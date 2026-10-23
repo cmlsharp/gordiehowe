@@ -1,0 +1,360 @@
+diff --git a/crates/examples/Cargo.toml b/crates/examples/Cargo.toml
+index dd20d269..931a7ad3 100644
+--- a/crates/examples/Cargo.toml
++++ b/crates/examples/Cargo.toml
+@@ -126,3 +126,7 @@ path = "examples/tutorials/circuits_gadgets.rs"
+ [[example]]
+ name = "end_to_end_example"
+ path = "examples/tutorials/end_to_end_example.rs"
++
++[[bench]]
++name = "hash_compare"
++harness = false
+diff --git a/crates/examples/benches/hash_compare.rs b/crates/examples/benches/hash_compare.rs
+new file mode 100644
+index 00000000..a6499742
+--- /dev/null
++++ b/crates/examples/benches/hash_compare.rs
+@@ -0,0 +1,342 @@
++// Copyright 2026 The Binius Developers
++//! Keccak-f[1600] permutations, SHA3-256 and SHA-256: prover time, verifier time and proof size, with the
++//! metric definitions of the ML-DSA comparison (benches/ml_dsa.rs in
++//! longfellow-zk benchmarks/2026-10-12-mldsa-binius):
++//!
++//! - prover: commit + prove, from a populated witness to the finished proof (witness generation
++//!   and circuit construction excluded, reported separately);
++//! - verify: the verifier's own setup (`Verifier::setup` from the constraint system) plus
++//!   verification; `verify_only` excludes the setup;
++//! - proof bytes: the transcript the verifier reads.
++//!
++//! Workloads (`WORKLOAD`), each at the sizes `SIZES`:
++//!
++//! - `keccak-perms`: `IndependentKeccakPermutations` (upstream, unmodified) with SIZE
++//!   permutations, each from a private state to a public output state;
++//! - `sha256-private`: `sha256_fixed` (upstream gadget) of a private SIZE-byte message to a public
++//!   digest, wired as `Sha256Example`'s fixed mode with the message as witness wires;
++//! - `sha256-public`: upstream `Sha256Example` (fixed mode) of a SIZE-byte message, which makes
++//!   the message an inout (public) value;
++//! - `sha3-256-private`: `sha3_256` (upstream gadget, `sha3::fixed_length`) of a private SIZE-byte
++//!   message to a public digest, wired as `Sha3Example`'s fixed mode with the message as witness
++//!   wires.
++//!
++//! Environment: `WORKLOAD`, `SIZES`, `LOG_INV_RATES` (default `1,2`), `MODES` (`zk,plain`),
++//! `HASH` (`sha256` or `blake3`), `TRIALS` (9), `WARMUP` (1, at least 1: the cold proof).
++
++use std::{env, time::Instant};
++
++use binius_circuits::{
++	sha3::{SHA3_256_DIGEST_WORDS, fixed_length::sha3_256},
++	sha256::sha256_fixed,
++};
++use binius_core::{
++	constraint_system::{ConstraintSystem, ValueVec},
++	word::Word,
++};
++use binius_examples::{
++	ExampleCircuit, check_proof, check_proof_zk,
++	circuits::{
++		independent_hashes::{IndependentKeccakPermutations, Instance, PrimitiveParams},
++		sha256::Sha256Example,
++		utils::{HasherInstance, HasherParams},
++	},
++	create_proof, create_proof_zk, setup, setup_verifier, setup_zk, setup_zk_verifier,
++};
++use binius_frontend::{Circuit, CircuitBuilder, CircuitStat, Wire};
++use binius_hash::{blake3::Blake3HashSuite, sha256::Sha256HashSuite};
++use binius_hash_prover::ParallelHashSuite;
++use binius_utils::{DeserializeBytes, SerializeBytes};
++use digest::Output;
++use rand::prelude::*;
++use sha2::Digest;
++
++fn env_list<T: std::str::FromStr>(name: &str, default: &str) -> Vec<T> {
++	env::var(name)
++		.unwrap_or_else(|_| default.to_string())
++		.split(',')
++		.map(|s| {
++			s.trim()
++				.parse()
++				.ok()
++				.unwrap_or_else(|| panic!("bad {name}"))
++		})
++		.collect()
++}
++
++fn env_usize(name: &str, default: usize) -> usize {
++	env::var(name).map_or(default, |s| s.parse().expect(name))
++}
++
++fn ms(start: Instant) -> f64 {
++	start.elapsed().as_secs_f64() * 1e3
++}
++
++/// `median (min-max)` of a sample, in ms.
++fn summary(xs: &mut [f64]) -> (f64, f64, f64) {
++	xs.sort_by(f64::total_cmp);
++	(xs[xs.len() / 2], xs[0], xs[xs.len() - 1])
++}
++
++struct Trial {
++	prove: f64,
++	verify: f64,
++	verify_only: f64,
++	bytes: usize,
++}
++
++/// A closure running one proof and its verification with the hash suite `H`.
++fn runner<'a, H>(
++	cs: &ConstraintSystem,
++	rate: usize,
++	mode: &str,
++	witness: &'a ValueVec,
++) -> Box<dyn FnMut() -> Trial + 'a>
++where
++	H: ParallelHashSuite + Clone + 'a,
++	Output<H::LeafHash>: SerializeBytes + DeserializeBytes,
++{
++	match mode {
++		"zk" => {
++			let (_, prover) = setup_zk::<H>(cs.clone(), rate).expect("setup");
++			let cs = cs.clone();
++			Box::new(move || {
++				let t = Instant::now();
++				let proof = create_proof_zk(&prover, witness, None).expect("prove");
++				let prove = ms(t);
++				let bytes = proof.len();
++				let t = Instant::now();
++				let verifier = setup_zk_verifier::<H>(cs.clone(), rate).expect("setup");
++				let t_only = Instant::now();
++				check_proof_zk(&verifier, witness, proof, None).expect("verify");
++				Trial {
++					prove,
++					verify: ms(t),
++					verify_only: ms(t_only),
++					bytes,
++				}
++			})
++		}
++		"plain" => {
++			let (_, prover) = setup::<H>(cs.clone(), rate, None).expect("setup");
++			let cs = cs.clone();
++			Box::new(move || {
++				let t = Instant::now();
++				let proof = create_proof(&prover, witness).expect("prove");
++				let prove = ms(t);
++				let bytes = proof.len();
++				let t = Instant::now();
++				let verifier = setup_verifier::<H>(cs.clone(), rate).expect("setup");
++				let t_only = Instant::now();
++				check_proof(&verifier, witness, proof).expect("verify");
++				Trial {
++					prove,
++					verify: ms(t),
++					verify_only: ms(t_only),
++					bytes,
++				}
++			})
++		}
++		other => panic!("unknown mode {other}"),
++	}
++}
++
++/// A built circuit and its populated witness, with the build and witness times.
++struct Built {
++	circuit: Circuit,
++	witness: ValueVec,
++	build_ms: f64,
++	witness_ms: f64,
++}
++
++/// An upstream example circuit `E` at `params`, its witness from `instance`.
++fn build_example<E: ExampleCircuit>(params: E::Params, instance: E::Instance) -> Built {
++	let t = Instant::now();
++	let mut builder = CircuitBuilder::new();
++	let example = E::build(params, &mut builder).expect("build");
++	let circuit = builder.build();
++	let build_ms = ms(t);
++	let t = Instant::now();
++	let mut filler = circuit.new_witness_filler();
++	example
++		.populate_witness(instance, &mut filler)
++		.expect("populate");
++	circuit.populate_wire_witness(&mut filler).expect("witness");
++	let witness = filler.into_value_vec();
++	Built {
++		circuit,
++		witness,
++		build_ms,
++		witness_ms: ms(t),
++	}
++}
++
++/// SHA-256 of a private `len`-byte message to a public digest: `Sha256Example`'s fixed mode with
++/// the message words as witness wires instead of inout wires.
++fn build_sha256_private(len: usize) -> Built {
++	let t = Instant::now();
++	let builder = CircuitBuilder::new();
++	let message: Vec<Wire> = (0..len.div_ceil(4)).map(|_| builder.add_witness()).collect();
++	let computed = sha256_fixed(&builder, &message, len);
++	let digest: [Wire; 8] = std::array::from_fn(|_| builder.add_inout());
++	for i in 0..8 {
++		builder.assert_eq(format!("digest[{i}]"), computed[i], digest[i]);
++	}
++	let circuit = builder.build();
++	let build_ms = ms(t);
++
++	let t = Instant::now();
++	let mut rng = StdRng::seed_from_u64(20261014);
++	let mut msg = vec![0u8; len];
++	rng.fill_bytes(&mut msg);
++	let hash = sha2::Sha256::digest(&msg);
++	let mut filler = circuit.new_witness_filler();
++	// 32-bit big-endian words, 4 bytes per wire, high 32 bits zero (as Sha256Example).
++	for (wire, chunk) in message.iter().zip(msg.chunks(4)) {
++		let mut b = [0u8; 4];
++		b[..chunk.len()].copy_from_slice(chunk);
++		filler[*wire] = Word(u32::from_be_bytes(b) as u64);
++	}
++	for (i, chunk) in hash.chunks(4).enumerate() {
++		filler[digest[i]] = Word(u32::from_be_bytes(chunk.try_into().unwrap()) as u64);
++	}
++	circuit.populate_wire_witness(&mut filler).expect("witness");
++	let witness = filler.into_value_vec();
++	Built {
++		circuit,
++		witness,
++		build_ms,
++		witness_ms: ms(t),
++	}
++}
++
++/// SHA3-256 of a private `len`-byte message to a public digest: `Sha3Example`'s fixed mode with
++/// the message words as witness wires instead of inout wires.
++fn build_sha3_256_private(len: usize) -> Built {
++	let t = Instant::now();
++	let builder = CircuitBuilder::new();
++	let message: Vec<Wire> = (0..len.div_ceil(8)).map(|_| builder.add_witness()).collect();
++	let computed = sha3_256(&builder, &message, len);
++	let digest: [Wire; SHA3_256_DIGEST_WORDS] = std::array::from_fn(|_| builder.add_inout());
++	for i in 0..SHA3_256_DIGEST_WORDS {
++		builder.assert_eq(format!("digest[{i}]"), computed[i], digest[i]);
++	}
++	let circuit = builder.build();
++	let build_ms = ms(t);
++
++	let t = Instant::now();
++	let mut rng = StdRng::seed_from_u64(20261016);
++	let mut msg = vec![0u8; len];
++	rng.fill_bytes(&mut msg);
++	let hash = <sha3::Sha3_256 as sha3::Digest>::digest(&msg);
++	let mut filler = circuit.new_witness_filler();
++	// 64-bit little-endian words, 8 bytes per wire (as Sha3Example).
++	for (wire, chunk) in message.iter().zip(msg.chunks(8)) {
++		let mut b = [0u8; 8];
++		b[..chunk.len()].copy_from_slice(chunk);
++		filler[*wire] = Word(u64::from_le_bytes(b));
++	}
++	for (i, chunk) in hash.chunks(8).enumerate() {
++		filler[digest[i]] = Word(u64::from_le_bytes(chunk.try_into().unwrap()));
++	}
++	circuit.populate_wire_witness(&mut filler).expect("witness");
++	let witness = filler.into_value_vec();
++	Built {
++		circuit,
++		witness,
++		build_ms,
++		witness_ms: ms(t),
++	}
++}
++
++fn build(workload: &str, size: usize) -> Built {
++	match workload {
++		"keccak-perms" => build_example::<IndependentKeccakPermutations>(
++			PrimitiveParams {
++				num_primitives: size,
++			},
++			Instance { seed: None },
++		),
++		"sha256-private" => build_sha256_private(size),
++		"sha3-256-private" => build_sha3_256_private(size),
++		"sha256-public" => build_example::<Sha256Example>(
++			HasherParams {
++				message_len: Some(size),
++				max_message_len: None,
++			},
++			HasherInstance {
++				random_message: false,
++				random_message_len: None,
++				message: None,
++			},
++		),
++		other => panic!("unknown WORKLOAD {other}"),
++	}
++}
++
++fn main() {
++	let workload = env::var("WORKLOAD").expect("WORKLOAD");
++	let sizes: Vec<usize> = env_list("SIZES", "8");
++	let rates: Vec<usize> = env_list("LOG_INV_RATES", "1,2");
++	let modes: Vec<String> = env_list("MODES", "zk,plain");
++	let trials = env_usize("TRIALS", 9);
++	let warmup = env_usize("WARMUP", 1);
++	let hash = env::var("HASH").unwrap_or_else(|_| "sha256".into());
++
++	println!(
++		"# workload={workload} threads={} trials={trials} warmup={warmup} hash={hash}",
++		env::var("RAYON_NUM_THREADS").unwrap_or_else(|_| "default".into())
++	);
++	println!(
++		"size\tmode\tlog_inv_rate\tprover_ms\tverify_ms\tverify_only_ms\tproof_bytes\t\
++		 cold_prover_ms\twitness_ms\tprover_setup_ms\tand\timul\tbmul\tcommitted"
++	);
++
++	for &size in &sizes {
++		let b = build(&workload, size);
++		let stat = CircuitStat::collect(&b.circuit);
++		let cs = b.circuit.constraint_system().clone();
++		cs.verify(&b.witness).expect("constraint system rejects the witness");
++		eprintln!(
++			"{workload} {size}: circuit build {:.1} ms, witness {:.1} ms",
++			b.build_ms, b.witness_ms
++		);
++
++		for &rate in &rates {
++			for mode in &modes {
++				let t = Instant::now();
++				let mut run = match hash.as_str() {
++					"sha256" => runner::<Sha256HashSuite>(&cs, rate, mode, &b.witness),
++					"blake3" => runner::<Blake3HashSuite>(&cs, rate, mode, &b.witness),
++					other => panic!("unknown hash suite {other}"),
++				};
++				let setup_ms = ms(t);
++
++				// The first proof also fills the prover's buffer pool: what a one-shot prover pays.
++				let cold = run().prove;
++				for _ in 1..warmup {
++					run();
++				}
++				let results: Vec<Trial> = (0..trials).map(|_| run()).collect();
++				let mut prove: Vec<f64> = results.iter().map(|r| r.prove).collect();
++				let mut verify: Vec<f64> = results.iter().map(|r| r.verify).collect();
++				let mut verify_only: Vec<f64> = results.iter().map(|r| r.verify_only).collect();
++				let bytes = results[0].bytes;
++				assert!(results.iter().all(|r| r.bytes == bytes), "proof size varies");
++
++				let fmt = |(med, lo, hi): (f64, f64, f64)| format!("{med:.1} ({lo:.1}-{hi:.1})");
++				println!(
++					"{size}\t{mode}\t{rate}\t{}\t{}\t{}\t{bytes}\t{cold:.1}\t{:.1}\t{setup_ms:.1}\t{}\t{}\t{}\t{}",
++					fmt(summary(&mut prove)),
++					fmt(summary(&mut verify)),
++					fmt(summary(&mut verify_only)),
++					b.witness_ms,
++					stat.n_and_constraints,
++					stat.n_imul_constraints,
++					stat.n_bmul_constraints,
++					stat.committed_allocated,
++				);
++			}
++		}
++	}
++}

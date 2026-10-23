@@ -1,0 +1,11 @@
+--- a/src/mldsa_pok/verify_gadget.hpp	2026-10-17 10:30:50.418401322 -0400
++++ b/src/mldsa_pok/verify_gadget.hpp	2026-10-17 10:30:50.463028573 -0400
+@@ -146,7 +146,7 @@
+ // limit of 29 for a derived witness, see voleith.hpp).
+ using Ctilde = ShakeShape<Kf1600Deg9, MU_BYTES, 32 * K * W1_BITS, 32>; // H(mu || w1Encode(w1), 32)
+ using SibPerm = Kf1600Deg9;
+-using Sib = SampleInBall<P::TAU, 80, /* COMMIT_EQ */ true>;
++using Sib = SampleInBall<P::TAU, 100, /* COMMIT_EQ */ true>;
+ // Counters of degree 8, or 4 (COUNTER_LOG = 2): the latter needs about 1.8 times as many committed
+ // bits, so the proof is 1.5 times larger, but proving is 2.3 times faster.
+ constexpr size_t COUNTER_LOG = 3;

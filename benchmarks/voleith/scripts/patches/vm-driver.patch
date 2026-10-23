@@ -1,0 +1,12 @@
+--- a/meson.build	2026-10-17 10:30:50.421401349 -0400
++++ b/meson.build	2026-10-17 10:30:50.469401768 -0400
+@@ -77,3 +77,9 @@
+ if get_option('examples')
+   subdir('examples')
+ endif
++
++# Timing driver (longfellow-zk benchmarks/2026-10-17-voleith-mldsa).
++executable('vm_bench', 'tests/mldsa_pok/vm_bench.cpp',
++  include_directories : [vole_mole_inc, vole_mole_src_inc],
++  dependencies : [vole_mole_dep, faest_dep],
++)

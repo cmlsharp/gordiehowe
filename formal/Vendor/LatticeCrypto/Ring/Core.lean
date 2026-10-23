@@ -1,0 +1,259 @@
+/-
+Copyright (c) 2026 Quang Dao. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Quang Dao
+
+Vendored from VCVio LatticeCrypto/Ring/Core.lean at commit eb0f6e456a8dffee6a0ba8a2f66ca2a5b50dfd79, unmodified.
+-/
+
+module
+public import Init.Data.Vector.Basic
+public import Mathlib.LinearAlgebra.Matrix.Defs
+public import Mathlib.RingTheory.AdjoinRoot
+public import Mathlib.RingTheory.Ideal.Operations
+public import Mathlib.RingTheory.Ideal.Quotient.Basic
+public import Mathlib.RingTheory.Polynomial.Basic
+
+/-!
+# Generic Negacyclic Ring Core
+
+Semantic foundations for the generic lattice ring layer. Defines:
+
+- `PolyBackend`: a backend-neutral, coefficient-indexed carrier for fixed-degree polynomials.
+- `PolyVec` / `PolyMatrix`: length-indexed module containers over an arbitrary carrier.
+- `NegacyclicQuotient`: the proof-facing quotient ring `R[X] / (X^n + 1)`.
+
+All definitions here are purely semantic — no executable array operations or mutable
+state. Executable array exposure is layered on top in `LatticeCrypto.Ring.Kernel`, and
+the canonical vector-backed instantiation lives in `LatticeCrypto.Ring.VectorBackend`.
+-/
+
+@[expose] public section
+
+
+
+universe u v
+
+namespace LatticeCrypto
+
+/-- A length-`k` vector over an arbitrary carrier. -/
+abbrev PolyVec (P : Type u) (k : Nat) := Vector P k
+
+/-- A `rows × cols` row-major matrix over an arbitrary carrier. -/
+abbrev PolyMatrix (P : Type u) (rows cols : Nat) := Vector (PolyVec P cols) rows
+
+namespace PolyVec
+
+variable {P : Type u} {k : Nat}
+
+/-- View a vector as a `Fin k → P` function. -/
+def toPi (v : PolyVec P k) : Fin k → P :=
+  fun i => v[i.1]
+
+/-- Build a vector from a `Fin k → P` function. -/
+def ofPi (f : Fin k → P) : PolyVec P k :=
+  Vector.ofFn f
+
+@[simp] theorem toPi_ofPi (f : Fin k → P) :
+    toPi (ofPi f) = f := by
+  funext i
+  simp [toPi, ofPi]
+
+@[simp] theorem ofPi_toPi (v : PolyVec P k) :
+    ofPi (toPi v) = v := by
+  apply Vector.ext
+  intro i hi
+  simp [toPi, ofPi]
+
+end PolyVec
+
+namespace PolyMatrix
+
+variable {P : Type u} {rows cols : Nat}
+
+/-- View a row-major matrix as a Mathlib `Matrix`. -/
+def toMatrix (A : PolyMatrix P rows cols) : Matrix (Fin rows) (Fin cols) P :=
+  fun i j => A[i.1][j.1]
+
+/-- Build a row-major matrix from a Mathlib `Matrix`. -/
+def ofMatrix (A : Matrix (Fin rows) (Fin cols) P) : PolyMatrix P rows cols :=
+  Vector.ofFn fun i => Vector.ofFn fun j => A i j
+
+@[simp] theorem toMatrix_ofMatrix (A : Matrix (Fin rows) (Fin cols) P) :
+    toMatrix (ofMatrix A) = A := by
+  funext i j
+  simp [toMatrix, ofMatrix]
+
+@[simp] theorem ofMatrix_toMatrix (A : PolyMatrix P rows cols) :
+    ofMatrix (toMatrix A) = A := by
+  apply Vector.ext
+  intro i hi
+  apply Vector.ext
+  intro j hj
+  simp [ofMatrix, toMatrix]
+
+end PolyMatrix
+
+/-- Backend-neutral storage for fixed-degree polynomials.
+
+A `PolyBackend` bundles a carrier type `Poly`, a fixed `degree`, and a bijective
+coefficient-indexing interface (`coeff` / `build`). Concrete instantiations include
+vector-backed storage (`vectorBackend`) and function-backed storage (`piBackend`).
+
+The backend carries no arithmetic — ring operations are added by `NegacyclicRing`
+in `LatticeCrypto.Ring.Kernel`. -/
+structure PolyBackend (Coeff : Type u) where
+  Poly : Type v
+  degree : Nat
+  coeff : Poly → Fin degree → Coeff
+  build : (Fin degree → Coeff) → Poly
+  coeff_build : ∀ f i, coeff (build f) i = f i
+  build_coeff : ∀ p, build (coeff p) = p
+
+namespace PolyBackend
+
+variable {Coeff : Type u}
+
+/-- Materialize coefficients as an eager array. -/
+def coeffArray (backend : PolyBackend Coeff) (p : backend.Poly) : Array Coeff :=
+  Array.ofFn fun i : Fin backend.degree => backend.coeff p i
+
+@[simp] theorem coeff_build_apply (backend : PolyBackend Coeff)
+    (f : Fin backend.degree → Coeff) (i : Fin backend.degree) :
+    backend.coeff (backend.build f) i = f i :=
+  backend.coeff_build f i
+
+@[simp] theorem build_coeff_apply (backend : PolyBackend Coeff) (p : backend.Poly) :
+    backend.build (backend.coeff p) = p :=
+  backend.build_coeff p
+
+/-- Bridge the backend carrier to a Mathlib polynomial by summing monomials. -/
+noncomputable def toPolynomial [Semiring Coeff]
+    (backend : PolyBackend Coeff) (p : backend.Poly) : Polynomial Coeff :=
+  ∑ i : Fin backend.degree, Polynomial.monomial i.val (backend.coeff p i)
+
+/-- Map coefficients between equal-degree backends. -/
+def mapCoeffs {Coeff' : Type v}
+    (src : PolyBackend Coeff) (dst : PolyBackend Coeff')
+    (hdeg : src.degree = dst.degree) (f : Coeff → Coeff') (p : src.Poly) : dst.Poly :=
+  dst.build fun i =>
+    f (src.coeff p ⟨i.val, by
+      exact Nat.lt_of_lt_of_eq i.isLt hdeg.symm⟩)
+
+/-- Two `backend.Poly` values are equal iff they agree on every coefficient. -/
+@[ext] theorem ext_coeff {backend : PolyBackend Coeff} {p q : backend.Poly}
+    (h : ∀ i, backend.coeff p i = backend.coeff q i) : p = q :=
+  backend.build_coeff p ▸ backend.build_coeff q ▸ congr_arg backend.build (funext h)
+
+/-- The coefficient-indexing bijection between a backend carrier and `Fin degree → Coeff`,
+packaged from the `coeff_build` / `build_coeff` round-trip laws. -/
+def equivPi (backend : PolyBackend Coeff) : backend.Poly ≃ (Fin backend.degree → Coeff) where
+  toFun := backend.coeff
+  invFun := backend.build
+  left_inv := backend.build_coeff
+  right_inv f := funext (backend.coeff_build f)
+
+/-- `equivPi` reads coefficients through `PolyBackend.coeff`. -/
+@[simp] theorem equivPi_apply (backend : PolyBackend Coeff) (p : backend.Poly) :
+    backend.equivPi p = backend.coeff p :=
+  rfl
+
+/-- The inverse of `equivPi` rebuilds a carrier through `PolyBackend.build`. -/
+@[simp] theorem equivPi_symm_apply (backend : PolyBackend Coeff)
+    (f : Fin backend.degree → Coeff) :
+    backend.equivPi.symm f = backend.build f :=
+  rfl
+
+/-- A backend carrier over a finite coefficient type is finite, via `equivPi`. -/
+instance instFintypePoly (backend : PolyBackend Coeff) [Fintype Coeff] :
+    Fintype backend.Poly :=
+  Fintype.ofEquiv (Fin backend.degree → Coeff) backend.equivPi.symm
+
+end PolyBackend
+
+
+
+/-- The semantic modulus polynomial `X^n + 1`. -/
+noncomputable def negacyclicModulus (R : Type u) [Semiring R] (n : Nat) : Polynomial R :=
+  Polynomial.X ^ n + 1
+
+/-- The proof-facing semantic model `R[X] / (X^n + 1)`.
+
+This is the mathematical ring that executable `NegacyclicRing` operations are
+sound with respect to. The soundness bridge is provided by
+`NegacyclicRingSemantics` in `LatticeCrypto.Ring.Kernel`.
+
+It is definitionally `AdjoinRoot (negacyclicModulus R n)`, so Mathlib's `AdjoinRoot` API
+(`AdjoinRoot.mk`, `modByMonicHom`, `powerBasis'`) applies to it directly. -/
+abbrev NegacyclicQuotient (R : Type u) [CommRing R] (n : Nat) :=
+  Polynomial R ⧸ (Ideal.span ({negacyclicModulus R n} : Set (Polynomial R)))
+
+namespace NegacyclicQuotient
+
+variable {R : Type u} [CommRing R] {n : Nat}
+
+/-- Inject a polynomial into the negacyclic quotient. -/
+noncomputable def ofPolynomial (n : Nat) (p : Polynomial R) : NegacyclicQuotient R n :=
+  Ideal.Quotient.mk _ p
+
+/-- Inject a backend carrier into the negacyclic quotient via its coefficient polynomial. -/
+noncomputable def ofBackend (backend : PolyBackend R) (p : backend.Poly) :
+    NegacyclicQuotient R backend.degree :=
+  ofPolynomial backend.degree (backend.toPolynomial p)
+
+/-! ### Injectivity of `ofBackend` -/
+
+/-- `toPolynomial` is injective: distinct coefficient arrays yield
+distinct polynomials. -/
+theorem PolyBackend.toPolynomial_injective {R : Type u} [CommRing R]
+    (backend : PolyBackend R) : Function.Injective backend.toPolynomial := by
+  intro p q h
+  apply PolyBackend.ext_coeff
+  intro i
+  have extract : ∀ x : backend.Poly,
+      (backend.toPolynomial x).coeff i.val = backend.coeff x i := fun x => by
+    simp only [PolyBackend.toPolynomial, Polynomial.finsetSum_coeff, Polynomial.coeff_monomial,
+      Fin.val_inj, Finset.sum_ite_eq', Finset.mem_univ, ite_true]
+  rw [← extract p, ← extract q, h]
+
+/-- Coefficients of `toPolynomial x` at indices `≥ backend.degree` are zero. -/
+private theorem PolyBackend.toPolynomial_coeff_high {R : Type u} [CommRing R]
+    (backend : PolyBackend R) (x : backend.Poly) {j : Nat}
+    (hj : backend.degree ≤ j) :
+    (backend.toPolynomial x).coeff j = 0 := by
+  simp only [PolyBackend.toPolynomial, Polynomial.finsetSum_coeff]
+  apply Finset.sum_eq_zero
+  intro i _
+  simp only [Polynomial.coeff_monomial]
+  exact ite_eq_right (Nat.ne_of_lt (i.isLt.trans_le hj))
+
+/-- `ofBackend` is injective: distinct backend carriers map to distinct
+elements of the negacyclic quotient. Holds for any `CommRing` coefficient type. -/
+theorem ofBackend_injective
+    {R : Type u} [CommRing R] (backend : PolyBackend R) :
+    Function.Injective (NegacyclicQuotient.ofBackend backend) := by
+  intro p q heq
+  apply PolyBackend.toPolynomial_injective
+  rcases subsingleton_or_nontrivial R with hR | hR
+  · exact Subsingleton.elim _ _
+  rcases Nat.eq_zero_or_pos backend.degree with hn | hn
+  · have : IsEmpty (Fin backend.degree) := hn ▸ inferInstance
+    simp [PolyBackend.toPolynomial]
+  have hmonic : (negacyclicModulus R backend.degree).Monic := by
+    simpa [negacyclicModulus] using Polynomial.monic_X_pow_add_C (a := (1 : R)) hn.ne'
+  have hdeg : (negacyclicModulus R backend.degree).degree = backend.degree := by
+    simpa [negacyclicModulus] using Polynomial.degree_X_pow_add_C hn (1 : R)
+  have hlt : ∀ x : backend.Poly,
+      (backend.toPolynomial x).degree < (negacyclicModulus R backend.degree).degree := fun x => by
+    rw [hdeg, Polynomial.degree_lt_iff_coeff_zero]
+    exact fun m hm => PolyBackend.toPolynomial_coeff_high backend x hm
+  have key : ∀ x : backend.Poly,
+      AdjoinRoot.modByMonicHom hmonic (NegacyclicQuotient.ofBackend backend x) =
+        backend.toPolynomial x := fun x => by
+    change AdjoinRoot.modByMonicHom hmonic (AdjoinRoot.mk _ (backend.toPolynomial x)) = _
+    rw [AdjoinRoot.modByMonicHom_mk, (Polynomial.modByMonic_eq_self_iff hmonic).2 (hlt x)]
+  rw [← key p, ← key q, heq]
+
+end NegacyclicQuotient
+
+end LatticeCrypto

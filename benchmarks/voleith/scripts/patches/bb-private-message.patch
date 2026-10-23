@@ -1,0 +1,83 @@
+diff -ruN a/blind_mldsa/src/protocol.rs b/blind_mldsa/src/protocol.rs
+--- a/blind_mldsa/src/protocol.rs	2026-10-17 14:23:16.000000000 -0400
++++ b/blind_mldsa/src/protocol.rs	2026-10-17 11:06:59.555768111 -0400
+@@ -227,6 +227,36 @@
+         Ok((ProofState1NoHashCom { h_f2, prover_state }, com))
+     }
+ 
++    /// The masked circuit with `r` the 32-byte private message `msg` and the public
++    /// `H(M, pi_1)` set to zero, so `com = msg`: phase 1 commits `msg` where
++    /// [`Self::compute_commitment_masked`] commits a random `r`. Returns the state
++    /// for [`Self::prove`], with `com = msg` the message the signature is on.
++    pub fn compute_commitment_private_message(
++        &self,
++        msg: &[u8; COMMITMENT_SIZE_BYTES],
++        transcript: &mut Transcript,
++        rng: &mut ThreadRng,
++    ) -> CircuitResult<ProofState> {
++        assert_eq!(self.commitment_type, Masked);
++        let r: Vec<F2> = (0..COMMITMENT_SIZE_BYTES * 8)
++            .map(|i| F2::from((msg[i / 8] >> (i % 8)) & 1 == 1))
++            .collect();
++        let (_, _, prover_state) =
++            with_mldsa_params!(self.version, self.segment_plan, |B, D, F, W, S| {
++                let circuit = BlindMLDSACircuit::<B, D, F, W, S>::new(self.clone());
++                MixedHOProof::<VoleProver, VoleVerifier, VoleProverFq, VoleVerifierFq>::prove_1_with_randomness(
++                    &circuit,
++                    r,
++                    transcript,
++                    rng,
++                    self.edabit_variant,
++                    self.mask_method,
++                )
++            })?;
++        let h_f2 = [F2::ZERO; COMMITMENT_SIZE_BYTES * 8];
++        Ok(MaskedCommitmentState(ProofState1NoHashCom { h_f2, prover_state }))
++    }
++
+     /// Commit to a message: returns the commitment material and the witness bits
+     /// for the commitment SHAKE proof.
+     pub fn compute_commitment<'a>(
+diff -ruN a/swanky/edge/schmivitz/src/proof/mixed_ho_proof/prove_splitted.rs b/swanky/edge/schmivitz/src/proof/mixed_ho_proof/prove_splitted.rs
+--- a/swanky/edge/schmivitz/src/proof/mixed_ho_proof/prove_splitted.rs	2026-10-17 11:30:20.425047012 -0400
++++ b/swanky/edge/schmivitz/src/proof/mixed_ho_proof/prove_splitted.rs	2026-10-17 11:30:20.427047041 -0400
+@@ -88,6 +88,28 @@
+         R: CryptoRng + RngCore,
+         C: MixedHOCircuitExecuter<Fq, F2>,
+     {
++        let randomness: Vec<F2> = (0..randomness_len)
++            .map(|_| F2::from(rng.gen_bool(0.5)))
++            .collect();
++        Self::prove_1_with_randomness(circuit, randomness, transcript, rng, variant, mask_method)
++    }
++
++    /// Phase 1 as [`Self::prove_1`], with the first witness bits given by the
++    /// caller instead of sampled; they are committed the same way.
++    #[allow(clippy::too_many_arguments)]
++    pub fn prove_1_with_randomness<'a, R, C>(
++        circuit: &'a C,
++        randomness: Vec<F2>,
++        transcript: &mut Transcript,
++        rng: &'a mut R,
++        variant: EdabitVariant,
++        mask_method: FullFieldMaskMethod,
++    ) -> CircuitResult<(Vec<F2>, [u8; PI1_BYTES], ProveState<VoleF2>)>
++    where
++        R: CryptoRng + RngCore,
++        C: MixedHOCircuitExecuter<Fq, F2>,
++    {
++        let randomness_len = randomness.len();
+         let mut transcript = transcript::Transcript::from(transcript);
+ 
+         // The circuit's shape is independent of its values, so it can be counted
+@@ -102,10 +124,6 @@
+             )
+         }
+ 
+-        let randomness: Vec<F2> = (0..randomness_len)
+-            .map(|_| F2::from(rng.gen_bool(0.5)))
+-            .collect();
+-
+         let (voles_f2, _) = VoleF2::create_ho(
+             counts.f2_total(),
+             counts.max_degree_f2().saturating_sub(1),

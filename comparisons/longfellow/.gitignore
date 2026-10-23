@@ -1,0 +1,5 @@
+build*/
+*.cmake.log
+*.build.log
+__pycache__/
+.bench.lock

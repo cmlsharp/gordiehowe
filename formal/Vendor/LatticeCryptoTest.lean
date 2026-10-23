@@ -1,0 +1,2 @@
+import LatticeCryptoTest.MLDSA.ConcretePrimitivesTests
+import LatticeCryptoTest.Falcon.ConcretePrimitivesTests

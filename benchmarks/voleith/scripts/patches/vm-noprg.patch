@@ -1,0 +1,11 @@
+--- a/src/mldsa_pok/relation.hpp	2026-10-17 10:30:50.415401296 -0400
++++ b/src/mldsa_pok/relation.hpp	2026-10-17 10:30:50.441549031 -0400
+@@ -43,7 +43,7 @@
+ };
+ Statement make_statement(const mldsa::PublicKey<P>& pk);
+ 
+-using BinWitnessPrg = vole_mole::detail::LocalPrg<2>;
++using BinWitnessPrg = vole_mole::detail::NoPrg;
+ using Mu = MuHash<MESSAGE_BYTES>;
+ static_assert(Mu::NUM_PERMUTATIONS == 1);
+ 

@@ -1,0 +1,2282 @@
+{
+  "sources": {
+    "ArkLib": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+    "CompPoly": "df591bb8c6745126d1d72f5243faae3022b0432a",
+    "VCVio": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+    "PolyFun": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+    "cslib": "990e65a685bed413f43b139db900a36ad5322a10"
+  },
+  "note": "Each file records its repository and commit. Files outside the Johnson MCA closure keep the earlier subset's commits (ArkLib 0b5b67c6, CompPoly 7e3683ba).",
+  "files": {
+    "ArkLib.Data.CodingTheory.Basic.DecodingRadius": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "1746ef688e5de127f667651424e8af2dacad5aca45b4e7b60d9b0b8bc50fcc6d",
+      "adapted": false,
+      "vendored_sha256": "1746ef688e5de127f667651424e8af2dacad5aca45b4e7b60d9b0b8bc50fcc6d"
+    },
+    "ArkLib.Data.CodingTheory.Basic.Distance": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "92d655650ec7a3d2f112d4990b12c6b5ba63b80c402c8c5a0ed398baccba4e09",
+      "adapted": false,
+      "vendored_sha256": "92d655650ec7a3d2f112d4990b12c6b5ba63b80c402c8c5a0ed398baccba4e09"
+    },
+    "ArkLib.Data.CodingTheory.Basic.LinearCode": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "fd227220b9efed55d7c5df13225d4c79d0abc77a63597168b37899baeded2c0d",
+      "adapted": false,
+      "vendored_sha256": "fd227220b9efed55d7c5df13225d4c79d0abc77a63597168b37899baeded2c0d"
+    },
+    "ArkLib.Data.CodingTheory.Basic.RelativeDistance": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "f8245f83eeac7b1ad84931a9633d3ecb06941103abe51040d4abee4b26dabf48",
+      "adapted": false,
+      "vendored_sha256": "f8245f83eeac7b1ad84931a9633d3ecb06941103abe51040d4abee4b26dabf48"
+    },
+    "ArkLib.Data.CodingTheory.BerlekampWelch.BerlekampWelch": {
+      "repo": "ArkLib",
+      "commit": "0b5b67c63d74b26e38715bb90fa5d7d5a07def25",
+      "source_sha256": "9600832ed7001f773cf334fd82c0c736f47805b28e825c38462f428b997d3fb9",
+      "adapted": false,
+      "vendored_sha256": "9600832ed7001f773cf334fd82c0c736f47805b28e825c38462f428b997d3fb9"
+    },
+    "ArkLib.Data.CodingTheory.BerlekampWelch.Condition": {
+      "repo": "ArkLib",
+      "commit": "0b5b67c63d74b26e38715bb90fa5d7d5a07def25",
+      "source_sha256": "d8fb25eb1ce1e0156369192daaab78cbda8c18414e358b3f35720ef38a47c4f0",
+      "adapted": false,
+      "vendored_sha256": "d8fb25eb1ce1e0156369192daaab78cbda8c18414e358b3f35720ef38a47c4f0"
+    },
+    "ArkLib.Data.CodingTheory.BerlekampWelch.ElocPoly": {
+      "repo": "ArkLib",
+      "commit": "0b5b67c63d74b26e38715bb90fa5d7d5a07def25",
+      "source_sha256": "9df5e956e272298881ed49fd059f78847d1891ea27d407e38f35f6f559ba8f41",
+      "adapted": false,
+      "vendored_sha256": "9df5e956e272298881ed49fd059f78847d1891ea27d407e38f35f6f559ba8f41"
+    },
+    "ArkLib.Data.CodingTheory.BerlekampWelch.Existence": {
+      "repo": "ArkLib",
+      "commit": "0b5b67c63d74b26e38715bb90fa5d7d5a07def25",
+      "source_sha256": "bcedae5292707ffb04f85fa2d7da051fd27a82dc5c0956e0d7b1db5d1e380953",
+      "adapted": false,
+      "vendored_sha256": "bcedae5292707ffb04f85fa2d7da051fd27a82dc5c0956e0d7b1db5d1e380953"
+    },
+    "ArkLib.Data.CodingTheory.BerlekampWelch.Sorries": {
+      "repo": "ArkLib",
+      "commit": "0b5b67c63d74b26e38715bb90fa5d7d5a07def25",
+      "source_sha256": "75cae272a7383c44114d00b43847803f43536cea7a91edeec5501615666f8644",
+      "adapted": false,
+      "vendored_sha256": "75cae272a7383c44114d00b43847803f43536cea7a91edeec5501615666f8644"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Counting": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "fc96c3390887a04ca38acf97a1cf4dfff97588740e24d134a12ca4b50f3faca8",
+      "adapted": false,
+      "vendored_sha256": "fc96c3390887a04ca38acf97a1cf4dfff97588740e24d134a12ca4b50f3faca8"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Global.Multiplicity": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "05c54d47f9504dd27cb9391f66dd477529bb70cd397e4f12d27d0b01b4d7ff76",
+      "adapted": false,
+      "vendored_sha256": "05c54d47f9504dd27cb9391f66dd477529bb70cd397e4f12d27d0b01b4d7ff76"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Index": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "040e4319f90fd4c2633b24aa826e5f9f86b34a0c549a6225d22b5b279f425c0d",
+      "adapted": false,
+      "vendored_sha256": "040e4319f90fd4c2633b24aa826e5f9f86b34a0c549a6225d22b5b279f425c0d"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Local.ConstraintMap": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "6e033596fe99f3b90079bd7197bd74096566962925af6c933c19f0130778c370",
+      "adapted": false,
+      "vendored_sha256": "6e033596fe99f3b90079bd7197bd74096566962925af6c933c19f0130778c370"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Local.Contact": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "087697e101335c29683ae359cb38a8f0e95e29c31f2d3f8a53946aeb8927ef70",
+      "adapted": false,
+      "vendored_sha256": "087697e101335c29683ae359cb38a8f0e95e29c31f2d3f8a53946aeb8927ef70"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Local.Coordinates": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "89889d745b6427303a0c5d453dcedd7265538196f64129c6f0842fff755b5165",
+      "adapted": false,
+      "vendored_sha256": "89889d745b6427303a0c5d453dcedd7265538196f64129c6f0842fff755b5165"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Local.Identity": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "d226d5822f85e11332027ae9fff3cbcf24a50ad3c5a9d576e99f6b6140ecc248",
+      "adapted": false,
+      "vendored_sha256": "d226d5822f85e11332027ae9fff3cbcf24a50ad3c5a9d576e99f6b6140ecc248"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Local.Translation": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "0bba303ba7daaa383e107514b13a2a90a59be93e60cd85077144b841f9ab18ab",
+      "adapted": false,
+      "vendored_sha256": "0bba303ba7daaa383e107514b13a2a90a59be93e60cd85077144b841f9ab18ab"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Local.ZeroOrder": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "31ec17007c21f91db6901b2cd297d03ea90cc719c3adc2c1746a1a17f2264286",
+      "adapted": false,
+      "vendored_sha256": "31ec17007c21f91db6901b2cd297d03ea90cc719c3adc2c1746a1a17f2264286"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.SourceMonomial": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "de0c2ec07dc33162b03a853905ebd24b24bb2b7efb3971c94e70f2a8ea48eee9",
+      "adapted": false,
+      "vendored_sha256": "de0c2ec07dc33162b03a853905ebd24b24bb2b7efb3971c94e70f2a8ea48eee9"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Space": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "1a154b63e6891d16df191d36e144c7b50bf949ba001f5358d90e6da365f2a535",
+      "adapted": false,
+      "vendored_sha256": "1a154b63e6891d16df191d36e144c7b50bf949ba001f5358d90e6da365f2a535"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.SpecializationDegree": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "f9324ef4dc98e3292e9b6318ba7739e2d29797d5420db0535504ea1103eb466a",
+      "adapted": false,
+      "vendored_sha256": "f9324ef4dc98e3292e9b6318ba7739e2d29797d5420db0535504ea1103eb466a"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Symbolic.ChallengeDegree": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "5d9bbfb62b4a105221cc0ec63fa9bbf496b52237b79fa57c7937af85ebb52863",
+      "adapted": false,
+      "vendored_sha256": "5d9bbfb62b4a105221cc0ec63fa9bbf496b52237b79fa57c7937af85ebb52863"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Symbolic.ColumnHeight": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "35c20469ae5a6128a757933ac62af89b7ab3adc074dff7a383b1d53ce2255fa6",
+      "adapted": false,
+      "vendored_sha256": "35c20469ae5a6128a757933ac62af89b7ab3adc074dff7a383b1d53ce2255fa6"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Symbolic.ConstraintMatrix": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "4702272168a29cfea5e3455e49da678f7b051b8c5efb8a7cfd317800963bf729",
+      "adapted": false,
+      "vendored_sha256": "4702272168a29cfea5e3455e49da678f7b051b8c5efb8a7cfd317800963bf729"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Symbolic.JohnsonCertificate": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "c325b19c6cb118254101a67f833990c2435ba9c0f17867efc5d962f8a8fd8192",
+      "adapted": false,
+      "vendored_sha256": "c325b19c6cb118254101a67f833990c2435ba9c0f17867efc5d962f8a8fd8192"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Symbolic.LocalRank": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "7f442c0cc81d16131585f9e2196b65a71de91e3dfbabe7a2a45dd4d1a2ca0e65",
+      "adapted": false,
+      "vendored_sha256": "7f442c0cc81d16131585f9e2196b65a71de91e3dfbabe7a2a45dd4d1a2ca0e65"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Symbolic.ReceivedCurve": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "265b0494359f252653ffcf97f4ee57ccf302240207baa4b0764fc0c1efc62729",
+      "adapted": false,
+      "vendored_sha256": "265b0494359f252653ffcf97f4ee57ccf302240207baa4b0764fc0c1efc62729"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Symbolic.Soundness": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "ceb050b81dc74b6d0f7aa485ada9ed50fa25dbc32ae019ed120e9a414faf8c55",
+      "adapted": false,
+      "vendored_sha256": "ceb050b81dc74b6d0f7aa485ada9ed50fa25dbc32ae019ed120e9a414faf8c55"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Symbolic.SourceColumn": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "c91dcccca2f649d8dad68418cac706da7a929f6bc4f4ba90a95359609b06c190",
+      "adapted": false,
+      "vendored_sha256": "c91dcccca2f649d8dad68418cac706da7a929f6bc4f4ba90a95359609b06c190"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Symbolic.WeightedJohnsonCertificate": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "9edfdc44d376af5df9ff9756c19ba99263e746d50f4c233ff7d1fe29c828fe75",
+      "adapted": false,
+      "vendored_sha256": "9edfdc44d376af5df9ff9756c19ba99263e746d50f4c233ff7d1fe29c828fe75"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.Symbolic.WeightedSupport": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "0bf733c2fa01c62e62905e714b2b382533de4cc639d7614563b8874538a96f94",
+      "adapted": false,
+      "vendored_sha256": "0bf733c2fa01c62e62905e714b2b382533de4cc639d7614563b8874538a96f94"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.WeightedSupport.Basic": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "f9648142f39fc319aea9c9dde77a6a39b7f4dede68472366393a9e61a1ee283d",
+      "adapted": false,
+      "vendored_sha256": "f9648142f39fc319aea9c9dde77a6a39b7f4dede68472366393a9e61a1ee283d"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Interpolation.WeightedSupport.LocalRank": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "57224c74ae9d212e97ff6561c1c2119df20be0f1e6aa209320c874603e78e8b9",
+      "adapted": false,
+      "vendored_sha256": "57224c74ae9d212e97ff6561c1c2119df20be0f1e6aa209320c874603e78e8b9"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.NormalizedSubstitution": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "52ded973e326c4f9be5b0ae817f5fbff3ce82875197686fd27192080fc144b9f",
+      "adapted": false,
+      "vendored_sha256": "52ded973e326c4f9be5b0ae817f5fbff3ce82875197686fd27192080fc144b9f"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Parameters.Johnson.FiniteBounds": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "cae97029b320b85707a341a32f0589c8b824dd5e29b39645d918ff8a86d994cc",
+      "adapted": false,
+      "vendored_sha256": "cae97029b320b85707a341a32f0589c8b824dd5e29b39645d918ff8a86d994cc"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Parameters.Johnson.InterpolationBounds": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "09779d4070c66597dcf1f6054d5bd94bf1713b18d379b979d11b5bef24a0c189",
+      "adapted": false,
+      "vendored_sha256": "09779d4070c66597dcf1f6054d5bd94bf1713b18d379b979d11b5bef24a0c189"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Parameters.Johnson.WeightedCertificate": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "c10ea6bf60b34b700dfcd83fd563363a65b2052e3753b9926fdca0719789e8ad",
+      "adapted": false,
+      "vendored_sha256": "c10ea6bf60b34b700dfcd83fd563363a65b2052e3753b9926fdca0719789e8ad"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Substitution": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "b101e8d1d2133b71e9ecba5c05d8d085893daeaf336480ff0e934d4aeace9dfb",
+      "adapted": false,
+      "vendored_sha256": "b101e8d1d2133b71e9ecba5c05d8d085893daeaf336480ff0e934d4aeace9dfb"
+    },
+    "ArkLib.Data.CodingTheory.HiddenDerivative.Variables": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "3dc52d8d5d44bd636a43b7d50d8c7317278b72004203f2333f4a2a1c279259f7",
+      "adapted": false,
+      "vendored_sha256": "3dc52d8d5d44bd636a43b7d50d8c7317278b72004203f2333f4a2a1c279259f7"
+    },
+    "ArkLib.Data.CodingTheory.InterleavedCode": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "d0403a00d3738e584ce6e65cc0ee55f70d93e972c1f526f473322b91333339d3",
+      "adapted": false,
+      "vendored_sha256": "d0403a00d3738e584ce6e65cc0ee55f70d93e972c1f526f473322b91333339d3"
+    },
+    "ArkLib.Data.CodingTheory.InterleavedCode.ExactAgreement": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "f3ba118fd0fd690b5bfa3f63c4976677d58bfdc00aa24b2a773b32435c0d3710",
+      "adapted": false,
+      "vendored_sha256": "f3ba118fd0fd690b5bfa3f63c4976677d58bfdc00aa24b2a773b32435c0d3710"
+    },
+    "ArkLib.Data.CodingTheory.InterleavedCode.Projection": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "427a39b57533ab596aad51d96b648685a269dcb3f79f8dfd012186e06b31f95c",
+      "adapted": false,
+      "vendored_sha256": "427a39b57533ab596aad51d96b648685a269dcb3f79f8dfd012186e06b31f95c"
+    },
+    "ArkLib.Data.CodingTheory.JohnsonBound.Pairwise": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "589c03d38684ca6bf718b2851e4d372a4774a0aa73792f2ddf7b2309a720f344",
+      "adapted": false,
+      "vendored_sha256": "589c03d38684ca6bf718b2851e4d372a4774a0aa73792f2ddf7b2309a720f344"
+    },
+    "ArkLib.Data.CodingTheory.ListDecodability": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "a1be94bed541531b58e44c72b80bc3fd26f2c37e0b12b651e28aad63b20482a9",
+      "adapted": false,
+      "vendored_sha256": "a1be94bed541531b58e44c72b80bc3fd26f2c37e0b12b651e28aad63b20482a9"
+    },
+    "ArkLib.Data.CodingTheory.PolishchukSpielman": {
+      "repo": "ArkLib",
+      "commit": "0b5b67c63d74b26e38715bb90fa5d7d5a07def25",
+      "source_sha256": "7500401b8dc5d0f0a03bf65532ba2ba815f4a9a9bfa47a0fca5ec83f771317a6",
+      "adapted": false,
+      "vendored_sha256": "7500401b8dc5d0f0a03bf65532ba2ba815f4a9a9bfa47a0fca5ec83f771317a6"
+    },
+    "ArkLib.Data.CodingTheory.PolishchukSpielman.Degrees": {
+      "repo": "ArkLib",
+      "commit": "0b5b67c63d74b26e38715bb90fa5d7d5a07def25",
+      "source_sha256": "966a3344b5c06b04962fd4aa2dd7f3a051bcb6788985c104e04cfff7d0821728",
+      "adapted": false,
+      "vendored_sha256": "966a3344b5c06b04962fd4aa2dd7f3a051bcb6788985c104e04cfff7d0821728"
+    },
+    "ArkLib.Data.CodingTheory.PolishchukSpielman.Existence": {
+      "repo": "ArkLib",
+      "commit": "0b5b67c63d74b26e38715bb90fa5d7d5a07def25",
+      "source_sha256": "7553123a7b41c8d9ae8a73eaa525f4cc4bc16ce454df1818638bbae1d7738db7",
+      "adapted": false,
+      "vendored_sha256": "7553123a7b41c8d9ae8a73eaa525f4cc4bc16ce454df1818638bbae1d7738db7"
+    },
+    "ArkLib.Data.CodingTheory.PolishchukSpielman.PolishchukSpielman": {
+      "repo": "ArkLib",
+      "commit": "0b5b67c63d74b26e38715bb90fa5d7d5a07def25",
+      "source_sha256": "defe5a7ab43fcee305976280c827122f1eb0e331d54727eb1fb7dea74130ed45",
+      "adapted": false,
+      "vendored_sha256": "defe5a7ab43fcee305976280c827122f1eb0e331d54727eb1fb7dea74130ed45"
+    },
+    "ArkLib.Data.CodingTheory.PolishchukSpielman.Resultant": {
+      "repo": "ArkLib",
+      "commit": "0b5b67c63d74b26e38715bb90fa5d7d5a07def25",
+      "source_sha256": "e13e83f7c6e96c7f2cd460c81b56a22185c5a61c95478b2f818ded33fe5fab04",
+      "adapted": false,
+      "vendored_sha256": "e13e83f7c6e96c7f2cd460c81b56a22185c5a61c95478b2f818ded33fe5fab04"
+    },
+    "ArkLib.Data.CodingTheory.Prelims": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "cd56d57ab6845640591fc11abf3dd77a013e85a1d1c9ed681586cdd6535f1dc1",
+      "adapted": false,
+      "vendored_sha256": "cd56d57ab6845640591fc11abf3dd77a013e85a1d1c9ed681586cdd6535f1dc1"
+    },
+    "ArkLib.Data.CodingTheory.ProximityGap.BCIKS20.AffineLines.BWMatrix": {
+      "repo": "ArkLib",
+      "commit": "0b5b67c63d74b26e38715bb90fa5d7d5a07def25",
+      "source_sha256": "682560c14a1296a723928c7e8bc9318b7cf4b732517f185ad42242026c152ba2",
+      "adapted": false,
+      "vendored_sha256": "682560c14a1296a723928c7e8bc9318b7cf4b732517f185ad42242026c152ba2"
+    },
+    "ArkLib.Data.CodingTheory.ProximityGap.BCIKS20.AffineLines.GoodCoeffs": {
+      "repo": "ArkLib",
+      "commit": "0b5b67c63d74b26e38715bb90fa5d7d5a07def25",
+      "source_sha256": "7e446d005b681e6eadb88901d0459d2713d9e53b564fcbca4d6ba14cf30fe8fb",
+      "adapted": true,
+      "vendored_sha256": "e3aaba4eeca71c8ee290d4fb9bd8f180397eb98a93286cb4ce92bcd952ce3108"
+    },
+    "ArkLib.Data.CodingTheory.ProximityGap.BCIKS20.AffineLines.JointAgreement": {
+      "repo": "ArkLib",
+      "commit": "0b5b67c63d74b26e38715bb90fa5d7d5a07def25",
+      "source_sha256": "9a32c7e87b3318b821b9ef179dd7f238108d12b5573403698f6e34f7498cf425",
+      "adapted": false,
+      "vendored_sha256": "9a32c7e87b3318b821b9ef179dd7f238108d12b5573403698f6e34f7498cf425"
+    },
+    "ArkLib.Data.CodingTheory.ProximityGap.BCIKS20.Prelude": {
+      "repo": "ArkLib",
+      "commit": "0b5b67c63d74b26e38715bb90fa5d7d5a07def25",
+      "source_sha256": "3a61dcbe6f5fa06b9ee172508bb2c478e9c049650ff14ec2367bd5d0dcf4413e",
+      "adapted": true,
+      "vendored_sha256": "37debe6687bcd041bfa9281eafc1c69da5e44c61a8d1c0693158b52b0f58a581"
+    },
+    "ArkLib.Data.CodingTheory.ProximityGenerator.AffineGenerator": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "698c77fa330db2521a15f210658c6a5e357dcfa91247fdcbc6764a028629cf56",
+      "adapted": false,
+      "vendored_sha256": "698c77fa330db2521a15f210658c6a5e357dcfa91247fdcbc6764a028629cf56"
+    },
+    "ArkLib.Data.CodingTheory.ProximityGenerator.Basic": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "d65ca7b3d7225333460f359149953f9923b0cec6f24ee1ffc092b3686db4a3f2",
+      "adapted": false,
+      "vendored_sha256": "d65ca7b3d7225333460f359149953f9923b0cec6f24ee1ffc092b3686db4a3f2"
+    },
+    "ArkLib.Data.CodingTheory.ProximityGenerator.Interleaving": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "0ff4d240e5341dc395b485c641364bf65daca681942d094f348e063e2fb9f04b",
+      "adapted": false,
+      "vendored_sha256": "0ff4d240e5341dc395b485c641364bf65daca681942d094f348e063e2fb9f04b"
+    },
+    "ArkLib.Data.CodingTheory.ProximityGenerator.MCAGenerator": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "5885632d72492f4d094b9fd8bdeb300369ebbd9c0ecfb77d8cfff2fa8beebaf2",
+      "adapted": false,
+      "vendored_sha256": "5885632d72492f4d094b9fd8bdeb300369ebbd9c0ecfb77d8cfff2fa8beebaf2"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "886958e1ef452035bf124732627b70a2b9fbd13a87e3bce8d11cd8b8e64c22cf",
+      "adapted": false,
+      "vendored_sha256": "886958e1ef452035bf124732627b70a2b9fbd13a87e3bce8d11cd8b8e64c22cf"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.Agreement": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "9e5ed6dc2db1ccb3c2dec1179636caaa8388df7c7bf717334dbbc686d60b7875",
+      "adapted": false,
+      "vendored_sha256": "9e5ed6dc2db1ccb3c2dec1179636caaa8388df7c7bf717334dbbc686d60b7875"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.ComponentDimension": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "75dd6693cc5fb92a25bb393f794d691db5cc90fc306c1d75c867c5c6234897f9",
+      "adapted": false,
+      "vendored_sha256": "75dd6693cc5fb92a25bb393f794d691db5cc90fc306c1d75c867c5c6234897f9"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.EquationDescent": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "56c0adfe33d724ad500bfad7ba5820e7e972aeda948aff403c85041fa61f819e",
+      "adapted": false,
+      "vendored_sha256": "56c0adfe33d724ad500bfad7ba5820e7e972aeda948aff403c85041fa61f819e"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.ExtensionDescent": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "09a2f3be4b2adba7e622d18ed959d2b5d8f27c4f7b5bc49f058f11147d82eb6f",
+      "adapted": false,
+      "vendored_sha256": "09a2f3be4b2adba7e622d18ed959d2b5d8f27c4f7b5bc49f058f11147d82eb6f"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.FullAgreement": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "246e2961aaf075130e64b906e4d0235acc2ee0e37853cf1d8f3037b658d87028",
+      "adapted": false,
+      "vendored_sha256": "246e2961aaf075130e64b906e4d0235acc2ee0e37853cf1d8f3037b658d87028"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.GraphLine": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "a53f230bf6c1c7954b85359e4a48a74d93d06aff7a2a9292938edebe764de109",
+      "adapted": false,
+      "vendored_sha256": "a53f230bf6c1c7954b85359e4a48a74d93d06aff7a2a9292938edebe764de109"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.GraphLineComponent": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "2438036a099cf75f60e5e4db2989ef8a64225cb4fca5daeef9e6bcc9bf0d9389",
+      "adapted": false,
+      "vendored_sha256": "2438036a099cf75f60e5e4db2989ef8a64225cb4fca5daeef9e6bcc9bf0d9389"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Johnson.Agreement": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "eb7f69e1b737e2c22be33a47cfdd047d35caab99c6c4f26eb4ce579d192f0fe2",
+      "adapted": false,
+      "vendored_sha256": "eb7f69e1b737e2c22be33a47cfdd047d35caab99c6c4f26eb4ce579d192f0fe2"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Johnson.Probability": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "a9bbb4e6bcbdd96bdadbc6452dfe7a0c415d4be8269a6dff3b3711614c1458a9",
+      "adapted": false,
+      "vendored_sha256": "a9bbb4e6bcbdd96bdadbc6452dfe7a0c415d4be8269a6dff3b3711614c1458a9"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.LineToAffine": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "444bfca0d22111b4cb51c23a31537fce7444fe774460e3d11b7f31fec91b206f",
+      "adapted": false,
+      "vendored_sha256": "444bfca0d22111b4cb51c23a31537fce7444fe774460e3d11b7f31fec91b206f"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Ordinary.BaseEquation": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "87a478996782be51310e46138d0b71e655da95550c25eb47493ec60fe6a5c280",
+      "adapted": false,
+      "vendored_sha256": "87a478996782be51310e46138d0b71e655da95550c25eb47493ec60fe6a5c280"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Ordinary.Equation": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "2597b1b545069e54c5ad8e0d94f3f134088ee608b851e6e74637ed7c12bd8608",
+      "adapted": false,
+      "vendored_sha256": "2597b1b545069e54c5ad8e0d94f3f134088ee608b851e6e74637ed7c12bd8608"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Ordinary.FactorAssembly": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "cb3645226ed1f8a7243a6cae700f21edcde360ce6f07bac794f4d23b4bc96b17",
+      "adapted": false,
+      "vendored_sha256": "cb3645226ed1f8a7243a6cae700f21edcde360ce6f07bac794f4d23b4bc96b17"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Ordinary.FactorBudget": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "4359d1b23c6e13355f3a5ec5609062572b43d5498cd75783c6c85e92f419ef07",
+      "adapted": false,
+      "vendored_sha256": "4359d1b23c6e13355f3a5ec5609062572b43d5498cd75783c6c85e92f419ef07"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Ordinary.IrreducibleEquation": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "7d13abe58365b36285648cfb1e67599248804938023212bd915f8e56094c315e",
+      "adapted": false,
+      "vendored_sha256": "7d13abe58365b36285648cfb1e67599248804938023212bd915f8e56094c315e"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Pairs.Family": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "136bee10b7751ad79fff2b22aaf53dc870f0cd2ee0537879f8a2c0f21d97ed51",
+      "adapted": false,
+      "vendored_sha256": "136bee10b7751ad79fff2b22aaf53dc870f0cd2ee0537879f8a2c0f21d97ed51"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.PowerBatchedAdmissibility": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "96e39b9a38bd638e35896d9c58663f37f47941d39b300563c5358d5ca909c159",
+      "adapted": false,
+      "vendored_sha256": "96e39b9a38bd638e35896d9c58663f37f47941d39b300563c5358d5ca909c159"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.PowerBatchedComponentAgreement": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "badf046da95d81fc2061a31938ea3eb530de574cec799fae9eadbcaefcfc1e17",
+      "adapted": false,
+      "vendored_sha256": "badf046da95d81fc2061a31938ea3eb530de574cec799fae9eadbcaefcfc1e17"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.PowerBatchedComponentRecognition": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "c51b00d2b3d5e360dc85f3b4f50cc15ecb9799120dbbabfeb0aff242a358b51e",
+      "adapted": false,
+      "vendored_sha256": "c51b00d2b3d5e360dc85f3b4f50cc15ecb9799120dbbabfeb0aff242a358b51e"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.PowerBatchedExceptionalChallenges": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "5acd5f70e164452bb6f0be029313af962a2c5382182c987c9daa3bfdcbb980de",
+      "adapted": false,
+      "vendored_sha256": "5acd5f70e164452bb6f0be029313af962a2c5382182c987c9daa3bfdcbb980de"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.PowerBatchedFrobeniusFamily": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "c47ce53509e3220228d2c4b5bd7a3aea3379567f6e65c5bdd16ca0abf6d8c777",
+      "adapted": false,
+      "vendored_sha256": "c47ce53509e3220228d2c4b5bd7a3aea3379567f6e65c5bdd16ca0abf6d8c777"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.PowerBatchedGraphCounting": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "5839a60d6c09464be21fcc37c3aa58ff436d65d6edf2ea1ab1971ca65221fd68",
+      "adapted": false,
+      "vendored_sha256": "5839a60d6c09464be21fcc37c3aa58ff436d65d6edf2ea1ab1971ca65221fd68"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.PowerBatchedIncidence": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "c428cce984d1b23209f42159e933b793ba2ec9f1fdd132112b77beff8ed959cb",
+      "adapted": false,
+      "vendored_sha256": "c428cce984d1b23209f42159e933b793ba2ec9f1fdd132112b77beff8ed959cb"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.PowerBatchedPointRecognition": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "6cd6e0e8accdce2c85958382d14ac7972aa41cc59026afa40323b3351cb1c147",
+      "adapted": false,
+      "vendored_sha256": "6cd6e0e8accdce2c85958382d14ac7972aa41cc59026afa40323b3351cb1c147"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.PowerBatchedRegularEquation": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "ff67ea8e682df541da68807b515ded776c6f932e19369cfc4bee5754c17c27bd",
+      "adapted": false,
+      "vendored_sha256": "ff67ea8e682df541da68807b515ded776c6f932e19369cfc4bee5754c17c27bd"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.PowerBatchedSharpRegularAgreement": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "cf1550e565d86ac2f013af75e1de5a768f6ecad48fdc69e49a596f943da0c05f",
+      "adapted": false,
+      "vendored_sha256": "cf1550e565d86ac2f013af75e1de5a768f6ecad48fdc69e49a596f943da0c05f"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.PowerToLine": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "73533990bec1770dc6ff49e583956dbfef161d5f12f2e7b889a5569e9b61db48",
+      "adapted": false,
+      "vendored_sha256": "73533990bec1770dc6ff49e583956dbfef161d5f12f2e7b889a5569e9b61db48"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.PowerTupleCounting": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "5b76d13e4adf2341d4a815b06870aad28409305202b651df2bb0398a0a1edd31",
+      "adapted": false,
+      "vendored_sha256": "5b76d13e4adf2341d4a815b06870aad28409305202b651df2bb0398a0a1edd31"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.PowerTupleIncidence": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "a007a45e83137041b3cf02fef21dd151afbee7c3b911e56c6d7cab9bfd6f887e",
+      "adapted": false,
+      "vendored_sha256": "a007a45e83137041b3cf02fef21dd151afbee7c3b911e56c6d7cab9bfd6f887e"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.PowerTupleRegularBound": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "6ea5d070deb6c407869c21989d824eeebc1776a22f23ab3f9ee69b5d6b2d0274",
+      "adapted": false,
+      "vendored_sha256": "6ea5d070deb6c407869c21989d824eeebc1776a22f23ab3f9ee69b5d6b2d0274"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.PowerTupleSeparableBound": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "383bc5548be04a7b3f9efdaa2b0b2ae9fe20364cf8e171f2dd5357e7b4ca2620",
+      "adapted": false,
+      "vendored_sha256": "383bc5548be04a7b3f9efdaa2b0b2ae9fe20364cf8e171f2dd5357e7b4ca2620"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.TaylorChart.PointRecognition": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "12981f8a05e834b8ce753716ab7b81de958164dffebb6cb3cbaf92aa5dc864ee",
+      "adapted": false,
+      "vendored_sha256": "12981f8a05e834b8ce753716ab7b81de958164dffebb6cb3cbaf92aa5dc864ee"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.TupleSpecialization": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "d5606cf8c7af48e44b6d7ac0bc816f42d8e13a7e95eeedd6ae9362c3e5f719a9",
+      "adapted": false,
+      "vendored_sha256": "d5606cf8c7af48e44b6d7ac0bc816f42d8e13a7e95eeedd6ae9362c3e5f719a9"
+    },
+    "ArkLib.Data.CodingTheory.ReedSolomon.PowerAgreement": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "92ddcf7822dd2eef9e729a21577ff550646f4c06b696f8ddd3e9dfbb7f428bb2",
+      "adapted": false,
+      "vendored_sha256": "92ddcf7822dd2eef9e729a21577ff550646f4c06b696f8ddd3e9dfbb7f428bb2"
+    },
+    "ArkLib.Data.Fin.Basic": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "53e98b3b54720db8671720c5d4478f6dffa1d023bea2bb446395884b979d3e2a",
+      "adapted": true,
+      "vendored_sha256": "4e8380314ef393dd8f9ec42275d6e2b849c73f406a2a37ca89ac347840e0d914",
+      "adaptation": "omits the admitted `Fin.sumCases` (unused)"
+    },
+    "ArkLib.Data.Fin.Lift": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "00b996f86d79ccdb36f45c3ea67000c04fd64e256a5a9d834944cc4918b7b34a",
+      "adapted": false,
+      "vendored_sha256": "00b996f86d79ccdb36f45c3ea67000c04fd64e256a5a9d834944cc4918b7b34a"
+    },
+    "ArkLib.Data.Fin.Tuple.Defs": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "20cdcec75371269b9387edcdcd395511dda3e6d38b2570cef07aba19dc67fdcd",
+      "adapted": false,
+      "vendored_sha256": "20cdcec75371269b9387edcdcd395511dda3e6d38b2570cef07aba19dc67fdcd"
+    },
+    "ArkLib.Data.Finset.PairwiseIntersection": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "6641cbb095fb39a54535cfc11f58077891b9485ed6fb2e187747b372beab7eab",
+      "adapted": false,
+      "vendored_sha256": "6641cbb095fb39a54535cfc11f58077891b9485ed6fb2e187747b372beab7eab"
+    },
+    "ArkLib.Data.Finset.Staircase": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "71ca149d437c6e55a3df2c1b96cce038be46a54da09f7401528be03463485273",
+      "adapted": false,
+      "vendored_sha256": "71ca149d437c6e55a3df2c1b96cce038be46a54da09f7401528be03463485273"
+    },
+    "ArkLib.Data.Finset.WeightedSimplex": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "715ecd2902b2efd76ba7d74fb636d99be2722dfa03e6445758036cb5c72fd656",
+      "adapted": false,
+      "vendored_sha256": "715ecd2902b2efd76ba7d74fb636d99be2722dfa03e6445758036cb5c72fd656"
+    },
+    "ArkLib.Data.Matrix.Basic": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "49c09daaf2fea8fb474e35b93c9648e2c767988f2eb14bee2d80fd5496fcf825",
+      "adapted": false,
+      "vendored_sha256": "49c09daaf2fea8fb474e35b93c9648e2c767988f2eb14bee2d80fd5496fcf825"
+    },
+    "ArkLib.Data.Matrix.Vandermonde": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "a6f1625eb22a77217576a1d6c79b63d1d5f1cce1142c3e4643bafba023f9b403",
+      "adapted": false,
+      "vendored_sha256": "a6f1625eb22a77217576a1d6c79b63d1d5f1cce1142c3e4643bafba023f9b403"
+    },
+    "ArkLib.Data.MvPolynomial.Degrees": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "f0ad981fcf478c4119d6572e06d4879f8f960c3bd10e5859bf2cb7a7e7ca4a7d",
+      "adapted": false,
+      "vendored_sha256": "f0ad981fcf478c4119d6572e06d4879f8f960c3bd10e5859bf2cb7a7e7ca4a7d"
+    },
+    "ArkLib.Data.MvPolynomial.FrobeniusContraction": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "a3e000689810ccf291720c9691a0e65ff0169a56ba2ba06f82a07482ce3005ee",
+      "adapted": false,
+      "vendored_sha256": "a3e000689810ccf291720c9691a0e65ff0169a56ba2ba06f82a07482ce3005ee"
+    },
+    "ArkLib.Data.MvPolynomial.Interpolation": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "208f0b425b70ada0ba3fa7ce20911d3b266addd4675a11e7cf3e3f11c6d9f3e2",
+      "adapted": true,
+      "vendored_sha256": "74fe0998017550cc43382bcdc8bd1a79281d8cbcc4554a601681c75cea5d947b",
+      "adaptation": "omits the admitted `MvPolynomial.basis` (unused)"
+    },
+    "ArkLib.Data.MvPolynomial.JointDegree": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "3b0b35afdc132f4f8aa5e86c0f14a1729228e63d508c6fb84cf1dcae874ba777",
+      "adapted": false,
+      "vendored_sha256": "3b0b35afdc132f4f8aa5e86c0f14a1729228e63d508c6fb84cf1dcae874ba777"
+    },
+    "ArkLib.Data.MvPolynomial.LinearMvExtension": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "986800a09bfd9342ffe12e1ded81171c6b6fb10498f248724191e803673e6abb",
+      "adapted": false,
+      "vendored_sha256": "986800a09bfd9342ffe12e1ded81171c6b6fb10498f248724191e803673e6abb"
+    },
+    "ArkLib.Data.MvPolynomial.Multilinear": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "1d6982797e200c59397f23e54e61c6c47a1d16871d9544a742de7e65764e1692",
+      "adapted": false,
+      "vendored_sha256": "1d6982797e200c59397f23e54e61c6c47a1d16871d9544a742de7e65764e1692"
+    },
+    "ArkLib.Data.MvPolynomial.SchwartzZippelCounting": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "adbd65b90836a0558dd496e0ded96e859989d2fca84995ff291271c396a81833",
+      "adapted": false,
+      "vendored_sha256": "adbd65b90836a0558dd496e0ded96e859989d2fca84995ff291271c396a81833"
+    },
+    "ArkLib.Data.MvPolynomial.WeightAtMost": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "bb643c7c0a3715b6a5fd4f455f867a70dea7054f04225326744439b35bc8d503",
+      "adapted": false,
+      "vendored_sha256": "bb643c7c0a3715b6a5fd4f455f867a70dea7054f04225326744439b35bc8d503"
+    },
+    "ArkLib.Data.MvPolynomial.WeightedDegree": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "42c4e7ca2182373a0882b408189c0086af8b9804ad2c2addb614d02dc991acdd",
+      "adapted": false,
+      "vendored_sha256": "42c4e7ca2182373a0882b408189c0086af8b9804ad2c2addb614d02dc991acdd"
+    },
+    "ArkLib.Data.MvPolynomial.WeightedOrder": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "7e56d49df457c8f258f6715b702df41bd2fe731178d08c49b3241d9b0f41b60c",
+      "adapted": false,
+      "vendored_sha256": "7e56d49df457c8f258f6715b702df41bd2fe731178d08c49b3241d9b0f41b60c"
+    },
+    "ArkLib.Data.Polynomial.Bivariate": {
+      "repo": "ArkLib",
+      "commit": "0b5b67c63d74b26e38715bb90fa5d7d5a07def25",
+      "source_sha256": "c6950d2eba3d92c70590e3b28d6296a23dc92ca962cb43973c1377f4732ade67",
+      "adapted": false,
+      "vendored_sha256": "c6950d2eba3d92c70590e3b28d6296a23dc92ca962cb43973c1377f4732ade67"
+    },
+    "ArkLib.Data.Polynomial.Differential.BaseChange": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "fb4d594cfe42cc6d92f806210e1ede9ca6a610567ca7d28cf908c4d77bbf7027",
+      "adapted": false,
+      "vendored_sha256": "fb4d594cfe42cc6d92f806210e1ede9ca6a610567ca7d28cf908c4d77bbf7027"
+    },
+    "ArkLib.Data.Polynomial.Differential.Basic": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "b61ee881affc8874c4ba7a774b8309582b93d5e964296885a8f81b6311d15f73",
+      "adapted": false,
+      "vendored_sha256": "b61ee881affc8874c4ba7a774b8309582b93d5e964296885a8f81b6311d15f73"
+    },
+    "ArkLib.Data.Polynomial.Differential.ContentExceptions": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "6f0d2eaab4b6c6bc478c8a339c78f671323bf994ea8f9ca63c681e5027956d5d",
+      "adapted": false,
+      "vendored_sha256": "6f0d2eaab4b6c6bc478c8a339c78f671323bf994ea8f9ca63c681e5027956d5d"
+    },
+    "ArkLib.Data.Polynomial.Differential.DerivativeDescent": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "ad8fb11d3954a3c8e3a7ec7644c9b5df9bec9011e115618d06a9cc696894bc52",
+      "adapted": false,
+      "vendored_sha256": "ad8fb11d3954a3c8e3a7ec7644c9b5df9bec9011e115618d06a9cc696894bc52"
+    },
+    "ArkLib.Data.Polynomial.Differential.FrobeniusEquation": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "cc7c364b2346cb4b29018ffe272d58b8af5e31d38c24a2127b258d05a71a1662",
+      "adapted": false,
+      "vendored_sha256": "cc7c364b2346cb4b29018ffe272d58b8af5e31d38c24a2127b258d05a71a1662"
+    },
+    "ArkLib.Data.Polynomial.Differential.FrobeniusTaylorWitness": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "cd5af17d4a3c7ba921096de9f6079cc442c72e5be86bc09117e9a70d407796d4",
+      "adapted": false,
+      "vendored_sha256": "cd5af17d4a3c7ba921096de9f6079cc442c72e5be86bc09117e9a70d407796d4"
+    },
+    "ArkLib.Data.Polynomial.Differential.JetDegree": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "3737831016418bd00625d527876b873d0f716f8db9ea8156a676fea8c88ea6cc",
+      "adapted": false,
+      "vendored_sha256": "3737831016418bd00625d527876b873d0f716f8db9ea8156a676fea8c88ea6cc"
+    },
+    "ArkLib.Data.Polynomial.Differential.JetPrefix": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "a19aad4121526b2205eaa839431066187369e1dfe0f666dcfa0e55e3a6aafe6e",
+      "adapted": false,
+      "vendored_sha256": "a19aad4121526b2205eaa839431066187369e1dfe0f666dcfa0e55e3a6aafe6e"
+    },
+    "ArkLib.Data.Polynomial.Differential.OrderZeroPresentation": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "6e6e9e18a9fe0819b35594f441f78be13818ccd6ccfed4cc76c0f9d8d06e09bd",
+      "adapted": false,
+      "vendored_sha256": "6e6e9e18a9fe0819b35594f441f78be13818ccd6ccfed4cc76c0f9d8d06e09bd"
+    },
+    "ArkLib.Data.Polynomial.Differential.RationalTaylor": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "80344f615810e3a102d50aacd90a3717e39be359fc2e8c30fa7864ec722f2c82",
+      "adapted": false,
+      "vendored_sha256": "80344f615810e3a102d50aacd90a3717e39be359fc2e8c30fa7864ec722f2c82"
+    },
+    "ArkLib.Data.Polynomial.Differential.RationalTaylorAlgebra": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "2b5269edeeabaa174a52fa94970957ed7e5e65a54bdcfdcc2a26fb12b075a234",
+      "adapted": false,
+      "vendored_sha256": "2b5269edeeabaa174a52fa94970957ed7e5e65a54bdcfdcc2a26fb12b075a234"
+    },
+    "ArkLib.Data.Polynomial.Differential.RationalTaylorBidegree": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "769945372a012f13dba4d9cc031aae5a29bc5be03efaafc6d79af93d936a1009",
+      "adapted": false,
+      "vendored_sha256": "769945372a012f13dba4d9cc031aae5a29bc5be03efaafc6d79af93d936a1009"
+    },
+    "ArkLib.Data.Polynomial.Differential.RationalTaylorDerivativeDegree": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "b25a744e7717f832665fac1c456f60f41ce95be138f95b958e2650111e1dec30",
+      "adapted": false,
+      "vendored_sha256": "b25a744e7717f832665fac1c456f60f41ce95be138f95b958e2650111e1dec30"
+    },
+    "ArkLib.Data.Polynomial.Differential.RationalTaylorJointDegree": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "69b41d97665eed3577e61bd01f78f92b5b6d0dd5c4e2f552b474af44bc7cd8cc",
+      "adapted": false,
+      "vendored_sha256": "69b41d97665eed3577e61bd01f78f92b5b6d0dd5c4e2f552b474af44bc7cd8cc"
+    },
+    "ArkLib.Data.Polynomial.Differential.RegularLift": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "3b3fc4235d1289a175332033301b3f2653fd9242369be0c1d105098de9c1bb7c",
+      "adapted": false,
+      "vendored_sha256": "3b3fc4235d1289a175332033301b3f2653fd9242369be0c1d105098de9c1bb7c"
+    },
+    "ArkLib.Data.Polynomial.Differential.RootPresentation": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "7a992fdfce2cda1000025776f90e0e26463eb8f569bd5cc5675acb93d43b6c99",
+      "adapted": false,
+      "vendored_sha256": "7a992fdfce2cda1000025776f90e0e26463eb8f569bd5cc5675acb93d43b6c99"
+    },
+    "ArkLib.Data.Polynomial.Differential.ShiftedJet": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "c1f2f618628b81553bfbed974dd9a7954f2d48387e90d9873ca9ef345a46e06a",
+      "adapted": false,
+      "vendored_sha256": "c1f2f618628b81553bfbed974dd9a7954f2d48387e90d9873ca9ef345a46e06a"
+    },
+    "ArkLib.Data.Polynomial.Differential.TaylorChart": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "614b45553364dee14e4edc6d5ad8e9cc05ec65143b2d75ee21f05f9ccac7cc14",
+      "adapted": false,
+      "vendored_sha256": "614b45553364dee14e4edc6d5ad8e9cc05ec65143b2d75ee21f05f9ccac7cc14"
+    },
+    "ArkLib.Data.Polynomial.Differential.TaylorChartAlgebra": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "495baa1118dbd429a23b98e36f405270781c11c2592bddae6d889fff22b3f8e6",
+      "adapted": false,
+      "vendored_sha256": "495baa1118dbd429a23b98e36f405270781c11c2592bddae6d889fff22b3f8e6"
+    },
+    "ArkLib.Data.Polynomial.Differential.TaylorChartGeometry": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "86babb62e25a670006da0ef548cca9fb69208614acc5895e4bb52cca279065c9",
+      "adapted": false,
+      "vendored_sha256": "86babb62e25a670006da0ef548cca9fb69208614acc5895e4bb52cca279065c9"
+    },
+    "ArkLib.Data.Polynomial.Differential.TaylorChartIncidence": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "8505e9c7526d480a964514f740c38e921c4867efad1cbe7a2ded679396a5d704",
+      "adapted": false,
+      "vendored_sha256": "8505e9c7526d480a964514f740c38e921c4867efad1cbe7a2ded679396a5d704"
+    },
+    "ArkLib.Data.Polynomial.Differential.TaylorIndexWeight": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "b94d0f61967ce822edc90a1b4a8b1479a0b752022c63848a82bc5c928913da5e",
+      "adapted": false,
+      "vendored_sha256": "b94d0f61967ce822edc90a1b4a8b1479a0b752022c63848a82bc5c928913da5e"
+    },
+    "ArkLib.Data.Polynomial.Differential.TaylorResidual": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "b9fc933a8c72f9c00484b80a722f99b9e32021a9071895ada28092ab45872107",
+      "adapted": false,
+      "vendored_sha256": "b9fc933a8c72f9c00484b80a722f99b9e32021a9071895ada28092ab45872107"
+    },
+    "ArkLib.Data.Polynomial.Differential.Types": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "0b166758b97d8857311613c1c968f72a5aac88d3110f1a5128f31bc705b50642",
+      "adapted": false,
+      "vendored_sha256": "0b166758b97d8857311613c1c968f72a5aac88d3110f1a5128f31bc705b50642"
+    },
+    "ArkLib.Data.Polynomial.FractionFieldResultant": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "a2fb231b94af2fabe822a5649fa71d793f8dfa72ba0778f941d53cced120ea44",
+      "adapted": false,
+      "vendored_sha256": "a2fb231b94af2fabe822a5649fa71d793f8dfa72ba0778f941d53cced120ea44"
+    },
+    "ArkLib.Data.Polynomial.FrobeniusContraction": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "7b5e4f9c1dc2bdc7026ddea9e3afb0eed1d69007c358bf03922dd36b24a2a921",
+      "adapted": false,
+      "vendored_sha256": "7b5e4f9c1dc2bdc7026ddea9e3afb0eed1d69007c358bf03922dd36b24a2a921"
+    },
+    "ArkLib.Data.Polynomial.Interface": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "54bc973eb9b4608ee43ab6d7d4859514a9f12bd3fe3201a19bbf93aaf9fc1be7",
+      "adapted": false,
+      "vendored_sha256": "54bc973eb9b4608ee43ab6d7d4859514a9f12bd3fe3201a19bbf93aaf9fc1be7"
+    },
+    "ArkLib.Data.Polynomial.ResultantDegree": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "69b425b3ddc1fd1edb43d124b1948b37008822e7c2e9b261fb1845d606fafc8c",
+      "adapted": false,
+      "vendored_sha256": "69b425b3ddc1fd1edb43d124b1948b37008822e7c2e9b261fb1845d606fafc8c"
+    },
+    "ArkLib.Data.Polynomial.ResultantSpecialization": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "ec022007bafb063ecef6e5c51d3e68492659141de6a09c457032eb1607fb2938",
+      "adapted": false,
+      "vendored_sha256": "ec022007bafb063ecef6e5c51d3e68492659141de6a09c457032eb1607fb2938"
+    },
+    "ArkLib.Data.Polynomial.SpecializationAvoidance": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "2e126ae0548f0f8ec4cfec28b39216ef84af053ad6b4eb2a30d416aaddd2443e",
+      "adapted": false,
+      "vendored_sha256": "2e126ae0548f0f8ec4cfec28b39216ef84af053ad6b4eb2a30d416aaddd2443e"
+    },
+    "ArkLib.Data.Polynomial.TaylorPrefix": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "f4a5bc074a9f6c11a09a373f336eb939e019fcd9cf8e29c7b035510769268791",
+      "adapted": false,
+      "vendored_sha256": "f4a5bc074a9f6c11a09a373f336eb939e019fcd9cf8e29c7b035510769268791"
+    },
+    "ArkLib.Data.Polynomial.Trivariate": {
+      "repo": "ArkLib",
+      "commit": "0b5b67c63d74b26e38715bb90fa5d7d5a07def25",
+      "source_sha256": "d8f569de3a5984919cfe9f46d47939e0496d8d15bd9bb8f94ce0ceaf9e718b14",
+      "adapted": false,
+      "vendored_sha256": "d8f569de3a5984919cfe9f46d47939e0496d8d15bd9bb8f94ce0ceaf9e718b14"
+    },
+    "ArkLib.Data.Probability.Instances": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "7b2ac69ec9ec063608dc37fc7a20b91aa990490df21c5b67ba9366a94a049077",
+      "adapted": false,
+      "vendored_sha256": "7b2ac69ec9ec063608dc37fc7a20b91aa990490df21c5b67ba9366a94a049077"
+    },
+    "ArkLib.Data.Probability.Uniform": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "c70cea2559d481f11ab6609fd35b7322dc17f530f1b9fafe7358db5be7010083",
+      "adapted": false,
+      "vendored_sha256": "c70cea2559d481f11ab6609fd35b7322dc17f530f1b9fafe7358db5be7010083"
+    },
+    "ArkLib.ToMathlib.Algebra.Order.Floor.Semiring": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "3853791dc9a2652d637a8edff50c22f7bbd246fda6fb466842da50d08117ca25",
+      "adapted": false,
+      "vendored_sha256": "3853791dc9a2652d637a8edff50c22f7bbd246fda6fb466842da50d08117ca25"
+    },
+    "ArkLib.ToMathlib.BigOperators.LinearBudget": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "237deb10e6ccd5608749f85e0793e949f54883d4924410b48906a728662c6763",
+      "adapted": false,
+      "vendored_sha256": "237deb10e6ccd5608749f85e0793e949f54883d4924410b48906a728662c6763"
+    },
+    "ArkLib.ToMathlib.Combinatorics.Enumerative.DoubleCounting": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "6b63ec26e20a3d85e0dd55460c8344ec7dec60864b9d33d95b1ff643f675737c",
+      "adapted": false,
+      "vendored_sha256": "6b63ec26e20a3d85e0dd55460c8344ec7dec60864b9d33d95b1ff643f675737c"
+    },
+    "ArkLib.ToMathlib.Combinatorics.Enumerative.IncidenceProduct": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "0830c6c89a24d02ce8d92d905780327303abfa54041852de348c481e909a5394",
+      "adapted": false,
+      "vendored_sha256": "0830c6c89a24d02ce8d92d905780327303abfa54041852de348c481e909a5394"
+    },
+    "ArkLib.ToMathlib.Combinatorics.Enumerative.MonomialCount": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "e4c0ee253f2bd5fc7d13c2ebd0f6a4ee8202eee29d2e9d029da9bcd84289a575",
+      "adapted": false,
+      "vendored_sha256": "e4c0ee253f2bd5fc7d13c2ebd0f6a4ee8202eee29d2e9d029da9bcd84289a575"
+    },
+    "ArkLib.ToMathlib.Finset.LineAgreement": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "62e41e743f19339732c19b9b204350839f65ae1a906bc698e6f67cf6f0a82024",
+      "adapted": false,
+      "vendored_sha256": "62e41e743f19339732c19b9b204350839f65ae1a906bc698e6f67cf6f0a82024"
+    },
+    "ArkLib.ToMathlib.Finsupp.Weight": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "7e9d152444a40f8630d6d1bcc1420b40465f9cfe0c3bf0186cae2e8d3c9b9488",
+      "adapted": false,
+      "vendored_sha256": "7e9d152444a40f8630d6d1bcc1420b40465f9cfe0c3bf0186cae2e8d3c9b9488"
+    },
+    "ArkLib.ToMathlib.LinearAlgebra.FiniteDimensional": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "0d247e557e5697565378b9344d9a786a36a4288da7a51b94eb63817c88382fc9",
+      "adapted": false,
+      "vendored_sha256": "0d247e557e5697565378b9344d9a786a36a4288da7a51b94eb63817c88382fc9"
+    },
+    "ArkLib.ToMathlib.LinearAlgebra.LagrangeLine": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "d6e1e6b41b9b28a00bcabef2afb01339ebb8db9422ea37598cc066641f713032",
+      "adapted": false,
+      "vendored_sha256": "d6e1e6b41b9b28a00bcabef2afb01339ebb8db9422ea37598cc066641f713032"
+    },
+    "ArkLib.ToMathlib.LinearAlgebra.LineInjectivity": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "185b422fe1f1668e89ade3d301cb27bb4e74618d02281f461d86fcc72064f94d",
+      "adapted": false,
+      "vendored_sha256": "185b422fe1f1668e89ade3d301cb27bb4e74618d02281f461d86fcc72064f94d"
+    },
+    "ArkLib.ToMathlib.LinearAlgebra.Matrix.InvertibleCombination": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "4eda017160843ba3d19fc1b363cb89c3d3f4e3334a38026f1922955e19a38781",
+      "adapted": false,
+      "vendored_sha256": "4eda017160843ba3d19fc1b363cb89c3d3f4e3334a38026f1922955e19a38781"
+    },
+    "ArkLib.ToMathlib.LinearAlgebra.Matrix.PrimitiveKernel": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "46b273c9bf4f0992131d6413ddbab0e215a88c78743d217814bc458d846ceb8f",
+      "adapted": false,
+      "vendored_sha256": "46b273c9bf4f0992131d6413ddbab0e215a88c78743d217814bc458d846ceb8f"
+    },
+    "ArkLib.ToMathlib.LinearAlgebra.Matrix.Rank": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "effb05c243ad0ac510fae90a5d5f23ad140e94443e50aea84777329fa7ca5da1",
+      "adapted": false,
+      "vendored_sha256": "effb05c243ad0ac510fae90a5d5f23ad140e94443e50aea84777329fa7ca5da1"
+    },
+    "ArkLib.ToMathlib.LinearAlgebra.Matrix.RowBasis": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "5bff47eb4ebac06a4afd4b1b63d36b61823470e5fbae4b196eceb6afa6fa5ddb",
+      "adapted": false,
+      "vendored_sha256": "5bff47eb4ebac06a4afd4b1b63d36b61823470e5fbae4b196eceb6afa6fa5ddb"
+    },
+    "ArkLib.ToMathlib.LinearAlgebra.Matrix.SupportedRows": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "fe3f60d693b9ab265556ec10be3b1fbd1de31a747fc315267b4fe923213860c9",
+      "adapted": false,
+      "vendored_sha256": "fe3f60d693b9ab265556ec10be3b1fbd1de31a747fc315267b4fe923213860c9"
+    },
+    "ArkLib.ToMathlib.LinearAlgebra.PolynomialKernelHeight": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "a66933f32637270792f312874135456f7fbdf4003fcbdb6a690e036adcfbf79e",
+      "adapted": false,
+      "vendored_sha256": "a66933f32637270792f312874135456f7fbdf4003fcbdb6a690e036adcfbf79e"
+    },
+    "ArkLib.ToMathlib.LinearAlgebra.ShiftedPolynomialKernelHeight": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "c36043ec17ec58d3a352524e6a51ac084ee54b524a1a5ab8a51f87bfb88cc475",
+      "adapted": false,
+      "vendored_sha256": "c36043ec17ec58d3a352524e6a51ac084ee54b524a1a5ab8a51f87bfb88cc475"
+    },
+    "ArkLib.ToMathlib.LinearAlgebra.Submodule.Union": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "6e743789587636a99c2ba975877a4f34e1a635bfa0316814f3f60a2a61969ee5",
+      "adapted": false,
+      "vendored_sha256": "6e743789587636a99c2ba975877a4f34e1a635bfa0316814f3f60a2a61969ee5"
+    },
+    "ArkLib.ToMathlib.MvPolynomial.ClearedSubstitution": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "ab167060e714a38a4c89d71567a2863ef673a3275f57732b9bdbd4dfb77cd521",
+      "adapted": false,
+      "vendored_sha256": "ab167060e714a38a4c89d71567a2863ef673a3275f57732b9bdbd4dfb77cd521"
+    },
+    "ArkLib.ToMathlib.MvPolynomial.FirstOrderTaylor": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "2163c2009a7d8e1a7a64c7918972b0eef4c5d2b730986ccb95cdb6f0116c2b4c",
+      "adapted": false,
+      "vendored_sha256": "2163c2009a7d8e1a7a64c7918972b0eef4c5d2b730986ccb95cdb6f0116c2b4c"
+    },
+    "ArkLib.ToMathlib.MvPolynomial.FrobeniusPullback": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "aa71b5defb2e5d380d82f4cdd3b5d2f5630766d3ed7559f7a72f25d2a4d13371",
+      "adapted": false,
+      "vendored_sha256": "aa71b5defb2e5d380d82f4cdd3b5d2f5630766d3ed7559f7a72f25d2a4d13371"
+    },
+    "ArkLib.ToMathlib.MvPolynomial.OptionRoots": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "163e463c0592a80ebf9f410ce70af1be913da26b8f98bb8d8ec1caab7681ff61",
+      "adapted": false,
+      "vendored_sha256": "163e463c0592a80ebf9f410ce70af1be913da26b8f98bb8d8ec1caab7681ff61"
+    },
+    "ArkLib.ToMathlib.MvPolynomial.OptionWeightedDegree": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "fb1954830cbef57c8f62cc3b5788825a27f0c413171d886fb0a453f2f92c7029",
+      "adapted": false,
+      "vendored_sha256": "fb1954830cbef57c8f62cc3b5788825a27f0c413171d886fb0a453f2f92c7029"
+    },
+    "ArkLib.ToMathlib.MvPolynomial.PDeriv": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "11f4bc38727bde7957101eea6905202d26c957767264aed7fe44e725ddebfc22",
+      "adapted": false,
+      "vendored_sha256": "11f4bc38727bde7957101eea6905202d26c957767264aed7fe44e725ddebfc22"
+    },
+    "ArkLib.ToMathlib.MvPolynomial.PolynomialCoefficients": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "fb8230e8f6cb6fede49a8b9ca1bf2e4f6e99c180510e2d54a28adb0f5e1e8c00",
+      "adapted": false,
+      "vendored_sha256": "fb8230e8f6cb6fede49a8b9ca1bf2e4f6e99c180510e2d54a28adb0f5e1e8c00"
+    },
+    "ArkLib.ToMathlib.MvPolynomial.PowerMomentGeometry": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "5cb3a27979063c1b6c80f7447e81eb138d9619ed420d7289fe40bd2339b4ef6d",
+      "adapted": false,
+      "vendored_sha256": "5cb3a27979063c1b6c80f7447e81eb138d9619ed420d7289fe40bd2339b4ef6d"
+    },
+    "ArkLib.ToMathlib.MvPolynomial.PowerMomentLift": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "7573487d8ea873c9ccab2d49407b4ba024c8615520b5c7c77956d983abf18c70",
+      "adapted": false,
+      "vendored_sha256": "7573487d8ea873c9ccab2d49407b4ba024c8615520b5c7c77956d983abf18c70"
+    },
+    "ArkLib.ToMathlib.MvPolynomial.RadicalSplit": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "9d06d4e5db95f4dce656c8bcd1db62b5ec50517d746de933998e9d7ccc321999",
+      "adapted": false,
+      "vendored_sha256": "9d06d4e5db95f4dce656c8bcd1db62b5ec50517d746de933998e9d7ccc321999"
+    },
+    "ArkLib.ToMathlib.MvPolynomial.RootContraction": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "30cc62d01f9f6b9a11ba48e898d109a75d42d75ddb6d7b3e0925fcd094fdc792",
+      "adapted": false,
+      "vendored_sha256": "30cc62d01f9f6b9a11ba48e898d109a75d42d75ddb6d7b3e0925fcd094fdc792"
+    },
+    "ArkLib.ToMathlib.MvPolynomial.SupportWeight": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "d9c385ff79c2f216884ac5f93e7ebfb4f240eb7cc3e03ac0a2899e4fafcf1920",
+      "adapted": false,
+      "vendored_sha256": "d9c385ff79c2f216884ac5f93e7ebfb4f240eb7cc3e03ac0a2899e4fafcf1920"
+    },
+    "ArkLib.ToMathlib.MvPolynomial.SupportWeightOffset": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "d75506fcbe40d08c9ef64e56ec30aeb2fff490cc9a1d72e93a2327267e20b783",
+      "adapted": false,
+      "vendored_sha256": "d75506fcbe40d08c9ef64e56ec30aeb2fff490cc9a1d72e93a2327267e20b783"
+    },
+    "ArkLib.ToMathlib.Polynomial.DegreeLT": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "80bc39fe530198223339a65ba0ee7074c4d059961b35935ced99043ee45acf07",
+      "adapted": false,
+      "vendored_sha256": "80bc39fe530198223339a65ba0ee7074c4d059961b35935ced99043ee45acf07"
+    },
+    "ArkLib.ToMathlib.Polynomial.EventualGrowth": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "c3b987276a86605b6a1309d866c03b0ae376c374d1bedea921764eedf15b809b",
+      "adapted": false,
+      "vendored_sha256": "c3b987276a86605b6a1309d866c03b0ae376c374d1bedea921764eedf15b809b"
+    },
+    "ArkLib.ToMathlib.Polynomial.FrobeniusTaylor": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "7088b47a16b0abaddabffb48b489ec9bd82bf4cc6f63bedf5646c01f5a0a287b",
+      "adapted": false,
+      "vendored_sha256": "7088b47a16b0abaddabffb48b489ec9bd82bf4cc6f63bedf5646c01f5a0a287b"
+    },
+    "ArkLib.ToMathlib.Polynomial.HasseTaylor.FiniteJet": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "a4f0da553945eb11c8ae876d4266b7f31800628bd88167a0e818f81051432922",
+      "adapted": false,
+      "vendored_sha256": "a4f0da553945eb11c8ae876d4266b7f31800628bd88167a0e818f81051432922"
+    },
+    "ArkLib.ToMathlib.Polynomial.HasseTaylor.Lifting": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "cb84dd115caa6dfc91e62cec12bd3272078db5fb9133bf1aed9f1c9ad6150fcd",
+      "adapted": false,
+      "vendored_sha256": "cb84dd115caa6dfc91e62cec12bd3272078db5fb9133bf1aed9f1c9ad6150fcd"
+    },
+    "ArkLib.ToMathlib.Polynomial.HasseTaylor.Shift": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "20de275f304d894bce02fe26f7a8924a5463aba527301ce61b924558e3244005",
+      "adapted": false,
+      "vendored_sha256": "20de275f304d894bce02fe26f7a8924a5463aba527301ce61b924558e3244005"
+    },
+    "ArkLib.ToMathlib.Polynomial.RectangleDifference": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "4804d47ceba29e32931fcbff8f50fdbf7eadb793f2ccd65fcb66fd164ed3e82f",
+      "adapted": false,
+      "vendored_sha256": "4804d47ceba29e32931fcbff8f50fdbf7eadb793f2ccd65fcb66fd164ed3e82f"
+    },
+    "ArkLib.ToMathlib.Polynomial.RootMultiplicity": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "f0ed80d5c7a20d0f7dbc8d06b07544683ca4836ede823cbe7b3754eb87b0c080",
+      "adapted": false,
+      "vendored_sha256": "f0ed80d5c7a20d0f7dbc8d06b07544683ca4836ede823cbe7b3754eb87b0c080"
+    },
+    "ArkLib.ToMathlib.Polynomial.SparseContraction": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "ae01df5bcb06e06cba0e0bc65907f284f0ef5c670f51066c029f9c445b88c7f9",
+      "adapted": false,
+      "vendored_sha256": "ae01df5bcb06e06cba0e0bc65907f284f0ef5c670f51066c029f9c445b88c7f9"
+    },
+    "ArkLib.ToMathlib.RingTheory.Ideal.CutFamily": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "cbd9ab72b66e4deacbc6666736ca6c5ca4b896fbfdcb30de1bad1aa87ebcf35e",
+      "adapted": false,
+      "vendored_sha256": "cbd9ab72b66e4deacbc6666736ca6c5ca4b896fbfdcb30de1bad1aa87ebcf35e"
+    },
+    "ArkLib.ToMathlib.RingTheory.Ideal.HeightUnder": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "bb42d4bf7de2e3cf6b8b77cf924a14f9c89b4d51f254f38e5d9a918679cc73aa",
+      "adapted": false,
+      "vendored_sha256": "bb42d4bf7de2e3cf6b8b77cf924a14f9c89b4d51f254f38e5d9a918679cc73aa"
+    },
+    "ArkLib.ToMathlib.RingTheory.Ideal.MinimalPrime.Noetherian": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "7aee04e257b88bf9045880ad9509a3ce7b3f8bbbbf2e70c979db543e6bbd7070",
+      "adapted": false,
+      "vendored_sha256": "7aee04e257b88bf9045880ad9509a3ce7b3f8bbbbf2e70c979db543e6bbd7070"
+    },
+    "ArkLib.ToMathlib.RingTheory.Ideal.PrincipalCut": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "c95514d5ace8d249e9b289f2f62f7c71b49ba2614489e81d66ae6254e4adb5e4",
+      "adapted": false,
+      "vendored_sha256": "c95514d5ace8d249e9b289f2f62f7c71b49ba2614489e81d66ae6254e4adb5e4"
+    },
+    "ArkLib.ToMathlib.RingTheory.Ideal.Separator": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "edb93b2dee725e9dbe7f83bc209b59c53465fdf45f01cd879925948fcdcd393e",
+      "adapted": false,
+      "vendored_sha256": "edb93b2dee725e9dbe7f83bc209b59c53465fdf45f01cd879925948fcdcd393e"
+    },
+    "ArkLib.ToMathlib.RingTheory.Ideal.SurjectiveMap": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "db8778bcf38e42b888aab341c6ebd440c979c61d92c048004944cec749562a29",
+      "adapted": false,
+      "vendored_sha256": "db8778bcf38e42b888aab341c6ebd440c979c61d92c048004944cec749562a29"
+    },
+    "ArkLib.ToMathlib.RingTheory.MvPolynomial.AffineDegree": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "8680f15d4c1e1dce81a7e0d6d8aab63e2e493ac2d60ff0e59736ba791b4ba6ff",
+      "adapted": false,
+      "vendored_sha256": "8680f15d4c1e1dce81a7e0d6d8aab63e2e493ac2d60ff0e59736ba791b4ba6ff"
+    },
+    "ArkLib.ToMathlib.RingTheory.MvPolynomial.AffineHilbert": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "9df31849f46c07b8e1ee9e76d9bac47ebab47a7fc7f34ae3953bf3a1d0896899",
+      "adapted": false,
+      "vendored_sha256": "9df31849f46c07b8e1ee9e76d9bac47ebab47a7fc7f34ae3953bf3a1d0896899"
+    },
+    "ArkLib.ToMathlib.RingTheory.MvPolynomial.AffineHilbertAlgHom": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "274e57dfc825299eaf7338e8ec7fc87823ba90e760f678359a831fbe8cbfc3f7",
+      "adapted": false,
+      "vendored_sha256": "274e57dfc825299eaf7338e8ec7fc87823ba90e760f678359a831fbe8cbfc3f7"
+    },
+    "ArkLib.ToMathlib.RingTheory.MvPolynomial.AffineHilbertBidegree": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "289107ae19ff03a0f9acce582d5fe9078f8ad1563f30274b95966b227e50d882",
+      "adapted": false,
+      "vendored_sha256": "289107ae19ff03a0f9acce582d5fe9078f8ad1563f30274b95966b227e50d882"
+    },
+    "ArkLib.ToMathlib.RingTheory.MvPolynomial.AffineHilbertCappedDegree": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "d716655d8df054aa61e3e33f84b17adff0399496ab6eeb0a8e8d08c3d46c7ccd",
+      "adapted": false,
+      "vendored_sha256": "d716655d8df054aa61e3e33f84b17adff0399496ab6eeb0a8e8d08c3d46c7ccd"
+    },
+    "ArkLib.ToMathlib.RingTheory.MvPolynomial.AffineHilbertComap": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "a409c79b20f30b3a53209753cdc98f2c3e60e2dff5771acc7c6f6abc1ba4f429",
+      "adapted": false,
+      "vendored_sha256": "a409c79b20f30b3a53209753cdc98f2c3e60e2dff5771acc7c6f6abc1ba4f429"
+    },
+    "ArkLib.ToMathlib.RingTheory.MvPolynomial.AffineHilbertComponents": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "ef9ba820f25fe00c19919794e2186b1fb85f13962cbbc82918fe3e57d7ca6f74",
+      "adapted": false,
+      "vendored_sha256": "ef9ba820f25fe00c19919794e2186b1fb85f13962cbbc82918fe3e57d7ca6f74"
+    },
+    "ArkLib.ToMathlib.RingTheory.MvPolynomial.AffineHilbertCutFamily": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "46b9945a1aaaf797e2ffaf1f9a4628dae05c206b62fb8af3517102f51fbe743b",
+      "adapted": false,
+      "vendored_sha256": "46b9945a1aaaf797e2ffaf1f9a4628dae05c206b62fb8af3517102f51fbe743b"
+    },
+    "ArkLib.ToMathlib.RingTheory.MvPolynomial.AffineHilbertPolynomial": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "e8eefaa6c56d526a1cde1eaa7afbe92fc57ab8b192981ee3925ff32b6ab09ede",
+      "adapted": false,
+      "vendored_sha256": "e8eefaa6c56d526a1cde1eaa7afbe92fc57ab8b192981ee3925ff32b6ab09ede"
+    },
+    "ArkLib.ToMathlib.RingTheory.MvPolynomial.AffineHilbertPurity": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "9ae5472f84aa19ebc21d96764e60872fccd96149841f09d0735a947431cc24dd",
+      "adapted": false,
+      "vendored_sha256": "9ae5472f84aa19ebc21d96764e60872fccd96149841f09d0735a947431cc24dd"
+    },
+    "ArkLib.ToMathlib.RingTheory.MvPolynomial.AffineHilbertRadical": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "d8e910ef194a13f0ad00477235b5270b9956459896ebccd57049f2e44abbef27",
+      "adapted": false,
+      "vendored_sha256": "d8e910ef194a13f0ad00477235b5270b9956459896ebccd57049f2e44abbef27"
+    },
+    "ArkLib.ToMathlib.RingTheory.MvPolynomial.AwayPresentation": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "6ad63661383a327dca74f7e34da51bfb18ae4da363d0d47277cc0098d6275661",
+      "adapted": false,
+      "vendored_sha256": "6ad63661383a327dca74f7e34da51bfb18ae4da363d0d47277cc0098d6275661"
+    },
+    "ArkLib.ToMathlib.RingTheory.MvPolynomial.Bidegree": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "e9278bd1c20704a3b1270f1d8c3e8ffdf9d60e814b88d41040772faca69e4b65",
+      "adapted": false,
+      "vendored_sha256": "e9278bd1c20704a3b1270f1d8c3e8ffdf9d60e814b88d41040772faca69e4b65"
+    },
+    "ArkLib.ToMathlib.RingTheory.MvPolynomial.CappedBidegree": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "9f8d2abc3c11d51fc07d6e365ae80350d7b9dfdce0b89f7de76163f9e4037365",
+      "adapted": false,
+      "vendored_sha256": "9f8d2abc3c11d51fc07d6e365ae80350d7b9dfdce0b89f7de76163f9e4037365"
+    },
+    "ArkLib.ToMathlib.RingTheory.MvPolynomial.CappedDegree": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "7dc8007f1cdba180bce987808625d555969b6f88689fc0336f9aaa17af3b3338",
+      "adapted": false,
+      "vendored_sha256": "7dc8007f1cdba180bce987808625d555969b6f88689fc0336f9aaa17af3b3338"
+    },
+    "ArkLib.ToMathlib.RingTheory.MvPolynomial.CoefficientEvaluation": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "75c497733baeeda077f92ecbb3fba08105ce28c22aa779880b93088a329d07fc",
+      "adapted": false,
+      "vendored_sha256": "75c497733baeeda077f92ecbb3fba08105ce28c22aa779880b93088a329d07fc"
+    },
+    "ArkLib.ToMathlib.RingTheory.MvPolynomial.MonomialMap": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "02e2cbbb247360a6e85a965598e2eaf8657c9354a49a21932fadff7a703ea36e",
+      "adapted": false,
+      "vendored_sha256": "02e2cbbb247360a6e85a965598e2eaf8657c9354a49a21932fadff7a703ea36e"
+    },
+    "ArkLib.ToMathlib.RingTheory.MvPolynomial.StandardMonomials": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "fd4029403f657f91c55f39725fa5b259dab001fee48ec1e6b6844aacaac38e41",
+      "adapted": false,
+      "vendored_sha256": "fd4029403f657f91c55f39725fa5b259dab001fee48ec1e6b6844aacaac38e41"
+    },
+    "ArkLib.ToMathlib.RingTheory.Nullstellensatz": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "73fc7ec8db31b04a0d08ab16545961b2326cf3ec33f46126d683950702d28e95",
+      "adapted": false,
+      "vendored_sha256": "73fc7ec8db31b04a0d08ab16545961b2326cf3ec33f46126d683950702d28e95"
+    },
+    "ArkLib.ToMathlib.RingTheory.Nullstellensatz.AffineHilbertPolynomial": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "817470d6fb8de1568cbe9f2a1206a4f520778942d2fbdf0d8afe3dc8299f47de",
+      "adapted": false,
+      "vendored_sha256": "817470d6fb8de1568cbe9f2a1206a4f520778942d2fbdf0d8afe3dc8299f47de"
+    },
+    "ArkLib.ToMathlib.RingTheory.Nullstellensatz.AgreementIncidence": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "0688f1e192b6136969ec7cfe07653197aa18d309f249fc179ecaa456e2590159",
+      "adapted": false,
+      "vendored_sha256": "0688f1e192b6136969ec7cfe07653197aa18d309f249fc179ecaa456e2590159"
+    },
+    "ArkLib.ToMathlib.RingTheory.Nullstellensatz.BidegreeIncidence": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "17f2cbcb9ee2f2bc32098211fd310438c1dcf5b990dda89edad55374eb329b11",
+      "adapted": false,
+      "vendored_sha256": "17f2cbcb9ee2f2bc32098211fd310438c1dcf5b990dda89edad55374eb329b11"
+    },
+    "ArkLib.ToMathlib.RingTheory.Nullstellensatz.CappedDegreeIncidence": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "26558ba307ba870553cb792abab6125e8f98fbf5696e1dbafb92073a869184f6",
+      "adapted": false,
+      "vendored_sha256": "26558ba307ba870553cb792abab6125e8f98fbf5696e1dbafb92073a869184f6"
+    },
+    "ArkLib.ToMathlib.RingTheory.Nullstellensatz.CutFamily": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "175fd9ae0e1f558f2032dbef5a1d5ebe55887bd4b1f38daa4dd148c702e4b343",
+      "adapted": false,
+      "vendored_sha256": "175fd9ae0e1f558f2032dbef5a1d5ebe55887bd4b1f38daa4dd148c702e4b343"
+    },
+    "ArkLib.ToMathlib.RingTheory.Nullstellensatz.DimensionSensitiveIncidence": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "67740b3a1f1937455a8a4d4d5bfcdab80f09e2172dea4a20cb6b21a860348b23",
+      "adapted": false,
+      "vendored_sha256": "67740b3a1f1937455a8a4d4d5bfcdab80f09e2172dea4a20cb6b21a860348b23"
+    },
+    "ArkLib.ToMathlib.RingTheory.Nullstellensatz.FiniteQuotient": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "99a9d46a16f68260d6a3f3741fa080b2c03887093040ec8bb873b124f4a4fb72",
+      "adapted": false,
+      "vendored_sha256": "99a9d46a16f68260d6a3f3741fa080b2c03887093040ec8bb873b124f4a4fb72"
+    },
+    "ArkLib.ToMathlib.RingTheory.Nullstellensatz.FiniteZeroLocus": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "cc41f05754f887f8fcf832362d0bd5af7fb7c04d66a137dae45f7bf8300a4379",
+      "adapted": false,
+      "vendored_sha256": "cc41f05754f887f8fcf832362d0bd5af7fb7c04d66a137dae45f7bf8300a4379"
+    },
+    "ArkLib.ToMathlib.RingTheory.Nullstellensatz.PrincipalOpen": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "b055f79f300e1514a5bbc2203dd2e36d39d0bd3e2a7442d4b3dd17b05961f215",
+      "adapted": false,
+      "vendored_sha256": "b055f79f300e1514a5bbc2203dd2e36d39d0bd3e2a7442d4b3dd17b05961f215"
+    },
+    "ArkLib.ToMathlib.RingTheory.Nullstellensatz.PrincipalOpenParametrization": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "ac68107796284de2d7973a811a8c7afd256173731cf6770114dc65defbae3f7b",
+      "adapted": false,
+      "vendored_sha256": "ac68107796284de2d7973a811a8c7afd256173731cf6770114dc65defbae3f7b"
+    },
+    "ArkLib.ToMathlib.RingTheory.Radical.Representative": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "465970c8b9f30501c39d461dd8d8e74f9265d386ed23e1a5070fd047e2c0eaa8",
+      "adapted": false,
+      "vendored_sha256": "465970c8b9f30501c39d461dd8d8e74f9265d386ed23e1a5070fd047e2c0eaa8"
+    },
+    "ArkLib.ToMathlib.Set.Finite": {
+      "repo": "ArkLib",
+      "commit": "ace55c3e29da1fc55a321378ada55ea4f7ed8790",
+      "source_sha256": "121b4489d1f96647e69908641b2b77b486b03f391e0e9cea1df0a508f6244715",
+      "adapted": false,
+      "vendored_sha256": "121b4489d1f96647e69908641b2b77b486b03f391e0e9cea1df0a508f6244715"
+    },
+    "CompPoly.Bivariate.Basic": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "77c574e3577aafca587dc01d41880fe43f3597bda088898b3d762d4522227644",
+      "adapted": false,
+      "vendored_sha256": "77c574e3577aafca587dc01d41880fe43f3597bda088898b3d762d4522227644"
+    },
+    "CompPoly.Bivariate.ToPoly": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "ffcaa6ef378aa6eb2539402901e33dd454605797a824b2c6dfc0e9cd61e35486",
+      "adapted": false,
+      "vendored_sha256": "ffcaa6ef378aa6eb2539402901e33dd454605797a824b2c6dfc0e9cd61e35486"
+    },
+    "CompPoly.Data.Array.Lemmas": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "4a9131b06b600ffcabbd551716f32042f1c218e0f9c8aa9cdc9a19e4489d7631",
+      "adapted": false,
+      "vendored_sha256": "4a9131b06b600ffcabbd551716f32042f1c218e0f9c8aa9cdc9a19e4489d7631"
+    },
+    "CompPoly.Data.Classes.DCast": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "618a288049413ec69c63d1b3018ae5a2ab299a51bfcc5a183d541ad8fb90ebc8",
+      "adapted": false,
+      "vendored_sha256": "618a288049413ec69c63d1b3018ae5a2ab299a51bfcc5a183d541ad8fb90ebc8"
+    },
+    "CompPoly.Data.Fin.BigOperators": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "ab5afd4916822338c4d205e72730855933725332da1b72da0692f1cd6a1d3945",
+      "adapted": false,
+      "vendored_sha256": "ab5afd4916822338c4d205e72730855933725332da1b72da0692f1cd6a1d3945"
+    },
+    "CompPoly.Data.List.Lemmas": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "2a617cdfd4246a4f114e5e742820d85d82bc95a6995db2851fa29dc08dd5f94a",
+      "adapted": false,
+      "vendored_sha256": "2a617cdfd4246a4f114e5e742820d85d82bc95a6995db2851fa29dc08dd5f94a"
+    },
+    "CompPoly.Data.MvPolynomial.Notation": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "48aa9d59858a65d095a26ac78da066eac16290612ac39296a4b72043dde75f54",
+      "adapted": false,
+      "vendored_sha256": "48aa9d59858a65d095a26ac78da066eac16290612ac39296a4b72043dde75f54"
+    },
+    "CompPoly.Data.Nat.Bitwise": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "86406743751e1b7d216c05e8d8fd031b3df3fb022b554937304338d3cb1ad0ff",
+      "adapted": false,
+      "vendored_sha256": "86406743751e1b7d216c05e8d8fd031b3df3fb022b554937304338d3cb1ad0ff"
+    },
+    "CompPoly.Data.Polynomial.MonomialBasis": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "6d635df3bd1e5878c9f10c1a6b5faf10c247529e3a2fa757939f1c93204e7e31",
+      "adapted": false,
+      "vendored_sha256": "6d635df3bd1e5878c9f10c1a6b5faf10c247529e3a2fa757939f1c93204e7e31"
+    },
+    "CompPoly.ToMathlib.Finsupp.Fin": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "ca36b6040da13df3b04fdb401579eae92535ffa21aa833509ca20232320b80ad",
+      "adapted": false,
+      "vendored_sha256": "ca36b6040da13df3b04fdb401579eae92535ffa21aa833509ca20232320b80ad"
+    },
+    "CompPoly.ToMathlib.MvPolynomial.Equiv": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "17f395b709982b72899f68addb7e479795a78df125130e1161e221b5f541ac8f",
+      "adapted": false,
+      "vendored_sha256": "17f395b709982b72899f68addb7e479795a78df125130e1161e221b5f541ac8f"
+    },
+    "CompPoly.ToMathlib.Polynomial.BivariateDegree": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "0f444c0eabdabbc9db1f8dde529ab3d113fb4e09eaa76f485f5c957453e51f07",
+      "adapted": false,
+      "vendored_sha256": "0f444c0eabdabbc9db1f8dde529ab3d113fb4e09eaa76f485f5c957453e51f07"
+    },
+    "CompPoly.ToMathlib.Polynomial.BivariateMultiplicity": {
+      "repo": "CompPoly",
+      "commit": "7e3683ba72f61c1f3c2deda85953ce26392f0771",
+      "source_sha256": "8c181b4250eb590e26a13caa6e38fd0c2f8029e158685ab9a814505df2e85197",
+      "adapted": false,
+      "vendored_sha256": "8c181b4250eb590e26a13caa6e38fd0c2f8029e158685ab9a814505df2e85197"
+    },
+    "CompPoly.ToMathlib.Polynomial.BivariateWeightedDegree": {
+      "repo": "CompPoly",
+      "commit": "7e3683ba72f61c1f3c2deda85953ce26392f0771",
+      "source_sha256": "6f305cf49da3c4c4eb899714b61e52c13b54962befb95ddf397eedfcc232b709",
+      "adapted": false,
+      "vendored_sha256": "6f305cf49da3c4c4eb899714b61e52c13b54962befb95ddf397eedfcc232b709"
+    },
+    "CompPoly.Univariate.Basic": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "547cb9401b5d388ed1767a8aa7b24f63314a4270024380b39281f84c034cb0fc",
+      "adapted": false,
+      "vendored_sha256": "547cb9401b5d388ed1767a8aa7b24f63314a4270024380b39281f84c034cb0fc"
+    },
+    "CompPoly.Univariate.Linear": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "3199ef880628ed3980416b49c525ae30679af930d00c92cf40610abcea3eb543",
+      "adapted": false,
+      "vendored_sha256": "3199ef880628ed3980416b49c525ae30679af930d00c92cf40610abcea3eb543"
+    },
+    "CompPoly.Univariate.Raw.Core": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "c8206139b8ad1fcd47ed9a424762743413fae679670f1af4c5867979cd822b44",
+      "adapted": false,
+      "vendored_sha256": "c8206139b8ad1fcd47ed9a424762743413fae679670f1af4c5867979cd822b44"
+    },
+    "CompPoly.Univariate.Raw.Division": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "b9171bc6e25fd2dfe62a408825a1f2e983077f3eadeb6abbce34592a260c281d",
+      "adapted": false,
+      "vendored_sha256": "b9171bc6e25fd2dfe62a408825a1f2e983077f3eadeb6abbce34592a260c281d"
+    },
+    "CompPoly.Univariate.Raw.Ops": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "b5d19b205cfa5d7365606386b2b1693e8d8c13dcd8ca7b54dc4d30c33048a8b6",
+      "adapted": false,
+      "vendored_sha256": "b5d19b205cfa5d7365606386b2b1693e8d8c13dcd8ca7b54dc4d30c33048a8b6"
+    },
+    "CompPoly.Univariate.Raw.Proofs": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "7a8647bc29ce7c43113ca77aea434c795e791014796a568997be2d67be3b77b2",
+      "adapted": false,
+      "vendored_sha256": "7a8647bc29ce7c43113ca77aea434c795e791014796a568997be2d67be3b77b2"
+    },
+    "CompPoly.Univariate.ToPoly.Core": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "78fc41a365399731aa4e70c97094154d9a1c2187f08ad29bfcf4a6b93e2329bd",
+      "adapted": false,
+      "vendored_sha256": "78fc41a365399731aa4e70c97094154d9a1c2187f08ad29bfcf4a6b93e2329bd"
+    },
+    "CompPoly.Univariate.ToPoly.Equiv": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "7e360dc919a4a9173cf4c780bb5124ce820403e386184b2d258636815bdc6b25",
+      "adapted": false,
+      "vendored_sha256": "7e360dc919a4a9173cf4c780bb5124ce820403e386184b2d258636815bdc6b25"
+    },
+    "CompPoly.Univariate.ToPoly.Impl": {
+      "repo": "CompPoly",
+      "commit": "df591bb8c6745126d1d72f5243faae3022b0432a",
+      "source_sha256": "21b06241f5c9684d62bccaebfe3a2c5ecf039aa1d0ee9c112a74b8a550d1b926",
+      "adapted": false,
+      "vendored_sha256": "21b06241f5c9684d62bccaebfe3a2c5ecf039aa1d0ee9c112a74b8a550d1b926"
+    },
+    "Cslib.Foundations.Control.Monad.IsMonadHom": {
+      "repo": "cslib",
+      "commit": "990e65a685bed413f43b139db900a36ad5322a10",
+      "source_sha256": "31ae7f60d971e3ce8ad8d8dfa8eaf1b1eb9f91c29f8fe148ef3e5dafcfd8031f",
+      "adapted": false,
+      "vendored_sha256": "31ae7f60d971e3ce8ad8d8dfa8eaf1b1eb9f91c29f8fe148ef3e5dafcfd8031f"
+    },
+    "Cslib.Foundations.Control.Monad.IsMonadHom.List": {
+      "repo": "cslib",
+      "commit": "990e65a685bed413f43b139db900a36ad5322a10",
+      "source_sha256": "fcc0a13ac9c45e4702c9c3260edf033806b1bc3d035706a10cb4eb4a4bb0da8b",
+      "adapted": false,
+      "vendored_sha256": "fcc0a13ac9c45e4702c9c3260edf033806b1bc3d035706a10cb4eb4a4bb0da8b"
+    },
+    "Cslib.Foundations.Data.PFunctor.Free": {
+      "repo": "cslib",
+      "commit": "990e65a685bed413f43b139db900a36ad5322a10",
+      "source_sha256": "b47fec5ae7720a5b5ec3db40861c3536e97d30a1bf30a9134b1a228c7729615f",
+      "adapted": false,
+      "vendored_sha256": "b47fec5ae7720a5b5ec3db40861c3536e97d30a1bf30a9134b1a228c7729615f"
+    },
+    "Cslib.Foundations.Lint.Basic": {
+      "repo": "cslib",
+      "commit": "990e65a685bed413f43b139db900a36ad5322a10",
+      "source_sha256": "b92bb7aac662d4bea332126949702b17563cbaa833826646b7fad8265a087cfa",
+      "adapted": false,
+      "vendored_sha256": "b92bb7aac662d4bea332126949702b17563cbaa833826646b7fad8265a087cfa"
+    },
+    "Cslib.Init": {
+      "repo": "cslib",
+      "commit": "990e65a685bed413f43b139db900a36ad5322a10",
+      "source_sha256": "e453b900baa1938e94b02c562254de2ab2240611e3f23410f8c35dde0f419b0b",
+      "adapted": false,
+      "vendored_sha256": "e453b900baa1938e94b02c562254de2ab2240611e3f23410f8c35dde0f419b0b"
+    },
+    "Cslib.Tactic.GrindAttrs": {
+      "repo": "cslib",
+      "commit": "990e65a685bed413f43b139db900a36ad5322a10",
+      "source_sha256": "039da177090845a88b3a3cc7697f76f33369406a27531cfebfca92518b3b3b9c",
+      "adapted": false,
+      "vendored_sha256": "039da177090845a88b3a3cc7697f76f33369406a27531cfebfca92518b3b3b9c"
+    },
+    "PolyFun.Control.Monad.Algebra": {
+      "repo": "PolyFun",
+      "commit": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+      "source_sha256": "e941db82f61f326265b485ef8d10f0aac1501d614950fea9f02c6c47651ef815",
+      "adapted": false,
+      "vendored_sha256": "e941db82f61f326265b485ef8d10f0aac1501d614950fea9f02c6c47651ef815"
+    },
+    "PolyFun.Control.Monad.Hom": {
+      "repo": "PolyFun",
+      "commit": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+      "source_sha256": "cc6aaae8977e745147e17ff1de06804dfdd53998e4d8e39c915be693b2b0f31e",
+      "adapted": false,
+      "vendored_sha256": "cc6aaae8977e745147e17ff1de06804dfdd53998e4d8e39c915be693b2b0f31e"
+    },
+    "PolyFun.Control.Monad.Hom.IsMonadHom": {
+      "repo": "PolyFun",
+      "commit": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+      "source_sha256": "ab7359e45f22cf6856fb054c190154bcd3e75ffcc65b793908679b4ee061f0c2",
+      "adapted": false,
+      "vendored_sha256": "ab7359e45f22cf6856fb054c190154bcd3e75ffcc65b793908679b4ee061f0c2"
+    },
+    "PolyFun.Control.Monad.Hom.Loops": {
+      "repo": "PolyFun",
+      "commit": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+      "source_sha256": "0b0ce3ab8548e59dad276f618f7f739d664c9522fa2f19a19ff403a7845e94bc",
+      "adapted": false,
+      "vendored_sha256": "0b0ce3ab8548e59dad276f618f7f739d664c9522fa2f19a19ff403a7845e94bc"
+    },
+    "PolyFun.Control.Monad.Support": {
+      "repo": "PolyFun",
+      "commit": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+      "source_sha256": "61e890500067811a860fe5ae75269657e0d1d7b2c3549d757924e559ac70d4eb",
+      "adapted": false,
+      "vendored_sha256": "61e890500067811a860fe5ae75269657e0d1d7b2c3549d757924e559ac70d4eb"
+    },
+    "PolyFun.Control.Monad.Support.Instances": {
+      "repo": "PolyFun",
+      "commit": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+      "source_sha256": "6bc45a874609c3b73b7afdeae969b415978ca4c7304f0228b6c6909ad330b302",
+      "adapted": false,
+      "vendored_sha256": "6bc45a874609c3b73b7afdeae969b415978ca4c7304f0228b6c6909ad330b302"
+    },
+    "PolyFun.PFunctor.Basic": {
+      "repo": "PolyFun",
+      "commit": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+      "source_sha256": "ced80e3f72b8da104e15e7371bb5b0123605aff641794cc9d4e843add3304655",
+      "adapted": false,
+      "vendored_sha256": "ced80e3f72b8da104e15e7371bb5b0123605aff641794cc9d4e843add3304655"
+    },
+    "PolyFun.PFunctor.Equiv.Basic": {
+      "repo": "PolyFun",
+      "commit": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+      "source_sha256": "ad303a36f59cf6455f5da3841725cdfb8db61429cc3783ad8dc0c21609a1d848",
+      "adapted": false,
+      "vendored_sha256": "ad303a36f59cf6455f5da3841725cdfb8db61429cc3783ad8dc0c21609a1d848"
+    },
+    "PolyFun.PFunctor.Free.Basic": {
+      "repo": "PolyFun",
+      "commit": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+      "source_sha256": "01d9ae11a502dd1d12fc0055c7e3fd60d26b96d2a649de6d8dff011c9f2e39b3",
+      "adapted": false,
+      "vendored_sha256": "01d9ae11a502dd1d12fc0055c7e3fd60d26b96d2a649de6d8dff011c9f2e39b3"
+    },
+    "PolyFun.PFunctor.Free.Displayed": {
+      "repo": "PolyFun",
+      "commit": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+      "source_sha256": "e49e0cbe6cc2c85f717a9d154bb774cf5b41718631598522f3e39459f8c2ebb9",
+      "adapted": false,
+      "vendored_sha256": "e49e0cbe6cc2c85f717a9d154bb774cf5b41718631598522f3e39459f8c2ebb9"
+    },
+    "PolyFun.PFunctor.Free.Path": {
+      "repo": "PolyFun",
+      "commit": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+      "source_sha256": "914028189ae4aa26b99d13c87938cc75a23659d5368e3a27add33be642adc6c6",
+      "adapted": false,
+      "vendored_sha256": "914028189ae4aa26b99d13c87938cc75a23659d5368e3a27add33be642adc6c6"
+    },
+    "PolyFun.PFunctor.Free.Support": {
+      "repo": "PolyFun",
+      "commit": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+      "source_sha256": "edb55e438d7a28f5dc89ed12bfb6cac294bc4db126ddfcaedc89f341e730f066",
+      "adapted": false,
+      "vendored_sha256": "edb55e438d7a28f5dc89ed12bfb6cac294bc4db126ddfcaedc89f341e730f066"
+    },
+    "PolyFun.PFunctor.Handler": {
+      "repo": "PolyFun",
+      "commit": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+      "source_sha256": "9976e15e3d40b52e284700dc4bf47720584b0125845c3c552c043bd227b3e638",
+      "adapted": false,
+      "vendored_sha256": "9976e15e3d40b52e284700dc4bf47720584b0125845c3c552c043bd227b3e638"
+    },
+    "PolyFun.PFunctor.Handler.Instrumentation": {
+      "repo": "PolyFun",
+      "commit": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+      "source_sha256": "30208d7a8d2c2339798edeb0b906485946780b18035a4c7f2b626135dfaba49f",
+      "adapted": false,
+      "vendored_sha256": "30208d7a8d2c2339798edeb0b906485946780b18035a4c7f2b626135dfaba49f"
+    },
+    "PolyFun.PFunctor.Lens.Basic": {
+      "repo": "PolyFun",
+      "commit": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+      "source_sha256": "d41e787c8760eab5ebef7bec0b98f16ff5a73dfb72179ac9bef513eda5c62637",
+      "adapted": false,
+      "vendored_sha256": "d41e787c8760eab5ebef7bec0b98f16ff5a73dfb72179ac9bef513eda5c62637"
+    },
+    "PolyFun.PFunctor.Obj": {
+      "repo": "PolyFun",
+      "commit": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+      "source_sha256": "5c17008e06030da558ad927eed7b8ba36c9e7e6670bde85d69ba60347e58a0e5",
+      "adapted": false,
+      "vendored_sha256": "5c17008e06030da558ad927eed7b8ba36c9e7e6670bde85d69ba60347e58a0e5"
+    },
+    "ToCslib.Control.Monad.HomTransport": {
+      "repo": "PolyFun",
+      "commit": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+      "source_sha256": "eebb6191b56a757a51db940a7246e6220419d97b38b2498d32a2c9e70ffece54",
+      "adapted": false,
+      "vendored_sha256": "eebb6191b56a757a51db940a7246e6220419d97b38b2498d32a2c9e70ffece54"
+    },
+    "ToCslib.Data.PFunctor.Free.Basic": {
+      "repo": "PolyFun",
+      "commit": "3710d71b28404a151b8d1f0ce080ea448778dec0",
+      "source_sha256": "25097bf673e07105f67490150102035e187a8c80b5f2df02488020a7a591390f",
+      "adapted": false,
+      "vendored_sha256": "25097bf673e07105f67490150102035e187a8c80b5f2df02488020a7a591390f"
+    },
+    "ToMathlib.Algebra.BigOperators.Finset": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "c8fbb3eb9bfb8df85d81dc9bf2c016efbb73914e354f5638325d32b701c89282",
+      "adapted": false,
+      "vendored_sha256": "c8fbb3eb9bfb8df85d81dc9bf2c016efbb73914e354f5638325d32b701c89282"
+    },
+    "ToMathlib.Algebra.BigOperators.List": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "adba44f869a86c7f6eb26aeced3a6c598db17cf6a9382d5a763de47430e33549",
+      "adapted": false,
+      "vendored_sha256": "adba44f869a86c7f6eb26aeced3a6c598db17cf6a9382d5a763de47430e33549"
+    },
+    "ToMathlib.Control.Functor.Prod": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "d5cb6f62a6b2a3f7ac948ea9349f71476d3d8bbf08c61b9a2f36658bffe50030",
+      "adapted": false,
+      "vendored_sha256": "d5cb6f62a6b2a3f7ac948ea9349f71476d3d8bbf08c61b9a2f36658bffe50030"
+    },
+    "ToMathlib.Control.Monad.Fold": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "d7df1d089ce26f50667e32da5d8d0268151737b288b7d8be7dbdbd27ac4044ee",
+      "adapted": false,
+      "vendored_sha256": "d7df1d089ce26f50667e32da5d8d0268151737b288b7d8be7dbdbd27ac4044ee"
+    },
+    "ToMathlib.Control.OptionT": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "f91b4b5411ae2fd3c3d1360365374c5dcd9130c3602afde58b6cdc6675ba3ed4",
+      "adapted": false,
+      "vendored_sha256": "f91b4b5411ae2fd3c3d1360365374c5dcd9130c3602afde58b6cdc6675ba3ed4"
+    },
+    "ToMathlib.Data.BitVec": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "d9fb1d584f5594d790b920c9772c69e2d6fc3218734aa38d40953a55dc6d33e9",
+      "adapted": false,
+      "vendored_sha256": "d9fb1d584f5594d790b920c9772c69e2d6fc3218734aa38d40953a55dc6d33e9"
+    },
+    "ToMathlib.Data.Fin.Basic": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "d7ec117f11c913c8463a5eba4ca2e48c6a5d250e344bb1fdc7fd7c54760e73d3",
+      "adapted": false,
+      "vendored_sha256": "d7ec117f11c913c8463a5eba4ca2e48c6a5d250e344bb1fdc7fd7c54760e73d3"
+    },
+    "ToMathlib.Data.FinEnum": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "d52a410077256e68946fee586cd743a3636ef5a07265e6248e4a4f98494712a5",
+      "adapted": false,
+      "vendored_sha256": "d52a410077256e68946fee586cd743a3636ef5a07265e6248e4a4f98494712a5"
+    },
+    "ToMathlib.Data.List.Count": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "aed977efbab975b44f21c6bb4c80ae72a95a205c3cc225d06634851566fce35c",
+      "adapted": false,
+      "vendored_sha256": "aed977efbab975b44f21c6bb4c80ae72a95a205c3cc225d06634851566fce35c"
+    },
+    "ToMathlib.Data.Set.Functor": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "7c6f7e2a8bf1c3ad5b5ce1bdf9c3f7401b9df08a3b6fb3a4efce71205c25faca",
+      "adapted": false,
+      "vendored_sha256": "7c6f7e2a8bf1c3ad5b5ce1bdf9c3f7401b9df08a3b6fb3a4efce71205c25faca"
+    },
+    "ToMathlib.Data.Vector.Count": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "46a021262baa5a12095a6572ef2b059350da8aeccc3534ff49345112a4d8c29c",
+      "adapted": false,
+      "vendored_sha256": "46a021262baa5a12095a6572ef2b059350da8aeccc3534ff49345112a4d8c29c"
+    },
+    "ToMathlib.Data.Vector.Induction": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "9e54eddbb1a3f46957c5c21e58aeb7fd3a82fa7b54b61de6c9aa59451f2cc8e1",
+      "adapted": false,
+      "vendored_sha256": "9e54eddbb1a3f46957c5c21e58aeb7fd3a82fa7b54b61de6c9aa59451f2cc8e1"
+    },
+    "ToMathlib.Data.Vector.ListVector": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "144bf14a98292ff5e905caa2a007dfa14eb1bd0fc8459b8d54f48e8b295125ad",
+      "adapted": false,
+      "vendored_sha256": "144bf14a98292ff5e905caa2a007dfa14eb1bd0fc8459b8d54f48e8b295125ad"
+    },
+    "ToMathlib.Lint.LegacyProbability": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "e19f878a20740fd73053ecdfd9fab6128dad810b4e6195a52b021e136ddc1f55",
+      "adapted": false,
+      "vendored_sha256": "e19f878a20740fd73053ecdfd9fab6128dad810b4e6195a52b021e136ddc1f55"
+    },
+    "ToMathlib.Logic.Basic": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "c167df80794a51b8e50429dc6edbea335a773e52565948c497a4f4ae106b8f13",
+      "adapted": false,
+      "vendored_sha256": "c167df80794a51b8e50429dc6edbea335a773e52565948c497a4f4ae106b8f13"
+    },
+    "ToMathlib.MeasureTheory.DiscreteInstances": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "5edc637d4eb1eb875630a7ae202192278581240ad0ee9b8cb7e1ee3e5ef97e49",
+      "adapted": false,
+      "vendored_sha256": "5edc637d4eb1eb875630a7ae202192278581240ad0ee9b8cb7e1ee3e5ef97e49"
+    },
+    "ToMathlib.MeasureTheory.Integral.Bounds": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "25da7c7d196a7c161aa0ea825414768178d57cab9987c2f2eff322c40f1f45a8",
+      "adapted": false,
+      "vendored_sha256": "25da7c7d196a7c161aa0ea825414768178d57cab9987c2f2eff322c40f1f45a8"
+    },
+    "ToMathlib.MeasureTheory.Integral.Quadratic": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "b93d7ee6a1d03d93cd3e881dd7802abd62d53a242ec1f4198d15f79503515633",
+      "adapted": false,
+      "vendored_sha256": "b93d7ee6a1d03d93cd3e881dd7802abd62d53a242ec1f4198d15f79503515633"
+    },
+    "ToMathlib.MeasureTheory.MeasurableSpace.Option": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "773d0fba588e73cbbae430f0b2bd8395d4560769b27513327d728b2481e40a19",
+      "adapted": false,
+      "vendored_sha256": "773d0fba588e73cbbae430f0b2bd8395d4560769b27513327d728b2481e40a19"
+    },
+    "ToMathlib.MeasureTheory.Measure.Bounds": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "c16748470aaa88745d1b4cf1f62b078892e8dc8fe34c7d3acd9f92412b099ced",
+      "adapted": false,
+      "vendored_sha256": "c16748470aaa88745d1b4cf1f62b078892e8dc8fe34c7d3acd9f92412b099ced"
+    },
+    "ToMathlib.MeasureTheory.Measure.GiryMonad": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "07df8002aa0c954bc77c8e7497bf2f62b06b1e2f715032a8bee01009cfb55dd1",
+      "adapted": false,
+      "vendored_sha256": "07df8002aa0c954bc77c8e7497bf2f62b06b1e2f715032a8bee01009cfb55dd1"
+    },
+    "ToMathlib.MeasureTheory.Measure.IndependentDraws": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "bf186e5a8097930d98b18257c2570bdb7b010bb57bb4494dd62a8020f91bcba6",
+      "adapted": false,
+      "vendored_sha256": "bf186e5a8097930d98b18257c2570bdb7b010bb57bb4494dd62a8020f91bcba6"
+    },
+    "ToMathlib.MeasureTheory.Measure.Option": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "545686ee63bcf077665327eec1747ec55917d28b6f3516d7f9cb85f78ad23df2",
+      "adapted": false,
+      "vendored_sha256": "545686ee63bcf077665327eec1747ec55917d28b6f3516d7f9cb85f78ad23df2"
+    },
+    "ToMathlib.MeasureTheory.Measure.Prop": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "3ef78e5e9c7f68161c7944a47327cd298903ad5952a71b712ebf1d3041eae9f3",
+      "adapted": false,
+      "vendored_sha256": "3ef78e5e9c7f68161c7944a47327cd298903ad5952a71b712ebf1d3041eae9f3"
+    },
+    "ToMathlib.MeasureTheory.Measure.Subprobability": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "276caf1565c3c954872f1c63230055c14c5ccbf7a07f0bc4d42f28f2d964e668",
+      "adapted": false,
+      "vendored_sha256": "276caf1565c3c954872f1c63230055c14c5ccbf7a07f0bc4d42f28f2d964e668"
+    },
+    "ToMathlib.Probability.UniformOn": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "e97ead071d96f4fcddf09df0dd21793e41d01fcfc44732f60d79340a51e34599",
+      "adapted": false,
+      "vendored_sha256": "e97ead071d96f4fcddf09df0dd21793e41d01fcfc44732f60d79340a51e34599"
+    },
+    "ToMathlib.Topology.Algebra.InfiniteSum.Option": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "f32ade46ea76c989d3ccec213c9e70db0f12e6db6660e4a6fb3dffd3735ef2ad",
+      "adapted": false,
+      "vendored_sha256": "f32ade46ea76c989d3ccec213c9e70db0f12e6db6660e4a6fb3dffd3735ef2ad"
+    },
+    "VCVio.EvalDist.Defs.Measure.Core": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "ec1582068ea900fd67ec7ebf67ab1f96abe3ca473ef26432196a81c93cb1a60c",
+      "adapted": false,
+      "vendored_sha256": "ec1582068ea900fd67ec7ebf67ab1f96abe3ca473ef26432196a81c93cb1a60c"
+    },
+    "VCVio.EvalDist.Defs.Measure.Failure": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "5e61d2a66235ff40cc0d6d15d404703ed8a6dfedddbae585b37aea44b4f1d3c2",
+      "adapted": false,
+      "vendored_sha256": "5e61d2a66235ff40cc0d6d15d404703ed8a6dfedddbae585b37aea44b4f1d3c2"
+    },
+    "VCVio.EvalDist.Defs.Measure.OptionT": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "c5bd59e580cc36a9c2ccd17153fdf8d44c0bc1fec9cf38287ad5ddcde7abda4c",
+      "adapted": false,
+      "vendored_sha256": "c5bd59e580cc36a9c2ccd17153fdf8d44c0bc1fec9cf38287ad5ddcde7abda4c"
+    },
+    "VCVio.EvalDist.Defs.Support": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "6f871747ac81d3de30e3e8ae1a0ba8db6d6d0ecac1309816c96fa44faf373e32",
+      "adapted": false,
+      "vendored_sha256": "6f871747ac81d3de30e3e8ae1a0ba8db6d6d0ecac1309816c96fa44faf373e32"
+    },
+    "VCVio.EvalDist.Defs.Support.Failure": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "fc9ceb7a714d09addb0516b56f94b601c9ae3d4d82cfc836a0eb61f731455c96",
+      "adapted": false,
+      "vendored_sha256": "fc9ceb7a714d09addb0516b56f94b601c9ae3d4d82cfc836a0eb61f731455c96"
+    },
+    "VCVio.EvalDist.Monad.Measure": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "fb5478759772caf41ec16fe4b822709925ac370129cdbe71bd27b4b7a9d25f3e",
+      "adapted": false,
+      "vendored_sha256": "fb5478759772caf41ec16fe4b822709925ac370129cdbe71bd27b4b7a9d25f3e"
+    },
+    "VCVio.EvalDist.Monad.Option": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "0c5a20f6444106fac91fc92e5c2cb3e05dc864f302f7f0a198d802125283353b",
+      "adapted": false,
+      "vendored_sha256": "0c5a20f6444106fac91fc92e5c2cb3e05dc864f302f7f0a198d802125283353b"
+    },
+    "VCVio.EvalDist.Monad.Seq.Measure": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "f8668cfc792ab6687eb2cda293defd3e78c02b725e0aecf7431347daae4d938c",
+      "adapted": false,
+      "vendored_sha256": "f8668cfc792ab6687eb2cda293defd3e78c02b725e0aecf7431347daae4d938c"
+    },
+    "VCVio.EvalDist.Monad.Seq.Uniform": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "c1262fc577e69881e7a0d12b76bf8576b728627c0cf19ac3317cdb282b82b361",
+      "adapted": false,
+      "vendored_sha256": "c1262fc577e69881e7a0d12b76bf8576b728627c0cf19ac3317cdb282b82b361"
+    },
+    "VCVio.EvalDist.Monad.Support": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "934d33e016688827e598e2fce9f763b68877b8b8be05d05c440a112c5ed25408",
+      "adapted": false,
+      "vendored_sha256": "934d33e016688827e598e2fce9f763b68877b8b8be05d05c440a112c5ed25408"
+    },
+    "VCVio.EvalDist.PFunctorMeasure.Core": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "ea13feff96270112fa3f5a525a78624cf7405c8165054c2bef77c16f281fb371",
+      "adapted": false,
+      "vendored_sha256": "ea13feff96270112fa3f5a525a78624cf7405c8165054c2bef77c16f281fb371"
+    },
+    "VCVio.EvalDist.ProbabilityBounds": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "b4487fe791988a0bb6f815dd4f8172e47aecfb69723ddd683f4fb13dff80ab47",
+      "adapted": false,
+      "vendored_sha256": "b4487fe791988a0bb6f815dd4f8172e47aecfb69723ddd683f4fb13dff80ab47"
+    },
+    "VCVio.EvalDist.ProbabilityNotation": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "c07f46bc0445006dbe7386276d93c08de1330fe8390dbfef6a06b9c11342078c",
+      "adapted": false,
+      "vendored_sha256": "c07f46bc0445006dbe7386276d93c08de1330fe8390dbfef6a06b9c11342078c"
+    },
+    "VCVio.OracleComp.Constructions.SampleableType.Basic": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "6a9858fb5301dbd93a72b69569938d84cd8c980596e9e00a38583f94f8d7e2db",
+      "adapted": false,
+      "vendored_sha256": "6a9858fb5301dbd93a72b69569938d84cd8c980596e9e00a38583f94f8d7e2db"
+    },
+    "VCVio.OracleComp.Constructions.SampleableType.NativeMeasure": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "5ac619e19a68c8bc9c6a0fb53cb8e85a3c6be2a7ef056ec7533e65ac25e04d5b",
+      "adapted": false,
+      "vendored_sha256": "5ac619e19a68c8bc9c6a0fb53cb8e85a3c6be2a7ef056ec7533e65ac25e04d5b"
+    },
+    "VCVio.OracleComp.Constructions.UniformFinMeasure": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "28217c5beb333c8a92b5e9a5d7400a59e12bdccea2abdfb48c46922c6b1e7fbb",
+      "adapted": false,
+      "vendored_sha256": "28217c5beb333c8a92b5e9a5d7400a59e12bdccea2abdfb48c46922c6b1e7fbb"
+    },
+    "VCVio.OracleComp.EvalDist.Measure": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "d27a321916074ed464b3b2ef814aa4fca8b90dd01dd901d7357047e330d00619",
+      "adapted": false,
+      "vendored_sha256": "d27a321916074ed464b3b2ef814aa4fca8b90dd01dd901d7357047e330d00619"
+    },
+    "VCVio.OracleComp.EvalDist.MeasureSpec": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "2bf465e2f15d7c8b0d69beee43c1e038529a9322b4411fb6aa4d013628b386ff",
+      "adapted": false,
+      "vendored_sha256": "2bf465e2f15d7c8b0d69beee43c1e038529a9322b4411fb6aa4d013628b386ff"
+    },
+    "VCVio.OracleComp.HasQuery.Basic": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "6ef8d70f75869e9baee1c612cd2073998df65d32dd0e76e8ce7864817c971caa",
+      "adapted": false,
+      "vendored_sha256": "6ef8d70f75869e9baee1c612cd2073998df65d32dd0e76e8ce7864817c971caa"
+    },
+    "VCVio.OracleComp.OracleComp": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "0524a502a8134694c6f6870d9601e4a416c7626f38ec7a66370b6483e78b14f6",
+      "adapted": false,
+      "vendored_sha256": "0524a502a8134694c6f6870d9601e4a416c7626f38ec7a66370b6483e78b14f6"
+    },
+    "VCVio.OracleComp.OracleQuery": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "dfc8ddbd84291f567358f547695a1509fc252998899f411508c4c30c2a523572",
+      "adapted": false,
+      "vendored_sha256": "dfc8ddbd84291f567358f547695a1509fc252998899f411508c4c30c2a523572"
+    },
+    "VCVio.OracleComp.OracleSpec": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "d895bb1cfc5fd37dad3353282d88dd21849a4eed6dae044efc550975c29f6640",
+      "adapted": false,
+      "vendored_sha256": "d895bb1cfc5fd37dad3353282d88dd21849a4eed6dae044efc550975c29f6640"
+    },
+    "VCVio.OracleComp.ProbComp.Basic": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "365c2392c311efbcd756682dceea08307a66647d688f4228f985b55194392f6e",
+      "adapted": false,
+      "vendored_sha256": "365c2392c311efbcd756682dceea08307a66647d688f4228f985b55194392f6e"
+    },
+    "VCVio.OracleComp.SimSemantics.QueryImpl.Basic": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "50c36f6cdee2c055a2453daead649937b3b6640dca43ed74e82c33d4f379e431",
+      "adapted": false,
+      "vendored_sha256": "50c36f6cdee2c055a2453daead649937b3b6640dca43ed74e82c33d4f379e431"
+    },
+    "VCVio.OracleComp.SimSemantics.SimulateQ": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "98687e95cfe575ac6240e2cdfc30db376cf8d354b6c96c314dcf48511a03b91c",
+      "adapted": false,
+      "vendored_sha256": "98687e95cfe575ac6240e2cdfc30db376cf8d354b6c96c314dcf48511a03b91c"
+    },
+    "VCVio.OracleComp.Support": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "9836262eac7acadce382917ed3d116d479ada5610c378768d2fecc8e04e13b5c",
+      "adapted": false,
+      "vendored_sha256": "9836262eac7acadce382917ed3d116d479ada5610c378768d2fecc8e04e13b5c"
+    },
+    "VCVio.Prelude.Core": {
+      "repo": "VCVio",
+      "commit": "d7089e46d69e07640fa23b5ae6b1b966f1d4b949",
+      "source_sha256": "4c2993b62d3047bd867d7610defe162e5e10ebec0c3c1d4ee6cb0b98f1b42ddd",
+      "adapted": false,
+      "vendored_sha256": "4c2993b62d3047bd867d7610defe162e5e10ebec0c3c1d4ee6cb0b98f1b42ddd"
+    }
+  }
+}

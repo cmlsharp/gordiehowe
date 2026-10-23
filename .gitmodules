@@ -1,0 +1,3 @@
+[submodule "comparisons/longfellow/upstream"]
+	path = comparisons/longfellow/upstream
+	url = https://github.com/google/longfellow-zk.git

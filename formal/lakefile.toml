@@ -1,0 +1,87 @@
+# Copyright 2026 Chad Sharp and Paul Grubbs
+# SPDX-License-Identifier: Apache-2.0
+
+name = "pq"
+version = "0.1.0"
+defaultTargets = ["GordieHowe"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+pp.unicode.fun = true
+
+# Pinned to the Mathlib commit ArkLib uses (tag v4.34.0), so that ArkLib can be
+# added as a dependency later without a Mathlib bump.
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "5ed2965256430c3649e86755f9576b54eca72435"
+
+[[lean_lib]]
+name = "GordieHowe"
+
+[[lean_lib]]
+name = "LatticeCrypto"
+srcDir = "Vendor"
+
+[[lean_lib]]
+name = "HashSig"
+srcDir = "Vendor"
+
+[[lean_lib]]
+name = "HashSigTest"
+srcDir = "Vendor"
+
+[[lean_lib]]
+name = "LatticeCryptoTest"
+srcDir = "Vendor"
+
+[[lean_lib]]
+name = "GordieHoweTest"
+srcDir = "Test"
+
+# Audited ArkLib subset (BCIKS20 unique decoding, Johnson MCA); provenance is in Vendor/rs-provenance.json.
+[[lean_lib]]
+name = "ArkLib"
+srcDir = "Vendor"
+roots = []
+globs = ["ArkLib.+"]
+
+[[lean_lib]]
+name = "CompPoly"
+srcDir = "Vendor"
+roots = []
+globs = ["CompPoly.+"]
+
+# Probability layer of the Johnson MCA subset (ArkLib's `mcaError` is a VCVio probability).
+[[lean_lib]]
+name = "VCVio"
+srcDir = "Vendor"
+roots = []
+globs = ["VCVio.+"]
+
+[[lean_lib]]
+name = "ToMathlib"
+srcDir = "Vendor"
+roots = []
+globs = ["ToMathlib.+"]
+
+[[lean_lib]]
+name = "PolyFun"
+srcDir = "Vendor"
+roots = []
+globs = ["PolyFun.+"]
+
+[[lean_lib]]
+name = "ToCslib"
+srcDir = "Vendor"
+roots = []
+globs = ["ToCslib.+"]
+
+[[lean_lib]]
+name = "Cslib"
+srcDir = "Vendor"
+roots = []
+globs = ["Cslib.+"]
+# cslib builds with Lean's default auto-bound implicits.
+leanOptions = {autoImplicit = true, relaxedAutoImplicit = true}

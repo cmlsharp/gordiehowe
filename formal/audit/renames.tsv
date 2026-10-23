@@ -1,0 +1,6 @@
+# Declaration renames of pass P7 (computable simulators, 2026-10-19: the simulators are their own definitions over data-only simulator structures, apart from the honest provers; the forked domain's simulator reads the fixed rows, the readout and the simulator data, not the soundness data): old<TAB>new
+GordieHowe.TreeFork.Sound.HonestData.simulator	GordieHowe.TreeFork.simulatorOf
+GordieHowe.Ligero.MaskRow.Setup.honest_sim	GordieHowe.Ligero.MaskRow.Setup.sim_sim
+GordieHowe.FieldProof.MaskedReduction.Honest.fuse_sim	GordieHowe.FieldProof.MaskedReduction.Sim.fuse_sim
+GordieHowe.FieldProof.Honest.SimCoins	GordieHowe.FieldProof.Sim.SimCoins
+GordieHowe.FieldProof.Honest.simCoinsEquiv	GordieHowe.FieldProof.Sim.simCoinsEquiv

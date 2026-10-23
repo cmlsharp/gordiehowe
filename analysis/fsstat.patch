@@ -1,0 +1,167 @@
+--- a/lib/random/transcript.h
++++ b/lib/random/transcript.h
+@@ -15,9 +15,15 @@
+ #ifndef PRIVACY_PROOFS_ZK_LIB_RANDOM_TRANSCRIPT_H_
+ #define PRIVACY_PROOFS_ZK_LIB_RANDOM_TRANSCRIPT_H_
+ 
++#include <unistd.h>
++
++#include <atomic>
+ #include <cstddef>
+ #include <cstdint>
++#include <cstdio>
++#include <cstdlib>
+ #include <cstring>
++#include <map>
+ #include <memory>
+ #include <vector>
+ 
+@@ -179,6 +185,66 @@
+   size_t max_point_read = 0;  // most stream bytes read at one point
+ };
+ 
++// FSSTAT (measurement only, analysis/fsstat.patch): with
++// GH_FSSTAT=PREFIX set, every challenge point appends one line to
++// PREFIX.<pid> when it closes (or its transcript is destroyed):
++//   FSSTAT id=<transcript> k=<k> budget=<k + e> extra=<grant> read=<bytes>
++//          threads=<GH_THREADS> calls=<bytes>:<reads>,...
++// the reads of each length at the point; id numbers the transcripts a
++// process starts (a clone or a fork keeps its parent's). Nothing enters the
++// transcript.
++inline size_t fsstat_next_id() {
++  static std::atomic<size_t> next{0};
++  return ++next;
++}
++struct FsStat {
++  std::map<size_t, size_t> calls;
++  size_t id = 0, k = 0, budget = 0, extra = 0, read = 0;
++  bool open = false;
++  FsStat() = default;
++  FsStat(FsStat &&o) noexcept
++      : calls(std::move(o.calls)), id(o.id), k(o.k), budget(o.budget),
++        extra(o.extra),
++        read(o.read), open(o.open) {
++    o.open = false;
++  }
++  FsStat &operator=(FsStat &&o) noexcept {
++    dump();
++    calls = std::move(o.calls);
++    id = o.id;
++    k = o.k;
++    budget = o.budget;
++    extra = o.extra;
++    read = o.read;
++    open = o.open;
++    o.open = false;
++    return *this;
++  }
++  FsStat(const FsStat &) = delete;
++  FsStat &operator=(const FsStat &) = delete;
++  ~FsStat() { dump(); }
++  void dump() {
++    if (!open) return;
++    open = false;
++    const char *pre = std::getenv("GH_FSSTAT");
++    if (pre != nullptr) {
++      char path[4096];
++      std::snprintf(path, sizeof(path), "%s.%d", pre, int(getpid()));
++      if (FILE *f = std::fopen(path, "a")) {
++        const char *th = std::getenv("GH_THREADS");
++        std::fprintf(f,
++                     "FSSTAT id=%zu k=%zu budget=%zu extra=%zu read=%zu "
++                     "threads=%s calls=",
++                     id, k, budget, extra, read, th != nullptr ? th : "-");
++        for (const auto &[b, c] : calls) std::fprintf(f, "%zu:%zu,", b, c);
++        std::fprintf(f, "\n");
++        std::fclose(f);
++      }
++    }
++    calls.clear();
++  }
++};
++
+ template <class Hash = UpstreamHash>
+ class BasicTranscript : public RandomEngine {
+   enum { TAG_BSTR = 0, TAG_FIELD_ELEM = 1, TAG_ARRAY = 2, TAG_CHALLENGE = 3 };
+@@ -198,6 +264,7 @@
+                   size_t version = 6)
+       : sha_(), xof_(), seed_(seed), budget_(fs_stream_budget<Hash>()),
+         exhausted_(false), version_(version) {
++    fsstat_.id = fsstat_next_id();
+     write(init, init_len);
+     write(seed_.bytes, Seed::kLength);
+   }
+@@ -210,7 +277,8 @@
+   // running hash, budget and exhaustion flag; an open challenge point
+   // restarts at stream byte 0 in the copy, and its write-back is the same.
+   BasicTranscript clone() {
+-    return BasicTranscript(sha_, seed_, budget_, exhausted_, version_, stats_);
++    return BasicTranscript(sha_, seed_, budget_, exhausted_, version_, stats_,
++                           fsstat_.id);
+   }
+ 
+   // The proof's seed.
+@@ -232,6 +300,12 @@
+     }
+     xof_->bytes(buf, n);
+     stats_.read_bytes += n;
++    fsstat_.open = true;
++    ++fsstat_.calls[n];
++    fsstat_.k = kDigestSize;
++    fsstat_.budget = budget_;
++    fsstat_.extra = point_extra_;
++    fsstat_.read = xof_->read();
+     if (xof_->read() > stats_.max_point_read) {
+       stats_.max_point_read = xof_->read();
+     }
+@@ -262,7 +336,7 @@
+                                         size_t n) {
+     close_point();
+     std::unique_ptr<BasicTranscript> b(new BasicTranscript(
+-        sha_, seed_, budget_, exhausted_, version_, stats_));
++        sha_, seed_, budget_, exhausted_, version_, stats_, fsstat_.id));
+     b->write(label, n);
+     return b;
+   }
+@@ -274,7 +348,10 @@
+   // the budget; Ligero's quadratic test grants its own draws the same way
+   // (ligero_transcript.h). Prover and verifier grant the same, so the
+   // challenges and the transcript do not change.
+-  void extend_point_budget(size_t bytes) { point_extra_ += bytes; }
++  void extend_point_budget(size_t bytes) {
++    point_extra_ += bytes;
++    if (fsstat_.open) fsstat_.extra = point_extra_;
++  }
+   // The grant for N field elements of FIELD: four times their bytes, which
+   // covers their rejection sampling (each attempt accepts with probability
+   // at least 1/2) beyond the budget's own margin.
+@@ -351,10 +428,11 @@
+ private:
+   explicit BasicTranscript(const Hash &sha, const Seed &seed, size_t budget,
+                            bool exhausted, size_t version,
+-                           const TranscriptStats &stats)
++                           const TranscriptStats &stats, size_t fsid = 0)
+       : sha_(), seed_(seed), budget_(budget), exhausted_(exhausted),
+         version_(version), stats_(stats) {
+     sha_.CopyState(sha);
++    fsstat_.id = fsid;
+   }
+ 
+   void count_write(size_t n) {
+@@ -391,6 +469,8 @@
+     sha_.Update(hdr, sizeof(hdr));
+     sha_.Update(xof_->head(), kDigestSize);
+     stats_.writeback_bytes += sizeof(hdr) + kDigestSize;
++    fsstat_.extra = point_extra_;
++    fsstat_.dump();
+     xof_.reset();
+     point_extra_ = 0;
+   }
+@@ -415,6 +495,7 @@
+   bool exhausted_;
+   const size_t version_; // version 4+ fixes the TAG_ARRAY typo.
+   TranscriptStats stats_;
++  FsStat fsstat_;
+ };
+ 
+ using ProofSeed = BasicProofSeed<>;

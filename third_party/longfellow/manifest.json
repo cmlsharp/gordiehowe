@@ -1,0 +1,575 @@
+{
+  "upstream_commit": "d5e6be77336933d50bf7f25a954f8ec273eb51ce",
+  "files": [
+    {
+      "path": "third_party/longfellow/lib/CMake/aarch64-linux-clang.cmake",
+      "upstream_path": "lib/CMake/aarch64-linux-clang.cmake",
+      "sha256": "53b7f02927a07699f6cd17c210bb630af824c0cd6bf5a6e235d8e058a9687564"
+    },
+    {
+      "path": "third_party/longfellow/lib/CMake/i386-linux-clang.cmake",
+      "upstream_path": "lib/CMake/i386-linux-clang.cmake",
+      "sha256": "eeaf58453aaa27166b33a79ff8564f8f3467a88dcbb323ae9bcc359738865b3d"
+    },
+    {
+      "path": "third_party/longfellow/lib/CMake/i386-linux-gcc.cmake",
+      "upstream_path": "lib/CMake/i386-linux-gcc.cmake",
+      "sha256": "ae18c5a0aab45dbbee63b7b5b1dd09d083ead591fd321af3e094997858845465"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/blas.h",
+      "upstream_path": "lib/algebra/blas.h",
+      "sha256": "b2501aa69b53d92dbcd6c09f5ca3c158d6eb3033c3107190ff71f25327ecd02f"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/bogorng.h",
+      "upstream_path": "lib/algebra/bogorng.h",
+      "sha256": "7bd52fa614f6110edbf4192bc65e50e150a3dc3080c9f241710188af84eb4039"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/compare.h",
+      "upstream_path": "lib/algebra/compare.h",
+      "sha256": "5a09049080c74d3a5e614227ce2ad713cd2eac86f694310a8c9c2fc676446bb8"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/crt.cc",
+      "upstream_path": "lib/algebra/crt.cc",
+      "sha256": "ed96cc279622192c28a065f9ad66fe07450417f614c6b61e9b9e7a9882c5511d"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/crt.h",
+      "upstream_path": "lib/algebra/crt.h",
+      "sha256": "da5be994e4b9da30d44c92c5558fdb5fd72df60cb49d26ed4585337c19977cff"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/crt_test.cc",
+      "upstream_path": "lib/algebra/crt_test.cc",
+      "sha256": "8fe379d86e0ff06d0f444566dd93501476def0b633ca56b69bc4680f6176efb9"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/fft.h",
+      "upstream_path": "lib/algebra/fft.h",
+      "sha256": "71bb60d92054e02c752b0c01981fdcd03657e680d234b04f41f9b7cc2fc17fe5"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/fft_test.cc",
+      "upstream_path": "lib/algebra/fft_test.cc",
+      "sha256": "f2c9b416ce8cce481d57bbe4e874e1e89d457a8f81f74d7b35c2c0bffa46bb45"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/fp.h",
+      "upstream_path": "lib/algebra/fp.h",
+      "sha256": "d152fe6ce6c5b8aea549f21b31ce1bd4a1bb8947c226d1c78dec9165d2a7648e"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/fp2_test.cc",
+      "upstream_path": "lib/algebra/fp2_test.cc",
+      "sha256": "4a79c5c0f4e62a74901b1a10f6015986bf8902f505a4f3d3a84c86db40b3cdb7"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/fp_p128.h",
+      "upstream_path": "lib/algebra/fp_p128.h",
+      "sha256": "2c6c40c45b6f53ddb3d2771da85cb0a2cb1d5c87d3aa8d16d87219f477570f26"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/fp_p256.h",
+      "upstream_path": "lib/algebra/fp_p256.h",
+      "sha256": "e593a034bd8dd3b4970a87301156a402b14da8e0d7dec298a7061e10cd3f49ad"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/fp_p256k1.h",
+      "upstream_path": "lib/algebra/fp_p256k1.h",
+      "sha256": "c77e1bda75938f93b6edfc4c1689095beb630ed57e1a119d0fdac91bceca2125"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/fp_p384.h",
+      "upstream_path": "lib/algebra/fp_p384.h",
+      "sha256": "49b16012c7532e8162115d62249b43a2db90f7b3736e4ade97264ec559a4c1dd"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/fp_p521.h",
+      "upstream_path": "lib/algebra/fp_p521.h",
+      "sha256": "e27d258091da33d880ff1120d698a69d12ccfba9a96cef7769dc5535713925b6"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/hash.h",
+      "upstream_path": "lib/algebra/hash.h",
+      "sha256": "0b7d07eb7e3b6e7526b78c64330d41accaaa273ced5840fc6a2337418d7bbf02"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/interpolation.h",
+      "upstream_path": "lib/algebra/interpolation.h",
+      "sha256": "90c73336e9271962990f8b889315649e01541639248ba75b635eba8e59d5c079"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/interpolation_test.cc",
+      "upstream_path": "lib/algebra/interpolation_test.cc",
+      "sha256": "d5a46701c371aa95e1d3a842460ea53546bf738e35ea48641e2bc4a78210b8b9"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/limb.h",
+      "upstream_path": "lib/algebra/limb.h",
+      "sha256": "f87a8fa61369e9a6066ec4f82d8f3178840b9bef5b116902270cebe4e824587a"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/limb_test.cc",
+      "upstream_path": "lib/algebra/limb_test.cc",
+      "sha256": "33503386f227886fd450996439ed82303de77d044702202d0ff81789a0da9de4"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/nat.cc",
+      "upstream_path": "lib/algebra/nat.cc",
+      "sha256": "c4090a5ee793764a2b04b39e48ad5819c3111e6acfb303e826a93a7d4b07442c"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/nat.h",
+      "upstream_path": "lib/algebra/nat.h",
+      "sha256": "b786c0823d014f7dca8b2c55347cb7e4cc636da2ddb20f2d5f6d7a7068e39558"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/nat_test.cc",
+      "upstream_path": "lib/algebra/nat_test.cc",
+      "sha256": "aa01a450c68db5e80a2dcb6b569035079a0fbe3c5971bcd2e9047f447486dcc8"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/permutations.h",
+      "upstream_path": "lib/algebra/permutations.h",
+      "sha256": "08d9b37a67a24e22b752413117497007863d1683fa47b8585f51801fcad12504"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/poly.h",
+      "upstream_path": "lib/algebra/poly.h",
+      "sha256": "973c94e9943008a3c785fc549514186486929769c57f43cbf782683a64fb04e4"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/poly_test.cc",
+      "upstream_path": "lib/algebra/poly_test.cc",
+      "sha256": "d832949ab2f57c38c56bd82f2cda8de5b5f4eee2fdb819c725b6b2b76871078d"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/reed_solomon_test.cc",
+      "upstream_path": "lib/algebra/reed_solomon_test.cc",
+      "sha256": "eecb62cd15286b43e203dd82c8d821a044a6fe2e8b080157b1f04316a18cec0d"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/rfft.h",
+      "upstream_path": "lib/algebra/rfft.h",
+      "sha256": "a853fe7e10eb978fc89f4301826f53c9e249ee8282efdecfb10f4708563afd84"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/rfft_test.cc",
+      "upstream_path": "lib/algebra/rfft_test.cc",
+      "sha256": "1bb4c8dc77c8fd6ae519fcb907afd27b24a992ee5df1dc644bd409fcd232db7d"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/static_string.h",
+      "upstream_path": "lib/algebra/static_string.h",
+      "sha256": "6582d178faaa6b4b86f9dca38add197d6ea8dfa7e8dd8a6f27a0731f2a45688d"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/sysdep.h",
+      "upstream_path": "lib/algebra/sysdep.h",
+      "sha256": "614bd455460b1a9fee32afc097ecf8217bb603108d274561b4b325165426ff6b"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/sysdep_test.cc",
+      "upstream_path": "lib/algebra/sysdep_test.cc",
+      "sha256": "8ea3ff3b97a92caa149aaeb247167374810c98c6c961946db21018bef8ce6a8f"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/twiddle.h",
+      "upstream_path": "lib/algebra/twiddle.h",
+      "sha256": "6b3e7ba1167e393382664e7c94a3dbbe5c2ae41e855a74ea48befb1c68320641"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/utility.h",
+      "upstream_path": "lib/algebra/utility.h",
+      "sha256": "3fd37fb11fba61403e1bb34ed1bf8db779766a1c13fe786b87655f0099e4158d"
+    },
+    {
+      "path": "third_party/longfellow/lib/algebra/utility_test.cc",
+      "upstream_path": "lib/algebra/utility_test.cc",
+      "sha256": "af60d5623fc5363529d9404dcf2fa0bfd1fc2bc5c09ff879fe5e1a8b1e954157"
+    },
+    {
+      "path": "third_party/longfellow/lib/arrays/affine.h",
+      "upstream_path": "lib/arrays/affine.h",
+      "sha256": "684cd080f6ab1915f6b08501cc993512aa15b960fa1b6ef3fb3c7bbd7519fc04"
+    },
+    {
+      "path": "third_party/longfellow/lib/arrays/affine_test.cc",
+      "upstream_path": "lib/arrays/affine_test.cc",
+      "sha256": "bb691ec069b389841612a78ade366bc25f378ff18a1cd08065d39daf509ea2b7"
+    },
+    {
+      "path": "third_party/longfellow/lib/arrays/eq.h",
+      "upstream_path": "lib/arrays/eq.h",
+      "sha256": "4f5edc53eedb24fdee2336b88f51488a6b9f1a682847ba0ffcf5dbcce7f0287c"
+    },
+    {
+      "path": "third_party/longfellow/lib/arrays/eqs.h",
+      "upstream_path": "lib/arrays/eqs.h",
+      "sha256": "e4d5348d7e07a12033bdebcb0faf2581222a5e2d26d2d44bb64321e3c37c9a01"
+    },
+    {
+      "path": "third_party/longfellow/lib/arrays/eqs_test.cc",
+      "upstream_path": "lib/arrays/eqs_test.cc",
+      "sha256": "0dd206fe05d451f02c119f6ee508fbca3de627eaf18d0b2baf6392f355818db2"
+    },
+    {
+      "path": "third_party/longfellow/lib/arrays/sparse.h",
+      "upstream_path": "lib/arrays/sparse.h",
+      "sha256": "05b2dfce793d190e1c6752d677cc5c8ffe6dbbbe8726ac1079e4abe9930da891"
+    },
+    {
+      "path": "third_party/longfellow/lib/cbor/host_decoder.h",
+      "upstream_path": "lib/cbor/host_decoder.h",
+      "sha256": "3f3a5ec5a9f330c0c0086204be1d1395dc093474624dffe9b53c267c100dcae1"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/cbor_parser/cbor_byte_decoder.h",
+      "upstream_path": "lib/circuits/cbor_parser/cbor_byte_decoder.h",
+      "sha256": "00fb814547345610f1d8c9b79491af7a6428bf68d848ff26d46d7db040090164"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/compiler/canonicalization_test.cc",
+      "upstream_path": "lib/circuits/compiler/canonicalization_test.cc",
+      "sha256": "342a5ed8215356e657f4d3f03bcead29ad3c7b8cd50ed79c4081a2f4b4380f03"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/compiler/circuit_dump.h",
+      "upstream_path": "lib/circuits/compiler/circuit_dump.h",
+      "sha256": "25c448d2db7961c777f2df10bbe0b4698587168ae16dee3d1ef6e1b0dc1e4a2d"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/compiler/compiler_test.cc",
+      "upstream_path": "lib/circuits/compiler/compiler_test.cc",
+      "sha256": "16598d38a8d5ae54b526f4b020b8fe0b1f5fcd173294c9a550a12328265ddc55"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/compiler/node.h",
+      "upstream_path": "lib/circuits/compiler/node.h",
+      "sha256": "9181c3f9fa920330eef19c6a8fcc246fc9c66e8b8ac9d85130ce056f32440343"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/compiler/pdqhash.h",
+      "upstream_path": "lib/circuits/compiler/pdqhash.h",
+      "sha256": "962fee7ab3060167ff87a118659498e15e0427894e2bb9515d32199241485fcd"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/compiler/schedule.h",
+      "upstream_path": "lib/circuits/compiler/schedule.h",
+      "sha256": "f9770d428652a6e4b06658c3e73f55884e40008284436cd6a6d7b3df14cc832d"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/ecdsa/verify_circuit.h",
+      "upstream_path": "lib/circuits/ecdsa/verify_circuit.h",
+      "sha256": "f1e37d20169307e0b108d4ad994ca9f4e270a3c171ffe1c3a85b25ddde51ef23"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/ecdsa/verify_witness.h",
+      "upstream_path": "lib/circuits/ecdsa/verify_witness.h",
+      "sha256": "b5803254b2cd2e10c40b9934fe603d12930b568b82855f31ecf00b33d72e25b8"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/logic/bit_adder.h",
+      "upstream_path": "lib/circuits/logic/bit_adder.h",
+      "sha256": "529b56839dda08589a9f0a01c89cf65daa8f40b050ae3dc3599256d4a0a80870"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/logic/bit_adder_test.cc",
+      "upstream_path": "lib/circuits/logic/bit_adder_test.cc",
+      "sha256": "93bd6ccdcaad76efbb18236cf970e5907db1a669e8fee410f27aef97ab1df532"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/logic/bit_plucker.h",
+      "upstream_path": "lib/circuits/logic/bit_plucker.h",
+      "sha256": "57fa9718bd3c485170788617a5d6c62db8e893debc20ec215167650543d5204c"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/logic/bit_plucker_constants.h",
+      "upstream_path": "lib/circuits/logic/bit_plucker_constants.h",
+      "sha256": "fc9429bd8a0457bfa20f85018d1a6d4178bdbd7984ff028af31d7a6df1ea8205"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/logic/bit_plucker_encoder.h",
+      "upstream_path": "lib/circuits/logic/bit_plucker_encoder.h",
+      "sha256": "14853cb421b740467526e4339b7b169858be540096c0f0f0b5f70b8d84298d86"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/logic/bit_plucker_test.cc",
+      "upstream_path": "lib/circuits/logic/bit_plucker_test.cc",
+      "sha256": "ab32107ef5fe564bdfd2ccff7eb533912d5bc80657855a21771dffead4f07582"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/logic/counter.h",
+      "upstream_path": "lib/circuits/logic/counter.h",
+      "sha256": "6c445f33a908a7f5bf03c237b36f9cb358397ecc6d3abb218be58b1082571b5c"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/logic/counter_test.cc",
+      "upstream_path": "lib/circuits/logic/counter_test.cc",
+      "sha256": "78d15b2696d14cb92381ce218afd39af536dbb630a67421523f957f835cf06e7"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/logic/evaluation_backend.h",
+      "upstream_path": "lib/circuits/logic/evaluation_backend.h",
+      "sha256": "4a83aa731910dca28ed7ab5ba553e4a5f743207ccc9345f27dbe292dfc98728c"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/logic/logic_circuit_test.cc",
+      "upstream_path": "lib/circuits/logic/logic_circuit_test.cc",
+      "sha256": "c68635a116c7bc67b17068423895cfdf2f14cc8c281e634da64208584780b1f4"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/logic/memcmp.h",
+      "upstream_path": "lib/circuits/logic/memcmp.h",
+      "sha256": "4a7b844d08bc331d4c4342f23ec87ab1c4ff988b83055dcf0bc37cefa34fbb77"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/logic/memcmp_test.cc",
+      "upstream_path": "lib/circuits/logic/memcmp_test.cc",
+      "sha256": "5109cea42f9523f714ff2b30d190ce04916523dc4c071edae8b1ae075fc686df"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/logic/polynomial.h",
+      "upstream_path": "lib/circuits/logic/polynomial.h",
+      "sha256": "a6e376d530c2c2826edb5017b71c9446bdae5afd325d4b46038b6a9516ee220b"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/logic/polynomial_test.cc",
+      "upstream_path": "lib/circuits/logic/polynomial_test.cc",
+      "sha256": "2e5814bc86c222e003056897666af9e76eedce85cb1ff0f90aada75b6d68642e"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/logic/routing.h",
+      "upstream_path": "lib/circuits/logic/routing.h",
+      "sha256": "a9952cfc2ec4e7ba99398fc0afe5cb1520fffba19085ddf30cc83e340165612e"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/logic/routing_test.cc",
+      "upstream_path": "lib/circuits/logic/routing_test.cc",
+      "sha256": "f0416767087482a057e5f710fe5b4634a996400e17c080a1d775ffb3b9034538"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/mac/mac_witness.h",
+      "upstream_path": "lib/circuits/mac/mac_witness.h",
+      "sha256": "85e3fcba9d89bac3b27a31525ec04e0bd7a73f93d36733af78167c1f83686a12"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/mdoc/mdoc_attribute_ids.h",
+      "upstream_path": "lib/circuits/mdoc/mdoc_attribute_ids.h",
+      "sha256": "46d02460ee5ba4a991791be91a3438e899de091cb7dd5e4df27b7f18499fc25c"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/mdoc/mdoc_constants.h",
+      "upstream_path": "lib/circuits/mdoc/mdoc_constants.h",
+      "sha256": "ff8500e06e939530b6d9b969c08baefa954dc6960df5a8c98b36481eb7867b9c"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/mdoc/mdoc_examples.h",
+      "upstream_path": "lib/circuits/mdoc/mdoc_examples.h",
+      "sha256": "383178b3258cef2ece6ffa668834379e5bb86c2b8835b2b0fc11f9e7c984762c"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/mdoc/mdoc_hash.h",
+      "upstream_path": "lib/circuits/mdoc/mdoc_hash.h",
+      "sha256": "d50706ade57f28b63a735cae6932d870e4c7b563b215bf8173180589a8387eaf"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/mdoc/mdoc_test_attributes.h",
+      "upstream_path": "lib/circuits/mdoc/mdoc_test_attributes.h",
+      "sha256": "65da6bf1c86f3c0535d0d313a76cbd5fa96509b29611d765ac2dc3555c0f6af4"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/mdoc/mdoc_witness.h",
+      "upstream_path": "lib/circuits/mdoc/mdoc_witness.h",
+      "sha256": "30841a50907a049f41ef71356722d216d4739ad9c3b0f9ccf3568d03dc0a06f6"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/sha/flatsha256_circuit.h",
+      "upstream_path": "lib/circuits/sha/flatsha256_circuit.h",
+      "sha256": "6c0378500977f6148ec35ac7284aadfd3dc6fc9273ca5d5bb4a7ae50ca895705"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/sha/flatsha256_witness.cc",
+      "upstream_path": "lib/circuits/sha/flatsha256_witness.cc",
+      "sha256": "4261efec87f43c0ed130d0a6fb3d4858e8f333b4510daf48cbdc6c694f0298a4"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/sha/flatsha256_witness.h",
+      "upstream_path": "lib/circuits/sha/flatsha256_witness.h",
+      "sha256": "0bf37fcd92e0c97d03be5125a1a4e101c9537770abd3828fffc1af6fa2b7c6ac"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/sha/sha256_constants.cc",
+      "upstream_path": "lib/circuits/sha/sha256_constants.cc",
+      "sha256": "36627494a2fb2dc4289b46e313d529184e8f2087b1269c1c80b4a93f0adbe8e1"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/sha/sha256_constants.h",
+      "upstream_path": "lib/circuits/sha/sha256_constants.h",
+      "sha256": "6454c79d875f6316137ff56b7ccf29b2491735dcf2ab044cef97d803ac086c2c"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/tests/pq/ml_dsa/ml_dsa_ref_test_vectors.inc",
+      "upstream_path": "lib/circuits/tests/pq/ml_dsa/ml_dsa_ref_test_vectors.inc",
+      "sha256": "27fcdbd1b6156395aa65b7a1553b12de3898a1398d72c3e48afc8817677c221c"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/tests/pq/ml_dsa/ml_dsa_ref_test_vectors_pkdecode.inc",
+      "upstream_path": "lib/circuits/tests/pq/ml_dsa/ml_dsa_ref_test_vectors_pkdecode.inc",
+      "sha256": "c1cb593599f269ad24b0e85460b94da1712f2866464a69554008d0572192a6f8"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/tests/pq/ml_dsa/ml_dsa_ref_test_vectors_sigdecode.inc",
+      "upstream_path": "lib/circuits/tests/pq/ml_dsa/ml_dsa_ref_test_vectors_sigdecode.inc",
+      "sha256": "275afd67f668919d13e6d23d6388e16a0594e62fe1ad4aba89d9f0954470bb72"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/tests/pq/ml_dsa/ml_dsa_shared.cc",
+      "upstream_path": "lib/circuits/tests/pq/ml_dsa/ml_dsa_shared.cc",
+      "sha256": "bb39ebf94029839e2188ab49ce53bba20f68cb8db23b01d41c8223dd17912cdb"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/tests/sha3/sha3_reference.cc",
+      "upstream_path": "lib/circuits/tests/sha3/sha3_reference.cc",
+      "sha256": "6af2b76d9fe46b17e69ffbb6515d1e1663789987c3dda6fa31568e61da922ad9"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/tests/sha3/sha3_reference.h",
+      "upstream_path": "lib/circuits/tests/sha3/sha3_reference.h",
+      "sha256": "991a45f70ec96863361ace7169b3305ab85e6dacf2eea65cb76940db8a7c22e1"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/tests/sha3/sha3_reference_test.cc",
+      "upstream_path": "lib/circuits/tests/sha3/sha3_reference_test.cc",
+      "sha256": "a6d69d1d901e7eaeb8cbcedbc54ed1d093f31955e8bf5a4f00f73cd35079451b"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/tests/sha3/sha3_round_constants.cc",
+      "upstream_path": "lib/circuits/tests/sha3/sha3_round_constants.cc",
+      "sha256": "41e3c0448e7babdd8ce0cc47e1eeda09dd0dacddb64e74fa2e8907f7470dacb5"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/tests/sha3/sha3_round_constants.h",
+      "upstream_path": "lib/circuits/tests/sha3/sha3_round_constants.h",
+      "sha256": "4e456d0ae143a110d23ddecf9d745067c61ae983bda19d06cd2d5c6cd1606b1d"
+    },
+    {
+      "path": "third_party/longfellow/lib/circuits/tests/sha3/shake_test_vectors.h",
+      "upstream_path": "lib/circuits/tests/sha3/shake_test_vectors.h",
+      "sha256": "960ec41e047331b42df191e5e22ab26d8cf51211ef7e1afa329d35fcbf089ffc"
+    },
+    {
+      "path": "third_party/longfellow/lib/ec/elliptic_curve.h",
+      "upstream_path": "lib/ec/elliptic_curve.h",
+      "sha256": "3b216daf1bf4877585e760903a7c85999165c78880814d6c82d2d5c6391fdf41"
+    },
+    {
+      "path": "third_party/longfellow/lib/ec/p256.cc",
+      "upstream_path": "lib/ec/p256.cc",
+      "sha256": "bc48d5dd7b0de7281f58792181109ff6daa6bfcca849c7e2c377a6d24e9da34d"
+    },
+    {
+      "path": "third_party/longfellow/lib/ec/p256.h",
+      "upstream_path": "lib/ec/p256.h",
+      "sha256": "9bcdedc0969d4e1bfc6fda0efefdd77090d841ef54d3f8723d44603c6a2e28d9"
+    },
+    {
+      "path": "third_party/longfellow/lib/gf2k/gf2_128_test.cc",
+      "upstream_path": "lib/gf2k/gf2_128_test.cc",
+      "sha256": "457217dd6abd2c85e129defb06cdb757ef6f0f12cae9ab42b4951bae769216c8"
+    },
+    {
+      "path": "third_party/longfellow/lib/gf2k/gf2poly.h",
+      "upstream_path": "lib/gf2k/gf2poly.h",
+      "sha256": "3abf5c1d0bcde579472cc204763302df09fe8c57d8b479b171c85a7523387d54"
+    },
+    {
+      "path": "third_party/longfellow/lib/gf2k/lch14.h",
+      "upstream_path": "lib/gf2k/lch14.h",
+      "sha256": "097d78656d2b1df2254542b92563fca3ac0b49c9136d85202f16ed38d9b40bbd"
+    },
+    {
+      "path": "third_party/longfellow/lib/gf2k/lch14_reed_solomon_test.cc",
+      "upstream_path": "lib/gf2k/lch14_reed_solomon_test.cc",
+      "sha256": "0b9411aa021f9178e55cd08dfed7ba1d93da7b149aed4f3b385e37d1766326ec"
+    },
+    {
+      "path": "third_party/longfellow/lib/gf2k/lch14_test.cc",
+      "upstream_path": "lib/gf2k/lch14_test.cc",
+      "sha256": "f7bc9e674443337d5176c32bb4ca1de0be33b82ded43af604512bfc2302982d2"
+    },
+    {
+      "path": "third_party/longfellow/lib/gf2k/sysdep.h",
+      "upstream_path": "lib/gf2k/sysdep.h",
+      "sha256": "d8df9128ee5eaf83aa3d37f1dc2ac945117a3de13290fe265a07f186d5d05de4"
+    },
+    {
+      "path": "third_party/longfellow/lib/random/random.h",
+      "upstream_path": "lib/random/random.h",
+      "sha256": "056deadfa729a6d889a2ff70d9f895f914bd6ba6841f98cffc4aff90109286f8"
+    },
+    {
+      "path": "third_party/longfellow/lib/sumcheck/equad.h",
+      "upstream_path": "lib/sumcheck/equad.h",
+      "sha256": "b5954f243eda8dca6cbfb3052e461493a7ed19a64fc3020385c7b8187846fdd5"
+    },
+    {
+      "path": "third_party/longfellow/lib/sumcheck/quad_builder.h",
+      "upstream_path": "lib/sumcheck/quad_builder.h",
+      "sha256": "10fbea5fa6ac9ba41ed887351e965e9ac569178f2a06e1b3509b253067573148"
+    },
+    {
+      "path": "third_party/longfellow/lib/testing/test_main.cc",
+      "upstream_path": "lib/testing/test_main.cc",
+      "sha256": "e0dca51758a029f846f7d460c324eca6ce3d58ef3f96e21167e82da5a9e8f411"
+    },
+    {
+      "path": "third_party/longfellow/lib/util/ceildiv.h",
+      "upstream_path": "lib/util/ceildiv.h",
+      "sha256": "cf853f6b60e2b815b2b25bda77ec8067754753958fbb4671c401d1172b4b6223"
+    },
+    {
+      "path": "third_party/longfellow/lib/util/ceildiv_test.cc",
+      "upstream_path": "lib/util/ceildiv_test.cc",
+      "sha256": "8123ac6423dcdcfd7523c9c6cc47178b4a779c927dcb68fd73ef3ac854eed554"
+    },
+    {
+      "path": "third_party/longfellow/lib/util/crc64.h",
+      "upstream_path": "lib/util/crc64.h",
+      "sha256": "447cabbdfe87d50e6ac07302665471a0f29f36563ff8d1d557f66fc9ea9b0788"
+    },
+    {
+      "path": "third_party/longfellow/lib/util/crypto.cc",
+      "upstream_path": "lib/util/crypto.cc",
+      "sha256": "5662d67ab47f8f623250f26cd968e174a3cf14abe6139e68268ffbc6f7d8f297"
+    },
+    {
+      "path": "third_party/longfellow/lib/util/log.cc",
+      "upstream_path": "lib/util/log.cc",
+      "sha256": "15b5f5e4876c751751f735840582b42bb1c5d3b5da717f3d0064dbd1b979b3ae"
+    },
+    {
+      "path": "third_party/longfellow/lib/util/log.h",
+      "upstream_path": "lib/util/log.h",
+      "sha256": "701785eb75f33387f837ead75606471004826675eaae2c297ac0f61674c26df3"
+    },
+    {
+      "path": "third_party/longfellow/lib/util/panic.h",
+      "upstream_path": "lib/util/panic.h",
+      "sha256": "2f0aad7eda0f8eb4175b09777f43a295ec692457f207c711b1101a3cba1c2820"
+    },
+    {
+      "path": "third_party/longfellow/lib/util/readbuffer.h",
+      "upstream_path": "lib/util/readbuffer.h",
+      "sha256": "bf78eb20d45b941c5520f05190cf09b4d17c4ce67ed4f0bde2b3ef0b32dbaed3"
+    },
+    {
+      "path": "third_party/longfellow/lib/util/serialization.h",
+      "upstream_path": "lib/util/serialization.h",
+      "sha256": "004592b8d5d3c87dd9c628ec0f516ffcf9dbbec839a882a1f0974133e3385582"
+    }
+  ]
+}

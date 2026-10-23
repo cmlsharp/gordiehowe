@@ -1,0 +1,39 @@
+GordieHowe
+Copyright 2026 Chad Sharp and Paul Grubbs
+
+This product is licensed under the Apache License, Version 2.0 (LICENSE).
+
+This product includes software from the Longfellow ZK project
+(https://github.com/google/longfellow-zk), Copyright 2024-2026 Google
+LLC, licensed under the Apache License, Version 2.0, at commit
+d5e6be77336933d50bf7f25a954f8ec273eb51ce:
+
+  - third_party/longfellow/: Longfellow files used unchanged, with
+    Longfellow's LICENSE (third_party/longfellow/LICENSE). Their sha256
+    digests are in third_party/longfellow/manifest.json.
+  - lib/ and comparisons/longfellow/: Longfellow files modified by Chad
+    Sharp and Paul Grubbs, and new files derived from Longfellow code. Each
+    keeps Google's copyright notice and states that it was modified.
+    docs/longfellow-changes.md lists every such file with its upstream
+    source and a summary of the changes.
+  - comparisons/longfellow/upstream: Longfellow itself, as a git submodule
+    at the same commit.
+
+third_party/longfellow/licensing.json classifies every source file as
+ours, vendored, modified, derived or third-party.
+
+This product includes a subset of the eXtended Keccak Code Package (XKCP,
+https://github.com/XKCP/XKCP) at commit
+4affab454735d54e78156880b3b44e38dcbf765c, in lib/third_party/xkcp/upstream/
+and comparisons/longfellow/baselines/common-wide/third_party/xkcp/upstream/:
+
+  - Every file except KeccakP-1600-AVX2.s carries the CC0 1.0 waiver
+    (https://creativecommons.org/publicdomain/zero/1.0/) in its header.
+  - lib/low/KeccakP-1600/AVX2/KeccakP-1600-AVX2.s is
+    Copyright (c) 2006-2017, CRYPTOGAMS by <appro@openssl.org> and
+    Copyright (c) 2017 Ronny Van Keer, under the CRYPTOGAMS license. Its
+    text is in LICENSE.CRYPTOGAMS beside each copy:
+    lib/third_party/xkcp/LICENSE.CRYPTOGAMS and
+    comparisons/longfellow/baselines/common-wide/third_party/xkcp/LICENSE.CRYPTOGAMS.
+
+Each XKCP copy's README lists the vendored files and their licenses.

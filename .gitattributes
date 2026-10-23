@@ -1,0 +1,3 @@
+# Provenance is a byte-preserving record, including patches and raw logs.
+provenance/** -whitespace
+comparisons/**/results/** -whitespace
