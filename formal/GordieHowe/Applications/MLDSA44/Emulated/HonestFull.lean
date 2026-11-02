@@ -14,15 +14,15 @@ public import GordieHowe.Language.Completeness.Execution
 
 The execution of the source program of an emulated ML-DSA program (`GordieHowe.RealizedProgram.SourceExecution`): the honest
 valuation `honestVal` at the key's statement, the program facts (`MldsaEmulatedHonest`), the source
-predicates (`source_holds`) and the MAC's source facts (`srcMac_holds`) at the source environment,
-the node-typed source values in their types (`honest_types`) and the execution (`sourceExecution`).
+predicates (`source_holds`) and the crossing's operands' bits (`cross_bits`) at the source
+environment, the committed source cells in their nodes (`honest_cell_mem`), and the execution
+(`sourceExecution`) at the program's honest roles (`RealizedProgram.HonestRoles`).
 -/
 
 namespace GordieHowe.MLDSA44.Emulated
 
 open GordieHowe.Bits RealizedProgram
 open MLDSA44 (HonestInput)
-open Native.ROMParams (hVal MldsaHHash MldsaHSample MldsaHConsts MldsaHHonest MldsaHShuffle MldsaHSelHonest MldsaHNativeData MldsaHNodes)
 
 
 set_option linter.unusedSectionVars false
@@ -63,7 +63,7 @@ end Prime
 
 variable {program : RealizedProgram} [MldsaEAlgebra program] {F0 FH : FieldInterp} [AField F0]
   [MldsaANodes F0] [HField FH] [MldsaHHonest nat] [MldsaHSample nat] [MldsaHSelHonest nat]
-  [MldsaHConsts nat FH] [Native.ROMParams.MldsaHNativeData FH] [MldsaHNodes FH]
+  [MldsaHConsts nat FH] [MLDSA44.MldsaHNativeData FH] [MldsaHNodes FH]
   [hE : MldsaEmulatedHonest program F0 FH]
 
 open MldsaEmulatedHonest
@@ -93,9 +93,6 @@ theorem oneNodes : OneNodes interp [(0, "GF(p^1)"), (1, "bit"), (1, "GF(2^16)")]
   · simpa using natCast_mem_prime (F0 := F0) (FH := FH) 1
   · exact (MldsaHNodes.bit_iff (FH := FH) 1).2 (Or.inr rfl)
   · exact MldsaHNodes.node_of_sel (FH := FH) 1 (one_mem _)
-
-theorem bitH_of_mem {z : (interp 1).K} (h : z ∈ (interp 1).node "bit") : z = 0 ∨ z = 1 :=
-  (MldsaHNodes.bit_iff (FH := FH) z).1 h
 
 section Mem
 
@@ -132,27 +129,15 @@ theorem aVal_mem {L' : MldsaELayout} (hnd : (aValues L').Nodup) {v : ℕ} (hv : 
 
 end Mem
 
-/-- **An honest committed coordinate lies in its value's node.** -/
-theorem honest_cell_mem (i : HonestInput) (π : (program.layout interp).Pads) {v : ℕ}
-    (hv : v < program.values.length) (hc : program.isCellValue (program.value v).domain v = true)
-    (hsrc : program.IsSourceValue v)
+/-- **An honest committed source cell lies in its value's node.** -/
+theorem honest_cell_mem (i : HonestInput) {v : ℕ} (hv : v < program.values.length)
+    (hp : program.privCellB v = true) (hsrc : program.IsSourceValue v)
     (j : ℕ) {S : String} (hS : (program.value v).node.map (·.name) = some S) :
-    program.copyVal interp (honestVal program F0 FH i) π v j ∈
-      (interp (program.valueField v)).node S := by
+    honestVal program F0 FH i v j ∈ (interp (program.valueField v)).node S := by
   have hcl := List.all_eq_true.1 (cell_classes (program := program)) v (List.mem_range.2 hv)
-  simp only [hc, hsrc, decide_true, Bool.not_true, Bool.false_or, Bool.or_eq_true,
+  simp only [hp, hsrc, decide_true, Bool.not_true, Bool.false_or, Bool.or_eq_true,
     Bool.and_eq_true, beq_iff_eq, hS, Option.some.injEq, List.contains_iff_mem,
     decide_eq_true_eq] at hcl
-  have hpriv : v ≠ 569 → program.copyVal interp (honestVal program F0 FH i) π v j =
-      honestVal program F0 FH i v j := by
-    intro h569
-    unfold RealizedProgram.copyVal
-    split
-    · rename_i u m hk
-      exfalso
-      have := List.all_eq_true.1 (padCopy_only (program := program)) v (List.mem_range.2 hv)
-      simp [hk, h569] at this
-    · rfl
   have hH : ∀ {S'}, program.valueField v = 1 → 1 ≤ v → v - 1 ∈ hV →
       hVal nat F0 FH i (v - 1) j ∈ (interp ((nat).valueField (v - 1))).node S' →
       honestVal program F0 FH i v j ∈ (interp (program.valueField v)).node S' := by
@@ -170,160 +155,64 @@ theorem honest_cell_mem (i : HonestInput) (π : (program.layout interp).Pads) {v
     rw [if_neg hnA, if_pos ⟨h1, hvV⟩]
     exact mem_castElt_of_eq hfE'.symm hm
   rcases hcl with ((⟨⟨⟨⟨hf, rfl⟩, h1⟩, hvV⟩, hw⟩ | ⟨⟨⟨⟨hf, rfl⟩, h1⟩, hvV⟩, hb⟩) | ⟨⟨hf, rfl⟩, ha⟩)
-  · have h569 : v ≠ 569 := by
-      rintro rfl
-      have := (blind_cells (program := program)).2.2.2.1
-      omega
-    rw [hpriv h569]
-    obtain ⟨-, -, hfE, -⟩ := (MldsaEmbed.embedding (program := program)).vals (v - 1) hvV
+  · obtain ⟨-, -, hfE, -⟩ := (MldsaEmbed.embedding (program := program)).vals (v - 1) hvV
     have hf' : (nat).valueField (v - 1) = 1 := by
       rw [← hfE]
       have : v - 1 + 1 = v := by omega
       change program.valueField (v - 1 + 1) = 1
       rw [this]
       exact hf
-    exact hH hf h1 hvV (Native.ROMParams.hVal_mem_gf16 i hf' hw j)
-  · have h569 : v ≠ 569 := by
-      rintro rfl
-      have := (blind_cells (program := program)).2.2.2.1
-      omega
-    rw [hpriv h569]
-    obtain ⟨-, -, hfE, -⟩ := (MldsaEmbed.embedding (program := program)).vals (v - 1) hvV
+    exact hH hf h1 hvV (MLDSA44.hVal_mem_gf16 i hf' hw j)
+  · obtain ⟨-, -, hfE, -⟩ := (MldsaEmbed.embedding (program := program)).vals (v - 1) hvV
     have hf' : (nat).valueField (v - 1) = 1 := by
       rw [← hfE]
       have : v - 1 + 1 = v := by omega
       change program.valueField (v - 1 + 1) = 1
       rw [this]
       exact hf
-    exact hH hf h1 hvV (Native.ROMParams.hVal_mem_bit i hf' hb j)
-  · rcases ha with ha | rfl
-    · have h569 : v ≠ 569 := by
-        rintro rfl
-        have := kind_of_privCellB (a_cells (program := program) 569 ha).1
-        rw [(blind_cells (program := program)).1] at this
-        cases this
-      rw [hpriv h569]
-      unfold honestVal
-      rw [if_pos ha]
-      exact mem_castElt_of_eq (a := 0) hf.symm (aVal_mem (FH := FH) i a_nodup ha j)
-    · unfold RealizedProgram.copyVal
-      rw [(blind_cells (program := program)).1]
-      simp only
-      revert hf
-      generalize program.valueField 569 = f
-      intro hf
-      subst hf
-      unfold FieldInterp.ofBool
-      split_ifs
-      · exact bitA_mem (Or.inr rfl)
-      · exact bitA_mem (Or.inl rfl)
-
-/-- **The node-typed values lie in their types** at the source environment of the honest values
-(`RealizedProgram.SourceSatAt.types`). -/
-theorem honest_types (i : HonestInput) (x : program.Valuation interp)
-    (c : ∀ k, (program.layout interp).Ch k) (π : (program.layout interp).Pads) (v : ℕ)
-    (hv : v < program.values.length) (hts : (program.value v).typeSource = .node)
-    (hl : ¬ program.IsLate v) (hsrc : program.IsSourceValue v) (j : ℕ)
-    (hj : j < (program.value v).size) :
-    (interp (program.valueField v)).InType (program.value v).type
-      (program.reader (program.srcEnv interp x (honestVal program F0 FH i) c π) v j) := by
-  have hcl := List.all_eq_true.1 (typed_classes (program := program)) v (List.mem_range.2 hv)
-  simp only [hts, beq_self_eq_true, Bool.not_true, Bool.false_or, hl, decide_false,
-    Bool.or_eq_true, Bool.and_eq_true] at hcl
-  rcases hcl with ⟨hk, hty⟩ | ⟨⟨hp, hc⟩, hty⟩
-  · simp only [beq_iff_eq] at hty
-    rw [hty]
-    revert hk
-    rcases hkv : (program.value v).kind with _ | _ | _ | _ | _ | ⟨w, sel⟩ | _ | _ | _ <;>
-      simp only [Bool.false_eq_true, IsEmpty.forall_iff]
-    rcases hkw : (program.value w).kind <;> simp only [Bool.false_eq_true, IsEmpty.forall_iff]
-    intro _
-    rw [RealizedProgram.reader_of_bits_of_priv _ hkv hkw]
-    unfold FieldInterp.ofBool
-    split_ifs
-    · exact Or.inr rfl
-    · exact Or.inl rfl
-  · rw [RealizedProgram.reader_srcEnv_of_privCellB x _ c π hp hj]
-    have hmem : ∀ S, (program.value v).node.map (·.name) = some S →
-        honestVal program F0 FH i v j ∈ (interp (program.valueField v)).node S := fun S hS => by
-      have := honest_cell_mem i π hv hc hsrc j hS
-      unfold RealizedProgram.copyVal at this
-      split at this
-      · rename_i u m hk
-        have := kind_of_privCellB hp
-        rw [hk] at this
-        cases this
-      · exact this
-    revert hty
-    cases hty' : (program.value v).type with
-    | sub S =>
-      intro hty
-      exact hmem S (by simpa using hty)
-    | bit =>
-      intro hty
-      simp only [Bool.and_eq_true, beq_iff_eq] at hty
-      have := hmem "bit" hty.1
-      revert this
-      generalize honestVal program F0 FH i v j = z
-      revert z
-      rw [hty.2]
-      intro z hz
-      exact bitH_of_mem hz
-    | field => intro _; trivial
+    exact hH hf h1 hvV (MLDSA44.hVal_mem_bit i hf' hb j)
+  · unfold honestVal
+    rw [if_pos ha]
+    exact mem_castElt_of_eq (a := 0) hf.symm (aVal_mem (FH := FH) i a_nodup ha j)
 
 /-! ## The execution of the source program -/
 
 section Exec
 
 variable (i : HonestInput) {c : ∀ k, (program.layout interp).Ch k} {π : (program.layout interp).Pads}
+  {nodes : List (ℕ × String)} {S : RealizedProgram.Structure}
 
 /-- **The source program holds at the source environment of the honest values**: its predicates
-(`source_holds`, none a MAC role predicate) and its node-typed values' types (`honest_types`, no
-source value late). -/
-theorem source_sat
-    (hsl : ∀ v < program.values.length, program.IsLate v → ¬ program.IsSourceValue v)
-    (hsrc : ∀ q < program.predicates.length, program.inSource (program.predicate q) = true →
-      q ∉ macRolePreds) :
-    program.SourceSatAt (program.srcEnv interp (stmtH program F0 FH i) (honestVal program F0 FH i) c π) where
-  preds p hp hs := by
+(`source_holds`) and its node-typed values' types (`RealizedProgram.HonestRoles.sourceSatAt` at the
+honest cells' nodes, `honest_cell_mem`). -/
+theorem source_sat (hR : program.HonestRoles nodes S) (hbit : (interp).BitNodes program) :
+    program.SourceSatAt (program.srcEnv interp (stmtH program F0 FH i) (honestVal program F0 FH i) c π) :=
+  hR.sourceSatAt hbit (fun _ hv hp hs j _ hS => honest_cell_mem i hv hp hs j hS) fun p hp hs => by
     obtain ⟨q, hq, rfl⟩ := exists_index_of_mem hp
-    exact source_holds i rfl hq (hsrc q hq hs) hs
-  types v hv hs hts j hj :=
-    honest_types i _ c π v hv hts (fun hl => hsl v hv hl hs) hs j hj
+    exact source_holds i rfl hq hs
 
 /-- **The source cross-field `equal`s read bits at the source environment of the honest values**:
-the only one is the MAC's (`crossMac`), whose operands read bits (`srcMac_holds`). -/
+every one crosses `ref 527` and `ref 6` (`MldsaEmulatedHonest.crossOperands`), which read bits
+(`cross_bits`). -/
 theorem source_crossBits :
     program.CrossBitsAt interp
-      (program.srcEnv interp (stmtH program F0 FH i) (honestVal program F0 FH i) c π) := by
-  intro p hp _ dx x' dy y' k real hb
-  have hS := srcMac_holds i (c := c) (π := π) rfl
-  have he := crossMac (program := program) p hp dx x' dy y' k real hb
-  rw [hE.mac.hb, hb] at he
-  cases he
-  obtain ⟨-, -, hdy, hy, -, hcdy, hcy⟩ := mac_shape (program := program)
-  refine ⟨hS.xbits, ?_⟩
-  rw [hcdy, hcy, ← hdy, ← hy]
-  exact hS.ybits
+      (program.srcEnv interp (stmtH program F0 FH i) (honestVal program F0 FH i) c π) :=
+  crossBitsAt_of_operands (MldsaEmulatedHonest.crossOperands (program := program))
+    (cross_bits i (c := c) (π := π) rfl).1 (cross_bits i (c := c) (π := π) rfl).2
 
 end Exec
 
 variable (program F0 FH) in
 /-- **The execution of an emulated ML-DSA program's source program** (`RealizedProgram.SourceExecution`): at the
 key's statement, the honest values `honestVal` read off by `execOf` (a value bound to its digits
-as their number), no late value, no completeness event. The source program accepts (`source_sat`,
-`source_crossBits`); no `mod_q` has the field form. -/
+as their number), no late value, no completeness event. The source program accepts (`source_sat`
+at the honest roles `hR`, `source_crossBits`); no `mod_q` has the field form. -/
 noncomputable def sourceExecution {Gn : RealizedProgram.Gens} (R : program.CommittedFacts interp Gn)
-    (hbc : program.BoundNoCopy)
-    (hsl : ∀ v < program.values.length, program.IsLate v → ¬ program.IsSourceValue v)
-    (hk : program.KprivTyped)
-    (hone : program.BoundOneMem interp)
-    (hsrc : ∀ q < program.predicates.length, program.inSource (program.predicate q) = true →
-      q ∉ macRolePreds)
-    (hff : ∀ p < program.predicates.length, program.isFieldForm p = false)
-    (hng : program.NoGammaTables) :
+    (hbc : program.BoundNoCopy) {nodes : List (ℕ × String)} {S : RealizedProgram.Structure}
+    (hR : program.HonestRoles nodes S) (hO : OneNodes interp nodes) (hbit : (interp).BitNodes program)
+    (hff : ∀ p < program.predicates.length, program.isFieldForm p = false) :
     program.SourceExecution interp (relH program F0 FH) where
-  packFree _ _ _ _ _ := RealizedProgram.packFreeAt_of_noGamma hng _
+  packFree _ _ _ _ _ := RealizedProgram.packFreeAt_of_noGamma hR.noGamma _
   stmtOf := stmtH program F0 FH
   stmt _ _ h := h
   val i := program.execOf interp (honestVal program F0 FH i)
@@ -342,9 +231,17 @@ noncomputable def sourceExecution {Gn : RealizedProgram.Gens} (R : program.Commi
     exact bounded i
   accepting x i hx c _ := by
     rw [show x = stmtH program F0 FH i from hx]
-    exact sourceAcceptingAtC_of_srcEnv (l := 0) (π := 0) hE.wellFormed hE.registered hE.lawful R hbc hk hone
-      (by rw [RealizedProgram.srcEnvL_zero]; exact source_sat i hsl hsrc)
+    exact sourceAcceptingAtC_of_srcEnv (l := 0) (π := 0) hE.wellFormed hE.registered hE.lawful R hbc
+      hR.kprivTyped (hR.boundOneMem hO)
+      (by rw [RealizedProgram.srcEnvL_zero]; exact source_sat i hR hbit)
       (by rw [RealizedProgram.srcEnvL_zero]; exact source_crossBits i)
   fieldEqs _ _ _ _ _ := RealizedProgram.fieldEqsAt_of_none hff _
+
+/-- **The execution of an emulated ML-DSA program's source program has no completeness error.** -/
+theorem sourceExecution_δ {Gn : RealizedProgram.Gens} (R : program.CommittedFacts interp Gn)
+    (hbc : program.BoundNoCopy) {nodes : List (ℕ × String)} {S : RealizedProgram.Structure}
+    (hR : program.HonestRoles nodes S) (hO : OneNodes interp nodes) (hbit : (interp).BitNodes program)
+    (hff : ∀ p < program.predicates.length, program.isFieldForm p = false) :
+    (sourceExecution program F0 FH R hbc hR hO hbit hff).δ = 0 := rfl
 
 end GordieHowe.MLDSA44.Emulated

@@ -12,8 +12,7 @@ public import GordieHowe.Foundations.Probability.Probability
 # Lemmas for Unruh's Prove experiment in the oracle-test gap lemma
 
 Model-independent facts used for Unruh's Prove experiment in the oracle-test gap lemma
-(`GordieHowe/SPBCS/FullPast/OracleTest.lean`, at the series–parallel base model, and
-`GordieHowe/SPBCS/OracleTest.lean`, for the spBCS compiler): two laws on `Option α` that agree on `some` are
+(`GordieHowe/SPBCS/OracleTest.lean`): two laws on `Option α` that agree on `some` are
 equal; with blank logs the challenger's record is empty; an event and its complement have
 probabilities summing to `1`.
 -/

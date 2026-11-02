@@ -1,15 +1,29 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 
-// ML-DSA-44 proof of possession, Longfellow-style field split: a worker of
-// common/bench.py.
+// ML-DSA proof of possession (ML-DSA-44, -65 or -87), Longfellow-style field
+// split: a worker of common/bench.py.
 //
-// usage: ml_dsa_44_split_driver narrow on|off [MODE]
-//        ml_dsa_44_split_driver_wide wide on|off [MODE]
+// usage: ml_dsa_44_split_driver narrow on|off [MODE] [--param-set SET]
+//        ml_dsa_44_split_driver_wide wide on|off [MODE] [--param-set SET]
+//
+// SET is ml-dsa-44 (the default), ml-dsa-65 or ml-dsa-87 (ml_dsa_sets.h);
+// the flag may stand anywhere among the arguments.  The instance is the
+// set's benchmark example (ml_dsa_benchmark_example.h).
 //
 // MODE (optional) runs one trial or check and exits 0 on the expected
 // outcome, 1 otherwise:
-//   tamper        one coefficient of z changed in A's witness: rejected;
+//   test          three trials: the honest instance must verify, and the
+//                 tampered signature and the tampered message (below) must
+//                 be rejected;
+//   tamper_sig    the instance's signature with the lowest bit of its first
+//                 z coefficient flipped, the whole witness recomputed from
+//                 it: rejected;
+//   tamper_msg    the committed message differs from the signed one in one
+//                 bit, the whole witness (mu, c_tilde') recomputed from it:
+//                 rejected;
+//   tamper        one coefficient of z changed in A's witness only:
+//                 rejected;
 //   tamper_tag    the first chunk's target changed in H's statement only
 //                 (prover and verifier): H rejects;
 //   tamper_blind  the first chunk's blind a_p changed in H's witness only:
@@ -28,15 +42,20 @@
 // wide one (LFB_WIDE_HASH_DOMAIN) additionally sees baselines/common-wide's
 // hash domain (GF(2^256), the SHA-384 Merkle tree, Ligero and transcript).
 //
-// The statement: the prover knows a message M and an ML-DSA-44 signature on
-// M valid under the public key pk = (A_hat, t1, tr) (the message is private;
-// the empty context is public).  Two proofs, mdoc-style, on one transcript:
+// The statement, GordieHowe's proof of possession's: the prover knows a
+// message M of private length L <= 32 bytes and an ML-DSA signature on M,
+// valid under the public key pk under the public (empty) context.  The
+// verifier's public inputs are computed from pk's bytes in verify_ms
+// (ml_dsa_host.h's Statement: pkDecode, ExpandA, NTT(2^d t1),
+// tr = SHAKE256(pk, 64)).  Two proofs, mdoc-style, on one transcript:
 //  - A: the ML-DSA arithmetic over the profile's ML-DSA field (narrow:
 //    upstream's GF(q^6); wide: GF(q^11)), MLDSASplitVerify: z's norm, A z -
-//    c t1 2^d in the NTT domain, UseHint, the w1 encoding.
+//    c t1 2^d in the NTT domain, UseHint (with the exact Decompose of
+//    ml_dsa_decompose_exact.h), the hint's weight, the w1 encoding.
 //  - H: the hashing over the profile's binary field (narrow: upstream's
 //    GF(2^128); wide: GF(2^256)), MLDSAHashVerify:
-//    mu = SHAKE256(tr || 0 || |ctx| || ctx || M), SampleInBall,
+//    mu = SHAKE256(tr || 0 || |ctx| || ctx || M) for M of private length
+//    (ml_dsa_mu.h), SampleInBall over the 272-byte stream,
 //    c_tilde = SHAKE256(mu || w1_tilde).
 // The crossings (w1_tilde, and the (support, sign) bits of the challenge c)
 // are cut into w-bit chunks (w = 128 narrow, 256 wide); each chunk carries
@@ -60,18 +79,21 @@
 //
 // Per trial (details: A and H separately):
 //   witness   = the full witness from the instance (pk, signature, message,
-//               context): upstream's ml_dsa_witness::compute_witness (pk
-//               and signature decoding, ExpandA, tr, SampleInBall, the
-//               NTTs, w1), mu's block witnesses, the crossing chunks and
-//               both fills (a detail, outside commit_ms and prove_ms)
+//               context): ml_dsa_host.h's HostWitness (pk and signature
+//               decoding, ExpandA, tr, SampleInBall, the NTTs, w1, mu's and
+//               c_tilde's block witnesses), the crossing chunks and both
+//               fills (a detail, outside commit_ms and prove_ms)
 //   commit_ms = the MAC blinds + H commit + A commit
 //   prove_ms  = MAC key and targets + H prove + A prove
-//   verify_ms = both Reed-Solomon factories' use and ZkVerifier
-//               construction, both commitments, the key, the public inputs
-//               and both ZkVerifier::verify calls
-// The circuits are built once, before PQ_READY; each trial recomputes the
-// witness and draws fresh blinds and proof randomness.  prover_setup (the
-// ZkProof and ZkProver construction) is a detail outside every total.
+//   verify_ms = the statement from pk's bytes, both Reed-Solomon
+//               factories' use and ZkVerifier construction, both
+//               commitments, the key, the public inputs and both
+//               ZkVerifier::verify calls
+// The verifier reads both proofs back from their bytes first (the detail
+// v_proof_read, outside verify_ms, as the monolith's).  The circuits are
+// built once, before PQ_READY; each trial recomputes the witness and draws
+// fresh blinds and proof randomness.  prover_setup (the ZkProof and
+// ZkProver construction) is a detail outside every total.
 #include <array>
 #include <chrono>
 #include <cstddef>
@@ -90,10 +112,12 @@
 #include "circuits/logic/logic.h"
 #include "circuits/mac/mac_reference.h"
 #include "circuits/tests/pq/ml_dsa/ml_dsa_shared.h"
-#include "circuits/tests/pq/ml_dsa/ml_dsa_witness.h"
 #include "gf2k/lch14_reed_solomon.h"
-#include "ml_dsa_44_benchmark_example.h"
+#include "ml_dsa_benchmark_example.h"
+#include "ml_dsa_decompose_exact.h"
+#include "ml_dsa_host.h"
 #include "ml_dsa_mu.h"
+#include "ml_dsa_sets.h"
 #include "ml_dsa_split_bind.h"
 #include "ml_dsa_split_circuit.h"
 #include "ml_dsa_split_hash_circuit.h"
@@ -108,6 +132,7 @@
 #include "random/transcript.h"
 #include "sumcheck/circuit.h"
 #include "util/log.h"
+#include "util/readbuffer.h"
 #include "zk/zk_proof.h"
 #include "zk/zk_prover.h"
 #include "zk/zk_verifier.h"
@@ -117,7 +142,6 @@ namespace {
 using namespace ml_dsa_baseline;  // NOLINT(build/namespaces)
 using ml_dsa_split::LigeroHalf;
 
-constexpr size_t kCPrimeTildeBlocks = 7;
 const uint8_t kTranscriptInit[] = "mldsa_split";
 constexpr size_t kTranscriptInitLen = 11;
 
@@ -160,13 +184,17 @@ std::unique_ptr<ZkVerifier<F, RSF>> make_verifier(const Circuit<F>& c,
                                               l.block_enc, f);
 }
 
-enum class Mode { kServe, kTamperZ, kTamperTag, kTamperBlind, kTamperChunk,
-                  kCheckTags };
+enum class Mode { kServe, kTest, kTamperSig, kTamperMsg, kTamperZ, kTamperTag,
+                  kTamperBlind, kTamperChunk, kCheckTags };
 
-template <class P>
+// The instance a trial proves: the benchmark example, or a tampered copy.
+struct Instance {
+  std::vector<uint8_t> pk, sig, msg, ctx;
+};
+
+template <class P, class Set>
 int run(bool macs, Mode mode) {
-  const bool tamper = mode == Mode::kTamperZ;
-  using S = ml_dsa_split::Split<P>;
+  using S = ml_dsa_split::Split<P, typename Set::Reference>;
   using Params = typename S::Params;
   constexpr size_t kW = S::kW, kWBytes = S::kWBytes;
   using Field6 = typename P::AField;
@@ -180,31 +208,32 @@ int run(bool macs, Mode mode) {
   using MF = typename P::MacField;
   using MElt = typename MF::Elt;
   using WordA = typename LC6::template bitvec<kW>;
-  using WordH = typename HLC::template bitvec<kW>;
   using EltWH = typename HLC::EltW;
+  using HostWitness = ml_dsa_host::HostWitness<Params>;
+  using Statement = ml_dsa_host::Statement<Params>;
   static_assert(std::is_same_v<HF, MF>, "H's field is the MAC field");
   const LigeroHalf kLigeroA = P::kLigeroA, kLigeroH = P::kLigeroH;
+  constexpr size_t kMax = ml_dsa_host::kMaxMessageBytes;
 
   set_log_level(ERROR);
-  const auto& ex = ml_dsa_split::GetMlDsa44BenchmarkExample();
+  const auto& ex = ml_dsa_sets::benchmark_example<Set>();
+  const Instance honest{ex.pkey, ex.sig, ex.msg, ex.ctx};
+  Instance inst = honest;
   const MF mf;
   // The host witness from the instance (pk, signature, message, context):
-  // upstream's ml_dsa_witness (pkDecode with ExpandA and tr, sigDecode,
-  // SampleInBall, the NTTs, w1), mu's block witnesses, and the crossing
-  // chunks (host): w1_tilde ++ (support, sign) bits of c.  Computed once
-  // here for the circuits' shapes and again in every trial, timed as the
-  // witness (with the fills of WA and WH below).
-  std::unique_ptr<ml_dsa_witness<Params>> wgp;
-  std::vector<Sha3Witness::BlockWitness> mu_bws;
+  // ml_dsa_host.h's HostWitness and the crossing chunks (host): w1_tilde ++
+  // (support, sign) bits of c.  Computed once here for the circuits' shapes
+  // and again in every trial, timed as the witness (with the fills of WA
+  // and WH below).
+  std::unique_ptr<HostWitness> wgp;
+  bool inst_verified = false;
   std::vector<MElt> chunks_ref;
   std::vector<uint8_t> c_support(ml_dsa::N), c_sign(ml_dsa::N);
   auto host_witness = [&]() {
-    wgp = std::make_unique<ml_dsa_witness<Params>>();
+    wgp = std::make_unique<HostWitness>();
     auto& wg = *wgp;
-    check(wg.compute_witness(ex.pkey, ex.sig, ex.msg, ex.ctx), "witness");
-    mu_bws.clear();
-    ml_dsa_mu_witness(std::vector<uint8_t>(wg.tr_.begin(), wg.tr_.end()),
-                      wg.msg_, mu_bws, ex.ctx);
+    check(wg.compute(inst.pk, inst.sig, inst.msg, inst.ctx, &inst_verified),
+          "witness");
     chunks_ref.clear();
     for (size_t c = 0; c * kWBytes < wg.w1_tilde_.size(); ++c)
       chunks_ref.push_back(
@@ -221,6 +250,7 @@ int run(bool macs, Mode mode) {
       chunks_ref.push_back(mf.of_bytes_field(&buf[c * kWBytes]).value());
   };
   host_witness();
+  check(inst_verified, "the benchmark example verifies");
 
   SecureRandomEngine rng;
   const size_t nch = chunks_ref.size();
@@ -253,6 +283,7 @@ int run(bool macs, Mode mode) {
   for (size_t c = 0; c < nmac; ++c)
     for (size_t i = 0; i < kW; ++i) apA[c][i] = lcA.input();
   verifyA.assert_valid_signature_split(*pk, *sg, *wA);
+  assert_decompose_exact<Params>(lcA, wA->hint_aux_bits_, wA->w1_);
   {
     auto chunks = w1_chunks<kW, LC6>(wA->w1_tilde_);
     // c from committed advice (support_k, sign_k), tied to wA->c_.
@@ -282,7 +313,7 @@ int run(bool macs, Mode mode) {
 
   size_t apA_offset = 0, apH_offset = 0;
   Dense<Field6> WA(1, circA->ninputs);
-  auto fill_A = [&]() {
+  auto fill_A = [&](bool tamper_z) {
     const auto& wg = *wgp;
     DenseFiller<Field6> fA(WA);
     fA.push_back(f6.one());
@@ -296,16 +327,16 @@ int run(bool macs, Mode mode) {
       fA.push_back(c_sign[k] ? f6.one() : f6.zero());
     }
     check(fA.size() == circA->ninputs, "A witness size");
-    if (tamper) {
+    if (tamper_z) {
       // One coefficient of z: the proof must fail.
       WA.v_[circA->npub_in + Params::c_tilde_bytes * 8] = f6.of_scalar(12345);
     }
   };
-  fill_A();
+  fill_A(false);
 
   // ---------------- H: the hashing ----------------
   const HF hf;
-  using VH = MLDSAHashVerify<HLC, HF, Params, kW>;
+  using VH = MLDSAHashVerify<HLC, HF, Params, kW, ml_dsa_host::kSibBytes>;
   auto QH_owner = std::make_unique<QuadCircuit<HF>>(hf);
   auto& QH = *QH_owner;
   const HCBK cbkH(&QH);
@@ -325,18 +356,23 @@ int run(bool macs, Mode mode) {
   std::array<typename HLC::v8, Params::c_tilde_bytes> ct;
   for (size_t i = 0; i < Params::c_tilde_bytes; ++i)
     ct[i] = lcH.template vinput<8>();
-  std::vector<typename HLC::v8> msgH(ex.msg.size());
+  // The message: kMax bytes and their in-message flags [i < L].
+  std::vector<typename HLC::v8> msgH(kMax);
   for (auto& byte : msgH) byte = lcH.template vinput<8>();
+  std::vector<typename HLC::BitW> flagsH(kMax);
+  for (auto& flag : flagsH) flag = lcH.input();
   typename VH::HashWitness wH;
-  wH.c_prime_tilde_bws_.resize(kCPrimeTildeBlocks);
+  wH.c_prime_tilde_bws_.resize(Set::kCPrimeTildeBlocks);
   wH.input(lcH);
-  std::vector<typename Sha3Circuit<HLC>::BlockWitness> mu_bwsH(mu_bws.size());
+  std::vector<typename Sha3Circuit<HLC>::BlockWitness> mu_bwsH(
+      lfb::shake256_private_length_blocks(ml_dsa_host::kMuPrefixBytes, kMax,
+                                          64));
   for (auto& bw : mu_bwsH) bw.input(lcH);
   // The blinds, one full-field element each, after every subfield input.
   QH.begin_full_field();
   std::vector<EltWH> apH(nmac);
   for (auto& a : apH) a = lcH.eltw_input();
-  const auto mu = ml_dsa_derive_mu(lcH, trH, msgH, mu_bwsH, ctxH);
+  const auto mu = ml_dsa_derive_mu(lcH, trH, ctxH, msgH, flagsH, mu_bwsH);
   auto cchH = verifyH.assert_hash_side(ct, mu, wH);
   {
     auto chunks = w1_chunks<kW, HLC>(wH.w1_tilde_);
@@ -351,47 +387,62 @@ int run(bool macs, Mode mode) {
   QH_owner.reset();
 
   Dense<HF> WH(1, circH->ninputs);
-  auto fill_H = [&]() {
-    const auto& wg = *wgp;
+  auto fill_H = [&](bool tamper_chunk) {
+    auto& wg = *wgp;
     DenseFiller<HF> fH(WH);
     fH.push_back(hf.one());
     for (size_t i = 0; i < kKeyH + nmac; ++i) fH.push_back(hf.zero());
     for (uint8_t byte : wg.tr_) fH.push_back(byte, 8, hf);
-    for (uint8_t byte : ex.ctx) fH.push_back(byte, 8, hf);
-    if (mode == Mode::kTamperChunk) {
+    for (uint8_t byte : inst.ctx) fH.push_back(byte, 8, hf);
+    if (tamper_chunk) {
       // One crossing bit of H's witness only (w1_tilde, the first chunk).
-      wgp->w1_tilde_[0] ^= 1;
-      fill_split_H(fH, wg, mu_bws, hf);
-      wgp->w1_tilde_[0] ^= 1;
+      wg.w1_tilde_[0] ^= 1;
+      fill_split_H<Params>(fH, wg, hf);
+      wg.w1_tilde_[0] ^= 1;
     } else {
-      fill_split_H(fH, wg, mu_bws, hf);
+      fill_split_H<Params>(fH, wg, hf);
     }
     apH_offset = fH.size();
     for (size_t c = 0; c < nmac; ++c) fH.push_back(hf.zero());
     check(fH.size() == circH->ninputs, "H witness size");
   };
-  fill_H();
+  fill_H(false);
 
   const RSExt& rsextf = fields.rsa;
   const RSH rsfH(hf);
   const size_t pkN =
       Params::K * Params::L * ml_dsa::N + Params::K * ml_dsa::N + 64 * 8;
 
-  lfb::info({{"profile", P::kName},
-             {"macs", macs ? "on" : "off"},
-             {"chunks", std::to_string(nmac)},
-             {"A_ninputs", std::to_string(circA->ninputs)},
-             {"A_npub", std::to_string(circA->npub_in)},
-             {"A_nl", std::to_string(circA->nl)},
-             {"A_nwires", std::to_string(a_nwires)},
-             {"A_nterms", std::to_string(circA->nterms())},
-             {"A_id", id_hex(circA->id)},
-             {"H_ninputs", std::to_string(circH->ninputs)},
-             {"H_npub", std::to_string(circH->npub_in)},
-             {"H_nl", std::to_string(circH->nl)},
-             {"H_nwires", std::to_string(h_nwires)},
-             {"H_nterms", std::to_string(circH->nterms())},
-             {"H_id", id_hex(circH->id)}});
+  {
+    auto pa = make_proof(*circA, kLigeroA);
+    auto ph = make_proof(*circH, kLigeroH);
+    ::lfb::info({{"param_set", Set::kName},
+                 {"profile", P::kName},
+                 {"macs", macs ? "on" : "off"},
+                 {"chunks", std::to_string(nmac)},
+                 {"A_ninputs", std::to_string(circA->ninputs)},
+                 {"A_npub", std::to_string(circA->npub_in)},
+                 {"A_nl", std::to_string(circA->nl)},
+                 {"A_nwires", std::to_string(a_nwires)},
+                 {"A_nterms", std::to_string(circA->nterms())},
+                 {"A_id", id_hex(circA->id)},
+                 {"H_ninputs", std::to_string(circH->ninputs)},
+                 {"H_npub", std::to_string(circH->npub_in)},
+                 {"H_nl", std::to_string(circH->nl)},
+                 {"H_nwires", std::to_string(h_nwires)},
+                 {"H_nterms", std::to_string(circH->nterms())},
+                 {"H_id", id_hex(circH->id)},
+                 {"A_rate", std::to_string(kLigeroA.rate)},
+                 {"A_nreq", std::to_string(pa->param.nreq)},
+                 {"A_block", std::to_string(pa->param.block)},
+                 {"A_block_enc", std::to_string(pa->param.block_enc)},
+                 {"A_nrow", std::to_string(pa->param.nrow)},
+                 {"H_rate", std::to_string(kLigeroH.rate)},
+                 {"H_nreq", std::to_string(ph->param.nreq)},
+                 {"H_block", std::to_string(ph->param.block)},
+                 {"H_block_enc", std::to_string(ph->param.block_enc)},
+                 {"H_nrow", std::to_string(ph->param.nrow)}});
+  }
 
   if (mode == Mode::kCheckTags) {
     // The circuits' chunk words: w1_tilde byte b bit j at 8b + j, then the
@@ -433,11 +484,11 @@ int run(bool macs, Mode mode) {
 
   bool last_okH = false, last_okA = false;
   auto trial = [&]() {
-    lfb::Trial T;
-    lfb::Marks M;
+    ::lfb::Trial T;
+    ::lfb::Marks M;
     host_witness();
-    fill_A();
-    fill_H();
+    fill_A(mode == Mode::kTamperZ);
+    fill_H(mode == Mode::kTamperChunk);
     const double witness_ms = M.mark();
     auto zkA = make_proof(*circA, kLigeroA);
     auto zkH = make_proof(*circH, kLigeroH);
@@ -500,11 +551,19 @@ int run(bool macs, Mode mode) {
 
     // ---- verifier ----
     M.mark();
+    auto rA = make_proof(*circA, kLigeroA);
+    auto rH = make_proof(*circH, kLigeroH);
+    ReadBuffer rbA(bufA), rbH(bufH);
+    const bool readA = rA->read(rbA, f6);
+    const bool readH = rH->read(rbH, hf);
+    const double v_read = M.mark();
+    // The statement from the key's bytes: A_hat, NTT(2^d t1), tr.
+    const Statement st = Statement::of_pk(inst.pk);
     auto vH = make_verifier(*circH, rsfH, kLigeroH, hf);
     auto vA = make_verifier(*circA, rsextf, kLigeroA, f6);
     Transcript tv(kTranscriptInit, kTranscriptInitLen);
-    vH->recv_commitment(*zkH, tv);
-    vA->recv_commitment(*zkA, tv);
+    vH->recv_commitment(*rH, tv);
+    vA->recv_commitment(*rA, tv);
     const MElt av_v = macs ? tv.elt(mf) : MElt{};
     Dense<HF> pubH(1, circH->ninputs);
     {
@@ -512,23 +571,23 @@ int run(bool macs, Mode mode) {
       pf.push_back(hf.one());
       if (macs) pf.push_back(av_v);
       for (size_t c = 0; c < nmac; ++c) pf.push_back(tgtH_stmt[c]);
-      for (uint8_t byte : wgp->tr_) pf.push_back(byte, 8, hf);
-      for (uint8_t byte : ex.ctx) pf.push_back(byte, 8, hf);
+      for (uint8_t byte : st.key.tr) pf.push_back(byte, 8, hf);
+      for (uint8_t byte : inst.ctx) pf.push_back(byte, 8, hf);
       check(pf.size() == circH->npub_in, "H public inputs");
     }
     Dense<Field6> pubA(1, circA->ninputs);
     {
       DenseFiller<Field6> pf(pubA);
       pf.push_back(f6.one());
-      wgp->fill_pk(pf, f6);
+      st.fill_pk(pf, f6);
       if (macs) fill_gf2k<MF, Field6>(av_v, pf, f6);
       for (size_t c = 0; c < nmac; ++c) fill_gf2k<MF, Field6>(tgt[c], pf, f6);
       check(pf.size() == circA->npub_in, "A public inputs");
     }
     const double vsetup = M.mark();
-    bool vokH = vH->verify(*zkH, pubH, tv);
+    bool vokH = readH && vH->verify(*rH, pubH, tv);
     const double verifyH = M.mark();
-    bool vokA = vA->verify(*zkA, pubA, tv);
+    bool vokA = readA && vA->verify(*rA, pubA, tv);
     const double verifyA = M.mark();
 
     T.commit_ms = blinds + commitH + commitA;
@@ -549,6 +608,7 @@ int run(bool macs, Mode mode) {
     T.add("H_verify", verifyH);
     T.add("H_bytes", double(bufH.size()));
     T.add("macs_ms", mac_ms);
+    T.add("v_proof_read", v_read);
     T.add("v_setup", vsetup);
     T.add("target_bytes", double(nmac * MF::kBytes));
     T.add("A_rate", double(kLigeroA.rate));
@@ -563,37 +623,79 @@ int run(bool macs, Mode mode) {
     T.add("H_block_enc", double(zkH->param.block_enc));
     return T;
   };
-  if (tamper) {
-    lfb::Trial T = trial();
-    std::printf("TAMPER ok=%d (expected 0)\n", T.ok ? 1 : 0);
-    return T.ok ? 1 : 0;
+
+  // The tampered instances: the lowest bit of z[0][0]'s encoding (the byte
+  // after c_tilde, sigEncode's BitPack of gamma1 - z), and the message's
+  // first bit.
+  Instance bad_sig = honest, bad_msg = honest;
+  bad_sig.sig[Params::c_tilde_bytes] ^= 1;
+  bad_msg.msg[0] ^= 1;
+  auto run_on = [&](const Instance& i, const char* name) {
+    inst = i;
+    const ::lfb::Trial T = trial();
+    std::printf("%s: signature verifies %d, proof %s\n", name,
+                inst_verified ? 1 : 0, T.ok ? "accepted" : "rejected");
+    std::fflush(stdout);
+    return T.ok;
+  };
+  switch (mode) {
+    case Mode::kServe:
+      ::lfb::serve(trial);
+      return 0;
+    case Mode::kTest: {
+      const bool h = run_on(honest, "honest");
+      const bool s = run_on(bad_sig, "tamper_sig");
+      const bool m = run_on(bad_msg, "tamper_msg");
+      std::printf("TEST %s %s macs=%s: %s\n", Set::kName, P::kName,
+                  macs ? "on" : "off", (h && !s && !m) ? "PASS" : "FAIL");
+      return (h && !s && !m) ? 0 : 1;
+    }
+    case Mode::kTamperSig:
+      return run_on(bad_sig, "tamper_sig") ? 1 : 0;
+    case Mode::kTamperMsg:
+      return run_on(bad_msg, "tamper_msg") ? 1 : 0;
+    case Mode::kTamperZ: {
+      const ::lfb::Trial T = trial();
+      std::printf("TAMPER ok=%d (expected 0)\n", T.ok ? 1 : 0);
+      return T.ok ? 1 : 0;
+    }
+    default: {
+      // H-only tampering: H must reject.
+      check(macs, "the H tamper modes need macs=on");
+      const ::lfb::Trial T = trial();
+      std::printf("TAMPER_H H=%d A=%d (expected H=0)\n", last_okH ? 1 : 0,
+                  last_okA ? 1 : 0);
+      return (!last_okH && !T.ok) ? 0 : 1;
+    }
   }
-  if (mode != Mode::kServe) {
-    // H-only tampering: H must reject.
-    check(macs, "the H tamper modes need macs=on");
-    lfb::Trial T = trial();
-    std::printf("TAMPER_H H=%d A=%d (expected H=0)\n", last_okH ? 1 : 0,
-                last_okA ? 1 : 0);
-    return (!last_okH && !T.ok) ? 0 : 1;
-  }
-  lfb::serve(trial);
-  return 0;
 }
 
 }  // namespace
 }  // namespace proofs
 
 int main(int argc, char** argv) {
-  if (argc < 3) {
-    std::fprintf(stderr, "usage: %s narrow|wide on|off [MODE]\n", argv[0]);
+  std::vector<std::string> args(argv + 1, argv + argc);
+  std::string set = proofs::ml_dsa_sets::MlDsa44::kName;
+  if (!proofs::ml_dsa_sets::take_param_set(args, set) || args.size() < 2 ||
+      args.size() > 3) {
+    std::fprintf(stderr,
+                 "usage: %s narrow|wide on|off [MODE] "
+                 "[--param-set ml-dsa-44|ml-dsa-65|ml-dsa-87]\n",
+                 argv[0]);
     return 2;
   }
-  const std::string profile = argv[1], macs = argv[2];
+  const std::string profile = args[0], macs = args[1];
   using proofs::Mode;
   Mode mode = Mode::kServe;
-  if (argc > 3) {
-    const std::string m = argv[3];
-    if (m == "tamper") {
+  if (args.size() > 2) {
+    const std::string m = args[2];
+    if (m == "test") {
+      mode = Mode::kTest;
+    } else if (m == "tamper_sig") {
+      mode = Mode::kTamperSig;
+    } else if (m == "tamper_msg") {
+      mode = Mode::kTamperMsg;
+    } else if (m == "tamper") {
       mode = Mode::kTamperZ;
     } else if (m == "tamper_tag") {
       mode = Mode::kTamperTag;
@@ -617,12 +719,20 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "this target is the wide profile\n");
     return 2;
   }
-  return proofs::run<proofs::ml_dsa_split::Wide>(on, mode);
+  using Profile = proofs::ml_dsa_split::Wide;
 #else
   if (profile != "narrow") {
     std::fprintf(stderr, "this target is the narrow profile\n");
     return 2;
   }
-  return proofs::run<proofs::ml_dsa_split::Narrow>(on, mode);
+  using Profile = proofs::ml_dsa_split::Narrow;
 #endif
+  int rc = 2;
+  if (!proofs::ml_dsa_sets::with_param_set(set, [&](auto s) {
+        rc = proofs::run<Profile, decltype(s)>(on, mode);
+      })) {
+    std::fprintf(stderr, "unknown parameter set %s\n", set.c_str());
+    return 2;
+  }
+  return rc;
 }

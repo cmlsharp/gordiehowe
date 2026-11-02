@@ -52,4 +52,9 @@ context must apply this first. Requires `ctx.length ≤ 255`, as FIPS 204 does. 
 def preprocessMessage (msg ctx : List Byte) : List Byte :=
   (0 : Byte) :: UInt8.ofNat ctx.length :: (ctx ++ msg)
 
+/-- Run a group of known-answer checks, `act` returning whether all passed, and throw if one failed,
+so that a top-level `#eval requireChecks …` fails the build. -/
+def requireChecks (name : String) (act : IO Bool) : IO Unit := do
+  unless ← act do throw (IO.userError s!"{name}: some checks failed")
+
 end GordieHoweTest

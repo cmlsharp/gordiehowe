@@ -11,13 +11,13 @@ git submodule update --init comparisons/longfellow/upstream
 python3 scripts/longfellow_changes.py --diff lib/zk/zk_prover.h
 ```
 
-61 modified and 22 derived files.
+62 modified and 24 derived files.
 
 ## `lib`
 
 | File | Kind | Upstream source | Change |
 |---|---|---|---|
-| `CMakeLists.txt` | modified | `lib/CMakeLists.txt` | C++23, Dev build type, OpenSSL, separate third_party/longfellow include root and object libraries, report_bench target, tools directory, Longfellow's own tests built from third_party/longfellow |
+| `CMakeLists.txt` | modified | `lib/CMakeLists.txt` | C++23, Dev build type, OpenSSL, separate third_party/longfellow include root and object libraries, report_bench target, tools directory, Longfellow's own tests built from third_party/longfellow; on aarch64, a caller's -march/-mcpu in place of the default -march; aarch64 build goals |
 
 ## `lib/CMake`
 
@@ -54,14 +54,15 @@ python3 scripts/longfellow_changes.py --diff lib/zk/zk_prover.h
 
 | File | Kind | Upstream source | Change |
 |---|---|---|---|
-| `compiler.h` | modified | `lib/circuits/compiler/compiler.h` | packed-bit support (enable_packed_bits, deferred Boolean assertions), Hash-templated mkcircuit, circuit shape and size estimates |
+| `compiler.h` | modified | `lib/circuits/compiler/compiler.h` | packed-bit support (enable_packed_bits, deferred Boolean assertions), Hash-templated mkcircuit, circuit shape and size estimates, the translation-validation certificate (take_certificate) |
+| `schedule.h` | modified | `lib/circuits/compiler/schedule.h` | the provenance of every layered wire (ScheduleCert) for the translation-validation certificate |
 
 ## `lib/circuits/logic`
 
 | File | Kind | Upstream source | Change |
 |---|---|---|---|
 | `compiler_backend.h` | modified | `lib/circuits/logic/compiler_backend.h` | forward defer_bit_assertion to the underlying backend |
-| `logic.h` | modified | `lib/circuits/logic/logic.h` | GF(2^256) multiplication, optional deferred bit assertions via a backend hook, and power-of-two input-length check |
+| `logic.h` | modified | `lib/circuits/logic/logic.h` | GF(2^256) multiplication, optional deferred bit assertions via a backend hook, power-of-two input-length check, and the halving recursions' operands evaluated left to right |
 | `logic_test.cc` | modified | `lib/circuits/logic/logic_test.cc` | added Gf256Multiplier test comparing gf2_256_mul against GF2_256 multiplication on random inputs |
 
 ## `lib/circuits/mdoc`
@@ -135,8 +136,8 @@ python3 scripts/longfellow_changes.py --diff lib/zk/zk_prover.h
 | `hquad.h` | modified | `lib/sumcheck/hquad.h` | parallel bind_h compaction in chunks for large corner counts |
 | `prover.h` | modified | `lib/sumcheck/prover.h` | prove templated on the transcript hash (BasicTranscript<Hash>, TranscriptSumcheck<Field, Hash>) |
 | `prover_layers.h` | modified | `lib/sumcheck/prover_layers.h` | templated on transcript hash, unit-coefficient shortcuts, per-phase profiling scopes, and optional unsatisfied-witness proving |
-| `quad.h` | modified | `lib/sumcheck/quad.h` | accessors and assign_all for the compressed form, and a unit-coefficient shortcut option in bind_g and the bound evaluation |
-| `quad_test.cc` | modified | `lib/sumcheck/quad_test.cc` | tests that bind_g with and without unit-coefficient shortcuts agrees, over a prime field and GF(2^128) |
+| `quad.h` | modified | `lib/sumcheck/quad.h` | accessors and assign_all for the compressed form, a unit-coefficient shortcut option in bind_g and the bound evaluation, and bind_g and bind_gh_all in chunks from cached decoder checkpoints |
+| `quad_test.cc` | modified | `lib/sumcheck/quad_test.cc` | tests that bind_g with and without unit-coefficient shortcuts agrees, over a prime field and GF(2^128), and that bind_gh_all in chunks on threads equals bind_g then bind_h |
 | `sumcheck_test.cc` | modified | `lib/sumcheck/sumcheck_test.cc` | tests for constant coefficients and full-field binary evaluation; transcripts take an explicit seed |
 | `testing.h` | modified | `lib/sumcheck/testing.h` | transcripts take a default Seed argument |
 | `transcript_sumcheck.h` | modified | `lib/sumcheck/transcript_sumcheck.h` | templated on a hash policy and wraps BasicTranscript<Hash> |
@@ -191,11 +192,18 @@ python3 scripts/longfellow_changes.py --diff lib/zk/zk_prover.h
 |---|---|---|---|
 | `include/circuits/mac/mac_circuit.h` | derived | `lib/circuits/mac/mac_circuit.h` | mac_circuit_ablated flag that omits the MAC products and equality checks in assert_mac and verify_mac |
 
+## `comparisons/longfellow/baselines/ml-dsa-44-monolith`
+
+| File | Kind | Upstream source | Change |
+|---|---|---|---|
+| `ml_dsa_monolith_verify.h` | derived | `lib/circuits/tests/pq/ml_dsa/ml_dsa_circuit.h` | adapted from ml_dsa_circuit.h: MLDSAVerify's signature check with SampleInBall over the 272-byte stream and the exact Decompose |
+
 ## `comparisons/longfellow/baselines/ml-dsa-44-split`
 
 | File | Kind | Upstream source | Change |
 |---|---|---|---|
 | `fp24q.h` | derived | `lib/algebra/fp24.h` | adapted from lib/algebra/fp24.h: the prime field specialized to q = 8380417 with 3-byte serialization and compile-time modulus |
+| `ml_dsa_host.h` | derived | `lib/circuits/tests/pq/ml_dsa/ml_dsa_witness.h` | adapted from ml_dsa_witness.h: the host witness at the 272-byte SampleInBall stream and a private-length message, and the verifier statement from the key bytes |
 | `ml_dsa_split_circuit.h` | derived | `lib/circuits/tests/pq/ml_dsa/ml_dsa_circuit.h` | adapted from ml_dsa_circuit.h to the algebra half of the split ML-DSA circuit, taking committed crossings in place of SampleInBall |
 | `ml_dsa_split_hash_circuit.h` | derived | `lib/circuits/tests/pq/ml_dsa/ml_dsa_circuit.h` | adapted from ml_dsa_circuit.h to the hash half of the split ML-DSA circuit with a packed MAC-word SampleInBall output |
 | `reed_solomon_extension_crt.h` | derived | `lib/algebra/reed_solomon_extension.h` | adapted from lib/algebra/reed_solomon_extension.h: degree and base field as template parameters, per-component CRT convolution |

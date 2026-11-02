@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Copyright 2026 Chad Sharp and Paul Grubbs
+# SPDX-License-Identifier: Apache-2.0
+#
+# Prints a .ghc file (the GHC container, lib/gordiehowe/compiler/ghc.h) as
+# text: per section its index, name, Lean type, flags and value, decoded by
+# the section's type (the C++ schema of the Lean types), a reference to an
+# earlier section as @<index>.
+#
+#   scripts/ghc_show FILE.ghc
+#
+# Runs the build tree's bench/ghc_show (scripts/build.sh builds it); BUILD_DIR
+# overrides the build tree (default build).
+set -euo pipefail
+
+repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+build_dir="${BUILD_DIR:-build}"
+case "$build_dir" in
+  /*) ;;
+  *) build_dir="$repo_dir/$build_dir" ;;
+esac
+exe="$build_dir/bench/ghc_show"
+if [[ ! -x "$exe" ]]; then
+  echo "ghc_show: $exe not built (cmake --build $build_dir --target ghc_show)" >&2
+  exit 2
+fi
+exec "$exe" "$@"

@@ -16,7 +16,7 @@ uniform coins, a stream on which `S` returns `c`, uniform on the fibre of `c` (e
 fibre is hit by the same number of coins). The zero-knowledge simulator for a simulator of the IOP
 that chooses its own challenges (CY24 Definition 23.1.8, `GordieHowe.IOP.IOP.HVZK`) programs each
 challenge round's oracle answer with a preimage of the simulated challenge
-(`GordieHowe/SPBCS/FullPast/ZeroKnowledge.lean`).
+(`GordieHowe/SPBCS/ZeroKnowledge.lean`).
 
 **The law of the preimages of uniform challenges** (`Sampler.tvDist_preLaw_le`): the streams drawn
 by preimage at uniform challenges are within the probability that some round rejects of uniform

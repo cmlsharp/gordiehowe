@@ -5,8 +5,8 @@ module
 
 public import GordieHowe.Applications.MLDSA44.Emulated.ROMParams.Frontend.Embed
 public import GordieHowe.Applications.MLDSA44.Emulated.Frontend.Basic
-public import GordieHowe.Applications.MLDSA44.Native.ROMParams.Frontend.Sample
-public import GordieHowe.Applications.MLDSA44.Native.ROMParams.Frontend.Hash
+public import GordieHowe.Applications.MLDSA44.Frontend.Sample
+public import GordieHowe.Applications.MLDSA44.Frontend.Hash
 
 @[expose] public section
 
@@ -23,7 +23,7 @@ composition at this program (`KeyOf`, `rel`, `proj`, `extractor`, `rbr_of_views`
 namespace GordieHowe.MLDSA44.Emulated.ROMParams
 
 open Generated.MLDSA44.Emulated.ROMParams.Program (program)
-open HashField (interp)
+open Generated.MLDSA44.Emulated.ROMParams (interp)
 open GordieHowe.Bits IOP
 open scoped NNReal ENNReal
 
@@ -54,23 +54,23 @@ instance : Emulated.MldsaEMain program where
   projReadsN := by decide +kernel
 
 /-- The native program's domain `H` facts at the emulated program's native program. -/
-instance : Native.ROMParams.MldsaHHash (Emulated.MldsaEmbed.nat program) :=
-  inferInstanceAs (Native.ROMParams.MldsaHHash nat)
+instance : MLDSA44.MldsaHHash (Emulated.MldsaEmbed.nat program) :=
+  inferInstanceAs (MLDSA44.MldsaHHash nat)
 
 /-- The native program's SampleInBall facts at the emulated program's native program. -/
-instance : Native.ROMParams.MldsaHSample (Emulated.MldsaEmbed.nat program) :=
-  inferInstanceAs (Native.ROMParams.MldsaHSample nat)
+instance : MLDSA44.MldsaHSample (Emulated.MldsaEmbed.nat program) :=
+  inferInstanceAs (MLDSA44.MldsaHSample nat)
 
 /-- The native program's constants over `GF(2^128)` at the emulated program's native program. -/
-instance : Native.ROMParams.MldsaHConsts (Emulated.MldsaEmbed.nat program) RealizedProgram.gf128 :=
-  inferInstanceAs (Native.ROMParams.MldsaHConsts nat RealizedProgram.gf128)
+instance : MLDSA44.MldsaHConsts (Emulated.MldsaEmbed.nat program) RealizedProgram.gf128 :=
+  inferInstanceAs (MLDSA44.MldsaHConsts nat RealizedProgram.gf128)
 
 /-- **The statement holds a key's preprocessing** (`Emulated.KeyOf`). -/
 abbrev KeyOf (pk : MLDSA44.PublicKey44) (x : program.Valuation interp) : Prop :=
   Emulated.KeyOf pk x
 
 /-- **The relation of the theorem at the realized program of `MLDSA44.Emulated.ROMParams`** (`Emulated.rel`). -/
-abbrev rel : Set (program.Valuation interp × Native.ROMParams.VarWitness) :=
+abbrev rel : Set (program.Valuation interp × MLDSA44.VarWitness) :=
   Emulated.rel
 
 /-- **The witness extracted from a statement and a committed assignment** (`Emulated.proj`).
@@ -79,7 +79,7 @@ Running time: `Emulated.proj`'s paragraph (polynomial in the program's size).
 This running time is argued here, not proved in Lean. -/
 -- spec-side
 def proj (x : program.Valuation interp) (a : program.Assignment interp) :
-    Native.ROMParams.VarWitness :=
+    MLDSA44.VarWitness :=
   Emulated.proj x a
 
 /-- **The extractor of `Π_P₀`** for `MLDSA44.Emulated.ROMParams` (`RealizedProgram.sourceExtractor` at `proj`).
@@ -87,7 +87,7 @@ def proj (x : program.Valuation interp) (a : program.Assignment interp) :
 Running time: one read of the transcript's first round and one call of `proj` (polynomial,
 `proj`'s paragraph). This running time is argued here, not proved in Lean. -/
 def extractor :
-    Extractor (program.sourceSpec interp) (program.Valuation interp) Native.ROMParams.VarWitness :=
+    Extractor (program.sourceSpec interp) (program.Valuation interp) MLDSA44.VarWitness :=
   program.sourceExtractor interp proj
 
 /-- **The crossing wherever the source program holds** (`Emulated.CrossSound`). -/
@@ -118,7 +118,7 @@ crossing and the algebra (`Emulated.rbr_of_views`): SampleInBall's events with e
 theorem rbr_of_views (hx : CrossSound) (hA : AlgebraSound) :
     rbrKnowledgeSoundness rel (program.sourceVerifier interp) extractor
       (program.eventState interp rel proj sampleEvent sampleEvent_use (sound_of_views hx hA))
-      (program.roundError interp Native.ROMParams.sampleEps) :=
+      (program.roundError interp MLDSA44.sampleEps) :=
   Emulated.rbr_of_views hx hA
 
 end GordieHowe.MLDSA44.Emulated.ROMParams

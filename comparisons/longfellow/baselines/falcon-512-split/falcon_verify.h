@@ -33,10 +33,10 @@ struct FalconParams {
   uint64_t B;        // norm limb base (2*(B-1)^2 < q)
 };
 
-// Falcon-512 / Falcon-1024 (beta^2 from the FN-DSA reference).
-inline FalconParams falcon512() { return FalconParams{512, 12289, 34034726, 64}; }
-inline FalconParams falcon1024() {
-  return FalconParams{1024, 12289, 70265242, 64};
+// The parameters of a set S (falcon_set.h) with norm limb base B.
+template <class S>
+FalconParams falcon_params(uint64_t B) {
+  return FalconParams{S::kN, 12289, S::kBetaSq, B};
 }
 
 // Norm parameters for a FalconParams (norm runs over 2n = |s1|+|s2| coefficients).

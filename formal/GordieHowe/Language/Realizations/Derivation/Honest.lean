@@ -105,6 +105,7 @@ theorem srcFact_typed_sound (hwf : ir.WellFormed) (hI : I.Registered ir) (hL : I
           split_ifs at hf with hc2
           cases hf
           obtain ⟨hN0, hc'0, hcN⟩ := hc2
+          rw [← abs_eq_max_neg] at hc'0 hcN
           have hn : Fact.HoldsWith ir (ir.reader e) (.nat d' (.add (.leaf w) (.leaf c)) N) :=
             hfs _ (List.mem_of_getElem? hk)
           have hK : ∀ v es, (ir.value v).kind = .constant es → ∀ i,
@@ -268,6 +269,9 @@ theorem stepFact_honest (hwf : ir.WellFormed) (hI : I.Registered ir) (hL : I.Law
   | src v s =>
     simp only [stepFact] at hf
     split_ifs at hf with hg
+    have hn : ir.tableKernelFact sr ctx self body.dom v s = none := by
+      cases s <;> first | rfl | simp [honestStepB, honestSrcB, typedSrcB] at hs
+    rw [hn, Option.or_none] at hf
     simp only [honestStepB, Bool.or_eq_true] at hs
     rcases hs with hs | hs
     · rw [← pureSrcFact_of_honest hs] at hf
@@ -419,7 +423,8 @@ theorem realizedAt_of_honest_derivs (hwf : ir.WellFormed) {sr : List (ℕ × ℕ
         (fun p hp _ => hsat.preds p hp) hfs hg hf) hall hc
     rw [hf] at this
     exact ⟨lo, hi, this⟩
-  refine ⟨fun p hp _ => hsat.preds p hp, fun p hp d lhs rhs real hb => ?_, fun t ht g hg => ?_,
+  refine ⟨fun p hp _ => hsat.preds p hp, fun p hp d lhs rhs real hb => ?_,
+    fun p hp d m lhs rhs real hb hf h2 => ?_, fun t ht g hg => ?_,
     hsat.types, fun p hp _ _ _ _ _ _ hb hn hx => (hm.tag p hp _ _ _ _ _ _ hb hn).hosted hx⟩
   · obtain ⟨pid, hpid, rfl⟩ := exists_index_of_mem hp
     have hmc := hv.mods pid hpid
@@ -433,9 +438,27 @@ theorem realizedAt_of_honest_derivs (hwf : ir.WellFormed) {sr : List (ℕ × ℕ
     have hs := hsat.preds _ hp
     rw [hb] at hs
     intro i hi'
-    have h1 := hs i hi'
+    have h1 := hs.1 i hi'
     rw [Nat.cast_zero, zero_dvd_iff, sub_eq_zero] at h1
     rw [← (ha i hi').2.2, ← (hb2 i (hlen ▸ hi')).2.2, h1]
+  · -- a product-form `mod_q`: its quotient's equation, cast to the field
+    obtain ⟨pid, hpid, rfl⟩ := exists_index_of_mem hp
+    obtain ⟨hok, hp2⟩ := hv.products pid hpid d m lhs rhs real hb hf
+    obtain ⟨Q, hQ⟩ := productOkB_quotient hok
+    have hs := hsat.preds _ hp
+    rw [hb] at hs
+    obtain ⟨-, hq⟩ := hs
+    unfold ProductQuotWith at hq
+    rw [hQ] at hq
+    have hq' := hq hf h2
+    refine productPlaced_of_coeff hwf hI hL hok hp2 fun i hi => ?_
+    obtain ⟨heq, -, -, hcP, hcN, hcQ⟩ := hq' i hi
+    unfold quotTerm
+    rw [hQ]
+    simp only
+    rw [← hcP, ← hcN, ← hcQ, ← Int.cast_sub, heq]
+    push_cast
+    ring
   · have := charP_field hI (hv.tables t ht).field
     have hin' := hin t ht g hg
     have hc := hh t ht g hg

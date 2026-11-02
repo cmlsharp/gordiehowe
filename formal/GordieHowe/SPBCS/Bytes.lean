@@ -19,7 +19,7 @@ series–parallel term with merges. It follows the paper's challenge-input layou
 * the observer's label (`label`): `0` and the leaf's path bytes (`Leaf.pathBytes`) for a challenge
   round, `1` and the site's code (`SiteLayout.code`) for a branch's final input;
 * the item bytes of the full chains of the leaves the observer reads in full, in term order
-  (`visList`), as in `CausalEncoding.bytes`;
+  (`visList`, `ItemCodec.serChains`);
 * the final digest of each branch hidden from the observer, in the layout's site order
   (`hidList`), `k` bytes each;
 * for a round, its own items.
@@ -105,18 +105,18 @@ def ownBytes : BContent Mg k Wr X' → List Byte
 
 /-- **The bytes of a chain input** (module docstring). -/
 def bytesOf (c : BContent Mg k Wr X') : List Byte :=
-  CX.ser c.stmt ++ (label Λ c.obs ++ (CausalEncoding.serCtx C (visList c.obs) c.chains ++
+  CX.ser c.stmt ++ (label Λ c.obs ++ (ItemCodec.serChains C (visList c.obs) c.chains ++
     (serDs (hidList Λ c.obs) c.ds ++ ownBytes C c)))
 
 /-- **Parse the rest of a round input at the candidate leaf `p`**: strip `p`'s label, read the
 full chains of the leaves `p` reads in full, the digests of the branches hidden from `p`, then the
 rest as `p`'s own items, and accept only a proper prefix.
 
-Running time: a label comparison, one `parseCtx`, one `parseDs`, one `ItemCodec.parseList`.
+Running time: a label comparison, one `parseChains`, one `parseDs`, one `ItemCodec.parseList`.
 This running time is argued here, not proved in Lean. -/
 def tryLeaf (ss : X') (u : List Byte) (p : t.Leaf) : Option (BContent Mg k Wr X') :=
   (strip (label Λ (.leaf p)) u).bind fun u₁ =>
-    (CausalEncoding.parseCtx (k := k) C (visList (Mg := Mg) (.leaf p)) u₁).bind fun r =>
+    (ItemCodec.parseChains (k := k) C (visList (Mg := Mg) (.leaf p)) u₁).bind fun r =>
       (parseDs (k := k) (hidList Λ (.leaf p)) r.2).bind fun r' =>
         (ItemCodec.parseList (C p.label) r'.2.length 0 r'.2).bind fun own =>
           if own.length < n p.label then
@@ -128,11 +128,11 @@ def tryLeaf (ss : X') (u : List Byte) (p : t.Leaf) : Option (BContent Mg k Wr X'
 full chains of the leaves its sink reads in full and the digests of the branches hidden from its
 sink, and accept only if nothing is left.
 
-Running time: a label comparison, one `parseCtx`, one `parseDs`.
+Running time: a label comparison, one `parseChains`, one `parseDs`.
 This running time is argued here, not proved in Lean. -/
 def trySink (ss : X') (u : List Byte) (s : Mg.Site) : Option (BContent Mg k Wr X') :=
   (strip (label Λ (.sink s)) u).bind fun u₁ =>
-    (CausalEncoding.parseCtx (k := k) C (visList (Mg := Mg) (.sink s)) u₁).bind fun r =>
+    (ItemCodec.parseChains (k := k) C (visList (Mg := Mg) (.sink s)) u₁).bind fun r =>
       (parseDs (k := k) (hidList Λ (.sink s)) r.2).bind fun r' =>
         if r'.2 = [] then
           some (.final ss s (fun q => (r.1.dlookup q).getD []) fun s' => (r'.1.dlookup s').getD 0)
@@ -178,23 +178,23 @@ theorem ser_of_parseDs : ∀ (ss : List Mg.Site) {u v : List Byte}
 /-! ### Well-formed parses -/
 
 variable {C} in
-/-- **The chains read by `parseCtx` are full and well formed.** -/
-theorem wf_of_parseCtx : ∀ (qs : List t.Leaf) {u v : List Byte}
+/-- **The chains read by `parseChains` are full and well formed.** -/
+theorem wf_of_parseChains : ∀ (qs : List t.Leaf) {u v : List Byte}
     {ls : List (Σ q : t.Leaf, List (Item k (Σ i, Wr q.label i)))},
-    CausalEncoding.parseCtx C qs u = some (ls, v) →
+    ItemCodec.parseChains C qs u = some (ls, v) →
       ∀ e ∈ ls, chainWF (P e.1.label) e.2 ∧ e.2.length = n e.1.label
   | [], u, v, ls, h, e, he => by
     obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some_inj.1 h)
     simp at he
   | q :: qs, u, v, ls, h, e, he => by
-    rw [CausalEncoding.parseCtx] at h
+    rw [ItemCodec.parseChains] at h
     obtain ⟨⟨l, w⟩, hn, h⟩ := Option.bind_eq_some_iff.1 h
     obtain ⟨⟨ls', w'⟩, hc, hls⟩ := Option.map_eq_some_iff.1 h
     obtain ⟨rfl, rfl⟩ := Prod.mk.inj hls
     rcases List.mem_cons.1 he with rfl | he
     · refine ⟨fun j hj => ?_, ItemCodec.length_of_parseN _ _ _ hn⟩
       simpa using ItemCodec.fits_of_parseN _ _ _ hn j hj
-    · exact wf_of_parseCtx qs hc e he
+    · exact wf_of_parseChains qs hc e he
 
 /-- A lookup in a list whose keys are `qs` succeeds exactly at `qs`, at a member of the list. -/
 theorem dlookup_getD_of_keys {α : Type} [DecidableEq α] {β : α → Type} {l : List (Sigma β)}
@@ -217,15 +217,15 @@ variable {C CX Λ}
 
 /-- The bytes after the writes before round 0. -/
 theorem bytesOf_eq (c : BContent Mg k Wr X') :
-    bytesOf C CX Λ c = CX.ser c.stmt ++ (label Λ c.obs ++ (CausalEncoding.serCtx C (visList c.obs)
+    bytesOf C CX Λ c = CX.ser c.stmt ++ (label Λ c.obs ++ (ItemCodec.serChains C (visList c.obs)
       c.chains ++ (serDs (hidList Λ c.obs) c.ds ++ ownBytes C c))) := rfl
 
 /-- The chains of well-formed content parse as the full chains of the leaves read in full. -/
-theorem parseCtx_view {o : Mg.Obs} {chs : (q : t.Leaf) → List (Item k (Σ i, Wr q.label i))}
+theorem parseChains_view {o : Mg.Obs} {chs : (q : t.Leaf) → List (Item k (Σ i, Wr q.label i))}
     {ds : Mg.Site → Digest k} (hv : Content.ViewWF n (fun j => chainWF (P j)) o chs ds)
-    (u : List Byte) : CausalEncoding.parseCtx C (visList o) (CausalEncoding.serCtx C (visList o) chs ++ u) =
+    (u : List Byte) : ItemCodec.parseChains C (visList o) (ItemCodec.serChains C (visList o) chs ++ u) =
       some ((visList o).map fun q => ⟨q, chs q⟩, u) :=
-  CausalEncoding.parseCtx_serCtx C chs _ (fun q hq =>
+  ItemCodec.parseChains_serChains C chs _ (fun q hq =>
     ⟨hv.chains_wf q (mem_visList.1 hq), hv.chains_length q (mem_visList.1 hq)⟩) u
 
 /-- The chains of a view, read back by lookup. -/
@@ -253,25 +253,25 @@ theorem view_ds_lookup {o : Mg.Obs} {chs : (q : t.Leaf) → List (Item k (Σ i, 
 theorem tryLeaf_self {ss : X'} {p : t.Leaf} {chs : (q : t.Leaf) → List (Item k (Σ i, Wr q.label i))}
     {ds : Mg.Site → Digest k} {own : List (Item k (Σ i, Wr p.label i))}
     (h : (Content.round ss p chs ds own : BContent Mg k Wr X').WF n fun j => chainWF (P j)) :
-    tryLeaf C Λ ss (label Λ (.leaf p : Mg.Obs) ++ (CausalEncoding.serCtx C (visList (.leaf p : Mg.Obs)) chs ++
+    tryLeaf C Λ ss (label Λ (.leaf p : Mg.Obs) ++ (ItemCodec.serChains C (visList (.leaf p : Mg.Obs)) chs ++
       (serDs (hidList Λ (.leaf p : Mg.Obs)) ds ++ ItemCodec.serList (C p.label) own))) p =
       some (.round ss p chs ds own) := by
   cases h with
   | round hv hown hlt =>
     have hparse := ItemCodec.parseList_serList (C p.label) own 0
       (fun j hj => by simpa using hown j hj) _ le_rfl
-    simp only [tryLeaf, strip_append, Option.bind_some, parseCtx_view hv, parseDs_serDs, hparse,
+    simp only [tryLeaf, strip_append, Option.bind_some, parseChains_view hv, parseDs_serDs, hparse,
       hlt, ↓reduceIte, view_chains_lookup hv, view_ds_lookup hv]
 
 /-- A final input parses at its own site. -/
 theorem trySink_self {ss : X'} {s : Mg.Site} {chs : (q : t.Leaf) → List (Item k (Σ i, Wr q.label i))}
     {ds : Mg.Site → Digest k}
     (h : (Content.final ss s chs ds : BContent Mg k Wr X').WF n fun j => chainWF (P j)) :
-    trySink C Λ ss (label Λ (.sink s : Mg.Obs) ++ (CausalEncoding.serCtx C (visList (.sink s : Mg.Obs)) chs ++
+    trySink C Λ ss (label Λ (.sink s : Mg.Obs) ++ (ItemCodec.serChains C (visList (.sink s : Mg.Obs)) chs ++
       (serDs (hidList Λ (.sink s : Mg.Obs)) ds ++ []))) s = some (.final ss s chs ds) := by
   cases h with
   | final hv =>
-    simp only [trySink, strip_append, Option.bind_some, parseCtx_view hv, parseDs_serDs,
+    simp only [trySink, strip_append, Option.bind_some, parseChains_view hv, parseDs_serDs,
       ↓reduceIte, view_chains_lookup hv, view_ds_lookup hv]
 
 /-- A label determines its observer. -/
@@ -318,7 +318,7 @@ theorem decodeBytes_bytesOf {c : BContent Mg k Wr X'} (h : c.WF n fun j => chain
 theorem tryLeaf_spec {ss : X'} {u : List Byte} {p : t.Leaf} {c : BContent Mg k Wr X'}
     (h : tryLeaf C Λ ss u p = some c) :
     c.WF n (fun j => chainWF (P j)) ∧ c.stmt = ss ∧ c.obs = .leaf p ∧
-      label Λ c.obs ++ (CausalEncoding.serCtx C (visList c.obs) c.chains ++
+      label Λ c.obs ++ (ItemCodec.serChains C (visList c.obs) c.chains ++
         (serDs (hidList Λ c.obs) c.ds ++ ownBytes C c)) = u := by
   unfold tryLeaf at h
   obtain ⟨u₁, hu, h⟩ := Option.bind_eq_some_iff.1 h
@@ -328,9 +328,9 @@ theorem tryLeaf_spec {ss : X'} {u : List Byte} {p : t.Leaf} {c : BContent Mg k W
   split_ifs at h with hlt
   obtain rfl := Option.some_inj.1 h
   dsimp only at hu hc hd ho ⊢
-  obtain ⟨hk, hs⟩ := CausalEncoding.ser_of_parseCtx C _ hc
+  obtain ⟨hk, hs⟩ := ItemCodec.ser_of_parseChains C _ hc
   obtain ⟨hkd, hsd⟩ := ser_of_parseDs _ hd
-  have hwf := wf_of_parseCtx _ hc
+  have hwf := wf_of_parseChains _ hc
   refine ⟨.round ⟨fun q hq => ?_, fun q hq => ?_, fun q hq => ?_, fun s hs => ?_⟩
     (fun j hj => by simpa using ItemCodec.fits_of_parseList _ _ _ ho j hj) hlt, rfl, rfl, ?_⟩
   · obtain ⟨b, hb, hb'⟩ := (dlookup_getD_of_keys hk (fun _ => []) q).1 (mem_visList.2 hq)
@@ -355,7 +355,7 @@ theorem tryLeaf_spec {ss : X'} {u : List Byte} {p : t.Leaf} {c : BContent Mg k W
     rw [eq_of_strip hu, hs, hsd, ← ItemCodec.serList_of_parseList _ _ _ ho]
     congr 2
     · conv_rhs => rw [hls, hk]
-      simp [CausalEncoding.serCtx, List.flatMap_map]
+      simp [ItemCodec.serChains, List.flatMap_map]
     · congr 1
       conv_rhs => rw [hlds, hkd]
       simp [serDs, List.flatMap_map]
@@ -364,7 +364,7 @@ theorem tryLeaf_spec {ss : X'} {u : List Byte} {p : t.Leaf} {c : BContent Mg k W
 theorem trySink_spec {ss : X'} {u : List Byte} {s : Mg.Site} {c : BContent Mg k Wr X'}
     (h : trySink C Λ ss u s = some c) :
     c.WF n (fun j => chainWF (P j)) ∧ c.stmt = ss ∧ c.obs = .sink s ∧
-      label Λ c.obs ++ (CausalEncoding.serCtx C (visList c.obs) c.chains ++
+      label Λ c.obs ++ (ItemCodec.serChains C (visList c.obs) c.chains ++
         (serDs (hidList Λ c.obs) c.ds ++ ownBytes C c)) = u := by
   unfold trySink at h
   obtain ⟨u₁, hu, h⟩ := Option.bind_eq_some_iff.1 h
@@ -374,9 +374,9 @@ theorem trySink_spec {ss : X'} {u : List Byte} {s : Mg.Site} {c : BContent Mg k 
   obtain rfl := Option.some_inj.1 h
   dsimp only at hu hc hd hnil ⊢
   subst hnil
-  obtain ⟨hk, hs⟩ := CausalEncoding.ser_of_parseCtx C _ hc
+  obtain ⟨hk, hs⟩ := ItemCodec.ser_of_parseChains C _ hc
   obtain ⟨hkd, hsd⟩ := ser_of_parseDs _ hd
-  have hwf := wf_of_parseCtx _ hc
+  have hwf := wf_of_parseChains _ hc
   refine ⟨.final ⟨fun q hq => ?_, fun q hq => ?_, fun q hq => ?_, fun s' hs' => ?_⟩, rfl, rfl, ?_⟩
   · obtain ⟨b, hb, hb'⟩ := (dlookup_getD_of_keys hk (fun _ => []) q).1 (mem_visList.2 hq)
     rw [hb']
@@ -400,7 +400,7 @@ theorem trySink_spec {ss : X'} {u : List Byte} {s : Mg.Site} {c : BContent Mg k 
     rw [eq_of_strip hu, hs, hsd]
     congr 2
     · conv_rhs => rw [hls, hk]
-      simp [CausalEncoding.serCtx, List.flatMap_map]
+      simp [ItemCodec.serChains, List.flatMap_map]
     · congr 1
       conv_rhs => rw [hlds, hkd]
       simp [serDs, List.flatMap_map]
@@ -442,7 +442,7 @@ theorem length_bytesOf_le {B : ℕ} (hB : ∀ j i, (C j i).B ≤ B) {c : BConten
     rw [← List.toFinset_card_of_nodup (nodup_hidList Λ _)]
     refine le_trans (Finset.card_le_card fun s hs => ?_) (Merges.card_hiders_le c.obs)
     exact Merges.mem_hiders.2 ((mem_hidList Λ).1 (List.mem_toFinset.1 hs))
-  have hctx := CausalEncoding.length_serCtx_le C hB (visList c.obs) c.chains
+  have hctx := ItemCodec.length_serChains_le C hB (visList c.obs) c.chains
   have hvis : ((visList c.obs).map fun q => (c.chains q).length).sum ≤ ∑ q, (c.chains q).length := by
     rw [← List.sum_toFinset _ (nodup_visList _)]
     exact Finset.sum_le_sum_of_subset (Finset.subset_univ _)

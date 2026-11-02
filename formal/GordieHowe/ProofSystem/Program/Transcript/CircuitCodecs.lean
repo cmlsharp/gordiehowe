@@ -57,7 +57,6 @@ proofs' codecs and readers are assembled from:
   low-degree challenge and response, `SpecWrites.ldtCommit`, `SpecReaders.ldtCommit`) and the proof
   phase (`GordieHowe.Ligero.AgreementThreshold.proofSpec`: the constraint challenge, the masked responses and the
   column query, `SpecWrites.ligeroListRadius`, `SpecReaders.listRadius`);
-- the stream grants of the extended points (`StreamGrants`, `StreamRows`);
 - either masking (`GordieHowe.Ligero.MaskRow.Setup.writes`, `readers`, `commitWrites`, `commitReaders`, by
   cases on the setup, in `GordieHowe/ProofSystem/Program/Transcript/PrefixCodecs.lean`), with their loads
   (`readers_allLoads`, `commitReaders_allLoads`).
@@ -152,37 +151,5 @@ def listRadius {N nL nQ k t : ℕ} (htN : t ≤ N) (g : ℕ) :
     (CReader.choose N t htN)).dropMsg 0
 
 end SpecReaders
-
-/-- **The stream grants of a circuit proof's extended points**: the bytes beyond the default budget
-`k + e` that the C++ grants the point of the domain's packing stage combination (`stage`), of the
-root combination (`root`: Ligero's batching challenge for an A domain, the root stage's combination
-of every row for an H domain on the tree layout), and of Ligero's linear test `gen_alphal`, which is
-the constraint challenge (`linear`) (`BasicTranscript::extend_point_budget_for`,
-`lib/gordiehowe/compiler/tree_zk.h`, `lib/ligero/ligero_transcript.h`). `{}` grants none. -/
-structure StreamGrants where
-  /-- The packing stage's combination. -/
-  stage : ℕ := 0
-  /-- The root combination (A: Ligero's batching challenge; H: the root stage's combination). -/
-  root : ℕ := 0
-  /-- Ligero's linear test (the constraint challenge). -/
-  linear : ℕ := 0
-
-/-- **The row counts of a circuit proof's extended points**: the rows `n_i` the C++ grants each
-extended point a size for (`TreePlan::stream_rows`): the packing stage's row slots (`0` for a domain
-without one), the root's row slots and Ligero's linear rows. -/
-structure StreamRows where
-  /-- The packing stage's row slots. -/
-  stage : ℕ := 0
-  /-- The root's row slots. -/
-  root : ℕ
-  /-- Ligero's linear rows. -/
-  linear : ℕ
-
-/-- **The C++ grants of the extended points** at `fb`-byte field elements: `4 · n_i · fb` at each
-(`extend_point_budget_for(n, F)`: four times the bytes of `n` elements, `F::kBytes = fb`). -/
-def StreamRows.grants (n : StreamRows) (fb : ℕ) : StreamGrants where
-  stage := 4 * n.stage * fb
-  root := 4 * n.root * fb
-  linear := 4 * n.linear * fb
 
 end GordieHowe.SPBCS

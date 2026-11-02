@@ -112,7 +112,8 @@ struct NamedOp {
   // A transform's root psi, or fromDigits' base.
   Nat elt;
   // A convolution's form: the coefficients, or the transform at PSI
-  // (elt); ntt's order.
+  // (elt), in scheme order or, NATURAL_ORDER, in natural order (Lean
+  // `ConvForm.nttNatural`, the product form's spectra); ntt's order.
   bool ntt_form = false;
   bool natural_order = false;
   // macConv's taps.
@@ -270,6 +271,14 @@ struct InRealization {
   LookupRealization lookup;
 };
 
+// A mod predicate's realization form (Lean `ModForm`). The product forms
+// (compiler/mod.h's product_sides) are a source mod_m lhs R whose target
+// checks lhs - R - m (qlo + Q) = 0 coordinate by coordinate in F_p
+// (kProduct), or, for kSpectralProduct, the transform of each row of that
+// equation: Ntt(lhs_i - m qlo - m Q_i) = sum_t s_t spec_t * Ntt(x_t) for R_i
+// = sum_t s_t (h_t * x_t), each term of R a convolution by a spectrum
+// (NamedOp kNegacyclicConv or kPolyBroadcast in NTT form) read at one
+// block; Q is the quotient (none for m = p).
 enum class ModForm : uint8_t {
   kField,
   kConstant,
@@ -278,7 +287,9 @@ enum class ModForm : uint8_t {
   kDigits,
   kCommittedDigits,
   kGrouped,
-  kInteger
+  kInteger,
+  kProduct,
+  kSpectralProduct
 };
 
 struct GroupedMod {
@@ -471,6 +482,13 @@ struct CircuitEntry {
   RealRef real;
 };
 
+// A viewed word of a circuit's packed run (Lean `Circuit.aliases`): the
+// DEGREE view inputs from AT are the bits of the word committed at input
+// WORD.
+struct ViewAlias {
+  size_t at = 0, word = 0, degree = 0;
+};
+
 struct Circuit {
   std::string name;
   Id domain = 0;
@@ -478,6 +496,11 @@ struct Circuit {
   std::vector<CircuitEntry> entries;
   std::vector<InputBlock> inputs;
   size_t public_inputs = 1, input_count = 1, layers = 0, wires = 0, terms = 0;
+  // The packed runs of bit inputs, each (first input, length) (Lean
+  // `Circuit.packedRuns`).
+  std::vector<std::pair<size_t, size_t>> packed_runs;
+  // The viewed words of the packed runs, in input order.
+  std::vector<ViewAlias> aliases;
 };
 
 // ------------------------------------------------------------ program --
@@ -564,10 +587,31 @@ struct DStep {
     kLinop,
     kConclude,
     kHyp,
-    kIvlDisjoint
+    kIvlDisjoint,
+    kProductMod,
+    // Only in a GKR circuit's derivations (Certificates::circuit_derivs):
+    // the fact of template instance ID of the circuit's emission log, and
+    // the circuit's input premise ID (Lean circStepFact).
+    kCircuitAssert,
+    kInputPremise
   };
-  // An interval source (Lean `IvlSrc`).
-  enum Src : uint8_t { kConst, kDeclared, kNat, kPrime, kOpaqueBit, kQuadRoot, kRootSet, kShift };
+  // An interval source (Lean `IvlSrc`). kTableHull: the hull of the public
+  // entries the selections or lookups TAILS place the value among (INTS lo
+  // hi); kTableKernel: the coefficient hull (INTS lo hi) of block INTS[2]
+  // of the kernel of operator SRC_ARG (a convolution by a spectrum, whose
+  // value is the step's), from the selections TAILS.
+  enum Src : uint8_t {
+    kConst,
+    kDeclared,
+    kNat,
+    kPrime,
+    kOpaqueBit,
+    kQuadRoot,
+    kRootSet,
+    kShift,
+    kTableHull,
+    kTableKernel
+  };
   Rule rule = kConclude;
   // The domain the step reads in when not its predicate's (Lean inDom).
   Id in_dom = kNone;
@@ -627,6 +671,14 @@ struct Certificates {
   std::vector<std::vector<DStep>> deriv_refused;
   // The shared facts (Lean `Derivations.shared`) and their entries' order.
   std::vector<SharedFact> shared;
+  // The GKR circuits' derivations (Lean `Derivations.circuitDerivs`): per
+  // circuit, its entries whose derivation is not the fact of their own
+  // template instance, as (entry, steps), both lists sorted by index.
+  struct CircuitDerivs {
+    size_t circuit = 0;
+    std::vector<std::pair<size_t, std::vector<DStep>>> entries;
+  };
+  std::vector<CircuitDerivs> circuit_derivs;
   std::vector<size_t> roles;
   std::vector<std::vector<Id>> comm_digits;
   std::vector<Id> bound_recs;
@@ -713,10 +765,30 @@ struct Certificates {
       kFieldRow,
       kTwoTail
     };
+    // The role of a predicate in a MAC (Lean `MacRole`).
+    enum MacRole : uint8_t {
+      kTail,
+      kH,
+      kAccRow,
+      kGroupRow,
+      kResidues,
+      kGqLookup,
+      kQuotLookup,
+      kLowLookup,
+      kTopLookup,
+      kWrap
+    };
     Kind kind = kSource;
+    // kMacRow, kTwoTail: the macSite structure record's index (the
+    // records' gadgets, structure_records.h).
     size_t id = 0;
-    // kMacRow, kTwoTail: the site's side (the check over x's field).
-    bool x_side = false;
+    // kMacRow, kTwoTail: the site's slot in the record's predicates (1, or
+    // 2 for the check over y's field of a MAC no domain hosts).
+    size_t slot = 0;
+    // kMacRow: the predicate's role in the MAC, and the group of a
+    // kGroupRow.
+    MacRole role = kTail;
+    size_t group = 0;
     // kCommIn: the position of the quotient digit the lookup's record is.
     size_t j = 0;
     // kCommRow: per quotient digit, the digit lookup whose record it is.
@@ -764,6 +836,25 @@ struct Program {
   std::vector<NamedOp> ops;
   std::vector<LinearRows> linears;
 };
+
+// Lean `isStmtLeaf`: a value read from the statement as given (a public
+// input, or an opaque public value of no arguments).
+inline bool is_stmt_leaf(const Value &x) {
+  return x.kind == Value::kInput || (x.kind == Value::kOpaque && x.args.empty());
+}
+
+// Lean `isStmtValue`: a value read from the statement as given, or an
+// opaque public value computed from such values (`isStmtComputed`). Lean
+// `declaredRanges` lists every statement value that declares a bound, in
+// value order.
+inline bool is_stmt_value(const Program &P, size_t v) {
+  const Value &x = P.values.at(v);
+  if (is_stmt_leaf(x)) return true;
+  if (x.kind != Value::kOpaque) return false;
+  for (Id a : x.args)
+    if (a >= P.values.size() || !is_stmt_leaf(P.values[a])) return false;
+  return true;
+}
 
 }  // namespace proofs::gordiehowe::ir
 

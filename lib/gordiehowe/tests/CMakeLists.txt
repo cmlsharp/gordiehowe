@@ -56,6 +56,13 @@ gordiehowe_add_test(gordiehowe_per_chunk_mac_test SETS rom_emu qrom_emu)
 # Interval propagation through products, assert_int_equal and the conv
 # realizations.
 gordiehowe_add_test(gordiehowe_int_equal_test SETS mod)
+# The export of a GKR circuit's expression emission (compiler/emit_export.h).
+gordiehowe_add_test(gordiehowe_emit_export_test SETS mod)
+# The GHC writer and reader (compiler/ghc.h, ghc_gkr.h), and the GKR
+# schema's text against the Lean types' (formal/scripts/ghc_schema.txt).
+gordiehowe_add_test(gordiehowe_ghc_test)
+set_source_files_properties(gordiehowe_ghc_test.cc PROPERTIES COMPILE_DEFINITIONS
+  "GH_GHC_SCHEMA_FILE=\"${CMAKE_SOURCE_DIR}/../formal/scripts/ghc_schema.txt\"")
 # The Ligero parameter choice (compiler/ligero_choice.h).
 gordiehowe_add_test(gordiehowe_ligero_choice_test)
 # The compiled plan as Lean data (plan_export.h).

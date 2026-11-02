@@ -6,8 +6,8 @@ module
 public import GordieHowe.Applications.Falcon512.System.Source
 public import GordieHowe.Applications.Falcon512.System.Params
 public import GordieHowe.Foundations.Probability.RangeGroups
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative20
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative9
+public import GordieHowe.Applications.Falcon512.Fields.FalconNative20
+public import GordieHowe.Applications.Falcon512.Fields.FalconNative9
 public import GordieHowe.Applications.Falcon512.Gadgets.NativeNormGroups
 
 @[expose] public section

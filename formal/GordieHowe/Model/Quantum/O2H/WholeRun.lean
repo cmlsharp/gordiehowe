@@ -20,6 +20,16 @@ of `q` query slots distinguishes the two games with advantage at most `2 q √(n
 (`Distinguisher.advantage_acceptProb_le_of_fresh_secret_budget`), with `ε` bounding
 `Pr_σ[x ∈ T σ]`. The proof is `O2HSetting.o2h_fresh_secret_of_count` for `gameAlg`, the set being
 `T σ` on every query branch.
+
+The square-root form (`Distinguisher.abs_sqrt_eventProb_sub_le_of_fresh_secret_budget`) bounds
+`|√P − √P'|` by the same `2 q √(n ε)`, for the probabilities `eventProb` that the final state lies
+in a set `S ω` that may depend on the whole tape, the secret `σ` included: the hypotheses on `σ`
+concern the steps of the run only, never the final measurement. The oracle algorithm of the game
+measured with `S ω` on tape `ω` is `gameAlgOn`.
+
+- `eventProb E post S`: the probability that the final game state on tape `ω ← E.μ` lies in
+  `S ω`.
+- `gameAlgOn E post S`: `gameAlg` with the accepting set `S ω` on input `ω`.
 -/
 
 open Finset
@@ -123,6 +133,109 @@ theorem advantage_acceptProb_le_of_fresh_secret_budget (bud : D.Budget q)
     positivity
   have hε0 : 0 ≤ ε := ENNReal.toReal_nonneg.trans (hε x₀)
   exact s.o2h_fresh_secret_of_count _ M _ _ q hμ (fun v σ w hw => by simp [s, hw])
+    (fun v σ w hw => by simp [s, hw]) hpre hcount hMC hε0 hε
+
+/-- **The probability of a tape-dependent event of the final state**: the average over the tape
+`ω ← E.μ` of the probability that the final game state lies in `S ω`. -/
+noncomputable def eventProb {Ω : Type*} [Fintype Ω] (E : Env Ω Req A X Y Q)
+    (post : (X → Y) → QState (DReg W n X Y Req A) ≃ₗᵢ[ℂ] QState (DReg W n X Y Req A))
+    (S : Ω → Set (GameReg W n X Y Req A m)) : ℝ :=
+  ∑ ω, (E.μ ω).toReal * prob (S ω) (D.final E post ω)
+
+/-- The game as an oracle algorithm (`gameAlg`) whose accepting set on input `ω` is `S ω`. -/
+noncomputable def gameAlgOn {Ω : Type*} (E : Env Ω Req A X Y Q)
+    (post : (X → Y) → QState (DReg W n X Y Req A) ≃ₗᵢ[ℂ] QState (DReg W n X Y Req A))
+    (S : Ω → Set (GameReg W n X Y Req A m)) : OracleAlg Ω (GameReg W n X Y Req A m) m :=
+  { D.gameAlg E post Set.univ with accept := S }
+
+/-- **O2H over the whole run for a fresh secret, with a query budget, square-root form**: under
+the hypotheses of `advantage_acceptProb_le_of_fresh_secret_budget`, for any sets `S ω` of final
+basis states, which may depend on the whole tape, `|√P − √P'| ≤ 2 q √(n ε)` for the probabilities
+`P`, `P'` that the final states of the games against `E` and `E'` lie in `S ω`. The proof is
+`O2HSetting.o2h_sqrt_fresh_secret_of_count` for `gameAlgOn`. -/
+theorem abs_sqrt_eventProb_sub_le_of_fresh_secret_budget (bud : D.Budget q)
+    (E E' : Env (V × R) Req A X Y Q) (S : V × R → Set (GameReg W n X Y Req A m)) {μV : PMF V}
+    {ν : PMF R} {T : R → Set X} {ε : ℝ}
+    (hμ : ∀ v σ, E.μ (v, σ) = μV v * ν σ) (hμ' : E'.μ = E.μ)
+    (hans : ∀ ω rs req, E.answerAfter ω rs req = E'.answerAfter ω rs req)
+    (hdiff : ∀ ω rs, ∀ x ∉ T ω.2, E.oracleIn ω rs x = E'.oracleIn ω rs x)
+    (hfreshOracle : ∀ v σ σ' rs, E.oracleIn (v, σ) rs = E.oracleIn (v, σ') rs)
+    (hfreshAnswer : ∀ v σ σ' rs req, E.answerAfter (v, σ) rs req = E.answerAfter (v, σ') rs req)
+    (hε : ∀ x, (ν.toOuterMeasure {σ | x ∈ T σ}).toReal ≤ ε) :
+    |√(D.eventProb E noPost S) - √(D.eventProb E' noPost S)| ≤ 2 * q * √(n * ε) := by
+  classical
+  let M : Set (W × Req × Option A × LogReg Req m) := {w | D.kind w.1 = false}
+  let s : O2HSetting (V × R) (V × R) (W × Req × Option A × LogReg Req m) X Y :=
+    { μ := E.μ
+      S := fun ω w => if w ∈ M then T ω.2 else ∅
+      G := fun ω => E'.oracleFn D.kind ω
+      H := fun ω => E.oracleFn D.kind ω
+      z := id
+      agree := fun ω w x hx => by
+        simp only [Env.oracleFn, Env.oracle]
+        by_cases hk : D.kind w.1 = true
+        · simp [hk]
+        · have hw : w ∈ M := by simpa [M] using hk
+          simp only [hw, ite_true] at hx
+          simp only [hk, Bool.false_eq_true, ite_false]
+          exact (hdiff ω _ x hx).symm }
+  set Alg := D.gameAlgOn E noPost S
+  have hans' : ∀ ω (lg : LogReg Req m) k, E.answer ω lg k = E'.answer ω lg k := fun ω lg k => by
+    simp only [Env.answer, funext (hans ω (requestsBefore lg k))]
+  have hfin : ∀ ω (E'' : Env (V × R) Req A X Y Q),
+      (∀ (lg : LogReg Req m) k, E.answer ω lg k = E''.answer ω lg k) →
+      Alg.final (queryPermOf (E''.oracleFn D.kind ω)) ω = D.final E'' noPost ω := fun ω E'' h =>
+    D.final_gameAlg E noPost E'' Set.univ ω h
+  have hpL : s.pLeft Alg = D.eventProb E noPost S :=
+    sum_congr rfl fun ω _ => by
+      change _ * prob (S ω) (Alg.final _ ω) = _
+      rw [hfin ω E fun _ _ => rfl]
+  have hpR : s.pRight Alg = D.eventProb E' noPost S := by
+    change ∑ ω, (E.μ ω).toReal * _ = ∑ ω, (E'.μ ω).toReal * _
+    rw [hμ']
+    refine sum_congr rfl fun ω _ => ?_
+    change _ * prob (S ω) (Alg.final _ ω) = _
+    rw [hfin ω E' (hans' ω)]
+  have hcount : ∀ ω, Alg.StepCount ω (fun k => {r | r.1 ∈ {s | bud.Holds k s}})
+      (fun i => {r | r.1 ∈ {s : W × Req × Option A × LogReg Req m | queriedAt s.2.2.2 i = true}})
+      q := fun ω =>
+    have h := bud.stepCount_gameAlg noPost E Set.univ ω
+    ⟨h.init, h.stepG, h.stepC, h.stepCc, h.count⟩
+  have hMC : ∀ k < m, ∀ w ∈ M, w ∈ {s | bud.Holds k s} →
+      w ∈ {s : W × Req × Option A × LogReg Req m | queriedAt s.2.2.2 k = true} :=
+    fun k hk w hw hH => by
+      have h := hH.logged hk
+      rw [show D.kind w.1 = false from hw] at h
+      exact h
+  have hpre : ∀ v σ σ' i, mask {r : GameReg W n X Y Req A m | r.1 ∈ M}
+      (Alg.pre (queryPermOf (s.H (v, σ))) (s.z (v, σ)) i) =
+      mask {r : GameReg W n X Y Req A m | r.1 ∈ M}
+        (Alg.pre (queryPermOf (s.H (v, σ'))) (s.z (v, σ')) i) := by
+    intro v σ σ' i
+    have hH : s.H (v, σ) = s.H (v, σ') := by
+      funext w
+      simp only [s, Env.oracleFn, Env.oracle, hfreshOracle v σ σ']
+    rw [hH]
+    congr 1
+    refine Alg.pre_congr (z := (v, σ)) (z' := (v, σ')) _ rfl (fun k _ => ?_) i
+    exact gameStep_noPost_congr (fun lg k => by
+      simp only [Env.answer, funext (hfreshAnswer v σ σ' (requestsBefore lg k))]) k
+  rw [← hpL, ← hpR]
+  rcases isEmpty_or_nonempty X with hX | ⟨⟨x₀⟩⟩
+  · refine (s.o2h_sqrt_of_count _ _ _ q hcount fun ω k hk w hw x hx => isEmptyElim x).trans ?_
+    have hq : ∀ ω, queriedOf (n := n) (Y := Y) (s.S ω) = ∅ := fun ω => by
+      ext r
+      simp only [queriedOf, Set.mem_ofPred_eq, Set.mem_empty_iff_false, iff_false, not_exists]
+      exact fun i => isEmptyElim (r.2 i).1
+    have h0 : ∀ v : QState (GameReg W n X Y Req A m), prob ∅ v = 0 := fun v => by
+      have hm : mask (∅ : Set (GameReg W n X Y Req A m)) v = 0 := by
+        ext i
+        simp
+      rw [prob, hm, norm_zero, zero_pow two_ne_zero]
+    simp only [hq, h0, sum_const_zero, mul_zero, Real.sqrt_zero]
+    positivity
+  have hε0 : 0 ≤ ε := ENNReal.toReal_nonneg.trans (hε x₀)
+  exact s.o2h_sqrt_fresh_secret_of_count _ M _ _ q hμ (fun v σ w hw => by simp [s, hw])
     (fun v σ w hw => by simp [s, hw]) hpre hcount hMC hε0 hε
 
 end Distinguisher

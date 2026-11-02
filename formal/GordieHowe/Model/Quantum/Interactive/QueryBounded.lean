@@ -46,17 +46,17 @@ variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [Decida
 /-- **Every step of the adversary is a channel**: each of its Kraus maps is trace-preserving,
 `∑ r, (op r)ᴴ * op r = 1` (Unruh 2017 p. 10: every primitive of an oracle algorithm, a unitary
 gate, a computational-basis measurement, a partial trace or a fresh qubit, preserves the trace). -/
-def TracePreserving (A : AdaptiveIAlg X Y Req Resp O) : Prop :=
+def TracePreserving {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O) : Prop :=
   ∀ k, ∑ r, ((A.step k).op r)ᴴ * (A.step k).op r = 1
 
-theorem tracePreserving_iff (A : AdaptiveIAlg X Y Req Resp O) :
+theorem tracePreserving_iff {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O) :
     A.TracePreserving ↔ ∀ k, ∑ r, ((A.step k).op r)ᴴ * (A.step k).op r = 1 :=
   Iff.rfl
 
 /-- Whether the branch of a composed register has ended (its query counter is `ended`). -/
-def endedFlag (A : AdaptiveIAlg X Y Req Resp O) (C : Challenger X Y Req Resp)
+def endedFlag {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O) (C : Challenger X Y Req Resp)
     (v : A.toKindAlg.CW C) : Bool :=
-  decide (v.adv.workspace.2 = A.ended)
+  decide (v.adv.workspace.cnt = A.ended)
 
 variable [Nonempty X] [AddGroup Y] [Nonempty Y]
 
@@ -67,7 +67,7 @@ value of its counter) ends with probability `0`. So the branches of positive wei
 an over-budget query slot. The ended value also receives the weight the adversary's own Kraus maps
 lose; for a trace-preserving adversary there is none (`TracePreserving.haltOp_eq_zero`).
 Equivalently, the model's run (`compose`) never fails to terminate (`withinBudget_iff`). -/
-def WithinBudget (A : AdaptiveIAlg X Y Req Resp O) : Prop :=
+def WithinBudget {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O) : Prop :=
   ∀ (C : Challenger X Y Req Resp) (H : X → Y),
     (A.toTPKindAlg.composeBothOut C (A.endedFlag C)).outLaw H (some true) = 0
 
@@ -87,8 +87,10 @@ structure Quantum.QueryBoundedAdversary (X Y Req Resp O : Type) [Fintype X] [Fin
   Aux : Type
   /-- The distribution of the auxiliary input, independent of the oracle. -/
   aux : PMF Aux
+  /-- The shape of the algorithm on each value. -/
+  sh : Aux → AlgShape X Y Req Resp
   /-- The adversary run on each value of the auxiliary input. -/
-  alg : Aux → AdaptiveIAlg X Y Req Resp O
+  alg : (a : Aux) → AdaptiveIAlg (sh a) O
   /-- Every step is a channel. -/
   tracePreserving : ∀ a, (alg a).TracePreserving
   /-- No branch of positive weight asks for a query slot over the budget. -/

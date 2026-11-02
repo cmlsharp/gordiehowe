@@ -1,8 +1,11 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 
-// The ML-DSA-44 private ring's bench executable (mldsa_ring_native.h,
-// mldsa_ring_carrier.h): mldsa_ring_bench COMMAND [FLAG...].
+// The ML-DSA private ring's bench executable (mldsa_ring_native.h,
+// mldsa_ring_carrier.h): mldsa_ring_bench COMMAND [FLAG...]. serve, bench
+// and report take --param-set, the parameter set (mldsa_bench_flags.h:
+// config mldsa-ring-<arm> at ML-DSA-44, mldsa65-ring-<arm> or
+// mldsa87-ring-<arm>); export writes ML-DSA-44's plans.
 //   serve    a report_bench worker (bench_hook.h, bench/harness.h) of the
 //            arm --ring-arm at --ring-size members
 //   bench    the same records and --reps proofs without report_bench
@@ -17,6 +20,7 @@
 
 #include "bench/bench_hook.h"
 #include "bench/cli.h"
+#include "gordiehowe/examples/mldsa/mldsa_bench_flags.h"
 #include "gordiehowe/examples/rings/mldsa_ring_fixture.h"
 
 namespace proofs::gordiehowe::examples::mldsa {
@@ -26,19 +30,26 @@ namespace hook = examples::bench_hook;
 
 void add_ring_flags(bench::Flags &f, bool arm) {
   f.flag("ring-size", "256", "the ring's members");
-  if (arm) f.flag("ring-arm", "native", "the arm: native or carrier");
+  if (arm) {
+    f.flag("ring-arm", "native", "the arm: native or carrier");
+    add_param_set_flag(f);
+  }
 }
 
-// FN(arm, p) at the arm --ring-arm names, in the profile P.
+// FN(arm, p) at the arm --ring-arm and the parameter set --param-set name,
+// in the profile P.
 template <class P, class Fn>
 void with_arm(const bench::Flags &f, P p, Fn fn) {
   const std::string arm = f.str("ring-arm");
-  if (arm == "carrier")
-    fn(CarrierArm<P>{}, p);
-  else if (arm == "native")
-    fn(NativeArm<P>{}, p);
-  else
-    throw bench::UsageError("unknown ring arm " + arm);
+  with_param_set_flag(f, [&](auto s) {
+    using S = decltype(s);
+    if (arm == "carrier")
+      fn(CarrierArm<P, S>{}, p);
+    else if (arm == "native")
+      fn(NativeArm<P, S>{}, p);
+    else
+      throw bench::UsageError("unknown ring arm " + arm);
+  });
 }
 
 // The arm's system on a ring of --ring-size members (signer at R - 1),
@@ -48,10 +59,13 @@ void with_system(const bench::Flags &f, Fn fn) {
   const size_t R = f.num("ring-size");
   with_arm(f, P{}, [&](auto arm, auto) {
     using Arm = decltype(arm);
+    using S = typename Arm::S;
     typename Arm::E env;
-    const auto &ex = ml_dsa::GetMlDsa44BenchmarkExample();
-    const RingCase rc(ex, R, R - 1);
-    hook::Setup su{Arm::kConfig, P::kId, R};
+    const auto &ex = support::benchmark_example<S>();
+    const RingCase<S> rc(ex, R, R - 1);
+    hook::Setup su{Arm::kConfig.c_str(), P::kId, R};
+    // The ring split: mu_j reads the message (mldsa_ring.h's ring_rows).
+    su.ring_split = hook::RingSplit{{"ring.mu"}, {}};
     auto t0 = hook::Clock::now();
     typename Arm::T t(env, R, ex.msg.size(), ex.ctx.size());
     su.build = hook::ms_since(t0) - hook::relation_compile_ms(t);
@@ -104,11 +118,12 @@ int report(const bench::Flags &f) {
       std::printf("%s", r.c_str());
       for (const char *d : {"A", "H"}) {
         const auto s = domain_size(r, d);
-        std::printf("GH_MLRING_SIZE arm=%s profile=%s R=%zu domain=%s "
+        std::printf("GH_MLRING_SIZE arm=%s profile=%s set=%s R=%zu domain=%s "
                     "layers=%zu quad=%zu inputs=%zu public=%zu committed=%zu "
                     "nw=%zu nq=%zu affine=%zu\n",
-                    Arm::kName, P::kId, R, d, s.layers, s.quad, s.inputs,
-                    s.publics, s.committed, s.nw, s.nq, s.affine);
+                    Arm::kName, P::kId, Arm::S::kName, R, d, s.layers,
+                    s.quad, s.inputs, s.publics, s.committed, s.nw, s.nq,
+                    s.affine);
       }
       ok = fx.prove_verify();
     });
@@ -124,7 +139,7 @@ int main(int argc, char **argv) {
   namespace hook = proofs::gordiehowe::examples::bench_hook;
   using proofs::bench::Flags;
   return proofs::bench::run_commands(
-      argc, argv, "The ML-DSA-44 private ring's benches.",
+      argc, argv, "The ML-DSA private ring's benches.",
       {{"serve", "a report_bench worker",
         [](Flags &f) {
           hook::add_serve_flags(f);

@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Applications.MLDSA44.Native.ROMParams.Frontend.Algebra
+public import GordieHowe.Applications.MLDSA44.Native.Frontend.Algebra
 public import GordieHowe.Applications.MLDSA44.Native.QROMParams.Frontend.Shape
 
 @[expose] public section
@@ -31,9 +31,6 @@ instance : MldsaABase program where
 set_option maxRecDepth 8192 in
 /-- The native program at the QROM parameters has these facts. -/
 instance : MldsaACross program where
-  const6 := by decide +kernel
-  entries6 := by decide +kernel
-  field6 := by decide +kernel
   lt7 := by decide +kernel
   expr7 := rfl
   len63 := by decide +kernel

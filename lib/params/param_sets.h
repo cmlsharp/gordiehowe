@@ -86,6 +86,11 @@ struct MLDSAEmuArm {
 };
 
 constexpr uint64_t kFalconQ = 12289;
+// Falcon-512, the set PQ/Params.lean formalizes: the checks of Derived
+// below are its. The examples' parameter sets (Falcon-512 and Falcon-1024,
+// gordiehowe/examples/falcon/falcon_params.h) share FalconNativeArm and
+// FalconEmuArm; the gadgets and lowerings certify the conditions on them at
+// each set's n and beta^2 when a system is declared.
 constexpr size_t kFalconN = 512;
 // Falcon crosses c: 16 bits per coefficient.
 constexpr size_t kFalconBits = 16 * kFalconN;

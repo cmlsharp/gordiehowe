@@ -103,10 +103,10 @@ struct Fixture {
   }
 };
 
-template <class P>
-using CarrierFixture = Fixture<FalconRingCarrierSystem<P>, CarrierInstance>;
-template <class P>
-using NativeFixture = Fixture<FalconRingNativeSystem<P>, NativeInstance>;
+template <class P, class S = Falcon512>
+using CarrierFixture = Fixture<FalconRingCarrierSystem<P, S>, CarrierInstance>;
+template <class P, class S = Falcon512>
+using NativeFixture = Fixture<FalconRingNativeSystem<P, S>, NativeInstance>;
 
 }  // namespace
 }  // namespace proofs::gordiehowe::examples::falcon::ring

@@ -21,8 +21,9 @@ domains read:
 * **The realized assignment** (`GordieHowe.RealizedProgram.bindAsg`): a value bound to its digits
   reads its expression, from the committed values and constants (`reader_bindAsg_of_boundOk`,
   `GordieHowe.RealizedProgram.BoundOk`).
-* **The opaque functions' ranges** (`OpaqueRanges`): the value ranges the opaque values computed
-  from the statement meet (`reader_of_declared`, `ranges_reader`).
+* **The opaque functions' ranges** (`OpaqueRanges`) and the declared statement bounds: the value
+  ranges the opaque values computed from the statement meet, and the statement values a declared
+  bound covers (`reader_of_declared`, `ranges_reader`).
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -179,21 +180,51 @@ def OpaqueRanges (orng : List (ℕ × ℕ)) : Prop :=
 /-- **No opaque ranges hold.** -/
 theorem opaqueRanges_nil : ir.OpaqueRanges I [] := fun _ h => absurd h List.not_mem_nil
 
-/-- **A value with a declared bound is read from the statement.** -/
+/-- **A value read from the statement as given reads the statement** at any positive number of
+levels. -/
+theorem read_of_isStmtLeaf (e : ir.Env I) (n : ℕ) {u : ℕ} (h : isStmtLeaf (ir.value u).kind = true)
+    (j : ℕ) : ir.read e (n + 1) u j = e.stmt u j := by
+  unfold isStmtLeaf at h
+  split at h
+  · rename_i hk
+    simp [read, hk]
+  · rename_i name hk
+    simp [read, hk]
+  · cases h
+
+/-- **A value with a declared bound reads the statement values** (`stmtRead`): a value read from
+the statement as given reads it, and a value computed from such values reads its function at
+their readings. -/
 theorem reader_of_declared (e : ir.Env I) {vN : ℕ × ℕ} (h : vN ∈ ir.declaredRanges) :
-    ir.reader e vN.1 = e.stmt vN.1 := by
+    ir.reader e vN.1 = ir.stmtRead I e.stmt vN.1 := by
   unfold declaredRanges at h
-  obtain ⟨v, -, hv⟩ := List.mem_filterMap.1 h
+  obtain ⟨v, hvl, hv⟩ := List.mem_filterMap.1 h
   split_ifs at hv with hk
   obtain ⟨N, -, rfl⟩ := Option.map_eq_some_iff.1 hv
   funext i
-  unfold isStmtLeaf at hk
-  split at hk
-  · rename_i hk'
-    simp [reader, fuel, read, hk']
-  · rename_i name hk'
-    simp [reader, fuel, read, hk']
-  · cases hk
+  unfold isStmtValue at hk
+  rcases Bool.or_eq_true_iff.1 hk with hl | hc
+  · rw [stmtRead_of_isStmtLeaf _ hl]
+    unfold isStmtLeaf at hl
+    split at hl
+    · rename_i hk'
+      simp [reader, fuel, read, hk']
+    · rename_i name hk'
+      simp [reader, fuel, read, hk']
+    · cases hl
+  · unfold isStmtComputed at hc
+    split at hc
+    · rename_i name a as hk'
+      obtain ⟨m, hm⟩ : ∃ m, ir.values.length = m + 1 :=
+        ⟨ir.values.length - 1, by have := List.mem_range.1 hvl; omega⟩
+      have hargs : ((a :: as).map fun u j => (I (ir.valueField u)).toNat
+            (ir.read e ir.values.length u j)) =
+          (a :: as).map fun u j => (I (ir.valueField u)).toNat (e.stmt u j) := by
+        refine List.map_congr_left fun u hu => funext fun j => ?_
+        rw [hm, read_of_isStmtLeaf e m (List.all_eq_true.1 hc u hu)]
+      simp only [reader, fuel, read, hk', stmtRead, reduceCtorEq, ↓reduceIte]
+      rw [hargs]
+    · cases hc
 
 /-- **The value ranges hold at the reader** (`ShiftFacts.stmt` at `declaredRanges ++ orng`): at a
 statement within the declared bounds, every declared value's coordinates are casts of naturals

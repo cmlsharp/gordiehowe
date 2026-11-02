@@ -7,6 +7,7 @@ public import GordieHowe.Model.Quantum.Core.Model
 public import GordieHowe.Model.Quantum.Pure.QueryAlg
 public import GordieHowe.Model.Quantum.O2H.Mixed
 public import GordieHowe.Foundations.ToMathlib.PMFOption
+public import Mathlib.Analysis.CStarAlgebra.ContinuousFunctionalCalculus.Commute
 
 @[expose] public section
 
@@ -35,14 +36,19 @@ namespace KrausMap
 
 variable {R ι : Type*} [Fintype R] [Fintype ι] [DecidableEq ι] (K : KrausMap R ι ι)
 
-/-- **The halting operator** of a Kraus map: a matrix `B` with
-`Bᴴ * B = 1 - ∑ r, (op r)ᴴ * op r` (`haltOp_spec`), which exists since the right side is positive
-semidefinite. -/
+open scoped Matrix.Norms.L2Operator in
+/-- **The halting operator** of a Kraus map: the positive square root of the halting effect
+`1 - ∑ r, (op r)ᴴ * op r`; `Bᴴ * B` is the halting effect (`haltOp_spec`). -/
 noncomputable def haltOp : Matrix ι ι ℂ :=
-  (exists_eq_conjTranspose_mul_self (Matrix.le_iff.1 K.sum_le)).choose
+  CFC.sqrt (1 - ∑ r, (K.op r)ᴴ * K.op r)
 
-theorem haltOp_spec : 1 - ∑ r, (K.op r)ᴴ * K.op r = K.haltOpᴴ * K.haltOp :=
-  (exists_eq_conjTranspose_mul_self (Matrix.le_iff.1 K.sum_le)).choose_spec
+open scoped Matrix.Norms.L2Operator in
+theorem haltOp_spec : 1 - ∑ r, (K.op r)ᴴ * K.op r = K.haltOpᴴ * K.haltOp := by
+  have hP : (0 : Matrix ι ι ℂ) ≤ 1 - ∑ r, (K.op r)ᴴ * K.op r := sub_nonneg.2 K.sum_le
+  have hs : K.haltOpᴴ = K.haltOp :=
+    ((CFC.sqrt_nonneg (1 - ∑ r, (K.op r)ᴴ * K.op r)).isSelfAdjoint).star_eq
+  rw [hs]
+  exact (CFC.sqrt_mul_sqrt_self _ hP).symm
 
 variable {K} in
 /-- **The halting operator of a trace-preserving Kraus map is `0`.** -/
@@ -50,6 +56,76 @@ theorem haltOp_eq_zero (htp : ∑ r, (K.op r)ᴴ * K.op r = 1) : K.haltOp = 0 :=
   have h := K.haltOp_spec
   rw [htp, sub_self] at h
   exact Matrix.conjTranspose_mul_self_eq_zero.1 h.symm
+
+open scoped Matrix.Norms.L2Operator in
+/-- **The halting operator commutes with every matrix commuting with every `(op r)ᴴ * op r`.** -/
+theorem haltOp_commute {M : Matrix ι ι ℂ} (hM : ∀ r, Commute M ((K.op r)ᴴ * K.op r)) :
+    Commute M K.haltOp := by
+  have hP : Commute (1 - ∑ r, (K.op r)ᴴ * K.op r) M :=
+    ((Commute.one_left M).sub_left (Commute.sum_left _ _ _ fun r _ => (hM r).symm))
+  unfold haltOp
+  rw [CFC.sqrt_eq_cfc]
+  exact (Commute.cfc_nnreal hP _).symm
+
+/-- **`(op r)ᴴ * op r` keeps every basis permutation that the operators keep.** -/
+theorem conjTranspose_mul_perm {σ : Equiv.Perm ι} (h : ∀ r a b, K.op r (σ a) (σ b) = K.op r a b)
+    (r : R) (a b : ι) : ((K.op r)ᴴ * K.op r) (σ a) (σ b) = ((K.op r)ᴴ * K.op r) a b := by
+  simp only [Matrix.mul_apply, Matrix.conjTranspose_apply]
+  rw [← Equiv.sum_comp σ]
+  simp only [h]
+
+/-- **The halting operator keeps every basis permutation that the operators keep.** -/
+theorem haltOp_perm {σ : Equiv.Perm ι} (h : ∀ r a b, K.op r (σ a) (σ b) = K.op r a b)
+    (a b : ι) : K.haltOp (σ a) (σ b) = K.haltOp a b := by
+  set Pσ : Matrix ι ι ℂ := Matrix.of fun a b => if a = σ b then 1 else 0
+  have hl : ∀ (N : Matrix ι ι ℂ) a b, (Pσ * N) a b = N (σ.symm a) b := fun N a b => by
+    simp only [Pσ, Matrix.mul_apply, Matrix.of_apply]
+    rw [Finset.sum_eq_single (σ.symm a)]
+    · simp
+    · intro c _ hc
+      rw [if_neg (fun h' => hc (by rw [h']; simp)), zero_mul]
+    · simp
+  have hr : ∀ (N : Matrix ι ι ℂ) a b, (N * Pσ) a b = N a (σ b) := fun N a b => by
+    simp only [Pσ, Matrix.mul_apply, Matrix.of_apply]
+    rw [Finset.sum_eq_single (σ b)]
+    · simp
+    · intro c _ hc
+      rw [if_neg hc, mul_zero]
+    · simp
+  have hc : Commute Pσ K.haltOp := K.haltOp_commute fun r => by
+    ext a b
+    rw [hl, hr]
+    have := conjTranspose_mul_perm K h r (σ.symm a) b
+    rw [Equiv.apply_symm_apply] at this
+    exact this.symm
+  have := congrFun (congrFun hc.eq (σ a)) b
+  rw [hl, hr, Equiv.symm_apply_apply] at this
+  exact this.symm
+
+/-- **The halting operator keeps every register that the operators read**: if the nonzero entries
+of every operator have rows `a` and columns `b` with `f a = g b`, the nonzero entries of the halting
+operator have rows and columns with equal `g`. -/
+theorem haltOp_keeps {V : Type*} [DecidableEq V] {f g : ι → V}
+    (h : ∀ r a b, K.op r a b ≠ 0 → f a = g b) {a b : ι} (hab : K.haltOp a b ≠ 0) : g a = g b := by
+  set Dv : Matrix ι ι ℂ := Matrix.diagonal fun c => if g c = g b then 1 else 0
+  have hc : Commute Dv K.haltOp := K.haltOp_commute fun r => by
+    ext c d
+    simp only [Dv, Matrix.diagonal_mul, Matrix.mul_diagonal]
+    by_cases hz : ((K.op r)ᴴ * K.op r) c d = 0
+    · rw [hz, mul_zero, zero_mul]
+    · have hcd : g c = g d := by
+        obtain ⟨e, -, he⟩ := Finset.exists_ne_zero_of_sum_ne_zero (by
+          rwa [Matrix.mul_apply] at hz)
+        have h1 : K.op r e c ≠ 0 := fun h0 => he (by
+          rw [Matrix.conjTranspose_apply, h0, star_zero, zero_mul])
+        have h2 : K.op r e d ≠ 0 := fun h0 => he (by rw [h0, mul_zero])
+        exact (h r e c h1).symm.trans (h r e d h2)
+      rw [hcd, mul_comm]
+  have := congrFun (congrFun hc.eq a) b
+  simp only [Dv, Matrix.diagonal_mul, Matrix.mul_diagonal, if_true, mul_one] at this
+  by_contra hne
+  rw [if_neg hne, zero_mul] at this
+  exact hab this.symm
 
 /-- The operators of the completion on `ι × Bool`: `K.op r ⊗ |false⟩⟨false|`, the halting step
 `B ⊗ |true⟩⟨false|`, and `1 ⊗ |true⟩⟨true|` on halted states. -/

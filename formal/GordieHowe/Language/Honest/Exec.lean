@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.Honest.Packed
+public import GordieHoweNative.Language.Honest.Exec
 
 @[expose] public section
 
@@ -28,6 +29,9 @@ strategy from it once for all programs.
   the committed coordinates and at the coordinates of the values bound to their digits, the late
   values at the late values' coordinates, the challenges, and no pads; a value bound to its digits
   reads its own value, as in `P₀`.
+
+The definitions are in `GordieHoweNative/Language/Honest/Exec.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -41,11 +45,6 @@ def Kind.isKpriv : Kind → Bool
   | .priv => true
   | .late => true
   | .bound _ => true
-  | _ => false
-
-/-- Whether a kind is a message. -/
-def Kind.isMessage : Kind → Bool
-  | .message _ => true
   | _ => false
 
 section
@@ -413,13 +412,6 @@ def lookupDigitNat (rd : ir.Valuation I) (o : LookupDigit) (i : ℕ) : ℕ :=
         r.base ^ o.idx % r.base
   | _ => 0
 
-variable (ir) in
-/-- **An expression through a top shared expression**: `.ref k` the shared expression `k`, any other
-expression itself. -/
-def unref : Expr → Expr
-  | .ref k => if k < ir.exprs.length then ir.expr k else .ref k
-  | e => e
-
 /-- **An expression through a top shared expression reads alike** (`unref`, `evalE_ref`). -/
 theorem evalE_unref (hwf : ir.WellFormed) (rd : ir.Valuation I) (f : ℕ) (e : Expr) (i : ℕ) :
     ir.evalE rd f (ir.unref e) i = ir.evalE rd f e i := by
@@ -445,37 +437,6 @@ structure CommDigit where
   /-- The position among the lookup's digits. -/
   k : ℕ
   deriving DecidableEq
-
-variable (ir) in
-/-- **The source `mod_q`s in the committed-digits form**, by index. -/
-def srcCommMods : List ℕ :=
-  (List.range ir.predicates.length).filter fun m =>
-    ir.inSource (ir.predicateT m) &&
-      match (ir.predicateT m).body with
-      | .mod _ _ _ _ real => real.form == .committedDigits
-      | _ => false
-
-variable (ir) in
-/-- **The source committed-digits `mod_q` `m` listing `rec` among its digits**, and the digit's
-position (`commRecOf?`'s step, through the predicates' table `pr`). -/
-def commRecStep (pr : ℕ → Predicate) (rec : Expr) (m : ℕ) : Option (ℕ × ℕ) :=
-  if ir.inSource (pr m) = true then
-    match (pr m).body with
-    | .mod _ _ _ _ real =>
-      if real.form = .committedDigits then
-        (real.digits.findIdx? fun D => D.beq rec).map fun j => (m, j)
-      else none
-    | _ => none
-  else none
-
-variable (ir) in
-/-- **The quotient digit the record of predicate `lk` is**, searched among the
-source committed-digits `mod_q`s (`srcCommMods`) through the predicates' table. -/
-def commRecOf? (lk : ℕ) : Option (ℕ × ℕ) :=
-  match (ir.predicateT lk).body with
-  | .mem _ [rec] (.range _) (.lookup r) =>
-    if r.kind = .digits then ir.srcCommMods.findSome? (ir.commRecStep ir.predicateT rec) else none
-  | _ => none
 
 /-- **The honest quotient of the committed-digits `mod_q` `m`** at coordinate `i` at the reader
 `rd`: `(e − e') / q − qlo` over the sides' integer readings, as a natural. -/
@@ -552,14 +513,6 @@ theorem rowCountNat_nil (rd : ir.Valuation I) (t : ℕ) (j : Fin (ir.tableSize t
     ir.rowCountNat rd t [] j = 0 := by
   unfold rowCountNat
   split <;> simp
-
-variable (ir) in
-/-- **The members a static histogram counts** in group `g` of table `t`: with a late histogram
-beside it, the members reading no late value (the late histogram counts the others); otherwise all
-the group's members. -/
-def staticMembers (t g : ℕ) : List Member :=
-  if (ir.groupOf t g).lateMult.isSome then (ir.members t g).filter fun m => !ir.memberReadsLate m
-  else ir.members t g
 
 /-- **The honest count of row `j` of a table packed at a value** (`gammaPack?`, its powers' value
 `P`, `A` columns of `b`) over the members `ms`, read by `rd` in the field of the table's challenge:
@@ -753,71 +706,7 @@ structure DigitsRead (rd : ir.Valuation I) (d : ℕ) (rec : Expr) (N : ℕ) (r :
       (((N - 1 - (I (ir.domainField d)).toNat (ir.evalWith rd d rec i)) / r.base ^ j %
         r.base : ℕ) : _)
 
-/-! ## Values bound to their digits -/
-
-variable (ir) in
-/-- **Value `v` is the record of the `in` predicate `pid`, bound to its digits**, as a check: a
-two-sided or digit lookup with one record and a range whose record is `v` or `v + c`, `v` bound to
-its digits (`boundDigitsOk`), and `c` a constant of at most `v`'s size with entries below the
-characteristic. -/
-def boundRecAtB (v pid : ℕ) : Bool :=
-  match (ir.predicate pid).body with
-  | .mem d [rec] (.range _) (.lookup r) =>
-    (r.kind == .twoSided || r.kind == .digits) && (ir.commRecOf? pid).isNone &&
-      ir.boundDigitsOk d rec r &&
-      match rec with
-      | .leaf u => u == v
-      | .add (.leaf u) (.leaf c) =>
-        u == v && match (ir.value c).kind with
-          | .constant es => decide (es.length ≤ (ir.value v).size) &&
-              es.all (· < ir.charOf (ir.valueField c))
-          | _ => false
-      | _ => false
-  | _ => false
-
-variable (ir) in
-/-- **Value `v` is the record of a two-sided or digit lookup, bound to its digits**, as a check. -/
-def boundRecB (v : ℕ) : Bool := (List.range ir.predicates.length).any (ir.boundRecAtB v)
-
-/-- **The lookup whose record a value bound to its digits is**: its body, the record `v` or `v + c`
-with the constant `c`, and the record bound to the digits. -/
-theorem exists_of_boundRecB {v : ℕ} (h : ir.boundRecB v = true) :
-    ∃ pid < ir.predicates.length, ∃ d rec N r,
-      (ir.predicate pid).body = .mem d [rec] (.range N) (.lookup r) ∧
-        (r.kind = .twoSided ∨ r.kind = .digits) ∧ ir.commRecOf? pid = none ∧
-          ir.boundDigitsOk d rec r = true ∧
-        (rec = .leaf v ∨ ∃ c es, rec = .add (.leaf v) (.leaf c) ∧
-          (ir.value c).kind = .constant es ∧ es.length ≤ (ir.value v).size ∧
-            ∀ k ∈ es, k < ir.charOf (ir.valueField c)) := by
-  obtain ⟨pid, hpid, h⟩ := List.any_eq_true.1 h
-  rw [List.mem_range] at hpid
-  unfold boundRecAtB at h
-  split at h
-  · rename_i d rec N r hb
-    simp only [Bool.and_eq_true, Bool.or_eq_true, beq_iff_eq] at h
-    obtain ⟨⟨⟨hk, hnc⟩, hbd⟩, hr⟩ := h
-    refine ⟨pid, hpid, d, rec, N, r, hb, hk, Option.isNone_iff_eq_none.1 hnc, hbd, ?_⟩
-    split at hr
-    · rename_i u
-      simp only [beq_iff_eq] at hr
-      exact .inl (by rw [hr])
-    · rename_i u c
-      simp only [Bool.and_eq_true, beq_iff_eq] at hr
-      obtain ⟨rfl, hc⟩ := hr
-      split at hc
-      · rename_i es hk'
-        simp only [Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at hc
-        exact .inr ⟨c, es, rfl, hk', hc.1, hc.2⟩
-      · cases hc
-    · cases hr
-  · cases h
-
 /-! ## The program facts of the honest strategy from an execution -/
-
-/-- Whether a kind is a pad copy. -/
-def _root_.GordieHowe.RealizedProgram.Kind.isPadCopy : Kind → Bool
-  | .padCopy _ _ => true
-  | _ => false
 
 /-- **A static histogram counts its members' needles** (`staticHistNeedles`, `staticMembers`). -/
 theorem staticHistNeedles_eq (rd : ir.Valuation I) (f t g : ℕ) :
@@ -831,46 +720,6 @@ theorem flatMap_memberVals_congr {rd rd' : ir.Valuation I} {f : ℕ} {ms : List 
     ms.flatMap (ir.memberVals rd f) = ms.flatMap (ir.memberVals rd' f) := by
   refine List.flatMap_congr fun m hm => ?_
   simp only [memberVals, evalE_congr (f := f) (h m hm)]
-
-variable (ir) in
-/-- **The values the honest static histogram reads of member `m`'s needle** in table `t`: for a
-table packed at a value, its records' expression (`memberBase?`); otherwise the needle's values. -/
-def histNodes (t : ℕ) (m : Member) : List ℕ :=
-  match ir.gammaPack? t with
-  | some (P, A, _) =>
-    match ir.memberBase? P A m with
-    | some b => ir.exprNodes b
-    | none => ir.exprNodes (ir.needleExpr m.pred m.needle)
-  | none => ir.exprNodes (ir.needleExpr m.pred m.needle)
-
-variable (ir) in
-/-- **The values the honest static histogram reads of table `t`'s rows**: for a table packed at a
-value, its records' expression's values; otherwise the rows' (`tableRowReads`). -/
-def histRowNodes (t : ℕ) : List ℕ :=
-  match ir.gammaPack? t with
-  | some (_, _, b) => ir.exprNodes b
-  | none => ir.tableRowReads t
-
-variable (ir) in
-/-- **Member `m`'s needle is packed at the value `P` with `A` columns**, as a check
-(`memberBase?`): its coordinates within the needle's length, its records' expression reading only
-source values. -/
-def packMemberB (P A : ℕ) (m : Member) : Bool :=
-  match ir.memberBase? P A m with
-  | some b => decide (m.first + m.count ≤ ir.exprLen (ir.needleExpr m.pred m.needle)) &&
-      (ir.exprNodes b).all fun w => decide (ir.IsSourceValue w)
-  | none => false
-
-variable (ir) in
-/-- **The static members of group `g` of a table packed at a value are packed alike**, as a check:
-the powers' value and the rows' records read only source values, and every member it counts is
-packed at the table's value and arity (`packMemberB`); a table packed at no value passes. -/
-def packGroupB (t g : ℕ) : Bool :=
-  match ir.gammaPack? t with
-  | some (P, A, b) => decide (ir.IsSourceValue P) &&
-      (ir.exprNodes b).all (fun w => decide (ir.IsSourceValue w)) &&
-      (ir.staticMembers t g).all (ir.packMemberB P A)
-  | none => true
 
 /-- **The static histogram depends only on the values it reads** (`histNodes`, `histRowNodes`). -/
 theorem staticHistNat_congr {rd rd' : ir.Valuation I} {t g : ℕ}
@@ -1033,80 +882,35 @@ theorem realTypes_of_natTypedIn {L : List (ℕ × String)} (hL : OneNodes I L)
   obtain ⟨hp, ht⟩ := h v hv hts hl hs
   exact ⟨hp, natTyped_of_natTypedInB hL ht⟩
 
-variable (ir primeNodes) in
-/-- **The values' intervals the honest checks read**: `leafIvl` at the declared statement bounds, one
-choice of justified intervals (`leafIvl_justified`). -/
-abbrev srcLeafIvl : ℕ → ℕ → Option Ivl := fun f v => ir.leafIvl primeNodes f v ir.declaredRanges
-
-variable (ir L) in
-/-- **The interval of an expression in field `f` from the source values' intervals** (`ivlOf` at the
-values' intervals `L` restricted to the source values of the program). -/
-def srcIvl (f : ℕ) (e : Expr) : Option Ivl :=
-  ir.ivlOf (ir.charOf f) (fun v => if v < ir.values.length ∧ ir.IsSourceValue v then
-    L f v else none) e
-
-variable (ir L) in
-/-- **Predicate `rid` is the quotient's `in` of the one-digit `mod_q` `m`, whose honest quotient
-lies in its range**, as a check: `m` is a source `mod_q` in the one-digit form with `q > 0` and
-`p > 2`, its quotient derived from the sides (`quotDerivedB`), `rid` its quotient's direct `in`
-`Q ∈ [0, N)` (`quotRangeB`), and by the sides' intervals from the source values (`srcIvl`,
-`[l, h]` and `[l', h']`) the honest quotient `(e − e')/q − qlo` lies in `[0, N)`:
-`h' − l + q · qlo < q` and `(h − l')/q − qlo < N`. -/
-def oneDigitQuotAtB (m rid : ℕ) : Bool :=
-  match (ir.predicate m).body with
-  | .mod d q e e' real =>
-    ir.inSource (ir.predicate m) && real.form == .oneDigit && decide (0 < q) &&
-      decide (2 < ir.charOf (ir.domainField d)) && ir.quotDerivedB d q e e' real &&
-      ir.quotRangeB d q e real rid &&
-      match ir.srcIvl L (ir.domainField d) e, ir.srcIvl L (ir.domainField d) e',
-        (ir.predicate rid).body with
-      | some J, some J', .mem _ [_] (.range N) _ =>
-        decide (J'.hi - J.lo + q * real.quotientLo < q) &&
-          decide ((J.hi - J'.lo) / q - real.quotientLo < N)
-      | _, _, _ => false
-  | _ => false
-
-variable (ir) in
-/-- **Predicate `q` is the Boolean check of a pad copy**, as a check: `v · v = v` in a domain of
-`v`'s field, `v` a pad copy that is a committed cell of its domain. -/
-def padCopyBoolB (q : ℕ) : Bool :=
-  match (ir.predicate q).body with
-  | .equal d (.mul (.leaf a) (.leaf b)) (.leaf v) _ =>
-    a == v && b == v && (ir.value v).kind.isPadCopy && decide (v < ir.values.length) &&
-      decide ((ir.value v).domain < ir.domains.length) &&
-      ir.isCellValue (ir.value v).domain v && decide (ir.domainField d = ir.valueField v)
-  | _ => false
-
-variable (ir) in
-/-- **Predicate `q` is the field equation of a source `mod_q` in the field form**, as a check: the
-row `e + (p − 1) e' = 0` of a source `mod_q` of sides `e`, `e'` whose realization has the field
-form (`fieldRowB`). -/
-def fieldRowRealB (q : ℕ) : Bool :=
-  (ir.predicates.filter fun p => ir.inSource p &&
-      match p.body with
-      | .mod _ _ _ _ real => real.form == .field
-      | _ => false).any fun p => ir.inSource p &&
-    match p.body with
-    | .mod d _ a b real => real.form == .field && ir.fieldRowB d a b (ir.predicateT q).body
-    | _ => false
-
-theorem fieldRowRealB_eq (q : ℕ) : ir.fieldRowRealB q = ir.predicates.any fun p => ir.inSource p &&
-    match p.body with
-    | .mod d _ a b real => real.form == .field && ir.fieldRowB d a b (ir.predicate q).body
-    | _ => false := by
-  unfold fieldRowRealB
-  rw [predicateT_eq, any_filter_eq]
-  intro p _ hp
-  cases hs : ir.inSource p
-  · rfl
-  · rw [hs, Bool.true_and] at hp
-    simp only [Bool.true_and]
-    split
+/-- **What `fieldRowRealB` checks**: the owner of `q` is a source field-form `mod_q` whose row `q`
+is. -/
+theorem fieldRowRealB_spec {q : ℕ} (h : ir.fieldRowRealB q = true) :
+    ∃ m < ir.predicates.length, ir.inSource (ir.predicate m) = true ∧ ∃ d q' a b real,
+      (ir.predicate m).body = .mod d q' a b real ∧ real.form = .field ∧
+        ir.fieldRowB d a b (ir.predicate q).body = true := by
+  unfold fieldRowRealB at h
+  simp only [predicateT_eq] at h
+  split at h
+  · rename_i m _
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+    obtain ⟨⟨hm, hs⟩, h⟩ := h
+    refine ⟨m, hm, hs, ?_⟩
+    split at h
     · rename_i d q' a b real hb
-      rw [hb] at hp
-      simp only [beq_eq_false_iff_ne] at hp
-      simp [hp]
-    · rfl
+      simp only [Bool.and_eq_true, beq_iff_eq] at h
+      exact ⟨d, q', a, b, real, hb, h.1, h.2⟩
+    · cases h
+  · cases h
+
+/-- **The row at a checked structure pointer of a source field-form `mod_q` passes
+`fieldRowRealB`.** -/
+theorem fieldRowRealB_of_fieldRowAtB {m r : ℕ} (hm : m < ir.predicates.length)
+    (hs : ir.inSource (ir.predicate m) = true) (h : ir.fieldRowAtB m r = true) :
+    ir.fieldRowRealB r = true := by
+  obtain ⟨-, hrole, hb⟩ := ir.fieldRowAtB_iff.1 h
+  unfold fieldRowRealB
+  simp only [predicateT_eq, hrole, Bool.and_eq_true, decide_eq_true_eq]
+  exact ⟨⟨hm, hs⟩, hb⟩
 
 /-- **A field `equal` row `e + (p − 1) e' = 0` holds exactly where `e = e'`** in the field
 (`fieldRowB`): its right side is a constant `0` and `p − 1` is `−1`. -/
@@ -1162,47 +966,34 @@ theorem holdsAt_fieldRow_iff (hwf : ir.WellFormed) (hI : I.Registered ir)
 theorem holds_fieldRow (hwf : ir.WellFormed) (hI : I.Registered ir) (hL : I.Lawful ir primeNodes)
     {e : ir.Env I} (hE : ir.FieldEqsAt I e) {q : ℕ} (h : ir.fieldRowRealB q = true) :
     ir.HoldsAt e (ir.predicate q).body := by
-  rw [fieldRowRealB_eq] at h
-  obtain ⟨p, hp, hpq⟩ := List.any_eq_true.1 h
-  simp only [Bool.and_eq_true] at hpq
-  obtain ⟨hsrc, hpq⟩ := hpq
-  split at hpq
-  · rename_i d q' a b real hb
-    simp only [Bool.and_eq_true, beq_iff_eq] at hpq
-    exact (holdsAt_fieldRow_iff hwf hI hL e hpq.2).2 (hE p hp hsrc d q' a b real hb hpq.1)
-  · cases hpq
+  obtain ⟨m, hm, hsrc, d, q', a, b, real, hb, hf, hrow⟩ := ir.fieldRowRealB_spec h
+  exact (holdsAt_fieldRow_iff hwf hI hL e hrow).2
+    (hE _ (predicate_mem hm) hsrc d q' a b real hb hf)
 
 variable (ir) in
-/-- **Every source `mod_q` in the field form has its field equation as a row of the program**, as
-a check (`fieldRowB`; the realization's `FieldFormOk.row`). -/
-def fieldRowsB : Bool :=
-  ir.predicates.all fun p => !ir.inSource p ||
-    match p.body with
-    | .mod d _ a b real => !(real.form == .field) || ir.predicates.any fun r => ir.fieldRowB d a b r.body
-    | _ => true
+/-- **`fieldRowsE` as a `Bool`.** -/
+def fieldRowsB (S : Structure) : Bool := Twin.okB (ir.fieldRowsE S)
 
 /-- **The source field-form `mod_q`s hold as their field equations where their rows hold**
 (`fieldRowsB`, `holdsAt_fieldRow_iff`). -/
 theorem fieldEqsAt_of_rows (hwf : ir.WellFormed) (hI : I.Registered ir)
-    (hL : I.Lawful ir primeNodes) (hB : ir.fieldRowsB = true) {e : ir.Env I}
+    (hL : I.Lawful ir primeNodes) {S : Structure} (hB : ir.fieldRowsB S = true) {e : ir.Env I}
     (hH : ∀ r < ir.predicates.length, ir.fieldRowRealB r = true → ir.HoldsAt e (ir.predicate r).body) :
     ir.FieldEqsAt I e := by
   intro p hp hsrc d q a b real hb hform
-  have hp' := List.all_eq_true.1 hB p hp
-  rw [hsrc, hb] at hp'
-  simp only [Bool.not_true, Bool.false_or, hform, beq_self_eq_true] at hp'
-  obtain ⟨r, hr, hrow⟩ := List.any_eq_true.1 hp'
-  obtain ⟨k, hk, rfl⟩ := exists_index_of_mem hr
-  have hreal : ir.fieldRowRealB k = true := by
-    rw [fieldRowRealB_eq]
-    exact List.any_eq_true.2 ⟨p, hp, by rw [hsrc, hb]; simp [hform, hrow]⟩
-  exact (holdsAt_fieldRow_iff hwf hI hL e hrow).1 (hH k hk hreal)
-
-/-- **The value a quadratic root equation is on** (`quadRootView`'s `v₁`), read off the equation. -/
-def quadVar? (pr : Predicate) : Option ℕ :=
-  match pr.body with
-  | .equal _ (.mul (.add (.leaf _) (.scale (.const _) (.leaf v₁))) _) (.leaf _) _ => some v₁
-  | _ => none
+  obtain ⟨m, hm, rfl⟩ := exists_index_of_mem hp
+  have hm' := okB_of_okB_allE hB m hm
+  have hpm : ir.predicates[m] = ir.predicate m := by
+    rw [predicate_eq_getD,
+        List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hm, Option.getD_some]
+  rw [hpm, Nat.zero_add] at hm'
+  simp only [hsrc, hb, hform, beq_self_eq_true, Bool.and_self, ↓reduceIte] at hm'
+  obtain ⟨r, hr⟩ := ir.exists_fieldRowAtB_of_ptr hm'
+  obtain ⟨hrl, -, hrb⟩ := ir.fieldRowAtB_iff.1 hr
+  rw [hb] at hrb
+  simp only [Bool.and_eq_true] at hrb
+  exact (holdsAt_fieldRow_iff hwf hI hL e hrb.2).1
+    (hH r hrl (ir.fieldRowRealB_of_fieldRowAtB hm hsrc hr))
 
 theorem quadVar?_of_quadRootView {v : ℕ} {pr : Predicate}
     (h : (ir.quadRootView v pr).isSome = true) : quadVar? pr = some v := by
@@ -1216,14 +1007,6 @@ theorem quadVar?_of_quadRootView {v : ℕ} {pr : Predicate}
       · simp at h
     · simp at h
   · simp at h
-
-variable (ir) in
-/-- **The value a root-set equation is on** (`rootSetView`'s first reading of the root product),
-read off the equation. -/
-def rootSetVar? (pr : Predicate) : Option ℕ :=
-  match pr.body with
-  | .equal d lhs (.leaf _) _ => (ir.rootsAt (ir.domainField d) rootFuel ir.exprs.length 0 lhs).map (·.1)
-  | _ => none
 
 theorem rootSetVar?_of_rootSetView {v : ℕ} {pr : Predicate}
     (h : (ir.rootSetView v pr).isSome = true) : ir.rootSetVar? pr = some v := by
@@ -1245,110 +1028,22 @@ theorem mem_rootVars {v : ℕ} {pr : Predicate} (h : ir.rootEqB v pr = true) :
   · simp [quadVar?_of_quadRootView (ir := ir) h]
   · simp [rootSetVar?_of_rootSetView (ir := ir) h]
 
-variable (ir) in
-/-- **The values whose type predicate is each predicate**: key `q` holds the values `v` with
-`typeSource = .pred q`. -/
-def typePredTab : NatTrie (List ℕ) :=
-  ir.values.zipIdx.foldl (fun t xv =>
-    match xv.1.typeSource with
-    | .pred q => t.set q (xv.2 :: t.getD q [])
-    | _ => t) .nil
-
-theorem mem_foldl_typePred : ∀ (L : List (Value × ℕ)) (t : NatTrie (List ℕ)) (q v : ℕ),
-    v ∈ (L.foldl (fun t xv =>
-      match xv.1.typeSource with
-      | .pred q => t.set q (xv.2 :: t.getD q [])
-      | _ => t) t).getD q [] ↔
-      v ∈ t.getD q [] ∨ ∃ x, (x, v) ∈ L ∧ x.typeSource = .pred q
-  | [], t, q, v => by simp
-  | (x, w) :: L, t, q, v => by
-    rw [List.foldl_cons, mem_foldl_typePred L]
-    cases hx : x.typeSource with
-    | pred q' =>
-      simp only [hx, NatTrie.getD_set]
-      by_cases hq : q = q'
-      · subst hq
-        simp only [if_true, List.mem_cons, List.mem_cons, Prod.mk.injEq]
-        constructor
-        · rintro ((rfl | h) | ⟨y, hy, hy'⟩)
-          · exact .inr ⟨x, .inl ⟨rfl, rfl⟩, hx⟩
-          · exact .inl h
-          · exact .inr ⟨y, .inr hy, hy'⟩
-        · rintro (h | ⟨y, (⟨rfl, rfl⟩ | hy), hy'⟩)
-          · exact .inl (.inr h)
-          · exact .inl (.inl rfl)
-          · exact .inr ⟨y, hy, hy'⟩
-      · simp only [hq, if_false, List.mem_cons, Prod.mk.injEq]
-        constructor
-        · rintro (h | ⟨y, hy, hy'⟩)
-          · exact .inl h
-          · exact .inr ⟨y, .inr hy, hy'⟩
-        · rintro (h | ⟨y, (⟨rfl, rfl⟩ | hy), hy'⟩)
-          · exact .inl h
-          · rw [hx] at hy'
-            cases hy'
-            exact absurd rfl hq
-          · exact .inr ⟨y, hy, hy'⟩
-    | node =>
-      simp only [hx, List.mem_cons, Prod.mk.injEq]
-      constructor
-      · rintro (h | ⟨y, hy, hy'⟩)
-        · exact .inl h
-        · exact .inr ⟨y, .inr hy, hy'⟩
-      · rintro (h | ⟨y, (⟨rfl, rfl⟩ | hy), hy'⟩)
-        · exact .inl h
-        · rw [hx] at hy'
-          cases hy'
-        · exact .inr ⟨y, hy, hy'⟩
-    | none =>
-      simp only [hx, List.mem_cons, Prod.mk.injEq]
-      constructor
-      · rintro (h | ⟨y, hy, hy'⟩)
-        · exact .inl h
-        · exact .inr ⟨y, .inr hy, hy'⟩
-      · rintro (h | ⟨y, (⟨rfl, rfl⟩ | hy), hy'⟩)
-        · exact .inl h
-        · rw [hx] at hy'
-          cases hy'
-        · exact .inr ⟨y, hy, hy'⟩
-
-/-- **A value whose type predicate is `q`** is listed at key `q` of `typePredTab`. -/
-theorem mem_typePredTab {v q : ℕ} (hv : v < ir.values.length)
-    (h : (ir.value v).typeSource = .pred q) : v ∈ ir.typePredTab.getD q [] := by
-  unfold typePredTab
-  rw [mem_foldl_typePred]
-  refine .inr ⟨ir.value v, ?_, h⟩
-  rw [List.mem_zipIdx_iff_getElem?]
-  simp only [Nat.sub_zero]
-  rw [value, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hv]
-  rfl
-
-variable (ir) in
-/-- **The predicates the source values' intervals read are source predicates**, at predicate `q`,
-as a check: a source predicate; or a direct, digit or two-sided `in` on no source value or on no
-source value plus a value; or a field `equal` that is the type predicate or a root equation
-(`rootEqB`) of no source value. -/
-def ivlSourceB (q : ℕ) : Bool :=
-  ir.inSource (ir.predicateT q) ||
-    match (ir.predicateT q).body with
-    | .mem _ [rec] _ (.lookup r) =>
-      !(r.kind == .direct || r.kind == .digits || r.kind == .twoSided) ||
-        match rec with
-        | .leaf v => !decide (ir.IsSourceValue v)
-        | .add (.leaf v) (.leaf _) => !decide (ir.IsSourceValue v)
-        | _ => true
-    | .equal .. =>
-      ((quadVar? (ir.predicateT q)).toList ++ (ir.rootSetVar? (ir.predicateT q)).toList ++
-          ir.typePredTab.getD q []).all fun v =>
-        !(decide (v < ir.values.length) && decide (ir.IsSourceValue v) &&
-          (ir.rootEqB v (ir.predicateT q) || (ir.value v).typeSource == .pred q))
-    | _ => true
+/-- **The type roles of a sweep of `typeRoleV`**: every value's type predicate names it. -/
+theorem typeRoles_of_typeRoleV (h : allIdx ir.typeRoleV ir.values 0 = true) :
+    ∀ v < ir.values.length, ∀ q, (ir.value v).typeSource = .pred q →
+      (ir.predicate q).role = .type v := by
+  intro v hv q hq
+  have := (allIdx_values_iff ir _).1 h v hv
+  simp only [typeRoleV, typeRoleVE, hq, Twin.okB_seqE, Twin.okB_guardE, Bool.and_eq_true,
+    decide_eq_true_eq, beq_iff_eq, predicateT_eq] at this
+  exact this.2
 
 /-- **A field `equal` that is the type predicate or a root equation of a source value is a source
-predicate** (`ivlSourceB`). -/
+predicate** (`ivlSourceB`), where a type predicate's role names its value (`hrole`). -/
 theorem inSource_of_ivlSourceB_equal {q v : ℕ} (h : ir.ivlSourceB q = true)
     (he : (ir.predicate q).body.isEqual = true) (hv : v < ir.values.length)
     (hsrc : ir.IsSourceValue v)
+    (hrole : (ir.value v).typeSource = .pred q → (ir.predicate q).role = .type v)
     (hr : ir.rootEqB v (ir.predicate q) = true ∨ (ir.value v).typeSource = .pred q) :
     ir.inSource (ir.predicate q) = true := by
   unfold ivlSourceB at h
@@ -1361,10 +1056,10 @@ theorem inSource_of_ivlSourceB_equal {q v : ℕ} (h : ir.ivlSourceB q = true)
     cases (ir.predicate q).body <;> simp [PredBody.isEqual]
   rw [hb] at h
   have hmem : v ∈ (quadVar? (ir.predicate q)).toList ++ (ir.rootSetVar? (ir.predicate q)).toList ++
-      ir.typePredTab.getD q [] := by
+      (typeVar? (ir.predicate q)).toList := by
     rcases hr with hr | hr
     · exact List.mem_append_left _ (mem_rootVars hr)
-    · exact List.mem_append_right _ (mem_typePredTab hv hr)
+    · exact List.mem_append_right _ (by simp [typeVar?, hrole hr])
   have := List.all_eq_true.1 h v hmem
   rcases hr with hr | hr <;> simp [hsrc, hr, hv] at this
 

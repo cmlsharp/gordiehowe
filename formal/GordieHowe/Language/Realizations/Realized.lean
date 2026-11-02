@@ -6,6 +6,8 @@ module
 public import GordieHowe.Language.RealizedProgram.Protocol
 public import GordieHowe.Language.Realizations.MAC
 public import GordieHowe.Language.Realizations.CommittedLookup
+public import GordieHowe.Language.Realizations.ProductForm
+public import GordieHoweNative.Language.Realizations.Realized
 
 @[expose] public section
 
@@ -29,6 +31,7 @@ the same committed assignment. This file states that constraint and its events.
 * **The realized semantics** (`GordieHowe.RealizedProgram.RealizedAt`): every field `equal` holds (source and
   realization rows, type checks), every `mod_0` has its field equation `e = e'` (the integer
   equality follows from the sides' intervals, `GordieHowe/Language/Realizations/RealizeInteger.lean`), every
+  product-form `mod_q` its placed equation (`GordieHowe.RealizedProgram.ProductPlaced`), every
   group's LogUp identity holds, every node-typed value lies in its type, and the H half of every
   hosted cross-field `equal` the compiler states by its own circuit holds (`GordieHowe.RealizedProgram.MacHHoldsAt`: the tag
   is `Σ_c β^(c+1) · chunk_c(X_H)`). A `mod_q` in the one-digit or the digit form needs no field: its
@@ -47,82 +50,23 @@ the same committed assignment. This file states that constraint and its events.
 * **Sampled environments** (`GordieHowe.RealizedProgram.Env.Sampled`): every challenge coordinate is a value of its
   sampler, as in the layout's environments (`GordieHowe.RealizedProgram.layoutEnv_sampled`); the lookup challenge then
   avoids the table values by its type (`Range.LookupChallenge`).
+
+The definitions are in `GordieHoweNative/Language/Realizations/Realized.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
 
 open Export Range IOP
-open scoped NNReal
+open scoped NNReal ENNReal
 
 /-! ## Group membership -/
-
-/-- **A member of a table group's LogUp sum**: `(pred, needle, first, count)`, the coordinates
-`[first, first + count)` of needle `needle` (an index into the `in` predicate's needles) of the `in`
-predicate `pred` (`TableGroup.members`). -/
-abbrev Member : Type := ℕ × ℕ × ℕ × ℕ
-
-namespace Member
-
-/-- The `in` predicate of a member. -/
-def pred (m : Member) : ℕ := m.1
-
-/-- The needle of a member, an index into its predicate's needles. -/
-def needle (m : Member) : ℕ := m.2.1
-
-/-- The first coordinate of a member. -/
-def first (m : Member) : ℕ := m.2.2.1
-
-/-- The number of coordinates of a member. -/
-def count (m : Member) : ℕ := m.2.2.2
-
-end Member
 
 section
 
 variable (ir : RealizedProgram)
 
 /-! ## The data of a lookup -/
-
-/-- **The lookup realization of a predicate body**: an `in` realized by lookups. -/
-def lookupOf? : PredBody → Option LookupRealization
-  | .mem _ _ _ (.lookup r) => some r
-  | _ => none
-
-/-- **Needle `n` of predicate `p`**, an expression of its lookup realization (a default expression
-when `p` has none). -/
-def needleExpr (p n : ℕ) : Expr :=
-  ((lookupOf? (ir.predicate p).body).map fun r => r.needles.getD n default).getD default
-
-/-- **The size `T` of table `t`**: the range `[0, T)`, the size of a committed table's first
-column (the one a single-record `in` reads, `RealizedProgram.InRows`), or the length of the expression whose
-coordinates are the rows. -/
-def tableSize (t : ℕ) : ℕ :=
-  match (ir.table t).rows with
-  | .range T => T
-  | .columns cols => (ir.value (cols.headD 0)).size
-  | .expr e' => ir.exprLen e'
-
-/-- **The challenge `α` of table `t`.** -/
-def alphaOf (t : ℕ) : ℕ := (ir.table t).alpha
-
-/-- **Group `g` of table `t`.** -/
-def groupOf (t g : ℕ) : TableGroup := (ir.table t).groups.getD g default
-
-/-- **The members of group `g` of table `t`**, in the order its LogUp sum reads them. -/
-def members (t g : ℕ) : List Member := (ir.groupOf t g).members
-
-/-- **The number of needles of group `g` of table `t`**: the coordinates of its members. -/
-def groupCount (t g : ℕ) : ℕ := ((ir.members t g).map Member.count).sum
-
-/-- **The number of groups of table `t`.** -/
-def groupCountOf (t : ℕ) : ℕ := (ir.table t).groups.length
-
-/-- **The largest table challenge `j` avoids**: `tmax` for the sampler `fieldMinusTables (range
-tmax)`, `0` otherwise. -/
-def tmaxOf (j : ℕ) : ℕ :=
-  match (ir.challenge j).sampler with
-  | .fieldMinusTables (.range T) => T
-  | _ => 0
 
 variable {I : Interp}
 
@@ -212,11 +156,6 @@ def logupAt (rd : ir.Valuation I) (t g : ℕ) (α : (I (ir.chalField (ir.alphaOf
 coordinate `0` of the table's challenge. -/
 def LogupHolds (e : ir.Env I) (t g : ℕ) : Prop :=
   ir.logupAt (ir.reader e) t g (e.chal (ir.alphaOf t) 0) = true
-
-/-- Whether a predicate body is a field `equal`. -/
-def _root_.GordieHowe.RealizedProgram.PredBody.isEqual : PredBody → Bool
-  | .equal _ _ _ _ => true
-  | _ => false
 
 /-- Whether a predicate body is a `mod_0` (an integer equality). -/
 def _root_.GordieHowe.RealizedProgram.PredBody.isIntEq : PredBody → Bool
@@ -314,6 +253,9 @@ structure RealizedAt (e : ir.Env I) : Prop where
   /-- Every `mod_0` has its field equation. -/
   integer : ∀ p ∈ ir.predicates, ∀ d lhs rhs real, p.body = .mod d 0 lhs rhs real →
     ∀ i < ir.exprLen lhs, ir.evalWith (ir.reader e) d lhs i = ir.evalWith (ir.reader e) d rhs i
+  /-- Every product-form `mod_q` (`q > 2`) has its placed equation (`ProductPlaced`). -/
+  product : ∀ p ∈ ir.predicates, ∀ d m lhs rhs real, p.body = .mod d m lhs rhs real →
+    real.form.isProduct = true → 2 < m → ir.ProductPlaced (ir.reader e) d m lhs rhs real
   /-- Every group's LogUp identity holds. -/
   logup : ∀ t < ir.tables.length, ∀ g < ir.groupCountOf t, ir.LogupHolds e t g
   /-- Every node-typed value lies in its type. -/
@@ -344,8 +286,65 @@ def MacEvent (j : ℕ) (e : ir.Env I) : Prop :=
     (ir.predicate p).body = .cross dx x dy y k real ∧ real.key = j ∧
       (ir.macEvent e dx x dy y real).BadAt (castElt (e.chal j 0))
 
-/-- **The realization event at challenge `j`**: the lookup event or the MAC event at `j`. -/
-def RealEvent (j : ℕ) (e : ir.Env I) : Prop := ir.LookupEvent j e ∨ ir.MacEvent j e
+/-! ### Public-table selections -/
+
+/-- **A selection is exact** at the reader `rd`: the record is one row `r` of the table under the
+row map, block by block: record `i` (of `|v_i| / n` blocks) is the leaf transform of the row's blocks
+from `blockStart i` on, coordinate by coordinate in the domain's field. For one record of one block
+and `width = n`, the record is the transform of row `r`. -/
+def SelExact (rd : ir.Valuation I) (sh : SelShape) : Prop :=
+  ∃ r < sh.rows, ∀ i < sh.records.length, ∀ b < ir.recBlocks sh (sh.records.getD i 0),
+    ∀ m < sh.n,
+      (castElt (rd (sh.records.getD i 0) (b * sh.n + m)) : (I (ir.domainField sh.domain)).K) =
+        Ops.nttOf sh.natural sh.n ((I (ir.domainField sh.domain)).decode sh.psi)
+          (fun c => castElt (rd sh.table (r * sh.width + (ir.blockStart sh i + b) * sh.n + c))) m
+
+/-- **A selection's exactness reads its records and its table only.** -/
+theorem selExact_congr {rd rd' : ir.Valuation I} {sh : SelShape}
+    (hr : ∀ v ∈ sh.records, rd v = rd' v) (ht : rd sh.table = rd' sh.table) :
+    ir.SelExact rd sh ↔ ir.SelExact rd' sh := by
+  unfold SelExact
+  refine exists_congr fun r => and_congr_right fun _ => forall_congr' fun i =>
+    forall_congr' fun hi => ?_
+  have hm : sh.records.getD i 0 ∈ sh.records := by
+    rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hi, Option.getD_some]
+    exact List.getElem_mem hi
+  rw [hr _ hm, ht]
+
+/-- **A tiling record's blocks lie within the row**: record `i`'s blocks end by the row's
+end. -/
+theorem blockStart_add_le {sh : SelShape} (ht : ir.tilesB sh = true) {i : ℕ}
+    (hi : i < sh.records.length) :
+    (ir.blockStart sh i + ir.recBlocks sh (sh.records.getD i 0)) * sh.n ≤ sh.width := by
+  simp only [tilesB, Bool.and_eq_true, beq_iff_eq] at ht
+  rw [← ht.2]
+  refine Nat.mul_le_mul_right _ ?_
+  have h1 : ir.blockStart sh i + ir.recBlocks sh (sh.records.getD i 0) =
+      ((sh.records.take (i + 1)).map (ir.recBlocks sh)).sum := by
+    rw [blockStart, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hi, Option.getD_some,
+      List.map_take, List.map_take, List.take_succ, List.sum_append, List.getElem?_map,
+      List.getElem?_eq_getElem hi]
+    simp
+  rw [h1, List.map_take]
+  have h2 := List.sum_take_add_sum_drop (sh.records.map (ir.recBlocks sh)) (i + 1)
+  omega
+
+/-- **The selection event at challenge `j`** in the environment `e`: a selection a product form's
+kernel reads (`kernelSel?`) has its fingerprint at `j`, its records and its table read only what is
+fixed when `j` is drawn (`ReadFixedAt`), the program's field `equal`s that read only what is fixed
+when `j` is drawn hold, and its record is no row's transform (`SelExact`). -/
+def SelEvent (j : ℕ) (e : ir.Env I) : Prop :=
+  ∃ q < ir.predicates.length, ∃ sh, ir.kernelSel? q = some sh ∧ sh.chal = j ∧
+    (∀ rd ∈ sh.records.flatMap (ir.nodeReads ir.fuel) ++ ir.nodeReads ir.fuel sh.table,
+      ir.ReadFixedAt j rd) ∧
+    (∀ p < ir.predicates.length, (ir.predicate p).body.isEqual = true →
+      (∀ rd ∈ ir.predReads (ir.predicate p).body, ir.ReadFixedAt j rd) →
+      ir.HoldsAt e (ir.predicate p).body) ∧ ¬ ir.SelExact (ir.reader e) sh
+
+/-- **The realization event at challenge `j`**: the lookup event, the MAC event or the selection
+event at `j`. -/
+def RealEvent (j : ℕ) (e : ir.Env I) : Prop :=
+  ir.LookupEvent j e ∨ ir.MacEvent j e ∨ ir.SelEvent j e
 
 /-- **The groups at challenge `j`**: the pairs `(t, g)` of a table `t` with challenge `j` and one
 of its groups `g`. -/
@@ -365,12 +364,23 @@ is `j`. -/
 def macChunksAt (j : ℕ) : List ℕ :=
   (List.range ir.predicates.length).filterMap (ir.macChunksOf j)
 
-/-- **The error terms at challenge `j`**: per group at `j`, its lookup polynomial's degree bound
-`N_g + T − 1` (`N_g` needles, `T` rows: the range `[0, T)` or another table's) and the number `tmax` of values `j` avoids; per
-MAC keyed by `j`, its binding polynomial's degree `chunks` (`macChunksAt`). -/
-def realErrorTerms (j : ℕ) : List (ℕ × ℕ) :=
+/-- **The lookup and MAC error terms at challenge `j`**: per group at `j`, its lookup polynomial's
+degree bound `N_g + T − 1` (`N_g` needles, `T` rows: the range `[0, T)` or another table's) and the
+number `tmax` of values `j` avoids; per MAC keyed by `j`, its binding polynomial's degree `chunks`
+(`macChunksAt`). -/
+def lmErrorTerms (j : ℕ) : List (ℕ × ℕ) :=
   (ir.realGroups j).map (fun tg => (ir.groupCount tg.1 tg.2 + ir.tableSize tg.1 - 1, ir.tmaxOf j)) ++
     (ir.macChunksAt j).map fun n => (n, ir.tmaxOf j)
+
+/-- **The selection error terms at challenge `j`**: per selection a product form's kernel reads
+with its fingerprint at `j` (`kernelSel?`), the fingerprint's degree. -/
+def selErrorTerms (j : ℕ) : List (ℕ × ℕ) :=
+  (List.range ir.predicates.length).filterMap fun q =>
+    (ir.kernelSel? q).bind fun sh => if sh.chal = j then some (sh.deg, ir.tmaxOf j) else none
+
+/-- **The error terms at challenge `j`**: the lookup and MAC terms (`lmErrorTerms`) and the
+selection terms (`selErrorTerms`). -/
+def realErrorTerms (j : ℕ) : List (ℕ × ℕ) := ir.lmErrorTerms j ++ ir.selErrorTerms j
 
 variable (I) in
 /-- **The error at challenge `j`**: the sum over the error terms `(n, u)` of `n / (|F| − u)`, `F`
@@ -394,8 +404,113 @@ theorem realError_eq (j : ℕ) :
       rw [List.map_cons, List.sum_cons, ih fun x hx => hL x (List.mem_cons_of_mem _ hx),
         hL nu List.mem_cons_self, List.map_cons, List.sum_cons, Nat.cast_add, add_div]
   refine key _ fun nu hnu => ?_
-  simp only [realErrorTerms, List.mem_append, List.mem_map] at hnu
+  simp only [realErrorTerms, lmErrorTerms, selErrorTerms, List.mem_append, List.mem_map,
+    List.mem_filterMap] at hnu
+  rcases hnu with (⟨_, _, rfl⟩ | ⟨_, _, rfl⟩) | ⟨q, -, hq⟩
+  · rfl
+  · rfl
+  · obtain ⟨sh, -, hsh⟩ := Option.bind_eq_some_iff.1 hq
+    split_ifs at hsh
+    cases hsh
+    rfl
+
+variable (I) in
+/-- **The lookup and MAC error at challenge `j`** (`lmErrorTerms`). -/
+noncomputable def lmError (j : ℕ) : ℝ≥0 :=
+  ((ir.lmErrorTerms j).map fun nu =>
+    ((nu.1 : ℝ≥0) / (Fintype.card (I (ir.chalField j)).K - nu.2 : ℕ))).sum
+
+variable (I) in
+/-- **The selection error at challenge `j`** (`selErrorTerms`). -/
+noncomputable def selError (j : ℕ) : ℝ≥0 :=
+  ((ir.selErrorTerms j).map fun nu =>
+    ((nu.1 : ℝ≥0) / (Fintype.card (I (ir.chalField j)).K - nu.2 : ℕ))).sum
+
+/-- **The error at challenge `j`** is the lookup and MAC error plus the selection error. -/
+theorem realError_eq_add (j : ℕ) : ir.realError I j = ir.lmError I j + ir.selError I j := by
+  simp only [realError, lmError, selError, realErrorTerms, List.map_append, List.sum_append]
+
+/-- **The lookup and MAC error at challenge `j`** is their degree bounds over `|F| − tmax`. -/
+theorem lmError_eq (j : ℕ) :
+    ir.lmError I j =
+      (((ir.lmErrorTerms j).map Prod.fst).sum : ℝ≥0) /
+        (Fintype.card (I (ir.chalField j)).K - ir.tmaxOf j : ℕ) := by
+  have key : ∀ L : List (ℕ × ℕ), (∀ nu ∈ L, nu.2 = ir.tmaxOf j) →
+      (L.map fun nu => ((nu.1 : ℝ≥0) / (Fintype.card (I (ir.chalField j)).K - nu.2 : ℕ))).sum =
+        ((L.map Prod.fst).sum : ℝ≥0) / (Fintype.card (I (ir.chalField j)).K - ir.tmaxOf j : ℕ) := by
+    intro L hL
+    induction L with
+    | nil => simp
+    | cons nu L ih =>
+      rw [List.map_cons, List.sum_cons, ih fun x hx => hL x (List.mem_cons_of_mem _ hx),
+        hL nu List.mem_cons_self, List.map_cons, List.sum_cons, Nat.cast_add, add_div]
+  refine key _ fun nu hnu => ?_
+  simp only [lmErrorTerms, List.mem_append, List.mem_map] at hnu
   rcases hnu with ⟨_, _, rfl⟩ | ⟨_, _, rfl⟩ <;> rfl
+
+/-- **The selection error at challenge `j`** is the fingerprints' degrees over `|F| − tmax`. -/
+theorem selError_eq (j : ℕ) :
+    ir.selError I j =
+      (((ir.selErrorTerms j).map Prod.fst).sum : ℝ≥0) /
+        (Fintype.card (I (ir.chalField j)).K - ir.tmaxOf j : ℕ) := by
+  have key : ∀ L : List (ℕ × ℕ), (∀ nu ∈ L, nu.2 = ir.tmaxOf j) →
+      (L.map fun nu => ((nu.1 : ℝ≥0) / (Fintype.card (I (ir.chalField j)).K - nu.2 : ℕ))).sum =
+        ((L.map Prod.fst).sum : ℝ≥0) / (Fintype.card (I (ir.chalField j)).K - ir.tmaxOf j : ℕ) := by
+    intro L hL
+    induction L with
+    | nil => simp
+    | cons nu L ih =>
+      rw [List.map_cons, List.sum_cons, ih fun x hx => hL x (List.mem_cons_of_mem _ hx),
+        hL nu List.mem_cons_self, List.map_cons, List.sum_cons, Nat.cast_add, add_div]
+  refine key _ fun nu hnu => ?_
+  simp only [selErrorTerms, List.mem_filterMap] at hnu
+  obtain ⟨q, -, hq⟩ := hnu
+  obtain ⟨sh, -, hsh⟩ := Option.bind_eq_some_iff.1 hq
+  split_ifs at hsh
+  cases hsh
+  rfl
+
+variable (I) in
+/-- **The selections' error bound** (supplied per program by its selections' gadget): the selection
+event's probability at every challenge is at most the selection error (the fingerprint's degree
+over `|F| − tmax`, Schwartz–Zippel). -/
+def SelSound : Prop :=
+  ∀ j (e : ir.Env I),
+    Pr[c ← ir.ChalVal I j : ir.SelEvent j (e.setChal j c)] ≤ (ir.selError I j : ℝ≥0∞)
+
+/-- **No product form, no selection event.** -/
+theorem kernelSel?_eq_none {q : ℕ}
+    (h : ir.predicates.all (fun p => !p.body.isProductMod) = true) : ir.kernelSel? q = none := by
+  have hk : ∀ v, ir.kernelOfValue? v = none := by
+    intro v
+    unfold kernelOfValue?
+    rw [List.findSome?_eq_none_iff]
+    intro p hp
+    have := List.all_eq_true.1 h p hp
+    cases hb : p.body with
+    | mod d m P N real =>
+      rw [hb] at this
+      simp only [PredBody.isProductMod, Bool.not_eq_eq_eq_not, Bool.not_true] at this
+      simp [this]
+    | equal => simp
+    | mem => simp
+    | cross => simp
+  unfold kernelSel? selShape?
+  split
+  · simp [hk]
+  · rfl
+
+/-- **A program without a product form has sound selections** (`SelEvent` is empty). -/
+theorem selSound_of_noProduct (h : ir.predicates.all (fun p => !p.body.isProductMod) = true) :
+    ir.SelSound I := by
+  have hn : ∀ j (e : ir.Env I), ¬ ir.SelEvent j e := fun j e ⟨q, _, sh, hq, _⟩ => by
+    rw [kernelSel?_eq_none ir h] at hq
+    cases hq
+  intro j e
+  have : {c : ir.ChalVal I j | ir.SelEvent j (e.setChal j c)} = ∅ :=
+    Set.eq_empty_of_forall_notMem fun c => hn j _
+  simp only [probUniform, this, MeasureTheory.measure_empty]
+  exact zero_le
 
 /-! ## Sampled environments -/
 

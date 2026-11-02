@@ -1265,6 +1265,33 @@ struct PlanRecords {
     bool integer = false;
     Bound span = 0;
   };
+  // An assert_mod of modulus M >= 2 over a congruence D = 0 of terms not
+  // all affine (mod.h's product form) in DOMAIN: D = P - N, P its terms of
+  // sign +1 and N of sign -1 (ops/integer_congruence.h), its field
+  // equation D - m qlo - m q = 0 in the congruence's normalization the
+  // domain's predicate NAME; ROWS rows, SPECTRAL when the equation is
+  // stated in a transform's spectrum (a row with spectral products). The
+  // record keeps P's and N's integer intervals (lhs_lo, lhs_hi: P;
+  // rhs_lo, rhs_hi: N), the quotient node QUOTIENT (SIZE_MAX for m = p)
+  // committed below QMAX + 1 with the sound bound DMAX (its range request
+  // NAME.q), qlo, and the congruence CONG
+  // (std::shared_ptr<const ops::Congruence<F>> of the domain's field F,
+  // type-erased), which the realized program's export reads: it states
+  // NAME as the source mod_m P N (ModForm::kProduct, kSpectralProduct)
+  // with the derivation productMod. The certificates <name>.leftSpan,
+  // .rightSpan and .cap are the committed quotient's (mod.h's
+  // committed_digits, P and N in the roles of its sides).
+  struct ProductModEq {
+    std::string name, domain;
+    Bound m = 0;
+    bool spectral = false;
+    size_t rows = 1;
+    SignedInt lhs_lo = 0, lhs_hi = 0, rhs_lo = 0, rhs_hi = 0, qlo = 0;
+    Bound qmax = 0, dmax = 0;
+    size_t quotient = SIZE_MAX;
+    std::shared_ptr<const void> cong;
+  };
+  std::vector<ProductModEq> product_mod_equalities;
   // The excluded set U of a challenge drawn uniform in K minus U
   // (Domain::challenge_outside): [0, RANGE), the union of the domain's range
   // tables. CHALLENGE is the domain's alpha:<D>.
@@ -1422,7 +1449,19 @@ struct PlanRecords {
     // by the integer C (kScale).
     // kApplyIn: the first operator application (pre-order) of the left side
     // of predicate or row ITEM (a group row's convolution term).
-    enum Kind : uint8_t { kSide, kLeaf, kDef, kAdd, kSub, kMul, kScale, kApplyIn };
+    // kTermOperand: the operand of part A of the product-form predicate
+    // ITEM's congruence (mod.h's derive_product).
+    enum Kind : uint8_t {
+      kSide,
+      kLeaf,
+      kDef,
+      kAdd,
+      kSub,
+      kMul,
+      kScale,
+      kApplyIn,
+      kTermOperand
+    };
     Kind kind = kLeaf;
     std::string item;
     bool row = false;
@@ -1432,7 +1471,9 @@ struct PlanRecords {
   };
   // A value's interval source (Lean `IvlSrc`): its constant entries, its
   // statement bound (kDeclared), a nat premise (kNat), the prime field, a
-  // Bit.
+  // Bit; the hull of the public table entries a selection or lookup places
+  // it among (kTableHull); for a spectrum a kernel of the product form
+  // reads, the hull of its coefficient form (kTableKernel).
   struct DerivIvlSrc {
     enum Kind : uint8_t {
       kConst,
@@ -1442,7 +1483,9 @@ struct PlanRecords {
       kOpaqueBit,
       kQuadRoot,
       kRootSet,
-      kShift
+      kShift,
+      kTableHull,
+      kTableKernel
     };
     Kind kind = kConst;
   };
@@ -1476,7 +1519,8 @@ struct PlanRecords {
       kLinop,
       kConclude,
       kInline,
-      kViewIvl
+      kViewIvl,
+      kProductMod
     };
     Rule rule = kConclude;
     // Earlier steps of the derivation, by index; kLinear's coefficients.
@@ -2908,36 +2952,54 @@ template <class F>
 std::vector<typename F::Elt> pack_bytes(const F &f,
                                         const std::vector<uint8_t> &b) {
   const size_t k = pack_bytes_per_coordinate(f);
-  std::vector<typename F::Elt> out;
+  // The elements split into chunks on the calling thread's runner
+  // (util/parallel.h); each element is packed alone.
   if constexpr (!kCoordinateAligned<F>) {
     // Each coordinate's value over the extension basis of F over its
     // prime field (zk_extension_packed.h): an injective packing whatever
     // the serialization.
     constexpr size_t D = ExtensionTraits<F>::degree;
     const auto &basis = ExtensionBasis<F>::get(f).beta;
-    for (size_t at = 0; at < b.size(); at += k * D) {
-      typename F::Elt e = f.zero();
-      for (size_t j = 0; j < D; ++j) {
-        uint64_t v = 0;
-        for (size_t i = 0; i < k && at + j * k + i < b.size(); ++i)
-          v |= uint64_t(b[at + j * k + i]) << (8 * i);
-        f.add(e, f.mulf(f.of_scalar(v), basis[j]));
-      }
-      out.push_back(e);
-    }
+    const size_t n = (b.size() + k * D - 1) / (k * D);
+    auto out = parallel::presized<typename F::Elt>(n);
+    parallel::for_each(n, parallel::grain_for(n, parallel::kChunks),
+                       [&](size_t m) {
+                         const size_t at = m * k * D;
+                         typename F::Elt e = f.zero();
+                         for (size_t j = 0; j < D; ++j) {
+                           uint64_t v = 0;
+                           for (size_t i = 0;
+                                i < k && at + j * k + i < b.size(); ++i)
+                             v |= uint64_t(b[at + j * k + i]) << (8 * i);
+                           f.add(e, f.mulf(f.of_scalar(v), basis[j]));
+                         }
+                         out[m] = e;
+                       });
     return out;
   }
   const size_t coords = F::kBytes / domain_subfield<F>::kBytes;
   const size_t per = k * coords;
-  for (size_t at = 0; at < b.size(); at += per) {
-    uint8_t buf[F::kBytes] = {};
-    for (size_t j = 0; j < coords; ++j)
-      for (size_t i = 0; i < k && at + j * k + i < b.size(); ++i)
-        buf[j * domain_subfield<F>::kBytes + i] = b[at + j * k + i];
-    auto e = f.of_bytes_field(buf);
-    if (!e) fail("pack_bytes: a packed element is not canonical");
-    out.push_back(*e);
-  }
+  const size_t n = (b.size() + per - 1) / per;
+  auto out = parallel::presized<typename F::Elt>(n);
+  const size_t grain = parallel::grain_for(n, parallel::kChunks);
+  std::vector<uint8_t> chunk_ok(parallel::chunks(n, grain), 1);
+  parallel::for_chunks(n, grain, [&](size_t lo, size_t hi) {
+    for (size_t m = lo; m < hi; ++m) {
+      const size_t at = m * per;
+      uint8_t buf[F::kBytes] = {};
+      for (size_t j = 0; j < coords; ++j)
+        for (size_t i = 0; i < k && at + j * k + i < b.size(); ++i)
+          buf[j * domain_subfield<F>::kBytes + i] = b[at + j * k + i];
+      auto e = f.of_bytes_field(buf);
+      if (!e) {
+        chunk_ok[lo / grain] = 0;
+        return;
+      }
+      out[m] = *e;
+    }
+  });
+  for (uint8_t c : chunk_ok)
+    if (!c) fail("pack_bytes: a packed element is not canonical");
   return out;
 }
 

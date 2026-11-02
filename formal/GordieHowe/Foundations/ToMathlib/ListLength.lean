@@ -5,6 +5,8 @@ module
 
 public import Mathlib.Data.Set.Card
 public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Fintype.Vector
+public import Mathlib.Data.Fintype.Sigma
 
 @[expose] public section
 
@@ -13,9 +15,28 @@ public import Mathlib.Data.Fintype.BigOperators
 
 Candidates for upstreaming, next to Mathlib's `List.finite_length_le`
 (`Mathlib/Data/Set/Finite/List.lean`).
+
+- `List.equivSigmaLengthLe`, `List.fintypeLengthLe`: the lists of length at most `n` as the
+  vectors of each length `k ≤ n`, and the finite type they form, with compiled code and no
+  decision of equality on the entries (`List.finite_length_le` gives only `Finite`).
 -/
 
 namespace List
+
+/-- **The lists of length at most `n` are the vectors of each length `k ≤ n`.** -/
+def equivSigmaLengthLe (α : Type*) (n : ℕ) :
+    {l : List α // l.length ≤ n} ≃ Σ k : Fin (n + 1), List.Vector α k where
+  toFun l := ⟨⟨l.1.length, Nat.lt_succ_of_le l.2⟩, ⟨l.1, rfl⟩⟩
+  invFun v := ⟨v.2.1, v.2.2.trans_le (Nat.le_of_lt_succ v.1.2)⟩
+  left_inv _ := rfl
+  right_inv v := by
+    obtain ⟨k, l, hl⟩ := v
+    exact Sigma.ext (Fin.ext hl) ((Subtype.heq_iff_coe_eq fun _ => by dsimp only; rw [hl]).2 rfl)
+
+/-- **The lists of length at most `n` over a finite type form a finite type**, enumerated through
+the vectors of each length (`equivSigmaLengthLe`), with compiled code. -/
+abbrev fintypeLengthLe (α : Type*) [Fintype α] (n : ℕ) : Fintype {l : List α // l.length ≤ n} :=
+  Fintype.ofEquiv _ (equivSigmaLengthLe α n).symm
 
 /-- **There are `|α|^n` lists of length `n`** over a finite type `α`. -/
 theorem ncard_length_eq (α : Type*) [Fintype α] (n : ℕ) :

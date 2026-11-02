@@ -21,7 +21,7 @@ quantum residual state jointly with a witness.
   notions on the laws of the simulated run and the extractor's run, and the implication at error
   `errsim + errse` for tests that are events of the measured output.
 - `AcceptsFinal`, `verdictGame`, `expand_mem_verdictGame_iff`: on the control (the adversary's
-  output and the challenger's registers, `GordieHowe.SPBCS.Base.Ctrl`), the spBCS verifier accepts under
+  output and the challenger's registers, `GordieHowe.SPBCS.Ctrl`), the spBCS verifier accepts under
   the final oracle exactly when the expanded control wins the verdict game;
   `expand_mem_simExtGame_iff`: on registers consistent with the oracle, the expanded registers win
   `simExtGame` exactly when the adversary wins (`Wins`).
@@ -88,7 +88,7 @@ namespace GordieHowe.Quantum.KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] [Nonempty X] [AddGroup Y]
-  [Nonempty Y] (A : KindAlg X Y Req Resp O) (C : Challenger X Y Req Resp)
+  [Nonempty Y] {ksA : KindShape X Y Req Resp} (A : KindAlg ksA O) (C : Challenger X Y Req Resp)
 
 /-- **The coherent pure form of a composition with a relabelled output** is the coherent pure form
 of the composition with its output relabelled: the same registers and steps. -/
@@ -211,8 +211,7 @@ variable {M : SPBCS Mg P X k kN kS L e} {B : ℕ} [∀ j i, Fintype ((M.comp j).
 
 section Verdict
 
-variable (A : AdaptiveIAlg (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
-    (Claim X M.NIProof))
+variable {shA : AlgShape (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)} (A : AdaptiveIAlg shA (Claim X M.NIProof))
   (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B) SC) (Q kq : ℕ)
 
 /-- **The spBCS verifier accepts the output of a control under the final oracle**: the
@@ -220,15 +219,15 @@ base oracle `H` reprogrammed by the assignments in force after the last slot, re
 challenger's registers `c.2`, accepts the adversary's output `c.1`. `Wins` is this with freshness
 (`wins_iff`). -/
 def AcceptsFinal (H : Bits (queryBits k kN kS L) → XOut k e)
-    (c : Base.Ctrl A.toTPKindAlg Psim Q) : Prop :=
+    (c : SPBCS.Ctrl A.toTPKindAlg Psim Q) : Prop :=
   M.Accepts (chainOracle (H.reprogram (A.toTPKindAlg.postAss (simExtChallenger Psim Q) c.2)))
     c.1.stmt c.1.proof (Qs c.1.stmt)
 
 theorem wins_iff (fx : X' → X) (H : Bits (queryBits k kN kS L) → XOut k e)
-    (v : Base.Reg A Psim Q) :
+    (v : SPBCS.Reg A Psim Q) :
     Wins A.toTPKindAlg Psim Q Qs fx H v ↔
-      Base.Fresh A Psim Q fx v ∧
-        AcceptsFinal Qs A Psim Q H (Base.ctrlOf A.toTPKindAlg Psim Q v) :=
+      SPBCS.Fresh A Psim Q fx v ∧
+        AcceptsFinal Qs A Psim Q H (SPBCS.ctrlOf A.toTPKindAlg Psim Q v) :=
   Iff.rfl
 
 /-- **The base game of the verdict under the final oracle** with `K` queries, on the control (the
@@ -236,16 +235,16 @@ second condition of `simExtGame`): an oracle under which the spBCS verifier acce
 output, each of its queries in the tuple with that answer, read through the assignments of the
 challenger's registers, as its final answer. -/
 def verdictGame (K : ℕ) :
-    GordieHowe.QROM.BaseGame (Bits (queryBits k kN kS L)) (Out k e) (Base.Ctrl A.toTPKindAlg Psim Q) K :=
+    GordieHowe.QROM.BaseGame (Bits (queryBits k kN kS L)) (Out k e) (SPBCS.Ctrl A.toTPKindAlg Psim Q) K :=
   {o | ∃ h, M.Accepts h o.out.1.stmt o.out.1.proof (Qs o.out.1.stmt) ∧
     ∀ q ∈ M.queries o.out.1.stmt o.out.1.proof h (Qs o.out.1.stmt),
       ∃ i, o.queries i = Query.toBits q ∧
-        Base.finalAnswerOf A.toTPKindAlg Psim Q o.out.2 (o.queries i) (o.answers i) = h q}
+        SPBCS.finalAnswerOf A.toTPKindAlg Psim Q o.out.2 (o.queries i) (o.answers i) = h q}
 
 theorem mem_verdictGame_of_mem_simExtGame (fx : X' → X) {K : ℕ}
-    {o : GordieHowe.QROM.BaseGame.Tuple (Bits (queryBits k kN kS L)) (Out k e) (Base.Reg A Psim Q) K}
+    {o : GordieHowe.QROM.BaseGame.Tuple (Bits (queryBits k kN kS L)) (Out k e) (SPBCS.Reg A Psim Q) K}
     (ho : o ∈ simExtGame A.toTPKindAlg Psim Q Qs fx K) :
-    (⟨o.queries, o.answers, Base.ctrlOf A.toTPKindAlg Psim Q o.out⟩ :
+    (⟨o.queries, o.answers, SPBCS.ctrlOf A.toTPKindAlg Psim Q o.out⟩ :
       GordieHowe.QROM.BaseGame.Tuple _ _ _ K) ∈ verdictGame Qs A Psim Q K :=
   ho.2.1
 
@@ -254,7 +253,7 @@ extraction queries wins `verdictGame` exactly when the spBCS verifier accepts it
 under the final oracle. Hypothesis `hkq`: accepting runs make at most `kq` verifier queries. -/
 theorem expand_mem_verdictGame_iff
     (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq)
-    (H : Bits (queryBits k kN kS L) → XOut k e) (c : Base.Ctrl A.toTPKindAlg Psim Q) :
+    (H : Bits (queryBits k kN kS L) → XOut k e) (c : SPBCS.Ctrl A.toTPKindAlg Psim Q) :
     (ctrlExpansion A.toTPKindAlg Psim Q Qs).expand (fun a => outEquiv k e (H a)) c ∈
         verdictGame Qs A Psim Q (kq + Q * Psim.q) ↔ AcceptsFinal Qs A Psim Q H c := by
   constructor
@@ -267,7 +266,7 @@ theorem expand_mem_verdictGame_iff
         (fun a => outEquiv k e (H a)) c).queries i)) = _
       rw [hi1]
     rw [← hi2, hi1, ha]
-    exact (Base.finalAnswerOf_eq A.toTPKindAlg Psim Q H c.2 q).symm
+    exact (SPBCS.finalAnswerOf_eq A.toTPKindAlg Psim Q H c.2 q).symm
   · intro hv
     set h := chainOracle (H.reprogram (A.toTPKindAlg.postAss (simExtChallenger Psim Q) c.2))
     have htr := trace_extractionProgOf A.toTPKindAlg Psim Q Qs H c
@@ -275,7 +274,7 @@ theorem expand_mem_verdictGame_iff
         (fun a => outEquiv k e (H a))).length ≤ kq + Q * Psim.q := by
       rw [htr, List.length_append, List.length_map]
       exact Nat.add_le_add (hkq _ h _ hv)
-        (FullPast.simQueryInputsOf_length_le A.toTPKindAlg Psim Q c.2)
+        (SPBCS.simQueryInputsOf_length_le A.toTPKindAlg Psim Q c.2)
     refine ⟨h, hv, fun q hq => ?_⟩
     have hmem : ∃ i : Fin (kq + Q * Psim.q),
         ((ctrlExpansion A.toTPKindAlg Psim Q Qs).expand
@@ -287,7 +286,7 @@ theorem expand_mem_verdictGame_iff
     obtain ⟨i, hi1, hi2⟩ := hmem
     refine ⟨i, hi1, ?_⟩
     rw [hi1, hi2]
-    exact Base.finalAnswerOf_eq A.toTPKindAlg Psim Q H c.2 q
+    exact SPBCS.finalAnswerOf_eq A.toTPKindAlg Psim Q H c.2 q
 
 variable {C : Type} [Fintype C] [DecidableEq (SaltedCoins (FiatShamirSalt kS) C)]
 
@@ -299,13 +298,13 @@ theorem expand_mem_simExtGame_iff
     (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq)
     {Psim' : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
       (SaltedCoins (FiatShamirSalt kS) C)} {fx : X' → X} (hA : M.SimAssignsAtKeys B Psim' fx)
-    {H : Bits (queryBits k kN kS L) → XOut k e} {v : Base.Reg A Psim' Q}
+    {H : Bits (queryBits k kN kS L) → XOut k e} {v : SPBCS.Reg A Psim' Q}
     (hv : A.toTPKindAlg.Consistent (simExtChallenger Psim' Q) H v) :
     (simExtractionExpansion A.toTPKindAlg Psim' Q Qs).expand (fun a => outEquiv k e (H a)) v ∈
         simExtGame A.toTPKindAlg Psim' Q Qs fx (kq + Q * Psim'.q) ↔
       Wins A.toTPKindAlg Psim' Q Qs fx H v :=
   ⟨fun ho => ⟨ho.1, (expand_mem_verdictGame_iff Qs A Psim' Q kq hkq H
-      (Base.ctrlOf A.toTPKindAlg Psim' Q v)).1 (by
+      (SPBCS.ctrlOf A.toTPKindAlg Psim' Q v)).1 (by
         have hm := mem_verdictGame_of_mem_simExtGame Qs A Psim' Q fx ho
         rw [← comapIn_ctrlExpansion, Expansion.expand_comapIn] at hm
         exact hm)⟩,
@@ -317,8 +316,7 @@ end Verdict
 
 section Verifiers
 
-variable (A : AdaptiveIAlg (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
-    (Claim X M.NIProof))
+variable {shA : AlgShape (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)} (A : AdaptiveIAlg shA (Claim X M.NIProof))
   (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B) SC) (Q kq : ℕ)
 
 /-- **The simulated run of `A`**: the composition of its trace-preserving form with the
@@ -329,8 +327,8 @@ Running time: that of `A`, plus one run of the simulator program (`Psim.q` queri
 the at most `Q` answered proof queries; polynomial when `A` and `Psim` are.
 This running time is argued here, not proved in Lean. -/
 noncomputable abbrev simRun :
-    Alg (Bits (queryBits k kN kS L)) (XOut k e) (Base.Ctrl A.toTPKindAlg Psim Q) :=
-  A.toTPKindAlg.composeBothOut (simExtChallenger Psim Q) (Base.ctrlOf A.toTPKindAlg Psim Q)
+    Alg (Bits (queryBits k kN kS L)) (XOut k e) (SPBCS.Ctrl A.toTPKindAlg Psim Q) :=
+  A.toTPKindAlg.composeBothOut (simExtChallenger Psim Q) (SPBCS.ctrlOf A.toTPKindAlg Psim Q)
 
 /-- **The model's simulated run of `A`** (`AdaptiveIAlg.toKindAlg`): the composition of `A` with
 the simulation challenger answering `Q` proof queries by `Psim`, outputting the control; the
@@ -340,15 +338,15 @@ Running time: that of `A`, plus one run of the simulator program (`Psim.q` queri
 the at most `Q` answered proof queries; polynomial when `A` and `Psim` are.
 This running time is argued here, not proved in Lean. -/
 noncomputable abbrev simRunModel :
-    Alg (Bits (queryBits k kN kS L)) (XOut k e) (Base.Ctrl A.toTPKindAlg Psim Q) :=
-  A.toKindAlg.composeBothOut (simExtChallenger Psim Q) (Base.ctrlOf A.toTPKindAlg Psim Q)
+    Alg (Bits (queryBits k kN kS L)) (XOut k e) (SPBCS.Ctrl A.toTPKindAlg Psim Q) :=
+  A.toKindAlg.composeBothOut (simExtChallenger Psim Q) (SPBCS.ctrlOf A.toTPKindAlg Psim Q)
 
 /-- **The spBCS verifier under the final oracle, on the control** (a `NARG.QROM.Verifier`): the
 extraction queries (`ctrlExpansion`, `kq + Q · q` of them); on their answers it accepts when an
 oracle with these answers accepts the adversary's output under the oracle reprogrammed by the
 assignments in force (`AcceptsFinal`, `NARG.Verifier.ofOracle`); and the adversary's statement. -/
 noncomputable def simVerifier :
-    NARG.QROM.Verifier (queryBits k kN kS L) k e (Base.Ctrl A.toTPKindAlg Psim Q) X :=
+    NARG.QROM.Verifier (queryBits k kN kS L) k e (SPBCS.Ctrl A.toTPKindAlg Psim Q) X :=
   NARG.Verifier.ofOracle (kq + Q * Psim.q) (ctrlExpansion A.toTPKindAlg Psim Q Qs)
     (fun h c => AcceptsFinal Qs A Psim Q ((outEquiv k e).symm ∘ h) c) fun c => c.1.stmt
 
@@ -357,7 +355,7 @@ Hypothesis `hkq`: accepting runs make at most `kq` verifier queries. -/
 theorem mem_verdictGame_of_mem_game
     (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq)
     {o : GordieHowe.QROM.BaseGame.Tuple (Bits (queryBits k kN kS L)) (Out k e)
-      (Base.Ctrl A.toTPKindAlg Psim Q) (kq + Q * Psim.q)}
+      (SPBCS.Ctrl A.toTPKindAlg Psim Q) (kq + Q * Psim.q)}
     (ho : o ∈ (simVerifier Qs A Psim Q kq).game) : o ∈ verdictGame Qs A Psim Q (kq + Q * Psim.q) := by
   obtain ⟨h, he, hv⟩ := NARG.Verifier.mem_game_ofOracle.1 ho
   have hh : h = fun a => outEquiv k e (((outEquiv k e).symm ∘ h) a) :=
@@ -371,17 +369,17 @@ from the answers, the answers and the registers win `simExtGame`, which also ask
 statement and the structure of the assignments; and the adversary's statement. Its extraction run
 is `extRunFull`. -/
 noncomputable def simExtVerifier (fx : X' → X) :
-    NARG.QROM.Verifier (queryBits k kN kS L) k e (Base.Reg A Psim Q) X where
+    NARG.QROM.Verifier (queryBits k kN kS L) k e (SPBCS.Reg A Psim Q) X where
   kq := kq + Q * Psim.q
   expansion := simExtractionExpansion A.toTPKindAlg Psim Q Qs
   AcceptsOn v a := (⟨(simExtractionExpansion A.toTPKindAlg Psim Q Qs).queriesOn v a, a, v⟩ :
     GordieHowe.QROM.BaseGame.Tuple _ _ _ _) ∈ simExtGame A.toTPKindAlg Psim Q Qs fx (kq + Q * Psim.q)
-  stmt v := (Base.advOut A.toTPKindAlg Psim Q v).stmt
+  stmt v := (SPBCS.advOut A.toTPKindAlg Psim Q v).stmt
 
 /-- **The base game of `simExtVerifier` is `simExtGame` on the tuples whose queries are computed
 from their answers.** -/
 theorem mem_game_simExtVerifier_iff (fx : X' → X)
-    {o : GordieHowe.QROM.BaseGame.Tuple (Bits (queryBits k kN kS L)) (Out k e) (Base.Reg A Psim Q)
+    {o : GordieHowe.QROM.BaseGame.Tuple (Bits (queryBits k kN kS L)) (Out k e) (SPBCS.Reg A Psim Q)
       (kq + Q * Psim.q)} :
     o ∈ (simExtVerifier Qs A Psim Q kq fx).game ↔
       o.queries = (simExtractionExpansion A.toTPKindAlg Psim Q Qs).queriesOn o.out o.answers ∧
@@ -427,7 +425,7 @@ Running time: that of `extRun`, whose operations it applies in the same order.
 This running time is argued here, not proved in Lean. -/
 noncomputable abbrev extRunFull
     (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) :=
-  (simVerifier Qs A Psim Q kq).expandedOpt (Base.ctrlOf A.toTPKindAlg Psim Q)
+  (simVerifier Qs A Psim Q kq).expandedOpt (SPBCS.ctrlOf A.toTPKindAlg Psim Q)
     (A.toTPKindAlg.composeBothOut (simExtChallenger Psim Q) id).defaultOut
     (A.toTPKindAlg.composeBothOut (simExtChallenger Psim Q) id).toQueryAlgCoh
 
@@ -439,22 +437,22 @@ their joint law. -/
 theorem simLaw_extRun
     (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq)
     (S : Set (GordieHowe.QROM.BaseGame.Tuple (Bits (queryBits k kN kS L)) (Out k e)
-      (Option (Base.Ctrl A.toTPKindAlg Psim Q)) (kq + Q * Psim.q) ×
+      (Option (SPBCS.Ctrl A.toTPKindAlg Psim Q)) (kq + Q * Psim.q) ×
       DB (Bits (queryBits k kN kS L)) (Out k e))) :
     simLaw (outEquiv k e) (extRun Qs A Psim Q kq hkq) S =
       simLaw (outEquiv k e) (extRunFull Qs A Psim Q kq hkq)
-        {p | (⟨p.1.queries, p.1.answers, p.1.out.map (Base.ctrlOf A.toTPKindAlg Psim Q)⟩,
+        {p | (⟨p.1.queries, p.1.answers, p.1.out.map (SPBCS.ctrlOf A.toTPKindAlg Psim Q)⟩,
           p.2) ∈ S} := by
   have hcoh : (simRun A Psim Q).toQueryAlgCoh =
       (A.toTPKindAlg.composeBothOut (simExtChallenger Psim Q) id).toQueryAlgCoh.mapOut
-        (Option.map (Base.ctrlOf A.toTPKindAlg Psim Q)) :=
+        (Option.map (SPBCS.ctrlOf A.toTPKindAlg Psim Q)) :=
     A.toTPKindAlg.toQueryAlgCoh_composeBothOut_comp (simExtChallenger Psim Q) id
-      (Base.ctrlOf A.toTPKindAlg Psim Q)
+      (SPBCS.ctrlOf A.toTPKindAlg Psim Q)
   have hexp : (⟨fun c => ((simVerifier Qs A Psim Q kq).expansionOpt id
-      (simRun A Psim Q).defaultOut).next (Option.map (Base.ctrlOf A.toTPKindAlg Psim Q) c)⟩ :
+      (simRun A Psim Q).defaultOut).next (Option.map (SPBCS.ctrlOf A.toTPKindAlg Psim Q) c)⟩ :
         Expansion (Bits (queryBits k kN kS L)) (Out k e)
-          (Option (Base.Reg A Psim Q))) =
-      (simVerifier Qs A Psim Q kq).expansionOpt (Base.ctrlOf A.toTPKindAlg Psim Q)
+          (Option (SPBCS.Reg A Psim Q))) =
+      (simVerifier Qs A Psim Q kq).expansionOpt (SPBCS.ctrlOf A.toTPKindAlg Psim Q)
         (A.toTPKindAlg.composeBothOut (simExtChallenger Psim Q) id).defaultOut := by
     congr 1
     funext c
@@ -470,9 +468,9 @@ database. -/
 def WinsNotExtracts (fx : X' → X) [DecidableEq X] {Wit : Type} (rel : Set (X × Wit))
     (E : CausalExtractor P t X Wit)
     (p : GordieHowe.QROM.BaseGame.Tuple (Bits (queryBits k kN kS L)) (Out k e)
-        (Option (Base.Ctrl A.toTPKindAlg Psim Q)) (kq + Q * Psim.q) ×
+        (Option (SPBCS.Ctrl A.toTPKindAlg Psim Q)) (kq + Q * Psim.q) ×
       DB (Bits (queryBits k kN kS L)) (Out k e)) : Prop :=
-  ∃ c ∈ p.1.out, Base.FreshOf A.toTPKindAlg Psim Q fx c ∧
+  ∃ c ∈ p.1.out, SPBCS.FreshOf A.toTPKindAlg Psim Q fx c ∧
     (⟨p.1.queries, p.1.answers, c⟩ : GordieHowe.QROM.BaseGame.Tuple _ _ _ _) ∈
       verdictGame Qs A Psim Q (kq + Q * Psim.q) ∧
     ¬ M.extractsAt rel E c.1.stmt p.2
@@ -509,7 +507,7 @@ structure WeakOnlineSimExtracts [DecidableEq X] {tq : ℕ} (𝒜 : M.QBSimExtrac
   /-- The state clause: the extraction run leaves the composed registers in the model's simulated
   run's state, the adversary's workspace unmeasured. -/
   outputState_eq : ∀ (a : 𝒜.Aux)
-    (vo : NARG.VerifiedOutput (Base.Ctrl (𝒜.alg a).toTPKindAlg Psim Q)),
+    (vo : NARG.VerifiedOutput (SPBCS.Ctrl (𝒜.alg a).toTPKindAlg Psim Q)),
     (simVerifier Qs (𝒜.alg a) Psim Q kq).extractionOutputState id NARG.QROM.compressedSim (simRun (𝒜.alg a) Psim Q)
         (simRun (𝒜.alg a) Psim Q).defaultOut vo =
       (simVerifier Qs (𝒜.alg a) Psim Q kq).realOutputState id (simRunModel (𝒜.alg a) Psim Q) vo
@@ -538,8 +536,7 @@ def WeakOnlineSimulationExtractable [DecidableEq X] {Wit : Type} (rel : Set (X �
 
 section State
 
-variable (A : AdaptiveIAlg (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
-    (Claim X M.NIProof))
+variable {shA : AlgShape (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)} (A : AdaptiveIAlg shA (Claim X M.NIProof))
   (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B) SC) (Q kq : ℕ)
   (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq)
 
@@ -548,18 +545,18 @@ for a query slot over its budget on a branch of positive weight has the same fin
 trace-preserving composition and in the model's (`AdaptiveIAlg.WithinBudget.final_composeBothOut_eq`).
 -/
 theorem realOutputState_simRun_eq_model (hB : A.WithinBudget)
-    (vo : NARG.VerifiedOutput (Base.Ctrl A.toTPKindAlg Psim Q)) :
+    (vo : NARG.VerifiedOutput (SPBCS.Ctrl A.toTPKindAlg Psim Q)) :
     (simVerifier Qs A Psim Q kq).realOutputState id (simRun A Psim Q) vo =
       (simVerifier Qs A Psim Q kq).realOutputState id (simRunModel A Psim Q) vo := by
   unfold NARG.QROM.Verifier.realOutputState Quantum.Alg.outputState
   refine Finset.sum_congr rfl fun h _ => ?_
-  rw [hB.final_composeBothOut_eq (simExtChallenger Psim Q) (Base.ctrlOf A.toTPKindAlg Psim Q) h]
+  rw [hB.final_composeBothOut_eq (simExtChallenger Psim Q) (SPBCS.ctrlOf A.toTPKindAlg Psim Q) h]
 
 /-- **The extraction run leaves the composed registers in the model's simulated run's state** at
 every value of the control and the verdict, the adversary's workspace unmeasured
 (`GordieHowe.SPBCS.QROM.extractionOutputState_eq` and `realOutputState_simRun_eq_model`). -/
 theorem extractionOutputState_eq_model (hB : A.WithinBudget)
-    (vo : NARG.VerifiedOutput (Base.Ctrl A.toTPKindAlg Psim Q)) :
+    (vo : NARG.VerifiedOutput (SPBCS.Ctrl A.toTPKindAlg Psim Q)) :
     (simVerifier Qs A Psim Q kq).extractionOutputState id NARG.QROM.compressedSim (simRun A Psim Q)
         (simRun A Psim Q).defaultOut vo =
       (simVerifier Qs A Psim Q kq).realOutputState id (simRunModel A Psim Q) vo :=
@@ -572,8 +569,7 @@ end State
 
 section Extraction
 
-variable (A : AdaptiveIAlg (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
-    (Claim X M.NIProof)) (Q kq : ℕ)
+variable {shA : AlgShape (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)} (A : AdaptiveIAlg shA (Claim X M.NIProof)) (Q kq : ℕ)
   (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq)
   {C : Type} [Fintype C] [DecidableEq (SaltedCoins (FiatShamirSalt kS) C)]
 
@@ -586,8 +582,8 @@ theorem simLaw_verdict_not_simExtGame
     {Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
       (SaltedCoins (FiatShamirSalt kS) C)} {fx : X' → X} (hA : M.SimAssignsAtKeys B Psim fx) :
     simLaw (outEquiv k e) (extRunFull Qs A Psim Q kq hkq)
-        {p | ∃ v ∈ p.1.out, Base.Fresh A Psim Q fx v ∧
-          (⟨p.1.queries, p.1.answers, Base.ctrlOf A.toTPKindAlg Psim Q v⟩ :
+        {p | ∃ v ∈ p.1.out, SPBCS.Fresh A Psim Q fx v ∧
+          (⟨p.1.queries, p.1.answers, SPBCS.ctrlOf A.toTPKindAlg Psim Q v⟩ :
             GordieHowe.QROM.BaseGame.Tuple _ _ _ (kq + Q * Psim.q)) ∈
             verdictGame Qs A Psim Q (kq + Q * Psim.q) ∧
           (⟨p.1.queries, p.1.answers, v⟩ : GordieHowe.QROM.BaseGame.Tuple _ _ _ (kq + Q * Psim.q)) ∉
@@ -598,9 +594,9 @@ theorem simLaw_verdict_not_simExtGame
   set Ec := ctrlExpansion A.toTPKindAlg Psim Q Qs
   set E := simExtractionExpansion A.toTPKindAlg Psim Q Qs
   set T : Set (GordieHowe.QROM.BaseGame.Tuple (Bits (queryBits k kN kS L)) (Out k e)
-      (Option (Base.Reg A Psim Q)) (kq + Q * Psim.q)) :=
-    {o | ∃ v ∈ o.out, Base.Fresh A Psim Q fx v ∧
-      (⟨o.queries, o.answers, Base.ctrlOf A.toTPKindAlg Psim Q v⟩ :
+      (Option (SPBCS.Reg A Psim Q)) (kq + Q * Psim.q)) :=
+    {o | ∃ v ∈ o.out, SPBCS.Fresh A Psim Q fx v ∧
+      (⟨o.queries, o.answers, SPBCS.ctrlOf A.toTPKindAlg Psim Q v⟩ :
         GordieHowe.QROM.BaseGame.Tuple _ _ _ (kq + Q * Psim.q)) ∈
         verdictGame Qs A Psim Q (kq + Q * Psim.q) ∧
       (⟨o.queries, o.answers, v⟩ : GordieHowe.QROM.BaseGame.Tuple _ _ _ (kq + Q * Psim.q)) ∉
@@ -619,8 +615,8 @@ theorem simLaw_verdict_not_simExtGame
         rw [expand_adversary, PMF.toOuterMeasure_map_apply, Quantum.Alg.realLaw_toQueryAlgCoh]
         rfl
     _ ≤ (A₀.realLaw e').toOuterMeasure {p | ∃ v, p.out = some v ∧
-            (Base.Fresh A Psim Q fx v ∧
-              Ec.expand (k := kq + Q * Psim.q) p.oracle (Base.ctrlOf A.toTPKindAlg Psim Q v) ∈
+            (SPBCS.Fresh A Psim Q fx v ∧
+              Ec.expand (k := kq + Q * Psim.q) p.oracle (SPBCS.ctrlOf A.toTPKindAlg Psim Q v) ∈
                 verdictGame Qs A Psim Q (kq + Q * Psim.q) ∧
               E.expand (k := kq + Q * Psim.q) p.oracle v ∉
                 simExtGame A.toTPKindAlg Psim Q Qs fx (kq + Q * Psim.q))} := by
@@ -637,16 +633,16 @@ theorem simLaw_verdict_not_simExtGame
               (k := kq + Q * Psim.q) f (some v)).queries,
             ((V1.expansionOpt id A₀.defaultOut).expand
               (k := kq + Q * Psim.q) f (some v)).answers,
-              Base.ctrlOf A.toTPKindAlg Psim Q v⟩ :
+              SPBCS.ctrlOf A.toTPKindAlg Psim Q v⟩ :
             GordieHowe.QROM.BaseGame.Tuple _ _ _ (kq + Q * Psim.q)) =
-              Ec.expand (k := kq + Q * Psim.q) f (Base.ctrlOf A.toTPKindAlg Psim Q v) :=
+              Ec.expand (k := kq + Q * Psim.q) f (SPBCS.ctrlOf A.toTPKindAlg Psim Q v) :=
           QROM.expand_expansionOpt_some (simVerifier Qs A Psim Q kq)
-            (Base.ctrlOf A.toTPKindAlg Psim Q) A₀.defaultOut f v
+            (SPBCS.ctrlOf A.toTPKindAlg Psim Q) A₀.defaultOut f v
         change (⟨((V1.expansionOpt id A₀.defaultOut).expand
               (k := kq + Q * Psim.q) f (some v)).queries,
             ((V1.expansionOpt id A₀.defaultOut).expand
               (k := kq + Q * Psim.q) f (some v)).answers,
-              Base.ctrlOf A.toTPKindAlg Psim Q v⟩ :
+              SPBCS.ctrlOf A.toTPKindAlg Psim Q v⟩ :
             GordieHowe.QROM.BaseGame.Tuple _ _ _ (kq + Q * Psim.q)) ∈
           verdictGame Qs A Psim Q (kq + Q * Psim.q) at hg
         change (⟨((V1.expansionOpt id A₀.defaultOut).expand
@@ -660,15 +656,15 @@ theorem simLaw_verdict_not_simExtGame
         exact ⟨v, rfl, hf, hg, hng⟩
     _ = (A₀.realLaw e').toOuterMeasure
           {p | ∃ v, p.out = some v ∧
-            (Base.Fresh A Psim Q fx v ∧
-              Ec.expand (k := kq + Q * Psim.q) p.oracle (Base.ctrlOf A.toTPKindAlg Psim Q v) ∈
+            (SPBCS.Fresh A Psim Q fx v ∧
+              Ec.expand (k := kq + Q * Psim.q) p.oracle (SPBCS.ctrlOf A.toTPKindAlg Psim Q v) ∈
                 verdictGame Qs A Psim Q (kq + Q * Psim.q) ∧
               E.expand (k := kq + Q * Psim.q) p.oracle v ∉
                 simExtGame A.toTPKindAlg Psim Q Qs fx (kq + Q * Psim.q)) ∧
             A.toTPKindAlg.Consistent (simExtChallenger Psim Q) (e'.symm ∘ p.oracle) v} :=
         KindAlg.realLaw_composeBothOut_inter _ _ e' fun v f =>
-          Base.Fresh A Psim Q fx v ∧
-            Ec.expand (k := kq + Q * Psim.q) f (Base.ctrlOf A.toTPKindAlg Psim Q v) ∈
+          SPBCS.Fresh A Psim Q fx v ∧
+            Ec.expand (k := kq + Q * Psim.q) f (SPBCS.ctrlOf A.toTPKindAlg Psim Q v) ∈
               verdictGame Qs A Psim Q (kq + Q * Psim.q) ∧
             E.expand (k := kq + Q * Psim.q) f v ∉
               simExtGame A.toTPKindAlg Psim Q Qs fx (kq + Q * Psim.q)
@@ -680,7 +676,7 @@ theorem simLaw_verdict_not_simExtGame
         rw [he] at hg hng
         exact hng ((expand_mem_simExtGame_iff Qs A Q kq hkq hA hc).2
           ⟨hf, (expand_mem_verdictGame_iff Qs A Psim Q kq hkq _
-            (Base.ctrlOf A.toTPKindAlg Psim Q v)).1 hg⟩)
+            (SPBCS.ctrlOf A.toTPKindAlg Psim Q v)).1 hg⟩)
 
 variable [DecidableEq X]
 
@@ -697,7 +693,7 @@ theorem simLaw_winsNotExtracts_le {Wit : Type} {rel : Set (X × Wit)}
       (SaltedCoins (FiatShamirSalt kS) C)} {fx : X' → X} (hA : M.SimAssignsAtKeys B Psim fx) :
     simLaw (outEquiv k e) (extRun Qs A Psim Q kq hkq)
         {p | WinsNotExtracts Qs A Psim Q kq fx rel E p} ≤
-      knowledgeError k e (kq + Q * Psim.q) (FullPast.branchQueries A Psim Q + (kq + Q * Psim.q))
+      knowledgeError k e (kq + Q * Psim.q) (SPBCS.branchQueries A Psim Q + (kq + Q * Psim.q))
         M.senc.digestsPerInput Mg.nJ (maxError ε) := by
   set A₀ := A.toTPKindAlg.composeBothOut (simExtChallenger Psim Q) id
   set V1 := simExtVerifier Qs A Psim Q kq fx
@@ -712,11 +708,11 @@ theorem simLaw_winsNotExtracts_le {Wit : Type} {rel : Set (X × Wit)}
   have h1 := QROM.simLaw_queries_ne V1 id A₀.defaultOut A₀.toQueryAlgCoh
   rw [← hrun] at h1
   refine (simLaw_extRun Qs A Psim Q kq hkq _).trans_le ?_
-  calc ν {p | (⟨p.1.queries, p.1.answers, p.1.out.map (Base.ctrlOf A.toTPKindAlg Psim Q)⟩,
+  calc ν {p | (⟨p.1.queries, p.1.answers, p.1.out.map (SPBCS.ctrlOf A.toTPKindAlg Psim Q)⟩,
           p.2) ∈ {p | WinsNotExtracts Qs A Psim Q kq fx rel E p}}
       ≤ ν (({p | V1.AcceptsNotExtracts id rel (M.dbExtractBits E) p.1 p.2} ∪
-          {p | ∃ v ∈ p.1.out, Base.Fresh A Psim Q fx v ∧
-            (⟨p.1.queries, p.1.answers, Base.ctrlOf A.toTPKindAlg Psim Q v⟩ :
+          {p | ∃ v ∈ p.1.out, SPBCS.Fresh A Psim Q fx v ∧
+            (⟨p.1.queries, p.1.answers, SPBCS.ctrlOf A.toTPKindAlg Psim Q v⟩ :
               GordieHowe.QROM.BaseGame.Tuple _ _ _ (kq + Q * Psim.q)) ∈
               verdictGame Qs A Psim Q (kq + Q * Psim.q) ∧
             (⟨p.1.queries, p.1.answers, v⟩ : GordieHowe.QROM.BaseGame.Tuple _ _ _ (kq + Q * Psim.q)) ∉
@@ -785,7 +781,7 @@ theorem weak_online_simulation_extractability_qrom [DecidableEq X] {kq : ℕ}
     refine (simLaw_winsNotExtracts_le Qs (𝒜.alg a) Q kq hkq hrbr (hA.comap fx)).trans ?_
     unfold simExtractionError knowledgeError
     have h2 := 𝒜.queries_le a
-    have hb : FullPast.branchQueries (𝒜.alg a) Psim Q + (kq + Q * Psim.q) ≤
+    have hb : SPBCS.branchQueries (𝒜.alg a) Psim Q + (kq + Q * Psim.q) ≤
         tq + Q * Psim.q + (kq + Q * Psim.q) := by
       change (𝒜.alg a).width * (𝒜.alg a).budget + Q * Psim.q + (𝒜.alg a).width * (𝒜.alg a).post +
         (kq + Q * Psim.q) ≤ tq + Q * Psim.q + (kq + Q * Psim.q)
@@ -802,8 +798,7 @@ theorem weak_online_simulation_extractability_qrom [DecidableEq X] {kq : ℕ}
 
 section WeakForm
 
-variable (A : AdaptiveIAlg (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
-    (Claim X M.NIProof))
+variable {shA : AlgShape (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)} (A : AdaptiveIAlg shA (Claim X M.NIProof))
   (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B) SC) (Q kq : ℕ)
   (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) (fx : X' → X)
   [DecidableEq X] {Wit : Type} (rel : Set (X × Wit)) (E : CausalExtractor P t X Wit)
@@ -826,24 +821,24 @@ theorem jointSimExtraction_extRun (hB : A.WithinBudget) :
       (fun p => p.1.out.getD
         (A.toTPKindAlg.composeBothOut (simExtChallenger Psim Q) id).defaultOut)
       {p | ∃ v, p.out = some v ∧ Wins A.toTPKindAlg Psim Q Qs fx ((outEquiv k e).symm ∘ p.oracle) v}
-      {p | ∃ v ∈ p.1.out, Base.Fresh A Psim Q fx v ∧
-        (⟨p.1.queries, p.1.answers, Base.ctrlOf A.toTPKindAlg Psim Q v⟩ :
+      {p | ∃ v ∈ p.1.out, SPBCS.Fresh A Psim Q fx v ∧
+        (⟨p.1.queries, p.1.answers, SPBCS.ctrlOf A.toTPKindAlg Psim Q v⟩ :
           GordieHowe.QROM.BaseGame.Tuple _ _ _ (kq + Q * Psim.q)) ∈
           verdictGame Qs A Psim Q (kq + Q * Psim.q)}
-      {p | ∃ v ∈ p.1.out, M.extractsAt rel E (Base.advOut A.toTPKindAlg Psim Q v).stmt p.2}
+      {p | ∃ v ∈ p.1.out, M.extractsAt rel E (SPBCS.advOut A.toTPKindAlg Psim Q v).stmt p.2}
       0 (simLaw (outEquiv k e) (extRun Qs A Psim Q kq hkq)
         {p | WinsNotExtracts Qs A Psim Q kq fx rel E p}) where
   sim_le S := by
     set V2 := simVerifier Qs A Psim Q kq
     set A₀ := A.toTPKindAlg.composeBothOut (simExtChallenger Psim Q) id
-    have hv := QROM.simLaw_verdict V2 (Base.ctrlOf A.toTPKindAlg Psim Q) A₀.defaultOut
-      A₀.toQueryAlgCoh {vo | vo.accepted ∧ ∃ v ∈ vo.out, Base.Fresh A Psim Q fx v ∧ v ∈ S}
+    have hv := QROM.simLaw_verdict V2 (SPBCS.ctrlOf A.toTPKindAlg Psim Q) A₀.defaultOut
+      A₀.toQueryAlgCoh {vo | vo.accepted ∧ ∃ v ∈ vo.out, SPBCS.Fresh A Psim Q fx v ∧ v ∈ S}
     rw [Quantum.Alg.realLaw_toQueryAlgCoh] at hv
     rw [add_zero, hB.realLaw_composeBothOut_eq (simExtChallenger Psim Q) id (outEquiv k e)]
     calc _ ≤ (A₀.realLaw (outEquiv k e)).toOuterMeasure
-          {p | (⟨p.out, ∃ c ∈ p.out, V2.Accepted p.oracle (Base.ctrlOf A.toTPKindAlg Psim Q c)⟩ :
-            NARG.VerifiedOutput (Base.Reg A Psim Q)) ∈
-              {vo | vo.accepted ∧ ∃ v ∈ vo.out, Base.Fresh A Psim Q fx v ∧ v ∈ S}} := by
+          {p | (⟨p.out, ∃ c ∈ p.out, V2.Accepted p.oracle (SPBCS.ctrlOf A.toTPKindAlg Psim Q c)⟩ :
+            NARG.VerifiedOutput (SPBCS.Reg A Psim Q)) ∈
+              {vo | vo.accepted ∧ ∃ v ∈ vo.out, SPBCS.Fresh A Psim Q fx v ∧ v ∈ S}} := by
           refine MeasureTheory.measure_mono ?_
           rintro ⟨o, f⟩ ⟨⟨v, hv, hw⟩, hS⟩
           obtain rfl : o = some v := hv
@@ -861,7 +856,7 @@ theorem jointSimExtraction_extRun (hB : A.WithinBudget) :
   winsNotExtracts_le := by
     refine le_of_le_of_eq ?_ (simLaw_extRun Qs A Psim Q kq hkq _).symm
     exact MeasureTheory.measure_mono fun p ⟨⟨v, hv, hf, hg⟩, hne⟩ =>
-      ⟨Base.ctrlOf A.toTPKindAlg Psim Q v, Option.mem_map_of_mem _ hv, hf, hg,
+      ⟨SPBCS.ctrlOf A.toTPKindAlg Psim Q v, Option.mem_map_of_mem _ hv, hf, hg,
         fun hx => hne ⟨v, hv, hx⟩⟩
 
 /-- **The fresh extraction event of `SimulationSoundExtractableFresh` is that of the extraction
@@ -871,12 +866,12 @@ theorem extractFreshTestProb_eq_simLaw (ok : A.W → Prop) :
     extractFreshTestProb Qs A Psim Q kq fx rel E ok =
       simLaw (outEquiv k e) (extRunFull Qs A Psim Q kq hkq)
         {p | M.extractsAt rel E
-            (Base.advOut A.toTPKindAlg Psim Q (p.1.out.getD
+            (SPBCS.advOut A.toTPKindAlg Psim Q (p.1.out.getD
               (A.toTPKindAlg.composeBothOut (simExtChallenger Psim Q) id).defaultOut)).stmt
             p.2 ∧
-          Base.Fresh A Psim Q fx
+          SPBCS.Fresh A Psim Q fx
             (p.1.out.getD (A.toTPKindAlg.composeBothOut (simExtChallenger Psim Q) id).defaultOut) ∧
-          ok (Base.advWorkspace A.toTPKindAlg Psim Q
+          ok (SPBCS.advWorkspace A.toTPKindAlg Psim Q
             (p.1.out.getD
               (A.toTPKindAlg.composeBothOut (simExtChallenger Psim Q) id).defaultOut)).1} := by
   unfold extractFreshTestProb simProb extAdv
@@ -923,8 +918,8 @@ theorem WeakOnlineSimulationExtractable.unruhSimExtraction_of_queryFreeTest [Dec
       fun a => by
     have hw := (jointSimExtraction_extRun Qs ((𝒜.toSimExtraction Q).alg a) Psim Q kq hkq fx rel E
       (𝒜.withinBudget a)).unruhSimExtraction
-      {v | Base.Fresh ((𝒜.toSimExtraction Q).alg a) Psim Q fx v ∧
-        ok a (Base.advWorkspace ((𝒜.toSimExtraction Q).alg a).toTPKindAlg Psim Q v).1}
+      {v | SPBCS.Fresh ((𝒜.toSimExtraction Q).alg a) Psim Q fx v ∧
+        ok a (SPBCS.advWorkspace ((𝒜.toSimExtraction Q).alg a).toTPKindAlg Psim Q v).1}
     rw [zero_add] at hw
     have hx := extractFreshTestProb_eq_simLaw Qs ((𝒜.toSimExtraction Q).alg a) Psim Q kq hkq fx
       rel E (ok a)
@@ -938,7 +933,7 @@ theorem WeakOnlineSimulationExtractable.unruhSimExtraction_of_queryFreeTest [Dec
     · rintro ⟨o, D⟩ ⟨⟨v, hv, hx⟩, hS⟩
       have hout : o.out = some v := hv
       refine ⟨?_, hS⟩
-      show M.extractsAt rel E (Base.advOut _ Psim Q (o.out.getD _)).stmt D
+      show M.extractsAt rel E (SPBCS.advOut _ Psim Q (o.out.getD _)).stmt D
       rw [hout]
       exact hx
   calc acceptsTest Qs (𝒜.toSimExtraction Q) Psim fx ok
@@ -976,7 +971,7 @@ witness of the statement, with probability at most `ε tq Q`.
 CL06's `Q+` is the list of the queries sent to `Sim` with a valid witness. A CL06 adversary is run
 as an adversary that checks each witness itself, a classical computation at no query cost, and
 makes proof queries only for the statements sent with a valid witness, so its list of queried statements
-(`Base.queriedOf` read through `fx`) is `Q+`. CL06's message is part of the statement: for the
+(`SPBCS.queriedOf` read through `fx`) is `Q+`. CL06's message is part of the statement: for the
 relation `R' = {((x, m), w) | (x, w) ∈ R}` the statements are the pairs `(x, m)`. CL06 asks this
 for probabilistic polynomial-time adversaries with classical auxiliary input; here the
 adversaries are the query-bounded quantum adversaries of `def:adversary`, with a concrete error. -/
@@ -991,7 +986,7 @@ def CL06Extraction [DecidableEq X] {Wit : Type} (rel : Set (X × Wit))
       {p | ∃ o u, (o, u) ∈ p.1.out ∧
         (⟨p.1.queries, p.1.answers, (o, u)⟩ : GordieHowe.QROM.BaseGame.Tuple _ _ _ _) ∈
           verdictGame Qs (𝒜.alg a) (Sim.comap fx) Q (kq + Q * (Sim.comap fx).q) ∧
-        o.stmt ∉ (Base.queriedOf (𝒜.alg a).toTPKindAlg (Sim.comap fx) Q u).map fx ∧
+        o.stmt ∉ (SPBCS.queriedOf (𝒜.alg a).toTPKindAlg (Sim.comap fx) Q u).map fx ∧
         ∀ w ∈ M.dbExtractBits E o.stmt p.2, (o.stmt, w) ∉ rel} ≤ ε tq Q
 
 variable {Qs} in

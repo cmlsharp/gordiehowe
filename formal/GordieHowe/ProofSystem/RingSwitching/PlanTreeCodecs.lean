@@ -59,6 +59,12 @@ theorem ofListReaders_allLoads {Rd : ∀ b, SpecReaders (M b).spec} {good : Load
   | [] => fun i => i.1.elim0
   | b :: l => SpecReaders.append_allLoads (h b) (ofListReaders_allLoads h l)
 
+/-- **A list's readers grant nothing** when every entry's grant nothing. -/
+theorem ofListReaders_ungranted {Rd : ∀ b, SpecReaders (M b).spec} (h : ∀ b, (Rd b).Ungranted) :
+    ∀ l, (ofListReaders Rd l).Ungranted
+  | [] => fun i => i.1.elim0
+  | b :: l => SpecReaders.AllGranted.append (h b) (ofListReaders_ungranted h l)
+
 /-- **The rounds of a list of masked reductions** are its entries'. -/
 theorem ofList_n : (l : List β) → (FieldProof.MaskedReduction.ofList M l).n = (l.map fun b => (M b).n).sum
   | [] => rfl
@@ -137,6 +143,24 @@ theorem touchReaders_allGranted (rd : CReader K) (g : ℕ)
   | .single _ => hR
   | .combine _ _ => SpecReaders.AllGranted.append hR
       (SpecReaders.AllGranted.one _ (by rw [CReader.extend_load, CReader.pi_load]; exact hnt))
+
+/-- **The largest grant of the combination's readers**: the masked reduction's, and the
+combination's grant `g` when two or more claims touch and the field reader grants nothing. -/
+theorem touchReaders_maxGrant (rd : CReader K) (hrd : rd.grant = 0) (g : ℕ)
+    (M : FieldProof.MaskedReduction K ι PubT WitT cells Zt nc) (R : StageRouting nc nt np)
+    (Rd : SpecReaders M.spec) :
+    (touchReaders rd g M R Rd).maxGrant = max Rd.maxGrant (if 2 ≤ nt then g else 0) :=
+  match R with
+  | .none _ => by
+    change Rd.maxGrant = _
+    simp
+  | .single _ => by
+    change Rd.maxGrant = _
+    simp
+  | .combine _ h2 => by
+    change (Rd ++ SpecReaders.one (Fin _ → K) ((CReader.pi _ rd).extend g)).maxGrant = _
+    rw [SpecReaders.maxGrant_append, SpecReaders.maxGrant_one, CReader.extend_grant,
+      CReader.pi_grant, hrd, if_pos h2, mul_zero, zero_add]
 
 /-- **The combination adds a round** exactly when two or more claims touch. -/
 theorem touch_n (M : FieldProof.MaskedReduction K ι PubT WitT cells Zt nc) (R : StageRouting nc nt np) :
@@ -281,6 +305,66 @@ def runReaders (rd : CReader K) (gr : ℕ → ℕ) (fc : ι) : (pos : ℕ) → (
       (M.routedStage (routeAt pos r).route (stage fc pos e es)
         (path fc (pos + 1) es _ (nextReads pos e r)).level)
       (touchReaders rd (gr pos) M (routeAt pos r).route Rd ++ SpecReaders.oneP (Fin e.d → K))
+
+/-- **The shape of an edge** the run's routing reads: its relative degree and its parent. -/
+def shape (e : PEdge K ι p S0) : ℕ × Option ℕ := (e.d, e.parent)
+
+/-- **The nodes the claims after a stage read** (`nextReads`) from the edge's relative degree `dd`
+and parent `par`. -/
+def nextReadsOf {nc : ℕ} (pos dd : ℕ) (par : Option ℕ) (r : Fin nc → Finset ℕ) :
+    Fin (dd + 1 + (routeAt pos r).np) → Finset ℕ :=
+  Fin.append
+    (Fin.cases (Finset.univ.biUnion fun i => r ((routeAt pos r).route.split.symm (.inl i)))
+      fun _ => match par with
+        | none => ∅
+        | some j => {pos + 1 + (j - (pos + 1))})
+    fun i => r ((routeAt pos r).route.split.symm (.inr i))
+
+omit [DecidableEq K] [Fintype ι] in
+theorem nextReads_eq {nc : ℕ} (pos : ℕ) (e : PEdge K ι p S0) (r : Fin nc → Finset ℕ) :
+    nextReads pos e r = nextReadsOf pos e.d e.parent r := by
+  unfold nextReads nextReadsOf parentNodes
+  rfl
+
+/-- **The grant of a stage's combination challenge**: the stage's grant `g` when two or more of
+its `nt` claims touch. A stage granted nothing contributes nothing whatever its claims. -/
+def stageGrant (g nt : ℕ) : ℕ := if g = 0 then 0 else if 2 ≤ nt then g else 0
+
+theorem stageGrant_eq (g nt : ℕ) : stageGrant g nt = if 2 ≤ nt then g else 0 := by
+  unfold stageGrant
+  split_ifs <;> simp_all
+
+/-- **The largest grant of the run's combination challenges** from absolute position `pos` on, at
+the edges' shapes (`shape`): `gr pos` for every stage at which two or more claims touch
+(`stageGrant`). -/
+def runGrant (gr : ℕ → ℕ) : (pos : ℕ) → (es : List (ℕ × Option ℕ)) → (nc : ℕ) →
+    (Fin nc → Finset ℕ) → ℕ
+  | _, [], _, _ => 0
+  | pos, s :: es, _, r =>
+    max (stageGrant (gr pos) (routeAt pos r).nt)
+      (runGrant gr (pos + 1) es _ (nextReadsOf pos s.1 s.2 r))
+
+/-- **The largest grant of the run's readers** is the masked reduction's readers' and the run's
+combination challenges' (`runGrant`) when the field reader grants nothing. -/
+theorem runReaders_maxGrant (rd : CReader K) (hrd : rd.grant = 0) (gr : ℕ → ℕ) (fc : ι) :
+    (pos : ℕ) → (es : List (PEdge K ι p S0)) → (nc : ℕ) → (r : Fin nc → Finset ℕ) →
+    (M : FieldProof.MaskedReduction K ι PubT WitT cells (Logical ι es) nc) →
+    (Rd : SpecReaders M.spec) →
+      (runReaders rd gr fc pos es nc r M Rd).maxGrant =
+        max Rd.maxGrant (runGrant gr pos (es.map shape) nc r)
+  | _, [], _, _, _, Rd => (max_eq_left (Nat.zero_le Rd.maxGrant)).symm
+  | pos, e :: es, _, r, M, Rd => by
+    let _ := e.kit.order
+    refine (runReaders_maxGrant rd hrd gr fc (pos + 1) es _ (nextReads pos e r)
+      (M.routedStage (routeAt pos r).route (stage fc pos e es)
+        (path fc (pos + 1) es _ (nextReads pos e r)).level)
+      (touchReaders rd (gr pos) M (routeAt pos r).route Rd ++ SpecReaders.oneP (Fin e.d → K))).trans
+      ?_
+    have h := SpecReaders.maxGrant_append (touchReaders rd (gr pos) M (routeAt pos r).route Rd)
+      (SpecReaders.oneP (Fin e.d → K))
+    rw [(SpecReaders.Ungranted.oneP _).maxGrant_eq, touchReaders_maxGrant rd hrd] at h
+    refine (congrArg (max · _) h).trans ?_
+    simp only [List.map_cons, runGrant, shape, nextReads_eq, stageGrant_eq, Nat.max_zero, max_assoc]
 
 /-- **The loads of the run's readers** are at most `L` when the masked reduction's are and every
 stage's touching claims' elements are. -/

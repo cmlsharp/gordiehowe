@@ -94,13 +94,11 @@ docstring only: VCVio's caveat that no theorem relates the `@[implemented_by]` l
 replaced by the names of the theorems in `GordieHowe/Applications/MLDSA44/Spec/NTTLoop.lean`
 that prove each pair equal).
 
-Not copied: `Scheme.lean`, `Signature.lean`, `Security.lean`, `SecurityHVZK.lean`,
-`SecurityNMA.lean`. `Scheme.lean` and `Signature.lean` mix the pure `fipsVerify` together with
-the monadic `fipsSign`/`fipsKeyGen`/`identificationScheme`/security-reduction machinery (they
-import `VCVio.CryptoFoundations.IdenSchemeWithAbort` and
-`VCVio.OracleComp.Constructions.SampleableType`); the pure parts needed for verification were
-extracted into a new file instead of copying either wholesale — see `Verify.lean` below. The
-`Security*.lean` files are EUF-CMA reduction proofs, out of scope for a verification spec.
+Not copied in the first pass: `Scheme.lean`, `Signature.lean`, `Security.lean`,
+`SecurityHVZK.lean`, `SecurityNMA.lean`; the pure parts needed for verification were extracted into
+`Verify.lean` (below). `Scheme.lean` and `Signature.lean` were added later; see "ML-DSA key
+generation and signing" below. `Security.lean`, `SecurityHVZK.lean` and `SecurityNMA.lean` are not
+copied.
 
 **New file** `Verify.lean`: not a straight copy of any one VCVio file. Collects the pure,
 non-monadic declarations `fipsVerify` depends on, taken from `Scheme.lean` (`PublicKey`,
@@ -176,6 +174,34 @@ qualify — every ML-DSA/Falcon test vector in VCVio is checked by running it th
 reference implementation, not against inlined literals. `LatticeCryptoTest/Ring/*` (`CenteredRepr.lean`,
 `VectorAPI.lean`) are pure `decide`-based lemma sanity gates on the ring layer, not ML-DSA/Falcon
 test vectors, so they are out of scope.
+
+## ML-DSA key generation and signing
+
+Vendored 2026-10-23 from VCVio commit `eb0f6e456a8dffee6a0ba8a2f66ca2a5b50dfd79`, the commit of the
+ML-DSA files above: `LatticeCrypto/MLDSA/Scheme.lean` and `LatticeCrypto/MLDSA/Signature.lean`, the
+only two files added. VCVio's head at the time (`f3df0ac18aa5ae72b3e920ad5460492aa039b4f7`) changes
+these two files only in docstrings and imports; its imports move to a measure-based probability
+API that changes 28 of the 54 VCVio/`ToMathlib` files the Johnson MCA subset shares (pinned at
+VCVio `d7089e46`, which `eb0f6e45` leaves unchanged) and needs Lean v4.35.0.
+
+- `Scheme.lean` keeps `SecretKey`, `keyGenFromSeed`, `validKeyPair`, `validKeyPairShort` and the
+  key-generation lemmas. Dropped: `PublicKey` and `computeWApprox` (identical copies are in
+  `Verify.lean`, imported in place of `Primitives`); `identificationScheme` and
+  `identificationSchemeShort`, with the import `VCVio.CryptoFoundations.IdenSchemeWithAbort` that
+  only they need and the types `SigningState`, `Commitment`, `Response` that only they use. The
+  reason: their commitment samples the mask `y` uniformly over all of `R_q^l`, not over the
+  FIPS 204 mask range `[-γ₁+1, γ₁]` (ExpandMask, Algorithm 34), so they model a different scheme.
+  `VCVio.OracleComp.Constructions.SampleableType` is replaced by its already-vendored
+  `SampleableType.Basic` (the kept declarations sample only `Bytes 32`). The module docstring is
+  shortened to the kept content.
+- `Signature.lean` keeps `fipsKeyGen`, `fipsSignAttempt`, `fipsSignLoop`, `fipsSign`, the hint
+  lemmas and `fipsSign_fipsVerify_correct'` / `fipsSign_fipsVerify_correct`. Dropped:
+  `FIPSSignature` and `fipsVerify` (identical copies are in `Verify.lean`).
+
+Not copied: `LearningWithErrors.lean` would add 40 more files (through
+`VCVio.CryptoFoundations.HardnessAssumptions.NoisyLearning`). `Vendor/LatticeCrypto.lean` imports
+the two new modules. `lake build LatticeCrypto` builds (2829 jobs), and `#print axioms` on
+`MLDSA.fipsSign_fipsVerify_correct` reports only `propext`, `Classical.choice`, `Quot.sound`.
 
 ## Concrete primitives
 

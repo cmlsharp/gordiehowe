@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.Completeness.Env
+public import GordieHoweNative.Language.Completeness.Late
 
 @[expose] public section
 
@@ -16,6 +17,9 @@ values respect the exported reads where every generated value reads only its exp
 (`respectsReads_genLateOf`, checked by `genReadsCoveredCB`); and a late histogram counts its
 group's needles at the honest environment, alone (`histogramsCount_lateC`) or beside a static
 histogram (`histogramsCount_mixedC`).
+
+The definitions are in `GordieHoweNative/Language/Completeness/Late.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -25,41 +29,6 @@ open Export ProofSystem.PhaseLayout IOP
 section
 
 variable {ir : RealizedProgram} {I : Interp}
-
-variable (ir) in
-/-- **The values and challenges the generator of value `v` (`genSrcOf`) reads**: a tag reads its H
-operand's values and its key, a grouped `mod_q`'s accumulators and quotient digits read its
-powers and its operand's values, an ungrouped digit-form `mod_q`'s accumulator and lower digits
-read its left side's values (`genInputs` with the generators read off `G`). -/
-def genInputsOf (G : Gens) (v : ℕ) : List ℕ × List ℕ :=
-  match G.at v with
-  | .tag p =>
-    match (ir.predicate p).body with
-    | .cross _ x _ _ _ real => (ir.exprNodes x, [real.key])
-    | _ => ([], [])
-  | .acc p =>
-    match (ir.predicate p).body with
-    | .mod _ _ L _ real =>
-      match real.grouped, macUnits? L with
-      | some _, some u => (u.powers :: ir.exprNodes u.operand, [])
-      | _, _ => ([], [])
-    | _ => ([], [])
-  | .quotDigit p =>
-    match (ir.predicate p).body with
-    | .mod _ _ L _ real =>
-      match real.grouped, macUnits? L with
-      | some _, some u => (u.powers :: ir.exprNodes u.operand, [])
-      | _, _ => ([], [])
-    | _ => ([], [])
-  | .digitsAcc p =>
-    match (ir.predicate p).body with
-    | .mod _ _ L _ _ => (ir.exprNodes L, [])
-    | _ => ([], [])
-  | .lowDigit p _ =>
-    match (ir.predicate p).body with
-    | .mod _ _ L _ _ => (ir.exprNodes L, [])
-    | _ => ([], [])
-  | _ => ([], [])
 
 /-- **A generator reads only its inputs** (`genInputsOf`). -/
 theorem genSrcOf_congr_inputs {G : Gens} {e e' : ir.Env I} {v : ℕ}
@@ -197,33 +166,36 @@ theorem respectsReads_genLateOf {Inp : Type} {G : Gens} (hG : ir.CGenFacts I G)
       (hcov l).1 (hcov l).2]
 
 variable (ir) in
-/-- **`GenCoveredC`, through the reads tables.** -/
-def genCoveredCB (G : Gens) (rs : List Read) (v : ℕ) : Bool :=
-  (ir.genInputsOf G v).2.all (fun j => rs.contains (.chal j)) &&
-    (ir.genInputsOf G v).1.all (ir.srcCoveredB rs)
+/-- **`genCoveredCB` at the program.** -/
+theorem genCoveredCB_eq (G : Gens) (MT : NatTrie ℕ) (rs : List Read) (v : ℕ) :
+    ir.genCoveredCB G MT rs v = ((ir.genInputsOf G v).2.all (fun j => rs.contains (.chal j)) &&
+      (ir.genInputsOf G v).1.all (ir.srcCoveredB MT rs)) :=
+  rfl
 
 /-- **`GenCoveredC` holds where its check does.** -/
-theorem genCoveredC_of_B (hwf : ir.WellFormed) {G : Gens} {rs : List Read} {v : ℕ}
-    (h : ir.genCoveredCB G rs v = true) : ir.GenCoveredC G rs v := by
-  unfold genCoveredCB at h
+theorem genCoveredC_of_B (hwf : ir.WellFormed) {MT : NatTrie ℕ} (hMT : ir.MessagesCovered MT)
+    {G : Gens} {rs : List Read} {v : ℕ}
+    (h : ir.genCoveredCB G MT rs v = true) : ir.GenCoveredC G rs v := by
+  rw [genCoveredCB_eq] at h
   simp only [Bool.and_eq_true, List.all_eq_true, List.contains_iff_mem] at h
-  exact ⟨h.1, fun w hw => srcCovered_of_B hwf (h.2 w hw)⟩
+  exact ⟨h.1, fun w hw => srcCovered_of_B hwf hMT (h.2 w hw)⟩
 
 variable (ir) in
 /-- **`HistCoveredC`, through the reads tables.** -/
-def histCoveredCB (G : Gens) (rs : List Read) (v : ℕ) : Bool :=
+def histCoveredCB (G : Gens) (MT : NatTrie ℕ) (rs : List Read) (v : ℕ) : Bool :=
   match G.at v with
   | .lateHist t g => (ir.members t g).all fun m =>
       (ir.exprNodes (ir.needleExpr m.pred m.needle)).all fun w =>
-        ir.srcCoveredB rs w && (ir.readsT.getD w []).all fun r =>
+        ir.srcCoveredB MT rs w && (ir.readsT.getD w []).all fun r =>
           match r with
-          | .late u => ir.genCoveredCB G rs u
+          | .late u => ir.genCoveredCB G MT rs u
           | _ => true
   | _ => true
 
 /-- **`HistCoveredC` holds where its check does.** -/
-theorem histCoveredC_of_B (hwf : ir.WellFormed) {G : Gens} {rs : List Read} {v : ℕ}
-    (h : ir.histCoveredCB G rs v = true) : ir.HistCoveredC G rs v := by
+theorem histCoveredC_of_B (hwf : ir.WellFormed) {MT : NatTrie ℕ} (hMT : ir.MessagesCovered MT)
+    {G : Gens} {rs : List Read} {v : ℕ}
+    (h : ir.histCoveredCB G MT rs v = true) : ir.HistCoveredC G rs v := by
   unfold histCoveredCB at h
   unfold HistCoveredC
   split
@@ -231,25 +203,25 @@ theorem histCoveredC_of_B (hwf : ir.WellFormed) {G : Gens} {rs : List Read} {v :
     simp only [htg, List.all_eq_true, Bool.and_eq_true] at h
     intro m hm w hw
     obtain ⟨h1, h2⟩ := h m hm w hw
-    exact ⟨srcCovered_of_B hwf h1, fun u hu =>
-      genCoveredC_of_B hwf (by simpa using h2 _ ((mem_readsT hwf w _).1 hu))⟩
+    exact ⟨srcCovered_of_B hwf hMT h1, fun u hu =>
+      genCoveredC_of_B hwf hMT (by simpa using h2 _ ((mem_readsT hwf w _).1 hu))⟩
   · trivial
 
 variable (ir) in
 /-- **`GenReadsCoveredC`, through the reads tables.** -/
-def genReadsCoveredCB (G : Gens) : Bool :=
+def genReadsCoveredCB (G : Gens) (MT : NatTrie ℕ) : Bool :=
   (List.range ir.values.length).all fun v =>
     !decide (ir.IsLate v) ||
-      (ir.genCoveredCB G (ir.value v).reads v && ir.histCoveredCB G (ir.value v).reads v)
+      (ir.genCoveredCB G MT (ir.value v).reads v && ir.histCoveredCB G MT (ir.value v).reads v)
 
 /-- **`GenReadsCoveredC` holds where its check does.** -/
-theorem genReadsCoveredC_of_B (hwf : ir.WellFormed) {G : Gens}
-    (h : ir.genReadsCoveredCB G = true) : ir.GenReadsCoveredC G := by
+theorem genReadsCoveredC_of_B (hwf : ir.WellFormed) {MT : NatTrie ℕ} (hMT : ir.MessagesCovered MT)
+    {G : Gens} (h : ir.genReadsCoveredCB G MT = true) : ir.GenReadsCoveredC G := by
   intro l
   have := List.all_eq_true.1 h l.1 (List.mem_range.2 l.1.2)
   have hl : ir.IsLate l.1 := l.2
   simp only [hl, decide_true, Bool.not_true, Bool.false_or, Bool.and_eq_true] at this
-  exact ⟨genCoveredC_of_B hwf this.1, histCoveredC_of_B hwf this.2⟩
+  exact ⟨genCoveredC_of_B hwf hMT this.1, histCoveredC_of_B hwf hMT this.2⟩
 
 section HonestEnv
 

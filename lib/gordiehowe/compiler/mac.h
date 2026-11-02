@@ -440,7 +440,7 @@ class EqualityLoweringImpl : Lowering {
       }
       gkr(s, pre + ".H", depends_on(X, r, U),
           [xp](const auto &lc, const auto &chunks, const auto &r,
-               const auto &u) {
+               const auto &u, FamilyLog *log) {
             std::optional<size_t> sum;
             for (size_t c = 0; c < r.size(); ++c) {
               const auto bits = chunks.row(c);
@@ -449,10 +449,12 @@ class EqualityLoweringImpl : Lowering {
                 const size_t t = lc.mul(xp[i], bits[i]);
                 chunk = chunk ? lc.add(*chunk, t) : t;
               }
+              if (log != nullptr) log->chunks.push_back(*chunk);
               const size_t t = lc.mul(*chunk, r[c]);
               sum = sum ? lc.add(*sum, t) : t;
             }
-            lc.assert_eq(u[0], *sum);
+            const size_t z = lc.assert_eq(u[0], *sum);
+            if (log != nullptr) log->z = z;
           },
           key);
     }

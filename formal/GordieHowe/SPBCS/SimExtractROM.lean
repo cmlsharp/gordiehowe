@@ -15,13 +15,13 @@ public import GordieHowe.Model.ROM.SimExtract
 Weak simulation-sound extractability with straight-line extraction (paper `thm:bcs-se`(2); Unruh
 2017, ePrint 2017/398, Definition 14, p. 21, eq. (6), weak variant), against query-bounded
 classical adversaries (`ROM.QueryBoundedAdversary`), for the spBCS compiler. The game is the
-one of `GordieHowe/SPBCS/FullPast/SimExtractROM.lean` (the composed run `SEProg.compose` of the adversary's
+one of `GordieHowe/SPBCS/SEProg.lean` (the composed run `SEProg.compose` of the adversary's
 tree with the simulation oracle, then the verifier's queries under the final oracle) with a
 classical simulator program `sp` that assigns only at the keys of its chain inputs
 (`GordieHowe.SPBCS.AssignsAtKeys`) and the spBCS verifier.
 
-**The extractor** reads the game's query table: `dbExtract` (the database extractor on the
-translated database) on `gameLog`. It is straight-line and makes no queries.
+**The extractor** reads the game's query table: the database extractor `dbExtract` on
+`gameLog`. It is straight-line and makes no queries.
 
 **The theorem** (`simulation_sound_extractability_rom_joint`, CY24 Definition 5.1.1 joint form):
 `Pr_h[win ∧ the extractor fails] ≤ simExtractionErrorROM kq (max_c ε c) q tq Q`, the classical
@@ -56,7 +56,7 @@ variable {V : X → FullTr P t → Bool} (Qs : ∀ x, M.IOPQueries V x) {X' : Ty
   (sp : X' → SaltedCoins (FiatShamirSalt kS) C →
     OracleProg (Query k kN kS L) (Out k e) (NARG.SimOutput (Query k kN kS L) (Out k e) (M.Response B)))
 
-variable {Q : ℕ} (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C) (𝒜 : M.toFullPast.ROMAdversary B X')
+variable {Q : ℕ} (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C) (𝒜 : M.ROMAdversary B X')
 
 /-- **The game as a classical program**: the composed run, then the spBCS verifier's queries
 on the output under the final oracle. -/
@@ -83,7 +83,7 @@ def WinsROM (h : Query k kN kS L → Out k e) : Prop :=
 
 /-- **The game's query table**: the base answers at the game's queries, padded to `K`. -/
 noncomputable def gameLog (K : ℕ) (h : Query k kN kS L → Out k e) : DB (Query k kN kS L) (Out k e) :=
-  ((Base.baseAlg (k := k) (kN := kN) (kS := kS) (L := L) (e := e)).append
+  ((SPBCS.baseAlg (k := k) (kN := kN) (kS := kS) (L := L) (e := e)).append
     (OracleProg.toExpansion (fun _ : Unit => M.romGame B Qs sp c 𝒜)
       (.xof (fun _ => 0) fun _ => 0)) K).log h (0 + K)
 
@@ -123,7 +123,7 @@ omit [∀ j i, Nonempty ((P j).Challenge i)] [∀ j i, Fintype ((M.comp j).Messa
 variable (M B fx sp) in
 /-- **The assignments of a composed run keep the invariant.** -/
 theorem assignInv_compose (hA : ∀ r a, M.AssignsAtKeys (sp r a) ⟨a.salt, fx r⟩) {Q : ℕ} (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C)
-    (h : Query k kN kS L → Out k e) : ∀ (p : M.toFullPast.ROMAdversary B X') ass i qs Tr,
+    (h : Query k kN kS L → Out k e) : ∀ (p : M.ROMAdversary B X') ass i qs Tr,
     M.AssignInv fx h Tr qs ass →
     M.AssignInv fx h (Tr ++ (SEProg.compose (sp) c p ass i qs).trace h)
       ((SEProg.compose (sp) c p ass i qs).run h).queried
@@ -161,7 +161,7 @@ theorem assignInv_compose (hA : ∀ r a, M.AssignsAtKeys (sp r a) ⟨a.salt, fx 
 /-! ### The game's trace and query table -/
 
 omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
-theorem trace_romGame {Q : ℕ} (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C) (𝒜 : M.toFullPast.ROMAdversary B X')
+theorem trace_romGame {Q : ℕ} (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C) (𝒜 : M.ROMAdversary B X')
     (h : Query k kN kS L → Out k e) :
     (M.romGame B Qs sp c 𝒜).trace h =
       (SEProg.compose (sp) c 𝒜 [] 0 []).trace h ++
@@ -176,7 +176,7 @@ theorem trace_romGame {Q : ℕ} (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C
 omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
 /-- **The query table records every query of the game with its base answer**, when the padding
 `K` covers the game's queries. -/
-theorem lookup_gameLog {Q : ℕ} (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C) (𝒜 : M.toFullPast.ROMAdversary B X')
+theorem lookup_gameLog {Q : ℕ} (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C) (𝒜 : M.ROMAdversary B X')
     {K : ℕ} {h : Query k kN kS L → Out k e}
     (hK : ((M.romGame B Qs sp c 𝒜).trace h).length ≤ K) {q : Query k kN kS L}
     (hq : q ∈ (M.romGame B Qs sp c 𝒜).trace h) :
@@ -205,7 +205,7 @@ omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
 /-- **A win whose query table the extractor fails on puts the table in `bad ∪ P_col`.** -/
 theorem gameLog_mem_bad [DecidableEq X] (hA : ∀ r a, M.AssignsAtKeys (sp r a) ⟨a.salt, fx r⟩)
     (hrbr : CausalRBRKnowledgeSound rel V E St ε) {Q : ℕ} (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C)
-    (𝒜 : M.toFullPast.ROMAdversary B X') {K : ℕ} {h : Query k kN kS L → Out k e}
+    (𝒜 : M.ROMAdversary B X') {K : ℕ} {h : Query k kN kS L → Out k e}
     (hK : ((M.romGame B Qs sp c 𝒜).trace h).length ≤ K)
     (hw : M.WinsROM B Qs fx sp c 𝒜 h)
     (hn : M.gameLog B Qs sp c 𝒜 K h ∉
@@ -253,11 +253,10 @@ theorem gameLog_mem_bad [DecidableEq X] (hA : ∀ r a, M.AssignsAtKeys (sp r a) 
   have hQ : RecordsQueries D Of x π (Qs x) := fun q hq => by
     show D.lookup q = some (Of q)
     rw [hlookup _ (hver _ hq), show Of q = h q from reprogram_apply_of_forall_ne h (hunprog q hq)]
-  rcases mem_of_verify rel E St hrbr hw.2 hQ with hc | hE | hb | hc
+  rcases mem_of_verify rel E St hrbr hw.2 hQ with hc | hE | hb
   · exact Or.inr hc
   · exact absurd hE hn
   · exact Or.inl hb
-  · exact absurd hc (trans_notMem_digestCollision hcol)
 
 omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
 /-- **Simulation-sound extractability of the spBCS compiler in the classical random-oracle
@@ -275,7 +274,7 @@ theorem simulation_sound_extractability_rom_joint [DecidableEq X]
     (hqs : ∀ r a G, ((sp r a).trace G).length ≤ q)
     (hrbr : CausalRBRKnowledgeSound rel V E St ε) {kq : ℕ}
     (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) {Q tq : ℕ}
-    (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C) (𝒜 : M.toFullPast.ROMAdversary B X') (h𝒜 : 𝒜.QueryBound tq) :
+    (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C) (𝒜 : M.ROMAdversary B X') (h𝒜 : 𝒜.QueryBound tq) :
     Pr[h ← (Query k kN kS L → Out k e) : M.WinsROM B Qs fx sp c 𝒜 h ∧
         M.gameLog B Qs sp c 𝒜
           (tq + Q * q + kq) h ∉
@@ -291,7 +290,7 @@ theorem simulation_sound_extractability_rom_joint [DecidableEq X]
     simp only [Nat.sub_zero] at h1
     omega
   have hle := M.prob_log_bad_union_le rel E St hrbr
-    ((Base.baseAlg (k := k) (kN := kN) (kS := kS) (L := L) (e := e)).append
+    ((SPBCS.baseAlg (k := k) (kN := kN) (kS := kS) (L := L) (e := e)).append
       (OracleProg.toExpansion (fun _ : Unit => M.romGame B Qs sp c 𝒜)
         (.xof (fun _ => 0) fun _ => 0)) K)
   refine le_trans (QROM.probUniform_mono fun h hh => ?_)
@@ -303,7 +302,7 @@ theorem simulation_sound_extractability_rom_joint [DecidableEq X]
 
 namespace SimExtractionAdversaryROM
 
-variable {tq Q : ℕ} (𝒜 : M.toFullPast.SimExtractionAdversaryROM B X' tq) (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C)
+variable {tq Q : ℕ} (𝒜 : M.SimExtractionAdversaryROM B X' (Claim X M.NIProof) tq) (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C)
 
 /-- **The probability that `𝒜` wins while the straight-line extractor `dbExtract` fails**, over
 its coins and a uniform base oracle, with simulator coins `c`: it outputs a statement none of its
@@ -353,7 +352,7 @@ theorem _root_.GordieHowe.SPBCS.weak_online_simulation_extractability_rom_basic 
     (hqs : ∀ r a G, ((sp r a).trace G).length ≤ q)
     (hrbr : CausalRBRKnowledgeSound rel V E St ε) {kq : ℕ}
     (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) {Q tq : ℕ}
-    (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C) (𝒜 : M.toFullPast.SimExtractionAdversaryROM B X' tq) :
+    (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C) (𝒜 : M.SimExtractionAdversaryROM B X' (Claim X M.NIProof) tq) :
     SimExtractionAdversaryROM.winsNotExtracts (Qs := Qs) (fx := fx) (sp := sp) 𝒜 c rel E kq q ≤
       M.simExtractionErrorROM kq (maxError ε) q tq Q :=
   𝒜.tsum_le fun r => simulation_sound_extractability_rom_joint hA hqs hrbr hkq c

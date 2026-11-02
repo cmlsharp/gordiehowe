@@ -19,8 +19,8 @@ circuit.
 
 * `falconLen msgLen`: the SHAKE256 input length, the salt then the message.
 * `falconExtra msgLen`: the absorb permutations beyond the first, so that
-  `A = falconExtra msgLen + 1` absorb permutations are followed by nine squeezes:
-  `falconPerms msgLen = A + 9` permutations.
+  `A = falconExtra msgLen + 1` absorb permutations are followed by ten squeezes:
+  `falconPerms msgLen = A + 10` permutations.
 -/
 
 namespace GordieHowe.HashCircuit
@@ -37,7 +37,7 @@ abbrev falconLen (msgLen : ℕ) : ℕ := falcon512.saltBytes + msgLen
 /-- The absorb permutations beyond the first: `(40 + msgLen) / 136`. -/
 abbrev falconExtra (msgLen : ℕ) : ℕ := falconLen msgLen / SpongeSpec.shake256.rate
 
-/-- Falcon's permutations: the absorbs and nine squeezes. -/
-def falconPerms (msgLen : ℕ) : ℕ := falconExtra msgLen + 10
+/-- Falcon's permutations: the absorbs and ten squeezes. -/
+def falconPerms (msgLen : ℕ) : ℕ := falconExtra msgLen + 11
 
 end GordieHowe.HashCircuit

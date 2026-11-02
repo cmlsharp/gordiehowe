@@ -116,16 +116,16 @@ open Classical in
 (`eventBound_loweringOfRbr`, `sum_chalPhase_eq`), the realization step's the sum of its challenges'
 `realError` (`eventBound_realizeSource`), the cells lowering none; errors add along the composite
 (`Lowering.eventBound_comp`). -/
-theorem eventBound_lowering (T : B.CircuitsEnforce)
+theorem eventBound_lowering
     (h : rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
     (hend : ∀ i, ir.rounds.get i.1 = .final → ε i = 0) :
-    (B.lowering T ⟨_, h, hend⟩).EventBound (ir.phaseError I ε) := by
+    (B.lowering ⟨_, h, hend⟩).EventBound (ir.phaseError I ε) := by
   have hc := Lowering.eventBound_comp
     (Lowering.eventBound_comp (B.eventBound_rbrRanged ⟨_, h, hend⟩
         (ir.eventBound_loweringOfRbr I B.source proj S h ⟨_, h, hend⟩))
       B.eventBound_realizeSource)
-    (B.eventBound_cellsLowering T)
-  rw [B.lowering_eq T ⟨_, h, hend⟩]
+    (B.eventBound_cellsLowering)
+  rw [B.lowering_eq ⟨_, h, hend⟩]
   intro k x b r
   refine (hc k x b r).trans (le_of_eq ?_)
   simp only [Pi.add_apply, Pi.zero_apply, add_zero, phaseError, Finset.sum_add_distrib,
@@ -133,20 +133,20 @@ theorem eventBound_lowering (T : B.CircuitsEnforce)
 
 /-- **The soundness of the soundness IOP**: the domain proofs' soundness `BS`, and the phases' errors
 at their challenge rounds (`eventBound_lowering`). -/
-noncomputable def soundIOPSound (BS : B.Sound) (T : B.CircuitsEnforce)
+noncomputable def soundIOPSound (BS : B.Sound)
     (h : rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
-    (hend : ∀ i, ir.rounds.get i.1 = .final → ε i = 0) : (B.soundIOP T h hend).Sound where
+    (hend : ∀ i, ir.rounds.get i.1 = .final → ε i = 0) : (B.soundIOP h hend).Sound where
   circuitSound := BS
   appε := (ir.layout I).error (ir.phaseError I ε)
   appBound := Phased.eventBound_toAppPhase _
-    (Lowering.eventBound_toPhased (Lowering.eventBound_check (B.eventBound_lowering T h hend)))
+    (Lowering.eventBound_toPhased (Lowering.eventBound_check (B.eventBound_lowering h hend)))
 
 /-- **The state function of the proof system**: the soundness IOP's (`MultiCircuitIOP.stateFn`), on the
 protocol's verifier (`verifier_eq`). Not required to be efficient. -/
-noncomputable def stateFn [Inhabited W] (BS : B.Sound) (T : B.CircuitsEnforce)
+noncomputable def stateFn [Inhabited W] (BS : B.Sound)
     (h : rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
     (hend : ∀ i, ir.rounds.get i.1 = .final → ε i = 0) : KnowledgeStateFunction B.verifier :=
-  (B.soundIOP T h hend).stateFn (B.soundIOPSound BS T h hend)
+  (B.soundIOP h hend).stateFn (B.soundIOPSound BS h hend)
 
 /-! ## The round errors -/
 
@@ -159,10 +159,10 @@ noncomputable def roundError (BS : B.Sound) (ε : (ir.sourceSpec I).ChallengeIdx
   B.protocol.app.fullError (fun d => (BS d).toShape) ((ir.layout I).error (ir.phaseError I ε))
 
 /-- **The round errors of the soundness IOP are the proof system's.** -/
-theorem error_soundIOP (BS : B.Sound) (T : B.CircuitsEnforce)
+theorem error_soundIOP (BS : B.Sound)
     (h : rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
     (hend : ∀ i, ir.rounds.get i.1 = .final → ε i = 0) :
-    (B.soundIOP T h hend).error (B.soundIOPSound BS T h hend) = B.roundError BS ε :=
+    (B.soundIOP h hend).error (B.soundIOPSound BS h hend) = B.roundError BS ε :=
   rfl
 
 end ProofSystem

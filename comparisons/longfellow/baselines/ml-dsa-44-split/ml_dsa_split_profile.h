@@ -1,14 +1,18 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 //
-// longfellow-baselines: the two field profiles of the ML-DSA-44 split
+// longfellow-baselines: the two field profiles of the ML-DSA split
 // baseline, after the fork's ml_dsa_baseline_profile.h::Split<P> and
 // pq_profile.h (mac-bench 8d8e0aa4), restricted to what upstream's library
 // provides.
 //  - Narrow: A over upstream's Fp24_6 = GF(q^6) with upstream's
 //    ReedSolomonExtensionFactory, H over upstream's GF(2^128) with LCH14,
 //    128-bit per-chunk MACs.  Ligero: rate 7, 132 opened columns, block_enc
-//    4096 for both halves (the fork's BaselineLigero<Narrow>).
+//    4096 for both halves (the fork's BaselineLigero<Narrow>), at every
+//    parameter set: block_enc fixes the tableau's row length (N = 3187,
+//    k = 455) whatever the row count, and 132 is the least number of opened
+//    columns that reaches Longfellow's deployed 2^-108 target on it under
+//    unique decoding (analysis/screen_run.py's ud_min_t).
 //  - Wide: ml_dsa_split_profile_wide.h, compiled only into the wide target
 //    (baselines/common-wide's hash domain).
 // The narrow transcript is upstream's (SHA-256).
@@ -51,9 +55,11 @@ struct Narrow : Mac128 {
   };
 };
 
-template <class P>
+// PARAMS: upstream's parameter struct of the set (ml_dsa_sets.h's
+// Reference); ML-DSA-44 by default.
+template <class P, class PARAMS = ml_dsa::MLDsa44Params>
 struct Split {
-  using Params = ml_dsa::MLDsa44Params;
+  using Params = PARAMS;
   static constexpr size_t kW = P::kW, kWBytes = P::kWBytes;
   // Crossings: w1_tilde, then the (support, sign) bit pair of each challenge
   // coefficient, cut into w-bit chunks.

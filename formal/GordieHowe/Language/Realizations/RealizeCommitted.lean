@@ -214,6 +214,7 @@ theorem holdsWith_mod_of_committed (hwf : ir.WellFormed) (hI : I.Registered ir)
       (I (ir.domainField d)).decode c = (c : (I (ir.domainField d)).K) := hdec0
   have hf : ir.domainField d < ir.fields.length := domainField_lt hwf he.1
   have hp0 : 0 < ir.charOf (ir.domainField d) := by have := hok.char; omega
+  refine (holdsWith_mod_iff (.inl (by rw [hok.form]; rfl))).2 ?_
   intro i hi
   obtain ⟨⟨ha1, ha2⟩, hca⟩ := exprIvl_within hwf hI hL hF hK hLok he.1 hok.char he.2 hok.lhs hi
   obtain ⟨⟨hb1, hb2⟩, hcb⟩ := exprIvl_within hwf hI hL hF hK hLok he.1 hok.char he'.2 hok.rhs

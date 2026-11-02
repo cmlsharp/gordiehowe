@@ -552,6 +552,18 @@
    "summary": null
   },
   {
+   "path": "comparisons/longfellow/baselines/falcon-512-split/falcon_set.h",
+   "class": "ours",
+   "upstream_source": null,
+   "summary": null
+  },
+  {
+   "path": "comparisons/longfellow/baselines/falcon-512-split/falcon_split_audit.cc",
+   "class": "ours",
+   "upstream_source": null,
+   "summary": null
+  },
+  {
    "path": "comparisons/longfellow/baselines/falcon-512-split/falcon_split_driver.cc",
    "class": "ours",
    "upstream_source": null,
@@ -648,10 +660,10 @@
    "summary": null
   },
   {
-   "path": "comparisons/longfellow/baselines/ml-dsa-44-monolith/ml_dsa_mu.h",
-   "class": "ours",
-   "upstream_source": null,
-   "summary": null
+   "path": "comparisons/longfellow/baselines/ml-dsa-44-monolith/ml_dsa_monolith_verify.h",
+   "class": "derived",
+   "upstream_source": "lib/circuits/tests/pq/ml_dsa/ml_dsa_circuit.h",
+   "summary": "adapted from ml_dsa_circuit.h: MLDSAVerify's signature check with SampleInBall over the 272-byte stream and the exact Decompose"
   },
   {
    "path": "comparisons/longfellow/baselines/ml-dsa-44-split/CMakeLists.txt",
@@ -666,19 +678,49 @@
    "summary": "adapted from lib/algebra/fp24.h: the prime field specialized to q = 8380417 with 3-byte serialization and compile-time modulus"
   },
   {
-   "path": "comparisons/longfellow/baselines/ml-dsa-44-split/ml_dsa_44_benchmark_example.h",
-   "class": "ours",
-   "upstream_source": null,
-   "summary": null
-  },
-  {
    "path": "comparisons/longfellow/baselines/ml-dsa-44-split/ml_dsa_44_split_driver.cc",
    "class": "ours",
    "upstream_source": null,
    "summary": null
   },
   {
+   "path": "comparisons/longfellow/baselines/ml-dsa-44-split/ml_dsa_benchmark_example.h",
+   "class": "ours",
+   "upstream_source": null,
+   "summary": null
+  },
+  {
+   "path": "comparisons/longfellow/baselines/ml-dsa-44-split/ml_dsa_decompose_exact.h",
+   "class": "ours",
+   "upstream_source": null,
+   "summary": null
+  },
+  {
+   "path": "comparisons/longfellow/baselines/ml-dsa-44-split/ml_dsa_gadget_test.cc",
+   "class": "ours",
+   "upstream_source": null,
+   "summary": null
+  },
+  {
+   "path": "comparisons/longfellow/baselines/ml-dsa-44-split/ml_dsa_host.h",
+   "class": "derived",
+   "upstream_source": "lib/circuits/tests/pq/ml_dsa/ml_dsa_witness.h",
+   "summary": "adapted from ml_dsa_witness.h: the host witness at the 272-byte SampleInBall stream and a private-length message, and the verifier statement from the key bytes"
+  },
+  {
    "path": "comparisons/longfellow/baselines/ml-dsa-44-split/ml_dsa_mu.h",
+   "class": "ours",
+   "upstream_source": null,
+   "summary": null
+  },
+  {
+   "path": "comparisons/longfellow/baselines/ml-dsa-44-split/ml_dsa_ref_sets.cc",
+   "class": "ours",
+   "upstream_source": null,
+   "summary": null
+  },
+  {
+   "path": "comparisons/longfellow/baselines/ml-dsa-44-split/ml_dsa_sets.h",
    "class": "ours",
    "upstream_source": null,
    "summary": null
@@ -858,6 +900,18 @@
    "summary": null
   },
   {
+   "path": "comparisons/longfellow/common/shake256_private_length.h",
+   "class": "ours",
+   "upstream_source": null,
+   "summary": null
+  },
+  {
+   "path": "comparisons/longfellow/common/test_baselines.sh",
+   "class": "ours",
+   "upstream_source": null,
+   "summary": null
+  },
+  {
    "path": "comparisons/longfellow/equivalence/mdoc-v7/build_old_worker.sh",
    "class": "ours",
    "upstream_source": null,
@@ -909,7 +963,7 @@
    "path": "lib/CMakeLists.txt",
    "class": "modified",
    "upstream_source": "lib/CMakeLists.txt",
-   "summary": "C++23, Dev build type, OpenSSL, separate third_party/longfellow include root and object libraries, report_bench target, tools directory, Longfellow's own tests built from third_party/longfellow"
+   "summary": "C++23, Dev build type, OpenSSL, separate third_party/longfellow include root and object libraries, report_bench target, tools directory, Longfellow's own tests built from third_party/longfellow; on aarch64, a caller's -march/-mcpu in place of the default -march; aarch64 build goals"
   },
   {
    "path": "lib/algebra/CMakeLists.txt",
@@ -1137,7 +1191,7 @@
    "path": "lib/circuits/compiler/compiler.h",
    "class": "modified",
    "upstream_source": "lib/circuits/compiler/compiler.h",
-   "summary": "packed-bit support (enable_packed_bits, deferred Boolean assertions), Hash-templated mkcircuit, circuit shape and size estimates"
+   "summary": "packed-bit support (enable_packed_bits, deferred Boolean assertions), Hash-templated mkcircuit, circuit shape and size estimates, the translation-validation certificate (take_certificate)"
   },
   {
    "path": "lib/circuits/logic/CMakeLists.txt",
@@ -1155,7 +1209,7 @@
    "path": "lib/circuits/logic/logic.h",
    "class": "modified",
    "upstream_source": "lib/circuits/logic/logic.h",
-   "summary": "GF(2^256) multiplication, optional deferred bit assertions via a backend hook, and power-of-two input-length check"
+   "summary": "GF(2^256) multiplication, optional deferred bit assertions via a backend hook, power-of-two input-length check, and the halving recursions' operands evaluated left to right"
   },
   {
    "path": "lib/circuits/logic/logic_test.cc",
@@ -3444,6 +3498,12 @@
    "summary": "parallel bind_h compaction in chunks for large corner counts"
   },
   {
+   "path": "lib/sumcheck/neon_kernels_test.cc",
+   "class": "ours",
+   "upstream_source": null,
+   "summary": null
+  },
+  {
    "path": "lib/sumcheck/prover.h",
    "class": "modified",
    "upstream_source": "lib/sumcheck/prover.h",
@@ -3459,13 +3519,13 @@
    "path": "lib/sumcheck/quad.h",
    "class": "modified",
    "upstream_source": "lib/sumcheck/quad.h",
-   "summary": "accessors and assign_all for the compressed form, and a unit-coefficient shortcut option in bind_g and the bound evaluation"
+   "summary": "accessors and assign_all for the compressed form, a unit-coefficient shortcut option in bind_g and the bound evaluation, and bind_g and bind_gh_all in chunks from cached decoder checkpoints"
   },
   {
    "path": "lib/sumcheck/quad_test.cc",
    "class": "modified",
    "upstream_source": "lib/sumcheck/quad_test.cc",
-   "summary": "tests that bind_g with and without unit-coefficient shortcuts agrees, over a prime field and GF(2^128)"
+   "summary": "tests that bind_g with and without unit-coefficient shortcuts agrees, over a prime field and GF(2^128), and that bind_gh_all in chunks on threads equals bind_g then bind_h"
   },
   {
    "path": "lib/sumcheck/skip_gfni.h",
@@ -3475,6 +3535,12 @@
   },
   {
    "path": "lib/sumcheck/skip_gfni_test.cc",
+   "class": "ours",
+   "upstream_source": null,
+   "summary": null
+  },
+  {
+   "path": "lib/sumcheck/skip_neon.h",
    "class": "ours",
    "upstream_source": null,
    "summary": null
@@ -3732,6 +3798,12 @@
    "summary": null
   },
   {
+   "path": "lib/util/openssl_asm_test.cc",
+   "class": "ours",
+   "upstream_source": null,
+   "summary": null
+  },
+  {
    "path": "lib/util/optimization_options.h",
    "class": "ours",
    "upstream_source": null,
@@ -3841,6 +3913,12 @@
   },
   {
    "path": "scripts/check_vendor.py",
+   "class": "ours",
+   "upstream_source": null,
+   "summary": null
+  },
+  {
+   "path": "scripts/cross_aarch64.sh",
    "class": "ours",
    "upstream_source": null,
    "summary": null
@@ -4242,10 +4320,10 @@
    "summary": "byte-identical to Longfellow d5e6be77 (scripts/check_vendor.py), header unchanged"
   },
   {
-   "path": "third_party/longfellow/lib/circuits/compiler/schedule.h",
-   "class": "vendored",
+   "path": "lib/circuits/compiler/schedule.h",
+   "class": "modified",
    "upstream_source": "lib/circuits/compiler/schedule.h",
-   "summary": "byte-identical to Longfellow d5e6be77 (scripts/check_vendor.py), header unchanged"
+   "summary": "the provenance of every layered wire (ScheduleCert) for the translation-validation certificate"
   },
   {
    "path": "third_party/longfellow/lib/circuits/ecdsa/verify_circuit.h",

@@ -64,6 +64,6 @@ theorem natOfBits_sampleBits {K : Type} [Field K] [DecidableEq K] {c : Fin falco
 /-- The sample bits are bits. -/
 theorem sampleBits_bool {K : Type} [Field K] (c : Fin falcon512.n → ℕ) (i : Fin falcon512.n)
     (b : Fin falconSampleBits) : sampleBits (K := K) c i b = 0 ∨ sampleBits (K := K) c i b = 1 :=
-  constBit_bool _ _
+  Bits.constBit_bool _ _
 
 end GordieHowe.Falcon512.Emulated

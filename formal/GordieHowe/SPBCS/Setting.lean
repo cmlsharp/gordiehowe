@@ -6,9 +6,14 @@ module
 public import GordieHowe.Model.IOP.SPIOP
 public import GordieHowe.SPBCS.Bytes
 public import GordieHowe.SPBCS.Basic
-public import GordieHowe.SPBCS.FullPast.Extract
-public import GordieHowe.SPBCS.FullPast.Online
-public import GordieHowe.SPBCS.FullPast.ZeroKnowledge
+public import GordieHowe.SPBCS.Extract
+public import GordieHowe.SPBCS.Extraction.KnowledgeError
+public import GordieHowe.Model.QROM.QueryBits
+public import GordieHowe.Model.QROM.QueryCount
+public import GordieHowe.SPBCS.Extraction.OnlineExtract
+public import GordieHowe.SPBCS.Extraction.OnlineExtractROM
+public import GordieHowe.Model.ROM.Model
+public import GordieHowe.SPBCS.ZeroKnowledge
 public import GordieHowe.SPBCS.Merkle.Multiproof
 
 @[expose] public section
@@ -23,12 +28,11 @@ of a composite IOP with oracles (`GordieHowe.IOP.SPIOP`, `GordieHowe/Model/IOP/S
 * `Setting I Mg kMin`: digests of `k ≥ kMin` bytes, Merkle salts of `kN` bytes, Fiat–Shamir
   salts of `kS` bytes, inputs of `L` bytes, XOF answers of `k + e` bytes, the label and statement
   codec of the writes before round 0, a site layout of the merges (`SiteLayout`), the write codec
-  of each prover message of each component, the leaf codecs, the samplers, and the length budgets
-  of both chain-input encodings (`fits` for the chain inputs with merges, `fitsC` for full causal
-  pasts).
-* `GordieHowe.SPBCS.Setting.model`: the spBCS compiler data (`GordieHowe.SPBCS`): each component's chain data
-  (`compModel`), the byte encoding of full causal pasts (`CausalEncoding.bytes`, read only by the
-  extractor) and of the chain inputs with merges (`MergeBytes.bytes` at the layout).
+  of each prover message of each component, the leaf codecs, the samplers, and the length budget
+  of the chain inputs with merges (`fits`).
+* `GordieHowe.SPBCS.Setting.model`: the spBCS compiler data (`GordieHowe.SPBCS`): each component's
+  chain data (`compModel`) and the byte encoding of the chain inputs with merges
+  (`MergeBytes.bytes` at the layout).
 * The query phase `queries` (decided by `I.V` through query locality), the honest encoding
   `encoder`, the view laws `viewEncoder` (the composite verifier's view `GordieHowe.IOP.SPIOP.views`), and the
   format bounds `formatBounds` of the query phases.
@@ -46,8 +50,7 @@ variable {ι : Type} {n : ι → ℕ} {P : (j : ι) → ProtocolSpec (n j)}
 /-- **The setting of the spBCS compiler** of `I` over the merges `Mg` with digests of at
 least `kMin` bytes (module docstring). The label, the statement codec, the site layout, the codecs
 and the samplers are instance data (their correspondence to an implementation is the instance's
-obligation); `kMin_le_k`, `nTrees_le`, `leaf_fit`, `fits` and `fitsC` are conditions on the
-parameters. -/
+obligation); `kMin_le_k`, `nTrees_le`, `leaf_fit` and `fits` are conditions on the parameters. -/
 structure Setting (I : SPIOP P t X) (Mg : Merges t) (kMin : ℕ) where
   /-- The digest length in bytes. -/
   k : ℕ
@@ -88,10 +91,6 @@ structure Setting (I : SPIOP P t X) (Mg : Merges t) (kMin : ℕ) where
     ((TranscriptEncoding.saltedCodec (kS := kS) label stmt).ser x).length +
       (MergeBytes.label layout o).length + (∑ q : t.Leaf, n q.label) * max B (9 + k) +
       Mg.nJ * k ≤ L
-  /-- Every chain input of the full causal past fits in `L` bytes. -/
-  fitsC : ∀ x (p : t.Leaf),
-    ((TranscriptEncoding.saltedCodec (kS := kS) label stmt).ser x).length + p.pathLabel.length +
-      (∑ q : t.Leaf, n q.label) * max B (9 + k) ≤ L
   /-- The challenge sampler of each challenge round of each component. -/
   sampler : ∀ j i, Sampler k e ((P j).Challenge i)
 
@@ -114,6 +113,9 @@ def msg (j : ι) (i : (P j).MessageIdx) (w : CompWrite I F.k j i)
 /-- **The chain data of component `j`**: its `ComponentModel`, without the chain-input encoding. -/
 def compModel (j : ι) : ComponentModel (P j) F.k F.kN F.L F.e where
   MessageWrite := CompWrite I F.k j
+  instDecEqMessageWrite i a b :=
+    decidable_of_iff ((F.write j i).ser a = (F.write j i).ser b)
+      (F.write j i).toCodec.ser_injective.eq_iff
   nTrees := (I.comp j).nTrees
   nLeaves := (I.comp j).nLeaves
   rootOf _ w t := w.roots t
@@ -134,42 +136,18 @@ theorem card_roots_le (j : ι) (w : (F.compModel j).W) : ((F.compModel j).roots 
     rw [Finset.card_univ, Fintype.card_fin]
     exact F.nTrees_le j w.1)
 
-/-- **The encoding of full causal pasts** (`CausalEncoding.bytes`), read only by the extractor. -/
-def causalEnc : CausalEncoding F.k F.L t n (SaltedStatement F.kS X) (fun j => (F.compModel j).W)
-    (fun j => (F.compModel j).roots) (fun j => chainWF (P j)) :=
-  CausalEncoding.bytes F.writeC F.preCodec (fun j => (F.compModel j).roots) F.B F.card_roots_le
-    F.one_le_nd F.write_B_le F.fitsC
-
 /-- **The byte encoding of the chain inputs with merges** (`MergeBytes.bytes` at the layout). -/
 def mergeEnc : MergeEncoding F.k F.L Mg n (SaltedStatement F.kS X) (fun j => (F.compModel j).W)
     (fun j => (F.compModel j).roots) (fun j => chainWF (P j)) :=
   MergeBytes.bytes F.writeC F.preCodec F.layout (fun j => (F.compModel j).roots) F.B
     F.card_roots_le F.one_le_nd F.write_B_le F.fits
 
-/-- **The digests of an encoded causal past are those of its content.** -/
-theorem causalEnc_digestsOf_encode (ss : SaltedStatement F.kS X)
-    (ch : CausalChain t F.k fun j => (F.compModel j).W)
-    (hwf : ch.WF n fun j => chainWF (P j)) :
-    F.causalEnc.digestsOf (F.causalEnc.encode ss ch) ⊆ ch.digests fun j => (F.compModel j).roots := by
-  intro u hu
-  have hd := F.causalEnc.decode_encode ss ch hwf
-  unfold causalEnc at hu hd
-  simp only [CausalEncoding.bytes] at hu hd
-  rw [hd] at hu
-  simp only at hu
-  by_cases hs : ch.size ≤ ∑ q : t.Leaf, n q.label
-  · rwa [if_pos hs] at hu
-  · rw [if_neg hs] at hu
-    exact absurd hu (Finset.notMem_empty u)
-
 /-- **The spBCS compiler data of the setting** (module docstring), with the trees opened by
 compressed multiproofs (`Multiproof.opening`), as the C++ does. -/
 def model : SPBCS Mg P X F.k F.kN F.kS F.L F.e where
   comp := F.compModel
-  enc := F.causalEnc
   opening := Multiproof.opening
   senc := F.mergeEnc
-  enc_digests_subset := F.causalEnc_digestsOf_encode
 
 /-- **The quantum adversaries against the argument of the setting**: the `t`-query adversaries of
 `def:adversary` without proof queries with output in `O` (`GordieHowe.NARG.QROM.Adversary`) at the
@@ -285,7 +263,7 @@ query positions is the verdict on the transcript read with the answers alone: qu
 (`SPIOP.reads`). -/
 theorem V_eq_of_trOf (x : X) {chs : (p : t.Leaf) → F.model.Items p} {ch : Chs P t}
     {vw : F.model.Views} {f : FullTr P t} {ans : List (MerkleLeaf F.kN F.L)}
-    (hmsg : F.model.MessagesFrom chs vw f) (hch : Base.ChallengesAre f ch)
+    (hmsg : F.model.MessagesFrom chs vw f) (hch : SPBCS.ChallengesAre f ch)
     (hans : F.model.OpenedAs vw ((I.pos ch).map F.toPos) ans) {f₁ : FullTr P t}
     (h1 : F.trOf chs ch (lookupAns ((I.pos ch).map F.toPos) ans) = some f₁) :
     I.V x f = I.V x f₁ := by
@@ -330,7 +308,7 @@ def queries (x : X) : F.model.IOPQueries I.V x where
       rw [V_eq_of_trOf x hmsg hch hans h1]
       exact hdec
 
-/-- **The format bounds of the query phases** (`Base.FormatBounds`): at most `NQ` query
+/-- **The format bounds of the query phases** (`SPBCS.FormatBounds`): at most `NQ` query
 positions of `I` and at most `N` leaves per tree. -/
 theorem formatBounds {NQ N : ℕ} (hpos : ∀ ch, (I.pos ch).length ≤ NQ)
     (hN : ∀ (p : t.Leaf) i τ, (I.comp p.label).nLeaves i τ ≤ N) :
@@ -396,7 +374,7 @@ def colOfView (o : CausalView I.views) (q : F.model.Pos) : Bytes F.L :=
 
 /-- **What the compiled proof reveals of a composite transcript**: the composite verifier's view,
 from which the writes (`writesOfView`) and the opened columns (`colOfView`) are read off. -/
-@[reducible] def reveal : Base.Reveal (M := F.model.toBase) F.encoder F.queries where
+@[reducible] def reveal : SPBCS.Reveal (M := F.model) F.encoder F.queries where
   MV := I.views
   writesOf _ _ o := F.writesOfView o
   colOf _ _ o q := F.colOfView o q
@@ -429,9 +407,9 @@ from which the writes (`writesOfView`) and the opened columns (`colOfView`) are 
     simp only [CausalIOPViews.read]
     exact dif_pos trivial
 
-/-- **The view laws of the setting** (`Base.ViewEncoder`): `reveal`, and the opened
+/-- **The view laws of the setting** (`SPBCS.ViewEncoder`): `reveal`, and the opened
 positions `I.pos` at the challenges on every chain. -/
-@[reducible] def viewEncoder : Base.ViewEncoder (M := F.model.toBase) F.encoder F.queries where
+@[reducible] def viewEncoder : SPBCS.ViewEncoder (M := F.model) F.encoder F.queries where
   toReveal := F.reveal
   posC _ ch := (I.pos ch).map F.toPos
   pos_eq _ _ _ _ := rfl

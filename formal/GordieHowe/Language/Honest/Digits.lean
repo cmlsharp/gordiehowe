@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.Honest.TwoFields
+public import GordieHoweNative.Language.Honest.Digits
 
 @[expose] public section
 
@@ -13,7 +14,7 @@ public import GordieHowe.Language.Honest.TwoFields
 A MAC whose tail is a `mod_2` in the ungrouped digit form (compiler/mac.h with compiler/mod.h
 `kDigits`: the left side committed by an accumulator `acc`, a lower digit `low` and the derived top
 digit, bounded by `in`s, and the no-wrap range on `q · (low + B · top)`), as the ML-DSA programs
-realize their MACs (`DigitsMac`). The generated values (`GordieHowe.RealizedProgram.genSrc`): the accumulator is the
+realize their MACs. The generated values (`GordieHowe.RealizedProgram.genSrcOf`): the accumulator is the
 natural of the tail's left side's integer reading (`digitsAccNat`), the lower digit its quotient by
 `q`'s first base-`B` digit (`lowDigitNat`).
 
@@ -21,6 +22,9 @@ natural of the tail's left side's integer reading (`digitsAccNat`), the lower di
   where its operands are bits.
 * The realization's facts give the realization's predicates at the
   honest environment where the source environment satisfies their obligations.
+
+The definitions are in `GordieHoweNative/Language/Honest/Digits.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -31,63 +35,6 @@ open scoped NNReal
 section
 
 variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String}
-
-/-! ## A MAC with an ungrouped digit tail -/
-
-variable (ir primeNodes) in
-/-- **A MAC whose tail is a `mod_2` in the ungrouped digit form** (compiler/mac.h with
-compiler/mod.h `kDigits`): a MAC (`MacBase`) whose tail has the digits `[low, top]` (`low` a value,
-`top` derived from the accumulator `acc`, which commits the left side by a row), and the facts the
-honest values need: the owners of the accumulator and the lower digit, which are late values of
-their domain's field; the left side reads no late value; the convolutions fit the characteristic;
-the lookups on the digits and the no-wrap range `2 low + 2 B top` have room (`lowRoom`, `topRoom`,
-`wrapRoom`). Data and properties of the program, decided per program. -/
-structure DigitsMac extends ir.MacBase primeNodes where
-  /-- The accumulator. -/
-  acc : ℕ
-  /-- The lower digit. -/
-  low : ℕ
-  /-- The derived top digit. -/
-  top : Expr
-  hdig : realT.digits = [.leaf low, top]
-  hT : realT.isDigitsTail = true
-  hacc : ir.digitsAcc realT = acc
-  accRow : ir.accRowB dy acc L = true
-  derived : ir.topDerivedB dy 2 R realT acc = true
-  accOwn : ir.digitsAccOwner? acc = some t
-  accTag : ir.tagOwner? acc = none
-  accGr : ir.accOwner? acc = none
-  accDig : ir.digitsOwner? acc = none
-  accHist : ir.histOwner? acc = none
-  accLt : acc < ir.values.length
-  accLate : ir.IsLate acc
-  accField : ir.valueField acc = ir.domainField dy
-  lowOwn : ir.lowDigitOwner? low = some (t, 0)
-  lowTag : ir.tagOwner? low = none
-  lowGr : ir.accOwner? low = none
-  lowDig : ir.digitsOwner? low = none
-  lowHist : ir.histOwner? low = none
-  lowDAcc : ir.digitsAccOwner? low = none
-  lowLt : low < ir.values.length
-  lowLate : ir.IsLate low
-  lowField : ir.valueField low = ir.domainField dy
-  lowSize : (ir.value low).size = u.width
-  accSize : (ir.value acc).size = u.width
-  topLen : ir.exprLen top = u.width
-  lNoLate : ∀ v ∈ ir.exprNodes L, ir.NoLateRead v
-  hw : 0 < u.width
-  convFit : 2 * u.width < ir.charOf (ir.domainField dy)
-  accMax : 1 + u.chunks * Conv.convMax u.width u.taps.toFinset < ir.charOf (ir.domainField dy)
-  radixPos : 0 < realT.radix
-  radixChar : 2 * realT.radix < ir.charOf (ir.domainField dy)
-  lowRoom : ∀ p ∈ ir.predicates, ∀ d N r, p.body = .mem d [.leaf low] (.range N) (.lookup r) →
-    d = dy ∧ realT.radix ≤ N
-  topRoom : ∀ p ∈ ir.predicates, ∀ d D N r, p.body = .mem d [D] (.range N) (.lookup r) →
-    D.beq top = true →
-      d = dy ∧ (1 + u.chunks * Conv.convMax u.width u.taps.toFinset) / (2 * realT.radix) < N
-  wrapRoom : ∀ p ∈ ir.predicates, ∀ d D N r, p.body = .mem d [D] (.range N) r →
-    D.beq (.add (.scale (.const 2) (.leaf low)) (.scale (.const (2 * realT.radix)) top)) = true →
-      d = dy ∧ 1 + u.chunks * Conv.convMax u.width u.taps.toFinset < N
 
 /-! ## A group with a static and a late histogram -/
 
@@ -104,15 +51,6 @@ theorem groupNeedles_perm (rd : ir.Valuation I) (f t g : ℕ) :
   exact List.Perm.flatMap_right _ (List.filter_append_perm _ _)
 
 /-! ## The values a table's rows read -/
-
-variable (ir) in
-/-- **The values the rows of table `t` read** (`tableRow`): none for a range, the first column for
-a committed table, the expression's values for a table of an expression's coordinates. -/
-def tableRowReads (t : ℕ) : List ℕ :=
-  match (ir.table t).rows with
-  | .range _ => []
-  | .columns cols => [cols.headD 0]
-  | .expr e' => ir.exprNodes e'
 
 /-- **A table's rows depend only on the values they read** (`tableRowReads`). -/
 theorem tableRow_congr_reads {rd rd' : ir.Valuation I} {f t : ℕ}
@@ -155,15 +93,6 @@ def SrcTypesHold (e : ir.Env I) : Prop :=
 
 /-! ## Checkers for the digit tails' room -/
 
-variable (ir) in
-/-- **`DigitsMac.topRoom`, as a check**: every lookup of a single record `D` with `D.beq top` into
-a range `[0, N)` is of domain `dy` with `m < N`. -/
-def topRoomB (top : Expr) (dy m : ℕ) : Bool :=
-  ir.predicates.all fun p =>
-    match p.body with
-    | .mem d [D] (.range N) (.lookup _) => !(D.beq top) || (d == dy && decide (m < N))
-    | _ => true
-
 theorem topRoom_of_B {top : Expr} {dy m : ℕ} (h : ir.topRoomB top dy m = true) :
     ∀ p ∈ ir.predicates, ∀ d D N r, p.body = .mem d [D] (.range N) (.lookup r) →
       D.beq top = true → d = dy ∧ m < N := by
@@ -172,15 +101,6 @@ theorem topRoom_of_B {top : Expr} {dy m : ℕ} (h : ir.topRoomB top dy m = true)
   simp only [hb, hD, Bool.not_true, Bool.false_or, Bool.and_eq_true, beq_iff_eq,
     decide_eq_true_eq] at this
   exact this
-
-variable (ir) in
-/-- **`DigitsMac.wrapRoom`, as a check**: every membership of a single record `D` with `D.beq W`
-in a range `[0, N)` is of domain `dy` with `m < N`. -/
-def wrapRoomB (W : Expr) (dy m : ℕ) : Bool :=
-  ir.predicates.all fun p =>
-    match p.body with
-    | .mem d [D] (.range N) _ => !(D.beq W) || (d == dy && decide (m < N))
-    | _ => true
 
 theorem wrapRoom_of_B {W : Expr} {dy m : ℕ} (h : ir.wrapRoomB W dy m = true) :
     ∀ p ∈ ir.predicates, ∀ d D N r, p.body = .mem d [D] (.range N) r →
@@ -191,7 +111,7 @@ theorem wrapRoom_of_B {W : Expr} {dy m : ℕ} (h : ir.wrapRoomB W dy m = true) :
     decide_eq_true_eq] at this
   exact this
 
-/-- **`DigitsMac.lowRoom` from `digitsRoomB`.** -/
+/-- **`DigitsMacC.lowRoom` from `digitsRoomB`.** -/
 theorem lowRoom_of_B {low dy B : ℕ} (h : ir.digitsRoomB low dy B = true) :
     ∀ p ∈ ir.predicates, ∀ d N r, p.body = .mem d [.leaf low] (.range N) (.lookup r) →
       d = dy ∧ B ≤ N := fun p hp d N r hb =>

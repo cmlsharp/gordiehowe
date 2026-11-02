@@ -1,10 +1,11 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 
-// The Falcon emulated system at the ROM parameters (gordiehowe/examples/instances.h).
+// The Falcon-512 emulated system at the ROM parameters
+// (gordiehowe/examples/instances.h).
 
 #include "gordiehowe/examples/instances.h"
 
 namespace proofs::gordiehowe::examples::falcon::emulated {
-GORDIEHOWE_FALCON_EMULATED_INSTANCE(, param_sets::ROMParams)
+GORDIEHOWE_FALCON_EMULATED_INSTANCE(, param_sets::ROMParams, Falcon512)
 }  // namespace proofs::gordiehowe::examples::falcon::emulated

@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Language.RealizedProgram.Source
 public import GordieHowe.Model.IOP.Append
+public import GordieHoweNative.Language.RealizedProgram.Protocol
 
 @[expose] public section
 
@@ -49,6 +50,9 @@ The bridge to the proof system's event form on the phase layout of the realized 
   knowledge soundness of `Π_P₀`, at the state function `GordieHowe.RealizedProgram.eventState` ("past the first
   challenge, and the extractor succeeds or an event occurred at a challenge so far") and the
   errors `ε j` at the rounds of the source challenges and `0` at `γ_end`.
+
+The definitions are in `GordieHoweNative/Language/RealizedProgram/Protocol.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.IOP
@@ -171,12 +175,6 @@ section
 variable (ir : RealizedProgram)
 
 /-! ## The rounds -/
-
-/-- **A challenge of a phase the program has** (`1 ≤ phase ≤ phases`), a challenge of the layout. -/
-def IsPhaseChal (j : ℕ) : Prop :=
-  j < ir.challenges.length ∧ 1 ≤ (ir.challenge j).phase ∧ (ir.challenge j).phase ≤ ir.phases
-
-instance (j : ℕ) : Decidable (ir.IsPhaseChal j) := by unfold IsPhaseChal; infer_instance
 
 /-- **A challenge of `Π_P₀`**: a source challenge (`RealizedProgram.chalIsSource`) of a phase the program
 has. -/
@@ -913,12 +911,6 @@ theorem eventBound_loweringOfRbr {W : Type} {rel : Set (ir.Valuation I × W)} (h
     _ = (∑ i ∈ s, ε i) * Fintype.card ((ir.layout I).Ch k) := (Finset.sum_mul ..).symm
 
 /-! ## From per-challenge events to round-by-round knowledge soundness of `Π_P₀` -/
-
-/-- **Challenge `j'` is drawn no later than challenge `j`**: of an earlier phase, or of the same
-phase and declared no later. -/
-def ChalBefore (j' j : ℕ) : Prop :=
-  (ir.challenge j').phase < (ir.challenge j).phase ∨
-    ((ir.challenge j').phase = (ir.challenge j).phase ∧ j' ≤ j)
 
 /-- **Two environments agree on what is fixed when challenge `j` is drawn, and on `j`**: the
 statement, the committed assignment, the challenges drawn no later than `j` (`ChalBefore`), and the

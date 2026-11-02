@@ -660,7 +660,8 @@ TEST(GordieHowe, ShapesAndViews) {
 // The one generator form: an elementwise field closure broadcasts its
 // dependencies; a record fills two slots (one of canonical integers) from
 // one closure call per proof, reading a host input; a cached public
-// computation runs once per statement and is memoized across prepares.
+// computation runs once per statement and is memoized across prepares, and
+// so does a cached public computation that reads it.
 TEST(GordieHowe, GeneratorForms) {
   const AF &af = env().af;
   Sys cs("gh-generators");
@@ -704,11 +705,20 @@ TEST(GordieHowe, GeneratorForms) {
                                           af.addf(kv[1], kv[1])};
                              })
                 .cache();
+  int computed2 = 0;
+  auto pc2 = A.pub(Field{}, "pc2", 2, depends_on(pc), computes("plus_one"),
+                   [&af, &computed2](const Vec &pv) {
+                     ++computed2;
+                     return Vec{af.addf(pv[0], af.one()),
+                                af.addf(pv[1], af.one())};
+                   })
+                 .cache();
   A.constant("unused", Vec{af.one()});
-  L::gkr(A, "checks", depends_on(y, x, k, w1, w2, pc, hf, hn),
+  L::gkr(A, "checks", depends_on(y, x, k, w1, w2, pc, hf, hn, pc2),
         [&af](const auto &lc, const auto &y, const auto &x,
               const auto &k, const auto &w1, const auto &w2,
-              const auto &pc, const auto &hf, const auto &hn) {
+              const auto &pc, const auto &hf, const auto &hn,
+              const auto &pc2) {
           auto c = [&](uint64_t v) { return lc.konst(af.of_scalar(v)); };
           for (size_t i = 0; i < 2; ++i)
             for (size_t j = 0; j < 2; ++j)
@@ -717,12 +727,16 @@ TEST(GordieHowe, GeneratorForms) {
           lc.assert_eq(w2[0], c(8));
           lc.assert_eq(w2[1], c(10));
           lc.assert_eq(pc[1], c(40));
+          lc.assert_eq(pc2[1], c(41));
           lc.assert_eq(hf[1], c(9));
           lc.assert_eq(hn[0], c(8));
           lc.assert_eq(hn[1], c(11));
         });
   auto c = compile(cs);
   EXPECT_NE(c->report().find("public_compute pc n=2 cached (setup)"),
+            std::string::npos)
+      << c->report();
+  EXPECT_NE(c->report().find("public_compute pc2 n=2 cached (setup)"),
             std::string::npos)
       << c->report();
   EXPECT_NE(c->report().find("host_input h n=2 phase=0"), std::string::npos)
@@ -737,16 +751,20 @@ TEST(GordieHowe, GeneratorForms) {
   w.set(x, vec({1, 2, 3, 4})).set(h, std::vector<uint8_t>{7, 9});
   auto prep = c->prepare(st);
   EXPECT_EQ(computed, 1);
+  EXPECT_EQ(computed2, 1);
   SecureRandomEngine rng;
   EXPECT_TRUE(prep.verify(prep.prove(w, rng)));
   EXPECT_EQ(runs, 1);  // one closure call for both slots
   EXPECT_EQ(computed, 1);  // neither prove nor verify recomputes it
+  EXPECT_EQ(computed2, 1);
   auto prep2 = c->prepare(st);
   EXPECT_EQ(computed, 1);  // memoized by the statement's digest
+  EXPECT_EQ(computed2, 1);
   Assignment st2;
   st2.set(k, vec({11, 20}));
   c->prepare(st2);
   EXPECT_EQ(computed, 2);
+  EXPECT_EQ(computed2, 2);
   // A missing host input.
   Assignment w0;
   w0.set(x, vec({1, 2, 3, 4}));
@@ -757,7 +775,9 @@ TEST(GordieHowe, GeneratorForms) {
                      [](const Vec &g) { return g; })
       .cache();
   EXPECT_NE(core_error(m.cs).find("public_compute 'g2' is cached but reads "
-                                    "'gamma'"),
+                                    "'gamma', which is not a statement value, "
+                                    "a constant or a cached public "
+                                    "computation"),
             std::string::npos)
       << core_error(m.cs);
 }

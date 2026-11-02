@@ -16,8 +16,24 @@
 //                                      Goldilocks^4 fails compilation
 //   GordieHoweIntEqual.ModZero         assert_mod(l, r, 0) is the same
 //                                      system as assert_int_equal(l, r),
-//                                      takes a pin, and a modulus m >= 2
-//                                      refuses a product side
+//                                      and takes a pin
+//   GordieHoweIntEqual.ProductMod      assert_mod over a product side,
+//                                      m >= 2: its committed quotient,
+//                                      certificates and record, an honest
+//                                      proof, a wrong quotient and a wrong
+//                                      residue rejected; the realized
+//                                      program's source mod_m with its
+//                                      productMod derivation, which the
+//                                      C++ check accepts and refuses
+//                                      mutated
+//   GordieHoweOpInterval.Primitives    int_interval's product, acyclic and
+//                                      negacyclic intervals against the
+//                                      extremes over every vertex and
+//                                      random interior points
+//   GordieHoweOpInterval.Operators     each operator kind's own interval
+//                                      (OpSpec::interval) against its
+//                                      instantiated matrix on random
+//                                      operands of the given intervals
 //   GordieHoweIntEqual.SlackDerived    Slack requests: the maximum the
 //                                      integer equality derives, an honest
 //                                      proof, a negative value rejected,
@@ -76,8 +92,10 @@
 #include "gf2k/gf2_128.h"
 #include "gf2k/gf2_256.h"
 #include "gf2k/lch14_reed_solomon.h"
+#include "gordiehowe/compiler/derivation_check.h"
 #include "gordiehowe/compiler/plan_export.h"
 #include "gordiehowe/compiler/plan_program.h"
+#include "gordiehowe/compiler/program_builder.h"
 #include "gordiehowe/examples/shared/program_testing.h"
 #include "gordiehowe/instances.h"
 #include "gordiehowe/system.h"
@@ -239,10 +257,15 @@ TEST(GordieHoweIntEqual, Intervals) {
   // A public operand with its entry bound: rows sum to 3 * 3.
   const auto h = A.constant("h", AV(3, af().of_scalar(3)));
   EXPECT_EQ(iv(conv(a, h, ops::EntryBound{4})), (I{0, 63}));
-  // Without one the operator bounds no row.
+  // Without one the operator's own interval reads h's entries (the
+  // constant's, all 3): the same rows. A kernel of either sign bounds
+  // nothing.
+  EXPECT_EQ(iv(conv(a, h)), (I{0, 63}));
   std::string why;
-  EXPECT_FALSE(iv(conv(a, h), &why).has_value());
-  has(why, "which bounds no row sum");
+  const auto hs = A.constant("hs", AV{af().of_scalar(3), af().negf(af().one()),
+                                      af().of_scalar(2)});
+  EXPECT_FALSE(iv(conv(a, hs), &why).has_value());
+  has(why, "bounds no interval");
   // A prime-field value without a request: [0, p - 1], its square
   // [0, (p - 1)^2] exactly, and its fifth power beyond the cap 2^300.
   EXPECT_EQ(iv(u), (I{0, SignedInt(p - 1)}));
@@ -322,8 +345,7 @@ TEST(GordieHoweIntEqual, ProveVerify) {
 }
 
 // assert_int_equal(l, r) is assert_mod(l, r, 0): the same system digest
-// and report, a pin fixes the placement, and m >= 2 takes affine sides
-// only.
+// and report, and a pin fixes the placement.
 TEST(GordieHoweIntEqual, ModZero) {
   struct Built {
     std::unique_ptr<Sys> cs;
@@ -364,18 +386,131 @@ TEST(GordieHoweIntEqual, ModZero) {
   w.set(s3.b, values({5, 1023, 9, 100}));
   EXPECT_TRUE(honest(*c3, w));
   EXPECT_TRUE(rejected(*c3, w, add_one(s3.c.id, 1)));
-  // m >= 2 takes affine sides.
-  Sys cs("gh-int-mod-two");
+}
+
+// The derivation of product-form predicate PID of P (certificates C0)
+// checks; every mutation of its productMod step or of the predicate is
+// refused: a premise dropped, two premises swapped, a premise replaced by
+// another fact, R's or lhs's interval widened past p, the modulus made p
+// or another, the form changed, the quotient's range premise cut to its
+// lhs.
+void expect_product_mutants(const ir::Program &P, const ir::Certificates &c0,
+                            size_t pid) {
+  auto refused = [&](const ir::Program &p, ir::Certificates c) {
+    compiler::DerivChecker check(p, c);
+    return check.check(pid);
+  };
+  ASSERT_EQ(refused(P, c0), "");
+  const auto &d0 = c0.derivations.at(pid);
+  const size_t last = d0.size() - 1;
+  const size_t np = d0[last].premises.size();
+  ASSERT_GE(np, 3u);
+  auto with = [&](auto edit) {
+    ir::Certificates c = c0;
+    edit(c.derivations[pid]);
+    return refused(P, c);
+  };
+  EXPECT_NE(with([](auto &d) { d.back().premises.pop_back(); }), "");
+  EXPECT_NE(with([](auto &d) { d.back().premises.erase(d.back().premises.begin()); }), "");
+  EXPECT_NE(with([](auto &d) { std::swap(d.back().premises[0], d.back().premises[1]); }), "");
+  EXPECT_NE(with([](auto &d) { std::swap(d.back().premises[1], d.back().premises[2]); }), "");
+  EXPECT_NE(with([](auto &d) { d.back().premises[2] = d.back().premises[0]; }), "");
+  EXPECT_NE(with([](auto &d) { d.back().premises.push_back(d.back().premises[0]); }), "");
+  // An interval premise widened past p.
+  const std::string p = P.fields.at(P.domains.at(P.predicates[pid].domain).field).characteristic;
+  for (size_t k : {size_t(1), np - 1}) {
+    EXPECT_NE(with([&](auto &d) {
+                const size_t at = d.back().premises[k];
+                ASSERT_EQ(d[at].rule, ir::DStep::kIvlExpr);
+                d[at].ints = {"-" + p, p};
+              }),
+              "")
+        << "premise " << k;
+  }
+  // The predicate's modulus, form or quotient changed.
+  auto with_pred = [&](auto edit) {
+    ir::Program p2 = P;
+    edit(p2.predicates[pid]);
+    return refused(p2, c0);
+  };
+  EXPECT_NE(with_pred([&](ir::Predicate &q) { q.q = p; }), "");
+  EXPECT_NE(with_pred([](ir::Predicate &q) { q.q = "1"; }), "");
+  EXPECT_NE(with_pred([](ir::Predicate &q) {
+              q.mod.form = q.mod.form == ir::ModForm::kProduct
+                               ? ir::ModForm::kSpectralProduct
+                               : ir::ModForm::kProduct;
+            }),
+            "");
+  EXPECT_NE(with_pred([](ir::Predicate &q) { q.mod.form = ir::ModForm::kOneDigit; }), "");
+  EXPECT_NE(with_pred([](ir::Predicate &q) { q.mod.quotient = q.lhs; }), "");
+  EXPECT_NE(with_pred([](ir::Predicate &q) { std::swap(q.lhs, q.rhs); }), "");
+}
+
+// assert_mod(a b, c, 97) with a, b below 1024 and c below 97: the product
+// form commits the quotient below floor(1023^2 / 97) + 1, states one predicate,
+// and records its plan record; an honest proof verifies, and a wrong
+// quotient or a wrong residue is rejected.
+TEST(GordieHoweIntEqual, ProductMod) {
+  Sys cs("gh-int-mod-product");
   auto &A = cs.domain(env().a_profile(), "A");
   const auto a = A.priv(Subfield{}, "a", 4);
-  const auto c = A.priv(Subfield{}, "c", 4);
-  std::string err;
-  try {
-    assert_mod(a * a, c, 2, "square");
-  } catch (const CompileError &e) {
-    err = e.what();
-  }
-  has(err, "assert_mod 'square': a modulus m >= 2 takes affine sides");
+  const auto b = A.priv(Subfield{}, "b", 4);
+  const auto c = A.priv(Subfield{}, "c", 4, depends_on(a, b),
+                        [](const AElt &x, const AElt &y) {
+                          uint64_t ok = 1;
+                          const Bound v = nat_of_ct(af(), af().mulf(x, y), ok);
+                          return af().of_scalar(uint64_t(v % 97));
+                        });
+  assert_range(a, 1024, "a");
+  assert_range(b, 1024, "b");
+  assert_range(c, 97, "c");
+  assert_mod(a * b, c, 97, "product");
+  auto comp = compile(cs, table_profile());
+  const std::string r = comp->report();
+  has(r, "assert_mod 'product': lhs in [0, 1046529], rhs in [0, 96], m = 97, "
+         "quotient in [0, 10788]; a committed quotient 'product.q' below "
+         "10789");
+  has(r, "certify:product.leftSpan");
+  has(r, "certify:product.rightSpan");
+  has(r, "certify:product.cap");
+  ASSERT_EQ(comp->records().product_mod_equalities.size(), 1u);
+  const auto &e = comp->records().product_mod_equalities[0];
+  EXPECT_EQ(e.qmax, Bound(10788));
+  EXPECT_FALSE(e.spectral);
+  Assignment w;
+  w.set(a, values({3, 1023, 0, 77}));
+  w.set(b, values({5, 1023, 9, 100}));
+  EXPECT_TRUE(honest(*comp, w));
+  EXPECT_TRUE(rejected(*comp, w, add_one(id_of(cs, "product.q"), 1)));
+  EXPECT_TRUE(rejected(*comp, w, add_one(c.id, 2)));
+  // The realized program states the source mod_97 (a b) c, its target the
+  // predicate's equation, its quotient owned by it; the plan holds no
+  // separate record.
+  const compiler::ExportMeta meta{"product", "wide", "c0ffee", "run-0", 0};
+  const std::string plan = compiler::export_lean_plan(*comp, meta);
+  EXPECT_EQ(plan.find("productModEqualities"), std::string::npos);
+  const auto prog = compiler::build_program(*comp, meta);
+  for (const auto &x : compiler::program_errors(prog)) ADD_FAILURE() << x;
+  for (const auto &x : compiler::module_errors(prog)) ADD_FAILURE() << x;
+  // Its derivation: productMod from ivl lhs, nat Q and ivl R, which the
+  // C++ check accepts, and refuses mutated.
+  ir::Certificates c0;
+  const ir::Program P = compiler::build_ir(*comp, c0);
+  size_t pid = SIZE_MAX;
+  for (size_t i = 0; i < P.predicates.size(); ++i)
+    if (P.predicates[i].name == "product") pid = i;
+  ASSERT_NE(pid, SIZE_MAX);
+  const ir::Predicate &q = P.predicates[pid];
+  EXPECT_EQ(q.body, ir::Predicate::kMod);
+  EXPECT_EQ(q.q, "97");
+  EXPECT_EQ(q.mod.form, ir::ModForm::kProduct);
+  EXPECT_EQ(q.mod.qmax, "10788");
+  ASSERT_TRUE(q.mod.target.has_value());
+  EXPECT_EQ(c0.deriv_gaps.at(pid), "");
+  ASSERT_FALSE(c0.derivations.at(pid).empty());
+  EXPECT_EQ(c0.derivations[pid].back().rule, ir::DStep::kProductMod);
+  EXPECT_EQ(c0.derivations[pid].back().premises.size(), 3u);
+  expect_product_mutants(P, c0, pid);
 }
 
 // x and y nonnegative below 100 honestly (Slack), c = x + y below 200:
@@ -948,6 +1083,168 @@ TEST(GordieHoweConv, PublicOperand) {
   w.set(x, values({1, 2, 3, 4, 5, 6, 15, 0, 15, 0, 15, 15}));
   EXPECT_TRUE(honest(*comp, w));
   EXPECT_TRUE(rejected(*comp, w, add_one(c.id, 7)));
+}
+
+
+// --------------------------------------------------- operator intervals --
+
+int64_t pick(std::mt19937_64 &g, int64_t lo, int64_t hi) {
+  return lo + int64_t(g() % uint64_t(hi - lo + 1));
+}
+AElt elt_of(int64_t x) {
+  return x >= 0 ? af().of_scalar(uint64_t(x)) : af().negf(af().of_scalar(uint64_t(-x)));
+}
+// The centred integer of a base-field element of small magnitude.
+int64_t centred_of(const AElt &e) {
+  const Bound p = field_characteristic(af());
+  const Bound x = nat_of(af(), e);
+  return x <= (p - 1) / 2 ? int64_t(uint64_t(x)) : -int64_t(uint64_t(p - x));
+}
+bool within(int64_t v, const IntInterval &iv) {
+  return SignedInt(v) >= iv.first && SignedInt(v) <= iv.second;
+}
+
+// int_interval's product, acyclic and negacyclic intervals are the
+// extremes over the operands' vertices (their every assignment of ends),
+// and hold every random interior point.
+TEST(GordieHoweOpInterval, Primitives) {
+  namespace ii = int_interval;
+  std::mt19937_64 g(11);
+  for (int trial = 0; trial < 60; ++trial) {
+    const int64_t a0 = pick(g, -9, 9), a1 = pick(g, a0, 12);
+    const int64_t b0 = pick(g, -9, 9), b1 = pick(g, b0, 12);
+    const IntInterval A{a0, a1}, B{b0, b1};
+    // a b.
+    {
+      const auto P = ii::product(A, B, 300);
+      ASSERT_TRUE(P);
+      int64_t lo = a0 * b0, hi = lo;
+      for (int64_t u : {a0, a1})
+        for (int64_t v : {b0, b1}) {
+          lo = std::min(lo, u * v);
+          hi = std::max(hi, u * v);
+        }
+      EXPECT_EQ(*P, (IntInterval{lo, hi}));
+    }
+    // The negacyclic product h x of length n <= 3 over every vertex, and
+    // the acyclic convolution of lengths la, lb <= 3.
+    for (size_t n = 1; n <= 3; ++n) {
+      const auto N = ii::negacyclic(n, A, B, 300);
+      ASSERT_TRUE(N);
+      int64_t lo = 0, hi = 0;
+      bool first = true;
+      for (uint64_t mask = 0; mask < (uint64_t(1) << (2 * n)); ++mask) {
+        std::vector<int64_t> h(n), x(n);
+        for (size_t j = 0; j < n; ++j) {
+          h[j] = (mask >> j) & 1 ? a1 : a0;
+          x[j] = (mask >> (n + j)) & 1 ? b1 : b0;
+        }
+        for (size_t i = 0; i < n; ++i) {
+          int64_t c = 0;
+          for (size_t j = 0; j < n; ++j) {
+            const size_t k = (i + n - j) % n;
+            c += j <= i ? h[j] * x[k] : -h[j] * x[k];
+          }
+          lo = first ? c : std::min(lo, c);
+          hi = first ? c : std::max(hi, c);
+          first = false;
+        }
+      }
+      EXPECT_EQ(*N, (IntInterval{lo, hi})) << "n = " << n;
+      for (size_t la = 1; la <= 3; ++la) {
+        const size_t lb = n;
+        const auto C = ii::acyclic(std::min(la, lb), A, B, 300);
+        ASSERT_TRUE(C);
+        int64_t clo = 0, chi = 0;
+        bool cf = true;
+        for (uint64_t mask = 0; mask < (uint64_t(1) << (la + lb)); ++mask) {
+          std::vector<int64_t> u(la), v(lb), c(la + lb - 1, 0);
+          for (size_t j = 0; j < la; ++j) u[j] = (mask >> j) & 1 ? a1 : a0;
+          for (size_t j = 0; j < lb; ++j) v[j] = (mask >> (la + j)) & 1 ? b1 : b0;
+          for (size_t x = 0; x < la; ++x)
+            for (size_t y = 0; y < lb; ++y) c[x + y] += u[x] * v[y];
+          for (int64_t z : c) {
+            clo = cf ? z : std::min(clo, z);
+            chi = cf ? z : std::max(chi, z);
+            cf = false;
+          }
+        }
+        EXPECT_EQ(*C, (IntInterval{clo, chi})) << "la = " << la << ", lb = " << lb;
+      }
+    }
+  }
+  // Past the cap: none.
+  EXPECT_FALSE(ii::product({0, SignedInt(1) << 200}, {0, SignedInt(1) << 200}, 300));
+  EXPECT_FALSE(ii::negacyclic(4, {0, SignedInt(1) << 150}, {0, SignedInt(1) << 150}, 300));
+}
+
+// Each operator kind's own interval (OpSpec::interval, given its operand's
+// and its dependency's intervals) holds its instantiated matrix applied to
+// random operands drawn from them, ends included: NegacyclicConv,
+// PolyMatVec and PolyBroadcast in coefficient form with and without an
+// entry bound, AcyclicConv with and without one (a kernel of either sign
+// bounds nothing), a sparse matrix by its row sum; FromDigits without a
+// declared row sum bounds nothing.
+TEST(GordieHoweOpInterval, Operators) {
+  Sys cs("gh-op-intervals");
+  auto &A = cs.domain(env().a_profile(), "A");
+  const size_t n = 4;
+  const auto h = A.pub(Subfield{}, "h", n);
+  const auto a = A.pub(Subfield{}, "a", Shape{2, 3, n});
+  const auto t = A.pub(Subfield{}, "t", Shape{3, n});
+  const auto k = A.pub(Subfield{}, "k", 5);
+  struct Case {
+    std::string what;
+    Op<AF> op;
+    IntInterval H;
+    bool bounded;
+  };
+  const std::vector<Case> cases = {
+      {"negacyclic_conv", ops::NegacyclicConv(h), {-3, 5}, true},
+      {"negacyclic_conv entry", ops::NegacyclicConv(h, ops::EntryBound{6}), {0, 5}, true},
+      {"poly_mat_vec", ops::PolyMatVec(a, ops::Form::kCoefficients), {-2, 4}, true},
+      {"poly_mat_vec entry", ops::PolyMatVec(a, ops::EntryBound{5}), {0, 4}, true},
+      {"poly_broadcast", ops::PolyBroadcast(t, ops::Form::kCoefficients), {0, 7}, true},
+      {"poly_broadcast entry", ops::PolyBroadcast(t, ops::EntryBound{8}), {0, 7}, true},
+      {"acyclic_conv", ops::AcyclicConv(k, 6), {0, 9}, true},
+      {"acyclic_conv entry", ops::AcyclicConv(k, 6, ops::EntryBound{10}), {0, 9}, true},
+      {"acyclic_conv signed", ops::AcyclicConv(k, 6), {-1, 3}, false},
+      {"from_digits unbounded", FromDigits(af(), 3, af().of_scalar(5)), {0, 0}, false},
+      {"sparse", ops::sparse_matrix(af(), "rows", 4, {{{0, 2}, {3, 1}}, {{1, 7}}, {}}),
+       {0, 0}, true},
+  };
+  std::mt19937_64 g(3);
+  const IntInterval X{-4, 6};
+  for (const auto &c : cases) {
+    const OpSpec<AF> &op = *c.op.spec;
+    const auto iv = op.interval(X, [&](size_t) { return std::optional(c.H); }, 300);
+    if (!c.bounded) {
+      EXPECT_FALSE(iv) << c.what;
+      continue;
+    }
+    ASSERT_TRUE(iv) << c.what;
+    for (int trial = 0; trial < 200; ++trial) {
+      std::vector<AV> deps;
+      OpArgs args;
+      for (size_t dk = 0; dk < op.deps.size(); ++dk) {
+        AV v;
+        for (size_t j = 0; j < cs.graph().nodes.at(op.deps[dk]).n; ++j)
+          v.push_back(elt_of(trial < 2 ? int64_t(trial ? c.H.second : c.H.first)
+                                       : pick(g, int64_t(c.H.first), int64_t(c.H.second))));
+        deps.push_back(std::move(v));
+      }
+      for (const auto &v : deps) args.push(field_tag<AF>(), &v);
+      const auto m = op.make(args);
+      AV x(op.cols), y(op.rows);
+      for (auto &e : x)
+        e = elt_of(trial < 4 ? (trial % 2 ? 6 : -4) : pick(g, -4, 6));
+      m->apply(x.data(), y.data());
+      for (const auto &e : y)
+        ASSERT_TRUE(within(centred_of(e), *iv))
+            << c.what << ": " << centred_of(e) << " outside [" << int_str(iv->first)
+            << ", " << int_str(iv->second) << "]";
+    }
+  }
 }
 
 }  // namespace

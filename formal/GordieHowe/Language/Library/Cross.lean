@@ -18,8 +18,8 @@ holds outright; with `y` Boolean by its own check (`v · v = v`, `PredBody.boolC
 are `1` at the same coordinates (`GordieHowe.RealizedProgram.one_iff_of_cross`), so their words denote the same
 naturals (`GordieHowe.RealizedProgram.natOfBits_wordAt_eq_of_cross`).
 
-The native Falcon programs' crossing (`GordieHowe.Falcon512.Native.ROMParams.natOfBits_raw_eq`) is in
-`GordieHowe/Applications/Falcon512/Native/ROMParams/Frontend/Basic.lean`.
+The native Falcon programs' crossing (`GordieHowe.Falcon512.natOfBits_raw_eq`) is in
+`GordieHowe/Applications/Falcon512/Frontend/Basic.lean`.
 -/
 
 namespace GordieHowe.RealizedProgram

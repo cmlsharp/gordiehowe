@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# Modified 2026 by Chad Sharp and Paul Grubbs: C++23, Dev build type, OpenSSL, separate third_party/longfellow include root and object libraries, report_bench target, tools directory, Longfellow's own tests built from third_party/longfellow
+# Modified 2026 by Chad Sharp and Paul Grubbs: C++23, Dev build type, OpenSSL, separate third_party/longfellow include root and object libraries, report_bench target, tools directory, Longfellow's own tests built from third_party/longfellow; on aarch64, a caller's -march/-mcpu in place of the default -march; aarch64 build goals
 
 cmake_minimum_required(VERSION 3.13)
 project(proofs)
@@ -65,7 +65,14 @@ if(ARCHITECTURE MATCHES "x86_64")
 elseif(ARCHITECTURE MATCHES "i386")
     set(ARCH_FLAGS -msse2 -mpclmul)
 elseif(ARCHITECTURE MATCHES "aarch64")
-    set(ARCH_FLAGS -march=armv8-a -march=armv8-a+crypto)
+    # A caller's -march/-mcpu in CMAKE_CXX_FLAGS selects the ISA (it must
+    # include the crypto extension); the default -march would come after it
+    # and override it.
+    if(CMAKE_CXX_FLAGS MATCHES "-march=|-mcpu=")
+        set(ARCH_FLAGS "")
+    else()
+        set(ARCH_FLAGS -march=armv8-a -march=armv8-a+crypto)
+    endif()
 elseif(ARCHITECTURE MATCHES "armv7l")
     set(ARCH_FLAGS -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard)
 elseif(ARCHITECTURE MATCHES "arm64")
@@ -147,3 +154,15 @@ add_custom_target(pq_bench_targets DEPENDS
   sha256_compare_bench mdoc_bench rsa_pkcs1_bench pq_mdoc_bench
   composite_bench)
 add_subdirectory(tools)
+# The aarch64 benchmark run's executables, as one goal: the flagship bench
+# executables, report_bench, and the tests of the kernels with an aarch64
+# path and of the flagship systems.
+add_custom_target(rpi_bench_targets DEPENDS
+  report_bench falcon_emulated_bench falcon_native_bench mldsa_native_bench
+  mldsa_emulated_bench falcon_ring_bench mldsa_ring_bench)
+add_custom_target(rpi_test_targets DEPENDS
+  fields256_test fp_goldilocks_test gf2_128_test boolean_skip_test
+  skip_gfni_test gordiehowe_ct_test
+  mldsa_native_test mldsa_emulated_test falcon_native_test
+  falcon_emulated_test mldsa_ring_test falcon_ring_test native_wide_test
+  neon_kernels_test neon_kernels_scalar_test openssl_asm_test)

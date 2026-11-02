@@ -25,7 +25,7 @@ interchangeably:
   is accepted, so are these paths (`check_decompress`), and the per-leaf verifier's queries on
   them are among the multiproof verifier's queries (`trace_decompress_subset`).
 
-The compiler's guarantees hold for every opening format (`GordieHowe.SPBCS.Base.opening`) at errors that do not
+The compiler's guarantees hold for every opening format (`GordieHowe.SPBCS.opening`) at errors that do not
 depend on the format: both formats make at most `1 + ⌊log₂ 2n⌋` verifier queries per opened leaf
 of an `n`-leaf tree (`MerkleOpening.length_trace_le`). The lemmas here relate the two formats
 directly: a cheating multiproof yields accepted authentication paths, and the honest multiproof

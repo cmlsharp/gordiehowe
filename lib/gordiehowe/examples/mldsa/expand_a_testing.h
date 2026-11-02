@@ -70,7 +70,7 @@ struct ExpandASystem {
       : env(e),
         cfg(c),
         rel(compile<ExpandAStatement, ExpandAWitness>(
-            compile_profile<P>(),
+            compile_profile<P, MLDSA44>(),
             [this](Sys &s, ExpandAStatement<In>, ExpandAWitness<In> w) {
               relation(s, w);
             },

@@ -628,6 +628,50 @@ PublicTable<F> public_table(const Scope &s, Domain<F> &D,
 }
 
 namespace table_internal {
+
+// The node of X when X is a whole handle (one term of coefficient 1 and no
+// operator reading every coordinate of its node), or none.
+template <class F>
+std::optional<size_t> whole_handle(const Expr<F> &x) {
+  const ExprNode<F> &e = *x.node;
+  if (e.op != ExprOp::kLin || e.lin.terms.size() != 1) return std::nullopt;
+  const auto &t = e.lin.terms[0];
+  if (!t.chain.empty() || t.scale != e.f->one() || t.in_n != e.n)
+    return std::nullopt;
+  return t.node;
+}
+
+// Records on T's domain that PARTS (the record's parts, in order, of a
+// record of T's width repeated every width coordinates) equal M(row) for
+// rows of T, by the predicate NM, for interval propagation
+// (Domain::TableRecord): each part that is a whole handle.
+template <class F>
+void note_records(const PublicTable<F> &t, const std::vector<Expr<F>> &parts,
+                  const Name &nm) {
+  using Rec = typename Domain<F>::TableRecord;
+  using Leaf = typename Domain<F>::TableLeaf;
+  Rec base;
+  base.width = t.width;
+  base.pred = nm.prefix.empty() ? nm.name : nm.prefix + "." + nm.name;
+  for (const auto &l : t.map.leaves())
+    base.leaves.push_back(Leaf{l.offset, l.n, l.ntt, l.natural, l.psi});
+  for (size_t b = 0; b < t.parts.size(); ++b)
+    base.blocks.push_back({t.parts[b].id, t.widths[b]});
+  size_t at = 0;
+  for (const auto &p : parts) {
+    if (const auto id = whole_handle(p)) {
+      Rec r = base;
+      r.node = *id;
+      r.at = at;
+      t.D->note_table_record(std::move(r));
+    }
+    at += p.size();
+  }
+}
+
+}  // namespace table_internal
+
+namespace table_internal {
 // select_row with the index bits INDEX, or bits NAME.index declared after
 // the table's digests when INDEX is empty.
 template <class F>
@@ -677,6 +721,7 @@ Selected<F> select_row_at(const Scope &s, const PublicTable<F> &t,
   assert_equal(table_internal::record_digest(record, Expr<F>(dg.powers), t.map),
                table_internal::fold(Expr<F>(dg.digests), out.index),
                s.name(name));
+  note_records(t, parts, s.name(name));
   return out;
 }
 }  // namespace table_internal
@@ -811,6 +856,8 @@ void lookup_rows(const Scope &s, const PublicTable<F> &t,
          " coordinates are not a whole number of records of width " +
          std::to_string(t.width));
   assert_in(e, table_internal::lookup_table(t), s.name(name));
+  table_internal::note_records(t, std::vector<Expr<F>>{Expr<F>(e)},
+                               s.name(name));
 }
 
 }  // namespace proofs::gordiehowe::lib::table

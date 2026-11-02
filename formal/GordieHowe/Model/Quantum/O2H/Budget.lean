@@ -30,7 +30,13 @@ averages to at most `n ε Pr[C i before step i]`, and these sum to at most `q`
 `O2HSetting.o2h_fresh_secret` with `q` steps, where now each branch makes at most `q` queries but
 the steps at which it does are chosen at run time.
 
-- `O2HSetting.o2h_fresh_secret_of_count`: that bound.
+- `O2HSetting.o2h_of_count`, `O2HSetting.o2h_sqrt_of_count`: the bound
+  `2 √q √(𝔼 ω, ∑ i, Pr[queried S before step i])` on `|P_left − P_right|` and on
+  `|√P_left − √P_right|`.
+- `O2HSetting.sum_mul_sum_prob_pre_le_of_fresh_secret`: for a fresh secret, the averaged sum is at
+  most `n (ε q)` (`mem_of_mem_S`, `two_mul_sqrt_mul_sqrt_eq` are the bookkeeping).
+- `O2HSetting.o2h_fresh_secret_of_count`, `O2HSetting.o2h_sqrt_fresh_secret_of_count`: the bound
+  `2 q √(n ε)`, on the advantage and on the difference of the square roots.
 - `Distinguisher.advantage_acceptProbOn_made_le_of_fresh_secret_budget`: the O2H step at one
   request of a game (`GordieHowe/Model/Quantum/O2H/Game.lean`) for a distinguisher with a budget of `q` query
   slots, `2 q √(n ε)`.
@@ -389,21 +395,56 @@ theorem o2h_of_count (G C : ℕ → Set W) (q : ℕ)
         gcongr
         exact Real.sum_mul_sqrt_le_sqrt_sum_mul hw s.μ.sum_toReal hg0
 
+/-- **AHU19 Theorem 3 with a per-branch count of the oracle steps, square-root form** (our
+statement; AHU19 pp. 11–12, square-root form, with `OracleAlg.StepCount.norm_final_sub_le` in
+place of Lemma 8): under the hypotheses of `o2h_of_count`,
+`|√P_left − √P_right| ≤ 2 √q √(𝔼 ω, ∑ i, Pr[queried S before step i])`. -/
+theorem o2h_sqrt_of_count (G C : ℕ → Set W) (q : ℕ)
+    (hcount : ∀ ω, A.StepCount (s.z ω) (fun k => {r | r.1 ∈ G k}) (fun i => {r | r.1 ∈ C i}) q)
+    (hSC : ∀ ω, ∀ k < d, ∀ w ∈ G k, ∀ x ∈ s.S ω w, w ∈ C k) :
+    |√(s.pLeft A) - √(s.pRight A)| ≤ 2 * √q * √(∑ ω, (s.μ ω).toReal *
+      ∑ i : Fin d, prob (queriedOf (s.S ω)) (A.pre (queryPermOf (s.H ω)) (s.z ω) i)) := by
+  set g : Ω → ℝ := fun ω => ∑ i : Fin d,
+    prob (queriedOf (s.S ω)) (A.pre (queryPermOf (s.H ω)) (s.z ω) i)
+  have hw : ∀ ω, 0 ≤ (s.μ ω).toReal := fun _ => ENNReal.toReal_nonneg
+  have hg0 : ∀ ω, 0 ≤ g ω := fun ω => sum_nonneg fun _ _ => prob_nonneg _ _
+  have hpoint : ∀ ω, (√(A.acceptProb (queryPermOf (s.H ω)) (s.z ω)) -
+      √(A.acceptProb (queryPermOf (s.G ω)) (s.z ω))) ^ 2 ≤ (2 * √q) ^ 2 * g ω := fun ω => by
+    rw [← Real.sq_sqrt (hg0 ω), ← mul_pow, ← sq_abs]
+    gcongr
+    exact (A.abs_sqrt_acceptProb_sub_le _ _ _).trans ((hcount ω).norm_final_sub_le
+      (respects_queryPermOf _ G C) (respects_queryPermOf _ G C)
+      (queryPermOf_eq_of_notMem_queriedOf fun w x hx => (s.agree ω w x hx).symm)
+      fun k hk r hr hrG => by
+        obtain ⟨j, hj⟩ := hr
+        exact hSC ω k hk r.1 hrG _ hj)
+  refine (Real.abs_sqrt_sum_mul_sub_sqrt_sum_mul_le hw (fun _ => prob_nonneg _ _)
+    fun _ => prob_nonneg _ _).trans ?_
+  calc √(∑ ω, (s.μ ω).toReal * (√(A.acceptProb (queryPermOf (s.H ω)) (s.z ω)) -
+          √(A.acceptProb (queryPermOf (s.G ω)) (s.z ω))) ^ 2)
+      ≤ √(∑ ω, (s.μ ω).toReal * ((2 * √q) ^ 2 * g ω)) := by
+        gcongr with ω
+        exact hpoint ω
+    _ = 2 * √q * √(∑ ω, (s.μ ω).toReal * g ω) := by
+        simp_rw [mul_left_comm _ ((2 * √(q : ℝ)) ^ 2)]
+        rw [← mul_sum, Real.sqrt_mul (by positivity), Real.sqrt_sq (by positivity)]
+
 end General
 
 variable {Z V : Type*} [Fintype V] [AddGroup Y] {d : ℕ}
   (s : O2HSetting (V × R) Z W X Y) (A : OracleAlg Z (QueryReg W n X Y) d)
 
-/-- **O2H for a fresh secret, with a per-branch count of the oracle steps** (our statement; AHU19
-Theorem 3, pp. 11–12, through `o2h_of_count`). Let the outcome be `(v, σ)` with `μ (v, σ) = μV v * ν σ`, let the oracles differ on `T σ` for
-the contents `w ∈ M` of the work register and nowhere else, and let the part on `M` of the states
-before the oracle steps not depend on `σ`; suppose that along every run the branches record their oracle steps (`StepCount` with sets
-`G k` and `C i` of the work register) and that a basis state of `M` before step `k` lies in `C k`.
-If every input lies in `T σ` with probability at most `ε`, then
-`|P_left − P_right| ≤ 2 q √(n ε)`: each branch is charged for the at most `q` oracle steps at
-which it lies in `M`, wherever they fall. -/
-theorem o2h_fresh_secret_of_count {μV : PMF V} {ν : PMF R} {T : R → Set X} {ε : ℝ} (M : Set W)
-    (G C : ℕ → Set W) (q : ℕ) (hμ : ∀ v σ, s.μ (v, σ) = μV v * ν σ)
+omit [AddGroup Y] in
+/-- **The per-branch guessing sum for a fresh secret** (the averaging step of
+`o2h_fresh_secret_of_count`). Let the outcome be `(v, σ)` with `μ (v, σ) = μV v * ν σ`, let the
+set be `T σ` on the contents `w ∈ M` of the work register and empty elsewhere, and let the part on
+`M` of the states before the oracle steps not depend on `σ`; suppose the branches record their
+oracle steps (`StepCount` with sets `G k` and `C i`) and a basis state of `M` before step `k` lies
+in `C k`. If every input lies in `T σ` with probability at most `ε`, then
+`𝔼 ω, ∑ i, Pr[queried S before step i] ≤ n (ε q)`. -/
+theorem sum_mul_sum_prob_pre_le_of_fresh_secret [AddGroup Y] {μV : PMF V} {ν : PMF R}
+    {T : R → Set X} {ε : ℝ} (M : Set W) (G C : ℕ → Set W) (q : ℕ)
+    (hμ : ∀ v σ, s.μ (v, σ) = μV v * ν σ)
     (hS : ∀ v σ w, w ∈ M → s.S (v, σ) w = T σ) (hS' : ∀ v σ w, w ∉ M → s.S (v, σ) w = ∅)
     (hpre : ∀ v σ σ' i, mask {r : QueryReg W n X Y | r.1 ∈ M}
       (A.pre (queryPermOf (s.H (v, σ))) (s.z (v, σ)) i) =
@@ -411,18 +452,11 @@ theorem o2h_fresh_secret_of_count {μV : PMF V} {ν : PMF R} {T : R → Set X} {
     (hcount : ∀ ω, A.StepCount (s.z ω) (fun k => {r | r.1 ∈ G k}) (fun i => {r | r.1 ∈ C i}) q)
     (hMC : ∀ k < d, ∀ w ∈ M, w ∈ G k → w ∈ C k)
     (hε0 : 0 ≤ ε) (hε : ∀ x, (ν.toOuterMeasure {σ | x ∈ T σ}).toReal ≤ ε) :
-    GordieHowe.advantage (s.pLeft A) (s.pRight A) ≤ 2 * q * √(n * ε) := by
+    ∑ ω, (s.μ ω).toReal * ∑ i : Fin d,
+      prob (queriedOf (s.S ω)) (A.pre (queryPermOf (s.H ω)) (s.z ω) i) ≤ n * (ε * q) := by
   classical
   set g : V × R → ℝ := fun ω => ∑ i : Fin d,
     prob (queriedOf (s.S ω)) (A.pre (queryPermOf (s.H ω)) (s.z ω) i) with hg
-  have hSC : ∀ ω, ∀ k < d, ∀ w ∈ G k, ∀ x ∈ s.S ω w, w ∈ C k := by
-    intro ω k hk w hwG x hx
-    have hwM : w ∈ M := by
-      by_contra hM
-      rw [hS' ω.1 ω.2 _ hM] at hx
-      exact hx
-    exact hMC k hk w hwM hwG
-  -- the average of `g` is at most `n ε q`
   set Mr : Set (QueryReg W n X Y) := {r | r.1 ∈ M}
   have hq : ∀ v σ (ψ : QState (QueryReg W n X Y)),
       prob (queriedOf (s.S (v, σ))) ψ = prob (queried (T σ)) (mask Mr ψ) := by
@@ -464,19 +498,73 @@ theorem o2h_fresh_secret_of_count {μV : PMF V} {ν : PMF R} {T : R → Set X} {
           rw [← mul_sum]
           exact mul_le_mul_of_nonneg_left
             ((hcount (v, σ₀)).sum_prob_pre_le (respects_queryPermOf _ G C)) (by positivity)
-  have havg : ∑ ω, (s.μ ω).toReal * g ω ≤ n * ε * q := by
-    rw [Fintype.sum_prod_type]
-    simp_rw [hμ, ENNReal.toReal_mul, mul_assoc, ← mul_sum]
-    calc ∑ v, (μV v).toReal * ∑ σ, (ν σ).toReal * g (v, σ) ≤ ∑ v, (μV v).toReal * (n * ε * q) :=
-          sum_le_sum fun v _ => mul_le_mul_of_nonneg_left (inner v) ENNReal.toReal_nonneg
-      _ = n * ε * q := by rw [← sum_mul, μV.sum_toReal, one_mul]
-      _ = n * (ε * q) := by ring
-  refine (s.o2h_of_count A G C q hcount hSC).trans ?_
-  calc 2 * √q * √(∑ ω, (s.μ ω).toReal * g ω) ≤ 2 * √q * √(n * ε * q) := by
-        gcongr
-    _ = 2 * q * √(n * ε) := by
-        rw [Real.sqrt_mul (by positivity) q, mul_comm (√(n * ε)) (√q), ← mul_assoc,
-          mul_assoc 2 (√q) (√q), Real.mul_self_sqrt (Nat.cast_nonneg _)]
+  rw [Fintype.sum_prod_type]
+  simp_rw [hμ, ENNReal.toReal_mul, mul_assoc, ← mul_sum]
+  calc ∑ v, (μV v).toReal * ∑ σ, (ν σ).toReal * g (v, σ) ≤ ∑ v, (μV v).toReal * (n * ε * q) :=
+        sum_le_sum fun v _ => mul_le_mul_of_nonneg_left (inner v) ENNReal.toReal_nonneg
+    _ = n * ε * q := by rw [← sum_mul, μV.sum_toReal, one_mul]
+    _ = n * (ε * q) := by ring
+
+omit [Fintype V] [Fintype R] [Fintype W] [Fintype X] [Fintype Y] [AddGroup Y] in
+/-- If the set is empty off `M` and every basis state of `M` before step `k` lies in `C k`, so
+does every basis state on which the oracles may differ. -/
+theorem mem_of_mem_S {M : Set W} {G C : ℕ → Set W} (hS' : ∀ v σ w, w ∉ M → s.S (v, σ) w = ∅)
+    (hMC : ∀ k < d, ∀ w ∈ M, w ∈ G k → w ∈ C k) :
+    ∀ ω, ∀ k < d, ∀ w ∈ G k, ∀ x ∈ s.S ω w, w ∈ C k := by
+  intro ω k hk w hwG x hx
+  have hwM : w ∈ M := by
+    by_contra hM
+    rw [hS' ω.1 ω.2 _ hM] at hx
+    exact hx
+  exact hMC k hk w hwM hwG
+
+/-- `2 √q √(n (ε q)) = 2 q √(n ε)`. -/
+theorem two_mul_sqrt_mul_sqrt_eq (q n : ℕ) {ε : ℝ} (hε0 : 0 ≤ ε) :
+    2 * √(q : ℝ) * √(n * (ε * q)) = 2 * q * √(n * ε) := by
+  rw [← mul_assoc, Real.sqrt_mul (by positivity) q, mul_comm (√(n * ε)) (√q), ← mul_assoc,
+    mul_assoc 2 (√q) (√q), Real.mul_self_sqrt (Nat.cast_nonneg _)]
+
+/-- **O2H for a fresh secret, with a per-branch count of the oracle steps** (our statement; AHU19
+Theorem 3, pp. 11–12, through `o2h_of_count`). Let the outcome be `(v, σ)` with
+`μ (v, σ) = μV v * ν σ`, let the oracles differ on `T σ` for the contents `w ∈ M` of the work
+register and nowhere else, and let the part on `M` of the states before the oracle steps not depend
+on `σ`; suppose that along every run the branches record their oracle steps (`StepCount` with sets
+`G k` and `C i` of the work register) and that a basis state of `M` before step `k` lies in `C k`.
+If every input lies in `T σ` with probability at most `ε`, then
+`|P_left − P_right| ≤ 2 q √(n ε)`: each branch is charged for the at most `q` oracle steps at
+which it lies in `M`, wherever they fall. -/
+theorem o2h_fresh_secret_of_count {μV : PMF V} {ν : PMF R} {T : R → Set X} {ε : ℝ} (M : Set W)
+    (G C : ℕ → Set W) (q : ℕ) (hμ : ∀ v σ, s.μ (v, σ) = μV v * ν σ)
+    (hS : ∀ v σ w, w ∈ M → s.S (v, σ) w = T σ) (hS' : ∀ v σ w, w ∉ M → s.S (v, σ) w = ∅)
+    (hpre : ∀ v σ σ' i, mask {r : QueryReg W n X Y | r.1 ∈ M}
+      (A.pre (queryPermOf (s.H (v, σ))) (s.z (v, σ)) i) =
+        mask {r : QueryReg W n X Y | r.1 ∈ M} (A.pre (queryPermOf (s.H (v, σ'))) (s.z (v, σ')) i))
+    (hcount : ∀ ω, A.StepCount (s.z ω) (fun k => {r | r.1 ∈ G k}) (fun i => {r | r.1 ∈ C i}) q)
+    (hMC : ∀ k < d, ∀ w ∈ M, w ∈ G k → w ∈ C k)
+    (hε0 : 0 ≤ ε) (hε : ∀ x, (ν.toOuterMeasure {σ | x ∈ T σ}).toReal ≤ ε) :
+    GordieHowe.advantage (s.pLeft A) (s.pRight A) ≤ 2 * q * √(n * ε) := by
+  refine (s.o2h_of_count A G C q hcount (s.mem_of_mem_S hS' hMC)).trans ?_
+  rw [← two_mul_sqrt_mul_sqrt_eq q n hε0]
+  gcongr
+  exact s.sum_mul_sum_prob_pre_le_of_fresh_secret A M G C q hμ hS hS' hpre hcount hMC hε0 hε
+
+/-- **O2H for a fresh secret, with a per-branch count of the oracle steps, square-root form**
+(our statement; AHU19 Theorem 3, pp. 11–12, square-root form, through `o2h_sqrt_of_count`): under
+the hypotheses of `o2h_fresh_secret_of_count`, `|√P_left − √P_right| ≤ 2 q √(n ε)`. -/
+theorem o2h_sqrt_fresh_secret_of_count {μV : PMF V} {ν : PMF R} {T : R → Set X} {ε : ℝ}
+    (M : Set W) (G C : ℕ → Set W) (q : ℕ) (hμ : ∀ v σ, s.μ (v, σ) = μV v * ν σ)
+    (hS : ∀ v σ w, w ∈ M → s.S (v, σ) w = T σ) (hS' : ∀ v σ w, w ∉ M → s.S (v, σ) w = ∅)
+    (hpre : ∀ v σ σ' i, mask {r : QueryReg W n X Y | r.1 ∈ M}
+      (A.pre (queryPermOf (s.H (v, σ))) (s.z (v, σ)) i) =
+        mask {r : QueryReg W n X Y | r.1 ∈ M} (A.pre (queryPermOf (s.H (v, σ'))) (s.z (v, σ')) i))
+    (hcount : ∀ ω, A.StepCount (s.z ω) (fun k => {r | r.1 ∈ G k}) (fun i => {r | r.1 ∈ C i}) q)
+    (hMC : ∀ k < d, ∀ w ∈ M, w ∈ G k → w ∈ C k)
+    (hε0 : 0 ≤ ε) (hε : ∀ x, (ν.toOuterMeasure {σ | x ∈ T σ}).toReal ≤ ε) :
+    |√(s.pLeft A) - √(s.pRight A)| ≤ 2 * q * √(n * ε) := by
+  refine (s.o2h_sqrt_of_count A G C q hcount (s.mem_of_mem_S hS' hMC)).trans ?_
+  rw [← two_mul_sqrt_mul_sqrt_eq q n hε0]
+  gcongr
+  exact s.sum_mul_sum_prob_pre_le_of_fresh_secret A M G C q hμ hS hS' hpre hcount hMC hε0 hε
 
 end O2HSetting
 
@@ -540,9 +628,11 @@ theorem holds_of_le {k : ℕ} (hk : m ≤ k) {s : W × Req × Option A × LogReg
   mem h := absurd h (by omega)
 
 variable [DecidableEq Req] [DecidableEq A] {Ω : Type*} {Q : ℕ}
+  {St : Type _} [OracleState St X Y]
 
+omit [OracleState St X Y] in
 /-- The logs after the request of slot `k`, on a state whose log `k` is blank. -/
-theorem logs_requestPerm_of_blank (E : Env Ω Req A X Y Q) (ω : Ω) {k : ℕ} (hk : k < m)
+theorem logs_requestPerm_of_blank (E : Env Ω Req A X Y Q St) (ω : Ω) {k : ℕ} (hk : k < m)
     {r : GameReg W n X Y Req A m} (h0 : r.1.2.2.2 ⟨k, hk⟩ = none) :
     (E.requestPerm D.kind ω ⟨k, hk⟩ r).1.2.2.2 =
       if D.kind r.1.1 then Function.update r.1.2.2.2 ⟨k, hk⟩ (some r.1.2.1) else r.1.2.2.2 := by
@@ -553,8 +643,9 @@ theorem logs_requestPerm_of_blank (E : Env Ω Req A X Y Q) (ω : Ω) {k : ℕ} (
   rw [h0, Equiv.swap_apply_left] at h
   exact h
 
+omit [OracleState St X Y] in
 /-- The request of slot `k` does not change whether another slot was a query slot. -/
-theorem queriedAt_requestPerm_of_ne (E : Env Ω Req A X Y Q) (ω : Ω) {k : ℕ} (hk : k < m)
+theorem queriedAt_requestPerm_of_ne (E : Env Ω Req A X Y Q St) (ω : Ω) {k : ℕ} (hk : k < m)
     (r : GameReg W n X Y Req A m) {i : ℕ} (hi : i ≠ k) :
     queriedAt (E.requestPerm D.kind ω ⟨k, hk⟩ r).1.2.2.2 i = queriedAt r.1.2.2.2 i := by
   have h := E.logs_requestPerm D.kind ω ⟨k, hk⟩ r
@@ -566,10 +657,11 @@ theorem queriedAt_requestPerm_of_ne (E : Env Ω Req A X Y Q) (ω : Ω) {k : ℕ}
   · exact queriedAt_update_of_ne _ hi _
   · rfl
 
+omit [OracleState St X Y] in
 /-- **The request of slot `k` keeps the budget**: from a state where the budget holds after the
 step before slot `k`, the request logs the slot's kind, and a query at slot `k` is within the
 budget (`Budget.cap`). -/
-theorem holds_requestPerm (E : Env Ω Req A X Y Q) (ω : Ω) {k : ℕ} (hk : k < m)
+theorem holds_requestPerm (E : Env Ω Req A X Y Q St) (ω : Ω) {k : ℕ} (hk : k < m)
     {r : GameReg W n X Y Req A m} (hr : bud.HoldsBefore k r.1) :
     bud.Holds k (E.requestPerm D.kind ω ⟨k, hk⟩ r).1 := by
   have hws : (E.requestPerm D.kind ω ⟨k, hk⟩ r).1.1 = r.1.1 := E.workspace_requestPerm D.kind ω _ r

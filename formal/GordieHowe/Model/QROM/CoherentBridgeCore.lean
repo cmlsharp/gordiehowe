@@ -69,7 +69,7 @@ def haltOutCoh (w : (A.V × Bool) × A.HaltAnc) : Option O :=
 completion without a final measurement (`MixedAlg.dilateCoh`), relabelled by `haltRelabel`. Its
 output is read from the system register (`haltOutCoh`), so the run leaves the registers it does not
 read unmeasured. -/
-noncomputable abbrev toQueryAlgCoh : QueryAlg X Y A.depth (Option O) :=
+@[reducible] noncomputable def toQueryAlgCoh : QueryAlg X Y A.depth (Option O) :=
   haveI := A.init.nonempty
   let D := (A.halting.dilateCoh fun _ => ∅).relabel (haltRelabel A.V A.HaltAnc X Y)
   { W := (A.V × Bool) × A.HaltAnc

@@ -66,7 +66,7 @@ inline CompositeWitness<Value> composite_witness(
   CompositeWitness<Value> w;
   w.msg = lib::message::sha256_part(lib::message::sha256_layout(max), msg);
   w.msg_length = uint16_t(msg.size());
-  mldsa::set_signature(w, mldsa_sig);
+  mldsa::set_signature<MLDSA>(w, mldsa_sig);
   std::copy(ecdsa_sig.begin(), ecdsa_sig.end(), w.ecdsa_sig.begin());
   return w;
 }

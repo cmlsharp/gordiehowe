@@ -123,6 +123,16 @@ PACKING_ABLATIONS = ("gh-ml-native-nobitpack", "gh-ml-native-subfieldrows",
                      "gh-ml-emulated-nobitpack", "gh-ml-emulated-subfieldrows")
 GH = GH + PACKING_ABLATIONS
 OPTIONAL |= set(PACKING_ABLATIONS)
+# The other parameter sets' proofs of possession and rings (ML-DSA-65 and
+# -87, Falcon-1024; report_bench's gh-ml65-*, gh-ml87-*, gh-fn1024-*), with
+# no plan export (Ligero rounds only); optional, since earlier runs lack
+# them.
+OTHER_SETS = tuple(f"gh-{s}-{arm}" for s in ("ml65", "ml87", "fn1024")
+                   for arm in ("native", "emulated")) \
+    + tuple(f"gh-{s}-ring-{arm}-{r}" for s in ("ml65", "ml87", "fn1024")
+            for arm in ("native", "carrier") for r in (64, 256, 1024))
+GH = GH + OTHER_SETS
+OPTIONAL |= set(OTHER_SETS)
 EXPECTED = set(BASELINES + GH)
 
 M_MAX, BJ_MAX = 120, 250

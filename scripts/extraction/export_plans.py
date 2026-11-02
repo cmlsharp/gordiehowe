@@ -21,7 +21,7 @@ RSA_CONFIGS = ("auto:9:64:batched:2:narrow,auto:9:2048:batched:2:narrow,"
                "auto:11:64:batched:3:narrow-fp128,auto:11:2048:batched:3:narrow-fp128")
 # The modules every export writes per configuration: the data modules and
 # the proof modules (lib/gordiehowe/compiler/plan_proofs.h).
-MODULES = ("Plan.lean", "Program.lean", "Valid.lean", "Realize.lean", "Honest.lean")
+MODULES = ("Plan.lean", "Program.lean", "Valid.lean", "Realize.lean", "Honest/Nodes.lean")
 
 
 # The license header every exported module opens with (plan_export.h's
@@ -91,8 +91,11 @@ def main():
             print(f"{profile}/{group}/{target}: exit={result.returncode}", flush=True)
             if result.returncode:
                 raise RuntimeError(f"Export failed: {log_path}")
-    # Every configuration directory holds all of its modules.
-    for directory in sorted({p.parent for p in output.rglob("*.lean")}):
+    # Every configuration directory (one holding a Plan.lean or a
+    # Program.lean; its per-condition modules sit in subdirectories) holds
+    # all of its modules.
+    configs = {p.parent for name in ("Plan.lean", "Program.lean") for p in output.rglob(name)}
+    for directory in sorted(configs):
         missing = [m for m in MODULES if not (directory / m).is_file()]
         if missing:
             raise RuntimeError(f"Export incomplete: {directory} lacks {missing}")

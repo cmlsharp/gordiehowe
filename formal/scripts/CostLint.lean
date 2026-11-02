@@ -85,14 +85,18 @@ def costTypes : List Name :=
     ``GordieHowe.NARG.ROM.OracleSampler]
 
 /-- **Extractor procedures of other types**: named extraction procedures whose type is not one of
-`costTypes` (they return a `Multiset`, an `Option`, a witness), checked like the cost types: a
+`costTypes` (they return a `Multiset`, an `Option`, a witness), and the readouts of the
+multi-user forgers (the forgery read from an extraction run), checked like the cost types: a
 "Running time" docstring paragraph, and compiled code unless listed in `knownNoncomputable`. -/
 def extractorFunctions : List Name :=
-  [``GordieHowe.SPBCS.Base.dbExtract, ``GordieHowe.SPBCS.Base.targetedExtract,
-    ``GordieHowe.SPBCS.dbExtract, ``GordieHowe.SPBCS.dbExtractBits,
+  [``GordieHowe.SPBCS.targetedExtract, ``GordieHowe.SPBCS.dbExtract, ``GordieHowe.SPBCS.dbExtractBits,
     ``GordieHowe.SPBCS.targetedExtractor, ``GordieHowe.SPBCS.targetedExtractorOf,
     ``GordieHowe.SPBCS.targetedExtractorAt,
-    ``GordieHowe.SPBCS.extractLabel, ``GordieHowe.SPBCS.extractLabelR]
+    ``GordieHowe.SPBCS.extractLabel, ``GordieHowe.SPBCS.extractLabelR,
+    ``GordieHowe.Ring.StmtVerifiesRing.extractor, ``GordieHowe.SPBCS.dbExtractBitsList,
+    ``GordieHowe.Ring.StmtVerifiesRing.extractorList, ``GordieHowe.muReadout,
+    ``GordieHowe.RingSignature.Insider.zkCands, ``GordieHowe.RingSignature.Insider.zkCandTest,
+    ``GordieHowe.RingSignature.Insider.zkReadout]
 
 /-- **Configuration templates checked like extractor procedures**: `@[config_template]`
 definitions (`GordieHowe/Applications/Configuration/Instantiate.lean`) that are part of an
@@ -127,18 +131,27 @@ them is a reduction (`reductionDefs`). -/
 def adversaryTypes : List Name :=
   [``GordieHowe.Quantum.Alg, ``GordieHowe.Quantum.IAlg, ``GordieHowe.Quantum.KindAlg, ``GordieHowe.Quantum.AdaptiveIAlg,
     ``GordieHowe.Quantum.QueryAlg, ``GordieHowe.Quantum.Distinguisher,
-    ``GordieHowe.Quantum.OracleAlg, ``GordieHowe.Quantum.MixedAlg, ``GordieHowe.SPBCS.Base.SimExtractionAdversary,
-    ``GordieHowe.SPBCS.Base.WIAdversary, ``GordieHowe.ROM.Alg, ``GordieHowe.ROM.Adversary,
-    ``GordieHowe.Ring.ExtractionForger, ``GordieHowe.Ring.RingAdversary, ``GordieHowe.Ring.AnonAdversary,
-    ``GordieHowe.Ring.KeyedAnonAdversary]
+    ``GordieHowe.Quantum.OracleAlg, ``GordieHowe.Quantum.MixedAlg, ``GordieHowe.SPBCS.SimExtractionAdversary,
+    ``GordieHowe.SPBCS.WIAdversary, ``GordieHowe.ROM.Alg, ``GordieHowe.ROM.Adversary,
+    ``GordieHowe.Ring.ExtractionForger, ``GordieHowe.Ring.RingAdversary, ``GordieHowe.Ring.PubAnonAdversary,
+    ``GordieHowe.Ring.KeyedAnonAdversary, ``GordieHowe.Ring.MaskedSigner.QAdversary]
 
 /-- **Constructions on adversaries that are not reductions**, each with the reason: the
 translations that define the semantics of the model and the
 equivalent forms of the same algorithm used inside proofs. They do not build an adversary that
 another party runs, so they carry no running-time obligation. -/
 def notReductions : List (Name × String) :=
-  [(`GordieHowe.Quantum.IAlg.compose, "the semantics of an interactive adversary with a challenger \
+  [(`GordieHowe.Quantum.AdaptiveIAlg.runDil, "the dilated adversary with its output forgotten, the \
+      pure game whose final state carries the run's history events \
+      (`GordieHowe/Model/RingSignature/HistoryLogs.lean`), a proof device; no party runs it"),
+    (`GordieHowe.Quantum.Distinguisher.gameAlgOn, "the game of a distinguisher as an oracle algorithm \
+      with a tape-dependent accepting set, the form one-way to hiding is applied to \
+      (`GordieHowe/Model/Quantum/O2H/WholeRun.lean`), a proof device; no party runs it"),
+    (`GordieHowe.Quantum.IAlg.compose, "the semantics of an interactive adversary with a challenger \
       (the definition of the model)"),
+    (`GordieHowe.Quantum.KindAlg.unitOut, "the same algorithm with its output forgotten, a form \
+      used inside the proof of identical until bad for split challengers \
+      (`GordieHowe/Model/Quantum/Interactive/SplitHybrid.lean`); no party runs it"),
     (`GordieHowe.Quantum.IAlg.composeOut, "`IAlg.compose` with the classical registers as output, \
       a proof device"),
     (`GordieHowe.Quantum.IAlg.toKindAlg, "the adversary with its slot counter, the internal form of \
@@ -177,11 +190,72 @@ def notReductions : List (Name × String) :=
       same outcome law for an adversary within its budget (`WithinBudget.outLaw_compose_abortAlg`)"),
     (`GordieHowe.Quantum.Alg.halting, "the same algorithm with a halting flag, an equivalent form"),
     (`GordieHowe.Quantum.QueryAlg.mapOut, "the same algorithm with its output relabelled"),
+    (`GordieHowe.Quantum.QueryAlg.withOut, "the same algorithm with its output read from the work \
+      register by another function"),
+    (`GordieHowe.Ring.MaskedSigner.QAdversary.entryAlg, "the quantum adversary's algorithm at one \
+      input with its output read as an entry of a table, the same algorithm"),
     (`GordieHowe.Quantum.QueryAlg.toOracleAlg, "the same algorithm as an oracle algorithm of AHU19"),
     (`GordieHowe.Quantum.OracleAlg.relabel, "the same algorithm on relabelled basis states"),
     (`GordieHowe.Quantum.O2HSetting.dilAlg, "the dilation of a mixed algorithm in the O2H statement, \
       the same algorithm"),
-    (`GordieHowe.Quantum.Distinguisher.gameAlg, "the game as an oracle algorithm, the same run")]
+    (`GordieHowe.Quantum.Distinguisher.gameAlg, "the game as an oracle algorithm, the same run"),
+    (`GordieHowe.Quantum.bridgeCompose,
+      "the trace-preserving composition of the absorbed adversary with the challenger at the empty \
+      table, the composition of the bridge proof \
+      (`GordieHowe/Model/Quantum/Interactive/ReqBridgeProof.lean`), a proof device"),
+    (`GordieHowe.Quantum.bridgeComposeAt,
+      "`bridgeCompose` with the absorbed adversary's steps replaced, a proof device of the bridge \
+      statement"),
+    (`GordieHowe.Quantum.bridgeCompose',
+      "`bridgeCompose` with its Kraus maps read after the request points of a table, a proof \
+      device of the bridge statement"),
+    (`GordieHowe.Quantum.bridgeQ,
+      "the bridge's registers, steps and output as a query algorithm, the same algorithm (a proof \
+      device)"),
+    (`GordieHowe.Quantum.Alg.precomp,
+      "the same core algorithm with its Kraus maps read after basis permutations, a proof device"),
+    (`GordieHowe.Quantum.QueryAlg.precompSteps,
+      "the same query algorithm with its steps read after basis permutations, a proof device"),
+    (`GordieHowe.Quantum.AdaptiveIAlg.withConst,
+      "the adversary with a constant classical register, a form used inside the proof of the \
+      bridge statement"),
+    (`GordieHowe.Quantum.AdaptiveIAlg.withStep, "the adversary with its steps replaced, a proof \
+      device"),
+    (`GordieHowe.Quantum.KindAlg.dilateIn,
+      "the dilated distinguisher accepting on a set of outputs, the same algorithm (a proof \
+      device)"),
+    (`GordieHowe.Quantum.Distinguisher.KC,
+      "the kind algorithm of `Distinguisher.toAdaptive` with its registers stated concretely, \
+      equal to it (`toKindAlg_eq_KC`)"),
+    (`GordieHowe.Quantum.AdaptiveIAlg.relayA,
+      "`relayAdv` before its aborting completion, the internal form of the relayed adversary"),
+    (`GordieHowe.Quantum.AdaptiveIAlg.mapOut,
+      "the same adversary with its output read through a map"),
+    (`GordieHowe.Quantum.AdaptiveIAlg.pureD,
+      "the dilation of the adversary as a pure distinguisher, the same algorithm (the input of \
+      `Distinguisher.relay`)"),
+    (`GordieHowe.Quantum.AdaptiveIAlg.leadPureD,
+      "`pureD` with each step's leading unitary before its completed Kraus map, the same law \
+      (`AdaptiveIAlg.leadPureD_acceptProbOnAt`), a proof device"),
+    (`GordieHowe.Quantum.KindAlg.leadPost,
+      "`KindAlg.leadDilate` with its post batches as slots, a proof device"),
+    (`GordieHowe.Quantum.KindAlg.leadDilate,
+      "`KindAlg.dilate` with each step's leading unitary before its completed Kraus map, a proof \
+      device"),
+    (`GordieHowe.Quantum.AdaptiveIAlg.pureDil, "the dilation of the adversary for an output as a \
+      distinguisher without a final unitary, the same algorithm"),
+    (`GordieHowe.Quantum.Distinguisher.toAdaptive,
+      "a distinguisher of the pure game as an adversary with run-time kinds, the same algorithm \
+      with a query counter"),
+    (`GordieHowe.Quantum.Alg.castDepth, "the same algorithm read at an equal depth, the same \
+      expanded coherent law (`simLaw_expandAdv_castDepth`), a proof device"),
+    (`GordieHowe.Quantum.Alg.withStep', "an algorithm's registers with other Kraus maps, a proof \
+      device of the transport of expanded coherent runs (`simLaw_expandAdv_transport`)"),
+    (`GordieHowe.Quantum.KindAlg.withStep, "the kind algorithm with its Kraus maps replaced, a \
+      proof device (as `AdaptiveIAlg.withStep`)"),
+    (`GordieHowe.Quantum.KindAlg.dilPost, "the dilated adversary with its post phase as query \
+      slots (`KindAlg.dilateIn` then `Distinguisher.withPostSlots`), the same algorithm (a proof \
+      device)")]
 
 /-- The reductions: the definitions in the `GordieHowe` namespace whose type ends in one of
 `adversaryTypes` and that take an argument of one of `adversaryTypes`, outside `notReductions`. -/
@@ -434,7 +508,7 @@ def knownNoncomputable : List (Name × String) :=
       `SPModel.pureWithTest`, fields of a structure defined over Mathlib's complex matrices; it \
       changes no outcome of the measurement"),
     (`GordieHowe.Quantum.AdaptiveIAlg.withTest, quantumReduction),
-    (`GordieHowe.SPBCS.Base.pureWithTest, quantumReduction),
+    (`GordieHowe.SPBCS.pureWithTest, quantumReduction),
     (`GordieHowe.SPBCS.extAt, quantumReduction),
     (`GordieHowe.SPBCS.extAdv, quantumReduction),
     (`GordieHowe.SPBCS.extRun, quantumReduction),
@@ -445,7 +519,20 @@ def knownNoncomputable : List (Name × String) :=
     (`GordieHowe.QROM.expandAt, quantumReduction),
     (`GordieHowe.NARG.QROM.Verifier.expandedOpt, quantumReduction),
     (`GordieHowe.SPBCS.QROM.extAdvVia, quantumReduction),
-    (`GordieHowe.SPBCS.Base.SimExtractionAdversary.withTest, quantumReduction)]
+    (`GordieHowe.SPBCS.SimExtractionAdversary.withTest, quantumReduction),
+    (`GordieHowe.Quantum.AdaptiveIAlg.thenProg, quantumReduction),
+    (`GordieHowe.Quantum.AdaptiveIAlg.thenProgWith, quantumReduction),
+    (`GordieHowe.Quantum.AdaptiveIAlg.thenProgOut, quantumReduction),
+    (`GordieHowe.Quantum.Distinguisher.relay, quantumReduction),
+    (`GordieHowe.Quantum.AdaptiveIAlg.relayAdv, quantumReduction),
+    (`GordieHowe.Quantum.AdaptiveIAlg.relayD, quantumReduction),
+    (`GordieHowe.Quantum.extRun, quantumReduction),
+    (`GordieHowe.Quantum.AdaptiveIAlg.patchTag, quantumReduction),
+    (`GordieHowe.Quantum.AdaptiveIAlg.absorbAssignP, quantumReduction),
+    (`GordieHowe.Quantum.AdaptiveIAlg.absorbAssign, quantumReduction),
+    (`GordieHowe.Quantum.AdaptiveIAlg.eventOut, quantumReduction),
+    (`GordieHowe.Quantum.AdaptiveIAlg.assignSideBase, quantumReduction),
+    (`GordieHowe.RingSignature.KeyFree.kfRelaySideBase, quantumReduction)]
 
 /-! ### Classical decisions passed to extractors
 
@@ -787,6 +874,9 @@ run_cmd liftTermElabM do
   logInfo m!"cost lint: every definition named like an extractor with a collection result is \
     listed ({extractorFunctions.length} extractor procedures, {notExtractors.length} exempt)"
 
+-- The pass reads every declaration of the `GordieHowe` namespace in one command, so its cost
+-- grows with the library; the default heartbeat budget does not bound it.
+set_option maxHeartbeats 0 in
 run_cmd liftTermElabM do
   let (bad, nReaching) ← classicalExtractorDecisions
   unless bad.isEmpty do

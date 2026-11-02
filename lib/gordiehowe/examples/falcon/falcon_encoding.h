@@ -1,16 +1,18 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 //
-// Falcon-512 encodability of s2.
+// Falcon encodability of s2 (Falcon specification v1.2, Algorithm 17
+// Compress, section 3.11.2).
 //
 // The compressed format codes coefficient x as a sign bit, the seven low bits
 // of |x|, then |x|/128 zeros and a terminating one: 9 + |x|/128 bits.  The
-// encoder rejects |x| > 2047, and the payload is 625 bytes.  So a decoded s2
-// is encodable iff every magnitude splits as |x| = 128*h + l with h < 16 and
-// l < 128, and
+// encoder rejects |x| > 2047, and Compress fails when the string exceeds
+// slen = 8 sbytelen - 328 bits.  So a decoded s2 of degree n is encodable
+// iff every magnitude splits as |x| = 128*h + l with h < 16 and l < 128, and
 //
-//   sum_i h_i <= 8*625 - 9*512 = 392.
+//   sum_i h_i <= J = slen - 9 n
 //
+// (Falcon-512: slen = 5000, J = 392; Falcon-1024: slen = 9912, J = 696).
 // The encoder writes the sign of x < 0, so it never emits -0.  This header
 // holds the codec constants and the host advice (each magnitude's split and
 // the budget's slack).
@@ -30,14 +32,10 @@ constexpr uint64_t kFalconMagnitudeBound = 2048;  // |x| <= 2047
 constexpr uint64_t kFalconHighBound = kFalconMagnitudeBound / kFalconLowRadix;  // 16
 constexpr uint64_t kFalconBaseCoefficientBits = 1 + 7 + 1;  // sign, low, terminator
 
-// Unary bits left after every coefficient's fixed overhead.
-constexpr uint64_t falcon_encoding_high_budget(uint64_t n, uint64_t payload_bytes) {
-  return 8 * payload_bytes - kFalconBaseCoefficientBits * n;
+// Unary bits left of SLEN_BITS after every coefficient's fixed overhead.
+constexpr uint64_t falcon_encoding_high_budget(uint64_t n, uint64_t slen_bits) {
+  return slen_bits - kFalconBaseCoefficientBits * n;
 }
-constexpr uint64_t kFalcon512PayloadBytes = 625;
-constexpr uint64_t kFalcon512HighBudget =
-    falcon_encoding_high_budget(512, kFalcon512PayloadBytes);  // 392
-static_assert(kFalcon512HighBudget == 392);
 
 // ---- host -------------------------------------------------------------------
 

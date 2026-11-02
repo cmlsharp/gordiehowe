@@ -14,7 +14,7 @@ The relative trace `Tr_{K/E}` and the coordinates in a relative basis (`GordieHo
 are additive (`relTrace_add`, `coord_add`: the iterated Frobenius is additive, `phi_add`), and the
 first coordinate of an element of `E` in a basis whose first element is `1` is the element itself
 (`coord_zero_of_mem`). A word's bits, read through its first relative coordinate, are then an
-additive function of the field (`GordieHowe/Applications/MLDSA44/Native/ROMParams/HashField.lean`).
+additive function of the field.
 -/
 
 namespace GordieHowe.RelativePacking

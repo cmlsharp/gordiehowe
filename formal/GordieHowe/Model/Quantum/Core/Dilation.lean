@@ -12,8 +12,10 @@ public import Mathlib.Analysis.Matrix.Order
 /-!
 # Purification and Stinespring dilation in finite dimension
 
-The facts that turn the mixed-state formalism of `GordieHowe/Model/Quantum/Core/Channel.lean` into the pure-state
-formalism of `GordieHowe/Model/Quantum/Core/State.lean`, for a system with computational basis `ι` and an ancilla
+The facts that turn the mixed-state formalism of `GordieHowe/Model/Quantum/Core/Channel.lean`
+    into the pure-state
+formalism of `GordieHowe/Model/Quantum/Core/State.lean`, for a system with computational basis
+    `ι` and an ancilla
 register with basis `A`.
 
 - `reduce ψ` is the reduced density matrix of a vector `ψ` on `ι × A` on the system `ι`, the
@@ -28,7 +30,8 @@ register with basis `A`.
   product space, a linear map that preserves the norm of every vector of a subspace `S` agrees
   on `S` with a unitary. This is Mathlib's `LinearIsometry.extend`.
 - **Stinespring dilation** (`stinespring`, `reduce_stinespring`): for a Kraus family
-  `K : KrausChannel R ι ι` and an ancilla `A ≃ R × C` with a register `R` in a fixed basis state `r₀`
+  `K : KrausChannel R ι ι` and an ancilla `A ≃ R × C` with a register `R` in a fixed basis state
+      `r₀`
   (a fresh register), the map `ψ ↦ ∑ r, (K r ⊗ |r⟩⟨r₀|) ψ` preserves norms on the vectors whose
   `R` register is `r₀` (`norm_krausAct`), so it agrees there with a unitary; the reduced state
   after it is `K.apply` of the reduced state before. The register `R` afterwards holds the Kraus
@@ -107,7 +110,8 @@ theorem trace_reduce (ψ : QState (ι × A)) : (reduce ψ).trace = ((‖ψ‖ ^ 
 
 /-- Two vectors with reduced density matrices of equal trace have equal norms. -/
 theorem norm_eq_norm_of_trace_reduce_eq {κ B : Type*} [Fintype κ] [Fintype B]
-    {φ : QState (ι × A)} {ψ : QState (κ × B)} (h : (reduce φ).trace = (reduce ψ).trace) : ‖φ‖ = ‖ψ‖ := by
+    {φ : QState (ι × A)} {ψ : QState (κ × B)} (h : (reduce φ).trace = (reduce ψ).trace) : ‖φ‖ =
+        ‖ψ‖ := by
   rw [trace_reduce, trace_reduce, Complex.ofReal_inj] at h
   exact (pow_left_inj₀ (norm_nonneg _) (norm_nonneg _) two_ne_zero).1 h
 
@@ -280,7 +284,8 @@ theorem krausAct_apply_symm (K : KrausChannel R ι κ) (ψ : QState (ι × A)) (
   simp [krausAct_apply]
 
 /-- A sum over the ancilla is a sum over the register `R` and the rest `C`. -/
-theorem sum_ancilla {M : Type*} [AddCommMonoid M] (e : A ≃ R × C) (f : A → M) : ∑ a, f a = ∑ r, ∑ c, f (e.symm (r, c)) := by
+theorem sum_ancilla {M : Type*} [AddCommMonoid M] (e : A ≃ R × C) (f : A → M) : ∑ a, f a = ∑ r, ∑
+    c, f (e.symm (r, c)) := by
   rw [← Fintype.sum_prod_type']
   exact (Equiv.sum_comp e.symm f).symm
 
@@ -335,7 +340,8 @@ theorem krausAct_eq_zero_of (K : KrausChannel R ι κ) {P : A → Prop} {ψ : QS
 /-- **Naimark dilation of a measurement**: after the Stinespring map of a fresh vector, measuring
 the register `R` gives `r` with probability `tr (K r ρ (K r)ᴴ)` for the reduced density matrix
 `ρ` before it. -/
-theorem prob_krausAct_fiber (K : KrausChannel R ι κ) {ψ : QState (ι × A)} (hψ : Fresh e r₀ ψ) (r : R) :
+theorem prob_krausAct_fiber (K : KrausChannel R ι κ) {ψ : QState (ι × A)} (hψ : Fresh e r₀ ψ) (r
+    : R) :
     prob ((fun p : κ × A => (e p.2).1) ⁻¹' {r}) (krausAct e r₀ K ψ) =
       (K.op r * reduce ψ * (K.op r)ᴴ).trace.re := by
   classical
@@ -357,7 +363,8 @@ noncomputable def stinespring (K : KrausChannel R ι ι) : QState (ι × A) ≃�
 
 variable {e r₀}
 
-theorem stinespring_apply_of_fresh (K : KrausChannel R ι ι) {ψ : QState (ι × A)} (hψ : Fresh e r₀ ψ) :
+theorem stinespring_apply_of_fresh (K : KrausChannel R ι ι) {ψ : QState (ι × A)} (hψ : Fresh e r₀
+    ψ) :
     stinespring e r₀ K ψ = krausAct e r₀ K ψ :=
   extendUnitary_apply_of_mem _ _ _ hψ
 
@@ -367,6 +374,42 @@ before it. -/
 theorem reduce_stinespring (K : KrausChannel R ι ι) {ψ : QState (ι × A)} (hψ : Fresh e r₀ ψ) :
     reduce (stinespring e r₀ K ψ) = K (reduce ψ) := by
   rw [stinespring_apply_of_fresh K hψ, reduce_krausAct K hψ]
+
+omit [Fintype C] in
+theorem fresh_single [DecidableEq (ι × A)] {x : ι × A} (hx : (e x.2).1 = r₀) :
+    Fresh e r₀ (EuclideanSpace.single x (1 : ℂ)) := fun i a ha => by
+  rw [EuclideanSpace.single_apply, if_neg]
+  rintro rfl
+  exact ha hx
+
+/-- **The entries of the Stinespring unitary on the fresh columns**: the Kraus operator of the
+row's register `R`, from the column's system to the row's, the rest of the ancilla kept. -/
+theorem stinespring_single_apply [DecidableEq A] [DecidableEq (ι × A)] (K : KrausChannel R ι ι)
+    {x : ι × A}
+    (hx : (e x.2).1 = r₀) (y : ι × A) :
+    stinespring e r₀ K (EuclideanSpace.single x 1) y =
+      K.op (e y.2).1 y.1 x.1 * (if x.2 = e.symm (r₀, (e y.2).2) then 1 else 0) := by
+  rw [stinespring_apply_of_fresh K (fresh_single hx)]
+  change ∑ j, K.op (e y.2).1 y.1 j *
+    EuclideanSpace.single x (1 : ℂ) (j, e.symm (r₀, (e y.2).2)) = _
+  simp only [EuclideanSpace.single_apply]
+  rw [Finset.sum_eq_single x.1]
+  · congr 1
+    exact if_congr ⟨fun h => (congrArg Prod.snd h).symm, fun h => Prod.ext rfl h.symm⟩ rfl rfl
+  · intro j _ hj
+    rw [ite_cond_eq_false _ _ (eq_false fun h' => hj (congrArg Prod.fst h')), mul_zero]
+  · simp
+
+/-- **The Stinespring unitary along permutations of the system** on the fresh columns: for a
+Kraus family whose operators agree read along `πr` on the rows and `πc` on the columns, its
+Stinespring unitary does too. -/
+theorem stinespring_single_perm [DecidableEq A] [DecidableEq (ι × A)] (K : KrausChannel R ι ι)
+    {πr πc : Equiv.Perm ι}
+    (hK : ∀ r a b, K.op r (πr a) (πc b) = K.op r a b) {x : ι × A} (hx : (e x.2).1 = r₀)
+    (y : ι × A) :
+    stinespring e r₀ K (EuclideanSpace.single (πc x.1, x.2) 1) (πr y.1, y.2) =
+      stinespring e r₀ K (EuclideanSpace.single x 1) y := by
+  rw [stinespring_single_apply K (x := (πc x.1, x.2)) hx, stinespring_single_apply K hx, hK]
 
 end Stinespring
 

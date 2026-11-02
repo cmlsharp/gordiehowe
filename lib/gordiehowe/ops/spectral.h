@@ -42,32 +42,11 @@
 #include "gordiehowe/domain.h"
 #include "gordiehowe/expr.h"
 #include "gordiehowe/ops/operators.h"
+#include "gordiehowe/ops/integer_congruence.h"
+#include "gordiehowe/ops/spectral_sum.h"
 #include "gordiehowe/predicates.h"
 
 namespace proofs::gordiehowe::ops {
-
-// scale * spec[k] * Ntt(x)[k], spec read at an offset (in elements) of its
-// node, x at an offset of its expression's coordinates. KEY names the
-// operand x: a handle's node, or the expression itself, so that an operand
-// passed twice is transformed once.
-template <class F>
-struct SpectralTerm {
-  Ref<F> spec;
-  size_t spec_at = 0;
-  ExprPtr<F> x;
-  size_t x_at = 0;
-  typename F::Elt scale;
-  std::pair<size_t, const void *> key;
-};
-
-// A sum of spectral terms under one staged transform (OP, the Ntt
-// operator; NTT its stages).
-template <class F>
-struct SpectralSum {
-  std::shared_ptr<const StagedNtt<F>> ntt;
-  Op<F> op;
-  std::vector<SpectralTerm<F>> terms;
-};
 
 namespace spectral_detail {
 // A spectrum: any value a circuit reads (no Bytes statement).
@@ -183,54 +162,14 @@ SpectralSum<F> operator-(SpectralSum<F> a, const SpectralSum<F> &b) {
   return a + (-b);
 }
 
-// One spectral row: Ntt(lhs) == rhs, LHS an expression of n coordinates.
-template <class F>
-struct SpectralRow {
-  ExprPtr<F> lhs;
-  SpectralSum<F> rhs;
-};
 // The row Ntt(LHS) == RHS, LHS a handle or an expression.
 template <class X, class F = PolyField<X>>
 SpectralRow<F> spectral_row(const X &lhs, SpectralSum<F> rhs) {
   return SpectralRow<F>{spectral_detail::operand_expr(lhs), std::move(rhs)};
 }
 
-// The two sides of each row, Ntt(rows[i].lhs) and rows[i].rhs, as
-// expressions. Every row shares one transform, applied through its staged
-// butterflies (the Ntt operator's circuit expansion): each distinct operand
-// x is transformed once (one expression, emitted once), each row's lhs
-// once, and a row's right side is the sum of scale_t spec_t[k] Ntt(x_t)[k].
-// WHAT names the caller in errors.
-template <class F>
-std::vector<std::pair<Expr<F>, Expr<F>>> spectral_sides(
-    const std::vector<SpectralRow<F>> &rows, const std::string &what) {
-  if (rows.empty()) fail(what + ": no rows");
-  const auto t = rows[0].rhs.ntt;
-  const Op<F> ntt = rows[0].rhs.op;
-  const size_t n = t->n;
-  std::map<std::pair<size_t, const void *>, Expr<F>> hat;
-  std::vector<std::pair<Expr<F>, Expr<F>>> out;
-  for (const auto &r : rows) {
-    if (r.rhs.ntt != t) fail(what + ": rows under different transforms");
-    if (r.lhs->n != n)
-      fail(what + ": a left side of " + std::to_string(r.lhs->n) +
-           " elements, not " + std::to_string(n));
-    if (r.rhs.terms.empty()) fail(what + ": a row without terms");
-    std::optional<Expr<F>> rhs;
-    for (const auto &tm : r.rhs.terms) {
-      auto it = hat.find(tm.key);
-      if (it == hat.end())
-        it = hat.emplace(tm.key, ntt(Expr<F>(tm.x))).first;
-      const Expr<F> p =
-          Expr<F>(tm.spec).flat().slice(tm.spec_at, tm.spec_at + n) *
-          it->second.flat().slice(tm.x_at, tm.x_at + n);
-      const Expr<F> sp = tm.scale == tm.spec.f->one() ? p : tm.scale * p;
-      rhs = rhs.has_value() ? *rhs + sp : sp;
-    }
-    out.push_back({ntt(Expr<F>(r.lhs)), *rhs});
-  }
-  return out;
-}
+// (spectral_sides, the two sides of each row as expressions, is in
+// ops/spectral_sum.h.)
 
 // Ntt(rows[i].lhs) == rows[i].rhs (spectral_sides) as predicates pinned to
 // the GKR circuit, declared on SC: the system or a scope (the domain is the
@@ -270,6 +209,61 @@ void assert_spectral(Sc &&sc, std::string nm, const X &lhs,
   assert_spectral(sc, std::move(nm),
                   std::vector<SpectralRow<F>>{
                       spectral_row(lhs, std::move(rhs))});
+}
+
+// rows[i].lhs = rows[i].rhs (mod M) as integers, for every row, M >= 2:
+// the product form of assert_mod (system_core.h's assert_mod_congruence,
+// lowered by mod.h) over the congruence whose row i is
+// +lhs_i - rhs_i, lhs_i an expression term and rhs_i a spectral product
+// term (ops/integer_congruence.h): the integer value of a spectral sum is
+// sum_t scale_t (h_t * x_t) in Z[X]/(X^n + 1), h_t the polynomial whose
+// spectrum spec_t is, which a public table selects (its coefficients'
+// interval is the hull of the table's columns,
+// range_internal::table_preimage_hull). The lowering derives the
+// quotient's interval and its sound bound, commits it (one value of shape
+// [rows][n]), and states each row, normalized, as the spectral predicate
+//   Ntt(lhs_i - m qlo - m q_i) == rhs_i
+// pinned to the circuit, as assert_spectral does. NM names it.
+template <class F>
+Predicate assert_mod(const std::vector<SpectralRow<F>> &rows, Bound m,
+                     const Name &nm = {}) {
+  if (rows.empty() || rows[0].rhs.terms.empty())
+    fail("assert_mod '" + nm.name + "': no spectral rows");
+  const Scope sc = internal::predicate_scope(
+      internal::operand_graph(rows[0].rhs.terms[0].spec), nm, "assert_mod");
+  using T = std::shared_ptr<const IntegerTerm<F>>;
+  std::vector<typename Congruence<F>::Row> cr;
+  for (const auto &r : rows)
+    cr.push_back({plus<F>(T(std::make_shared<const ExprTerm<F>>(r.lhs))),
+                  minus<F>(T(std::make_shared<const SpectralProductTerm<F>>(r.rhs)))});
+  return internal::Predicates::mod_congruence(
+      sc,
+      std::make_shared<const Congruence<F>>(std::move(cr),
+                                            "assert_mod '" + nm.name + "'"),
+      m, nm.name);
+}
+// D = 0 (mod M) as integers for the congruence of ROWS
+// (ops/integer_congruence.h: each row a list of signed terms, any an
+// expression or a spectral product, none distinguished), M >= 2, declared
+// in scope SC: the product form of assert_mod (mod.h). NM names it.
+template <class F>
+Predicate assert_congruence(const Scope &sc,
+                            std::vector<typename Congruence<F>::Row> rows,
+                            Bound m, const std::string &nm) {
+  return internal::Predicates::mod_congruence(
+      sc,
+      std::make_shared<const Congruence<F>>(std::move(rows),
+                                            "assert_mod '" + sc.scoped(nm) + "'"),
+      m, nm);
+}
+// lhs = rhs (mod M) for one spectral row: LHS a handle or an expression of
+// n coordinates, RHS a spectral sum.
+template <class X, class F = PolyField<X>>
+Predicate assert_mod(const X &lhs, SpectralSum<F> rhs, Bound m,
+                     const Name &nm = {}) {
+  return assert_mod(std::vector<SpectralRow<F>>{
+                        spectral_row(lhs, std::move(rhs))},
+                    m, nm);
 }
 
 }  // namespace proofs::gordiehowe::ops

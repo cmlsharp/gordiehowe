@@ -9,7 +9,7 @@ with the vendored `MLDSA.Concrete.pkDecode` / `MLDSA.Concrete.sigDecode`. See
 `Verify44Check.lean` for why the message must be preprocessed with `GordieHoweTest.preprocessMessage`
 before being passed to `verify65`.
 
-Exposes `checkVerify65 : IO Bool`, run from `Test/GordieHoweTest/MLDSAVectors.lean`'s `#eval`.
+Exposes `checkVerify65 : IO Bool`, run from `Test/GordieHoweTest/MLDSAVectorsVerify.lean`'s `#eval`.
 -/
 import LatticeCrypto.MLDSA.ConcretePrimitives
 import GordieHoweTest.Hex

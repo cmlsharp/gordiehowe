@@ -51,9 +51,11 @@ theorem memberHolds_coord_lt {x : ir.Valuation I} {m : MemberCheck} (h : ir.Memb
   · cases hq
 
 /-- **A statement passing the member checks lies within the declared bounds** (`StmtBounded`)
-when every declared bound is at least a member check's bound on the same value (`hcov`) and every
-bounded coordinate is the cast of its integer reading (`hnat`). -/
+when every bounded value is read from the statement as given (`hleaf`), every declared bound is at
+least a member check's bound on the same value (`hcov`) and every bounded coordinate is the cast
+of its integer reading (`hnat`). -/
 theorem stmtBounded_of_checks {x : ir.Valuation I} (hok : ir.StatementOk I x)
+    (hleaf : ∀ vN ∈ ir.declaredRanges, isStmtLeaf (ir.value vN.1).kind = true)
     (hcov : ∀ vN ∈ ir.declaredRanges, ∃ m ∈ ir.statement.checks,
       ir.memberValue? m.member = some vN.1 ∧ ∃ q, m.coordBound? = some q ∧ q ≤ vN.2)
     (hnat : ∀ vN ∈ ir.declaredRanges, ∀ i < (ir.value vN.1).size,
@@ -62,6 +64,7 @@ theorem stmtBounded_of_checks {x : ir.Valuation I} (hok : ir.StatementOk I x)
     ir.StmtBounded I x := by
   intro vN hvN i hi
   obtain ⟨m, hm, hv, q, hq, hle⟩ := hcov vN hvN
+  rw [stmtRead_of_isStmtLeaf x (hleaf vN hvN)]
   exact ⟨_, lt_of_lt_of_le (memberHolds_coord_lt (hok m hm) hv hq i hi) hle,
     (hnat vN hvN i hi).symm⟩
 

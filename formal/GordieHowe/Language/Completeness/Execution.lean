@@ -35,15 +35,15 @@ the node's subgroup contains `1`: its record `v` or `v + c` is a natural below i
 (the lookup's `in`, a source predicate), so `v` is the cast of an integer. -/
 theorem inTypeC_bound_of_sat (hwf : ir.WellFormed) (hI : I.Registered ir)
     (hL : I.Lawful ir primeNodes)
-    {G : Gens} (hB : ir.BoundRecs) (hD : ir.DigitLookupsC G) {e : ir.Env I}
+    {G : Gens} (hB : ir.BoundRecs G) (hD : ir.DigitLookupsC G) {e : ir.Env I}
     (hsat : ir.SourceSatAt e) {v : ℕ} (hv : v < ir.values.length)
     (hb : (ir.value v).kind.isBound = true) {E : String} (ht : (ir.value v).type = .sub E)
     (h1 : (1 : (I (ir.valueField v)).K) ∈ (I (ir.valueField v)).node E) {i : ℕ}
     (hi : i < (ir.value v).size) :
     (I (ir.valueField v)).InType (ir.value v).type (ir.reader e v i) := by
-  obtain ⟨-, hBv⟩ := hB v hv hb
-  obtain ⟨pid, hpid, d, rec, N, r, hbody, hk, hnc, hbd, hrec⟩ := exists_of_boundRecB hBv
-  have hF := hD pid hpid d rec N r hbody hk (by rw [hnc]; rfl)
+  obtain ⟨-, pid, hpid, hBv⟩ := hB v hv hb
+  obtain ⟨d, rec, N, r, hbody, hk, hnc, hbd, hrec⟩ := exists_of_boundRecAtB hBv
+  have hF := hD pid hpid d rec N r hbody hk hnc
   have hint : ∀ z : ℤ, ((z : ℤ) : (I (ir.valueField v)).K) ∈ (I (ir.valueField v)).node E :=
     fun z => by simpa using AddSubgroup.zsmul_mem _ h1 z
   have hin := hsat.preds _ (predicate_mem hpid) hF.source
@@ -97,7 +97,7 @@ subfield type whose node's subgroup contains `1` (`hone`), and every source cros
 reads bits. -/
 theorem sourceAcceptingAtC_of_sat (hwf : ir.WellFormed) (hI : I.Registered ir)
     (hL : I.Lawful ir primeNodes)
-    {G : Gens} (hB : ir.BoundRecs) (hD : ir.DigitLookupsC G) {e : ir.Env I}
+    {G : Gens} (hB : ir.BoundRecs G) (hD : ir.DigitLookupsC G) {e : ir.Env I}
     (hsat : ir.SourceSatAt e) (hk : ir.KprivTyped) (hone : ir.BoundOneMem I)
     (hcb : ir.CrossBitsAt I e) :
     ir.SourceAcceptingAt I e where
@@ -187,7 +187,7 @@ theorem sourceAcceptingAtC_of_srcEnv (hwf : ir.WellFormed) (hI : I.Registered ir
 source environment** (`fieldEqsAt_of_rows`). -/
 theorem fieldEqsAtC_of_srcEnv (hwf : ir.WellFormed) (hI : I.Registered ir)
     (hL : I.Lawful ir primeNodes) {G : Gens} (R : ir.CommittedFacts I G) (hbc : ir.BoundNoCopy)
-    (hB : ir.fieldRowsB = true)
+    {S : Structure} (hB : ir.fieldRowsB S = true)
     {x V l : ir.Valuation I} {c : ∀ k, (ir.layout I).Ch k} {π : (ir.layout I).Pads}
     (hH : ∀ r < ir.predicates.length, ir.fieldRowRealB r = true →
       ir.HoldsAt (ir.srcEnvL I x V l c π) (ir.predicate r).body) :

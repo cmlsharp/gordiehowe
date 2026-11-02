@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.SPBCS.FullPast.Verifier
+public import GordieHowe.SPBCS.ComponentModel
 
 @[expose] public section
 
@@ -30,9 +30,8 @@ variable {m : ℕ} {P : ProtocolSpec m} [∀ i, Fintype (P.Challenge i)]
   (inputOf : List (Item k C.W) → Bytes L)
 
 /-- **The key and `xof` queries of a chain** whose chain input at the items `l` is `inputOf l`,
-returning the chain and the `xof` answer of each round. As the compiler over the term
-(`FullPast.roundsProgFullPast`), the program queries the key and the point at every round; at a prover
-round the item is the write. -/
+returning the chain and the `xof` answer of each round. The program queries the key and the point
+at every round; at a prover round the item is the write. -/
 def chainProg : (r : ℕ) → r ≤ m →
     GordieHowe.OracleProg (Query k kN kS L) (Out k e) (List (Item k C.W) × List (Out k e))
   | 0, _ => .pure ([], [])

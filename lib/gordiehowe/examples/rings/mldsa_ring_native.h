@@ -1,7 +1,8 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 
-// GordieHowe: the ML-DSA-44 private ring, native arm. It proves the ring
+// GordieHowe: the ML-DSA private ring, native arm, at a parameter set S
+// (mldsa_params.h). It proves the ring
 // statement of mldsa_ring.h: the prover holds a signature on the message
 // under one member's key, without revealing which.
 //
@@ -19,6 +20,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "gordiehowe/examples/mldsa/mldsa_gadgets.h"
@@ -38,17 +40,17 @@ namespace proofs::gordiehowe::examples::mldsa {
 // Algorithm 8, line 9, with A_hat and t1_hat committed): the advice w
 // (canonical) and one circuit of K rows over the L + 1 shared operands z_j
 // and c = support - 2 sign. Returns w'.
-template <class D, class AF, class PZ>
+template <class S, class D, class AF, class PZ>
 Ref<AF, Subfield<>, Committed> spectral_relation(
     const Scope &s, D &A, const Member<AF> &m,
     const Ref<AF, Subfield<>, PZ> &z, const Ref<AF, Bit, Committed> &c) {
-  const auto w = s[A].priv(Subfield{}, "w", Shape{kK, kN},
+  const auto w = s[A].priv(Subfield{}, "w", Shape{S::kK, kN},
                              depends_on(m.a_hat, m.t1, z, c),
-                             host::w_prime_spectral);
+                             host::w_prime_spectral<S>);
   const auto ntt = ops::SchemeNtt(A.field(), kN, ops::Stages::every(4));
   const auto cpoly = challenge_poly(s, c);
   std::vector<ops::SpectralRow<AF>> rows;
-  for (size_t i = 0; i < kK; ++i)
+  for (size_t i = 0; i < S::kK; ++i)
     rows.push_back(ops::spectral_row(w[i],
                                 ops::SpectralMatVec(m.a_hat[i], z, ntt) -
                                     ops::SpectralProduct(m.t1[i], cpoly, ntt)));
@@ -58,27 +60,29 @@ Ref<AF, Subfield<>, Committed> spectral_relation(
 
 // The relation over the ring statement ST and witness W (mldsa_ring.h),
 // declared into CS.
-template <class P>
-void mldsa_ring_native_relation(typename Env<P>::Sys &cs, const Env<P> &env,
-                                MLDSARingStatement<In> st,
-                                MLDSARingWitness<In> w) {
+template <class P, class S>
+void mldsa_ring_native_relation(
+    typename Env<P>::Sys &cs, const Env<P> &env,
+    typename MLDSARingInputs<S>::template Statement<In> st,
+    typename MLDSARingInputs<S>::template Witness<In> w) {
   using AF = typename Env<P>::AF;
   auto &A = cs.domain(domain_profile<P>(env.af, env.rsa), "A");
   auto &H = cs.domain(domain_profile<P>(env.hf, env.rsh), "H");
   const auto rows =
-      ring_rows(cs.scope("ring"), H, A, st,
-                computes("mldsa44_native_key_row", {kKeyCells}),
-                ring_host::native_key_row);
+      ring_rows<S>(cs.scope("ring"), H, A, st,
+                   computes(std::string(S::kId) + "_native_key_row",
+                            {kKeyCells<S>}),
+                   ring_host::native_key_row<S>);
   const auto member =
-      select_member(cs.scope("member"), A, w, rows,
-                    member_map(lib::table::RowMap<AF>::identity(kN)));
+      select_member<S>(cs.scope("member"), A, w, rows,
+                       member_map<S>(lib::table::RowMap<AF>::identity(kN)));
   const auto z = A.priv(Subfield{}, w.z);
   const auto h = A.priv(Bit{}, w.h);
-  const auto c = challenge(cs.scope("challenge"), A, w.c_tilde);
+  const auto c = challenge<S>(cs.scope("challenge"), A, w.c_tilde);
   const auto w_prime =
-      spectral_relation(cs.scope("signature"), A, member, z, c);
-  const auto w1 = signature_checks(cs, A, z, h, w_prime, UseHintArm{});
-  const auto hash = mldsa_hash_domain_on_mu(cs, H, member.mu, w1);
+      spectral_relation<S>(cs.scope("signature"), A, member, z, c);
+  const auto w1 = signature_checks<S>(cs, A, z, h, w_prime, UseHintArm{});
+  const auto hash = mldsa_hash_domain_on_mu<S>(cs, H, member.mu, w1);
   ring_crossing(cs.scope("crossing"), hash, c);
 }
 

@@ -4,6 +4,8 @@
 module
 
 public import GordieHowe.Language.RealizedProgram.Check
+public import GordieHowe.Language.RealizedProgram.StructureCheck
+public import GordieHoweNative.Language.RealizedProgram.Annotations
 
 @[expose] public section
 
@@ -26,14 +28,14 @@ references (`exprAnnOkB`), in one pass; the rules give the closures' facts at ev
 decides `wellFormedB` (`wellFormedB_of_ann`) without building the tables.
 
 Everything here is stated for any realized program.
+
+The definitions are in `GordieHoweNative/Language/RealizedProgram/Annotations.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
 
 /-! ## Packed tables -/
-
-/-- **Entry `i` of a packed table** of `w`-bit entries: bits `[w i, w (i + 1))` of `T`. -/
-def packedGet (T w i : ℕ) : ℕ := (T >>> (w * i)) % 2 ^ w
 
 section Rules
 
@@ -75,42 +77,34 @@ end Rules
 
 /-! ## Lists with the same elements -/
 
-/-- **Two lists have the same elements**, as a check. -/
-def sameMemB (a b : List ℕ) : Bool := (a.all fun w => b.contains w) && b.all fun w => a.contains w
+theorem testBit_bitsOf (l : List ℕ) (w : ℕ) : (bitsOf l).testBit w = decide (w ∈ l) := by
+  induction l with
+  | nil => simp [bitsOf]
+  | cons x l ih =>
+    simp only [bitsOf, List.foldr_cons] at ih ⊢
+    rw [Nat.testBit_or, Nat.testBit_two_pow, ih]
+    by_cases h : w = x
+    · subst h
+      simp
+    · simp [h, Ne.symm h]
 
 theorem sameMemB_iff {a b : List ℕ} : sameMemB a b = true ↔ ∀ w, w ∈ a ↔ w ∈ b := by
-  simp only [sameMemB, Bool.and_eq_true, List.all_eq_true, List.contains_iff_mem]
-  exact ⟨fun h w => ⟨h.1 w, h.2 w⟩, fun h => ⟨fun w => (h w).1, fun w => (h w).2⟩⟩
+  simp only [sameMemB, beq_iff_eq]
+  constructor
+  · intro h w
+    have := testBit_bitsOf a w
+    rw [h, testBit_bitsOf] at this
+    simpa using this.symm
+  · intro h
+    refine Nat.eq_of_testBit_eq fun w => ?_
+    rw [testBit_bitsOf, testBit_bitsOf]
+    simp [h w]
 
 /-! ## The shared expressions' values as packed lists -/
-
-/-- **Lists packed in two tables**: the entries of all lists in `ids` (`idW` bits each), and in
-`offs` (`offW` bits each) the position of each list's first entry, list `k` ending where list
-`k + 1` starts. -/
-structure PackedLists where
-  /-- The lists' entries, one after another. -/
-  ids : ℕ
-  /-- The position of each list's first entry, and the end of the last. -/
-  offs : ℕ
-  /-- The width of an entry. -/
-  idW : ℕ
-  /-- The width of a position. -/
-  offW : ℕ
-
-/-- **List `k`** of the packed lists. -/
-def PackedLists.get (c : PackedLists) (k : ℕ) : List ℕ :=
-  let a := packedGet c.offs c.offW k
-  (List.range (packedGet c.offs c.offW (k + 1) - a)).map fun t => packedGet c.ids c.idW (a + t)
 
 section Packed
 
 variable (ir : RealizedProgram)
-
-/-- **The packed lists are the shared expressions' values**, as a check: list `k` has the values
-shared expression `k` reads directly and those of the earlier lists its references name. -/
-def closuresOkB (c : PackedLists) : Bool :=
-  allIdx (fun k e => e.refs.all (· < k) &&
-    sameMemB (c.get k) (e.directNodes ++ e.refs.flatMap c.get)) ir.exprs 0
 
 variable {ir}
 
@@ -125,7 +119,7 @@ theorem mem_get_of_closuresOk {c : PackedLists} (h : ir.closuresOkB c = true) :
     rw [closuresOkB, allIdx_iff] at hall
     have hk' := hall k hk
     rw [Nat.zero_add] at hk'
-    have he : ir.exprs.getD k default = ir.expr k := rfl
+    have he : ir.exprs.getD k default = ir.expr k := (ir.expr_eq_getD k).symm
     rw [he, Bool.and_eq_true, List.all_eq_true] at hk'
     obtain ⟨hr, hs⟩ := hk'
     rw [sameMemB_iff] at hs
@@ -139,53 +133,6 @@ end Packed
 
 /-! ## The annotations -/
 
-/-- **The structural annotations of the shared expressions**: packed tables of `maxW`-bit bounds
-(entry `k` one past every value the closure of entry `k` reads), `fieldW`-bit field sets (bit `f`
-of entry `k`: a value it reads in its own field has field `f`) and `lenW`-bit lengths, and a mask
-(bit `k`: every coefficient value the closure of entry `k` reads is public). -/
-structure ExprAnn where
-  /-- The bounds on the values read. -/
-  maxId : ℕ
-  /-- The field sets. -/
-  fields : ℕ
-  /-- The public-coefficient mask. -/
-  pub : ℕ
-  /-- The lengths. -/
-  len : ℕ
-  /-- The degrees in the committed cells (`degT cellNdT`). -/
-  deg : ℕ
-  /-- The vanishing-at-zero mask (`zeroT`). -/
-  zero : ℕ
-  /-- The width of a bound. -/
-  maxW : ℕ
-  /-- The width of a field set. -/
-  fieldW : ℕ
-  /-- The width of a length. -/
-  lenW : ℕ
-  /-- The width of a degree. -/
-  degW : ℕ
-
-namespace ExprAnn
-
-variable (a : ExprAnn)
-
-/-- The bound of entry `k`. -/
-def maxAt (k : ℕ) : ℕ := packedGet a.maxId a.maxW k
-
-/-- The field set of entry `k`. -/
-def fieldsAt (k : ℕ) : ℕ := packedGet a.fields a.fieldW k
-
-/-- The length of entry `k`. -/
-def lenAt (k : ℕ) : ℕ := packedGet a.len a.lenW k
-
-/-- The cell degree of entry `k`. -/
-def degAt (k : ℕ) : ℕ := packedGet a.deg a.degW k
-
-/-- Whether entry `k` vanishes at zero. -/
-def zeroAt (k : ℕ) : Bool := a.zero.testBit k
-
-end ExprAnn
-
 section Ann
 
 variable (ir : RealizedProgram)
@@ -193,30 +140,13 @@ variable (ir : RealizedProgram)
 /-- The field set of a list of values. -/
 def fieldSet (vs : List ℕ) : ℕ := vs.foldl (fun s v => s ||| 1 <<< ir.valueFieldT v) 0
 
-/-- **The annotations' local rules**, at shared expression `k` with expression `e`: its references
-are earlier entries; its bound lies above the values it reads directly and the bounds of the
-entries it references; its field set holds its own values' fields and those of the entries it
-references; it is public only when its coefficient values are and the entries it references
-are; its length is `e`'s at the entries' lengths. -/
-def annAtB (a : ExprAnn) (k : ℕ) (e : Expr) : Bool :=
-  e.refs.all (· < k) &&
-    e.directNodes.all (· < a.maxAt k) && e.refs.all (fun j => a.maxAt j ≤ a.maxAt k) &&
-    (e.fieldNodes.all fun v => (a.fieldsAt k).testBit (ir.valueFieldT v)) &&
-    e.refs.all (fun j => a.fieldsAt j &&& a.fieldsAt k == a.fieldsAt j) &&
-    (!a.pub.testBit k ||
-      (e.coefNodes.all ir.isPublicT && e.refs.all fun j => a.pub.testBit j)) &&
-    a.lenAt k == ir.lenV a.lenAt e
-
-/-- **The annotations' check**: every shared expression passes its local rules. -/
-def exprAnnOkB (a : ExprAnn) : Bool := allIdx (ir.annAtB a) ir.exprs 0
-
 variable {ir}
 
 theorem annAt_of_ok {a : ExprAnn} (h : ir.exprAnnOkB a = true) {k : ℕ} (hk : k < ir.exprs.length) :
     ir.annAtB a k (ir.expr k) = true := by
   rw [exprAnnOkB, allIdx_iff] at h
   have := h k hk
-  rwa [Nat.zero_add] at this
+  rwa [Nat.zero_add, ← expr_eq_getD] at this
 
 theorem refsOrdered_of_ann {a : ExprAnn} (h : ir.exprAnnOkB a = true) : ir.RefsOrdered := by
   intro k hk j hj
@@ -275,7 +205,7 @@ theorem field_rule {a : ExprAnn} (h : ir.exprAnnOkB a = true) :
 
 /-- **The public mask covers the coefficient values read.** -/
 theorem pub_rule {a : ExprAnn} (h : ir.exprAnnOkB a = true) :
-    ∀ k < ir.exprs.length, (∀ x ∈ Expr.coefNodes (ir.expr k),
+    ∀ k < ir.exprs.length, (∀ x ∈ Expr.pubNodes (ir.expr k),
       a.pub.testBit k = true → ir.isPublicT x = true) ∧
       ∀ j ∈ (ir.expr k).refs, ∀ x, (a.pub.testBit j = true → ir.isPublicT x = true) →
         a.pub.testBit k = true → ir.isPublicT x = true := by
@@ -319,12 +249,6 @@ section DegZero
 
 variable (ir : RealizedProgram)
 
-/-- **The degree and vanishing annotations' local rules**: at shared expression `k`, its cell
-degree and its vanishing at zero are `e`'s at the entries' annotations. -/
-def degZeroOkB (a : ExprAnn) : Bool :=
-  allIdx (fun k e => e.refs.all (· < k) && a.degAt k == e.deg ir.cellNdT a.degAt &&
-    a.zeroAt k == e.zeroAtZero a.zeroAt) ir.exprs 0
-
 variable {ir}
 
 theorem degZeroAt_of_ok {a : ExprAnn} (h : ir.degZeroOkB a = true) {k : ℕ}
@@ -333,7 +257,7 @@ theorem degZeroAt_of_ok {a : ExprAnn} (h : ir.degZeroOkB a = true) {k : ℕ}
       a.zeroAt k = (ir.expr k).zeroAtZero a.zeroAt := by
   rw [degZeroOkB, allIdx_iff] at h
   have := h k hk
-  rw [Nat.zero_add] at this
+  rw [Nat.zero_add, ← expr_eq_getD] at this
   simp only [Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq, beq_iff_eq] at this
   exact ⟨this.1.1, this.1.2, this.2⟩
 
@@ -383,7 +307,7 @@ theorem closAll_of_packed {c : PackedLists} (hc : ir.closuresOkB c = true) (p : 
     have := hc
     rw [closuresOkB, allIdx_iff] at this
     have h2 := this k hk
-    rw [Nat.zero_add] at h2
+    rw [Nat.zero_add, ← expr_eq_getD] at h2
     simp only [Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq] at h2
     exact h2.1 j hj
   rw [closAll, Bool.and_eq_true, List.all_eq_true]
@@ -399,49 +323,15 @@ section WellFormed
 
 variable (ir : RealizedProgram) (a : ExprAnn)
 
-/-- **`closAll Expr.directNodes (· < b)`, through the bounds.** -/
-def belowA (b : ℕ) (e : Expr) : Bool :=
-  e.directNodes.all (· < b) && e.refs.all fun j => a.maxAt j ≤ b
-
 /-- **`closAll Expr.fieldNodes (valueFieldT · == f)`, through the field sets.** -/
 def inFieldA (f : ℕ) (e : Expr) : Bool :=
   (e.fieldNodes.all fun v => ir.valueFieldT v == f) &&
     e.refs.all fun j => a.fieldsAt j == 0 || a.fieldsAt j == 1 <<< f
 
-/-- **`closAll Expr.coefNodes isPublicT`, through the public mask.** -/
-def pubA (e : Expr) : Bool := e.coefNodes.all ir.isPublicT && e.refs.all fun j => a.pub.testBit j
+/-- **`closAll Expr.pubNodes isPublicT`, through the public mask.** -/
+def pubA (e : Expr) : Bool := e.pubNodes.all ir.isPublicT && e.refs.all fun j => a.pub.testBit j
 
 /-! ### One walk for the three node tests -/
-
-mutual
-
-/-- **The three node tests in one walk**: `p` on the values `e` reads directly, `q` on those it
-reads in its own field, `r` on its coefficient values (`directNodes`, `fieldNodes`, `coefNodes`). -/
-def Expr.walk3 (p q r : ℕ → Bool) : Expr → Bool
-  | .leaf v => p v && q v
-  | .add e e' => Expr.walk3 p q r e && Expr.walk3 p q r e'
-  | .sub e e' => Expr.walk3 p q r e && Expr.walk3 p q r e'
-  | .scale c e => c.nodes.all (fun v => p v && q v && r v) && Expr.walk3 p q r e
-  | .mul e e' => Expr.walk3 p q r e && Expr.walk3 p q r e'
-  | .reindex _ e => Expr.walk3 p q r e
-  | .concat e e' => Expr.walk3 p q r e && Expr.walk3 p q r e'
-  | .linear rows e =>
-    (rows.flatMap (·.flatMap fun t => t.2.nodes)).all (fun v => p v && q v && r v) &&
-      Expr.walk3 p q r e
-  | .prod _ e => Expr.walk3 p q r e
-  | .mux b t e => Expr.walk3 p q r b && Expr.walk3 p q r t && Expr.walk3 p q r e
-  | .apply op e =>
-    op.operands.all (fun v => p v && q v && r v) && op.foreignOperands.all (fun v => p v && r v) &&
-      Expr.walk3 p q r e
-  | .ref _ => true
-  | .logic _ _ args => Expr.walk3List p q r args
-
-/-- `Expr.walk3` on a list. -/
-def Expr.walk3List (p q r : ℕ → Bool) : List Expr → Bool
-  | [] => true
-  | e :: es => Expr.walk3 p q r e && Expr.walk3List p q r es
-
-end
 
 theorem all_and3 (l : List ℕ) (p q r : ℕ → Bool) :
     l.all (fun v => p v && q v && r v) = (l.all p && l.all q && l.all r) := by
@@ -462,96 +352,60 @@ theorem all_and2 (l : List ℕ) (p r : ℕ → Bool) :
 mutual
 
 theorem Expr.walk3_eq (p q r : ℕ → Bool) : ∀ e : Expr,
-    Expr.walk3 p q r e = (e.directNodes.all p && e.fieldNodes.all q && e.coefNodes.all r)
-  | .leaf v => by simp [Expr.walk3, Expr.directNodes, Expr.fieldNodes, Expr.coefNodes]
+    Expr.walk3 p q r e = (e.directNodes.all p && e.fieldNodes.all q && e.pubNodes.all r)
+  | .leaf v => by simp [Expr.walk3, Expr.directNodes, Expr.fieldNodes, Expr.pubNodes]
   | .add e e' | .sub e e' | .mul e e' | .concat e e' => by
-    simp only [Expr.walk3, Expr.directNodes, Expr.fieldNodes, Expr.coefNodes, List.all_append,
+    simp only [Expr.walk3, Expr.directNodes, Expr.fieldNodes, Expr.pubNodes, List.all_append,
       Expr.walk3_eq p q r e, Expr.walk3_eq p q r e']
-    cases e.directNodes.all p <;> cases e.fieldNodes.all q <;> cases e.coefNodes.all r <;>
-      cases e'.directNodes.all p <;> cases e'.fieldNodes.all q <;> cases e'.coefNodes.all r <;> rfl
+    cases e.directNodes.all p <;> cases e.fieldNodes.all q <;> cases e.pubNodes.all r <;>
+      cases e'.directNodes.all p <;> cases e'.fieldNodes.all q <;> cases e'.pubNodes.all r <;> rfl
   | .scale c e => by
-    simp only [Expr.walk3, Expr.directNodes, Expr.fieldNodes, Expr.coefNodes, List.all_append,
+    simp only [Expr.walk3, Expr.directNodes, Expr.fieldNodes, Expr.pubNodes, List.all_append,
       Expr.walk3_eq p q r e, all_and3]
     cases c.nodes.all p <;> cases c.nodes.all q <;> cases c.nodes.all r <;>
-      cases e.directNodes.all p <;> cases e.fieldNodes.all q <;> cases e.coefNodes.all r <;> rfl
+      cases e.directNodes.all p <;> cases e.fieldNodes.all q <;> cases e.pubNodes.all r <;> rfl
   | .reindex _ e | .prod _ e => by
-    simp only [Expr.walk3, Expr.directNodes, Expr.fieldNodes, Expr.coefNodes, Expr.walk3_eq p q r e]
+    simp only [Expr.walk3, Expr.directNodes, Expr.fieldNodes, Expr.pubNodes, Expr.walk3_eq p q r e]
   | .linear rows e => by
-    simp only [Expr.walk3, Expr.directNodes, Expr.fieldNodes, Expr.coefNodes, List.all_append,
+    simp only [Expr.walk3, Expr.directNodes, Expr.fieldNodes, Expr.pubNodes, List.all_append,
       Expr.walk3_eq p q r e, all_and3]
     generalize (rows.flatMap (·.flatMap fun t => t.2.nodes)) = L
     cases L.all p <;> cases L.all q <;> cases L.all r <;>
-      cases e.directNodes.all p <;> cases e.fieldNodes.all q <;> cases e.coefNodes.all r <;> rfl
+      cases e.directNodes.all p <;> cases e.fieldNodes.all q <;> cases e.pubNodes.all r <;> rfl
   | .mux b t e => by
-    simp only [Expr.walk3, Expr.directNodes, Expr.fieldNodes, Expr.coefNodes, List.all_append,
+    simp only [Expr.walk3, Expr.directNodes, Expr.fieldNodes, Expr.pubNodes, List.all_append,
       Expr.walk3_eq p q r b, Expr.walk3_eq p q r t, Expr.walk3_eq p q r e]
-    cases b.directNodes.all p <;> cases b.fieldNodes.all q <;> cases b.coefNodes.all r <;>
-      cases t.directNodes.all p <;> cases t.fieldNodes.all q <;> cases t.coefNodes.all r <;>
-      cases e.directNodes.all p <;> cases e.fieldNodes.all q <;> cases e.coefNodes.all r <;> rfl
+    cases b.directNodes.all p <;> cases b.fieldNodes.all q <;> cases b.pubNodes.all r <;>
+      cases t.directNodes.all p <;> cases t.fieldNodes.all q <;> cases t.pubNodes.all r <;>
+      cases e.directNodes.all p <;> cases e.fieldNodes.all q <;> cases e.pubNodes.all r <;> rfl
   | .apply op e => by
-    simp only [Expr.walk3, Expr.directNodes, Expr.fieldNodes, Expr.coefNodes, List.all_append,
+    simp only [Expr.walk3, Expr.directNodes, Expr.fieldNodes, Expr.pubNodes, List.all_append,
       Expr.walk3_eq p q r e, all_and3, all_and2]
-    cases op.operands.all p <;> cases op.operands.all q <;> cases op.operands.all r <;>
+    cases op.operands.all p <;> cases op.operands.all q <;> cases op.pubOperands.all r <;>
       cases op.foreignOperands.all p <;> cases op.foreignOperands.all r <;>
-      cases e.directNodes.all p <;> cases e.fieldNodes.all q <;> cases e.coefNodes.all r <;> rfl
+      cases e.directNodes.all p <;> cases e.fieldNodes.all q <;> cases e.pubNodes.all r <;> rfl
   | .ref _ => rfl
   | .logic _ _ args => by
-    simp only [Expr.walk3, Expr.directNodes, Expr.fieldNodes, Expr.coefNodes,
+    simp only [Expr.walk3, Expr.directNodes, Expr.fieldNodes, Expr.pubNodes,
       Expr.walk3List_eq p q r args]
 
 theorem Expr.walk3List_eq (p q r : ℕ → Bool) : ∀ es : List Expr,
     Expr.walk3List p q r es = ((Expr.directNodesList es).all p &&
-      (Expr.fieldNodesList es).all q && (Expr.coefNodesList es).all r)
+      (Expr.fieldNodesList es).all q && (Expr.pubNodesList es).all r)
   | [] => rfl
   | e :: es => by
-    simp only [Expr.walk3List, Expr.directNodesList, Expr.fieldNodesList, Expr.coefNodesList,
+    simp only [Expr.walk3List, Expr.directNodesList, Expr.fieldNodesList, Expr.pubNodesList,
       List.all_append, Expr.walk3_eq p q r e, Expr.walk3List_eq p q r es]
-    cases e.directNodes.all p <;> cases e.fieldNodes.all q <;> cases e.coefNodes.all r <;>
+    cases e.directNodes.all p <;> cases e.fieldNodes.all q <;> cases e.pubNodes.all r <;>
       cases (Expr.directNodesList es).all p <;> cases (Expr.fieldNodesList es).all q <;>
-      cases (Expr.coefNodesList es).all r <;> rfl
+      cases (Expr.pubNodesList es).all r <;> rfl
 
 end
-
-/-- **`exprOkA` in one walk** of the expression and one pass over its references. -/
-def exprOkF (f : ℕ) (e : Expr) : Bool :=
-  e.refs.all (· < ir.exprs.length) &&
-    Expr.walk3 (· < ir.values.length) (fun v => ir.valueFieldT v == f) ir.isPublicT e &&
-    e.refs.all (fun j => a.maxAt j ≤ ir.values.length &&
-      (a.fieldsAt j == 0 || a.fieldsAt j == 1 <<< f) && a.pub.testBit j) &&
-    ir.shapeOkV a.lenAt e
 
 /-- **`exprOkB`, through the annotations.** -/
 def exprOkA (f : ℕ) (e : Expr) : Bool :=
   e.refs.all (· < ir.exprs.length) && belowA a ir.values.length e && ir.inFieldA a f e &&
     ir.pubA a e && ir.shapeOkV a.lenAt e
-
-/-- **`kindOkB`, through the annotations.** -/
-def kindOkA (v : ℕ) : Kind → Bool
-  | .pub (.expr e) => ir.exprOkF a (ir.valueFieldT v) e && belowA a v e
-  | .bound e => ir.exprOkF a (ir.valueFieldT v) e && belowA a ir.values.length e
-  | k => ir.kindOkB v k
-
-/-- **`lensOkB`, through the annotations' lengths.** -/
-def lensOkA : PredBody → Bool
-  | .equal _ e e' _ => ir.lenV a.lenAt e == ir.lenV a.lenAt e'
-  | .mem _ _ _ _ => true
-  | .mod _ _ e e' _ => ir.lenV a.lenAt e == ir.lenV a.lenAt e'
-  | .cross _ x _ y _ _ => ir.lenV a.lenAt x == ir.lenV a.lenAt y
-
-/-- **`predOkB`, through the annotations.** -/
-def predOkA (b : PredBody) : Bool :=
-  b.exprs.all (fun de => de.1 < ir.domains.length && ir.exprOkF a (ir.domainField de.1) de.2) &&
-    ir.lensOkA a b
-
-/-- **`wellFormedB`, through the annotations** (checked by `exprAnnOkB`). -/
-def wellFormedA : Bool :=
-  decide (∀ d ∈ ir.domains, d.field < ir.fields.length) &&
-    allIdx (fun v x => x.domain < ir.domains.length && ir.kindOkA a v x.kind) ir.values 0 &&
-    allIdx (fun _ e => ir.shapeOkV a.lenAt e) ir.exprs 0 &&
-    ir.predicates.all (fun p => ir.predOkA a p.body) &&
-    decide (∀ c ∈ ir.challenges, ir.ChallengeOk c) &&
-    decide (∀ m ∈ ir.statement.checks, ir.CheckOk m) &&
-    allIdx (fun _ x => ir.fieldOkV x) ir.values 0
 
 variable {ir a}
 
@@ -591,9 +445,9 @@ theorem closAll_inField (h : ir.exprAnnOkB a = true) {f : ℕ} {e : Expr}
 
 theorem closAll_pub (h : ir.exprAnnOkB a = true) {e : Expr}
     (he : ∀ k ∈ e.refs, k < ir.exprs.length) (hp : ir.pubA a e = true) :
-    ir.closAll Expr.coefNodes ir.isPublicT e = true := by
+    ir.closAll Expr.pubNodes ir.isPublicT e = true := by
   simp only [pubA, Bool.and_eq_true, List.all_eq_true] at hp
-  exact closAll_of_rule (refsOrdered_of_ann h) Expr.coefNodes (fun k => a.pub.testBit k)
+  exact closAll_of_rule (refsOrdered_of_ann h) Expr.pubNodes (fun k => a.pub.testBit k)
     (fun b x => b = true → ir.isPublicT x = true) (pub_rule h) _ he
     (List.all_eq_true.2 hp.1) fun k hk x hx => hx (hp.2 k hk)
 
@@ -610,7 +464,7 @@ theorem exprOkF_eq (f : ℕ) (e : Expr) : ir.exprOkF a f e = ir.exprOkA a f e :=
   cases e.refs.all (· < ir.exprs.length) <;>
     cases e.directNodes.all (· < ir.values.length) <;>
     cases e.fieldNodes.all (fun v => ir.valueFieldT v == f) <;>
-    cases e.coefNodes.all ir.isPublicT <;>
+    cases e.pubNodes.all ir.isPublicT <;>
     cases e.refs.all (fun j => a.maxAt j ≤ ir.values.length) <;>
     cases e.refs.all (fun j => a.fieldsAt j == 0 || a.fieldsAt j == 1 <<< f) <;>
     cases e.refs.all (fun j => a.pub.testBit j) <;> cases ir.shapeOkV a.lenAt e <;> rfl
@@ -649,10 +503,10 @@ theorem lensOkB_of_A (h : ir.exprAnnOkB a = true) {b : PredBody} (hb : ir.BodyRe
     rwa [← lenV_lenAt h hb.1, ← lenV_lenAt h hb.2]
   | mem _ _ _ _ => rfl
   | mod d q e e' r =>
-    simp only [BodyRefsOk, PredBody.exprs, List.mem_cons, List.not_mem_nil, or_false,
-      forall_eq_or_imp, forall_eq] at hb
+    have hb1 := hb (d, e) (by simp [PredBody.exprs])
+    have hb2 := hb (d, e') (by simp [PredBody.exprs])
     simp only [lensOkA, lensOkB] at hA ⊢
-    rwa [← lenV_lenAt h hb.1, ← lenV_lenAt h hb.2]
+    rwa [← lenV_lenAt h hb1, ← lenV_lenAt h hb2]
   | cross dx x dy y k r =>
     simp only [BodyRefsOk, PredBody.exprs, List.mem_cons, List.not_mem_nil, or_false,
       forall_eq_or_imp, forall_eq] at hb
@@ -672,9 +526,9 @@ theorem wellFormedB_of_ann (h : ir.exprAnnOkB a = true) (hA : ir.wellFormedA a =
     ir.wellFormedB = true := by
   have ho := refsOrdered_of_ann h
   simp only [wellFormedA, Bool.and_eq_true] at hA
-  obtain ⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩ := hA
+  obtain ⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h7⟩ := hA
   simp only [wellFormedB, Bool.and_eq_true]
-  refine ⟨⟨⟨⟨⟨⟨⟨(refsOrderedB_iff ir).2 ho, h1⟩, ?_⟩, ?_⟩, ?_⟩, h5⟩, h6⟩, h7⟩
+  refine ⟨⟨⟨⟨⟨⟨(refsOrderedB_iff ir).2 ho, h1⟩, ?_⟩, ?_⟩, ?_⟩, h5⟩, h7⟩
   · rw [allIdx_iff] at h2 ⊢
     intro v hv
     have := h2 v hv
@@ -684,17 +538,18 @@ theorem wellFormedB_of_ann (h : ir.exprAnnOkB a = true) (hA : ir.wellFormedA a =
     intro k hk
     have h3k := h3 k hk
     have hr : ∀ j ∈ (ir.exprs.getD k default).refs, j < ir.exprs.length := fun j hj => by
-      have := ho k hk j hj
+      have := ho k hk j (by rwa [expr_eq_getD])
       omega
     rw [← shapeOkV_lenAt h hr]
     exact h3k
   · rw [List.all_eq_true] at h4 ⊢
     exact fun p hp => predOkB_of_A h (h4 p hp)
 
-/-- **`WellFormed`, through checked annotations.** -/
-theorem wellFormed_of_ann (h : ir.exprAnnOkB a = true) (hA : ir.wellFormedA a = true) :
-    ir.WellFormed :=
-  ir.wellFormedB_iff.1 (wellFormedB_of_ann h hA)
+/-- **`WellFormed`, through checked annotations** and the member checks (decided at the structure
+records' pointers, `RealizedProgram.checksOk_of_memberValuesB`). -/
+theorem wellFormed_of_ann (h : ir.exprAnnOkB a = true) (hA : ir.wellFormedA a = true)
+    (hc : ∀ m ∈ ir.statement.checks, ir.CheckOk m) : ir.WellFormed :=
+  ir.wellFormedB_iff.1 ⟨wellFormedB_of_ann h hA, hc⟩
 
 end WellFormed
 
@@ -702,65 +557,23 @@ end WellFormed
 
 section Targets
 
-variable (ir : RealizedProgram) (a : ExprAnn) (c : PackedLists)
+variable (ir : RealizedProgram) (a : ExprAnn) (c : PackedLists) (S : Structure)
 
-/-- `closAll Expr.directNodes`, through the packed closures. -/
-def closP (p : ℕ → Bool) (e : Expr) : Bool :=
-  e.directNodes.all p && e.refs.all fun k => (c.get k).all p
+variable {ir a c S}
 
-/-- **`batchAdmitsB`, through the annotations.** -/
-def batchAdmitsA (pid d b : ℕ) (e e' : Expr) : Bool :=
-  let B := ir.batch b
-  let p := (ir.field (ir.domainField d)).characteristic
-  decide (b < ir.batches.length ∧ B.domain = d) && ir.inPartsB b pid &&
-    closP c ir.isBatchNodeT e && closP c ir.isBatchNodeT e' &&
-    decide (1 ≤ B.degree) && decide (e.deg ir.cellNdT a.degAt ≤ B.degree) &&
-    decide (e'.deg ir.cellNdT a.degAt ≤ B.degree) && e.zeroAtZero a.zeroAt &&
-    e'.zeroAtZero a.zeroAt &&
-    decide (B.skipDomain = skipDomainName p ∧ SkipFits B.degree B.width p) &&
-    decide (ir.lenV a.lenAt e ≤ B.operands.lane * B.instances) &&
-    decide (B.operands.lane * B.instances ≤ 2 ^ B.rounds * B.width)
-
-/-- **`gkrAdmitsB`, through the packed closures.** -/
-def gkrAdmitsA (pid d cc : ℕ) (e e' : Expr) : Bool :=
-  decide (cc < ir.circuits.length ∧ (ir.circuit cc).domain = d) &&
-    natMem (ir.circuitT.getD cc default).preds pid &&
-    closP c (fun v => isCircuitInputT (ir.circuitT.getD cc default) v (ir.valueT v).kind) e &&
-    closP c (fun v => isCircuitInputT (ir.circuitT.getD cc default) v (ir.valueT v).kind) e'
-
-/-- **`targetAdmitsB`, through the annotations.** -/
-def targetAdmitsA (pid d : ℕ) (e e' : Expr) : Target → Bool
-  | .affine => decide (e.deg ir.cellNdT a.degAt ≤ 1) && decide (e'.deg ir.cellNdT a.degAt ≤ 1)
-  | .quadratic => ir.isQuadraticT e e'
-  | .batch b => ir.batchAdmitsA a c pid d b e e'
-  | .gkr cc => ir.gkrAdmitsA c pid d cc e e'
-  | .realized q => decide (ir.RealizedAdmits d e e' q)
-
-/-- **`bodyAdmittedB`, through the annotations.** -/
-def bodyAdmittedA (pid : ℕ) : PredBody → Bool
-  | .equal d e e' t => ir.targetAdmitsA a c pid d e e' t
-  | .mem _ _ _ _ => true
-  | .mod d q e e' real =>
-    (q != 0 || real.target.isSome) &&
-      match real.target with
-      | some t => ir.targetAdmitsA a c pid d e e' t
-      | none => true
-  | .cross _ _ _ _ _ _ => true
-
-/-- **`targetsB`, through the annotations.** -/
-def targetsA : Bool :=
-  allIdx (fun pid p => ir.bodyAdmittedA a c pid p.body) ir.predicates 0 &&
-    allIdx (fun cc C => C.predicates.all fun pid =>
-      decide (pid < ir.predicates.length ∧
-        PredBody.target (ir.predT.getD pid default).body = some (.gkr cc))) ir.circuits 0 &&
-    decide (∀ cc ∈ ir.circuits, CircuitLaidOut cc)
-
-variable {ir a c}
+/-- **The realized route admits the field equation** (`RealizedAdmits`). -/
+theorem realizedAdmits_of_realizedAtS {pid d q : ℕ} {e e' : Expr}
+    (h : ir.realizedAtS S pid d e e' q = true) : ir.RealizedAdmits d e e' q := by
+  unfold realizedAtS at h
+  split at h
+  · simp only [Bool.and_eq_true, beq_iff_eq] at h
+    exact ir.realizedAdmits_of_atB h.2
+  · cases h
 
 theorem targetAdmitsB_of_A (hl : ir.exprAnnOkB a = true) (hd : ir.degZeroOkB a = true)
     (hc : ir.closuresOkB c = true) {pid d : ℕ} {e e' : Expr}
     (he : ∀ k ∈ e.refs, k < ir.exprs.length) (he' : ∀ k ∈ e'.refs, k < ir.exprs.length)
-    (t : Target) (h : ir.targetAdmitsA a c pid d e e' t = true) :
+    (t : Target) (h : ir.targetAdmitsA a c S pid d e e' t = true) :
     ir.targetAdmitsB pid d e e' t = true := by
   cases t with
   | affine =>
@@ -781,11 +594,11 @@ theorem targetAdmitsB_of_A (hl : ir.exprAnnOkB a = true) (hd : ir.degZeroOkB a =
     simp only [targetAdmitsA, targetAdmitsB, gkrAdmitsA, gkrAdmitsB, Bool.and_eq_true] at h ⊢
     obtain ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩ := h
     exact ⟨⟨⟨h1, h2⟩, closAll_of_packed hc _ he h3⟩, closAll_of_packed hc _ he' h4⟩
-  | realized q => exact h
+  | realized q => exact decide_eq_true (realizedAdmits_of_realizedAtS h)
 
 theorem bodyAdmittedB_of_A (hl : ir.exprAnnOkB a = true) (hd : ir.degZeroOkB a = true)
     (hc : ir.closuresOkB c = true) {pid : ℕ} {b : PredBody} (hb : ir.BodyRefsOk b)
-    (h : ir.bodyAdmittedA a c pid b = true) : ir.bodyAdmittedB pid b = true := by
+    (h : ir.bodyAdmittedA a c S pid b = true) : ir.bodyAdmittedB pid b = true := by
   cases b with
   | equal d e e' t =>
     simp only [BodyRefsOk, PredBody.exprs, List.mem_cons, List.not_mem_nil, or_false,
@@ -793,21 +606,22 @@ theorem bodyAdmittedB_of_A (hl : ir.exprAnnOkB a = true) (hd : ir.degZeroOkB a =
     exact targetAdmitsB_of_A hl hd hc hb.1 hb.2 t h
   | mem _ _ _ _ => rfl
   | mod d q e e' real =>
-    simp only [BodyRefsOk, PredBody.exprs, List.mem_cons, List.not_mem_nil, or_false,
-      forall_eq_or_imp, forall_eq] at hb
+    have hb1 := hb (d, e) (by simp [PredBody.exprs])
+    have hb2 := hb (d, e') (by simp [PredBody.exprs])
     simp only [bodyAdmittedA, bodyAdmittedB, Bool.and_eq_true] at h ⊢
     refine ⟨h.1, ?_⟩
     have h2 := h.2
     revert h2
     cases real.target with
     | none => exact fun _ => rfl
-    | some t => exact fun h2 => targetAdmitsB_of_A hl hd hc hb.1 hb.2 t h2
+    | some t => exact fun h2 => targetAdmitsB_of_A hl hd hc hb1 hb2 t h2
   | cross _ _ _ _ _ _ => rfl
 
+variable (S) in
 /-- **`targetsB` from `targetsA`, with checked annotations and closures.** -/
 theorem targetsB_of_ann (hwf : ir.WellFormed) (hl : ir.exprAnnOkB a = true)
     (hd : ir.degZeroOkB a = true) (hc : ir.closuresOkB c = true)
-    (h : ir.targetsA a c = true) : ir.targetsB = true := by
+    (h : ir.targetsA a c S = true) : ir.targetsB = true := by
   simp only [targetsA, Bool.and_eq_true] at h
   simp only [targetsB, Bool.and_eq_true]
   refine ⟨⟨?_, h.1.2⟩, h.2⟩
@@ -820,11 +634,12 @@ theorem targetsB_of_ann (hwf : ir.WellFormed) (hl : ir.exprAnnOkB a = true)
     rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hpid]
     exact List.getElem_mem hpid)) this
 
+variable (S) in
 /-- **`TargetsAdmit`, through checked annotations and closures.** -/
 theorem targetsAdmit_of_ann (hwf : ir.WellFormed) (hl : ir.exprAnnOkB a = true)
     (hd : ir.degZeroOkB a = true) (hc : ir.closuresOkB c = true)
-    (h : ir.targetsA a c = true) : ir.TargetsAdmit :=
-  (targetsB_iff hwf).1 (targetsB_of_ann hwf hl hd hc h)
+    (h : ir.targetsA a c S = true) : ir.TargetsAdmit :=
+  (targetsB_iff hwf).1 (targetsB_of_ann S hwf hl hd hc h)
 
 end Targets
 
@@ -889,8 +704,9 @@ theorem memoAux_congr {γ β : Type} [Inhabited γ] {F F' : (ℕ → β) → ℕ
 
 theorem memo_congr {γ β : Type} [Inhabited γ] {F F' : (ℕ → β) → ℕ → γ → β} {d : β}
     {L : List γ} (h : ∀ j < L.length, ∀ r, F r j (L.getD j default) = F' r j (L.getD j default)) :
-    memo F d L = memo F' d L :=
-  memoAux_congr L 0 .nil fun i hi r => by simpa using h i hi r
+    memo F d L = memo F' d L := by
+  rw [memo_eq, memo_eq]
+  exact memoAux_congr L 0 .nil fun i hi r => by simpa using h i hi r
 
 /-- `refDegVT` at the lengths `rl`. -/
 def refDegVTW (rl : ℕ → ℕ) (nv : ℕ → RunVec) : NatTrie RunVec :=
@@ -932,7 +748,7 @@ theorem refDegVTW_congr (ho : ir.RefsOrdered) {rl rl' : ℕ → ℕ}
     (hrl : ∀ k < ir.exprs.length, rl k = rl' k) (nv : ℕ → RunVec) :
     ir.refDegVTW rl nv = ir.refDegVTW rl' nv :=
   memo_congr fun j hj r => Expr.degV_congr_rl ir _ fun k hk => hrl k (by
-    have := ho j hj k hk
+    have := ho j hj k (by rwa [expr_eq_getD])
     omega)
 
 theorem degVMW_congr (ho : ir.RefsOrdered) {rl rl' : ℕ → ℕ}
@@ -945,7 +761,7 @@ theorem valDegTW_congr (hwf : ir.WellFormed) {rl rl' : ℕ → ℕ}
     (hrl : ∀ k < ir.exprs.length, rl k = rl' k) (c : ℕ) : ir.valDegTW rl c = ir.valDegTW rl' c := by
   refine memo_congr fun v hv r => ?_
   have hok := (hwf.values v hv).2
-  have hx : ir.values.getD v default = ir.value v := rfl
+  have hx : ir.values.getD v default = ir.value v := (ir.value_eq_getD v).symm
   rw [hx]
   unfold valDegStepW
   split
@@ -984,5 +800,136 @@ theorem degreesAt_of_ann (hwf : ir.WellFormed) {a : ExprAnn} (h : ir.exprAnnOkB 
   exact hA
 
 end Degrees
+
+/-! ## The checks in ranges
+
+Each check of this file over the shared expressions, the values or the predicates splits into checks
+of ranges of positions `[i, j)` (`allIdxIn`): two consecutive ranges join with no re-check
+(`…In_append`), and the range `[0, n)`, `n` at least the list's length, gives the check (`…_of_In`,
+`…_of_parts`). A large program's check is then a module per range and a module joining them. A
+range's check visits its positions in one walk. -/
+
+section Ranges
+
+variable (ir : RealizedProgram)
+
+/-- **`exprAnnOkB` on the shared expressions `[i, j)`.** -/
+def exprAnnOkIn (a : ExprAnn) (i j : ℕ) : Bool := allIdxIn (ir.annAtB a) ir.exprs i j
+
+/-- **`closuresOkB` on the shared expressions `[i, j)`.** -/
+def closuresOkIn (c : PackedLists) (i j : ℕ) : Bool :=
+  allIdxIn (fun k e => e.refs.all (· < k) &&
+    sameMemB (c.get k) (e.directNodes ++ e.refs.flatMap c.get)) ir.exprs i j
+
+/-- **`degZeroOkB` on the shared expressions `[i, j)`.** -/
+def degZeroOkIn (a : ExprAnn) (i j : ℕ) : Bool :=
+  allIdxIn (fun k e => e.refs.all (· < k) && a.degAt k == e.deg ir.cellNdT a.degAt &&
+    a.zeroAt k == e.zeroAtZero a.zeroAt) ir.exprs i j
+
+/-- **`wellFormedA`'s checks of the values `[i, j)`**: the domain and kind, and the field. -/
+def wellFormedValuesIn (a : ExprAnn) (i j : ℕ) : Bool :=
+  allIdxIn (fun v x => (x.domain < ir.domains.length && ir.kindOkA a v x.kind) && ir.fieldOkV x)
+    ir.values i j
+
+/-- **`wellFormedA`'s check of the shared expressions `[i, j)`.** -/
+def wellFormedExprsIn (a : ExprAnn) (i j : ℕ) : Bool :=
+  allIdxIn (fun _ e => ir.shapeOkV a.lenAt e) ir.exprs i j
+
+/-- **`wellFormedA`'s check of the predicates `[i, j)`.** -/
+def wellFormedPredsIn (a : ExprAnn) (i j : ℕ) : Bool :=
+  allIdxIn (fun _ p => ir.predOkA a p.body) ir.predicates i j
+
+/-- **`wellFormedA`'s checks of the domains and the challenges.** -/
+def wellFormedRestB : Bool :=
+  decide (∀ d ∈ ir.domains, d.field < ir.fields.length) &&
+    decide (∀ c ∈ ir.challenges, ir.ChallengeOk c)
+
+/-- **`targetsA`'s check of the predicates `[i, j)`.** -/
+def targetsPredsIn (a : ExprAnn) (c : PackedLists) (S : Structure) (i j : ℕ) : Bool :=
+  allIdxIn (fun pid p => ir.bodyAdmittedA a c S pid p.body) ir.predicates i j
+
+/-- **`targetsA`'s checks of the circuits.** -/
+def targetsRestB : Bool :=
+  allIdx (fun cc C => C.predicates.all fun pid =>
+      decide (pid < ir.predicates.length ∧
+        PredBody.target (ir.predT.getD pid default).body = some (.gkr cc))) ir.circuits 0 &&
+    decide (∀ cc ∈ ir.circuits, CircuitLaidOut cc)
+
+variable {ir}
+
+theorem exprAnnOkIn_append {a : ExprAnn} {i j k : ℕ} (h₁ : ir.exprAnnOkIn a i j = true)
+    (h₂ : ir.exprAnnOkIn a j k = true) : ir.exprAnnOkIn a i k = true :=
+  allIdxIn_append h₁ h₂
+
+theorem exprAnnOkB_of_In {a : ExprAnn} {n : ℕ} (h : ir.exprAnnOkIn a 0 n = true)
+    (hn : ir.exprs.length ≤ n) : ir.exprAnnOkB a = true :=
+  allIdx_of_allIdxIn h hn
+
+theorem closuresOkIn_append {c : PackedLists} {i j k : ℕ} (h₁ : ir.closuresOkIn c i j = true)
+    (h₂ : ir.closuresOkIn c j k = true) : ir.closuresOkIn c i k = true :=
+  allIdxIn_append h₁ h₂
+
+theorem closuresOkB_of_In {c : PackedLists} {n : ℕ} (h : ir.closuresOkIn c 0 n = true)
+    (hn : ir.exprs.length ≤ n) : ir.closuresOkB c = true :=
+  allIdx_of_allIdxIn h hn
+
+theorem degZeroOkIn_append {a : ExprAnn} {i j k : ℕ} (h₁ : ir.degZeroOkIn a i j = true)
+    (h₂ : ir.degZeroOkIn a j k = true) : ir.degZeroOkIn a i k = true :=
+  allIdxIn_append h₁ h₂
+
+theorem degZeroOkB_of_In {a : ExprAnn} {n : ℕ} (h : ir.degZeroOkIn a 0 n = true)
+    (hn : ir.exprs.length ≤ n) : ir.degZeroOkB a = true :=
+  allIdx_of_allIdxIn h hn
+
+theorem wellFormedValuesIn_append {a : ExprAnn} {i j k : ℕ}
+    (h₁ : ir.wellFormedValuesIn a i j = true) (h₂ : ir.wellFormedValuesIn a j k = true) :
+    ir.wellFormedValuesIn a i k = true :=
+  allIdxIn_append h₁ h₂
+
+theorem wellFormedExprsIn_append {a : ExprAnn} {i j k : ℕ}
+    (h₁ : ir.wellFormedExprsIn a i j = true) (h₂ : ir.wellFormedExprsIn a j k = true) :
+    ir.wellFormedExprsIn a i k = true :=
+  allIdxIn_append h₁ h₂
+
+theorem wellFormedPredsIn_append {a : ExprAnn} {i j k : ℕ}
+    (h₁ : ir.wellFormedPredsIn a i j = true) (h₂ : ir.wellFormedPredsIn a j k = true) :
+    ir.wellFormedPredsIn a i k = true :=
+  allIdxIn_append h₁ h₂
+
+/-- **`wellFormedA` from its checks of the values, the shared expressions and the predicates**,
+each on `[0, n)` for `n` at least the list's length, and of the domains and the challenges. -/
+theorem wellFormedA_of_parts {a : ExprAnn} {nv ne np : ℕ} (h : ir.wellFormedRestB = true)
+    (hv : ir.wellFormedValuesIn a 0 nv = true) (hnv : ir.values.length ≤ nv)
+    (he : ir.wellFormedExprsIn a 0 ne = true) (hne : ir.exprs.length ≤ ne)
+    (hp : ir.wellFormedPredsIn a 0 np = true) (hnp : ir.predicates.length ≤ np) :
+    ir.wellFormedA a = true := by
+  have hv' := allIdx_of_allIdxIn hv hnv
+  rw [allIdx_and] at hv'
+  have he' := allIdx_of_allIdxIn he hne
+  have hp' : ir.predicates.all (fun p => ir.predOkA a p.body) = true := by
+    rw [all_eq_allIdx _ _ 0]
+    exact allIdx_of_allIdxIn hp hnp
+  simp only [wellFormedRestB, Bool.and_eq_true] at h hv'
+  unfold wellFormedA
+  rw [h.1, h.2, hv'.1, hv'.2, he', hp']
+  rfl
+
+theorem targetsPredsIn_append {a : ExprAnn} {c : PackedLists} {S : Structure} {i j k : ℕ}
+    (h₁ : ir.targetsPredsIn a c S i j = true) (h₂ : ir.targetsPredsIn a c S j k = true) :
+    ir.targetsPredsIn a c S i k = true :=
+  allIdxIn_append h₁ h₂
+
+/-- **`targetsA` from its check of the predicates on `[0, n)`**, `n` at least their number, and of
+the circuits. -/
+theorem targetsA_of_parts {a : ExprAnn} {c : PackedLists} {S : Structure} {n : ℕ}
+    (h : ir.targetsRestB = true) (hp : ir.targetsPredsIn a c S 0 n = true)
+    (hn : ir.predicates.length ≤ n) : ir.targetsA a c S = true := by
+  have hp' := allIdx_of_allIdxIn hp hn
+  simp only [targetsRestB, Bool.and_eq_true] at h
+  unfold targetsA
+  rw [h.1, h.2, hp']
+  rfl
+
+end Ranges
 
 end GordieHowe.RealizedProgram

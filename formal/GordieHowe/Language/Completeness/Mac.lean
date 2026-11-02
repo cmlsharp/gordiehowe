@@ -26,7 +26,7 @@ open scoped NNReal
 
 section
 
-variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String}
+variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String} {S : Structure}
 
 section HonestEnv
 
@@ -42,7 +42,7 @@ set_option hygiene false in
 local notation "SE" => ir.srcEnvL I (stmtOf y) (val y) (SL.late y c) c π
 
 /-- **The honest environment reads a generated value other than a late histogram as its generator
-reads the source environment** (`genSrcOf`; `reader_honestEnv_genSrc`): the honest late value is the
+reads the source environment** (`genSrcOf`): the honest late value is the
 generated value there (`honestEnvC_late_eq`). -/
 theorem reader_honestEnvC_genSrcOf {v : ℕ} (hv : v < ir.values.length) (hl : ir.IsLate v)
     (hns : ¬ ir.IsSourceValue v) (hhist : ∀ t g, G.at v ≠ .lateHist t g) {n : ℕ}
@@ -62,7 +62,7 @@ theorem reader_srcEnvL_eq_honestEnvC {N : List ℕ} (hN : ∀ w ∈ N, ir.NoLate
     ∀ w ∈ N, ir.reader SE w = ir.reader HE w := fun w hw =>
   (reader_honestEnvC_srcEnvL_of_noGen hG stmtOf val SL y c π (hN w hw).noGen).symm
 
-/-- **The honest tag is the MAC's honest tag** (`MacTagAt`; `macTag_honest`) at the honest
+/-- **The honest tag is the MAC's honest tag** (`MacTagAt`) at the honest
 environment: the tag's generated value (`tagGen`, its generator the tag of the cross-field `equal`
 `pid`) at the source environment, which reads the `x` operand alike (`hx`: it reads no late
 value). -/
@@ -168,8 +168,8 @@ theorem reader_quotDigitC_honest {t d q : ℕ} {L R : Expr} {real : ModRealizati
 end HonestEnv
 
 variable (ir primeNodes) in
-/-- **A MAC check over a field with its tail, at the certificate's generators `G`** (compiler/mac.h;
-`MacBase` with the tag's generator read off `G`): the cross-field `equal` `pid` with its MAC
+/-- **A MAC check over a field with its tail, at the certificate's generators `G`** (compiler/mac.h,
+the tag's generator read off `G`): the cross-field `equal` `pid` with its MAC
 realization, the check over a field that its tail performs (`MacFieldCheck`: the check over `y`'s
 field for a hosted MAC, or over either field for a MAC no domain hosts), with the check's domain
 `dy`, operand `y` and blind `sb`; its tail `t`, a `mod_2` whose left side is in the MAC unit form
@@ -177,7 +177,7 @@ with units `u` (the blind and the check's operand), and the facts every honest M
 generated as this MAC's tag, a late value and no source value; the `x` operand, the cross-field
 `equal`'s `y` operand, the check's operand and the powers read no late value; the blind is the tag's
 pad copy. Data and properties of the program, decided per program. -/
-structure MacBaseC (G : Gens) where
+structure MacBaseC (S : Structure) (G : Gens) where
   /-- The cross-field `equal`. -/
   pid : ℕ
   /-- Its `x` domain (the H domain of a hosted MAC). -/
@@ -200,7 +200,7 @@ structure MacBaseC (G : Gens) where
   y : Expr
   /-- The check's blind. -/
   sb : ℕ
-  hside : ir.MacFieldCheck primeNodes pid dx x cdy cy k real dy y sb
+  hside : ir.MacFieldCheck primeNodes S pid dx x cdy cy k real dy y sb
   /-- The check's domain is a domain of the program. -/
   dyLt : dy < ir.domains.length
   /-- The check's operand is well formed in its domain's field. -/
@@ -234,7 +234,7 @@ structure MacBaseC (G : Gens) where
 
 namespace MacBaseC
 
-variable {G : Gens} (M : ir.MacBaseC primeNodes G)
+variable {G : Gens} (M : ir.MacBaseC primeNodes S G)
 
 /-- **The check is over one of the cross-field `equal`'s operands**: the `y` operand padded by zeros
 (`zeroPadB`), or the `x` operand. -/
@@ -386,7 +386,7 @@ end MacBaseC
 
 namespace MacBaseC
 
-variable {G : Gens} (M : ir.MacBaseC primeNodes G)
+variable {G : Gens} (M : ir.MacBaseC primeNodes S G)
 
 /-- **The source facts a MAC check over a field's honest values need**, at a reader `rd`: the cross-field `equal`
 holds, the `x` operand and the check's operand read bits, and the check's operand's integer reading
@@ -519,7 +519,7 @@ end MacBaseC
 
 namespace MacBaseC
 
-variable {G : Gens} (M : ir.MacBaseC primeNodes G) {Inp : Type} (hgen : ir.CGenFacts I G)
+variable {G : Gens} (M : ir.MacBaseC primeNodes S G) {Inp : Type} (hgen : ir.CGenFacts I G)
   (stmtOf val : Inp → ir.Valuation I) (SL : ir.SrcLate I Inp) (y : Inp) (c : ∀ k, (ir.layout I).Ch k)
   (π : (ir.layout I).Pads)
 
@@ -638,13 +638,13 @@ end MacBaseC
 
 variable (ir primeNodes) in
 /-- **A MAC whose tail is a `mod_2` in the ungrouped digit form, at the certificate's generators** (compiler/mac.h with
-compiler/mod.h `kDigits`; `DigitsMac` with the generators read off `G`): a MAC (`MacBaseC`) whose
+compiler/mod.h `kDigits`, the generators read off `G`): a MAC (`MacBaseC`) whose
 tail has the digits `[low, top]` (`low` a value, `top` derived from the accumulator `acc`, which
 commits the left side by a row), and the facts the honest values need: the accumulator and the lower
 digit generated as the tail's, late values of their domain's field and no source values; the left side reads no late value; the convolutions fit the characteristic;
 the lookups on the digits and the no-wrap range `2 low + 2 B top` have room (`lowRoom`, `topRoom`,
 `wrapRoom`). Data and properties of the program, decided per program. -/
-structure DigitsMacC (G : Gens) extends ir.MacBaseC primeNodes G where
+structure DigitsMacC (S : Structure) (G : Gens) extends ir.MacBaseC primeNodes S G where
   /-- The accumulator. -/
   acc : ℕ
   /-- The lower digit. -/
@@ -654,7 +654,6 @@ structure DigitsMacC (G : Gens) extends ir.MacBaseC primeNodes G where
   hdig : realT.digits = [.leaf low, top]
   hT : realT.isDigitsTail = true
   hacc : ir.digitsAcc realT = acc
-  accRow : ir.accRowB dy acc L = true
   derived : ir.topDerivedB dy 2 R realT acc = true
   /-- The accumulator is generated as the tail's. -/
   accGen : G.at acc = .digitsAcc t
@@ -690,7 +689,7 @@ structure DigitsMacC (G : Gens) extends ir.MacBaseC primeNodes G where
 
 namespace MacBaseC
 
-variable {G : Gens} (M : ir.MacBaseC primeNodes G) {Inp : Type} (hgen : ir.CGenFacts I G)
+variable {G : Gens} (M : ir.MacBaseC primeNodes S G) {Inp : Type} (hgen : ir.CGenFacts I G)
   (stmtOf val : Inp → ir.Valuation I) (SL : ir.SrcLate I Inp) (y : Inp) (c : ∀ k, (ir.layout I).Ch k)
   (π : (ir.layout I).Pads) (hwf : ir.WellFormed) (hI : I.Registered ir)
   (hL : I.Lawful ir primeNodes)
@@ -775,7 +774,7 @@ end MacBaseC
 
 namespace DigitsMacC
 
-variable {G : Gens} (M : ir.DigitsMacC primeNodes G) {Inp : Type} (hgen : ir.CGenFacts I G)
+variable {G : Gens} (M : ir.DigitsMacC primeNodes S G) {Inp : Type} (hgen : ir.CGenFacts I G)
   (stmtOf val : Inp → ir.Valuation I) (SL : ir.SrcLate I Inp) (y : Inp) (c : ∀ k, (ir.layout I).Ch k)
   (π : (ir.layout I).Pads) (hwf : ir.WellFormed) (hI : I.Registered ir)
   (hL : I.Lawful ir primeNodes) (hM : I.MacModel ir)
@@ -830,7 +829,7 @@ theorem rhs_honest (hB : ir.BlindsArePadCopies) (hS : M.Source HE) {i : ℕ} (hi
   have htail := M.tail_honest hgen stmtOf val SL y c π hwf hI hL hM hB hS
   rw [M.hbt] at htail
   have hLlen : i < ir.exprLen M.L := M.lLen ▸ hi
-  have hcong := htail i hLlen
+  have hcong := htail.1 i hLlen
   rw [heint, ← M.lhsNat_eq hgen stmtOf val SL y c π hwf hI hL hB hS hi] at hcong
   rw [hecast]
   congr 1
@@ -882,7 +881,7 @@ end DigitsMacC
 
 namespace DigitsMacC
 
-variable {G : Gens} (M : ir.DigitsMacC primeNodes G)
+variable {G : Gens} (M : ir.DigitsMacC primeNodes S G)
 
 /-- **The no-wrap range's expression** `2 low + 2 B top`. -/
 def wrapExpr : Expr :=
@@ -1005,7 +1004,7 @@ end DigitsMacC
 
 namespace DigitsMacC
 
-variable {G : Gens} (M : ir.DigitsMacC primeNodes G) {Inp : Type} (hgen : ir.CGenFacts I G)
+variable {G : Gens} (M : ir.DigitsMacC primeNodes S G) {Inp : Type} (hgen : ir.CGenFacts I G)
   (stmtOf val : Inp → ir.Valuation I) (SL : ir.SrcLate I Inp) (y : Inp)
   (c : ∀ k, (ir.layout I).Ch k) (π : (ir.layout I).Pads)
 
@@ -1027,12 +1026,12 @@ the honest values need: the accumulator generated as the tail's (`digitsAcc`, wh
 `digitsAccNat` is the left side's integer reading), a late value of its domain's field and no source
 value; the left side reads no late value; the convolutions fit the characteristic; the lookups on
 the quotient have room (`quotRoom`). Data and properties of the program, decided per program. -/
-structure OneDigitMacC (G : Gens) extends ir.MacBaseC primeNodes G where
+structure OneDigitMacC (S : Structure) (G : Gens) extends ir.MacBaseC primeNodes S G where
   /-- The accumulator. -/
   acc : ℕ
   hT : realT.isOneDigitTail = true
   hacc : ir.oneDigitAcc realT = acc
-  derived : ir.quotDerivedAccB dy 2 L R realT = true
+  derived : ir.quotAccShapeB dy 2 R realT = true
   /-- The accumulator is generated as the tail's. -/
   accGen : G.at acc = .digitsAcc t
   /-- The accumulator is no source value. -/
@@ -1052,7 +1051,7 @@ structure OneDigitMacC (G : Gens) extends ir.MacBaseC primeNodes G where
 
 namespace OneDigitMacC
 
-variable {G : Gens} (M : ir.OneDigitMacC primeNodes G) {Inp : Type} (hgen : ir.CGenFacts I G)
+variable {G : Gens} (M : ir.OneDigitMacC primeNodes S G) {Inp : Type} (hgen : ir.CGenFacts I G)
   (stmtOf val : Inp → ir.Valuation I) (SL : ir.SrcLate I Inp) (y : Inp) (c : ∀ k, (ir.layout I).Ch k)
   (π : (ir.layout I).Pads) (hwf : ir.WellFormed) (hI : I.Registered ir)
   (hL : I.Lawful ir primeNodes) (hM : I.MacModel ir)
@@ -1096,14 +1095,14 @@ theorem rhs_honest (hB : ir.BlindsArePadCopies) (hS : M.Source HE) {i : ℕ} (hi
   have htail := M.tail_honest hgen stmtOf val SL y c π hwf hI hL hM hB hS
   rw [M.hbt] at htail
   have hLlen : i < ir.exprLen M.L := M.lLen ▸ hi
-  have hcong := htail i hLlen
+  have hcong := htail.1 i hLlen
   rw [heint, ← M.lhsNat_eq hgen stmtOf val SL y c π hwf hI hL hB hS hi] at hcong
   rw [hecast]
   congr 1
   omega
 
 include hwf hI hL hM in
-/-- **The honest quotient** is the cast of half the left side's natural (`quotDerivedAccB`:
+/-- **The honest quotient** is the cast of half the left side's natural (`quotAccShapeB`:
 `Q = a · acc + b · R` with `2 a ≡ 1`, `2 b ≡ −1`, the honest accumulator the left side's natural
 and `R` its parity). -/
 theorem quot_honest (hB : ir.BlindsArePadCopies) (hS : M.Source HE) {i : ℕ} (hi : i < M.u.width) :
@@ -1116,7 +1115,7 @@ theorem quot_honest (hB : ir.BlindsArePadCopies) (hS : M.Source HE) {i : ℕ} (h
   have hA := M.acc_honest hgen stmtOf val SL y c π hi
   have hd := M.derived
   have hacc := M.hacc
-  unfold quotDerivedAccB at hd
+  unfold quotAccShapeB at hd
   unfold oneDigitAcc at hacc
   simp only [Bool.and_eq_true, decide_eq_true_eq] at hd
   obtain ⟨-, hd⟩ := hd
@@ -1128,7 +1127,7 @@ theorem quot_honest (hB : ir.BlindsArePadCopies) (hS : M.Source HE) {i : ℕ} (h
     simp only at hacc
     subst hacc
     simp only [Bool.and_eq_true, decide_eq_true_eq] at hd
-    obtain ⟨⟨⟨⟨⟨-, h2'⟩, ha⟩, hb⟩, hqa⟩, hqb⟩ := hd
+    obtain ⟨⟨⟨⟨h2', ha⟩, hb⟩, hqa⟩, hqb⟩ := hd
     simp only [evalWith] at hR
     rw [hx, evalE_add, evalE_scale_const, evalE_scale_const, evalE_leaf, hA, Expr.eq_of_beq h2',
       hR, hL.decode_natCast _ hf a ha, hL.decode_natCast _ hf b hb]
@@ -1168,7 +1167,7 @@ end OneDigitMacC
 
 namespace OneDigitMacC
 
-variable {G : Gens} (M : ir.OneDigitMacC primeNodes G)
+variable {G : Gens} (M : ir.OneDigitMacC primeNodes S G)
 
 /-- **The predicates the MAC's honest values satisfy**: its tail, the accumulator row, a lookup on
 its quotient, its H predicate. -/
@@ -1251,15 +1250,18 @@ end OneDigitMacC
 
 variable (ir primeNodes) in
 /-- **A MAC whose tail is a grouped `mod_2`, at the certificate's generators** (compiler/mac.h with
-compiler/mod.h `kGrouped`; `GroupedMac` with the generators read off `G`): a MAC (`MacBaseC`) whose
-tail is in the grouped form (`GroupedFormOk`) with accumulators `acc` and quotient digits `gq`, and
-the facts the honest values need: the accumulators and the digits generated as the tail's (`acc`,
-`quotDigit`), late values of their domain's field and no source values; the digits fit (`fit`: a
-group's sum, at most `count · convMax`, halved, is below `T^k`); the lookups on the digits and on
-the final quotient have room (`digitsRoom`, `finalRoom`). Data and properties of the program,
-decided per program. -/
-structure GroupedMacC (G : Gens) extends ir.MacBaseC primeNodes G where
-  hgf : ir.GroupedFormOk (ir.honestIvl primeNodes) dy 2 L R realT
+compiler/mod.h `kGrouped`, the generators read off `G`): a MAC (`MacBaseC`) whose
+tail has the grouped form's core (`groupedCoreB`) and its final quotient's range
+(`groupedQuotRangeB`), with accumulators `acc` and quotient digits `gq`, and the facts the honest
+values need: the accumulators and the digits generated as the tail's (`acc`, `quotDigit`), late
+values of their domain's field and no source values; the digits fit (`fit`: a group's sum, at most
+`count · convMax`, halved, is below `T^k`); the lookups on the digits and on the final quotient have
+room (`digitsRoom`, `finalRoom`). Data and properties of the program, decided per program. -/
+structure GroupedMacC (S : Structure) (G : Gens) extends ir.MacBaseC primeNodes S G where
+  /-- The grouped form's core (`groupedCoreB`). -/
+  core : ir.groupedCoreB dy 2 L R realT = true
+  /-- The final quotient bounded by its first exported range (`groupedQuotRangeB`). -/
+  quotRange : ir.groupedQuotRangeB dy L realT = true
   /-- The grouping. -/
   Gm : GroupedMod
   hG : realT.grouped = some Gm
@@ -1291,33 +1293,30 @@ structure GroupedMacC (G : Gens) extends ir.MacBaseC primeNodes G where
 
 namespace GroupedMacC
 
-variable {G : Gens} (M : ir.GroupedMacC primeNodes G)
+variable {G : Gens} (M : ir.GroupedMacC primeNodes S G)
 
-/-- **The parts of the tail's grouped shape** (`groupedShapeB`): well-formed
-units, a row for every group, the residues and the derived final quotient. -/
+/-- **The parts of the tail's grouped core** (`groupedCoreB`): well-formed
+units, the residues and the derived final quotient. -/
 theorem shape : ir.macUnitsOkB M.dy M.u M.Gm = true ∧
-    (∀ g < M.Gm.groups.length, ∃ p ∈ ir.predicates,
-      ir.groupRowB (ir.honestIvl primeNodes) M.dy M.u M.Gm M.acc g (M.Gm.groups.getD g default)
-        p.body = true) ∧
     ir.residuesB M.dy 2 M.u M.Gm M.acc = true ∧ ir.finalQuotB M.dy 2 M.R M.u M.Gm M.realT = true := by
-  have h := M.hgf.shape
-  unfold groupedShapeB at h
+  have h := M.core
+  unfold groupedCoreB at h
   rw [M.hG, M.hu] at h
   dsimp only at h
   rw [M.hA] at h
-  simp only [Bool.and_eq_true, List.all_eq_true, List.any_eq_true, List.mem_range] at h
-  exact ⟨h.1.1.1, h.1.1.2, h.1.2, h.2⟩
+  simp only [Bool.and_eq_true] at h
+  exact ⟨h.1.1, h.1.2, h.2⟩
 
 /-- **The accumulators have one coordinate per group and output coordinate.** -/
 theorem acc_size : (ir.value M.acc).size = M.Gm.groups.length * M.u.width := by
-  have h := M.shape.2.2.1
+  have h := M.shape.2.1
   unfold residuesB at h
   simp only [Bool.and_eq_true, decide_eq_true_eq] at h
   exact h.1.1.1.2
 
 /-- **The digits have `k` coordinates per accumulator.** -/
 theorem gq_size : (ir.value M.gq).size = M.Gm.groups.length * M.u.width * M.Gm.digitCount := by
-  have h := M.shape.2.2.1
+  have h := M.shape.2.1
   unfold residuesB at h
   simp only [Bool.and_eq_true, decide_eq_true_eq] at h
   obtain ⟨-, h⟩ := h
@@ -1342,40 +1341,32 @@ theorem group_fit {fc : ℕ × ℕ} (hfc : fc ∈ M.Gm.groups) : fc.1 - 1 + fc.2
   simp only [Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at hunits
   exact (tiles_bound hunits.2 _ (List.mem_map_of_mem hfc)).2
 
-/-- **The final quotient has the tail's output length** (`groupedBoundsB`: a direct `in` on it of
-the left side's length). -/
+/-- **The final quotient has the tail's output length** (`groupedQuotRangeB`: a direct `in` on it
+of the left side's length). -/
 theorem quot_len : ir.exprLen M.realT.quotExpr = M.u.width := by
-  have hb := M.hgf.bounds
-  unfold groupedBoundsB at hb
-  rw [M.hG, M.hu] at hb
-  dsimp only at hb
-  split at hb
-  · simp only [Bool.and_eq_true, decide_eq_true_eq, List.any_eq_true] at hb
-    obtain ⟨-, rid, -, hQr⟩ := hb
-    split at hQr
-    · rename_i N hN
-      unfold digitRangeOf at hN
-      split_ifs at hN with hr
-      split at hN
-      · rename_i d' D' N' r' hbody
-        split_ifs at hN with hc
-        obtain ⟨-, -, hbq, hlen, -⟩ := hc
-        rw [← Expr.eq_of_beq hbq, hlen, eq_of_macUnits? M.hu]
-        change (ir.value M.u.blind).size = _
-        have hbl := M.blindAt
-        unfold macBlindCoreB at hbl
-        rw [← M.units.1] at hbl
-        simp only [Bool.and_eq_true, decide_eq_true_eq] at hbl
-        rw [hbl.2, M.units.2.2.1]
-      · cases hN
-    · cases hQr
-  · cases hb
+  have hb := M.quotRange
+  unfold groupedQuotRangeB at hb
+  obtain ⟨N, hN⟩ := Option.isSome_iff_exists.1 hb
+  unfold digitRangeOf at hN
+  split_ifs at hN with hr
+  split at hN
+  · rename_i d' D' N' r' hbody
+    split_ifs at hN with hc
+    obtain ⟨-, -, hbq, hlen, -⟩ := hc
+    rw [← Expr.eq_of_beq hbq, hlen, eq_of_macUnits? M.hu]
+    change (ir.value M.u.blind).size = _
+    have hbl := M.blindAt
+    unfold macBlindCoreB at hbl
+    rw [← M.units.1] at hbl
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hbl
+    rw [hbl.2, M.units.2.2.1]
+  · cases hN
 
 end GroupedMacC
 
 namespace GroupedMacC
 
-variable {G : Gens} (M : ir.GroupedMacC primeNodes G) {Inp : Type} (hgen : ir.CGenFacts I G)
+variable {G : Gens} (M : ir.GroupedMacC primeNodes S G) {Inp : Type} (hgen : ir.CGenFacts I G)
   (stmtOf val : Inp → ir.Valuation I) (SL : ir.SrcLate I Inp) (y : Inp) (c : ∀ k, (ir.layout I).Ch k)
   (π : (ir.layout I).Pads)
 
@@ -1429,7 +1420,7 @@ variable (hwf : ir.WellFormed) (hI : I.Registered ir) (hL : I.Lawful ir primeNod
 include hwf hI hL in
 /-- **Every accumulator row of the tail holds at the honest values** (`groupRow_holds`). -/
 theorem rows_honest (hS : M.Source HE) {p : Predicate} {g : ℕ} (hg : g < M.Gm.groups.length)
-    (hrow : ir.groupRowB (ir.honestIvl primeNodes) M.dy M.u M.Gm M.acc g
+    (hrow : ir.groupRowB (ir.srcLeafIvl primeNodes S) M.dy M.u M.Gm M.acc g
       (M.Gm.groups.getD g default) p.body = true) :
     ir.HoldsWith HE p.body := by
   have hdy := M.dy_lt hwf
@@ -1468,7 +1459,7 @@ theorem residues_honest (hS : M.Source HE) {j : ℕ} (hj : j < M.Gm.groups.lengt
       ((ir.accNat HE M.dy M.u M.Gm j % 2 : ℕ) : (I (ir.domainField M.dy)).K) := by
   have hdy := M.dy_lt hwf
   have hw0 : 0 < M.u.width := M.units.2.2.1 ▸ M.pos
-  refine residue_honest hwf hI hL _ hdy M.char (by norm_num) M.shape.2.2.1
+  refine residue_honest hwf hI hL _ hdy M.char (by norm_num) M.shape.2.1
     (ir.accNat HE M.dy M.u M.Gm) hj ?_ ?_ (M.accNat_fit hgen stmtOf val SL y c π hS hj hw0)
   · exact reader_accC_honest hgen stmtOf val SL y c π M.hbt M.hG M.hu M.accGen M.accNotSource
       M.accLt M.accLate M.accField M.powNoLate M.yNoLate (by rw [M.acc_size]; exact hj)
@@ -1499,7 +1490,7 @@ theorem residueCheck_honest (hS : M.Source HE) {d : ℕ} {R₁ R₂ R₃ : Expr}
   subst hd
   rw [Expr.eq_of_beq h1, Expr.eq_of_beq h2, Expr.eq_of_beq h3]
   intro i hi
-  have hres := M.shape.2.2.1
+  have hres := M.shape.2.1
   unfold residuesB at hres
   simp only [Bool.and_eq_true, decide_eq_true_eq] at hres
   have hlen := hres.1.1.2
@@ -1592,7 +1583,7 @@ theorem finalLookup_honest (hB : ir.BlindsArePadCopies) (hS : M.Source HE) {p : 
   have htail := M.tail_honest hgen stmtOf val SL y c π hwf hI hL hM hB hS
   rw [M.hbt] at htail
   have hLlen : i < ir.exprLen M.L := M.lLen ▸ hiw
-  have hcongL := htail i hLlen
+  have hcongL := htail.1 i hLlen
   rw [M.lhs_honest hgen stmtOf val SL y c π hwf hI hL hS hiw, hbint, heint] at hcongL
   set A := fun g => ir.accNat rd M.dy M.u M.Gm (g * M.u.width + i)
   set ng := M.Gm.groups.length
@@ -1612,7 +1603,7 @@ theorem finalLookup_honest (hB : ir.BlindsArePadCopies) (hS : M.Source HE) {p : 
     rw [hs] at hz
     push_cast at hz ⊢
     linarith
-  have hQ := finalQuot_honest hwf hI hL rd hdy h2 M.shape.2.2.2 hiw (fun g => A g % 2) hρ bI bt
+  have hQ := finalQuot_honest hwf hI hL rd hdy h2 M.shape.2.2 hiw (fun g => A g % 2) hρ bI bt
     hbcast hecast hcong
   have hF0 : 0 ≤ ∑ g ∈ Finset.range ng, ((A g % 2 : ℕ) : ℤ) :=
     Finset.sum_nonneg fun g _ => Int.natCast_nonneg _
@@ -1643,14 +1634,15 @@ end GroupedMacC
 
 namespace GroupedMacC
 
-variable {G : Gens} (M : ir.GroupedMacC primeNodes G)
+variable {G : Gens} (M : ir.GroupedMacC primeNodes S G)
 
 /-- **The predicates the MAC's honest values satisfy**: its tail, an accumulator row, the residues'
 Boolean check, a lookup on its quotient digits or on its final quotient, its H predicate. -/
 def Role (b : PredBody) : Prop :=
   b = (ir.predicate M.t).body ∨
     (∃ g < M.Gm.groups.length,
-      ir.groupRowB (ir.honestIvl primeNodes) M.dy M.u M.Gm M.acc g (M.Gm.groups.getD g default) b =
+      ir.groupRowB (ir.srcLeafIvl primeNodes S) M.dy M.u M.Gm M.acc g
+        (M.Gm.groups.getD g default) b =
         true) ∨
     (∃ R₁ R₂ R₃ tgt, b = .equal M.dy (.mul R₁ R₂) R₃ tgt ∧ R₁.beq M.Gm.residues = true ∧
       R₂.beq M.Gm.residues = true ∧ R₃.beq M.Gm.residues = true) ∨

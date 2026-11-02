@@ -18,7 +18,6 @@ the emulated program at the ROM parameters: its program facts (`GordieHowe.MLDSA
 namespace GordieHowe.MLDSA44.Emulated.ROMParams
 
 open Generated.MLDSA44.Emulated.ROMParams.Program
-open HashField (interp)
 
 set_option maxRecDepth 4096 in
 /-- The emulated program at the ROM parameters has the crossing's facts. -/

@@ -1,7 +1,8 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 
-// GordieHowe: the ML-DSA-44 proof of possession, native arm. The prover
+// GordieHowe: the ML-DSA proof of possession, native arm, at a parameter
+// set S (mldsa_params.h). The prover
 // shows that it holds a message of private length and a signature on it
 // that verifies under a public key and context (FIPS 204 Algorithm 8).
 // Domain H hashes the key, the context, the message and w1 into the
@@ -11,7 +12,7 @@
 // affine row per coefficient. A MAC equates w1 and the challenge across
 // the two domains.
 //
-//   mldsa_native<P>(env, max_bytes, ctx_bytes)  the compiled relation
+//   mldsa_native<P, S>(env, max_bytes, ctx_bytes)  the compiled relation
 //
 // mldsa_native_signature, domain A's part, also serves the composite
 // signature. Shared gadgets: mldsa_gadgets.h.
@@ -21,6 +22,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <type_traits>
 
 #include "gordiehowe/examples/mldsa/mldsa_gadgets.h"
@@ -42,12 +44,13 @@ namespace proofs::gordiehowe::examples::mldsa {
 // 9) as K N affine rows: w' is advice, A_hat
 // enters in NTT form through PolyMatVec, t1 in coefficient form through
 // PolyBroadcast, and c = support - 2 sign. Returns w'.
-template <class D, class KF, class AF, class PZ>
+template <class S, class D, class KF, class AF, class PZ>
 Ref<AF, Subfield<>, Committed> signature_relation(
     const Scope &s, D &A, const Key<KF, AF> &k,
     const Ref<AF, Subfield<>, PZ> &z, const Ref<AF, Bit, Committed> &c) {
-  const auto w = s[A].priv(Subfield{}, "w", Shape{kK, kN},
-                             depends_on(k.a_hat, k.t1, z, c), host::w_prime);
+  const auto w = s[A].priv(Subfield{}, "w", Shape{S::kK, kN},
+                             depends_on(k.a_hat, k.t1, z, c),
+                             host::w_prime<S>);
   const auto cpoly = challenge_poly(s, c);
   const auto psi = A.field().of_scalar(kPsi);
   assert_zero(w - ops::PolyMatVec(k.a_hat, ops::Form::kNtt, psi)(z) +
@@ -60,8 +63,8 @@ Ref<AF, Subfield<>, Committed> signature_relation(
 
 // ---------------------------------------------------------------- system --
 
-// Domain A's values that cross into domain H: UseHint's output w1 ([K][N][6]
-// Bits, w1Encode's bit order), which H copies and hashes, and the
+// Domain A's values that cross into domain H: UseHint's output w1
+// ([K][N][r1 bits] Bits, w1Encode's bit order), which H copies and hashes, and the
 // challenge's (support, sign) bits ([N][2]), which the crossing equates
 // with H's challenge.
 template <class AF>
@@ -74,28 +77,30 @@ struct MLDSANativeSignature {
 // key's bytes are absorbed in), the members z, h and c_tilde of the witness
 // W committed, the challenge, w', the norm of z, UseHint and the hint's
 // weight. The caller hashes w1 and crosses w1 and c (crossing).
-template <class KF, class Sys, class DA, class PK, class W>
+template <class S, class KF, class Sys, class DA, class PK, class W>
 auto mldsa_native_signature(Sys &cs, DA &A, const PK &pk, const W &w) {
   using AF = std::decay_t<decltype(A.field())>;
-  const auto key = mldsa_key_of<KF>(cs, A, pk);
+  const auto key = mldsa_key_of<S, KF>(cs, A, pk);
   const auto z = A.priv(Subfield{}, w.z);
   const auto h = A.priv(Bit{}, w.h);
-  const auto c = challenge(cs.scope("challenge"), A, w.c_tilde);
-  const auto w_prime = signature_relation(cs.scope("signature"), A, key, z, c);
-  const auto w1 = signature_checks(cs, A, z, h, w_prime, UseHintArm{});
+  const auto c = challenge<S>(cs.scope("challenge"), A, w.c_tilde);
+  const auto w_prime =
+      signature_relation<S>(cs.scope("signature"), A, key, z, c);
+  const auto w1 = signature_checks<S>(cs, A, z, h, w_prime, UseHintArm{});
   return MLDSANativeSignature<AF>{w1, c};
 }
 
-// The relation over the statement ST (MLDSAStatement: the key's bytes and
-// the context) and the witness W (MLDSAWitness: the message and the
-// signature), declared into CS. Domain A is declared before domain H
-// because H commits a copy of A's w1 (H.copy_of). PACKING is the packing
-// ablation.
-template <class P>
-void mldsa_native_relation(typename Env<P>::Sys &cs, const Env<P> &env,
-                           MLDSAStatement<In> st,
-                           MLDSAWitness<In> w, size_t max_bytes,
-                           PackingAblation packing = PackingAblation::kNone) {
+// The relation over the statement ST (MLDSAInputs<S>::Statement: the
+// key's bytes and the context) and the witness W (MLDSAInputs<S>::Witness:
+// the message and the signature), declared into CS. Domain A is declared
+// before domain H because H commits a copy of A's w1 (H.copy_of). PACKING
+// is the packing ablation.
+template <class P, class S>
+void mldsa_native_relation(
+    typename Env<P>::Sys &cs, const Env<P> &env,
+    typename MLDSAInputs<S>::template Statement<In> st,
+    typename MLDSAInputs<S>::template Witness<In> w, size_t max_bytes,
+    PackingAblation packing = PackingAblation::kNone) {
   using HF = typename Env<P>::HF;
   auto ap = domain_profile<P>(env.af, env.rsa);
   auto hp = domain_profile<P>(env.hf, env.rsh);
@@ -104,28 +109,31 @@ void mldsa_native_relation(typename Env<P>::Sys &cs, const Env<P> &env,
   auto &A = cs.domain(ap, "A");
   auto &H = cs.domain(hp, "H");
   const auto pk = st.pk;
-  const auto sig = mldsa_native_signature<HF>(cs, A, pk, w);
-  const auto hash = mldsa_hash_domain(cs, H, pk, sig.w1, st.ctx, w.msg,
-                                    w.msg_length, max_bytes);
+  const auto sig = mldsa_native_signature<S, HF>(cs, A, pk, w);
+  const auto hash = mldsa_hash_domain<S>(cs, H, pk, sig.w1, st.ctx, w.msg,
+                                         w.msg_length, max_bytes);
   crossing(cs.scope("crossing"), hash, sig.c);
   pin_full_system_placement(H, packing);
 }
 
 // The relation over messages of at most MAX_BYTES bytes under contexts of
 // CTX_BYTES bytes, compiled under BUILD; PACKING is the packing ablation.
-template <class P>
-Relation<MLDSAStatement<Value>, MLDSAWitness<Value>> mldsa_native(
-    const Env<P> &env, size_t max_bytes, size_t ctx_bytes,
-    PackingAblation packing = PackingAblation::kNone,
-    const BuildOptions &build = {}) {
-  return compile<MLDSAStatement, MLDSAWitness>(
-      build.profile(compile_profile<P>(packing)),
+template <class P, class S>
+Relation<typename MLDSAInputs<S>::template Statement<Value>,
+         typename MLDSAInputs<S>::template Witness<Value>>
+mldsa_native(const Env<P> &env, size_t max_bytes, size_t ctx_bytes,
+             PackingAblation packing = PackingAblation::kNone,
+             const BuildOptions &build = {}) {
+  using I = MLDSAInputs<S>;
+  return compile<I::template Statement, I::template Witness>(
+      build.profile(compile_profile<P, S>(packing)),
       [&env, max_bytes, packing](typename Env<P>::Sys &cs,
-                                 MLDSAStatement<In> st, MLDSAWitness<In> w) {
-        mldsa_native_relation<P>(cs, env, st, w, max_bytes, packing);
+                                 typename I::template Statement<In> st,
+                                 typename I::template Witness<In> w) {
+        mldsa_native_relation<P, S>(cs, env, st, w, max_bytes, packing);
       },
-      "ml-dsa-44-possession", mldsa_statement_shape(ctx_bytes),
-      mldsa_witness_shape(max_bytes, ctx_bytes), build.compile);
+      std::string(S::kName) + "-possession", I::statement_shape(ctx_bytes),
+      I::witness_shape(max_bytes, ctx_bytes), build.compile);
 }
 
 }  // namespace proofs::gordiehowe::examples::mldsa

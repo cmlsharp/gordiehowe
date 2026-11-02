@@ -76,12 +76,15 @@ def digitAt (b n s : ℕ) : ℕ := n / b ^ s % b
 /-- **The honest digit value `v` of `n`**: the digit at `v`'s position. -/
 def digit (D : DigitLayout) (n v : ℕ) : ℕ := digitAt D.base n (D.ids.idxOf v)
 
-/-- **The digits a layout holds every natural up to `n` in**: some digit and room for `n`. -/
+/-- **The digits a layout holds every natural up to `n` in**: some digit, room for `n`, and
+weights `b^s` below Goldilocks' `p` (so each weight is a constant of the field). -/
 structure Fits (D : DigitLayout) (n : ℕ) : Prop where
   /-- There is a digit. -/
   ne : D.ids ≠ []
   /-- The digits hold `n`. -/
   le : n < D.base ^ D.ids.length
+  /-- The weights are below `p = 2^64 - 2^32 + 1`. -/
+  weight_le : D.base ^ D.ids.length ≤ 18446744069414584321
 
 /-- **The digits reconstruct the residue**: `Σ_{s < k} b^s · digit_s(n) = n mod b^k`. -/
 theorem sum_digitAt (b n k : ℕ) :

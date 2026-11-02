@@ -29,7 +29,7 @@ honest natural (`nS2`, `nS1`, `nA`, `nSq`, `nCc`, `nNd`, `nNc`, `nD`, `nDc`).
 
 namespace GordieHowe.Falcon512.Norm
 
-open GordieHowe.Bits Native.ROMParams
+open GordieHowe.Bits
 
 /-! ## The honest input -/
 
@@ -262,7 +262,7 @@ end Reading
 theorem modZero_of_eq {rd : program.Valuation I} {d : ℕ} {l r : RealizedProgram.Expr} {real : RealizedProgram.ModRealization}
     (h : ∀ i < program.exprLen l, program.evalIntWith rd d l i = program.evalIntWith rd d r i) :
     program.HoldsWith rd (.mod d 0 l r real) := by
-  intro i hi
+  refine (RealizedProgram.holdsWith_mod_iff (.inr (by omega))).2 fun i hi => ?_
   rw [Nat.cast_zero, zero_dvd_iff, sub_eq_zero]
   exact h i hi
 
@@ -435,7 +435,7 @@ theorem center_holds {e : program.Env I} (h : ∀ i < 1024,
   rw [RealizedProgram.HoldsAt, hpb]
   refine holdsWith_equalA_of fun i hi => ?_
   rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_mul, exprLen_refA (by norm_disch), expr492,
-    RealizedProgram.exprLen_add, RealizedProgram.exprLen_reindex, FalconNorm.i52_size (program := program)] at hi
+    RealizedProgram.exprLen_reindex, FalconNorm.i52_size (program := program)] at hi
   rw [evalE_42, RealizedProgram.evalE_add, RealizedProgram.evalE_mul, RealizedProgram.evalE_scale_const,
     RealizedProgram.evalE_mul, RealizedProgram.evalE_add, RealizedProgram.evalE_add, RealizedProgram.evalE_scale_const,
     RealizedProgram.evalE_scale_const, evalE_492 e hi, evalE_495 e hi, evalE_refA _ _ (by norm_disch),
@@ -443,7 +443,7 @@ theorem center_holds {e : program.Env I} (h : ∀ i < 1024,
     RealizedProgram.evalE_reindex, FalconNorm.i54_entry (program := program) i hi,
     FalconNorm.i55_entry (program := program) i hi]
   try dsimp only
-  try simp only [AField.decode_eq]
+  try simp (disch := norm_num) only [AField.decode_lt]
   change normInF e i * normInF e i + ((12288 : ℕ) : (I fA).K) *
     ((rdA e vA (3 * i) + ((64 : ℕ) : (I fA).K) * rdA e vA (3 * i + 1) +
       ((4096 : ℕ) : (I fA).K) * topF e i) *
@@ -520,7 +520,7 @@ theorem parity_holds {e : program.Env I}
       exprMid, evalE_refA _ _ (FalconNorm.enc_le (program := program)).1, exprHigh,
       RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex,
       (FalconNorm.idx_enc (program := program)).2.1 i hi,
-      (FalconNorm.idx_enc (program := program)).1 i hi, parityF, decode_A]
+      (FalconNorm.idx_enc (program := program)).1 i hi, parityF, decode_A (by norm_num)]
     have hq : ((12287 : ℕ) : (I fA).K) = -2 := by
       have h0 : ((12289 : ℕ) : (I fA).K) = 0 := CharP.cast_eq_zero _ 12289
       push_cast at h0 ⊢
@@ -1067,7 +1067,7 @@ theorem evalE_slack_honest (hw : w.Valid) (hv : NormVals val w) :
   rw [Finset.sum_congr rfl fun t _ => by rw [Nat.zero_mul, Nat.zero_add, evalE_526 _ t.isLt,
     highF_honest hv t.isLt]]
   try dsimp only
-  try simp only [AField.decode_eq]
+  try simp (disch := norm_num) only [AField.decode_lt]
   change ((12288 : ℕ) : (I fA).K) * _ + ((392 : ℕ) : (I fA).K) = _
   rw [q_neg_one]
   unfold NormIn.slack

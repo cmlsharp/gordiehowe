@@ -7,8 +7,8 @@ public import GordieHowe.ProofSystem.Program.FieldModel
 public import GordieHowe.Foundations.Algebra.RelativePackingAdditive
 public import GordieHowe.Foundations.Fields.GF2_128Relative
 public import GordieHowe.Foundations.Fields.GF2_128Dual
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative9Relative
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNativeCoords
+public import GordieHowe.Applications.Falcon512.Fields.FalconNative9Relative
+public import GordieHowe.Applications.Falcon512.Fields.FalconNativeCoords
 
 @[expose] public section
 
@@ -27,9 +27,9 @@ programs share:
   `{0, 1}` (`mem_fixedField_two_one`). Its model at the node `bit` (`gf128_model`); a binary MAC
   field of width `128` with the taps `{0, 1, 2, 7}` (`gf128_macFieldOk`).
 * **`F_q^9`** (`fq9`, `q = 12289`): the registry entry `falconNative9Entry`,
-  `FalconNativeField9`; constants are casts of naturals, the integer reading is the constant
-  coefficient; the node `GF(p^1)` is the prime subfield `F_q` (`fq9Node`); no bit coordinates. Its
-  model at `GF(p^1)` (`fq9_model`); its integer reading is linear (`fq9_readLinear`).
+  `FalconNativeField9`; constants are coefficient vectors in the C++ encoding (`fq9Code`), the
+  integer reading is the constant coefficient; the node `GF(p^1)` is the prime subfield `F_q`
+  (`fq9Node`); no bit coordinates. Its model at `GF(p^1)` (`fq9_model`); its integer reading is linear (`fq9_readLinear`).
 * **The MAC target's bits** (`targetBitsFn`): the opaque function `mac.target_bits` of the programs
   with a MAC.
 -/
@@ -207,12 +207,13 @@ instance fq9NodeDec (s : String) : DecidablePred (· ∈ fq9Node s) := fun x => 
   · exact isTrue (AddSubgroup.mem_top x)
 
 /-- **`F_q^9` as a field of the program**: the registry entry, `FalconNativeField9`, constants as
-casts of naturals, the integer reading the constant coefficient, the nodes `fq9Node`, no bit
+coefficient vectors (`GKR.Fold.extDecode`), the integer reading the constant coefficient, the
+nodes `fq9Node`, no bit
 coordinates (an odd field). -/
 def fq9 : FieldInterp where
   spec := falconNative9Entry.spec
   K := FalconNativeField9
-  decode n := (n : FalconNativeField9)
+  decode := GKR.Fold.extDecode (fun c : ℕ => (c : ZMod 12289)) 16 9
   toNat x := (falconNative9Coords x 0).val
   node := fq9Node
   memDec := fq9NodeDec
@@ -230,7 +231,8 @@ reading the constant coordinate (`falconNative9Coords_natCast`,
 theorem fq9_model : fq9.Model ["GF(p^1)"] [] :=
   FieldInterp.model_of_primeCoord (spec := falconNative9Entry.spec) (p := 12289)
     (c := fun x => falconNative9Coords x 0) ⟨falconNative9Entry, by simp [fieldRegistry], rfl⟩ rfl
-    falconNativeField_card falconNative9Coords_natCast falconNative9Coords_algebraMap
+    falconNativeField_card (fun _ hc => GKR.Fold.ExtCode.extDecode_natCast_of_lt (by norm_num) hc)
+    falconNative9Coords_natCast falconNative9Coords_algebraMap
     (fun _ hx => by rwa [fq9Node, if_pos rfl] at hx)
     (by rw [fq9Node, if_neg (by decide)])
 
@@ -259,5 +261,53 @@ theorem targetBitsFn_lt_two (nm : String) (xs : List (ℕ → ℕ)) (i : ℕ) :
 theorem targetBitsFn_target (xs : List (ℕ → ℕ)) (i : ℕ) :
     targetBitsFn "mac.target_bits" xs i = if ((xs.headD 0) 0).testBit i then 1 else 0 :=
   if_pos rfl
+
+/-- **The code arithmetic of `F_q^9`** (`GKR.Fold.ExtCode.overPrime`): `Fp14_9 = Fp14_N<9, 2>`
+(`lib/algebra/fp14_n.h:286`, `:397`) writes coefficient `i` as `Fp14`'s two bytes
+(`lib/algebra/fp14.h:280`) at byte `2 i`, so a code is `Σ_i c_i 2^(16 i)` with `c_i` the
+coefficient of `X^i`; the arithmetic modulo `12289` on each of the `9` coefficients, `X^9 = 2`. -/
+def fq9Code : GKR.Fold.ExtCode := GKR.Fold.ExtCode.overPrime 12289 16 9 2
+
+/-- **The code arithmetic of `F_q^9` is the field's** (`GKR.Fold.ExtCode.overPrime_hom`). -/
+theorem fq9_codeHom : fq9.CodeHom fq9Code.arith :=
+  GKR.Fold.ExtCode.overPrime_hom falconNative9_polySpec Nat.cast_ofNat (by norm_num)
+
+/-- **`F_q^9`'s arithmetic is arithmetic modulo `q` on `F_q`**, so its checks take the fast path
+`.withPrime 12289`. -/
+theorem fq9Code_primeOn : fq9Code.arith.PrimeOn 12289 :=
+  GKR.Fold.ExtCode.overPrime_primeOn (p := 12289) (s := 16) (n := 9) (beta := 2)
+    (by norm_num) (by norm_num)
+
+/-! ## The code arithmetic of `GF(2^128)` -/
+
+open BinarySpread in
+set_option exponentiation.threshold 20000 in
+/-- The spread representation of `GF(2^128)`'s code arithmetic: `gf2_128Exec`'s reduction with
+digits of `130` bits (`GKR.Fold.BinCode`: `k ≥ n + 2`). -/
+def gf2_128CodeExec : Exec where
+  k := 130
+  n := 128
+  tapN := 1 + 2 ^ 130 + 2 ^ 260 + 2 ^ 910
+  mask := (2 ^ (130 * 128) - 1) / (2 ^ 130 - 1)
+
+open BinarySpread in
+set_option exponentiation.threshold 70000 in
+/-- The facts tying `gf2_128CodeExec` to `gf2_128Poly` (`GKR.Fold.Rep.widen` of `gf2_128Rep`). -/
+noncomputable def gf2_128CodeRep : Rep gf2_128CodeExec gf2_128Poly :=
+  GKR.Fold.Rep.widen gf2_128Rep gf2_128CodeExec rfl (by decide)
+    (by simp only [gf2_128Rep, gf2_128Tap, gf2_128CodeExec, Polynomial.eval_add,
+      Polynomial.eval_pow, Polynomial.eval_X, Polynomial.eval_one]; norm_num)
+    (by decide +kernel)
+
+set_option exponentiation.threshold 20000 in
+/-- **The code arithmetic of `GF(2^128)`** (`GKR.Fold.BinCode.arith`): exclusive or, and one spread
+product per multiplication. -/
+def gf2_128Code : GKR.Fold.BinCode := ⟨gf2_128CodeExec, (2 ^ (129 * 128) - 1) / (2 ^ 129 - 1)⟩
+
+/-- **The code arithmetic of `GF(2^128)` is the field's** (`GKR.Fold.BinCode.hom`: constants decode
+as their polynomial-basis bits, `gf2_128ToSpec_ofNat`). -/
+theorem gf128_codeHom : gf128.CodeHom gf2_128Code.arith :=
+  GKR.Fold.BinCode.hom gf2_128Code gf2_128CodeRep (by decide) (by decide +kernel)
+    gf2_128ToSpec.toRingEquiv fun c => gf2_128ToSpec_ofNat c
 
 end GordieHowe.RealizedProgram

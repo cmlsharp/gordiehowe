@@ -4,8 +4,8 @@
 module
 
 public import GordieHowe.ProofSystem.Program.FieldModel
-public import GordieHowe.Applications.MLDSA44.Native.Fields.MLDSANative6Coords
-public import GordieHowe.Applications.MLDSA44.Native.Fields.MLDSANative11Coords
+public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative6Coords
+public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative11Coords
 public import GordieHowe.Foundations.Fields.GoldilocksCoords
 
 @[expose] public section
@@ -24,12 +24,14 @@ fields that `F_q^9` and `F_q^20` (`GordieHowe/Applications/FieldInterps/Basic.le
   `MLDSA44.Emulated.ROMParams`) and **Goldilocks⁴** (`GordieHowe.RealizedProgram.gold4`,
   `Falcon512.Ring.Carrier.QROMParams`, `MLDSA44.Emulated.QROMParams`).
 
-Each is the registry entry's field, constants cast from naturals, the integer reading the constant
-coordinate, the node `GF(p^1)` the prime subfield, no bit coordinates (an odd field). The fields
-keep the namespaces of the configurations that introduced them.
+Each is the registry entry's field, a constant decoded as its coefficient vector in the C++
+encoding (`GKR.Fold.extDecode`; a constant below the characteristic decodes to its cast), the
+integer reading the constant coordinate, the node `GF(p^1)` the prime subfield, no bit coordinates
+(an odd field), with the code arithmetic of `GKR.Fold.ExtCode.overPrime`. The fields keep the
+namespaces of the configurations that introduced them.
 -/
 
-namespace GordieHowe.MLDSA44.Native.ROMParams.HashField
+namespace GordieHowe
 
 open RealizedProgram.Export RelativePacking
 
@@ -45,12 +47,12 @@ instance _root_.GordieHowe.RealizedProgram.fq6NodeDec (s : String) : DecidablePr
   · exact isTrue (AddSubgroup.mem_top x)
 
 /-- **`F_q^6` as a field of the program**: the registry entry, `MLDSANativeField6`, constants as
-casts of naturals, the integer reading the constant coefficient, the nodes `fq6Node`, no bit
-coordinates (an odd field). -/
+coefficient vectors (`GKR.Fold.extDecode`), the integer reading the constant coefficient, the nodes
+`fq6Node`, no bit coordinates (an odd field). -/
 def _root_.GordieHowe.RealizedProgram.fq6 : RealizedProgram.FieldInterp where
   spec := mldsaNative6Entry.spec
   K := MLDSANativeField6
-  decode n := (n : MLDSANativeField6)
+  decode := GKR.Fold.extDecode (fun c : ℕ => (c : ZMod 8380417)) 24 6
   toNat x := (mldsaNative6Coords x 0).val
   node := RealizedProgram.fq6Node
   memDec := RealizedProgram.fq6NodeDec
@@ -62,13 +64,32 @@ reading the constant coordinate (`mldsaNative6Coords_natCast`, `mldsaNative6Coor
 theorem _root_.GordieHowe.RealizedProgram.fq6_model : RealizedProgram.fq6.Model ["GF(p^1)"] [] :=
   RealizedProgram.FieldInterp.model_of_primeCoord (spec := mldsaNative6Entry.spec) (p := 8380417)
     (c := fun x => mldsaNative6Coords x 0) ⟨mldsaNative6Entry, by simp [fieldRegistry], rfl⟩ rfl
-    mldsaNativeField_card mldsaNative6Coords_natCast mldsaNative6Coords_algebraMap
+    mldsaNativeField_card (fun _ hc => GKR.Fold.ExtCode.extDecode_natCast_of_lt (by norm_num) hc)
+    mldsaNative6Coords_natCast mldsaNative6Coords_algebraMap
     (fun _ hx => by rwa [RealizedProgram.fq6Node, if_pos rfl] at hx)
     (by rw [RealizedProgram.fq6Node, if_neg (by decide)])
 
-end GordieHowe.MLDSA44.Native.ROMParams.HashField
+/-- **The code arithmetic of `F_q^6`** (`GKR.Fold.ExtCode.overPrime`): `Fp24_6`
+(`lib/algebra/fp24_6.h:225`) writes coefficient `i` as `Fp24`'s three bytes
+(`lib/algebra/fp24.h:273`) at byte `3 i`, so a code is `Σ_i c_i 2^(24 i)` with `c_i` the coefficient
+of `X^i`; the arithmetic modulo `8380417` on each of the `6` coefficients, `X^6 = 7`. -/
+def _root_.GordieHowe.RealizedProgram.fq6Code : GKR.Fold.ExtCode :=
+  GKR.Fold.ExtCode.overPrime 8380417 24 6 7
 
-namespace GordieHowe.MLDSA44.Native.QROMParams.HashField
+/-- **The code arithmetic of `F_q^6` is the field's** (`GKR.Fold.ExtCode.overPrime_hom`). -/
+theorem _root_.GordieHowe.RealizedProgram.fq6_codeHom :
+    RealizedProgram.fq6.CodeHom RealizedProgram.fq6Code.arith :=
+  GKR.Fold.ExtCode.overPrime_hom mldsaNative6_polySpec Nat.cast_ofNat (by norm_num)
+
+/-- **`F_q^6`'s arithmetic is arithmetic modulo `8380417` on its prime subfield**, so its
+checks take the fast path `.withPrime 8380417`. -/
+theorem _root_.GordieHowe.RealizedProgram.fq6Code_primeOn :
+    RealizedProgram.fq6Code.arith.PrimeOn 8380417 :=
+  GKR.Fold.ExtCode.overPrime_primeOn (by norm_num) (by norm_num)
+
+end GordieHowe
+
+namespace GordieHowe
 
 open RealizedProgram.Export RelativePacking
 
@@ -84,12 +105,12 @@ instance _root_.GordieHowe.RealizedProgram.fq11NodeDec (s : String) : DecidableP
   · exact isTrue (AddSubgroup.mem_top x)
 
 /-- **`F_q^11` as a field of the program**: the registry entry, `MLDSANativeField11`, constants as
-casts of naturals, the integer reading the constant coefficient, the nodes `fq11Node`, no bit
-coordinates (an odd field). -/
+coefficient vectors (`GKR.Fold.extDecode`), the integer reading the constant coefficient, the nodes
+`fq11Node`, no bit coordinates (an odd field). -/
 def _root_.GordieHowe.RealizedProgram.fq11 : RealizedProgram.FieldInterp where
   spec := mldsaNative11Entry.spec
   K := MLDSANativeField11
-  decode n := (n : MLDSANativeField11)
+  decode := GKR.Fold.extDecode (fun c : ℕ => (c : ZMod 8380417)) 23 11
   toNat x := (mldsaNative11Coords x 0).val
   node := RealizedProgram.fq11Node
   memDec := RealizedProgram.fq11NodeDec
@@ -102,11 +123,31 @@ reading the constant coordinate (`mldsaNative11Coords_natCast`,
 theorem _root_.GordieHowe.RealizedProgram.fq11_model : RealizedProgram.fq11.Model ["GF(p^1)"] [] :=
   RealizedProgram.FieldInterp.model_of_primeCoord (spec := mldsaNative11Entry.spec) (p := 8380417)
     (c := fun x => mldsaNative11Coords x 0) ⟨mldsaNative11Entry, by simp [fieldRegistry], rfl⟩ rfl
-    mldsaNativeField11_card mldsaNative11Coords_natCast mldsaNative11Coords_algebraMap
+    mldsaNativeField11_card (fun _ hc => GKR.Fold.ExtCode.extDecode_natCast_of_lt (by norm_num) hc)
+    mldsaNative11Coords_natCast mldsaNative11Coords_algebraMap
     (fun _ hx => by rwa [RealizedProgram.fq11Node, if_pos rfl] at hx)
     (by rw [RealizedProgram.fq11Node, if_neg (by decide)])
 
-end GordieHowe.MLDSA44.Native.QROMParams.HashField
+/-- **The code arithmetic of `F_q^11`** (`GKR.Fold.ExtCode.overPrime`): `MlDsaField11 =
+NativeWide<Fp24, 11, 2, …>` (`lib/algebra/fp_native_wide.h:631`) packs coefficient `i` in
+`kCoefficientBits = 23` bits at bit `23 i` (`lib/algebra/fp_native_wide.h:64`, `:388`), so a code is
+`Σ_i c_i 2^(23 i)` with `c_i` the coefficient of `X^i`; the arithmetic modulo `8380417` on each of
+the `11` coefficients, `X^11 = 2`. -/
+def _root_.GordieHowe.RealizedProgram.fq11Code : GKR.Fold.ExtCode :=
+  GKR.Fold.ExtCode.overPrime 8380417 23 11 2
+
+/-- **The code arithmetic of `F_q^11` is the field's** (`GKR.Fold.ExtCode.overPrime_hom`). -/
+theorem _root_.GordieHowe.RealizedProgram.fq11_codeHom :
+    RealizedProgram.fq11.CodeHom RealizedProgram.fq11Code.arith :=
+  GKR.Fold.ExtCode.overPrime_hom mldsaNative11_polySpec Nat.cast_ofNat (by norm_num)
+
+/-- **`F_q^11`'s arithmetic is arithmetic modulo `8380417` on its prime subfield**, so its
+checks take the fast path `.withPrime 8380417`. -/
+theorem _root_.GordieHowe.RealizedProgram.fq11Code_primeOn :
+    RealizedProgram.fq11Code.arith.PrimeOn 8380417 :=
+  GKR.Fold.ExtCode.overPrime_primeOn (by norm_num) (by norm_num)
+
+end GordieHowe
 
 namespace GordieHowe.Falcon512.Ring.Carrier.ROMParams
 
@@ -125,12 +166,12 @@ instance _root_.GordieHowe.RealizedProgram.gold2NodeDec (s : String) : Decidable
   · exact isTrue (AddSubgroup.mem_top x)
 
 /-- **Goldilocks² as a field of the program**: the registry entry, `GoldilocksExt2`, constants as
-casts of naturals, the integer reading the constant coordinate, the nodes `gold2Node`, no bit
-coordinates (an odd field). -/
+coefficient vectors (`GKR.Fold.extDecode`), the integer reading the constant coordinate, the nodes
+`gold2Node`, no bit coordinates (an odd field). -/
 def _root_.GordieHowe.RealizedProgram.gold2 : RealizedProgram.FieldInterp where
   spec := goldilocksExt2Entry.spec
   K := GoldilocksExt2
-  decode n := (n : GoldilocksExt2)
+  decode := GKR.Fold.extDecode (fun c : ℕ => (c : ZMod pGold)) 64 2
   toNat x := (goldilocksExt2Coords x 0).val
   node := RealizedProgram.gold2Node
   memDec := RealizedProgram.gold2NodeDec
@@ -143,9 +184,29 @@ def _root_.GordieHowe.RealizedProgram.gold2 : RealizedProgram.FieldInterp where
 theorem _root_.GordieHowe.RealizedProgram.gold2_model : RealizedProgram.gold2.Model ["GF(p^1)"] [] :=
   RealizedProgram.FieldInterp.model_of_primeCoord (spec := goldilocksExt2Entry.spec) (p := pGold)
     (c := fun x => goldilocksExt2Coords x 0) ⟨goldilocksExt2Entry, by simp [fieldRegistry], rfl⟩ rfl
-    goldilocksExt2_card goldilocksExt2Coords_natCast goldilocksExt2Coords_algebraMap
+    goldilocksExt2_card
+    (fun _ hc => GKR.Fold.ExtCode.extDecode_natCast_of_lt (by norm_num [pGold]) hc)
+    goldilocksExt2Coords_natCast goldilocksExt2Coords_algebraMap
     (fun _ hx => by rwa [RealizedProgram.gold2Node, if_pos rfl] at hx)
     (by rw [RealizedProgram.gold2Node, if_neg (by decide)])
+
+/-- **The code arithmetic of Goldilocks²** (`GKR.Fold.ExtCode.overPrime`): `Fp64G2`
+(`lib/algebra/fp_goldilocks.h:402`) writes the coefficients of `1` and `X` as eight bytes each
+(`lib/algebra/fp_goldilocks.h:188`), so a code is `Σ_i c_i 2^(64 i)` with `c_i` the coefficient of
+`X^i`; the arithmetic modulo `18446744069414584321` on each of the `2` coefficients, `X^2 = 7`. -/
+def _root_.GordieHowe.RealizedProgram.gold2Code : GKR.Fold.ExtCode :=
+  GKR.Fold.ExtCode.overPrime pGold 64 2 7
+
+/-- **The code arithmetic of Goldilocks² is the field's** (`GKR.Fold.ExtCode.overPrime_hom`). -/
+theorem _root_.GordieHowe.RealizedProgram.gold2_codeHom :
+    RealizedProgram.gold2.CodeHom RealizedProgram.gold2Code.arith :=
+  GKR.Fold.ExtCode.overPrime_hom goldilocksExt2_polySpec Nat.cast_ofNat (by norm_num [pGold])
+
+/-- **Goldilocks²'s arithmetic is arithmetic modulo `pGold` on its prime subfield**, so its
+checks take the fast path `.withPrime pGold`. -/
+theorem _root_.GordieHowe.RealizedProgram.gold2Code_primeOn :
+    RealizedProgram.gold2Code.arith.PrimeOn pGold :=
+  GKR.Fold.ExtCode.overPrime_primeOn (by norm_num [pGold]) (by norm_num)
 
 end GordieHowe.Falcon512.Ring.Carrier.ROMParams
 
@@ -166,12 +227,12 @@ instance _root_.GordieHowe.RealizedProgram.gold4NodeDec (s : String) : Decidable
   · exact isTrue (AddSubgroup.mem_top x)
 
 /-- **Goldilocks⁴ as a field of the program**: the registry entry, `GoldilocksExt4`, constants as
-casts of naturals, the integer reading the constant coordinate, the nodes `gold4Node`, no bit
-coordinates (an odd field). -/
+coefficient vectors (`GKR.Fold.extDecode`), the integer reading the constant coordinate, the nodes
+`gold4Node`, no bit coordinates (an odd field). -/
 def _root_.GordieHowe.RealizedProgram.gold4 : RealizedProgram.FieldInterp where
   spec := goldilocksExt4Entry.spec
   K := GoldilocksExt4
-  decode n := (n : GoldilocksExt4)
+  decode := GKR.Fold.extDecode (fun c : ℕ => (c : ZMod pGold)) 64 4
   toNat x := (goldilocksExt4Coords x 0).val
   node := RealizedProgram.gold4Node
   memDec := RealizedProgram.gold4NodeDec
@@ -184,8 +245,28 @@ def _root_.GordieHowe.RealizedProgram.gold4 : RealizedProgram.FieldInterp where
 theorem _root_.GordieHowe.RealizedProgram.gold4_model : RealizedProgram.gold4.Model ["GF(p^1)"] [] :=
   RealizedProgram.FieldInterp.model_of_primeCoord (spec := goldilocksExt4Entry.spec) (p := pGold)
     (c := fun x => goldilocksExt4Coords x 0) ⟨goldilocksExt4Entry, by simp [fieldRegistry], rfl⟩ rfl
-    goldilocksExt4_card goldilocksExt4Coords_natCast goldilocksExt4Coords_algebraMap
+    goldilocksExt4_card
+    (fun _ hc => GKR.Fold.ExtCode.extDecode_natCast_of_lt (by norm_num [pGold]) hc)
+    goldilocksExt4Coords_natCast goldilocksExt4Coords_algebraMap
     (fun _ hx => by rwa [RealizedProgram.gold4Node, if_pos rfl] at hx)
     (by rw [RealizedProgram.gold4Node, if_neg (by decide)])
+
+/-- **The code arithmetic of Goldilocks⁴** (`GKR.Fold.ExtCode.overPrime`): `Fp64G4`
+(`lib/algebra/fp_goldilocks4.h:196`) writes coefficient `i` as eight bytes at byte `8 i`, so a code
+is `Σ_i c_i 2^(64 i)` with `c_i` the coefficient of `X^i`; the arithmetic modulo
+`18446744069414584321` on each of the `4` coefficients, `X^4 = 7`. -/
+def _root_.GordieHowe.RealizedProgram.gold4Code : GKR.Fold.ExtCode :=
+  GKR.Fold.ExtCode.overPrime pGold 64 4 7
+
+/-- **The code arithmetic of Goldilocks⁴ is the field's** (`GKR.Fold.ExtCode.overPrime_hom`). -/
+theorem _root_.GordieHowe.RealizedProgram.gold4_codeHom :
+    RealizedProgram.gold4.CodeHom RealizedProgram.gold4Code.arith :=
+  GKR.Fold.ExtCode.overPrime_hom goldilocksExt4_polySpec Nat.cast_ofNat (by norm_num [pGold])
+
+/-- **Goldilocks⁴'s arithmetic is arithmetic modulo `pGold` on its prime subfield**, so its
+checks take the fast path `.withPrime pGold`. -/
+theorem _root_.GordieHowe.RealizedProgram.gold4Code_primeOn :
+    RealizedProgram.gold4Code.arith.PrimeOn pGold :=
+  GKR.Fold.ExtCode.overPrime_primeOn (by norm_num [pGold]) (by norm_num)
 
 end GordieHowe.Falcon512.Ring.Carrier.QROMParams

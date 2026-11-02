@@ -360,15 +360,15 @@ class LigeroVerifier {
     // The linear test's rows evaluated at the opened columns, row-major
     // [nwqrow][nreq]: each row encoded, then gathered at IDX.
     std::vector<Elt> Areq(p.nwqrow * p.nreq);
-    // One partial per fixed chunk of rows, each chunk with its own
-    // interpolator (util/parallel.h).
+    // One partial per fixed chunk of rows (util/parallel.h); the chunks
+    // share one interpolator (interpolate is const).
     const size_t grain = parallel::grain_for(p.nwqrow, parallel::kChunks);
 
     {
       profiling::Scope sc(
           key("bin.v.ligero.dot.encode", "odd.v.ligero.dot.encode"));
+      const auto interpA = interpolator.make(p.block, p.block_enc);
       parallel::for_chunks(p.nwqrow, grain, [&](size_t b, size_t e) {
-        const auto interpA = interpolator.make(p.block, p.block_enc);
         std::vector<Elt> Aext(p.block_enc);
         for (size_t i = b; i < e; ++i) {
           LigeroCommon<Field>::layout_Aext(&Aext[0], p, i, &A[0], F);

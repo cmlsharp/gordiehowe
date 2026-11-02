@@ -31,7 +31,7 @@ decides `GordieHowe.MLDSA44.ExpandAWithin` at the key (`expandAWithinB`) and eva
 matrix is `expandABounded(ρ)` (`GordieHowe.MLDSA44.expandA_eq_expandABounded`), the matrix the
 relation reads (`GordieHowe.MLDSA44.expandABounded_eq_expandAFull`).
 
-Exposes `checkVerify44 : IO Bool`, run from `Test/GordieHoweTest/MLDSAVectors.lean`'s `#eval`.
+Exposes `checkVerify44 : IO Bool`, run from `Test/GordieHoweTest/MLDSAVectorsVerify.lean`'s `#eval`.
 -/
 import LatticeCrypto.MLDSA.ConcretePrimitives
 import GordieHoweTest.Hex

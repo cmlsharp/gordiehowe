@@ -107,14 +107,6 @@ theorem length_pathBytes_le {N : ℕ} (hN : ∀ d, C.shape.nb d ≤ N) (p : C.te
       Leaf.length_pathBytes_inN, List.length_nil]
     omega
 
-/-- **The label of a leaf of the series–parallel term** has at most `m + N + 2` bytes. -/
-theorem length_pathLabel_le {N : ℕ} (hN : ∀ d, C.shape.nb d ≤ N) (p : C.term.Leaf) :
-    p.pathLabel.length ≤ C.m + N + 2 := by
-  unfold Leaf.pathLabel
-  split_ifs
-  · simp
-  · exact C.length_pathBytes_le hN p
-
 /-- **The label of an observer** (`MergeBytes.label`: a tag byte, then a leaf's path bytes or a
 site's code) has at most `m + N + 3` bytes for branch counts at most `N`. -/
 theorem length_label_le {N : ℕ} (hN : ∀ d, C.shape.nb d ≤ N) (o : C.merges.Obs) :

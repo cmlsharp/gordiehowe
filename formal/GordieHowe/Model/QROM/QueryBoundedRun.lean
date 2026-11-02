@@ -43,7 +43,7 @@ namespace AdaptiveIAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] [Nonempty X] [AddGroup Y]
-  [Nonempty Y] (A : AdaptiveIAlg X Y Req Resp O)
+  [Nonempty Y] {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O)
 
 /-- **The run of a request-free adversary** (proof-internal semantics of the knowledge-soundness
 game): the composition of the trace-preserving form of `A` with the challenger that answers

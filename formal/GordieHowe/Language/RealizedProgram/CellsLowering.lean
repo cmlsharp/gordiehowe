@@ -18,23 +18,26 @@ each domain's cells). The committed assignment is read from every domain's cells
 through its own cells (`GordieHowe.RealizedProgram.cellValuation`), which agree with the assignment of all domains at
 every value the domain's constraints read (`GordieHowe.RealizedProgram.Local`, `GordieHowe/Language/RealizedProgram/Locality.lean`).
 
-**The checks** (`GordieHowe.RealizedProgram.CellsValid`, decidable, checked by `decide +kernel` on each program):
+**The checks** (`GordieHowe.RealizedProgram.CellsValid`, decided at the compiler's structure
+records' pointers by `GordieHowe.RealizedProgram.cellsValid_of_placementB`,
+`GordieHowe/Language/RealizedProgram/Placement.lean`):
 
 * the program has a domain;
 * every field `equal` and every `mod_0` of the program is lowered into its own domain
-  (`GordieHowe.RealizedProgram.loweredOwnB`: an affine row or a family of rows on views of the domain, placed in a GKR
-  circuit of the domain, or a part of a batch of the domain that passes the batch check,
-  `GordieHowe.RealizedProgram.BatchOk`, on columns or on bits);
+  (`GordieHowe.RealizedProgram.LoweredOwn`: an affine row or a family of rows on views of the
+  domain, placed in a GKR circuit of the domain, or a part of a batch of the domain that passes the
+  batch check, `GordieHowe.RealizedProgram.BatchOk`, on columns or on bits);
 * every group of every lookup table has its LogUp identity as a realization circuit of a GKR
-  circuit of a domain (`GordieHowe.RealizedProgram.logupAnyB`), and a value of `α`'s field holds every table's
-  challenge (`GordieHowe.RealizedProgram.alphaNodeB`);
+  circuit of a domain, and a value of `α`'s field holds every table's challenge
+  (`GordieHowe.RealizedProgram.chalNode`);
 * every value whose type its packing-tree node enforces is a committed value of its domain whose
   node is its type's subfield (or, for a `Bit` value, a node the model reads as `{0, 1}`,
   `Interp.BitNodes`), a bit view of type `Bit`, or a late value of its domain whose pad space is its
   type's node (`GordieHowe.RealizedProgram.typeOwnB`);
 * every entry of every GKR circuit is a predicate of the program, a LogUp identity of a group of a
-  table, an alignment check or a realization circuit given no meaning (`GordieHowe.RealizedProgram.entryOkB`; no H
-  half of a cross-field `equal`).
+  table, an alignment check or a realization circuit given no meaning
+  (`GordieHowe.RealizedProgram.EntryOk`), or the H half of a cross-field `equal` with a value
+  holding its key (`GordieHowe.RealizedProgram.MacHNode`).
 
 **Soundness** (`GordieHowe.RealizedProgram.realizedAt_of_holds`, `GordieHowe.RealizedProgram.cellsLowering`): where every domain's
 predicate holds on its cells `a d`, the realized program holds at the committed assignment of all
@@ -77,80 +80,63 @@ variable (ir : RealizedProgram)
 
 /-! ## The checks -/
 
-/-- **Predicate `p` is a part of a batch on columns of domain `d` the proof system covers**
-(`RealizedProgram.BatchOk`). -/
-def batchPartB (d p : ℕ) : Bool :=
-  (List.finRange ir.batches.length).any fun b =>
-    ir.colsBatchOkB d b && decide (p ∈ (ir.batch b).parts)
+/-- **Whether a predicate body needs a lowering route** (`Structure.routes`): a field `equal`, a
+`mod_0` or a product-form `mod_q`, the predicates `CellsValid.equal` covers. -/
+def _root_.GordieHowe.RealizedProgram.PredBody.needsRoute (b : PredBody) : Bool :=
+  b.isEqual || b.isIntEq || b.isProductMod
 
-/-- **Predicate `p` is a part of a batch on bits of domain `d` the proof system covers**
-(`RealizedProgram.BatchOk`). -/
-def bitsBatchPartB (d p : ℕ) : Bool :=
-  (List.finRange ir.batches.length).any fun b =>
-    ir.bitsBatchOkB d b && decide (p ∈ (ir.batch b).parts)
+/-- **Whether a predicate body needs its H half hosted by a circuit** (`Structure.macHosts`): a
+hosted cross-field `equal` (no `x`-side blind) with no `<mac>.H` predicate. -/
+def _root_.GordieHowe.RealizedProgram.PredBody.needsH : PredBody → Bool
+  | .cross _ _ _ _ _ real => real.hPredicate.isNone && real.blindX.isNone
+  | _ => false
 
-/-- **Predicate `p` is lowered into domain `d`**, decided (`RealizedProgram.Lowered`): a predicate of the
-program that is an affine row of `d`, a family of rows on views of `d`, a part of a batch of `d` the
-proof system covers, on columns or on bits, a quadratic triple of `d`, or a field `equal` or a `mod_0`
-placed in a GKR circuit of `d`. -/
-def loweredB (d p : ℕ) : Bool :=
-  decide (p < ir.predicates.length) &&
-    (ir.isRow d p || ir.isViewRow d p || ir.batchPartB d p || ir.bitsBatchPartB d p ||
-      ir.isQuad d p ||
-      (((ir.predicate p).body.isEqual || (ir.predicate p).body.isIntEq) &&
-        (List.finRange ir.circuits.length).any fun c =>
-          decide ((ir.circuit c).domain = d) &&
-            (decide (CircuitEntry.pred p ∈ (ir.circuit c).entries) ||
-              decide (CircuitEntry.typeCheck p ∈ (ir.circuit c).entries))))
+/-- **Predicate `p` is lowered into its own domain** (`PredBody.domain?`), a domain of the program
+(`RealizedProgram.Lowered`). -/
+def LoweredOwn (p : ℕ) : Prop :=
+  ∃ d : Fin ir.domains.length, (ir.predicate p).body.domain? = some (d : ℕ) ∧ ir.Lowered d p
 
-/-- **Predicate `p` is lowered into its own domain** (`PredBody.domain?`), a domain of the
-program. -/
-def loweredOwnB (p : ℕ) : Bool :=
-  match (ir.predicate p).body.domain? with
-  | some d => decide (d < ir.domains.length) && ir.loweredB d p
-  | none => false
-
-/-- **The LogUp identity of group `g` of table `t` is a realization circuit of a domain**: an
-entry of a GKR circuit whose domain is a domain of the program. -/
-def logupAnyB (t g : ℕ) : Bool :=
-  (List.finRange ir.circuits.length).any fun c =>
-    decide ((ir.circuit c).domain < ir.domains.length) &&
-      decide (CircuitEntry.realization (.logup t g) ∈ (ir.circuit c).entries)
+/-- **Predicate `p` is realized through its convolutions' realizations** (`Target.realized q`):
+a field `equal` or a `mod_0` of a domain of the program whose target is `realized q`, admitted by
+`RealizedAdmits` (its field equation is `q`'s, the convolutions read through their spectral
+realizations, `fieldEq_of_realized`). -/
+def RealizedOwn (p : ℕ) : Prop :=
+  match (ir.predicate p).body with
+  | .equal d e e' (.realized q) => d < ir.domains.length ∧ ir.RealizedAdmits d e e' q
+  | .mod d 0 e e' real =>
+    match real.target with
+    | some (.realized q) => d < ir.domains.length ∧ ir.RealizedAdmits d e e' q
+    | _ => False
+  | _ => False
 
 /-- **The H half of cross-field `equal` `p` is stated by the compiler's own circuit, with a value
 holding its key**: `p` is a hosted cross-field `equal` (no `x`-side blind) with no `<mac>.H`
 predicate whose key is held by a value of the key's field (`RealizedProgram.chalNode`). -/
-def macHNodeB (p : ℕ) : Bool :=
-  match (ir.predicate p).body with
-  | .cross _ _ _ _ _ real =>
-    match real.hPredicate, real.blindX, ir.chalNode real.key with
-    | none, none, some v => decide (ir.valueField v = ir.chalField real.key)
-    | _, _, _ => false
-  | _ => false
+def MacHNode (p : ℕ) : Prop :=
+  ∃ dx x dy y k real v, (ir.predicate p).body = .cross dx x dy y k real ∧
+    real.hPredicate = none ∧ real.blindX = none ∧ ir.chalNode real.key = some v ∧
+      ir.valueField v = ir.chalField real.key
 
-/-- **The H half of cross-field `equal` `p` is a realization circuit of a domain**: an entry of a
-GKR circuit whose domain is a domain of the program. -/
-def macHAnyB (p : ℕ) : Bool :=
-  (List.finRange ir.circuits.length).any fun c =>
-    decide ((ir.circuit c).domain < ir.domains.length) &&
-      decide (CircuitEntry.realization (.macH p) ∈ (ir.circuit c).entries)
+/-- **An entry of a GKR circuit the honest prover covers**: a Boolean check or a placed predicate of
+the program, the LogUp identity of a group of a table, an alignment check, or a realization circuit
+given no meaning (`named`, `unmodeled`), or the H half of a cross-field `equal` with a value holding
+its key (`MacHNode`). -/
+def EntryOk : CircuitEntry → Prop
+  | .typeCheck p => p < ir.predicates.length
+  | .alignment _ => True
+  | .pred p => p < ir.predicates.length
+  | .realization (.logup t g) => t < ir.tables.length ∧ g < ir.groupCountOf t
+  | .realization (.macH p) => p < ir.predicates.length ∧ ir.MacHNode p
+  | .realization (.named _) => True
+  | .realization (.unmodeled _) => True
 
-/-- **The H half of predicate `p` is covered**: a hosted cross-field `equal` (no `x`-side blind)
-with no `<mac>.H` predicate has its H half as a realization circuit of a domain (`macHAnyB`); any
-other predicate needs nothing. -/
-def macHCoveredB (p : ℕ) : Bool :=
-  match (ir.predicate p).body with
-  | .cross _ _ _ _ _ real =>
-    match real.hPredicate, real.blindX with
-    | none, none => ir.macHAnyB p
-    | _, _ => true
-  | _ => true
-
-/-- **A value of `α`'s field holds table `t`'s challenge** (`RealizedProgram.chalNode`). -/
-def alphaNodeB (t : ℕ) : Bool :=
-  match ir.chalNode (ir.alphaOf t) with
-  | some v => decide (ir.valueField v = ir.chalField (ir.alphaOf t))
-  | none => false
+/-- **The H half of predicate `p` is covered**: a predicate that needs its H half hosted
+(`PredBody.needsH`) has it as a realization circuit of a GKR circuit of a domain; any other
+predicate needs nothing. -/
+def MacHCovered (p : ℕ) : Prop :=
+  (ir.predicate p).body.needsH = true → ∃ c : Fin ir.circuits.length,
+    (ir.circuit c).domain < ir.domains.length ∧
+      CircuitEntry.realization (.macH p) ∈ (ir.circuit c).entries
 
 /-- **Value `v`'s type is its cells' base in domain `d`**: a committed value of `d` (kind `priv`)
 typed `Field`, or typed `Sub(E)` at the node `E`. -/
@@ -187,157 +173,63 @@ def typeOwnB (v : ℕ) : Bool :=
     (ir.typeAtCellB (ir.value v).domain v || ir.bitViewTypeB v ||
       ir.lateTypeB (ir.value v).domain v)
 
-/-- **An entry of a GKR circuit the honest prover covers**: a Boolean check or a placed predicate of
-the program, the LogUp identity of a group of a table, an alignment check, or a realization circuit
-given no meaning (`named`, `unmodeled`), or the H half of a cross-field `equal` with a value holding
-its key (`macHNodeB`). -/
-def entryOkB : CircuitEntry → Bool
-  | .typeCheck p => decide (p < ir.predicates.length)
-  | .alignment _ => true
-  | .pred p => decide (p < ir.predicates.length)
-  | .realization (.logup t g) => decide (t < ir.tables.length) && decide (g < ir.groupCountOf t)
-  | .realization (.macH p) => decide (p < ir.predicates.length) && ir.macHNodeB p
-  | .realization (.named _) => true
-  | .realization (.unmodeled _) => true
-
-/-- **Predicate `p` is realized through its convolutions' realizations** (`Target.realized q`):
-a field `equal` or a `mod_0` of a domain of the program whose target is `realized q`, admitted by
-`RealizedAdmits` (its field equation is `q`'s, the convolutions read through their spectral
-realizations, `fieldEq_of_realized`). -/
-def realizedOwnB (p : ℕ) : Bool :=
-  match (ir.predicate p).body with
-  | .equal d e e' (.realized q) => decide (d < ir.domains.length ∧ ir.RealizedAdmits d e e' q)
-  | .mod d 0 e e' real =>
-    match real.target with
-    | some (.realized q) => decide (d < ir.domains.length ∧ ir.RealizedAdmits d e e' q)
-    | _ => false
-  | _ => false
-
 /-- **The program's GKR circuits and affine rows enforce its realized program in its domains** (see
 the module docstring): a domain, every field `equal` and `mod_0` lowered into its domain, every
 group's LogUp identity a realization circuit of a domain with `α` held by a value of its field,
 every node-typed value a committed value at its type's node, and every circuit entry covered by the
-honest prover. -/
+honest prover. Decided at the structure records' pointers (`cellsValid_of_placementB`,
+`GordieHowe/Language/RealizedProgram/Placement.lean`). -/
 structure CellsValid : Prop where
   /-- The program has a domain. -/
   nonempty : ir.domains.length ≠ 0
   /-- Every field `equal` and every `mod_0` is lowered into its domain, or realized through its
   convolutions' realizations. -/
-  equal : ∀ p < ir.predicates.length,
-    ((ir.predicate p).body.isEqual || (ir.predicate p).body.isIntEq) = true →
-      (ir.loweredOwnB p || ir.realizedOwnB p) = true
+  equal : ∀ p < ir.predicates.length, (ir.predicate p).body.needsRoute = true →
+    ir.LoweredOwn p ∨ ir.RealizedOwn p
   /-- Every group's LogUp identity is a realization circuit of a domain. -/
-  logup : ∀ t < ir.tables.length, ∀ g < ir.groupCountOf t, ir.logupAnyB t g = true
+  logup : ∀ t < ir.tables.length, ∀ g < ir.groupCountOf t, ∃ c : Fin ir.circuits.length,
+    (ir.circuit c).domain < ir.domains.length ∧
+      CircuitEntry.realization (.logup t g) ∈ (ir.circuit c).entries
   /-- A value of `α`'s field holds every table's challenge. -/
-  alpha : ∀ t < ir.tables.length, ir.alphaNodeB t = true
+  alpha : ∀ t < ir.tables.length, ∃ v, ir.chalNode (ir.alphaOf t) = some v ∧
+    ir.valueField v = ir.chalField (ir.alphaOf t)
   /-- Every node-typed value is a committed value of its domain at its type's node. -/
   types : ∀ v < ir.values.length, (ir.value v).typeSource = .node → ir.typeOwnB v = true
   /-- Every entry of every GKR circuit is covered by the honest prover. -/
-  entries : ∀ c < ir.circuits.length, ∀ e ∈ (ir.circuit c).entries, ir.entryOkB e = true
+  entries : ∀ c < ir.circuits.length, ∀ e ∈ (ir.circuit c).entries, ir.EntryOk e
   /-- Every H half stated by the compiler's own circuit is a realization circuit of a domain. -/
-  macH : ∀ p < ir.predicates.length, ir.macHCoveredB p = true
-
-theorem cellsValid_iff : ir.CellsValid ↔
-    ir.domains.length ≠ 0 ∧
-      (∀ p < ir.predicates.length,
-        ((ir.predicate p).body.isEqual || (ir.predicate p).body.isIntEq) = true →
-          (ir.loweredOwnB p || ir.realizedOwnB p) = true) ∧
-      (∀ t < ir.tables.length, ∀ g < ir.groupCountOf t, ir.logupAnyB t g = true) ∧
-      (∀ t < ir.tables.length, ir.alphaNodeB t = true) ∧
-      (∀ v < ir.values.length, (ir.value v).typeSource = .node → ir.typeOwnB v = true) ∧
-      (∀ c < ir.circuits.length, ∀ e ∈ (ir.circuit c).entries, ir.entryOkB e = true) ∧
-      ∀ p < ir.predicates.length, ir.macHCoveredB p = true :=
-  ⟨fun h => ⟨h.nonempty, h.equal, h.logup, h.alpha, h.types, h.entries, h.macH⟩,
-    fun ⟨h0, h1, h2, h3, h4, h5, h6⟩ => ⟨h0, h1, h2, h3, h4, h5, h6⟩⟩
-
-instance : Decidable ir.CellsValid := decidable_of_iff _ ir.cellsValid_iff.symm
+  macH : ∀ p < ir.predicates.length, ir.MacHCovered p
 
 variable {ir}
 
 /-! ## The checks' meaning -/
 
-/-- **A predicate decided lowered is lowered** (`RealizedProgram.Lowered`). -/
-theorem lowered_of_loweredB {d p : ℕ} (h : ir.loweredB d p = true) : ir.Lowered d p := by
-  simp only [loweredB, batchPartB, bitsBatchPartB, Bool.and_eq_true, Bool.or_eq_true,
-    decide_eq_true_eq, List.any_eq_true, List.mem_finRange, true_and] at h
-  obtain ⟨hp, ((((hrow | hvrow) | ⟨b, hb, hmem⟩) | ⟨b, hb, hmem⟩) | hq) | ⟨heq, c, hc, hmem⟩⟩ := h
-  · exact .row hp hrow
-  · exact .viewRow hp hvrow
-  · exact .batch ⟨b, hb⟩ hmem
-  · exact .bitsBatch b hb hmem
-  · exact .quad hp hq
-  · exact .placed ⟨c, hc⟩ (Bool.or_eq_true_iff.2 heq) hmem
-
-/-- **A predicate decided lowered into its own domain** is lowered into a domain `d` of the
-program, its domain. -/
-theorem exists_lowered_of_loweredOwnB {p : ℕ} (h : ir.loweredOwnB p = true) :
-    ∃ d : Fin ir.domains.length, (ir.predicate p).body.domain? = some (d : ℕ) ∧ ir.Lowered d p := by
-  unfold loweredOwnB at h
-  split at h
-  · rename_i d hd
-    simp only [Bool.and_eq_true, decide_eq_true_eq] at h
-    exact ⟨⟨d, h.1⟩, hd, lowered_of_loweredB h.2⟩
-  · cases h
-
 /-- **A field `equal` whose target is no realization's is not realized.** -/
-theorem realizedOwnB_equal {p d : ℕ} {e e' : Expr} {t : Target}
+theorem not_realizedOwn_equal {p d : ℕ} {e e' : Expr} {t : Target}
     (hb : (ir.predicate p).body = .equal d e e' t) (ht : t.isRealized = false) :
-    ir.realizedOwnB p = false := by
-  unfold realizedOwnB
+    ¬ ir.RealizedOwn p := by
+  unfold RealizedOwn
   rw [hb]
   cases t <;> simp_all [Target.isRealized]
 
 /-- **A realized field `equal`**: its target is `realized q`, admitted. -/
 theorem realizedAdmits_of_equal {p d : ℕ} {e e' : Expr} {t : Target}
-    (hb : (ir.predicate p).body = .equal d e e' t) (h : ir.realizedOwnB p = true) :
+    (hb : (ir.predicate p).body = .equal d e e' t) (h : ir.RealizedOwn p) :
     d < ir.domains.length ∧ ∃ q, ir.RealizedAdmits d e e' q := by
-  unfold realizedOwnB at h
+  unfold RealizedOwn at h
   rw [hb] at h
   cases t <;> simp_all
   exact ⟨_, h.2⟩
 
 /-- **A realized `mod_0`**: its target is `realized q`, admitted. -/
 theorem realizedAdmits_of_mod {p d : ℕ} {e e' : Expr} {real : ModRealization}
-    (hb : (ir.predicate p).body = .mod d 0 e e' real) (h : ir.realizedOwnB p = true) :
+    (hb : (ir.predicate p).body = .mod d 0 e e' real) (h : ir.RealizedOwn p) :
     d < ir.domains.length ∧ ∃ q, ir.RealizedAdmits d e e' q := by
-  unfold realizedOwnB at h
+  unfold RealizedOwn at h
   rw [hb] at h
   simp only at h
   split at h
-  · simp only [decide_eq_true_eq] at h
-    exact ⟨h.1, _, h.2⟩
-  · cases h
-
-/-- **A LogUp identity decided in a domain** is an entry of a GKR circuit of a domain of the
-program. -/
-theorem exists_logup_of_logupAnyB {t g : ℕ} (h : ir.logupAnyB t g = true) :
-    ∃ c : Fin ir.circuits.length, (ir.circuit c).domain < ir.domains.length ∧
-      CircuitEntry.realization (.logup t g) ∈ (ir.circuit c).entries := by
-  simp only [logupAnyB, List.any_eq_true, List.mem_finRange, true_and, Bool.and_eq_true,
-    decide_eq_true_eq] at h
-  exact h
-
-/-- **An H half decided in a domain** is an entry of a GKR circuit of a domain of the program. -/
-theorem exists_macH_of_macHAnyB {p : ℕ} (h : ir.macHAnyB p = true) :
-    ∃ c : Fin ir.circuits.length, (ir.circuit c).domain < ir.domains.length ∧
-      CircuitEntry.realization (.macH p) ∈ (ir.circuit c).entries := by
-  simp only [macHAnyB, List.any_eq_true, List.mem_finRange, true_and, Bool.and_eq_true,
-    decide_eq_true_eq] at h
-  exact h
-
-/-- **An H half with its key decided held**: `p` is a cross-field `equal` with no `<mac>.H`
-predicate whose key is held by a value of the key's field. -/
-theorem exists_of_macHNodeB {p : ℕ} (h : ir.macHNodeB p = true) :
-    ∃ dx x dy y k real v, (ir.predicate p).body = .cross dx x dy y k real ∧
-      real.hPredicate = none ∧ real.blindX = none ∧ ir.chalNode real.key = some v ∧
-        ir.valueField v = ir.chalField real.key := by
-  unfold macHNodeB at h
-  split at h
-  · rename_i dx x dy y k real hb
-    split at h
-    · rename_i v hn hbx hv
-      exact ⟨dx, x, dy, y, k, real, v, hb, hn, hbx, hv, of_decide_eq_true h⟩
-    · cases h
+  · exact ⟨h.1, _, h.2⟩
   · cases h
 
 /-- **The H half at an environment's reader is `MacHHoldsAt` at the key**, when a value of the key's
@@ -350,14 +242,6 @@ theorem macHHolds_reader_iff {I : Interp} (e : ir.Env I) {p dx : ℕ} {x : Expr}
       ir.MacHHoldsAt (ir.reader e) dx x real (castElt (e.chal real.key 0)) := by
   simp only [MacHHolds, hb, hn, hv]
   rw [← ir.reader_chalNode e hv hf, castElt_castElt_eq, if_pos hf]
-
-/-- **A table's challenge decided held** is held by a value of `α`'s field. -/
-theorem exists_chalNode_of_alphaNodeB {t : ℕ} (h : ir.alphaNodeB t = true) :
-    ∃ v, ir.chalNode (ir.alphaOf t) = some v ∧ ir.valueField v = ir.chalField (ir.alphaOf t) := by
-  unfold alphaNodeB at h
-  split at h
-  · exact ⟨_, by assumption, of_decide_eq_true h⟩
-  · cases h
 
 /-- **A node-typed value decided at its cells** is a committed value of the domain, of kind
 `priv`, whose type is `Field` or its node's subfield. -/
@@ -449,9 +333,8 @@ theorem holdsWith_of_holds_nonrealized (hv : ir.CellsValid) (hl : ir.Local treeN
           (ir.predicate p).body := by
   intro pid hpid d e e' t hb ht
   have heq : (ir.predicate pid).body.isEqual = true := by rw [hb]; rfl
-  have hown := hv.equal pid hpid (by rw [heq]; rfl)
-  rw [realizedOwnB_equal hb ht, Bool.or_false] at hown
-  obtain ⟨dd, hd, hlow⟩ := exists_lowered_of_loweredOwnB hown
+  have hown := hv.equal pid hpid (by simp [PredBody.needsRoute, heq])
+  obtain ⟨dd, hd, hlow⟩ := hown.resolve_right (not_realizedOwn_equal hb ht)
   exact placedHolds_of_isEqual heq
     ((placedHolds_cellValuation_iff hl a dd hpid hd).1 (placedHolds_of_holds hadd hz (h dd) hlow))
 
@@ -497,8 +380,9 @@ theorem realizedAt_of_holds (hv : ir.CellsValid) (hl : ir.Local treeNodes)
     ir.Realized I x (ir.ofAllCells I a) r where
   equal p hp heq := by
     obtain ⟨pid, hpid, rfl⟩ := exists_index_of_mem hp
-    have hown := hv.equal pid hpid (by rw [heq]; rfl)
-    by_cases hre : ir.realizedOwnB pid = true
+    rcases hv.equal pid hpid (by simp [PredBody.needsRoute, heq]) with ⟨d, hd, hlow⟩ | hre
+    · exact placedHolds_of_isEqual heq
+        ((placedHolds_cellValuation_iff hl a d hpid hd).1 (placedHolds_of_holds hadd hz (h d) hlow))
     · obtain ⟨d, e, e', t, hb⟩ : ∃ d e e' t, (ir.predicate pid).body = .equal d e e' t := by
         revert heq
         cases (ir.predicate pid).body <;> simp [PredBody.isEqual]
@@ -508,30 +392,43 @@ theorem realizedAt_of_holds (hv : ir.CellsValid) (hl : ir.Local treeNodes)
       exact fieldEq_of_holds_realized hv hl hadd hz hwf hI hL h hpid hpo
         (by rw [hb]; simp [PredBody.exprs]) (by rw [hb]; simp [PredBody.exprs])
         (by have := hpo.2; rw [hb] at this; exact this.symm) hd hR
-    · rw [Bool.not_eq_true] at hre
-      rw [hre, Bool.or_false] at hown
-      obtain ⟨d, hd, hlow⟩ := exists_lowered_of_loweredOwnB hown
-      exact placedHolds_of_isEqual heq
-        ((placedHolds_cellValuation_iff hl a d hpid hd).1 (placedHolds_of_holds hadd hz (h d) hlow))
   integer p hp dd lhs rhs real hb := by
     obtain ⟨pid, hpid, rfl⟩ := exists_index_of_mem hp
-    have hown := hv.equal pid hpid (by rw [hb]; simp [PredBody.isIntEq])
-    by_cases hre : ir.realizedOwnB pid = true
+    rcases hv.equal pid hpid (by rw [hb]; simp [PredBody.needsRoute, PredBody.isIntEq]) with
+      ⟨d, hd, hlow⟩ | hre
+    · have hl' := (placedHolds_cellValuation_iff hl a d hpid hd).1
+        (placedHolds_of_holds hadd hz (h d) hlow)
+      rw [hb, placedHolds_mod_zero_iff] at hl'
+      exact hl'
     · obtain ⟨hd, q, hR⟩ := realizedAdmits_of_mod hb hre
       have hpo := hwf.predicates _ hp
       exact fieldEq_of_holds_realized hv hl hadd hz hwf hI hL h hpid hpo
         (by rw [hb]; simp [PredBody.exprs]) (by rw [hb]; simp [PredBody.exprs])
         (by have := hpo.2; rw [hb] at this; exact this.symm) hd hR
-    · rw [Bool.not_eq_true] at hre
-      rw [hre, Bool.or_false] at hown
-      obtain ⟨d, hd, hlow⟩ := exists_lowered_of_loweredOwnB hown
-      have hl' := (placedHolds_cellValuation_iff hl a d hpid hd).1
-        (placedHolds_of_holds hadd hz (h d) hlow)
-      rw [hb, placedHolds_mod_zero_iff] at hl'
-      exact hl'
+  product p hp dd m lhs rhs real hb hf h2 := by
+    obtain ⟨pid, hpid, rfl⟩ := exists_index_of_mem hp
+    have hown := hv.equal pid hpid
+      (by rw [hb]; simp [PredBody.needsRoute, PredBody.isProductMod, hf])
+    have hre : ¬ ir.RealizedOwn pid := by
+      unfold RealizedOwn
+      rw [hb]
+      cases m with
+      | zero => omega
+      | succ k => exact id
+    obtain ⟨d, hd, hlow⟩ := hown.resolve_right hre
+    have hl' := (placedHolds_cellValuation_iff hl a d hpid hd).1
+      (placedHolds_of_holds hadd hz (h d) hlow)
+    have hnf : ¬ (m = 0 ∨ real.form = .field) := by
+      rintro (h0 | h0)
+      · omega
+      · rw [h0] at hf
+        cases hf
+    rw [hb] at hl'
+    simp only [PlacedHolds, if_neg hnf, if_pos (And.intro hf h2)] at hl'
+    exact hl'
   logup t ht g hg := by
-    obtain ⟨c, hcd, hc⟩ := exists_logup_of_logupAnyB (hv.logup t ht g hg)
-    obtain ⟨v, hnode, hf⟩ := exists_chalNode_of_alphaNodeB (hv.alpha t ht)
+    obtain ⟨c, hcd, hc⟩ := hv.logup t ht g hg
+    obtain ⟨v, hnode, hf⟩ := hv.alpha t ht
     have hcirc : ir.CircuitHolds I c
         (ir.cellValuation I (ir.circuit c).domain x r (a ⟨_, hcd⟩)) :=
       (h ⟨_, hcd⟩).circuit ⟨c, rfl⟩
@@ -539,12 +436,8 @@ theorem realizedAt_of_holds (hv : ir.CellsValid) (hl : ir.Local treeNodes)
       ((logupHoldsAt_cellValuation_iff hl a ⟨_, hcd⟩ rfl hc).1 (hcirc _ hc))
   macH p hp dx x' dy y k real hb hn hbx := by
     obtain ⟨pid, hpid, rfl⟩ := exists_index_of_mem hp
-    have hcov := hv.macH pid hpid
-    simp only [macHCoveredB, hb, hn, hbx] at hcov
-    obtain ⟨c, hcd, hc⟩ := exists_macH_of_macHAnyB hcov
-    have hok := hv.entries c c.2 _ hc
-    simp only [entryOkB, Bool.and_eq_true] at hok
-    obtain ⟨dx', x'', dy', y', k', real', v, hb', hn', -, hv', hf⟩ := exists_of_macHNodeB hok.2
+    obtain ⟨c, hcd, hc⟩ := hv.macH pid hpid (by simp [PredBody.needsH, hb, hn, hbx])
+    obtain ⟨-, dx', x'', dy', y', k', real', v, hb', hn', -, hv', hf⟩ := hv.entries c c.2 _ hc
     rw [hb] at hb'
     cases hb'
     have hcirc : ir.CircuitHolds I c

@@ -15,8 +15,7 @@ source program's at its own late values, the late generators' at every other) an
 environment reads them: the source late values as the execution's, the generated ones as their
 generators' (`honestEnvC_late_eq`), so a value reading no generated late value reads at the honest
 environment as at the source environment with the source late values
-(`reader_honestEnvC_srcEnvL_of_noGen`). These are `honestEnv_late_eq` and its companions with the
-generators read off the certificate.
+(`reader_honestEnvC_srcEnvL_of_noGen`).
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -30,7 +29,7 @@ variable {ir : RealizedProgram} {I : Interp}
 variable (ir I) in
 /-- **The facts the late generators' values need**: a tag's pad space is the whole field, every pad
 space of a late value contains the naturals, and every late value has a pad cell in its domain at
-each coordinate (`GenFacts` with the tags read off `G`). -/
+each coordinate. -/
 structure CGenFacts (G : Gens) : Prop where
   /-- A tag's pad space is the whole field. -/
   tagFull : ∀ v < ir.values.length, ∀ p, G.at v = .tag p → (ir.value v).padSpace = .full

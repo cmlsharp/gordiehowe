@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Language.RealizedProgram.Lemmas
 public import GordieHowe.Language.RealizedProgram.NatTrie
+public import GordieHoweNative.Language.RealizedProgram.Check
 
 @[expose] public section
 
@@ -45,6 +46,9 @@ lookup `List.getD l k` per position, which costs `k` steps; the predicates are l
 `NatTrie` (`predT`). The kernel does not share the evaluation of a term an argument passes into a
 loop: an index map's range check compares its largest entry with the operand's length once
 (`IndexMap.inRangeNat`), not each run's ends.
+
+The definitions are in `GordieHoweNative/Language/RealizedProgram/Check.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -53,16 +57,13 @@ open Export
 
 /-! ## Lists -/
 
-/-- **A predicate holds at every position of a list**, the positions counted from `i`. -/
-def allIdx {α : Type} (p : ℕ → α → Bool) : List α → ℕ → Bool
-  | [], _ => true
-  | x :: xs, i => p i x && allIdx p xs (i + 1)
+theorem allIdx_nil {α : Type} (p : ℕ → α → Bool) (i : ℕ) : allIdx p [] i = true := rfl
 
 theorem allIdx_iff {α : Type} [Inhabited α] (p : ℕ → α → Bool) :
     ∀ (l : List α) (i : ℕ), allIdx p l i = true ↔ ∀ j < l.length, p (i + j) (l.getD j default) = true
-  | [], i => by simp [allIdx]
+  | [], i => by simp [allIdx_nil]
   | x :: xs, i => by
-    rw [allIdx, Bool.and_eq_true, allIdx_iff p xs (i + 1)]
+    rw [allIdx_cons, Bool.and_eq_true, allIdx_iff p xs (i + 1)]
     constructor
     · rintro ⟨h0, h⟩ j hj
       cases j with
@@ -75,10 +76,204 @@ theorem allIdx_iff {α : Type} [Inhabited α] (p : ℕ → α → Bool) :
       have := h (j + 1) (by simpa using hj)
       simpa [Nat.add_assoc, Nat.add_comm 1 j] using this
 
-/-- **The elements of `l` added to `acc`**, each once (`List.insert`). -/
-def insertAll {α : Type} [DecidableEq α] : List α → List α → List α
-  | acc, [] => acc
-  | acc, x :: xs => insertAll (acc.insert x) xs
+/-! ## Ranges of positions
+
+A check of every position of a long list splits into checks of the ranges of positions `[i, j)`
+(`allIdxIn`), which join with no re-check (`allIdxIn_append`) and give the whole check
+(`allIdx_of_allIdxIn`); a check of every number below a bound splits the same way (`allNatIn`). The
+kernel evaluates a range's check by walks written with the recursors: `dropK` passes the positions
+before `i` with one `List.casesOn` each, evaluating none of their elements, and `allIdxN` checks the
+next `j - i` positions, matching on the position (`Nat.casesOn`) at each step, so the kernel keeps it
+a literal. Compiled code runs `allIdx` of `List.drop` and `List.take` (`allIdxIn_csimp`). -/
+
+/-- **`l.drop n`**, by the recursor on `n` (`dropK_eq`), each step matching on the list. -/
+noncomputable def dropK {α : Type} (n : ℕ) (l : List α) : List α :=
+  @Nat.rec (fun _ => List α → List α) (fun l => l)
+    (fun _ ih l => @List.casesOn α (fun _ => List α) l [] fun _ xs => ih xs) n l
+
+theorem dropK_eq {α : Type} : ∀ (n : ℕ) (l : List α), dropK n l = l.drop n
+  | 0, _ => rfl
+  | _ + 1, [] => rfl
+  | n + 1, _ :: xs => dropK_eq n xs
+
+/-- **`l.drop n`**: the code compiled for `dropK`. -/
+def dropC {α : Type} (n : ℕ) (l : List α) : List α := l.drop n
+
+@[csimp] theorem dropK_csimp : @dropK = @dropC := by
+  funext α n l
+  exact dropK_eq n l
+
+/-- **`allIdx p (l.take n) i`**, by the recursor on `n` (`allIdxN_eq`). -/
+noncomputable def allIdxN {α : Type} (p : ℕ → α → Bool) (n : ℕ) : List α → ℕ → Bool :=
+  @Nat.rec (fun _ => List α → ℕ → Bool) (fun _ _ => true)
+    (fun _ ih l i => @List.casesOn α (fun _ => Bool) l true fun x xs =>
+      p i x && @Nat.casesOn (fun _ => Bool) i (ih xs 1) fun k => ih xs (k + 2)) n
+
+theorem allIdxN_succ_cons {α : Type} (p : ℕ → α → Bool) (n : ℕ) (x : α) (xs : List α) (i : ℕ) :
+    allIdxN p (n + 1) (x :: xs) i = (p i x && allIdxN p n xs (i + 1)) := by
+  cases i <;> rfl
+
+theorem allIdxN_eq {α : Type} (p : ℕ → α → Bool) :
+    ∀ (n : ℕ) (l : List α) (i : ℕ), allIdxN p n l i = allIdx p (l.take n) i
+  | 0, l, _ => by rw [List.take_zero]; rfl
+  | _ + 1, [], _ => rfl
+  | n + 1, x :: xs, i => by
+    rw [allIdxN_succ_cons, allIdxN_eq p n xs, List.take_succ_cons, allIdx_cons]
+
+/-- **A predicate holds at every position of `[i, j)` of a list** (`allIdxIn_iff`), by the
+recursors (see above). -/
+noncomputable def allIdxIn {α : Type} (p : ℕ → α → Bool) (l : List α) (i j : ℕ) : Bool :=
+  allIdxN p (j - i) (dropK i l) i
+
+/-- **`allIdxIn`, by `List.drop` and `List.take`**: the code compiled for it. -/
+def allIdxInC {α : Type} (p : ℕ → α → Bool) (l : List α) (i j : ℕ) : Bool :=
+  allIdx p ((l.drop i).take (j - i)) i
+
+theorem allIdxIn_eq {α : Type} (p : ℕ → α → Bool) (l : List α) (i j : ℕ) :
+    allIdxIn p l i j = allIdx p ((l.drop i).take (j - i)) i := by
+  rw [allIdxIn, allIdxN_eq, dropK_eq]
+
+@[csimp] theorem allIdxIn_csimp : @allIdxIn = @allIdxInC := by
+  funext α p l i j
+  exact allIdxIn_eq p l i j
+
+theorem allIdxIn_iff {α : Type} [Inhabited α] (p : ℕ → α → Bool) (l : List α) (i j : ℕ) :
+    allIdxIn p l i j = true ↔
+      ∀ k, i ≤ k → k < j → k < l.length → p k (l.getD k default) = true := by
+  rw [allIdxIn_eq, allIdx_iff]
+  simp only [List.length_take, List.length_drop, List.getD_eq_getElem?_getD, List.getElem?_take,
+    List.getElem?_drop]
+  constructor
+  · intro h k hik hkj hkl
+    have := h (k - i) (by omega)
+    simp only [show k - i < j - i by omega, ite_true, Nat.add_sub_cancel' hik] at this
+    exact this
+  · intro h t ht
+    simp only [show t < j - i by omega, ite_true]
+    exact h (i + t) (by omega) (by omega) (by omega)
+
+/-- **Two consecutive ranges of positions** check as one. -/
+theorem allIdxIn_append {α : Type} [Inhabited α] {p : ℕ → α → Bool} {l : List α} {i j k : ℕ}
+    (h₁ : allIdxIn p l i j = true) (h₂ : allIdxIn p l j k = true) : allIdxIn p l i k = true := by
+  rw [allIdxIn_iff] at h₁ h₂ ⊢
+  intro t hit htk htl
+  by_cases htj : t < j
+  · exact h₁ t hit htj htl
+  · exact h₂ t (by omega) htk htl
+
+/-- **The positions `[0, n)` of a list of at most `n` elements** check as the whole list. -/
+theorem allIdx_of_allIdxIn {α : Type} [Inhabited α] {p : ℕ → α → Bool} {l : List α} {n : ℕ}
+    (h : allIdxIn p l 0 n = true) (hn : l.length ≤ n) : allIdx p l 0 = true := by
+  rw [allIdxIn_iff] at h
+  rw [allIdx_iff]
+  intro t ht
+  rw [Nat.zero_add]
+  exact h t (Nat.zero_le _) (by omega) ht
+
+/-- **A check of every element is one of every position.** -/
+theorem all_eq_allIdx {α : Type} (f : α → Bool) :
+    ∀ (l : List α) (i : ℕ), l.all f = allIdx (fun _ x => f x) l i
+  | [], _ => rfl
+  | x :: xs, i => by rw [List.all_cons, allIdx_cons, all_eq_allIdx f xs (i + 1)]
+
+/-- **Two checks of every position, in one walk.** -/
+theorem allIdx_and {α : Type} (p q : ℕ → α → Bool) :
+    ∀ (l : List α) (i : ℕ), allIdx (fun k x => p k x && q k x) l i = (allIdx p l i && allIdx q l i)
+  | [], _ => rfl
+  | x :: xs, i => by
+    rw [allIdx_cons, allIdx_cons, allIdx_cons, allIdx_and p q xs (i + 1)]
+    cases p i x <;> cases q i x <;> simp
+
+/-- **The bit set of the failing positions**: bit `v` is set exactly when `v` is the position,
+counted from `i`, of an entry failing `f` there. -/
+theorem testBit_failBits {α : Type} (f : ℕ → α → Bool) :
+    ∀ (l : List α) (i v : ℕ),
+      (failBits f l i).testBit v = true ↔ ∃ j x, l[j]? = some x ∧ v = i + j ∧ f v x = false
+  | [], i, v => by simp [failBits]
+  | x :: xs, i, v => by
+    rw [failBits_cons, show ∀ a b : ℕ, Nat.lor a b = a ||| b from fun _ _ => rfl, Nat.testBit_or,
+      Bool.or_eq_true, testBit_failBits f xs]
+    constructor
+    · rintro (h | ⟨j, y, hy, rfl, hf⟩)
+      · cases hx : f i x <;> simp only [hx, Bool.cond_true, Bool.cond_false, Nat.zero_testBit,
+          Nat.testBit_two_pow, decide_eq_true_eq, Bool.false_eq_true] at h
+        subst h
+        exact ⟨0, x, rfl, by omega, hx⟩
+      · exact ⟨j + 1, y, by simpa using hy, by omega, hf⟩
+    · rintro ⟨j, y, hy, rfl, hf⟩
+      cases j with
+      | zero =>
+        cases hy
+        rw [Nat.add_zero] at hf
+        left
+        simp [hf]
+      | succ j =>
+        right
+        exact ⟨j, y, by simpa using hy, by omega, hf⟩
+
+/-- **The bit test is `f` at the entry**, a default entry past the end. -/
+theorem bitTest_eq {α : Type} [Inhabited α] (f : ℕ → α → Bool) (l : List α) (v : ℕ) :
+    bitTest (failBits f l 0) l.length (f v default) v = f v (l.getD v default) := by
+  unfold bitTest
+  split_ifs with hv
+  · rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hv, Option.getD_some]
+    cases hf : f v l[v]
+    · rw [Bool.not_eq_false', testBit_failBits]
+      exact ⟨v, l[v], List.getElem?_eq_getElem hv, by omega, hf⟩
+    · rw [Bool.not_eq_true', Bool.eq_false_iff, Ne, testBit_failBits]
+      rintro ⟨j, y, hy, hj, hf'⟩
+      rw [Nat.zero_add] at hj
+      subst hj
+      rw [List.getElem?_eq_getElem hv] at hy
+      cases hy
+      rw [hf] at hf'
+      cases hf'
+  · rw [List.getD_eq_getElem?_getD, List.getElem?_eq_none (by omega), Option.getD_none]
+
+/-- **`(List.range' i n).all P`**, by the recursor on `n` (`allNatN_eq`). -/
+noncomputable def allNatN (P : ℕ → Bool) (n : ℕ) : ℕ → Bool :=
+  @Nat.rec (fun _ => ℕ → Bool) (fun _ => true)
+    (fun _ ih i => P i && @Nat.casesOn (fun _ => Bool) i (ih 1) fun k => ih (k + 2)) n
+
+theorem allNatN_eq (P : ℕ → Bool) : ∀ (n i : ℕ), allNatN P n i = (List.range' i n).all P
+  | 0, _ => rfl
+  | n + 1, i => by
+    have : allNatN P (n + 1) i = (P i && allNatN P n (i + 1)) := by cases i <;> rfl
+    rw [this, allNatN_eq P n (i + 1), List.range'_succ, List.all_cons]
+
+/-- **A predicate holds at every number of `[i, j)`** (`allNatIn_iff`), by the recursor. -/
+noncomputable def allNatIn (P : ℕ → Bool) (i j : ℕ) : Bool := allNatN P (j - i) i
+
+@[csimp] theorem allNatIn_csimp : @allNatIn = @allNatInC := by
+  funext P i j
+  exact allNatN_eq P (j - i) i
+
+theorem allNatIn_iff (P : ℕ → Bool) (i j : ℕ) :
+    allNatIn P i j = true ↔ ∀ k, i ≤ k → k < j → P k = true := by
+  rw [allNatIn, allNatN_eq, List.all_eq_true]
+  simp only [List.mem_range'_1]
+  constructor
+  · intro h k hik hkj
+    exact h k ⟨hik, by omega⟩
+  · intro h k ⟨hik, hkj⟩
+    exact h k hik (by omega)
+
+/-- **Two consecutive ranges of numbers** check as one. -/
+theorem allNatIn_append {P : ℕ → Bool} {i j k : ℕ} (h₁ : allNatIn P i j = true)
+    (h₂ : allNatIn P j k = true) : allNatIn P i k = true := by
+  rw [allNatIn_iff] at h₁ h₂ ⊢
+  intro t hit htk
+  by_cases htj : t < j
+  · exact h₁ t hit htj
+  · exact h₂ t (by omega) htk
+
+/-- **The numbers `[0, n)`** check as every number below `m ≤ n`. -/
+theorem all_range_of_allNatIn {P : ℕ → Bool} {n m : ℕ} (h : allNatIn P 0 n = true) (hm : m ≤ n) :
+    (List.range m).all P = true := by
+  rw [allNatIn_iff] at h
+  rw [List.all_eq_true]
+  intro t ht
+  exact h t (Nat.zero_le _) (by have := List.mem_range.1 ht; omega)
 
 theorem mem_insertAll {α : Type} [DecidableEq α] {x : α} :
     ∀ (acc l : List α), x ∈ insertAll acc l ↔ x ∈ acc ∨ x ∈ l
@@ -89,16 +284,56 @@ theorem mem_insertAll {α : Type} [DecidableEq α] {x : α} :
 
 /-! ## Tables computed in order -/
 
-/-- **A table of a list's entries, each computed from the earlier ones**: entry `j` (the list's
-element `x`) is `F r j x`, `r` reading the entries already set (`d` when unset). -/
-def memoAux {γ β : Type} (F : (ℕ → β) → ℕ → γ → β) (d : β) :
-    List γ → ℕ → NatTrie β → NatTrie β
-  | [], _, t => t
-  | x :: xs, j, t => memoAux F d xs (j + 1) (t.set j (F (t.getD · d) j x))
+theorem memoAuxL_fst {γ β : Type} (F : (ℕ → β) → ℕ → γ → β) (d : β) :
+    ∀ (xs : List γ) (j : ℕ) (t : NatTrie β) (acc : List β),
+      (memoAuxL F d xs j t acc).1 = memoAux F d xs j t
+  | [], _, _, _ => rfl
+  | _ :: xs, j, _, _ => memoAuxL_fst F d xs (j + 1) _ _
 
-/-- **The table of a list's entries** (`memoAux` from the empty table). -/
-def memo {γ β : Type} (F : (ℕ → β) → ℕ → γ → β) (d : β) (L : List γ) : NatTrie β :=
-  memoAux F d L 0 .nil
+theorem memo_eq {γ β : Type} (F : (ℕ → β) → ℕ → γ → β) (d : β) (L : List γ) :
+    memo F d L = memoAux F d L 0 .nil :=
+  memoAuxL_fst F d L 0 .nil []
+
+theorem memoAuxL_snd {γ β : Type} (F : (ℕ → β) → ℕ → γ → β) (d : β) :
+    ∀ (xs : List γ) (j : ℕ) (t : NatTrie β) (acc : List β),
+      (memoAuxL F d xs j t acc).2 = acc.reverse ++ (memoAuxL F d xs j t []).2
+  | [], _, _, _ => by simp [memoAuxL]
+  | x :: xs, j, t, acc => by
+    rw [memoAuxL, memoAuxL, memoAuxL_snd F d xs (j + 1) _ (_ :: acc),
+      memoAuxL_snd F d xs (j + 1) _ [_]]
+    simp
+
+theorem memoAux_getD_lt {γ β : Type} (F : (ℕ → β) → ℕ → γ → β) (d : β) :
+    ∀ (xs : List γ) (j : ℕ) (t : NatTrie β) (k : ℕ), k < j →
+      (memoAux F d xs j t).getD k d = t.getD k d
+  | [], _, _, _, _ => rfl
+  | _ :: xs, j, t, k, hk => by
+    rw [memoAux, memoAux_getD_lt F d xs (j + 1) _ k (by omega), NatTrie.getD_set,
+      if_neg (by omega)]
+
+theorem length_memoAuxL_snd {γ β : Type} (F : (ℕ → β) → ℕ → γ → β) (d : β) :
+    ∀ (xs : List γ) (j : ℕ) (t : NatTrie β), (memoAuxL F d xs j t []).2.length = xs.length
+  | [], _, _ => rfl
+  | x :: xs, j, t => by
+    rw [memoAuxL, memoAuxL_snd, List.length_append, length_memoAuxL_snd F d xs (j + 1) _]
+    simp only [List.reverse_cons, List.reverse_nil, List.nil_append, List.length_singleton,
+      List.length_cons, List.length_nil]
+    omega
+
+theorem getD_memoAuxL_snd {γ β : Type} (F : (ℕ → β) → ℕ → γ → β) (d : β) :
+    ∀ (xs : List γ) (j : ℕ) (t : NatTrie β) (k : ℕ), k < xs.length →
+      (memoAuxL F d xs j t []).2.getD k d = (memoAux F d xs j t).getD (j + k) d
+  | [], _, _, _, hk => absurd hk (Nat.not_lt_zero _)
+  | x :: xs, j, t, 0, _ => by
+    rw [memoAuxL, memoAuxL_snd, memoAux, memoAux_getD_lt F d xs (j + 1) _ (j + 0) (by omega),
+      NatTrie.getD_set]
+    simp
+  | x :: xs, j, t, k + 1, hk => by
+    rw [memoAuxL, memoAuxL_snd, memoAux,
+      show j + (k + 1) = j + 1 + k by omega]
+    simp only [List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append,
+      List.getD_cons_succ]
+    exact getD_memoAuxL_snd F d xs (j + 1) _ k (by simpa using hk)
 
 section Memo
 
@@ -153,7 +388,7 @@ theorem memoAux_inv (hF : MemoDeps F L D) :
 /-- **Entry `j` of the table is its step at the table.** -/
 theorem memo_getD (hF : MemoDeps F L D) {j : ℕ} (hj : j < L.length) :
     (memo F d L).getD j d = F ((memo F d L).getD · d) j (L.getD j default) :=
-  memoAux_inv hF L 0 .nil (by simp) (fun _ h => absurd h (Nat.not_lt_zero _)) j hj
+  memo_eq F d L ▸ memoAux_inv hF L 0 .nil (by simp) (fun _ h => absurd h (Nat.not_lt_zero _)) j hj
 
 omit [Inhabited γ] in
 theorem memoAux_get?_of_le :
@@ -167,9 +402,17 @@ theorem memoAux_get?_of_le :
 omit [Inhabited γ] in
 /-- **The table is `d` past the list's end.** -/
 theorem memo_getD_of_le {j : ℕ} (hj : L.length ≤ j) : (memo F d L).getD j d = d := by
-  simp only [NatTrie.getD, memo,
+  simp only [NatTrie.getD, memo_eq,
     memoAux_get?_of_le L 0 .nil (fun _ _ => NatTrie.get?_nil _) j (by simpa using hj),
     Option.getD_none]
+
+omit [Inhabited γ] in
+/-- **The list of a table's entries reads as the table**, past the list's end too. -/
+theorem getD_memoList (j : ℕ) : (memoList F d L).getD j d = (memo F d L).getD j d := by
+  by_cases hj : j < L.length
+  · rw [memoList, getD_memoAuxL_snd F d L 0 .nil j hj, memo_eq, Nat.zero_add]
+  · rw [memo_getD_of_le (by omega), List.getD_eq_getElem?_getD, List.getElem?_eq_none (by
+      rw [memoList, length_memoAuxL_snd]; omega), Option.getD_none]
 
 /-- **A recursion with fuel agrees with the table**: when the fuel step `G` and the table's step `F`
 are related by `R` wherever their readers are related on the entries read, the recursion `iter`
@@ -189,22 +432,6 @@ theorem iter_rel_memo {β' : Type} {R : β' → β → Prop} {iter : ℕ → ℕ
 
 end Memo
 
-/-- **A list as a `NatTrie`** (`memo` of the elements). -/
-def toTrie {γ : Type} [Inhabited γ] (L : List γ) : NatTrie γ := memo (fun _ _ x => x) default L
-
-theorem toTrie_getD {γ : Type} [Inhabited γ] {L : List γ} {j : ℕ} (hj : j < L.length) :
-    (toTrie L).getD j default = L.getD j default :=
-  memo_getD (D := fun _ => []) ⟨fun _ _ _ h => absurd h List.not_mem_nil,
-    fun _ _ _ _ _ => rfl⟩ hj
-
-/-- **A list as a `NatTrie` reads as the list at every index**, past its end too. -/
-theorem toTrie_getD_eq {γ : Type} [Inhabited γ] (L : List γ) (j : ℕ) :
-    (toTrie L).getD j default = L.getD j default := by
-  by_cases hj : j < L.length
-  · exact toTrie_getD hj
-  · rw [toTrie, memo_getD_of_le (by omega), List.getD_eq_getElem?_getD,
-      List.getElem?_eq_none (by omega), Option.getD_none]
-
 /-! ## The values as a table
 
 A condition on value `v` that reads another value `u` reads it through `valueT` (`O(log u)` steps in
@@ -213,51 +440,15 @@ values is then near-linear, not quadratic. The per-value functions below are the
 `GordieHowe/Language/RealizedProgram/Valid.lean` on a value (`Value.isCommittedB`, `fieldOfV`, …) or
 through the table (`valueFieldT`, `isPublicT`), each with its equation. -/
 
-/-- **The keys set by a fold of `NatTrie.set`** are the list's and the initial table's. -/
-theorem foldl_set_isSome {α : Type} (key : α → ℕ) :
-    ∀ (L : List α) (t : NatTrie Unit) (v : ℕ),
-      ((L.foldl (fun t m => t.set (key m) ()) t).get? v).isSome = true ↔
-        v ∈ L.map key ∨ (t.get? v).isSome = true
-  | [], t, v => by simp
-  | m :: L, t, v => by
-    rw [List.foldl_cons, foldl_set_isSome key L _ v, NatTrie.get?_set]
-    by_cases h : v = key m <;> simp [h]
-
-/-- **A list of naturals as a set**: a `NatTrie` with a key at each element. -/
-def natSet (L : List ℕ) : NatTrie Unit := L.foldl (fun t m => t.set m ()) .nil
-
-theorem natSet_isSome (L : List ℕ) (v : ℕ) : ((natSet L).get? v).isSome = true ↔ v ∈ L := by
-  have h := foldl_set_isSome id L .nil v
-  simp only [NatTrie.get?_nil, Option.isSome_none, Bool.false_eq_true, or_false, List.map_id] at h
-  exact h
-
 section ValueTable
 
 variable (ir : RealizedProgram)
-
-/-- **The values as a `NatTrie`.** -/
-def valT : NatTrie Value := toTrie ir.values
-
-/-- **Value `v`, through the table.** -/
-def valueT (v : ℕ) : Value := ir.valT.getD v default
-
-theorem valueT_eq (v : ℕ) : ir.valueT v = ir.value v := toTrie_getD_eq ir.values v
 
 /-- **A check of every value, in one pass**, as a statement on `RealizedProgram.value`. -/
 theorem allIdx_values_iff (p : ℕ → Value → Bool) :
     allIdx p ir.values 0 = true ↔ ∀ v < ir.values.length, p v (ir.value v) = true := by
   rw [allIdx_iff]
-  simp only [Nat.zero_add]
-  rfl
-
-/-- Whether a value is committed in phase `0` (`RealizedProgram.isCommitted`). -/
-def _root_.GordieHowe.RealizedProgram.Value.isCommittedB (x : Value) : Bool :=
-  match x.kind with
-  | .priv => true
-  | .bits _ _ => true
-  | .padCopy _ _ => true
-  | .bound _ => true
-  | _ => false
+  simp only [Nat.zero_add, value_eq_getD]
 
 theorem isCommitted_eq (v : ℕ) : ir.isCommitted v = (ir.value v).isCommittedB := rfl
 
@@ -269,73 +460,28 @@ def _root_.GordieHowe.RealizedProgram.Value.isPadRealizedB (x : Value) : Bool :=
 
 theorem isPadRealized_eq (v : ℕ) : ir.isPadRealized v = (ir.value v).isPadRealizedB := rfl
 
-/-- **A value is a late value node of a phase of the program** (`RealizedProgram.IsLate`). -/
-def isLateV (x : Value) : Bool := x.kind.isLate && decide (1 ≤ x.phase) && decide (x.phase ≤ ir.phases)
-
 theorem isLateV_iff (v : ℕ) : ir.isLateV (ir.value v) = true ↔ ir.IsLate v := by
   simp [isLateV, IsLate, and_assoc]
 
-/-- The field of a value (`RealizedProgram.valueField`). -/
-def fieldOfV (x : Value) : ℕ :=
-  match x.kind.allowsField, x.field with
-  | true, some f => f
-  | _, _ => ir.domainField x.domain
-
 theorem valueField_eq (v : ℕ) : ir.valueField v = ir.fieldOfV (ir.value v) := rfl
-
-/-- The field of value `v`, through the table. -/
-def valueFieldT (v : ℕ) : ℕ := ir.fieldOfV (ir.valueT v)
 
 theorem valueFieldT_eq (v : ℕ) : ir.valueFieldT v = ir.valueField v := by
   rw [valueFieldT, valueT_eq, valueField_eq]
 
-/-- Whether value `v` is public (`RealizedProgram.isPublic`), through the table. -/
-def isPublicT (v : ℕ) : Bool := !(ir.valueT v).isCommittedB && !(ir.valueT v).kind.isLate
-
 theorem isPublicT_eq (v : ℕ) : ir.isPublicT v = ir.isPublic v := by
   rw [isPublicT, valueT_eq, isPublic, isCommitted_eq, isLateNode]
-
-/-- Whether value `v` is an operand a batch may read (`RealizedProgram.isBatchNode`), through the
-table. -/
-def isBatchNodeT (v : ℕ) : Bool :=
-  match (ir.valueT v).kind with
-  | .priv => (ir.valueT v).phase == 0
-  | .bits _ _ => true
-  | .padCopy _ _ => true
-  | .constant _ => true
-  | .pub .input => true
-  | .pub (.opaque _ _) => true
-  | _ => false
 
 theorem isBatchNodeT_eq (v : ℕ) : ir.isBatchNodeT v = ir.isBatchNode v := by
   rw [isBatchNodeT, valueT_eq]
   rfl
 
-/-- Whether value `v` is a cell of the quadratic test (`RealizedProgram.isQuadCell`), through the
-table. -/
-def isQuadCellT (v : ℕ) : Bool :=
-  match (ir.valueT v).kind with
-  | .priv => (ir.valueT v).phase == 0 && (ir.valueT v).type == .field
-  | _ => false
-
 theorem isQuadCellT_eq (v : ℕ) : ir.isQuadCellT v = ir.isQuadCell v := by
   rw [isQuadCellT, valueT_eq]
   rfl
 
-/-- **The quadratic form** (`RealizedProgram.isQuadratic`), through the table. -/
-def isQuadraticT : Expr → Expr → Bool
-  | .mul (.leaf a) (.leaf b), .leaf c => ir.isQuadCellT a && ir.isQuadCellT b && ir.isQuadCellT c
-  | _, _ => false
-
 theorem isQuadraticT_eq (e e' : Expr) : ir.isQuadraticT e e' = ir.isQuadratic e e' := by
   unfold isQuadraticT isQuadratic
   split <;> simp only [isQuadCellT_eq]
-
-/-- **A value's field is well formed** (`RealizedProgram.FieldOk`), on the value. -/
-def fieldOkV (x : Value) : Bool :=
-  match x.field with
-  | none => true
-  | some f => decide (f < ir.fields.length) && x.kind.allowsField && decide (x.type = .field)
 
 theorem fieldOkV_iff (v : ℕ) : ir.fieldOkV (ir.value v) = true ↔ ir.FieldOk v := by
   unfold fieldOkV FieldOk
@@ -348,42 +494,6 @@ end ValueTable
 section LenV
 
 variable (ir : RealizedProgram)
-
-/-- `NamedOp.cols`, the values through the table. -/
-def colsV : NamedOp → ℕ
-  | .negacyclicConv h _ => (ir.valueT h).size
-  | .polyMatVec a K L _ => L * ((ir.valueT a).size / (K * L))
-  | .polyBroadcast t K _ => (ir.valueT t).size / K
-  | .ntt n _ _ => n
-  | .inverseNtt n _ => n
-  | .nttTranspose n _ => n
-  | .rowDot _ _ W => W
-  | .macConv _ w nch _ => nch * w
-  | .acyclicConv _ lx => lx
-  | .diagonal d => (ir.valueT d).size
-  | .scale _ => 1
-  | .constDiagonal d => (ir.valueT d).size
-  | .sum w => w
-  | .fromDigits k _ => k
-  | .batched b op => b * colsV op
-
-/-- `NamedOp.rows`, the values through the table. -/
-def rowsV : NamedOp → ℕ
-  | .negacyclicConv h _ => (ir.valueT h).size
-  | .polyMatVec a K L _ => K * ((ir.valueT a).size / (K * L))
-  | .polyBroadcast t _ _ => (ir.valueT t).size
-  | .ntt n _ _ => n
-  | .inverseNtt n _ => n
-  | .nttTranspose n _ => n
-  | .rowDot _ R _ => R
-  | .macConv _ w _ _ => w
-  | .acyclicConv h lx => lx + (ir.valueT h).size - 1
-  | .diagonal d => (ir.valueT d).size
-  | .scale _ => 1
-  | .constDiagonal d => (ir.valueT d).size
-  | .sum _ => 1
-  | .fromDigits _ _ => 1
-  | .batched b op => b * rowsV op
 
 theorem colsV_eq : ∀ op : NamedOp, ir.colsV op = NamedOp.cols ir op
   | .batched b op => by rw [colsV, NamedOp.cols, colsV_eq op]
@@ -419,37 +529,13 @@ theorem readLenV_eq : ∀ op : NamedOp, ir.readLenV op = NamedOp.readLen ir op
 
 mutual
 
-/-- **`Expr.len`, the values through the table.** -/
-def lenV (rl : ℕ → ℕ) : Expr → ℕ
-  | .leaf v => (ir.valueT v).size
-  | .add e _ => lenV rl e
-  | .sub e _ => lenV rl e
-  | .scale _ e => lenV rl e
-  | .mul e _ => lenV rl e
-  | .reindex idx _ => idx.size
-  | .concat e e' => lenV rl e + lenV rl e'
-  | .linear rows _ => rows.length
-  | .prod n e => lenV rl e / n
-  | .mux _ t _ => lenV rl t
-  | .apply op e => lenV rl e / ir.colsV op * ir.rowsV op
-  | .ref k => rl k
-  | .logic _ w args => (lenListV rl args).headD 0 / w
-
-/-- `Expr.lenList`, the values through the table. -/
-def lenListV (rl : ℕ → ℕ) : List Expr → List ℕ
-  | [] => []
-  | e :: es => lenV rl e :: lenListV rl es
-
-end
-
-mutual
-
 theorem lenV_eq (rl : ℕ → ℕ) : ∀ e : Expr, ir.lenV rl e = Expr.len ir rl e
   | .leaf v => by rw [lenV, Expr.len, valueT_eq]
   | .add e _ | .sub e _ | .scale _ e | .mul e _ | .mux _ e _ => by
     simp only [lenV, Expr.len, lenV_eq rl e]
   | .prod _ e => by simp only [lenV, Expr.len, lenV_eq rl e]
-  | .reindex _ _ | .linear _ _ | .ref _ => rfl
+  | .reindex idx _ => by rw [lenV, Expr.len, IndexMap.sizeK_eq]
+  | .linear _ _ | .ref _ => rfl
   | .concat e e' => by simp only [lenV, Expr.len, lenV_eq rl e, lenV_eq rl e']
   | .apply op e => by simp only [lenV, Expr.len, lenV_eq rl e, colsV_eq, rowsV_eq]
   | .logic _ _ args => by simp only [lenV, Expr.len, lenListV_eq rl args]
@@ -580,32 +666,6 @@ theorem Expr.zeroAtZero_congr {rz rz' : ℕ → Bool} :
 
 namespace IndexMap
 
-/-- **A run's entries are naturals below `n`**, in natural arithmetic: for a step `-(m + 1)` the
-last entry `s − (m + 1)(c − 1)` is at least `0` and below the first. -/
-def runInRange (n : ℕ) : ℕ × ℤ × ℕ → Bool
-  | (s, .ofNat d, c) => c == 0 || (decide (s < n) && decide (s + d * (c - 1) < n))
-  | (s, .negSucc m, c) => c == 0 || (decide ((m + 1) * (c - 1) ≤ s) && decide (s < n))
-
-/-- **A run's last entry is a natural**: for a step `-(m + 1)`, `(m + 1)(c − 1) ≤ s`. -/
-def runLowOk : ℕ × ℤ × ℕ → Bool
-  | (_, .ofNat _, _) => true
-  | (s, .negSucc m, c) => c == 0 || decide ((m + 1) * (c - 1) ≤ s)
-
-/-- **One more than a run's largest entry** (`0` for an empty run). -/
-def runBound : ℕ × ℤ × ℕ → ℕ
-  | (s, .ofNat d, c) => if c = 0 then 0 else s + d * (c - 1) + 1
-  | (s, .negSucc _, c) => if c = 0 then 0 else s + 1
-
-/-- **The larger of `a` and the bound of the runs `m`**, by a left fold of `Nat.ble` tests: the
-kernel evaluates a `foldr max` over a long list far slower (an index map of 32 832 runs: over 150 s
-against about 20 s). -/
-def boundAux : ℕ → IndexMap → ℕ
-  | a, [] => a
-  | a, r :: rs => boundAux (if Nat.ble a (runBound r) then runBound r else a) rs
-
-/-- **One more than an index map's largest entry.** -/
-def bound (m : IndexMap) : ℕ := boundAux 0 m
-
 theorem boundAux_le_iff (n : ℕ) :
     ∀ (a : ℕ) (m : IndexMap), boundAux a m ≤ n ↔ a ≤ n ∧ ∀ r ∈ m, runBound r ≤ n
   | a, [] => by simp [boundAux]
@@ -627,10 +687,15 @@ theorem boundAux_le_iff (n : ℕ) :
     simp only [List.mem_cons, forall_eq_or_imp]
     tauto
 
-/-- **`IndexMap.inRange`, in natural arithmetic** (`inRangeNat_eq`), the bound `n` read once: the
-per-map facts (`runLowOk` on every run and `bound`) do not depend on `n`, so the kernel computes
-them once per index map, and each use compares one number. -/
-def inRangeNat (m : IndexMap) (n : ℕ) : Bool := m.all runLowOk && decide (m.bound ≤ n)
+/-! ### The walks the kernel evaluates
+
+`inRangeNat` reads its two per-map facts through walks written with the recursors and with
+`Nat.beq`, `Nat.ble` and `cond`, which the kernel evaluates on literals in one step each: a
+structural `List.all` costs a `brecOn` step per run and `decide` several. `boundK` keeps the
+largest bound so far a literal: each step's `Nat.casesOn` on the accumulator makes the kernel
+evaluate it, so no chain of pending comparisons builds up (as in `boundAux`, whose accumulator the
+kernel evaluates only at the end). Compiled code runs `lowOk` and `bound` (`lowOkK_csimp`,
+`boundK_csimp`). -/
 
 theorem runInRange_eq_bound (n : ℕ) (r : ℕ × ℤ × ℕ) :
     runInRange n r = (runLowOk r && decide (runBound r ≤ n)) := by
@@ -644,8 +709,8 @@ theorem runInRange_eq_bound (n : ℕ) (r : ℕ × ℤ × ℕ) :
 theorem all_runInRange (m : IndexMap) (n : ℕ) :
     m.all (runInRange n) = m.inRangeNat n := by
   rw [Bool.eq_iff_iff]
-  simp only [inRangeNat, bound, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq,
-    boundAux_le_iff, runInRange_eq_bound, Nat.zero_le, true_and]
+  simp only [inRangeNat, lowOkK_eq, boundK_eq, bound, Bool.and_eq_true, List.all_eq_true,
+    Nat.ble_eq, boundAux_le_iff, runInRange_eq_bound, decide_eq_true_eq, Nat.zero_le, true_and]
   constructor
   · intro h
     exact ⟨fun r hr => (h r hr).1, fun r hr => (h r hr).2⟩
@@ -1035,34 +1100,6 @@ end
 
 mutual
 
-/-- **`shapeOkWith`, the lengths through the value table** (`lenV`, `shapeOkV_eq`). -/
-def shapeOkV (rl : ℕ → ℕ) : Expr → Bool
-  | .leaf _ => true
-  | .add e e' => shapeOkV rl e && shapeOkV rl e' && ir.lenV rl e == ir.lenV rl e'
-  | .sub e e' => shapeOkV rl e && shapeOkV rl e' && ir.lenV rl e == ir.lenV rl e'
-  | .scale _ e => shapeOkV rl e
-  | .mul e e' => shapeOkV rl e && shapeOkV rl e' && ir.lenV rl e == ir.lenV rl e'
-  | .reindex idx e => shapeOkV rl e && idx.inRangeNat (ir.lenV rl e)
-  | .concat e e' => shapeOkV rl e && shapeOkV rl e'
-  | .linear rows e => shapeOkV rl e && rows.all (·.all (·.1 < ir.lenV rl e))
-  | .prod n e => shapeOkV rl e && 0 < n && ir.lenV rl e % n == 0
-  | .mux b t e =>
-      shapeOkV rl b && shapeOkV rl t && shapeOkV rl e &&
-        ir.lenV rl b == ir.lenV rl t && ir.lenV rl t == ir.lenV rl e
-  | .apply op e =>
-      shapeOkV rl e && (0 < ir.colsV op && 0 < ir.rowsV op) && ir.lenV rl e % ir.colsV op == 0
-  | .ref _ => true
-  | .logic op w args => shapeOkVList rl args && logicShapeOk op w (ir.lenListV rl args)
-
-/-- `shapeOkV` on a list of expressions. -/
-def shapeOkVList (rl : ℕ → ℕ) : List Expr → Bool
-  | [] => true
-  | e :: es => shapeOkV rl e && shapeOkVList rl es
-
-end
-
-mutual
-
 theorem shapeOkV_eq (rl : ℕ → ℕ) : ∀ e : Expr, ir.shapeOkV rl e = ir.shapeOkWith rl e
   | .leaf _ | .ref _ => rfl
   | .add e e' | .sub e e' | .mul e e' | .concat e e' => by
@@ -1170,21 +1207,7 @@ def refsOrderedB : Bool := allIdx (fun k e => e.refs.all (· < k)) ir.exprs 0
 
 theorem refsOrderedB_iff : ir.refsOrderedB = true ↔ ir.RefsOrdered := by
   simp only [refsOrderedB, allIdx_iff, Nat.zero_add, List.all_eq_true, decide_eq_true_eq,
-    RefsOrdered, expr]
-
-/-- **A deduplicated closure step**: the elements `g` gives the entry, and those of the entries
-it reads. -/
-def closureStep {α : Type} [DecidableEq α] (g : Expr → List α) (r : ℕ → List α) (_ : ℕ)
-    (e : Expr) : List α :=
-  insertAll (insertAll [] (g e)) (e.refs.flatMap r)
-
-/-- **The table of a closure**: for each shared expression, the elements `g` gives it and the
-entries it reads, each once. -/
-def closureT {α : Type} [DecidableEq α] (g : Expr → List α) : NatTrie (List α) :=
-  memo (closureStep g) [] ir.exprs
-
-/-- **The table of the shared expressions' lengths.** -/
-def lenT : NatTrie ℕ := memo (fun rl _ e => ir.lenV rl e) 0 ir.exprs
+    RefsOrdered, expr_eq_getD]
 
 /-- **The table of the shared expressions' degrees**, the values having degrees `nd`. -/
 def degT (nd : ℕ → ℕ) : NatTrie ℕ := memo (fun rd _ e => e.deg nd rd) 0 ir.exprs
@@ -1192,38 +1215,15 @@ def degT (nd : ℕ → ℕ) : NatTrie ℕ := memo (fun rd _ e => e.deg nd rd) 0 
 /-- **The table of the shared expressions' vanishing at zero.** -/
 def zeroT : NatTrie Bool := memo (fun rz _ e => e.zeroAtZero rz) false ir.exprs
 
-/-- An expression's length, through the table. -/
-def lenOf (e : Expr) : ℕ := ir.lenV (ir.lenT.getD · 0) e
-
 /-- An expression's degree, the values having degrees `nd`, through the table. -/
 def degM (nd : ℕ → ℕ) (e : Expr) : ℕ := e.deg nd ((ir.degT nd).getD · 0)
 
 /-- An expression's vanishing at zero, through the table. -/
 def zeroM (e : Expr) : Bool := e.zeroAtZero (ir.zeroT.getD · false)
 
-/-- **Every element of a closure satisfies `p`**, through the table `closureT g`. -/
-def closAll {α : Type} [DecidableEq α] (g : Expr → List α) (p : α → Bool) (e : Expr) : Bool :=
-  (g e).all p && e.refs.all fun k => ((ir.closureT g).getD k []).all p
-
-/-- **The values an expression reads**, through the table (with repetitions). -/
-def nodesOf (e : Expr) : List ℕ :=
-  e.directNodes ++ e.refs.flatMap fun k => (ir.closureT Expr.directNodes).getD k []
-
 /-! ## The values' tables -/
 
-/-- **The step of `readsT`**: what value `v` reads, from what the values it reads read (`r`). -/
-def readsStep (r : ℕ → List Read) (v : ℕ) (x : Value) : List Read :=
-  match x.kind with
-  | .pub (.expr e) => insertAll [] ((ir.nodesOf e).flatMap r)
-  | .pub (.opaque _ args) => insertAll [] (args.flatMap r)
-  | .challenge c => [.chal c]
-  | .late => [.late v]
-  | .bits w _ => r w
-  | .message u => [.late u]
-  | _ => []
-
-/-- **The table of what each value reads from the run** (`nodeReads`). -/
-def readsT : NatTrie (List Read) := memo ir.readsStep [] ir.values
+theorem getD_readsL (v : ℕ) : ir.readsL.getD v [] = ir.readsT.getD v [] := getD_memoList v
 
 /-- **The table of the shared expressions' per-coordinate degrees**, the values' degrees read from
 the runs `nv`. -/
@@ -1248,15 +1248,6 @@ def valDegT (c : ℕ) : NatTrie RunVec := memo (ir.valDegStep c) default ir.valu
 
 /-- The per-coordinate degrees of value `v` in challenge `c`, through the table. -/
 def valDegM (c v : ℕ) : RunVec := (ir.valDegT c).getD v default
-
-/-- **The predicates as a `NatTrie`.** -/
-def predT : NatTrie Predicate := toTrie ir.predicates
-
-/-- **Predicate `p`, through the table** (`O(log p)` steps where `RealizedProgram.predicate`, a
-list lookup, takes `p`). -/
-def predicateT (p : ℕ) : Predicate := ir.predT.getD p default
-
-theorem predicateT_eq (p : ℕ) : ir.predicateT p = ir.predicate p := toTrie_getD_eq _ p
 
 /-- **A search through a sublist**: `any` over the elements a filter keeps is `any` over the list,
 where every element it drops fails. -/
@@ -1295,7 +1286,7 @@ of smaller index. -/
 theorem memoDeps_exprs (ho : ir.RefsOrdered) {β : Type} {F : (ℕ → β) → ℕ → Expr → β}
     (hF : ∀ r r' j e, (∀ k ∈ e.refs, r k = r' k) → F r j e = F r' j e) :
     MemoDeps F ir.exprs fun k => (ir.expr k).refs :=
-  ⟨ho, fun j _ r r' h => hF r r' j _ h⟩
+  ⟨ho, fun j _ r r' h => hF r r' j _ (by rw [← expr_eq_getD]; exact h)⟩
 
 theorem closureStep_congr {α : Type} [DecidableEq α] (g : Expr → List α) (r r' : ℕ → List α)
     (j : ℕ) (e : Expr) (h : ∀ k ∈ e.refs, r k = r' k) : closureStep g r j e = closureStep g r' j e := by
@@ -1309,6 +1300,7 @@ theorem mem_closureT (ho : ir.RefsOrdered) {α : Type} [DecidableEq α] (g : Exp
   iter_rel_memo (R := fun l l' => ∀ x, x ∈ l ↔ x ∈ l') (iter := ir.refClosure g)
     (G := fun r k => g (ir.expr k) ++ (ir.expr k).refs.flatMap r) (fun _ _ => rfl)
     (fun j _ r r' h x => by
+      rw [← expr_eq_getD]
       simp only [closureStep, mem_insertAll, List.mem_append, List.mem_flatMap, List.not_mem_nil,
         false_or]
       exact or_congr Iff.rfl (exists_congr fun k => and_congr_right fun hk => h k hk x))
@@ -1334,6 +1326,36 @@ theorem closAll_iff (ho : ir.RefsOrdered) {α : Type} [DecidableEq α] (g : Expr
   · intro h
     exact ⟨fun x hx => h x (.inl hx), fun k hk x hx => h x (.inr ⟨k, hk, hx⟩)⟩
 
+/-- **Two tests agreeing on a list's elements test it alike.** -/
+theorem all_congr_mem {α : Type} {l : List α} {f f' : α → Bool} (h : ∀ x ∈ l, f x = f' x) :
+    l.all f = l.all f' :=
+  Bool.eq_iff_iff.2 (by simp only [List.all_eq_true]; exact forall₂_congr fun x hx => by rw [h x hx])
+
+/-- **The flags' table holds the closures' flags**: entry `k` is whether every element of
+`refClosure g n k` satisfies `p`, at every fuel `n > k`. -/
+theorem closFlagT_getD (ho : ir.RefsOrdered) {α : Type} (g : Expr → List α) (p : α → Bool)
+    {n k : ℕ} (hkn : k < n) (hk : k < ir.exprs.length) :
+    (ir.refClosure g n k).all p = (ir.closFlagT g p).getD k false :=
+  iter_rel_memo (R := Eq) (iter := fun n k => (ir.refClosure g n k).all p)
+    (G := fun r k => (g (ir.expr k)).all p && (ir.expr k).refs.all r)
+    (fun n j => by simp only [refClosure, List.all_append, List.all_flatMap])
+    (fun j _ r r' h => by
+      rw [← expr_eq_getD]
+      exact congrArg _ (all_congr_mem h))
+    (memoDeps_exprs ho fun r r' _ e h => congrArg _ (all_congr_mem h))
+    n k hkn hk
+
+/-- **`closFlag` is the closure's test** for an expression whose references are entries. -/
+theorem closFlag_eq (ho : ir.RefsOrdered) {α : Type} (g : Expr → List α) (p : α → Bool)
+    {e : Expr} (he : ∀ k ∈ e.refs, k < ir.exprs.length) :
+    ir.closFlag g p e = (ir.closure g e).all p := by
+  rw [closFlag, closure, List.all_append, List.all_flatMap]
+  refine congrArg _ (all_congr_mem fun k hk => ?_)
+  have h := bitTest_eq (fun _ (b : Bool) => b) (ir.closFlagL g p) k
+  change bitTest (ir.closFlagBits g p) (ir.closFlagL g p).length false k = _ at h
+  rw [h, show (default : Bool) = false from rfl, closFlagL, getD_memoList, ← closFlagT,
+    closFlagT_getD ho g p (he k hk) (he k hk)]
+
 /-- **The values an expression reads**, through the table. -/
 theorem mem_nodesOf (ho : ir.RefsOrdered) {e : Expr} (he : ∀ k ∈ e.refs, k < ir.exprs.length)
     (v : ℕ) : v ∈ ir.nodesOf e ↔ v ∈ ir.exprNodes e := by
@@ -1344,7 +1366,7 @@ theorem mem_nodesOf (ho : ir.RefsOrdered) {e : Expr} (he : ∀ k ∈ e.refs, k <
 theorem lenT_getD (ho : ir.RefsOrdered) {n k : ℕ} (hkn : k < n) (hk : k < ir.exprs.length) :
     ir.refLen n k = ir.lenT.getD k 0 :=
   iter_rel_memo (R := Eq) (G := fun r k => Expr.len ir r (ir.expr k)) (fun _ _ => rfl)
-    (fun _ _ _ _ h => by rw [lenV_eq]; exact Expr.len_congr ir _ h)
+    (fun _ _ _ _ h => by rw [← expr_eq_getD, lenV_eq]; exact Expr.len_congr ir _ h)
     (memoDeps_exprs ho fun _ _ _ e h => by rw [lenV_eq, lenV_eq]; exact Expr.len_congr ir e h)
     n k hkn hk
 
@@ -1365,7 +1387,7 @@ theorem shapeOkWith_lenT (ho : ir.RefsOrdered) {e : Expr}
 theorem degT_getD (ho : ir.RefsOrdered) (nd : ℕ → ℕ) {n k : ℕ} (hkn : k < n)
     (hk : k < ir.exprs.length) : ir.refDeg nd n k = (ir.degT nd).getD k 0 :=
   iter_rel_memo (R := Eq) (G := fun r k => (ir.expr k).deg nd r) (fun _ _ => rfl)
-    (fun _ _ _ _ h => Expr.deg_congr _ (fun _ _ => rfl) h)
+    (fun _ _ _ _ h => by rw [← expr_eq_getD]; exact Expr.deg_congr _ (fun _ _ => rfl) h)
     (memoDeps_exprs ho fun _ _ _ e h => Expr.deg_congr e (fun _ _ => rfl) h) n k hkn hk
 
 /-- **An expression's degree**, through the table. -/
@@ -1377,7 +1399,7 @@ theorem degM_eq (ho : ir.RefsOrdered) (nd : ℕ → ℕ) {e : Expr}
 theorem zeroT_getD (ho : ir.RefsOrdered) {n k : ℕ} (hkn : k < n) (hk : k < ir.exprs.length) :
     ir.refZero n k = ir.zeroT.getD k false :=
   iter_rel_memo (R := Eq) (G := fun r k => (ir.expr k).zeroAtZero r) (fun _ _ => rfl)
-    (fun _ _ _ _ h => Expr.zeroAtZero_congr _ h)
+    (fun _ _ _ _ h => by rw [← expr_eq_getD]; exact Expr.zeroAtZero_congr _ h)
     (memoDeps_exprs ho fun _ _ _ e h => Expr.zeroAtZero_congr e h) n k hkn hk
 
 /-- **An expression's vanishing at zero**, through the table. -/
@@ -1449,7 +1471,7 @@ theorem nodeReads_succ (n v : ℕ) : ir.nodeReads (n + 1) v = ir.nodeReadsStep (
   rfl
 
 theorem value_eq_default {v : ℕ} (hv : ir.values.length ≤ v) : ir.value v = default := by
-  rw [value, List.getD_eq_getElem?_getD, List.getElem?_eq_none hv]
+  rw [value_eq_getD, List.getD_eq_getElem?_getD, List.getElem?_eq_none hv]
   rfl
 
 theorem nodeReads_of_le {v : ℕ} (hv : ir.values.length ≤ v) : ∀ n, ir.nodeReads n v = []
@@ -1459,7 +1481,7 @@ theorem nodeReads_of_le {v : ℕ} (hv : ir.values.length ≤ v) : ∀ n, ir.node
 theorem readsStep_congr (hwf : ir.WellFormed) :
     MemoDeps ir.readsStep ir.values ir.valueDeps := by
   refine ⟨fun v hv => hwf.valueDeps_lt hv, fun v hv r r' h => ?_⟩
-  change ir.readsStep r v (ir.value v) = ir.readsStep r' v (ir.value v)
+  rw [← value_eq_getD]
   unfold valueDeps at h
   unfold readsStep
   rcases hk : (ir.value v).kind with _ | ⟨_ | ⟨_, args⟩ | e⟩ | _ | _ | _ | ⟨w, sel⟩ | _ | _ <;>
@@ -1475,6 +1497,7 @@ theorem mem_readsT (hwf : ir.WellFormed) (v : ℕ) (x : Read) :
   by_cases hv : v < ir.values.length
   · refine iter_rel_memo (R := fun l l' => ∀ x, x ∈ l ↔ x ∈ l') nodeReads_succ
       (fun v hv r r' h x => ?_) (readsStep_congr hwf) ir.fuel v (by simp [fuel]; omega) hv x
+    rw [← value_eq_getD]
     change x ∈ ir.nodeReadsStep r v ↔ x ∈ ir.readsStep r' v (ir.value v)
     unfold valueDeps at h
     unfold nodeReadsStep readsStep
@@ -1499,7 +1522,8 @@ theorem refDegVT_getD (ho : ir.RefsOrdered) (nv : ℕ → RunVec) {n k : ℕ} (h
   unfold refDegVT
   exact iter_rel_memo (R := Eq) (G := fun r k => Expr.degV ir nv r (ir.lenT.getD · 0) (ir.expr k))
     (F := fun rv _ e => Expr.degV ir nv rv (ir.lenT.getD · 0) e)
-    (fun _ _ => rfl) (fun _ _ _ _ h => Expr.degV_congr _ (fun _ _ => rfl) h)
+    (fun _ _ => rfl)
+    (fun _ _ _ _ h => by rw [← expr_eq_getD]; exact Expr.degV_congr _ (fun _ _ => rfl) h)
     (memoDeps_exprs (F := fun rv _ e => Expr.degV ir nv rv (ir.lenT.getD · 0) e) ho
       fun _ _ _ e h => Expr.degV_congr e (fun _ _ => rfl) h) n k hkn hk
 
@@ -1534,6 +1558,7 @@ theorem refDegVT_get (ho : ir.RefsOrdered) (nv : ℕ → RunVec) {n k : ℕ} (hk
     (fun _ _ => rfl) (fun j hj r r' h i => ?_)
     (memoDeps_exprs (F := fun rv _ e => Expr.degV ir nv rv (ir.lenT.getD · 0) e) ho
       fun _ _ _ e h => Expr.degV_congr e (fun _ _ => rfl) h) n k hkn hk i
+  rw [← expr_eq_getD]
   change (Expr.degV ir nv r' (ir.lenT.getD · 0) (ir.expr j)).get i = _
   rw [Expr.degV_get]
   exact congrFun (Expr.degAt_congr _ (fun _ _ => rfl) (fun k hk => funext (h k hk))
@@ -1574,7 +1599,7 @@ theorem degAtOf_congr {nd nd' : ℕ → ℕ → ℕ} {e : Expr} (h : ∀ v ∈ i
 theorem valDegStep_congr (hwf : ir.WellFormed) (c : ℕ) :
     MemoDeps (ir.valDegStep c) ir.values ir.valueDeps := by
   refine ⟨fun v hv => hwf.valueDeps_lt hv, fun v hv r r' h => ?_⟩
-  change ir.valDegStep c r v (ir.value v) = ir.valDegStep c r' v (ir.value v)
+  rw [← value_eq_getD]
   unfold valueDeps at h
   unfold valDegStep
   rcases hk : (ir.value v).kind with _ | ⟨_ | ⟨_, args⟩ | e⟩ | _ | _ | _ | ⟨w, sel⟩ | _ | _ <;>
@@ -1587,6 +1612,7 @@ theorem valDegM_get (hwf : ir.WellFormed) (c : ℕ) {v : ℕ} (hv : v < ir.value
     (ir.valDegM c v).get i = ir.nodeDegAt c ir.fuel v i := by
   refine iter_rel_memo (R := fun g x => ∀ i, x.get i = g i) (nodeDegAt_succ c)
     (fun v hv r r' h i => ?_) (valDegStep_congr hwf c) ir.fuel v (by simp [fuel]; omega) hv i
+  rw [← value_eq_getD]
   change (ir.valDegStep c r' v (ir.value v)).get i = ir.nodeDegAtStep c r v i
   unfold valueDeps at h
   unfold valDegStep nodeDegAtStep
@@ -1598,30 +1624,6 @@ theorem valDegM_get (hwf : ir.WellFormed) (c : ℕ) {v : ℕ} (hv : v < ir.value
 end ValueTables
 
 /-! ## The checkers -/
-
-/-- **`ExprOk f e`**, through the tables. -/
-def exprOkB (f : ℕ) (e : Expr) : Bool :=
-  e.refs.all (· < ir.exprs.length) &&
-    ir.closAll Expr.directNodes (· < ir.values.length) e &&
-    ir.closAll Expr.fieldNodes (fun v => ir.valueFieldT v == f) e &&
-    ir.closAll Expr.coefNodes ir.isPublicT e &&
-    ir.shapeOkV (ir.lenT.getD · 0) e
-
-/-- **`KindOk v k`**, through the tables: the values it reads through `valueT`, a public or bound
-expression through the shared expressions' tables. -/
-def kindOkB (v : ℕ) : Kind → Bool
-  | .pub (.expr e) =>
-    ir.exprOkB (ir.valueFieldT v) e && ir.closAll Expr.directNodes (· < v) e
-  | .challenge c => decide (c < ir.challenges.length) && decide (ir.chalField c = ir.valueFieldT v)
-  | .bits w sel =>
-    decide (w < v) && decide (0 < sel.size) && sel.inRangeNat (ir.valueT w).size &&
-      decide ((ir.valueT v).size % sel.size = 0)
-  | .padCopy u _ => (ir.valueT u).kind.isLate
-  | .message u =>
-    decide (u < v) && (ir.valueT u).kind.isLate && decide (ir.valueFieldT u = ir.valueFieldT v)
-  | .bound e =>
-    ir.exprOkB (ir.valueFieldT v) e && ir.closAll Expr.directNodes (· < ir.values.length) e
-  | k => decide (ir.KindOk v k)
 
 /-- **`LensOk b`**, through the table. -/
 def lensOkB : PredBody → Bool
@@ -1643,11 +1645,7 @@ def wellFormedB : Bool :=
     allIdx (fun _ e => ir.shapeOkV (ir.lenT.getD · 0) e) ir.exprs 0 &&
     ir.predicates.all (fun p => ir.predOkB p.body) &&
     decide (∀ c ∈ ir.challenges, ir.ChallengeOk c) &&
-    decide (∀ m ∈ ir.statement.checks, ir.CheckOk m) &&
     allIdx (fun _ x => ir.fieldOkV x) ir.values 0
-
-/-- **The values a predicate reads**, through the table (with repetitions). -/
-def predNodesM (b : PredBody) : List ℕ := b.exprs.flatMap (ir.nodesOf ·.2) ++ ir.tableCols b
 
 /-- **`ReadsSound`**, through the tables. -/
 def readsB : Bool :=
@@ -1681,18 +1679,9 @@ def degreesAtB (c : ℕ) : Bool :=
 /-- The degree in the committed cells (`cellDeg`'s value degrees). -/
 def cellNd (v : ℕ) : ℕ := if ir.isCommitted v || ir.isLateNode v then 1 else 0
 
-/-- `cellNd`, through the table. -/
-def cellNdT (v : ℕ) : ℕ := if (ir.valueT v).isCommittedB || (ir.valueT v).kind.isLate then 1 else 0
-
 theorem cellNdT_eq : ir.cellNdT = ir.cellNd := by
   funext v
   rw [cellNdT, cellNd, valueT_eq, isCommitted_eq, isLateNode]
-
-/-- **The parts of each batch**, each as a set (`natSet`), by batch. -/
-def batchPartsT : NatTrie (NatTrie Unit) := toTrie (ir.batches.map fun B => natSet B.parts)
-
-/-- **Predicate `pid` is a part of batch `b`**, through the table. -/
-def inPartsB (b pid : ℕ) : Bool := ((ir.batchPartsT.getD b default).get? pid).isSome
 
 theorem inPartsB_iff {b : ℕ} (hb : b < ir.batches.length) (pid : ℕ) :
     ir.inPartsB b pid = true ↔ pid ∈ (ir.batch b).parts := by
@@ -1700,103 +1689,10 @@ theorem inPartsB_iff {b : ℕ} (hb : b < ir.batches.length) (pid : ℕ) :
     List.getElem?_map, batch, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hb]
   exact natSet_isSome _ pid
 
-/-- **The values of a circuit's input blocks by kind, and its predicates**, each as a set
-(`natSet`). -/
-structure CircuitSets where
-  /-- The values of the committed blocks. -/
-  committed : NatTrie Unit
-  /-- The values of the public blocks. -/
-  pub : NatTrie Unit
-  /-- The late values of the pad blocks. -/
-  pad : NatTrie Unit
-  /-- The values of the view blocks. -/
-  view : NatTrie Unit
-  /-- The predicates. -/
-  preds : NatTrie Unit
-  deriving Inhabited
-
-/-- The value of a committed block. -/
-def _root_.GordieHowe.RealizedProgram.InputBlock.committedOf? : InputBlock → Option ℕ
-  | .committed u _ _ => some u
-  | _ => none
-
-/-- The value of a public block. -/
-def _root_.GordieHowe.RealizedProgram.InputBlock.pubOf? : InputBlock → Option ℕ
-  | .pub u _ _ => some u
-  | _ => none
-
-/-- The late value of a pad block. -/
-def _root_.GordieHowe.RealizedProgram.InputBlock.padOf? : InputBlock → Option ℕ
-  | .pad u _ _ => some u
-  | _ => none
-
-/-- The value of a view block. -/
-def _root_.GordieHowe.RealizedProgram.InputBlock.viewOf? : InputBlock → Option ℕ
-  | .view u _ _ => some u
-  | _ => none
-
-/-- **A circuit's sets.** -/
-def circuitSets (C : Circuit) : CircuitSets :=
-  ⟨natSet (C.inputs.filterMap InputBlock.committedOf?), natSet (C.inputs.filterMap InputBlock.pubOf?),
-    natSet (C.inputs.filterMap InputBlock.padOf?), natSet (C.inputs.filterMap InputBlock.viewOf?),
-    natSet C.predicates⟩
-
-/-- Whether key `v` is in the set `t`. -/
-def natMem (t : NatTrie Unit) (v : ℕ) : Bool := (t.get? v).isSome
-
-theorem any_isCommittedOf_iff (ins : List InputBlock) (v : ℕ) :
-    ins.any (·.isCommittedOf v) = true ↔ natMem (natSet (ins.filterMap InputBlock.committedOf?)) v = true := by
-  rw [natMem, natSet_isSome]
-  simp only [List.any_eq_true, List.mem_filterMap]
-  refine exists_congr fun b => and_congr_right fun _ => ?_
-  cases b <;> simp [InputBlock.isCommittedOf, InputBlock.committedOf?]
-
-theorem any_isPubOf_iff (ins : List InputBlock) (v : ℕ) :
-    ins.any (·.isPubOf v) = true ↔ natMem (natSet (ins.filterMap InputBlock.pubOf?)) v = true := by
-  rw [natMem, natSet_isSome]
-  simp only [List.any_eq_true, List.mem_filterMap]
-  refine exists_congr fun b => and_congr_right fun _ => ?_
-  cases b <;> simp [InputBlock.isPubOf, InputBlock.pubOf?]
-
-theorem any_isPadOf_iff (ins : List InputBlock) (v : ℕ) :
-    ins.any (·.isPadOf v) = true ↔ natMem (natSet (ins.filterMap InputBlock.padOf?)) v = true := by
-  rw [natMem, natSet_isSome]
-  simp only [List.any_eq_true, List.mem_filterMap]
-  refine exists_congr fun b => and_congr_right fun _ => ?_
-  cases b <;> simp [InputBlock.isPadOf, InputBlock.padOf?]
-
-theorem any_isViewOf_iff (ins : List InputBlock) (v : ℕ) :
-    ins.any (·.isViewOf v) = true ↔ natMem (natSet (ins.filterMap InputBlock.viewOf?)) v = true := by
-  rw [natMem, natSet_isSome]
-  simp only [List.any_eq_true, List.mem_filterMap]
-  refine exists_congr fun b => and_congr_right fun _ => ?_
-  cases b <;> simp [InputBlock.isViewOf, InputBlock.viewOf?]
-
-/-- **`IsCircuitInputOf`**, through a circuit's sets. -/
-def isCircuitInputT (S : CircuitSets) (v : ℕ) : Kind → Bool
-  | .priv => natMem S.committed v
-  | .pub _ => natMem S.pub v
-  | .constant _ => true
-  | .challenge _ => natMem S.pub v
-  | .late => natMem S.pub v && natMem S.pad v
-  | .bits _ _ => natMem S.view v
-  | .padCopy _ _ => natMem S.committed v
-  | .message _ => natMem S.pub v
-  | .bound _ => true
-
 theorem isCircuitInputT_iff (C : Circuit) (v : ℕ) (k : Kind) :
     isCircuitInputT (circuitSets C) v k = true ↔ IsCircuitInputOf C.inputs v k := by
   cases k <;> simp only [isCircuitInputT, IsCircuitInputOf, circuitSets, any_isCommittedOf_iff,
     any_isPubOf_iff, any_isPadOf_iff, any_isViewOf_iff, Bool.and_eq_true]
-
-/-- **The circuits' sets**, by circuit. -/
-def circuitT : NatTrie CircuitSets := toTrie (ir.circuits.map circuitSets)
-
-theorem circuitT_getD {c : ℕ} (hc : c < ir.circuits.length) :
-    ir.circuitT.getD c default = circuitSets (ir.circuit c) := by
-  rw [circuitT, toTrie_getD (by simpa using hc), List.getD_eq_getElem?_getD, List.getElem?_map,
-    circuit, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hc]
-  rfl
 
 /-- **`BatchAdmits pid d b e e'`**, through the tables. -/
 def batchAdmitsB (pid d b : ℕ) (e e' : Expr) : Bool :=
@@ -1900,13 +1796,16 @@ def BodyRefsOk (b : PredBody) : Prop := ∀ de ∈ b.exprs, ∀ k ∈ de.2.refs,
 
 theorem lensOkB_iff (ho : ir.RefsOrdered) {b : PredBody} (hb : ir.BodyRefsOk b) :
     ir.lensOkB b = true ↔ ir.LensOk b := by
-  cases b <;> simp only [BodyRefsOk, PredBody.exprs, List.mem_cons, List.mem_map,
-    forall_eq_or_imp, List.not_mem_nil, IsEmpty.forall_iff,
-    implies_true, and_true] at hb <;>
-    simp only [lensOkB, LensOk, beq_iff_eq]
-  · rw [lenOf_eq ho hb.1, lenOf_eq ho hb.2]
-  · rw [lenOf_eq ho hb.1, lenOf_eq ho hb.2]
-  · rw [lenOf_eq ho hb.1, lenOf_eq ho hb.2]
+  cases b <;> simp only [lensOkB, LensOk, beq_iff_eq]
+  · rename_i d e e' t
+    rw [lenOf_eq ho (hb (d, e) (by simp [PredBody.exprs])),
+      lenOf_eq ho (hb (d, e') (by simp [PredBody.exprs]))]
+  · rename_i d q e e' real
+    rw [lenOf_eq ho (hb (d, e) (by simp [PredBody.exprs])),
+      lenOf_eq ho (hb (d, e') (by simp [PredBody.exprs]))]
+  · rename_i dx x dy y k real
+    rw [lenOf_eq ho (hb (dx, x) (by simp [PredBody.exprs])),
+      lenOf_eq ho (hb (dy, y) (by simp [PredBody.exprs]))]
 
 theorem PredOk.bodyRefsOk {b : PredBody} (h : ir.PredOk b) : ir.BodyRefsOk b :=
   fun de hde => (h.1 de hde).2.refs
@@ -1924,11 +1823,13 @@ theorem exprsShape_iff (ho : ir.RefsOrdered) :
       ∀ k < ir.exprs.length, ir.exprShapeOk (ir.expr k) = true := by
   rw [allIdx_iff]
   refine forall₂_congr fun k hk => ?_
-  rw [shapeOkV_eq, ← shapeOkWith_lenT ho fun k' hk' => by have := ho k hk k' hk'; omega]
-  rfl
+  rw [shapeOkV_eq, ← shapeOkWith_lenT ho fun k' hk' => by have := ho k hk k' hk'; omega,
+    expr_eq_getD]
 
-/-- **`wellFormedB` is `WellFormed`.** -/
-theorem wellFormedB_iff : ir.wellFormedB = true ↔ ir.WellFormed := by
+/-- **`wellFormedB` with the member checks is `WellFormed`.** The member checks are decided at the
+structure records' pointers (`RealizedProgram.checksOk_of_memberValuesB`), not here. -/
+theorem wellFormedB_iff :
+    ir.wellFormedB = true ∧ (∀ m ∈ ir.statement.checks, ir.CheckOk m) ↔ ir.WellFormed := by
   rw [wellFormed_iff]
   by_cases ho : ir.RefsOrdered
   · simp only [wellFormedB, (refsOrderedB_iff ir).2 ho, Bool.true_and, Bool.and_eq_true,
@@ -1936,21 +1837,21 @@ theorem wellFormedB_iff : ir.wellFormedB = true ↔ ir.WellFormed := by
       predOkB_iff ho]
     have hv : ∀ v < ir.values.length, ((ir.values.getD v default).domain < ir.domains.length ∧
         ir.kindOkB v (ir.values.getD v default).kind = true) ↔ ir.ValueOk v := fun v _ => by
-      rw [kindOkB_iff ho]
+      rw [← value_eq_getD, kindOkB_iff ho]
       rfl
     have hf : ∀ v, ir.fieldOkV (ir.values.getD v default) = true ↔ ir.FieldOk v :=
-      fun v => ir.fieldOkV_iff v
+      fun v => by rw [← value_eq_getD]; exact ir.fieldOkV_iff v
     simp only [ExprsOk, hf]
     constructor
-    · rintro ⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩
+    · rintro ⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h7⟩, h6⟩
       exact ⟨h1, fun v hv' => (hv v hv').1 (h2 v hv'), fun k hk => ⟨ho k hk, h3 k hk⟩, h4, h5, h6,
         h7⟩
     · rintro ⟨h1, h2, h3, h4, h5, h6, h7⟩
       exact ⟨⟨⟨⟨⟨⟨h1, fun v hv' => (hv v hv').2 (h2 v hv')⟩, fun k hk => (h3 k hk).2⟩, h4⟩, h5⟩,
-        h6⟩, h7⟩
+        h7⟩, h6⟩
   · have hb : ir.refsOrderedB = false :=
       Bool.eq_false_iff.2 fun h => ho ((refsOrderedB_iff ir).1 h)
-    simp only [wellFormedB, hb, Bool.false_and, Bool.false_eq_true, false_iff]
+    simp only [wellFormedB, hb, Bool.false_and, Bool.false_eq_true, false_and, false_iff]
     exact fun h => ho fun k hk => (h.2.2.1 k hk).1
 
 instance : Decidable ir.WellFormed := decidable_of_iff _ ir.wellFormedB_iff
@@ -2004,13 +1905,13 @@ theorem degreesB_iff (hwf : ir.WellFormed) : ir.degreesB = true ↔ ir.DegreesSo
       exact h.1 p hp c hc
     · rcases h.2 v hv with h' | h'
       · rw [isPubExpr_eq] at hpub
-        exact absurd hpub (by simpa [value] using h')
+        exact absurd hpub (by simpa [value_eq_getD] using h')
       · have := h' c hc
         rw [RunVec.maxUpTo_eq] at this
         rw [show maxBelow (ir.value v).size (ir.nodeDegAt c ir.fuel v) =
           maxBelow (ir.value v).size (ir.valDegM c v).get from
             maxBelow_congr fun i _ => (valDegM_get hwf c hv i).symm]
-        simpa [value] using this
+        simpa [value_eq_getD] using this
   · intro h
     simp only [degreesB, Bool.and_eq_true, List.all_eq_true, List.mem_range, decide_eq_true_eq,
       allIdx_iff, Nat.zero_add, Bool.or_eq_true, Bool.not_eq_true']
@@ -2024,10 +1925,10 @@ theorem degreesB_iff (hwf : ir.WellFormed) : ir.degreesB = true ↔ ir.DegreesSo
         rw [show maxBelow (ir.value v).size (ir.nodeDegAt c ir.fuel v) =
           maxBelow (ir.value v).size (ir.valDegM c v).get from
             maxBelow_congr fun i _ => (valDegM_get hwf c hv i).symm] at this
-        simpa [value] using this
+        simpa [value_eq_getD] using this
       · refine .inl ?_
         rw [isPubExpr_eq] at hpub
-        simpa [value] using hpub
+        simpa [value_eq_getD] using hpub
 
 /-- **`degreesB` is `degreesAtB` at every challenge.** -/
 theorem degreesB_iff_at :
@@ -2064,7 +1965,7 @@ theorem degrees_of_at (hwf : ir.WellFormed) {n : ℕ} (hn : ir.challenges.length
 
 theorem predicate_mem {pid : ℕ} (h : pid < ir.predicates.length) :
     ir.predicate pid ∈ ir.predicates := by
-  rw [predicate, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h]
+  rw [predicate_eq_getD, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h]
   exact List.getElem_mem h
 
 theorem cellDeg_eq (e : Expr) : ir.cellDeg e = ir.degOf ir.cellNd e := rfl
@@ -2127,13 +2028,13 @@ theorem bodyAdmittedB_iff (ho : ir.RefsOrdered) (pid : ℕ) {b : PredBody} (hb :
     exact targetAdmitsB_iff ho pid d hb.1 hb.2 t
   | mem => simp [bodyAdmittedB, BodyAdmitted]
   | mod d q e e' real =>
-    simp only [BodyRefsOk, PredBody.exprs, List.mem_cons, forall_eq_or_imp, List.not_mem_nil,
-      IsEmpty.forall_iff, implies_true, and_true] at hb
+    have hb1 := hb (d, e) (by simp [PredBody.exprs])
+    have hb2 := hb (d, e') (by simp [PredBody.exprs])
     simp only [bodyAdmittedB, BodyAdmitted, Bool.and_eq_true, Bool.or_eq_true, bne_iff_ne, ne_eq]
     refine and_congr (by tauto) ?_
     cases real.target with
     | none => simp [OptTargetAdmits]
-    | some t => exact targetAdmitsB_iff ho pid d hb.1 hb.2 t
+    | some t => exact targetAdmitsB_iff ho pid d hb1 hb2 t
   | cross => simp [bodyAdmittedB, BodyAdmitted]
 
 /-- **`targetsB` is `TargetsAdmit`** for a well-formed program. -/
@@ -2144,12 +2045,13 @@ theorem targetsB_iff (hwf : ir.WellFormed) : ir.targetsB = true ↔ ir.TargetsAd
   rw [and_assoc]
   refine and_congr (forall₂_congr fun pid hpid => ?_)
     (and_congr (forall₂_congr fun c _ => forall₂_congr fun pid _ => ?_) Iff.rfl)
-  · exact bodyAdmittedB_iff hwf.refsOrdered pid (hwf.bodyRefsOk (predicate_mem hpid))
+  · rw [← predicate_eq_getD]
+    exact bodyAdmittedB_iff hwf.refsOrdered pid (hwf.bodyRefsOk (predicate_mem hpid))
   · constructor
     · rintro ⟨h1, h2⟩
-      exact ⟨h1, by rwa [predT, toTrie_getD h1] at h2⟩
+      exact ⟨h1, by rwa [predT, toTrie_getD h1, ← predicate_eq_getD] at h2⟩
     · rintro ⟨h1, h2⟩
-      exact ⟨h1, by rwa [predT, toTrie_getD h1]⟩
+      exact ⟨h1, by rwa [predT, toTrie_getD h1, ← predicate_eq_getD]⟩
 
 end Checkers
 

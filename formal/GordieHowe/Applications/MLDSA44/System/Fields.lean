@@ -8,8 +8,8 @@ public import GordieHowe.Foundations.Fields.GF2_256Conv
 public import GordieHowe.Foundations.Fields.GF2_128Conv
 public import GordieHowe.Applications.MLDSA44.Fields.GF2_256
 public import GordieHowe.Applications.MLDSA44.Fields.GF2_128
-public import GordieHowe.Applications.MLDSA44.Native.Fields.MLDSANative11Relative
-public import GordieHowe.Applications.MLDSA44.Native.Fields.MLDSANative6Relative
+public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative11Relative
+public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative6Relative
 
 @[expose] public section
 

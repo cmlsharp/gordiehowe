@@ -4,14 +4,14 @@
 module
 
 public import GordieHowe.Language.Honest.Source
-public import GordieHowe.Applications.MLDSA44.Native.ROMParams.Frontend.Hash
+public import GordieHowe.Applications.MLDSA44.Frontend.Hash
 
 @[expose] public section
 
 /-!
 # GordieHowe: the honest SHAKE256 calls of an ML-DSA program's domain `H`
 
-The converse of the frontend's hash view (`GordieHowe/Applications/MLDSA44/Native/ROMParams/Frontend/Hash.lean`) for a native ML-DSA program
+The converse of the frontend's hash view (`GordieHowe/Applications/MLDSA44/Frontend/Hash.lean`) for a native ML-DSA program
 (`MldsaHHash`): at an environment reading honest committed values (`GordieHowe.RealizedProgram.ReadsCells`, such as the
 source environment) whose trace words are the packed states of an honest Keccak trace
 (`WordsAgree`), the `240` round predicates hold (`round_holds`, `GordieHowe.RealizedProgram.holdsWith_of_shapes` on the
@@ -21,7 +21,7 @@ The program facts beyond the frontend's (`MldsaHHonest`: each round's output is 
 committed words) are decided per program.
 -/
 
-namespace GordieHowe.MLDSA44.Native.ROMParams
+namespace GordieHowe.MLDSA44
 
 open Generated.MLDSA44.Native.ROMParams.Program
 open GordieHowe.Bits GordieHowe.Keccak GordieHowe.KeccakTrace
@@ -43,20 +43,20 @@ class MldsaHHonest (program : RealizedProgram) : Prop extends MldsaHHash program
   /-- The word view reads word `i` at entry `i`. -/
   idx1_entry : RealizedProgram.IndexMap.size idx1 = 100 ∧ ∀ i < 100, idx1.entry i = i
   /-- `h2c.mu.out` is the bit view `idx2` of its `32` committed words. -/
-  view121 : program.isBitsB 121 120 idx2 = true ∧ program.privCellB 120 = true ∧
-    program.valueField 121 = 1 ∧ program.valueField 120 = 1 ∧ (program.value 121).size = 512 ∧
-    (program.value 120).size = 32 ∧ (program.value 120).type.nodeName = some "GF(2^16)" ∧
+  view121 : program.isBitsB 120 119 idx2 = true ∧ program.privCellB 119 = true ∧
+    program.valueField 120 = 1 ∧ program.valueField 119 = 1 ∧ (program.value 120).size = 512 ∧
+    (program.value 119).size = 32 ∧ (program.value 119).type.nodeName = some "GF(2^16)" ∧
     RealizedProgram.IndexMap.size idx2 = 32 ∧ ∀ i < 32, idx2.entry i = i
   /-- `w1` is the bit view `idx0` of its `384` committed words. -/
-  view71 : program.isBitsB 71 70 idx0 = true ∧ program.privCellB 70 = true ∧
-    program.valueField 71 = 1 ∧ program.valueField 70 = 1 ∧ (program.value 71).size = 6144 ∧
-    (program.value 70).size = 384 ∧ (program.value 70).type.nodeName = some "GF(2^16)" ∧
+  view71 : program.isBitsB 70 69 idx0 = true ∧ program.privCellB 69 = true ∧
+    program.valueField 70 = 1 ∧ program.valueField 69 = 1 ∧ (program.value 70).size = 6144 ∧
+    (program.value 69).size = 384 ∧ (program.value 69).type.nodeName = some "GF(2^16)" ∧
     RealizedProgram.IndexMap.size idx0 = 384 ∧ ∀ i < 384, idx0.entry i = i
   /-- The message buffer and its flags are committed cells of domain `H`. -/
-  priv6869 : program.privCellB 68 = true ∧ program.valueField 68 = 1 ∧
-    program.privCellB 69 = true ∧ program.valueField 69 = 1
+  priv6869 : program.privCellB 67 = true ∧ program.valueField 67 = 1 ∧
+    program.privCellB 68 = true ∧ program.valueField 68 = 1
   /-- `tr` is the statement's opaque value. -/
-  kind67 : (program.value 67).kind = .pub (.opaque "tr" [])
+  kind67 : (program.value 66).kind = .pub (.opaque "tr" [])
 
 set_option maxRecDepth 4096 in
 /-- The program of `MLDSA44.Native.ROMParams` has these facts. -/
@@ -211,9 +211,9 @@ theorem round_holds (hS : HonestTrace S) (hw : WordsAgree val S) (p : Fin 10)
     (MldsaHHonest.words_checks (program := program) p t).2.2.2.2.1.le
   have key : ∀ D, program.domainField 1 = D →
       (∀ j < 1600, program.evalE (program.reader e) D
-        (.leaf 11) j = 1) →
+        (.leaf 10) j = 1) →
       (∀ j < 1600, program.evalE (program.reader e) D
-        (.leaf 13) j = 0) →
+        (.leaf 12) j = 0) →
       (∀ x' y' z', program.evalE (program.reader e) D
         (.leaf (rcLeaf t)) (RealizedProgram.keccakIdx x' y' z') = iotaVec t (x', y', z')) →
       RoundRelation t (RealizedProgram.stateOf (program.evalE (program.reader e)
@@ -238,9 +238,9 @@ end Rounds
 
 /-! ## The honest trace of the three calls -/
 
-/-- **The honest inputs of domain `H`'s hash**, as bit readings: `tr` (`512` bits, value `67`),
-`μ`'s buffer past `tr ‖ 0x00 ‖ 0x00` (`560` bits, value `68`), `μ` (`512` bits, value `121`) and
-`w1` (`6144` bits, value `71`). -/
+/-- **The honest inputs of domain `H`'s hash**, as bit readings: `tr` (`512` bits, value `66`),
+`μ`'s buffer past `tr ‖ 0x00 ‖ 0x00` (`560` bits, value `67`), `μ` (`512` bits, value `120`) and
+`w1` (`6144` bits, value `70`). -/
 structure HashData (K : Type*) where
   /-- The bits of `tr`. -/
   tr : ℕ → K
@@ -345,10 +345,10 @@ end HashData
 
 /-- **The readings of the hash inputs** `D`: `tr`, the buffer, `μ` and `w1`. -/
 structure InputsAgree (rd : program.Valuation interp) (D : HashData FH.K) : Prop where
-  tr : ∀ j < 512, program.evalE rd 1 (.leaf 67) j = D.tr j
-  buf : ∀ j < 560, program.evalE rd 1 (.leaf 68) j = D.buf j
-  mu : ∀ j < 512, program.evalE rd 1 (.leaf 121) j = D.mu j
-  w1 : ∀ j < 6144, program.evalE rd 1 (.leaf 71) j = D.w1 j
+  tr : ∀ j < 512, program.evalE rd 1 (.leaf 66) j = D.tr j
+  buf : ∀ j < 560, program.evalE rd 1 (.leaf 67) j = D.buf j
+  mu : ∀ j < 512, program.evalE rd 1 (.leaf 120) j = D.mu j
+  w1 : ∀ j < 6144, program.evalE rd 1 (.leaf 70) j = D.w1 j
 
 section Inputs
 
@@ -434,7 +434,7 @@ theorem stateOf_in (hr : program.ReadsCells 1 e val) (hD : D.Bool) (ha : InputsA
     refine stateOf_congr fun j hj => ?_
     rw [show linRef 8 0 - 2 = 410 from rfl, evalE_ref410 _ hj]
     split_ifs with h1 h2
-    · rw [evalE_458 _ h2, show (457 : ℕ) = outVal (7 : Fin 10) (23 : Fin 24) from rfl,
+    · rw [evalE_458 _ h2, show (456 : ℕ) = outVal (7 : Fin 10) (23 : Fin 24) from rfl,
         evalE_out hr hD hw _ _ hj]
       simp only [HashData.states, show ((7 : Fin 10) : ℕ) = 7 from rfl]
       rfl
@@ -450,7 +450,7 @@ theorem stateOf_in (hr : program.ReadsCells 1 e val) (hD : D.Bool) (ha : InputsA
     funext x' y' z
     simp only [RealizedProgram.stateOf]
     rw [show linRef 9 0 - 2 = 459 from rfl, evalE_ref459 _ (RealizedProgram.keccakIdx_lt x' y' z),
-      show (506 : ℕ) = outVal (8 : Fin 10) (23 : Fin 24) from rfl,
+      show (505 : ℕ) = outVal (8 : Fin 10) (23 : Fin 24) from rfl,
       evalE_out hr hD hw _ _ (RealizedProgram.keccakIdx_lt x' y' z), RealizedProgram.stateBit_keccakIdx]
     simp only [HashData.states, show ((8 : Fin 10) : ℕ) = 8 from rfl]
     simp
@@ -462,13 +462,13 @@ theorem trace_holds (hr : program.ReadsCells 1 e val) (hD : D.Bool) (ha : Inputs
   round_holds hr ⟨D.states_bool hD⟩ hw p (stateOf_in hr hD ha hw p) t
 
 /-- **An environment reading honest committed values reads the hash inputs**: `tr` from the
-statement, the buffer from value `68`, `μ` and `w1` packed in their words (`120`, `70`). -/
+statement, the buffer from value `67`, `μ` and `w1` packed in their words (`120`, `70`). -/
 theorem inputsAgree_of (hr : program.ReadsCells 1 e val) (hD : D.Bool)
-    (htr : ∀ j < 512, (RealizedProgram.castElt (b := 1) (e.stmt 67 j) : (interp 1).K) = D.tr j)
-    (h68 : ∀ j < 560, val 68 j = RealizedProgram.castElt (a := 1) (D.buf j))
-    (h120 : ∀ i < 32, val 120 i = RealizedProgram.castElt (a := 1)
+    (htr : ∀ j < 512, (RealizedProgram.castElt (b := 1) (e.stmt 66 j) : (interp 1).K) = D.tr j)
+    (h68 : ∀ j < 560, val 67 j = RealizedProgram.castElt (a := 1) (D.buf j))
+    (h120 : ∀ i < 32, val 119 i = RealizedProgram.castElt (a := 1)
       (PackedClaim.pack HField.packing fun b => decide (D.mu (16 * i + b) = 1)))
-    (h70 : ∀ i < 384, val 70 i = RealizedProgram.castElt (a := 1)
+    (h70 : ∀ i < 384, val 69 i = RealizedProgram.castElt (a := 1)
       (PackedClaim.pack HField.packing fun b => decide (D.w1 (16 * i + b) = 1))) :
     InputsAgree RD D where
   tr j hj := by
@@ -502,7 +502,7 @@ theorem pad42_of (h : ∀ i < 135, flag e (i + 1) * (flag e i + 1) = 0) :
   rw [RealizedProgram.exprLen_mul, RealizedProgram.exprLen_reindex, (pad_facts (program := program)).2.2.2.2.2.1]
     at hi
   rw [RealizedProgram.evalWith_eq_iff MldsaHCross.domainField1]
-  rw [evalE_zeroConst e (constPad 35 (by simp)).1 (constPad 35 (by simp)).2
+  rw [evalE_zeroConst e (constPad 34 (by simp)).1 (constPad 34 (by simp)).2
       (pad_facts (program := program)).2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
     RealizedProgram.evalE_mul, RealizedProgram.evalE_add, RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex,
     RealizedProgram.evalE_reindex, idx26_eq hi, idx27_id hi, idx28_eq hi, evalE_one7 e 0 rfl]
@@ -516,7 +516,7 @@ theorem pad43_of (h : flag e 98 = 0) :
   rw [RealizedProgram.exprLen_reindex, (pad_facts (program := program)).2.2.2.2.2.2.1] at hi
   obtain rfl : i = 0 := by omega
   rw [RealizedProgram.evalWith_eq_iff MldsaHCross.domainField1]
-  rw [evalE_listConst e (constPad 36 (by simp)).1 (constPad 36 (by simp)).2
+  rw [evalE_listConst e (constPad 35 (by simp)).1 (constPad 35 (by simp)).2
       (pad_facts (program := program)).2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, RealizedProgram.evalE_reindex,
     (pad_facts (program := program)).2.2.2.2.2.2.2.2.2.2.1]
   exact h.trans HField.decode_zero.symm
@@ -530,7 +530,7 @@ theorem pad44_of (h : flag e 65 = 1) :
     at hi
   obtain rfl : i = 0 := by omega
   rw [RealizedProgram.evalWith_eq_iff MldsaHCross.domainField1]
-  rw [evalE_listConst e (constPad 36 (by simp)).1 (constPad 36 (by simp)).2
+  rw [evalE_listConst e (constPad 35 (by simp)).1 (constPad 35 (by simp)).2
       (pad_facts (program := program)).2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, RealizedProgram.evalE_add,
     RealizedProgram.evalE_reindex, (pad_facts (program := program)).2.2.2.2.2.2.2.2.2.2.2.1, evalE_one7 e 0 rfl]
   change flag e 65 + 1 = _
@@ -539,7 +539,7 @@ theorem pad44_of (h : flag e 65 = 1) :
 
 /-- **`h2c.mu.padding.suffix` holds** where `suffix_eq`'s identity holds at every byte. -/
 theorem pad45_of (h : ∀ i < 136, ((if i = 0 then 1 else flag e (i - 1)) + flag e i) *
-      (selF.embedBits (by decide) (bufByte e i) + cH (program := program) (FH := FH) 38 i) = 0) :
+      (selF.embedBits (by decide) (bufByte e i) + cH (program := program) (FH := FH) 37 i) = 0) :
     program.HoldsWith (program.reader e) (program.predicate 45).body := by
   rw [(pad_exprs (program := program)).2.2.2.1]
   intro i hi
@@ -548,15 +548,15 @@ theorem pad45_of (h : ∀ i < 136, ((if i = 0 then 1 else flag e (i - 1)) + flag
     (pad_exprs (program := program)).2.2.2.2.2.2.1, RealizedProgram.exprLen_reindex,
     (pad_facts (program := program)).2.2.2.2.2.2.2.2.1] at hi
   rw [RealizedProgram.evalWith_eq_iff MldsaHCross.domainField1]
-  rw [evalE_zeroConst e (constPad 39 (by simp)).1 (constPad 39 (by simp)).2
+  rw [evalE_zeroConst e (constPad 38 (by simp)).1 (constPad 38 (by simp)).2
       (pad_facts (program := program)).2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
     RealizedProgram.evalE_mul, RealizedProgram.evalE_add, RealizedProgram.evalE_add, evalE_ref61 e hi, evalE_ref62 e hi,
-    evalE_constH e (constPad 38 (by simp)).1 (constPad 38 (by simp)).2]
+    evalE_constH e (constPad 37 (by simp)).1 (constPad 37 (by simp)).2]
   exact h i hi
 
 /-- **`h2c.mu.padding.zeros` holds** where `zeros_eq`'s identity holds at every byte. -/
 theorem pad46_of (h : ∀ i < 136, ((if i = 0 then 1 else flag e (i - 1)) + 1) *
-      (selF.embedBits (by decide) (bufByte e i) + cH (program := program) (FH := FH) 40 i) = 0) :
+      (selF.embedBits (by decide) (bufByte e i) + cH (program := program) (FH := FH) 39 i) = 0) :
     program.HoldsWith (program.reader e) (program.predicate 46).body := by
   rw [(pad_exprs (program := program)).2.2.2.2.1]
   intro i hi
@@ -565,25 +565,25 @@ theorem pad46_of (h : ∀ i < 136, ((if i = 0 then 1 else flag e (i - 1)) + 1) *
     (pad_exprs (program := program)).2.2.2.2.2.2.1, RealizedProgram.exprLen_reindex,
     (pad_facts (program := program)).2.2.2.2.2.2.2.2.1] at hi
   rw [RealizedProgram.evalWith_eq_iff MldsaHCross.domainField1]
-  rw [evalE_zeroConst e (constPad 39 (by simp)).1 (constPad 39 (by simp)).2
+  rw [evalE_zeroConst e (constPad 38 (by simp)).1 (constPad 38 (by simp)).2
       (pad_facts (program := program)).2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
     RealizedProgram.evalE_mul, RealizedProgram.evalE_add, RealizedProgram.evalE_add, evalE_ref61 e hi, evalE_ref62 e hi,
     RealizedProgram.evalE_reindex, idx33_eq hi, evalE_one7 e 0 rfl, RealizedProgram.evalE_mul,
     RealizedProgram.evalE_reindex, idx33_eq hi, evalE_ref64, one_mul,
-    evalE_constH e (constPad 40 (by simp)).1 (constPad 40 (by simp)).2]
+    evalE_constH e (constPad 39 (by simp)).1 (constPad 39 (by simp)).2]
   exact h i hi
 
 /-- **`h2c.mu.padding.output` holds** where `h2c.mu.out` reads `μ`'s state's first `512` bits. -/
-theorem pad47_of (h : ∀ j < 512, program.evalE (program.reader e) 1 (.leaf 121) j =
-      program.evalE (program.reader e) 1 (.leaf 119) j) :
+theorem pad47_of (h : ∀ j < 512, program.evalE (program.reader e) 1 (.leaf 120) j =
+      program.evalE (program.reader e) 1 (.leaf 118) j) :
     program.HoldsWith (program.reader e) (program.predicate 47).body := by
   rw [(pad_exprs (program := program)).2.2.2.2.2.1]
   intro j hj
   rw [RealizedProgram.exprLen_mul, RealizedProgram.exprLen_reindex,
     (pad_facts (program := program)).2.2.2.2.2.2.2.2.2.1] at hj
   rw [RealizedProgram.evalWith_eq_iff MldsaHCross.domainField1]
-  rw [evalE_zeroConst e ((hash_sizes (program := program)).2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2 10 (by simp)).1
-      ((hash_sizes (program := program)).2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2 10 (by simp)).2
+  rw [evalE_zeroConst e ((hash_sizes (program := program)).2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2 9 (by simp)).1
+      ((hash_sizes (program := program)).2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2 9 (by simp)).2
       (hash_sizes (program := program)).2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
     RealizedProgram.evalE_mul, RealizedProgram.evalE_reindex, idx37_eq hj, evalE_ref64, one_mul,
     RealizedProgram.evalE_add, RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex, idx13_id hj,
@@ -670,4 +670,4 @@ theorem pad_holds_honest {L : ℕ} (hL : L ≤ 32) {msg : ℕ → ℕ} (hmsg : �
 
 end Padding
 
-end GordieHowe.MLDSA44.Native.ROMParams
+end GordieHowe.MLDSA44

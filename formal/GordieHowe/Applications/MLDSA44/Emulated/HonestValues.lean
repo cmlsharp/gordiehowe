@@ -3,8 +3,9 @@
 
 module
 
+public import GordieHowe.Language.Completeness.Roles
 public import GordieHowe.Applications.MLDSA44.Emulated.HonestAlgebra
-public import GordieHowe.Applications.MLDSA44.Native.ROMParams.HonestSelect
+public import GordieHowe.Applications.MLDSA44.Honest.SampleInBall
 public import GordieHowe.Language.Honest.Digits
 public import GordieHowe.Applications.MLDSA44.Emulated.System.Honest
 
@@ -15,7 +16,7 @@ public import GordieHowe.Applications.MLDSA44.Emulated.System.Honest
 
 The honest committed values of an emulated ML-DSA program (`MLDSA44.Emulated.ROMParams`,
 `MLDSA44.Emulated.QROMParams`) on an honest input (`honestVal`): domain `H`'s are the native program's
-(`GordieHowe.MLDSA44.Native.ROMParams.hVal` at the embedded native program, one identifier lower), and domain `A`'s
+(`GordieHowe.MLDSA44.hVal` at the embedded native program, one identifier lower), and domain `A`'s
 (`aVal`) `GordieHowe.MLDSA44.Emulated`'s honest assignment's hint, challenge bits, UseHint output bits and
 signs (`GordieHowe.MLDSA44.Emulated.honestAssignment`) and the digits of `w'`, of `z + 130993`, of the UseHint
 offset and of the slack, in the bases and at the values of the program's digit layout
@@ -34,15 +35,10 @@ namespace GordieHowe.MLDSA44.Emulated
 
 open GordieHowe.Bits RealizedProgram
 open MLDSA44 (HonestInput)
-open Native.ROMParams (hVal MldsaHHash MldsaHSample MldsaHConsts MldsaHHonest MldsaHShuffle MldsaHSelHonest MldsaHNativeData MldsaHNodes)
 
 /-- **Domain `A`'s committed values** of a layout: the hint, the challenge bits, the UseHint output
 bits and signs, and the layout's digits of `w'`, of `z + 130993`, of the offset and of the slack. -/
-def aValues (L : MldsaELayout) : List ℕ := [60, 61, 64, 65] ++ (L).digitValues
-
-/-- **The MAC's predicates**: `mac.A` (the accumulator row), the lower digit's and the top digit's
-ranges, the no-wrap check, the tail `mac`. -/
-def macRolePreds : List ℕ := [3, 16, 17, 18, 273]
+def aValues (L : MldsaELayout) : List ℕ := [59, 60, 63, 64] ++ (L).digitValues
 
 /-! ## The layout's values are distinct -/
 
@@ -53,7 +49,7 @@ include h
 
 theorem nodup_digitValues : (L).digitValues.Nodup := (List.nodup_append.1 h).2.1
 
-theorem fixed_not_mem {u v : ℕ} (hu : u ∈ [60, 61, 64, 65]) (hv : v ∈ (L).digitValues) : v ≠ u :=
+theorem fixed_not_mem {u v : ℕ} (hu : u ∈ [59, 60, 63, 64]) (hv : v ∈ (L).digitValues) : v ≠ u :=
   fun e => (List.nodup_append.1 h).2.2 u hu v hv e.symm
 
 theorem w_nodup : (L).w.ids.Nodup := by
@@ -121,7 +117,7 @@ theorem mem_aValues_of_digit {L : MldsaELayout} {v : ℕ} (hv : v ∈ (L).digitV
     v ∈ aValues L :=
   List.mem_append_right _ hv
 
-theorem fixed_mem_aValues {L : MldsaELayout} {v : ℕ} (hv : v ∈ [60, 61, 64, 65]) :
+theorem fixed_mem_aValues {L : MldsaELayout} {v : ℕ} (hv : v ∈ [59, 60, 63, 64]) :
     v ∈ aValues L :=
   List.mem_append_left _ hv
 
@@ -140,8 +136,9 @@ local notation "L" => MldsaEAlgebra.layout program
 instantiates them by `decide`): the statement of a key (`stmtOfKey`) with what the honest prover
 reads of it, the transfer of domain `H`'s committed values from the embedded native program, the
 kinds, sizes and classes of domain `A`'s values with the digit layout's (`MldsaEAlgebra.layout`)
-values bound to its digits and room for the honest naturals, and the only cross-field `equal` the
-MAC's. -/
+values bound to its digits and room for the honest naturals, the crossing `mac.equal` and the
+operands of every cross-field `equal`. The program-wide facts every honest strategy reads are the
+honest roles (`RealizedProgram.HonestRoles`). -/
 class MldsaEmulatedHonest (program : RealizedProgram) [MldsaEAlgebra program] (F0 FH : outParam FieldInterp)
     where
   /-- The statement of a key. -/
@@ -152,8 +149,8 @@ class MldsaEmulatedHonest (program : RealizedProgram) [MldsaEAlgebra program] (F
   bound : ∀ v < program.values.length, program.BoundOk v
   /-- The key's statement holds the key's preprocessing. -/
   keyOf : ∀ pk, KeyOf pk (stmtOfKey pk)
-  /-- The key's statement holds the bits of `tr` at value `68`. -/
-  stmt68 : ∀ pk, ∀ j (hj : j < 512), (castElt (b := 1) (stmtOfKey pk 68 j) : (interp 1).K) =
+  /-- The key's statement holds the bits of `tr` at value `67`. -/
+  stmt68 : ∀ pk, ∀ j (hj : j < 512), (castElt (b := 1) (stmtOfKey pk 67 j) : (interp 1).K) =
     constBit (MLDSA44.PoP.Compose.trOf pk ⟨j / 8, by omega⟩).toNat (j % 8)
   /-- Domain `H`'s committed cells are the native program's, one identifier higher. -/
   hCells : ∀ v < (nat).values.length, (nat).privCellB v = true → (nat).valueField v = 1 →
@@ -163,26 +160,26 @@ class MldsaEmulatedHonest (program : RealizedProgram) [MldsaEAlgebra program] (F
   /-- Domain `A`'s committed values are cells of field `0`. -/
   a_cells : ∀ v ∈ aValues L, program.privCellB v = true ∧ program.valueField v = 0
   /-- `z` is bound to its digits less the offset `130993`. -/
-  kind59 : (program.value 59).kind =
-    .bound (.add (L).z.expr (.scale (.const 18446744069414584320) (.leaf 63)))
+  kind59 : (program.value 58).kind =
+    .bound (.add (L).z.expr (.scale (.const 18446744069414584320) (.leaf 62)))
   /-- `w'` is bound to its digits. -/
-  kind62 : (program.value 62).kind = .bound (L).w.expr
+  kind62 : (program.value 61).kind = .bound (L).w.expr
   /-- The offset is bound to its digits. -/
-  kind66 : (program.value 66).kind = .bound (L).offset.expr
+  kind66 : (program.value 65).kind = .bound (L).offset.expr
   /-- The slack is bound to its digits. -/
-  kind67 : (program.value 67).kind = .bound (L).slack.expr
+  kind67 : (program.value 66).kind = .bound (L).slack.expr
   /-- The bound values of domain `A` are values of field `0`. -/
-  boundVals : ∀ v ∈ [59, 62, 66, 67], v < program.values.length ∧ program.valueField v = 0
+  boundVals : ∀ v ∈ [58, 61, 65, 66], v < program.values.length ∧ program.valueField v = 0
   /-- The digits have one coordinate per coefficient. -/
   digitSizes : ∀ v ∈ (L).digitValues, (program.value v).size = 1024
   /-- The hint has `1024` coordinates. -/
-  size60 : (program.value 60).size = 1024
+  size60 : (program.value 59).size = 1024
   /-- The challenge bits have `512` coordinates. -/
-  size61 : (program.value 61).size = 512
+  size61 : (program.value 60).size = 512
   /-- The UseHint output bits have `6144` coordinates. -/
-  size64 : (program.value 64).size = 6144
+  size64 : (program.value 63).size = 6144
   /-- The signs have `1024` coordinates. -/
-  size65 : (program.value 65).size = 1024
+  size65 : (program.value 64).size = 1024
   /-- `w'`'s digits hold every natural below `q`. -/
   wFits : (L).w.Fits 8380417
   /-- `z + 130993`'s digits hold every natural below `261987`. -/
@@ -193,10 +190,6 @@ class MldsaEmulatedHonest (program : RealizedProgram) [MldsaEAlgebra program] (F
   slackFits : (L).slack.Fits 95233
   /-- The offset's and the slack's bound lies above `γ₂`. -/
   offsetRoom : 95232 < (L).offsetBound
-  /-- The MAC with its digit tail. -/
-  mac : program.DigitsMac PN
-  /-- The MAC's width. -/
-  macW : ℕ
   /-- The program is well formed. -/
   wellFormed : program.WellFormed
   /-- The interpretation's registry. -/
@@ -209,61 +202,34 @@ class MldsaEmulatedHonest (program : RealizedProgram) [MldsaEAlgebra program] (F
   bounded : ∀ i : HonestInput, program.StmtBounded interp (stmtOfKey i.y.key)
   /-- The statement has no member checks. -/
   checks : program.statement.checks = []
-  /-- The realization's predicates outside the MAC's are no source predicates. -/
-  realPreds : ∀ q ∈ [4, 5, 10, 19], program.inSource (program.predicate q) = false
-  /-- The blind's cells. -/
-  blind_cells : (program.value 569).kind = .padCopy 572 "polynomialBits" ∧
-    (program.value 569).domain < program.domains.length ∧
-    (∀ j < macW, CellKey.val 569 j ∈ program.cellKeys (program.value 569).domain) ∧
-    program.valueField 569 = 0 ∧ (program.value 569).size = macW
+  /-- The realization's predicates and the MAC's role predicates (`mac.A`, the lower and the top
+  digit's ranges, the no-wrap check, the tail `mac`) are no source predicates. -/
+  realPreds : ∀ q ∈ [3, 4, 5, 10, 16, 17, 18, 19, 273], program.inSource (program.predicate q) = false
   /-- The program has `276` predicates. -/
   predicates_length : program.predicates.length = 276
   /-- The A operand of the crossing has `6656` coordinates. -/
   len6 : program.exprLen (.ref 6) = 6656
-  /-- The bits the A operand reads. -/
-  cross_vals : program.isConstant 64 = false ∧ program.isConstant 61 = false ∧
-    program.valueField 64 = 0 ∧ program.valueField 61 = 0
-  /-- `mac.equal` is predicate `275`, the MAC's. -/
-  hb : (program.predicate 275).body = .cross 1 (.ref 527) 0 (.ref 6) {} mac.real
-  /-- The MAC crosses `ref 527` of domain `H` and `ref 6` of domain `A`. -/
-  mac_shape : mac.dx = 1 ∧ mac.x = Expr.ref 527 ∧ mac.dy = 0 ∧ mac.y = Expr.ref 6 ∧ mac.k = {} ∧
-    mac.cdy = 0 ∧ mac.cy = Expr.ref 6
-  /-- The only cross-field `equal` is the MAC's. -/
-  crossMac : ∀ p ∈ program.predicates, ∀ dx x dy y k real, p.body = .cross dx x dy y k real →
-    (program.predicate mac.pid).body = p.body
-  /-- The committed values' classes. -/
+  /-- The MAC realization of `mac.equal`. -/
+  macReal : MacRealization
+  /-- `mac.equal` is predicate `275`, crossing `ref 527` of domain `H` and `ref 6` of domain `A`. -/
+  hb : (program.predicate 275).body = .cross 1 (.ref 527) 0 (.ref 6) {} macReal
+  /-- Every cross-field `equal` crosses `ref 527` of domain `H` and `ref 6` of domain `A`. -/
+  crossOperands : program.crossOperandsB 1 (.ref 527) 0 (.ref 6) = true
+  /-- The committed source cells' classes. -/
   cell_classes : (List.range program.values.length).all (fun v =>
-    !program.isCellValue (program.value v).domain v || !decide (program.IsSourceValue v) ||
+    !program.privCellB v || !decide (program.IsSourceValue v) ||
       (program.valueField v == 1 && (program.value v).node.map (·.name) == some "GF(2^16)" &&
         decide (1 ≤ v) && decide (v - 1 ∈ hV) &&
-        ((Native.ROMParams.wordsOwner? (v - 1)).isSome ||
-          [70, 120, 558, 561, 563, 564, 565, 566].contains (v - 1))) ||
+        ((MLDSA44.wordsOwner? (v - 1)).isSome ||
+          [69, 119, 557, 560, 562, 563, 564, 565].contains (v - 1))) ||
       (program.valueField v == 1 && (program.value v).node.map (·.name) == some "bit" &&
-        decide (1 ≤ v) && decide (v - 1 ∈ hV) && [68, 69, 557, 562].contains (v - 1)) ||
+        decide (1 ≤ v) && decide (v - 1 ∈ hV) && [67, 68, 556, 561].contains (v - 1)) ||
       (program.valueField v == 0 && (program.value v).node.map (·.name) == some "GF(p^1)" &&
-        ((aValues L).contains v || v == 569))) = true
-  /-- Only the blind is a pad copy. -/
-  padCopy_only : (List.range program.values.length).all (fun w => w == 569 ||
-    match (program.value w).kind with
-    | .padCopy _ _ => false
-    | _ => true) = true
-  /-- The node-typed values that are not late. -/
-  typed_classes : (List.range program.values.length).all (fun v =>
-    !((program.value v).typeSource == .node) || decide (program.IsLate v) ||
-      ((match (program.value v).kind with
-        | .bits w _ => (match (program.value w).kind with
-          | .priv => true
-          | _ => false)
-        | _ => false) && (program.value v).type == .bit) ||
-      (program.privCellB v && program.isCellValue (program.value v).domain v &&
-        (match (program.value v).type with
-          | .sub S => (program.value v).node.map (·.name) == some S
-          | .bit => (program.value v).node.map (·.name) == some "bit" && program.valueField v == 1
-          | .field => true))) = true
+        (aValues L).contains v)) = true
 
 variable {program : RealizedProgram} [MldsaEAlgebra program] {F0 FH : FieldInterp} [AField F0]
   [HField FH] [MldsaHHonest nat] [MldsaHSample nat] [MldsaHSelHonest nat]
-  [MldsaHConsts nat FH] [Native.ROMParams.MldsaHNativeData FH] [MldsaHNodes FH]
+  [MldsaHConsts nat FH] [MLDSA44.MldsaHNativeData FH] [MldsaHNodes FH]
   [hE : MldsaEmulatedHonest program F0 FH]
 
 open MldsaEmulatedHonest
@@ -276,13 +242,19 @@ omit hE
 
 /-- **The digits' sum from position `t` on reads its terms** in domain `A`. -/
 theorem evalE_exprFrom (rd : program.Valuation interp) (b j : ℕ) :
-    ∀ (t : ℕ) (acc : Expr) (ds : List ℕ), program.evalE rd 0 (DigitLayout.exprFrom b t acc ds) j =
-      program.evalE rd 0 acc j + ∑ s ∈ Finset.range ds.length,
-        ((b ^ (t + s) : ℕ) : (interp 0).K) * program.evalE rd 0 (.leaf (ds.getD s 0)) j
-  | t, acc, [] => by simp
-  | t, acc, d :: ds => by
-    rw [DigitLayout.exprFrom_cons, evalE_exprFrom rd b j (t + 1), List.length_cons,
-      Finset.sum_range_succ', evalE_add, evalE_scaleA]
+    ∀ (t : ℕ) (acc : Expr) (ds : List ℕ), b ^ (t + ds.length) ≤ 18446744069414584321 →
+      program.evalE rd 0 (DigitLayout.exprFrom b t acc ds) j =
+        program.evalE rd 0 acc j + ∑ s ∈ Finset.range ds.length,
+          ((b ^ (t + s) : ℕ) : (interp 0).K) * program.evalE rd 0 (.leaf (ds.getD s 0)) j
+  | t, acc, [], _ => by simp
+  | t, acc, d :: ds, hb => by
+    have hbt : b ^ t < 18446744069414584321 := by
+      rcases Nat.lt_or_ge b 2 with h | h
+      · exact (pow_le_one₀ (Nat.zero_le b) (by omega)).trans_lt (by norm_num)
+      · exact (Nat.pow_lt_pow_right h (by simp)).trans_le hb
+    rw [DigitLayout.exprFrom_cons, evalE_exprFrom rd b j (t + 1) _ _
+        (by rw [List.length_cons, ← add_assoc, add_right_comm] at hb; exact hb), List.length_cons,
+      Finset.sum_range_succ', evalE_add, evalE_scaleA _ hbt]
     have hs : ∑ s ∈ Finset.range ds.length, ((b ^ (t + (s + 1)) : ℕ) : (interp 0).K) *
         program.evalE rd 0 (.leaf ((d :: ds).getD (s + 1) 0)) j =
         ∑ s ∈ Finset.range ds.length, ((b ^ (t + 1 + s) : ℕ) : (interp 0).K) *
@@ -312,7 +284,8 @@ theorem evalE_expr_of_digits {D : DigitLayout} {n N : ℕ} (hD : D.Fits N) (hn :
     rw [DigitLayout.sum_digitAt, Nat.mod_eq_of_lt hlt]
   have h0 := h' 0 (by omega)
   rw [List.getD_cons_zero] at h0
-  rw [DigitLayout.expr_cons, evalE_exprFrom, hn', Finset.sum_range_succ', Nat.cast_add,
+  rw [DigitLayout.expr_cons, evalE_exprFrom rd b j 1 _ _ (by rw [add_comm]; exact hD.weight_le),
+    hn', Finset.sum_range_succ', Nat.cast_add,
     Nat.cast_sum, h0, add_comm]
   congr 1
   · refine Finset.sum_congr rfl fun s hs => ?_
@@ -377,8 +350,8 @@ def wtN (i : HonestInput) : ℕ :=
     (NativeAlgebraCircuit.flat (NativeAlgebraCircuit.Honest.hintBool i.y.h) m).toNat
 
 variable (F0) in
-/-- **Domain `A`'s honest values** (in domain `A`'s field) at a digit layout: the hint (`60`), the
-challenge bits (`61`), the UseHint output bits (`64`) and signs (`65`) of `Emulated`'s
+/-- **Domain `A`'s honest values** (in domain `A`'s field) at a digit layout: the hint (`59`), the
+challenge bits (`60`), the UseHint output bits (`63`) and signs (`64`) of `Emulated`'s
 honest assignment; the layout's digits (`DigitLayout.digit`) of `w'`, of `z + 130993`, of the
 offset and of the slack; `0` elsewhere (the realization's values are generated, `RealizedProgram.genCommitted`).
 
@@ -386,15 +359,15 @@ Running time: a prover computing these values would take the time of `Emulated`'
 assignment and one digit per coordinate. This running time is argued here, not proved in Lean. -/
 -- spec-side
 noncomputable def aVal (L' : MldsaELayout) (i : HonestInput) (v j : ℕ) : F0.K :=
-  if v = 61 then
+  if v = 60 then
     (if h : j < 512 then (nativeE F0 i).cA ⟨j / 2, by change j / 2 < 256; omega⟩ ⟨j % 2, by omega⟩
       else 0)
-  else if v = 64 then
+  else if v = 63 then
     (if h : j < 6144 then NativeAlgebraCircuit.outputBits (nativeE F0 i).w1A
       ⟨j / 6, by change j / 6 < 4 * 256; omega⟩ ⟨j % 6, by change j % 6 < 6; omega⟩ else 0)
   else if h : j < 1024 then
-    if v = 60 then NativeAlgebraCircuit.flat (nativeE F0 i).h (fm j h)
-    else if v = 65 then NativeAlgebraCircuit.flat (nativeE F0 i).np (fm j h)
+    if v = 59 then NativeAlgebraCircuit.flat (nativeE F0 i).h (fm j h)
+    else if v = 64 then NativeAlgebraCircuit.flat (nativeE F0 i).np (fm j h)
     else if v ∈ L'.w.ids then ((L'.w.digit (wN i (fm j h)) v : ℕ) : F0.K)
     else if v ∈ L'.z.ids then ((L'.z.digit (zN i (fmz j h)) v : ℕ) : F0.K)
     else if v ∈ L'.offset.ids then ((L'.offset.digit (offN i (fm j h)) v : ℕ) : F0.K)
@@ -462,25 +435,25 @@ section Access
 variable (L' : MldsaELayout) (i : HonestInput) {j : ℕ}
 
 theorem aVal_60 (h : j < 1024) :
-    aVal F0 L' i 60 j = NativeAlgebraCircuit.flat (nativeE F0 i).h (fm j h) := by
+    aVal F0 L' i 59 j = NativeAlgebraCircuit.flat (nativeE F0 i).h (fm j h) := by
   unfold aVal
-  simp only [show (60 : ℕ) ≠ 61 by decide, show (60 : ℕ) ≠ 64 by decide,
+  simp only [show (59 : ℕ) ≠ 60 by decide, show (59 : ℕ) ≠ 63 by decide,
     if_false, dif_pos h, if_true]
 
 theorem aVal_65 (h : j < 1024) :
-    aVal F0 L' i 65 j = NativeAlgebraCircuit.flat (nativeE F0 i).np (fm j h) := by
+    aVal F0 L' i 64 j = NativeAlgebraCircuit.flat (nativeE F0 i).np (fm j h) := by
   unfold aVal
-  simp only [show (65 : ℕ) ≠ 61 by decide, show (65 : ℕ) ≠ 64 by decide,
-    show (65 : ℕ) ≠ 60 by decide,
+  simp only [show (64 : ℕ) ≠ 60 by decide, show (64 : ℕ) ≠ 63 by decide,
+    show (64 : ℕ) ≠ 59 by decide,
     if_false, dif_pos h, if_true]
 
-theorem aVal_61 (h : j < 512) : aVal F0 L' i 61 j =
+theorem aVal_61 (h : j < 512) : aVal F0 L' i 60 j =
     (nativeE F0 i).cA ⟨j / 2, by change j / 2 < 256; omega⟩ ⟨j % 2, by omega⟩ := by
   unfold aVal
   rw [if_pos rfl]
   exact dif_pos h
 
-theorem aVal_64 (h : j < 6144) : aVal F0 L' i 64 j = NativeAlgebraCircuit.outputBits (nativeE F0 i).w1A
+theorem aVal_64 (h : j < 6144) : aVal F0 L' i 63 j = NativeAlgebraCircuit.outputBits (nativeE F0 i).w1A
     ⟨j / 6, by change j / 6 < 4 * 256; omega⟩ ⟨j % 6, by change j % 6 < 6; omega⟩ := by
   unfold aVal
   rw [if_neg (by decide), if_pos rfl]
@@ -491,7 +464,7 @@ include hnd
 
 /-- A digit value of the layout is none of the fixed values. -/
 theorem aVal_digit_ne {v : ℕ} (hv : v ∈ L'.digitValues) :
-    v ≠ 61 ∧ v ≠ 64 ∧ v ≠ 60 ∧ v ≠ 65 :=
+    v ≠ 60 ∧ v ≠ 63 ∧ v ≠ 59 ∧ v ≠ 64 :=
   ⟨fixed_not_mem hnd (by simp) hv, fixed_not_mem hnd (by simp) hv,
     fixed_not_mem hnd (by simp) hv, fixed_not_mem hnd (by simp) hv⟩
 
@@ -621,7 +594,7 @@ theorem rdA_honest {v : ℕ} (hv : v ∈ aValues L) {j : ℕ} (hj : j < (program
   exact honestVal_a i v hv j
 
 /-- **A fixed committed value of domain `A` reads its honest value** at the source environment. -/
-theorem rdA_honest_fixed {v : ℕ} (hv : v ∈ [60, 61, 64, 65]) {j : ℕ}
+theorem rdA_honest_fixed {v : ℕ} (hv : v ∈ [59, 60, 63, 64]) {j : ℕ}
     (hj : j < (program.value v).size) :
     rdA (program.srcEnv interp x (honestVal program F0 FH i) c π) v j = aVal F0 L i v j :=
   rdA_honest (fixed_mem_aValues hv) hj
@@ -649,8 +622,8 @@ theorem rdA_digit {v : ℕ} (hv : v ∈ (L).digitValues) {m : ℕ} (hm : m < 102
   rdA_honest (mem_aValues_of_digit hv) (by rw [digitSizes (program := program) v hv]; exact hm)
 
 /-- **`w'` reads its honest natural.** -/
-theorem rdA_62 {m : ℕ} (hm : m < 1024) : rdA E 62 m = ((wN i (fm m hm) : ℕ) : (interp 0).K) := by
-  obtain ⟨hl, hf⟩ := boundVals (program := program) 62 (by simp)
+theorem rdA_62 {m : ℕ} (hm : m < 1024) : rdA E 61 m = ((wN i (fm m hm) : ℕ) : (interp 0).K) := by
+  obtain ⟨hl, hf⟩ := boundVals (program := program) 61 (by simp)
   rw [rdA_bound kind62 hf hl]
   refine evalE_expr_of_digits wFits (wN_lt i _) _ m fun s hs => ?_
   exact (rdA_digit (w_mem_digitValues (List.getElem_mem hs)) hm).trans
@@ -658,21 +631,21 @@ theorem rdA_62 {m : ℕ} (hm : m < 1024) : rdA E 62 m = ((wN i (fm m hm) : ℕ) 
 
 /-- **`z` reads its centered coefficient.** -/
 theorem rdA_59 {m : ℕ} (hm : m < 1024) :
-    rdA E 59 m = ((NativeAlgebraCircuit.flat (NativeAlgebraCircuit.Honest.zCentered i.y.z) (fmz m hm) : ℤ) :
+    rdA E 58 m = ((NativeAlgebraCircuit.flat (NativeAlgebraCircuit.Honest.zCentered i.y.z) (fmz m hm) : ℤ) :
       (interp 0).K) := by
-  obtain ⟨hl, hf⟩ := boundVals (program := program) 59 (by simp)
+  obtain ⟨hl, hf⟩ := boundVals (program := program) 58 (by simp)
   rw [rdA_bound kind59 hf hl, evalE_add, evalE_negA]
   have hz : program.evalE (program.reader E) 0 (L).z.expr m = ((zN i (fmz m hm) : ℕ) : (interp 0).K) :=
     evalE_expr_of_digits zFits (zN_lt i _) _ m fun s hs =>
       (rdA_digit (z_mem_digitValues (List.getElem_mem hs)) hm).trans (aVal_z i a_nodup hs hm)
-  change _ + -rdA _ 63 m = _
+  change _ + -rdA _ 62 m = _
   rw [hz, rdA_63 _ hm, zN_cast]
   ring
 
 /-- **The offset reads its digits' sum.** -/
 theorem rdA_66 {m : ℕ} (hm : m < 1024) :
-    rdA E 66 m = ((offN i (fm m hm) : ℕ) : (interp 0).K) := by
-  obtain ⟨hl, hf⟩ := boundVals (program := program) 66 (by simp)
+    rdA E 65 m = ((offN i (fm m hm) : ℕ) : (interp 0).K) := by
+  obtain ⟨hl, hf⟩ := boundVals (program := program) 65 (by simp)
   rw [rdA_bound kind66 hf hl]
   refine evalE_expr_of_digits offsetFits (Nat.lt_succ_of_le (offN_slN_le i _).1) _ m
     fun s hs => ?_
@@ -681,8 +654,8 @@ theorem rdA_66 {m : ℕ} (hm : m < 1024) :
 
 /-- **The slack reads its digits' sum.** -/
 theorem rdA_67 {m : ℕ} (hm : m < 1024) :
-    rdA E 67 m = ((slN i (fm m hm) : ℕ) : (interp 0).K) := by
-  obtain ⟨hl, hf⟩ := boundVals (program := program) 67 (by simp)
+    rdA E 66 m = ((slN i (fm m hm) : ℕ) : (interp 0).K) := by
+  obtain ⟨hl, hf⟩ := boundVals (program := program) 66 (by simp)
   rw [rdA_bound kind67 hf hl]
   refine evalE_expr_of_digits slackFits (Nat.lt_succ_of_le (offN_slN_le i _).2) _ m
     fun s hs => ?_
@@ -722,38 +695,38 @@ theorem nativeEC : Emulated.AlgebraConstraints i.y.key (nativeE F0 i) :=
 set_option hygiene false in
 local notation "E" => program.srcEnv interp x (honestVal program F0 FH i) c π
 
-theorem w1Bits_bool : ∀ m < 1024, ∀ t < 6, rdA E 64 (6 * m + t) = 0 ∨ rdA E 64 (6 * m + t) = 1 :=
+theorem w1Bits_bool : ∀ m < 1024, ∀ t < 6, rdA E 63 (6 * m + t) = 0 ∨ rdA E 63 (6 * m + t) = 1 :=
   fun m hm t ht => by
     have h := congrFun (bitsA_honest (i := i) (x := x) (c := c) (π := π) hm) ⟨t, ht⟩
     unfold bitsA at h
     rw [h]
     exact (nativeEC (F0 := F0) i).w1Bool _
 
-theorem h60_bool : ∀ m < 1024, rdA E 60 m = 0 ∨ rdA E 60 m = 1 := fun m hm => by
+theorem h60_bool : ∀ m < 1024, rdA E 59 m = 0 ∨ rdA E 59 m = 1 := fun m hm => by
   have h60 := size60 (program := program)
   rw [rdA_honest_fixed (i := i) (x := x) (c := c) (π := π) (by simp) (by rw [h60]; exact hm),
     aVal_60 _ i hm]
   exact (nativeEC (F0 := F0) i).hBool _ _
 
-theorem h65_bool : ∀ m < 1024, rdA E 65 m = 0 ∨ rdA E 65 m = 1 := fun m hm => by
+theorem h65_bool : ∀ m < 1024, rdA E 64 m = 0 ∨ rdA E 64 m = 1 := fun m hm => by
   have h65 := size65 (program := program)
   rw [rdA_honest_fixed (i := i) (x := x) (c := c) (π := π) (by simp) (by rw [h65]; exact hm),
     aVal_65 _ i hm]
   exact (nativeEC (F0 := F0) i).npBool _ _
 
-theorem h61_bool : ∀ s < 512, rdA E 61 s = 0 ∨ rdA E 61 s = 1 := fun s hs => by
+theorem h61_bool : ∀ s < 512, rdA E 60 s = 0 ∨ rdA E 60 s = 1 := fun s hs => by
   have h61 := size61 (program := program)
   rw [rdA_honest_fixed (i := i) (x := x) (c := c) (π := π) (by simp) (by rw [h61]; exact hs),
     aVal_61 _ i hs]
   exact (nativeEC (F0 := F0) i).cBool _ _
 
 theorem useHint_at {m : ℕ} (hm : m < 1024) :
-    UseHint.WrapHolds mldsa44.γ₂ (rdA E 60 m) (rdA E 62 m) (rdA E 65 m) (rdA E 66 m) (rdA E 67 m)
+    UseHint.WrapHolds mldsa44.γ₂ (rdA E 59 m) (rdA E 61 m) (rdA E 64 m) (rdA E 65 m) (rdA E 66 m)
       (bitsA E m) := by
   have h60 := size60 (program := program)
   have h65 := size65 (program := program)
-  rw [rdA_honest_fixed (i := i) (x := x) (c := c) (π := π) (v := 60) (by simp) (by rw [h60]; exact hm),
-    rdA_honest_fixed (i := i) (x := x) (c := c) (π := π) (v := 65) (by simp) (by rw [h65]; exact hm),
+  rw [rdA_honest_fixed (i := i) (x := x) (c := c) (π := π) (v := 59) (by simp) (by rw [h60]; exact hm),
+    rdA_honest_fixed (i := i) (x := x) (c := c) (π := π) (v := 64) (by simp) (by rw [h65]; exact hm),
     rdA_62 hm, rdA_66 hm, rdA_67 hm, bitsA_honest hm, aVal_60 _ i hm, aVal_65 _ i hm]
   exact (nativeEC (F0 := F0) i).useHint (fm m hm)
 
@@ -765,11 +738,11 @@ theorem w1bound_honest : program.HoldsWith (program.reader E) (program.predicate
 theorem decompose_honest : program.HoldsWith (program.reader E) (program.predicate 1).body :=
   decompose1_of (w1Bits_bool i) fun _ hm => (useHint_at i hm).wrap
 
-theorem offset_nat : ∀ m < 1024, ∃ k : ℕ, k < (L).offsetBound ∧ rdA E 66 m = k :=
+theorem offset_nat : ∀ m < 1024, ∃ k : ℕ, k < (L).offsetBound ∧ rdA E 65 m = k :=
   fun m hm => ⟨_, by have := (offN_slN_le i (fm m hm)).1; have := offsetRoom (program := program); omega,
     rdA_66 hm⟩
 
-theorem slack_nat : ∀ m < 1024, ∃ k : ℕ, k < (L).offsetBound ∧ rdA E 67 m = k :=
+theorem slack_nat : ∀ m < 1024, ∃ k : ℕ, k < (L).offsetBound ∧ rdA E 66 m = k :=
   fun m hm => ⟨_, by have := (offN_slN_le i (fm m hm)).2; have := offsetRoom (program := program); omega,
     rdA_67 hm⟩
 
@@ -851,21 +824,21 @@ theorem fmz_eq (j : Fin Native.Rows.nCols) (k : Fin Native.Rows.deg)
 
 /-- **`w'` reads `Emulated`'s honest assignment's** at coefficient `(i', k)`. -/
 theorem rdA_62_native (i' : Fin Native.Rows.nRows) (k : Fin Native.Rows.deg) :
-    rdA E 62 ((i' : ℕ) * 256 + k) = (nativeE F0 i).w i' k := by
+    rdA E 61 ((i' : ℕ) * 256 + k) = (nativeE F0 i).w i' k := by
   rw [rdA_62 (m := (i' : ℕ) * 256 + k) (flat_lt' i' k), wN, fm_eq i' k (flat_lt' i' k),
     NativeAlgebraCircuit.flat_apply]
   rfl
 
 /-- **`z` reads `Emulated`'s honest assignment's** at coefficient `(j, k)`. -/
 theorem rdA_59_native (j : Fin Native.Rows.nCols) (k : Fin Native.Rows.deg) :
-    rdA E 59 ((j : ℕ) * 256 + k) = (nativeE F0 i).z j k := by
+    rdA E 58 ((j : ℕ) * 256 + k) = (nativeE F0 i).z j k := by
   rw [rdA_59 (m := (j : ℕ) * 256 + k) (flat_lt' j k), fmz_eq j k (flat_lt' j k),
     NativeAlgebraCircuit.flat_apply]
   rfl
 
 /-- **The challenge bits read `Emulated`'s honest assignment's.** -/
 theorem rdA_61_native (k : Fin Native.Rows.deg) (t : Fin 2) :
-    rdA E 61 (2 * k + t) = (nativeE F0 i).cA k t := by
+    rdA E 60 (2 * k + t) = (nativeE F0 i).cA k t := by
   have h61 := size61 (program := program)
   have hk := k.isLt
   have ht := t.isLt
@@ -877,13 +850,13 @@ theorem rdA_61_native (k : Fin Native.Rows.deg) (t : Fin 2) :
   · exact Fin.ext (by simp only; change (k : ℕ) < 256 at hk; omega)
 
 omit [MldsaHHonest nat] [MldsaHSample nat] [MldsaHSelHonest nat] [MldsaHConsts nat FH]
-  [Native.ROMParams.MldsaHNativeData FH] [MldsaHNodes FH] hE in
+  [MLDSA44.MldsaHNativeData FH] [MldsaHNodes FH] hE in
 theorem toNatE_zero : (interp 0).toNat (0 : (interp 0).K) = 0 := by
   have := toNat_gold_natCast (F0 := F0) (FH := FH) (k := 0) (by norm_num [pGold])
   simpa using this
 
 omit [MldsaHHonest nat] [MldsaHSample nat] [MldsaHSelHonest nat] [MldsaHConsts nat FH]
-  [Native.ROMParams.MldsaHNativeData FH] [MldsaHNodes FH] hE in
+  [MLDSA44.MldsaHNativeData FH] [MldsaHNodes FH] hE in
 theorem toNatE_one : (interp 0).toNat (1 : (interp 0).K) = 1 := by
   have := toNat_gold_natCast (F0 := F0) (FH := FH) (k := 1) (by norm_num [pGold])
   simpa using this

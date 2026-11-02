@@ -48,9 +48,10 @@
 
 namespace proofs::gordiehowe::examples::pq_mdoc {
 
-using examples::mldsa::kK;
-using examples::mldsa::kL;
+// The mDL's ML-DSA parameter set: both signatures are ML-DSA-44.
+using MLDSA = examples::mldsa::MLDSA44;
 using examples::mldsa::kN;
+constexpr size_t kK = MLDSA::kK, kL = MLDSA::kL;
 
 // The longest MSO: v7's kMaxMsoLen (2533 bytes, 40 SHA-256 blocks less
 // the padding's 9 bytes and v7's 18-byte prefix; the MSO bytes as v7 lays
@@ -83,7 +84,7 @@ static_assert(kHeadBytes == 85 && kBlocks == 29 && kMsoBytes == 3859 &&
 constexpr size_t kWindowFirst = examples::mdoc::kWindowFirst;
 constexpr size_t kWindowEnd = kMsoBytes;
 constexpr size_t kFixedWindows = examples::mdoc::kFixedWindows;
-constexpr size_t kPkBytes = examples::mldsa::kPkBytes;
+constexpr size_t kPkBytes = MLDSA::kPkBytes;
 constexpr size_t kRhoBytes = 32;
 constexpr size_t kT1Bits = 10;
 // The Goldilocks arm's device relation (goldilocks_device_relation): w'
@@ -184,7 +185,7 @@ Ref<AF, Subfield<>, Committed> device_relation(
       Subfield{}, "w", Shape{kK, kN}, depends_on(k.a_bits, k.t1_bits, z, c),
       [](const std::vector<uint64_t> &ab, const std::vector<uint64_t> &tb,
          const std::vector<uint64_t> &zz, const std::vector<uint64_t> &cb) {
-        return examples::mldsa::host::w_prime(host::integers(ab, 23),
+        return examples::mldsa::host::w_prime<MLDSA>(host::integers(ab, 23),
                                     host::integers(tb, kT1Bits), zz, cb);
       });
   const auto c_hat = s[A].priv(
@@ -490,7 +491,7 @@ Ref<AF, Subfield<>, Committed> goldilocks_device_relation(
         std::vector<uint64_t> zq(zz.size());
         for (size_t i = 0; i < zz.size(); ++i)
           zq[i] = examples::mldsa::emulated::host::residue(zz[i], p);
-        return examples::mldsa::host::w_prime(host::integers(ab, 23),
+        return examples::mldsa::host::w_prime<MLDSA>(host::integers(ab, 23),
                                     host::integers(tb, kT1Bits), zq, cb);
       });
   assert_range(w, kT * kT, s.name("w"));
@@ -599,7 +600,7 @@ struct FqArm {
                               const examples::mldsa::Key<KF, AF> &key,
                               const Ref<AF, Subfield<>, PZ> &z,
                               const Ref<AF, Bit, Committed> &c) {
-    return examples::mldsa::signature_relation(s, A, key, z, c);
+    return examples::mldsa::signature_relation<MLDSA>(s, A, key, z, c);
   }
   template <class D, class AF, class PZ>
   static auto device_relation(const Scope &s, D &A,
@@ -620,7 +621,8 @@ struct GoldilocksArm {
                               const examples::mldsa::Key<KF, AF> &key,
                               const Ref<AF, Subfield<>, PZ> &z,
                               const Ref<AF, Bit, Committed> &c) {
-    return examples::mldsa::emulated::signature_relation(s, A, key, z, c);
+    return examples::mldsa::emulated::signature_relation<MLDSA>(s, A, key, z,
+                                                                c);
   }
   template <class D, class AF, class PZ>
   static auto device_relation(const Scope &s, D &A,
@@ -642,7 +644,7 @@ void signature_hash_domain(const Scope &s, D &H, const K &keccak,
                          const Ref<AF, Bit, Committed> &c_A) {
   const auto w1 = s[H].copy_of("w1", w1_A);
   const auto h2c = s.scope("h2c");
-  const auto c_H = examples::mldsa::challenge_from_mu(
+  const auto c_H = examples::mldsa::challenge_from_mu<MLDSA>(
       h2c, H, keccak.rescoped(h2c[H]), mu, w1);
   assert_same_bits(c_H.flat(), c_A.flat());
 }
@@ -679,10 +681,11 @@ void device_signature_check(const Scope &sd, DH &H, DA &A, const K &keccak,
   const auto z_d = A.priv(Subfield{}, sig.z);
   const auto h_d = A.priv(Bit{}, sig.h);
   const auto c_d =
-      examples::mldsa::challenge(sd.scope("challenge"), A, sig.c_tilde);
+      examples::mldsa::challenge<MLDSA>(sd.scope("challenge"), A, sig.c_tilde);
   const auto w_d = Arm::device_relation(sd.scope("signature"), A, dk, z_d, c_d);
   const auto w1_d =
-      examples::mldsa::signature_checks(sd, A, z_d, h_d, w_d, Arm::use_hint());
+      examples::mldsa::signature_checks<MLDSA>(sd, A, z_d, h_d, w_d,
+                                               Arm::use_hint());
   signature_hash_domain(sd, H, keccak, mu_d.out, w1_d, c_d);
 }
 
@@ -707,7 +710,7 @@ template <template <class> class F>
 struct SignatureWitness {
   F<std::array<std::array<int32_t, kN>, kL>> z;
   F<std::array<std::array<bool, kN>, kK>> h;
-  F<std::array<uint8_t, examples::mldsa::kCTildeBytes>> c_tilde;
+  F<std::array<uint8_t, MLDSA::kCTildeBytes>> c_tilde;
 };
 // The witness: the MSO's part of the issuer's mu buffer (kMsoBytes: the
 // MSO, SHAKE256's padding, zeros) and the message length L = |tr || 00 00
@@ -748,7 +751,8 @@ void pq_mdoc_relation(Sys &cs, const PqMdocStatement<In> &st,
   if (n_attr == 0) fail("pq_mdoc: no attribute");
   const auto si = cs.scope("issuer");
   const auto key =
-      examples::mldsa::mldsa_key_of<HF>(si, A, st.issuer_pk, Arm::kIssuerKeyForm);
+      examples::mldsa::mldsa_key_of<MLDSA, HF>(si, A, st.issuer_pk,
+                                               Arm::kIssuerKeyForm);
   // The issuer key's statement bounds in the coefficient form: A's
   // coefficients below q, t1's below 2^10, as the emulated ML-DSA relation
   // declares them. The interval of the issuer's signature relation reads
@@ -823,11 +827,13 @@ void pq_mdoc_relation(Sys &cs, const PqMdocStatement<In> &st,
   const auto z_i = A.priv(Subfield{}, w.issuer.z);
   const auto h_i = A.priv(Bit{}, w.issuer.h);
   const auto c_i =
-      examples::mldsa::challenge(si.scope("challenge"), A, w.issuer.c_tilde);
+      examples::mldsa::challenge<MLDSA>(si.scope("challenge"), A,
+                                        w.issuer.c_tilde);
   const auto w_i =
       Arm::issuer_relation(si.scope("signature"), A, key, z_i, c_i);
   const auto w1_i =
-      examples::mldsa::signature_checks(si, A, z_i, h_i, w_i, Arm::use_hint());
+      examples::mldsa::signature_checks<MLDSA>(si, A, z_i, h_i, w_i,
+                                               Arm::use_hint());
   signature_hash_domain(si, H, keccak, mu_i, w1_i, c_i);
 
   // 3. The device's signature (device_signature_check), unless ablated.

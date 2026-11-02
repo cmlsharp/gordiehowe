@@ -254,8 +254,8 @@ end TranscriptView
 on what it reads. `reads` only requires the view to suffice for the decision, so a view could report
 less than the verifier receives and make `HVZK` weaker. Each concrete IOP carries the obligation
 that its views are what the C++ verifier reads; for the BCS transformation the compiled proof's
-revealed data is a function of the view (`SPBCS.Base.Reveal.write_congr`,
-`SPBCS.Base.Reveal.col_congr`). -/
+revealed data is a function of the view (`SPBCS.Reveal.write_congr`,
+`SPBCS.Reveal.col_congr`). -/
 structure IOP (P : ProtocolSpec n) (Stmt : Type) where
   V : Verifier P Stmt
   /-- The positions of each prover message. -/
@@ -287,6 +287,12 @@ theorem V_eq_of_view (I : IOP P Stmt) (x : Stmt) {ch : P.Challenges}
     I.V x tr = I.V x tr' :=
   I.reads x tr tr' (TranscriptView.of_eq_of_see htr htr' fun i => congrFun h i)
 
+-- TODO(instance-hazard): `Coins` and its `Fintype`/`Nonempty` instances are fields, so each
+-- constructed simulator carries its own instance terms. A construction that builds one simulator
+-- from others (composition, a coin change) and is then compared with another could give equal
+-- coin types with unequal instances, so the two simulators agree only up to proof.
+-- If that arises, take `Coins` as a parameter (as `NARG.Simulator` does) or type it through a
+-- named coins function with registered instances.
 /-- **An honest-verifier simulator** for the IOP `I`: from the statement, the challenges and
 its own uniform coins, a view of `I`. It reads no witness. What it must achieve is
 `IOP.HVZKOffExceptions`; it gives the joint simulator `Simulator.joint` of `IOP.HVZK`.
@@ -384,6 +390,12 @@ noncomputable def honestView (I : IOP P Stmt) (honest : Wit → R → Prover P S
   (PMF.uniformOfFintype P.Challenges).bind fun ch =>
     (PMF.uniformOfFintype R).map fun ρ => ⟨ch, I.view ch ((honest w ρ).run x ch)⟩
 
+-- TODO(instance-hazard): `Coins` and its `Fintype`/`Nonempty` instances are fields, so each
+-- constructed simulator carries its own instance terms. A construction that builds one simulator
+-- from others (composition, a coin change) and is then compared with another could give equal
+-- coin types with unequal instances, so the two simulators agree only up to proof.
+-- If that arises, take `Coins` as a parameter (as `NARG.Simulator` does) or type it through a
+-- named coins function with registered instances.
 /-- **An honest-verifier simulator in the form of CY24 Definition 23.1.8** (p. 260): from the
 statement and its own uniform coins, a view of `I` together with challenges (`TranscriptView`),
 drawn jointly. It reads no witness and receives no challenges. What it must achieve is `IOP.HVZK`.

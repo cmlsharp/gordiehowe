@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.Assumptions
+public import GordieHoweNative.Language.RealizedProgram.Cells
 
 @[expose] public section
 
@@ -19,6 +20,9 @@ public values, values bound to their digits) have no cell.
   coordinate that is not a cell);
 * `GordieHowe.RealizedProgram.cellBase`: the base of a cell, the set its value lies in by the domain's packing tree:
   the packing-tree node of its value, the pad space of its late value, the whole field for filler.
+
+The definitions are in `GordieHoweNative/Language/RealizedProgram/Cells.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -60,20 +64,6 @@ def InputBlock.fillerKeys (c : ℕ) : InputBlock → List CellKey
 section
 
 variable (ir : RealizedProgram)
-
-/-- **Value `v` is committed in domain `d`**: a committed value or a pad copy of `d`. -/
-def isCellValue (d v : ℕ) : Bool :=
-  (ir.value v).domain == d &&
-    match (ir.value v).kind with
-    | .priv => true
-    | .padCopy _ _ => true
-    | _ => false
-
-/-- **Value `v` is a late value of domain `d`**: a late value of `d` that lies in its domain (not
-the tag of a MAC that no domain hosts, whose field no domain commits and whose pad is a cell of no
-domain). -/
-def isLateOf (d v : ℕ) : Bool :=
-  (ir.value v).field.isNone && (ir.value v).domain == d && decide (ir.IsLate v)
 
 /-- **The committed coordinates of domain `d`**, as keys: the coordinates of its committed values,
 of the pads of its late values, and its circuits' filler inputs. -/

@@ -173,23 +173,23 @@ namespace ProofSystem
 
 variable {P : Export.Plan} (B : ir.ProofSystem P I) {W : Type} {rel : Set (ir.Valuation I × W)}
   (Lw : Lowering (ir.layout I) (Constraint.guard (ir.stmtOk I) (Constraint.ofRel rel))
-    (GordieHowe.Domain.lowered B.guardedDomain))
+    (GordieHowe.Domain.lowered B.domains))
 
 variable {Inp : Type} {relH : Set (ir.Valuation I × Inp)}
 
 /-- **The phased honest prover at the lowering `Lw`** (`ProofSystem.phasedHonest`, which is this at the
 protocol's lowering): the honest prover does not read the lowering. -/
-def phasedHonestAt (A : B.CircuitsAccept) {DS : B.DomainSims} (HD : B.HonestDomains DS)
+def phasedHonestAt {DS : B.DomainSims} (HD : B.HonestDomains DS)
     (H : ir.HonestCore I relH) :
     ((Lw.check (ir.stmtOk I)).toPhased B.enforcement).Honest Inp relH
-      (fun d => (HD A d).In) fun d => (HD A d).dom where
-  wit d y π := (HD A d).encode (ir.honestCells I d (H.val y) π)
+      (fun d => (HD d).In) fun d => (HD d).dom where
+  wit d y π := (HD d).encode (ir.honestCells I d (H.val y) π)
   late := H.late
   challengeCausal y π := challengeCausal_of_respectsReads B.valid.program.order (H.respects y) π
   padOrder y := padOrder_of_respectsReads B.valid.program.pads (H.respects y)
   bad := H.bad
   ok_honest x _ hy _ _ _ := stmtOk_iff.2 ⟨H.checks x _ hy, H.bounded x _ hy⟩
-  dom_honest x _ hy _ _ hc d := (HD A d).dom_of x _ _ (B.holds_honest H hy hc d)
+  dom_honest x _ hy _ _ hc d := (HD d).dom_of x _ _ (B.holds_honest H hy hc d)
 
 end ProofSystem
 

@@ -22,7 +22,8 @@ expressions:
 * **The batch form** (`GordieHowe.RealizedProgram.bpoly`, `GordieHowe.RealizedProgram.partForm`): a side is a sum of signed monomials in
   atoms, an atom being a maximal subexpression of degree at most one in the cells reading only
   values the batch's operand map may read (`GordieHowe.RealizedProgram.atomB` on columns, `GordieHowe.RealizedProgram.bitsAtomB` on
-  bits); sums, differences, constant multiples and products are distributed
+  bits); sums, differences, constant multiples and products are distributed, and so are views
+  (a reindex, a concatenation, its pieces extended by zeros) over the monomials they view
   (`GordieHowe.RealizedProgram.eval_bpoly`). The monomials of degree other than one are placed on the distinct atoms
   (`placeMonos`; an atom read twice is one shared node, `ref k`, or one value, `leaf v`:
   `Expr.sameAtom`); the part of degree one is one operand, the last (`batch_form`: "the part of
@@ -131,7 +132,29 @@ def scale (c : ℕ) (m : BMono) : BMono := ⟨m.coef.scale c, m.factors⟩
 /-- The product of two monomials. -/
 def mul (m m' : BMono) : BMono := ⟨m.coef.mul m'.coef, m.factors ++ m'.factors⟩
 
+/-- **The monomial with each factor `x` replaced by `h x`** (a view of the monomial, when `h` is a
+view). -/
+def mapFactors (h : Expr → Expr) (m : BMono) : BMono := ⟨m.coef, m.factors.map h⟩
+
 end BMono
+
+/-- **The index map of the first `n` coordinates**: one run `0, 1, …, n − 1`. -/
+def IndexMap.first (n : ℕ) : IndexMap := [(0, 1, n)]
+
+theorem IndexMap.size_first (n : ℕ) : (IndexMap.first n).size = n := by
+  simp [IndexMap.first, IndexMap.size]
+
+theorem IndexMap.entry_first {n i : ℕ} (h : i < n) : (IndexMap.first n).entry i = i := by
+  simp [IndexMap.first, IndexMap.entry, h]
+
+/-- **A factor of the left piece of a concatenation, `n` coordinates, extended by zeros**: `x` on
+the first `n` coordinates, `x − x` after them. -/
+def Expr.padRight (n : ℕ) (x : Expr) : Expr := .concat (.reindex (IndexMap.first n) x) (.sub x x)
+
+/-- **A factor of the right piece of a concatenation, after `n` zeros**: `x − x` on the first `n`
+coordinates (read at the first `n` of `x`), `x` after them. -/
+def Expr.padLeft (n : ℕ) (x : Expr) : Expr :=
+  .concat (.sub (.reindex (IndexMap.first n) x) (.reindex (IndexMap.first n) x)) x
 
 /-- **Two atoms are one node**: the same shared expression or the same value (the export writes a
 node read more than once as a shared expression, so the C++'s shared atoms are these). -/
@@ -180,9 +203,18 @@ atom, `rest` otherwise. -/
 def bnode (atom : Expr → Bool) (e : Expr) (rest : Option (List BMono)) : Option (List BMono) :=
   if atom e then some [⟨BCoef.one, [e]⟩] else rest
 
+/-- **The monomials `ms` of a view**, when each has a factor and every factor is an atom (`none`
+otherwise). -/
+def viewed (atom : Expr → Bool) (ms : List BMono) : Option (List BMono) :=
+  if ms.all fun m => !m.factors.isEmpty && m.factors.all atom then some ms else none
+
 /-- **The batch form of an expression** (`batch_form`) at the atom test `atom` (`atomB` for a batch
 on columns, `bitsAtomB` for one on bits): an atom is one monomial of degree one; sums,
-differences, constant multiples and products are distributed; anything else has no form. -/
+differences, constant multiples and products are distributed; a view is distributed over the
+monomials of what it views (`batch_form`'s `kGather`: a view of a product is the product of the
+views), a reindex as the reindex of each factor, a concatenation as the left piece's monomials
+with each factor extended by zeros (`Expr.padRight`) and the right piece's after zeros
+(`Expr.padLeft`), when every factor so made is an atom (`viewed`); anything else has no form. -/
 def bpoly (atom : Expr → Bool) : Expr → Option (List BMono)
   | .add a b => bnode atom (.add a b) do
       let p ← bpoly atom a
@@ -199,7 +231,28 @@ def bpoly (atom : Expr → Bool) : Expr → Option (List BMono)
       let p ← bpoly atom a
       let q ← bpoly atom b
       pure (p.flatMap fun m => q.map m.mul)
+  | .reindex idx a => bnode atom (.reindex idx a) do
+      let p ← bpoly atom a
+      viewed atom (p.map (BMono.mapFactors (.reindex idx)))
+  | .concat a b => bnode atom (.concat a b) do
+      let p ← bpoly atom a
+      let q ← bpoly atom b
+      viewed atom (p.map (BMono.mapFactors (Expr.padRight (ir.exprLen a))) ++
+        q.map (BMono.mapFactors (Expr.padLeft (ir.exprLen a))))
   | e => bnode atom e none
+
+/-- **The monomials of a view**: the monomials themselves, each with a factor and its factors
+atoms. -/
+theorem viewed_eq_some {atom : Expr → Bool} {ms ms' : List BMono}
+    (h : viewed atom ms = some ms') :
+    ms' = ms ∧ ∀ m ∈ ms, m.factors ≠ [] ∧ ∀ a ∈ m.factors, atom a = true := by
+  unfold viewed at h
+  split_ifs at h with hc
+  refine ⟨(Option.some.inj h).symm, fun m hm => ?_⟩
+  have := List.all_eq_true.1 hc m hm
+  simp only [Bool.and_eq_true, Bool.not_eq_true', List.isEmpty_eq_false_iff,
+    List.all_eq_true] at this
+  exact this
 
 theorem bnode_eq_some {atom : Expr → Bool} {e : Expr} {rest : Option (List BMono)}
     {ms : List BMono} (h : bnode atom e rest = some ms) :
@@ -261,11 +314,62 @@ theorem bpolyVal_atom {f : ℕ} (ev : Expr → ℕ → (I f).K) (e : Expr) (i : 
     bpolyVal ev [⟨BCoef.one, [e]⟩] i = ev e i := by
   simp [bpolyVal, BMono.val]
 
+/-- **A monomial's view at coordinate `i` is the monomial at coordinate `j`**, when each factor's
+view at `i` is the factor at `j`. -/
+theorem BMono.val_mapFactors {f : ℕ} {ev : Expr → ℕ → (I f).K} {h : Expr → Expr} {i j : ℕ}
+    (hh : ∀ x, ev (h x) i = ev x j) (m : BMono) : (m.mapFactors h).val ev i = m.val ev j := by
+  simp only [BMono.val, BMono.mapFactors, List.map_map, Function.comp_def, hh]
+
+/-- **A monomial's view vanishes at coordinate `i`** when it has a factor and every factor's view
+vanishes there. -/
+theorem BMono.val_mapFactors_eq_zero {f : ℕ} {ev : Expr → ℕ → (I f).K} {h : Expr → Expr}
+    {i : ℕ} (hh : ∀ x, ev (h x) i = 0) {m : BMono} (hm : m.factors ≠ []) :
+    (m.mapFactors h).val ev i = 0 := by
+  obtain ⟨x, xs, hx⟩ := List.exists_cons_of_ne_nil hm
+  simp [BMono.val, BMono.mapFactors, hx, hh]
+
+theorem bpolyVal_mapFactors {f : ℕ} {ev : Expr → ℕ → (I f).K} {h : Expr → Expr} {i j : ℕ}
+    (hh : ∀ x, ev (h x) i = ev x j) (ms : List BMono) :
+    bpolyVal ev (ms.map (BMono.mapFactors h)) i = bpolyVal ev ms j := by
+  simp only [bpolyVal, List.map_map, Function.comp_def, BMono.val_mapFactors hh]
+
+theorem bpolyVal_mapFactors_eq_zero {f : ℕ} {ev : Expr → ℕ → (I f).K} {h : Expr → Expr}
+    {i : ℕ} (hh : ∀ x, ev (h x) i = 0) {ms : List BMono} (hms : ∀ m ∈ ms, m.factors ≠ []) :
+    bpolyVal ev (ms.map (BMono.mapFactors h)) i = 0 := by
+  unfold bpolyVal
+  rw [List.map_map]
+  refine List.sum_eq_zero fun x hx => ?_
+  obtain ⟨m, hm, rfl⟩ := List.mem_map.1 hx
+  exact BMono.val_mapFactors_eq_zero hh (hms m hm)
+
+/-- **A left piece's factor extended by zeros**: the factor on the first `n` coordinates, `0`
+after them. -/
+theorem eval_padRight {f : ℕ} {leaf : ir.Valuation I} {ref : ℕ → ℕ → (I f).K} {rl : ℕ → ℕ}
+    (n : ℕ) (x : Expr) (i : ℕ) :
+    Expr.eval ir f leaf ref rl (Expr.padRight n x) i =
+      if i < n then Expr.eval ir f leaf ref rl x i else 0 := by
+  simp only [Expr.padRight, Expr.eval, Expr.len, IndexMap.size_first]
+  split_ifs with h
+  · rw [IndexMap.entry_first h]
+  · exact sub_self _
+
+/-- **A right piece's factor after zeros**: `0` on the first `n` coordinates, the factor after
+them. -/
+theorem eval_padLeft {f : ℕ} {leaf : ir.Valuation I} {ref : ℕ → ℕ → (I f).K} {rl : ℕ → ℕ}
+    (n : ℕ) (x : Expr) (i : ℕ) :
+    Expr.eval ir f leaf ref rl (Expr.padLeft n x) i =
+      if i < n then 0 else Expr.eval ir f leaf ref rl x (i - n) := by
+  simp only [Expr.padLeft, Expr.eval, Expr.len, IndexMap.size_first]
+  split_ifs
+  · exact sub_self _
+  · rfl
+
 /-- **The batch form's value is the expression's**: at every coordinate, the expression is the sum
 of its form's monomials, each factor evaluated as the expression is (`Expr.eval` with the same
-readings). -/
+readings), the shared expressions' lengths `rl` being the program's (`hrl`). -/
 theorem eval_bpoly {atom : Expr → Bool} {f : ℕ} {leaf : ir.Valuation I} {ref : ℕ → ℕ → (I f).K}
-    {rl : ℕ → ℕ} : ∀ (e : Expr) {ms : List BMono}, bpoly atom e = some ms → ∀ i,
+    {rl : ℕ → ℕ} (hrl : ∀ e, Expr.len ir rl e = ir.exprLen e) :
+    ∀ (e : Expr) {ms : List BMono}, ir.bpoly atom e = some ms → ∀ i,
       Expr.eval ir f leaf ref rl e i = bpolyVal (Expr.eval ir f leaf ref rl) ms i
   | .add a b, ms, h, i => by
     rw [bpoly] at h
@@ -274,7 +378,7 @@ theorem eval_bpoly {atom : Expr → Bool} {f : ℕ} {leaf : ir.Valuation I} {ref
     · simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def,
         Option.some.injEq] at h
       obtain ⟨p, hp, q, hq, rfl⟩ := h
-      simp only [Expr.eval, bpolyVal_append, eval_bpoly a hp, eval_bpoly b hq]
+      simp only [Expr.eval, bpolyVal_append, eval_bpoly hrl a hp, eval_bpoly hrl b hq]
   | .sub a b, ms, h, i => by
     rw [bpoly] at h
     rcases bnode_eq_some h with ⟨-, rfl⟩ | ⟨-, h⟩
@@ -282,7 +386,7 @@ theorem eval_bpoly {atom : Expr → Bool} {f : ℕ} {leaf : ir.Valuation I} {ref
     · simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def,
         Option.some.injEq] at h
       obtain ⟨p, hp, q, hq, rfl⟩ := h
-      simp only [Expr.eval, bpolyVal_append, bpolyVal_negate, eval_bpoly a hp, eval_bpoly b hq,
+      simp only [Expr.eval, bpolyVal_append, bpolyVal_negate, eval_bpoly hrl a hp, eval_bpoly hrl b hq,
         sub_eq_add_neg]
   | .scale (.const c) a, ms, h, i => by
     rw [bpoly] at h
@@ -291,7 +395,7 @@ theorem eval_bpoly {atom : Expr → Bool} {f : ℕ} {leaf : ir.Valuation I} {ref
     · simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def,
         Option.some.injEq] at h
       obtain ⟨p, hp, rfl⟩ := h
-      simp only [Expr.eval, Coef.eval, bpolyVal_scale, eval_bpoly a hp]
+      simp only [Expr.eval, Coef.eval, bpolyVal_scale, eval_bpoly hrl a hp]
   | .mul a b, ms, h, i => by
     rw [bpoly] at h
     rcases bnode_eq_some h with ⟨-, rfl⟩ | ⟨-, h⟩
@@ -299,9 +403,39 @@ theorem eval_bpoly {atom : Expr → Bool} {f : ℕ} {leaf : ir.Valuation I} {ref
     · simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def,
         Option.some.injEq] at h
       obtain ⟨p, hp, q, hq, rfl⟩ := h
-      simp only [Expr.eval, bpolyVal_mul, eval_bpoly a hp, eval_bpoly b hq]
-  | .leaf _, ms, h, i | .scale (.node _ _) _, ms, h, i | .reindex _ _, ms, h, i
-  | .concat _ _, ms, h, i | .linear _ _, ms, h, i | .prod _ _, ms, h, i | .mux _ _ _, ms, h, i
+      simp only [Expr.eval, bpolyVal_mul, eval_bpoly hrl a hp, eval_bpoly hrl b hq]
+  | .reindex idx a, ms, h, i => by
+    rw [bpoly] at h
+    rcases bnode_eq_some h with ⟨-, rfl⟩ | ⟨-, h⟩
+    · rw [bpolyVal_atom]
+    · simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
+      obtain ⟨p, hp, h⟩ := h
+      obtain ⟨rfl, -⟩ := viewed_eq_some h
+      rw [bpolyVal_mapFactors (j := idx.entry i) (fun x => by rw [Expr.eval]), Expr.eval]
+      exact eval_bpoly hrl a hp _
+  | .concat a b, ms, h, i => by
+    rw [bpoly] at h
+    rcases bnode_eq_some h with ⟨-, rfl⟩ | ⟨-, h⟩
+    · rw [bpolyVal_atom]
+    · simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
+      obtain ⟨p, hp, q, hq, h⟩ := h
+      obtain ⟨rfl, hv⟩ := viewed_eq_some h
+      have hne : ∀ (g : Expr → Expr) (l : List BMono),
+          (∀ m ∈ l.map (BMono.mapFactors g), m.factors ≠ []) → ∀ m ∈ l, m.factors ≠ [] :=
+        fun g l hl m hm => by simpa [BMono.mapFactors] using hl _ (List.mem_map_of_mem hm)
+      have hp' := hne _ p fun m hm => (hv m (List.mem_append_left _ hm)).1
+      have hq' := hne _ q fun m hm => (hv m (List.mem_append_right _ hm)).1
+      rw [bpolyVal_append, Expr.eval, hrl a]
+      split_ifs with hi
+      · rw [bpolyVal_mapFactors (j := i) (fun x => by simp [eval_padRight, hi]),
+          bpolyVal_mapFactors_eq_zero (fun x => by simp [eval_padLeft, hi]) hq', add_zero]
+        exact eval_bpoly hrl a hp i
+      · rw [bpolyVal_mapFactors_eq_zero (fun x => by simp [eval_padRight, hi]) hp',
+          bpolyVal_mapFactors (j := i - ir.exprLen a) (fun x => by simp [eval_padLeft, hi]),
+          zero_add]
+        exact eval_bpoly hrl b hq _
+  | .leaf _, ms, h, i | .scale (.node _ _) _, ms, h, i | .linear _ _, ms, h, i
+  | .prod _ _, ms, h, i | .mux _ _ _, ms, h, i
   | .apply _ _, ms, h, i | .ref _, ms, h, i | .logic _ _ _, ms, h, i => by
     change bnode atom _ none = some ms at h
     rcases bnode_eq_some h with ⟨-, rfl⟩ | ⟨-, h⟩
@@ -310,7 +444,7 @@ theorem eval_bpoly {atom : Expr → Bool} {f : ℕ} {leaf : ir.Valuation I} {ref
 
 /-- **Every factor of a batch form is an atom.** -/
 theorem atom_of_mem_bpoly {atom : Expr → Bool} : ∀ (e : Expr) {ms : List BMono},
-    bpoly atom e = some ms → ∀ m ∈ ms, ∀ a ∈ m.factors, atom a = true
+    ir.bpoly atom e = some ms → ∀ m ∈ ms, ∀ a ∈ m.factors, atom a = true
   | .add x y, ms, h, m, hm, a, ha => by
     rw [bpoly] at h
     rcases bnode_eq_some h with ⟨hat, rfl⟩ | ⟨-, h⟩
@@ -369,8 +503,31 @@ theorem atom_of_mem_bpoly {atom : Expr → Bool} : ∀ (e : Expr) {ms : List BMo
       rcases List.mem_append.1 ha with ha | ha
       · exact atom_of_mem_bpoly x hp m₁ hm₁ a ha
       · exact atom_of_mem_bpoly y hq m₂ hm₂ a ha
+  | .reindex idx x, ms, h, m, hm, a, ha => by
+    rw [bpoly] at h
+    rcases bnode_eq_some h with ⟨hat, rfl⟩ | ⟨-, h⟩
+    · simp only [List.mem_singleton] at hm
+      subst hm
+      simp only [List.mem_singleton] at ha
+      subst ha
+      exact hat
+    · simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
+      obtain ⟨p, -, h⟩ := h
+      obtain ⟨rfl, hv⟩ := viewed_eq_some h
+      exact (hv m hm).2 a ha
+  | .concat x y, ms, h, m, hm, a, ha => by
+    rw [bpoly] at h
+    rcases bnode_eq_some h with ⟨hat, rfl⟩ | ⟨-, h⟩
+    · simp only [List.mem_singleton] at hm
+      subst hm
+      simp only [List.mem_singleton] at ha
+      subst ha
+      exact hat
+    · simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
+      obtain ⟨p, -, q, -, h⟩ := h
+      obtain ⟨rfl, hv⟩ := viewed_eq_some h
+      exact (hv m hm).2 a ha
   | .leaf _, ms, h, m, hm, a, ha | .scale (.node _ _) _, ms, h, m, hm, a, ha
-  | .reindex _ _, ms, h, m, hm, a, ha | .concat _ _, ms, h, m, hm, a, ha
   | .linear _ _, ms, h, m, hm, a, ha | .prod _ _, ms, h, m, hm, a, ha
   | .mux _ _ _, ms, h, m, hm, a, ha | .apply _ _, ms, h, m, hm, a, ha | .ref _, ms, h, m, hm, a, ha
   | .logic _ _ _, ms, h, m, hm, a, ha => by
@@ -634,8 +791,8 @@ of degree other than one placed on their atoms (`placeMonos`), the monomials of 
 linear part, without those on a zero constant (`zeroMonoB`, `batch_form`'s `zero_coef`), padded by
 `padOf`. -/
 def partForm (atom : Expr → Bool) (e e' : Expr) : Option PartForm := do
-  let p ← bpoly atom e
-  let q ← bpoly atom e'
+  let p ← ir.bpoly atom e
+  let q ← ir.bpoly atom e'
   let ms := p ++ q.map BMono.negate
   let high := ms.filter (·.factors.length != 1)
   let low := (ms.filter (·.factors.length == 1)).filter fun m => !ir.zeroMonoB m
@@ -953,9 +1110,11 @@ theorem bpolyVal_filter_zeroMonoB {f : ℕ} {ev : Expr → ℕ → (I f).K} {ms 
 
 /-- **The relation of a part's shape on its operands is its field equation**: at every
 coordinate, `e − e'` is the shape's relation on the part's operands, every atom evaluated as the
-sides are, when the leaves of zero constants read `0` (`hz`; `zeroLeafB`). -/
+sides are, when the leaves of zero constants read `0` (`hz`; `zeroLeafB`) and the shared
+expressions' lengths are the program's (`hrl`). -/
 theorem partForm_eval {atom : Expr → Bool} {f : ℕ} {leaf : ir.Valuation I}
     {ref : ℕ → ℕ → (I f).K} {rl : ℕ → ℕ} {e e' : Expr} {pf : PartForm}
+    (hrl : ∀ e, Expr.len ir rl e = ir.exprLen e)
     (hz : ∀ a, ir.zeroLeafB a = true → ∀ i, Expr.eval ir f leaf ref rl a i = 0)
     (h : ir.partForm atom e e' = some pf) (i : ℕ) :
     Expr.eval ir f leaf ref rl e i - Expr.eval ir f leaf ref rl e' i =
@@ -971,7 +1130,7 @@ theorem partForm_eval {atom : Expr → Bool} {f : ℕ} {leaf : ir.Valuation I}
           ((ms.filter (·.factors.length == 1)).filter fun m => !ir.zeroMonoB m) i := by
     rw [bpolyVal_filter_zeroMonoB hz (fun m hm h0 => by
         simpa [h0] using (List.mem_filter.1 hm).2),
-      eval_bpoly e hp, eval_bpoly e' hq, sub_eq_add_neg, ← bpolyVal_negate, ← bpolyVal_append,
+      eval_bpoly hrl e hp, eval_bpoly hrl e' hq, sub_eq_add_neg, ← bpolyVal_negate, ← bpolyVal_append,
       hms]
     unfold bpolyVal
     rw [sum_map_filter_add _ (·.factors.length != 1) ms]
@@ -1097,6 +1256,18 @@ variable (ir : RealizedProgram)
 /-- The predicate of part `j` of batch `b`. -/
 def partPred (b j : ℕ) : ℕ := (ir.batch b).parts.getD j 0
 
+/-- **The form of predicate `pr` as a part of batch `b`** in domain `d` at the atom test `atom`. -/
+def predForm (atom : Expr → Bool) (d b : ℕ) (pr : Predicate) : Option PartForm :=
+  (pr.body.batchSides d b).bind fun s => ir.partForm atom s.1 s.2
+
+/-- **The shape of predicate `pr` as a part of batch `b`.** -/
+def predShape (atom : Expr → Bool) (d b : ℕ) (pr : Predicate) : Shape :=
+  ((ir.predForm atom d b pr).map PartForm.shape).getD default
+
+/-- **The coordinates of predicate `pr` as a part of batch `b`**: those of its left side. -/
+def predLen (d b : ℕ) (pr : Predicate) : ℕ :=
+  ((pr.body.batchSides d b).map fun s => ir.exprLen s.1).getD 0
+
 /-- **The sides of part `j` of batch `b`** in domain `d`. -/
 def partSides (d b j : ℕ) : Option (Expr × Expr) :=
   (ir.predicate (ir.partPred b j)).body.batchSides d b
@@ -1160,32 +1331,92 @@ structure PartsOk (atom : Expr → Bool) (d b : ℕ) : Prop where
   /-- With a merging challenge, the parts have one number of coordinates. -/
   lens : ir.merged b = true → ∀ j < (ir.batch b).parts.length, ir.partLen d b j = ir.partLen d b 0
 
-/-- **`PartsOk`, decided.** -/
+/-- **A part's check at its predicate `pr`** (`PartsOk` at one part): a form, a relation of
+degree at most the batch's, and, without a merging challenge, the shape `sh0`, with one, the
+coordinates `l0`. -/
+def partPredOkB (atom : Expr → Bool) (d b : ℕ) (sh0 : Shape) (l0 : ℕ) (pr : Predicate) : Bool :=
+  match ir.predForm atom d b pr with
+  | some pf => pf.shape.okB (ir.batch b).degree && (ir.merged b || pf.shape == sh0) &&
+      (!ir.merged b || ir.predLen d b pr == l0)
+  | none => false
+
+/-- **`PartsOk`, decided** in one walk of the batch's parts, in order, each part's predicate
+checked against the first part's shape and coordinates (`partPredOkB`). -/
 def partsOkB (atom : Expr → Bool) (d b : ℕ) : Bool :=
-  decide (0 < (ir.batch b).parts.length) && (ir.batch b).parts.all (· < ir.predicates.length) &&
-    (List.range (ir.batch b).parts.length).all (fun j =>
-      (ir.partFormAt atom d b j).isSome && (ir.partShape atom d b j).okB (ir.batch b).degree &&
-        (ir.merged b || ir.partShape atom d b j == ir.partShape atom d b 0) &&
-        (!ir.merged b || ir.partLen d b j == ir.partLen d b 0))
+  match (ir.batch b).parts with
+  | [] => false
+  | p0 :: ps => (p0 :: ps).all fun p => decide (p < ir.predicates.length) &&
+      ir.partPredOkB atom d b (ir.predShape atom d b (ir.predicate p0))
+        (ir.predLen d b (ir.predicate p0)) (ir.predicate p)
+
+theorem partFormAt_eq_predForm (atom : Expr → Bool) (d b j : ℕ) :
+    ir.partFormAt atom d b j = ir.predForm atom d b (ir.predicate (ir.partPred b j)) := rfl
+
+theorem partShape_eq_predShape (atom : Expr → Bool) (d b j : ℕ) :
+    ir.partShape atom d b j = ir.predShape atom d b (ir.predicate (ir.partPred b j)) := rfl
+
+theorem partLen_eq_predLen (d b j : ℕ) :
+    ir.partLen d b j = ir.predLen d b (ir.predicate (ir.partPred b j)) := rfl
+
+theorem partPredOkB_iff {atom : Expr → Bool} {d b : ℕ} {sh0 : Shape} {l0 : ℕ} {pr : Predicate} :
+    ir.partPredOkB atom d b sh0 l0 pr = true ↔
+      (ir.predForm atom d b pr).isSome ∧ (ir.predShape atom d b pr).Ok (ir.batch b).degree ∧
+        (ir.merged b = false → ir.predShape atom d b pr = sh0) ∧
+          (ir.merged b = true → ir.predLen d b pr = l0) := by
+  unfold partPredOkB predShape
+  cases ir.predForm atom d b pr with
+  | none => simp
+  | some pf => cases ir.merged b <;> simp [Shape.okB_iff]
+
+/-- **A property of every part's predicate identifier, by index or by membership.** -/
+theorem forall_partPred_iff {b : ℕ} {P : ℕ → Prop} :
+    (∀ j < (ir.batch b).parts.length, P (ir.partPred b j)) ↔ ∀ p ∈ (ir.batch b).parts, P p := by
+  constructor
+  · intro h p hp
+    obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem hp
+    have := h j hj
+    rwa [partPred, List.getD_eq_getElem _ _ hj] at this
+  · intro h j hj
+    rw [partPred, List.getD_eq_getElem _ _ hj]
+    exact h _ (List.getElem_mem hj)
 
 theorem partsOkB_iff (atom : Expr → Bool) (d b : ℕ) :
     ir.partsOkB atom d b = true ↔ ir.PartsOk atom d b := by
-  simp only [partsOkB, Bool.and_eq_true, List.all_eq_true, List.mem_range, Bool.or_eq_true,
-    beq_iff_eq, Shape.okB_iff, Bool.not_eq_true', decide_eq_true_eq]
-  constructor
-  · rintro ⟨⟨h0, hp⟩, h⟩
-    exact ⟨h0, fun p hp' => by simpa using hp p hp', fun j hj => (h j hj).1.1.1,
-      fun j hj => (h j hj).1.1.2, fun hm j hj => ((h j hj).1.2.resolve_left (by simp [hm])),
-      fun hm j hj => ((h j hj).2.resolve_left (by simp [hm]))⟩
-  · intro h
-    refine ⟨⟨h.pos, fun p hp => by simpa using h.parts p hp⟩,
-      fun j hj => ⟨⟨⟨h.forms j hj, h.ok j hj⟩, ?_⟩, ?_⟩⟩
-    · cases hm : ir.merged b
-      · exact .inr (h.shapes hm j hj)
-      · exact .inl rfl
-    · cases hm : ir.merged b
-      · exact .inl rfl
-      · exact .inr (h.lens hm j hj)
+  unfold partsOkB
+  split
+  · rename_i hp
+    simp only [Bool.false_eq_true, false_iff]
+    intro h
+    have := h.pos
+    simp [hp] at this
+  · rename_i p0 ps hp
+    have h0 : ir.partPred b 0 = p0 := by simp [partPred, hp]
+    simp only [List.all_eq_true, Bool.and_eq_true, decide_eq_true_eq, partPredOkB_iff]
+    rw [← hp]
+    have hall := fun (P : ℕ → Prop) => (forall_partPred_iff ir (b := b) (P := P))
+    constructor
+    · intro h
+      refine ⟨by simp [hp], fun p hp' => (h p hp').1, ?_, ?_, ?_, ?_⟩
+      · exact (hall _).2 fun p hp' => (h p hp').2.1
+      · exact (hall _).2 fun p hp' => (h p hp').2.2.1
+      · intro hm
+        simp only [partShape_eq_predShape, h0]
+        exact (hall (fun p => ir.predShape atom d b (ir.predicate p) =
+          ir.predShape atom d b (ir.predicate p0))).2 fun p hp' => (h p hp').2.2.2.1 hm
+      · intro hm
+        simp only [partLen_eq_predLen, h0]
+        exact (hall (fun p => ir.predLen d b (ir.predicate p) = ir.predLen d b (ir.predicate p0))).2
+          fun p hp' => (h p hp').2.2.2.2 hm
+    · intro h p hp'
+      have hs0 := h.shapes
+      have hl0 := h.lens
+      simp only [partShape_eq_predShape, partLen_eq_predLen, h0] at hs0 hl0
+      refine ⟨h.parts p hp', ?_, ?_, ?_, ?_⟩
+      · exact (hall (fun p => (ir.predForm atom d b (ir.predicate p)).isSome)).1 h.forms p hp'
+      · exact (hall (fun p => (ir.predShape atom d b (ir.predicate p)).Ok _)).1 h.ok p hp'
+      · exact fun hm => (hall (fun p => ir.predShape atom d b (ir.predicate p) = _)).1
+          (hs0 hm) p hp'
+      · exact fun hm => (hall (fun p => ir.predLen d b (ir.predicate p) = _)).1 (hl0 hm) p hp'
 
 variable {ir}
 
@@ -1610,7 +1841,8 @@ theorem batchRelation_instance (hz : ir.ZeroDecodes I) {d b : ℕ} (hb : ir.Part
   rw [batchRelation_Q_cellValuation hb j hs hpf x r a i]
   exact (partForm_eval (leaf := ir.cellValuation I d x r a)
     (ref := ir.refVal (ir.cellValuation I d x r a) ir.exprs.length (ir.domainField d))
-    (rl := ir.refLen ir.exprs.length) (fun _ ha i => eval_cellValuation_zeroLeaf hz ha i) hpf i).symm
+    (rl := ir.refLen ir.exprs.length) (fun _ => rfl)
+    (fun _ ha i => eval_cellValuation_zeroLeaf hz ha i) hpf i).symm
 
 /-- **The batched relation reads the cells through their valuation**: at cells of one valuation, it
 holds at both or at neither. -/

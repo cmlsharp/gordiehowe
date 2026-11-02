@@ -150,6 +150,11 @@ macro(gordiehowe_add_bench PROG)
                         ${CMAKE_BINARY_DIR}/bench)
 endmacro()
 
+# The text rendering of a GHC file (compiler/ghc_show.cc,
+# scripts/ghc_show), built into the build tree's bench/.
+add_executable(ghc_show compiler/ghc_show.cc)
+set_target_properties(ghc_show PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bench)
+
 # The core tests (tests/), the application systems (examples/) and the
 # hash comparison harnesses (bench/hash_comparisons/).
 add_subdirectory(tests)

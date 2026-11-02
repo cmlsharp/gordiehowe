@@ -311,6 +311,12 @@ theorem Valid.mono_left {C G : ℕ → Set V} : ∀ {c : ReprogrammedCircuit V X
     ⟨htp, hk, P'', fun r p' p hp hne => hs r p' p (h hp) hne, hv⟩
   | rquery _ _, _, _, _, _, h, ⟨hG, hpad, hv⟩ => ⟨h.trans hG, hpad, hv⟩
 
+theorem Valid.mono_right {C G : ℕ → Set V} : ∀ {c : ReprogrammedCircuit V X Y} {k : ℕ}
+    {P Q Q' : Set V}, Q ⊆ Q' → Valid C G c k P Q → Valid C G c k P Q'
+  | nil, _, _, _, _, h, hv => hv.trans h
+  | kraus _ _, _, _, _, _, h, ⟨htp, hk, P'', hs, hv⟩ => ⟨htp, hk, P'', hs, hv.mono_right h⟩
+  | rquery _ _, _, _, _, _, h, ⟨hG, hpad, hv⟩ => ⟨hG, hpad, hv.mono_right h⟩
+
 theorem Valid.append {C G : ℕ → Set V} : ∀ {c d : ReprogrammedCircuit V X Y} {k : ℕ}
     {P Q R : Set V}, Valid C G c k P Q → Valid C G d (k + c.queries) Q R →
       Valid C G (c ++ d) k P R

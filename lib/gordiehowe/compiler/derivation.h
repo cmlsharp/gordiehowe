@@ -62,6 +62,17 @@ inline E apply_in(std::string name, bool row) {
   e.row = row;
   return e;
 }
+// The operand of part A of the product-form predicate NAME's congruence
+// (counted over its rows, terms and their parts, in order), as the
+// realized program writes it: an expression part's expression, a kernel
+// part's operand before the slice it reads (mod.h's derive_product).
+inline E term_operand(std::string name, size_t a) {
+  E e;
+  e.kind = E::kTermOperand;
+  e.item = std::move(name);
+  e.a = a;
+  return e;
+}
 // The definition of derived node ID (its shared entry's root).
 inline E def(size_t id) {
   E e;
@@ -94,16 +105,28 @@ inline E scale(SignedInt c, E a) {
 // type; its statement bound; the range request REQUEST on X (with
 // constants when OFFSET), read at its bound BOUND; the hull of the view's
 // SOURCES, each with its own source; the roots of a vanishing product
-// (root_hull); the prime field (an unbounded prime-field node).
+// (root_hull); the prime field (an unbounded prime-field node); the hull
+// [LO, HI] of the public table entries that the selections or lookups
+// PREDS place X among (range.h's table_hull, kTable).
 struct IvlWhy {
-  enum Kind : uint8_t { kNone, kBit, kStmt, kRequest, kViews, kRoots, kPrime };
+  enum Kind : uint8_t {
+    kNone,
+    kBit,
+    kStmt,
+    kRequest,
+    kViews,
+    kRoots,
+    kPrime,
+    kTable
+  };
   Kind kind = kNone;
   std::string request;
   bool offset = false;
   Bound bound = 0;
   std::vector<std::pair<size_t, IvlWhy>> sources;
   // kRoots: the predicates whose roots bound the node, and for a
-  // quadratic the node m of its factors.
+  // quadratic the node m of its factors; kTable: the selections and
+  // lookups.
   std::vector<std::string> preds;
   size_t m = SIZE_MAX;
   SignedInt lo = 0, hi = 0;
@@ -259,6 +282,44 @@ class Deriv {
     }
     return push(std::move(s));
   }
+  // ivl (leaf of NODE) LO HI from the table selections or lookups PREDS
+  // (tableHull): NODE's coordinates are entries of their columns, whose
+  // public entries lie in [LO, HI].
+  size_t src_table(size_t node, std::vector<std::string> preds, SignedInt lo,
+                   SignedInt hi) {
+    Step s = make(Step::kSrc);
+    s.node = node;
+    s.src.kind = Src::kTableHull;
+    s.names = std::move(preds);
+    s.ints = {lo, hi};
+    return push(std::move(s));
+  }
+  // The coefficient interval [LO, HI] of the polynomial whose spectrum is
+  // coordinates [AT, AT + n) of node NODE, a kernel of the product form
+  // (tableKernel), from the table selections PREDS: those coordinates are
+  // a leaf's transform of a row, whose public coefficients lie in
+  // [LO, HI]. The export names the kernel's operator and block.
+  size_t src_kernel(size_t node, size_t at, std::vector<std::string> preds,
+                    SignedInt lo, SignedInt hi) {
+    Step s = make(Step::kSrc);
+    s.node = node;
+    s.a = at;
+    s.src.kind = Src::kTableKernel;
+    s.names = std::move(preds);
+    s.ints = {lo, hi};
+    return push(std::move(s));
+  }
+  // holds (the product form's mod_m P N for the congruence D = P - N;
+  // mod.h's product_sides) by the rule productMod from the premises KS:
+  // nat Q, then for P and for N the part's interval, one ivl, or for a
+  // part with spectral products per part of its terms its kernel's
+  // interval (src_kernel) and ivl of its operand, or ivl of an expression
+  // part (derivation_check.h states the rule).
+  size_t product_mod(std::vector<size_t> ks) {
+    Step s = make(Step::kProductMod);
+    s.premises = std::move(ks);
+    return push(std::move(s));
+  }
   // ivl E by interval propagation from the ivl premises KS, at the bounds
   // the walk gives (the export states them).
   size_t ivl_expr_auto(std::vector<size_t> ks, E e) {
@@ -353,7 +414,8 @@ class Deriv {
 // The ivl premises of the nodes NODES an expression reads, by the sources
 // WHY the lowering recorded when it computed the expression's interval:
 // a constant's entries, a Bit, a statement bound, the range fact of a
-// plain request on the node (its derivation spliced in), the prime field;
+// plain request on the node (its derivation spliced in), the prime field,
+// a public table's hull;
 // a view takes its sources' premises (the interval check reads it through
 // its definition). Each node's premise is appended once (DONE). A source
 // the rules do not state records a gap.
@@ -402,6 +464,9 @@ inline std::vector<size_t> ivl_premises(Deriv &dv, const Graph &g,
         return;
       case IvlWhy::kPrime:
         out.push_back(done[id] = dv.src(id, Deriv::Src::kPrime));
+        return;
+      case IvlWhy::kTable:
+        out.push_back(done[id] = dv.src_table(id, w->preds, w->lo, w->hi));
         return;
       case IvlWhy::kRequest:
         if (w->offset) {

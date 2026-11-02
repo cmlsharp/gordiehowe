@@ -14,6 +14,32 @@ set(CMAKE_CXX_STANDARD 17)
 # targets a baseline links are built (common/build.sh names them).
 add_subdirectory(upstream/lib upstream)
 
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" LFB_ARCH)
+# On aarch64, upstream adds -march=armv8-a+crypto to each of its targets'
+# compile options, which follow CMAKE_CXX_FLAGS on the command line and so
+# override a caller's -march (an -mcpu's architecture likewise).  When
+# CMAKE_CXX_FLAGS selects the ISA (it must include the crypto extension),
+# upstream's -march options are removed from its targets, here and not in
+# the submodule, which stays at its pinned commit unmodified.
+if(LFB_ARCH MATCHES "aarch64" AND CMAKE_CXX_FLAGS MATCHES "-march=|-mcpu=")
+  function(lfb_drop_upstream_march dir)
+    get_property(targets DIRECTORY ${dir} PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(t IN LISTS targets)
+      get_property(opts TARGET ${t} PROPERTY COMPILE_OPTIONS)
+      # The generator expression of upstream's ARCH_FLAGS list is stored as
+      # one item per flag, each holding "-march=armv8-a"; both go.
+      list(FILTER opts EXCLUDE REGEX "-march=armv8-a")
+      set_property(TARGET ${t} PROPERTY COMPILE_OPTIONS "${opts}")
+    endforeach()
+    get_property(subdirs DIRECTORY ${dir} PROPERTY SUBDIRECTORIES)
+    foreach(s IN LISTS subdirs)
+      lfb_drop_upstream_march(${s})
+    endforeach()
+  endfunction()
+  lfb_drop_upstream_march(${CMAKE_CURRENT_SOURCE_DIR}/upstream/lib)
+  message(STATUS "aarch64: upstream's -march removed; CMAKE_CXX_FLAGS selects the ISA")
+endif()
+
 set(LFB_UPSTREAM_LIB ${CMAKE_CURRENT_SOURCE_DIR}/upstream/lib)
 set(LFB_COMMON ${CMAKE_CURRENT_SOURCE_DIR}/common)
 
@@ -21,9 +47,10 @@ set(LFB_COMMON ${CMAKE_CURRENT_SOURCE_DIR}/common)
 # the baselines get the same.
 include_directories(${LFB_UPSTREAM_LIB} ${LFB_COMMON})
 add_compile_definitions(OPENSSL_SUPPRESS_DEPRECATED=1)
-string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" LFB_ARCH)
 if(LFB_ARCH MATCHES "x86_64")
   add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-mpclmul>")
+elseif(LFB_ARCH MATCHES "aarch64" AND NOT CMAKE_CXX_FLAGS MATCHES "-march=|-mcpu=")
+  add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-march=armv8-a+crypto>")
 endif()
 
 # A benchmark driver: one executable that speaks the worker protocol of

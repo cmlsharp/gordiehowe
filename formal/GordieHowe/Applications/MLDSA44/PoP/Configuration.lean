@@ -41,8 +41,8 @@ public import GordieHowe.Foundations.Fields.Goldilocks
 public import GordieHowe.ProofSystem.GKR.CircuitBudget
 public import GordieHowe.Foundations.Fields.GF2_256
 public import GordieHowe.Foundations.Fields.GoldilocksQuartic
-public import GordieHowe.Applications.MLDSA44.Native.Fields.MLDSANative11
-public import GordieHowe.Applications.MLDSA44.Native.Fields.MLDSANative6
+public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative11
+public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative6
 public import GordieHowe.Applications.MLDSA44.PoP.Native.Algebra
 public import GordieHowe.Applications.MLDSA44.PoP.Compose
 public import GordieHowe.Applications.MLDSA44.Circuits.NativeAlgebra
@@ -53,8 +53,8 @@ public import GordieHowe.Foundations.Fields.GF2_256Skip
 public import GordieHowe.Foundations.Fields.GF2_128Skip
 public import GordieHowe.Applications.MLDSA44.Fields.GF2_128
 public import GordieHowe.Applications.MLDSA44.Fields.GF2_256
-public import GordieHowe.Applications.MLDSA44.Native.Fields.MLDSANative11Relative
-public import GordieHowe.Applications.MLDSA44.Native.Fields.MLDSANative6Relative
+public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative11Relative
+public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative6Relative
 public import GordieHowe.Foundations.Fields.GoldilocksQuarticRelative
 public import GordieHowe.Foundations.Fields.GoldilocksRelative
 public import GordieHowe.Applications.Rows.MAC
@@ -83,10 +83,10 @@ public import GordieHowe.Language.Realizations.Range
 public import GordieHowe.Applications.Configuration.Witness
 public import GordieHowe.Applications.Falcon512.Circuits.EmulatedAlgebraHonest
 public import GordieHowe.Applications.Falcon512.Circuits.NativeAlgebra
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative9
+public import GordieHowe.Applications.Falcon512.Fields.FalconNative9
 public import GordieHowe.Foundations.Fields.GF2_128Selection
 public import GordieHowe.Applications.Keccak.Gadgets.Basic
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative20
+public import GordieHowe.Applications.Falcon512.Fields.FalconNative20
 public import GordieHowe.Applications.Falcon512.Circuits.NativeAlgebraHonest
 public import GordieHowe.ProofSystem.GKR.SourceInput
 public import GordieHowe.Applications.Falcon512.Emulated.Rows

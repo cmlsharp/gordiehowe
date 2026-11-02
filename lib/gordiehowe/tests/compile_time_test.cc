@@ -128,7 +128,7 @@ TEST(CompileTime, DISABLED_Run) {
       static const mldsa::Env<P> env;
       const auto &ex = ml_dsa::GetMlDsa44BenchmarkExample();
       run_system(s, P::kId, [&ex, &bo] {
-        return std::make_unique<mldsa::MLDSANativeSystem<P>>(
+        return std::make_unique<mldsa::MLDSANativeSystem<P, mldsa::MLDSA44>>(
             env, ex.msg.size(), ex.ctx.size(), mldsa::PackingAblation::kNone,
             bo);
       });
@@ -201,7 +201,7 @@ TEST(Provisional, ShapeMatchesCircuit) {
     static const mldsa::Env<P> md;
     const auto &ex = ml_dsa::GetMlDsa44BenchmarkExample();
     same([&ex](const BuildOptions &o) {
-      return std::make_unique<mldsa::MLDSANativeSystem<P>>(
+      return std::make_unique<mldsa::MLDSANativeSystem<P, mldsa::MLDSA44>>(
           md, ex.msg.size(), ex.ctx.size(), mldsa::PackingAblation::kNone, o);
     }, "mldsa-native");
   });

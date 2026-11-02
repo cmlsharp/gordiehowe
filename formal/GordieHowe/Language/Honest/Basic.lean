@@ -283,19 +283,18 @@ variable {P : Export.Plan} {ir : RealizedProgram} {I : Interp} (B : ir.ProofSyst
 
 /-! ## The domains' honest provers -/
 
-/-- **The honest predicate of domain `d`**: the domain's predicate (`RealizedProgram.domainOf`), without the
-compiler trust. -/
+/-- **The honest predicate of domain `d`**: the domain's predicate (`RealizedProgram.domainOf`). -/
 abbrev honestPred (d : Fin ir.domains.length) :
-    (ir.layout I).Constraint (ir.Valuation I) (B.guardedDomain d).Cells :=
+    (ir.layout I).Constraint (ir.Valuation I) (B.domains d).Cells :=
   fun x a r => (ir.domainOf I d).Holds x a r
 
 /-- **The domains' simulator data**: every domain proof's (`FieldProof.Sim`). -/
 abbrev DomainSims : Type 1 := ∀ d, (B.proof d).proof.Sim
 
-/-- **The domains' honest provers**, simulated by `DS`: from the compiler's completeness, every
-domain proof's honest prover at the domain's predicate. -/
+/-- **The domains' honest provers**, simulated by `DS`: every domain proof's honest prover at the
+domain's predicate (built from the proof system's `accept`). -/
 abbrev HonestDomains (DS : B.DomainSims) : Type 1 :=
-  B.CircuitsAccept → ∀ d, (B.proof d).Honest (B.honestPred d) (DS d)
+  ∀ d, (B.proof d).Honest (B.honestPred d) (DS d)
 
 /-! ## The honest prover -/
 
@@ -326,17 +325,17 @@ every circuit's honest input encoded from the honest cells by its domain's hones
 values computed after their phase's challenge and in pad order (`ChallengeOrder.late` and
 `RealizedProgram.PadOrderValid`, from the exported reads); off the events, every circuit's honest input lies
 in its domain (`holds_honest`). -/
-def phasedHonest (A : B.CircuitsAccept) {DS : B.DomainSims} (HD : B.HonestDomains DS)
+def phasedHonest {DS : B.DomainSims} (HD : B.HonestDomains DS)
     (H : ir.HonestCore I relH) :
     (((B.baseLowering fun _ _ => ()).check (ir.stmtOk I)).toPhased B.enforcement).Honest Inp relH
-      (fun d => (HD A d).In) fun d => (HD A d).dom where
-  wit d y π := (HD A d).encode (ir.honestCells I d (H.val y) π)
+      (fun d => (HD d).In) fun d => (HD d).dom where
+  wit d y π := (HD d).encode (ir.honestCells I d (H.val y) π)
   late := H.late
   challengeCausal y π := challengeCausal_of_respectsReads B.valid.program.order (H.respects y) π
   padOrder y := padOrder_of_respectsReads B.valid.program.pads (H.respects y)
   bad := H.bad
   ok_honest x _ hy _ _ _ := stmtOk_iff.2 ⟨H.checks x _ hy, H.bounded x _ hy⟩
-  dom_honest x _ hy _ _ hc d := (HD A d).dom_of x _ _ (B.holds_honest H hy hc d)
+  dom_honest x _ hy _ _ hc d := (HD d).dom_of x _ _ (B.holds_honest H hy hc d)
 
 /-- **The simulator data of the protocol**: the phased application phase's simulator
 (`Phased.appSim`) and the domains' simulator data `DS`. -/
@@ -346,25 +345,25 @@ def simData (DS : B.DomainSims) : B.protocol.SimData where
 
 /-- **The honest prover of the protocol**: the phased honest prover as the application phase's, and
 every domain proof's honest prover, simulated by `simData DS`. -/
-def honest (A : B.CircuitsAccept) {DS : B.DomainSims} (HD : B.HonestDomains DS)
+def honest {DS : B.DomainSims} (HD : B.HonestDomains DS)
     (H : ir.HonestCore I relH) : B.protocol.Honest (B.simData DS) Inp relH where
-  In d := (HD A d).In
-  dom d := (HD A d).dom
-  app := (B.phasedHonest A HD H).toAppHonest
-  circuit d := (HD A d).circuit
+  In d := (HD d).In
+  dom d := (HD d).dom
+  app := (B.phasedHonest HD H).toAppHonest
+  circuit d := (HD d).circuit
 
 /-- The honest prover's coins: the pads of the late values and every domain proof's coins. -/
-abbrev Coins (A : B.CircuitsAccept) {DS : B.DomainSims} (HD : B.HonestDomains DS) (H : ir.HonestCore I relH) :
+abbrev Coins {DS : B.DomainSims} (HD : B.HonestDomains DS) (H : ir.HonestCore I relH) :
     Type :=
-  (B.honest A HD H).Coins
+  (B.honest HD H).Coins
 
 /-- **The honest prover of the proof system** at the honest input `y` and the coins `c`: commit to every
 domain's honest cells, send the strategy's late values masked by the pads, then run every domain
 proof's honest prover (`MultiCircuitIOP.honest`). -/
-noncomputable def prover (A : B.CircuitsAccept) {DS : B.DomainSims} (HD : B.HonestDomains DS)
-    (H : ir.HonestCore I relH) (y : Inp) (c : B.Coins A HD H) :
+noncomputable def prover {DS : B.DomainSims} (HD : B.HonestDomains DS)
+    (H : ir.HonestCore I relH) (y : Inp) (c : B.Coins HD H) :
     Prover B.spec (ir.Valuation I) :=
-  B.protocol.honest (B.honest A HD H) y c
+  B.protocol.honest (B.honest HD H) y c
 
 /-- **The simulator of the proof system**: uniform messages for the late values at the given challenges
 (`PadOrder.uniform`), then every domain proof's simulator on the public input the simulated
@@ -379,15 +378,15 @@ def simulator (DS : B.DomainSims) : B.iop.Simulator :=
 
 /-- **The exception event of the simulation**: a completeness event of the strategy occurs at the
 phases' challenges of the protocol's challenges `ch`. -/
-def exception (A : B.CircuitsAccept) {DS : B.DomainSims} (HD : B.HonestDomains DS) (H : ir.HonestCore I relH)
+def exception {DS : B.DomainSims} (HD : B.HonestDomains DS) (H : ir.HonestCore I relH)
     (x : ir.Valuation I) (y : Inp) (ch : B.spec.Challenges) : Prop :=
-  ¬ (B.honest A HD H).app.Avoids x y (B.protocol.appChallenges ch)
+  ¬ (B.honest HD H).app.Avoids x y (B.protocol.appChallenges ch)
 
 /-- The completeness events of the protocol's application phase have together the honest prover's
 completeness error (`HonestCore.Complete`). -/
-theorem errorBound_honest (A : B.CircuitsAccept) {DS : B.DomainSims} (HD : B.HonestDomains DS)
+theorem errorBound_honest {DS : B.DomainSims} (HD : B.HonestDomains DS)
     (H : ir.HonestCore I relH) {errc : ir.Valuation I → ℝ≥0} (hc : H.Complete errc) :
-    (B.honest A HD H).app.ErrorBound errc :=
+    (B.honest HD H).app.ErrorBound errc :=
   Phased.Honest.errorBound_toAppHonest hc
 
 end ProofSystem

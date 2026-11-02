@@ -42,11 +42,11 @@ namespace proofs::gordiehowe::examples::composite {
 
 namespace p256_ecdsa = mdoc::p256_ecdsa;
 namespace signatures = mdoc::signatures;
-using mldsa::kCTildeBytes;
-using mldsa::kK;
-using mldsa::kL;
+// The composite's ML-DSA parameter set (its label's MLDSA44).
+using MLDSA = mldsa::MLDSA44;
 using mldsa::kN;
-using mldsa::kPkBytes;
+constexpr size_t kCTildeBytes = MLDSA::kCTildeBytes, kK = MLDSA::kK,
+                 kL = MLDSA::kL, kPkBytes = MLDSA::kPkBytes;
 using PElt = PF::Elt;
 
 // The draft's Prefix and the algorithm's Label (sections 2.2 and 6).
@@ -165,9 +165,10 @@ void composite_relation(typename Env<P>::Sys &cs, const Env<P> &env,
   const auto label = kc::constant_input(
       H,
       kc::constant_bytes(std::vector<uint8_t>(kLabel.begin(), kLabel.end())));
-  const auto sig = mldsa::mldsa_native_signature<HF>(cs, B, st.mldsa_pk, w);
-  const auto hash =
-      mldsa::mldsa_hash_domain(cs, H, st.mldsa_pk, sig.w1, label, m_prime);
+  const auto sig =
+      mldsa::mldsa_native_signature<MLDSA, HF>(cs, B, st.mldsa_pk, w);
+  const auto hash = mldsa::mldsa_hash_domain<MLDSA>(cs, H, st.mldsa_pk, sig.w1,
+                                                    label, m_prime);
   mldsa::crossing(cs.scope("crossing"), hash, sig.c);
 }
 
@@ -190,14 +191,15 @@ void ecdsa_pop_relation(typename Env<P>::EcdsaSys &cs, const Env<P> &env,
 // relation at this file's profiles).
 template <class P>
 void mldsa_pop_relation(typename Env<P>::MldsaSys &cs, const Env<P> &env,
-                        mldsa::MLDSAStatement<In> st,
-                        mldsa::MLDSAWitness<In> w, size_t max_bytes) {
+                        mldsa::MLDSAInputs<MLDSA>::Statement<In> st,
+                        mldsa::MLDSAInputs<MLDSA>::Witness<In> w,
+                        size_t max_bytes) {
   using HF = typename Env<P>::HF;
   auto &H = cs.domain(h_profile(env), "H");
   auto &B = cs.domain(b_profile(env), "B");
-  const auto sig = mldsa::mldsa_native_signature<HF>(cs, B, st.pk, w);
-  const auto hash = mldsa::mldsa_hash_domain(cs, H, st.pk, sig.w1, st.ctx,
-                                           w.msg, w.msg_length, max_bytes);
+  const auto sig = mldsa::mldsa_native_signature<MLDSA, HF>(cs, B, st.pk, w);
+  const auto hash = mldsa::mldsa_hash_domain<MLDSA>(
+      cs, H, st.pk, sig.w1, st.ctx, w.msg, w.msg_length, max_bytes);
   mldsa::crossing(cs.scope("crossing"), hash, sig.c);
 }
 

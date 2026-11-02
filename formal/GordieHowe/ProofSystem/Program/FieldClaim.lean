@@ -183,26 +183,13 @@ theorem MBatch.partsOk (cb : ir.MBatch I d) : ir.PartsOk (atomAt ir d cb.om) d c
   obtain ⟨idx, ok, om, hops, hm, dom⟩ := cb
   cases om <;> exact h
 
-/-- **The instances of a covered merged batch fit its rows**: one part's coordinates, in whole
-lanes (`BatchOk.instances`, merged). -/
+/-- **The instances of a covered merged batch fit its rows**: one part's coordinates fit the
+instances (`BatchOk.instances`, merged), which fit the rows. -/
 theorem MBatch.fits (cb : ir.MBatch I d) :
     ir.partLen d cb.idx 0 ≤ 2 ^ (ir.batch cb.idx).rounds * (ir.batch cb.idx).width := by
   have hi := cb.batchOk.instances
-  have hr := cb.batchOk.rows
-  rw [if_pos cb.merged] at hi
-  refine le_trans ?_ hr
-  rw [hi]
-  have hl : 0 < (ir.batch cb.idx).operands.lane := by
-    cases (ir.batch cb.idx).operands <;> simp [OperandMap.lane]
-  unfold partCount
-  have := Nat.div_add_mod (ir.partLen d cb.idx 0 + ((ir.batch cb.idx).operands.lane - 1))
-    (ir.batch cb.idx).operands.lane
-  have := Nat.mod_lt (ir.partLen d cb.idx 0 + ((ir.batch cb.idx).operands.lane - 1)) hl
-  have h2 : (ir.partLen d cb.idx 0 + ((ir.batch cb.idx).operands.lane - 1)) /
-      (ir.batch cb.idx).operands.lane * (ir.batch cb.idx).operands.lane =
-      (ir.batch cb.idx).operands.lane * ((ir.partLen d cb.idx 0 +
-        ((ir.batch cb.idx).operands.lane - 1)) / (ir.batch cb.idx).operands.lane) := Nat.mul_comm _ _
-  omega
+  rw [partsLen, if_pos cb.merged] at hi
+  exact hi.trans cb.batchOk.rows
 
 /-- **Relation `q` of a covered merged batch**: part `q`'s shape on its slice (`sliceShape`). -/
 abbrev MBatch.rels (cb : ir.MBatch I d) (q : Fin (ir.batch cb.idx).parts.length) :
@@ -226,28 +213,14 @@ theorem CBatch.partsOk {om : OperandMap} (cb : ir.CBatch I d om) :
   simp only [atomOf, cb.operands] at h
   cases om <;> exact h
 
-/-- **The instances of a covered batch fit its rows**: its instances are its parts' coordinates
-in whole lanes (`BatchOk.instances`), each at least the part's coordinates. -/
+/-- **The instances of a covered batch fit its rows**: its parts' coordinates side by side fit
+the instances (`BatchOk.instances`), which fit the rows. -/
 theorem CBatch.fits {om : OperandMap} (cb : ir.CBatch I d om) :
     ∑ j : Fin (ir.batch cb.idx).parts.length, ir.partLen d cb.idx j ≤
       2 ^ (ir.batch cb.idx).rounds * (ir.batch cb.idx).width := by
   have hi := cb.batchOk.instances
-  have hr := cb.batchOk.rows
-  rw [if_neg (by simp [cb.unmerged])] at hi
-  refine le_trans ?_ hr
-  rw [hi, sum_map_range_eq_sum_fin]
-  refine Finset.sum_le_sum fun j _ => ?_
-  have hl : 0 < (ir.batch cb.idx).operands.lane := by
-    cases (ir.batch cb.idx).operands <;> simp [OperandMap.lane]
-  unfold partCount
-  have := Nat.div_add_mod (ir.partLen d cb.idx j + ((ir.batch cb.idx).operands.lane - 1))
-    (ir.batch cb.idx).operands.lane
-  have := Nat.mod_lt (ir.partLen d cb.idx j + ((ir.batch cb.idx).operands.lane - 1)) hl
-  have h2 : (ir.partLen d cb.idx j + ((ir.batch cb.idx).operands.lane - 1)) /
-      (ir.batch cb.idx).operands.lane * (ir.batch cb.idx).operands.lane =
-      (ir.batch cb.idx).operands.lane * ((ir.partLen d cb.idx j +
-        ((ir.batch cb.idx).operands.lane - 1)) / (ir.batch cb.idx).operands.lane) := Nat.mul_comm _ _
-  omega
+  rw [partsLen_of_unmerged cb.unmerged] at hi
+  exact hi.trans cb.batchOk.rows
 
 /-- **The relation of a covered batch** (`Shape.rel` at the batch's shape). -/
 abbrev CBatch.rel {om : OperandMap} (cb : ir.CBatch I d om) :

@@ -211,14 +211,6 @@ section
 
 variable (M : SPBCS Mg P X k kN kS L e) (B : ℕ) [∀ j i, Fintype ((M.comp j).MessageWrite i)]
 
-/-- **The query-bounded classical adversaries of the simulation-extraction game with output in
-`O`** (`def:adversary` in the ROM, `ROM.QueryBoundedAdversary`): coins independent of the oracle,
-then at each step a query of the oracle in force or a proof query of a statement in `X'` (answered
-by a simulated proof, or `none` once the proof queries are exhausted), at most `tq` queries on every
-run, and an output in `O`: a claim and the auxiliary output `Z` of `def:bcs-se`. -/
-abbrev SimExtractionAdversaryROM (X' O : Type) (tq : ℕ) : Type 1 :=
-  ROM.QueryBoundedAdversary (Query k kN kS L) (Out k e) X' (Option (M.Response B)) O tq
-
 variable {V : X → FullTr P t → Bool} (Qs : ∀ x, M.IOPQueries V x) {X' Z : Type} {C : Type}
   (sp : X' → SaltedCoins (FiatShamirSalt kS) C →
     OracleProg (Query k kN kS L) (Out k e) (NARG.SimOutput (Query k kN kS L) (Out k e) (M.Response B)))
@@ -261,10 +253,10 @@ theorem trace_romGameAux
 
 omit [∀ j i, Nonempty ((P j).Challenge i)] [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
 /-- **The queries of a program padded to `K` queries** (`OracleProg.toExpansion` after the trivial
-algorithm `Base.baseAlg`) are the program's padded trace. -/
+algorithm `SPBCS.baseAlg`) are the program's padded trace. -/
 theorem queries_baseAlg_append {R : Type} (G : OracleProg (Query k kN kS L) (Out k e) R)
     (pad : Query k kN kS L) (K : ℕ) (h : Query k kN kS L → Out k e) :
-    ((Base.baseAlg (k := k) (kN := kN) (kS := kS) (L := L) (e := e)).append
+    ((SPBCS.baseAlg (k := k) (kN := kN) (kS := kS) (L := L) (e := e)).append
         (OracleProg.toExpansion (fun _ : Unit => G) pad) K).queries h (0 + K) =
       (List.range K).map (G.paddedTrace h pad) := by
   rw [ROM.Alg.queries_append_add]
@@ -274,14 +266,9 @@ namespace SimExtractionAdversaryROM
 
 variable {M B} {tq : ℕ} (𝒜 : M.SimExtractionAdversaryROM B X' (Claim X M.NIProof × Z) tq)
 
-/-- **The adversary's algorithm at the coins `r` as a tree of the game** (`ROM.IAlg.toSEProg`). -/
-abbrev prog (r : 𝒜.Coins) :
-    SEProg (Query k kN kS L) (Out k e) X' (M.Response B) (Claim X M.NIProof × Z) :=
-  (𝒜.alg r).toSEProg tq
-
 /-- **The adversary without its auxiliary output**, an adversary of
 `SPBCS.weak_online_simulation_extractability_rom_basic`. -/
-abbrev claims : FullPast.SimExtractionAdversaryROM M.toFullPast B X' tq :=
+abbrev claims : M.SimExtractionAdversaryROM B X' (Claim X M.NIProof) tq :=
   𝒜.mapOut Prod.fst
 
 omit [∀ j i, Nonempty ((P j).Challenge i)] [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
@@ -306,7 +293,7 @@ noncomputable def simLaw (r : 𝒜.Coins) :
 `K` (`OracleProg.toExpansion`), as in `gameLog`. -/
 noncomputable abbrev gameAlg (r : 𝒜.Coins) (K : ℕ) :
     ROM.Alg (Query k kN kS L) (Out k e) Unit (0 + K) :=
-  (Base.baseAlg (k := k) (kN := kN) (kS := kS) (L := L) (e := e)).append
+  (SPBCS.baseAlg (k := k) (kN := kN) (kS := kS) (L := L) (e := e)).append
     (OracleProg.toExpansion (fun _ : Unit => M.romGameAux B Qs sp c (𝒜.prog r))
       (.xof (fun _ => 0) fun _ => 0)) K
 
@@ -415,7 +402,7 @@ its auxiliary output (`gameLog`). -/
 theorem log_stateOf_gameAlg :
     ((𝒜.gameAlg Qs sp c r K).stateOf h (0 + K)).log = M.gameLog B Qs sp c (𝒜.claims.prog r) K h := by
   change ROM.logOf h ((𝒜.gameAlg Qs sp c r K).queries h (0 + K)) =
-    ROM.logOf h (((Base.baseAlg (k := k) (kN := kN) (kS := kS) (L := L) (e := e)).append
+    ROM.logOf h (((SPBCS.baseAlg (k := k) (kN := kN) (kS := kS) (L := L) (e := e)).append
       (OracleProg.toExpansion (fun _ : Unit => M.romGame B Qs sp c (𝒜.claims.prog r))
         (.xof (fun _ => 0) fun _ => 0)) K).queries h (0 + K))
   rw [queries_baseAlg_append, queries_baseAlg_append, 𝒜.claims_prog r]

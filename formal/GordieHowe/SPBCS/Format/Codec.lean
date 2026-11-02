@@ -12,8 +12,8 @@ public import Mathlib.Data.Set.Finite.List
 # The transcript byte encoding
 
 The byte codecs of the chains of a protocol `P` (`GordieHowe/SPBCS/Extraction/Transcript.lean`), modelling the writes of
-`lib/random/transcript.h` at `f4e27b3c`; the chain-input encodings of the compiler
-(`GordieHowe/SPBCS/FullPast/Encoding.lean`, `GordieHowe/SPBCS/Encoding.lean`) are built from them:
+`lib/random/transcript.h` at `f4e27b3c`; the chain-input encoding of the compiler
+(`GordieHowe/SPBCS/Encoding.lean`, `GordieHowe/SPBCS/Bytes.lean`) is built from them:
 
 - tags `TAG_BSTR = 0`, `TAG_FIELD_ELEM = 1`, `TAG_ARRAY = 2`, `TAG_CHALLENGE = 3` (line 184), one
   byte each (`tag`, lines 328–332);

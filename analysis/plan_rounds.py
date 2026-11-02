@@ -486,8 +486,11 @@ def plan_files(plans_dir):
         stem = p.name.split(".")[0]
         # Program.lean is the plan's companion; Valid, Realize and Honest are
         # the Lean library's proof modules beside a configuration's plan, with
-        # their per-condition modules in directories of the same names.
-        proof = ("Valid", "Realize", "Honest")
+        # their per-condition modules in directories of the same names, and
+        # Cert, Completion, Derivs and Annotations (with Annotations/) its
+        # certificate modules.
+        proof = ("Valid", "Realize", "Honest", "Cert", "Completion", "Derivs",
+                 "Annotations")
         if stem.endswith("Program") or stem in proof or p.parent.name in proof:
             continue
         prog = "Program" if stem == "Plan" else stem + "Program"

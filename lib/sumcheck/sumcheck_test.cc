@@ -16,7 +16,9 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <memory>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -32,6 +34,7 @@
 #include "sumcheck/quad.h"
 #include "sumcheck/quad_builder.h"
 #include "sumcheck/verifier.h"
+#include "util/parallel.h"
 #include "gtest/gtest.h"
 
 namespace proofs {
@@ -488,6 +491,112 @@ TEST(Sumcheck, Limits) {
                                        Wverifier->clone(), tsv, F));
   EXPECT_STREQ(why, "too many outputs");
   CIRCUIT->nv = 3;  // Restore
+}
+
+// Each chunk on its own thread.
+class ThreadRunner : public parallel::Runner {
+ public:
+  void run(size_t n, const std::function<void(size_t)>& fn) override {
+    std::vector<std::thread> th;
+    for (size_t i = 1; i < n; ++i) th.emplace_back([&, i] { fn(i); });
+    if (n > 0) fn(0);
+    for (auto& t : th) t.join();
+  }
+};
+
+// A random layered circuit of NL layers of NW wires, one copy, large
+// enough that every parallel kernel of the prover splits: each gate reads
+// two products, one of them with the constant wire 0 (a hand most corners
+// share, which the hand products cut into pieces), and gates share some
+// hand pairs (which bind_g sums). With ASSERT, layer 0 also asserts a
+// product of two nonzero wires.
+template <class FF>
+std::unique_ptr<Circuit<FF>> random_circuit(const FF& f, size_t nl, size_t nw,
+                                            size_t logw, bool assert_zero,
+                                            Bogorng<FF>& r) {
+  using EC = typename EQuad<FF>::ecorner;
+  using QC = typename EQuad<FF>::quad_corner_t;
+  auto c = std::make_unique<Circuit<FF>>();
+  c->nv = corner_t(nw);
+  c->logv = logw;
+  c->nc = 1;
+  c->logc = 0;
+  c->nl = nl;
+  c->ninputs = nw;
+  c->npub_in = 0;
+  uint64_t x = 12345;
+  const auto next = [&x](size_t m) {
+    x = x * 6364136223846793005ull + 1442695040888963407ull;
+    return size_t(x >> 33) % m;
+  };
+  for (size_t ly = 0; ly < nl; ++ly) {
+    const size_t extra = assert_zero && ly == 0 ? 1 : 0;
+    EQuad<FF> q(2 * nw + extra);
+    for (size_t g = 0; g < nw; ++g) {
+      size_t a = next(nw), b = g % 3 == 0 ? next(64) : next(nw);
+      if (a > b) std::swap(a, b);
+      const auto v = g % 5 == 0 ? f.one() : r.nonzero();
+      q.ec_[2 * g] = EC{QC(g), {QC(a), QC(b)}, v};
+      q.ec_[2 * g + 1] = EC{QC(g), {QC(0), QC(1 + next(nw - 1))}, r.nonzero()};
+    }
+    if (extra) q.ec_[2 * nw] = EC{QC(0), {QC(1), QC(2)}, f.zero()};
+    q.canonicalize(f);
+    c->l.push_back(Layer<FF>{.nw = corner_t(nw), .logw = logw,
+                             .quad = QuadBuilder<FF>::compress(&q, f)});
+  }
+  return c;
+}
+
+// The prover's outputs and proof under a runner are the serial prover's.
+template <class FF>
+void check_parallel_prover(const FF& f, size_t nw, size_t logw) {
+  Bogorng<FF> r(&f);
+  auto circ = random_circuit(f, 3, nw, logw, false, r);
+  auto W = std::make_unique<Dense<FF>>(1, nw);
+  for (size_t i = 0; i < nw; ++i) W->v_[i] = r.next();
+  ThreadRunner runner;
+  std::vector<Proof<FF>> proofs;
+  std::vector<std::vector<typename FF::Elt>> outs;
+  for (bool pooled : {false, true}) {
+    parallel::Scope scope(pooled ? &runner : nullptr);
+    typename Prover<FF>::inputs in;
+    Prover<FF> prover(f);
+    prover.require_satisfied = false;
+    auto V = prover.eval_circuit(&in, circ.get(), W->clone(), f);
+    ASSERT_NE(V, nullptr);
+    outs.emplace_back(V->v_.begin(), V->v_.begin() + nw);
+    proofs.emplace_back(circ->nl);
+    Transcript ts((uint8_t*)"test", 4, Transcript::Seed{});
+    prover.prove(&proofs.back(), nullptr, circ.get(), in, ts);
+  }
+  EXPECT_EQ(outs[0], outs[1]);
+  for (size_t ly = 0; ly < circ->nl; ++ly) {
+    const auto &a = proofs[0].l[ly], &b = proofs[1].l[ly];
+    for (size_t hand = 0; hand < 2; ++hand) {
+      EXPECT_EQ(a.wc[hand], b.wc[hand]);
+      for (size_t round = 0; round < logw; ++round)
+        for (size_t k = 0; k < 3; ++k)
+          EXPECT_EQ(a.hp[hand][round].t_[k], b.hp[hand][round].t_[k]);
+    }
+  }
+  // A failed assertion fails the evaluation in both modes.
+  auto bad = random_circuit(f, 1, nw, logw, true, r);
+  for (bool pooled : {false, true}) {
+    parallel::Scope scope(pooled ? &runner : nullptr);
+    typename Prover<FF>::inputs in;
+    Prover<FF> prover(f);
+    auto Wb = W->clone();
+    Wb->v_[1] = f.one();
+    Wb->v_[2] = f.one();
+    EXPECT_EQ(prover.eval_circuit(&in, bad.get(), std::move(Wb), f), nullptr);
+  }
+}
+
+TEST(Sumcheck, ParallelProverPrime) { check_parallel_prover(F, 20000, 15); }
+
+TEST(Sumcheck, ParallelProverBinary) {
+  const GF2_128<> field;
+  check_parallel_prover(field, 40000, 16);
 }
 
 }  // namespace

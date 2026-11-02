@@ -1,32 +1,33 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 //
-// Falcon-512 encodability of s2.
+// Falcon encodability of s2 (Falcon specification v1.2, Algorithm 17
+// Compress, section 3.11.2).
 //
 // The compressed format codes coefficient x as a sign bit, the seven low bits
 // of |x|, then |x|/128 zeros and a terminating one: 9 + |x|/128 bits.  The
-// encoder rejects |x| > 2047, and the payload is 625 bytes.  So a decoded s2
-// is encodable iff every magnitude splits as |x| = 128*h + l with h < 16 and
-// l < 128, and
+// encoder rejects |x| > 2047, and Compress fails when the string exceeds
+// slen = 8 sbytelen - 328 bits.  So a decoded s2 of degree n is encodable
+// iff every magnitude splits as |x| = 128*h + l with h < 16 and l < 128, and
 //
-//   sum_i h_i <= 8*625 - 9*512 = 392.
+//   sum_i h_i <= J = slen - 9 n
+//
+// (Falcon-512: slen = 5000, J = 392; Falcon-1024: slen = 9912, J = 696;
+// GordieHowe's lib/gordiehowe/examples/falcon/falcon_encoding.h).
 //
 // The encoder writes the sign of x < 0, so it never emits -0; no sign check is
 // needed in circuit.  Every arm reuses the magnitude its norm gadget already
 // pins to s2 (a in {v, q - v}); once a < 2048 < q/2 is enforced, a is the
 // centered magnitude.  The low part l is always derived, never committed.
 //
-// Four realizations, one per arm:
-//   emulated, lookup (table 2048):  requests a, h, 16*(a - 128*h) per
-//       coefficient, then 392 - sum h.  Matches the Lean model
-//       (formal/pq/PQ/Gadgets/FalconEncoding.lean) request for request.
-//   native, lookup (table 64):      the magnitude's top base-64 limb slot
-//       carries h; requests h + 48 per coefficient, then the two base-64
-//       digits of 392 - sum h (one committed, one derived).
-//   native, bits (baseline):        h committed as 4 bits in the top slot;
-//       392 - sum h committed as 9 bits.
-//   emulated, bits (baseline):      h is bits 7..10 of the committed 13-bit
-//       magnitude; bits 11, 12 are asserted zero; 392 - sum h as 9 bits.
+// The baselines' two realizations, with Boolean digits only:
+//   native (falcon_encoding_native_bits): h committed as 4 bits in the top
+//       magnitude slot; J - sum h committed in slack digits, per group of
+//       coefficients (falcon_encoding_native_groups), so that every equation
+//       is exact in F_q.
+//   emulated (falcon_encoding_emulated_bits): h is bits 7..10 of the
+//       committed 13-bit magnitude; bits 11, 12 are asserted zero; J - sum h
+//       in slack digits.
 
 #ifndef LFB_FALCON_FALCON_ENCODING_H_
 #define LFB_FALCON_FALCON_ENCODING_H_
@@ -46,14 +47,35 @@ constexpr uint64_t kFalconMagnitudeBound = 2048;  // |x| <= 2047
 constexpr uint64_t kFalconHighBound = kFalconMagnitudeBound / kFalconLowRadix;  // 16
 constexpr uint64_t kFalconBaseCoefficientBits = 1 + 7 + 1;  // sign, low, terminator
 
-// Unary bits left after every coefficient's fixed overhead.
-constexpr uint64_t falcon_encoding_high_budget(uint64_t n, uint64_t payload_bytes) {
-  return 8 * payload_bytes - kFalconBaseCoefficientBits * n;
+// Unary bits left of SLEN_BITS after every coefficient's fixed overhead.
+constexpr uint64_t falcon_encoding_high_budget(uint64_t n, uint64_t slen_bits) {
+  return slen_bits - kFalconBaseCoefficientBits * n;
 }
-constexpr uint64_t kFalcon512PayloadBytes = 625;
-constexpr uint64_t kFalcon512HighBudget =
-    falcon_encoding_high_budget(512, kFalcon512PayloadBytes);  // 392
-static_assert(kFalcon512HighBudget == 392);
+
+// The number of bits of x.
+constexpr size_t falcon_bit_width(uint64_t x) {
+  size_t n = 0;
+  while (x >> n) ++n;
+  return n;
+}
+
+// The native form's groups. The slack of BUDGET has bit_width(BUDGET)
+// digits. Group g asserts (BUDGET - slack_{g-1}) + sum_{i in g} h_i +
+// slack_g = BUDGET (the first term 0 for g = 0), which is exact in F_q when
+// BUDGET + 15 G + 2^bits - 1 < q for groups of at most G coefficients. The
+// count is the least that meets it with equal groups (Falcon-512: one group
+// of 512; Falcon-1024: two of 512).
+constexpr size_t falcon_encoding_native_group_max(uint64_t budget,
+                                                  uint64_t q) {
+  return size_t((q - 1 - budget -
+                 ((uint64_t{1} << falcon_bit_width(budget)) - 1)) /
+                (kFalconHighBound - 1));
+}
+constexpr size_t falcon_encoding_native_groups(size_t n, uint64_t budget,
+                                               uint64_t q) {
+  const size_t g = falcon_encoding_native_group_max(budget, q);
+  return (n + g - 1) / g;
+}
 
 // ---- host -------------------------------------------------------------------
 
@@ -83,116 +105,75 @@ inline FalconEncodingAdvice falcon_encoding_advice(const std::vector<uint64_t>& 
   return e;
 }
 
-// ---- emulated, lookup ---------------------------------------------------------
-
-// Appends, in order: for each i, a[i], high[i], 16*(a[i] - 128*high[i]); then
-// budget - sum high.  All into a table of size kFalconMagnitudeBound.
-//
-// Soundness (all over the integers once lifted, given p > 2048^2 and
-// p > 512*15 + 2047): a, h, 16*l in [0, 2048) with 16*a = 16*l + 2048*h forces
-// h < 16 and 0 <= l < 128, so a = 128*h + l < 2048; the slack lookup then
-// lifts sum h + slack = budget, so sum h <= budget.
-template <class Logic>
-void falcon_encoding_emulated(const Logic& lc,
-                              const std::vector<typename Logic::EltW>& a,
-                              const std::vector<typename Logic::EltW>& high,
-                              uint64_t budget,
-                              std::vector<typename Logic::EltW>& needles) {
-  using EltW = typename Logic::EltW;
-  check(a.size() == high.size(), "falcon_encoding_emulated: size mismatch");
-  const uint64_t scale = kFalconMagnitudeBound / kFalconLowRadix;  // 16
-  EltW sum = lc.konst(uint64_t{0});
-  for (size_t i = 0; i < a.size(); ++i) {
-    needles.push_back(a[i]);
-    needles.push_back(high[i]);
-    EltW low = lc.sub(a[i], lc.mul(lc.elt(kFalconLowRadix), high[i]));
-    needles.push_back(lc.mul(lc.elt(scale), low));
-    sum = lc.add(sum, high[i]);
+// Host: the native form's slack per group of GROUPS equal groups, the budget
+// less the high parts up to the group's end (0 once they exceed it, which
+// the circuit rejects).
+inline std::vector<uint64_t> falcon_encoding_group_slacks(
+    const FalconEncodingAdvice& e, size_t groups, uint64_t budget) {
+  const size_t n = e.high.size(), size = (n + groups - 1) / groups;
+  std::vector<uint64_t> out;
+  uint64_t sum = 0;
+  for (size_t g = 0; g < groups; ++g) {
+    for (size_t i = g * size; i < n && i < (g + 1) * size; ++i)
+      sum += e.high[i];
+    out.push_back(sum <= budget ? budget - sum : 0);
   }
-  needles.push_back(lc.sub(lc.konst(budget), sum));
-}
-
-// ---- native, lookup -------------------------------------------------------------
-
-// Native s2 coefficients store h in the top base-B limb slot of the norm's
-// magnitude (FalconNormParams::high_from).  With B = 64 the magnitude is
-// a = a0 + 64*a1, and a = 128*h + l with l = a0 + 64*b, b = a1 - 2*h.
-//
-// The norm already requests a0, a1 and the top slot h in [0, 64).  Added here,
-// in order: for each s2 coefficient, h + 48 (so h < 16); then the digits
-// slack_lo, slack_hi of budget - sum h, where slack_hi is committed and
-// slack_lo = budget - sum h - 64*slack_hi is derived.  b is asserted Boolean.
-//
-// Soundness in F_q: h in [0,64) and h + 48 in [0,64) give h in [0,16); b in
-// {0,1} with a1 in [0,64) gives a1 = 2h + b over the integers, so
-// a = 128h + a0 + 64b < 2048 < q/2 is the centered magnitude.  sum h <= 7680
-// and the two digits give a value in [0, 4095]; 7680 + 4095 < q, so
-// sum h + slack = budget holds over the integers.
-template <class Logic>
-void falcon_encoding_native(const Logic& lc,
-                            const std::vector<FalconCoeffWires<Logic>>& cw,
-                            size_t first, size_t count,
-                            const typename Logic::EltW& slack_hi,
-                            const FalconNormParams& p, uint64_t budget,
-                            std::vector<typename Logic::EltW>& needles) {
-  using EltW = typename Logic::EltW;
-  check(p.B == 64 && p.La == 3, "falcon_encoding_native: expects B = 64, La = 3");
-  check(p.high_from == first, "falcon_encoding_native: high_from must be the s2 start");
-  check(count * (kFalconHighBound - 1) + p.B * p.B - 1 < p.q,
-        "falcon_encoding_native: sum of high parts may wrap");
-  EltW sum = lc.konst(uint64_t{0});
-  for (size_t i = first; i < first + count; ++i) {
-    const EltW& a1 = cw[i].a_lo[1];
-    const EltW& h = cw[i].a_lo[p.La - 1];
-    EltW b = lc.sub(a1, lc.mul(lc.elt(uint64_t{2}), h));
-    lc.assert0(lc.mul(b, lc.sub(b, lc.konst(uint64_t{1}))));
-    needles.push_back(lc.add(h, lc.konst(p.B - kFalconHighBound)));
-    sum = lc.add(sum, h);
-  }
-  EltW slack = lc.sub(lc.konst(budget), sum);
-  EltW slack_lo = lc.sub(slack, lc.mul(lc.elt(p.B), slack_hi));
-  needles.push_back(slack_lo);
-  needles.push_back(slack_hi);
-}
-
-// Host side of the native forms: the committed high digit of the slack.
-inline uint64_t falcon_encoding_native_slack_hi(const FalconEncodingAdvice& e,
-                                                uint64_t B) {
-  return e.slack / B;
+  return out;
 }
 
 // ---- native, bits (baseline) ------------------------------------------------------
 
-// Same top-slot layout as the lookup form, with h committed as 4 bits there
-// and slack = budget - sum h committed as `slack` (9 bits, so < 512).  No
-// requests: every range comes from committed Boolean digits.
+// The top-slot layout: native s2 coefficients store h in the top base-B limb
+// slot of the norm's magnitude (FalconNormParams::high_from), with B = 64,
+// so a = a0 + 64*a1 and a = 128*h + l with l = a0 + 64*b, b = a1 - 2*h; b is
+// asserted Boolean.  h is committed as 4 bits there, and each group's slack
+// as bit_width(budget) bits (SLACK, one per group).  No requests: every
+// range comes from committed Boolean digits.
+//
+// Soundness in F_q: h in [0,16) and b in {0,1} with a1 in [0,64) give
+// a1 = 2h + b over the integers, so a = 128h + a0 + 64b < 2048 < q/2 is the
+// centered magnitude.  By induction over the groups, budget - slack_{g-1} is
+// an integer in [0, budget]; the group's equation is then exact
+// (falcon_encoding_native_group_max), so the high parts up to the group's
+// end sum to budget - slack_g <= budget.
 template <class Logic>
 void falcon_encoding_native_bits(const Logic& lc,
                                  const std::vector<FalconCoeffWires<Logic>>& cw,
                                  size_t first, size_t count,
-                                 const typename Logic::EltW& slack,
+                                 const std::vector<typename Logic::EltW>& slack,
                                  const FalconNormParams& p, uint64_t budget) {
   using EltW = typename Logic::EltW;
   check(p.B == 64 && p.La == 3, "falcon_encoding_native_bits: expects B = 64, La = 3");
   check(p.high_from == first, "falcon_encoding_native_bits: high_from must be the s2 start");
-  check(count * (kFalconHighBound - 1) + 511 < p.q,
-        "falcon_encoding_native_bits: sum of high parts may wrap");
-  EltW sum = lc.konst(uint64_t{0});
-  for (size_t i = first; i < first + count; ++i) {
-    const EltW& a1 = cw[i].a_lo[1];
-    const EltW& h = cw[i].a_lo[p.La - 1];
-    EltW b = lc.sub(a1, lc.mul(lc.elt(uint64_t{2}), h));
-    lc.assert0(lc.mul(b, lc.sub(b, lc.konst(uint64_t{1}))));
-    sum = lc.add(sum, h);
+  const size_t groups = falcon_encoding_native_groups(count, budget, p.q);
+  check(slack.size() == groups, "falcon_encoding_native_bits: one slack per group");
+  const size_t size = (count + groups - 1) / groups;
+  check(size <= falcon_encoding_native_group_max(budget, p.q),
+        "falcon_encoding_native_bits: a group's sum may wrap");
+  for (size_t g = 0; g < groups; ++g) {
+    // budget - slack_{g-1}: the high parts before the group (none for g = 0).
+    EltW sum = g == 0 ? lc.konst(uint64_t{0})
+                      : lc.sub(lc.konst(budget), slack[g - 1]);
+    const size_t end = first + count < first + (g + 1) * size
+                           ? first + count
+                           : first + (g + 1) * size;
+    for (size_t i = first + g * size; i < end; ++i) {
+      const EltW& a1 = cw[i].a_lo[1];
+      const EltW& h = cw[i].a_lo[p.La - 1];
+      EltW b = lc.sub(a1, lc.mul(lc.elt(uint64_t{2}), h));
+      lc.assert0(lc.mul(b, lc.sub(b, lc.konst(uint64_t{1}))));
+      sum = lc.add(sum, h);
+    }
+    lc.assert_eq(lc.add(sum, slack[g]), lc.konst(budget));
   }
-  lc.assert_eq(lc.add(sum, slack), lc.konst(budget));
 }
 
 // ---- emulated, bits (baseline) ------------------------------------------------------
 
 // mags: the committed 13-bit s2 magnitudes (little-endian).  Bits 11 and 12
 // are asserted zero, h is bits 7..10, l is bits 0..6; slack = budget - sum h
-// is committed as 9 bits.
+// is committed as bit_width(budget) bits.  The field's characteristic
+// exceeds n * 15 + 2^bits, so the equation is exact.
 template <class Logic>
 void falcon_encoding_emulated_bits(
     const Logic& lc, const std::vector<typename Logic::template bitvec<13>>& mags,

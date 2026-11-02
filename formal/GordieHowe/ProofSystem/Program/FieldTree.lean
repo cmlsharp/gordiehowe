@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.ProofSystem.Program.FieldPacking
 public import GordieHowe.Language.RealizedProgram.Views
+public import GordieHowe.Language.RealizedProgram.MemberValues
 
 @[expose] public section
 
@@ -286,15 +287,21 @@ structure TreeOk (es : List PackingEdge) (n : ℕ) : Prop where
   /-- Every relative degree is positive. -/
   deg_pos : ∀ (b : ℕ) (hb : b < es.length), 0 < es[b].degree
 
-/-- **The tree condition as a test.** -/
-def treeOkB (es : List PackingEdge) (n : ℕ) : Bool :=
-  (List.finRange es.length).all fun b =>
-    decide (0 < es[b].degree) &&
-      match parentIdx es b with
-      | none => es[b].childDegree * es[b].degree == n
-      | some j => decide (b < j) &&
-          if hj : j < es.length then es[j].childDegree == es[b].childDegree * es[b].degree
-          else false
+/-- **The tree condition at edge `b` (`e`)**, a sweep of the edges with no search: its relative
+degree is positive; every edge whose child is `e`'s parent comes later and spans `e`'s edge; and
+when no edge's child is `e`'s parent, `e` spans the field. -/
+def treeEdgeB (es : List PackingEdge) (n b : ℕ) (e : PackingEdge) : Bool :=
+  decide (0 < e.degree) &&
+    Twin.okB (Twin.allE (fun j f => Twin.guardE (f.child != e.parent ||
+      (decide (b < j) && f.childDegree == e.childDegree * e.degree)) ()) 0 es) &&
+    (es.any (·.child == e.parent) || e.childDegree * e.degree == n)
+
+/-- **The tree condition as a check** whose failure names the edge (`treeEdge`). -/
+def treeOkE (es : List PackingEdge) (n : ℕ) : Except StructFailure Unit :=
+  Twin.allE (fun b e => Twin.guardE (treeEdgeB es n b e) ⟨b, 0, .treeEdge⟩) 0 es
+
+/-- **The tree condition as a test** (`okB` of `treeOkE`). -/
+def treeOkB (es : List PackingEdge) (n : ℕ) : Bool := Twin.okB (treeOkE es n)
 
 theorem parentIdx_lt {es : List PackingEdge} {b j : ℕ} (h : parentIdx es b = some j) :
     j < es.length := by
@@ -303,17 +310,41 @@ theorem parentIdx_lt {es : List PackingEdge} {b j : ℕ} (h : parentIdx es b = s
 
 theorem TreeOk.of_treeOkB {es : List PackingEdge} {n : ℕ} (h : treeOkB es n = true) :
     TreeOk es n := by
-  simp only [treeOkB, List.all_eq_true, List.mem_finRange, true_implies, Bool.and_eq_true,
-    decide_eq_true_eq] at h
-  refine ⟨fun b hb j hp => ?_, fun b hb hp => ?_, fun b hb => (h ⟨b, hb⟩).1⟩
-  · have h2 := (h ⟨b, hb⟩).2
+  have hE : ∀ b (hb : b < es.length), treeEdgeB es n b es[b] = true := fun b hb => by
+    have := Twin.okB_allE_getElem h b hb
+    rwa [Nat.zero_add, Twin.okB_guardE] at this
+  refine ⟨fun b hb j hp => ?_, fun b hb hp => ?_, fun b hb => ?_⟩
+  · have h2 := hE b hb
+    unfold treeEdgeB at h2
+    simp only [Bool.and_eq_true] at h2
     have hj := parentIdx_lt hp
-    simp only [Fin.getElem_fin, hp, hj, ↓reduceDIte, Bool.and_eq_true, decide_eq_true_eq,
-      beq_iff_eq] at h2
-    exact ⟨h2.1, hj, h2.2⟩
-  · have h2 := (h ⟨b, hb⟩).2
-    simp only [Fin.getElem_fin, hp, beq_iff_eq] at h2
-    exact h2
+    unfold parentIdx at hp
+    obtain ⟨_, hc, -⟩ := List.findIdx?_eq_some_iff_getElem.1 hp
+    have := Twin.okB_allE_getElem h2.1.2 j hj
+    rw [Nat.zero_add, Twin.okB_guardE] at this
+    rw [List.getD_eq_getElem _ _ hb] at hc
+    have hc' : es[j].child = es[b].parent := by simpa using hc
+    simp only [Bool.or_eq_true, Bool.and_eq_true, bne_iff_ne, ne_eq, decide_eq_true_eq,
+      beq_iff_eq] at this
+    rcases this with h | h
+    · exact absurd hc' h
+    · exact ⟨h.1, hj, h.2⟩
+  · have h2 := hE b hb
+    unfold treeEdgeB at h2
+    simp only [Bool.and_eq_true, Bool.or_eq_true, beq_iff_eq] at h2
+    rcases h2.2 with ha | hr
+    · exfalso
+      obtain ⟨j, hj, hc⟩ := List.any_eq_true.1 ha
+      unfold parentIdx at hp
+      rw [List.findIdx?_eq_none_iff] at hp
+      have := hp j hj
+      rw [List.getD_eq_getElem _ _ hb] at this
+      simp_all
+    · exact hr
+  · have h2 := hE b hb
+    unfold treeEdgeB at h2
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at h2
+    exact h2.1.1
 
 theorem viewChild_spec {es : List PackingEdge} {a b : ℕ} (h : viewChild es a = some b) :
     b < es.length ∧ parentIdx es b = some a ∧ isView es b = true := by
@@ -599,27 +630,120 @@ structure PlaceOk (Pk : (I (ir.domainField d)).Packing) (es : List PackingEdge) 
   root : ∀ k ∈ ir.cellKeys d, ir.cellNode es k = none → ∀ s, ir.cellName k = some s →
     Pk.nodeDeg s = some Pk.n
 
+/-- **The node named `s` has its edges' degree**, a sweep of the edges with no search: every edge
+whose child is `s` has child degree `s`'s degree, and when none is, `s` is the whole field. It reads
+the name only, so the kernel computes it once per name, not per cell. -/
+def nodeDegB {F : FieldInterp} (Pk : F.Packing) (es : List PackingEdge) (s : String) : Bool :=
+  es.all (fun e => e.child != s || Pk.nodeDeg s == some e.childDegree) &&
+    (es.any (·.child == s) || Pk.nodeDeg s == some Pk.n)
+
+/-- **A cell name passes `nodeDegB`**: no name, or a name of its edges' degree. -/
+def nameOkB {F : FieldInterp} (Pk : F.Packing) (es : List PackingEdge) : Option String → Bool
+  | none => true
+  | some s => nodeDegB Pk es s
+
+/-- **Every coordinate of value `v` names a node passing `nodeDegB`**: a value of no coordinate, or
+the name of its cells (a committed value's node, a late value's pad space), which is the same at
+every coordinate (`cellName`). -/
+def placeValueB (d : ℕ) (Pk : (I (ir.domainField d)).Packing) (es : List PackingEdge) (v : ℕ) :
+    Bool :=
+  (ir.value v).size == 0 ||
+    if ir.isCellValue d v then nameOkB Pk es (ir.cellName (.val v 0))
+    else if ir.isLateOf d v then nameOkB Pk es (ir.cellName (.pad v 0))
+    else true
+
 variable (d) in
-/-- **The placement checks as a test.** -/
+/-- **The placement checks as a check**, value by value (a value's cells share their name, so the
+check reads each value once, not each coordinate), whose failure names the value
+(`nodeDegree`). -/
+def placeOkE (Pk : (I (ir.domainField d)).Packing) (es : List PackingEdge) :
+    Except StructFailure Unit :=
+  Twin.allE (fun _ v => Twin.guardE (ir.placeValueB d Pk es v) ⟨v, 0, .nodeDegree⟩) 0
+    (List.range ir.values.length)
+
+variable (d) in
+/-- **The placement checks as a test** (`okB` of `placeOkE`). -/
 def placeOkB (Pk : (I (ir.domainField d)).Packing) (es : List PackingEdge) : Bool :=
-  (ir.cellKeys d).all fun k =>
-    match ir.cellName k with
-    | none => true
-    | some s =>
-      match ir.cellNode es k with
-      | some a => Pk.nodeDeg s == some (es.getD a noEdge).childDegree
-      | none => Pk.nodeDeg s == some Pk.n
+  Twin.okB (ir.placeOkE d Pk es)
+
+/-- **A constant test over a range** holds when the range is empty or the test holds. -/
+theorem all_range_const (n : ℕ) (c : Bool) : (List.range n).all (fun _ => c) = (n == 0 || c) := by
+  cases c <;> cases n <;> simp [List.all_eq_true, List.range_succ]
+
+/-- **The filler cells have no name.** -/
+theorem all_fillerKeys {F : FieldInterp} (Pk : F.Packing) (es : List PackingEdge) (c : ℕ)
+    (b : InputBlock) : (b.fillerKeys c).all (fun k => nameOkB Pk es (ir.cellName k)) = true := by
+  cases b <;> simp [InputBlock.fillerKeys, cellName, nameOkB]
+
+/-- **The placement test cell by cell.** -/
+theorem placeOkB_eq (Pk : (I (ir.domainField d)).Packing) (es : List PackingEdge) :
+    ir.placeOkB d Pk es = (ir.cellKeys d).all fun k =>
+      match ir.cellName k with
+      | none => true
+      | some s => nodeDegB Pk es s := by
+  have hk : (fun k => match ir.cellName k with
+      | none => true
+      | some s => nodeDegB Pk es s) = fun k => nameOkB Pk es (ir.cellName k) := by
+    funext k
+    cases ir.cellName k <;> rfl
+  rw [hk]
+  unfold placeOkB placeOkE
+  rw [Twin.okB_allE (p := ir.placeValueB d Pk es) (fun _ v => Twin.okB_guardE _ _) 0 _]
+  unfold cellKeys
+  rw [List.all_append, List.all_flatMap]
+  have hf : ((List.range ir.circuits.length).flatMap fun c =>
+      if (ir.circuit c).domain = d then (ir.circuit c).inputs.flatMap (·.fillerKeys c)
+      else []).all (fun k => nameOkB Pk es (ir.cellName k)) = true := by
+    rw [List.all_flatMap, List.all_eq_true]
+    intro c _
+    split
+    · rw [List.all_flatMap, List.all_eq_true]
+      exact fun b _ => ir.all_fillerKeys Pk es c b
+    · rfl
+  rw [hf, Bool.and_true]
+  congr 1
+  funext v
+  unfold placeValueB
+  by_cases h1 : ir.isCellValue d v <;> by_cases h2 : ir.isLateOf d v <;>
+    simp [h1, h2, List.all_map, Function.comp_def, cellName, all_range_const]
+
+/-- **A named node passing `nodeDegB` has the degree of the edge `nodeIdx` names**, and the whole
+field's when no edge has it as child. -/
+theorem nodeDeg_of_nodeDegB {F : FieldInterp} {Pk : F.Packing} {es : List PackingEdge} {s : String}
+    (h : nodeDegB Pk es s = true) :
+    (∀ a, nodeIdx es s = some a → Pk.nodeDeg s = some (es.getD a noEdge).childDegree) ∧
+      (nodeIdx es s = none → Pk.nodeDeg s = some Pk.n) := by
+  unfold nodeDegB at h
+  simp only [Bool.and_eq_true, List.all_eq_true, Bool.or_eq_true, bne_iff_ne, ne_eq,
+    beq_iff_eq] at h
+  refine ⟨fun a ha => ?_, fun hn => ?_⟩
+  · unfold nodeIdx at ha
+    obtain ⟨hal, hc, -⟩ := List.findIdx?_eq_some_iff_getElem.1 ha
+    rw [List.getD_eq_getElem _ _ hal]
+    rcases h.1 _ (List.getElem_mem hal) with hne | hd
+    · simp at hc
+      exact absurd hc hne
+    · exact hd
+  · rcases h.2 with ha | hr
+    · exfalso
+      obtain ⟨e, he, hc⟩ := List.any_eq_true.1 ha
+      unfold nodeIdx at hn
+      rw [List.findIdx?_eq_none_iff] at hn
+      simp_all
+    · exact hr
 
 theorem PlaceOk.of_placeOkB {Pk : (I (ir.domainField d)).Packing} {es : List PackingEdge}
     (h : ir.placeOkB d Pk es = true) : ir.PlaceOk d Pk es := by
-  simp only [placeOkB, List.all_eq_true] at h
+  rw [placeOkB_eq, List.all_eq_true] at h
   refine ⟨fun k hk a s hn hs => ?_, fun k hk hn s hs => ?_⟩
   · have := h k hk
-    simp only [hs, hn, beq_iff_eq] at this
-    exact this
+    simp only [hs] at this
+    rw [cellNode, hs, Option.bind_some] at hn
+    exact (nodeDeg_of_nodeDegB this).1 a hn
   · have := h k hk
-    simp only [hs, hn, beq_iff_eq] at this
-    exact this
+    simp only [hs] at this
+    rw [cellNode, hs, Option.bind_some] at hn
+    exact (nodeDeg_of_nodeDegB this).2 hn
 
 theorem nodeIdx_spec {es : List PackingEdge} {s : String} {a : ℕ} (h : nodeIdx es s = some a) :
     ∃ ha : a < es.length, es[a].child = s := by

@@ -18,14 +18,14 @@ at the realized program of the emulated ML-DSA-44 proof of possession at the ROM
 with the statement an encoded public key whose `ExpandA` finishes within the byte budget
 (`KeyStmt`), read through the statement values it determines (`stmtOf`: `key.a` the key's `A` in coefficient form, `key.t1`
 its `t1`, `tr` the bits of `H(pk)`; `iop`: the soundness IOP of the proof system at the frontend's
-round-by-round knowledge soundness, `MultiCircuitIOP.comap stmtOf`). The transcript is in
-`GordieHowe/Applications/MLDSA44/Emulated/ROMParams/Transcript.lean`, its statements in
+round-by-round knowledge soundness, `MultiCircuitIOP.comap stmtOf`). The transcript and the statements are in
 `GordieHowe/Applications/MLDSA44/Emulated/ROMParams.lean`.
 
 * **The statement** (`KeyStmt`, `keyStmtCodec`, `stmtOf`, `keyOf_stmtOf`, `stmtBounded_stmtOf`):
   as native's; the statement values lie within the declared bounds `key.a < q`, `key.t1 < 2^10`
   (`stmtBounded_stmtOf`).
-* **The compiled circuits** (`Compiled`).
+* **The proof systems** (`ProofSystems`, `ProofSystem.lean`): the definitions below are generic over
+  them; the statements are at `proofSystem` (`GordieHowe/Generated/MLDSA44/Emulated/ROMParams/Certified.lean`).
 * **The transcript data**: the label `gordiehowe:ml-dsa-44-possession-emulated`, `32`-byte
   digests, the key-and-context writes, the codecs of domain `A`'s circuit proof (Goldilocks², `16`
   bytes) and domain `H`'s (`GF(2^128)`, `16` bytes), the C++ challenge readers and LogUp's `α`
@@ -38,7 +38,7 @@ namespace GordieHowe.MLDSA44.Emulated.ROMParams
 
 open RealizedProgram.Export RealizedProgram.ProofSystem.PhaseLayout IOP RelativePacking GordieHowe.SPBCS GordieHowe.QROM SPBCS.Configurations
 open Generated.MLDSA44.Emulated.ROMParams.Program (program)
-open HashField (interp)
+open Generated.MLDSA44.Emulated.ROMParams (interp ProofSystems)
 open scoped NNReal ENNReal
 
 /-! ## The statement -/
@@ -76,20 +76,20 @@ def aCol (n : ℕ) : Fin 4 := ⟨n / 256 % 4, Nat.mod_lt _ (by decide)⟩
 /-- The coefficient index of a coordinate of `key.a`. -/
 def aIdx (n : ℕ) : Fin 256 := ⟨n % 256, Nat.mod_lt _ (by norm_num)⟩
 
-/-- **The statement values of a key and a matrix**: `key.a` (value `57`) the coefficients of
-`A = NTT⁻¹(aHat)` below `q` (`KeyNTT.vals`), `key.t1` (value `58`) the coefficients of `t1`, `tr`
-(value `68`) the bits of `H(pk)` (`MLDSA44.PoP.Compose.trOf`), every other statement coordinate
+/-- **The statement values of a key and a matrix**: `key.a` (value `56`) the coefficients of
+`A = NTT⁻¹(aHat)` below `q` (`KeyNTT.vals`), `key.t1` (value `57`) the coefficients of `t1`, `tr`
+(value `67`) the bits of `H(pk)` (`MLDSA44.PoP.Compose.trOf`), every other statement coordinate
 `0`. -/
 def stmtOfKeyWith (pk : MLDSA44.PublicKey44)
     (aHat : _root_.MLDSA.TqMatrix _root_.MLDSA.mldsa44.k _root_.MLDSA.mldsa44.l) :
     program.Valuation interp := fun v i =>
-  if h : v = 57 ∧ i < 4096 then
+  if h : v = 56 ∧ i < 4096 then
     RealizedProgram.castElt (a := 0) ((KeyNTT.vals (_root_.MLDSA.Concrete.invNTT
       ((aHat.get (aRow i h.2)).get (aCol i))) (aIdx i) : ℕ) : (interp 0).K)
-  else if h : v = 58 ∧ i < 1024 then
+  else if h : v = 57 ∧ i < 1024 then
     RealizedProgram.castElt (a := 0) ((((pk.t1.get (⟨i / 256, by change i / 256 < 4; omega⟩ :
       Fin _root_.MLDSA.mldsa44.k)).get (aIdx i)).val : ℕ) : (interp 0).K)
-  else if h : v = 68 ∧ i < 512 then
+  else if h : v = 67 ∧ i < 512 then
     RealizedProgram.castElt (a := 1) (Bits.constBit (K := (interp 1).K)
       (MLDSA44.PoP.Compose.trOf pk ⟨i / 8, by omega⟩).toNat (i % 8))
   else 0
@@ -155,11 +155,11 @@ theorem keyOf_stmtOf (s : KeyStmt) : KeyOf (MLDSA44.pkDecode44 s.1.key) (stmtOf 
   rw [stmtOf_eq]
   exact keyOf_stmtOfKey _
 
-/-- The declared statement bounds: `key.a` (value `57`) below `q` and `key.t1` (value `58`) below
+/-- The declared statement bounds: `key.a` (value `56`) below `q` and `key.t1` (value `57`) below
 `2^10`, of `4096` and `1024` coordinates in field `0`. -/
-theorem rangeValues : program.declaredRanges = [(57, 8380417), (58, 1024)] ∧
-    True ∧ (program.value 57).size = 4096 ∧
-    (program.value 58).size = 1024 ∧ program.valueField 57 = 0 ∧ program.valueField 58 = 0 := by
+theorem rangeValues : program.declaredRanges = [(56, 8380417), (57, 1024)] ∧
+    True ∧ (program.value 56).size = 4096 ∧
+    (program.value 57).size = 1024 ∧ program.valueField 56 = 0 ∧ program.valueField 57 = 0 := by
   decide +kernel
 
 /-- **A key's statement values lie within the declared bounds** (`RealizedProgram.StmtBounded`): `A`'s
@@ -175,82 +175,37 @@ theorem stmtBounded_stmtOf (s : KeyStmt) : program.StmtBounded interp (stmtOf s)
     refine ⟨_, KeyNTT.vals_lt (_root_.MLDSA.Concrete.invNTT
       (((MLDSA44.expandABounded _root_.MLDSA.mldsa44 (MLDSA44.pkDecode44 s.1.key).rho).get
         (aRow i hi)).get (aCol i))) (aIdx i), ?_⟩
-    show stmtOfKeyWith _ (MLDSA44.expandABounded _ _) 57 i = _
+    rw [RealizedProgram.stmtRead_of_isStmtLeaf _ (by decide +kernel)]
+    show stmtOfKeyWith _ (MLDSA44.expandABounded _ _) 56 i = _
     unfold stmtOfKeyWith
     rw [dif_pos ⟨rfl, hi⟩]
     have hf := rangeValues.2.2.2.2.1
     revert hf
-    generalize program.valueField 57 = a
+    generalize program.valueField 56 = a
     rintro rfl
     rfl
   · intro i hi
     rw [rangeValues.2.2.2.1] at hi
     refine ⟨_, MLDSA44.pkDecode44_t1_lt s.1.key ⟨i / 256, by change i / 256 < 4; omega⟩ (aIdx i),
       ?_⟩
-    show stmtOfKeyWith _ (MLDSA44.expandABounded _ _) 58 i = _
+    rw [RealizedProgram.stmtRead_of_isStmtLeaf _ (by decide +kernel)]
+    show stmtOfKeyWith _ (MLDSA44.expandABounded _ _) 57 i = _
     unfold stmtOfKeyWith
-    rw [dif_neg (show ¬ ((58 : ℕ) = 57 ∧ i < 4096) by omega), dif_pos ⟨rfl, hi⟩]
+    rw [dif_neg (show ¬ ((57 : ℕ) = 56 ∧ i < 4096) by omega), dif_pos ⟨rfl, hi⟩]
     have hf := rangeValues.2.2.2.2.2
     revert hf
-    generalize program.valueField 58 = a
+    generalize program.valueField 57 = a
     rintro rfl
     rfl
 
 /-! ## The compiled circuits and the multi-circuit IOP -/
 
-/-- **The compiled circuits of `MLDSA44.Emulated.ROMParams`** (`RealizedProgram.Compiled` at `proofSystem`): the GKR sources of
-the program's circuits with the trust bundle `CircuitsEnforce`. -/
-abbrev Compiled : Type := RealizedProgram.Compiled proofSystem
-
-variable (C : Compiled)
+variable (C : ProofSystems)
 
 /-- **The relation of the BCS transformation**: the relation `rel` at the realized program, at the statement
 values of the key, on the witness read from those values. -/
-abbrev keyRel : Set (KeyStmt × (program.Valuation interp → Native.ROMParams.VarWitness)) :=
+abbrev keyRel : Set (KeyStmt × (program.Valuation interp → MLDSA44.VarWitness)) :=
   {p | (stmtOf p.1, p.2) ∈ RealizedProgram.ProofSystem.relOf rel}
-
-/-- **The bytes of the fields' elements**: `16` bytes for Goldilocks² (field `0`), `16` bytes for
-`GF(2^128)` (every other field), the C++ layouts (`Codec.FieldBytes.goldilocksExt2`,
-`Codec.FieldBytes.gf2_128`). -/
-def fieldBytes : RealizedProgram.FieldBytesOf interp where
-  fb
-    | 0 => 16
-    | _ + 1 => 16
-  bytes
-    | 0 => Codec.FieldBytes.goldilocksExt2
-    | _ + 1 => Codec.FieldBytes.gf2_128
-
-/-- **The phases' messages fit in `2^20` bytes.** -/
-theorem msgB_le : ∀ k, program.msgB fieldBytes k ≤ 2 ^ 20 := by
-  decide +kernel
-
-/-- The program has four challenges. -/
-theorem challenges_length : program.challenges.length = 4 := by decide
-
-/-- **The C++ samplers of the fields' elements**: `CReader.goldilocksExt2` for field `0`, `CReader.gf2_128` for every
-other field. -/
-def fieldReader : ∀ f, CReader (interp f).K
-  | 0 => CReader.goldilocksExt2
-  | _ + 1 => CReader.gf2_128
-
-/-- **The fields' sizes**: `pGold ^ 2` for field `0`, `2 ^ 128` for every other field. -/
-theorem fieldCard : ∀ f, Fintype.card (interp f).K = if f = 0 then pGold ^ 2 else 2 ^ 128
-  | 0 => by convert goldilocksExt2_card <;> rfl
-  | _ + 1 => by convert gf2_128_card <;> rfl
-
-/-- **The readers of the challenges' values** (`RealizedProgram.stdReaders`): every challenge's field's
-sampler, repeated until its value is outside the table values for LogUp's `α` (decided). -/
-def samplerReaders : RealizedProgram.SamplerReaders interp program :=
-  RealizedProgram.stdReaders fieldReader fieldCard (by decide +kernel)
-
-/-- The largest load of a challenge: the `8` draws of `RealizedProgram.stdReaders`, the `16` bytes of an element
-of `GF(2^128)` or of `RealizedProgram.stdReaders`'s draws. -/
-def chalLoadMax : Load := ⟨8, 16⟩
-
-/-- Every challenge's draws are within `chalLoadMax` (`RealizedProgram.chalLoad_stdReaders_le`, decided). -/
-theorem chalLoad_le (k : Fin program.phases) (j : program.ChalAt k) :
-    program.chalLoad samplerReaders j.1 ≤ chalLoadMax :=
-  RealizedProgram.chalLoad_stdReaders_le fieldReader fieldCard _ (by decide +kernel) k j
 
 /-- **The label write of `MLDSA44.Emulated.ROMParams`**: `gordiehowe:ml-dsa-44-possession-emulated`
 (`system.h`, `"gordiehowe:" + s.name()`, the plan's system name). -/

@@ -17,7 +17,7 @@ environment), the round predicates and `μ`'s padding hold (`rounds_holds_honest
 `pad_holds_hashVal`).
 -/
 
-namespace GordieHowe.MLDSA44.Native.ROMParams
+namespace GordieHowe.MLDSA44
 
 open Generated.MLDSA44.Native.ROMParams.Program
 open GordieHowe.Bits GordieHowe.Keccak GordieHowe.KeccakTrace
@@ -30,8 +30,8 @@ def wordsOwner? (v : ℕ) : Option (Fin 10 × Fin 24) :=
 /-- The rounds' words are distinct values, none the buffer, the flags, `w1`'s or `μ`'s words,
 decided. -/
 theorem wordsOwner_checks : (∀ p t, wordsOwner? (wordsVal p t) = some (p, t)) ∧
-    wordsOwner? 68 = none ∧ wordsOwner? 69 = none ∧ wordsOwner? 70 = none ∧
-    wordsOwner? 120 = none := by
+    wordsOwner? 67 = none ∧ wordsOwner? 68 = none ∧ wordsOwner? 69 = none ∧
+    wordsOwner? 119 = none := by
   decide +kernel
 
 set_option linter.unusedSectionVars false
@@ -59,10 +59,10 @@ Running time: a prover computing these values would take ten Keccak-f permutatio
 `16` packing sums per word. This running time is argued here, not proved in Lean. -/
 -- spec-side
 noncomputable def hashVal (v i : ℕ) : (interp (program.valueField v)).K :=
-  if v = 68 then RealizedProgram.castElt (a := 1) ((honestData (K := FH.K) y).buf i)
-  else if v = 69 then RealizedProgram.castElt (a := 1) ((flagNat L i : ℕ) : FH.K)
-  else if v = 70 then RealizedProgram.castElt (a := 1) (packWord (honestData (K := FH.K) y).w1 i)
-  else if v = 120 then RealizedProgram.castElt (a := 1) (packWord (honestData (K := FH.K) y).mu i)
+  if v = 67 then RealizedProgram.castElt (a := 1) ((honestData (K := FH.K) y).buf i)
+  else if v = 68 then RealizedProgram.castElt (a := 1) ((flagNat L i : ℕ) : FH.K)
+  else if v = 69 then RealizedProgram.castElt (a := 1) (packWord (honestData (K := FH.K) y).w1 i)
+  else if v = 119 then RealizedProgram.castElt (a := 1) (packWord (honestData (K := FH.K) y).mu i)
   else match wordsOwner? v with
     | some pt => RealizedProgram.castElt (a := 1) (RealizedProgram.stateWords HField.packing
         (iterRounds ((honestData (K := FH.K) y).states pt.1) ((pt.2 : ℕ) + 1)) i)
@@ -70,7 +70,7 @@ noncomputable def hashVal (v i : ℕ) : (interp (program.valueField v)).K :=
 
 /-- **Value `v` is a committed input of the hash.** -/
 def IsHashValue (v : ℕ) : Prop :=
-  v = 68 ∨ v = 69 ∨ v = 70 ∨ v = 120 ∨ (wordsOwner? v).isSome
+  v = 67 ∨ v = 68 ∨ v = 69 ∨ v = 119 ∨ (wordsOwner? v).isSome
 
 instance (v : ℕ) : Decidable (IsHashValue v) := by unfold IsHashValue; infer_instance
 
@@ -91,7 +91,7 @@ omit hr in
 theorem wordsAgree_of_hashVal : WordsAgree val (honestData (K := FH.K) y).states := by
   obtain ⟨hw, h68, h69, h70, h120⟩ := wordsOwner_checks
   refine ⟨fun p t i _ => ?_⟩
-  have hv : wordsVal p t ≠ 68 ∧ wordsVal p t ≠ 69 ∧ wordsVal p t ≠ 70 ∧ wordsVal p t ≠ 120 := by
+  have hv : wordsVal p t ≠ 67 ∧ wordsVal p t ≠ 68 ∧ wordsVal p t ≠ 69 ∧ wordsVal p t ≠ 119 := by
     refine ⟨fun h' => ?_, fun h' => ?_, fun h' => ?_, fun h' => ?_⟩ <;>
       · have := hw p t
         rw [h'] at this
@@ -101,7 +101,7 @@ theorem wordsAgree_of_hashVal : WordsAgree val (honestData (K := FH.K) y).states
   rw [if_neg hv.1, if_neg hv.2.1, if_neg hv.2.2.1, if_neg hv.2.2.2, hw p t]
 
 theorem inputsAgree_of_hashVal
-    (htr : ∀ j < 512, (RealizedProgram.castElt (b := 1) (e.stmt 67 j) : (interp 1).K) = (honestData (K := FH.K) y).tr j) :
+    (htr : ∀ j < 512, (RealizedProgram.castElt (b := 1) (e.stmt 66 j) : (interp 1).K) = (honestData (K := FH.K) y).tr j) :
     InputsAgree RD (honestData (K := FH.K) y) :=
   inputsAgree_of hr (honestData_bool y) htr
     (fun j _ => by rw [h _ (Or.inl rfl)]; rfl)
@@ -129,21 +129,21 @@ theorem bufByte_honest {i : ℕ} (hi : i < 136) (h66 : 66 ≤ i) :
   rw [evalE_ref11 _ (by omega), if_neg (by omega), if_neg (by omega), RealizedProgram.evalE_leaf,
     hr hp hf
       (by rw [(pad_facts (program := program)).2.2.2.1]; omega), h _ (Or.inl rfl)]
-  rw [show hashVal y 68 (8 * i + u - 528) = RealizedProgram.castElt (a := 1)
+  rw [show hashVal y 67 (8 * i + u - 528) = RealizedProgram.castElt (a := 1)
     ((honestData (K := FH.K) y).buf (8 * i + u - 528)) from rfl, RealizedProgram.castElt_castElt_of_eq hf.symm]
   simp only [honestData, data0]
   rw [show 66 + (8 * i + (u : ℕ) - 528) / 8 = i by omega, show (8 * i + (u : ℕ) - 528) % 8 = u by omega]
 
 /-- **The round predicates hold at honest hash values.** -/
 theorem rounds_holds_honest
-    (htr : ∀ j < 512, (RealizedProgram.castElt (b := 1) (e.stmt 67 j) : (interp 1).K) = (honestData (K := FH.K) y).tr j)
+    (htr : ∀ j < 512, (RealizedProgram.castElt (b := 1) (e.stmt 66 j) : (interp 1).K) = (honestData (K := FH.K) y).tr j)
     (p : Fin 10) (t : Fin 24) :
     program.HoldsWith RD (program.predicate (roundPred p t)).body :=
   trace_holds hr (honestData_bool y) (inputsAgree_of_hashVal hr h htr) (wordsAgree_of_hashVal h) p t
 
 /-- **`μ`'s padding holds at honest hash values**, for a message of at most `32` bytes. -/
 theorem pad_holds_hashVal (hL : L ≤ 32)
-    (htr : ∀ j < 512, (RealizedProgram.castElt (b := 1) (e.stmt 67 j) : (interp 1).K) = (honestData (K := FH.K) y).tr j)
+    (htr : ∀ j < 512, (RealizedProgram.castElt (b := 1) (e.stmt 66 j) : (interp 1).K) = (honestData (K := FH.K) y).tr j)
     {q : ℕ} (hq : q ∈ [42, 43, 44, 45, 46, 47]) :
     program.HoldsWith RD (program.predicate q).body := by
   have hmsg : ∀ k, msgNat y k < 256 := fun k => by
@@ -163,7 +163,7 @@ theorem pad_holds_hashVal (hL : L ≤ 32)
   · exact hp (by simp)
   refine pad47_of _ fun j hj => ?_
   have hin := inputsAgree_of_hashVal hr h htr
-  rw [hin.mu j hj, show (119 : ℕ) = outVal (0 : Fin 10) (23 : Fin 24) from rfl,
+  rw [hin.mu j hj, show (118 : ℕ) = outVal (0 : Fin 10) (23 : Fin 24) from rfl,
     evalE_out hr (honestData_bool y) (wordsAgree_of_hashVal h) 0 23 (by omega)]
   rfl
 
@@ -181,13 +181,13 @@ theorem sibBits_honest (t : Fin (8 * 272)) :
     simp [HashData.states]
   unfold sibBits
   split_ifs with h1
-  · rw [evalE_555 _ h1, show (506 : ℕ) = outVal (8 : Fin 10) (23 : Fin 24) from rfl,
+  · rw [evalE_555 _ h1, show (505 : ℕ) = outVal (8 : Fin 10) (23 : Fin 24) from rfl,
       evalE_out hr hb hw 8 23 (by omega), h8, Nat.mod_eq_of_lt h1]
     rfl
-  · rw [evalE_556 _ (by omega), show (554 : ℕ) = outVal (9 : Fin 10) (23 : Fin 24) from rfl,
+  · rw [evalE_556 _ (by omega), show (553 : ℕ) = outVal (9 : Fin 10) (23 : Fin 24) from rfl,
       evalE_out hr hb hw 9 23 (by omega), h9, show (t : ℕ) % 1088 = t - 1088 by omega]
     rfl
 
 end Agree
 
-end GordieHowe.MLDSA44.Native.ROMParams
+end GordieHowe.MLDSA44

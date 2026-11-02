@@ -26,25 +26,37 @@
 #include <utility>
 #include <vector>
 
+#include "gordiehowe/expr.h"
+
 namespace proofs::gordiehowe::compiler {
 
-// A fraction-tree node: numerator (absent means 1) and denominator.
+// A fraction-tree node: numerator (absent means 1), denominator, and its
+// index in the tree's record (FamilyLog: the leaves, then the inner nodes).
 struct Fraction {
   std::optional<size_t> n;
   size_t d;
+  size_t at = 0;
 };
 
 // The balanced fraction tree over the leaves LEVEL (not empty): its root,
-// sum_i n_i / d_i as one fraction.
+// sum_i n_i / d_i as one fraction. LOG, when given, receives each inner
+// node (its kids' indices, its numerator and denominator); the leaves'
+// indices are their positions in LEVEL.
 template <class LC>
-Fraction fraction_sum(const LC &lc, std::vector<Fraction> level) {
+Fraction fraction_sum(const LC &lc, std::vector<Fraction> level,
+                      FamilyLog *log = nullptr) {
+  size_t next_at = level.size();
+  for (size_t i = 0; i < level.size(); ++i) level[i].at = i;
   while (level.size() > 1) {
     std::vector<Fraction> next;
     for (size_t i = 0; i + 1 < level.size(); i += 2) {
       const Fraction &l = level[i], &r = level[i + 1];
       const size_t lr = l.n ? lc.mul(*l.n, r.d) : r.d;
       const size_t rl = r.n ? lc.mul(*r.n, l.d) : l.d;
-      next.push_back({lc.add(lr, rl), lc.mul(l.d, r.d)});
+      const size_t num = lc.add(lr, rl);
+      const size_t den = lc.mul(l.d, r.d);
+      if (log != nullptr) log->inner.push_back({l.at, r.at, num, den});
+      next.push_back({num, den, next_at++});
     }
     if (level.size() % 2) next.push_back(level.back());
     level = std::move(next);
@@ -54,15 +66,19 @@ Fraction fraction_sum(const LC &lc, std::vector<Fraction> level) {
 
 // The identity over the needle wires NEEDLES, the alpha wire ALPHA, the
 // count wires COUNTS (each indexable by j) and the weight wires WEIGHTS.
+// LOG, when given, receives the fraction tree, the sum S and the node
+// assert_eq returned.
 template <class LC, class Counts, class Weights>
 void assert_log_derivative(const LC &lc, const std::vector<size_t> &needles,
                            size_t alpha,
                            const std::vector<const Counts *> &counts,
-                           const Weights &weights) {
+                           const Weights &weights, FamilyLog *log = nullptr) {
   std::vector<Fraction> level;
   level.reserve(needles.size());
   for (size_t v : needles) level.push_back({std::nullopt, lc.sub(alpha, v)});
-  const Fraction root = fraction_sum(lc, std::move(level));
+  if (log != nullptr)
+    for (const Fraction &x : level) log->dens.push_back(x.d);
+  const Fraction root = fraction_sum(lc, std::move(level), log);
   std::vector<size_t> sum;
   for (const Counts *m : counts)
     for (size_t j = 0; j < m->size(); ++j)
@@ -79,7 +95,11 @@ void assert_log_derivative(const LC &lc, const std::vector<size_t> &needles,
     sum = std::move(next);
   }
   const size_t num = root.n ? *root.n : lc.konst(lc.one());
-  lc.assert_eq(num, lc.mul(root.d, sum.at(0)));
+  const size_t z = lc.assert_eq(num, lc.mul(root.d, sum.at(0)));
+  if (log != nullptr) {
+    log->sum = sum.at(0);
+    log->z = z;
+  }
 }
 
 // The identity over a table whose packed rows TABLE are wires (an

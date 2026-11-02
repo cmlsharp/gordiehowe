@@ -115,15 +115,9 @@ abbrev postStep {slots post : ℕ} (b : Fin post) : StepIdx slots post := ⟨slo
 /-- The last Kraus map, after the last post batch. -/
 abbrev lastStep {slots post : ℕ} : StepIdx slots post := ⟨slots + post, by omega⟩
 
-/-- **An interactive mixed adversary with a kind register** (proof-internal): as `IAlg`, except that
-whether slot `j` is a request is read from the workspace (`kind`) rather than fixed by a schedule.
-It is the form of the distinguishers of `GordieHowe/Model/Quantum/Pure/Game.lean`, and the translation
-(`IAlg.compose`) and the pure game (`KindAlg.composeBoth_eq_pureGame`) are proved through it: an
-`IAlg` is a `KindAlg` whose workspace carries a slot counter (`Quantum.IAlg.toKindAlg`). The run is
-`step 0`, slot `0`, `step 1`, …, slot `slots - 1`, `step slots`, then `post` batches of `width`
-queries with `step (slots + 1)`, …, `step (slots + post)` between and after them. -/
-structure KindAlg (X Y Req Resp O : Type) [Fintype X] [Fintype Y] [Fintype Req] [Fintype Resp]
-    [DecidableEq X] [DecidableEq Y] [DecidableEq Req] [DecidableEq Resp] where
+/-- **The shape of an algorithm with run-time kinds** (`KindAlg`): its workspace, width, slots,
+post batches and Kraus index. -/
+structure KindShape (X Y Req Resp : Type) where
   /-- The workspace. -/
   W : Type
   [instFintypeW : Fintype W]
@@ -135,20 +129,57 @@ structure KindAlg (X Y Req Resp O : Type) [Fintype X] [Fintype Y] [Fintype Req] 
   slots : ℕ
   /-- The number of query batches after the last slot. -/
   post : ℕ
-  /-- The kind bit: request (`true`) or query (`false`). -/
-  kind : W → Bool
   /-- The index type of the Kraus operators. -/
   R : Type
   [instFintypeR : Fintype R]
-  /-- The initial state. -/
-  init : MState (DReg W width X Y Req Resp)
-  /-- The Kraus maps. -/
-  step : StepIdx slots post →
-    KrausMap R (DReg W width X Y Req Resp) (DReg W width X Y Req Resp)
-  /-- The output read from the workspace. -/
-  out : W → O
 
-attribute [instance] KindAlg.instFintypeW KindAlg.instDecidableEqW KindAlg.instFintypeR
+attribute [instance] KindShape.instFintypeW KindShape.instDecidableEqW KindShape.instFintypeR
+
+/-- **An interactive mixed adversary with a kind register** (proof-internal): as `IAlg`, except that
+whether slot `j` is a request is read from the workspace (`kind`) rather than fixed by a schedule.
+It is the form of the distinguishers of `GordieHowe/Model/Quantum/Pure/Game.lean`, and the translation
+(`IAlg.compose`) and the pure game (`KindAlg.composeBoth_eq_pureGame`) are proved through it: an
+`IAlg` is a `KindAlg` whose workspace carries a slot counter (`Quantum.IAlg.toKindAlg`). The run is
+`step 0`, slot `0`, `step 1`, …, slot `slots - 1`, `step slots`, then `post` batches of `width`
+queries with `step (slots + 1)`, …, `step (slots + post)` between and after them. The workspace,
+width, slots, post batches and Kraus index are those of the shape `sh`, the type index
+(`KindAlg.W`, …, `KindAlg.toShape`). -/
+structure KindAlg {X Y Req Resp : Type} [Fintype X] [Fintype Y] [Fintype Req] [Fintype Resp]
+    [DecidableEq X] [DecidableEq Y] [DecidableEq Req] [DecidableEq Resp]
+    (sh : KindShape X Y Req Resp) (O : Type) where
+  /-- The kind bit: request (`true`) or query (`false`). -/
+  kind : sh.W → Bool
+  /-- The initial state. -/
+  init : MState (DReg sh.W sh.width X Y Req Resp)
+  /-- The Kraus maps. -/
+  step : StepIdx sh.slots sh.post →
+    KrausMap sh.R (DReg sh.W sh.width X Y Req Resp) (DReg sh.W sh.width X Y Req Resp)
+  /-- The output read from the workspace. -/
+  out : sh.W → O
+
+-- Two algorithms with the same kind, initial state, steps and output are equal.
+attribute [ext] KindAlg
+
+namespace KindAlg
+
+variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
+  [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] {sh : KindShape X Y Req Resp}
+
+/-- The workspace: the shape's. -/
+abbrev W (_ : KindAlg sh O) : Type := sh.W
+/-- The number of parallel query pairs: the shape's. -/
+abbrev width (_ : KindAlg sh O) : ℕ := sh.width
+theorem width_pos (A : KindAlg sh O) : 0 < A.width := sh.width_pos
+/-- The number of slots: the shape's. -/
+abbrev slots (_ : KindAlg sh O) : ℕ := sh.slots
+/-- The number of post batches: the shape's. -/
+abbrev post (_ : KindAlg sh O) : ℕ := sh.post
+/-- The Kraus index: the shape's. -/
+abbrev R (_ : KindAlg sh O) : Type := sh.R
+/-- **The shape of an algorithm with run-time kinds**: its type index. -/
+abbrev toShape (_ : KindAlg sh O) : KindShape X Y Req Resp := sh
+
+end KindAlg
 
 /-- **An entry of a challenger's history**: a request and the response it received (`none` for
 no response). -/
@@ -496,7 +527,7 @@ namespace KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  (A : KindAlg X Y Req Resp O) (C : Challenger X Y Req Resp)
+  {ksA : KindShape X Y Req Resp} (A : KindAlg ksA O) (C : Challenger X Y Req Resp)
 
 /-- The work register of the composed algorithm without the ancilla. -/
 abbrev CW := CWork A.W A.width X Y Req Resp A.slots C.q C.Coins
@@ -798,17 +829,23 @@ def cntPerm (k : StepIdx A.slots A.post) :
 def cntKind (w : A.W × Fin (A.slots + 1)) : Bool :=
   if h : (w.2 : ℕ) = 0 then false else A.sched ⟨w.2 - 1, by have := w.2.2; omega⟩
 
-/-- **The adversary as one with a kind register** (proof-internal): its workspace carries a slot
-counter, started at `0` and advanced by the Kraus maps before the slots, and the kind read from
-it is the schedule. -/
-def toKindAlg : KindAlg X Y Req Resp O where
-  W := A.W × Fin (A.slots + 1)
+/-- **The workspace with the slot counter** (`toKindAlg`). -/
+abbrev CntW : Type := A.W × Fin (A.slots + 1)
+
+/-- **The shape of `toKindAlg`**: the workspace with the slot counter. -/
+abbrev kindS : KindShape X Y Req Resp where
+  W := A.CntW
   width := A.width
   width_pos := A.width_pos
   slots := A.slots
   post := A.post
-  kind := A.cntKind
   R := A.R
+
+/-- **The adversary as one with a kind register** (proof-internal): its workspace carries a slot
+counter, started at `0` and advanced by the Kraus maps before the slots, and the kind read from
+it is the schedule. -/
+def toKindAlg : KindAlg A.kindS O where
+  kind := A.cntKind
   init := MState.reindex A.cntSplit.symm (A.init.tensorKet 0)
   step k := (((A.step k).tensorId (Fin (A.slots + 1))).reindex A.cntSplit.symm).permConj
     (Equiv.refl _) (A.cntPerm k)

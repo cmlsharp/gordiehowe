@@ -24,9 +24,11 @@ Falcon-512 as a `Ring.SigScheme`, the base scheme of the Falcon ring signature
   primitives `prims512` (`GordieHowe.Falcon512.verify`).
 
 Key generation and signing are not specified in Lean: they are the parameter `Signer`, and the
-scheme is `scheme G` for a signer `G`. The ring relation reads only the verifier; the
-properties of the signer (`SigScheme.Correct`, which includes the salt condition: a signature
-carries the drawn salt) are hypotheses of the ring corollaries only.
+scheme is `scheme G` for a signer `G`, whose signing coins are the salt and the signer's private
+coins. The ring relation reads only the verifier; the properties of the signer (its correctness
+error, `SigScheme.CorrectWithin`, and `Signer.CarriesSalt`: a signature carries the drawn salt,
+which gives `SigScheme.PubOfCoins` at the salt, `pubOfCoins_scheme`) are hypotheses of the ring
+corollaries only.
 
 The extraction of a signature from the decoded values (`extractSig`): the salt and the centered
 `s2` encoded by the explicit encoder `GordieHowe.Falcon512.encodeSignature`; on encoding bounds and decoded
@@ -125,7 +127,8 @@ variable (msgLen) in
 /-- **Falcon-512 key generation and signing**, which the Lean does not specify: secret keys, the
 coins of key generation and the private coins of signing (finite), key generation from its coins,
 and signing of a message with a drawn salt and private coins (Falcon specification v1.2,
-Algorithms 1 and 10). The scheme's properties are hypotheses where used (`SigScheme.Correct`). -/
+Algorithms 1 and 10). The scheme's properties are hypotheses where used
+(`SigScheme.CorrectWithin`, `Signer.CarriesSalt`). -/
 structure Signer where
   /-- Secret keys. -/
   SK : Type
@@ -148,8 +151,14 @@ attribute [instance] Signer.instFintypeKeyCoins Signer.instDecEqKeyCoins
   Signer.instNonemptyKeyCoins Signer.instFintypeSignCoins Signer.instDecEqSignCoins
   Signer.instNonemptySignCoins
 
-/-- **Falcon-512 as a signature scheme** with the signer `G`: verification is the vendored
-serialized verifier on `msgLen`-byte messages, the public value of a signature is its salt. -/
+/-- **The signer's signatures carry the drawn salt** (Falcon specification v1.2, Algorithm 10,
+line 1 and the output `(r, s)`). -/
+def Signer.CarriesSalt (G : Signer msgLen) : Prop :=
+  ∀ sk m r c, (G.signWith sk m r c).1.salt = r
+
+/-- **Falcon-512 as a signature scheme** with the signer `G`: signing draws the salt and the
+signer's private coins, verification is the vendored serialized verifier on `msgLen`-byte
+messages, the public value of a signature is its salt. -/
 abbrev scheme (G : Signer msgLen) : SigScheme where
   PK := PublicKey
   SK := G.SK
@@ -157,11 +166,17 @@ abbrev scheme (G : Signer msgLen) : SigScheme where
   Sig := Sig
   Pub := Salt
   KeyCoins := G.KeyCoins
-  SignCoins := G.SignCoins
+  SignCoins := Salt × G.SignCoins
   keyGen := G.keyGen
   pub σ := σ.1.salt
-  signWith := G.signWith
+  signWith sk m (c : Salt × G.SignCoins) := G.signWith sk m c.1 c.2
   verify := verifySig
+
+/-- **The public value of an honest signature is the drawn salt** for a signer whose signatures
+carry it. -/
+theorem pubOfCoins_scheme {G : Signer msgLen} (hG : G.CarriesSalt) :
+    (scheme G).PubOfCoins Prod.fst :=
+  fun _ m (c : Salt × G.SignCoins) => hG _ m c.1 c.2
 
 /-! ### The statement's challenge and the extracted signature -/
 

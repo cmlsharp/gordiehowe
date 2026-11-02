@@ -4,7 +4,12 @@
 module
 
 public import GordieHowe.Applications.MLDSA44.Emulated.Frontend.Embed
-public import GordieHowe.Applications.MLDSA44.Emulated.ROMParams.HashField
+public import GordieHowe.Generated.MLDSA44.Emulated.ROMParams.Program
+public import GordieHowe.Generated.MLDSA44.Emulated.ROMParams.Plan
+public import GordieHowe.Generated.MLDSA44.Emulated.ROMParams.Valid
+public import GordieHowe.ProofSystem.Program.FieldHonest
+public import GordieHowe.Generated.MLDSA44.Emulated.ROMParams.Interp
+public import GordieHowe.Generated.MLDSA44.Emulated.ROMParams.Ready
 
 @[expose] public section
 
@@ -42,7 +47,7 @@ theorem predCorr : ∀ k, 18 ≤ k → k ≤ 270 →
 
 /-- **The values the frontend reads by their node types** are renamed to node-typed source
 values. -/
-theorem typedCorr : ∀ v ∈ Native.ROMParams.hTyped, v ∈ Emulated.hV ∧
+theorem typedCorr : ∀ v ∈ MLDSA44.hTyped, v ∈ Emulated.hV ∧
     σ.val v < program.values.length ∧ program.IsSourceValue (σ.val v) ∧
     (program.value (σ.val v)).typeSource = .node := by
   decide +kernel
@@ -58,7 +63,7 @@ instance : Emulated.MldsaEmbed program where
 instance : AField RealizedProgram.gold2 where
   charP := inferInstanceAs (CharP GoldilocksExt2 pGold)
   char_spec := rfl
-  decode_eq _ := rfl
+  decode_lt c hc := RealizedProgram.gold2_model.decode_natCast c hc
   toNat_natCast k hk := by
     change (goldilocksExt2Coords (k : GoldilocksExt2) 0).val = k
     rw [goldilocksExt2Coords_natCast, ZMod.val_natCast, Nat.mod_eq_of_lt hk]

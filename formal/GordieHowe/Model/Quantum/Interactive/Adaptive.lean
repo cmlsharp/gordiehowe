@@ -60,7 +60,7 @@ namespace KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] [Nonempty X] [AddGroup Y]
-  (A : KindAlg X Y Req Resp O) (C : Challenger X Y Req Resp)
+  {ksA : KindShape X Y Req Resp} (A : KindAlg ksA O) (C : Challenger X Y Req Resp)
 
 /-- **Slot `j` with its kind chosen at run time**: the adversary's Kraus map, the request
 measurement (of the kind register and the request), the challenger's queries (padded on the
@@ -297,7 +297,7 @@ end KindAlg
 namespace KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
-  [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] (A : KindAlg X Y Req Resp O)
+  [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] {ksA : KindShape X Y Req Resp} (A : KindAlg ksA O)
 
 section
 
@@ -386,6 +386,7 @@ theorem dilate_init_supported [DecidableEq O] (o : O) {P : A.W → Prop}
     (hP : SuppIn {r : A.G | P r.1.1} A.mgInit) :
     Supported {d : DReg A.DW A.width X Y Req Resp | MixedAlg.Clean 0 d.workspace.2.2 ∧
       (d.workspace.2.1 = true ∨ P d.workspace.1)} (A.dilate o).init := by
+  rw [A.dilate_init o]
   intro r hr
   obtain ⟨⟨⟨w, b, a⟩, req, resp⟩, qs⟩ := r
   simp only [DReg.workspace, Set.mem_ofPred_eq, not_and_or, not_or] at hr
@@ -443,19 +444,11 @@ def restrict (K : KrausMap R ι ι) (p : ι → Bool) : KrausMap R ι ι where
 
 end KrausMap
 
-/-! ### Interactive adversaries with run-time kinds -/
+/-! ### Shapes -/
 
-/-- **An interactive mixed adversary with run-time kinds and a query budget** (Unruh 2017, ePrint
-2017/398, p. 10, oracle algorithms, whose Turing machine chooses at run time which oracle it calls):
-as `IAlg`, except that whether slot `j` is a request or a batch of `width` queries is read from the
-kind register of the workspace (`kind`, request when `true`) and measured at the slot, and that on
-every branch at most `budget` slots are query slots: a branch that asks for a further query slot
-halts (`toKindAlg`). The run is `step 0`, slot `0`, `step 1`, …, slot `slots - 1`, `step slots`,
-then `post` batches of `width` queries with `step (slots + 1)`, …, `step (slots + post)` between and
-after them. The Kraus maps are trace-non-increasing. The output is read from the computational-basis
-measurement of the workspace. -/
-structure AdaptiveIAlg (X Y Req Resp O : Type) [Fintype X] [Fintype Y] [Fintype Req]
-    [Fintype Resp] [DecidableEq X] [DecidableEq Y] [DecidableEq Req] [DecidableEq Resp] where
+/-- **The shape of an adversary with run-time kinds** at the interface `X, Y, Req, Resp`: its
+workspace, width, slots, post batches, budget and Kraus index. -/
+structure AlgShape (X Y Req Resp : Type) where
   /-- The workspace. -/
   W : Type
   [instFintypeW : Fintype W]
@@ -469,46 +462,241 @@ structure AdaptiveIAlg (X Y Req Resp O : Type) [Fintype X] [Fintype Y] [Fintype 
   post : ℕ
   /-- The number of slots that may be query slots on a branch. -/
   budget : ℕ
-  /-- The kind register: request (`true`) or query (`false`), read from the workspace. -/
-  kind : W → Bool
   /-- The index type of the Kraus operators. -/
   R : Type
   [instFintypeR : Fintype R]
-  /-- The initial state. -/
-  init : MState (DReg W width X Y Req Resp)
-  /-- The Kraus maps. -/
-  step : StepIdx slots post →
-    KrausMap R (DReg W width X Y Req Resp) (DReg W width X Y Req Resp)
-  /-- The output read from the workspace. -/
-  out : W → O
 
-attribute [instance] AdaptiveIAlg.instFintypeW AdaptiveIAlg.instDecidableEqW
-  AdaptiveIAlg.instFintypeR
+attribute [instance] AlgShape.instFintypeW AlgShape.instDecidableEqW AlgShape.instFintypeR
+
+/-- **The workspace with the query counter at a shape** (`AdaptiveIAlg.toKindAlg`): the shape's
+workspace and the number of query slots so far. A named type, so that instance search over the
+registers built from it stops at its own instances (design rule R2). -/
+def AlgShape.CntW {X Y Req Resp : Type} (s : AlgShape X Y Req Resp) : Type := s.W × Fin (s.budget + 2)
+
+instance AlgShape.instFintypeCntW {X Y Req Resp : Type} (s : AlgShape X Y Req Resp) :
+    Fintype s.CntW :=
+  inferInstanceAs (Fintype (s.W × Fin (s.budget + 2)))
+
+instance AlgShape.instDecidableEqCntW {X Y Req Resp : Type} (s : AlgShape X Y Req Resp) :
+    DecidableEq s.CntW :=
+  inferInstanceAs (DecidableEq (s.W × Fin (s.budget + 2)))
+
+namespace AlgShape.CntW
+
+variable {X Y Req Resp : Type} {s : AlgShape X Y Req Resp}
+
+/-- The workspace `w` with the counter at `c`. -/
+def mk (w : s.W) (c : Fin (s.budget + 2)) : s.CntW := (w, c)
+
+/-- The workspace of a workspace with the counter. -/
+def work (x : s.CntW) : s.W := Prod.fst (α := s.W) (β := Fin (s.budget + 2)) x
+
+/-- The counter of a workspace with the counter. -/
+def cnt (x : s.CntW) : Fin (s.budget + 2) := Prod.snd (α := s.W) (β := Fin (s.budget + 2)) x
+
+@[simp] theorem work_mk (w : s.W) (c : Fin (s.budget + 2)) : (mk w c).work = w := rfl
+
+@[simp] theorem cnt_mk (w : s.W) (c : Fin (s.budget + 2)) : (mk w c).cnt = c := rfl
+
+@[simp] theorem mk_work_cnt (x : s.CntW) : mk x.work x.cnt = x := rfl
+
+@[ext] theorem ext {x y : s.CntW} (h₁ : x.work = y.work) (h₂ : x.cnt = y.cnt) : x = y :=
+  Prod.ext h₁ h₂
+
+theorem exists_eq_mk (x : s.CntW) : ∃ w c, x = mk w c := ⟨x.work, x.cnt, rfl⟩
+
+theorem mk_inj {w w' : s.W} {c c' : Fin (s.budget + 2)} : mk w c = mk w' c' ↔ w = w' ∧ c = c' :=
+  Prod.mk.injEq w c w' c' ▸ Iff.rfl
+
+end AlgShape.CntW
+
+/-- **The workspace with the counter as a pair** (`AlgShape.CntW`). -/
+def AlgShape.cntWEquiv {X Y Req Resp : Type} (s : AlgShape X Y Req Resp) :
+    s.CntW ≃ s.W × Fin (s.budget + 2) where
+  toFun x := (x.work, x.cnt)
+  invFun p := .mk p.1 p.2
+  left_inv _ := rfl
+  right_inv _ := rfl
+
+@[simp] theorem AlgShape.cntWEquiv_apply {X Y Req Resp : Type} (s : AlgShape X Y Req Resp)
+    (x : s.CntW) : s.cntWEquiv x = (x.work, x.cnt) := rfl
+
+@[simp] theorem AlgShape.cntWEquiv_symm_apply {X Y Req Resp : Type} (s : AlgShape X Y Req Resp)
+    (p : s.W × Fin (s.budget + 2)) : s.cntWEquiv.symm p = .mk p.1 p.2 := rfl
+
+/-! ### Interactive adversaries with run-time kinds -/
+
+/-- **An interactive mixed adversary with run-time kinds and a query budget** (Unruh 2017, ePrint
+2017/398, p. 10, oracle algorithms, whose Turing machine chooses at run time which oracle it calls):
+as `IAlg`, except that whether slot `j` is a request or a batch of `width` queries is read from the
+kind register of the workspace (`kind`, request when `true`) and measured at the slot, and that on
+every branch at most `budget` slots are query slots: a branch that asks for a further query slot
+halts (`toKindAlg`). The run is `step 0`, slot `0`, `step 1`, …, slot `slots - 1`, `step slots`,
+then `post` batches of `width` queries with `step (slots + 1)`, …, `step (slots + post)` between and
+after them. The Kraus maps are trace-non-increasing. The output is read from the computational-basis
+measurement of the workspace. -/
+structure AdaptiveIAlg {X Y Req Resp : Type} [Fintype X] [Fintype Y] [Fintype Req]
+    [Fintype Resp] [DecidableEq X] [DecidableEq Y] [DecidableEq Req] [DecidableEq Resp]
+    (sh : AlgShape X Y Req Resp) (O : Type) where
+  /-- The kind register: request (`true`) or query (`false`), read from the workspace. -/
+  kind : sh.W → Bool
+  /-- The initial state. -/
+  init : MState (DReg sh.W sh.width X Y Req Resp)
+  /-- The Kraus maps. -/
+  step : StepIdx sh.slots sh.post →
+    KrausMap sh.R (DReg sh.W sh.width X Y Req Resp) (DReg sh.W sh.width X Y Req Resp)
+  /-- The output read from the workspace. -/
+  out : sh.W → O
+
+-- Two algorithms with the same kind, initial state, steps and output are equal.
+attribute [ext] AdaptiveIAlg
+
+namespace AdaptiveIAlg
+
+variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
+  [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] {sh : AlgShape X Y Req Resp}
+
+/-- The workspace: the shape's. -/
+abbrev W (_ : AdaptiveIAlg sh O) : Type := sh.W
+/-- The number of parallel query pairs: the shape's. -/
+abbrev width (_ : AdaptiveIAlg sh O) : ℕ := sh.width
+theorem width_pos (A : AdaptiveIAlg sh O) : 0 < A.width := sh.width_pos
+/-- The number of slots: the shape's. -/
+abbrev slots (_ : AdaptiveIAlg sh O) : ℕ := sh.slots
+/-- The number of post batches: the shape's. -/
+abbrev post (_ : AdaptiveIAlg sh O) : ℕ := sh.post
+/-- The query budget: the shape's. -/
+abbrev budget (_ : AdaptiveIAlg sh O) : ℕ := sh.budget
+/-- The Kraus index: the shape's. -/
+abbrev R (_ : AdaptiveIAlg sh O) : Type := sh.R
+/-- **The shape of an adversary**: its type index. -/
+abbrev toShape (_ : AdaptiveIAlg sh O) : AlgShape X Y Req Resp := sh
+
+/-- The workspace's `Fintype` instance: the shape's (not an instance: the adversary does not occur
+in `sh.W`, so instance search finds the shape's instance directly). -/
+abbrev instFintypeW (_ : AdaptiveIAlg sh O) : Fintype sh.W := sh.instFintypeW
+/-- The workspace's `DecidableEq` instance: the shape's. -/
+abbrev instDecidableEqW (_ : AdaptiveIAlg sh O) : DecidableEq sh.W := sh.instDecidableEqW
+/-- The Kraus index's `Fintype` instance: the shape's. -/
+abbrev instFintypeR (_ : AdaptiveIAlg sh O) : Fintype sh.R := sh.instFintypeR
+
+end AdaptiveIAlg
+
+/-- **`omega` over the accessors of an adversary** (design rule R5): unfolds the accessors to the
+fields of the shape, so that `A.slots` and `sh.slots` are one atom, then runs `omega`. -/
+macro "shape_omega" : tactic =>
+  `(tactic| ((try simp only [AdaptiveIAlg.slots, AdaptiveIAlg.post, AdaptiveIAlg.budget,
+    AdaptiveIAlg.width] at *); omega))
 
 namespace AdaptiveIAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  (A : AdaptiveIAlg X Y Req Resp O)
+  {sh : AlgShape X Y Req Resp} (A : AdaptiveIAlg sh O)
 
-/-- The adversary's registers with a query counter, as the registers without it and the
+/-- **The workspace with the query counter** (`toKindAlg`): the shape's (`AlgShape.CntW`). -/
+abbrev CntW (_ : AdaptiveIAlg sh O) : Type := sh.CntW
+
+/-- The registers with a query counter at the shape `s`, as the registers without it and the
 counter. -/
-def cntSplit : DReg (A.W × Fin (A.budget + 2)) A.width X Y Req Resp ≃
-    DReg A.W A.width X Y Req Resp × Fin (A.budget + 2) where
-  toFun p := (((p.1.1.1, p.1.2.1, p.1.2.2), p.2), p.1.1.2)
-  invFun q := ((((q.1.1.1, q.2), q.1.1.2.1, q.1.1.2.2)), q.1.2)
+def _root_.GordieHowe.Quantum.AlgShape.cntSplit (s : AlgShape X Y Req Resp) :
+    DReg s.CntW s.width X Y Req Resp ≃ DReg s.W s.width X Y Req Resp × Fin (s.budget + 2) where
+  toFun p := (((p.1.1.work, p.1.2.1, p.1.2.2), p.2), p.1.1.cnt)
+  invFun q := (((AlgShape.CntW.mk q.1.1.1 q.2, q.1.1.2.1, q.1.1.2.2)), q.1.2)
   left_inv _ := rfl
   right_inv _ := rfl
 
-/-- The query counter advanced on the branches whose kind is a query. -/
-def cntShift : Equiv.Perm (DReg (A.W × Fin (A.budget + 2)) A.width X Y Req Resp) :=
-  Equiv.prodCongr (Equiv.prodCongr (Equiv.prodShear (Equiv.refl A.W)
-    fun w => if A.kind w then Equiv.refl _ else finRotate _) (Equiv.refl _)) (Equiv.refl _)
+/-- The adversary's registers with a query counter, as the registers without it and the
+counter (`AlgShape.cntSplit`). -/
+abbrev cntSplit : DReg A.CntW A.width X Y Req Resp ≃
+    DReg A.W A.width X Y Req Resp × Fin (A.budget + 2) :=
+  sh.cntSplit
 
-/-- A branch is within the budget unless it asks for a query slot with the counter at
-`budget`. -/
-def inBudget (d : DReg (A.W × Fin (A.budget + 2)) A.width X Y Req Resp) : Bool :=
-  A.kind d.workspace.1 || decide (d.workspace.2 ≠ Fin.castSucc (Fin.last A.budget))
+/-- The query counter at the shape `s` advanced on the branches whose kind `kind` is a query. -/
+def _root_.GordieHowe.Quantum.AlgShape.cntShift (s : AlgShape X Y Req Resp) (kind : s.W → Bool) :
+    Equiv.Perm (DReg s.CntW s.width X Y Req Resp) :=
+  Equiv.prodCongr (Equiv.prodCongr (s.cntWEquiv.permCongr.symm (Equiv.prodShear (Equiv.refl s.W)
+    fun w => if kind w then Equiv.refl _ else finRotate _)) (Equiv.refl _)) (Equiv.refl _)
+
+/-- The query counter advanced on the branches whose kind is a query (`AlgShape.cntShift` at `A`'s
+kind). -/
+abbrev cntShift : Equiv.Perm (DReg A.CntW A.width X Y Req Resp) := sh.cntShift A.kind
+
+/-- At the shape `s` and the kind `kind`, a branch is within the budget unless it asks for a query
+slot with the counter at `budget`. -/
+def _root_.GordieHowe.Quantum.AlgShape.inBudget (s : AlgShape X Y Req Resp) (kind : s.W → Bool)
+    (d : DReg s.CntW s.width X Y Req Resp) : Bool :=
+  kind d.workspace.work || decide (d.workspace.cnt ≠ Fin.castSucc (Fin.last s.budget))
+
+/-- A branch is within the budget unless it asks for a query slot with the counter at `budget`
+(`AlgShape.inBudget` at `A`'s kind). -/
+abbrev inBudget (d : DReg A.CntW A.width X Y Req Resp) : Bool := sh.inBudget A.kind d
+
+@[simp] theorem cntSplit_apply (w : A.W) (c : Fin (A.budget + 2)) (rr : Req × Option Resp)
+    (p : Fin A.width → X × Y) :
+    A.cntSplit (((AlgShape.CntW.mk w c), rr), p) = (((w, rr), p), c) := rfl
+
+@[simp] theorem cntSplit_symm_apply (w : A.W) (c : Fin (A.budget + 2)) (rr : Req × Option Resp)
+    (p : Fin A.width → X × Y) :
+    A.cntSplit.symm (((w, rr), p), c) = (((AlgShape.CntW.mk w c), rr), p) := rfl
+
+@[simp] theorem cntShift_apply (w : A.W) (c : Fin (A.budget + 2)) (rr : Req × Option Resp)
+    (p : Fin A.width → X × Y) :
+    A.cntShift (((AlgShape.CntW.mk w c), rr), p) =
+      (((AlgShape.CntW.mk w (if A.kind w then c else finRotate _ c)), rr), p) := by
+  cases h : A.kind w <;> simp [cntShift, AlgShape.cntShift, h, Equiv.permCongr_apply]
+
+@[simp] theorem cntShift_symm_apply (w : A.W) (c : Fin (A.budget + 2)) (rr : Req × Option Resp)
+    (p : Fin A.width → X × Y) :
+    A.cntShift.symm (((AlgShape.CntW.mk w c), rr), p) =
+      (((AlgShape.CntW.mk w (if A.kind w then c else (finRotate _).symm c)), rr), p) := by
+  rw [Equiv.symm_apply_eq]
+  cases h : A.kind w <;> simp [h]
+
+@[simp] theorem inBudget_mk (w : A.W) (c : Fin (A.budget + 2)) (rr : Req × Option Resp)
+    (p : Fin A.width → X × Y) :
+    A.inBudget (((AlgShape.CntW.mk w c), rr), p) =
+      (A.kind w || decide (c ≠ Fin.castSucc (Fin.last A.budget))) := rfl
+
+/-- **The Kraus map `k` with the query counter** at the shape `s`, for the kind `kind` and the
+steps `step`: before a slot, `step k`, then the projection onto the branches within the budget and
+the counter advanced on the query branches; after the slots, `step k` with the identity on the
+counter. Sealed, and of the kind and the steps only; it unfolds through `AlgShape.kindStep_eq`. -/
+@[irreducible,
+    no_expose] def _root_.GordieHowe.Quantum.AlgShape.kindStep (s : AlgShape X Y Req Resp)
+    (kind : s.W → Bool)
+    (step : StepIdx s.slots s.post →
+      KrausMap s.R (DReg s.W s.width X Y Req Resp) (DReg s.W s.width X Y Req Resp))
+    (k : StepIdx s.slots s.post) :
+    KrausMap s.R (DReg s.CntW s.width X Y Req Resp) (DReg s.CntW s.width X Y Req Resp) :=
+  if (k : ℕ) < s.slots then
+    ((((step k).tensorId (Fin (s.budget + 2))).reindex s.cntSplit.symm).restrict
+      (s.inBudget kind)).permConj (Equiv.refl _) (s.cntShift kind)
+  else ((step k).tensorId (Fin (s.budget + 2))).reindex s.cntSplit.symm
+
+theorem _root_.GordieHowe.Quantum.AlgShape.kindStep_eq (s : AlgShape X Y Req Resp)
+    (kind : s.W → Bool)
+    (step : StepIdx s.slots s.post →
+      KrausMap s.R (DReg s.W s.width X Y Req Resp) (DReg s.W s.width X Y Req Resp))
+    (k : StepIdx s.slots s.post) :
+    s.kindStep kind step k = if (k : ℕ) < s.slots then
+      ((((step k).tensorId (Fin (s.budget + 2))).reindex s.cntSplit.symm).restrict
+        (s.inBudget kind)).permConj (Equiv.refl _) (s.cntShift kind)
+    else ((step k).tensorId (Fin (s.budget + 2))).reindex s.cntSplit.symm := by
+  unfold AlgShape.kindStep; rfl
+
+/-- **The shape of `toKindAlg` at a shape** `s`: the workspace with the query counter. -/
+@[reducible] def _root_.GordieHowe.Quantum.AlgShape.toKindS (s : AlgShape X Y Req Resp) :
+    KindShape X Y Req Resp where
+  W := s.CntW
+  width := s.width
+  width_pos := s.width_pos
+  slots := s.slots
+  post := s.post
+  R := s.R
+
+/-- **The shape of `toKindAlg`**: the shape's (`AlgShape.toKindS`). -/
+abbrev kindS (_ : AdaptiveIAlg sh O) : KindShape X Y Req Resp := sh.toKindS
 
 /-- **The adversary with its query counter** (proof-internal and the definition of the model's
 semantics): its workspace carries the number of its query slots so far, started at `0`. The Kraus
@@ -518,20 +706,44 @@ query branches. The counter takes values in `Fin (budget + 2)`; on every branch 
 `budget` (`AdaptiveIAlg.dilBudget`), and the value `budget + 1` is left free for the
 trace-preserving form of the adversary (`AdaptiveIAlg.toTPKindAlg`), where it marks a branch that
 has ended. -/
-def toKindAlg : KindAlg X Y Req Resp O where
-  W := A.W × Fin (A.budget + 2)
-  width := A.width
-  width_pos := A.width_pos
-  slots := A.slots
-  post := A.post
-  kind w := A.kind w.1
-  R := A.R
+def toKindAlg : KindAlg sh.toKindS O where
+  kind w := A.kind w.work
   init := MState.reindex A.cntSplit.symm (A.init.tensorKet 0)
-  step k := if (k : ℕ) < A.slots then
+  step := sh.kindStep A.kind A.step
+  out w := A.out w.1
+
+/-- **The Kraus map `k` with the counter** (`AlgShape.kindStep`): before a slot, `A`'s, then the
+projection onto the branches within the budget and the counter advanced on the query branches;
+after the slots, `A`'s with the identity on the counter. -/
+theorem toKindAlg_step_eq (k : StepIdx A.slots A.post) :
+    A.toKindAlg.step k = if (k : ℕ) < A.slots then
       ((((A.step k).tensorId (Fin (A.budget + 2))).reindex A.cntSplit.symm).restrict
         A.inBudget).permConj (Equiv.refl _) A.cntShift
-    else ((A.step k).tensorId (Fin (A.budget + 2))).reindex A.cntSplit.symm
-  out w := A.out w.1
+    else ((A.step k).tensorId (Fin (A.budget + 2))).reindex A.cntSplit.symm :=
+  sh.kindStep_eq A.kind A.step k
+
+/-- The initial state of the kind algorithm: `A`'s with the counter at `0`. -/
+theorem toKindAlg_init : A.toKindAlg.init = MState.reindex A.cntSplit.symm (A.init.tensorKet 0) :=
+  rfl
+
+@[simp] theorem toKindAlg_kind_mk (w : A.W) (c : Fin (A.budget + 2)) :
+    A.toKindAlg.kind (AlgShape.CntW.mk w c) = A.kind w := rfl
+
+@[simp] theorem toKindAlg_out_mk (w : A.W) (c : Fin (A.budget + 2)) :
+    A.toKindAlg.out (AlgShape.CntW.mk w c) = A.out w := rfl
+
+/-- **The Kraus map before slot `k` with the counter**: `A`'s, then the projection onto the
+branches within the budget and the counter advanced on the query branches. -/
+theorem toKindAlg_step_of_lt {k : StepIdx A.slots A.post} (hk : (k : ℕ) < A.slots) :
+    A.toKindAlg.step k = ((((A.step k).tensorId (Fin (A.budget + 2))).reindex
+      A.cntSplit.symm).restrict A.inBudget).permConj (Equiv.refl _) A.cntShift :=
+  (A.toKindAlg_step_eq k).trans (if_pos hk)
+
+/-- **The Kraus map before a post batch, or the last one, with the counter**: `A`'s with the
+identity on the counter. -/
+theorem toKindAlg_step_of_not_lt {k : StepIdx A.slots A.post} (hk : ¬ (k : ℕ) < A.slots) :
+    A.toKindAlg.step k = ((A.step k).tensorId (Fin (A.budget + 2))).reindex A.cntSplit.symm :=
+  (A.toKindAlg_step_eq k).trans (if_neg hk)
 
 variable [Nonempty X] [AddGroup Y] [Nonempty Y]
 
@@ -553,16 +765,13 @@ namespace AdaptiveIAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  (A : AdaptiveIAlg X Y Req Resp O)
+  {sh : AlgShape X Y Req Resp} (A : AdaptiveIAlg sh O)
 
 /-- The query counter of a workspace of `toKindAlg`. -/
-def wcnt (w : A.toKindAlg.W) : ℕ := ((w.2 : Fin (A.budget + 2)) : ℕ)
+def wcnt (w : A.toKindAlg.W) : ℕ := ((AlgShape.CntW.cnt w : Fin (A.budget + 2)) : ℕ)
 
-theorem cntShift_symm_apply (w : A.W) (c : Fin (A.budget + 2)) (rq : Req) (rs : Option Resp)
-    (p : Fin A.width → X × Y) :
-    A.cntShift.symm (((w, c), rq, rs), p) =
-      (((w, if A.kind w then c else (finRotate _).symm c), rq, rs), p) := by
-  cases h : A.kind w <;> simp [cntShift, h]
+@[simp] theorem wcnt_mk (w : A.W) (c : Fin (A.budget + 2)) :
+    A.wcnt (AlgShape.CntW.mk w c) = c := rfl
 
 /-- **The Kraus map before slot `k` counts the query slot**: from a state with counter
 `c ≤ budget`, its operators send only to states with counter `c + 1 ≤ budget` on the branches whose
@@ -570,20 +779,28 @@ kind is a query and `c` on the others (a query branch at `c = budget` is project
 theorem step_op_eq_zero {k : StepIdx A.slots A.post} (hk : (k : ℕ) < A.slots) {c : ℕ}
     (hc : c ≤ A.budget) (r : A.R) (y x : DReg A.toKindAlg.W A.width X Y Req Resp)
     (hx : A.wcnt x.workspace = c)
-    (hy : ¬ (A.wcnt y.workspace = c + (if A.kind y.workspace.1 then 0 else 1) ∧
+    (hy : ¬ (A.wcnt y.workspace = c + (if A.kind y.workspace.work then 0 else 1) ∧
       A.wcnt y.workspace ≤ A.budget)) :
     (A.toKindAlg.step k).op r y x = 0 := by
-  obtain ⟨⟨⟨w, cy⟩, ry, sy⟩, py⟩ := y
-  obtain ⟨⟨⟨w', cx⟩, rx, sx⟩, px⟩ := x
-  simp only [wcnt] at hx hy
-  simp only [toKindAlg, hk, ↓reduceIte, KrausMap.permConj, KrausMap.restrict, KrausMap.reindex,
+  obtain ⟨⟨wcy, ry, sy⟩, py⟩ := y
+  obtain ⟨w, cy, rfl⟩ := AlgShape.CntW.exists_eq_mk wcy
+  obtain ⟨⟨wcx, rx, sx⟩, px⟩ := x
+  obtain ⟨w', cx, rfl⟩ := AlgShape.CntW.exists_eq_mk wcx
+  simp only [DReg.workspace, wcnt_mk, AlgShape.CntW.work_mk] at hx hy
+  rw [toKindAlg_step_of_lt A hk]
+  simp only [KrausMap.permConj, KrausMap.restrict, KrausMap.reindex,
     KrausMap.tensorId, Matrix.submatrix_apply, Matrix.diagonal_mul, Equiv.symm_symm,
-    cntShift_symm_apply, Equiv.refl_apply]
-  change (if A.inBudget _ = true then 1 else 0) * ((A.step k).op r _ _ * (1 : Matrix _ _ ℂ) _ cx) = 0
+    Equiv.refl_apply, Matrix.kroneckerMap_apply]
+  rw [cntShift_symm_apply]
+  change (if A.inBudget (((AlgShape.CntW.mk w (if A.kind w then cy else (finRotate _).symm cy)),
+      ry, sy), py) = true then 1 else 0) * ((A.step k).op r _ _ *
+    (1 : Matrix (Fin (A.budget + 2)) (Fin (A.budget + 2)) ℂ)
+      (if A.kind w then cy else (finRotate _).symm cy) cx) = 0
+  rw [inBudget_mk]
   cases hkw : A.kind w
   · simp only [hkw, Bool.false_eq_true, ↓reduceIte] at hy ⊢
     by_cases hl : (finRotate (A.budget + 2)).symm cy = Fin.castSucc (Fin.last A.budget)
-    · simp [inBudget, hkw, hl]
+    · simp [hl]
     · by_cases hne : (finRotate (A.budget + 2)).symm cy = cx
       · exfalso
         apply hy
@@ -601,7 +818,7 @@ theorem step_op_eq_zero {k : StepIdx A.slots A.post} (hk : (k : ℕ) < A.slots) 
         have h2 : (cy : ℕ) = cx + 1 := by rw [hcy, h1]
         constructor <;> omega
       · exact mul_eq_zero_of_right _ (mul_eq_zero_of_right _ (Matrix.one_apply_ne (by
-          simpa [cntSplit] using hne)))
+          exact hne)))
   · simp only [hkw, ↓reduceIte, add_zero] at hy ⊢
     by_cases hne : cy = cx
     · exfalso
@@ -610,14 +827,16 @@ theorem step_op_eq_zero {k : StepIdx A.slots A.post} (hk : (k : ℕ) < A.slots) 
       rw [hne]
       exact ⟨hcx, hcx ▸ hc⟩
     · exact mul_eq_zero_of_right _ (mul_eq_zero_of_right _ (Matrix.one_apply_ne (by
-        simpa [cntSplit] using hne)))
+        exact hne)))
 
 /-- The initial state of the mixed game of `toKindAlg` has counter `0`. -/
 theorem suppIn_mgInit_wcnt : SuppIn {r | A.wcnt r.1.1 = 0} A.toKindAlg.mgInit := by
   intro a b hab
-  obtain ⟨⟨⟨w, ca⟩, ra, sa, la⟩, pa⟩ := a
-  obtain ⟨⟨⟨w', cb⟩, rb, sb, lb⟩, pb⟩ := b
-  simp only [Set.mem_ofPred_eq, wcnt] at hab
+  obtain ⟨⟨wca, ra, sa, la⟩, pa⟩ := a
+  obtain ⟨w, ca, rfl⟩ := AlgShape.CntW.exists_eq_mk wca
+  obtain ⟨⟨wcb, rb, sb, lb⟩, pb⟩ := b
+  obtain ⟨w', cb, rfl⟩ := AlgShape.CntW.exists_eq_mk wcb
+  simp only [Set.mem_ofPred_eq, wcnt_mk] at hab
   change (_ * Matrix.single (0 : Fin (A.budget + 2)) 0 (1 : ℂ) ca cb) * _ = 0
   rw [Matrix.single_apply, if_neg, mul_zero, zero_mul]
   rintro ⟨h1, h2⟩

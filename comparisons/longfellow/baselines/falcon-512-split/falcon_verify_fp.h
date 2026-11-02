@@ -28,7 +28,6 @@
 #include <cstdint>
 #include <vector>
 
-#include "falcon_encoding.h"
 #include "falcon_ntt.h"
 #include "falcon_ntt_lazy.h"
 #include "falcon_reduce.h"
@@ -50,10 +49,6 @@ struct FalconFpParams {
   size_t La_sum;      // limbs of the norm sum in [0,beta^2]
   size_t field_bits;  // width lazy values may reach before a reduction
   size_t margin;
-  // Coefficients at index >= encoding_from are s2's, checked for encodability
-  // (falcon_encoding.h): their a_lo is the pair (magnitude, high part) and they
-  // carry no a_hi.  SIZE_MAX: none.
-  size_t encoding_from = SIZE_MAX;
 };
 
 // ---- host witness ----------------------------------------------------------
@@ -111,7 +106,7 @@ FalconFpWitness falcon_fp_build_witness(const Field& F,
   const size_t qb = falcon_ceil_log2(q);
   auto fwd_sched = falcon_reduce_schedule(n, qb, p.field_bits, p.margin, qb);
   auto inv_sched = falcon_reduce_schedule(n, qb, p.field_bits, p.margin,
-                                          falcon_intt_growth_bits(q));
+                                          falcon_intt_growth_bits(q), 0, qb);
   FalconFpWitness w;
 
   // NTT(s2)
@@ -180,7 +175,7 @@ std::vector<typename Logic::EltW> falcon_verify_fp_coefficients(const Logic& lc,
   const size_t qb = falcon_ceil_log2(q);
   auto fwd_sched = falcon_reduce_schedule(n, qb, p.field_bits, p.margin, qb);
   auto inv_sched = falcon_reduce_schedule(n, qb, p.field_bits, p.margin,
-                                          falcon_intt_growth_bits(q));
+                                          falcon_intt_growth_bits(q), 0, qb);
 
   // s2_hat = lazy NTT(s2)
   std::vector<EltW> s2_hat = s2;
@@ -215,68 +210,6 @@ std::vector<typename Logic::EltW> falcon_verify_fp_coefficients(const Logic& lc,
   coeffs.insert(coeffs.end(), s1.begin(), s1.end());
   coeffs.insert(coeffs.end(), s2.begin(), s2.end());
   return coeffs;
-}
-
-// Centered-magnitude L2 norm over coefficient residues in [0,q).  Shared by
-// the single-signer emulated arm and the ring arm; the a_lo/a_hi advice also
-// pins every coefficient to [0,q), so callers need no separate range check.
-template <class Logic>
-void falcon_assert_norm_fp(const Logic& lc,
-                           const std::vector<typename Logic::EltW>& coeffs,
-                           const FalconFpWires<Logic>& w,
-                           const FalconFpParams& p,
-                           std::vector<typename Logic::EltW>& needles) {
-  using EltW = typename Logic::EltW;
-  const uint64_t q = p.q;
-  // Request order: the two-sided magnitude ranges, then the encoding requests
-  // for s2, then the sum.
-  const size_t ef = std::min(p.encoding_from, coeffs.size());
-  std::vector<EltW> mag(coeffs.size());
-  for (size_t i = 0; i < ef; ++i) {
-    mag[i] = falcon_recon(lc, w.a_lo[i], p.B);
-    range_check_two_sided(lc, mag[i], q / 2 + 1, p.B, p.La_a, w.a_lo[i].data(),
-                          w.a_hi[i].data(), needles);
-  }
-  if (ef < coeffs.size()) {
-    check(p.n == 512 && p.B == kFalconMagnitudeBound,
-          "falcon_assert_norm_fp: encoding check is Falcon-512 over table 2048");
-    std::vector<EltW> s2mag, s2high;
-    for (size_t i = ef; i < coeffs.size(); ++i) {
-      mag[i] = w.a_lo[i][0];
-      s2mag.push_back(w.a_lo[i][0]);
-      s2high.push_back(w.a_lo[i][1]);
-    }
-    falcon_encoding_emulated(lc, s2mag, s2high, kFalcon512HighBudget, needles);
-  }
-  EltW sum = lc.konst(uint64_t{0});
-  for (size_t i = 0; i < coeffs.size(); ++i) {
-    const EltW& a = mag[i];
-    // centering: pin a in {c, q-c}.  Unlike the native (char-q) arm, here q != 0
-    // and squares are EXACT integers, so v*v==a*a is WRONG (c^2 != (q-c)^2); use
-    // the product form.  With a <= q/2 (range-checked above), a = |centered c|.
-    EltW c = coeffs[i];
-    EltW qmc = lc.sub(lc.konst(lc.elt(q)), c);            // q - c
-    lc.assert0(lc.mul(lc.sub(a, c), lc.sub(a, qmc)));     // (a-c)(a-(q-c)) == 0
-    sum = lc.add(sum, lc.mul(a, a));                       // a^2 exact (< char)
-  }
-  // sum <= beta^2
-  EltW sumrec = falcon_recon(lc, w.sum_lo, p.B);
-  lc.assert_eq(sum, sumrec);
-  range_check_two_sided(lc, sum, p.beta_sq + 1, p.B, p.La_sum, w.sum_lo.data(),
-                        w.sum_hi.data(), needles);
-}
-
-template <class Logic>
-void falcon_verify_fp(const Logic& lc,
-                      const std::vector<typename Logic::EltW>& h_hat,
-                      const std::vector<typename Logic::EltW>& c_hat,
-                      const std::vector<typename Logic::EltW>& s2,
-                      const FalconFpWires<Logic>& w, const FalconFpParams& p,
-                      std::vector<typename Logic::EltW>& needles,
-                      FalconChallengeForm form = FalconChallengeForm::Ntt) {
-  auto coeffs = falcon_verify_fp_coefficients(lc, h_hat, c_hat, s2, w, p,
-                                              needles, form);
-  falcon_assert_norm_fp(lc, coeffs, w, p, needles);
 }
 
 }  // namespace proofs

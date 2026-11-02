@@ -7,6 +7,7 @@ public import GordieHowe.Applications.Falcon512.Ring.Frontend.Statement
 public import GordieHowe.Applications.Falcon512.NormHonest
 public import GordieHowe.Language.Honest.Exec
 public import GordieHowe.Language.Completeness.Execution
+public import GordieHowe.Language.Completeness.Roles
 
 @[expose] public section
 
@@ -109,12 +110,14 @@ noncomputable def mag2 (j : ℕ) : ℕ := if j < 512 then w.mag (512 + j) else 0
 -- spec-side
 noncomputable def mag1 (j : ℕ) : ℕ := if j < 512 then w.mag j else 0
 
-/-- **The carriers' bias** `512 (q − 1)² + 12289 · 2`, a multiple of `q` above every negative
+/-- **The carriers' quotient offset** `q · 6291457`: `−q · qlo` at the lower end
+`qlo = −6291457` of the signature equation's quotient, a multiple of `q` above every negative
 residual `c − h s2 − s1`. -/
-abbrev bias : ℕ := 77309435394
+abbrev bias : ℕ := 77315715073
 
-/-- **The honest quotient of coefficient `j`** of the biased signature equation
-(`Emulated.Rows.honestQuotient` at the carriers' bias: `(bias + c − h s2 − s1) / q`). -/
+/-- **The honest quotient of coefficient `j`** of the signature equation
+(`Emulated.Rows.honestQuotient` at the carriers' offset: `(bias + c − h s2 − s1) / q`, the
+quotient `Q` of `c − s1 − h s2 = q (qlo + Q)`). -/
 -- spec-side
 noncomputable def quot (j : ℕ) : ℕ :=
   if h : j < 512 then Emulated.Rows.honestQuotient 12289 bias
@@ -420,9 +423,10 @@ theorem honestVal_mem [PrimeNode (I 0)]
 
 variable (program) in
 /-- **The program facts of a Falcon ring's source strategy** (decided per program): statement
-bounds only on the keys and the challenge, at least `q`; no cross-field `equal`; the committed values in the node `GF(p^1)` of field `0` and no pad
-copy; the node-typed values committed in the node of field `0`; the statement's two member checks,
-the keys and the challenge below `q`. -/
+bounds only on the keys and the challenge, at least `q`; no cross-field `equal`; the committed
+values in the node `GF(p^1)` of field `0`; the statement's two member checks, the keys and the
+challenge below `q`. The program-wide facts every honest strategy reads are the honest roles
+(`RealizedProgram.HonestRoles`). -/
 class FalconRingSource : Prop where
   /-- The program is well formed. -/
   wf : program.WellFormed
@@ -437,13 +441,6 @@ class FalconRingSource : Prop where
   cells : ∀ v < program.values.length, program.isCellValue (program.value v).domain v = true →
     (program.value v).node.map (·.name) = some "GF(p^1)" ∧ program.valueField v = 0 ∧
       program.domainField (program.value v).domain = 0
-  /-- No pad copy. -/
-  noPadCopy : ∀ v < program.values.length, (match (program.value v).kind with
-    | .padCopy _ _ => false
-    | _ => true) = true
-  /-- The node-typed values are committed values of the node `GF(p^1)` in field `0`. -/
-  typed : ∀ v < program.values.length, (program.value v).typeSource = .node →
-    program.privCellB v = true ∧ (program.value v).type = .sub "GF(p^1)" ∧ program.valueField v = 0
   /-- The statement's member checks: the keys (`statement.ring`) and the challenge (`statement.c`)
   below `q`. -/
   checks : ∀ m ∈ program.statement.checks,
@@ -481,16 +478,16 @@ def relH : Set (program.Valuation I × RingIn G) := {p | p.1 = stmtOf p.2.x}
 
 variable [PrimeNode (I 0)]
 
-/-- **The node-typed values lie in their types** at the source environment of the honest values
-(`RealizedProgram.SourceSatAt.types`). -/
-theorem honest_types (hψ : (I 0).decode (FalconRingMember.psi program) ∈ (I 0).node "GF(p^1)")
-    (y : RingIn G) (x : program.Valuation I) (c : ∀ k, (program.layout I).Ch k)
-    (π : (program.layout I).Pads) (v : ℕ) (hv : v < program.values.length)
-    (hts : (program.value v).typeSource = .node) (j : ℕ) (hj : j < (program.value v).size) :
-    (I (program.valueField v)).InType (program.value v).type
-      (program.reader (program.srcEnv I x (honestVal program I y) c π) v j) := by
-  obtain ⟨hp, hty, hf⟩ := FalconRingSource.typed (program := program) v hv hts
-  rw [RealizedProgram.reader_srcEnv_of_privCellB x _ c π hp hj, hty]
+/-- **An honest committed cell lies in its value's node**: the committed cells are in the node
+`GF(p^1)` of field `0` (`FalconRingSource.cells`), where every honest value of field `0` lies
+(`honestVal_mem`, at the root in `GF(p^1)`, `hψ`). -/
+theorem honest_cell_mem (hψ : (I 0).decode (FalconRingMember.psi program) ∈ (I 0).node "GF(p^1)")
+    (y : RingIn G) {v : ℕ} (hv : v < program.values.length) (hp : program.privCellB v = true)
+    (j : ℕ) {S : String} (hS : (program.value v).node.map (·.name) = some S) :
+    honestVal program I y v j ∈ (I (program.valueField v)).node S := by
+  obtain ⟨hn, hf, -⟩ := FalconRingSource.cells (program := program) v hv (isCellValue_of_privCellB hp)
+  rw [hn, Option.some.injEq] at hS
+  subst hS
   exact honestVal_mem hψ y hf j
 
 /-- **The node `GF(p^1)` of field `0` contains `1`** (`natCast_mem_prime0`). -/
@@ -504,8 +501,8 @@ variable (program I PN) in
 /-- **The execution of a Falcon ring's source program** (`RealizedProgram.SourceExecution`): the honest values
 `honestVal` (`RealizedProgram.execOf`) at the ring statement's program statement, no late value, no
 completeness event; the source program accepts where the scheme's source predicates hold (`holds`)
-and its node-typed values lie in their types (`honest_types`, at the root in `GF(p^1)`, `hψ`), every
-other `kpriv` source value being Boolean checked (`hk`). -/
+and, at the honest roles `hR`, its node-typed values lie in their types (`honest_cell_mem`, at the
+root in `GF(p^1)`, `hψ`). -/
 noncomputable def sourceExecutionOf (hψ : (I 0).decode (FalconRingMember.psi program) ∈ (I 0).node "GF(p^1)")
     (holds : ∀ (y : RingIn G) c π, ∀ q < program.predicates.length,
       program.inSource (program.predicate q) = true →
@@ -513,12 +510,11 @@ noncomputable def sourceExecutionOf (hψ : (I 0).decode (FalconRingMember.psi pr
           (honestVal program I y) c π) (program.predicate q).body)
     (hI : I.Registered program) (hL : I.Lawful program PN)
     {Gn : RealizedProgram.Gens} (R : program.CommittedFacts I Gn)
-    (hbc : program.BoundNoCopy)
-    (hk : program.KprivTyped) (hone : program.BoundOneMem I)
-    (hff : ∀ p < program.predicates.length, program.isFieldForm p = false)
-    (hng : program.NoGammaTables) :
+    (hbc : program.BoundNoCopy) {L : List (ℕ × String)} {S : RealizedProgram.Structure}
+    (hR : program.HonestRoles L S) (hO : OneNodes I L) (hbit : I.BitNodes program)
+    (hff : ∀ p < program.predicates.length, program.isFieldForm p = false) :
     program.SourceExecution I (relH G program I) where
-  packFree _ _ _ _ _ := RealizedProgram.packFreeAt_of_noGamma hng _
+  packFree _ _ _ _ _ := RealizedProgram.packFreeAt_of_noGamma hR.noGamma _
   stmtOf y := stmtOf y.x
   stmt _ _ h := h
   val y := program.execOf I (honestVal program I y)
@@ -536,29 +532,44 @@ noncomputable def sourceExecutionOf (hψ : (I 0).decode (FalconRingMember.psi pr
     obtain ⟨hv | hv, hle⟩ := FalconRingSource.bounds (program := program) vN hvN
     · rw [hv]
       refine ⟨_, lt_of_lt_of_le (keyEntry_lt y.x i) hle, ?_⟩
-      rw [stmtOf_ring]
+      rw [RealizedProgram.stmtRead_of_isStmtLeaf _
+        (by rw [FalconRingMember.ringKind (program := program)]; rfl), stmtOf_ring]
       exact RealizedProgram.castElt_natCast
         ((FalconRingMember.fields (program := program)) _ (by simp)).symm _
     · rw [hv] at hi ⊢
       rw [(FalconRingMember.sizes (program := program)).2.2.2.1] at hi
       refine ⟨_, lt_of_lt_of_le (stmtChallenge_lt y.x ⟨i, hi⟩) hle, ?_⟩
-      rw [stmtOf_chal y.x hi]
+      rw [RealizedProgram.stmtRead_of_isStmtLeaf _
+        (by rw [FalconRingMember.chalKind (program := program)]; rfl), stmtOf_chal y.x hi]
       exact RealizedProgram.castElt_natCast
         ((FalconRingMember.fields (program := program)) _ (by simp)).symm _
   accepting x y hy c _ := by
     rw [show x = stmtOf y.x from hy]
-    refine sourceAcceptingAtC_of_srcEnv (l := 0) (π := 0) FalconRingSource.wf hI hL R hbc hk hone
-      ?_ ?_ <;> rw [RealizedProgram.srcEnvL_zero]
-    · exact ⟨fun p hp _ => by
-        obtain ⟨q, hq, rfl⟩ := exists_index_of_mem hp
-        exact holds y c 0 q hq ‹_›,
-       fun v hv _ hts i hi => honest_types hψ y _ c 0 v hv hts i hi⟩
+    refine sourceAcceptingAtC_of_srcEnv (l := 0) (π := 0) FalconRingSource.wf hI hL R hbc
+      hR.kprivTyped (hR.boundOneMem hO) ?_ ?_ <;> rw [RealizedProgram.srcEnvL_zero]
+    · exact hR.sourceSatAt hbit (fun _ hv hp _ j _ hS => honest_cell_mem hψ y hv hp j hS)
+        fun p hp hs => by
+          obtain ⟨q, hq, rfl⟩ := exists_index_of_mem hp
+          exact holds y c 0 q hq hs
     · intro p hp _ dx x' dy y' k real hb
       obtain ⟨q, hq, rfl⟩ := exists_index_of_mem hp
       have := FalconRingSource.noCross (program := program) q hq
       rw [hb] at this
       cases this
   fieldEqs _ _ _ _ _ := RealizedProgram.fieldEqsAt_of_none hff _
+
+/-- **The execution of a Falcon ring's source program has no completeness error.** -/
+theorem sourceExecutionOf_δ {PN : ℕ → List String} (hψ : (I 0).decode (FalconRingMember.psi program) ∈ (I 0).node "GF(p^1)")
+    (holds : ∀ (y : RingIn G) c π, ∀ q < program.predicates.length,
+      program.inSource (program.predicate q) = true →
+        program.HoldsAt (program.srcEnv I (stmtOf (program := program) (I := I) y.x)
+          (honestVal program I y) c π) (program.predicate q).body)
+    (hI : I.Registered program) (hL : I.Lawful program PN)
+    {Gn : RealizedProgram.Gens} (R : program.CommittedFacts I Gn)
+    (hbc : program.BoundNoCopy) {L : List (ℕ × String)} {S : RealizedProgram.Structure}
+    (hR : program.HonestRoles L S) (hO : OneNodes I L) (hbit : I.BitNodes program)
+    (hff : ∀ p < program.predicates.length, program.isFieldForm p = false) :
+    (sourceExecutionOf program I PN hψ holds hI hL R hbc hR hO hbit hff).δ = 0 := rfl
 
 end Source
 
@@ -738,7 +749,7 @@ variable [FalconRingSource program] [FalconRingBase program]
 
 /-- **The native root lies in `F_q`.** -/
 theorem psi_mem_native : (I 0).decode (FalconRingMember.psi program) ∈ (I 0).node "GF(p^1)" := by
-  rw [AField.decode_eq]
+  rw [(FalconRingBase.ids (program := program)).2.2.2.1, AField.decode_lt _ (by norm_num)]
   exact natCast_mem_prime0 rfl _
 
 variable (program I PN) in
@@ -746,13 +757,20 @@ variable (program I PN) in
 predicates `source_holds`). -/
 noncomputable def sourceExecution (hI : I.Registered program) (hL : I.Lawful program PN)
     {Gn : RealizedProgram.Gens} (R : program.CommittedFacts I Gn)
-    (hbc : program.BoundNoCopy)
-    (hk : program.KprivTyped) (hone : program.BoundOneMem I)
-    (hff : ∀ p < program.predicates.length, program.isFieldForm p = false)
-    (hng : program.NoGammaTables) :
+    (hbc : program.BoundNoCopy) {L : List (ℕ × String)} {S : RealizedProgram.Structure}
+    (hR : program.HonestRoles L S) (hO : OneNodes I L) (hbit : I.BitNodes program)
+    (hff : ∀ p < program.predicates.length, program.isFieldForm p = false) :
     program.SourceExecution I (relH G program I) :=
-  sourceExecutionOf program I PN psi_mem_native (fun y _ _ _ hq hs => source_holds y hq hs) hI hL R hbc hk
-    hone hff hng
+  sourceExecutionOf program I PN psi_mem_native (fun y _ _ _ hq hs => source_holds y hq hs) hI hL R hbc
+    hR hO hbit hff
+
+/-- **The execution of a native Falcon ring's source program has no completeness error.** -/
+theorem sourceExecution_δ {PN : ℕ → List String} (hI : I.Registered program) (hL : I.Lawful program PN)
+    {Gn : RealizedProgram.Gens} (R : program.CommittedFacts I Gn)
+    (hbc : program.BoundNoCopy) {L : List (ℕ × String)} {S : RealizedProgram.Structure}
+    (hR : program.HonestRoles L S) (hO : OneNodes I L) (hbit : I.BitNodes program)
+    (hff : ∀ p < program.predicates.length, program.isFieldForm p = false) :
+    (sourceExecution program I PN (G := G) hI hL R hbc hR hO hbit hff).δ = 0 := rfl
 
 end Native
 

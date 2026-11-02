@@ -3,7 +3,7 @@
 
 // GordieHowe: assert_mod(lhs, rhs, m), lhs = rhs (mod m) as integers.
 //
-// The lowering picks one of four forms from m, p and the integer
+// The lowering picks one of five forms from m, p and the integer
 // intervals of the two sides (interval propagation over Bit types, range
 // requests, the roots of vanishing products, constants and operators with
 // a row sum):
@@ -39,7 +39,15 @@
 //                committed quotient digits in base T and its residue
 //                r_g = S_g - m Q_g derived (a Bit for m = 2), then the
 //                final sum sum_g r_g + (units below m) = rhs (mod m) in the
-//                one-group form.
+//                one-group form;
+//   product      m >= 2 over a congruence D = 0 of signed terms not all
+//                affine (ops/integer_congruence.h: each term an expression
+//                with products, conv or operators, or a spectral product):
+//                every term bounds itself (its operators' and kernels' own
+//                intervals), the quotient is committed with one range
+//                request, and the terms state the field equation
+//                D - m qlo - m q = 0 through their own emission
+//                (product_sides); its derivation is the rule productMod.
 //
 // Each form is one gadget below, owning its advice, its constraints and
 // its range requests.
@@ -65,6 +73,7 @@
 #include "gordiehowe/expr.h"
 #include "gordiehowe/ops/operators.h"
 #include "gordiehowe/compiler/derivation.h"
+#include "gordiehowe/ops/integer_congruence.h"
 #include "gordiehowe/compiler/range.h"
 #include "gordiehowe/system.h"
 
@@ -99,6 +108,14 @@ struct ModSpec {
   // declaration's pin (the other fields are unused).
   ExprPtr<F> l, r;
   std::shared_ptr<Placement> pin;
+  // M >= 2 over terms that are not all affine (the product form,
+  // product_sides): the congruence CONG.
+  bool product = false;
+  std::shared_ptr<const ops::Congruence<F>> cong;
+  // The product form's quotient, declared with the program, and the lower
+  // end its generator reads.
+  std::optional<Ref<F>> q;
+  std::shared_ptr<SignedInt> qlo;
 };
 
 template <class F, class S>
@@ -124,6 +141,10 @@ class ModLoweringImpl : Lowering {
       p_ = field_characteristic(f_);
       if (sp_.m == 0) {
         integer_equality();
+        return;
+      }
+      if (sp_.product) {
+        product_sides();
         return;
       }
       if (!sp_.units.empty()) units_from_terms();
@@ -185,9 +206,13 @@ class ModLoweringImpl : Lowering {
   // request, m for an interval); and for a request on x + c (c a constant
   // node, as InfinityNorm's shifted value), x in [-max c, N - 1 - min c].
   // The narrowest interval wins; a bound beyond the cap gives none. A node
-  // without a request takes the hull of its roots when a vanishing product
-  // constrains it or the views of it (range_internal::root_hull).
-  // Each node's interval source is recorded (why_) for the derivations.
+  // without a request takes the narrower of the hull of its roots when a
+  // vanishing product constrains it or the views of it
+  // (range_internal::root_hull) and the hull of the public entries that a
+  // table selection or lookup places it among (range_internal::table_hull;
+  // the roots on a tie). Each node's interval source is recorded (why_)
+  // for the derivations: a table hull as IvlWhy::kTable with its
+  // selections.
   std::optional<Interval> static_bound(size_t id) const {
     const Graph &g = b_.system().graph();
     IvlWhy w;
@@ -204,6 +229,17 @@ class ModLoweringImpl : Lowering {
           return rk;
         },
         &w);
+    std::vector<std::string> preds;
+    const auto t = range_internal::table_hull(d_, g, p_, id, &preds);
+    if (t && (!r || t->second - t->first < r->second - r->first)) {
+      IvlWhy wt;
+      wt.kind = IvlWhy::kTable;
+      wt.preds = std::move(preds);
+      wt.lo = t->first;
+      wt.hi = t->second;
+      why_[id] = std::move(wt);
+      return t;
+    }
     if (r) why_[id] = std::move(w);
     return r;
   }
@@ -1168,6 +1204,265 @@ class ModLoweringImpl : Lowering {
     put_bound(sum.descr, dmax);
   }
 
+  // ---------------------------------------------------- the product form --
+
+  // The intervals a congruence's terms read (ops::TermIntervals):
+  // expressions by interval propagation (expr_interval, their nodes'
+  // sources in why_), spectra by the hull of the public table that selects
+  // them (range_internal::table_preimage_hull, its selection in
+  // kernel_why_), constants by their signed representatives.
+  ops::TermIntervals<F> term_intervals() const {
+    ops::TermIntervals<F> env;
+    env.expr = [this](const ExprPtr<F> &e, std::string &why) {
+      return expr_interval(e, why);
+    };
+    env.spectrum = [this](size_t id, size_t at, const ops::StagedNtt<F> &t)
+        -> std::optional<Interval> {
+      std::vector<std::string> preds;
+      const auto h = range_internal::table_preimage_hull(
+          d_, b_.system().graph(), p_, id, at, t.n, t.psi,
+          t.order == ops::NttOrder::kNatural, &preds);
+      if (h) kernel_why_[{id, at}] = {std::move(preds), *h};
+      return h;
+    };
+    env.signed_of = [this](const Elt &a) -> std::optional<SignedInt> {
+      const auto r = range_internal::signed_rep(f_, p_,
+                                                d_.prime == Space::kField, a);
+      if (!r || r->second >= Bound::pow2(range_internal::kIntervalCapBits))
+        return std::nullopt;
+      return r->first ? -SignedInt(r->second) : SignedInt(r->second);
+    };
+    env.cap_bits = range_internal::kIntervalCapBits;
+    return env;
+  }
+  // The interval of the part of sign SIGN of the congruence (WHICH names it).
+  Interval part_interval(int sign, const std::string &which) const {
+    std::string why;
+    const auto iv = sp_.cong->part_interval(term_intervals(), sign, why);
+    if (!iv) fail(what() + ": " + which + " have no integer interval: " + why);
+    return range_internal::ordered_interval(iv->first, iv->second,
+                                            what() + "'s " + which);
+  }
+
+  // M >= 2 over a congruence of terms that are not all affine
+  // (ops/integer_congruence.h: D = P - N, P the terms of sign +1 and N of
+  // sign -1, any of them an expression or a spectral product;
+  // committed_digits' committed quotient): the intervals of P and N, each
+  // term by its own method (IntegerTerm::interval over term_intervals),
+  // the quotient's interval [qlo, qhi] and sound bound Dmax as
+  // committed_digits derives them from P's and N's (P in the role of its
+  // left side, N of its right), with its certificates leftSpan, rightSpan
+  // and cap; the quotient q committed as NAME.q (the congruence's dims)
+  // below Qmax + 1 (MaxBound Dmax), and the integer equation
+  //   D - m qlo - m q = 0
+  // in the congruence's normalization (Congruence::equation: expressions
+  // as themselves, rows with spectral products in their transform's
+  // spectrum), the rows concatenated into the one predicate NAME under the
+  // declaration's pin (the equation's placement). M = p is the field
+  // equation without a quotient. The derivation (derive_product) is the
+  // rule productMod.
+  void product_sides() {
+    const Graph &g = b_.system().graph();
+    in_prime_ = range_internal::prime_node(d_, g);
+    const ops::Congruence<F> &cong = *sp_.cong;
+    const Bound m = sp_.m, p = p_;
+    if (m < 2) fail(what() + ": the modulus is below 2");
+    const size_t rows = cong.rows();
+    const size_t n = cong.n();
+    // The equation's predicate: each row's expression terms minus the
+    // quotient term MQ(i) (row i's m q, when given) and the scalar m qlo
+    // (MQLO, when given). An affine first term and an affine quotient term
+    // stay one affine expression, which a circuit reads without
+    // intermediate wires.
+    auto state = [&](const std::optional<Elt> &mqlo,
+                     const std::function<Expr<F>(size_t)> &mq) {
+      const Expr<F> e = cong.equation([&](size_t i, const ExprPtr<F> &e0) {
+        Expr<F> x(e0);
+        if (mq) {
+          const Expr<F> t = mq(i);
+          if (e0->op == ExprOp::kLin && t.node->op == ExprOp::kLin)
+            x = Expr<F>(expr_node(e0->lin - t.node->lin));
+          else
+            x = x - t;
+        }
+        if (mqlo) x = x - *mqlo;
+        return x;
+      });
+      if (const auto nt = cong.note())
+        b_.system().note(nt->first, sp_.name, nt->second, d_);
+      add_predicate(d_, sp_.name, e.node, sp_.pin);
+    };
+    PlanRecords::ProductModEq eq;
+    eq.name = sp_.name;
+    eq.domain = d_.name;
+    eq.m = m;
+    eq.rows = rows;
+    eq.spectral = cong.transformed();
+    eq.cong = sp_.cong;
+    auto &sum = b_.summary();
+    if (m == p) {
+      state(std::nullopt, nullptr);
+      b_.records().product_mod_equalities.push_back(eq);
+      derive_product(std::nullopt, std::nullopt);
+      sum.report.push_back(what() + ": m = p = " + bound_str(p) +
+                           ", the field equation");
+      put_str(sum.descr, sp_.name);
+      put_u64(sum.descr, 0);
+      return;
+    }
+    // The quotient's arithmetic multiplies m by quotients within interval
+    // propagation's cap: m below the cap keeps every product m q within a
+    // SignedInt.
+    if (m >= Bound::pow2(range_internal::kIntervalCapBits))
+      fail(what() + ": the modulus " + bound_str(m) + " is at least 2^" +
+           std::to_string(range_internal::kIntervalCapBits) + " and not p");
+    const Interval L = part_interval(1, "the positive terms");
+    R_ = part_interval(-1, "the negative terms");
+    const Shape1 s = quotient_shape(L);
+    eq.lhs_lo = L.first;
+    eq.lhs_hi = L.second;
+    eq.rhs_lo = R_.first;
+    eq.rhs_hi = R_.second;
+    eq.qlo = s.qlo;
+    eq.qmax = s.qmax;
+    const std::string nm = sp_.name;
+    certify(nm + ".leftSpan", term("lhs span + a0", s.a_side) < term("p", p));
+    std::string line = what() + ": lhs in [" + int_str(L.first) + ", " +
+                       int_str(L.second) + "], rhs in [" + int_str(R_.first) +
+                       ", " + int_str(R_.second) + "], m = " + bound_str(m) +
+                       ", quotient in [" + int_str(s.qlo) + ", " +
+                       int_str(s.qhi) + "]; ";
+    put_str(sum.descr, nm);
+    put_bound(sum.descr, m);
+    put_bound(sum.descr, Bound(s.qlo.negative() ? -s.qlo : s.qlo));
+    put_u64(sum.descr, s.qlo.negative() ? 1 : 0);
+    put_bound(sum.descr, s.qmax);
+    cong.describe(sum.descr);
+    const Bound nq = s.qmax + 1;
+    const Bound dmax = (p - 1 - s.w) / m + 1;
+    certify(nm + ".rightSpan",
+            term("W + m (Dmax - 1)", bound_add(s.w, bound_mul(m, dmax - 1))) <
+                term("p", p));
+    certify(nm + ".cap", term("Qmax + 1", nq) <= term("Dmax", dmax));
+    eq.dmax = dmax;
+    // The quotient the declaration commits (system_core.h's product_mod),
+    // its generator reading qlo.
+    if (!sp_.q || sp_.qlo == nullptr)
+      fail(what() + ": the declaration committed no quotient");
+    // The generator's dividend, below m (Qmax + 1) honestly, is a NatInt.
+    if (!bound_mul(m, nq).fits128())
+      fail(what() + ": the quotient's dividend reaches " +
+           bound_str(bound_mul(m, nq)) +
+           ", beyond the 128-bit integers witness generation reads");
+    *sp_.qlo = s.qlo;
+    const Ref<F> q = *sp_.q;
+    eq.quotient = q.id;
+    d_.assert_range(q, nq, MaxBound{dmax}, nm + ".q");
+    const Elt me = elt_of_nat(f_, m);
+    std::optional<Elt> mqlo;
+    if (!s.qlo.is_zero()) mqlo = elt_of_int(SignedInt(m) * s.qlo);
+    // m q for row i: a slice of q for several rows; for one row an affine
+    // expression of q in the row's dims.
+    const std::vector<size_t> row_dims = cong.row(0)[0].term->dims();
+    state(mqlo, [&](size_t i) -> Expr<F> {
+      if (rows > 1) return me * Expr<F>(q).flat().slice(i * n, (i + 1) * n);
+      return Expr<F>(expr_node(me * (q.dims() == row_dims ? q : q.flat())));
+    });
+    b_.records().product_mod_equalities.push_back(eq);
+    derive_product(L, R_);
+    sum.report.push_back(line + "a committed quotient '" + nm + ".q' below " +
+                         bound_str(nq) + " (MaxBound " + bound_str(dmax) +
+                         ")" + cong.report());
+    put_u64(sum.descr, 6);
+    put_bound(sum.descr, nq);
+    put_bound(sum.descr, dmax);
+  }
+
+  // The derivation of the product form NAME (the realized program's source
+  // mod_m P N, its target the predicate NAME): the rule productMod
+  // (derivation_check.h states it), its premises the quotient's range (its
+  // request NAME.q) and then, for P and for N in turn, the part's interval:
+  // for a part without spectral products the walk over its terms' sources
+  // (at the lowering's interval or wider); for a part with spectral
+  // products, per term of that sign in order (rows, then terms), a spectral
+  // product's parts each as its kernel's coefficient interval (the table
+  // selection that bounds its spectrum, src_kernel) and its operand's
+  // interval (the walk), an expression term as its interval (the walk).
+  // At m = p (P, N none) the field equation is the congruence: no
+  // premises.
+  void derive_product(const std::optional<Interval> &P,
+                      const std::optional<Interval> &N) {
+    Deriv dv(sp_.name, d_.name);
+    if (!P) {
+      dv.product_mod({});
+      dv.commit(b_.records());
+      return;
+    }
+    const ops::Congruence<F> &cong = *sp_.cong;
+    std::map<size_t, size_t> done;
+    std::vector<size_t> ks;
+    ks.push_back(dv.inline_request(sp_.name + ".q"));
+    auto gap = [&](const std::string &why) {
+      dv.gap(why);
+      dv.commit(b_.records());
+    };
+    for (int a = 0; a < 2; ++a) {
+      const int sign = a == 0 ? 1 : -1;
+      const Interval &iv = a == 0 ? *P : *N;
+      // The part's terms, and whether a spectral product is among them.
+      bool kernels = false, every_row = true;
+      std::vector<size_t> nodes;
+      for (size_t i = 0; i < cong.rows(); ++i) {
+        bool any = false;
+        for (const auto &t : cong.row(i)) {
+          if (t.sign != sign) continue;
+          any = true;
+          for (const auto &pt : t.term->parts()) {
+            if (pt.kind == ops::IntPart<F>::kKernel) kernels = true;
+            for (size_t id : expr_deps(pt.e)) nodes.push_back(id);
+          }
+        }
+        every_row = every_row && any;
+      }
+      if (!kernels) {
+        ks.push_back(dv.ivl_expr_widen(ivl_sources(dv, nodes, done),
+                                       dx::side(sp_.name, size_t(a)), iv.first,
+                                       iv.second));
+        continue;
+      }
+      if (!every_row)
+        return gap("a part with spectral products and a row without terms");
+      size_t j = 0;
+      for (size_t i = 0; i < cong.rows(); ++i)
+        for (const auto &t : cong.row(i)) {
+          if (t.sign != sign) {
+            j += t.term->parts().size();
+            continue;
+          }
+          for (const auto &pt : t.term->parts()) {
+            std::string why;
+            const auto x = expr_interval(pt.e, why);
+            if (!x) return gap("a term's operand has no interval: " + why);
+            if (pt.kind == ops::IntPart<F>::kKernel) {
+              auto kw = kernel_why_.find({pt.spec.id, pt.spec_at});
+              if (kw == kernel_why_.end())
+                return gap("the spectrum '" + pt.spec.name() +
+                           "' has no recorded hull");
+              ks.push_back(dv.src_kernel(pt.spec.id, pt.spec_at, kw->second.first,
+                                         kw->second.second.first,
+                                         kw->second.second.second));
+            }
+            ks.push_back(dv.ivl_expr_widen(ivl_sources(dv, expr_deps(pt.e), done),
+                                           dx::term_operand(sp_.name, j),
+                                           x->first, x->second));
+            ++j;
+          }
+        }
+    }
+    dv.product_mod(std::move(ks));
+    dv.commit(b_.records());
+  }
+
   // ------------------------------------------------------ accumulators --
 
   // The committed accumulators of RANGES (SUMS their sums), by the spec's
@@ -1504,6 +1799,11 @@ class ModLoweringImpl : Lowering {
   Interval R_{0, 0};
   // The interval sources static_bound used, by node (the derivations').
   mutable std::map<size_t, IvlWhy> why_;
+  // The product form's spectra (node, offset): the selections that bound
+  // their coefficient forms, and the hull (side_intervals).
+  mutable std::map<std::pair<size_t, size_t>,
+                   std::pair<std::vector<std::string>, Interval>>
+      kernel_why_;
   // Whether the one-group form commits the left side (sp_.acc_row).
   bool acc_used_ = false;
   // The nodes of the prime field (m = 0's intervals).
@@ -1532,6 +1832,15 @@ void lower_assert_mod(ConstraintSystemBuilder<S> &b, int domain,
     sp.l = decl.l;
     sp.r = decl.r;
     sp.pin = decl.pin;
+    lower_mod(*d, b, std::move(sp));
+    return;
+  }
+  if (decl.cong != nullptr) {
+    sp.product = true;
+    sp.cong = decl.cong;
+    sp.pin = decl.pin;
+    sp.q = decl.q;
+    sp.qlo = decl.qlo;
     lower_mod(*d, b, std::move(sp));
     return;
   }

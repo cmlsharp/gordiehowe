@@ -25,6 +25,7 @@
 #include <utility>
 #include <vector>
 
+#include "gordiehowe/examples/falcon/falcon_params.h"
 #include "gordiehowe/examples/shared/keccak_host.h"
 #include "circuits/tests/pq/ml_dsa/ml_dsa_44_examples.h"
 #include "params/param_sets.h"
@@ -138,7 +139,8 @@ using Workload = std::vector<Call>;
 
 Workload falcon_workload() {
   constexpr size_t kSaltBytes = 40, kMessageBytes = 32;
-  constexpr size_t kSamples = 512 + 127;  // n + falcon_oversamples(512)
+  // Falcon-512's HashToPoint candidates (falcon_params.h).
+  constexpr size_t kSamples = examples::falcon::Falcon512::kSamples;
   std::mt19937 g(20260915);
   std::vector<uint8_t> seed(kSaltBytes + kMessageBytes);
   for (auto &x : seed) x = uint8_t(g());

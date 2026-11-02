@@ -73,6 +73,12 @@ protocol hash of every system and baseline, which the report states first.
 Longfellow's mdoc benchmark on this host) and prints the Vega scale factors
 (benchmarks/vega_calib.py, which holds Vega's reported figures).
 
+The ring split (render_ring_split): each ring proof's GH_RING_SPLIT line
+(bench_hook.h's header) splits P and verify into the work that depends on
+the ring's keys alone (reused by every proof on the ring), the work that
+also reads the message (reused by proofs of the same message) and the rest;
+the three add up to the proof's P and verify.
+
 --split-json FILE writes the per-domain table's figures as JSON (see
 render_domain_split): per case, each domain's field, prover, verify and
 bytes, the shared term, and the baseline's per-circuit split.
@@ -113,6 +119,15 @@ import math
 TRIALS = int(os.environ.get("PQ_REPORT_TRIALS", "9"))
 WARMUPS = int(os.environ.get("PQ_REPORT_WARMUPS", "2"))
 
+# The parameter sets of the proofs of possession and rings: (case tag,
+# name). Set T's GordieHowe cases are gh-T-<arm> and gh-T-ring-<arm>-<R>;
+# its baselines T-split and T-monolith (ML-DSA) and T-split-<arm> (Falcon).
+# ML-DSA-44 and Falcon-512 (tags ml and fn) keep their unnumbered names.
+ML_SETS = (("ml", "ML-DSA-44"), ("ml65", "ML-DSA-65"), ("ml87", "ML-DSA-87"))
+FN_SETS = (("fn", "Falcon-512"), ("fn1024", "Falcon-1024"))
+# The other sets' case labels: the set's name in place of the scheme's.
+OTHER_SET_LABEL = {t: n for t, n in ML_SETS[1:] + FN_SETS[1:]}
+
 # The longfellow-baselines cases (run_bench.sh's bench.py spec labels).
 BASELINE_NAMES = {
     "mdoc-v7": "Longfellow mdoc v7, 1 attribute",
@@ -122,6 +137,11 @@ BASELINE_NAMES = {
     "ml-split-nomac": "ML-DSA split baseline, MACs off (ablation)",
     "fn-split-native": "Falcon native baseline",
     "fn-split-emulated": "Falcon emulated baseline",
+    **{f"{t}-{kind}": f"{n} {label}" for t, n in ML_SETS[1:]
+       for kind, label in (("monolith", "monolith"),
+                           ("split", "split baseline"))},
+    **{f"{t}-split-{arm}": f"{n} {arm} baseline" for t, n in FN_SETS[1:]
+       for arm in ("native", "emulated")},
     "rsa-fp128-64": "RSA-2048 baseline (Fp128), 64 B",
     "rsa-fp128-2048": "RSA-2048 baseline (Fp128), 2 KB",
     **{f"pq-mdoc-{n}": f"Post-quantum mDL baseline, {n} attribute{'s' * (n > 1)}"
@@ -226,21 +246,31 @@ NAMES = {
     **{f"gh-{s}-ring-{arm}-{r}": f"{label} ring, {arm} (R={r})"
        for s, label in (("ml", "ML-DSA"), ("fn", "Falcon"))
        for arm in ("native", "carrier") for r in (64, 256, 1024)},
+    **{f"gh-{t}-{arm}": f"{n} {arm}" for t, n in OTHER_SET_LABEL.items()
+       for arm in ("native", "emulated")},
+    **{f"gh-{t}-ring-{arm}-{r}": f"{n} ring, {arm} (R={r})"
+       for t, n in OTHER_SET_LABEL.items()
+       for arm in ("native", "carrier") for r in (64, 256, 1024)},
 }
 
 RING_SIZES = (64, 256, 1024)
-GH_POP = ("gh-ml-native", "gh-ml-emulated", "gh-fn-native", "gh-fn-emulated")
-GH_RING = tuple(f"gh-{s}-ring-{arm}-{r}" for s in ("ml", "fn")
+SETS = ML_SETS + FN_SETS
+GH_POP = tuple(f"gh-{t}-{arm}" for t, _ in SETS for arm in ("native", "emulated"))
+GH_RING = tuple(f"gh-{t}-ring-{arm}-{r}" for t, _ in SETS
                 for arm in ("native", "carrier") for r in RING_SIZES)
 GH = GH_POP + GH_RING
+
+
+def split_baseline(tag):
+    """The split baseline of the set TAG: T-split (ML-DSA), the native
+    baseline T-split-native (Falcon)."""
+    return f"{tag}-split" if tag in dict(ML_SETS) else f"{tag}-split-native"
+
+
 # Each GordieHowe proof of possession's baseline (both Falcon arms against
 # the native baseline).
-GH_BASELINE_FOR = {
-    "gh-ml-native": "ml-split",
-    "gh-ml-emulated": "ml-split",
-    "gh-fn-native": "fn-split-native",
-    "gh-fn-emulated": "fn-split-native",
-}
+GH_BASELINE_FOR = {f"gh-{t}-{arm}": split_baseline(t)
+                   for t, _ in SETS for arm in ("native", "emulated")}
 
 # H-only gadget comparisons: optional, and outside the construction tables.
 KECCAK = ("keccak-falcon-gkr", "keccak-falcon-batched",
@@ -415,13 +445,15 @@ def read_summary(directory):
 
 
 # The baseline drivers' proof-reading detail, which their verify_ms leaves
-# out (the drivers time deserializing the proof apart). The ML-DSA split,
-# Falcon split and post-quantum mDL drivers verify the prover's in-memory
-# proof objects and read no serialized proof, so they have none.
+# out (the drivers time deserializing the proof apart). The post-quantum mDL
+# driver verifies the prover's in-memory proof objects and reads no
+# serialized proof, so it has none.
 BASELINE_READ = {
     "mdoc-v7": "v_proof_read",
     "mdoc-v7-nomac": "v_proof_read",
-    "ml-monolith": "v_proof_read",
+    **{f"{t}-monolith": "v_proof_read" for t, _ in ML_SETS},
+    **{f"{t}-split": "v_proof_read" for t, _ in ML_SETS},
+    "ml-split-nomac": "v_proof_read",
     "rsa-fp128-64": "v_read",
     "rsa-fp128-2048": "v_read",
     **{f"lf-sha256-{n}": "v_read" for n in LF_SHA256_LENGTHS},
@@ -443,11 +475,20 @@ def _baseline_trials(directory):
     return out
 
 
+# The proof-reading detail of the drivers whose verify_ms already includes
+# it (the Falcon split driver parses both proofs and the tags inside its
+# verify): the parsing table shows it, verify adds nothing.
+BASELINE_READ_INSIDE = {f"{t}-split-{arm}": "v_read" for t, _ in FN_SETS
+                        for arm in ("native", "emulated")}
+
+
 def baseline_parse(directory):
-    """Each baseline case's proof-reading median (BASELINE_READ), or None
-    for a driver that reads no serialized proof."""
+    """Each baseline case's proof-reading median (BASELINE_READ, or
+    BASELINE_READ_INSIDE), or None for a driver that reads no serialized
+    proof."""
     medians = read_summary(directory)[0]
-    return {case: m.get(BASELINE_READ[case]) if case in BASELINE_READ else None
+    reads = {**BASELINE_READ_INSIDE, **BASELINE_READ}
+    return {case: m.get(reads[case]) if case in reads else None
             for case, m in medians.items()}
 
 
@@ -1088,28 +1129,36 @@ def render(results, par=None):
     if present:
         absolute("Baselines (longfellow-baselines, on upstream longfellow-zk)",
                  present)
-    arms = [a for a in ("native", "emulated") if f"gh-ml-{a}" in results
-            and all(b in results for b in ("ml-monolith", "ml-split"))]
-    if arms:
-        print("## GordieHowe ML-DSA against both baselines\n")
+    for t, n in ML_SETS:
+        bases = (f"{t}-monolith", f"{t}-split")
+        arms = [a for a in ("native", "emulated") if f"gh-{t}-{a}" in results
+                and all(b in results for b in bases)]
+        if not arms:
+            continue
+        # ML-DSA-44's title names no set (as in earlier reports).
+        print(f"## GordieHowe {'ML-DSA' if t == 'ml' else n} against both baselines\n")
         table(["Metric", "vs monolith", "vs split baseline"], [
-            [f"{arm} {metric}"] + [relative(results[f"gh-ml-{arm}"][i],
+            [f"{arm} {metric}"] + [relative(results[f"gh-{t}-{arm}"][i],
                                             results[base][i], i)
-                                   for base in ("ml-monolith", "ml-split")]
+                                   for base in bases]
             for arm in arms
             for i, metric in enumerate(METRICS)
         ])
-    if "gh-fn-emulated" in results and "fn-split-emulated" in results:
-        print("## GordieHowe Falcon emulated against the emulated baseline\n")
+    for t, n in FN_SETS:
+        gh_e, base_e = f"gh-{t}-emulated", f"{t}-split-emulated"
+        if gh_e not in results or base_e not in results:
+            continue
+        label = "Falcon" if t == "fn" else n
+        print(f"## GordieHowe {label} emulated against the emulated baseline\n")
         rows = []
         for i, metric in enumerate(METRICS):
-            baseline = results["fn-split-emulated"][i]
-            current = results["gh-fn-emulated"][i]
+            baseline = results[base_e][i]
+            current = results[gh_e][i]
             rows.append([metric, fmt(i, baseline), fmt(i, current),
                          relative(current, baseline, i)])
-        table(["Metric", "Falcon emulated baseline", "Falcon emulated",
+        table(["Metric", f"{label} emulated baseline", f"{label} emulated",
                "Comparison"], rows)
-    for scheme, label in (("ml", "ML-DSA"), ("fn", "Falcon")):
+    for scheme, label in (("ml", "ML-DSA"), ("fn", "Falcon"), *OTHER_SET_LABEL.items()):
         if not all(f"gh-{scheme}-{a}" in results for a in ("native", "emulated")):
             continue
         native, emulated = results[f"gh-{scheme}-native"], results[f"gh-{scheme}-emulated"]
@@ -1186,7 +1235,7 @@ def render_gordiehowe(results, gh):
               "generators), the witness generation apart (next table). "
               "Proof sizes are the whole serialized proof.\n")
         rows = []
-        for base in ("ml-split", "fn-split-native"):
+        for base in dict.fromkeys(GH_BASELINE_FOR.values()):
             if base not in results:
                 continue
             b = results[base]
@@ -1208,7 +1257,8 @@ def render_gordiehowe(results, gh):
         print("Each cell lists ring sizes 64 / 256 / 1024. The carrier arms "
               "are the emulated rings (carrier NTT).\n")
         rows = []
-        for s, label in (("ml", "ML-DSA"), ("fn", "Falcon")):
+        for s, label in (("ml", "ML-DSA"), ("fn", "Falcon"),
+                         *OTHER_SET_LABEL.items()):
             for arm in ("native", "carrier"):
                 names = [f"gh-{s}-ring-{arm}-{r}" for r in RING_SIZES]
                 if not all(n in results for n in names):
@@ -1248,6 +1298,76 @@ def render_gordiehowe(results, gh):
            "A KiB", "Build ms", "Compile ms", "Prepare ms", "Cached ms"], rows)
 
 
+RING_SPLIT = re.compile(r"^\[([^]]+)\] GH_RING_SPLIT (.*)$")
+RING_SPLIT_KEYS = ("ring_p", "message_p", "proof_p", "prover",
+                   "ring_v", "message_v", "proof_v", "verify")
+
+
+def parse_ring_split(lines, mode="single"):
+    """Each ring case's GH_RING_SPLIT figures in MODE (bench_hook.h): per
+    key, the median over the measured trials."""
+    runs = {}
+    for line in lines:
+        m = RING_SPLIT.match(line.strip())
+        if not m:
+            continue
+        name = m[1]
+        multi = name.endswith(MULTI)
+        if multi != (mode == "multi"):
+            continue
+        name = name[:-len(MULTI)] if multi else name
+        if name not in GH_RING:
+            raise ValueError(f"GH_RING_SPLIT of a case outside the rings: {name}")
+        values = dict(kv.split("=", 1) for kv in m[2].split())
+        runs.setdefault(name, []).append({k: float(values[k]) for k in RING_SPLIT_KEYS})
+    out = {}
+    for name, rs in runs.items():
+        if len(rs) != WARMUPS + TRIALS:
+            raise ValueError(f"{name}: expected {WARMUPS} warm-ups and {TRIALS} "
+                             f"GH_RING_SPLIT lines, got {len(rs)}")
+        out[name] = {k: statistics.median(r[k] for r in rs[WARMUPS:])
+                     for k in RING_SPLIT_KEYS}
+    return out
+
+
+def render_ring_split(split, par_split=None, cores=None):
+    """The ring table with the prover's and the verifier's time split per
+    ring, per message and per proof (parse_ring_split), single-threaded and,
+    when the log has them, multi-threaded."""
+    for title, sp in (("single-threaded", split),
+                      (f"{cores[1]} threads" if cores else "multi-threaded",
+                       par_split or {})):
+        rows = []
+        for s, label in (("ml", "ML-DSA"), ("fn", "Falcon")):
+            for arm in ("native", "carrier"):
+                for r in RING_SIZES:
+                    g = sp.get(f"gh-{s}-ring-{arm}-{r}")
+                    if g is None:
+                        continue
+                    rows.append([f"{label} {arm}", str(r)]
+                                + [f"{g[k]:.1f}" for k in RING_SPLIT_KEYS])
+        if not rows:
+            continue
+        print(f"## GordieHowe ring signatures per ring, per message and per "
+              f"proof ({title})\n")
+        print(f"Medians over the {TRIALS} measured trials, each figure its own "
+              "median (so a row's three parts add up to its total within the "
+              "trials' spread; in every trial they add up exactly). Per ring "
+              "is the work that depends on the ring's keys alone, which every "
+              "proof on the ring could reuse: the statement's prepare (the "
+              "keys' packing and codecs and their cached decode: ML-DSA's tr "
+              "and key rows, Falcon's key values) and any other public value "
+              "computed from the keys alone. Per message "
+              "is the work that also reads the message, which proofs of the "
+              "same message could reuse (ML-DSA's mu limbs; Falcon has none, "
+              "since its challenge c hashes the signature's salt). Per proof is "
+              "the rest of P and Verify.\n")
+        table(["Ring", "R", "Prover per ring ms", "Prover per message ms",
+               "Prover per proof ms", "Prover ms", "Verify per ring ms",
+               "Verify per message ms", "Verify per proof ms", "Verify ms"],
+              rows)
+
+
 def parallel_cores(lines):
     """report_bench's PQ_BENCH_PAR_CPUS line: (core list, K, scope "all"
     or "set"), or None."""
@@ -1261,11 +1381,16 @@ def parallel_cores(lines):
 
 # Each application with GordieHowe (seq) and (par) rows, and its baseline.
 SEQ_PAR_GROUPS = (
-    ("ML-DSA-44 proof of possession", "ml-split", ("gh-ml-native", "gh-ml-emulated")),
-    ("Falcon-512 proof of possession", "fn-split-native", ("gh-fn-native", "gh-fn-emulated")),
-    ("Falcon-512 emulated, against the emulated baseline", "fn-split-emulated", ("gh-fn-emulated",)),
-    ("ML-DSA-44 ring", None, tuple(f"gh-ml-ring-{a}-{r}" for a in ("native", "carrier") for r in RING_SIZES)),
-    ("Falcon-512 ring", None, tuple(f"gh-fn-ring-{a}-{r}" for a in ("native", "carrier") for r in RING_SIZES)),
+    *((f"{n} proof of possession", f"{t}-split", (f"gh-{t}-native", f"gh-{t}-emulated"))
+      for t, n in ML_SETS),
+    *(group for t, n in FN_SETS for group in (
+        (f"{n} proof of possession", f"{t}-split-native",
+         (f"gh-{t}-native", f"gh-{t}-emulated")),
+        (f"{n} emulated, against the emulated baseline", f"{t}-split-emulated",
+         (f"gh-{t}-emulated",)))),
+    *((f"{n} ring", None, tuple(f"gh-{t}-ring-{a}-{r}" for a in ("native", "carrier")
+                                for r in RING_SIZES))
+      for t, n in SETS),
     ("ECDSA mDL", "mdoc-v7", ("gh-mdoc",)),
     *((f"Post-quantum mDL, {n} attribute{'s' * (n > 1)}", f"pq-mdoc-{n}",
        tuple(f"gh-pqmdl-{arm}-{n}" for arm, _ in PQMDOC_ARMS)) for n in PQMDOC_ATTRS),
@@ -1355,10 +1480,10 @@ def render_seq_par(results, par, cores):
           f"GordieHowe (par) uses {core_note}, GordieHowe (seq) one core. "
           "Verify includes proof parsing on both sides: GordieHowe's verify "
           "call parses its proof, and a baseline's verify adds its driver's "
-          "proof-reading detail to verify_ms (BASELINE_READ). The ML-DSA "
-          "split, Falcon split and post-quantum mDL baselines verify the "
-          "prover's in-memory proofs and parse nothing. The next table gives "
-          "the parsing apart.\n")
+          "proof-reading detail to verify_ms (BASELINE_READ), and the Falcon "
+          "split baselines' verify_ms parses their proofs itself. The "
+          "post-quantum mDL baseline verifies the prover's in-memory proofs "
+          "and parses nothing. The next table gives the parsing apart.\n")
 
 
 def render_parsing(results, split_lines, base_parse):
@@ -1713,12 +1838,12 @@ def render_keccak(results):
 SPLIT_CASES = (
     ("gh-mdoc", "mdoc-v7"),
     *sorted(RSA_CASES.values(), key=lambda nb: BASELINES.index(nb[1])),
-    ("gh-ml-native", "ml-split"),
-    ("gh-ml-emulated", "ml-split"),
+    *((f"gh-{t}-{arm}", f"{t}-split") for t, _ in ML_SETS
+      for arm in ("native", "emulated")),
     *((f"gh-pqmdl-{arm}-{n}", f"pq-mdoc-{n}") for n in PQMDOC_ATTRS
       for arm, _ in PQMDOC_ARMS),
-    ("gh-fn-native", "fn-split-native"),
-    ("gh-fn-emulated", "fn-split-emulated"),
+    *((f"gh-{t}-{arm}", f"{t}-split-{arm}") for t, _ in FN_SETS
+      for arm in ("native", "emulated")),
     *((name, None) for name in COMPOSITE_SYSTEMS.values()),
     *((name, None) for name in GH_RING),
 )
@@ -1745,11 +1870,11 @@ _SPLIT_RSA = {
 BASELINE_SPLIT = {
     "mdoc-v7": _SPLIT_MDOC,
     "mdoc-v7-nomac": _SPLIT_MDOC,
-    "ml-split": _SPLIT_HA,
+    **{f"{t}-split": _SPLIT_HA for t, _ in ML_SETS},
     "ml-split-nomac": _SPLIT_HA,
     **{f"pq-mdoc-{n}": _SPLIT_HA for n in PQMDOC_ATTRS},
-    "fn-split-native": _SPLIT_FALCON,
-    "fn-split-emulated": _SPLIT_FALCON,
+    **{f"{t}-split-{arm}": _SPLIT_FALCON for t, _ in FN_SETS
+       for arm in ("native", "emulated")},
     "rsa-fp128-64": _SPLIT_RSA,
     "rsa-fp128-2048": _SPLIT_RSA,
 }
@@ -2527,6 +2652,9 @@ if __name__ == "__main__":
         render_parsing(results, split_lines, base_parse)
         gh = parse_gordiehowe(lines)
         render_gordiehowe(results, gh)
+        render_ring_split(parse_ring_split(lines),
+                          parse_ring_split(lines, "multi"),
+                          parallel_cores(lines))
         if "--binius" in options:
             binius_meta, binius_runs = parse_binius(options["--binius"])
             render_binius(results, par, lines, (binius_meta, binius_runs))

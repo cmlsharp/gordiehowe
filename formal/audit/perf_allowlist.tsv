@@ -1,0 +1,14 @@
+# The performance allowlist and backlog (audit/PERF.md): declarations over the budget of
+# scripts/perf_gate.py, sorted by max(elab_s, kernel_s), descending. The top entries are
+# the first targets for improvement. Every entry needs a reason.
+declaration	module	elab_s	kernel_s	budget_s	reason	fix_note
+GordieHowe.Quantum.ReqQueryAlg.wsSlice_preVLog_congr	GordieHowe.Model.Quantum.Interactive.CompressedSimReindex	0.4	18.5	23.2	pre-existing	kernel check
+GordieHowe.MLDSA.Regularity.envelope_seven_mldsa87	GordieHowe.Applications.MLDSA.Regularity.EnvelopeSeven	17.7	0.3	22.1	pre-existing	elaboration, 16.9 s of it in the IR interpreter (decide/#eval)
+GordieHowe.RingSignature.Insider.simProb_extAdv_seAlg_eq_zk	GordieHowe.Applications.Ring.RingForgerZK	10.5	14.1	17.7	pre-existing	slow elaboration and kernel check
+GordieHowe.RealizedProgram.tail_holds_of_honest	GordieHowe.Language.Honest.Source	11.8	0.2	14.8	pre-existing	elaboration, 9.6 s of it in the IR interpreter (decide/#eval)
+GordieHowe.RingSignature.completeWithin_ofBase	GordieHowe.Model.RingSignature.BaseCompleteness	11.3	0.0	14.1	pre-existing	elaboration
+GordieHowe.RealizedProgram.holdsWith_mod_of_grouped	GordieHowe.Language.Realizations.RealizeGrouped	10.7	0.2	13.4	pre-existing	elaboration, 9.1 s of it in the IR interpreter (decide/#eval)
+GordieHowe.RealizedProgram.holdsWith_mod_of_grouped_named	GordieHowe.Language.Realizations.RealizeGrouped	10.7	0.2	13.4	pre-existing	elaboration, 9.1 s of it in the IR interpreter (decide/#eval)
+GordieHowe.Quantum.AdaptiveIAlg.proveFoldedProb_eq	GordieHowe.Model.Quantum.Interactive.QueryFreeTest	10.5	0.0	13.2	at the budget: 9.4 s on develop, 9.6 s profiled alone, 10.5 s under 48-way co-running	elaboration; not yet diagnosed
+GordieHowe.MLDSA.Regularity.envelope_seven_mldsa65	GordieHowe.Applications.MLDSA.Regularity.EnvelopeSeven	10.4	0.2	13.1	pre-existing	elaboration, 9.8 s of it in the IR interpreter (decide/#eval)
+GordieHowe.SPBCS.simExtractionExpansion_absorbTab_next_congr	GordieHowe.Applications.Ring.RingForgerZK	1.0	7.6	9.5	pre-existing	kernel check

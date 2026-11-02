@@ -128,11 +128,6 @@ struct ProgramData {
   // Each domain's field in the program's field list (Lean `domainField`).
   std::vector<size_t> domain_fields;
   std::string text;
-  // The honest strategy's certificate as its Lean definition
-  // (print_certificates): the lowerings' record of each predicate's MAC
-  // site, each value's bound record and each predicate's quotient-digit
-  // lookups.
-  std::string cert_defs;
   // The derivations' module (print_derivations_module), and each
   // predicate without a derivation with its gap.
   std::string derivs;
@@ -216,7 +211,10 @@ inline ProgramData data_of(const ir::Program &p, std::string text) {
     if (q.body == ir::Predicate::kEqual) {
       o.target = Printer::target(q.target);
       if (q.target.kind == ir::Target::kGkr) o.circuit = q.target.id;
-    } else if (q.body == ir::Predicate::kMod && q.mod.form == ir::ModForm::kInteger &&
+    } else if (q.body == ir::Predicate::kMod &&
+               (q.mod.form == ir::ModForm::kInteger ||
+                q.mod.form == ir::ModForm::kProduct ||
+                q.mod.form == ir::ModForm::kSpectralProduct) &&
                q.mod.target) {
       o.target = Printer::target(*q.mod.target);
       if (q.mod.target->kind == ir::Target::kGkr) o.circuit = q.mod.target->id;
@@ -310,7 +308,6 @@ ProgramData build_program(const BasicCompiledSystem<S> &cs,
   for (size_t i = 0; i < c.deriv_gaps.size(); ++i)
     if (!c.deriv_gaps[i].empty())
       out.deriv_gaps.push_back({p.predicates.at(i).name, c.deriv_gaps[i]});
-  out.cert_defs = print_certificates(c);
   return out;
 }
 template <class S>
@@ -597,9 +594,45 @@ inline std::vector<std::string> bracket_items(const std::string &s, size_t i) {
   return out;
 }
 
+// The items of the list definition NM in module text T, through the
+// chunks it continues in (program_printer.h's chained_chunks): a
+// definition written `%[x, … | next]` continues with the items of NEXT, a
+// plain literal ends the list. Appends them to OUT; false when a
+// definition is missing or malformed.
+inline bool chained_items(const std::string &t, std::string nm,
+                          std::vector<std::string> &out) {
+  auto trim = [](const std::string &x) {
+    const size_t a = x.find_first_not_of(" \n");
+    return a == std::string::npos ? std::string()
+                                  : x.substr(a, x.find_last_not_of(" \n") + 1 - a);
+  };
+  // at most one definition per item read, so the walk ends on a cycle
+  for (size_t seen = 0; seen <= t.size(); ++seen) {
+    const size_t d = t.find("\ndef " + trim(nm) + " : List ");
+    if (d == std::string::npos) return false;
+    const std::string body = " :=\n  ";
+    const size_t b = t.find(body, d);
+    if (b == std::string::npos) return false;
+    const size_t i = b + body.size();
+    const bool chained = t.compare(i, 2, "%[") == 0;
+    auto xs = bracket_items(t, chained ? i + 1 : i);
+    if (!chained) {
+      if (t[i] != '[') return false;
+      out.insert(out.end(), xs.begin(), xs.end());
+      return true;
+    }
+    const size_t bar = xs.empty() ? std::string::npos : xs.back().rfind('|');
+    if (bar == std::string::npos) return false;
+    nm = trim(xs.back().substr(bar + 1));
+    xs.back() = trim(xs.back().substr(0, bar));
+    out.insert(out.end(), xs.begin(), xs.end());
+  }
+  return false;
+}
+
 // The items of the program's list FIELD in module text T: its literal's,
-// or its chunks' (each a definition `<field>Chunk<k>`, appended with ++),
-// in order.
+// or its chunks' (definitions `<field>Chunk<k>` chained by their tails,
+// the field naming the first), in order.
 inline std::vector<std::string> program_list_items(const std::string &t,
                                                    const std::string &field) {
   std::vector<std::string> out;
@@ -609,18 +642,7 @@ inline std::vector<std::string> program_list_items(const std::string &t,
   const size_t v = at + head.size();
   if (t[v] == '[') return bracket_items(t, v);
   const size_t end = t.find(",\n", v);
-  const std::string chunks = t.substr(v, end - v);
-  for (size_t b = 0; b < chunks.size();) {
-    size_t e = chunks.find(" ++ ", b);
-    if (e == std::string::npos) e = chunks.size();
-    const std::string nm = chunks.substr(b, e - b);
-    const size_t d = t.find("\ndef " + nm + " : List ");
-    if (d != std::string::npos) {
-      const auto xs = bracket_items(t, t.find("  [", d) + 2);
-      out.insert(out.end(), xs.begin(), xs.end());
-    }
-    b = e + 4;
-  }
+  chained_items(t, t.substr(v, end - v), out);
   return out;
 }
 
@@ -729,34 +751,47 @@ inline std::vector<std::string> index_map_errors(const ProgramData &p) {
     err.push_back("the text writes " + std::to_string(k) + " index maps, the "
                   "program has " + std::to_string(p.index_maps.size()));
   // Constants: each value's ConstRuns.expand decodes to the value's
-  // entries, its runs in place or in the constRuns definitions it appends.
+  // entries, its runs in place or in the chained constRuns definitions it
+  // names; a constant written as its entries names the first of its
+  // chained constEntries definitions.
   const auto vals = program_list_items(t, "values");
   for (size_t v = 0; v < std::min(vals.size(), p.values.size()); ++v) {
     const std::string &body = vals[v];
     const std::string ce = "ConstRuns.expand ";
     const size_t c = body.find(ce);
+    const size_t pc = body.find(".constant constEntries");
     const bool is_const = p.values[v].kind == "constant";
-    if ((c != std::string::npos) != is_const) {
+    if ((c != std::string::npos || pc != std::string::npos) != is_const) {
       err.push_back("value " + std::to_string(v) + "'s constant form disagrees");
       continue;
     }
     if (!is_const) continue;
     bool ok = true;
     std::vector<std::string> got;
-    // The runs of the list literal at S[I] ((x, c) pairs, x and c raw
-    // literals or not), each run of length one when ONES (values only).
-    auto runs_at = [&got](const std::string &s, size_t i, bool ones, bool &good) {
+    if (c == std::string::npos) {
+      const size_t i = pc + std::string(".constant ").size();
+      std::vector<std::string> xs;
+      ok = chained_items(t, body.substr(i, body.find(',', i) - i), xs);
+      for (std::string x : xs) {
+        const std::string l = "(nat_lit ";
+        if (x.rfind(l, 0) == 0 && x.size() > l.size() && x.back() == ')')
+          x = x.substr(l.size(), x.size() - l.size() - 1);
+        got.push_back(x);
+      }
+      if (!ok || got != p.values[v].entries)
+        err.push_back("constant value '" + p.values[v].name +
+                      "' does not decode to its entries");
+      continue;
+    }
+    // The runs RS ((x, c) pairs, x and c raw literals or not), expanded.
+    auto runs_of = [&got](const std::vector<std::string> &rs, bool &good) {
       auto unlit = [](std::string x) {
         const std::string l = "(nat_lit ";
         if (x.rfind(l, 0) == 0 && x.size() > l.size() && x.back() == ')')
           x = x.substr(l.size(), x.size() - l.size() - 1);
         return x;
       };
-      for (const std::string &it : bracket_items(s, i)) {
-        if (ones) {
-          got.push_back(unlit(it));
-          continue;
-        }
+      for (const std::string &it : rs) {
         const auto xc = bracket_items("[" + it.substr(1, it.size() - 2) + "]", 0);
         if (it.size() < 2 || it.front() != '(' || xc.size() != 2) {
           good = false;
@@ -771,29 +806,13 @@ inline std::vector<std::string> index_map_errors(const ProgramData &p) {
           got.push_back(unlit(xc[0]));
       }
     };
-    size_t i = c + ce.size();
+    const size_t i = c + ce.size();
     if (body[i] == '[') {
-      runs_at(body, i, false, ok);
+      runs_of(bracket_items(body, i), ok);
     } else {
-      size_t e = body.find(')', i);
-      std::string names = body.substr(i, e - i);
-      if (!names.empty() && names[0] == '(') names = names.substr(1);
-      for (size_t b = 0; ok && b < names.size();) {
-        size_t f = names.find(" ++ ", b);
-        if (f == std::string::npos) f = names.size();
-        const std::string nm = names.substr(b, f - b);
-        const std::string dh = "\ndef " + nm + " : List (Nat × Nat) :=\n  ";
-        const size_t d = t.find(dh);
-        const std::string mp = "List.map (fun x => (x, 1)) ";
-        if (d == std::string::npos) {
-          ok = false;
-        } else if (t.compare(d + dh.size(), mp.size(), mp) == 0) {
-          runs_at(t, d + dh.size() + mp.size(), true, ok);
-        } else {
-          runs_at(t, d + dh.size(), false, ok);
-        }
-        b = f + 4;
-      }
+      std::vector<std::string> rs;
+      ok = chained_items(t, body.substr(i, body.find(')', i) - i), rs);
+      if (ok) runs_of(rs, ok);
     }
     if (!ok || got != p.values[v].entries)
       err.push_back("constant value '" + p.values[v].name +

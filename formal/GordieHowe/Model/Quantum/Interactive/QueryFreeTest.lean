@@ -33,12 +33,12 @@ namespace AdaptiveIAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  {A : AdaptiveIAlg X Y Req Resp O}
+  {shA : AlgShape X Y Req Resp} {A : AdaptiveIAlg shA O}
 
 /-- **A query-free test of the residual state** (Unruh 2017, Definition 14, p. 21, the test
 `Π_{x‖π}` without oracle queries): a channel on the adversary's registers and the outcome, a
 predicate of the workspace measured in the computational basis afterwards. -/
-structure QFTest (A : AdaptiveIAlg X Y Req Resp O) where
+structure QFTest {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O) where
   /-- The index type of the channel's Kraus operators. -/
   R : Type
   [instFintypeR : Fintype R]
@@ -92,6 +92,11 @@ theorem lifts_step {k : StepIdx A.slots A.post} (hk : (k : ℕ) < A.slots + A.po
   have hcnt : ((A.withTest T.toQTest).cntKraus k).Lifts (cntCopy T) (A.cntKraus k) :=
     (hcopy.tensorId (Fin (A.budget + 2)) (E₂ := liftProd A.copySplit _) fun _ _ => rfl).reindex
       fun _ => rfl
+  rw [AdaptiveIAlg.toKindAlg_step_eq]
+  -- TODO(unbundle-M4): the step of `(A.withTest T.toQTest).toKindAlg` is indexed by `A`'s `k`,
+  -- so its shape argument is spelled `(A.withTest T.toQTest).toShape.toKindS` where the lemma
+  -- has the shape function; `rw` does not match the two spellings and `erw` bridges them.
+  erw [AdaptiveIAlg.toKindAlg_step_eq]
   change KrausMap.Lifts (cntCopy T)
     (if (k : ℕ) < A.slots then (((A.withTest T.toQTest).cntKraus k).restrict
       (A.withTest T.toQTest).inBudget).permConj (Equiv.refl _) (A.withTest T.toQTest).cntShift
@@ -109,7 +114,7 @@ theorem lifts_step {k : StepIdx A.slots A.post} (hk : (k : ℕ) < A.slots + A.po
   have hτ : ∀ x, cntCopy T ((A.withTest T.toQTest).cntShift x) =
       (A.cntShift (cntCopy T x).1, (cntCopy T x).2) := fun x => by
     obtain ⟨⟨⟨⟨w, c⟩, n⟩, rq, rs⟩, pr⟩ := x
-    simp only [cntShift, cntCopy, Equiv.prodCongr_apply, Prod.map,
+    simp only [cntShift, AlgShape.cntShift, cntCopy, Equiv.prodCongr_apply, Prod.map,
       Equiv.prodShear_apply, Equiv.refl_apply]
     rfl
   exact h1.permConj hσ (perm_symm_lift _ hτ)
@@ -191,12 +196,12 @@ theorem lifted_postCirc [Nonempty X] [AddGroup Y] (b : Fin A.post) :
     (lifted_advQueries T C fun u => A.toKindAlg.postAss C u.chal)
 
 /-- **The composed circuit before the junction**: the slots and the post batches. -/
-noncomputable def preCirc [Nonempty X] [AddGroup Y] (B : KindAlg X Y Req Resp O) :
+noncomputable def preCirc [Nonempty X] [AddGroup Y] {ksB : KindShape X Y Req Resp} (B : KindAlg ksB O) :
     ReprogrammedCircuit (B.CW C) X Y :=
   ReprogrammedCircuit.concat ((List.finRange B.slots).map fun j => B.slotCircBoth C j) ++
     ReprogrammedCircuit.concat ((List.finRange B.post).map (B.postCirc C))
 
-theorem fullCircBoth_eq [Nonempty X] [AddGroup Y] (B : KindAlg X Y Req Resp O) :
+theorem fullCircBoth_eq [Nonempty X] [AddGroup Y] {ksB : KindShape X Y Req Resp} (B : KindAlg ksB O) :
     B.fullCircBoth C = preCirc C B ++ .kraus (B.advKraus C lastStep) .nil :=
   rfl
 
@@ -248,7 +253,7 @@ theorem initSys_withTest [Nonempty X] [AddGroup Y] [Nonempty Y] :
 
 section Composed
 
-variable (A₀ : AdaptiveIAlg X Y Req Resp O)
+variable {shA₀ : AlgShape X Y Req Resp} (A₀ : AdaptiveIAlg shA₀ O)
 
 /-- **The composed registers of `A₀.toKindAlg`** as the adversary's registers and the rest (its
 query counter, the challenger's registers and the query register). -/
@@ -295,7 +300,8 @@ theorem lifts_advKraus_last :
   have h1 := advKraus_eq_composedLift C (A.withTest T.toQTest) hk
   have hl : ((lastStep : StepIdx (A.withTest T.toQTest).slots (A.withTest T.toQTest).post) : ℕ) =
       A.slots + A.post := by
-    simp [withTest, QFTest.toQTest]
+    simp only [Fin.val_mk, AdaptiveIAlg.slots, AdaptiveIAlg.post, AlgShape.withTestS, QFTest.toQTest]
+    omega
   have hstep : (A.withTest T.toQTest).step lastStep =
       (junction T.toQTest).embedIdx (A.embAT T.toQTest.R) := by
     show withTestStep T.toQTest lastStep = _
@@ -309,7 +315,6 @@ theorem lifts_advKraus_last :
       exact KrausMap.embedIdx_apply _ _ ρ
   exact h2.congr_left fun ρ => by
     rw [h1]
-    exact rfl
 
 /-- **The block of a lifted state at the rest of the composed registers of `A^Π`** is the block of
 `A`'s state with the copy register. -/
@@ -385,7 +390,6 @@ theorem lifts_advKraus_last_self :
   have h1 := advKraus_eq_composedLift C A hk
   exact (lifts_composedLift C A (A.step lastStep)).congr_left fun ρ => by
     rw [h1]
-    exact rfl
 
 omit [Nonempty Y] in
 /-- **The final state of `A`'s composition, block by block**: at the rest `z` of the registers,
@@ -428,7 +432,7 @@ end Run
 
 section Outputs
 
-variable (A₀ : AdaptiveIAlg X Y Req Resp O)
+variable {shA₀ : AlgShape X Y Req Resp} (A₀ : AdaptiveIAlg shA₀ O)
 
 open Classical in
 /-- **The outputs of the adversary's workspaces.** -/
@@ -572,7 +576,7 @@ theorem sum_diag_withTest (H : X → Y)
 
 /-- **The final state of a composition** is the run of its circuit on the initial state, with the
 clean ancilla. -/
-theorem final_composeBothOut {B : KindAlg X Y Req Resp O} {O' : Type} (f : B.CW C → O') (H : X → Y) :
+theorem final_composeBothOut {ksB : KindShape X Y Req Resp} {B : KindAlg ksB O} {O' : Type} (f : B.CW C → O') (H : X → Y) :
     (B.composeBothOut C f).final H =
       liftMat (ancSplit (B.CW C) X Y) ((B.fullCircBoth C).run H (B.initSys C).mat)
         (reprogAnc KindAlg.x₀) := by

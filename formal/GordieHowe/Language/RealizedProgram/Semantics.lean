@@ -7,6 +7,7 @@ public import GordieHowe.Language.RealizedProgram
 public import GordieHowe.Language.RealizedProgram.Ops
 public import GordieHowe.Language.Realizations.Lowering
 public import GordieHowe.Language.Realizations.Range
+public import GordieHoweNative.Language.RealizedProgram.Semantics
 
 @[expose] public section
 
@@ -52,6 +53,9 @@ The meaning of a program (`GordieHowe.RealizedProgram`, `GordieHowe/Language/Rea
   challenge is the product of the program's challenges of that phase, each a vector of its size
   drawn by its sampler; the late values are the late value nodes in identifier order, each masked
   over its pad space.
+
+The definitions are in `GordieHoweNative/Language/RealizedProgram/Semantics.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -210,51 +214,14 @@ namespace NamedOp
 
 variable (ir : RealizedProgram)
 
-/-- **The block width of a named operator**: the coordinates of one block of its operand
-(`n` for the transforms and convolutions, `L·n` for `polyMatVec`, `nch·w` for `macConv`, `w` for
-`sum`, `k` for `fromDigits`, `1` for `scale`). -/
-def cols : NamedOp → ℕ
-  | .negacyclicConv h _ => (ir.value h).size
-  | .polyMatVec a K L _ => L * ((ir.value a).size / (K * L))
-  | .polyBroadcast t K _ => (ir.value t).size / K
-  | .ntt n _ _ => n
-  | .inverseNtt n _ => n
-  | .nttTranspose n _ => n
-  | .rowDot _ _ W => W
-  | .macConv _ w nch _ => nch * w
-  | .acyclicConv _ lx => lx
-  | .diagonal d => (ir.value d).size
-  | .scale _ => 1
-  | .constDiagonal d => (ir.value d).size
-  | .sum w => w
-  | .fromDigits k _ => k
-  | .batched b op => b * cols op
-
-/-- **The output width of a named operator** on one block. -/
-def rows : NamedOp → ℕ
-  | .negacyclicConv h _ => (ir.value h).size
-  | .polyMatVec a K L _ => K * ((ir.value a).size / (K * L))
-  | .polyBroadcast t _ _ => (ir.value t).size
-  | .ntt n _ _ => n
-  | .inverseNtt n _ => n
-  | .nttTranspose n _ => n
-  | .rowDot _ R _ => R
-  | .macConv _ w _ _ => w
-  | .acyclicConv h lx => lx + (ir.value h).size - 1
-  | .diagonal d => (ir.value d).size
-  | .scale _ => 1
-  | .constDiagonal d => (ir.value d).size
-  | .sum _ => 1
-  | .fromDigits _ _ => 1
-  | .batched b op => b * rows op
-
 variable {I : Interp}
 
 /-- **A polynomial operand in its form**: its coefficients, or the inverse transform of its
-scheme-order spectrum at `ψ`. -/
+spectrum at `ψ`, in scheme order or in natural order. -/
 def formPoly (f n : ℕ) (h : ℕ → (I f).K) : ConvForm → ℕ → (I f).K
   | .coefficients => h
   | .ntt psi => Ops.inverseNtt n ((I f).decode psi) h
+  | .nttNatural psi => Ops.inverseNttNatural n ((I f).decode psi) h
 
 /-- **A named operator on one block**, in field `f`, its public operands read by `leaf` (read in
 field `f`; `macConv` reads the bits of its powers `r_c` in their own field, the MAC field's
@@ -325,32 +292,6 @@ def LogicOp.eval {R : Type*} [CommRing R] (w : ℕ) (args : List (ℕ → R)) (j
 /-! ## Expressions -/
 
 variable (ir : RealizedProgram)
-
-mutual
-
-/-- **The length of an expression** (its number of coordinates), the shared expressions having
-lengths `rl`. -/
-def Expr.len (rl : ℕ → ℕ) : Expr → ℕ
-  | .leaf v => (ir.value v).size
-  | .add e _ => Expr.len rl e
-  | .sub e _ => Expr.len rl e
-  | .scale _ e => Expr.len rl e
-  | .mul e _ => Expr.len rl e
-  | .reindex idx _ => idx.size
-  | .concat e e' => Expr.len rl e + Expr.len rl e'
-  | .linear rows _ => rows.length
-  | .prod n e => Expr.len rl e / n
-  | .mux _ t _ => Expr.len rl t
-  | .apply op e => Expr.len rl e / NamedOp.cols ir op * NamedOp.rows ir op
-  | .ref k => rl k
-  | .logic _ w args => (Expr.lenList rl args).headD 0 / w
-
-/-- The lengths of a list of expressions. -/
-def Expr.lenList (rl : ℕ → ℕ) : List Expr → List ℕ
-  | [] => []
-  | e :: es => Expr.len rl e :: Expr.lenList rl es
-
-end
 
 variable {I : Interp}
 
@@ -452,12 +393,6 @@ instance (k : Fin ir.phases) : DecidableEq (ir.ChalAt k) := Subtype.instDecidabl
 abbrev ChalVal (j : ℕ) : Type :=
   Fin (ir.challenge j).size → (I (ir.chalField j)).SamplerTy (ir.challenge j).sampler
 
-/-- **A late value node** of a phase the program has. -/
-def IsLate (v : ℕ) : Prop :=
-  (ir.value v).kind.isLate = true ∧ 1 ≤ (ir.value v).phase ∧ (ir.value v).phase ≤ ir.phases
-
-instance (v : ℕ) : Decidable (ir.IsLate v) := inferInstanceAs (Decidable (_ ∧ _))
-
 /-- **The late values**: the late value nodes, in identifier order. -/
 def Late : Type := {v : Fin ir.values.length // ir.IsLate v}
 
@@ -537,15 +472,6 @@ def layoutEnv (x : ir.Valuation I) (a : ir.Assignment I) (r : (ir.layout I).Run)
 
 /-! ## Shared expressions -/
 
-/-- **The lengths of the shared expressions**, with `n` levels (`0`: every length `0`). -/
-def refLen : ℕ → ℕ → ℕ
-  | 0, _ => 0
-  | n + 1, k => Expr.len ir (refLen n) (ir.expr k)
-
-/-- **The length of an expression**, its shared expressions' lengths at the program's depth (the
-number of shared expressions, enough when each reads only entries of smaller index). -/
-def exprLen (e : Expr) : ℕ := Expr.len ir (ir.refLen ir.exprs.length) e
-
 variable {I}
 
 /-- **Coordinate `i` of shared expression `k`** in field `f`, reading values by `leaf`, with `n`
@@ -560,9 +486,6 @@ def evalE (leaf : ir.Valuation I) (f : ℕ) (e : Expr) (i : ℕ) : (I f).K :=
   Expr.eval ir f leaf (ir.refVal leaf ir.exprs.length f) (ir.refLen ir.exprs.length) e i
 
 /-! ## Reading values -/
-
-/-- **The fuel of the program**: one more than its number of values. -/
-def fuel : ℕ := ir.values.length + 1
 
 /-- **Coordinate `i` of a bit view** of the words `sel` of value `w`, `e` bits per word, the words
 read by `rd`: bit `i mod e` of word `sel[i / e]` in the basis of `w`'s subfield. -/
@@ -714,7 +637,31 @@ instance (rd : ir.Valuation I) (d : ℕ) (records : List Expr) (i : ℕ) (set : 
     Decidable (ir.InSetWith rd d records i set) := by
   cases set <;> unfold InSetWith <;> infer_instance
 
-/-- **A predicate body holds**, reading values by `rd`. A cross-field `equal(x, y)` (`x` in domain
+/-- **The quotient equation of a product form**, reading values by `rd`: for a `mod_q` `e ≡ e'`
+whose realization is the product form (`ModForm.isProduct`) with a quotient `Q` (a value the
+program declares, read by the source program) and `q > 2`, at every coordinate the integers satisfy
+`e − e' = q (quotientLo + Q)` with `Q ∈ [0, qmax]`, and the integer readings of `e`, `e'` and `Q`
+are their field elements' (they cast to them); nothing for any other `mod_q`. -/
+def ProductQuotWith (rd : ir.Valuation I) (d q : ℕ) (e e' : Expr) (real : ModRealization) :
+    Prop :=
+  match real.quotient with
+  | some Q => real.form.isProduct = true → 2 < q → ∀ i < ir.exprLen e,
+      ir.evalIntWith rd d e i - ir.evalIntWith rd d e' i =
+          q * (real.quotientLo + ir.evalIntWith rd d Q i) ∧
+        0 ≤ ir.evalIntWith rd d Q i ∧ ir.evalIntWith rd d Q i ≤ real.qmax ∧
+        ((ir.evalIntWith rd d e i : ℤ) : (I (ir.domainField d)).K) = ir.evalWith rd d e i ∧
+        ((ir.evalIntWith rd d e' i : ℤ) : (I (ir.domainField d)).K) = ir.evalWith rd d e' i ∧
+        ((ir.evalIntWith rd d Q i : ℤ) : (I (ir.domainField d)).K) = ir.evalWith rd d Q i
+  | none => True
+
+/-- The quotient equation of a product form is decidable. -/
+instance (rd : ir.Valuation I) (d q : ℕ) (e e' : Expr) (real : ModRealization) :
+    Decidable (ir.ProductQuotWith rd d q e e' real) := by
+  unfold ProductQuotWith
+  split <;> infer_instance
+
+/-- **A predicate body holds**, reading values by `rd`. A `mod_q` holds on the integers, and a
+product form also states its quotient's equation (`ProductQuotWith`). A cross-field `equal(x, y)` (`x` in domain
 `dx`, `y` in domain `dy`) holds in the compiler's contract (compiler/mac.h): every reading of `y` is
 below `2^width`, and where every reading of `x` is, the readings of `x` and `y` are equal. The MAC
 binds the packed chunks of `x` to those of `y` and so states nothing about `x` when `x` holds field
@@ -726,8 +673,9 @@ def HoldsWith (rd : ir.Valuation I) : PredBody → Prop
   | .equal d e e' _ => ∀ i < ir.exprLen e, ir.evalWith rd d e i = ir.evalWith rd d e' i
   | .mem d records set _ =>
       ∀ i < ir.exprLen (records.headD default), ir.InSetWith rd d records i set
-  | .mod d q e e' _ =>
-      ∀ i < ir.exprLen e, (q : ℤ) ∣ ir.evalIntWith rd d e i - ir.evalIntWith rd d e' i
+  | .mod d q e e' real =>
+      (∀ i < ir.exprLen e, (q : ℤ) ∣ ir.evalIntWith rd d e i - ir.evalIntWith rd d e' i) ∧
+        ir.ProductQuotWith rd d q e e' real
   | .cross dx ex dy ey k _ =>
       (∀ i < ir.exprLen ex, (I (ir.domainField dy)).toNat (ir.evalWith rd dy ey i) < 2 ^ k.width) ∧
         ((∀ i < ir.exprLen ex, (I (ir.domainField dx)).toNat (ir.evalWith rd dx ex i) < 2 ^ k.width) →
@@ -736,6 +684,29 @@ def HoldsWith (rd : ir.Valuation I) : PredBody → Prop
 
 instance (rd : ir.Valuation I) (b : PredBody) : Decidable (ir.HoldsWith rd b) := by
   cases b <;> unfold HoldsWith <;> infer_instance
+
+variable {ir} in
+/-- **A `mod_q` not in the product form, or with `q ≤ 2`, states no quotient equation.** -/
+theorem productQuotWith_of_not {rd : ir.Valuation I} {d q : ℕ} {e e' : Expr}
+    {real : ModRealization} (h : real.form.isProduct = false ∨ q ≤ 2) :
+    ir.ProductQuotWith rd d q e e' real := by
+  unfold ProductQuotWith
+  split
+  · intro h1 h2
+    rcases h with h | h
+    · rw [h] at h1
+      cases h1
+    · omega
+  · trivial
+
+variable {ir} in
+/-- **A `mod_q` not in the product form, or with `q ≤ 2`, holds** exactly when its sides' integer
+readings are congruent. -/
+theorem holdsWith_mod_iff {rd : ir.Valuation I} {d q : ℕ} {e e' : Expr} {real : ModRealization}
+    (h : real.form.isProduct = false ∨ q ≤ 2) :
+    ir.HoldsWith rd (.mod d q e e' real) ↔
+      ∀ i < ir.exprLen e, (q : ℤ) ∣ ir.evalIntWith rd d e i - ir.evalIntWith rd d e' i :=
+  ⟨fun h' => h'.1, fun h' => ⟨h', productQuotWith_of_not h⟩⟩
 
 /-- **A predicate body holds in the environment `e`**: `RealizedProgram.HoldsWith` at the environment's
 reader. -/
@@ -827,25 +798,36 @@ instance (x : ir.Valuation I) : Decidable (ir.StatementOk I x) := by
   unfold StatementOk
   infer_instance
 
-/-- Whether a value's kind is read from the statement as given: a statement input or an opaque
-statement value with no arguments. -/
-def isStmtLeaf : Kind → Bool
-  | .pub .input => true
-  | .pub (.opaque _ []) => true
-  | _ => false
+variable (I) in
+/-- **The statement values of a statement** `x`: a value computed from the statement
+(`isStmtComputed`) its function at the integer readings of its arguments' coordinates in `x`, as
+the program's reader computes it (`read`); every other value its coordinates in `x`. -/
+def stmtRead (x : ir.Valuation I) : ir.Valuation I := fun v i =>
+  match (ir.value v).kind with
+  | .pub (.opaque name (a :: as)) =>
+    (I (ir.valueField v)).decode (I.opaqueFn name
+      ((a :: as).map fun u j => (I (ir.valueField u)).toNat (x u j)) i)
+  | _ => x v i
 
-/-- **The declared statement bounds** (`Value.bound`): `(v, N)` for every value read from the
-statement as given (`isStmtLeaf`) that declares the bound `N`. -/
-def declaredRanges : List (ℕ × ℕ) :=
-  (List.range ir.values.length).filterMap fun v =>
-    if isStmtLeaf (ir.value v).kind then (ir.value v).bound.map (v, ·) else none
+variable {ir} in
+/-- **A value that is not computed from arguments reads the statement as given.** -/
+theorem stmtRead_of_isStmtLeaf (x : ir.Valuation I) {v : ℕ}
+    (h : isStmtLeaf (ir.value v).kind = true) : ir.stmtRead I x v = x v := by
+  funext i
+  unfold isStmtLeaf at h
+  split at h
+  · rename_i hk
+    simp [stmtRead, hk]
+  · rename_i name hk
+    simp [stmtRead, hk]
+  · cases h
 
 variable (I) in
 /-- **The statement lies within the declared bounds** (`declaredRanges`): every coordinate of a
-bounded statement value is the cast of a natural below its bound. -/
+bounded statement value (`stmtRead`) is the cast of a natural below its bound. -/
 def StmtBounded (x : ir.Valuation I) : Prop :=
   ∀ vN ∈ ir.declaredRanges, ∀ i < (ir.value vN.1).size,
-    ∃ n < vN.2, x vN.1 i = ((n : ℕ) : (I (ir.valueField vN.1)).K)
+    ∃ n < vN.2, ir.stmtRead I x vN.1 i = ((n : ℕ) : (I (ir.valueField vN.1)).K)
 
 variable {ir} in
 /-- **A program declaring no bound bounds every statement.** -/

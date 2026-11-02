@@ -188,6 +188,70 @@ def degAnnOkB (c : ℕ) (a : DegAnn) : Bool :=
 
 end Check
 
+/-! ## The check in ranges
+
+`degAnnOkB` splits into checks of ranges `[i, j)` of the values, the shared expressions and the
+predicates (`allIdxIn`), which join with no re-check (`…In_append`) and give the check from
+`[0, n)`, `n` at least the list's length (`degAnnOkB_of_parts`). -/
+
+section Ranges
+
+variable (ir : RealizedProgram)
+
+/-- **`degAnnOkB`'s check of the values `[i, j)`.** -/
+def degAnnValuesIn (c : ℕ) (a : DegAnn) (i j : ℕ) : Bool :=
+  allIdxIn (fun v x => match x.kind with
+    | .pub (.expr e) =>
+      decide (e.deg a.val (a.ref ir.exprs.length) ≤ a.val v) &&
+        decide (a.val v ≤ (x.degree.lookup c).getD 0)
+    | .challenge c' => decide ((if c' = c then 1 else 0) ≤ a.val v)
+    | _ => true) ir.values i j
+
+/-- **`degAnnOkB`'s check of the shared expressions `[i, j)`.** -/
+def degAnnExprsIn (a : DegAnn) (i j : ℕ) : Bool :=
+  allIdxIn (fun k e => decide (e.deg a.val (a.ref ir.exprs.length) ≤ a.ref ir.exprs.length k))
+    ir.exprs i j
+
+/-- **`degAnnOkB`'s check of the predicates `[i, j)`.** -/
+def degAnnPredsIn (c : ℕ) (a : DegAnn) (i j : ℕ) : Bool :=
+  allIdxIn (fun _ p =>
+    (p.body.exprs.all fun de => decide (de.2.deg a.val (a.ref ir.exprs.length) ≤ p.deg c)) ||
+      decide (ir.exprDegM c p.body ≤ p.deg c)) ir.predicates i j
+
+variable {ir}
+
+theorem degAnnValuesIn_append {c : ℕ} {a : DegAnn} {i j k : ℕ}
+    (h₁ : ir.degAnnValuesIn c a i j = true) (h₂ : ir.degAnnValuesIn c a j k = true) :
+    ir.degAnnValuesIn c a i k = true :=
+  allIdxIn_append h₁ h₂
+
+theorem degAnnExprsIn_append {a : DegAnn} {i j k : ℕ}
+    (h₁ : ir.degAnnExprsIn a i j = true) (h₂ : ir.degAnnExprsIn a j k = true) :
+    ir.degAnnExprsIn a i k = true :=
+  allIdxIn_append h₁ h₂
+
+theorem degAnnPredsIn_append {c : ℕ} {a : DegAnn} {i j k : ℕ}
+    (h₁ : ir.degAnnPredsIn c a i j = true) (h₂ : ir.degAnnPredsIn c a j k = true) :
+    ir.degAnnPredsIn c a i k = true :=
+  allIdxIn_append h₁ h₂
+
+/-- **`degAnnOkB` from its checks of the values, the shared expressions and the predicates**, each
+on `[0, n)` for `n` at least the list's length. -/
+theorem degAnnOkB_of_parts {c : ℕ} {a : DegAnn} {nv ne np : ℕ}
+    (hv : ir.degAnnValuesIn c a 0 nv = true) (hnv : ir.values.length ≤ nv)
+    (he : ir.degAnnExprsIn a 0 ne = true) (hne : ir.exprs.length ≤ ne)
+    (hp : ir.degAnnPredsIn c a 0 np = true) (hnp : ir.predicates.length ≤ np) :
+    ir.degAnnOkB c a = true := by
+  have hv' := allIdx_of_allIdxIn hv hnv
+  have he' := allIdx_of_allIdxIn he hne
+  have hp' := allIdx_of_allIdxIn hp hnp
+  rw [← all_eq_allIdx] at hp'
+  unfold degAnnOkB
+  rw [hv', he', hp']
+  rfl
+
+end Ranges
+
 variable {ir : RealizedProgram}
 
 /-- **The annotation's bounds cover the shared expressions' coordinates' degrees**, at value
@@ -204,7 +268,7 @@ theorem refDegAt_le_ann {a : DegAnn}
     by_cases hkl : k < ir.exprs.length
     · exact le_trans h (hk k hkl)
     · have he : ir.expr k = .leaf 0 := by
-        rw [RealizedProgram.expr, List.getD_eq_getElem?_getD, List.getElem?_eq_none (by omega)]
+        rw [expr_eq_getD, List.getD_eq_getElem?_getD, List.getElem?_eq_none (by omega)]
         rfl
       rw [he] at h ⊢
       simp only [DegAnn.ref, if_neg hkl]
@@ -220,7 +284,7 @@ theorem nodeDegAt_le_ann {c : ℕ} {a : DegAnn} (h : ir.degAnnOkB c a = true) :
   have hk' : ∀ k < ir.exprs.length,
       (ir.expr k).deg a.val (a.ref ir.exprs.length) ≤ a.ref ir.exprs.length k := fun k hkl => by
     have := hk k hkl
-    simp only [Nat.zero_add, decide_eq_true_eq] at this
+    simp only [Nat.zero_add, decide_eq_true_eq, ← expr_eq_getD] at this
     exact this
   intro n
   induction n with
@@ -231,6 +295,7 @@ theorem nodeDegAt_le_ann {c : ℕ} {a : DegAnn} (h : ir.degAnnOkB c a = true) :
     by_cases hvl : v < ir.values.length
     · have hc := hv v hvl
       simp only [Nat.zero_add] at hc
+      rw [← value_eq_getD] at hc
       change (match (ir.value v).kind with
         | .pub (.expr e) =>
           decide (e.deg a.val (a.ref ir.exprs.length) ≤ a.val v) &&
@@ -247,7 +312,7 @@ theorem nodeDegAt_le_ann {c : ℕ} {a : DegAnn} (h : ir.degAnnOkB c a = true) :
         simpa using hc
       · exact Nat.zero_le _
     · have hd : ir.value v = default := by
-        rw [RealizedProgram.value, List.getD_eq_getElem?_getD, List.getElem?_eq_none (by omega)]
+        rw [value_eq_getD, List.getD_eq_getElem?_getD, List.getElem?_eq_none (by omega)]
         rfl
       rw [hd]
       exact Nat.zero_le _
@@ -264,7 +329,7 @@ theorem degreesAtB_of_ann (hwf : ir.WellFormed) {c : ℕ} {a : DegAnn}
   have hk' : ∀ k < ir.exprs.length,
       (ir.expr k).deg a.val (a.ref ir.exprs.length) ≤ a.ref ir.exprs.length k := fun k hkl => by
     have := hk k hkl
-    simp only [Nat.zero_add, decide_eq_true_eq] at this
+    simp only [Nat.zero_add, decide_eq_true_eq, ← expr_eq_getD] at this
     exact this
   have hdeg : ∀ e i, ir.degAtOf (ir.nodeDegAt c ir.fuel) e i ≤
       e.deg a.val (a.ref ir.exprs.length) := fun e i =>
@@ -284,7 +349,7 @@ theorem degreesAtB_of_ann (hwf : ir.WellFormed) {c : ℕ} {a : DegAnn}
     intro v hvl
     have hc := hv v hvl
     simp only [Nat.zero_add] at hc ⊢
-    have hx : ir.values.getD v default = ir.value v := rfl
+    have hx : ir.values.getD v default = ir.value v := (ir.value_eq_getD v).symm
     rw [hx] at hc ⊢
     rw [Bool.or_eq_true, Bool.not_eq_true']
     cases hk : (ir.value v).kind with

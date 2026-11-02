@@ -4,25 +4,31 @@
 module
 
 public import GordieHowe.SPBCS.Verifier
+public import GordieHowe.SPBCS.Stability
+public import GordieHowe.SPBCS.Targeted
 
 @[expose] public section
 
 /-!
-# An accepted spBCS proof is an accepted proof of the compiler over the term
+# An accepted spBCS proof and the database extractor (CMS19 Proposition 8.12)
 
-A database `D` that records the spBCS verifier's queries on an accepted proof with the
-answers of `h` translates (`GordieHowe.SPBCS.trans`, `GordieHowe/SPBCS/Translate.lean`) into a database that
-records the queries of the compiler over the term (`GordieHowe.SPBCS.FullPast`) on the same proof, under the
-oracle `transOracle D h` that answers each translated query as `D` answered its preimage. Under
-that oracle the keys, chains and challenges of the compiler over the term are those of the
-spBCS verifier (`chains_transOracle`, `chalOf_transOracle`), the Merkle queries are answered
-as by `h`, and the proof is accepted (`accepts_transOracle`). So CMS19 Proposition 8.12 for the
-compiler over the term applies to the translated database (`mem_of_verify`).
+A database `D` without a digest collision that records the spBCS verifier's queries on an accepted
+proof with the answers of `h` records the proof's chains (`RecordsChains`): the chains are full
+and hold the proof's writes, and at every challenge the chain input with merges (read from `D` by
+`keyD`, with the final digests read from `D`, which are those of `h` since `D` records the final
+inputs: `recordsChains_of_verify`) and the stream are recorded, and the sampler reads the
+challenge from the stream. The transcript read from such chains is the transcript along the proof
+(`RecordsChains.extPast_eq`), so the database extractor, or the targeted extractor, returns a
+witness or `D` lies in `bad` (`mem_of_recordsChains`, `mem_of_recordsChains_targeted`; the flip
+comes from `CausalRBR.exists_flip`). The proof's leaves are those of `D`'s views
+(`openedAs_views_of_check`). `mem_of_verify`, `mem_of_verify_targeted`: CMS19 Proposition 8.12
+(p. 42), knowledge form (p. 44), for the spBCS verifier.
 -/
 
 namespace GordieHowe.SPBCS
 
 open GordieHowe.QROM GordieHowe.IOP IOP.SPTerm
+open scoped ENNReal NNReal
 
 variable {ι : Type} {t : SPTerm ι} {Mg : Merges t} {k kN kS L e : ℕ} {n : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (n j)} [∀ j i, Fintype ((P j).Challenge i)]
@@ -32,64 +38,67 @@ section
 
 variable (M : SPBCS Mg P X k kN kS L e)
 
-/-- **The oracle of the translated database**: its answer at a translated query, `h` elsewhere. -/
-def transOracle (D : ODB k kN kS L e) (h : Query k kN kS L → Out k e) : Query k kN kS L → Out k e :=
-  fun q => ((M.trans D).lookup q).getD (h q)
+/-! ### Recorded queries -/
 
-/-! ### Reading the translated database -/
+/-- `D` records `q` with the answer of `h`. -/
+def Recorded (h : Query k kN kS L → Out k e) (D : ODB k kN kS L e) (q : Query k kN kS L) : Prop :=
+  D.lookup q = some (h q)
 
-section Lookup
+variable (h : Query k kN kS L → Out k e) (ss : SaltedStatement kS X) (wr : M.Writes)
 
-variable {M} {D : ODB k kN kS L e}
+/-- **The database records each branch's final input of the proof** with the answer of `h`. -/
+def RecordsFinals (D : ODB k kN kS L e) : Prop :=
+  ∀ s, Recorded h D (.transcript (M.senc.encode
+    (finalContent ss (M.chains h ss wr) (M.finals h ss wr) s)))
 
-theorem trans_lookup_of (hD : D ∉ digestCollision) {q q' : Query k kN kS L} {y : Out k e}
-    (hq : D.lookup q = some y) (hφ : M.φ D q = some q') : (M.trans D).lookup q' = some y :=
-  DB.lookup_image_of_lookup (injOnKeys_φ hD) hq hφ
+variable {M h ss wr} {D : ODB k kN kS L e}
 
-theorem transOracle_of (hD : D ∉ digestCollision) (h : Query k kN kS L → Out k e)
-    {q q' : Query k kN kS L} {y : Out k e} (hq : D.lookup q = some y) (hφ : M.φ D q = some q') :
-    M.transOracle D h q' = y := by
-  rw [transOracle, trans_lookup_of hD hq hφ, Option.getD_some]
+/-- **The final content of a proof is well formed.** -/
+theorem wf_finalContent_chains (s : Mg.Site) :
+    (finalContent ss (M.chains h ss wr) (M.finals h ss wr) s).WF n fun j => chainWF (P j) :=
+  wf_finalContent_of_sees ss _ fun q _ => ⟨chainWF_chains wr q, length_chains wr q⟩
 
-/-- Only a Merkle query translates to itself. -/
-theorem φ_eq_merkle_iff {q q' : Query k kN kS L} (hq' : (∃ a b, q' = .leaf a b) ∨ ∃ l r, q' = .node l r) :
-    M.φ D q = some q' ↔ q = q' := by
-  constructor
-  · intro h
-    cases q with
-    | leaf a b => exact Option.some_inj.1 h
-    | node l r => exact Option.some_inj.1 h
-    | transcript c =>
-      obtain ⟨_, _, _, _, _, rfl⟩ := φ_transcript_eq_some h
-      rcases hq' with ⟨_, _, h'⟩ | ⟨_, _, h'⟩ <;> cases h'
-    | xof u s =>
-      rw [φ_of_not_transcript (fun b h' => by cases h')] at h
-      rcases hq' with ⟨_, _, h'⟩ | ⟨_, _, h'⟩ <;> rw [h'] at h <;> cases h
-  · rintro rfl
-    rcases hq' with ⟨a, b, rfl⟩ | ⟨l, r, rfl⟩ <;> rfl
+/-- **The round content of a proof at a proper prefix is well formed.** -/
+theorem wf_roundContent_chains (p : t.Leaf) {l : M.Items p} (hl : chainWF (P p.label) l)
+    (hlen : l.length < n p.label) :
+    (roundContent ss (M.chains h ss wr) (M.finals h ss wr) p l).WF n fun j => chainWF (P j) :=
+  wf_roundContent_of_before ss _ (fun q _ => ⟨chainWF_chains wr q, length_chains wr q⟩) hl hlen
 
-/-- **The translated database answers a Merkle query as `D`.** -/
-theorem trans_lookup_merkle (hD : D ∉ digestCollision) {q : Query k kN kS L}
-    (hq : (∃ a b, q = .leaf a b) ∨ ∃ l r, q = .node l r) : (M.trans D).lookup q = D.lookup q := by
-  rcases hl : D.lookup q with _ | y
-  · rw [trans, DB.lookup_image]
-    refine DB.select_eq_none_of_forall fun q₀ y₀ hq₀ => ?_
-    simp only [ite_eq_right_iff, reduceCtorEq, imp_false]
-    intro h
-    rw [φ_eq_merkle_iff hq] at h
-    subst h
-    rw [hl] at hq₀
-    cases hq₀
-  · exact trans_lookup_of hD hl ((φ_eq_merkle_iff hq).2 rfl)
+/-- **The final digests read from a database that records the proof's final inputs are the
+proof's.** -/
+theorem finalsD_chains (hr : M.RecordsFinals h ss wr D) :
+    M.finalsD D ss (M.chains h ss wr) = M.finals h ss wr :=
+  finalsWith_eq_of_agree fun s => by
+    show (D.lookup (.transcript (M.senc.encode
+      (finalContent ss (M.chains h ss wr) (M.finals h ss wr) s)))).getD defaultOut = _
+    rw [hr s]
+    rfl
 
-end Lookup
+/-- **The key read from a database that records the proof's final inputs and the chain input of a
+round of `p`** is the recorded answer of `h` there. -/
+theorem keyD_chains (hr : M.RecordsFinals h ss wr D) (p : t.Leaf) (l : M.Items p)
+    (hin : Recorded h D (.transcript (M.senc.encode
+      (roundContent ss (M.chains h ss wr) (M.finals h ss wr) p l)))) :
+    M.keyD D ss (M.chains h ss wr) p l =
+      some (h (.transcript (M.senc.encode
+        (roundContent ss (M.chains h ss wr) (M.finals h ss wr) p l)))) := by
+  have hrec : M.FinalsRecorded D ss (M.chains h ss wr) (.leaf p) := fun s _ => by
+    unfold finalInputD
+    rw [finalsD_chains hr]
+    exact DB.mem_iff_lookup.2 ⟨_, hr s⟩
+  unfold keyD inputD
+  rw [ite_eq_left hrec, finalsD_chains hr]
+  exact hin
 
-/-! ### The translated oracle computes the chains with merges -/
+end
+
+/-! ### The database records the chains of an accepted proof -/
 
 section Chains
 
-variable {M} [∀ j i, Nonempty ((P j).Challenge i)] {h : Query k kN kS L → Out k e} {x : X}
-  {π : M.NIProof} {V : X → FullTr P t → Bool} {Q : M.IOPQueries V x} {D : ODB k kN kS L e}
+variable {M : SPBCS Mg P X k kN kS L e} [∀ j i, Nonempty ((P j).Challenge i)]
+  {h : Query k kN kS L → Out k e} {x : X} {π : M.NIProof} {V : X → FullTr P t → Bool}
+  {Q : M.IOPQueries V x} {D : ODB k kN kS L e}
 
 /-- `D` records every query of the spBCS verifier on `π` with the answer of `h`. -/
 def RecordsQueries (D : ODB k kN kS L e) (h : Query k kN kS L → Out k e) (x : X) (π : M.NIProof)
@@ -104,169 +113,254 @@ theorem RecordsQueries.finals (hrec : RecordsQueries D h x π Q) :
     M.RecordsFinals h (M.ssOf x π) π.writes D :=
   fun s => hrec.of_rounds (M.mem_roundsProg_final x π h s)
 
-variable (hD : D ∉ digestCollision) (hrec : RecordsQueries D h x π Q)
-include hD hrec
+variable (M) in
+/-- **The database `D` records the chains `chs` of the proof `π` of `x` at the challenges `ch`**:
+every chain is full and holds `π`'s write at each prover round; at each challenge `c`, the chain
+input of `c` (the chains `chs` and the items of `c`'s leaf before its round, with the final
+digests read from `D`) is recorded with its final inputs, with an answer `a` (`keyD`), and the
+stream at `a`'s digest and the salt with an answer `s`, whose digest is the item of `c`'s round and
+from whose stream the sampler reads `ch c`. -/
+structure RecordsChains (D : ODB k kN kS L e) (x : X) (π : M.NIProof) (chs : M.Chains)
+    (ch : Chs P t) : Prop where
+  /-- Every chain is full. -/
+  length_eq : ∀ q, (chs q).length = n q.label
+  /-- The item of a prover round is `π`'s write. -/
+  write_eq : ∀ (p : t.Leaf) (i : (P p.label).MessageIdx),
+    (chs p)[i.1.1]? = some (.write ⟨i, π.writes p i⟩)
+  /-- The chain input and the stream of every challenge are recorded and read `ch`. -/
+  challenge : ∀ c : ChIdx P t, ∃ a s : Out k e,
+    M.keyD D (M.ssOf x π) chs c.leaf ((chs c.leaf).take c.idx.1) = some a ∧
+      D.lookup (.xof a.digest π.salt) = some s ∧
+      (chs c.leaf)[c.idx.1.1]? = some (.absorb s.digest) ∧
+      ((M.comp c.leaf.label).sampler c.idx).sample s.stream = some (ch c)
 
-/-- **The keys of the compiler over the term under the translated oracle** at the chains of the
-proof are the keys with merges. -/
-theorem key_transOracle (p : t.Leaf) (r : ℕ) (hr : r < n p.label) :
-    M.toFullPast.keyFullPast (M.transOracle D h) x π.salt p (M.ctx h (M.ssOf x π) π.writes p)
-        ((M.comp p.label).chainWith (π.writes p)
-          (M.key h (M.ssOf x π) (M.chains h (M.ssOf x π) π.writes) (M.finals h (M.ssOf x π) π.writes) p)
-          π.salt h r hr.le) =
-      M.key h (M.ssOf x π) (M.chains h (M.ssOf x π) π.writes) (M.finals h (M.ssOf x π) π.writes) p
-        ((M.comp p.label).chainWith (π.writes p)
-          (M.key h (M.ssOf x π) (M.chains h (M.ssOf x π) π.writes) (M.finals h (M.ssOf x π) π.writes) p)
-          π.salt h r hr.le) := by
-  unfold FullPast.keyFullPast
-  rw [transOracle_of hD h (hrec.of_rounds (M.mem_roundsProg_input x π h p r hr).1)
-    (φ_transcript_honest hD hrec.finals p ((M.comp p.label).chainWF_chainWith _ _ _ _ r hr.le)
-      (by rw [ComponentModel.length_chainWith]; exact hr))]
+namespace RecordsChains
+
+variable {chs : M.Chains} {ch : Chs P t} (hR : M.RecordsChains D x π chs ch)
+include hR
+
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+/-- **A prover round read from the recorded chains is the message of `π`'s write.** -/
+theorem extStep_message_eq (q : t.Leaf) (i : (P q.label).MessageIdx) :
+    M.extStep D (M.ssOf x π) chs q (chs q) i.1 i.1.2 =
+      some ((M.comp q.label).msg i (π.writes q i) ((M.comp q.label).views D i (π.writes q i))) := by
+  rw [M.extStep_message, hR.write_eq q i, Option.bind_some, (M.comp q.label).writeAt_write]
   rfl
 
-theorem point_transOracle (p : t.Leaf) (r : ℕ) (hr : r < n p.label) :
-    M.transOracle D h (.xof (M.key h (M.ssOf x π) (M.chains h (M.ssOf x π) π.writes)
-        (M.finals h (M.ssOf x π) π.writes) p
-        ((M.comp p.label).chainWith (π.writes p)
-          (M.key h (M.ssOf x π) (M.chains h (M.ssOf x π) π.writes) (M.finals h (M.ssOf x π) π.writes) p)
-          π.salt h r hr.le)) π.salt) =
-      h (.xof (M.key h (M.ssOf x π) (M.chains h (M.ssOf x π) π.writes)
-        (M.finals h (M.ssOf x π) π.writes) p
-        ((M.comp p.label).chainWith (π.writes p)
-          (M.key h (M.ssOf x π) (M.chains h (M.ssOf x π) π.writes) (M.finals h (M.ssOf x π) π.writes) p)
-          π.salt h r hr.le)) π.salt) :=
-  transOracle_of hD h (hrec.of_rounds (M.mem_roundsProg_input x π h p r hr).2)
-    (φ_of_not_transcript fun _ h' => by cases h')
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+/-- **A challenge round read from the recorded chains is the challenge `ch`.** -/
+theorem extStep_challenge_eq (c : ChIdx P t) :
+    M.extStep D (M.ssOf x π) chs c.leaf (chs c.leaf) c.idx.1 c.idx.1.2 = some (ch c) := by
+  obtain ⟨a, s, ha, hs, hit, hsm⟩ := hR.challenge c
+  rw [M.extStep_challenge, hit]
+  simp only [Option.bind_some, Item.getAbsorb, extChal, ha, hs, ↓reduceIte]
+  exact hsm
 
-/-- **A leaf's chain under the translated oracle**, in the context of the chains of the proof, is
-its chain with merges. -/
-theorem leafChain_transOracle (p : t.Leaf) (r : ℕ) (hr : r ≤ n p.label) :
-    M.toFullPast.leafChainFullPast (M.transOracle D h) x π.salt π.writes p (M.ctx h (M.ssOf x π) π.writes p) r hr =
-      (M.comp p.label).chainWith (π.writes p)
-        (M.key h (M.ssOf x π) (M.chains h (M.ssOf x π) π.writes) (M.finals h (M.ssOf x π) π.writes) p)
-        π.salt h r hr := by
-  rw [FullPast.leafChainFullPast_eq_chainWith]
-  refine ((M.comp p.label).chainWith_congr r hr fun j hj => ?_).symm
-  have hk := key_transOracle hD hrec p j (by omega)
-  have hp := point_transOracle hD hrec p j (by omega)
-  rw [hk, hp]
+/-- **Every round read from the recorded chains is the round of the transcript along `π`.** -/
+theorem extStep_eq (q : t.Leaf) (r : ℕ) (hr : r < n q.label) :
+    M.extStep D (M.ssOf x π) chs q (chs q) r hr = some (M.trT D π ch q ⟨r, hr⟩) := by
+  by_cases hd : (P q.label).dir ⟨r, hr⟩ = .P_to_V
+  · exact (hR.extStep_message_eq q ⟨⟨r, hr⟩, hd⟩).trans
+      (congrArg some (M.trT_message D π ch q ⟨⟨r, hr⟩, hd⟩).symm)
+  · exact (hR.extStep_challenge_eq ⟨q, (P q.label).chIdx ⟨r, hr⟩ hd⟩).trans
+      (congrArg some (M.trT_challenge D π ch ⟨q, (P q.label).chIdx ⟨r, hr⟩ hd⟩).symm)
 
-/-- **The chains of the compiler over the term under the translated oracle are the chains with
-merges.** -/
-theorem chains_transOracle :
-    M.toFullPast.chainsFullPast (M.transOracle D h) x π.salt π.writes = M.chains h (M.ssOf x π) π.writes :=
-  (solve_unique _ _ fun p => ((leafChain_transOracle hD hrec p _ le_rfl).trans
-    (chains_eq_chainWith π.writes p).symm).symm).symm
+/-- **The full transcript of every leaf read from the recorded chains is the transcript along
+`π`.** -/
+theorem extLeaf_eq (q : t.Leaf) :
+    M.extLeaf D (M.ssOf x π) chs q (chs q) (n q.label) le_rfl = some (M.trT D π ch q) := by
+  obtain ⟨tr, htr⟩ := Option.isSome_iff_exists.1 (M.extLeaf_isSome D (M.ssOf x π) chs q (chs q)
+    (fun r hr => Option.isSome_iff_exists.2 ⟨_, hR.extStep_eq q r hr⟩) _ le_rfl)
+  rw [htr]
+  congr 1
+  funext r
+  have h1 := M.extStep_of_extLeaf D (M.ssOf x π) chs q (chs q) _ le_rfl htr r.1 r.2
+  rw [hR.extStep_eq q r.1 r.2] at h1
+  exact (Option.some_inj.1 h1).symm
 
-theorem ctxOf_transOracle (p : t.Leaf) :
-    M.toFullPast.ctxOf (M.transOracle D h) x π.salt π.writes p = M.ctx h (M.ssOf x π) π.writes p := by
-  funext q
-  exact congrFun (chains_transOracle hD hrec) q.1
-
-/-- **The challenges of the compiler over the term under the translated oracle are the challenges
-with merges.** -/
-theorem chalOf_transOracle (c : ChIdx P t) :
-    M.toFullPast.chalOf (M.transOracle D h) x π.salt π.writes c = M.chal h (M.ssOf x π) π.writes c := by
-  rw [FullPast.chalOf, ctxOf_transOracle hD hrec, leafChain_transOracle hD hrec,
-    key_transOracle hD hrec _ _ c.idx.1.2, point_transOracle hD hrec _ _ c.idx.1.2]
+/-- **The causal past of every challenge read from the recorded chains is its past in the
+transcript along `π`.** -/
+theorem extPast_eq (c : ChIdx P t) :
+    M.extPast D (M.ssOf x π) chs c ((chs c.leaf).take c.idx.1) = some ((M.trT D π ch).past c) := by
+  have hctx : M.extCtx D (M.ssOf x π) chs c.leaf = some ((M.trT D π ch).ctx c.leaf) :=
+    optAll_eq_some.2 fun q => hR.extLeaf_eq q.1
+  rw [extPast, hctx, Option.bind_some,
+    M.extLeaf_take D (M.ssOf x π) chs c.leaf (chs c.leaf) _ _ le_rfl,
+    M.extLeaf_of_le D (M.ssOf x π) chs c.leaf (chs c.leaf) le_rfl (hR.extLeaf_eq c.leaf) _
+      c.idx.1.2.le,
+    Option.map_some]
   rfl
 
-theorem chV_transOracle :
-    M.toFullPast.chVFullPast (M.transOracle D h) x π.salt π.writes = M.chV h (M.ssOf x π) π.writes := by
-  funext c
-  simp only [FullPast.chVFullPast, chV, chalOf_transOracle hD hrec]
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+theorem length_take (c : ChIdx P t) : ((chs c.leaf).take c.idx.1).length = c.idx.1.1 := by
+  rw [List.length_take, hR.length_eq]
+  exact Nat.min_eq_left c.idx.1.2.le
 
-/-- **The translated oracle answers the verifier's Merkle queries as `h`.** -/
-theorem transOracle_tree {τ : M.Tree}
-    (hτ : τ ∈ M.trees (Q.pos (M.chains h (M.ssOf x π) π.writes) (M.chV h (M.ssOf x π) π.writes)))
-    {q : Query k kN kS L} (hq : q ∈ (M.treeProg π (Q.pos (M.chains h (M.ssOf x π) π.writes)
-      (M.chV h (M.ssOf x π) π.writes)) τ).trace h) : M.transOracle D h q = h q := by
-  have hrq : Recorded h D q := hrec q (by
-    rw [queries_eq]
-    exact List.mem_append_right _ (List.mem_flatMap.2 ⟨τ, hτ, hq⟩))
-  have hm : (∃ a b, q = .leaf a b) ∨ ∃ l r, q = .node l r := M.opening.merkle_of_mem_trace hq
-  rw [transOracle, trans_lookup_merkle hD hm, hrq, Option.getD_some]
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+/-- **The composite verifier accepts the transcript along `π`** when the leaves of `π` are those of
+the database's views at the positions the query phase reads, and the query phase accepts. -/
+theorem accepts (Q : M.IOPQueries V x)
+    (hopen : M.OpenedAs (fun p i => (M.comp p.label).views D i (π.writes p i)) (Q.pos chs ch)
+      π.leaves) (hdec : Q.verdict chs ch π.leaves = true) : V x (M.trT D π ch) = true := by
+  refine Q.accept_of_verdict chs ch (fun p i => (M.comp p.label).views D i (π.writes p i))
+    (M.trT D π ch) _ ?_ (M.challenges_trT D π ch) hopen hdec
+  intro p i w hw
+  have hw' : w = π.writes p i := by
+    have h2 := hR.write_eq p i
+    rw [hw] at h2
+    exact eq_of_heq (Sigma.mk.inj (Item.write.inj (Option.some_inj.1 h2))).2
+  subst hw'
+  exact M.trT_message D π ch p i
 
-/-- **An accepted spBCS proof is accepted by the compiler over the term under the
-translated oracle.** -/
-theorem accepts_transOracle (hv : M.Accepts h x π Q) : M.toFullPast.AcceptsFullPast (M.transOracle D h) x π Q where
-  sampled c := by
-    rw [chalOf_transOracle hD hrec]
-    exact hv.sampled c
-  leaves_length := by
-    rw [chains_transOracle hD hrec, chV_transOracle hD hrec]
-    exact hv.leaves_length
-  paths τ hτ := by
-    rw [chains_transOracle hD hrec, chV_transOracle hD hrec] at hτ ⊢
-    obtain ⟨h1, h2, h3, h4, h5⟩ := hv.paths τ hτ
-    refine ⟨h1, h2, h3, h4, ?_⟩
-    rw [← h5]
-    exact (GordieHowe.OracleProg.run_congr _ fun a ha => (transOracle_tree hD hrec hτ ha).symm).symm
-  decides := by
-    rw [chains_transOracle hD hrec, chV_transOracle hD hrec]
-    exact hv.decides
+variable {Wit : Type} {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit}
+  {S : CausalStateFn P t X}
 
-/-- **Every query of the compiler over the term under the translated oracle** is recorded in the
-translated database with the oracle's answer. -/
-theorem mem_trans_of_queries :
-    ∀ q ∈ M.toFullPast.queriesFullPast x π (M.transOracle D h) Q,
-      (M.trans D).lookup q = some (M.transOracle D h q) := by
-  have hfix : ∀ {q : Query k kN kS L} {y : Out k e}, (M.trans D).lookup q = some y →
-      (M.trans D).lookup q = some (M.transOracle D h q) := fun hy => by
-    rw [transOracle, hy, Option.getD_some]
-  intro q hq
-  rw [FullPast.queriesFullPast_eq] at hq
-  rcases List.mem_append.1 hq with hq | hq
-  · rcases M.toFullPast.isChainQuery_of_mem_trace_roundsProgFullPast (M.transOracle D h) x π _ hq with
-      ⟨b, rfl⟩ | ⟨d, s, rfl⟩
-    · obtain ⟨p, r, rfl⟩ := M.toFullPast.transcript_mem_trace_roundsProgFullPast (M.transOracle D h) x π _ le_rfl hq
-      rw [Base.inputAt, chains_transOracle hD hrec]
-      have hctx : M.ctxOfChains p (M.chains h (M.ssOf x π) π.writes) = M.ctx h (M.ssOf x π) π.writes p :=
-        rfl
-      rw [hctx, ctxOf_transOracle hD hrec, leafChain_transOracle hD hrec]
-      exact hfix (trans_lookup_of hD (hrec.of_rounds (M.mem_roundsProg_input x π h p r r.2).1)
-        (φ_transcript_honest hD hrec.finals p ((M.comp p.label).chainWF_chainWith _ _ _ _ r r.2.le)
-          (by rw [ComponentModel.length_chainWith]; exact r.2)))
-    · obtain ⟨p, r, rfl, rfl, -⟩ := M.toFullPast.xof_mem_trace_roundsProgFullPast (M.transOracle D h) x π _ le_rfl hq
-      rw [ctxOf_transOracle hD hrec, leafChain_transOracle hD hrec,
-        key_transOracle hD hrec p r r.2]
-      exact hfix (trans_lookup_of hD (hrec.of_rounds (M.mem_roundsProg_input x π h p r r.2).2)
-        (φ_of_not_transcript fun _ h' => by cases h'))
-  · obtain ⟨τ, hτ, hq⟩ := List.mem_flatMap.1 hq
-    rw [chains_transOracle hD hrec, chV_transOracle hD hrec] at hτ hq
-    rw [← GordieHowe.OracleProg.trace_congr _ fun a ha => (transOracle_tree hD hrec hτ ha).symm] at hq
-    have hrq : Recorded h D q := hrec q (by
-      rw [queries_eq]
-      exact List.mem_append_right _ (List.mem_flatMap.2 ⟨τ, hτ, hq⟩))
-    have hm : (∃ a b, q = .leaf a b) ∨ ∃ l r, q = .node l r := M.opening.merkle_of_mem_trace hq
-    exact hfix ((trans_lookup_merkle hD hm).trans hrq)
+/-- **A flip at a challenge of the transcript along `π` puts `D` in `bad`.** -/
+theorem mem_bad (c : ChIdx P t) (hflip : PastFlip rel E S x c ((M.trT D π ch).past c)
+    ((M.trT D π ch).challenges c)) : D ∈ M.bad rel E S := by
+  obtain ⟨a, s, ha, hs, -, hsm⟩ := hR.challenge c
+  refine ⟨M.ssOf x π, c, chs, (chs c.leaf).take c.idx.1, (M.trT D π ch).past c, a, s,
+    (M.trT D π ch).challenges c, fun q _ => hR.length_eq q, hR.length_take c, hR.extPast_eq c, ha,
+    hs, ?_, hflip⟩
+  rw [M.challenges_trT D π ch]
+  exact hsm
+
+end RecordsChains
 
 end Chains
 
-/-! ### Proposition 8.12 for spBCS -/
+/-! ### Proposition 8.12 -/
 
 section Prop812
 
-variable {M} [∀ j i, Nonempty ((P j).Challenge i)] {V : X → FullTr P t → Bool} {Wit : Type}
-  (rel : Set (X × Wit)) (E : CausalExtractor P t X Wit) (St : CausalStateFn P t X)
-  {ε : ChIdx P t → NNReal}
+variable {M : SPBCS Mg P X k kN kS L e} [∀ j i, Nonempty ((P j).Challenge i)]
+  {V : X → FullTr P t → Bool} {Wit : Type} (rel : Set (X × Wit)) (E : CausalExtractor P t X Wit)
+  (St : CausalStateFn P t X) {ε : ChIdx P t → ℝ≥0} {D : ODB k kN kS L e} {x : X}
+  {π : M.NIProof} {chs : M.Chains} {ch : Chs P t}
 
-/-- **CMS19 Proposition 8.12** (p. 42), knowledge form (p. 44), for the spBCS compiler at
-one accepted proof: a database that records the verifier's queries on an accepted proof `π` of `x`
-with the answers of `h` has a digest collision, or its translation extracts a witness at `x`,
-lies in `badAny` of the compiler over the term, or has a digest collision. -/
+/-- **CMS19 Proposition 8.12** (p. 42), knowledge form (p. 44), at chains a database records: when
+`D` has no digest collision and records the chains `chs` of the proof `π` of `x` at the challenges
+`ch`, the leaves of `π` are those of `D`'s views at the queried positions and the query phase
+accepts, the database extractor returns a witness for `x` or `D` lies in `bad`. The flip comes
+from `CausalRBR.exists_flip` on the transcript along `π`, which is the transcript read from `D`. -/
+theorem mem_of_recordsChains [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
+    (hD : D ∉ digestCollision) (Q : M.IOPQueries V x) (hR : M.RecordsChains D x π chs ch)
+    (hopen : M.OpenedAs (fun p i => (M.comp p.label).views D i (π.writes p i)) (Q.pos chs ch)
+      π.leaves) (hdec : Q.verdict chs ch π.leaves = true) :
+    D ∈ M.extracts rel E x ∪ M.bad rel E St := by
+  by_cases hE : ∃ c, (x, E c x ((M.trT D π ch).past c)) ∈ rel
+  · obtain ⟨c, hc⟩ := hE
+    obtain ⟨a, s, ha, -, -, -⟩ := hR.challenge c
+    exact Or.inl (mem_extracts_of hD rfl (fun q _ => hR.length_eq q) (hR.length_take c) ha
+      (hR.extPast_eq c) hc)
+  · push Not at hE
+    obtain ⟨c, hflip⟩ := hrbr.exists_flip x _ (hR.accepts Q hopen hdec) id hE
+    exact Or.inr (hR.mem_bad c ⟨hE c, hflip⟩)
+
+/-- **CMS19 Proposition 8.12 at chains a database records, with the targeted extractor**: under
+the hypotheses of `mem_of_recordsChains`, the targeted extractor at the challenges `ch` returns a
+witness for `x` or `D` lies in `bad`. -/
+theorem mem_of_recordsChains_targeted (hrbr : CausalRBRKnowledgeSound rel V E St ε)
+    (Q : M.IOPQueries V x) (hR : M.RecordsChains D x π chs ch)
+    (hopen : M.OpenedAs (fun p i => (M.comp p.label).views D i (π.writes p i)) (Q.pos chs ch)
+      π.leaves) (hdec : Q.verdict chs ch π.leaves = true) :
+    (∃ w ∈ M.targetedExtract D π ch E x, (x, w) ∈ rel) ∨ D ∈ M.bad rel E St := by
+  by_cases hE : ∃ c, (x, E c x ((M.trT D π ch).past c)) ∈ rel
+  · obtain ⟨c, hc⟩ := hE
+    exact Or.inl ⟨_, (M.mem_targetedExtract D π ch E x).2 ⟨c, rfl⟩, hc⟩
+  · push Not at hE
+    obtain ⟨c, hflip⟩ := hrbr.exists_flip x _ (hR.accepts Q hopen hdec) id hE
+    exact Or.inr (hR.mem_bad c ⟨hE c, hflip⟩)
+
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+/-- **The leaves of a proof whose openings check are the leaves of the database's views**: at a
+database without a digest collision that records every opening query of the trees of the
+positions `ps` with the answers of `h`, a proof with one leaf per position whose every tree's
+opening checks opens the leaves of the Merkle views of the database at the roots of its writes. -/
+theorem openedAs_views_of_check (hcol : D ∉ digestCollision) {h : Query k kN kS L → Out k e}
+    {ps : List M.Pos} (hlen : ps.length = π.leaves.length)
+    (hpaths : ∀ τ ∈ M.trees ps, SPBCS.checkTree h π ps τ)
+    (hrec : ∀ τ ∈ M.trees ps, ∀ q ∈ (M.treeProg π ps τ).trace h, D.lookup q = some (h q)) :
+    M.OpenedAs (fun p i => (M.comp p.label).views D i (π.writes p i)) ps π.leaves := by
+  refine List.forall₂_iff_zip.2 ⟨hlen, fun {q a} hqa => ?_⟩
+  have hτ := M.mem_trees (List.of_mem_zip hqa).1
+  have hmem : (q.pos.leaf.1, a) ∈ ((M.openedIn q.treeOf ps π.leaves).map Prod.fst).zip
+      ((M.openedIn q.treeOf ps π.leaves).map Prod.snd) := by
+    rw [← List.zip_of_prod rfl rfl]
+    exact M.mem_openedIn hqa
+  exact M.opening.leafAt_of_check hcol (fun q' hq' => hrec _ hτ q' hq') (hpaths _ hτ) hmem
+    q.pos.leaf.2
+
+variable {h : Query k kN kS L → Out k e} {Q : M.IOPQueries V x}
+
+/-- **A database that records the verifier's queries on an accepted proof records its chains**:
+the chains with merges of `π`, at its challenges with merges. -/
+theorem recordsChains_of_verify (hrec : RecordsQueries D h x π Q) (hv : M.Accepts h x π Q) :
+    M.RecordsChains D x π (M.chains h (M.ssOf x π) π.writes) (M.chV h (M.ssOf x π) π.writes) where
+  length_eq := length_chains π.writes
+  write_eq := chains_getElem?_message π.writes
+  challenge c := by
+    have hr := c.idx.1.2
+    obtain ⟨h1, h2⟩ := M.mem_roundsProg_input x π h c.leaf c.idx.1 hr
+    have htake : (M.chains h (M.ssOf x π) π.writes c.leaf).take c.idx.1 =
+        (M.comp c.leaf.label).chainWith (π.writes c.leaf)
+          (M.key h (M.ssOf x π) (M.chains h (M.ssOf x π) π.writes)
+            (M.finals h (M.ssOf x π) π.writes) c.leaf) π.salt h c.idx.1 hr.le := by
+      rw [chains_eq_chainWith]
+      exact ComponentModel.take_chainWith _ _ _ _ _ _ _ _ hr.le
+    obtain ⟨v, hsv⟩ := Option.isSome_iff_exists.1 (hv.sampled c)
+    refine ⟨_, _, ?_, hrec.of_rounds h2, ?_, ?_⟩
+    · rw [htake]
+      exact keyD_chains hrec.finals c.leaf _ (hrec.of_rounds h1)
+    · have hd : ¬ (P c.leaf.label).dir c.idx.1 = .P_to_V := by simp [c.idx.2]
+      rw [chains_eq_chainWith, ComponentModel.chainWith_getElem? _ _ _ _ _ _ _ c.idx.1 hr]
+      unfold ComponentModel.itemWith
+      simp only [hd, ↓reduceDIte]
+      rfl
+    · have hc : M.chV h (M.ssOf x π) π.writes c = v := by
+        simp only [chV]
+        rw [hsv]
+        rfl
+      rw [hc, ← hsv]
+      rfl
+
+/-- **The leaves of an accepted proof are those of the database's views.** -/
+theorem openedAs_views_of_verify (hD : D ∉ digestCollision) (hrec : RecordsQueries D h x π Q)
+    (hv : M.Accepts h x π Q) :
+    M.OpenedAs (fun p i => (M.comp p.label).views D i (π.writes p i))
+      (Q.pos (M.chains h (M.ssOf x π) π.writes) (M.chV h (M.ssOf x π) π.writes)) π.leaves :=
+  openedAs_views_of_check hD hv.leaves_length hv.paths fun τ hτ q hq =>
+    hrec q (by
+      rw [queries_eq]
+      exact List.mem_append_right _ (List.mem_flatMap.2 ⟨τ, hτ, hq⟩))
+
+/-- **CMS19 Proposition 8.12** (p. 42), knowledge form (p. 44), for the spBCS compiler at one
+accepted proof: a database that records the verifier's queries on an accepted proof `π` of `x`
+with the answers of `h` has a digest collision, or the database extractor returns a witness for
+`x`, or it lies in `bad`. -/
 theorem mem_of_verify [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
-    {h : Query k kN kS L → Out k e} {x : X} {π : M.NIProof} {Q : M.IOPQueries V x}
-    {D : ODB k kN kS L e} (hv : M.Accepts h x π Q) (hrec : RecordsQueries D h x π Q) :
-    D ∈ digestCollision ∨
-      M.trans D ∈ M.toFullPast.extractsFullPast rel E x ∪ (M.toFullPast.badAny rel E St ∪ digestCollision) := by
+    (hv : M.Accepts h x π Q) (hrec : RecordsQueries D h x π Q) :
+    D ∈ digestCollision ∨ D ∈ M.extracts rel E x ∪ M.bad rel E St := by
   by_cases hD : D ∈ digestCollision
   · exact Or.inl hD
-  · exact Or.inr (M.toFullPast.mem_of_verifyFullPast rel E St hrbr (M.transOracle D h) x π Q
-      (accepts_transOracle hD hrec hv) (mem_trans_of_queries hD hrec))
+  · exact Or.inr (mem_of_recordsChains rel E St hrbr hD Q (recordsChains_of_verify hrec hv)
+      (openedAs_views_of_verify hD hrec hv) hv.decides)
+
+/-- **CMS19 Proposition 8.12 along one accepted spBCS proof, with the targeted extractor**:
+a database that records the spBCS verifier's queries on an accepted proof `π` of `x` with
+the answers of `h` has a digest collision, lies in `bad`, or the targeted extractor at the
+challenges with merges returns a witness for `x`. -/
+theorem mem_of_verify_targeted (hrbr : CausalRBRKnowledgeSound rel V E St ε)
+    (hv : M.Accepts h x π Q) (hrec : RecordsQueries D h x π Q) :
+    (∃ w ∈ M.targetedExtract D π (M.chV h (M.ssOf x π) π.writes) E x, (x, w) ∈ rel) ∨
+      D ∈ M.bad rel E St ∪ digestCollision := by
+  by_cases hD : D ∈ digestCollision
+  · exact Or.inr (Or.inr hD)
+  rcases mem_of_recordsChains_targeted rel E St hrbr Q (recordsChains_of_verify hrec hv)
+      (openedAs_views_of_verify hD hrec hv) hv.decides with hE | hbad
+  · exact Or.inl hE
+  · exact Or.inr (Or.inl hbad)
 
 end Prop812
-
-end
 
 end GordieHowe.SPBCS

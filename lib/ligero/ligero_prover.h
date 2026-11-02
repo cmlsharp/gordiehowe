@@ -329,14 +329,14 @@ private:
 
   // Extends rows FIRST .. FIRST + N - 1 from their first K entries to
   // BLOCK_ENC, SUB[i] (when given) marking a row of the subfield, in
-  // parallel chunks of rows (util/parallel.h), each chunk with its own
-  // interpolator.
+  // parallel chunks of rows (util/parallel.h). The chunks share one
+  // interpolator: interpolate is const and keeps its scratch local.
   void interpolate_rows(size_t first, size_t n, size_t k,
                         const InterpolatorFactory &interpolator,
                         const std::vector<char> *sub = nullptr) {
+    const auto interp = interpolator.make(k, p_.block_enc);
     parallel::for_chunks(
         n, parallel::grain_for(n, parallel::kChunks), [&](size_t b, size_t e) {
-          const auto interp = interpolator.make(k, p_.block_enc);
           for (size_t i = b; i < e; ++i) {
             if (sub != nullptr)
               interp->interpolate(&tableau_at(first + i, 0), (*sub)[i] != 0);
@@ -529,23 +529,22 @@ private:
 
   void dot_proof(Elt y[/*dblock*/], const Elt A[/*nwqrow, w*/],
                  const InterpolatorFactory &interpolator, const Field &F) {
+    // One interpolator for every chunk (interpolate is const).
     const auto interpA = interpolator.make(p_.block, p_.dblock);
 
     // the dot-product mask with coefficient 1
     mask_row(y, 0, F);
 
-    (void)interpA;
     const size_t grain = parallel::grain_for(p_.nwqrow, parallel::kChunks);
     const size_t nc = parallel::chunks(p_.nwqrow, grain);
     std::vector<std::vector<Elt>> part(nc);
     parallel::for_chunks(p_.nwqrow, grain, [&](size_t b, size_t e) {
-      const auto interp = interpolator.make(p_.block, p_.dblock);
       std::vector<Elt> Aext(p_.dblock);
       auto &v = part[b / grain];
       v.assign(p_.dblock, F.zero());
       for (size_t i = b; i < e; ++i) {
         LigeroCommon<Field>::layout_Aext(&Aext[0], p_, i, &A[0], F);
-        interp->interpolate(&Aext[0]);
+        interpA->interpolate(&Aext[0]);
 
         // Accumulate y += A \otimes W.
         Blas<Field>::vaxpy(p_.dblock, v.data(), 1, &Aext[0], 1,

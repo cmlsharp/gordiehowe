@@ -1,8 +1,8 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 
-// Test support for the ML-DSA-44 emulated proof of possession
-// (mldsa_emulated.h): the values each GordieHowe generator must equal on a
+// Test support for the ML-DSA emulated proof of possession
+// (mldsa_emulated.h) at a parameter set S: the values each GordieHowe generator must equal on a
 // signed example, from its host witness (ml_dsa_witness's compute_witness,
 // ml_dsa_fp::advice) and the signature relation over the integers, and the
 // plan export (export_plan, the bench hook). The native arm's support
@@ -34,13 +34,16 @@ namespace proofs::gordiehowe::examples::mldsa::emulated {
 // The relation with the assignments of example values, for the tests and
 // benchmarks that drive the prover directly. PACKING is the packing
 // ablation (setup.h).
-template <class P>
+template <class P, class S>
 struct MLDSAEmulatedSystem
-    : RelationSystem<typename Env<P>::Sys, MLDSAStatement<Value>,
-                     MLDSAWitness<Value>> {
+    : RelationSystem<typename Env<P>::Sys,
+                     typename MLDSAInputs<S>::template Statement<Value>,
+                     typename MLDSAInputs<S>::template Witness<Value>> {
   using E = Env<P>;
-  using Base = RelationSystem<typename E::Sys, MLDSAStatement<Value>,
-                              MLDSAWitness<Value>>;
+  using Base =
+      RelationSystem<typename E::Sys,
+                     typename MLDSAInputs<S>::template Statement<Value>,
+                     typename MLDSAInputs<S>::template Witness<Value>>;
   using typename Base::Assignment;
 
   size_t max_bytes, ctx_bytes;
@@ -48,19 +51,19 @@ struct MLDSAEmulatedSystem
   MLDSAEmulatedSystem(const E &env, size_t max, size_t ctx,
                       PackingAblation packing = PackingAblation::kNone,
                       const BuildOptions &build = {})
-      : Base(mldsa_emulated<P>(env, max, ctx, packing, build)),
+      : Base(mldsa_emulated<P, S>(env, max, ctx, packing, build)),
         max_bytes(max),
         ctx_bytes(ctx) {}
 
   Assignment statement(const std::vector<uint8_t> &pk,
                        const std::vector<uint8_t> &ctx) const {
-    return Base::statement(mldsa_statement(pk, ctx));
+    return Base::statement(mldsa_statement<S>(pk, ctx));
   }
   // The decoded signature's z (canonical in [0, q)) enters as the
   // carrier's signed coefficients.
   Assignment witness(const std::vector<uint8_t> &msg,
                      const Signature &sig) const {
-    return Base::witness(mldsa_witness(msg, sig, max_bytes, ctx_bytes));
+    return Base::witness(mldsa_witness<S>(msg, sig, max_bytes, ctx_bytes));
   }
 };
 
@@ -74,17 +77,19 @@ using examples::mldsa::support::Existing;
 // The digits of the shifted coefficient z + (bound - 1), or of its
 // complement 2 bound - 2 - (z + bound - 1), K each in base T (the
 // planner's), [L][N][K].
-inline std::vector<uint64_t> z_limbs(const Existing &e, bool complement,
-                                     uint64_t T, size_t K) {
-  const uint64_t top = 2 * kBound - 2;
+template <class S>
+std::vector<uint64_t> z_limbs(const Existing<S> &e, bool complement,
+                              uint64_t T, size_t K) {
+  const uint64_t top = 2 * S::kBound - 2;
   std::vector<uint64_t> v;
-  for (size_t j = 0; j < kL; ++j)
+  for (size_t j = 0; j < S::kL; ++j)
     for (size_t k = 0; k < kN; ++k)
       v.push_back(complement ? top - e.wg->z_bits_[j][k] : e.wg->z_bits_[j][k]);
   return digits_of(v, T, K);
 }
 // w' in base T, K digits per coefficient.
-inline std::vector<uint64_t> w_limbs(const Existing &e, uint64_t T, size_t K) {
+template <class S>
+std::vector<uint64_t> w_limbs(const Existing<S> &e, uint64_t T, size_t K) {
   return digits_of(e.w(), T, K);
 }
 
@@ -94,7 +99,10 @@ inline std::vector<uint64_t> w_limbs(const Existing &e, uint64_t T, size_t K) {
 // NTT(2^d t1), z = z' - (bound - 1) from the shifted z', and c in
 // {-1, 0, 1}. ML-DSA's verification equation w' = A z - c 2^d t1 (mod q)
 // makes every coordinate a multiple of q.
-inline std::vector<__int128> signature_residual(const Existing &e) {
+template <class S>
+std::vector<__int128> signature_residual(const Existing<S> &e) {
+  constexpr size_t kK = S::kK, kL = S::kL;
+  constexpr uint64_t kBound = S::kBound;
   const auto &wg = *e.wg;
   auto coefficients = [](ml_dsa::Rq spectrum) {
     ml_dsa::InvNtt(spectrum);
@@ -146,7 +154,7 @@ std::string export_plan(const std::string &dir, const std::string &commit,
                         const std::string &run_id) {
   const auto &ex = ml_dsa::GetMlDsa44BenchmarkExample();
   const Env<P> env;
-  MLDSAEmulatedSystem<P> t(env, ex.msg.size(), ex.ctx.size());
+  MLDSAEmulatedSystem<P, MLDSA44> t(env, ex.msg.size(), ex.ctx.size());
   const auto c = t.compile();
   const compiler::ExportMeta meta{"mldsa-emulated", P::kId, commit,
                         run_id, ex.msg.size(), ex.ctx.size()};

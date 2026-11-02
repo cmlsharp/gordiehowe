@@ -178,7 +178,7 @@ theorem entry_rep {pat : List RepRun} {k c : ℕ}
       entry (pat.map fun p => IdxSeg.shift j p.base p.delta) t := by
   have h : IndexMap.ofSegs [.rep pat k] =
       (List.range k).flatMap fun j => pat.map fun p => IdxSeg.shift j p.base p.delta := by
-    simp [IndexMap.ofSegs, IdxSeg.expand]
+    simp [IndexMap.ofSegs_eq, IdxSeg.expand]
   rw [h]
   exact entry_flatMap_range _ hc hj ht
 

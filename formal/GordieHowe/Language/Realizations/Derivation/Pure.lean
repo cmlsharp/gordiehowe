@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.Realizations.Derivation
+public import GordieHoweNative.Language.Realizations.Derivation.Pure
 
 @[expose] public section
 
@@ -25,55 +26,14 @@ environment, no cited predicate. The completeness track runs them at the honest 
 * **The model**: the program's structure (`DerivModel`), constants reading their entries (`hK`,
   which holds at the reader of every environment, `reader_of_constant`), the value ranges `sr`
   (`hS`) and the bound values' readings (`hB`) at the reader.
+
+The definitions are in `GordieHoweNative/Language/Realizations/Derivation/Pure.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
 
 open Export
-
-section
-
-variable (ir : RealizedProgram)
-
-/-- **The reader-generic interval sources**: a constant's entries, a declared bound, a `nat`
-premise (`srcFact`); none for the others. -/
-def pureSrcFact (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (fs : List Fact) (d v : ℕ) :
-    IvlSrc → Option Fact
-  | .const => ir.srcFact primeNodes sr fs d v .const
-  | .declared k => ir.srcFact primeNodes sr fs d v (.declared k)
-  | .nat k => ir.srcFact primeNodes sr fs d v (.nat k)
-  | _ => none
-
-/-- **The conclusion of a reader-generic step** (`stepFact` on the rules whose soundness reads only
-their premises), for a derivation of body `body` from the facts `fs`; `none` for every other
-step. -/
-def pureStepFact (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (body : PredBody)
-    (fs : List Fact) : Step → Option Fact
-  | .subst e₁ e₂ => ir.substFact body.dom e₁ e₂
-  | .linear cs e₁ e₂ => ir.linearFact fs body.dom cs e₁ e₂
-  | .rangeNat k => ir.rangeNatFact fs body.dom k
-  | .src v s =>
-    if ir.srcGuard body.dom v = true then ir.pureSrcFact primeNodes sr fs body.dom v s else none
-  | .ivlNat k => ir.ivlNatFact fs body.dom k
-  | .ivlExpr ks x lo hi => ir.ivlExprFact fs body.dom ks x lo hi
-  | .ivlSolve k ks a j lo hi => ir.ivlSolveFact fs body.dom k ks a j lo hi
-  | .ivlApply k a e lo hi => ir.ivlApplyFact fs body.dom k a e lo hi
-  | .ivlLogic ks e => ir.ivlLogicFact fs body.dom ks e
-  | .ivlMeet a b => ivlMeetFact fs a b
-  | .ivlDisjoint a b => ir.ivlDisjointFact fs body.dom a b
-  | .fieldDvd k a b => ir.fieldDvdFact fs body.dom k a b
-  | .natIvl k => natIvlFact fs k
-  | .transport k j => ir.transportFact fs k j
-  | .natComp k j => ir.natCompFact fs body.dom k j
-  | .natLin k ks => ir.natLinFact fs body.dom k ks
-  | .liftConst k a => ir.liftConstFact fs body k a
-  | .lift k a b => ir.liftFact fs k a b
-  | .digits k ds T => ir.digitsFact fs body.dom k ds T
-  | .linop s => ir.linopFact fs body.dom s
-  | .inDom d s => pureStepFact primeNodes sr (entryBody d) fs s
-  | _ => none
-
-end
 
 variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String}
 
@@ -106,13 +66,15 @@ theorem pureSrcFact_sound (hwf : ir.WellFormed) (hI : I.Registered ir) (hL : I.L
         rw [List.getD_eq_getElem?_getD]
         cases hes : es[i]? with
         | none => simp only [Option.getD_none]; omega
-        | some c => exact of_decide_eq_true (List.all_eq_true.1 hall c (List.mem_of_getElem? hes))
+        | some c =>
+          exact of_decide_eq_true (List.all_eq_true.1 ((allK_eq _ es).symm.trans hall) c
+            (List.mem_of_getElem? hes))
       have hint : ir.evalIntWith rd d (.leaf v) i =
           centeredZ (ir.charOf (ir.domainField d)) (es.getD i 0) := by
         change ir.intOf rd v i = _
         rw [intOf_of_constant _ hk, FieldInterp.centered_eq, hI.characteristic _ (hfd ▸ hf'), hfd]
       have hmem := mem_constIvlOf (p := ir.charOf (ir.domainField d)) (n := (ir.value v).size)
-        (by omega) es hi
+        es hi
       rw [hint]
       refine ⟨hmem.1, hmem.2, ?_⟩
       change _ = castElt (rd v i)
@@ -145,6 +107,8 @@ theorem pureSrcFact_sound (hwf : ir.WellFormed) (hI : I.Registered ir) (hL : I.L
   | shift k => simp [pureSrcFact] at hf
   | quadRoot q r => simp [pureSrcFact] at hf
   | rootSet qs => simp [pureSrcFact] at hf
+  | tableHull _ _ _ => simp [pureSrcFact] at hf
+  | tableKernel _ _ _ _ _ => simp [pureSrcFact] at hf
 
 /-- **`pureStepFact_sound`**: every reader-generic rule is sound at any reader `rd` whose constants
 read their entries (`hK`), whose ranged values lie in their ranges (`hS`) and whose bound values

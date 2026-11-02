@@ -20,7 +20,7 @@ length, relations, honest prover and figures, with the figures' side conditions 
 
 This module states them once, generically:
 
-* `GordieHowe.Configuration`: the data of a configuration (the compiled-circuit type, the IOP, its soundness
+* `GordieHowe.Configuration`: the data of a configuration (the type of proof systems its code is generic over, the IOP, its soundness
   data, its transcript, the Fiat–Shamir salt length, the headline relation and the witness map,
   the honest prover and its completeness error as type families, the fixed honest strategy, and the
   figures: rounds, Chernoff exponent, leaves, queried leaves, verifier queries, the largest round
@@ -70,7 +70,7 @@ theorem overrun_le_at_granted (hb : T.MergeBounds kS) (E : ℕ)
         have hc' : Configurations.PassesChernoff (65 / 64) ((1 / 2) ^ E) (T.stream c.leaf.label c.idx)
             ((T.readers c.leaf.label) c.idx).load := h c.leaf.label c.idx
         unfold RealizedProgram.ProofSystem.IOP.samplersOf
-        rw [SpecReaders.sampler_rejectionProb _ (T.stream_le c.leaf.label c.idx)]
+        rw [SpecReaders.sampler_rejectionProb _ (stream_le hb.toBounds c.leaf.label c.idx)]
         exact ((T.readers c.leaf.label c.idx).failProb_le (by norm_num) hc'.pow_lt _ _).trans
           (ENNReal.ofReal_le_ofReal hc'.bound_le)
     _ = Fintype.card (ChIdx C.P C.term) * ENNReal.ofReal ((1 / 2) ^ E) := by
@@ -88,9 +88,11 @@ open scoped NNReal ENNReal
 
 /-- **The data of a configuration under spBCS** (module docstring). Every field is
 data; the facts the generic proofs use are `Configuration.GrantedFacts`. -/
-structure _root_.GordieHowe.Configuration where
-  /-- The compiled circuits, with the trust bundle that relates them to the program. -/
-  Compiled : Type
+structure _root_.GordieHowe.Configuration.{u} where
+  /-- The proof systems the configuration's code is generic over (the program's
+  `RealizedProgram.ProofSystem`, a `Type 1`). Its definitions take one and read it at run time; its
+  statements are instantiated at the configuration's proof system (`instantiate_config … at`). -/
+  ProofSystem : Type u
   /-- The statements. -/
   Stmt : Type
   /-- The decision of equality of statements: the database extractor (`SPBCS.dbExtract`) reads
@@ -100,8 +102,8 @@ structure _root_.GordieHowe.Configuration where
   Wit : Type
   /-- The IOP's relation. -/
   rel : Set (Stmt × Wit)
-  /-- The multi-circuit IOP with forked domains at the compiled circuits. -/
-  iop : Compiled → RealizedProgram.ProofSystem.IOP Stmt Wit rel
+  /-- The multi-circuit IOP with forked domains at a proof system. -/
+  iop : ProofSystem → RealizedProgram.ProofSystem.IOP Stmt Wit rel
   /-- Its soundness data. -/
   sound : ∀ C, (iop C).Sound
   /-- Its transcript: label, digests, codecs and challenge readers. -/
@@ -114,8 +116,6 @@ structure _root_.GordieHowe.Configuration where
   rel' : Set (Stmt × Wit')
   /-- The map from the IOP's witnesses to the headline relation's, applied by the extractor. -/
   g : Stmt → Wit → Wit'
-  /-- The trust type of the honest prover (the compiler's completeness) at the compiled circuits. -/
-  TA : Compiled → Prop
   /-- The valuations the honest strategies are stated over. -/
   Val : Type
   /-- The honest strategies on honest inputs `Inp` related to valuations by `relH`. -/
@@ -125,7 +125,7 @@ structure _root_.GordieHowe.Configuration where
   /-- The simulator data of the IOP: data apart from the honest prover and the soundness data. -/
   sim : ∀ C, (iop C).SimData
   /-- The honest prover of the IOP at a strategy, simulated by `sim`. -/
-  honest : ∀ C, TA C → ∀ {Inp : Type} {relH : Set (Val × Inp)}, Strategy Inp relH →
+  honest : ∀ C {Inp : Type} {relH : Set (Val × Inp)}, Strategy Inp relH →
     (iop C).Honest (sim C) Inp (hrel relH)
   /-- The completeness error of a strategy (the paper's `errc`): the summed probabilities of its
   completeness events. -/
@@ -193,9 +193,9 @@ structure GrantedFacts : Prop where
     (R.T C).KnowledgeGuarantees R.kS (hb C) (R.sound C) R.rel' R.g hkq
   /-- **The end-to-end theorem** (paper `thm:e2e`) at every honest strategy, with the strategy's
   completeness error (an instance of `RealizedProgram.ProofSystem.FieldBranches.e2e`). -/
-  e2e : ∀ C (TA : R.TA C) {Inp : Type} {relH : Set (R.Val × Inp)} (H : R.Strategy Inp relH)
+  e2e : ∀ C {Inp : Type} {relH : Set (R.Val × Inp)} (H : R.Strategy Inp relH)
     {kq : ℕ} (hkq : (R.T C).QueryBudget R.kS (hb C) kq) (hf : (R.T C).ProofFormat R.kS (hb C) R.proofBound),
-    (R.T C).Guarantees R.kS (hb C) (R.sound C) R.rel' R.g hkq hf (R.honest C TA H) (R.err H)
+    (R.T C).Guarantees R.kS (hb C) (R.sound C) R.rel' R.g hkq hf (R.honest C H) (R.err H)
   /-- The composite has at most `rounds` rounds. -/
   rounds_le : ∀ C, ∑ q : (R.iop C).shape.term.Leaf, (R.iop C).rounds q.label ≤ R.rounds
   /-- Every round's load passes the Chernoff test `2^-chernoff` on the round's own stream length,
@@ -250,7 +250,7 @@ variable (R : Configuration) (F : R.GrantedFacts)
 /-- **The spBCS setting of the configuration** (`SPBCS.ProofSystemTranscript.setting` of its
 transcript at `kS`-byte salts). -/
 @[config_template]
-abbrev setting (C : R.Compiled) :
+abbrev setting (C : R.ProofSystem) :
     Setting (R.iop C).toCausalIOP (R.iop C).merges (R.T C).k :=
   (R.T C).setting R.kS (F.hb C)
 
@@ -262,26 +262,26 @@ domains' commit phases) and one application of the witness map `g`, polynomial w
 configurations' maps read the witness at the statement's values: one `ExpandA` and one `H(pk)` for
 ML-DSA, the key's coefficients for Falcon). This running time is argued here, not proved in Lean. -/
 @[config_template]
-def keyExtractor (_F : R.GrantedFacts) (C : R.Compiled) :
+def keyExtractor (_F : R.GrantedFacts) (C : R.ProofSystem) :
     CausalExtractor (R.iop C).P (R.iop C).term R.Stmt R.Wit' :=
   (R.iop C).extractor.mapWit R.g
 
 /-- **The extractor of the statements is the composite's**, its witness read by `g`. -/
-theorem keyExtractor_eq (C : R.Compiled) :
+theorem keyExtractor_eq (C : R.ProofSystem) :
     keyExtractor R F C = (R.iop C).extractor.mapWit R.g :=
   rfl
 
 /-- **The decoding of the database extractor's queries**: the decoder of the chain inputs of the
 setting (`SPBCS.MergeEncoding.decode` of the spBCS compiler's encoding), which the database
-extractor applies to every transcript query of the database (`SPBCS.φ`) and to every input it
-reads behind a final digest (`SPBCS.resolveSink`). It parses the label, the salt, the statement
+extractor applies to every transcript query of the database (`SPBCS.candidate`) and to every input
+it reads behind a final digest (`SPBCS.resolveSink`). It parses the label, the salt, the statement
 writes by the transcript's statement codec, and the chain contents by the write codecs.
 
 Running time: one pass over the input's bytes, with one parse of each write by its codec, the
 statement codec's parse included (for ML-DSA-44, one decision of `ExpandAWithin`: `16 · 336`
 SHAKE128 candidates). This running time is argued here, not proved in Lean. -/
 @[config_template]
-def queryDecoder (C : R.Compiled) :=
+def queryDecoder (C : R.ProofSystem) :=
   ((R.T C).setting R.kS (F.hb C)).model.senc.decode
 
 /-- **The quantum knowledge error at `t` queries**:
@@ -301,7 +301,7 @@ noncomputable abbrev knowledgeErrorROM (_F : R.GrantedFacts) (t : ℕ) : ℝ≥0
 /-- **The verifier's queries on accepting runs**: at most `kq`, two per round, one per branch and
 `1 + log₂ (2N)` per queried leaf (`SPBCS.ProofSystemTranscript.length_queries_le`). -/
 @[config_template]
-theorem verifierQueries_le (C : R.Compiled) (x : R.Stmt) (h) (π : (setting R F C).model.NIProof)
+theorem verifierQueries_le (C : R.ProofSystem) (x : R.Stmt) (h) (π : (setting R F C).model.NIProof)
     (hv : (setting R F C).model.Accepts h x π ((setting R F C).queries x)) :
     ((setting R F C).model.queries x π h ((setting R F C).queries x)).length ≤ R.kq := by
   refine ((R.T C).length_queries_le (F.hb C) (F.leaves_le C) (F.queries_le C) x h π
@@ -311,20 +311,20 @@ theorem verifierQueries_le (C : R.Compiled) (x : R.Stmt) (h) (π : (setting R F 
 
 /-- **The spBCS verifier in the QROM**, at its `kq` queries. -/
 @[config_template]
-noncomputable abbrev verifierQROM (C : R.Compiled) :=
+noncomputable abbrev verifierQROM (C : R.ProofSystem) :=
   (R.T C).verifier R.kS (F.hb C) R.kq
 
 
 /-- **The spBCS verifier in the ROM**, at `kq` queries. -/
 @[config_template]
-noncomputable abbrev verifierROM (C : R.Compiled) :=
+noncomputable abbrev verifierROM (C : R.ProofSystem) :=
   (R.T C).verifierROM R.kS (F.hb C) R.kq
 
 /-- **The overrun of the spBCS setting**: at most `rounds / 2^chernoff`
 (`SPBCS.ProofSystemTranscript.overrun_le_at_granted`, every round's load within `2^-chernoff` on
 its own stream length). -/
 @[config_template]
-theorem overrun_le (C : R.Compiled) :
+theorem overrun_le (C : R.ProofSystem) :
     (setting R F C).model.overrun ≤ (R.rounds : ℝ≥0∞) / 2 ^ R.chernoff :=
   ((R.T C).overrun_le_at_granted (F.hb C) R.chernoff (F.loadsGranted C)).trans
     (ENNReal.div_le_div_right (by exact_mod_cast F.rounds_le C) _)
@@ -332,7 +332,7 @@ theorem overrun_le (C : R.Compiled) :
 /-- **The positions of the spBCS setting**: `pos`, the leaves of all trees
 (`SPBCS.ProofSystemTranscript.card_pos`). -/
 @[config_template]
-theorem card_pos (C : R.Compiled) : Fintype.card (setting R F C).model.Pos = R.pos :=
+theorem card_pos (C : R.ProofSystem) : Fintype.card (setting R F C).model.Pos = R.pos :=
   ((R.T C).card_pos (F.hb C)).trans (F.pos_eq C)
 
 /-- **The quantum knowledge error is monotone in the query count.** -/
@@ -360,10 +360,9 @@ proof queries (`Quantum.QueryBoundedAdversary`) whose output is a statement, a p
 classical value in `Z`: the state of the adversary's register after measuring only its output is
 the same in the coherent extraction run as in the real run, and in the extraction run the spBCS
 verifier accepts while the database extractor at `keyExtractor` returns no witness of the
-headline relation with probability at most `forkKnowledgeErrorAt (t + kq)`. The compiled
-circuits' `enforce`: trust base. -/
+headline relation with probability at most `forkKnowledgeErrorAt (t + kq)`. -/
 @[config_template headline]
-theorem knowledge_soundness_qrom_at (C : R.Compiled) {Zo : Type} {t : ℕ}
+theorem knowledge_soundness_qrom_at (C : R.ProofSystem) {Zo : Type} {t : ℕ}
     (𝒢 : (setting R F C).QROMAdversary (Claim R.Stmt (setting R F C).model.NIProof × Zo) t) :
     𝒢.OnlineExtracts (verifierQROM R F C) NARG.QROM.compressedSim R.rel'
       (NARG.QROM.compressedExt ((setting R F C).model.dbExtractBits (keyExtractor R F C))) 0
@@ -379,10 +378,9 @@ theorem knowledge_soundness_qrom_at (C : R.Compiled) {Zo : Type} {t : ℕ}
 (`SPBCS.ProofSystemTranscript.soundness`, the `soundness` clause of
 `SPBCS.knowledgeGuarantees`): every `t`-query adversary of `def:adversary` that makes no proof
 queries outputs a statement without a witness of the headline relation and a proof the spBCS
-verifier accepts with probability at most `forkKnowledgeErrorAt (t + kq)`. The compiled circuits'
-`enforce`: trust base. -/
+verifier accepts with probability at most `forkKnowledgeErrorAt (t + kq)`. -/
 @[config_template headline]
-theorem soundness_qrom_at (C : R.Compiled) {t : ℕ} (𝒜 : (setting R F C).QROMAdversary (Claim R.Stmt (setting R F C).model.NIProof) t) :
+theorem soundness_qrom_at (C : R.ProofSystem) {t : ℕ} (𝒜 : (setting R F C).QROMAdversary (Claim R.Stmt (setting R F C).model.NIProof) t) :
     𝒜.acceptsFalse (verifierQROM R F C) R.rel' ≤ knowledgeErrorQROM R F (t + R.kq) := by
   have h2 : _ ≤ knowledgeErrorQROM R F (t + R.kq) := (Configurations.knowledgeError_le (k := (R.T C).k)
     (e := fsExtraBytes + (R.T C).maxGrant) (t := t + R.kq) F.kq_le (F.digests_le C)
@@ -397,9 +395,9 @@ theorem soundness_qrom_at (C : R.Compiled) {t : ℕ} (𝒜 : (setting R F C).QRO
 run's law of the output and the verdict, and in it the spBCS verifier accepts while the
 database extractor at `keyExtractor`, reading the table of the adversary's and the verifier's
 `kq` queries, returns no witness of the headline relation with probability at most
-`forkKnowledgeErrorROMAt (t + kq)`. The compiled circuits' `enforce`: trust base. -/
+`forkKnowledgeErrorROMAt (t + kq)`. -/
 @[config_template headline]
-theorem knowledge_soundness_rom_at (C : R.Compiled) {Zo : Type} {t : ℕ}
+theorem knowledge_soundness_rom_at (C : R.ProofSystem) {Zo : Type} {t : ℕ}
     (𝒢 : (setting R F C).ROMAdversary (Claim R.Stmt (setting R F C).model.NIProof × Zo) t) :
     𝒢.OnlineExtracts (verifierROM R F C) NARG.ROM.OracleSampler.lazy.law R.rel'
       ((setting R F C).model.dbExtract (keyExtractor R F C)) 0
@@ -414,10 +412,9 @@ theorem knowledge_soundness_rom_at (C : R.Compiled) {Zo : Type} {t : ℕ}
 queries** (`SPBCS.ProofSystemTranscript.soundnessROM`, the `soundnessROM` clause of
 `SPBCS.knowledgeGuarantees`): every classical `t`-query adversary that makes no proof queries
 outputs a statement without a witness of the headline relation and a proof the spBCS verifier accepts
-with probability at most `forkKnowledgeErrorROMAt (t + kq)`. The compiled circuits' `enforce`:
-trust base. -/
+with probability at most `forkKnowledgeErrorROMAt (t + kq)`. -/
 @[config_template headline]
-theorem soundness_rom_at (C : R.Compiled) {t : ℕ} (𝒜 : (setting R F C).ROMAdversary (Claim R.Stmt (setting R F C).model.NIProof) t) :
+theorem soundness_rom_at (C : R.ProofSystem) {t : ℕ} (𝒜 : (setting R F C).ROMAdversary (Claim R.Stmt (setting R F C).model.NIProof) t) :
     𝒜.acceptsFalse (verifierROM R F C) R.rel' ≤ knowledgeErrorROM R F (t + R.kq) := by
   have h2 : _ ≤ knowledgeErrorROM R F (t + R.kq) := (Configurations.knowledgeErrorROM_le
     (k := (R.T C).k) (t := t + R.kq) (F.digests_le C) (F.error_le C)).trans_eq (by rw [F.k_eq C])
@@ -429,10 +426,9 @@ simulator and simulation error `0`): for every
 adversary of `def:adversary` that makes no proof queries, with at most `qQ` queries and an
 auxiliary output, the extraction run leaves the adversary's register in its real-run state at every
 output and verdict, and in it the spBCS verifier accepts while the database extractor returns no witness with probability at
-most `forkKnowledgeErrorAt (qQ + kq)` (`knowledge_soundness_qrom_at`, `knowledgeErrorQROM_mono`).
-The compiled circuits' `enforce`: trust base. -/
+most `forkKnowledgeErrorAt (qQ + kq)` (`knowledge_soundness_qrom_at`, `knowledgeErrorQROM_mono`). -/
 @[config_template headline]
-theorem knowledge_soundness_qrom (C : R.Compiled) {Zo : Type} {t : ℕ}
+theorem knowledge_soundness_qrom (C : R.ProofSystem) {Zo : Type} {t : ℕ}
     (𝒢 : (setting R F C).QROMAdversary (Claim R.Stmt (setting R F C).model.NIProof × Zo) t) (ht : t ≤ R.qQ) :
     𝒢.OnlineExtracts (verifierQROM R F C) NARG.QROM.compressedSim R.rel'
       (NARG.QROM.compressedExt ((setting R F C).model.dbExtractBits (keyExtractor R F C))) 0
@@ -443,10 +439,9 @@ theorem knowledge_soundness_qrom (C : R.Compiled) {Zo : Type} {t : ℕ}
 /-- **Soundness of the configuration's argument at the quantum query cap `qQ`**: every
 adversary of `def:adversary` that makes no proof queries, with at most `qQ` queries, outputs a statement without a
 witness of the headline relation and an accepted proof with probability at most
-`forkKnowledgeErrorAt (qQ + kq)` (`soundness_qrom_at`, `knowledgeErrorQROM_mono`). The compiled
-circuits' `enforce`: trust base. -/
+`forkKnowledgeErrorAt (qQ + kq)` (`soundness_qrom_at`, `knowledgeErrorQROM_mono`). -/
 @[config_template headline]
-theorem soundness_qrom (C : R.Compiled) {t : ℕ} (𝒜 : (setting R F C).QROMAdversary (Claim R.Stmt (setting R F C).model.NIProof) t)
+theorem soundness_qrom (C : R.ProofSystem) {t : ℕ} (𝒜 : (setting R F C).QROMAdversary (Claim R.Stmt (setting R F C).model.NIProof) t)
     (ht : t ≤ R.qQ) :
     𝒜.acceptsFalse (verifierQROM R F C) R.rel' ≤ knowledgeErrorQROM R F (R.qQ + R.kq) :=
   (soundness_qrom_at R F C 𝒜).trans (knowledgeErrorQROM_mono R F (Nat.add_le_add_right ht _))
@@ -457,9 +452,9 @@ classical adversary that makes no proof queries, with at most `qR` queries and a
 the extraction run has the real run's law of the output and the verdict, and in it the spBCS
 verifier accepts while the database extractor returns no witness with probability at most
 `forkKnowledgeErrorROMAt (qR + kq)` (`knowledge_soundness_rom_at`,
-`knowledgeErrorROM_mono`). The compiled circuits' `enforce`: trust base. -/
+`knowledgeErrorROM_mono`). -/
 @[config_template headline]
-theorem knowledge_soundness_rom (C : R.Compiled) {Zo : Type} {t : ℕ}
+theorem knowledge_soundness_rom (C : R.ProofSystem) {Zo : Type} {t : ℕ}
     (𝒢 : (setting R F C).ROMAdversary (Claim R.Stmt (setting R F C).model.NIProof × Zo) t) (ht : t ≤ R.qR) :
     𝒢.OnlineExtracts (verifierROM R F C) NARG.ROM.OracleSampler.lazy.law R.rel'
       ((setting R F C).model.dbExtract (keyExtractor R F C)) 0
@@ -471,9 +466,9 @@ theorem knowledge_soundness_rom (C : R.Compiled) {Zo : Type} {t : ℕ}
 classical query cap `qR`**: every classical adversary that makes no proof queries, with at most
 `qR` queries, outputs a statement without a witness of the headline relation and an accepted proof with
 probability at most `forkKnowledgeErrorROMAt (qR + kq)` (`soundness_rom_at`,
-`knowledgeErrorROM_mono`). The compiled circuits' `enforce`: trust base. -/
+`knowledgeErrorROM_mono`). -/
 @[config_template headline]
-theorem soundness_rom (C : R.Compiled) {t : ℕ} (𝒜 : (setting R F C).ROMAdversary (Claim R.Stmt (setting R F C).model.NIProof) t)
+theorem soundness_rom (C : R.ProofSystem) {t : ℕ} (𝒜 : (setting R F C).ROMAdversary (Claim R.Stmt (setting R F C).model.NIProof) t)
     (ht : t ≤ R.qR) :
     𝒜.acceptsFalse (verifierROM R F C) R.rel' ≤ knowledgeErrorROM R F (R.qR + R.kq) :=
   (soundness_rom_at R F C 𝒜).trans
@@ -485,28 +480,28 @@ theorem soundness_rom (C : R.Compiled) {t : ℕ} (𝒜 : (setting R F C).ROMAdve
 setting opens at most `proofBound` positions and every tree has at most `proofBound` leaves, since
 `proofBound` is the larger of the tree size `N` and the number `nq` of queried leaves. -/
 @[config_template]
-theorem proofFormat (C : R.Compiled) : (R.T C).ProofFormat R.kS (F.hb C) R.proofBound :=
+theorem proofFormat (C : R.ProofSystem) : (R.T C).ProofFormat R.kS (F.hb C) R.proofBound :=
   ProofSystemTranscript.formatBounds (F.hb C) (fun d => (F.leaves_le C d).trans (le_max_left _ _))
     fun ch => (F.queries_le C ch).trans (le_max_right _ _)
 
 /-- **The honest prover of the configuration at a strategy**: the IOP's honest prover at the
 strategy `H` (the proof system's phased honest prover and every forked domain's honest prover, read
-at the statement). `TA`: trust base. -/
+at the statement). -/
 @[config_template]
-abbrev honestProver (_F : R.GrantedFacts) (C : R.Compiled) (TA : R.TA C) {Inp : Type}
+abbrev honestProver (_F : R.GrantedFacts) (C : R.ProofSystem) {Inp : Type}
     {relH : Set (R.Val × Inp)} (H : R.Strategy Inp relH) :
     (R.iop C).Honest (R.sim C) Inp (R.hrel relH) :=
-  R.honest C TA H
+  R.honest C H
 
 /-- **The honest prover of the configuration's argument** at the strategy `H`: the compiled proof
 of the IOP's honest prover, with uniform coins, Merkle salts and salt, in the format `proofBound`
 (`ProofSystemTranscript.prover`). It is the prover of every completeness, zero-knowledge and
-witness-indistinguishability statement of the configuration. `TA`: trust base. -/
+witness-indistinguishability statement of the configuration. -/
 @[config_template]
-noncomputable abbrev prover (C : R.Compiled) (TA : R.TA C) {Inp : Type}
+noncomputable abbrev prover (C : R.ProofSystem) {Inp : Type}
     {relH : Set (R.Val × Inp)} (H : R.Strategy Inp relH) :=
   (R.T C).prover R.kS (F.hb C) (proofFormat R F C)
-    (RealizedProgram.ProofSystem.IOP.honest (honestProver R F C TA H))
+    (RealizedProgram.ProofSystem.IOP.honest (honestProver R F C H))
 
 /-- **The simulator of the configuration's argument**: the compiled simulator
 (`ProofSystemTranscript.simulator`, `SPBCS.niSimulator`) of the IOP's simulator at the
@@ -517,7 +512,7 @@ simulation-extractability statement of the configuration, at every strategy.
 Running time: that of `SPBCS.niSimulator` at the setting (its Running time paragraph). This running
 time is argued here, not proved in Lean. -/
 @[config_template]
-abbrev simulator (C : R.Compiled) :=
+abbrev simulator (C : R.ProofSystem) :=
   (R.T C).simulator R.kS (F.hb C) (proofFormat R F C) (R.sim C)
 
 open Classical in
@@ -526,27 +521,26 @@ the `completeness` clause of `SPBCS.CompletenessGuarantees` at `GrantedFacts.e2e
 honest input `y` at the statement `s`, at every value `c` of the honest prover's coins, Merkle salts
 `ν` and salt `σ`, over a uniform oracle the spBCS verifier rejects the compiled honest proof
 with probability at most `err H + rounds/2^chernoff + C(rounds, 2)/2^(8k)` (the strategy's
-completeness error, the overrun and the key collisions). The compiled circuits' `enforce`, `TA`:
-trust base. -/
+completeness error, the overrun and the key collisions). -/
 @[config_template headline]
-theorem completeness (C : R.Compiled) (TA : R.TA C) {Inp : Type} {relH : Set (R.Val × Inp)}
-    (H : R.Strategy Inp relH) (c : (honestProver R F C TA H).Coins)
+theorem completeness (C : R.ProofSystem) {Inp : Type} {relH : Set (R.Val × Inp)}
+    (H : R.Strategy Inp relH) (c : (honestProver R F C H).Coins)
     {s : R.Stmt} {y : Inp} (hy : (s, y) ∈ R.hrel relH)
     (ν : (setting R F C).model.Pos → MerkleSalt (2 * (R.T C).k)) (σ : FiatShamirSalt R.kS) :
     Pr[h ← (Query (R.T C).k (2 * (R.T C).k) R.kS (2 ^ 40) →
           Out (R.T C).k (fsExtraBytes + (R.T C).maxGrant)) :
-        ¬ (setting R F C).model.Accepts h s ((prover R F C TA H).toFn.prove h s y
+        ¬ (setting R F C).model.Accepts h s ((prover R F C H).toFn.prove h s y
           { salt := σ, coins := { iop := c, merkleSalts := ν } }).val ((setting R F C).queries s)] ≤
       (R.err H : ℝ≥0∞) + (R.rounds : ℝ≥0∞) / 2 ^ R.chernoff + SPBCS.keyCollision R.rounds R.k := by
-  have hp : ∀ h, ((prover R F C TA H).toFn.prove h s y
+  have hp : ∀ h, ((prover R F C H).toFn.prove h s y
       { salt := σ, coins := { iop := c, merkleSalts := ν } }).val = SPBCS.prove
-        (RealizedProgram.ProofSystem.IOP.honest (honestProver R F C TA H) y c) s σ
+        (RealizedProgram.ProofSystem.IOP.honest (honestProver R F C H) y c) s σ
         (setting R F C).encoder ν h ((setting R F C).queries s) := fun h =>
     (setting R F C).model.toFn_niProver (setting R F C).layout _ (setting R F C).encoder
       (setting R F C).viewEncoder (proofFormat R F C) h s y _
   refine le_of_eq_of_le (congrArg (probUniform _) (funext fun h => congrArg Not (congrArg
     (fun π => (setting R F C).model.Accepts h s π ((setting R F C).queries s)) (hp h)))) ?_
-  have h := ((F.e2e C TA H (verifierQueries_le R F C) (proofFormat R F C)).completeness c).completeness s y ν σ hy
+  have h := ((F.e2e C H (verifierQueries_le R F C) (proofFormat R F C)).completeness c).completeness s y ν σ hy
   rw [ROM.probUniform_unit_prod, SPTerm.size_eq_sum] at h
   refine h.trans (add_le_add (add_le_add le_rfl (overrun_le R F C)) ?_)
   rw [← F.k_eq C]
@@ -559,23 +553,22 @@ witness sampler `D` whose honest input on the proof query `u` is outside the hon
 statement `s` with probability at most `η` (`hD`), at every value `c` of the honest prover's coins,
 Merkle salts `ν` and salt `σ`, over the sampler's coins and a uniform oracle the spBCS verifier
 rejects the compiled honest proof at the drawn input with probability at most
-`err H + rounds/2^chernoff + C(rounds, 2)/2^(8k) + η`. The compiled circuits' `enforce`, `TA`:
-trust base. -/
+`err H + rounds/2^chernoff + C(rounds, 2)/2^(8k) + η`. -/
 @[config_template headline]
-theorem completeness_of_sampler (C : R.Compiled) (TA : R.TA C) {Inp : Type}
+theorem completeness_of_sampler (C : R.ProofSystem) {Inp : Type}
     {relH : Set (R.Val × Inp)} (H : R.Strategy Inp relH)
-    (c : (honestProver R F C TA H).Coins) {U : Type} (D : WitnessSampler U Inp)
+    (c : (honestProver R F C H).Coins) {U : Type} (D : WitnessSampler U Inp)
     {s : R.Stmt} {u : U} {η : ℝ≥0} (hD : D.MissesAtMostAt (R.hrel relH) s u η)
     (ν : (setting R F C).model.Pos → MerkleSalt (2 * (R.T C).k)) (σ : FiatShamirSalt R.kS) :
     Pr[d ← D.Draw (Query (R.T C).k (2 * (R.T C).k) R.kS (2 ^ 40) →
           Out (R.T C).k (fsExtraBytes + (R.T C).maxGrant)) :
-        ¬ (setting R F C).model.Accepts d.oracle s ((prover R F C TA H).toFn.prove d.oracle s
+        ¬ (setting R F C).model.Accepts d.oracle s ((prover R F C H).toFn.prove d.oracle s
           (D.draw u d.coins) { salt := σ, coins := { iop := c, merkleSalts := ν } }).val
           ((setting R F C).queries s)] ≤
       (R.err H : ℝ≥0∞) + (R.rounds : ℝ≥0∞) / 2 ^ R.chernoff + SPBCS.keyCollision R.rounds R.k + η :=
-  D.prob_draw_le hD (fun y h => ¬ (setting R F C).model.Accepts h s ((prover R F C TA H).toFn.prove
+  D.prob_draw_le hD (fun y h => ¬ (setting R F C).model.Accepts h s ((prover R F C H).toFn.prove
       h s y { salt := σ, coins := { iop := c, merkleSalts := ν } }).val ((setting R F C).queries s))
-    fun _ hy => completeness R F C TA H c hy ν σ
+    fun _ hy => completeness R F C H c hy ν σ
 
 open Classical in
 /-- **Zero knowledge of the configuration's argument** (paper `thm:e2e`(3) in the QROM: the
@@ -584,16 +577,15 @@ zero knowledge for many adaptively chosen proofs (the distinguisher receives the
 after the last proof query) against query-bounded adversaries
 (`NARG.QROM.EverlastingZeroKnowledge`) of the configuration's prover `prover` on the honest inputs,
 against its simulator `simulator`, for statements and honest inputs read from any finite types, with error
-`zkError (err H)`, the strategy's completeness error as the HVZK error. The compiled circuits'
-`enforce`, `TA`: trust base. -/
+`zkError (err H)`, the strategy's completeness error as the HVZK error. -/
 @[config_template headline]
-theorem everlasting_zero_knowledge_qrom (C : R.Compiled) (TA : R.TA C) {Inp : Type} {relH : Set (R.Val × Inp)}
+theorem everlasting_zero_knowledge_qrom (C : R.ProofSystem) {Inp : Type} {relH : Set (R.Val × Inp)}
     (H : R.Strategy Inp relH) {X' W' : Type} [Fintype X'] [DecidableEq X'] [Fintype W']
     [DecidableEq W'] (fx : X' → R.Stmt) (fw : W' → Inp) :
     NARG.QROM.EverlastingZeroKnowledge (fun x w => (fx x, fw w) ∈ R.hrel relH) queryEncoding
-      ((prover R F C TA H).comap fx fw) ((simulator R F C).comap fx)
+      ((prover R F C H).comap fx fw) ((simulator R F C).comap fx)
       ((setting R F C).model.zkError (R.err H)) :=
-  (F.e2e C TA H (verifierQueries_le R F C) (proofFormat R F C)).zeroKnowledge.zeroKnowledge X' W' fx fw
+  (F.e2e C H (verifierQueries_le R F C) (proofFormat R F C)).zeroKnowledge.zeroKnowledge X' W' fx fw
 
 open Classical in
 /-- **Zero knowledge of the configuration's argument at drawn honest inputs** (the
@@ -602,20 +594,19 @@ knowledge of `everlasting_zero_knowledge_qrom` when each proof query of `relU` i
 by `D`, which misses the honest relation with probability at most `η` (`hD`): against every
 query-bounded adversary (`SPBCS.ZeroKnowledgeOfSampler`), for statements and proof queries read
 from any finite types, the counted honest prover drawing its input (`drawProver`) and the configuration's
-counted simulator are at most `zkError (err H) t Q + Q · η` apart. The compiled
-circuits' `enforce`, `TA`: trust base. -/
+counted simulator are at most `zkError (err H) t Q + Q · η` apart. -/
 @[config_template headline]
-theorem everlasting_zero_knowledge_qrom_of_sampler (C : R.Compiled) (TA : R.TA C) {Inp : Type}
+theorem everlasting_zero_knowledge_qrom_of_sampler (C : R.ProofSystem) {Inp : Type}
     {relH : Set (R.Val × Inp)} (H : R.Strategy Inp relH) {U : Type}
     (D : WitnessSampler U Inp) {relU : Set (R.Stmt × U)} {η : ℝ≥0}
     (hD : D.MissesAtMost (R.hrel relH) relU η) :
     (setting R F C).model.ZeroKnowledgeOfSampler (setting R F C).layout
       (setting R F C).viewEncoder (proofFormat R F C)
-      (RealizedProgram.ProofSystem.IOP.honest (honestProver R F C TA H)) id
+      (RealizedProgram.ProofSystem.IOP.honest (honestProver R F C H)) id
       (RealizedProgram.ProofSystem.IOP.simulator (R.sim C))
       ((R.T C).preimages R.kS (F.hb C)) D relU
       (fun t Q => (setting R F C).model.zkError (R.err H) t Q + Q * η) :=
-  (F.e2e C TA H (verifierQueries_le R F C) (proofFormat R F C)).zeroKnowledge.zeroKnowledgeOfSampler D relU η hD
+  (F.e2e C H (verifierQueries_le R F C) (proofFormat R F C)).zeroKnowledge.zeroKnowledgeOfSampler D relU η hD
 
 /-- **Witness indistinguishability of the configuration's argument** (paper `thm:e2e`(4):
 `ProofSystemTranscript.Guarantees.witnessIndist` at `GrantedFacts.e2e`): unconditional (against a
@@ -626,15 +617,15 @@ against adversaries making `Q` proof queries, each a statement and two honest in
 encoding length at most `ℓ` chosen as a function of the whole oracle and the earlier proofs, every
 distinguisher of the oracle and the proofs has advantage at most `Q · wiError (err H) (choiceCount
 ℓ)` (`SPBCS.WitnessIndistinguishableOfLength`), the strategy's completeness error as the HVZK
-error. The compiled circuits' `enforce`, `TA`: trust base. -/
+error. -/
 @[config_template headline]
-theorem unconditional_witness_indistinguishability (C : R.Compiled) (TA : R.TA C) {Inp : Type}
+theorem unconditional_witness_indistinguishability (C : R.ProofSystem) {Inp : Type}
     {relH : Set (R.Val × Inp)} (H : R.Strategy Inp relH)
     (eX : SPBCS.BitEncoding R.Stmt) (eW : SPBCS.BitEncoding Inp) (Q ℓ : ℕ) :
-    (setting R F C).model.WitnessIndistinguishableOfLength (prover R F C TA H) eX eW
+    (setting R F C).model.WitnessIndistinguishableOfLength (prover R F C H) eX eW
       (R.hrel relH) Q ℓ
       (Q * (setting R F C).model.wiError (R.err H) (SPBCS.choiceCount ℓ)) :=
-  (F.e2e C TA H (verifierQueries_le R F C) (proofFormat R F C)).witnessIndist eX eW Q ℓ
+  (F.e2e C H (verifierQueries_le R F C) (proofFormat R F C)).witnessIndist eX eW Q ℓ
 
 open Classical in
 /-- **Zero knowledge of the configuration's argument in the classical random-oracle model**
@@ -642,14 +633,13 @@ open Classical in
 `GrantedFacts.e2e`): everlasting zero knowledge for many adaptively chosen proofs (the
 distinguisher receives the whole oracle after the last proof query) against query-bounded
 classical adversaries (`NARG.ROM.EverlastingZeroKnowledge`), of the prover `prover` against
-the compiled simulator, with error `zkErrorROM (err H)`. The compiled circuits' `enforce`, `TA`:
-trust base. -/
+the compiled simulator, with error `zkErrorROM (err H)`. -/
 @[config_template headline]
-theorem everlasting_zero_knowledge_rom (C : R.Compiled) (TA : R.TA C) {Inp : Type}
+theorem everlasting_zero_knowledge_rom (C : R.ProofSystem) {Inp : Type}
     {relH : Set (R.Val × Inp)} (H : R.Strategy Inp relH) :
-    NARG.ROM.EverlastingZeroKnowledge (fun x w => (x, w) ∈ R.hrel relH) (prover R F C TA H)
+    NARG.ROM.EverlastingZeroKnowledge (fun x w => (x, w) ∈ R.hrel relH) (prover R F C H)
       (simulator R F C) ((setting R F C).model.zkErrorROM (R.err H)) :=
-  (F.e2e C TA H (verifierQueries_le R F C) (proofFormat R F C)).zeroKnowledge.zeroKnowledgeROM
+  (F.e2e C H (verifierQueries_le R F C) (proofFormat R F C)).zeroKnowledge.zeroKnowledgeROM
 
 open Classical in
 /-- **Weak online simulation extractability of the configuration's argument in the QROM** (paper
@@ -660,10 +650,9 @@ database extractor at `keyExtractor`, at the verifier's `kq` queries: in the ext
 joint state of the adversary's output and its auxiliary output is as in the simulated run, and an
 accepted proof of a fresh statement from which the extractor obtains no witness of the headline
 relation has probability at most `simExtractionError kq (max_c ε c) q t Q`
-(`SPBCS.WeakOnlineSimulationExtractable`). The compiled circuits' `enforce`, `TA`: trust
-base. -/
+(`SPBCS.WeakOnlineSimulationExtractable`). -/
 @[config_template headline]
-theorem weak_online_simulation_extractability_qrom (C : R.Compiled) (TA : R.TA C) {Inp : Type}
+theorem weak_online_simulation_extractability_qrom (C : R.ProofSystem) {Inp : Type}
     {relH : Set (R.Val × Inp)} (H : R.Strategy Inp relH) :
     (setting R F C).model.WeakOnlineSimulationExtractable R.proofBound
       (setting R F C).queries R.rel' (keyExtractor R F C) R.kq (verifierQueries_le R F C)
@@ -672,7 +661,7 @@ theorem weak_online_simulation_extractability_qrom (C : R.Compiled) (TA : R.TA C
         (2 * Fintype.card (setting R F C).model.Pos +
           (R.iop C).shape.term.size (R.iop C).rounds + ∑ d, (R.iop C).shape.nb d)) := by
   rw [keyExtractor_eq R F C]
-  exact (F.e2e C TA H (verifierQueries_le R F C) (proofFormat R F C)).simOnlineExtractability
+  exact (F.e2e C H (verifierQueries_le R F C) (proofFormat R F C)).simOnlineExtractability
 
 open Classical in
 /-- **Simulation-sound extractability of the configuration's argument in the QROM** (paper
@@ -680,10 +669,9 @@ open Classical in
 `GrantedFacts.e2e`; Unruh 2017, Definition 14, p. 21, weak variant, for residual-state tests that
 make no oracle queries, with straight-line extraction and freshness in both events) against
 query-bounded adversaries, with the counted simulator of the configuration's simulator (`simulator`) and the
-database extractor at `keyExtractor`, at the verifier's `kq` queries. The compiled circuits'
-`enforce`, `TA`: trust base. -/
+database extractor at `keyExtractor`, at the verifier's `kq` queries. -/
 @[config_template headline]
-theorem unruh_simulation_extractability_qrom (C : R.Compiled) (TA : R.TA C) {Inp : Type}
+theorem unruh_simulation_extractability_qrom (C : R.ProofSystem) {Inp : Type}
     {relH : Set (R.Val × Inp)} (H : R.Strategy Inp relH) :
     (setting R F C).model.SimulationSoundExtractableFresh R.proofBound
       (setting R F C).queries R.rel' (keyExtractor R F C) R.kq
@@ -692,7 +680,7 @@ theorem unruh_simulation_extractability_qrom (C : R.Compiled) (TA : R.TA C) {Inp
         (2 * Fintype.card (setting R F C).model.Pos +
           (R.iop C).shape.term.size (R.iop C).rounds + ∑ d, (R.iop C).shape.nb d)) := by
   rw [keyExtractor_eq R F C]
-  exact (F.e2e C TA H (verifierQueries_le R F C) (proofFormat R F C)).simExtractability
+  exact (F.e2e C H (verifierQueries_le R F C) (proofFormat R F C)).simExtractability
 
 /-- **Weak online simulation extractability of the configuration's argument in the classical
 random-oracle model** (paper `thm:e2e`(5) in the ROM, the joint form of `def:bcs-se`:
@@ -702,10 +690,9 @@ program of the configuration's simulator (`simulator`) on uniform coins and the 
 on the table of the lazily sampled execution, at the verifier's `kq` queries: the extractor's
 execution has the simulated execution's law of the claim, the auxiliary output, the statements
 of the proof queries and the verdict (oracle simulation error `0`), and wins without extraction with
-probability at most `simExtractionErrorROM kq (max_c ε c) q tq Q`. The compiled circuits'
-`enforce`, `TA`: trust base. -/
+probability at most `simExtractionErrorROM kq (max_c ε c) q tq Q`. -/
 @[config_template headline]
-theorem weak_online_simulation_extractability_rom (C : R.Compiled) (TA : R.TA C) {Inp : Type}
+theorem weak_online_simulation_extractability_rom (C : R.ProofSystem) {Inp : Type}
     {relH : Set (R.Val × Inp)} (H : R.Strategy Inp relH) :
     (setting R F C).model.WeakOnlineSimulationExtractableROM R.proofBound
       (setting R F C).queries R.rel' (keyExtractor R F C) R.kq (simulator R F C).prog
@@ -715,7 +702,7 @@ theorem weak_online_simulation_extractability_rom (C : R.Compiled) (TA : R.TA C)
         (2 * Fintype.card (setting R F C).model.Pos +
           (R.iop C).shape.term.size (R.iop C).rounds + ∑ d, (R.iop C).shape.nb d)) := by
   rw [keyExtractor_eq R F C]
-  exact (F.e2e C TA H (verifierQueries_le R F C) (proofFormat R F C)).simOnlineExtractabilityROM
+  exact (F.e2e C H (verifierQueries_le R F C) (proofFormat R F C)).simOnlineExtractabilityROM
 
 open Classical in
 /-- **Simulation-sound extractability of the configuration's argument for tests that query the
@@ -726,10 +713,9 @@ simulated oracle after extraction) against query-bounded adversaries, with the c
 the configuration's simulator (`simulator`) and the targeted extractor at `keyExtractor`, at the verifier's
 `kq` queries: for every adversary with at most `tq` queries and `Q` proof queries and every
 residual-state test with at most `tTest` queries, Prove with the test is at most Extract′ with the
-test plus `simExtractionError kq (max_c ε c) q (tq + tTest) Q + swapError tTest`. The compiled
-circuits' `enforce`, `TA`: trust base. -/
+test plus `simExtractionError kq (max_c ε c) q (tq + tTest) Q + swapError tTest`. -/
 @[config_template headline]
-theorem unruh_simulation_extractability_sim_oracle_qrom (C : R.Compiled) (TA : R.TA C)
+theorem unruh_simulation_extractability_sim_oracle_qrom (C : R.ProofSystem)
     {Inp : Type} {relH : Set (R.Val × Inp)} (H : R.Strategy Inp relH) :
     (setting R F C).model.SimulationSoundExtractableSimOracle R.proofBound
       (setting R F C).queries R.rel' (keyExtractor R F C) R.kq
@@ -740,7 +726,7 @@ theorem unruh_simulation_extractability_sim_oracle_qrom (C : R.Compiled) (TA : R
             (R.iop C).shape.term.size (R.iop C).rounds + ∑ d, (R.iop C).shape.nb d) (tq + tTest) Q +
         (setting R F C).model.swapError tTest := by
   rw [keyExtractor_eq R F C]
-  exact (F.e2e C TA H (verifierQueries_le R F C) (proofFormat R F C)).simExtractabilitySimOracle
+  exact (F.e2e C H (verifierQueries_le R F C) (proofFormat R F C)).simExtractabilitySimOracle
 
 /-! ## The fixed honest strategy -/
 
@@ -750,15 +736,15 @@ at the fixed honest strategy, whose completeness error is `0`): everlasting zero
 knowledge for many adaptively chosen proofs (the distinguisher receives the whole oracle after the
 last proof query) against query-bounded adversaries of the compiled honest prover on the
 valid honest inputs at their statements, at the configuration's compiled simulator, with error
-`zkError 0`. The compiled circuits' `enforce`, `TA`: trust base. -/
+`zkError 0`. -/
 @[config_template headline]
-theorem everlasting_zero_knowledge_honest_qrom (C : R.Compiled) (TA : R.TA C) {X' W' : Type}
+theorem everlasting_zero_knowledge_honest_qrom (C : R.ProofSystem) {X' W' : Type}
     [Fintype X'] [DecidableEq X'] [Fintype W'] [DecidableEq W'] (fx : X' → R.Stmt)
     (fw : W' → R.HonestIn) :
     NARG.QROM.EverlastingZeroKnowledge (fun x w => (fx x, fw w) ∈ R.hrel R.relH) queryEncoding
-      ((prover R F C TA R.strategy).comap fx fw) ((simulator R F C).comap fx)
+      ((prover R F C R.strategy).comap fx fw) ((simulator R F C).comap fx)
       ((setting R F C).model.zkError 0) := by
-  have h := everlasting_zero_knowledge_qrom R F C TA R.strategy fx fw
+  have h := everlasting_zero_knowledge_qrom R F C R.strategy fx fw
   rwa [F.exact] at h
 
 open Classical in
@@ -766,18 +752,18 @@ open Classical in
 the fixed honest strategy, whose completeness error is `0`): on a valid honest input `y` at its
 statement, at every value of the honest prover's coins, Merkle salts and salt, over a uniform
 oracle the spBCS verifier rejects the compiled honest proof with probability at most
-`rounds/2^chernoff + C(rounds, 2)/2^(8k)`. The compiled circuits' `enforce`, `TA`: trust base. -/
+`rounds/2^chernoff + C(rounds, 2)/2^(8k)`. -/
 @[config_template headline]
-theorem completeness_honest (C : R.Compiled) (TA : R.TA C)
-    (c : (honestProver R F C TA R.strategy).Coins) (y : R.HonestIn)
+theorem completeness_honest (C : R.ProofSystem)
+    (c : (honestProver R F C R.strategy).Coins) (y : R.HonestIn)
     (ν : (setting R F C).model.Pos → MerkleSalt (2 * (R.T C).k)) (σ : FiatShamirSalt R.kS) :
     Pr[h ← (Query (R.T C).k (2 * (R.T C).k) R.kS (2 ^ 40) →
           Out (R.T C).k (fsExtraBytes + (R.T C).maxGrant)) :
-        ¬ (setting R F C).model.Accepts h (R.keyStmtOf y) ((prover R F C TA R.strategy).toFn.prove h
+        ¬ (setting R F C).model.Accepts h (R.keyStmtOf y) ((prover R F C R.strategy).toFn.prove h
           (R.keyStmtOf y) y { salt := σ, coins := { iop := c, merkleSalts := ν } }).val
           ((setting R F C).queries (R.keyStmtOf y))] ≤
       (R.rounds : ℝ≥0∞) / 2 ^ R.chernoff + SPBCS.keyCollision R.rounds R.k := by
-  have h := completeness R F C TA R.strategy c (F.keyStmtOf_mem y) ν σ
+  have h := completeness R F C R.strategy c (F.keyStmtOf_mem y) ν σ
   rwa [F.exact, ENNReal.coe_zero, zero_add] at h
 
 end Common
@@ -799,18 +785,18 @@ queries answered, has advantage at most
 `Q t/2^(8 kS) + Q (Q - 1)/(2 · 2^(8 kS)) + Q · keyCollision rounds k
 + Q (4 · pos · t + 4 (pos² Q + pos))/2^(16 k) + Q (rounds/2^chernoff + err H)`
 (`zkErrorROMQuery (err H)` at `pos` positions, `rounds` rounds, `2k`-byte Merkle salts and the
-overrun bound `overrun_le`). The compiled circuits' `enforce`, `TA`: trust base. -/
+overrun bound `overrun_le`). -/
 @[config_template headline]
-theorem zero_knowledge_rom (C : R.Compiled) (TA : R.TA C) {Inp : Type}
+theorem zero_knowledge_rom (C : R.ProofSystem) {Inp : Type}
     {relH : Set (R.Val × Inp)} (H : R.Strategy Inp relH) :
-    NARG.ROM.ZeroKnowledge (fun x w => (x, w) ∈ R.hrel relH) (prover R F C TA H)
+    NARG.ROM.ZeroKnowledge (fun x w => (x, w) ∈ R.hrel relH) (prover R F C H)
       (simulator R F C)
       (fun t Q => Q * t / 2 ^ (8 * R.kS) + Q * (Q - 1) / (2 * 2 ^ (8 * R.kS)) +
         Q * (SPBCS.keyCollision R.rounds R.k).toReal +
         Q * ((4 * t * R.pos + 4 * (Q * R.pos ^ 2 + R.pos)) / 2 ^ (16 * R.k)) +
         Q * (R.rounds / 2 ^ R.chernoff + R.err H)) := by
   refine GordieHowe.ROM.ZeroKnowledge.mono
-    (F.e2e C TA H (verifierQueries_le R F C) (proofFormat R F C)).zeroKnowledge.zeroKnowledgeROMQuery fun t Q => ?_
+    (F.e2e C H (verifierQueries_le R F C) (proofFormat R F C)).zeroKnowledge.zeroKnowledgeROMQuery fun t Q => ?_
   have hkc : (SPBCS.keyCollision ((R.iop C).term.size (R.iop C).rounds) (R.T C).k).toReal ≤
       (SPBCS.keyCollision R.rounds R.k).toReal := by
     rw [← F.k_eq C, SPTerm.size_eq_sum]
@@ -829,7 +815,7 @@ theorem zero_knowledge_rom (C : R.Compiled) (TA : R.TA C) {Inp : Type}
     congr 1
     ring
   have hQ : (0 : ℝ) ≤ Q := Nat.cast_nonneg Q
-  rw [Base.zkErrorROMQuery, hU, hN]
+  rw [SPBCS.zkErrorROMQuery, hU, hN]
   exact add_le_add (add_le_add (add_le_add (add_le_add le_rfl le_rfl)
     (mul_le_mul_of_nonneg_left hkc hQ)) le_rfl)
     (mul_le_mul_of_nonneg_left (add_le_add hov le_rfl) hQ)
@@ -853,20 +839,20 @@ post phase, with `Q` proof queries answered, has advantage at most
 `4 Q t/2^(4 kS) + Q (Q - 1)/2^(8 kS) + Q · keyCollision rounds k + Q (4 t √pos/2^(8 k)
 + 3 (pos + pos² Q + pos²)/2^(16 k)) + Q (rounds/2^chernoff + err H)` (`zkErrorQuery (err H)` at
 `pos` positions, `rounds` rounds, `2k`-byte Merkle salts and the overrun bound
-`overrun_le`). The compiled circuits' `enforce`, `TA`: trust base. -/
+`overrun_le`). -/
 @[config_template headline]
-theorem zero_knowledge_qrom (C : R.Compiled) (TA : R.TA C) {Inp : Type}
+theorem zero_knowledge_qrom (C : R.ProofSystem) {Inp : Type}
     {relH : Set (R.Val × Inp)} (H : R.Strategy Inp relH) {X' W' : Type} [Fintype X']
     [DecidableEq X'] [Fintype W'] [DecidableEq W'] (fx : X' → R.Stmt) (fw : W' → Inp) :
     NARG.QROM.ZeroKnowledge (fun x w => (fx x, fw w) ∈ R.hrel relH) queryEncoding
-      ((prover R F C TA H).comap fx fw) ((simulator R F C).comap fx)
+      ((prover R F C H).comap fx fw) ((simulator R F C).comap fx)
       (fun t Q => 4 * Q * t / 2 ^ (4 * R.kS) + Q * (Q - 1) / 2 ^ (8 * R.kS) +
         Q * (SPBCS.keyCollision R.rounds R.k).toReal +
         Q * (4 * t * √R.pos / 2 ^ (8 * R.k) +
           3 * ((R.pos + Q * R.pos ^ 2 + R.pos ^ 2) / 2 ^ (16 * R.k))) +
         Q * (R.rounds / 2 ^ R.chernoff + R.err H)) := by
   refine GordieHowe.QROM.ZeroKnowledge.mono
-    ((F.e2e C TA H (verifierQueries_le R F C) (proofFormat R F C)).zeroKnowledge.zeroKnowledgeQueryCounted X' W' fx fw)
+    ((F.e2e C H (verifierQueries_le R F C) (proofFormat R F C)).zeroKnowledge.zeroKnowledgeQueryCounted X' W' fx fw)
     fun t Q => ?_
   have hkc : (SPBCS.keyCollision ((R.iop C).term.size (R.iop C).rounds) (R.T C).k).toReal ≤
       (SPBCS.keyCollision R.rounds R.k).toReal := by
@@ -891,7 +877,7 @@ theorem zero_knowledge_qrom (C : R.Compiled) (TA : R.TA C) {Inp : Type}
     congr 1
     ring
   have hQ : (0 : ℝ) ≤ Q := Nat.cast_nonneg Q
-  rw [Base.zkErrorQuery, hU, h4, h8]
+  rw [SPBCS.zkErrorQuery, hU, h4, h8]
   exact add_le_add (add_le_add (add_le_add (add_le_add le_rfl le_rfl)
     (mul_le_mul_of_nonneg_left hkc hQ)) le_rfl)
     (mul_le_mul_of_nonneg_left (add_le_add hov le_rfl) hQ)
@@ -910,15 +896,14 @@ variable (R : Configuration) (F : R.GrantedFacts)
 `H`, the honest prover `prover`, with uniform coins, Merkle salts and salt, is complete for the
 spBCS verifier `verifierROM`: every classical `t`-query adversary that outputs a statement and an
 honest input after its queries makes the honest proof of a valid pair rejected with probability at
-most `err H + rounds/2^chernoff + C(rounds, 2)/2^(8k) + t/2^(8 kS)`. The compiled circuits'
-`enforce`, `TA`: trust base. -/
+most `err H + rounds/2^chernoff + C(rounds, 2)/2^(8k) + t/2^(8 kS)`. -/
 @[config_template headline]
-theorem completeness_adaptive_rom (C : R.Compiled) (TA : R.TA C) {Inp : Type}
+theorem completeness_adaptive_rom (C : R.ProofSystem) {Inp : Type}
     {relH : Set (R.Val × Inp)} (H : R.Strategy Inp relH) :
-    NARG.ROM.Complete (prover R F C TA H) (verifierROM R F C) (fun x π => SPBCS.Claim.mk x π.val)
+    NARG.ROM.Complete (prover R F C H) (verifierROM R F C) (fun x π => SPBCS.Claim.mk x π.val)
       (fun x y => (x, y) ∈ R.hrel relH) fun t => (R.err H : ℝ≥0∞) +
         (R.rounds : ℝ≥0∞) / 2 ^ R.chernoff + SPBCS.keyCollision R.rounds R.k + t / 2 ^ (8 * R.kS) :=
-  fun t 𝒜 => ((F.e2e C TA H (verifierQueries_le R F C) (proofFormat R F C)).completeROM t 𝒜).trans <| by
+  fun t 𝒜 => ((F.e2e C H (verifierQueries_le R F C) (proofFormat R F C)).completeROM t 𝒜).trans <| by
     rw [← F.k_eq C]
     exact add_le_add (add_le_add (add_le_add le_rfl (overrun_le R F C))
       (SPBCS.keyCollision_mono (F.rounds_le C) _)) le_rfl
@@ -930,17 +915,16 @@ QROM; `def:narg-complete`, `NARG.QROM.Complete`; Unruh 2017 Definition 5, p. 14;
 salt, is complete for the
 spBCS verifier `verifierQROM`: every `t`-query adversary of `def:adversary` that outputs a statement
 and an honest input after its queries makes the honest proof of a valid pair rejected with
-probability at most `err H + rounds/2^chernoff + C(rounds, 2)/2^(8k) + 2 t/2^(4 kS)`. The compiled
-circuits' `enforce`, `TA`: trust base. -/
+probability at most `err H + rounds/2^chernoff + C(rounds, 2)/2^(8k) + 2 t/2^(4 kS)`. -/
 @[config_template headline]
-theorem completeness_adaptive_qrom (C : R.Compiled) (TA : R.TA C) {Inp : Type}
+theorem completeness_adaptive_qrom (C : R.ProofSystem) {Inp : Type}
     {relH : Set (R.Val × Inp)} (H : R.Strategy Inp relH) :
-    NARG.QROM.Complete queryEncoding (prover R F C TA H) (verifierQROM R F C)
+    NARG.QROM.Complete queryEncoding (prover R F C H) (verifierQROM R F C)
       (fun x π => SPBCS.Claim.mk x π.val)
       (fun x y => (x, y) ∈ R.hrel relH) fun t => (R.err H : ℝ≥0∞) +
         (R.rounds : ℝ≥0∞) / 2 ^ R.chernoff + SPBCS.keyCollision R.rounds R.k +
           2 * t / 2 ^ (4 * R.kS) :=
-  fun t 𝒜 => ((F.e2e C TA H (verifierQueries_le R F C) (proofFormat R F C)).completeQROM t 𝒜).trans <| by
+  fun t 𝒜 => ((F.e2e C H (verifierQueries_le R F C) (proofFormat R F C)).completeQROM t 𝒜).trans <| by
     rw [← F.k_eq C]
     exact add_le_add (add_le_add (add_le_add le_rfl (overrun_le R F C))
       (SPBCS.keyCollision_mono (F.rounds_le C) _)) le_rfl
@@ -948,30 +932,29 @@ theorem completeness_adaptive_qrom (C : R.Compiled) (TA : R.TA C) {Inp : Type}
 /-- **Completeness of the configuration's argument in the ROM on its honest inputs**
 (`completeness_adaptive_rom` at the fixed honest strategy, whose completeness error is `0`): the
 honest prover is complete for the spBCS verifier at error
-`rounds/2^chernoff + C(rounds, 2)/2^(8k) + t/2^(8 kS)` against classical `t`-query adversaries.
-The compiled circuits' `enforce`, `TA`: trust base. -/
+`rounds/2^chernoff + C(rounds, 2)/2^(8k) + t/2^(8 kS)` against classical `t`-query adversaries. -/
 @[config_template headline]
-theorem completeness_adaptive_honest_rom (C : R.Compiled) (TA : R.TA C) :
-    NARG.ROM.Complete (prover R F C TA R.strategy) (verifierROM R F C)
+theorem completeness_adaptive_honest_rom (C : R.ProofSystem) :
+    NARG.ROM.Complete (prover R F C R.strategy) (verifierROM R F C)
       (fun x π => SPBCS.Claim.mk x π.val)
       (fun x y => (x, y) ∈ R.hrel R.relH) fun t =>
         (R.rounds : ℝ≥0∞) / 2 ^ R.chernoff + SPBCS.keyCollision R.rounds R.k + t / 2 ^ (8 * R.kS) :=
-  fun t 𝒜 => (completeness_adaptive_rom R F C TA R.strategy t 𝒜).trans_eq <| by
+  fun t 𝒜 => (completeness_adaptive_rom R F C R.strategy t 𝒜).trans_eq <| by
     rw [F.exact, ENNReal.coe_zero, zero_add]
 
 /-- **Completeness of the configuration's argument in the QROM on its honest inputs**
 (`completeness_adaptive_qrom` at the fixed honest strategy, whose completeness error is `0`): the
 honest prover is complete for the spBCS verifier at error
 `rounds/2^chernoff + C(rounds, 2)/2^(8k) + 2 t/2^(4 kS)` against `t`-query adversaries of
-`def:adversary`. The compiled circuits' `enforce`, `TA`: trust base. -/
+`def:adversary`. -/
 @[config_template headline]
-theorem completeness_adaptive_honest_qrom (C : R.Compiled) (TA : R.TA C) :
-    NARG.QROM.Complete queryEncoding (prover R F C TA R.strategy) (verifierQROM R F C)
+theorem completeness_adaptive_honest_qrom (C : R.ProofSystem) :
+    NARG.QROM.Complete queryEncoding (prover R F C R.strategy) (verifierQROM R F C)
       (fun x π => SPBCS.Claim.mk x π.val)
       (fun x y => (x, y) ∈ R.hrel R.relH) fun t =>
         (R.rounds : ℝ≥0∞) / 2 ^ R.chernoff + SPBCS.keyCollision R.rounds R.k +
           2 * t / 2 ^ (4 * R.kS) :=
-  fun t 𝒜 => (completeness_adaptive_qrom R F C TA R.strategy t 𝒜).trans_eq <| by
+  fun t 𝒜 => (completeness_adaptive_qrom R F C R.strategy t 𝒜).trans_eq <| by
     rw [F.exact, ENNReal.coe_zero, zero_add]
 
 end AdaptiveCompleteness
@@ -1014,19 +997,18 @@ open Classical in
 (`Common.completeness_honest` at the honest input `B.honestOf p hp` of a pair `p` of `B.rel`, at
 `p`'s statement): at every value of the honest prover's coins, Merkle salts and salt, over a
 uniform oracle the spBCS verifier rejects the compiled honest proof of `p`'s statement with
-probability at most `rounds/2^chernoff + C(rounds, 2)/2^(8k)`. The compiled circuits' `enforce`,
-`TA`: trust base. -/
+probability at most `rounds/2^chernoff + C(rounds, 2)/2^(8k)`. -/
 @[config_template headline]
-theorem completeness_of_rel (C : R.Compiled) (TA : R.TA C)
-    (c : (honestProver R F C TA R.strategy).Coins) {p : R.Stmt × R.Wit'} (hp : p ∈ B.rel)
+theorem completeness_of_rel (C : R.ProofSystem)
+    (c : (honestProver R F C R.strategy).Coins) {p : R.Stmt × R.Wit'} (hp : p ∈ B.rel)
     (ν : (setting R F C).model.Pos → MerkleSalt (2 * (R.T C).k)) (σ : FiatShamirSalt R.kS) :
     Pr[h ← (Query (R.T C).k (2 * (R.T C).k) R.kS (2 ^ 40) →
           Out (R.T C).k (fsExtraBytes + (R.T C).maxGrant)) :
-        ¬ (setting R F C).model.Accepts h p.1 ((prover R F C TA R.strategy).toFn.prove h
+        ¬ (setting R F C).model.Accepts h p.1 ((prover R F C R.strategy).toFn.prove h
           p.1 (B.honestOf p hp) { salt := σ, coins := { iop := c, merkleSalts := ν } }).val
           ((setting R F C).queries p.1)] ≤
       (R.rounds : ℝ≥0∞) / 2 ^ R.chernoff + SPBCS.keyCollision R.rounds R.k := by
-  have h := completeness_honest R F C TA c (B.honestOf p hp) ν σ
+  have h := completeness_honest R F C c (B.honestOf p hp) ν σ
   rwa [B.keyStmtOf_honestOf p hp] at h
 
 end PaperRelation

@@ -167,7 +167,7 @@ theorem flagPerm_symm_false {ι : Type*} (πF πT : Equiv.Perm ι) (i : ι) :
 namespace KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
-  [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] (A : KindAlg X Y Req Resp O)
+  [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] {ksA : KindShape X Y Req Resp} (A : KindAlg ksA O)
 
 /-- The game registers with the halting flag. -/
 abbrev GB := A.G × Bool
@@ -343,13 +343,22 @@ theorem ffBlock_stageV (ω : Ω) (k : ℕ) :
 
 /-! #### The dilated distinguisher -/
 
-/-- The ancilla of the dilation: a purifying copy of the game registers with the flag, one
-register per Kraus map for its index (`MixedAlg.Anc`). -/
-abbrev DAnc := MixedAlg.Anc A.GB (A.slots + A.post) (A.R ⊕ Bool) Unit
+/-- **The ancilla of the dilation at a shape** `s`: a purifying copy of the game registers with the
+flag, one register per Kraus map for its index (`MixedAlg.Anc`). -/
+abbrev _root_.GordieHowe.Quantum.KindShape.DAnc (s : KindShape X Y Req Resp) : Type :=
+  MixedAlg.Anc (GameReg s.W s.width X Y Req Resp s.slots × Bool) (s.slots + s.post) (s.R ⊕ Bool)
+    Unit
 
-/-- The workspace of the dilated distinguisher: the adversary's workspace, the halting flag, the
+/-- **The workspace of the dilation at a shape** `s`: the workspace, the halting flag and the
 ancilla. -/
-abbrev DW := A.W × (Bool × A.DAnc)
+abbrev _root_.GordieHowe.Quantum.KindShape.DW (s : KindShape X Y Req Resp) : Type :=
+  s.W × (Bool × s.DAnc)
+
+/-- The ancilla of the dilation: the shape's (`KindShape.DAnc`). -/
+abbrev DAnc (_ : KindAlg ksA O) : Type := ksA.DAnc
+
+/-- The workspace of the dilated distinguisher: the shape's (`KindShape.DW`). -/
+abbrev DW (_ : KindAlg ksA O) : Type := ksA.DW
 
 /-- The adversary's registers with the flag and the ancilla, as the registers of the dilated
 distinguisher. -/
@@ -437,13 +446,35 @@ noncomputable def postOp (H : X → Y) :
 /-- **The dilated distinguisher** of `A`, accepting when the halting flag is clear and the output
 is `o`: the workspace holds the flag and the ancilla of the dilation; its steps are the dilated
 Kraus maps of the slots (`uStepD`), and its post phase is `postOp`. -/
-noncomputable def dilate [DecidableEq O] (o : O) :
-    Distinguisher A.DW X Y Req Resp A.width A.slots where
+@[irreducible, no_expose] noncomputable def dilate [DecidableEq O] (o : O) :
+    Distinguisher ksA.DW X Y Req Resp ksA.width ksA.slots where
   kind w := A.kind w.1 || w.2.1
   init := Quantum.relabel A.relD A.dInitVec
   norm_init := by rw [LinearIsometryEquiv.norm_map, A.norm_dInitVec]
   step k := A.uStepD k
   accept := {x | x.1.1.2.1 = false ∧ A.out x.1.1.1 = o}
+
+/-! The fields of the dilation, as equations (`dilate` is sealed). -/
+
+theorem dilate_kind [DecidableEq O] (o : O) : (A.dilate o).kind = fun w => A.kind w.1 || w.2.1 := by
+  unfold dilate; rfl
+
+theorem dilate_init [DecidableEq O] (o : O) :
+    (A.dilate o).init = Quantum.relabel A.relD A.dInitVec := by
+  unfold dilate; rfl
+
+theorem dilate_step [DecidableEq O] (o : O) (k : Fin (ksA.slots + 1)) :
+    (A.dilate o).step k = A.uStepD k := by
+  unfold dilate; rfl
+
+theorem dilate_accept [DecidableEq O] (o : O) :
+    (A.dilate o).accept = {x | x.1.1.2.1 = false ∧ A.out x.1.1.1 = o} := by
+  unfold dilate; rfl
+
+theorem stepAt_dilate [DecidableEq O] (o : O) {k : ℕ} (hk : k ≤ ksA.slots) :
+    (A.dilate o).stepAt k = A.uStepD k := by
+  simp only [Distinguisher.stepAt, dif_pos (Nat.lt_succ_of_le hk)]
+  exact A.dilate_step o _
 
 /-- The entries of the completed step on the game registers. -/
 theorem gStep_op_apply (k : StepIdx A.slots A.post) (x : A.R ⊕ Bool) (g g' : A.G)
@@ -575,9 +606,7 @@ theorem stage_dilate (o : O) (ω : Ω) {n : ℕ} (hn : n ≤ A.slots) :
     Quantum.relabel A.relG ((A.dilate o).stage E ω n) =
       hybrid A.uG (fun k => permOp (MixedAlg.liftPerm (A.evPermB E ω k)))
         (A.gameMixed.dilInit ()) n := by
-  have hstep : ∀ k ≤ A.slots, (A.dilate o).stepAt k = A.uStepD k := fun k hk => by
-    simp only [Distinguisher.stepAt, dif_pos (Nat.lt_succ_of_le hk)]
-    rfl
+  have hstep : ∀ k ≤ A.slots, (A.dilate o).stepAt k = A.uStepD k := fun _ hk => A.stepAt_dilate o hk
   induction n with
   | zero =>
     rw [Distinguisher.stage, hybrid_zero, hybrid_zero, Distinguisher.liftedStep, hstep 0 (by omega),
@@ -628,6 +657,7 @@ theorem acceptProbAt_dilate (o : O) (ω : Ω) :
   rw [Distinguisher.acceptProbAt, hfin, prob_relabel]
   have hset : (A.relG.symm ⁻¹' (A.dilate o).gameAccept) =
       {p : A.GB × A.DAnc | p.1 ∈ {gb : A.GB | gb.2 = false ∧ A.out gb.1.1.1 = o}} := by
+    simp only [Distinguisher.gameAccept, dilate_accept]
     ext ⟨⟨g, b⟩, a⟩
     rfl
   rw [hset, ← probIn_reduceMState _ hn, MState.probIn]

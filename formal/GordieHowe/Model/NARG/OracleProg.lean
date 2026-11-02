@@ -15,8 +15,10 @@ public import Mathlib.Algebra.BigOperators.Fin
 with their result `run h` and their query list `trace h`, and the padded query sequence
 `paddedTrace` with its next-query form `paddedTrace_eq_next`. The challengers of the interactive
 model answer requests with such programs (`GordieHowe/Model/Quantum/Interactive/Basic.lean`); the verifier's
-queries are given as one (`GordieHowe.SPBCS.FullPast.roundsProgFullPast`, `GordieHowe/SPBCS/FullPast/Verifier.lean`), and
+queries are given as one (`GordieHowe.SPBCS.roundsProg`, `GordieHowe/SPBCS/Verifier.lean`), and
 `OracleProg.toExpansion` (`GordieHowe/Model/QROM/Expansion.lean`) turns a program family into a query expansion.
+`AllOut p P`: every output of `p`, on every path of answers, satisfies `P` (`AllOut.run`,
+`mono`, `mapOutput`, `translate`).
 -/
 
 namespace GordieHowe
@@ -283,7 +285,77 @@ theorem trace_translate (ι : A → A') (g : A → B' → B) (h' : A' → B') :
     rw [translate, trace_query, trace_query, List.map_cons]
     exact congrArg _ (trace_translate ι g h' (k (g a (h' (ι a)))))
 
+/-- **Translating a composed program translates its parts.** -/
+theorem translate_bind {S : Type*} (ι : A → A') (g : A → B' → B) :
+    ∀ (p : OracleProg A B R) (f : R → OracleProg A B S),
+      translate ι g (p.bind f) = (translate ι g p).bind fun r => translate ι g (f r)
+  | .pure _, _ => rfl
+  | .query a k, f => by
+    change OracleProg.query _ _ = OracleProg.query _ _
+    exact congrArg _ (funext fun b => translate_bind ι g (k _) f)
+
+/-- **Two translations in a row are one translation.** -/
+theorem translate_translate {A'' B'' : Type*} (ι : A → A') (g : A → B' → B) (ι' : A' → A'')
+    (g' : A' → B'' → B') :
+    ∀ p : OracleProg A B R,
+      translate ι' g' (translate ι g p) = translate (ι' ∘ ι) (fun a b => g a (g' (ι a) b)) p
+  | .pure _ => rfl
+  | .query a k => by
+    change OracleProg.query _ _ = OracleProg.query _ _
+    exact congrArg _ (funext fun b => translate_translate ι g ι' g' (k _))
+
+/-- **A translation is determined by its query map and its answer maps.** -/
+theorem translate_congr {ι : A → A'} {g g' : A → B' → B} (hg : ∀ a b, g a b = g' a b)
+    (p : OracleProg A B R) : translate ι g p = translate ι g' p := by
+  rw [show g = g' from funext fun a => funext (hg a)]
+
 end Translate
+
+/-! ### Outputs on every path -/
+
+
+section AllOut
+
+variable {α β : Type*}
+
+/-- **Every output of `p` satisfies `P`**: on every path of answers, not only at an oracle. -/
+def AllOut : OracleProg A B α → (α → Prop) → Prop
+  | .pure a, P => P a
+  | .query _ k, P => ∀ b, AllOut (k b) P
+
+theorem AllOut.mono {P P' : α → Prop} :
+    ∀ {p : OracleProg A B α}, p.AllOut P → (∀ a, P a → P' a) → p.AllOut P'
+  | .pure _, hp, h => h _ hp
+  | .query _ k, hp, h => fun b => AllOut.mono (p := k b) (hp b) h
+
+/-- An output on every path is the output at every oracle. -/
+theorem AllOut.run {P : α → Prop} : ∀ {p : OracleProg A B α}, p.AllOut P → ∀ h, P (p.run h)
+  | .pure _, hp, _ => hp
+  | .query a k, hp, h => AllOut.run (p := k (h a)) (hp (h a)) h
+
+theorem AllOut.mapOutput {P : β → Prop} (f : α → β) :
+    ∀ {p : OracleProg A B α}, p.AllOut (fun a => P (f a)) → (p.mapOutput f).AllOut P
+  | .pure _, hp => hp
+  | .query _ k, hp => fun b => AllOut.mapOutput f (p := k b) (hp b)
+
+/-- **Two properties of every output give their conjunction on every output.** -/
+theorem AllOut.and {P P' : α → Prop} :
+    ∀ {p : OracleProg A B α}, p.AllOut P → p.AllOut P' → p.AllOut fun a => P a ∧ P' a
+  | .pure _, hp, hp' => ⟨hp, hp'⟩
+  | .query _ k, hp, hp' => fun b => AllOut.and (p := k b) (hp b) (hp' b)
+
+/-- **Renaming the queries and recoding the answers keeps the outputs on every path.** -/
+theorem AllOut.mapQuery {A' B' : Type} (f : A → A') (g : B' → B) {P : α → Prop} :
+    ∀ {p : OracleProg A B α}, p.AllOut P → (p.mapQuery f g).AllOut P
+  | .pure _, hp => hp
+  | .query _ k, hp => fun b => AllOut.mapQuery f g (p := k (g b)) (hp _)
+
+theorem AllOut.translate {A' B' : Type} (ι : A → A') (g : A → B' → B) {P : α → Prop} :
+    ∀ {p : OracleProg A B α}, p.AllOut P → (p.translate ι g).AllOut P
+  | .pure _, hp => hp
+  | .query a k, hp => fun b => AllOut.translate ι g (p := k (g a b)) (hp _)
+
+end AllOut
 
 end OracleProg
 

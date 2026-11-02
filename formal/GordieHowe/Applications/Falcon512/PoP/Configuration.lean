@@ -40,7 +40,7 @@ public import GordieHowe.Foundations.Fields.Goldilocks
 public import GordieHowe.ProofSystem.GKR.CircuitBudget
 public import GordieHowe.Foundations.Fields.GF2_256
 public import GordieHowe.Foundations.Fields.GoldilocksQuartic
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative20
+public import GordieHowe.Applications.Falcon512.Fields.FalconNative20
 public import GordieHowe.Applications.Falcon512.Circuits.Hash
 public import GordieHowe.Applications.Falcon512.Spec.Decoded
 public import GordieHowe.Applications.Falcon512.Spec.Encoding
@@ -49,12 +49,12 @@ public import GordieHowe.Language.Realizations.Range
 public import GordieHowe.Applications.Configuration.Witness
 public import GordieHowe.Applications.Falcon512.Circuits.EmulatedAlgebraHonest
 public import GordieHowe.Applications.Falcon512.Circuits.NativeAlgebra
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative9
+public import GordieHowe.Applications.Falcon512.Fields.FalconNative9
 public import GordieHowe.Foundations.Fields.GF2_128Selection
 public import GordieHowe.Applications.Keccak.Gadgets.Basic
 public import GordieHowe.Applications.Falcon512.Circuits.EmulatedAlgebra
 public import GordieHowe.Foundations.Fields.GF2_256Conv
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative20Relative
+public import GordieHowe.Applications.Falcon512.Fields.FalconNative20Relative
 public import GordieHowe.Foundations.Fields.GoldilocksQuarticRelative
 public import GordieHowe.Applications.Rows.NativeLinear
 public import GordieHowe.Applications.Rows.MAC
@@ -79,7 +79,7 @@ public import GordieHowe.Foundations.Fields.GF2_128Relative
 public import GordieHowe.Foundations.Fields.GF2_128Dual
 public import GordieHowe.Foundations.Fields.GF2_256Dual
 public import GordieHowe.Foundations.Fields.GF2_256Skip
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative9Relative
+public import GordieHowe.Applications.Falcon512.Fields.FalconNative9Relative
 public import GordieHowe.Foundations.Fields.GoldilocksRelative
 public import GordieHowe.Applications.MLDSA44.Circuits.HashStep
 public import GordieHowe.Language.Realizations.MemoryShuffleSubfield
@@ -91,7 +91,7 @@ public import GordieHowe.Foundations.Probability.IdentDistrib
 public import GordieHowe.Applications.Falcon512.Circuits.NativeAlgebraHonest
 public import GordieHowe.Applications.MLDSA44.Circuits.NativeAlgebra
 public import GordieHowe.Applications.MLDSA44.PoP.Native.Algebra
-public import GordieHowe.Applications.MLDSA44.Native.Fields.MLDSANative11
+public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative11
 public import GordieHowe.Applications.MLDSA44.Circuits.NativeAlgebraHonest
 public import GordieHowe.Applications.MLDSA44.Emulated.Rows
 public import GordieHowe.Applications.MLDSA44.PoP.Relation
@@ -105,7 +105,7 @@ public import GordieHowe.Language.Realizations.MemoryShuffle
 public import GordieHowe.Foundations.Fields.GF2_256Relative
 public import GordieHowe.Applications.MLDSA44.Fields.GF2_256
 public import GordieHowe.ProofSystem.Ligero.RelativeLayout
-public import GordieHowe.Applications.MLDSA44.Native.Fields.MLDSANative6
+public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative6
 public import GordieHowe.Foundations.ToMathlib.OfFn
 
 @[expose] public section
@@ -160,7 +160,7 @@ message bytes, the samples the fixed-stream `HashToPoint` takes on them
 A pair of `relSupported` samples and decodes (`valid_ofWitness`); elsewhere the defaults are
 read.
 
-Running time: one SHAKE256 call of `1278` bytes with the selection over its `639` samples, and
+Running time: one SHAKE256 call of `1434` bytes with the selection over its `717` samples, and
 one `decompress` of the `625`-byte payload. -/
 def ofWitness : HonestInput msgLen where
   pk := pk

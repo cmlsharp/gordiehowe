@@ -5,7 +5,7 @@ module
 
 public import GordieHowe.Applications.MLDSA44.PoP.Compose
 public import GordieHowe.Applications.MLDSA44.Circuits.NativeAlgebra
-public import GordieHowe.Applications.MLDSA44.Native.Fields.MLDSANative6
+public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative6
 public import GordieHowe.Foundations.Fields.GF2_128Conv
 public import GordieHowe.Applications.MLDSA44.Fields.GF2_128
 

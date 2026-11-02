@@ -30,7 +30,7 @@ int bench_crossing(const bench::Flags &f) {
     for (Placement where :
          {Placement::kCircuit, Placement::kBatch, Placement::kAuto}) {
       CrossingSystem<P> t(env, n, where);
-      const auto c = gordiehowe::compile(t.cs, compile_profile<P>());
+      const auto c = gordiehowe::compile(t.cs, compile_profile<P, MLDSA44>());
       if (f.on("print-report")) std::printf("%s\n", c->report().c_str());
       auto prep = c->prepare(typename CrossingSystem<P>::Sys::Assignment{});
       SecureRandomEngine rng;

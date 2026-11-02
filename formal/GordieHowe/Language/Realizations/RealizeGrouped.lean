@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.Realizations.RealizeMac
+public import GordieHoweNative.Language.Realizations.RealizeGrouped
 
 @[expose] public section
 
@@ -32,6 +33,9 @@ quotient, then the sum of the residues):
 So `e − e' = q (k + Σ_g Q_g)`. No model fact beyond the lawful integer readings enters; the honest
 prover needs no lemma (the group rows, the residues' checks and the digits' and quotient's `in`s are
 predicates of the program, which the honest strategy's `sat` gives).
+
+The definitions are in `GordieHoweNative/Language/Realizations/RealizeGrouped.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -180,32 +184,6 @@ theorem evalIntWith_macUnits (hwf : ir.WellFormed) (hI : I.Registered ir)
   simp only [Nat.div_eq_of_lt hi, zero_mul, zero_add]
   rw [← Fin.sum_univ_eq_sum_range]
   rfl
-
-variable (ir) in
-/-- **A group's accumulator row, without its interval** (`groupRowB` but the interval of its
-convolution, which a derivation states as a fact). -/
-def groupRowCoreB (d : ℕ) (u : MacUnits) (G : GroupedMod) (acc g : ℕ) (fc : ℕ × ℕ) (b : PredBody) :
-    Bool :=
-  match b with
-  | .equal d' (.add (.reindex ia (.leaf acc')) (.scale (.const c)
-      (.apply (.macConv rg w cnt taps) Yv))) (.leaf z) _ =>
-    d' == d && acc' == acc && c + 1 == ir.charOf (ir.domainField d) && w == u.width &&
-      cnt == fc.2 && taps == u.taps && ia.toList == runList (g * u.width) u.width &&
-      ir.subPowersB rg u.powers (fc.1 - 1) fc.2 &&
-      (match ir.deref Yv with
-        | .reindex iy y' => y'.beq u.operand &&
-          iy.toList == runList ((fc.1 - 1) * u.width) (fc.2 * u.width)
-        | _ => false) &&
-      ir.constAll z 0 u.width (ir.domainField d) &&
-      decide (ir.exprLen (.apply (.macConv rg w cnt taps) Yv) = u.width) &&
-      ir.exprShapeOk (.apply (.macConv rg w cnt taps) Yv) &&
-      Yv.refs.all (· < ir.exprs.length)
-  | _ => false
-
-/-- **The convolution term of a group's accumulator row** `acc_view + c · E = z`. -/
-def groupRowExpr? : PredBody → Option Expr
-  | .equal _ (.add (.reindex _ (.leaf _)) (.scale (.const _) E)) (.leaf _) _ => some E
-  | _ => none
 
 /-- **A group's accumulator row on the integers** (`groupRowB`): where the row holds (a field
 `equal`), the integer reading `S` of the group's convolution is the sum of the integer convolutions
@@ -557,6 +535,7 @@ theorem holdsWith_mod_of_grouped (hwf : ir.WellFormed) (hI : I.Registered ir)
         have hcm : 2 * u.width < ir.charOf (ir.domainField d) := hcmB
         set rd := ir.reader e with hrd
         set ng := G.groups.length with hng
+        refine (holdsWith_mod_iff (.inl (by rw [hok.form]; rfl))).2 ?_
         intro i hi
         have hiw : i < u.width := by
           change i < (ir.value u.blind).size at hi
@@ -849,8 +828,8 @@ final quotient below their bounds, the blind's and the right side's intervals, a
 conditions at those numbers. -/
 theorem holdsWith_mod_of_grouped_named (hwf : ir.WellFormed) (hI : I.Registered ir)
     (hL : I.Lawful ir primeNodes) (e : ir.Env I) {d q : ℕ} {E E' : Expr} {real : ModRealization}
-    (hpo : ir.PredOk (.mod d q E E' real)) (hq : 0 < q) (h2 : 2 < ir.charOf (ir.domainField d))
-    {G : GroupedMod} {u : MacUnits} {acc : ℕ} (hu : macUnits? E = some u)
+    (hpo : ir.PredOk (.mod d q E E' real)) (hform : real.form.isProduct = false) (hq : 0 < q)
+    (h2 : 2 < ir.charOf (ir.domainField d)) {G : GroupedMod} {u : MacUnits} {acc : ℕ} (hu : macUnits? E = some u)
     (hunits : ir.macUnitsOkB d u G = true) (hres : ir.residuesB d q u G acc = true)
     (hfin : ir.finalQuotB d q E' u G real = true) (rows : List ℕ)
     (hrowsB : ∀ g < G.groups.length, ir.groupRowCoreB d u G acc g (G.groups.getD g default)
@@ -898,6 +877,7 @@ theorem holdsWith_mod_of_grouped_named (hwf : ir.WellFormed) (hI : I.Registered 
     have hcm : 2 * u.width < ir.charOf (ir.domainField d) := hcmB
     set rd := ir.reader e with hrd
     set ng := G.groups.length with hng
+    refine (holdsWith_mod_iff (.inl hform)).2 ?_
     intro i hi
     have hiw : i < u.width := by
       change i < (ir.value u.blind).size at hi

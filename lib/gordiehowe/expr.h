@@ -329,11 +329,15 @@ bool circuit_expandable(const OpSpec<F> &op) {
 
 // The circuit expansion of OP on the wires W, with the Logic object LC: a
 // staged transform's butterflies (one transform per block of a batched
-// one), or the sparse rows of its constant matrix.
+// one), or the sparse rows of its constant matrix. STAGE, when given,
+// receives a staged transform's working array after each stage, block by
+// block (StagedNtt::forward).
 template <class F, class LC>
 std::vector<typename LC::EltW> expand_operator(
     const LC &lc, const OpSpec<F> &op,
-    const std::vector<typename LC::EltW> &w) {
+    const std::vector<typename LC::EltW> &w,
+    const std::function<void(std::vector<typename LC::EltW> &)> *stage =
+        nullptr) {
   if (op.staged != nullptr) {
     const size_t n = op.staged->n;
     if (n == 0 || w.size() % n != 0 || op.rows != w.size())
@@ -344,7 +348,7 @@ std::vector<typename LC::EltW> expand_operator(
     for (size_t at = 0; at < w.size(); at += n) {
       std::vector<typename LC::EltW> a(w.begin() + long(at),
                                        w.begin() + long(at + n));
-      op.staged->forward(lc, a);
+      op.staged->forward(lc, a, stage);
       out.insert(out.end(), a.begin(), a.end());
     }
     return out;
@@ -1727,6 +1731,218 @@ Word<F> word_of(const Lin<F> &l) {
 
 // --------------------------------------------------------------- emit --
 
+// A fingerprint of node X's contents: its operation, sizes, flags, kids
+// and payload sizes. Two nodes at one address with different
+// fingerprints are a reused address (EmitWalk).
+template <class F>
+uint64_t expr_fingerprint(const ExprNode<F> &x) {
+  uint64_t h = 1469598103934665603ull;
+  auto mix = [&h](uint64_t v) {
+    h ^= v + 0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2);
+  };
+  mix(uint64_t(x.op));
+  mix(x.n);
+  mix(x.w);
+  mix(x.imm ? 1 : 0);
+  mix(x.value);
+  mix(x.bit ? 1 : 0);
+  mix(x.c.size());
+  mix(x.idx.size());
+  mix(x.lin.terms.size());
+  for (const auto &t : x.lin.terms) mix(t.node);
+  mix(reinterpret_cast<uintptr_t>(x.apply.get()));
+  for (const auto &k : x.kids) mix(reinterpret_cast<uintptr_t>(k.get()));
+  return h;
+}
+
+// The walk of one circuit's expression emission, for the GKR certificate's
+// expression export (compiler/emit_export.h): every node the emitter
+// completes (an expression node at its first completion by operator(), a
+// chain node it flattened when its chain's root completes, before the
+// root), every value view CompiledDomain::view completes, and the step
+// nodes the circuit's Boolean checks and asserted truths add, numbered in
+// completion order, so each node's kids are numbered below it. Per node:
+// its length, whether a chain flattened it, its memo hits, its wires (the
+// c0 + c1 x the emission produced per coordinate; none for a flattened
+// chain node) and its aux wires (the results of its own emission that a
+// product reads and that are no kid's wire, emit_export.h). A view whose
+// wires differ from its value's last view gets a new id. Per circuit entry
+// a block: the ids completed in it, its asserted root, and per coordinate
+// the node assert0 returned. The walk holds addresses only (no shared_ptr:
+// holding one would change the use counts chain_leaves and forget_kids
+// read), with each expression node's fingerprint at completion, checked at
+// every hit.
+// What a realization circuit's closure built, for its entry's family record
+// (emit_export.h), by DAG node: a range LogUp group's fraction tree (each
+// leaf's denominator alpha - v, whose numerator is one; each inner node's
+// kids, indices into the tree's fractions with the leaves first and the
+// inner nodes after them in creation order, and its numerator and
+// denominator) and its sum S of counts times weights, or a MAC H closure's
+// chunks; and the node its one assert_eq returned. The closure computes
+// every node whether or not it records, so recording changes no gate.
+struct FamilyLog {
+  struct Inner {
+    size_t l = 0, r = 0, num = 0, den = 0;
+  };
+  std::vector<size_t> dens;
+  std::vector<Inner> inner;
+  size_t sum = SIZE_MAX;
+  std::vector<size_t> chunks;
+  size_t z = SIZE_MAX;
+};
+
+template <class F>
+struct EmitWalk {
+  using Elt = typename F::Elt;
+  struct Wire {
+    Elt c0, c1;
+    size_t x = 0;
+    bool operator==(const Wire &o) const {
+      return c0 == o.c0 && c1 == o.c1 && x == o.x;
+    }
+  };
+  // A node no expression node is: the Boolean checks' steps (a cell's
+  // x x, its negation and x + (-(x x)); a view's ones - x and x (ones - x))
+  // and an asserted truth's ones - root.
+  enum Step : uint8_t {
+    kNoStep,
+    kCellMul,
+    kCellNeg,
+    kCellAdd,
+    kViewNot,
+    kViewMul,
+    kTrueNot
+  };
+  struct Entry {
+    // An expression node, or (null, no step) the view of value VALUE.
+    const ExprNode<F> *e = nullptr;
+    size_t value = SIZE_MAX;
+    Step step = kNoStep;
+    // A step's operands (ids).
+    size_t a = SIZE_MAX, b = SIZE_MAX;
+    uint64_t fp = 0;
+    size_t len = 0;
+    bool flat = false;
+    size_t hits = 0;
+    std::vector<Wire> W, aux;
+  };
+  // A circuit entry: the ids [lo, hi) completed in it, its root (SIZE_MAX:
+  // none), per root coordinate (or filler input) the node assert0 returned,
+  // and for an alignment the filler inputs; for a realization circuit, per
+  // read the id of its view (SIZE_MAX: none, the weights) and what its
+  // closure built.
+  struct Block {
+    size_t lo = 0, hi = 0;
+    size_t root = SIZE_MAX;
+    std::vector<size_t> Z, U;
+    std::vector<size_t> reads;
+    FamilyLog fam;
+  };
+  std::vector<Entry> nodes;
+  std::vector<Block> blocks;
+  std::unordered_map<const ExprNode<F> *, size_t> expr_id;
+  // Per value, its views' ids in increasing order.
+  std::unordered_map<size_t, std::vector<size_t>> view_ids;
+  // The first inconsistency seen ("" when none): an address reused with
+  // other contents, or a node completed twice.
+  std::string problem;
+
+  void note(const std::string &why) {
+    if (problem.empty()) problem = why;
+  }
+  template <class BitW>
+  static std::vector<Wire> wires_of(const std::vector<BitW> &v) {
+    std::vector<Wire> out;
+    out.reserve(v.size());
+    for (const auto &b : v) out.push_back(Wire{b.c0, b.c1, size_t(b.x)});
+    return out;
+  }
+  // Node X completed (FLAT: flattened into its chain's root) with wires W
+  // and aux wires AUX.
+  size_t complete(const ExprNode<F> *x, bool flat, std::vector<Wire> W = {},
+                  std::vector<Wire> aux = {}) {
+    if (expr_id.count(x)) {
+      note("an expression node completed twice (re-emitted after its memo "
+           "entry was erased, or an address reused)");
+      return expr_id.at(x);
+    }
+    Entry en;
+    en.e = x;
+    en.fp = expr_fingerprint(*x);
+    en.len = x->n;
+    en.flat = flat;
+    en.W = std::move(W);
+    en.aux = std::move(aux);
+    expr_id.emplace(x, nodes.size());
+    nodes.push_back(std::move(en));
+    return nodes.size() - 1;
+  }
+  // The view of value V completed with wires W: a new id unless V's last
+  // view has the same wires.
+  size_t view(size_t v, std::vector<Wire> W) {
+    auto &ids = view_ids[v];
+    if (!ids.empty() && nodes[ids.back()].W == W) return ids.back();
+    Entry en;
+    en.value = v;
+    en.len = W.size();
+    en.W = std::move(W);
+    ids.push_back(nodes.size());
+    nodes.push_back(std::move(en));
+    return nodes.size() - 1;
+  }
+  // The last view of value V below id K (SIZE_MAX: none).
+  size_t view_before(size_t v, size_t k) const {
+    auto it = view_ids.find(v);
+    if (it == view_ids.end()) return SIZE_MAX;
+    size_t r = SIZE_MAX;
+    for (size_t i : it->second)
+      if (i < k) r = i;
+    return r;
+  }
+  // The last view of value V.
+  size_t last_view(size_t v) const {
+    auto it = view_ids.find(v);
+    return it == view_ids.end() || it->second.empty() ? SIZE_MAX
+                                                      : it->second.back();
+  }
+  // A step node over ids A (and B) with wires W.
+  size_t step(Step s, size_t a, size_t b, std::vector<Wire> W) {
+    Entry en;
+    en.step = s;
+    en.a = a;
+    en.b = b;
+    en.len = W.size();
+    en.W = std::move(W);
+    nodes.push_back(std::move(en));
+    return nodes.size() - 1;
+  }
+  // A circuit entry starts; it ends with its root and asserted nodes.
+  void begin_block() {
+    Block b;
+    b.lo = nodes.size();
+    blocks.push_back(std::move(b));
+  }
+  void end_block(size_t root, std::vector<size_t> Z, std::vector<size_t> U = {}) {
+    Block &b = blocks.back();
+    b.hi = nodes.size();
+    b.root = root;
+    b.Z = std::move(Z);
+    b.U = std::move(U);
+  }
+  // A memo hit on X.
+  void hit(const ExprNode<F> *x) {
+    auto it = expr_id.find(x);
+    if (it == expr_id.end()) {
+      note("a memo hit on an expression node never completed");
+      return;
+    }
+    Entry &en = nodes[it->second];
+    if (en.fp != expr_fingerprint(*x))
+      note("an expression node's address reused with other contents");
+    ++en.hits;
+  }
+};
+
 // Emits expressions with the Logic object LC: over a compiler backend it
 // builds gates, over the evaluation backend it computes values. TERM gives
 // the values of one affine term (its node through its operators, before
@@ -1745,6 +1961,7 @@ class ExprEmitter {
                                                   const std::vector<EltW> &)>;
   ExprEmitter(const LC &lc, TermFn term, ApplyFn apply = nullptr)
       : lc_(lc), term_(std::move(term)), apply_(std::move(apply)) {
+    default_apply_ = !apply_;
     if (!apply_)
       apply_ = [pl = &lc](const OpSpec<F> &op, const std::vector<EltW> &w) {
         return expand_operator<F>(*pl, op, w);
@@ -1758,10 +1975,28 @@ class ExprEmitter {
   // same; only the order in which TERM is called may differ.
   void lean_views(bool on) { lean_ = on; }
 
+  // Records the emission's walk in W (EmitWalk; null: none). It records
+  // addresses, flags and wires only, so the gates are the same.
+  void record_walk(EmitWalk<F> *w) { walk_ = w; }
+
   const std::vector<BitW> &operator()(const ExprPtr<F> &e) {
     auto it = memo_.find(e.get());
-    if (it != memo_.end()) return it->second;
+    if (it != memo_.end()) {
+      if (walking()) walk_->hit(e.get());
+      return it->second;
+    }
+    if (walking()) aux_.emplace_back();
     std::vector<BitW> v = emit(*e);
+    if constexpr (kWalks) {
+      if (walk_ != nullptr) {
+        std::vector<BitW> aux = std::move(aux_.back());
+        aux_.pop_back();
+        walk_->complete(e.get(), false, EmitWalk<F>::wires_of(v),
+                        EmitWalk<F>::wires_of(aux));
+      }
+    } else if (walk_ != nullptr) {
+      walk_->complete(e.get(), false);
+    }
     // A lean-view emitter (predicate_terms) is short-lived and keeps its
     // memo whole.
     if (!lean_) forget_kids(*e);
@@ -1774,13 +2009,18 @@ class ExprEmitter {
     if (b.c0 == lc_.zero() && b.c1 == lc_.one()) return b.x;
     return lc_.eval(b);
   }
-  // E = 0 at every coordinate.
-  void assert_zero(const ExprPtr<F> &e) {
-    for (const auto &b : (*this)(e)) lc_.assert0(wire(b));
+  // E = 0 at every coordinate; the nodes assert0 returned, by coordinate.
+  std::vector<EltW> assert_zero(const ExprPtr<F> &e) {
+    std::vector<EltW> z;
+    for (const auto &b : (*this)(e)) z.push_back(lc_.assert0(wire(b)));
+    return z;
   }
-  // E = 1 at every coordinate (Logic::assert1).
-  void assert_true(const ExprPtr<F> &e) {
-    for (const auto &b : (*this)(e)) lc_.assert1(b);
+  // E = 1 at every coordinate (Logic::assert1); the nodes assert0
+  // returned, by coordinate.
+  std::vector<EltW> assert_true(const ExprPtr<F> &e) {
+    std::vector<EltW> z;
+    for (const auto &b : (*this)(e)) z.push_back(lc_.assert1(b));
+    return z;
   }
 
   // a + b and a b in the c0 + c1 x representation, without a gate for a
@@ -1799,7 +2039,11 @@ class ExprEmitter {
     } else if (b.c1 == lc_.one()) {
       x = lc_.axpy(b.x, a.c1, a.x);
     } else {
-      x = lc_.add(lc_.ax(a.c1, a.x), lc_.ax(b.c1, b.x));
+      // The operands are bound in order (left, then right), so the primitive
+      // calls, and the fold log's records, follow one fixed order.
+      const EltW sa = lc_.ax(a.c1, a.x);
+      const EltW sb = lc_.ax(b.c1, b.x);
+      x = lc_.add(sa, sb);
     }
     return BitW(c0, lc_.one(), x);
   }
@@ -1815,6 +2059,22 @@ class ExprEmitter {
   }
 
  private:
+  // The walk records wires only over a compiler backend (EltW a node).
+  static constexpr bool kWalks = std::is_convertible_v<EltW, size_t>;
+  bool walking() const {
+    if constexpr (kWalks) return walk_ != nullptr;
+    return false;
+  }
+  // The emission of the node being emitted computed B, a result a product
+  // reads that is no kid's wire (its aux wires, EmitWalk).
+  void keep(const BitW &b) const {
+    if (walking() && !aux_.empty()) aux_.back().push_back(b);
+  }
+  // Drops the last aux wire kept (a tree's root, which is the node's own
+  // wire).
+  void unkeep() const {
+    if (walking() && !aux_.empty() && !aux_.back().empty()) aux_.back().pop_back();
+  }
   BitW konst(const Elt &c) const {
     return BitW(c, lc_.zero(), lc_.konst(lc_.one()));
   }
@@ -1851,7 +2111,11 @@ class ExprEmitter {
     if (i1 <= i0) return konst(lc_.zero());
     if (i1 == i0 + 1) return v[i0];
     const size_t im = i0 + (i1 - i0) / 2;
-    return add(total(v, i0, im), total(v, im, i1));
+    // The operands are bound in order (left, then right), so the primitive
+    // calls, and the fold log's records, follow one fixed order.
+    const BitW lo = total(v, i0, im);
+    const BitW hi = total(v, im, i1);
+    return add(lo, hi);
   }
   // A balanced product of V[i0, i1): ceil(log2 (i1 - i0)) layers of
   // multiplications, pairing neighbours level by level and carrying an odd
@@ -1861,14 +2125,18 @@ class ExprEmitter {
   BitW product(const std::vector<BitW> &v, size_t i0, size_t i1) const {
     if (i1 <= i0) return konst(lc_.one());
     std::vector<BitW> w(v.begin() + long(i0), v.begin() + long(i1));
+    const bool any = w.size() > 1;
     while (w.size() > 1) {
       std::vector<BitW> nx;
       nx.reserve((w.size() + 1) / 2);
-      for (size_t i = 0; i + 1 < w.size(); i += 2)
+      for (size_t i = 0; i + 1 < w.size(); i += 2) {
         nx.push_back(mul(w[i], w[i + 1]));
+        keep(nx.back());
+      }
       if (w.size() % 2 != 0) nx.push_back(w.back());
       w = std::move(nx);
     }
+    if (any) unkeep();
     return w[0];
   }
 
@@ -1878,13 +2146,18 @@ class ExprEmitter {
   // coordinate, so a * b * c * d has depth 2. A node with another use (a
   // second parent, or a C++ variable that holds it: shared_ptr's use count)
   // or one already emitted stays a leaf, emitted once.
+  // FLAT, when given, receives the flattened nodes, each after its own
+  // flattened kids.
   void chain_leaves(const ExprNode<F> &e, ExprOp op,
-                    std::vector<const ExprPtr<F> *> &leaves) const {
+                    std::vector<const ExprPtr<F> *> &leaves,
+                    std::vector<const ExprNode<F> *> *flat = nullptr) const {
     for (const auto &k : e.kids) {
-      if (k->op == op && k.use_count() == 1 && !memo_.count(k.get()))
-        chain_leaves(*k, op, leaves);
-      else
+      if (k->op == op && k.use_count() == 1 && !memo_.count(k.get())) {
+        chain_leaves(*k, op, leaves, flat);
+        if (flat != nullptr) flat->push_back(k.get());
+      } else {
         leaves.push_back(&k);
+      }
     }
   }
   BitW combine(ExprOp op, const BitW &a, const BitW &b) const {
@@ -1905,17 +2178,91 @@ class ExprEmitter {
             size_t i, size_t j0, size_t j1) const {
     if (j1 == j0 + 1) return (*v[j0])[i];
     const size_t jm = j0 + (j1 - j0) / 2;
-    return combine(op, tree(op, v, i, j0, jm), tree(op, v, i, jm, j1));
+    // The operands are bound in order (left, then right), so the primitive
+    // calls, and the fold log's records, follow one fixed order.
+    const BitW lo = tree(op, v, i, j0, jm);
+    const BitW hi = tree(op, v, i, jm, j1);
+    const BitW r = combine(op, lo, hi);
+    if (multiplies(op)) keep(r);
+    return r;
+  }
+  // Whether a chain of OP combines its operands by a product (an aux wire
+  // per inner combination): mul, and, or, and xor in odd characteristic.
+  static bool multiplies(ExprOp op) {
+    if (op == ExprOp::kAdd) return false;
+    if (op == ExprOp::kXor) return !F::kCharacteristicTwo;
+    return true;
+  }
+  // Logic::land(0, w, f) and lor(0, w, f) over A[0, w), keeping each
+  // combination's result (the caller drops the root's).
+  BitW range_tree(bool any, const BitW *a, size_t i0, size_t i1) const {
+    if (i1 <= i0) return lc_.bit(any ? 0 : 1);
+    if (i1 == i0 + 1) return a[i0];
+    const size_t im = i0 + (i1 - i0) / 2;
+    const BitW lo = range_tree(any, a, i0, im);
+    const BitW hi = range_tree(any, a, im, i1);
+    const BitW r = any ? lc_.lor(lo, hi) : lc_.land(lo, hi);
+    keep(r);
+    return r;
+  }
+  // Logic::lt_reduce, keeping the results a product reads: every non-root
+  // call's equality, and a lower half's less-than.
+  void lt_reduce(size_t i0, size_t i1, BitW *xeq, BitW *xlt, const BitW *a,
+                 const BitW *b, bool root, bool lower) const {
+    if (i1 - i0 > 1) {
+      BitW eq0, eq1, lt0, lt1;
+      const size_t im = i0 + (i1 - i0) / 2;
+      lt_reduce(i0, im, &eq0, &lt0, a, b, false, true);
+      lt_reduce(im, i1, &eq1, &lt1, a, b, false, false);
+      *xeq = lc_.land(eq1, eq0);
+      *xlt = lc_.lor_exclusive(lt1, lc_.land(eq1, lt0));
+    } else {
+      *xeq = lc_.lnot(lc_.lxor(a[i0], b[i0]));
+      *xlt = lc_.land(lc_.lnot(a[i0]), b[i0]);
+    }
+    if (!root) {
+      keep(*xeq);
+      if (lower) keep(*xlt);
+    }
+  }
+  // Logic::lt, leq and eq of W-bit words A and B, keeping the results a
+  // product reads.
+  BitW cmp_lt(size_t w, const BitW *a, const BitW *b) const {
+    if (w == 0) return lc_.bit(0);
+    BitW xeq, xlt;
+    lt_reduce(0, w, &xeq, &xlt, a, b, true, false);
+    return xlt;
+  }
+  BitW eq_reduce(size_t i0, size_t i1, const BitW *a, const BitW *b,
+                 bool root) const {
+    if (i1 <= i0) return lc_.bit(1);
+    BitW r;
+    if (i1 == i0 + 1) {
+      r = lc_.lnot(lc_.lxor(a[i0], b[i0]));
+    } else {
+      const size_t im = i0 + (i1 - i0) / 2;
+      const BitW lo = eq_reduce(i0, im, a, b, false);
+      const BitW hi = eq_reduce(im, i1, a, b, false);
+      r = lc_.land(lo, hi);
+    }
+    if (!root) keep(r);
+    return r;
   }
   std::vector<BitW> chain(const ExprNode<F> &e) {
     std::vector<const ExprPtr<F> *> leaves;
-    chain_leaves(e, e.op, leaves);
+    std::vector<const ExprNode<F> *> flat;
+    chain_leaves(e, e.op, leaves, walk_ != nullptr ? &flat : nullptr);
     std::vector<const std::vector<BitW> *> v;
     for (const ExprPtr<F> *k : leaves) v.push_back(&(*this)(*k));
     std::vector<BitW> out;
     out.reserve(e.n);
-    for (size_t i = 0; i < e.n; ++i)
+    for (size_t i = 0; i < e.n; ++i) {
       out.push_back(tree(e.op, v, i, 0, v.size()));
+      // The root's own result is its wire, no aux.
+      if (v.size() > 1 && multiplies(e.op)) unkeep();
+    }
+    // The flattened nodes complete with their chain, before its root.
+    for (const ExprNode<F> *x : flat) walk_->complete(x, true);
     return out;
   }
 
@@ -1990,12 +2337,34 @@ class ExprEmitter {
       case ExprOp::kApply: {
         std::vector<EltW> w;
         for (const auto &b : (*this)(e.kids[0])) w.push_back(wire(b));
-        for (const auto &x : apply_(*e.apply, w))
-          out.push_back(BitW(lc_.zero(), lc_.one(), x));
+        std::vector<EltW> r;
+        if (walking() && default_apply_ && e.apply->staged != nullptr) {
+          // A staged transform's aux wires: per block, the working array
+          // after each stage but the last.
+          std::vector<std::vector<EltW>> stages;
+          const std::function<void(std::vector<EltW> &)> hook =
+              [&stages](std::vector<EltW> &a) { stages.push_back(a); };
+          r = expand_operator<F>(lc_, *e.apply, w, &hook);
+          const size_t n = e.apply->staged->n;
+          size_t L = 0;
+          while ((size_t(1) << L) < n) ++L;
+          const size_t blocks = n == 0 ? 0 : w.size() / n;
+          if (stages.size() != blocks * L)
+            fail("a staged transform reported other than one array per stage");
+          for (size_t blk = 0; blk < blocks; ++blk)
+            for (size_t s = 0; s + 1 < L; ++s)
+              for (const EltW &x : stages[blk * L + s])
+                keep(BitW(lc_.zero(), lc_.one(), x));
+        } else {
+          r = apply_(*e.apply, w);
+        }
+        for (const auto &x : r) out.push_back(BitW(lc_.zero(), lc_.one(), x));
         break;
       }
       case ExprOp::kGather: {
         if (lean_) {
+          if (walk_ != nullptr)
+            walk_->note("a gather emitted through Lean views");
           for (size_t i = 0; i < e.n; ++i) out.push_back(view_at(e, i));
           break;
         }
@@ -2027,6 +2396,7 @@ class ExprEmitter {
             continue;
           }
           const BitW d = add(t[i], negate(f[i]));
+          keep(d);
           out.push_back(add(f[i], mul(c[i], d)));
         }
         break;
@@ -2042,6 +2412,13 @@ class ExprEmitter {
           const BitW *pa = &a[k * w];
           const BitW *pb = bc.data();
           if (!e.imm) pb = &(*this)(e.kids[1])[k * w];
+          if (walking()) {
+            // Logic's comparisons, keeping their aux wires.
+            out.push_back(e.op == ExprOp::kLt    ? cmp_lt(w, pa, pb)
+                          : e.op == ExprOp::kLeq ? lc_.lnot(cmp_lt(w, pb, pa))
+                                                 : eq_reduce(0, w, pa, pb, true));
+            continue;
+          }
           out.push_back(e.op == ExprOp::kLt    ? lc_.lt(w, pa, pb)
                         : e.op == ExprOp::kLeq ? lc_.leq(w, pa, pb)
                                                : lc_.eq(w, pa, pb));
@@ -2054,6 +2431,11 @@ class ExprEmitter {
         const size_t w = e.w;
         const auto &a = (*this)(e.kids[0]);
         for (size_t k = 0; k < e.n; ++k) {
+          if (walking()) {
+            out.push_back(range_tree(any, &a[k * w], 0, w));
+            if (w > 1) unkeep();
+            continue;
+          }
           auto at = [&](size_t j) { return a[k * w + j]; };
           out.push_back(any ? lc_.lor(0, w, at) : lc_.land(0, w, at));
         }
@@ -2077,8 +2459,12 @@ class ExprEmitter {
       }
       case ExprOp::kMaterialize: {
         for (const auto &x : (*this)(e.kids[0])) {
-          // ntt_gadget::share: one linear node that keeps the operand.
-          const EltW s = lc_.axpy(lc_.konst(lc_.zero()), lc_.one(), wire(x));
+          // ntt_gadget::share: one linear node that keeps the operand. The
+          // zero constant is created before the operand's wire, in this order
+          // for the fold log.
+          const EltW z = lc_.konst(lc_.zero());
+          const EltW w = wire(x);
+          const EltW s = lc_.axpy(z, lc_.one(), w);
           out.push_back(BitW(lc_.zero(), lc_.one(), s));
         }
         break;
@@ -2091,6 +2477,10 @@ class ExprEmitter {
   const LC &lc_;
   TermFn term_;
   ApplyFn apply_;
+  EmitWalk<F> *walk_ = nullptr;
+  bool default_apply_ = true;
+  // Per node being emitted (innermost last), its aux wires so far.
+  mutable std::vector<std::vector<BitW>> aux_;
   std::map<const ExprNode<F> *, std::vector<BitW>> memo_;
   // Lean views (lean_views): the wires of the plain leaves gathers read.
   bool lean_ = false;

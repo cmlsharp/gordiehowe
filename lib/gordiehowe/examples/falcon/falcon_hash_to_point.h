@@ -10,8 +10,8 @@
 //
 // A FIXED, oversampled number S of chunks is squeezed, so the circuit's size is
 // fixed and nothing branches on secret data (the host code branches only on the
-// public accept flag). S is chosen so P(fewer than n accepts) < 2^-100.
-// reject prob p = (65536-61445)/65536 ≈ 0.0624.
+// public accept flag). The parameter set fixes S (falcon_params.h's kSamples:
+// P(fewer than n accepts) <= 2^-256); reject prob (65536-61445)/65536 ≈ 0.0624.
 
 #ifndef PRIVACY_PROOFS_ZK_LIB_GORDIEHOWE_EXAMPLES_FALCON_FALCON_HASH_TO_POINT_H_
 #define PRIVACY_PROOFS_ZK_LIB_GORDIEHOWE_EXAMPLES_FALCON_FALCON_HASH_TO_POINT_H_
@@ -27,10 +27,6 @@ namespace proofs {
 constexpr uint64_t kFalconQ = 12289;
 constexpr uint64_t kFalconCutoff = 5 * kFalconQ;  // 61445
 
-// Oversample count S = n + OVERSAMPLES.  ZoKrates/C-ref values (P(<n accepts)
-// negligible): 127 for n=512, 190 for n=1024.
-inline size_t falcon_oversamples(size_t n) { return n == 512 ? 127 : 190; }
-
 struct FalconH2PWitness {
   size_t n = 0, S = 0;
   std::vector<uint16_t> stream;   // [S] big-endian 2-byte chunks
@@ -40,14 +36,15 @@ struct FalconH2PWitness {
   size_t n_accepts = 0;           // total accepts (>= n for a valid instance)
 };
 
-// nonce ‖ msg -> SHAKE-256 -> rejection-sampled challenge.  Returns false if the
-// oversample S yielded fewer than n accepts (negligible for honest inputs).
+// nonce ‖ msg -> SHAKE-256 -> rejection-sampled challenge from S chunks.
+// n_accepts < n when the S chunks yielded fewer than n accepts (at most
+// 2^-256 likely at the parameter sets' S).
 inline FalconH2PWitness falcon_hash_to_point(const std::vector<uint8_t>& nonce,
                                              const std::vector<uint8_t>& msg,
-                                             size_t n) {
+                                             size_t n, size_t S) {
   FalconH2PWitness w;
   w.n = n;
-  w.S = n + falcon_oversamples(n);
+  w.S = S;
   std::vector<uint8_t> in;
   in.reserve(nonce.size() + msg.size());
   in.insert(in.end(), nonce.begin(), nonce.end());

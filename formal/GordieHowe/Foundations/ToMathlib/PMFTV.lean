@@ -40,6 +40,8 @@ zero-knowledge and witness-indistinguishability arguments use:
   give one of the product (`IsDisintegration.pi`);
 - mixtures of probabilities: `abs_toReal_tsum_mul_sub_le`, a pointwise bound on the difference
   of two families of probabilities bounds the difference of their averages under any PMF;
+- normalized masses: `tvDist_le_sum_abs_sub_div_sum`, two PMFs obtained by normalizing
+  nonnegative masses `p` and `s` are at most `∑ a, |p a - s a| / ∑ a, s a` apart;
 - the collision bound `tvDist_uniformOfFintype_le`:
   `tvDist p uniform ≤ √(|α| · ∑ a, p a ^ 2 - 1) / 2`, by Cauchy–Schwarz, with
   `one_le_card_mul_sum_sq` for the radicand.
@@ -668,5 +670,53 @@ theorem abs_toReal_tsum_mul_sub_le (μ : PMF α) {p r : α → ENNReal} (hp : �
     linarith
   · have := key hr hp fun a => by linarith [(abs_sub_le_iff.1 (h a)).2]
     linarith
+
+/-- **Normalized masses.** If `P` and `Q` are the normalizations of nonnegative masses `p` and `s`
+on a finite type, with `∑ s > 0`, then `tvDist P Q ≤ ∑ a, |p a - s a| / ∑ a, s a`. The masses
+need not sum to one or to each other: the normalization error `|∑ p - ∑ s| / ∑ s` is itself at
+most the right side, and the factor `1/2` in `tvDist` absorbs it. -/
+theorem tvDist_le_sum_abs_sub_div_sum [Fintype α] (P Q : PMF α) {p s : α → ℝ}
+    (hp : ∀ a, 0 ≤ p a) (hs : 0 < ∑ a, s a)
+    (hP : ∀ a, (P a).toReal = p a / ∑ b, p b) (hQ : ∀ a, (Q a).toReal = s a / ∑ b, s b) :
+    tvDist P Q ≤ (∑ a, |p a - s a|) / ∑ a, s a := by
+  set π := ∑ b, p b with hπdef
+  set σ := ∑ b, s b with hσdef
+  have hπ1 : π / π = 1 := by
+    have h := P.sum_toReal
+    simp only [hP] at h
+    rwa [← Finset.sum_div] at h
+  have hπ : 0 < π := by
+    rcases (Finset.sum_nonneg fun a _ => hp a : 0 ≤ π).lt_or_eq with h | h
+    · exact h
+    · rw [hπdef, ← h, div_zero] at hπ1
+      exact absurd hπ1 zero_ne_one
+  have key : ∀ a, |p a / π - s a / σ| ≤ p a * |1 / π - 1 / σ| + |p a - s a| / σ := by
+    intro a
+    have h : p a / π - s a / σ = p a * (1 / π - 1 / σ) + (p a - s a) / σ := by
+      field_simp
+      ring
+    rw [h]
+    refine (abs_add_le _ _).trans_eq ?_
+    rw [abs_mul, abs_of_nonneg (hp a), abs_div, abs_of_pos hs]
+  have h1 : π * |1 / π - 1 / σ| = |σ - π| / σ := by
+    rw [show 1 / π - 1 / σ = (σ - π) / (π * σ) by field_simp, abs_div,
+      abs_of_pos (mul_pos hπ hs)]
+    field_simp
+  have h2 : |σ - π| ≤ ∑ a, |p a - s a| := by
+    rw [hσdef, hπdef, ← Finset.sum_sub_distrib]
+    refine (Finset.abs_sum_le_sum_abs _ _).trans_eq ?_
+    simp only [abs_sub_comm]
+  rw [tvDist_eq_sum]
+  simp only [hP, hQ]
+  calc (∑ a, |p a / π - s a / σ|) / 2
+      ≤ (∑ a, (p a * |1 / π - 1 / σ| + |p a - s a| / σ)) / 2 := by
+        gcongr with a
+        exact key a
+    _ = (π * |1 / π - 1 / σ| + (∑ a, |p a - s a|) / σ) / 2 := by
+        rw [Finset.sum_add_distrib, ← Finset.sum_mul, ← Finset.sum_div]
+    _ ≤ (∑ a, |p a - s a|) / σ := by
+        rw [h1]
+        have := div_le_div_of_nonneg_right h2 hs.le
+        linarith
 
 end PMF

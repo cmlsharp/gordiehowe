@@ -11,7 +11,10 @@
 //   MatchesHostWitness            every generated value equals the host
 //                                 witness's
 //   TamperRejected                a wrong index, a key off the ring, a bad
-//                                 signature, a wrong mu, a broken MAC
+//                                 signature, a wrong mu, a broken MAC, and
+//                                 (carrier) the relation's quotient
+//   SetupModesAgree               the ring setup and the proofs agree
+//                                 across the threading knob's modes
 //   RingHost.BoundedExpandA       the ring's bounded ExpandA (6 SHAKE128
 //                                 blocks per call) equals the unbounded
 //                                 reference on a 64-member ring's keys, and
@@ -36,35 +39,14 @@ TYPED_TEST(MLDSARing, NativeProvesAtRingSizes) {
 }
 
 TYPED_TEST(MLDSARing, NativeMatchesHostWitness) {
-  using Arm = NativeArm<TypeParam>;
-  Fixture<Arm> f(64);
-  ASSERT_TRUE(f.rc.old.ok);
-  using AV = std::vector<typename Arm::AF::Elt>;
-  std::map<size_t, typename Fixture<Arm>::Value> cap;
-  ASSERT_TRUE(f.prove_verify(&cap));
-  const auto &af = f.env.af;
-  auto av = [&](const std::string &n) {
-    return ints_of(af, std::get<AV>(cap.at(f.id(n))));
-  };
-  expect_hash_domain<TypeParam>(f, cap);
-  const auto &old = f.rc.old;
-  EXPECT_EQ(av("challenge.c"), old.c_bits());
-  EXPECT_EQ(av("signature.w"), old.w());
-  EXPECT_EQ(av("hint.w1"), old.w1_bits());
-  const auto hint = old.hint();
-  EXPECT_EQ(av("hint.nonpositive"), hint.nonpositive);
-  EXPECT_EQ(av("hint.offset"), hint.offset);
-  EXPECT_EQ(av("hint.slack"), hint.slack);
-  // The z digits in the planner's table.
-  const auto &rz = f.c->realization("norm.z");
-  EXPECT_EQ(support::realized_digits(av, "norm.z", "d", rz.k),
-            old.z_limbs(false, uint64_t(rz.table), rz.k));
-  EXPECT_EQ(support::realized_digits(av, "norm.z", "h", rz.k),
-            old.z_limbs(true, uint64_t(rz.table), rz.k));
+  native_matches_host_witness<NativeArm<TypeParam>>();
 }
 
 TYPED_TEST(MLDSARing, NativeTamperRejected) {
   tamper_rejected<NativeArm<TypeParam>>();
+}
+TYPED_TEST(MLDSARing, NativeSetupModesAgree) {
+  setup_modes_agree<NativeArm<TypeParam>>();
 }
 
 // A Bytes statement of the native field F_q^k, whose serialization at
@@ -77,10 +59,10 @@ TYPED_TEST(MLDSARing, BytesStatementOverNativeField) {
   const E env;
   typename E::Sys cs{"bytes-native"};
   auto &A = cs.domain(domain_profile<TypeParam>(env.af, env.rsa), "A");
-  const auto b = A.pub_bytes("b", kPkBytes,
-                                computes("len", {kPkBytes}),
+  const auto b = A.pub_bytes("b", MLDSA44::kPkBytes,
+                                computes("len", {MLDSA44::kPkBytes}),
                                 [](const std::vector<uint8_t> &v) {
-                                  return v.size() == kPkBytes;
+                                  return v.size() == MLDSA44::kPkBytes;
                                 });
   const AF *pa = &env.af;
   const auto sum = A.pub(Subfield{}, "sum", 1, depends_on(b), computes("byte_sum", {}),
@@ -91,7 +73,8 @@ TYPED_TEST(MLDSARing, BytesStatementOverNativeField) {
       }).cache();
   const auto x = A.priv(Subfield{}, "x", 1);
   assert_zero(x - sum).pin(Placement::kCircuit);
-  const auto c = gordiehowe::compile(cs, compile_profile<TypeParam>());
+  const auto c =
+      gordiehowe::compile(cs, compile_profile<TypeParam, MLDSA44>());
   // The benchmark key's bytes.
   std::vector<uint8_t> bytes = ml_dsa::GetMlDsa44BenchmarkExample().pkey;
   uint64_t t = 0;
@@ -144,24 +127,24 @@ TYPED_TEST(MLDSARing, ProgramExport) {
 
 TEST(RingHost, BoundedExpandA) {
   const auto &ex = ml_dsa::GetMlDsa44BenchmarkExample();
-  const auto ring = make_ml_dsa_ring_public_key_ring<Params>(64, ex.pkey, 5);
+  const auto ring = make_ml_dsa_ring_public_key_ring<MLDSA44::Reference>(64, ex.pkey, 5);
   const ::proofs::Shake128 sh;
   for (const auto &pk : ring) {
     const std::vector<uint8_t> rho(pk.begin(), pk.begin() + 32);
-    const auto ref = ml_dsa::ExpandA<Params>(rho);
+    const auto ref = ml_dsa::ExpandA<MLDSA44::Reference>(rho);
     std::vector<uint64_t> want;
-    for (size_t i = 0; i < kK; ++i)
-      for (size_t j = 0; j < kL; ++j) {
+    for (size_t i = 0; i < MLDSA44::kK; ++i)
+      for (size_t j = 0; j < MLDSA44::kL; ++j) {
         const auto p = host::canonical(ref[i][j]);
         want.insert(want.end(), p.begin(), p.end());
       }
-    const auto key = ring_host::decode(pk);
+    const auto key = ring_host::decode<MLDSA44>(pk);
     EXPECT_EQ(std::vector<uint64_t>(key.a_hat.begin(), key.a_hat.end()), want);
-    std::vector<uint32_t> a(kK * kL * kN);
-    EXPECT_TRUE(expand_a_fast<Params>(sh, rho.data(), ml_dsa::Q, a.data()));
+    std::vector<uint32_t> a(MLDSA44::kK * MLDSA44::kL * kN);
+    EXPECT_TRUE(expand_a_fast<MLDSA44::Reference>(sh, rho.data(), ml_dsa::Q, a.data()));
     // 4 blocks (224 candidates) cannot hold 256 acceptances.
     EXPECT_FALSE(
-        expand_a_fast<Params>(sh, rho.data(), ml_dsa::Q, a.data(), 4));
+        expand_a_fast<MLDSA44::Reference>(sh, rho.data(), ml_dsa::Q, a.data(), 4));
   }
 }
 

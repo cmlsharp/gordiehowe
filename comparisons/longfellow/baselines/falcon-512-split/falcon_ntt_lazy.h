@@ -35,11 +35,15 @@ namespace proofs {
 // `field_bits`.  Reduces whenever the accumulated bound (q_bits per stage) would
 // exceed field_bits - margin, and always reduces after the last stage so the
 // output is in [0,q).
+// final_bits: the bits the last stage's output gains after the stage (the
+// inverse transform folds n^{-1} < q into it), so the stage before the last
+// reduces when the last one's value with them would pass the bound.
 inline std::vector<bool> falcon_reduce_schedule(size_t n, uint64_t q_bits,
                                                 size_t field_bits,
                                                 size_t margin = 2,
                                                 size_t growth_bits = 0,
-                                                size_t input_bits = 0) {
+                                                size_t input_bits = 0,
+                                                size_t final_bits = 0) {
   // Default = forward growth (M *= (1+q) per stage, so ~q_bits).  The inverse
   // (Gentleman-Sande) grows faster -- see falcon_intt_growth_bits() -- so the
   // caller passes that value explicitly for an inverse schedule.
@@ -54,7 +58,8 @@ inline std::vector<bool> falcon_reduce_schedule(size_t n, uint64_t q_bits,
   size_t bits = input_bits;  // inputs are < 2^input_bits
   for (size_t s = 0; s < nstages; ++s) {
     bits += growth_bits;
-    if (bits + growth_bits > field_bits - margin) {
+    const size_t next_final = s + 2 == nstages ? final_bits : 0;
+    if (bits + growth_bits + next_final > field_bits - margin) {
       sched[s] = true;  // reduce now to stay under field_bits
       bits = q_bits;
     }

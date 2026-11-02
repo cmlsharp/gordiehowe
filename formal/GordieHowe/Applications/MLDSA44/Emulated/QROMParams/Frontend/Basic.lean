@@ -5,7 +5,10 @@ module
 
 public import GordieHowe.Applications.MLDSA44.Emulated.Frontend.Algebra
 public import GordieHowe.Applications.MLDSA44.Native.QROMParams.Frontend.Shape
-public import GordieHowe.Applications.MLDSA44.Emulated.QROMParams.HashField
+public import GordieHowe.Generated.MLDSA44.Emulated.QROMParams.Interp
+public import GordieHowe.Generated.MLDSA44.Emulated.QROMParams.Valid
+public import GordieHowe.ProofSystem.Program.FieldHonest
+public import GordieHowe.Generated.MLDSA44.Emulated.QROMParams.Ready
 
 @[expose] public section
 
@@ -22,7 +25,7 @@ program's domain `H` under `Emulated.σ` (`MldsaEmbed`), its program facts (`Mld
 namespace GordieHowe.MLDSA44.Emulated.QROMParams
 
 open Generated.MLDSA44.Emulated.QROMParams.Program (program)
-open HashField (interp)
+open Generated.MLDSA44.Emulated.QROMParams (interp)
 open GordieHowe.Bits IOP
 open scoped NNReal ENNReal
 
@@ -48,7 +51,7 @@ theorem predCorr : ∀ k, 18 ≤ k → k ≤ 270 →
 
 /-- **The values the frontend reads by their node types** are renamed to node-typed source
 values. -/
-theorem typedCorr : ∀ v ∈ Native.ROMParams.hTyped, v ∈ Emulated.hV ∧
+theorem typedCorr : ∀ v ∈ MLDSA44.hTyped, v ∈ Emulated.hV ∧
     σ.val v < program.values.length ∧ program.IsSourceValue (σ.val v) ∧
     (program.value (σ.val v)).typeSource = .node := by
   decide +kernel
@@ -64,7 +67,7 @@ instance : Emulated.MldsaEmbed program where
 instance : AField RealizedProgram.gold4 where
   charP := inferInstanceAs (CharP GoldilocksExt4 pGold)
   char_spec := rfl
-  decode_eq _ := rfl
+  decode_lt c hc := RealizedProgram.gold4_model.decode_natCast c hc
   toNat_natCast k hk := by
     change (goldilocksExt4Coords (k : GoldilocksExt4) 0).val = k
     rw [goldilocksExt4Coords_natCast, ZMod.val_natCast, Nat.mod_eq_of_lt hk]
@@ -105,13 +108,13 @@ instance : Emulated.MldsaECross program where
   crossPred := ⟨_, rfl⟩
 
 /-- **The digit layout of `MLDSA44.Emulated.QROMParams`**: `w'`, `z + 130993`, the offset and the slack in
-two base-`4096` digits each (`578`, `579`; `580`, `581`; `585`, `586`; `587`, `588`); the offset's
+two base-`4096` digits each (`577`, `578`; `579`, `580`; `584`, `585`; `586`, `587`); the offset's
 and the slack's bound `2^24`. -/
 def layout : Emulated.MldsaELayout where
-  w := ⟨4096, [578, 579]⟩
-  z := ⟨4096, [580, 581]⟩
-  offset := ⟨4096, [585, 586]⟩
-  slack := ⟨4096, [587, 588]⟩
+  w := ⟨4096, [577, 578]⟩
+  z := ⟨4096, [579, 580]⟩
+  offset := ⟨4096, [584, 585]⟩
+  slack := ⟨4096, [586, 587]⟩
   offsetBound := 16777216
 
 set_option maxRecDepth 4096 in
@@ -129,7 +132,7 @@ instance : Emulated.MldsaEAlgebra program where
   pred13 := ⟨_, rfl⟩
   pred14 := ⟨_, rfl⟩
   pred15 := ⟨_, rfl⟩
-  pred274 := ⟨_, rfl⟩
+  pred274 := ⟨_, rfl, rfl⟩
   expr7 := rfl
   expr8 := rfl
   expr0 := rfl
@@ -159,27 +162,27 @@ instance : Emulated.MldsaEAlgebra program where
     decide +kernel
 
 /-- The native program's domain `H` facts at the emulated program's native program. -/
-instance : Native.ROMParams.MldsaHHash (Emulated.MldsaEmbed.nat program) :=
-  inferInstanceAs (Native.ROMParams.MldsaHHash nat)
+instance : MLDSA44.MldsaHHash (Emulated.MldsaEmbed.nat program) :=
+  inferInstanceAs (MLDSA44.MldsaHHash nat)
 
 /-- The native program's SampleInBall facts at the emulated program's native program. -/
-instance : Native.ROMParams.MldsaHSample (Emulated.MldsaEmbed.nat program) :=
-  inferInstanceAs (Native.ROMParams.MldsaHSample nat)
+instance : MLDSA44.MldsaHSample (Emulated.MldsaEmbed.nat program) :=
+  inferInstanceAs (MLDSA44.MldsaHSample nat)
 
 /-- The native program's constants over `GF(2^256)` at the emulated program's native program. -/
-instance : Native.ROMParams.MldsaHConsts (Emulated.MldsaEmbed.nat program) RealizedProgram.gf256 :=
-  inferInstanceAs (Native.ROMParams.MldsaHConsts nat RealizedProgram.gf256)
+instance : MLDSA44.MldsaHConsts (Emulated.MldsaEmbed.nat program) RealizedProgram.gf256 :=
+  inferInstanceAs (MLDSA44.MldsaHConsts nat RealizedProgram.gf256)
 
 /-- **The round errors of SampleInBall's challenges** over `GF(2^256)`: `264/2^256` and
-`295/2^256` (`Native.ROMParams.sampleEpsOf 256`). -/
-noncomputable def sampleEps (j : ℕ) : NNReal := Native.ROMParams.sampleEpsOf 256 j
+`295/2^256` (`MLDSA44.sampleEpsOf 256`). -/
+noncomputable def sampleEps (j : ℕ) : NNReal := MLDSA44.sampleEpsOf 256 j
 
 /-- **The statement holds a key's preprocessing** (`Emulated.KeyOf`). -/
 abbrev KeyOf (pk : MLDSA44.PublicKey44) (x : program.Valuation interp) : Prop :=
   Emulated.KeyOf pk x
 
 /-- **The relation of the theorem at the realized program of `MLDSA44.Emulated.QROMParams`** (`Emulated.rel`). -/
-abbrev rel : Set (program.Valuation interp × Native.ROMParams.VarWitness) :=
+abbrev rel : Set (program.Valuation interp × MLDSA44.VarWitness) :=
   Emulated.rel
 
 /-- **The witness extracted from a statement and a committed assignment** (`Emulated.proj`).
@@ -188,7 +191,7 @@ Running time: `Emulated.proj`'s paragraph (polynomial in the program's size).
 This running time is argued here, not proved in Lean. -/
 -- spec-side
 def proj (x : program.Valuation interp) (a : program.Assignment interp) :
-    Native.ROMParams.VarWitness :=
+    MLDSA44.VarWitness :=
   Emulated.proj x a
 
 /-- **The extractor of `Π_P₀`** for `MLDSA44.Emulated.QROMParams` (`RealizedProgram.sourceExtractor` at `proj`).
@@ -196,7 +199,7 @@ def proj (x : program.Valuation interp) (a : program.Assignment interp) :
 Running time: one read of the transcript's first round and one call of `proj` (polynomial,
 `proj`'s paragraph). This running time is argued here, not proved in Lean. -/
 def extractor :
-    Extractor (program.sourceSpec interp) (program.Valuation interp) Native.ROMParams.VarWitness :=
+    Extractor (program.sourceSpec interp) (program.Valuation interp) MLDSA44.VarWitness :=
   program.sourceExtractor interp proj
 
 /-- **The crossing wherever the source program holds** (`Emulated.CrossSound`). -/

@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.Honest.Exec
+public import GordieHoweNative.Language.Completeness.Basic
 
 @[expose] public section
 
@@ -27,51 +28,20 @@ the certificate and nothing is searched (`CERTIFICATE_REPRESENTATION.md`, C):
   the source late values; the late generators read the source environment (`genSrcOf`), a late
   histogram reads it with the other generated values as late values (`histEnvOf`).
 
-The strata are those of `GordieHowe.RealizedProgram.genCommitted` and `GordieHowe.RealizedProgram.genVal`;
-the generator formulas are theirs (`lookupDigitNat`, `commDigitNat`, `specNat`, `staticHistNat`,
-`tagGen`, `accNat`, `digitNat`, `digitsAccNat`, `lowDigitNat`, `histNat`). The certificate is
+The generator formulas are `lookupDigitNat`, `commDigitNat`, `specNat`, `staticHistNat`,
+`tagGen`, `accNat`, `digitNat`, `digitsAccNat`, `lowDigitNat` and `histNat`. The certificate is
 untrusted: what the honest values satisfy follows from its checks
 (`GordieHowe/Language/Completeness/Check.lean`).
+
+The definitions are in `GordieHoweNative/Language/Completeness/Basic.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
 
 open Export ProofSystem.PhaseLayout IOP
 
-/-- **The generator of a value**, naming the program items it reads by id. -/
-inductive Gen where
-  /-- A value the semantics fixes, or that no generator computes: `0` where honest. -/
-  | none
-  /-- A value of the source program: the execution's. -/
-  | source
-  /-- Digit `j` of the record of the two-sided or digit lookup `p` (of `N − 1` minus it for the
-  second set). -/
-  | lookupDigit (p : ℕ) (second : Bool) (j : ℕ)
-  /-- Digit `k` of the lookup `lk` of radix-`R` digit `j` of the honest quotient of `mod_q` `m`. -/
-  | commDigit (m j lk k : ℕ)
-  /-- The transformed value of convolution `c` of `RealizedProgram.convs`. -/
-  | spec (c : ℕ)
-  /-- The static histogram of group `g` of table `t`. -/
-  | staticHist (t g : ℕ)
-  /-- The tag of the MAC of cross-field `equal` `p`. -/
-  | tag (p : ℕ)
-  /-- The accumulators of the grouped `mod_q` `p`. -/
-  | acc (p : ℕ)
-  /-- The quotient digits of the grouped `mod_q` `p`. -/
-  | quotDigit (p : ℕ)
-  /-- The accumulator of the ungrouped digit-form `mod_q` `p`. -/
-  | digitsAcc (p : ℕ)
-  /-- Lower digit `j` of the ungrouped digit-form `mod_q` `p`. -/
-  | lowDigit (p j : ℕ)
-  /-- The late histogram of group `g` of table `t`. -/
-  | lateHist (t g : ℕ)
-  deriving DecidableEq, Repr, Inhabited
-
-/-- **The generators of a program's values**, aligned with the values. -/
-abbrev Gens : Type := List Gen
-
-/-- **The generator of value `v`** (`none` past the list). -/
-def Gens.at (G : Gens) (v : ℕ) : Gen := G.getD v .none
+theorem Gens.at_eq_getD (G : Gens) (v : ℕ) : G.at v = G.getD v .none := NatTrie.getD_ofSeq _ _ _
 
 section
 
@@ -122,7 +92,7 @@ variable (ir) in
 /-- **The late generators' values read from the source environment** `e`: a MAC tag (`tagGen`, at
 coordinate `0`), the accumulators (`accNat`) and the quotient digits (`digitNat`) of a grouped
 `mod_q`, the accumulator (`digitsAccNat`) and the lower digits (`lowDigitNat`) of an ungrouped
-digit-form `mod_q`; `0` for any other generator (`genSrc` with the owners read off `G`). -/
+digit-form `mod_q`; `0` for any other generator. -/
 def genSrcOf (G : Gens) (e : ir.Env I) (v i : ℕ) : (I (ir.valueField v)).K :=
   match G.at v with
   | .tag p =>

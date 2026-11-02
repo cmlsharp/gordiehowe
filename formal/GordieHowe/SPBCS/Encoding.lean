@@ -4,7 +4,7 @@
 module
 
 public import GordieHowe.SPBCS.Merges
-public import GordieHowe.SPBCS.FullPast.Encoding
+public import GordieHowe.SPBCS.Format.ChainBytes
 
 @[expose] public section
 
@@ -26,12 +26,11 @@ its own items:
 
 `Content.WF` is well-formed content (the view's chains full and well formed where read, empty
 elsewhere; the digests `0` off the hidden branches; the own items a well-formed proper prefix).
-`MergeEncoding` is the laws an encoding of contents must satisfy, those of `CausalEncoding`: a
-decoder that inverts it on well-formed content, whose decoded strings are encodings and parse
-well-formed content, and the digests of an input containing those of its items.
+`MergeEncoding` is the laws an encoding of contents must satisfy: a decoder that inverts it on
+well-formed content, whose decoded strings are encodings and parse well-formed content, and the
+digests of an input containing those of its items.
 
-Without merges (`Merges.none`) every observer is a leaf reading its whole causal past, and the
-content is the content of the compiler over the term (`CausalChain`).
+Without merges (`Merges.none`) every observer is a leaf reading its whole causal past.
 -/
 
 namespace GordieHowe.SPBCS
@@ -271,8 +270,7 @@ end Content
 
 /-! ### Encodings -/
 
-/-- **A chain-input encoding for the spBCS compiler** (module docstring), the laws of
-`CausalEncoding` for contents:
+/-- **A chain-input encoding for the spBCS compiler** (module docstring):
 - `decode_encode`: on well-formed content the decoder inverts the encoding;
 - `encode_decode`: a decoded string is the encoding of its parse;
 - `wf_of_decode`: the decoder parses only well-formed content;

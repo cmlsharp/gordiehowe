@@ -3,9 +3,13 @@
 
 module
 
-public import GordieHowe.Applications.Falcon512.Native.QROMParams.HonestFacts
+public import GordieHowe.Applications.Falcon512.Native.QROMParams.GadgetFacts
+public import GordieHowe.ProofSystem.Program.HonestReady
 public import GordieHowe.Generated.Falcon512.Native.QROMParams.Completion
-public import GordieHowe.Applications.Falcon512.Native.QROMParams.Transcript
+public import GordieHowe.Applications.Falcon512.Native.QROMParams.Relations
+public import GordieHowe.Generated.Falcon512.Native.QROMParams.Figures
+public import GordieHowe.ProofSystem.Program.Transcript.MergeSetting
+public import GordieHowe.ProofSystem.Program.ForkJoinComap
 public import GordieHowe.Applications.Configuration
 public import GordieHowe.ProofSystem.Program.EndToEnd
 
@@ -24,7 +28,7 @@ families `Common`, `Query` and `GordieHowe.Configuration.AdaptiveCompleteness`.
 
 The figures: at most `2315` rounds, every round's load within `2^-1870` at its own stream length,
 trees of at most `4069` leaves, `255` queried leaves, `7951` verifier queries
-(`2 · 2315 + 6 + 255 · 13`), round errors at most `errorMax / 2^260`, `4635` digests per input
+(`2 · 2315 + 6 + 255 · 13`), round errors at most `13358901 / 2^260`, `4635` digests per input
 (`2 · 2315 + 4 + 1`), the query caps `2^100` (QROM) and `2^64` (ROM), `7327` positions
 (`4069 + 3258`) and `48`-byte digests.
 
@@ -44,77 +48,115 @@ source program (`sourceExecution`), with no completeness event (`δ = 0`), on th
 `HonestIn` (a valid Falcon-512 honest input with a message of at most `32` bytes, at its key);
 the realization's facts come from the checks (`completionReady`).
 
-All statements hold under the compiler trust (`CircuitsEnforce`, and `CircuitsAccept` for the honest
-prover).
+No statement has a compiler-trust hypothesis: the configuration's definitions are generic over the
+program's proof systems (`ProofSystems`), and its statements are instantiated at `proofSystem`,
+whose sources enforce the circuits' entries and accept the honest inputs by the certificates
+(`GordieHowe/Applications/Falcon512/Native/QROMParams/Certified.lean`).
 -/
 
 namespace GordieHowe.Falcon512.Native.QROMParams
 
 open RealizedProgram.Export RealizedProgram.ProofSystem.PhaseLayout IOP RelativePacking GordieHowe.SPBCS GordieHowe.QROM SPBCS.Configurations GordieHowe.Configuration
 open Generated.Falcon512.Native.QROMParams.Program (program)
-open ROMParams (HonestIn relH sourceExecution oneNodes VarWitness stmtOf)
+open Generated.Falcon512.Native.QROMParams (interp ready ProofSystems figures figuresOk numbers
+  branchName branchName_le fieldBytes msgB_le
+  samplerReaders chalLoadMax chalLoad_le grantMax
+  sourceErrors fieldCard)
+open Generated.Falcon512.Native.QROMParams.Facts (interpModel sourceValid)
 open GordieHowe.Falcon512.Emulated (PublicKey)
 open scoped NNReal ENNReal
 
 /-! ## The honest strategy -/
 
-set_option maxRecDepth 8192 in
-/-- No late value is a source value (decided). -/
-theorem facts_noSourceLate : ∀ v < program.values.length, program.IsLate v →
-    ¬ program.IsSourceValue v := by
-  decide +kernel
-
-/-- **The ready data of the honest strategy of `Falcon512.Native.QROMParams`** (`RealizedProgram.CompletionReady`): the nodes
-containing `1` (`oneNodes (FH := gf256) (FA := fq20)`), the program's validity, the interpretation's registry, integer
-readings and MAC model, and the checks (`GordieHowe.Generated.Falcon512.Native.QROMParams.Completion.completionOk`). -/
-def completionReady : program.CompletionReady interp Honest.PN
-    Generated.Falcon512.Native.QROMParams.Cert.gens Generated.Falcon512.Native.QROMParams.Cert.cderivs where
-  nodes := Generated.Falcon512.Native.QROMParams.Honest.nodes
-  oneNodes := oneNodes (FH := RealizedProgram.gf256) (FA := RealizedProgram.fq20)
-  wf := Generated.Falcon512.Native.QROMParams.Valid.wellFormed
-  registered := interpModel.registered
-  lawful := interpModel.lawful
-  macModel := interpModel.macModel
-  tables := Generated.Falcon512.Native.QROMParams.Realize.derivable.tables
-  macsRealizable := Generated.Falcon512.Native.QROMParams.Realize.derivable.eventsOk
-  sourceValid := Locality.sourceValid
-  ok := Generated.Falcon512.Native.QROMParams.Completion.completionOk
-
-set_option maxRecDepth 8192 in
-/-- **The `kpriv` source values whose type no node states have checked types** (decided). -/
-theorem kprivTyped : program.KprivTyped := by
-  decide +kernel
+/-- **The ready data of the honest strategy of `Falcon512.Native.QROMParams`**
+(`RealizedProgram.CompletionReady.ofGenerated`): the honest nodes, which contain `1`
+(`oneNodes`), and the generated facts: validity, the interpretation's model, the realizations, the
+source part, and the checks of the completeness certificate and the honest roles
+(`GordieHowe.Generated.Falcon512.Native.QROMParams.Completion.completionOk`, `GordieHowe.Generated.Falcon512.Native.QROMParams.Completion.rolesOk`). -/
+def completionReady : program.CompletionReady interp
+    (RealizedProgram.primeNodesOf Generated.Falcon512.Native.QROMParams.Plan.plan program)
+    Generated.Falcon512.Native.QROMParams.Structure.records
+    Generated.Falcon512.Native.QROMParams.Cert.gens Generated.Falcon512.Native.QROMParams.Cert.cderivs :=
+  .ofGenerated (oneNodes (FH := RealizedProgram.gf256) (FA := RealizedProgram.fq20)) Generated.Falcon512.Native.QROMParams.Valid.wellFormed interpModel
+    Generated.Falcon512.Native.QROMParams.Realize.derivable sourceValid Generated.Falcon512.Native.QROMParams.Completion.completionOk
+    Generated.Falcon512.Native.QROMParams.Completion.rolesOk
 
 /-- **The honest strategy of `Falcon512.Native.QROMParams`** (`RealizedProgram.HonestStrategy.ofCompletionReady` at the
-execution `sourceExecution`): the honest valuation `honestVal` read off by `execOf`, the generated late
-values, no completeness event. -/
-noncomputable def honestStrategy : program.HonestStrategy interp (ROMParams.relH program RealizedProgram.gf256 RealizedProgram.fq20) :=
+execution `sourceExecution` at the program's honest roles `completionReady.roles`): the honest
+valuation `honestVal` read off by `execOf`, the generated late values, no completeness event. -/
+noncomputable def honestStrategy : program.HonestStrategy interp (Native.relH program RealizedProgram.gf256 RealizedProgram.fq20) :=
   RealizedProgram.HonestStrategy.ofCompletionReady completionReady
-    (ROMParams.sourceExecution program RealizedProgram.gf256 RealizedProgram.fq20 _ Generated.Falcon512.Native.QROMParams.Valid.wellFormed interpModel.registered
-      interpModel.lawful completionReady.facts.committed completionReady.facts.boundNoCopy facts_noSourceLate kprivTyped (RealizedProgram.boundOneMem_of_natTypedIn
-        (L := [(0, "bit"), (0, "GF(2^16)"), (1, "GF(p^1)")]) (oneNodes (FH := RealizedProgram.gf256) (FA := RealizedProgram.fq20))
-        (by decide +kernel))
-      (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel))
+    (Native.sourceExecution program RealizedProgram.gf256 RealizedProgram.fq20 _ Generated.Falcon512.Native.QROMParams.Valid.wellFormed interpModel.registered
+      interpModel.lawful completionReady.facts.committed completionReady.facts.boundNoCopy
+      completionReady.roles completionReady.oneNodes interpModel.bitNodes)
 
 /-- The honest strategy's completeness errors are `0`. -/
 theorem honestStrategy_delta : ∑ k, honestStrategy.δ k ≤ honestBound := by
-  simp [honestStrategy, RealizedProgram.HonestStrategy.ofCompletionReady_δ, ROMParams.sourceExecution, honestBound]
+  rw [honestStrategy, RealizedProgram.HonestStrategy.ofCompletionReady_δ, Native.sourceExecution_δ]
+  simp [honestBound]
 
-/-! ## The facts of the figures -/
+/-! ## The multi-circuit IOP with forked domains -/
 
-variable (C : Compiled)
+variable (C : ProofSystems)
 
-/-- **The facts the spBCS setting is built from**: the transcript's (`forkTranscript_bounds`)
-and `48`-byte salts. -/
+/-- The lowering of the soundness theorem on the generic per-field domain proofs
+(`RealizedProgram.ProofSystem.lowering`). -/
+abbrev forkLowering :=
+  (C.withFieldProofs ready).lowering ⟨_, source_rbr_knowledge_soundness, sourceError_final⟩
+
+/-- **`Falcon512.Native.QROMParams` as a multi-circuit IOP with forked domains at the key**: the generic
+per-field domain proofs (`RealizedProgram.ProofSystem.fieldIop`) with the proof system's application phase at the
+frontend's round-by-round knowledge soundness (`QROMParams.source_rbr_knowledge_soundness`), the statement read as the key's
+statement values (`stmtOf`). -/
+abbrev forkIop : RealizedProgram.ProofSystem.IOP PublicKey (program.Valuation interp → VarWitness)
+    keyRel :=
+  C.fieldIop ready (forkLowering C) stmtOf
+
+/-- The soundness data of `forkIop` (`RealizedProgram.ProofSystem.FieldBranches.soundIOPSound`, `RealizedProgram.ProofSystem.IOP.Sound.comap`). -/
+noncomputable abbrev forkIopSound : (forkIop C).Sound :=
+  ((C.fieldBranches ready).soundIOPSound (C.fieldBranchesSound ready) source_rbr_knowledge_soundness
+    sourceError_final).comap stmtOf
+
+/-- **The C++ series–parallel transcript of `Falcon512.Native.QROMParams`** (`RealizedProgram.ProofSystem.fieldForkTranscript`): the
+label `label`, `figures.k`-byte digests, the key writes (`falconKeyCodec`), every branch named by its
+domain's field (`branchName`), the phases' codecs (`RealizedProgram.appWrites` at `fieldBytes`) and readers
+(`RealizedProgram.appReaders` at `samplerReaders`), every domain's at `numbers`. The largest grant of a round is `grantMax`. -/
+abbrev forkTranscript : ProofSystemTranscript (forkIop C) :=
+  C.fieldForkTranscript ready (forkLowering C) stmtOf numbers.cod
+    (numbers.fits C.enforce) label figures.k
+    falconKeyCodec (fun a => branchName a.1) (program.appWrites fieldBytes msgB_le)
+    (program.appReaders samplerReaders (fun _ => chalLoadMax) chalLoad_le) grantMax
+
+/-- **The facts the setting with merges is built from**: the transcript's
+(`RealizedProgram.ProgramFigures.Check.transcript_bounds`: the statement's writes, the label and the
+branch names) and `48`-byte salts. -/
 theorem transcriptMergeBounds : (forkTranscript C).MergeBounds 48 :=
-  ⟨forkTranscript_bounds C, by norm_num⟩
+  ⟨figuresOk.transcript_bounds
+    (fun pk => by
+      change (falconKeyWrites pk).length ≤ _
+      rw [falconKeyWrites_length]
+      norm_num)
+    (Nat.le_of_ble_eq_true rfl) (fun a => branchName_le a.1), by norm_num⟩
 
-set_option maxRecDepth 8192 in
-/-- **The figures of `forkIop`** (`RealizedProgram.ProofSystem.fieldIop_figures`, decided): at most `2315` rounds,
-trees of at most `4069` leaves, `255` queried leaves, `7951` verifier queries, `4635` digests
-per input and `7327` positions. -/
-theorem forkFigures : (forkIop C).Figures 2315 4069 255 7951 4635 7327 :=
-  (proofSystem C.src).fieldIop_figures (forkLowering C) stmtOf C.enforce (by decide +kernel)
+/-- **The source challenges' errors are within their fractions** (`sourceErrors`). -/
+theorem sampleEps_le (j : ℕ) (_ : program.IsSourceChal j) :
+    (selectEps (FH := RealizedProgram.gf256)) j ≤ ((sourceErrors j).1 : ℝ≥0) / (sourceErrors j).2 := by
+  unfold selectEps
+  simp only [sourceErrors]
+  split_ifs
+  · show (717 : ℝ≥0) / 2 ^ 256 ≤ _
+    norm_num
+  · exact zero_le'
+
+/-- **The largest round error of the series–parallel composite** is at most
+`figures.errorMax / 2^figures.errorExp` (`RealizedProgram.ProofSystem.fieldForkError_le`): every
+domain's round charges and every phase's error (`RealizedProgram.ProgramFigures.Check.fieldRoundsLe`,
+`RealizedProgram.ProgramFigures.Check.phaseError_le`). -/
+theorem maxRoundError_le :
+    maxError (forkIopSound C).error ≤ (figures.errorMax : ℝ≥0) / 2 ^ figures.errorExp :=
+  maxError_le_iff.2 (C.fieldForkError_le ready stmtOf source_rbr_knowledge_soundness
+    sourceError_final (figuresOk.fieldRoundsLe fieldCard)
+    (fun _ => figuresOk.phaseError_le fieldCard (selectEps (FH := RealizedProgram.gf256)) sampleEps_le _))
 
 /-! ## The configuration -/
 
@@ -125,7 +167,7 @@ prover on the generic per-field domain proofs (`RealizedProgram.ProofSystem.Fiel
 (`RealizedProgram.ProofSystem.IOP.Honest.comap`); its completeness error is the strategy's summed completeness errors
 (`err`). -/
 noncomputable def configuration : Configuration where
-  Compiled := Compiled
+  ProofSystem := ProofSystems
   Stmt := PublicKey
   Wit := program.Valuation interp → VarWitness
   rel := keyRel
@@ -136,73 +178,74 @@ noncomputable def configuration : Configuration where
   Wit' := VarWitness
   rel' := keyWitRel
   g s w := w (stmtOf s)
-  TA C := (proofSystem C.src).CircuitsAccept
   Val := program.Valuation interp
   Strategy _ relH := program.HonestStrategy interp relH
   hrel := keyHonestRel
-  sim C := (proofSystem C.src).fieldIopSimData (forkLowering C) stmtOf
-  honest C TA _ _ H := (proofSystem C.src).fieldIopHonest (forkLowering C) stmtOf TA H.toHonestCore
+  sim C := C.fieldIopSimData (forkLowering C) stmtOf
+  honest C _ _ H := C.fieldIopHonest (forkLowering C) stmtOf H.toHonestCore
   err H := ∑ k, H.δ k
-  HonestIn := ROMParams.HonestIn
-  relH := ROMParams.relH program RealizedProgram.gf256 RealizedProgram.fq20
+  HonestIn := Native.HonestIn
+  relH := Native.relH program RealizedProgram.gf256 RealizedProgram.fq20
   strategy := honestStrategy
   keyStmtOf y := y.y.pk
   inh := inferInstance
-  rounds := 2315
-  chernoff := 1870
-  N := 4069
-  nq := 255
-  kq := 7951
-  errorMax := errorMax
-  errorExp := 260
-  D := 4635
+  rounds := figures.rounds
+  chernoff := figures.chernoff
+  N := figures.N
+  nq := figures.nq
+  kq := figures.kq
+  errorMax := figures.errorMax
+  errorExp := figures.errorExp
+  D := figures.D
   qQ := 2 ^ 100
   qR := 2 ^ 64
-  pos := 7327
-  k := 48
+  pos := figures.pos
+  k := figures.k
 
-/-- **The facts of `configuration`**: the figures' bounds (`transcriptMergeBounds`, `forkLoadsGranted`,
-every round at its own stream length, `QROMParams.maxRoundError_le`), the end-to-end theorem at the
-configuration's IOP (`RealizedProgram.ProofSystem.FieldBranches.e2e_knowledge`, `RealizedProgram.ProofSystem.FieldBranches.e2e`, at the witness
+/-- **The facts of `configuration`**: the figures' bounds, from the generated check
+(`GordieHowe.Generated.Falcon512.Native.QROMParams.figuresOk`: `RealizedProgram.ProgramFigures.Check.figures`,
+`RealizedProgram.ProgramFigures.Check.loadsGranted`, `maxRoundError_le`), the setting's facts
+(`transcriptMergeBounds`), the end-to-end theorem at the configuration's IOP
+(`RealizedProgram.ProofSystem.FieldBranches.e2e_knowledge`, `RealizedProgram.ProofSystem.FieldBranches.e2e`, at the witness
 map `mem_keyWitRel` and the domains' generic honest provers) and the honest strategy's
 (`honestStrategy_delta`). -/
 theorem configurationFacts : configuration.GrantedFacts where
   hb := transcriptMergeBounds
-  knowledge C _ hkq := ((proofSystem C.src).fieldBranches ready).e2e_knowledge ((proofSystem C.src).fieldBranchesSound ready) C.enforce source_rbr_knowledge_soundness
+  knowledge C _ hkq := (C.fieldBranches ready).e2e_knowledge (C.fieldBranchesSound ready) source_rbr_knowledge_soundness
     sourceError_final stmtOf (forkTranscript C) 48 (transcriptMergeBounds C)
     (fun _ _ h => mem_keyWitRel h) hkq
-  e2e C TA _ _ H _ hkq hf := ((proofSystem C.src).fieldBranches ready).e2e ((proofSystem C.src).fieldBranchesSound ready) C.enforce source_rbr_knowledge_soundness
+  e2e C _ _ H _ hkq hf := (C.fieldBranches ready).e2e (C.fieldBranchesSound ready) source_rbr_knowledge_soundness
     sourceError_final stmtOf (forkTranscript C) 48 (transcriptMergeBounds C)
-    (fun _ _ h => mem_keyWitRel h) hkq hf TA ((proofSystem C.src).fieldHonestDomains ready)
-    ((proofSystem C.src).fieldForkHonestDomains ready TA) H.toHonestCore
+    (fun _ _ h => mem_keyWitRel h) hkq hf (C.fieldHonestDomains ready)
+    (C.fieldForkHonestDomains ready) H.toHonestCore
     H.complete
-  rounds_le C := (forkFigures C).rounds_le
-  loadsGranted := forkLoadsGranted
-  leaves_le C := (forkFigures C).leaves_le
-  queries_le C := (forkFigures C).queries_le
-  kq_ge C := (forkFigures C).kq_ge
-  kq_le := show 7951 ≤ 2 ^ 16 by norm_num
+  rounds_le C := (figuresOk.figures (B := C) (Lw := forkLowering C) (f := stmtOf)).rounds_le
+  loadsGranted C := figuresOk.loadsGranted (B := C) (Lw := forkLowering C) (f := stmtOf)
+  leaves_le C := (figuresOk.figures (B := C) (Lw := forkLowering C) (f := stmtOf)).leaves_le
+  queries_le C := (figuresOk.figures (B := C) (Lw := forkLowering C) (f := stmtOf)).queries_le
+  kq_ge C := (figuresOk.figures (B := C) (Lw := forkLowering C) (f := stmtOf)).kq_ge
+  kq_le := figuresOk.kq_le
   error_le := maxRoundError_le
-  digests_le C := (forkFigures C).digests_le
-  pos_eq C := (forkFigures C).pos_eq
+  digests_le C := (figuresOk.figures (B := C) (Lw := forkLowering C) (f := stmtOf)).digests_le
+  pos_eq C := (figuresOk.figures (B := C) (Lw := forkLowering C) (f := stmtOf)).pos_eq
   k_eq _ := rfl
   exact := nonpos_iff_eq_zero.1 honestStrategy_delta
   keyStmtOf_mem _ := rfl
 
 /-- **The honest inputs of the supported pairs of the paper's relation**
-(`Configuration.HonestOf` at `ROMParams.keySupportedRel`: the pairs of `keyWitRel` whose
-`HashToPoint` succeeds within the H circuit's `639` samples, `Falcon512.PoP.relSupported`): every
-such pair has the honest input `ROMParams.HonestIn.ofRel` at its key. -/
+(`Configuration.HonestOf` at `Falcon512.Native.keySupportedRel`: the pairs of `keyWitRel` whose
+`HashToPoint` succeeds within the H circuit's `717` samples, `Falcon512.PoP.relSupported`): every
+such pair has the honest input `HonestIn.ofRel` at its key. -/
 def honestOfRel : configuration.HonestOf where
-  rel := ROMParams.keySupportedRel
+  rel := Native.keySupportedRel
   rel_subset _ h := h.1
-  honestOf p hp := ROMParams.HonestIn.ofRel p.1 p.2 hp
+  honestOf p hp := HonestIn.ofRel p.1 p.2 hp
   keyStmtOf_honestOf _ _ := rfl
 
 instantiate_config GordieHowe.Falcon512.Native.QROMParams
   from [GordieHowe.Configuration.Common, GordieHowe.Configuration.ZeroKnowledgeQROM,
     GordieHowe.Configuration.AdaptiveCompleteness,
     GordieHowe.Configuration.PaperRelation] configuration
-    configurationFacts honestOfRel
+    configurationFacts honestOfRel at proofSystem
 
 end GordieHowe.Falcon512.Native.QROMParams

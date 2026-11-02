@@ -170,7 +170,7 @@ namespace KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  (A : KindAlg X Y Req Resp O)
+  {ksA : KindShape X Y Req Resp} (A : KindAlg ksA O)
 
 /-- The game registers of `A` (`GameReg`). -/
 abbrev G := GameReg A.W A.width X Y Req Resp A.slots

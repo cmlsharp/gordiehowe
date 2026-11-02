@@ -20,6 +20,28 @@ rev = "5ed2965256430c3649e86755f9576b54eca72435"
 [[lean_lib]]
 name = "GordieHowe"
 
+# The certificate library, opt in: the exported programs, plans and certificates
+# (GordieHowe/Generated/), each program's proof system from them, and every module importing one,
+# imported by the root GordieHoweCerts.lean under their GordieHowe.* names. The default target
+# builds none of them; GordieHowe imports no module of this library (scripts/cert_boundary.py).
+[[lean_lib]]
+name = "GordieHoweCerts"
+globs = ["GordieHoweCerts"]
+
+# The .ghc container and its type-directed decoders (GordieHoweNative/Ghc.lean, Derive.lean,
+# Codecs.lean), the loader's term building (Terms.lean), the data types they build
+# (GordieHoweNative/Data.lean), and the certificate checkers with every definition their compiled
+# code calls (GordieHoweNative/<path>.lean for the module GordieHowe/<path>.lean holding their
+# lemmas), compiled to a shared library that Lake loads into every Lean process building a module
+# that imports it (precompileModules), so that the loader, the run-time reader and native mode's
+# checks run compiled code instead of Lean's interpreter. Lake also builds the shared library of
+# every library these modules import, so they import no Mathlib (scripts/check.sh).
+[[lean_lib]]
+name = "GordieHoweNative"
+roots = []
+globs = ["GordieHoweNative.+"]
+precompileModules = true
+
 [[lean_lib]]
 name = "LatticeCrypto"
 srcDir = "Vendor"
@@ -38,6 +60,11 @@ srcDir = "Vendor"
 
 [[lean_lib]]
 name = "GordieHoweTest"
+srcDir = "Test"
+
+# The tests that read exported programs or certificates; their modules keep GordieHoweTest.* names.
+[[lean_lib]]
+name = "GordieHoweCertsTest"
 srcDir = "Test"
 
 # Audited ArkLib subset (BCIKS20 unique decoding, Johnson MCA); provenance is in Vendor/rs-provenance.json.

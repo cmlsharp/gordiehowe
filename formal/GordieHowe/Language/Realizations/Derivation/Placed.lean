@@ -18,8 +18,9 @@ where the source predicates hold and the derivations are valid (`DerivationsVali
 * **A placed predicate holds where its predicate does and the realized program holds**
   (`GordieHowe.RealizedProgram.placedHolds_of_derivs`): a `mod_0` has its field equation by the
   realized program (`RealizedAt.integer`), a `mod_p` in the field form by its field `equal` row
-  (`DerivationsValid.fieldRows`, `fieldEq_of_fieldRow`); every other `mod_q` is placed by its
-  realization circuits, and every other predicate is placed as written.
+  (`DerivationsValid.fieldRows`, `fieldEq_of_fieldRow`), a product-form `mod_q` by its placed
+  equation (`RealizedAt.product`); every other `mod_q` is placed by its realization circuits, and
+  every other predicate is placed as written.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -76,12 +77,14 @@ theorem placedHolds_of_derivs (hwf : ir.WellFormed) (hI : I.Registered ir)
     {pid : ℕ} (hpid : pid < ir.predicates.length)
     (hint : ∀ d lhs rhs real, (ir.predicate pid).body = .mod d 0 lhs rhs real →
       ∀ i < ir.exprLen lhs, ir.evalWith rd d lhs i = ir.evalWith rd d rhs i)
+    (hprod : ∀ d m lhs rhs real, (ir.predicate pid).body = .mod d m lhs rhs real →
+      real.form.isProduct = true → 2 < m → ir.ProductPlaced rd d m lhs rhs real)
     (h : ir.HoldsWith rd (ir.predicate pid).body) : ir.PlacedHolds rd (ir.predicate pid).body := by
   have hpo := hwf.predicates _ (predicate_mem hpid)
   have hrows := hv.fieldRows pid hpid
-  revert hint h hpo hrows
+  revert hint hprod h hpo hrows
   generalize (ir.predicate pid).body = b
-  intro hint h hpo hrows
+  intro hint hprod h hpo hrows
   cases b with
   | mod d q e e' real =>
     by_cases hq : q = 0
@@ -92,7 +95,10 @@ theorem placedHolds_of_derivs (hwf : ir.WellFormed) (hI : I.Registered ir)
       · simp only [PlacedHolds, hf, or_true, ↓reduceIte]
         obtain ⟨hc, h2, hrow⟩ := hrows d q e e' real rfl hq hf
         exact fieldEq_of_fieldRow hwf hI hL hF hpo hc h2 hrow
-      · simp only [PlacedHolds, hq, hf, or_self, ↓reduceIte]
+      · by_cases hp : real.form.isProduct = true ∧ 2 < q
+        · simp only [PlacedHolds, hq, hf, or_self, ↓reduceIte, if_pos hp]
+          exact hprod d q e e' real rfl hp.1 hp.2
+        · simp only [PlacedHolds, hq, hf, or_self, ↓reduceIte, if_neg hp]
   | _ => exact h
 
 /-- **The placed predicates hold, from valid derivations**: domain `d`'s predicate holds on the cells `a` where the source predicates hold, the
@@ -111,6 +117,7 @@ theorem holds_of_sat_derivs (hwf : ir.WellFormed) (hI : I.Registered ir)
     (placedHolds_cellValuation_iff hl a d hp hd').2
       (placedHolds_of_derivs hwf hI hL hd hsat.leafFacts hp
         (fun d' lhs rhs real hb => hreal.integer _ (predicate_mem hp) d' lhs rhs real hb)
+        (fun d' m lhs rhs real hb hf h2 => hreal.product _ (predicate_mem hp) d' m lhs rhs real hb hf h2)
         (hsat.preds _ (predicate_mem hp)))
   have hlow : ∀ p, p < ir.predicates.length → ir.Lowered d p →
       ir.PlacedHolds (ir.cellValuation I d x r (a d)) (ir.predicate p).body := fun p hp h =>
@@ -121,23 +128,21 @@ theorem holds_of_sat_derivs (hwf : ir.WellFormed) (hI : I.Registered ir)
     intro e he
     have hok := hv.entries c.1 c.1.2 e he
     cases e with
-    | typeCheck p =>
-      exact hpred p (of_decide_eq_true hok) (c.2 ▸ hl.placed c.1 c.1.2 p (.inr he))
+    | typeCheck p => exact hpred p hok (c.2 ▸ hl.placed c.1 c.1.2 p (.inr he))
     | alignment _ => trivial
-    | pred p => exact hpred p (of_decide_eq_true hok) (c.2 ▸ hl.placed c.1 c.1.2 p (.inl he))
+    | pred p => exact hpred p hok (c.2 ▸ hl.placed c.1 c.1.2 p (.inl he))
     | realization rc =>
       cases rc with
       | logup t g =>
-        simp only [entryOkB, Bool.and_eq_true, decide_eq_true_eq] at hok
-        obtain ⟨v, hnode, hf⟩ := exists_chalNode_of_alphaNodeB (hv.alpha t hok.1)
+        obtain ⟨ht, hg⟩ := hok
+        obtain ⟨v, hnode, hf⟩ := hv.alpha t ht
         exact (logupHoldsAt_cellValuation_iff hl a d c.2 he).2
-          ((ir.logupHoldsAt_reader_iff _ hnode hf).2 (hreal.logup t hok.1 g hok.2))
+          ((ir.logupHoldsAt_reader_iff _ hnode hf).2 (hreal.logup t ht g hg))
       | macH p =>
-        simp only [entryOkB, Bool.and_eq_true, decide_eq_true_eq] at hok
-        obtain ⟨dx, x', dy, y, k, real, v, hb, hn, hbx, hv', hf⟩ := exists_of_macHNodeB hok.2
+        obtain ⟨hp, dx, x', dy, y, k, real, v, hb, hn, hbx, hv', hf⟩ := hok
         exact (macHHolds_cellValuation_iff hl a d c.2 he).2
           ((macHHolds_reader_iff _ hb hn hv' hf).2
-            (hreal.macH _ (predicate_mem hok.1) _ _ _ _ _ _ hb hn hbx))
+            (hreal.macH _ (predicate_mem hp) _ _ _ _ _ _ hb hn hbx))
       | named _ => trivial
       | unmodeled _ => trivial
   · exact (affineRows_iff q.1 x (a d) r).2 (hlow _ q.1.1.2 (.row q.1.1.2 q.1.2)) q.2

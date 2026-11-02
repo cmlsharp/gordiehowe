@@ -4,8 +4,9 @@
 module
 
 public import GordieHowe.SPBCS.SimExtractGame
-public import GordieHowe.SPBCS.FullPast.SimExtract
 public import GordieHowe.Model.Quantum.Interactive.QueryBounded
+public import GordieHowe.Model.QROM.QueryCountExpand
+public import GordieHowe.Model.QROM.AdaptiveCount
 
 @[expose] public section
 
@@ -17,15 +18,96 @@ Unruh 2017, ePrint 2017/398, Definition 14, p. 21, eq. (6), weak variant, for re
 that make no oracle queries) of the spBCS compiler, against query-bounded adversaries
 (`Quantum.QueryBoundedAdversary`, the paper's `(t, Q)`-adversaries), given a simulation oracle that
 runs a counted simulator program assigning only at the keys of its chain inputs
-(`SimAssignsAtKeys`) on any statement. The argument uses the spBCS cover (`cover_simExtGame`, through the
-translation of the database).
+(`SimAssignsAtKeys`) on any statement. The argument uses the spBCS cover (`cover_simExtGame`).
 
-The extractor is `dbExtract` (the database extractor on the translated database) on the measured
+The extractor is the database extractor `dbExtract` on the measured
 database of the simulated run expanded by the verifier's and the simulator's queries
 (`extractsAt`). The error (`simExtractionError`) is the spBCS knowledge error
 `knowledgeError k e (kq + Q q) (t + Q q + kq + Q q) c nJ κ`, with `q` the queries of one run of
 the simulator program: the paper's `errse(t, Q)` with `k = kq + Q q_S` and `T = t + k + Q q_S`.
 -/
+
+/-!
+## The simulation-extraction game at one adversary
+
+Objects of the weak simulation-sound extractability game (Unruh 2017, ePrint 2017/398,
+Definition 14, p. 21, eq. (6), weak variant, for residual-state tests that make no oracle queries)
+at one adaptive interactive adversary `A` with the simulation challenger running the simulator
+program `Psim`:
+
+- `Reg`: the composed registers; `branchQueries`: the per-branch query count of the composed
+  algorithm; `Fresh`: the adversary's statement is none of its proof queries.
+- `SimExtractionAdversary.tsum_le_tsum_add`: an auxiliary-input average of bounds `x a ≤ y a + c`
+  is a bound `∑ x ≤ ∑ y + c`.
+-/
+
+namespace GordieHowe.SPBCS
+
+open GordieHowe.QROM GordieHowe.IOP IOP.SPTerm Quantum GordieHowe.QROM
+open scoped NNReal ENNReal
+
+variable {k kN kS L e : ℕ}
+
+section
+
+variable {ι : Type} {n : ι → ℕ} {P : (j : ι) → ProtocolSpec (n j)}
+  [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)]
+  [∀ j i, Nonempty ((P j).Challenge i)] {t : SPTerm ι} {Mg : Merges t} {X : Type}
+  {M : SPBCS Mg P X k kN kS L e} {B : ℕ} [∀ j i, Fintype ((M.comp j).MessageWrite i)]
+  {V : X → FullTr P t → Bool} (Qs : ∀ x, M.IOPQueries V x) {X' : Type} [Fintype X']
+  [DecidableEq X'] {SC : Type} [Fintype SC] [DecidableEq SC]
+
+/-! ### The game at one adversary -/
+
+variable {shA : AlgShape (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)} (A : AdaptiveIAlg shA (Claim X M.NIProof))
+  (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B) SC) (Q kq : ℕ)
+
+/-- The composed registers of `A` with the simulation challenger. -/
+abbrev Reg := M.Register B A.toTPKindAlg Psim Q
+
+variable (fx : X' → X)
+
+/-- **The statement is fresh** on the composed registers. -/
+def Fresh (v : Reg A Psim Q) : Prop :=
+  ∀ x' ∈ queried A.toTPKindAlg Psim Q v, fx x' ≠ (advOut A.toTPKindAlg Psim Q v).stmt
+
+variable {E₀ : (j : ι) → (M.comp j).Encoder} {VE : M.ViewEncoder E₀ Qs} {Pub : Type}
+  {pub : X → Pub} {S : CausalJointSimulator VE.MV Pub} {T : M.Preimages}
+
+/-! ### Averages over auxiliary inputs -/
+
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+/-- An auxiliary-input average of bounds `x a ≤ y a + c` is a bound `∑ x ≤ ∑ y + c`. -/
+theorem SimExtractionAdversary.tsum_le_tsum_add {tq Q : ℕ} (𝒜 : M.SimExtractionAdversary B X' tq Q)
+    {x y : 𝒜.Aux → ℝ≥0∞} {c : ℝ≥0∞} (h : ∀ a, x a ≤ y a + c) :
+    ∑' a, 𝒜.aux a * x a ≤ ∑' a, 𝒜.aux a * y a + c := by
+  calc ∑' a, 𝒜.aux a * x a ≤ ∑' a, (𝒜.aux a * y a + 𝒜.aux a * c) :=
+        ENNReal.tsum_le_tsum fun a => by rw [← mul_add]; gcongr; exact h a
+    _ = ∑' a, 𝒜.aux a * y a + c := by
+        rw [ENNReal.tsum_add, ENNReal.tsum_mul_right, PMF.tsum_coe, one_mul]
+
+end
+
+section
+
+variable {ι : Type} {n : ι → ℕ} {P : (j : ι) → ProtocolSpec (n j)}
+  [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)]
+  [∀ j i, Nonempty ((P j).Challenge i)] {t : SPTerm ι} {Mg : Merges t} {X : Type}
+  {M : SPBCS Mg P X k kN kS L e} {B : ℕ} [∀ j i, Fintype ((M.comp j).MessageWrite i)]
+  {V : X → FullTr P t → Bool} (Qs : ∀ x, M.IOPQueries V x) {X' : Type} [Fintype X']
+  [DecidableEq X'] {SC : Type} [Fintype SC] [DecidableEq SC]
+
+/-! ### The game at one adversary -/
+
+variable {shA : AlgShape (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)} (A : AdaptiveIAlg shA (Claim X M.NIProof))
+  (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B) SC) (Q kq : ℕ)
+
+/-- **The per-branch query count of the composed algorithm.** -/
+abbrev branchQueries : ℕ := A.width * A.budget + Q * Psim.q + A.width * A.post
+
+end
+
+end GordieHowe.SPBCS
 
 namespace GordieHowe.SPBCS
 
@@ -51,8 +133,7 @@ def extractsAt [DecidableEq X] {Wit : Type} (rel : Set (X × Wit)) (E : CausalEx
 
 /-! ### The game at one adversary -/
 
-variable (A : AdaptiveIAlg (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
-    (Claim X M.NIProof))
+variable {shA : AlgShape (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)} (A : AdaptiveIAlg shA (Claim X M.NIProof))
   (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B) SC) (Q kq : ℕ)
 
 /-- **The simulated adversary of the extractor**: the composed algorithm of the trace-preserving
@@ -64,7 +145,7 @@ of the simulator program, `Psim.q` queries), in pure serial form, then `kq + Q �
 extraction queries computed from the measured registers by the spBCS verifier's query program;
 polynomial when `A` and `Psim` are. This running time is argued here, not proved in Lean. -/
 noncomputable abbrev extAdv :
-    Adv (Bits (queryBits k kN kS L)) (XOut k e) (Out k e) (Base.Reg A Psim Q)
+    Adv (Bits (queryBits k kN kS L)) (XOut k e) (Out k e) (SPBCS.Reg A Psim Q)
       (kq + Q * Psim.q)
       ((A.toTPKindAlg.composeBothOut (simExtChallenger Psim Q) id).depth + (kq + Q * Psim.q)) :=
   expandAdv (outEquiv k e) (simExtractionExpansion A.toTPKindAlg Psim Q Qs) (kq + Q * Psim.q)
@@ -74,7 +155,7 @@ noncomputable abbrev extAdv :
 /-- The per-branch query count of the simulated adversary: `branchQueries + kq + Q · q`. -/
 noncomputable def extAdvQueryCount :
     QueryCount (outEquiv k e) (extAdv Qs A Psim Q kq)
-      (FullPast.branchQueries A Psim Q + (kq + Q * Psim.q)) :=
+      (SPBCS.branchQueries A Psim Q + (kq + Q * Psim.q)) :=
   QueryCount.expandAdv (kq + Q * Psim.q) (outEquiv k e)
     (simExtractionExpansion A.toTPKindAlg Psim Q Qs)
     (AdaptiveIAlg.tpQueryCount (outEquiv k e) A (simExtChallenger Psim Q) id _)
@@ -85,15 +166,15 @@ variable (fx : X' → X)
 noncomputable def winTestProb (ok : A.W → Prop) : ℝ≥0∞ :=
   ((A.toKindAlg.composeBothOut (simExtChallenger Psim Q) id).realLaw (outEquiv k e)).toOuterMeasure
     {p | ∃ v, p.out = some v ∧ Wins A.toTPKindAlg Psim Q Qs fx ((outEquiv k e).symm ∘ p.oracle) v ∧
-      ok (Base.advWorkspace A.toTPKindAlg Psim Q v).1}
+      ok (SPBCS.advWorkspace A.toTPKindAlg Psim Q v).1}
 
 /-- **The probability that the extractor `dbExtract` returns a witness for `A`'s statement, the
 statement is fresh and the test `ok` accepts**, in one simulated run of `extAdv`. -/
 noncomputable def extractFreshTestProb [DecidableEq X] {Wit : Type} (rel : Set (X × Wit))
     (E : CausalExtractor P t X Wit) (ok : A.W → Prop) : ℝ≥0∞ :=
   simProb (outEquiv k e) (extAdv Qs A Psim Q kq) fun c D =>
-    M.extractsAt rel E (Base.advOut A.toTPKindAlg Psim Q c).stmt D ∧
-      Base.Fresh A Psim Q fx c ∧ ok (Base.advWorkspace A.toTPKindAlg Psim Q c).1
+    M.extractsAt rel E (SPBCS.advOut A.toTPKindAlg Psim Q c).stmt D ∧
+      SPBCS.Fresh A Psim Q fx c ∧ ok (SPBCS.advWorkspace A.toTPKindAlg Psim Q c).1
 
 variable {C : Type} [Fintype C] [DecidableEq (SaltedCoins (FiatShamirSalt kS) C)]
 
@@ -107,23 +188,23 @@ theorem winTestProb_le_winO
     (ok : A.W → Prop) :
     winTestProb Qs A Psim' Q fx ok ≤ winO (outEquiv k e) (extAdv Qs A Psim' Q kq)
       (simExtGame A.toTPKindAlg Psim' Q Qs fx (kq + Q * Psim'.q) ∩
-        {o | ok (Base.advWorkspace A.toTPKindAlg Psim' Q o.out).1}) := by
+        {o | ok (SPBCS.advWorkspace A.toTPKindAlg Psim' Q o.out).1}) := by
   set e' := outEquiv k e
   set C := simExtChallenger Psim' Q
-  set Acc : Set (Outcome (Base.Reg A Psim' Q) (Bits (queryBits k kN kS L)) (Out k e)) :=
+  set Acc : Set (Outcome (SPBCS.Reg A Psim' Q) (Bits (queryBits k kN kS L)) (Out k e)) :=
     {p | (Wins A.toTPKindAlg Psim' Q Qs fx (e'.symm ∘ p.oracle) p.out ∧
-      ok (Base.advWorkspace A.toTPKindAlg Psim' Q p.out).1) ∧
+      ok (SPBCS.advWorkspace A.toTPKindAlg Psim' Q p.out).1) ∧
       A.toTPKindAlg.Consistent C (e'.symm ∘ p.oracle) p.out}
-  have hdom := A.realLaw_composeBothOut_le C id e'
+  have hdom := A.realLaw_composeBothOut_le (freeze := false) C id e'
     {p | ∃ v, p.out = some v ∧ Wins A.toTPKindAlg Psim' Q Qs fx (e'.symm ∘ p.oracle) v ∧
-      ok (Base.advWorkspace A.toTPKindAlg Psim' Q v).1} (fun p ⟨v, hv, _⟩ => by rw [hv]; simp)
+      ok (SPBCS.advWorkspace A.toTPKindAlg Psim' Q v).1} (fun p ⟨v, hv, _⟩ => by rw [hv]; simp)
   refine hdom.trans ?_
   have hinter := A.toTPKindAlg.realLaw_composeBothOut_inter C e'
     (fun v f => Wins A.toTPKindAlg Psim' Q Qs fx (e'.symm ∘ f) v ∧
-      ok (Base.advWorkspace A.toTPKindAlg Psim' Q v).1)
+      ok (SPBCS.advWorkspace A.toTPKindAlg Psim' Q v).1)
   refine le_of_eq_of_le (by convert hinter using 1) ?_
   refine le_trans (MeasureTheory.measure_mono
-    (t := {p : Outcome (Option (Base.Reg A Psim' Q)) (Bits (queryBits k kN kS L)) (Out k e) |
+    (t := {p : Outcome (Option (SPBCS.Reg A Psim' Q)) (Bits (queryBits k kN kS L)) (Out k e) |
       ∃ o ∈ p.out, ⟨o, p.oracle⟩ ∈ Acc})
     ?_) ?_
   · rintro p ⟨v, hv, hw, hc⟩
@@ -151,13 +232,13 @@ theorem winTestProb_le_fresh [DecidableEq X]
     (ok : A.W → Prop) :
     winTestProb Qs A Psim' Q fx ok ≤ extractFreshTestProb Qs A Psim' Q kq fx rel E ok +
       knowledgeError k e (kq + Q * Psim'.q)
-        (FullPast.branchQueries A Psim' Q + (kq + Q * Psim'.q))
+        (SPBCS.branchQueries A Psim' Q + (kq + Q * Psim'.q))
         M.senc.digestsPerInput Mg.nJ (maxError ε) := by
   set e' := outEquiv k e
   set K := kq + Q * Psim'.q
-  set b := FullPast.branchQueries A Psim' Q + K
+  set b := SPBCS.branchQueries A Psim' Q + K
   set G := simExtGame A.toTPKindAlg Psim' Q Qs fx K ∩
-    {o | ok (Base.advWorkspace A.toTPKindAlg Psim' Q o.out).1}
+    {o | ok (SPBCS.advWorkspace A.toTPKindAlg Psim' Q o.out).1}
   set 𝒜 := extAdv Qs A Psim' Q kq
   have hexpand := winTestProb_le_winO Qs A Q kq fx hkq hA ok
   have hsimulation : winO e' 𝒜 G ≤ winS e' 𝒜 G + 2 * esqrt (K / Fintype.card (Out k e)) :=
@@ -192,21 +273,6 @@ queries and `Q` proof queries: the spBCS knowledge error at `kq + Q · q` append
 `tq + Q · q + kq + Q · q` queries in all. -/
 noncomputable def simExtractionError (kq : ℕ) (κ : ℝ≥0) (q tq Q : ℕ) : ℝ≥0∞ :=
   knowledgeError k e (kq + Q * q) (tq + Q * q + (kq + Q * q)) M.senc.digestsPerInput Mg.nJ κ
-
-variable (M B) in
-/-- **The query-bounded adversaries of the simulation-extraction game** of the spBCS argument
-with proof queries in `X'` (`Quantum.QueryBoundedAdversary`, the paper's `(t, Q)`-adversaries). -/
-abbrev QBSimExtractionAdversary (X' : Type) [Fintype X'] [DecidableEq X'] (tq : ℕ) : Type 1 :=
-  QueryBoundedAdversary (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B) (Claim X M.NIProof) tq
-
-/-- **A query-bounded adversary as an adversary of the simulation-extraction game** answered on
-`Q` proof queries (proof-internal): the same auxiliary input, algorithms and query bound. -/
-def QBSimExtractionAdversary.toSimExtraction {tq : ℕ} (Q : ℕ)
-    (𝒜 : M.QBSimExtractionAdversary B X' tq) : M.SimExtractionAdversary B X' tq Q where
-  Aux := 𝒜.Aux
-  aux := 𝒜.aux
-  alg := 𝒜.alg
-  queries_le := 𝒜.queries_le
 
 /-- **The probability that `𝒜` wins Prove and the test `ok` accepts**, averaged over its
 auxiliary input. -/
@@ -248,7 +314,7 @@ variable (M B) in
 over the game's adversaries** (proof-internal; the headline form is
 `SimulationSoundExtractableFresh`, over the query-bounded adversaries): as
 `SimulationSoundExtractableFresh`, for every adversary of the simulation-extraction game
-(`Base.SimExtractionAdversary`), whose steps need not be channels. -/
+(`SPBCS.SimExtractionAdversary`), whose steps need not be channels. -/
 def SimulationSoundExtractableFreshGame [DecidableEq X] {Wit : Type} (rel : Set (X × Wit))
     (E : CausalExtractor P t X Wit) (kq : ℕ)
     (Sim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X (M.Response B) SC)
@@ -282,12 +348,12 @@ theorem simulation_sound_extractability_game [DecidableEq X] {kq : ℕ}
   set Psim := Sim.comap fx
   have hq : Psim.q = Sim.q := rfl
   rw [← hq]
-  refine Base.SimExtractionAdversary.tsum_le_tsum_add 𝒜 fun a => ?_
+  refine SPBCS.SimExtractionAdversary.tsum_le_tsum_add 𝒜 fun a => ?_
   refine (winTestProb_le_fresh Qs (𝒜.alg a) Q kq fx hkq hrbr Psim (hA.comap fx) (ok a)).trans
     (add_le_add le_rfl ?_)
   unfold simExtractionError knowledgeError
   have h2 := 𝒜.queries_le a
-  have hb : FullPast.branchQueries (𝒜.alg a) Psim Q + (kq + Q * Psim.q) ≤
+  have hb : SPBCS.branchQueries (𝒜.alg a) Psim Q + (kq + Q * Psim.q) ≤
       tq + Q * Psim.q + (kq + Q * Psim.q) := by
     change (𝒜.alg a).width * (𝒜.alg a).budget + Q * Psim.q + (𝒜.alg a).width * (𝒜.alg a).post +
       (kq + Q * Psim.q) ≤ tq + Q * Psim.q + (kq + Q * Psim.q)

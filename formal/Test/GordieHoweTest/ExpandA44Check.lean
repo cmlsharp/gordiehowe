@@ -19,7 +19,7 @@ check also evaluates `GordieHowe.MLDSA44.expandAWithinB`, which decides `ExpandA
 `GordieHowe.MLDSA44.expandA_eq_expandABounded` proves the vendored `expandA` equal to
 `expandABounded`, so the table tests `expandABounded` too.
 
-Exposes `checkExpandA44 : IO Bool`, run from `Test/GordieHoweTest/MLDSAVectors.lean`'s `#eval`.
+Exposes `checkExpandA44 : IO Bool`, run from `Test/GordieHoweTest/MLDSAVectorsVerify.lean`'s `#eval`.
 -/
 import LatticeCrypto.MLDSA.ConcretePrimitives
 import GordieHoweTest.Hex

@@ -6,60 +6,71 @@ module
 public import GordieHowe.Language.RealizedProgram.Semantics
 public import GordieHowe.Language.RealizedProgram.RunVec
 public import GordieHowe.Language.RealizedProgram.Encoding
+public import GordieHoweNative.Language.RealizedProgram.Valid
 
 @[expose] public section
 
 /-!
 # GordieHowe: the validity conditions that read the plan's program
 
-The conditions of `Plan.Valid` that read the value table and the predicates of the realized program (`GordieHowe.RealizedProgram`), as
-decidable predicates:
+The conditions of `Plan.Valid` that read the value table and the predicates of the realized program
+(`GordieHowe.RealizedProgram`), as decidable predicates:
 
-* `GordieHowe.RealizedProgram.WellFormed`: identifiers in range, every expression of a predicate in its domain's field
-  (the MAC's powers read by `macConv` excepted: they are read in their own field) and of consistent
-  lengths, coefficients and named operators' operands public, values acyclic (each reads values of
+* `GordieHowe.RealizedProgram.WellFormed`: identifiers in range, every expression of a predicate in
+  its domain's field (the MAC's powers read by `macConv` excepted: they are read in their own field)
+  and of consistent lengths, coefficients and named operators' operands public (a transform-form
+  convolution's spectrum excepted, `NamedOp.pubOperands`), values acyclic (each reads values of
   smaller identifier only), shared expressions acyclic (each reads entries of smaller index only),
   challenges of positive size in phases among the program's;
-* `GordieHowe.RealizedProgram.MessagesMatch`: the messages are the late values, in `MsgBefore` order, with their
-  phases, sizes and pad spaces;
-* `GordieHowe.RealizedProgram.ReadsSound`: every predicate's exported reads contain the reads computed from its
-  expressions (`GordieHowe.RealizedProgram.predReads`, through the shared expressions), so its meaning depends only
-  on them (`GordieHowe/Language/RealizedProgram/Lemmas.lean`);
-* `GordieHowe.RealizedProgram.DegreesSound`: every exported degree bounds the degree computed from the expressions, the
-  largest over their coordinates of the per-coordinate degree (`Expr.degAt`, `GordieHowe.RealizedProgram.exprDeg`; the
-  exported degrees are the C++'s `deg_c(p)`, computed coordinate by coordinate);
-* `GordieHowe.RealizedProgram.ChallengeOrder`: (a) a late value of phase `k` reads only challenges of phases at most
-  `k` (and pads); (b) for each source predicate `p` and challenge `c` with `deg_c(p) > 0`, every
-  late value `p` reads that is not computed from `c` has phase below `c`'s; (c) the realizations' phase conditions (`in`: the late needles, the group's late histogram
-  and the digits before `α`; cross-field `equal`: the key before the tag and the accumulators);
-* `GordieHowe.RealizedProgram.PadOrderValid`: every late value reads only pads of pad-realized late values of strictly
-  earlier messages in `MsgBefore` order (never its own);
-* `GordieHowe.RealizedProgram.TypeSources`: every committed or late `Bit` and `Sub(E)` value has a type source, a
-  packing-tree node of that subfield or its Boolean-check predicate `v · v = v`;
-* `GordieHowe.RealizedProgram.TargetsAdmit`: every target admits its predicate, the GKR circuits list exactly the
-  predicates placed in them, and their input layouts are contiguous with the public blocks first
-  (`GordieHowe.RealizedProgram.CircuitLaidOut`);
-* `GordieHowe.RealizedProgram.PadRealized`: every late value is pad-realized (`commitment` is rejected).
+* `GordieHowe.RealizedProgram.MessagesMatch`: the messages are the late values, in `MsgBefore`
+  order, with their phases, sizes and pad spaces;
+* `GordieHowe.RealizedProgram.ReadsSound`: every predicate's exported reads contain the reads
+  computed from its expressions (`GordieHowe.RealizedProgram.predReads`, through the shared
+  expressions), so its meaning depends only on them
+  (`GordieHowe/Language/RealizedProgram/Lemmas.lean`);
+* `GordieHowe.RealizedProgram.DegreesSound`: every exported degree bounds the degree computed from
+  the expressions, the largest over their coordinates of the per-coordinate degree (`Expr.degAt`,
+  `GordieHowe.RealizedProgram.exprDeg`; the exported degrees are the C++'s `deg_c(p)`, computed
+  coordinate by coordinate);
+* `GordieHowe.RealizedProgram.ChallengeOrder`: (a) a late value of phase `k` reads only challenges
+  of phases at most `k` (and pads); (b) for each source predicate `p` and challenge `c` with
+  `deg_c(p) > 0`, every late value `p` reads that is not computed from `c` has phase below `c`'s;
+  (c) the realizations' phase conditions (`in`: the late needles, the group's late histogram and the
+  digits before `α`; cross-field `equal`: the key before the tag and the accumulators);
+* `GordieHowe.RealizedProgram.PadOrderValid`: every late value reads only pads of pad-realized late
+  values of strictly earlier messages in `MsgBefore` order (never its own);
+* `GordieHowe.RealizedProgram.TypeSources`: every committed or late `Bit` and `Sub(E)` value has a
+  type source, a packing-tree node of that subfield or its Boolean-check predicate `v · v = v`;
+* `GordieHowe.RealizedProgram.TargetsAdmit`: every target admits its predicate, the GKR circuits
+  list exactly the predicates placed in them, and their input layouts are contiguous with the public
+  blocks first (`GordieHowe.RealizedProgram.CircuitLaidOut`);
+* `GordieHowe.RealizedProgram.PadRealized`: every late value is pad-realized (`commitment` is
+  rejected).
 
 No condition bounds the challenges' degrees: the exported degrees are data that the frontend's
 lowerings read.
 
-`GordieHowe.RealizedProgram.ValidAtNodes` is their conjunction for given packing-tree nodes; `RealizedProgram.Valid P ir`
-(`GordieHowe/Language/RealizedProgram/WithPlan.lean`) adds the plan's `Plan.Valid P` and the agreement of the
-program's domains with the plan's, the nodes being the plan's.
+`GordieHowe.RealizedProgram.ValidAtNodes` is their conjunction for given packing-tree nodes;
+`RealizedProgram.Valid P ir` (`GordieHowe/Language/RealizedProgram/WithPlan.lean`) adds the plan's
+`Plan.Valid P` and the agreement of the program's domains with the plan's, the nodes being the
+plan's.
 
 **Shared expressions.** A property of an expression through its shared expressions is computed by
-`GordieHowe.RealizedProgram.closure` (lists, such as the values read) or by a table of the entries' values with one
-level per entry (`GordieHowe.RealizedProgram.refDeg`, degrees in the cells; `GordieHowe.RealizedProgram.refDegAt`, per-coordinate degrees
-in a challenge). Both recompute an entry at each reference, so their cost is that of the expression
-written as a tree. They are the definitions; the decision procedure is the checker of
-`GordieHowe/Language/RealizedProgram/Check.lean`, which computes each entry once: `WellFormed` takes its `Decidable`
-instance from `wellFormedB` (`wellFormedB_iff`), and `ReadsSound`, `DegreesSound` and `TargetsAdmit`
-are decided through `readsB`, `degreesB` and `targetsB` (`readsB_iff`, `degreesB_iff`,
-`targetsB_iff`). The conditions over the values (`MessagesMatch`, `ChallengeOrder`,
-`PadOrderValid`, `PadRealized`, `TypeSources`) have `Decidable` instances here that look each
-value up in the list, quadratic in the number of values; the proof modules decide them through the
+`GordieHowe.RealizedProgram.closure` (lists, such as the values read) or by a table of the entries'
+values with one level per entry (`GordieHowe.RealizedProgram.refDeg`, degrees in the cells;
+`GordieHowe.RealizedProgram.refDegAt`, per-coordinate degrees in a challenge). Both recompute an
+entry at each reference, so their cost is that of the expression written as a tree. They are the
+definitions; the decision procedure is the checker of
+`GordieHowe/Language/RealizedProgram/Check.lean`, which computes each entry once: `WellFormed` takes
+its `Decidable` instance from `wellFormedB` (`wellFormedB_iff`), and `ReadsSound`, `DegreesSound`
+and `TargetsAdmit` are decided through `readsB`, `degreesB` and `targetsB` (`readsB_iff`,
+`degreesB_iff`, `targetsB_iff`). The conditions over the values (`MessagesMatch`, `ChallengeOrder`,
+`PadOrderValid`, `PadRealized`, `TypeSources`) have `Decidable` instances here that look each value
+up in the list, quadratic in the number of values; the proof modules decide them through the
 one-pass checkers of `GordieHowe/Language/RealizedProgram/CheckValues.lean`.
+
+The definitions are in `GordieHoweNative/Language/RealizedProgram/Valid.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -67,93 +78,6 @@ namespace GordieHowe.RealizedProgram
 open Export
 
 /-! ## Syntax: nodes, references, reads and degrees -/
-
-/-- The values a coefficient reads. -/
-def Coef.nodes : Coef → List ℕ
-  | .const _ => []
-  | .node v _ => [v]
-
-/-- **The public operands of a named operator read in its operand's field** (`h`, `a`, `t`, `M`,
-`d`, `c`; through `batched`). -/
-def NamedOp.operands : NamedOp → List ℕ
-  | .negacyclicConv h _ => [h]
-  | .polyMatVec a _ _ _ => [a]
-  | .polyBroadcast t _ _ => [t]
-  | .ntt _ _ _ => []
-  | .inverseNtt _ _ => []
-  | .nttTranspose _ _ => []
-  | .rowDot M _ _ => [M]
-  | .macConv _ _ _ _ => []
-  | .acyclicConv h _ => [h]
-  | .diagonal d => [d]
-  | .scale c => [c]
-  | .constDiagonal d => [d]
-  | .sum _ => []
-  | .fromDigits _ _ => []
-  | .batched _ op => operands op
-
-/-- **The public operands of a named operator read in their own field**: the MAC's powers `r` of
-`macConv` (their bits in the MAC field's polynomial basis). -/
-def NamedOp.foreignOperands : NamedOp → List ℕ
-  | .macConv r _ _ _ => [r]
-  | .batched _ op => foreignOperands op
-  | _ => []
-
-/-- **A named operator's block widths are positive** (`cols` and `rows`). -/
-def NamedOp.widthsOk (ir : RealizedProgram) (op : NamedOp) : Bool :=
-  0 < NamedOp.cols ir op && 0 < NamedOp.rows ir op
-
-mutual
-
-/-- **The values an expression reads directly** (not through its shared expressions): its leaves,
-the values of its coefficients and the operands of its named operators. -/
-def Expr.directNodes : Expr → List ℕ
-  | .leaf v => [v]
-  | .add e e' => e.directNodes ++ e'.directNodes
-  | .sub e e' => e.directNodes ++ e'.directNodes
-  | .scale c e => c.nodes ++ e.directNodes
-  | .mul e e' => e.directNodes ++ e'.directNodes
-  | .reindex _ e => e.directNodes
-  | .concat e e' => e.directNodes ++ e'.directNodes
-  | .linear rows e => rows.flatMap (·.flatMap fun t => t.2.nodes) ++ e.directNodes
-  | .prod _ e => e.directNodes
-  | .mux b t e => b.directNodes ++ t.directNodes ++ e.directNodes
-  | .apply op e => op.operands ++ op.foreignOperands ++ e.directNodes
-  | .ref _ => []
-  | .logic _ _ args => Expr.directNodesList args
-
-/-- The values a list of expressions reads directly. -/
-def Expr.directNodesList : List Expr → List ℕ
-  | [] => []
-  | e :: es => e.directNodes ++ Expr.directNodesList es
-
-end
-
-mutual
-
-/-- **The values an expression reads directly in its own field**: `Expr.directNodes` without the
-MAC's powers of `macConv`. -/
-def Expr.fieldNodes : Expr → List ℕ
-  | .leaf v => [v]
-  | .add e e' => e.fieldNodes ++ e'.fieldNodes
-  | .sub e e' => e.fieldNodes ++ e'.fieldNodes
-  | .scale c e => c.nodes ++ e.fieldNodes
-  | .mul e e' => e.fieldNodes ++ e'.fieldNodes
-  | .reindex _ e => e.fieldNodes
-  | .concat e e' => e.fieldNodes ++ e'.fieldNodes
-  | .linear rows e => rows.flatMap (·.flatMap fun t => t.2.nodes) ++ e.fieldNodes
-  | .prod _ e => e.fieldNodes
-  | .mux b t e => b.fieldNodes ++ t.fieldNodes ++ e.fieldNodes
-  | .apply op e => op.operands ++ e.fieldNodes
-  | .ref _ => []
-  | .logic _ _ args => Expr.fieldNodesList args
-
-/-- The values a list of expressions reads directly in its own field. -/
-def Expr.fieldNodesList : List Expr → List ℕ
-  | [] => []
-  | e :: es => e.fieldNodes ++ Expr.fieldNodesList es
-
-end
 
 mutual
 
@@ -178,64 +102,6 @@ def Expr.coefNodes : Expr → List ℕ
 def Expr.coefNodesList : List Expr → List ℕ
   | [] => []
   | e :: es => e.coefNodes ++ Expr.coefNodesList es
-
-end
-
-mutual
-
-/-- **The shared expressions an expression reads directly** (`ref k`). -/
-def Expr.refs : Expr → List ℕ
-  | .leaf _ => []
-  | .add e e' => e.refs ++ e'.refs
-  | .sub e e' => e.refs ++ e'.refs
-  | .scale _ e => e.refs
-  | .mul e e' => e.refs ++ e'.refs
-  | .reindex _ e => e.refs
-  | .concat e e' => e.refs ++ e'.refs
-  | .linear _ e => e.refs
-  | .prod _ e => e.refs
-  | .mux b t e => b.refs ++ t.refs ++ e.refs
-  | .apply _ e => e.refs
-  | .ref k => [k]
-  | .logic _ _ args => Expr.refsList args
-
-/-- The shared expressions a list of expressions reads directly. -/
-def Expr.refsList : List Expr → List ℕ
-  | [] => []
-  | e :: es => e.refs ++ Expr.refsList es
-
-end
-
-/-- The coefficients of sparse rows. -/
-def Expr.rowCoefs (rows : List (List (ℕ × Coef))) : List Coef := rows.flatMap (·.map (·.2))
-
-mutual
-
-/-- **An expression's degree**, the values having degrees `nd` and the shared expressions `rd`: `+`
-takes the maximum, `·` adds, `prod` multiplies by the axis length, a coefficient adds its degree, a
-named operator adds the largest degree of its operands, a Logic builder on words of `w` bits
-multiplies the largest degree of its arguments by `2w` (`lt_reduce` has degree at most `2w` in its
-bits). -/
-def Expr.deg (nd : ℕ → ℕ) (rd : ℕ → ℕ) : Expr → ℕ
-  | .leaf v => nd v
-  | .add e e' => max (e.deg nd rd) (e'.deg nd rd)
-  | .sub e e' => max (e.deg nd rd) (e'.deg nd rd)
-  | .scale c e => (c.nodes.map nd).foldr max 0 + e.deg nd rd
-  | .mul e e' => e.deg nd rd + e'.deg nd rd
-  | .reindex _ e => e.deg nd rd
-  | .concat e e' => max (e.deg nd rd) (e'.deg nd rd)
-  | .linear rows e =>
-      ((Expr.rowCoefs rows).flatMap (·.nodes) |>.map nd).foldr max 0 + e.deg nd rd
-  | .prod n e => n * e.deg nd rd
-  | .mux b t e => b.deg nd rd + max (t.deg nd rd) (e.deg nd rd)
-  | .apply op e => ((op.operands ++ op.foreignOperands).map nd).foldr max 0 + e.deg nd rd
-  | .ref k => rd k
-  | .logic _ w args => 2 * w * (Expr.degList nd rd args).foldr max 0
-
-/-- The degrees of a list of expressions. -/
-def Expr.degList (nd : ℕ → ℕ) (rd : ℕ → ℕ) : List Expr → List ℕ
-  | [] => []
-  | e :: es => e.deg nd rd :: Expr.degList nd rd es
 
 end
 
@@ -318,27 +184,6 @@ end
 
 end DegAt
 
-mutual
-
-/-- **An expression vanishes where all its values vanish**, the shared expressions doing so where
-`rz` holds (a batch relation's `Q(0) = 0`, with every value an operand). -/
-def Expr.zeroAtZero (rz : ℕ → Bool) : Expr → Bool
-  | .leaf _ => true
-  | .add e e' => e.zeroAtZero rz && e'.zeroAtZero rz
-  | .sub e e' => e.zeroAtZero rz && e'.zeroAtZero rz
-  | .scale _ e => e.zeroAtZero rz
-  | .mul e e' => e.zeroAtZero rz || e'.zeroAtZero rz
-  | .reindex _ e => e.zeroAtZero rz
-  | .concat e e' => e.zeroAtZero rz && e'.zeroAtZero rz
-  | .linear _ e => e.zeroAtZero rz
-  | .prod n e => 0 < n && e.zeroAtZero rz
-  | .mux b t e => e.zeroAtZero rz && (b.zeroAtZero rz || t.zeroAtZero rz)
-  | .apply _ e => e.zeroAtZero rz
-  | .ref k => rz k
-  | .logic _ _ _ => false
-
-end
-
 /-- The late values among reads. -/
 def Read.lates (rds : List Read) : List ℕ :=
   rds.filterMap fun
@@ -351,22 +196,9 @@ def Read.pads (rds : List Read) : List ℕ :=
     | .pad u => some u
     | _ => none
 
-/-- **The expressions of a set**: `e'` for the entries of `e'`, none for a range or a table. -/
-def InSet.exprs : InSet → List Expr
-  | .expr e' => [e']
-  | _ => []
-
 @[simp] theorem InSet.exprs_range (n : ℕ) : (InSet.range n).exprs = [] := rfl
 @[simp] theorem InSet.exprs_table (t : ℕ) : (InSet.table t).exprs = [] := rfl
 @[simp] theorem InSet.exprs_expr (e' : Expr) : (InSet.expr e').exprs = [e'] := rfl
-
-/-- **The expressions of a predicate body**, each with its domain: an `in` reads its records and
-the expression of its set. -/
-def PredBody.exprs : PredBody → List (ℕ × Expr)
-  | .equal d e e' _ => [(d, e), (d, e')]
-  | .mem d records set _ => (records ++ set.exprs).map ((d, ·))
-  | .mod d _ e e' _ => [(d, e), (d, e')]
-  | .cross dx x dy y _ _ => [(dx, x), (dy, y)]
 
 /-- **A predicate body is the Boolean check of value `v`**: `v · v = v`, either way round. -/
 def PredBody.isBoolCheck (v : ℕ) : PredBody → Bool
@@ -379,20 +211,6 @@ section
 variable (ir : RealizedProgram)
 
 /-! ## Through the shared expressions -/
-
-/-- **A list property of shared expression `k`** with `n` levels: `g` of the entry, then of the
-entries it reads. -/
-def refClosure {α : Type} (g : Expr → List α) : ℕ → ℕ → List α
-  | 0, _ => []
-  | n + 1, k => g (ir.expr k) ++ (ir.expr k).refs.flatMap (refClosure g n)
-
-/-- **A list property of an expression through its shared expressions**: `g` of the expression,
-then of the entries it reads, at the program's depth (the number of entries). -/
-def closure {α : Type} (g : Expr → List α) (e : Expr) : List α :=
-  g e ++ e.refs.flatMap (ir.refClosure g ir.exprs.length)
-
-/-- **The values an expression reads**, through its shared expressions. -/
-def exprNodes (e : Expr) : List ℕ := ir.closure Expr.directNodes e
 
 /-- **The degrees of the shared expressions**, the values having degrees `nd`, with `n` levels. -/
 def refDeg (nd : ℕ → ℕ) : ℕ → ℕ → ℕ
@@ -411,31 +229,6 @@ def refZero : ℕ → ℕ → Bool
 def zeroOf (e : Expr) : Bool := e.zeroAtZero (ir.refZero ir.exprs.length)
 
 /-! ## Reads and degrees -/
-
-/-- **What value `v` reads from the run**, with `n` levels of values read by values (as
-`RealizedProgram.read`): a challenge value its challenge, a late value itself, a message its late value,
-a public expression, an opaque value or a bit view what the values they read read. -/
-def nodeReads : ℕ → ℕ → List Read
-  | 0, _ => []
-  | n + 1, v =>
-    match (ir.value v).kind with
-    | .pub (.expr e) => (ir.exprNodes e).flatMap (nodeReads n)
-    | .pub (.opaque _ args) => args.flatMap (nodeReads n)
-    | .challenge c => [.chal c]
-    | .late => [.late v]
-    | .bits w _ => nodeReads n w
-    | .message u => [.late u]
-    | _ => []
-
-/-- **The values the table of a lookup reads**: its columns for a table of columns, the values its
-expression reads for a table of an expression's coordinates. -/
-def tableCols : PredBody → List ℕ
-  | .mem _ _ (.table t) _ =>
-    match (ir.table t).rows with
-    | .columns cols => cols
-    | .range _ => []
-    | .expr e' => ir.exprNodes e'
-  | _ => []
 
 /-- **The values a predicate reads**: those of its expressions, and the columns of the table it
 looks up into. -/
@@ -469,31 +262,14 @@ def nodeDegAt (c : ℕ) : ℕ → ℕ → ℕ → ℕ
 /-- **The degree of a predicate in challenge `c`**, computed from its expressions: the largest
 degree among their coordinates below their lengths. -/
 def exprDeg (c : ℕ) (b : PredBody) : ℕ :=
-  (b.exprs.map fun de => maxBelow (ir.exprLen de.2) (ir.degAtOf (ir.nodeDegAt c ir.fuel) de.2)).foldr
-    max 0
-
-/-- Whether value `v` is committed in phase `0` (a committed value, a bit view of committed words, a
-pad copy, or a value bound to its digits, which the source program commits). -/
-def isCommitted (v : ℕ) : Bool :=
-  match (ir.value v).kind with
-  | .priv => true
-  | .bits _ _ => true
-  | .padCopy _ _ => true
-  | .bound _ => true
-  | _ => false
+  (b.exprs.map fun de =>
+    maxBelow (ir.exprLen de.2) (ir.degAtOf (ir.nodeDegAt c ir.fuel) de.2)).foldr max 0
 
 /-- Whether value `v` is a public expression. -/
 def isPubExpr (v : ℕ) : Bool :=
   match (ir.value v).kind with
   | .pub (.expr _) => true
   | _ => false
-
-/-- Whether value `v` is late. -/
-def isLateNode (v : ℕ) : Bool := (ir.value v).kind.isLate
-
-/-- Whether value `v` is public (a statement member, an opaque or expression public value, a
-constant, a challenge value or a message). -/
-def isPublic (v : ℕ) : Bool := !(ir.isCommitted v) && !(ir.isLateNode v)
 
 /-- Whether value `v` is an operand a batch may read: a value committed in phase `0`, a constant,
 or a statement member or opaque public value (no challenge, no late value and no message). -/
@@ -509,110 +285,10 @@ def isBatchNode (v : ℕ) : Bool :=
 
 /-! ## Well-formedness -/
 
-/-- **A Logic builder's arguments have consistent lengths** `lens`: two for `lt`, `leq`, `eq`, of
-one length, one for `any` and `all`, the length a multiple of the width `w ≥ 1`. -/
-def logicShapeOk (op : LogicOp) (w : ℕ) (lens : List ℕ) : Bool :=
-  0 < w && lens.length == (match op with
-    | .lt | .leq | .eq => 2
-    | .any | .all => 1) &&
-  lens.all (· == lens.headD 0) && lens.headD 0 % w == 0
-
-mutual
-
-/-- **An expression's lengths are consistent** (its shared expressions are checked once each,
-`RealizedProgram.ExprsOk`): the operands of `+`, `-`, `·` and `mux` have one length, index maps and sparse
-rows stay in range, a product's axis divides the length, a named operator's block divides its
-operand, and a Logic builder's arguments are of one length, a multiple of the word width. -/
-def exprShapeOk : Expr → Bool
-  | .leaf _ => true
-  | .add e e' => exprShapeOk e && exprShapeOk e' && ir.exprLen e == ir.exprLen e'
-  | .sub e e' => exprShapeOk e && exprShapeOk e' && ir.exprLen e == ir.exprLen e'
-  | .scale _ e => exprShapeOk e
-  | .mul e e' => exprShapeOk e && exprShapeOk e' && ir.exprLen e == ir.exprLen e'
-  | .reindex idx e => exprShapeOk e && idx.inRange (ir.exprLen e)
-  | .concat e e' => exprShapeOk e && exprShapeOk e'
-  | .linear rows e => exprShapeOk e && rows.all (·.all (·.1 < ir.exprLen e))
-  | .prod n e => exprShapeOk e && 0 < n && ir.exprLen e % n == 0
-  | .mux b t e =>
-      exprShapeOk b && exprShapeOk t && exprShapeOk e && ir.exprLen b == ir.exprLen t &&
-        ir.exprLen t == ir.exprLen e
-  | .apply op e =>
-      exprShapeOk e && op.widthsOk ir && ir.exprLen e % NamedOp.cols ir op == 0
-  | .ref _ => true
-  | .logic op w args => exprShapeOkList args && logicShapeOk op w (args.map ir.exprLen)
-
-/-- The lengths of a list of expressions are consistent. -/
-def exprShapeOkList : List Expr → Bool
-  | [] => true
-  | e :: es => exprShapeOk e && exprShapeOkList es
-
-end
-
-/-- **An expression is well formed in field `f`**: its values exist; those read in its field lie
-in field `f`; its coefficients and operators' operands are public; its shared expressions exist;
-its lengths are consistent. -/
-structure ExprOk (f : ℕ) (e : Expr) : Prop where
-  /-- The values exist. -/
-  range : ∀ v ∈ ir.exprNodes e, v < ir.values.length
-  /-- The values read in the expression's field lie in field `f`. -/
-  field : ∀ v ∈ ir.closure Expr.fieldNodes e, ir.valueField v = f
-  /-- The coefficients and operands are public. -/
-  coefs : ∀ v ∈ ir.closure Expr.coefNodes e, ir.isPublic v = true
-  /-- The shared expressions exist. -/
-  refs : ∀ k ∈ e.refs, k < ir.exprs.length
-  /-- The lengths are consistent. -/
-  shape : ir.exprShapeOk e = true
-
-theorem exprOk_iff (f : ℕ) (e : Expr) : ir.ExprOk f e ↔
-    (∀ v ∈ ir.exprNodes e, v < ir.values.length) ∧
-      (∀ v ∈ ir.closure Expr.fieldNodes e, ir.valueField v = f) ∧
-      (∀ v ∈ ir.closure Expr.coefNodes e, ir.isPublic v = true) ∧
-      (∀ k ∈ e.refs, k < ir.exprs.length) ∧ ir.exprShapeOk e = true :=
-  ⟨fun h => ⟨h.range, h.field, h.coefs, h.refs, h.shape⟩,
-    fun ⟨h1, h2, h3, h4, h5⟩ => ⟨h1, h2, h3, h4, h5⟩⟩
-
-instance (f : ℕ) (e : Expr) : Decidable (ir.ExprOk f e) :=
-  decidable_of_iff _ (ir.exprOk_iff f e).symm
-
 /-- **The shared expressions are well formed**: entry `k` reads only entries of smaller index, and
 its lengths are consistent. -/
 def ExprsOk : Prop :=
   ∀ k < ir.exprs.length, (∀ k' ∈ (ir.expr k).refs, k' < k) ∧ ir.exprShapeOk (ir.expr k) = true
-
-/-- **A public value's definition is well formed**: a public expression is well formed in the
-value's field and reads only values of smaller identifier; an opaque function's arguments are
-values of smaller identifier. -/
-def PubDefOk (v : ℕ) : PubDef → Prop
-  | .input => True
-  | .opaque _ args => ∀ u ∈ args, u < v
-  | .expr e => ir.ExprOk (ir.valueField v) e ∧ ∀ u ∈ ir.exprNodes e, u < v
-
-instance (v : ℕ) (d : PubDef) : Decidable (ir.PubDefOk v d) := by
-  cases d <;> unfold PubDefOk <;> infer_instance
-
-/-- **A value's kind is well formed**: a public value's definition (`PubDefOk`); a challenge
-value's challenge exists and lies in the value's field; a bit view's words are words of a value
-of smaller identifier, in range, its size a multiple of their number; a pad copy's late value is a
-late value (the copy is committed: it reads no value); a message's late value is a late value of
-smaller identifier, in its field; a bound value's expression is well formed in the value's field
-and reads only values of the program (its digits may come after it: the realized program reads a
-bound value as its expression at the committed assignment, `RealizedProgram.bindAsg`, never through the
-value order). -/
-def KindOk (v : ℕ) : Kind → Prop
-  | .priv => True
-  | .pub d => ir.PubDefOk v d
-  | .constant _ => True
-  | .challenge c => c < ir.challenges.length ∧ ir.chalField c = ir.valueField v
-  | .late => True
-  | .bits w sel =>
-      w < v ∧ 0 < sel.size ∧ sel.inRange (ir.value w).size = true ∧
-        (ir.value v).size % sel.size = 0
-  | .padCopy u _ => ir.isLateNode u = true
-  | .message u => u < v ∧ ir.isLateNode u = true ∧ ir.valueField u = ir.valueField v
-  | .bound e => ir.ExprOk (ir.valueField v) e ∧ ∀ u ∈ ir.exprNodes e, u < ir.values.length
-
-instance (v : ℕ) (k : Kind) : Decidable (ir.KindOk v k) := by
-  cases k <;> unfold KindOk <;> infer_instance
 
 /-- **A value is well formed**: its domain exists and its kind is well formed. -/
 def ValueOk (v : ℕ) : Prop :=
@@ -633,28 +309,6 @@ instance (b : PredBody) : Decidable (ir.LensOk b) := by
 the sides have one length (`LensOk`). -/
 def PredOk (b : PredBody) : Prop :=
   (∀ de ∈ b.exprs, de.1 < ir.domains.length ∧ ir.ExprOk (ir.domainField de.1) de.2) ∧ ir.LensOk b
-
-/-- **A challenge's sampler is supported** for a challenge of `size` coordinates: the field or a
-node; the field minus `[0, tmax)` for a challenge of one coordinate. The packed rows of public tables
-and unions are rejected (their `U` depends on an earlier challenge under the `gamma` packing;
-`FieldInterp.SamplerTy`). -/
-def SamplerOk (size : ℕ) : Sampler → Prop
-  | .full => True
-  | .node _ => True
-  | .fieldMinusTables (.range _) => size = 1
-  | .fieldMinusTables (.packedRows _) => False
-  | .fieldMinusTables (.union _ _) => False
-
-instance (size : ℕ) (s : Sampler) : Decidable (SamplerOk size s) := by
-  rcases s with _ | _ | ⟨_ | _⟩ <;> unfold SamplerOk <;> infer_instance
-
-/-- **A challenge is well formed**: of positive size, in a phase of the program and in a field of
-it, with a supported sampler. -/
-def ChallengeOk (c : Challenge) : Prop :=
-  1 ≤ c.size ∧ 1 ≤ c.phase ∧ c.phase ≤ ir.phases ∧ c.field < ir.fields.length ∧
-    SamplerOk c.size c.sampler
-
-instance (c : Challenge) : Decidable (ir.ChallengeOk c) := by unfold ChallengeOk; infer_instance
 
 /-- **A value's field is well formed**: a value of a field no domain commits (`Value.field`, the
 odd–odd MAC's key, chunk powers, tag and message) names a field of the program, is of a kind that
@@ -740,41 +394,6 @@ theorem WellFormed.field_none_of_type (hwf : ir.WellFormed) {v : ℕ} (hv : v < 
   | none => exact fun _ => rfl
   | some f => exact fun h => absurd h.2.2 ht
 
-/-! ## Messages -/
-
-/-- **The message order on identifiers**: by phase, then by identifier (`PhaseLayout.MsgBefore` on
-the program's layout). -/
-def MsgBeforeId (u v : ℕ) : Prop :=
-  (ir.value u).phase < (ir.value v).phase ∨ ((ir.value u).phase = (ir.value v).phase ∧ u < v)
-
-instance (u v : ℕ) : Decidable (ir.MsgBeforeId u v) := inferInstanceAs (Decidable (_ ∨ _))
-
-/-- **A message matches its value**: the value is a late value of the program's phases, with the
-message's domain, field, phase, size, space and late realization. -/
-def MessageOk (m : Message) : Prop :=
-  m.value < ir.values.length ∧ ir.IsLate m.value ∧ (ir.value m.value).domain = m.domain ∧
-    (ir.value m.value).field = m.field ∧
-    (ir.value m.value).phase = m.phase ∧ (ir.value m.value).size = m.size ∧
-    (ir.value m.value).padSpace = m.space ∧ (ir.value m.value).realization = m.realization
-
-instance (m : Message) : Decidable (ir.MessageOk m) := by unfold MessageOk; infer_instance
-
-/-- **The messages are the late values in `MsgBefore` order.** -/
-structure MessagesMatch : Prop where
-  /-- Every message matches its value. -/
-  values : ∀ m ∈ ir.messages, ir.MessageOk m
-  /-- The messages are in strictly increasing `MsgBefore` order. -/
-  ordered : (ir.messages.map (·.value)).Pairwise ir.MsgBeforeId
-  /-- Every late value has a message. -/
-  complete : ∀ v < ir.values.length, ir.isLateNode v = true → v ∈ ir.messages.map (·.value)
-
-theorem messagesMatch_iff : ir.MessagesMatch ↔
-    (∀ m ∈ ir.messages, ir.MessageOk m) ∧ (ir.messages.map (·.value)).Pairwise ir.MsgBeforeId ∧
-      (∀ v < ir.values.length, ir.isLateNode v = true → v ∈ ir.messages.map (·.value)) :=
-  ⟨fun h => ⟨h.values, h.ordered, h.complete⟩, fun ⟨h1, h2, h3⟩ => ⟨h1, h2, h3⟩⟩
-
-instance : Decidable ir.MessagesMatch := decidable_of_iff _ ir.messagesMatch_iff.symm
-
 /-! ## Reads and degrees -/
 
 /-- **The exported reads are sound**: every predicate's reads contain those computed from its
@@ -826,7 +445,8 @@ instance (c : ℕ) (rd : Read) : Decidable (ir.PredReadOrdered c rd) := by
   cases rd <;> unfold PredReadOrdered <;> infer_instance
 
 /-- **The challenge order, part (b)**, for a source predicate `p` at challenge `c`: when
-`deg_c(p) > 0`, every late value `p` reads that `c` tests is fixed before `c` (`PredReadOrdered`). -/
+`deg_c(p) > 0`, every late value `p` reads that `c` tests is fixed before `c`
+(`PredReadOrdered`). -/
 def PredReadsOrdered (p : Predicate) (c : ℕ) : Prop :=
   p.role.isSource = true → 0 < p.deg c → ∀ rd ∈ p.reads, ir.PredReadOrdered c rd
 
@@ -974,16 +594,6 @@ def isQuadratic : Expr → Expr → Bool
   | .mul (.leaf a) (.leaf b), .leaf c => ir.isQuadCell a && ir.isQuadCell b && ir.isQuadCell c
   | _, _ => false
 
-/-- **The skip domain's limit** at degree `D`, width `w` and characteristic `p`: `D(w − 1) < p` in
-odd characteristic, `D(w − 1) + 1 ≤ 256` in characteristic two. -/
-def SkipFits (D w p : ℕ) : Prop := if p = 2 then D * (w - 1) + 1 ≤ 256 else D * (w - 1) < p
-
-instance (D w p : ℕ) : Decidable (SkipFits D w p) := by unfold SkipFits; infer_instance
-
-/-- **The skip domain's name** in characteristic `p`: `gf256` in characteristic two, `integers`
-otherwise (compiler/field_skip.h, `SkipDomain`). -/
-def skipDomainName (p : ℕ) : String := if p = 2 then "gf256" else "integers"
-
 /-- **Batch `b` admits predicate `pid`** with sides `e`, `e'` in domain `d`: the batch is of the
 domain and lists the predicate among its parts; the sides read only batch operands (values
 committed in phase `0`, constants, statement values), have degree at most `D ≥ 1` in the committed
@@ -1026,237 +636,21 @@ instance (ins : List InputBlock) (v : ℕ) (k : Kind) : Decidable (IsCircuitInpu
 the domain, lists the predicate, and has every value the sides read among its inputs. -/
 def GkrAdmits (pid d c : ℕ) (e e' : Expr) : Prop :=
   c < ir.circuits.length ∧ (ir.circuit c).domain = d ∧ pid ∈ (ir.circuit c).predicates ∧
-    ∀ v ∈ ir.exprNodes e ++ ir.exprNodes e', IsCircuitInputOf (ir.circuit c).inputs v (ir.value v).kind
+    ∀ v ∈ ir.exprNodes e ++ ir.exprNodes e',
+      IsCircuitInputOf (ir.circuit c).inputs v (ir.value v).kind
 
-/-! ### Convolutions realized through a transform -/
+/-! ### Equality checks the kernel evaluates in bounded depth
 
-/-- Whether a target is a realization predicate's (`Target.realized`). -/
-def _root_.GordieHowe.RealizedProgram.Target.isRealized : Target → Bool
-  | .realized _ => true
-  | _ => false
-
-
-/-- **A constant holding `0`**: a constant value whose every entry is `0`. -/
-def zeroConst (z : ℕ) : Bool :=
-  match (ir.value z).kind with
-  | .constant es => es.all (· == 0)
-  | _ => false
-
-/-- **The parts of a source convolution** (`SpectralConv.source`): the sum width `la`, the two
-operands' views `mA`, `mB`, the operands `a`, `b` and their zero constants `zA`, `zB`. -/
-structure ConvSource where
-  /-- The sum width. -/
-  la : ℕ
-  /-- The left operand's view. -/
-  mA : IndexMap
-  /-- The left operand. -/
-  a : Expr
-  /-- The left operand's zero constant. -/
-  zA : ℕ
-  /-- The right operand's view. -/
-  mB : IndexMap
-  /-- The right operand. -/
-  b : Expr
-  /-- The right operand's zero constant. -/
-  zB : ℕ
-
-/-- **The parts of an expression of the source convolution's form**
-`.apply (.sum la) (.mul (.reindex mA (.concat a (.leaf zA))) (.reindex mB (.concat b (.leaf zB))))`,
-none for any other. -/
-def _root_.GordieHowe.RealizedProgram.Expr.convSource? : Expr → Option ConvSource
-  | .apply (.sum la) (.mul (.reindex mA (.concat a (.leaf zA))) (.reindex mB (.concat b (.leaf zB)))) =>
-    some ⟨la, mA, a, zA, mB, b, zB⟩
-  | _ => none
-
-/-- **The parts of a reading through the inverse transform** (`SpectralConv.read`): the gather
-`g`, the blocks `B`, the length `M`, the root `ψ` and the transformed value `z`. -/
-structure ConvRead where
-  /-- The gather. -/
-  g : IndexMap
-  /-- The blocks. -/
-  B : ℕ
-  /-- The transform length. -/
-  M : ℕ
-  /-- The root. -/
-  psi : ℕ
-  /-- The transformed value. -/
-  z : ℕ
-
-/-- **The parts of an expression of the form**
-`.reindex g (.apply (.batched B (.inverseNtt M ψ)) (.leaf z))`, none for any other. -/
-def _root_.GordieHowe.RealizedProgram.Expr.convRead? : Expr → Option ConvRead
-  | .reindex g (.apply (.batched B (.inverseNtt M psi)) (.leaf z)) => some ⟨g, B, M, psi, z⟩
-  | _ => none
-
-/-- **The parts of a spectral product** (the left side of `SpectralConv.products`): each operand's
-blocks, length, root, zero extension, operand and zero constant. -/
-structure ConvProducts where
-  /-- The left transform's blocks. -/
-  B : ℕ
-  /-- The left transform's length. -/
-  M : ℕ
-  /-- The left transform's root. -/
-  psi : ℕ
-  /-- The left operand's zero extension. -/
-  pA : IndexMap
-  /-- The left operand. -/
-  a : Expr
-  /-- The left operand's zero constant. -/
-  zA : ℕ
-  /-- The right transform's blocks. -/
-  B' : ℕ
-  /-- The right transform's length. -/
-  M' : ℕ
-  /-- The right transform's root. -/
-  psi' : ℕ
-  /-- The right operand's zero extension. -/
-  pB : IndexMap
-  /-- The right operand. -/
-  b : Expr
-  /-- The right operand's zero constant. -/
-  zB : ℕ
-
-/-- **The parts of an expression of the form** `NTT(pA (a, 0)) · NTT(pB (b, 0))`,
-`.mul (.apply (.batched B (.ntt M ψ .scheme)) (.reindex pA (.concat a (.leaf zA))))
-(.apply (.batched B' (.ntt M' ψ' .scheme)) (.reindex pB (.concat b (.leaf zB))))`, none for any
-other. -/
-def _root_.GordieHowe.RealizedProgram.Expr.convProducts? : Expr → Option ConvProducts
-  | .mul (.apply (.batched B (.ntt M psi .scheme)) (.reindex pA (.concat a (.leaf zA))))
-      (.apply (.batched B' (.ntt M' psi' .scheme)) (.reindex pB (.concat b (.leaf zB)))) =>
-    some ⟨B, M, psi, pA, a, zA, B', M', psi', pB, b, zB⟩
-  | _ => none
-
-/-- **The facts of a spectrally realized convolution** `c` in domain `d` (field `F` of
-characteristic `p`), its source's parts `s`, its reading's `r` and its products' `q`, `z` the
-transformed value: the identifiers exist; the source sums width `la` over the operands' views
-`IndexMap.convLeft B la lb` and `IndexMap.convRight B la lb`; the reading gathers the first
-`la + lb − 1` coordinates of each block of `INTT_M(z)` at the root `ψ`; the products are
-`NTT_M` at `ψ` of the same operands zero-extended to `M` (`IndexMap.zeroExtend`); the zero
-constants and `z` lie in `F`, the constants holding `0`; the operands have `B la` and `B lb`
-coordinates; and the transform computes the product: `M = 2^k ≥ la + lb − 1` with `la, lb ≥ 1`,
-`2 < p`, `ψ, M < p`, and `ψ^M ≡ −1 (mod p)`, so `ψ` is a primitive `2M`-th root of unity of `F` and
-`M` is invertible. -/
-structure ConvFacts (c : SpectralConv) (s : ConvSource) (r : ConvRead) (q : ConvProducts)
-    (d z : ℕ) : Prop where
-  source_lt : c.source < ir.exprs.length
-  read_lt : c.read < ir.exprs.length
-  products_lt : c.products < ir.predicates.length
-  la : s.la = c.left
-  mA : s.mA = IndexMap.convLeft c.blocks c.left c.right
-  mB : s.mB = IndexMap.convRight c.blocks c.left c.right
-  g : r.g = IndexMap.blockPrefix c.blocks c.length (c.left + c.right - 1)
-  rB : r.B = c.blocks
-  rM : r.M = c.length
-  rpsi : r.psi = c.root
-  rz : r.z = z
-  qB : q.B = c.blocks ∧ q.B' = c.blocks
-  qM : q.M = c.length ∧ q.M' = c.length
-  qpsi : q.psi = c.root ∧ q.psi' = c.root
-  pA : q.pA = IndexMap.zeroExtend c.blocks c.left c.length
-  pB : q.pB = IndexMap.zeroExtend c.blocks c.right c.length
-  qa : q.a = s.a
-  qb : q.b = s.b
-  zeros : ∀ v ∈ [s.zA, s.zB, q.zA, q.zB], ir.zeroConst v = true
-  fields : ∀ v ∈ [s.zA, s.zB, q.zA, q.zB, z], ir.valueField v = ir.domainField d
-  lenA : ir.exprLen s.a = c.blocks * c.left
-  lenB : ir.exprLen s.b = c.blocks * c.right
-  left_pos : 0 < c.left
-  right_pos : 0 < c.right
-  fits : c.left + c.right - 1 ≤ c.length
-  pow2 : c.length = 2 ^ Nat.log2 c.length
-  char : 2 < (ir.field (ir.domainField d)).characteristic
-  root_lt : c.root < (ir.field (ir.domainField d)).characteristic
-  length_lt : c.length < (ir.field (ir.domainField d)).characteristic
-  root_pow : c.root ^ c.length % (ir.field (ir.domainField d)).characteristic =
-    (ir.field (ir.domainField d)).characteristic - 1
-
-theorem convFacts_iff (c : SpectralConv) (s : ConvSource) (r : ConvRead) (q : ConvProducts)
-    (d z : ℕ) : ir.ConvFacts c s r q d z ↔
-      c.source < ir.exprs.length ∧ c.read < ir.exprs.length ∧ c.products < ir.predicates.length ∧
-      s.la = c.left ∧ s.mA = IndexMap.convLeft c.blocks c.left c.right ∧
-      s.mB = IndexMap.convRight c.blocks c.left c.right ∧
-      r.g = IndexMap.blockPrefix c.blocks c.length (c.left + c.right - 1) ∧ r.B = c.blocks ∧
-      r.M = c.length ∧ r.psi = c.root ∧ r.z = z ∧ (q.B = c.blocks ∧ q.B' = c.blocks) ∧
-      (q.M = c.length ∧ q.M' = c.length) ∧ (q.psi = c.root ∧ q.psi' = c.root) ∧
-      q.pA = IndexMap.zeroExtend c.blocks c.left c.length ∧
-      q.pB = IndexMap.zeroExtend c.blocks c.right c.length ∧ q.a = s.a ∧ q.b = s.b ∧
-      (∀ v ∈ [s.zA, s.zB, q.zA, q.zB], ir.zeroConst v = true) ∧
-      (∀ v ∈ [s.zA, s.zB, q.zA, q.zB, z], ir.valueField v = ir.domainField d) ∧
-      ir.exprLen s.a = c.blocks * c.left ∧ ir.exprLen s.b = c.blocks * c.right ∧
-      0 < c.left ∧ 0 < c.right ∧ c.left + c.right - 1 ≤ c.length ∧
-      c.length = 2 ^ Nat.log2 c.length ∧ 2 < (ir.field (ir.domainField d)).characteristic ∧
-      c.root < (ir.field (ir.domainField d)).characteristic ∧
-      c.length < (ir.field (ir.domainField d)).characteristic ∧
-      c.root ^ c.length % (ir.field (ir.domainField d)).characteristic =
-        (ir.field (ir.domainField d)).characteristic - 1 :=
-  ⟨fun h => ⟨h.source_lt, h.read_lt, h.products_lt, h.la, h.mA, h.mB, h.g, h.rB, h.rM, h.rpsi,
-      h.rz, h.qB, h.qM, h.qpsi, h.pA, h.pB, h.qa, h.qb, h.zeros, h.fields, h.lenA, h.lenB,
-      h.left_pos, h.right_pos, h.fits, h.pow2, h.char, h.root_lt, h.length_lt, h.root_pow⟩,
-    fun ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19,
-        h20, h21, h22, h23, h24, h25, h26, h27, h28, h29, h30⟩ =>
-      ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19, h20,
-        h21, h22, h23, h24, h25, h26, h27, h28, h29, h30⟩⟩
-
-instance (c : SpectralConv) (s : ConvSource) (r : ConvRead) (q : ConvProducts) (d z : ℕ) :
-    Decidable (ir.ConvFacts c s r q d z) :=
-  decidable_of_iff _ (ir.convFacts_iff c s r q d z).symm
-
-/-- **The products side `lhs` has the parts of a spectral product** (`Expr.convProducts?`) with
-the facts `ConvFacts` of `c`, `s`, `r` at domain `d` and transformed value `z`. -/
-def ConvProductsOk (c : SpectralConv) (s : ConvSource) (r : ConvRead) (d z : ℕ) (lhs : Expr) :
-    Prop :=
-  match lhs.convProducts? with
-  | some q => ir.ConvFacts c s r q d z
-  | none => False
-
-/-- **`ConvProductsOk`, decided.** -/
-def convProductsOkB (c : SpectralConv) (s : ConvSource) (r : ConvRead) (d z : ℕ) (lhs : Expr) :
-    Bool :=
-  match lhs.convProducts? with
-  | some q => decide (ir.ConvFacts c s r q d z)
-  | none => false
-
-theorem convProductsOkB_iff (c : SpectralConv) (s : ConvSource) (r : ConvRead) (d z : ℕ)
-    (lhs : Expr) : ir.convProductsOkB c s r d z lhs = true ↔ ir.ConvProductsOk c s r d z lhs := by
-  unfold convProductsOkB ConvProductsOk
-  cases lhs.convProducts? <;> simp
+The derived decidable equality of lists nests one kernel reduction per entry, so `decide (m = m')`
+on index maps of some thousands of entries exceeds the kernel's recursion limit (RSA2048's
+convolution views hold 11577 entries). `List.beq` returns its recursive call in tail position,
+which the kernel evaluates in constant depth. The checks below compare index maps and linear maps'
+rows by `==` (`List.beq`) and expressions by `Expr.beqK`, which is `Expr.beq` with those
+comparisons (`Expr.beqK_eq`). -/
 
 instance (c : SpectralConv) (s : ConvSource) (r : ConvRead) (d z : ℕ) (lhs : Expr) :
     Decidable (ir.ConvProductsOk c s r d z lhs) :=
   decidable_of_iff _ (ir.convProductsOkB_iff c s r d z lhs)
-
-/-- **The convolution `c` is spectrally realized in domain `d`** (compiler/conv.h, the batch
-form): its source and its reading have the forms of `Expr.convSource?` and `Expr.convRead?`, its
-products predicate is a field `equal` of `d` between a spectral product (`Expr.convProducts?`) and
-the transformed value `z` whose target is no realization's, and the facts `ConvFacts` hold
-(`ConvProductsOk`). Then, wherever the
-products predicate holds, the reading equals the source below their common length
-(`RealizedProgram.convRead_eq_source`). -/
-def ConvOkAt (d : ℕ) (c : SpectralConv) : Prop :=
-  match (ir.expr c.source).convSource?, (ir.expr c.read).convRead?,
-      (ir.predicate c.products).body with
-  | some s, some r, .equal d' lhs (.leaf z) t =>
-    d' = d ∧ t.isRealized = false ∧ ir.ConvProductsOk c s r d z lhs
-  | _, _, _ => False
-
-/-- **`ConvOkAt`, decided.** -/
-def convOkAtB (d : ℕ) (c : SpectralConv) : Bool :=
-  match (ir.expr c.source).convSource?, (ir.expr c.read).convRead?,
-      (ir.predicate c.products).body with
-  | some s, some r, .equal d' lhs (.leaf z) t =>
-    decide (d' = d) && !t.isRealized && ir.convProductsOkB c s r d z lhs
-  | _, _, _ => false
-
-theorem convOkAtB_iff (d : ℕ) (c : SpectralConv) : ir.convOkAtB d c = true ↔ ir.ConvOkAt d c := by
-  unfold convOkAtB ConvOkAt
-  cases (ir.expr c.source).convSource? <;> cases (ir.expr c.read).convRead? <;>
-    cases (ir.predicate c.products).body <;> try simp
-  all_goals
-    rename_i d' lhs rhs t
-    cases rhs <;> simp [convProductsOkB_iff, and_assoc]
-
-instance (d : ℕ) (c : SpectralConv) : Decidable (ir.ConvOkAt d c) :=
-  decidable_of_iff _ (ir.convOkAtB_iff d c)
 
 /-- **Shared expressions `k` and `k'` are a convolution and its reading** in domain `d`: some
 spectrally realized convolution of the program (`ConvOkAt`) has the source `k` and the reading
@@ -1312,6 +706,78 @@ theorem realizedAdmitsB_iff (d : ℕ) (e e' : Expr) (q : ℕ) :
 instance (d : ℕ) (e e' : Expr) (q : ℕ) : Decidable (ir.RealizedAdmits d e e' q) :=
   decidable_of_iff _ (ir.realizedAdmitsB_iff d e e' q)
 
+/-! ### The realized route at the given conversions -/
+
+/-- **A match at the given conversions is a match** (`Expr.matchB`) at every relation the
+conversions' test implies. -/
+theorem _root_.GordieHowe.RealizedProgram.Expr.matchB_of_matchL {P : ℕ → ℕ → Bool}
+    {ok : ℕ → ℕ → ℕ → Bool} (hok : ∀ j k k', ok j k k' = true → P k k' = true) :
+    ∀ (e E : Expr) (js : List ℕ) {js' : List ℕ}, Expr.matchL ok e E js = some js' →
+      Expr.matchB P e E = true
+  | e, E, js, js', h => by
+    cases e <;> cases E <;> simp only [Expr.matchL, Expr.matchB] at h ⊢
+    all_goals first
+      | (split at h
+         · assumption
+         · cases h)
+      | (rw [Option.bind_eq_some_iff] at h
+         obtain ⟨j₁, h1, h2⟩ := h
+         rw [Bool.and_eq_true]
+         exact ⟨Expr.matchB_of_matchL hok _ _ _ h1, Expr.matchB_of_matchL hok _ _ _ h2⟩)
+      | (split at h
+         · rename_i hc
+           rw [Expr.beqK_eq] at hc
+           exact hc
+         · cases h)
+      | (split at h
+         · rename_i hc
+           rw [Bool.and_eq_true, decide_eq_true_eq]
+           exact ⟨by first | exact hc | exact beq_iff_eq.1 hc,
+             Expr.matchB_of_matchL hok _ _ _ h⟩
+         · cases h)
+      | (rw [Bool.or_eq_true, beq_iff_eq]
+         rename_i k k'
+         by_cases hk : k = k'
+         · exact .inl hk
+         · simp only [beq_iff_eq, hk, ↓reduceIte] at h
+           split at h
+           · split at h
+             · exact .inr (hok _ _ _ (by assumption))
+             · cases h
+           · cases h)
+  termination_by e => e
+
+/-- **The conversion at the pointer pairs its source and reading** (`ConvPair`). -/
+theorem convPair_of_convAtB {d j k k' : ℕ} (h : ir.convAtB d j k k' = true) :
+    decide (ir.ConvPair d k k') = true := by
+  unfold convAtB at h
+  split at h
+  · rename_i c hc
+    simp only [Bool.and_eq_true, beq_iff_eq] at h
+    obtain ⟨⟨hs, hr⟩, hok⟩ := h
+    exact decide_eq_true ⟨c, List.mem_of_getElem? hc, hs, hr, (ir.convOkAtB_iff d c).1 hok⟩
+  · cases h
+
+/-- **The realized route at its conversions admits the field equation** (`RealizedAdmits`). -/
+theorem realizedAdmits_of_atB {d q : ℕ} {e e' : Expr} {js : List ℕ}
+    (h : ir.realizedAdmitsAtB d e e' q js = true) : ir.RealizedAdmits d e e' q := by
+  unfold realizedAdmitsAtB at h
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+  obtain ⟨hq, h⟩ := h
+  refine ⟨hq, ?_⟩
+  split at h
+  · rename_i d' E E' t hb
+    simp only [hb]
+    simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.not_eq_true'] at h
+    obtain ⟨⟨hd, ht⟩, h⟩ := h
+    split at h
+    · rename_i js' h1
+      have h2 : Expr.matchL (ir.convAtB d) e' E' js' = some [] := by simpa using h
+      exact ⟨hd, ht, Expr.matchB_of_matchL (fun _ _ _ h => ir.convPair_of_convAtB h) _ _ _ h1,
+        Expr.matchB_of_matchL (fun _ _ _ h => ir.convPair_of_convAtB h) _ _ _ h2⟩
+    · cases h
+  · cases h
+
 /-- **Target `t` admits the field equation `e = e'`** of predicate `pid` in domain `d`
 (`TargetsAdmit`): `affine`, degree at most one in the committed cells (coefficients and constants
 may read public values and challenges); `quadratic`, `a · b = c` on single cells of the quadratic
@@ -1322,14 +788,6 @@ def TargetAdmits (pid d : ℕ) (e e' : Expr) : Target → Prop
   | .batch b => ir.BatchAdmits pid d b e e'
   | .gkr c => ir.GkrAdmits pid d c e e'
   | .realized q => ir.RealizedAdmits d e e' q
-
-/-- **The target of a predicate body**: a field `equal`'s, or a `mod_q`'s field equation's (`q = 0`,
-or `q` the characteristic of a prime-field `mod_q`). -/
-def PredBody.target : PredBody → Option Target
-  | .equal _ _ _ t => some t
-  | .mem _ _ _ _ => none
-  | .mod _ _ _ _ real => real.target
-  | .cross _ _ _ _ _ _ => none
 
 /-- **A side condition admitted by an optional target**: by the target, or true without one. -/
 def OptTargetAdmits (pid d : ℕ) (e e' : Expr) : Option Target → Prop
@@ -1347,41 +805,6 @@ def BodyAdmitted (pid : ℕ) : PredBody → Prop
 
 /-- **Predicate `pid` is admitted by its target** (`BodyAdmitted`). -/
 def PredAdmitted (pid : ℕ) : Prop := ir.BodyAdmitted pid (ir.predicate pid).body
-
-/-- **The end of an input layout** read from input `pos`: the input after the last block when every
-block starts where the previous one ends, none otherwise. -/
-def _root_.GordieHowe.RealizedProgram.InputBlock.layoutEnd : ℕ → List InputBlock → Option ℕ
-  | pos, [] => some pos
-  | pos, b :: bs => if b.first = pos then InputBlock.layoutEnd (pos + b.len) bs else none
-
-/-- **The predicates of an emission order**: its Boolean checks and placed predicates, in order. -/
-def _root_.GordieHowe.RealizedProgram.CircuitEntry.predicate? : CircuitEntry → Option ℕ
-  | .typeCheck p => some p
-  | .pred p => some p
-  | _ => none
-
-/-- **A GKR circuit's layout is well formed** (stage (c)): the blocks are contiguous from input `1`
-to the input count, the public blocks come first and end at `publicInputs`, and the predicates are
-those of the emission order, in order. -/
-structure CircuitLaidOut (c : Circuit) : Prop where
-  /-- The blocks are contiguous. -/
-  contiguous : InputBlock.layoutEnd 1 c.inputs = some c.inputCount
-  /-- The public blocks end at `publicInputs`. -/
-  publicEnd : InputBlock.layoutEnd 1 (c.inputs.takeWhile (·.isPublic)) = some c.publicInputs
-  /-- No public block follows a committed one. -/
-  publicFirst : (c.inputs.dropWhile (·.isPublic)).all (!·.isPublic) = true
-  /-- The predicates are the emission order's. -/
-  entries : c.entries.filterMap (·.predicate?) = c.predicates
-
-theorem circuitLaidOut_iff (c : Circuit) : CircuitLaidOut c ↔
-    InputBlock.layoutEnd 1 c.inputs = some c.inputCount ∧
-      InputBlock.layoutEnd 1 (c.inputs.takeWhile (·.isPublic)) = some c.publicInputs ∧
-      (c.inputs.dropWhile (·.isPublic)).all (!·.isPublic) = true ∧
-      c.entries.filterMap (·.predicate?) = c.predicates :=
-  ⟨fun h => ⟨h.contiguous, h.publicEnd, h.publicFirst, h.entries⟩,
-    fun ⟨h1, h2, h3, h4⟩ => ⟨h1, h2, h3, h4⟩⟩
-
-instance (c : Circuit) : Decidable (CircuitLaidOut c) := decidable_of_iff _ (circuitLaidOut_iff c).symm
 
 /-- **Every target admits its predicate**, every GKR circuit lists only predicates placed in it, and
 every circuit's layout is well formed. -/

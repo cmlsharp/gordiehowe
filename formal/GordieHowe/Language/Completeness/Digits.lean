@@ -181,7 +181,8 @@ default predicate is no lookup. -/
 theorem lt_of_body_mem {pid d : ℕ} {recs : List Expr} {set : InSet} {real : InRealization}
     (hb : (ir.predicate pid).body = .mem d recs set real) : pid < ir.predicates.length := by
   by_contra h
-  simp only [predicate, List.getD_eq_getElem?_getD, List.getElem?_eq_none (Nat.le_of_not_lt h),
+  simp only [predicate_eq_getD,
+      List.getD_eq_getElem?_getD, List.getElem?_eq_none (Nat.le_of_not_lt h),
     Option.getD_none] at hb
   cases hb
 

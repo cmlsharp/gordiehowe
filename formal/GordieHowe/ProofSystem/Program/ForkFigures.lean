@@ -65,18 +65,6 @@ namespace GordieHowe.RealizedProgram
 open Export ProofSystem.PhaseLayout IOP GordieHowe.QROM GordieHowe.SPBCS SPBCS.Configurations
 open scoped NNReal
 
-/-! ## The compiled circuits -/
-
-/-- **The compiled circuits of a configuration**: GKR sources of the program's circuits, related to
-the program only by the trust bundle `enforce` (the circuits enforce their entries and have the
-circuits' shapes, `CircuitsEnforce`) at the proof system `B` of the sources. -/
-structure Compiled {ir : RealizedProgram} {I : Interp} {P : Export.Plan}
-    (B : (∀ c : Fin ir.circuits.length, ir.CircuitSource I c) → ir.ProofSystem P I) : Type where
-  /-- The GKR sources of the program's circuits. -/
-  src : ∀ c : Fin ir.circuits.length, ir.CircuitSource I c
-  /-- Trust base: the circuits enforce their entries and have the circuits' shapes. -/
-  enforce : (B src).CircuitsEnforce
-
 /-! ## The numbers of one domain -/
 
 section Domain
@@ -498,10 +486,12 @@ def ForkNumbers.leafBytes (d : Fin ir.domains.length) : ℕ :=
   (9 + ((R d).cert.Sh.nrep + Nm.Lmax d) * (Nm.cod d).fb) + ((1 + (Nm.cod d).fb) + (1 + (Nm.cod d).fb))
 
 /-- **The bounds of a transcript's figures** (decidable): at most `2^8` domains of at most `2^8`
-branches, columns of at most `2^40` bytes and at most `maxRounds` rounds. -/
+branches, columns of at most `2^40` bytes, at most `maxRounds` rounds, and fields' readers that
+grant nothing. -/
 def ForkNumbers.BoundsOk : Prop :=
   ir.domains.length ≤ 2 ^ 8 ∧ (∀ d : Fin ir.domains.length, ir.nBranch d (R d).Pk ≤ 2 ^ 8) ∧
-    (∀ d, Nm.leafBytes d ≤ 2 ^ 40) ∧ forkRoundsTotal R ≤ maxRounds
+    (∀ d, Nm.leafBytes d ≤ 2 ^ 40) ∧ forkRoundsTotal R ≤ maxRounds ∧
+    ∀ d, (Nm.cod d).rd.grant = 0
 
 noncomputable instance : Decidable Nm.BoundsOk := by
   unfold ForkNumbers.BoundsOk
@@ -531,7 +521,7 @@ variable {P : Export.Plan} {ir : RealizedProgram} {I : Interp} (B : ir.ProofSyst
   {R : ∀ d : Fin ir.domains.length, ir.FieldReady I d P} {W : Type}
   {rel : Set (ir.Valuation I × W)}
   (Lw : Lowering (ir.layout I) (Constraint.guard (ir.stmtOk I) (Constraint.ofRel rel))
-    (GordieHowe.Domain.lowered (B.withFieldProofs R).guardedDomain))
+    (GordieHowe.Domain.lowered (B.withFieldProofs R).domains))
 
 /-- **The composite on the generic per-field domain proofs** before its statement is read
 (`FieldBranches.iopOf`). -/
@@ -540,7 +530,7 @@ abbrev fieldIopBase := (B.fieldBranches R).iopOf Lw
 variable (R) in
 /-- **The rounds of the composite** are at most `forkRoundsTotal` under the compiler trust
 (`IOP.sum_rounds`, `fieldFork_rounds_le_at`). -/
-theorem fieldIopBase_rounds_le (T : B.CircuitsEnforce) :
+theorem fieldIopBase_rounds_le :
     ∑ q : (B.fieldIopBase (R := R) Lw).shape.term.Leaf, (B.fieldIopBase Lw).rounds q.label ≤
       forkRoundsTotal R := by
   rw [IOP.sum_rounds]
@@ -553,7 +543,7 @@ theorem fieldIopBase_rounds_le (T : B.CircuitsEnforce) :
     rfl
   have h2 : ∑ d, (∑ b, ((B.fieldIopBase (R := R) Lw).circuit d).bn b +
       ((B.fieldIopBase (R := R) Lw).circuit d).jn) ≤ ∑ d, forkRoundsAt (R d) :=
-    Finset.sum_le_sum fun d _ => fieldFork_rounds_le_at (R d) T
+    Finset.sum_le_sum fun d _ => fieldFork_rounds_le_at (R d) B.enforce
   exact Nat.add_le_add (Nat.add_le_add_left h1.le 1) h2
 
 variable {Stmt : Type} (f : Stmt → ir.Valuation I)
@@ -621,24 +611,24 @@ theorem fieldIopWith_kq_ge (chk : Stmt → Bool) {r nq N kq : ℕ}
   h
 
 /-- **The rounds of the composite read through `f`** are the composite's (`IOP.sum_rounds`). -/
-theorem fieldIop_rounds_le (T : B.CircuitsEnforce) :
+theorem fieldIop_rounds_le :
     ∑ q : (B.fieldIop R Lw f).shape.term.Leaf, (B.fieldIop R Lw f).rounds q.label ≤
       forkRoundsTotal R := by
-  have h := B.fieldIopBase_rounds_le R Lw T
+  have h := B.fieldIopBase_rounds_le R Lw
   rw [IOP.sum_rounds] at h ⊢
   exact h
 
 /-- **The rounds of the composite read through `f` and checked** are the composite's. -/
-theorem fieldIopWith_rounds_le (T : B.CircuitsEnforce) (chk : Stmt → Bool) :
+theorem fieldIopWith_rounds_le (chk : Stmt → Bool) :
     ∑ q : (B.fieldIopWith R Lw f chk).shape.term.Leaf, (B.fieldIopWith R Lw f chk).rounds q.label ≤
       forkRoundsTotal R := by
-  have h := B.fieldIopBase_rounds_le R Lw T
+  have h := B.fieldIopBase_rounds_le R Lw
   rw [IOP.sum_rounds] at h ⊢
   exact h
 
 /-- **The digests of one chain input, the final digests and the seeding's** (as
 `Configuration.GrantedFacts.digests_le` states it), from the rounds' bound (`fieldIop_rounds_le`). -/
-theorem fieldIop_digests_le (T : B.CircuitsEnforce) {D : ℕ}
+theorem fieldIop_digests_le {D : ℕ}
     (h : max 2 (forkRoundsTotal R * ir.domains.length) +
       (Finset.univ.sup fun d : Fin ir.domains.length => ir.nBranch d (R d).Pk) + 1 ≤ D) :
     max 2 (ProofSystemTranscript.digests (C := B.fieldIop R Lw f)) +
@@ -646,7 +636,7 @@ theorem fieldIop_digests_le (T : B.CircuitsEnforce) {D : ℕ}
   rw [IOP.nJ_merges]
   refine le_trans ?_ h
   unfold ProofSystemTranscript.digests
-  have hr := Nat.mul_le_mul_right ir.domains.length (B.fieldIop_rounds_le Lw f T)
+  have hr := Nat.mul_le_mul_right ir.domains.length (B.fieldIop_rounds_le Lw f)
   have hnb : (Finset.univ.sup (B.fieldIop R Lw f).shape.nb) =
       Finset.univ.sup fun d : Fin ir.domains.length => ir.nBranch d (R d).Pk := rfl
   rw [hnb]
@@ -654,7 +644,7 @@ theorem fieldIop_digests_le (T : B.CircuitsEnforce) {D : ℕ}
   omega
 
 /-- **The digests of one chain input** (with a statement check; as `fieldIop_digests_le`). -/
-theorem fieldIopWith_digests_le (T : B.CircuitsEnforce) (chk : Stmt → Bool) {D : ℕ}
+theorem fieldIopWith_digests_le (chk : Stmt → Bool) {D : ℕ}
     (h : max 2 (forkRoundsTotal R * ir.domains.length) +
       (Finset.univ.sup fun d : Fin ir.domains.length => ir.nBranch d (R d).Pk) + 1 ≤ D) :
     max 2 (ProofSystemTranscript.digests (C := B.fieldIopWith R Lw f chk)) +
@@ -662,7 +652,7 @@ theorem fieldIopWith_digests_le (T : B.CircuitsEnforce) (chk : Stmt → Bool) {D
   rw [IOP.nJ_merges]
   refine le_trans ?_ h
   unfold ProofSystemTranscript.digests
-  have hr := Nat.mul_le_mul_right ir.domains.length (B.fieldIopWith_rounds_le Lw f T chk)
+  have hr := Nat.mul_le_mul_right ir.domains.length (B.fieldIopWith_rounds_le Lw f chk)
   have hnb : (Finset.univ.sup (B.fieldIopWith R Lw f chk).shape.nb) =
       Finset.univ.sup fun d : Fin ir.domains.length => ir.nBranch d (R d).Pk := rfl
   rw [hnb]
@@ -671,11 +661,11 @@ theorem fieldIopWith_digests_le (T : B.CircuitsEnforce) (chk : Stmt → Bool) {D
 
 /-- **The bytes of a serialized column of domain `d`** are at most `leafBytes`
 (`length_ser_forkLeafCodec_le`, the data rows within `Lmax`). -/
-theorem forkLeaf_le_leafBytes (Nm : ForkNumbers R) (T : B.CircuitsEnforce)
+theorem forkLeaf_le_leafBytes (Nm : ForkNumbers R)
     (d : Fin ir.domains.length) (c : (ir.fieldForkOracle B.src (R d)).Leaf) :
     ((forkLeafCodec B.src (R d) (Nm.cod d).FB).ser c).length ≤ Nm.leafBytes d := by
   refine (length_ser_forkLeafCodec_le B.src (R d) (Nm.cod d).FB c).trans ?_
-  have hR := (Nm.fits T d).loads.R_le
+  have hR := (Nm.fits B.enforce d).loads.R_le
     ((fieldFork_nrep B.src (R d)).symm ▸ (Nm.ok d).2.2.2.2.2.2.1)
   unfold ForkNumbers.leafBytes
   rw [fieldFork_nrep]
@@ -684,30 +674,33 @@ theorem forkLeaf_le_leafBytes (Nm : ForkNumbers R) (T : B.CircuitsEnforce)
 
 /-- **The facts the setting is built from**, for the transcript on the generic per-field domain
 proofs at the numbers `Nm` (`fieldForkTranscript`): the statement's writes, the label, the digest
-length and the branch names given, the rest from `Nm.BoundsOk`. -/
-theorem fieldForkTranscript_bounds (Nm : ForkNumbers R) (T : B.CircuitsEnforce)
+length and the branch names given, the declared largest grant `mg` the plan's
+(`fieldForkGrant`), the rest from `Nm.BoundsOk`. -/
+theorem fieldForkTranscript_bounds (Nm : ForkNumbers R)
     {label : List Byte} {k : ℕ} {stmt : Codec Stmt}
     {name : (Σ d : Fin (B.fieldIop R Lw f).m, Fin ((B.fieldIop R Lw f).circuit d).nb) → List Byte}
     {appWrites : SpecWrites (B.fieldIop R Lw f).app.spec (2 ^ 20)}
     {appReaders : SpecReaders (B.fieldIop R Lw f).app.spec}
     (hpre : ∀ x, (stmt.ser x).length ≤ 2 ^ 20) (hlabel : label.length ≤ 2 ^ 10)
     (hk : k ≤ 2 ^ 10) (hk0 : 0 < k) (hname : ∀ a, (name a).length ≤ 2 ^ 10)
-    (hok : Nm.BoundsOk) :
-    (B.fieldForkTranscript R Lw f Nm.cod (Nm.fits T) label k stmt name appWrites
-      appReaders).Bounds where
+    (hok : Nm.BoundsOk) {mg : ℕ} (hmg : mg = fieldForkGrant R Nm.grants appReaders) :
+    (B.fieldForkTranscript R Lw f Nm.cod (Nm.fits B.enforce) label k stmt name appWrites
+      appReaders mg).Bounds where
   pre_le := hpre
   label_le := hlabel
   k_le := hk
   k_pos := hk0
-  leaf_le d c := (B.forkLeaf_le_leafBytes Nm T d c).trans (hok.2.2.1 d)
+  leaf_le d c := (B.forkLeaf_le_leafBytes Nm d c).trans (hok.2.2.1 d)
   m_le := hok.1
   nb_le d := hok.2.1 d
   name_le := hname
-  n_le := (B.fieldIop_rounds_le Lw f T).trans hok.2.2.2
+  n_le := (B.fieldIop_rounds_le Lw f).trans hok.2.2.2.1
+  maxGrant_eq := (B.sup_fieldForkTranscript_maxGrant R Lw f Nm.cod (Nm.fits B.enforce) hok.2.2.2.2).trans
+    hmg.symm
 
 /-- **The facts the setting is built from**, for the transcript of the composite read through `f`
 and checked by `chk` (as `fieldForkTranscript_bounds`). -/
-theorem fieldForkTranscriptWith_bounds (Nm : ForkNumbers R) (T : B.CircuitsEnforce)
+theorem fieldForkTranscriptWith_bounds (Nm : ForkNumbers R)
     (chk : Stmt → Bool) {label : List Byte} {k : ℕ} {stmt : Codec Stmt}
     {name : (Σ d : Fin (B.fieldIopWith R Lw f chk).m, Fin ((B.fieldIopWith R Lw f chk).circuit d).nb) →
       List Byte}
@@ -715,39 +708,41 @@ theorem fieldForkTranscriptWith_bounds (Nm : ForkNumbers R) (T : B.CircuitsEnfor
     {appReaders : SpecReaders (B.fieldIopWith R Lw f chk).app.spec}
     (hpre : ∀ x, (stmt.ser x).length ≤ 2 ^ 20) (hlabel : label.length ≤ 2 ^ 10)
     (hk : k ≤ 2 ^ 10) (hk0 : 0 < k) (hname : ∀ a, (name a).length ≤ 2 ^ 10)
-    (hok : Nm.BoundsOk) :
-    (B.fieldForkTranscriptWith R Lw f Nm.cod (Nm.fits T) chk label k stmt name appWrites
-      appReaders).Bounds where
+    (hok : Nm.BoundsOk) {mg : ℕ} (hmg : mg = fieldForkGrant R Nm.grants appReaders) :
+    (B.fieldForkTranscriptWith R Lw f Nm.cod (Nm.fits B.enforce) chk label k stmt name appWrites
+      appReaders mg).Bounds where
   pre_le := hpre
   label_le := hlabel
   k_le := hk
   k_pos := hk0
-  leaf_le d c := (B.forkLeaf_le_leafBytes Nm T d c).trans (hok.2.2.1 d)
+  leaf_le d c := (B.forkLeaf_le_leafBytes Nm d c).trans (hok.2.2.1 d)
   m_le := hok.1
   nb_le d := hok.2.1 d
   name_le := hname
-  n_le := (B.fieldIopWith_rounds_le Lw f T chk).trans hok.2.2.2
+  n_le := (B.fieldIopWith_rounds_le Lw f chk).trans hok.2.2.2.1
+  maxGrant_eq := (B.sup_fieldForkTranscriptWith_maxGrant R Lw f Nm.cod (Nm.fits B.enforce)
+    hok.2.2.2.2).trans hmg.symm
 
 /-- **The figures of the composite read through `f`** from their numbers (`FiguresOk`) under the
 compiler trust. -/
-theorem fieldIop_figures (T : B.CircuitsEnforce) {rounds N nq kq D pos : ℕ}
+theorem fieldIop_figures {rounds N nq kq D pos : ℕ}
     (h : FiguresOk R rounds N nq kq D pos) : (B.fieldIop R Lw f).Figures rounds N nq kq D pos where
-  rounds_le := (B.fieldIop_rounds_le Lw f T).trans h.1
+  rounds_le := (B.fieldIop_rounds_le Lw f).trans h.1
   leaves_le d := (B.fieldIop_nLeaves Lw f d).trans_le (h.2.1 d)
   queries_le ch := (B.fieldIop_queryList_le Lw f ch).trans h.2.2.1
   kq_ge := B.fieldIop_kq_ge Lw f h.2.2.2.1
-  digests_le := B.fieldIop_digests_le Lw f T h.2.2.2.2.1
+  digests_le := B.fieldIop_digests_le Lw f h.2.2.2.2.1
   pos_eq := (B.fieldIop_pos Lw f).trans h.2.2.2.2.2
 
 /-- **The figures of the composite read through `f` and checked** (as `fieldIop_figures`). -/
-theorem fieldIopWith_figures (T : B.CircuitsEnforce) (chk : Stmt → Bool)
+theorem fieldIopWith_figures (chk : Stmt → Bool)
     {rounds N nq kq D pos : ℕ} (h : FiguresOk R rounds N nq kq D pos) :
     (B.fieldIopWith R Lw f chk).Figures rounds N nq kq D pos where
-  rounds_le := (B.fieldIopWith_rounds_le Lw f T chk).trans h.1
+  rounds_le := (B.fieldIopWith_rounds_le Lw f chk).trans h.1
   leaves_le d := (B.fieldIopWith_nLeaves Lw f chk d).trans_le (h.2.1 d)
   queries_le ch := (B.fieldIopWith_queryList_le Lw f chk ch).trans h.2.2.1
   kq_ge := B.fieldIopWith_kq_ge Lw f chk h.2.2.2.1
-  digests_le := B.fieldIopWith_digests_le Lw f T chk h.2.2.2.2.1
+  digests_le := B.fieldIopWith_digests_le Lw f chk h.2.2.2.2.1
   pos_eq := (B.fieldIopWith_pos Lw f chk).trans h.2.2.2.2.2
 
 /-! ### The honest prover of the composite read through a map -/
@@ -767,20 +762,19 @@ def fieldIopWithSimData (chk : Stmt → Bool) : (B.fieldIopWith R Lw f chk).SimD
 
 /-- **The honest prover of the composite read through `f`** at the strategy `H`: the honest prover at
 `Lw` (`FieldBranches.honestAt`) on every domain's generic honest provers (`fieldHonestDomains`,
-`fieldForkHonestDomains`), read through `f` (`IOP.Honest.comap`). `TA`: the compiler's
-completeness (trust base). -/
-noncomputable def fieldIopHonest (TA : (B.withFieldProofs R).CircuitsAccept)
+`fieldForkHonestDomains`), read through `f` (`IOP.Honest.comap`), at the proof system's `accept`. -/
+noncomputable def fieldIopHonest
     (H : ir.HonestCore I relH) :
     (B.fieldIop R Lw f).Honest (B.fieldIopSimData Lw f) Inp {p | (f p.1, p.2) ∈ relH} :=
-  ((B.fieldBranches R).honestAt Lw TA (B.fieldHonestDomains R) (B.fieldForkHonestDomains R TA) H).comap f
+  ((B.fieldBranches R).honestAt Lw (B.fieldHonestDomains R) (B.fieldForkHonestDomains R) H).comap f
 
 /-- **The honest prover of the composite read through `f` and checked by `chk`** (as
 `fieldIopHonest`, `IOP.Honest.comapWith`). -/
-noncomputable def fieldIopWithHonest (chk : Stmt → Bool) (TA : (B.withFieldProofs R).CircuitsAccept)
+noncomputable def fieldIopWithHonest (chk : Stmt → Bool)
     (H : ir.HonestCore I relH) :
     (B.fieldIopWith R Lw f chk).Honest (B.fieldIopWithSimData Lw f chk) Inp
       {p | chk p.1 = true ∧ (f p.1, p.2) ∈ relH} :=
-  ((B.fieldBranches R).honestAt Lw TA (B.fieldHonestDomains R) (B.fieldForkHonestDomains R TA)
+  ((B.fieldBranches R).honestAt Lw (B.fieldHonestDomains R) (B.fieldForkHonestDomains R)
     H).comapWith f chk
 
 end ProofSystem

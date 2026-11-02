@@ -15,7 +15,8 @@ body contributes only its statement.
 The roots are the theorems tagged `@[headline]` (`GordieHowe/Headline.lean`). The instance corollaries
 are stated at concrete settings, so none of them is vacuous.
 
-Own code, followed: `GordieHowe`, `LatticeCrypto`, `HashSig` and the vendored `ArkLib` and `CompPoly`.
+Own code, followed: `GordieHowe`, `GordieHoweNative`, `LatticeCrypto`, `HashSig` and the vendored
+`ArkLib` and `CompPoly`.
 Every other constant reached (Lean core, Batteries, Mathlib, ...) is listed by name, grouped by
 the root of its module, and not followed.
 
@@ -38,7 +39,8 @@ Run as `lake env lean scripts/StatementClosure.lean`.
 open Lean Meta Elab Command
 
 /-- The libraries followed as own code. -/
-def ownRoots : List Name := [`GordieHowe, `LatticeCrypto, `HashSig, `ArkLib, `CompPoly]
+def ownRoots : List Name :=
+  [`GordieHowe, `GordieHoweNative, `LatticeCrypto, `HashSig, `ArkLib, `CompPoly]
 
 /-- Whether a module belongs to this project (including the vendored libraries). -/
 def ownModule (m : Name) : Bool :=

@@ -413,7 +413,7 @@ namespace KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] [Nonempty X] [AddGroup Y]
-  [Nonempty Y] (A : KindAlg X Y Req Resp O) (C : Challenger X Y Req Resp)
+  [Nonempty Y] {ksA : KindShape X Y Req Resp} (A : KindAlg ksA O) (C : Challenger X Y Req Resp)
 
 /-- The `i`-th query pair of the challenger's program for request `r` after the requests `rs`,
 with its answer from the oracle in force; `(x₀, 0)` after the last query and for requests numbered
@@ -1284,7 +1284,7 @@ theorem liftG_op_eq_zero (j : Fin A.slots) (r : A.R) (a b : A.toKindAlg.G) (ha :
     apply ha
     rw [Equiv.symm_apply_eq] at h
     rw [h, coe_finRotate_of_ne_last (fun hl => by rw [hl, Fin.val_last] at hb; omega), hb]
-  simp only [KindAlg.liftG, KrausMap.reindex, toKindAlg, KrausMap.permConj, KrausMap.tensorId,
+  simp only [KindAlg.liftG, KrausMap.reindex, toKindAlg, kindS, CntW, KindAlg.W, KindAlg.width, KindAlg.slots, KindAlg.post, KindAlg.R, KrausMap.permConj, KrausMap.tensorId,
     cntPerm, if_pos hj, Equiv.symm_symm, cntSplit, Equiv.coe_fn_mk, Equiv.prodCongr_symm,
     Equiv.refl_symm]
   change (_ * (1 : Matrix (Fin (A.slots + 1)) (Fin (A.slots + 1)) ℂ)
@@ -1337,6 +1337,15 @@ theorem suppIn_mgInit_cnt : SuppIn {r | A.cnt r = 0} A.toKindAlg.mgInit := by
   · exact h (by rw [← h1]; rfl)
   · exact h (by rw [← h2]; rfl)
 
+-- TODO(unbundle-M4): instance built in steps under synthInstance.maxSize; state over {W} {n} (R6)
+-- or register the instance on M1b's named type
+omit [Nonempty X] [AddGroup Y] [Nonempty Y] in
+/-- Decidable equality of the composed registers with the clean ancilla, built in steps (one
+instance search for the whole product exceeds the default size limit of instance search). -/
+instance instDecidableEqCWAnc : DecidableEq (QueryReg (A.toKindAlg.CW C × X × Y × Bool) 1 X Y) :=
+  haveI : DecidableEq (A.toKindAlg.CW C) := inferInstance
+  inferInstance
+
 /-- **The final state of the composition**: the clean ancilla and the coin-mixture of the placed
 final states of the mixed game of `toKindAlg` with measured requests. -/
 theorem compose_final (H : X → Y) :
@@ -1349,7 +1358,6 @@ theorem compose_final (H : X → Y) :
   simp only [KindAlg.initSys, MState.mix, A.toKindAlg.initSys_coin C H]
   rw [ReprogrammedCircuit.run_sum_smul]
   simp only [fullCirc, A.toKindAlg.fullCirc_run C (A.respects C) A.suppIn_mgInit_cnt]
-  rfl
 
 /-- **The output law of the composition** is the coin-average of the acceptance probabilities of
 the mixed game of `toKindAlg` with measured requests. -/

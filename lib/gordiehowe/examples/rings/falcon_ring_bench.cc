@@ -1,8 +1,9 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 
-// The Falcon-512 rings' bench executable (falcon_ring.h):
-// falcon_ring_bench COMMAND [FLAG...].
+// The Falcon rings' bench executable (falcon_ring.h):
+// falcon_ring_bench COMMAND [FLAG...], every command at the set
+// --falcon-set (512, the default, or 1024).
 //   serve             a report_bench worker (bench_hook.h, bench/harness.h)
 //                     of the arm --ring-arm at --ring-size members
 //   bench             the same records and --reps proofs without
@@ -23,6 +24,7 @@
 #include "bench/bench_hook.h"
 #include "bench/cli.h"
 #include "bench/timing.h"
+#include "gordiehowe/examples/falcon/falcon_instance_testing.h"
 #include "gordiehowe/examples/rings/falcon_ring_fixture.h"
 
 namespace proofs::gordiehowe::examples::falcon::ring {
@@ -30,8 +32,12 @@ namespace {
 
 namespace hook = examples::bench_hook;
 
+void add_set_flag(bench::Flags &f) {
+  f.flag("falcon-set", "512", "the Falcon parameter set: 512 or 1024");
+}
 void add_size_flag(bench::Flags &f) {
   f.flag("ring-size", "256", "the ring's members");
+  add_set_flag(f);
 }
 void add_ring_flags(bench::Flags &f) {
   add_size_flag(f);
@@ -41,9 +47,13 @@ void add_ring_flags(bench::Flags &f) {
 // The arm's system on its instance at --ring-size members, compiled, and
 // handed to FN with its statement, witness and setup record.
 template <class T, class I, class Fn>
-void with_arm_system(const char *config, const char *profile, I in, Fn fn) {
+void with_arm_system(const std::string &config, const char *profile, I in,
+                     Fn fn) {
   typename T::Env env;
-  hook::Setup su{config, profile, in.R};
+  hook::Setup su{config.c_str(), profile, in.R};
+  // The ring split: c = HashToPoint(r || m) hashes the signature's salt, so
+  // it changes with every proof (falcon_ring.h's ring_values).
+  su.ring_split = hook::RingSplit{{}, {"statement.c"}};
   auto t0 = hook::Clock::now();
   T t(env, in.R);
   su.build = hook::ms_since(t0) - hook::relation_compile_ms(t);
@@ -52,21 +62,26 @@ void with_arm_system(const char *config, const char *profile, I in, Fn fn) {
   fn(*c, t.statement(in.ring, in.c),
      [&] { return t.witness(in.signer, in.h, in.s2); }, su);
 }
-template <class P, class Fn>
+template <class P, class S, class Fn>
 void with_system(const bench::Flags &f, Fn fn) {
   const size_t R = f.num("ring-size");
   const std::string arm = f.str("ring-arm");
+  const std::string tag = S::kTag;
   if (arm == "native")
-    with_arm_system<FalconRingNativeSystem<P>>("falcon-ring-native", P::kId,
-                                               native_instance<P>(R), fn);
+    with_arm_system<FalconRingNativeSystem<P, S>>(
+        tag + "-ring-native", P::kId, native_instance<P, S>(R), fn);
   else if (arm == "carrier")
-    with_arm_system<FalconRingCarrierSystem<P>>(
-        "falcon-ring-carrier", P::kId, carrier_instance<P>(R), fn);
+    with_arm_system<FalconRingCarrierSystem<P, S>>(
+        tag + "-ring-carrier", P::kId, carrier_instance<P, S>(R), fn);
   else
     throw bench::UsageError("unknown ring arm " + arm);
 }
 auto systems(const bench::Flags &f) {
-  return [&f](auto p, auto fn) { with_system<decltype(p)>(f, fn); };
+  return [&f](auto p, auto fn) {
+    instance::with_set(f.str("falcon-set"), [&](auto s) {
+      with_system<decltype(p), decltype(s)>(f, fn);
+    });
+  };
 }
 
 int export_plans(const bench::Flags &f) {
@@ -74,15 +89,20 @@ int export_plans(const bench::Flags &f) {
   const std::string dir = hook::export_dir(f);
   const size_t R = f.num("ring-size");
   param_sets::with_profile(profile, [&](auto p) {
-    using P = decltype(p);
-    for (const auto &path :
-         {export_plan<P, FalconRingCarrierSystem<P>>(
-              dir, "falcon-ring-carrier", f.str("commit"), f.str("run-id"),
-              R),
-          export_plan<P, FalconRingNativeSystem<P>>(
-              dir, "falcon-ring-native", f.str("commit"), f.str("run-id"),
-              R)})
-      std::printf("GH_EXPORT_PLAN profile=%s path=%s\n", P::kId, path.c_str());
+    instance::with_set(f.str("falcon-set"), [&](auto s) {
+      using P = decltype(p);
+      using S = decltype(s);
+      const std::string tag = S::kTag;
+      for (const auto &path :
+           {export_plan<P, FalconRingCarrierSystem<P, S>>(
+                dir, tag + "-ring-carrier", f.str("commit"), f.str("run-id"),
+                R),
+            export_plan<P, FalconRingNativeSystem<P, S>>(
+                dir, tag + "-ring-native", f.str("commit"), f.str("run-id"),
+                R)})
+        std::printf("GH_EXPORT_PLAN profile=%s path=%s\n", P::kId,
+                    path.c_str());
+    });
   });
   return 0;
 }
@@ -145,13 +165,16 @@ int report(const bench::Flags &f) {
   const size_t capacity = f.num("group-capacity");
   const bool print = f.on("print-report");
   param_sets::with_profile(profile, [&](auto p) {
-    using P = decltype(p);
-    for (size_t R : sizes) {
-      report_sizes<FalconRingCarrierSystem<P>>("carrier", P::kId, R, capacity,
-                                               print);
-      report_sizes<FalconRingNativeSystem<P>>("native", P::kId, R, capacity,
-                                              print);
-    }
+    instance::with_set(f.str("falcon-set"), [&](auto s) {
+      using P = decltype(p);
+      using S = decltype(s);
+      for (size_t R : sizes) {
+        report_sizes<FalconRingCarrierSystem<P, S>>("carrier", P::kId, R,
+                                                    capacity, print);
+        report_sizes<FalconRingNativeSystem<P, S>>("native", P::kId, R,
+                                                   capacity, print);
+      }
+    });
   });
   return 0;
 }
@@ -198,11 +221,14 @@ int witness_profiles(const bench::Flags &f) {
   const size_t R = f.num("ring-size");
   const size_t reps = f.num("reps");
   param_sets::with_profile(profile, [&](auto p) {
-    using P = decltype(p);
-    witness_profile<FalconRingCarrierSystem<P>>("carrier", P::kId,
-                                                carrier_instance<P>(R), reps);
-    witness_profile<FalconRingNativeSystem<P>>("native", P::kId,
-                                               native_instance<P>(R), reps);
+    instance::with_set(f.str("falcon-set"), [&](auto s) {
+      using P = decltype(p);
+      using S = decltype(s);
+      witness_profile<FalconRingCarrierSystem<P, S>>(
+          "carrier", P::kId, carrier_instance<P, S>(R), reps);
+      witness_profile<FalconRingNativeSystem<P, S>>(
+          "native", P::kId, native_instance<P, S>(R), reps);
+    });
   });
   return 0;
 }
@@ -215,7 +241,7 @@ int main(int argc, char **argv) {
   namespace hook = proofs::gordiehowe::examples::bench_hook;
   using proofs::bench::Flags;
   return proofs::bench::run_commands(
-      argc, argv, "The Falcon-512 rings' benches.",
+      argc, argv, "The Falcon rings' benches.",
       {{"serve", "a report_bench worker",
         [](Flags &f) {
           hook::add_serve_flags(f);
@@ -237,6 +263,7 @@ int main(int argc, char **argv) {
        {"report", "the circuit figures per arm and ring size",
         [](Flags &f) {
           proofs::bench::add_common_flags(f);
+          app::add_set_flag(f);
           f.flag("ring-sizes", "64,256,1024", "the ring sizes")
               .flag("group-capacity", "0",
                     "the range groups' capacity (0: the profile's)")

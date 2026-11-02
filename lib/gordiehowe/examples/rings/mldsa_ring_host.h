@@ -1,7 +1,7 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 
-// GordieHowe: the host code of the ML-DSA-44 private ring's public rows,
+// GordieHowe: the host code of the ML-DSA private ring's public rows,
 // which prover and verifier both compute: a member's decoded key, its key
 // row in each arm's form, and mu's limbs.
 
@@ -53,38 +53,43 @@ inline std::array<uint8_t, kMuBytes> mu_of(const ::proofs::Shake256 &sh,
 // SHAKE128, bounded at 6 blocks per RejNTTPoly call, the t1 unpack scaled
 // by 2^d, tr). A key whose bounded ExpandA fails is a malformed statement
 // (StatementRefused), as in the proofs of possession (host::expand_a).
-inline MlDsaRingPublicKey<Params> decode(const std::vector<uint8_t> &pk) {
-  auto key = decode_ml_dsa_ring_public_key<Params>(pk);
+template <class S>
+MlDsaRingPublicKey<typename S::Reference> decode(
+    const std::vector<uint8_t> &pk) {
+  auto key = decode_ml_dsa_ring_public_key<typename S::Reference>(pk);
   if (!key.has_value())
     throw StatementRefused("ExpandA: fewer than 256 acceptances");
   return std::move(*key);
 }
 
 // NTT(2^d t1) of a decoded key, [K][N], canonical.
-inline std::vector<uint64_t> native_t1_hat(
-    const MlDsaRingPublicKey<Params> &key) {
-  std::vector<uint64_t> out(key.t1d.begin(), key.t1d.begin() + kK * kN);
+template <class S>
+std::vector<uint64_t> native_t1_hat(
+    const MlDsaRingPublicKey<typename S::Reference> &key) {
+  std::vector<uint64_t> out(key.t1d.begin(), key.t1d.begin() + S::kK * kN);
   host::ntt_each(out);
   return out;
 }
 
 // A native key row: A_hat (NTT order) then NTT(2^d t1), canonical.
-inline std::vector<uint64_t> native_key_row(const std::vector<uint8_t> &pk) {
-  const auto key = decode(pk);
+template <class S>
+std::vector<uint64_t> native_key_row(const std::vector<uint8_t> &pk) {
+  const auto key = decode<S>(pk);
   std::vector<uint64_t> out(key.a_hat.begin(), key.a_hat.end());
-  const auto t1_hat = native_t1_hat(key);
+  const auto t1_hat = native_t1_hat<S>(key);
   out.insert(out.end(), t1_hat.begin(), t1_hat.end());
   return out;
 }
 
 // A carrier key row: A's coefficients (NTT^-1 of A_hat) then 2^d t1,
 // canonical.
-inline std::vector<uint64_t> carrier_key_row(const std::vector<uint8_t> &pk) {
-  const auto key = decode(pk);
+template <class S>
+std::vector<uint64_t> carrier_key_row(const std::vector<uint8_t> &pk) {
+  const auto key = decode<S>(pk);
   std::vector<uint64_t> out(key.a_hat.begin(),
-                            key.a_hat.begin() + kK * kL * kN);
+                            key.a_hat.begin() + S::kK * S::kL * kN);
   host::intt_each(out);
-  out.reserve(kKeyCells);
+  out.reserve(kKeyCells<S>);
   out.insert(out.end(), key.t1d.begin(), key.t1d.end());
   return out;
 }

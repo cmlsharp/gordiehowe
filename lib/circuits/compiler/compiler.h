@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-// Modified 2026 by Chad Sharp and Paul Grubbs: packed-bit support (enable_packed_bits, deferred Boolean assertions), Hash-templated mkcircuit, circuit shape and size estimates
+// Modified 2026 by Chad Sharp and Paul Grubbs: packed-bit support (enable_packed_bits, deferred Boolean assertions), Hash-templated mkcircuit, circuit shape and size estimates, the translation-validation certificate (take_certificate, with the last-layer assertions turned into outputs)
 
 #ifndef PRIVACY_PROOFS_ZK_LIB_CIRCUITS_COMPILER_COMPILER_H_
 #define PRIVACY_PROOFS_ZK_LIB_CIRCUITS_COMPILER_COMPILER_H_
@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "algebra/hash.h"
+#include "circuits/compiler/gkr_certificate.h"
 #include "circuits/compiler/node.h"
 #include "circuits/compiler/pdqhash.h"
 #include "circuits/compiler/schedule.h"
@@ -111,97 +112,26 @@ class QuadCircuit {
   size_t linear(size_t op0) { return mul(0, op0); }
   size_t linear(const Elt& k, size_t op0) { return mul(k, 0, op0); }
 
-  size_t mul(const Elt& k, size_t op) {
-    if (k == f_.zero()) {
-      return konst(k);
-    } else if (k == f_.one() || nodes_[op].zero()) {
-      return op;
-    } else {
-      return push_node(scale(k, op));
-    }
-  }
+  size_t mul(const Elt& k, size_t op) { return scale_node(k, op); }
 
   size_t mul(size_t op0, size_t op1) { return mul(f_.one(), op0, op1); }
 
   size_t mul(const Elt& k, size_t op0, size_t op1) {
-    const auto& n0 = nodes_[op0];
-    const auto& n1 = nodes_[op1];
-
-    if (n0.zero()) {
-      return op0;
-    } else if (n0.constant()) {
-      // k * (k1 * op1) -> (k * k1) * op1
-      return mul(f_.mulf(k, kload(n0.terms[0].ki)), op1);
-    } else if (n0.linearp()) {
-      // k * ((k1 * op0) * op1) -> (k * k1) * op0 * op1
-      return mul(f_.mulf(k, kload(n0.terms[0].ki)), n0.terms[0].op1, op1);
-    } else if (n1.zero() || n1.constant() || n1.linearp()) {
-      return mul(k, op1, op0);
-    } else {
-      // general term k * op0 * op1
-      return push_node(node(kstore(k), op0, op1));
-    }
+    return mul_node(k, op0, op1);
   }
 
-  size_t add(size_t op0, size_t op1) {
-    const auto& n0 = nodes_[op0];
-    const auto& n1 = nodes_[op1];
-
-    if (n0.zero()) {
-      return op1;
-    } else if (n1.zero()) {
-      return op0;
-    } else {
-      // If the two addends are of different depth, do not merge
-      // them, which is accomplished by multiplying the shallower
-      // node by 1 and treating it as a single term of the final
-      // sum.
-      //
-      // Like many other "optimizations", this is a heuristic
-      // that may or may not work, but it seems to be uniformly
-      // beneficial or at least not harmful for all our circuits
-      // as of 2023-11-15.
-      if (n0.info.depth < n1.info.depth) {
-        op0 = linear(op0);
-      } else if (n1.info.depth < n0.info.depth) {
-        op1 = linear(op1);
-      }
-      return push_node(merge(op0, op1));
-    }
-  }
+  size_t add(size_t op0, size_t op1) { return add_node(op0, op1); }
   size_t sub(size_t op0, size_t op1) { return add(op0, mul(f_.mone(), op1)); }
 
-  size_t konst(const Elt& k) { return push_node(node(kstore(k), 0, 0)); }
+  size_t konst(const Elt& k) {
+    const size_t ki = kstore(k);
+    return push_node(node(ki, 0, 0));
+  }
 
   // Generate a special node that asserts that op == 0.
   // The node has the form 0*(1*op), which does not normally
   // appear in circuits.
-  size_t assert0(size_t op) {
-    const node* n = &nodes_[op];
-    if (n->zero()) {
-      // Identically zero, so nothing to generate.
-      // More importantly, we cannot multiply OP by 1,
-      // since OP doesn't really exist.
-      return op;
-    } else if (n->linearp()) {
-      // n = k * (1 * op1).
-      //
-      // Reduce to assert0(op1), but handle the screw case k==0,
-      // which shouldn't happen but just in case...
-      if (n->terms[0].ki == 0) {
-        return op;
-      } else {
-        return assert0(n->terms[0].op1);
-      }
-    } else {
-      typename term::assert0_type_hack hack;
-      std::vector<term> terms;
-      terms.push_back(term(op, hack));
-      node nn(std::move(terms));
-      nn.info.is_assert0 = true;
-      return push_node(std::move(nn));
-    }
-  }
+  size_t assert0(size_t op) { return assert0_node(op); }
 
   // Wrappers to avoid creating unnecessary wires.  The
   // compiler will discard them anyway, but they still take
@@ -280,6 +210,86 @@ class QuadCircuit {
     return true;
   }
 
+  // The translation-validation certificate of the last scheduled circuit
+  // (gkr_certificate.h): the inputs, the nodes the circuit computes or
+  // asserts, the nodes EXTRA names (a GKR export's wires) with every node
+  // their terms read, the constant table, the circuit's outputs, the
+  // last-layer assertions turned into outputs (each with the last-layer
+  // wire carrying its operand) and the scheduler's provenance (moved out:
+  // call it once, after mkcircuit).
+  std::unique_ptr<GkrCertificate<Field>> take_certificate(
+      const std::vector<size_t>& extra = {}) {
+    auto c = std::make_unique<GkrCertificate<Field>>();
+    c->nnodes = nodes_.size();
+    c->ninput = ninput_;
+    for (size_t i = 0; i < ninput_; ++i)
+      c->inputs_first = c->inputs_first && i < nodes_.size() &&
+                        nodes_[i].info.is_input &&
+                        size_t(nodes_[i].info.desired_wire_id_for_input) == i;
+    c->constants = constants_;
+    // The extra nodes and every node their terms read (a needed node's
+    // operands are needed, so the walk stops there).
+    std::vector<uint8_t> named(nodes_.size(), 0);
+    std::vector<size_t> todo;
+    for (size_t n : extra)
+      if (n < nodes_.size() && !named[n]) {
+        named[n] = 1;
+        todo.push_back(n);
+      }
+    while (!todo.empty()) {
+      const size_t n = todo.back();
+      todo.pop_back();
+      if (nodes_[n].info.is_needed) continue;
+      for (const term& t : nodes_[n].terms)
+        for (size_t o : {size_t(t.op0), size_t(t.op1)})
+          if (!named[o]) {
+            named[o] = 1;
+            todo.push_back(o);
+          }
+    }
+    c->node_term_begin.push_back(0);
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+      const node& n = nodes_[i];
+      if (n.info.is_output &&
+          n.info.desired_wire_id_for_output != nodeinfo::kWireIdUndefined)
+        c->outputs.push_back(
+            {uint32_t(i), uint32_t(n.info.desired_wire_id_for_output)});
+      if (n.info.is_input) continue;
+      bool asserts = false;
+      for (const term& t : n.terms) asserts = asserts || t.ki == 0;
+      if (!n.info.is_needed && !asserts && !named[i]) continue;
+      c->node_id.push_back(uint32_t(i));
+      c->node_depth.push_back(uint32_t(n.info.depth));
+      c->node_needed.push_back(n.info.is_needed);
+      for (const term& t : n.terms) {
+        c->node_terms.push_back(t.ki);
+        c->node_terms.push_back(t.op0);
+        c->node_terms.push_back(t.op1);
+      }
+      c->node_term_begin.push_back(uint32_t(c->node_terms.size() / 3));
+    }
+    c->wires = std::move(sched_cert_);
+    // Each last-layer assertion 0 * (1 * u) turned into an output: the
+    // last-layer wire carrying u.
+    if (c->wires.depths() > 0) {
+      const size_t d = c->wires.depths() - 1;
+      std::vector<std::pair<uint32_t, uint32_t>> at;
+      for (uint32_t w = c->wires.first_wire[d]; w < c->wires.first_wire[d + 1];
+           ++w)
+        at.push_back({c->wires.op[w], w - c->wires.first_wire[d]});
+      std::sort(at.begin(), at.end());
+      for (size_t z : last_asserts_) {
+        const uint32_t u = uint32_t(nodes_[z].terms[0].op1);
+        auto it = std::lower_bound(at.begin(), at.end(),
+                                   std::make_pair(u, uint32_t(0)));
+        proofs::check(it != at.end() && it->first == u,
+                      "a last-layer assertion's operand on no output wire");
+        c->last_asserts.push_back({it->second, uint32_t(z)});
+      }
+    }
+    return c;
+  }
+
   void output_wire(size_t n, size_t wire_id) {
     output_internal(n, quad_corner_t(wire_id));
   }
@@ -301,7 +311,7 @@ class QuadCircuit {
   // The circuit's quad terms and layers, as mkcircuit(NC) builds it,
   // without its id (a cost estimate's circuit).
   std::pair<size_t, size_t> mkcircuit_size(size_t nc) {
-    const std::unique_ptr<Circuit<Field>> c = schedule(nc);
+    const std::unique_ptr<Circuit<Field>> c = schedule(nc, /*provenance=*/false);
     return {c->nterms(), c->nl};
   }
 
@@ -347,8 +357,10 @@ class QuadCircuit {
   }
 
  private:
-  // The circuit's layers (mkcircuit without the id and the Boolean plan).
-  std::unique_ptr<Circuit<Field>> schedule(size_t nc) {
+  // The circuit's layers (mkcircuit without the id and the Boolean plan),
+  // and with PROVENANCE the scheduler's provenance for take_certificate (a
+  // size estimate, mkcircuit_size, needs none).
+  std::unique_ptr<Circuit<Field>> schedule(size_t nc, bool provenance = true) {
     std::vector<std::pair<size_t, size_t>> packed = pack_deferred_bits();
     size_t depth_ub = compute_depth_ub();
     fixup_last_layer_assertions(depth_ub);
@@ -356,7 +368,8 @@ class QuadCircuit {
 
     Scheduler<Field> sched(nodes_, f_);
     std::unique_ptr<Circuit<Field>> c =
-        sched.mkcircuit(constants_, depth_ub, nc);
+        sched.mkcircuit(constants_, depth_ub, nc, provenance);
+    sched_cert_ = std::move(sched.cert_);
 
     // re-export the scheduler telemetry
     nwires_ = sched.nwires_;
@@ -423,6 +436,91 @@ class QuadCircuit {
     nn->info.is_output = true;
     nn->info.desired_wire_id_for_output = wire_id;
     noutput_++;
+  }
+
+  // The primitives' bodies (Longfellow's mul, add, assert0).
+  size_t scale_node(const Elt& k, size_t op) {
+    if (k == f_.zero()) {
+      return konst(k);
+    } else if (k == f_.one() || nodes_[op].zero()) {
+      return op;
+    } else {
+      return push_node(scale(k, op));
+    }
+  }
+
+  size_t mul_node(const Elt& k, size_t op0, size_t op1) {
+    const auto& n0 = nodes_[op0];
+    const auto& n1 = nodes_[op1];
+
+    if (n0.zero()) {
+      return op0;
+    } else if (n0.constant()) {
+      // k * (k1 * op1) -> (k * k1) * op1
+      return mul(f_.mulf(k, kload(n0.terms[0].ki)), op1);
+    } else if (n0.linearp()) {
+      // k * ((k1 * op0) * op1) -> (k * k1) * op0 * op1
+      return mul(f_.mulf(k, kload(n0.terms[0].ki)), n0.terms[0].op1, op1);
+    } else if (n1.zero() || n1.constant() || n1.linearp()) {
+      return mul(k, op1, op0);
+    } else {
+      // general term k * op0 * op1
+      return push_node(node(kstore(k), op0, op1));
+    }
+  }
+
+  size_t add_node(size_t op0, size_t op1) {
+    const auto& n0 = nodes_[op0];
+    const auto& n1 = nodes_[op1];
+
+    if (n0.zero()) {
+      return op1;
+    } else if (n1.zero()) {
+      return op0;
+    } else {
+      // If the two addends are of different depth, do not merge
+      // them, which is accomplished by multiplying the shallower
+      // node by 1 and treating it as a single term of the final
+      // sum.
+      //
+      // Like many other "optimizations", this is a heuristic
+      // that may or may not work, but it seems to be uniformly
+      // beneficial or at least not harmful for all our circuits
+      // as of 2023-11-15.
+      if (n0.info.depth < n1.info.depth) {
+        op0 = linear(op0);
+      } else if (n1.info.depth < n0.info.depth) {
+        op1 = linear(op1);
+      }
+      return push_node(merge(op0, op1));
+    }
+  }
+
+  size_t assert0_node(size_t op) {
+    const node* n = &nodes_[op];
+    if (n->zero()) {
+      // Identically zero, so nothing to generate.
+      // More importantly, we cannot multiply OP by 1,
+      // since OP doesn't really exist.
+      return op;
+    } else if (n->linearp()) {
+      // n = k * (1 * op1).
+      //
+      // Reduce to assert0(op1), but handle the screw case k==0,
+      // which shouldn't happen but just in case...
+      if (n->terms[0].ki == 0) {
+        return op;
+      } else {
+        return assert0(n->terms[0].op1);
+      }
+    } else {
+      typename term::assert0_type_hack hack;
+      std::vector<term> terms;
+      terms.push_back(term(op, hack));
+      node nn(std::move(terms));
+      nn.info.is_assert0 = true;
+      return push_node(std::move(nn));
+    }
   }
 
   size_t push_node(node n) {
@@ -521,7 +619,12 @@ class QuadCircuit {
   std::vector<node> nodes_;
   PdqHash cse_;
 
+  // The last-layer assertions fixup_last_layer_assertions turned into
+  // outputs, in node order.
+  std::vector<size_t> last_asserts_;
+
   bool packed_bits_enabled_ = false;
+  ScheduleCert sched_cert_;
   std::vector<std::pair<size_t, size_t>> packed_marks_;  // (input, node)
 
   size_t kstore(const Elt& k) {
@@ -579,9 +682,12 @@ class QuadCircuit {
 
   void fixup_last_layer_assertions(size_t depth_ub) {
     // convert assertions in the last layer into outputs
-    for (auto& n : nodes_) {
+    last_asserts_.clear();
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+      auto& n = nodes_[i];
       if (!n.info.is_output && n.info.is_assert0 && n.info.depth == depth_ub &&
           n.linearp()) {
+        last_asserts_.push_back(i);
         n.info.is_assert0 = false;
         output_internal(n.terms[0].op1, nodeinfo::kWireIdUndefined);
       }

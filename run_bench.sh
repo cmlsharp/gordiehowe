@@ -24,9 +24,11 @@
 #
 # GordieHowe cases (the bench executables in BUILD_DIR/bench, each with its
 # commands and flags: lib/bench/cli.h):
-#   report_bench   the four proofs of possession (ML-DSA and Falcon, native
-#                     and emulated), both rings' native and carrier arms at
-#                     64, 256 and 1024 members, the Keccak and SHA-256 gadget
+#   report_bench   the proofs of possession of ML-DSA-44, -65 and -87 and
+#                     Falcon-512 and -1024, native and emulated (gh-ml-*,
+#                     gh-ml65-*, gh-ml87-*, gh-fn-*, gh-fn1024-*), every
+#                     set's rings, native and carrier arms, at 64, 256 and
+#                     1024 members, the Keccak and SHA-256 gadget
 #                     comparisons, SHA3-256 and SHA-256 batched of a private
 #                     message of 1 KiB, 8 KiB and 32 KiB (sha3-256-batched-<S>
 #                     and sha256-batched-<S>, S = 1KiB, 8KiB, 32KiB; SHA3-256
@@ -109,11 +111,16 @@
 # (scripts/snapshot_baselines.py; uncommitted changes in DIR are not
 # benchmarked), builds it with the snapshot's common/build.sh and runs it with
 # its common/bench.py.  ROM parameters: mdoc-v7 (doc 3, 1 attribute), its MAC
-# ablation, ML-DSA-44 monolith (rate 7, 134 columns, block_enc 8192), ML-DSA-44
-# split with MACs on and off, Falcon-512 split native and emulated, RSA-2048
+# ablation, the ML-DSA monolith at ML-DSA-44 (rate 7, 134 columns, block_enc
+# 8192), -65 and -87 (the driver's defaults of each set; labels ml-monolith,
+# ml65-monolith, ml87-monolith), the ML-DSA split at each set with MACs on
+# (ml-split, ml65-split, ml87-split) and at ML-DSA-44 with MACs off
+# (ml-split-nomac), Falcon split native and emulated at Falcon-512
+# (fn-split-*) and -1024 (fn1024-split-*), RSA-2048
 # over Fp128 at 2 KB (and 64 B with --rsa-64), the post-quantum mDL
 # (pq-mdoc) at 1 attribute (and the counts of --pqmdoc-attrs).  QROM parameters:
-# the baselines with a QROM configuration, ML-DSA-44 split (MACs on and off), Falcon-512 split (both arms) and pq-mdoc
+# the baselines with a QROM configuration, the ML-DSA split (each set; MACs
+# off at ML-DSA-44 too), Falcon split (both sets, both arms) and pq-mdoc
 # at 1 attribute, each through its TARGET_wide driver where the baseline
 # defines one; the others are skipped, and the run says so.  A missing DIR is
 # an error.
@@ -572,10 +579,16 @@ if [[ "$profile" == narrow ]]; then
   bl_cases="mdoc-v7 mdoc-v7/mdoc_v7 3 1
 mdoc-v7-nomac mdoc-v7-mac-ablation/mdoc_v7_nomac 3 1
 ml-monolith ml-dsa-44-monolith/ml_dsa_44_monolith 7 134 8192
+ml65-monolith ml-dsa-44-monolith/ml_dsa_44_monolith --param-set ml-dsa-65
+ml87-monolith ml-dsa-44-monolith/ml_dsa_44_monolith --param-set ml-dsa-87
 ml-split ml-dsa-44-split/ml_dsa_44_split_driver narrow on
+ml65-split ml-dsa-44-split/ml_dsa_44_split_driver narrow on --param-set ml-dsa-65
+ml87-split ml-dsa-44-split/ml_dsa_44_split_driver narrow on --param-set ml-dsa-87
 ml-split-nomac ml-dsa-44-split/ml_dsa_44_split_driver narrow off
 fn-split-native falcon-512-split/falcon_split_driver native narrow
 fn-split-emulated falcon-512-split/falcon_split_driver emulated narrow
+fn1024-split-native falcon-512-split/falcon_split_driver native narrow --falcon-set 1024
+fn1024-split-emulated falcon-512-split/falcon_split_driver emulated narrow --falcon-set 1024
 rsa-fp128-2048 rsa-pkcs1/rsa_zk worker Fp128 2048"
   # --rsa-64: the 64-byte RSA baseline; --pqmdoc-attrs: one pq-mdoc
   # baseline per attribute count.
@@ -590,9 +603,13 @@ else
   bl_dirs="ml-dsa-44-split;falcon-512-split;pq-mdoc"
   bl_targets=(ml_dsa_44_split_driver falcon_split_driver pq_mdoc_driver)
   bl_cases="ml-split ml-dsa-44-split/ml_dsa_44_split_driver wide on
+ml65-split ml-dsa-44-split/ml_dsa_44_split_driver wide on --param-set ml-dsa-65
+ml87-split ml-dsa-44-split/ml_dsa_44_split_driver wide on --param-set ml-dsa-87
 ml-split-nomac ml-dsa-44-split/ml_dsa_44_split_driver wide off
 fn-split-native falcon-512-split/falcon_split_driver native wide
 fn-split-emulated falcon-512-split/falcon_split_driver emulated wide
+fn1024-split-native falcon-512-split/falcon_split_driver native wide --falcon-set 1024
+fn1024-split-emulated falcon-512-split/falcon_split_driver emulated wide --falcon-set 1024
 pq-mdoc-1 pq-mdoc/pq_mdoc_driver wide 1"
   if [[ "$pq_mdoc_attrs" != 1 ]]; then
     echo "Wide profile: the post-quantum mDL runs at 1 attribute (--pqmdoc-attrs is narrow only)."
@@ -881,9 +898,11 @@ for ring in 64 1024; do
   done
 done
 # Each checked system exports its plan, its realized program and their
-# proof modules (GordieHowe/Generated/<Lean name>/{Plan,Program,Valid,
-# Realize,Honest}.lean, the last three with their per-condition modules in
-# directories of the same names, not counted): 8 constructions,
+# proof and certificate modules (GordieHowe/Generated/<Lean name>/: Plan,
+# Program, Valid, Realize, Cert, Completion, Derivs, Annotations and its
+# Annotations/ modules; Valid and Realize with their per-condition modules
+# in directories of the same names). The check counts one Plan.lean and one
+# Program.lean per system: 8 constructions,
 # SHA-256 and the post-quantum mDL's Goldilocks arm (MDL.MLDSA44.Attrs<n>)
 # at each attribute count; the ROM parameters add mdoc and each RSA configuration
 # (RSA2048.*). The post-quantum mDL's F_q arm (MDL.MLDSA44Fq.*) is not
@@ -903,9 +922,9 @@ while IFS= read -r f; do
   esac
 done < <(find "$gen" -name '*.lean' -not -path '*/Valid/*' -not -path '*/Realize/*' \
   -not -path '*/Honest/*' 2>/dev/null | sort)
-if (( $(printf '%s\n' "${checked[@]}" | grep -c 'Program\.lean$') != n_exports \
-  || ${#checked[@]} != 5 * n_exports )); then
-  echo "Expected $n_exports GordieHowe plans, programs and proof modules in $results_dir/lean" >&2
+if (( $(printf '%s\n' "${checked[@]}" | grep -c '/Program\.lean$') != n_exports \
+  || $(printf '%s\n' "${checked[@]}" | grep -c '/Plan\.lean$') != n_exports )); then
+  echo "Expected $n_exports GordieHowe plans and programs in $results_dir/lean" >&2
   exit 1
 fi
 # The hash comparison's GordieHowe systems (sha3-256-batched-<S> and
@@ -932,9 +951,9 @@ while IFS= read -r f; do
   hash_plan_files+=("$f")
 done < <(find "$hash_plans" -name '*.lean' -not -path '*/Valid/*' -not -path '*/Realize/*' \
   -not -path '*/Honest/*' | sort)
-if (( $(printf '%s\n' "${hash_plan_files[@]}" | grep -c 'Program\.lean$') != 8 \
-  || ${#hash_plan_files[@]} != 40 )); then
-  echo "Expected 8 hash-comparison plans, programs and proof modules in $hash_plans" >&2
+if (( $(printf '%s\n' "${hash_plan_files[@]}" | grep -c '/Program\.lean$') != 8 \
+  || $(printf '%s\n' "${hash_plan_files[@]}" | grep -c '/Plan\.lean$') != 8 )); then
+  echo "Expected 8 hash-comparison plans and programs in $hash_plans" >&2
   exit 1
 fi
 # --export-lean copies the checked-in set: the constructions (the rings at

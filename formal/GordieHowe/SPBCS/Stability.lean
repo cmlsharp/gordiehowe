@@ -3,400 +3,221 @@
 
 module
 
-public import GordieHowe.SPBCS.Cover
+public import GordieHowe.SPBCS.Extractor
+public import GordieHowe.Model.IOP.CausalSound
+public import GordieHowe.Model.QROM.Lifting
 
 @[expose] public section
 
 /-!
-# Recording a fresh answer and the translated database with merges
+# The instability bound of the database extractor
 
-How the translation of a database with merges (`GordieHowe/SPBCS/Translate.lean`) changes when one
-fresh answer is recorded. A round input holds the final digests of the branches hidden from its
-leaf and is read through the recorded final inputs whose answers have those digests; recording a
-new answer can change such a reading only when the new answer is a final input whose digest is
-one being looked for. `pend D q` is the set of those digests for a new query `q`: for a new final
-input, the final digests held by the recorded inputs (`finalDsAll`); nothing for any other query.
-A new round input reads only recorded answers: should its own answer have a digest it looks for,
-the input it finds is itself, a round input, which resolves no branch.
+CMS19 Proposition 8.14 (p. 44) for the database extractor of the spBCS compiler
+(`GordieHowe/SPBCS/Extractor.lean`, paper `lem:sse-instability`), from causal round-by-round
+soundness (`CausalRBR`, `GordieHowe/Model/IOP/Causal.lean`).
 
-**The extension lemma** (`trans_extend`): outside `pend D q`, the translation of `D` with the new
-answer is the translation of `D`, with the translated query's answer recorded when `q` has a
-translation. `pend D q` has at most `nJ · |D|` elements (`card_pend_le`): a content holds at most
-`nJ` final digests (`Content.card_finalDs_le`). This gives the instability bound
-`max_c ε c + (max 2 c_in + nJ) · t / 2^(8k)` (`condInstab_bad_le`, paper `lem:sse-instability`).
+`flipAt ss c chs l` (`P_σ ∩ P̄_{E,σ}` for the challenge `c`): the chains of the leaves before
+`c.leaf` (`chs`, full) and `c`'s own items `l` (`|l| = c.idx`) give a chain input of `c` recorded
+with its final inputs (`keyD`), the causal past of `c` is extracted from them, the stream at the
+key and the salt is recorded and samples a challenge that moves `c`'s leaf state from false to
+true (`FlipAt`) while the causal extractor fails on the past. `bad` is the union over salted
+statements, challenges and chains: the knowledge failures of the paper's `lem:sse-instability`.
+
+A fresh `xof` answer completes at most one challenge of one causal past: the key has one recorded
+`transcript` preimage, which determines the salted statement, the leaf, the own items and, through
+the recorded final inputs, the chains before the leaf (`eq_of_keyD_digest_eq`; `nextBad_unique`),
+so the union costs nothing, and the challenge's own error `ε c` bounds the event (`CausalRBR.rbr`);
+the bound is at the largest `ε c`. Every other change of the extraction puts the new digest among
+the digests of a recorded input, of the query, or among the final digests the recorded inputs hold
+(`digest_mem_of_extPast_extend`): at most `(max 2 c_in + nJ) · t` digests for a database of fewer
+than `t` entries. This gives `I(bad | P̄_col, t) ≤ max_c ε c + (max 2 c_in + nJ) · t / 2^(8k)`
+(`condInstab_bad_le`).
 -/
 
 namespace GordieHowe.SPBCS
 
 open GordieHowe.QROM GordieHowe.IOP IOP.SPTerm
+open scoped ENNReal NNReal
 
 variable {ι : Type} {t : SPTerm ι} {Mg : Merges t} {k kN kS L e : ℕ} {n : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (n j)} [∀ j i, Fintype ((P j).Challenge i)]
-  [∀ j i, DecidableEq ((P j).Challenge i)] {X : Type}
+  [∀ j i, DecidableEq ((P j).Challenge i)] {X Wit : Type}
 
 section
 
-variable (M : SPBCS Mg P X k kN kS L e)
+variable (M : SPBCS Mg P X k kN kS L e) (rel : Set (X × Wit)) (E : CausalExtractor P t X Wit)
+  (S : CausalStateFn P t X)
 
-/-! ### The digests a new answer must avoid -/
+/-- **The extracted causal past of `c` flips at the challenge `ch`**: the causal extractor fails
+on the past and the leaf's state moves from false to true. -/
+structure PastFlip (x : X) (c : ChIdx P t) (past : CausalPast P c) (ch : c.Challenge) : Prop where
+  /-- The causal extractor fails on the past. -/
+  extract_fails : (x, E c x past) ∉ rel
+  /-- The leaf's state moves from false to true. -/
+  flip : FlipAt S c x past ch
 
-/-- The final digests held by a recorded input. -/
-def finalDsOf : Query k kN kS L → Finset (Digest k)
-  | .transcript b => ((M.senc.decode b).map Content.finalDs).getD ∅
-  | _ => ∅
+/-- `P_σ ∩ P̄_{E,σ}` at the challenge `c` (module docstring). -/
+def flipAt (ss : SaltedStatement kS X) (c : ChIdx P t) (chs : M.Chains) (l : M.Items c.leaf) :
+    Set (ODB k kN kS L e) :=
+  {D | ∃ (past : CausalPast P c) (a s : Out k e) (ch : c.Challenge),
+    M.ChainsFull chs c.leaf ∧ l.length = c.idx.1 ∧ M.extPast D ss chs c l = some past ∧
+    M.keyD D ss chs c.leaf l = some a ∧ D.lookup (.xof a.digest ss.salt) = some s ∧
+    ((M.comp c.leaf.label).sampler c.idx).sample s.stream = some ch ∧
+    PastFlip rel E S ss.stmt c past ch}
 
-/-- **The final digests held by the recorded inputs.** -/
-def finalDsAll (D : ODB k kN kS L e) : Finset (Digest k) := D.keys.biUnion M.finalDsOf
+/-- **The bad databases** (paper `lem:sse-instability`, the knowledge failures): the union of
+`flipAt` over salted statements, challenges and chains. -/
+def bad : Set (ODB k kN kS L e) :=
+  {D | ∃ ss c chs l, D ∈ M.flipAt rel E S ss c chs l}
 
-/-- **The digests a new answer at `q` must avoid** (module docstring). -/
-def pend (D : ODB k kN kS L e) : Query k kN kS L → Finset (Digest k)
-  | .transcript b =>
-    match M.senc.decode b with
-    | some (.final _ _ _ _) => M.finalDsAll D
-    | _ => ∅
-  | _ => ∅
+theorem empty_notMem_bad : (∅ : ODB k kN kS L e) ∉ M.bad rel E S := by
+  rintro ⟨ss, c, chs, l, past, a, s, ch, -, -, -, ha, -⟩
+  unfold keyD at ha
+  split_ifs at ha
+  simp [Finmap.lookup_empty] at ha
 
-theorem card_finalDsAll_le (D : ODB k kN kS L e) : (M.finalDsAll D).card ≤ Mg.nJ * D.size :=
-  Finset.card_biUnion_le.trans ((Finset.sum_le_card_nsmul _ _ Mg.nJ fun q _ => by
-    cases q with
-    | transcript b =>
-      simp only [finalDsOf]
-      cases M.senc.decode b with
-      | none => simp
-      | some c => exact Content.card_finalDs_le c
-    | _ => simp [finalDsOf]).trans (by simp [DB.size, mul_comm]))
+/-- The event that a fresh `xof` answer `y` at the query `q` completes the challenge `c` of an
+extracted causal past whose chain input is recorded. -/
+def nextBad (D : ODB k kN kS L e) (q : Query k kN kS L) (y : Out k e) : Prop :=
+  ∃ (ss : SaltedStatement kS X) (c : ChIdx P t) (chs : M.Chains) (l : M.Items c.leaf)
+    (past : CausalPast P c) (a : Out k e) (ch : c.Challenge),
+    M.ChainsFull chs c.leaf ∧ l.length = c.idx.1 ∧ M.extPast D ss chs c l = some past ∧
+    M.keyD D ss chs c.leaf l = some a ∧ q = .xof a.digest ss.salt ∧
+    ((M.comp c.leaf.label).sampler c.idx).sample y.stream = some ch ∧
+    PastFlip rel E S ss.stmt c past ch
 
-/-- **The digests a new answer must avoid are at most `nJ · |D|`.** -/
-theorem card_pend_le (D : ODB k kN kS L e) (q : Query k kN kS L) :
-    (M.pend D q).card ≤ Mg.nJ * D.size := by
-  cases q with
-  | transcript b =>
-    simp only [pend]
-    split
-    · exact M.card_finalDsAll_le D
-    · exact Nat.zero_le _
-  | _ => exact Nat.zero_le _
+variable {M rel E S} {D : ODB k kN kS L e} {q : Query k kN kS L} {y : Out k e}
 
-/-! ### Resolutions after recording one answer -/
+/-- **The digests of an extracted past whose chain input is recorded lie in `S(D)`.** -/
+theorem pastDigests_subset_halfPre_of_extPast {ss : SaltedStatement kS X} {c : ChIdx P t}
+    {chs : M.Chains} {l : M.Items c.leaf} {past : CausalPast P c} {a : Out k e}
+    (hfull : M.ChainsFull chs c.leaf) (hl : l.length = c.idx.1)
+    (hp : M.extPast D ss chs c l = some past) (ha : M.keyD D ss chs c.leaf l = some a) :
+    M.pastDigests chs c.leaf l ⊆ halfPre M.senc.digestsOf D := by
+  obtain ⟨hwf, hlwf, hlen⟩ := M.wf_of_extPast D ss chs hfull hl hp
+  exact M.pastDigests_subset_halfPre ss hwf hlwf hlen ha
 
-section ResolveExtend
+/-- Flipping into `bad` (the first half of CMS19 Proposition 8.14, p. 44). -/
+theorem flip_into_bad (hD : D ∉ M.bad rel E S) (hq : q ∉ D)
+    (hcol : D.extend q y ∉ digestCollision) (h : D.extend q y ∈ M.bad rel E S) :
+    y.digest ∈ halfPre M.senc.digestsOf D ∪ q.digests M.senc.digestsOf ∪ M.pend D q ∨
+      M.nextBad rel E S D q y := by
+  obtain ⟨ss, c, chs, l, past, a', s', ch, hfull, hl, hpast', ha', hs', hc, hflip⟩ := h
+  obtain ⟨hwf, hlwf, hlen⟩ := M.wf_of_extPast (D.extend q y) ss chs hfull hl hpast'
+  by_cases hpast : M.extPast D ss chs c l = some past
+  · by_cases ha : M.keyD D ss chs c.leaf l = some a'
+    · cases hs : D.lookup (.xof a'.digest ss.salt) with
+      | none =>
+        obtain ⟨rfl, rfl⟩ := eq_of_lookup_extend hs hs'
+        exact Or.inr ⟨ss, c, chs, l, past, a', ch, hfull, hl, hpast, ha, rfl, hc, hflip⟩
+      | some s =>
+        obtain rfl : s' = s :=
+          (Option.some_inj.1 ((lookup_extend_of_lookup hq hs).symm.trans hs')).symm
+        exact absurd ⟨ss, c, chs, l, past, a', s', ch, hfull, hl, hpast, ha, hs, hc, hflip⟩ hD
+    · refine Or.inl ?_
+      rcases M.keyD_extend ss chs hq hwf hlwf hlen ha' ha with ⟨hq₀, hay⟩ | hp
+      · have hne : Query.xof a'.digest ss.salt ≠ q := fun he => by
+          rw [hq₀] at he
+          simp [inputD] at he
+        rw [DB.lookup_extend_of_ne hne] at hs'
+        rw [← hay]
+        exact Finset.mem_union_left _ (Finset.mem_union_left _
+          (key_mem_halfPre (DB.mem_iff_lookup.2 ⟨s', hs'⟩)))
+      · exact Finset.mem_union_right _ hp
+  · have hmem := M.digest_mem_of_extPast_extend ss chs hq hcol c hfull l hpast' hpast
+    refine Or.inl ?_
+    rcases Finset.mem_union.1 hmem with hm | hm
+    · have := halfPre_extend_subset
+        (pastDigests_subset_halfPre_of_extPast hfull hl hpast' ha' hm)
+      exact Finset.mem_union_left _ this
+    · rcases Finset.mem_union.1 hm with hm | hm
+      · exact Finset.mem_union_left _ (Finset.mem_union_left _ hm)
+      · exact Finset.mem_union_right _ hm
 
-variable {M} {D : ODB k kN kS L e} {q : Query k kN kS L} {y : Out k e}
-  (hq : q ∉ D) (hcol : D.extend q y ∉ digestCollision)
-include hq hcol
+/-- Flipping out of `bad` (the second half of CMS19 Proposition 8.14, p. 45). -/
+theorem flip_out_of_bad (hD : D ∈ M.bad rel E S) (hq : q ∉ D)
+    (hcol : D.extend q y ∉ digestCollision) (h : D.extend q y ∉ M.bad rel E S) :
+    y.digest ∈ halfPre M.senc.digestsOf D := by
+  obtain ⟨ss, c, chs, l, past, a, s, ch, hfull, hl, hpast, ha, hs, hc, hflip⟩ := hD
+  by_cases hpast' : M.extPast (D.extend q y) ss chs c l = some past
+  · exact absurd ⟨ss, c, chs, l, past, a, s, ch, hfull, hl, hpast',
+      M.keyD_extend_of_eq_some ss chs hq ha, lookup_extend_of_lookup hq hs, hc, hflip⟩ h
+  · have hmem := M.digest_mem_of_extPast_extend_ne ss chs hq hcol c l hpast hpast'
+    rcases Finset.mem_union.1 hmem with hm | hm
+    · exact pastDigests_subset_halfPre_of_extPast hfull hl hpast ha hm
+    · exact hm
 
-/-- **A hidden branch resolves as before** unless the new answer is a final input with its final
-digest. -/
-theorem resolveSink_extend {ss : SaltedStatement kS X} {chs : M.Chains} {ds : Mg.Site → Digest k}
-    {s : Mg.Site}
-    (hb : ∀ b ss' s' chs' ds', q = .transcript b → M.senc.decode b = some (.final ss' s' chs' ds') →
-      y.digest ≠ ds s) :
-    M.resolveSink (D.extend q y) ss chs ds s = M.resolveSink D ss chs ds s := by
-  unfold resolveSink
-  by_cases hu : ∃ b, q = .transcript b ∧ y.digest = ds s
-  · obtain ⟨b, rfl, hv⟩ := hu
-    obtain ⟨h1, h2⟩ := findTr_extend_self hq hcol rfl
-    rw [← hv, h1, h2, Option.bind_some, Option.bind_none]
-    rcases hdec : M.senc.decode b with _ | c
-    · rfl
-    rcases c with ⟨ss', p, chs', ds', own⟩ | ⟨ss', s', chs', ds'⟩
-    · rfl
-    · exact absurd hv (hb b ss' s' chs' ds' rfl hdec)
-  · rw [findTr_extend hq hcol fun b hb hd => hu ⟨b, hb, hd⟩]
+/-- **In a collision-free database, `nextBad` determines its statement, challenge and past**: the
+key has one recorded `transcript` preimage, which determines the salted statement, the leaf, the
+own items and the chains before the leaf (`eq_of_keyD_digest_eq`). -/
+theorem nextBad_unique (hcol : D ∉ digestCollision) {ss ss' : SaltedStatement kS X}
+    {c c' : ChIdx P t} {chs chs' : M.Chains} {l : M.Items c.leaf}
+    {l' : M.Items c'.leaf} {past : CausalPast P c} {past' : CausalPast P c'} {a a' : Out k e}
+    (hfull : M.ChainsFull chs c.leaf) (hfull' : M.ChainsFull chs' c'.leaf)
+    (hl : l.length = c.idx.1) (hl' : l'.length = c'.idx.1)
+    (hp : M.extPast D ss chs c l = some past) (hp' : M.extPast D ss' chs' c' l' = some past')
+    (ha : M.keyD D ss chs c.leaf l = some a) (ha' : M.keyD D ss' chs' c'.leaf l' = some a')
+    (hq : q = .xof a.digest ss.salt) (hq' : q = .xof a'.digest ss'.salt) :
+    ss.stmt = ss'.stmt ∧ c = c' ∧ HEq past past' := by
+  obtain ⟨hd, -⟩ := Query.xof.inj (hq.symm.trans hq')
+  obtain ⟨hwf, hlwf, hlen⟩ := M.wf_of_extPast D ss chs hfull hl hp
+  obtain ⟨hwf', hlwf', hlen'⟩ := M.wf_of_extPast D ss' chs' hfull' hl' hp'
+  obtain ⟨rfl, hleaf, hown, hagree⟩ :=
+    M.eq_of_keyD_digest_eq ss hcol hwf hwf' hlwf hlwf' hlen hlen' ha ha' hd
+  obtain ⟨p, i⟩ := c
+  obtain ⟨p', i'⟩ := c'
+  dsimp only at hleaf hown hl hl' hp hp' hagree
+  subst hleaf
+  obtain rfl := eq_of_heq hown
+  obtain rfl : i = i' := Subtype.ext (Fin.ext (hl.symm.trans hl'))
+  rw [M.extPast_congr D ss hagree, hp'] at hp
+  exact ⟨rfl, rfl, heq_of_eq (Option.some_inj.1 hp).symm⟩
 
-variable (M q y) in
-/-- **The new answer misses the digests the reading of a content looks for**: a new final input
-misses the digests `V`. -/
-def NoHit (V : Finset (Digest k)) : Prop :=
-  ∀ b ss s chs ds, q = .transcript b → M.senc.decode b = some (.final ss s chs ds) → y.digest ∉ V
-
-/-- **A content reads the same causal past** after recording a new answer that misses the
-digests it looks for. -/
-theorem fullChain_extend {c : M.MContent} (hn : M.NoHit q y c.finalDs) :
-    M.fullChain (D.extend q y) c = M.fullChain D c := by
-  rcases c with ⟨ss, p, chs, ds, own⟩ | ⟨ss, s, chs, ds⟩
-  · simp only [fullChain, pastChains]
-    congr 2
-    congr 1
-    funext s
-    split_ifs with hs
-    · exact resolveSink_extend hq hcol fun b ss' s' chs' ds' hb hd he =>
-        hn b ss' s' chs' ds' hb hd (he ▸ Finset.mem_image_of_mem _ (Merges.mem_hiders.2 hs))
-    · rfl
-  · rfl
-
-/-- **The pending digests cover what the readings of recorded inputs look for.** -/
-theorem noHit_of_pend (hy : y.digest ∉ M.pend D q) : M.NoHit q y (M.finalDsAll D) := by
-  intro b ss s chs ds hb hd hm
-  subst hb
-  apply hy
-  simp only [pend, hd]
-  exact hm
-
-omit hq hcol in
-/-- The final digests of a recorded input are among those of `D`. -/
-theorem finalDs_subset_of_mem {b : Bytes L} {c : M.MContent} (hb : Query.transcript b ∈ D)
-    (hc : M.senc.decode b = some c) : c.finalDs ⊆ M.finalDsAll D :=
-  fun v hv => Finset.mem_biUnion.2 ⟨_, Finmap.mem_keys.2 hb, by simp [finalDsOf, hc, hv]⟩
-
-/-- **A recorded query translates as before** after recording a new answer outside the pending
-digests. -/
-theorem φ_extend_of_mem (hy : y.digest ∉ M.pend D q) {q₀ : Query k kN kS L} (hq₀ : q₀ ∈ D) :
-    M.φ (D.extend q y) q₀ = M.φ D q₀ := by
-  cases q₀ with
-  | transcript b₀ =>
-    simp only [φ, fullOf]
-    rcases hc : M.senc.decode b₀ with _ | c
-    · rfl
-    · simp only [Option.bind_some]
-      rw [fullChain_extend hq hcol fun b' ss s chs ds hb' hd hm =>
-        noHit_of_pend hq hcol hy b' ss s chs ds hb' hd (finalDs_subset_of_mem hq₀ hc hm)]
-  | _ => rfl
-
-/-- **The new query translates as before**: a new final input has no translation, and a new
-round input finds itself at most, which resolves no branch. -/
-theorem φ_extend_self : M.φ (D.extend q y) q = M.φ D q := by
-  cases q with
-  | transcript b =>
-    simp only [φ, fullOf]
-    rcases hc : M.senc.decode b with _ | c
-    · rfl
-    simp only [Option.bind_some]
-    rcases c with ⟨ss', p, chs', ds', own⟩ | ⟨ss', s', chs', ds'⟩
-    · rw [fullChain_extend hq hcol]
-      intro b' ss s chs ds hb hd
-      cases hb
-      rw [hc] at hd
-      cases hd
-    · rfl
-  | _ => rfl
-
-/-- **The translation of the new query is a new query** of the translated database. -/
-theorem φ_notMem_trans (hy : y.digest ∉ M.pend D q) {q' : Query k kN kS L}
-    (hφ : M.φ D q = some q') : q' ∉ M.trans D := by
-  have hD := notMem_digestCollision_of_extend hq hcol
-  intro hm
-  obtain ⟨q₁, hq₁, hφ₁⟩ := (DB.mem_image_iff (injOnKeys_φ hD)).1 hm
-  have := injOnKeys_φ (M := M) hcol (DB.mem_extend.2 (Or.inr hq₁)) (DB.mem_extend.2 (Or.inl rfl))
-    ((φ_extend_of_mem hq hcol hy hq₁).trans hφ₁) ((φ_extend_self hq hcol).trans hφ)
-  exact hq (this ▸ hq₁)
-
-/-- **The extension lemma** (module docstring): outside the pending digests, the translation of
-`D` with the new answer is the translation of `D`, with the translated query's answer recorded
-when the new query has a translation. -/
-theorem trans_extend (hy : y.digest ∉ M.pend D q) :
-    M.trans (D.extend q y) = match M.φ D q with
-      | none => M.trans D
-      | some q' => (M.trans D).extend q' y := by
-  have hD := notMem_digestCollision_of_extend hq hcol
-  have hL : ∀ q' y', (M.trans (D.extend q y)).lookup q' = some y' ↔
-      (M.trans D).lookup q' = some y' ∨ (M.φ D q = some q' ∧ y' = y) := fun q' y' => by
-    rw [trans, DB.lookup_image_eq_some_iff (injOnKeys_φ hcol), trans,
-      DB.lookup_image_eq_some_iff (injOnKeys_φ hD)]
-    constructor
-    · rintro ⟨q₀, hq₀, hφ₀⟩
-      rcases (lookup_extend_eq_some_iff hq).1 hq₀ with h | ⟨rfl, rfl⟩
-      · exact Or.inl ⟨q₀, h, (φ_extend_of_mem hq hcol hy (Finmap.mem_of_lookup_eq_some h)).symm.trans hφ₀⟩
-      · exact Or.inr ⟨(φ_extend_self hq hcol).symm.trans hφ₀, rfl⟩
-    · rintro (⟨q₀, h, hφ₀⟩ | ⟨hφ, rfl⟩)
-      · exact ⟨q₀, (lookup_extend_eq_some_iff hq).2 (Or.inl h),
-          (φ_extend_of_mem hq hcol hy (Finmap.mem_of_lookup_eq_some h)).trans hφ₀⟩
-      · exact ⟨q, DB.lookup_extend_self, (φ_extend_self hq hcol).trans hφ⟩
-  refine Finmap.ext_lookup fun q' => Option.ext fun y' => ?_
-  rw [hL]
-  rcases hφ : M.φ D q with _ | q₀'
-  · simp
-  · have hf := φ_notMem_trans hq hcol hy hφ
-    simp only [lookup_extend_eq_some_iff hf, Option.some.injEq]
-    constructor
-    · rintro (h | ⟨rfl, rfl⟩)
-      · exact Or.inl h
-      · exact Or.inr ⟨rfl, rfl⟩
-    · rintro (h | ⟨rfl, rfl⟩)
-      · exact Or.inl h
-      · exact Or.inr ⟨rfl, rfl⟩
-
-end ResolveExtend
-
-/-! ### Collisions and digests of the translated database -/
-
-section Digests
-
-variable {M} {D : ODB k kN kS L e}
-
-/-- **The translated database has no digest collision** when `D` has none: its answers are
-answers of `D` at distinct queries. -/
-theorem trans_notMem_digestCollision (hD : D ∉ digestCollision) : M.trans D ∉ digestCollision := by
-  rintro ⟨q₁, h₁, q₂, h₂, hne, heq⟩
-  obtain ⟨y₁, hy₁⟩ := Finmap.mem_iff.1 h₁
-  obtain ⟨y₂, hy₂⟩ := Finmap.mem_iff.1 h₂
-  obtain ⟨p₁, hp₁, hφ₁⟩ := (DB.lookup_image_eq_some_iff (injOnKeys_φ hD)).1 hy₁
-  obtain ⟨p₂, hp₂, hφ₂⟩ := (DB.lookup_image_eq_some_iff (injOnKeys_φ hD)).1 hy₂
-  rw [hy₁, hy₂] at heq
-  refine hD ⟨p₁, Finmap.mem_of_lookup_eq_some hp₁, p₂, Finmap.mem_of_lookup_eq_some hp₂,
-    fun he => hne ?_, by rw [hp₁, hp₂]; exact heq⟩
-  rw [he] at hφ₁
-  exact Option.some_inj.1 (hφ₁.symm.trans hφ₂)
-
-/-- The item digests of a chain of a content are among the content's. -/
-theorem chainDigests_subset_itemDigests {c : M.MContent} (q : t.Leaf) :
-    chainDigests ((M.comp q.label).roots) (c.chains q) ⊆ c.itemDigests (fun j => (M.comp j).roots) := by
-  rcases c with ⟨ss, p, chs, ds, own⟩ | ⟨ss, s, chs, ds⟩
-  · simp only [Content.itemDigests, Content.chains]
-    exact (Finset.subset_biUnion_of_mem (fun q : t.Leaf => chainDigests ((M.comp q.label).roots) (chs q))
-      (Finset.mem_univ q)).trans Finset.subset_union_left
-  · simp only [Content.itemDigests, Content.chains]
-    exact Finset.subset_biUnion_of_mem (fun q : t.Leaf => chainDigests ((M.comp q.label).roots) (chs q))
-      (Finset.mem_univ q)
-
-/-- **A resolved branch's chains carry digests of a recorded input.** -/
-theorem chainDigests_of_resolveSink (hD : D ∉ digestCollision) {ss : SaltedStatement kS X}
-    {chs : M.Chains} {ds : Mg.Site → Digest k} {s : Mg.Site} {chs' : M.Chains}
-    (h : M.resolveSink D ss chs ds s = some chs') (q : t.Leaf) :
-    chainDigests ((M.comp q.label).roots) (chs' q) ⊆ halfPre M.senc.digestsOf D := by
-  obtain ⟨⟨a, ha, -⟩, ss', ds', hdec⟩ := resolveSink_spec hD h
-  have hwf := M.senc.wf_of_decode _ _ hdec
-  have he := M.senc.encode_decode _ _ hdec
-  refine (chainDigests_subset_itemDigests (c := .final ss' s chs' ds') q).trans fun u hu => ?_
-  have hu' := M.senc.digest_mem _ hwf hu
-  rw [he] at hu'
-  exact mem_halfPre_of_transcript (Finmap.mem_of_lookup_eq_some ha) hu'
-
-/-- **The digests of a translated content** are those of the recorded inputs it reads and of its
-own items. -/
-theorem digests_fullChain_subset (hD : D ∉ digestCollision) {c : M.MContent}
-    {ss : SaltedStatement kS X}
-    {ch : CausalChain t k fun j => (M.comp j).W} (h : M.fullChain D c = some (ss, ch)) :
-    ch.digests (fun j => (M.comp j).roots) ⊆
-      halfPre M.senc.digestsOf D ∪ c.itemDigests (fun j => (M.comp j).roots) := by
-  rcases c with ⟨ss', p, chs, ds, own⟩ | ⟨ss', s, chs, ds⟩
-  · obtain ⟨F, hF, he⟩ := fullChain_round h
-    obtain ⟨-, rfl⟩ := Prod.mk.inj he
-    obtain ⟨R, hR, rfl⟩ := pastChains_spec hF
-    intro u hu
-    simp only [CausalChain.digests, Base.content, Finset.mem_union, Finset.mem_biUnion,
-      Finset.mem_univ, true_and] at hu
-    rcases hu with ⟨q, hq⟩ | hu
-    · unfold Base.chainsOf at hq
-      split_ifs at hq with hb
-      · dsimp only at hq
-        have hb' : (Merges.Obs.leaf p : Mg.Obs).Sees q := hb
-        by_cases hv : (Merges.Obs.leaf p : Mg.Obs).Visible q
-        · rw [Merges.Obs.fill_of_visible hv] at hq
-          exact Finset.mem_union_right _
-            (chainDigests_subset_itemDigests (c := .round ss' p chs ds own) q hq)
-        · obtain ⟨s, hs, hm⟩ := Merges.Obs.exists_hides_of_sees hb' hv
-          rw [Merges.Obs.fill_of_hides hs hm] at hq
-          exact Finset.mem_union_left _ (chainDigests_of_resolveSink hD (hR s hs) q hq)
-      · simp [chainDigests] at hq
-    · refine Finset.mem_union_right _ ?_
-      simp only [Content.itemDigests]
-      exact Finset.mem_union_right _ hu
-  · exact absurd h (by simp [fullChain])
-
-/-- **The digests of a translated query** are among those of the recorded inputs and of the
-query itself. -/
-theorem digests_φ_subset (hD : D ∉ digestCollision) {q q' : Query k kN kS L}
-    (hφ : M.φ D q = some q') :
-    q'.digests M.enc.digestsOf ⊆ halfPre M.senc.digestsOf D ∪ q.digests M.senc.digestsOf := by
-  cases q with
-  | leaf a b =>
-    obtain rfl := Option.some_inj.1 hφ
-    exact Finset.subset_union_right
-  | node l r =>
-    obtain rfl := Option.some_inj.1 hφ
-    exact Finset.subset_union_right
-  | xof u s =>
-    obtain rfl := Option.some_inj.1 hφ
-    exact Finset.subset_union_right
-  | transcript b =>
-    obtain ⟨c, ss, ch, hc, hf, rfl⟩ := φ_transcript_eq_some hφ
-    have hwc := M.senc.wf_of_decode b c hc
-    have hwf := wf_fullChain hD hwc hf
-    intro u hu
-    have hu' := digests_fullChain_subset hD hf (M.enc_digests_subset ss ch hwf hu)
-    rcases Finset.mem_union.1 hu' with h | h
-    · exact Finset.mem_union_left _ h
-    · refine Finset.mem_union_right _ ?_
-      show u ∈ M.senc.digestsOf b
-      rw [← M.senc.encode_decode b c hc]
-      exact M.senc.digest_mem c hwc h
-
-/-- **The digests of the translated database's queries** are among those of the recorded
-inputs. -/
-theorem halfPre_trans_subset (hD : D ∉ digestCollision) :
-    halfPre M.enc.digestsOf (M.trans D) ⊆ halfPre M.senc.digestsOf D := by
-  intro u hu
-  obtain ⟨q', hq', hu'⟩ := mem_halfPre.1 hu
-  obtain ⟨q, hq, hφ⟩ := (DB.mem_image_iff (injOnKeys_φ hD)).1 hq'
-  rcases Finset.mem_union.1 (digests_φ_subset hD hφ hu') with h | h
-  · exact h
-  · exact mem_halfPre.2 ⟨q, hq, h⟩
-
-end Digests
-
-/-! ### The instability bound with merges -/
-
-section Instability
-
-variable {Wit : Type} (rel : Set (X × Wit)) (E : CausalExtractor P t X Wit)
-  (St : CausalStateFn P t X)
-
-theorem trans_empty : M.trans (∅ : ODB k kN kS L e) = ∅ := by
-  refine Finmap.ext_lookup fun q' => ?_
-  rw [trans, DB.lookup_image, Finmap.lookup_empty]
-  exact DB.select_eq_none_of_forall fun q y hq => by simp [Finmap.lookup_empty] at hq
-
-/-- **The bad databases with merges**: those whose translation lies in `badAny` of the compiler
-over the term (paper `lem:sse-instability`, the knowledge failures read through the final
-digests). -/
-def bad : Set (ODB k kN kS L e) := {D | M.trans D ∈ M.toFullPast.badAny rel E St}
-
-theorem empty_notMem_bad : (∅ : ODB k kN kS L e) ∉ M.bad rel E St := by
-  show M.trans ∅ ∉ _
-  rw [trans_empty]
-  exact M.toFullPast.empty_notMem_badAny rel E St
-
-variable [∀ j i, Nonempty ((P j).Challenge i)] {ε : ChIdx P t → NNReal}
+variable [∀ j i, Nonempty ((P j).Challenge i)] {ε : ChIdx P t → ℝ≥0}
   {claim : X → Prop} {claimOut : X → FullTr P t → Prop}
 
+/-- **The `xof` case of the flip bound**: by the round-by-round bound of the unique challenge
+and past, `Pr[nextBad] ≤ ε c ≤ max_c ε c`. -/
+theorem prob_nextBad_le (hcol : D ∉ digestCollision) (hrbr : CausalRBR rel E S ε claim claimOut) :
+    Pr[y ← Out k e : M.nextBad rel E S D q y] ≤ maxError ε := by
+  by_cases hex : ∃ (ss : SaltedStatement kS X) (c : ChIdx P t) (chs : M.Chains)
+      (l : M.Items c.leaf) (past : CausalPast P c) (a : Out k e), M.ChainsFull chs c.leaf ∧
+      l.length = c.idx.1 ∧ M.extPast D ss chs c l = some past ∧
+      M.keyD D ss chs c.leaf l = some a ∧ q = .xof a.digest ss.salt
+  · obtain ⟨ss₀, c₀, chs₀, l₀, past₀, a₀, hf₀, hl₀, hp₀, ha₀, hq₀⟩ := hex
+    let A : Set c₀.Challenge :=
+      {ch | (ss₀.stmt, E c₀ ss₀.stmt past₀) ∉ rel ∧ FlipAt S c₀ ss₀.stmt past₀ ch}
+    calc Pr[y ← Out k e : M.nextBad rel E S D q y]
+        ≤ Pr[y ← Out k e : ∃ ch ∈ A, ((M.comp c₀.leaf.label).sampler c₀.idx).sample y.stream =
+            some ch] := by
+          refine QROM.probUniform_mono fun y hy => ?_
+          obtain ⟨ss, c, chs, l, past, a, ch, hf, hl, hp, ha, hq, hc, hflip⟩ := hy
+          obtain ⟨hx, rfl, hpp⟩ := nextBad_unique hcol hf hf₀ hl hl₀ hp hp₀ ha ha₀ hq hq₀
+          obtain rfl := eq_of_heq hpp
+          rw [hx] at hflip
+          exact ⟨ch, ⟨hflip.extract_fails, hflip.flip⟩, hc⟩
+      _ ≤ Pr[ch ← c₀.Challenge : ch ∈ A] := ((M.comp c₀.leaf.label).sampler c₀.idx).prob_mem_le A
+      _ ≤ ε c₀ := hrbr.rbr c₀ ss₀.stmt past₀
+      _ ≤ maxError ε := by exact_mod_cast le_maxError ε c₀
+  · refine le_of_eq_of_le (probUniform_eq_zero fun y hy => hex ?_) zero_le
+    obtain ⟨ss, c, chs, l, past, a, ch, hf, hl, hp, ha, hq, -⟩ := hy
+    exact ⟨ss, c, chs, l, past, a, hf, hl, hp, ha, hq⟩
+
+variable (M rel E S)
+
 /-- `flip(bad | P̄_col, t) ≤ max_c ε c + (max 2 c_in + nJ) · t / 2^(8k)`. -/
-theorem condFlip_bad_le (hrbr : CausalRBR rel E St ε claim claimOut) {tq : ℕ} :
-    condFlip (M.bad rel E St) digestCollisionᶜ tq ≤
+theorem condFlip_bad_le (hrbr : CausalRBR rel E S ε claim claimOut) {tq : ℕ} :
+    condFlip (M.bad rel E S) digestCollisionᶜ tq ≤
       maxError ε + (((max 2 M.senc.digestsPerInput + Mg.nJ) * tq : ℕ) : ENNReal) /
         2 ^ (8 * k) := by
   refine flipProb_le fun D hD hs q hq => ?_
   obtain ⟨hDb, hDc⟩ := hD
   have hDc' : D ∉ digestCollision := hDc
-  set A := M.pend D q ∪ (halfPre M.senc.digestsOf D ∪ q.digests M.senc.digestsOf) with hA
-  calc Pr[y ← Out k e : D.extend q y ∈ M.bad rel E St ∩ digestCollisionᶜ]
-      ≤ Pr[y ← Out k e : y.digest ∈ A ∨
-          ∃ q', M.φ D q = some q' ∧ M.toFullPast.nextBad rel E St (M.trans D) q' y] := by
-        refine QROM.probUniform_mono fun y hy => ?_
-        obtain ⟨hyb, hyc⟩ := hy
-        by_cases hyA : y.digest ∈ A
-        · exact Or.inl hyA
-        right
-        have hyp : y.digest ∉ M.pend D q := fun h => hyA (Finset.mem_union_left _ h)
-        have hext := trans_extend hq hyc hyp
-        rcases hφ : M.φ D q with _ | q'
-        · simp only [hφ] at hext
-          exact absurd (show M.trans D ∈ M.toFullPast.badAny rel E St by rw [← hext]; exact hyb) hDb
-        · simp only [hφ] at hext
-          refine ⟨q', rfl, ?_⟩
-          have hcol' : (M.trans D).extend q' y ∉ digestCollision := by
-            rw [← hext]
-            exact trans_notMem_digestCollision hyc
-          rcases M.toFullPast.flip_into_bad rel E St hDb (φ_notMem_trans hq hyc hyp hφ) hcol'
-              (by rw [← hext]; exact hyb) with h | h
-          · exfalso
-            apply hyA
-            rcases Finset.mem_union.1 h with h | h
-            · exact Finset.mem_union_right _ (Finset.mem_union_left _ (halfPre_trans_subset hDc' h))
-            · exact Finset.mem_union_right _ (digests_φ_subset hDc' hφ h)
-          · exact h
-    _ ≤ Pr[y ← Out k e : y.digest ∈ A] +
-          Pr[y ← Out k e : ∃ q', M.φ D q = some q' ∧ M.toFullPast.nextBad rel E St (M.trans D) q' y] :=
+  set A := halfPre M.senc.digestsOf D ∪ q.digests M.senc.digestsOf ∪ M.pend D q with hA
+  calc Pr[y ← Out k e : D.extend q y ∈ M.bad rel E S ∩ digestCollisionᶜ]
+      ≤ Pr[y ← Out k e : y.digest ∈ A ∨ M.nextBad rel E S D q y] :=
+        QROM.probUniform_mono fun y hy => flip_into_bad hDb hq hy.2 hy.1
+    _ ≤ Pr[y ← Out k e : y.digest ∈ A] + Pr[y ← Out k e : M.nextBad rel E S D q y] :=
         probUniform_or_le _ _
     _ ≤ (((max 2 M.senc.digestsPerInput + Mg.nJ) * tq : ℕ) : ENNReal) / 2 ^ (8 * k) +
           maxError ε := by
@@ -406,90 +227,63 @@ theorem condFlip_bad_le (hrbr : CausalRBR rel E St ε claim claimOut) {tq : ℕ}
           have h1 := M.card_pend_le D q
           have h2 := card_halfPre_union_le (digestsOf := M.senc.digestsOf) (D := D) (q := q)
             M.senc.card_digestsOf_le
-          have h3 : (A.card : ℕ) ≤ Mg.nJ * D.size + max 2 M.senc.digestsPerInput * (D.size + 1) :=
-            (Finset.card_union_le _ _).trans (Nat.add_le_add h1 h2)
-          have h4 : Mg.nJ * D.size + max 2 M.senc.digestsPerInput * (D.size + 1) ≤
+          have h3 : (A.card : ℕ) ≤ max 2 M.senc.digestsPerInput * (D.size + 1) + Mg.nJ * D.size :=
+            (Finset.card_union_le _ _).trans (Nat.add_le_add h2 h1)
+          have h4 : max 2 M.senc.digestsPerInput * (D.size + 1) + Mg.nJ * D.size ≤
               (max 2 M.senc.digestsPerInput + Mg.nJ) * tq := by
             have hs1 : D.size + 1 ≤ tq := hs
-            calc Mg.nJ * D.size + max 2 M.senc.digestsPerInput * (D.size + 1)
-                ≤ Mg.nJ * tq + max 2 M.senc.digestsPerInput * tq :=
-                  Nat.add_le_add (Nat.mul_le_mul_left _ (by omega)) (Nat.mul_le_mul_left _ hs1)
+            calc max 2 M.senc.digestsPerInput * (D.size + 1) + Mg.nJ * D.size
+                ≤ max 2 M.senc.digestsPerInput * tq + Mg.nJ * tq :=
+                  Nat.add_le_add (Nat.mul_le_mul_left _ hs1) (Nat.mul_le_mul_left _ (by omega))
               _ = _ := by ring
           exact_mod_cast h3.trans h4
-        · rcases hφ : M.φ D q with _ | q'
-          · exact le_of_eq_of_le (probUniform_eq_zero fun y ⟨q', h, _⟩ => by cases h) zero_le
-          · refine (QROM.probUniform_mono (E' := fun y => M.toFullPast.nextBad rel E St (M.trans D) q' y)
-              fun y ⟨q'', h, hb⟩ => ?_).trans
-              (M.toFullPast.prob_nextBad_le rel E St (q := q') (trans_notMem_digestCollision (M := M) hDc') hrbr)
-            obtain rfl := Option.some_inj.1 h
-            exact hb
+        · exact prob_nextBad_le hDc' hrbr
     _ = _ := add_comm _ _
 
 omit [∀ j i, Nonempty ((P j).Challenge i)] in
 /-- `flip(complement of bad | P̄_col, t) ≤ (max 2 c_in + nJ) · t / 2^(8k)`. -/
 theorem condFlip_compl_bad_le {tq : ℕ} :
-    condFlip (M.bad rel E St)ᶜ digestCollisionᶜ tq ≤
+    condFlip (M.bad rel E S)ᶜ digestCollisionᶜ tq ≤
       (((max 2 M.senc.digestsPerInput + Mg.nJ) * tq : ℕ) : ENNReal) / 2 ^ (8 * k) := by
   refine flipProb_le fun D hD hs q hq => ?_
   rw [compl_compl] at hD
   obtain ⟨hDb, hDc⟩ := hD
-  have hDc' : D ∉ digestCollision := hDc
-  calc Pr[y ← Out k e : D.extend q y ∈ (M.bad rel E St)ᶜ ∩ digestCollisionᶜ]
-      ≤ Pr[y ← Out k e : y.digest ∈ M.pend D q ∪ halfPre M.senc.digestsOf D] := by
-        refine QROM.probUniform_mono fun y hy => ?_
-        obtain ⟨hyb, hyc⟩ := hy
-        by_cases hyp : y.digest ∈ M.pend D q
-        · exact Finset.mem_union_left _ hyp
-        refine Finset.mem_union_right _ ?_
-        have hext := trans_extend hq hyc hyp
-        rcases hφ : M.φ D q with _ | q'
-        · simp only [hφ] at hext
-          exact absurd (show M.trans (D.extend q y) ∈ M.toFullPast.badAny rel E St by rw [hext]; exact hDb) hyb
-        · simp only [hφ] at hext
-          have hcol' : (M.trans D).extend q' y ∉ digestCollision := by
-            rw [← hext]
-            exact trans_notMem_digestCollision hyc
-          exact halfPre_trans_subset hDc' (M.toFullPast.flip_out_of_bad rel E St hDb
-            (φ_notMem_trans hq hyc hyp hφ) hcol' (by rw [← hext]; exact hyb))
+  calc Pr[y ← Out k e : D.extend q y ∈ (M.bad rel E S)ᶜ ∩ digestCollisionᶜ]
+      ≤ Pr[y ← Out k e : y.digest ∈ halfPre M.senc.digestsOf D] :=
+        QROM.probUniform_mono fun y hy => flip_out_of_bad hDb hq hy.2 hy.1
     _ ≤ _ := by
         rw [Out.probUniform_digest_mem]
         gcongr
-        have h1 := M.card_pend_le D q
         have h2 := card_halfPre_le (digestsOf := M.senc.digestsOf) (D := D) M.senc.card_digestsOf_le
-        have h3 := (Finset.card_union_le (M.pend D q) (halfPre M.senc.digestsOf D)).trans
-          (Nat.add_le_add h1 h2)
-        have h4 : Mg.nJ * D.size + max 2 M.senc.digestsPerInput * D.size ≤
+        have h4 : max 2 M.senc.digestsPerInput * D.size ≤
             (max 2 M.senc.digestsPerInput + Mg.nJ) * tq := by
           have hs1 : D.size ≤ tq := hs.le
-          calc Mg.nJ * D.size + max 2 M.senc.digestsPerInput * D.size
-              ≤ Mg.nJ * tq + max 2 M.senc.digestsPerInput * tq :=
-                Nat.add_le_add (Nat.mul_le_mul_left _ hs1) (Nat.mul_le_mul_left _ hs1)
-            _ = _ := by ring
-        exact_mod_cast h3.trans h4
+          calc max 2 M.senc.digestsPerInput * D.size
+              ≤ (max 2 M.senc.digestsPerInput + Mg.nJ) * D.size :=
+                Nat.mul_le_mul_right _ (Nat.le_add_right _ _)
+            _ ≤ _ := Nat.mul_le_mul_left _ hs1
+        exact_mod_cast h2.trans h4
 
-/-- **The instability bound with merges** (paper `lem:sse-instability`, CMS19 Proposition 8.14,
-conditional part, read through the final digests): `I(bad | P̄_col, t) ≤ max_c ε c +
-(max 2 c_in + nJ) · t / 2^(8k)`. -/
-theorem condInstab_bad_le (hrbr : CausalRBR rel E St ε claim claimOut) {tq : ℕ} :
-    condInstab (M.bad rel E St) digestCollisionᶜ tq ≤
+/-- **The instability bound** (paper `lem:sse-instability`, CMS19 Proposition 8.14, conditional
+part): `I(bad | P̄_col, t) ≤ max_c ε c + (max 2 c_in + nJ) · t / 2^(8k)`. -/
+theorem condInstab_bad_le (hrbr : CausalRBR rel E S ε claim claimOut) {tq : ℕ} :
+    condInstab (M.bad rel E S) digestCollisionᶜ tq ≤
       maxError ε + (((max 2 M.senc.digestsPerInput + Mg.nJ) * tq : ℕ) : ENNReal) /
         2 ^ (8 * k) :=
-  max_le (M.condFlip_bad_le rel E St hrbr) ((M.condFlip_compl_bad_le rel E St).trans le_add_self)
+  max_le (M.condFlip_bad_le rel E S hrbr) ((M.condFlip_compl_bad_le rel E S).trans le_add_self)
 
-/-- **The instability of the bad set with merges** (paper `lem:sse-instability`): the databases
-with a digest collision or a knowledge failure, `bad ∪ digestCollision`, have instability
+/-- **The instability of the bad set** (paper `lem:sse-instability`): the databases with a digest
+collision or a knowledge failure, `bad ∪ digestCollision`, have instability
 `I(bad ∪ digestCollision, t) ≤ max_c ε c + (max 2 c_in + nJ + 1) · t / 2^(8k)`. CMS19
 Proposition 5.12 (3), p. 24 (`instab_union_le`), splits it into the conditional bound
 `condInstab_bad_le` and the collision bound `instab_digestCollision_le`. -/
-theorem instab_bad_union_le (hrbr : CausalRBR rel E St ε claim claimOut) {tq : ℕ} :
-    instab (M.bad rel E St ∪ digestCollision) tq ≤
+theorem instab_bad_union_le (hrbr : CausalRBR rel E S ε claim claimOut) {tq : ℕ} :
+    instab (M.bad rel E S ∪ digestCollision) tq ≤
       maxError ε + (((max 2 M.senc.digestsPerInput + Mg.nJ + 1) * tq : ℕ) : ENNReal) /
         2 ^ (8 * k) :=
-  instab_union_le.trans <| (add_le_add (M.condInstab_bad_le rel E St hrbr)
+  instab_union_le.trans <| (add_le_add (M.condInstab_bad_le rel E S hrbr)
     instab_digestCollision_le).trans_eq (by
       rw [add_assoc, ENNReal.div_add_div_same, ← Nat.cast_add, add_mul _ 1, one_mul])
-
-end Instability
 
 end
 

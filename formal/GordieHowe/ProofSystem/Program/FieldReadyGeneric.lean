@@ -104,27 +104,22 @@ theorem placeOkB_mono {Pk Pk' : (I (ir.domainField d)).Packing} {es : List Packi
     (ht : TreeOk es Pk.n) (h : ir.placeOkB d Pk es = true) (hn : Pk.n = Pk'.n)
     (hdeg : ∀ s m, m ∣ Pk.n → Pk.nodeDeg s = some m → Pk'.nodeDeg s = some m) :
     ir.placeOkB d Pk' es = true := by
-  simp only [placeOkB, List.all_eq_true] at h ⊢
+  rw [placeOkB_eq, List.all_eq_true] at h ⊢
   intro k hk
   have hk' := h k hk
   cases hs : ir.cellName k with
   | none => rfl
   | some s =>
     rw [hs] at hk'
-    cases ha : ir.cellNode es k with
-    | none =>
-      simp only [ha, beq_iff_eq] at hk' ⊢
-      rw [← hn]
-      exact hdeg s Pk.n dvd_rfl hk'
-    | some a =>
-      simp only [ha, beq_iff_eq] at hk' ⊢
-      have hal : a < es.length := by
-        rw [cellNode, hs] at ha
-        exact nodeIdx_lt ha
-      have hget : es.getD a noEdge = es[a] := by
-        rw [List.getD_eq_getElem _ _ hal]
-      rw [hget] at hk' ⊢
-      exact hdeg s _ (ht.childDegree_dvd hal) hk'
+    dsimp only
+    unfold nodeDegB at hk' ⊢
+    simp only [Bool.and_eq_true, List.all_eq_true, Bool.or_eq_true, bne_iff_ne, ne_eq,
+      beq_iff_eq] at hk' ⊢
+    refine ⟨fun e he => (hk'.1 e he).imp id fun hd => ?_, hk'.2.imp id fun hd => ?_⟩
+    · obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem he
+      exact hdeg s _ (ht.childDegree_dvd hi) hd
+    · rw [← hn]
+      exact hdeg s Pk.n dvd_rfl hd
 
 /-- **The batch check is monotone in the skip domains.** -/
 theorem batchesOkB_mono {Pk Pk' : (I (ir.domainField d)).Packing}

@@ -1,7 +1,8 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 
-// GordieHowe: the Falcon-512 proof of possession, native arm. It proves
+// GordieHowe: the Falcon proof of possession of a parameter set S
+// (falcon_params.h), native arm. It proves
 // the emulated arm's statement (falcon_emulated.h): the prover holds a
 // nonce, a message and a signature s2 that verify under the public key h.
 // Domain H computes c = HashToPoint(nonce || message) (falcon_hash.h), and
@@ -17,6 +18,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "gordiehowe/core.h"
@@ -35,9 +37,10 @@ namespace proofs::gordiehowe::examples::falcon::native {
 
 // ------------------------------------------------------------ parameters --
 
-using examples::falcon::kBetaSq;
-using examples::falcon::kHighBudget;
-using examples::falcon::kN;
+using examples::falcon::Falcon1024;
+using examples::falcon::Falcon512;
+using examples::falcon::FalconStatement;
+using examples::falcon::FalconWitness;
 using examples::falcon::kNonceBytes;
 using examples::falcon::kQ;
 // The digit base of every range request: the norm's B, the MAC's table.
@@ -61,15 +64,15 @@ using examples::falcon::emulated::host::words_of_bits;
 // mod q (advice), and s1 + h s2 = c (mod q) with h given by its NTT
 // coordinates (the key), as assert_mod at m = q: one affine row per
 // coefficient, no quotient. Returns s1.
-template <class D, class AF>
+template <class S, class D, class AF>
 Ref<AF, Subfield<>, Committed> signature_relation(
     const Scope &s, D &A, const Ref<AF, Subfield<>, Public> &key,
     const Ref<AF, Bit, Committed> &c_A,
     const Ref<AF, Subfield<>, Committed> &s2) {
   using U64s = std::vector<uint64_t>;
-  const U64s z = falcon_ntt_zetas(kN, kQ);
+  const U64s z = falcon_ntt_zetas(S::kN, kQ);
   const auto s1 = s[A].priv(
-      Subfield{}, "s1", kN, depends_on(key, c_A, s2),
+      Subfield{}, "s1", S::kN, depends_on(key, c_A, s2),
       [z](const U64s &k, const Tensor<uint64_t> &c, const U64s &s2v) {
         return host::s1_of(k, host::words_of_bits(c), s2v, z);
       });
@@ -78,23 +81,23 @@ Ref<AF, Subfield<>, Committed> signature_relation(
   return s1;
 }
 
-// The norm of (s1, s2) (norm.h, assert_norm_native at P's parameters), in
-// scope "norm". Returns its trace, which the encoding reads.
-template <class P, class D, class AF>
+// The norm of (s1, s2) (norm.h, assert_norm_native at P's parameters and
+// S's bound), in scope "norm". Returns its trace, which the encoding reads.
+template <class P, class S, class D, class AF>
 lib::arith::NativeNormTrace<AF> norm(const Scope &s, D &A,
                          const Ref<AF, Subfield<>, Committed> &s1,
                          const Ref<AF, Subfield<>, Committed> &s2) {
-  return lib::arith::assert_norm_native(s, A, s1.concat(s2), native_norm<P>(),
+  return lib::arith::assert_norm_native(s, A, s1.concat(s2), native_norm<P, S>(),
                                         "norm");
 }
 
 // The encoding budget of s2 (norm.h, assert_encodable_native), in scope
 // "encoding": each top digit slot below 16, the parity bit of the second
 // digit, and sum high <= J.
-template <class D, class AF>
+template <class S, class D, class AF>
 void encoding_budget(const Scope &s, D &A,
                      const lib::arith::NativeNormTrace<AF> &t) {
-  lib::arith::assert_encodable_native(s, A, t, kHighBudget, "encoding");
+  lib::arith::assert_encodable_native(s, A, t, S::kHighBudget, "encoding");
 }
 
 // ---------------------------------------------------------------- system --
@@ -102,11 +105,11 @@ void encoding_budget(const Scope &s, D &A,
 // The relation over the statement ST and the witness W. The norm is
 // declared before the encoding budget, so its range requests come first;
 // the MAC lowering's come last.
-template <class P>
+template <class P, class S>
 void falcon_native_relation(typename Env<P>::Sys &cs, const Env<P> &env,
-                            FalconStatement<In> st, FalconWitness<In> w,
+                            FalconStatement<S, In> st, FalconWitness<S, In> w,
                             size_t max_bytes) {
-  const auto hash = examples::falcon::falcon_hash_domain(
+  const auto hash = examples::falcon::falcon_hash_domain<S>(
       cs, domain_profile<P>(env.hf, env.rsh), w.nonce, w.message,
       w.msg_length, max_bytes);
   auto &A = cs.domain(domain_profile<P>(env.af, env.rsa), "A");
@@ -114,24 +117,26 @@ void falcon_native_relation(typename Env<P>::Sys &cs, const Env<P> &env,
   const auto c_A =
       examples::falcon::emulated::crossing(cs.scope("crossing"), A, hash.c_H);
   const auto s2 = A.priv(Subfield{}, w.s2);
-  const auto s1 = signature_relation(cs.scope("signature"), A, key, c_A, s2);
-  const auto trace = norm<P>(cs, A, s1, s2);
-  encoding_budget(cs, A, trace);
+  const auto s1 =
+      signature_relation<S>(cs.scope("signature"), A, key, c_A, s2);
+  const auto trace = norm<P, S>(cs, A, s1, s2);
+  encoding_budget<S>(cs, A, trace);
 }
 
-// The relation for messages of at most MAX_BYTES bytes, compiled under
-// BUILD.
-template <class P>
-Relation<FalconStatement<Value>, FalconWitness<Value>> falcon_native(
+// The relation of set S for messages of at most MAX_BYTES bytes, compiled
+// under BUILD, named <S::kTag>-native-possession.
+template <class P, class S = Falcon512>
+Relation<FalconStatement<S, Value>, FalconWitness<S, Value>> falcon_native(
     const Env<P> &env, size_t max_bytes, const BuildOptions &build = {}) {
-  return compile<FalconStatement, FalconWitness>(
+  using I = examples::falcon::FalconInputs<S>;
+  return compile<I::template Statement, I::template Witness>(
       build.profile(compile_profile<P>()),
-      [&env, max_bytes](typename Env<P>::Sys &cs, FalconStatement<In> st,
-                        FalconWitness<In> w) {
-        falcon_native_relation<P>(cs, env, st, w, max_bytes);
+      [&env, max_bytes](typename Env<P>::Sys &cs, FalconStatement<S, In> st,
+                        FalconWitness<S, In> w) {
+        falcon_native_relation<P, S>(cs, env, st, w, max_bytes);
       },
-      "falcon-native-possession", FalconStatement<Value>{},
-      falcon_witness_shape(max_bytes), build.compile);
+      std::string(S::kTag) + "-native-possession", FalconStatement<S, Value>{},
+      examples::falcon::falcon_witness_shape<S>(max_bytes), build.compile);
 }
 
 }  // namespace proofs::gordiehowe::examples::falcon::native

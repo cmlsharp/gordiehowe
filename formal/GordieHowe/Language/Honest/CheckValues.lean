@@ -4,6 +4,9 @@
 module
 
 public import GordieHowe.Language.Honest.Check
+public import GordieHowe.Language.Completeness.Bound
+public import GordieHowe.Language.RealizedProgram.StructureCheck
+public import GordieHoweNative.Language.Honest.CheckValues
 
 @[expose] public section
 
@@ -20,6 +23,14 @@ through the lemma.
 The value checks on value `v` (`cellV`, `realTypeV`, …) are those of
 `GordieHowe/Language/Honest/Check.lean` with `ir.value v` the visited value `x`, each with its
 equation.
+
+A value bound to its digits names the lookup whose record it is in the structure records
+(`Structure.boundRecs`, read through the table `Structure.boundRecTab`); `boundRecsVE` checks the
+lookup at that pointer (`boundRecAtT`) and reports the value it refuses, and `boundRecsV` is its
+verdict (`boundRecsV_sound`).
+
+The definitions are in `GordieHoweNative/Language/Honest/CheckValues.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -40,61 +51,9 @@ theorem allIdx_iff_all_range {P : ℕ → Value → Bool} {Q : ℕ → Bool}
   rw [allIdx_values_iff]
   simp [List.all_eq_true, h]
 
-/-- `isCellValue d v`, on value `v`. -/
-def cellValueV (d : ℕ) (x : Value) : Bool :=
-  x.domain == d &&
-    match x.kind with
-    | .priv => true
-    | .padCopy _ _ => true
-    | _ => false
-
-/-- `isLateOf d v`, on value `v`. -/
-def lateOfV (d : ℕ) (x : Value) : Bool := x.field.isNone && x.domain == d && ir.isLateV x
-
 theorem isLateOf_eq (d v : ℕ) : ir.isLateOf d v = ir.lateOfV d (ir.value v) := by
   rw [lateOfV, isLateV_eq]
   rfl
-
-/-- `padNatB L v`, on value `v`. -/
-def padNatV (L : List (ℕ × String)) (x : Value) : Bool :=
-  match x.padSpace with
-  | .full => true
-  | .node S => L.contains (ir.fieldOfV x, S)
-
-/-- `natTypedInB L v`, on value `v`. -/
-def natTypedV (L : List (ℕ × String)) (x : Value) : Bool :=
-  match x.type with
-  | .field => true
-  | .sub E => L.contains (ir.fieldOfV x, E)
-  | .bit => false
-
-/-- `latePadTypeB v`, on value `v`. -/
-def latePadTypeV (x : Value) : Bool :=
-  match x.padSpace, x.type with
-  | .full, _ => true
-  | .node E', .sub E => E == E'
-  | .node _, _ => false
-
-/-- `cellNodeB v`, on value `v`. -/
-def cellNodeV (x : Value) : Bool :=
-  match x.node with
-  | some nr => !decide (x.role = .source) || (x.type == .sub nr.name || x.type == .bit ||
-      (x.type == .field && nr.name == (ir.field (ir.domainField x.domain)).name))
-  | none => false
-
-/-- `cellNodeInB L v`, on value `v`. -/
-def cellNodeInV (L : List (ℕ × String)) (x : Value) : Bool :=
-  match x.node with
-  | some nr => L.contains (ir.domainField x.domain, nr.name)
-  | none => false
-
-/-- `privCellB v`, on value `v`. -/
-def privCellV (v : ℕ) (x : Value) : Bool :=
-  (match x.kind with
-    | .priv => true
-    | _ => false) &&
-    decide (v < ir.values.length) && decide (x.domain < ir.domains.length) &&
-    cellValueV x.domain x
 
 /-- `noLateReadB v`, through the tables. -/
 def noLateReadT (v : ℕ) : Bool :=
@@ -104,54 +63,38 @@ def noLateReadT (v : ℕ) : Bool :=
     | _ => true
 
 theorem noLateReadT_eq (v : ℕ) : ir.noLateReadT v = ir.noLateReadB v := by
-  unfold noLateReadT noLateReadB
+  rw [noLateReadT, noLateReadB_eq]
   congr 1
   funext r
   cases r <;> simp [valueT_eq, isLateV_eq]
 
 /-! ## The values bound to their digits -/
 
-/-- `boundRecAtB v pid`, through the tables. -/
-def boundRecAtT (v pid : ℕ) : Bool :=
-  match (ir.predicateT pid).body with
-  | .mem d [rec] (.range _) (.lookup r) =>
-    (r.kind == .twoSided || r.kind == .digits) && (ir.commRecOf? pid).isNone &&
-      ir.boundDigitsOk d rec r &&
-      match rec with
-      | .leaf u => u == v
-      | .add (.leaf u) (.leaf c) =>
-        u == v && match (ir.valueT c).kind with
-          | .constant es => decide (es.length ≤ (ir.valueT v).size) &&
-              es.all (· < ir.charOf (ir.valueFieldT c))
-          | _ => false
-      | _ => false
-  | _ => false
+theorem commOfT_eq (G : Gens) (r : LookupRealization) : commOfT (toTrie G) r = G.commOf? r := by
+  unfold commOfT Gens.commOf?
+  congr 1
 
-/-- **The two-sided and digit `in`s with one record and a range**, by index. -/
-def recLookups : List ℕ :=
-  (List.range ir.predicates.length).filter fun pid =>
-    match (ir.predicateT pid).body with
-    | .mem _ [_] (.range _) (.lookup r) => r.kind == .twoSided || r.kind == .digits
-    | _ => false
+theorem boundRecAtT_eq (G : Gens) (v pid : ℕ) :
+    ir.boundRecAtT (toTrie G) v pid = ir.boundRecAtB G v pid := by
+  simp only [boundRecAtT, boundRecAtB, predicateT_eq, valueT_eq, valueFieldT_eq, commOfT_eq]
+  rfl
 
-/-- `boundRecB v`, through the tables, searched among `recLookups`. -/
-def boundRecT (v : ℕ) : Bool := ir.recLookups.any (ir.boundRecAtT v)
-
-theorem boundRecT_eq (v : ℕ) : ir.boundRecT v = ir.boundRecB v := by
-  unfold boundRecT recLookups
-  rw [any_filter_eq]
-  · unfold boundRecB
-    congr 1
-    funext pid
-    simp only [boundRecAtT, boundRecAtB, predicateT_eq, valueT_eq, valueFieldT_eq]
-    rfl
-  intro pid _ hp
-  unfold boundRecAtT
-  split
-  · rename_i d rec N r hb
-    rw [hb] at hp
-    simp [hp]
-  · rfl
+/-- **A bound value that passes `boundRecsV` is a source value and the record of a two-sided or
+digit lookup** (`BoundRecs`): the entry's pointer witnesses it. -/
+theorem boundRecsV_sound {G : Gens} {T : NatTrie ℕ} {v : ℕ}
+    (h : ir.boundRecsV (toTrie G) T v (ir.value v) = true)
+    (hb : (ir.value v).kind.isBound = true) :
+    ir.IsSourceValue v ∧ ∃ pid < ir.predicates.length, ir.boundRecAtB G v pid = true := by
+  unfold boundRecsV boundRecsVE at h
+  rw [hb] at h
+  simp only [Twin.okB_seqE, Twin.okB_guardE, Bool.and_eq_true, decide_eq_true_eq] at h
+  obtain ⟨hs, h⟩ := h
+  refine ⟨hs, ?_⟩
+  split at h
+  · rename_i pid _
+    rw [Twin.okB_guardE, boundRecAtT_eq] at h
+    exact ⟨pid, lt_of_boundRecAtB h, h⟩
+  · cases h
 
 /-! ## The value checks on a value -/
 
@@ -164,55 +107,19 @@ def typedNoLateV (v : ℕ) (x : Value) : Bool :=
 theorem typedNoLateV_eq (v : ℕ) : ir.typedNoLateV v (ir.value v) = ir.typedNoLateB v := by
   simp only [typedNoLateV, typedNoLateB, isLateV_eq, noLateReadT_eq]
 
-/-- `srcNoPadCopyB v`, on value `v`. -/
-def srcNoPadCopyV (_ : ℕ) (x : Value) : Bool := !decide (x.role = .source) || !x.kind.isPadCopy
-
 theorem srcNoPadCopyV_eq (v : ℕ) : srcNoPadCopyV v (ir.value v) = ir.srcNoPadCopyB v := rfl
 
-/-- `srcNoMessageB v`, on value `v`. -/
-def srcNoMessageV (_ : ℕ) (x : Value) : Bool := !decide (x.role = .source) || !x.kind.isMessage
-
 theorem srcNoMessageV_eq (v : ℕ) : srcNoMessageV v (ir.value v) = ir.srcNoMessageB v := rfl
-
-/-- `srcLatePadB v`, on value `v`. -/
-def srcLatePadV (_ : ℕ) (x : Value) : Bool :=
-  !decide (x.role = .source) || !ir.isLateV x || latePadTypeV x
 
 theorem srcLatePadV_eq (v : ℕ) : ir.srcLatePadV v (ir.value v) = ir.srcLatePadB v := by
   simp only [srcLatePadV, srcLatePadB, isLateV_eq]
   rfl
 
-/-- `boundRecsB v`, on value `v`. -/
-def boundRecsV (v : ℕ) (x : Value) : Bool :=
-  !x.kind.isBound || (decide (x.role = .source) && ir.boundRecT v)
-
-theorem boundRecsV_eq (v : ℕ) : ir.boundRecsV v (ir.value v) = ir.boundRecsB v := by
-  simp only [boundRecsV, boundRecsB, boundRecT_eq]
-  rfl
-
-/-- `cellB L v`, on value `v`. -/
-def cellV (_ : ℕ) (x : Value) : Bool :=
-  !cellValueV x.domain x || (ir.cellNodeV x && ir.cellNodeInV L x)
-
 theorem cellV_eq (v : ℕ) : ir.cellV L v (ir.value v) = ir.cellB L v := rfl
-
-/-- `realTypeB L v`, on value `v`. -/
-def realTypeV (v : ℕ) (x : Value) : Bool :=
-  !(x.typeSource == .node) || ir.isLateV x || decide (x.role = .source) ||
-    (ir.privCellV v x && ir.natTypedV L x)
 
 theorem realTypeV_eq (v : ℕ) : ir.realTypeV L v (ir.value v) = ir.realTypeB L v := by
   simp only [realTypeV, realTypeB, isLateV_eq]
   rfl
-
-/-- `boundNoCopyB`'s check at value `u`, on value `u`. -/
-def boundNoCopyV (_ : ℕ) (x : Value) : Bool :=
-  match x.kind with
-  | .bound e => (ir.exprNodes e).all fun w =>
-      match (ir.valueT w).kind with
-      | .padCopy _ _ => false
-      | _ => true
-  | _ => true
 
 /-! ## The value checks in one pass -/
 

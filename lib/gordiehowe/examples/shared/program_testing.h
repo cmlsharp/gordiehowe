@@ -7,7 +7,11 @@
 //   write_program   the program module DIR/<lean_program_module>.lean
 //   write_plan      the plan module DIR/<lean_plan_module>.lean, the
 //                   program module and the proof modules
-//                   (compiler/plan_proofs.h) beside it
+//                   (compiler/plan_proofs.h) beside it, and each
+//                   emitted GKR circuit's export (compiler/emit_export.h)
+//                   beside them: its binary certificate GKR/<domain>.ghc,
+//                   its Lean modules GKR/<domain>.lean and GKR/<domain>/,
+//                   and its certificate text GKR/<domain>.cert
 //   program_problems  the program's structural checks and its index maps
 //                   decoded against their explicit entries
 //   check_program   program_problems as test failures
@@ -17,12 +21,14 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "gordiehowe/compiler/emit_export.h"
 #include "gordiehowe/compiler/plan_export.h"
 #include "gordiehowe/compiler/plan_program.h"
 #include "gordiehowe/compiler/plan_proofs.h"
@@ -52,10 +58,11 @@ std::string write_program(const C &cs, const std::string &dir,
 
 // The plan export of the compiled system CS (plan_export.h), written to
 // DIR/<lean_plan_module>.lean, its realized program
-// (DIR/<lean_program_module>.lean) and its proof modules
-// (compiler::proof_modules, at the template TPL). Every text is built
-// before any file is written, so an export that throws leaves no file
-// behind. Returns the plan's path.
+// (DIR/<lean_program_module>.lean), its proof modules
+// (compiler::proof_modules, at the template TPL) and the GKR export of each
+// domain whose circuit was emitted here (compiler::emit_tables), beside the
+// plan. Every text is built before any file is written, so an export that
+// throws leaves no file behind. Returns the plan's path.
 template <class C>
 std::string write_plan(const C &cs, const std::string &dir,
                        const compiler::ExportMeta &meta,
@@ -70,7 +77,29 @@ std::string write_plan(const C &cs, const std::string &dir,
   modules.emplace_back(compiler::lean_derivs_file(dir, meta), program.derivs);
   for (const auto &mod : compiler::proof_modules(data, tpl))
     modules.emplace_back(compiler::lean_proof_file(dir, meta, mod), mod.text);
-  for (const auto &[path, text] : modules) write_module(path, text);
+  const std::filesystem::path base =
+      std::filesystem::path(modules.front().first).parent_path();
+  const std::filesystem::path gkr = base / "GKR";
+  // Each domain's certificate text (checked against its circuit).
+  for (size_t d = 0; d < cs.num_domains(); ++d) {
+    std::string cert = cs.compiled_domain(d).gkr_certificate();
+    if (cert.empty()) continue;
+    modules.emplace_back((gkr / (cs.domain(d).name + ".cert")).string(),
+                         std::move(cert));
+  }
+  // The GKR export of each emitted circuit: the binary certificate and its
+  // Lean modules.
+  for (auto &ex : compiler::emit_tables(cs, meta)) {
+    modules.emplace_back((gkr / (ex.domain + ".ghc")).string(),
+                         std::string(ex.ghc.begin(), ex.ghc.end()));
+    for (auto &[rel, text] : ex.modules)
+      modules.emplace_back((base / rel).string(), std::move(text));
+  }
+  for (const auto &[path, text] : modules) {
+    std::filesystem::create_directories(
+        std::filesystem::path(path).parent_path());
+    write_module(path, text);
+  }
   std::fprintf(stderr, "GH_DERIVS config=%s-%s predicates=%zu gaps=%zu bytes=%zu\n",
                meta.config.c_str(), meta.profile.c_str(),
                program.predicates.size(), program.deriv_gaps.size(),

@@ -3,10 +3,9 @@
 
 module
 
-public import GordieHowe.Applications.MLDSA44.Native.ROMParams.HashField
-public import GordieHowe.Applications.MLDSA44.Native.QROMParams.HashField
-public import GordieHowe.Applications.MLDSA44.Native.Fields.MLDSANative11Coords
-public import GordieHowe.Applications.MLDSA44.Native.Fields.MLDSANative6Coords
+public import GordieHowe.Applications.FieldInterps.Odd
+public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative11Coords
+public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative6Coords
 public import LatticeCrypto.MLDSA.Arithmetic
 
 @[expose] public section
@@ -18,8 +17,8 @@ The native ML-DSA programs carry domain `A` over an extension of `F_q`, `q = 838
 at the ROM parameters (`GordieHowe.RealizedProgram.fq6`), `F_q^11` at the QROM parameters
 (`GordieHowe.RealizedProgram.fq11`). The native frontend
 reads domain `A` only through the data and facts below (`GordieHowe.MLDSA44.QField`), discharged once per field:
-characteristic `q`, constants decode as casts, the integer reading is the value of the constant
-coordinate (an additive map to `F_q` taking a natural's cast to its cast), and the node `GF(p^1)`
+characteristic `q`, constants below `q` decode as casts, the integer reading is the value of the
+constant coordinate (an additive map to `F_q` taking a natural's cast to its cast), and the node `GF(p^1)`
 is the prime subfield, on which the cast of the integer reading is the element.
 -/
 
@@ -33,8 +32,8 @@ class _root_.GordieHowe.MLDSA44.QField (F0 : FieldInterp) where
   charP : CharP F0.K 8380417
   /-- The registry entry's characteristic is `q`. -/
   char_spec : F0.spec.characteristic = 8380417
-  /-- Constants decode as casts. -/
-  decode_eq : ∀ c, F0.decode c = (c : F0.K)
+  /-- Constants below `q` decode as casts. -/
+  decode_lt : ∀ c < 8380417, F0.decode c = (c : F0.K)
   /-- The constant coordinate. -/
   coord0 : F0.K →+ _root_.MLDSA.Coeff
   /-- The constant coordinate of a natural's cast is its cast. -/
@@ -85,7 +84,7 @@ open RealizedProgram (fq6 fq6Node) in
 instance : MLDSA44.QField fq6 where
   charP := inferInstanceAs (CharP MLDSANativeField6 8380417)
   char_spec := rfl
-  decode_eq _ := rfl
+  decode_lt c hc := fq6_model.decode_natCast c hc
   coord0 :=
     { toFun := fun x => mldsaNative6Coords x 0
       map_zero' := mldsaNative6Coords_zero 0
@@ -112,7 +111,7 @@ open RealizedProgram (fq11 fq11Node) in
 instance : MLDSA44.QField fq11 where
   charP := inferInstanceAs (CharP MLDSANativeField11 8380417)
   char_spec := rfl
-  decode_eq _ := rfl
+  decode_lt c hc := fq11_model.decode_natCast c hc
   coord0 :=
     { toFun := fun x => mldsaNative11Coords x 0
       map_zero' := mldsaNative11Coords_zero 0

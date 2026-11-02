@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Model.Quantum.Interactive.Adaptive
+public import GordieHowe.Model.Quantum.Interactive.AlgShape
 public import GordieHowe.Model.QROM.CircuitCount
 public import GordieHowe.Model.Quantum.Interactive.Output
 
@@ -19,7 +19,12 @@ budget is projected away. The trace-preserving form `AdaptiveIAlg.toTPKindAlg` (
 keeps that weight: such a branch moves to the **ended** value `budget + 1` of the query counter (for
 non-termination, with the adversary's workspace given by the halting operator of its Kraus map), and
 an ended branch requests at every later slot, so it makes no queries of its own. It has the
-registers of `toKindAlg`.
+registers of `toKindAlg`. Its operators are `tpOp freeze`: unfrozen (`freeze = false`, the
+default), an ended branch keeps running the adversary's Kraus map (`tpRaw`); frozen, it stays as it
+is (`aliveMask`, `endedMask`), as the relay needs. Both are trace preserving (`tpOp_tp`), and they
+have the same final state and output law on the branches that have not ended
+(`final_composeBothOut_freeze`, `outLaw_composeBothOut_freeze`), where both are the model's.
+Its shape is `AlgShape.tpKindS` of the adversary's (`toTPKindAlg_toShape`).
 
 On the branches that have not ended, the two compositions with a challenger run alike, and an ended
 branch never comes back (`intertwined_fullCircBoth`): the state of the model's composition is the
@@ -346,55 +351,296 @@ namespace AdaptiveIAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  (A : AdaptiveIAlg X Y Req Resp O)
+  {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O)
 
 /-- The adversary's registers with a query counter. -/
-abbrev CReg := DReg (A.W × Fin (A.budget + 2)) A.width X Y Req Resp
+abbrev CReg := DReg A.CntW A.width X Y Req Resp
 
-/-- **The ended value** `budget + 1` of the query counter. -/
-def ended : Fin (A.budget + 2) := Fin.last (A.budget + 1)
+/-- **The ended value** `budget + 1` of the query counter at the shape `s`. -/
+def _root_.GordieHowe.Quantum.AlgShape.ended (s : AlgShape X Y Req Resp) : Fin (s.budget + 2) :=
+  Fin.last (s.budget + 1)
 
-/-- A permutation of the workspace with its counter, on the adversary's registers. -/
-def wPerm (π : Equiv.Perm (A.W × Fin (A.budget + 2))) : Equiv.Perm A.CReg :=
-  Equiv.prodCongr (Equiv.prodCongr π (Equiv.refl _)) (Equiv.refl _)
+/-- **The ended value** `budget + 1` of the query counter (`AlgShape.ended`). -/
+abbrev ended : Fin (A.budget + 2) := shA.ended
+
+/-- A permutation of the workspace with its counter at the shape `s`, on the registers. -/
+def _root_.GordieHowe.Quantum.AlgShape.wPerm (s : AlgShape X Y Req Resp)
+    (π : Equiv.Perm (s.W × Fin (s.budget + 2))) :
+    Equiv.Perm (DReg s.CntW s.width X Y Req Resp) :=
+  Equiv.prodCongr (Equiv.prodCongr (s.cntWEquiv.permCongr.symm π) (Equiv.refl _)) (Equiv.refl _)
+
+/-- A permutation of the workspace with its counter, on the adversary's registers
+(`AlgShape.wPerm`). -/
+abbrev wPerm (π : Equiv.Perm (A.W × Fin (A.budget + 2))) : Equiv.Perm A.CReg := shA.wPerm π
+
+@[simp] theorem wPerm_apply (π : Equiv.Perm (A.W × Fin (A.budget + 2))) (w : A.W)
+    (c : Fin (A.budget + 2)) (rr : Req × Option Resp) (p : Fin A.width → X × Y) :
+    A.wPerm π (((AlgShape.CntW.mk w c), rr), p) =
+      (((AlgShape.CntW.mk (π (w, c)).1 (π (w, c)).2), rr), p) := rfl
+
+/-- The counter at the shape `s` advanced from `c < budget` to `c + 1`, `budget` sent to `0`, and
+the ended value kept. -/
+def _root_.GordieHowe.Quantum.AlgShape.rot (s : AlgShape X Y Req Resp) :
+    Equiv.Perm (Fin (s.budget + 2)) :=
+  (finRotate _).trans (Equiv.swap 0 s.ended)
 
 /-- The counter advanced from `c < budget` to `c + 1`, `budget` sent to `0`, and the ended value
-kept. -/
-def rot : Equiv.Perm (Fin (A.budget + 2)) :=
-  (finRotate _).trans (Equiv.swap 0 A.ended)
+kept (`AlgShape.rot`). -/
+abbrev rot : Equiv.Perm (Fin (A.budget + 2)) := shA.rot
 
-/-- The counter advanced on the branches whose kind is a query, the ended value kept. -/
-def tpShift : Equiv.Perm A.CReg :=
-  A.wPerm (Equiv.prodShear (Equiv.refl A.W) fun w => if A.kind w then Equiv.refl _ else A.rot)
+/-- The counter at the shape `s` advanced on the branches whose kind `kind` is a query, the ended
+value kept. -/
+def _root_.GordieHowe.Quantum.AlgShape.tpShift (s : AlgShape X Y Req Resp) (kind : s.W → Bool) :
+    Equiv.Perm (DReg s.CntW s.width X Y Req Resp) :=
+  s.wPerm (Equiv.prodShear (Equiv.refl s.W) fun w => if kind w then Equiv.refl _ else s.rot)
 
-/-- The counter values `budget` and `budget + 1` exchanged. -/
-def endSwap : Equiv.Perm A.CReg :=
-  A.wPerm (Equiv.prodCongr (Equiv.refl A.W) (Equiv.swap (Fin.castSucc (Fin.last A.budget)) A.ended))
+/-- The counter advanced on the branches whose kind is a query, the ended value kept
+(`AlgShape.tpShift` at `A`'s kind). -/
+abbrev tpShift : Equiv.Perm A.CReg := shA.tpShift A.kind
 
-/-- The adversary's Kraus map number `k`, on its registers with the counter. -/
-def cntKraus (k : StepIdx A.slots A.post) : KrausMap A.R A.CReg A.CReg :=
-  ((A.step k).tensorId (Fin (A.budget + 2))).reindex A.cntSplit.symm
+/-- The counter values `budget` and `budget + 1` exchanged, at the shape `s`. -/
+def _root_.GordieHowe.Quantum.AlgShape.endSwap (s : AlgShape X Y Req Resp) :
+    Equiv.Perm (DReg s.CntW s.width X Y Req Resp) :=
+  s.wPerm (Equiv.prodCongr (Equiv.refl s.W)
+    (Equiv.swap (Fin.castSucc (Fin.last s.budget)) s.ended))
+
+/-- The counter values `budget` and `budget + 1` exchanged (`AlgShape.endSwap`). -/
+abbrev endSwap : Equiv.Perm A.CReg := shA.endSwap
+
+@[simp] theorem tpShift_apply (w : A.W) (c : Fin (A.budget + 2)) (rr : Req × Option Resp)
+    (p : Fin A.width → X × Y) :
+    A.tpShift (((AlgShape.CntW.mk w c), rr), p) =
+      (((AlgShape.CntW.mk w (if A.kind w then c else A.rot c)), rr), p) := by
+  cases h : A.kind w <;> simp [tpShift, AlgShape.tpShift, h]
+
+@[simp] theorem tpShift_symm_apply (w : A.W) (c : Fin (A.budget + 2)) (rr : Req × Option Resp)
+    (p : Fin A.width → X × Y) :
+    A.tpShift.symm (((AlgShape.CntW.mk w c), rr), p) =
+      (((AlgShape.CntW.mk w (if A.kind w then c else A.rot.symm c)), rr), p) := by
+  rw [Equiv.symm_apply_eq]
+  cases h : A.kind w <;> simp [h]
+
+@[simp] theorem endSwap_apply (w : A.W) (c : Fin (A.budget + 2)) (rr : Req × Option Resp)
+    (p : Fin A.width → X × Y) :
+    A.endSwap (((AlgShape.CntW.mk w c), rr), p) =
+      (((AlgShape.CntW.mk w (Equiv.swap (Fin.castSucc (Fin.last A.budget)) A.ended c)), rr),
+        p) := rfl
+
+@[simp] theorem endSwap_symm_apply (w : A.W) (c : Fin (A.budget + 2)) (rr : Req × Option Resp)
+    (p : Fin A.width → X × Y) :
+    A.endSwap.symm (((AlgShape.CntW.mk w c), rr), p) =
+      (((AlgShape.CntW.mk w (Equiv.swap (Fin.castSucc (Fin.last A.budget)) A.ended c)), rr),
+        p) := rfl
+
+/-- The Kraus map number `k` of the steps `step` at the shape `s`, on the registers with the
+counter. -/
+def _root_.GordieHowe.Quantum.AlgShape.cntKraus (s : AlgShape X Y Req Resp)
+    (step : StepIdx s.slots s.post →
+      KrausMap s.R (DReg s.W s.width X Y Req Resp) (DReg s.W s.width X Y Req Resp))
+    (k : StepIdx s.slots s.post) :
+    KrausMap s.R (DReg s.CntW s.width X Y Req Resp) (DReg s.CntW s.width X Y Req Resp) :=
+  ((step k).tensorId (Fin (s.budget + 2))).reindex s.cntSplit.symm
+
+/-- The adversary's Kraus map number `k`, on its registers with the counter
+(`AlgShape.cntKraus`). -/
+abbrev cntKraus (k : StepIdx A.slots A.post) : KrausMap A.R A.CReg A.CReg := shA.cntKraus A.step k
 
 theorem toKindAlg_step (k : StepIdx A.slots A.post) :
     A.toKindAlg.step k = if (k : ℕ) < A.slots then
       ((A.cntKraus k).restrict A.inBudget).permConj (Equiv.refl _) A.cntShift
     else A.cntKraus k :=
-  rfl
+  A.toKindAlg_step_eq k
 
-/-- The operators of the trace-preserving form: at a slot, the adversary's operator within the
-budget followed by the counter advanced on query branches, and the adversary's operator on a branch
-over the budget followed by the move to the ended value; the halting operator of the adversary's
-Kraus map, ending the branch, at every counter value. -/
-noncomputable def tpOp (k : StepIdx A.slots A.post) :
-    A.R ⊕ (A.R ⊕ Fin (A.budget + 2)) → Matrix A.CReg A.CReg ℂ
-  | .inl r => if (k : ℕ) < A.slots then
-      (((A.cntKraus k).restrict A.inBudget).permConj (Equiv.refl _) A.tpShift).op r
-    else (A.cntKraus k).op r
-  | .inr (.inl r) => if (k : ℕ) < A.slots then
-      (((A.cntKraus k).restrict fun d => !A.inBudget d).permConj (Equiv.refl _) A.endSwap).op r
+/-- The operators of the trace-preserving form without freezing, at the shape `s`, for the kind
+`kind` and the steps `step` (`AdaptiveIAlg.tpRaw`). -/
+noncomputable def _root_.GordieHowe.Quantum.AlgShape.tpRaw (s : AlgShape X Y Req Resp)
+    (kind : s.W → Bool)
+    (step : StepIdx s.slots s.post →
+      KrausMap s.R (DReg s.W s.width X Y Req Resp) (DReg s.W s.width X Y Req Resp))
+    (k : StepIdx s.slots s.post) :
+    s.R ⊕ (s.R ⊕ Fin (s.budget + 2)) →
+      Matrix (DReg s.CntW s.width X Y Req Resp) (DReg s.CntW s.width X Y Req Resp) ℂ
+  | .inl r => if (k : ℕ) < s.slots then
+      (((s.cntKraus step k).restrict (s.inBudget kind)).permConj (Equiv.refl _)
+        (s.tpShift kind)).op r
+    else (s.cntKraus step k).op r
+  | .inr (.inl r) => if (k : ℕ) < s.slots then
+      (((s.cntKraus step k).restrict fun d => !s.inBudget kind d).permConj (Equiv.refl _)
+        s.endSwap).op r
     else 0
   | .inr (.inr c) =>
-      ((A.step k).haltOp ⊗ₖ Matrix.single A.ended c (1 : ℂ)).submatrix A.cntSplit A.cntSplit
+      ((step k).haltOp ⊗ₖ Matrix.single s.ended c (1 : ℂ)).submatrix s.cntSplit s.cntSplit
+
+/-- The operators of the trace-preserving form without freezing: at a slot, the adversary's operator within the
+budget followed by the counter advanced on query branches, and the adversary's operator on a branch
+over the budget followed by the move to the ended value; the halting operator of the adversary's
+Kraus map, ending the branch, at every counter value (`AlgShape.tpRaw` at `A`'s kind and
+steps). -/
+noncomputable abbrev tpRaw (k : StepIdx A.slots A.post) :
+    A.R ⊕ (A.R ⊕ Fin (A.budget + 2)) → Matrix A.CReg A.CReg ℂ :=
+  shA.tpRaw A.kind A.step k
+
+/-- The operators of the trace-preserving form without freezing on the adversary's operators,
+through `A`'s helpers. -/
+theorem tpRaw_inl (k : StepIdx A.slots A.post) (r : A.R) :
+    A.tpRaw k (.inl r) = if (k : ℕ) < A.slots then
+      (((A.cntKraus k).restrict A.inBudget).permConj (Equiv.refl _) A.tpShift).op r
+    else (A.cntKraus k).op r :=
+  rfl
+
+/-- The operators of the trace-preserving form without freezing over the budget, through `A`'s
+helpers. -/
+theorem tpRaw_inr_inl (k : StepIdx A.slots A.post) (r : A.R) :
+    A.tpRaw k (.inr (.inl r)) = if (k : ℕ) < A.slots then
+      (((A.cntKraus k).restrict fun d => !A.inBudget d).permConj (Equiv.refl _) A.endSwap).op r
+    else 0 :=
+  rfl
+
+/-- The halting operators of the trace-preserving form, through `A`'s helpers. -/
+theorem tpRaw_inr_inr (k : StepIdx A.slots A.post) (c : Fin (A.budget + 2)) :
+    A.tpRaw k (.inr (.inr c)) =
+      ((A.step k).haltOp ⊗ₖ Matrix.single A.ended c (1 : ℂ)).submatrix A.cntSplit A.cntSplit :=
+  rfl
+
+/-- The projector onto the registers at the shape `s` whose counter has not ended. -/
+noncomputable def _root_.GordieHowe.Quantum.AlgShape.aliveMask (s : AlgShape X Y Req Resp) :
+    Matrix (DReg s.CntW s.width X Y Req Resp) (DReg s.CntW s.width X Y Req Resp) ℂ :=
+  Matrix.diagonal fun x => if x.workspace.cnt = s.ended then 0 else 1
+
+/-- The projector onto the adversary's registers whose counter has not ended
+(`AlgShape.aliveMask`). -/
+noncomputable abbrev aliveMask : Matrix A.CReg A.CReg ℂ := shA.aliveMask
+
+/-- The projector onto the registers at the shape `s` whose counter has ended. -/
+noncomputable def _root_.GordieHowe.Quantum.AlgShape.endedMask (s : AlgShape X Y Req Resp) :
+    Matrix (DReg s.CntW s.width X Y Req Resp) (DReg s.CntW s.width X Y Req Resp) ℂ :=
+  Matrix.diagonal fun x => if x.workspace.cnt = s.ended then 1 else 0
+
+/-- The projector onto the adversary's registers whose counter has ended (`AlgShape.endedMask`). -/
+noncomputable abbrev endedMask : Matrix A.CReg A.CReg ℂ := shA.endedMask
+
+/-- The halting operator at the ended counter value at the shape `s`, the one the frozen form
+replaces. -/
+def _root_.GordieHowe.Quantum.AlgShape.isEndSlot (s : AlgShape X Y Req Resp) :
+    s.R ⊕ (s.R ⊕ Fin (s.budget + 2)) → Bool
+  | .inr (.inr c) => decide (c = s.ended)
+  | _ => false
+
+/-- The halting operator at the ended counter value, the one the frozen form replaces
+(`AlgShape.isEndSlot`). -/
+abbrev isEndSlot : A.R ⊕ (A.R ⊕ Fin (A.budget + 2)) → Bool := shA.isEndSlot
+
+/-- **The operators of the trace-preserving form** at the shape `s`, for the kind `kind` and the
+steps `step`, frozen or not (`AdaptiveIAlg.tpOp`). Sealed, and of the kind and the steps only; it
+unfolds through `AlgShape.tpOp_eq`. -/
+@[irreducible, no_expose] noncomputable def _root_.GordieHowe.Quantum.AlgShape.tpOp
+    (s : AlgShape X Y Req Resp) (kind : s.W → Bool)
+    (step : StepIdx s.slots s.post →
+      KrausMap s.R (DReg s.W s.width X Y Req Resp) (DReg s.W s.width X Y Req Resp))
+    (freeze : Bool) (k : StepIdx s.slots s.post) (z : s.R ⊕ (s.R ⊕ Fin (s.budget + 2))) :
+    Matrix (DReg s.CntW s.width X Y Req Resp) (DReg s.CntW s.width X Y Req Resp) ℂ :=
+  if freeze then (if s.isEndSlot z then s.endedMask else s.tpRaw kind step k z * s.aliveMask)
+  else s.tpRaw kind step k z
+
+theorem _root_.GordieHowe.Quantum.AlgShape.tpOp_eq (s : AlgShape X Y Req Resp)
+    (kind : s.W → Bool)
+    (step : StepIdx s.slots s.post →
+      KrausMap s.R (DReg s.W s.width X Y Req Resp) (DReg s.W s.width X Y Req Resp))
+    (freeze : Bool) (k : StepIdx s.slots s.post) (z : s.R ⊕ (s.R ⊕ Fin (s.budget + 2))) :
+    s.tpOp kind step freeze k z =
+      if freeze then (if s.isEndSlot z then s.endedMask else s.tpRaw kind step k z * s.aliveMask)
+      else s.tpRaw kind step k z := by
+  unfold AlgShape.tpOp; rfl
+
+/-- **The operators of the trace-preserving form**, frozen or not (`freeze`). Unfrozen, they are
+`tpRaw`: an ended branch keeps running the adversary's Kraus map. Frozen, every operator of
+`tpRaw` acts only on the branches that have not ended (`tpRaw k z * aliveMask`), and the halting
+operator at the ended counter value is replaced by the identity on the ended branches
+(`endedMask`): an ended branch stays as it is. The relay freezes: otherwise an ended branch keeps
+requesting, its replies are not stored, and the relation between the relay's blocks and the
+adversary's requests fails. It is `AlgShape.tpOp` at `A`'s kind and steps (`tpOp_eq`). -/
+noncomputable abbrev tpOp (freeze : Bool) (k : StepIdx A.slots A.post)
+    (z : A.R ⊕ (A.R ⊕ Fin (A.budget + 2))) : Matrix A.CReg A.CReg ℂ :=
+  shA.tpOp A.kind A.step freeze k z
+
+/-- The operators of the trace-preserving form, through `A`'s helpers. -/
+theorem tpOp_eq (freeze : Bool) (k : StepIdx A.slots A.post)
+    (z : A.R ⊕ (A.R ⊕ Fin (A.budget + 2))) :
+    A.tpOp freeze k z =
+      if freeze then (if A.isEndSlot z then A.endedMask else A.tpRaw k z * A.aliveMask)
+      else A.tpRaw k z :=
+  shA.tpOp_eq A.kind A.step freeze k z
+
+theorem tpOp_false (k : StepIdx A.slots A.post) (z : A.R ⊕ (A.R ⊕ Fin (A.budget + 2))) :
+    A.tpOp false k z = A.tpRaw k z :=
+  (A.tpOp_eq false k z).trans (if_neg Bool.false_ne_true)
+
+theorem tpOp_true (k : StepIdx A.slots A.post) (z : A.R ⊕ (A.R ⊕ Fin (A.budget + 2))) :
+    A.tpOp true k z = if A.isEndSlot z then A.endedMask else A.tpRaw k z * A.aliveMask :=
+  (A.tpOp_eq true k z).trans (if_pos rfl)
+
+theorem aliveMask_conjTranspose : (A.aliveMask)ᴴ = A.aliveMask := by
+  rw [aliveMask, AlgShape.aliveMask, Matrix.diagonal_conjTranspose]
+  congr 1
+  funext x
+  by_cases h : x.workspace.cnt = A.ended <;> simp [h]
+
+theorem aliveMask_mul_self : A.aliveMask * A.aliveMask = A.aliveMask := by
+  rw [aliveMask, AlgShape.aliveMask, Matrix.diagonal_mul_diagonal]
+  congr 1
+  funext x
+  by_cases h : x.workspace.cnt = A.ended <;> simp [h]
+
+theorem endedMask_conjTranspose : (A.endedMask)ᴴ = A.endedMask := by
+  rw [endedMask, AlgShape.endedMask, Matrix.diagonal_conjTranspose]
+  congr 1
+  funext x
+  by_cases h : x.workspace.cnt = A.ended <;> simp [h]
+
+theorem endedMask_mul_self : A.endedMask * A.endedMask = A.endedMask := by
+  rw [endedMask, AlgShape.endedMask, Matrix.diagonal_mul_diagonal]
+  congr 1
+  funext x
+  by_cases h : x.workspace.cnt = A.ended <;> simp [h]
+
+theorem endedMask_add_aliveMask : A.endedMask + A.aliveMask = 1 := by
+  rw [endedMask, AlgShape.endedMask, aliveMask, AlgShape.aliveMask, Matrix.diagonal_add,
+      ← Matrix.diagonal_one]
+  congr 1
+  funext x
+  by_cases h : x.workspace.cnt = A.ended <;> simp [h]
+
+theorem eq_of_isEndSlot {z : A.R ⊕ (A.R ⊕ Fin (A.budget + 2))} (h : A.isEndSlot z = true) :
+    z = .inr (.inr A.ended) := by
+  rcases z with r | r | c
+  · exact absurd h Bool.false_ne_true
+  · exact absurd h Bool.false_ne_true
+  · simp only [isEndSlot, AlgShape.isEndSlot, decide_eq_true_eq] at h
+    rw [h]
+
+theorem sum_isEndSlot :
+    ∑ z, (if A.isEndSlot z then A.endedMask else 0) = A.endedMask := by
+  rw [Fintype.sum_sum_type, Fintype.sum_sum_type]
+  simp [isEndSlot, AlgShape.isEndSlot]
+
+/-- A halting operator at the counter value `c` acts on the branches with counter `c`. -/
+theorem tpRaw_halt_ne_zero {k : StepIdx A.slots A.post} {c : Fin (A.budget + 2)} {y x : A.CReg}
+    (h : A.tpRaw k (.inr (.inr c)) y x ≠ 0) : x.workspace.cnt = c := by
+  simp only [tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, Matrix.submatrix_apply,
+      Matrix.kroneckerMap_apply] at h
+  rw [Matrix.single_apply] at h
+  by_contra hne
+  exact h (by rw [if_neg (fun h' => hne h'.2.symm), mul_zero])
+
+theorem tpRaw_end_mul_aliveMask (k : StepIdx A.slots A.post) :
+    A.tpRaw k (.inr (.inr A.ended)) * A.aliveMask = 0 := by
+  ext y x
+  rw [aliveMask, AlgShape.aliveMask, Matrix.mul_diagonal, Matrix.zero_apply]
+  by_cases hx : x.workspace.cnt = A.ended
+  · rw [if_pos hx, mul_zero]
+  · rw [if_neg hx, mul_one]
+    by_contra h
+    exact hx (A.tpRaw_halt_ne_zero h)
 
 theorem restrict_permConj_conjTranspose_mul {R ι : Type*} [Fintype R] [Fintype ι] [DecidableEq ι]
     (K : KrausMap R ι ι) (p : ι → Bool) (τ : Equiv.Perm ι) (r : R) :
@@ -416,92 +662,181 @@ theorem restrict_permConj_conjTranspose_mul {R ι : Type*} [Fintype R] [Fintype 
     by_cases hp : p i <;> simp [hp]
   rw [hs, Matrix.mul_assoc, ← Matrix.mul_assoc _ _ (K.op r), hD, Matrix.mul_assoc]
 
-/-- **The trace-preserving form preserves the trace.** -/
-theorem tpOp_tp (k : StepIdx A.slots A.post) :
-    ∑ x, (A.tpOp k x)ᴴ * A.tpOp k x = 1 := by
-  have hK : ∑ r, ((A.cntKraus k).op r)ᴴ * (A.cntKraus k).op r =
-      ((∑ r, ((A.step k).op r)ᴴ * (A.step k).op r) ⊗ₖ (1 : Matrix (Fin (A.budget + 2))
-        (Fin (A.budget + 2)) ℂ)).submatrix A.cntSplit A.cntSplit := by
-    rw [sum_kronecker, submatrix_sum]
-    refine Finset.sum_congr rfl fun r _ => ?_
-    simp only [cntKraus, KrausMap.reindex, KrausMap.tensorId, Equiv.symm_symm]
-    rw [conjTranspose_submatrix, submatrix_mul_equiv, conjTranspose_kronecker, conjTranspose_one,
-      ← mul_kronecker_mul, Matrix.one_mul]
-  have hH : ∑ c : Fin (A.budget + 2), (((A.step k).haltOp ⊗ₖ Matrix.single A.ended c (1 : ℂ)).submatrix
-      A.cntSplit A.cntSplit)ᴴ * ((A.step k).haltOp ⊗ₖ Matrix.single A.ended c (1 : ℂ)).submatrix
-      A.cntSplit A.cntSplit = ((((A.step k).haltOp)ᴴ * (A.step k).haltOp) ⊗ₖ
-        (1 : Matrix (Fin (A.budget + 2)) (Fin (A.budget + 2)) ℂ)).submatrix A.cntSplit A.cntSplit := by
-    have h1 : ∀ c : Fin (A.budget + 2), (((A.step k).haltOp ⊗ₖ Matrix.single A.ended c (1 : ℂ)).submatrix
+/-- **The trace-preserving form preserves the trace**, frozen or not. Frozen, the operators of
+`tpRaw` restricted to the branches that have not ended and the identity on the ended ones sum to
+`aliveMask · 1 · aliveMask + endedMask = 1`; an ended branch is frozen so that it stops requesting
+(`tpOp`). -/
+theorem tpOp_tp (freeze : Bool) (k : StepIdx A.slots A.post) :
+    ∑ x, (A.tpOp freeze k x)ᴴ * A.tpOp freeze k x = 1 := by
+  have hraw : ∑ x, (A.tpRaw k x)ᴴ * A.tpRaw k x = 1 := by
+    have hK : ∑ r, ((A.cntKraus k).op r)ᴴ * (A.cntKraus k).op r =
+        ((∑ r, ((A.step k).op r)ᴴ * (A.step k).op r) ⊗ₖ (1 : Matrix (Fin (A.budget + 2))
+          (Fin (A.budget + 2)) ℂ)).submatrix A.cntSplit A.cntSplit := by
+      rw [sum_kronecker, submatrix_sum]
+      refine Finset.sum_congr rfl fun r _ => ?_
+      simp only [cntKraus, AlgShape.cntKraus, KrausMap.reindex, KrausMap.tensorId, Equiv.symm_symm]
+      rw [conjTranspose_submatrix, submatrix_mul_equiv, conjTranspose_kronecker, conjTranspose_one,
+        ← mul_kronecker_mul, Matrix.one_mul]
+    have hH : ∑ c : Fin (A.budget + 2), (((A.step k).haltOp ⊗ₖ Matrix.single A.ended c (1 : ℂ)).submatrix
         A.cntSplit A.cntSplit)ᴴ * ((A.step k).haltOp ⊗ₖ Matrix.single A.ended c (1 : ℂ)).submatrix
         A.cntSplit A.cntSplit = ((((A.step k).haltOp)ᴴ * (A.step k).haltOp) ⊗ₖ
-          Matrix.single c c (1 : ℂ)).submatrix A.cntSplit A.cntSplit := fun c => by
-      rw [conjTranspose_submatrix, submatrix_mul_equiv, conjTranspose_kronecker,
-        conjTranspose_single, star_one, ← mul_kronecker_mul, single_mul_single_same, mul_one]
-    simp only [h1]
-    have hks : (((A.step k).haltOp)ᴴ * (A.step k).haltOp) ⊗ₖ
-        (∑ c : Fin (A.budget + 2), Matrix.single c c (1 : ℂ)) =
-        ∑ c : Fin (A.budget + 2), (((A.step k).haltOp)ᴴ * (A.step k).haltOp) ⊗ₖ
-          Matrix.single c c (1 : ℂ) :=
-      map_sum ({ toFun := fun M => (((A.step k).haltOp)ᴴ * (A.step k).haltOp) ⊗ₖ M
-                 map_zero' := kronecker_zero _
-                 map_add' := fun M N => kronecker_add _ M N } :
-        Matrix (Fin (A.budget + 2)) (Fin (A.budget + 2)) ℂ →+ _) _ _
-    rw [← submatrix_sum, ← hks, Matrix.sum_single_one]
-  have hsplit : ∑ x, (A.tpOp k x)ᴴ * A.tpOp k x =
-      ∑ r, ((A.cntKraus k).op r)ᴴ * (A.cntKraus k).op r + ∑ c : Fin (A.budget + 2),
-        (((A.step k).haltOp ⊗ₖ Matrix.single A.ended c (1 : ℂ)).submatrix A.cntSplit A.cntSplit)ᴴ *
-          ((A.step k).haltOp ⊗ₖ Matrix.single A.ended c (1 : ℂ)).submatrix A.cntSplit A.cntSplit := by
-    rw [Fintype.sum_sum_type, Fintype.sum_sum_type, ← add_assoc]
-    congr 1
-    by_cases hk : (k : ℕ) < A.slots
-    · simp only [tpOp, hk, if_true, restrict_permConj_conjTranspose_mul, ← Finset.sum_add_distrib]
-      refine Finset.sum_congr rfl fun r _ => ?_
-      rw [← Matrix.add_mul, ← Matrix.mul_add, Matrix.diagonal_add]
-      have hI : (fun i => (if A.inBudget i then (1 : ℂ) else 0) + if !A.inBudget i then 1 else 0) =
-          fun _ => 1 := by
-        funext i
-        cases A.inBudget i <;> simp
-      rw [hI, Matrix.diagonal_one, Matrix.mul_one]
-    · simp [tpOp, hk]
-  rw [hsplit, hK, hH]
-  calc _ = ((∑ r, ((A.step k).op r)ᴴ * (A.step k).op r + ((A.step k).haltOp)ᴴ * (A.step k).haltOp)
-        ⊗ₖ (1 : Matrix (Fin (A.budget + 2)) (Fin (A.budget + 2)) ℂ)).submatrix A.cntSplit
-          A.cntSplit := by
-        rw [add_kronecker]
-        rfl
-    _ = 1 := by
-        rw [← (A.step k).haltOp_spec, add_sub_cancel, one_kronecker_one, submatrix_one_equiv]
+          (1 : Matrix (Fin (A.budget + 2)) (Fin (A.budget + 2)) ℂ)).submatrix A.cntSplit A.cntSplit := by
+      have h1 : ∀ c : Fin (A.budget + 2), (((A.step k).haltOp ⊗ₖ Matrix.single A.ended c (1 : ℂ)).submatrix
+          A.cntSplit A.cntSplit)ᴴ * ((A.step k).haltOp ⊗ₖ Matrix.single A.ended c (1 : ℂ)).submatrix
+          A.cntSplit A.cntSplit = ((((A.step k).haltOp)ᴴ * (A.step k).haltOp) ⊗ₖ
+            Matrix.single c c (1 : ℂ)).submatrix A.cntSplit A.cntSplit := fun c => by
+        rw [conjTranspose_submatrix, submatrix_mul_equiv, conjTranspose_kronecker,
+          conjTranspose_single, star_one, ← mul_kronecker_mul, single_mul_single_same, mul_one]
+      simp only [h1]
+      have hks : (((A.step k).haltOp)ᴴ * (A.step k).haltOp) ⊗ₖ
+          (∑ c : Fin (A.budget + 2), Matrix.single c c (1 : ℂ)) =
+          ∑ c : Fin (A.budget + 2), (((A.step k).haltOp)ᴴ * (A.step k).haltOp) ⊗ₖ
+            Matrix.single c c (1 : ℂ) :=
+        map_sum ({ toFun := fun M => (((A.step k).haltOp)ᴴ * (A.step k).haltOp) ⊗ₖ M
+                   map_zero' := kronecker_zero _
+                   map_add' := fun M N => kronecker_add _ M N } :
+          Matrix (Fin (A.budget + 2)) (Fin (A.budget + 2)) ℂ →+ _) _ _
+      rw [← submatrix_sum, ← hks, Matrix.sum_single_one]
+    have hsplit : ∑ x, (A.tpRaw k x)ᴴ * A.tpRaw k x =
+        ∑ r, ((A.cntKraus k).op r)ᴴ * (A.cntKraus k).op r + ∑ c : Fin (A.budget + 2),
+          (((A.step k).haltOp ⊗ₖ Matrix.single A.ended c (1 : ℂ)).submatrix A.cntSplit A.cntSplit)ᴴ *
+            ((A.step k).haltOp ⊗ₖ Matrix.single A.ended c (1 : ℂ)).submatrix A.cntSplit A.cntSplit := by
+      rw [Fintype.sum_sum_type, Fintype.sum_sum_type, ← add_assoc]
+      congr 1
+      by_cases hk : (k : ℕ) < A.slots
+      · simp only [tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, hk, if_true,
+          restrict_permConj_conjTranspose_mul, ← Finset.sum_add_distrib]
+        refine Finset.sum_congr rfl fun r _ => ?_
+        rw [← Matrix.add_mul, ← Matrix.mul_add, Matrix.diagonal_add]
+        have hI : (fun i => (if A.inBudget i then (1 : ℂ) else 0) + if !A.inBudget i then 1 else 0) =
+            fun _ => 1 := by
+          funext i
+          cases A.inBudget i <;> simp
+        rw [hI, Matrix.diagonal_one, Matrix.mul_one]
+      · simp [tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, hk]
+    rw [hsplit, hK, hH]
+    calc _ = ((∑ r, ((A.step k).op r)ᴴ * (A.step k).op r + ((A.step k).haltOp)ᴴ * (A.step k).haltOp)
+          ⊗ₖ (1 : Matrix (Fin (A.budget + 2)) (Fin (A.budget + 2)) ℂ)).submatrix A.cntSplit
+            A.cntSplit := by
+          rw [add_kronecker]
+          rfl
+      _ = 1 := by
+          rw [← (A.step k).haltOp_spec, add_sub_cancel, one_kronecker_one, submatrix_one_equiv]
+
+  cases freeze
+  · simp only [tpOp_false]
+    exact hraw
+  have hM := A.aliveMask_conjTranspose
+  have hz : ∀ z, (A.tpOp true k z)ᴴ * A.tpOp true k z = (if A.isEndSlot z then A.endedMask else 0) +
+      A.aliveMask * ((A.tpRaw k z)ᴴ * A.tpRaw k z) * A.aliveMask := by
+    intro z
+    by_cases hz : A.isEndSlot z = true
+    · have h0 : A.aliveMask * ((A.tpRaw k z)ᴴ * A.tpRaw k z) * A.aliveMask = 0 := by
+        obtain rfl := A.eq_of_isEndSlot hz
+        calc _ = (A.tpRaw k (.inr (.inr A.ended)) * A.aliveMask)ᴴ *
+              (A.tpRaw k (.inr (.inr A.ended)) * A.aliveMask) := by
+              rw [Matrix.conjTranspose_mul, hM]
+              simp only [Matrix.mul_assoc]
+          _ = 0 := by simp [A.tpRaw_end_mul_aliveMask]
+      simp only [tpOp_eq, hz, if_true, h0, add_zero]
+      rw [A.endedMask_conjTranspose, A.endedMask_mul_self]
+    · simp only [tpOp_eq, hz, if_true, Bool.false_eq_true, if_false, zero_add]
+      rw [Matrix.conjTranspose_mul, hM]
+      simp only [Matrix.mul_assoc]
+  rw [Finset.sum_congr rfl fun z _ => hz z, Finset.sum_add_distrib, ← Finset.sum_mul,
+    ← Finset.mul_sum, hraw, Matrix.mul_one, A.aliveMask_mul_self, A.sum_isEndSlot,
+    A.endedMask_add_aliveMask]
+
+/-- **The Kraus map `k` of the trace-preserving form** at the shape `s`, for the kind `kind` and
+the steps `step`: the channel of the operators `AlgShape.tpOp`, trace preserving by `h`. Sealed, and
+of the kind and the steps only (the proof `h` is irrelevant to comparisons); its operators are
+`AlgShape.tpOp` (`AlgShape.tpStep_op`). -/
+@[irreducible, no_expose] noncomputable def _root_.GordieHowe.Quantum.AlgShape.tpStep
+    (s : AlgShape X Y Req Resp) (kind : s.W → Bool)
+    (step : StepIdx s.slots s.post →
+      KrausMap s.R (DReg s.W s.width X Y Req Resp) (DReg s.W s.width X Y Req Resp))
+    (freeze : Bool) (k : StepIdx s.slots s.post)
+    (h : ∑ z, (s.tpOp kind step freeze k z)ᴴ * s.tpOp kind step freeze k z = 1) :
+    KrausMap (s.R ⊕ (s.R ⊕ Fin (s.budget + 2))) (DReg s.CntW s.width X Y Req Resp)
+      (DReg s.CntW s.width X Y Req Resp) :=
+  KrausChannel.toKrausMap ⟨s.tpOp kind step freeze k, h⟩
+
+theorem _root_.GordieHowe.Quantum.AlgShape.tpStep_eq (s : AlgShape X Y Req Resp)
+    (kind : s.W → Bool)
+    (step : StepIdx s.slots s.post →
+      KrausMap s.R (DReg s.W s.width X Y Req Resp) (DReg s.W s.width X Y Req Resp))
+    (freeze : Bool) (k : StepIdx s.slots s.post)
+    (h : ∑ z, (s.tpOp kind step freeze k z)ᴴ * s.tpOp kind step freeze k z = 1) :
+    s.tpStep kind step freeze k h = KrausChannel.toKrausMap ⟨s.tpOp kind step freeze k, h⟩ := by
+  unfold AlgShape.tpStep; rfl
+
+theorem _root_.GordieHowe.Quantum.AlgShape.tpStep_op (s : AlgShape X Y Req Resp)
+    (kind : s.W → Bool)
+    (step : StepIdx s.slots s.post →
+      KrausMap s.R (DReg s.W s.width X Y Req Resp) (DReg s.W s.width X Y Req Resp))
+    (freeze : Bool) (k : StepIdx s.slots s.post)
+    (h : ∑ z, (s.tpOp kind step freeze k z)ᴴ * s.tpOp kind step freeze k z = 1) :
+    (s.tpStep kind step freeze k h).op = s.tpOp kind step freeze k := by
+  rw [AlgShape.tpStep_eq]; rfl
+
+/-- **The shape of the trace-preserving form** (`toTPKindAlg`), whatever `freeze`: the registers
+of `toKindAlg`, the Kraus index with the completion's and the end's operators. -/
+abbrev tpKindS (_ : AdaptiveIAlg shA O) : KindShape X Y Req Resp := shA.tpKindS
 
 /-- **The trace-preserving form** of an adversary with run-time kinds (proof-internal): the
 registers of `toKindAlg`, the kind of a branch read as a request once its counter has the ended
-value, and the Kraus maps `tpOp`, which are trace preserving (`tpOp_tp`). A branch over the budget,
-and the weight the adversary's Kraus map loses, move to the ended value. -/
-noncomputable abbrev toTPKindAlg : KindAlg X Y Req Resp O :=
-  { A.toKindAlg with
-    kind := fun w => A.kind w.1 || decide (w.2 = A.ended)
-    R := A.R ⊕ (A.R ⊕ Fin (A.budget + 2))
-    instFintypeR := inferInstance
-    step := fun k => KrausChannel.toKrausMap ⟨A.tpOp k, A.tpOp_tp k⟩ }
+value, and the Kraus maps `tpOp freeze`, which are trace preserving (`tpOp_tp`). A branch over the
+budget, and the weight the adversary's Kraus map loses, move to the ended value. Unfrozen (the
+default), an ended branch keeps running the adversary's Kraus map; frozen, it stays as it is
+(`tpOp`), which the relay needs: an ended branch would otherwise keep requesting and leave its
+replies unstored. -/
+noncomputable abbrev toTPKindAlg (freeze : Bool := false) : KindAlg shA.tpKindS O where
+  kind w := A.kind w.work || decide (w.cnt = A.ended)
+  init := MState.reindex A.cntSplit.symm (A.init.tensorKet 0)
+  step k := shA.tpStep A.kind A.step freeze k (A.tpOp_tp freeze k)
+  out w := A.out w.work
 
-theorem toTPKindAlg_step_tp (k : StepIdx A.slots A.post) :
-    ∑ x, ((A.toTPKindAlg.step k).op x)ᴴ * (A.toTPKindAlg.step k).op x = 1 :=
-  A.tpOp_tp k
+/-- **The Kraus map `k` of the trace-preserving form** is the channel of the operators
+`tpOp freeze k`. -/
+theorem toTPKindAlg_step_eq (freeze : Bool) (k : StepIdx A.slots A.post) :
+    (A.toTPKindAlg freeze).step k = KrausChannel.toKrausMap ⟨A.tpOp freeze k, A.tpOp_tp freeze k⟩ :=
+  shA.tpStep_eq A.kind A.step freeze k (A.tpOp_tp freeze k)
+
+/-- **The operators of the trace-preserving form** are `tpOp freeze k`. -/
+theorem toTPKindAlg_step_op (freeze : Bool) (k : StepIdx A.slots A.post) :
+    ((A.toTPKindAlg freeze).step k).op = A.tpOp freeze k :=
+  shA.tpStep_op A.kind A.step freeze k (A.tpOp_tp freeze k)
+
+/-- **The initial state of the trace-preserving form** is that of `toKindAlg`; it reads only the
+adversary's initial state. -/
+theorem toTPKindAlg_init (freeze : Bool) : (A.toTPKindAlg freeze).init = A.toKindAlg.init :=
+  rfl
+
+/-- **The shape of the trace-preserving form** (`AlgShape.tpKindS`), whatever `freeze`. -/
+theorem toTPKindAlg_toShape (freeze : Bool) :
+    (A.toTPKindAlg freeze).toShape = A.toShape.tpKindS :=
+  rfl
+
+theorem toTPKindAlg_step_tp {freeze : Bool} (k : StepIdx A.slots A.post) :
+    ∑ x, (((A.toTPKindAlg freeze).step k).op x)ᴴ * ((A.toTPKindAlg freeze).step k).op x = 1 := by
+  rw [toTPKindAlg_step_op]
+  exact A.tpOp_tp freeze k
 
 /-! ### The trace-preserving form agrees with the model on the branches that have not ended -/
 
 /-- The adversary's registers whose counter has not ended. -/
-def aliveD : Set A.CReg := {d | d.workspace.2 ≠ A.ended}
+def aliveD : Set A.CReg := {d | d.workspace.cnt ≠ A.ended}
 
 instance : DecidablePred (· ∈ A.aliveD) := fun d => inferInstanceAs (Decidable (_ ≠ _))
 
 theorem cntKraus_op_apply (k : StepIdx A.slots A.post) (r : A.R) (y x : A.CReg) :
     (A.cntKraus k).op r y x = (A.step k).op r (A.cntSplit y).1 (A.cntSplit x).1 *
-      (1 : Matrix (Fin (A.budget + 2)) (Fin (A.budget + 2)) ℂ) y.workspace.2 x.workspace.2 := by
-  rw [cntKraus, KrausMap.tensorId_reindex_op_apply, Equiv.symm_symm]
+      (1 : Matrix (Fin (A.budget + 2)) (Fin (A.budget + 2)) ℂ) y.workspace.cnt x.workspace.cnt := by
+  rw [cntKraus, AlgShape.cntKraus, KrausMap.tensorId_reindex_op_apply, Equiv.symm_symm]
   rfl
 
 theorem cntKraus_op_ne_zero {k : StepIdx A.slots A.post} {r : A.R} {y x : A.CReg}
-    (h : (A.cntKraus k).op r y x ≠ 0) : y.workspace.2 = x.workspace.2 := by
+    (h : (A.cntKraus k).op r y x ≠ 0) : y.workspace.cnt = x.workspace.cnt := by
   rw [cntKraus_op_apply] at h
   by_contra hne
   exact h (by rw [Matrix.one_apply_ne hne, mul_zero])
@@ -513,91 +848,133 @@ theorem restrict_permConj_op_apply {R ι : Type*} [Fintype R] [Fintype ι] [Deci
   simp [KrausMap.permConj, KrausMap.restrict, Matrix.diagonal_mul]
 
 theorem inBudget_of_alive_kind (d : A.CReg) :
-    A.inBudget d = true ↔ (A.kind d.workspace.1 = true ∨
-      d.workspace.2 ≠ Fin.castSucc (Fin.last A.budget)) := by
-  simp [inBudget]
+    A.inBudget d = true ↔ (A.kind d.workspace.work = true ∨
+      d.workspace.cnt ≠ Fin.castSucc (Fin.last A.budget)) := by
+  simp [inBudget, AlgShape.inBudget]
 
 /-- Within the budget and before the end, the trace-preserving counter step is the model's, and
 it does not reach the ended value. -/
 theorem tpShift_eq_cntShift {z : A.CReg} (hz : A.inBudget z = true) (ha : z ∈ A.aliveD) :
     A.tpShift z = A.cntShift z ∧ A.cntShift z ∈ A.aliveD := by
-  obtain ⟨⟨⟨w, c⟩, rq, rs⟩, p⟩ := z
-  simp only [aliveD, Set.mem_setOf_eq, DReg.workspace] at ha
+  obtain ⟨⟨wc_, rq, rs⟩, p⟩ := z
+  obtain ⟨w, c, rfl⟩ := AlgShape.CntW.exists_eq_mk wc_
+  simp only [aliveD, Set.mem_setOf_eq, DReg.workspace, AlgShape.CntW.cnt_mk] at ha
   rw [inBudget_of_alive_kind] at hz
-  simp only [DReg.workspace] at hz
+  simp only [DReg.workspace, AlgShape.CntW.work_mk, AlgShape.CntW.cnt_mk] at hz
   cases hkw : A.kind w
   · have hc : (c : ℕ) < A.budget := by
       have h1 : c ≠ Fin.castSucc (Fin.last A.budget) := by simpa [hkw] using hz
       have h2 : (c : ℕ) ≠ A.budget := fun h => h1 (Fin.ext (by simpa using h))
-      have h3 : (c : ℕ) ≠ A.budget + 1 := fun h => ha (Fin.ext (by simpa [ended] using h))
-      omega
+      have h3 : (c : ℕ) ≠ A.budget + 1 := fun h => ha (Fin.ext (by simpa [ended,
+          AlgShape.ended] using h))
+      shape_omega
     have hnl : c ≠ Fin.last (A.budget + 1) := fun h => by
       have := congrArg Fin.val h
       simp at this
-      omega
+      shape_omega
     have h1 := coe_finRotate_of_ne_last hnl
     have hr0 : finRotate (A.budget + 2) c ≠ 0 := fun h => by
       have := congrArg Fin.val h
       simp only [h1, Fin.val_zero] at this
-      omega
+      shape_omega
     have hre : finRotate (A.budget + 2) c ≠ A.ended := fun h => by
       have := congrArg Fin.val h
-      simp only [h1, ended, Fin.val_last] at this
-      omega
+      simp only [h1, ended, AlgShape.ended, Fin.val_last] at this
+      shape_omega
     have hrot : A.rot c = finRotate (A.budget + 2) c := by
-      rw [rot, Equiv.trans_apply, Equiv.swap_apply_of_ne_of_ne hr0 hre]
+      rw [rot, AlgShape.rot, Equiv.trans_apply, Equiv.swap_apply_of_ne_of_ne hr0 hre]
     refine ⟨?_, ?_⟩
-    · simp [tpShift, cntShift, wPerm, hkw, hrot]
+    · simp [tpShift, AlgShape.tpShift, cntShift, AlgShape.cntShift, wPerm, AlgShape.wPerm, hkw,
+        hrot]
     · simpa [aliveD, cntShift, hkw, DReg.workspace] using hre
   · refine ⟨?_, ?_⟩
-    · simp [tpShift, cntShift, wPerm, hkw]
+    · simp [tpShift, AlgShape.tpShift, cntShift, AlgShape.cntShift, wPerm, AlgShape.wPerm, hkw]
     · simpa [aliveD, cntShift, hkw, DReg.workspace] using ha
 
-theorem tpShift_ended {z : A.CReg} (hz : z.workspace.2 = A.ended) :
-    (A.tpShift z).workspace.2 = A.ended := by
-  obtain ⟨⟨⟨w, c⟩, rq, rs⟩, p⟩ := z
+theorem tpShift_ended {z : A.CReg} (hz : z.workspace.cnt = A.ended) :
+    (A.tpShift z).workspace.cnt = A.ended := by
+  obtain ⟨⟨wc_, rq, rs⟩, p⟩ := z
+  obtain ⟨w, c, rfl⟩ := AlgShape.CntW.exists_eq_mk wc_
   simp only [DReg.workspace] at hz
   subst hz
   cases hkw : A.kind w
   · have h0 : finRotate (A.budget + 2) A.ended = 0 := by
-      simp [ended]
-    simp [tpShift, wPerm, hkw, rot, h0, DReg.workspace]
-  · simp [tpShift, wPerm, hkw, DReg.workspace]
+      simp [ended, AlgShape.ended]
+    simp [tpShift, AlgShape.tpShift, wPerm, AlgShape.wPerm, hkw, rot, AlgShape.rot, h0,
+        DReg.workspace]
+  · simp [tpShift, AlgShape.tpShift, wPerm, AlgShape.wPerm, hkw, DReg.workspace]
 
 theorem endSwap_ended {z : A.CReg} (hz : A.inBudget z = false) :
-    (A.endSwap z).workspace.2 = A.ended := by
-  obtain ⟨⟨⟨w, c⟩, rq, rs⟩, p⟩ := z
+    (A.endSwap z).workspace.cnt = A.ended := by
+  obtain ⟨⟨wc_, rq, rs⟩, p⟩ := z
+  obtain ⟨w, c, rfl⟩ := AlgShape.CntW.exists_eq_mk wc_
   have h : c = Fin.castSucc (Fin.last A.budget) := by
     by_contra hc
-    have := (A.inBudget_of_alive_kind (((w, c), rq, rs), p)).2 (Or.inr hc)
+    have := (A.inBudget_of_alive_kind (((AlgShape.CntW.mk w c), rq, rs), p)).2 (Or.inr hc)
     rw [hz] at this
     exact Bool.false_ne_true this
   subst h
-  simp [endSwap, wPerm, DReg.workspace]
+  simp [endSwap, AlgShape.endSwap, wPerm, AlgShape.wPerm, DReg.workspace]
 
 theorem not_inBudget_alive {z : A.CReg} (hz : A.inBudget z = false) : z ∈ A.aliveD := by
-  obtain ⟨⟨⟨w, c⟩, rq, rs⟩, p⟩ := z
+  obtain ⟨⟨wc_, rq, rs⟩, p⟩ := z
+  obtain ⟨w, c, rfl⟩ := AlgShape.CntW.exists_eq_mk wc_
   have h : c = Fin.castSucc (Fin.last A.budget) := by
     by_contra hc
-    have := (A.inBudget_of_alive_kind (((w, c), rq, rs), p)).2 (Or.inr hc)
+    have := (A.inBudget_of_alive_kind (((AlgShape.CntW.mk w c), rq, rs), p)).2 (Or.inr hc)
     rw [hz] at this
     exact Bool.false_ne_true this
   subst h
   intro he
   have := congrArg Fin.val he
-  simp [ended, DReg.workspace] at this
+  simp [ended, AlgShape.ended, DReg.workspace] at this
+
+/-- On a branch that has not ended, or unfrozen, the operators are those of `tpRaw`. -/
+theorem tpOp_apply_of {freeze : Bool} (k : StepIdx A.slots A.post)
+    (z : A.R ⊕ (A.R ⊕ Fin (A.budget + 2))) (y x : A.CReg) (h : freeze = false ∨ x ∈ A.aliveD) :
+    A.tpOp freeze k z y x = A.tpRaw k z y x := by
+  cases freeze
+  · rw [tpOp_false]
+  · have hx : x.workspace.cnt ≠ A.ended := h.resolve_left (by decide)
+    simp only [tpOp_eq, if_true]
+    split_ifs with hz
+    · obtain rfl := A.eq_of_isEndSlot hz
+      have h1 : A.endedMask y x = 0 := by
+        by_cases hyx : y = x
+        · subst hyx
+          simp [endedMask, AlgShape.endedMask, hx]
+        · simp [endedMask, AlgShape.endedMask, Matrix.diagonal_apply_ne _ hyx]
+      rw [h1]
+      by_contra h'
+      exact hx (A.tpRaw_halt_ne_zero (Ne.symm h'))
+    · rw [aliveMask, AlgShape.aliveMask, Matrix.mul_diagonal, if_neg hx, mul_one]
+
+/-- Frozen, an operator moves no ended branch. -/
+theorem tpOp_true_ne_zero_ended {k : StepIdx A.slots A.post}
+    {z : A.R ⊕ (A.R ⊕ Fin (A.budget + 2))} {y x : A.CReg} (hx : x ∉ A.aliveD)
+    (h : A.tpOp true k z y x ≠ 0) : y = x := by
+  have hx' : x.workspace.cnt = A.ended := not_not.1 hx
+  simp only [tpOp_eq, if_true] at h
+  split_ifs at h with hz
+  · by_contra hne
+    exact h (by rw [endedMask, AlgShape.endedMask, Matrix.diagonal_apply_ne _ hne])
+  · rw [aliveMask, AlgShape.aliveMask, Matrix.mul_diagonal, if_pos hx', mul_zero] at h
+    exact absurd rfl h
+
+variable {freeze : Bool}
 
 theorem tpOp_inl_apply (k : StepIdx A.slots A.post) (r : A.R) (y x : A.CReg) :
-    (A.toTPKindAlg.step k).op (.inl r) y x = A.tpOp k (.inl r) y x :=
-  rfl
+    ((A.toTPKindAlg freeze).step k).op (.inl r) y x = A.tpOp freeze k (.inl r) y x := by
+  rw [toTPKindAlg_step_op]
 
 /-- On the branches that have not ended, the trace-preserving operators are the model's. -/
 theorem tp_hl (k : StepIdx A.slots A.post) (r : A.R) (y x : A.CReg) (hx : x ∈ A.aliveD) :
-    (if y ∈ A.aliveD then (A.toTPKindAlg.step k).op (.inl r) y x else 0) =
+    (if y ∈ A.aliveD then ((A.toTPKindAlg freeze).step k).op (.inl r) y x else 0) =
       (A.toKindAlg.step k).op r y x := by
-  rw [tpOp_inl_apply, toKindAlg_step]
+  rw [tpOp_inl_apply, A.tpOp_apply_of k _ y x (Or.inr hx), toKindAlg_step]
   by_cases hk : (k : ℕ) < A.slots
-  · simp only [tpOp, hk, if_true, restrict_permConj_op_apply, Equiv.refl_symm, Equiv.refl_apply]
+  · simp only [tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, hk, if_true, restrict_permConj_op_apply,
+      Equiv.refl_symm, Equiv.refl_apply]
     set z := A.tpShift.symm y
     set z' := A.cntShift.symm y
     have hzy : A.tpShift z = y := Equiv.apply_symm_apply _ _
@@ -632,7 +1009,7 @@ theorem tp_hl (k : StepIdx A.slots A.post) (r : A.R) (y x : A.CReg) (hx : x ∈ 
         rw [← hzy, h1]
         exact h2
       rw [if_pos hy, hz']
-  · simp only [tpOp, hk, if_false]
+  · simp only [tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, hk, if_false]
     by_cases hy : y ∈ A.aliveD
     · rw [if_pos hy]
     · rw [if_neg hy]
@@ -643,50 +1020,69 @@ theorem tp_hl (k : StepIdx A.slots A.post) (r : A.R) (y x : A.CReg) (hx : x ∈ 
 
 /-- The extra operators of the trace-preserving form end the branch. -/
 theorem tp_hr (k : StepIdx A.slots A.post) (t : A.R ⊕ Fin (A.budget + 2)) (y x : A.CReg)
-    (hy : y ∈ A.aliveD) : (A.toTPKindAlg.step k).op (.inr t) y x = 0 := by
-  change A.tpOp k (.inr t) y x = 0
-  rcases t with r | c
-  · by_cases hk : (k : ℕ) < A.slots
-    · simp only [tpOp, hk, if_true, restrict_permConj_op_apply]
-      by_cases hb : A.inBudget (A.endSwap.symm y)
-      · simp [hb]
-      · have := A.endSwap_ended (Bool.of_not_eq_true hb)
-        rw [Equiv.apply_symm_apply] at this
-        exact absurd this hy
-    · simp [tpOp, hk]
-  · simp only [tpOp, Matrix.submatrix_apply, Matrix.kroneckerMap_apply]
-    rw [Matrix.single_apply, if_neg, mul_zero]
-    rintro ⟨h, -⟩
-    exact hy h.symm
+    (hy : y ∈ A.aliveD) : ((A.toTPKindAlg freeze).step k).op (.inr t) y x = 0 := by
+  rw [toTPKindAlg_step_op]
+  change A.tpOp freeze k (.inr t) y x = 0
+  have hraw : A.tpRaw k (.inr t) y x = 0 := by
+    rcases t with r | c
+    · by_cases hk : (k : ℕ) < A.slots
+      · simp only [tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, hk, if_true, restrict_permConj_op_apply]
+        by_cases hb : A.inBudget (A.endSwap.symm y)
+        · simp [hb]
+        · have := A.endSwap_ended (Bool.of_not_eq_true hb)
+          rw [Equiv.apply_symm_apply] at this
+          exact absurd this hy
+      · simp [tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, hk]
+    · simp only [tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, Matrix.submatrix_apply,
+        Matrix.kroneckerMap_apply]
+      rw [Matrix.single_apply, if_neg, mul_zero]
+      rintro ⟨h, -⟩
+      exact hy h.symm
+  by_cases hf : freeze = false ∨ x ∈ A.aliveD
+  · rw [A.tpOp_apply_of k _ y x hf, hraw]
+  · obtain ⟨hf, hx⟩ := not_or.1 hf
+    rw [Bool.not_eq_false] at hf
+    subst hf
+    by_contra h
+    obtain rfl := A.tpOp_true_ne_zero_ended hx h
+    exact hx hy
 
 /-- **An ended branch stays ended** in the trace-preserving form. -/
 theorem tp_habs (k : StepIdx A.slots A.post) (z : A.R ⊕ (A.R ⊕ Fin (A.budget + 2)))
-    (y x : A.CReg) (h : (A.toTPKindAlg.step k).op z y x ≠ 0) (hx : x ∉ A.aliveD) :
+    (y x : A.CReg) (h : ((A.toTPKindAlg freeze).step k).op z y x ≠ 0) (hx : x ∉ A.aliveD) :
     y ∉ A.aliveD := by
-  change A.tpOp k z y x ≠ 0 at h
-  simp only [aliveD, Set.mem_setOf_eq, not_not] at hx ⊢
-  rcases z with r | r | c
-  · by_cases hk : (k : ℕ) < A.slots
-    · simp only [tpOp, hk, if_true, restrict_permConj_op_apply] at h
-      have hK : (A.cntKraus k).op r (A.tpShift.symm y) x ≠ 0 := fun h' => h (by rw [h', mul_zero])
-      have := A.tpShift_ended ((A.cntKraus_op_ne_zero hK).trans hx)
-      rwa [Equiv.apply_symm_apply] at this
-    · simp only [tpOp, hk, if_false] at h
-      exact (A.cntKraus_op_ne_zero h).trans hx
-  · by_cases hk : (k : ℕ) < A.slots
-    · simp only [tpOp, hk, if_true, restrict_permConj_op_apply] at h
-      exfalso
-      by_cases hb : A.inBudget (A.endSwap.symm y)
-      · exact h (by simp [hb])
-      · have hK : (A.cntKraus k).op r (A.endSwap.symm y) x ≠ 0 := fun h' =>
-          h (by rw [h', mul_zero])
-        exact A.not_inBudget_alive (Bool.of_not_eq_true hb)
-          ((A.cntKraus_op_ne_zero hK).trans hx)
-    · simp [tpOp, hk] at h
-  · simp only [tpOp, Matrix.submatrix_apply, Matrix.kroneckerMap_apply] at h
-    rw [Matrix.single_apply] at h
-    by_contra hne
-    exact h (by rw [if_neg (fun h' => hne h'.1.symm), mul_zero])
+  rw [toTPKindAlg_step_op] at h
+  change A.tpOp freeze k z y x ≠ 0 at h
+  cases freeze
+  · rw [A.tpOp_apply_of k z y x (Or.inl rfl)] at h
+    simp only [aliveD, Set.mem_setOf_eq, not_not] at hx ⊢
+    rcases z with r | r | c
+    · by_cases hk : (k : ℕ) < A.slots
+      · simp only [tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, hk, if_true,
+          restrict_permConj_op_apply] at h
+        have hK : (A.cntKraus k).op r (A.tpShift.symm y) x ≠ 0 := fun h' => h (by rw [h', mul_zero])
+        have := A.tpShift_ended ((A.cntKraus_op_ne_zero hK).trans hx)
+        rwa [Equiv.apply_symm_apply] at this
+      · simp only [tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, hk, if_false] at h
+        exact (A.cntKraus_op_ne_zero h).trans hx
+    · by_cases hk : (k : ℕ) < A.slots
+      · simp only [tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, hk, if_true,
+          restrict_permConj_op_apply] at h
+        exfalso
+        by_cases hb : A.inBudget (A.endSwap.symm y)
+        · exact h (by simp [hb])
+        · have hK : (A.cntKraus k).op r (A.endSwap.symm y) x ≠ 0 := fun h' =>
+            h (by rw [h', mul_zero])
+          exact A.not_inBudget_alive (Bool.of_not_eq_true hb)
+            ((A.cntKraus_op_ne_zero hK).trans hx)
+      · simp [tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, hk] at h
+    · simp only [tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, Matrix.submatrix_apply,
+        Matrix.kroneckerMap_apply] at h
+      rw [Matrix.single_apply] at h
+      by_contra hne
+      exact h (by rw [if_neg (fun h' => hne h'.1.symm), mul_zero])
+  · obtain rfl := A.tpOp_true_ne_zero_ended hx h
+    exact hx
 
 /-! ### The compositions with a challenger -/
 
@@ -695,12 +1091,12 @@ section Compose
 variable (C : Challenger X Y Req Resp)
 
 /-- The composed registers whose adversary branch has not ended. -/
-def aliveC : Set (A.toKindAlg.CW C) := {v | v.adv.workspace.2 ≠ A.ended}
+def aliveC : Set (A.toKindAlg.CW C) := {v | v.adv.workspace.cnt ≠ A.ended}
 
 instance : DecidablePred (· ∈ ReprogrammedCircuit.workIn (X := X) (Y := Y) (A.aliveC C)) := fun p =>
   inferInstanceAs (Decidable (_ ≠ _))
 
-theorem measReq_op_apply {B : KindAlg X Y Req Resp O} (j : Fin B.slots) (o : Option Req × Unit)
+theorem measReq_op_apply {ksB : KindShape X Y Req Resp} {B : KindAlg ksB O} (j : Fin B.slots) (o : Option Req × Unit)
     (y x : QueryReg (B.CW C) 1 X Y) :
     (B.measReq C j).op o y x =
       (if y = B.copyReq C j x then 1 else 0) * (if B.reqOutcome C x = o.1 then 1 else 0) := by
@@ -717,7 +1113,7 @@ variable [Nonempty X] [AddGroup Y]
 /-- **The adversary's Kraus maps intertwine** on the branches that have not ended. -/
 theorem advKraus_intertwine (k : StepIdx A.slots A.post) (ρ : Matrix (QueryReg (A.toKindAlg.CW C) 1 X Y)
     (QueryReg (A.toKindAlg.CW C) 1 X Y) ℂ) :
-    cutTo (ReprogrammedCircuit.workIn (A.aliveC C)) ((A.toTPKindAlg.advKraus C k) ρ) =
+    cutTo (ReprogrammedCircuit.workIn (A.aliveC C)) (((A.toTPKindAlg freeze).advKraus C k) ρ) =
       (A.toKindAlg.advKraus C k) (cutTo (ReprogrammedCircuit.workIn (A.aliveC C)) ρ) := by
   exact KrausMap.cutTo_tensorId_reindex_of_absorbing (A.tp_hl k) (A.tp_hr k) (A.tp_habs k)
     (A.toKindAlg.advSplit C) ρ
@@ -726,11 +1122,11 @@ theorem advKraus_intertwine (k : StepIdx A.slots A.post) (ρ : Matrix (QueryReg 
 not ended both read the same kind. -/
 theorem measReq_intertwine (j : Fin A.slots) (ρ : Matrix (QueryReg (A.toKindAlg.CW C) 1 X Y)
     (QueryReg (A.toKindAlg.CW C) 1 X Y) ℂ) :
-    cutTo (ReprogrammedCircuit.workIn (A.aliveC C)) ((A.toTPKindAlg.measReq C j) ρ) =
+    cutTo (ReprogrammedCircuit.workIn (A.aliveC C)) (((A.toTPKindAlg freeze).measReq C j) ρ) =
       (A.toKindAlg.measReq C j) (cutTo (ReprogrammedCircuit.workIn (A.aliveC C)) ρ) := by
   have hkind : ∀ x : QueryReg (A.toKindAlg.CW C) 1 X Y,
       x ∈ ReprogrammedCircuit.workIn (A.aliveC C) →
-        A.toTPKindAlg.kind x.1.adv.workspace = A.toKindAlg.kind x.1.adv.workspace := by
+        (A.toTPKindAlg freeze).kind x.1.adv.workspace = A.toKindAlg.kind x.1.adv.workspace := by
     intro x hx
     change (A.kind _ || decide (_ = A.ended)) = A.kind _
     rw [decide_eq_false hx, Bool.or_false]
@@ -741,27 +1137,30 @@ theorem measReq_intertwine (j : Fin A.slots) (ρ : Matrix (QueryReg (A.toKindAlg
     simp only [projOn, Matrix.mul_diagonal]
     split_ifs with hx
     · rw [mul_one, mul_one]
-      refine (measReq_op_apply C (B := A.toTPKindAlg) j o y x).trans
+      refine (measReq_op_apply C (B := (A.toTPKindAlg freeze)) j o y x).trans
         (Eq.trans ?_ (measReq_op_apply C (B := A.toKindAlg) j o y x).symm)
       have hk := hkind x hx
-      have hπ : A.toTPKindAlg.copyReq C j x = A.toKindAlg.copyReq C j x := by
-        change (if A.toTPKindAlg.kind x.1.adv.workspace then _ else x) =
+      have hπ : (A.toTPKindAlg freeze).copyReq C j x = A.toKindAlg.copyReq C j x := by
+        change (if (A.toTPKindAlg freeze).kind x.1.adv.workspace then _ else x) =
           (if A.toKindAlg.kind x.1.adv.workspace then _ else x)
         rw [hk]
-      have hf : A.toTPKindAlg.reqOutcome C x = A.toKindAlg.reqOutcome C x := by
-        change (if A.toTPKindAlg.kind x.1.adv.workspace then _ else none) =
+      have hf : (A.toTPKindAlg freeze).reqOutcome C x = A.toKindAlg.reqOutcome C x := by
+        change (if (A.toTPKindAlg freeze).kind x.1.adv.workspace then _ else none) =
           (if A.toKindAlg.kind x.1.adv.workspace then _ else none)
         rw [hk]
       rw [hπ, hf]
     · rw [mul_zero, mul_zero]
-  · rw [show (A.toTPKindAlg.measReq C j).op o y x = _ from
-      measReq_op_apply C (B := A.toTPKindAlg) j o y x] at h
-    have hy : y = A.toTPKindAlg.copyReq C j x := by
+  · rw [show ((A.toTPKindAlg freeze).measReq C j).op o y x = _ from
+      measReq_op_apply C (B := (A.toTPKindAlg freeze)) j o y x] at h
+    have hy : y = (A.toTPKindAlg freeze).copyReq C j x := by
       by_contra hne
       exact h (mul_eq_zero_of_left (if_neg hne) _)
     subst hy
-    simp only [KindAlg.copyReq, Function.Involutive.coe_toPerm]
-    by_cases hc : (A.kind x.1.adv.workspace.1 || decide (x.1.adv.workspace.2 = A.ended)) = true
+    have hcp : (A.toTPKindAlg freeze).copyReq C j x =
+        if (A.toTPKindAlg freeze).kind x.1.adv.workspace then
+          (⟨x.1.adv, x.1.chal.swapLog j x.1.adv.request⟩, x.2) else x := rfl
+    rw [hcp]
+    by_cases hc : (A.kind x.1.adv.workspace.work || decide (x.1.adv.workspace.cnt = A.ended)) = true
     · simp only [hc, ↓reduceIte]
       exact Iff.rfl
     · simp only [hc, Bool.false_eq_true, ↓reduceIte]
@@ -791,7 +1190,7 @@ theorem keeps_writeReply (j : Fin A.slots) :
 open ReprogrammedCircuit in
 /-- **A slot of the two compositions intertwines.** -/
 theorem intertwined_slotCircBoth (j : Fin A.slots) :
-    Intertwined (A.aliveC C) (A.toKindAlg.slotCircBoth C j) (A.toTPKindAlg.slotCircBoth C j) :=
+    Intertwined (A.aliveC C) (A.toKindAlg.slotCircBoth C j) ((A.toTPKindAlg freeze).slotCircBoth C j) :=
   ⟨fun ρ => A.advKraus_intertwine C (slotStep j) ρ, fun ρ => A.measReq_intertwine C j ρ,
     Intertwined.append (A.keepsAll_chalQueries C j).intertwined
       ⟨fun ρ => (KrausMap.ofPerm (A.toKindAlg.writeReply C j)).cutTo_apply_of_keeps
@@ -800,13 +1199,13 @@ theorem intertwined_slotCircBoth (j : Fin A.slots) :
 open ReprogrammedCircuit in
 /-- **A post batch of the two compositions intertwines.** -/
 theorem intertwined_postCirc (b : Fin A.post) :
-    Intertwined (A.aliveC C) (A.toKindAlg.postCirc C b) (A.toTPKindAlg.postCirc C b) :=
+    Intertwined (A.aliveC C) (A.toKindAlg.postCirc C b) ((A.toTPKindAlg freeze).postCirc C b) :=
   ⟨fun ρ => A.advKraus_intertwine C (postStep b) ρ, (A.keepsAll_advQueries C _).intertwined⟩
 
 open ReprogrammedCircuit in
 /-- **The two compositions with a challenger intertwine** on the branches that have not ended. -/
 theorem intertwined_fullCircBoth :
-    Intertwined (A.aliveC C) (A.toKindAlg.fullCircBoth C) (A.toTPKindAlg.fullCircBoth C) :=
+    Intertwined (A.aliveC C) (A.toKindAlg.fullCircBoth C) ((A.toTPKindAlg freeze).fullCircBoth C) :=
   Intertwined.append (Intertwined.append
     (Intertwined.concat (List.forall₂_map_left_iff.2 (List.forall₂_map_right_iff.2
       (List.forall₂_same.2 fun j _ => A.intertwined_slotCircBoth C j))))
@@ -822,7 +1221,7 @@ section Law
 
 variable (C : Challenger X Y Req Resp) [Nonempty X] [AddGroup Y] [Nonempty Y]
 
-theorem init_mat_eq_zero (a b : A.CReg) (h : a.workspace.2 ≠ 0 ∨ b.workspace.2 ≠ 0) :
+theorem init_mat_eq_zero (a b : A.CReg) (h : a.workspace.cnt ≠ 0 ∨ b.workspace.cnt ≠ 0) :
     (MState.reindex A.cntSplit.symm (A.init.tensorKet (0 : Fin (A.budget + 2)))).mat a b = 0 := by
   change (A.init.mat ⊗ₖ Matrix.single (0 : Fin (A.budget + 2)) 0 (1 : ℂ)) (A.cntSplit a)
     (A.cntSplit b) = 0
@@ -835,24 +1234,24 @@ theorem init_mat_eq_zero (a b : A.CReg) (h : a.workspace.2 ≠ 0 ∨ b.workspace
 theorem ended_ne_zero : A.ended ≠ 0 := by
   intro h
   have := congrArg Fin.val h
-  simp [ended] at this
+  simp [ended, AlgShape.ended] at this
 
 /-- The initial state of the composition has counter `0`, so it lies on the branches that have
 not ended. -/
 theorem cutTo_initSys :
-    cutTo (ReprogrammedCircuit.workIn (A.aliveC C)) (A.toTPKindAlg.initSys C).mat =
-      (A.toTPKindAlg.initSys C).mat := by
+    cutTo (ReprogrammedCircuit.workIn (A.aliveC C)) ((A.toTPKindAlg freeze).initSys C).mat =
+      ((A.toTPKindAlg freeze).initSys C).mat := by
   classical
   ext i j
   simp only [cutTo]
   split_ifs with h
   · rfl
   · symm
-    have hz : ∀ a b : A.CReg, (a.workspace.2 = A.ended ∨ b.workspace.2 = A.ended) →
+    have hz : ∀ a b : A.CReg, (a.workspace.cnt = A.ended ∨ b.workspace.cnt = A.ended) →
         (MState.reindex A.cntSplit.symm (A.init.tensorKet (0 : Fin (A.budget + 2)))).mat a b = 0 :=
       fun a b hab => A.init_mat_eq_zero a b (hab.imp (fun h => by rw [h]; exact A.ended_ne_zero)
         (fun h => by rw [h]; exact A.ended_ne_zero))
-    have hab : i.1.adv.workspace.2 = A.ended ∨ j.1.adv.workspace.2 = A.ended := by
+    have hab : i.1.adv.workspace.cnt = A.ended ∨ j.1.adv.workspace.cnt = A.ended := by
       rw [not_and_or] at h
       exact h.imp not_not.1 not_not.1
     simp only [KindAlg.initSys, MState.mix, MState.reindex, Matrix.sum_apply, Matrix.smul_apply,
@@ -861,14 +1260,30 @@ theorem cutTo_initSys :
     have := hz i.1.adv j.1.adv hab
     simp only [MState.reindex, MState.tensorKet_mat] at this
     simp only [KindAlg.advSplit, Equiv.coe_fn_symm_mk, smul_eq_mul, mul_eq_zero]
-    exact Or.inr (Or.inl this)
+    exact Or.inr (Or.inl (mul_eq_zero.mp this))
 
 /-- **The composition of a core algorithm with run-time kinds and a challenger, with an output read
 from all composed registers** (as `IAlg.composeOut`): the compiled circuit `fullCircBoth` on the
 composed registers with the clean ancilla, the output `f` of the composed registers. -/
-noncomputable abbrev _root_.GordieHowe.Quantum.KindAlg.composeBothOut (B : KindAlg X Y Req Resp O)
+@[reducible] noncomputable def _root_.GordieHowe.Quantum.KindAlg.composeBothOut {ksB : KindShape X Y Req Resp} (B : KindAlg ksB O)
     {O' : Type} (f : B.CW C → O') : Alg X Y O' :=
   (B.fullCircBoth C).toCircuit.toAlg (MState.withAnc KindAlg.x₀ (B.initSys C)) fun v => f v.1
+
+-- TODO(unbundle-M4): instance at the adversary because one over a free shape does not fire; state
+-- over {W} {n} (R6) or register the instance on M1b's named type
+/-- The reprogrammed registers of the composition of the trace-preserving form are nonempty (its
+initial state lives on them), as one instance at the adversary: an instance over a free shape does
+not apply to the trace-preserving form's shape, whose workspace reduces. -/
+instance instNonemptyTPRQReg : Nonempty (ReprogrammedQueryReg ((A.toTPKindAlg freeze).CW C) X Y) :=
+  (MState.withAnc KindAlg.x₀ ((A.toTPKindAlg freeze).initSys C)).nonempty
+
+-- TODO(unbundle-M4): instance at the adversary; state over {W} {n} (R6) or register the instance
+-- on M1b's named type
+/-- The registers of the composition of the trace-preserving form are nonempty, as one instance at
+the adversary (`instNonemptyTPRQReg`). -/
+instance instNonemptyTPComposeV {O' : Type} (f : (A.toTPKindAlg freeze).CW C → O') :
+    Nonempty (QueryReg ((A.toTPKindAlg freeze).composeBothOut C f).V 1 X Y) :=
+  ((A.toTPKindAlg freeze).composeBothOut C f).init.nonempty
 
 /-- **The final state of the model's composition is the part of the trace-preserving one on the
 branches that have not ended.** -/
@@ -876,19 +1291,19 @@ theorem final_composeBothOut_apply {O' : Type} (f : A.toKindAlg.CW C → O') (H 
     (p : ReprogrammedQueryReg (A.toKindAlg.CW C) X Y) :
     (A.toKindAlg.composeBothOut C f).final H p p =
       if (p.1.1, p.2) ∈ ReprogrammedCircuit.workIn (A.aliveC C) then
-        (A.toTPKindAlg.composeBothOut C f).final H p p else 0 := by
+        ((A.toTPKindAlg freeze).composeBothOut C f).final H p p else 0 := by
   have e₁ : (A.toKindAlg.composeBothOut C f).final H = withAnc KindAlg.x₀
       ((A.toKindAlg.fullCircBoth C).run H (A.toKindAlg.initSys C).mat) := by
     rw [Circuit.toAlg_final]
     exact ReprogrammedCircuit.run_toCircuit H _ _ _
-  have e₂ : (A.toTPKindAlg.composeBothOut C f).final H = withAnc KindAlg.x₀
-      ((A.toTPKindAlg.fullCircBoth C).run H (A.toTPKindAlg.initSys C).mat) := by
+  have e₂ : ((A.toTPKindAlg freeze).composeBothOut C f).final H = withAnc KindAlg.x₀
+      (((A.toTPKindAlg freeze).fullCircBoth C).run H ((A.toTPKindAlg freeze).initSys C).mat) := by
     rw [Circuit.toAlg_final]
     exact ReprogrammedCircuit.run_toCircuit H _ _ _
   rw [e₁, e₂]
   have hrun : (A.toKindAlg.fullCircBoth C).run H (A.toKindAlg.initSys C).mat =
       cutTo (ReprogrammedCircuit.workIn (A.aliveC C))
-        ((A.toTPKindAlg.fullCircBoth C).run H (A.toTPKindAlg.initSys C).mat) := by
+        (((A.toTPKindAlg freeze).fullCircBoth C).run H ((A.toTPKindAlg freeze).initSys C).mat) := by
     rw [(A.intertwined_fullCircBoth C).run H, A.cutTo_initSys C]
     rfl
   simp only [withAnc]
@@ -900,7 +1315,7 @@ theorem final_composeBothOut_apply {O' : Type} (f : A.toKindAlg.CW C → O') (H 
 theorem outLaw_composeBothOut_le {O' : Type} [DecidableEq O'] (f : A.toKindAlg.CW C → O')
     (H : X → Y) (o : O') :
     (A.toKindAlg.composeBothOut C f).outLaw H (some o) ≤
-      (A.toTPKindAlg.composeBothOut C f).outLaw H (some o) := by
+      ((A.toTPKindAlg freeze).composeBothOut C f).outLaw H (some o) := by
   rw [Alg.outLaw, Alg.outLaw]
   refine le_of_eq_of_le (map_basisLaw_apply_some _ _ _ _ o)
     (le_of_le_of_eq ?_ (map_basisLaw_apply_some _ _ _ _ o).symm)
@@ -912,6 +1327,36 @@ theorem outLaw_composeBothOut_le {O' : Type} [DecidableEq O'] (f : A.toKindAlg.C
     · simp
   · exact le_rfl
 
+/-- **Frozen or not, the trace-preserving form has the same final state on the branches that have
+not ended** (both are the model's there, `final_composeBothOut_apply`). -/
+theorem final_composeBothOut_freeze {O' : Type} (f : A.toKindAlg.CW C → O') (H : X → Y)
+    (p : ReprogrammedQueryReg (A.toKindAlg.CW C) X Y)
+    (hp : (p.1.1, p.2) ∈ ReprogrammedCircuit.workIn (A.aliveC C)) :
+    ((A.toTPKindAlg true).composeBothOut C f).final H p p =
+      ((A.toTPKindAlg false).composeBothOut C f).final H p p := by
+  have h1 := A.final_composeBothOut_apply (freeze := true) C f H p
+  have h2 := A.final_composeBothOut_apply (freeze := false) C f H p
+  rw [if_pos hp] at h1 h2
+  exact h1.symm.trans h2
+
+/-- **Frozen or not, the trace-preserving form has the same output law on the branches that have
+not ended.** -/
+theorem outLaw_composeBothOut_freeze (H : X → Y) {v : A.toKindAlg.CW C} (hv : v ∈ A.aliveC C) :
+    ((A.toTPKindAlg true).composeBothOut C id).outLaw H (some v) =
+      ((A.toTPKindAlg false).composeBothOut C id).outLaw H (some v) := by
+  rw [Alg.outLaw, Alg.outLaw]
+  refine (map_basisLaw_apply_some _ _ _ _ v).trans
+    (Eq.trans ?_ (map_basisLaw_apply_some _ _ _ _ v).symm)
+  refine Finset.sum_congr rfl fun p _ => ?_
+  split_ifs with h
+  · have hpv : p.1.1 = v := by simpa using h.symm
+    have hp : (p.1.1, p.2) ∈ ReprogrammedCircuit.workIn (A.aliveC C) := by
+      change p.1.1 ∈ A.aliveC C
+      rw [hpv]
+      exact hv
+    rw [A.final_composeBothOut_freeze C id H p hp]
+  · rfl
+
 /-- **Every event of a terminating run has at most the probability under the trace-preserving
 form**: for an event `S` of outcomes whose output is not `none`, the probability under the model's
 composition (`H` uniform, read through `e`) is at most the probability under the composition of the
@@ -919,7 +1364,7 @@ trace-preserving form. -/
 theorem realLaw_composeBothOut_le {O' B : Type} [DecidableEq O'] (f : A.toKindAlg.CW C → O')
     (e : Y ≃ B) (S : Set (Outcome (Option O') X B)) (hS : ∀ p ∈ S, p.out ≠ none) :
     ((A.toKindAlg.composeBothOut C f).realLaw e).toOuterMeasure S ≤
-      ((A.toTPKindAlg.composeBothOut C f).realLaw e).toOuterMeasure S := by
+      (((A.toTPKindAlg freeze).composeBothOut C f).realLaw e).toOuterMeasure S := by
   rw [Alg.realLaw, Alg.realLaw, PMF.toOuterMeasure_bind_apply, PMF.toOuterMeasure_bind_apply]
   refine ENNReal.tsum_le_tsum fun H => mul_le_mul' le_rfl ?_
   rw [PMF.toOuterMeasure_map_apply, PMF.toOuterMeasure_map_apply, PMF.toOuterMeasure_apply,
@@ -944,7 +1389,7 @@ namespace KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] [Nonempty X] [AddGroup Y]
-  [Nonempty Y] (A : KindAlg X Y Req Resp O) (C : Challenger X Y Req Resp)
+  [Nonempty Y] {ksA : KindShape X Y Req Resp} (A : KindAlg ksA O) (C : Challenger X Y Req Resp)
 
 theorem composeBothOut_final {O' : Type} (f : A.CW C → O') (H : X → Y) :
     (A.composeBothOut C f).final H = (A.composeBoth C).final H :=

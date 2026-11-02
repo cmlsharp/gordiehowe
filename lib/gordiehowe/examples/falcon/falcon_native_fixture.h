@@ -41,9 +41,11 @@ using bench::ms_since;
 // coefficients of s1 and s2 (an invertible s2), and h = (c - s1) / s2: a
 // statement whose signature is not valid when the coefficients break the
 // norm or the encoding budget.
+template <class S = Falcon512>
 reference::Instance chosen_instance(const std::function<int64_t(size_t)> &s1c,
                                    const std::function<int64_t(size_t)> &s2c) {
-  reference::Instance in = reference::instance();
+  constexpr size_t kN = S::kN;
+  reference::Instance in = reference::instance<S>();
   const auto zetas = falcon_ntt_zetas(kN, kQ);
   std::vector<uint64_t> s1(kN), s2(kN);
   for (size_t i = 0; i < kN; ++i) {
@@ -61,10 +63,11 @@ reference::Instance chosen_instance(const std::function<int64_t(size_t)> &s1c,
   return in;
 }
 
-// A compiled system of profile P on an instance.
-template <class P>
+// A compiled system of profile P and set S on an instance.
+template <class P, class S = Falcon512>
 struct Fixture {
-  using T = FalconNativeSystem<P>;
+  using Set = S;
+  using T = FalconNativeSystem<P, S>;
   using Value = typename T::Sys::Value;
   using ProveOptions = typename T::Sys::ProveOptions;
   using AF = typename P::FalconNativeField;
@@ -75,7 +78,7 @@ struct Fixture {
   reference::Instance in;
   T t;
   std::shared_ptr<const typename T::Compiled> c;
-  explicit Fixture(reference::Instance i = reference::instance())
+  explicit Fixture(reference::Instance i = reference::instance<S>())
       : in(std::move(i)),
         t(env, in.msg.size()),
         c(t.compile()) {}

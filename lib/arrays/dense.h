@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-// Modified 2026 by Chad Sharp and Paul Grubbs: bind runs in parallel over chunks when the table has at least 2^14 entries
+// Modified 2026 by Chad Sharp and Paul Grubbs: bind runs in parallel over chunks when the table has at least 2^13 entries, without zero-filling its buffer
 
 #ifndef PRIVACY_PROOFS_ZK_LIB_ARRAYS_DENSE_H_
 #define PRIVACY_PROOFS_ZK_LIB_ARRAYS_DENSE_H_
@@ -98,25 +98,40 @@ class Dense {
 
   // The bind of IN into this in parallel chunks of outputs
   // (util/parallel.h): output (i1, i0) reads only IN's (i1, 2 i0) and
-  // (i1, 2 i0 + 1), so the chunks write disjoint outputs. In place (IN is
-  // this), the outputs go to a fresh buffer first.
-  static constexpr size_t kParallelBind = 1 << 14;
+  // (i1, 2 i0 + 1), so the chunks write disjoint outputs. Out of place,
+  // they write this directly; in place (IN is this), a fresh buffer first,
+  // copied back in chunks.
+  static constexpr size_t kParallelBind = size_t(1) << 13;
   void bind_parallel(const Elt& r, const Dense& in, corner_t n0_out,
                      const Field& F) {
     const size_t total = size_t(n1_) * size_t(n0_out);
-    std::vector<Elt> out(total);
     const corner_t n0_in = in.n0_;
-    parallel::for_chunks(total, parallel::grain_for(total, parallel::kChunks),
-                         [&](size_t b, size_t e) {
-      for (size_t k = b; k < e; ++k) {
-        const size_t i1 = k / n0_out, i0 = k % n0_out;
-        const size_t rd = i1 * n0_in + 2 * i0;
-        out[k] = 2 * i0 + 1 < n0_in
-                     ? affine_interpolation(r, in.v_[rd], in.v_[rd + 1], F)
-                     : affine_interpolation_nz_z(r, in.v_[rd], F);
-      }
-    });
-    std::copy(out.begin(), out.end(), v_.begin());
+    const size_t grain = parallel::grain_for(total, parallel::kChunks);
+    const auto run = [&](Elt* out) {
+      parallel::for_chunks(total, grain, [&](size_t b, size_t e) {
+        for (size_t k = b; k < e; ++k) {
+          const size_t i1 = k / n0_out, i0 = k % n0_out;
+          const size_t rd = i1 * n0_in + 2 * i0;
+          out[k] = 2 * i0 + 1 < n0_in
+                       ? affine_interpolation(r, in.v_[rd], in.v_[rd + 1], F)
+                       : affine_interpolation_nz_z(r, in.v_[rd], F);
+        }
+      });
+    };
+    if (&in != this) {
+      run(v_.data());
+    } else {
+      // Kept per thread from bind to bind, its pages mapped already.
+      static thread_local parallel::Buffer<Elt> out;
+      out.resize(total);
+      run(out.data());
+      // The chunks, which may run on other threads, read through a pointer.
+      const Elt* const o = out.data();
+      Elt* const v = v_.data();
+      parallel::for_chunks(total, grain, [&](size_t b, size_t e) {
+        std::copy(o + b, o + e, v + b);
+      });
+    }
     n0_ = n0_out;
   }
 

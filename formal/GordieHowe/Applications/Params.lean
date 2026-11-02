@@ -255,7 +255,7 @@ def falcon512 : Falcon512.Params where
   q := 12289
   n := 512
   βSq := 34034726
-  S := 512 + 127
+  S := 512 + 205
   saltBytes := 40
   sigPayloadBytes := 625
   encodingFits := by norm_num [Falcon512.Codec.baseCoefficientBits, Falcon512.Codec.lowBits]

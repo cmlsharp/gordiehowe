@@ -202,14 +202,6 @@ structure DomainPub where
 
 end Blocks
 
-/-- A list sum over the first `n` naturals is the sum over `Fin n`. -/
-theorem sum_map_range_eq_sum_fin (n : ℕ) (f : ℕ → ℕ) :
-    ((List.range n).map f).sum = ∑ j : Fin n, f j := by
-  induction n with
-  | zero => simp
-  | succ n ih => rw [List.range_succ, List.map_append, List.sum_append, ih, Fin.sum_univ_castSucc]
-                 simp
-
 variable {ir : RealizedProgram}
 
 /-- **The committed block holding a committed coordinate.** -/

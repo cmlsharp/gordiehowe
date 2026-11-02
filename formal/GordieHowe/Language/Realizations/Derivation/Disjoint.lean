@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.Realizations.Derivation.Basic
+public import GordieHoweNative.Language.Realizations.Derivation.Disjoint
 
 @[expose] public section
 
@@ -16,43 +17,14 @@ The rule `ivlDisjoint a b` of a derivation: from the intervals `[lo, hi]` of `x`
 has the interval `[min lo lo', max hi hi']`: at each coordinate it is one of the two. This is how the joined operand of a
 cross-field `equal`, the sum of the `Bit` views of its two halves, reads within `[0, 1]`, where the
 interval walk's sum rule would give `[0, 2]`.
+
+The definitions are in `GordieHoweNative/Language/Realizations/Derivation/Disjoint.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
 
 open Export
-
-section
-
-variable (ir : RealizedProgram)
-
-/-- **The coordinates where a sum of masked views may be nonzero**: a masked view
-`reindex m (concat A (leaf z))`, `z` a constant holding `0` and `A` any expression of length `n`
-at the lengths `rl`, is nonzero only where its entry reads `A` (`mapNz n`); a sum of two such sums
-only on the union of theirs, when the two are disjoint (`disjointNz`). As `maskedNz`, with any
-first operand of the concatenation. -/
-def maskSupp (rl : ℕ → ℕ) : Expr → Option (List (ℕ × ℕ))
-  | .reindex m (.concat A (.leaf z)) =>
-    if ir.zeroConstB z then some (mapNz (Expr.len ir rl A) 0 m) else none
-  | .add e e' =>
-    match maskSupp rl e, maskSupp rl e' with
-    | some L, some L' => if disjointNz L L' then some (L ++ L') else none
-    | _, _ => none
-  | _ => none
-
-/-- **`ivlDisjoint a b`** in domain `d`: from `ivl d x lo hi` (`a`) and `ivl d y lo' hi'` (`b`), `x`
-and `y` of one length and well-formed shape, masked views of disjoint supports: `ivl d (x + y)
-(min lo lo') (max hi hi')`. -/
-def ivlDisjointFact (fs : List Fact) (d a b : ℕ) : Option Fact :=
-  match fs[a]?, fs[b]? with
-  | some (.ivl d₁ x lo hi), some (.ivl d₂ y lo' hi') =>
-    if d₁ = d ∧ d₂ = d ∧ ir.exprLen x = ir.exprLen y ∧ ir.exprShapeOk x = true ∧
-        ir.exprShapeOk y = true ∧ (ir.maskSupp (ir.refLen ir.exprs.length) (.add x y)).isSome = true
-    then some (.ivl d (.add x y) (min lo lo') (max hi hi'))
-    else none
-  | _, _ => none
-
-end
 
 variable {ir : RealizedProgram} {I : Interp}
 

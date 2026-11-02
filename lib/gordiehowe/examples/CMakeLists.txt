@@ -3,9 +3,11 @@
 
 # The example applications, one directory each: the relation headers, their
 # host and testing headers, their tests and their bench executable.
-#   mldsa/             ML-DSA-44 proofs of possession (native and emulated)
-#   falcon/            Falcon-512 proofs of possession (native and emulated)
-#   rings/             ML-DSA-44 and Falcon-512 private rings
+#   mldsa/             ML-DSA-44/65/87 proofs of possession (native and
+#                      emulated)
+#   falcon/            Falcon-512 and Falcon-1024 proofs of possession (native
+#                      and emulated)
+#   rings/             ML-DSA-44/65/87, Falcon-512 and Falcon-1024 private rings
 #   rsa/               RSA-2048 PKCS#1 v1.5 proof of possession
 #   p256/              P-256 gadgets (ECDSA verification, scalar mult)
 #   mdoc/              the ECDSA mDL (v7 mdoc)

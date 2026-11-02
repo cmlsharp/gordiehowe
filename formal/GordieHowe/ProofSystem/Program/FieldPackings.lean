@@ -6,15 +6,23 @@ module
 public import GordieHowe.ProofSystem.Program.FieldPacking
 public import GordieHowe.ProofSystem.GKR.ConcreteNodes
 public import GordieHowe.ProofSystem.Zerocheck.ZeroOneTwoNodes
-public import GordieHowe.Applications.MLDSA44.Native.ROMParams.AlgebraField
-public import GordieHowe.Applications.MLDSA44.Native.QROMParams.AlgebraField
-public import GordieHowe.Applications.Falcon512.Ring.Carrier.ROMParams.Interp
-public import GordieHowe.Applications.Falcon512.Ring.Carrier.QROMParams.Interp
+public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative6Relative
+public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative11
+public import GordieHowe.Applications.FieldInterps.Odd
+public import GordieHowe.Applications.Shared.Tableaux
+public import GordieHowe.Language.RealizedProgram.Interval
+public import GordieHowe.Language.RealizedProgram.WithPlan
+public import GordieHowe.Foundations.Fields.GoldilocksRelative
+public import GordieHowe.Foundations.Fields.GoldilocksCoords
+public import GordieHowe.Applications.Configuration.AlgebraSetups
+public import GordieHowe.Language.Export.Valid
+public import GordieHowe.Foundations.Fields.GoldilocksQuarticRelative
 public import GordieHowe.Applications.FieldInterps.Basic
 public import GordieHowe.Applications.FieldInterps.GF256
 public import GordieHowe.Applications.FieldInterps.Fq20
 public import GordieHowe.Foundations.Algebra.RelativePackingBijective
 public import GordieHowe.Foundations.Fields.GF2_128Tower
+public import GordieHowe.Foundations.Fields.GF2_128Tower32
 public import GordieHowe.Foundations.Fields.GF2_256Tower
 public import GordieHowe.Applications.Shared.TableauFq20
 public import GordieHowe.Applications.Falcon512.Ring.Native.System.Params
@@ -35,9 +43,12 @@ field by computation and registered as the field's instance of the class:
   the packing basis `gf2_128PackedBasis`, the inner edge `GF(2^16) <4 GF(2^64)` in the basis
   `gf2_128InnerStageBasis` and the root edge `GF(2^64) <2 GF(2^128)` in the basis
   `gf2_128RootBasis`, both with subfield masks over `S0 = GF(2^16)` in the basis
-  `gf2_128RelativeBasis`; the nodes `bit` (degree `1`) and `GF(2^16)` (degree `16`), no degree for
-  `GF(2^64)` (the field interpretation's node of that name is the whole field, and no cell lives
-  there), every other name the field; the `of_scalar` points of the packing basis; the C++ skip
+  `gf2_128RelativeBasis`, for the tree through `GF(2^32)` the inner edge `GF(2^16) <2 GF(2^32)` in
+  the basis `gf2_128Inner32StageBasis` and the root edge `GF(2^32) <4 GF(2^128)` in the basis
+  `gf2_128Root32Basis` with the same masks, and for a tree with no intermediate node the direct
+  edge `GF(2^16) <8 GF(2^128)` in that basis; the nodes `bit` (degree `1`) and `GF(2^16)` (degree
+  `16`), no degree for `GF(2^64)` and `GF(2^32)` (the field interpretation's nodes of those names
+  are the whole field, and no cell lives there), every other name the field; the `of_scalar` points of the packing basis; the C++ skip
   domain of width `16` at degree `2`; a word's bit coordinates its decoded bits.
 * **`GF(2^256)`** (`gf256Packing`): the same tree `GF(2) <16 GF(2^16) <4 GF(2^64) <4 GF(2^256)` in
   the bases `gf2_256PackedBasis`, `gf2_256InnerStageBasis` and `gf2_256RootBasis`, masks over
@@ -53,7 +64,6 @@ open Export PackingStage RelativePacking PEdge
 
 section Fq6
 
-open MLDSA44.Native.ROMParams.HashField
 
 /-- `F_q^6` is `F_{q^6}`. -/
 theorem fq6_top : fixedField MLDSANativeField6 8380417 6 = ⊤ := by
@@ -161,7 +171,31 @@ def gf128RootEdge : EdgeKit GF2_128 2 (fixedField GF2_128 2 16) 64 2 where
   top_eq := by rw [show 64 * 2 = 128 from rfl, gf128_top]; rfl
   masks := MaskKit.subfield gf2_128RelativeBasis.β (fixedField_le_mul 16 4) (packSub_bijective _)
 
-/-- **The edges of `GF(2^128)`**: the bit edge, the inner edge and the root edge. -/
+/-- **The direct edge `GF(2^16) <8 GF(2^128)`** with subfield masks over `GF(2^16)`, in the
+relative basis `gf2_128RelativeBasis` (the tree of a domain with no `GF(2^64)` node). -/
+def gf128DirectEdge : EdgeKit GF2_128 2 (fixedField GF2_128 2 16) 16 8 where
+  e := 8
+  basis := gf2_128RelativeBasis.toStageBasis
+  top_eq := by rw [show 16 * 8 = 128 from rfl, gf128_top]; rfl
+  masks := MaskKit.subfield gf2_128RelativeBasis.β le_rfl (packSub_bijective _)
+
+/-- **The inner edge `GF(2^16) <2 GF(2^32)`** with subfield masks over `GF(2^16)`. -/
+def gf128Inner32Edge : EdgeKit GF2_128 2 (fixedField GF2_128 2 16) 16 2 where
+  e := 8
+  basis := gf2_128Inner32StageBasis
+  top_eq := gf2_128Inner32StageBasis_top
+  masks := MaskKit.subfield gf2_128RelativeBasis.β le_rfl (packSub_bijective _)
+
+/-- **The root edge `GF(2^32) <4 GF(2^128)`** with subfield masks over `GF(2^16)`. -/
+def gf128Root32Edge : EdgeKit GF2_128 2 (fixedField GF2_128 2 16) 32 4 where
+  e := 4
+  basis := gf2_128Root32Basis.toStageBasis
+  top_eq := by rw [show 32 * 4 = 128 from rfl, gf128_top]; rfl
+  masks := MaskKit.subfield gf2_128RelativeBasis.β (fixedField_le_mul 16 2) (packSub_bijective _)
+
+/-- **The edges of `GF(2^128)`**: the bit edge, the inner edges `GF(2^16) <4 GF(2^64)` and
+`GF(2^16) <2 GF(2^32)`, the root edges `GF(2^64) <2 GF(2^128)` and `GF(2^32) <4 GF(2^128)`, and
+the direct edge. -/
 def gf128Edges (m d : ℕ) (mode : PackingMode) :
     Option (EdgeKit GF2_128 2 (fixedField GF2_128 2 16) m d) :=
   if h : m = 1 ∧ d = 16 ∧ mode = .squaringChain then
@@ -170,13 +204,19 @@ def gf128Edges (m d : ℕ) (mode : PackingMode) :
     some (cast (by rw [h.1, h.2.1]) gf128InnerEdge)
   else if h : m = 64 ∧ d = 2 ∧ mode = .subfieldMasks then
     some (cast (by rw [h.1, h.2.1]) gf128RootEdge)
+  else if h : m = 16 ∧ d = 8 ∧ mode = .subfieldMasks then
+    some (cast (by rw [h.1, h.2.1]) gf128DirectEdge)
+  else if h : m = 16 ∧ d = 2 ∧ mode = .subfieldMasks then
+    some (cast (by rw [h.1, h.2.1]) gf128Inner32Edge)
+  else if h : m = 32 ∧ d = 4 ∧ mode = .subfieldMasks then
+    some (cast (by rw [h.1, h.2.1]) gf128Root32Edge)
   else none
 
-/-- **The node degrees of `GF(2^128)`**: `GF(2^16)`, `bit`, none for `GF(2^64)` (`gf2Node` reads
-it as the whole field), every other name the field. -/
+/-- **The node degrees of `GF(2^128)`**: `GF(2^16)`, `bit`, none for `GF(2^64)` and `GF(2^32)`
+(`gf2Node` reads them as the whole field), every other name the field. -/
 def gf128NodeDeg (s : String) : Option ℕ :=
   if s = "GF(2^16)" then some 16 else if s = "bit" then some 1
-  else if s = "GF(2^64)" then none else some 128
+  else if s = "GF(2^64)" ∨ s = "GF(2^32)" then none else some 128
 
 theorem gf128_node_eq (s : String) (m : ℕ) (h : gf128NodeDeg s = some m) :
     ((gf2Node s : AddSubgroup GF2_128) : Set GF2_128) = fixedField GF2_128 2 m := by
@@ -621,15 +661,6 @@ instance : gf256.Packing := gf256Packing
 
 /-! ## The Ligero certificates -/
 
-/-- **The tableau of `MLDSA44.Native.ROMParams`'s domain `A`**: `(rate, t, block_enc) = (9, 74, 3376)`,
-the mask test at `A = 975` with `17258473` exceptional challenges (`MLDSA44.Native.ROMParams.AlgebraField.aMaskTest`). -/
-def mldsaNativeROMACert : LigeroCert where
-  Sh := MLDSA44.Native.ROMParams.AlgebraField.aShape
-  agree := MLDSA44.Native.ROMParams.AlgebraField.aAgree
-  exceptions := MLDSA44.Native.ROMParams.AlgebraField.aExceptions
-  line C hk := MLDSA44.Native.ROMParams.AlgebraField.aMaskTest C hk
-  masking := .split
-
 /-- **The tableau `(rate, t, block_enc) = (12, 63, 3955)` at two low-degree repetitions**, the
 mask test at `A = 982` with `41166706213` exceptional challenges (`Tableau.gf128K282R2MaskTest`). -/
 def gf128K282R2Cert : LigeroCert where
@@ -637,6 +668,15 @@ def gf128K282R2Cert : LigeroCert where
   agree := Tableau.gf128K282R2Agree
   exceptions := Tableau.gf128K282R2Exceptions
   line C hk := Tableau.gf128K282R2MaskTest C hk
+  masking := .split
+
+/-- **The tableau `(rate, t, block_enc) = (12, 63, 4203)` at two low-degree repetitions**, the
+mask test at `A = 1044` with `50940304454` exceptional challenges (`Tableau.gf128K300R2MaskTest`). -/
+def gf128K300R2Cert : LigeroCert where
+  Sh := Tableau.gf128K300R2Shape
+  agree := Tableau.gf128K300R2Agree
+  exceptions := Tableau.gf128K300R2Exceptions
+  line C hk := Tableau.gf128K300R2MaskTest C hk
   masking := .split
 
 /-- **The tableau of `Falcon512.Native.ROMParams`'s domain `A`** at two low-degree repetitions:
@@ -667,16 +707,6 @@ def fq20K271Cert : LigeroCert where
   agree := Tableau.fq20K271Agree
   exceptions := Tableau.fq20K271Exceptions
   line C hk := Tableau.fq20K271MaskTest C hk
-  masking := .split
-
-/-- **The tableau of `MLDSA44.Native.QROMParams`'s domain `A`**: `(rate, t, block_enc) = (9, 144, 4274)`
-at two low-degree repetitions, the mask test at `A = 1169` with `74189372805` exceptional challenges
-(`MLDSA44.Native.QROMParams.AlgebraField.aMaskTest`). -/
-def mldsaNativeQROMACert : LigeroCert where
-  Sh := MLDSA44.Native.QROMParams.AlgebraField.aShape
-  agree := MLDSA44.Native.QROMParams.AlgebraField.aAgree
-  exceptions := MLDSA44.Native.QROMParams.AlgebraField.aExceptions
-  line C hk := MLDSA44.Native.QROMParams.AlgebraField.aMaskTest C hk
   masking := .split
 
 /-- **The Goldilocks⁴ tableau** `(6, 201, 4095)`. -/

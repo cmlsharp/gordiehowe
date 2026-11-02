@@ -149,6 +149,12 @@ theorem CausalViews.honestView_eq_map (M : CausalViews P t)
   rw [PMF.map_comp]
   rfl
 
+-- TODO(instance-hazard): `Coins` and its `Fintype`/`Nonempty` instances are fields, so each
+-- constructed simulator carries its own instance terms. A construction that builds one simulator
+-- from others (composition, a coin change) and is then compared with another could give equal
+-- coin types with unequal instances, so the two simulators agree only up to proof.
+-- If that arises, take `Coins` as a parameter (as `NARG.Simulator` does) or type it through a
+-- named coins function with registered instances.
 /-- **A joint simulator** for the views `M` on public statements `Pub` (CY24 Definition 23.1.8;
 `IOP.JointSimulator`): from the public statement and its own uniform coins, a composite view
 (challenges included). It must run in polynomial time; every value is a named definition whose

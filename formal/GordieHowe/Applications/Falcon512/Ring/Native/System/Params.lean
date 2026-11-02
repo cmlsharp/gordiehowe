@@ -5,8 +5,8 @@ module
 
 public import GordieHowe.Applications.Falcon512.System.Params
 public import GordieHowe.Foundations.Probability.RangeGroups
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative20
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative9
+public import GordieHowe.Applications.Falcon512.Fields.FalconNative20
+public import GordieHowe.Applications.Falcon512.Fields.FalconNative9
 
 @[expose] public section
 
@@ -18,8 +18,8 @@ The parameters of the Falcon-512 ring signature's native arm as the C++ compiles
 ring's profile constants): the membership table's transform root
 (`psi`), and the Ligero codes of domain A at the ROM parameters at two low-degree repetitions, one for
 `Falcon512.Native.ROMParams` (`GordieHowe.Falcon512.Ring.Native.Params.aNativeROMShape`) and one for `Falcon512.Ring.Native.ROMParams`
-(`GordieHowe.Falcon512.Ring.Native.Params.aRingROMShape`), with their line certificates (`GordieHowe.Falcon512.Ring.Native.Params.aNativeROMMaskTest`, `GordieHowe.Falcon512.Ring.Native.Params.aRingROMMaskTest`) and their
-round bounds (`GordieHowe.Falcon512.Ring.Native.Params.aNativeROMCommit_le`, `GordieHowe.Falcon512.Ring.Native.Params.aRingROMCommit_le`, …). The notes below
+(`GordieHowe.Falcon512.Ring.Native.Params.aRingROMShape`), with their line certificates (`GordieHowe.Falcon512.Ring.Native.Params.aNativeROMMaskTest`, `GordieHowe.Falcon512.Ring.Native.Params.aRingROMMaskTest`). The round bounds are the library's, at the certificates'
+fractions (`GordieHowe.RealizedProgram.FieldRoundsLe.of_ok`). The notes below
 record the C++'s range plan, phase layout, domain A and its packing tree, which the generated
 plan data carries (`GordieHowe/Generated/Falcon512/Ring/Native/QROMParams/Plan.lean`,
 `GordieHowe/Generated/Falcon512/Ring/Native/ROMParams/Plan.lean`). The system has one domain, `A`, and no MAC: the
@@ -156,32 +156,6 @@ theorem aNativeROMMaskTest {F : Type} [Field F] (C : GordieHowe.RSCode F aNative
     Ligero.MaskTest.Pieces.Parameters C aNativeROMAgree aNativeROMExceptions :=
   ⟨by rw [hk]; decide, aNativeROMLine C hk⟩
 
-/-- The round bounds of the tableau (`Ligero.MaskTest.Pieces.bounds`). -/
-noncomputable abbrev aNativeROMBounds : Ligero.AgreementThreshold.Bounds :=
-  Ligero.MaskTest.Pieces.bounds FalconNativeField9 aNativeROMN aNativeROMAgree aNativeROMExceptions
-    aNativeROMReps aNativeROMK aNativeROMT
-
-/-- The commit round of the tableau: `(34023420758/(|F| − 1))^2`, `2^-174.56`. -/
-theorem aNativeROMCommit_le : aNativeROMBounds.commit ≤ (1 : ℝ≥0) / 2 ^ 140 := by
-  show (((34023420758 : ℕ) : ℝ≥0) / (Fintype.card FalconNativeField9 - 1)) ^ 2 ≤ _
-  rw [falconNativeField_card]
-  have h := ratio_pred_pow_le_dyadic (num := 34023420758) (q := 12289 ^ 9) (c := 1) (e := 140)
-    (nrep := 2) (by decide +kernel)
-  rwa [Nat.cast_one] at h
-
-/-- The test round of the tableau with the mask test: `1/|F|`, `2^-122.266`. -/
-theorem aNativeROMTest_le : aNativeROMBounds.test ≤ (218048 : ℝ≥0) / 2 ^ 140 := by
-  show (1 : ℝ≥0) / (Fintype.card FalconNativeField9 : ℝ≥0) ≤ _
-  rw [falconNativeField_card]
-  exact_mod_cast ratio_le_dyadic (num := 1) (c := 218048) (by decide +kernel) (by decide +kernel)
-
-/-- The column round of the tableau with the mask test at `t = 90`, with the joint subfield
-term: `((758 − 1)_90 + (2 · 338 − 1)_90)/(1694)_90 + (338 − 1)_90/(1694)_90`, `2^-109.066`. -/
-theorem aNativeROMColumn_le : aNativeROMBounds.column +
-    Ligero.SubfieldTest.jointSubfieldError aNativeROMK aNativeROMN aNativeROMT ≤
-      (2051026752 : ℝ≥0) / 2 ^ 140 :=
-  column_le_dyadic (by decide +kernel) (by decide +kernel)
-
 /-! ### The code at the ROM parameters of `Falcon512.Ring.Native.ROMParams`'s domain A, `(N, k) = (1506, 300)`, `t = 89`, two low-degree repetitions -/
 
 /-- The rate of the tableau: `5`. -/
@@ -235,31 +209,5 @@ theorem aRingROMMaskTest {F : Type} [Field F] (C : GordieHowe.RSCode F aRingROMN
     (hk : C.k = aRingROMK) :
     Ligero.MaskTest.Pieces.Parameters C aRingROMAgree aRingROMExceptions :=
   ⟨by rw [hk]; decide, aRingROMLine C hk⟩
-
-/-- The round bounds of the tableau (`Ligero.MaskTest.Pieces.bounds`). -/
-noncomputable abbrev aRingROMBounds : Ligero.AgreementThreshold.Bounds :=
-  Ligero.MaskTest.Pieces.bounds FalconNativeField9 aRingROMN aRingROMAgree aRingROMExceptions
-    aRingROMReps aRingROMK aRingROMT
-
-/-- The commit round of the tableau: `(51456804230/(|F| − 1))^2`, `2^-173.37`. -/
-theorem aRingROMCommit_le : aRingROMBounds.commit ≤ (1 : ℝ≥0) / 2 ^ 140 := by
-  show (((51456804230 : ℕ) : ℝ≥0) / (Fintype.card FalconNativeField9 - 1)) ^ 2 ≤ _
-  rw [falconNativeField_card]
-  have h := ratio_pred_pow_le_dyadic (num := 51456804230) (q := 12289 ^ 9) (c := 1) (e := 140)
-    (nrep := 2) (by decide +kernel)
-  rwa [Nat.cast_one] at h
-
-/-- The test round of the tableau with the mask test: `1/|F|`, `2^-122.266`. -/
-theorem aRingROMTest_le : aRingROMBounds.test ≤ (218048 : ℝ≥0) / 2 ^ 140 := by
-  show (1 : ℝ≥0) / (Fintype.card FalconNativeField9 : ℝ≥0) ≤ _
-  rw [falconNativeField_card]
-  exact_mod_cast ratio_le_dyadic (num := 1) (c := 218048) (by decide +kernel) (by decide +kernel)
-
-/-- The column round of the tableau with the mask test at `t = 89`, with the joint subfield
-term: `((673 − 1)_89 + (2 · 300 − 1)_89)/(1506)_89 + (300 − 1)_89/(1506)_89`, `2^-108.588`. -/
-theorem aRingROMColumn_le : aRingROMBounds.column +
-    Ligero.SubfieldTest.jointSubfieldError aRingROMK aRingROMN aRingROMT ≤
-      (2856780266 : ℝ≥0) / 2 ^ 140 :=
-  column_le_dyadic (by decide +kernel) (by decide +kernel)
 
 end GordieHowe.Falcon512.Ring.Native.Params

@@ -10,11 +10,17 @@
 //     and block maps: honest proofs, a wrong index, a record off the table;
 //   - lookup over a small public table: honest, a record off the table, a
 //     wrong multiplicity; with a range check in the same domain, one alpha;
+//   - the intervals of selected and looked-up records (table hulls), a
+//     spectral product term's interval against brute force, and assert_mod
+//     over a selected spectrum with the spectral product among either
+//     sign's terms (honest, tampered, its productMod derivation and its
+//     mutants);
 //   - compile errors for misuse.
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <random>
 #include <string>
 #include <vector>
@@ -27,11 +33,14 @@
 #include "gordiehowe/lib/ring_core.h"
 #include "gf2k/gf2_256.h"
 #include "gf2k/lch14_reed_solomon.h"
+#include "gordiehowe/compiler/derivation_check.h"
 #include "gordiehowe/compiler/plan_program.h"
+#include "gordiehowe/compiler/program_builder.h"
 #include "gordiehowe/instances.h"
 #include "gordiehowe/system.h"
 #include "gordiehowe/lib/permutation.h"
 #include "gordiehowe/lib/table.h"
+#include "gordiehowe/ops/spectral.h"
 #include "gtest/gtest.h"
 #include "random/secure_random_engine.h"
 
@@ -835,6 +844,417 @@ TEST(GordieHoweTable, LookupWideAndMappedRecords) {
 }
 
 // ------------------------------------------------------- compile errors --
+
+// --------------------------------------------------------- table hulls --
+
+// Interval propagation reads public-table records (range_internal's
+// table_hull and table_preimage_hull): a looked-up or selected identity
+// cell lies in the hull of its column's bounded entries, a selected
+// spectrum's polynomial in the hull of its leaf's columns under the same
+// transform only, and an unbounded block bounds nothing. The staged
+// transform agrees with the row map in both orders, so the preimage is
+// the row the selection names.
+TEST(GordieHoweTable, TableHulls) {
+  using I = compiler::range_internal::Interval;
+  namespace ri = compiler::range_internal;
+  const size_t n = 16, R = 8;
+  Sys cs("gh-table-hulls");
+  auto &A = cs.domain(env().a_profile(), "A");
+  const Bound p = field_characteristic(af());
+  const Graph &g = cs.graph();
+  // An identity table of bounded rows: a lookup's records and a selected
+  // record lie in [0, 99]; the free value has no interval.
+  auto rows = A.pub(Subfield{}, "rows", Shape{R, 2}).bounded(100);
+  auto recs = A.priv(Subfield{}, "recs", Shape{3, 2});
+  auto pick = A.priv(Subfield{}, "pick", 2);
+  auto free_v = A.priv(Subfield{}, "free", 2);
+  const auto t = lib::table::public_table(
+      cs, A, "t", rows, lib::table::RowMap<AF>::identity(2));
+  lib::table::lookup_rows(cs, t, "attrs", recs);
+  lib::table::select_row(cs, t, "one", pick);
+  EXPECT_EQ(ri::table_hull(A, g, p, recs.id), (I{0, 99}));
+  EXPECT_EQ(ri::table_hull(A, g, p, pick.id), (I{0, 99}));
+  EXPECT_EQ(ri::table_hull(A, g, p, recs[1].id), (I{0, 99}));
+  EXPECT_FALSE(ri::table_hull(A, g, p, free_v.id));
+  // A ring of keys below 12289 selected as spectra in natural order.
+  auto keys = A.pub(Subfield{}, "keys", Shape{R, n}).bounded(12289);
+  auto spec = A.priv(Subfield{}, "spec", n);
+  const auto ring = lib::table::public_table(
+      cs, A, "ring", keys,
+      lib::table::RowMap<AF>::negacyclic(af(), n, psi_of(n),
+                                         ops::NttOrder::kNatural));
+  lib::table::select_row(cs, ring, "signer", spec);
+  EXPECT_EQ(ri::table_preimage_hull(A, g, p, spec.id, 0, n, psi_of(n), true),
+            (I{0, 12288}));
+  // Another order, another root, a partial slice: no interval; nor does a
+  // spectrum have a coefficient interval of its own.
+  EXPECT_FALSE(ri::table_preimage_hull(A, g, p, spec.id, 0, n, psi_of(n), false));
+  EXPECT_FALSE(ri::table_preimage_hull(A, g, p, spec.id, 0, n,
+                                       af().negf(psi_of(n)), true));
+  EXPECT_FALSE(ri::table_preimage_hull(A, g, p, spec.id, 0, n / 2, psi_of(n),
+                                       true));
+  EXPECT_FALSE(ri::table_hull(A, g, p, spec.id));
+  // Unbounded rows bound nothing.
+  auto open_rows = A.pub(Subfield{}, "open", Shape{R, 2});
+  auto open_rec = A.priv(Subfield{}, "open_rec", 2);
+  const auto t2 = lib::table::public_table(
+      cs, A, "t2", open_rows, lib::table::RowMap<AF>::identity(2));
+  lib::table::select_row(cs, t2, "two", open_rec);
+  EXPECT_FALSE(ri::table_hull(A, g, p, open_rec.id));
+  // The staged transform is the row map's, in either order.
+  const AV row = lift(af(), random_mod(n, 12289, 11));
+  for (auto order : {ops::NttOrder::kNatural, ops::NttOrder::kScheme}) {
+    const auto op = ops::Ntt(af(), n, psi_of(n), ops::Stages::every(2), order);
+    AV a = row;
+    op.spec->staged->apply(a);
+    EXPECT_EQ(a, lib::table::RowMap<AF>::negacyclic(af(), n, psi_of(n), order)
+                     .apply(af(), row));
+    op.spec->staged->inverse(a);
+    EXPECT_EQ(a, row);
+  }
+}
+
+// The realized program of C states the spectral product form NAME as the
+// source mod_q w R, R the convolution by the selected spectrum in NTT form;
+// its derivation is productMod over a tableKernel source per term (TERMS
+// of them), which the C++ check accepts; it refuses a kernel's block, its
+// operator or its selection changed, a kernel hull past p/2, a term's
+// operand interval missing, and a predicate whose R is not the kernels'
+// sum.
+void expect_spectral_derivation(const CompiledSystem &comp, const std::string &name,
+                                size_t terms) {
+  ir::Certificates c0;
+  const ir::Program P = compiler::build_ir(comp, c0);
+  size_t pid = SIZE_MAX;
+  for (size_t i = 0; i < P.predicates.size(); ++i)
+    if (P.predicates[i].name == name) pid = i;
+  ASSERT_NE(pid, SIZE_MAX);
+  const ir::Predicate &q = P.predicates[pid];
+  EXPECT_EQ(q.body, ir::Predicate::kMod);
+  EXPECT_EQ(q.mod.form, ir::ModForm::kSpectralProduct);
+  ASSERT_EQ(c0.deriv_gaps.at(pid), "");
+  const auto &d0 = c0.derivations.at(pid);
+  ASSERT_FALSE(d0.empty());
+  ASSERT_EQ(d0.back().rule, ir::DStep::kProductMod);
+  ASSERT_EQ(d0.back().premises.size(), 2 + 2 * terms);
+  auto check = [&](const ir::Program &p, ir::Certificates c) {
+    compiler::DerivChecker ch(p, c);
+    return ch.check(pid);
+  };
+  ASSERT_EQ(check(P, c0), "");
+  // The first kernel premise (P's or N's, whichever holds the spectral
+  // product), and its place among the premises.
+  size_t kp = SIZE_MAX;
+  for (size_t i = 0; i < d0.back().premises.size() && kp == SIZE_MAX; ++i) {
+    const auto &st = d0[d0.back().premises[i]];
+    if (st.rule == ir::DStep::kSrc && st.src == ir::DStep::kTableKernel) kp = i;
+  }
+  ASSERT_NE(kp, SIZE_MAX);
+  const size_t ker = d0.back().premises[kp];
+  auto with = [&](auto edit) {
+    ir::Certificates c = c0;
+    edit(c.derivations[pid]);
+    return check(P, c);
+  };
+  const std::string p = P.fields.at(P.domains.at(q.domain).field).characteristic;
+  EXPECT_NE(with([&](auto &d) { d[ker].ints.at(2) = "1"; }), "");
+  EXPECT_NE(with([&](auto &d) { d[ker].src_arg += 1; }), "");
+  EXPECT_NE(with([&](auto &d) { d[ker].tails.clear(); }), "");
+  EXPECT_NE(with([&](auto &d) { d[ker].ints.at(0) = "-" + p; }), "");
+  EXPECT_NE(with([&](auto &d) { d[ker].ints.at(1) = p; }), "");
+  EXPECT_NE(with([&](auto &d) { d[ker].src = ir::DStep::kTableHull; }), "");
+  EXPECT_NE(with([](auto &d) { d.back().premises.pop_back(); }), "");
+  EXPECT_NE(with([&](auto &d) { std::swap(d.back().premises[kp], d.back().premises[kp + 1]); }), "");
+  EXPECT_NE(with([](auto &d) { std::swap(d.back().premises[0], d.back().premises[1]); }), "");
+  EXPECT_NE(with([](auto &d) { d.back().premises.push_back(d.back().premises[3]); }), "");
+  // A predicate whose parts are swapped: the premises no longer match.
+  {
+    ir::Program p2 = P;
+    std::swap(p2.predicates[pid].rhs, p2.predicates[pid].lhs);
+    EXPECT_NE(check(p2, c0), "");
+  }
+  // The expression form's rule on the spectral predicate.
+  {
+    ir::Program p2 = P;
+    p2.predicates[pid].mod.form = ir::ModForm::kProduct;
+    EXPECT_NE(check(p2, c0), "");
+  }
+}
+
+// A spectral product term's interval (ops/integer_congruence.h) holds its
+// integer value, sum_t s_t (h_t * x_t) in Z[X]/(X^n + 1), for random h_t
+// and x_t drawn from the intervals its environment gives (ends included),
+// and is the negacyclic product's for one term; a congruence's parts
+// (P, N) are the sums of its terms of each sign, hulled over the rows.
+TEST(GordieHoweTable, SpectralProductInterval) {
+  const size_t n = 8;
+  Sys cs("gh-table-spectral-term");
+  auto &A = cs.domain(env().a_profile(), "A");
+  auto s0 = A.priv(Subfield{}, "s0", n);
+  auto s1 = A.priv(Subfield{}, "s1", Shape{2, n});
+  auto x = A.priv(Subfield{}, "x", n);
+  auto y = A.priv(Subfield{}, "y", Shape{2, n});
+  auto w = A.priv(Subfield{}, "w", n);
+  const auto ntt = ops::Ntt(af(), n, psi_of(n), ops::Stages::every(2),
+                            ops::NttOrder::kNatural);
+  using T = std::shared_ptr<const ops::IntegerTerm<AF>>;
+  const T t0 = std::make_shared<const ops::SpectralProductTerm<AF>>(
+      ops::SpectralProduct(s0, x, ntt) -
+      af().of_scalar(3) * ops::SpectralMatVec(s1, y, ntt));
+  const T t1 = std::make_shared<const ops::SpectralProductTerm<AF>>(
+      ops::SpectralProduct(s0, y[1], ntt));
+  const T tw = std::make_shared<const ops::ExprTerm<AF>>(expr_node(w));
+  using I = IntInterval;
+  const std::map<size_t, I> H = {{s0.id, {-2, 5}}, {s1.id, {0, 3}}};
+  const std::map<size_t, I> X = {{x.id, {-1, 4}}, {y.id, {-3, 2}}, {w.id, {0, 9}}};
+  ops::TermIntervals<AF> env;
+  env.spectrum = [&](size_t id, size_t, const ops::StagedNtt<AF> &) {
+    return std::optional<I>(H.at(id));
+  };
+  env.expr = [&](const ExprPtr<AF> &e, std::string &) {
+    std::optional<I> out;
+    for (size_t id : expr_deps(e)) {
+      size_t src = id;
+      if (!X.count(src)) src = cs.graph().nodes.at(id).deps.at(0);
+      out = out ? int_interval::hull(*out, X.at(src)) : X.at(src);
+    }
+    return out;
+  };
+  env.signed_of = [](const AElt &a) -> std::optional<SignedInt> {
+    const auto r = compiler::range_internal::signed_rep(
+        af(), field_characteristic(af()), false, a);
+    if (!r) return std::nullopt;
+    return r->first ? -SignedInt(r->second) : SignedInt(r->second);
+  };
+  env.cap_bits = 300;
+  std::string why;
+  const auto R0 = t0->interval(env, why);
+  ASSERT_TRUE(R0) << why;
+  // h * x over the integers.
+  auto conv = [&](const std::vector<int64_t> &h, const std::vector<int64_t> &v) {
+    std::vector<int64_t> c(n, 0);
+    for (size_t i = 0; i < n; ++i)
+      for (size_t j = 0; j < n; ++j) {
+        const size_t k = (i + n - j) % n;
+        c[i] += j <= i ? h[j] * v[k] : -h[j] * v[k];
+      }
+    return c;
+  };
+  std::mt19937_64 g(5);
+  auto draw = [&](const I &iv, size_t len, int mode) {
+    std::vector<int64_t> v(len);
+    const int64_t lo = int64_t(iv.first), hi = int64_t(iv.second);
+    for (auto &z : v)
+      z = mode == 0 ? lo : mode == 1 ? hi : lo + int64_t(g() % uint64_t(hi - lo + 1));
+    return v;
+  };
+  for (int trial = 0; trial < 300; ++trial) {
+    const int mode = trial < 2 ? trial : 2;
+    const auto h0 = draw(H.at(s0.id), n, mode);
+    const auto h1 = draw(H.at(s1.id), 2 * n, mode);
+    const auto xv = draw(X.at(x.id), n, mode);
+    const auto yv = draw(X.at(y.id), 2 * n, mode);
+    auto part = [&](const std::vector<int64_t> &v, size_t at) {
+      return std::vector<int64_t>(v.begin() + long(at), v.begin() + long(at + n));
+    };
+    std::vector<int64_t> r0 = conv(h0, xv);
+    for (size_t j = 0; j < 2; ++j) {
+      const auto c = conv(part(h1, j * n), part(yv, j * n));
+      for (size_t i = 0; i < n; ++i) r0[i] -= 3 * c[i];
+    }
+    for (int64_t v : r0)
+      ASSERT_TRUE(SignedInt(v) >= R0->first && SignedInt(v) <= R0->second)
+          << v << " outside [" << int_str(R0->first) << ", " << int_str(R0->second) << "]";
+  }
+  // One term: the negacyclic product's interval.
+  const auto R1 = t1->interval(env, why);
+  ASSERT_TRUE(R1);
+  EXPECT_EQ(*R1, *int_interval::negacyclic(n, H.at(s0.id), X.at(y.id), 300));
+  // The congruence +t0 - w, +w - t1 over two rows: P and N, hulled.
+  const ops::Congruence<AF> cong(
+      {{ops::plus(t0), ops::minus(tw)}, {ops::plus(tw), ops::minus(t1)}}, "c");
+  EXPECT_TRUE(cong.transformed());
+  EXPECT_EQ(cong.dims(), (std::vector<size_t>{2, n}));
+  const auto P = cong.part_interval(env, 1, why);
+  const auto N = cong.part_interval(env, -1, why);
+  ASSERT_TRUE(P && N);
+  EXPECT_EQ(*P, int_interval::hull(*R0, X.at(w.id)));
+  EXPECT_EQ(*N, int_interval::hull(X.at(w.id), *R1));
+  // A spectrum without a hull bounds nothing.
+  env.spectrum = [](size_t, size_t, const ops::StagedNtt<AF> &) {
+    return std::optional<I>();
+  };
+  EXPECT_FALSE(t0->interval(env, why));
+  EXPECT_NE(why.find("has no coefficient interval"), std::string::npos) << why;
+}
+
+// The congruence h s - w = 0 (mod q) with the spectral product among the
+// positive terms and w among the negative (no side distinguished): the
+// same relation as SpectralMod's w = h s, its equation normalized to
+// Ntt(-w - m qlo - m q) = -(spec * Ntt(s)); an honest proof verifies, a
+// wrong residue and a key off the ring are rejected, and its derivation
+// checks.
+TEST(GordieHoweTable, SpectralModSymmetric) {
+  const size_t n = 16, R = 8;
+  const uint64_t q = 12289;
+  Sys cs("gh-table-spectral-sym");
+  auto &A = cs.domain(env().a_profile(), "A");
+  auto keys = A.pub(Subfield{}, "keys", Shape{R, n}).bounded(q);
+  auto spec = A.priv(Subfield{}, "spec", n);
+  auto sv = A.priv(Subfield{}, "s", n);
+  auto w = A.priv(Subfield{}, "w", n);
+  assert_range(sv, 50, "s");
+  assert_range(w, q, "w");
+  const auto ntt = ops::Ntt(af(), n, psi_of(n), ops::Stages::every(2),
+                            ops::NttOrder::kNatural);
+  const auto map = lib::table::RowMap<AF>::negacyclic(
+      af(), n, psi_of(n), ops::NttOrder::kNatural);
+  const auto ring = lib::table::public_table(cs, A, "ring", keys, map);
+  const auto sel = lib::table::select_row(cs, ring, "signer", spec);
+  using T = std::shared_ptr<const ops::IntegerTerm<AF>>;
+  ops::assert_congruence<AF>(
+      cs,
+      {{ops::plus(T(std::make_shared<const ops::SpectralProductTerm<AF>>(
+            ops::SpectralProduct(spec, sv, ntt)))),
+        ops::minus(T(std::make_shared<const ops::ExprTerm<AF>>(expr_node(w))))}},
+      q, "sym");
+  auto c = compile(cs);
+  const Bound P = 12288 * 49;
+  const std::string want = "assert_mod 'sym': lhs in [-" + bound_str(15 * P) + ", " +
+                           bound_str(16 * P) + "], rhs in [0, 12288]";
+  EXPECT_NE(c->report().find(want), std::string::npos) << c->report();
+  expect_spectral_derivation(*c, "sym", 1);
+  const auto kv = random_mod(R * n, q, 31);
+  const auto s = random_mod(n, 50, 32);
+  const size_t signer = 2;
+  auto residue = [&](const std::vector<uint64_t> &h) {
+    std::vector<uint64_t> out(n);
+    for (size_t k = 0; k < n; ++k) {
+      __int128 acc = 0;
+      for (size_t i = 0; i < n; ++i) {
+        const size_t j = (k + n - i) % n;
+        const __int128 t = __int128(h[i]) * s[j];
+        acc += i <= k ? t : -t;
+      }
+      out[k] = uint64_t(((acc % q) + q) % q);
+    }
+    return out;
+  };
+  const std::vector<uint64_t> h(kv.begin() + long(signer * n),
+                                kv.begin() + long((signer + 1) * n));
+  Assignment st;
+  st.set(keys, lift(af(), kv));
+  auto witness = [&](const std::vector<uint64_t> &key, std::vector<uint64_t> r) {
+    Assignment wi;
+    wi.set(spec, map.apply(af(), lift(af(), key)));
+    wi.set(sv, lift(af(), s));
+    wi.set(w, lift(af(), r));
+    wi.set(sel.index, bits_of(signer, 3));
+    return wi;
+  };
+  EXPECT_TRUE(honest(*c, st, witness(h, residue(h))));
+  {
+    auto r = residue(h);
+    r[5] = (r[5] + 1) % q;
+    EXPECT_TRUE(verifier_rejects_witness(*c, st, witness(h, r)));
+  }
+  {
+    auto off = h;
+    off[1] = (off[1] + 1) % q;
+    EXPECT_TRUE(verifier_rejects_witness(*c, st, witness(off, residue(off))));
+  }
+}
+
+// assert_mod(w, SpectralProduct(spec, s), q) over a selected spectrum
+// (ops/spectral.h): the key's coefficients lie in the ring's hull [0,
+// 12288] and s below 50, so the relation's right side lies in [-15 P, 16 P]
+// for P = 12288 * 49; the lowering commits the quotient and states one
+// spectral predicate in the circuit. An honest proof verifies; a wrong
+// residue, a wrong quotient and a key off the ring are rejected.
+TEST(GordieHoweTable, SpectralMod) {
+  const size_t n = 16, R = 8;
+  const uint64_t q = 12289;
+  Sys cs("gh-table-spectral-mod");
+  auto &A = cs.domain(env().a_profile(), "A");
+  auto keys = A.pub(Subfield{}, "keys", Shape{R, n}).bounded(q);
+  auto spec = A.priv(Subfield{}, "spec", n);
+  auto sv = A.priv(Subfield{}, "s", n);
+  auto w = A.priv(Subfield{}, "w", n);
+  assert_range(sv, 50, "s");
+  assert_range(w, q, "w");
+  const auto ntt = ops::Ntt(af(), n, psi_of(n), ops::Stages::every(2),
+                            ops::NttOrder::kNatural);
+  const auto map = lib::table::RowMap<AF>::negacyclic(
+      af(), n, psi_of(n), ops::NttOrder::kNatural);
+  const auto ring = lib::table::public_table(cs, A, "ring", keys, map);
+  const auto sel = lib::table::select_row(cs, ring, "signer", spec);
+  assert_mod(w, ops::SpectralProduct(spec, sv, ntt), q, "rel");
+  auto c = compile(cs);
+  const Bound P = 12288 * 49;
+  const std::string want = "assert_mod 'rel': lhs in [0, 12288], rhs in [-" +
+                           bound_str(15 * P) + ", " + bound_str(16 * P) + "]";
+  EXPECT_NE(c->report().find(want), std::string::npos) << c->report();
+  ASSERT_EQ(c->records().product_mod_equalities.size(), 1u);
+  EXPECT_TRUE(c->records().product_mod_equalities[0].spectral);
+  expect_spectral_derivation(*c, "rel", 1);
+  // The ring, the signer's key, s and w = h s mod q (negacyclic).
+  const auto kv = random_mod(R * n, q, 21);
+  const auto s = random_mod(n, 50, 22);
+  const size_t signer = 5;
+  auto residue = [&](const std::vector<uint64_t> &h) {
+    std::vector<uint64_t> out(n);
+    for (size_t k = 0; k < n; ++k) {
+      __int128 acc = 0;
+      for (size_t i = 0; i < n; ++i) {
+        const size_t j = (k + n - i) % n;
+        const __int128 t = __int128(h[i]) * s[j];
+        acc += i <= k ? t : -t;
+      }
+      out[k] = uint64_t(((acc % q) + q) % q);
+    }
+    return out;
+  };
+  const std::vector<uint64_t> h(kv.begin() + long(signer * n),
+                                kv.begin() + long((signer + 1) * n));
+  Assignment st;
+  st.set(keys, lift(af(), kv));
+  auto witness = [&](const std::vector<uint64_t> &key) {
+    Assignment wi;
+    wi.set(spec, map.apply(af(), lift(af(), key)));
+    wi.set(sv, lift(af(), s));
+    wi.set(w, lift(af(), residue(key)));
+    wi.set(sel.index, bits_of(signer, 3));
+    return wi;
+  };
+  EXPECT_TRUE(honest(*c, st, witness(h)));
+  // A wrong residue.
+  {
+    Assignment wi = witness(h);
+    auto r = residue(h);
+    r[3] = (r[3] + 1) % q;
+    wi.set(w, lift(af(), r));
+    EXPECT_TRUE(verifier_rejects_witness(*c, st, wi));
+  }
+  // A wrong quotient: one more in the quotient and its digits.
+  {
+    std::vector<size_t> ids;
+    for (size_t id = 0; id < cs.graph().nodes.size(); ++id) {
+      const std::string &nm = cs.graph().nodes[id].name;
+      if (nm == "rel.q" || nm.rfind("range.rel.q.", 0) == 0) ids.push_back(id);
+    }
+    ASSERT_FALSE(ids.empty());
+    EXPECT_TRUE(verifier_rejects(*c, st, witness(h), [ids](size_t at, SysValue &x) {
+      for (size_t id : ids)
+        if (at == id) af().add(std::get<AV>(x).at(2), af().one());
+    }));
+  }
+  // A key off the ring, with its own residue.
+  {
+    auto off = h;
+    off[0] = (off[0] + 1) % q;
+    EXPECT_TRUE(verifier_rejects_witness(*c, st, witness(off)));
+  }
+}
 
 TEST(GordieHoweTable, MisuseIsACompileError) {
   // Rows computed from a challenge: the digests would not depend on the

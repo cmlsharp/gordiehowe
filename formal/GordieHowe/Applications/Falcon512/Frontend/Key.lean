@@ -5,7 +5,7 @@ module
 
 public import GordieHowe.Applications.MLDSA44.Spec.KeyNTT
 public import GordieHowe.Language.RealizedProgram.Ops
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative9
+public import GordieHowe.Applications.Falcon512.Fields.FalconNative9
 
 @[expose] public section
 

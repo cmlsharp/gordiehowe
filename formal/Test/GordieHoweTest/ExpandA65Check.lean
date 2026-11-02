@@ -9,7 +9,7 @@ against the ML-DSA-65 `kExpectedExpandAVectors` of the C++ reference tests, at t
 coefficients (both sides build `Â` in NTT domain via rejection sampling, no separate NTT
 step).
 
-Exposes `checkExpandA65 : IO Bool`, run from `Test/GordieHoweTest/MLDSAVectors.lean`'s `#eval`.
+Exposes `checkExpandA65 : IO Bool`, run from `Test/GordieHoweTest/MLDSAVectorsVerify.lean`'s `#eval`.
 -/
 import LatticeCrypto.MLDSA.ConcretePrimitives
 import GordieHoweTest.Hex

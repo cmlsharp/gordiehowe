@@ -15,8 +15,8 @@ Compiler-generated constants (auxiliary proofs, matchers, equation lemmas, const
 projections, recursors) count for the declaration that generates them: reaching `Foo.bar._proof_1`
 or `Foo.mk` keeps `Foo.bar` or `Foo`.
 
-Own code, followed: `GordieHowe`, `LatticeCrypto`, `HashSig` and the vendored `ArkLib` and `CompPoly`;
-only `GordieHowe` modules are reported.
+Own code, followed: `GordieHowe`, `GordieHoweNative`, `LatticeCrypto`, `HashSig` and the vendored
+`ArkLib` and `CompPoly`; only `GordieHowe` and `GordieHoweNative` modules are reported.
 
 Output format:
 * `# module\t<module>\t<used>\t<total>\t<lines of unused declarations>`: one line per module;
@@ -30,7 +30,8 @@ Run as `lake env lean scripts/ProofClosure.lean`.
 open Lean Meta Elab Command
 
 /-- The libraries followed as own code. -/
-def ownRoots : List Name := [`GordieHowe, `LatticeCrypto, `HashSig, `ArkLib, `CompPoly]
+def ownRoots : List Name :=
+  [`GordieHowe, `GordieHoweNative, `LatticeCrypto, `HashSig, `ArkLib, `CompPoly]
 
 /-- The module of a constant, if known. -/
 def moduleOf (env : Environment) (n : Name) : Option Name := do
@@ -114,7 +115,7 @@ run_cmd liftTermElabM do
   let mut byModule : Std.HashMap Name (Array (Name × Bool × Bool)) := {}
   for (n, ci) in env.constants.map₁.toList do
     let some m := moduleOf env n | continue
-    unless m.getRoot == `GordieHowe do continue
+    unless m.getRoot == `GordieHowe || m.getRoot == `GordieHoweNative do continue
     if owner env n != n then continue
     let un := (privateToUserName? n).getD n
     if un.isInternal then continue

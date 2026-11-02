@@ -29,6 +29,7 @@
 #include "circuits/ntt/falcon_ntt.h"
 #include "gordiehowe/examples/falcon/falcon_encoding.h"
 #include "gordiehowe/examples/falcon/falcon_hash_to_point.h"
+#include "gordiehowe/examples/falcon/falcon_instance_testing.h"
 #include "params/param_sets.h"
 #include "params/param_sets_testing.h"
 #include "random/secure_random_engine.h"
@@ -42,10 +43,11 @@ using bench::ms_since;
 using bench::median;
 
 
-// A bounded verification instance: coefficients of s1 and s2 in
-// [-90, 90] from RNG until NTT(s2) is invertible, and h = (c - s1) / s2 in
-// the NTT domain (key generation is outside the proved statement).
-template <class RNG>
+// A bounded verification instance of set S: short coefficients of s1 and
+// s2 from RNG (instance::short_residue) until NTT(s2) is invertible and
+// (s1, s2) is a valid signature, and h = (c - s1) / s2 in the NTT domain
+// (key generation is outside the proved statement).
+template <class S, class RNG>
 void short_instance(const std::vector<uint64_t> &chat,
                     const std::vector<uint64_t> &zetas, uint64_t q, RNG &rng,
                     std::vector<uint64_t> &s2, std::vector<uint64_t> &hhat) {
@@ -53,11 +55,10 @@ void short_instance(const std::vector<uint64_t> &chat,
   s2.resize(n);
   hhat.resize(n);
   std::vector<uint64_t> s1(n);
-  auto centered = [&](uint64_t x) { return (x % 181 + q - 90) % q; };
   for (;;) {
     for (size_t i = 0; i < n; ++i) {
-      s1[i] = centered(rng());
-      s2[i] = centered(rng());
+      s1[i] = instance::short_residue<S>(rng);
+      s2[i] = instance::short_residue<S>(rng);
     }
     auto s1hat = s1;
     auto s2hat = s2;
@@ -65,7 +66,7 @@ void short_instance(const std::vector<uint64_t> &chat,
     falcon_ntt_ref(s2hat, zetas, q);
     bool invertible = true;
     for (auto x : s2hat) invertible &= x != 0;
-    if (!invertible) continue;
+    if (!invertible || !instance::valid_signature<S>(s1, s2)) continue;
     for (size_t i = 0; i < n; ++i) {
       hhat[i] = static_cast<uint64_t>(
           (__uint128_t)((chat[i] + q - s1hat[i]) % q) *
@@ -75,14 +76,15 @@ void short_instance(const std::vector<uint64_t> &chat,
   }
 }
 
-// The benchmark instance: nonce and message from mt19937(20260915), then
-// the short (s1, s2) and h = (c - s1) / s2 of short_instance, from the same
-// generator.
+// The benchmark instance of set S: nonce and message from
+// mt19937(20260915), then the short (s1, s2) and h = (c - s1) / s2 of
+// short_instance, from the same generator.
 struct Instance {
   std::vector<uint8_t> nonce, msg;
   std::vector<uint64_t> s2, hhat, hcoeff;
   FalconH2PWitness hw;
 };
+template <class S = Falcon512>
 Instance bench_instance(size_t msg_len = 32) {
   Instance in;
   std::mt19937 g(20260915);
@@ -90,23 +92,25 @@ Instance bench_instance(size_t msg_len = 32) {
   in.msg.resize(msg_len);
   for (auto &x : in.nonce) x = uint8_t(g());
   for (auto &x : in.msg) x = uint8_t(g());
-  in.hw = falcon_hash_to_point(in.nonce, in.msg, kN);
-  const auto zetas = falcon_ntt_zetas(kN, kQ);
-  std::vector<uint64_t> chat(kN);
-  for (size_t i = 0; i < kN; ++i) chat[i] = in.hw.c[i] % kQ;
+  in.hw = falcon_hash_to_point(in.nonce, in.msg, S::kN, S::kSamples);
+  const auto zetas = falcon_ntt_zetas(S::kN, kQ);
+  std::vector<uint64_t> chat(S::kN);
+  for (size_t i = 0; i < S::kN; ++i) chat[i] = in.hw.c[i] % kQ;
   falcon_ntt_ref(chat, zetas, kQ);
-  short_instance(chat, zetas, kQ, g, in.s2, in.hhat);
+  short_instance<S>(chat, zetas, kQ, g, in.s2, in.hhat);
   in.hcoeff = emulated_ntt::decode(in.hhat, zetas, kQ);
   return in;
 }
 
-// An instance on the same nonce and message with chosen signed
+// An instance of set S on the same nonce and message with chosen signed
 // coefficients of s1 and s2 (an invertible s2), and h = (c - s1) / s2: a
 // statement whose signature is not valid when the coefficients break the
 // norm or the encoding budget.
+template <class S = Falcon512>
 Instance chosen_instance(const std::function<int64_t(size_t)> &s1c,
                          const std::function<int64_t(size_t)> &s2c) {
-  Instance in = bench_instance();
+  constexpr size_t kN = S::kN;
+  Instance in = bench_instance<S>();
   const auto zetas = falcon_ntt_zetas(kN, kQ);
   std::vector<uint64_t> chat(kN), s1(kN), s2(kN);
   for (size_t i = 0; i < kN; ++i) {
@@ -132,7 +136,7 @@ Instance chosen_instance(const std::function<int64_t(size_t)> &s1c,
 // convolution): s1, the quotient dq, the centered magnitudes of s1, the
 // norm (the sum of the squared magnitudes of s1 and s2), s2's encoding
 // advice and the MAC chunks of c.
-template <class P>
+template <class P, class S = Falcon512>
 struct HostWitness {
   std::vector<uint64_t> s1, dq, mag1;
   uint64_t norm = 0;
@@ -140,7 +144,7 @@ struct HostWitness {
   std::vector<typename P::MacField::Elt> cref;
 
   explicit HostWitness(const Instance &in) {
-    const size_t n = kN;
+    const size_t n = S::kN;
     const uint64_t Q = kQ;
     const auto zetas = falcon_ntt_zetas(n, Q);
     const auto &hw = in.hw;
@@ -167,15 +171,16 @@ struct HostWitness {
     for (uint64_t v : s1) mag1.push_back(mag(v));
     for (uint64_t a : mag1) norm += a * a;
     for (uint64_t v : s2) norm += mag(v) * mag(v);
-    const uint64_t bound = n * (Q - 1) * Q + Q + 65535;
-    const uint64_t Bp = ((bound + Q - 1) / Q) * Q;
+    // A multiple of q at least n (q - 1) q + q + 65535, so that dq >= 0 for
+    // c < 2^16, h and s2 below q and s1 at most q.
+    const uint64_t Bp = ((n * (Q - 1) * Q + Q + 65535 + Q - 1) / Q) * Q;
     auto hs2 = emulated_ntt::integer_convolution(in.hcoeff, s2);
     dq.resize(n);
     for (size_t j = 0; j < n; ++j) {
       const __int128_t residual = (__int128_t)Bp + craw[j] - hs2[j] - s1[j];
       dq[j] = (uint64_t)(residual / Q);
     }
-    enc = falcon_encoding_advice(s2, Q, kFalcon512HighBudget);
+    enc = falcon_encoding_advice(s2, Q, S::kHighBudget);
     using MF = typename P::MacField;
     const MF mf;
     const size_t kW = MF::kBits, nch = 16 * n / kW;
@@ -191,9 +196,10 @@ struct HostWitness {
 };
 
 // A compiled system of profile P on an instance.
-template <class P>
+template <class P, class S = Falcon512>
 struct Fixture {
-  using T = FalconEmulatedSystem<P>;
+  using Set = S;
+  using T = FalconEmulatedSystem<P, S>;
   using Value = typename T::Sys::Value;
   using ProveOptions = typename T::Sys::ProveOptions;
   using AF = typename P::EmulatedField;
@@ -204,7 +210,7 @@ struct Fixture {
   Instance in;
   T t;
   std::shared_ptr<const typename T::Compiled> c;
-  explicit Fixture(Instance i = bench_instance())
+  explicit Fixture(Instance i = bench_instance<S>())
       : in(std::move(i)),
         t(env, in.msg.size()),
         c(t.compile()) {}

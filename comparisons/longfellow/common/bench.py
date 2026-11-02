@@ -315,7 +315,20 @@ class Worker:
             pass
         for s in self.p.stdout:
             self.log.write(s)
-        rc = self.p.wait(timeout=600)
+        # The worker's exit status and peak resident set (its whole life),
+        # from wait4, within 600 s as Popen.wait's timeout.
+        deadline = time.monotonic() + 600
+        while True:
+            pid, status, ru = os.wait4(self.p.pid, os.WNOHANG)
+            if pid != 0:
+                break
+            if time.monotonic() > deadline:
+                raise subprocess.TimeoutExpired(self.p.args, 600)
+            time.sleep(0.05)
+        rc = os.waitstatus_to_exitcode(status)
+        self.p.returncode = rc
+        self.maxrss_kb = ru.ru_maxrss
+        self.log.write(f"# maxrss_kb {ru.ru_maxrss}\n")
         self.log.write(f"# exit {rc}\n")
         self.log.close()
         return rc
@@ -491,6 +504,8 @@ def main():
         for w in workers:
             if w.p.poll() is None:
                 w.stop()
+                meta["cases"].setdefault(w.label, {})["maxrss_kb"] = \
+                    getattr(w, "maxrss_kb", None)
         meta["end"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
         meta["load_end"] = loadavg()
         meta["governor_end"] = governors(spec.get("cpu"))

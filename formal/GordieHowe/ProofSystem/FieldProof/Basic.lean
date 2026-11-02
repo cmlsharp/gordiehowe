@@ -59,6 +59,12 @@ open IOP
 open ProtocolSpec
 open scoped NNReal
 
+-- TODO(instance-hazard): the field `F` and its `Field` instance, and `ι` with its `Fintype`
+-- instance, are fields, so each field proof carries its own instance terms. A construction deriving
+-- one field proof from another (packing, ring switching) could give two `Field` structures on the
+-- same `F` equal only up to proof, an instance diamond that would make statements disagree. If
+-- that arises, take `F` and `ι` as parameters, or type them through named functions with
+-- registered instances.
 /-- **The proof of one circuit** (see the module docstring): a masked row reduction `ip` on the
 cells `ι → F`, a commit-and-prove system `cp` for its deferred rows at the context of the public
 input and the masked transcript (`MaskedRowReduction.Context`), and the readout of the circuit's witness

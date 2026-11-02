@@ -10,6 +10,7 @@ public import Mathlib.Data.Finset.Lattice.Fold
 public import Mathlib.Tactic.Ring
 public import Mathlib.Tactic.NormNum
 public import Mathlib.Tactic.IntervalCases
+public import GordieHoweNative.Foundations.Algebra.ConvMatrix
 
 @[expose] public section
 
@@ -47,6 +48,9 @@ taps `gf2_128Taps = {0, 1, 2, 7}` of `X¹²⁸ + X⁷ + X² + X + 1`, where
 `convMax 128 gf2_128Taps = 504` (`convMax_gf2_128`); the width-256 shape has the taps
 `gf2_256Taps = {0, 2, 5, 10}` of `X²⁵⁶ + X¹⁰ + X⁵ + X² + 1`, where `convMax 256 gf2_256Taps = 1017`
 (`convMax_gf2_256`). Both match the C++ `MACConv` (`lib/gordiehowe/ops/operators.h`).
+
+The definitions are in `GordieHoweNative/Foundations/Algebra/ConvMatrix.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.Conv
@@ -67,10 +71,6 @@ section Lanes
 A natural number `P` is read as a vector of `B`-bit digits, its lanes. With `B = 1` the lanes are
 the bits of `P`; wider lanes let the kernel accumulate the integer row sums of `Conv(1…1)` in one
 natural number (`convMax_eq_packed`). -/
-
-/-- The lane of width `B` at position `j` of a natural number read as a vector of `B`-bit
-digits: `⌊P / 2^(B·j)⌋ mod 2^B`. -/
-def lane (B P j : ℕ) : ℕ := P / 2 ^ (B * j) % 2 ^ B
 
 theorem lane_zero_right (B P : ℕ) : lane B P 0 = P % 2 ^ B := by
   simp [lane]
@@ -185,11 +185,6 @@ def phiPacked (B w : ℕ) (T : Finset ℕ) : ℕ := ∑ t ∈ insert w T, 2 ^ (B
 theorem lane_phiPacked {B : ℕ} (hB : 0 < B) (w : ℕ) (T : Finset ℕ) (j : ℕ) :
     lane B (phiPacked B w T) j = if j ∈ insert w T then 1 else 0 :=
   lane_sum_two_pow hB _ j
-
-/-- Multiply a packed polynomial by `X` and reduce once by `φ` (packed as `Φ`) when the
-coefficient of `X^w` is set. -/
-def mulXPacked (B w Φ s : ℕ) : ℕ :=
-  if lane B (s * 2 ^ B) w = 0 then s * 2 ^ B else (s * 2 ^ B) ^^^ Φ
 
 /-- `X^k mod φ` as a packed vector (lanes of width `B`), for `φ` packed as `Φ`. -/
 def powModPacked (B w Φ : ℕ) : ℕ → ℕ
@@ -409,21 +404,9 @@ all-one inputs, are accumulated lane by lane in one natural number with lanes of
 (`accPacked`): the kernel evaluates the `2w − 1` steps with its built-in natural number arithmetic.
 No lane overflows when `(2w − 1) · w < 2^B`, and `convMax_eq_packed` transfers the result. -/
 
-/-- The reduction polynomial packed from a list of taps: `Σ_{t ∈ w :: Tl} 2^(B·t)`. -/
-def phiList (B w : ℕ) (Tl : List ℕ) : ℕ := ((w :: Tl).map fun t => 2 ^ (B * t)).sum
-
 theorem phiList_eq {B w : ℕ} {T : Finset ℕ} {Tl : List ℕ} (hTl : (w :: Tl).Nodup)
     (hT : Tl.toFinset = T) : phiList B w Tl = phiPacked B w T := by
   rw [phiList, phiPacked, ← hT, ← List.toFinset_cons, List.sum_toFinset _ hTl]
-
-/-- The product coefficient of `X^k` on the all-one inputs, `min (k + 1) (2w − 1 − k)`. -/
-def onesCoeff (w k : ℕ) : ℕ := min (k + 1) (2 * w - 1 - k)
-
-/-- The packed row sums of `Conv(1…1)`: the pair `(X^n mod φ, Σ_{k<n} c_k · (X^k mod φ))` after
-`n = 2w − 1` steps, packed with lanes of width `B`, for `φ` packed as `Φ`. -/
-def accPacked (B w Φ : ℕ) : ℕ × ℕ :=
-  (List.range (2 * w - 1)).foldl
-    (fun p k => (mulXPacked B w Φ p.1, p.2 + onesCoeff w k * p.1)) (1, 0)
 
 theorem foldl_accPacked (B w Φ n : ℕ) :
     (List.range n).foldl (fun p k => (mulXPacked B w Φ p.1, p.2 + onesCoeff w k * p.1)) (1, 0) =

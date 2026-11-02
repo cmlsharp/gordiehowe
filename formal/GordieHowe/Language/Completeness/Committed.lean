@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.Completeness.Bound
+public import GordieHoweNative.Language.Completeness.Committed
 
 @[expose] public section
 
@@ -17,6 +18,9 @@ program holds there (`sourceSatAt_srcEnvC`); every static histogram counts its g
 (`staticHistsCount_srcEnvC`), and one beside a late histogram its static members' needles
 (`mixedStatic_srcEnvC`); the committed cells lie in their bases (`honestCellsC_base`); the
 quotient of a one-digit `mod_q` lies in its range (`holds_oneDigitQuot_srcEnvC`).
+
+The definitions are in `GordieHoweNative/Language/Completeness/Committed.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -25,7 +29,7 @@ open Export ProofSystem.PhaseLayout IOP Range
 
 section
 
-variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String}
+variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String} {S : Structure}
 
 /-- **The honest committed values off the source values are naturals**: committed generators'
 values, static histograms, or `0`. -/
@@ -48,35 +52,6 @@ theorem genCommitted_natCast_of_not_source (G : Gens) (x s : ir.Valuation I) {v 
       · exact ⟨0, by simp⟩
     · exact ⟨0, by simp⟩
 
-variable (ir) in
-/-- **The facts of group `g` of table `t` with the static histogram `h`** at the
-certificate's generators `G`: a committed cell of the table's size in the field of the table's challenge,
-no source value, generated as the group's static histogram; the needles and the rows read no
-challenge and no late value, and no value they read is a static histogram or a pad copy; a table
-packed at a value has its members packed alike. -/
-structure StaticGroupFactsC (G : Gens) (t g h : ℕ) : Prop where
-  /-- A committed cell. -/
-  cell : ir.privCellB h = true
-  /-- The table's size. -/
-  size : (ir.value h).size = ir.tableSize t
-  /-- The field of the table's challenge. -/
-  field : ir.valueField h = ir.chalField (ir.alphaOf t)
-  /-- No source value. -/
-  notSource : ¬ ir.IsSourceValue h
-  /-- Generated as the group's static histogram. -/
-  own : G.at h = .staticHist t g
-  /-- The needles read no challenge, no late value, no static histogram and no pad copy. -/
-  needles : ∀ m ∈ ir.staticMembers t g, ∀ w ∈ ir.histNodes t m,
-    (ir.readsT.getD w []).isEmpty = true ∧
-      ∀ u ∈ ir.valReads ir.fuel w, (∀ t' g', G.at u ≠ .staticHist t' g') ∧
-        (ir.value u).kind.isPadCopy = false
-  /-- The rows read no challenge, no late value, no static histogram and no pad copy. -/
-  rows : ∀ w ∈ ir.histRowNodes t, (ir.readsT.getD w []).isEmpty = true ∧
-    ∀ u ∈ ir.valReads ir.fuel w, (∀ t' g', G.at u ≠ .staticHist t' g') ∧
-      (ir.value u).kind.isPadCopy = false
-  /-- A table packed at a value has its members packed alike. -/
-  packed : ir.packGroupB t g = true
-
 variable (ir I) in
 /-- **The facts the honest committed values need** at the certificate's generators `G`: the source
 part well formed, no source value a pad copy or a message, each source late value's pad space
@@ -96,9 +71,12 @@ structure CommittedFacts (G : Gens) : Prop where
   srcLatePads : ∀ v < ir.values.length, ir.IsSourceValue v → ir.IsLate v → ir.latePadTypeB v = true
   /-- The predicates the source values' intervals read are source predicates. -/
   ivlSource : ∀ q < ir.predicates.length, ir.ivlSourceB q = true
+  /-- Every value's type predicate names the value in its role (`typeRoleV`). -/
+  typeRoles : ∀ v < ir.values.length, ∀ q, (ir.value v).typeSource = .pred q →
+    (ir.predicate q).role = .type v
   /-- Every value bound to its digits is a source value and the record of a two-sided or digit
   lookup. -/
-  boundRecs : ir.BoundRecs
+  boundRecs : ir.BoundRecs G
   /-- Every two-sided and digit lookup has its facts, its digits generated as its digits. -/
   digitLookups : ir.DigitLookupsC G
   /-- A group with no late histogram has its static histogram with its facts, or no members. -/
@@ -428,12 +406,14 @@ theorem ivlFacts_srcEnvC (hbd : ir.StmtBounded I x) :
       exact hbd vN hvN i hi⟩
   · intro v hS q hq hts he
     exact hsat.preds _ (predicate_mem hq)
-      (inSource_of_ivlSourceB_equal (R.ivlSource q hq) he hS.1 hS.2 (.inr hts))
+      (inSource_of_ivlSourceB_equal (R.ivlSource q hq) he hS.1 hS.2
+        (R.typeRoles v hS.1 q) (.inr hts))
   · intro v hS q hq d rec set r hb hk hrec
     exact hsat.preds _ (predicate_mem hq) (inSource_of_ivlSourceB_lookup (R.ivlSource q hq) hb hk
       hrec hS.2)
   · intro v hS q hq he hr
-    have hsrc := inSource_of_ivlSourceB_equal (R.ivlSource q hq) he hS.1 hS.2 (.inl hr)
+    have hsrc := inSource_of_ivlSourceB_equal (R.ivlSource q hq) he hS.1 hS.2
+      (R.typeRoles v hS.1 q) (.inl hr)
     refine ⟨hsat.preds _ (predicate_mem hq) hsrc, fun w hw => ⟨?_, R.sourceValid.preds _
       (predicate_mem hq) hsrc w hw⟩⟩
     have hpo := hwf.predicates _ (predicate_mem hq)
@@ -448,14 +428,15 @@ include hwf hI hL R hA in
 /-- **The quotient of a one-digit `mod_q` lies in its range at the source environment** of the
 honest committed values, at value intervals `L` justified by the source program (`hLok`). -/
 theorem holds_oneDigitQuot_srcEnvC (hbd : ir.StmtBounded I x) {m rid : ℕ}
-    (h : ir.oneDigitQuotAtB (ir.srcLeafIvl primeNodes) m rid = true) :
+    (h : ir.oneDigitQuotAtB (ir.srcLeafIvl primeNodes S) m rid = true) :
     ir.HoldsWith (ir.reader SE) (ir.predicate rid).body := by
   have hsat := sourceSatAt_srcEnvC hwf hI hL R hA π
   have hIF := ivlFacts_srcEnvC hwf hI hL R hA π hbd
-  have hlok := ir.leafIvl_justified primeNodes ir.declaredRanges
+  have hlok := ir.ivlTab_justified primeNodes S.ivlTrie ir.declaredRanges
   have hm : m < ir.predicates.length := by
     by_contra hm
-    have hd : ir.predicate m = default := List.getD_eq_default _ _ (Nat.le_of_not_lt hm)
+    have hd : ir.predicate m = default :=
+      (ir.predicate_eq_getD m).trans <| List.getD_eq_default _ _ (Nat.le_of_not_lt hm)
     unfold oneDigitQuotAtB at h
     rw [hd] at h
     change false = true at h
@@ -494,17 +475,17 @@ theorem holds_oneDigitQuot_srcEnvC (hbd : ir.StmtBounded I x) {m rid : ℕ}
         simp only [List.headD_cons] at hi
         rw [hQlen] at hi
         refine (inRows_range_iff _ d Q' i N).2 ?_
-        have hwe : IvlWithin (ir.srcIvl (ir.srcLeafIvl primeNodes) (ir.domainField d) e)
+        have hwe : IvlWithin (ir.srcIvl (ir.srcLeafIvl primeNodes S) (ir.domainField d) e)
             J.lo J.hi := by
           rw [hJ]; exact ⟨le_rfl, le_rfl⟩
-        have hwe' : IvlWithin (ir.srcIvl (ir.srcLeafIvl primeNodes) (ir.domainField d) e')
+        have hwe' : IvlWithin (ir.srcIvl (ir.srcLeafIvl primeNodes S) (ir.domainField d) e')
             J'.lo J'.hi := by
           rw [hJ']; exact ⟨le_rfl, le_rfl⟩
         obtain ⟨⟨h1, h2'⟩, hc⟩ := exprIvl_within_of hwf hI hL hIF hlok he.1 h2 he.2 hwe hi
         obtain ⟨⟨h3, h4⟩, hc'⟩ := exprIvl_within_of hwf hI hL hIF hlok
           he'.1 h2 he'.2 hwe' (by rw [← hlen]; exact hi)
         simp only at h1 h2' h3 h4 hc hc'
-        obtain ⟨z, hz⟩ := hmod i hi
+        obtain ⟨z, hz⟩ := hmod.1 i hi
         have hq0 : (0 : ℤ) < q := by exact_mod_cast hq
         have hz0 : real.quotientLo ≤ z := by
           by_contra hneg

@@ -3,11 +3,12 @@
 
 module
 
-public import GordieHowe.Applications.Falcon512.Native.QROMParams.ProofSystem
-public import GordieHowe.Applications.Falcon512.Native.ROMParams.Frontend.Algebra
-public import GordieHowe.Applications.Falcon512.Native.ROMParams.Frontend.Hash
+public import GordieHowe.Generated.Falcon512.Native.QROMParams.Certified
+public import GordieHowe.Applications.Falcon512.Native.Frontend.Algebra
+public import GordieHowe.Applications.Falcon512.Frontend.Hash
 public import GordieHowe.Applications.Falcon512.Native.QROMParams.Frontend.HashFacts
 public import GordieHowe.Applications.Falcon512.Native.QROMParams.Frontend.AlgebraFacts
+public import GordieHowe.ProofSystem.Program.Headlines
 
 @[expose] public section
 
@@ -15,14 +16,14 @@ public import GordieHowe.Applications.Falcon512.Native.QROMParams.Frontend.Algeb
 # GordieHowe: the theorem at the realized program for `Falcon512.Native.QROMParams`
 
 The native Falcon frontend's round-by-round knowledge soundness of `Π_P₀` at the Falcon-512
-proof-of-possession relation (`GordieHowe.Falcon512.Native.ROMParams.rbr_of_views`, generic in the program and its
+proof-of-possession relation (`GordieHowe.Falcon512.rbr_of_views`, generic in the program and its
 fields, at the program facts of `GordieHowe/Applications/Falcon512/Native/QROMParams/Frontend/Facts.lean`,
 `GordieHowe/Applications/Falcon512/Native/QROMParams/Frontend/HashFacts.lean` and
 `GordieHowe/Applications/Falcon512/Native/QROMParams/Frontend/AlgebraFacts.lean`: the relation `rel` at the decoded key, the extractor `proj`, the
-error `639/2^256` at `h2p.select.delta`) composed with the proof system
+error `717/2^256` at `h2p.select.delta`) composed with the proof system
 (`GordieHowe.RealizedProgram.ProofSystem.FieldBranches.causal_rbr_knowledge_soundness` at the forked domains of `proofSystem`): the proof system's protocol is
 round-by-round knowledge sound for `rel` at the proof system's extractor reading `proj`, with the
-phase errors (`GordieHowe.RealizedProgram.phaseError`) `639/2^256 + 32/2^256` and `18175/(q^20 − 189)` and the
+phase errors (`GordieHowe.RealizedProgram.phaseError`) `717/2^256 + 32/2^256` and `18175/(q^20 − 189)` and the
 domain proofs' errors. The frontend's two obligations are the generic frontend's: the hash view
 (`falconHashView`) and domain A's algebra (`algebraSound`).
 
@@ -34,8 +35,15 @@ namespace GordieHowe.Falcon512.Native.QROMParams
 
 open RealizedProgram.Export RealizedProgram.ProofSystem.PhaseLayout IOP
 open Generated.Falcon512.Native.QROMParams.Program (program)
-open ROMParams
+open Generated.Falcon512.Native.QROMParams (interp ready ProofSystems)
 open scoped NNReal
+
+/-- **The proof system of `Falcon512.Native.QROMParams`**
+(`GordieHowe.Generated.Falcon512.Native.QROMParams.proofSystem`): the generic per-field proof system
+at the certificates' sources, whose circuits enforce their entries and accept the honest inputs by
+the certificates. -/
+abbrev proofSystem : ProofSystems :=
+  Generated.Falcon512.Native.QROMParams.proofSystem
 
 /-- **`Π_P₀`'s round errors vanish at `γ_end`**: they are `selectEps` at a challenge round, `0` at
 every other round. -/
@@ -45,7 +53,7 @@ theorem sourceError_final :
   simp only [RealizedProgram.roundError, hi]
 
 /-- **Round-by-round knowledge soundness of `Π_P₀` for `Falcon512.Native.QROMParams`** at the relation
-`rel`, the extractor `extractor` and the errors `639/2^256` at `h2p.select.delta`, `0` elsewhere
+`rel`, the extractor `extractor` and the errors `717/2^256` at `h2p.select.delta`, `0` elsewhere
 (`rbr_of_views` at the hash view `falconHashView` and domain A's `algebraSound`). -/
 theorem source_rbr_knowledge_soundness :
     rbrKnowledgeSoundness rel (program.sourceVerifier interp) extractor
@@ -54,8 +62,6 @@ theorem source_rbr_knowledge_soundness :
       (program.roundError interp (selectEps (FH := RealizedProgram.gf256))) :=
   rbr_of_views falconHashView (algebraSound normSound)
 
-variable (src : ∀ c : Fin program.circuits.length, program.CircuitSource interp c)
-
 /-- **Soundness of `Falcon512.Native.QROMParams` at the realized program, in the series–parallel order of
 `prot:backend`** (`RealizedProgram.ProofSystem.FieldBranches.causal_rbr_knowledge_soundness` at the forked domains
 `RealizedProgram.ProofSystem.fieldBranches` of `QROMParams.proofSystem`): the series–parallel composite is round-by-round knowledge sound in the series–parallel order
@@ -63,14 +69,40 @@ for `rel` at the proof system's extractor (`RealizedProgram.ProofSystem.FieldBra
 witness map at the realized assignment of the committed cells), with every challenge's own error
 (`RealizedProgram.ProofSystem.IOP.Sound.error`): at a phase's challenge round the sum over the phase's challenges of
 `Π_P₀`'s errors and the realization step's (`RealizedProgram.phaseError`), at every other challenge the
-error of that challenge in its domain's commit rounds, branches or join part. `T`: the program's
-GKR circuits enforce their entries (trust base). -/
+error of that challenge in its domain's commit rounds, branches or join part. -/
 @[headline]
-theorem iop_rbr_knowledge_soundness (T : (proofSystem src).CircuitsEnforce) :
-    CausalRBRKnowledgeSound rel (((proofSystem src).fieldBranches ready).soundIOP T source_rbr_knowledge_soundness sourceError_final).verifier
-      (((proofSystem src).fieldBranches ready).extractor T source_rbr_knowledge_soundness sourceError_final)
-      (((proofSystem src).fieldBranches ready).soundIOPSound ((proofSystem src).fieldBranchesSound ready) T source_rbr_knowledge_soundness sourceError_final).stateFn
-      (((proofSystem src).fieldBranches ready).soundIOPSound ((proofSystem src).fieldBranchesSound ready) T source_rbr_knowledge_soundness sourceError_final).error :=
-  ((proofSystem src).fieldBranches ready).causal_rbr_knowledge_soundness ((proofSystem src).fieldBranchesSound ready) T source_rbr_knowledge_soundness sourceError_final
+theorem iop_rbr_knowledge_soundness :
+    CausalRBRKnowledgeSound rel ((proofSystem.fieldBranches ready).soundIOP source_rbr_knowledge_soundness sourceError_final).verifier
+      ((proofSystem.fieldBranches ready).extractor source_rbr_knowledge_soundness sourceError_final)
+      ((proofSystem.fieldBranches ready).soundIOPSound (proofSystem.fieldBranchesSound ready) source_rbr_knowledge_soundness sourceError_final).stateFn
+      ((proofSystem.fieldBranches ready).soundIOPSound (proofSystem.fieldBranchesSound ready) source_rbr_knowledge_soundness sourceError_final).error :=
+  (proofSystem.fieldBranches ready).causal_rbr_knowledge_soundness (proofSystem.fieldBranchesSound ready) source_rbr_knowledge_soundness sourceError_final
+
+variable {Inp : Type} {relH : Set (program.Valuation interp × Inp)}
+
+/-- **Completeness of `Falcon512.Native.QROMParams` at the realized program** (`RealizedProgram.ProofSystem.FieldBranches.completeness` at
+the forked domains `RealizedProgram.ProofSystem.fieldBranches` of `proofSystem`, the domains' honest provers `RealizedProgram.ProofSystem.fieldHonestDomains`): in the
+series–parallel order of `prot:backend`, if the honest prover `H` has completeness error `errc` (a function of the statement)
+(`hc`), then at every value of the coins, on every honest input, the honest prover is rejected with
+probability at most `errc`. -/
+@[headline]
+theorem iop_completeness (H : program.HonestCore interp relH)
+    {errc : program.Valuation interp → ℝ≥0} (hc : H.Complete errc) (c : (proofSystem.fieldForkHonest ready H).Coins) :
+    CausalCompleteStmt relH (proofSystem.fieldBranches ready).protocol.verifier
+      (fun y => RealizedProgram.ProofSystem.IOP.honest (proofSystem.fieldForkHonest ready H) y c) errc :=
+  (proofSystem.fieldBranches ready).completeness (proofSystem.fieldHonestDomains ready) _ H hc c
+
+/-- **Honest-verifier zero knowledge of `Falcon512.Native.QROMParams` at the realized program**
+(`RealizedProgram.ProofSystem.FieldBranches.hvzk` at the forked domains of `proofSystem`): in the series–parallel order of
+`prot:backend`, if the honest prover `H` has completeness error `errc` (a function of the statement) (`hc`), the simulator of the
+series–parallel composite is honest-verifier zero knowledge for the honest prover with error `errc`. -/
+@[headline]
+theorem iop_hvzk (H : program.HonestCore interp relH) {errc : program.Valuation interp → ℝ≥0}
+    (hc : H.Complete errc) :
+    CausalHVZKStmt (proofSystem.fieldBranches ready).protocol.toCausalIOP.views relH
+      (RealizedProgram.ProofSystem.IOP.honest (proofSystem.fieldForkHonest ready H)) id
+      (RealizedProgram.ProofSystem.IOP.simulator
+        ((proofSystem.fieldBranches ready).simData (proofSystem.fieldForkSims ready))) errc :=
+  (proofSystem.fieldBranches ready).hvzk (proofSystem.fieldHonestDomains ready) _ H hc
 
 end GordieHowe.Falcon512.Native.QROMParams

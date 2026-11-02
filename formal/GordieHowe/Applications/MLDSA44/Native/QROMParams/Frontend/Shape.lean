@@ -3,8 +3,8 @@
 
 module
 
-public import GordieHowe.Applications.MLDSA44.Native.ROMParams.Frontend.Hash
-public import GordieHowe.Applications.MLDSA44.Native.ROMParams.Frontend.Sample
+public import GordieHowe.Applications.MLDSA44.Frontend.Hash
+public import GordieHowe.Applications.MLDSA44.Frontend.Sample
 public import GordieHowe.Generated.MLDSA44.Native.QROMParams.Program
 
 @[expose] public section
@@ -43,9 +43,6 @@ instance : MldsaHCross program where
   len71 := by decide +kernel
   len523 := by decide +kernel
   len524 := by decide +kernel
-  const36 := by decide +kernel
-  entries36 := by decide +kernel
-  field36 := by decide +kernel
   bitView71 := by decide +kernel
   domainField1 := by decide +kernel
 
@@ -155,7 +152,7 @@ instance : MldsaHSample program where
     decide +kernel
 /-- **Entry `j < 8` of the constant `37` is `g^j`** in `GF(2^256)`, computed. -/
 theorem c37_pow : ∀ j < 8,
-    gf2_256OfNat ((program.constEntries 37).getD j 0) = gf2_256SubfieldGen ^ j := by
+    gf2_256OfNat ((program.constEntries 36).getD j 0) = gf2_256SubfieldGen ^ j := by
   decide +kernel
 
 /-- The native program at the QROM parameters, over `GF(2^256)`: entry `j < 8` of the constant `37` is `g^j = e_j`. -/

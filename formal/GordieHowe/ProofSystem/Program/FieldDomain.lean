@@ -39,13 +39,14 @@ section
 
 variable (ir : RealizedProgram) {I : Interp}
 
-/-- **The packing edges of the plan's domain of `d`** (none when the plan has no such domain). -/
-def planPacking (P : Export.Plan) (d : ℕ) : List PackingEdge :=
-  ((P.domain (ir.domain d).name).map (·.packing)).getD []
+/-- **The packing edges of the plan's domain of `d`**, the plan's domain at position `d`
+(`Export.Plan.domainAt`; none when the plan has no domain there). -/
+def planPacking (_ : RealizedProgram) (P : Export.Plan) (d : ℕ) : List PackingEdge :=
+  ((P.domainAt d).map (·.packing)).getD []
 
 /-- **The plan's Ligero numbers of `d` are the certificate's.** -/
-def planLigeroB (P : Export.Plan) (d : ℕ) (c : LigeroCert) : Bool :=
-  ((P.domain (ir.domain d).name).map fun pd => c.matchesB pd.ligero).getD false
+def planLigeroB (_ : RealizedProgram) (P : Export.Plan) (d : ℕ) (c : LigeroCert) : Bool :=
+  ((P.domainAt d).map fun pd => c.matchesB pd.ligero).getD false
 
 variable (d : ℕ)
 
@@ -60,7 +61,7 @@ def fieldOkB (P : Export.Plan) (Pk : (I (ir.domainField d)).Packing) (c : Ligero
     treeOkB ((ir.fieldEdgesOf d P Pk).map REdge.plan) Pk.n &&
     ir.placeOkB d Pk ((ir.fieldEdgesOf d P Pk).map REdge.plan) &&
     ir.viewsOkB d ((ir.fieldEdgesOf d P Pk).map REdge.plan) &&
-    (ir.circs d).all (fun c => decide (ir.InputsT d c)) &&
+    (ir.circs d).all (fun c => ir.inputsTB d c) &&
     ir.batchesOkB d Pk && decide (ir.QuadsOk d) && c.validB Pk.q && ir.planLigeroB P d c
 
 variable (I) in
@@ -94,7 +95,8 @@ theorem claimOk : ir.ClaimOk R.rs := by
   simp only [fieldOkB, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq] at h
   obtain ⟨⟨⟨⟨⟨⟨⟨⟨-, ht⟩, hp⟩, hv⟩, hc⟩, hb⟩, hq⟩, -⟩, -⟩ := h
   exact ⟨TreeOk.of_treeOkB ht, PlaceOk.of_placeOkB ir hp, ir.realizedOk_realizedEdges _,
-    ViewsOk.of_viewsOkB ir d hv, hc, BatchesOk.of_batchesOkB hb, hq, R.wf⟩
+    ViewsOk.of_viewsOkB ir d hv, fun c hc' => (ir.inputsTB_iff d R.wf c).1 (hc c hc'),
+    BatchesOk.of_batchesOkB hb, hq, R.wf⟩
 
 /-- **The tree layout's Ligero numbers** at the certificate and the field's points. -/
 abbrev numbers : TreeLayout.Numbers (I (ir.domainField d)).K R.Pk.S0 :=

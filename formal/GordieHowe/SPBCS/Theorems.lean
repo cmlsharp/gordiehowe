@@ -9,7 +9,7 @@ public import GordieHowe.SPBCS.ZeroKnowledgeQuery
 public import GordieHowe.SPBCS.ZeroKnowledgeROMProver
 public import GordieHowe.SPBCS.ZeroKnowledgeSampler
 public import GordieHowe.SPBCS.WitnessIndistAdaptive
-public import GordieHowe.SPBCS.FullPast.Sampler
+public import GordieHowe.SPBCS.WitnessSampler
 
 @[expose] public section
 
@@ -65,7 +65,7 @@ error `δ` (`GordieHowe.IOP.CausalHVZK`):
   witnesses have total encoding length at most `ℓ` under injective binary encodings `eX`, `eW`,
   at `Q · wiError δ (choiceCount ℓ)` (`thm:bcs-wi`, `GordieHowe.SPBCS.unconditionallyWitnessIndistinguishable`).
 
-The errors are those of the compiler over the term: the key-collision term counts the `t.size n`
+The errors are those of the spBCS compiler (`zkError`, `wiError`, …): the key-collision term counts the `t.size n`
 chain inputs of the rounds; the final inputs of the branches are answered by the slice and add no
 key.
 -/

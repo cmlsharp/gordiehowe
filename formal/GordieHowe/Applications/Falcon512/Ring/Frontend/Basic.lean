@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Applications.Falcon512.Frontend.Norm
 public import GordieHowe.Applications.Falcon512.Ring.Native.System.Composite
+public import GordieHowe.Language.Library.TableSelect
 
 @[expose] public section
 
@@ -13,19 +14,19 @@ public import GordieHowe.Applications.Falcon512.Ring.Native.System.Composite
 
 The frontend of the theorem at the realized program for the native Falcon rings (`Falcon512.Ring.Native.ROMParams` and
 `Falcon512.Ring.Native.QROMParams`, export `b65a4929`), generic in the program and its interpretation at the
-program facts `FalconRingPowers`, `FalconRingSelect` and `FalconRingBase` (decided per program;
-the two programs agree on every source value, shared expression and predicate):
+program facts `FalconRingPowers`, `FalconRingSelect`, `FalconRingMember` and `FalconRingBase`
+(decided per program):
 
-* **The challenge powers** (`powers_eval`): shared expressions `0 … 15` square and concatenate the
-  challenge `γ` (`member.ring.gamma`, value `8`) into `γ^0, …, γ^511` (`member.ring.powers`).
-* **The selection** (`select_top`): shared expressions `16 … 20` and `member.signer`'s multiplexer
-  select, by the index bits, the digest at the signer's position (`idxOf`).
-* **The digests** (`digests_eval`): the digest of key `r` is the fingerprint
-  `Σ_m γ^m · NTT(h_r)_m` of its natural-order transform at `ψ = 10302`.
-* **The membership** (`member_eq`, `ringEvent`, `ringEvent_bound`, `spec_eq_of_not_event`): the
-  committed spectrum's fingerprint is the signer's key's; unless `γ` is a root of the nonzero
-  difference polynomial (degree at most `511`, probability `511/|F|`, Schwartz–Zippel), the spectrum
-  is the transform of the signer's key.
+* **The table's selection** (`FalconRingPowers`, `FalconRingSelect`): `member.signer` is the
+  generic selection of a public table's row (`GordieHowe.RealizedProgram.TableSelect`,
+  `GordieHowe/Language/Library/TableSelect.lean`) at the record `key.spectrum`, the rows
+  `statement.ring` (`64` keys of `512` coefficients) and the row map the natural-order transform of
+  length `512` at `ψ`, whose power indices are the identity.
+* **The membership** (`evalE_memberLhs`, `member_eq`, `ringEvent`, `ringEvent_bound`,
+  `spec_eq_of_not_event`): the committed spectrum's fingerprint `Σ_k spectrum_k γ^k` is the
+  signer's key's (`GordieHowe.RealizedProgram.TableSelect.evalE_lhs`); unless `γ` is a root of the
+  nonzero difference polynomial (degree at most `511`, probability `511/|F|`, Schwartz–Zippel),
+  the spectrum is the transform of the signer's key.
 * **The signature equation** (`sig_eq`): `Ntt(c − s1) = spectrum ⊙ Ntt(s2)`.
 * **The relation and the extractor** (`rel`, `proj`, `extractor`): the signer's position is below
   `64` and, at its key (`ringKey`) and the statement's challenge (`chalNat`), Falcon's algebraic
@@ -43,150 +44,26 @@ namespace GordieHowe.Falcon512.Ring
 open GordieHowe.Bits IOP
 open scoped NNReal ENNReal
 
-/-! ## The challenge powers -/
+/-! ## The table's selection -/
 
-/-- **The shared expressions of the challenge powers** (decided per program): `0` is `(1, γ)`, `1`
-is `γ²`, `2 m` concatenates `2 m − 2` with its products by `2 m − 1` (`m = 1 … 7`), `2 m + 1`
-squares `2 m − 1` (`m = 1 … 6`), and `15` is `14`'s products by `γ^256`. -/
-class FalconRingPowers (program : RealizedProgram) where
-  /-- The constant `1`. -/
-  one : ℕ
-  /-- The challenge `γ` (`member.ring.gamma`). -/
-  gamma : ℕ
-  /-- The program's shared expressions read only earlier entries. -/
-  refsOrdered : program.RefsOrdered
-  /-- The powers' shared expressions are in the table. -/
-  exprs_length : 15 < program.exprs.length
-  /-- `(1, γ)`. -/
-  expr0 : program.expr 0 = .reindex [(0, 1, 2)] (.concat (.leaf one) (.mul (.leaf gamma) (.leaf one)))
-  /-- `γ²`. -/
-  expr1 : program.expr 1 = .mul (.leaf gamma) (.leaf gamma)
-  /-- The concatenations. -/
-  exprEven : ∀ m ∈ List.range' 1 7, program.expr (2 * m) = .reindex [(0, 1, 2 ^ (m + 1))]
-    (.concat (.ref (2 * m - 2)) (.mul (.reindex [(0, 0, 2 ^ m)] (.ref (2 * m - 1)))
-      (.ref (2 * m - 2))))
-  /-- The squares. -/
-  exprOdd : ∀ m ∈ List.range' 1 6,
-    program.expr (2 * m + 1) = .mul (.ref (2 * m - 1)) (.ref (2 * m - 1))
-  /-- The upper half. -/
-  expr15 : program.expr 15 = .mul (.reindex [(0, 0, 256)] (.mul (.ref 13) (.ref 13))) (.ref 14)
-  /-- The constant `1` has one coordinate. -/
-  size0 : (program.value one).size = 1
+/-- **The Falcon ring's table selection** (`member.signer`, `lib/gordiehowe/lib/table.h`'s
+`select_row`; decided per program): the generic `GordieHowe.RealizedProgram.TableSelect`, whose
+theorems read the powers, the digests and the multiplexer fold. -/
+class FalconRingPowers (program : RealizedProgram) extends RealizedProgram.TableSelect program
 
-section Powers
+/-- **The Falcon ring selection's identifiers** (decided per program): domain `0`, predicate `0`
+(`member.signer`), `6` index bits, `64` rows, challenge `0` (`member.ring.gamma`). -/
+class FalconRingSelect (program : RealizedProgram) [FalconRingPowers program] : Prop where
+  /-- The identifiers. -/
+  ids : (RealizedProgram.TableSelect.shape program).dom = 0 ∧
+    (RealizedProgram.TableSelect.shape program).pred = 0 ∧
+    (RealizedProgram.TableSelect.shape program).bits = 6 ∧
+    (RealizedProgram.TableSelect.shape program).rows = 64 ∧
+    (RealizedProgram.TableSelect.shape program).chal = 0
 
-variable {program : RealizedProgram} [FalconRingPowers program] {I : RealizedProgram.Interp}
-  (rd : program.Valuation I) (f : ℕ)
-
-theorem evalE_refP {k : ℕ} (hk : k ≤ 15) :
-    program.evalE rd f (.ref k) = program.evalE rd f (program.expr k) :=
-  RealizedProgram.evalE_ref FalconRingPowers.refsOrdered rd f
-    (lt_of_le_of_lt hk FalconRingPowers.exprs_length)
-
-theorem exprLen_refP {k : ℕ} (hk : k ≤ 15) :
-    program.exprLen (.ref k) = program.exprLen (program.expr k) :=
-  RealizedProgram.exprLen_ref FalconRingPowers.refsOrdered (lt_of_le_of_lt hk FalconRingPowers.exprs_length)
-
-variable {rd f} {γ : (I f).K}
-
-/-- **The powers' levels** (`m ≤ 7`): shared expression `2 m` has `2^(m+1)` coordinates, the
-powers `γ^k`, and shared expression `2 m + 1` (for `m ≤ 6`) reads `γ^(2^(m+1))` at coordinate
-`0`. -/
-theorem powers_level (h1 : program.evalE rd f (.leaf (FalconRingPowers.one program)) 0 = 1)
-    (hγ : program.evalE rd f (.leaf (FalconRingPowers.gamma program)) 0 = γ) :
-    ∀ m ≤ 7, program.exprLen (.ref (2 * m)) = 2 ^ (m + 1) ∧
-      (∀ k < 2 ^ (m + 1), program.evalE rd f (.ref (2 * m)) k = γ ^ k) ∧
-      (m ≤ 6 → program.evalE rd f (.ref (2 * m + 1)) 0 = γ ^ 2 ^ (m + 1))
-  | 0, _ => by
-    refine ⟨?_, fun k hk => ?_, fun _ => ?_⟩
-    · rw [exprLen_refP (by norm_num), FalconRingPowers.expr0, RealizedProgram.exprLen_reindex]
-      rfl
-    · rw [evalE_refP rd f (by norm_num), FalconRingPowers.expr0, RealizedProgram.evalE_reindex,
-        RealizedProgram.IndexMap.entry_step_one (show k < 2 by simpa using hk), Nat.zero_add,
-        RealizedProgram.evalE_concat, RealizedProgram.exprLen_leaf, FalconRingPowers.size0, RealizedProgram.evalE_mul]
-      have hk2 : k < 2 := by simpa using hk
-      interval_cases k
-      · simp [h1]
-      · simp [h1, hγ]
-    · rw [evalE_refP rd f (by norm_num), FalconRingPowers.expr1, RealizedProgram.evalE_mul, hγ]
-      ring
-  | m + 1, hm => by
-    obtain ⟨hlen, hval, hodd⟩ := powers_level h1 hγ m (by omega)
-    have hE := FalconRingPowers.exprEven (program := program) (m + 1)
-      (List.mem_range'_1.2 ⟨by omega, by omega⟩)
-    have h2 : 2 * (m + 1) - 2 = 2 * m := by omega
-    have h3 : 2 * (m + 1) - 1 = 2 * m + 1 := by omega
-    rw [h2, h3] at hE
-    refine ⟨?_, fun k hk => ?_, fun hm6 => ?_⟩
-    · rw [exprLen_refP (by omega), hE, RealizedProgram.exprLen_reindex]
-      simp
-    · rw [evalE_refP rd f (by omega), hE, RealizedProgram.evalE_reindex, RealizedProgram.IndexMap.entry_step_one hk,
-        Nat.zero_add, RealizedProgram.evalE_concat, hlen]
-      split_ifs with hk'
-      · exact hval k hk'
-      · rw [RealizedProgram.evalE_mul, RealizedProgram.evalE_reindex,
-          RealizedProgram.IndexMap.entry_step_zero (show k - 2 ^ (m + 1) < 2 ^ (m + 1) by
-            rw [pow_succ] at hk; omega),
-          hodd (by omega), hval _ (by rw [pow_succ] at hk; omega), ← pow_add]
-        congr 1
-        omega
-    · have hO := FalconRingPowers.exprOdd (program := program) (m + 1)
-        (List.mem_range'_1.2 ⟨by omega, by omega⟩)
-      rw [h3] at hO
-      rw [evalE_refP rd f (by omega), hO, RealizedProgram.evalE_mul, hodd (by omega), ← pow_add,
-        ← two_mul, pow_succ 2 (m + 1)]
-      ring
-
-/-- **The upper half of the powers**: shared expression `15` reads `γ^(256 + k)` at `k < 256`. -/
-theorem powers_upper (h1 : program.evalE rd f (.leaf (FalconRingPowers.one program)) 0 = 1)
-    (hγ : program.evalE rd f (.leaf (FalconRingPowers.gamma program)) 0 = γ) {k : ℕ} (hk : k < 256) :
-    program.evalE rd f (.ref 15) k = γ ^ (256 + k) := by
-  obtain ⟨-, h13v, h13⟩ := powers_level h1 hγ 6 (by norm_num)
-  obtain ⟨-, h14v, -⟩ := powers_level h1 hγ 7 (by norm_num)
-  rw [evalE_refP rd f (by norm_num), FalconRingPowers.expr15, RealizedProgram.evalE_mul,
-    RealizedProgram.evalE_reindex, RealizedProgram.IndexMap.entry_step_zero hk, RealizedProgram.evalE_mul, h13 (by norm_num),
-    h14v k (by omega), ← pow_add, ← pow_add]
-  norm_num
-
-/-- **The powers**: the concatenation of shared expressions `14` and `15` reads `γ^k` at
-`k < 512`. -/
-theorem powers_eval (h1 : program.evalE rd f (.leaf (FalconRingPowers.one program)) 0 = 1)
-    (hγ : program.evalE rd f (.leaf (FalconRingPowers.gamma program)) 0 = γ) {k : ℕ} (hk : k < 512) :
-    program.evalE rd f (.concat (.ref 14) (.ref 15)) k = γ ^ k := by
-  obtain ⟨hlen, h14v, -⟩ := powers_level h1 hγ 7 (by norm_num)
-  rw [RealizedProgram.evalE_concat, hlen, show 2 ^ (7 + 1) = 256 by norm_num]
-  split_ifs with h
-  · exact h14v k (by omega)
-  · rw [powers_upper h1 hγ (by omega), show 256 + (k - 256) = k by omega]
-
-end Powers
-
-/-! ## The selection of the signer's digest -/
-
-/-- **The shared expressions of the selection** (decided per program): `16 + t` (`t = 0 … 4`)
-selects, by bit `t` of the signer's index (value `7`), the odd or the even entries of `15 + t`
-(of the digests, value `21`, for `t = 0`). -/
-class FalconRingSelect (program : RealizedProgram) where
-  /-- The index bits (`member.signer.index`). -/
-  idx : ℕ
-  /-- The digests (`member.ring.digests`). -/
-  dig : ℕ
-  /-- The program's shared expressions read only earlier entries. -/
-  refsOrdered : program.RefsOrdered
-  /-- The selection's shared expressions are in the table. -/
-  exprs_length : 20 < program.exprs.length
-  /-- The first level, on the digests. -/
-  expr16 : program.expr 16 = .mux (.reindex [(0, 0, 32)] (.reindex [(0, 0, 1)] (.leaf idx)))
-    (.reindex [(1, 2, 32)] (.leaf dig)) (.reindex [(0, 2, 32)] (.leaf dig))
-  /-- The later levels. -/
-  exprSel : ∀ t ∈ List.range' 1 4, program.expr (16 + t) =
-    .mux (.reindex [(0, 0, 2 ^ (5 - t))] (.reindex [(t, 0, 1)] (.leaf idx)))
-      (.reindex [(1, 2, 2 ^ (5 - t))] (.ref (15 + t))) (.reindex [(0, 2, 2 ^ (5 - t))] (.ref (15 + t)))
-
-/-- **A multiplexer on a bit** selects its first operand at `1`, its second at `0`. -/
-theorem mux_bit {K : Type*} [Field K] {b : ℕ} (hb : b ≤ 1) (x y : K) :
-    (b : K) * x + (1 - (b : K)) * y = if b = 1 then x else y := by
-  rcases Nat.le_one_iff_eq_zero_or_eq_one.1 hb with rfl | rfl <;> simp
+/-- **The index bits** (`member.signer.index`). -/
+abbrev FalconRingSelect.idx (program : RealizedProgram) [FalconRingPowers program] : ℕ :=
+  (RealizedProgram.TableSelect.shape program).idx
 
 /-- **The low bits of an index**: `Σ_{i ≤ t} b_i 2^i`. -/
 def lowBits (b : ℕ → ℕ) (t : ℕ) : ℕ := ∑ i ∈ Finset.range (t + 1), b i * 2 ^ i
@@ -203,134 +80,6 @@ theorem lowBits_lt {b : ℕ → ℕ} (hb : ∀ i, b i ≤ 1) : ∀ t, lowBits b 
     have := lowBits_lt hb t
     have := hb (t + 1)
     nlinarith
-
-section Select
-
-variable {program : RealizedProgram} [FalconRingSelect program] {I : RealizedProgram.Interp}
-  {rd : program.Valuation I} {f : ℕ} {b : ℕ → ℕ} {D : ℕ → (I f).K}
-
-theorem evalE_refS (rd : program.Valuation I) (f : ℕ) {k : ℕ} (hk : k ≤ 20) :
-    program.evalE rd f (.ref k) = program.evalE rd f (program.expr k) :=
-  RealizedProgram.evalE_ref FalconRingSelect.refsOrdered rd f
-    (lt_of_le_of_lt hk FalconRingSelect.exprs_length)
-
-/-- **The selection's levels** (`t ≤ 4`): entry `j < 2^(5 − t)` of shared expression `16 + t` is
-digest `2^(t+1) j + Σ_{i ≤ t} b_i 2^i`, at bits `b` of the index and digests `D`. -/
-theorem select_level (hb : ∀ i, b i ≤ 1)
-    (hbit : ∀ i < 6, program.evalE rd f (.leaf (FalconRingSelect.idx program)) i = (b i : (I f).K))
-    (hD : ∀ r < 64, program.evalE rd f (.leaf (FalconRingSelect.dig program)) r = D r) :
-    ∀ t ≤ 4, ∀ j < 2 ^ (5 - t),
-      program.evalE rd f (.ref (16 + t)) j = D (2 ^ (t + 1) * j + lowBits b t)
-  | 0, _, j, hj => by
-    rw [evalE_refS rd f (by norm_num), FalconRingSelect.expr16, RealizedProgram.evalE_mux,
-      RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex,
-      RealizedProgram.evalE_reindex, RealizedProgram.IndexMap.entry_step_zero (show j < 32 by simpa using hj),
-      RealizedProgram.IndexMap.entry_step_zero (show 0 < 1 by norm_num), hbit 0 (by norm_num),
-      mux_bit (hb 0), RealizedProgram.IndexMap.entry_single (show j < 32 by simpa using hj),
-      RealizedProgram.IndexMap.entry_single (show j < 32 by simpa using hj)]
-    have h1 : (((1 : ℕ) : ℤ) + 2 * (j : ℤ)).toNat = 2 * j + 1 := by omega
-    have h0 : (((0 : ℕ) : ℤ) + 2 * (j : ℤ)).toNat = 2 * j := by omega
-    rw [h1, h0, hD _ (by simp at hj; omega), hD _ (by simp at hj; omega)]
-    simp only [lowBits, Finset.sum_range_one, pow_zero, mul_one, zero_add, pow_one]
-    rcases Nat.le_one_iff_eq_zero_or_eq_one.1 (hb 0) with h | h <;> simp [h]
-  | t + 1, ht, j, hj => by
-    have hE := FalconRingSelect.exprSel (program := program) (t + 1)
-      (List.mem_range'_1.2 ⟨by omega, by omega⟩)
-    rw [show 15 + (t + 1) = 16 + t by omega] at hE
-    have hj' : j < 2 ^ (5 - (t + 1)) := hj
-    have h2 : 2 ^ (5 - t) = 2 * 2 ^ (5 - (t + 1)) := by
-      rw [← pow_succ']
-      congr 1
-      omega
-    rw [evalE_refS rd f (by omega), hE, RealizedProgram.evalE_mux, RealizedProgram.evalE_reindex,
-      RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex,
-      RealizedProgram.IndexMap.entry_step_zero hj', RealizedProgram.IndexMap.entry_step_zero (show 0 < 1 by norm_num),
-      Nat.add_zero, hbit (t + 1) (by omega), mux_bit (hb (t + 1)), RealizedProgram.IndexMap.entry_single hj',
-      RealizedProgram.IndexMap.entry_single hj']
-    have h1 : (((1 : ℕ) : ℤ) + 2 * (j : ℤ)).toNat = 2 * j + 1 := by omega
-    have h0 : (((0 : ℕ) : ℤ) + 2 * (j : ℤ)).toNat = 2 * j := by omega
-    rw [h1, h0, select_level hb hbit hD t (by omega) _ (by rw [h2]; omega),
-      select_level hb hbit hD t (by omega) _ (by rw [h2]; omega), lowBits_succ]
-    rcases Nat.le_one_iff_eq_zero_or_eq_one.1 (hb (t + 1)) with h | h
-    · simp only [h, zero_ne_one, if_false, zero_mul, add_zero]
-      congr 1
-      rw [pow_succ 2 (t + 1)]
-      ring
-    · simp only [h, if_true, one_mul]
-      congr 1
-      rw [pow_succ 2 (t + 1)]
-      ring
-
-/-- **The selected digest**: the selection by bit `5` of shared expression `20`'s two entries is
-digest `Σ_{i < 6} b_i 2^i`. -/
-theorem select_top (hb : ∀ i, b i ≤ 1)
-    (hbit : ∀ i < 6, program.evalE rd f (.leaf (FalconRingSelect.idx program)) i = (b i : (I f).K))
-    (hD : ∀ r < 64, program.evalE rd f (.leaf (FalconRingSelect.dig program)) r = D r) :
-    program.evalE rd f (.mux (.reindex [(5, 0, 1)] (.leaf (FalconRingSelect.idx program)))
-      (.reindex [(1, 0, 1)] (.ref 20))
-      (.reindex [(0, 0, 1)] (.ref 20))) 0 = D (lowBits b 5) := by
-  rw [RealizedProgram.evalE_mux, RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex,
-    RealizedProgram.IndexMap.entry_step_zero (show 0 < 1 by norm_num), RealizedProgram.IndexMap.entry_step_zero (show 0 < 1 by norm_num),
-    RealizedProgram.IndexMap.entry_step_zero (show 0 < 1 by norm_num), hbit 5 (by norm_num), mux_bit (hb 5),
-    select_level hb hbit hD 4 (by norm_num) 1 (by norm_num),
-    select_level hb hbit hD 4 (by norm_num) 0 (by norm_num)]
-  have h5 : lowBits b 5 = lowBits b 4 + b 5 * 32 := lowBits_succ b 4
-  rw [h5]
-  rcases Nat.le_one_iff_eq_zero_or_eq_one.1 (hb 5) with h | h
-  · simp [h]
-  · simp only [h, if_true]
-    congr 1
-    norm_num <;> omega
-
-end Select
-
-/-! ## The digests -/
-
-/-- **The digests' expression** (`member.ring.digests`, value `21`): the rows of the ring
-(value `4`, `64` keys of `512` coefficients) against the transposed natural-order transform of the
-challenge powers. -/
-def digestsExpr (ring psi : ℕ) : RealizedProgram.Expr :=
-  .apply (.rowDot ring 64 512) (.reindex [(0, 1, 512)] (.apply (.nttTranspose 512 psi)
-    (.reindex [(0, 1, 512)] (.reindex [(0, 1, 512)] (.concat (.ref 14) (.ref 15))))))
-
-section Digests
-
-variable {program : RealizedProgram} [FalconRingPowers program] {I : RealizedProgram.Interp}
-  {rd : program.Valuation I} {f : ℕ} {γ : (I f).K}
-
-/-- **The digest of key `r`** is the fingerprint `Σ_m γ^m · NTT(h_r)_m` of its natural-order
-transform at `ψ` (`Ops.nttNatural`), `h_r` the ring's row `r`. -/
-theorem digests_eval {ring psi : ℕ} (h1 : program.evalE rd f (.leaf (FalconRingPowers.one program)) 0 = 1)
-    (hγ : program.evalE rd f (.leaf (FalconRingPowers.gamma program)) 0 = γ) {r : ℕ} (hr : r < 64) :
-    program.evalE rd f (digestsExpr ring psi) r = ∑ m : Fin 512, γ ^ (m : ℕ) *
-      RealizedProgram.Ops.nttNatural 512 ((I f).decode psi) (fun c => program.evalE rd f (.leaf ring) (r * 512 + c))
-        m := by
-  have hp : ∀ m < 512, program.evalE rd f (.reindex [(0, 1, 512)] (.reindex [(0, 1, 512)]
-      (.concat (.ref 14) (.ref 15)))) m = γ ^ m := fun m hm => by
-    rw [RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex, RealizedProgram.IndexMap.entry_step_one hm, Nat.zero_add,
-      RealizedProgram.IndexMap.entry_step_one hm, Nat.zero_add]
-    exact powers_eval h1 hγ hm
-  have ht : ∀ c < 512, program.evalE rd f (.reindex [(0, 1, 512)] (.apply (.nttTranspose 512 psi)
-      (.reindex [(0, 1, 512)] (.reindex [(0, 1, 512)] (.concat (.ref 14) (.ref 15)))))) c =
-      ∑ m : Fin 512, (I f).decode psi ^ ((2 * (m : ℕ) + 1) * c) * γ ^ (m : ℕ) := fun c hc => by
-    rw [RealizedProgram.evalE_reindex, RealizedProgram.IndexMap.entry_step_one hc, Nat.zero_add, RealizedProgram.evalE_apply]
-    simp only [RealizedProgram.NamedOp.apply, RealizedProgram.NamedOp.block, RealizedProgram.NamedOp.rows, RealizedProgram.NamedOp.cols, RealizedProgram.Ops.nttTranspose,
-      Nat.mod_eq_of_lt hc, Nat.div_eq_of_lt hc, zero_mul, zero_add, if_pos hc]
-    exact Finset.sum_congr rfl fun m _ => by rw [hp m m.isLt]
-  unfold digestsExpr
-  rw [RealizedProgram.evalE_apply]
-  simp only [RealizedProgram.NamedOp.apply, RealizedProgram.NamedOp.block, RealizedProgram.NamedOp.rows, RealizedProgram.NamedOp.cols, RealizedProgram.Ops.rowDot,
-    Nat.mod_eq_of_lt hr, Nat.div_eq_of_lt hr, zero_mul, zero_add, if_pos hr]
-  simp only [fun c : Fin 512 => ht c c.isLt]
-  simp only [Finset.mul_sum]
-  rw [Finset.sum_comm]
-  refine Finset.sum_congr rfl fun m _ => ?_
-  rw [RealizedProgram.Ops.nttNatural_apply _ _ _ m.isLt, Finset.mul_sum]
-  refine Finset.sum_congr rfl fun c _ => ?_
-  rw [RealizedProgram.evalE_leaf]
-  ring
-
-end Digests
 
 /-! ## The membership -/
 
@@ -365,15 +114,24 @@ class RingField (FA : RealizedProgram.FieldInterp) (negOne : ℕ) : Prop where
   /-- `1` reads as `1`. -/
   toNat_one : FA.toNat 1 = 1
 
+/-- **A ring field is a selection's field** (`GordieHowe.RealizedProgram.SelectField`). -/
+instance (FA : RealizedProgram.FieldInterp) (n : ℕ) [RingField FA n] :
+    RealizedProgram.SelectField FA n where
+  decode_negOne := RingField.decode_negOne
+  decode_zero := RingField.decode_zero (negOne := n)
+  decode_one := RingField.decode_one (negOne := n)
+  toNat_zero := RingField.toNat_zero (negOne := n)
+  toNat_one := RingField.toNat_one (negOne := n)
+
 /-- **A native Falcon field** (`F_q^k`): `q − 1 = 12288` is `−1`. -/
 instance (FA : RealizedProgram.FieldInterp) [AField FA] : RingField FA 12288 where
   decode_negOne := by
-    rw [AField.decode_eq]
+    rw [AField.decode_lt _ (by norm_num)]
     have h0 : ((12289 : ℕ) : FA.K) = 0 := CharP.cast_eq_zero _ 12289
     push_cast at h0 ⊢
     linear_combination h0
-  decode_zero := by rw [AField.decode_eq, Nat.cast_zero]
-  decode_one := by rw [AField.decode_eq, Nat.cast_one]
+  decode_zero := by rw [AField.decode_lt _ (by norm_num), Nat.cast_zero]
+  decode_one := by rw [AField.decode_lt _ (by norm_num), Nat.cast_one]
   toNat_zero := AField.toNat_zero
   toNat_one := AField.toNat_one
 
@@ -382,7 +140,7 @@ the carrier rings number their values differently): domain `0` of field `0`; the
 (`statement.ring`, `ring`), the spectrum (`spec`), the powers (`pow`), the zero constant (`zero`),
 the transform root (`psi`) and the constant `−1` (`mOne`) of the field; the membership
 `member.signer` (predicate `0`) and the index bits' type check (`idxPred`), source predicates; the
-powers and the digests as public expressions; the kinds, fields and sizes of the values read; the
+table selection's record, rows and row map; the kinds, fields and sizes of the values read; the
 challenge `γ`. -/
 class FalconRingMember (program : RealizedProgram) [FalconRingPowers program] [FalconRingSelect program]
     where
@@ -416,17 +174,17 @@ class FalconRingMember (program : RealizedProgram) [FalconRingPowers program] [F
   /-- The two predicates are source predicates. -/
   inSource : ∀ p ∈ [0, idxPred],
     p < program.predicates.length ∧ program.inSource (program.predicate p) = true
-  /-- The challenge powers. -/
-  powersKind : (program.value pow).kind =
-    .pub (.expr (.reindex [(0, 1, 512)] (.concat (.ref 14) (.ref 15))))
-  /-- The digests. -/
-  digestsKind : (program.value (FalconRingSelect.dig program)).kind = .pub (.expr (digestsExpr ring psi))
-  /-- The constants `1` and `0`. -/
-  consts : program.isConstant (FalconRingPowers.one program) = true ∧
-    (program.constEntries (FalconRingPowers.one program)).getD 0 0 = 1 ∧
-    program.isConstant zero = true ∧ (program.constEntries zero).getD 0 0 = 0
-  /-- `γ` is challenge `0`. -/
-  gammaKind : (program.value (FalconRingPowers.gamma program)).kind = .challenge 0
+  /-- The zero constant. -/
+  consts : program.isConstant zero = true ∧ (program.constEntries zero).getD 0 0 = 0
+  /-- The table selection's identifiers: the record is the spectrum, the rows the ring, the row
+  map the natural-order transform of length `512` at `ψ`. -/
+  table : (RealizedProgram.TableSelect.shape program).record = .leaf spec ∧
+    (RealizedProgram.TableSelect.shape program).parts = [(ring, 512)] ∧
+    (RealizedProgram.TableSelect.shape program).map = [⟨true, true, 512, 0, psi⟩] ∧
+    (RealizedProgram.TableSelect.shape program).zero = zero ∧
+    (RealizedProgram.TableSelect.shape program).mOne = mOne ∧
+    (RealizedProgram.TableSelect.shape program).idxPred = idxPred ∧
+    (RealizedProgram.TableSelect.shape program).pow = pow
   /-- The ring is an opaque statement value with no arguments. -/
   ringKind : (program.value ring).kind = .pub (.opaque "statement.ring" [])
   /-- The challenge is an opaque statement value with no arguments. -/
@@ -434,8 +192,9 @@ class FalconRingMember (program : RealizedProgram) [FalconRingPowers program] [F
   /-- The challenge and the ring are distinct values. -/
   chal_ne_ring : chal ≠ ring
   /-- The values read are of field `0`. -/
-  fields : ∀ v ∈ [FalconRingPowers.one program, zero, ring, spec, FalconRingSelect.idx program,
-    FalconRingPowers.gamma program, pow, FalconRingSelect.dig program, chal, s2],
+  fields : ∀ v ∈ [(RealizedProgram.TableSelect.shape program).one, zero, ring, spec,
+    FalconRingSelect.idx program, (RealizedProgram.TableSelect.shape program).gamma, pow,
+    (RealizedProgram.TableSelect.shape program).dig, chal, s2],
     program.valueField v = 0
   /-- The sizes of the values read. -/
   sizes : (program.value (FalconRingSelect.idx program)).size = 6 ∧
@@ -539,6 +298,14 @@ theorem holdsAt_src {e : program.Env I} (hs : program.SourceSatAt e) {p : ℕ}
   hs.preds _ (RealizedProgram.predicate_mem (FalconRingMember.inSource p hp).1)
     (FalconRingMember.inSource p hp).2
 
+/-- **The membership's predicates hold**: `member.signer` and the index bits' check. -/
+def MemberPreds (e : program.Env I) : Prop :=
+  ∀ p ∈ [0, FalconRingMember.idxPred program], program.HoldsAt e (program.predicate p).body
+
+/-- **The membership's predicates hold** where the source program holds. -/
+theorem memberPreds_of_source {e : program.Env I} (hs : program.SourceSatAt e) : MemberPreds e :=
+  fun _ hp => holdsAt_src hs hp
+
 /-- **Entry `i` of the challenge** (`statement.c`) of a statement, read in field `0`. -/
 def chalEntry (x : program.Valuation I) (i : ℕ) : (I 0).K :=
   RealizedProgram.castElt (x (FalconRingMember.chal program) i)
@@ -548,24 +315,6 @@ def s2Of (e : program.Env I) (i : ℕ) : (I 0).K :=
   program.evalE (program.reader e) 0 (.leaf (FalconRingMember.s2 program)) i
 
 variable [RingField (I 0) (FalconRingMember.mOne program)]
-
-theorem read_leaf0 (e : program.Env I) :
-    program.evalE (program.read e program.values.length) 0
-      (.leaf (FalconRingPowers.one program)) 0 = 1 := by
-  obtain ⟨n, hn⟩ := values_length_succ (program := program)
-  obtain ⟨c0, e0, -⟩ := FalconRingMember.consts (program := program)
-  rw [RealizedProgram.evalE_leaf, hn, RealizedProgram.read_of_constant e (RealizedProgram.kind_of_isConstant c0)
-    (by omega), RealizedProgram.castElt_decode ((FalconRingMember.fields (program := program)) _ (by simp)),
-    e0, RingField.decode_one (negOne := FalconRingMember.mOne program)]
-
-theorem read_leafGamma (e : program.Env I) :
-    program.evalE (program.read e program.values.length) 0
-      (.leaf (FalconRingPowers.gamma program)) 0 = gammaOf e := by
-  obtain ⟨n, hn⟩ := values_length_succ (program := program)
-  rw [RealizedProgram.evalE_leaf, hn, RealizedProgram.read_of_challenge e FalconRingMember.gammaKind (by omega),
-    RealizedProgram.castElt_castElt_eq, if_pos (by rw [(FalconRingMember.chal0 (program := program)).2.2,
-      (FalconRingMember.fields (program := program)) _ (by simp)])]
-  rfl
 
 theorem read_leafRing (e : program.Env I) (s : ℕ) :
     program.evalE (program.read e program.values.length) 0 (.leaf (FalconRingMember.ring program)) s =
@@ -582,11 +331,12 @@ def bitsOf (e : program.Env I) (i : ℕ) : ℕ :=
 /-- **The signer's position**: the index bits read as a natural. -/
 def idxOf (e : program.Env I) : ℕ := lowBits (bitsOf e) 5
 
-/-- **The index bits are bits** where the source program holds (`member.signer.index.boolean`). -/
-theorem bitsOf_spec {e : program.Env I} (hs : program.SourceSatAt e) {i : ℕ} (hi : i < 6) :
+/-- **The index bits are bits** where the membership's predicates hold
+(`member.signer.index.boolean`). -/
+theorem bitsOf_spec {e : program.Env I} (hs : MemberPreds e) {i : ℕ} (hi : i < 6) :
     bitsOf e i ≤ 1 ∧ program.evalE (program.reader e) 0 (.leaf vIdx) i = (bitsOf e i : (I 0).K) := by
   obtain ⟨t, hb⟩ := FalconRingMember.idxBool (program := program)
-  have h := holdsAt_src hs (p := FalconRingMember.idxPred program) (by simp)
+  have h := hs (FalconRingMember.idxPred program) (by simp)
   rw [hb] at h
   have hx := holdsAt_equal0 h i (by
     rw [RealizedProgram.exprLen_mul, RealizedProgram.exprLen_leaf, (FalconRingMember.sizes (program := program)).1]
@@ -600,13 +350,13 @@ theorem bitsOf_spec {e : program.Env I} (hs : program.SourceSatAt e) {i : ℕ} (
   · rw [h1, RingField.toNat_one (negOne := FalconRingMember.mOne program), Nat.cast_one]
     exact ⟨le_rfl, rfl⟩
 
-theorem bitsOf_le (e : program.Env I) (hs : program.SourceSatAt e) (i : ℕ) : bitsOf e i ≤ 1 := by
+theorem bitsOf_le (e : program.Env I) (hs : MemberPreds e) (i : ℕ) : bitsOf e i ≤ 1 := by
   by_cases hi : i < 6
   · exact (bitsOf_spec hs hi).1
   · simp [bitsOf, hi]
 
 /-- **The signer's position is below `64`.** -/
-theorem idxOf_lt (e : program.Env I) (hs : program.SourceSatAt e) : idxOf e < 64 :=
+theorem idxOf_lt (e : program.Env I) (hs : MemberPreds e) : idxOf e < 64 :=
   lowBits_lt (bitsOf_le e hs) 5
 
 theorem decode_mOne : (I 0).decode (FalconRingMember.mOne program) = -1 :=
@@ -616,6 +366,61 @@ theorem exprLen_memberLhs (spec pow idx mOne : ℕ) : program.exprLen (memberLhs
   unfold memberLhs
   rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_apply, RealizedProgram.exprLen_mul, RealizedProgram.exprLen_reindex]
   simp [RealizedProgram.NamedOp.rows, RealizedProgram.NamedOp.cols]
+
+/-- **The table selection's field facts** at the program's constant `−1`. -/
+theorem selectField_shape :
+    RealizedProgram.SelectField (I 0) (RealizedProgram.TableSelect.shape program).mOne := by
+  rw [(FalconRingMember.table (program := program)).2.2.2.2.1]
+  infer_instance
+
+/-- **The table selection's domain** has field `0`. -/
+theorem domainField_shape :
+    program.domainField (RealizedProgram.TableSelect.shape program).dom = 0 := by
+  rw [(FalconRingSelect.ids (program := program)).1]
+  exact FalconRingMember.domainField0
+
+/-- **The table selection's index bits** are the membership's. -/
+theorem bitsOf_shape (e : program.Env I) : RealizedProgram.TableSelect.bitsOf 0 e = bitsOf e := by
+  funext i
+  unfold RealizedProgram.TableSelect.bitsOf bitsOf
+  rw [(FalconRingSelect.ids (program := program)).2.2.1]
+
+/-- **The table selection's index** is the signer's position. -/
+theorem idxOf_shape (e : program.Env I) : RealizedProgram.TableSelect.idxOf 0 e = idxOf e := by
+  unfold RealizedProgram.TableSelect.idxOf idxOf lowBits RealizedProgram.idxVal
+  rw [bitsOf_shape, (FalconRingSelect.ids (program := program)).2.2.1]
+
+/-- **The table selection's challenge** is `member.ring.gamma`. -/
+theorem gammaOf_shape (e : program.Env I) : RealizedProgram.TableSelect.gammaOf 0 e = gammaOf e := by
+  unfold RealizedProgram.TableSelect.gammaOf gammaOf
+  rw [(FalconRingSelect.ids (program := program)).2.2.2.2]
+
+/-- **The table selection's image of the selected row** is the transform of the ring's row at the
+signer's position. -/
+theorem mapOf_shape (e : program.Env I)
+    (hb : ∀ i < 6, bitsOf e i ≤ 1 ∧
+      program.evalE (program.reader e) 0 (.leaf vIdx) i = (bitsOf e i : (I 0).K)) {c : ℕ}
+    (hc : c < 512) : RealizedProgram.TableSelect.mapOf 0 e c =
+      RealizedProgram.Ops.nttNatural 512 ((I 0).decode (FalconRingMember.psi program))
+        (fun c => ringEntry e.stmt (idxOf e * 512 + c)) c := by
+  have hle : ∀ i, bitsOf e i ≤ 1 := fun i => by
+    by_cases hi : i < 6
+    · exact (hb i hi).1
+    · simp [bitsOf, hi]
+  have hidx : idxOf e < 64 := lowBits_lt hle 5
+  obtain ⟨-, hparts, hmap, -⟩ := FalconRingMember.table (program := program)
+  have hrow : RealizedProgram.TableSelect.rowIdx 0 e = idxOf e := by
+    unfold RealizedProgram.TableSelect.rowIdx
+    rw [idxOf_shape, (FalconRingSelect.ids (program := program)).2.2.2.1, if_pos hidx]
+  unfold RealizedProgram.TableSelect.mapOf
+  rw [hmap, hrow]
+  simp only [RealizedProgram.rowApply, if_pos hc, RealizedProgram.RowLeaf.apply, if_true]
+  refine RealizedProgram.NamedOp.nttNatural_congr (fun i hi => ?_) c
+  unfold RealizedProgram.TableSelect.rowAt
+  rw [hparts]
+  simp only [RealizedProgram.rowOf, if_pos hi]
+  rw [← read_leafRing e]
+  rfl
 
 /-- **The membership's left side**, at index bits that are bits: the fingerprint
 `Σ_k spectrum_k γ^k` of the committed spectrum less the fingerprint of the natural-order transform
@@ -628,53 +433,54 @@ theorem evalE_memberLhs (e : program.Env I)
       ∑ t : Fin 512, specOf e t * gammaOf e ^ (t : ℕ) - ∑ m : Fin 512, gammaOf e ^ (m : ℕ) *
         RealizedProgram.Ops.nttNatural 512 ((I 0).decode (FalconRingMember.psi program))
           (fun c => ringEntry e.stmt (idxOf e * 512 + c)) m := by
-  have hle : ∀ i, bitsOf e i ≤ 1 := fun i => by
-    by_cases hi : i < 6
-    · exact (hb i hi).1
-    · simp [bitsOf, hi]
-  have hidx : idxOf e < 64 := lowBits_lt hle 5
-  rw [memberLhs, RealizedProgram.evalE_add, RealizedProgram.evalE_apply_sum, RealizedProgram.evalE_scale_const, decode_mOne]
-  have hpow : ∀ k : Fin 512, program.evalE (program.reader e) 0
-      (.mul (.reindex [(0, 1, 512)] (.reindex [(0, 1, 512)] (.leaf (FalconRingMember.spec program))))
-        (.reindex [(0, 1, 512)] (.leaf (FalconRingMember.pow program)))) (0 * 512 + k) =
-        specOf e k * gammaOf e ^ (k : ℕ) := by
-    intro k
-    rw [Nat.zero_mul, Nat.zero_add, RealizedProgram.evalE_mul, RealizedProgram.evalE_reindex,
-      RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex, RealizedProgram.IndexMap.entry_step_one k.isLt,
-      Nat.zero_add, RealizedProgram.IndexMap.entry_step_one k.isLt, Nat.zero_add,
-      evalE_leaf_pubExpr e FalconRingMember.powersKind
-        ((FalconRingMember.fields (program := program)) _ (by simp)),
-      RealizedProgram.evalE_reindex, RealizedProgram.IndexMap.entry_step_one k.isLt, Nat.zero_add,
-      powers_eval (read_leaf0 e) (read_leafGamma e) k.isLt]
+  haveI := selectField_shape (program := program) (I := I)
+  obtain ⟨t, hm⟩ := FalconRingMember.member (program := program)
+  obtain ⟨T, F, tg, hbody, hT, hF⟩ :=
+    RealizedProgram.TableShape.bodyOk_spec (RealizedProgram.TableSelect.bodyOk (program := program))
+  rw [(FalconRingSelect.ids (program := program)).2.1, hm] at hbody
+  have hL := (RealizedProgram.PredBody.equal.inj hbody).2.1
+  obtain ⟨hrec, -, hmap, -⟩ := FalconRingMember.table (program := program)
+  have hb' : ∀ i < (RealizedProgram.TableSelect.shape program).bits,
+      RealizedProgram.TableSelect.bitsOf 0 e i ≤ 1 ∧ program.evalE (program.reader e) 0
+        (.leaf (RealizedProgram.TableSelect.shape program).idx) i =
+          (RealizedProgram.TableSelect.bitsOf 0 e i : (I 0).K) := by
+    rw [bitsOf_shape, (FalconRingSelect.ids (program := program)).2.2.1]
+    exact hb
+  obtain ⟨-, hv⟩ := RealizedProgram.TableSelect.evalE_lhs domainField_shape e hT hF hb'
+  have hW : RealizedProgram.TableSelect.W program = 512 := by
+    unfold RealizedProgram.TableSelect.W
+    rw [hmap]
     rfl
-  have hsel := select_top (rd := program.reader e) (f := 0) (b := bitsOf e)
-    (D := fun r => program.evalE (program.reader e) 0 (.leaf (FalconRingSelect.dig program)) r) hle
-    (fun i hi => (hb i hi).2) (fun _ _ => rfl)
-  simp only [hpow]
-  rw [hsel, evalE_leaf_pubExpr e FalconRingMember.digestsKind
-      ((FalconRingMember.fields (program := program)) _ (by simp)),
-    digests_eval (r := lowBits (bitsOf e) 5) (read_leaf0 e) (read_leafGamma e) hidx]
-  simp only [read_leafRing]
-  unfold idxOf
-  ring
+  have hexp : ∀ c < 512, RealizedProgram.cellExp (RealizedProgram.TableSelect.shape program).map c = c :=
+    fun c hc => by
+      rw [hmap]
+      simp [RealizedProgram.cellExp, RealizedProgram.RowLeaf.perm, RealizedProgram.RowLeaf.scheme, hc]
+  rw [hL, hv, hW, Finset.sum_range, Finset.sum_range, gammaOf_shape]
+  refine congrArg₂ (· - ·) ?_ ?_
+  · refine Finset.sum_congr rfl fun c _ => ?_
+    rw [hexp c c.isLt]
+    unfold RealizedProgram.TableSelect.recOf specOf
+    rw [hrec]
+  · refine Finset.sum_congr rfl fun c _ => ?_
+    rw [hexp c c.isLt, mapOf_shape e hb c.isLt, _root_.mul_comm]
 
 /-- The zero constant reads `0` in field `0`. -/
 theorem evalE_zero (e : program.Env I) :
     program.evalE (program.reader e) 0 (.leaf (FalconRingMember.zero program)) 0 = 0 := by
-  obtain ⟨-, -, c1, e1⟩ := FalconRingMember.consts (program := program)
+  obtain ⟨c1, e1⟩ := FalconRingMember.consts (program := program)
   rw [RealizedProgram.evalE_leaf_of_isConstant e c1, RealizedProgram.constRead_of_valueField
     ((FalconRingMember.fields (program := program)) _ (by simp)), e1,
     RingField.decode_zero (negOne := FalconRingMember.mOne program)]
 
-/-- **The membership's equation** (`member.signer`): where the source program holds, the
+/-- **The membership's equation** (`member.signer`): where the membership's predicates hold, the
 fingerprint `Σ_k spectrum_k γ^k` of the committed spectrum is the fingerprint of the natural-order
 transform of the ring's row at the signer's position (`idxOf`). -/
-theorem member_eq {e : program.Env I} (hs : program.SourceSatAt e) :
+theorem member_eq {e : program.Env I} (hs : MemberPreds e) :
     ∑ t : Fin 512, specOf e t * gammaOf e ^ (t : ℕ) = ∑ m : Fin 512, gammaOf e ^ (m : ℕ) *
       RealizedProgram.Ops.nttNatural 512 ((I 0).decode (FalconRingMember.psi program))
         (fun c => ringEntry e.stmt (idxOf e * 512 + c)) m := by
   obtain ⟨t, hb⟩ := FalconRingMember.member (program := program)
-  have h := holdsAt_src hs (p := 0) (by simp)
+  have h := hs 0 (by simp)
   rw [hb] at h
   have hx := holdsAt_equal0 h 0 (by rw [exprLen_memberLhs]; norm_num)
   rw [evalE_zero, evalE_memberLhs e fun i hi => bitsOf_spec hs hi] at hx
@@ -799,7 +605,7 @@ variable [RingField (I 0) (FalconRingMember.mOne program)]
 
 /-- **Without the event, the spectrum is the transform of the signer's row**: the fingerprints
 agree (`member_eq`), so `γ` is a root of the fingerprint's polynomial, which is then `0`. -/
-theorem spec_eq_of_not_event {e : program.Env I} (hs : program.SourceSatAt e)
+theorem spec_eq_of_not_event {e : program.Env I} (hs : MemberPreds e)
     (hev : ¬ ringEvent 0 e) (m : Fin 512) : specOf e m = keySpec e m := by
   have heval : (fpPoly e).eval (gammaOf e) = 0 := by
     rw [fpPoly, coeffPoly_eval, ← Fin.sum_univ_eq_sum_range
@@ -954,7 +760,8 @@ theorem evalE_leaf2 (e : program.Env I) {k : ℕ} (hk : k < 512) :
   obtain ⟨c2, e2⟩ := FalconRingBase.const2 (program := program)
   rw [RealizedProgram.evalE_leaf_of_isConstant e c2, RealizedProgram.constRead_of_valueField
     ((FalconRingBase.fields (program := program)) 2 (by simp)), e2, List.getD_eq_getElem?_getD,
-    List.getElem?_replicate, if_pos hk, Option.getD_some, AField.decode_eq, Nat.cast_zero]
+    List.getElem?_replicate, if_pos hk, Option.getD_some, AField.decode_lt _ (by norm_num),
+    Nat.cast_zero]
 
 /-- **The signature equation** (`signature.equation`): where the source program holds,
 `Ntt(c − s1)_k = spectrum_k · Ntt(s2)_k` at every frequency `k < 512`. -/
@@ -1074,7 +881,7 @@ theorem primeProj_negacyclic (h s2 : Fin falcon512.n → (I 0).K)
   · exact map_zero _
 
 theorem decode_psi : (I 0).decode 10302 = psiF (I 0).K := by
-  rw [AField.decode_eq]
+  rw [AField.decode_lt _ (by norm_num)]
   rfl
 
 theorem nttNatural_eq_negSpectrum (x : ℕ → (I 0).K) (k : Fin falcon512.n) :
@@ -1104,7 +911,7 @@ theorem mem_rel_of_source (hN : NormSound (program := program) (I := I)) {e : pr
     rw [DFT.negSpectrum_negacyclicConvCoeff (Native.psiF_pow _)]
     funext k
     have h := sig_eq hs k.isLt
-    rw [spec_eq_of_not_event hs hev k, keySpec, (FalconRingBase.ids (program := program)).2.2.2.1,
+    rw [spec_eq_of_not_event (memberPreds_of_source hs) hev k, keySpec, (FalconRingBase.ids (program := program)).2.2.2.1,
       nttNatural_eq_negSpectrum,
       nttNatural_eq_negSpectrum, nttNatural_eq_negSpectrum] at h
     exact h
@@ -1134,7 +941,7 @@ theorem mem_rel_of_source (hN : NormSound (program := program) (I := I)) {e : pr
   have hq : ∀ i, chalNat e.stmt i < 2 ^ falconSampleBits := fun i =>
     (AField.toNat_lt _).trans (by norm_num [falconSampleBits])
   obtain ⟨hok, hbd⟩ := Native.ringAlgebra_sound hq halg hreq
-  refine ⟨by rw [proj_idx]; exact idxOf_lt e hs, ?_, ?_⟩
+  refine ⟨by rw [proj_idx]; exact idxOf_lt e (memberPreds_of_source hs), ?_, ?_⟩
   · show Falcon512.algebraOk falcon512 (ringKey e.stmt (proj e.stmt e.asg).idx).h _
       (proj e.stmt e.asg).s2.toRq
     rw [proj_idx, proj_s2]

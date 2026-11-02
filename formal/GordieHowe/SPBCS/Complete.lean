@@ -4,7 +4,9 @@
 module
 
 public import GordieHowe.SPBCS.Basic
-public import GordieHowe.SPBCS.FullPast.Completeness
+public import GordieHowe.Model.IOP.Append
+public import GordieHowe.Model.IOP.Completeness
+public import GordieHowe.Model.IOP.CausalRun
 
 @[expose] public section
 
@@ -33,6 +35,114 @@ at most `ε + overrun + keyCollision (t.size n) k`. The transcript queries are d
 contents are well formed and distinct, `eq_of_queryW_eq`), so a repeated query is a stream query
 at the key of an earlier round, and only the `t.size n` rounds have a key; a final input has none.
 -/
+
+/-!
+## The honest writes
+
+The pieces of the honest prover of the spBCS compiler, for every causal prover (`CausalProver`),
+with which completeness is stated below (`prob_not_accepts_prove_le`).
+
+* `ComponentModel.Encoder`: the honest encoding of a component's messages (the column bytes of
+  each leaf and the write carrying given roots).
+* `WriteFn`, `honestWrite`, `leafFn`: the honest writes of every leaf as functions of the
+  challenges and the oracle, and the honest leaves of every position;
+  `honestWrite_congr_oracle`: the honest writes depend on the oracle only through its answers.
+* `overrun`: the samplers' rejection probabilities summed over all challenges of all leaves.
+-/
+
+namespace GordieHowe.SPBCS
+
+open GordieHowe.QROM GordieHowe.IOP IOP.SPTerm
+open scoped ENNReal NNReal
+
+variable {k kN kS L e : ℕ}
+
+/-! ### Encoders of components -/
+
+namespace ComponentModel
+
+variable {m : ℕ} {P : ProtocolSpec m} [∀ i, Fintype (P.Challenge i)]
+  [∀ i, DecidableEq (P.Challenge i)] (C : ComponentModel P k kN L e)
+
+/-- **The honest encoding of a component's messages**: the column bytes of
+each leaf of each tree of a prover round, and the write carrying given roots, with the laws that
+the write carries the roots and that the message read back from views holding the columns is the
+message. -/
+structure Encoder where
+  /-- The column bytes of each leaf. -/
+  cols : (i : P.MessageIdx) → P.Type i.1 → (τ : Fin (C.nTrees i)) → Fin (C.nLeaves i τ) → Bytes L
+  /-- The write carrying the roots. -/
+  write : (i : P.MessageIdx) → P.Type i.1 → (Fin (C.nTrees i) → Digest k) → C.MessageWrite i
+  rootOf_write : ∀ i msg rts τ, C.rootOf i (write i msg rts) τ = rts τ
+  msg_write : ∀ i msg rts (vw : (τ : Fin (C.nTrees i)) → MerkleView k kN L (C.nLeaves i τ)),
+    (∀ τ j, ∃ ν, (vw τ).leaves j = some ⟨ν, cols i msg τ j⟩) → C.msg i (write i msg rts) vw = msg
+
+end ComponentModel
+
+section
+
+variable {ι : Type} {n : ι → ℕ} {P : (j : ι) → ProtocolSpec (n j)}
+  [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)] {t : SPTerm ι} {Mg : Merges t}
+  {X : Type} (M : SPBCS Mg P X k kN kS L e)
+
+/-- **The overrun term** of the composite: the samplers' rejection probabilities summed over all
+challenges of all leaves. -/
+noncomputable def overrun : ℝ≥0∞ :=
+  ∑ c : ChIdx P t, ((M.comp c.leaf.label).sampler c.idx).rejectionProb
+
+/-- The overrun is finite. -/
+theorem overrun_ne_top : M.overrun ≠ ⊤ :=
+  ENNReal.sum_ne_top.2 fun _ _ =>
+    ne_top_of_le_ne_top ENNReal.one_ne_top (Sampler.rejectionProb_le_one _)
+
+/-- A write function: the write of each prover round of each leaf as a function of its message. -/
+abbrev WriteFn : Type := (p : t.Leaf) → (i : (P p.label).MessageIdx) → (P p.label).Type i.1 →
+  (M.comp p.label).MessageWrite i
+
+variable {M} (E : (j : ι) → (M.comp j).Encoder) (prv : CausalProver P t X) (x : X)
+  (ν : M.Pos → MerkleSalt kN) (σ : FiatShamirSalt kS)
+
+/-- Leaf `j` of tree `τ` of round `i` of leaf `p` with message `msg`: the Merkle salt of the
+position and the column bytes; past the last leaf, a fixed value. -/
+def leafFn (p : t.Leaf) (i : (P p.label).MessageIdx) (msg : (P p.label).Type i.1)
+    (τ : Fin ((M.comp p.label).nTrees i)) (j : ℕ) : MerkleLeaf kN L :=
+  if hj : j < (M.comp p.label).nLeaves i τ then
+    ⟨ν ⟨p, ⟨i, τ, ⟨j, hj⟩⟩⟩, (E p.label).cols i msg τ ⟨j, hj⟩⟩
+  else ⟨fun _ => 0, ⟨0, Fin.elim0⟩⟩
+
+theorem leafFn_val (p : t.Leaf) (i : (P p.label).MessageIdx) (msg : (P p.label).Type i.1)
+    (τ : Fin ((M.comp p.label).nTrees i)) (j : Fin ((M.comp p.label).nLeaves i τ)) :
+    leafFn E ν p i msg τ j = ⟨ν ⟨p, ⟨i, τ, j⟩⟩, (E p.label).cols i msg τ j⟩ := by
+  simp [leafFn]
+
+/-- The honest write of round `i` of leaf `p` with message `msg`: the encoder's write at the
+honest roots of its trees. -/
+def honestWrite (h : Query k kN kS L → Out k e) : M.WriteFn := fun p i msg =>
+  (E p.label).write i msg fun τ => MerkleTree.root h ((M.comp p.label).nLeaves i τ)
+    (leafFn E ν p i msg τ)
+
+variable [∀ j i, Nonempty ((P j).Challenge i)]
+
+variable {V : X → FullTr P t → Bool} (Q : M.IOPQueries V x)
+
+variable (h : Query k kN kS L → Out k e)
+
+/-! ### The probability bound -/
+
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+/-- The honest write function reads the oracle only at `leaf` and `node` queries. -/
+theorem honestWrite_congr_oracle {h₁ h₂ : Query k kN kS L → Out k e}
+    (hq : ∀ a, ¬ SPBCS.IsChainQuery a → h₁ a = h₂ a) :
+    honestWrite (M := M) E ν h₁ = honestWrite E ν h₂ := by
+  funext p i msg
+  unfold honestWrite
+  congr 1
+  funext τ
+  exact MerkleTree.root_congr (fun a b => hq _ id) (fun l r => hq _ id) _ _
+
+end
+
+end GordieHowe.SPBCS
 
 namespace GordieHowe.SPBCS
 
@@ -464,11 +574,11 @@ variable {M} (E : (j : ι) → (M.comp j).Encoder) (ν : M.Pos → MerkleSalt kN
 
 /-- The answers to the honest prover's queries. -/
 noncomputable def answers : List (Out k e) :=
-  answersW prv x σ (Base.honestWrite (M := M.toBase) E ν) h
+  answersW prv x σ (SPBCS.honestWrite (M := M) E ν) h
 
 /-- The honest prover's chains. -/
 noncomputable def honestChains : M.Chains :=
-  chsW prv x (Base.honestWrite E ν h) (answers prv x σ E ν h)
+  chsW prv x (SPBCS.honestWrite E ν h) (answers prv x σ E ν h)
 
 /-- The honest prover's challenges. -/
 noncomputable def honestCh : Chs P t := M.chOfW (answers prv x σ E ν h)
@@ -482,7 +592,7 @@ noncomputable def honestPos : List M.Pos :=
 /-- The opened leaves of the honest prover, in the order of the positions. -/
 noncomputable def honestLeaves : List (MerkleLeaf kN L) :=
   (honestPos prv x σ E ν h Q).map fun q =>
-    Base.leafFn E ν q.leaf q.pos.msg (prv.run x (honestCh prv x σ E ν h) q.leaf q.pos.msg.1)
+    SPBCS.leafFn E ν q.leaf q.pos.msg (prv.run x (honestCh prv x σ E ν h) q.leaf q.pos.msg.1)
       q.pos.tree q.pos.leaf
 
 /-- **The honest non-interactive spBCS prover** for the query phase `Q`: the causal prover
@@ -491,11 +601,11 @@ honest write of every prover round of every leaf at the challenges from the hone
 opened leaves and the honest opening of every tree (`MerkleFormat.path`). -/
 noncomputable def prove : M.NIProof where
   salt := σ
-  writes p i := Base.honestWrite E ν h p i (prv.run x (honestCh prv x σ E ν h) p i.1)
+  writes p i := SPBCS.honestWrite E ν h p i (prv.run x (honestCh prv x σ E ν h) p i.1)
   leaves := honestLeaves prv x σ E ν h Q
   paths τ := M.opening.path h ((M.comp τ.leaf.label).nLeaves τ.tree.msg τ.tree.tree)
     ((M.openedIn τ (honestPos prv x σ E ν h Q) (honestLeaves prv x σ E ν h Q)).map Prod.fst)
-    (Base.leafFn E ν τ.leaf τ.tree.msg
+    (SPBCS.leafFn E ν τ.leaf τ.tree.msg
       (prv.run x (honestCh prv x σ E ν h) τ.leaf τ.tree.msg.1) τ.tree.tree)
 
 theorem chains_prove :
@@ -510,7 +620,7 @@ theorem chal_prove (c : ChIdx P t) :
     M.chal h ⟨σ, x⟩ (prove prv x σ E ν h Q).writes c =
       ((M.comp c.leaf.label).sampler c.idx).sample
         (ansAt (answers prv x σ E ν h) (posX (Mg := Mg) c)).stream :=
-  chal_eq (M := M) prv x σ (Base.honestWrite E ν) h _ (fun _ _ => rfl) c
+  chal_eq (M := M) prv x σ (SPBCS.honestWrite E ν) h _ (fun _ _ => rfl) c
 
 /-- **The honest proof is accepted** when every challenge's sampler accepts its stream and the
 composite verifier accepts the causal prover's run at the challenges from the honest answers. -/
@@ -529,7 +639,7 @@ theorem accepts_prove
     rw [hl, hc]
     rfl
   let f : M.Pos → MerkleLeaf kN L := fun q =>
-    Base.leafFn E ν q.leaf q.pos.msg (prv.run x (honestCh prv x σ E ν h) q.leaf q.pos.msg.1)
+    SPBCS.leafFn E ν q.leaf q.pos.msg (prv.run x (honestCh prv x σ E ν h) q.leaf q.pos.msg.1)
       q.pos.tree q.pos.leaf
   have hleaves : π.leaves = (honestPos prv x σ E ν h Q).map f := rfl
   refine ⟨fun c => by
@@ -545,22 +655,22 @@ theorem accepts_prove
         q.treeOf = ⟨p, ⟨i, τ₀⟩⟩ := fun q hq => by simpa using (List.mem_filter.1 hq).2
     have hroot : (M.comp p.label).rootOf i (π.writes p i) τ₀ =
         MerkleTree.root h ((M.comp p.label).nLeaves i τ₀)
-          (Base.leafFn E ν p i (prv.run x (honestCh prv x σ E ν h) p i.1) τ₀) :=
+          (SPBCS.leafFn E ν p i (prv.run x (honestCh prv x σ E ν h) p i.1) τ₀) :=
       (E p.label).rootOf_write _ _ _ _
     have hpath : π.paths ⟨p, ⟨i, τ₀⟩⟩ = M.opening.path h ((M.comp p.label).nLeaves i τ₀)
         ((M.openedIn ⟨p, ⟨i, τ₀⟩⟩ ps (ps.map f)).map Prod.fst)
-        (Base.leafFn E ν p i (prv.run x (honestCh prv x σ E ν h) p i.1) τ₀) := rfl
-    unfold Base.checkTree
+        (SPBCS.leafFn E ν p i (prv.run x (honestCh prv x σ E ν h) p i.1) τ₀) := rfl
+    unfold SPBCS.checkTree
     rw [hroot, hpath, hleaves, hop]
     simp only [List.map_map]
     refine M.opening.check_path h ?_ ?_ ?_ ?_
     · refine List.Nodup.map_on (fun q hq q' hq' he =>
-        Base.Pos.eq_of_treeOf_eq M.toBase (hsel q hq) (hsel q' hq') he)
+        SPBCS.Pos.eq_of_treeOf_eq M (hsel q hq) (hsel q' hq') he)
         ((Q.pos_nodup _ _).filter _)
     · intro j hj
       obtain ⟨q, hq, rfl⟩ := List.mem_map.1 hj
       obtain ⟨p', ⟨i', τ', j'⟩⟩ := q
-      obtain ⟨rfl, he⟩ := Base.Tree.mk.inj (hsel _ hq)
+      obtain ⟨rfl, he⟩ := SPBCS.Tree.mk.inj (hsel _ hq)
       obtain ⟨rfl, he⟩ := TreeIdx.mk.inj (eq_of_heq he)
       obtain rfl := eq_of_heq he
       exact j'.2
@@ -569,13 +679,13 @@ theorem accepts_prove
     · refine List.forall₂_map_left_iff.2 (List.forall₂_map_right_iff.2 (List.forall₂_same.2 ?_))
       intro q hq
       obtain ⟨p', ⟨i', τ', j'⟩⟩ := q
-      obtain ⟨rfl, he⟩ := Base.Tree.mk.inj (hsel _ hq)
+      obtain ⟨rfl, he⟩ := SPBCS.Tree.mk.inj (hsel _ hq)
       obtain ⟨rfl, he⟩ := TreeIdx.mk.inj (eq_of_heq he)
       obtain rfl := eq_of_heq he
       rfl
   · let vw : M.Views := fun p i τ₀ =>
       ⟨fun _ => none, fun j =>
-        some (Base.leafFn E ν p i (prv.run x (honestCh prv x σ E ν h) p i.1) τ₀ j)⟩
+        some (SPBCS.leafFn E ν p i (prv.run x (honestCh prv x σ E ν h) p i.1) τ₀ j)⟩
     rw [hleaves, ← hpos]
     refine Q.verdict_of_accept _ _ vw (prv.run x (M.chV h ⟨π.salt, x⟩ π.writes)) _
       (fun p i => ⟨_, chains_getElem?_message (M := M) (h := h) (ss := ⟨π.salt, x⟩) π.writes p i⟩) ?_
@@ -588,7 +698,7 @@ theorem accepts_prove
       subst hw'
       rw [hc]
       exact ((E p.label).msg_write _ _ _ _ fun τ₀ j =>
-        ⟨ν ⟨p, ⟨i, τ₀, j⟩⟩, by simp [vw, Base.leafFn_val]⟩).symm
+        ⟨ν ⟨p, ⟨i, τ₀, j⟩⟩, by simp [vw, SPBCS.leafFn_val]⟩).symm
     · rw [hpos]
       exact List.forall₂_map_right_iff.2 (List.forall₂_same.2 fun q _ => rfl)
 
@@ -971,8 +1081,8 @@ theorem prob_not_accepts_prove_le {M : SPBCS Mg P X k kN kS L e}
     Pr[h ← (Query k kN kS L → Out k e) : ¬ M.Accepts h x (prove prv x σ E ν h Q) Q] ≤
       ε + M.overrun + SPBCS.keyCollision (t.size n) k := by
   refine le_trans (QROM.probUniform_mono fun h hv => ?_)
-    ((prob_sample_none_or_chOfW_mem_le prv x σ (Base.honestWrite E ν)
-      (fun _ _ hq => Base.honestWrite_congr_oracle E ν hq)
+    ((prob_sample_none_or_chOfW_mem_le prv x σ (SPBCS.honestWrite E ν)
+      (fun _ _ hq => SPBCS.honestWrite_congr_oracle E ν hq)
       fun ch => V x (prv.run x ch) ≠ true).trans (by gcongr))
   by_contra hc
   push Not at hc

@@ -3,6 +3,8 @@
 
 module
 
+public import GordieHoweNative.Language.Export
+
 @[expose] public section
 
 /-!
@@ -22,6 +24,9 @@ Changing a field's meaning, renaming or removing a field or constructor incremen
 adding a field with a default does not. From version 2 on, the packing modes are `squaringChain`
 and `subfieldMasks` and the Ligero data has no field `A`. From version 3 on, the Ligero data has
 the field `ldtReps`, the number of repetitions of the low-degree test (absent means one).
+
+The definitions are in `GordieHoweNative/Language/Export.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram.Export
@@ -208,34 +213,6 @@ structure BitCheck where
   cells : Nat
   /-- The placement, chosen by the profile's cell/term cost ratio. -/
   placement : BitCheckPlacement
-  deriving Repr, DecidableEq
-
-/-- **A placement target** (`placement.h`, `Placement`): where a predicate group is realized. -/
-inductive PlacementTarget where
-  /-- As affine rows of the commitment. -/
-  | affine
-  /-- As quadratic triples of the commitment. -/
-  | quadratic
-  /-- In a batch of the domain (`Placement.batch` names it). -/
-  | batch
-  /-- As constraints of the domain's GKR circuit. -/
-  | circuit
-  deriving Repr, DecidableEq
-
-/-- **A placed predicate group** (`plan_export.h`, `DomainPlan::Placed`): its name, its target, the
-number of same-shaped predicates merged into it, its instances and, for a batch target, the batch.
-The program's per-predicate targets (`RealizedProgram.TargetsAdmit`) subsume it. -/
-structure Placement where
-  /-- The group's name. -/
-  name : String
-  /-- The target. -/
-  target : PlacementTarget
-  /-- The predicates merged into the group (the export omits `1`). -/
-  predicates : Nat := 1
-  /-- The instances. -/
-  instances : Nat
-  /-- The batch, for a batch target (`""` otherwise). -/
-  batch : String := ""
   deriving Repr, DecidableEq
 
 /-- One field domain. -/

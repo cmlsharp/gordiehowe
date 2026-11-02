@@ -315,7 +315,11 @@ class Logic {
 
   // mux over logic values
   BitW mux(const BitW& control, const BitW& iftrue, const BitW& iffalse) const {
-    return lor_exclusive(land(control, iftrue), land(lnot(control), iffalse));
+    // The operands are bound in order (left, then right), so the primitive
+    // calls, and the fold log's records, follow one fixed order.
+    const BitW t = land(control, iftrue);
+    const BitW f = land(lnot(control), iffalse);
+    return lor_exclusive(t, f);
   }
 
   // mux over backend values
@@ -356,7 +360,11 @@ class Logic {
       return f(i0);
     } else {
       size_t im = i0 + (i1 - i0) / 2;
-      return land(land(i0, im, f), land(im, i1, f));
+      // The operands are bound in order (left, then right), so the primitive
+      // calls, and the fold log's records, follow one fixed order.
+      const BitW lo = land(i0, im, f);
+      const BitW hi = land(im, i1, f);
+      return land(lo, hi);
     }
   }
 
@@ -368,7 +376,11 @@ class Logic {
       return f(i0);
     } else {
       size_t im = i0 + (i1 - i0) / 2;
-      return lor(lor(i0, im, f), lor(im, i1, f));
+      // The operands are bound in order (left, then right), so the primitive
+      // calls, and the fold log's records, follow one fixed order.
+      const BitW lo = lor(i0, im, f);
+      const BitW hi = lor(im, i1, f);
+      return lor(lo, hi);
     }
   }
 
@@ -1223,7 +1235,11 @@ class Logic {
       return a[i0];
     } else {
       size_t im = i0 + (i1 - i0) / 2;
-      return lxor(parity(i0, im, a), parity(im, i1, a));
+      // The operands are bound in order (left, then right), so the primitive
+      // calls, and the fold log's records, follow one fixed order.
+      const BitW lo = parity(i0, im, a);
+      const BitW hi = parity(im, i1, a);
+      return lxor(lo, hi);
     }
   }
 
@@ -1234,7 +1250,11 @@ class Logic {
       return lnot(a[i0]);
     } else {
       size_t im = i0 + (i1 - i0) / 2;
-      return land(eq0(i0, im, a), eq0(im, i1, a));
+      // The operands are bound in order (left, then right), so the primitive
+      // calls, and the fold log's records, follow one fixed order.
+      const BitW lo = eq0(i0, im, a);
+      const BitW hi = eq0(im, i1, a);
+      return land(lo, hi);
     }
   }
 
@@ -1245,7 +1265,11 @@ class Logic {
       return lnot(lxor(a[i0], b[i0]));
     } else {
       size_t im = i0 + (i1 - i0) / 2;
-      return land(eq_reduce(i0, im, a, b), eq_reduce(im, i1, a, b));
+      // The operands are bound in order (left, then right), so the primitive
+      // calls, and the fold log's records, follow one fixed order.
+      const BitW lo = eq_reduce(i0, im, a, b);
+      const BitW hi = eq_reduce(im, i1, a, b);
+      return land(lo, hi);
     }
   }
 

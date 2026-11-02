@@ -11,9 +11,9 @@ public import GordieHowe.Model.NARG.OracleProg
 /-!
 # Merkle opening formats
 
-How a compiled proof opens the queried leaves of one Merkle tree. The compiler of a series–parallel
-composition (`GordieHowe.SPBCS.FullPast`, `GordieHowe/SPBCS/FullPast/Model.lean`) takes the format as a parameter
-(`GordieHowe.SPBCS.Base.opening`), and every guarantee of the compiler holds for every lawful format.
+How a compiled proof opens the queried leaves of one Merkle tree. The spBCS compiler
+(`GordieHowe/SPBCS/Basic.lean`) takes the format as a parameter
+(`GordieHowe.SPBCS.opening`), and every guarantee of the compiler holds for every lawful format.
 
 - `MerkleFormat`: the data of a format for the leaves at the indices `js` of an `n`-leaf tree in
   the heap layout of `GordieHowe/SPBCS/Merkle/Tree.lean`: the heap positions `sibs n js` whose digests the
@@ -70,6 +70,12 @@ def check (n : ℕ) (rt : Digest k) (js : List ℕ) (lvs : List (MerkleLeaf kN L
     (path : List (Digest k)) : Prop :=
   js.Nodup ∧ (∀ j ∈ js, j < n) ∧ lvs.length = js.length ∧
     path.length = (F.sibs n js).length ∧ (F.treeProg n js lvs path).run h = some rt
+
+/-- **Acceptance of an opening is decided**: distinctness, the bounds and lengths, and one run of
+the tree program. -/
+instance (n : ℕ) (rt : Digest k) (js : List ℕ) (lvs : List (MerkleLeaf kN L))
+    (path : List (Digest k)) : Decidable (F.check h n rt js lvs path) :=
+  inferInstanceAs (Decidable (_ ∧ _))
 
 /-- **The honest opening** of the indices `js` of the honest tree over the leaves `lf`: the
 honest tree's digests at the positions `sibs n js`, in order. -/

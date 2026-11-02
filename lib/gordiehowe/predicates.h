@@ -322,8 +322,12 @@ auto assert_in(const X &rec, const Tab &table, const Name &nm = {}) {
 // predicate fixes the placement) once the compiler's intervals show that
 // both sides lie in [0, p) after one common shift, so that the field
 // equation implies the integer one; compilation fails naming the widest
-// term otherwise. M >= 2 takes affine sides, and its lowering realizes it
-// (the returned predicate has no placement).
+// term otherwise. M >= 2 over affine sides: its lowering realizes it (the
+// returned predicate has no placement). M >= 2 over sides with products or
+// conv: the congruence +lhs - rhs of two expression terms
+// (ops/integer_congruence.h), a committed quotient and one predicate
+// lhs - rhs - m (qlo + q) = 0, which pin() places. ops/spectral.h's
+// assert_mod and assert_congruence take spectral product terms.
 template <class X, class Y,
           class = std::enable_if_t<kIsPoly<X> && kIsPoly<Y>>>
 Predicate assert_mod(const X &lhs, const Y &rhs, Bound m, const Name &nm = {}) {

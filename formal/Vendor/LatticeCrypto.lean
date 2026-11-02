@@ -12,6 +12,8 @@ import LatticeCrypto.MLDSA.Arithmetic
 import LatticeCrypto.MLDSA.Primitives
 import LatticeCrypto.MLDSA.Encoding
 import LatticeCrypto.MLDSA.Verify
+import LatticeCrypto.MLDSA.Scheme
+import LatticeCrypto.MLDSA.Signature
 import LatticeCrypto.MLDSA.Concrete.NTT
 import LatticeCrypto.MLDSA.Concrete.Rounding
 import LatticeCrypto.MLDSA.Concrete.Encoding

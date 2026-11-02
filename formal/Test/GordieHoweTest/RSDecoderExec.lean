@@ -8,7 +8,7 @@ import Mathlib.Algebra.Field.ZMod
 # Sanity checks for the executable Reed–Solomon decoder
 
 Decoding over `ZMod 13` at the points `1, …, 12` (`N = 12`, `k = 4`, `e = 4`, so `2e + k = N`).
-Not imported by `GordieHowe.lean` or `GordieHoweTest.lean`; check with
+Imported by `GordieHoweTest.lean`; check alone with
 `lake env lean Test/GordieHoweTest/RSDecoderExec.lean`.
 -/
 

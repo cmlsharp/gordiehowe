@@ -3,8 +3,7 @@
 
 module
 
-public import GordieHowe.SPBCS.Stability
-public import GordieHowe.SPBCS.FullPast.Verifier
+public import GordieHowe.SPBCS.Cover
 public import GordieHowe.SPBCS.Extraction.KnowledgeError
 public import GordieHowe.Model.QROM.QueryBits
 public import GordieHowe.Model.QROM.QueryCount
@@ -20,8 +19,8 @@ CMS19 section 8.5.2 (pp. 43–44, knowledge) for the spBCS compiler
 
 * `game`: CMS19's base game for the spBCS verifier; `expansion` its query expansion, with
   `mem_game_of_verify` (Proposition 8.11).
-* `dbExtract`: the database extractor (paper `prot:bcs-db-extractor`): the database extractor of
-  the compiler over the term on the translated database (`trans`).
+* `mem_of_game`: Proposition 8.12 for the base game, with the database extractor `dbExtract`
+  (paper `prot:bcs-db-extractor`, `GordieHowe/SPBCS/Extractor.lean`).
 * `dbProb_bad_union_le_of_queryCount`: the measured database of an algorithm with per-branch
   query count `b` lies in `bad ∪ P_col` with probability at most
   `6b² (max_c ε c + (max 2 c_in + nJ + 1) b / 2^(8k))`; the error is
@@ -82,35 +81,6 @@ theorem mem_game_of_verify (Qs : ∀ x, M.IOPQueries V x) {Xs : Set X} {kq : ℕ
 
 end Game
 
-/-! ### The database extractor -/
-
-section Extractor
-
-variable {Wit : Type} (rel : Set (X × Wit)) (E : CausalExtractor P t X Wit)
-
-/-- **The database extractor of the spBCS compiler at the statement `x`**: the database
-extractor of the compiler over the term (`Base.dbExtract`) on the translation of `D`, which
-reads the branches hidden from each recorded round input through the final digests it holds
-(paper `prot:bcs-db-extractor`).
-
-Running time, in the database size `|D|`: the translation evaluates `φ` at most `|D|²` times
-(`DB.image`); each evaluation decodes one input and follows at most `nJ` digests, each one pass over
-the entries of `D`, one decode and one encoding, then encodes one causal past with the full-past
-compiler's encoding; then `dbExtract` on the translation, which has at most `|D|` entries
-(polynomial by its own Running time paragraph). This running time is argued here, not proved in
-Lean. -/
-def dbExtract [DecidableEq X] (x : X) (D : ODB k kN kS L e) : Multiset Wit :=
-  M.toBase.dbExtract E x (M.trans D)
-
-/-- The databases from which the extractor succeeds at `x`. -/
-def extracts [DecidableEq X] (x : X) : Set (ODB k kN kS L e) :=
-  {D | ∃ w ∈ M.dbExtract E x D, (x, w) ∈ rel}
-
-theorem mem_extracts_iff [DecidableEq X] {x : X} {D : ODB k kN kS L e} :
-    D ∈ M.extracts rel E x ↔ M.trans D ∈ M.toFullPast.extractsFullPast rel E x := Iff.rfl
-
-end Extractor
-
 /-! ### Proposition 8.12 for the base game -/
 
 section Prop812
@@ -132,13 +102,10 @@ theorem mem_of_game [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St �
   have hrec : RecordsQueries D h o.out.stmt o.out.proof (Qs o.out.stmt) := fun q hq => by
     obtain ⟨i, rfl⟩ := hcov q hq
     rw [Recorded, hD i, hb i]
-  rcases mem_of_verify rel E St hrbr hv hrec with hc | he | hb' | hc
+  rcases mem_of_verify rel E St hrbr hv hrec with hc | he | hb'
   · exact Or.inr (Or.inr hc)
   · exact Or.inl he
   · exact Or.inr (Or.inl hb')
-  · by_cases hD' : D ∈ digestCollision
-    · exact Or.inr (Or.inr hD')
-    · exact absurd hc (trans_notMem_digestCollision hD')
 
 end Prop812
 

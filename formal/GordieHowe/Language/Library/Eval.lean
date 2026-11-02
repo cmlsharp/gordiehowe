@@ -8,6 +8,8 @@ public import GordieHowe.Language.RealizedProgram.Views
 public import GordieHowe.Language.RealizedProgram.OpsLemmas
 public import GordieHowe.Foundations.Probability.IdentDistrib
 public import GordieHowe.Foundations.Probability.ChallengeEventCount
+public import GordieHowe.Language.RealizedProgram.StructureCheck
+public import GordieHoweNative.Language.Library.Eval
 
 @[expose] public section
 
@@ -19,6 +21,9 @@ The library the frontend's proofs read the program through (the plan-level theor
 
 * **Index maps** (`IndexMap.entry_single`, `IndexMap.entry_replicate`): the entries of one run and
   of a repeated run.
+* **Wiring views** (`evalE_wiring_part`, `evalE_wiring_eq_sum`): a view of the right-nested
+  concatenation of its sources (`concatR`) reads, at each coordinate, the part holding it, and
+  equals the sum of its sources' gathers.
 * **Expressions** (`GordieHowe.RealizedProgram.evalE_leaf`, `evalE_reindex`, `evalE_concat`, `evalE_prod`,
   `evalE_mux`, `evalE_apply_sum`, `evalE_apply_batched_fromDigits`, `evalE_apply_negacyclicConv`,
   `evalE_logic_lt`, `evalE_ref`; `exprLen_*`; the integer readings
@@ -30,10 +35,12 @@ The library the frontend's proofs read the program through (the plan-level theor
   from the run is fixed by the statement and the committed assignment; a constant reads its entries
   (`constRead`). A committed value is `GordieHowe.RealizedProgram.reader_of_priv`; the statement's values are
   `GordieHowe.RealizedProgram.reader_of_input` and `GordieHowe.RealizedProgram.reader_of_opaque_nil` (`GordieHowe/Language/RealizedProgram/Views.lean`).
-* **Predicates by name** (`GordieHowe.RealizedProgram.predByName`): the identifier of the first predicate of a name;
-  a source predicate of a satisfied source program holds (`SourceSatAt.holdsAt_of_predByName`).
-  Its body is read through Option-valued matchers on `PredBody` and `Expr` (`Expr` has no decidable
-  equality), which return the identifiers of a body of a known shape.
+* **Predicates at given identifiers** (`GordieHowe.RealizedProgram.predNameB`, its twin
+  `predNameE`): the predicate at an identifier exists and has the given name, checked at the
+  pointer; a source predicate of a satisfied source program holds
+  (`SourceSatAt.holdsAt_of_predNameB`). Its body is read through Option-valued matchers on
+  `PredBody` and `Expr` (`Expr` has no decidable equality), which return the identifiers of a body
+  of a known shape.
 * **Named operators are linear** (`NamedOp.block_eq_sum_unit`): output coordinate `r` is
   `Σ_{t < cols} M_{r t} x_t`, `M_{r t}` the operator on the unit vector `t` (it reads only the first
   `cols` coordinates, `NamedOp.block_congr_cols`, vanishes at zero and past `rows`).
@@ -42,6 +49,9 @@ The library the frontend's proofs read the program through (the plan-level theor
 * **A challenge of one coordinate drawn from the field** (`probUniform_badAt_setChal_le`): an event
   fixed before it has the challenge as a root with probability at most its degree over the field's
   size.
+
+The definitions are in `GordieHoweNative/Language/Library/Eval.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -106,6 +116,41 @@ theorem entry_append : ∀ (m m' : IndexMap) (i : ℕ),
       by_cases hr : i - c < size rest
       · rw [if_pos hr, if_pos (by omega)]
       · rw [if_neg hr, if_neg (by omega), Nat.sub_sub]
+
+/-- **The index map of entries `g x` for `x ∈ xs`**, one run of one entry each. -/
+def ofList (xs : List ℕ) : IndexMap := xs.map fun x => (x, 0, 1)
+
+/-- **Entry `i` of `ofList xs`** is `xs[i]`. -/
+theorem entry_ofList : ∀ (xs : List ℕ) (i : ℕ), entry (ofList xs) i = xs.getD i 0
+  | [], i => by simp [ofList, entry]
+  | x :: xs, 0 => by simp [ofList, entry]
+  | x :: xs, i + 1 => by
+    have h := entry_ofList xs i
+    simp only [ofList] at h
+    simp only [ofList, List.map_cons, entry, Nat.add_sub_cancel]
+    simpa using h
+
+/-- **The size of `ofList xs`** is the length of `xs`. -/
+theorem size_ofList (xs : List ℕ) : size (ofList xs) = xs.length := by
+  induction xs with
+  | nil => simp [ofList, size]
+  | cons x xs ih =>
+    simp only [ofList, List.map_cons, size_cons] at ih ⊢
+    rw [ih]
+    simp only [List.length_cons]
+    omega
+
+/-- **The gather of one part of a view** of `n` coordinates (`IndexMap`, `lib/gordiehowe/linear.h`'s
+`Gather`): coordinate `i` reads `idx[i] − b` when `idx[i]` lies in the part `[b, b + ℓ)` of the
+viewed concatenation, and `ℓ` (the zero after the part) otherwise. -/
+def gatherPart (idx : IndexMap) (n b ℓ : ℕ) : IndexMap :=
+  ofList ((List.range n).map fun i =>
+    if b ≤ idx.entry i ∧ idx.entry i < b + ℓ then idx.entry i - b else ℓ)
+
+theorem entry_gatherPart {idx : IndexMap} {n b ℓ i : ℕ} (hi : i < n) :
+    entry (gatherPart idx n b ℓ) i =
+      if b ≤ idx.entry i ∧ idx.entry i < b + ℓ then idx.entry i - b else ℓ := by
+  simp [gatherPart, entry_ofList, hi]
 
 end IndexMap
 
@@ -270,6 +315,134 @@ theorem exprLen_mux (b t e : Expr) : ir.exprLen (.mux b t e) = ir.exprLen t := r
 theorem exprLen_apply (op : NamedOp) (e : Expr) :
     ir.exprLen (.apply op e) = ir.exprLen e / NamedOp.cols ir op * NamedOp.rows ir op := rfl
 
+/-! ## Wiring views
+
+A wiring view (`Domain::wiring`, `lib/gordiehowe/domain.h`) copies each coordinate from a coordinate
+of one of its source values, or is zero. The program prints it as one view of the concatenation of
+its sources, followed by one zero when a coordinate is zero: `reindex idx (concatR a as)`
+(`ProgramBuilder::wiring`, `lib/gordiehowe/compiler/program_builder.h`). The domain also keeps it
+as a sum of gathers, one per source, each reading its source's coordinates and a zero elsewhere.
+The two are equal (`evalE_wiring_eq_sum`); a coordinate reads the part holding it
+(`evalE_wiring_part`). -/
+
+/-- **The right-nested concatenation** `concat a₀ (concat a₁ (… aₖ))` of the parts `a₀ :: as`. -/
+def concatR (a : Expr) : List Expr → Expr
+  | [] => a
+  | b :: bs => .concat a (concatR b bs)
+
+/-- **The offset of part `j`** of a concatenation of the parts `ps`: the sum of the earlier parts'
+lengths. -/
+def partBase (ir : RealizedProgram) (ps : List Expr) (j : ℕ) : ℕ :=
+  ((ps.take j).map ir.exprLen).sum
+
+/-- **The length of a right-nested concatenation** is the sum of its parts' lengths. -/
+theorem exprLen_concatR (a : Expr) : ∀ as : List Expr,
+    ir.exprLen (concatR a as) = ((a :: as).map ir.exprLen).sum
+  | [] => by simp [concatR]
+  | b :: bs => by
+    rw [concatR, exprLen_concat, exprLen_concatR b bs]
+    simp
+
+/-- **Coordinate `k` of part `j`** of a right-nested concatenation is its coordinate
+`partBase j + k`. -/
+theorem evalE_concatR_part (rd : ir.Valuation I) (f : ℕ) (a : Expr) :
+    ∀ (as : List Expr) {j k : ℕ} (hj : j < (a :: as).length),
+      k < ir.exprLen ((a :: as)[j]) →
+      ir.evalE rd f (concatR a as) (partBase ir (a :: as) j + k) = ir.evalE rd f (a :: as)[j] k
+  | [], 0, k, _, _ => by simp [concatR, partBase]
+  | b :: bs, 0, k, _, hk => by
+    simp only [concatR, partBase, List.take_zero, List.map_nil, List.sum_nil, Nat.zero_add,
+      evalE_concat]
+    rw [if_pos (by simpa using hk)]
+    rfl
+  | b :: bs, j + 1, k, hj, hk => by
+    have hb : partBase ir (a :: b :: bs) (j + 1) = ir.exprLen a + partBase ir (b :: bs) j := by
+      simp [partBase, List.take_succ_cons]
+    rw [concatR, hb, evalE_concat, if_neg (by omega), show ir.exprLen a + partBase ir (b :: bs) j + k -
+      ir.exprLen a = partBase ir (b :: bs) j + k by omega]
+    exact evalE_concatR_part rd f b bs (j := j) (by simpa using hj) (by simpa using hk)
+
+/-- **A coordinate of a right-nested concatenation lies in one part**: below the total length,
+coordinate `m` is `partBase j + k` with `k` below part `j`'s length. -/
+theorem exists_part (a : Expr) : ∀ (as : List Expr) {m : ℕ},
+    m < ((a :: as).map ir.exprLen).sum →
+    ∃ j, ∃ hj : j < (a :: as).length, ∃ k < ir.exprLen ((a :: as)[j]), m = partBase ir (a :: as) j + k
+  | [], m, hm => ⟨0, by simp, m, by simpa using hm, by simp [partBase]⟩
+  | b :: bs, m, hm => by
+    by_cases h : m < ir.exprLen a
+    · exact ⟨0, by simp, m, h, by simp [partBase]⟩
+    · obtain ⟨j, hj, k, hk, hm'⟩ := exists_part b bs (m := m - ir.exprLen a) (by simp at hm ⊢; omega)
+      refine ⟨j + 1, by simpa using hj, k, by simpa using hk, ?_⟩
+      simp only [partBase, List.take_succ_cons, List.map_cons, List.sum_cons] at hm' ⊢
+      omega
+
+/-- **The offset of part `j + 1`** is part `j`'s offset plus its length. -/
+theorem partBase_succ (ps : List Expr) {j : ℕ} (hj : j < ps.length) :
+    partBase ir ps (j + 1) = partBase ir ps j + ir.exprLen ps[j] := by
+  rw [partBase, partBase, List.take_add_one, List.getElem?_eq_getElem hj, List.map_append,
+    List.sum_append]
+  simp
+
+/-- **The parts are disjoint**: part `j` ends before part `j'` starts, for `j < j'`. -/
+theorem partBase_add_le (ps : List Expr) {j j' : ℕ} (hj : j < j') (hj' : j' ≤ ps.length) :
+    partBase ir ps j + ir.exprLen (ps[j]'(by omega)) ≤ partBase ir ps j' := by
+  induction j' with
+  | zero => omega
+  | succ j' ih =>
+    rw [partBase_succ ps (by omega)]
+    rcases Nat.lt_succ_iff_lt_or_eq.1 hj with h | h
+    · have := ih h (by omega)
+      omega
+    · subst h
+      omega
+
+/-- **A coordinate lies in at most one part**: `partBase j₀ + k` with `k` below part `j₀`'s length lies
+in part `j` only for `j = j₀`. -/
+theorem part_unique (ps : List Expr) {j j₀ k : ℕ} (hj : j < ps.length) (hj₀ : j₀ < ps.length)
+    (hk : k < ir.exprLen ps[j₀]) (h₁ : partBase ir ps j ≤ partBase ir ps j₀ + k)
+    (h₂ : partBase ir ps j₀ + k < partBase ir ps j + ir.exprLen ps[j]) : j = j₀ := by
+  by_contra hne
+  rcases Nat.lt_or_gt_of_ne hne with h | h
+  · have := partBase_add_le (ir := ir) ps h hj₀.le
+    omega
+  · have := partBase_add_le (ir := ir) ps h hj.le
+    omega
+
+/-- **A wiring view is the sum of its parts' gathers** (`Domain::wiring` keeps both): coordinate `i`
+of the view `reindex idx (concatR a as)`, its entry within the concatenation, is the sum over the
+parts `j` of coordinate `i` of the gather of part `j` from `concat pⱼ z`, `z` a zero: the gather
+reads `idx[i]` in the part holding it and the zero in every other part. -/
+theorem evalE_wiring_eq_sum (rd : ir.Valuation I) (f : ℕ) (idx : IndexMap) (a : Expr)
+    (as : List Expr) (z : Expr) (hz : ir.evalE rd f z 0 = 0) {n i : ℕ} (hi : i < n)
+    (hin : idx.entry i < ((a :: as).map ir.exprLen).sum) :
+    ir.evalE rd f (.reindex idx (concatR a as)) i =
+      ∑ j : Fin (a :: as).length,
+        ir.evalE rd f (.reindex (IndexMap.gatherPart idx n (partBase ir (a :: as) j)
+          (ir.exprLen (a :: as)[j])) (.concat (a :: as)[j] z)) i := by
+  obtain ⟨j₀, hj₀, k, hk, hm⟩ := exists_part (ir := ir) a as hin
+  rw [evalE_reindex, hm, evalE_concatR_part rd f a as hj₀ hk,
+    Finset.sum_eq_single (⟨j₀, hj₀⟩ : Fin (a :: as).length)]
+  · have hk' : k < ir.exprLen ((a :: as)[(⟨j₀, hj₀⟩ : Fin (a :: as).length)]) := hk
+    rw [evalE_reindex, IndexMap.entry_gatherPart hi, hm,
+      if_pos ⟨Nat.le_add_right _ _, Nat.add_lt_add_left hk' _⟩, evalE_concat,
+      Nat.add_sub_cancel_left, if_pos hk']
+    rfl
+  · intro j _ hne
+    rw [evalE_reindex, IndexMap.entry_gatherPart hi, hm, if_neg, evalE_concat, if_neg (lt_irrefl _),
+      Nat.sub_self, hz]
+    rintro ⟨h₁, h₂⟩
+    exact hne (Fin.ext (part_unique (a :: as) j.isLt hj₀ hk h₁ h₂))
+  · intro h
+    exact absurd (Finset.mem_univ _) h
+
+/-- **Coordinate `i` of a wiring view** `reindex idx (concatR a as)` is coordinate `k` of part `j`,
+when `idx[i]` is `partBase j + k` with `k` below part `j`'s length. -/
+theorem evalE_wiring_part (rd : ir.Valuation I) (f : ℕ) (idx : IndexMap) (a : Expr)
+    (as : List Expr) {i j k : ℕ} (hj : j < (a :: as).length) (hk : k < ir.exprLen ((a :: as)[j]))
+    (he : idx.entry i = partBase ir (a :: as) j + k) :
+    ir.evalE rd f (.reindex idx (concatR a as)) i = ir.evalE rd f (a :: as)[j] k := by
+  rw [evalE_reindex, he, evalE_concatR_part rd f a as hj hk]
+
 /-! ## One step of the integer reading -/
 
 /-- **A leaf's integer reading** is the value's (`RealizedProgram.intOf`). -/
@@ -340,7 +513,7 @@ theorem reader_of_bits_of_priv (e : ir.Env I) {v w : ℕ} {sel : IndexMap}
   have hpos : 0 < ir.values.length := by
     by_contra h0
     have hnil : ir.values = [] := List.eq_nil_of_length_eq_zero (by omega)
-    have hv : ir.value v = default := by simp [RealizedProgram.value, hnil]
+    have hv : ir.value v = default := by simp [RealizedProgram.value_eq_getD, hnil]
     rw [hv] at hk
     exact Kind.noConfusion hk
   obtain ⟨m, hm⟩ : ∃ m, ir.values.length = m + 1 := ⟨_, (Nat.succ_pred_eq_of_pos hpos).symm⟩
@@ -410,18 +583,6 @@ theorem reader_eq_of_nodeReads_nil {v : ℕ} (hv : ir.nodeReads ir.fuel v = []) 
   read_congr _ v
     ⟨hs, ha, fun _ h => (by rw [hv] at h; cases h), fun _ h => (by rw [hv] at h; cases h)⟩
 
-/-- **The entries of a constant value** (none for a value of another kind). -/
-def constEntries (v : ℕ) : List ℕ :=
-  match (ir.value v).kind with
-  | .constant es => es
-  | _ => []
-
-/-- **Whether value `v` is a constant.** -/
-def isConstant (v : ℕ) : Bool :=
-  match (ir.value v).kind with
-  | .constant _ => true
-  | _ => false
-
 /-- A constant's kind lists its entries. -/
 theorem kind_of_isConstant {v : ℕ} (h : ir.isConstant v = true) :
     (ir.value v).kind = .constant (ir.constEntries v) := by
@@ -462,25 +623,34 @@ theorem evalE_leaf_of_isConstant (e : ir.Env I) {v : ℕ} (h : ir.isConstant v =
   rw [evalE_leaf, reader_of_constant e (kind_of_isConstant h)]
   rfl
 
-/-! ## Predicates by name -/
+/-! ## Predicates at given identifiers -/
 
-/-- **The predicate named `name`**: the identifier of the first predicate of that name. -/
-def predByName (name : String) : Option ℕ := ir.predicates.findIdx? (·.name == name)
+/-- **Predicate `p` exists and is named `name`**, a check at the given identifier whose failure
+names it (`nameMismatch`). The name is documentation: soundness reads only `p < P`. -/
+def predNameE (p : ℕ) (name : String) : Except StructFailure Unit :=
+  Twin.guardE (decide (p < ir.predicates.length) && (ir.predicate p).name == name)
+    ⟨p, 0, .nameMismatch⟩
 
-/-- **The predicate found by name** is a predicate of the program of that name. -/
-theorem predByName_spec {name : String} {p : ℕ} (h : ir.predByName name = some p) :
-    p < ir.predicates.length ∧ (ir.predicate p).name = name := by
-  unfold predByName at h
-  obtain ⟨hp, hname, -⟩ := List.findIdx?_eq_some_iff_getElem.1 h
-  refine ⟨hp, ?_⟩
-  rw [predicate, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hp, Option.getD_some]
-  simpa using hname
+/-- **`predNameE` as a `Bool`.** -/
+def predNameB (p : ℕ) (name : String) : Bool := Twin.okB (ir.predNameE p name)
 
-/-- **A source predicate found by name holds** where the source program is satisfied. -/
-theorem SourceSatAt.holdsAt_of_predByName {e : ir.Env I} (h : ir.SourceSatAt e) {name : String}
-    {p : ℕ} (hp : ir.predByName name = some p) (hs : ir.inSource (ir.predicate p) = true) :
+theorem lt_of_predNameB {p : ℕ} {name : String} (h : ir.predNameB p name = true) :
+    p < ir.predicates.length := by
+  unfold predNameB predNameE at h
+  rw [Twin.okB_guardE, Bool.and_eq_true, decide_eq_true_eq] at h
+  exact h.1
+
+/-- **A source predicate of the program holds** where the source program is satisfied. -/
+theorem SourceSatAt.holdsAt_of_lt {e : ir.Env I} (h : ir.SourceSatAt e) {p : ℕ}
+    (hp : p < ir.predicates.length) (hs : ir.inSource (ir.predicate p) = true) :
     ir.HoldsAt e (ir.predicate p).body :=
-  h.preds _ (predicate_mem (predByName_spec hp).1) hs
+  h.preds _ (predicate_mem hp) hs
+
+/-- **A source predicate at a checked identifier holds** where the source program is satisfied. -/
+theorem SourceSatAt.holdsAt_of_predNameB {e : ir.Env I} (h : ir.SourceSatAt e) {name : String}
+    {p : ℕ} (hp : ir.predNameB p name = true) (hs : ir.inSource (ir.predicate p) = true) :
+    ir.HoldsAt e (ir.predicate p).body :=
+  h.holdsAt_of_lt (lt_of_predNameB hp) hs
 
 /-! ## A challenge drawn from the field -/
 

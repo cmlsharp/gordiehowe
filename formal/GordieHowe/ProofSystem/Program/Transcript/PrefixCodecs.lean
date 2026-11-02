@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.ProofSystem.Program.Transcript.Format
 public import GordieHowe.ProofSystem.Program.Transcript.CircuitCodecs
+public import GordieHowe.ProofSystem.Program.Transcript.GrantedLoads
 public import GordieHowe.ProofSystem.Ligero.MaskRow.Masked
 
 @[expose] public section
@@ -134,5 +135,16 @@ def commitReaders (S : Setup C P products Lin nL np) (r : CReader K) :
 theorem commitReaders_allLoads (S : Setup C P products Lin nL np) (r : CReader K) :
     (S.commitReaders rows r).AllLoads (· ≤ r.load.nsmul (S.nrep * R)) := by
   cases S <;> exact SpecReaders.ldtCommit_allLoads r _ _ _
+
+/-- **The largest grant of the proof phase's readers** is the constraint challenge's grant `g` when
+the field reader grants nothing (`SpecReaders.maxGrant_listRadius`). -/
+theorem maxGrant_readers (S : Setup C P products Lin nL np) {r : CReader K} (hr : r.grant = 0)
+    (g : ℕ) : (S.readers rows r g).maxGrant = g := by
+  cases S <;> exact SpecReaders.maxGrant_listRadius hr _ g
+
+/-- **The commit rounds' readers grant nothing** when the field reader grants nothing. -/
+theorem commitReaders_ungranted (S : Setup C P products Lin nL np) {r : CReader K}
+    (hr : r.grant = 0) : (S.commitReaders rows r).Ungranted := by
+  cases S <;> exact SpecReaders.ldtCommit_ungranted hr _ _ _
 
 end GordieHowe.Ligero.MaskRow.Setup

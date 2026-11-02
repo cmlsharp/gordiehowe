@@ -19,6 +19,8 @@ distinguisher's steps, the requests (`Env.requestPerm`) and, after the last slot
 p. 10: "additional oracles can simply be encoded as part of z"; here the tape is the input `z`.
 Its accepting set is the distinguisher's accepting set on the logs in `L`.
 
+- `final_gameAlg`: run with the oracle of an environment `E'` whose answers are those of `E`, the
+  final state of the oracle algorithm is `post` of `E` after the game against `E'`.
 - `acceptProb_gameAlg`: run with the oracle of an environment `E'` whose answers are those of
   `E` and whose oracle agrees with `E`'s on the logs in `L`, the oracle algorithm accepts with
   the probability of the game against `E'` restricted to `L`.
@@ -115,12 +117,13 @@ namespace Distinguisher
 variable {W X Y Req A : Type*} [Fintype W] [Fintype X] [Fintype Y] [Fintype Req] [Fintype A]
   {n m : ℕ} (D : Distinguisher W X Y Req A n m) [DecidableEq Req] [DecidableEq A] {Ω : Type*}
   [AddGroup Y] {Q : ℕ}
+  {St St' : Type _} [OracleState St X Y] [OracleState St' X Y]
 
 /-! ### Slots on reachable states -/
 
 section Slots
 
-variable (E : Env Ω Req A X Y Q)
+variable (E : Env Ω Req A X Y Q St)
 
 /-- A slot from slot `m` on is the identity. -/
 theorem eventPerm_of_le (ω : Ω) {k : ℕ} (hk : m ≤ k) (r : GameReg W n X Y Req A m) :
@@ -135,6 +138,7 @@ theorem eventPerm_of_query (ω : Ω) {k : ℕ} (hk : k < m) {r : GameReg W n X Y
   simp [eventPerm, hk, Env.requestPerm, copyPerm_apply, respondPerm_apply, hkind,
     Env.oraclePerm, splitLogs]
 
+omit [AddGroup Y] [OracleState St X Y] in
 /-- The request of slot `k` on a request branch of a reachable state logs the request and writes
 its answer after the branch's earlier requests. -/
 theorem requestPerm_of_request (ω : Ω) {k : ℕ} (hk : k < m) {r : GameReg W n X Y Req A m}
@@ -152,6 +156,7 @@ theorem requestPerm_of_request (ω : Ω) {k : ℕ} (hk : k < m) {r : GameReg W n
     copyPerm_apply, hkind, ite_true, hblank, Equiv.swap_apply_left, Prod.map, Equiv.refl_apply,
     respondPerm_apply, Env.answer, Function.update_self, Option.elim, hreq]
 
+omit [AddGroup Y] [OracleState St X Y] in
 /-- The request of slot `k` is the identity on a query branch. -/
 theorem requestPerm_of_query (ω : Ω) {k : ℕ} (hk : k < m) {r : GameReg W n X Y Req A m}
     (hkind : D.kind r.workspace = false) : E.requestPerm D.kind ω ⟨k, hk⟩ r = r := by
@@ -179,7 +184,7 @@ theorem eventPerm_of_request (ω : Ω) {k : ℕ} (hk : k < m) {r : GameReg W n X
 
 /-- On a reachable state, two environments give the same slot permutation if they have the same
 oracle in force on a query branch and the same answer on a request branch. -/
-theorem eventPerm_eq_of_agree {Ω' : Type*} (E' : Env Ω' Req A X Y Q) {ω : Ω} {ω' : Ω'} {k : ℕ}
+theorem eventPerm_eq_of_agree {Ω' : Type*} (E' : Env Ω' Req A X Y Q St') {ω : Ω} {ω' : Ω'} {k : ℕ}
     {r : GameReg W n X Y Req A m} (hr : r ∈ logsIn (reachableLogs k))
     (hq : D.kind r.workspace = false → E.oracle ω (splitLogs r).2 = E'.oracle ω' (splitLogs r).2)
     (ha : D.kind r.workspace = true → E.answerAfter ω (requests (splitLogs r).2) r.request =
@@ -217,7 +222,7 @@ end Slots
 outside `N` into `N`, and the two environments give the same slot permutation on every reachable
 state with logs in `N` that one of them keeps in `N`, then the game states have the same part on
 `N`. -/
-theorem mask_stage_eq_of_eventPerm (E : Env Ω Req A X Y Q) {Ω' : Type*} (E' : Env Ω' Req A X Y Q)
+theorem mask_stage_eq_of_eventPerm (E : Env Ω Req A X Y Q St) {Ω' : Type*} (E' : Env Ω' Req A X Y Q St')
     {ω : Ω} {ω' : Ω'} (N : Set (LogReg Req m))
     (hclosed : ∀ k (r : GameReg W n X Y Req A m), r ∈ logsIn (reachableLogs k) → r ∉ logsIn N →
       D.eventPerm E ω k r ∉ logsIn N ∧ D.eventPerm E' ω' k r ∉ logsIn N)
@@ -299,6 +304,31 @@ theorem gameAlg_stage (E' : Env Ω Req A X Y Q) (L : Set (LogReg Req m)) (ω : �
       dif_pos (show k < m by omega), permOp_trans]
     simp only [hreq, Env.oraclePerm_eq]
 
+/-- The final state of the oracle algorithm of `E` run with the oracle function of `E'`, when the
+two environments give the same answers on tape `ω`: `postOp` of `E` applied to the run against
+`E'`. -/
+theorem final_gameAlg (E' : Env Ω Req A X Y Q) (L : Set (LogReg Req m)) (ω : Ω)
+    (hans : ∀ (lg : LogReg Req m) k, E.answer ω lg k = E'.answer ω lg k) :
+    (D.gameAlg E post L).final (queryPermOf (E'.oracleFn D.kind ω)) ω =
+      postOp E post ω (D.run E' ω) := by
+  set A := D.gameAlg E post L
+  have hreq : ∀ k : Fin m, E.requestPerm (n := n) D.kind ω k = E'.requestPerm D.kind ω k :=
+    fun k => by simp only [Env.requestPerm, funext fun lg => hans lg k]
+  have hstep : ∀ t (ht : t < m + 1), A.stepAt ω t = D.gameStep E post ω t := fun t ht => by
+    rw [OracleAlg.stepAt_of_lt _ ht]
+    rfl
+  have hlt := D.gameAlg_stage E post E' L ω hans
+  rw [OracleAlg.final, run]
+  cases m with
+  | zero =>
+    rw [OracleAlg.stage, hybrid_zero, hstep 0 (by omega), gameStep, dif_neg (lt_irrefl 0)]
+    rfl
+  | succ k =>
+    rw [OracleAlg.stage, hybrid_succ, ← OracleAlg.stage, hlt k (by omega), hstep _ (by omega),
+      gameStep, dif_neg (lt_irrefl _), LinearIsometryEquiv.trans_apply, D.stage_succ,
+      eventPerm, dif_pos (show k < k + 1 by omega), permOp_trans]
+    simp only [hreq, Env.oraclePerm_eq]
+
 /-- **The bridge.** If `E` and `E'` give the same answers on tape `ω`, and the same oracle on the
 logs in `L`, the oracle algorithm of `E` run with the oracle function of `E'` accepts with the
 probability of the game against `E'` restricted to `L`. -/
@@ -307,26 +337,7 @@ theorem acceptProb_gameAlg (E' : Env Ω Req A X Y Q) (L : Set (LogReg Req m)) (�
     (hL : ∀ lg ∈ L, E.oracle ω lg = E'.oracle ω lg) :
     (D.gameAlg E post L).acceptProb (queryPermOf (E'.oracleFn D.kind ω)) ω =
       D.acceptProbOnAt E' post L ω := by
-  set A := D.gameAlg E post L
-  set π := queryPermOf (n := n) (E'.oracleFn D.kind ω)
-  have hreq : ∀ k : Fin m, E.requestPerm (n := n) D.kind ω k = E'.requestPerm D.kind ω k :=
-    fun k => by simp only [Env.requestPerm, funext fun lg => hans lg k]
-  have hstep : ∀ t (ht : t < m + 1), A.stepAt ω t = D.gameStep E post ω t := fun t ht => by
-    rw [OracleAlg.stepAt_of_lt _ ht]
-    rfl
-  have hlt := D.gameAlg_stage E post E' L ω hans
-  have hfin : A.final π ω = postOp E post ω (D.run E' ω) := by
-    rw [OracleAlg.final, run]
-    cases m with
-    | zero =>
-      rw [OracleAlg.stage, hybrid_zero, hstep 0 (by omega), gameStep, dif_neg (lt_irrefl 0)]
-      rfl
-    | succ k =>
-      rw [OracleAlg.stage, hybrid_succ, ← OracleAlg.stage, hlt k (by omega), hstep _ (by omega),
-        gameStep, dif_neg (lt_irrefl _), LinearIsometryEquiv.trans_apply, D.stage_succ,
-        eventPerm, dif_pos (show k < k + 1 by omega), permOp_trans]
-      simp only [hreq, π, Env.oraclePerm_eq]
-  rw [OracleAlg.acceptProb, hfin, acceptProbOnAt, final]
+  rw [OracleAlg.acceptProb, D.final_gameAlg E post E' L ω hans, acceptProbOnAt, final]
   change prob (D.gameAccept ∩ logsIn L) _ = prob (D.gameAccept ∩ logsIn L) _
   rw [prob_inter_eq_prob_mask, prob_inter_eq_prob_mask, postOp, mask_logControlled,
     mask_logControlled]
@@ -350,7 +361,7 @@ def _root_.GordieHowe.Quantum.madeLogs (j : ℕ) : Set (LogReg Req m) :=
   {lg | j < (requests lg).length}
 
 /-- On reachable states, a slot permutation keeps a made request made. -/
-theorem mem_madeLogs_eventPerm (E : Env Ω Req A X Y Q) (ω : Ω) {j k : ℕ}
+theorem mem_madeLogs_eventPerm (E : Env Ω Req A X Y Q St) (ω : Ω) {j k : ℕ}
     {r : GameReg W n X Y Req A m} (hr : r ∈ logsIn (reachableLogs k))
     (hj : r ∈ logsIn (madeLogs j)) : D.eventPerm E ω k r ∈ logsIn (madeLogs j) := by
   simp only [mem_logsIn, madeLogs, Set.mem_ofPred_eq] at hj ⊢
@@ -361,7 +372,7 @@ theorem mem_madeLogs_eventPerm (E : Env Ω Req A X Y Q) (ω : Ω) {j k : ℕ}
   · exact hj
 
 /-- A request slot on a reachable state with `j` earlier requests makes request number `j`. -/
-theorem mem_madeLogs_eventPerm_of_request (E : Env Ω Req A X Y Q) (ω : Ω) {j k : ℕ} (hk : k < m)
+theorem mem_madeLogs_eventPerm_of_request (E : Env Ω Req A X Y Q St) (ω : Ω) {j k : ℕ} (hk : k < m)
     {r : GameReg W n X Y Req A m} (hr : r ∈ logsIn (reachableLogs k)) (hkind : D.kind r.workspace = true)
     (hj : j = (requests (splitLogs r).2).length) : D.eventPerm E ω k r ∈ logsIn (madeLogs j) := by
   simp only [mem_logsIn, madeLogs, Set.mem_ofPred_eq]
@@ -371,10 +382,11 @@ theorem mem_madeLogs_eventPerm_of_request (E : Env Ω Req A X Y Q) (ω : Ω) {j 
 /-- **The game on the branches that have not made request `j`.** If `E` at `ω` and `E'` at `ω'`
 give the same answers to the requests numbered below `j` and have the same oracle after at most
 `j` requests, the game states have the same part on the logs that have not made request `j`. -/
-theorem mask_stage_eq_of_agree (E : Env Ω Req A X Y Q) {Ω' : Type*} (E' : Env Ω' Req A X Y Q)
+theorem mask_stage_eq_of_agree (E : Env Ω Req A X Y Q St) {Ω' : Type*} (E' : Env Ω' Req A X Y Q St')
     {ω : Ω} {ω' : Ω'} {j : ℕ}
     (hans : ∀ rs req, rs.length < j → E.answerAfter ω rs req = E'.answerAfter ω' rs req)
-    (horacle : ∀ rs, rs.length ≤ j → E.oracleIn ω rs = E'.oracleIn ω' rs) (k : ℕ) :
+    (horacle : ∀ rs, rs.length ≤ j →
+      (OracleState.toOracle (E.oracleIn ω rs) : X → Y) = OracleState.toOracle (E'.oracleIn ω' rs)) (k : ℕ) :
     mask (logsIn (madeLogs j)ᶜ) (D.stage E ω k) = mask (logsIn (madeLogs j)ᶜ) (D.stage E' ω' k) := by
   refine D.mask_stage_eq_of_eventPerm E E' _ (fun k r hr hN => ?_) (fun k r hr hN himg => ?_) k
   · simp only [mem_logsIn, Set.mem_compl_iff, not_not] at hN ⊢
@@ -392,7 +404,7 @@ theorem mask_stage_eq_of_agree (E : Env Ω Req A X Y Q) {Ω' : Type*} (E' : Env 
 
 /-- The final states have the same part on `N` if the runs do and the oracles in force agree on
 the logs in `N`. -/
-theorem mask_final_eq (E : Env Ω Req A X Y Q) {Ω' : Type*} (E' : Env Ω' Req A X Y Q)
+theorem mask_final_eq (E : Env Ω Req A X Y Q St) {Ω' : Type*} (E' : Env Ω' Req A X Y Q St')
     (post : (X → Y) → QState (DReg W n X Y Req A) ≃ₗᵢ[ℂ] QState (DReg W n X Y Req A))
     {ω : Ω} {ω' : Ω'} {N : Set (LogReg Req m)}
     (hrun : mask (logsIn N) (D.run E ω) = mask (logsIn N) (D.run E' ω'))
@@ -404,7 +416,7 @@ theorem mask_final_eq (E : Env Ω Req A X Y Q) {Ω' : Type*} (E' : Env Ω' Req A
 
 /-- The acceptance probability on the logs in `L ∩ N` depends only on the part of the final
 state on `N`. -/
-theorem acceptProbOnAt_inter_eq (E : Env Ω Req A X Y Q) {Ω' : Type*} (E' : Env Ω' Req A X Y Q)
+theorem acceptProbOnAt_inter_eq (E : Env Ω Req A X Y Q St) {Ω' : Type*} (E' : Env Ω' Req A X Y Q St')
     (post : (X → Y) → QState (DReg W n X Y Req A) ≃ₗᵢ[ℂ] QState (DReg W n X Y Req A))
     {ω : Ω} {ω' : Ω'} {N : Set (LogReg Req m)}
     (h : mask (logsIn N) (D.final E post ω) = mask (logsIn N) (D.final E' post ω'))
@@ -419,11 +431,12 @@ theorem acceptProbOnAt_inter_eq (E : Env Ω Req A X Y Q) {Ω' : Type*} (E' : Env
 
 /-- Two environments that agree before request `j` (`mask_stage_eq_of_agree`) give the same
 acceptance probability on the branches that never make request `j`. -/
-theorem acceptProbOnAt_notMade_eq (E : Env Ω Req A X Y Q) {Ω' : Type*} (E' : Env Ω' Req A X Y Q)
+theorem acceptProbOnAt_notMade_eq (E : Env Ω Req A X Y Q St) {Ω' : Type*} (E' : Env Ω' Req A X Y Q St')
     (post : (X → Y) → QState (DReg W n X Y Req A) ≃ₗᵢ[ℂ] QState (DReg W n X Y Req A))
     {ω : Ω} {ω' : Ω'} {j : ℕ}
     (hans : ∀ rs req, rs.length < j → E.answerAfter ω rs req = E'.answerAfter ω' rs req)
-    (horacle : ∀ rs, rs.length ≤ j → E.oracleIn ω rs = E'.oracleIn ω' rs)
+    (horacle : ∀ rs, rs.length ≤ j →
+      (OracleState.toOracle (E.oracleIn ω rs) : X → Y) = OracleState.toOracle (E'.oracleIn ω' rs))
     (L : Set (LogReg Req m)) :
     D.acceptProbOnAt E post (L ∩ (madeLogs j)ᶜ) ω =
       D.acceptProbOnAt E' post (L ∩ (madeLogs j)ᶜ) ω' :=

@@ -248,6 +248,7 @@ theorem holdsWith_mod_of_oneDigit (hwf : ir.WellFormed) (hI : I.Registered ir)
   have he := hex (d, e) (by simp [PredBody.exprs])
   have he' := hex (d, e') (by simp [PredBody.exprs])
   have hchar := (modData hwf hI hL he.1 hok.char).2.1
+  refine (holdsWith_mod_iff (.inl (by rw [hok.form]; rfl))).2 ?_
   intro i hi
   obtain ⟨⟨ha1, ha2⟩, hca⟩ := exprIvl_within hwf hI hL hF hK hLok he.1 hok.char he.2 hok.lhs hi
   obtain ⟨⟨hb1, hb2⟩, hcb⟩ := exprIvl_within hwf hI hL hF hK hLok he.1 hok.char he'.2 hok.rhs
@@ -539,6 +540,7 @@ theorem holdsWith_mod_of_digits (hwf : ir.WellFormed) (hI : I.Registered ir)
   have he := hex (d, e) (by simp [PredBody.exprs])
   have he' := hex (d, e') (by simp [PredBody.exprs])
   have hchar := (modData hwf hI hL he.1 hok.char).2.1
+  refine (holdsWith_mod_iff (.inl (by rw [hok.form]; rfl))).2 ?_
   intro i hi
   obtain ⟨⟨ha1, ha2⟩, hca⟩ := exprIvl_within hwf hI hL hF hK hLok he.1 hok.char he.2 hok.lhs hi
   obtain ⟨⟨hb1, hb2⟩, hcb⟩ := exprIvl_within hwf hI hL hF hK hLok he.1 hok.char he'.2 hok.rhs

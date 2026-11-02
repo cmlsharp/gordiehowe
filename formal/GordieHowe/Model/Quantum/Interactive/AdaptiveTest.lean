@@ -35,7 +35,7 @@ p. 12, generalized to trace-preserving maps): Kraus channels on the adversary's 
 before the first of `batches` batches of `width` queries and `step (b + 1)` after batch `b`, and
 the outcome, a predicate `ok` of the workspace measured in the computational basis at the end. The
 module docstring explains why the channels need not depend on `x‖π`. -/
-structure QTest (A : AdaptiveIAlg X Y Req Resp O) where
+structure QTest {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O) where
   /-- The number of query batches. -/
   batches : ℕ
   /-- The index type of the Kraus operators. -/
@@ -49,13 +49,13 @@ structure QTest (A : AdaptiveIAlg X Y Req Resp O) where
 
 attribute [instance] QTest.instFintypeR
 
-variable (A : AdaptiveIAlg X Y Req Resp O)
+variable {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O)
 
 instance : DecidableEq (DReg A.W A.width X Y Req Resp × A.W) :=
   @instDecidableEqProd _ _ inferInstance inferInstance
 
 /-- The number of queries of a test: `width` per batch. -/
-def QTest.queries {A : AdaptiveIAlg X Y Req Resp O} (T : A.QTest) : ℕ := A.width * T.batches
+def QTest.queries {shA : AlgShape X Y Req Resp} {A : AdaptiveIAlg shA O} (T : A.QTest) : ℕ := A.width * T.batches
 
 open Classical in
 /-- **The canonical representative of the output of a workspace**: a workspace with the same
@@ -131,11 +131,24 @@ noncomputable def withTestStep (k : StepIdx A.slots (A.post + T.batches)) :
     KrausMap (Option A.R × Option T.R) (DReg (A.W × A.W) A.width X Y Req Resp)
       (DReg (A.W × A.W) A.width X Y Req Resp) :=
   if h : (k : ℕ) < A.slots + A.post then
-    (A.liftCopy (A.step ⟨k, by omega⟩)).embedIdx (A.embA T.R)
+    (A.liftCopy (A.step ⟨k, by simp only [AdaptiveIAlg.slots, AdaptiveIAlg.post] at h; omega⟩)).embedIdx
+      (A.embA T.R)
   else if (k : ℕ) = A.slots + A.post then
     (junction T).embedIdx (A.embAT T.R)
   else
     (A.liftCopy (T.step ⟨k - (A.slots + A.post), by omega⟩).toKrausMap).embedIdx (A.embT T.R)
+
+/-- The shape of `withTest`: the workspace with a copy register, the test's batches as post
+batches, the Kraus index of both. -/
+@[reducible] def _root_.GordieHowe.Quantum.AlgShape.withTestS (s : AlgShape X Y Req Resp) (b : ℕ) (R' : Type)
+    [Fintype R'] : AlgShape X Y Req Resp where
+  W := s.W × s.W
+  width := s.width
+  width_pos := s.width_pos
+  slots := s.slots
+  post := s.post + b
+  budget := s.budget
+  R := Option s.R × Option R'
 
 variable (A) in
 /-- **The adversary followed by a test** (`A^Π`; Unruh 2017, Definition 14, p. 21, Prove with the
@@ -147,15 +160,8 @@ test's maps, which leave the copy register alone, never change it.
 Running time: that of `A`, one copy of its output register, and the test's channels and its
 `T.queries` queries; polynomial when `A` and the test are. This running time is argued here, not
 proved in Lean. -/
-noncomputable def withTest : AdaptiveIAlg X Y Req Resp O where
-  W := A.W × A.W
-  width := A.width
-  width_pos := A.width_pos
-  slots := A.slots
-  post := A.post + T.batches
-  budget := A.budget
+noncomputable def withTest : AdaptiveIAlg (shA.withTestS T.batches T.R) O where
   kind w := A.kind w.1
-  R := Option A.R × Option T.R
   init := MState.reindex A.copySplit.symm (A.init.tensorKet A.copyBlank)
   step := withTestStep T
   out p := A.out p.2

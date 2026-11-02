@@ -11,13 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-// Modified 2026 by Chad Sharp and Paul Grubbs: tests that bind_g with and without unit-coefficient shortcuts agrees, over a prime field and GF(2^128)
+// Modified 2026 by Chad Sharp and Paul Grubbs: tests that bind_g with and without unit-coefficient shortcuts agrees, over a prime field and GF(2^128), and that bind_gh_all in chunks on threads equals bind_g then bind_h
 
 #include "sumcheck/quad.h"
 
 #include <stddef.h>
 
+#include <functional>
 #include <memory>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -29,6 +31,7 @@
 #include "sumcheck/hquad.h"
 #include "sumcheck/quad_builder.h"
 #include "gf2k/gf2_128.h"
+#include "util/parallel.h"
 #include "gtest/gtest.h"
 
 namespace proofs {
@@ -187,6 +190,62 @@ TEST(EQuad, BindH) {
   one_bind_h(index_t(467), 9);
   one_bind_h(index_t(512), 9);
   one_bind_h(index_t(512), 33);
+}
+
+// Each chunk on its own thread.
+class ThreadRunner : public parallel::Runner {
+ public:
+  void run(size_t n, const std::function<void(size_t)>& fn) override {
+    std::vector<std::thread> th;
+    for (size_t i = 1; i < n; ++i) th.emplace_back([&, i] { fn(i); });
+    if (n > 0) fn(0);
+    for (auto& t : th) t.join();
+  }
+};
+
+// bind_gh_all of N terms equals bind_g followed by LOGW rounds of bind_h on
+// each hand, serially and in chunks on threads.
+void one_bind_gh_all(index_t n, size_t logv, size_t logw) {
+  auto EQUAD = std::make_unique<EQuad<Field>>(n);
+  const size_t vmask = (size_t(1) << logv) - 1,
+               wmask = (size_t(1) << logw) - 1;
+  for (index_t i = 0; i < n; ++i) {
+    // Runs of three terms share their hands, which the index never splits;
+    // every seventh coefficient is zero, which takes beta.
+    const size_t k = size_t(i) / 3;
+    const Elt v = (i % 7 == 0) ? F.zero() : rng.next();
+    EQUAD->ec_[i] = EQuad<Field>::ecorner{
+        .g = quad_corner_t((29 * size_t(i) + 5) & vmask),
+        .h = {quad_corner_t((13 * k + 4) & wmask),
+              quad_corner_t((23 * k + 3) & wmask)},
+        .v = v};
+  }
+  EQUAD->canonicalize(F);
+  auto QUAD = QuadBuilder<Field>::compress(EQUAD.get(), F);
+  RandomSlice G0(logv), G1(logv), H0(logw), H1(logw);
+  const Elt alpha = rng.next(), beta = rng.next();
+
+  auto HQUAD = QUAD->bind_g(logv, G0.r_.data(), G1.r_.data(), alpha, beta, F);
+  for (size_t round = 0; round < logw; ++round) {
+    HQUAD->bind_h(H0.r_[round], /*hand=*/0, F);
+    HQUAD->bind_h(H1.r_[round], /*hand=*/1, F);
+  }
+  const Elt want = HQUAD->scalar();
+
+  EXPECT_EQ(QUAD->bind_gh_all(logv, G0.r_.data(), G1.r_.data(), alpha, beta,
+                              logw, H0.r_.data(), H1.r_.data(), F),
+            want);
+  ThreadRunner runner;
+  parallel::Scope scope(&runner);
+  EXPECT_EQ(QUAD->bind_gh_all(logv, G0.r_.data(), G1.r_.data(), alpha, beta,
+                              logw, H0.r_.data(), H1.r_.data(), F),
+            want);
+}
+
+TEST(EQuad, BindGhAll) {
+  one_bind_gh_all(index_t(1), 3, 3);
+  one_bind_gh_all(index_t(666), 10, 9);
+  one_bind_gh_all(index_t(40000), 14, 12);
 }
 
 TEST(ApproximateDeltaTableBuilder, Basic) {

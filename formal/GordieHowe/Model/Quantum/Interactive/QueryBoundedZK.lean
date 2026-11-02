@@ -36,7 +36,7 @@ namespace GordieHowe
 namespace Quantum.KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
-  [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] (A : KindAlg X Y Req Resp O)
+  [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] {ksA : KindShape X Y Req Resp} (A : KindAlg ksA O)
   [AddGroup Y]
 
 /-- **The post phase of the dilation is a post phase of query batches** (`Distinguisher.postN`). -/
@@ -53,7 +53,7 @@ namespace Quantum.AdaptiveIAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  (A : AdaptiveIAlg X Y Req Resp O) [Nonempty X] [AddGroup Y] [Nonempty Y] [DecidableEq O]
+  {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O) [Nonempty X] [AddGroup Y] [Nonempty Y] [DecidableEq O]
 
 /-- **The dilated adversary has a budget of `budget` query slots**: the invariant of
 `dilRequestBudget` at the budget; a branch that queries has not halted and its counter, one more
@@ -64,7 +64,8 @@ def dilBudget (o : O) : (A.toKindAlg.dilate o).Budget A.budget where
   step := (A.dilRequestBudget A.requestsAfterAtMost_budget o).step
   cap k hk c w hw hkind := by
     obtain ⟨-, hw⟩ := hw
-    change (A.kind w.1.1 || w.2.1) = false at hkind
+    rw [A.toKindAlg.dilate_kind o] at hkind
+    change (A.kind w.1.work || w.2.1) = false at hkind
     rw [Bool.or_eq_false_iff] at hkind
     rcases hw with h | ⟨h1, h2, -⟩
     · rw [hkind.2] at h

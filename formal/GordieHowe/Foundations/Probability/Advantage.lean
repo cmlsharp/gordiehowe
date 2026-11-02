@@ -14,7 +14,8 @@ public import Mathlib.Algebra.BigOperators.Expect
 Every distinguishing advantage in the development (zero knowledge, witness indistinguishability,
 O2H, anonymity games) is the absolute difference of two probabilities, written with the one
 definition `GordieHowe.advantage`, and its bounds are stated in `ℝ`. `GordieHowe.gameAdvantage` is the same
-quantity for a winning event under two output distributions.
+quantity for a winning event under two output distributions; `gameAdvantage_comm` and
+`gameAdvantage_le_add₃` (three hops of a hybrid) are its symmetry and triangle inequality.
 
 The probability and expectation notation for general distributions lives here, beside the uniform
 form `Pr[c ← C : E]` of `GordieHowe/Foundations/Probability/Probability.lean`:
@@ -72,5 +73,21 @@ theorem advantage_le_iff {p₀ p₁ ε : ℝ} :
 `win`: `|Pr_{μ₀}[win] - Pr_{μ₁}[win]|`. -/
 noncomputable def gameAdvantage {α : Type*} (μ₀ μ₁ : PMF α) (win : Set α) : ℝ :=
   advantage (Pr[x ~ μ₀ : x ∈ win]).toReal (Pr[x ~ μ₁ : x ∈ win]).toReal
+
+/-- The game advantage is symmetric. -/
+theorem gameAdvantage_comm {α : Type*} (μ₀ μ₁ : PMF α) (win : Set α) :
+    gameAdvantage μ₀ μ₁ win = gameAdvantage μ₁ μ₀ win :=
+  advantage_comm _ _
+
+/-- **Three hops in a hybrid**: the advantage between `μ₀` and `μ₃` is at most the sum of the three
+advantages between consecutive laws (`advantage_le_add`). -/
+theorem gameAdvantage_le_add₃ {α : Type*} (μ₀ μ₁ μ₂ μ₃ : PMF α) (win : Set α) :
+    gameAdvantage μ₀ μ₃ win ≤
+      gameAdvantage μ₀ μ₁ win + gameAdvantage μ₁ μ₂ win + gameAdvantage μ₂ μ₃ win := by
+  unfold gameAdvantage
+  linarith [advantage_le_add (Pr[x ~ μ₀ : x ∈ win]).toReal (Pr[x ~ μ₁ : x ∈ win]).toReal
+      (Pr[x ~ μ₃ : x ∈ win]).toReal,
+    advantage_le_add (Pr[x ~ μ₁ : x ∈ win]).toReal (Pr[x ~ μ₂ : x ∈ win]).toReal
+      (Pr[x ~ μ₃ : x ∈ win]).toReal]
 
 end GordieHowe

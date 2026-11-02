@@ -509,6 +509,14 @@ theorem simProb_mono (𝒜 : Adv (Bits m) (BitStr I J) B C k t) {R R' : C → DB
     (h : ∀ c D, R c D → R' c D) : simProb e 𝒜 R ≤ simProb e 𝒜 R' :=
   MeasureTheory.measure_mono fun _ hp => h _ _ hp
 
+/-- **`simProb` is subadditive over a disjunction of win conditions.** -/
+theorem simProb_or_le (𝒜 : Adv (Bits m) (BitStr I J) B C k t) (R R' : C → DB (Bits m) B → Prop) :
+    simProb e 𝒜 (fun c D => R c D ∨ R' c D) ≤ simProb e 𝒜 R + simProb e 𝒜 R' := by
+  refine (MeasureTheory.measure_mono fun p hp => ?_).trans (MeasureTheory.measure_union_le
+    {p : BaseGame.Tuple (Bits m) B C k × DB (Bits m) B | R p.1.out p.2}
+    {p : BaseGame.Tuple (Bits m) B C k × DB (Bits m) B | R' p.1.out p.2})
+  exact hp
+
 /-- `Pr[𝒜 wins G*_D]` (CMS19 Def 4.8, p. 20): some `(a', b', c') ∈ G` has
 `D(a'_i) = b'_i`. The text before Def 4.8 writes `(a', b', c)`; the displayed
 formula of Def 4.8 and Def 4.4 (p. 19) have `c'`. -/

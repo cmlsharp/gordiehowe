@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.RealizedProgram.Check
+public import GordieHoweNative.Language.RealizedProgram.Source
 
 @[expose] public section
 
@@ -34,6 +35,9 @@ reads from the run only source challenges and source late values (`GordieHowe.Re
 reads its late value). Then the source semantics depends only on the statement, the committed
 assignment, the source challenges and the source late values (`GordieHowe.RealizedProgram.sourceSatAt_congr`), and the
 realized program's semantics gives it (`GordieHowe.RealizedProgram.SatAt.toSource`).
+
+The definitions are in `GordieHoweNative/Language/RealizedProgram/Source.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -56,11 +60,6 @@ variable (ir : RealizedProgram)
 
 /-! ## The source part -/
 
-/-- **A value of the source program**: a value of role `source`. -/
-def IsSourceValue (v : ℕ) : Prop := (ir.value v).role = .source
-
-instance (v : ℕ) : Decidable (ir.IsSourceValue v) := inferInstanceAs (Decidable (_ = _))
-
 /-- **A challenge of the source program**: a challenge of role `source`. -/
 def chalIsSource (j : ℕ) : Bool :=
   decide (j < ir.challenges.length) && (ir.challenge j).role == .source
@@ -76,14 +75,6 @@ def chalRoleOk (j : ℕ) : Bool :=
       if ir.tables.any (·.alpha == j) then PredBody.isMem (ir.predicate o).body
       else PredBody.isCross (ir.predicate o).body
   | .unmodeled => false
-
-/-- **A predicate of the source program**: of role `source`, or the type check of a source
-value. -/
-def inSource (p : Predicate) : Bool :=
-  match p.role with
-  | .source => true
-  | .type v => decide (ir.IsSourceValue v)
-  | .realization _ => false
 
 /-- **A read of the source program**: a source challenge, or a source value (a late value). A pad
 is never read by a value (`RealizedProgram.nodeReads`). -/

@@ -124,11 +124,11 @@ TEST(PerChunkMac, DISABLED_MlDsaEmulated) {
   namespace e = mldsa::emulated;
   e::Env<ROMParams> env;
   const auto &ex = ml_dsa::GetMlDsa44BenchmarkExample();
-  const mldsa::support::Existing old{ex};
+  const mldsa::support::Existing<mldsa::MLDSA44> old{ex};
   const auto sig = old.signature();
   size_t bytes[2];
   for (bool abl : {false, true}) {
-    e::MLDSAEmulatedSystem<ROMParams> sys(env, ex.msg.size(), ex.ctx.size(),
+    e::MLDSAEmulatedSystem<ROMParams, mldsa::MLDSA44> sys(env, ex.msg.size(), ex.ctx.size(),
                                           mldsa::PackingAblation::kNone,
                                           abl ? per_chunk() : BuildOptions{});
     const auto c = sys.compile();

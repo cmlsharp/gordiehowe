@@ -106,6 +106,26 @@ struct CompilePlan {
   }
 };
 
+// A value's definition (one per value, set once by Domain::set_def): an
+// affine combination (derive, bit_from_unchecked over a Lin), a wiring of
+// coordinates of other values ((value, coordinate), kZeroCoordinate for a
+// zero; wire), or an expression (bit_from_unchecked over an expression, a
+// public expression). A wiring's affine form is computed from it
+// (Domain::as_lin), never stored.
+template <class F>
+struct Affine {
+  Lin<F> lin;
+};
+struct Wiring {
+  std::vector<std::pair<size_t, size_t>> srcs;
+};
+template <class F>
+struct ExprDef {
+  ExprPtr<F> e;
+};
+template <class F>
+using ValueDef = std::variant<Affine<F>, Wiring, ExprDef<F>>;
+
 namespace compiler {
 template <class S>
 class ConstraintSystemBuilder;
@@ -339,6 +359,18 @@ struct DomainPlan {
   // The alignment inputs (each asserted zero or packed as zero bits), in
   // input order.
   std::vector<size_t> filler;
+  // The packed runs of bit inputs, each [begin, end): the inputs the
+  // packing commits as bits (bit views, bit-packed Bit cells, the zero bits
+  // up to a word).
+  std::vector<std::pair<size_t, size_t>> packed_runs;
+  // A viewed word: the DEGREE view inputs from AT are the bits of the word
+  // committed at input WORD (packing.h: an alias when DEGREE is the bit
+  // node's parent's, a composed view above it).
+  struct ViewWord {
+    size_t at = 0, word = 0, degree = 0;
+  };
+  // The viewed words, in input order.
+  std::vector<ViewWord> view_words;
 };
 
 template <class S>
@@ -380,6 +412,20 @@ class CompiledDomainBase {
   // Why the realized program given to the domain did not build it ("" when
   // it did, or none was given).
   virtual std::string misfit() const = 0;
+  // The translation-validation certificate of the domain's GKR circuit
+  // (circuits/compiler/gkr_certificate.h's text): "" when the domain runs no
+  // GKR or its circuit was not compiled here (a compile cache hit, a
+  // realized program's circuit). Throws when the certificate does not
+  // describe the circuit.
+  virtual std::string gkr_certificate() const { return ""; }
+  // The walk of the GKR circuit's expression emission (expr.h's
+  // EmitWalk<F> of the domain's field F), its translation-validation
+  // certificate (GkrCertificate<F>) and its number of inputs, for the
+  // expression export (compiler/emit_export.h): null and 0 when the domain
+  // runs no GKR or its circuit was not emitted here.
+  virtual const void *gkr_emit_walk() const { return nullptr; }
+  virtual const void *gkr_cert_data() const { return nullptr; }
+  virtual size_t gkr_inputs() const { return 0; }
 };
 
 // The face of a domain that the system's compiler sees, typed by the
@@ -623,6 +669,10 @@ class Domain : public virtual DomainCore {
     // reads (compiler/compile_cache.h). A closure without one makes the
     // system uncacheable.
     std::optional<std::vector<uint8_t>> key = std::nullopt;
+    // A realization closure's recording entry point (the GKR export):
+    // EMIT's calls in EMIT's order, reporting what it built (FamilyLog).
+    std::function<void(const CLogic &, const std::vector<Wires> &, FamilyLog *)> record =
+        nullptr;
   };
   struct AffineDecl {
     std::string name;
@@ -940,13 +990,36 @@ class Domain : public virtual DomainCore {
       return eval_expr(e, v);
     };
     const size_t id = add_node(std::move(nd), std::move(gen));
-    exprs_[id] = e;
+    set_def(id, ExprDef<F>{e});
     unchecked_bits_.push_back(id);
     return ref<Bit, CircuitOnly>(id, shape);
   }
   // Whether node ID is defined by a non-affine expression (no affine row
   // reads it).
   bool circuit_only(size_t id) const { return exprs_.count(id) != 0; }
+
+  // Value ID's definition, null when it has none.
+  const ValueDef<F> *def(size_t id) const {
+    auto it = defs_.find(id);
+    return it == defs_.end() ? nullptr : &it->second;
+  }
+  // The affine form of a definition: an affine combination itself, a
+  // wiring the sum over its sources of Gather(source)(source); none for an
+  // expression.
+  std::optional<Lin<F>> as_lin(const ValueDef<F> &d) const {
+    return std::visit(
+        [&](const auto &x) -> std::optional<Lin<F>> {
+          using T = std::decay_t<decltype(x)>;
+          if constexpr (std::is_same_v<T, Affine<F>>) {
+            return x.lin;
+          } else if constexpr (std::is_same_v<T, Wiring>) {
+            return wiring_lin(x.srcs);
+          } else {
+            return std::nullopt;
+          }
+        },
+        d);
+  }
 
   // A range request: every coordinate of V is below N.
   // assert_range(v, n) establishes N = n; assert_range(v, n, MaxBound{m}) some N with
@@ -1277,6 +1350,32 @@ class Domain : public virtual DomainCore {
     auto it = wiring_.find(id);
     return it == wiring_.end() ? nullptr : &it->second;
   }
+  // A record that a public-table selection or lookup (lib/table.h) proves
+  // equal to the image M(row) of some row of the table under its row map:
+  // the handle NODE holds the record's coordinates [AT, AT + node's length)
+  // of a record of WIDTH coordinates, records repeating every WIDTH
+  // coordinates of NODE (a lookup's m records); LEAVES are the map's leaves
+  // and BLOCKS the rows' column blocks (a public node and its width), in
+  // column order; PRED is the predicate that proves it (the selection's
+  // digest equation, the lookup's in). Interval propagation reads it
+  // (compiler/range.h, table_hull and table_preimage_hull): a recorded
+  // coordinate lies in the hull of its column's public entries, which PRED
+  // establishes (the derivations' interval source, IvlWhy::kTable).
+  struct TableLeaf {
+    size_t offset = 0, n = 0;
+    bool ntt = false, natural = false;
+    Elt psi{};
+  };
+  struct TableRecord {
+    size_t node = SIZE_MAX, at = 0, width = 0;
+    std::vector<TableLeaf> leaves;
+    std::vector<std::pair<size_t, size_t>> blocks;
+    std::string pred;
+  };
+  void note_table_record(TableRecord r) { table_records_.push_back(std::move(r)); }
+  const std::vector<TableRecord> &table_records() const {
+    return table_records_;
+  }
   // B2 of a binding: X is no batch table, bit-view source or quadratic
   // operand, and is not bound yet.
   bool bindable_shape(size_t x) const {
@@ -1321,21 +1420,41 @@ class Domain : public virtual DomainCore {
     static_assert((std::is_same_v<typename R::field_type, F> && ...),
               "gkr: every value a circuit reads lies in its domain's "
               "field");
-    static_assert(std::is_invocable_v<
-                  const Fn &, const CLogic &,
-                  const std::conditional_t<true, Tensor<size_t>, R> &...>,
+    // A closure may take a trailing FamilyLog * (a realization family's
+    // closure): null when it builds, the log when the export records.
+    constexpr bool logged = std::is_invocable_v<
+        const Fn &, const CLogic &,
+        const std::conditional_t<true, Tensor<size_t>, R> &..., FamilyLog *>;
+    static_assert(logged ||
+                      std::is_invocable_v<
+                          const Fn &, const CLogic &,
+                          const std::conditional_t<true, Tensor<size_t>, R> &...>,
               "gkr: the closure must take the Logic object and one "
               "wire tensor (Tensor<size_t>, or const "
               "std::vector<size_t>&) per depends_on entry, in order");
     std::vector<std::vector<size_t>> dims;
     std::apply([&](const auto &...x) { (dims.push_back(x.dims()), ...); },
            r.refs);
-    circuits_.push_back(CircuitDecl{
-        std::move(nm), r.ids(),
-        [fn, dims](const CLogic &lc, const std::vector<Wires> &w) {
-          call(fn, lc, w, dims, std::index_sequence_for<R...>{});
-        },
-        -1, std::move(key)});
+    if constexpr (logged) {
+      circuits_.push_back(CircuitDecl{
+          std::move(nm), r.ids(),
+          [fn, dims](const CLogic &lc, const std::vector<Wires> &w) {
+            call([&fn](const CLogic &l, const auto &...x) { fn(l, x..., nullptr); }, lc,
+                 w, dims, std::index_sequence_for<R...>{});
+          },
+          -1, std::move(key),
+          [fn, dims](const CLogic &lc, const std::vector<Wires> &w, FamilyLog *log) {
+            call([&fn, log](const CLogic &l, const auto &...x) { fn(l, x..., log); }, lc,
+                 w, dims, std::index_sequence_for<R...>{});
+          }});
+    } else {
+      circuits_.push_back(CircuitDecl{
+          std::move(nm), r.ids(),
+          [fn, dims](const CLogic &lc, const std::vector<Wires> &w) {
+            call(fn, lc, w, dims, std::index_sequence_for<R...>{});
+          },
+          -1, std::move(key)});
+    }
   }
   // A circuit over a data-dependent list of reads of this field: FN(lc, w)
   // receives one wire vector per read. KEY describes what FN's circuit
@@ -1343,17 +1462,29 @@ class Domain : public virtual DomainCore {
   template <class Fn>
   void gkr(std::string nm, const std::vector<Ref<F>> &r, Fn fn,
            std::optional<std::vector<uint8_t>> key = std::nullopt) {
-    static_assert(std::is_invocable_v<const Fn &, const CLogic &,
-                                  const std::vector<Wires> &>,
+    constexpr bool logged = std::is_invocable_v<const Fn &, const CLogic &,
+                                                const std::vector<Wires> &, FamilyLog *>;
+    static_assert(logged || std::is_invocable_v<const Fn &, const CLogic &,
+                                                const std::vector<Wires> &>,
               "gkr over a list of reads: the closure must take the "
               "Logic object and a const std::vector<std::vector<size_t>>&, "
               "one wire vector per read");
     std::vector<size_t> ids;
     for (const auto &x : r) ids.push_back(x.id);
-    circuits_.push_back(CircuitDecl{
-        std::move(nm), ids,
-        [fn](const CLogic &lc, const std::vector<Wires> &w) { fn(lc, w); },
-        -1, std::move(key)});
+    if constexpr (logged) {
+      circuits_.push_back(CircuitDecl{
+          std::move(nm), ids,
+          [fn](const CLogic &lc, const std::vector<Wires> &w) { fn(lc, w, nullptr); },
+          -1, std::move(key),
+          [fn](const CLogic &lc, const std::vector<Wires> &w, FamilyLog *log) {
+            fn(lc, w, log);
+          }});
+    } else {
+      circuits_.push_back(CircuitDecl{
+          std::move(nm), ids,
+          [fn](const CLogic &lc, const std::vector<Wires> &w) { fn(lc, w); },
+          -1, std::move(key)});
+    }
   }
 
   // Adds node ND with the generator GEN to the system's graph; the system's
@@ -2142,7 +2273,7 @@ class Domain : public virtual DomainCore {
       return eval_expr(e, v);
     };
     const size_t id = add_node(std::move(nd), std::move(gen));
-    pub_exprs_[id] = e;
+    set_def(id, ExprDef<F>{e});
     return ref<Field, Public>(id, shape);
   }
 
@@ -2743,7 +2874,7 @@ class Domain : public virtual DomainCore {
       return eval_lin(e, v);
     };
     const size_t id = add_node(std::move(nd), std::move(gen));
-    lins_[id] = e;
+    set_def(id, Affine<F>{e});
     if (bit == kCheckedBit) checked_derived_.push_back(id);
     if (bit == kUncheckedBit) unchecked_bits_.push_back(id);
     return ref<T, Committed>(id, Shape(e.dims()));
@@ -2784,12 +2915,7 @@ class Domain : public virtual DomainCore {
       it->second[i] = src[i].second;
     }
     if (order.empty()) fail("view '" + nm + "' reads no value");
-    Lin<F> e;
-    for (size_t id : order) {
-      const Lin<F> t =
-          Gather(*f_, idx.at(id), g_->nodes.at(id).n)(ref_of(id));
-      e = e.terms.empty() ? t : e + t;
-    }
+    const Lin<F> e = wiring_lin(src);
     const Type type =
         !mixed && (*common == Base::kBit || *common == Base::kSubfield)
             ? Type{*common}
@@ -2819,9 +2945,54 @@ class Domain : public virtual DomainCore {
       return out;
     };
     const size_t id = add_node(std::move(nd), std::move(gen));
-    lins_[id] = e;
-    wiring_[id] = std::move(src);
+    set_def(id, Wiring{std::move(src)});
     return ref(id, e.n);
+  }
+
+  // The affine form of the wiring SRC (its sources read through no other
+  // wiring): per source, in order of first appearance, Gather(source) of
+  // the coordinates it fills.
+  Lin<F> wiring_lin(const std::vector<std::pair<size_t, size_t>> &src) const {
+    std::vector<size_t> order;
+    std::map<size_t, std::vector<size_t>> idx;
+    for (size_t i = 0; i < src.size(); ++i) {
+      const size_t id = src[i].first;
+      if (id == kZeroCoordinate) continue;
+      auto it = idx.find(id);
+      if (it == idx.end()) {
+        order.push_back(id);
+        it = idx.emplace(id, std::vector<size_t>(src.size(), kGatherNone)).first;
+      }
+      it->second[i] = src[i].second;
+    }
+    Lin<F> e;
+    for (size_t id : order) {
+      const Lin<F> t = Gather(*f_, idx.at(id), g_->nodes.at(id).n)(ref_of(id));
+      e = e.terms.empty() ? t : e + t;
+    }
+    return e;
+  }
+
+  // Sets value ID's definition, once; the indexes below follow it.
+  void set_def(size_t id, ValueDef<F> d) {
+    if (defs_.count(id))
+      fail("value '" + g_->nodes.at(id).name + "' is defined twice");
+    std::visit(
+        [&](const auto &x) {
+          using T = std::decay_t<decltype(x)>;
+          if constexpr (std::is_same_v<T, Affine<F>>) {
+            lins_[id] = x.lin;
+          } else if constexpr (std::is_same_v<T, Wiring>) {
+            lins_[id] = wiring_lin(x.srcs);
+            wiring_[id] = x.srcs;
+          } else if (g_->nodes.at(id).kind == Kind::kPublicCompute) {
+            pub_exprs_[id] = x.e;
+          } else {
+            exprs_[id] = x.e;
+          }
+        },
+        d);
+    defs_.emplace(id, std::move(d));
   }
 
   Graph *g_;
@@ -2832,11 +3003,15 @@ class Domain : public virtual DomainCore {
   std::vector<PredDecl> preds_;
   std::vector<QuadDecl> quads_;
   std::vector<BatchDecl> batches_;
+  // Each value's definition (set_def): the one source of truth.
+  std::map<size_t, ValueDef<F>> defs_;
+  // Indexes of the definitions by form, written by set_def only: the
+  // affine form of every affine or wiring definition (as_lin); the
+  // derived values defined by an expression (bit_from_unchecked over a
+  // non-affine expression: circuits only); the public values defined by
+  // an expression (public_expr).
   std::map<size_t, Lin<F>> lins_;
-  // Derived values defined by an expression (bit_from_unchecked over a
-  // non-affine expression): circuits only.
   std::map<size_t, ExprPtr<F>> exprs_;
-  // Public values defined by an expression (public_expr), by node.
   std::map<size_t, ExprPtr<F>> pub_exprs_;
   std::vector<size_t> checked_derived_;  // derive(Bit{}): x (x - 1) = 0
   Placement bit_pin_ = Placement::kAuto;  // pin_bit_checks
@@ -2847,8 +3022,11 @@ class Domain : public virtual DomainCore {
   // The bit views of priv(e) values stored as words whose words a program
   // fills, keeping its packed bits under the view (expr_advice).
   std::set<size_t> packed_views_;
-  // Wiring views (concat, gather): each coordinate's (node, index).
+  // Index of the wiring definitions (concat, gather): each coordinate's
+  // (node, index); written by set_def only.
   std::map<size_t, std::vector<std::pair<size_t, size_t>>> wiring_;
+  // The records of public-table selections and lookups (note_table_record).
+  std::vector<TableRecord> table_records_;
   std::vector<RangeRequest<F>> requests_;
   std::map<size_t, Lin<F>> bound_;            // bound node -> its view
   std::map<size_t, std::string> bound_note_;  // report line of a binding

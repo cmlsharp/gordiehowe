@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-// Modified 2026 by Chad Sharp and Paul Grubbs: parallel bind_h compaction in chunks for large corner counts
+// Modified 2026 by Chad Sharp and Paul Grubbs: parallel bind_h compaction in chunks for large corner counts, into per-thread buffers swapped in
 
 #ifndef PRIVACY_PROOFS_ZK_LIB_SUMCHECK_HQUAD_H_
 #define PRIVACY_PROOFS_ZK_LIB_SUMCHECK_HQUAD_H_
@@ -60,8 +60,10 @@ class HQuad {
   };
 
   index_t n_;
-  std::vector<hcorner> hc_;
-  std::vector<vcorner> vc_;
+  // Written before they are read (bind_g writes every corner), so
+  // allocated without value-initialization (util/parallel.h's Buffer).
+  parallel::Buffer<hcorner> hc_;
+  parallel::Buffer<vcorner> vc_;
 
   explicit HQuad(index_t n) : n_(n), hc_(n), vc_(n) {}
 
@@ -104,7 +106,11 @@ class HQuad {
   // The compaction in parallel chunks (util/parallel.h): each chunk counts
   // its outputs (the corners that start a pair or stand alone), then writes
   // them at its offset into fresh arrays.
-  static constexpr size_t kParallelBindH = 1 << 14;
+  // The corner count from which the parallel compaction pays (measured on
+  // an 8-core Zen 4c L3 at 4 and 8 threads): 2^12 in odd characteristic,
+  // 2^13 in characteristic two, whose arithmetic is cheaper.
+  static constexpr size_t kParallelBindH =
+      Field::kCharacteristicTwo ? size_t(1) << 13 : size_t(1) << 12;
   template <size_t hand>
   void bind_h_parallel(const Elt& r, const Field& F) {
     const size_t n = n_;
@@ -120,8 +126,15 @@ class HQuad {
       count[b / grain + 1] = c;
     });
     for (size_t c = 0; c < nc; ++c) count[c + 1] += count[c];
-    std::vector<hcorner> hc(count[nc]);
-    std::vector<vcorner> vc(count[nc]);
+    // Buffers kept per thread from bind to bind (and from layer to layer,
+    // whose corners they swap with), so their pages are mapped already.
+    // The chunks, which may run on other threads, write through pointers.
+    static thread_local parallel::Buffer<hcorner> hc;
+    static thread_local parallel::Buffer<vcorner> vc;
+    hc.resize(count[nc]);
+    vc.resize(count[nc]);
+    hcorner* const hco = hc.data();
+    vcorner* const vco = vc.data();
     parallel::for_chunks(n, grain, [&](size_t b, size_t e) {
       size_t wr = count[b / grain];
       for (size_t k = b; k < e; ++k) {
@@ -138,13 +151,13 @@ class HQuad {
         } else {
           vcc.v = affine_interpolation_z_nz(r, vc_[rd].v, F);
         }
-        hc[wr] = hcc;
-        vc[wr] = vcc;
+        hco[wr] = hcc;
+        vco[wr] = vcc;
         ++wr;
       }
     });
-    std::copy(hc.begin(), hc.end(), hc_.begin());
-    std::copy(vc.begin(), vc.end(), vc_.begin());
+    hc_.swap(hc);
+    vc_.swap(vc);
     n_ = index_t(count[nc]);
   }
 

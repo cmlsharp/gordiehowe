@@ -393,7 +393,7 @@ inline void get(R &r, Predicate &x) {
   l.max = r.s();
   x.q = r.s();
   ModRealization &m = x.mod;
-  m.form = r.e<ModForm>(uint64_t(ModForm::kInteger));
+  m.form = r.e<ModForm>(uint64_t(ModForm::kSpectralProduct));
   m.has_interval = r.flag();
   m.lhs_lo = r.s();
   m.lhs_hi = r.s();
@@ -648,7 +648,7 @@ inline void get_index_maps(R &r, std::vector<std::vector<size_t>> &maps) {
 }  // namespace io_internal
 
 // The format's tag and version; bumped when the layout changes.
-inline constexpr uint64_t kProgramFormat = 7;
+inline constexpr uint64_t kProgramFormat = 8;
 
 inline std::vector<uint8_t> write_program(const Program &p) {
   using namespace io_internal;
@@ -746,6 +746,15 @@ inline std::vector<uint8_t> write_program(const Program &p) {
     });
     for (size_t x : {c.public_inputs, c.input_count, c.layers, c.wires, c.terms})
       w2.u(x);
+    w2.list(c.packed_runs, [](W &w3, const std::pair<size_t, size_t> &x) {
+      w3.u(x.first);
+      w3.u(x.second);
+    });
+    w2.list(c.aliases, [](W &w3, const ViewAlias &x) {
+      w3.u(x.at);
+      w3.u(x.word);
+      w3.u(x.degree);
+    });
   });
   w.list(p.realization_circuits, [](W &w2, const std::pair<RealRef, Id> &x) {
     put(w2, x.first);
@@ -884,6 +893,15 @@ inline std::optional<Program> read_program(const std::vector<uint8_t> &b) {
     c.layers = r2.z();
     c.wires = r2.z();
     c.terms = r2.z();
+    r2.list(c.packed_runs, [](R &r3, std::pair<size_t, size_t> &x) {
+      x.first = r3.z();
+      x.second = r3.z();
+    });
+    r2.list(c.aliases, [](R &r3, ViewAlias &x) {
+      x.at = r3.z();
+      x.word = r3.z();
+      x.degree = r3.z();
+    });
   });
   r.list(p.realization_circuits, [](R &r2, std::pair<RealRef, Id> &x) {
     get(r2, x.first);

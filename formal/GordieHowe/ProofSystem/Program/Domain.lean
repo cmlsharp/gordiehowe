@@ -29,7 +29,8 @@ the statements `GordieHowe.RealizedProgram.Valuation`:
 
 **A domain under a trust assumption** (`GordieHowe.Domain.guard`): the same field and coordinates
 and one circuit constraint, "`T` gives the domain's predicate"; a domain's circuit proof under the
-compiler trust is defined without the trust bundle.
+compiler trust is defined without the trust bundle, and given `T` it is a circuit proof of the
+domain (`GordieHowe.DomainProof.unguard`).
 
 **Decoding and encoding** (`GordieHowe.RealizedProgram.ofCells`, `GordieHowe.RealizedProgram.toCells`): the committed assignment of the
 program read from the cells, and the cells read from a committed assignment; the two agree at every
@@ -73,6 +74,29 @@ theorem Domain.holds_guard_iff {T : Prop} {D : Domain L Stmt} {x : Stmt} {a : D.
   ⟨fun h => h.circuit (), fun h =>
     ⟨fun _ => trivial, fun _ => h, fun i => i.elim, fun i => i.elim, fun i => i.elim,
       fun i => i.elim⟩⟩
+
+variable {T : Prop} {D : Domain L Stmt}
+
+/-- **The circuit proof of `D` from a circuit proof of `D` under `T`, given `T`**: the same
+circuit proof, public input and decoding, the bridge discharging `T` (`holds_guard_iff`). -/
+def DomainProof.unguard (P : DomainProof L Stmt (D.guard T)) (hT : T) : DomainProof L Stmt D where
+  Pub := P.Pub
+  Wit := P.Wit
+  holds := P.holds
+  proof := P.proof
+  pub := P.pub
+  decode := P.decode
+  enforce x r w h := Domain.holds_guard_iff.1 (P.enforce x r w h) hT
+
+/-- **The honest prover of `P.unguard hT`** is `P`'s. -/
+def DomainProof.Honest.unguard {P : DomainProof L Stmt (D.guard T)}
+    {hpred : L.Constraint Stmt D.Cells} {S : P.proof.Sim} (H : P.Honest hpred S) (hT : T) :
+    (P.unguard hT).Honest hpred S where
+  In := H.In
+  dom := H.dom
+  encode := H.encode
+  dom_of := H.dom_of
+  circuit := H.circuit
 
 end GordieHowe
 
@@ -213,9 +237,10 @@ inductive Lowered (d p : ℕ) : Prop where
   | row (hp : p < ir.predicates.length) (hrow : ir.isRow d p = true)
   /-- A family of rows on views of `d`. -/
   | viewRow (hp : p < ir.predicates.length) (hrow : ir.isViewRow d p = true)
-  /-- A field `equal` or a `mod_0` placed in circuit `c` of `d`. -/
+  /-- A field `equal`, a `mod_0` or a product-form `mod_q` placed in circuit `c` of `d`. -/
   | placed (c : ir.DomainCircuit d)
-      (heq : ((ir.predicate p).body.isEqual || (ir.predicate p).body.isIntEq) = true)
+      (heq : ((ir.predicate p).body.isEqual || (ir.predicate p).body.isIntEq ||
+        (ir.predicate p).body.isProductMod) = true)
       (hmem : CircuitEntry.pred p ∈ (ir.circuit c.1).entries ∨
         CircuitEntry.typeCheck p ∈ (ir.circuit c.1).entries)
   /-- A part of batch `b` of `d`. -/

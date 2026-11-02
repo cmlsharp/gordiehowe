@@ -32,7 +32,7 @@ assignment into the Falcon-512 proof-of-possession relation (`GordieHowe.Falcon5
   and Falcon's algebraic verifier and the encoding bounds on the extracted values
   (`GordieHowe.Falcon512.Emulated.AlgebraSpec`); then the relation holds on the extracted witness. The
   frontend at the realized program supplies these from the realized program
-  (`GordieHowe/Applications/Falcon512/Native/ROMParams/Frontend/Basic.lean`).
+  (`GordieHowe/Applications/Falcon512/Frontend/Basic.lean`).
 -/
 
 namespace GordieHowe.Falcon512.Native

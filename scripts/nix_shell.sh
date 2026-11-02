@@ -15,10 +15,13 @@
 # files differ from this tree's is refused, so a shared flake directory is
 # never overwritten.
 #
-#   gh_prepare_flake REPO_DIR    sets flake_dir and nix_shell, or exits
+#   gh_prepare_flake REPO_DIR [SHELL]   sets flake_dir and nix_shell, or exits
+#
+# SHELL names one of the flake's devShells (default: default); a shell other
+# than the default keeps its closure in FLAKE_DIR/SHELL-profile.
 
 gh_prepare_flake() {
-  local repo="$1" f
+  local repo="$1" shell="${2:-default}" f profile
   flake_dir="${FLAKE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/gordiehowe/flake}"
   mkdir -p "$flake_dir"
   flake_dir="$(cd -- "$flake_dir" && pwd -P)"
@@ -30,6 +33,7 @@ gh_prepare_flake() {
     [[ -e "$f" || -L "$f" ]] || continue
     case "$(basename -- "$f")" in
       flake.nix|flake.lock|dev-profile|dev-profile-*-link) ;;
+      aarch64-cross-profile|aarch64-cross-profile-*-link) ;;
       *) echo "FLAKE_DIR $flake_dir holds $(basename -- "$f"); it must hold only the flake" >&2
          exit 2 ;;
     esac
@@ -46,6 +50,11 @@ gh_prepare_flake() {
   done
   # The flake's shell hook sets CC, CXX and NIX_ENFORCE_NO_NATIVE=0 (without
   # the latter the cc-wrapper drops -march=native silently).
+  if [[ "$shell" == default ]]; then
+    profile="$flake_dir/dev-profile"
+  else
+    profile="$flake_dir/$shell-profile"
+  fi
   nix_shell=(nix --extra-experimental-features "nix-command flakes"
-    develop "$flake_dir" --profile "$flake_dir/dev-profile" -c)
+    develop "$flake_dir#$shell" --profile "$profile" -c)
 }

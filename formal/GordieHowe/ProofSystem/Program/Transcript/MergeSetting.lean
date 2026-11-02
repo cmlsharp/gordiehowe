@@ -95,15 +95,6 @@ def setting (kS : ℕ) (hb : T.MergeBounds kS) :
       omega
     exact key _ _ _ _ (length_saltedCodec_le hb.toBounds x) h2 (rounds_mul_le hb.toBounds)
       (nJ_mul_le hb.toBounds)
-  fitsC x p := by
-    have h2 := C.length_pathLabel_le hb.nb_le p
-    have key : ∀ a d g : ℕ, a ≤ 2 ^ 10 + (9 + kS) + 2 ^ 20 → d ≤ C.m + 2 ^ 8 + 2 →
-        g ≤ Configurations.maxRounds * 2 ^ 20 → a + d + g ≤ 2 ^ 40 := by
-      have := hb.kS_le
-      have := hb.m_le
-      simp only [Configurations.maxRounds]
-      omega
-    exact key _ _ _ (length_saltedCodec_le hb.toBounds x) h2 (rounds_mul_le hb.toBounds)
   sampler := C.samplersOf T.readers T.k (Configurations.fsExtraBytes + T.maxGrant) T.stream
 
 variable (T) in
@@ -118,7 +109,7 @@ def preimages (kS : ℕ) (hb : T.MergeBounds kS) :
 /-- **The positions of the setting with merges** are the leaves of the domains' trees. -/
 theorem card_pos {kS : ℕ} (hb : T.MergeBounds kS) :
     Fintype.card (T.setting kS hb).model.Pos = ∑ d, (C.oracle d).nLeaves := by
-  rw [Fintype.card_congr (Base.Pos.equivSigma _), Fintype.card_sigma]
+  rw [Fintype.card_congr (SPBCS.Pos.equivSigma _), Fintype.card_sigma]
   simp only [Fintype.card_congr Position.equivSigma, Fintype.card_sigma, Fintype.card_fin]
   change ∑ q : C.term.Leaf, ∑ i, ∑ t : Fin ((C.comp q.label).nTrees i), (C.comp q.label).nLeaves i t = _
   simp only [C.sum_nLeaves_comp]

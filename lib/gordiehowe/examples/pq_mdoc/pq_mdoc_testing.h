@@ -81,7 +81,7 @@ struct ArmProfiles<P, FqArm> {
     return domain_profile<P>(env.hf, env.rsh);
   }
   static CompileProfile compile_profile() {
-    return examples::mldsa::compile_profile<P>();
+    return examples::mldsa::compile_profile<P, MLDSA>();
   }
 };
 template <class P>
@@ -99,7 +99,7 @@ struct ArmProfiles<P, GoldilocksArm> {
     return domain_profile<P>(env.hf, env.rsh);
   }
   static CompileProfile compile_profile() {
-    return examples::mldsa::emulated::compile_profile<P>();
+    return examples::mldsa::emulated::compile_profile<P, MLDSA>();
   }
 };
 
@@ -203,7 +203,7 @@ inline examples::mldsa::Signature decoded(const std::vector<uint8_t> &pk,
   ex.msg = msg;
   ex.pkey = pk;
   ex.sig = sig;
-  const examples::mldsa::support::Existing e(ex);
+  const examples::mldsa::support::Existing<MLDSA> e(ex);
   if (!e.ok) throw std::runtime_error("pq_mdoc: the reference verifier rejects");
   return e.signature();
 }

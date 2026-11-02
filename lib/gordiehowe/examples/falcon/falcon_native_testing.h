@@ -1,7 +1,7 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 
-// GordieHowe: test support for the Falcon-512 native system
+// GordieHowe: test support for the Falcon native systems
 // (falcon_native.h), which a standalone implementation does not need:
 //   FalconNativeSystem     the relation with the assignments of example
 //                          values
@@ -30,6 +30,7 @@
 #include "gordiehowe/compiler/plan_program.h"
 #include "gordiehowe/examples/falcon/falcon_builders.h"
 #include "gordiehowe/examples/falcon/falcon_hash_to_point.h"
+#include "gordiehowe/examples/falcon/falcon_instance_testing.h"
 #include "gordiehowe/examples/falcon/falcon_native.h"
 #include "gordiehowe/examples/shared/program_testing.h"
 #include "gordiehowe/examples/shared/system_testing.h"
@@ -41,30 +42,31 @@ namespace proofs::gordiehowe::examples::falcon::native {
 // The relation for messages of at most MAX_BYTES bytes, with the
 // assignments of example values, for the tests and benchmarks that drive
 // the prover directly.
-template <class P>
+template <class P, class S = Falcon512>
 struct FalconNativeSystem
-    : RelationSystem<typename Env<P>::Sys, FalconStatement<Value>,
-                     FalconWitness<Value>> {
+    : RelationSystem<typename Env<P>::Sys, FalconStatement<S, Value>,
+                     FalconWitness<S, Value>> {
+  using Set = S;
   using E = Env<P>;
   using HF = typename E::HF;
   using AF = typename E::AF;
   using PH = typename E::PH;
-  using Base = RelationSystem<typename E::Sys, FalconStatement<Value>,
-                              FalconWitness<Value>>;
+  using Base = RelationSystem<typename E::Sys, FalconStatement<S, Value>,
+                              FalconWitness<S, Value>>;
   using typename Base::Assignment;
 
   size_t max_bytes;
 
   FalconNativeSystem(const E &env, size_t max, const BuildOptions &build = {})
-      : Base(falcon_native<P>(env, max, build)), max_bytes(max) {}
+      : Base(falcon_native<P, S>(env, max, build)), max_bytes(max) {}
 
   Assignment statement(const std::vector<uint64_t> &hhat) const {
-    return Base::statement(falcon_statement(hhat));
+    return Base::statement(falcon_statement<S>(hhat));
   }
   Assignment witness(const std::vector<uint8_t> &nonce,
                      const std::vector<uint8_t> &msg,
                      const std::vector<uint64_t> &s2) const {
-    return Base::witness(falcon_witness(nonce, msg, s2, max_bytes));
+    return Base::witness(falcon_witness<S>(nonce, msg, s2, max_bytes));
   }
 };
 
@@ -78,45 +80,43 @@ auto &a_domain(const typename Env<P>::Sys &cs) {
   return *d;
 }
 
-// The plan export of profile P (plan_export.h): the system as the bench
-// builds it for MSG_LEN-byte messages, compiled,
-// written to DIR/<lean_plan_module>.lean, and its realized program
-// (plan_program.h) to DIR/<lean_program_module>.lean. Returns the plan's
-// path.
-template <class P>
+// The plan export of profile P and set S (plan_export.h): the system as
+// the bench builds it for MSG_LEN-byte messages, compiled, written to
+// DIR/<lean_plan_module>.lean, and its realized program (plan_program.h)
+// to DIR/<lean_program_module>.lean. Returns the plan's path.
+template <class P, class S = Falcon512>
 std::string export_plan(const std::string &dir, const std::string &commit,
                         const std::string &run_id, size_t msg_len) {
   const Env<P> env;
-  FalconNativeSystem<P> t(env, msg_len);
+  FalconNativeSystem<P, S> t(env, msg_len);
   const auto c = t.compile();
-  const compiler::ExportMeta meta{"falcon-native", P::kId, commit, run_id,
-                                  msg_len};
+  const compiler::ExportMeta meta{std::string(S::kTag) + "-native", P::kId,
+                                  commit, run_id, msg_len};
   return write_plan(*c, dir, meta);
 }
 
 namespace reference {
 
-// The benchmark instance: nonce and message from
-// mt19937(20260915), then centered s1 and s2 with |x| <= 90 from the same
-// generator until NTT(s2) is invertible, and h = (c - s1) / s2 in the NTT
-// domain.
+// The benchmark instance of set S: nonce and message from
+// mt19937(20260915), then short s1 and s2 (instance::short_residue) from
+// the same generator until NTT(s2) is invertible and (s1, s2) is a valid
+// signature, and h = (c - s1) / s2 in the NTT domain.
 struct Instance {
   std::vector<uint8_t> nonce, msg;
   std::vector<uint64_t> s2, hhat, chat;
   FalconH2PWitness hw;
 };
-inline Instance instance(size_t msg_len = 32) {
+template <class S = Falcon512>
+Instance instance(size_t msg_len = 32) {
+  constexpr size_t kN = S::kN;
   Instance in;
   std::mt19937 g(20260915);
   in.nonce.resize(kNonceBytes);
   in.msg.resize(msg_len);
   for (auto &x : in.nonce) x = uint8_t(g());
   for (auto &x : in.msg) x = uint8_t(g());
-  in.hw = falcon_hash_to_point(in.nonce, in.msg, kN);
+  in.hw = falcon_hash_to_point(in.nonce, in.msg, kN, S::kSamples);
   const auto zetas = falcon_ntt_zetas(kN, kQ);
-  auto ctr = [](uint64_t v) {
-    return uint64_t(((int)(v % 181) - 90 + (int)kQ) % (int)kQ);
-  };
   in.chat.resize(kN);
   for (size_t i = 0; i < kN; ++i) in.chat[i] = in.hw.c[i] % kQ;
   falcon_ntt_ref(in.chat, zetas, kQ);
@@ -125,15 +125,15 @@ inline Instance instance(size_t msg_len = 32) {
   in.hhat.resize(kN);
   for (;;) {
     for (size_t i = 0; i < kN; ++i) {
-      s1c[i] = ctr(g());
-      in.s2[i] = ctr(g());
+      s1c[i] = instance::short_residue<S>(g);
+      in.s2[i] = instance::short_residue<S>(g);
     }
     std::vector<uint64_t> s1hat = s1c, s2hat = in.s2;
     falcon_ntt_ref(s1hat, zetas, kQ);
     falcon_ntt_ref(s2hat, zetas, kQ);
     bool ok = true;
     for (size_t i = 0; i < kN; ++i) ok = ok && s2hat[i] != 0;
-    if (!ok) continue;
+    if (!ok || !instance::valid_signature<S>(s1c, in.s2)) continue;
     for (size_t i = 0; i < kN; ++i)
       in.hhat[i] = uint64_t((__uint128_t)((in.chat[i] + kQ - s1hat[i]) % kQ) *
                             falcon_powmod(s2hat[i], kQ - 2, kQ) % kQ);
@@ -144,6 +144,7 @@ inline Instance instance(size_t msg_len = 32) {
 
 // s1 = c - s2 h in the coefficient domain: INTT(c_hat - NTT(s2) h_hat).
 inline std::vector<uint64_t> s1(const Instance &in) {
+  const size_t kN = in.s2.size();
   const auto zetas = falcon_ntt_zetas(kN, kQ);
   std::vector<uint64_t> s2hat = in.s2;
   falcon_ntt_ref(s2hat, zetas, kQ);

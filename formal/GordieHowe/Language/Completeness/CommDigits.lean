@@ -4,6 +4,8 @@
 module
 
 public import GordieHowe.Language.Completeness.Digits
+public import GordieHoweNative.Language.Completeness.Reader
+public import GordieHowe.Language.RealizedProgram.Reader
 
 @[expose] public section
 
@@ -23,6 +25,9 @@ and the sides satisfy `e − e' = q·qlo + q·Q` (`commQuot_specC`), each record
 quotient digit (`commRec_srcEnvC`), so the lookup holds (`holds_commInC`), the field equation holds
 (`holds_commRowC`) and the digits of every two-sided and digit lookup are below their bases
 (`digitsBelow_srcEnvCC`).
+
+The definitions are in `GordieHoweNative/Language/Completeness/CommDigits.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -31,125 +36,8 @@ open Export ProofSystem.PhaseLayout IOP Range
 
 section
 
-variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String}
+variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String} {S : Structure}
   {L : ℕ → ℕ → Option Ivl}
-
-variable (ir) in
-/-- **The facts of a digit lookup whose record is a committed-digits `mod_q`'s quotient digit** at
-the certificate's generators `G`, at the `in`
-predicate `lk` with body `mem d [rec] (range N) (lookup r)` whose record is digit `j` of the
-`mod_q` `m` with body `mod d q e e' real`: a digit lookup of a domain with `k` digit values and no
-second digits, each generated as the committed digit `⟨m, j, lk, k⟩` at its position, a committed
-cell of the record's length in the domain's field that is no source value; the base above `1`; the
-record the number of its digits (`digitsExprOk`) and digit `j` of the `mod_q`, of the sides'
-length; the radix `R` with `R ≤ N` (the honest quotient digit lies in the range) and `R ≤ T^k`
-(the digits hold it); the range within the characteristic. -/
-structure CommLookupFactsC (G : Gens) (lk d : ℕ) (rec : Expr) (N : ℕ) (r : LookupRealization)
-    (m j : ℕ) (q : ℕ) (e e' : Expr) (real : ModRealization) : Prop where
-  /-- A digit lookup. -/
-  kind : r.kind = .digits
-  /-- A domain of the program. -/
-  domain : d < ir.domains.length
-  /-- `k` digit values. -/
-  len : r.digitValues.length = r.digits
-  /-- No second digits. -/
-  second : r.second = []
-  /-- The digit values are generated as the committed digits at their positions. -/
-  own : ∀ k (hk : k < r.digitValues.length), G.at r.digitValues[k] = .commDigit m j lk k
-  /-- The digits are committed cells of the record's length in the domain's field, no source
-  values. -/
-  cells : ∀ u ∈ r.digitValues, ir.privCellB u = true ∧ (ir.value u).size = ir.exprLen rec ∧
-    ir.valueField u = ir.domainField d ∧ ¬ ir.IsSourceValue u
-  /-- The base exceeds `1`. -/
-  baseGt : 1 < r.base
-  /-- The record, through a shared expression (`unref`), is the number of its digits. -/
-  expr : digitsExprOk (ir.charOf (ir.domainField d)) r.base (ir.unref rec) r.digitValues = true
-  /-- The record is digit `j` of the `mod_q`. -/
-  isDigit : (real.digits[j]?.map fun D => D.beq rec) = some true
-  /-- The record has the sides' length. -/
-  recLen : ir.exprLen rec = ir.exprLen e
-  /-- The honest quotient digit lies in the range. -/
-  radixLe : real.radix ≤ N
-  /-- The digits hold the honest quotient digit. -/
-  radixDigits : real.radix ≤ r.base ^ r.digits
-  /-- The range lies within the characteristic. -/
-  rangeLe : N ≤ ir.charOf (ir.domainField d)
-
-instance (G : Gens) (lk d : ℕ) (rec : Expr) (N : ℕ) (r : LookupRealization) (m j q : ℕ)
-    (e e' : Expr) (real : ModRealization) :
-    Decidable (ir.CommLookupFactsC G lk d rec N r m j q e e' real) :=
-  decidable_of_iff (_ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _)
-    ⟨fun ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13⟩ =>
-      ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13⟩,
-     fun h => ⟨h.kind, h.domain, h.len, h.second, h.own, h.cells, h.baseGt, h.expr, h.isDigit,
-      h.recLen, h.radixLe, h.radixDigits, h.rangeLe⟩⟩
-
-variable (ir) in
-/-- **The facts of the committed-digits lookup `lk` at digit `j` of the `mod_q` `m`, as a check**
-(`CommLookupFactsC`): `lk` has one record and a range,
-`m` is a `mod_q` of the same domain. -/
-def commLookupCB (G : Gens) (lk m j : ℕ) : Bool :=
-  match (ir.predicate lk).body, (ir.predicate m).body with
-  | .mem d [rec] (.range N) (.lookup r), .mod d' q e e' real =>
-    decide (d' = d) && decide (ir.CommLookupFactsC G lk d rec N r m j q e e' real)
-  | _, _ => false
-
-variable (ir L) in
-/-- **The honest-quotient facts of a source committed-digits `mod_q`** `m` with body
-`mod d q e e' real`: `q > 0`, `p > 2`; the sides' intervals from the source values
-(`srcIvl`) within the exported `[lhsLo, lhsHi]` and `[rhsLo, rhsHi]`; the honest quotient
-`(e − e')/q` at least `qlo` and below `qlo + R^K`; the sides read no challenge. -/
-structure CommModFactsC (m d q : ℕ) (e e' : Expr) (real : ModRealization) : Prop where
-  /-- A source predicate. -/
-  source : ir.inSource (ir.predicate m) = true
-  /-- The committed-digits form. -/
-  form : real.form = .committedDigits
-  /-- The modulus is positive. -/
-  qpos : 0 < q
-  /-- The characteristic exceeds `2`. -/
-  char : 2 < ir.charOf (ir.domainField d)
-  /-- The left side's interval lies within the exported one. -/
-  lhs : IvlWithin (ir.srcIvl L (ir.domainField d) e) real.lhsLo real.lhsHi
-  /-- The right side's interval lies within the exported one. -/
-  rhs : IvlWithin (ir.srcIvl L (ir.domainField d) e') real.rhsLo real.rhsHi
-  /-- The honest quotient is at least `qlo`. -/
-  lo : (q : ℤ) * (real.quotientLo - 1) < real.lhsLo - real.rhsHi
-  /-- The honest quotient lies below `qlo + R^K`. -/
-  hi : real.lhsHi - real.rhsLo <
-    (q : ℤ) * (real.quotientLo + ((real.radix ^ real.digits.length : ℕ) : ℤ))
-  /-- The radix is positive. -/
-  radixPos : 0 < real.radix
-  /-- The sides read no challenge and no late value. -/
-  noChal : ∀ w ∈ ir.exprNodes e ++ ir.exprNodes e', (ir.readsT.getD w []).isEmpty = true
-
-instance (m d q : ℕ) (e e' : Expr) (real : ModRealization) :
-    Decidable (ir.CommModFactsC L m d q e e' real) :=
-  decidable_of_iff (_ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _)
-    ⟨fun ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10⟩ =>
-      ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10⟩,
-     fun h => ⟨h.source, h.form, h.qpos, h.char, h.lhs, h.rhs, h.lo, h.hi, h.radixPos,
-      h.noChal⟩⟩
-
-variable (ir primeNodes) in
-/-- **Predicate `m` is a source committed-digits `mod_q` with its honest-quotient facts**
-(`CommModFactsC` at the values' intervals `srcLeafIvl`), as a check. -/
-def commModCB (m : ℕ) : Bool :=
-  match (ir.predicate m).body with
-  | .mod d q e e' real => decide (ir.CommModFactsC (ir.srcLeafIvl primeNodes) m d q e e' real)
-  | _ => false
-
-variable (ir primeNodes) in
-/-- **Predicate `pr` is the field equation of the committed-digits `mod_q` `m`** whose quotient
-digit `j` is the record of the lookup `lks[j]`, as a check: `m` has its honest-quotient facts
-(`commModCB`), `pr` is its field equation (`commRowB`), and `lks` names one lookup per quotient
-digit with its facts (`commLookupCB`). -/
-def commRowCB (G : Gens) (m : ℕ) (lks : List ℕ) (pr : Predicate) : Bool :=
-  match (ir.predicate m).body with
-  | .mod d q e e' real =>
-    ir.commModCB primeNodes m && ir.commRowB d q e e' real pr.body &&
-      lks.length == real.digits.length &&
-      (List.range lks.length).all fun j => ir.commLookupCB G (lks.getD j 0) m j
-  | _ => false
 
 /-- **A committed-digits lookup passing its check** has one record and a range, its `mod_q` of the
 same domain, and its facts. -/
@@ -165,10 +53,30 @@ theorem commLookupFactsC_of_B {G : Gens} {lk m j : ℕ} (h : ir.commLookupCB G l
     exact ⟨d', rec, N, r, q, e, e', real, hb, hbm, hF⟩
   · cases h
 
+variable (ir primeNodes S) in
+/-- **`PReader.commModCB` at the program and the source values' intervals is `commModCB`.** -/
+theorem commModCB_ofProgram (m : ℕ) :
+    @PReader.commModCB (ir.srcLeafIvl primeNodes S) ir (PReader.ofProgram ir) m =
+      ir.commModCB primeNodes S m := by
+  unfold PReader.commModCB commModCB
+  simp only [PReader.ofProgram_predicate]
+  cases (ir.predicate m).body
+  case mod d q e e' real =>
+    rw [Bool.eq_iff_iff, decide_eq_true_iff]
+    simp only [Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true,
+      PReader.ofProgram_reads]
+    constructor
+    · rintro ⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩, h10⟩
+      exact ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10⟩
+    · intro h
+      exact ⟨⟨⟨⟨⟨⟨⟨⟨⟨h.source, h.form⟩, h.qpos⟩, h.char⟩, h.lhs⟩, h.rhs⟩, h.lo⟩, h.hi⟩,
+        h.radixPos⟩, h.noChal⟩
+  all_goals rfl
+
 /-- **A `mod_q` passing `commModCB`** has its body and its honest-quotient facts. -/
-theorem commModFactsC_of_B {m : ℕ} (h : ir.commModCB primeNodes m = true) :
+theorem commModFactsC_of_B {m : ℕ} (h : ir.commModCB primeNodes S m = true) :
     ∃ d q e e' real, (ir.predicate m).body = .mod d q e e' real ∧
-      ir.CommModFactsC (ir.srcLeafIvl primeNodes) m d q e e' real := by
+      ir.CommModFactsC (ir.srcLeafIvl primeNodes S) m d q e e' real := by
   unfold commModCB at h
   split at h
   · rename_i d q e e' real hb
@@ -181,7 +89,8 @@ theorem lt_of_commModFactsC {m d q : ℕ} {e e' : Expr}
     {real : ModRealization} (hb : (ir.predicate m).body = .mod d q e e' real)
     (_hM : ir.CommModFactsC L m d q e e' real) : m < ir.predicates.length := by
   by_contra h
-  simp only [predicate, List.getD_eq_getElem?_getD, List.getElem?_eq_none (Nat.le_of_not_lt h),
+  simp only [predicate_eq_getD,
+      List.getD_eq_getElem?_getD, List.getElem?_eq_none (Nat.le_of_not_lt h),
     Option.getD_none] at hb
   cases hb
 
@@ -198,6 +107,18 @@ theorem genCommitted_commDigit {G : Gens} {lk d N m j q : ℕ} {rec e e' : Expr}
         real.radix / r.base ^ k % r.base : ℕ) : (I (ir.valueField r.digitValues[k])).K) := by
   obtain ⟨-, -, -, hns⟩ := hF.cells _ (List.getElem_mem hk)
   simp only [genCommitted, withGens, if_neg hns, hF.own k hk, commDigitNat, hbm, hb, lookupOf?]
+
+variable (ir primeNodes) in
+/-- **`commRowCB` at the program.** -/
+theorem commRowCB_eq (S : Structure) (G : Gens) (m : ℕ) (lks : List ℕ) (pr : Predicate) :
+    ir.commRowCB primeNodes S G m lks pr =
+      match (ir.predicate m).body with
+      | .mod d q e e' real =>
+        ir.commModCB primeNodes S m && ir.commRowB d q e e' real pr.body &&
+          lks.length == real.digits.length &&
+          (List.range lks.length).all fun j => ir.commLookupCB G (lks.getD j 0) m j
+      | _ => false :=
+  rfl
 
 variable (hwf : ir.WellFormed) (hI : I.Registered ir) (hL : I.Lawful ir primeNodes)
   {G : Gens} (R : ir.CommittedFacts I G) {x s l : ir.Valuation I} {c : ∀ k, (ir.layout I).Ch k}
@@ -237,13 +158,13 @@ makes `e − e' = q z` over the integers, the sides' intervals from the source v
 (`exprIvl_within_of`), so `qlo ≤ z < qlo + R^K`, and the honest quotient is `z − qlo`. -/
 theorem commQuot_specC (hbd : ir.StmtBounded I x) {m d q : ℕ} {e e' : Expr}
     {real : ModRealization} (hb : (ir.predicate m).body = .mod d q e e' real)
-    (hM : ir.CommModFactsC (ir.srcLeafIvl primeNodes) m d q e e' real) {i : ℕ}
+    (hM : ir.CommModFactsC (ir.srcLeafIvl primeNodes S) m d q e e' real) {i : ℕ}
     (hi : i < ir.exprLen e) :
     ir.CommQuotSpec (ir.reader SE) d q e e' real i (ir.commQuot (ir.reader SE) m i) := by
   have hm := lt_of_commModFactsC hb hM
   have hsat := sourceSatAt_srcEnvC hwf hI hL R hA π
   have hIF := ivlFacts_srcEnvC hwf hI hL R hA π hbd
-  have hlok := ir.leafIvl_justified primeNodes ir.declaredRanges
+  have hlok := ir.ivlTab_justified primeNodes S.ivlTrie ir.declaredRanges
   have hmod := hsat.preds _ (predicate_mem hm) hM.source
   rw [hb] at hmod
   have hpo := hwf.predicates _ (predicate_mem hm)
@@ -255,7 +176,7 @@ theorem commQuot_specC (hbd : ir.StmtBounded I x) {m d q : ℕ} {e e' : Expr}
   obtain ⟨⟨h3, h4⟩, hc'⟩ := exprIvl_within_of hwf hI hL hIF hlok he'.1 hM.char he'.2 hM.rhs
     (by rw [← hlen]; exact hi)
   simp only at h1 h2 h3 h4 hc hc'
-  obtain ⟨z, hz⟩ := hmod i hi
+  obtain ⟨z, hz⟩ := hmod.1 i hi
   have hq0 : (0 : ℤ) < q := by exact_mod_cast hM.qpos
   have hlo := hM.lo
   have hhi := hM.hi
@@ -318,7 +239,7 @@ include hwf hI hL R hA in
 honest committed values: the record reads its honest quotient digit
 (`commRec_srcEnvC`), below `R ≤ N`. -/
 theorem holds_commInC {lk m j : ℕ} (h : ir.commLookupCB G lk m j = true)
-    (hm : ir.commModCB primeNodes m = true) :
+    (hm : ir.commModCB primeNodes S m = true) :
     ir.HoldsWith (ir.reader SE) (ir.predicate lk).body := by
   obtain ⟨d, rec, N, r, q, e, e', real, hb, hbm, hF⟩ := commLookupFactsC_of_B h
   obtain ⟨d₁, q₁, e₁, e₁', real₁, hbm₁, hM⟩ := commModFactsC_of_B hm
@@ -339,9 +260,9 @@ quotient digit `D_j` is the record of the lookup `lks[j]` and reads digit `j` of
 quotient `Q` (`commRec_srcEnvC`), so `Σ_j R^j D_j = Q` below `R^K`, and `e − e' = q·qlo + q·Q`
 (`commQuot_specC`). -/
 theorem holds_commRowC (hbd : ir.StmtBounded I x) {m : ℕ} {lks : List ℕ} {pr : Predicate}
-    (h : ir.commRowCB primeNodes G m lks pr = true) : ir.HoldsWith (ir.reader SE) pr.body := by
+    (h : ir.commRowCB primeNodes S G m lks pr = true) : ir.HoldsWith (ir.reader SE) pr.body := by
   set rd := ir.reader SE with hrd
-  unfold commRowCB at h
+  rw [commRowCB_eq] at h
   split at h
   · rename_i d q e e' real hbm
     simp only [Bool.and_eq_true, beq_iff_eq, List.all_eq_true, List.mem_range] at h

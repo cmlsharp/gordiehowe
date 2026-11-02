@@ -4,8 +4,16 @@
 module
 
 public import GordieHowe.Applications.Falcon512.Frontend.Fields
-public import GordieHowe.Applications.Falcon512.Ring.Carrier.ROMParams.Interp
-public import GordieHowe.Applications.Falcon512.Ring.Carrier.QROMParams.Interp
+public import GordieHowe.Applications.FieldInterps.Odd
+public import GordieHowe.Applications.Shared.Tableaux
+public import GordieHowe.Language.RealizedProgram.Interval
+public import GordieHowe.Language.RealizedProgram.WithPlan
+public import GordieHowe.Applications.Falcon512.Emulated.System.Params
+public import GordieHowe.Foundations.Fields.GoldilocksRelative
+public import GordieHowe.Foundations.Fields.GoldilocksCoords
+public import GordieHowe.Applications.Configuration.AlgebraSetups
+public import GordieHowe.Language.Export.Valid
+public import GordieHowe.Foundations.Fields.GoldilocksQuarticRelative
 public import GordieHowe.Language.Realizations.Realize
 
 @[expose] public section
@@ -14,11 +22,11 @@ public import GordieHowe.Language.Realizations.Realize
 # GordieHowe: the fields of the emulated Falcon programs
 
 The ring carrier programs at the ROM and QROM parameters (`Falcon512.Ring.Carrier.ROMParams`,
-`Falcon512.Ring.Carrier.QROMParams`, export `b65a4929`) emulate Falcon's arithmetic modulo `q` in
+`Falcon512.Ring.Carrier.QROMParams`, export `5d775ae1`) emulate Falcon's arithmetic modulo `q` in
 one domain `A` over a Goldilocks extension (Goldilocks² at the ROM parameters, Goldilocks⁴ at the
 QROM parameters: `GordieHowe.RealizedProgram.gold2`, `GordieHowe.RealizedProgram.gold4`, which
-decode a natural as its cast; every constant of these programs is below `p`). This file states the
-field facts of such a domain (`Falcon512.EField`) and proves them for both fields.
+decode a natural below `p` as its cast; every constant of these programs is below `p`). This file
+states the field facts of such a domain (`Falcon512.EField`) and proves them for both fields.
 -/
 
 namespace GordieHowe
@@ -87,7 +95,7 @@ instance : Falcon512.EField RealizedProgram.gold2 where
       map_add' x y := goldilocksExt2Coords_add x y 0 }
   coord0_natCast := goldilocksExt2Coords_natCast
   toNat_eq _ := rfl
-  decode_lt _ _ := rfl
+  decode_lt c hc := RealizedProgram.gold2_model.decode_natCast c hc
   natCast_toNat x hx :=
     RealizedProgram.gold2_model.natCast_toNat "GF(p^1)" (List.mem_singleton_self _) x hx
 
@@ -104,7 +112,7 @@ instance : Falcon512.EField RealizedProgram.gold4 where
       map_add' x y := goldilocksExt4Coords_add x y 0 }
   coord0_natCast := goldilocksExt4Coords_natCast
   toNat_eq _ := rfl
-  decode_lt _ _ := rfl
+  decode_lt c hc := RealizedProgram.gold4_model.decode_natCast c hc
   natCast_toNat x hx :=
     RealizedProgram.gold4_model.natCast_toNat "GF(p^1)" (List.mem_singleton_self _) x hx
 

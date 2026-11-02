@@ -4,8 +4,11 @@
 module
 
 public import GordieHowe.Language.Completeness.Honest
+public import GordieHowe.Language.Completeness.Reader
+public import GordieHowe.Language.Completeness.Roles
 public import GordieHowe.Language.Honest.Check
 public import GordieHowe.Language.Honest.CheckP
+public import GordieHoweNative.Language.Completeness.Check
 
 @[expose] public section
 
@@ -21,37 +24,25 @@ generated late values), over the predicates
 (`predCB`: the lookups, the MACs) and over the tables' groups (`groupCB`: the static, the late and
 the mixed histograms), plus the program-wide checks of the soundness side (`boundNoCopyB`,
 `genReadsCoveredCB`, `typedNoLateB`, `blindsB`, `staticGroupNoLateB`) and the derivations
-(`cderivsB`). Each value's, predicate's and group's check reads the generator or the MAC site its
-entry names (`Gens.at`); nothing is searched. The value passes visit the values and the generators
+(`cderivsB`). Each value's, predicate's and group's check reads the generator its entry names
+(`Gens.at`) or the MAC site a structure record names (`macSiteAt`: a cross-field `equal`'s record
+by its first predicate, `Structure.gadgetAt`; a late member's through its predicate's completeness
+step); nothing is searched. The value passes visit the values and the generators
 together (`allIdx2`: `valueCV`, `coveredCV`, and `boundNoCopyV`, `typedNoLateV` of
 `GordieHowe/Language/Honest/CheckValues.lean`), reading each value and its generator from the lists
 rather than by a lookup per value.
+
+The definitions are in `GordieHoweNative/Language/Completeness/Check.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
 
 open Export ProofSystem.PhaseLayout IOP Range
 
-/-- **Whether a generator is a static histogram's**, decidably. -/
-instance (x : Gen) : Decidable (∀ t g, x ≠ .staticHist t g) := by
-  cases x
-  case staticHist t g => exact isFalse fun h => h t g rfl
-  all_goals exact isTrue fun _ _ h => Gen.noConfusion h
-
-/-- **Whether a generator is a late histogram's**, decidably. -/
-instance (x : Gen) : Decidable (∀ t g, x ≠ .lateHist t g) := by
-  cases x
-  case lateHist t g => exact isFalse fun h => h t g rfl
-  all_goals exact isTrue fun _ _ h => Gen.noConfusion h
-
 section
 
 variable (ir : RealizedProgram) {I : Interp}
-
-instance (G : Gens) (t g h : ℕ) : Decidable (ir.StaticGroupFactsC G t g h) :=
-  decidable_of_iff (_ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _)
-    ⟨fun ⟨h1, h2, h3, h4, h5, h6, h7, h8⟩ => ⟨h1, h2, h3, h4, h5, h6, h7, h8⟩,
-     fun h => ⟨h.cell, h.size, h.field, h.notSource, h.own, h.needles, h.rows, h.packed⟩⟩
 
 /-- **A tag's pad space is the whole field**, as a check at value `v`. -/
 def tagFullCB (G : Gens) (v : ℕ) : Bool :=
@@ -82,92 +73,253 @@ def genLateTypeCB (L : List (ℕ × String)) (G : Gens) (v : ℕ) : Bool :=
     (G.notTagAt v && ir.natTypedInB L v)
 
 /-- **The completeness checks at value `v`**: the source part's facts (no pad copy, no message, the
-late values' pad spaces), a value bound to its digits a source value and the record of a two-sided
-or digit lookup (`boundRecsB`), the generators' facts, the committed cells' nodes, the node-typed
-realization values and generated late values. -/
-def valueCB (L : List (ℕ × String)) (G : Gens) (v : ℕ) : Bool :=
-  ir.srcNoPadCopyB v && ir.srcNoMessageB v && ir.srcLatePadB v && ir.boundRecsB v &&
+late values' pad spaces), a value bound to its digits a source value and the record of the two-sided
+or digit lookup its structure record names (`boundRecsV`), the generators' facts, the committed
+cells' nodes, the node-typed realization values and generated late values. -/
+def valueCB (L : List (ℕ × String)) (G : Gens) (S : Structure) (v : ℕ) : Bool :=
+  ir.srcNoPadCopyB v && ir.srcNoMessageB v && ir.srcLatePadB v &&
+    ir.boundRecsV (toTrie G) S.boundRecTab v (ir.value v) &&
     ir.tagFullCB G v && ir.lateGenCB L v && ir.cellB L v && ir.realTypeB L v &&
     ir.genLateTypeCB L G v
 
-/-- **A two-sided or digit lookup `q` has one record, a range and its facts at the generators `G`**,
-its digits generated as its digits (`DigitLookupFactsC`) or, when its record is a quotient digit
-(`commRecOf?`), as the committed digits of the quotient digit its first digit's generator names
-(`commLookupCB`), as a check. -/
-def digitLookupCB (G : Gens) (q : ℕ) : Bool :=
-  match lookupOf? (ir.predicateT q).body with
-  | some r =>
-    !(r.kind == .twoSided || r.kind == .digits) ||
-      match (ir.predicateT q).body with
-      | .mem d [rec] (.range N) (.lookup r') =>
-        decide (ir.DigitLookupFactsC G q d rec N r') ||
-          (ir.commRecOf? q).isSome && match G.at (r'.digitValues.getD 0 0) with
-          | .commDigit m j _ _ => ir.commLookupCB G q m j
+variable (primeNodes : ℕ → List String) in
+/-- **`siteCB` as a check whose failure names the record `g` and the slot `i`** of the site
+(`StructReason.siteFacts`). -/
+def siteCE (S : Structure) (G : Gens) (g i : ℕ) (st : MacSite) : Except StructFailure Unit :=
+  if ir.charOf (ir.domainField (ir.siteDom st)) = 2 then
+    Twin.guardE (ir.twoMacCB primeNodes G st) ⟨g, i, .siteFacts⟩
+  else
+    Twin.seqE (Twin.guardE (ir.macBaseCB primeNodes S G st) ⟨g, i, .siteFacts⟩) <|
+      Twin.seqE (Twin.guardE (ir.macTailCB G st) ⟨g, i, .siteFacts⟩)
+        (Twin.guardE (ir.macIvlB primeNodes S st) ⟨g, i, .siteFacts⟩)
+
+theorem okB_siteCE (primeNodes : ℕ → List String) (S : Structure) (G : Gens) (g i : ℕ)
+    (st : MacSite) :
+    Twin.okB (ir.siteCE primeNodes S G g i st) = ir.siteCB primeNodes S G st := by
+  unfold siteCE siteCB
+  split <;> simp only [Twin.okB_seqE, Twin.okB_guardE, Bool.and_assoc]
+
+variable (primeNodes : ℕ → List String) in
+/-- **`macCB` as a check whose failure names what is missing**: no record for `q`
+(`StructReason.uncovered`), no site at the record (`macSiteAtE`), a site of another `equal`
+(`StructReason.wrongSite`) or the site's facts (`siteCE`). -/
+def macCE (S : Structure) (G : Gens) (q : ℕ) : Except StructFailure Unit :=
+  if ir.isCrossB q then
+    match S.gadgetAt.get? q with
+    | some g =>
+      Twin.thenE (ir.macSiteAtE S g (ir.ySlot q)) fun st =>
+        Twin.seqE (Twin.guardE (st.pid == q) ⟨g, 0, .wrongSite⟩)
+          (ir.siteCE primeNodes S G g (ir.ySlot q) st)
+    | none => .error ⟨q, 0, .uncovered⟩
+  else .ok ()
+
+/-! ## The checkers at the program
+
+Each checker below is its generic form (`CReader.…`, `PReader.…`) at the program's reader. Its
+equation lemma states it through the program's own definitions; the shared verdicts of a site
+read at the site the record names (`siteCheckAt_of_some`). -/
+
+/-- **`CReader.mixedMemberCB` at the program, at a site**, is `mixedMemberCB`. -/
+theorem mixedMemberCB_ofProgram (primeNodes : ℕ → List String) (S : Structure) (G : Gens)
+    {g i t v : ℕ} {st : MacSite} (h : ir.macSiteAt S g i = some st) (m : Member) :
+    @CReader.mixedMemberCB ir (CReader.ofProgram ir primeNodes S G) g i t v st m =
+      ir.mixedMemberCB primeNodes S G t v st m := by
+  simp only [CReader.mixedMemberCB, CReader.ofProgram_site, siteCheckAt_of_some h, SiteCheck.eval,
+    CReader.ofProgram_value]
+  rfl
+
+/-- **`CReader.siteCB` at the program, at a site**, is `siteCB`. -/
+theorem siteCB_ofProgram (primeNodes : ℕ → List String) (S : Structure) (G : Gens) {g i : ℕ}
+    {st : MacSite} (h : ir.macSiteAt S g i = some st) :
+    @CReader.siteCB ir (CReader.ofProgram ir primeNodes S G) g i st =
+      ir.siteCB primeNodes S G st := by
+  simp only [CReader.siteCB, CReader.ofProgram_site, siteCheckAt_of_some h, SiteCheck.eval]
+  rfl
+
+/-- **`macCB` at the program.** -/
+theorem macCB_eq (primeNodes : ℕ → List String) (S : Structure) (G : Gens) (q : ℕ) :
+    ir.macCB primeNodes S G q = (!ir.isCrossB q ||
+      match S.gadgetAt.get? q with
+      | some g =>
+        match ir.macSiteAt S g (ir.ySlot q) with
+        | some st => st.pid == q && ir.siteCB primeNodes S G st
+        | none => false
+      | none => false) := by
+  simp only [macCB, CReader.macCB]
+  congr 1
+  cases S.gadgetAt.get? q with
+  | none => rfl
+  | some g =>
+    dsimp only
+    cases hst : ir.macSiteAt S g (ir.ySlot q) with
+    | none => rfl
+    | some st => exact congrArg (st.pid == q && ·) (siteCB_ofProgram ir primeNodes S G hst)
+
+/-- **`predCB` at the program.** -/
+theorem predCB_eq (primeNodes : ℕ → List String) (S : Structure) (G : Gens) (q : ℕ) :
+    ir.predCB primeNodes S G q =
+      (ir.ivlSourceB q && ir.digitLookupCB G q && ir.macCB primeNodes S G q) :=
+  rfl
+
+/-- **`needlesLateCB` at the program.** -/
+theorem needlesLateCB_eq (G : Gens) (t g : ℕ) :
+    ir.needlesLateCB G t g =
+      (ir.members t g).all fun m => (ir.exprNodes (ir.needleExpr m.pred m.needle)).all fun w =>
+        (ir.readsT.getD w []).all fun r =>
+          match r with
+          | .late u => decide (u < ir.values.length ∧ ir.IsLate u) &&
+            decide (∀ t' g', G.at u ≠ .lateHist t' g')
+          | _ => true :=
+  rfl
+
+/-- **`mixedGroupCB` at the program.** -/
+theorem mixedGroupCB_eq (primeNodes : ℕ → List String) (S : Structure) (G : Gens)
+    (D : CDerivations) (t g v s : ℕ) :
+    ir.mixedGroupCB primeNodes S G D t g v s =
+      (decide (G.at v = .lateHist t g) && !decide (ir.IsSourceValue v) &&
+        decide (v < ir.values.length) && decide (ir.IsLate v) &&
+        decide ((ir.value v).size ≤ ir.tableSize t) &&
+        decide (ir.valueField v = ir.chalField (ir.alphaOf t)) && decide (ir.IsRange t) &&
+        decide (ir.StaticGroupFactsC G t g s) && ir.noLateReadB s &&
+        (ir.members t g).all (fun m => ir.memberReadsLate m ||
+          (ir.exprNodes (ir.needleExpr m.pred m.needle)).all ir.noLateReadB) &&
+        ir.needlesLateCB G t g && decide (ir.chalField (ir.alphaOf t) < ir.fields.length) &&
+        decide (ir.tableSize t ≤ ir.charOf (ir.chalField (ir.alphaOf t))) &&
+        (ir.members t g).all (fun m => !ir.memberReadsLate m ||
+          match D.derivs[m.pred]? with
+          | some [.macRow g' i _] =>
+            match ir.macSiteAt S g' i with
+            | some st => ir.mixedMemberCB primeNodes S G t v st m
+            | none => false
+          | _ => false)) := by
+  simp only [mixedGroupCB, CReader.mixedGroupCB]
+  congr 1
+  congr 1
+  funext m
+  congr 1
+  cases D.derivs[m.pred]? with
+  | none => rfl
+  | some l =>
+    rcases l with _ | ⟨c, _ | ⟨c', l⟩⟩
+    · rfl
+    · cases c <;> try rfl
+      rename_i g' i _
+      dsimp only
+      cases hst : ir.macSiteAt S g' i with
+      | none => rfl
+      | some st => exact mixedMemberCB_ofProgram ir primeNodes S G hst m
+    · cases c <;> rfl
+
+/-- **`groupCB` at the program.** -/
+theorem groupCB_eq (primeNodes : ℕ → List String) (S : Structure) (G : Gens) (D : CDerivations)
+    (t g : ℕ) :
+    ir.groupCB primeNodes S G D t g =
+      match (ir.groupOf t g).lateMult with
+      | some v =>
+        ((ir.groupOf t g).staticMult.isNone && decide (G.at v = .lateHist t g) &&
+          !decide (ir.IsSourceValue v) && decide (v < ir.values.length) && decide (ir.IsLate v) &&
+          decide ((ir.value v).size = ir.tableSize t) &&
+          decide (ir.valueField v = ir.chalField (ir.alphaOf t)) && decide (ir.IsRange t) &&
+          ir.needlesLateCB G t g) ||
+        match (ir.groupOf t g).staticMult with
+        | some s => ir.mixedGroupCB primeNodes S G D t g v s
+        | none => false
+      | none =>
+        match (ir.groupOf t g).staticMult with
+        | none => (ir.members t g).isEmpty
+        | some h => decide (ir.StaticGroupFactsC G t g h) :=
+  rfl
+
+/-- **`histCoveredCV` at the program.** -/
+theorem histCoveredCV_eq (GT : NatTrie Gen) (MT : NatTrie ℕ) (rs : List Read) (g : Gen) :
+    ir.histCoveredCV GT MT rs g =
+      match g with
+      | .lateHist t g => (ir.members t g).all fun m =>
+          (ir.exprNodes (ir.needleExpr m.pred m.needle)).all fun w =>
+            ir.srcCoveredB MT rs w && (ir.readsT.getD w []).all fun r =>
+              match r with
+              | .late u => ir.genCoveredCB [GT.getD u default] MT rs 0
+              | _ => true
+      | _ => true :=
+  rfl
+
+/-- **`coveredCV` at the program.** -/
+theorem coveredCV_def (GT : NatTrie Gen) (MT : NatTrie ℕ) (v : ℕ) (x : Value) (g : Gen) :
+    ir.coveredCV GT MT v x g =
+      (!ir.isLateV x || (ir.genCoveredCB [g] MT x.reads 0 && ir.histCoveredCV GT MT x.reads g)) :=
+  rfl
+
+/-- **`typedNoLateL` at the program.** -/
+theorem typedNoLateL_eq (v : ℕ) (x : Value) (rs : List Read) :
+    ir.typedNoLateL v x rs =
+      (!(x.typeSource == .node) || ir.isLateV x ||
+        rs.all fun r =>
+          match r with
+          | .late u => !(decide (u < ir.values.length) && ir.isLateV (ir.valueT u))
+          | _ => true) :=
+  rfl
+
+/-- **`completionB` at the program.** -/
+theorem completionB_eq (primeNodes : ℕ → List String) (L : List (ℕ × String)) (S : Structure)
+    (G : Gens) (D : CDerivations) :
+    ir.completionB primeNodes L S G D =
+      (allIdx2 (ir.valueCV L (toTrie G) S.boundRecTab) .none ir.values G 0 &&
+        ir.allPredsB (ir.predCB primeNodes S G) &&
+        ir.allGroupsB (ir.groupCB primeNodes S G D) && allIdx ir.boundNoCopyV ir.values 0 &&
+        allIdx2 (ir.coveredCV (toTrie G) S.messageTab) .none ir.values G 0 &&
+        allIdx2 ir.typedNoLateL [] ir.values ir.readsL 0 && ir.allPredsB ir.blindsB &&
+        ir.allGroupsB ir.staticGroupNoLateB && ir.cderivsB primeNodes S G D &&
+        allIdx ir.typeRoleV ir.values 0 && ir.messageRecsB S) :=
+  rfl
+
+/-- **Compiled code runs the completeness checker at the context built once** (`completionBA`):
+the context's reader is the program's (`CReader.ofCtx_build`). -/
+@[csimp] theorem completionB_csimp : @completionB = @completionBA := by
+  funext ir primeNodes L S G D
+  show @CReader.completionB ir (CReader.ofProgram ir primeNodes S G) primeNodes L S G D =
+    @CReader.completionB ir (CReader.ofCtx (CCtx.build ir primeNodes S G)) primeNodes L S G D
+  rw [CReader.ofCtx_build]
+
+theorem okB_macCE (primeNodes : ℕ → List String) (S : Structure) (G : Gens) (q : ℕ) :
+    Twin.okB (ir.macCE primeNodes S G q) = ir.macCB primeNodes S G q := by
+  rw [macCB_eq]
+  unfold macCE macSiteAt
+  cases ir.isCrossB q
+  · rfl
+  · simp only [Bool.not_true, Bool.false_or, if_true]
+    cases S.gadgetAt.get? q with
+    | some g =>
+      rw [Twin.okB_thenE]
+      cases h : ir.macSiteAtE S g (ir.ySlot q) <;>
+        simp [h, Except.toOption, Twin.okB_seqE, Twin.okB_guardE, okB_siteCE]
+    | none => rfl
+
+/-- **The `macSite` record `G` (index `g`) has its kind's slots**, as a check whose failure names
+the record and the slot (frozen §3.8's per-kind rule; no theorem reads it): no parts; a
+cross-field `equal` first (`notCross`), then its tails, one per site (`ySlot`), each a realization
+of the `equal`; the parameters `[macField, chunks, width]` of its MAC; the values `[tag, key]`,
+`key` holding the MAC's key challenge. -/
+def macSiteE (g : ℕ) (G : Gadget) : Except StructFailure Unit :=
+  Twin.seqE (Twin.guardE (G.kind == .macSite) ⟨g, 0, .notMacSite⟩) <|
+  Twin.seqE (Twin.guardE G.parts.isEmpty ⟨g, 0, .slotMismatch⟩) <|
+  match G.preds with
+  | [] => .error ⟨g, 0, .noSlot⟩
+  | p :: ts =>
+    Twin.seqE (Twin.guardE (ir.isCrossB p) ⟨g, 0, .notCross⟩) <|
+    Twin.seqE (Twin.guardE (ts.length == ir.ySlot p) ⟨g, ts.length, .noSlot⟩) <|
+    Twin.seqE (Twin.guardE (G.params == [(ir.macCross p).real.macField,
+      (ir.macCross p).real.chunks, (ir.macCross p).real.width]) ⟨g, 0, .slotMismatch⟩) <|
+    Twin.seqE (Twin.guardE (match G.values with
+      | [tg, kv] => tg == (ir.macCross p).real.tag && decide (kv < ir.values.length) &&
+          match (ir.value kv).kind with
+          | .challenge c => c == (ir.macCross p).real.key
           | _ => false
-      | _ => false
-  | none => true
+      | _ => false) ⟨g, 0, .slotMismatch⟩)
+    (Twin.allE (fun j t => Twin.guardE ((ir.predicateT t).role == .realization p)
+      ⟨g, j, .roleMismatch⟩) 1 ts)
 
-variable (primeNodes : ℕ → List String) in
-/-- **A cross-field `equal` `q` is the predicate of a MAC site whose MAC, tail and interval
-facts check, or whose MAC check over a field of characteristic `2` checks**
-(`CompletionFacts.macs`), as a check over the two sites of `q`. -/
-def macCB (G : Gens) (q : ℕ) : Bool :=
-  !ir.isCrossB q || [false, true].any fun b =>
-    ir.macBaseCB primeNodes G ⟨q, b⟩ && ir.macTailCB primeNodes G ⟨q, b⟩ &&
-      ir.macIvlB primeNodes ⟨q, b⟩ || ir.twoMacCB primeNodes G ⟨q, b⟩
-
-variable (primeNodes : ℕ → List String) in
-/-- **The completeness checks at predicate `q`**: the source values' intervals read source
-predicates, a two-sided or digit lookup with its facts, a cross-field `equal` with its MAC. -/
-def predCB (G : Gens) (q : ℕ) : Bool :=
-  ir.ivlSourceB q && ir.digitLookupCB G q && ir.macCB primeNodes G q
-
-/-- **The needles of group `g` of table `t` read only late values of the program that are generated
-as no late histogram** (`LateGroupFactsC.needles`), as a check through the reads table. -/
-def needlesLateCB (G : Gens) (t g : ℕ) : Bool :=
-  (ir.members t g).all fun m => (ir.exprNodes (ir.needleExpr m.pred m.needle)).all fun w =>
-    (ir.readsT.getD w []).all fun r =>
-      match r with
-      | .late u => decide (u < ir.values.length ∧ ir.IsLate u) &&
-        decide (∀ t' g', G.at u ≠ .lateHist t' g')
-      | _ => true
-
-variable (primeNodes : ℕ → List String) in
-/-- **A group with the late histogram `v` and the static histogram `s` has its facts**
-(`MixedGroupFactsC`), as a check: the late members' MAC digits through the MAC sites
-(`mixedMemberCB`). -/
-def mixedGroupCB (G : Gens) (t g v s : ℕ) : Bool :=
-  decide (G.at v = .lateHist t g) && !decide (ir.IsSourceValue v) &&
-    decide (v < ir.values.length) && decide (ir.IsLate v) &&
-    decide ((ir.value v).size ≤ ir.tableSize t) &&
-    decide (ir.valueField v = ir.chalField (ir.alphaOf t)) && decide (ir.IsRange t) &&
-    decide (ir.StaticGroupFactsC G t g s) && ir.noLateReadB s &&
-    (ir.members t g).all (fun m => ir.memberReadsLate m ||
-      (ir.exprNodes (ir.needleExpr m.pred m.needle)).all ir.noLateReadB) &&
-    ir.needlesLateCB G t g && decide (ir.chalField (ir.alphaOf t) < ir.fields.length) &&
-    decide (ir.tableSize t ≤ ir.charOf (ir.chalField (ir.alphaOf t))) &&
-    (ir.members t g).all (fun m => !ir.memberReadsLate m ||
-      ir.sites.any fun st => ir.mixedMemberCB primeNodes G t v st m)
-
-variable (primeNodes : ℕ → List String) in
-/-- **The completeness checks at group `g` of table `t`**: a late histogram with its facts, alone
-(`LateGroupFactsC`) or beside a static one (`mixedGroupCB`); without one, a static histogram with
-its facts (`StaticGroupFactsC`), or no members. -/
-def groupCB (G : Gens) (t g : ℕ) : Bool :=
-  match (ir.groupOf t g).lateMult with
-  | some v =>
-    ((ir.groupOf t g).staticMult.isNone && decide (G.at v = .lateHist t g) &&
-      !decide (ir.IsSourceValue v) && decide (v < ir.values.length) && decide (ir.IsLate v) &&
-      decide ((ir.value v).size = ir.tableSize t) &&
-      decide (ir.valueField v = ir.chalField (ir.alphaOf t)) && decide (ir.IsRange t) &&
-      ir.needlesLateCB G t g) ||
-    match (ir.groupOf t g).staticMult with
-    | some s => ir.mixedGroupCB primeNodes G t g v s
-    | none => false
-  | none =>
-    match (ir.groupOf t g).staticMult with
-    | none => (ir.members t g).isEmpty
-    | some h => decide (ir.StaticGroupFactsC G t g h)
+/-- **The `macSite` record's slots check** (`okB` of `macSiteE`). -/
+def macSiteB (g : ℕ) (G : Gadget) : Bool := Twin.okB (ir.macSiteE g G)
 
 /-! ## The value passes in one zipped pass
 
@@ -176,38 +328,6 @@ def groupCB (G : Gens) (t g : ℕ) : Bool :=
 the values and the generators together (`allIdx2`), read the visited value and generator from the
 lists, any other generator through the table `toTrie G`, and equal the checks above at
 `ir.value v` and `G.at v` (`valueCV_eq`, `coveredCV_eq`). -/
-
-/-- **Generator `g` is no MAC tag's** (`Gens.notTagAt`, on the generator). -/
-def _root_.GordieHowe.RealizedProgram.Gen.notTag (g : Gen) : Bool :=
-  match g with
-  | .tag _ => false
-  | _ => true
-
-/-- `tagFullCB G v`, on value `x` and generator `g`. -/
-def tagFullCV (x : Value) (g : Gen) : Bool :=
-  match g with
-  | .tag _ =>
-    match x.padSpace with
-    | .full => true
-    | _ => false
-  | _ => true
-
-/-- `lateGenCB L v`, on value `x`. -/
-def lateGenCV (L : List (ℕ × String)) (x : Value) : Bool :=
-  !ir.isLateV x ||
-    (ir.padNatV L x && decide (x.domain < ir.domains.length) && !cellValueV x.domain x &&
-      ir.lateOfV x.domain x)
-
-/-- `genLateTypeCB L G v`, on value `x` and generator `g`. -/
-def genLateTypeCV (L : List (ℕ × String)) (x : Value) (g : Gen) : Bool :=
-  !ir.isLateV x || decide (x.role = .source) || !(x.typeSource == .node) ||
-    (g.notTag && ir.natTypedV L x)
-
-/-- `valueCB L G v`, on value `x` and generator `g`. -/
-def valueCV (L : List (ℕ × String)) (v : ℕ) (x : Value) (g : Gen) : Bool :=
-  srcNoPadCopyV v x && srcNoMessageV v x && ir.srcLatePadV v x && ir.boundRecsV v x &&
-    tagFullCV x g && ir.lateGenCV L x && ir.cellV L v x && ir.realTypeV L v x &&
-    ir.genLateTypeCV L x g
 
 /-- **The pad-space check on a value is `padNatB`.** -/
 theorem padNatV_eq (L : List (ℕ × String)) (v : ℕ) : ir.padNatV L (ir.value v) = ir.padNatB L v :=
@@ -219,10 +339,10 @@ theorem natTypedV_eq (L : List (ℕ × String)) (v : ℕ) :
   rfl
 
 /-- **`valueCV` at value `v` and its generator is `valueCB`.** -/
-theorem valueCV_eq (L : List (ℕ × String)) (G : Gens) (v : ℕ) :
-    ir.valueCV L v (ir.value v) (G.at v) = ir.valueCB L G v := by
+theorem valueCV_eq (L : List (ℕ × String)) (G : Gens) (S : Structure) (v : ℕ) :
+    ir.valueCV L (toTrie G) S.boundRecTab v (ir.value v) (G.at v) = ir.valueCB L G S v := by
   simp only [valueCV, valueCB, srcNoPadCopyV_eq, srcNoMessageV_eq, srcLatePadV_eq,
-    boundRecsV_eq, cellV_eq, realTypeV_eq]
+    cellV_eq, realTypeV_eq]
   congr 1
   · congr 1
     · congr 2
@@ -232,79 +352,63 @@ theorem valueCV_eq (L : List (ℕ × String)) (G : Gens) (v : ℕ) :
     rfl
 
 /-- **A generator's check at value `u` reads only `G.at u`.** -/
-theorem genCoveredCB_at (G : Gens) (rs : List Read) (u : ℕ) :
-    ir.genCoveredCB [(toTrie G).getD u default] rs 0 = ir.genCoveredCB G rs u := by
-  rw [toTrie_getD_eq]
-  rfl
-
-/-- `histCoveredCB G rs v`, on generator `g`, the other generators read through `GT`. -/
-def histCoveredCV (GT : NatTrie Gen) (rs : List Read) (g : Gen) : Bool :=
-  match g with
-  | .lateHist t g => (ir.members t g).all fun m =>
-      (ir.exprNodes (ir.needleExpr m.pred m.needle)).all fun w =>
-        ir.srcCoveredB rs w && (ir.readsT.getD w []).all fun r =>
-          match r with
-          | .late u => ir.genCoveredCB [GT.getD u default] rs 0
-          | _ => true
-  | _ => true
-
-/-- `genReadsCoveredCB G`'s check at value `v`, on value `x` and generator `g`, the other
-generators read through `GT`. -/
-def coveredCV (GT : NatTrie Gen) (_ : ℕ) (x : Value) (g : Gen) : Bool :=
-  !ir.isLateV x || (ir.genCoveredCB [g] x.reads 0 && ir.histCoveredCV GT x.reads g)
+theorem genCoveredCB_at (G : Gens) (MT : NatTrie ℕ) (rs : List Read) (u : ℕ) :
+    ir.genCoveredCB [(toTrie G).getD u default] MT rs 0 = ir.genCoveredCB G MT rs u := by
+  have h : Gens.at [(toTrie G).getD u default] 0 = G.at u := by
+    rw [Gens.at_eq_getD, Gens.at_eq_getD, toTrie_getD_eq]
+    rfl
+  rw [genCoveredCB_eq, genCoveredCB_eq]
+  unfold genInputsOf
+  rw [h]
 
 /-- **`coveredCV` at value `v` and its generator is `genReadsCoveredCB`'s check.** -/
-theorem coveredCV_eq (G : Gens) (v : ℕ) :
-    ir.coveredCV (toTrie G) v (ir.value v) (G.at v) =
+theorem coveredCV_eq (G : Gens) (MT : NatTrie ℕ) (v : ℕ) :
+    ir.coveredCV (toTrie G) MT v (ir.value v) (G.at v) =
       (!decide (ir.IsLate v) ||
-        (ir.genCoveredCB G (ir.value v).reads v && ir.histCoveredCB G (ir.value v).reads v)) := by
-  simp only [coveredCV, isLateV_eq]
+        (ir.genCoveredCB G MT (ir.value v).reads v &&
+          ir.histCoveredCB G MT (ir.value v).reads v)) := by
+  simp only [coveredCV_def, isLateV_eq]
   congr 2
-  unfold histCoveredCV histCoveredCB
-  cases G.at v
-  all_goals first
-    | rfl
-    | (simp only [genCoveredCB_at]
-       congr 1)
 
 /-- **The zipped value pass is `valueCB`'s.** -/
-theorem allValuesB_valueCB_of_V {L : List (ℕ × String)} {G : Gens}
-    (h : allIdx2 (ir.valueCV L) .none ir.values G 0 = true) :
-    ir.allValuesB (ir.valueCB L G) = true := by
+theorem allValuesB_valueCB_of_V {L : List (ℕ × String)} {G : Gens} {S : Structure}
+    (h : allIdx2 (ir.valueCV L (toTrie G) S.boundRecTab) .none ir.values G 0 = true) :
+    ir.allValuesB (ir.valueCB L G S) = true := by
   unfold allValuesB
   rw [List.all_eq_true]
   intro v hv
   have := allIdx2_sound _ _ _ _ _ h v (List.mem_range.1 hv)
-  rw [Nat.zero_add] at this
+  rw [Nat.zero_add, ← value_eq_getD, ← Gens.at_eq_getD] at this
   rw [← valueCV_eq]
   exact this
 
 /-- **The zipped coverage pass is `genReadsCoveredCB`.** -/
-theorem genReadsCoveredCB_of_V {G : Gens}
-    (h : allIdx2 (ir.coveredCV (toTrie G)) .none ir.values G 0 = true) :
-    ir.genReadsCoveredCB G = true := by
+theorem genReadsCoveredCB_of_V {G : Gens} {MT : NatTrie ℕ}
+    (h : allIdx2 (ir.coveredCV (toTrie G) MT) .none ir.values G 0 = true) :
+    ir.genReadsCoveredCB G MT = true := by
   unfold genReadsCoveredCB
   rw [List.all_eq_true]
   intro v hv
   have := allIdx2_sound _ _ _ _ _ h v (List.mem_range.1 hv)
-  rw [Nat.zero_add] at this
+  rw [Nat.zero_add, ← value_eq_getD, ← Gens.at_eq_getD] at this
   rw [← coveredCV_eq]
   exact this
 
-/-- **The checker of a completeness certificate** at the nodes `L`. -/
-def completionB (primeNodes : ℕ → List String) (L : List (ℕ × String)) (G : Gens)
-    (D : CDerivations) : Bool :=
-  allIdx2 (ir.valueCV L) .none ir.values G 0 && ir.allPredsB (ir.predCB primeNodes G) &&
-    ir.allGroupsB (ir.groupCB primeNodes G) && allIdx ir.boundNoCopyV ir.values 0 &&
-    allIdx2 (ir.coveredCV (toTrie G)) .none ir.values G 0 &&
-    allIdx ir.typedNoLateV ir.values 0 && ir.allPredsB ir.blindsB &&
-    ir.allGroupsB ir.staticGroupNoLateB && ir.cderivsB primeNodes G D
+/-- **The zipped pass of `typedNoLateL` is `typedNoLateV`'s.** -/
+theorem typedNoLateV_of_L (h : allIdx2 ir.typedNoLateL [] ir.values ir.readsL 0 = true) :
+    allIdx ir.typedNoLateV ir.values 0 = true := by
+  rw [allIdx_iff]
+  intro j hj
+  have := allIdx2_sound _ _ _ _ _ h j hj
+  rw [getD_readsL, Nat.zero_add] at this
+  rw [Nat.zero_add]
+  exact this
 
 end
 
 section Sound
 
-variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String}
+variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String} {S : Structure}
 
 /-- **A two-sided or digit lookup that passes `digitLookupCB`** has one record, a range and its
 facts, of either form. -/
@@ -313,43 +417,39 @@ theorem digitLookupCB_spec {G : Gens} {q : ℕ} {r : LookupRealization}
     (hk : r.kind = .twoSided ∨ r.kind = .digits) :
     ∃ d rec N, (ir.predicate q).body = .mem d [rec] (.range N) (.lookup r) ∧
       (ir.DigitLookupFactsC G q d rec N r ∨ ∃ m j, ir.commLookupCB G q m j = true) := by
-  unfold digitLookupCB at h
+  unfold digitLookupCB digitLookupCE at h
   rw [predicateT_eq, hr] at h
   have hk' : (r.kind == .twoSided || r.kind == .digits) = true := by
     rcases hk with h | h <;> simp [h]
-  simp only [hk', Bool.not_true, Bool.false_or] at h
+  dsimp only at h
+  rw [hk'] at h
+  dsimp only at h
   split at h
   · rename_i d rec N r' hb
     rw [hb] at hr
     simp only [lookupOf?, Option.some.injEq] at hr
     subst hr
     refine ⟨d, rec, N, hb, ?_⟩
-    rcases Bool.or_eq_true_iff.1 h with h | h
-    · exact .inl (of_decide_eq_true h)
-    · refine .inr ?_
-      rw [Bool.and_eq_true] at h
-      obtain ⟨-, h⟩ := h
-      split at h
-      · rename_i m j _ _ _
-        exact ⟨m, j, h⟩
-      · cases h
+    split at h
+    · rename_i m j _
+      rw [Twin.okB_guardE] at h
+      exact .inr ⟨m, j, h⟩
+    · rw [Twin.okB_guardE] at h
+      exact .inl (of_decide_eq_true h)
   · cases h
 
-/-- **A two-sided or digit lookup that passes `digitLookupCB` and whose record is no quotient
-digit** (`commRecOf? q = none`) has its facts, its digits generated as its digits. -/
+/-- **A two-sided or digit lookup that passes `digitLookupCB` and whose digits are generated as no
+quotient digit's** (`G.commOf? r = none`) has its facts, its digits generated as its digits. -/
 theorem digitLookupCB_noComm {G : Gens} {q d N : ℕ} {rec : Expr} {r : LookupRealization}
     (h : ir.digitLookupCB G q = true)
     (hb : (ir.predicate q).body = .mem d [rec] (.range N) (.lookup r))
-    (hk : r.kind = .twoSided ∨ r.kind = .digits) (hn : (ir.commRecOf? q).isNone = true) :
+    (hk : r.kind = .twoSided ∨ r.kind = .digits) (hn : G.commOf? r = none) :
     ir.DigitLookupFactsC G q d rec N r := by
-  unfold digitLookupCB at h
+  unfold digitLookupCB digitLookupCE at h
   rw [predicateT_eq, hb] at h
   have hk' : (r.kind == .twoSided || r.kind == .digits) = true := by
     rcases hk with h | h <;> simp [h]
-  have hs : (ir.commRecOf? q).isSome = false := by
-    revert hn
-    cases ir.commRecOf? q <;> simp
-  simp only [lookupOf?, hk', Bool.not_true, Bool.false_or, hs, Bool.false_and, Bool.or_false] at h
+  simp only [lookupOf?, hk', hn, Twin.okB_guardE] at h
   exact of_decide_eq_true h
 
 /-- **A group's needles that pass `needlesLateCB`** read only late values of the program that are
@@ -360,18 +460,18 @@ theorem needlesLateC_of_B (hwf : ir.WellFormed) {G : Gens} {t g : ℕ}
       ∀ u, Read.late u ∈ ir.nodeReads ir.fuel w →
         (u < ir.values.length ∧ ir.IsLate u) ∧ ∀ t' g', G.at u ≠ .lateHist t' g' := by
   intro m hm w hw u hu
-  unfold needlesLateCB at h
+  rw [needlesLateCB_eq] at h
   have := List.all_eq_true.1 (List.all_eq_true.1 (List.all_eq_true.1 h m hm) w hw) _
     ((mem_readsT hwf w _).1 hu)
   simp only [Bool.and_eq_true, decide_eq_true_eq] at this
   exact this
 
 /-- **A group with a late histogram that passes `groupCB`** has its facts (`LateGroupFactsC`). -/
-theorem lateGroupFactsC_of_B (hwf : ir.WellFormed) {G : Gens} {t g v : ℕ}
-    (h : ir.groupCB primeNodes G t g = true) (hv : (ir.groupOf t g).lateMult = some v)
+theorem lateGroupFactsC_of_B (hwf : ir.WellFormed) {G : Gens} {D : CDerivations} {t g v : ℕ}
+    (h : ir.groupCB primeNodes S G D t g = true) (hv : (ir.groupOf t g).lateMult = some v)
     (hs : (ir.groupOf t g).staticMult = none) :
     ir.LateGroupFactsC G t g v := by
-  unfold groupCB at h
+  rw [groupCB_eq] at h
   rw [hv, hs] at h
   simp only [Option.isNone_none, Bool.true_and, Bool.or_false, Bool.and_eq_true,
     decide_eq_true_eq, Bool.not_eq_true', decide_eq_false_iff_not] at h
@@ -379,20 +479,22 @@ theorem lateGroupFactsC_of_B (hwf : ir.WellFormed) {G : Gens} {t g v : ℕ}
   exact ⟨hs, h2, h3, h4, h5, h6, h7, h8, needlesLateC_of_B hwf h9⟩
 
 /-- **A group with both histograms that passes `groupCB`** passes `mixedGroupCB`. -/
-theorem mixedGroupCB_of_groupCB {G : Gens} {t g v s : ℕ} (h : ir.groupCB primeNodes G t g = true)
+theorem mixedGroupCB_of_groupCB {G : Gens} {D : CDerivations} {t g v s : ℕ}
+    (h : ir.groupCB primeNodes S G D t g = true)
     (hv : (ir.groupOf t g).lateMult = some v) (hs : (ir.groupOf t g).staticMult = some s) :
-    ir.mixedGroupCB primeNodes G t g v s = true := by
-  unfold groupCB at h
+    ir.mixedGroupCB primeNodes S G D t g v s = true := by
+  rw [groupCB_eq] at h
   rw [hv, hs] at h
   simpa using h
 
 /-- **A group with both histograms that passes `mixedGroupCB`** has its facts
 (`MixedGroupFactsC`). -/
-theorem mixedGroupFactsC_of_B (hwf : ir.WellFormed) {G : Gens} {t g v s : ℕ}
-    (h : ir.mixedGroupCB primeNodes G t g v s = true) : ir.MixedGroupFactsC primeNodes G t g v s := by
-  unfold mixedGroupCB at h
+theorem mixedGroupFactsC_of_B (hwf : ir.WellFormed) {G : Gens} {D : CDerivations} {t g v s : ℕ}
+    (h : ir.mixedGroupCB primeNodes S G D t g v s = true) :
+    ir.MixedGroupFactsC primeNodes S G t g v s := by
+  rw [mixedGroupCB_eq] at h
   simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.not_eq_true', decide_eq_false_iff_not,
-    List.all_eq_true, Bool.or_eq_true, List.any_eq_true] at h
+    List.all_eq_true, Bool.or_eq_true] at h
   obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩, h10⟩, h11⟩, h12⟩, h13⟩, h14⟩ := h
   refine ⟨h1, h2, h3, h4, h5, h6, h7, h8, noLateRead_of_B hwf h9, fun m hm hl w hw => ?_,
     needlesLateC_of_B hwf h11, h12, h13, fun m hm hl => ?_⟩
@@ -400,48 +502,62 @@ theorem mixedGroupFactsC_of_B (hwf : ir.WellFormed) {G : Gens} {t g v s : ℕ}
     · rw [hl] at h
       cases h
     · exact noLateRead_of_B hwf (h w hw)
-  · rcases h14 m hm with h | ⟨st, -, hst⟩
+  · rcases h14 m hm with h | h
     · rw [hl] at h
       cases h
-    · exact ⟨st, hst⟩
+    · split at h
+      · split at h
+        · exact ⟨_, h⟩
+        · cases h
+      · cases h
 
 /-- **A cross-field `equal` that passes `macCB`** is the predicate of a MAC site whose MAC, tail and
 interval facts check, or whose MAC check over a field of characteristic `2` checks. -/
-theorem macs_of_macCB {G : Gens} {pid : ℕ} (h : ir.macCB primeNodes G pid = true)
+theorem macs_of_macCB {G : Gens} {pid : ℕ} (h : ir.macCB primeNodes S G pid = true)
     {dx dy : ℕ} {x y : Expr} {k : CrossKind} {real : MacRealization}
     (hb : (ir.predicate pid).body = .cross dx x dy y k real) :
     ∃ st : MacSite, st.pid = pid ∧
-      ((ir.macBaseCB primeNodes G st = true ∧ ir.macTailCB primeNodes G st = true ∧
-        ir.macIvlB primeNodes st = true) ∨ ir.twoMacCB primeNodes G st = true) := by
-  unfold macCB at h
+      ((ir.macBaseCB primeNodes S G st = true ∧ ir.macTailCB G st = true ∧
+        ir.macIvlB primeNodes S st = true) ∨ ir.twoMacCB primeNodes G st = true) := by
+  rw [macCB_eq] at h
   rw [isCrossB_of_body hb] at h
-  simp only [Bool.not_true, Bool.false_or, List.any_eq_true, List.mem_cons,
-    List.not_mem_nil, or_false, Bool.or_eq_true, Bool.and_eq_true] at h
-  obtain ⟨b, -, ⟨⟨h1, h2⟩, h3⟩ | h4⟩ := h
-  · exact ⟨⟨pid, b⟩, rfl, .inl ⟨h1, h2, h3⟩⟩
-  · exact ⟨⟨pid, b⟩, rfl, .inr h4⟩
+  simp only [Bool.not_true, Bool.false_or] at h
+  split at h
+  · split at h
+    · rename_i st _
+      simp only [Bool.and_eq_true, beq_iff_eq] at h
+      obtain ⟨hp, hs⟩ := h
+      refine ⟨st, hp, ?_⟩
+      unfold siteCB at hs
+      split at hs
+      · exact .inr hs
+      · simp only [Bool.and_eq_true] at hs
+        exact .inl ⟨hs.1.1, hs.1.2, hs.2⟩
+    · cases h
+  · cases h
 
 /-- **The facts of a completeness certificate that checks** (`completionB`), at nodes known to
 contain `1`, for a well-formed program whose source part is well formed (`hwf`, `hsv`, facts the
 soundness proof shares). -/
 theorem completionFacts_of_B {L : List (ℕ × String)} (hO : OneNodes I L) (hwf : ir.WellFormed)
-    (hsv : ir.SourceValid) {G : Gens} {D : CDerivations}
-    (h : ir.completionB primeNodes L G D = true) :
-    ir.CompletionFacts I primeNodes G D := by
-  unfold completionB at h
+    (hsv : ir.SourceValid) {S : Structure} {G : Gens} {D : CDerivations}
+    (h : ir.completionB primeNodes L S G D = true) :
+    ir.CompletionFacts I primeNodes S G D := by
+  rw [completionB_eq] at h
   simp only [Bool.and_eq_true] at h
-  obtain ⟨⟨⟨⟨⟨⟨⟨⟨hval, hpred⟩, hgrp⟩, hbnc⟩, hcov⟩, htnl⟩, hbl⟩, hsg⟩, hder⟩ := h
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨hval, hpred⟩, hgrp⟩, hbnc⟩, hcov⟩, htnl⟩, hbl⟩, hsg⟩, hder⟩, htr⟩, hmsg⟩ := h
   replace hval := ir.allValuesB_valueCB_of_V hval
   replace hbnc := ir.boundNoCopyV_iff.1 hbnc
   replace hcov := ir.genReadsCoveredCB_of_V hcov
-  replace htnl := ir.typedNoLateV_iff.1 htnl
-  have hv : ∀ v < ir.values.length, ir.valueCB L G v = true := fun v hv => of_allValuesB hval hv
-  have hq : ∀ q < ir.predicates.length, ir.predCB primeNodes G q = true := fun q hq =>
+  replace htnl := ir.typedNoLateV_iff.1 (ir.typedNoLateV_of_L htnl)
+  have hv : ∀ v < ir.values.length, ir.valueCB L G S v = true := fun v hv =>
+    of_allValuesB hval hv
+  have hq : ∀ q < ir.predicates.length, ir.predCB primeNodes S G q = true := fun q hq =>
     of_allPredsB hpred hq
   have hq3 : ∀ q < ir.predicates.length, ir.ivlSourceB q = true ∧ ir.digitLookupCB G q = true ∧
-      ir.macCB primeNodes G q = true := fun q hlt => by
+      ir.macCB primeNodes S G q = true := fun q hlt => by
     have := hq q hlt
-    unfold predCB at this
+    rw [predCB_eq] at this
     simp only [Bool.and_eq_true] at this
     exact ⟨this.1.1, this.1.2, this.2⟩
   have hdl : ∀ pid < ir.predicates.length, ∀ r, lookupOf? (ir.predicate pid).body = some r →
@@ -451,7 +567,7 @@ theorem completionFacts_of_B {L : List (ℕ × String)} (hO : OneNodes I L) (hwf
     fun pid hlt r hr hk =>
       digitLookupCB_spec (hq3 pid hlt).2.1 hr hk
   have hvs : ∀ v < ir.values.length, ir.srcNoPadCopyB v = true ∧ ir.srcNoMessageB v = true ∧
-      ir.srcLatePadB v = true ∧ ir.boundRecsB v = true ∧
+      ir.srcLatePadB v = true ∧ ir.boundRecsV (toTrie G) S.boundRecTab v (ir.value v) = true ∧
       ir.tagFullCB G v = true ∧ ir.lateGenCB L v = true ∧
       ir.cellB L v = true ∧ ir.realTypeB L v = true ∧ ir.genLateTypeCB L G v = true :=
     fun v hlt => by
@@ -487,15 +603,13 @@ theorem completionFacts_of_B {L : List (ℕ × String)} (hO : OneNodes I L) (hwf
             unfold srcLatePadB at hB
             simpa [hs, hl] using hB
           ivlSource := fun q hlt => (hq3 q hlt).1
-          boundRecs := fun v hlt hb => by
-            have hB := (hvs v hlt).2.2.2.1
-            unfold boundRecsB at hB
-            simpa [hb] using hB
+          typeRoles := typeRoles_of_typeRoleV htr
+          boundRecs := fun v hlt hb => ir.boundRecsV_sound (hvs v hlt).2.2.2.1 hb
           digitLookups := fun pid hlt d rec N r hb hk hn =>
             digitLookupCB_noComm (hq3 pid hlt).2.1 hb hk hn
           groups := fun t ht g hg hlm => by
             have hB := of_allGroupsB hgrp ht hg
-            unfold groupCB at hB
+            rw [groupCB_eq] at hB
             rcases hs : (ir.groupOf t g).staticMult with _ | h'
             · simp only [hlm, hs] at hB
               exact .inl ⟨rfl, List.isEmpty_iff.1 hB⟩
@@ -535,7 +649,7 @@ theorem completionFacts_of_B {L : List (ℕ × String)} (hO : OneNodes I L) (hwf
           padCells := fun l i hi =>
             (ir.mem_cellKeys_pad).2 ⟨l.1.2, by simpa using (hlg l).2.2.1, (hlg l).2.2.2, hi⟩ }
       boundNoCopy := boundNoCopy_of_B hbnc
-      covered := genReadsCoveredC_of_B hwf hcov
+      covered := genReadsCoveredC_of_B hwf (messagesCovered_of_B hmsg) hcov
       lateTypes := fun l hs hts => by
         have hB := (hvs l.1 l.1.2).2.2.2.2.2.2.2.2
         have hL : ir.IsLate l.1 := l.2
@@ -570,16 +684,16 @@ end Sound
 
 section Ready
 
-variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String}
+variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String} {S : Structure}
 
 variable (ir I primeNodes) in
 /-- **The ready data of the honest strategy from a completeness certificate** (generators `G`,
 derivations `D`): the nodes `nodes` known to contain `1`
 (`OneNodes`), the program well formed, the interpretation's registry, integer readings and MAC
 model, every table valid (`TableOk`, from the realization's validity), the cross-field `equal`s'
-covered MAC realizations (`MacsRealizable`), the source part well formed, and the check
-`completionB`. -/
-structure CompletionReady (G : Gens) (D : CDerivations) where
+covered MAC realizations (`MacsRealizable`), the source part well formed, the check `completionB`
+and the honest roles' check (`honestRolesB`). -/
+structure CompletionReady (S : Structure) (G : Gens) (D : CDerivations) where
   /-- The nodes known to contain `1`. -/
   nodes : List (ℕ × String)
   /-- They contain `1`. -/
@@ -599,32 +713,153 @@ structure CompletionReady (G : Gens) (D : CDerivations) where
   /-- The source part is well formed. -/
   sourceValid : ir.SourceValid
   /-- The check. -/
-  ok : ir.completionB primeNodes nodes G D = true
+  ok : ir.completionB primeNodes nodes S G D = true
+  /-- The honest roles' check. -/
+  rolesOk : ir.honestRolesB nodes S = true
 
-variable {G : Gens} {D : CDerivations}
+variable {S : Structure} {G : Gens} {D : CDerivations}
 
 /-- **The model facts of ready data** (`DerivModel`). -/
-theorem CompletionReady.model (R : ir.CompletionReady I primeNodes G D) :
+theorem CompletionReady.model (R : ir.CompletionReady I primeNodes S G D) :
     ir.DerivModel I primeNodes :=
   ⟨R.wf, R.registered, R.lawful, R.tables, R.macModel⟩
 
+/-- **The honest roles of ready data** (`honestRoles_of_B`). -/
+theorem CompletionReady.roles (R : ir.CompletionReady I primeNodes S G D) :
+    ir.HonestRoles R.nodes S :=
+  honestRoles_of_B R.rolesOk
+
 /-- **The facts of a completeness certificate passing the check** (`completionFacts_of_B`). -/
-theorem CompletionReady.facts (R : ir.CompletionReady I primeNodes G D) :
-    ir.CompletionFacts I primeNodes G D :=
+theorem CompletionReady.facts (R : ir.CompletionReady I primeNodes S G D) :
+    ir.CompletionFacts I primeNodes S G D :=
   completionFacts_of_B R.oneNodes R.wf R.sourceValid R.ok
 
 variable {Inp : Type} {relH : Set (ir.Valuation I × Inp)}
 
 /-- **The honest strategy of a program whose completeness certificate passes the check, from an
 execution of its source program** (`HonestStrategy.ofCompletion` at `CompletionReady.facts`). -/
-def HonestStrategy.ofCompletionReady (R : ir.CompletionReady I primeNodes G D)
+def HonestStrategy.ofCompletionReady (R : ir.CompletionReady I primeNodes S G D)
     (E : ir.SourceExecution I relH) : ir.HonestStrategy I relH :=
   HonestStrategy.ofCompletion R.model R.macsRealizable R.facts E
 
 /-- **The completeness errors of the honest strategy from ready data are the execution's.** -/
-theorem HonestStrategy.ofCompletionReady_δ (R : ir.CompletionReady I primeNodes G D)
+theorem HonestStrategy.ofCompletionReady_δ (R : ir.CompletionReady I primeNodes S G D)
     (E : ir.SourceExecution I relH) : (HonestStrategy.ofCompletionReady R E).δ = E.δ := rfl
 
 end Ready
+
+/-! ## The check in ranges
+
+`completionB` splits into checks of ranges `[i, j)` of the values (`completionValuesIn`: the value
+passes in one walk, each value with its generator) and of the predicates (`completionPredsIn`: the
+predicates' checks and their completeness derivations, each predicate with its derivation), which
+join with no re-check (`…In_append`) and give the check from `[0, n)`, `n` at least the list's
+length, with the groups' checks, the message records and the derivations' count
+(`completionRestB`, `completionB_of_parts`). -/
+
+section Ranges
+
+variable (ir : RealizedProgram)
+
+/-- **`completionB`'s checks at value `v`** (`x`) with generator `g`, the generators read through
+`GT`, the bound values' records through `T`, the messages through `MT` and the reads through
+`RT`. -/
+def valueAllCV (L : List (ℕ × String)) (GT : NatTrie Gen) (T MT : NatTrie ℕ)
+    (RT : NatTrie (List Read)) (v : ℕ) (x : Value) (g : Gen) : Bool :=
+  ir.valueCV L GT T v x g && ir.boundNoCopyV v x && ir.coveredCV GT MT v x g &&
+    ir.typedNoLateL v x (RT.getD v []) && ir.typeRoleV v x
+
+/-- **`completionB`'s checks of the values `[i, j)`**, each with its generator. -/
+def completionValuesIn (L : List (ℕ × String)) (S : Structure) (G : Gens) (i j : ℕ) : Bool :=
+  allIdx2In (ir.valueAllCV L (toTrie G) S.boundRecTab S.messageTab ir.readsT) .none ir.values G i j
+
+/-- **`completionB`'s checks at predicate `pid`** (`pr`) with completeness derivation `s`. -/
+def predAllCB (primeNodes : ℕ → List String) (S : Structure) (G : Gens) (D : CDerivations)
+    (pid : ℕ) (pr : Predicate) (s : List CStep) : Bool :=
+  ir.predCB primeNodes S G pid && ir.blindsB pid &&
+    ir.cderivStepsB primeNodes S G D.ranks (rankOf D.ranks pid) pid pr s
+
+/-- **`completionB`'s checks of the predicates `[i, j)`**, each with its completeness
+derivation. -/
+def completionPredsIn (primeNodes : ℕ → List String) (S : Structure) (G : Gens)
+    (D : CDerivations) (i j : ℕ) : Bool :=
+  allIdx2In (ir.predAllCB primeNodes S G D) [] ir.predicates D.derivs i j
+
+/-- **`completionB`'s checks of the groups and the message records**, and one completeness
+derivation per predicate. -/
+def completionRestB (primeNodes : ℕ → List String) (S : Structure) (G : Gens)
+    (D : CDerivations) : Bool :=
+  ir.allGroupsB (ir.groupCB primeNodes S G D) && ir.allGroupsB ir.staticGroupNoLateB &&
+    ir.messageRecsB S && Nat.beq D.derivs.length ir.predicates.length
+
+variable {ir}
+
+theorem completionValuesIn_append {L : List (ℕ × String)} {S : Structure} {G : Gens}
+    {i j k : ℕ} (h₁ : ir.completionValuesIn L S G i j = true)
+    (h₂ : ir.completionValuesIn L S G j k = true) : ir.completionValuesIn L S G i k = true :=
+  allIdx2In_append h₁ h₂
+
+theorem completionPredsIn_append {primeNodes : ℕ → List String} {S : Structure} {G : Gens}
+    {D : CDerivations} {i j k : ℕ} (h₁ : ir.completionPredsIn primeNodes S G D i j = true)
+    (h₂ : ir.completionPredsIn primeNodes S G D j k = true) :
+    ir.completionPredsIn primeNodes S G D i k = true :=
+  allIdx2In_append h₁ h₂
+
+theorem allCDerivsB_of_forall {primeNodes : ℕ → List String} {S : Structure} {G : Gens} {P : ℕ} :
+    ∀ {pid : ℕ} {ps : List Predicate} {ds : List (List CStep)}, ds.length = ps.length →
+      (∀ k < ps.length, ir.cderivStepsB primeNodes S G P (rankOf P (pid + k)) (pid + k)
+        (ps.getD k default) (ds.getD k []) = true) →
+      ir.allCDerivsB primeNodes S G P pid ps ds = true
+  | _, [], [], _, _ => rfl
+  | _, [], _ :: _, hl, _ => by simp at hl
+  | _, _ :: _, [], hl, _ => by simp at hl
+  | pid, pr :: ps, s :: ds, hl, h => by
+    simp only [allCDerivsB, CReader.allCDerivsB, Bool.and_eq_true]
+    have h0 := h 0 (by simp)
+    simp only [Nat.add_zero, List.getD_cons_zero] at h0
+    refine ⟨h0, allCDerivsB_of_forall (by simpa using hl) fun k hk => ?_⟩
+    have := h (k + 1) (by simpa using hk)
+    rw [show pid + (k + 1) = pid + 1 + k by omega] at this
+    simpa using this
+
+/-- **`completionB` from its checks of the values and the predicates**, each on `[0, n)` for `n`
+at least the list's length, and of the groups and the message records. -/
+theorem completionB_of_parts {primeNodes : ℕ → List String} {L : List (ℕ × String)}
+    {S : Structure} {G : Gens} {D : CDerivations} {nv np : ℕ}
+    (h : ir.completionRestB primeNodes S G D = true)
+    (hv : ir.completionValuesIn L S G 0 nv = true) (hnv : ir.values.length ≤ nv)
+    (hp : ir.completionPredsIn primeNodes S G D 0 np = true) (hnp : ir.predicates.length ≤ np) :
+    ir.completionB primeNodes L S G D = true := by
+  simp only [completionRestB, Bool.and_eq_true, Nat.beq_eq] at h
+  obtain ⟨⟨⟨hg, hsg⟩, hm⟩, hd⟩ := h
+  have hv' := allIdx2_sound _ _ _ _ _ (allIdx2_of_allIdx2In hv hnv)
+  have hp' := allIdx2_sound _ _ _ _ _ (allIdx2_of_allIdx2In hp hnp)
+  have hvk : ∀ k < ir.values.length, _ := fun k hk => by
+    have := hv' k hk
+    simp only [Nat.zero_add, valueAllCV, Bool.and_eq_true] at this
+    exact this
+  have hpk : ∀ k < ir.predicates.length, _ := fun k hk => by
+    have := hp' k hk
+    simp only [Nat.zero_add, predAllCB, Bool.and_eq_true] at this
+    exact this
+  have hrange : ∀ (P : ℕ → Bool), (∀ k < ir.predicates.length, P k = true) →
+      ir.allPredsB P = true := fun P hP => by
+    rw [allPredsB, List.all_eq_true]
+    exact fun k hk => hP k (List.mem_range.1 hk)
+  rw [completionB_eq]
+  rw [(allIdx2_iff _ _ _ _ _).2 fun k hk => by simpa using (hvk k hk).1.1.1.1,
+    hrange _ fun k hk => (hpk k hk).1.1, hg, (allIdx_iff _ _ _).2 fun k hk => by
+      simpa using (hvk k hk).1.1.1.2,
+    (allIdx2_iff _ _ _ _ _).2 fun k hk => by simpa using (hvk k hk).1.1.2,
+    (allIdx2_iff _ _ _ _ _).2 fun k hk => by
+      rw [getD_readsL]
+      simpa using (hvk k hk).1.2,
+    hrange _ fun k hk => (hpk k hk).1.2, hsg,
+    show ir.cderivsB primeNodes S G D = true from
+      allCDerivsB_of_forall (by omega) fun k hk => by simpa using (hpk k hk).2,
+    (allIdx_iff _ _ _).2 fun k hk => by simpa using (hvk k hk).2, hm]
+  rfl
+
+end Ranges
 
 end GordieHowe.RealizedProgram

@@ -326,25 +326,27 @@ variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [Decida
 /-- **The trace-preserving form's step when the adversary's Kraus map does not halt**: the
 adversary's map within the budget with the counter advanced, plus the map over the budget moved to
 the ended value, at a slot; the adversary's map with the counter, after the slots. -/
-theorem toTPKindAlg_step_apply (B : AdaptiveIAlg X Y Req Resp O) (k : StepIdx B.slots B.post)
+theorem toTPKindAlg_step_apply {shB : AlgShape X Y Req Resp} (B : AdaptiveIAlg shB O) (k : StepIdx B.slots B.post)
     (h : (B.step k).haltOp = 0) (ρ : Matrix B.CReg B.CReg ℂ) :
     B.toTPKindAlg.step k ρ = if (k : ℕ) < B.slots then
         ((B.cntKraus k).restrict B.inBudget).permConj (Equiv.refl _) B.tpShift ρ +
           ((B.cntKraus k).restrict fun d => !B.inBudget d).permConj (Equiv.refl _) B.endSwap ρ
       else B.cntKraus k ρ := by
-  change ∑ x, B.tpOp k x * ρ * (B.tpOp k x)ᴴ = _
+  rw [AdaptiveIAlg.toTPKindAlg_step_eq]
+  change ∑ x, B.tpOp false k x * ρ * (B.tpOp false k x)ᴴ = _
   rw [Fintype.sum_sum_type, Fintype.sum_sum_type]
-  have h3 : ∀ c : Fin (B.budget + 2), B.tpOp k (.inr (.inr c)) = 0 := fun c => by
-    simp only [tpOp, h, zero_kronecker]
+  have h3 : ∀ c : Fin (B.budget + 2), B.tpOp false k (.inr (.inr c)) = 0 := fun c => by
+    simp only [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, h, zero_kronecker]
     rfl
   simp only [h3, Matrix.zero_mul, Finset.sum_const_zero, add_zero]
   split_ifs with hk
-  · simp only [tpOp, hk, ite_true]
+  · simp only [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, hk, ite_true]
     rfl
-  · simp only [tpOp, hk, ite_false, Matrix.zero_mul, Finset.sum_const_zero, add_zero]
+  · simp only [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, hk, ite_false,
+      Matrix.zero_mul, Finset.sum_const_zero, add_zero]
     rfl
 
-variable {A : AdaptiveIAlg X Y Req Resp O} (T : A.QFTest)
+variable {shA : AlgShape X Y Req Resp} {A : AdaptiveIAlg shA O} (T : A.QFTest)
 
 /-- The steps of `A^Π` before the junction are trace preserving when `A`'s are. -/
 theorem withTest_step_tp (hA : A.TracePreserving) {k : StepIdx A.slots A.post}
@@ -427,7 +429,8 @@ theorem lifts_tpMeasReq [Nonempty X] [AddGroup Y] (j : Fin A.slots) :
   refine KrausMap.Lifts.comp (KrausMap.lifts_ofPerm _ (perm_symm_lift _ fun x => ?_))
     (KrausMap.lifts_measureFn _ fun x => ?_)
   · obtain ⟨⟨⟨⟨⟨⟨w, c⟩, n⟩, rq, rs⟩, pr⟩, u⟩, qr⟩ := x
-    simp only [KindAlg.copyReq, Function.Involutive.coe_toPerm]
+    simp only [KindAlg.copyReq_apply]
+    show (liftEquiv (cwCopy T C)) (if _ then _ else _) = _
     split_ifs with h1 h2 h2 <;> first | rfl | exact absurd h1 h2 | exact absurd h2 h1
   · obtain ⟨⟨⟨⟨⟨⟨w, c⟩, n⟩, rq, rs⟩, pr⟩, u⟩, qr⟩ := x
     rfl
@@ -743,7 +746,7 @@ namespace AdaptiveIAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  {A : AdaptiveIAlg X Y Req Resp O} (T : A.QFTest) (C : Challenger X Y Req Resp)
+  {shA : AlgShape X Y Req Resp} {A : AdaptiveIAlg shA O} (T : A.QFTest) (C : Challenger X Y Req Resp)
 
 /-- **The junction is trace preserving** when `A`'s last map is. -/
 theorem junction_tp (hA : A.TracePreserving) :
@@ -776,18 +779,18 @@ theorem withTest_step_last_tp (hA : A.TracePreserving) :
 
 /-- **After the slots, the trace-preserving form's map on the composed registers is the model's**,
 when the adversary's map does not halt. -/
-theorem tpAdvKraus_apply_of_not_lt (B : AdaptiveIAlg X Y Req Resp O) {k : StepIdx B.slots B.post}
+theorem tpAdvKraus_apply_of_not_lt {shB : AlgShape X Y Req Resp} (B : AdaptiveIAlg shB O) {k : StepIdx B.slots B.post}
     (hk : ¬ (k : ℕ) < B.slots) (h : (B.step k).haltOp = 0)
     (M : Matrix (QueryReg (B.toKindAlg.CW C) 1 X Y) (QueryReg (B.toKindAlg.CW C) 1 X Y) ℂ) :
     B.toTPKindAlg.advKraus C k M = B.toKindAlg.advKraus C k M :=
   KrausMap.tensorId_reindex_congr (fun ρ => by
     refine (toTPKindAlg_step_apply B k h ρ).trans ?_
-    rw [if_neg hk]
+    rw [if_neg hk, AdaptiveIAlg.toKindAlg_step]
     change B.cntKraus k ρ = (if (k : ℕ) < B.slots then ((B.cntKraus k).restrict
       B.inBudget).permConj (Equiv.refl _) B.cntShift else B.cntKraus k) ρ
     rw [if_neg hk]) _ M
 
-theorem lastStep_not_lt (B : AdaptiveIAlg X Y Req Resp O) :
+theorem lastStep_not_lt {shB : AlgShape X Y Req Resp} (B : AdaptiveIAlg shB O) :
     ¬ ((lastStep : StepIdx B.slots B.post) : ℕ) < B.slots := by
   rw [Fin.val_mk]
   omega
@@ -866,7 +869,7 @@ variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [Decida
 open ReprogrammedCircuit (liftEquiv Lifted ancLift)
 
 /-- The query depth of a composition is the number of queries before its last map. -/
-theorem depth_composeBothOut (B : KindAlg X Y Req Resp O) {O' : Type} (f : B.CW C → O') :
+theorem depth_composeBothOut {ksB : KindShape X Y Req Resp} (B : KindAlg ksB O) {O' : Type} (f : B.CW C → O') :
     (B.composeBothOut C f).depth = (preCirc C B).queries := by
   show (ReprogrammedCircuit.toCircuit (B.fullCircBoth C)).queries = _
   rw [ReprogrammedCircuit.queries_toCircuit, fullCircBoth_eq, ReprogrammedCircuit.queries_append]
@@ -874,7 +877,7 @@ theorem depth_composeBothOut (B : KindAlg X Y Req Resp O) {O' : Type} (f : B.CW 
 
 /-- **The Kraus maps of a composition**: the query intervals of the circuit before its last map,
 the last followed by the last map. -/
-theorem composeBothOut_step_apply (B : KindAlg X Y Req Resp O) {O' : Type} (f : B.CW C → O')
+theorem composeBothOut_step_apply {ksB : KindShape X Y Req Resp} (B : KindAlg ksB O) {O' : Type} (f : B.CW C → O')
     (k : Fin ((B.composeBothOut C f).depth + 1))
     (ρ : Matrix (ReprogrammedQueryReg (B.CW C) X Y) (ReprogrammedQueryReg (B.CW C) X Y) ℂ) :
     (B.composeBothOut C f).step k ρ =
@@ -897,7 +900,7 @@ theorem composeBothOut_step_apply (B : KindAlg X Y Req Resp O) {O' : Type} (f : 
   rw [← h]
   exact congrArg (fun c => (Circuit.seg c k).K ρ) he
 
-variable {A : AdaptiveIAlg X Y Req Resp O} (T : A.QFTest)
+variable {shA : AlgShape X Y Req Resp} {A : AdaptiveIAlg shA O} (T : A.QFTest)
 
 theorem depth_composeTP_withTest (hA : A.TracePreserving) {O' O'' : Type}
     (f : (A.withTest T.toQTest).toTPKindAlg.CW C → O') (g : A.toTPKindAlg.CW C → O'') :
@@ -1149,20 +1152,20 @@ namespace AdaptiveIAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] [Nonempty X] [AddGroup Y]
-  [Nonempty Y] (C : Challenger X Y Req Resp) {A : AdaptiveIAlg X Y Req Resp O} (T : A.QFTest)
+  [Nonempty Y] (C : Challenger X Y Req Resp) {shA : AlgShape X Y Req Resp} {A : AdaptiveIAlg shA O} (T : A.QFTest)
 
 open ReprogrammedCircuit (liftEquiv ancLift)
 
 /-- The rest of the composed work register with the reprogramming ancilla, beside the adversary's
 registers: the query counter, the challenger's registers and the ancilla. -/
-abbrev WorkRest (A : AdaptiveIAlg X Y Req Resp O) (C : Challenger X Y Req Resp) : Type :=
+abbrev WorkRest {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O) (C : Challenger X Y Req Resp) : Type :=
   (Fin (A.budget + 2) × ChallengerRegs X Y Req A.slots C.q C.Coins) × (X × Y × Bool)
 
-instance (A : AdaptiveIAlg X Y Req Resp O) (C : Challenger X Y Req Resp) :
+instance {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O) (C : Challenger X Y Req Resp) :
     DecidableEq (WorkRest A C) :=
   @instDecidableEqProd _ _ inferInstance inferInstance
 
-instance (A : AdaptiveIAlg X Y Req Resp O) (C : Challenger X Y Req Resp) :
+instance {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O) (C : Challenger X Y Req Resp) :
     DecidableEq (A.toKindAlg.CW C × (X × Y × Bool)) :=
   @instDecidableEqProd _ _ inferInstance inferInstance
 
@@ -1176,7 +1179,7 @@ def workSplitR : A.toKindAlg.CW C × (X × Y × Bool) ≃ DReg A.W A.width X Y R
 
 /-- The rest of the composed registers with the reprogramming ancilla, beside the adversary's
 registers. -/
-abbrev TestRest (A : AdaptiveIAlg X Y Req Resp O) (C : Challenger X Y Req Resp) : Type :=
+abbrev TestRest {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O) (C : Challenger X Y Req Resp) : Type :=
   (Fin (A.budget + 2) × CRest X Y Req A.slots C.q C.Coins) × (X × Y × Bool)
 
 /-- The composed registers with the reprogramming ancilla as the adversary's registers and the
@@ -2517,7 +2520,7 @@ end ReprogrammedCircuit
 /-- **The composition of a core algorithm with trace-preserving steps is trace preserving.** -/
 theorem KindAlg.StepsTP.tracePreserving_composeBothOut {X Y Req Resp O : Type} [Fintype X]
     [DecidableEq X] [Fintype Y] [DecidableEq Y] [Fintype Req] [DecidableEq Req] [Fintype Resp]
-    [DecidableEq Resp] [Nonempty X] [AddGroup Y] [Nonempty Y] {B : KindAlg X Y Req Resp O}
+    [DecidableEq Resp] [Nonempty X] [AddGroup Y] [Nonempty Y] {ksB : KindShape X Y Req Resp} {B : KindAlg ksB O}
     (hB : B.StepsTP) (C : Challenger X Y Req Resp) {O' : Type} (f : B.CW C → O') :
     (B.composeBothOut C f).TracePreserving := fun k =>
   KrausMap.tp_sigmaEmbed _ k ((hB.allTP_fullCircBoth C).toCircuit.seg k)

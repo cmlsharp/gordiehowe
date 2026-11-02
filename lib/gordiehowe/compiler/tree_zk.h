@@ -59,6 +59,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -1686,9 +1687,14 @@ void gkr_rows(const TreePlan<F, Hash> &plan, const Dense<F> &pub,
   std::vector<Llc> a;
   std::vector<typename F::Elt> b;
   size_t ci = 0;
-  const auto in = ZkCommon<F>::layer_constraints(c, proof, aux, a, b, ts,
-                                                 l.pad_L, f, ch, ci);
-  rows.add_sparse(a, b, 0);
+  GkrTrace trace(F::kCharacteristicTwo ? "bin" : "odd");
+  std::optional<typename ZkCommon<F>::InputClaim> in_claim;
+  trace.step("rows.layers", 0, 0, -1, c.nl, [&] {
+    in_claim.emplace(ZkCommon<F>::layer_constraints(c, proof, aux, a, b, ts,
+                                                    l.pad_L, f, ch, ci));
+    rows.add_sparse(a, b, 0);
+  });
+  const auto &in = *in_claim;
   // The input row. Its eq tables are the prover's scratch's when set
   // (prover_scratch.h).
   typename TreeRows<F>::Row row;
@@ -1697,7 +1703,10 @@ void gkr_rows(const TreePlan<F, Hash> &plan, const Dense<F> &pub,
   std::vector<typename F::Elt> own[2];
   std::vector<typename F::Elt> *eq =
       rows.scratch != nullptr ? rows.scratch->input_eq : own;
-  for (size_t h = 0; h < 2; ++h) fill_eq(f, in.logv, c.ninputs, in.g[h], eq[h]);
+  trace.step("rows.eq", 0, 0, -1, c.ninputs, [&] {
+    for (size_t h = 0; h < 2; ++h)
+      fill_eq(f, in.logv, c.ninputs, in.g[h], eq[h]);
+  });
   const typename F::Elt *eq0 = eq[0].data(), *eq1 = eq[1].data();
   typename F::Elt pub_binding = f.zero();
   for (size_t i = 0; i < c.ninputs; ++i) {

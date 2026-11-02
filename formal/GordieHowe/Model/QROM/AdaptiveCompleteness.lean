@@ -399,7 +399,7 @@ runs**: before query `k`, the part of the real run against `H` outside the recor
 the per-branch count (`tpQueryCount`) is fixed by every oracle permutation
 (`GordieHowe.QROM.compiled_realPad`). -/
 theorem tpRealPad (e : GordieHowe.QROM.BitStr I J ≃ B)
-    (A : AdaptiveIAlg (GordieHowe.QROM.Bits m) (GordieHowe.QROM.BitStr I J) Req Resp O)
+    {shA : AlgShape (GordieHowe.QROM.Bits m) (GordieHowe.QROM.BitStr I J) Req Resp} (A : AdaptiveIAlg shA O)
     (Ch : Challenger (GordieHowe.QROM.Bits m) (GordieHowe.QROM.BitStr I J) Req Resp) {O' O'' : Type}
     (f : A.toKindAlg.CW Ch → O') (g : Option O' → O'') (H H' : GordieHowe.QROM.Bits m → GordieHowe.QROM.BitStr I J)
     {k : ℕ} (hk : k < (A.toTPKindAlg.composeBothOut Ch f).depth) :

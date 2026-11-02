@@ -78,20 +78,20 @@ omit [∀ j i, Nonempty ((P j).Challenge i)] in
 /-- **The honest writes on a fresh slice are those of the oracle off the slice**: the writes read
 only `leaf` and `node` queries, which carry no salt. -/
 theorem honestWrite_replaceSlice (g F : Query k kN kS L → Out k e) :
-    Base.honestWrite (M := M.toBase) E ν (replaceSlice M.querySalt σ g F) =
-      Base.honestWrite E ν g :=
-  Base.honestWrite_congr_oracle E ν fun a ha => by
+    SPBCS.honestWrite (M := M) E ν (replaceSlice M.querySalt σ g F) =
+      SPBCS.honestWrite E ν g :=
+  SPBCS.honestWrite_congr_oracle E ν fun a ha => by
     simp [replaceSlice, M.querySalt_of_not_isChainQuery ha]
 
 /-- **The honest answers on a fresh slice**: against `g` with the slice of `σ` answered by `F`,
 the honest prover's answers are those of the prover with the fixed writes of `g` against `F`. -/
 theorem answersW_replaceSlice (g F : Query k kN kS L → Out k e) :
-    answersW prv x σ (Base.honestWrite (M := M.toBase) E ν)
+    answersW prv x σ (SPBCS.honestWrite (M := M) E ν)
         (replaceSlice M.querySalt σ g F) =
-      answersW prv x σ (fun _ => Base.honestWrite E ν g) F := by
+      answersW prv x σ (fun _ => SPBCS.honestWrite E ν g) F := by
   unfold answersW
   rw [ansList_congr_fun _ _
-    (q' := strategy M prv x σ fun _ => Base.honestWrite E ν g)
+    (q' := strategy M prv x σ fun _ => SPBCS.honestWrite E ν g)
     (fun i l => by simp only [strategy, honestWrite_replaceSlice]) _]
   exact ansList_congr_oracle _ _ (Dom := fun a => M.querySalt a = some σ)
     (fun i _ l => querySalt_strategy prv x σ _ i l _) (fun _ _ => rfl)
@@ -112,10 +112,10 @@ theorem prob_not_accepts_prove_replaceSlice_le (g : Query k kN kS L → Out k e)
         (prove prv x σ E ν (replaceSlice M.querySalt σ g F) Q) Q] ≤
       ε + M.overrun + SPBCS.keyCollision (t.size n) k := by
   refine le_trans (QROM.probUniform_mono fun F hv => ?_)
-    ((prob_sample_none_or_chOfW_mem_le prv x σ (fun _ => Base.honestWrite E ν g)
+    ((prob_sample_none_or_chOfW_mem_le prv x σ (fun _ => SPBCS.honestWrite E ν g)
       (fun _ _ _ => rfl) fun ch => V x (prv.run x ch) ≠ true).trans (by gcongr))
   have hans : answers prv x σ E ν (replaceSlice M.querySalt σ g F) =
-      answersW prv x σ (fun _ => Base.honestWrite E ν g) F :=
+      answersW prv x σ (fun _ => SPBCS.honestWrite E ν g) F :=
     answersW_replaceSlice prv x σ E ν g F
   by_contra hc
   push Not at hc

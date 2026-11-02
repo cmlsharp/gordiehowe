@@ -12,7 +12,12 @@
 //   ivl e lo hi   every coordinate's integer reading lies in [lo, hi];
 //   intEq a b     the integer readings agree;
 //   dvd x q       q divides every coordinate's integer reading of x;
-//   inRows t e    every coordinate of e is a row of table t.
+//   inRows t e    every coordinate of e is a row of table t;
+//   kernel o b lo hi
+//                 block b of the kernel of operator o (a convolution by a
+//                 spectrum: NTT-form negacyclicConv or polyBroadcast) is
+//                 the transform of a polynomial whose coefficients'
+//                 centred readings lie in [lo, hi] (src tableKernel).
 // Expressions compare by their Lean text (Expr.beq). A linear form expands
 // sums, differences, scalings by a constant below p and constant leaves
 // of one repeated entry; every other subterm is an atom. A constant is
@@ -86,12 +91,10 @@ class DerivChecker {
  public:
   DerivChecker(const ir::Program &P, ir::Certificates &C)
       : P_(P), C_(C), pr_(P) {
-    for (size_t v = 0; v < P.values.size(); ++v) {
-      const auto &x = P.values[v];
-      const bool leaf = x.kind == ir::Value::kInput ||
-                        (x.kind == ir::Value::kOpaque && x.args.empty());
-      if (leaf && !x.bound.empty()) declared_.push_back(Id(v));
-    }
+    // Lean declaredRanges: the statement values with a bound.
+    for (size_t v = 0; v < P.values.size(); ++v)
+      if (ir::is_stmt_value(P, v) && !P.values[v].bound.empty())
+        declared_.push_back(Id(v));
   }
 
   // The first failure of shared fact K's steps (in predicate PID's
@@ -103,6 +106,62 @@ class DerivChecker {
       return e.what();
     } catch (const std::logic_error &e) {
       return std::string("an id out of range: ") + e.what();
+    }
+    return "";
+  }
+
+  // The first failure of the GKR circuits' derivations
+  // (Certificates::circuit_derivs), or "": the circuits and their entries
+  // listed in increasing order and in range, every step one the Lean
+  // circStepFact concludes from (circuitAssert of an instance of the
+  // circuit, an input premise, or a reader-generic rule, Lean
+  // pureStepFact), every premise an earlier step. The facts are the Lean
+  // checker's (circDerivsB): the C++ holds no template instance's fact.
+  std::string check_circuit_derivs() const {
+    using D = ir::DStep;
+    auto pure = [](const D &s) {
+      switch (s.rule) {
+        case D::kSubst: case D::kLinear: case D::kRangeNat: case D::kIvlNat:
+        case D::kIvlExpr: case D::kIvlSolve: case D::kIvlApply: case D::kIvlLogic:
+        case D::kIvlMeet: case D::kIvlDisjoint: case D::kFieldDvd: case D::kNatIvl:
+        case D::kTransport: case D::kNatComp: case D::kNatLin: case D::kLiftConst:
+        case D::kLift: case D::kDigits: case D::kLinop:
+          return true;
+        case D::kSrc:
+          return s.src == D::kConst || s.src == D::kDeclared || s.src == D::kNat;
+        default:
+          return false;
+      }
+    };
+    size_t prev_c = 0;
+    for (size_t k = 0; k < C_.circuit_derivs.size(); ++k) {
+      const auto &cd = C_.circuit_derivs[k];
+      const std::string at_c = "circuit " + std::to_string(cd.circuit) + ": ";
+      if (cd.circuit >= P_.circuits.size()) return at_c + "no such circuit";
+      if (k > 0 && cd.circuit <= prev_c) return at_c + "circuits out of order";
+      prev_c = cd.circuit;
+      const size_t n = P_.circuits[cd.circuit].entries.size();
+      for (size_t j = 0; j < cd.entries.size(); ++j) {
+        const auto &[e, steps] = cd.entries[j];
+        const std::string at_e = at_c + "entry " + std::to_string(e) + ": ";
+        if (e >= n) return at_e + "no such entry";
+        if (j > 0 && e <= cd.entries[j - 1].first) return at_e + "entries out of order";
+        if (steps.empty()) return at_e + "an empty derivation";
+        for (size_t i = 0; i < steps.size(); ++i) {
+          const D &s = steps[i];
+          const std::string where = at_e + "step " + std::to_string(i) + ": ";
+          for (size_t q : s.premises)
+            if (q >= i) return where + "a premise not before the step";
+          if (s.rule == D::kCircuitAssert) {
+            if (s.in_dom != kNone) return where + "circuitAssert in another domain";
+            if (s.id >= n) return where + "circuitAssert: no such instance";
+          } else if (s.rule == D::kInputPremise) {
+            if (s.in_dom != kNone) return where + "inputPremise in another domain";
+          } else if (!pure(s)) {
+            return where + "a rule no circuit derivation reads";
+          }
+        }
+      }
     }
     return "";
   }
@@ -128,7 +187,7 @@ class DerivChecker {
     bool cert = false;
     Id id = kNone;
   };
-  enum FK { kEq, kNat, kIvl, kIntEq, kDvd, kInRows, kHolds };
+  enum FK { kEq, kNat, kIvl, kIntEq, kDvd, kInRows, kHolds, kKernel };
   struct Fact {
     FK k = kHolds;
     H a, b;
@@ -587,6 +646,7 @@ class DerivChecker {
           (s.rule == ir::DStep::kConclude || s.rule == ir::DStep::kCongr ||
            s.rule == ir::DStep::kRealized || s.rule == ir::DStep::kMac ||
            s.rule == ir::DStep::kFact || s.rule == ir::DStep::kGroupedMod ||
+           s.rule == ir::DStep::kProductMod ||
            (s.rule == ir::DStep::kSrc && s.src != ir::DStep::kConst &&
             s.src != ir::DStep::kDeclared && s.src != ir::DStep::kNat &&
             s.src != ir::DStep::kPrime && s.src != ir::DStep::kOpaqueBit &&
@@ -820,6 +880,55 @@ class DerivChecker {
               f.lo = I(0);
               f.hi = I(1);
               break;
+            case ir::DStep::kTableHull: {
+              // The value's coordinates are entries of the columns that the
+              // selections or lookups TAILS read, whose public entries lie
+              // in [lo, hi] (the Lean recomputes the hull from the tables;
+              // this check reads the predicates' kinds and the bounds'
+              // fit): a plain value reads its natural, so 0 <= lo and
+              // hi < p; a bound value reads centred, so |lo|, |hi| < p/2.
+              table_tails(s, where, true);
+              f.lo = derivation_check_internal::parse_int(s.ints.at(0));
+              f.hi = derivation_check_internal::parse_int(s.ints.at(1));
+              if (v.kind == ir::Value::kConstant) fail(where + "src tableHull: a constant");
+              if (f.lo > f.hi) fail(where + "src tableHull: an inverted interval");
+              if (v.kind == ir::Value::kBound) {
+                if (!(I(2) * (f.lo.negative() ? -f.lo : f.lo) < p_) ||
+                    !(I(2) * (f.hi.negative() ? -f.hi : f.hi) < p_))
+                  fail(where + "src tableHull: a bound value's hull leaves (-p/2, p/2)");
+              } else if (f.lo.negative() || f.hi >= p_) {
+                fail(where + "src tableHull: the hull leaves [0, p)");
+              }
+              break;
+            }
+            case ir::DStep::kTableKernel: {
+              // Block b of the kernel of operator SRC_ARG, a convolution by
+              // the spectrum the value holds, is a leaf's transform of a row
+              // that the selections TAILS select, whose public coefficients
+              // lie in [lo, hi] (the Lean recomputes it; this check reads
+              // the operator, the predicates' kinds and the bounds' fit:
+              // the centred reading of a coefficient in (-p/2, p/2) is the
+              // coefficient).
+              table_tails(s, where, false);
+              if (s.src_arg >= P_.ops.size()) fail(where + "src tableKernel: no such operator");
+              const ir::NamedOp &op = P_.ops[s.src_arg];
+              if ((op.kind != ir::NamedOp::kNegacyclicConv &&
+                   op.kind != ir::NamedOp::kPolyBroadcast) ||
+                  !op.ntt_form || op.value != s.id)
+                fail(where + "src tableKernel: not a convolution by the value's spectrum");
+              const I b = derivation_check_internal::parse_int(s.ints.at(2));
+              if (b >= I(uint64_t(kernel_blocks(op)))) fail(where + "src tableKernel: no such block");
+              f.k = kKernel;
+              f.t = s.src_arg;
+              f.n = b;
+              f.lo = derivation_check_internal::parse_int(s.ints.at(0));
+              f.hi = derivation_check_internal::parse_int(s.ints.at(1));
+              if (f.lo > f.hi) fail(where + "src tableKernel: an inverted interval");
+              if (!(I(2) * (f.lo.negative() ? -f.lo : f.lo) < p_) ||
+                  !(I(2) * (f.hi.negative() ? -f.hi : f.hi) < p_))
+                fail(where + "src tableKernel: the hull leaves (-p/2, p/2)");
+              break;
+            }
           }
           break;
         }
@@ -1294,6 +1403,12 @@ class DerivChecker {
           f.k = kHolds;
           break;
         }
+        case ir::DStep::kProductMod: {
+          product_mod(s, at, me);
+          concluded = at + 1 == steps.size();
+          f.k = kHolds;
+          break;
+        }
         case ir::DStep::kConclude: {
           const Fact &q = premise(s, 0, at);
           bool ok = false;
@@ -1320,6 +1435,8 @@ class DerivChecker {
           break;
         }
         default:
+          // circuitAssert and inputPremise among them: a program derivation
+          // concludes nothing from them (Lean stepFact).
           fail(where + "a rule the check does not implement");
       }
       facts_.push_back(f);
@@ -1334,6 +1451,279 @@ class DerivChecker {
       return;
     }
     if (!concluded) fail("the derivation does not end in its predicate");
+  }
+
+  // The selections (field equals: a selection's digest equation) or
+  // lookups (ins, when LOOKUPS) TAILS of a table source step.
+  void table_tails(const ir::DStep &s, const std::string &where, bool lookups) const {
+    if (s.tails.empty()) fail(where + "src table: no selection");
+    for (Id q : s.tails) {
+      const auto b = pred(q).body;
+      if (b != ir::Predicate::kEqual && !(lookups && b == ir::Predicate::kMem))
+        fail(where + "src table: '" + pred(q).name + "' is no selection");
+    }
+    if (s.ints.size() < 2) fail(where + "src table: no bounds");
+  }
+  // The blocks of a convolution's kernel: 1 for negacyclicConv, K for
+  // polyBroadcast; its block length n.
+  size_t kernel_blocks(const ir::NamedOp &op) const {
+    return op.kind == ir::NamedOp::kPolyBroadcast ? op.nats.at(0) : 1;
+  }
+  size_t kernel_n(const ir::NamedOp &op) const {
+    return P_.values.at(op.value).size() / kernel_blocks(op);
+  }
+  // A coefficient of h x in Z[X]/(X^N + 1), h's coefficients in [hl, hh] and
+  // x's in [xl, xh] (int_interval::negacyclic): with products in
+  // [Pmin, Pmax], [min(N Pmin, Pmin - (N - 1) Pmax),
+  // max(N Pmax, Pmax - (N - 1) Pmin)].
+  static Ivl negacyclic(size_t n, const Ivl &h, const Ivl &x) {
+    const I q[4] = {h.lo * x.lo, h.lo * x.hi, h.hi * x.lo, h.hi * x.hi};
+    I lo = q[0], hi = q[0];
+    for (const I &v : q) {
+      lo = std::min(lo, v);
+      hi = std::max(hi, v);
+    }
+    const I N{uint64_t(n)}, N1{uint64_t(n == 0 ? 0 : n - 1)};
+    return {std::min(N * lo, lo - N1 * hi), std::max(N * hi, hi - N1 * lo)};
+  }
+
+  // The rule productMod (compiler/mod.h's product form), concluding holds
+  // of ME = mod_m P N for the congruence D = P - N = 0 (mod m) (ModForm
+  // kProduct or kSpectralProduct; quotient Q, quotientLo qlo): P is the sum
+  // of the congruence's terms of sign +1 and N of those of sign -1, rows
+  // concatenated, each term a sum of parts (an expression, or a
+  // convolution s . K(x) by block b of a kernel, K an NTT-form
+  // negacyclicConv or polyBroadcast, read through the block's reindex for
+  // polyBroadcast, x a reindex of an operand X or X itself). ME's target
+  // checks in F_p, coordinate by coordinate,
+  //   D - m qlo - m Q = 0                                     (kProduct),
+  // or (kSpectralProduct) the same equation with each row normalized and
+  // transformed: Ntt(E_i - m qlo - m Q_i) = the kernel parts' spectra,
+  // signed, E_i the row's expression parts, which is the first by the
+  // transform's invertibility and the convolution theorem (a kernel's
+  // coefficient form is INTT of its spectrum, read centred).
+  //
+  // m = p: no premises; the field equation is p | P - N.
+  //
+  // Otherwise, 2 <= m < p, and the premises are
+  //   0: nat (leaf Q) N_Q
+  //   then for P, then for N, the part's interval:
+  //     a part without kernel parts: one premise, ivl of the part;
+  //     a part with kernel parts: per row (each of the parts' n
+  //     coordinates; n the kernels' block length) and per part in order
+  //     (the row's add tree), a kernel part as two premises, kernel o b
+  //     hl hh (o its operator, b its block) and ivl X xl xh (or of x), an
+  //     expression part E (whose own add tree matches the row's next
+  //     summands) as one, ivl E el eh; the part's interval is the hull over
+  //     the rows of the sum over the row's parts of their intervals, a
+  //     kernel part's s (centred) times negacyclic(n, [hl, hh], [xl, xh]).
+  // With [Plo, Phi] and [Nlo, Nhi] those intervals, C = m qlo,
+  // d0 = Plo - Nlo - C, a0 = max(d0, 0), b0 = max(-d0, 0), the side
+  // conditions are P, N and Q of one length and
+  //   (Phi - Plo) + a0 < p                 (the certificate leftSpan)
+  //   (Nhi - Nlo) + b0 + m (N_Q - 1) < p   (rightSpan at the range's N_Q)
+  // Soundness: P - Plo + a0 lies in [0, p), N - Nlo + m Q + b0 too, and
+  // they agree mod p (their difference is D - C - m Q, as a0 - b0 = d0);
+  // so they are equal, D = m (qlo + Q) over the integers, and m | D.
+  void product_mod(const ir::DStep &s, size_t at, const ir::Predicate &me) {
+    const std::string where = "step " + std::to_string(at) + ": productMod: ";
+    if (me.body != ir::Predicate::kMod ||
+        (me.mod.form != ir::ModForm::kProduct && me.mod.form != ir::ModForm::kSpectralProduct))
+      fail(where + "not a product-form mod_q");
+    const I m = derivation_check_internal::parse_int(me.q);
+    if (m == p_) {
+      if (!s.premises.empty()) fail(where + "the field form takes no premises");
+      return;
+    }
+    if (m < I(2) || m >= p_) fail(where + "m is not in [2, p)");
+    if (s.premises.empty() || me.mod.quotient == kNone) fail(where + "no quotient premise");
+    const Fact &q = premise(s, 0, at);
+    if (q.k != kNat || text(q.a) != pr_.expr(me.mod.quotient) || q.n < I(1))
+      fail(where + "premise 0 is not nat of the quotient");
+    const size_t len_p = len({false, me.lhs});
+    if (len_p != len({false, me.rhs}) || len_p != len({false, me.mod.quotient}))
+      fail(where + "P, N and Q differ in length");
+    size_t next = 1;
+    bool kernels = false;
+    const Ivl P = part_ivl(s, at, me.lhs, next, where + "P: ", kernels);
+    const Ivl N = part_ivl(s, at, me.rhs, next, where + "N: ", kernels);
+    // The spectral form's target states a transformed equation: it has a
+    // kernel part, the expression form none.
+    if (kernels != (me.mod.form == ir::ModForm::kSpectralProduct))
+      fail(where + "the form does not match the parts' kernels");
+    if (next != s.premises.size()) fail(where + "premises past the parts");
+    const I C = m * derivation_check_internal::parse_int(me.mod.quotient_lo);
+    const I d0 = P.lo - N.lo - C;
+    const I a0 = d0.negative() ? I(0) : d0, b0 = d0.negative() ? -d0 : I(0);
+    if (P.hi - P.lo + a0 >= p_)
+      fail(where + "the positive span " + (P.hi - P.lo + a0).str() + " reaches p");
+    const I right = N.hi - N.lo + b0 + m * (q.n - I(1));
+    if (right >= p_) fail(where + "the negative span " + right.str() + " reaches p");
+  }
+  // The leaves of the add tree at X, in order.
+  std::vector<Id> summands(Id x) const {
+    std::vector<Id> out, st{x};
+    while (!st.empty()) {
+      const Id y = st.back();
+      st.pop_back();
+      const ir::Expr &e = P_.nodes.at(y);
+      if (e.op == ir::Expr::kAdd) {
+        st.push_back(e.b);
+        st.push_back(e.a);
+      } else {
+        out.push_back(y);
+      }
+    }
+    return out;
+  }
+  // The kernel application at summand T (s . [reindex block] apply K X), or
+  // none: its operator, block, scale and operand.
+  struct KernelPart {
+    Id op = kNone, operand = kNone;
+    size_t block = 0, n = 0;
+    I c{1};
+  };
+  std::optional<KernelPart> kernel_part(Id t, const std::string &where) {
+    KernelPart k;
+    Id x = t;
+    if (P_.nodes.at(x).op == ir::Expr::kScale) {
+      const ir::Coef &cf = P_.coefs.at(P_.nodes[x].x);
+      if (!cf.is_const) return std::nullopt;
+      k.c = centred(derivation_check_internal::parse_int(cf.c));
+      x = P_.nodes[x].a;
+    }
+    Id sel = kNone;
+    if (P_.nodes.at(x).op == ir::Expr::kReindex) {
+      sel = x;
+      x = P_.nodes[x].a;
+    }
+    const ir::Expr &ap = P_.nodes.at(x);
+    if (ap.op != ir::Expr::kApply) return std::nullopt;
+    const ir::NamedOp &op = P_.ops.at(ap.x);
+    if ((op.kind != ir::NamedOp::kNegacyclicConv && op.kind != ir::NamedOp::kPolyBroadcast) ||
+        !op.ntt_form)
+      return std::nullopt;
+    k.op = Id(ap.x);
+    k.n = kernel_n(op);
+    k.operand = ap.a;
+    const size_t K = kernel_blocks(op);
+    if (P_.nodes.at(ap.a).n != k.n) fail(where + "a kernel's operand is not one block");
+    if (sel != kNone) {
+      const auto &mp = P_.index_maps.at(P_.nodes[sel].x);
+      bool block = mp.size() == k.n && !mp.empty() && mp[0] % k.n == 0;
+      for (size_t j = 0; block && j < k.n; ++j) block = mp[j] == mp[0] + j;
+      if (!block) fail(where + "a kernel's reindex is no block");
+      k.block = mp[0] / k.n;
+    } else if (K != 1) {
+      fail(where + "a kernel read at no one block");
+    }
+    if (k.block >= K) fail(where + "a kernel block past the operator's");
+    return k;
+  }
+  // The interval of part E (productMod's P or N) from premises NEXT on.
+  Ivl part_ivl(const ir::DStep &s, size_t at, Id e, size_t &next,
+               const std::string &where, bool &kernels) {
+    // The part's summands, rows split at the kernels' block length.
+    std::optional<size_t> n;
+    for (Id t : summands(e))
+      if (auto k = kernel_part(t, where)) n = k->n;
+    // A part concatenating rows: the first kernel found in any row.
+    if (!n) {
+      std::vector<Id> cs{e};
+      while (!cs.empty() && !n) {
+        const Id x = cs.back();
+        cs.pop_back();
+        const ir::Expr &c = P_.nodes.at(x);
+        if (c.op == ir::Expr::kConcat) {
+          cs.push_back(c.b);
+          cs.push_back(c.a);
+          continue;
+        }
+        for (Id t : summands(x))
+          if (auto k = kernel_part(t, where)) n = k->n;
+      }
+    }
+    // Rows: concatenations split down to rows of n coordinates.
+    std::vector<Id> rows;
+    if (n) {
+      std::vector<Id> rs{e};
+      while (!rs.empty()) {
+        const Id x = rs.back();
+        rs.pop_back();
+        const ir::Expr &c = P_.nodes.at(x);
+        if (c.n > *n && c.op == ir::Expr::kConcat) {
+          rs.push_back(c.b);
+          rs.push_back(c.a);
+        } else {
+          rows.push_back(x);
+        }
+      }
+      bool any = false;
+      for (Id r : rows)
+        for (Id t : summands(r))
+          if (kernel_part(t, where)) any = true;
+      if (!any) n.reset();
+    }
+    if (!n) {
+      const Fact &f = premise(s, next++, at);
+      if (f.k != kIvl || text(f.a) != pr_.expr(e)) fail(where + "no ivl of the part");
+      return {f.lo, f.hi};
+    }
+    kernels = true;
+    Ivl out;
+    bool first = true;
+    for (Id r : rows) {
+      if (P_.nodes.at(r).n != *n) fail(where + "a row of another length");
+      const std::vector<Id> ts = summands(r);
+      Ivl sum{I(0), I(0)};
+      for (size_t i = 0; i < ts.size();) {
+        if (auto k = kernel_part(ts[i], where)) {
+          const Fact &kf = premise(s, next, at);
+          if (kf.k != kKernel || kf.t != k->op || kf.n != I(uint64_t(k->block)))
+            fail(where + "premise " + std::to_string(next) + " is not the part's kernel");
+          const Fact &xv = premise(s, next + 1, at);
+          const Id inner = P_.nodes.at(k->operand).op == ir::Expr::kReindex
+                               ? P_.nodes[k->operand].a
+                               : k->operand;
+          if (xv.k != kIvl ||
+              (text(xv.a) != pr_.expr(k->operand) && text(xv.a) != pr_.expr(inner)))
+            fail(where + "premise " + std::to_string(next + 1) +
+                 " is not ivl of the kernel's operand");
+          next += 2;
+          const Ivl tv = negacyclic(k->n, {kf.lo, kf.hi}, {xv.lo, xv.hi});
+          I l = k->c * tv.lo, h = k->c * tv.hi;
+          if (l > h) std::swap(l, h);
+          sum = {sum.lo + l, sum.hi + h};
+          ++i;
+          continue;
+        }
+        // An expression part: its own summands are the row's next ones.
+        const Fact &f = premise(s, next++, at);
+        if (f.k != kIvl) fail(where + "an expression part's premise is no ivl");
+        Id node = f.a.id;
+        if (f.a.cert)
+          node = C_.exprs.at(f.a.id).kind == ir::DExpr::kProgram ? C_.exprs[f.a.id].id : kNone;
+        std::vector<std::string> want;
+        if (node == kNone) {
+          want.push_back(text(f.a));
+        } else {
+          for (Id y : summands(node)) want.push_back(pr_.expr(y));
+        }
+        if (i < ts.size() && text(f.a) == pr_.expr(ts[i])) {
+          ++i;
+        } else {
+          for (const auto &w : want) {
+            if (i >= ts.size() || pr_.expr(ts[i]) != w)
+              fail(where + "an expression part's premise is not the row's next summands");
+            ++i;
+          }
+        }
+        sum = {sum.lo + f.lo, sum.hi + f.hi};
+      }
+      out = first ? sum : Ivl{std::min(out.lo, sum.lo), std::max(out.hi, sum.hi)};
+      first = false;
+    }
+    return out;
   }
 
   // Lean quadView at value V of predicate Q, with m's ivl fact MF: c, when

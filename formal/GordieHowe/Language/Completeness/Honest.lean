@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Language.Completeness.Deriv
 public import GordieHowe.Language.Completeness.Late
+public import GordieHoweNative.Language.Completeness.Honest
 
 @[expose] public section
 
@@ -31,6 +32,9 @@ one-digit `mod_q`s, the committed-digits `mod_q`s, the MACs with a grouped, a on
 ungrouped digit tail and the MAC checks over the fields of characteristic `2` (`macs`), the Boolean checks of the pad copies, the spectrally realized convolutions with their
 transformed values generated as theirs and the predicates realized through them, and the field
 equations of the field-form `mod_q`s (from the execution's field equations, `fieldEqs`).
+
+The definitions are in `GordieHoweNative/Language/Completeness/Honest.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -40,7 +44,7 @@ open scoped NNReal
 
 section
 
-variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String}
+variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String} {S : Structure}
 
 variable (ir) in
 /-- **The facts of group `g` of table `t` with the late histogram `v`** at the certificate's
@@ -70,20 +74,6 @@ structure LateGroupFactsC (G : Gens) (t g v : ℕ) : Prop where
       (u < ir.values.length ∧ ir.IsLate u) ∧ ∀ t' g', G.at u ≠ .lateHist t' g'
 
 variable (ir primeNodes) in
-/-- **A late member `m` of a mixed group at the late histogram `v` of table `t` reads a digit of the
-tail of the MAC of site `st`** (`HonestFacts.mixedLate` at a site, with the generators read off
-`G`), as a check: the site's MAC and interval facts check, and the needle is the lower or the top
-digit of an ungrouped digit tail (`lateMemberAtB`, the top digit's bound `macTopMax` below the late
-histogram's size) or the quotient of a one-digit tail (`lateMemberOneAtB`, its bound `macQuotMax`
-below that size). -/
-def mixedMemberCB (G : Gens) (t v : ℕ) (st : MacSite) (m : Member) : Bool :=
-  ir.macBaseCB primeNodes G st && ir.macIvlB primeNodes st &&
-    ((ir.digitsMacCB G st && ir.lateMemberAtB st t v m &&
-        decide (ir.macTopMax st < (ir.value v).size)) ||
-      (ir.oneDigitMacCB G st && ir.lateMemberOneAtB st t m &&
-        decide (ir.macQuotMax st < (ir.value v).size)))
-
-variable (ir primeNodes) in
 /-- **The facts of group `g` of table `t` with the late histogram `v` and the static histogram `s`**
 at the certificate's generators `G`: `v` generated as
 the group's late histogram, no source value, a late value of the program at most the table's size
@@ -92,7 +82,7 @@ reading no late value; the static members reading no late value, every needle's 
 values that are no late histogram; the table's size at most the characteristic of the challenge's
 field, a field of the program; every late member reading a digit of a MAC's tail
 (`mixedMemberCB`). -/
-structure MixedGroupFactsC (G : Gens) (t g v s : ℕ) : Prop where
+structure MixedGroupFactsC (S : Structure) (G : Gens) (t g v s : ℕ) : Prop where
   /-- Generated as the group's late histogram. -/
   own : G.at v = .lateHist t g
   /-- No source value. -/
@@ -124,7 +114,7 @@ structure MixedGroupFactsC (G : Gens) (t g v s : ℕ) : Prop where
   sizeChar : ir.tableSize t ≤ ir.charOf (ir.chalField (ir.alphaOf t))
   /-- Every late member reads a digit of a MAC's tail. -/
   members : ∀ m ∈ ir.members t g, ir.memberReadsLate m = true →
-    ∃ st, ir.mixedMemberCB primeNodes G t v st m = true
+    ∃ st, ir.mixedMemberCB primeNodes S G t v st m = true
 
 variable (ir I primeNodes) in
 /-- **The facts of a program and its completeness certificate** (generators `G`, derivations `D`)
@@ -134,7 +124,7 @@ groups' reads and late histograms; every cross-field `equal` a MAC with a groupe
 ungrouped digit tail, or a MAC check over a field of characteristic `2`, at a MAC site; the MACs'
 blinds; the two-sided and digit lookups; and every predicate's completeness
 derivation checking. -/
-structure CompletionFacts (G : Gens) (D : CDerivations) : Prop where
+structure CompletionFacts (S : Structure) (G : Gens) (D : CDerivations) : Prop where
   /-- The honest committed values' facts. -/
   committed : ir.CommittedFacts I G
   /-- The late generators' facts. -/
@@ -162,13 +152,13 @@ structure CompletionFacts (G : Gens) (D : CDerivations) : Prop where
   /-- A group with a late and a static histogram has its facts. -/
   mixedGroups : ∀ t < ir.tables.length, ∀ g < ir.groupCountOf t, ∀ v s,
     (ir.groupOf t g).lateMult = some v → (ir.groupOf t g).staticMult = some s →
-      ir.MixedGroupFactsC primeNodes G t g v s
+      ir.MixedGroupFactsC primeNodes S G t g v s
   /-- Every cross-field `equal` is the predicate of a MAC site whose MAC, tail and interval
   facts check, or whose MAC check over a field of characteristic `2` checks. -/
   macs : ∀ pid < ir.predicates.length, ∀ dx x dy y k real,
     (ir.predicate pid).body = .cross dx x dy y k real → ∃ st : MacSite, st.pid = pid ∧
-      ((ir.macBaseCB primeNodes G st = true ∧ ir.macTailCB primeNodes G st = true ∧
-        ir.macIvlB primeNodes st = true) ∨ ir.twoMacCB primeNodes G st = true)
+      ((ir.macBaseCB primeNodes S G st = true ∧ ir.macTailCB G st = true ∧
+        ir.macIvlB primeNodes S st = true) ∨ ir.twoMacCB primeNodes G st = true)
   /-- Every MAC's blind is the pad copy `polynomialBits` of its tag's pad. -/
   blinds : ir.BlindsArePadCopies
   /-- Every two-sided and digit lookup has one record and a range. -/
@@ -182,7 +172,7 @@ structure CompletionFacts (G : Gens) (D : CDerivations) : Prop where
       (r.kind = .twoSided ∨ r.kind = .digits) →
         ir.DigitLookupFactsC G pid d rec N r ∨ ∃ m j, ir.commLookupCB G pid m j = true
   /-- Every predicate's completeness derivation checks. -/
-  derivs : ir.cderivsB primeNodes G D = true
+  derivs : ir.cderivsB primeNodes S G D = true
 
 /-- **A source value reads no generated late value** (`SourceValid.reads`). -/
 theorem noGenRead_of_source (hsv : ir.SourceValid) {w : ℕ} (hw : w < ir.values.length)
@@ -210,7 +200,7 @@ abbrev SourceExecutionCore.committedC (E : ir.SourceExecutionCore I relH) (G : G
 section Env
 
 variable (hM : ir.DerivModel I primeNodes) (hreal : ir.MacsRealizable primeNodes)
-  {G : Gens} {D : CDerivations} (R : ir.CompletionFacts I primeNodes G D)
+  {S : Structure} {G : Gens} {D : CDerivations} (R : ir.CompletionFacts I primeNodes S G D)
   (E : ir.SourceExecutionCore I relH) (y : Inp) (c : ∀ k, (ir.layout I).Ch k)
   (π : (ir.layout I).Pads)
 
@@ -249,7 +239,7 @@ value; the MACs' predicates by `MacFormC.role_holds` from their source facts
 (`MacBaseC.source_honestC`), and the tails of the MAC checks over the fields of characteristic `2`
 by `TwoMacC.tail_honest` (`TwoMacC.source_honestC`). -/
 theorem cEnvFacts_honestEnvC {x : ir.Valuation I} (hy : (x, y) ∈ relH) (hc : ∀ k, ¬ E.bad k x y c) :
-    ir.CEnvFacts I primeNodes G (ir.reader HE) := by
+    ir.CEnvFacts I primeNodes S G (ir.reader HE) := by
   have hA := E.accepting x y hy c hc
   have hbd := E.bounded x y hy
   have hFE := E.fieldEqs x y hy c hc
@@ -260,7 +250,7 @@ theorem cEnvFacts_honestEnvC {x : ir.Valuation I} (hy : (x, y) ∈ relH) (hc : �
     noGenPred_of_B hwf (hwf.bodyRefsOk (predicate_mem hpid)) h
   refine ⟨hM, fun v es hk i => reader_of_constant _ hk i, fun v hv x hk => ?_,
     fun q hq hs => ?_, fun m rid hrid h hn => ?_, fun p pid hpid h hn => ?_,
-    fun st pid hpid h hd hi hr => ?_, fun pid hpid h hn => ?_, fun m j pid hpid h hm hn => ?_,
+    fun st _ pid hpid h hd hi hr => ?_, fun pid hpid h hn => ?_, fun m j pid hpid h hm hn => ?_,
     fun m lks pid hpid h hn => ?_, fun k cv hk h hn => ?_, fun m pid hpid h hn => ?_,
     fun pid hpid h hn => ?_, fun st h => ?_⟩
   · exact boundReads_of_boundRecs hwf hM.lawful R.committed.boundRecs R.committed.digitLookups
@@ -289,7 +279,7 @@ theorem cEnvFacts_honestEnvC {x : ir.Valuation I} (hy : (x, y) ∈ relH) (hc : �
       (E.committedC G) E.srcLate y c π hwf hM.registered hM.lawful R.committed hA hbd rfl rfl hsrc hw
     exact MacFormC.ofB_role_holds hwf hreal h hd R.gen E.stmtOf (E.committedC G) E.srcLate y c π
       hM.registered hM.lawful hM.mac R.blinds ((macBaseFactsC_of_B h).macPow hM.mac)
-      (macBaseFactsC_of_B h).tag1 hS (predicate_mem hpid) (roleC_of_macRoleCB hwf hreal h hd hr)
+      (macBaseFactsC_of_B h).tag1 hS (predicate_mem hpid) (roleC_of_macRoleAtB hwf hreal h hd hr)
   · exact holds_honestEnvC_of_src R E y c π (hng pid hpid hn)
       (holds_padCopyBool_srcEnv _ _ _ c π h)
   · exact holds_honestEnvC_of_src R E y c π (hng pid hpid hn)
@@ -343,7 +333,7 @@ honest environment (`reader_honestEnvC_histEnvOf`); the lower digit lies below t
 one-digit quotient at most `macQuotMax` (`OneDigitMacC.quot_honest`), the MAC's source facts from
 the execution (`MacBaseC.source_honestC`). -/
 theorem mixedLate_honestC {x : ir.Valuation I} (hy : (x, y) ∈ relH) (hc : ∀ k, ¬ E.bad k x y c)
-    {t g v s : ℕ} (hF : ir.MixedGroupFactsC primeNodes G t g v s)
+    {t g v s : ℕ} (hF : ir.MixedGroupFactsC primeNodes S G t g v s)
     (hs : (ir.groupOf t g).staticMult = some s) :
     ∀ z ∈ ir.histNeedles (ir.reader (ir.histEnvOf G (ir.srcEnvL I (E.stmtOf y) (E.committedC G y)
       (E.srcLate.late y c) c π))) (ir.chalField (ir.alphaOf t)) t g,
@@ -507,7 +497,7 @@ values lie in their types (`typesHold_honestEnvC`), every group's histograms cou
 MACs' tags are honest (`macTagsHonest_honestEnvC`), and the committed cells lie in their bases
 (`honestCellsC_base`). -/
 def HonestCore.ofCompletion (hM : ir.DerivModel I primeNodes) (hreal : ir.MacsRealizable primeNodes)
-    {G : Gens} {D : CDerivations} (R : ir.CompletionFacts I primeNodes G D)
+    {S : Structure} {G : Gens} {D : CDerivations} (R : ir.CompletionFacts I primeNodes S G D)
     (E : ir.SourceExecutionCore I relH) : ir.HonestCore I relH where
   val := E.committedC G
   late := ir.genLateOf I R.gen E.stmtOf (E.committedC G) E.srcLate
@@ -543,8 +533,8 @@ def HonestCore.ofCompletion (hM : ir.DerivModel I primeNodes) (hreal : ir.MacsRe
 /-- **The completeness error of the honest prover from a certificate over the prover's coins** is
 the execution's (`HonestCore.ofCompletion_coinComplete`): the events are the execution's. -/
 theorem HonestCore.ofCompletion_coinComplete (hM : ir.DerivModel I primeNodes)
-    (hreal : ir.MacsRealizable primeNodes) {G : Gens} {D : CDerivations}
-    (R : ir.CompletionFacts I primeNodes G D) (E : ir.SourceExecutionCore I relH) {J Ω : Type}
+    (hreal : ir.MacsRealizable primeNodes) {S : Structure} {G : Gens} {D : CDerivations}
+    (R : ir.CompletionFacts I primeNodes S G D) (E : ir.SourceExecutionCore I relH) {J Ω : Type}
     [Fintype Ω] [Nonempty Ω] {relJ : Set (ir.Valuation I × J)} {inp : J → Ω → Inp}
     {errc : ir.Valuation I → ℝ≥0} (h : E.CoinComplete relJ inp errc) :
     (HonestCore.ofCompletion hM hreal R E).CoinComplete relJ inp errc := h
@@ -554,8 +544,8 @@ theorem HonestCore.ofCompletion_coinComplete (hM : ir.DerivModel I primeNodes)
 certificate**: the honest prover from the certificate (`HonestCore.ofCompletion`) with the
 execution's per-phase errors (`ofCompletion_δ`). -/
 def HonestStrategy.ofCompletion (hM : ir.DerivModel I primeNodes)
-    (hreal : ir.MacsRealizable primeNodes) {G : Gens} {D : CDerivations}
-    (R : ir.CompletionFacts I primeNodes G D) (E : ir.SourceExecution I relH) :
+    (hreal : ir.MacsRealizable primeNodes) {S : Structure} {G : Gens} {D : CDerivations}
+    (R : ir.CompletionFacts I primeNodes S G D) (E : ir.SourceExecution I relH) :
     ir.HonestStrategy I relH where
   toHonestCore := HonestCore.ofCompletion hM hreal R E.toSourceExecutionCore
   δ := E.δ
@@ -563,8 +553,8 @@ def HonestStrategy.ofCompletion (hM : ir.DerivModel I primeNodes)
 
 /-- **The completeness errors of the honest strategy from a certificate are the execution's.** -/
 theorem HonestStrategy.ofCompletion_δ (hM : ir.DerivModel I primeNodes)
-    (hreal : ir.MacsRealizable primeNodes) {G : Gens} {D : CDerivations}
-    (R : ir.CompletionFacts I primeNodes G D) (E : ir.SourceExecution I relH) :
+    (hreal : ir.MacsRealizable primeNodes) {S : Structure} {G : Gens} {D : CDerivations}
+    (R : ir.CompletionFacts I primeNodes S G D) (E : ir.SourceExecution I relH) :
     (HonestStrategy.ofCompletion hM hreal R E).δ = E.δ := rfl
 
 end

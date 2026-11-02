@@ -67,21 +67,30 @@ def isFieldForm (ir : RealizedProgram) (p : ℕ) : Bool :=
   | .mod _ _ _ _ real => real.form == .field
   | _ => false
 
+/-- **Whether a predicate body is a `mod_q` in the field form**: `isFieldForm` at a predicate read
+from a walk of the predicates (`isFieldForm_eq`). -/
+def PredBody.isFieldForm : PredBody → Bool
+  | .mod _ _ _ _ real => real.form == .field
+  | _ => false
+
+theorem isFieldForm_eq (ir : RealizedProgram) (p : ℕ) :
+    ir.isFieldForm p = (ir.predicate p).body.isFieldForm := rfl
+
 end
 
 /-- **A program without field-form `mod_q`s constrains no interpretation's integer readings**
-(`Interp.FieldFormModel` holds vacuously). -/
+(`Interp.FieldFormModel` holds vacuously), checked in one walk of the predicates. -/
 theorem Interp.fieldFormModel_of_none {I : Interp} {ir : RealizedProgram}
-    (h : ∀ p < ir.predicates.length, ir.isFieldForm p = false) : I.FieldFormModel ir := by
+    (h : ir.predicates.all (fun p => !p.body.isFieldForm) = true) : I.FieldFormModel ir := by
   intro p hp d q e e' real hb hf
-  have := h p hp
-  simp [RealizedProgram.isFieldForm, hb, hf] at this
+  have := List.all_eq_true.1 h _ (predicate_mem hp)
+  simp [PredBody.isFieldForm, hb, hf] at this
 
 /-- **Whether every field-form `mod_q` of the program is in a domain of field `f`** (decided): the
 program's part of `Interp.FieldFormModel` (`Interp.fieldFormModel_of_field`). -/
 def fieldFormsIn (ir : RealizedProgram) (f : ℕ) : Bool :=
-  (List.range ir.predicates.length).all fun p =>
-    match (ir.predicate p).body with
+  ir.predicates.all fun p =>
+    match p.body with
     | .mod d _ _ _ real => !(real.form == .field) || ir.domainField d == f
     | _ => true
 
@@ -91,7 +100,7 @@ linearly. -/
 theorem Interp.fieldFormModel_of_field {I : Interp} {ir : RealizedProgram} {f : ℕ}
     (h : ir.fieldFormsIn f = true) (hRL : (I f).ReadLinear) : I.FieldFormModel ir := by
   intro p hp d q e e' real hb hf
-  have h1 := List.all_eq_true.1 h p (List.mem_range.2 hp)
+  have h1 := List.all_eq_true.1 h _ (predicate_mem hp)
   simp only [hb, hf, beq_self_eq_true, Bool.not_true, Bool.false_or, beq_iff_eq] at h1
   rw [h1]
   exact hRL
@@ -399,6 +408,7 @@ theorem holdsWith_mod_of_field (hwf : ir.WellFormed) (hI : I.Registered ir)
   have hd : d < ir.domains.length := he.1
   have h2 : 2 < ir.charOf (ir.domainField d) := hok.char ▸ hok.two
   obtain ⟨-, hcharF, -, -⟩ := modData hwf hI hL hd h2
+  refine (holdsWith_mod_iff (.inl (by rw [hok.form]; rfl))).2 ?_
   intro i hi
   have hpe := evalIntWith_proj hwf hI hL hF hK hLok hd h2 hRL e hok.lhs he.2.shape he.2.refs i hi
   have hpe' := evalIntWith_proj hwf hI hL hF hK hLok hd h2 hRL e' hok.rhs he'.2.shape he'.2.refs i

@@ -9,8 +9,8 @@ public import GordieHowe.ProofSystem.Ligero.RelativeLayout
 public import GordieHowe.ProofSystem.Ligero.MaskRow.Layout
 public import GordieHowe.ProofSystem.Ligero.SubfieldTest
 public import GordieHowe.Foundations.Algebra.RelativePacking
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative20Relative
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative20Tower
+public import GordieHowe.Applications.Falcon512.Fields.FalconNative20Relative
+public import GordieHowe.Applications.Falcon512.Fields.FalconNative20Tower
 
 @[expose] public section
 
@@ -26,8 +26,8 @@ compiler chooses for domain A of `Falcon512.Native.QROMParams` and of `Falcon512
 The code is `k = (block_enc + 1) / (2 + rate)` (`lib/ligero/ligero_param.h:275`) and
 `N = block_enc − (2k − 1)` (`lib/ligero/ligero_param.h:303`, `:313`). The line certificate is the
 weighted Johnson certificate `lib/gordiehowe/compiler/ligero_choice.h` (`best_line_exhaustive`)
-returns at threshold `A`, checked by `decide`. Each per-round error is proved below `c / 2^260` for
-an explicit natural `c`; the docstrings give `-log₂` of the bound. The tree layout's numbers
+returns at threshold `A`, checked by `decide`. The round errors are the certificate's fractions
+(`GordieHowe.RealizedProgram.FieldRoundsLe.of_ok`). The tree layout's numbers
 (`fq20K271Numbers`) evaluate at the casts of the naturals below `q`.
 -/
 
@@ -81,29 +81,5 @@ theorem fq20K271MaskTest {F : Type} [Field F] (C : GordieHowe.RSCode F fq20K271N
     (hk : C.k = fq20K271K) :
     Ligero.MaskTest.Pieces.Parameters C fq20K271Agree fq20K271Exceptions :=
   ⟨by rw [hk]; decide, fq20K271Line C hk⟩
-
-/-- The round bounds of the tableau (`Ligero.MaskTest.Pieces.bounds`). -/
-noncomputable abbrev fq20K271Bounds : Ligero.AgreementThreshold.Bounds :=
-  Ligero.MaskTest.Pieces.bounds FalconNativeField20 fq20K271N fq20K271Agree fq20K271Exceptions 1
-    fq20K271K fq20K271T
-
-/-- The commit round of the tableau: `23020764629/(|F| − 1)`, `2^-237.28`. -/
-theorem fq20K271Commit_le : fq20K271Bounds.commit ≤ (6911746 : ℝ≥0) / 2 ^ 260 := by
-  show (((23020764629 : ℕ) : ℝ≥0) / (Fintype.card FalconNativeField20 - 1)) ^ 1 ≤ _
-  rw [pow_one, falconNativeField20_card]
-  exact ratio_pred_le_dyadic (by decide +kernel)
-
-/-- The test round of the tableau with the mask test: `1/|F|`, `2^-271.70`. -/
-theorem fq20K271Test_le : fq20K271Bounds.test ≤ (1 : ℝ≥0) / 2 ^ 260 := by
-  show (1 : ℝ≥0) / (Fintype.card FalconNativeField20 : ℝ≥0) ≤ _
-  rw [falconNativeField20_card]
-  exact_mod_cast ratio_le_dyadic (num := 1) (c := 1) (by decide +kernel) (by decide +kernel)
-
-/-- The column round of the tableau with the mask test at `t = 127`, with the joint subfield term:
-`((944 − 1)_127 + (2 · 271 − 1)_127)/(3258)_127 + (271 − 1)_127/(3258)_127`, `2^-236.40`. -/
-theorem fq20K271Column_le : fq20K271Bounds.column +
-    Ligero.SubfieldTest.jointSubfieldError fq20K271K fq20K271N fq20K271T ≤
-      (12734825 : ℝ≥0) / 2 ^ 260 :=
-  column_le_dyadic (by decide +kernel) (by decide +kernel)
 
 end GordieHowe.Tableau

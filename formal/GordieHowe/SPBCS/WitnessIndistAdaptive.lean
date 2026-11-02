@@ -202,13 +202,13 @@ most `ℓ`** (CY24 Definition 33.1.1, pp. 426-427, at unbounded queries, p. 430)
 at advantage `ε`, of the prover program `Pv`: against every adversary making `Q` proof queries, each
 a statement and two witnesses of `rel` of total encoding length at most `ℓ` chosen as a function of
 the whole oracle and the earlier proofs, every distinguisher of the oracle and the proofs has
-advantage at most `ε` (`Base.wiAdvantageWith` at the proof laws of `Pv`). -/
+advantage at most `ε` (`SPBCS.wiAdvantageWith` at the proof laws of `Pv`). -/
 def WitnessIndistinguishableOfLength {B : ℕ} {C : Type}
     (Pv : NARG.Prover (Query k kN kS L) (Out k e) X W (M.BProof B) C) (eX : SPBCS.BitEncoding X)
     (eW : SPBCS.BitEncoding W) (rel : Set (X × W)) (Q ℓ : ℕ) (ε : ℝ) : Prop :=
   ∀ A : M.WIAdversaryOfLength eX eW rel ℓ Q,
     ∀ D : (Query k kN kS L → Out k e) → (Fin Q → M.NIProof) → Prop,
-      Base.wiAdvantageWith (M.proverProofLaw Pv) A.toWIAdversary D ≤ ε
+      SPBCS.wiAdvantageWith (M.proverProofLaw Pv) A.toWIAdversary D ≤ ε
 
 /-- **The proof law of the prover `niProver` is the law of the compiled proof** over uniform coins
 (`proofLaw`). -/
@@ -220,7 +220,7 @@ theorem proverProofLaw_niProver (Λ : SiteLayout Mg) {E : (j : ι) → (M.comp j
   let eq : SaltedCoins (FiatShamirSalt kS) (M.ProverCoins R) ≃
       FiatShamirSalt kS × R × (M.Pos → MerkleSalt kN) :=
     (SaltedCoins.equivProd _ _).trans
-      ((Equiv.refl _).prodCongr (Base.ProverCoins.equivProd M.toBase R))
+      ((Equiv.refl _).prodCongr (SPBCS.ProverCoins.equivProd M R))
   unfold proverProofLaw proofLaw
   rw [show (M.niProver Λ honest E hb).coins = PMF.uniformOfFintype _ from rfl,
     ← PMF.uniformOfFintype_map_equiv eq.symm, PMF.map_comp]
@@ -249,7 +249,7 @@ theorem unconditionallyWitnessIndistinguishable [∀ j i, Fintype ((M.comp j).Me
       (Q * M.wiError δ (SPBCS.choiceCount ℓ)) := fun A D => by
   rw [show M.proverProofLaw (M.niProver Λ honest E hb) = fun h x w => proofLaw E Qs h x (honest w)
     from funext fun h => funext fun x => funext fun w => proverProofLaw_niProver Λ VE hb honest h x w]
-  exact witnessIndistinguishable VE.toReveal (Base.obsClose_of_causalHVZK VE.toReveal hvzk) Q
+  exact witnessIndistinguishable VE.toReveal (SPBCS.obsClose_of_causalHVZK VE.toReveal hvzk) Q
     _ A.toWIAdversary A.card_choices_le D
 
 end

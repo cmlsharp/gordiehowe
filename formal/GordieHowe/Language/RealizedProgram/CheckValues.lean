@@ -242,7 +242,8 @@ def typeSourcedV (treeNodes : ℕ → List String) (v : ℕ) (x : Value) : Bool 
 
 theorem typeSourcedV_iff (treeNodes : ℕ → List String) (v : ℕ) :
     ir.typeSourcedV treeNodes v (ir.value v) = true ↔ ir.TypeSourced treeNodes v := by
-  have hp : ∀ p, ir.predT.getD p default = ir.predicate p := fun p => toTrie_getD_eq _ p
+  have hp : ∀ p, ir.predT.getD p default = ir.predicate p := fun p =>
+    (toTrie_getD_eq _ p).trans (ir.predicate_eq_getD p).symm
   unfold typeSourcedV TypeSourced
   simp only [hp, isLateNode]
   cases hb : (ir.value v).kind.isBound
@@ -269,5 +270,108 @@ theorem typesB_iff (treeNodes : ℕ → List String) :
   cases ((ir.value v).isCommittedB || (ir.value v).kind.isLate) <;> simp
 
 end
+
+/-! ## The checks in ranges
+
+Each check of this file over the values or the predicates splits into checks of ranges of positions
+`[i, j)` (`allIdxIn`): two consecutive ranges join with no re-check (`…In_append`), and the range
+`[0, n)`, `n` at least the list's length, gives the check (`…_of_In`, `…_of_parts`). -/
+
+section Ranges
+
+variable (ir : RealizedProgram)
+
+/-- **`messagesB`'s check of the values `[i, j)`.** -/
+def messagesValuesIn (i j : ℕ) : Bool :=
+  allIdxIn (fun v x => !x.kind.isLate || (ir.msgT.get? v).isSome) ir.values i j
+
+/-- **`messagesB`'s checks of the messages.** -/
+def messagesRestB : Bool :=
+  ir.messages.all ir.messageOkT && chainB ir.msgBeforeT (ir.messages.map (·.value))
+
+/-- **`orderB`'s check of the values `[i, j)`.** -/
+def orderValuesIn (i j : ℕ) : Bool :=
+  allIdxIn (fun _ x => !x.kind.isLate || x.reads.all (ir.lateReadOrderedV x)) ir.values i j
+
+/-- **`orderB`'s checks of the predicates `[i, j)`**, in one walk. -/
+def orderPredsIn (i j : ℕ) : Bool :=
+  allIdxIn (fun _ p => (List.range ir.challenges.length).all (ir.predReadsOrderedT p) &&
+    ir.bodyOrderedT p.reads p.body) ir.predicates i j
+
+/-- **`padsB` on the values `[i, j)`.** -/
+def padsIn (i j : ℕ) : Bool :=
+  allIdxIn (fun v x => !x.kind.isLate || (Read.pads x.reads).all (ir.padBeforeT v)) ir.values i j
+
+/-- **`padRealizedB` on the values `[i, j)`.** -/
+def padRealizedIn (i j : ℕ) : Bool :=
+  allIdxIn (fun _ x => !x.kind.isLate || x.isPadRealizedB) ir.values i j
+
+/-- **`typesB` on the values `[i, j)`.** -/
+def typesIn (treeNodes : ℕ → List String) (i j : ℕ) : Bool :=
+  allIdxIn (fun v x => !(x.isCommittedB || x.kind.isLate) || ir.typeSourcedV treeNodes v x)
+    ir.values i j
+
+variable {ir}
+
+theorem messagesValuesIn_append {i j k : ℕ} (h₁ : ir.messagesValuesIn i j = true)
+    (h₂ : ir.messagesValuesIn j k = true) : ir.messagesValuesIn i k = true :=
+  allIdxIn_append h₁ h₂
+
+/-- **`messagesB` from its check of the values on `[0, n)`**, `n` at least their number, and of
+the messages. -/
+theorem messagesB_of_parts {n : ℕ} (h : ir.messagesRestB = true)
+    (hv : ir.messagesValuesIn 0 n = true) (hn : ir.values.length ≤ n) : ir.messagesB = true := by
+  have hv' := allIdx_of_allIdxIn hv hn
+  simp only [messagesRestB, Bool.and_eq_true] at h
+  unfold messagesB
+  rw [h.1, h.2, hv']
+  rfl
+
+theorem orderValuesIn_append {i j k : ℕ} (h₁ : ir.orderValuesIn i j = true)
+    (h₂ : ir.orderValuesIn j k = true) : ir.orderValuesIn i k = true :=
+  allIdxIn_append h₁ h₂
+
+theorem orderPredsIn_append {i j k : ℕ} (h₁ : ir.orderPredsIn i j = true)
+    (h₂ : ir.orderPredsIn j k = true) : ir.orderPredsIn i k = true :=
+  allIdxIn_append h₁ h₂
+
+/-- **`orderB` from its checks of the values and the predicates**, each on `[0, n)` for `n` at
+least the list's length. -/
+theorem orderB_of_parts {nv np : ℕ} (hv : ir.orderValuesIn 0 nv = true)
+    (hnv : ir.values.length ≤ nv) (hp : ir.orderPredsIn 0 np = true)
+    (hnp : ir.predicates.length ≤ np) : ir.orderB = true := by
+  have hv' := allIdx_of_allIdxIn hv hnv
+  have hp' := allIdx_of_allIdxIn hp hnp
+  rw [allIdx_and, ← all_eq_allIdx, ← all_eq_allIdx, Bool.and_eq_true] at hp'
+  unfold orderB
+  rw [hv', hp'.1, hp'.2]
+  rfl
+
+theorem padsIn_append {i j k : ℕ} (h₁ : ir.padsIn i j = true) (h₂ : ir.padsIn j k = true) :
+    ir.padsIn i k = true :=
+  allIdxIn_append h₁ h₂
+
+theorem padsB_of_In {n : ℕ} (h : ir.padsIn 0 n = true) (hn : ir.values.length ≤ n) :
+    ir.padsB = true :=
+  allIdx_of_allIdxIn h hn
+
+theorem padRealizedIn_append {i j k : ℕ} (h₁ : ir.padRealizedIn i j = true)
+    (h₂ : ir.padRealizedIn j k = true) : ir.padRealizedIn i k = true :=
+  allIdxIn_append h₁ h₂
+
+theorem padRealizedB_of_In {n : ℕ} (h : ir.padRealizedIn 0 n = true)
+    (hn : ir.values.length ≤ n) : ir.padRealizedB = true :=
+  allIdx_of_allIdxIn h hn
+
+theorem typesIn_append {treeNodes : ℕ → List String} {i j k : ℕ}
+    (h₁ : ir.typesIn treeNodes i j = true) (h₂ : ir.typesIn treeNodes j k = true) :
+    ir.typesIn treeNodes i k = true :=
+  allIdxIn_append h₁ h₂
+
+theorem typesB_of_In {treeNodes : ℕ → List String} {n : ℕ} (h : ir.typesIn treeNodes 0 n = true)
+    (hn : ir.values.length ≤ n) : ir.typesB treeNodes = true :=
+  allIdx_of_allIdxIn h hn
+
+end Ranges
 
 end GordieHowe.RealizedProgram

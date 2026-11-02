@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Applications.Falcon512.Native.ROMParams.Frontend.Basic
+public import GordieHowe.Applications.Falcon512.Frontend.Basic
 public import GordieHowe.Language.Realizations.RealizeGrouped
 
 @[expose] public section
@@ -35,7 +35,7 @@ field equations as the values are in the prime subfield (`intOf_cast`, their nod
 
 namespace GordieHowe.Falcon512.Norm
 
-open GordieHowe.Bits Native.ROMParams
+open GordieHowe.Bits
 
 /-! ## The program facts -/
 
@@ -106,7 +106,6 @@ class FalconNorm (program : RealizedProgram) where
   /-- The middle digits' index map. -/
   iMid : RealizedProgram.IndexMap
   i52 : RealizedProgram.IndexMap
-  i53 : RealizedProgram.IndexMap
   i54 : RealizedProgram.IndexMap
   i55 : RealizedProgram.IndexMap
   i56 : RealizedProgram.IndexMap
@@ -195,8 +194,7 @@ class FalconNorm (program : RealizedProgram) where
     .mem dA [.add (.scale (.const 12288) (.apply (.sum 512) (.ref eHigh))) (.leaf off)] (.range 393)
       real
   /-- The norm's shared expressions. -/
-  exprs_norm : program.expr e0 =
-      .add (.reindex i52 (.concat (.leaf s1) (.leaf z1))) (.reindex i53 (.concat (.leaf s2) (.leaf z1))) ∧
+  exprs_norm : program.expr e0 = .reindex i52 (.concat (.leaf s1) (.leaf s2)) ∧
     program.expr (e0 + 1) = .reindex i54 (.leaf a) ∧
     program.expr (e0 + 2) = .reindex i55 (.leaf a) ∧
     program.expr (e0 + 3) = .reindex i56 (.concat (.leaf a) (.leaf z1)) ∧
@@ -272,8 +270,7 @@ class FalconNorm (program : RealizedProgram) where
   /-- The entries of the norm's index maps (coefficient `i < 1024`: digit `3 i + l`, square digit
   `6 i + m`, carry `5 i + m`; the top digit of an `s2` coefficient reads the zero padding at
   `3072`). -/
-  i52_entry : ∀ i < 1024, i52.entry i = if i < 512 then i else 512
-  i53_entry : ∀ i < 1024, i53.entry i = if i < 512 then 512 else i - 512
+  i52_entry : ∀ i < 1024, i52.entry i = i
   i54_entry : ∀ i < 1024, i54.entry i = 3 * i
   i55_entry : ∀ i < 1024, i55.entry i = 3 * i + 1
   i56_entry : ∀ i < 1024, i56.entry i = if i < 512 then 3 * i + 2 else 3072
@@ -416,7 +413,7 @@ theorem kind_ne_bound (v : ℕ) (x : RealizedProgram.Expr) : (program.value v).k
     rw [h] at this
     cases this
   · have hd : program.value v = default := by
-      simp only [RealizedProgram.value, List.getD_eq_getElem?_getD]
+      simp only [RealizedProgram.value_eq_getD, List.getD_eq_getElem?_getD]
       rw [List.getElem?_eq_none (by omega), Option.getD_none]
     rw [hd] at h
     cases h
@@ -452,7 +449,7 @@ theorem holdsAt {e : program.Env I} (hs : program.SourceSatAt e) {p : ℕ}
 theorem eq_of_modZero {rd : program.Valuation I} {d : ℕ} {l r : RealizedProgram.Expr} {real : RealizedProgram.ModRealization}
     (h : program.HoldsWith rd (.mod d 0 l r real)) {i : ℕ} (hi : i < program.exprLen l) :
     program.evalIntWith rd d l i = program.evalIntWith rd d r i := by
-  have := h i hi
+  have := h.1 i hi
   rwa [Nat.cast_zero, zero_dvd_iff, sub_eq_zero] at this
 
 /-- **A range membership of one record** gives a natural below the bound. -/
@@ -469,8 +466,8 @@ theorem natBelow_of_mem {rd : program.Valuation I} {n : ℕ} {r : RealizedProgra
 /-! ## The shared expressions of domain `A` -/
 
 theorem expr492 : program.expr eN =
-    .add (.reindex (FalconNorm.i52 program) (.concat (.leaf vS1) (.leaf vZ1)))
-      (.reindex (FalconNorm.i53 program) (.concat (.leaf vS2) (.leaf vZ1))) := FalconNorm.exprs_norm.1
+    .reindex (FalconNorm.i52 program) (RealizedProgram.concatR (.leaf vS1) [.leaf vS2]) :=
+  FalconNorm.exprs_norm.1
 theorem expr493 : program.expr (eN + 1) = .reindex (FalconNorm.i54 program) (.leaf vA) :=
   FalconNorm.exprs_norm.2.1
 theorem expr494 : program.expr (eN + 2) = .reindex (FalconNorm.i55 program) (.leaf vA) :=
@@ -880,7 +877,7 @@ theorem evalE_41 (e : program.Env I) :
     program.evalE (program.reader e) fA (.leaf vZ1) 0 = 0 := by
   obtain ⟨c41, f41, e41, -⟩ := FalconNorm.consts_A (program := program)
   rw [RealizedProgram.evalE_leaf_of_isConstant e c41, RealizedProgram.constRead_of_valueField f41, e41]
-  exact (AField.decode_eq (FA := I fA) 0).trans Nat.cast_zero
+  exact (AField.decode_lt (FA := I fA) 0 (by norm_num)).trans Nat.cast_zero
 
 /-- The zero constant `const42` reads `0`. -/
 theorem evalE_42 (e : program.Env I) (i : ℕ) :
@@ -888,7 +885,7 @@ theorem evalE_42 (e : program.Env I) (i : ℕ) :
   obtain ⟨-, -, -, c42, f42, e42, -⟩ := FalconNorm.consts_A (program := program)
   rw [RealizedProgram.evalE_leaf_of_isConstant e c42, RealizedProgram.constRead_of_valueField f42, e42,
     List.getD_eq_getElem?_getD, List.getElem?_replicate]
-  split <;> exact (AField.decode_eq (FA := I fA) 0).trans Nat.cast_zero
+  split <;> exact (AField.decode_lt (FA := I fA) 0 (by norm_num)).trans Nat.cast_zero
 
 /-- **A coordinate of a value padded by the zero constant.** -/
 theorem evalE_concat41 (e : program.Env I) {v n : ℕ} (hn : (program.value v).size = n)
@@ -934,13 +931,19 @@ def topF (e : program.Env I) (i : ℕ) : (I fA).K :=
 
 theorem evalE_492 (e : program.Env I) {i : ℕ} (hi : i < 1024) :
     program.evalE (program.reader e) fA (.ref eN) i = normInF e i := by
-  rw [evalE_refA _ _ (by norm_disch), expr492, RealizedProgram.evalE_add, RealizedProgram.evalE_reindex,
-    RealizedProgram.evalE_reindex, (FalconNorm.i52_entry (program := program)) i hi, (FalconNorm.i53_entry (program := program)) i hi, normInF]
+  have h1 := (FalconNorm.sizes_A (program := program)).2.1
+  have h2 := (FalconNorm.sizes_A (program := program)).1
+  rw [evalE_refA _ _ (by norm_disch), expr492, normInF]
   by_cases h : i < 512
-  · rw [if_pos h, if_pos h, if_pos h, evalE_concat41 e (FalconNorm.sizes_A (program := program)).2.1 _ (by omega), if_pos h,
-      evalE_concat41 e (FalconNorm.sizes_A (program := program)).1 _ le_rfl, if_neg (lt_irrefl _), add_zero]
-  · rw [if_neg h, if_neg h, if_neg h, evalE_concat41 e (FalconNorm.sizes_A (program := program)).2.1 _ le_rfl,
-      if_neg (lt_irrefl _), evalE_concat41 e (FalconNorm.sizes_A (program := program)).1 _ (by omega), if_pos (by omega), zero_add]
+  · rw [if_pos h, RealizedProgram.evalE_wiring_part _ _ _ _ _ (j := 0) (k := i) (by simp)
+      (by simp [RealizedProgram.exprLen_leaf, h1, h])
+      (by simp [FalconNorm.i52_entry (program := program) i hi, RealizedProgram.partBase])]
+    rfl
+  · rw [if_neg h, RealizedProgram.evalE_wiring_part _ _ _ _ _ (j := 1) (k := i - 512) (by simp)
+      (by simp [RealizedProgram.exprLen_leaf, h2]; omega)
+      (by simp [FalconNorm.i52_entry (program := program) i hi, RealizedProgram.partBase,
+        RealizedProgram.exprLen_leaf, h1]; omega)]
+    rfl
 
 theorem evalE_495 (e : program.Env I) {i : ℕ} (hi : i < 1024) :
     program.evalE (program.reader e) fA (.ref (eN + 3)) i = topF e i := by
@@ -949,7 +952,9 @@ theorem evalE_495 (e : program.Env I) {i : ℕ} (hi : i < 1024) :
   · rw [if_pos h, if_pos h, evalE_concat41 e (FalconNorm.sizes_A (program := program)).2.2.1 _ (by omega), if_pos (by omega)]
   · rw [if_neg h, if_neg h, evalE_concat41 e (FalconNorm.sizes_A (program := program)).2.2.1 _ le_rfl, if_neg (lt_irrefl _)]
 
-theorem decode_A (c : ℕ) : (I fA).decode c = (c : (I fA).K) := AField.decode_eq c
+/-- Constants below `q` decode to their casts. -/
+theorem decode_A {c : ℕ} (hc : c < 12289) : (I fA).decode c = (c : (I fA).K) :=
+  AField.decode_lt c hc
 
 /-- **`norm.center`**: `v² = mag²`, `v` the coefficient and `mag = a₀ + 64 a₁ + 4096 a₂` its
 magnitude (`a₂` the top digit, `topF`). -/
@@ -963,7 +968,7 @@ theorem center_eq {e : program.Env I} (hs : program.SourceSatAt e) {i : ℕ} (hi
   rw [hbd] at h
   have := holdsAt_equalA h i (by
     rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_mul, exprLen_refA (by norm_disch), expr492,
-      RealizedProgram.exprLen_add, RealizedProgram.exprLen_reindex, (FalconNorm.i52_size (program := program))]
+      RealizedProgram.exprLen_reindex, (FalconNorm.i52_size (program := program))]
     exact hi)
   change program.evalE _ fA _ i = program.evalE _ fA (.leaf vZ) i at this
   rw [evalE_42, RealizedProgram.evalE_add, RealizedProgram.evalE_mul, RealizedProgram.evalE_scale_const,
@@ -972,7 +977,7 @@ theorem center_eq {e : program.Env I} (hs : program.SourceSatAt e) {i : ℕ} (hi
     expr493, evalE_refA _ _ (by norm_disch), expr494, RealizedProgram.evalE_reindex,
     RealizedProgram.evalE_reindex, (FalconNorm.i54_entry (program := program)) i hi, (FalconNorm.i55_entry (program := program)) i hi] at this
   try dsimp only at this
-  simp only [AField.decode_eq] at this
+  simp (disch := norm_num) only [AField.decode_lt] at this
   change normInF e i * normInF e i + ((12288 : ℕ) : (I fA).K) *
     ((rdA e vA (3 * i) + ((64 : ℕ) : (I fA).K) * rdA e vA (3 * i + 1) +
       ((4096 : ℕ) : (I fA).K) * topF e i) *
@@ -1006,7 +1011,7 @@ theorem parity_bool {e : program.Env I} (hs : program.SourceSatAt e) {i : ℕ} (
     rw [evalE_refA _ _ (FalconNorm.enc_le (program := program)).2.2, exprB, RealizedProgram.evalE_add, RealizedProgram.evalE_scale_const,
       evalE_refA _ _ (FalconNorm.enc_le (program := program)).2.1, exprMid, evalE_refA _ _ (FalconNorm.enc_le (program := program)).1, exprHigh,
       RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex, (FalconNorm.idx_enc (program := program)).2.1 i hi, (FalconNorm.idx_enc (program := program)).1 i hi, parityF,
-      decode_A]
+      decode_A (by norm_num)]
     have hq : ((12287 : ℕ) : (I fA).K) = -2 := by
       have h0 : ((12289 : ℕ) : (I fA).K) = 0 := CharP.cast_eq_zero _ 12289
       push_cast at h0 ⊢
@@ -1436,7 +1441,7 @@ theorem slack_below {e : program.Env I} (hs : program.SourceSatAt e) :
   rw [RealizedProgram.evalE_add, RealizedProgram.evalE_scale_const, RealizedProgram.evalE_apply_sum,
     RealizedProgram.evalE_leaf_of_isConstant e (FalconNorm.consts_A (program := program)).2.2.2.2.2.2.1,
     RealizedProgram.constRead_of_valueField (FalconNorm.consts_A (program := program)).2.2.2.2.2.2.2.1,
-    (FalconNorm.consts_A (program := program)).2.2.2.2.2.2.2.2, decode_A] at hkv
+    (FalconNorm.consts_A (program := program)).2.2.2.2.2.2.2.2, decode_A (by norm_num)] at hkv
   rw [Finset.sum_congr rfl fun t _ => by rw [Nat.zero_mul, Nat.zero_add, evalE_526 e t.isLt]]
     at hkv
   have hq : ((12288 : ℕ) : (I fA).K) = -1 := by
@@ -1444,7 +1449,7 @@ theorem slack_below {e : program.Env I} (hs : program.SourceSatAt e) :
     push_cast at h0 ⊢
     linear_combination h0
   try dsimp only at hkv
-  simp only [AField.decode_eq] at hkv
+  simp (disch := norm_num) only [AField.decode_lt] at hkv
   change ((12288 : ℕ) : (I fA).K) * _ + ((392 : ℕ) : (I fA).K) = _ at hkv
   rw [hq] at hkv
   have hkv' : (-1 : (I fA).K) * ∑ t : Fin 512, highF e t + ((392 : ℕ) : (I fA).K) =

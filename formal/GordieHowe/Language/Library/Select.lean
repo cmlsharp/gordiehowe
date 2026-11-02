@@ -43,8 +43,8 @@ are the program's constant values, whose decoded entries the caller supplies
   (`SelectFirstN.badEvent`, degree `S`), which reads only the committed values
   (`GordieHowe.RealizedProgram.selectReadings_congr`).
 
-The native Falcon programs' selection (`h2p.select.*` at `(S, n, w) = (639, 512, 16)`,
-`bound = 61445 = 5q`) is read in `GordieHowe/Applications/Falcon512/Native/ROMParams/Frontend/Basic.lean`.
+The native Falcon programs' selection (`h2p.select.*` at `(S, n, w) = (717, 512, 16)`,
+`bound = 61445 = 5q`) is read in `GordieHowe/Applications/Falcon512/Frontend/Basic.lean`.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -339,17 +339,28 @@ def isNodeBit (v m : ℕ) : Bool :=
 /-- **Whether value `z` is a constant whose entries are all `0`.** -/
 def isZeroConst (z : ℕ) : Bool := ir.isConstant z && (ir.constEntries z).all (· == 0)
 
+/-- **A concatenation of bit views, possibly ended by the value `zv`** (a wiring view's operand,
+`concat a₀ (concat a₁ (… aₖ))`): its bit views' total length and whether `zv` ends it. Every
+part but the last is a bit view; the last is a bit view or `zv`. `none` for any other expression. -/
+def bitCat? (zv : ℕ) : Expr → Option (ℕ × Bool)
+  | .leaf v =>
+    if ir.isBitView v then some ((ir.value v).size, false)
+    else if v == zv then some (0, true) else none
+  | .concat (.leaf a) y =>
+    if ir.isBitView a then (bitCat? zv y).map fun p => ((ir.value a).size + p.1, p.2) else none
+  | _ => none
+
 /-- **The coordinates of an expression of bits that may be nonzero**, when its structure makes every
 coordinate `0` or `1` and the value `zv` reads `0`: a view of a bit view (every coordinate); a
-view of a bit view `a` concatenated with `zv` (the coordinates that read `a`);
-a sum of two such expressions with supports of one length and disjoint (the masked sum of views the
-C++ writes for a sponge's squeezed stream). `none` for any other expression. -/
+view of a concatenation of bit views ended by `zv` (`bitCat?`; the coordinates that read a bit
+view), or of bit views alone (every coordinate); a sum of two such expressions with supports of
+one length and disjoint (a masked sum of views). `none` for any other expression. -/
 def bitSupport? (zv : ℕ) : Expr → Option (List Bool)
   | .reindex m (.leaf v) => if ir.isBitView v then some (m.toList.map fun _ => true) else none
-  | .reindex m (.concat (.leaf a) (.leaf z)) =>
-    if ir.isBitView a && z == zv then
-      some (m.toList.map fun j => decide (j < (ir.value a).size))
-    else none
+  | .reindex m x =>
+    match ir.bitCat? zv x with
+    | some (L, z) => some (m.toList.map fun j => decide (j < L) || !z)
+    | none => none
   | .add x y =>
     match bitSupport? zv x, bitSupport? zv y with
     | some s, some s' =>
@@ -549,6 +560,59 @@ section
 
 variable {ir : RealizedProgram} {I : Interp} {S n w pStart pStep pDone pRoute : ℕ} {s : SelectShape}
 
+/-- **A concatenation of bit views has bit coordinates** (`RealizedProgram.bitCat?`), `0` from its
+bit views' total length on when `zv` ends it, where the bit views read bits (`hbit`) and the value
+`zv` reads `0` (`hz`). -/
+theorem bitCat?_spec {zv f : ℕ} {rd : ir.Valuation I}
+    (hbit : ∀ v, ir.isBitView v = true → ∀ j,
+      ir.evalE rd f (.leaf v) j = 0 ∨ ir.evalE rd f (.leaf v) j = 1)
+    (hz : ∀ j, ir.evalE rd f (.leaf zv) j = 0) :
+    ∀ (x : Expr) {L : ℕ} {z : Bool}, ir.bitCat? zv x = some (L, z) → ∀ j,
+      (ir.evalE rd f x j = 0 ∨ ir.evalE rd f x j = 1) ∧ (z = true → L ≤ j → ir.evalE rd f x j = 0)
+  | .leaf v, L, z, h, j => by
+    unfold bitCat? at h
+    split_ifs at h with hv hzv
+    · cases h
+      exact ⟨hbit v hv j, fun h' => by cases h'⟩
+    · cases h
+      simp only [beq_iff_eq] at hzv
+      subst hzv
+      exact ⟨.inl (hz j), fun _ _ => hz j⟩
+  | .concat (.leaf a) y, L, z, h, j => by
+    unfold bitCat? at h
+    split_ifs at h with ha
+    obtain ⟨⟨L', z'⟩, hy, hp⟩ := Option.map_eq_some_iff.1 h
+    simp only [Prod.mk.injEq] at hp
+    obtain ⟨rfl, rfl⟩ := hp
+    rw [evalE_concat, exprLen_leaf]
+    split_ifs with hj
+    · exact ⟨hbit a ha j, fun _ h' => by omega⟩
+    · obtain ⟨hb, h0⟩ := bitCat?_spec hbit hz y hy (j - (ir.value a).size)
+      exact ⟨hb, fun hz' h' => h0 hz' (by omega)⟩
+  | .concat (.add _ _) _, _, _, h, _ => by simp [bitCat?] at h
+  | .concat (.sub _ _) _, _, _, h, _ => by simp [bitCat?] at h
+  | .concat (.scale _ _) _, _, _, h, _ => by simp [bitCat?] at h
+  | .concat (.mul _ _) _, _, _, h, _ => by simp [bitCat?] at h
+  | .concat (.reindex _ _) _, _, _, h, _ => by simp [bitCat?] at h
+  | .concat (.concat _ _) _, _, _, h, _ => by simp [bitCat?] at h
+  | .concat (.linear _ _) _, _, _, h, _ => by simp [bitCat?] at h
+  | .concat (.prod _ _) _, _, _, h, _ => by simp [bitCat?] at h
+  | .concat (.mux _ _ _) _, _, _, h, _ => by simp [bitCat?] at h
+  | .concat (.apply _ _) _, _, _, h, _ => by simp [bitCat?] at h
+  | .concat (.ref _) _, _, _, h, _ => by simp [bitCat?] at h
+  | .concat (.logic _ _ _) _, _, _, h, _ => by simp [bitCat?] at h
+  | .add _ _, _, _, h, _ => by simp [bitCat?] at h
+  | .sub _ _, _, _, h, _ => by simp [bitCat?] at h
+  | .scale _ _, _, _, h, _ => by simp [bitCat?] at h
+  | .mul _ _, _, _, h, _ => by simp [bitCat?] at h
+  | .reindex _ _, _, _, h, _ => by simp [bitCat?] at h
+  | .linear _ _, _, _, h, _ => by simp [bitCat?] at h
+  | .prod _ _, _, _, h, _ => by simp [bitCat?] at h
+  | .mux _ _ _, _, _, h, _ => by simp [bitCat?] at h
+  | .apply _ _, _, _, h, _ => by simp [bitCat?] at h
+  | .ref _, _, _, h, _ => by simp [bitCat?] at h
+  | .logic _ _ _, _, _, h, _ => by simp [bitCat?] at h
+
 /-- **An expression of bits by its structure has bit coordinates** (`RealizedProgram.bitSupport?`): every
 coordinate below its support's length is `0` or `1`, and `0` off the support, where the bit views
 read bits (`hbit`) and the value `zv` reads `0` (`hz`). -/
@@ -598,21 +662,21 @@ theorem bitSupport?_spec {zv f : ℕ} {rd : ir.Valuation I}
       refine ⟨fun h' => by simp at h', ?_⟩
       rw [evalE_reindex]
       exact hbit v hv _
-    · rename_i a z heq
+    · rename_i _ _ _ _ heq
       cases heq
-      split_ifs at h with hc
-      cases h
-      simp only [Bool.and_eq_true, beq_iff_eq] at hc
-      obtain ⟨ha, rfl⟩ := hc
-      have hi' : i < m.toList.length := by simpa using hi
-      have hentry : m.entry i = m.toList[i] := by
-        rw [IndexMap.entry_eq_getD_toList, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hi',
-          Option.getD_some]
-      rw [evalE_reindex, evalE_concat, exprLen_leaf, hentry]
-      simp only [List.getElem_map]
-      split_ifs with hlt
-      · exact ⟨fun h' => by simp [hlt] at h', hbit a ha _⟩
-      · exact ⟨fun _ => hz _, .inl (hz _)⟩
+      split at h
+      · rename_i L z hc
+        cases h
+        have hi' : i < m.toList.length := by simpa using hi
+        have hentry : m.entry i = m.toList[i] := by
+          rw [IndexMap.entry_eq_getD_toList, List.getD_eq_getElem?_getD,
+            List.getElem?_eq_getElem hi', Option.getD_some]
+        obtain ⟨hb, h0⟩ := bitCat?_spec hbit hz _ hc (m.entry i)
+        rw [evalE_reindex]
+        refine ⟨fun h' => ?_, hb⟩
+        have h'' : ¬ m.toList[i] < L ∧ z = true := by simpa [List.getElem_map] using h'
+        exact h0 h''.2 (by rw [hentry]; omega)
+      · cases h
     · rename_i heq
       cases heq
     · cases h

@@ -258,6 +258,22 @@ class CompiledDomain final : public CompiledDomainBase<S> {
   std::string misfit() const override { return misfit_; }
 
   const uint8_t *circuit_id() const override { return circ_->id; }
+  std::string gkr_certificate() const override {
+    if (gkr_cert_ == nullptr) return "";
+    const std::string why = gkr_cert_->mismatch(*circ_, d_.field());
+    if (!why.empty())
+      fail("the GKR certificate of domain " + d_.name +
+           " does not describe its circuit: " + why);
+    return gkr_cert_->text(d_.field());
+  }
+
+  const void *gkr_emit_walk() const override {
+    return gkr_cert_ != nullptr ? walk_.get() : nullptr;
+  }
+  const void *gkr_cert_data() const override { return gkr_cert_.get(); }
+  size_t gkr_inputs() const override {
+    return circ_ != nullptr ? circ_->ninputs : 0;
+  }
 
   std::vector<size_t> views_read() const override {
     std::vector<size_t> out;
@@ -830,6 +846,8 @@ class CompiledDomain final : public CompiledDomainBase<S> {
     p.type_checks = type_checks_;
     p.circuit_entries = circuit_entries_;
     p.filler = filler_;
+    if (run_end_ > run_begin_) p.packed_runs.push_back({run_begin_, run_end_});
+    p.view_words = view_aliases_;
     return p;
   }
 
@@ -1287,29 +1305,73 @@ class CompiledDomain final : public CompiledDomainBase<S> {
            "only in its own field");
   }
 
+  // Value ID's wiring definition, null when it has none.
+  const Wiring *wiring_of(size_t id) const {
+    const ValueDef<F> *d = d_.def(id);
+    return d == nullptr ? nullptr : std::get_if<Wiring>(d);
+  }
+  // How the circuit reads a value (one placement per value, by its plan):
+  // a committed cell, a public input, a late value's message minus its pad,
+  // a challenge's public input, a realization's weights (no value), a bit
+  // view, an advice value bound to its digits (read through its binding),
+  // or a value the circuit computes from its definition.
+  struct Pl {
+    struct Cell {};
+    struct Public {};
+    struct Late {
+      size_t pad;
+    };
+    struct Challenge {};
+    struct RealPub {};
+    struct BitView {};
+    struct Bound {
+      const Lin<F> *lin;
+    };
+    struct Defined {
+      const ValueDef<F> *def;
+    };
+  };
+  using ValuePlacement =
+      std::variant<typename Pl::Cell, typename Pl::Public, typename Pl::Late,
+                   typename Pl::Challenge, typename Pl::RealPub, typename Pl::BitView,
+                   typename Pl::Bound, typename Pl::Defined>;
+  // Value ID's placement; none when the circuit cannot read it.
+  std::optional<ValuePlacement> placement(size_t id) const {
+    const Node &n = nodes()[id];
+    if (plan_.late(id)) return typename Pl::Late{static_cast<size_t>(plan_.pad_of[id])};
+    if (n.kind == Kind::kDerived) {
+      // A derived value of another domain has no definition here (null):
+      // every reader refuses it.
+      const ValueDef<F> *d = d_.def(id);
+      if (d == nullptr && n.domain == d_.index)
+        fail("derived value '" + n.name + "' has no definition");
+      return typename Pl::Defined{d};
+    }
+    if (plan_.bound.count(id)) return typename Pl::Bound{&expr(id)};
+    if (n.kind == Kind::kChallenge) return typename Pl::Challenge{};
+    if (is_public(n.kind)) return typename Pl::Public{};
+    if (n.kind == Kind::kBitView) return typename Pl::BitView{};
+    if (plan_.cell(id)) return typename Pl::Cell{};
+    return std::nullopt;
+  }
+  template <class... Ts>
+  struct Visit : Ts... {
+    using Ts::operator()...;
+  };
+  template <class... Ts>
+  Visit(Ts...) -> Visit<Ts...>;
+
   // Public slots that VIEW(id) needs.
   void need(size_t id, std::set<std::pair<size_t, bool>> &keys) {
     const Node &n = nodes()[id];
-    if (plan_.late(id)) {
-      if (n.domain != d_.index)
-        fail("circuit of domain " + d_.name + " reads the late value '" +
-             n.name + "' of another domain; read its public message");
-      keys.insert({id, true});
-    } else if (n.kind == Kind::kBitView) {
-      if (n.domain != d_.index)
-        fail("circuit of domain " + d_.name + " reads the bit view '" +
-             n.name + "' of another domain");
-      views_read_.insert(id);
-    } else if (auto x = d_.exprs_.find(id); x != d_.exprs_.end()) {
-      if (n.domain != d_.index)
-        fail("circuit of domain " + d_.name + " reads the expression value '" +
-             n.name + "' of another domain");
-      for (size_t r : expr_deps(x->second)) need(r, keys);
-    } else if (n.kind == Kind::kDerived || plan_.bound.count(id)) {
+    const auto pl = placement(id);
+    if (!pl) fail("circuit reads unsupported value '" + n.name + "'");
+    // The affine form's reads (a derived or bound value).
+    auto terms = [&](const Lin<F> &L) {
       if (n.domain != d_.index)
         fail("circuit of domain " + d_.name + " reads the derived value '" +
              n.name + "' of another domain");
-      for (const auto &t : expr(id).terms) {
+      for (const auto &t : L.terms) {
         // A circuit reads an operator through its circuit expansion only.
         for (const auto &op : t.chain)
           if (!circuit_expandable(*op))
@@ -1318,55 +1380,141 @@ class CompiledDomain final : public CompiledDomainBase<S> {
                  "circuit expansion (OpSpec::emit or a staged transform)");
         need(t.node, keys);
       }
-    } else if (is_public(n.kind)) {
+    };
+    auto pub = [&]() {
       if (n.type.base == Base::kBytes)
         fail("circuit of domain " + d_.name + " reads the Bytes statement '" +
              n.name + "'; read it through a public computation");
       same_field(id, "public value");
       keys.insert({id, false});
-    } else if (plan_.cell(id)) {
-      if (n.domain != d_.index)
-        fail("circuit of domain " + d_.name + " reads '" + n.name +
-             "' of another domain");
-    } else {
-      fail("circuit reads unsupported value '" + n.name + "'");
-    }
+    };
+    std::visit(
+        Visit{
+            [&](const typename Pl::Late &) {
+              if (n.domain != d_.index)
+                fail("circuit of domain " + d_.name + " reads the late value '" +
+                     n.name + "' of another domain; read its public message");
+              keys.insert({id, true});
+            },
+            [&](const typename Pl::BitView &) {
+              if (n.domain != d_.index)
+                fail("circuit of domain " + d_.name + " reads the bit view '" +
+                     n.name + "' of another domain");
+              views_read_.insert(id);
+            },
+            [&](const typename Pl::Defined &x) {
+              if (x.def == nullptr)
+                fail("circuit of domain " + d_.name + " reads the derived value '" +
+                     n.name + "' of another domain");
+              std::visit(
+                  Visit{[&](const ExprDef<F> &e) {
+                          if (n.domain != d_.index)
+                            fail("circuit of domain " + d_.name +
+                                 " reads the expression value '" + n.name +
+                                 "' of another domain");
+                          for (size_t r : expr_deps(e.e)) need(r, keys);
+                        },
+                        [&](const Affine<F> &) { terms(expr(id)); },
+                        [&](const Wiring &) { terms(expr(id)); }},
+                  *x.def);
+            },
+            [&](const typename Pl::Bound &) { terms(expr(id)); },
+            [&](const typename Pl::Challenge &) { pub(); },
+            [&](const typename Pl::Public &) { pub(); },
+            [&](const typename Pl::RealPub &) { fail("circuit reads a realization's weights as a value"); },
+            [&](const typename Pl::Cell &) {
+              if (n.domain != d_.index)
+                fail("circuit of domain " + d_.name + " reads '" + n.name +
+                     "' of another domain");
+            }},
+        *pl);
   }
 
+  // The wires of value ID's view, recorded in the emission's walk.
   Wires view(const CLogic &lc, size_t id) const {
+    Wires w = view_wires(lc, id);
+    if (walk_ != nullptr) walk_->view(id, walk_wires(w));
+    return w;
+  }
+  // Circuit wires as the walk's wires 0 + 1 x.
+  std::vector<typename EmitWalk<F>::Wire> walk_wires(const Wires &w) const {
+    std::vector<typename EmitWalk<F>::Wire> out;
+    out.reserve(w.size());
+    for (size_t x : w)
+      out.push_back({d_.field().zero(), d_.field().one(), x});
+    return out;
+  }
+  // Whether value ID's view reads its inputs only (a committed cell, a
+  // public value or a bit view).
+  bool input_view(size_t id) const {
+    const auto pl = placement(id);
+    return pl && std::visit(
+                     Visit{[](const typename Pl::Cell &) { return true; },
+                           [](const typename Pl::Public &) { return true; },
+                           [](const typename Pl::Challenge &) { return true; },
+                           [](const typename Pl::BitView &) { return true; },
+                           [](const typename Pl::Late &) { return false; },
+                           [](const typename Pl::RealPub &) { return false; },
+                           [](const typename Pl::Bound &) { return false; },
+                           [](const typename Pl::Defined &) { return false; }},
+                     *pl);
+  }
+  // The Boolean check x (x - 1) = 0 on value ID's view x, its entry's
+  // block in the walk (when emitted here): the steps n = ones - x, of wire
+  // -N for N = x - 1, and the root x n, of wire -M for M = x N.
+  void bool_view_check(const CLogic &lc, size_t id) {
+    using W = typename EmitWalk<F>::Wire;
+    const F &f = d_.field();
+    if (walk_ != nullptr) walk_->begin_block();
+    const Wires w = view(lc, id);
+    std::vector<W> nw, mw;
+    std::vector<size_t> z;
+    for (size_t x : w) {
+      const size_t one = lc.konst(lc.one());
+      const size_t N = lc.sub(x, one);
+      const size_t M = lc.mul(x, N);
+      z.push_back(lc.assert0(M));
+      nw.push_back({f.zero(), f.mone(), N});
+      mw.push_back({f.zero(), f.mone(), M});
+    }
+    if (walk_ == nullptr) return;
+    const size_t x = walk_->last_view(id);
+    const size_t n = walk_->step(EmitWalk<F>::kViewNot, x, SIZE_MAX, std::move(nw));
+    const size_t r = walk_->step(EmitWalk<F>::kViewMul, x, n, std::move(mw));
+    walk_->end_block(r, std::move(z));
+  }
+  // The Boolean check x - x x = 0 on Bit cell ID, its entry's block in the
+  // walk (when emitted here): the cell's view x, the steps m = x x (wire
+  // M), s = -m (wire -M) and the root x + s (wire T = x - M).
+  void bool_cell_check(const CLogic &lc, size_t id) {
+    using W = typename EmitWalk<F>::Wire;
+    const F &f = d_.field();
+    if (walk_ != nullptr) walk_->begin_block();
+    const Wires &w = cell_wires_.at(id);
+    std::vector<W> mw, sw, tw;
+    std::vector<size_t> z;
+    for (size_t x : w) {
+      const size_t M = lc.mul(x, x);
+      const size_t T = lc.sub(x, M);
+      z.push_back(lc.assert0(T));
+      mw.push_back({f.zero(), f.one(), M});
+      sw.push_back({f.zero(), f.mone(), M});
+      tw.push_back({f.zero(), f.one(), T});
+    }
+    if (walk_ == nullptr) return;
+    const size_t x = walk_->view(id, walk_wires(w));
+    const size_t m = walk_->step(EmitWalk<F>::kCellMul, x, x, std::move(mw));
+    const size_t s = walk_->step(EmitWalk<F>::kCellNeg, m, SIZE_MAX, std::move(sw));
+    const size_t r = walk_->step(EmitWalk<F>::kCellAdd, x, s, std::move(tw));
+    walk_->end_block(r, std::move(z));
+  }
+  Wires view_wires(const CLogic &lc, size_t id) const {
     const Node &n = nodes()[id];
-    if (plan_.late(id)) {
-      const Wires &t = pub_wires_.at({id, true});
-      const Wires &p = cell_wires_.at(static_cast<size_t>(plan_.pad_of[id]));
-      Wires out(n.n);
-      for (size_t i = 0; i < n.n; ++i) out[i] = lc.sub(t[i], p[i]);
-      return out;
-    }
-    if (auto w = d_.wiring_.find(id); w != d_.wiring_.end()) {
-      // A wiring view: the source wires themselves.
-      std::map<size_t, Wires> part;
-      Wires out(w->second.size());
-      for (size_t i = 0; i < out.size(); ++i) {
-        const auto &[node, k] = w->second[i];
-        if (node == kZeroCoordinate) {
-          out[i] = lc.konst(lc.elt(0));
-          continue;
-        }
-        auto it = part.find(node);
-        if (it == part.end()) it = part.emplace(node, view(lc, node)).first;
-        out[i] = it->second.at(k);
-      }
-      return out;
-    }
-    if (auto x = d_.exprs_.find(id); x != d_.exprs_.end()) {
-      // An expression value: emitted in place, once per build.
-      Wires out;
-      for (const auto &b : (*emitter_)(x->second))
-        out.push_back(emitter_->wire(b));
-      return out;
-    }
-    if (n.kind == Kind::kDerived || plan_.bound.count(id)) {
-      const Lin<F> &e = expr(id);
+    const auto pl = placement(id);
+    if (!pl) fail("circuit reads unsupported value '" + n.name + "'");
+    // An affine form's wires: per term, the view through its operators,
+    // scaled and summed.
+    auto affine = [&](const Lin<F> &e) {
       Wires out(e.n);
       for (size_t k = 0; k < e.terms.size(); ++k) {
         const auto &t = e.terms[k];
@@ -1378,10 +1526,58 @@ class CompiledDomain final : public CompiledDomainBase<S> {
         }
       }
       return out;
-    }
-    if (is_public(n.kind)) return pub_wires_.at({id, false});
-    if (n.kind == Kind::kBitView) return view_wires_.at(id);
-    return cell_wires_.at(id);
+    };
+    return std::visit(
+        Visit{
+            [&](const typename Pl::Late &l) {
+              const Wires &t = pub_wires_.at({id, true});
+              const Wires &p = cell_wires_.at(l.pad);
+              Wires out(n.n);
+              for (size_t i = 0; i < n.n; ++i) out[i] = lc.sub(t[i], p[i]);
+              return out;
+            },
+            [&](const typename Pl::Defined &x) {
+              if (x.def == nullptr)
+                fail("circuit of domain " + d_.name + " reads the derived value '" +
+                     n.name + "' of another domain");
+              return std::visit(
+                  Visit{[&](const Wiring &w) {
+                          // A wiring: the source wires themselves.
+                          std::map<size_t, Wires> part;
+                          Wires out(w.srcs.size());
+                          for (size_t i = 0; i < out.size(); ++i) {
+                            const auto &[node, k] = w.srcs[i];
+                            if (node == kZeroCoordinate) {
+                              out[i] = lc.konst(lc.elt(0));
+                              continue;
+                            }
+                            auto it = part.find(node);
+                            if (it == part.end())
+                              it = part.emplace(node, view(lc, node)).first;
+                            out[i] = it->second.at(k);
+                          }
+                          return out;
+                        },
+                        [&](const ExprDef<F> &e) {
+                          // An expression value: emitted in place, once per
+                          // build.
+                          Wires out;
+                          for (const auto &b : (*emitter_)(e.e))
+                            out.push_back(emitter_->wire(b));
+                          return out;
+                        },
+                        [&](const Affine<F> &) { return affine(expr(id)); }},
+                  *x.def);
+            },
+            [&](const typename Pl::Bound &b) { return affine(*b.lin); },
+            [&](const typename Pl::Challenge &) { return pub_wires_.at({id, false}); },
+            [&](const typename Pl::Public &) { return pub_wires_.at({id, false}); },
+            [&](const typename Pl::RealPub &) -> Wires {
+              fail("circuit reads a realization's weights as a value");
+            },
+            [&](const typename Pl::BitView &) { return view_wires_.at(id); },
+            [&](const typename Pl::Cell &) { return cell_wires_.at(id); }},
+        *pl);
   }
 
   // Flatten an affine expression into cell and public terms.
@@ -1400,7 +1596,10 @@ class CompiledDomain final : public CompiledDomainBase<S> {
         if (!is_public(nodes()[dep].kind))
           fail("operator '" + op->name + "' applied to '" + n.name +
                "' reads private value '" + nodes()[dep].name + "'");
-    if (n.kind == Kind::kDerived || plan_.bound.count(t.node)) {
+    const auto pl = placement(t.node);
+    if (!pl) fail("affine constraint reads unsupported value '" + n.name + "'");
+    // A derived or bound value: its terms, through its affine form.
+    auto terms = [&]() {
       if (n.domain != d_.index)
         fail("derived value '" + n.name + "' read from another domain");
       for (const auto &s : expr(t.node).terms) {
@@ -1409,38 +1608,49 @@ class CompiledDomain final : public CompiledDomainBase<S> {
         u.chain.insert(u.chain.end(), t.chain.begin(), t.chain.end());
         flatten(u, out);
       }
-    } else if (plan_.late(t.node)) {
-      if (n.domain != d_.index)
-        fail("affine constraint of domain " + d_.name + " reads the late "
-             "value '" + n.name + "' of another domain; read its public "
-             "message");
-      // x = t - P.
-      out.push_back(Flat{t.scale, t.chain, t.node, Flat::kMessage, 0, n.n});
-      const size_t p = static_cast<size_t>(plan_.pad_of[t.node]);
-      out.push_back(Flat{f.negf(t.scale), t.chain, p, Flat::kCell,
-                         coord(cells_.at(p)), n.n});
-    } else if (is_public(n.kind)) {
+    };
+    auto pub = [&]() {
       if (n.type.base == Base::kBytes)
         fail("affine constraint of domain " + d_.name +
              " reads the Bytes statement '" + n.name +
              "'; read it through a public computation");
       out.push_back(Flat{t.scale, t.chain, t.node, Flat::kPublic, 0, n.n});
-    } else if (plan_.cell(t.node)) {
-      if (n.domain != d_.index)
-        fail("affine constraint of domain " + d_.name + " reads '" + n.name +
-             "' of another domain");
-      out.push_back(Flat{t.scale, t.chain, t.node, Flat::kCell,
-                         coord(cells_.at(t.node)), n.n});
-    } else if (n.kind == Kind::kBitView) {
-      if (n.domain != d_.index)
-        fail("affine constraint of domain " + d_.name +
-             " reads the bit view '" + n.name + "' of another domain");
-      // Its bits are packed run inputs; the bit stage reads them.
-      out.push_back(Flat{t.scale, t.chain, t.node, Flat::kCell,
-                         coord(view_at_.at(t.node)), n.n});
-    } else {
-      fail("affine constraint reads unsupported value '" + n.name + "'");
-    }
+    };
+    std::visit(
+        Visit{
+            [&](const typename Pl::Defined &) { terms(); },
+            [&](const typename Pl::Bound &) { terms(); },
+            [&](const typename Pl::Late &l) {
+              if (n.domain != d_.index)
+                fail("affine constraint of domain " + d_.name + " reads the late "
+                     "value '" + n.name + "' of another domain; read its public "
+                     "message");
+              // x = t - P.
+              out.push_back(Flat{t.scale, t.chain, t.node, Flat::kMessage, 0, n.n});
+              out.push_back(Flat{f.negf(t.scale), t.chain, l.pad, Flat::kCell,
+                                 coord(cells_.at(l.pad)), n.n});
+            },
+            [&](const typename Pl::Challenge &) { pub(); },
+            [&](const typename Pl::Public &) { pub(); },
+            [&](const typename Pl::Cell &) {
+              if (n.domain != d_.index)
+                fail("affine constraint of domain " + d_.name + " reads '" +
+                     n.name + "' of another domain");
+              out.push_back(Flat{t.scale, t.chain, t.node, Flat::kCell,
+                                 coord(cells_.at(t.node)), n.n});
+            },
+            [&](const typename Pl::BitView &) {
+              if (n.domain != d_.index)
+                fail("affine constraint of domain " + d_.name +
+                     " reads the bit view '" + n.name + "' of another domain");
+              // Its bits are packed run inputs; the bit stage reads them.
+              out.push_back(Flat{t.scale, t.chain, t.node, Flat::kCell,
+                                 coord(view_at_.at(t.node)), n.n});
+            },
+            [&](const typename Pl::RealPub &) {
+              fail("affine constraint reads a realization's weights");
+            }},
+        *pl);
   }
 
   // The committed witness coordinate of circuit input I (PackedLayout when
@@ -1461,15 +1671,26 @@ class CompiledDomain final : public CompiledDomainBase<S> {
   // Committed cells an affine expression term reads.
   void affine_cells(size_t id, std::set<size_t> &out) const {
     const Node &n = nodes()[id];
-    if (d_.circuit_only(id)) return;  // flatten refuses it
-    if ((n.kind == Kind::kDerived || plan_.bound.count(id)) &&
-        n.domain == d_.index) {
+    const auto pl = placement(id);
+    if (!pl) return;
+    auto terms = [&]() {
+      if (n.domain != d_.index) return;
       for (const auto &t : expr(id).terms) affine_cells(t.node, out);
-    } else if (plan_.late(id)) {
-      out.insert(static_cast<size_t>(plan_.pad_of[id]));
-    } else if (plan_.cell(id) || n.kind == Kind::kBitView) {
-      out.insert(id);
-    }
+    };
+    std::visit(Visit{[&](const typename Pl::Defined &x) {
+                       // An expression value: flatten refuses it.
+                       if (x.def != nullptr &&
+                           !std::holds_alternative<ExprDef<F>>(*x.def))
+                         terms();
+                     },
+                     [&](const typename Pl::Bound &) { terms(); },
+                     [&](const typename Pl::Late &l) { out.insert(l.pad); },
+                     [&](const typename Pl::Cell &) { out.insert(id); },
+                     [&](const typename Pl::BitView &) { out.insert(id); },
+                     [](const typename Pl::Public &) {},
+                     [](const typename Pl::Challenge &) {},
+                     [](const typename Pl::RealPub &) {}},
+               *pl);
   }
 
   // The affine expression a derived node is, or a bound node is read as.
@@ -1584,7 +1805,9 @@ class CompiledDomain final : public CompiledDomainBase<S> {
       return "";
     }
     if (plan_.late(id)) return "it reads the late value '" + n.name + "'";
-    if (d_.exprs_.count(id))
+    if (const ValueDef<F> *x = d_.def(id);
+        x != nullptr && n.kind == Kind::kDerived &&
+        std::holds_alternative<ExprDef<F>>(*x))
       return "it reads the expression value '" + n.name + "'";
     if (plan_.bound.count(id))
       return "it reads '" + n.name + "', whose storage is a view";
@@ -1622,14 +1845,14 @@ class CompiledDomain final : public CompiledDomainBase<S> {
       for (const auto &k : x->kids) st.push_back(k.get());
       if (x->op != ExprOp::kLin) continue;
       for (const auto &t : x->lin.terms) {
-        auto w = d_.wiring_.find(t.node);
-        if (w == d_.wiring_.end()) {
+        const Wiring *w = wiring_of(t.node);
+        if (w == nullptr) {
           const std::string why = one(t.node);
           if (!why.empty()) return why;
           continue;
         }
         std::set<size_t> bases;
-        for (const auto &[node, c] : w->second)
+        for (const auto &[node, c] : w->srcs)
           if (node != kZeroCoordinate) bases.insert(node);
         for (size_t b : bases) {
           const std::string why = one(b);
@@ -2428,10 +2651,10 @@ class CompiledDomain final : public CompiledDomainBase<S> {
                                      std::vector<SourceRef> &r,
                                      std::string &) {
       r.clear();
-      auto w = d_.wiring_.find(id);
+      const Wiring *w = wiring_of(id);
       const size_t n = coords ? coords->size() : N[id].n;
       r.reserve(n);
-      if (w == d_.wiring_.end()) {
+      if (w == nullptr) {
         if (n == 0) return true;
         const Base b = base_of(id);
         for (size_t i = 0; i < n; ++i)
@@ -2444,7 +2667,7 @@ class CompiledDomain final : public CompiledDomainBase<S> {
       Base b;
       for (size_t i = 0; i < n; ++i) {
         const size_t c = coords ? (*coords)[i] : i;
-        const auto &[node, k] = w->second.at(c);
+        const auto &[node, k] = w->srcs.at(c);
         if (node == kZeroCoordinate) {
           r.push_back(SourceRef{});
           continue;
@@ -3038,6 +3261,9 @@ class CompiledDomain final : public CompiledDomainBase<S> {
   // The expression emitter of the circuit being built (build() only).
   ExprEmitter<F, CLogic> *emitter_ = nullptr;
   std::unique_ptr<Circuit<F>> circ_;
+  // The translation-validation certificate of circ_, when compiled here or
+  // by the donor of a fresh compile.
+  std::shared_ptr<const GkrCertificate<F>> gkr_cert_;
   // The compile cache: the record build() reads, whether the domain was
   // restored from it, and what the circuit's record holds beyond its
   // layers (the scheduler's packed bits).
@@ -3085,6 +3311,10 @@ class CompiledDomain final : public CompiledDomainBase<S> {
   std::vector<DomainPlan::TypeCheck> type_checks_;
   // The circuit's constraints in emission order (DomainPlan).
   std::vector<DomainPlan::CircuitEntry> circuit_entries_;
+  // The walk of the circuit's expression emission (expr.h's EmitWalk), when
+  // emitted here or by the donor of a fresh compile; null otherwise: its
+  // nodes, their wires, and per circuit entry its block.
+  std::shared_ptr<EmitWalk<F>> walk_;
   std::shared_ptr<BatchKernel<F, Hash>> bool_kernel_;
   std::vector<size_t> bool_tables_;
   // The kernels of the declared batches (Domain::batch), in order.
@@ -3097,6 +3327,9 @@ class CompiledDomain final : public CompiledDomainBase<S> {
   std::vector<std::vector<BatchSpace>> group_spaces_;
   // The packed run of Bit cells and bit views: its first and last inputs.
   size_t run_begin_ = 0, run_end_ = 0;
+  // The viewed words of the packed run (aliased and composed), in input
+  // order (the plan export's Circuit.aliases).
+  std::vector<DomainPlan::ViewWord> view_aliases_;
   size_t batch_bit_checks_ = 0;
   size_t total_rows_ = 0, late_bits_ = 0, bit_products_ = 0;
   size_t cell_bit_checks_ = 0, packed_bits_ = 0, packed_zero_bits_ = 0;
@@ -3931,6 +4164,7 @@ void CompiledDomain<F, RSF, S>::build() {
   std::vector<std::pair<size_t, size_t>> aliases;
   std::vector<TreeInputs::Composed> composed;
   size_t run_begin = at;
+  view_aliases_.clear();
   if (bitpack && (!packed.empty() || !views_read_.empty())) {
     while (at % W) alignment.push_back(zero_input());
     run_begin = at;
@@ -3949,6 +4183,7 @@ void CompiledDomain<F, RSF, S>::build() {
       view_at_[id] = at;
       Wires w(counting ? 0 : N[id].n);
       for (size_t k = 0; k < sel.size(); ++k) {
+        view_aliases_.push_back({at + D * k, cells_.at(words) + sel[k], D});
         if (D == W)
           aliases.push_back({at + D * k, cells_.at(words) + sel[k]});
         else
@@ -4168,6 +4403,12 @@ void CompiledDomain<F, RSF, S>::build() {
     return w;
   });
   emitter_ = &emitter;
+  // The walk of this emission, for the expression export.
+  walk_.reset();
+  if (emit) {
+    walk_ = std::make_shared<EmitWalk<F>>();
+    emitter.record_walk(walk_.get());
+  }
 
   // Boolean checks the circuit carries: late bits, x (x - 1) = 0 on the
   // private view x = t - P, and the Bit cells whose check the placement rule
@@ -4178,24 +4419,28 @@ void CompiledDomain<F, RSF, S>::build() {
   for (size_t id : late_bits) {
     type_checks_.push_back({id, Placement::kCircuit});
     circuit_entries_.push_back({CE::kTypeCheck, id, ""});
-    if (emit)
-      for (size_t x : view(lc, id))
-        lc.assert0(lc.mul(x, lc.sub(x, lc.konst(lc.one()))));
+    if (emit) bool_view_check(lc, id);
     ++late_bits_;
   }
   // Alignment only: each input is zero (fill_cells writes it so). Only the
   // GKR input row reads these inputs, so a domain without GKR checks none.
-  if (gkr_ && !alignment.empty())
+  if (gkr_ && !alignment.empty()) {
     circuit_entries_.push_back({CE::kAlignment, alignment.size(), ""});
-  if (gkr_ && emit)
-    for (size_t x : alignment) lc.assert0(x);
+    if (emit) walk_->begin_block();
+  }
+  if (gkr_ && emit) {
+    std::vector<size_t> z;
+    for (size_t x : alignment) z.push_back(lc.assert0(x));
+    if (!alignment.empty())
+      walk_->end_block(SIZE_MAX, std::move(z),
+                       std::vector<size_t>(alignment.begin(), alignment.end()));
+  }
   // A Bit cell is a circuit input, so its check x - x x = 0 is in the
   // input layer: x x and -x are two terms of layer 1, the assertion one
   // term of layer 2 (kBitCheckTerms).
   for (size_t id : checked_bits) {
     circuit_entries_.push_back({CE::kTypeCheck, id, ""});
-    if (emit)
-      for (size_t x : cell_wires_.at(id)) lc.assert0(lc.sub(x, lc.mul(x, x)));
+    if (emit) bool_cell_check(lc, id);
     cell_bit_checks_ += N[id].n;
     if (!packing) bit_checks_[id] = true;
   }
@@ -4203,9 +4448,7 @@ void CompiledDomain<F, RSF, S>::build() {
   for (size_t id : d_.checked_derived_) {
     type_checks_.push_back({id, Placement::kCircuit});
     circuit_entries_.push_back({CE::kTypeCheck, id, ""});
-    if (emit)
-      for (size_t x : view(lc, id))
-        lc.assert0(lc.mul(x, lc.sub(x, lc.konst(lc.one()))));
+    if (emit) bool_view_check(lc, id);
     derived_bit_checks_ += N[id].n;
   }
   for (const auto &c : d_.circuits_) {
@@ -4215,17 +4458,41 @@ void CompiledDomain<F, RSF, S>::build() {
       circuit_entries_.push_back({CE::kPredicate, size_t(c.pred), ""});
       const auto &p = d_.preds_[size_t(c.pred)];
       if (!emit) continue;
-      if (p.truth)
-        emitter.assert_true(p.e);
-      else
-        emitter.assert_zero(p.e);
+      walk_->begin_block();
+      std::vector<size_t> z =
+          p.truth ? emitter.assert_true(p.e) : emitter.assert_zero(p.e);
+      // The entry's root: the predicate's expression, and for an asserted
+      // truth its step ones - root (the asserted value, wire 1 - w).
+      size_t root = walk_->expr_id.at(p.e.get());
+      if (p.truth) {
+        const F &f = d_.field();
+        std::vector<typename EmitWalk<F>::Wire> nw;
+        for (const auto &b : walk_->nodes[root].W)
+          nw.push_back({f.addf(f.one(), f.mulf(f.mone(), b.c0)),
+                        f.mulf(f.mone(), b.c1), b.x});
+        root = walk_->step(EmitWalk<F>::kTrueNot, root, SIZE_MAX, std::move(nw));
+      }
+      walk_->end_block(root, std::move(z));
       continue;
     }
     circuit_entries_.push_back({CE::kRealization, 0, c.name});
     if (!emit) continue;
+    walk_->begin_block();
+    // A realization's reads are views like any other (its family record
+    // points at them), and its closure reports what it built.
     std::vector<Wires> w;
-    for (size_t r : c.reads) w.push_back(view(lc, r));
-    c.emit(lc, w);
+    for (size_t r : c.reads) {
+      w.push_back(view(lc, r));
+      walk_->blocks.back().reads.push_back(walk_->last_view(r));
+    }
+    FamilyLog &log = walk_->blocks.back().fam;
+    if (c.record)
+      c.record(lc, w, &log);
+    else
+      c.emit(lc, w);
+    std::vector<size_t> z;
+    if (log.z != SIZE_MAX) z.push_back(log.z);
+    walk_->end_block(SIZE_MAX, std::move(z));
   }
   emitter_ = nullptr;
   // The provisional pass reads the circuit's shape only (its layers' input
@@ -4235,14 +4502,52 @@ void CompiledDomain<F, RSF, S>::build() {
   ph.emplace(compile_times_on() ? "mkcircuit" : "");
   const bool shape_only =
       provisional_pass() && !plan_.options.full_provisional;
+  gkr_cert_.reset();
   if (gkr_ && !emit) {
     circ_ = std::move(loaded);
+    // A fresh compile's domain built from its realized program shares the
+    // certificate and the emission log its compiler recorded
+    // (DomainSource::donor) for the same circuit.
+    if (source_ != nullptr && source_->donor != nullptr) {
+      const auto *dn = dynamic_cast<const CompiledDomain *>(
+          static_cast<const CompiledDomainBase<S> *>(source_->donor));
+      if (dn != nullptr && dn->gkr_cert_ != nullptr && dn->circ_ != nullptr &&
+          std::equal(dn->circ_->id, dn->circ_->id + sizeof(dn->circ_->id),
+                     circ_->id)) {
+        gkr_cert_ = dn->gkr_cert_;
+        walk_ = dn->walk_;
+      }
+    }
   } else if (gkr_ && shape_only) {
     circ_ = Q.mkcircuit_shape(/*nc=*/1);
   } else if (gkr_) {
     // The id once, below, after the input products it covers.
     circ_ = Q.mkcircuit_without_id(/*nc=*/1);
     sched_packed_ = circ_->packed_bits;
+    // The certificate's DAG keeps every node the walk's wires, assertions
+    // and family records name (emit_export.h's relational check reads
+    // them).
+    std::vector<size_t> named;
+    if (walk_ != nullptr) {
+      for (const auto &en : walk_->nodes) {
+        for (const auto &b : en.W) named.push_back(b.x);
+        for (const auto &b : en.aux) named.push_back(b.x);
+      }
+      for (const auto &b : walk_->blocks) {
+        named.insert(named.end(), b.Z.begin(), b.Z.end());
+        named.insert(named.end(), b.U.begin(), b.U.end());
+        // A family record's wires.
+        const FamilyLog &g = b.fam;
+        named.insert(named.end(), g.dens.begin(), g.dens.end());
+        for (const auto &x : g.inner) {
+          named.push_back(x.num);
+          named.push_back(x.den);
+        }
+        if (g.sum != SIZE_MAX) named.push_back(g.sum);
+        named.insert(named.end(), g.chunks.begin(), g.chunks.end());
+      }
+    }
+    gkr_cert_ = Q.take_certificate(named);
   } else {
     // No layers: the circuit only lays out the inputs.
     circ_ = std::make_unique<Circuit<F>>();
@@ -4453,8 +4758,30 @@ class DomainProver final : public DomainProverBase<S> {
     bool gkr_ok = true;
     const auto branch = [&](size_t i) {
       std::string pname;
-      if (profiling::enabled()) pname = cd_.branch_profile_name(i);
+      if (profiling::enabled() || GkrTrace::on())
+        pname = cd_.branch_profile_name(i);
       profiling::Session ses("gh.prove.branch", pname.c_str(), i, 0);
+      // The branch's kernel calls (GH_GKR_TRACE, sumcheck/prover_layers.h).
+      parallel::ChunkTrace ct;
+      parallel::ChunkTrace *const prev_trace = parallel::trace;
+      const auto t0 = std::chrono::steady_clock::now();
+      if (GkrTrace::on()) parallel::trace = &ct;
+      struct TraceEnd {
+        std::function<void()> f;
+        ~TraceEnd() { f(); }
+      } trace_end{[&] {
+        if (!GkrTrace::on()) return;
+        parallel::trace = prev_trace;
+        std::fprintf(stderr,
+                     "BRANCH_TRACE %s us=%.3f thread=%u calls=%zu items=%zu "
+                     "chunks=%zu split=%zu threads=%zu max_threads=%zu\n",
+                     pname.c_str(),
+                     std::chrono::duration<double, std::micro>(
+                         std::chrono::steady_clock::now() - t0)
+                         .count(),
+                     parallel::thread_slot(), ct.calls, ct.items, ct.chunks,
+                     ct.split, ct.threads, ct.max_threads);
+      }};
       Transcript &bt = *br[i];
       if (i == nb) {
         gkr_ok = p_.prove_gkr(zk_, W_, bt, *rows);

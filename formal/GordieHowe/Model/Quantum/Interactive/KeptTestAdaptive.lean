@@ -32,6 +32,17 @@ variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [Decida
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] [AddCommGroup Y]
   [Nonempty Req] (p : OracleProg X Y O) (q : ℕ) (pad : X)
 
+-- TODO(unbundle-M4): replace by a named copy register (`A.CopyReg`, a def with a one-step
+-- instance, R2) in AdaptiveTest.lean
+/-- Decidable equality of the registers of the compiled program's embedding with the copy
+register (`AdaptiveIAlg.copySplit`), assembled from the workspace factor (the default search
+exceeds its size limit). -/
+noncomputable instance toIAlg.instDecidableEqCopyReg (φ : QState (X × Y)) (hφ : ‖φ‖ = 1) :
+    DecidableEq (DReg ((toIAlg (Req := Req) (Resp := Resp) p q pad φ hφ).toAdaptive.W ×
+      (toIAlg (Req := Req) (Resp := Resp) p q pad φ hφ).toAdaptive.W)
+      (toIAlg (Req := Req) (Resp := Resp) p q pad φ hφ).toAdaptive.width X Y Req Resp) :=
+  @DReg.instDecidableEq _ _ _ _ _ _ (@instDecidableEqProd _ _ inferInstance inferInstance) _ _ _ _
+
 set_option hygiene false in
 /-- The compiled program, in the proofs below. -/
 local notation "𝔸" => toIAlg (Req := Req) (Resp := Resp) p q pad φ hφ
@@ -137,8 +148,8 @@ theorem pureRun_withTest_keptTest_toAdaptive (H : X → Y) (φ : QState (X × Y)
   rw [hj, hl, matApply_mul, matApply_submatrix_perm, AdaptiveIAlg.matApply_copyMat]
   erw [← hA']
   rw [hA, (𝔸).toAdaptive.permOp_copyOut_copyVec _ hc]
-  erw [AdaptiveIAlg.matApply_copyMat, AdaptiveIAlg.permOp_queryPerm_copyVec,
-    AdaptiveIAlg.matApply_copyMat]
+  rw [(𝔸).toAdaptive.matApply_copyMat, (𝔸).toAdaptive.permOp_queryPerm_copyVec,
+    (𝔸).toAdaptive.matApply_copyMat]
   simp only [V']
   congr 1
   set v := progVec (Req := Req) (Resp := Resp) q H φ (tab p q pad H q) (xs p pad H q, 0)

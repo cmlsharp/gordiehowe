@@ -185,6 +185,41 @@ theorem negacyclicConv_natAbs_le_mul {A B : ℕ} {h s : Fin n → ℕ} (hh : ∀
         exact Nat.mul_le_mul (hh _) (hs j)
     _ = n * A * B := by simp [Finset.sum_const, Nat.mul_assoc]
 
+/-- **The negacyclic product of bounded natural operands is at least `−(n − 1) · A · B`**: only
+the `n − 1 − i` wrapped terms of coefficient `i` are negative, when every coefficient of `h` is at
+most `A` and every coefficient of `s` at most `B`. -/
+theorem negacyclicConv_ge_neg_mul {A B : ℕ} {h s : Fin n → ℕ} (hh : ∀ k, h k ≤ A)
+    (hs : ∀ k, s k ≤ B) (i : Fin n) :
+    -(((n - 1) * A * B : ℕ) : ℤ) ≤
+      LatticeCrypto.negacyclicConvCoeff (fun j => (h j : ℤ)) (fun j => (s j : ℤ)) i := by
+  rw [← sum_convWeight_eq_negacyclicConvCoeff]
+  have hterm : ∀ j : Fin n, (if (i : ℕ) < j then -((A * B : ℕ) : ℤ) else 0) ≤
+      convWeight ℤ h i j * (s j : ℤ) := by
+    intro j
+    unfold convWeight
+    split_ifs with h1 h2 h2
+    · omega
+    · rw [neg_mul, neg_le_neg_iff]
+      exact_mod_cast Nat.mul_le_mul (hh _) (hs j)
+    · exact mul_nonneg (Int.natCast_nonneg _) (Int.natCast_nonneg _)
+    · omega
+  have hcard : (Finset.univ.filter fun j : Fin n => (i : ℕ) < j).card ≤ n - 1 := by
+    have hsub : (Finset.univ.filter fun j : Fin n => (i : ℕ) < j) ⊆ Finset.univ.erase i :=
+      fun j hj => by
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hj
+        exact Finset.mem_erase.2 ⟨fun hji => by rw [hji] at hj; omega, Finset.mem_univ _⟩
+    have := Finset.card_le_card hsub
+    rwa [Finset.card_erase_of_mem (Finset.mem_univ _), Finset.card_univ, Fintype.card_fin] at this
+  calc -(((n - 1) * A * B : ℕ) : ℤ)
+      ≤ -(((Finset.univ.filter fun j : Fin n => (i : ℕ) < j).card * (A * B) : ℕ) : ℤ) := by
+        rw [neg_le_neg_iff, Nat.mul_assoc]
+        exact_mod_cast Nat.mul_le_mul_right _ hcard
+    _ = ∑ j : Fin n, (if (i : ℕ) < j then -((A * B : ℕ) : ℤ) else 0) := by
+        rw [Finset.sum_ite, Finset.sum_const_zero, add_zero, Finset.sum_const, nsmul_eq_mul]
+        push_cast
+        ring
+    _ ≤ ∑ j, convWeight ℤ h i j * (s j : ℤ) := Finset.sum_le_sum fun j _ => hterm j
+
 /-- An integer row identity holds modulo `q` once `q ∣ BIAS`. -/
 theorem Congruent.of_integer_eq {q BIAS : ℕ} {h c s₁v s₂v dq : Fin n → ℕ}
     (hBIAS : q ∣ BIAS)

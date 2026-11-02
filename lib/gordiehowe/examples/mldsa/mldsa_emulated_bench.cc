@@ -1,7 +1,7 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 
-// The ML-DSA-44 emulated proof of possession's bench executable
+// The ML-DSA emulated proof of possession's bench executable
 // (mldsa_emulated.h): mldsa_emulated_bench COMMAND [FLAG...].
 //   serve    a report_bench worker (bench_hook.h, bench/harness.h)
 //   bench    the same records and --reps proofs without report_bench
@@ -9,7 +9,10 @@
 //   report   the compile report, with each domain's sizes on one line
 //   parallel single- against multi-threaded proofs, interleaved
 // serve, bench and report take --packing, a packing ablation (setup.h's
-// PackingAblation: config mldsa-emulated-nobitpack or -subfieldrows).
+// PackingAblation: config mldsa-emulated-nobitpack or -subfieldrows), and
+// --param-set, the parameter set (mldsa_bench_flags.h: config
+// mldsa-emulated at ML-DSA-44, mldsa65-emulated or mldsa87-emulated).
+// export writes ML-DSA-44's plan; parallel runs ML-DSA-44.
 
 #include <chrono>
 #include <cstdio>
@@ -22,6 +25,7 @@
 #include "bench/cli.h"
 #include "bench/timing.h"
 #include "gordiehowe/examples/shared/ablation_testing.h"
+#include "gordiehowe/examples/mldsa/mldsa_bench_flags.h"
 #include "gordiehowe/examples/mldsa/mldsa_emulated_fixture.h"
 
 namespace proofs::gordiehowe::examples::mldsa::emulated {
@@ -29,24 +33,24 @@ namespace {
 
 namespace hook = examples::bench_hook;
 
-// The system as the bench builds it under the ablations --ablation and
-// --packing name, compiled, and handed to FN with its statement, witness
-// and setup record.
-template <class P, class Fn>
+// The system at the parameter set S as the bench builds it under the
+// ablations --ablation and --packing name, compiled, and handed to FN with
+// its statement, witness and setup record.
+template <class P, class S, class Fn>
 void with_system(const bench::Flags &f, Fn fn) {
   const std::string which = ablation::from_flag(f.str("ablation"));
   const PackingAblation pk = ablation::packing(f);
   Env<P> env;
-  const auto &ex = ml_dsa::GetMlDsa44BenchmarkExample();
-  const Existing old{ex};
+  const auto &ex = examples::mldsa::support::benchmark_example<S>();
+  const Existing<S> old{ex};
   const auto sig = old.signature();
   const std::string config = ablation::config(
-      std::string("mldsa-emulated") + packing_suffix(pk), which);
+      std::string(S::kConfigStem) + "-emulated" + packing_suffix(pk), which);
   hook::Setup su{config.c_str(), P::kId};
   auto t0 = hook::Clock::now();
   const auto tp = ablation::build(
       [&](const BuildOptions &o) {
-        return std::make_unique<MLDSAEmulatedSystem<P>>(
+        return std::make_unique<MLDSAEmulatedSystem<P, S>>(
             env, ex.msg.size(), ex.ctx.size(), pk, o);
       },
       [](const auto &s) -> const auto & { return *s.compile(); }, t0, which);
@@ -58,7 +62,11 @@ void with_system(const bench::Flags &f, Fn fn) {
      su);
 }
 auto systems(const bench::Flags &f) {
-  return [&f](auto p, auto fn) { with_system<decltype(p)>(f, fn); };
+  return [&f](auto p, auto fn) {
+    with_param_set_flag(f, [&](auto s) {
+      with_system<decltype(p), decltype(s)>(f, fn);
+    });
+  };
 }
 
 int export_plans(const bench::Flags &f) {
@@ -78,19 +86,23 @@ int report(const bench::Flags &f) {
   const std::string profile = bench::apply_common_flags(f);
   bool ok = false;
   param_sets::with_profile(profile, [&](auto p) {
-    using P = decltype(p);
-    Fixture<P> fx(ml_dsa::GetMlDsa44BenchmarkExample(), ablation::packing(f));
-    const std::string r = fx.c->report();
-    std::printf("%s", r.c_str());
-    for (const char *d : {"A", "H"}) {
-      const auto s = domain_size(r, d);
-      std::printf("GH_MLEMU_SIZE profile=%s domain=%s layers=%zu quad=%zu "
-                  "inputs=%zu public=%zu committed=%zu nw=%zu nq=%zu "
-                  "affine=%zu\n",
-                  P::kId, d, s.layers, s.quad, s.inputs, s.publics,
-                  s.committed, s.nw, s.nq, s.affine);
-    }
-    ok = fx.prove_verify();
+    with_param_set_flag(f, [&](auto set) {
+      using P = decltype(p);
+      using S = decltype(set);
+      Fixture<P, S> fx(examples::mldsa::support::benchmark_example<S>(),
+                       ablation::packing(f));
+      const std::string r = fx.c->report();
+      std::printf("%s", r.c_str());
+      for (const char *d : {"A", "H"}) {
+        const auto s = domain_size(r, d);
+        std::printf("GH_MLEMU_SIZE profile=%s set=%s domain=%s layers=%zu "
+                    "quad=%zu inputs=%zu public=%zu committed=%zu nw=%zu "
+                    "nq=%zu affine=%zu\n",
+                    P::kId, S::kName, d, s.layers, s.quad, s.inputs,
+                    s.publics, s.committed, s.nw, s.nq, s.affine);
+      }
+      ok = fx.prove_verify();
+    });
   });
   return ok ? 0 : 1;
 }
@@ -182,16 +194,18 @@ int parallel(const bench::Flags &flags) {
 
 int main(int argc, char **argv) {
   namespace app = proofs::gordiehowe::examples::mldsa::emulated;
+  namespace examples = proofs::gordiehowe::examples;
   namespace hook = proofs::gordiehowe::examples::bench_hook;
   namespace ablation = proofs::gordiehowe::examples::ablation;
   using proofs::bench::Flags;
   return proofs::bench::run_commands(
-      argc, argv, "The ML-DSA-44 emulated proof of possession's benches.",
+      argc, argv, "The ML-DSA emulated proof of possession's benches.",
       {{"serve", "a report_bench worker",
         [](Flags &f) {
           hook::add_serve_flags(f);
           ablation::add_flag(f);
           ablation::add_packing_flag(f);
+          examples::mldsa::add_param_set_flag(f);
         },
         [](const Flags &f) { return hook::serve_command(f, app::systems(f)); }},
        {"bench", "the worker's records and --reps proofs, alone",
@@ -199,6 +213,7 @@ int main(int argc, char **argv) {
           hook::add_bench_flags(f);
           ablation::add_flag(f);
           ablation::add_packing_flag(f);
+          examples::mldsa::add_param_set_flag(f);
         },
         [](const Flags &f) { return hook::bench_command(f, app::systems(f)); }},
        {"export", "the plan export and realized program",
@@ -207,6 +222,7 @@ int main(int argc, char **argv) {
         [](Flags &f) {
           proofs::bench::add_common_flags(f);
           ablation::add_packing_flag(f);
+          examples::mldsa::add_param_set_flag(f);
         },
         app::report},
        {"parallel", "single- against multi-threaded proofs, interleaved",

@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-// Modified 2026 by Chad Sharp and Paul Grubbs: adapted from ml_dsa_circuit.h to the hash half of the split ML-DSA circuit with a packed MAC-word SampleInBall output
+// Modified 2026 by Chad Sharp and Paul Grubbs: adapted from ml_dsa_circuit.h to the hash half of the split ML-DSA circuit with a packed MAC-word SampleInBall output, and a SampleInBall stream of SibBytes bytes
 
 #ifndef LFB_BASELINES_ML_DSA_44_SPLIT_ML_DSA_SPLIT_HASH_CIRCUIT_H_
 #define LFB_BASELINES_ML_DSA_44_SPLIT_ML_DSA_SPLIT_HASH_CIRCUIT_H_
@@ -26,9 +26,10 @@
 #include "util/panic.h"
 
 namespace proofs {
-// FROZEN COPY of ml_dsa_hash_circuit.h at e73411f (the v2 checkpoint).
-// Do not 'fix' this to track the live header: it exists to keep the
-// pre-verifier-randomness baseline runnable forever.
+// A copy of the fork's ml_dsa_hash_circuit.h at e73411f (the v2
+// checkpoint), whose only change is the template parameter SibBytes (the
+// SampleInBall stream's length): at its default, 136, the circuit is the
+// checkpoint's (pq-mdoc's); the ML-DSA baselines pass 272.
 namespace ml_dsa_baseline {
 
 /**
@@ -69,8 +70,15 @@ namespace ml_dsa_baseline {
  *   5. Hash Commitment: Encodes w'_1 and asserts that SHAKE256(mu ||
  * encoded_w'_1) == c_tilde.
  */
-template <class LogicCircuit, class Field, typename Params, size_t MacBits = 128>
+// SibBytes: the length of SampleInBall's SHAKE256 stream, a multiple of the
+// rate.  The ML-DSA baselines read 272 bytes (two blocks, GordieHowe's
+// kSibBytes); the default 136 is upstream's one block, which pq-mdoc keeps.
+template <class LogicCircuit, class Field, typename Params, size_t MacBits = 128,
+          size_t SibBytes = 136>
 class MLDSAHashVerify {
+  static_assert(SibBytes % 136 == 0 && SibBytes / 136 >= 1,
+                "SampleInBall's stream is whole SHAKE256 blocks");
+  static_assert(SibBytes <= 65536, "stream positions are 16-bit words");
   static constexpr size_t bit_width(size_t x) {
     return x == 0 ? 0 : 1 + bit_width(x >> 1);
   }
@@ -154,8 +162,12 @@ class MLDSAHashVerify {
     }
   };
 
+  // SHAKE256(c~, SibBytes): one absorbed block and SibBytes / 136 - 1
+  // squeezed ones.
+  static constexpr size_t kSibBlocks = SibBytes / 136;
+
   struct SampleInBallWitness {
-    BlockWitness shake_bws;
+    std::vector<BlockWitness> shake_bws;
     std::array<v8, Params::tau> j_vals;
     std::array<v16, Params::tau> j_k_indices;
     std::vector<std::vector<v8>> position_trace;
@@ -165,7 +177,8 @@ class MLDSAHashVerify {
         j_vals[i] = lc.template vinput<8>();
         j_k_indices[i] = lc.template vinput<16>();
       }
-      shake_bws.input(lc);
+      shake_bws.resize(kSibBlocks);
+      for (auto& bw : shake_bws) bw.input(lc);
       if (position_trace.empty()) {
         position_trace.resize(Params::tau);
       }
@@ -213,10 +226,8 @@ class MLDSAHashVerify {
     Sha3Circuit<LogicCircuit> sha3(lc_);
     std::vector<v8> out;
     std::vector<v8> rho_vec(rho.begin(), rho.end());
-    size_t out_bytes = 136;
-    std::vector<BlockWitness> bws;
-    bws.push_back(witness.shake_bws);
-    sha3.assert_shake256(rho_vec, out_bytes, out, bws);
+    size_t out_bytes = SibBytes;
+    sha3.assert_shake256(rho_vec, out_bytes, out, witness.shake_bws);
 
     v16 prev_k_index = lc_.template vbit<16>(8);
 

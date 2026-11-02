@@ -199,7 +199,7 @@ states the rule. -/
 Ligero at an agreement threshold, with the mask test, at the tableaus of the plan data (each
 domain's `ligero` entry: rate, `block_enc`, `N`, `k`, the opened columns `t` and the blinding width
 `r = t`). The agreement thresholds, exceptional counts and line certificates are those of
-`MLDSA44.Native.QROMParams.AlgebraField.aLine` and `MLDSA44.Native.ROMParams.AlgebraField.aLine`
-(domain A) and of `Tableau.gf256K339R2Line` and `Tableau.gf128K282R2Line` (domain H). -/
+`GordieHowe.Generated.MLDSA44.Native.QROMParams.Tableau.lineA` and
+`GordieHowe.Generated.MLDSA44.Native.ROMParams.Tableau.lineA` (domain A, the compiler's) and of `Tableau.gf256K339R2Line` and `Tableau.gf128K282R2Line` (domain H). -/
 
 end GordieHowe.MLDSA44.Native.Params

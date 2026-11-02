@@ -4,6 +4,8 @@
 module
 
 public import GordieHowe.Language.Completeness.Digits
+public import GordieHowe.Language.RealizedProgram.Annotations
+public import GordieHoweNative.Language.Completeness.Spectral
 
 @[expose] public section
 
@@ -18,6 +20,9 @@ of the honest committed values (`holds_specProductsC_srcEnv`), and so does every
 source predicate's field equation through the convolutions (`specRowCB`,
 `holds_specRowC_srcEnv`). The field equation of a source field-form `mod_q` holds there where the
 execution has its field equations (`holds_fieldRowC_srcEnv`).
+
+The definitions are in `GordieHoweNative/Language/Completeness/Spectral.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -26,55 +31,12 @@ open Export ProofSystem.PhaseLayout IOP Range
 
 section
 
-variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String}
-
-variable (ir primeNodes) in
-/-- **The honest facts of the spectrally realized convolution `k`** at the certificate's generators
-`G`, as a check: `k` is a convolution of the program
-whose products predicate is a field `equal` `NTT_M(P_a) · NTT_M(P_b) = z` of a domain `d` where it
-is realized (`ConvOkAt`); the operand views are well formed and have intervals from the source
-values (`srcIvl`); every value the products' left side reads is a source value reading no challenge
-and no late value, or a constant; and `z` is a committed cell generated as `k`'s transformed value,
-no source value. -/
-def specHonestCB (G : Gens) (k : ℕ) : Bool :=
-  match ir.convs[k]? with
-  | none => false
-  | some cv =>
-    match (ir.predicate cv.products).body with
-    | .equal d (.mul (.apply op pa) (.apply op' pb)) (.leaf z) _ =>
-      decide (ir.ConvOkAt d cv) && decide (ir.ExprOk (ir.domainField d) pa) &&
-        decide (ir.ExprOk (ir.domainField d) pb) &&
-        (ir.srcIvl (ir.srcLeafIvl primeNodes) (ir.domainField d) pa).isSome &&
-        (ir.srcIvl (ir.srcLeafIvl primeNodes) (ir.domainField d) pb).isSome &&
-        (ir.exprNodes (.mul (.apply op pa) (.apply op' pb))).all (fun w =>
-          (decide (ir.IsSourceValue w) && (ir.readsT.getD w []).isEmpty) || ir.isConstant w) &&
-        decide (G.at z = .spec k) && ir.privCellB z && !decide (ir.IsSourceValue z)
-    | _ => false
-
-variable (ir primeNodes) in
-/-- **Predicate `q` realizes the field equation of the source predicate `m`**, as a check:
-every spectrally realized convolution has its honest
-facts (`specHonestCB`), and `m` is a source field `equal` or `mod_0` with the target `realized q`
-admitted (`RealizedAdmits`), a `mod_0` with the intervals of its sides from the source values within
-the exported ones (`srcIvl`) in a field of characteristic above `2`. -/
-def specRowCB (G : Gens) (m q : ℕ) : Bool :=
-  (List.range ir.convs.length).all (ir.specHonestCB primeNodes G) &&
-    ir.inSource (ir.predicate m) &&
-      match (ir.predicate m).body with
-      | .equal d e e' (.realized q') => q' == q && decide (ir.RealizedAdmits d e e' q)
-      | .mod d 0 e e' real =>
-        real.target == some (.realized q) && decide (ir.RealizedAdmits d e e' q) &&
-          decide (IvlWithin (ir.srcIvl (ir.srcLeafIvl primeNodes) (ir.domainField d) e)
-            real.lhsLo real.lhsHi) &&
-          decide (IvlWithin (ir.srcIvl (ir.srcLeafIvl primeNodes) (ir.domainField d) e')
-            real.rhsLo real.rhsHi) &&
-          decide (2 < ir.charOf (ir.domainField d))
-      | _ => false
+variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String} {S : Structure}
 
 /-- **The products predicate of a convolution with its honest facts is a predicate of the
 program** (`ConvFacts.products_lt`). -/
 theorem products_lt_of_specHonestCB {G : Gens} {k : ℕ} {cv : SpectralConv}
-    (hk : ir.convs[k]? = some cv) (hc : ir.specHonestCB primeNodes G k = true) :
+    (hk : ir.convs[k]? = some cv) (hc : ir.specHonestCB primeNodes S G k = true) :
     cv.products < ir.predicates.length := by
   unfold specHonestCB at hc
   rw [hk] at hc
@@ -101,7 +63,7 @@ execution (`specNat`, generated as `k`'s transformed value), the left side reads
 the products are a cast of an integer, so the integer reading casts back to them
 (`natCast_toNat_of_intCast`). -/
 theorem holds_specProductsC_srcEnv (hbd : ir.StmtBounded I x) {k : ℕ} {cv : SpectralConv}
-    (hk : ir.convs[k]? = some cv) (hc : ir.specHonestCB primeNodes G k = true) :
+    (hk : ir.convs[k]? = some cv) (hc : ir.specHonestCB primeNodes S G k = true) :
     ir.HoldsWith (ir.reader SE) (ir.predicate cv.products).body := by
   unfold specHonestCB at hc
   rw [hk] at hc
@@ -130,7 +92,7 @@ theorem holds_specProductsC_srcEnv (hbd : ir.StmtBounded I x) {k : ℕ} {cv : Sp
   have hlaM : cv.left ≤ cv.length := by have := F.fits; have := F.right_pos; omega
   have hlbM : cv.right ≤ cv.length := by have := F.fits; have := F.left_pos; omega
   have hIF := ivlFacts_srcEnvC hwf hI hL R hA π hbd
-  have hlok := ir.leafIvl_justified primeNodes ir.declaredRanges
+  have hlok := ir.ivlTab_justified primeNodes S.ivlTrie ir.declaredRanges
   rw [hbody]
   intro i hi
   have hiz : i < (ir.value z).size := by
@@ -176,7 +138,7 @@ theorem holds_specProductsC_srcEnv (hbd : ir.StmtBounded I x) {k : ℕ} {cv : Sp
       have hM0 : 0 < cv.length := by have := F.left_pos; omega
       exact (Nat.div_lt_iff_lt_mul hM0).2 hiBM
     have hside : ∀ (B' M' psi' : ℕ) (P : Expr) (J : Ivl), B' = cv.blocks → M' = cv.length →
-        psi' = cv.root → ir.ExprOk f P → ir.srcIvl (ir.srcLeafIvl primeNodes) f P = some J →
+        psi' = cv.root → ir.ExprOk f P → ir.srcIvl (ir.srcLeafIvl primeNodes S) f P = some J →
         ir.exprLen P = cv.blocks * cv.length →
         ir.evalE (ir.reader SE) f (.apply (.batched B' (.ntt M' psi' .scheme)) P) i ∈
           (Int.castRingHom (I f).K).range := by
@@ -212,14 +174,15 @@ integer equality, its sides' integer readings cast to their values), and every s
 convolution's products predicate holds (`holds_specProductsC_srcEnv`), so the realization holds
 (`holdsWith_realized_of_fieldEq`). -/
 theorem holds_specRowC_srcEnv (hbd : ir.StmtBounded I x) {m q : ℕ}
-    (h : ir.specRowCB primeNodes G m q = true) :
+    (h : ir.specRowCB primeNodes S G m q = true) :
     ir.HoldsWith (ir.reader SE) (ir.predicate q).body := by
   have hsat := sourceSatAt_srcEnvC hwf hI hL R hA π
   have hIF := ivlFacts_srcEnvC hwf hI hL R hA π hbd
-  have hlok := ir.leafIvl_justified primeNodes ir.declaredRanges
+  have hlok := ir.ivlTab_justified primeNodes S.ivlTrie ir.declaredRanges
   have hm : m < ir.predicates.length := by
     by_contra hm
-    have hd : ir.predicate m = default := List.getD_eq_default _ _ (Nat.le_of_not_lt hm)
+    have hd : ir.predicate m = default :=
+      (ir.predicate_eq_getD m).trans <| List.getD_eq_default _ _ (Nat.le_of_not_lt hm)
     unfold specRowCB at h
     rw [hd] at h
     simp only [Bool.and_eq_true] at h
@@ -251,7 +214,7 @@ theorem holds_specRowC_srcEnv (hbd : ir.StmtBounded I x) {m q : ℕ}
     simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hB
     obtain ⟨-, hR⟩ := hB
     rw [hbody] at hpo hsm
-    exact key d e e' hR (hpo.1 (d, e) (by simp [PredBody.exprs])).1
+    exact key d e e' (realizedAdmits_of_realizedAtS hR) (hpo.1 (d, e) (by simp [PredBody.exprs])).1
       (hpo.1 (d, e) (by simp [PredBody.exprs])).2 (hpo.1 (d, e') (by simp [PredBody.exprs])).2
       hpo.2.symm hsm
   · rename_i d e e' real hbody
@@ -262,11 +225,11 @@ theorem holds_specRowC_srcEnv (hbd : ir.StmtBounded I x) {m q : ℕ}
     have he := (hpo.1 (d, e) (by simp [PredBody.exprs])).2
     have he' := (hpo.1 (d, e') (by simp [PredBody.exprs])).2
     have hlen : ir.exprLen e = ir.exprLen e' := hpo.2
-    refine key d e e' hR hd he he' hlen.symm fun i hi => ?_
+    refine key d e e' (realizedAdmits_of_realizedAtS hR) hd he he' hlen.symm fun i hi => ?_
     obtain ⟨-, hc⟩ := exprIvl_within_of hwf hI hL hIF hlok hd h2 he hwe hi
     obtain ⟨-, hc'⟩ := exprIvl_within_of hwf hI hL hIF hlok hd h2 he' hwe'
       (by rw [← hlen]; exact hi)
-    have hz := hsm i hi
+    have hz := hsm.1 i hi
     rw [Nat.cast_zero, zero_dvd_iff, sub_eq_zero] at hz
     rw [← hc, ← hc', hz]
   · cases hB

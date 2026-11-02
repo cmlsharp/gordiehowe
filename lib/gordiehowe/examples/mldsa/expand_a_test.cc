@@ -124,7 +124,7 @@ TYPED_TEST(ExpandATest, MatchesReference) {
   for (const auto &pk : keys) {
     std::map<size_t, typename Fx::Value> cap;
     ASSERT_TRUE(f.prove_verify(seed_of(pk), &cap));
-    const std::vector<uint64_t> want = host::expand_a(pk);
+    const std::vector<uint64_t> want = host::expand_a<MLDSA44>(pk);
     const auto a = words_of(
         f.env.af, std::get<typename Fx::AV>(cap.at(f.id("crossing.bits"))),
         kCoeffBits);
@@ -227,7 +227,8 @@ TYPED_TEST(ExpandATest, TamperRejected) {
 static_assert(ml_dsa::kRejNTTPolyBlocks == kBlocks);
 
 // The canonical coefficients of a matrix A_hat, r major.
-std::vector<uint64_t> flat(const ml_dsa::MLDsaTypes<Params>::MatrixA &a) {
+std::vector<uint64_t> flat(
+    const ml_dsa::MLDsaTypes<MLDSA44::Reference>::MatrixA &a) {
   std::vector<uint64_t> out;
   for (size_t i = 0; i < kRows; ++i)
     for (size_t j = 0; j < kCols; ++j) {
@@ -259,21 +260,21 @@ TEST(ExpandAHost, HostBounded) {
     keys.push_back(ex.pkey);
   for (const auto &pk : keys) {
     const std::vector<uint8_t> rho(pk.begin(), pk.begin() + 32);
-    const auto want = flat(ml_dsa::ExpandA<Params>(rho));
-    const auto bounded = ml_dsa::ExpandABounded<Params>(rho);
+    const auto want = flat(ml_dsa::ExpandA<MLDSA44::Reference>(rho));
+    const auto bounded = ml_dsa::ExpandABounded<MLDSA44::Reference>(rho);
     ASSERT_TRUE(bounded.has_value());
     EXPECT_EQ(flat(*bounded), want);
-    EXPECT_EQ(host::expand_a(pk), want);
+    EXPECT_EQ(host::expand_a<MLDSA44>(pk), want);
     // A 4-block squeeze (224 candidates) cannot hold 256 acceptances.
-    EXPECT_FALSE(ml_dsa::ExpandABounded<Params>(rho, 4).has_value());
-    EXPECT_THROW(host::expand_a_within(pk, 4), StatementRefused);
+    EXPECT_FALSE(ml_dsa::ExpandABounded<MLDSA44::Reference>(rho, 4).has_value());
+    EXPECT_THROW(host::expand_a_within<MLDSA44>(pk, 4), StatementRefused);
   }
   // FIPS 204's ExpandA known-answer vector (ml_dsa_ref_test_vectors.inc).
   const std::vector<uint8_t> kat = {
       0x5e, 0x1b, 0xad, 0xb2, 0x92, 0x27, 0x6b, 0x20, 0x2a, 0x6f, 0x6a,
       0xf9, 0x0e, 0x3c, 0xdc, 0xf6, 0xc1, 0xb5, 0xcc, 0x62, 0x60, 0xc0,
       0x1b, 0x74, 0x7d, 0xac, 0x61, 0x9f, 0xe1, 0x61, 0x30, 0x28};
-  const auto kat_a = ml_dsa::ExpandABounded<Params>(kat);
+  const auto kat_a = ml_dsa::ExpandABounded<MLDSA44::Reference>(kat);
   ASSERT_TRUE(kat_a.has_value());
   const std::vector<uint64_t> got = flat(*kat_a);
   for (size_t i = 0; i < kRows; ++i)
@@ -282,7 +283,7 @@ TEST(ExpandAHost, HostBounded) {
         EXPECT_EQ(got[(i * kCols + j) * kDegree + k],
                   ml_dsa::kExpectedExpandAVectors[i][j][k])
             << i << " " << j << " " << k;
-  EXPECT_EQ(got, flat(ml_dsa::ExpandA<Params>(kat)));
+  EXPECT_EQ(got, flat(ml_dsa::ExpandA<MLDSA44::Reference>(kat)));
 }
 
 // A RejNTTPoly call at B blocks succeeds exactly when its 56 B candidates

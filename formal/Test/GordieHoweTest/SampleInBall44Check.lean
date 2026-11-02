@@ -10,7 +10,7 @@ exercised by the C++ reference test `MlDsaRefTest<MLDsa44Params>.SampleInBall`. 
 mod `q` (so `0`, `1`, or `q - 1` for `-1`), matching `Coeff := ZMod modulus`'s canonical
 representatives directly.
 
-Exposes `checkSampleInBall44 : IO Bool`, run from `Test/GordieHoweTest/MLDSAVectors.lean`'s `#eval`.
+Exposes `checkSampleInBall44 : IO Bool`, run from `Test/GordieHoweTest/MLDSAVectorsVerify.lean`'s `#eval`.
 -/
 import LatticeCrypto.MLDSA.ConcretePrimitives
 import GordieHoweTest.Hex

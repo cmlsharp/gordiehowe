@@ -18,9 +18,12 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <memory>
 #include <vector>
 
 #include "gordiehowe/compiler/field_skip.h"
+#include "sumcheck/skip_neon.h"
 #include "sumcheck/boolean_skip.h"
 #include "util/panic.h"
 #include "util/parallel.h"
@@ -40,6 +43,10 @@ class RuntimeBooleanSkip {
   using Elt = typename F::Elt;
   using Small = typename SkipByteField<F>::type;
   static constexpr unsigned kMaxOperands = kMaxBitOperands;
+  // The NEON kernels' element bytes (sumcheck/skip_neon.h), 0 when the
+  // portable kernels run.
+  static constexpr size_t kNeonBytes =
+      PROOFS_SKIP_NEON ? SkipElementBytes<F>::value : 0;
 
   // MONOS: each monomial's operand indices (below K), with repetition;
   // coefficient 1, no constant monomial.
@@ -155,6 +162,32 @@ class RuntimeBooleanSkip {
     // Per chunk c and point x, the eight basis accumulators at
     // sums[(c extra() + x) 8 + b].
     std::vector<Elt> sums(nc * extra() * 8, f.zero());
+#if PROOFS_SKIP_NEON
+    // The NEON kernel's bit-plane sums (sumcheck/skip_neon.h), per tile of
+    // rows, the same sums.
+    if constexpr (kNeonBytes != 0) {
+      using Sums = skip_neon::PlaneSums<kNeonBytes>;
+      parallel::for_chunks(n, grain, [&](size_t lo, size_t hi) {
+        Sums acc(extra());
+        std::vector<uint8_t> residual(extra() * Sums::kTile), part;
+        for (size_t t = lo; t < hi; t += Sums::kTile) {
+          const size_t nr = std::min(Sums::kTile, hi - t);
+          part.resize(nr);
+          for (unsigned x = 0; x < extra(); ++x) {
+            small_residual(rows, bytes, n, x, t, t + nr, part);
+            std::memcpy(&residual[x * Sums::kTile], part.data(), nr);
+          }
+          acc.add(reinterpret_cast<const uint8_t *>(&e[t]), residual.data(),
+                  nr);
+        }
+        for (unsigned x = 0; x < extra(); ++x)
+          for (unsigned b = 0; b < 8; ++b)
+            acc.get(x, b,
+                    reinterpret_cast<uint8_t *>(
+                        &sums[((lo / grain) * extra() + x) * 8 + b]));
+      });
+    } else
+#endif
     parallel::for_chunks(n, grain, [&](size_t lo, size_t hi) {
       std::vector<uint8_t> residual(hi - lo);
       for (unsigned x = 0; x < extra(); ++x) {
@@ -206,14 +239,35 @@ class RuntimeBooleanSkip {
     const size_t nl = std::min(n, live);
     const Elt *const tb = tables.data();
     const uint64_t *const rw = rows.data();
+#if PROOFS_SKIP_NEON
+    std::unique_ptr<skip_neon::BitEval<kNeonBytes != 0 ? kNeonBytes : 16>> eval;
+    if constexpr (kNeonBytes != 0)
+      eval = std::make_unique<skip_neon::BitEval<kNeonBytes>>(
+          reinterpret_cast<const uint8_t *>(tb), w);
+    const auto *const ev = eval.get();
+#endif
     const unsigned k = K;
     parallel::for_chunks(
         n, parallel::grain_for(n, parallel::kChunks),
         [&, out, tb, rw, k, nl](size_t lo, size_t hi) {
+#if PROOFS_SKIP_NEON
+          const auto *eval = ev;
+#endif
           const size_t e = std::min(hi, std::max(lo, nl));
           for (unsigned j = 0; j < k; ++j) {
             Elt *const o = out[j];
-            for (size_t i = lo; i < e; ++i)
+            size_t i = lo;
+#if PROOFS_SKIP_NEON
+            // The NEON kernel (sumcheck/skip_neon.h), 16 rows at a time.
+            if constexpr (kNeonBytes != 0) {
+              for (; i + 16 <= e; i += 16) {
+                alignas(16) uint64_t z[16];
+                for (unsigned q = 0; q < 16; ++q) z[q] = rw[(i + q) * k + j];
+                eval->eval(z, reinterpret_cast<uint8_t *>(o + i));
+              }
+            }
+#endif
+            for (; i < e; ++i)
               o[i] = large_eval(rw[i * k + j], tb);
             std::fill(o + e, o + hi, f.zero());
           }
@@ -272,6 +326,15 @@ class RuntimeBooleanSkip {
     else
       return Elt(gf2_256_elt_t{_mm_and_si128(value.n.lo, m),
                                _mm_and_si128(value.n.hi, m)});
+#elif defined(__aarch64__) && !defined(PROOFS_NO_NEON)
+    const uint64x2_t m = vdupq_n_u64(uint64_t(0) - bit);
+    auto masked = [&](gf2_128_elt_t x) {
+      return vreinterpretq_p64_u64(vandq_u64(vreinterpretq_u64_p64(x), m));
+    };
+    if constexpr (narrow)
+      return Elt(masked(value.n));
+    else
+      return Elt(gf2_256_elt_t{masked(value.n.lo), masked(value.n.hi)});
 #else
     if constexpr (narrow) {
       auto raw = uint64x2_of_gf2_128(value.n);
@@ -345,6 +408,46 @@ class RuntimeBooleanSkip {
                                 [](__m128i a, __m128i b) {
                                   return _mm_xor_si128(a, b);
                                 }));
+    }
+#elif defined(__aarch64__) && !defined(PROOFS_NO_NEON)
+    // The SSSE3 loop's NEON form: TBL for the nibble shuffles. A product
+    // in the skip subfield (polynomial basis, x^8 = mul[128][2]) is the
+    // carryless product by PMULL (8 x 8 -> 16 bits) and the reduction of
+    // its high byte h, h x^8 = R(h), a GF(2)-linear map of h by two
+    // nibble shuffles. R's tables are public constants.
+    const uint8x16_t zero = vdupq_n_u8(0);
+    alignas(16) uint8_t red_lo[16], red_hi[16] = {};
+    const uint8_t x8 = mul[128][2];
+    for (unsigned v = 0; v < 16; ++v) red_lo[v] = mul[v][x8];
+    for (unsigned v = 0; v < 8; ++v) red_hi[v] = mul[16 * v][x8];
+    const uint8x16_t rlo = vld1q_u8(red_lo), rhi = vld1q_u8(red_hi);
+    auto multiply = [&](uint8x16_t a, uint8x16_t b) {
+      const poly8x16_t pa = vreinterpretq_p8_u8(a), pb = vreinterpretq_p8_u8(b);
+      const uint8x16_t p0 = vreinterpretq_u8_p16(
+          vmull_p8(vget_low_p8(pa), vget_low_p8(pb)));
+      const uint8x16_t p1 = vreinterpretq_u8_p16(vmull_high_p8(pa, pb));
+      const uint8x16_t l = vuzp1q_u8(p0, p1), h = vuzp2q_u8(p0, p1);
+      return veorq_u8(l, veorq_u8(vqtbl1q_u8(rlo, vandq_u8(h, vdupq_n_u8(15))),
+                                  vqtbl1q_u8(rhi, vshrq_n_u8(h, 4))));
+    };
+    for (; i + 16 <= hi; i += 16) {
+      std::array<uint8x16_t, kMaxOperands> v;
+      for (auto &x : v) x = zero;
+      for (unsigned b = 0; b < chunks(); ++b) {
+        // Both complete 16-byte tables are loaded at public addresses.
+        const auto *t = &small[(point * chunks() + b) * 32];
+        const uint8x16_t tlo = vld1q_u8(t), thi = vld1q_u8(t + 16);
+        for (unsigned j = 0; j < K; ++j) {
+          const uint8x16_t word = vld1q_u8(&bytes[(j * chunks() + b) * n + i]);
+          v[j] = veorq_u8(v[j],
+                          veorq_u8(vqtbl1q_u8(tlo, vandq_u8(word, vdupq_n_u8(15))),
+                                   vqtbl1q_u8(thi, vshrq_n_u8(word, 4))));
+        }
+      }
+      vst1q_u8(&result[i - lo], relation(v.data(), zero, multiply,
+                               [](uint8x16_t a, uint8x16_t b) {
+                                 return veorq_u8(a, b);
+                               }));
     }
 #endif
     for (; i < hi; ++i) {

@@ -35,7 +35,7 @@ namespace Quantum.AdaptiveIAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  (A : AdaptiveIAlg X Y Req Resp O)
+  {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O)
 
 /-- **Every proof query comes after at most `q` query slots**, in the model's semantics: the adversary
 with its query counter (`toKindAlg`) moves no weight from a branch within its budget to a branch
@@ -44,7 +44,7 @@ branch are not charged. -/
 def RequestsAfterAtMost (q : ℕ) : Prop :=
   ∀ k : StepIdx A.slots A.post, (k : ℕ) < A.slots →
     ∀ (r : A.R) (y x : DReg A.toKindAlg.W A.width X Y Req Resp), A.wcnt x.workspace ≤ A.budget →
-      A.kind y.workspace.1 = true → q < A.wcnt y.workspace → (A.toKindAlg.step k).op r y x = 0
+      A.kind y.workspace.work = true → q < A.wcnt y.workspace → (A.toKindAlg.step k).op r y x = 0
 
 /-- **The budget bounds the query slots before every proof query**: a branch within its budget stays
 within it, so it makes a proof query after at most `budget` query slots. -/
@@ -63,19 +63,20 @@ flag. -/
 def dilRequestBudget {q : ℕ} (hq : A.RequestsAfterAtMost q) (o : O) :
     (A.toKindAlg.dilate o).RequestBudget q where
   inv k c := {w | MixedAlg.Clean (k + 1) w.2.2 ∧
-    (w.2.1 = true ∨ (A.wcnt w.1 = c + (if A.kind w.1.1 then 0 else 1) ∧ A.wcnt w.1 ≤ A.budget ∧
-      (A.kind w.1.1 = true → A.wcnt w.1 ≤ q)))}
+    (w.2.1 = true ∨ (A.wcnt w.1 = c + (if A.kind w.1.work then 0 else 1) ∧ A.wcnt w.1 ≤ A.budget ∧
+      (A.kind w.1.work = true → A.wcnt w.1 ≤ q)))}
   init hm := by
     have h0 := A.toKindAlg.dilate_init_supported o (P := fun w => A.wcnt w = 0)
       A.suppIn_mgInit_wcnt
+    rw [A.toKindAlg.dilate_step o]
     exact A.toKindAlg.uStepD_supported (k := 0) (by omega)
       (P := fun w => A.wcnt w = 0)
-      (Q := fun w => A.wcnt w = 0 + (if A.kind w.1 then 0 else 1) ∧ A.wcnt w ≤ A.budget ∧
-        (A.kind w.1 = true → A.wcnt w ≤ q))
+      (Q := fun w => A.wcnt w = 0 + (if A.kind w.work then 0 else 1) ∧ A.wcnt w ≤ A.budget ∧
+        (A.kind w.work = true → A.wcnt w ≤ q))
       (fun r y x hx hy => by
-        by_cases h2 : A.wcnt y.workspace = 0 + (if A.kind y.workspace.1 then 0 else 1) ∧
+        by_cases h2 : A.wcnt y.workspace = 0 + (if A.kind y.workspace.work then 0 else 1) ∧
             A.wcnt y.workspace ≤ A.budget
-        · have h3 : A.kind y.workspace.1 = true ∧ q < A.wcnt y.workspace := by
+        · have h3 : A.kind y.workspace.work = true ∧ q < A.wcnt y.workspace := by
             by_contra h'
             exact hy ⟨h2.1, h2.2, fun hk => by
               by_contra hlt
@@ -90,6 +91,7 @@ def dilRequestBudget {q : ℕ} (hq : A.RequestsAfterAtMost q) (o : O) :
           (d.workspace.2.1 = true ∨ (A.wcnt d.workspace.1 = c' ∧ A.wcnt d.workspace.1 ≤ A.budget))} v := by
       refine Supported.mono hv fun d hd => ?_
       obtain ⟨⟨hc, hh⟩, hkind⟩ := hd
+      rw [A.toKindAlg.dilate_kind o] at hkind
       refine ⟨hc, ?_⟩
       rcases hh with h | h
       · exact Or.inl h
@@ -97,21 +99,22 @@ def dilRequestBudget {q : ℕ} (hq : A.RequestsAfterAtMost q) (o : O) :
         · exact Or.inl hhalt
         · right
           rw [Bool.not_eq_true] at hhalt
-          have hb : A.kind d.workspace.1.1 = b := by
-            have : (A.kind d.workspace.1.1 || d.workspace.2.1) = b := hkind
+          have hb : A.kind d.workspace.1.work = b := by
+            have : (A.kind d.workspace.1.work || d.workspace.2.1) = b := hkind
             rwa [hhalt, Bool.or_false] at this
           subst hb
           refine ⟨?_, h.2.1⟩
           rw [h.1]
-          by_cases hkd : A.kind d.workspace.1.1 = true <;> simp [c', hkd]
+          by_cases hkd : A.kind d.workspace.1.work = true <;> simp [c', hkd]
+    rw [A.toKindAlg.dilate_step o]
     exact A.toKindAlg.uStepD_supported (k := k + 1) (by change k + 1 < A.slots + A.post + 1; omega)
       (P := fun w => A.wcnt w = c' ∧ A.wcnt w ≤ A.budget)
-      (Q := fun w => A.wcnt w = c' + (if A.kind w.1 then 0 else 1) ∧ A.wcnt w ≤ A.budget ∧
-        (A.kind w.1 = true → A.wcnt w ≤ q))
+      (Q := fun w => A.wcnt w = c' + (if A.kind w.work then 0 else 1) ∧ A.wcnt w ≤ A.budget ∧
+        (A.kind w.work = true → A.wcnt w ≤ q))
       (fun r y x hx hy => by
-        by_cases h2 : A.wcnt y.workspace = c' + (if A.kind y.workspace.1 then 0 else 1) ∧
+        by_cases h2 : A.wcnt y.workspace = c' + (if A.kind y.workspace.work then 0 else 1) ∧
             A.wcnt y.workspace ≤ A.budget
-        · have h3 : A.kind y.workspace.1 = true ∧ q < A.wcnt y.workspace := by
+        · have h3 : A.kind y.workspace.work = true ∧ q < A.wcnt y.workspace := by
             by_contra h'
             exact hy ⟨h2.1, h2.2, fun hk => by
               by_contra hlt
@@ -124,6 +127,7 @@ def dilRequestBudget {q : ℕ} (hq : A.RequestsAfterAtMost q) (o : O) :
     have hv' : Supported {d : DReg A.toKindAlg.DW A.width X Y Req Resp |
         MixedAlg.Clean (k + 1) d.workspace.2.2 ∧ (d.workspace.2.1 = true ∨ False)} v :=
       hv.mono fun d hd => ⟨hd.1.1, Or.inl hd.2⟩
+    rw [A.toKindAlg.dilate_step o]
     have h := A.toKindAlg.uStepD_supported (k := k + 1)
       (by change k + 1 < A.slots + A.post + 1; change k + 1 < A.slots + 1 at hk; omega)
       (P := fun _ => False) (Q := fun _ => False) (fun _ _ _ hx _ => hx.elim) hv'
@@ -134,7 +138,7 @@ def dilRequestBudget {q : ℕ} (hq : A.RequestsAfterAtMost q) (o : O) :
   capReq k hk c w hw hkind hnh := by
     have hflag : w.2.1 = false := by
       simpa using hnh
-    have hk' : (A.kind w.1.1 || w.2.1) = true := hkind
+    have hk' : (A.kind w.1.work || w.2.1) = true := by rw [A.toKindAlg.dilate_kind o] at hkind; exact hkind
     rw [hflag, Bool.or_false] at hk'
     rcases hw.2 with h | h
     · rw [hflag] at h
@@ -178,7 +182,9 @@ theorem postRejectsHalted_dilRequestBudget {q : ℕ} (hq : A.RequestsAfterAtMost
     hv.mono fun d hd => ⟨hd.1.1, hd.2⟩
   have h := A.supported_postOpN_halted H A.toKindAlg.post le_rfl v hv'
   refine h r fun hd => ?_
-  have hflag : r.workspace.2.1 = false := hr.1
+  have hflag : r.workspace.2.1 = false := by
+    rw [A.toKindAlg.dilate_accept o] at hr
+    exact hr.1
   rw [hd.2] at hflag
   exact absurd hflag (by decide)
 

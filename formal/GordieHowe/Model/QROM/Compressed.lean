@@ -133,6 +133,23 @@ namespace GordieHowe.QROM
 /-- `{0,1}^n` as `|I|` words of `|J|` bits, added bitwise (XOR). -/
 abbrev BitStr (I J : Type) := I → J → ZMod 2
 
+/-! The `Prop` instances below are named, so that each is a constant applied to variables: a
+definition keeps such an instance as it is (an inline instance term is abstracted into an auxiliary
+lemma of the definition, while a statement keeps it inline), and definitions and statements spell
+it as one term. -/
+
+/-- Bit strings are nonempty. -/
+instance instNonemptyBitStr (I J : Type) : Nonempty (BitStr I J) :=
+  ⟨fun _ _ => 0⟩
+
+/-- Two is not zero (the bits `ZMod 2`). -/
+instance instNeZeroTwo : NeZero 2 :=
+  ⟨two_ne_zero⟩
+
+/-- The numeral `12` is at least two. -/
+instance instAtLeastTwo12 : Nat.AtLeastTwo 12 :=
+  ⟨by norm_num⟩
+
 variable {I J : Type} [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J]
 
 /-- The dot product `u · y = ∑ u_ij y_ij (mod 2)` of two bit strings (CMS19 section 3.6). -/

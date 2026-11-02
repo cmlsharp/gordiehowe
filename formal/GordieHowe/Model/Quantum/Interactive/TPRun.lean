@@ -40,7 +40,8 @@ over-budget call is equivalent to the bound on every branch.
   budget for every adversary (`tracePreserving_abortAlg`, `withinBudget_abortAlg`), and for an
   adversary within its budget its model run has the adversary's output law and final state, the
   latter placed along the map that adds the completion's counter
-  (`WithinBudget.outLaw_compose_abortAlg`, `WithinBudget.final_compose_abortAlg`).
+  (`WithinBudget.outLaw_compose_abortAlg`, `WithinBudget.final_compose_abortAlg`). Its shape is
+  `AlgShape.abortS` of the adversary's (`abortAlg_toShape`).
 
 The proofs of (iii) and of the last two statements do not use `TracePreserving`: `WithinBudget`
 excludes both the projected over-budget weight and the lost weight. With `TracePreserving`, the
@@ -121,7 +122,7 @@ namespace KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  (B : KindAlg X Y Req Resp O) (C : Challenger X Y Req Resp)
+  {ksB : KindShape X Y Req Resp} (B : KindAlg ksB O) (C : Challenger X Y Req Resp)
 
 /-- **Every step of the core algorithm with kinds is trace preserving.** -/
 def StepsTP : Prop :=
@@ -190,7 +191,7 @@ theorem trace_withAnc {V : Type} [Fintype V] [DecidableEq V] (x₀ : X)
 
 /-- The final state of a composition with an output of the composed registers is the run of its
 circuit on the initial state, with the clean ancilla. -/
-theorem final_composeBothOut {O' : Type} (B : KindAlg X Y Req Resp O) (f : B.CW C → O')
+theorem final_composeBothOut {O' : Type} {ksB : KindShape X Y Req Resp} (B : KindAlg ksB O) (f : B.CW C → O')
     (H : X → Y) :
     (B.composeBothOut C f).final H =
       withAnc x₀ ((B.fullCircBoth C).run H (B.initSys C).mat) := by
@@ -198,7 +199,7 @@ theorem final_composeBothOut {O' : Type} (B : KindAlg X Y Req Resp O) (f : B.CW 
   exact ReprogrammedCircuit.run_toCircuit H _ _ _
 
 /-- The composition reads the adversary's output from the composed registers. -/
-theorem composeBoth_eq_composeBothOut (B : KindAlg X Y Req Resp O) :
+theorem composeBoth_eq_composeBothOut {ksB : KindShape X Y Req Resp} (B : KindAlg ksB O) :
     B.composeBoth C = B.composeBothOut C fun v => B.out v.adv.workspace :=
   rfl
 
@@ -404,7 +405,7 @@ namespace KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  (B : KindAlg X Y Req Resp O) (C : Challenger X Y Req Resp)
+  {ksB : KindShape X Y Req Resp} (B : KindAlg ksB O) (C : Challenger X Y Req Resp)
 
 /-- **A set of workspaces closed under the adversary's steps** (proof-internal): the initial state
 lies on it, and no Kraus map sends a register whose workspace is in it to one whose workspace is
@@ -529,16 +530,16 @@ namespace AdaptiveIAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  (A : AdaptiveIAlg X Y Req Resp O)
+  {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O)
 
 /-- **(i) The halting operators of a trace-preserving adversary are zero**, so in its
 trace-preserving form a branch ends only by asking for a query slot over its budget. -/
-theorem TracePreserving.haltOp_eq_zero {A : AdaptiveIAlg X Y Req Resp O} (hA : A.TracePreserving)
+theorem TracePreserving.haltOp_eq_zero {shA : AlgShape X Y Req Resp} {A : AdaptiveIAlg shA O} (hA : A.TracePreserving)
     (k : StepIdx A.slots A.post) : (A.step k).haltOp = 0 :=
   KrausMap.haltOp_eq_zero (hA k)
 
 /-- The steps of the trace-preserving form are trace preserving. -/
-theorem stepsTP_toTPKindAlg : A.toTPKindAlg.StepsTP :=
+theorem stepsTP_toTPKindAlg {freeze : Bool} : (A.toTPKindAlg freeze).StepsTP :=
   A.toTPKindAlg_step_tp
 
 variable [Nonempty X] [AddGroup Y] [Nonempty Y]
@@ -564,7 +565,7 @@ theorem final_composeBothOut_apply' {O' : Type} (f : A.toKindAlg.CW C → O') (H
   split_ifs <;> simp
 
 /-- The final state of a composition is positive semidefinite. -/
-theorem posSemidef_final {O' : Type} (B : KindAlg X Y Req Resp O) (f : B.CW C → O') (H : X → Y) :
+theorem posSemidef_final {O' : Type} {ksB : KindShape X Y Req Resp} (B : KindAlg ksB O) (f : B.CW C → O') (H : X → Y) :
     ((B.composeBothOut C f).final H).PosSemidef :=
   (B.composeBothOut C f).posSemidef_stage H _
 
@@ -668,7 +669,7 @@ theorem withinBudget_iff :
   have hF : F.PosSemidef := posSemidef_final C A.toTPKindAlg f H
   have hd : ∀ p, 0 ≤ (F p p).re := fun p => (Complex.nonneg_iff.1 (hF.diag_nonneg (i := p))).1
   have htr : ∑ p, (F p p).re = 1 := by
-    have := (A.stepsTP_toTPKindAlg).trace_final C f H
+    have := (A.stepsTP_toTPKindAlg (freeze := false)).trace_final C f H
     simp only [Matrix.trace, Matrix.diag] at this
     simpa [Complex.re_sum] using congrArg Complex.re this
   have hG : 1 ≤ ∑ p, if p.1.1 ∈ A.aliveC C then (F p p).re else 0 := by
@@ -958,25 +959,22 @@ namespace AdaptiveIAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  (A : AdaptiveIAlg X Y Req Resp O)
+  {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O)
 
 /-- **The aborting completion of an adversary**: the adversary that keeps its own count of query
 slots in its workspace, aborts a branch that asks for a query slot over `budget` (or that the
 adversary's Kraus maps lose) by moving its counter to the ended value, and requests at every later
 slot of an ended branch. Its steps are those of the trace-preserving form `toTPKindAlg`, and its
 output is the adversary's, read from the workspace without the counter. -/
-noncomputable def abortAlg : AdaptiveIAlg X Y Req Resp O where
-  W := A.W × Fin (A.budget + 2)
-  width := A.width
-  width_pos := A.width_pos
-  slots := A.slots
-  post := A.post
-  budget := A.budget
+noncomputable def abortAlg : AdaptiveIAlg shA.abortS O where
   kind := A.toTPKindAlg.kind
-  R := A.toTPKindAlg.R
   init := A.toTPKindAlg.init
   step := A.toTPKindAlg.step
   out := A.toTPKindAlg.out
+
+/-- **The shape of the aborting completion** (`AlgShape.abortS`). -/
+theorem abortAlg_toShape : A.abortAlg.toShape = A.toShape.abortS :=
+  rfl
 
 /-- **The aborting completion is trace preserving**, whatever the adversary. -/
 theorem tracePreserving_abortAlg : A.abortAlg.TracePreserving :=
@@ -990,10 +988,10 @@ theorem haltOp_abortAlg (k : StepIdx A.slots A.post) : (A.abortAlg.step k).haltO
 trace-preserving form) has not ended, and on a branch whose inner counter (the completion's own)
 has not ended the two agree. -/
 def counterInv : Set A.abortAlg.toTPKindAlg.W :=
-  {w | w.2 ≠ A.ended ∧ (w.1.2 ≠ A.ended → w.1.2 = w.2)}
+  {w | w.cnt ≠ A.ended ∧ (w.work.cnt ≠ A.ended → w.work.cnt = w.cnt)}
 
 theorem cntSplit_fst_workspace (y : A.abortAlg.CReg) :
-    (A.abortAlg.cntSplit y).1.workspace = y.workspace.1 :=
+    (A.abortAlg.cntSplit y).1.workspace = y.workspace.work :=
   rfl
 
 theorem val_ended : ((A.ended : Fin (A.budget + 2)) : ℕ) = A.budget + 1 :=
@@ -1013,7 +1011,7 @@ theorem ne_ended_iff (c : Fin (A.budget + 2)) : c ≠ A.ended ↔ (c : ℕ) ≤ 
 
 /-- The register determines its part without the counter and the counter. -/
 theorem cntSplit_ext {u v : A.CReg} (h1 : (A.cntSplit u).1 = (A.cntSplit v).1)
-    (h2 : u.workspace.2 = v.workspace.2) : u = v :=
+    (h2 : u.workspace.cnt = v.workspace.cnt) : u = v :=
   A.cntSplit.injective (Prod.ext h1 h2)
 
 /-- The counter step keeps the register without the counter. -/
@@ -1036,9 +1034,9 @@ theorem cntSplit_fst_endSwap_symm (u : A.CReg) :
 /-- **The register of the aborting completion's trace-preserving form with both counters equal to
 the counter of `d`** (proof-internal). -/
 noncomputable def liftD (d : A.CReg) : A.abortAlg.CReg :=
-  A.abortAlg.cntSplit.symm (d, d.workspace.2)
+  A.abortAlg.cntSplit.symm (d, d.workspace.cnt)
 
-theorem cntSplit_liftD (d : A.CReg) : A.abortAlg.cntSplit (A.liftD d) = (d, d.workspace.2) :=
+theorem cntSplit_liftD (d : A.CReg) : A.abortAlg.cntSplit (A.liftD d) = (d, d.workspace.cnt) :=
   Equiv.apply_symm_apply _ _
 
 theorem liftD_injective : Function.Injective A.liftD := fun a b h => by
@@ -1048,42 +1046,44 @@ theorem liftD_injective : Function.Injective A.liftD := fun a b h => by
 
 /-- The kind of the aborting completion on a workspace whose counter has not ended is the
 adversary's. -/
-theorem abortAlg_kind_of_ne {w : A.W × Fin (A.budget + 2)} (hw : w.2 ≠ A.ended) :
-    A.abortAlg.kind w = A.kind w.1 := by
-  change (A.kind w.1 || decide (w.2 = A.ended)) = _
+theorem abortAlg_kind_of_ne {w : A.CntW} (hw : w.cnt ≠ A.ended) :
+    A.abortAlg.kind w = A.kind w.work := by
+  change (A.kind w.work || decide (w.cnt = A.ended)) = _
   rw [decide_eq_false hw, Bool.or_false]
 
 theorem abortAlg_step_op (k : StepIdx A.abortAlg.slots A.abortAlg.post) (r : A.abortAlg.R) (y x : A.CReg) :
-    (A.abortAlg.step k).op r y x = A.tpOp k r y x :=
-  rfl
+    (A.abortAlg.step k).op r y x = A.tpOp false k r y x := by
+  show (A.toTPKindAlg.step k).op r y x = _
+  rw [toTPKindAlg_step_op]
 
 /-- **On registers with equal counters that have not ended, the aborting completion's
 trace-preserving operators are the trace-preserving form's.** -/
 theorem tpOp_abortAlg_inl (k : StepIdx A.abortAlg.slots A.abortAlg.post) (r : A.abortAlg.R)
-    {y : A.CReg} (x : A.CReg) (hy : y.workspace.2 ≠ A.ended) :
-    A.abortAlg.tpOp k (.inl r) (A.liftD y) (A.liftD x) = A.tpOp k r y x := by
-  have ey : ((A.liftD y).workspace.2 : ℕ) = y.workspace.2 :=
+    {y : A.CReg} (x : A.CReg) (hy : y.workspace.cnt ≠ A.ended) :
+    A.abortAlg.tpOp false k (.inl r) (A.liftD y) (A.liftD x) = A.tpOp false k r y x := by
+  have ey : ((A.liftD y).workspace.cnt : ℕ) = y.workspace.cnt :=
     congrArg (fun p => (p.2 : ℕ)) (A.cntSplit_liftD y)
-  have ex : ((A.liftD x).workspace.2 : ℕ) = x.workspace.2 :=
+  have ex : ((A.liftD x).workspace.cnt : ℕ) = x.workspace.cnt :=
     congrArg (fun p => (p.2 : ℕ)) (A.cntSplit_liftD x)
   by_cases hk : (k : ℕ) < A.slots
-  · conv_lhs => simp only [tpOp, show (k : ℕ) < A.abortAlg.slots from hk, if_true,
+  · conv_lhs => simp only [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr,
+      show (k : ℕ) < A.abortAlg.slots from hk, if_true,
       restrict_permConj_op_apply]
     rw [cntKraus_op_apply, cntSplit_fst_tpShift_symm, cntSplit_liftD, cntSplit_liftD,
       abortAlg_step_op]
-    by_cases hA : A.tpOp k r y x = 0
+    by_cases hA : A.tpOp false k r y x = 0
     · rw [hA]
       simp
     · have hc := A.tp_slot_counter hk r y x hA
       rcases hc with hc | ⟨hxe, hc, hlt⟩
       · exact absurd hc hy
-      set u₀ : A.abortAlg.CReg := A.abortAlg.cntSplit.symm (y, x.workspace.2)
-      have hu₀ : A.abortAlg.cntSplit u₀ = (y, x.workspace.2) := Equiv.apply_symm_apply _ _
-      have e1 : u₀.workspace.1 = y.workspace := congrArg (fun p => p.1.workspace) hu₀
-      have e2 : (u₀.workspace.2 : ℕ) = x.workspace.2 := congrArg (fun p => (p.2 : ℕ)) hu₀
+      set u₀ : A.abortAlg.CReg := A.abortAlg.cntSplit.symm (y, x.workspace.cnt)
+      have hu₀ : A.abortAlg.cntSplit u₀ = (y, x.workspace.cnt) := Equiv.apply_symm_apply _ _
+      have e1 : u₀.workspace.work = y.workspace := congrArg (fun p => p.1.workspace) hu₀
+      have e2 : (u₀.workspace.cnt : ℕ) = x.workspace.cnt := congrArg (fun p => (p.2 : ℕ)) hu₀
       have hb : A.abortAlg.inBudget u₀ = true := by
         rw [inBudget_of_alive_kind]
-        by_cases hkd : A.kind y.workspace.1 = true
+        by_cases hkd : A.kind y.workspace.work = true
         · left
           rw [e1, A.abortAlg_kind_of_ne hy]
           exact hkd
@@ -1093,10 +1093,10 @@ theorem tpOp_abortAlg_inl (k : StepIdx A.abortAlg.slots A.abortAlg.post) (r : A.
           have := congrArg Fin.val h
           rw [e2] at this
           simp only [Fin.coe_castSucc, Fin.val_last] at this
-          change (x.workspace.2 : ℕ) = A.budget at this
+          change (x.workspace.cnt : ℕ) = A.budget at this
           omega
       have ha : u₀ ∈ A.abortAlg.aliveD := by
-        change u₀.workspace.2 ≠ A.ended
+        change u₀.workspace.cnt ≠ A.ended
         intro h
         have := congrArg Fin.val h
         rw [e2] at this
@@ -1109,17 +1109,18 @@ theorem tpOp_abortAlg_inl (k : StepIdx A.abortAlg.slots A.abortAlg.post) (r : A.
           rw [h2, e2, e1, A.abortAlg_kind_of_ne hy, ey, hc]
       have hu : A.abortAlg.tpShift.symm (A.liftD y) = u₀ := by
         rw [← hshift, Equiv.symm_apply_apply]
-      have e4 : u₀.workspace.2 = (A.liftD x).workspace.2 := Fin.ext (by rw [e2, ex])
+      have e4 : u₀.workspace.cnt = (A.liftD x).workspace.cnt := Fin.ext (by rw [e2, ex])
       rw [hu, hb, e4, Matrix.one_apply_eq]
       simp
-  · conv_lhs => simp only [tpOp, show ¬ (k : ℕ) < A.abortAlg.slots from hk, if_false]
+  · conv_lhs => simp only [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr,
+      show ¬ (k : ℕ) < A.abortAlg.slots from hk, if_false]
     rw [cntKraus_op_apply, cntSplit_liftD, cntSplit_liftD, abortAlg_step_op]
-    by_cases hA : A.tpOp k r y x = 0
+    by_cases hA : A.tpOp false k r y x = 0
     · rw [hA]
       simp
     · rcases A.tp_post_counter hk r y x hA with hc | hc
       · exact absurd hc hy
-      · have e : (A.liftD y).workspace.2 = (A.liftD x).workspace.2 :=
+      · have e : (A.liftD y).workspace.cnt = (A.liftD x).workspace.cnt :=
           Fin.ext (by rw [ey, ex, hc])
         rw [e, Matrix.one_apply_eq, mul_one]
 
@@ -1127,13 +1128,14 @@ theorem tpOp_abortAlg_inl (k : StepIdx A.abortAlg.slots A.abortAlg.post) (r : A.
 completion's trace-preserving form vanish.** -/
 theorem tpOp_abortAlg_inr (k : StepIdx A.abortAlg.slots A.abortAlg.post)
     (t : A.abortAlg.R ⊕ Fin (A.abortAlg.budget + 2)) {y : A.CReg} (x : A.CReg)
-    (hy : y.workspace.2 ≠ A.ended) :
-    A.abortAlg.tpOp k (.inr t) (A.liftD y) (A.liftD x) = 0 := by
-  have ex : ((A.liftD x).workspace.2 : ℕ) = x.workspace.2 :=
+    (hy : y.workspace.cnt ≠ A.ended) :
+    A.abortAlg.tpOp false k (.inr t) (A.liftD y) (A.liftD x) = 0 := by
+  have ex : ((A.liftD x).workspace.cnt : ℕ) = x.workspace.cnt :=
     congrArg (fun p => (p.2 : ℕ)) (A.cntSplit_liftD x)
   rcases t with r | c
   · by_cases hk : (k : ℕ) < A.slots
-    · simp only [tpOp, show (k : ℕ) < A.abortAlg.slots from hk, if_true,
+    · simp only [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr,
+        show (k : ℕ) < A.abortAlg.slots from hk, if_true,
         restrict_permConj_op_apply]
       by_contra hne
       set v := A.abortAlg.endSwap.symm (A.liftD y)
@@ -1150,7 +1152,7 @@ theorem tpOp_abortAlg_inr (k : StepIdx A.abortAlg.slots A.abortAlg.post)
       have hv := (A.abortAlg.inBudget_of_alive_kind v).not.1 (by rw [hb]; exact Bool.false_ne_true)
       rw [not_or, not_not] at hv
       obtain ⟨hvk, hvb⟩ := hv
-      have hvw : v.workspace.1 = y.workspace := by
+      have hvw : v.workspace.work = y.workspace := by
         have := A.abortAlg.cntSplit_fst_endSwap_symm (A.liftD y)
         rw [cntSplit_liftD] at this
         exact congrArg (fun p => p.workspace) this
@@ -1158,23 +1160,24 @@ theorem tpOp_abortAlg_inr (k : StepIdx A.abortAlg.slots A.abortAlg.post)
       rcases hin with hin | ⟨-, -, hlt⟩
       · exact hy hin
       · have h1 := hlt (by simpa using hvk)
-        have hxv : (x.workspace.2 : ℕ) = A.budget := by
+        have hxv : (x.workspace.cnt : ℕ) = A.budget := by
           have := congrArg Fin.val (hc.symm.trans hvb)
           simp only [Fin.coe_castSucc, Fin.val_last] at this
           rw [ex] at this
           exact this
         omega
-    · simp [tpOp, show ¬ (k : ℕ) < A.abortAlg.slots from hk]
-  · simp [tpOp, A.haltOp_abortAlg k]
+    · simp [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr,
+        show ¬ (k : ℕ) < A.abortAlg.slots from hk]
+  · simp [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, A.haltOp_abortAlg k]
 
 /-- **An ended branch stays ended under the aborting completion's trace-preserving steps**: a
 register whose inner counter has ended is sent only to registers whose inner counter has ended. -/
 theorem tpOp_abortAlg_absorb (k : StepIdx A.abortAlg.slots A.abortAlg.post)
     (z : A.abortAlg.R ⊕ (A.abortAlg.R ⊕ Fin (A.abortAlg.budget + 2))) (y a : A.abortAlg.CReg)
-    (h : A.abortAlg.tpOp k z y a ≠ 0) (ha : a.workspace.1.2 = A.ended) :
-    y.workspace.1.2 = A.ended := by
+    (h : A.abortAlg.tpOp false k z y a ≠ 0) (ha : a.workspace.work.cnt = A.ended) :
+    y.workspace.work.cnt = A.ended := by
   have habs : ∀ (r : A.abortAlg.R) (u : A.abortAlg.CReg),
-      (A.abortAlg.cntKraus k).op r u a ≠ 0 → u.workspace.1.2 = A.ended := by
+      (A.abortAlg.cntKraus k).op r u a ≠ 0 → u.workspace.work.cnt = A.ended := by
     intro r u hu
     rw [cntKraus_op_apply] at hu
     have := A.tp_habs k r _ _ (left_ne_zero_of_mul hu) (fun h => h ha)
@@ -1182,21 +1185,25 @@ theorem tpOp_abortAlg_absorb (k : StepIdx A.abortAlg.slots A.abortAlg.post)
     exact this hne
   rcases z with r | r | c
   · by_cases hk : (k : ℕ) < A.slots
-    · simp only [tpOp, show (k : ℕ) < A.abortAlg.slots from hk, if_true,
+    · simp only [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr,
+        show (k : ℕ) < A.abortAlg.slots from hk, if_true,
         restrict_permConj_op_apply] at h
       have := habs r _ (right_ne_zero_of_mul h)
-      have e := congrArg (fun p => p.workspace.2) (A.abortAlg.cntSplit_fst_tpShift_symm y)
+      have e := congrArg (fun p => p.workspace.cnt) (A.abortAlg.cntSplit_fst_tpShift_symm y)
       exact e.symm.trans this
-    · simp only [tpOp, show ¬ (k : ℕ) < A.abortAlg.slots from hk, if_false] at h
+    · simp only [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr,
+        show ¬ (k : ℕ) < A.abortAlg.slots from hk, if_false] at h
       exact habs r y h
   · by_cases hk : (k : ℕ) < A.slots
-    · simp only [tpOp, show (k : ℕ) < A.abortAlg.slots from hk, if_true,
+    · simp only [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr,
+        show (k : ℕ) < A.abortAlg.slots from hk, if_true,
         restrict_permConj_op_apply] at h
       have := habs r _ (right_ne_zero_of_mul h)
-      have e := congrArg (fun p => p.workspace.2) (A.abortAlg.cntSplit_fst_endSwap_symm y)
+      have e := congrArg (fun p => p.workspace.cnt) (A.abortAlg.cntSplit_fst_endSwap_symm y)
       exact e.symm.trans this
-    · simp [tpOp, show ¬ (k : ℕ) < A.abortAlg.slots from hk] at h
-  · simp [tpOp, A.haltOp_abortAlg k] at h
+    · simp [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr,
+        show ¬ (k : ℕ) < A.abortAlg.slots from hk] at h
+  · simp [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, A.haltOp_abortAlg k] at h
 
 variable [Nonempty X] [AddGroup Y] [Nonempty Y]
 
@@ -1206,19 +1213,19 @@ theorem invariant_counterInv : A.abortAlg.toTPKindAlg.Invariant A.counterInv := 
   constructor
   · intro a b hab
     have hz : ∀ d : A.abortAlg.CReg, A.abortAlg.toTPKindAlg.init.mat a b ≠ 0 →
-        (d = a ∨ d = b) → d.workspace.2 = 0 ∧ d.workspace.1.2 = 0 := by
+        (d = a ∨ d = b) → d.workspace.cnt = 0 ∧ d.workspace.work.cnt = 0 := by
       intro d hne hd
-      have h1 : a.workspace.2 = 0 ∧ b.workspace.2 = 0 := by
+      have h1 : a.workspace.cnt = 0 ∧ b.workspace.cnt = 0 := by
         by_contra h
         exact hne (A.abortAlg.init_mat_eq_zero a b (by tauto))
       have he : A.abortAlg.toTPKindAlg.init.mat a b =
           A.toKindAlg.init.mat (A.abortAlg.cntSplit a).1 (A.abortAlg.cntSplit b).1 *
-            Matrix.single (0 : Fin (A.budget + 2)) 0 (1 : ℂ) a.workspace.2 b.workspace.2 :=
+            Matrix.single (0 : Fin (A.budget + 2)) 0 (1 : ℂ) a.workspace.cnt b.workspace.cnt :=
         rfl
       rw [he] at hne
       have h2 := left_ne_zero_of_mul hne
-      have h2' : (A.abortAlg.cntSplit a).1.workspace.2 = 0 ∧
-          (A.abortAlg.cntSplit b).1.workspace.2 = 0 := by
+      have h2' : (A.abortAlg.cntSplit a).1.workspace.cnt = 0 ∧
+          (A.abortAlg.cntSplit b).1.workspace.cnt = 0 := by
         by_contra h
         exact h2 (A.init_mat_eq_zero _ _ (by tauto))
       rcases hd with rfl | rfl
@@ -1236,10 +1243,12 @@ theorem invariant_counterInv : A.abortAlg.toTPKindAlg.Invariant A.counterInv := 
       (z : A.abortAlg.R ⊕ (A.abortAlg.R ⊕ Fin (A.abortAlg.budget + 2)))
       (y : A.abortAlg.CReg) (x : A.abortAlg.CReg) h hx
     obtain ⟨hxo, hxi⟩ := hx
-    change A.abortAlg.tpOp k z y x ≠ 0 at h
+    simp only [AdaptiveIAlg.toTPKindAlg_step_op, AlgShape.tpStep_op] at h
+    change A.abortAlg.tpOp false k z y x ≠ 0 at h
     rcases z with r | r | c
     · by_cases hk : (k : ℕ) < A.slots
-      · simp only [tpOp, show (k : ℕ) < A.abortAlg.slots from hk, if_true,
+      · simp only [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr,
+          show (k : ℕ) < A.abortAlg.slots from hk, if_true,
           restrict_permConj_op_apply] at h
         set u := A.abortAlg.tpShift.symm y
         have huy : A.abortAlg.tpShift u = y := Equiv.apply_symm_apply _ _
@@ -1248,7 +1257,7 @@ theorem invariant_counterInv : A.abortAlg.toTPKindAlg.Invariant A.counterInv := 
           exact h (by simp [hb])
         have hK : (A.abortAlg.cntKraus k).op r u x ≠ 0 := fun h' => h (by rw [h', mul_zero])
         have hc := A.abortAlg.cntKraus_op_ne_zero hK
-        rw [cntKraus_op_apply] at hK
+        rw [cntKraus_op_apply, abortAlg_step_op] at hK
         have hA := left_ne_zero_of_mul hK
         have ha : u ∈ A.abortAlg.aliveD := by
           simp only [aliveD, Set.mem_ofPred_eq, hc]
@@ -1259,10 +1268,10 @@ theorem invariant_counterInv : A.abortAlg.toTPKindAlg.Invariant A.counterInv := 
         rw [cntSplit_fst_workspace, cntSplit_fst_workspace] at hin
         refine ⟨?_, fun hyi => ?_⟩
         · refine (A.ne_ended_iff _).2 ?_
-          change (y.workspace.2 : ℕ) ≤ A.budget
+          change (y.workspace.cnt : ℕ) ≤ A.budget
           rw [h2, hc]
           have hxo' := (A.ne_ended_iff _).1 hxo
-          by_cases hkd : A.abortAlg.kind u.workspace.1 = true
+          by_cases hkd : A.abortAlg.kind u.workspace.work = true
           · simp only [hkd, if_true, add_zero]
             exact hxo'
           · have := h3 (by simpa using hkd)
@@ -1274,13 +1283,14 @@ theorem invariant_counterInv : A.abortAlg.toTPKindAlg.Invariant A.counterInv := 
           · exact absurd hin hyi
           · apply Fin.ext
             rw [h2, h1, hin, hxi hxi', hc]
-            have hkind : A.abortAlg.kind u.workspace.1 = A.kind u.workspace.1.1 := by
+            have hkind : A.abortAlg.kind u.workspace.work = A.kind u.workspace.work.work := by
               change (A.kind _ || decide (_ = A.ended)) = _
               rw [decide_eq_false hyi, Bool.or_false]
             rw [hkind]
-      · simp only [tpOp, show ¬ (k : ℕ) < A.abortAlg.slots from hk, if_false] at h
+      · simp only [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr,
+          show ¬ (k : ℕ) < A.abortAlg.slots from hk, if_false] at h
         have hc := A.abortAlg.cntKraus_op_ne_zero h
-        rw [cntKraus_op_apply] at h
+        rw [cntKraus_op_apply, abortAlg_step_op] at h
         have hin := A.tp_post_counter hk r _ _ (left_ne_zero_of_mul h)
         rw [cntSplit_fst_workspace, cntSplit_fst_workspace] at hin
         refine ⟨by rw [hc]; exact hxo, fun hyi => ?_⟩
@@ -1290,7 +1300,8 @@ theorem invariant_counterInv : A.abortAlg.toTPKindAlg.Invariant A.counterInv := 
           exact hxi (hin ▸ hyi)
     · exfalso
       by_cases hk : (k : ℕ) < A.slots
-      · simp only [tpOp, show (k : ℕ) < A.abortAlg.slots from hk, if_true,
+      · simp only [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr,
+          show (k : ℕ) < A.abortAlg.slots from hk, if_true,
           restrict_permConj_op_apply] at h
         set v := A.abortAlg.endSwap.symm y
         have hb : A.abortAlg.inBudget v = false := by
@@ -1299,14 +1310,14 @@ theorem invariant_counterInv : A.abortAlg.toTPKindAlg.Invariant A.counterInv := 
           exact h (by simp [hb'])
         have hK : (A.abortAlg.cntKraus k).op r v x ≠ 0 := fun h' => h (by rw [h', mul_zero])
         have hc := A.abortAlg.cntKraus_op_ne_zero hK
-        rw [cntKraus_op_apply] at hK
+        rw [cntKraus_op_apply, abortAlg_step_op] at hK
         have hin := A.tp_slot_counter hk r _ _ (left_ne_zero_of_mul hK)
         rw [cntSplit_fst_workspace, cntSplit_fst_workspace] at hin
         have hv := (A.abortAlg.inBudget_of_alive_kind v).not.1 (by rw [hb]; exact Bool.false_ne_true)
         rw [not_or, not_not] at hv
         obtain ⟨hvk, hvb⟩ := hv
-        have hvk' : A.kind v.workspace.1.1 = false ∧ v.workspace.1.2 ≠ A.ended := by
-          have : (A.kind v.workspace.1.1 || decide (v.workspace.1.2 = A.ended)) = false :=
+        have hvk' : A.kind v.workspace.work.work = false ∧ v.workspace.work.cnt ≠ A.ended := by
+          have : (A.kind v.workspace.work.work || decide (v.workspace.work.cnt = A.ended)) = false :=
             Bool.not_eq_true _ ▸ hvk
           rw [Bool.or_eq_false_iff, decide_eq_false_iff_not] at this
           exact this
@@ -1315,9 +1326,10 @@ theorem invariant_counterInv : A.abortAlg.toTPKindAlg.Invariant A.counterInv := 
         · have h1 := hlt hvk'.1
           rw [hxi hxi', ← hc, hvb] at h1
           exact lt_irrefl A.budget h1
-      · simp [tpOp, show ¬ (k : ℕ) < A.abortAlg.slots from hk] at h
+      · simp [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr,
+          show ¬ (k : ℕ) < A.abortAlg.slots from hk] at h
     · exfalso
-      simp [tpOp, A.haltOp_abortAlg k] at h
+      simp [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, A.haltOp_abortAlg k] at h
 
 /-- **The aborting completion of any adversary is within its budget.** -/
 theorem withinBudget_abortAlg : A.abortAlg.WithinBudget := by
@@ -1352,22 +1364,22 @@ theorem liftCW_injective : Function.Injective (A.liftCW C) := fun a b h => by
   exact CWork.ext (A.liftD_injective h1) h2
 
 omit [Nonempty X] [AddGroup Y] [Nonempty Y] in
-theorem liftD_workspace (d : A.CReg) : (A.liftD d).workspace = (d.workspace, d.workspace.2) :=
+theorem liftD_workspace (d : A.CReg) : (A.liftD d).workspace = AlgShape.CntW.mk (s := shA.abortS) d.workspace d.workspace.cnt :=
   rfl
 
 /-- The workspaces of the trace-preserving form whose counter has not ended. -/
-def aliveW : Set A.toTPKindAlg.W := {w | w.2 ≠ A.ended}
+def aliveW : Set A.toTPKindAlg.W := {w | w.cnt ≠ A.ended}
 
 /-- The workspaces of the aborting completion's trace-preserving form whose inner counter has not
 ended and equals the outer one. -/
-def equalW : Set A.abortAlg.toTPKindAlg.W := {w | w.1.2 ≠ A.ended ∧ w.2 = w.1.2}
+def equalW : Set A.abortAlg.toTPKindAlg.W := {w | w.work.cnt ≠ A.ended ∧ w.cnt = w.work.cnt}
 
 omit [Nonempty X] [AddGroup Y] [Nonempty Y] in
 theorem liftCW_mem_equal (v : A.toTPKindAlg.CW C) :
     A.liftCW C v ∈ A.abortAlg.toTPKindAlg.advIn C A.equalW ↔
       v ∈ A.toTPKindAlg.advIn C A.aliveW := by
-  change (v.adv.workspace.2 ≠ A.ended ∧ v.adv.workspace.2 = v.adv.workspace.2) ↔
-    v.adv.workspace.2 ≠ A.ended
+  change (v.adv.workspace.cnt ≠ A.ended ∧ v.adv.workspace.cnt = v.adv.workspace.cnt) ↔
+    v.adv.workspace.cnt ≠ A.ended
   simp
 
 omit [Nonempty X] [AddGroup Y] [Nonempty Y] in
@@ -1389,19 +1401,21 @@ omit [Nonempty X] [AddGroup Y] [Nonempty Y] in
 theorem advKraus_abortAlg_op_lift (k : StepIdx A.slots A.post)
     (z : A.abortAlg.toTPKindAlg.R) (a b : QueryReg (A.toTPKindAlg.CW C) 1 X Y) :
     (A.abortAlg.toTPKindAlg.advKraus C k).op z (liftQ (A.liftCW C) a) (liftQ (A.liftCW C) b) =
-      A.abortAlg.tpOp k z (A.liftD a.1.adv) (A.liftD b.1.adv) *
+      A.abortAlg.tpOp false k z (A.liftD a.1.adv) (A.liftD b.1.adv) *
         (1 : Matrix (CRest X Y Req A.toTPKindAlg.slots C.q C.Coins) _ ℂ) (a.1.chal, a.2)
           (b.1.chal, b.2) :=
-  KrausMap.tensorId_reindex_op_apply _ _ _ _ _
+  (KrausMap.tensorId_reindex_op_apply _ _ _ _ _).trans
+    (by simp only [toTPKindAlg_step_op, AlgShape.tpStep_op] <;> rfl)
 
 omit [Nonempty X] [AddGroup Y] [Nonempty Y] in
 theorem advKraus_op_apply' (k : StepIdx A.slots A.post) (r : A.toTPKindAlg.R)
     (a b : QueryReg (A.toTPKindAlg.CW C) 1 X Y) :
     (A.toTPKindAlg.advKraus C k).op r a b =
-      A.tpOp k r a.1.adv b.1.adv *
+      A.tpOp false k r a.1.adv b.1.adv *
         (1 : Matrix (CRest X Y Req A.toTPKindAlg.slots C.q C.Coins) _ ℂ) (a.1.chal, a.2)
           (b.1.chal, b.2) :=
-  KrausMap.tensorId_reindex_op_apply _ _ _ _ _
+  (KrausMap.tensorId_reindex_op_apply _ _ _ _ _).trans
+    (by simp only [toTPKindAlg_step_op, AlgShape.tpStep_op] <;> rfl)
 
 /-- **The adversary's Kraus maps are simulated** along the lift. -/
 theorem ksim_advKraus (k : StepIdx A.slots A.post) :
@@ -1420,15 +1434,16 @@ theorem ksim_advKraus (k : StepIdx A.slots A.post) :
   have habs₂ : ∀ z i a, K₂.op z i a ≠ 0 →
       a ∈ workIn (A.abortAlg.toTPKindAlg.advIn C A.counterInv) → a ∉ T₂ → i ∉ T₂ := by
     intro z i a h ha haT hiT
-    have hae : a.1.adv.workspace.1.2 = A.ended := by
+    have hae : a.1.adv.workspace.work.cnt = A.ended := by
       by_contra hne
       exact haT ⟨hne, (ha.2 hne).symm⟩
     rw [show K₂.op z i a = _ from KrausMap.tensorId_reindex_op_apply _ _ _ _ _] at h
+    simp only [AdaptiveIAlg.toTPKindAlg_step_op, AlgShape.tpStep_op] at h
     exact hiT.1 (A.tpOp_abortAlg_absorb k z _ _ (left_ne_zero_of_mul h) hae)
   have habs₁ : ∀ r i a, K₁.op r i a ≠ 0 → a ∈ (Set.univ : Set _) → a ∉ T₁ → i ∉ T₁ := by
     intro r i a h _ haT hiT
     rw [advKraus_op_apply'] at h
-    exact A.tp_habs k r _ _ (left_ne_zero_of_mul h) haT hiT
+    exact A.tp_habs k r _ _ (by rw [toTPKindAlg_step_op]; exact left_ne_zero_of_mul h) haT hiT
   have hcut₂ := KrausMap.cutTo_apply_of_absorb (A.equal_subset_inv C) habs₂ hS
   have hcut₁ := KrausMap.cutTo_apply_of_absorb (Set.subset_univ _) habs₁
     (ρ := σ) (by ext i j; simp [cutTo])
@@ -1539,8 +1554,8 @@ omit [Nonempty X] [AddGroup Y] [Nonempty Y] in
 /-- The kind of the aborting form on a lifted workspace is the trace-preserving form's. -/
 theorem kind_liftD (d : A.CReg) :
     A.abortAlg.toTPKindAlg.kind (A.liftD d).workspace = A.toTPKindAlg.kind d.workspace := by
-  change ((A.kind d.workspace.1 || decide (d.workspace.2 = A.ended)) ||
-    decide (d.workspace.2 = A.ended)) = (A.kind d.workspace.1 || decide (d.workspace.2 = A.ended))
+  change ((A.kind d.workspace.work || decide (d.workspace.cnt = A.ended)) ||
+    decide (d.workspace.cnt = A.ended)) = (A.kind d.workspace.work || decide (d.workspace.cnt = A.ended))
   rw [Bool.or_assoc, Bool.or_self]
 
 omit [Nonempty X] [AddGroup Y] [Nonempty Y] in
@@ -1628,10 +1643,10 @@ theorem init_liftD (d d' : A.CReg) :
     A.abortAlg.toTPKindAlg.init.mat (A.liftD d) (A.liftD d') = A.toTPKindAlg.init.mat d d' := by
   have he : A.abortAlg.toTPKindAlg.init.mat (A.liftD d) (A.liftD d') =
       A.toKindAlg.init.mat d d' *
-        Matrix.single (0 : Fin (A.budget + 2)) 0 (1 : ℂ) d.workspace.2 d'.workspace.2 :=
+        Matrix.single (0 : Fin (A.budget + 2)) 0 (1 : ℂ) d.workspace.cnt d'.workspace.cnt :=
     rfl
-  rw [he]
-  by_cases h0 : d.workspace.2 = 0 ∧ d'.workspace.2 = 0
+  rw [he, toTPKindAlg_init]
+  by_cases h0 : d.workspace.cnt = 0 ∧ d'.workspace.cnt = 0
   · rw [h0.1, h0.2, Matrix.single_apply_same, mul_one]
   · rw [show A.toKindAlg.init.mat d d' = 0 from A.init_mat_eq_zero d d' (by tauto), zero_mul]
 

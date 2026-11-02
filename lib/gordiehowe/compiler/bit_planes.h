@@ -47,9 +47,21 @@
 #include "gordiehowe/ct.h"
 #include "sumcheck/boolean_skip.h"
 #include "sumcheck/skip_gfni.h"
+#include "sumcheck/skip_neon.h"
 #include "util/panic.h"
 
 namespace proofs::gordiehowe::compiler {
+
+// The target's bit-plane kernels: GFNI and AVX-512 (sumcheck/skip_gfni.h)
+// or NEON (sumcheck/skip_neon.h), with the same interface and results.
+#define PROOFS_BIT_PLANE_KERNELS (PROOFS_SKIP_GFNI || PROOFS_SKIP_NEON)
+#if PROOFS_SKIP_GFNI
+template <size_t B>
+using KernelPlaneSums = skip_gfni::PlaneSums<B>;
+#elif PROOFS_SKIP_NEON
+template <size_t B>
+using KernelPlaneSums = skip_neon::PlaneSums<B>;
+#endif
 
 // The 16 pivot bits of GF(2^16) words in K: from a basis BETA of the words,
 // reduced to echelon form on its memory bits, each reduced row contributes
@@ -59,9 +71,9 @@ template <class F>
 class PivotDecoder {
  public:
   using Elt = typename F::Elt;
-  // The element bytes of the GFNI kernel, 0 when there is none.
+  // The element bytes of the GFNI or NEON kernel, 0 when there is none.
   static constexpr size_t kBytes =
-      PROOFS_SKIP_GFNI ? SkipElementBytes<F>::value : 0;
+      PROOFS_BIT_PLANE_KERNELS ? SkipElementBytes<F>::value : 0;
   static constexpr size_t kBits = 16;
 
   PivotDecoder() = default;
@@ -130,6 +142,8 @@ class PivotDecoder {
             idx[8 * jj + e] = uint8_t((kBytes * e + 8 * h + jj) % 128);
         in_idx_[h] = _mm512_load_si512(idx);
       }
+#elif PROOFS_SKIP_NEON
+      gather_ = skip_neon::BitGather16<kBytes>(pivot_);
 #endif
       on_ = true;
     }
@@ -162,6 +176,28 @@ class PivotDecoder {
         eight(buf, out);
         std::memcpy(lo + y, &out[0], n);
         std::memcpy(hi + y, &out[1], n);
+      }
+      return;
+    }
+#elif PROOFS_SKIP_NEON
+    if constexpr (kBytes != 0) {
+      // Sixteen words at a time (the last sixteen padded with zero words).
+      alignas(16) Elt buf[16];
+      alignas(16) uint8_t o0[16], o1[16];
+      for (size_t y = b; y < e; y += 16) {
+        const size_t n = e - y < 16 ? e - y : 16;
+        for (size_t r = 0; r < 16; ++r) {
+          if (r < n)
+            buf[r] = word(y + r);
+          else
+            std::memset(&buf[r], 0, sizeof(Elt));
+        }
+        uint8x16_t out[2];
+        gather_.gather(reinterpret_cast<const uint8_t *>(buf), out);
+        vst1q_u8(o0, out[0]);
+        vst1q_u8(o1, out[1]);
+        std::memcpy(lo + y, o0, n);
+        std::memcpy(hi + y, o1, n);
       }
       return;
     }
@@ -206,6 +242,8 @@ class PivotDecoder {
   std::vector<size_t> bytes_;
   std::vector<__m512i> mat_;
   __m512i in_idx_[kBytes == 0 ? 1 : kBytes / 8];
+#elif PROOFS_SKIP_NEON
+  skip_neon::BitGather16<kBytes != 0 ? kBytes : 16> gather_;
 #endif
   template <size_t N>
   static bool bit(const std::array<uint8_t, N> &b, size_t i) {
@@ -255,9 +293,9 @@ class BitPlaneDots {
   // The same over the words LO <= y < HI of the N.
   void sums(const F &f, const Elt *a, const uint8_t *piv, size_t n, size_t lo,
             size_t hi, Elt *g) const {
-#if PROOFS_SKIP_GFNI
+#if PROOFS_BIT_PLANE_KERNELS
     if constexpr (kBytes != 0) {
-      using Sums = skip_gfni::PlaneSums<kBytes>;
+      using Sums = KernelPlaneSums<kBytes>;
       constexpr size_t kTile = Sums::kTile;
       Sums acc(2);
       alignas(64) uint8_t res[2 * kTile];
@@ -298,7 +336,7 @@ class BitPlaneSums {
  public:
   using Elt = typename F::Elt;
   static constexpr size_t kGfniBytes =
-      PROOFS_SKIP_GFNI ? SkipElementBytes<F>::value : 0;
+      PROOFS_BIT_PLANE_KERNELS ? SkipElementBytes<F>::value : 0;
   static_assert(F::kCharacteristicTwo, "bit planes of a binary field");
   static_assert(sizeof(Elt) % 8 == 0, "an element of whole 64-bit words");
   // Rows per call of the GFNI kernel; add() takes any count.
@@ -306,9 +344,9 @@ class BitPlaneSums {
 
   BitPlaneSums(const F &f, unsigned bits) : f_(f), bits_(bits) {
     check(bits % 8 == 0 && bits >= 8 && bits <= 64, "bit planes: word bits");
-#if PROOFS_SKIP_GFNI
+#if PROOFS_BIT_PLANE_KERNELS
     if constexpr (kGfniBytes != 0) {
-      gfni_ = std::make_unique<skip_gfni::PlaneSums<kGfniBytes>>(bits / 8);
+      gfni_ = std::make_unique<KernelPlaneSums<kGfniBytes>>(bits / 8);
       return;
     }
 #endif
@@ -317,9 +355,9 @@ class BitPlaneSums {
 
   // Rows r < N: element E[r], word T[r].
   void add(const Elt *e, const uint64_t *t, size_t n) {
-#if PROOFS_SKIP_GFNI
+#if PROOFS_BIT_PLANE_KERNELS
     if constexpr (kGfniBytes != 0) {
-      constexpr size_t kT = skip_gfni::PlaneSums<kGfniBytes>::kTile;
+      constexpr size_t kT = KernelPlaneSums<kGfniBytes>::kTile;
       static_assert(kT == kTile, "the GFNI kernel's tile");
       const unsigned points = bits_ / 8;
       for (size_t t0 = 0; t0 < n; t0 += kT) {
@@ -345,7 +383,7 @@ class BitPlaneSums {
   // S_b.
   Elt get(unsigned b) const {
     Elt s = f_.zero();
-#if PROOFS_SKIP_GFNI
+#if PROOFS_BIT_PLANE_KERNELS
     if constexpr (kGfniBytes != 0) {
       gfni_->get(b / 8, b % 8, reinterpret_cast<uint8_t *>(&s));
       return s;
@@ -360,8 +398,8 @@ class BitPlaneSums {
   const F &f_;
   unsigned bits_;
   std::vector<uint64_t> acc_;
-#if PROOFS_SKIP_GFNI
-  std::unique_ptr<skip_gfni::PlaneSums<(kGfniBytes != 0 ? kGfniBytes : 16)>>
+#if PROOFS_BIT_PLANE_KERNELS
+  std::unique_ptr<KernelPlaneSums<(kGfniBytes != 0 ? kGfniBytes : 16)>>
       gfni_;
   alignas(64) uint8_t res_[8 * kTile];
 #endif

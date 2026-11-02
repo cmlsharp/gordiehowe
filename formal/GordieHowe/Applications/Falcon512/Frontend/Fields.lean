@@ -21,14 +21,14 @@ over an extension `FA` of `F_q`, `q = 12289` (`falconInterpOf FH FA`); its facts
 hold for any interpretations with the data and facts below, discharged once per field:
 
 * **domain `H`'s field** (`GordieHowe.Falcon512.HField`): the selection field of the hash-to-point selection at
-  `S = 639` samples (`sel`: the subfield `GF(2^16)`, `X`, the labels `g^j`, the embedding basis
+  `S = 717` samples (`sel`: the subfield `GF(2^16)`, `X`, the labels `g^j`, the embedding basis
   `e_u = g^u`, linearly independent over `GF(2)`), characteristic two, `|K| = 2^bits`, the decodings
   of `0`, `1`, `2 = X` and of xors, and the integer readings of `0` and `1`. Instances: `GF(2^128)`
   (`gf128`, `Falcon512.Native.ROMParams`) and `GF(2^256)` (`gf256`, `Falcon512.Native.QROMParams`).
 * **domain `A`'s field** (`GordieHowe.Falcon512.AField`): characteristic `q`, the constant coordinate `coord0`, an
   additive map to `F_q` taking the cast of a natural to its cast, the integer reading the constant
-  coordinate's value, constants decoded as casts, the node `GF(p^1)` the prime subfield. Instances:
-  `F_q^9` (`fq9`) and `F_q^20` (`fq20`).
+  coordinate's value, constants below `q` decoded as casts, the node `GF(p^1)` the prime subfield.
+  Instances: `F_q^9` (`fq9`) and `F_q^20` (`fq20`).
 -/
 
 namespace GordieHowe
@@ -46,12 +46,31 @@ def RealizedProgram.keyCoeffs (xs : List (ℕ → ℕ)) (i : ℕ) : ℕ :=
   | some c => if h : i < 512 then c ⟨i, h⟩ else 0
   | none => 0
 
+/-- **The key's coefficients lie below `q`**: a decoded entry is the value of an element of
+`ZMod 12289`, every other entry `0`. -/
+theorem RealizedProgram.keyCoeffs_lt (xs : List (ℕ → ℕ)) (i : ℕ) :
+    RealizedProgram.keyCoeffs xs i < 12289 := by
+  unfold RealizedProgram.keyCoeffs
+  split
+  · rename_i c hc
+    split
+    · exact ((Falcon512.KeyNTT.falconDecode_512_eq_some_iff _ c).1 hc).1 _
+    · omega
+  · omega
+
 /-- **The opaque functions of a Falcon program**: `key.coefficients` the key's coefficients
 (`keyCoeffs`, read by the emulated programs), every other name as `targetBitsFn`
 (`mac.target_bits`). -/
 def RealizedProgram.falconOps : String → List (ℕ → ℕ) → ℕ → ℕ := fun nm xs i =>
   open Classical in
   if nm = "key.coefficients" then keyCoeffs xs i else targetBitsFn nm xs i
+
+/-- **The key's coefficients as an opaque function lie below `q`** (`keyCoeffs_lt`): the bound a
+program declares on `key.coefficients`. -/
+theorem RealizedProgram.falconOps_key_lt (xs : List (ℕ → ℕ)) (i : ℕ) :
+    falconOps "key.coefficients" xs i < 12289 := by
+  simp only [falconOps, ↓reduceIte]
+  exact keyCoeffs_lt xs i
 
 theorem RealizedProgram.falconOps_target (xs : List (ℕ → ℕ)) (i : ℕ) :
     falconOps "mac.target_bits" xs i = targetBitsFn "mac.target_bits" xs i := by
@@ -229,8 +248,8 @@ class Falcon512.AField (FA : RealizedProgram.FieldInterp) where
   coord0_natCast : ∀ n : ℕ, coord0 (n : FA.K) = n
   /-- The integer reading is the constant coordinate's value. -/
   toNat_eq : ∀ x, FA.toNat x = (coord0 x).val
-  /-- Constants decode to their casts. -/
-  decode_eq : ∀ c, FA.decode c = (c : FA.K)
+  /-- Constants below `q` decode to their casts. -/
+  decode_lt : ∀ c < 12289, FA.decode c = (c : FA.K)
   /-- The node `GF(p^1)` is the prime subfield. -/
   node_prime : ∀ x, x ∈ FA.node "GF(p^1)" ↔ x ∈ fixedField FA.K 12289 1
 
@@ -247,7 +266,7 @@ instance : Falcon512.AField RealizedProgram.fq9 where
       map_add' x y := falconNative9Coords_add x y 0 }
   coord0_natCast := falconNative9Coords_natCast
   toNat_eq _ := rfl
-  decode_eq _ := rfl
+  decode_lt c hc := RealizedProgram.fq9_model.decode_natCast c hc
   node_prime x := by
     change x ∈ RealizedProgram.fq9Node "GF(p^1)" ↔ _
     rw [RealizedProgram.fq9Node, if_pos rfl]
@@ -269,7 +288,7 @@ instance : Falcon512.AField RealizedProgram.fq20 where
           (falconQuarticCoords_add _ _ 0) }
   coord0_natCast := falconNative20Coords_natCast
   toNat_eq _ := rfl
-  decode_eq _ := rfl
+  decode_lt c hc := RealizedProgram.fq20_model.decode_natCast c hc
   node_prime x := by
     change x ∈ RealizedProgram.fq20Node "GF(p^1)" ↔ _
     rw [RealizedProgram.fq20Node, if_pos rfl]

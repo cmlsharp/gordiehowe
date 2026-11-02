@@ -3,15 +3,22 @@
 
 module
 
-public import GordieHowe.Applications.Falcon512.Ring.Native.QROMParams.ProofSystem
 public import GordieHowe.Applications.Falcon512.Ring.Frontend.Basic
+public import GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.Interp
+public import GordieHowe.ProofSystem.Program.Headlines
+public import GordieHowe.ProofSystem.Program.FieldProofSystem
+public import GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.Realize
+public import GordieHowe.Language.RealizedProgram.Placement
+public import GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.Ready
+public import GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.Facts
+public import GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.Facts.Model
 
 @[expose] public section
 
 /-!
 # GordieHowe frontend: the program facts of `Falcon512.Ring.Native.QROMParams`
 
-The native Falcon ring frontend's program facts (`GordieHowe.Falcon512.Ring.FalconRingPowers`,
+The native Falcon ring frontend's program facts (the table's selection `GordieHowe.Falcon512.Ring.FalconRingPowers`,
 `GordieHowe.Falcon512.Ring.FalconRingSelect`, `GordieHowe.Falcon512.Ring.FalconRingBase`) and the generic norm's
 (`GordieHowe.Falcon512.Norm.FalconNorm`) for `GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.Program.program` (export
 `b65a4929`), by `decide` and `rfl` (generated data: reading predicates several entries deep raises
@@ -21,40 +28,58 @@ The native Falcon ring frontend's program facts (`GordieHowe.Falcon512.Ring.Falc
 namespace GordieHowe.Falcon512.Ring.Native.QROMParams
 
 open Generated.Falcon512.Ring.Native.QROMParams.Program
+open Generated.Falcon512.Ring.Native.QROMParams (interp)
 open Norm Ring
 
-instance : AField (interpQROM 0) := inferInstanceAs (AField RealizedProgram.fq20)
+instance : AField (interp 0) := inferInstanceAs (AField RealizedProgram.fq20)
 
-set_option maxRecDepth 4096 in
-instance : FalconRingPowers program where
+/-- **The table's selection** (`member.signer`): the record `key.spectrum` (value `6`), the rows
+`statement.ring` (value `4`), the natural-order transform of length `512` at `ψ = 10302`. -/
+def tableShape : RealizedProgram.TableShape where
+  dom := 0
   one := 0
+  zero := 1
+  mOne := 12288
   gamma := 8
-  refsOrdered := (RealizedProgram.refsOrderedB_iff program).1 (by decide +kernel)
-  exprs_length := by decide +kernel
-  expr0 := rfl
-  expr1 := rfl
-  exprEven m hm := by
-    simp only [List.mem_range'_1] at hm
-    obtain ⟨h1, h2⟩ := hm
-    interval_cases m <;> rfl
-  exprOdd m hm := by
-    simp only [List.mem_range'_1] at hm
-    obtain ⟨h1, h2⟩ := hm
-    interval_cases m <;> rfl
-  expr15 := rfl
-  size0 := by decide +kernel
-
-set_option maxRecDepth 4096 in
-instance : FalconRingSelect program where
-  idx := 7
+  chal := 0
+  pow := 20
   dig := 21
+  idx := 7
+  pred := 0
+  idxPred := 14
+  record := .leaf 6
+  map := [⟨true, true, 512, 0, 10302⟩]
+  parts := [(4, 512)]
+  rows := 64
+  bits := 6
+
+set_option maxRecDepth 100000 in
+/-- **The table's selection**, decided on the program's tables. -/
+instance : FalconRingPowers program where
+  shape := tableShape
   refsOrdered := (RealizedProgram.refsOrderedB_iff program).1 (by decide +kernel)
-  exprs_length := by decide +kernel
-  expr16 := rfl
-  exprSel t ht := by
-    simp only [List.mem_range'_1] at ht
-    obtain ⟨h1, h2⟩ := ht
-    interval_cases t <;> rfl
+  exprs_pos := by decide +kernel
+  values_pos := by decide +kernel
+  mapWf := by decide +kernel
+  width := by decide +kernel
+  powOk := by decide +kernel
+  digOk := by decide +kernel
+  bodyOk := by decide +kernel
+  powKind := rfl
+  digKind := rfl
+  idxBool := ⟨_, rfl⟩
+  inSource := by decide +kernel
+  consts := by decide +kernel
+  gammaKind := rfl
+  chalOk := by decide +kernel
+  fields := by decide +kernel
+  sizes := by decide +kernel
+  idxPriv := rfl
+  recordReads := by decide +kernel
+  rowReads := by decide +kernel
+
+/-- The selection's identifiers. -/
+instance : FalconRingSelect program := ⟨⟨rfl, rfl, rfl, rfl, rfl⟩⟩
 
 set_option maxRecDepth 4096 in
 theorem ring_member : ∃ t, (program.predicate 0).body = .equal 0 (.add (.apply (.sum 512)
@@ -93,10 +118,8 @@ instance : FalconRingMember program where
   member := ring_member
   idxBool := ring_idxBool
   inSource := by decide +kernel
-  powersKind := rfl
-  digestsKind := rfl
   consts := by decide +kernel
-  gammaKind := rfl
+  table := ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   ringKind := rfl
   chalKind := rfl
   chal_ne_ring := by decide
@@ -199,7 +222,7 @@ theorem norm_slack : ∃ real, (program.predicate 24).body =
       real := ⟨_, rfl⟩
 
 /-- The norm's index maps of the batches (`6426` entries, decided coordinate by coordinate). -/
-theorem norm_i70_entry : ∀ b < 17, ∀ m < 6, ∀ s < 63, idx50.entry ((6 * b + m) * 63 + s) =
+theorem norm_i70_entry : ∀ b < 17, ∀ m < 6, ∀ s < 63, idx49.entry ((6 * b + m) * 63 + s) =
     if 63 * b + s < 1024 then 6 * (63 * b + s) + m else 6144 := by
   decide +kernel
 
@@ -233,31 +256,30 @@ noncomputable instance : FalconNorm program where
   eHigh := 51
   eMid := 53
   eB := 54
-  iHigh := idx55
-  iMid := idx56
+  iHigh := idx54
+  iMid := idx55
   i52 := idx33
-  i53 := idx34
-  i54 := idx35
-  i55 := idx36
-  i56 := idx37
+  i54 := idx34
+  i55 := idx35
+  i56 := idx36
   i57 := idx17
-  i58 := idx38
-  i59 := idx39
-  i60 := idx40
-  i61 := idx41
-  i62 := idx42
-  i63 := idx43
-  i64 := idx44
-  i65 := idx45
-  i66 := idx46
-  i67 := idx47
-  i68 := idx48
-  i69 := idx49
-  i70 := idx50
-  i71 := idx51
-  i72 := idx52
-  i73 := idx53
-  i74 := idx54
+  i58 := idx37
+  i59 := idx38
+  i60 := idx39
+  i61 := idx40
+  i62 := idx41
+  i63 := idx42
+  i64 := idx43
+  i65 := idx44
+  i66 := idx45
+  i67 := idx46
+  i68 := idx47
+  i69 := idx48
+  i70 := idx49
+  i71 := idx50
+  i72 := idx51
+  i73 := idx52
+  i74 := idx53
   refsOrdered := (RealizedProgram.refsOrderedB_iff program).1 (by decide +kernel)
   inSource_A := by decide +kernel
   center := norm_center
@@ -295,7 +317,6 @@ noncomputable instance : FalconNorm program where
   const41 := ⟨[0], rfl, rfl⟩
   const555 := ⟨by decide +kernel, [38, 16, 53, 1, 2, 0], rfl, by decide⟩
   i52_entry := by decide +kernel
-  i53_entry := by decide +kernel
   i54_entry := by decide +kernel
   i55_entry := by decide +kernel
   i56_entry := by decide +kernel

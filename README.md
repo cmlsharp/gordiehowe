@@ -22,6 +22,31 @@ at the QROM parameters need about 1.2 GB each. On a 64-core host the
 build and tests take about 20 minutes. Without GFNI and AVX-512, three
 GFNI kernel tests report as skipped.
 
+### aarch64
+
+On aarch64, GF(2^128) and GF(2^256) arithmetic uses PMULL and the
+bit-sliced kernels use NEON (`lib/sumcheck/skip_neon.h`); defining
+`PROOFS_NO_NEON` selects the portable code. The aarch64 build is a cross
+build on an x86-64 Linux host, in the flake's `aarch64-cross` shell:
+
+```sh
+scripts/cross_aarch64.sh                # lib/: the benches, report_bench and the aarch64 tests
+scripts/cross_aarch64.sh --baselines    # the ML-DSA and Falcon split baselines
+scripts/cross_aarch64.sh --closure build-aarch64   # the /nix/store paths they load
+```
+
+The flags default to a Cortex-A76 (Raspberry Pi 5) with the crypto
+extension; `AARCH64_CXXFLAGS` sets others, which must keep the crypto
+extension. The executables load the shell's aarch64 libraries from
+`/nix/store`, so the target needs Nix and those store paths:
+`nix-store --export $(nix-store -qR PATH...) | ssh HOST nix-store --import`
+copies the paths `--closure` lists with their dependencies, and
+`nix-store --add-root LINK --realise PATH` on the target keeps each from
+garbage collection. The executables then run there from a copy of the
+build directory.
+The shell's OpenSSL is built with its ARMv8 assembly (SHA-2, AES, PMULL);
+`openssl_asm_test` checks it on the target.
+
 ## Running an example
 
 ```sh
@@ -54,7 +79,6 @@ were measured on a 128-core AMD EPYC 9754 with no other large jobs running;
 - `benchmarks/`, `analysis/`: the benchmark driver, comparisons and table
   scripts.
 - `formal/`: the Lean library (`formal/README.md`).
-- `docs/planned-changes.md`: program changes held for a later release.
 
 ## License
 

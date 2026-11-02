@@ -385,27 +385,4 @@ def Query.leafSalt : Query k kN kS L → Option (MerkleSalt kN)
   | .leaf ν _ => some ν
   | _ => none
 
-/-! ### Recorded Fiat–Shamir salts -/
-
-/-- The Fiat–Shamir salt of an `xof` query. -/
-def Query.salt? : Query k kN kS L → Option (FiatShamirSalt kS)
-  | .xof _ σ => some σ
-  | _ => none
-
-/-- The Fiat–Shamir salts of the recorded `xof` queries of `D`, one per query. -/
-def recordedSalts (D : ODB k kN kS L e) : Multiset (FiatShamirSalt kS) := D.keys.val.filterMap Query.salt?
-
-theorem mem_recordedSalts {D : ODB k kN kS L e} {σ : FiatShamirSalt kS} :
-    σ ∈ recordedSalts D ↔ ∃ κ, Query.xof κ σ ∈ D := by
-  constructor
-  · intro h
-    obtain ⟨q, hq, hσ⟩ := (Multiset.mem_filterMap _ _).1 h
-    cases q with
-    | xof κ σ' =>
-      cases hσ
-      exact ⟨κ, Finmap.mem_keys.1 hq⟩
-    | _ => simp [Query.salt?] at hσ
-  · rintro ⟨κ, hκ⟩
-    exact (Multiset.mem_filterMap _ _).2 ⟨_, Finmap.mem_keys.2 hκ, rfl⟩
-
 end GordieHowe.QROM

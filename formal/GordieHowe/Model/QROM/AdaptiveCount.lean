@@ -247,7 +247,7 @@ namespace KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  (A : KindAlg X Y Req Resp O) (C : Challenger X Y Req Resp)
+  {ksA : KindShape X Y Req Resp} (A : KindAlg ksA O) (C : Challenger X Y Req Resp)
 
 /-- **The challenger's query `i` of slot `j` reads the oracle**: the slot holds a request, fewer
 than `Q` were answered before, and the challenger's program makes a further query after the answers
@@ -390,7 +390,7 @@ namespace AdaptiveIAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  (A : AdaptiveIAlg X Y Req Resp O) (Ch : Challenger X Y Req Resp)
+  {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O) (Ch : Challenger X Y Req Resp)
 
 /-- The composed registers of the trace-preserving composition. -/
 abbrev TW := A.toTPKindAlg.CW Ch
@@ -418,16 +418,16 @@ the logs from `n` on are blank, and a branch that has not ended has counted the 
 without a request. -/
 def Good (n : ℕ) : Set (A.TW Ch) :=
   {v | A.noneCnt Ch n v ≤ A.budget ∧ (∀ j : Fin A.toTPKindAlg.slots, n ≤ j → v.chal.logs j = none) ∧
-    (v.adv.workspace.2 ≠ A.ended → (v.adv.workspace.2 : ℕ) = A.noneCnt Ch n v)}
+    (v.adv.workspace.cnt ≠ A.ended → (v.adv.workspace.cnt : ℕ) = A.noneCnt Ch n v)}
 
 /-- **After the adversary's Kraus map before slot `n`** (proof-internal): as `Good n`, except that a
 branch that has not ended has also counted slot `n` if its kind there is a query, and its counter is
 at most `budget`. -/
 def Mid (n : ℕ) : Set (A.TW Ch) :=
   {v | A.noneCnt Ch n v ≤ A.budget ∧ (∀ j : Fin A.toTPKindAlg.slots, n ≤ j → v.chal.logs j = none) ∧
-    (v.adv.workspace.2 ≠ A.ended →
-      (v.adv.workspace.2 : ℕ) = A.noneCnt Ch n v + (if A.kind v.adv.workspace.1 then 0 else 1) ∧
-        (v.adv.workspace.2 : ℕ) ≤ A.budget)}
+    (v.adv.workspace.cnt ≠ A.ended →
+      (v.adv.workspace.cnt : ℕ) = A.noneCnt Ch n v + (if A.kind v.adv.workspace.work then 0 else 1) ∧
+        (v.adv.workspace.cnt : ℕ) ≤ A.budget)}
 
 theorem noneCnt_congr {n : ℕ} {v v' : A.TW Ch} (h : v'.chal.logs = v.chal.logs) :
     A.noneCnt Ch n v' = A.noneCnt Ch n v := by
@@ -441,13 +441,15 @@ theorem good_congr {n : ℕ} {v v' : A.TW Ch} (h : v'.chal.logs = v.chal.logs)
   rw [hw, A.noneCnt_congr Ch h]
   exact h3
 
+-- TODO(unbundle-M4): `convert … using 3`; restore once M1b's named register types and
+-- shape-indexed AdaptiveIAlg make both sides one instance path
 theorem noneCnt_succ {n : ℕ} (hn : n < A.toTPKindAlg.slots) (v : A.TW Ch) :
     A.noneCnt Ch (n + 1) v =
       A.noneCnt Ch n v + if v.chal.logs ⟨n, hn⟩ = none then 1 else 0 := by
   classical
   unfold noneCnt
-  convert card_filter_lt_succ (fun j => v.chal.logs j = none) hn using 2 <;>
-    first | (ext; simp) | (congr 1; exact Subsingleton.elim _ _) | simp
+  convert card_filter_lt_succ (fun j => v.chal.logs j = none) hn using 3 <;>
+    first | rfl | (ext; simp) | (congr 1; exact Subsingleton.elim _ _) | simp
 
 open Classical in
 theorem ansCnt_succ {n : ℕ} (hn : n < A.toTPKindAlg.slots) (v : A.TW Ch) :
@@ -466,52 +468,53 @@ theorem ansCnt_succ {n : ℕ} (hn : n < A.toTPKindAlg.slots) (v : A.TW Ch) :
 /-- Within the budget and before the end, the trace-preserving counter step keeps the workspace
 and advances the counter on a query branch, which was below `budget`. -/
 theorem tpShift_counter {z : A.CReg} (hz : A.inBudget z = true) (ha : z ∈ A.aliveD) :
-    (A.tpShift z).workspace.1 = z.workspace.1 ∧
-      ((A.tpShift z).workspace.2 : ℕ) = z.workspace.2 + (if A.kind z.workspace.1 then 0 else 1) ∧
-      (A.kind z.workspace.1 = false → (z.workspace.2 : ℕ) < A.budget) := by
-  obtain ⟨⟨⟨w, c⟩, rq, rs⟩, p⟩ := z
-  simp only [aliveD, Set.mem_setOf_eq, DReg.workspace] at ha
+    (A.tpShift z).workspace.work = z.workspace.work ∧
+      ((A.tpShift z).workspace.cnt : ℕ) = z.workspace.cnt + (if A.kind z.workspace.work then 0 else 1) ∧
+      (A.kind z.workspace.work = false → (z.workspace.cnt : ℕ) < A.budget) := by
+  obtain ⟨⟨wc_, rq, rs⟩, p⟩ := z
+  obtain ⟨w, c, rfl⟩ := AlgShape.CntW.exists_eq_mk wc_
+  simp only [aliveD, Set.mem_setOf_eq, DReg.workspace, AlgShape.CntW.cnt_mk] at ha
   rw [inBudget_of_alive_kind] at hz
-  simp only [DReg.workspace] at hz ⊢
-  cases hkw : A.kind w
+  simp only [DReg.workspace, AlgShape.CntW.work_mk, AlgShape.CntW.cnt_mk] at hz
+  simp only [tpShift_apply, DReg.workspace, AlgShape.CntW.work_mk, AlgShape.CntW.cnt_mk]
+  rcases (Bool.eq_false_or_eq_true (A.kind w)).symm with hkw | hkw <;> simp only [hkw]
   · have hc : (c : ℕ) < A.budget := by
       have h1 : c ≠ Fin.castSucc (Fin.last A.budget) := by simpa [hkw] using hz
       have h2 : (c : ℕ) ≠ A.budget := fun h => h1 (Fin.ext (by simpa using h))
-      have h3 : (c : ℕ) ≠ A.budget + 1 := fun h => ha (Fin.ext (by simpa [ended] using h))
-      omega
+      have h3 : (c : ℕ) ≠ A.budget + 1 := fun h => ha (Fin.ext (by simpa [ended,
+          AlgShape.ended] using h))
+      shape_omega
     have hnl : c ≠ Fin.last (A.budget + 1) := fun h => by
       have := congrArg Fin.val h
       simp at this
-      omega
+      shape_omega
     have h1 := coe_finRotate_of_ne_last hnl
     have hr0 : finRotate (A.budget + 2) c ≠ 0 := fun h => by
       have := congrArg Fin.val h
       simp only [h1, Fin.val_zero] at this
-      omega
+      shape_omega
     have hre : finRotate (A.budget + 2) c ≠ A.ended := fun h => by
       have := congrArg Fin.val h
-      simp only [h1, ended, Fin.val_last] at this
-      omega
+      simp only [h1, ended, AlgShape.ended, Fin.val_last] at this
+      shape_omega
     have hrot : A.rot c = finRotate (A.budget + 2) c := by
-      rw [rot, Equiv.trans_apply, Equiv.swap_apply_of_ne_of_ne hr0 hre]
-    refine ⟨by simp [tpShift, wPerm], ?_, fun _ => hc⟩
-    simp only [tpShift, wPerm, Equiv.prodCongr_apply, Equiv.prodShear_apply, hkw,
-      Bool.false_eq_true, if_false, Prod.map_apply, Equiv.coe_refl, id_eq, Equiv.refl_apply, hrot,
-      h1]
-  · refine ⟨by simp [tpShift, wPerm], ?_, fun h => absurd h (by simp)⟩
-    simp [tpShift, wPerm, hkw]
+      rw [rot, AlgShape.rot, Equiv.trans_apply, Equiv.swap_apply_of_ne_of_ne hr0 hre]
+    refine ⟨trivial, ?_, fun _ => hc⟩
+    simp only [Bool.false_eq_true, if_false, hrot, h1]
+  · refine ⟨trivial, ?_, fun h => absurd h (by simp)⟩
+    simp
 
 /-- **The counter through the adversary's Kraus map before a slot**: a branch either ends, or had
 not ended, keeps its counter on a request and advances it from below `budget` on a query. -/
 theorem tp_slot_counter {k : StepIdx A.slots A.post} (hk : (k : ℕ) < A.slots)
     (z : A.R ⊕ (A.R ⊕ Fin (A.budget + 2))) (y x : A.CReg)
-    (h : (A.toTPKindAlg.step k).op z y x ≠ 0) :
-    y.workspace.2 = A.ended ∨ (x.workspace.2 ≠ A.ended ∧
-      (y.workspace.2 : ℕ) = x.workspace.2 + (if A.kind y.workspace.1 then 0 else 1) ∧
-      (A.kind y.workspace.1 = false → (x.workspace.2 : ℕ) < A.budget)) := by
-  change A.tpOp k z y x ≠ 0 at h
+    (h : A.tpOp false k z y x ≠ 0) :
+    y.workspace.cnt = A.ended ∨ (x.workspace.cnt ≠ A.ended ∧
+      (y.workspace.cnt : ℕ) = x.workspace.cnt + (if A.kind y.workspace.work then 0 else 1) ∧
+      (A.kind y.workspace.work = false → (x.workspace.cnt : ℕ) < A.budget)) := by
   rcases z with r | r | c
-  · simp only [tpOp, hk, if_true, restrict_permConj_op_apply] at h
+  · simp only [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, hk, if_true,
+      restrict_permConj_op_apply] at h
     set z := A.tpShift.symm y
     have hzy : A.tpShift z = y := Equiv.apply_symm_apply _ _
     have hb : A.inBudget z = true := by
@@ -519,7 +522,7 @@ theorem tp_slot_counter {k : StepIdx A.slots A.post} (hk : (k : ℕ) < A.slots)
       exact h (by simp [hb])
     have hK : (A.cntKraus k).op r z x ≠ 0 := fun h' => h (by rw [h', mul_zero])
     have hc := A.cntKraus_op_ne_zero hK
-    by_cases hx : x.workspace.2 = A.ended
+    by_cases hx : x.workspace.cnt = A.ended
     · left
       rw [← hzy]
       exact A.tpShift_ended (hc.trans hx)
@@ -536,13 +539,15 @@ theorem tp_slot_counter {k : StepIdx A.slots A.post} (hk : (k : ℕ) < A.slots)
         rw [← hc]
         exact h3 hk'
   · left
-    simp only [tpOp, hk, if_true, restrict_permConj_op_apply] at h
+    simp only [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, hk, if_true,
+        restrict_permConj_op_apply] at h
     by_cases hb : A.inBudget (A.endSwap.symm y)
     · exact absurd (by simp [hb]) h
     · have := A.endSwap_ended (Bool.of_not_eq_true hb)
       rwa [Equiv.apply_symm_apply] at this
   · left
-    simp only [tpOp, Matrix.submatrix_apply, Matrix.kroneckerMap_apply] at h
+    simp only [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, Matrix.submatrix_apply,
+        Matrix.kroneckerMap_apply] at h
     rw [Matrix.single_apply] at h
     by_contra hne
     exact h (by rw [if_neg (fun h' => hne h'.1.symm), mul_zero])
@@ -550,15 +555,15 @@ theorem tp_slot_counter {k : StepIdx A.slots A.post} (hk : (k : ℕ) < A.slots)
 /-- **The counter through a post-phase Kraus map**: a branch either ends or keeps its counter. -/
 theorem tp_post_counter {k : StepIdx A.slots A.post} (hk : ¬ (k : ℕ) < A.slots)
     (z : A.R ⊕ (A.R ⊕ Fin (A.budget + 2))) (y x : A.CReg)
-    (h : (A.toTPKindAlg.step k).op z y x ≠ 0) :
-    y.workspace.2 = A.ended ∨ y.workspace.2 = x.workspace.2 := by
-  change A.tpOp k z y x ≠ 0 at h
+    (h : A.tpOp false k z y x ≠ 0) :
+    y.workspace.cnt = A.ended ∨ y.workspace.cnt = x.workspace.cnt := by
   rcases z with r | r | c
-  · simp only [tpOp, hk, if_false] at h
+  · simp only [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, hk, if_false] at h
     exact Or.inr (A.cntKraus_op_ne_zero h)
-  · simp [tpOp, hk] at h
+  · simp [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, hk] at h
   · left
-    simp only [tpOp, Matrix.submatrix_apply, Matrix.kroneckerMap_apply] at h
+    simp only [tpOp_false, tpRaw_inl, tpRaw_inr_inl, tpRaw_inr_inr, Matrix.submatrix_apply,
+        Matrix.kroneckerMap_apply] at h
     rw [Matrix.single_apply] at h
     by_contra hne
     exact h (by rw [if_neg (fun h' => hne h'.1.symm), mul_zero])
@@ -736,13 +741,15 @@ theorem advKraus_slot_supp (j : Fin A.toTPKindAlg.slots) :
   obtain ⟨g1, g2, g3⟩ := hp
   have hn : A.noneCnt Ch j p'.1 = A.noneCnt Ch j p.1 := A.noneCnt_congr Ch (by rw [hc])
   refine ⟨by rw [hn]; exact g1, fun j' hj' => by rw [hc]; exact g2 j' hj', fun ha => ?_⟩
-  rcases A.tp_slot_counter (k := slotStep j) j.isLt z p'.1.adv p.1.adv hK with he | ⟨hx, hy, hlt⟩
+  rcases A.tp_slot_counter (k := slotStep j) j.isLt z p'.1.adv p.1.adv 
+    (by simpa only [AdaptiveIAlg.toTPKindAlg_step_op, AlgShape.tpStep_op] using hK) with he | ⟨hx,
+        hy, hlt⟩
   · exact absurd he ha
   · have hx' := g3 hx
     rw [hn]
     refine ⟨by rw [hy, hx'], ?_⟩
     rw [hy]
-    cases hkw : A.kind p'.1.adv.workspace.1
+    cases hkw : A.kind p'.1.adv.workspace.work
     · have := hlt hkw
       simp only [Bool.false_eq_true, if_false]
       omega
@@ -760,7 +767,8 @@ theorem advKraus_post_supp (b : Fin A.toTPKindAlg.post) :
   have hn : A.noneCnt Ch A.toTPKindAlg.slots p'.1 = A.noneCnt Ch A.toTPKindAlg.slots p.1 :=
     A.noneCnt_congr Ch (by rw [hc])
   refine ⟨by rw [hn]; exact g1, fun j' hj' => by rw [hc]; exact g2 j' hj', fun ha => ?_⟩
-  rcases A.tp_post_counter (k := postStep b) (by simp) z p'.1.adv p.1.adv hK with he | he
+  rcases A.tp_post_counter (k := postStep b) (by simp) z p'.1.adv p.1.adv 
+    (by simpa only [AdaptiveIAlg.toTPKindAlg_step_op, AlgShape.tpStep_op] using hK) with he | he
   · exact absurd he ha
   · rw [hn, he]
     exact g3 (by rw [← he]; exact ha)
@@ -776,7 +784,8 @@ theorem advKraus_last_supp :
   have hn : A.noneCnt Ch A.toTPKindAlg.slots p'.1 = A.noneCnt Ch A.toTPKindAlg.slots p.1 :=
     A.noneCnt_congr Ch (by rw [hc])
   refine ⟨by rw [hn]; exact g1, fun j' hj' => by rw [hc]; exact g2 j' hj', fun ha => ?_⟩
-  rcases A.tp_post_counter (k := lastStep) (by simp) z p'.1.adv p.1.adv hK with he | he
+  rcases A.tp_post_counter (k := lastStep) (by simp) z p'.1.adv p.1.adv 
+    (by simpa only [AdaptiveIAlg.toTPKindAlg_step_op, AlgShape.tpStep_op] using hK) with he | he
   · exact absurd he ha
   · rw [hn, he]
     exact g3 (by rw [← he]; exact ha)
@@ -824,16 +833,16 @@ theorem measReq_supp (j : Fin A.toTPKindAlg.slots) :
     · rw [hlogs j' (fun h => by rw [h] at hj'; simp at hj')]
       exact m2 j' (by omega)
     · rw [hn]
-      have ha' : p.1.adv.workspace.2 ≠ A.ended := ha
+      have ha' : p.1.adv.workspace.cnt ≠ A.ended := ha
       obtain ⟨h1, -⟩ := m3 ha'
-      have hkind : A.kind p.1.adv.workspace.1 = true := by
-        change (A.kind p.1.adv.workspace.1 || decide (p.1.adv.workspace.2 = A.ended)) = true at hk
+      have hkind : A.kind p.1.adv.workspace.work = true := by
+        change (A.kind p.1.adv.workspace.work || decide (p.1.adv.workspace.cnt = A.ended)) = true at hk
         simpa [ha'] using hk
-      change (p.1.adv.workspace.2 : ℕ) = _
+      change (p.1.adv.workspace.cnt : ℕ) = _
       rw [h1, hkind]
       simp
   · rw [if_neg hk]
-    have hk' : (A.kind p.1.adv.workspace.1 || decide (p.1.adv.workspace.2 = A.ended)) = false :=
+    have hk' : (A.kind p.1.adv.workspace.work || decide (p.1.adv.workspace.cnt = A.ended)) = false :=
       Bool.of_not_eq_true hk
     rw [Bool.or_eq_false_iff, decide_eq_false_iff_not] at hk'
     obtain ⟨hkind, ha⟩ := hk'
@@ -842,7 +851,6 @@ theorem measReq_supp (j : Fin A.toTPKindAlg.slots) :
     simp only [Bool.false_eq_true, if_false] at h1
     have hn : A.noneCnt Ch (j + 1) p.1 = A.noneCnt Ch j p.1 + 1 := by
       rw [A.noneCnt_succ Ch j.isLt]
-      simp only at hlj
       rw [if_pos hlj]
     refine ⟨by rw [hn]; omega, fun j' hj' => m2 j' (by omega), fun _ => by rw [hn]; exact h1⟩
 
@@ -1107,7 +1115,7 @@ theorem initSys_good (p : QueryReg (A.TW Ch) 1 X Y)
   have hlogs : p.1.chal.logs = fun _ => none := by
     have := congrArg (fun r => r.1.logs) hrest
     exact this
-  have hc : p.1.adv.workspace.2 = 0 := by
+  have hc : p.1.adv.workspace.cnt = 0 := by
     by_contra hne
     exact hi (A.init_mat_eq_zero p.1.adv p.1.adv (Or.inl hne))
   have hn : A.noneCnt Ch 0 p.1 = 0 := by
@@ -1180,7 +1188,7 @@ composition of the trace-preserving form with a challenger, with any output, has
 queries on each branch, whatever the number of slots. -/
 noncomputable def tpQueryCount {m : ℕ} {I J : Type} [Fintype I] [Fintype J] [DecidableEq I]
     [DecidableEq J] {B : Type} (e : GordieHowe.QROM.BitStr I J ≃ B)
-    (A : AdaptiveIAlg (GordieHowe.QROM.Bits m) (GordieHowe.QROM.BitStr I J) Req Resp O)
+    {shA : AlgShape (GordieHowe.QROM.Bits m) (GordieHowe.QROM.BitStr I J) Req Resp} (A : AdaptiveIAlg shA O)
     (Ch : Challenger (GordieHowe.QROM.Bits m) (GordieHowe.QROM.BitStr I J) Req Resp) {O' O'' : Type}
     (f : A.toKindAlg.CW Ch → O') (g : Option O' → O'') :
     GordieHowe.QROM.QueryCount e ((A.toTPKindAlg.composeBothOut Ch f).toQueryAlgCoh.mapOut g)

@@ -4,7 +4,8 @@
 module
 
 public import GordieHowe.SPBCS.SimExtract
-public import GordieHowe.SPBCS.FullPast.SimExtractTest
+public import GordieHowe.Model.Quantum.Interactive.AdaptiveTest
+public import GordieHowe.Model.Quantum.Interactive.QueryFreeTest
 
 @[expose] public section
 
@@ -15,9 +16,7 @@ The test forms of simulation-sound extractability (paper `thm:bcs-se`(1) and the
 `def:bcs-se` to Unruh's Definition 14 in the paper's Section 6.1.2; Unruh 2017, ePrint 2017/398,
 Definition 14, p. 21, eq. (6)) for the spBCS compiler, from
 `simulation_sound_extractability_game` (`GordieHowe/SPBCS/SimExtract.lean`), with the tests and the
-adversary followed by the test of the compiler over the term
-(`GordieHowe.SPBCS.Base.SimExtractionAdversary.QTest`, `withTest`, `QFTest`,
-`GordieHowe/SPBCS/FullPast/SimExtractTest.lean`).
+adversary followed by the test (`SimExtractionAdversary.QTest`, `withTest`, `QFTest`, below).
 
 - `simulation_sound_extractability_folded`: for tests that query the final oracle, folded into the
   adversary on both sides (`SimulationSoundExtractableFolded`).
@@ -28,10 +27,90 @@ adversary followed by the test of the compiler over the term
   (`SimulationSoundExtractableQueryFree`).
 -/
 
+/-!
+## Tests of the residual state
+
+The tests of the test forms of simulation-sound extractability (Unruh 2017, ePrint 2017/398,
+Definition 14, p. 21, eq. (6)), with which the test forms are stated below
+(`simulation_sound_extractability_folded`, `simulation_sound_extractability_query_free`, with
+Unruh's Prove with a query-free test `acceptsQFTest`).
+
+- `SimExtractionAdversary.QTest`, `withTest`, `QTest.okWithTest`: a test of the residual state
+  with at most `tTest` queries to the final oracle, and the adversary followed by the test
+  (`A^Π`), with `tq + tTest` queries.
+- `SimExtractionAdversary.QFTest`, `QFTest.toQTest`: a query-free test, as a test with no query
+  batch.
+-/
+
 namespace GordieHowe.SPBCS
 
 open GordieHowe.QROM GordieHowe.IOP IOP.SPTerm Quantum GordieHowe.QROM
-open Base (SimExtractionAdversary)
+open scoped NNReal ENNReal
+
+variable {k kN kS L e : ℕ}
+
+section
+
+variable {ι : Type} {n : ι → ℕ} {P : (j : ι) → ProtocolSpec (n j)}
+  [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)]
+  [∀ j i, Nonempty ((P j).Challenge i)] {t : SPTerm ι} {Mg : Merges t} {X : Type}
+  {M : SPBCS Mg P X k kN kS L e} {B : ℕ} [∀ j i, Fintype ((M.comp j).MessageWrite i)]
+  {X' : Type} [Fintype X'] [DecidableEq X'] {SC : Type} [Fintype SC] [DecidableEq SC] {tq Q : ℕ}
+
+/-! ### Tests of the residual state -/
+
+/-- **A residual-state test with at most `tTest` queries** (Unruh 2017, Definition 14, p. 21, the
+test `Π^{H_final}_{x‖π}`): for each auxiliary value `a`, a test of the residual state of
+`𝒜.alg a` (`AdaptiveIAlg.QTest`: channels on its registers alternating with batches of queries to
+the final oracle, and an outcome predicate of its measured workspace) making at most `tTest`
+queries. -/
+structure SimExtractionAdversary.QTest (𝒜 : M.SimExtractionAdversary B X' tq Q) (tTest : ℕ) where
+  /-- The test at each auxiliary value. -/
+  test : (a : 𝒜.Aux) → (𝒜.alg a).QTest
+  /-- At most `tTest` queries. -/
+  queries_le : ∀ a, (test a).queries ≤ tTest
+
+/-- **The adversary followed by the test** (`A^Π`): at each auxiliary value,
+`AdaptiveIAlg.withTest`; it makes at most `tq + tTest` queries of its own on every branch.
+
+Running time: at each auxiliary value that of `AdaptiveIAlg.withTest`, the adversary followed by
+the test. This running time is argued here, not proved in Lean. -/
+noncomputable def SimExtractionAdversary.withTest {tTest : ℕ}
+    (𝒜 : M.SimExtractionAdversary B X' tq Q) (T : 𝒜.QTest tTest) :
+    M.SimExtractionAdversary B X' (tq + tTest) Q where
+  Aux := 𝒜.Aux
+  aux := 𝒜.aux
+  sh a := (𝒜.sh a).withTestS (T.test a).batches (T.test a).R
+  alg a := (𝒜.alg a).withTest (T.test a)
+  queries_le a := by
+    rw [AdaptiveIAlg.withTest_queries]
+    exact add_le_add (𝒜.queries_le a) (T.queries_le a)
+
+/-- **The test's outcome on the workspace of `A^Π`**: its predicate on `A`'s part of the
+workspace (the copy register holds the output). -/
+def SimExtractionAdversary.QTest.okWithTest {tTest : ℕ} {𝒜 : M.SimExtractionAdversary B X' tq Q}
+    (T : 𝒜.QTest tTest) : (a : (𝒜.withTest T).Aux) → ((𝒜.withTest T).alg a).W → Prop :=
+  fun a w => (T.test a).ok w.1
+
+/-- **A query-free test of the residual state** of `𝒜` (Unruh 2017, Definition 14, p. 21, the test
+`Π_{x‖π}`, without oracle queries): at each auxiliary value, a channel on the adversary's registers
+and an outcome predicate of the workspace measured afterwards. -/
+abbrev SimExtractionAdversary.QFTest (𝒜 : M.SimExtractionAdversary B X' tq Q) : Type 1 :=
+  (a : 𝒜.Aux) → (𝒜.alg a).QFTest
+
+/-- **A query-free test as a test with no query batch**: `𝒜.withTest T.toQTest` is the adversary
+followed by the test (`A^Π`), with the queries of `𝒜`. -/
+noncomputable def SimExtractionAdversary.QFTest.toQTest {𝒜 : M.SimExtractionAdversary B X' tq Q}
+    (T : 𝒜.QFTest) : 𝒜.QTest 0 where
+  test a := (T a).toQTest
+  queries_le a := (AdaptiveIAlg.QFTest.queries_toQTest (T a)).le
+
+end
+end GordieHowe.SPBCS
+
+namespace GordieHowe.SPBCS
+
+open GordieHowe.QROM GordieHowe.IOP IOP.SPTerm Quantum GordieHowe.QROM
 open scoped NNReal ENNReal BigOperators
 
 variable {ι : Type} {t : SPTerm ι} {Mg : Merges t} {k kN kS L e : ℕ} {n : ι → ℕ}
@@ -100,8 +179,7 @@ statement of `o`, and the spBCS verifier accepts `o` under `H` reprogrammed by t
 assignments. `Wins` is this event at the registers' output (`wins_iff_winsAt`). -/
 def WinsAt (fx : X' → X)
     (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B) SC) (Q : ℕ)
-    (A : AdaptiveIAlg (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
-      (Claim X M.NIProof))
+    {shA : AlgShape (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)} (A : AdaptiveIAlg shA (Claim X M.NIProof))
     (H : Bits (queryBits k kN kS L) → XOut k e) (o : Claim X M.NIProof)
     (u : ChallengerRegs (Bits (queryBits k kN kS L)) (XOut k e) X' A.slots
       (simExtChallenger Psim Q).q (simExtChallenger Psim Q).Coins) : Prop :=
@@ -112,11 +190,10 @@ def WinsAt (fx : X' → X)
 
 theorem wins_iff_winsAt (fx : X' → X)
     (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B) SC) (Q : ℕ)
-    (A : AdaptiveIAlg (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
-      (Claim X M.NIProof))
+    {shA : AlgShape (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)} (A : AdaptiveIAlg shA (Claim X M.NIProof))
     (H : Bits (queryBits k kN kS L) → XOut k e) (v : M.Register B A.toTPKindAlg Psim Q) :
     Wins A.toTPKindAlg Psim Q Qs fx H v ↔
-      WinsAt Qs fx Psim Q A H (Base.advOut A.toTPKindAlg Psim Q v) v.chal :=
+      WinsAt Qs fx Psim Q A H (SPBCS.advOut A.toTPKindAlg Psim Q v) v.chal :=
   Iff.rfl
 
 /-- **Unruh's Prove with a query-free test for the spBCS compiler** (Unruh 2017,

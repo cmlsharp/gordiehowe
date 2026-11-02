@@ -356,13 +356,13 @@ def unsupportedFraction (P : Params) : ℚ :=
         (samples16 fun i => (bytes i : ℕ)) P.n = none).card : ℚ) / (256 : ℚ) ^ (2 * P.S)
 
 set_option maxRecDepth 8000 in
-/-- For Falcon-512, at most a `2^-102` fraction of `1278`-byte strings has fewer than
-`512` samples below `61445` among its `639` big-endian 16-bit samples. The fraction is
-the binomial tail `Σ_{k<512} C(639,k) · 61445^k · 4091^(639−k) / 65536^639`, about
-`2^(-102.26)`. This is a statement about uniform byte strings; applying it to SHAKE256
+/-- For Falcon-512, at most a `2^-256` fraction of `1434`-byte strings has fewer than
+`512` samples below `61445` among its `717` big-endian 16-bit samples. The fraction is
+the binomial tail `Σ_{k<512} C(717,k) · 61445^k · 4091^(717−k) / 65536^717`, about
+`2^(-256.18)`. This is a statement about uniform byte strings; applying it to SHAKE256
 output is a random-oracle assumption on SHAKE256. -/
-theorem unsupportedFraction_le : unsupportedFraction falcon512 ≤ (2 : ℚ) ^ (-(102 : ℤ)) := by
-  have hS : falcon512.S = 639 := by decide
+theorem unsupportedFraction_le : unsupportedFraction falcon512 ≤ (2 : ℚ) ^ (-(256 : ℤ)) := by
+  have hS : falcon512.S = 717 := by decide
   have hn : falcon512.n = 512 := by decide
   have hboundeq : falcon512.bound = 61445 := by decide
   have hbound : falcon512.bound ≤ 65536 := by decide
@@ -387,14 +387,14 @@ theorem unsupportedFraction_le : unsupportedFraction falcon512 ≤ (2 : ℚ) ^ (
       simp only [Finset.mem_filter, Finset.mem_univ, true_and, decide_eq_true_eq]
       rw [samples16Equiv_apply bytes i]
     rw [hAB]
-  have hnat : 2 ^ 102 * binomialTail falcon512.S falcon512.bound 65536 falcon512.n
+  have hnat : 2 ^ 256 * binomialTail falcon512.S falcon512.bound 65536 falcon512.n
       ≤ 65536 ^ falcon512.S := by
     rw [hS, hn, hboundeq]
     decide
   have hpow256 : (256 : ℚ) ^ (2 * falcon512.S) = (65536 : ℚ) ^ falcon512.S := by
     rw [pow_mul, show (256 : ℚ) ^ 2 = 65536 from by norm_num]
   unfold unsupportedFraction
-  rw [hcard, hpow256, show (2 : ℚ) ^ (-(102 : ℤ)) = 1 / (2 : ℚ) ^ 102 from by norm_num,
+  rw [hcard, hpow256, show (2 : ℚ) ^ (-(256 : ℤ)) = 1 / (2 : ℚ) ^ 256 from by norm_num,
     div_le_div_iff₀ (by positivity) (by positivity), one_mul]
   exact_mod_cast hnat
 

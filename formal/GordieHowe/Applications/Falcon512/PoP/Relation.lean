@@ -45,11 +45,11 @@ def rel (msgLen : ℕ) :
   {p | Falcon512.verify p.1 (List.ofFn p.2.message) p.2.signature}
 
 /-- **The Falcon-512 relation at the signatures the circuits sample**: the pairs of `rel` whose
-`HashToPoint` succeeds on the H circuit's fixed stream of `S = 639` samples
+`HashToPoint` succeeds on the H circuit's fixed stream of `S = 717` samples
 (`Falcon512.acceptedCandidates`), the restriction of the honest prover's completeness. The
 verifier `Falcon512.verify` draws up to `1024` samples; a signature outside this set (its salt
-and message give fewer than `512` samples below `5q` among the first `639`) has no honest input.
-Over a uniform `2 · 639`-byte stream the excluded fraction is at most `2^-102`
+and message give fewer than `512` samples below `5q` among the first `717`) has no honest input.
+Over a uniform `2 · 717`-byte stream the excluded fraction is at most `2^-256`
 (`Falcon512.unsupportedFraction_le`). -/
 def relSupported (msgLen : ℕ) :
     Set (_root_.Falcon.PublicKey _root_.Falcon.Concrete.params512 × Witness msgLen) :=

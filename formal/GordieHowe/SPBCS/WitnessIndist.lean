@@ -3,7 +3,10 @@
 
 module
 
-public import GordieHowe.SPBCS.FullPast.WitnessIndist
+public import GordieHowe.SPBCS.ZeroKnowledge
+public import GordieHowe.Model.IOP.FiatShamirLaw
+public import GordieHowe.SPBCS.Merkle.LeafHidingAdaptive
+public import GordieHowe.Foundations.ToMathlib.PMFTVJoint
 public import GordieHowe.SPBCS.CompleteAdaptive
 public import GordieHowe.SPBCS.Merkle.LeafHidingCausal
 
@@ -14,9 +17,8 @@ public import GordieHowe.SPBCS.Merkle.LeafHidingCausal
 
 Adaptive, multi-theorem, everlasting (statistical) witness indistinguishability (CY24 Definition
 33.1.1, p. 426, at unbounded queries) of the spBCS compiler (`GordieHowe/SPBCS/Basic.lean`)
-against a distinguisher that receives the whole random oracle. The argument is the one for the
-compiler over the term (`GordieHowe/SPBCS/FullPast/WitnessIndist.lean`) with the merge chains, challenges
-and verifier, per proof query at a fixed oracle:
+against a distinguisher that receives the whole random oracle. The argument, per proof query at a fixed oracle, uses the pieces below with the merge chains,
+challenges and verifier:
 
 1. *Leaf equivocation* (`close_realLaw_idealLaw`): the honest proof is a function of its leaf
    (Merkle salt, digest) pairs (`prove_eq_proofTr`); replacing them by uniform digests with Merkle
@@ -32,13 +34,594 @@ and verifier, per proof query at a fixed oracle:
 3. *The salt bound* (`expect_sup'_fpDist_le`): the salt slices of the oracle are independent given
    its salt-free part; on each slice the challenges are dominated by uniform ones up to
    `overrun + keyCollision (t.size n) k` (`prob_sample_none_or_chOfW_mem_le`).
-4. *The leaf term* and *the hybrid* over the `Q` proof queries (`GordieHowe.SPBCS.Base.wiAdvantageWith_le_of`).
+4. *The leaf term* and *the hybrid* over the `Q` proof queries (`GordieHowe.SPBCS.wiAdvantageWith_le_of`).
 
-The theorem (`wiAdvantage_le`): `wiAdvantage ≤ Q · wiError δ |choices|`, with the error of the
-compiler over the term (`GordieHowe.SPBCS.Base.wiError`), from the views of two witnesses being at average
-distance at most `2δ` (`GordieHowe.SPBCS.Base.ObsClose`), which honest-verifier zero knowledge of the
-composite at error `δ` gives (`GordieHowe.SPBCS.Base.obsClose_of_causalHVZK`).
+The theorem (`wiAdvantage_le`): `wiAdvantage ≤ Q · wiError δ |choices|`, with the error
+`GordieHowe.SPBCS.wiError`, from the views of two witnesses being at average
+distance at most `2δ` (`GordieHowe.SPBCS.ObsClose`), which honest-verifier zero knowledge of the
+composite at error `δ` gives (`GordieHowe.SPBCS.obsClose_of_causalHVZK`).
 -/
+
+/-! ### The pieces of witness indistinguishability
+
+Adaptive, multi-theorem, everlasting (statistical) witness indistinguishability (CY24 Definition
+33.1.1, p. 426, at unbounded queries) of the compiled composite against a distinguisher that
+receives the whole random oracle: the pieces from which the theorem for the spBCS compiler below
+follows. The argument, per proof query at a fixed
+oracle:
+
+1. *Leaf equivocation* (`GordieHowe.SPBCS.close_realLaw_idealLaw`): the honest proof is a function of
+   its leaf (Merkle salt, digest) pairs (`GordieHowe.SPBCS.prove_eq_proofTr`); replacing them by
+   uniform digests with Merkle salts drawn from their preimages, tree by tree in global round order,
+   costs at most `|Pos| · leafDist h` (`GordieHowe.SPBCS.tvDist_leafPairs_causal_le`). A column
+   reads only the digests of earlier rounds (`GordieHowe.SPBCS.rankCausal_colD`).
+2. *The fixed-point laws* (`GordieHowe.SPBCS.close_idealLaw`): in the ideal law the proof is a kernel
+   applied to the composite view, the digests and the Fiat–Shamir challenges, which are the unique
+   self-consistent challenges (`GordieHowe.SPBCS.fsD_eq_iff`).
+3. *The salt bound* (`GordieHowe.SPBCS.expect_sup'_fpDist_le`): the salt slices of the oracle are
+   independent given its unlabeled part; on each slice the challenges are dominated by uniform ones
+   up to `overrun + keyCollision (t.size n) k`.
+4. *The leaf term* (`GordieHowe.SPBCS.expect_leafDist_le`) and *the hybrid* over the `Q` proof queries
+   (`close_wiGameWith`).
+
+The theorem (`GordieHowe.SPBCS.wiAdvantage_le`): `wiAdvantage ≤ Q · wiError δ |choices|`, `wiError δ c =
+2 · leafTerm + 2δ + overrun + keyCollision (t.size n) k + saltTerm kS c`, from the observations of
+two witnesses being at average distance at most `2δ` (`ObsClose`), which honest-verifier zero
+knowledge of the composite at error `δ` gives (`obsClose_of_causalHVZK`).
+-/
+
+section
+
+namespace GordieHowe.SPBCS
+
+open GordieHowe.QROM GordieHowe.IOP IOP.SPTerm
+open scoped ENNReal NNReal BigOperators
+
+variable {k kN kS L e : ℕ}
+
+section
+
+variable {ι : Type} {n : ι → ℕ} {P : (j : ι) → ProtocolSpec (n j)}
+  [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)]
+  [∀ j i, Nonempty ((P j).Challenge i)] {t : SPTerm ι} {Mg : Merges t} {X W : Type}
+  {M : SPBCS Mg P X k kN kS L e}
+
+/-! ### Positions in global round order, and what the proof reveals -/
+
+/-- **The global round of a position**: the global round of its message, its leaf's offset plus
+the message's round. -/
+def Pos.gIdx (q : M.Pos) : ℕ := q.leaf.off n + q.pos.msg.1.1
+
+section Reveal
+
+variable {E : (j : ι) → (M.comp j).Encoder} {V : X → FullTr P t → Bool}
+  {Qs : ∀ x, M.IOPQueries V x}
+
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+/-- **The view determines every write**, at any roots. -/
+theorem Reveal.write_congr (Rv : M.Reveal E Qs) (x : X) (ρ : Chs P t) {tr tr' : FullTr P t}
+    (h : Rv.MV.view tr = Rv.MV.view tr') (p : t.Leaf) (i : (P p.label).MessageIdx)
+    (rts : Fin ((M.comp p.label).nTrees i) → Digest k) :
+    (E p.label).write i (tr p i.1) rts = (E p.label).write i (tr' p i.1) rts := by
+  have e := (Rv.writesOf_obs x ρ tr).symm.trans (h ▸ Rv.writesOf_obs x ρ tr')
+  exact congrFun (congrFun (congrFun (Option.some_injective _ e) p) i) rts
+
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+/-- **The view determines the column of every opened leaf.** -/
+theorem Reveal.col_congr (Rv : M.Reveal E Qs) (x : X) (chs : (p : t.Leaf) → M.Items p)
+    (ρ : Chs P t) {tr tr' : FullTr P t} (hρ : tr.challenges = ρ)
+    (h : Rv.MV.view tr = Rv.MV.view tr') (q : M.Pos) (hq : q ∈ (Qs x).pos chs ρ) :
+    (E q.leaf.label).cols q.pos.msg (tr q.leaf q.pos.msg.1) q.pos.tree q.pos.leaf =
+      (E q.leaf.label).cols q.pos.msg (tr' q.leaf q.pos.msg.1) q.pos.tree q.pos.leaf := by
+  have hρ' : tr'.challenges = ρ := by
+    have := congrArg CausalView.challenges h
+    simp only [CausalViews.view] at this
+    rw [← this, hρ]
+  rw [← Rv.colOf_obs x chs ρ tr hρ q hq, h, Rv.colOf_obs x chs ρ tr' hρ' q hq]
+
+/-- **The law of the view** of the run of `prv` on `x` at the challenges `ρ`, under uniform
+prover coins. -/
+noncomputable def obsLaw (Rv : M.Reveal E Qs) (x : X) {R : Type} [Fintype R] [Nonempty R]
+    (prv : R → CausalProver P t X) (ρ : Chs P t) : PMF (CausalView Rv.MV) :=
+  (PMF.uniformOfFintype R).map fun r => Rv.MV.view ((prv r).run x ρ)
+
+/-- **The views of two witnesses are close** at `2δ`: for every statement and two
+witnesses with it in the relation, the average over uniform challenges `ρ` of the distance between
+the two laws of the view (`obsLaw`) is at most `2δ`. It is the hypothesis of the
+witness-indistinguishability theorem (`wiAdvantage_le`); honest-verifier zero knowledge of the
+composite at error `δ` gives it (`obsClose_of_causalHVZK`). -/
+def ObsClose (Rv : M.Reveal E Qs) (rel : Set (X × W)) {R : Type} [Fintype R] [Nonempty R]
+    (prv : W → R → CausalProver P t X) (δ : ℝ≥0) : Prop :=
+  ∀ x w w', (x, w) ∈ rel → (x, w') ∈ rel →
+    𝔼 ρ : Chs P t, PMF.tvDist (obsLaw Rv x (prv w) ρ) (obsLaw Rv x (prv w') ρ) ≤ 2 * δ
+
+end Reveal
+
+/-! ### Two witnesses under honest-verifier zero knowledge -/
+
+section HVZK
+
+variable {MV : CausalViews P t}
+
+/-- A composite view as its challenges and its seen entries. -/
+def _root_.GordieHowe.IOP.CausalView.equivProd :
+    CausalView MV ≃ Chs P t × (∀ p (i : (P p.label).MessageIdx), MV.Idx p i → Option (MV.Ans p i)) where
+  toFun v := (v.challenges, v.entries)
+  invFun a := ⟨a.1, a.2⟩
+  left_inv _ := rfl
+  right_inv _ := rfl
+
+/-- Pairing with a fixed first component keeps the distance of two laws. -/
+theorem _root_.PMF.tvDist_map_prodMk {α β : Type*} (a : α) (p q : PMF β) :
+    PMF.tvDist (p.map (Prod.mk a)) (q.map (Prod.mk a)) = PMF.tvDist p q := by
+  refine le_antisymm (PMF.tvDist_map_le _ _ _) ?_
+  have h := PMF.tvDist_map_le (p.map (Prod.mk a)) (q.map (Prod.mk a)) Prod.snd
+  rwa [PMF.map_comp, PMF.map_comp, show (Prod.snd ∘ Prod.mk a : β → β) = id from rfl, PMF.map_id,
+    PMF.map_id] at h
+
+omit [∀ j i, DecidableEq ((P j).Challenge i)] in
+/-- **The honest views of two witnesses are at the average distance of the views at the
+challenges**: both honest views draw uniform challenges, which the view records. -/
+theorem tvDist_honestView {R : Type} [Fintype R] [Nonempty R] (honest : W → R → CausalProver P t X)
+    (x : X) (w w' : W) :
+    PMF.tvDist (MV.honestView honest x w) (MV.honestView honest x w') =
+      𝔼 ρ : Chs P t, PMF.tvDist ((PMF.uniformOfFintype R).map fun r => MV.view ((honest w r).run x ρ))
+        ((PMF.uniformOfFintype R).map fun r => MV.view ((honest w' r).run x ρ)) := by
+  have hview : ∀ (v : W) ρ, ((PMF.uniformOfFintype R).map fun r => MV.view ((honest v r).run x ρ)).map
+      CausalView.equivProd = ((PMF.uniformOfFintype R).map fun r =>
+        (MV.view ((honest v r).run x ρ)).entries).map (Prod.mk ρ) := fun v ρ => by
+    rw [PMF.map_comp, PMF.map_comp]
+    congr 1
+    funext r
+    simp only [Function.comp_apply, CausalView.equivProd, Equiv.coe_fn_mk, CausalViews.view,
+      CausalProver.challenges_run]
+  have hhv : ∀ v : W, (MV.honestView honest x v).map CausalView.equivProd =
+      (PMF.uniformOfFintype (Chs P t)).bind fun ρ => ((PMF.uniformOfFintype R).map fun r =>
+        (MV.view ((honest v r).run x ρ)).entries).map (Prod.mk ρ) := fun v => by
+    rw [CausalViews.honestView, PMF.map_bind]
+    exact congrArg _ (funext fun ρ => hview v ρ)
+  rw [← PMF.tvDist_map_equiv CausalView.equivProd, hhv, hhv,
+    PMF.tvDist_uniformOfFintype_bind_map_prodMk]
+  refine Finset.expect_congr rfl fun ρ _ => ?_
+  rw [← PMF.tvDist_map_equiv CausalView.equivProd, hview, hview, PMF.tvDist_map_prodMk]
+
+end HVZK
+
+variable {E : (j : ι) → (M.comp j).Encoder} {V : X → FullTr P t → Bool}
+  {Qs : ∀ x, M.IOPQueries V x}
+
+/-- **Honest-verifier zero knowledge of the composite makes the views of two witnesses close**: for
+two witnesses of a statement the average over uniform challenges of the distance between their
+view laws is the distance of the two honest views, at most `2δ` when both are within `δ` of the
+simulated law (CY24 Definition 23.1.8 for composites, `CausalHVZK`). -/
+theorem obsClose_of_causalHVZK (Rv : M.Reveal E Qs) {rel : Set (X × W)} {R : Type} [Fintype R]
+    [Nonempty R] {honest : W → R → CausalProver P t X} {Pub : Type} {pub : X → Pub}
+    {S : CausalJointSimulator Rv.MV Pub} {δ : ℝ≥0} (h : CausalHVZK Rv.MV rel honest pub S δ) :
+    ObsClose Rv rel honest δ := fun x w w' hw hw' => by
+  show 𝔼 ρ : Chs P t, PMF.tvDist ((PMF.uniformOfFintype R).map fun r => Rv.MV.view ((honest w r).run x ρ))
+    ((PMF.uniformOfFintype R).map fun r => Rv.MV.view ((honest w' r).run x ρ)) ≤ 2 * δ
+  rw [← tvDist_honestView]
+  calc PMF.tvDist (Rv.MV.honestView honest x w) (Rv.MV.honestView honest x w')
+      ≤ PMF.tvDist (Rv.MV.honestView honest x w) (S.law (pub x)) +
+          PMF.tvDist (S.law (pub x)) (Rv.MV.honestView honest x w') := PMF.tvDist_triangle _ _ _
+    _ ≤ δ + δ := add_le_add (h x w hw) ((PMF.tvDist_comm _ _).trans_le (h x w' hw'))
+    _ = 2 * δ := (two_mul _).symm
+
+/-! ### The proof read from what it reveals -/
+
+section Observation
+
+variable (E) (Qs) (h : Query k kN kS L → Out k e) (x : X) (σ : FiatShamirSalt kS)
+
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+theorem map_fst_openedIn (f g : M.Pos → MerkleLeaf kN L) (τ : M.Tree) (ps : List M.Pos) :
+    (M.openedIn τ ps (ps.map f)).map Prod.fst = (M.openedIn τ ps (ps.map g)).map Prod.fst := by
+  rw [openedIn_map, openedIn_map, List.map_map, List.map_map]
+  rfl
+
+end Observation
+
+/-! ### The experiment -/
+
+variable (M) in
+/-- **An adaptive multi-theorem witness-indistinguishability adversary** of the composite with
+`Q` proof queries: in round `j` it chooses a statement and two witnesses from its finite choice
+set, both valid, as a function of the whole oracle and the earlier proofs. -/
+structure WIAdversary (rel : Set (X × W)) (Q : ℕ) where
+  /-- The finite choice set. -/
+  choices : Finset (SPBCS.WIChoice X W)
+  /-- Both witnesses of every choice are valid for its statement. -/
+  admissible : ∀ c ∈ choices, (c.stmt, c.wit₀) ∈ rel ∧ (c.stmt, c.wit₁) ∈ rel
+  /-- The choice of round `j` from the oracle and the earlier proofs. -/
+  choose : (j : Fin Q) → (Query k kN kS L → Out k e) → (Fin j → M.NIProof) → SPBCS.WIChoice X W
+  /-- Every choice is in the choice set. -/
+  choose_mem : ∀ j h πs, choose j h πs ∈ choices
+
+section Game
+
+omit [∀ j i, Nonempty ((P j).Challenge i)]
+
+variable (law : (Query k kN kS L → Out k e) → X → W → PMF M.NIProof) {rel : Set (X × W)} {Q : ℕ}
+  (A : M.WIAdversary rel Q)
+
+/-- Round `j` of the experiment with the proof laws `law` (the law of the proof at an oracle, a
+statement and a witness) from the state `s` (the oracle and the earlier proofs), answering
+with the witness `w_{j,1}` when `b`. -/
+noncomputable def wiStep (b : Bool) (j : Fin Q)
+    (s : (Query k kN kS L → Out k e) × (Fin j → M.NIProof)) :
+    PMF ((Query k kN kS L → Out k e) × (Fin (j + 1) → M.NIProof)) :=
+  (law s.1 (A.choose j s.1 s.2).stmt
+      (if b then (A.choose j s.1 s.2).wit₁ else (A.choose j s.1 s.2).wit₀)).map
+    fun π => (s.1, Fin.snoc (α := fun _ => M.NIProof) s.2 π)
+
+/-- The experiment after `j` rounds, round `i` answering with the witness `w_{i,1}` when `bs i`. -/
+noncomputable def wiRun (bs : ℕ → Bool) :
+    (j : ℕ) → j ≤ Q → PMF ((Query k kN kS L → Out k e) × (Fin j → M.NIProof))
+  | 0, _ => (PMF.uniformOfFintype _).map fun h => (h, Fin.elim0)
+  | j + 1, hj => (wiRun bs j (by omega)).bind (wiStep law A (bs j) ⟨j, by omega⟩)
+
+/-- **The witness-indistinguishability experiment** `D_b` (CY24 Definition 33.1.1 at `t = ∞`, for
+many proofs) with the proof laws `law`: the whole oracle and the `Q` proofs, every proof query answered
+with the witness `w_{j,b}`. -/
+noncomputable def wiGameWith (b : Bool) : PMF ((Query k kN kS L → Out k e) × (Fin Q → M.NIProof)) :=
+  wiRun law A (fun _ => b) Q le_rfl
+
+/-- **The advantage of a distinguisher** `D` given the whole oracle and the proofs, with the proof
+laws `law`: the `GordieHowe.gameAdvantage` of the event `D` between the two experiments. -/
+noncomputable def wiAdvantageWith (D : (Query k kN kS L → Out k e) → (Fin Q → M.NIProof) → Prop) : ℝ :=
+  GordieHowe.gameAdvantage (wiGameWith law A false) (wiGameWith law A true) {s | D s.1 s.2}
+
+/-- The oracle of every intermediate state is uniform: proofs are drawn given the oracle. -/
+theorem map_fst_wiRun (bs : ℕ → Bool) : ∀ j (hj : j ≤ Q),
+    (wiRun law A bs j hj).map Prod.fst = PMF.uniformOfFintype _
+  | 0, _ => by rw [wiRun, PMF.map_comp]; exact PMF.map_id _
+  | j + 1, hj => by
+    rw [wiRun, PMF.map_bind]
+    simp_rw [wiStep, PMF.map_comp]
+    rw [← map_fst_wiRun bs j (by omega), ← PMF.bind_pure_comp]
+    congr 1
+    funext s
+    exact PMF.map_const _ _
+
+/-- Two runs whose answer bits agree before round `j` agree after `j` rounds. -/
+theorem wiRun_congr {bs bs' : ℕ → Bool} : ∀ j (hj : j ≤ Q), (∀ i < j, bs i = bs' i) →
+    wiRun law A bs j hj = wiRun law A bs' j hj
+  | 0, _, _ => rfl
+  | j + 1, hj, hb => by
+    rw [wiRun, wiRun, wiRun_congr j (by omega) fun i hi => hb i (by omega), hb j (by omega)]
+
+/-- The average of a function of the oracle under an intermediate state is its uniform average. -/
+theorem tsum_wiRun_mul (bs : ℕ → Bool) (j : ℕ) (hj : j ≤ Q)
+    {f : (Query k kN kS L → Out k e) → ℝ} (hf : ∀ h, 0 ≤ f h) :
+    𝔼[s ~ wiRun law A bs j hj : f s.1] = 𝔼[h ← (Query k kN kS L → Out k e) : f h] :=
+  PMF.tsum_toReal_mul_comp_eq_expect _ Prod.fst (map_fst_wiRun law A bs j hj) hf
+
+/-- **One hybrid step**: two runs whose answer bits differ only at round `i`, where every choice
+of the adversary gives proof laws within `ε h` at the oracle `h`, are within the uniform average
+of `ε` after every later round. -/
+theorem close_wiRun_step {bs bs' : ℕ → Bool} {i : ℕ} (hi : i < Q)
+    (hb : ∀ j, j ≠ i → bs j = bs' j) {ε : (Query k kN kS L → Out k e) → ℝ} (hε0 : ∀ h, 0 ≤ ε h)
+    (hε : ∀ s, wiStep law A (bs i) ⟨i, hi⟩ s ≈[ε s.1] wiStep law A (bs' i) ⟨i, hi⟩ s) :
+    ∀ j (hj : j ≤ Q), i < j →
+      wiRun law A bs j hj ≈[𝔼[h ← (Query k kN kS L → Out k e) : ε h]]
+        wiRun law A bs' j hj
+  | 0, _, h0 => absurd h0 (Nat.not_lt_zero _)
+  | j + 1, hj, hij => by
+    rcases Nat.lt_succ_iff_lt_or_eq.1 hij with hij | rfl
+    · rw [wiRun, wiRun, hb j (by omega)]
+      exact (PMF.tvDist_bind_right_le _ _ _).trans (close_wiRun_step hi hb hε0 hε j (by omega) hij)
+    · rw [wiRun, wiRun, wiRun_congr law A i (by omega) fun j hj => hb j (by omega)]
+      refine (PMF.tvDist_bind_left_le' _ _ _).trans ?_
+      rw [← tsum_wiRun_mul law A bs' i (by omega) hε0]
+      exact PMF.tsum_toReal_mul_le_tsum_toReal_mul _ (fun s => PMF.tvDist_nonneg _ _) hε
+        (fun s => Finset.single_le_sum (fun h _ => hε0 h) (Finset.mem_univ s.1))
+
+/-- **The hybrid argument**: if at every oracle `h` and every choice of the adversary the proof
+laws of the two witnesses are within `ε h`, the experiments answering with the first and with the
+second witnesses are within `Q · 𝔼[h ← Oracle : ε h]`. -/
+theorem close_wiGameWith {ε : (Query k kN kS L → Out k e) → ℝ} (hε0 : ∀ h, 0 ≤ ε h)
+    (hε : ∀ h c, c ∈ A.choices →
+      law h c.stmt c.wit₀ ≈[ε h] law h c.stmt c.wit₁) :
+    wiGameWith law A false ≈[Q * 𝔼[h ← (Query k kN kS L → Out k e) : ε h]]
+      wiGameWith law A true := by
+  let hyb : ℕ → PMF ((Query k kN kS L → Out k e) × (Fin Q → M.NIProof)) := fun i =>
+    wiRun law A (fun j => decide (j < i)) Q le_rfl
+  have h0 : hyb 0 = wiGameWith law A false :=
+    wiRun_congr law A Q le_rfl fun j _ => by simp
+  have hQ : hyb Q = wiGameWith law A true :=
+    wiRun_congr law A Q le_rfl fun j hj => by simp [hj]
+  have hstep : ∀ i (hi : i < Q), hyb i ≈[𝔼[h ← (Query k kN kS L → Out k e) : ε h]] hyb (i + 1) := by
+    intro i hi
+    have hb : ∀ j, j ≠ i → decide (j < i) = decide (j < i + 1) := fun j hj => by
+      rcases Nat.lt_or_ge j i with h | h
+      · simp [h, Nat.lt_succ_of_lt h]
+      · simp [not_lt.2 h, show ¬ j < i + 1 by omega]
+    have hmem : ∀ s : (Query k kN kS L → Out k e) × (Fin i → M.NIProof),
+        A.choose ⟨i, hi⟩ s.1 s.2 ∈ A.choices := fun s => A.choose_mem _ _ _
+    refine close_wiRun_step law A hi hb hε0 (fun s => ?_) Q le_rfl hi
+    simp only [lt_irrefl, decide_false, Nat.lt_succ_self, decide_true]
+    exact (PMF.tvDist_map_le _ _ _).trans (hε s.1 _ (hmem s))
+  have hfwd : ∀ i ≤ Q, hyb 0 ≈[i * 𝔼[h ← (Query k kN kS L → Out k e) : ε h]] hyb i := by
+    intro i
+    induction i with
+    | zero => exact fun _ => by simp
+    | succ i ih =>
+      intro hi
+      refine (PMF.tvDist_triangle _ (hyb i) _).trans ?_
+      have := ih (by omega)
+      have := hstep i (by omega)
+      push_cast
+      linarith
+  rw [← h0, ← hQ]
+  exact hfwd Q le_rfl
+
+end Game
+
+/-! ### Unconditional witness indistinguishability -/
+
+variable (M) in
+/-- **The leaf term** of one proof: `U · leafBound k kN L` for the `U = |Pos|` leaves (CY24 Claim
+3.4.2 at salt length `8kN` and digest length `8k` bits). -/
+noncomputable def leafTerm : ℝ := Fintype.card M.Pos * SPBCS.leafBound k kN L
+
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+theorem leafTerm_nonneg : 0 ≤ M.leafTerm :=
+  mul_nonneg (Nat.cast_nonneg _) SPBCS.leafBound_nonneg
+
+variable (M) in
+/-- **The witness-indistinguishability error of one proof query**: twice the leaf term (once per
+witness), `2δ` for the two witnesses' views at statistical HVZK error `δ`, the overrun and
+key-collision terms of the ideal challenges, and the salt term for `c` choices of the
+adversary. -/
+noncomputable def wiError (δ : ℝ≥0) (c : ℕ) : ℝ :=
+  2 * M.leafTerm + 2 * δ + M.overrun.toReal + (SPBCS.keyCollision (t.size n) k).toReal +
+    SPBCS.saltTerm kS c
+
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+theorem wiError_nonneg (δ : ℝ≥0) (c : ℕ) : 0 ≤ M.wiError δ c := by
+  have := leafTerm_nonneg (M := M)
+  have := SPBCS.saltTerm_nonneg kS c
+  unfold wiError
+  positivity
+
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+/-- The error grows with the number of choices. -/
+theorem wiError_mono (δ : ℝ≥0) {c c' : ℕ} (h : c ≤ c') : M.wiError δ c ≤ M.wiError δ c' := by
+  unfold wiError
+  gcongr
+  exact SPBCS.saltTerm_mono kS h
+
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+/-- **The expected error of one proof query**, maximized over the choices: twice the leaf term,
+and a per-choice distance `F` whose expected maximum is bounded by the salt bound (`hF`). -/
+theorem expect_sup'_errors_le_of {δ : ℝ≥0} {choices : Finset (SPBCS.WIChoice X W)}
+    (hne : choices.Nonempty) (F : (Query k kN kS L → Out k e) → SPBCS.WIChoice X W → ℝ)
+    (hF : 𝔼 h : Query k kN kS L → Out k e, choices.sup' hne (F h) ≤
+      min 1 (2 * δ + M.overrun.toReal + (SPBCS.keyCollision (t.size n) k).toReal) +
+        SPBCS.saltTerm kS choices.card) :
+    𝔼[h ← (Query k kN kS L → Out k e) : choices.sup' hne (fun c =>
+        2 * (Fintype.card M.Pos * SPBCS.leafDist h) + F h c)] ≤
+      M.wiError δ choices.card := by
+  have hsup : ∀ h, choices.sup' hne (fun c =>
+      2 * (Fintype.card M.Pos * SPBCS.leafDist h) + F h c) ≤
+      2 * (Fintype.card M.Pos * SPBCS.leafDist h) + choices.sup' hne (F h) := fun h =>
+    Finset.sup'_le _ _ fun c hc => add_le_add le_rfl (Finset.le_sup' (F h) hc)
+  have hleaf : 𝔼 h : Query k kN kS L → Out k e,
+      2 * (Fintype.card M.Pos * SPBCS.leafDist h) ≤ 2 * M.leafTerm := by
+    rw [← Finset.mul_expect, ← Finset.mul_expect, leafTerm]
+    have := SPBCS.expect_leafDist_le (k := k) (kN := kN) (kS := kS) (L := L) (e := e)
+    gcongr
+  calc _ ≤ 𝔼 h : Query k kN kS L → Out k e,
+          (2 * (Fintype.card M.Pos * SPBCS.leafDist h) + choices.sup' hne (F h)) :=
+        Finset.expect_le_expect fun h _ => hsup h
+    _ = 𝔼 h : Query k kN kS L → Out k e, 2 * (Fintype.card M.Pos * SPBCS.leafDist h) +
+          𝔼 h, choices.sup' hne (F h) := Finset.expect_add_distrib _ _ _
+    _ ≤ 2 * M.leafTerm + (min 1 (2 * δ + M.overrun.toReal +
+          (SPBCS.keyCollision (t.size n) k).toReal) +
+          SPBCS.saltTerm kS choices.card) := add_le_add hleaf hF
+    _ ≤ _ := by
+        have := min_le_right (1 : ℝ)
+          (2 * δ + M.overrun.toReal + (SPBCS.keyCollision (t.size n) k).toReal)
+        unfold wiError
+        linarith
+
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+/-- **Witness indistinguishability from one proof query** (the hybrid over the proof queries): for
+proof laws `law` whose laws at the two witnesses of every choice are within twice the leaf term
+plus a nonnegative per-choice distance `F h c` at every oracle `h` (`hlaw`), with the expected
+maximum of `F` over the choices bounded by the salt bound (`hF`), the advantage of every
+distinguisher is at most `Q · wiError δ |choices|`. -/
+theorem wiAdvantageWith_le_of {law : (Query k kN kS L → Out k e) → X → W → PMF M.NIProof}
+    {rel : Set (X × W)} {δ : ℝ≥0} {Q : ℕ}
+    (A : M.WIAdversary rel Q) (F : (Query k kN kS L → Out k e) → SPBCS.WIChoice X W → ℝ)
+    (hF0 : ∀ h c, 0 ≤ F h c)
+    (hlaw : ∀ h, ∀ c ∈ A.choices, law h c.stmt c.wit₀ ≈[2 * (Fintype.card M.Pos *
+      SPBCS.leafDist h) + F h c] law h c.stmt c.wit₁)
+    (hF : ∀ hne : A.choices.Nonempty, 𝔼 h : Query k kN kS L → Out k e, A.choices.sup' hne (F h) ≤
+      min 1 (2 * δ + M.overrun.toReal + (SPBCS.keyCollision (t.size n) k).toReal) +
+        SPBCS.saltTerm kS A.choices.card)
+    (D : (Query k kN kS L → Out k e) → (Fin Q → M.NIProof) → Prop) :
+    wiAdvantageWith law A D ≤ Q * M.wiError δ A.choices.card := by
+  classical
+  have hadv : wiAdvantageWith law A D ≤
+      PMF.tvDist (wiGameWith law A false) (wiGameWith law A true) :=
+    PMF.abs_toOuterMeasure_sub_le_tvDist _ _ _
+  rcases A.choices.eq_empty_or_nonempty with hempty | hne
+  · -- no choices: no proof query can be made
+    have hQ : Q = 0 := by
+      by_contra hQ
+      have := A.choose_mem ⟨0, Nat.pos_of_ne_zero hQ⟩ (fun _ => Classical.arbitrary _) Fin.elim0
+      simp [hempty] at this
+    subst hQ
+    have : wiGameWith law A false = wiGameWith law A true := rfl
+    rw [this, PMF.tvDist_self] at hadv
+    have := wiError_nonneg (M := M) δ A.choices.card
+    simpa using hadv
+  let ε : (Query k kN kS L → Out k e) → ℝ := fun h => A.choices.sup' hne fun c =>
+    2 * (Fintype.card M.Pos * SPBCS.leafDist h) + F h c
+  have hε0 : ∀ h, 0 ≤ ε h := fun h => by
+    obtain ⟨c, hc⟩ := hne
+    refine le_trans ?_ (Finset.le_sup' _ hc)
+    have := SPBCS.leafDist_nonneg (k := k) (kN := kN) (kS := kS) (L := L) (e := e) h
+    have := hF0 h c
+    positivity
+  have hgame := close_wiGameWith law A hε0 fun h c hc =>
+    (hlaw h c hc).trans (Finset.le_sup' (fun c =>
+      2 * (Fintype.card M.Pos * SPBCS.leafDist h) + F h c) hc)
+  have hE := expect_sup'_errors_le_of hne F (hF hne)
+  calc wiAdvantageWith law A D ≤ Q * 𝔼[h ← (Query k kN kS L → Out k e) : ε h] :=
+        hadv.trans hgame
+    _ ≤ Q * M.wiError δ A.choices.card := mul_le_mul_of_nonneg_left hE (Nat.cast_nonneg _)
+
+end
+
+section
+
+variable {ι : Type} {n : ι → ℕ} {P : (j : ι) → ProtocolSpec (n j)}
+  [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)]
+  [∀ j i, Nonempty ((P j).Challenge i)] {t : SPTerm ι} {Mg : Merges t} {X W : Type}
+  {M : SPBCS Mg P X k kN kS L e}
+
+/-! ### The fixed point of the Fiat–Shamir transformation -/
+
+section FixedPoint
+
+variable (prv : CausalProver P t X) (x : X) (σ : FiatShamirSalt kS)
+  (h : Query k kN kS L → Out k e)
+
+/-- **The writes of a write function at the challenges `ρ`**: the write of every prover round of
+every leaf at the causal prover's message at `ρ`. -/
+noncomputable def skeletonW (wr : M.WriteFn) (ρ : Chs P t) : M.Writes :=
+  fun p i => wr p i (prv.run x ρ p i.1)
+
+end FixedPoint
+
+variable {E : (j : ι) → (M.comp j).Encoder} {V : X → FullTr P t → Bool}
+  {Qs : ∀ x, M.IOPQueries V x}
+
+/-! ### The prover at given leaf digests -/
+
+section Digests
+
+variable (E) (prv : CausalProver P t X) (x : X) (σ : FiatShamirSalt kS)
+  (h : Query k kN kS L → Out k e)
+
+/-- The write function at the roots over the leaf digests `d`. -/
+def writeD (d : M.Pos → Digest k) : M.WriteFn :=
+  fun p i m => (E p.label).write i m (M.rootsOf h d p i)
+
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+/-- **The write function at the roots over given leaf digests reads the oracle only at `leaf` and
+`node` queries.** -/
+theorem writeD_congr_leaf_node {h h' : Query k kN kS L → Out k e}
+    (hleaf : ∀ a b, h (.leaf a b) = h' (.leaf a b)) (hnode : ∀ l r, h (.node l r) = h' (.node l r))
+    (d : M.Pos → Digest k) : writeD E h d = writeD E h' d := by
+  funext p i m
+  unfold writeD
+  rw [M.rootsOf_congr hleaf hnode]
+
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+/-- **The writes at given leaf digests read only the digests of their round**: digest vectors that
+agree at the positions before global round `m` give the same write function at every prover round
+before `m` (`rootsOf_congr_ld`). -/
+theorem writeD_congr_digests {d d' : M.Pos → Digest k} {m : ℕ}
+    (hd : ∀ q : M.Pos, q.gIdx < m → d q = d' q) (p : t.Leaf) (i : (P p.label).MessageIdx)
+    (hi : p.off n + i.1.1 < m) : writeD E h d p i = writeD E h d' p i := by
+  funext msg
+  unfold writeD
+  rw [rootsOf_congr_ld h p i fun τ j => hd _ hi]
+
+end Digests
+
+/-! ### The proof read from what it reveals -/
+
+section Observation
+
+variable (E) (Qs) (h : Query k kN kS L → Out k e) (x : X) (σ : FiatShamirSalt kS)
+
+/-- The writes of a composite transcript `tr` at the leaf digests `d`: the write of every prover
+message at the roots over `d`. -/
+def skeletonTr (d : M.Pos → Digest k) (tr : FullTr P t) : M.Writes :=
+  fun p i => (E p.label).write i (tr p i.1) (M.rootsOf h d p i)
+
+/-- The opened leaf of position `q` of the transcript `tr` at the Merkle salts `ν`. -/
+def leafTr (tr : FullTr P t) (ν : M.Pos → MerkleSalt kN) (q : M.Pos) : MerkleLeaf kN L :=
+  MerkleLeaf.mk (ν q) ((E q.leaf.label).cols q.pos.msg (tr q.leaf q.pos.msg.1) q.pos.tree q.pos.leaf)
+
+variable {E Qs} (Rv : M.Reveal E Qs)
+
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+include x Rv in
+/-- Transcripts with the same view have the same writes. -/
+theorem skeletonTr_congr (d : M.Pos → Digest k) {tr tr' : FullTr P t}
+    (ho : Rv.MV.view tr = Rv.MV.view tr') :
+    skeletonTr E h d tr = skeletonTr E h d tr' := by
+  funext p i
+  exact Rv.write_congr x tr.challenges ho p i _
+
+end Observation
+
+/-! ### One proof query at a fixed oracle and salt -/
+
+section OneProof
+
+variable (E) (Qs) (h : Query k kN kS L → Out k e) (x : X)
+  (σ : FiatShamirSalt kS) {R : Type} [Fintype R] [Nonempty R]
+
+/-- The Merkle salts drawn from the preimages of the digests `d` at the columns `cols`
+(`invert`). -/
+noncomputable def merkleSaltLaw (h : Query k kN kS L → Out k e) (cols : M.Pos → Bytes L)
+    (d : M.Pos → Digest k) : PMF (M.Pos → MerkleSalt kN) :=
+  PMF.pi fun q => invert (SPBCS.digestOf h) (SPBCS.leafEnc (cols q)) (d q)
+
+end OneProof
+
+/-! ### Two witnesses in the ideal law: the fixed-point laws -/
+
+section Coupling
+
+variable (Rv : M.Reveal E Qs) (h : Query k kN kS L → Out k e) (x : X)
+  (σ : FiatShamirSalt kS) {R : Type} [Fintype R] [Nonempty R]
+
+/-- What the ideal proof reveals at the challenges `ρ`: the view of the composite run and the
+leaf digests. -/
+def obsD (prv : R → CausalProver P t X) (c : R × (M.Pos → Digest k)) (ρ : Chs P t) :
+    CausalView Rv.MV × (M.Pos → Digest k) :=
+  (Rv.MV.view ((prv c.1).run x ρ), c.2)
+
+end Coupling
+
+/-! ### The salt bound -/
+
+section Salt
+
+variable (x : X) (σ : FiatShamirSalt kS) {R : Type} [Fintype R] [Nonempty R]
+
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+/-- **The revealed data with uniform leaf digests** are as close as the views: the leaf digests
+are uniform and independent of the view. -/
+theorem tvDist_obsD_le (Rv : M.Reveal E Qs) (prv prv' : R → CausalProver P t X) (ρ : Chs P t) :
+    PMF.tvDist ((PMF.uniformOfFintype (R × (M.Pos → Digest k))).map (obsD Rv x prv · ρ))
+        ((PMF.uniformOfFintype (R × (M.Pos → Digest k))).map (obsD Rv x prv' · ρ)) ≤
+      PMF.tvDist (obsLaw Rv x prv ρ) (obsLaw Rv x prv' ρ) := by
+  have hbind : ∀ q : R → CausalProver P t X,
+      (PMF.uniformOfFintype (R × (M.Pos → Digest k))).map (obsD Rv x q · ρ) =
+        (obsLaw Rv x q ρ).bind fun o =>
+          (PMF.uniformOfFintype (M.Pos → Digest k)).map fun d => (o, d) := fun q => by
+    rw [PMF.uniformOfFintype_prod_eq_bind, PMF.map_bind, obsLaw, PMF.bind_map]
+    refine congrArg (PMF.bind _) (funext fun r => ?_)
+    rw [PMF.map_comp]
+    rfl
+  rw [hbind, hbind]
+  exact PMF.tvDist_bind_right_le _ _ _
+
+end Salt
+
+end
+
+end GordieHowe.SPBCS
+
+end
 
 namespace GordieHowe.SPBCS
 
@@ -49,9 +632,6 @@ open scoped ENNReal NNReal BigOperators
 variable {ι : Type} {k kN kS L e : ℕ} {t : SPTerm ι}
 
 section
-
-open Base (obsLaw ObsClose)
-open FullPast (skeletonW skeletonTr writeD leafTr merkleSaltLaw obsD)
 
 variable {Mg : Merges t} {n : ι → ℕ} {P : (j : ι) → ProtocolSpec (n j)}
   [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)]
@@ -172,8 +752,8 @@ theorem eq_of_chV_skeletonW_of_le {wr wr' : M.WriteFn} {m : ℕ}
     (hwr : ∀ (p : t.Leaf) (i : (P p.label).MessageIdx), p.off n + i.1.1 < m → wr p i = wr' p i)
     {ρ ρ' : Chs P t} (hρ : M.chV h ⟨σ, x⟩ (skeletonW prv x wr ρ) = ρ)
     (hρ' : M.chV h ⟨σ, x⟩ (skeletonW prv x wr' ρ') = ρ') (c : ChIdx P t)
-    (hc : FullPast.gIdx c ≤ m) : ρ c = ρ' c := by
-  suffices H : ∀ m', m' ≤ m + 1 → ∀ c : ChIdx P t, FullPast.gIdx c < m' → ρ c = ρ' c from
+    (hc : SPBCS.gIdx c ≤ m) : ρ c = ρ' c := by
+  suffices H : ∀ m', m' ≤ m + 1 → ∀ c : ChIdx P t, SPBCS.gIdx c < m' → ρ c = ρ' c from
     H _ le_rfl c (Nat.lt_succ_of_le hc)
   intro m'
   induction m' with
@@ -181,9 +761,9 @@ theorem eq_of_chV_skeletonW_of_le {wr wr' : M.WriteFn} {m : ℕ}
   | succ m' ih =>
     intro hm c hc
     have hrun : ∀ (p : t.Leaf) (i : (P p.label).MessageIdx),
-        (∀ c' : ChIdx P t, c'.leaf.Before p → FullPast.gIdx c' < m') →
+        (∀ c' : ChIdx P t, c'.leaf.Before p → SPBCS.gIdx c' < m') →
         (∀ j : (P p.label).ChallengeIdx, j.1 < i.1 →
-          FullPast.gIdx (⟨p, j⟩ : ChIdx P t) < m') →
+          SPBCS.gIdx (⟨p, j⟩ : ChIdx P t) < m') →
         prv.run x ρ p i.1 = prv.run x ρ' p i.1 := fun p i hb ho =>
       CausalProver.run_message_congr prv x p i (fun c' hc' => ih (by omega) c' (hb c' hc'))
         fun j hj => ih (by omega) _ (ho j hj)
@@ -191,26 +771,26 @@ theorem eq_of_chV_skeletonW_of_le {wr wr' : M.WriteFn} {m : ℕ}
         M.chal h ⟨σ, x⟩ (skeletonW prv x wr' ρ') c := by
       refine chal_congr h _ c (fun i hi => ?_) (fun q hq => funext fun i => ?_)
       · simp only [skeletonW]
-        rw [hwr c.leaf i (by unfold FullPast.gIdx at hc; omega)]
+        rw [hwr c.leaf i (by unfold SPBCS.gIdx at hc; omega)]
         rw [hrun c.leaf i (fun c' hc' => ?_) (fun j hj => ?_)]
         · have h1 := Leaf.Before.off_add_le n hc'
           have h2 := c'.idx.1.2
-          unfold FullPast.gIdx at hc ⊢
+          unfold SPBCS.gIdx at hc ⊢
           omega
-        · unfold FullPast.gIdx at hc ⊢
+        · unfold SPBCS.gIdx at hc ⊢
           simp only
           omega
       · simp only [skeletonW]
         have h3 := Leaf.Before.off_add_le n hq
         have h4 := i.1.2
-        rw [hwr q i (by unfold FullPast.gIdx at hc; omega)]
+        rw [hwr q i (by unfold SPBCS.gIdx at hc; omega)]
         rw [hrun q i (fun c' hc' => ?_) (fun j hj => ?_)]
         · have h1 := Leaf.Before.off_add_le n hc'
           have h2 := c'.idx.1.2
-          unfold FullPast.gIdx at hc ⊢
+          unfold SPBCS.gIdx at hc ⊢
           omega
         · have h4 := j.1.2
-          unfold FullPast.gIdx at hc ⊢
+          unfold SPBCS.gIdx at hc ⊢
           simp only
           omega
     calc ρ c = M.chV h ⟨σ, x⟩ (skeletonW prv x wr ρ) c := (congrFun hρ c).symm
@@ -225,7 +805,7 @@ theorem eq_of_chV_skeletonW (wr : M.WriteFn) {ρ ρ' : Chs P t}
     (hρ : M.chV h ⟨σ, x⟩ (skeletonW prv x wr ρ) = ρ)
     (hρ' : M.chV h ⟨σ, x⟩ (skeletonW prv x wr ρ') = ρ') : ρ = ρ' :=
   funext fun c => eq_of_chV_skeletonW_of_le prv x σ h (m := t.size n) (fun _ _ _ => rfl) hρ hρ' c
-    (FullPast.gIdx_lt_size c).le
+    (SPBCS.gIdx_lt_size c).le
 
 /-- **The derived challenges are the unique self-consistent challenges**: the challenges derived
 by the prover with write functions `wrOf` against `h` are `ρ` exactly when the verifier,
@@ -267,8 +847,8 @@ noncomputable def colD (d : M.Pos → Digest k) (q : M.Pos) : Bytes L :=
 vectors that agree at the positions before global round `m` give the same challenges up to global
 round `m` (`eq_of_chV_skeletonW_of_le`). -/
 theorem chD_congr {d d' : M.Pos → Digest k} {m : ℕ} (hd : ∀ q : M.Pos, q.gIdx < m → d q = d' q)
-    (c : ChIdx P t) (hc : FullPast.gIdx c ≤ m) : chD E prv x σ h d c = chD E prv x σ h d' c :=
-  eq_of_chV_skeletonW_of_le prv x σ h (fun p i hi => FullPast.writeD_congr_digests E h hd p i hi)
+    (c : ChIdx P t) (hc : SPBCS.gIdx c ≤ m) : chD E prv x σ h d c = chD E prv x σ h d' c :=
+  eq_of_chV_skeletonW_of_le prv x σ h (fun p i hi => SPBCS.writeD_congr_digests E h hd p i hi)
     ((chOfW_answersW_eq_iff prv x σ h (fun h' => writeD E h' d) _).1 rfl)
     ((chOfW_answersW_eq_iff prv x σ h (fun h' => writeD E h' d') _).1 rfl) c hc
 
@@ -276,17 +856,17 @@ theorem chD_congr {d d' : M.Pos → Digest k} {m : ℕ} (hd : ∀ q : M.Pos, q.g
 the leaf digests `d` depends only on the digests of positions whose global round is below that of
 `q`. Its message reads only the challenges before it (`CausalProver.run_message_congr`), and those
 read only the digests of earlier rounds (`chD_congr`). -/
-theorem rankCausal_colD : PMF.RankCausal Base.Pos.gIdx (colD E prv x σ h) := fun d d' q hd => by
+theorem rankCausal_colD : PMF.RankCausal SPBCS.Pos.gIdx (colD E prv x σ h) := fun d d' q hd => by
   unfold colD
   rw [CausalProver.run_message_congr prv x q.leaf q.pos.msg (fun c hc => ?_) fun j hj => ?_]
   · refine chD_congr E prv x σ h hd c ?_
     have h1 := Leaf.Before.off_add_le n hc
     have h2 := c.idx.1.2
-    unfold FullPast.gIdx Base.Pos.gIdx
+    unfold SPBCS.gIdx SPBCS.Pos.gIdx
     omega
   · refine chD_congr E prv x σ h hd _ ?_
     have : j.1.1 < q.pos.msg.1.1 := hj
-    unfold FullPast.gIdx Base.Pos.gIdx
+    unfold SPBCS.gIdx SPBCS.Pos.gIdx
     simp only
     omega
 
@@ -309,17 +889,17 @@ omit [∀ j i, Nonempty ((P j).Challenge i)] in
 /-- At the honest challenges, the digests of the honest leaves are the honest leaf digests. -/
 theorem leafDigest_leafFn_honest (p : t.Leaf) (i : (P p.label).MessageIdx)
     (τ : Fin ((M.comp p.label).nTrees i)) (j : ℕ) :
-    MerkleTree.leafDigest h (Base.leafFn E ν p i (prv.run x (honestCh prv x σ E ν h) p i.1) τ j) =
-      M.toFullPast.leafDigestsOf h (honestD E prv x ν σ h) p i τ j := by
-  unfold Base.leafFn FullPast.leafDigestsOf honestD
+    MerkleTree.leafDigest h (SPBCS.leafFn E ν p i (prv.run x (honestCh prv x σ E ν h) p i.1) τ j) =
+      M.leafDigestsOf h (honestD E prv x ν σ h) p i τ j := by
+  unfold SPBCS.leafFn SPBCS.leafDigestsOf honestD
   split_ifs <;> rfl
 
 omit [∀ j i, Nonempty ((P j).Challenge i)] in
 /-- At the honest challenges, the honest write is the write at the honest leaf digests. -/
 theorem honestWrite_eq_writeD (p : t.Leaf) (i : (P p.label).MessageIdx) :
-    Base.honestWrite E ν h p i (prv.run x (honestCh prv x σ E ν h) p i.1) =
+    SPBCS.honestWrite E ν h p i (prv.run x (honestCh prv x σ E ν h) p i.1) =
       writeD E h (honestD E prv x ν σ h) p i (prv.run x (honestCh prv x σ E ν h) p i.1) := by
-  unfold Base.honestWrite writeD FullPast.rootsOf
+  unfold SPBCS.honestWrite writeD SPBCS.rootsOf
   congr 1
   funext τ
   unfold MerkleTree.root MerkleTree.treeDigest
@@ -331,9 +911,9 @@ theorem honestWrite_eq_writeD (p : t.Leaf) (i : (P p.label).MessageIdx) :
 point of the writes at the causal prover's messages at the honest challenges
 (`chOfW_answersW_eq_iff`). -/
 theorem chD_honestD : chD E prv x σ h (honestD E prv x ν σ h) = honestCh prv x σ E ν h := by
-  have hfix : M.chV h ⟨σ, x⟩ (skeletonW prv x (Base.honestWrite E ν h) (honestCh prv x σ E ν h)) =
-      honestCh prv x σ E ν h := (chOfW_answersW_eq_iff prv x σ h (Base.honestWrite E ν) _).1 rfl
-  have hsk : skeletonW prv x (Base.honestWrite E ν h) (honestCh prv x σ E ν h) =
+  have hfix : M.chV h ⟨σ, x⟩ (skeletonW prv x (SPBCS.honestWrite E ν h) (honestCh prv x σ E ν h)) =
+      honestCh prv x σ E ν h := (chOfW_answersW_eq_iff prv x σ h (SPBCS.honestWrite E ν) _).1 rfl
+  have hsk : skeletonW prv x (SPBCS.honestWrite E ν h) (honestCh prv x σ E ν h) =
       skeletonW prv x (writeD E h (honestD E prv x ν σ h)) (honestCh prv x σ E ν h) :=
     funext fun p => funext fun i => honestWrite_eq_writeD E prv x ν σ h p i
   rw [hsk] at hfix
@@ -374,7 +954,7 @@ def proofTr (d : M.Pos → Digest k) (ρ : Chs P t) (tr : FullTr P t)
     ((M.openedIn τ (posTr E Qs h x σ d ρ tr)
       ((posTr E Qs h x σ d ρ tr).map (leafTr E tr ν))).map Prod.fst)).map
         (MerkleTree.nodeDigest h ((M.comp τ.leaf.label).nLeaves τ.tree.msg τ.tree.tree)
-          (M.toFullPast.leafDigestsOf h d τ.leaf τ.tree.msg τ.tree.tree))
+          (M.leafDigestsOf h d τ.leaf τ.tree.msg τ.tree.tree))
 
 /-- **The challenges at given leaf digests are the self-consistent ones**: they are `ρ` exactly
 when the spBCS verifier, recomputing the chains from the writes of the prover's run at `ρ`,
@@ -401,7 +981,7 @@ theorem prove_eq_proofTr (prv : CausalProver P t X) (ν : M.Pos → MerkleSalt k
       (posTr E Qs h x σ (honestD E prv x ν σ h) ρ (prv.run x ρ)).map (leafTr E (prv.run x ρ) ν) := by
     unfold honestLeaves
     rw [hpos]
-    exact List.map_congr_left fun q _ => by rw [Base.leafFn_val, leafTr]
+    exact List.map_congr_left fun q _ => by rw [SPBCS.leafFn_val, leafTr]
   unfold prove proofTr
   congr 1
   funext τ
@@ -422,7 +1002,7 @@ theorem proofTr_congr_merkleSalt (d : M.Pos → Digest k) (ρ : Chs P t) (tr : F
   congr 1
   · exact List.map_congr_left fun q hq => by rw [leafTr, leafTr, hν q hq]
   · funext τ
-    rw [Base.map_fst_openedIn _ (leafTr E tr ν')]
+    rw [SPBCS.map_fst_openedIn _ (leafTr E tr ν')]
 
 variable {E Qs} (Rv : M.Reveal E Qs)
 
@@ -432,7 +1012,7 @@ include Rv in
 theorem proofTr_congr (d : M.Pos → Digest k) {ρ : Chs P t} {tr tr' : FullTr P t}
     (hρ : tr.challenges = ρ) (ho : Rv.MV.view tr = Rv.MV.view tr') (ν : M.Pos → MerkleSalt kN) :
     proofTr E Qs h x σ d ρ tr ν = proofTr E Qs h x σ d ρ tr' ν := by
-  have hsk := FullPast.skeletonTr_congr h x Rv d ho
+  have hsk := SPBCS.skeletonTr_congr h x Rv d ho
   have hpos : posTr E Qs h x σ d ρ tr = posTr E Qs h x σ d ρ tr' := by
     unfold posTr
     rw [hsk]
@@ -444,7 +1024,7 @@ theorem proofTr_congr (d : M.Pos → Digest k) {ρ : Chs P t} {tr tr' : FullTr P
   unfold proofTr
   congr 1
   · funext τ
-    rw [hleaves, hpos, Base.map_fst_openedIn _ (leafTr E tr' ν)]
+    rw [hleaves, hpos, SPBCS.map_fst_openedIn _ (leafTr E tr' ν)]
 
 end Observation
 
@@ -512,7 +1092,7 @@ theorem close_realLaw_idealLaw (prv : R → CausalProver P t X) :
     rfl
   have hdist : ∀ r, PMF.tvDist (realPair r) (idealPair r) ≤
       Fintype.card M.Pos * SPBCS.leafDist h := fun r =>
-    tvDist_leafPairs_causal_le (SPBCS.digestOf h) SPBCS.leafEnc Base.Pos.gIdx
+    tvDist_leafPairs_causal_le (SPBCS.digestOf h) SPBCS.leafEnc SPBCS.Pos.gIdx
       (rankCausal_colD E (prv r) x σ h) (fun ν q => honestD_eq E (prv r) x ν σ h q) fun c =>
         Finset.le_sup' (fun c : Bytes L =>
           PMF.tvDist (digestLaw (SPBCS.digestOf h) (SPBCS.leafEnc c))
@@ -560,7 +1140,7 @@ theorem fsD_eq_iff (prv : R → CausalProver P t X) (c : R × (M.Pos → Digest 
   · exact fun hc => ⟨_, rfl, hc⟩
   · rintro ⟨tr, ho, hc⟩
     change M.chV h ⟨σ, x⟩ (skeletonTr E h c.2 tr) = ρ at hc
-    rwa [FullPast.skeletonTr_congr h x Rv c.2 ho] at hc
+    rwa [SPBCS.skeletonTr_congr h x Rv c.2 ho] at hc
 
 /-- **The fixed-point law** of the ideal merge proof at the salt `σ`: causal prover coins and
 leaf digests uniform, what the proof reveals at its Fiat–Shamir challenges, with the
@@ -716,7 +1296,7 @@ theorem fsD_congr (prv : R → CausalProver P t X) {h h' : Query k kN kS L → O
     (c : R × (M.Pos → Digest k)) : fsD E h x σ prv c = fsD E h' x σ prv c := by
   unfold fsD chD ansD
   rw [answersW_congr_slice (prv c.1) x σ (fun h' => writeD E h' c.2)
-    (fun h₁ h₂ hoff => FullPast.writeD_congr_leaf_node E (fun a b => hoff _ id)
+    (fun h₁ h₂ hoff => SPBCS.writeD_congr_leaf_node E (fun a b => hoff _ id)
       (fun l r => hoff _ id) c.2) hh]
 
 /-- **The mean over one salt's slice**: for any values `f` off the slice of `σ`, the probability
@@ -731,7 +1311,7 @@ theorem prob_chD_mem_le (prv : CausalProver P t X) (B : Set (Chs P t))
   classical
   have hwr : ∀ g : Query k kN kS L → Out k e,
       writeD E (replaceSlice M.querySalt σ f g) d = writeD E f d := fun g =>
-    FullPast.writeD_congr_leaf_node (h := replaceSlice M.querySalt σ f g) (h' := f) E
+    SPBCS.writeD_congr_leaf_node (h := replaceSlice M.querySalt σ f g) (h' := f) E
       (fun a b => rfl) (fun l r => rfl) d
   have heq : ∀ g : Query k kN kS L → Out k e,
       chD E prv x σ (fun q => if M.querySalt q = some σ then g q else f q) d =
@@ -777,7 +1357,7 @@ theorem expect_tvDist_fpLaw_le (Rv : M.Reveal E Qs) (prv prv' : R → CausalProv
   refine h.trans ?_
   rw [ENNReal.toReal_add M.overrun_ne_top (SPBCS.keyCollision_ne_top _ k), ← add_assoc]
   exact add_le_add (add_le_add
-    (Finset.expect_le_expect fun ρ _ => FullPast.tvDist_obsD_le x Rv prv prv' ρ) le_rfl) le_rfl
+    (Finset.expect_le_expect fun ρ _ => SPBCS.tvDist_obsD_le x Rv prv prv' ρ) le_rfl) le_rfl
 
 /-- **The salt bound of the spBCS compiler** (step 3). For finitely many choices `m` of a
 statement and two prover families whose view laws are at average distance at most `β` over
@@ -829,15 +1409,15 @@ variable (E Qs) {R : Type} [Fintype R] [Nonempty R] (prv : W → R → CausalPro
   {rel : Set (X × W)} {Q : ℕ} (A : M.WIAdversary rel Q)
 
 /-- **The witness-indistinguishability experiment of the spBCS compiler** `D_b`
-(`Base.wiGameWith` at the merge proof laws `proofLaw`). -/
+(`SPBCS.wiGameWith` at the merge proof laws `proofLaw`). -/
 noncomputable def wiGame (b : Bool) :
     PMF ((Query k kN kS L → Out k e) × (Fin Q → M.NIProof)) :=
-  Base.wiGameWith (fun h x w => proofLaw E Qs h x (prv w)) A b
+  SPBCS.wiGameWith (fun h x w => proofLaw E Qs h x (prv w)) A b
 
 /-- **The advantage of a distinguisher** `D` against the spBCS compiler, given the whole oracle
-and the proofs (`Base.wiAdvantageWith` at the merge proof laws `proofLaw`). -/
+and the proofs (`SPBCS.wiAdvantageWith` at the merge proof laws `proofLaw`). -/
 noncomputable def wiAdvantage (D : (Query k kN kS L → Out k e) → (Fin Q → M.NIProof) → Prop) : ℝ :=
-  Base.wiAdvantageWith (fun h x w => proofLaw E Qs h x (prv w)) A D
+  SPBCS.wiAdvantageWith (fun h x w => proofLaw E Qs h x (prv w)) A D
 
 end Game
 
@@ -849,9 +1429,9 @@ given the whole oracle and the proofs, the advantage of `D` between answering ev
 the first witness and answering with the second is at most `Q · wiError δ |choices|`.
 
 Hypotheses: `Rv` (what the compiled proof writes and opens is determined by the composite view); `hz` (the views of
-two witnesses of a statement are at average distance at most `2δ`, `Base.ObsClose`;
+two witnesses of a statement are at average distance at most `2δ`, `SPBCS.ObsClose`;
 honest-verifier zero knowledge of the composite at error `δ` gives it,
-`Base.obsClose_of_causalHVZK`). -/
+`SPBCS.obsClose_of_causalHVZK`). -/
 theorem wiAdvantage_le {E : (j : ι) → (M.comp j).Encoder} {V : X → FullTr P t → Bool}
     {Qs : ∀ x, M.IOPQueries V x} (Rv : M.Reveal E Qs) {rel : Set (X × W)}
     {R : Type} [Fintype R] [Nonempty R] {prv : W → R → CausalProver P t X} {δ : ℝ≥0}
@@ -880,7 +1460,7 @@ theorem wiAdvantage_le {E : (j : ι) → (M.comp j).Encoder} {V : X → FullTr P
           (prv m.1.wit₁)) (Finset.mem_univ ⟨c, hc⟩)
         exact this
     exact (Finset.expect_le_expect fun h _ => hsup h).trans hbound
-  exact Base.wiAdvantageWith_le_of (law := fun h x w => proofLaw E Qs h x (prv w)) A
+  exact SPBCS.wiAdvantageWith_le_of (law := fun h x w => proofLaw E Qs h x (prv w)) A
     (fun h c => fpDist Rv h c.stmt (prv c.wit₀) (prv c.wit₁))
     (fun h c => fpDist_nonneg Rv h c.stmt _ _) hlaw hF D
 
@@ -898,13 +1478,13 @@ def WitnessIndistinguishable (E : (j : ι) → (M.comp j).Encoder) {V : X → Fu
     ∀ D : (Query k kN kS L → Out k e) → (Fin Q → M.NIProof) → Prop, wiAdvantage E Qs prv A D ≤ ε
 
 /-- **Unconditional witness indistinguishability of the spBCS compiler** at `Q · wiError δ C`
-(`wiAdvantage_le`, `Base.wiError_mono`). -/
+(`wiAdvantage_le`, `SPBCS.wiError_mono`). -/
 theorem witnessIndistinguishable {E : (j : ι) → (M.comp j).Encoder}
     {V : X → FullTr P t → Bool} {Qs : ∀ x, M.IOPQueries V x} (Rv : M.Reveal E Qs) {rel : Set (X × W)} {R : Type} [Fintype R] [Nonempty R]
     {prv : W → R → CausalProver P t X} {δ : ℝ≥0} (hz : ObsClose Rv rel prv δ) (Q C : ℕ) :
     M.WitnessIndistinguishable E Qs rel prv Q C (Q * M.wiError δ C) := fun A hA D =>
   (wiAdvantage_le Rv hz A D).trans
-    (mul_le_mul_of_nonneg_left (Base.wiError_mono δ hA) (Nat.cast_nonneg _))
+    (mul_le_mul_of_nonneg_left (SPBCS.wiError_mono δ hA) (Nat.cast_nonneg _))
 
 end
 

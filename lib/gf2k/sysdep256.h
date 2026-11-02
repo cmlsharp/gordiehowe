@@ -81,9 +81,63 @@ inline gf2_256_elt_t gf2_256_accum_reduce(const gf2_256_accum_t &r) {
   lo = _mm_xor_si128(lo, _mm_clmulepi64_si128(d, p, 1));
   return {lo, hi};
 }
+#elif defined(__aarch64__) && defined(__ARM_FEATURE_AES) && !defined(PROOFS_NO_NEON)
+// PMULL: the x86 path's nine carryless products per product and delayed
+// reduction, one vmull_p64 per 64 x 64 product.
+using gf2_256_accum_t = std::array<uint64x2_t, 4>;
+namespace gf2_256_neon {
+inline uint64x2_t u64(gf2_128_elt_t x) { return vreinterpretq_u64_p64(x); }
+inline gf2_128_elt_t p64(uint64x2_t x) { return vreinterpretq_p64_u64(x); }
+// Lane I of A times lane J of B.
+template <int I, int J>
+inline uint64x2_t clmul(uint64x2_t a, uint64x2_t b) {
+  return vreinterpretq_u64_p128(
+      vmull_p64(poly64_t(vgetq_lane_u64(a, I)), poly64_t(vgetq_lane_u64(b, J))));
+}
+// _mm_slli_si128(x, 8) and _mm_srli_si128(x, 8).
+inline uint64x2_t shl64(uint64x2_t x) {
+  return vextq_u64(vdupq_n_u64(0), x, 1);
+}
+inline uint64x2_t shr64(uint64x2_t x) {
+  return vextq_u64(x, vdupq_n_u64(0), 1);
+}
+// The 256-bit product of two 128-bit polynomials by Karatsuba: low and
+// high halves.
+inline std::array<uint64x2_t, 2> clmul128(uint64x2_t a, uint64x2_t b) {
+  const auto l = clmul<0, 0>(a, b), h = clmul<1, 1>(a, b);
+  const auto ax = veorq_u64(a, vextq_u64(a, a, 1));
+  const auto bx = veorq_u64(b, vextq_u64(b, b, 1));
+  const auto m = veorq_u64(clmul<0, 0>(ax, bx), veorq_u64(l, h));
+  return {veorq_u64(l, shl64(m)), veorq_u64(h, shr64(m))};
+}
+}  // namespace gf2_256_neon
+inline void gf2_256_mac(gf2_256_accum_t &r, gf2_256_elt_t a, gf2_256_elt_t b) {
+  using namespace gf2_256_neon;
+  const auto alo = u64(a.lo), ahi = u64(a.hi), blo = u64(b.lo),
+             bhi = u64(b.hi);
+  const auto l = clmul128(alo, blo), h = clmul128(ahi, bhi);
+  const auto m = clmul128(veorq_u64(alo, ahi), veorq_u64(blo, bhi));
+  r[0] = veorq_u64(r[0], l[0]);
+  r[1] = veorq_u64(
+      r[1], veorq_u64(l[1], veorq_u64(m[0], veorq_u64(l[0], h[0]))));
+  r[2] = veorq_u64(
+      r[2], veorq_u64(h[0], veorq_u64(m[1], veorq_u64(l[1], h[1]))));
+  r[3] = veorq_u64(r[3], h[1]);
+}
+inline gf2_256_elt_t gf2_256_accum_reduce(const gf2_256_accum_t &r) {
+  using namespace gf2_256_neon;
+  const uint64x2_t p = {0x425, 0};
+  const auto a = clmul<0, 0>(r[2], p), b = clmul<1, 0>(r[2], p);
+  const auto c = clmul<0, 0>(r[3], p), d = clmul<1, 0>(r[3], p);
+  auto lo = veorq_u64(r[0], veorq_u64(a, shl64(b)));
+  auto hi = veorq_u64(r[1], veorq_u64(shr64(b), veorq_u64(c, shl64(d))));
+  lo = veorq_u64(lo, clmul<1, 0>(d, p));
+  return {p64(lo), p64(hi)};
+}
 #else
-// Portable oracle/fallback. The x86 path above uses nine carryless products
-// and delays all modular reduction until the end of a dot product.
+// Portable oracle/fallback. The x86 and aarch64 paths above use nine
+// carryless products and delay all modular reduction until the end of a
+// dot product.
 using gf2_256_accum_t = std::array<uint64_t, 8>;
 inline void gf2_256_mac(gf2_256_accum_t &r, gf2_256_elt_t a, gf2_256_elt_t b) {
   auto x = uint64x4_of_gf2_256(a), y = uint64x4_of_gf2_256(b);
@@ -119,6 +173,12 @@ inline gf2_256_elt_t gf2_256_square(gf2_256_elt_t a) {
                     _mm_clmulepi64_si128(a.lo, a.lo, 0x11),
                     _mm_clmulepi64_si128(a.hi, a.hi, 0),
                     _mm_clmulepi64_si128(a.hi, a.hi, 0x11)};
+  return gf2_256_accum_reduce(r);
+#elif defined(__aarch64__) && defined(__ARM_FEATURE_AES) && !defined(PROOFS_NO_NEON)
+  using namespace gf2_256_neon;
+  const auto lo = u64(a.lo), hi = u64(a.hi);
+  gf2_256_accum_t r{clmul<0, 0>(lo, lo), clmul<1, 1>(lo, lo),
+                    clmul<0, 0>(hi, hi), clmul<1, 1>(hi, hi)};
   return gf2_256_accum_reduce(r);
 #else
   return gf2_256_mul(a, a);

@@ -1,7 +1,7 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 
-// GordieHowe: test support for the Falcon-512 emulated system
+// GordieHowe: test support for the Falcon emulated systems
 // (falcon_emulated.h), which a standalone implementation does not need:
 //   FalconEmulatedSystem   the relation with the assignments of example
 //                          values
@@ -38,31 +38,32 @@ namespace proofs::gordiehowe::examples::falcon::emulated {
 // The relation for messages of at most MAX_BYTES bytes, with the
 // assignments of example values, for the tests and benchmarks that drive
 // the prover directly.
-template <class P>
+template <class P, class S = Falcon512>
 struct FalconEmulatedSystem
-    : RelationSystem<typename Env<P>::Sys, FalconStatement<Value>,
-                     FalconWitness<Value>> {
+    : RelationSystem<typename Env<P>::Sys, FalconStatement<S, Value>,
+                     FalconWitness<S, Value>> {
+  using Set = S;
   using E = Env<P>;
   using HF = typename E::HF;
   using AF = typename E::AF;
   using PH = typename E::PH;
-  using Base = RelationSystem<typename E::Sys, FalconStatement<Value>,
-                              FalconWitness<Value>>;
+  using Base = RelationSystem<typename E::Sys, FalconStatement<S, Value>,
+                              FalconWitness<S, Value>>;
   using typename Base::Assignment;
 
   size_t max_bytes;
 
   FalconEmulatedSystem(const E &env, size_t max,
                        const BuildOptions &build = {})
-      : Base(falcon_emulated<P>(env, max, build)), max_bytes(max) {}
+      : Base(falcon_emulated<P, S>(env, max, build)), max_bytes(max) {}
 
   Assignment statement(const std::vector<uint64_t> &hhat) const {
-    return Base::statement(falcon_statement(hhat));
+    return Base::statement(falcon_statement<S>(hhat));
   }
   Assignment witness(const std::vector<uint8_t> &nonce,
                      const std::vector<uint8_t> &msg,
                      const std::vector<uint64_t> &s2) const {
-    return Base::witness(falcon_witness(nonce, msg, s2, max_bytes));
+    return Base::witness(falcon_witness<S>(nonce, msg, s2, max_bytes));
   }
 };
 
@@ -75,18 +76,17 @@ size_t node_id(const S &s, const std::string &name) {
   throw std::runtime_error("no node " + name);
 }
 
-// The plan export of profile P (plan_export.h): the system as the bench
-// builds it for MSG_LEN-byte messages, compiled,
-// written to DIR with its realized program (write_plan). Returns the plan's
-// path.
-template <class P>
+// The plan export of profile P and set S (plan_export.h): the system as
+// the bench builds it for MSG_LEN-byte messages, compiled, written to DIR
+// with its realized program (write_plan). Returns the plan's path.
+template <class P, class S = Falcon512>
 std::string export_plan(const std::string &dir, const std::string &commit,
                         const std::string &run_id, size_t msg_len) {
   const Env<P> env;
-  FalconEmulatedSystem<P> t(env, msg_len);
+  FalconEmulatedSystem<P, S> t(env, msg_len);
   const auto c = t.compile();
-  const compiler::ExportMeta meta{"falcon-emulated", P::kId, commit, run_id,
-                                  msg_len};
+  const compiler::ExportMeta meta{std::string(S::kTag) + "-emulated", P::kId,
+                                  commit, run_id, msg_len};
   return write_plan(*c, dir, meta);
 }
 

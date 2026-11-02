@@ -61,7 +61,7 @@ variable (R : Configuration) (F : R.GrantedFacts)
 leaf terms of the spBCS setting are at most `C(rounds, 2)/2^(8k) + rounds/2^chernoff +
 pos · (1/(2 · 2^(4k)) + 2^21/2^(8k))` (`overrun_le`, `card_pos`,
 `SPBCS.leafBound_two_mul_le` at the setting's `2k`-byte Merkle salts and `2^40`-byte inputs). -/
-theorem request_terms_le (C : R.Compiled) :
+theorem request_terms_le (C : R.ProofSystem) :
     (SPBCS.keyCollision ((R.iop C).term.size (R.iop C).rounds) (setting R F C).k).toReal +
         (setting R F C).model.overrun.toReal +
         Fintype.card (setting R F C).model.Pos *
@@ -95,7 +95,7 @@ theorem request_terms_le (C : R.Compiled) :
 /-- **The bit security of zero knowledge in the ROM** (`everlasting_zero_knowledge_rom`'s error): if the
 ROM budget is at most `2^-λ`, then for every `t ≥ 1` hash queries and `Q ≤ 2^64` proof queries,
 `zkErrorROM 0 t Q ≤ Q · t · 2^-λ`. At `Q = 1` the paper's `λ(errzk^C)` is at least `λ`. -/
-theorem zkErrorROM_le_bits (C : R.Compiled) {lam : ℝ} (hB : R.zkBudgetROM ≤ 2 ^ (-lam))
+theorem zkErrorROM_le_bits (C : R.ProofSystem) {lam : ℝ} (hB : R.zkBudgetROM ≤ 2 ^ (-lam))
     {t Q : ℕ} (ht : 1 ≤ t) (hQ : Q ≤ 2 ^ 64) :
     (setting R F C).model.zkErrorROM 0 t Q ≤ Q * t * 2 ^ (-lam) := by
   have hreq := request_terms_le R F C
@@ -127,7 +127,7 @@ theorem zkErrorROM_le_bits (C : R.Compiled) {lam : ℝ} (hB : R.zkBudgetROM ≤ 
           linarith
   calc (setting R F C).model.zkErrorROM 0 t Q
       ≤ Q * t * (1 / 2 ^ (8 * R.kS)) + Q * t * (2 ^ 64 / (2 * 2 ^ (8 * R.kS))) + Q * t * c := by
-        rw [Base.zkErrorROM, NNReal.coe_zero]
+        rw [SPBCS.zkErrorROM, NNReal.coe_zero]
         refine add_le_add (add_le_add (le_of_eq ?_) hsalt) hreq'
         change (Q : ℝ) * t / 2 ^ (8 * R.kS) = _
         ring
@@ -139,7 +139,7 @@ theorem zkErrorROM_le_bits (C : R.Compiled) {lam : ℝ} (hB : R.zkBudgetROM ≤ 
 /-- **The bit security of zero knowledge in the QROM** (`everlasting_zero_knowledge_qrom`'s error): if the
 QROM budget is at most `2^-λ`, then for every `t ≥ 1` hash queries and `Q ≤ 2^64` proof queries,
 `zkError 0 t Q ≤ Q · t · 2^-λ`. At `Q = 1` the paper's `λ(errzk)` is at least `λ`. -/
-theorem zkError_le_bits (C : R.Compiled) {lam : ℝ} (hB : R.zkBudget ≤ 2 ^ (-lam))
+theorem zkError_le_bits (C : R.ProofSystem) {lam : ℝ} (hB : R.zkBudget ≤ 2 ^ (-lam))
     {t Q : ℕ} (ht : 1 ≤ t) (hQ : Q ≤ 2 ^ 64) :
     (setting R F C).model.zkError 0 t Q ≤ Q * t * 2 ^ (-lam) := by
   have hreq := request_terms_le R F C
@@ -170,7 +170,7 @@ theorem zkError_le_bits (C : R.Compiled) {lam : ℝ} (hB : R.zkBudget ≤ 2 ^ (-
           linarith
   calc (setting R F C).model.zkError 0 t Q
       ≤ Q * t * (4 / 2 ^ (4 * R.kS)) + Q * t * (2 ^ 64 / 2 ^ (8 * R.kS)) + Q * t * c := by
-        rw [Base.zkError, NNReal.coe_zero]
+        rw [SPBCS.zkError, NNReal.coe_zero]
         refine add_le_add (add_le_add (le_of_eq ?_) hsalt) hreq'
         change 4 * (Q : ℝ) * t / 2 ^ (4 * R.kS) = _
         ring

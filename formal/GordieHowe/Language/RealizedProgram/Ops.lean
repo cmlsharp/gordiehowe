@@ -25,7 +25,8 @@ formula:
   `y_m = Σ_i x_i ψ^((2m+1) i)`), in scheme order at the bit reversal `bitRevNat`
   (`nttScheme_apply`: `y_m = Σ_i x_i ψ^((2·br(m)+1) i)`);
 * the inverse transform is a right inverse of the scheme-order transform at a primitive `2n`-th
-  root of unity (`nttScheme_inverseNtt`);
+  root of unity (`nttScheme_inverseNtt`), and the inverse natural-order transform one of the
+  natural-order transform (`nttNatural_inverseNttNatural`);
 * the MAC's carry-free convolution is `Conv.matrix` (`GordieHowe/Foundations/Algebra/ConvMatrix.lean`, the
   transcription of `ApplyConv` and of the C++ `mac_fold`), column `i` of chunk `c` being
   `fold(R_c · x^i)` (`macConv_natCast`: on naturals it is `Σ_c ApplyConv(r_c, x_c)`).
@@ -226,6 +227,101 @@ theorem inverseNtt_congr {n : ℕ} {ψ : K} {x y : ℕ → K} (hxy : ∀ m < n, 
 theorem map_inverseNtt {K' : Type*} [Field K'] (f : K →+* K') (n : ℕ) (ψ : K) (y : ℕ → K)
     (i : ℕ) : f (inverseNtt n ψ y i) = inverseNtt n (f ψ) (fun m => f (y m)) i := by
   unfold inverseNtt
+  split_ifs
+  · rw [map_mul, map_inv₀, map_natCast, map_sum]
+    simp only [map_mul, map_pow, map_inv₀]
+  · exact map_zero f
+
+/-- **The inverse natural-order transform** (the polynomial of a spectrum in natural order,
+`ConvForm.nttNatural`): `x_i = n⁻¹ Σ_m y_m ψ^(−(2m+1) i)`, the inverse of the natural-order
+transform at a primitive `2n`-th root `ψ` (`nttNatural_inverseNttNatural`,
+`inverseNttNatural_nttNatural`). -/
+def inverseNttNatural (n : ℕ) (ψ : K) (y : ℕ → K) (i : ℕ) : K :=
+  if i < n then (n : K)⁻¹ * ∑ m : Fin n, y m * ψ⁻¹ ^ ((2 * (m : ℕ) + 1) * i) else 0
+
+/-- **The inverse natural-order transform is a right inverse of the natural-order transform**, for
+`n` invertible in `K` and `ψ` a primitive `2n`-th root of unity. -/
+theorem nttNatural_inverseNttNatural {n : ℕ} {ψ : K} (hψ : IsPrimitiveRoot ψ (2 * n))
+    (hn0 : (n : K) ≠ 0) (y : ℕ → K) {m : ℕ} (hm : m < n) :
+    nttNatural n ψ (inverseNttNatural n ψ y) m = y m := by
+  have hn0' : n ≠ 0 := fun h => hn0 (by rw [h, Nat.cast_zero])
+  have hψ0 : ψ ≠ 0 := hψ.ne_zero (by omega)
+  have hω : IsPrimitiveRoot (ψ ^ 2) n := IsPrimitiveRoot.sq_of_two_mul hψ hn0'
+  rw [nttNatural_apply n ψ _ hm]
+  -- Each term: `n⁻¹ Σ_{m'} y_{m'} ψ^(2 m i) ψ^(−2 m' i)`, the `ψ^(±i)` cancelling.
+  have hterm : ∀ i : Fin n, inverseNttNatural n ψ y i * ψ ^ ((2 * m + 1) * i) =
+      (n : K)⁻¹ * ∑ m' : Fin n, y m' *
+        ((ψ ^ 2) ^ (m * (i : ℕ)) * (ψ ^ 2)⁻¹ ^ ((i : ℕ) * m')) := by
+    intro i
+    rw [inverseNttNatural, if_pos i.isLt, mul_assoc, Finset.sum_mul]
+    congr 1
+    refine Finset.sum_congr rfl fun m' _ => ?_
+    have hsplit : ∀ b : ℕ, ψ ^ ((2 * b + 1) * (i : ℕ)) = (ψ ^ 2) ^ (b * i) * ψ ^ (i : ℕ) :=
+      fun b => by rw [← pow_mul, ← pow_add]; ring_nf
+    have hsplit' : ∀ b : ℕ, ψ⁻¹ ^ ((2 * b + 1) * (i : ℕ)) =
+        (ψ ^ 2)⁻¹ ^ ((i : ℕ) * b) * (ψ ^ (i : ℕ))⁻¹ := fun b => by
+      simp only [inv_pow]
+      rw [← mul_inv, ← pow_mul, ← pow_add]
+      ring_nf
+    rw [hsplit, hsplit']
+    have hc : (ψ ^ (i : ℕ))⁻¹ * ψ ^ (i : ℕ) = 1 := inv_mul_cancel₀ (pow_ne_zero _ hψ0)
+    calc y m' * ((ψ ^ 2)⁻¹ ^ ((i : ℕ) * m') * (ψ ^ (i : ℕ))⁻¹) *
+          ((ψ ^ 2) ^ (m * (i : ℕ)) * ψ ^ (i : ℕ))
+        = y m' * ((ψ ^ 2) ^ (m * (i : ℕ)) *
+            (ψ ^ 2)⁻¹ ^ ((i : ℕ) * m')) * ((ψ ^ (i : ℕ))⁻¹ * ψ ^ (i : ℕ)) := by ring
+      _ = _ := by rw [hc, mul_one]
+  rw [Finset.sum_congr rfl fun i _ => hterm i, ← Finset.mul_sum, Finset.sum_comm]
+  -- Orthogonality at `ω = ψ²`.
+  have horth : ∀ m' : Fin n, ∑ i : Fin n, y m' *
+      ((ψ ^ 2) ^ (m * (i : ℕ)) * (ψ ^ 2)⁻¹ ^ ((i : ℕ) * m')) =
+        if (m' : ℕ) = m then y m' * n else 0 := by
+    intro m'
+    rw [← Finset.mul_sum]
+    have := sum_pow_mul_inv_pow_eq hω ⟨m, hm⟩ m'
+    simp only at this
+    rw [this]
+    by_cases hmm : (m' : ℕ) = m
+    · rw [if_pos (Fin.ext hmm.symm), if_pos hmm]
+    · have hne : (⟨m, hm⟩ : Fin n) ≠ m' := fun h => hmm (by rw [← h])
+      rw [if_neg hne, if_neg hmm, mul_zero]
+  rw [Finset.sum_congr rfl fun m' _ => horth m']
+  rw [Finset.sum_ite, Finset.sum_const_zero, add_zero]
+  have hfilter : (Finset.univ.filter fun m' : Fin n => (m' : ℕ) = m) = {⟨m, hm⟩} := by
+    ext m'
+    simp [Fin.ext_iff]
+  rw [hfilter, Finset.sum_singleton, ← mul_assoc, mul_comm _ (y m), mul_assoc,
+    inv_mul_cancel₀ hn0, mul_one]
+
+/-- **The inverse natural-order transform is a left inverse of the natural-order transform** below
+`n`, for `n` invertible in `K` and `ψ` a primitive `2n`-th root of unity
+(`nttNatural_inverseNttNatural` and the transform's injectivity, `negSpectrum_injective`). -/
+theorem inverseNttNatural_nttNatural {n : ℕ} {ψ : K} (hψ : IsPrimitiveRoot ψ (2 * n))
+    (hn0 : (n : K) ≠ 0) (x : ℕ → K) {i : ℕ} (hi : i < n) :
+    inverseNttNatural n ψ (nttNatural n ψ x) i = x i := by
+  have e1 : ∀ (z : ℕ → K) (k : Fin n), nttNatural n ψ z k = negSpectrum ψ (toFin n z) k :=
+    fun z k => by rw [nttNatural, ofFin_of_lt _ k.isLt]
+  have h : toFin n (inverseNttNatural n ψ (nttNatural n ψ x)) = toFin n x := by
+    apply negSpectrum_injective hψ hn0
+    funext k
+    have := nttNatural_inverseNttNatural hψ hn0 (nttNatural n ψ x) k.isLt
+    rw [e1, e1] at this
+    exact this
+  exact congrFun h ⟨i, hi⟩
+
+/-- **The inverse natural-order transform reads only its input's first `n` coordinates.** -/
+theorem inverseNttNatural_congr {n : ℕ} {ψ : K} {x y : ℕ → K} (hxy : ∀ m < n, x m = y m)
+    (i : ℕ) : inverseNttNatural n ψ x i = inverseNttNatural n ψ y i := by
+  unfold inverseNttNatural
+  split_ifs
+  · congr 1
+    exact Finset.sum_congr rfl fun m _ => by rw [hxy m m.isLt]
+  · rfl
+
+/-- **The inverse natural-order transform commutes with a field homomorphism.** -/
+theorem map_inverseNttNatural {K' : Type*} [Field K'] (f : K →+* K') (n : ℕ) (ψ : K)
+    (y : ℕ → K) (i : ℕ) :
+    f (inverseNttNatural n ψ y i) = inverseNttNatural n (f ψ) (fun m => f (y m)) i := by
+  unfold inverseNttNatural
   split_ifs
   · rw [map_mul, map_inv₀, map_natCast, map_sum]
     simp only [map_mul, map_pow, map_inv₀]

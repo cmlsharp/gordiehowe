@@ -572,6 +572,79 @@ theorem placedHolds_iff_of_rowSides {ir : RealizedProgram} {I : Interp} {b : Pre
     simp [PlacedHolds]
   · cases h
 
+/-! ## The public values' table -/
+
+section PubTable
+
+variable {ir : RealizedProgram}
+
+/-- **Two `all`s agree when their tests agree on the list.** -/
+theorem all_eq_all_of_mem {α : Type} {l : List α} {f g : α → Bool} (h : ∀ x ∈ l, f x = g x) :
+    l.all f = l.all g := by
+  induction l with
+  | nil => rfl
+  | cons x xs ih =>
+    simp only [List.all_cons, h x List.mem_cons_self, ih fun y hy => h y (List.mem_cons_of_mem _ hy)]
+
+variable (ir) in
+/-- **The step of `pubT`**: whether value `v` reads nothing of the committed assignment, from
+whether the values it reads do (`r`; the step of `pubB`). -/
+def pubStep (r : ℕ → Bool) (_ : ℕ) (x : Value) : Bool :=
+  match x.kind with
+  | .pub .input => true
+  | .pub (.opaque _ args) => args.all r
+  | .pub (.expr e) => (ir.nodesOf e).all r
+  | .constant _ => true
+  | .challenge _ => true
+  | .message u => decide (u < ir.values.length ∧ ir.IsLate u)
+  | _ => false
+
+variable (ir) in
+/-- **The table of the values reading nothing of the committed assignment** (`pubB`), one entry
+per value. -/
+def pubT : NatTrie Bool := memo ir.pubStep false ir.values
+
+theorem pubStep_congr (hwf : ir.WellFormed) : MemoDeps ir.pubStep ir.values ir.valueDeps := by
+  refine ⟨fun v hv => hwf.valueDeps_lt hv, fun v hv r r' h => ?_⟩
+  rw [← value_eq_getD]
+  unfold valueDeps at h
+  unfold pubStep
+  rcases hk : (ir.value v).kind with _ | ⟨_ | ⟨_, args⟩ | e⟩ | _ | _ | _ | _ | _ | _ <;>
+    (rw [hk] at h; (try dsimp only at h); try simp only)
+  · exact all_eq_all_of_mem fun u hu => h u hu
+  · have he := hwf.pubExpr_refs hv hk
+    exact all_eq_all_of_mem fun u hu => h u ((mem_nodesOf hwf.refsOrdered he u).1 hu)
+
+/-- **`pubB` at the program's fuel is the table** (`pubT`), at every value. -/
+theorem pubB_fuel_eq_pubT (hwf : ir.WellFormed) (v : ℕ) :
+    ir.pubB ir.fuel v = ir.pubT.getD v false := by
+  by_cases hv : v < ir.values.length
+  · refine iter_rel_memo (R := Eq) (iter := ir.pubB)
+      (G := fun r v => match (ir.value v).kind with
+        | .pub .input => true
+        | .pub (.opaque _ args) => args.all r
+        | .pub (.expr x) => (ir.exprNodes x).all r
+        | .constant _ => true
+        | .challenge _ => true
+        | .message u => decide (u < ir.values.length ∧ ir.IsLate u)
+        | _ => false) (fun _ _ => rfl) (fun j hj r r' h => ?_) (pubStep_congr hwf) ir.fuel v
+      (by simp only [fuel]; omega) hv
+    rw [← value_eq_getD]
+    change _ = ir.pubStep r' j (ir.value j)
+    unfold valueDeps at h
+    unfold pubStep
+    rcases hk : (ir.value j).kind with _ | ⟨_ | ⟨_, args⟩ | e⟩ | _ | _ | _ | _ | _ | _ <;>
+      (rw [hk] at h; (try dsimp only at h); try simp only)
+    · exact all_eq_all_of_mem fun u hu => h u hu
+    · have he := hwf.pubExpr_refs hj hk
+      exact (all_eq_all_of_mem fun u hu => h u hu).trans
+        (Bool.eq_iff_iff.2 (by simp only [List.all_eq_true, mem_nodesOf hwf.refsOrdered he]))
+  · rw [pubT, memo_getD_of_le (Nat.le_of_not_lt hv), fuel, pubB, value_eq_getD,
+      List.getD_eq_default _ _ (Nat.le_of_not_lt hv)]
+    rfl
+
+end PubTable
+
 variable (ir : RealizedProgram)
 
 /-- **A sum of constant multiples of committed values and constants**: a committed value, a

@@ -6,10 +6,10 @@ module
 public import GordieHowe.SPBCS.Format.SpecWrites
 public import GordieHowe.Foundations.Fields.GF2_128
 public import GordieHowe.Foundations.Fields.GF2_256
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative9
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative20
-public import GordieHowe.Applications.MLDSA44.Native.Fields.MLDSANative6
-public import GordieHowe.Applications.MLDSA44.Native.Fields.MLDSANative11
+public import GordieHowe.Applications.Falcon512.Fields.FalconNative9
+public import GordieHowe.Applications.Falcon512.Fields.FalconNative20
+public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative6
+public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative11
 public import GordieHowe.Foundations.Fields.Goldilocks
 public import GordieHowe.Foundations.Fields.GoldilocksQuartic
 

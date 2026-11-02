@@ -43,8 +43,8 @@ at `GordieHowe.RealizedProgram.CompletionReady` and `GordieHowe.RealizedProgram.
 the first hypothesis. The configurations' statements are instances of these theorems
 (`GordieHowe.Configuration.GrantedFacts`, fields `knowledge` and `e2e`).
 
-`T`: the program's GKR circuits enforce their entries; `A`: they accept honest inputs (trust
-base).
+The proof system's `enforce` and `accept` (its sources enforce the circuits' entries and accept the
+honest inputs) are read from it.
 -/
 
 namespace GordieHowe.RealizedProgram.ProofSystem.FieldBranches
@@ -55,7 +55,7 @@ open scoped NNReal
 variable {P : Export.Plan} {ir : RealizedProgram} {I : Interp} {B : ir.ProofSystem P I} (F : B.FieldBranches) (FS : F.Sound)
   {W : Type} [Inhabited W] {rel : Set (ir.Valuation I × W)}
   {proj : ir.Valuation I → ir.Assignment I → W} {S : KnowledgeStateFunction (ir.sourceVerifier I)}
-  {ε : (ir.sourceSpec I).ChallengeIdx → ℝ≥0} (T : B.CircuitsEnforce)
+  {ε : (ir.sourceSpec I).ChallengeIdx → ℝ≥0}
   (h : rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
   (hend : ∀ i, ir.rounds.get i.1 = .final → ε i = 0)
   {Stmt : Type} [DecidableEq Stmt] (f : Stmt → ir.Valuation I) {W' : Type} {rel' : Set (Stmt × W')}
@@ -63,7 +63,7 @@ variable {P : Export.Plan} {ir : RealizedProgram} {I : Interp} {B : ir.ProofSyst
 
 section Comap
 
-variable (TD : SPBCS.ProofSystemTranscript ((F.soundIOP T h hend).comap f)) (kS : ℕ)
+variable (TD : SPBCS.ProofSystemTranscript ((F.soundIOP h hend).comap f)) (kS : ℕ)
   (hb : TD.MergeBounds kS)
 
 /-- **The end-to-end theorem, knowledge soundness** (the paper's `thm:e2e`(2)): if the source
@@ -71,11 +71,11 @@ program is round-by-round knowledge sound (`h`, `hend`), then the compiled argum
 multi-circuit IOP with forked domains, its statement read through `f`, is knowledge sound and sound
 in the QROM and the ROM at the verifier with merges of query budget `kq` (`hkq`), for every relation
 `rel'` into which the witness map `g` sends the IOP's relation (`hg`), with `errk` the largest round
-error of the proof system (`thm:backend`(2)). `T`: trust base. -/
+error of the proof system (`thm:backend`(2)). -/
 @[headline]
 theorem e2e_knowledge (hg : ∀ x w, (f x, w) ∈ relOf rel → (x, g x w) ∈ rel') {kq : ℕ}
     (hkq : TD.QueryBudget kS hb kq) :
-    TD.KnowledgeGuarantees kS hb ((F.soundIOPSound FS T h hend).comap f) rel' g hkq :=
+    TD.KnowledgeGuarantees kS hb ((F.soundIOPSound FS h hend).comap f) rel' g hkq :=
   SPBCS.ProofSystemTranscript.knowledgeGuarantees _ hg hkq
 
 /-- **The end-to-end theorem** (the paper's `thm:e2e`): if the source program is round-by-round
@@ -86,17 +86,17 @@ forked domains, its statement read through `f`, has parts (1)–(5) of
 every relation `rel'` into which the witness map `g` sends the IOP's relation (`hg`): with `errk`
 the largest round error of the proof system (`thm:backend`(2)), and with `errc` as the completeness and
 HVZK error (`thm:backend`(1)), at the honest prover `FieldBranches.honestAt` of the domains' honest
-provers `HD` and `FH`. `T`, `A`: trust base. -/
+provers `HD` and `FH`. -/
 @[headline]
 theorem e2e (hg : ∀ x w, (f x, w) ∈ relOf rel → (x, g x w) ∈ rel') {kq : ℕ}
-    (hkq : TD.QueryBudget kS hb kq) {pB : ℕ} (hf : TD.ProofFormat kS hb pB) (A : B.CircuitsAccept) {DS : B.DomainSims} (HD : B.HonestDomains DS)
-    {FSm : F.ForkSims} (FH : ∀ d, F.ForkDomainHonest d (HD A d).In (HD A d).dom (FSm d)) (H : ir.HonestCore I relH)
+    (hkq : TD.QueryBudget kS hb kq) {pB : ℕ} (hf : TD.ProofFormat kS hb pB) {DS : B.DomainSims} (HD : B.HonestDomains DS)
+    {FSm : F.ForkSims} (FH : ∀ d, F.ForkDomainHonest d (HD d).In (HD d).dom (FSm d)) (H : ir.HonestCore I relH)
     {errc : ℝ≥0} (hc : H.Complete fun _ => errc) :
-    TD.Guarantees kS hb ((F.soundIOPSound FS T h hend).comap f) rel' g hkq hf
-      ((F.honestAt (B.lowering T ⟨_, h, hend⟩) A HD FH H).comap f) errc :=
-  SPBCS.ProofSystemTranscript.guarantees ((F.soundIOPSound FS T h hend).comap f) hg hkq hf
-    ((F.honestAt (B.lowering T ⟨_, h, hend⟩) A HD FH H).comap f)
-    ((F.errorBound_honestAt (B.lowering T ⟨_, h, hend⟩) A HD FH H hc).comap f)
+    TD.Guarantees kS hb ((F.soundIOPSound FS h hend).comap f) rel' g hkq hf
+      ((F.honestAt (B.lowering ⟨_, h, hend⟩) HD FH H).comap f) errc :=
+  SPBCS.ProofSystemTranscript.guarantees ((F.soundIOPSound FS h hend).comap f) hg hkq hf
+    ((F.honestAt (B.lowering ⟨_, h, hend⟩) HD FH H).comap f)
+    ((F.errorBound_honestAt (B.lowering ⟨_, h, hend⟩) HD FH H hc).comap f)
 
 /-- **The end-to-end theorem for an honest prover with coins** (the paper's `thm:e2e`, with the
 honest prover's coins drawn): if the source program is round-by-round knowledge sound (`h`,
@@ -105,18 +105,18 @@ honest prover's coins drawn): if the source program is round-by-round knowledge 
 compiled argument of the proof system's multi-circuit IOP with forked domains, its statement read
 through `f`, has parts (1)–(5) of `SPBCS.ProofSystemTranscript.CoinGuarantees` (as `e2e`, with completeness,
 everlasting zero knowledge and witness indistinguishability at the honest prover with coins), with `errc` as
-the completeness and HVZK error. `T`, `A`: trust base. -/
+the completeness and HVZK error. -/
 @[headline]
 theorem e2e_coins (hg : ∀ x w, (f x, w) ∈ relOf rel → (x, g x w) ∈ rel') {kq : ℕ}
-    (hkq : TD.QueryBudget kS hb kq) {pB : ℕ} (hf : TD.ProofFormat kS hb pB) (A : B.CircuitsAccept) {DS : B.DomainSims} (HD : B.HonestDomains DS)
-    {FSm : F.ForkSims} (FH : ∀ d, F.ForkDomainHonest d (HD A d).In (HD A d).dom (FSm d)) (H : ir.HonestCore I relH)
+    (hkq : TD.QueryBudget kS hb kq) {pB : ℕ} (hf : TD.ProofFormat kS hb pB) {DS : B.DomainSims} (HD : B.HonestDomains DS)
+    {FSm : F.ForkSims} (FH : ∀ d, F.ForkDomainHonest d (HD d).In (HD d).dom (FSm d)) (H : ir.HonestCore I relH)
     {J Ω : Type} [Fintype Ω] [Nonempty Ω] {relJ : Set (ir.Valuation I × J)} {inp : J → Ω → Inp}
     {errc : ℝ≥0} (hc : H.CoinComplete relJ inp fun _ => errc) :
-    TD.CoinGuarantees kS hb ((F.soundIOPSound FS T h hend).comap f) rel' g hkq hf
-      ((F.honestAt (B.lowering T ⟨_, h, hend⟩) A HD FH H).comap f) {p | (f p.1, p.2) ∈ relJ} inp errc :=
-  SPBCS.ProofSystemTranscript.coinGuarantees ((F.soundIOPSound FS T h hend).comap f) hg hkq hf
-    ((F.honestAt (B.lowering T ⟨_, h, hend⟩) A HD FH H).comap f)
-    ((F.coinErrorBound_honestAt (B.lowering T ⟨_, h, hend⟩) A HD FH H hc).comap f)
+    TD.CoinGuarantees kS hb ((F.soundIOPSound FS h hend).comap f) rel' g hkq hf
+      ((F.honestAt (B.lowering ⟨_, h, hend⟩) HD FH H).comap f) {p | (f p.1, p.2) ∈ relJ} inp errc :=
+  SPBCS.ProofSystemTranscript.coinGuarantees ((F.soundIOPSound FS h hend).comap f) hg hkq hf
+    ((F.honestAt (B.lowering ⟨_, h, hend⟩) HD FH H).comap f)
+    ((F.coinErrorBound_honestAt (B.lowering ⟨_, h, hend⟩) HD FH H hc).comap f)
 
 /-- **The end-to-end theorem from the source program's guarantees** (the paper's `thm:e2e`, with
 its hypotheses as in `def:o-guarantees`): if the source program is round-by-round knowledge sound
@@ -127,64 +127,64 @@ with probability at most `errc`), then the compiled argument has parts (1)–(5)
 prover of the prover's execution (`HonestCore.ofCompletion` at `SourceComplete.toExecutionCore`: the
 realizations' values added by the completeness certificate `R` (generators `G`, derivations `D`)
 of a program passing the completeness check, `CompletionReady`), on the honest inputs `relH` with
-the prover's coins drawn uniformly. `T`, `A`: trust base. -/
+the prover's coins drawn uniformly. -/
 @[headline]
 theorem e2e_source (hg : ∀ x w, (f x, w) ∈ relOf rel → (x, g x w) ∈ rel') {kq : ℕ}
-    (hkq : TD.QueryBudget kS hb kq) {pB : ℕ} (hf : TD.ProofFormat kS hb pB) (A : B.CircuitsAccept) {DS : B.DomainSims} (HD : B.HonestDomains DS)
-    {FSm : F.ForkSims} (FH : ∀ d, F.ForkDomainHonest d (HD A d).In (HD A d).dom (FSm d)) {primeNodes : ℕ → List String}
-    {G : Gens} {D : CDerivations} (R : ir.CompletionReady I primeNodes G D) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (hkq : TD.QueryBudget kS hb kq) {pB : ℕ} (hf : TD.ProofFormat kS hb pB) {DS : B.DomainSims} (HD : B.HonestDomains DS)
+    {FSm : F.ForkSims} (FH : ∀ d, F.ForkDomainHonest d (HD d).In (HD d).dom (FSm d)) {primeNodes : ℕ → List String}
+    {S : Structure} {G : Gens} {D : CDerivations} (R : ir.CompletionReady I primeNodes S G D)
+    {Ω : Type} [Fintype Ω] [Nonempty Ω]
     {Hs : ir.SourceProver I Inp Ω} {errc : ℝ≥0} (hs : ir.SourceComplete I relH Hs errc) :
-    TD.CoinGuarantees kS hb ((F.soundIOPSound FS T h hend).comap f) rel' g hkq hf
-      ((F.honestAt (B.lowering T ⟨_, h, hend⟩) A HD FH
+    TD.CoinGuarantees kS hb ((F.soundIOPSound FS h hend).comap f) rel' g hkq hf
+      ((F.honestAt (B.lowering ⟨_, h, hend⟩) HD FH
         (HonestCore.ofCompletion R.model R.macsRealizable R.facts hs.toExecutionCore)).comap f)
       {p | (f p.1, p.2) ∈ relH} WithCoins.mk errc :=
-  F.e2e_coins FS T h hend f TD kS hb hg hkq hf A HD FH _
+  F.e2e_coins FS h hend f TD kS hb hg hkq hf HD FH _
     (HonestCore.ofCompletion_coinComplete R.model R.macsRealizable R.facts _ hs.coinComplete)
 
 end Comap
 
 section ComapWith
 
-variable (chk : Stmt → Bool) (TD : SPBCS.ProofSystemTranscript ((F.soundIOP T h hend).comapWith f chk))
+variable (chk : Stmt → Bool) (TD : SPBCS.ProofSystemTranscript ((F.soundIOP h hend).comapWith f chk))
   (kS : ℕ) (hb : TD.MergeBounds kS)
 
 /-- **The end-to-end theorem, knowledge soundness, with a statement check** (`e2e_knowledge` with
-the statement read through `f` and checked by `chk`, `IOP.comapWith`). `T`: trust base. -/
+the statement read through `f` and checked by `chk`, `IOP.comapWith`). -/
 @[headline]
 theorem e2eWith_knowledge
     (hg : ∀ x w, chk x = true ∧ (f x, w) ∈ relOf rel → (x, g x w) ∈ rel') {kq : ℕ}
     (hkq : TD.QueryBudget kS hb kq) :
-    TD.KnowledgeGuarantees kS hb ((F.soundIOPSound FS T h hend).comapWith f chk) rel' g hkq :=
+    TD.KnowledgeGuarantees kS hb ((F.soundIOPSound FS h hend).comapWith f chk) rel' g hkq :=
   SPBCS.ProofSystemTranscript.knowledgeGuarantees _ hg hkq
 
 /-- **The end-to-end theorem with a statement check** (`e2e` with the statement read through `f`
-and checked by `chk`, `IOP.comapWith`). `T`, `A`: trust base. -/
+and checked by `chk`, `IOP.comapWith`). -/
 @[headline]
 theorem e2eWith (hg : ∀ x w, chk x = true ∧ (f x, w) ∈ relOf rel → (x, g x w) ∈ rel') {kq : ℕ}
-    (hkq : TD.QueryBudget kS hb kq) {pB : ℕ} (hf : TD.ProofFormat kS hb pB) (A : B.CircuitsAccept) {DS : B.DomainSims} (HD : B.HonestDomains DS)
-    {FSm : F.ForkSims} (FH : ∀ d, F.ForkDomainHonest d (HD A d).In (HD A d).dom (FSm d)) (H : ir.HonestCore I relH)
+    (hkq : TD.QueryBudget kS hb kq) {pB : ℕ} (hf : TD.ProofFormat kS hb pB) {DS : B.DomainSims} (HD : B.HonestDomains DS)
+    {FSm : F.ForkSims} (FH : ∀ d, F.ForkDomainHonest d (HD d).In (HD d).dom (FSm d)) (H : ir.HonestCore I relH)
     {errc : ℝ≥0} (hc : H.Complete fun _ => errc) :
-    TD.Guarantees kS hb ((F.soundIOPSound FS T h hend).comapWith f chk) rel' g hkq hf
-      ((F.honestAt (B.lowering T ⟨_, h, hend⟩) A HD FH H).comapWith f chk) errc :=
-  SPBCS.ProofSystemTranscript.guarantees ((F.soundIOPSound FS T h hend).comapWith f chk) hg hkq hf
-    ((F.honestAt (B.lowering T ⟨_, h, hend⟩) A HD FH H).comapWith f chk)
-    ((F.errorBound_honestAt (B.lowering T ⟨_, h, hend⟩) A HD FH H hc).comapWith f chk)
+    TD.Guarantees kS hb ((F.soundIOPSound FS h hend).comapWith f chk) rel' g hkq hf
+      ((F.honestAt (B.lowering ⟨_, h, hend⟩) HD FH H).comapWith f chk) errc :=
+  SPBCS.ProofSystemTranscript.guarantees ((F.soundIOPSound FS h hend).comapWith f chk) hg hkq hf
+    ((F.honestAt (B.lowering ⟨_, h, hend⟩) HD FH H).comapWith f chk)
+    ((F.errorBound_honestAt (B.lowering ⟨_, h, hend⟩) HD FH H hc).comapWith f chk)
 
 /-- **The end-to-end theorem for an honest prover with coins, with a statement check** (`e2e_coins`
-with the statement read through `f` and checked by `chk`, `IOP.comapWith`). `T`, `A`:
-trust base. -/
+with the statement read through `f` and checked by `chk`, `IOP.comapWith`). -/
 @[headline]
 theorem e2eWith_coins (hg : ∀ x w, chk x = true ∧ (f x, w) ∈ relOf rel → (x, g x w) ∈ rel')
-    {kq : ℕ} (hkq : TD.QueryBudget kS hb kq) {pB : ℕ} (hf : TD.ProofFormat kS hb pB) (A : B.CircuitsAccept) {DS : B.DomainSims} (HD : B.HonestDomains DS)
-    {FSm : F.ForkSims} (FH : ∀ d, F.ForkDomainHonest d (HD A d).In (HD A d).dom (FSm d)) (H : ir.HonestCore I relH)
+    {kq : ℕ} (hkq : TD.QueryBudget kS hb kq) {pB : ℕ} (hf : TD.ProofFormat kS hb pB) {DS : B.DomainSims} (HD : B.HonestDomains DS)
+    {FSm : F.ForkSims} (FH : ∀ d, F.ForkDomainHonest d (HD d).In (HD d).dom (FSm d)) (H : ir.HonestCore I relH)
     {J Ω : Type} [Fintype Ω] [Nonempty Ω] {relJ : Set (ir.Valuation I × J)} {inp : J → Ω → Inp}
     {errc : ℝ≥0} (hc : H.CoinComplete relJ inp fun _ => errc) :
-    TD.CoinGuarantees kS hb ((F.soundIOPSound FS T h hend).comapWith f chk) rel' g hkq hf
-      ((F.honestAt (B.lowering T ⟨_, h, hend⟩) A HD FH H).comapWith f chk)
+    TD.CoinGuarantees kS hb ((F.soundIOPSound FS h hend).comapWith f chk) rel' g hkq hf
+      ((F.honestAt (B.lowering ⟨_, h, hend⟩) HD FH H).comapWith f chk)
       {p | chk p.1 = true ∧ (f p.1, p.2) ∈ relJ} inp errc :=
-  SPBCS.ProofSystemTranscript.coinGuarantees ((F.soundIOPSound FS T h hend).comapWith f chk) hg hkq hf
-    ((F.honestAt (B.lowering T ⟨_, h, hend⟩) A HD FH H).comapWith f chk)
-    ((F.coinErrorBound_honestAt (B.lowering T ⟨_, h, hend⟩) A HD FH H hc).comapWith f chk)
+  SPBCS.ProofSystemTranscript.coinGuarantees ((F.soundIOPSound FS h hend).comapWith f chk) hg hkq hf
+    ((F.honestAt (B.lowering ⟨_, h, hend⟩) HD FH H).comapWith f chk)
+    ((F.coinErrorBound_honestAt (B.lowering ⟨_, h, hend⟩) HD FH H hc).comapWith f chk)
 
 end ComapWith
 

@@ -179,6 +179,50 @@ theorem LigeroCert.covers_treeMasking {K : Type} [Field K] (c : LigeroCert)
     rw [hk]
     exact h
 
+/-! ### The round bounds of a certified shape as fractions -/
+
+/-- **The test numerator of a certified masking**: the mask list size `l` for untested masks, `1`
+for the mask test (the test bound is this over the field's size). -/
+def LigeroCert.testNum (c : LigeroCert) : ℕ :=
+  match c.masking with
+  | .untested _ l _ => l
+  | .split => 1
+
+/-- **The mask count of the column bound** at `t = nreq` queried columns: `a_t` for untested masks
+at the mask agreement threshold `a`, `(2k − 1)_t` for the mask test. -/
+def LigeroCert.maskCount (c : LigeroCert) : ℕ :=
+  match c.masking with
+  | .untested a _ _ => a.descFactorial c.Sh.nreq
+  | .split => (2 * c.Sh.block - 1).descFactorial c.Sh.nreq
+
+/-- **The numerator of the column bound**: `(A − 1)_t` and the mask count. -/
+def LigeroCert.columnNum (c : LigeroCert) : ℕ :=
+  (c.agree - 1).descFactorial c.Sh.nreq + c.maskCount
+
+/-- **The numerator of the joint subfield term**: `(k − 1)_t`. -/
+def LigeroCert.jointNum (c : LigeroCert) : ℕ :=
+  (c.Sh.block - 1).descFactorial c.Sh.nreq
+
+/-- **The denominator of the column bound and the joint subfield term**: `(N)_t`. -/
+def LigeroCert.columnDen (c : LigeroCert) : ℕ :=
+  c.Sh.N.descFactorial c.Sh.nreq
+
+/-- **The round bounds of a certified shape's tree masking** at its repetitions and queried
+columns: the commit bound `(B/(|K| − 1))^nrep`, the test bound `testNum/|K|` and the column bound
+`columnNum/columnDen`. -/
+theorem LigeroCert.bounds_treeMasking {K : Type} [Field K] [Fintype K] (c : LigeroCert)
+    (C : GordieHowe.RSCode K c.Sh.N) (hk : C.k = c.Sh.block) :
+    (c.treeMasking C hk).bounds c.Sh.nrep c.Sh.nreq =
+      ⟨((c.exceptions : NNReal) / (Fintype.card K - 1)) ^ c.Sh.nrep,
+        (c.testNum : NNReal) / Fintype.card K, (c.columnNum : NNReal) / c.columnDen⟩ := by
+  unfold treeMasking testNum columnNum maskCount columnDen
+  split
+  · next heq =>
+    simp only [heq, TreeLayout.Masking.bounds, Ligero.AgreementThreshold.bounds, Nat.cast_add]
+  · next heq =>
+    simp only [heq, TreeLayout.Masking.bounds, Ligero.MaskTest.Pieces.bounds, hk, Nat.cast_add,
+      Nat.cast_one]
+
 namespace FieldInterp.Packing
 
 variable {F : FieldInterp} (Pk : F.Packing)
@@ -197,6 +241,14 @@ def numbers (c : LigeroCert) (hv : c.validB Pk.q = true) :
   points_mem := Pk.points_mem
   masking := c.treeMasking _ rfl
   covers := c.covers_treeMasking _ rfl (LigeroCert.covers_of_validB hv)
+
+/-- **The round bounds of the tree layout's Ligero numbers** are the certificate's fractions
+(`LigeroCert.bounds_treeMasking`). -/
+theorem numbers_bounds (c : LigeroCert) (hv : c.validB Pk.q = true) :
+    (Pk.numbers c hv).bounds =
+      ⟨((c.exceptions : NNReal) / (Fintype.card F.K - 1)) ^ c.Sh.nrep,
+        (c.testNum : NNReal) / Fintype.card F.K, (c.columnNum : NNReal) / c.columnDen⟩ :=
+  c.bounds_treeMasking _ rfl
 
 end FieldInterp.Packing
 

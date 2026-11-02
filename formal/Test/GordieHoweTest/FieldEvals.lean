@@ -8,14 +8,14 @@ and fails the build if it is false. Not proofs. They live here rather than in th
 because evaluation is slow and every importer of those modules would otherwise rebuild them, and
 because this file is not a `module` (see `MLDSAVectors.lean`'s header on `#eval` in modules).
 -/
-import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative20
+import GordieHowe.Applications.Falcon512.Fields.FalconNative20
 import GordieHowe.Foundations.Fields.GF2_256
-import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative9
+import GordieHowe.Applications.Falcon512.Fields.FalconNative9
 import GordieHowe.Foundations.Fields.Goldilocks
 import GordieHowe.Foundations.Fields.GoldilocksQuartic
 import GordieHowe.Foundations.Fields.GF2_128
-import GordieHowe.Applications.MLDSA44.Native.Fields.MLDSANative11
-import GordieHowe.Applications.MLDSA44.Native.Fields.MLDSANative6
+import GordieHowe.Applications.MLDSA44.Fields.MLDSANative11
+import GordieHowe.Applications.MLDSA44.Fields.MLDSANative6
 import GordieHowe.Foundations.Fields.GF2_128Exec
 import GordieHowe.Foundations.Algebra.Conv
 
@@ -91,7 +91,11 @@ Not proofs: the executable field computes. `X⁶ = 7`, and a product with an inv
 
 /-! ## `GordieHowe.Fields.GF2_128Exec`
 
-`gfMul` agrees with `Conv.applyConv` reduced mod `2`. -/
+`gfMul` agrees with `Conv.applyConv` reduced mod `2` at sampled output coordinates. For all inputs
+and coordinates this is the theorem `gf2_128_conv_parity`; the checks here evaluate `applyConv` as
+defined. One coordinate costs about 1.7 s in the interpreter (`prodCoeffs` is a double sum over
+`Fin 128` for each of the 255 product degrees), so each product is checked at the constant
+coordinate `0`, the highest tap `7` and the top coordinate `127`, not at all 128. -/
 
 namespace GF2_128Exec
 
@@ -99,11 +103,11 @@ namespace GF2_128Exec
 input shape. -/
 def natBitsOfBitVec (bv : BitVec 128) (i : Fin 128) : ℕ := if bv.getLsbD i then 1 else 0
 
-/-- The inverse of `natBitsOfBitVec`, for reading back a `GordieHowe.Conv.applyConv`
-result reduced mod `2`. -/
-def bitVecOfNatBits (v : Fin 128 → ℕ) : BitVec 128 :=
-  (List.finRange 128).foldl
-    (fun acc i => if v i % 2 = 1 then acc ||| ((1 : BitVec 128) <<< (i : ℕ)) else acc) 0
+/-- Coordinate `m` of `Conv.applyConv` on the bits of `a` and `b`, reduced mod `2`, agrees with bit
+`m` of `gfMul a b`. -/
+def convBitOk (a b : BitVec 128) (m : Fin 128) : Bool :=
+  (Conv.applyConv Conv.gf2_128Taps (natBitsOfBitVec a) (natBitsOfBitVec b) m % 2 == 1) ==
+    (gfMul a b).getLsbD m
 
 /-- A test value. -/
 def a1 : BitVec 128 := 0x0123456789abcdef0123456789abcdef#128
@@ -113,13 +117,10 @@ def b1 : BitVec 128 := 0xdeadbeefcafebabe0011223344556677#128
 def x64 : BitVec 128 := (1#128) <<< 64
 
 -- `gfMul` agrees with `GordieHowe.Conv.applyConv` reduced mod `2`, the executable
--- form of `Conv.conv_parity` for the concrete reduction polynomial.
-#guard bitVecOfNatBits (fun i => Conv.applyConv Conv.gf2_128Taps (natBitsOfBitVec a1) (natBitsOfBitVec b1) i % 2) ==
-  gfMul a1 b1
-#guard bitVecOfNatBits (fun i => Conv.applyConv Conv.gf2_128Taps (natBitsOfBitVec a1) (natBitsOfBitVec x64) i % 2) ==
-  gfMul a1 x64
-#guard bitVecOfNatBits (fun i => Conv.applyConv Conv.gf2_128Taps (natBitsOfBitVec b1) (natBitsOfBitVec b1) i % 2) ==
-  gfMul b1 b1
+-- form of `Conv.conv_parity` for the concrete reduction polynomial, at coordinates 0, 7 and 127.
+#guard [0, 7, 127].all (convBitOk a1 b1)
+#guard [0, 7, 127].all (convBitOk a1 x64)
+#guard [0, 7, 127].all (convBitOk b1 b1)
 
 end GF2_128Exec
 

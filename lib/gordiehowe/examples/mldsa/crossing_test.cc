@@ -55,7 +55,8 @@ TYPED_TEST(CrossingTest, HonestAndRejected) {
   for (Placement where : {Placement::kCircuit, Placement::kBatch}) {
     SCOPED_TRACE(placement_name(where));
     T t(env, n, where);
-    const auto c = gordiehowe::compile(t.cs, compile_profile<TypeParam>());
+    const auto c =
+        gordiehowe::compile(t.cs, compile_profile<TypeParam, MLDSA44>());
     const std::string rep = c->report();
     if (where == Placement::kCircuit) {
       EXPECT_NE(rep.find("batch_bit_checks=0"), std::string::npos);

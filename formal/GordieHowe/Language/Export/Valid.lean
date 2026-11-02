@@ -159,7 +159,7 @@ def gf2_256Entry : FieldEntry where
   points := 2 ^ 16
   subfields := [bitSubfield, ⟨gf2_16In256, 0⟩]
 
-/-- **`F_q^9`**, `q = 12289`: the Lean `FalconNativeField9` (`GordieHowe/Applications/Falcon512/Native/Fields/FalconNative9.lean`),
+/-- **`F_q^9`**, `q = 12289`: the Lean `FalconNativeField9` (`GordieHowe/Applications/Falcon512/Fields/FalconNative9.lean`),
 `ZMod 12289 [X]/(X^9 - 2)` (the plan writes the coefficients `1, q - 2`), `18` bytes (`Fp14_N`,
 `9 · 2`), points `q`; subfield `GF(p^1)`, `2` bytes. -/
 def falconNative9Entry : FieldEntry where
@@ -169,7 +169,7 @@ def falconNative9Entry : FieldEntry where
   points := 12289
   subfields := [primeSubfield 12289 2]
 
-/-- **`F_q^20`**, `q = 12289`: the Lean `FalconNativeField20` (`GordieHowe/Applications/Falcon512/Native/Fields/FalconNative20.lean`), the
+/-- **`F_q^20`**, `q = 12289`: the Lean `FalconNativeField20` (`GordieHowe/Applications/Falcon512/Fields/FalconNative20.lean`), the
 tower `u^4 = 11`, `v^5 = u + 2`, `35` bytes (`NativeWide`, `⌈20 · 14 / 8⌉`), points `q`; subfield
 `GF(p^1)`, `2` bytes. -/
 def falconNative20Entry : FieldEntry where
@@ -180,7 +180,7 @@ def falconNative20Entry : FieldEntry where
   points := 12289
   subfields := [primeSubfield 12289 2]
 
-/-- **`F_q^6`**, `q = 8380417`: the Lean `MLDSANativeField6` (`GordieHowe/Applications/MLDSA44/Native/Fields/MLDSANative6.lean`),
+/-- **`F_q^6`**, `q = 8380417`: the Lean `MLDSANativeField6` (`GordieHowe/Applications/MLDSA44/Fields/MLDSANative6.lean`),
 `ZMod q [X]/(X^6 - 7)`, `18` bytes (`Fp24_6`, `6 · 3`), points `q`; subfield `GF(p^1)`, `3`
 bytes. -/
 def mldsaNative6Entry : FieldEntry where
@@ -190,7 +190,7 @@ def mldsaNative6Entry : FieldEntry where
   points := 8380417
   subfields := [primeSubfield 8380417 3]
 
-/-- **`F_q^11`**, `q = 8380417`: the Lean `MLDSANativeField11` (`GordieHowe/Applications/MLDSA44/Native/Fields/MLDSANative11.lean`),
+/-- **`F_q^11`**, `q = 8380417`: the Lean `MLDSANativeField11` (`GordieHowe/Applications/MLDSA44/Fields/MLDSANative11.lean`),
 `ZMod q [X]/(X^11 - 2)`, `32` bytes (`NativeWide`, `⌈11 · 23 / 8⌉`), points `q`; subfield
 `GF(p^1)`, `3` bytes. -/
 def mldsaNative11Entry : FieldEntry where
@@ -692,6 +692,226 @@ instance (P : Plan) (e : ModEquality) : Decidable (e.Lowered P) := by
   unfold ModEquality.Lowered
   infer_instance
 
+/-! ## The range requests by pointer
+
+The compiler names, per MAC record and per modular equality, the index of each range request its
+lowering reads (`RealizedProgram.Structure.macRequests`, `.modRequests`). The check at a pointer
+compares the request's name with the expected one and sweeps the requests before it for that name,
+so the request at the pointer is the request of that name (`Plan.request_of_requestAt`); the
+conditions above, which read the requests by name, follow (`MAC.lowerable_of_at`,
+`ModEquality.lowered_of_at`) without a search by name. -/
+
+/-- **Request `i` of the plan, checked to be the request named `name`**: it has that name and no
+request before it does. -/
+def Plan.requestAt (P : Plan) (name : String) (i : Nat) : Option Request :=
+  match P.requests[i]? with
+  | some r =>
+    if r.name = name ∧ (P.requests.take i).all (fun r' => decide (r'.name ≠ name)) = true
+      then some r
+    else none
+  | none => none
+
+/-- **The request at a checked pointer is the request of that name.** -/
+theorem Plan.request_of_requestAt {P : Plan} {name : String} {i : Nat} {r : Request}
+    (h : P.requestAt name i = some r) : P.request name = some r := by
+  unfold requestAt at h
+  cases hr : P.requests[i]? with
+  | none => simp [hr] at h
+  | some r' =>
+    simp only [hr] at h
+    split at h
+    · rename_i hc
+      cases h
+      obtain ⟨hn, hall⟩ := hc
+      have hi : i < P.requests.length := (List.getElem?_eq_some_iff.1 hr).1
+      have hdrop : P.requests.drop i = r :: P.requests.drop (i + 1) := by
+        rw [List.drop_eq_getElem_cons hi]
+        congr
+        exact (List.getElem?_eq_some_iff.1 hr).2
+      have hnone : (P.requests.take i).find? (·.name = name) = none := by
+        rw [List.find?_eq_none]
+        intro x hx
+        have := List.all_eq_true.1 hall x hx
+        simpa using this
+      unfold Plan.request
+      rw [← List.take_append_drop i P.requests, List.find?_append, hnone, hdrop]
+      simp [hn]
+    · cases h
+
+/-- **The request of slot `k` of the pointers `ptrs`, checked to be named `name`.** -/
+def Plan.requestVia (P : Plan) (ptrs : List Nat) (k : Nat) (name : String) : Option Request :=
+  ptrs[k]?.bind (P.requestAt name)
+
+theorem Plan.request_of_requestVia {P : Plan} {ptrs : List Nat} {k : Nat} {name : String}
+    {r : Request} (h : P.requestVia ptrs k name = some r) : P.request name = some r := by
+  unfold requestVia at h
+  cases hk : ptrs[k]? with
+  | none => simp [hk] at h
+  | some i =>
+    simp only [hk, Option.bind_some] at h
+    exact Plan.request_of_requestAt h
+
+/-- **`MAC.SingleValid` at the pointers `ptrs`** (`<name>.low`, `.high`, `.nowrap`). -/
+def MAC.SingleValidAt (P : Plan) (m : MAC) (ptrs : List Nat) : Prop :=
+  match P.requestVia ptrs 0 (m.name ++ ".low") with
+  | none => False
+  | some l =>
+    match P.requestVia ptrs 1 (m.name ++ ".high") with
+    | none => False
+    | some h =>
+      match P.requestVia ptrs 2 (m.name ++ ".nowrap") with
+      | none => False
+      | some w =>
+        m.accMax = m.nch * m.convMax + 1 ∧ m.radixValue = 2 * m.nLow ∧
+          (SingleMACNumbers.mk (P.floorOf m.accDomain) m.nLow m.accMax l.realization.bound
+            h.realization.bound w.realization.bound).Valid
+
+instance (P : Plan) (m : MAC) (ptrs : List Nat) : Decidable (m.SingleValidAt P ptrs) := by
+  unfold MAC.SingleValidAt
+  split
+  · infer_instance
+  · split
+    · infer_instance
+    · split <;> infer_instance
+
+theorem MAC.singleValid_of_at {P : Plan} {m : MAC} {ptrs : List Nat}
+    (h : m.SingleValidAt P ptrs) : m.SingleValid P := by
+  unfold SingleValidAt at h
+  split at h
+  · exact h.elim
+  · rename_i l hl
+    split at h
+    · exact h.elim
+    · rename_i hh hh'
+      split at h
+      · exact h.elim
+      · rename_i w hw
+        simp only [SingleValid, Plan.bound?, Plan.request_of_requestVia hl,
+          Plan.request_of_requestVia hh', Plan.request_of_requestVia hw, Option.map_some]
+        exact h
+
+/-- **`MAC.GroupedValid` at the pointers `ptrs`** (`<name>.gq`, `.final.q`). -/
+def MAC.GroupedValidAt (P : Plan) (m : MAC) (ptrs : List Nat) : Prop :=
+  match P.requestVia ptrs 0 (m.name ++ ".gq") with
+  | none => False
+  | some d =>
+    match P.requestVia ptrs 1 (m.name ++ ".final.q") with
+    | none => False
+    | some f =>
+      m.GroupedBounds (P.charOf m.accDomain) d.realization.bound f.realization.bound f.max
+
+instance (P : Plan) (m : MAC) (ptrs : List Nat) : Decidable (m.GroupedValidAt P ptrs) := by
+  unfold MAC.GroupedValidAt
+  split
+  · infer_instance
+  · split <;> infer_instance
+
+theorem MAC.groupedValid_of_at {P : Plan} {m : MAC} {ptrs : List Nat}
+    (h : m.GroupedValidAt P ptrs) : m.GroupedValid P := by
+  unfold GroupedValidAt at h
+  split at h
+  · exact h.elim
+  · rename_i d hd
+    split at h
+    · exact h.elim
+    · rename_i f hf
+      simp only [GroupedValid, Plan.request_of_requestVia hd, Plan.request_of_requestVia hf]
+      exact h
+
+/-- **`MAC.OneDigitValid` at the pointers `ptrs`** (`<name>.q`). -/
+def MAC.OneDigitValidAt (P : Plan) (m : MAC) (ptrs : List Nat) : Prop :=
+  match P.requestVia ptrs 0 (m.name ++ ".q") with
+  | none => False
+  | some d => m.OneDigitBounds (P.floorOf m.accDomain) d.realization.bound d.max
+
+instance (P : Plan) (m : MAC) (ptrs : List Nat) : Decidable (m.OneDigitValidAt P ptrs) := by
+  unfold MAC.OneDigitValidAt
+  split <;> infer_instance
+
+theorem MAC.oneDigitValid_of_at {P : Plan} {m : MAC} {ptrs : List Nat}
+    (h : m.OneDigitValidAt P ptrs) : m.OneDigitValid P := by
+  unfold OneDigitValidAt at h
+  split at h
+  · exact h.elim
+  · rename_i d hd
+    simp only [OneDigitValid, Plan.request_of_requestVia hd]
+    exact h
+
+/-- **`MAC.Lowerable` at the pointers `ptrs`**: the same forms, each reading its requests at the
+pointers. -/
+def MAC.LowerableAt (P : Plan) (m : MAC) (ptrs : List Nat) : Prop :=
+  (m.groups = 1 ∧ m.tail = .digits ∧ m.tailDigits = 2 ∧ m.SingleValidAt P ptrs) ∨
+    (m.groups = 1 ∧ m.tail = .oneDigit ∧ m.OneDigitValidAt P ptrs) ∨
+    (2 < m.groups ∧ m.tail = .oneDigit ∧ m.GroupedValidAt P ptrs)
+
+instance (P : Plan) (m : MAC) (ptrs : List Nat) : Decidable (m.LowerableAt P ptrs) := by
+  unfold MAC.LowerableAt
+  infer_instance
+
+theorem MAC.lowerable_of_at {P : Plan} {m : MAC} {ptrs : List Nat}
+    (h : m.LowerableAt P ptrs) : m.Lowerable P := by
+  rcases h with ⟨h1, h2, h3, h4⟩ | ⟨h1, h2, h3⟩ | ⟨h1, h2, h3⟩
+  · exact .inl ⟨h1, h2, h3, singleValid_of_at h4⟩
+  · exact .inr (.inl ⟨h1, h2, oneDigitValid_of_at h3⟩)
+  · exact .inr (.inr ⟨h1, h2, groupedValid_of_at h3⟩)
+
+/-- **The established bounds of the requests `names` at the pointers `ptrs`**, each checked to be
+the request of its name; `none` when the lists differ in length or a pointer fails. -/
+def Plan.boundsVia (P : Plan) : List Nat → List String → Option (List Nat)
+  | [], [] => some []
+  | i :: is, n :: ns =>
+    match P.requestAt n i, P.boundsVia is ns with
+    | some r, some bs => some (r.realization.bound :: bs)
+    | _, _ => none
+  | _, _ => none
+
+theorem Plan.mapM_bound_of_boundsVia {P : Plan} :
+    ∀ {ptrs : List Nat} {names : List String} {N : List Nat},
+      P.boundsVia ptrs names = some N → names.mapM P.bound? = some N
+  | [], [], N, h => by
+    simp only [boundsVia, Option.some.injEq] at h
+    subst h
+    rfl
+  | i :: is, n :: ns, N, h => by
+    simp only [boundsVia] at h
+    split at h
+    · rename_i r bs hr hbs
+      cases h
+      simp [List.mapM_cons, Plan.bound?, Plan.request_of_requestAt hr,
+        Plan.mapM_bound_of_boundsVia hbs]
+    · cases h
+  | [], _ :: _, _, h => by simp [boundsVia] at h
+  | _ :: _, [], _, h => by simp [boundsVia] at h
+
+/-- **`ModEquality.Lowered` at the pointers `ptrs`** of its digit requests. -/
+def ModEquality.LoweredAt (P : Plan) (e : ModEquality) (ptrs : List Nat) : Prop :=
+  e.name ∈ P.macs.map (·.name) ∨
+    e.FormValid (P.charOf e.domain) (P.boundsVia ptrs e.digitRequests)
+
+instance (P : Plan) (e : ModEquality) (ptrs : List Nat) : Decidable (e.LoweredAt P ptrs) := by
+  unfold ModEquality.LoweredAt
+  infer_instance
+
+/-- **A form valid at no bounds is valid at any**, unless it reads them (the digit forms). -/
+theorem ModEquality.formValid_of_none {p : Nat} {e : ModEquality} (N : Option (List Nat))
+    (h : e.FormValid p none) : e.FormValid p N := by
+  unfold FormValid at h ⊢
+  cases hq : e.quotient <;> simp only [hq] at h ⊢ <;> exact h
+
+theorem ModEquality.lowered_of_at {P : Plan} {e : ModEquality} {ptrs : List Nat}
+    (h : e.LoweredAt P ptrs) : e.Lowered P := by
+  rcases h with h | h
+  · exact .inl h
+  · refine .inr ?_
+    cases hb : P.boundsVia ptrs e.digitRequests with
+    | none =>
+      rw [hb] at h
+      exact formValid_of_none _ h
+    | some N =>
+      rw [hb] at h
+      rw [Plan.mapM_bound_of_boundsVia hb]
+      exact h
+
 /-- **A filtered permutation's windows do not wrap** (`end - first + L ≤ ord(α)` at
 `ord(α) = 2^bits - 1`): in the exported fields `last - first + 2 · len ≤ 2^bits - 1`
 (`last = end - len`); and the offset field is a declared subfield of the domain of degree `bits`
@@ -738,6 +958,31 @@ theorem Plan.noWrapHolds_iff (P : Plan) : P.NoWrapHolds ↔
     fun h => ⟨h.1, h.2.1, h.2.2.1, h.2.2.2.1, h.2.2.2.2⟩⟩
 
 instance (P : Plan) : Decidable P.NoWrapHolds := decidable_of_iff _ P.noWrapHolds_iff.symm
+
+/-- **The no-wrap conditions with the range requests read at the pointers** `macPtrs` (per MAC
+record's index, `RealizedProgram.Structure.macRequests`) and `modPtrs` (per modular equality's
+index, `.modRequests`); a missing entry reads no pointer. -/
+def Plan.NoWrapHoldsAt (P : Plan) (macPtrs modPtrs : List (Nat × List Nat)) : Prop :=
+  (∀ g ∈ P.gadgets, g.kind = "certify" → g.CertifyHolds) ∧ (∀ r ∈ P.requests, r.Admits) ∧
+    (∀ i (hi : i < P.macs.length), P.macs[i].LowerableAt P ((macPtrs.lookup i).getD [])) ∧
+    (∀ i (hi : i < P.modEqualities.length),
+      P.modEqualities[i].LoweredAt P ((modPtrs.lookup i).getD [])) ∧
+    ∀ f ∈ P.filteredPermutations, ∃ d ∈ P.domains, d.name = f.domain ∧ f.NoWrapIn d
+
+instance (P : Plan) (macPtrs modPtrs : List (Nat × List Nat)) :
+    Decidable (P.NoWrapHoldsAt macPtrs modPtrs) := by
+  unfold Plan.NoWrapHoldsAt
+  infer_instance
+
+/-- **The no-wrap conditions at pointers give the no-wrap conditions.** -/
+theorem Plan.noWrapHolds_of_at {P : Plan} {macPtrs modPtrs : List (Nat × List Nat)}
+    (h : P.NoWrapHoldsAt macPtrs modPtrs) : P.NoWrapHolds := by
+  obtain ⟨h1, h2, h3, h4, h5⟩ := h
+  refine ⟨h1, h2, fun m hm => ?_, fun e he => ?_, h5⟩
+  · obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hm
+    exact MAC.lowerable_of_at (h3 i hi)
+  · obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem he
+    exact ModEquality.lowered_of_at (h4 i hi)
 
 /-! ## The Ligero tableaus -/
 
@@ -815,7 +1060,7 @@ def hashBytes (name : String) : Option Nat :=
 
 /-- **A domain's streams fit at `k`-byte digests**: its extended Fiat–Shamir points follow the
 C++ rule at the default budget `k + fsExtraBytes` and its registry entry's element bytes
-(`Domain.FollowsStreamRule`; `SPBCS.ProofSystemTranscript.stream`, `StreamRows.grants`), and those bytes
+(`Domain.FollowsStreamRule`; `SPBCS.ProofSystemTranscript.stream`), and those bytes
 are at most `35`. -/
 def Domain.StreamsFit (k : Nat) (d : Domain) : Prop :=
   match d.entry? with

@@ -29,6 +29,7 @@
 #include "gordiehowe/compiler/compile_options.h"
 #include "gordiehowe/core.h"
 #include "gordiehowe/examples/falcon/falcon_params.h"
+#include "gordiehowe/examples/mldsa/mldsa_params.h"
 #include "gordiehowe/examples/shared/domain_profile.h"
 #include "gordiehowe/system.h"
 #include "gordiehowe/examples/rings/falcon_ring_params.h"
@@ -183,10 +184,12 @@ void pin_full_system_placement(D &H, PackingAblation a) {
 }
 
 // The compile profile: the MAC basis of P's hash field; the system
-// ml-dsa-native, with the packing ablation's suffix.
-template <class P>
+// <stem>-native for the parameter set S (S::kSystemStem: ml-dsa at
+// ML-DSA-44, ml-dsa-65 and ml-dsa-87 at the others), with the packing
+// ablation's suffix.
+template <class P, class S>
 CompileProfile compile_profile(PackingAblation packing = PackingAblation::kNone) {
-  return mac_profile<P>(std::string("ml-dsa-native") +
+  return mac_profile<P>(std::string(S::kSystemStem) + "-native" +
                         packing_suffix(packing));
 }
 
@@ -203,10 +206,11 @@ struct Env : HashArithEnv<P, typename P::EmulatedField> {};
 // over Goldilocks^k, H over GF(2^k) with its GF(2^16) subfield.
 
 // The compile profile: the MAC basis of P's hash field; the system
-// ml-dsa-emulated, with the packing ablation's suffix.
-template <class P>
+// <stem>-emulated for the parameter set S (as the native arm's), with the
+// packing ablation's suffix.
+template <class P, class S>
 CompileProfile compile_profile(PackingAblation packing = PackingAblation::kNone) {
-  return mac_profile<P>(std::string("ml-dsa-emulated") +
+  return mac_profile<P>(std::string(S::kSystemStem) + "-emulated" +
                         packing_suffix(packing));
 }
 

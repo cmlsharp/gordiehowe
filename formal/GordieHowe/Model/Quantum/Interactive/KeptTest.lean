@@ -193,7 +193,7 @@ state differs, and no statement uses it.
 
 Running time: two basis permutations, one query, and one unitary on the kept pair, whose acceptance
 law is that of any circuit mapping `φ` to `i₀`; for the Merkle-node superposition of the oracle test
-(`SPBCS.Base.oracleTestQBTest`), an `X` gate on the tag bit and `16k` Hadamard gates on the two
+(`SPBCS.oracleTestQBTest`), an `X` gate on the tag bit and `16k` Hadamard gates on the two
 digests, run backwards. This running time is argued here, not proved in Lean. -/
 noncomputable def keptTest (φ : QState (X × Y)) (hφ : ‖φ‖ = 1) (i₀ : X × Y) :
     (toIAlg (Req := Req) (Resp := Resp) p q pad φ hφ).QTest where

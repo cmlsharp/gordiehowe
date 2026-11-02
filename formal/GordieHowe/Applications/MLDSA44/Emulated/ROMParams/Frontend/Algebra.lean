@@ -19,16 +19,15 @@ layout (`layout`) and its program facts (`GordieHowe.MLDSA44.Emulated.MldsaEAlge
 namespace GordieHowe.MLDSA44.Emulated.ROMParams
 
 open Generated.MLDSA44.Emulated.ROMParams.Program
-open HashField (interp)
 
 /-- **The digit layout of `MLDSA44.Emulated.ROMParams`**: `w'` in three base-`256` digits
-(`578`–`580`), `z + 130993`, the offset and the slack in two base-`645` digits each (`581`, `582`;
-`586`, `587`; `588`, `589`); the offset's and the slack's bound `645^2`. -/
+(`577`–`579`), `z + 130993`, the offset and the slack in two base-`645` digits each (`580`, `581`;
+`585`, `586`; `587`, `588`); the offset's and the slack's bound `645^2`. -/
 def layout : Emulated.MldsaELayout where
-  w := ⟨256, [578, 579, 580]⟩
-  z := ⟨645, [581, 582]⟩
-  offset := ⟨645, [586, 587]⟩
-  slack := ⟨645, [588, 589]⟩
+  w := ⟨256, [577, 578, 579]⟩
+  z := ⟨645, [580, 581]⟩
+  offset := ⟨645, [585, 586]⟩
+  slack := ⟨645, [587, 588]⟩
   offsetBound := 416025
 
 set_option maxRecDepth 4096 in
@@ -46,7 +45,7 @@ instance : Emulated.MldsaEAlgebra program where
   pred13 := ⟨_, rfl⟩
   pred14 := ⟨_, rfl⟩
   pred15 := ⟨_, rfl⟩
-  pred274 := ⟨_, rfl⟩
+  pred274 := ⟨_, rfl, rfl⟩
   expr7 := rfl
   expr8 := rfl
   expr0 := rfl

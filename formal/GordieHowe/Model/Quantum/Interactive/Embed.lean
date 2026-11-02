@@ -341,19 +341,23 @@ namespace KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  (K : KindAlg X Y Req Resp O) (b : ℕ)
+  {ksK : KindShape X Y Req Resp} (K : KindAlg ksK O) (b : ℕ)
+
+/-- The shape of `toAdaptive`: the kind shape `s` with the budget `b`. -/
+@[reducible] def _root_.GordieHowe.Quantum.KindShape.withBudgetS (s : KindShape X Y Req Resp) (b : ℕ) :
+    AlgShape X Y Req Resp where
+  W := s.W
+  width := s.width
+  width_pos := s.width_pos
+  slots := s.slots
+  post := s.post
+  budget := b
+  R := s.R
 
 /-- **A kind algorithm as an adversary with run-time kinds and budget `b`**: the same registers,
 kinds, Kraus maps and output, with a budget of `b` query slots. -/
-def toAdaptive : AdaptiveIAlg X Y Req Resp O where
-  W := K.W
-  width := K.width
-  width_pos := K.width_pos
-  slots := K.slots
-  post := K.post
-  budget := b
+def toAdaptive : AdaptiveIAlg (ksK.withBudgetS b) O where
   kind := K.kind
-  R := K.R
   init := K.init
   step := K.step
   out := K.out
@@ -391,7 +395,7 @@ theorem liftG_toAdaptive_slot {k : StepIdx K.slots K.post} (hk : (k : ℕ) < K.s
   have h : (K.toAdaptive b).toKindAlg.step k = (((K.step k).tensorId (Fin (b + 2))).reindex
       (K.toAdaptive b).cntSplit.symm |>.restrict (K.toAdaptive b).inBudget).permConj
         (Equiv.refl _) (K.toAdaptive b).cntShift :=
-    if_pos hk
+    (K.toAdaptive b).toKindAlg_step_of_lt hk
   show (((K.toAdaptive b).toKindAlg.step k).tensorId (LogReg Req K.slots)).reindex splitLogs.symm = _
   erw [h, KrausMap.tensorId_permConj, KrausMap.tensorId_restrict, KrausMap.reindex_permConj,
     KrausMap.reindex_restrict]
@@ -405,14 +409,8 @@ theorem shiftG_withCnt (c : Fin (b + 2)) (a : K.G) :
     K.shiftG b (K.placeCnt b c a) =
       K.placeCnt b (if K.kind a.1.1 then c else finRotate _ c) a := by
   obtain ⟨⟨w, rq, rs, lg⟩, p⟩ := a
-  change splitLogs.symm (((K.toAdaptive b).cntShift (((w, c), rq, rs), p)), lg) = _
-  have hs : (K.toAdaptive b).cntShift (((w, c), rq, rs), p) =
-      (((w, if K.kind w then c else finRotate _ c), rq, rs), p) := by
-    have hk : (K.toAdaptive b).kind w = K.kind w := rfl
-    simp only [AdaptiveIAlg.cntShift, Equiv.prodCongr_apply, Prod.map, Equiv.prodShear_apply,
-      Equiv.refl_apply, hk]
-    split_ifs <;> rfl
-  rw [hs]
+  change splitLogs.symm (((K.toAdaptive b).cntShift (((AlgShape.CntW.mk w c), rq, rs), p)), lg) = _
+  rw [AdaptiveIAlg.cntShift_apply]
   rfl
 
 /-- **A slot step of `K.toAdaptive b` on a placed state**: from counter `c`, on a state whose
@@ -453,7 +451,7 @@ theorem liftG_toAdaptive_post {k : StepIdx K.slots K.post} (hk : ¬ (k : ℕ) < 
     (K.toAdaptive b).toKindAlg.liftG k = K.rawLiftG b k := by
   have h : (K.toAdaptive b).toKindAlg.step k = ((K.step k).tensorId (Fin (b + 2))).reindex
       (K.toAdaptive b).cntSplit.symm :=
-    if_neg hk
+    (K.toAdaptive b).toKindAlg_step_of_not_lt hk
   show (((K.toAdaptive b).toKindAlg.step k).tensorId (LogReg Req K.slots)).reindex splitLogs.symm = _
   rw [h]
   rfl
@@ -573,7 +571,7 @@ namespace KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] [Nonempty X] [AddGroup Y]
-  [Nonempty Y] (K : KindAlg X Y Req Resp O) (C : Challenger X Y Req Resp)
+  [Nonempty Y] {ksK : KindShape X Y Req Resp} (K : KindAlg ksK O) (C : Challenger X Y Req Resp)
 
 /-- **The mixed game of `K` with a budget counter follows `K` along a respected schedule**: if
 `K` respects the schedule `sched` along its run (`KindAlg.Respects`), then with the budget the
@@ -643,7 +641,6 @@ theorem mgRun_toAdaptive {sched : Fin K.slots → Bool} {Inv : ℕ → Set K.G}
   erw [h1, hposts]
   simp only [Circuit.run]
   erw [K.liftG_lastStep_embed b]
-  rfl
 
 end KindAlg
 
@@ -651,7 +648,7 @@ namespace KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] [Nonempty X] [AddGroup Y]
-  [Nonempty Y] [DecidableEq O] (K : KindAlg X Y Req Resp O) (C : Challenger X Y Req Resp)
+  [Nonempty Y] [DecidableEq O] {ksK : KindShape X Y Req Resp} (K : KindAlg ksK O) (C : Challenger X Y Req Resp)
 
 /-- **The mixed game of `K` with a budget counter accepts as that of `K`** along a respected
 schedule. -/
@@ -673,7 +670,7 @@ namespace KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] [Nonempty X] [AddGroup Y]
-  [Nonempty Y] (B : KindAlg X Y Req Resp O) (C : Challenger X Y Req Resp)
+  [Nonempty Y] {ksB : KindShape X Y Req Resp} (B : KindAlg ksB O) (C : Challenger X Y Req Resp)
 
 /-- **The output law of `composeBothOut f`** is the coin-average of the diagonal of the mixed game
 with measured requests on the registers whose composed register `f` reads as `o` (as
@@ -729,7 +726,7 @@ theorem outLaw_composeBothOut_some {O' : Type} [DecidableEq O'] (f : B.CW C → 
   · simp [h]
   · simp [h, Ne.symm h]
 
-variable (K : KindAlg X Y Req Resp O) (b : ℕ)
+variable {ksK : KindShape X Y Req Resp} (K : KindAlg ksK O) (b : ℕ)
 
 /-- The composed registers of `K` with the query counter of `K.toAdaptive b` at `d` added to the
 workspace. -/
@@ -759,7 +756,7 @@ variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [Decida
 /-- **A fixed-schedule interactive adversary as one with run-time kinds**: the adversary with its
 slot counter (`IAlg.toKindAlg`), whose kind register reads the schedule from the counter, with a
 budget of its number of query slots. -/
-def toAdaptive : AdaptiveIAlg X Y Req Resp O :=
+def toAdaptive :=
   A.toKindAlg.toAdaptive A.querySlots
 
 @[simp] theorem toAdaptive_width : A.toAdaptive.width = A.width := rfl
@@ -900,6 +897,7 @@ noncomputable def ofIAlg {Aux : Type} (aux : PMF Aux) (alg : Aux → IAlg X Y Re
     QueryBoundedAdversary X Y Req Resp O t where
   Aux := Aux
   aux := aux
+  sh a := (alg a).toAdaptive.toShape
   alg a := (alg a).toAdaptive
   tracePreserving a := (alg a).toAdaptive_tracePreserving (htp a)
   withinBudget a := (htp a).toAdaptive_withinBudget

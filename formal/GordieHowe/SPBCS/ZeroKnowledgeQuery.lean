@@ -5,7 +5,9 @@ module
 
 public import GordieHowe.SPBCS.ZeroKnowledgeROMQuery
 public import GordieHowe.SPBCS.ProverProg
-public import GordieHowe.SPBCS.FullPast.ZeroKnowledgeQuery
+public import GordieHowe.SPBCS.ZeroKnowledgeROMQuery
+public import GordieHowe.SPBCS.ProverProg
+public import GordieHowe.Model.QROM.LeafZK
 
 @[expose] public section
 
@@ -15,15 +17,74 @@ public import GordieHowe.SPBCS.FullPast.ZeroKnowledgeQuery
 Zero knowledge of the spBCS compiler against quantum adversaries all of whose queries are
 counted (Unruh 2017 Definition 6, p. 14, `NIZK.ZeroKnowledgeQueryBounded`, with the pure form
 `GordieHowe.QROM.ZeroKnowledgeQueryBoundedPure`): the prover `niProverZKM` and simulator `niJointSimulator`
-of `GordieHowe.SPBCS.everlastingZeroKnowledge`, with the leaf term charged per query. The argument is
-the compiler's over the term (`GordieHowe/SPBCS/FullPast/ZeroKnowledgeQuery.lean`) with the merge chain
-inputs: the leaf kernel `leafKernel`, its laws and the lazy kernel `lazyKernel` of the classical
+of `GordieHowe.SPBCS.everlastingZeroKnowledge`, with the leaf term charged per query. The argument uses the pieces
+below with the merge chain inputs: the leaf kernel `leafKernel`, its laws and the lazy kernel `lazyKernel` of the classical
 proof (`GordieHowe/SPBCS/ZeroKnowledgeROMQuery.lean`). The error is the compiler's
-`Base.zkErrorQuery δ`:
+`SPBCS.zkErrorQuery δ`:
 
     4 Q t / 2^(4kS) + Q (Q - 1) / 2^(8kS) + Q · keyCollision (t.size n) k
     + Q (4 t √U / 2^(4kN) + 3 (U + Q U² + U²) / 2^(8kN)) + Q · (overrun + δ)    (`U = |Pos|`).
 -/
+
+/-! ### The error
+
+Zero knowledge against quantum adversaries all of whose
+queries are counted (Unruh 2017 Definition 6, p. 14, `NIZK.ZeroKnowledgeQueryBounded`, with the pure
+form `GordieHowe.QROM.ZeroKnowledgeQueryBoundedPure`): the honest prover `GordieHowe.SPBCS.niProverZKM` and the
+simulator `GordieHowe.SPBCS.niJointSimulator` of `GordieHowe.SPBCS.everlastingZeroKnowledge`,
+with the leaf term charged per query instead of statistically. The error (`GordieHowe.SPBCS.zkErrorQuery`) is
+
+    4 Q t / 2^(4kS) + Q (Q - 1) / 2^(8kS)                (Fiat–Shamir salts, as `zkError`)
+    + Q · keyCollision (t.size n) k                       (lazy sampling of the streams)
+    + Q (4 t √U / 2^(4kN) + 3 (U + Q U² + U²) / 2^(8kN))  (hidden leaf digests, `U = |Pos|`)
+    + Q · (overrun + δ)                                   (the observation)
+
+in place of `Q · U · leafBound k kN L`.
+
+**The argument** (`GordieHowe.QROM.zeroKnowledgeQueryBoundedPure_comap_of_leafKernel`), with the leaf kernel,
+its laws and the lazy kernel of the classical proof (`GordieHowe/SPBCS/ZeroKnowledgeROMQuery.lean`):
+1. the honest prover against the lazily sampled honest reply `lazyKernel`, by the salted QROM
+   theorem (`GordieHowe.QROM.zeroKnowledgeAfterAdaptive_of_sliceClose`) with the one-proof bound
+   `keyCollision (t.size n) k` at every salt (`sliceCloseAt_lazy`);
+2. the honest-digest kernel against the uniform-digest kernel (`GordieHowe/Model/QROM/HiddenLeaves.lean`);
+3. the uniform-digest kernel against the simulator, at `overrun + δ` per proof query
+   (`tvDist_kD_joint_le`).
+-/
+
+section
+
+namespace GordieHowe.SPBCS
+
+open GordieHowe.QROM GordieHowe.IOP IOP.SPTerm Quantum GordieHowe.QROM
+open scoped ENNReal NNReal BigOperators
+
+variable {k kN kS L e : ℕ}
+
+/-- The square root of a power of two with an exponent divisible by eight. -/
+theorem sqrt_two_pow_eight_mul (a : ℕ) : √((2 : ℝ) ^ (8 * a)) = 2 ^ (4 * a) := by
+  rw [show 8 * a = 4 * a * 2 by ring, pow_mul, Real.sqrt_sq (by positivity)]
+
+section
+
+variable {ι : Type} {n : ι → ℕ} {P : (j : ι) → ProtocolSpec (n j)}
+  [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)] {t : SPTerm ι} {Mg : Merges t}
+  {X : Type} (M : SPBCS Mg P X k kN kS L e)
+
+/-- **The query-counted zero-knowledge error of the composite in the QROM** at the HVZK error
+`δ`, `t` queries and `Q` proof queries: `4 Q t / 2^(4kS) + Q (Q - 1) / 2^(8kS) +
+Q · keyCollision (t.size n) k + Q (4 t √U / 2^(4kN) + 3 (U + Q U² + U²) / 2^(8kN)) +
+Q · (overrun + δ)` with `U = |Pos|` (`zeroKnowledgeQuery`). -/
+noncomputable def zkErrorQuery (δ : ℝ≥0) (tq Q : ℕ) : ℝ :=
+  4 * Q * tq / 2 ^ (4 * kS) + Q * (Q - 1) / 2 ^ (8 * kS) +
+    Q * (SPBCS.keyCollision (t.size n) k).toReal +
+    Q * (4 * tq * √(Fintype.card M.Pos) / 2 ^ (4 * kN) +
+      3 * ((Fintype.card M.Pos + Q * Fintype.card M.Pos ^ 2 + Fintype.card M.Pos ^ 2) /
+        2 ^ (8 * kN))) + Q * (M.overrun.toReal + δ)
+
+end
+end GordieHowe.SPBCS
+
+end
 
 namespace GordieHowe.SPBCS
 
@@ -61,7 +122,7 @@ theorem zeroKnowledgeQuery {X' W' : Type} [Fintype X'] [DecidableEq X'] [Fintype
   refine (zeroKnowledgeQueryBoundedPure_comap_of_leafKernel (rel₀ := fun x w => (x, w) ∈ rel)
     (P := M.niProverZKM B honest E Qs) (S := M.niJointSimulator VE.toViewRead B pub Sim T)
     (L := leafKernel VE B honest) (K₁ := lazyKernel VE B honest) (leafKernel_laws VE B honest)
-    (M.toFullPast.lazyEquiv R) (fun _ _ _ => rfl) (saltedLocal_lazy VE B honest)
+    (M.lazyEquiv R) (fun _ _ _ => rfl) (saltedLocal_lazy VE B honest)
     (sliceCloseAt_lazy VE B honest) hε₃
     (fun req O hr => tvDist_kD_joint_le VE B honest pub T hvzk req O hr) fx fw).mono
     fun tq Q => le_of_eq ?_
@@ -79,7 +140,7 @@ theorem zeroKnowledgeQuery {X' W' : Type} [Fintype X'] [DecidableEq X'] [Fintype
     Finset.expect_const Finset.univ_nonempty _
   rw [hsalt, hN, hE, Finset.card_singleton, Real.sqrt_div' _ (by positivity),
     sqrt_two_pow_eight_mul, sqrt_two_pow_eight_mul,
-    Base.zkErrorQuery]
+    SPBCS.zkErrorQuery]
   push_cast
   ring
 

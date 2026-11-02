@@ -3,7 +3,8 @@
 
 module
 
-public import GordieHowe.SPBCS.Translate
+public import GordieHowe.SPBCS.Basic
+public import GordieHowe.SPBCS.Extraction.ChainProg
 
 @[expose] public section
 
@@ -16,16 +17,14 @@ the leaves and the final digests of the branches in the prover's step order (`Me
 every step reads only steps of smaller rank (`Merges.Obs.rank_lt_of_reads`), so processing the
 observers sorted by rank computes the chains and final digests of the proof.
 
-* `roundContent_congr`, `finalContent_congr`: a chain input reads the chains only at the leaves
-  its observer reads in full, and the final digests only at the branches hidden from it.
 * `leafProg`, `finalQuery`, `step`: the key and `xof` queries of a leaf's chain, the
   `transcript` query of a branch's final input, one step on a state of chains, final digests and
   `xof` answers.
 * `obsOrder`: all observers sorted by rank; `roundsProg`: the steps in that order
   (`agrees_roundsProg`, `trace_roundsProg`: the chains, final digests and answers of the proof, and
   the honest queries of every observer).
-* `queryProg`, `queries`: then each tree's multiproof queries at the positions the query phase
-  reads.
+* `treeProg`, `queryProg`, `queries`: then each tree's multiproof queries at the positions the
+  query phase reads.
 -/
 
 namespace GordieHowe.SPBCS
@@ -39,34 +38,6 @@ variable {ι : Type} {t : SPTerm ι} {Mg : Merges t} {k kN kS L e : ℕ} {n : ι
 section
 
 variable (M : SPBCS Mg P X k kN kS L e)
-
-/-! ### What a chain input reads -/
-
-section Congr
-
-variable {M}
-
-/-- **A round content reads the chains only at the leaves its leaf reads in full and the final
-digests only at the branches hidden from it.** -/
-theorem roundContent_congr {ss : SaltedStatement kS X} {chs chs' : M.Chains}
-    {fs fs' : Mg.Site → Digest k} {p : t.Leaf}
-    (hc : ∀ q, (Merges.Obs.leaf p : Mg.Obs).Visible q → chs q = chs' q)
-    (hf : ∀ s, Mg.Hides s (.leaf p) → fs s = fs' s) (l : M.Items p) :
-    roundContent ss chs fs p l = roundContent ss chs' fs' p l := by
-  unfold roundContent
-  rw [Merges.Obs.viewChains_congr _ hc, Merges.Obs.viewDs_congr _ hf]
-
-/-- **A final content reads the chains only at the leaves its sink reads in full and the final
-digests only at the branches hidden from its sink.** -/
-theorem finalContent_congr {ss : SaltedStatement kS X} {chs chs' : M.Chains}
-    {fs fs' : Mg.Site → Digest k} {s : Mg.Site}
-    (hc : ∀ q, (Merges.Obs.sink s : Mg.Obs).Visible q → chs q = chs' q)
-    (hf : ∀ s', Mg.Hides s' (.sink s) → fs s' = fs' s') :
-    finalContent ss chs fs s = finalContent ss chs' fs' s := by
-  unfold finalContent
-  rw [Merges.Obs.viewChains_congr _ hc, Merges.Obs.viewDs_congr _ hf]
-
-end Congr
 
 /-! ### The steps -/
 
@@ -367,6 +338,13 @@ theorem chVOfAns_xofAnswers [∀ j i, Nonempty ((P j).Challenge i)] (h : Query k
     (ss : SaltedStatement kS X) (wr : M.Writes) : M.chVOfAns (M.xofAnswers h ss wr) = M.chV h ss wr := by
   funext c
   simp only [chVOfAns, chV, chal_eq_xofAnswers]
+
+/-- **The opening program of tree `τ`** (`MerkleFormat.treeProg`) at the positions `ps` and the
+leaves of `π`. -/
+def treeProg (π : M.NIProof) (ps : List M.Pos) (τ : M.Tree) :
+    GordieHowe.OracleProg (Query k kN kS L) (Out k e) (Option (Digest k)) :=
+  M.opening.treeProg ((M.comp τ.leaf.label).nLeaves τ.tree.msg τ.tree.tree)
+    ((M.openedIn τ ps π.leaves).map Prod.fst) ((M.openedIn τ ps π.leaves).map Prod.snd) (π.paths τ)
 
 variable [∀ j i, Nonempty ((P j).Challenge i)] (x : X) (π : M.NIProof)
 

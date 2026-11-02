@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Language.Honest.Digits
 public import GordieHowe.Foundations.Probability.PackingCollision
+public import GordieHoweNative.Language.Honest.Packed
 
 @[expose] public section
 
@@ -25,6 +26,9 @@ records (`rowHistogram_map_of_injOn`), which the source execution ensures off it
 events (`PackFreeAt`, `GordieHowe.RealizedProgram.SourceExecutionCore.packFree`): a program with
 no such table ensures it always (`packFreeAt_of_noGamma`), and an application with one charges the
 collision event to its completeness error (`GordieHowe.prob_packCollision_le`).
+
+The definitions are in `GordieHoweNative/Language/Honest/Packed.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -34,24 +38,6 @@ open Range
 section
 
 variable {ir : RealizedProgram} {I : Interp}
-
-/-- **The rows of a packed expression** of `n` records of `A` columns, packed at the coordinates
-of value `P`: row `j` is `[(A j + c, node P c) | c < A]`. -/
-def packRows (A P n : ℕ) : List (List (ℕ × Coef)) :=
-  (List.range n).map fun j => (List.range A).map fun c => (A * j + c, Coef.node P c)
-
-/-- **An expression packed at the coordinates of a value** (`packRows`): `linear rows b` with
-records of `A ≥ 2` columns at the value `P`, read off its first coefficient; the powers' value
-`P`, the arity `A` and the records' expression `b`. -/
-def packOf? : Expr → Option (ℕ × ℕ × Expr)
-  | .linear rows b =>
-    match rows with
-    | ((_, .node P _) :: r0) :: _ =>
-      if 2 ≤ r0.length + 1 ∧ rows = packRows (r0.length + 1) P rows.length then
-        some (P, r0.length + 1, b)
-      else none
-    | _ => none
-  | _ => none
 
 /-- **A packed expression is `linear (packRows A P n) b`** for some `n`, with `2 ≤ A`. -/
 theorem eq_of_packOf? {e : Expr} {P A : ℕ} {b : Expr} (h : packOf? e = some (P, A, b)) :
@@ -67,21 +53,6 @@ theorem eq_of_packOf? {e : Expr} {P A : ℕ} {b : Expr} (h : packOf? e = some (P
         exact ⟨hc.1, _, by rw [← hc.2]⟩
     · cases h
   · cases h
-
-variable (ir) in
-/-- **Table `t` is packed at a value**: its rows are a packed expression (`packOf?`). -/
-def gammaPack? (t : ℕ) : Option (ℕ × ℕ × Expr) :=
-  match (ir.table t).rows with
-  | .expr e' => packOf? e'
-  | _ => none
-
-variable (ir) in
-/-- **The records' expression of member `m`'s needle** packed at the value `P` with `A` columns,
-when its needle is one. -/
-def memberBase? (P A : ℕ) (m : Member) : Option Expr :=
-  match packOf? (ir.needleExpr m.pred m.needle) with
-  | some (P', A', b) => if P' = P ∧ A' = A then some b else none
-  | none => none
 
 variable (ir) in
 /-- **The record at coordinate `i`** of `A` columns of the expression `b`, read by `rd` in field

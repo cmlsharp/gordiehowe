@@ -396,6 +396,13 @@ theorem requestsBefore_succ_of_lt (lg : LogReg Req m) {k : ℕ} (h : k < m) :
     requestsBefore lg (k + 1) = requestsBefore lg k ++ (lg ⟨k, h⟩).toList := by
   simp [requestsBefore, h]
 
+/-- The requests before a slot are a prefix of the requests before every later slot. -/
+theorem requestsBefore_prefix (lg : LogReg Req m) {k k' : ℕ} (h : k ≤ k') :
+    requestsBefore lg k <+: requestsBefore lg k' := by
+  induction k', h using Nat.le_induction with
+  | base => exact List.prefix_refl _
+  | succ k' _ ih => exact ih.trans (List.prefix_append _ _)
+
 /-- Blank logs add no requests: if every log from slot `a` on is blank, the requests before
 slot `b ≥ a` are those before slot `a`. -/
 theorem requestsBefore_eq_of_blank {lg : LogReg Req m} {a b : ℕ} (hab : a ≤ b)
@@ -620,6 +627,12 @@ namespace Distinguisher
 variable {W X Y Req A : Type*} [Fintype W] [Fintype X] [Fintype Y] [Fintype Req] [Fintype A]
   {n m : ℕ} (D : Distinguisher W X Y Req A n m)
 
+/-- A distinguisher with its own steps put back is itself. -/
+theorem with_step_eq (s : Fin (m + 1) → QState (DReg W n X Y Req A) ≃ₗᵢ[ℂ] QState (DReg W n X Y Req A))
+    (h : s = D.step) : { D with step := s } = D := by
+  subst h
+  rfl
+
 /-- The steps indexed by `ℕ`, extended by the identity after `step m`. -/
 noncomputable def stepAt (k : ℕ) : QState (DReg W n X Y Req A) ≃ₗᵢ[ℂ] QState (DReg W n X Y Req A) :=
   if h : k < m + 1 then D.step ⟨k, h⟩ else LinearIsometryEquiv.refl ℂ _
@@ -727,6 +740,16 @@ noncomputable def final
     (post : (X → Y) → QState (DReg W n X Y Req A) ≃ₗᵢ[ℂ] QState (DReg W n X Y Req A))
     (ω : Ω) : QState (GameReg W n X Y Req A m) :=
   logControlled (fun lg => post (E.oracle ω lg)) (D.run E ω)
+
+/-- The final state reads only the kind, the initial state and the steps (not `accept`). -/
+theorem final_congr_steps {D' : Distinguisher W X Y Req A n m} (hkind : D.kind = D'.kind)
+    (hinit : D.init = D'.init) (hstep : D.step = D'.step)
+    (post : (X → Y) → QState (DReg W n X Y Req A) ≃ₗᵢ[ℂ] QState (DReg W n X Y Req A))
+    (ω : Ω) : D.final E post ω = D'.final E post ω := by
+  obtain ⟨k, i, ni, s, a⟩ := D
+  obtain ⟨k', i', ni', s', a'⟩ := D'
+  subst hkind hinit hstep
+  rfl
 
 /-- The probability that the distinguisher outputs `1` on tape `ω`, with logs in `L`. -/
 noncomputable def acceptProbOnAt

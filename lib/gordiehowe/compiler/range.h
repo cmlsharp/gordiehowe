@@ -55,6 +55,7 @@
 #include "gordiehowe/certify.h"
 #include "gordiehowe/core.h"
 #include "gordiehowe/domain.h"
+#include "gordiehowe/int_interval.h"
 #include "gordiehowe/compiler/compile_times.h"
 #include "gordiehowe/compiler/derivation.h"
 #include "gordiehowe/compiler/log_derivative.h"
@@ -280,8 +281,8 @@ std::vector<typename F::Elt> histogram(
   return out;
 }
 
-// A signed integer interval [lo, hi].
-using Interval = std::pair<SignedInt, SignedInt>;
+// A signed integer interval [lo, hi] (int_interval.h).
+using Interval = IntInterval;
 
 // The cap of interval propagation (core.h's kBoundCapBits): an interval
 // or coefficient beyond 2^kIntervalCapBits bounds nothing. Every
@@ -329,16 +330,56 @@ std::optional<std::pair<bool, Bound>> signed_rep(const F &f, Bound p,
   return std::make_pair(true, p - x);
 }
 
+// The interval of the entries of node ID, an operator's dependency (an
+// operator's own interval reads it, OpSpec::interval): a constant's values
+// exactly, otherwise BOUND_OF's (an exclusive bound N for [0, N - 1], or an
+// interval), and [0, p - 1] for an unbounded node IN_PRIME names. None
+// otherwise, or past 2^CAP_BITS.
+template <class F, class BoundOf>
+std::optional<Interval> op_dep_interval(
+    const F &f, Bound p, bool prime_field, const Graph &g, size_t id,
+    BoundOf bound_of, const std::function<bool(size_t)> *in_prime,
+    unsigned cap_bits) {
+  const Node &n = g.nodes.at(id);
+  if (n.kind == Kind::kConstant) {
+    const auto v = g.system->template constant_values<F>(id);
+    std::optional<Interval> out;
+    for (const auto &x : v) {
+      const auto c = signed_rep(f, p, prime_field, x);
+      if (!c || c->second >= Bound::pow2(cap_bits)) return std::nullopt;
+      const SignedInt cj = c->first ? -SignedInt(c->second) : SignedInt(c->second);
+      out = out ? int_interval::hull(*out, Interval{cj, cj}) : Interval{cj, cj};
+    }
+    return out;
+  }
+  const auto b = bound_of(id);
+  if (!b) {
+    if (in_prime == nullptr || !(*in_prime)(id)) return std::nullopt;
+    const auto top = int_below(field_characteristic(f) - 1, cap_bits);
+    if (!top) return std::nullopt;
+    return Interval{0, *top};
+  }
+  if constexpr (std::is_same_v<std::decay_t<decltype(*b)>, Interval>) {
+    return *b;
+  } else {
+    if (*b == 0) return Interval{0, 0};
+    const auto top = int_below(*b - 1, cap_bits);
+    if (!top) return std::nullopt;
+    return Interval{0, *top};
+  }
+}
+
 // The integer interval of the affine expression E over every coordinate
 // (interval propagation, shared by the range and modular lowerings). A term
 // a op_k(...op_1(x)) starts from the interval of node x, BOUND_OF(x): an
 // exclusive bound N_x (x in [0, N_x - 1]) or a signed interval. Each
-// operator maps [lo, hi] to [min(lo, 0) r, max(hi, 0) r] for a nonnegative
-// integer matrix with row sum r (OpSpec::row_sum), and to [-m s, m s] with
-// m = max(-lo, hi) for a signed one whose rows' absolute values sum to s
-// (OpSpec::abs_row_sum); then a's signed representative scales it. A
+// operator maps [lo, hi] to its own interval (OpSpec::interval: its method,
+// given its dependencies' intervals (op_dep_interval), or its row bound:
+// [min(lo, 0) r, max(hi, 0) r] for a nonnegative integer matrix with row
+// sum r, [-m s, m s] with m = max(-lo, hi) for a signed one whose rows'
+// absolute values sum to s); then a's signed representative scales it. A
 // constant node contributes its values exactly. A node with no bound, an
-// operator without a row bound, a coefficient outside the prime field, or
+// operator that bounds nothing, a coefficient outside the prime field, or
 // an interval beyond 2^CAP_BITS leaves the expression unbounded (none,
 // with WHY). IN_PRIME, when given, names the nodes whose values lie in the
 // prime field: such a node without a bound has [0, p - 1], p the field's
@@ -438,25 +479,28 @@ std::optional<Interval> lin_interval(
       if (r > Bound(kCap / m)) return std::nullopt;
       return x * SignedInt(r);
     };
+    // Each operator by its own interval (OpSpec::interval), its
+    // dependencies read as nodes (op_dep_interval).
     for (const auto &op : t.chain) {
-      std::optional<SignedInt> l, h;
-      if (op->row_sum != 0) {
-        l = times(std::min<SignedInt>(tlo, 0), op->row_sum);
-        h = times(std::max<SignedInt>(thi, 0), op->row_sum);
-      } else if (op->abs_row_sum != 0) {
-        h = times(std::max<SignedInt>(-tlo, thi), op->abs_row_sum);
-        if (h) l = -*h;
-      } else {
+      if (!op->bounds()) {
         why = "the term '" + n.name + "' applies the operator '" + op->name +
               "', which bounds no row sum";
         return std::nullopt;
       }
-      if (!l || !h) {
-        why = "the interval exceeds 2^" + std::to_string(cap_bits);
+      const auto r = op->interval(
+          Interval{tlo, thi},
+          [&](size_t k) {
+            return op_dep_interval(f, p, prime_field, g, op->deps.at(k),
+                                   bound_of, in_prime, cap_bits);
+          },
+          cap_bits);
+      if (!r) {
+        why = "the operator '" + op->name + "' on the term '" + n.name +
+              "' bounds no interval below 2^" + std::to_string(cap_bits);
         return std::nullopt;
       }
-      tlo = *l;
-      thi = *h;
+      tlo = r->first;
+      thi = r->second;
     }
     // a [tlo, thi], checked: |a| max(|tlo|, |thi|) < 2^CAP_BITS.
     const auto l = times(tlo, a->second), h = times(thi, a->second);
@@ -528,10 +572,10 @@ std::string describe_term(const Graph &g, const ExprNode<F> &x,
 // coordinates w times its operand's (or, for a sum of an operand times a
 // constant, each group's sum of the operand's interval times its
 // constants), a view or broadcast its operands', an
-// operator by its row bound (as lin_interval), conv(a, b) the sum of
+// operator by its own interval (as lin_interval), conv(a, b) the sum of
 // between 1 and min(la, lb) products (coefficient i sums x_u y_{i-u} over
 // its terms), and a Bit [0, 1]. A coefficient outside the prime field, an
-// operator without a row bound, a product of coordinates, or an interval
+// operator that bounds nothing, a product of coordinates, or an interval
 // beyond 2^CAP_BITS (lin_interval's cap) leaves E unbounded (none, with WHY
 // naming the term).
 template <class F, class BoundOf>
@@ -649,29 +693,16 @@ std::optional<Interval> expr_interval(
         if (!a) return std::nullopt;
         const auto b = go(*x.kids[1]);
         if (!b) return std::nullopt;
-        SignedInt lo = 0, hi = 0;
-        bool first = true;
-        for (SignedInt u : {a->first, a->second}) {
-          for (SignedInt v : {b->first, b->second}) {
-            const auto w = times(u, v);
-            if (!w) return wide();
-            if (first || *w < lo) lo = *w;
-            if (first || *w > hi) hi = *w;
-            first = false;
-          }
-        }
+        // a b by the endpoints' products; conv(a, b)'s coefficient i sums
+        // between 1 and min(la, lb) of them (int_interval).
         if (x.op == ExprOp::kConv) {
-          // Coefficient i sums between 1 and min(la, lb) products.
           const size_t la = x.kids[0]->dims().back();
           const size_t lb = x.kids[1]->dims().back();
-          const SignedInt cnt = SignedInt(std::min(la, lb));
-          const auto l = times(lo, cnt);
-          const auto h = times(hi, cnt);
-          if (!l || !h) return wide();
-          lo = std::min(lo, *l);
-          hi = std::max(hi, *h);
+          out = int_interval::acyclic(std::min(la, lb), *a, *b, cap_bits);
+        } else {
+          out = int_interval::product(*a, *b, cap_bits);
         }
-        out = Interval{lo, hi};
+        if (!out) return wide();
         break;
       }
       case ExprOp::kSum: {
@@ -738,26 +769,22 @@ std::optional<Interval> expr_interval(
         const auto a = go(*x.kids[0]);
         if (!a) return std::nullopt;
         const OpSpec<F> &op = *x.apply;
-        std::optional<SignedInt> l, h;
-        // The row bounds are Bounds: compared with the cap before the cast.
-        if (op.row_sum != 0) {
-          const auto r = int_below(op.row_sum, cap_bits);
-          if (!r) return wide();
-          l = times(std::min<SignedInt>(a->first, 0), *r);
-          h = times(std::max<SignedInt>(a->second, 0), *r);
-        } else if (op.abs_row_sum != 0) {
-          const auto r = int_below(op.abs_row_sum, cap_bits);
-          if (!r) return wide();
-          h = times(std::max<SignedInt>(-a->first, a->second), *r);
-          if (h) l = -*h;
-        } else {
+        // The operator's own interval (OpSpec::interval: its method, or its
+        // row bound), its dependencies read as nodes.
+        if (!op.bounds()) {
           why = "the term '" + describe_term(g, x) +
                 "' applies the operator '" + op.name +
                 "', which bounds no row sum";
           return std::nullopt;
         }
-        if (!l || !h) return wide();
-        out = Interval{*l, *h};
+        out = op.interval(
+            *a,
+            [&](size_t k) {
+              return op_dep_interval(f, p, prime_field, g, op.deps.at(k),
+                                     bound_of, in_prime, cap_bits);
+            },
+            cap_bits);
+        if (!out) return wide();
         break;
       }
       case ExprOp::kMux: {
@@ -1225,6 +1252,166 @@ std::optional<Interval> root_hull(const Domain<F> &d, const Graph &g, Bound p,
     }
   }
   return out;
+}
+
+// The hull of the public entries in columns [C0, C1) of the rows of a
+// table record R (Domain::TableRecord): over each column block that meets
+// those columns, a constant's values exactly, and otherwise the block's
+// interval by request_bound (a Bit, a statement bound). None when a block
+// has none.
+template <class F>
+std::optional<Interval> table_columns_hull(
+    const Domain<F> &d, const Graph &g, Bound p,
+    const typename Domain<F>::TableRecord &r, size_t c0, size_t c1) {
+  const F &f = d.field();
+  const bool prime_field = d.prime == Space::kField;
+  std::optional<Interval> out;
+  size_t off = 0;
+  for (const auto &[node, w] : r.blocks) {
+    const size_t b0 = off, b1 = off + w;
+    off = b1;
+    if (b1 <= c0 || b0 >= c1) continue;
+    std::optional<Interval> iv;
+    if (g.nodes.at(node).kind == Kind::kConstant) {
+      const auto v = g.system->template constant_values<F>(node);
+      for (size_t j = 0; j < v.size(); ++j) {
+        const auto c = signed_rep(f, p, prime_field, v[j]);
+        if (!c) return std::nullopt;
+        const auto m = int_below(c->second, kRequestCapBits);
+        if (!m) return std::nullopt;
+        const SignedInt cj = c->first ? -*m : *m;
+        iv = iv ? Interval{std::min(iv->first, cj), std::max(iv->second, cj)}
+                : Interval{cj, cj};
+      }
+    } else {
+      iv = request_bound(d, g, p, node);
+    }
+    if (!iv) return std::nullopt;
+    out = out ? Interval{std::min(out->first, iv->first),
+                         std::max(out->second, iv->second)}
+              : *iv;
+  }
+  return out;
+}
+
+// The coordinates (node, index) that coordinates [AT, AT + N) of node ID
+// read: a view's sources, or ID's own coordinates.
+template <class F>
+std::vector<std::pair<size_t, size_t>> table_sources(const Domain<F> &d,
+                                                     size_t id, size_t at,
+                                                     size_t n) {
+  std::vector<std::pair<size_t, size_t>> out;
+  const auto *src = d.view_sources(id);
+  for (size_t j = at; j < at + n; ++j)
+    out.push_back(src != nullptr ? src->at(j) : std::make_pair(id, j));
+  return out;
+}
+
+// The coordinate of table record R's node that reads coordinate K of node
+// S: K itself when R's node is S, the coordinate of R's node (a view) whose
+// source is (S, K), or none.
+template <class F>
+std::optional<size_t> record_coordinate(const Domain<F> &d,
+                                        const typename Domain<F>::TableRecord &r,
+                                        size_t s, size_t k) {
+  if (r.node == s) return k;
+  const auto *src = d.view_sources(r.node);
+  if (src == nullptr) return std::nullopt;
+  for (size_t j = 0; j < src->size(); ++j)
+    if ((*src)[j].first == s && (*src)[j].second == k) return j;
+  return std::nullopt;
+}
+
+// The interval node ID takes from public-table selections and lookups
+// (interval propagation's table hulls): a coordinate that a
+// table record (Domain::TableRecord) places in an identity leaf equals the
+// entry of its column in some row, so it lies in the hull of that
+// column's public entries (table_columns_hull). Coordinates are read
+// through views on either side (a view's coordinate is its source's, a
+// zero coordinate is [0, 0]). The narrowest of a coordinate's records
+// wins; ID's interval is the hull over its coordinates, none when some
+// coordinate has none. PREDS, when given, receives the predicates of the
+// records that bound it (TableRecord::pred), each once, in order.
+template <class F>
+std::optional<Interval> table_hull(const Domain<F> &d, const Graph &g,
+                                   Bound p, size_t id,
+                                   std::vector<std::string> *preds = nullptr) {
+  const auto &recs = d.table_records();
+  if (recs.empty()) return std::nullopt;
+  std::optional<Interval> out;
+  std::vector<std::string> used;
+  for (const auto &[s, k] : table_sources(d, id, 0, g.nodes.at(id).n)) {
+    std::optional<Interval> best;
+    const std::string *best_pred = nullptr;
+    if (s == kZeroCoordinate) best = Interval{0, 0};
+    for (const auto &r : recs) {
+      if (s == kZeroCoordinate) break;
+      const auto j = record_coordinate(d, r, s, k);
+      if (!j) continue;
+      const size_t col = (r.at + *j) % r.width;
+      for (const auto &l : r.leaves) {
+        if (l.ntt || col < l.offset || col >= l.offset + l.n) continue;
+        const auto iv = table_columns_hull(d, g, p, r, col, col + 1);
+        if (iv && (!best || iv->second - iv->first < best->second - best->first)) {
+          best = iv;
+          best_pred = &r.pred;
+        }
+      }
+    }
+    if (!best) return std::nullopt;
+    if (best_pred != nullptr &&
+        std::find(used.begin(), used.end(), *best_pred) == used.end())
+      used.push_back(*best_pred);
+    out = out ? Interval{std::min(out->first, best->first),
+                         std::max(out->second, best->second)}
+              : *best;
+  }
+  if (preds != nullptr) *preds = std::move(used);
+  return out;
+}
+
+// The interval of the coefficients of the polynomial whose spectrum under
+// the negacyclic transform of length N at root PSI (in natural order when
+// NATURAL, ntt.h's spectrum order otherwise) is coordinates [AT, AT + N)
+// of node ID: when those coordinates are, in order, one negacyclic leaf
+// of that transform in one table record (through views on either side),
+// the selection makes them the leaf's transform of some row, so the
+// polynomial is that row's slice and its coefficients lie in the hull of
+// the leaf's columns (table_columns_hull). None otherwise.
+// PREDS, when given, receives the predicate of the record that bounds it
+// (TableRecord::pred).
+template <class F>
+std::optional<Interval> table_preimage_hull(
+    const Domain<F> &d, const Graph &g, Bound p, size_t id, size_t at,
+    size_t n, const typename F::Elt &psi, bool natural,
+    std::vector<std::string> *preds = nullptr) {
+  if (n == 0) return std::nullopt;
+  const auto src = table_sources(d, id, at, n);
+  for (const auto &[s, k] : src)
+    if (s == kZeroCoordinate) return std::nullopt;
+  std::optional<Interval> best;
+  for (const auto &r : d.table_records()) {
+    const auto j0 = record_coordinate(d, r, src[0].first, src[0].second);
+    if (!j0) continue;
+    bool in_order = true;
+    for (size_t t = 1; t < n && in_order; ++t) {
+      const auto j = record_coordinate(d, r, src[t].first, src[t].second);
+      in_order = j && *j == *j0 + t;
+    }
+    if (!in_order) continue;
+    const size_t col = (r.at + *j0) % r.width;
+    for (const auto &l : r.leaves) {
+      if (!l.ntt || l.offset != col || l.n != n || l.psi != psi ||
+          l.natural != natural)
+        continue;
+      const auto iv = table_columns_hull(d, g, p, r, col, col + n);
+      if (iv && (!best || iv->second - iv->first < best->second - best->first)) {
+        best = iv;
+        if (preds != nullptr) *preds = {r.pred};
+      }
+    }
+  }
+  return best;
 }
 
 // E over the integers, for the plan export (PlanRecords::Affine): each
@@ -3229,8 +3416,8 @@ class RangeLoweringImpl : Lowering {
           put_u64(key, e);
         }
         gkr(d_, "range.lookup:" + gt, rd,
-               [nn, has0, has1, rg](const auto &lc, const auto &w) {
-                 fraction_tree(lc, w, nn, rg, has0, has1);
+               [nn, has0, has1, rg](const auto &lc, const auto &w, FamilyLog *log) {
+                 fraction_tree(lc, w, nn, rg, has0, has1, log);
                },
                key);
         const Bound sd = g.merged ? T : g.s_dyn;
@@ -3274,11 +3461,12 @@ class RangeLoweringImpl : Lowering {
 
   // The log-derivative identity (log_derivative.h) over the needles'
   // coordinates RG[k] of read k. W holds the needles' wires (NN reads),
-  // then m0 and m1 when present, the weights and alpha.
+  // then m0 and m1 when present, the weights and alpha. LOG, when given,
+  // receives what the identity built.
   template <class LC, class W>
   static void fraction_tree(const LC &lc, const W &w, size_t nn,
                             const std::vector<std::pair<size_t, size_t>> &rg,
-                            bool has0, bool has1) {
+                            bool has0, bool has1, FamilyLog *log) {
     using Wires = std::decay_t<decltype(w[0])>;
     size_t at = nn;
     std::vector<const Wires *> counts;
@@ -3290,7 +3478,7 @@ class RangeLoweringImpl : Lowering {
     for (size_t k = 0; k < nn; ++k)
       for (size_t i = rg[k].first; i < rg[k].second; ++i)
         needles.push_back(w[k][i]);
-    assert_log_derivative(lc, needles, alpha, counts, wt);
+    assert_log_derivative(lc, needles, alpha, counts, wt, log);
   }
 
   D &d_;

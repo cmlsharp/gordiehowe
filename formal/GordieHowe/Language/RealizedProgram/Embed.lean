@@ -14,23 +14,26 @@ public import GordieHowe.Language.RealizedProgram.Source
 # GordieHowe: programs that share a part up to a renaming
 
 Two realized programs of one interpretation can hold one part (a set of values, shared
-expressions and predicates) up to a renaming of the value and shared-expression identifiers: the
-emulated ML-DSA program at the ROM parameters holds the native one's domain `H` with every value identifier one
-larger and every shared-expression identifier two larger (export `c825eb05`). This file transports
-that part's semantics:
+expressions and predicates) up to a renaming of the value, shared-expression and challenge
+identifiers: the emulated ML-DSA program at the ROM parameters holds the native one's domain `H`
+with every value identifier one larger and every shared-expression identifier two larger (export
+`c825eb05`), and the ML-DSA ring programs hold parts of the ML-DSA programs with every challenge
+identifier one larger. This file transports that part's semantics:
 
-* **the renaming** (`Renaming`, `Renaming.expr`, `Renaming.kind`) of an expression's leaves,
+* **the renaming** (`Renaming`, `Renaming.expr`, `Renaming.kind?`) of an expression's leaves,
   coefficients and references and of a value's kind;
-* **expressions** (`Renaming.len_expr`, `Renaming.eval_expr`): a renamed expression has the
-  original's length and value, where the renamed values have the originals' sizes and readings,
-  for an expression whose named operators read no value (`Expr.opsFree`, `NamedOp.valueFree`);
+* **expressions** (`Renaming.len_expr`, `Renaming.eval_expr`, `Renaming.evalInt_expr`): a renamed
+  expression has the original's length and value, in the field and on the integers, where the
+  renamed values have the originals' sizes and readings, for an expression whose named operators
+  read no value (`Expr.opsFree`, `NamedOp.valueFree`);
 * **the embedding** (`GordieHowe.RealizedProgram.Embedding`, decided per program pair): the values `V` and shared
   expressions `R` of the part, renamed, with their kinds, sizes, fields and types, closed under
   what they read;
 * **environments** (`GordieHowe.RealizedProgram.pullEnv`): an environment of the larger program read as one of the
   smaller, through the renaming, `0` outside `V`; the readers agree on `V` (`reader_pullEnv`),
-  the shared expressions on `R`, and a renamed predicate `equal` holds in one exactly when it
-  holds in the other (`holdsAt_pullEnv`).
+  as do the integer readings (`intOf_pullEnv`) and the shared expressions on `R`, and a renamed
+  predicate `equal` holds in one exactly when it holds in the other (`holdsAt_pullEnv`), as does
+  a renamed range `in` or `mod_q` (`bodyCorrB`, `holdsAt_pullEnv_body`).
 
 The values a program reads must be read in identifier order (`GordieHowe.RealizedProgram.ValuesOrdered`), so a
 value's reading does not depend on the fuel past its identifier.
@@ -93,12 +96,15 @@ end
 
 /-! ## The renaming -/
 
-/-- **A renaming of identifiers**: of values (`val`) and of shared expressions (`ref`). -/
+/-- **A renaming of identifiers**: of values (`val`), of shared expressions (`ref`) and of
+challenges (`chal`). -/
 structure Renaming where
   /-- The new identifier of a value. -/
   val : ℕ → ℕ
   /-- The new identifier of a shared expression. -/
   ref : ℕ → ℕ
+  /-- The new identifier of a challenge. -/
+  chal : ℕ → ℕ
 
 namespace Renaming
 
@@ -135,18 +141,19 @@ def exprs : List Expr → List Expr
 
 end
 
-/-- **A value's kind renamed**, for the kinds an embedding holds: a bit view's words and a pad
-copy's late value renamed, the others kept; `none` for a public expression, an opaque function of
-arguments, a message and a bound value. -/
+/-- **A value's kind renamed**, for the kinds an embedding holds: a challenge's identifier, a bit
+view's words, a pad copy's late value and a bound value's expression renamed, the others kept;
+`none` for a public expression, an opaque function of arguments and a message. -/
 def kind? : Kind → Option Kind
   | .priv => some .priv
   | .pub .input => some (.pub .input)
   | .pub (.opaque n []) => some (.pub (.opaque n []))
   | .constant es => some (.constant es)
-  | .challenge c => some (.challenge c)
+  | .challenge c => some (.challenge (σ.chal c))
   | .late => some .late
   | .bits w sel => some (.bits (σ.val w) sel)
   | .padCopy v m => some (.padCopy (σ.val v) m)
+  | .bound e => some (.bound (σ.expr e))
   | _ => none
 
 /-- **A value's kind corresponds**: the larger program's kind is the renamed kind (`kind?`). -/
@@ -160,6 +167,7 @@ def kindCorr (k k' : Kind) : Bool :=
   | some .late, .late => true
   | some (.bits w sel), .bits w' sel' => w == w' && decide (sel = sel')
   | some (.padCopy v m), .padCopy v' m' => v == v' && m == m'
+  | some (.bound e), .bound e' => e.beq e'
   | _, _ => false
 
 /-! ## Renamed expressions -/
@@ -338,6 +346,141 @@ theorem evalList_exprs {f : ℕ} {leaf : ir.Valuation I} {leaf' : ir'.Valuation 
 
 end
 
+/-- **A coefficient's integer value renamed** is the original's, where the renamed values have the
+originals' integer readings. -/
+theorem coef_evalInt {f : ℕ} {il il' : ℕ → ℕ → ℤ} {c : Coef}
+    (hl : ∀ v ∈ c.nodes, ∀ i, il' (σ.val v) i = il v i) :
+    Coef.evalInt (I := I) f il' (σ.coef c) = Coef.evalInt (I := I) f il c := by
+  cases c with
+  | const => rfl
+  | node v i => exact hl v (by simp [Coef.nodes]) i
+
+/-- **A named operator that reads no value has the same integer form in every program.** -/
+theorem applyInt_of_valueFree {f : ℕ} {leaf : ir.Valuation I} {leaf' : ir'.Valuation I}
+    {op : NamedOp} (h : op.valueFree = true) :
+    NamedOp.applyInt ir' f leaf' op = NamedOp.applyInt ir f leaf op := by
+  funext x j
+  unfold NamedOp.applyInt
+  rw [NamedOp.block_of_valueFree (leaf := leaf') (leaf' := leaf) h,
+    NamedOp.rows_of_valueFree (ir := ir') (ir' := ir) h,
+    NamedOp.cols_of_valueFree (ir := ir') (ir' := ir) h]
+
+mutual
+
+/-- **A renamed expression has the original's integer value**, where the renamed values have the
+originals' sizes and integer readings and the renamed shared expressions the originals' lengths
+and integer values, for an expression whose named operators read no value. -/
+theorem evalInt_expr {f : ℕ} {leaf : ir.Valuation I} {leaf' : ir'.Valuation I}
+    {il il' : ℕ → ℕ → ℤ} {iref iref' : ℕ → ℕ → ℤ} {rl rl' : ℕ → ℕ} : ∀ (e : Expr),
+    e.opsFree = true →
+    (∀ v ∈ e.directNodes, (ir'.value (σ.val v)).size = (ir.value v).size ∧
+      ∀ i, il' (σ.val v) i = il v i) →
+    (∀ k ∈ e.refs, rl' (σ.ref k) = rl k ∧ iref' (σ.ref k) = iref k) →
+    Expr.evalInt ir' f leaf' il' iref' rl' (σ.expr e) = Expr.evalInt ir f leaf il iref rl e
+  | .leaf v, _, hs, _ => by
+    funext i
+    exact (hs v (by simp [Expr.directNodes])).2 i
+  | .add e e', ho, hs, hr | .sub e e', ho, hs, hr | .mul e e', ho, hs, hr => by
+    simp only [Expr.opsFree, Bool.and_eq_true] at ho
+    simp only [Expr.directNodes, Expr.refs, List.mem_append] at hs hr
+    funext i
+    simp only [expr, Expr.evalInt,
+      evalInt_expr (leaf := leaf) (leaf' := leaf')
+        e ho.1 (fun v hv => hs v (.inl hv)) fun k hk => hr k (.inl hk),
+      evalInt_expr (leaf := leaf) (leaf' := leaf')
+        e' ho.2 (fun v hv => hs v (.inr hv)) fun k hk => hr k (.inr hk)]
+  | .concat e e', ho, hs, hr => by
+    simp only [Expr.opsFree, Bool.and_eq_true] at ho
+    simp only [Expr.directNodes, Expr.refs, List.mem_append] at hs hr
+    funext i
+    simp only [expr, Expr.evalInt,
+      evalInt_expr (leaf := leaf) (leaf' := leaf')
+        e ho.1 (fun v hv => hs v (.inl hv)) fun k hk => hr k (.inl hk),
+      evalInt_expr (leaf := leaf) (leaf' := leaf')
+        e' ho.2 (fun v hv => hs v (.inr hv)) fun k hk => hr k (.inr hk),
+      len_expr σ e ho.1 (fun v hv => (hs v (.inl hv)).1) fun k hk => (hr k (.inl hk)).1]
+  | .scale c e, ho, hs, hr => by
+    simp only [Expr.opsFree] at ho
+    simp only [Expr.directNodes, Expr.refs, List.mem_append] at hs hr
+    funext i
+    simp only [expr, Expr.evalInt, evalInt_expr (leaf := leaf) (leaf' := leaf')
+                            e ho (fun v hv => hs v (.inr hv)) hr,
+      coef_evalInt σ fun v hv => (hs v (.inl hv)).2]
+  | .reindex idx e, ho, hs, hr => by
+    simp only [Expr.opsFree] at ho
+    simp only [Expr.directNodes, Expr.refs] at hs hr
+    funext i
+    simp only [expr, Expr.evalInt, evalInt_expr (leaf := leaf) (leaf' := leaf') e ho hs hr]
+  | .prod n e, ho, hs, hr => by
+    simp only [Expr.opsFree] at ho
+    simp only [Expr.directNodes, Expr.refs] at hs hr
+    funext i
+    simp only [expr, Expr.evalInt, evalInt_expr (leaf := leaf) (leaf' := leaf') e ho hs hr]
+  | .linear rows e, ho, hs, hr => by
+    simp only [Expr.opsFree] at ho
+    simp only [Expr.directNodes, Expr.refs, List.mem_append] at hs hr
+    funext i
+    simp only [expr, Expr.evalInt, evalInt_expr (leaf := leaf) (leaf' := leaf')
+                            e ho (fun v hv => hs v (.inr hv)) hr]
+    rw [show (rows.map (·.map fun t => (t.1, σ.coef t.2))).getD i [] =
+        (rows.getD i []).map (fun t => (t.1, σ.coef t.2)) by
+      simp only [List.getD_eq_getElem?_getD, List.getElem?_map]
+      cases rows[i]? <;> rfl, List.map_map]
+    refine congrArg List.sum (List.map_congr_left fun t ht => ?_)
+    simp only [Function.comp]
+    rw [coef_evalInt σ fun v hv => (hs v (.inl (mem_rowNodes_of_mem_getD ht hv))).2]
+  | .mux b t e, ho, hs, hr => by
+    simp only [Expr.opsFree, Bool.and_eq_true] at ho
+    simp only [Expr.directNodes, Expr.refs, List.mem_append] at hs hr
+    funext i
+    simp only [expr, Expr.evalInt,
+      evalInt_expr (leaf := leaf) (leaf' := leaf')
+        b ho.1.1 (fun v hv => hs v (.inl (.inl hv))) fun k hk => hr k (.inl (.inl hk)),
+      evalInt_expr (leaf := leaf) (leaf' := leaf')
+        t ho.1.2 (fun v hv => hs v (.inl (.inr hv))) fun k hk => hr k (.inl (.inr hk)),
+      evalInt_expr (leaf := leaf) (leaf' := leaf')
+        e ho.2 (fun v hv => hs v (.inr hv)) fun k hk => hr k (.inr hk)]
+  | .apply op e, ho, hs, hr => by
+    simp only [Expr.opsFree, Bool.and_eq_true] at ho
+    simp only [Expr.directNodes, Expr.refs, List.mem_append] at hs hr
+    funext i
+    simp only [expr, Expr.evalInt, evalInt_expr (leaf := leaf) (leaf' := leaf')
+                            e ho.2 (fun v hv => hs v (.inr hv)) hr,
+      applyInt_of_valueFree (leaf := leaf) (leaf' := leaf') ho.1]
+  | .ref k, _, _, hr => by
+    funext i
+    simp only [expr, Expr.evalInt, (hr k (by simp [Expr.refs])).2]
+  | .logic op w args, ho, hs, hr => by
+    simp only [Expr.opsFree] at ho
+    simp only [Expr.directNodes, Expr.refs] at hs hr
+    funext i
+    simp only [expr, Expr.evalInt, evalIntList_exprs (leaf := leaf) (leaf' := leaf') args ho hs hr]
+
+theorem evalIntList_exprs {f : ℕ} {leaf : ir.Valuation I} {leaf' : ir'.Valuation I}
+    {il il' : ℕ → ℕ → ℤ} {iref iref' : ℕ → ℕ → ℤ} {rl rl' : ℕ → ℕ} : ∀ (es : List Expr),
+    Expr.opsFreeList es = true →
+    (∀ v ∈ Expr.directNodesList es, (ir'.value (σ.val v)).size = (ir.value v).size ∧
+      ∀ i, il' (σ.val v) i = il v i) →
+    (∀ k ∈ Expr.refsList es, rl' (σ.ref k) = rl k ∧ iref' (σ.ref k) = iref k) →
+    Expr.evalIntList ir' f leaf' il' iref' rl' (σ.exprs es) =
+      Expr.evalIntList ir f leaf il iref rl es
+  | [], _, _, _ => rfl
+  | e :: es, ho, hs, hr => by
+    simp only [Expr.opsFreeList, Bool.and_eq_true] at ho
+    simp only [Expr.directNodesList, Expr.refsList, List.mem_append] at hs hr
+    simp only [exprs, Expr.evalIntList,
+      evalInt_expr (leaf := leaf) (leaf' := leaf')
+        e ho.1 (fun v hv => hs v (.inl hv)) (fun k hk => hr k (.inl hk)),
+      evalIntList_exprs (leaf := leaf) (leaf' := leaf')
+        es ho.2 (fun v hv => hs v (.inr hv)) fun k hk => hr k (.inr hk)]
+
+end
+
+/-- **A list of expressions renamed** is the list of the renamed expressions. -/
+theorem exprs_eq_map : ∀ es : List Expr, σ.exprs es = es.map σ.expr
+  | [] => rfl
+  | e :: es => by rw [exprs, exprs_eq_map es, List.map_cons]
+
 mutual
 
 theorem mem_refs_expr {k : ℕ} : ∀ {e : Expr}, k ∈ e.refs → σ.ref k ∈ (σ.expr e).refs
@@ -457,8 +600,9 @@ variable (ir ir') in
 `σ`**: both programs read their values in identifier order and their shared expressions read
 earlier entries; every value of `V` is renamed to a value of `ir'` of the same field, size, type
 and phase, of the renamed kind (`Renaming.kindCorr`), reading only values of `V`; a challenge
-value's challenge has the same field in both; every shared expression of `R` is renamed to `ir'`'s
-entry, reads only values of `V` and entries of `R`, and has no named operator reading a value. -/
+value's challenge and its renamed challenge have the same field; every shared expression of `R`
+is renamed to `ir'`'s entry, reads only values of `V` and entries of `R`, and has no named
+operator reading a value. -/
 structure Embedding (σ : Renaming) (V R : List ℕ) : Prop where
   /-- `ir` reads its values in identifier order. -/
   ordered : ir.ValuesOrdered
@@ -476,8 +620,8 @@ structure Embedding (σ : Renaming) (V R : List ℕ) : Prop where
     (ir'.value (σ.val v)).phase = (ir.value v).phase ∧
     σ.kindCorr (ir.value v).kind (ir'.value (σ.val v)).kind = true ∧
     ∀ u ∈ ir.valueDeps v, u ∈ V
-  /-- A challenge value's challenge has the same field in both programs. -/
-  chal : ∀ v ∈ V, ∀ c ∈ (ir.value v).kind.challenge?, ir'.chalField c = ir.chalField c
+  /-- A challenge value's challenge and its renamed challenge have the same field. -/
+  chal : ∀ v ∈ V, ∀ c ∈ (ir.value v).kind.challenge?, ir'.chalField (σ.chal c) = ir.chalField c
   /-- The shared expressions of `R`, renamed. -/
   refs : ∀ k ∈ R, k < ir.exprs.length ∧ σ.ref k < ir'.exprs.length ∧
     (σ.expr (ir.expr k)).beq (ir'.expr (σ.ref k)) = true ∧ (ir.expr k).opsFree = true ∧
@@ -492,7 +636,7 @@ theorem embedding_iff {σ : Renaming} {V R : List ℕ} : ir.Embedding ir' σ V R
       (ir'.value (σ.val v)).phase = (ir.value v).phase ∧
       σ.kindCorr (ir.value v).kind (ir'.value (σ.val v)).kind = true ∧
       ∀ u ∈ ir.valueDeps v, u ∈ V) ∧
-    (∀ v ∈ V, ∀ c ∈ (ir.value v).kind.challenge?, ir'.chalField c = ir.chalField c) ∧
+    (∀ v ∈ V, ∀ c ∈ (ir.value v).kind.challenge?, ir'.chalField (σ.chal c) = ir.chalField c) ∧
     (∀ k ∈ R, k < ir.exprs.length ∧ σ.ref k < ir'.exprs.length ∧
       (σ.expr (ir.expr k)).beq (ir'.expr (σ.ref k)) = true ∧ (ir.expr k).opsFree = true ∧
       (∀ v ∈ (ir.expr k).directNodes, v ∈ V) ∧ ∀ k' ∈ (ir.expr k).refs, k' ∈ R) :=
@@ -505,12 +649,12 @@ theorem embedding_iff {σ : Renaming} {V R : List ℕ} : ir.Embedding ir' σ V R
 variable (ir) in
 /-- **An environment of `ir'` read as one of `ir`** through the renaming `σ`: the statement, the
 committed assignment and the late values of value `v ∈ V` are those of `σ.val v`, `0` outside
-`V`; the challenges are `ir'`'s. -/
+`V`; challenge `j` is `ir'`'s challenge `σ.chal j`. -/
 def pullEnv (σ : Renaming) (V : List ℕ) (e' : ir'.Env I) : ir.Env I where
   stmt v i := if v ∈ V then castElt (e'.stmt (σ.val v) i) else 0
   asg := ⟨fun v i => if v ∈ V then castElt (e'.asg.val (σ.val v) i) else 0,
     fun v i => if v ∈ V then castElt (e'.asg.pad (σ.val v) i) else 0⟩
-  chal j i := castElt (e'.chal j i)
+  chal j i := castElt (e'.chal (σ.chal j) i)
   late v i := if v ∈ V then castElt (e'.late (σ.val v) i) else 0
 
 variable {σ : Renaming} {V R : List ℕ}
@@ -548,6 +692,7 @@ theorem read_pullEnv (hE : ir.Embedding ir' σ V R) (e' : ir'.Env I) :
       obtain ⟨-, -, hfw, -, htyw, -⟩ := hE.vals w hw
       simp only [bitView, read_pullEnv hE e' n w hw, hsz, hty, htyw,
         coord_castElt_of_eq hfw, castElt_ofBool_of_eq hf]
+    · simp only [pullEnv, if_pos hv]
     · simp only [pullEnv, if_pos hv]
 
 /-- **The readers agree on `V`.** -/
@@ -655,6 +800,175 @@ theorem holdsAt_pullEnv (hE : ir.Embedding ir' σ V R) (e' : ir'.Env I) {b b' : 
       evalE_rename hE e' hoy hvy hry]
   · exact absurd hb Bool.false_ne_true
 
+/-! ## Integer readings through the renaming -/
+
+theorem centered_of_eq {a b : ℕ} (h : a = b) (c : ℕ) : (I b).centered c = (I a).centered c := by
+  subst h
+  rfl
+
+/-- **The integer readings agree on `V`** (`RealizedProgram.intOf`): a constant's entries, a bound
+value's and any other value's readings are the renamed value's. -/
+theorem intOf_pullEnv (hE : ir.Embedding ir' σ V R) (e' : ir'.Env I) {v : ℕ} (hv : v ∈ V)
+    (i : ℕ) : ir'.intOf (ir'.reader e') (σ.val v) i =
+      ir.intOf (ir.reader (ir.pullEnv σ V e')) v i := by
+  obtain ⟨-, -, hf, -, -, -, hk, -⟩ := hE.vals v hv
+  have hr := reader_pullEnv hE e' hv i
+  rcases hkv : (ir.value v).kind with _ | ⟨_ | ⟨name, _ | ⟨a, args⟩⟩ | x⟩ | es | c | _ |
+      ⟨w, sel⟩ | ⟨u, mp⟩ | u | x <;>
+    rcases hkv' : (ir'.value (σ.val v)).kind with _ | ⟨_ | ⟨name', _ | ⟨a', args'⟩⟩ | x'⟩ | es' |
+      c' | _ | ⟨w', sel'⟩ | ⟨u', mp'⟩ | u' | x' <;>
+    simp only [Renaming.kindCorr, Renaming.kind?, hkv, hkv', reduceCtorEq] at hk <;>
+    simp only [intOf, hkv, hkv', hr, toNat_castElt hf]
+  · simp only [beq_iff_eq] at hk
+    rw [hk, centered_of_eq hf]
+  · rw [centered_of_eq hf]
+
+/-- **A shared expression's integer value does not depend on the levels** past its index, when the
+shared expressions read only entries of smaller index. -/
+private theorem refInt_levels (ho : ir.RefsOrdered) (rd : ir.Valuation I) (f : ℕ) :
+    ∀ k, k < ir.exprs.length → ∀ n m, k < n → k < m → ir.refInt rd f n k = ir.refInt rd f m k
+  | k, hk, n + 1, m + 1, hn, hm => by
+    funext i
+    simp only [refInt]
+    exact congrFun (Expr.evalInt_congr ir (ir.expr k) (fun _ _ => ⟨rfl, rfl⟩) fun k' hk' =>
+      have := ho k hk k' hk'
+      refInt_levels ho rd f k' (by omega) n m (by omega) (by omega)) i
+
+/-- **The renamed shared expressions have the originals' integer values**, where the values of `V`
+have alike integer readings. -/
+theorem refInt_rename (hE : ir.Embedding ir' σ V R) {f : ℕ} {rd : ir.Valuation I}
+    {rd' : ir'.Valuation I} (hl : ∀ v ∈ V, ∀ i, ir'.intOf rd' (σ.val v) i = ir.intOf rd v i) :
+    ∀ k ∈ R, ir'.refInt rd' f ir'.exprs.length (σ.ref k) = ir.refInt rd f ir.exprs.length k := by
+  intro k
+  induction k using Nat.strong_induction_on with
+  | _ k ih =>
+    intro hk
+    obtain ⟨hlt, hlt', -, ho, hv, hr⟩ := hE.refs k hk
+    rw [refInt_levels hE.refsOrdered rd f k hlt _ (k + 1) hlt (by omega),
+      refInt_levels hE.refsOrdered' rd' f (σ.ref k) hlt' _ (σ.ref k + 1) hlt' (by omega)]
+    simp only [refInt]
+    rw [expr_eq hE hk]
+    refine Renaming.evalInt_expr σ _ ho
+      (fun v hv' => ⟨(hE.vals v (hv v hv')).2.2.2.1, hl v (hv v hv')⟩) fun k' hk' => ?_
+    have hkk := hE.refsOrdered k hlt k' hk'
+    have hk'R := hr k' hk'
+    obtain ⟨hlt₁, hlt₁', -⟩ := hE.refs k' hk'R
+    have hσ : σ.ref k' < σ.ref k := hE.refsOrdered' (σ.ref k) hlt' (σ.ref k')
+      (by rw [expr_eq hE hk]; exact σ.mem_refs_expr hk')
+    refine ⟨refLen_rename hE k' hk'R, ?_⟩
+    rw [refInt_levels hE.refsOrdered' rd' f (σ.ref k') hlt₁' (σ.ref k) ir'.exprs.length hσ hlt₁',
+      refInt_levels hE.refsOrdered rd f k' hlt₁ k ir.exprs.length hkk hlt₁]
+    exact ih k' hkk hk'R
+
+/-- **A renamed expression has the original's integer value** in domain `d` in the environment
+read through the renaming, the domain having one field in both programs. -/
+theorem evalIntWith_rename (hE : ir.Embedding ir' σ V R) (e' : ir'.Env I) {d : ℕ}
+    (hd : ir'.domainField d = ir.domainField d) {e : Expr} (ho : e.opsFree = true)
+    (hv : ∀ v ∈ e.directNodes, v ∈ V) (hr : ∀ k ∈ e.refs, k ∈ R) :
+    ir'.evalIntWith (ir'.reader e') d (σ.expr e) =
+      ir.evalIntWith (ir.reader (ir.pullEnv σ V e')) d e := by
+  have hl := fun v (hv' : v ∈ V) i => intOf_pullEnv hE e' hv' i
+  funext i
+  simp only [evalIntWith]
+  rw [hd, Renaming.evalInt_expr σ e ho (leaf := ir.reader (ir.pullEnv σ V e'))
+    (fun v hv' => ⟨(hE.vals v (hv v hv')).2.2.2.1, hl v (hv v hv')⟩)
+    fun k hk => ⟨refLen_rename hE k (hr k hk), refInt_rename hE hl k (hr k hk)⟩]
+
+/-! ## Ranges and congruences through the renaming -/
+
+/-- **An expression of the part**: its named operators read no value, it reads values of `V` and
+shared expressions of `R`. -/
+def partExprB (V R : List ℕ) (x : Expr) : Bool :=
+  x.opsFree && x.directNodes.all (· ∈ V) && x.refs.all (· ∈ R)
+
+theorem partExprB_iff {x : Expr} : partExprB V R x = true ↔
+    x.opsFree = true ∧ (∀ v ∈ x.directNodes, v ∈ V) ∧ ∀ k ∈ x.refs, k ∈ R := by
+  simp only [partExprB, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq, and_assoc]
+
+/-- **An expression of `ir'` is a renamed expression of the part.** -/
+def exprCorrB (σ : Renaming) (V R : List ℕ) (x x' : Expr) : Bool :=
+  (σ.expr x).beq x' && partExprB V R x
+
+/-- **A quotient of `ir'` is the renamed quotient of the part**, or neither program has one. -/
+def quotCorrB (σ : Renaming) (V R : List ℕ) : Option Expr → Option Expr → Bool
+  | none, none => true
+  | some Q, some Q' => exprCorrB σ V R Q Q'
+  | _, _ => false
+
+variable (ir ir') in
+/-- **A predicate of `ir'` is a renamed one of `ir`**, a body of the part: an `equal`
+(`equalCorrB`); a range `in` of one range, one domain of one field in both, the renamed
+nonempty records of the part; a `mod_q` of one modulus, one domain of one field in both, the
+renamed sides of the part, with one product flag, quotient bounds and renamed quotient. -/
+def bodyCorrB (σ : Renaming) (V R : List ℕ) : PredBody → PredBody → Bool
+  | .equal d x y t, .equal d' x' y' t' =>
+    ir.equalCorrB ir' σ V R (.equal d x y t) (.equal d' x' y' t')
+  | .mem d rs (.range n) _, .mem d' rs' (.range n') _ =>
+    d == d' && ir'.domainField d == ir.domainField d && n == n' && !rs.isEmpty &&
+      Expr.beqList (σ.exprs rs) rs' && rs.all (partExprB V R)
+  | .mod d q x y real, .mod d' q' x' y' real' =>
+    d == d' && ir'.domainField d == ir.domainField d && q == q' && exprCorrB σ V R x x' &&
+      exprCorrB σ V R y y' && real.form.isProduct == real'.form.isProduct &&
+      real.quotientLo == real'.quotientLo && real.qmax == real'.qmax &&
+      quotCorrB σ V R real.quotient real'.quotient
+  | _, _ => false
+
+theorem exprCorrB_iff {x x' : Expr} : exprCorrB σ V R x x' = true ↔
+    x' = σ.expr x ∧ x.opsFree = true ∧ (∀ v ∈ x.directNodes, v ∈ V) ∧ ∀ k ∈ x.refs, k ∈ R := by
+  rw [exprCorrB, Bool.and_eq_true, partExprB_iff]
+  exact ⟨fun h => ⟨(Expr.eq_of_beq h.1).symm, h.2⟩,
+    fun h => ⟨by rw [h.1]; exact Expr.beq_self _, h.2⟩⟩
+
+/-- **A renamed range `in` or `mod_q` holds in an environment of `ir'`**, as a renamed `equal`
+does (`holdsAt_pullEnv`), exactly when the original holds in the environment read through the
+renaming. -/
+theorem holdsAt_pullEnv_body (hE : ir.Embedding ir' σ V R) (e' : ir'.Env I) {b b' : PredBody}
+    (hb : ir.bodyCorrB ir' σ V R b b' = true) :
+    ir'.HoldsAt e' b' ↔ ir.HoldsAt (ir.pullEnv σ V e') b := by
+  unfold bodyCorrB at hb
+  split at hb
+  · exact holdsAt_pullEnv hE e' hb
+  · rename_i d rs n _ d' rs' n' _
+    simp only [Bool.and_eq_true, beq_iff_eq, Bool.not_eq_true', List.isEmpty_eq_false_iff,
+      List.all_eq_true] at hb
+    obtain ⟨⟨⟨⟨⟨rfl, hd⟩, rfl⟩, hne⟩, hrs⟩, hok⟩ := hb
+    have hok' := fun x (hx : x ∈ rs) => partExprB_iff.1 (hok x hx)
+    rw [← Expr.eq_of_beqList hrs, Renaming.exprs_eq_map]
+    have hhead : (rs.map σ.expr).headD default = σ.expr (rs.headD default) := by
+      cases rs with
+      | nil => exact absurd rfl hne
+      | cons => rfl
+    have hmem : rs.headD default ∈ rs := by
+      cases rs with
+      | nil => exact absurd rfl hne
+      | cons => simp
+    simp only [HoldsAt, HoldsWith, InSetWith, InRows, evalWith, hhead]
+    rw [exprLen_rename hE (hok' _ hmem).1 (hok' _ hmem).2.1 (hok' _ hmem).2.2, hd]
+    refine forall_congr' fun i => imp_congr_right fun _ => ?_
+    rw [List.forall_mem_map]
+    refine forall₂_congr fun x hx => ?_
+    rw [evalE_rename hE e' (hok' x hx).1 (hok' x hx).2.1 (hok' x hx).2.2]
+  · rename_i d q x y real d' q' x' y' real'
+    simp only [Bool.and_eq_true, beq_iff_eq] at hb
+    obtain ⟨⟨⟨⟨⟨⟨⟨⟨rfl, hd⟩, rfl⟩, hx⟩, hy⟩, hprod⟩, hlo⟩, hqmax⟩, hq⟩ := hb
+    obtain ⟨rfl, hX⟩ := exprCorrB_iff.1 hx
+    obtain ⟨rfl, hY⟩ := exprCorrB_iff.1 hy
+    simp only [HoldsAt, HoldsWith]
+    rw [exprLen_rename hE hX.1 hX.2.1 hX.2.2, evalIntWith_rename hE e' hd hX.1 hX.2.1 hX.2.2,
+      evalIntWith_rename hE e' hd hY.1 hY.2.1 hY.2.2]
+    refine and_congr Iff.rfl ?_
+    rcases hQ : real.quotient with _ | Q <;> rcases hQ' : real'.quotient with _ | Q' <;>
+      simp only [quotCorrB, hQ, hQ', reduceCtorEq] at hq
+    · simp only [ProductQuotWith, hQ, hQ']
+    · obtain ⟨rfl, hQo⟩ := exprCorrB_iff.1 hq
+      simp only [ProductQuotWith, hQ, hQ', evalWith, hprod, hlo, hqmax]
+      rw [exprLen_rename hE hX.1 hX.2.1 hX.2.2, evalIntWith_rename hE e' hd hX.1 hX.2.1 hX.2.2,
+        evalIntWith_rename hE e' hd hY.1 hY.2.1 hY.2.2,
+        evalIntWith_rename hE e' hd hQo.1 hQo.2.1 hQo.2.2, hd,
+        evalE_rename hE e' hX.1 hX.2.1 hX.2.2, evalE_rename hE e' hY.1 hY.2.1 hY.2.2,
+        evalE_rename hE e' hQo.1 hQo.2.1 hQo.2.2]
+  · exact absurd hb Bool.false_ne_true
+
 /-- **A value of `V` lies in its type** in the environment read through the renaming where its
 renamed value does. -/
 theorem inType_pullEnv (hE : ir.Embedding ir' σ V R) (e' : ir'.Env I) {v : ℕ} (hv : v ∈ V)
@@ -665,18 +979,21 @@ theorem inType_pullEnv (hE : ir.Embedding ir' σ V R) (e' : ir'.Env I) {v : ℕ}
   rw [reader_pullEnv hE e' hv, ← hty]
   exact inType_castElt_of_eq hf _ h
 
-/-- **Environments agreeing on what is fixed when challenge `j` is drawn agree read through the
-renaming**, the challenges having the same phases in both programs. -/
+/-- **Environments agreeing on what is fixed when challenge `σ.chal j` is drawn agree, read
+through the renaming, on what is fixed when challenge `j` is drawn**, each renamed challenge
+having the original's phase and the challenge renaming keeping the order. -/
 theorem eqUpTo_pullEnv (hE : ir.Embedding ir' σ V R)
-    (hph : ∀ j, (ir'.challenge j).phase = (ir.challenge j).phase) {j : ℕ} {e₁ e₂ : ir'.Env I}
-    (h : Env.EqUpTo j e₁ e₂) : Env.EqUpTo j (ir.pullEnv σ V e₁) (ir.pullEnv σ V e₂) where
+    (hph : ∀ j, (ir'.challenge (σ.chal j)).phase = (ir.challenge j).phase)
+    (hmono : Monotone σ.chal) {j : ℕ} {e₁ e₂ : ir'.Env I}
+    (h : Env.EqUpTo (σ.chal j) e₁ e₂) : Env.EqUpTo j (ir.pullEnv σ V e₁) (ir.pullEnv σ V e₂) where
   stmt := by simp only [pullEnv, h.stmt]
   asg := by simp only [pullEnv, h.asg]
   chal j' hj := by
-    have : ir'.ChalBefore j' j := by
+    have : ir'.ChalBefore (σ.chal j') (σ.chal j) := by
       unfold ChalBefore at hj ⊢
-      rwa [hph, hph]
-    simp only [pullEnv, h.chal j' this]
+      rw [hph, hph]
+      exact hj.imp_right fun h' => ⟨h'.1, hmono h'.2⟩
+    simp only [pullEnv, h.chal (σ.chal j') this]
   late v hv := by
     funext i
     simp only [pullEnv]

@@ -32,6 +32,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <functional>
 #include <map>
 #include <optional>
@@ -48,6 +49,7 @@
 #include "gordiehowe/compiler/plan_export.h"
 #include "gordiehowe/compiler/realized_program.h"
 #include "gordiehowe/expr.h"
+#include "gordiehowe/ops/integer_congruence.h"
 #include "gordiehowe/ops/operators.h"
 #include "gordiehowe/system.h"
 
@@ -117,6 +119,47 @@ struct BigNat {
   }
 };
 
+// The role of a predicate of a MAC (Certificates::CStep::MacRole) at the
+// site whose tail is named T, from the predicate's name N (ROW: a
+// lowering's affine row; H: the MAC's H predicate), by the names the
+// lowerings give: the tail T itself (mac.h, `rec.tail`), the H predicate,
+// the accumulator row T.A and group G's row T.A.gG (mod.h, mod_row), the
+// residues' Boolean check T.r.boolean, the quotient-digit lookup T.gq, the
+// quotient lookups T.final.q and T.q, the digit lookups T.low and T.high
+// and the no-wrap range T.nowrap. Sets ST's role (and group); false when
+// the name has no role.
+inline bool mac_role(const std::string &n, bool row, bool h, const std::string &t,
+                     ir::Certificates::CStep &st) {
+  using CS = ir::Certificates::CStep;
+  const std::string g = t + ".A.g";
+  if (n == t && !row) {
+    st.role = CS::kTail;
+  } else if (h) {
+    st.role = CS::kH;
+  } else if (n == t + ".A") {
+    st.role = CS::kAccRow;
+  } else if (n.size() > g.size() && n.compare(0, g.size(), g) == 0 &&
+             n.find_first_not_of("0123456789", g.size()) == std::string::npos) {
+    st.role = CS::kGroupRow;
+    st.group = size_t(std::stoul(n.substr(g.size())));
+  } else if (n == t + ".r.boolean") {
+    st.role = CS::kResidues;
+  } else if (n == t + ".gq") {
+    st.role = CS::kGqLookup;
+  } else if (n == t + ".final.q" || n == t + ".q") {
+    st.role = CS::kQuotLookup;
+  } else if (n == t + ".low") {
+    st.role = CS::kLowLookup;
+  } else if (n == t + ".high") {
+    st.role = CS::kTopLookup;
+  } else if (n == t + ".nowrap") {
+    st.role = CS::kWrap;
+  } else {
+    return false;
+  }
+  return true;
+}
+
 template <class S>
 class ProgramBuilder : Lowering {
  public:
@@ -127,6 +170,50 @@ class ProgramBuilder : Lowering {
   ir::Certificates take_certificates() { return std::move(certs_); }
   // Builds the derivations with the certificates.
   void want_derivations() { want_derivations_ = true; }
+  // Reports each integer equality placed in a circuit whose asserted node
+  // passed the shape check (GH_MOD0_ASSERT), as the export does.
+  void report_mod0() { report_mod0_ = true; }
+
+  // The printed forms, after run(), for the expression export
+  // (emit_export.h). The printed node of expression node X (an arena node
+  // of the program run() returned; a kRef when X is shared), kNone when
+  // the program prints no form of X.
+  Id printed_expr(const void *x) const {
+    auto it = memo_.find(x);
+    return it == memo_.end() ? kNone : it->second.e;
+  }
+  // The printed node of derived value ID (a kRef), kNone when none.
+  Id printed_derived(size_t id) const {
+    auto it = derived_.find(id);
+    return it == derived_.end() ? kNone : it->second.e;
+  }
+  // The printed definition of the bound or public expression value ID,
+  // kNone when it has none.
+  Id printed_value_def(size_t id) const {
+    auto it = vals_.find(id);
+    return it == vals_.end() ? kNone : it->second.expr;
+  }
+  // The kind of value ID ("" when it is no value).
+  std::string value_kind(size_t id) const {
+    auto it = vals_.find(id);
+    return it == vals_.end() ? std::string() : it->second.kind;
+  }
+  // The program's id of value KEY, SIZE_MAX when none.
+  size_t value_id(size_t key) const {
+    auto it = id_of_.find(key);
+    return it == id_of_.end() ? SIZE_MAX : it->second;
+  }
+  // The program's id of the message of late value ID, SIZE_MAX when none.
+  size_t message_of(size_t id) const {
+    for (const auto &[k, v] : vals_)
+      if (v.kind == "message" && v.ref == id) return value_id(k);
+    return SIZE_MAX;
+  }
+  // The program's code of field element X (its constants' encoding).
+  template <class F>
+  static std::string code_of(const F &f, const typename F::Elt &x) {
+    return enc(f, x);
+  }
 
   ir::Program run() {
     const auto &N = cs_.nodes();
@@ -151,6 +238,8 @@ class ProgramBuilder : Lowering {
       with_domain(d, [&](const auto &dm) { domain_predicates(dm); });
     with_domain_all([&](const auto &dm) { mod_predicates(dm); });
     cross_predicates();
+    equation_forms();
+    step_ones();
     finish();
     return std::move(P_);
   }
@@ -709,6 +798,13 @@ class ProgramBuilder : Lowering {
         return;
       case Base::kSubfield: {
         const size_t D = subfield_degree<F>(n.type.degree);
+        // The subfield of the field's own degree (the prime subfield of a
+        // prime field) is the field: typed Field, which no node enforces.
+        if (D == K) {
+          v.type = ir::VType::kField;
+          v.node_name = tree_node(dm, K);
+          return;
+        }
         v.type = ir::VType::kSub;
         v.sub = tree_node(dm, D);
         v.node_name = v.sub;
@@ -798,19 +894,24 @@ class ProgramBuilder : Lowering {
           } else {
             v.kind = "opaque";
             v.opaque = n.name;
-            // Its arguments are values, or the statement's bytes, which are
-            // no value (an opaque value with no argument reads the
-            // statement only).
+            // Its arguments are the values it reads. A value that also
+            // reads the statement's bytes, which are no value, is not
+            // determined by its arguments: it has none and is read from
+            // the statement (an opaque value with no argument).
+            bool reads_bytes = false;
             for (size_t a : n.deps) {
               if (cls_[a] == kValue) {
                 v.args.push_back(a);
-              } else if (!(N[a].kind == Kind::kPublicInput &&
-                           N[a].type.base == Base::kBytes)) {
+              } else if (N[a].kind == Kind::kPublicInput &&
+                         N[a].type.base == Base::kBytes) {
+                reads_bytes = true;
+              } else {
                 v.unmodeled = "opaque public value '" + n.name + "' reads '" +
                               N[a].name + "', which is neither a value nor "
                               "the statement's bytes";
               }
             }
+            if (reads_bytes) v.args.clear();
           }
           break;
         case Kind::kPrivateInput:
@@ -1038,8 +1139,10 @@ class ProgramBuilder : Lowering {
     derived_[id] = r;
     return r;
   }
-  // The definition of derived value ID: its binding, affine view, wiring
-  // view or expression.
+  // The definition of derived value ID: its binding, wiring view, affine
+  // view or expression. A wiring view is also kept as an affine view (a sum
+  // of gathers, Domain::wiring); it prints as its wiring, the form the
+  // circuit reads (CompiledDomain::view_wires).
   template <class F>
   Ex derived_def(const Domain<F> &d0, size_t id) {
     const Node &n = cs_.nodes()[id];
@@ -1047,16 +1150,23 @@ class ProgramBuilder : Lowering {
     with_domain(size_t(domain_of(id)), [&](const auto &d) {
       using G = std::decay_t<decltype(d.field())>;
       if constexpr (std::is_same_v<G, F>) {
+        // A binding is how the value is placed (read through its digits);
+        // otherwise its one definition, by form.
         if (auto b = bindings(d).find(id); b != bindings(d).end()) {
           out = lin(d, b->second);
-        } else if (auto l = derived_views(d).find(id);
-                   l != derived_views(d).end()) {
-          out = lin(d, l->second);
-        } else if (auto w = wiring_views(d).find(id);
-                   w != wiring_views(d).end()) {
-          out = wiring(d, w->second);
-        } else if (auto x = expr_values(d).find(id); x != expr_values(d).end()) {
-          out = convert(d, x->second);
+        } else if (const auto *def = d.def(id)) {
+          std::visit(
+              [&](const auto &x) {
+                using T = std::decay_t<decltype(x)>;
+                if constexpr (std::is_same_v<T, Wiring>) {
+                  out = wiring(d, x.srcs);
+                } else if constexpr (std::is_same_v<T, Affine<G>>) {
+                  out = lin(d, x.lin);
+                } else {
+                  out = convert(d, x.e);
+                }
+              },
+              *def);
         } else {
           export_fail("derived value '" + n.name + "' has no definition");
         }
@@ -1902,6 +2012,28 @@ class ProgramBuilder : Lowering {
     return t;
   }
 
+  // Why the asserted node E of an integer equality is not L + (-1) R over
+  // the recorded sides' own nodes ("" when it is), naming the rewrite.
+  template <class F>
+  static std::string int_eq_shape_error(const ExprPtr<F> &e,
+                                        const ExprPtr<F> &l,
+                                        const ExprPtr<F> &r, const F &f) {
+    if (e == nullptr || e->op != ExprOp::kAdd || e->kids.size() != 2)
+      return "the asserted node is no longer a sum (a lowering rewrote it)";
+    if (e->kids[0].get() != l.get())
+      return "the sum's left operand is not the recorded left side "
+             "(a lowering rewrote it)";
+    const ExprPtr<F> &s = e->kids[1];
+    if (s->op != ExprOp::kScale || s->kids.size() != 1 || s->c.size() != 1 ||
+        !(s->c[0] == f.mone()))
+      return "the sum's right operand is not a scaling by -1 "
+             "(a lowering rewrote it)";
+    if (s->kids[0].get() != r.get())
+      return "the scaled operand is not the recorded right side "
+             "(a lowering rewrote it)";
+    return "";
+  }
+
   template <class F>
   void domain_predicates(const Domain<F> &d) {
     const auto &N = cs_.nodes();
@@ -1916,6 +2048,11 @@ class ProgramBuilder : Lowering {
     std::map<std::string, const PlanRecords::ModEq *> integer;
     for (const auto &eq : cs_.records().mod_equalities)
       if (eq.integer && eq.domain == d.name) integer[eq.name] = &eq;
+    // The product forms of D (assert_mod over an integer side): their
+    // predicates are mod_m lhs R (product_predicate).
+    std::map<std::string, const PlanRecords::ProductModEq *> product;
+    for (const auto &eq : cs_.records().product_mod_equalities)
+      if (eq.domain == d.name) product[eq.name] = &eq;
     // The predicates (assert_zero, assert_true), each with its target.
     const auto &preds = d.predicates();
     if (plan.pred_targets.size() != preds.size())
@@ -1939,6 +2076,10 @@ class ProgramBuilder : Lowering {
       if (conv_products(pd.name)) p.role = "realization";
       p.p.domain = Id(di);
       p.p.origin = {ir::Origin::kDecl, Id(di), k};
+      if (auto it = product.find(pd.name); it != product.end()) {
+        product_predicate(d, std::move(p), *it->second);
+        continue;
+      }
       if (auto it = integer.find(pd.name); it != integer.end()) {
         const PlanRecords::ModEq &eq = *it->second;
         mod_names_.insert(eq.name);
@@ -1960,6 +2101,20 @@ class ProgramBuilder : Lowering {
         m.span = bound_str(eq.span);
         const ExprPtr<F> &lhs = *static_cast<const ExprPtr<F> *>(eq.lhs.get());
         const ExprPtr<F> &rhs = *static_cast<const ExprPtr<F> *>(eq.rhs.get());
+        // A circuit asserts the predicate's node lhs + (-1) rhs
+        // (integer_equality, compiler/mod.h), and the program prints the
+        // recorded sides: the node must still be that sum of the sides'
+        // own nodes, which a later lowering's rewrite of the predicate
+        // (rewrite_predicate) would break.
+        if (tg.where == Placement::kCircuit) {
+          const std::string why = int_eq_shape_error(pd.e, lhs, rhs, f);
+          if (!why.empty())
+            export_fail("integer equality '" + pd.name +
+                        "' placed in the circuit: " + why);
+          if (want_derivations_ || report_mod0_)
+            std::fprintf(stderr, "GH_MOD0_ASSERT domain=%s pred=%s ok\n",
+                         d.name.c_str(), pd.name.c_str());
+        }
         try {
           Ex l = convert(d, lhs);
           Ex r = convert(d, rhs);
@@ -2352,6 +2507,194 @@ class ProgramBuilder : Lowering {
       circuit_id_[di] = circuits_.size();
       circuits_.push_back({di, plan});
     }
+  }
+
+  // The product form EQ (mod.h's product_sides) as the source predicate P:
+  // mod_m P N for its congruence D = P - N, its realization
+  // ModForm::kProduct (kSpectralProduct when the equation is stated in a
+  // transform's spectrum), its target the predicate's own placement (the
+  // equation the domain states), P's and N's intervals, the quotient (its
+  // leaf, qlo, qmax and its range request NAME.q). P and N are the
+  // congruence's terms of each sign (product_parts).
+  template <class F>
+  void product_predicate(const Domain<F> &d, PredRec p,
+                         const PlanRecords::ProductModEq &eq) {
+    mod_names_.insert(eq.name);
+    p.p.body = ir::Predicate::kMod;
+    p.p.q = bound_str(eq.m);
+    ir::ModRealization &m = p.p.mod;
+    m.form = eq.spectral ? ir::ModForm::kSpectralProduct : ir::ModForm::kProduct;
+    m.has_interval = eq.quotient != SIZE_MAX;
+    if (m.has_interval) {
+      m.lhs_lo = int_str(eq.lhs_lo);
+      m.lhs_hi = int_str(eq.lhs_hi);
+      m.rhs_lo = int_str(eq.rhs_lo);
+      m.rhs_hi = int_str(eq.rhs_hi);
+    }
+    m.quotient_lo = int_str(eq.qlo);
+    m.qmax = bound_str(eq.qmax);
+    m.radix = "0";
+    m.target = ir::Target{};
+    p.mod_target = true;
+    if (eq.quotient != SIZE_MAX) {
+      p.mod_ranges = eq.name;
+      mod_ranges_[eq.name] = {eq.name + ".q"};
+    }
+    describe(std::move(p), [&](PredRec &q) {
+      if (eq.quotient != SIZE_MAX) q.p.mod.quotient = leaf(d, eq.quotient).e;
+      const auto &cong = *static_cast<const ops::Congruence<F> *>(eq.cong.get());
+      return product_parts(d, cong, eq.name);
+    });
+  }
+  // The printed forms of the asserted equations (Congruence::equation) of
+  // the spectral product forms placed in a circuit, for the expression
+  // export (emit_export.h): the circuit emits the equation's nodes, the
+  // program prints the predicate's sides P and N (product_predicate), so
+  // the nodes' lins, constants and index maps are converted here. The
+  // constants this adds take value ids after every other value
+  // (late_consts_), so the program's other ids do not move.
+  // The all-ones constants of the circuits' step nodes (emit_export.h): a
+  // Boolean check on a view (a late or derived value) reads ones - x, and
+  // a predicate asserted true reads ones - root, each with the domain's
+  // constant of as many ones as the checked value has coordinates. A
+  // constant the program lacks is added here, after equation_forms, so its
+  // value id follows every other value's (late_consts_).
+  void step_ones() {
+    with_domain_all([&](const auto &d) {
+      if (d.index < 0) return;
+      const DomainPlan &plan = plan_of(size_t(d.index));
+      const auto &preds = d.predicates();
+      for (const auto &ce : plan.circuit_entries) {
+        if (ce.kind == DomainPlan::CircuitEntry::kTypeCheck) {
+          const Node &n = cs_.nodes()[ce.id];
+          if (late(ce.id) || n.kind == Kind::kDerived)
+            repeat_const(d, d.field().one(), n.n);
+        } else if (ce.kind == DomainPlan::CircuitEntry::kPredicate &&
+                   ce.id < preds.size() && preds[ce.id].truth) {
+          repeat_const(d, d.field().one(), preds[ce.id].e->n);
+        }
+      }
+    });
+  }
+
+  void equation_forms() {
+    late_consts_ = const_recs_.size();
+    with_domain_all([&](const auto &d) {
+      const DomainPlan &plan = plan_of(size_t(d.index));
+      const auto &preds = d.predicates();
+      for (const auto &eq : cs_.records().product_mod_equalities) {
+        if (eq.domain != d.name || !eq.spectral) continue;
+        for (size_t k = 0; k < preds.size() && k < plan.pred_targets.size(); ++k)
+          if (preds[k].name == eq.name &&
+              plan.pred_targets[k].where == Placement::kCircuit)
+            node(d, *preds[k].e);
+      }
+    });
+  }
+
+  // The parts P (sign +1) and N (sign -1) of congruence CONG of the product
+  // form NAME as expressions: each row the sum of its terms of that sign
+  // (a zero constant for none), the rows concatenated. A term is the sum of
+  // its integer parts: an expression part is the expression; a kernel part
+  // s (h * x) is the convolution by the spectrum, NamedOp negacyclicConv
+  // (or polyBroadcast over the blocks of its value, read at the part's
+  // block) in NTT form at the transform's root and order (ConvForm .ntt or
+  // .nttNatural), applied to x's coordinates [x_at, x_at + n), scaled by s.
+  // Each part's operand (an expression part's expression; a kernel part's
+  // x before its slice), in order over the rows, terms and parts, and the
+  // kernels' operators are recorded for the derivation (term_operands_,
+  // kernels_).
+  template <class F>
+  std::pair<Ex, Ex> product_parts(const Domain<F> &d,
+                                  const ops::Congruence<F> &cong,
+                                  const std::string &name) {
+    using T = ops::IntPart<F>;
+    auto &operands = term_operands_[name];
+    operands.clear();
+    std::vector<Ex> sides[2];
+    for (size_t i = 0; i < cong.rows(); ++i) {
+      std::optional<Ex> row[2];
+      for (const auto &st : cong.row(i)) {
+        std::optional<Ex> term;
+        for (const T &t : st.term->parts()) {
+          Ex e;
+          if (t.kind == T::kExpr) {
+            e = convert(d, t.e);
+            operands.push_back(e.e);
+          } else {
+            const size_t n = t.ntt->n;
+            const Ex x = convert(d, t.e);
+            operands.push_back(x.e);
+            Ex xs = x;
+            if (t.x_at != 0 || x.n != n) {
+              if (t.x_at + n > x.n) export_fail("a kernel part's operand is short");
+              std::vector<size_t> idx(n);
+              for (size_t j = 0; j < n; ++j) idx[j] = t.x_at + j;
+              xs = reindex(index_map(std::move(idx)), n, x);
+            }
+            const auto kb = kernel_block(d, t.spec.id, t.spec_at, n);
+            if (!kb)
+              export_fail("the spectrum '" + t.spec.name() + "' at " +
+                          std::to_string(t.spec_at) +
+                          " is no aligned block of one value");
+            const auto [v, off] = *kb;
+            const size_t size = cs_.nodes().at(v).n, K = size / n, b = off / n;
+            ir::NamedOp o;
+            o.kind = K == 1 ? ir::NamedOp::kNegacyclicConv
+                            : ir::NamedOp::kPolyBroadcast;
+            o.value = Id(v);
+            if (K > 1) o.nats = {K};
+            o.ntt_form = true;
+            o.natural_order = t.ntt->order == ops::NttOrder::kNatural;
+            o.elt = enc(d.field(), t.ntt->psi);
+            const Id op = op_of(std::move(o));
+            kernels_[{name, t.spec.id, t.spec_at}] = {op, v, b};
+            e = apply(op, K * n, {v}, xs);
+            if (K > 1) {
+              std::vector<size_t> idx(n);
+              for (size_t j = 0; j < n; ++j) idx[j] = b * n + j;
+              e = reindex(index_map(std::move(idx)), n, e);
+            }
+            e = scale(d, t.scale, e);
+          }
+          term = term ? add(*term, e) : e;
+        }
+        if (!term) export_fail("a term of the congruence has no parts");
+        auto &r = row[st.sign > 0 ? 0 : 1];
+        r = r ? add(*r, *term) : *term;
+      }
+      for (int a = 0; a < 2; ++a)
+        sides[a].push_back(row[a] ? *row[a]
+                                  : const_leaf(d, repeat_const(d, d.field().zero(),
+                                                               cong.n()),
+                                               cong.n()));
+    }
+    auto join = [&](std::vector<Ex> &v) { return v.size() == 1 ? v[0] : concat(v); };
+    return {join(sides[0]), join(sides[1])};
+  }
+  // The value and offset of coordinates [AT, AT + N) of node ID when they
+  // are, in order, the coordinates [OFF, OFF + N) of one exported value
+  // with OFF and the value's length multiples of N (ID itself, or the
+  // sources of a view); none otherwise.
+  template <class F>
+  std::optional<std::pair<size_t, size_t>> kernel_block(const Domain<F> &d,
+                                                        size_t id, size_t at,
+                                                        size_t n) const {
+    size_t v = id, off = at;
+    if (cls_[id] != kValue) {
+      const auto *src = d.view_sources(id);
+      if (src == nullptr || at + n > src->size()) return std::nullopt;
+      v = (*src)[at].first;
+      off = (*src)[at].second;
+      if (v == kZeroCoordinate) return std::nullopt;
+      for (size_t j = 0; j < n; ++j)
+        if ((*src)[at + j].first != v || (*src)[at + j].second != off + j)
+          return std::nullopt;
+    }
+    if (v >= cls_.size() || cls_[v] != kValue || n == 0 || off % n != 0 ||
+        cs_.nodes().at(v).n % n != 0)
+      return std::nullopt;
+    return std::make_pair(v, off);
   }
 
   // The assert_mod predicates of domain D (the application's and the MAC
@@ -3265,7 +3608,14 @@ class ProgramBuilder : Lowering {
       }
     }
     // The MACs' predicates (their sites, Certificates::roles) and the Boolean
-    // checks of the pad copies.
+    // checks of the pad copies. A site is named by its macSite structure
+    // record (structure_records.h, fill_mac_sites: one record per cross
+    // equal in predicate order, the first records of the structure) and its
+    // slot; a predicate's role in the MAC by its name relative to the
+    // site's tail (mac.h, mod.h).
+    std::map<size_t, size_t> mac_gadget;
+    for (size_t i = 0; i < np; ++i)
+      if (P_.predicates[i].body == ir::Predicate::kCross) mac_gadget.emplace(i, mac_gadget.size());
     for (size_t q = 0; q < np; ++q) {
       if (!certs_.comp_derivs[q].empty()) continue;
       const size_t r = q < certs_.roles.size() ? certs_.roles[q] : 0;
@@ -3281,8 +3631,21 @@ class ProgramBuilder : Lowering {
         const bool two = c.mac.blind_x != kNone && d < P_.domains.size() &&
                          P_.domains[d].field < P_.fields.size() &&
                          P_.fields[P_.domains[d].field].characteristic == "2";
-        CS st{two ? CS::kTwoTail : CS::kMacRow, pid};
-        st.x_side = x_side;
+        CS st{two ? CS::kTwoTail : CS::kMacRow, mac_gadget.at(pid)};
+        const bool hosted = c.mac.blind_x == kNone;
+        st.slot = x_side || hosted ? 1 : 2;
+        if (!two) {
+          const auto &tails = preds_[pid].tails;
+          if (st.slot > tails.size()) {
+            gap("MAC '" + preds_[pid].name + "' has no tail at its site");
+            continue;
+          }
+          if (!mac_role(preds_[q].name, preds_[q].row, c.mac.h_predicate == Id(q),
+                        tails[st.slot - 1], st)) {
+            gap("MAC predicate '" + preds_[q].name + "' has no role");
+            continue;
+          }
+        }
         certs_.comp_derivs[q] = {st};
         continue;
       }
@@ -3429,10 +3792,14 @@ class ProgramBuilder : Lowering {
       if (v.type_source == "pred" && v.type_pred.empty())
         gap("value '" + v.name + "' has no type source");
     }
-    // Value ids: constants, then nodes in order.
-    for (const auto &c : const_recs_) id_of_[c.key] = id_of_.size();
+    // Value ids: constants, then nodes in order, then the constants of
+    // the asserted equations (equation_forms).
+    const size_t early = std::min(late_consts_, const_recs_.size());
+    for (size_t k = 0; k < early; ++k) id_of_[const_recs_[k].key] = id_of_.size();
     for (size_t id = 0; id < N.size(); ++id)
       if (vals_.count(id)) id_of_[id] = id_of_.size();
+    for (size_t k = early; k < const_recs_.size(); ++k)
+      id_of_[const_recs_[k].key] = id_of_.size();
     auto vid = [&](size_t key) -> Id {
       auto it = id_of_.find(key);
       if (it == id_of_.end()) {
@@ -3508,8 +3875,10 @@ class ProgramBuilder : Lowering {
       o.unmodeled = v.unmodeled;
       return o;
     };
-    for (const auto &c : const_recs_) P_.values.push_back(value_of(c));
+    for (size_t k = 0; k < early; ++k) P_.values.push_back(value_of(const_recs_[k]));
     for (const auto &[id, v] : vals_) P_.values.push_back(value_of(v));
+    for (size_t k = early; k < const_recs_.size(); ++k)
+      P_.values.push_back(value_of(const_recs_[k]));
     // The expressions' leaves and the operators' value parameters.
     for (auto &x : P_.nodes)
       if (x.op == ir::Expr::kLeaf) x.x = vid(size_t(x.x));
@@ -3589,6 +3958,24 @@ class ProgramBuilder : Lowering {
       q.needles = r.needles;
       q.size = r.size;
       P_.predicates.push_back(std::move(q));
+    }
+    // The quotient of a source product-form mod_q is a source value (the
+    // declaration commits it with the program), so its range is a source
+    // predicate too, as the source program reads it (Lean `inSource`).
+    for (size_t i = 0; i < P_.predicates.size(); ++i) {
+      const ir::Predicate &m = P_.predicates[i];
+      if (m.body != ir::Predicate::kMod || m.role != ir::Predicate::Role::kSource ||
+          (m.mod.form != ir::ModForm::kProduct &&
+           m.mod.form != ir::ModForm::kSpectralProduct))
+        continue;
+      for (Id rid : m.mod.ranges) {
+        if (rid >= P_.predicates.size()) continue;
+        ir::Predicate &rq = P_.predicates[rid];
+        if (rq.role == ir::Predicate::Role::kRealization && rq.owner == Id(i)) {
+          rq.role = ir::Predicate::Role::kSource;
+          rq.owner = kNone;
+        }
+      }
     }
     // Tables.
     for (const auto &T : tables_) {
@@ -3817,6 +4204,9 @@ class ProgramBuilder : Lowering {
       for (auto &b : blocks)
         if (b.kind == ir::InputBlock::kRealizationPub) b.real = real_pub(b.real.name);
       C.inputs = std::move(blocks);
+      for (const auto &[b, e] : Pl.packed_runs) C.packed_runs.push_back({b, e - b});
+      for (const auto &a : Pl.view_words)
+        C.aliases.push_back({a.at, a.word, a.degree});
       P_.circuits.push_back(std::move(C));
     }
     for (const auto &[name, di] : real_circuits_)
@@ -3857,12 +4247,10 @@ class ProgramBuilder : Lowering {
         for (size_t m = 0; m < ms.size(); ++m)
           dmembers_[{ms[m][0], ms[m][1]}].push_back({t, g, m});
       }
-    for (size_t v = 0; v < P_.values.size(); ++v) {
-      const auto &x = P_.values[v];
-      const bool leaf = x.kind == ir::Value::kInput ||
-                        (x.kind == ir::Value::kOpaque && x.args.empty());
-      if (leaf && !x.bound.empty()) ddeclared_[Id(v)] = ddeclared_.size();
-    }
+    // Lean declaredRanges: the statement values with a bound.
+    for (size_t v = 0; v < P_.values.size(); ++v)
+      if (ir::is_stmt_value(P_, v) && !P_.values[v].bound.empty())
+        ddeclared_[Id(v)] = ddeclared_.size();
     for (size_t i = 0; i < np; ++i) {
       const ir::Predicate &q = P_.predicates[i];
       auto &gap = certs_.deriv_gaps[i];
@@ -4274,6 +4662,25 @@ class ProgramBuilder : Lowering {
           break;
         }
         case R::kSrc: {
+          using K0 = PlanRecords::DerivIvlSrc;
+          if (s.src.kind == K0::kTableKernel) {
+            // The kernel of the product form's term reading the spectrum
+            // (node, offset): its operator, value and block.
+            auto k = kernels_.find({d.pred, s.node, s.a});
+            if (k == kernels_.end())
+              dfail("no kernel reads the spectrum '" +
+                    cs_.nodes().at(s.node).name + "'");
+            const auto &[op, val, blk] = k->second;
+            x.src = ir::DStep::kTableKernel;
+            x.id = Id(id_of_.at(val));
+            x.src_arg = op;
+            x.ints.push_back(std::to_string(blk));
+            for (const auto &q : s.names) {
+              x.tails.push_back(dpid(q, false));
+              if (x.tails.back() == kNone) dfail("no selection '" + q + "'");
+            }
+            break;
+          }
           auto v = id_of_.find(s.node);
           if (v == id_of_.end())
             dfail("a source on '" + cs_.nodes().at(s.node).name +
@@ -4291,6 +4698,15 @@ class ProgramBuilder : Lowering {
             }
             case K::kNat: x.src = ir::DStep::kNat; break;
             case K::kShift: x.src = ir::DStep::kShift; break;
+            case K::kTableHull:
+              x.src = ir::DStep::kTableHull;
+              for (const auto &q : s.names) {
+                x.tails.push_back(dpid(q, false));
+                if (x.tails.back() == kNone) dfail("no selection '" + q + "'");
+              }
+              break;
+            case K::kTableKernel:
+              break;
             case K::kQuadRoot:
             case K::kRootSet:
               x.src = s.src.kind == K::kQuadRoot ? ir::DStep::kQuadRoot
@@ -4390,6 +4806,7 @@ class ProgramBuilder : Lowering {
       case R::kMac: return D::kMac;
       case R::kLinop: return D::kLinop;
       case R::kConclude: return D::kConclude;
+      case R::kProductMod: return D::kProductMod;
       case R::kInline:
       case R::kViewIvl:
         break;
@@ -4445,6 +4862,16 @@ class ProgramBuilder : Lowering {
         x.a = dexpr(e.args.at(0), pid);
         x.b = dexpr(e.args.at(1), pid);
         break;
+      case K::kTermOperand: {
+        auto t = term_operands_.find(e.item);
+        if (t == term_operands_.end() || e.a >= t->second.size() ||
+            t->second[e.a] == kNone)
+          dfail("no operand of term " + std::to_string(e.a) + " of '" +
+                e.item + "'");
+        x.kind = ir::DExpr::kProgram;
+        x.id = t->second[e.a];
+        break;
+      }
       case K::kApplyIn: {
         const Id q = dpid(e.item, e.row);
         if (q == kNone) dfail("no predicate '" + e.item + "'");
@@ -4689,6 +5116,9 @@ class ProgramBuilder : Lowering {
   std::vector<Cls> cls_;
   std::map<size_t, ValueRec> vals_;
   std::vector<ValueRec> const_recs_;
+  // The constants from equation_forms on (const_recs_[late_consts_, …)):
+  // their value ids follow every other value's.
+  size_t late_consts_ = SIZE_MAX;
   std::map<std::pair<size_t, std::vector<std::string>>, size_t> consts_;
   std::map<std::vector<size_t>, Id> idx_;
   std::map<size_t, Ex> derived_, pub_ex_;
@@ -4700,6 +5130,7 @@ class ProgramBuilder : Lowering {
   std::map<const void *, Ex> memo_r_;
   std::map<const void *, bool> has_spec_;
   bool realized_ = false;
+  bool report_mod0_ = false;
   std::map<size_t, std::set<ProgramRead>> late_reads_;
   std::map<size_t, size_t> late_of_pad_, pad_of_late_, chal_of_, field_of_domain_;
   std::map<size_t, size_t> id_of_;
@@ -4719,6 +5150,13 @@ class ProgramBuilder : Lowering {
   // requests by name.
   std::map<std::string, std::tuple<Bound, Bound, Bound>> req_bounds_;
   std::map<std::string, std::vector<std::string>> mod_ranges_;
+  // The product forms' term operands (expression ids, kNone for an
+  // expression term), by predicate name, and their kernels: (name, spectrum
+  // node, offset) -> (operator, value key, block) (product_side).
+  std::map<std::string, std::vector<Id>> term_operands_;
+  std::map<std::tuple<std::string, size_t, size_t>,
+           std::tuple<Id, size_t, size_t>>
+      kernels_;
   std::map<size_t, std::vector<std::pair<size_t, size_t>>> public_wiring_;
   std::vector<TableRec> tables_;
   std::vector<std::tuple<DomainPlan::Batch, size_t, bool>> batches_;

@@ -167,15 +167,19 @@ using plan_export_internal::str;
 using ir::Id;
 using ir::kNone;
 
-// One line of naturals per twenty entries, at column COL.
-inline std::string nat_list(const std::vector<std::string> &xs, size_t col) {
-  if (xs.empty()) return "[]";
-  std::string s = "[";
+// One line of naturals per twenty entries, at column COL. With a TAIL (the
+// name of a list definition), the items continue in it: Lean's `%[x, … |
+// tail]`, which elaborates to the items consed onto TAIL.
+inline std::string nat_list(const std::vector<std::string> &xs, size_t col,
+                            const std::string &tail = "") {
+  if (xs.empty()) return tail.empty() ? "[]" : tail;
+  const std::string open = tail.empty() ? "[" : "%[";
+  std::string s = open;
   for (size_t i = 0; i < xs.size(); ++i) {
-    if (i) s += (i % 20 == 0) ? ",\n" + std::string(col + 1, ' ') : ", ";
+    if (i) s += (i % 20 == 0) ? ",\n" + std::string(col + open.size(), ' ') : ", ";
     s += xs[i];
   }
-  return s + "]";
+  return s + (tail.empty() ? "" : " | " + tail) + "]";
 }
 
 inline std::string paren(const std::string &s) { return "(" + s + ")"; }
@@ -206,6 +210,22 @@ std::string list_of(const std::vector<T> &v, Fn fn, const char *sep = ", ") {
   std::string o = "[";
   for (size_t i = 0; i < v.size(); ++i) o += (i ? sep : "") + fn(v[i]);
   return o + "]";
+}
+
+// A long list as chunk definitions chained by their tails: chunk i is
+// `%[x, … | <chunk i + 1>]` (Lean's list literal consed onto a list), the
+// last one a plain literal, so the first chunk's name is the whole list.
+// The kernel reads each item from its chunk with no append: a chain
+// appended instead (`a ++ (b ++ c)`) evaluates a List.append per item on
+// its first traversal. NAME(i) is chunk i's name and DEF(name, items, tail)
+// its definition's text (TAIL empty for the last); the definitions are
+// written last chunk first, so each one's tail is defined before it.
+template <class Name, class Def>
+std::string chained_chunks(size_t nchunks, Name name, Def def) {
+  std::string o;
+  for (size_t i = nchunks; i-- > 0;)
+    o += def(i, name(i), i + 1 < nchunks ? name(i + 1) : std::string());
+  return o;
 }
 
 class Printer {
@@ -240,7 +260,8 @@ class Printer {
     using NO = ir::NamedOp;
     auto v = [&]() { return num(op.value); };
     auto form = [&]() {
-      return op.ntt_form ? "(.ntt " + op.elt + ")" : std::string(".coefficients");
+      if (!op.ntt_form) return std::string(".coefficients");
+      return (op.natural_order ? "(.nttNatural " : "(.ntt ") + op.elt + ")";
     };
     switch (op.kind) {
       case NO::kNegacyclicConv:
@@ -368,7 +389,7 @@ class Printer {
         k = ".bound (" + expr(v.expr) + ")";
         break;
       case K::kConstant:
-        k = ".constant (ConstRuns.expand " + const_runs_text(v.entries) + ")";
+        k = ".constant " + const_text(v.entries);
         break;
       case K::kChallenge:
         k = ".challenge " + num(v.ref);
@@ -414,9 +435,10 @@ class Printer {
   }
 
   std::string mod_real(const ir::ModRealization &m) {
-    static const char *forms[] = {".field",   ".constant",        ".bit",
+    static const char *forms[] = {".field",    ".constant",        ".bit",
                                   ".oneDigit", ".digits", ".committedDigits",
-                                  ".grouped", ".integer"};
+                                  ".grouped",  ".integer",         ".product",
+                                  ".spectralProduct"};
     std::string out = "{ form := " + std::string(forms[int(m.form)]);
     if (m.has_interval)
       out += ", lhsLo := " + int_text(m.lhs_lo) + ", lhsHi := " +
@@ -588,7 +610,7 @@ class Printer {
            (b.char2 ? "\"gf256\"" : "\"integers\"") + ", parts := " +
            ids(b.parts) + " }";
   }
-  static std::string circuit(const ir::Circuit &c) {
+  std::string circuit(const ir::Circuit &c) {
     std::string ents;
     for (const auto &e : c.entries) {
       std::string t;
@@ -617,26 +639,93 @@ class Printer {
       t += num(b.at) + " " + num(b.n);
       ins += (ins.empty() ? "" : ", ") + t;
     }
+    // The packed runs and their viewed words, when the circuit has them.
+    std::string runs;
+    if (!c.packed_runs.empty()) {
+      std::string rs, as;
+      for (const auto &[at, n] : c.packed_runs)
+        rs += (rs.empty() ? "" : ", ") + ("(" + num(at) + ", " + num(n) + ")");
+      auto alias = [](const ir::ViewAlias &a, bool raw) {
+        auto n = [&](size_t x) { return raw ? "(nat_lit " + num(x) + ")" : num(x); };
+        return "(" + n(a.at) + ", " + n(a.word) + ", " + n(a.degree) + ")";
+      };
+      if (runs_sink_ == nullptr || c.aliases.size() <= kRunsPart) {
+        for (const auto &a : c.aliases) as += (as.empty() ? "" : ", ") + alias(a, false);
+        as = "[" + as + "]";
+      } else {
+        // Many aliases: definitions `circAliasesN` of at most kRunsPart
+        // each, in raw literals, chained by their tails (chained_chunks;
+        // one literal of thousands of entries exceeds the elaborator's
+        // recursion depth).
+        const size_t n = (c.aliases.size() + kRunsPart - 1) / kRunsPart;
+        const size_t first = alias_defs_;
+        alias_defs_ += n;
+        auto name = [first](size_t i) { return "circAliases" + std::to_string(first + i); };
+        *runs_sink_ += chained_chunks(n, name, [&](size_t k, const std::string &nm,
+                                                   const std::string &tail) {
+          std::string xs;
+          for (size_t i = k * kRunsPart; i < std::min(c.aliases.size(), (k + 1) * kRunsPart); ++i)
+            xs += (xs.empty() ? "" : ", ") + alias(c.aliases[i], true);
+          return "/-- Aliases of a circuit of the program. -/\ndef " + nm +
+                 " : List (Nat × Nat × Nat) :=\n  " +
+                 (tail.empty() ? "[" + xs + "]" : "%[" + xs + " | " + tail + "]") + "\n\n";
+        });
+        as = name(0);
+      }
+      runs = ", packedRuns := [" + rs + "], aliases := " + as;
+    }
     return "{ name := " + str(c.name) + ", domain := " + num(c.domain) +
            ", predicates := " + ids(c.predicates) + ", entries := [" + ents +
            "], inputs := [" + ins + "], publicInputs := " + num(c.public_inputs) +
            ", inputCount := " + num(c.input_count) + ", layers := " +
            num(c.layers) + ", wires := " + num(c.wires) + ", terms := " +
-           num(c.terms) + " }";
+           num(c.terms) + runs + " }";
   }
 
   // Long constants' runs as definitions of their own: with a sink, a
   // constant of more than kRunsInline runs has its runs written into SINK
   // as definitions `constRunsN` of at most kRunsPart runs each, in raw
-  // literals (`nat_lit`, so no OfNat instance is synthesized), runs all of
-  // length one as their values mapped to (x, 1); the constant reads the
-  // definitions appended. The list is the same. Without a sink every
-  // constant is written in place.
+  // literals (`nat_lit`, so no OfNat instance is synthesized), chained by
+  // their tails (chained_chunks); the constant reads the first. A long
+  // constant whose runs all have length one (no entry equals the one before
+  // it) has its entries written instead, as definitions `constEntriesN` of
+  // at most kRunsPart entries each, chained the same way: the kernel then
+  // reads each entry from its chunk, where expanding runs of length one
+  // costs a run, a pair and an append per entry. The list is the same.
+  // Without a sink every constant is written in place.
   void set_runs_sink(std::string *sink) { runs_sink_ = sink; }
 
  private:
   static constexpr size_t kRunsInline = 8;
   static constexpr size_t kRunsPart = 512;
+
+  // The constant's entries as the argument of `.constant`: its runs
+  // expanded (`(ConstRuns.expand runs)`), or for a long constant of runs of
+  // length one its entries' first chunk definition.
+  std::string const_text(const std::vector<std::string> &entries) {
+    const auto runs = const_runs(entries);
+    auto digits = [](const std::string &x) {
+      return !x.empty() && std::all_of(x.begin(), x.end(), [](char ch) {
+               return ch >= '0' && ch <= '9';
+             });
+    };
+    bool plain = runs_sink_ != nullptr && runs.size() > kRunsInline;
+    for (const auto &[x, c] : runs) plain = plain && digits(x) && c == 1;
+    if (!plain) return "(ConstRuns.expand " + const_runs_text(entries) + ")";
+    const size_t n = (entries.size() + kRunsPart - 1) / kRunsPart;
+    const size_t first = entries_defs_;
+    entries_defs_ += n;
+    auto name = [first](size_t i) { return "constEntries" + std::to_string(first + i); };
+    *runs_sink_ += chained_chunks(n, name, [&](size_t k, const std::string &nm,
+                                               const std::string &tail) {
+      std::vector<std::string> xs;
+      for (size_t i = k * kRunsPart; i < std::min(entries.size(), (k + 1) * kRunsPart); ++i)
+        xs.push_back("(nat_lit " + entries[i] + ")");
+      return "/-- Entries of a constant of the program. -/\ndef " + nm +
+             " : List Nat :=\n  " + nat_list(xs, 2, tail) + "\n\n";
+    });
+    return name(0);
+  }
 
   std::string const_runs_text(const std::vector<std::string> &entries) {
     const auto runs = const_runs(entries);
@@ -645,12 +734,10 @@ class Printer {
                return ch >= '0' && ch <= '9';
              });
     };
+    // (A long constant all of whose runs have length one is written as its
+    // entries, const_text.)
     bool split = runs_sink_ != nullptr && runs.size() > kRunsInline;
-    bool ones = true;
-    for (const auto &[x, c] : runs) {
-      split = split && digits(x);
-      ones = ones && c == 1;
-    }
+    for (const auto &[x, c] : runs) split = split && digits(x);
     if (!split) {
       std::string r;
       for (const auto &[x, c] : runs)
@@ -658,21 +745,19 @@ class Printer {
       return "[" + r + "]";
     }
     auto lit = [](const std::string &x) { return "(nat_lit " + x + ")"; };
-    std::string appended;
-    for (size_t at = 0; at < runs.size(); at += kRunsPart) {
-      const std::string nm = "constRuns" + std::to_string(runs_defs_++);
+    const size_t n = (runs.size() + kRunsPart - 1) / kRunsPart;
+    const size_t first = runs_defs_;
+    runs_defs_ += n;
+    auto name = [first](size_t i) { return "constRuns" + std::to_string(first + i); };
+    *runs_sink_ += chained_chunks(n, name, [&](size_t k, const std::string &nm,
+                                               const std::string &tail) {
       std::vector<std::string> xs;
-      for (size_t i = at; i < std::min(runs.size(), at + kRunsPart); ++i)
-        xs.push_back(ones ? lit(runs[i].first)
-                          : "(" + lit(runs[i].first) + ", " +
-                                lit(num(runs[i].second)) + ")");
-      *runs_sink_ += "/-- Runs of a constant of the program. -/\ndef " + nm +
-                     " : List (Nat × Nat) :=\n  " +
-                     (ones ? "List.map (fun x => (x, 1)) " : "") +
-                     nat_list(xs, 2) + "\n\n";
-      appended += (appended.empty() ? "" : " ++ ") + nm;
-    }
-    return runs.size() > kRunsPart ? "(" + appended + ")" : appended;
+      for (size_t i = k * kRunsPart; i < std::min(runs.size(), (k + 1) * kRunsPart); ++i)
+        xs.push_back("(" + lit(runs[i].first) + ", " + lit(num(runs[i].second)) + ")");
+      return "/-- Runs of a constant of the program. -/\ndef " + nm +
+             " : List (Nat × Nat) :=\n  " + nat_list(xs, 2, tail) + "\n\n";
+    });
+    return name(0);
   }
 
   bool done(Id x) const { return x < done_.size() && done_[x]; }
@@ -735,7 +820,9 @@ class Printer {
 
   const ir::Program &p_;
   std::string *runs_sink_ = nullptr;
+  size_t alias_defs_ = 0;
   size_t runs_defs_ = 0;
+  size_t entries_defs_ = 0;
   std::vector<std::string> text_;
   std::vector<bool> done_;
 };
@@ -896,41 +983,6 @@ inline std::string print_reads_ann(const ir::Certificates &c) {
          num(offw) + "⟩⟩\n\n";
 }
 
-// The honest checks' shared tables of certificates C as one Lean definition,
-// `tables : RealizedProgram.HonestTables`: the value lists aligned with the
-// program's predicates, the two masks as naturals, the owners' lists.
-inline std::string print_honest_tables(const ir::Certificates &c) {
-  using program_printer_internal::num;
-  auto ids = [](const std::vector<ir::Id> &v) {
-    std::string o = "[";
-    for (size_t i = 0; i < v.size(); ++i) o += (i ? ", " : "") + num(v[i]);
-    return o + "]";
-  };
-  std::string o =
-      "/-- The honest checks' shared tables: per predicate its values, the masks of the values\n"
-      "reading a late and a generated late value, the lookups' digits and the committed digits. -/\n"
-      "def tables : RealizedProgram.HonestTables where\n  predVals := ";
-  o += aligned_list(c.pred_vals.size(), [&](size_t i) { return ids(c.pred_vals[i]); }) +
-       "\n";
-  o += "  lateBad := " + program_printer_internal::mask_decimal(c.late_bad) + "\n";
-  o += "  genBad := " + program_printer_internal::mask_decimal(c.gen_bad) + "\n";
-  o += "  lookupOwners := " +
-       aligned_list(c.lookup_owners.size(), [&](size_t i) {
-         const auto &x = c.lookup_owners[i];
-         return "(" + num(x.value) + ", ⟨" + num(x.pid) + ", " +
-                (x.second ? "true" : "false") + ", " + num(x.idx) + "⟩)";
-       }) +
-       "\n";
-  o += "  commOwners := " +
-       aligned_list(c.comm_owners.size(), [&](size_t i) {
-         const auto &x = c.comm_owners[i];
-         return "(" + num(x.value) + ", ⟨" + num(x.mod) + ", " + num(x.j) + ", " +
-                num(x.lk) + ", " + num(x.k) + "⟩)";
-       }) +
-       "\n\n";
-  return o;
-}
-
 // The completeness certificate of certificates C as Lean definitions,
 // `gens : RealizedProgram.Gens` aligned with the program's values and
 // `cderivs : RealizedProgram.CDerivations` aligned with its predicates.
@@ -964,8 +1016,15 @@ inline std::string print_completion(const ir::Certificates &c) {
       case S::kSource: return ".source";
       case S::kQuotIn: return ".quotIn " + num(x.id);
       case S::kDigitRow: return ".digitRow " + num(x.id);
-      case S::kMacRow:
-        return ".macRow ⟨" + num(x.id) + ", " + (x.x_side ? "true" : "false") + "⟩";
+      case S::kMacRow: {
+        static const char *const roles[] = {".tail",       ".h",          ".accRow",
+                                            "",            ".residues",   ".gqLookup",
+                                            ".quotLookup", ".lowLookup",  ".topLookup",
+                                            ".wrap"};
+        const std::string role = x.role == S::kGroupRow ? "(.groupRow " + num(x.group) + ")"
+                                                        : std::string(roles[x.role]);
+        return "(.macRow " + num(x.id) + " " + num(x.slot) + " " + role + ")";
+      }
       case S::kPadBool: return ".padBool";
       case S::kHyp: return ".hyp " + num(x.id);
       case S::kCommIn: return "(.commIn " + num(x.id) + " " + num(x.j) + ")";
@@ -978,7 +1037,7 @@ inline std::string print_completion(const ir::Certificates &c) {
       case S::kSpecRow: return ".specRow " + num(x.id);
       case S::kFieldRow: return ".fieldRow";
       case S::kTwoTail:
-        return ".twoTail ⟨" + num(x.id) + ", " + (x.x_side ? "true" : "false") + "⟩";
+        return "(.twoTail " + num(x.id) + " " + num(x.slot) + ")";
     }
     return ".hyp 0";
   };
@@ -996,35 +1055,6 @@ inline std::string print_completion(const ir::Certificates &c) {
                       return d + "]";
                     }) +
        ",\n    " + program_printer_internal::packed_decimal(c.comp_ranks, 32) + "⟩\n\n";
-  return o;
-}
-
-// The honest strategy's certificate of certificates C as its Lean
-// definition (`honest : RealizedProgram.HonestCert`), each list aligned
-// with the program's; an absent predicate (kNone) is written as the number
-// of predicates, which names none.
-inline std::string print_certificates(const ir::Certificates &c) {
-  const size_t np = c.roles.size();
-  using program_printer_internal::num;
-  auto id = [np](ir::Id x) { return num(x == ir::kNone ? np : size_t(x)); };
-  auto ids = [&](const std::vector<ir::Id> &v) {
-    std::string o = "[";
-    for (size_t i = 0; i < v.size(); ++i) o += (i ? ", " : "") + id(v[i]);
-    return o + "]";
-  };
-  std::string o;
-  o += "/-- The honest checks' pointers: per predicate its MAC site, per value its bound record,\n"
-       "per predicate its committed digits' lookups. -/\n"
-       "def honest : RealizedProgram.HonestCert :=\n  ⟨" +
-       aligned_list(c.roles.size(), [&](size_t i) { return num(c.roles[i]); }) +
-       ",\n    " +
-       // A value that is not bound has any entry: 0.
-       aligned_list(c.bound_recs.size(), [&](size_t i) {
-         return c.bound_recs[i] == ir::kNone ? std::string("0") : id(c.bound_recs[i]);
-       }) +
-       ",\n    " +
-       aligned_list(c.comm_digits.size(), [&](size_t i) { return ids(c.comm_digits[i]); }) +
-       "⟩\n\n";
   return o;
 }
 
@@ -1109,9 +1139,18 @@ inline std::string print_derivations(
       case D::kHoldsIn:
         return ".holdsIn " + pr0();
       case D::kSrc: {
-        static const char *src[] = {".const", "(.declared ", "(.nat ", ".prime",
-                                    ".opaqueBit", "(.quadRoot ", "(.rootSet ", "(.shift "};
+        static const char *src[] = {".const",      "(.declared ", "(.nat ",
+                                    ".prime",      ".opaqueBit",  "(.quadRoot ",
+                                    "(.rootSet ",  "(.shift ",    "(.tableHull ",
+                                    "(.tableKernel "};
         std::string a = src[s.src];
+        if (s.src == D::kTableHull)
+          a += nums(std::vector<size_t>(s.tails.begin(), s.tails.end())) + " " +
+               ii(0) + " " + ii(1) + ")";
+        if (s.src == D::kTableKernel)
+          a += num(s.src_arg) + " " + ii(2) + " " +
+               nums(std::vector<size_t>(s.tails.begin(), s.tails.end())) + " " +
+               ii(0) + " " + ii(1) + ")";
         if (s.src == D::kDeclared) a += num(s.src_arg) + ")";
         if (s.src == D::kNat || s.src == D::kShift) a += pr0() + ")";
         if (s.src == D::kQuadRoot) a += num(s.tails.at(0)) + " " + pr0() + ")";
@@ -1182,6 +1221,12 @@ inline std::string print_derivations(
         return ".fact " + num(s.id);
       case D::kIvlDisjoint:
         return ".ivlDisjoint " + pr0() + " " + num(s.premises.at(1));
+      case D::kProductMod:
+        return ".productMod " + nums(s.premises);
+      case D::kCircuitAssert:
+        return ".circuitAssert " + num(s.id);
+      case D::kInputPremise:
+        return ".inputPremise " + num(s.id);
     }
     return "";
   };
@@ -1238,8 +1283,27 @@ inline std::string print_derivations(
                 ", steps := " + list_of(e.steps, step) + " }";
        }) +
        "\n\n";
+  // The GKR circuits' derivations, printed only when some entry has one
+  // (every other entry takes its own template instance's fact).
+  std::string circ;
+  if (!c.circuit_derivs.empty()) {
+    o += "/-- The GKR circuits' derivations other than their instances' facts, by circuit and "
+         "entry. -/\n"
+         "def circuitDerivs : List (ℕ × List (ℕ × List Step)) :=\n  " +
+         aligned_list(c.circuit_derivs.size(), [&](size_t k) {
+           const auto &cd = c.circuit_derivs[k];
+           return "(" + num(cd.circuit) + ", " +
+                  list_of(cd.entries, [&](const std::pair<size_t, std::vector<ir::DStep>> &e) {
+                    return "(" + num(e.first) + ", " + list_of(e.second, step) + ")";
+                  }) +
+                  ")";
+         }) +
+         "\n\n";
+    circ = ", circuitDerivs := circuitDerivs";
+  }
   o += "/-- The derivations, as the checker reads them. -/\n"
-       "def derivations : Derivations := { derivs := derivs, ranks := ranks, shared := shared }\n\n";
+       "def derivations : Derivations := { derivs := derivs, ranks := ranks, shared := shared" +
+       circ + " }\n\n";
   return o;
 }
 
@@ -1321,7 +1385,7 @@ inline std::string print_program(const ir::Program &p, const ExportMeta &meta,
     bts += (b ? ", " : "") + Printer::batch(p.batches[b]);
   for (const auto &c : p.circuits)
     add_def(ncircs, "Circuit", "A GKR circuit of the program.",
-            def_name("c", c.name), Printer::circuit(c));
+            def_name("c", c.name), pr.circuit(c));
   std::string reals;
   for (size_t i = 0; i < p.realization_circuits.size(); ++i)
     reals += (i ? ", " : "") + std::string("(") +
@@ -1401,8 +1465,8 @@ inline std::string print_program(const ir::Program &p, const ExportMeta &meta,
   o += defs;
   // The program's lists: a list of at most kChunk entries is written in
   // place; a longer one is chunks of kChunk entries, each its own
-  // definition, appended, so that a list literal's elaboration stays
-  // bounded whatever the program's size.
+  // definition, chained by their tails (chained_chunks), so that a list
+  // literal's elaboration stays bounded whatever the program's size.
   constexpr size_t kChunk = 1024;
   auto names = [&o](const char *field, const char *type,
                     const std::vector<std::string> &ns) {
@@ -1411,20 +1475,20 @@ inline std::string print_program(const ir::Program &p, const ExportMeta &meta,
       for (const auto &n : ns) l += (l.empty() ? "\n      " : ",\n      ") + n;
       return l;
     }
-    std::string appended;
-    for (size_t c = 0; c * kChunk < ns.size(); ++c) {
-      const std::string nm = std::string(field) + "Chunk" + std::to_string(c);
-      std::string l;
-      for (size_t i = c * kChunk; i < std::min(ns.size(), (c + 1) * kChunk); ++i)
-        l += (l.empty() ? "\n    " : ",\n    ") + ns[i];
-      o += "/-- The program's " + std::string(field) + ", chunk " +
-           std::to_string(c) + ". -/\ndef " + nm + " : List " + type +
-           " :=\n  [" + l + "]\n\n";
-      appended += (c ? " ++ " : "") + nm;
-    }
-    return std::string("\x01") + appended;
+    auto name = [field](size_t c) { return std::string(field) + "Chunk" + std::to_string(c); };
+    o += program_printer_internal::chained_chunks(
+        (ns.size() + kChunk - 1) / kChunk, name,
+        [&](size_t c, const std::string &nm, const std::string &tail) {
+          std::string l;
+          for (size_t i = c * kChunk; i < std::min(ns.size(), (c + 1) * kChunk); ++i)
+            l += (l.empty() ? "\n    " : ",\n    ") + ns[i];
+          return "/-- The program's " + std::string(field) + ", chunk " +
+                 std::to_string(c) + ". -/\ndef " + nm + " : List " + type + " :=\n  " +
+                 (tail.empty() ? "[" + l + "]" : "%[" + l + " |\n    " + tail + "]") + "\n\n";
+        });
+    return std::string("\x01") + name(0);
   };
-  // A list field: its literal, or its chunks appended.
+  // A list field: its literal, or its first chunk.
   auto field = [](const std::string &l) {
     return !l.empty() && l[0] == '\x01' ? l.substr(1) : "[" + l + "]";
   };

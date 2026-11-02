@@ -84,18 +84,19 @@ Relation<EcdsaStatement<Value>, EcdsaWitness<Value>> ecdsa_pop(
       "ecdsa-p256-possession", EcdsaStatement<Value>{},
       ecdsa_witness_shape(max_bytes));
 }
+using MLDSAInputs = mldsa::MLDSAInputs<MLDSA>;
 template <class P>
-Relation<mldsa::MLDSAStatement<Value>, mldsa::MLDSAWitness<Value>> mldsa_pop(
-    const Env<P> &env, size_t max_bytes, size_t ctx_bytes) {
-  return compile<mldsa::MLDSAStatement, mldsa::MLDSAWitness>(
+Relation<MLDSAInputs::Statement<Value>, MLDSAInputs::Witness<Value>>
+mldsa_pop(const Env<P> &env, size_t max_bytes, size_t ctx_bytes) {
+  return compile<MLDSAInputs::Statement, MLDSAInputs::Witness>(
       mac_profile<P>("ml-dsa-44"),
       [&env, max_bytes](typename Env<P>::MldsaSys &cs,
-                        mldsa::MLDSAStatement<In> st,
-                        mldsa::MLDSAWitness<In> w) {
+                        MLDSAInputs::Statement<In> st,
+                        MLDSAInputs::Witness<In> w) {
         mldsa_pop_relation<P>(cs, env, st, w, max_bytes);
       },
-      "ml-dsa-44-possession", mldsa::mldsa_statement_shape(ctx_bytes),
-      mldsa::mldsa_witness_shape(max_bytes, ctx_bytes));
+      "ml-dsa-44-possession", MLDSAInputs::statement_shape(ctx_bytes),
+      MLDSAInputs::witness_shape(max_bytes, ctx_bytes));
 }
 
 }  // namespace proofs::gordiehowe::examples::composite
@@ -103,9 +104,9 @@ Relation<mldsa::MLDSAStatement<Value>, mldsa::MLDSAWitness<Value>> mldsa_pop(
 namespace proofs::gordiehowe::examples::composite::support {
 
 // OpenSSL's ML-DSA-44 signer (mldsa_openssl_testing.h).
-using mldsa::support::mldsa_key;
-using mldsa::support::mldsa_public;
-using mldsa::support::mldsa_sign;
+inline constexpr auto mldsa_key = mldsa::support::mldsa_key<MLDSA>;
+inline constexpr auto mldsa_public = mldsa::support::mldsa_public<MLDSA>;
+inline constexpr auto mldsa_sign = mldsa::support::mldsa_sign<MLDSA>;
 using mldsa::support::ossl;
 using mldsa::support::Pkey;
 
@@ -133,7 +134,7 @@ inline mldsa::Signature mldsa_decoded(const std::vector<uint8_t> &pk,
   ex.pkey = pk;
   ex.ctx = ctx;
   ex.sig = sig;
-  const mldsa::support::Existing e(ex);
+  const mldsa::support::Existing<MLDSA> e(ex);
   if (!e.ok) throw std::runtime_error("ML-DSA: the reference verifier rejects");
   return e.signature();
 }
@@ -324,15 +325,15 @@ struct MldsaSystem {
   using Sys = typename Env<P>::MldsaSys;
   const Instance &x;
   size_t max;
-  Relation<mldsa::MLDSAStatement<Value>, mldsa::MLDSAWitness<Value>> rel;
+  Relation<MLDSAInputs::Statement<Value>, MLDSAInputs::Witness<Value>> rel;
   MldsaSystem(const Env<P> &e, const Instance &i, size_t m = 0)
       : x(i), max(m ? m : i.msg.size()), rel(mldsa_pop<P>(e, max, 0)) {}
   const auto &typed() const { return rel.template typed<Sys>(); }
-  mldsa::MLDSAStatement<Value> statement() const {
-    return mldsa::mldsa_statement(x.mldsa_pk, {});
+  MLDSAInputs::Statement<Value> statement() const {
+    return mldsa::mldsa_statement<MLDSA>(x.mldsa_pk, {});
   }
-  mldsa::MLDSAWitness<Value> witness() const {
-    return mldsa::mldsa_witness(x.msg, x.pop_mldsa, max, 0);
+  MLDSAInputs::Witness<Value> witness() const {
+    return mldsa::mldsa_witness<MLDSA>(x.msg, x.pop_mldsa, max, 0);
   }
 };
 

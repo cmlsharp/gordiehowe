@@ -15,7 +15,7 @@ The realization step (`GordieHowe.RealizedProgram.realizeLowering_of_derivs`) wi
 lowering data (the projection `bindAsg` and the realization events), its soundness from
 `satAt_or_realEvent_of_derivs`, its challenge-use rule from `challengeUseAt_realEvent_of_derivs`
 and its error bound (`eventBound_realizeLowering_of_derivs`) from
-`probUniform_realEvent_le_of_derivs`. The model reads no field-form linearity (`FieldFormModel`):
+`probUniform_realEvent_le_of_derivs`, given the selections' bound (`SelSound`). The model reads no field-form linearity (`FieldFormModel`):
 the derivations' rules state their own side conditions.
 -/
 
@@ -59,7 +59,7 @@ the phase's challenges of `realError`. -/
 theorem eventBound_realizeLowering_of_derivs (hwf : ir.WellFormed) {orng : List (ℕ × ℕ)}
     {D : Derivations} (hv : ir.DerivationsValid primeNodes (ir.declaredRanges ++ orng) D)
     (hI : I.Registered ir) (hL : I.Lawful ir primeNodes) (hM : I.MacModel ir)
-    (hO : ir.OpaqueRanges I orng) :
+    (hO : ir.OpaqueRanges I orng) (hsel : ir.SelSound I) :
     (ir.realizeLowering_of_derivs I hwf hv hI hL hM hO).EventBound fun k =>
       ∑ jj : ir.ChalAt k, ir.realError I jj.1 := by
   intro k x a r
@@ -70,7 +70,7 @@ theorem eventBound_realizeLowering_of_derivs (hwf : ir.WellFormed) {orng : List 
   refine card_le_of_card_update_le (β := fun jj : ir.ChalAt k => ir.ChalVal I jj.1) jj
     fun f => ?_
   have hb := (card_le_iff_probUniform_le _ _ _).2
-    (probUniform_realEvent_le_of_derivs hwf hv hI jj.1
+    (probUniform_realEvent_le_of_derivs hwf hv hI hsel jj.1
       (ir.layoutEnv I x (ir.bindAsg a) (r.setChal k f)))
   refine le_trans (le_of_eq ?_) hb
   congr 2
@@ -99,11 +99,11 @@ def realizeLowering_of_derivable (hwf : ir.WellFormed) {orng : List (ℕ × ℕ)
 theorem eventBound_realizeLowering_of_derivable (hwf : ir.WellFormed) {orng : List (ℕ × ℕ)}
     (hv : ir.Derivable primeNodes (ir.declaredRanges ++ orng))
     (hI : I.Registered ir) (hL : I.Lawful ir primeNodes) (hM : I.MacModel ir)
-    (hO : ir.OpaqueRanges I orng) :
+    (hO : ir.OpaqueRanges I orng) (hsel : ir.SelSound I) :
     (ir.realizeLowering_of_derivable I hwf hv hI hL hM hO).EventBound fun k =>
       ∑ jj : ir.ChalAt k, ir.realError I jj.1 := by
   obtain ⟨D, hD⟩ := hv
-  exact eventBound_realizeLowering_of_derivs I hwf hD hI hL hM hO
+  exact eventBound_realizeLowering_of_derivs I hwf hD hI hL hM hO hsel
 
 
 end

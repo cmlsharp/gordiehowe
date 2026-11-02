@@ -7,6 +7,7 @@ public import Mathlib.Logic.Equiv.Fin.Basic
 public import Mathlib.Data.Fintype.Card
 public import LatticeCrypto.MLDSA.Concrete.NTT
 import all LatticeCrypto.MLDSA.Concrete.NTT
+public import GordieHoweNative.Foundations.Algebra.BitReverse
 
 @[expose] public section
 
@@ -21,14 +22,12 @@ the evaluations at `ψ^(2·brv(k) + 1)`. The relation's reversal trick reads the
 `(2·brv(k) + 1) + (2·brv(n - 1 - k) + 1) = 2n` (`two_mul_bitRev_rev_add`).
 
 `bitRev 8` is the vendored FIPS 204 `brv` on eight bits (`bitRev_eight`).
+
+The definitions are in `GordieHoweNative/Foundations/Algebra/BitReverse.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe
-
-/-- Reverse the low `m` bits of `k`: the lowest bit becomes bit `m - 1`. -/
-def bitRevNat : ℕ → ℕ → ℕ
-  | 0, _ => 0
-  | m + 1, k => k % 2 * 2 ^ m + bitRevNat m (k / 2)
 
 theorem bitRevNat_lt (m k : ℕ) : bitRevNat m k < 2 ^ m := by
   induction m generalizing k with

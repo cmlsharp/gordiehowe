@@ -10,8 +10,13 @@ public import GordieHowe.Language.Realizations.Derivation.LinOp
 public import GordieHowe.Language.Realizations.Derivation.Solve
 public import GordieHowe.Language.Realizations.Derivation.OpIvl
 public import GordieHowe.Language.Realizations.Derivation.Events
+public import GordieHowe.Language.RealizedProgram.IvlSource
+public import GordieHoweNative.Language.RealizedProgram.Structure
 public import GordieHowe.Language.Realizations.Derivation.Mac
 public import GordieHowe.Language.Realizations.Derivation.Grouped
+public import GordieHowe.Language.Realizations.Derivation.ProductMod
+public import GordieHowe.Language.Realizations.Derivation.TableKernel
+public import GordieHoweNative.Language.Realizations.Derivation
 
 @[expose] public section
 
@@ -59,6 +64,9 @@ from a range (`ivlNat`, `src … (.nat k)`) is stated only for a leaf whose inte
 natural. `ivlExpr` walks its expression in pre-order consuming its premises in order
 (`ivlWalk`): sums, differences, products, constant multiples, views, concatenations and shared
 expressions.
+
+The definitions are in `GordieHoweNative/Language/Realizations/Derivation.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -69,208 +77,20 @@ section
 
 variable (ir : RealizedProgram) {I : Interp}
 
-/-- **The conclusion of a step** of a derivation of rank `self`, for predicate `pid` of body `body`
-(a shared entry: `entryBody d`, which no rule concludes), from the facts `fs` of the earlier
-steps, its side conditions checked; `none` when it does not check. -/
-def stepFact (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (ctx : DerivCtx) (self pid : ℕ)
-    (body : PredBody) (fs : List Fact) : Step → Option Fact
-  | .realized p => if p = pid then realizedOf body else ir.realizedFact p
-  | .subst e₁ e₂ => ir.substFact body.dom e₁ e₂
-  | .linear cs e₁ e₂ => ir.linearFact fs body.dom cs e₁ e₂
-  | .lookup ms => ir.lookupFact ms
-  | .rangeNat k => ir.rangeNatFact fs body.dom k
-  | .holdsIn k => ir.holdsInFact fs k
-  | .src v s => if ir.srcGuard body.dom v = true then ir.srcFact primeNodes sr fs body.dom v s else none
-  | .ivlNat k => ir.ivlNatFact fs body.dom k
-  | .ivlExpr ks x lo hi => ir.ivlExprFact fs body.dom ks x lo hi
-  | .ivlSolve k ks a j lo hi => ir.ivlSolveFact fs body.dom k ks a j lo hi
-  | .ivlApply k a e lo hi => ir.ivlApplyFact fs body.dom k a e lo hi
-  | .ivlLogic ks e => ir.ivlLogicFact fs body.dom ks e
-  | .ivlMeet a b => ivlMeetFact fs a b
-  | .ivlDisjoint a b => ir.ivlDisjointFact fs body.dom a b
-  | .fieldDvd k a b => ir.fieldDvdFact fs body.dom k a b
-  | .natIvl k => natIvlFact fs k
-  | .transport k j => ir.transportFact fs k j
-  | .natComp k j => ir.natCompFact fs body.dom k j
-  | .natBool p => ir.natBoolFact p
-  | .natLin k ks => ir.natLinFact fs body.dom k ks
-  | .liftConst k a => ir.liftConstFact fs body k a
-  | .lift k a b => ir.liftFact fs k a b
-  | .digits k ds T => ir.digitsFact fs body.dom k ds T
-  | .congr k => congrFact fs pid body k
-  | .mac ts h ivs => ir.macFact primeNodes ctx self pid body fs ts h ivs
-  | .linop s => ir.linopFact fs body.dom s
-  | .conclude k => ir.concludeFact fs pid body k
-  | .hyp q => if q < ir.predicates.length ∧ ctx.rank q < self then some (.holds q) else none
-  | .fact k => if ctx.srank k < self then ctx.sfact k else none
-  | .inDom d s => stepFact primeNodes sr ctx self pid (entryBody d) fs s
-  | .groupedMod rows ivs => ir.groupedFact ctx self pid body fs rows ivs
-
-/-- **The facts of a derivation**: one pass over the steps, each step's fact appended. -/
-def runSteps (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (ctx : DerivCtx) (self pid : ℕ)
-    (body : PredBody) : List Fact → List Step → Option (List Fact)
-  | fs, [] => some fs
-  | fs, s :: ss =>
-    (ir.stepFact primeNodes sr ctx self pid body fs s).bind fun f =>
-      runSteps primeNodes sr ctx self pid body (fs ++ [f]) ss
-
-/-- **The steps `steps` of predicate `pid`, of body `body` and rank `self`, check**: every step
-checks and the last fact is `holds pid`. -/
-def derivStepsB (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (ctx : DerivCtx)
-    (self pid : ℕ) (body : PredBody) (steps : List Step) : Bool :=
-  match ir.runSteps primeNodes sr ctx self pid body [] steps with
-  | some fs =>
-    match fs.getLast? with
-    | some (.holds p) => p == pid
-    | _ => false
-  | none => false
-
-/-- **A cross-field `equal` has a valid MAC realization** (`MacRealizable`: hosted or two-tail,
-its tails and H predicate among the program's). -/
-def macOkB (pid : ℕ) (body : PredBody) : Bool := ir.macCoreOkB pid body
-
-/-- Whether a predicate body is a cross-field `equal`. -/
-def derivCrossB : PredBody → Bool
-  | .cross _ _ _ _ _ _ => true
-  | _ => false
-
-/-- **The derivation `steps` of predicate `pid`, of body `body`, checks** at its rank
-(`derivStepsB`; a cross-field `equal` by its `mac` step). -/
-def derivB (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (ctx : DerivCtx) (pid : ℕ)
-    (body : PredBody) (steps : List Step) : Bool :=
-  ir.derivStepsB primeNodes sr ctx (ctx.rank pid) pid body steps
-
-/-- **Shared entry `k` checks**: its steps, at its rank, conclude its fact. -/
-def entryB (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (ctx : DerivCtx) (k : ℕ)
-    (en : SharedEntry) : Bool :=
-  match ir.runSteps primeNodes sr ctx (ctx.srank k) ir.predicates.length (entryBody en.fact.dom)
-      [] en.steps with
-  | some fs => (fs.getLast?.map fun f => f.beq en.fact).getD false
-  | none => false
-
-/-- **An interval source that holds at the honest prover's reader**: a constant's entries, a
-declared bound, a `nat` premise. -/
-def honestSrcB : IvlSrc → Bool
-  | .const => true
-  | .declared _ => true
-  | .nat _ => true
-  | _ => false
-
-/-- **An interval source that holds at the reader of a typed environment where every equality
-predicate holds**: a value of a prime node (`prime`, its type), an opaque bit (`opaqueBit`, the
-opaque call's evaluation), a root of cited equalities (`quadRoot`, `rootSet`), and a leaf whose
-sum with a constant is a range (`shift`). -/
-def typedSrcB : IvlSrc → Bool
-  | .prime => true
-  | .opaqueBit => true
-  | .quadRoot _ _ => true
-  | .rootSet _ => true
-  | .shift _ => true
-  | _ => false
-
-/-- **A step whose fact holds at the honest prover's reader**: the reader-generic rules, a lookup
-(every needle is a row of its table), a cited predicate (`hyp`, every predicate holds) and the
-facts read from one (`holdsIn`, `natBool`); never `realized`, `mac`, `congr`, `conclude`, `fact`
-or `groupedMod`. -/
-def honestStepB : Step → Bool
-  | .subst _ _ => true
-  | .linear _ _ _ => true
-  | .lookup _ => true
-  | .rangeNat _ => true
-  | .holdsIn _ => true
-  | .src _ s => honestSrcB s || typedSrcB s
-  | .ivlNat _ => true
-  | .ivlExpr _ _ _ _ => true
-  | .ivlSolve _ _ _ _ _ _ => true
-  | .ivlApply _ _ _ _ _ => true
-  | .ivlLogic _ _ => true
-  | .ivlMeet _ _ => true
-  | .ivlDisjoint _ _ => true
-  | .fieldDvd _ _ _ => true
-  | .natIvl _ => true
-  | .transport _ _ => true
-  | .natComp _ _ => true
-  | .natBool _ => true
-  | .natLin _ _ => true
-  | .liftConst _ _ => true
-  | .lift _ _ _ => true
-  | .digits _ _ _ => true
-  | .linop _ => true
-  | .hyp _ => true
-  | .inDom _ s => honestStepB s
-  | _ => false
-
-/-- **The steps `ss` cite a shared entry of `sh` concluding an interval of `x` in domain `d`**
-(`fact k`), whose steps all hold at the honest prover's reader (`honestStepB`). -/
-def citesIvlB (sh : List SharedEntry) (d : ℕ) (x : Expr) : List Step → Bool
-  | [] => false
-  | .fact k :: ss =>
-    (match sh[k]? with
-      | some en =>
-        (match en.fact with
-          | .ivl d' x' _ _ => d' == d && x'.beq x
-          | _ => false) && en.steps.all honestStepB
-      | none => false) || citesIvlB sh d x ss
-  | _ :: ss => citesIvlB sh d x ss
-
-/-- **The derivation `ss` of a `mod_0` cites intervals of both sides** (`citesIvlB`); `true` off
-`mod_0`s. -/
-def modCiteB (sh : List SharedEntry) : PredBody → List Step → Bool
-  | .mod d q a b _, ss => q != 0 || (citesIvlB sh d a ss && citesIvlB sh d b ss)
-  | _, _ => true
-
-/-- **An unlisted predicate's body**: a field `equal`, which `defaultSteps` derive
-(`derivB_default_of_equal`). -/
-def defaultOkB : PredBody → Bool
-  | .equal _ _ _ _ => true
-  | _ => false
-
-/-- **The derivations of the predicates `ps` from `pid` on check**: one pass merging `ps` with the
-sparse list `ds` (sorted by predicate); a listed predicate checks its steps, an unlisted one is a
-field `equal` (`defaultOkB`, which `defaultSteps` derive); an entry out of order or out of range is
-left over and fails. -/
-def allDerivsB (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (ctx : DerivCtx)
-    (sh : List SharedEntry) : ℕ → List Predicate → List (ℕ × List Step) → Bool
-  | _, [], [] => true
-  | _, [], _ :: _ => false
-  | pid, pr :: ps, [] => defaultOkB pr.body && allDerivsB primeNodes sr ctx sh (pid + 1) ps []
-  | pid, pr :: ps, d :: ds =>
-    if d.1 = pid then
-      ir.derivB primeNodes sr ctx pid pr.body d.2 && modCiteB sh pr.body d.2 &&
-        allDerivsB primeNodes sr ctx sh (pid + 1) ps ds
-    else defaultOkB pr.body && allDerivsB primeNodes sr ctx sh (pid + 1) ps (d :: ds)
-
-/-- **A lookup `in`'s interval-free shape** (`LookupCore`), as a Boolean; `true` off lookups. -/
-def lookupCoreB (pid : ℕ) : PredBody → Bool
-  | .mem d recs set (.lookup r) =>
-    match r.kind with
-    | .direct => ir.directOkB pid d recs set r
-    | .digits => decide (ir.DigitsOk pid d recs set r)
-    | .twoSided => decide (ir.TwoSidedOk pid d recs set r)
-    | .complement => decide (ir.ComplementCore pid d recs set r)
-    | _ => false
-  | _ => true
-
-/-- **A `mod_q` in the field form has its field equation as a row**: the modulus is the
-characteristic `p > 2` and the field equation `e − e' = 0` is a field `equal` of the program
-(`fieldRowB`); `true` on every other predicate. -/
-def fieldRowOkB : PredBody → Bool
-  | .mod d q e e' real =>
-    !(q != 0 && decide (real.form = .field)) ||
-      (q == ir.charOf (ir.domainField d) && decide (2 < q) &&
-        ir.predicates.any fun p => ir.fieldRowB d e e' p.body)
-  | _ => true
-
-/-- **The checker of `DerivationsValid`**: one derivation per predicate and every shared entry,
-each checking at its rank. -/
-def derivsB (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (D : Derivations) : Bool :=
-  ir.allDerivsB primeNodes sr D.ctx D.shared 0 ir.predicates D.derivs &&
-    (D.shared.zipIdx.all fun ek => ir.entryB primeNodes sr D.ctx ek.2 ek.1) &&
-    (List.range ir.tables.length).all ir.tableOkB &&
-    (ir.predicates.zipIdx.all fun pq => !derivCrossB pq.1.body || ir.macOkB pq.2 pq.1.body) &&
-    allIdx (fun pid p => ir.lookupCoreB pid p.body) ir.predicates 0 &&
-    allIdx (fun _ x => ir.boundOkV x) ir.values 0 &&
-    allIdx (fun _ p => ir.fieldRowOkB p.body) ir.predicates 0
+/-- **`fieldRowOkB` gives the field row** of a field-form `mod_q` with `q ≠ 0`. -/
+theorem fieldRowOkB_sound {S : Structure} {pid d q : ℕ} {e e' : Expr} {real : ModRealization}
+    (hb : (ir.predicate pid).body = .mod d q e e' real)
+    (h : ir.fieldRowOkB S pid (ir.predicate pid).body = true) (hq : q ≠ 0)
+    (hf : real.form = .field) :
+    q = ir.charOf (ir.domainField d) ∧ 2 < q ∧
+      ir.predicates.any (fun p => ir.fieldRowB d e e' p.body) = true := by
+  rw [hb] at h
+  simp only [fieldRowOkB, fieldRowOkE, hf, decide_true, Bool.and_true,
+    bne_iff_ne, ne_eq, hq, not_false_eq_true, ↓reduceIte, Twin.okB_seqE, Twin.okB_guardE,
+    Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
+  obtain ⟨⟨hq1, hq2⟩, hp⟩ := h
+  obtain ⟨r, hr⟩ := ir.exists_fieldRowAtB_of_ptr hp
+  exact ⟨hq1, hq2, ir.any_fieldRowB_of_fieldRowAtB hb hr⟩
 
 /-- **The derivations are valid**: aligned with the predicates, every predicate's derivation and
 every shared entry checks at its rank (`Derivations.ctx`). -/
@@ -303,6 +123,11 @@ structure DerivationsValid (primeNodes : ℕ → List String) (sr : List (ℕ ×
     (ir.predicate pid).body = .mod d q e e' real → q ≠ 0 → real.form = .field →
       q = ir.charOf (ir.domainField d) ∧ 2 < q ∧
         ir.predicates.any (fun p => ir.fieldRowB d e e' p.body) = true
+  /-- Every product-form `mod_q` passes the structural check (`productOkB`) in a field of
+  characteristic above `2` (the honest prover's placed equation reads it). -/
+  products : ∀ pid < ir.predicates.length, ∀ d q e e' real,
+    (ir.predicate pid).body = .mod d q e e' real → real.form.isProduct = true →
+      ir.productOkB (.mod d q e e' real) = true ∧ 2 < ir.charOf (ir.domainField d)
 
 /-- **The realization step has valid derivations** (`DerivationsValid`): the realization
 condition of a program, at the plan's prime-subfield nodes `primeNodes` and the value ranges
@@ -318,8 +143,8 @@ variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String}
 
 /-- **Every rule is sound** at the reader of a sampled environment of the realized program at a
 realized assignment (`hB`) within the value ranges `sr` (`hS`), where what the derivation cites
-holds (`hc`): the step's fact holds where its premises' do, or (`lookup`) a realization event
-happens. -/
+holds (`hc`): the step's fact holds where its premises' do, or (`lookup`, `mac`, `src … tableKernel`)
+a realization event happens. -/
 theorem stepFact_sound (hM : ir.DerivModel I primeNodes) {sr : List (ℕ × ℕ)} {e : ir.Env I}
     (he : Env.Sampled ir e) (h : ir.RealizedAt e)
     (hS : ∀ vN ∈ sr, ∀ i < (ir.value vN.1).size,
@@ -362,7 +187,9 @@ theorem stepFact_sound (hM : ir.DerivModel I primeNodes) {sr : List (ℕ × ℕ)
   | src v s =>
     simp only [stepFact] at hf
     split_ifs at hf with hg
-    exact .inl (srcFact_sound hM.wf hM.registered hM.lawful h hS hfs hg hf)
+    rcases Option.or_eq_some_iff.1 hf with hf | ⟨-, hf⟩
+    · exact .inl (srcFact_sound hM.wf hM.registered hM.lawful h hS hfs hg hf)
+    · exact tableKernelFact_sound hM.wf hM.registered hM.lawful hS hc hf
   | ivlExpr ks x lo hi => exact .inl (ivlExprFact_sound hM.wf hM.registered hM.lawful hK hfs hf)
   | lift k a b => exact .inl (liftFact_sound hM.wf hM.registered hM.lawful hK hfs hf)
   | digits k ds T => exact .inl (digitsFact_sound hM.wf hM.registered hM.lawful hK hfs hf)
@@ -393,6 +220,10 @@ theorem stepFact_sound (hM : ir.DerivModel I primeNodes) {sr : List (ℕ × ℕ)
     exact ih (.inr ⟨d, rfl⟩) hf
   | groupedMod rows ivs =>
     exact .inl (groupedFact_sound hM.wf hM.registered hM.lawful hown hc hfs hf)
+  | productMod ks =>
+    exact .inl (productModFact_sound hM.wf hM.registered hM.lawful h hS hfs hown hf)
+  | circuitAssert k => simp [stepFact] at hf
+  | inputPremise k => simp [stepFact] at hf
 
 /-- **The facts of a derivation hold**, or a realization event happens. -/
 theorem runSteps_sound (hM : ir.DerivModel I primeNodes) {sr : List (ℕ × ℕ)} {e : ir.Env I}
@@ -551,26 +382,29 @@ theorem allDerivsB_sound {sr : List (ℕ × ℕ)} {ctx : DerivCtx} {sh : List Sh
         simpa using this
 
 /-- **`derivsB` decides `DerivationsValid`** (one direction). -/
-theorem derivationsValid_of_derivsB (hwf : ir.WellFormed) {sr : List (ℕ × ℕ)} {D : Derivations}
-    (h : ir.derivsB primeNodes sr D = true) : ir.DerivationsValid primeNodes sr D := by
+theorem derivationsValid_of_derivsB (hwf : ir.WellFormed) {sr : List (ℕ × ℕ)} {S : Structure}
+    {D : Derivations} (h : ir.derivsB primeNodes sr S D = true) :
+    ir.DerivationsValid primeNodes sr D := by
   unfold derivsB at h
   simp only [Bool.and_eq_true] at h
-  obtain ⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩ := h
+  obtain ⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩ := h
   have hk := allDerivsB_sound h1
   rw [allIdx_iff] at h5
   rw [allIdx_values_iff] at h6
   rw [allIdx_iff] at h7
-  refine ⟨fun pid hpid => by simpa [predicate, Derivations.stepsOf] using (hk pid hpid).1,
-    fun pid hpid => by simpa [predicate, Derivations.stepsOf] using (hk pid hpid).2,
+  rw [allIdx_iff] at h8
+  refine ⟨fun pid hpid => by simpa [predicate_eq_getD, Derivations.stepsOf] using (hk pid hpid).1,
+    fun pid hpid => by simpa [predicate_eq_getD, Derivations.stepsOf] using (hk pid hpid).2,
     fun k hk' => ?_,
     fun t ht => (tableOkB_iff hwf t).1 (List.all_eq_true.1 h3 t (List.mem_range.2 ht)),
     fun p hp hc => ?_, fun pid hpid d recs set r hb => ?_,
-    fun v hv => (boundOkV_iff hwf v).1 (h6 v hv), fun pid hpid d q e e' real hb hq hf => ?_⟩
+    fun v hv => (boundOkV_iff hwf v).1 (h6 v hv), fun pid hpid d q e e' real hb hq hf => ?_,
+    fun pid hpid d q e e' real hb hf => ?_⟩
   · have := List.all_eq_true.1 h2 (D.shared[k], k) (List.mem_iff_getElem.2
       ⟨k, by simpa using hk', by simp⟩)
     simpa [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hk'] using this
   · have := List.all_eq_true.1 h4 ((ir.predicate p), p) (List.mem_iff_getElem.2
-      ⟨p, by simpa using hp, by simp [predicate, List.getD_eq_getElem?_getD,
+      ⟨p, by simpa using hp, by simp [predicate_eq_getD, List.getD_eq_getElem?_getD,
         List.getElem?_eq_getElem hp]⟩)
     simp only [Bool.or_eq_true, Bool.not_eq_true'] at this
     rcases this with h0 | h0
@@ -579,6 +413,7 @@ theorem derivationsValid_of_derivsB (hwf : ir.WellFormed) {sr : List (ℕ × ℕ
     · exact h0
   · have := h5 pid hpid
     simp only [Nat.zero_add] at this
+    rw [← predicate_eq_getD] at this
     change ir.lookupCoreB pid (ir.predicate pid).body = true at this
     rw [hb] at this
     simp only [lookupCoreB] at this
@@ -588,9 +423,17 @@ theorem derivationsValid_of_derivsB (hwf : ir.WellFormed) {sr : List (ℕ × ℕ
       decide_eq_true_eq, imp_self]
     exact (directOkB_iff hwf _ _ _ _ _).1
   · have := h7 pid hpid
-    change ir.fieldRowOkB (ir.predicate pid).body = true at this
+    simp only [Nat.zero_add] at this
+    rw [← predicate_eq_getD] at this
+    change ir.fieldRowOkB S pid (ir.predicate pid).body = true at this
+    exact ir.fieldRowOkB_sound hb this hq hf
+  · have := h8 pid hpid
+    rw [← predicate_eq_getD] at this
+    change ir.productValidB (ir.predicate pid).body = true at this
     rw [hb] at this
-    simpa [fieldRowOkB, hq, hf, and_assoc] using this
+    simp only [productValidB, PredBody.isProductMod, hf, Bool.not_true, Bool.false_or,
+      Bool.and_eq_true, PredBody.dom] at this
+    exact ⟨this.1, of_decide_eq_true this.2⟩
 
 /-- **Valid derivations give the structural checks the events read** (`EventsOk`). -/
 theorem DerivationsValid.eventsOk {sr : List (ℕ × ℕ)} {D : Derivations}
@@ -625,12 +468,13 @@ theorem challengeUseAt_realEvent_of_derivs (hwf : ir.WellFormed) {sr : List (ℕ
   challengeUseAt_realEvent_ev hwf hv.eventsOk
 
 /-- **The realization event at challenge `j` has probability at most `realError`**, from valid
-derivations (`probUniform_realEvent_le_ev` at their structural checks). -/
+derivations (`probUniform_realEvent_le_ev` at their structural checks) and the selections' bound
+(`SelSound`). -/
 theorem probUniform_realEvent_le_of_derivs (hwf : ir.WellFormed) {sr : List (ℕ × ℕ)}
-    {D : Derivations} (hv : ir.DerivationsValid primeNodes sr D) (hI : I.Registered ir) (j : ℕ)
-    (e : ir.Env I) :
+    {D : Derivations} (hv : ir.DerivationsValid primeNodes sr D) (hI : I.Registered ir)
+    (hsel : ir.SelSound I) (j : ℕ) (e : ir.Env I) :
     Pr[c ← ir.ChalVal I j : ir.RealEvent j (e.setChal j c)] ≤ ir.realError I j :=
-  probUniform_realEvent_le_ev hwf hv.eventsOk hI j e
+  probUniform_realEvent_le_ev hwf hv.eventsOk hI hsel j e
 
 /-- **The realized program gives the program, or a realization event**, where every predicate has
 a derivation that checks (`DerivationsValid`): in a sampled environment of the realized program at
@@ -677,5 +521,406 @@ theorem satAt_or_realEvent_of_derivs {sr : List (ℕ × ℕ)} {D : Derivations}
   exact (hgood (D.ctx.rank pid + 1)).1 pid hpid (Nat.lt_succ_self _)
 
 end Sound
+
+/-! ## The check in ranges
+
+`derivsB` splits into checks of ranges of predicates `[i, j)` (`DerivsPredsIn`, each from a walk,
+`derivsPredsB`) and of shared entries (`derivsSharedIn`), which join with no re-check and give the
+check from `[0, n)`, `n` at least the list's length (`derivsB_of_parts`), with the tables, the values
+bound to their digits (`derivsRestB`) and the order of the listed derivations (`derivsOrderB`). A
+range of predicates is checked in one walk of the predicates from `i` (`dropK`) merged with the
+listed derivations from the first one at `i` or later (`dropLtK`); the order of the listed
+derivations, checked once, makes the walk's merge read each predicate's listed steps. -/
+
+/-- **The listed steps of predicate `pid`**: those of the first derivation listed for it. -/
+def listedSteps : List (ℕ × List Step) → ℕ → Option (List Step)
+  | [], _ => none
+  | d :: ds, pid => if d.1 = pid then some d.2 else listedSteps ds pid
+
+theorem sparseSteps_eq_listed :
+    ∀ (ds : List (ℕ × List Step)) (pid : ℕ),
+      sparseSteps ds pid = (listedSteps ds pid).getD (defaultSteps pid)
+  | [], _ => rfl
+  | d :: ds, pid => by
+    by_cases h : d.1 = pid
+    · simp [sparseSteps, listedSteps, h]
+    · simp only [sparseSteps, listedSteps, h, if_false]
+      exact sparseSteps_eq_listed ds pid
+
+theorem listedSteps_of_lt : ∀ {ds : List (ℕ × List Step)} {pid : ℕ}, (∀ d ∈ ds, pid < d.1) →
+    listedSteps ds pid = none
+  | [], _, _ => rfl
+  | d :: ds, pid, h => by
+    have h1 := h d (by simp)
+    simp only [listedSteps, if_neg (Nat.ne_of_gt h1)]
+    exact listedSteps_of_lt fun d' hd' => h d' (by simp [hd'])
+
+/-- **The listed derivations from the first one at `i` or later**, by the recursor
+(`dropLtK_eq`). -/
+noncomputable def dropLtK (i : ℕ) (ds : List (ℕ × List Step)) : List (ℕ × List Step) :=
+  @List.rec (ℕ × List Step) (fun _ => List (ℕ × List Step)) []
+    (fun d ds' ih => cond (Nat.blt d.1 i) ih (d :: ds')) ds
+
+/-- **The listed derivations from the first one at `i` or later**: the code compiled for
+`dropLtK`. -/
+def dropLtC (i : ℕ) (ds : List (ℕ × List Step)) : List (ℕ × List Step) :=
+  ds.dropWhile fun d => Nat.blt d.1 i
+
+theorem dropLtK_eq (i : ℕ) : ∀ ds : List (ℕ × List Step), dropLtK i ds = dropLtC i ds
+  | [] => rfl
+  | d :: ds => by
+    change cond (Nat.blt d.1 i) (dropLtK i ds) (d :: ds) = _
+    rw [dropLtC, List.dropWhile_cons]
+    cases Nat.blt d.1 i
+    · rfl
+    · exact dropLtK_eq i ds
+
+@[csimp] theorem dropLtK_csimp : @dropLtK = @dropLtC := by
+  funext i ds
+  exact dropLtK_eq i ds
+
+theorem listedSteps_dropLtC {i pid : ℕ} (hi : i ≤ pid) :
+    ∀ ds : List (ℕ × List Step), listedSteps (dropLtC i ds) pid = listedSteps ds pid
+  | [] => rfl
+  | d :: ds => by
+    rw [dropLtC, List.dropWhile_cons]
+    by_cases h : d.1 < i
+    · have hb : Nat.blt d.1 i = true := by rw [Nat.blt_eq]; exact h
+      simp only [hb, listedSteps, show d.1 ≠ pid by omega, ite_true, ite_false]
+      exact listedSteps_dropLtC hi ds
+    · have hb : Nat.blt d.1 i = false := by
+        rw [Bool.eq_false_iff, ne_eq, Nat.blt_eq]; exact h
+      simp [hb]
+
+theorem dropLtC_ge {i : ℕ} :
+    ∀ {ds : List (ℕ × List Step)}, ds.Pairwise (fun a b => a.1 < b.1) →
+      ∀ e ∈ dropLtC i ds, i ≤ e.1
+  | [], _ => by simp [dropLtC]
+  | d :: ds, hs => by
+    rw [dropLtC, List.dropWhile_cons]
+    rw [List.pairwise_cons] at hs
+    by_cases h : d.1 < i
+    · have hb : Nat.blt d.1 i = true := by rw [Nat.blt_eq]; exact h
+      simp only [hb, ite_true]
+      exact dropLtC_ge hs.2
+    · have hb : Nat.blt d.1 i = false := by
+        rw [Bool.eq_false_iff, ne_eq, Nat.blt_eq]; exact h
+      simp only [hb, Bool.false_eq_true, ite_false, List.mem_cons, forall_eq_or_imp]
+      exact ⟨by omega, fun e he => by have := hs.1 e he; omega⟩
+
+theorem dropLtC_pairwise {i : ℕ} :
+    ∀ {ds : List (ℕ × List Step)}, ds.Pairwise (fun a b => a.1 < b.1) →
+      (dropLtC i ds).Pairwise (fun a b => a.1 < b.1)
+  | [], _ => by simp [dropLtC]
+  | d :: ds, hs => by
+    rw [dropLtC, List.dropWhile_cons]
+    cases Nat.blt d.1 i
+    · exact hs
+    · exact dropLtC_pairwise (List.pairwise_cons.1 hs).2
+
+/-- **The listed derivations are in increasing order of predicate**, as a check. -/
+def chainLtB : List (ℕ × List Step) → Bool
+  | d :: e :: ds => Nat.blt d.1 e.1 && chainLtB (e :: ds)
+  | _ => true
+
+theorem pairwise_of_chainLtB :
+    ∀ {ds : List (ℕ × List Step)}, chainLtB ds = true → ds.Pairwise (fun a b => a.1 < b.1)
+  | [], _ => List.Pairwise.nil
+  | [_], _ => List.pairwise_singleton _ _
+  | d :: e :: ds, h => by
+    simp only [chainLtB, Bool.and_eq_true, Nat.blt_eq] at h
+    have ih := pairwise_of_chainLtB h.2
+    refine List.Pairwise.cons (fun x hx => ?_) ih
+    rcases List.mem_cons.1 hx with rfl | hx
+    · exact h.1
+    · exact Nat.lt_trans h.1 ((List.pairwise_cons.1 ih).1 x hx)
+
+section
+
+variable (ir : RealizedProgram)
+
+/-- **The listed derivations are in increasing order of predicate, each of a predicate of the
+program**, as a check. -/
+def derivsOrderB (D : Derivations) : Bool :=
+  chainLtB D.derivs && D.derivs.all fun d => Nat.blt d.1 ir.predicates.length
+
+/-- **A predicate's derivation checks** (`allDerivsB`'s step): its listed steps `o`, or else a
+field `equal` (`defaultOkB`). -/
+def derivStepB (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (D : Derivations) (pid : ℕ)
+    (pr : Predicate) : Option (List Step) → Bool
+  | some s => ir.derivB primeNodes sr D.ctx pid pr.body s && modCiteB D.shared pr.body s
+  | none => defaultOkB pr.body
+
+/-- **`derivsB`'s checks at predicate `pid`** (`pr`), with its listed steps `o`: its derivation,
+its MAC realization, its lookup's shape, its field row and its product form. -/
+def derivPredB (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (S : Structure)
+    (D : Derivations) (pid : ℕ) (pr : Predicate) (o : Option (List Step)) : Bool :=
+  ir.derivStepB primeNodes sr D pid pr o && (!derivCrossB pr.body || ir.macOkB pid pr.body) &&
+    ir.lookupCoreB pid pr.body && ir.fieldRowOkB S pid pr.body && ir.productValidB pr.body
+
+/-- **`n` predicates' checks from `pid` on**, the predicates `ps` merged with the listed
+derivations `ds` (from the first at `pid` or later), by the recursors (`derivsWalkN_eq`): a
+derivation listed at `pid` gives its steps, else none is, its head being of a later predicate. -/
+noncomputable def derivsWalkN (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (S : Structure)
+    (D : Derivations) (n : ℕ) : List Predicate → List (ℕ × List Step) → ℕ → Bool :=
+  @Nat.rec (fun _ => List Predicate → List (ℕ × List Step) → ℕ → Bool) (fun _ _ _ => true)
+    (fun _ ih ps ds pid => @List.casesOn Predicate (fun _ => Bool) ps true fun pr ps' =>
+      @List.casesOn (ℕ × List Step) (fun _ => Bool) ds
+        (ir.derivPredB primeNodes sr S D pid pr none && ih ps' [] (pid + 1))
+        fun d ds' => cond (Nat.beq d.1 pid)
+          (ir.derivPredB primeNodes sr S D pid pr (some d.2) && ih ps' ds' (pid + 1))
+          (Nat.blt pid d.1 && ir.derivPredB primeNodes sr S D pid pr none &&
+            ih ps' (d :: ds') (pid + 1))) n
+
+/-- **`derivsWalkN`, by structural recursion**: the code compiled for it. -/
+def derivsWalkC (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (S : Structure)
+    (D : Derivations) : ℕ → List Predicate → List (ℕ × List Step) → ℕ → Bool
+  | 0, _, _, _ => true
+  | _ + 1, [], _, _ => true
+  | n + 1, pr :: ps, [], pid =>
+    ir.derivPredB primeNodes sr S D pid pr none && derivsWalkC primeNodes sr S D n ps [] (pid + 1)
+  | n + 1, pr :: ps, d :: ds, pid =>
+    cond (Nat.beq d.1 pid)
+      (ir.derivPredB primeNodes sr S D pid pr (some d.2) &&
+        derivsWalkC primeNodes sr S D n ps ds (pid + 1))
+      (Nat.blt pid d.1 && ir.derivPredB primeNodes sr S D pid pr none &&
+        derivsWalkC primeNodes sr S D n ps (d :: ds) (pid + 1))
+
+theorem derivsWalkN_eq (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (S : Structure)
+    (D : Derivations) : ∀ n ps ds pid,
+      ir.derivsWalkN primeNodes sr S D n ps ds pid = ir.derivsWalkC primeNodes sr S D n ps ds pid
+  | 0, _, _, _ => rfl
+  | _ + 1, [], _, _ => rfl
+  | n + 1, pr :: ps, [], pid => by
+    change (ir.derivPredB primeNodes sr S D pid pr none &&
+      ir.derivsWalkN primeNodes sr S D n ps [] (pid + 1)) = _
+    rw [derivsWalkN_eq primeNodes sr S D n, derivsWalkC]
+  | n + 1, pr :: ps, d :: ds, pid => by
+    change cond (Nat.beq d.1 pid)
+      (ir.derivPredB primeNodes sr S D pid pr (some d.2) &&
+        ir.derivsWalkN primeNodes sr S D n ps ds (pid + 1))
+      (Nat.blt pid d.1 && ir.derivPredB primeNodes sr S D pid pr none &&
+        ir.derivsWalkN primeNodes sr S D n ps (d :: ds) (pid + 1)) = _
+    rw [derivsWalkN_eq primeNodes sr S D n, derivsWalkN_eq primeNodes sr S D n, derivsWalkC]
+
+@[csimp] theorem derivsWalkN_csimp : @derivsWalkN = @derivsWalkC := by
+  funext ir primeNodes sr S D n ps ds pid
+  exact ir.derivsWalkN_eq primeNodes sr S D n ps ds pid
+
+/-- **`derivsB`'s checks of the predicates `[i, j)`**, in one walk (`derivsWalkN`). -/
+def derivsPredsB (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (S : Structure)
+    (D : Derivations) (i j : ℕ) : Bool :=
+  ir.derivsWalkN primeNodes sr S D (j - i) (dropK i ir.predicates) (dropLtK i D.derivs) i
+
+/-- **`derivsB`'s checks hold at the predicates `[i, j)`**, each with its listed steps. -/
+def DerivsPredsIn (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (S : Structure)
+    (D : Derivations) (i j : ℕ) : Prop :=
+  ∀ pid, i ≤ pid → pid < j → pid < ir.predicates.length →
+    ir.derivPredB primeNodes sr S D pid (ir.predicates.getD pid default)
+      (listedSteps D.derivs pid) = true
+
+/-- **`derivsB`'s check of the shared entries `[i, j)`.** -/
+def derivsSharedIn (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (D : Derivations)
+    (i j : ℕ) : Bool :=
+  allIdxIn (fun k e => ir.entryB primeNodes sr D.ctx k e) D.shared i j
+
+/-- **`derivsB`'s checks of the tables and of the values bound to their digits.** -/
+def derivsRestB : Bool :=
+  (List.range ir.tables.length).all ir.tableOkB && allIdx (fun _ x => ir.boundOkV x) ir.values 0
+
+end
+
+section
+
+variable {ir : RealizedProgram} {primeNodes : ℕ → List String} {sr : List (ℕ × ℕ)}
+  {S : Structure} {D : Derivations}
+
+theorem derivsWalkC_sound :
+    ∀ {n : ℕ} {ps : List Predicate} {ds : List (ℕ × List Step)} {pid : ℕ},
+      ds.Pairwise (fun a b => a.1 < b.1) → (∀ e ∈ ds, pid ≤ e.1) →
+      ir.derivsWalkC primeNodes sr S D n ps ds pid = true →
+      ∀ k < n, k < ps.length →
+        ir.derivPredB primeNodes sr S D (pid + k) (ps.getD k default)
+          (listedSteps ds (pid + k)) = true
+  | 0, _, _, _, _, _, _, k, hk, _ => absurd hk (Nat.not_lt_zero k)
+  | _ + 1, [], _, _, _, _, _, k, _, hk => absurd hk (Nat.not_lt_zero k)
+  | n + 1, pr :: ps, [], pid, _, _, h, k, hkn, hkl => by
+    rw [derivsWalkC, Bool.and_eq_true] at h
+    rcases k with _ | k
+    · exact h.1
+    · have := derivsWalkC_sound List.Pairwise.nil (by simp) h.2 k (by omega) (by simpa using hkl)
+      rw [show pid + (k + 1) = pid + 1 + k by omega]
+      simpa [listedSteps] using this
+  | n + 1, pr :: ps, d :: ds, pid, hs, hge, h, k, hkn, hkl => by
+    rw [derivsWalkC] at h
+    have hs' := List.pairwise_cons.1 hs
+    by_cases hq : d.1 = pid
+    · rw [show Nat.beq d.1 pid = true by rw [Nat.beq_eq]; exact hq, Bool.cond_true,
+        Bool.and_eq_true] at h
+      rcases k with _ | k
+      · simpa [listedSteps, hq] using h.1
+      · have := derivsWalkC_sound hs'.2 (fun e he => by have := hs'.1 e he; omega) h.2 k
+          (by omega) (by simpa using hkl)
+        rw [show pid + (k + 1) = pid + 1 + k by omega]
+        have hne : d.1 ≠ pid + 1 + k := by omega
+        simpa [listedSteps, hne] using this
+    · rw [show Nat.beq d.1 pid = false by rw [Bool.eq_false_iff, ne_eq, Nat.beq_eq]; exact hq,
+        Bool.cond_false,
+        Bool.and_eq_true, Bool.and_eq_true, Nat.blt_eq] at h
+      obtain ⟨⟨hlt, h0⟩, h1⟩ := h
+      rcases k with _ | k
+      · have hn : listedSteps (d :: ds) pid = none :=
+          listedSteps_of_lt fun e he => by
+            rcases List.mem_cons.1 he with rfl | he
+            · exact hlt
+            · exact Nat.lt_trans hlt (hs'.1 e he)
+        simpa [hn] using h0
+      · have := derivsWalkC_sound hs (fun e he => by
+          rcases List.mem_cons.1 he with rfl | he
+          · omega
+          · have := hs'.1 e he; omega) h1 k (by omega) (by simpa using hkl)
+        rw [show pid + (k + 1) = pid + 1 + k by omega]
+        simpa using this
+
+/-- **A range's walk gives its predicates' checks**, the listed derivations in order. -/
+theorem derivsPredsIn_of_B {i j : ℕ} (ho : ir.derivsOrderB D = true)
+    (h : ir.derivsPredsB primeNodes sr S D i j = true) : ir.DerivsPredsIn primeNodes sr S D i j := by
+  have hs := pairwise_of_chainLtB (Bool.and_eq_true _ _ ▸ ho).1
+  unfold derivsPredsB at h
+  rw [derivsWalkN_eq, dropK_eq, dropLtK_eq] at h
+  intro pid hi hj hl
+  have := derivsWalkC_sound (dropLtC_pairwise hs) (fun e he => dropLtC_ge hs e he) h (pid - i)
+    (by omega) (by simp; omega)
+  rw [Nat.add_sub_cancel' hi, listedSteps_dropLtC hi, List.getD_eq_getElem?_getD,
+    List.getElem?_drop, Nat.add_sub_cancel' hi] at this
+  rwa [List.getD_eq_getElem?_getD]
+
+/-- **Two consecutive ranges of predicates** check as one. -/
+theorem DerivsPredsIn.append {i j k : ℕ} (h₁ : ir.DerivsPredsIn primeNodes sr S D i j)
+    (h₂ : ir.DerivsPredsIn primeNodes sr S D j k) : ir.DerivsPredsIn primeNodes sr S D i k :=
+  fun pid hi hk hl => if hj : pid < j then h₁ pid hi hj hl else h₂ pid (by omega) hk hl
+
+theorem derivsSharedIn_append {i j k : ℕ} (h₁ : ir.derivsSharedIn primeNodes sr D i j = true)
+    (h₂ : ir.derivsSharedIn primeNodes sr D j k = true) :
+    ir.derivsSharedIn primeNodes sr D i k = true :=
+  allIdxIn_append h₁ h₂
+
+theorem zipIdx_all_eq_allIdx {α : Type} (g : α × ℕ → Bool) :
+    ∀ (l : List α) (n : ℕ), (l.zipIdx n).all g = allIdx (fun k x => g (x, k)) l n
+  | [], _ => rfl
+  | x :: xs, n => by
+    rw [List.zipIdx_cons, List.all_cons, allIdx_cons, zipIdx_all_eq_allIdx g xs (n + 1)]
+
+theorem allDerivsB_of_forall :
+    ∀ {pid : ℕ} {ps : List Predicate} {ds : List (ℕ × List Step)},
+      ds.Pairwise (fun a b => a.1 < b.1) → (∀ e ∈ ds, pid ≤ e.1 ∧ e.1 < pid + ps.length) →
+      (∀ k < ps.length, ir.derivStepB primeNodes sr D (pid + k) (ps.getD k default)
+        (listedSteps ds (pid + k)) = true) →
+      ir.allDerivsB primeNodes sr D.ctx D.shared pid ps ds = true
+  | _, [], [], _, _, _ => by simp [allDerivsB]
+  | pid, [], d :: _, _, hr, _ => by
+    have := hr d (by simp)
+    simp at this
+    omega
+  | pid, pr :: ps, [], _, _, hk => by
+    have h0 := hk 0 (by simp)
+    simp only [listedSteps, derivStepB, List.getD_cons_zero] at h0
+    rw [allDerivsB, h0, Bool.true_and]
+    refine allDerivsB_of_forall List.Pairwise.nil (by simp) fun k hkl => ?_
+    have := hk (k + 1) (by simpa using hkl)
+    rw [show pid + (k + 1) = pid + 1 + k by omega] at this
+    simpa [listedSteps] using this
+  | pid, pr :: ps, d :: ds, hs, hr, hk => by
+    have hs' := List.pairwise_cons.1 hs
+    have hd := hr d (by simp)
+    unfold allDerivsB
+    by_cases hq : d.1 = pid
+    · simp only [hq, ↓reduceIte]
+      have h0 := hk 0 (by simp)
+      simp only [Nat.add_zero, listedSteps, hq, ite_true, derivStepB, List.getD_cons_zero] at h0
+      rw [h0, Bool.true_and]
+      refine allDerivsB_of_forall hs'.2 (fun e he => ?_) fun k hkl => ?_
+      · have := hs'.1 e he
+        have := hr e (by simp [he])
+        simp only [List.length_cons] at this
+        omega
+      · have := hk (k + 1) (by simpa using hkl)
+        rw [show pid + (k + 1) = pid + 1 + k by omega] at this
+        have hne : d.1 ≠ pid + 1 + k := by omega
+        simpa [listedSteps, hne] using this
+    · simp only [hq, ↓reduceIte]
+      have hlt : pid < d.1 := by omega
+      have h0 := hk 0 (by simp)
+      have hn : listedSteps (d :: ds) pid = none :=
+        listedSteps_of_lt fun e he => by
+          rcases List.mem_cons.1 he with rfl | he
+          · exact hlt
+          · exact Nat.lt_trans hlt (hs'.1 e he)
+      simp only [Nat.add_zero, hn, derivStepB, List.getD_cons_zero] at h0
+      rw [h0, Bool.true_and]
+      refine allDerivsB_of_forall hs (fun e he => ?_) fun k hkl => ?_
+      · have h1 := hr e he
+        simp only [List.length_cons] at h1
+        rcases List.mem_cons.1 he with rfl | he
+        · omega
+        · have := hs'.1 e he
+          omega
+      · have := hk (k + 1) (by simpa using hkl)
+        rw [show pid + (k + 1) = pid + 1 + k by omega] at this
+        simpa using this
+
+/-- **`derivsB` from its checks of the predicates and of the shared entries**, each on `[0, n)`
+for `n` at least the list's length, of the tables and the bound values, and of the order of the
+listed derivations. -/
+theorem derivsB_of_parts {np ns : ℕ} (ho : ir.derivsOrderB D = true)
+    (h : ir.derivsRestB = true) (hp : ir.DerivsPredsIn primeNodes sr S D 0 np)
+    (hnp : ir.predicates.length ≤ np) (hs : ir.derivsSharedIn primeNodes sr D 0 ns = true)
+    (hns : D.shared.length ≤ ns) : ir.derivsB primeNodes sr S D = true := by
+  unfold derivsOrderB at ho
+  rw [Bool.and_eq_true, List.all_eq_true] at ho
+  have hpw := pairwise_of_chainLtB ho.1
+  have hp' : ∀ k < ir.predicates.length, ir.derivPredB primeNodes sr S D k
+      (ir.predicates.getD k default) (listedSteps D.derivs k) = true :=
+    fun k hk => hp k (Nat.zero_le _) (by omega) hk
+  have hpart : ∀ k < ir.predicates.length,
+      ir.derivStepB primeNodes sr D k (ir.predicates.getD k default)
+          (listedSteps D.derivs k) = true ∧
+        (!derivCrossB (ir.predicates.getD k default).body ||
+          ir.macOkB k (ir.predicates.getD k default).body) = true ∧
+        ir.lookupCoreB k (ir.predicates.getD k default).body = true ∧
+        ir.fieldRowOkB S k (ir.predicates.getD k default).body = true ∧
+        ir.productValidB (ir.predicates.getD k default).body = true := fun k hk => by
+    have := hp' k hk
+    simp only [derivPredB, Bool.and_eq_true] at this
+    exact ⟨this.1.1.1.1, this.1.1.1.2, this.1.1.2, this.1.2, this.2⟩
+  have h1 : ir.allDerivsB primeNodes sr D.ctx D.shared 0 ir.predicates D.derivs = true :=
+    allDerivsB_of_forall hpw (fun e he => by
+      have := ho.2 e he
+      rw [Nat.blt_eq] at this
+      omega) fun k hk => by simpa using (hpart k hk).1
+  have hall : ∀ (f : ℕ → Predicate → Bool),
+      (∀ k < ir.predicates.length, f k (ir.predicates.getD k default) = true) →
+        allIdx f ir.predicates 0 = true := fun f hf => by
+    rw [allIdx_iff]
+    intro k hk
+    simpa using hf k hk
+  have h2 : (D.shared.zipIdx.all fun ek => ir.entryB primeNodes sr D.ctx ek.2 ek.1) = true := by
+    rw [zipIdx_all_eq_allIdx]
+    exact allIdx_of_allIdxIn hs hns
+  have h4 : (ir.predicates.zipIdx.all fun pq => !derivCrossB pq.1.body || ir.macOkB pq.2 pq.1.body)
+      = true := by
+    rw [zipIdx_all_eq_allIdx]
+    exact hall (fun k p => !derivCrossB p.body || ir.macOkB k p.body) fun k hk => (hpart k hk).2.1
+  have h5 : allIdx (fun pid p => ir.lookupCoreB pid p.body) ir.predicates 0 = true :=
+    hall _ fun k hk => (hpart k hk).2.2.1
+  have h7 : allIdx (fun pid p => ir.fieldRowOkB S pid p.body) ir.predicates 0 = true :=
+    hall _ fun k hk => (hpart k hk).2.2.2.1
+  have h8 : allIdx (fun _ p => ir.productValidB p.body) ir.predicates 0 = true :=
+    hall _ fun k hk => (hpart k hk).2.2.2.2
+  simp only [derivsRestB, Bool.and_eq_true] at h
+  unfold derivsB
+  simp only [h1, h2, h.1, h4, h.2, h5, h7, h8, Bool.and_self]
+
+end
 
 end GordieHowe.RealizedProgram

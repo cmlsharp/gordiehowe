@@ -14,9 +14,9 @@ public import GordieHowe.Applications.Falcon512.Spec.Decoded
 
 The SHAKE256 call of Falcon emulated (`lib/gordiehowe/examples/falcon/falcon_hash.h`, `hash_to_point`,
 lines 46-60; `lib/gordiehowe/lib/keccak.h`, `shake256`, at `W = 16`):
-`SHAKE256(nonce ‖ message)` squeezed to `2 · 639` bytes over one batch of Keccak-f permutations, and
+`SHAKE256(nonce ‖ message)` squeezed to `2 · 717` bytes over one batch of Keccak-f permutations, and
 the sample stream read from the output bytes. Sample `i` reads byte `2i + 1` as bits `0 … 7` and
-byte `2i` as bits `8 … 15` (`falcon_hash.h:54-57`, the reshape to `[639][2][8]` reversed on the
+byte `2i` as bits `8 … 15` (`falcon_hash.h:54-57`, the reshape to `[717][2][8]` reversed on the
 middle axis; `GordieHowe.Falcon512.HashCircuit.sampleAt`).
 
 This file states the objects both Falcon configurations read on this call:
@@ -25,7 +25,7 @@ This file states the objects both Falcon configurations read on this call:
   `falconPerms msgLen` permutations, `100` words of `GF(2^16)` per state; word `4 (5x + y) + c` of a
   state holds bits `16c … 16c + 15` of lane `(x, y)` (`keccak.h`, `Shake256::start_word`,
   `round_word`). For a `msgLen`-byte message there are `blocks = (40 + msgLen) / 136 + 1` absorbed
-  blocks and `perms = blocks + 9` permutations (`falconPerms`).
+  blocks and `perms = blocks + 10` permutations (`falconPerms`).
 * **The SHAKE256 input** (`seed`): the nonce bytes, then the message bytes, Boolean when the nonce
   and message bits are (`seed_allBool`).
 * **The extracted bytes** (`bytesOf`, `nonceOf`, `messageOf`, `bytesOf_wiresOfByteVec`,

@@ -16,6 +16,7 @@
 
 #include "gordiehowe/compiler/plan_export.h"
 #include "gordiehowe/compiler/plan_program.h"
+#include "gordiehowe/compiler/structure_records.h"
 #include "gordiehowe/tests/gordiehowe_test.h"
 #include "gordiehowe/relation.h"
 
@@ -260,6 +261,39 @@ TEST(GordieHoweRelation, VectorMembersAndChecks) {
     other.keys.push_back({1, 2, 3});
     EXPECT_THROW((void)rel.verify(other, proof), std::runtime_error) << R;
   }
+}
+
+// The member checks' values (Structure.memberValues): the ring's check
+// reads the statement value of its member, the first value named
+// `statement.keys`; a member with no value fails the export.
+TEST(GordieHoweRelation, MemberCheckValues) {
+  const auto rel = ring_relation(3);
+  const auto &c = rel.typed<Sys>().compiled();
+  const ir::Program &P = c.program();
+  ASSERT_EQ(P.checks.size(), 1u);
+  const auto mv = compiler::structure_records_internal::member_values_of(P);
+  ASSERT_EQ(mv.size(), 1u);
+  EXPECT_EQ(mv[0].first, 0u);
+  const ir::Value &x = P.values.at(mv[0].second);
+  EXPECT_EQ(x.kind, ir::Value::kOpaque);
+  EXPECT_TRUE(x.args.empty());
+  EXPECT_EQ(x.opaque, "statement." + P.checks[0].member);
+  for (size_t i = 0; i < mv[0].second; ++i)
+    EXPECT_FALSE(P.values[i].kind == ir::Value::kOpaque &&
+                 P.values[i].opaque == "statement." + P.checks[0].member)
+        << i;
+  const compiler::ExportMeta meta{"ring", "wide", "c0ffee", "run-0", 0};
+  const auto p = compiler::build_program(c, meta);
+  const compiler::StructureRecords r =
+      compiler::build_structure(c, p, compiler::export_certificates(c));
+  EXPECT_EQ(r.member_values, mv);
+  EXPECT_NE(compiler::print_structure(r).find(
+                "  memberValues := [(0, " + std::to_string(mv[0].second) + ")]\n"),
+            std::string::npos);
+  // The member renamed: no value is the check's member, the export fails.
+  ir::Program Q = P;
+  Q.checks[0].member = "nobody";
+  EXPECT_THROW(compiler::structure_records_internal::member_values_of(Q), std::runtime_error);
 }
 
 // Record members: an attribute record (a struct of parallel vectors, whose

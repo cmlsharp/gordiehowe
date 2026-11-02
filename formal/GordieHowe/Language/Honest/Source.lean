@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.Honest.Basic
+public import GordieHoweNative.Language.Honest.Source
 
 @[expose] public section
 
@@ -22,18 +23,22 @@ tables), as functions of the honest committed values, the challenges and the pad
 * **the late histogram of a table group** (`GordieHowe.RealizedProgram.histNat`): the histogram of the group's needles,
   for a group without a static histogram.
 
-Each generated value is found by its owner (`tagOwner?`, `accOwner?`, `digitsOwner?`,
-`histOwner?`). The generators read the source environment (`srcEnv`: the honest committed values
-with their pad copies, the challenges, no late value); a late histogram reads the other generated
-values as late values (`histEnv`).
+The completeness certificate names each generated value's generator (`GordieHowe.RealizedProgram.Gens`).
+The generators read the source environment (`srcEnv`: the honest committed values with their pad
+copies, the challenges, no late value); a late histogram reads the other generated values as late
+values (`GordieHowe.RealizedProgram.histEnvOf`).
 
 * The generated values read only their exported reads, when each generator's inputs
   read only listed challenges and pads and no bound value reads a pad copy (`BoundNoCopy`).
-* At the honest environment a MAC with a grouped tail (`GroupedMac`) satisfies its predicates, where its operands are bits.
-* The MAC facts every tail form shares are `MacBase`, one MAC check over a field with its tail
-  (`GordieHowe.RealizedProgram.MacFieldCheck`: the check over `y`'s field for a hosted MAC, or the
-  check over either field for a MAC no domain hosts); the realization's facts over the MACs of both tail
-  forms are in `HonestDigits.lean`.
+* At the honest environment a MAC with a grouped tail satisfies its predicates, where its operands
+  are bits.
+* The MAC check over a field every tail form performs is `GordieHowe.RealizedProgram.MacFieldCheck`
+  (the check over `y`'s field for a hosted MAC, or the check over either field for a MAC no domain
+  hosts); the completeness certificate's MAC facts at the generators are in
+  `GordieHowe/Language/Completeness/Mac.lean`.
+
+The definitions are in `GordieHoweNative/Language/Honest/Source.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -44,118 +49,6 @@ open scoped NNReal
 section
 
 variable {ir : RealizedProgram} {I : Interp}
-
-/-! ## The owners of the generated values -/
-
-/-- **The first owner of each key**: entry `(k, a)` of `es` sets key `k` to `a` where no earlier
-entry sets it. -/
-def firstOwnerTab {α : Type} (es : List (ℕ × α)) : NatTrie α :=
-  es.foldr (fun e t => t.set e.1 e.2) .nil
-
-variable (ir) in
-/-- **The keys the predicates own**: `(k, p)` for every key `k` that `keys` gives predicate `p`'s
-body. -/
-def predKeys {α : Type} (keys : ℕ → PredBody → List (ℕ × α)) : List (ℕ × α) :=
-  ir.predicates.zipIdx.flatMap fun pp => keys pp.2 pp.1.body
-
-/-- The key of a cross-field `equal`'s MAC tag. -/
-def tagKeys (p : ℕ) : PredBody → List (ℕ × ℕ)
-  | .cross _ _ _ _ _ real => [(real.tag, p)]
-  | _ => []
-
-variable (ir) in
-/-- **The cross-field `equal` whose MAC tag is value `v`** (a table of the predicates' tags). -/
-def tagOwner? (v : ℕ) : Option ℕ := (firstOwnerTab (ir.predKeys tagKeys)).get? v
-
-/-- The key of a grouped `mod_q`'s accumulators. -/
-def accKeys (p : ℕ) : PredBody → List (ℕ × ℕ)
-  | .mod _ _ _ _ real =>
-    match real.grouped with
-    | some G =>
-      match G.accumulators with
-      | some (.leaf a) => [(a, p)]
-      | _ => []
-    | none => []
-  | _ => []
-
-variable (ir) in
-/-- **The grouped `mod_q` whose accumulators are value `v`** (a table of the predicates'). -/
-def accOwner? (v : ℕ) : Option ℕ := (firstOwnerTab (ir.predKeys accKeys)).get? v
-
-/-- The key of a grouped `mod_q`'s quotient digits. -/
-def digitsKeys (p : ℕ) : PredBody → List (ℕ × ℕ)
-  | .mod _ _ _ _ real =>
-    match real.grouped with
-    | some G =>
-      match G.groupDigits with
-      | .leaf g => [(g, p)]
-      | _ => []
-    | none => []
-  | _ => []
-
-variable (ir) in
-/-- **The grouped `mod_q` whose quotient digits are value `v`** (a table of the predicates'). -/
-def digitsOwner? (v : ℕ) : Option ℕ := (firstOwnerTab (ir.predKeys digitsKeys)).get? v
-
-/-- **A `mod_q` realized in the ungrouped digit form** (compiler/mod.h, `kDigits`): the digits, the
-top one derived, with no grouping. -/
-def _root_.GordieHowe.RealizedProgram.ModRealization.isDigitsTail (real : ModRealization) : Bool :=
-  real.form == .digits && real.grouped.isNone
-
-/-- **A `mod_q` realized in the one-digit form with no grouping** (compiler/mod.h, `kOneDigit`):
-its quotient derived, from an accumulator of the left side (`quotDerivedAccB`) where it has one. -/
-def _root_.GordieHowe.RealizedProgram.ModRealization.isOneDigitTail (real : ModRealization) : Bool :=
-  real.form == .oneDigit && real.grouped.isNone
-
-/-- **The lower digits of a `mod_q` in the digit form**: every digit but the derived top one. -/
-def _root_.GordieHowe.RealizedProgram.ModRealization.lowerDigits (real : ModRealization) : List Expr := real.digits.dropLast
-
-variable (ir) in
-/-- The key of an ungrouped digit-form or one-digit `mod_q`'s accumulator (`digitsAcc`,
-`oneDigitAcc`). -/
-def digitsAccKeys (p : ℕ) : PredBody → List (ℕ × ℕ)
-  | .mod _ _ _ _ real =>
-    (if real.isDigitsTail then [(ir.digitsAcc real, p)] else []) ++
-      (if real.isOneDigitTail then [(ir.oneDigitAcc real, p)] else [])
-  | _ => []
-
-variable (ir) in
-/-- **The ungrouped digit-form or one-digit `mod_q` whose accumulator is value `v`** (a table of the
-predicates'). -/
-def digitsAccOwner? (v : ℕ) : Option ℕ := (firstOwnerTab (ir.predKeys ir.digitsAccKeys)).get? v
-
-/-- The keys of an ungrouped digit-form `mod_q`'s lower digits: `(v, (p, j))` for lower digit `j`
-the leaf `v`. -/
-def lowDigitKeys (p : ℕ) : PredBody → List (ℕ × (ℕ × ℕ))
-  | .mod _ _ _ _ real =>
-    if real.isDigitsTail then
-      (real.lowerDigits.zipIdx.filterMap fun Dj =>
-        match Dj.1 with
-        | .leaf v => some (v, (p, Dj.2))
-        | _ => none)
-    else []
-  | _ => []
-
-variable (ir) in
-/-- **The ungrouped digit-form `mod_q` one of whose lower digits is value `v`**, as
-`(predicate, digit index)` (a table of the predicates'). -/
-def lowDigitOwner? (v : ℕ) : Option (ℕ × ℕ) := (firstOwnerTab (ir.predKeys lowDigitKeys)).get? v
-
-variable (ir) in
-/-- **The table group whose late histogram is value `v`**, the first such group, as
-`(table, group)`. -/
-def histOwner? (v : ℕ) : Option (ℕ × ℕ) :=
-  ((List.range ir.tables.length).flatMap fun t =>
-    (List.range (ir.groupCountOf t)).map fun g => (t, g)).find? fun tg =>
-      (ir.groupOf tg.1 tg.2).lateMult == some v
-
-variable (ir) in
-/-- **Value `v` is generated by the realization**: a MAC tag, the accumulators or the quotient
-digits of a grouped `mod_q`, a late histogram, or the accumulator or a lower digit of an ungrouped
-digit-form `mod_q`. -/
-def IsGenerated (v : ℕ) : Prop :=
-  (ir.tagOwner? v).isSome ∨ (ir.accOwner? v).isSome ∨ (ir.digitsOwner? v).isSome ∨
-    (ir.histOwner? v).isSome ∨ (ir.digitsAccOwner? v).isSome ∨ (ir.lowDigitOwner? v).isSome
 
 /-! ## The generators -/
 
@@ -199,15 +92,6 @@ def digitsAccNat (rd : ir.Valuation I) (d : ℕ) (e : Expr) (i : ℕ) : ℕ :=
 radix `B`, at coordinate `i`: digit `j` (base `B`) of the accumulator divided by `q`. -/
 def lowDigitNat (rd : ir.Valuation I) (d q : ℕ) (e : Expr) (B j i : ℕ) : ℕ :=
   ir.digitsAccNat rd d e i / q / B ^ j % B
-
-variable (ir) in
-/-- **Member `m`'s needle reads a late value of the program.** -/
-def memberReadsLate (m : Member) : Bool :=
-  (ir.exprNodes (ir.needleExpr m.pred m.needle)).any fun w =>
-    (ir.nodeReads ir.fuel w).any fun r =>
-      match r with
-      | .late u => decide (u < ir.values.length ∧ ir.IsLate u)
-      | _ => false
 
 /-- **The needles a late histogram counts** in group `g` of table `t`: with a static histogram
 beside it, the needles of the members reading late values (the static histogram counts the
@@ -271,110 +155,6 @@ theorem srcEnvL_zero (x val : ir.Valuation I) (c : ∀ k, (ir.layout I).Ch k) (�
   rw [h0]
   rfl
 
-/-- **The generated values read from the source environment** `e`: a MAC tag (`tagGen`, at
-coordinate `0`), the accumulators (`accNat`) and the quotient digits (`digitNat`) of a grouped
-`mod_q`, the accumulator (`digitsAccNat`) and the lower digits (`lowDigitNat`) of an ungrouped
-digit-form `mod_q`; `0` for any other value. -/
-def genSrc (e : ir.Env I) (v i : ℕ) : (I (ir.valueField v)).K :=
-  match ir.tagOwner? v with
-  | some p =>
-    match (ir.predicate p).body with
-    | .cross dx x _ _ _ real =>
-      if i = 0 then castElt (ir.tagGen (ir.reader e) dx x real (castElt (e.chal real.key 0)))
-      else 0
-    | _ => 0
-  | none =>
-    match ir.accOwner? v with
-    | some t =>
-      match (ir.predicate t).body with
-      | .mod d _ L _ real =>
-        match real.grouped, macUnits? L with
-        | some G, some u => (ir.accNat (ir.reader e) d u G i : (I (ir.valueField v)).K)
-        | _, _ => 0
-      | _ => 0
-    | none =>
-      match ir.digitsOwner? v with
-      | some t =>
-        match (ir.predicate t).body with
-        | .mod d q L _ real =>
-          match real.grouped, macUnits? L with
-          | some G, some u => (ir.digitNat (ir.reader e) d q u G i : (I (ir.valueField v)).K)
-          | _, _ => 0
-        | _ => 0
-      | none =>
-        match ir.digitsAccOwner? v with
-        | some t =>
-          match (ir.predicate t).body with
-          | .mod d _ L _ _ => (ir.digitsAccNat (ir.reader e) d L i : (I (ir.valueField v)).K)
-          | _ => 0
-        | none =>
-          match ir.lowDigitOwner? v with
-          | some tj =>
-            match (ir.predicate tj.1).body with
-            | .mod d q L _ real =>
-              (ir.lowDigitNat (ir.reader e) d q L real.radix tj.2 i : (I (ir.valueField v)).K)
-            | _ => 0
-          | none => 0
-
-/-- **The environment the late histograms read**: the source environment `e` with its source late
-values and the generated values other than the histograms (`genSrc`) as its late values, `0` past a
-value's coordinates. -/
-def histEnv (e : ir.Env I) : ir.Env I :=
-  { e with late := fun v i =>
-      if i < (ir.value v).size then (if ir.IsSourceValue v then e.late v i else ir.genSrc e v i)
-      else 0 }
-
-/-- **The generated values** at the source environment `e`: the late histograms (`histNat`) read
-from `e` with the values `genSrc e` as late values, every other value by `genSrc e`; `0` past a
-value's coordinates. -/
-def genVal (e : ir.Env I) (v i : ℕ) : (I (ir.valueField v)).K :=
-  if i < (ir.value v).size then
-    match ir.histOwner? v with
-    | some tg => (ir.histNat (ir.reader (ir.histEnv e)) tg.1 tg.2 i : (I (ir.valueField v)).K)
-    | none => ir.genSrc e v i
-  else 0
-
-/-! ## The facts the generators need -/
-
-variable (ir I) in
-/-- **The facts of a program and its interpretation the generated late values need**: every late
-value other than the source program's is generated (`IsGenerated`) and no generated late value is
-a source value, a tag's pad space is the whole field, every pad space contains the naturals, and every
-late value has a pad cell in its domain at each coordinate. -/
-structure GenFacts : Prop where
-  /-- Every late value other than the source program's is generated. -/
-  allGen : ∀ l : ir.Late, ¬ ir.IsSourceValue l.1 → ir.IsGenerated l.1
-  /-- No generated late value is a source value. -/
-  genNotSource : ∀ l : ir.Late, ir.IsGenerated l.1 → ¬ ir.IsSourceValue l.1
-  /-- A tag's pad space is the whole field. -/
-  tagFull : ∀ v, (ir.tagOwner? v).isSome → (ir.value v).padSpace = .full
-  /-- Every pad space of a late value contains the naturals. -/
-  natCast : ∀ l : ir.Late, ∀ n : ℕ,
-    (n : (I (ir.valueField l.1)).K) ∈ (I (ir.valueField l.1)).space (ir.value l.1).padSpace
-  /-- Every late value's domain is a domain of the program. -/
-  domain : ∀ l : ir.Late, (ir.value l.1).domain < ir.domains.length
-  /-- Every late value has a pad cell in its domain at each coordinate. -/
-  padCells : ∀ l : ir.Late, ∀ i < (ir.value l.1).size,
-    CellKey.pad l.1 i ∈ ir.cellKeys (ir.value l.1).domain
-
-/-- **A generated value lies in its pad space**: a tag's pad space is the whole field
-(`GenFacts.tagFull`), every other generated value is a natural (`GenFacts.natCast`). -/
-theorem genVal_mem (hG : ir.GenFacts I) (e : ir.Env I) (l : ir.Late) (i : ℕ) :
-    ir.genVal e l.1 i ∈ (I (ir.valueField l.1)).space (ir.value l.1).padSpace := by
-  unfold genVal
-  split
-  swap
-  · exact AddSubgroup.zero_mem _
-  split
-  · exact hG.natCast l _
-  · unfold genSrc
-    split
-    · rename_i p hp
-      rw [hG.tagFull l.1 (by rw [hp]; rfl)]
-      exact AddSubgroup.mem_top _
-    · repeat' split
-      all_goals first | exact hG.natCast l _ | exact AddSubgroup.zero_mem _
-
 /-! ## The honest late values -/
 
 variable (ir I) in
@@ -390,31 +170,6 @@ structure SrcLate (Inp : Type) where
   respects : ∀ y v, ir.IsSourceValue v → ir.IsLate v → ∀ c c' : (∀ k, (ir.layout I).Ch k),
     (∀ j, Read.chal j ∈ (ir.value v).reads → ir.chalRead I c j = ir.chalRead I c' j) →
       late y c v = late y c' v
-
-variable (I) in
-/-- **The honest late values** of the honest inputs `y` (statement `stmtOf y`, committed values
-`val y`, the source program's late values `SL`) at the challenges `c` and the pads `π`: the source
-program's late values at its own late values, the generated values (`genVal`) at the source
-environment with those late values (`srcEnvL`) at every other. -/
-def genLate {Inp : Type} (hG : ir.GenFacts I) (stmtOf val : Inp → ir.Valuation I) (SL : ir.SrcLate I Inp) (y : Inp)
-    (c : ∀ k, (ir.layout I).Ch k) (π : (ir.layout I).Pads) (l : (ir.layout I).Late) :
-    (ir.layout I).Mask l := fun i =>
-  if h : ir.IsSourceValue l.1 then ⟨SL.late y c l.1 i, SL.mem y c l h i⟩
-  else ⟨ir.genVal (ir.srcEnvL I (stmtOf y) (val y) (SL.late y c) c π) l.1 i, genVal_mem hG _ l i⟩
-
-/-- **The honest environment reads the honest late values** at the late values' coordinates: the
-message minus the pad (`GenFacts.padCells`: the honest assignment's pads are the pads). -/
-theorem honestEnv_late_genLate {Inp : Type} (hG : ir.GenFacts I) (stmtOf val : Inp → ir.Valuation I)
-    (SL : ir.SrcLate I Inp) (x : ir.Valuation I) (y : Inp) (c : ∀ k, (ir.layout I).Ch k)
-    (π : (ir.layout I).Pads) (l : ir.Late) {i : ℕ} (hi : i < (ir.value l.1).size) :
-    (ir.honestEnv I x (val y) (ir.genLate I hG stmtOf val SL y) c π).late l.1 i =
-      (ir.genLate I hG stmtOf val SL y c π l ⟨i, hi⟩).1 := by
-  have hcond : (l.1 : ℕ) < ir.values.length ∧ ir.IsLate l.1 ∧ i < (ir.value l.1).size :=
-    ⟨l.1.2, l.2, hi⟩
-  simp only [honestEnv, layoutEnv, hcond, and_self, ite_true, msgRead, bindAsg,
-    honestAsg_pad (hG.domain l) (hG.padCells l i hi), padsOf, ProofSystem.PhaseLayout.honestRun]
-  change (((ir.genLate I hG stmtOf val SL y c π l ⟨i, hi⟩).1 : (I (ir.valueField l.1)).K) + _) - _ = _
-  simp
 
 /-! ## The MAC's tail at the honest values -/
 
@@ -590,6 +345,7 @@ theorem tail_holds_of_honest (hwf : ir.WellFormed) (hI : I.Registered ir)
         rfl
       have hpar := MACRows.unpack_maskedMAC B β W
       rw [hmac] at hpar
+      refine (holdsWith_mod_iff (.inr le_rfl)).2 ?_
       intro m hm
       have hm' : m < real.width := by
         change m < (ir.value b).size at hm
@@ -867,50 +623,6 @@ theorem honestEnv_late_zero {x val : ir.Valuation I}
   simp only [honestEnv, layoutEnv]
   rw [if_neg h]
 
-section HonestEnv
-
-variable {Inp : Type} (hG : ir.GenFacts I) (stmtOf val : Inp → ir.Valuation I)
-  (SL : ir.SrcLate I Inp) (y : Inp) (c : ∀ k, (ir.layout I).Ch k) (π : (ir.layout I).Pads)
-
-set_option hygiene false in
-/-- The honest environment of the honest inputs `y`. -/
-local notation "HE" => ir.honestEnv I (stmtOf y) (val y) (ir.genLate I hG stmtOf val SL y) c π
-
-set_option hygiene false in
-/-- The honest environment of the honest inputs `y` at the statement `x`. -/
-local notation "HEx" => ir.honestEnv I x (val y) (ir.genLate I hG stmtOf val SL y) c π
-
-/-- **The honest environment's late values are the generated values** at every late value: the
-messages minus the pads (`honestEnv_late_genLate`), `0` past the coordinates on both sides. -/
-theorem honestEnv_late_eq (x : ir.Valuation I) {u : ℕ} (hu : u < ir.values.length)
-    (hl : ir.IsLate u) (hns : ¬ ir.IsSourceValue u) :
-    (HEx).late u =
-      ir.genVal (ir.srcEnvL I (stmtOf y) (val y) (SL.late y c) c π) u := by
-  funext i
-  by_cases hi : i < (ir.value u).size
-  · rw [honestEnv_late_genLate hG stmtOf val SL x y c π ⟨⟨u, hu⟩, hl⟩ hi]
-    simp only [genLate, dif_neg hns]
-  · rw [honestEnv_late_zero fun h => hi h.2.2, genVal, if_neg hi]
-
-/-- **The honest environment's late values are the source program's** at its own late values: both
-environments read them below their sizes and `0` past them (`srcLateOf`). -/
-theorem honestEnv_late_eq_src (x : ir.Valuation I) {u : ℕ} (hu : u < ir.values.length)
-    (hl : ir.IsLate u) (hs : ir.IsSourceValue u) :
-    (HEx).late u =
-      ir.srcLateOf I (SL.late y c) u := by
-  funext i
-  by_cases hi : i < (ir.value u).size
-  · rw [honestEnv_late_genLate hG stmtOf val SL x y c π ⟨⟨u, hu⟩, hl⟩ hi]
-    simp only [genLate, hs, dite_true, srcLateOf, hl, hi, and_self, ite_true]
-  · rw [honestEnv_late_zero fun h => hi h.2.2]
-    simp only [srcLateOf, hi, and_false, ite_false]
-
-/-- **A late value read but not a late value of the program reads `0`** in both environments. -/
-theorem honestEnv_late_of_not (x : ir.Valuation I) {u : ℕ}
-    (hl : ¬ (u < ir.values.length ∧ ir.IsLate u)) :
-    (HEx).late u = 0 :=
-  funext fun _ => honestEnv_late_zero fun h => hl ⟨h.1, h.2.1⟩
-
 /-- **No late value of the program is read**, in the sense the honest and source environments
 agree: every late read of `v` names no late value of the program. -/
 def NoLateRead (v : ℕ) : Prop :=
@@ -923,32 +635,9 @@ def NoGenRead (w : ℕ) : Prop :=
   ∀ u, Read.late u ∈ ir.nodeReads ir.fuel w → u < ir.values.length → ir.IsLate u →
     ir.IsSourceValue u
 
-/-- **The honest environment reads like the source environment with the source late values** at a
-value reading no generated late value. -/
-theorem reader_honestEnv_srcEnvL_of_noGen {v : ℕ} (hv : ir.NoGenRead v) :
-    ir.reader HE v =
-      ir.reader (ir.srcEnvL I (stmtOf y) (val y) (SL.late y c) c π) v := by
-  refine reader_eq_of_late (e := HE)
-    (e' := ir.srcEnvL I (stmtOf y) (val y) (SL.late y c) c π) rfl rfl rfl fun u hu => ?_
-  by_cases hl : u < ir.values.length ∧ ir.IsLate u
-  · rw [honestEnv_late_eq_src hG stmtOf val SL y c π _ hl.1 hl.2 (hv u hu hl.1 hl.2)]
-    rfl
-  · rw [honestEnv_late_of_not hG stmtOf val SL y c π _ hl]
-    funext i
-    simp only [srcEnvL, srcLateOf]
-    rw [if_neg (fun h => hl ⟨lt_of_isLate h.2.1, h.2.1⟩)]
-    rfl
-
 /-- **A value reading no late value of the program reads no generated late value.** -/
 theorem NoLateRead.noGen {v : ℕ} (h : ir.NoLateRead v) : ir.NoGenRead v :=
   fun u hu hlt hl => absurd ⟨hlt, hl⟩ (h u hu)
-
-/-- **The honest environment reads like the source environment with the source late values** at a
-value reading no late value of the program (`reader_honestEnv_srcEnvL_of_noGen`). -/
-theorem reader_honestEnv_srcEnvL_of_noLate {v : ℕ} (hv : ir.NoLateRead v) :
-    ir.reader HE v =
-      ir.reader (ir.srcEnvL I (stmtOf y) (val y) (SL.late y c) c π) v :=
-  reader_honestEnv_srcEnvL_of_noGen hG stmtOf val SL y c π hv.noGen
 
 /-- **The integer convolutions read only the powers and the operand.** -/
 theorem unitTerm_congr {rd rd' : ir.Valuation I} {d : ℕ} {u : MacUnits}
@@ -985,144 +674,11 @@ theorem tagGen_congr {rd rd' : ir.Valuation I} {dx : ℕ} {x : Expr} {real : Mac
   · simp only [macChunkA, evalPad, evalWith, evalE_congr hx]
     rfl
 
-variable (ir) in
-/-- **The values and challenges the generator of value `v` (`genSrc`) reads**: a tag reads its H
-operand's values and its key, a grouped `mod_q`'s accumulators and quotient digits read its
-powers and its operand's values, an ungrouped digit-form `mod_q`'s accumulator and lower digits
-read its left side's values. -/
-def genInputs (v : ℕ) : List ℕ × List ℕ :=
-  match ir.tagOwner? v with
-  | some p =>
-    match (ir.predicate p).body with
-    | .cross _ x _ _ _ real => (ir.exprNodes x, [real.key])
-    | _ => ([], [])
-  | none =>
-    match ir.accOwner? v with
-    | some t =>
-      match (ir.predicate t).body with
-      | .mod _ _ L _ real =>
-        match real.grouped, macUnits? L with
-        | some _, some u => (u.powers :: ir.exprNodes u.operand, [])
-        | _, _ => ([], [])
-      | _ => ([], [])
-    | none =>
-      match ir.digitsOwner? v with
-      | some t =>
-        match (ir.predicate t).body with
-        | .mod _ _ L _ real =>
-          match real.grouped, macUnits? L with
-          | some _, some u => (u.powers :: ir.exprNodes u.operand, [])
-          | _, _ => ([], [])
-        | _ => ([], [])
-      | none =>
-        match ir.digitsAccOwner? v with
-        | some t =>
-          match (ir.predicate t).body with
-          | .mod _ _ L _ _ => (ir.exprNodes L, [])
-          | _ => ([], [])
-        | none =>
-          match ir.lowDigitOwner? v with
-          | some tj =>
-            match (ir.predicate tj.1).body with
-            | .mod _ _ L _ _ => (ir.exprNodes L, [])
-            | _ => ([], [])
-          | none => ([], [])
-
-/-- **A generator reads only its inputs** (`genInputs`). -/
-theorem genSrc_congr_inputs {e e' : ir.Env I} {v : ℕ}
-    (hr : ∀ w ∈ (ir.genInputs v).1, ir.reader e w = ir.reader e' w)
-    (hc : ∀ j ∈ (ir.genInputs v).2, e.chal j = e'.chal j) :
-    ir.genSrc e v = ir.genSrc e' v := by
-  have hcons : ∀ (u : MacUnits), (∀ w ∈ u.powers :: ir.exprNodes u.operand,
-      ir.reader e w = ir.reader e' w) →
-      ir.reader e u.powers = ir.reader e' u.powers ∧
-        ∀ w ∈ ir.exprNodes u.operand, ir.reader e w = ir.reader e' w := fun u h =>
-    ⟨h _ (List.mem_cons_self ..), fun w hw => h w (List.mem_cons_of_mem _ hw)⟩
-  funext i
-  unfold genInputs at hr hc
-  unfold genSrc
-  rcases h1 : ir.tagOwner? v with _ | p <;> simp only [h1] at hr hc ⊢
-  · rcases h2 : ir.accOwner? v with _ | t <;> simp only [h2] at hr hc ⊢
-    · rcases h3 : ir.digitsOwner? v with _ | t <;> simp only [h3] at hr hc ⊢
-      · rcases h4 : ir.digitsAccOwner? v with _ | t <;> simp only [h4] at hr hc ⊢
-        · rcases h5 : ir.lowDigitOwner? v with _ | tj <;> simp only [h5] at hr hc ⊢
-          cases hb : (ir.predicate tj.1).body <;> simp only [hb] at hr hc ⊢
-          rename_i L _ real
-          simp only [lowDigitNat, digitsAccNat, evalIntWith_congr hr]
-        · cases hb : (ir.predicate t).body <;> simp only [hb] at hr hc ⊢
-          rename_i L _ real
-          simp only [digitsAccNat, evalIntWith_congr hr]
-      cases hb : (ir.predicate t).body <;> simp only [hb] at hr hc ⊢
-      rename_i L _ real
-      cases hg : real.grouped <;> cases hu : macUnits? L <;> simp only [hg, hu] at hr hc ⊢
-      rename_i u
-      obtain ⟨h4, h5⟩ := hcons u hr
-      rw [digitNat_congr h4 h5]
-    · cases hb : (ir.predicate t).body <;> simp only [hb] at hr hc ⊢
-      rename_i L _ real
-      cases hg : real.grouped <;> cases hu : macUnits? L <;> simp only [hg, hu] at hr hc ⊢
-      rename_i u
-      obtain ⟨h4, h5⟩ := hcons u hr
-      rw [accNat_congr h4 h5]
-  · cases hb : (ir.predicate p).body <;> simp only [hb] at hr hc ⊢
-    rename_i x _ _ _ real
-    rw [tagGen_congr (rd' := ir.reader e') hr, hc _ (List.mem_singleton_self _)]
-
 /-- **A late value node has kind `late`.** -/
 theorem kind_of_isLate {v : ℕ} (h : ir.IsLate v) : (ir.value v).kind = .late := by
   have h1 := h.1
   revert h1
   cases (ir.value v).kind <;> simp [Kind.isLate]
-
-/-- **The honest environment reads a generated value other than a late histogram as its generator
-reads it there** (`genSrc`): the honest late value is the generated value at the source environment
-(`honestEnv_late_eq`), whose generator reads its inputs alike in both (`genSrc_congr_inputs`; `hin`:
-they read no late value). -/
-theorem reader_honestEnv_genSrc {v : ℕ} (hv : v < ir.values.length) (hl : ir.IsLate v)
-    (hgen : ir.IsGenerated v) (hhist : ir.histOwner? v = none)
-    (hin : ∀ w ∈ (ir.genInputs v).1, ir.NoLateRead w) {n : ℕ} (hn : n < (ir.value v).size) :
-    ir.reader HE v n =
-      ir.genSrc HE v n := by
-  rw [reader_of_late _ (kind_of_isLate hl),
-    honestEnv_late_eq hG stmtOf val SL y c π _ hv hl (hG.genNotSource ⟨⟨v, hv⟩, hl⟩ hgen)]
-  simp only [genVal, if_pos hn, hhist]
-  exact congrFun (genSrc_congr_inputs (fun w hw =>
-    (reader_honestEnv_srcEnvL_of_noLate hG stmtOf val SL y c π (hin w hw)).symm) fun _ _ => rfl) n
-
-/-- **The honest tag is the MAC's honest tag** (`MacTagAt`) at the honest environment: the tag's
-generated value (`tagGen`, its owner the cross-field `equal` `pid`) at the source environment, which
-reads the `x` operand alike (`hx`: it reads no late value). -/
-theorem macTag_honest {pid dx : ℕ} {x : Expr} {dy : ℕ} {y' : Expr} {k : CrossKind}
-    {real : MacRealization} (hb : (ir.predicate pid).body = .cross dx x dy y' k real)
-    (htagB : ir.macTagB real = true) (hown : ir.tagOwner? real.tag = some pid)
-    (hhist : ir.histOwner? real.tag = none) (hlate : ir.IsLate real.tag)
-    (hx : ∀ v ∈ ir.exprNodes x, ir.NoLateRead v) :
-    ir.MacTagAt (ir.reader HE)
-      dx x real (castElt ((ir.honestEnv I (stmtOf y) (val y)
-        (ir.genLate I hG stmtOf val SL y) c π).chal real.key 0)) := by
-  have htag := htagB
-  unfold macTagB at htag
-  simp only [Bool.and_eq_true, decide_eq_true_eq] at htag
-  obtain ⟨⟨⟨htl, htagf⟩, htsz⟩, -⟩ := htag
-  set E := HE
-  have htg : (castElt (ir.reader E real.tag 0) : (I real.macField).K) =
-      ir.tagGen (ir.reader E) dx x real (castElt (E.chal real.key 0)) := by
-    rw [reader_honestEnv_genSrc hG stmtOf val SL y c π htl hlate (Or.inl (by rw [hown]; rfl)) hhist
-      (by simpa only [genInputs, hown, hb] using hx) htsz]
-    simp only [genSrc, hown, hb, if_true]
-    rw [castElt_castElt_of_eq htagf.symm]
-  unfold MacTagAt
-  split
-  · rename_i hbx
-    unfold MacHHoldsAt
-    rw [htg]
-    simp only [tagGen, hbx]
-  · rename_i bx hbx
-    unfold MacTwoTagAt
-    rw [htg]
-    simp only [tagGen, hbx]
-
-end HonestEnv
 
 /-! ## A MAC with a grouped tail -/
 
@@ -1132,123 +688,20 @@ and blind `sb`: where `x`'s domain hosts the MAC (`MacHostedCore`), the check ov
 blind `blind` (`macBlindCoreB`); where no domain hosts it (`MacTwoCore`, the other operand's
 domain of characteristic above `1`; `mac_odd`: one tail per field, each a
 `mod_2` in a domain of odd characteristic, `MacOddFieldOk`), the check over `x`'s field with the
-blind `blindX` or the check over `y`'s field with the blind `blind`, at the values' intervals
-`leafIvl`. A
+blind `blindX` or the check over `y`'s field with the blind `blind`, at the values' intervals of
+the structure records `S` (`srcLeafIvl`). A
 hosted MAC's check reads `y` padded by zeros to `chunks · width` coordinates (`zeroPadB`). -/
-def MacFieldCheck (pid dx : ℕ) (x : Expr) (dy : ℕ) (y : Expr) (k : CrossKind) (real : MacRealization)
-    (sd : ℕ) (sz : Expr) (sb : ℕ) : Prop :=
+def MacFieldCheck (S : Structure) (pid dx : ℕ) (x : Expr) (dy : ℕ) (y : Expr) (k : CrossKind)
+    (real : MacRealization) (sd : ℕ) (sz : Expr) (sb : ℕ) : Prop :=
   (ir.MacHostedCore pid dx x dy y k real ∧ sd = dy ∧
       ir.zeroPadB (ir.domainField dy) (real.chunks * real.width) sz y = true ∧
       real.blind = some sb ∧ ir.macBlindCoreB dy sb real = true) ∨
     (∃ b, real.blindX = some sb ∧ real.blind = some b ∧
       ir.MacTwoCore pid x y k real ∧ 1 < ir.charOf (ir.domainField dy) ∧
-        ir.MacOddFieldOk (ir.leafIvl primeNodes) pid dx x sb real ∧ sd = dx ∧ sz = x) ∨
+        ir.MacOddFieldOk (ir.srcLeafIvl primeNodes S) pid dx x sb real ∧ sd = dx ∧ sz = x) ∨
     ∃ bx, real.blindX = some bx ∧ real.blind = some sb ∧
       ir.MacTwoCore pid x y k real ∧ 1 < ir.charOf (ir.domainField dx) ∧
-        ir.MacOddFieldOk (ir.leafIvl primeNodes) pid dy y sb real ∧ sd = dy ∧ sz = y
-
-variable (ir primeNodes) in
-/-- **A MAC check over a field with its tail** (compiler/mac.h): the cross-field `equal` `pid` with its MAC
-realization, the check over a field that its tail performs (`MacFieldCheck`: the check over `y`'s
-field for a hosted MAC, or over either field for a MAC no domain hosts), with the check's domain
-`dy`, operand `y` and blind `sb`; its tail `t`, a `mod_2` whose left side is in the MAC unit form
-with units `u` (the blind and the check's operand), and the facts every honest MAC needs: the owner
-of the tag, a late value; the `x` operand, the cross-field `equal`'s `y` operand, the check's
-operand and the powers read no late value; the blind is the tag's pad copy. The tail's realization
-is either form (`GroupedMac`, `DigitsMac`). Data and properties of the program, decided per program.
--/
-structure MacBase where
-  /-- The cross-field `equal`. -/
-  pid : ℕ
-  /-- Its `x` domain (the H domain of a hosted MAC). -/
-  dx : ℕ
-  /-- Its `x` operand, the operand the tag is computed from. -/
-  x : Expr
-  /-- Its `y` domain. -/
-  cdy : ℕ
-  /-- Its `y` operand. -/
-  cy : Expr
-  /-- Its kind. -/
-  k : CrossKind
-  /-- Its MAC realization. -/
-  real : MacRealization
-  hpid : pid < ir.predicates.length
-  hb : (ir.predicate pid).body = .cross dx x cdy cy k real
-  /-- The check's domain. -/
-  dy : ℕ
-  /-- The check's operand. -/
-  y : Expr
-  /-- The check's blind. -/
-  sb : ℕ
-  hside : ir.MacFieldCheck primeNodes pid dx x cdy cy k real dy y sb
-  /-- The check's domain is a domain of the program. -/
-  dyLt : dy < ir.domains.length
-  /-- The check's operand is well formed in its domain's field. -/
-  yOk : ir.ExprOk (ir.domainField dy) y
-  /-- The tail. -/
-  t : ℕ
-  ht : t < ir.predicates.length
-  htB : ir.macTailAtB pid dy y sb real t = true
-  /-- The tail's realization. -/
-  realT : ModRealization
-  /-- The tail's left side. -/
-  L : Expr
-  /-- The tail's right side. -/
-  R : Expr
-  hbt : (ir.predicate t).body = .mod dy 2 L R realT
-  /-- The units. -/
-  u : MacUnits
-  hu : macUnits? L = some u
-  tagOwn : ir.tagOwner? real.tag = some pid
-  tagHist : ir.histOwner? real.tag = none
-  tagLate : ir.IsLate real.tag
-  xNoLate : ∀ v ∈ ir.exprNodes x, ir.NoLateRead v
-  cyNoLate : ∀ v ∈ ir.exprNodes cy, ir.NoLateRead v
-  yNoLate : ∀ v ∈ ir.exprNodes u.operand, ir.NoLateRead v
-  powNoLate : ir.NoLateRead u.powers
-  blindCopy : (ir.value sb).kind = .padCopy real.tag "polynomialBits"
-  macChar : ir.charOf real.macField = 2
-
-variable (ir primeNodes) in
-/-- **The values' intervals the honest MAC checks read**: `leafIvl` at no value range. -/
-abbrev honestIvl : ℕ → ℕ → Option Ivl := fun f v => ir.leafIvl primeNodes f v
-
-variable (ir primeNodes) in
-/-- **A MAC whose tail is a grouped `mod_2`** (compiler/mac.h with compiler/mod.h `kGrouped`): a
-MAC (`MacBase`) whose tail is in the grouped form (`GroupedFormOk`) with accumulators `acc` and
-quotient digits `gq`, and the facts the honest values need: the owners of the accumulators and the
-digits, which are late values of their domain's field; the digits fit (`fit`: a group's sum, at most
-`count · convMax`, halved, is below `T^k`); the lookups on the digits and on the final quotient have
-room (`digitsRoom`, `finalRoom`). Data and properties of the program, decided per program. -/
-structure GroupedMac extends ir.MacBase primeNodes where
-  hgf : ir.GroupedFormOk (ir.honestIvl primeNodes) dy 2 L R realT
-  /-- The grouping. -/
-  G : GroupedMod
-  hG : realT.grouped = some G
-  /-- The accumulators. -/
-  acc : ℕ
-  hA : G.accumulators = some (.leaf acc)
-  /-- The quotient digits. -/
-  gq : ℕ
-  hD : G.groupDigits = .leaf gq
-  accOwn : ir.accOwner? acc = some t
-  accTag : ir.tagOwner? acc = none
-  accHist : ir.histOwner? acc = none
-  accLt : acc < ir.values.length
-  accLate : ir.IsLate acc
-  accField : ir.valueField acc = ir.domainField dy
-  gqOwn : ir.digitsOwner? gq = some t
-  gqTag : ir.tagOwner? gq = none
-  gqAcc : ir.accOwner? gq = none
-  gqHist : ir.histOwner? gq = none
-  gqLt : gq < ir.values.length
-  gqLate : ir.IsLate gq
-  gqField : ir.valueField gq = ir.domainField dy
-  fit : ∀ fc ∈ G.groups, fc.2 * Conv.convMax u.width u.taps.toFinset / 2 < G.base ^ G.digitCount
-  digitsRoom : ∀ p ∈ ir.predicates, ∀ d N r, p.body = .mem d [.leaf gq] (.range N) (.lookup r) →
-    d = dy ∧ 0 < G.base ∧ G.base ≤ N
-  finalRoom : ∀ p ∈ ir.predicates, ∀ d D N r, p.body = .mem d [D] (.range N) (.lookup r) →
-    D.beq realT.quotExpr = true → d = dy ∧ G.groups.length + 1 < 2 * N
+        ir.MacOddFieldOk (ir.srcLeafIvl primeNodes S) pid dy y sb real ∧ sd = dy ∧ sz = y
 
 /-- **The H predicate holds at an honest tag** (`macHPredB`; the converse of `macHHolds_of_pred`):
 in characteristic `2`, where the tag is `Σ_c β^(c+1) · chunk_c(X_H)` (`MacHHoldsAt`), the predicate
@@ -1390,45 +843,7 @@ theorem macChunkA_congr {rd : ir.Valuation I} {f d d' : ℕ} {z z' : Expr} {w c 
   refine Finset.sum_congr rfl fun i _ => ?_
   simp only [h i]
 
-namespace MacBase
-
-variable (M : ir.MacBase primeNodes)
-
-/-- **The source facts a MAC check over a field's honest values need**, at a reader `rd`: the cross-field `equal`
-holds, the `x` operand and the check's operand read bits, and the check's operand's integer reading
-is its indicator. -/
-structure Source (rd : ir.Valuation I) : Prop where
-  /-- The cross-field `equal` holds. -/
-  cross : ir.HoldsWith rd (.cross M.dx M.x M.cdy M.cy M.k M.real)
-  /-- The `x` operand reads bits. -/
-  xbits : ∀ i < ir.exprLen M.x, ir.evalWith rd M.dx M.x i = 0 ∨ ir.evalWith rd M.dx M.x i = 1
-  /-- The check's operand reads bits. -/
-  ybits : ∀ j < ir.exprLen M.y, ir.evalWith rd M.dy M.y j = 0 ∨ ir.evalWith rd M.dy M.y j = 1
-  /-- The check's operand's integer reading is its indicator. -/
-  yint : ∀ j < ir.exprLen M.y, ir.evalIntWith rd M.dy M.y j =
-    if ir.evalWith rd M.dy M.y j = 1 then 1 else 0
-
-end MacBase
-
 /-! ## What the generated values read -/
-
-variable (ir) in
-/-- **The committed values value `v` reads**, with `n` levels (as `RealizedProgram.read`): a committed
-value, a pad copy or a value bound to its digits itself, a public expression, an opaque value or a
-bit view what the values it reads read; nothing for a late value, a message, a statement value, a
-constant or a challenge. A value bound to its digits is read whole (`RealizedProgram.asgReads` reads its
-digits instead). -/
-def valReads : ℕ → ℕ → List ℕ
-  | 0, _ => []
-  | n + 1, v =>
-    match (ir.value v).kind with
-    | .priv => [v]
-    | .padCopy _ _ => [v]
-    | .bound _ => [v]
-    | .pub (.expr e) => (ir.exprNodes e).flatMap (valReads n)
-    | .pub (.opaque _ args) => args.flatMap (valReads n)
-    | .bits w _ => valReads n w
-    | _ => []
 
 /-- **Readings agree where the environments agree on what is read**: two environments with the
 same statement read a value alike when they agree on the challenges and the late values it reads
@@ -1676,39 +1091,58 @@ def NoGenPred (b : PredBody) : Prop := ∀ w ∈ ir.predNodes b, ir.NoGenRead w
 /-! ## Checkers for the program facts, through the memo tables -/
 
 variable (ir) in
-/-- **The late values that have a message**, as a set. -/
-def msgSet : NatTrie Unit :=
-  natSet (ir.values.filterMap fun x =>
-    match x.kind with
-    | .message u => some u
-    | _ => none)
+/-- **The table `MT` has an entry for every late value that has a message.** -/
+def MessagesCovered (MT : NatTrie ℕ) : Prop :=
+  ∀ u m, (ir.value m).kind = .message u → (MT.get? u).isSome
 
-variable (ir) in
-/-- **Whether some value of the program is the message of late value `u`** (`msgSet`). -/
-def hasMessageB (u : ℕ) : Bool := (ir.msgSet.get? u).isSome
-
-/-- **A message of `u` is a value of the program.** -/
-theorem hasMessageB_of {u m : ℕ} (h : (ir.value m).kind = .message u) : ir.hasMessageB u = true := by
-  unfold hasMessageB msgSet
-  rw [natSet_isSome, List.mem_filterMap]
+/-- **A late value that has a message has an entry** where the records check. -/
+theorem messagesCovered_of_B {S : Structure} (h : ir.messageRecsB S = true) :
+    ir.MessagesCovered S.messageTab := by
+  intro u m hk
+  unfold messageRecsB messageRecsE at h
+  rw [Twin.okB_seqE, Bool.and_eq_true] at h
   have hm : m < ir.values.length := by
     by_contra hm
     have hd : ir.value m = default := by
-      simp only [value]
+      simp only [value_eq_getD]
       exact List.getD_eq_default _ _ (by omega)
-    rw [hd] at h
-    cases h
-  refine ⟨ir.value m, ?_, by rw [h]⟩
-  rw [value, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hm]
-  exact List.getElem_mem hm
+    rw [hd] at hk
+    cases hk
+  have hc := okB_of_okB_allE h.2 m hm
+  have hv : ir.values[m] = ir.value m := by
+    rw [value_eq_getD, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hm, Option.getD_some]
+  rw [Nat.zero_add, hv] at hc
+  unfold messageCoverE at hc
+  rw [hk, Twin.okB_guardE, beq_iff_eq] at hc
+  rw [hc]
+  rfl
+
+/-- **The table's entry for `u` is `u`'s message** where the records check. -/
+theorem kind_of_messageTab {S : Structure} (h : ir.messageRecsB S = true) {u m : ℕ}
+    (hm : S.messageTab.get? u = some m) : (ir.value m).kind = .message u := by
+  obtain ⟨j, hj, hjm⟩ := List.getElem_of_mem (NatTrie.mem_of_get?_ofList hm)
+  unfold messageRecsB messageRecsE at h
+  rw [Twin.okB_seqE, Bool.and_eq_true] at h
+  have he := okB_of_okB_allE h.1 j hj
+  rw [hjm] at he
+  unfold messageEntryE at he
+  rw [Twin.okB_guardE, Bool.and_eq_true] at he
+  obtain ⟨-, he⟩ := he
+  dsimp only at he
+  split at he
+  · rename_i u' hk
+    rw [beq_iff_eq] at he
+    rw [hk, he]
+  · cases he
 
 variable (ir) in
-/-- **`NoLateRead`, through the reads table.** -/
-def noLateReadB (v : ℕ) : Bool :=
-  (ir.readsT.getD v []).all fun r =>
-    match r with
-    | .late u => !decide (u < ir.values.length ∧ ir.IsLate u)
-    | _ => true
+/-- **`noLateReadB` at the program**, through the program's reads table. -/
+theorem noLateReadB_eq (v : ℕ) :
+    ir.noLateReadB v = (ir.readsT.getD v []).all fun r =>
+      match r with
+      | .late u => !decide (u < ir.values.length ∧ ir.IsLate u)
+      | _ => true :=
+  rfl
 
 theorem noLateRead_of_B (hwf : ir.WellFormed) {v : ℕ} (h : ir.noLateReadB v = true) :
     ir.NoLateRead v := by
@@ -1718,33 +1152,33 @@ theorem noLateRead_of_B (hwf : ir.WellFormed) {v : ℕ} (h : ir.noLateReadB v = 
   simp only [Bool.not_eq_true', decide_eq_false_iff_not] at this
   exact this
 
-variable (ir) in
-/-- **`SrcCovered`, through the reads tables.** -/
-def srcCoveredB (rs : List Read) (w : ℕ) : Bool :=
-  decide (w < ir.values.length) &&
-    (ir.readsT.getD w []).all (fun r =>
-      match r with
-      | .chal j => rs.contains (.chal j)
-      | .late u => (!ir.hasMessageB u || rs.contains (.pad u)) &&
-          (!decide (ir.IsSourceValue u) || (ir.value u).reads.all fun r =>
-            match r with
-            | .chal j => rs.contains (.chal j)
-            | _ => true)
-      | .pad _ => true) &&
-    (ir.asgReadsT.getD w []).all fun u =>
-      match (ir.value u).kind with
-      | .padCopy w' _ => rs.contains (.pad w')
-      | _ => true
+/-- **`srcCoveredB` at the program**, through the program's reads tables. -/
+theorem srcCoveredB_eq (MT : NatTrie ℕ) (rs : List Read) (w : ℕ) :
+    ir.srcCoveredB MT rs w = (decide (w < ir.values.length) &&
+      (ir.readsT.getD w []).all (fun r =>
+        match r with
+        | .chal j => rs.contains (.chal j)
+        | .late u => (!(MT.get? u).isSome || rs.contains (.pad u)) &&
+            (!decide (ir.IsSourceValue u) || (ir.value u).reads.all fun r =>
+              match r with
+              | .chal j => rs.contains (.chal j)
+              | _ => true)
+        | .pad _ => true) &&
+      (ir.asgReadsT.getD w []).all fun u =>
+        match (ir.value u).kind with
+        | .padCopy w' _ => rs.contains (.pad w')
+        | _ => true) :=
+  rfl
 
-theorem srcCovered_of_B (hwf : ir.WellFormed) {rs : List Read} {w : ℕ}
-    (h : ir.srcCoveredB rs w = true) : ir.SrcCovered rs w := by
-  unfold srcCoveredB at h
+theorem srcCovered_of_B (hwf : ir.WellFormed) {MT : NatTrie ℕ} (hMT : ir.MessagesCovered MT)
+    {rs : List Read} {w : ℕ} (h : ir.srcCoveredB MT rs w = true) : ir.SrcCovered rs w := by
+  rw [srcCoveredB_eq] at h
   simp only [Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at h
   obtain ⟨⟨hw, hr⟩, ha⟩ := h
   refine ⟨fun j hj => ?_, fun u hu ⟨m, hm⟩ => ?_, fun u hu w' m hk => ?_, fun u hu hs j hj => ?_⟩
   · simpa using hr _ ((mem_readsT hwf w _).1 hj)
   · have := hr _ ((mem_readsT hwf w _).1 hu)
-    simp only [Bool.and_eq_true, hasMessageB_of hm, Bool.not_true, Bool.false_or,
+    simp only [Bool.and_eq_true, hMT u m hm, Bool.not_true, Bool.false_or,
       List.contains_iff_mem] at this
     exact this.1
   · have := ha u ((mem_asgReadsT hwf hw u).1 hu)
@@ -1771,7 +1205,7 @@ theorem boundNoCopy_of_B (h : ir.boundNoCopyB = true) : ir.BoundNoCopy := by
   have hu : u < ir.values.length := by
     by_contra hu
     have hd : ir.value u = default := by
-      simp only [value]
+      simp only [value_eq_getD]
       exact List.getD_eq_default _ _ (by omega)
     rw [hd] at he
     cases he
@@ -1779,15 +1213,6 @@ theorem boundNoCopy_of_B (h : ir.boundNoCopyB = true) : ir.BoundNoCopy := by
   simp only [he, List.all_eq_true] at this
   have := this w hw
   simp [hk] at this
-
-variable (ir) in
-/-- **`GroupedMac.digitsRoom`, as a check**: every lookup of the single record `gq` into a range
-`[0, N)` is of domain `dy` with `0 < base ≤ N`. -/
-def digitsRoomB (gq dy base : ℕ) : Bool :=
-  ir.predicates.all fun p =>
-    match p.body with
-    | .mem d [.leaf g] (.range N) (.lookup _) => !(g == gq) || (d == dy && decide (0 < base) && decide (base ≤ N))
-    | _ => true
 
 theorem digitsRoom_of_B {gq dy base : ℕ} (h : ir.digitsRoomB gq dy base = true) :
     ∀ p ∈ ir.predicates, ∀ d N r, p.body = .mem d [.leaf gq] (.range N) (.lookup r) →
@@ -1798,15 +1223,6 @@ theorem digitsRoom_of_B {gq dy base : ℕ} (h : ir.digitsRoomB gq dy base = true
     decide_eq_true_eq] at this
   exact ⟨this.1.1, this.1.2, this.2⟩
 
-variable (ir) in
-/-- **`GroupedMac.finalRoom`, as a check**: every lookup of a single record `D` with
-`D.beq Q` into a range `[0, N)` is of domain `dy` with `groups + 1 < 2N`. -/
-def finalRoomB (Q : Expr) (dy groups : ℕ) : Bool :=
-  ir.predicates.all fun p =>
-    match p.body with
-    | .mem d [D] (.range N) (.lookup _) => !(D.beq Q) || (d == dy && decide (groups + 1 < 2 * N))
-    | _ => true
-
 theorem finalRoom_of_B {Q : Expr} {dy groups : ℕ} (h : ir.finalRoomB Q dy groups = true) :
     ∀ p ∈ ir.predicates, ∀ d D N r, p.body = .mem d [D] (.range N) (.lookup r) →
       D.beq Q = true → d = dy ∧ groups + 1 < 2 * N := by
@@ -1816,13 +1232,6 @@ theorem finalRoom_of_B {Q : Expr} {dy groups : ℕ} (h : ir.finalRoomB Q dy grou
     decide_eq_true_eq] at this
   exact this
 
-variable (ir) in
-/-- **Whether value `v` is the pad copy `m` of late value `w`**, as a check. -/
-def isPadCopyB (v w : ℕ) (m : String) : Bool :=
-  match (ir.value v).kind with
-  | .padCopy w' m' => w' == w && m' == m
-  | _ => false
-
 theorem kind_of_isPadCopyB {v w : ℕ} {m : String} (h : ir.isPadCopyB v w m = true) :
     (ir.value v).kind = .padCopy w m := by
   unfold isPadCopyB at h
@@ -1831,6 +1240,14 @@ theorem kind_of_isPadCopyB {v w : ℕ} {m : String} (h : ir.isPadCopyB v w m = t
     simp only [Bool.and_eq_true, beq_iff_eq] at h
     rw [hk, h.1, h.2]
   · cases h
+
+/-- **A committed value of a domain with a cell at each coordinate is a cell value of its
+domain.** -/
+theorem isCellValue_of_privCellB {v : ℕ} (h : ir.privCellB v = true) :
+    ir.isCellValue (ir.value v).domain v = true := by
+  unfold privCellB at h
+  simp only [Bool.and_eq_true] at h
+  exact h.2
 
 /-- **The source environment reads a committed value as the honest values** at a coordinate
 with a cell in its domain. -/
@@ -1843,16 +1260,6 @@ theorem reader_srcEnv_priv (x val : ir.Valuation I) (c : ∀ k, (ir.layout I).Ch
   simp only [srcEnv]
   rw [bindAsg_val_of_isBound (h := by rw [hk]; rfl), honestAsg_val hd hc]
   simp only [copyVal, hk]
-
-variable (ir) in
-/-- **Value `v` is a committed value of a domain of the program with a cell at each coordinate**,
-as a check. -/
-def privCellB (v : ℕ) : Bool :=
-  (match (ir.value v).kind with
-    | .priv => true
-    | _ => false) &&
-    decide (v < ir.values.length) && decide ((ir.value v).domain < ir.domains.length) &&
-    ir.isCellValue (ir.value v).domain v
 
 theorem kind_of_privCellB {v : ℕ} (h : ir.privCellB v = true) : (ir.value v).kind = .priv := by
   unfold privCellB at h

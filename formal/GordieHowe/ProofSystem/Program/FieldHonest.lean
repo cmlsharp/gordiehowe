@@ -230,7 +230,8 @@ theorem bitsBatchOkB_of (cb : ir.CBatch I d .bits) : ir.bitsBatchOkB d cb.idx = 
 /-- **Completeness of the compiler correspondence on the tree's coordinates**, the circuit's
 source read along its domain: where the circuit's meaning holds at the decoded cells and the
 filler cells decode to `0`, the source accepts the input of the logical assignment
-(`treeInput_eq_circuitInput`, `CircuitsAccept`). -/
+(`treeInput_eq_circuitInput`, `CircuitsAccept`, whose premise on the pads the cells' assignment
+meets by `padsAgreeOff_ofCells`). -/
 theorem satisfied_cast_of_accept (TA : ir.CircuitsAccept I src) {c : Fin ir.circuits.length}
     (hcd : (ir.circuit c).domain = d) {Pk : (I (ir.domainField d)).Packing}
     {rs : List (REdge (I (ir.domainField d)) Pk)} {Pads : Type} [Fintype Pads]
@@ -245,7 +246,7 @@ theorem satisfied_cast_of_accept (TA : ir.CircuitsAccept I src) {c : Fin ir.circ
         ((ir.treeLevel d rs Pads).view x)) := by
   subst hcd
   rw [treeInput_eq_circuitInput hc hv ht hp hr p x hfill]
-  exact TA.accept c p.stmt p.run _ hcirc
+  exact TA.accept c p.stmt p.run _ (fun u i h => (padsAgreeOff_ofCells _ _ u i h).symm) hcirc
 
 /-- **The honest circuits' sources accept the honest logical assignment** (`satisfied_cast_of_accept`
 at the honest committed cells, which decode to the cells). -/

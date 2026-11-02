@@ -18,9 +18,8 @@ program of the native ML-DSA-44 proof of possession at the ROM parameters (`Gord
 with the statement an encoded public key whose `ExpandA` finishes within the byte budget
 (`KeyStmt`), read through the statement values it determines (`stmtOf`: `key.a_hat` the key's `Â`, `key.t1` its `t1`, `tr` the
 bits of `H(pk)`; `iop`: the soundness IOP of the proof system at the frontend's round-by-round knowledge
-soundness, `MultiCircuitIOP.comap stmtOf`). The transcript is in
-`GordieHowe/Applications/MLDSA44/Native/ROMParams/Transcript.lean`, its statements in
-`GordieHowe/Applications/MLDSA44/Native/ROMParams.lean`.
+soundness, `MultiCircuitIOP.comap stmtOf`). The transcript and the
+statements are in `GordieHowe/Applications/MLDSA44/Native/ROMParams.lean`.
 
 * **The statement** (`KeyStmt`, `keyStmtCodec`, `stmtOf`, `keyOf_stmtOf`): the program checks no
   statement (`StatementOk` holds everywhere). The verifier prepares `Â = ExpandA(ρ)` with every
@@ -28,18 +27,19 @@ soundness, `MultiCircuitIOP.comap stmtOf`). The transcript is in
   (`GordieHowe.MLDSA44.expandABounded`), so the statements are the keys at which `ExpandA`
   finishes within that budget (`GordieHowe.MLDSA44.ExpandAWithin`); at the others no signature
   verifies (`GordieHowe.MLDSA44.Verifies.expandA`).
-* **The compiled circuits** (`Compiled`): the GKR sources with the trust bundle `CircuitsEnforce`.
-* **The transcript data**: the label `gordiehowe:ml-dsa-44-possession`, the key-and-context
-  writes, the phases' codecs (`GordieHowe.RealizedProgram.appWrites`: `18` bytes in `F_q^6`, `16` bytes in `GF(2^128)`), the C++ challenge readers of both
-  fields and LogUp's `α` outside `[0, 512)`; the domains' codecs and readers are the generic
-  per-field domain proofs' (`GordieHowe/Applications/MLDSA44/Native/ROMParams/Transcript.lean`).
+* **The proof systems** (`ProofSystems`): the definitions below are generic over them; the
+  statements are at `proofSystem` (`GordieHowe/Applications/MLDSA44/Native/ROMParams/Certified.lean`).
+* **The transcript data**: the label `gordiehowe:ml-dsa-44-possession` and the key-and-context
+  writes; the fields' codecs and readers are the generated module's
+  (`GordieHowe.Generated.MLDSA44.Native.ROMParams.fieldBytes`,
+  `GordieHowe.Generated.MLDSA44.Native.ROMParams.samplerReaders`).
 -/
 
 namespace GordieHowe.MLDSA44.Native.ROMParams
 
 open RealizedProgram.Export RealizedProgram.ProofSystem.PhaseLayout IOP RelativePacking GordieHowe.SPBCS GordieHowe.QROM SPBCS.Configurations
 open Generated.MLDSA44.Native.ROMParams.Program (program)
-open HashField (interp)
+open Generated.MLDSA44.Native.ROMParams (interp ProofSystems)
 open scoped NNReal ENNReal
 
 /-! ## The statement -/
@@ -78,19 +78,19 @@ def aCol (n : ℕ) : Fin _root_.MLDSA.mldsa44.l := ⟨n / 256 % 4, Nat.mod_lt _ 
 /-- The spectrum index of a coordinate of `key.a_hat`. -/
 def aIdx (n : ℕ) : Fin 256 := ⟨n % 256, Nat.mod_lt _ (by norm_num)⟩
 
-/-- **The statement values of a key and a matrix**: `key.a_hat` (value `56`) the entries of
-`aHat` as naturals, `key.t1` (value `57`) the coefficients of `t1`, `tr` (value `67`) the bits of
+/-- **The statement values of a key and a matrix**: `key.a_hat` (value `55`) the entries of
+`aHat` as naturals, `key.t1` (value `56`) the coefficients of `t1`, `tr` (value `66`) the bits of
 `H(pk)` (`MLDSA44.PoP.Compose.trOf`), every other statement coordinate `0`. -/
 def stmtOfKeyWith (pk : MLDSA44.PublicKey44)
     (aHat : _root_.MLDSA.TqMatrix _root_.MLDSA.mldsa44.k _root_.MLDSA.mldsa44.l) :
     program.Valuation interp := fun v i =>
-  if h : v = 56 ∧ i < 4096 then
+  if h : v = 55 ∧ i < 4096 then
     RealizedProgram.castElt (a := 0) ((((aHat.get (aRow i h.2)).get (aCol i)).coeffs.get
       (aIdx i)).val : (interp 0).K)
-  else if h : v = 57 ∧ i < 1024 then
+  else if h : v = 56 ∧ i < 1024 then
     RealizedProgram.castElt (a := 0) (((pk.t1.get (⟨i / 256, by change i / 256 < 4; omega⟩ :
       Fin _root_.MLDSA.mldsa44.k)).get (aIdx i)).val : (interp 0).K)
-  else if h : v = 67 ∧ i < 512 then
+  else if h : v = 66 ∧ i < 512 then
     RealizedProgram.castElt (a := 1) (Bits.constBit (K := (interp 1).K)
       (MLDSA44.PoP.Compose.trOf pk ⟨i / 8, by omega⟩).toNat (i % 8))
   else 0
@@ -160,11 +160,7 @@ theorem keyOf_stmtOf (s : KeyStmt) : KeyOf (MLDSA44.pkDecode44 s.1.key) (stmtOf 
 
 /-! ## The compiled circuits and the multi-circuit IOP -/
 
-/-- **The compiled circuits of `MLDSA44.Native.ROMParams`** (`RealizedProgram.Compiled` at `proofSystem`): the GKR sources of
-the program's circuits with the trust bundle `CircuitsEnforce`. -/
-abbrev Compiled : Type := RealizedProgram.Compiled proofSystem
-
-variable (C : Compiled)
+variable (C : ProofSystems)
 
 /-- **The relation of the BCS transformation**: the realized program's relation `rel` at the statement
 values of the key, on the witness read from those values. -/
@@ -172,49 +168,6 @@ abbrev keyRel : Set (KeyStmt × (program.Valuation interp → VarWitness)) :=
   {p | (stmtOf p.1, p.2) ∈ RealizedProgram.ProofSystem.relOf rel}
 
 /-! ## The transcript -/
-
-/-- **The bytes of the fields' elements**: `18` bytes for `F_q^6` (field `0`), `16` bytes for
-`GF(2^128)` (every other field), the C++ layouts (`Codec.FieldBytes.mldsaNative`,
-`Codec.FieldBytes.gf2_128`). -/
-def fieldBytes : RealizedProgram.FieldBytesOf interp where
-  fb
-    | 0 => 18
-    | _ + 1 => 16
-  bytes
-    | 0 => Codec.FieldBytes.mldsaNative
-    | _ + 1 => Codec.FieldBytes.gf2_128
-
-/-- **The phases' messages fit in `2^20` bytes.** -/
-theorem msgB_le : ∀ k, program.msgB fieldBytes k ≤ 2 ^ 20 := by
-  decide +kernel
-
-/-- The program has four challenges. -/
-theorem challenges_length : program.challenges.length = 4 := by decide
-
-/-- **The C++ samplers of the fields' elements**: `CReader.mldsaNative` for field `0`, `CReader.gf2_128` for every
-other field. -/
-def fieldReader : ∀ f, CReader (interp f).K
-  | 0 => CReader.mldsaNative
-  | _ + 1 => CReader.gf2_128
-
-/-- **The fields' sizes**: `8380417 ^ 6` for field `0`, `2 ^ 128` for every other field. -/
-theorem fieldCard : ∀ f, Fintype.card (interp f).K = if f = 0 then 8380417 ^ 6 else 2 ^ 128
-  | 0 => by convert mldsaNativeField_card <;> rfl
-  | _ + 1 => by convert gf2_128_card <;> rfl
-
-/-- **The readers of the challenges' values** (`RealizedProgram.stdReaders`): every challenge's field's
-sampler, repeated until its value is outside the table values for LogUp's `α` (decided). -/
-def samplerReaders : RealizedProgram.SamplerReaders interp program :=
-  RealizedProgram.stdReaders fieldReader fieldCard (by decide +kernel)
-
-/-- The largest load of a challenge: the `8` draws of `RealizedProgram.stdReaders`, the `16` bytes of an element
-of `GF(2^128)`. -/
-def chalLoadMax : Load := ⟨8, 16⟩
-
-/-- Every challenge's draws are within `chalLoadMax` (`RealizedProgram.chalLoad_stdReaders_le`, decided). -/
-theorem chalLoad_le (k : Fin program.phases) (j : program.ChalAt k) :
-    program.chalLoad samplerReaders j.1 ≤ chalLoadMax :=
-  RealizedProgram.chalLoad_stdReaders_le fieldReader fieldCard _ (by decide +kernel) k j
 
 /-- **The label write of `MLDSA44.Native.ROMParams`**: `gordiehowe:ml-dsa-44-possession` (`system.h`,
 `"gordiehowe:" + s.name()`, the C++ system's name). -/

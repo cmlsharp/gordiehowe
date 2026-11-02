@@ -417,7 +417,7 @@ TEST(GordieHoweM3, FalconSkeletonInventory) {
       .pin(Placement::kCircuit);
   assert_equal(norm, (mag1 * mag1).sum() + (mag2 * mag2).sum(), "norm")
       .pin(Placement::kCircuit);
-  // FalconBounds::derive, d = 128, b = 2048, J = 392.
+  // A Falcon-512 skeleton's bias 77315788807, d = 128, b = 2048, J = 392.
   const Bound bias2 = 2 * Bound(77315788807ull);
   const Bound beta2 = 34034726;
   auto r_s1 = assert_range(s1, q, "s1");

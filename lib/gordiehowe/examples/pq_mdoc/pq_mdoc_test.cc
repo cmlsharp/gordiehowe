@@ -655,7 +655,7 @@ TEST(PqMdocGoldilocks, NttBoundsAtExtremes) {
     const char *what;
     int64_t lo, hi;
   };
-  const int64_t zmax = int64_t(examples::mldsa::kBound - 1);
+  const int64_t zmax = int64_t(MLDSA::kBound - 1);
   const std::vector<Case> cases = {
       {"z", -zmax, zmax},
       {"w'", 0,

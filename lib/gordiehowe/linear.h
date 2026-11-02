@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "gordiehowe/core.h"
+#include "gordiehowe/int_interval.h"
 #include "util/panic.h"
 
 namespace proofs::gordiehowe {
@@ -115,6 +116,54 @@ struct OpSpec {
   // The terms of that bound, by name, for the plan export (PolyMatVec's
   // entryBound, K, L, n); empty when the bound is the row sum alone.
   std::vector<std::pair<std::string, Bound>> bound_terms;
+  // Interval propagation by the operator itself: when set, the integer
+  // interval of every output coordinate when every input coordinate lies
+  // in IN and dependency k's entries in DEPS(k) (by position in DEPS), or
+  // none when the operator bounds nothing there (a dependency without an
+  // interval, a bound past 2^CAP_BITS). It replaces the row bounds' rule
+  // (interval). Like the row bounds it does not enter the description: the
+  // operator's name and parameters fix it.
+  std::function<std::optional<IntInterval>(const IntInterval &in,
+                                           const DepIntervals &deps,
+                                           unsigned cap_bits)>
+      interval_fn;
+
+  // Whether interval propagation reads the operator (a row bound or an
+  // interval method).
+  bool bounds() const {
+    return row_sum != 0 || abs_row_sum != 0 || static_cast<bool>(interval_fn);
+  }
+  // The integer interval of every output coordinate when every input
+  // coordinate lies in IN (interval propagation, compiler/range.h): the
+  // operator's own method (INTERVAL_FN) when it has one; otherwise its row
+  // bound, [min(lo, 0) r, max(hi, 0) r] for a nonnegative matrix of row sum
+  // r (ROW_SUM), [-m s, m s] with m = max(-lo, hi) for a signed one whose
+  // rows' absolute values sum to s (ABS_ROW_SUM). None when the operator
+  // bounds nothing (bounds()), or past 2^CAP_BITS.
+  std::optional<IntInterval> interval(const IntInterval &in,
+                                      const DepIntervals &deps,
+                                      unsigned cap_bits) const {
+    namespace ii = int_interval;
+    if (interval_fn) return interval_fn(in, deps, cap_bits);
+    const Bound cap = Bound::pow2(cap_bits);
+    if (row_sum != 0) {
+      if (row_sum >= cap) return std::nullopt;
+      const SignedInt r(row_sum);
+      const auto l = ii::times(std::min<SignedInt>(in.first, 0), r, cap_bits);
+      const auto h = ii::times(std::max<SignedInt>(in.second, 0), r, cap_bits);
+      if (!l || !h) return std::nullopt;
+      return IntInterval{*l, *h};
+    }
+    if (abs_row_sum != 0) {
+      if (abs_row_sum >= cap) return std::nullopt;
+      const SignedInt s(abs_row_sum);
+      const auto h =
+          ii::times(std::max<SignedInt>(-in.first, in.second), s, cap_bits);
+      if (!h) return std::nullopt;
+      return IntInterval{-*h, *h};
+    }
+    return std::nullopt;
+  }
 };
 
 namespace internal {
@@ -505,6 +554,9 @@ class OpMake {
 //   row_sum, abs_row_sum, bound_terms
 //                  (optional) interval propagation's bounds of an integer
 //                  matrix (OpSpec);
+//   interval       (optional) the operator's own interval method, given the
+//                  input's and the dependencies' intervals (OpSpec::
+//                  interval_fn), in place of the row bounds;
 //   field          the field object, when no dependency lies in F.
 template <class F>
 struct LinearOpDef {
@@ -519,6 +571,9 @@ struct LinearOpDef {
   std::function<typename OpSpec<F>::DepRows()> dep_rows = {};
   Bound row_sum = 0, abs_row_sum = 0;
   std::vector<std::pair<std::string, Bound>> bound_terms = {};
+  std::function<std::optional<IntInterval>(const IntInterval &,
+                                           const DepIntervals &, unsigned)>
+      interval = {};
   const F *field = nullptr;
 };
 
@@ -544,6 +599,7 @@ Op<F> linear_operator(LinearOpDef<F> d) {
   s->row_sum = d.row_sum;
   s->abs_row_sum = d.abs_row_sum;
   s->bound_terms = std::move(d.bound_terms);
+  s->interval_fn = std::move(d.interval);
   return Op<F>{s};
 }
 
@@ -852,6 +908,8 @@ std::shared_ptr<const OpSpec<F>> batched(std::shared_ptr<const OpSpec<F>> op,
   s->row_sum = op->row_sum;
   s->abs_row_sum = op->abs_row_sum;
   s->bound_terms = op->bound_terms;
+  // Each block is the operator's own: the same interval.
+  s->interval_fn = op->interval_fn;
   s->make = [op, b](const OpArgs &a) {
     return std::make_shared<BatchedOperator<F>>(op->make(a), b);
   };

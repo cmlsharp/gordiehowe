@@ -1,7 +1,8 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 
-// GordieHowe: the Falcon-512 private ring, both arms. The statement is a
+// GordieHowe: the Falcon private ring of a parameter set S
+// (falcon_params.h: Falcon-512 or Falcon-1024), both arms. The statement is a
 // ring of R public keys and the challenge c = HashToPoint(r || m), a
 // statement value because the salt and message are public. The prover
 // shows that for a hidden member j,
@@ -43,40 +44,52 @@
 
 namespace proofs::gordiehowe::examples::falcon::ring {
 
+using examples::falcon::Falcon1024;
+using examples::falcon::Falcon512;
 using examples::falcon::emulated::CommittedKey;
-using examples::falcon::emulated::FalconBounds;
-using examples::falcon::emulated::kBetaSq;
-using examples::falcon::emulated::kHighBudget;
-using examples::falcon::emulated::kN;
 using examples::falcon::emulated::kQ;
 
-// The native arm's transform root (order 2n) in F_q, 11^12 mod q: the one
-// ops::FieldNtt::root gives (the least generator 11 to the power
-// (q - 1) / 2n); the tests' host transforms use it.
-constexpr uint64_t kNativePsi = 10302;
+// The native arm's transform root of order 2n in F_q: the one
+// ops::FieldNtt::root gives, the least generator 11 of F_q^* to the power
+// (q - 1) / 2n (11^12 = 10302 for n = 512, 11^6 = 1945 for n = 1024); the
+// tests' host transforms use it.
+constexpr uint64_t native_psi(size_t n) {
+  uint64_t r = 1;
+  for (uint64_t e = 0; e < (kQ - 1) / (2 * n); ++e) r = r * 11 % kQ;
+  return r;
+}
+static_assert(native_psi(512) == 10302 && native_psi(1024) == 1945);
 
 // ---------------------------------------------------------------- inputs --
 
-// The inputs. The statement: the ring's keys (R members, R fixed per
-// relation by the shape value) and the challenge c = HashToPoint(r || m),
-// as coefficients below q (the members' codecs). The witness: the
+// The inputs of set S. The statement: the ring's keys (R members, R fixed
+// per relation by the shape value) and the challenge c = HashToPoint(r ||
+// m), as coefficients below q (the members' codecs). The witness: the
 // signer's index in the ring (below the padded size), its key's
 // coefficients and s2's (canonical, in [0, q)).
-template <template <class> class F>
-struct RingStatement {
-  F<std::vector<std::array<uint16_t, kN>>> ring;
-  F<std::array<uint16_t, kN>> c;
+template <class S>
+struct RingInputs {
+  template <template <class> class F>
+  struct Statement {
+    F<std::vector<std::array<uint16_t, S::kN>>> ring;
+    F<std::array<uint16_t, S::kN>> c;
+  };
+  template <template <class> class F>
+  struct Witness {
+    F<uint32_t> signer;
+    F<std::array<uint16_t, S::kN>> key;
+    F<std::array<uint16_t, S::kN>> s2;
+  };
 };
-template <template <class> class F>
-struct RingWitness {
-  F<uint32_t> signer;
-  F<std::array<uint16_t, kN>> key;
-  F<std::array<uint16_t, kN>> s2;
-};
+template <class S, template <class> class F>
+using RingStatement = typename RingInputs<S>::template Statement<F>;
+template <class S, template <class> class F>
+using RingWitness = typename RingInputs<S>::template Witness<F>;
 
 // The shape of the statement for rings of R members.
-inline RingStatement<Value> ring_statement_shape(size_t R) {
-  RingStatement<Value> st{};
+template <class S>
+RingStatement<S, Value> ring_statement_shape(size_t R) {
+  RingStatement<S, Value> st{};
   st.ring.resize(R);
   return st;
 }
@@ -97,10 +110,10 @@ struct RingValues {
   Ref<F, Subfield<>, Public> keys;
   Ref<F, Subfield<>, Public> c;
 };
-template <class D,
+template <class S, class D,
           class F = std::decay_t<decltype(std::declval<D &>().field())>>
-RingValues<F> ring_values(D &A, const RingStatement<In> &st) {
-  st.ring.check(computes("falcon_ring_key_u16le", {kN, kQ}), below_q);
+RingValues<F> ring_values(D &A, const RingStatement<S, In> &st) {
+  st.ring.check(computes("falcon_ring_key_u16le", {S::kN, kQ}), below_q);
   st.c.check(computes("falcon_challenge_canonical", {kQ}), below_q);
   return {st.ring.values(A), st.c.values(A)};
 }
@@ -112,7 +125,7 @@ template <class D, class M,
 Ref<F, Subfield<>, Committed> key_spectrum(
     D &A, const In<M> &key, std::shared_ptr<const ops::StagedNtt<F>> t) {
   const F *pf = &A.field();
-  return A.priv(Subfield{}, "key.spectrum", kN, depends_on(key),
+  return A.priv(Subfield{}, "key.spectrum", t->n, depends_on(key),
                 [pf, t](const std::vector<uint8_t> &b) {
                   return host::key_spectrum(*pf, *t, host::key_coefficients(b));
                 });
@@ -131,7 +144,7 @@ Ref<F, Bit, Committed> membership(const Scope &s, D &A,
                                   const typename F::Elt &psi) {
   const auto table = lib::table::public_table(
       s, A, "ring", keys,
-      lib::table::RowMap<F>::negacyclic(A.field(), kN, psi,
+      lib::table::RowMap<F>::negacyclic(A.field(), spectrum.n, psi,
                                         ops::NttOrder::kNatural));
   const F *pf = &A.field();
   const size_t bits = table.index_bits;
@@ -160,10 +173,11 @@ Ref<F, Subfield<>, Committed> native_signature_relation(
   using Elt = typename F::Elt;
   const F *pf = &A.field();
   const auto t = key.ntt.spec->staged;
-  const U64s z = falcon_ntt_zetas(kN, kQ);
+  const size_t n = t->n;
+  const U64s z = falcon_ntt_zetas(n, kQ);
   const auto s1 = s[A].priv(
-      Subfield{}, "s1", kN, depends_on(key.spectrum, c, s2),
-      [pf, t, z](const std::vector<Elt> &spec, const std::vector<Elt> &cv,
+      Subfield{}, "s1", n, depends_on(key.spectrum, c, s2),
+      [pf, t, z, n](const std::vector<Elt> &spec, const std::vector<Elt> &cv,
                  const std::vector<Elt> &s2v) {
         auto ints = [pf](const std::vector<Elt> &v) {
           uint64_t ok = 1;
@@ -177,8 +191,8 @@ Ref<F, Subfield<>, Committed> native_signature_relation(
         falcon_ntt_ref<kQ>(hhat, z);
         const U64s s1 = examples::falcon::emulated::host::s1_of(hhat, ints(cv),
                                                                 ints(s2v), z);
-        std::vector<Elt> out(kN);
-        for (size_t i = 0; i < kN; ++i) out[i] = pf->of_scalar(s1[i]);
+        std::vector<Elt> out(n);
+        for (size_t i = 0; i < n; ++i) out[i] = pf->of_scalar(s1[i]);
         return out;
       });
   ops::assert_spectral(s, "equation", c - s1,
@@ -190,11 +204,15 @@ Ref<F, Subfield<>, Committed> native_signature_relation(
 
 // ---------------------------------------------------------------- systems --
 
-// The carrier arm's relation over the statement ST and the witness W.
-template <class P>
+// The carrier arm's relation of set S over the statement ST and the
+// witness W. The ring's keys and c carry the statement bound q, which the
+// committed-key relation's intervals read (the selected key's coefficients
+// from the ring's hull, and c's); its assert_mod lowering certifies that
+// the relation's sides stay below the characteristic.
+template <class P, class S>
 void ring_carrier_relation(typename CarrierEnv<P>::Sys &cs,
-                           const CarrierEnv<P> &env, RingStatement<In> st,
-                           RingWitness<In> w) {
+                           const CarrierEnv<P> &env, RingStatement<S, In> st,
+                           RingWitness<S, In> w) {
   using AF = typename CarrierEnv<P>::AF;
   using examples::falcon::emulated::assert_encoding_budget;
   using examples::falcon::emulated::assert_norm;
@@ -202,43 +220,44 @@ void ring_carrier_relation(typename CarrierEnv<P>::Sys &cs,
   using examples::falcon::emulated::signature_relation;
   const AF &f = env.af;
   auto &A = cs.domain(domain_profile<P>(env.af, env.rsa.factory()), "A");
-  const auto psi = ops::FieldNtt<AF>::root(f, 2 * kN).value();
+  const auto psi = ops::FieldNtt<AF>::root(f, 2 * S::kN).value();
   const auto ntt =
-      ops::Ntt(f, kN, psi, ops::Stages::every(2), ops::NttOrder::kNatural);
-  const FalconBounds bounds = FalconBounds::derive(
-      field_characteristic(f), Bound(FalconRingParams<P>::kBias));
-  const auto ring = ring_values(A, st);
+      ops::Ntt(f, S::kN, psi, ops::Stages::every(2), ops::NttOrder::kNatural);
+  const auto ring = ring_values<S>(A, st);
+  ring.keys.bounded(kQ);
+  ring.c.bounded(kQ);
   const auto spectrum = key_spectrum(A, w.key, ntt.spec->staged);
   membership(cs.scope("member"), A, ring.keys, spectrum, w.signer, psi);
   const auto s2 = A.priv(Subfield{}, w.s2);
-  const auto s1 = signature_relation(cs.scope("signature"), A,
-                                     CommittedKey<AF>{spectrum, ntt}, ring.c,
-                                     s2, bounds);
+  const auto s1 = signature_relation<S>(cs.scope("signature"), A,
+                                        CommittedKey<AF>{spectrum, ntt},
+                                        ring.c, s2);
   const auto mag = magnitudes(cs.scope("magnitudes"), A, s1, s2);
-  assert_encoding_budget(cs.scope("encoding"), A, mag.mag2);
-  assert_norm(cs.scope("norm"), A, mag.mag1, mag.mag2);
+  assert_encoding_budget<S>(cs.scope("encoding"), A, mag.mag2);
+  assert_norm<S>(cs.scope("norm"), A, mag.mag1, mag.mag2);
 }
 
-// The native arm's relation over the statement ST and the witness W.
-template <class P>
+// The native arm's relation of set S over the statement ST and the
+// witness W.
+template <class P, class S>
 void ring_native_relation(typename NativeEnv<P>::Sys &cs,
-                          const NativeEnv<P> &env, RingStatement<In> st,
-                          RingWitness<In> w) {
+                          const NativeEnv<P> &env, RingStatement<S, In> st,
+                          RingWitness<S, In> w) {
   using AF = typename NativeEnv<P>::AF;
   const AF &f = env.af;
   auto &A = cs.domain(domain_profile<P>(env.af, env.rsa), "A");
-  const auto psi = ops::FieldNtt<AF>::root(f, 2 * kN).value();
+  const auto psi = ops::FieldNtt<AF>::root(f, 2 * S::kN).value();
   const auto ntt =
-      ops::Ntt(f, kN, psi, ops::Stages::every(2), ops::NttOrder::kNatural);
-  const auto ring = ring_values(A, st);
+      ops::Ntt(f, S::kN, psi, ops::Stages::every(2), ops::NttOrder::kNatural);
+  const auto ring = ring_values<S>(A, st);
   const auto spectrum = key_spectrum(A, w.key, ntt.spec->staged);
   membership(cs.scope("member"), A, ring.keys, spectrum, w.signer, psi);
   const auto s2 = A.priv(Subfield{}, w.s2);
   const auto s1 = native_signature_relation(
       cs.scope("signature"), A, CommittedKey<AF>{spectrum, ntt}, ring.c, s2);
   const auto norm = lib::arith::assert_norm_native(
-      cs, A, s1.concat(s2).named("norm.v"), native_norm<P>(), "norm");
-  lib::arith::assert_encodable_native(cs, A, norm, kHighBudget, "enc");
+      cs, A, s1.concat(s2).named("norm.v"), native_norm<P, S>(), "norm");
+  lib::arith::assert_encodable_native(cs, A, norm, S::kHighBudget, "enc");
 }
 
 }  // namespace proofs::gordiehowe::examples::falcon::ring

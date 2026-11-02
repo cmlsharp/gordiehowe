@@ -694,16 +694,26 @@ class In {
       constexpr size_t w = internal::integer_width<Leaf>();
       return D.pub(Subfield<>{}, nm, Shape(dims()), depends_on(slice()), id,
                    [pf, nm](const std::vector<uint8_t> &b) {
-                     std::vector<typename F::Elt> out;
+                     // The integers in chunks on the calling thread's
+                     // runner (util/parallel.h), each with its own flag.
+                     const size_t n = b.size() / w;
+                     auto out = parallel::presized<typename F::Elt>(n);
+                     const size_t grain =
+                         parallel::grain_for(n, parallel::kChunks);
+                     std::vector<uint64_t> oks(parallel::chunks(n, grain), 1);
+                     parallel::for_chunks(n, grain, [&](size_t lo, size_t hi) {
+                       uint64_t ok = 1;
+                       for (size_t m = lo; m < hi; ++m) {
+                         using U = typename internal::UnsignedOf<Leaf>::type;
+                         uint64_t u = 0;
+                         for (size_t j = 0; j < w; ++j)
+                           u |= uint64_t(b[m * w + j]) << (8 * j);
+                         out[m] = internal::integer_elt(*pf, Leaf(U(u)), ok);
+                       }
+                       oks[lo / grain] = ok;
+                     });
                      uint64_t ok = 1;
-                     for (size_t k = 0; k < b.size(); k += w) {
-                       using U = typename internal::UnsignedOf<Leaf>::type;
-                       uint64_t u = 0;
-                       for (size_t j = 0; j < w; ++j)
-                         u |= uint64_t(b[k + j]) << (8 * j);
-                       out.push_back(
-                           internal::integer_elt(*pf, Leaf(U(u)), ok));
-                     }
+                     for (uint64_t x : oks) ok &= x;
                      if (!ok)
                        throw std::runtime_error(
                            nm + ": an integer's magnitude is not below p");

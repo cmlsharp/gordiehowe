@@ -1,7 +1,8 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 //
-// Falcon-512 ring parameters of a field profile (param_sets.h), for the native
+// Falcon ring parameters of a field profile (param_sets.h) and a Falcon
+// parameter set (gordiehowe/examples/falcon/falcon_params.h), for the native
 // ring and the emulated carrier ring (gordiehowe/examples/rings/falcon_ring.h).
 // Neither ring has a MAC: the salt and message are public, so each is a
 // single A proof.
@@ -17,6 +18,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "gordiehowe/examples/falcon/falcon_params.h"
 #include "params/param_sets.h"
 #include "params/ring_params.h"
 #include "util/panic.h"
@@ -60,17 +62,20 @@ template <> struct FalconRingLigero<param_sets::QROMParams> {
   static constexpr size_t kCarrierBlockEnc = 0;
 };
 // Each tableau's size search, pinned: it gives the same value at |R| = 64,
-// 256 and 1024.
+// 256 and 1024 (Falcon-512).
 template <> struct FalconRingLigero<param_sets::ROMParams> {
   static constexpr param_sets::LigeroHalf kNative{7, 132, 3799};
   static constexpr size_t kCarrierBlockEnc = 4607;
 };
 
-template <class P> struct FalconRingParams {
+template <class P,
+          class S = gordiehowe::examples::falcon::Falcon512>
+struct FalconRingParams {
   using PD = param_sets::Derived<P>;
-  static constexpr uint64_t kQ = param_sets::kFalconQ;
-  static constexpr size_t kN = param_sets::kFalconN;
-  static constexpr uint64_t kBetaSq = param_sets::kFalconBetaSq;
+  static constexpr uint64_t kQ = gordiehowe::examples::falcon::kQ;
+  static constexpr size_t kN = S::kN;
+  static constexpr uint64_t kBetaSq = S::kBetaSq;
+  static_assert(kQ == param_sets::kFalconQ);
 
   // Native arm, characteristic q: the flagship native arm's norm limb base
   // and periodic accumulation width (Derived checks normColumn).
@@ -98,15 +103,19 @@ template <class P> struct FalconRingParams {
   static_assert(kQ <= param_sets::power(kEmuB, kEmuLs1), "coefficientFits");
   static_assert(kQ / 2 < param_sets::power(kEmuB, kEmuLa), "magnitudeFits");
   static_assert(kBetaSq < param_sets::power(kEmuB, kEmuLsum), "normSumFits");
-  // The carrier relation prod = c - s1 + BIAS - q*dq == h*s2 over the
-  // integers: |h*s2| <= M = n(q-1)^2, BIAS is the multiple of q above M + q
-  // that keeps dq nonnegative, dq fits its limbs, and both sides stay below
-  // the field's integer bound.
-  static constexpr uint64_t kConvBound = (uint64_t)kN * (kQ - 1) * (kQ - 1);
-  static constexpr uint64_t kBias = kQ * ((kConvBound + kQ) / kQ + 1);
-  static_assert(kBias >= kConvBound + kQ, "BIAS keeps dq nonnegative");
-  static_assert((kQ - 1 + kBias + kConvBound) / kQ <
-                    param_sets::power(kEmuB, kEmuLdq),
+  // The carrier relation c - s1 - q (qlo + dq) = h s2 over the integers:
+  // the assert_mod lowering derives qlo = -(1 + n (q - 1)) and dq's honest
+  // bound (2n - 1)(q - 1) + 2 from c - s1 in [-q, q - 1] and h s2's
+  // coefficients in [-(n - 1)(q - 1) q, n (q - 1) q], and certifies that the
+  // sides stay below p (its leftSpan, rightSpan and cap certificates). The
+  // relation's other soundness conditions are certify notes of the emulated
+  // gadgets (budget.noWrap, sum.noWrap) and of the range lowering, which
+  // chooses the circuit's digits. The static_asserts below check the
+  // profile's FalconEmuArm limbs (PQ/Params.lean's) against the set,
+  // constants the circuit does not read: dq fits L_dq limbs of T, and both
+  // sides and the norm stay below the field's integer bound in those limbs.
+  static constexpr uint64_t kDqBound = (2 * (uint64_t)kN - 1) * (kQ - 1) + 2;
+  static_assert(kDqBound <= param_sets::power(kEmuB, kEmuLdq),
                 "carrier dq limbs");
   static_assert(2 * (unsigned __int128)kQ * param_sets::power(kEmuB, kEmuLdq) <
                     kFieldInt,

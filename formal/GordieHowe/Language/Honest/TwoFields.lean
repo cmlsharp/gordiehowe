@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.Honest.Source
+public import GordieHoweNative.Language.Honest.TwoFields
 
 @[expose] public section
 
@@ -23,6 +24,9 @@ its own; its tail reads the tag through the target's bits.
 * **A MAC check over a field of characteristic `2` with its tail**: the cross-field
   `equal`, the check (`GordieHowe.RealizedProgram.MacFieldCheckTwo`), the tail and the facts its
   honest values need; its source facts and the tail at the honest environment.
+
+The definitions are in `GordieHoweNative/Language/Honest/TwoFields.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -259,13 +263,6 @@ theorem evalWith_eq_one_iff_of_cross {rd : ir.Valuation I} (hwf : ir.WellFormed)
   · simp
 
 /-! ## A MAC check over a field of characteristic `2` with its tail -/
-
-/-- **The domains `dx` and `dy` of a MAC's operands have characteristic above `1`.** -/
-def MacChars (ir : RealizedProgram) (dx dy : ℕ) : Prop :=
-  1 < ir.charOf (ir.domainField dx) ∧ 1 < ir.charOf (ir.domainField dy)
-
-instance (ir : RealizedProgram) (dx dy : ℕ) : Decidable (MacChars ir dx dy) := by
-  unfold MacChars; infer_instance
 
 variable (ir primeNodes) in
 /-- **A MAC check over a field of characteristic `2`, for a MAC no domain hosts** (`MacTwoCore`,

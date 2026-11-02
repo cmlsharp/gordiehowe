@@ -257,11 +257,6 @@
       "sha256": "962fee7ab3060167ff87a118659498e15e0427894e2bb9515d32199241485fcd"
     },
     {
-      "path": "third_party/longfellow/lib/circuits/compiler/schedule.h",
-      "upstream_path": "lib/circuits/compiler/schedule.h",
-      "sha256": "f9770d428652a6e4b06658c3e73f55884e40008284436cd6a6d7b3df14cc832d"
-    },
-    {
       "path": "third_party/longfellow/lib/circuits/ecdsa/verify_circuit.h",
       "upstream_path": "lib/circuits/ecdsa/verify_circuit.h",
       "sha256": "f1e37d20169307e0b108d4ad994ca9f4e270a3c171ffe1c3a85b25ddde51ef23"

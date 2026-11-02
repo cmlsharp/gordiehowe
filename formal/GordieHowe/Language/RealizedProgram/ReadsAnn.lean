@@ -83,6 +83,53 @@ def readsLateB (a : ReadsAnn) (q : ℕ → Bool) (v : ℕ) : Bool :=
 
 end Check
 
+/-! ## The check in ranges
+
+`readsAnnOkB` splits into checks of ranges `[i, j)` of the values and of the predicates
+(`allIdxIn`), which join with no re-check (`…In_append`) and give the check from `[0, n)`, `n` at
+least the list's length (`readsAnnOkB_of_parts`). -/
+
+section Ranges
+
+variable (ir : RealizedProgram)
+
+/-- **`readsAnnOkB`'s check of the values `[i, j)`.** -/
+def readsValuesIn (c : PackedLists) (a : ReadsAnn) (i j : ℕ) : Bool :=
+  allIdxIn (fun v x => readsOwnB c a.reads v x) ir.values i j
+
+/-- **`readsAnnOkB`'s check of the predicates `[i, j)`.** -/
+def readsPredsIn (c : PackedLists) (a : ReadsAnn) (i j : ℕ) : Bool :=
+  allIdxIn (fun _ p => ((p.body.exprs.flatMap fun de => nodesC c de.2) ++
+    ir.tableCols p.body).all fun u => readsSubB (a.reads.get u) (p.reads.map Read.code))
+    ir.predicates i j
+
+variable {ir}
+
+theorem readsValuesIn_append {c : PackedLists} {a : ReadsAnn} {i j k : ℕ}
+    (h₁ : ir.readsValuesIn c a i j = true) (h₂ : ir.readsValuesIn c a j k = true) :
+    ir.readsValuesIn c a i k = true :=
+  allIdxIn_append h₁ h₂
+
+theorem readsPredsIn_append {c : PackedLists} {a : ReadsAnn} {i j k : ℕ}
+    (h₁ : ir.readsPredsIn c a i j = true) (h₂ : ir.readsPredsIn c a j k = true) :
+    ir.readsPredsIn c a i k = true :=
+  allIdxIn_append h₁ h₂
+
+/-- **`readsAnnOkB` from its checks of the values and the predicates**, each on `[0, n)` for `n` at
+least the list's length. -/
+theorem readsAnnOkB_of_parts {c : PackedLists} {a : ReadsAnn} {nv np : ℕ}
+    (hv : ir.readsValuesIn c a 0 nv = true) (hnv : ir.values.length ≤ nv)
+    (hp : ir.readsPredsIn c a 0 np = true) (hnp : ir.predicates.length ≤ np) :
+    ir.readsAnnOkB c a = true := by
+  have hv' := allIdx_of_allIdxIn hv hnv
+  have hp' := allIdx_of_allIdxIn hp hnp
+  rw [← all_eq_allIdx] at hp'
+  unfold readsAnnOkB
+  rw [hv', hp']
+  rfl
+
+end Ranges
+
 variable {ir : RealizedProgram}
 
 theorem readsSubB_mem {a b : List ℕ} (h : readsSubB a b = true) {x : ℕ} (hx : x ∈ a) : x ∈ b := by
@@ -118,6 +165,7 @@ theorem nodeReads_code_mem (hwf : ir.WellFormed) {c : PackedLists} (hc : ir.clos
     by_cases hvl : v < ir.values.length
     · have hr := hv v hvl
       simp only [Nat.zero_add] at hr
+      rw [← value_eq_getD] at hr
       change readsOwnB c a.reads v (ir.value v) = true at hr
       unfold readsOwnB at hr
       simp only [nodeReads] at hrd
@@ -151,7 +199,8 @@ theorem nodeReads_code_mem (hwf : ir.WellFormed) {c : PackedLists} (hc : ir.clos
         exact List.contains_iff_mem.1 hr
       · simp at hrd
     · have hd : ir.value v = default := by
-        rw [RealizedProgram.value, List.getD_eq_getElem?_getD, List.getElem?_eq_none (by omega)]
+        rw [RealizedProgram.value_eq_getD,
+            List.getD_eq_getElem?_getD, List.getElem?_eq_none (by omega)]
         rfl
       simp only [nodeReads, hd] at hrd
       exact absurd hrd List.not_mem_nil

@@ -14,22 +14,24 @@ runs it.
 one binary domain, with Keccak batched. Read `sha3_preimage.h`. The
 comparison harness in `../bench/hash_comparisons/` runs it.
 
-`mldsa/` proves possession of an ML-DSA-44 signature on a private message
-under a public key. Domain H hashes and domain A checks the signature's
+`mldsa/` proves possession of an ML-DSA signature (ML-DSA-44, -65 or
+-87, `mldsa_params.h`) on a private message under a public key. Domain H hashes and domain A checks the signature's
 algebra, either in an extension of the ML-DSA field F_q (native arm) or in
 a Goldilocks extension, where congruences mod q are checked over the
 integers (emulated arm). Read `mldsa_native.h`, then `mldsa_emulated.h`;
 `mldsa_hash.h` holds domain H.
 
-`falcon/` proves possession of a Falcon-512 signature on a private message
-under a public key, with the same two arms as ML-DSA. Read
-`falcon_emulated.h`, which states the relation, then `falcon_native.h`;
-`falcon_hash.h` holds domain H.
+`falcon/` proves possession of a Falcon-512 or Falcon-1024 signature on a
+private message under a public key, with the same two arms as ML-DSA. Read
+`falcon_params.h`, which holds the two parameter sets the relations take
+as a template parameter, then `falcon_emulated.h`, which states the
+relation, then `falcon_native.h`; `falcon_hash.h` holds domain H.
 
 `rings/` proves that the prover holds a signature on a message under one
-key of a public ring of ML-DSA-44 or Falcon-512 keys without revealing
-which. Read `mldsa_ring.h` (with `mldsa_ring_native.h` and
-`mldsa_ring_carrier.h`, its two arms) and `falcon_ring.h`.
+key of a public ring of ML-DSA (any of the three sets), Falcon-512 or
+Falcon-1024 keys without revealing which. Read `mldsa_ring.h` (with
+`mldsa_ring_native.h` and `mldsa_ring_carrier.h`, its two arms) and
+`falcon_ring.h`.
 
 `rsa/` proves possession of an RSA-2048 PKCS#1 v1.5 signature with SHA-256
 on a private message. Read `rsa_pkcs1.h`.

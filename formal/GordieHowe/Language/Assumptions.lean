@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Language.Realizations.Realized
 public import GordieHowe.ProofSystem.GKR.SourceCircuit
+public import GordieHoweNative.Language.Assumptions
 
 @[expose] public section
 
@@ -17,12 +18,15 @@ in two directions:
 * **soundness** (`GordieHowe.RealizedProgram.CircuitsEnforce`): for every circuit `c` of the program, a GKR source
   circuit (`GordieHowe.RealizedProgram.CircuitSource`: input dimension `d`, the source `S`, its nodes and `hfit`, the
   circuit's inputs fit) whose satisfaction, on every input vector whose public positions hold the
-  verifier's public input (`GordieHowe.RealizedProgram.publicInput`), gives the meaning of every entry of the circuit
+  verifier's public input (`GordieHowe.RealizedProgram.publicInput`) and on which the proof system's premises hold
+  (`GordieHowe.RealizedProgram.InputPremises`: the bit views read the decoded words' bits), gives the meaning of every entry of the circuit
   (`GordieHowe.RealizedProgram.CircuitHolds`) at the valuation decoded from the vector (`GordieHowe.RealizedProgram.inputValuation`); and
   the source has the circuit's shape (`ShapeAtMost` at the width `GordieHowe.RealizedProgram.circuitWidth` and the
   circuit's layers);
-* **completeness** (`GordieHowe.RealizedProgram.CircuitsAccept`): the honest prover only. Wherever the circuit's entries
-  hold at the reader of an environment of the layout, the source accepts the honest input vector
+* **completeness** (`GordieHowe.RealizedProgram.CircuitsAccept`): the honest prover only. At every
+  committed assignment whose pads are zero off the late values' coordinates
+  (`GordieHowe.RealizedProgram.PadsAgreeOff`), wherever the circuit's entries hold at the reader of
+  an environment of the layout, the source accepts the honest input vector
   (`GordieHowe.RealizedProgram.circuitInput`).
 
 **The meaning of a circuit** (`GordieHowe.RealizedProgram.CircuitHolds`, entry by entry, `GordieHowe.RealizedProgram.EntryHolds`): a
@@ -39,6 +43,9 @@ Every other coordinate (a value no block holds, a coordinate past a block, a val
 digits) is the semantics' own reading (`GordieHowe.RealizedProgram.reader`) at the realized assignment
 (`GordieHowe.RealizedProgram.bindAsg`) of the committed assignment decoded from the vector
 (`GordieHowe.RealizedProgram.inputAssignment`). There is no Boolean or subfield restriction on the private inputs.
+
+The definitions are in `GordieHoweNative/Language/Assumptions.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -125,9 +132,6 @@ section
 
 variable (ir : RealizedProgram) (I : Interp)
 
-/-- **The field of circuit `c`**: its domain's. -/
-abbrev circField (c : ℕ) : ℕ := ir.domainField (ir.circuit c).domain
-
 /-! ## Realization circuits -/
 
 /-- **The value holding challenge `j`**: the first value of kind `challenge j`. -/
@@ -196,12 +200,14 @@ def RealHolds (rd : ir.Valuation I) : RealCircuit → Prop
 /-! ## The meaning of a circuit -/
 
 /-- **A predicate placed in a circuit holds** at `rd`: a `mod_q`'s field equation (`e = e'` in the
-field, for `q = 0` or the field form; the other forms' equations are given no meaning yet), any
-other predicate itself (`RealizedProgram.HoldsWith`). -/
+field, for `q = 0` or the field form; for the product form with `q > 2` its placed equation,
+`RealizedProgram.ProductPlaced`; the other forms' equations are given no meaning), any other
+predicate itself (`RealizedProgram.HoldsWith`). -/
 def PlacedHolds (rd : ir.Valuation I) : PredBody → Prop
   | .mod d q e e' real =>
     if q = 0 ∨ real.form = .field then
       ∀ i < ir.exprLen e, ir.evalWith rd d e i = ir.evalWith rd d e' i
+    else if real.form.isProduct = true ∧ 2 < q then ir.ProductPlaced rd d q e e' real
     else True
   | b => ir.HoldsWith rd b
 
@@ -273,6 +279,25 @@ def inputValuation (c : ℕ) (x : ir.Valuation I) (r : (ir.layout I).Run) {d : �
   | .bits _ _ => fromBlock ((ir.circuit c).viewPos u i)
   | _ => fromBlock ((ir.circuit c).pubPos u i)
 
+/-- **The semantics' reading of an input vector `v` of circuit `c`** at the statement `x` and the
+run `r`: the reader (`reader`) at the realized assignment (`bindAsg`) of the committed assignment
+decoded from `v` (`inputAssignment`). `inputValuation` reads every coordinate no block holds from
+it. -/
+def inputBase (c : ℕ) (x : ir.Valuation I) (r : (ir.layout I).Run) {d : ℕ}
+    (v : Fin (2 ^ d) → (I (ir.circField c)).K) : ir.Valuation I :=
+  ir.reader (ir.layoutEnv I x (ir.bindAsg (ir.inputAssignment I c (vecRead v))) r)
+
+/-- **The premises the proof system gives on a circuit's input vector** `v` at the statement `x` and
+the run `r`, beyond its public inputs: every bit view's inputs read the bits of the committed words
+the vector decodes to (`views`: the decoded valuation `inputValuation` agrees with the semantics'
+reading `inputBase` at every bit view). The packing tree gives them: a view's inputs are the
+coordinates of the committed words they alias (`circuitHolds_of_treeInput`). -/
+structure InputPremises (c : ℕ) (x : ir.Valuation I) (r : (ir.layout I).Run) {d : ℕ}
+    (v : Fin (2 ^ d) → (I (ir.circField c)).K) : Prop where
+  /-- Every bit view reads the bits of the decoded words. -/
+  views : ∀ u w sel, (ir.value u).kind = .bits w sel → ∀ i,
+    ir.inputValuation I c x r v u i = ir.inputBase I c x r v u i
+
 /-- **The honest input vector of circuit `c`** at the statement `x`, the committed assignment `a`
 and the run `r`: the public input (`publicInput`) at the public inputs; committed coordinates and
 pads from `a`, bit views as the semantics reads them at the realized assignment; zero at filler,
@@ -305,7 +330,8 @@ structure CircuitSource (c : ℕ) where
 /-- **Trust base: the program's GKR circuits enforce their entries** (soundness direction of the
 compiler correspondence, the paper's `sec:formal-assumptions`): for every circuit `c`, every
 statement `x` and run `r`, every input vector `v` whose public inputs are the verifier's
-(`publicInput`) and that satisfies the source circuit gives the meaning of every entry of `c`
+(`publicInput`), on which the proof system's premises hold (`InputPremises`: the bit views read the
+decoded words' bits) and that satisfies the source circuit gives the meaning of every entry of `c`
 (`CircuitHolds`) at the valuation decoded from `v` (`inputValuation`); and every source has the
 circuit's shape (`circuitWidth`, the circuit's layers): its output and every layer's inputs have at
 most `2^circuitWidth` wires. The vector is otherwise arbitrary: no Boolean or subfield restriction
@@ -316,18 +342,27 @@ structure CircuitsEnforce (src : ∀ c : Fin ir.circuits.length, ir.CircuitSourc
   enforce : ∀ (c : Fin ir.circuits.length) (x : ir.Valuation I) (r : (ir.layout I).Run)
     (v : Fin (2 ^ (src c).d) → (I (ir.circField c)).K),
     (∀ i : Fin (2 ^ (src c).d), (ir.circuit c).IsPublicPos i → v i = ir.publicInput I c x r i) →
+    ir.InputPremises I c x r v →
     (src c).S.Satisfied v → ir.CircuitHolds I c (ir.inputValuation I c x r v)
   /-- The sources have the circuits' shapes. -/
   shape : ∀ c, (src c).S.ShapeAtMost (ir.circuitWidth c) (ir.circuit c).layers
 
+/-- **Two committed assignments agree off the late values' coordinates**: their pads agree at every
+coordinate that is not a coordinate of a late value. -/
+def PadsAgreeOff (a a' : ir.Assignment I) : Prop :=
+  ∀ u i, ¬ (u < ir.values.length ∧ ir.IsLate u ∧ i < (ir.value u).size) → a.pad u i = a'.pad u i
+
 /-- **Trust base, honest prover: the program's GKR circuits accept honest inputs** (completeness
-direction of the compiler correspondence): wherever every entry of circuit `c` holds at the reader
-of the layout's environment at the realized assignment (`bindAsg`), the source accepts the honest
-input vector (`circuitInput`). -/
+direction of the compiler correspondence): at every committed assignment `a` whose pads are zero off
+the late values' coordinates (`PadsAgreeOff` with the zero assignment), wherever every entry of
+circuit `c` holds at the reader of the layout's environment at the realized assignment
+(`bindAsg`), the source accepts the honest input vector (`circuitInput`). The honest prover's
+assignment, read from its cells, meets the premise: a pad cell is a coordinate of a late value. -/
 structure CircuitsAccept (src : ∀ c : Fin ir.circuits.length, ir.CircuitSource I c) : Prop where
   /-- The circuits accept honest inputs. -/
   accept : ∀ (c : Fin ir.circuits.length) (x : ir.Valuation I) (r : (ir.layout I).Run)
-    (a : ir.Assignment I), ir.CircuitHolds I c (ir.reader (ir.layoutEnv I x (ir.bindAsg a) r)) →
+    (a : ir.Assignment I), ir.PadsAgreeOff I ⟨0, 0⟩ a →
+    ir.CircuitHolds I c (ir.reader (ir.layoutEnv I x (ir.bindAsg a) r)) →
     (src c).S.Satisfied (ir.circuitInput I c x r a)
 
 /-! ## Public values do not read the committed assignment -/
@@ -346,11 +381,6 @@ def pubB : ℕ → ℕ → Bool
     | .challenge _ => true
     | .message u => decide (u < ir.values.length ∧ ir.IsLate u)
     | _ => false
-
-/-- **Two committed assignments agree off the late values' coordinates**: their pads agree at every
-coordinate that is not a coordinate of a late value. -/
-def PadsAgreeOff (a a' : ir.Assignment I) : Prop :=
-  ∀ u i, ¬ (u < ir.values.length ∧ ir.IsLate u ∧ i < (ir.value u).size) → a.pad u i = a'.pad u i
 
 variable {ir I}
 

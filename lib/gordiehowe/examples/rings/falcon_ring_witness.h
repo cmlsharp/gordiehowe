@@ -1,7 +1,7 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 
-// GordieHowe: the host code of the Falcon-512 ring's generators
+// GordieHowe: the host code of the Falcon ring's generators
 // (falcon_ring.h): the signer's key from its witness bytes and its
 // spectrum, and the signer's index bits.
 

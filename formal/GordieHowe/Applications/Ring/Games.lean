@@ -9,6 +9,7 @@ public import GordieHowe.SPBCS.Extraction.Transcript
 public import GordieHowe.Model.Quantum.Interactive.Output
 public import GordieHowe.Model.QROM.AdaptiveCount
 public import GordieHowe.Model.Quantum.Interactive.QueryBounded
+public import GordieHowe.Model.Quantum.Interactive.SplitHybrid
 
 @[expose] public section
 
@@ -61,11 +62,18 @@ distinct honest keys this is the index form of Bader et al.
   user; no user whose key is in the ring was asked to sign the base message `bind R* m*`
   (ordinarily or inside a ring-signing request). With `bind R m = m` (converted signatures) this
   is: a valid ring signature on `(R*, m*)` implies that some member of `R*` signed `m*`.
-- `BKMWins`: BKM06 Definition 7 (unforgeability with respect to insider corruption, TCC 2006,
-  LNCS p. 67): the forgery verifies, its ring consists of uncorrupted honest keys, no
-  ring-signing request on `(R*, m*)` was answered; and no ordinary signing request by a member
-  on `bind R* m*` was answered (BKM06 has no ordinary signing oracle, so this condition is
-  vacuous for its adversaries).
+- Two modelling choices, both stronger than BKM06: rings are ordered lists of at most `N` keys
+  (BKM06's rings are sets; a list fixes an order and may repeat a key), and corruption returns
+  the user's key-generation coins, which determine the secret key (BKM06's `Corrupt(i)` returns
+  `SK_i`; returning the coins, as BKP20 p. 7 and CCLM22 Experiment 3, p. 21 do, gives the
+  adversary at least as much).
+- `BKMRequest`, `bkmLayer`, `BKMAdversary`, `BKMAdversary.insiderWinProb`: the game of BKM06
+  Definition 7 (unforgeability with respect to insider corruption, TCC 2006, LNCS p. 67; ePrint
+  2005/304, p. 7). Its requests are public keys, corruptions and ring signatures, with no ordinary
+  signing oracle; `bkmLayer adm` answers them as the ring layer does on the rings the scheme
+  supports (`adm`) and refuses ring-signing requests for other rings. The adversary wins when the
+  forgery verifies, its ring consists of uncorrupted honest keys, and no ring-signing request on
+  `(R*, m*)` was answered (`BKMAdversary.InsiderFresh`).
 -/
 
 namespace GordieHowe.Ring
@@ -81,7 +89,9 @@ variable {Sch : SigScheme} {n : ℕ}
 and replies in `Option Resp`, and oracle programs over the random oracle `X → Y`: on a request and
 its coins (drawn from `coins`), a classical program that queries the base oracles (`BaseRequest`)
 adaptively and returns an oracle program over the random oracle making at most `q` queries, whose
-result is the reply. -/
+result is the reply. The base program of a request makes at most one signing call
+(`prog_signs_le`): the signing oracle answers with the signing coins drawn for the request, so a
+second signing call in the same request would reuse them. -/
 structure OracleLayer (Sch : SigScheme) (n : ℕ) (X Y Req Resp : Type) where
   /-- The coins of the layer for one request. -/
   Coins : Type
@@ -96,6 +106,9 @@ structure OracleLayer (Sch : SigScheme) (n : ℕ) (X Y Req Resp : Type) where
   q : ℕ
   prog_queries : ∀ req c (O : BaseRequest Sch n → BaseResponse Sch) H,
     (((prog req c).run O).trace H).length ≤ q
+  /-- The base program of a request makes at most one signing call. -/
+  prog_signs_le : ∀ req c (O : BaseRequest Sch n → BaseResponse Sch),
+    (((prog req c).trace O).filter BaseRequest.isSign).length ≤ 1
 
 attribute [instance] OracleLayer.instFintypeCoins OracleLayer.instDecEqCoins
 
@@ -104,14 +117,13 @@ namespace OracleLayer
 variable {X Y Req Resp : Type} (L : OracleLayer Sch n X Y Req Resp) (Q : ℕ)
 
 /-- **The draws of the game through a layer**: the `n` users' key-generation coins, and for each
-of the first `Q` requests a public value and signing coins for the base signing oracle and the
-layer's coins. -/
+of the first `Q` requests signing coins for the base signing oracle and the layer's coins. -/
 abbrev Draw : Type :=
-  (Fin n → Sch.KeyCoins) × (Fin Q → (Sch.Pub × Sch.SignCoins) × L.Coins)
+  (Fin n → Sch.KeyCoins) × (Fin Q → Sch.SignCoins × L.Coins)
 
-/-- The draws of one request: a uniform public value and signing coins, and the layer's coins. -/
-noncomputable def requestLaw : PMF ((Sch.Pub × Sch.SignCoins) × L.Coins) :=
-  (PMF.uniformOfFintype (Sch.Pub × Sch.SignCoins)).bind fun s => L.coins.map fun c => (s, c)
+/-- The draws of one request: uniform signing coins and the layer's coins. -/
+noncomputable def requestLaw : PMF (Sch.SignCoins × L.Coins) :=
+  (PMF.uniformOfFintype Sch.SignCoins).bind fun s => L.coins.map fun c => (s, c)
 
 /-- The law of the draws: uniform key-generation coins, and independent draws per request. -/
 noncomputable def drawLaw : PMF (L.Draw Q) :=
@@ -121,7 +133,7 @@ noncomputable def drawLaw : PMF (L.Draw Q) :=
 /-- The base oracles answering request number `c < Q` (`baseAnswer` at that request's signing
 draw). -/
 def oracleAt (ω : L.Draw Q) (c : Fin Q) : BaseRequest Sch n → BaseResponse Sch :=
-  baseAnswer ω.1 (ω.2 c).1.1 (ω.2 c).1.2
+  baseAnswer ω.1 (ω.2 c).1
 
 /-- **The base calls of request number `c`** with the request `req`: the trace of the layer's
 base program against the base oracles of that request; none for `c ≥ Q`. -/
@@ -161,6 +173,39 @@ noncomputable def challenger : Challenger X Y Req Resp where
     · simpa using L.prog_queries req _ _ H
     · simp
 
+/-- **The challenger of the game through a layer as a split challenger**
+(`Quantum.SplitChallenger`): the keys uniform, each request's draw (signing coins and the layer's
+coins) from `requestLaw`, request number `i` answered from the keys and its own draw. -/
+noncomputable def split : SplitChallenger X Y Req Resp (Fin n → Sch.KeyCoins) (Sch.SignCoins × L.Coins) where
+  keys := PMF.uniformOfFintype _
+  draw := L.requestLaw
+  Q := Q
+  q := L.q
+  reply κ d _ req := ((L.prog req d.2).run (baseAnswer κ d.1)).bind fun r => .pure ⟨r, []⟩
+  reply_queries κ d _ req H := by
+    simpa using L.prog_queries req d.2 _ H
+
+/-- **The challenger of a layer is its split challenger.** -/
+theorem challenger_eq_split : L.challenger Q = (L.split Q).toChallenger := rfl
+
+/-- **A layer read through a map of its requests**: the request `r` is answered as `f r`, with the
+same coins and query bound. -/
+def comap {Req' : Type} (f : Req' → Req) : OracleLayer Sch n X Y Req' Resp where
+  Coins := L.Coins
+  coins := L.coins
+  prog r c := L.prog (f r) c
+  q := L.q
+  prog_queries r c O H := L.prog_queries (f r) c O H
+  prog_signs_le r c O := L.prog_signs_le (f r) c O
+
+omit [Fintype X] [DecidableEq X] [Fintype Y] in
+variable {L Q} in
+/-- **The base calls of a layer read through `f`** are those of the mapped requests. -/
+theorem calls_comap {Req' : Type} (f : Req' → Req) (ω : L.Draw Q) (reqs : List Req') :
+    (L.comap f).calls Q ω reqs = L.calls Q ω (reqs.map f) := by
+  simp only [calls, List.zipIdx_map, List.flatMap_map]
+  rfl
+
 end OracleLayer
 
 /-! ### The multi-user game against extraction forgers -/
@@ -174,6 +219,28 @@ structure BaseForgery (keys : Fin n → Sch.KeyCoins) (corrupted : Fin n → Pro
   verify_eq : Sch.verify f.1 f.2.1 f.2.2 = true
   /-- The key is that of an uncorrupted user who did not sign the message. -/
   exists_user : ∃ i, Sch.pk (keys i) = f.1 ∧ ¬ corrupted i ∧ ¬ signed i f.2.1
+
+/-- **The single output of a forger** among the candidates `cands` it decodes: a candidate that
+passes the forger's test `ok` (a forgery of the multi-user game, which the forger decides from the
+candidate's verification, the users' public keys, which it may request, and its own log of
+corruption and signing requests), or `none` when no candidate passes. The multi-user game scores
+this one output. -/
+noncomputable def pickForgery {Sch : SigScheme} (ok : Sch.PK × Sch.Msg × Sch.Sig → Prop)
+    (cands : Set (Sch.PK × Sch.Msg × Sch.Sig)) : Option (Sch.PK × Sch.Msg × Sch.Sig) :=
+  open Classical in if h : ∃ f ∈ cands, ok f then some (Classical.choose h) else none
+
+/-- **Some candidate passes the test exactly when the single output does.** -/
+theorem exists_mem_iff_pickForgery {Sch : SigScheme} {ok : Sch.PK × Sch.Msg × Sch.Sig → Prop}
+    {cands : Set (Sch.PK × Sch.Msg × Sch.Sig)} :
+    (∃ f ∈ cands, ok f) ↔ ∃ f, pickForgery ok cands = some f ∧ ok f := by
+  constructor
+  · intro h
+    refine ⟨Classical.choose h, ?_, (Classical.choose_spec h).2⟩
+    simp only [pickForgery, dif_pos h]
+  · rintro ⟨f, hf, hok⟩
+    unfold pickForgery at hf
+    split_ifs at hf with h
+    exact h
 
 section Forger
 
@@ -204,8 +271,10 @@ structure ExtractionForger (_V : NARG.QROM.Verifier m k e (Claim Stmt Pf) Stmt) 
   Aux : Type
   /-- The distribution of the auxiliary input. -/
   aux : PMF Aux
+  /-- The shape of the algorithm on each value. -/
+  sh : Aux → AlgShape (Bits m) (XOut k e) Req Resp
   /-- The interactive algorithm on each value. -/
-  alg : Aux → AdaptiveIAlg (Bits m) (XOut k e) Req Resp (Claim Stmt Pf)
+  alg : (a : Aux) → AdaptiveIAlg (sh a) (Claim Stmt Pf)
   /-- The straight-line database extractor. -/
   extractor : Stmt → DB (Bits m) (Out k e) → Multiset Wit
   /-- The decoding of a statement and an extracted witness into a candidate forgery. -/
@@ -240,12 +309,31 @@ def Wins (a : F.Aux) (v : F.Register a) (D : DB (Bits m) (Out k e)) : Prop :=
     BaseForgery v.chal.coins.1 (F.layer.Corrupted F.Q v.chal.coins (F.answered a v))
       (F.layer.Signed F.Q v.chal.coins (F.answered a v)) f
 
+/-- **The single output of the forger** on the composed registers `v` and the database `D`
+(`pickForgery`): a candidate decoded from a witness the extractor returns that is a forgery for
+the users' coins and the records of the answered requests. -/
+noncomputable def output (a : F.Aux) (v : F.Register a) (D : DB (Bits m) (Out k e)) :
+    Option (Sch.PK × Sch.Msg × Sch.Sig) :=
+  pickForgery (BaseForgery v.chal.coins.1 (F.layer.Corrupted F.Q v.chal.coins (F.answered a v))
+      (F.layer.Signed F.Q v.chal.coins (F.answered a v)))
+    {f | ∃ w ∈ F.extractor (F.claim a v).stmt D, f ∈ F.decode (F.claim a v).stmt w}
+
+/-- **The forger wins exactly when its single output is a forgery.** -/
+theorem wins_iff_output (a : F.Aux) (v : F.Register a) (D : DB (Bits m) (Out k e)) :
+    F.Wins a v D ↔ ∃ f, F.output a v D = some f ∧
+      BaseForgery v.chal.coins.1 (F.layer.Corrupted F.Q v.chal.coins (F.answered a v))
+        (F.layer.Signed F.Q v.chal.coins (F.answered a v)) f := by
+  rw [output, ← exists_mem_iff_pickForgery]
+  simp only [Wins, Set.mem_ofPred_eq]
+  exact ⟨fun ⟨w, hw, f, hf, h⟩ => ⟨f, ⟨w, hw, hf⟩, h⟩, fun ⟨f, ⟨w, hw, hf⟩, h⟩ => ⟨w, hw, f, hf, h⟩⟩
+
 /-- **The success probability of the forger** in the multi-user game with adaptive corruption:
 averaged over the auxiliary input, the probability that in the simulated run of its algorithm
 against the layer's challenger, expanded by the verifier's queries on the output claim
 (`GordieHowe.SPBCS.QROM.extAdvVia`, of the composition of the trace-preserving form), the measured
-registers and database give a forgery (`Wins`). The users' keys enter only through the base
-oracles of the layer and the winning condition. -/
+registers and database give a forgery (`Wins`; equivalently, the single output `output` is a
+forgery, `wins_iff_output`). The users' keys enter only through the base oracles of the layer and
+the winning condition. -/
 noncomputable def success : ℝ≥0∞ :=
   ∑' a, F.aux a * simProb (outEquiv k e)
     (SPBCS.QROM.extAdvVia V (F.claim a)
@@ -270,12 +358,13 @@ inductive RingRequest (N : ℕ) (RMsg : Type) where
   | ringSign (s : Fin n) (R : RingOf Sch.PK N) (m : RMsg)
 deriving DecidableEq
 
-/-- **A reply of the ring games**: a base answer or a ring signature. -/
+/-- **A reply of the ring games**: a base answer or a ring signature, the public value of the base
+signature with the proof. -/
 inductive RingResponse (P : Type) where
   /-- A base answer. -/
   | base (r : BaseResponse Sch)
-  /-- A ring signature. -/
-  | ringSignature (π : P)
+  /-- A ring signature: the public value `ρ` of its statement and the proof `π`. -/
+  | ringSignature (ρ : Sch.Pub) (π : P)
 deriving DecidableEq
 
 variable {Sch n}
@@ -296,15 +385,15 @@ noncomputable instance (N : ℕ) (RMsg : Type) [Fintype RMsg] : Fintype (RingReq
   Fintype.ofEquiv _ (RingRequest.equivSum N RMsg).symm
 
 /-- Ring replies as a sum type. -/
-def RingResponse.equivSum (P : Type) : RingResponse Sch P ≃ BaseResponse Sch ⊕ P where
+def RingResponse.equivSum (P : Type) : RingResponse Sch P ≃ BaseResponse Sch ⊕ (Sch.Pub × P) where
   toFun
     | .base r => .inl r
-    | .ringSignature π => .inr π
+    | .ringSignature ρ π => .inr (ρ, π)
   invFun
     | .inl r => .base r
-    | .inr π => .ringSignature π
+    | .inr p => .ringSignature p.1 p.2
   left_inv r := by cases r <;> rfl
-  right_inv p := by rcases p with _ | _ <;> rfl
+  right_inv p := by rcases p with _ | ⟨_, _⟩ <;> rfl
 
 noncomputable instance (P : Type) [Fintype P] : Fintype (RingResponse Sch P) :=
   Fintype.ofEquiv _ (RingResponse.equivSum P).symm
@@ -312,9 +401,9 @@ noncomputable instance (P : Type) [Fintype P] : Fintype (RingResponse Sch P) :=
 variable {RMsg : Type} {N : ℕ} {m k e : ℕ} {Resp Coins : Type} [Fintype Coins]
 
 /-- **The ring-signing step after the signer's public key `pk`**: if `pk` is in the ring, at its
-first position `p`, ask a base signature by `s` on `bind R mg` and prove the ring relation for
-`(R, mg, pub σ)` with the witness `(p, σ)` by the compiled honest prover program `Pv`; otherwise
-reply `none`. -/
+first position `p`, ask a base signature `σ` by `s` on `bind R mg` and reply with the ring signature
+`(pub σ, π)`, `π` the proof of the ring relation for `(R, mg, pub σ)` with the witness `(p, σ)` by
+the compiled honest prover program `Pv`; otherwise reply `none`. -/
 noncomputable def ringSignAfterKey
     (Pv : NARG.Prover (Bits m) (XOut k e) (RingStmt Sch RMsg N) (RingWit Sch) Resp Coins)
     (bind : List Sch.PK → RMsg → Sch.Msg) (s : Fin n) (ring : RingOf Sch.PK N) (mg : RMsg)
@@ -324,7 +413,7 @@ noncomputable def ringSignAfterKey
   if ring.1.idxOf pk < ring.1.length then
     .query (.sign s (bind ring.1 mg)) fun
       | .signature σ => .pure ((Pv.prog ⟨ring, mg, Sch.pub σ⟩
-          ⟨ring.1.idxOf pk, σ⟩ c).bind fun π => .pure (some (.ringSignature π)))
+          ⟨ring.1.idxOf pk, σ⟩ c).bind fun π => .pure (some (.ringSignature (Sch.pub σ) π)))
       | _ => .pure (.pure none)
   else .pure (.pure none)
 
@@ -362,6 +451,19 @@ noncomputable def ringLayer
         · simp
       · simp
       · simp
+  prog_signs_le req c O := by
+    rcases req with r | ⟨s, ring, mg⟩
+    · simp only [OracleProg.trace_query, OracleProg.trace_pure]
+      exact (List.length_filter_le _ _).trans (by simp)
+    · simp only [OracleProg.trace_query]
+      rcases O (.publicKey s) with pk | σ | kc
+      · simp only [ringSignAfterKey]
+        split_ifs
+        · simp only [OracleProg.trace_query]
+          rcases O (.sign s (bind ring.1 mg)) with _ | _ | _ <;> simp [List.filter_cons, BaseRequest.isSign]
+        · simp [BaseRequest.isSign]
+      · simp [BaseRequest.isSign]
+      · simp [BaseRequest.isSign]
 
 /-! ### The ring adversaries and their wins -/
 
@@ -373,7 +475,10 @@ variable [Fintype RMsg] [DecidableEq RMsg]
 independently of the oracle, the kind of each slot chosen at run time, channels between calls, at
 most `t` queries on every branch over its query slots and its post phase) with ring requests and
 replies (the ring signatures `Resp` of the compiled argument whose verifier is `_V`), outputting a
-ring statement and a proof. The ring challenger answers the first `Q` requests. -/
+ring statement and a proof. The ring challenger answers the first `Q` requests, public-key
+requests included (an adversary that wants all `n` public keys spends `n` of them). The index `_Q`
+does not restrict the type: it records the number of requests the challenger of the game answers,
+which the games read from it. -/
 abbrev RingAdversary {Pf : Type}
     (_V : NARG.QROM.Verifier m k e (Claim (RingStmt Sch RMsg N) Pf) (RingStmt Sch RMsg N)) (Resp : Type)
     [Fintype Resp] [DecidableEq Resp] (n t _Q : ℕ) : Type 1 :=
@@ -437,32 +542,176 @@ noncomputable def convertedWinProb : ℝ≥0∞ :=
   ∑' a, A.aux a * (((A.alg a).toKindAlg.composeBothOut (challenger Pv bind (Q := Q)) id).realLaw
     (outEquiv k e)).toOuterMeasure {p | ∃ v ∈ p.out, A.ConvertedWins Pv bind a v p.oracle}
 
-/-- **The forgery is fresh in the sense of BKM06 Definition 7** (`BKMWins` without the
-verification): every key of the ring is the key of an uncorrupted user; no answered ring-signing
-request was for the forgery's ring and message; and no answered ordinary signing request was by a
-member on the forgery's base message. -/
-structure BKMFresh (a : A.Aux) (v : A.Register Pv bind a) : Prop where
+end RingAdversary
+
+/-! ### Unforgeability with respect to insider corruption (BKM06 Definition 7) -/
+
+variable (Sch n) in
+/-- **A request of the game of BKM06 Definition 7** (Bender, Katz, Morselli, TCC 2006, LNCS
+p. 67; ePrint 2005/304, p. 7): the public key of user `i` (BKM06 gives the adversary all public
+keys, step 1), the corruption of user `i` (`Corrupt(i)`, step 3; here returning its key-generation
+coins, which determine `SK_i`), or a ring signature by user `s` on the ring message `m` for the ring
+`R` (`OSign(s, M, R)`, step 2). There is no ordinary signing oracle. -/
+inductive BKMRequest (N : ℕ) (RMsg : Type) where
+  /-- The public key of user `i`. -/
+  | publicKey (i : Fin n)
+  /-- The corruption of user `i`. -/
+  | corrupt (i : Fin n)
+  /-- A ring signature by user `s` on `m` for the ring `R`. -/
+  | ringSign (s : Fin n) (R : RingOf Sch.PK N) (m : RMsg)
+deriving DecidableEq
+
+namespace BKMRequest
+
+variable (N RMsg) in
+/-- The requests of BKM06 Definition 7 as a sum type. -/
+def equivSum : BKMRequest Sch n N RMsg ≃ Fin n ⊕ Fin n ⊕ (Fin n × RingOf Sch.PK N × RMsg) where
+  toFun
+    | .publicKey i => .inl i
+    | .corrupt i => .inr (.inl i)
+    | .ringSign s R m => .inr (.inr (s, R, m))
+  invFun
+    | .inl i => .publicKey i
+    | .inr (.inl i) => .corrupt i
+    | .inr (.inr p) => .ringSign p.1 p.2.1 p.2.2
+  left_inv r := by cases r <;> rfl
+  right_inv p := by rcases p with _ | _ | ⟨_, _, _⟩ <;> rfl
+
+noncomputable instance : Fintype (BKMRequest Sch n N RMsg) :=
+  Fintype.ofEquiv _ (equivSum (N := N) (RMsg := RMsg)).symm
+
+/-- **A request of BKM06 Definition 7 as a request of the ring games**: public keys and
+corruptions as base requests, ring signatures as ring-signing requests. -/
+def toRingRequest : BKMRequest Sch n N RMsg → RingRequest Sch n N RMsg
+  | .publicKey i => .base (.publicKey i)
+  | .corrupt i => .base (.corrupt i)
+  | .ringSign s R m => .ringSign s R m
+
+omit [Fintype RMsg] [DecidableEq RMsg] in
+/-- No request of BKM06 Definition 7 is an ordinary signing request. -/
+theorem toRingRequest_ne_sign (r : BKMRequest Sch n N RMsg) (i : Fin n) (m : Sch.Msg) :
+    r.toRingRequest ≠ .base (.sign i m) := by
+  cases r <;> simp [toRingRequest]
+
+end BKMRequest
+
+variable (Sch n) in
+/-- **The request is admissible**: a ring-signing request is for a ring satisfying `adm` (the rings
+the scheme supports); public keys and corruptions are always admissible. -/
+def BKMRequest.Admissible (adm : List Sch.PK → Prop) : BKMRequest Sch n N RMsg → Prop
+  | .ringSign _ R _ => adm R.1
+  | _ => True
+
+variable (adm : List Sch.PK → Prop)
+
+open Classical in
+/-- **The layer of BKM06 Definition 7** for the admissible rings `adm`: an admissible request is
+answered as the ring layer answers it (`ringLayer`, on `BKMRequest.toRingRequest`); a ring-signing
+request asks the signer's public key and a base signature on `bind R m`, and proves the ring
+relation with the compiled honest prover `Pv`. A ring-signing request for a ring outside `adm` is
+answered by `none` without base calls: the scheme signs only for the rings it supports. -/
+noncomputable def bkmLayer :
+    OracleLayer Sch n (Bits m) (XOut k e) (BKMRequest Sch n N RMsg) (RingResponse Sch Resp) where
+  Coins := Coins
+  instDecEqCoins := Classical.decEq _
+  coins := Pv.coins
+  prog r c := if r.Admissible Sch n adm then (ringLayer Pv bind).prog r.toRingRequest c
+    else .pure (.pure none)
+  q := Pv.q
+  prog_queries r c O H := by
+    split_ifs
+    · exact (ringLayer Pv bind).prog_queries r.toRingRequest c O H
+    · simp
+  prog_signs_le r c O := by
+    split_ifs
+    · exact (ringLayer Pv bind).prog_signs_le r.toRingRequest c O
+    · simp
+
+omit [Fintype RMsg] [DecidableEq RMsg] in
+variable {Pv bind adm} in
+/-- **Every base call of the layer of BKM06 is a base call of the ring layer** on the mapped
+requests. -/
+theorem mem_calls_ringLayer_of_mem_calls_bkmLayer {Q : ℕ} {ω : (bkmLayer Pv bind adm).Draw Q}
+    {reqs : List (BKMRequest Sch n N RMsg)} {b : BaseRequest Sch n}
+    (hb : b ∈ (bkmLayer Pv bind adm).calls Q ω reqs) :
+    b ∈ (ringLayer Pv bind).calls Q ω (reqs.map BKMRequest.toRingRequest) := by
+  classical
+  simp only [OracleLayer.calls, List.zipIdx_map, List.flatMap_map, List.mem_flatMap] at hb ⊢
+  obtain ⟨p, hp, hb⟩ := hb
+  refine ⟨p, hp, ?_⟩
+  by_cases hQ : p.2 < Q
+  · rw [OracleLayer.callsAt, dif_pos hQ] at hb
+    simp only [Function.comp_def, Prod.map_fst, Prod.map_snd, id_eq, OracleLayer.callsAt, hQ,
+      dite_true]
+    change b ∈ OracleProg.trace _ (if p.1.Admissible Sch n adm then
+      (ringLayer Pv bind).prog p.1.toRingRequest (ω.2 ⟨p.2, hQ⟩).2 else .pure (.pure none)) at hb
+    split_ifs at hb
+    · exact hb
+    · simp at hb
+  · rw [OracleLayer.callsAt, dif_neg hQ] at hb
+    simp at hb
+
+/-- **An adversary of BKM06 Definition 7** with `n` honest users, rings of at most `N` keys, `Q`
+answered requests and at most `t` queries of its own: a query-bounded adversary
+(`Quantum.QueryBoundedAdversary`, as `RingAdversary`) whose requests are those of BKM06
+(`BKMRequest`: public keys, corruptions and ring signatures, no ordinary signatures), outputting
+a ring statement and a proof. The challenger answers the first `Q` requests, public-key requests
+included (BKM06 hands all public keys out at the start; here they cost requests); the index `_Q`
+does not restrict the type, it records the number of requests the game's challenger answers. -/
+abbrev BKMAdversary
+    (_V : NARG.QROM.Verifier m k e (Claim (RingStmt Sch RMsg N) Pf) (RingStmt Sch RMsg N))
+    (Resp : Type) [Fintype Resp] [DecidableEq Resp] (n t _Q : ℕ) : Type 1 :=
+  QueryBoundedAdversary (Bits m) (XOut k e) (BKMRequest Sch n N RMsg)
+    (RingResponse Sch Resp) (Claim (RingStmt Sch RMsg N) Pf) t
+
+namespace BKMAdversary
+
+variable (B : BKMAdversary V Resp n t Q)
+
+/-- The challenger of BKM06 Definition 7 answering `Q` requests: the layer `bkmLayer` over the
+base oracles. -/
+noncomputable abbrev challenger : Challenger (Bits m) (XOut k e) (BKMRequest Sch n N RMsg)
+    (RingResponse Sch Resp) :=
+  (bkmLayer Pv bind adm).challenger Q
+
+/-- The composed registers of the adversary at `a` with the challenger of BKM06. -/
+abbrev Register (a : B.Aux) : Type := (B.alg a).toTPKindAlg.CW (challenger Pv bind adm (Q := Q))
+
+/-- The claim the adversary outputs, read from the composed registers. -/
+noncomputable def claim (a : B.Aux) (v : B.Register Pv bind adm a) :
+    Claim (RingStmt Sch RMsg N) Pf :=
+  (B.alg a).out v.adv.workspace.1
+
+/-- The requests answered in the run (the first `Q` requests), in order. -/
+noncomputable def answered (a : B.Aux) (v : B.Register Pv bind adm a) :
+    List (BKMRequest Sch n N RMsg) :=
+  ((B.alg a).toTPKindAlg.stateAt (challenger Pv bind adm (Q := Q)) v.chal
+    (B.alg a).toTPKindAlg.slots).history.map HistoryEntry.request
+
+/-- **The forgery is fresh in the sense of BKM06 Definition 7** (the winning condition without the
+verification; ePrint 2005/304, p. 7, step 4: "`A` never queried `(?, M*, R*)`, and
+`R* ⊆ S \ C`, where `C` is the set of corrupted users"): every key of the ring is the key of an
+uncorrupted user, and no answered ring-signing request was for the forgery's ring and message. -/
+structure InsiderFresh (a : B.Aux) (v : B.Register Pv bind adm a) : Prop where
   /-- Every key of the ring is the key of an uncorrupted user. -/
-  honest_ring : ∀ pk ∈ (A.claim Pv bind a v).stmt.ring.1, ∃ i,
+  honest_ring : ∀ pk ∈ (B.claim Pv bind adm a v).stmt.ring.1, ∃ i,
     Sch.pk (v.chal.coins.1 i) = pk ∧
-      ¬ (ringLayer Pv bind).Corrupted Q v.chal.coins (A.answered Pv bind a v) i
+      ¬ (bkmLayer Pv bind adm).Corrupted Q v.chal.coins (B.answered Pv bind adm a v) i
   /-- No ring signature on the forgery's ring and message was requested. -/
   no_ringSign : ∀ s (ring : RingOf Sch.PK N) m,
-    RingRequest.ringSign s ring m ∈ A.answered Pv bind a v →
-    ¬ (ring.1 = (A.claim Pv bind a v).stmt.ring.1 ∧ m = (A.claim Pv bind a v).stmt.msg)
-  /-- No member was asked an ordinary signature on the forgery's base message. -/
-  no_sign : ∀ i, Sch.pk (v.chal.coins.1 i) ∈ (A.claim Pv bind a v).stmt.ring.1 →
-    RingRequest.base (.sign i (bind (A.claim Pv bind a v).stmt.ring.1
-      (A.claim Pv bind a v).stmt.msg)) ∉ A.answered Pv bind a v
+    BKMRequest.ringSign s ring m ∈ B.answered Pv bind adm a v →
+    ¬ (ring.1 = (B.claim Pv bind adm a v).stmt.ring.1 ∧ m = (B.claim Pv bind adm a v).stmt.msg)
 
-/-- **The probability that the adversary wins the game of BKM06 Definition 7** (with the
-ordinary signing oracle as an extra power): the compiled verifier accepts its claim and the claim
-is fresh in the sense of BKM06 (`BKMFresh`). -/
-noncomputable def bkmWinProb : ℝ≥0∞ :=
-  ∑' a, A.aux a * (((A.alg a).toKindAlg.composeBothOut (challenger Pv bind (Q := Q)) id).realLaw
+/-- **The probability that the adversary wins the game of unforgeability with respect to insider
+corruption** (BKM06 Definition 7, TCC 2006, LNCS p. 67; ePrint 2005/304): averaged over its
+auxiliary input, the oracle uniform, the probability that the composition with the challenger of
+BKM06 terminates with registers on which the compiled verifier accepts the adversary's claim and
+the claim is fresh (`InsiderFresh`). -/
+noncomputable def insiderWinProb : ℝ≥0∞ :=
+  ∑' a, B.aux a * (((B.alg a).toKindAlg.composeBothOut (challenger Pv bind adm (Q := Q)) id).realLaw
     (outEquiv k e)).toOuterMeasure {p | ∃ v ∈ p.out,
-      V.Accepted p.oracle (A.claim Pv bind a v) ∧ A.BKMFresh Pv bind a v}
+      V.Accepted p.oracle (B.claim Pv bind adm a v) ∧ B.InsiderFresh Pv bind adm a v}
 
-end RingAdversary
+end BKMAdversary
 
 end GordieHowe.Ring

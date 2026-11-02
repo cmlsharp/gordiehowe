@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.Completeness.Env
+public import GordieHoweNative.Language.Completeness.Bound
 
 @[expose] public section
 
@@ -14,10 +15,13 @@ The digits of a two-sided or digit lookup are generated as its digits (`Gen.look
 honest committed value at digit `j` is digit `j` in base `T` of the record's integer reading in the
 environment of the execution (`genCommitted_lookupDigit`; of `N − 1` minus it for the second set,
 `genCommitted_lookupSecond`), at the lookup's facts (`DigitLookupFactsC`). A value bound to its
-digits is the record `v` or `v + c` of such a lookup (`boundRecB`), so at the honest committed
+digits is the record `v` or `v + c` of such a lookup (`boundRecAtB`), so at the honest committed
 values it reads `0` past its size (`bindAsgC_bound_zero_past`) and its phase-`0` value below it
 where the execution accepts (`bindAsgC_bound_honest`); at every environment whose assignment binds
 the values to their digits, a bound value reads its expression (`boundReads_of_boundRecs`).
+
+The definitions are in `GordieHoweNative/Language/Completeness/Bound.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -27,52 +31,6 @@ open Export ProofSystem.PhaseLayout IOP Range
 section
 
 variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String}
-
-variable (ir) in
-/-- **The facts of a two-sided or digit lookup** `pid` with body `mem d [rec] (range N) (lookup r)`
-at the certificate's generators `G`: a source
-predicate of a domain with `k` digit values (and `k` second digits for a two-sided lookup, none for
-a digit lookup), each generated as this lookup's digit at its position; the digits committed cells
-of the record's length in the domain's field and no source values; the base above `1`; the range
-within the digits and within the characteristic; the record reading source values that read no
-challenge and no late value. -/
-structure DigitLookupFactsC (G : Gens) (pid d : ℕ) (rec : Expr) (N : ℕ) (r : LookupRealization) :
-    Prop where
-  /-- A two-sided or digit lookup. -/
-  kind : r.kind = .twoSided ∨ r.kind = .digits
-  /-- A source predicate. -/
-  source : ir.inSource (ir.predicate pid) = true
-  /-- A domain of the program. -/
-  domain : d < ir.domains.length
-  /-- `k` digit values. -/
-  len : r.digitValues.length = r.digits
-  /-- `k` second digits for a two-sided lookup, none for a digit lookup. -/
-  second : (r.kind = .twoSided → r.second.length = r.digits) ∧ (r.kind = .digits → r.second = [])
-  /-- The digit values are generated as this lookup's at their positions. -/
-  ownFirst : ∀ j (hj : j < r.digitValues.length), G.at r.digitValues[j] = .lookupDigit pid false j
-  /-- The second digits are generated as this lookup's at their positions. -/
-  ownSecond : ∀ j (hj : j < r.second.length), G.at r.second[j] = .lookupDigit pid true j
-  /-- The digits are committed cells of the record's length in the domain's field, no source
-  values. -/
-  cells : ∀ u ∈ r.digitValues ++ r.second, ir.privCellB u = true ∧
-    (ir.value u).size = ir.exprLen rec ∧ ir.valueField u = ir.domainField d ∧
-      ¬ ir.IsSourceValue u
-  /-- The base exceeds `1`. -/
-  baseGt : 1 < r.base
-  /-- The range lies within the digits. -/
-  honestRange : N ≤ r.base ^ r.digits
-  /-- The range lies within the characteristic. -/
-  rangeLe : N ≤ ir.charOf (ir.domainField d)
-  /-- The record reads source values that read no challenge and no late value. -/
-  recReads : ∀ w ∈ ir.exprNodes rec, ir.IsSourceValue w ∧ (ir.readsT.getD w []).isEmpty = true
-
-instance (G : Gens) (pid d : ℕ) (rec : Expr) (N : ℕ) (r : LookupRealization) :
-    Decidable (ir.DigitLookupFactsC G pid d rec N r) :=
-  decidable_of_iff (_ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _)
-    ⟨fun ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12⟩ =>
-      ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12⟩,
-     fun h => ⟨h.kind, h.source, h.domain, h.len, h.second, h.ownFirst, h.ownSecond, h.cells,
-      h.baseGt, h.honestRange, h.rangeLe, h.recReads⟩⟩
 
 /-- **The honest committed value at digit `j` of a two-sided or digit lookup**: digit `j` in base
 `T` of the record's integer reading in the environment of the execution. -/
@@ -100,32 +58,96 @@ theorem genCommitted_lookupSecond {G : Gens} {pid d N : ℕ} {rec : Expr} {r : L
     List.headD_cons, ite_true, InSet.bound]
 
 variable (ir) in
-/-- **Every two-sided and digit lookup whose record is no quotient digit has its facts** at the
-certificate's generators `G` (`commRecOf? pid = none`), its digits generated as its digits. -/
+/-- **Every two-sided and digit lookup whose digits are generated as no quotient digit's has its
+facts** at the certificate's generators `G` (`G.commOf? r = none`), its digits generated as its
+digits. -/
 abbrev DigitLookupsC (G : Gens) : Prop :=
   ∀ pid < ir.predicates.length, ∀ d rec N r,
     (ir.predicate pid).body = .mem d [rec] (.range N) (.lookup r) →
-      (r.kind = .twoSided ∨ r.kind = .digits) → (ir.commRecOf? pid).isNone →
+      (r.kind = .twoSided ∨ r.kind = .digits) → G.commOf? r = none →
         ir.DigitLookupFactsC G pid d rec N r
 
 variable (ir) in
+/-- **Value `v` is the record of the `in` predicate `pid`, bound to its digits**, as a check at the
+certificate's generators `G`: a two-sided or digit lookup with one record and a range, its digits
+generated as no quotient digit's (`G.commOf? r = none`), whose record is `v` or `v + c`, `v` bound
+to its digits (`boundDigitsOk`), and `c` a constant of at most `v`'s size with entries below the
+characteristic. -/
+def boundRecAtB (G : Gens) (v pid : ℕ) : Bool :=
+  match (ir.predicate pid).body with
+  | .mem d [rec] (.range _) (.lookup r) =>
+    (r.kind == .twoSided || r.kind == .digits) && (G.commOf? r).isNone &&
+      ir.boundDigitsOk d rec r &&
+      match rec with
+      | .leaf u => u == v
+      | .add (.leaf u) (.leaf c) =>
+        u == v && match (ir.value c).kind with
+          | .constant es => decide (es.length ≤ (ir.value v).size) &&
+              es.all (· < ir.charOf (ir.valueField c))
+          | _ => false
+      | _ => false
+  | _ => false
+
+/-- **The lookup whose record a value bound to its digits is**, at a pointer `pid` that passes
+`boundRecAtB`: its body, its digits generated as no quotient digit's, the record `v` or `v + c` with
+the constant `c`, and the record bound to the digits. -/
+theorem exists_of_boundRecAtB {G : Gens} {v pid : ℕ} (h : ir.boundRecAtB G v pid = true) :
+    ∃ d rec N r, (ir.predicate pid).body = .mem d [rec] (.range N) (.lookup r) ∧
+      (r.kind = .twoSided ∨ r.kind = .digits) ∧ G.commOf? r = none ∧
+        ir.boundDigitsOk d rec r = true ∧
+      (rec = .leaf v ∨ ∃ c es, rec = .add (.leaf v) (.leaf c) ∧
+        (ir.value c).kind = .constant es ∧ es.length ≤ (ir.value v).size ∧
+          ∀ k ∈ es, k < ir.charOf (ir.valueField c)) := by
+  unfold boundRecAtB at h
+  split at h
+  · rename_i d rec N r hb
+    simp only [Bool.and_eq_true, Bool.or_eq_true, beq_iff_eq] at h
+    obtain ⟨⟨⟨hk, hnc⟩, hbd⟩, hr⟩ := h
+    refine ⟨d, rec, N, r, hb, hk, Option.isNone_iff_eq_none.1 hnc, hbd, ?_⟩
+    split at hr
+    · rename_i u
+      simp only [beq_iff_eq] at hr
+      exact .inl (by rw [hr])
+    · rename_i u c
+      simp only [Bool.and_eq_true, beq_iff_eq] at hr
+      obtain ⟨rfl, hc⟩ := hr
+      split at hc
+      · rename_i es hk'
+        simp only [Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at hc
+        exact .inr ⟨c, es, rfl, hk', hc.1, hc.2⟩
+      · cases hc
+    · cases hr
+  · cases h
+
+/-- **A pointer that passes `boundRecAtB` is a predicate of the program.** -/
+theorem lt_of_boundRecAtB {G : Gens} {v pid : ℕ} (h : ir.boundRecAtB G v pid = true) :
+    pid < ir.predicates.length := by
+  by_contra hn
+  have hd : ir.predicate pid = default :=
+    (ir.predicate_eq_getD pid).trans <| List.getD_eq_default _ _ (by omega)
+  unfold boundRecAtB at h
+  rw [hd] at h
+  exact Bool.false_ne_true h
+
+variable (ir) in
 /-- **Every value bound to its digits is a source value and the record of a two-sided or digit
-lookup** (`boundRecB`). -/
-abbrev BoundRecs : Prop :=
+lookup** whose digits are generated as no quotient digit's at the certificate's generators `G`
+(`boundRecAtB`). -/
+abbrev BoundRecs (G : Gens) : Prop :=
   ∀ v < ir.values.length, (ir.value v).kind.isBound = true →
-    ir.IsSourceValue v ∧ ir.boundRecB v = true
+    ir.IsSourceValue v ∧ ∃ pid < ir.predicates.length, ir.boundRecAtB G v pid = true
 
 /-- **A value bound to its digits reads `0` past its size** at every honest assignment: its record is `v` or `v + c` of a two-sided or digit lookup whose
 digits are cells of `v`'s size, reading `0` past it, and the constant `c` has at most `v`'s size
 entries. -/
 theorem bindAsgC_bound_zero_past (hwf : ir.WellFormed) (hI : I.Registered ir)
-    (hL : I.Lawful ir primeNodes) {G : Gens} (hB : ir.BoundRecs) (hD : ir.DigitLookupsC G)
+    (hL : I.Lawful ir primeNodes) {G : Gens} (hB : ir.BoundRecs G) (hD : ir.DigitLookupsC G)
     (V : ir.Valuation I) (π : (ir.layout I).Pads) {v i : ℕ} (hv : v < ir.values.length)
     (hb : (ir.value v).kind.isBound = true) (hi : (ir.value v).size ≤ i) :
     (ir.bindAsg (ir.honestAsg I V π)).val v i = 0 := by
-  obtain ⟨-, hBv⟩ := hB v hv hb
-  obtain ⟨pid, hpid, d, rec, N, r, hbody, hk, hnc, hbd, hrec⟩ := exists_of_boundRecB hBv
-  have hF := hD pid hpid d rec N r hbody hk (by rw [hnc]; rfl)
+  obtain ⟨-, pid, hpid, hBv⟩ := hB v hv hb
+  obtain ⟨d, rec, N, r, hbody, hk, hnc, hbd, hrec⟩ := exists_of_boundRecAtB hBv
+  have hF := hD pid hpid d rec N r hbody hk hnc
   have hf := domainField_lt hwf hF.domain
   have hchar := charP_field hI hf
   have hzero : ¬ i < ir.exprLen rec → ∀ u ∈ r.digitValues,
@@ -179,12 +201,12 @@ theorem bindAsgC_bound_zero_past (hwf : ir.WellFormed) (hI : I.Registered ir)
 
 /-- **The honest digits rebuild a value bound to them** at the honest committed values where the
 execution accepts: the value is the record `v` or `v + c` of a two-sided or
-digit lookup (`boundRecB`), the honest digits are those of the record's integer reading in the
+digit lookup (`boundRecAtB`), the honest digits are those of the record's integer reading in the
 execution (`genCommitted_lookupDigit`), which is a natural below `N ≤ T^k` by the lookup's `in`; so
 its digits' number is the record, and the value bound to them reads its phase-`0` value below its
 size and `0` past it. -/
 theorem bindAsgC_bound_honest (hwf : ir.WellFormed) (hI : I.Registered ir)
-    (hL : I.Lawful ir primeNodes) {G : Gens} (hB : ir.BoundRecs) (hD : ir.DigitLookupsC G)
+    (hL : I.Lawful ir primeNodes) {G : Gens} (hB : ir.BoundRecs G) (hD : ir.DigitLookupsC G)
     {x s l : ir.Valuation I} {c : ∀ k, (ir.layout I).Ch k}
     (hA : ir.SourceAcceptingAt I (ir.execEnv I x s l c)) (π : (ir.layout I).Pads) {v : ℕ}
     (hv : v < ir.values.length) (hb : (ir.value v).kind.isBound = true) :
@@ -194,9 +216,9 @@ theorem bindAsgC_bound_honest (hwf : ir.WellFormed) (hI : I.Registered ir)
   split_ifs with hi
   swap
   · exact bindAsgC_bound_zero_past hwf hI hL hB hD _ π hv hb (by omega)
-  obtain ⟨-, hBv⟩ := hB v hv hb
-  obtain ⟨pid, hpid, d, rec, N, r, hbody, hk, hnc, hbd, hrec⟩ := exists_of_boundRecB hBv
-  have hF := hD pid hpid d rec N r hbody hk (by rw [hnc]; rfl)
+  obtain ⟨-, pid, hpid, hBv⟩ := hB v hv hb
+  obtain ⟨d, rec, N, r, hbody, hk, hnc, hbd, hrec⟩ := exists_of_boundRecAtB hBv
+  have hF := hD pid hpid d rec N r hbody hk hnc
   have hf := domainField_lt hwf hF.domain
   have hchar := charP_field hI hf
   have hin : ∀ i < ir.exprLen rec, IsNatBelow N
@@ -285,16 +307,16 @@ theorem bindAsgC_bound_honest (hwf : ir.WellFormed) (hI : I.Registered ir)
 
 /-- **Every value bound to its digits reads its expression** at an environment whose assignment is
 the realized assignment of a committed assignment `a` (`BoundReads`): the value is the record `v` or `v + c` of a two-sided or digit lookup
-(`boundRecB`), its expression is the number of the lookup's digits (and `c`), which are committed
+(`boundRecAtB`), its expression is the number of the lookup's digits (and `c`), which are committed
 cells reading `a` there, and `c` a constant. -/
 theorem boundReads_of_boundRecs (hwf : ir.WellFormed) (hL : I.Lawful ir primeNodes) {G : Gens}
-    (hB : ir.BoundRecs) (hD : ir.DigitLookupsC G) {e : ir.Env I} {a : ir.Assignment I}
+    (hB : ir.BoundRecs G) (hD : ir.DigitLookupsC G) {e : ir.Env I} {a : ir.Assignment I}
     (he : e.asg = ir.bindAsg a) : ir.BoundReads (ir.reader e) := by
   intro v hv x hk
   have hb : (ir.value v).kind.isBound = true := by rw [hk]; rfl
-  obtain ⟨-, hBv⟩ := hB v hv hb
-  obtain ⟨pid, hpid, d, rec, N, r, hbody, hkd, hnc, hbd, hrec⟩ := exists_of_boundRecB hBv
-  have hF := hD pid hpid d rec N r hbody hkd (by rw [hnc]; rfl)
+  obtain ⟨-, pid, hpid, hBv⟩ := hB v hv hb
+  obtain ⟨d, rec, N, r, hbody, hkd, hnc, hbd, hrec⟩ := exists_of_boundRecAtB hBv
+  have hF := hD pid hpid d rec N r hbody hkd hnc
   have hf := domainField_lt hwf hF.domain
   have hu : ∀ u ∈ r.digitValues, ir.reader e u = ir.committedRead a u := fun u hu => by
     have hk' := kind_of_privCellB (hF.cells u (List.mem_append_left _ hu)).1

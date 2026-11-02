@@ -53,6 +53,12 @@ and an earlier instance in a statement is applied to the binders, `N.g' x₁ …
 keeps the binders' kinds as written (`{x : X}` is implicit); a definition takes them explicitly,
 since nothing at its uses determines them.
 
+`at p` (after the arguments) states the theorems at the proof system `p`: a theorem `G` whose next
+binder has `p`'s type (the configuration's proof systems) is stated at `p`, so its instance has no
+such binder and names `p`. Its value is the instance at a free proof system, checked as without
+`at`, applied to `p` through `id` at its own type, so the kernel compares nothing at `p`. A
+definition keeps the binder, so its code reads the proof system at run time.
+
 `renaming g₁ → h₁, …` (after the families) names the instance of the template with last name
 component `gᵢ` as `N.hᵢ`.
 
@@ -175,7 +181,7 @@ def readable (ty : Expr) (lead : Array Expr) (done : Array (Name × Name × Arra
         let xs := x.getAppArgs
         if xs.size ≥ args.size && (← (List.range args.size).allM fun i =>
             pure (xs[i]! == args[i]!)) then
-          return .visit (mkAppN (.const n lvls) (bs ++ xs.extract args.size xs.size))
+          return .visit (mkAppN (.const n []) (bs ++ xs.extract args.size xs.size))
     if let some x' ← reduceConstProj? lead x then
       return .visit x'
     return .continue) (post := fun x => do
@@ -195,7 +201,7 @@ def explicitLeading : Nat → Expr → Expr
 syntax (name := instantiateConfig)
   "instantiate_config " ident " from " "[" ident,+ "]"
     (&" renaming " sepBy1(ident " → " ident, ", "))?
-    (atomic((ppSpace bracketedBinder)+ " => "))? (ppSpace term:max)+ : command
+    (atomic((ppSpace bracketedBinder)+ " => "))? (ppSpace term:max)+ (" at " term:max)? : command
 
 @[command_elab instantiateConfig]
 def elabInstantiateConfig : CommandElab := fun stx => do
@@ -206,6 +212,7 @@ def elabInstantiateConfig : CommandElab := fun stx => do
       stx[6][1].getSepArgs.map fun p => (p[0].getId, p[2].getId)
   let binderStxs : Array Syntax := if stx[7].isNone then #[] else stx[7][0].getArgs
   let argStxs := stx[8].getArgs
+  let atStx? : Option Syntax := if stx[9].isNone then none else some stx[9][1]
   let ref := stx
   liftTermElabM do
     let tmpls := (templates (← getEnv)).filter fun t => fams.any (·.isPrefixOf t.decl)
@@ -236,10 +243,16 @@ def elabInstantiateConfig : CommandElab := fun stx => do
           Term.synthesizeSyntheticMVarsNoPostponing
           instantiateMVars e
       lead := lead.push e
+    -- The proof system the theorems are stated at (`at p`): an argument of the theorems only.
+    let pt? ← atStx?.mapM fun a => do
+      let e ← Term.elabTerm a none
+      Term.synthesizeSyntheticMVarsNoPostponing
+      instantiateMVars e
     let mut done : Array (Name × Name × Array Expr) := #[]
     for t in tmpls do
       let some ci := (← getEnv).find? t.decl | throwError "unknown template {t.decl}"
-      let lvls := ci.levelParams.map mkLevelParam
+      -- The template's universe levels are fixed by the arguments (the record's universe).
+      let lvls ← ci.levelParams.mapM fun _ => mkFreshLevelMVar
       -- The arguments the template takes: for each leading binder in turn, the first remaining
       -- argument of its type.
       let mut args : Array Expr := #[]
@@ -254,6 +267,17 @@ def elabInstantiateConfig : CommandElab := fun stx => do
       let value := mkAppN (.const t.decl lvls) args
       let ty ← inferType value
       let ty ← readable ty lead done bs
+      -- `at p`: a theorem whose next binder has `p`'s type is stated at `p`, with no binder. Its
+      -- value is the instance at a free point, `G a₁ … aₙ : ∀ C, T C` (checked with `C` free, as
+      -- without `at`), applied to `p` through `id` at that type, so the kernel compares nothing at
+      -- `p` and never unfolds it (its certificates). A definition keeps the binder.
+      let atP ← match pt?, ← isProp ci.type, ty with
+        | some pt, true, .forallE _ d b _ => do
+          if ← isDefEq (← inferType pt) d then
+            pure (some (b.instantiate1 pt, mkApp (mkApp2 (mkConst ``id [levelZero]) ty value) pt))
+          else pure none
+        | _, _, _ => pure none
+      let (ty, value) := atP.getD (ty, value)
       let ty ← instantiateMVars (← mkForallFVars bs ty)
       -- A definition's value is the template's body at the arguments, made readable as the type
       -- is: its constant record projections reduced, so that the instance's code reads the
@@ -273,7 +297,7 @@ def elabInstantiateConfig : CommandElab := fun stx => do
         return .continue)
       let reduced ← reduced.mapM fun v => do instantiateMVars (← mkLambdaFVars bs v)
       let value ← instantiateMVars (← mkLambdaFVars bs value)
-      if ty.hasMVar || value.hasMVar then
+      if ty.hasMVar || value.hasMVar || ty.hasLevelMVar || value.hasLevelMVar then
         throwError "the instance of {t.decl} has unassigned metavariables"
       -- An imported theorem may be seen without its value (the module system), so a template is
       -- a theorem when its type is a proposition.
@@ -283,12 +307,12 @@ def elabInstantiateConfig : CommandElab := fun stx => do
         else (explicitLeading bs.size ty, explicitLeading bs.size value)
       let target := (renames.find? (·.1 == t.target)).map (·.2) |>.getD t.target
       let name := ns ++ target
-      let cv : ConstantVal := { name := name, levelParams := ci.levelParams, type := ty }
+      let cv : ConstantVal := { name := name, levelParams := [], type := ty }
       let mkDecl (value : Expr) : Declaration :=
         if isThm then
           .thmDecl { toConstantVal := cv, value := value, all := [name] }
         else
-          .defnDecl (mkDefinitionValEx name ci.levelParams ty value ReducibilityHints.abbrev
+          .defnDecl (mkDefinitionValEx name [] ty value ReducibilityHints.abbrev
             DefinitionSafety.safe [name])
       -- The reduced value when the kernel accepts it, else `G a₁ … aₙ`.
       let decl ← match reduced with
@@ -317,6 +341,7 @@ def elabInstantiateConfig : CommandElab := fun stx => do
       addDeclarationRangesFromSyntax name ref
       if t.headline then
         modifyEnv (GordieHowe.headlineExt.addEntry · name)
-      done := done.push (t.decl, name, args)
+      if atP.isNone then
+        done := done.push (t.decl, name, args)
 
 end GordieHowe.Configuration.Template

@@ -24,7 +24,8 @@ The lemmas that turn a `mod_0`'s field equation into its integer equality and ba
   coordinate of a value with an interval its source justifies (`GordieHowe.RealizedProgram.ivlAt`)
   lies in it, and its integer reading casts to its value; so for justified intervals
   (`GordieHowe.RealizedProgram.LeafIvlsOk.sound`, `GordieHowe.RealizedProgram.LeafIvlsOk.cast`),
-  `leafIvl` among them (`GordieHowe.RealizedProgram.leafIvl_justified`).
+  the intervals at the structure records' sources among them
+  (`GordieHowe.RealizedProgram.ivlTab_justified`).
 * **`mod_0`** (`GordieHowe.RealizedProgram.holdsWith_mod_of_fieldEq`): the field
   equation `e = e'` with the sides' integer readings in the exported intervals, whose span is below
   `p`, gives the integer equality (the difference is a multiple of `p` of absolute value below
@@ -158,7 +159,7 @@ structure ShiftFacts (rd : ir.Valuation I) (sr : List (ℕ × ℕ) := []) : Prop
   stmt : ∀ vN ∈ sr, ∀ i < (ir.value vN.1).size,
     ∃ n < vN.2, rd vN.1 i = ((n : ℕ) : (I (ir.valueField vN.1)).K)
 
-/-- **The facts the values' intervals read at the reader `rd`** (`leafIvl`), for the values `S`:
+/-- **The facts the values' intervals read at the reader `rd`** (`ivlAt`), for the values `S`:
 constants read as constants and opaque values computed from arguments read their functions; every
 value of `S` that is node-typed lies in its type, has its type predicate hold, has every direct,
 digit and two-sided `in` on it or on it plus a constant hold, and has every root equation on it
@@ -329,7 +330,7 @@ theorem shiftIvl_spec (hI : I.Registered ir) (hL : I.Lawful ir primeNodes) {rd :
   split at h
   · rename_i cN hqm
     obtain ⟨c₀, N⟩ := cN
-    unfold centredIvl at h
+    rw [centredIvl_eq] at h
     split_ifs at h with hc
     cases h
     obtain ⟨hlo, hhi⟩ := hc
@@ -1012,7 +1013,7 @@ theorem ivlAt_sound (hwf : ir.WellFormed) (hI : I.Registered ir) (hL : I.Lawful 
     split_ifs at h with hall
     cases h
     rw [intOf_of_constant rd hk, FieldInterp.centered_eq, hI.characteristic _ hf]
-    exact mem_constIvlOf (by omega) es hi
+    exact mem_constIvlOf es hi
   by_cases hb : ∃ q, s = .shiftRange q
   · obtain ⟨q, rfl⟩ := hb
     obtain ⟨x, hkb⟩ := IvlSource.allows_shiftRange ha
@@ -1201,7 +1202,7 @@ theorem holdsWith_mod_of_fieldEq (hwf : ir.WellFormed) (hI : I.Registered ir)
     ir.HoldsWith rd (.mod d 0 e e' real) := by
   have hd := (hpo.1 (d, e) (by simp [PredBody.exprs])).1
   have hchar := (modData hwf hI hL hd hok.char).2.1
-  intro i hi
+  refine (holdsWith_mod_iff (.inr (by omega))).2 fun i hi => ?_
   obtain ⟨ha, hb, hca, hcb⟩ := integerOk_sides hwf hI hL hF hK hLok hpo hok hi
   have hdvd : ((ir.charOf (ir.domainField d) : ℕ) : ℤ) ∣
       ir.evalIntWith rd d e i - ir.evalIntWith rd d e' i := by

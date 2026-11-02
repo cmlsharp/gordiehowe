@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <vector>
 #include "util/panic.h"
 
@@ -82,10 +83,15 @@ auto power(const F& f, typename F::Elt x, size_t n) {
 // Forward input and inverse output are natural-order coefficient vectors.
 // Both transforms use the selected frequency order, so convolution needs no
 // permutation between forward transforms, products, and inverse.
+// STAGE, when given, receives the working array after each butterfly stage
+// (after its sharing): a GKR export reads the stages' wires; it builds no
+// gate.
 template <class LC>
 void transform(const LC& lc, std::vector<typename LC::EltW>& a,
                typename LC::Elt omega, bool inverse, const Sharing& sharing,
-               typename LC::Elt psi) {
+               typename LC::Elt psi,
+               const std::function<void(std::vector<typename LC::EltW>&)>*
+                   stage_hook = nullptr) {
   const auto& f = lc.f_;
   const size_t n = a.size();
   check(n >= 2 && (n & (n - 1)) == 0, "NTT length must be a power of two");
@@ -126,6 +132,7 @@ void transform(const LC& lc, std::vector<typename LC::EltW>& a,
         w = f.mulf(w, step);
       }
       if (mask & (uint64_t{1} << stage)) share_all(lc, a);
+      if (stage_hook != nullptr) (*stage_hook)(a);
     }
   } else if (!inverse) {
     size_t stage = 0;
@@ -140,6 +147,7 @@ void transform(const LC& lc, std::vector<typename LC::EltW>& a,
         }
       }
       if (mask & (uint64_t{1} << stage)) share_all(lc, a);
+      if (stage_hook != nullptr) (*stage_hook)(a);
     }
   } else {
     size_t stage = 0;
@@ -154,6 +162,7 @@ void transform(const LC& lc, std::vector<typename LC::EltW>& a,
         }
       }
       if (mask & (uint64_t{1} << stage)) share_all(lc, a);
+      if (stage_hook != nullptr) (*stage_hook)(a);
     }
   }
   if (inverse) {

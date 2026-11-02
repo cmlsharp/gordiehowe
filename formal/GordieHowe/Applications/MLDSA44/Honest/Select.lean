@@ -4,21 +4,21 @@
 module
 
 public import GordieHowe.Applications.MLDSA44.Honest.Hash
-public import GordieHowe.Applications.MLDSA44.Native.ROMParams.Frontend.Shuffle
+public import GordieHowe.Applications.MLDSA44.Frontend.Shuffle
 
 @[expose] public section
 
 /-!
 # GordieHowe: SampleInBall's selection at honest values
 
-The converse of the frontend's selection view (`GordieHowe/Applications/MLDSA44/Native/ROMParams/Frontend/Select.lean`): where the gadget
+The converse of the frontend's selection view (`GordieHowe/Applications/MLDSA44/Frontend/Select.lean`): where the gadget
 `SelectFirstTau.run` holds on the program's readings (the candidate bytes, the selected bytes, the
 low threshold bits and `δ`), the selection's predicates `h2c.sample.select.start`, `.step` and
 `.route` (predicates `264`–`266`) hold (`select_holds_of_run`). The honest values pass the gadget at
 every `δ` (`SelectFirstTau.complete`).
 -/
 
-namespace GordieHowe.MLDSA44.Native.ROMParams
+namespace GordieHowe.MLDSA44
 
 open Generated.MLDSA44.Native.ROMParams.Program
 open GordieHowe.Bits
@@ -44,8 +44,8 @@ theorem sel264_of (h : SelectFirstTau.initialOk 39 (thrBits (program.reader e)) 
   have hb' : b < 8 := by
     revert hb
     rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_reindex]
-    unfold idx52
-    simp [RealizedProgram.IndexMap.ofSegs, RealizedProgram.IdxSeg.expand, RealizedProgram.IndexMap.size]
+    unfold idx50
+    simp [RealizedProgram.IndexMap.ofSegs_eq, RealizedProgram.IdxSeg.expand, RealizedProgram.IndexMap.size]
   change program.evalE _ (program.domainField 1) _ b = program.evalE _ (program.domainField 1) _ b
   rw [MldsaHCross.domainField1, RealizedProgram.evalE_add, RealizedProgram.evalE_reindex, idx52_eq hb',
     evalE_constH e (stepConsts (program := program)).1 (stepConsts (program := program)).2.2.2.2.2.2.1,
@@ -100,7 +100,7 @@ theorem sel265_of (h : SelectFirstTau.stepOk 39 (candBits (program.reader e))
   rw [MldsaHCross.domainField1, evalE_46, RealizedProgram.evalE_add, RealizedProgram.evalE_add, RealizedProgram.evalE_reindex,
     RealizedProgram.IndexMap.entry_of_toList idx53_toList (by omega), evalE_ref509 e hi hb,
     evalE_chain _ hi (by norm_num) le_rfl hb, ← hnext, hsucc]
-  have hsel : program.evalE (program.reader e) 1 (.reindex idx61 (.ref 513)) i =
+  have hsel : program.evalE (program.reader e) 1 (.reindex idx58 (.ref 513)) i =
       program.evalE (program.reader e) 1 (.ref 512) i := by
     rw [RealizedProgram.evalE_reindex, RealizedProgram.IndexMap.entry_of_toList idx61_toList hi, evalE_ref513 e hi]
   by_cases hb0 : b = 0
@@ -139,10 +139,10 @@ theorem sel266_of (h : SelectFirstTau.fingerprintOk selF 39 (candBits (program.r
   unfold SelectFirstTau.fingerprintOk at h
   rw [decide_eq_true_iff, List.finRange_foldl_mul_eq_prod, List.finRange_foldl_mul_eq_prod] at h
   have key : (∏ i : Fin 264, program.evalE (program.reader e) 1 (.mux (.ref 512)
-      (.add (.reindex idx76 (.leaf 560)) (.add (.apply (.sum 8) (.mul (.reindex idx77 (.ref 508))
-        (.reindex idx78 (.leaf 37)))) (.scale (.const 2) (.apply (.sum 8)
-          (.mul (.reindex idx77 (.ref 510)) (.reindex idx78 (.leaf 37)))))))
-      (.reindex idx76 (.leaf 7))) (0 * 264 + i)) =
+      (.add (.reindex idx73 (.leaf 559)) (.add (.apply (.sum 8) (.mul (.reindex idx74 (.ref 508))
+        (.reindex idx75 (.leaf 36)))) (.scale (.const 2) (.apply (.sum 8)
+          (.mul (.reindex idx74 (.ref 510)) (.reindex idx75 (.leaf 36)))))))
+      (.reindex idx73 (.leaf 6))) (0 * 264 + i)) =
       ∏ i : Fin 264, SelectScan.mux (SelectFirstTau.selected 39 (candBits (program.reader e))
         (thrBits (program.reader e)) i) (selDelta (program.reader e) -
           SelectFirstTau.enc selF (selF.embedBits (by decide) (thrBits (program.reader e) i))
@@ -160,9 +160,9 @@ theorem sel266_of (h : SelectFirstTau.fingerprintOk selF 39 (candBits (program.r
     simp only [CharTwo.sub_eq_add]
     rfl
   rw [key, h]
-  have key2 : ∀ (j : Fin 39), program.evalE (program.reader e) 1 (.add (.reindex idx79 (.leaf 560))
-      (.add (.leaf 47) (.scale (.const 2) (.apply (.sum 8) (.mul (.reindex idx80 (.leaf 557))
-        (.reindex idx81 (.leaf 37))))))) (0 * 39 + j) =
+  have key2 : ∀ (j : Fin 39), program.evalE (program.reader e) 1 (.add (.reindex idx76 (.leaf 559))
+      (.add (.leaf 46) (.scale (.const 2) (.apply (.sum 8) (.mul (.reindex idx77 (.leaf 556))
+        (.reindex idx78 (.leaf 36))))))) (0 * 39 + j) =
       selDelta (program.reader e) - SelectFirstTau.enc selF (selF.embed (256 - 39 + j))
         (jBits (program.reader e) j) := by
     intro j
@@ -232,9 +232,9 @@ theorem mem268_of (h : ∀ t : Fin 39, (samLowered e).origin t =
   have ho := h ⟨t, ht⟩
   unfold samLowered SampleInBall.originOf SelectionField.embedBits at ho
   dsimp only at ho
-  have hsum : (∑ b : Fin 6, program.evalE (program.reader e) 1 (.mul (.reindex idx82 (.leaf 562))
-      (.reindex idx83 (.leaf 49))) (t * 6 + b)) =
-      program.evalE (program.reader e) 1 (.leaf 566) t := by
+  have hsum : (∑ b : Fin 6, program.evalE (program.reader e) 1 (.mul (.reindex idx79 (.leaf 561))
+      (.reindex idx80 (.leaf 48))) (t * 6 + b)) =
+      program.evalE (program.reader e) 1 (.leaf 565) t := by
     rw [ho]
     refine Finset.sum_congr rfl fun b _ => ?_
     have hb := b.isLt
@@ -277,8 +277,8 @@ theorem mem269_of (h : (((samM program F0 FH).readsPacked (samLowered e)).map
 /-- **`h2c.sample.mem.fresh` holds** where every read origin is a Boolean word below its step plus
 one (`Checks.fresh`). -/
 theorem mem270_of (hbits : ∀ t < 39, ∀ b < 6,
-      program.evalE (program.reader e) 1 (.leaf 562) (t * 6 + b) = 0 ∨
-        program.evalE (program.reader e) 1 (.leaf 562) (t * 6 + b) = 1)
+      program.evalE (program.reader e) 1 (.leaf 561) (t * 6 + b) = 0 ∨
+        program.evalE (program.reader e) 1 (.leaf 561) (t * 6 + b) = 1)
     (h : ∀ t : Fin 39, Bits.ltConst ((samLowered e).readOrigin t) ((t : ℕ) + 1) = 1) :
     program.HoldsWith (program.reader e) (program.predicate 270).body := by
   rw [(pred270 (program := program))]
@@ -293,7 +293,7 @@ theorem mem270_of (hbits : ∀ t < 39, ∀ b < 6,
     List.getElem?_replicate, if_pos ht, Option.getD_some, HField.decode_one]
   simp only [RealizedProgram.LogicOp.eval, List.headD_cons, List.getD_cons_succ, List.getD_cons_zero]
   rw [RealizedProgram.Ops.ltWord, RealizedProgram.Ops.ltReduce_congr 6 0 (a' := fun b => program.evalE (program.reader e) 1
-    (.leaf 562) (t * 6 + b)) (b' := fun b => Bits.constBit ((t : ℕ) + 1) b)
+    (.leaf 561) (t * 6 + b)) (b' := fun b => Bits.constBit ((t : ℕ) + 1) b)
     (fun b _ => by rw [Nat.zero_add]) (fun b hb => by
       simp only [Nat.zero_add]
       rw [evalE_constH e (memConsts (program := program)).2.2.2.2.2.2.1
@@ -302,8 +302,8 @@ theorem mem270_of (hbits : ∀ t < 39, ∀ b < 6,
         (memConsts (program := program)).2.2.2.2.2.2.2.2.1 t ht b hb,
         HField.decode_lt_two (Nat.mod_lt _ (by norm_num))]
       rfl), ← RealizedProgram.Ops.ltWord, RealizedProgram.Ops.ltWord_eq_ltConst (fun b hb => hbits t ht b hb) (by omega)]
-  have hf : (fun b : Fin 6 => program.evalE (program.reader e) 1 (.leaf 562) (6 * t + b)) =
-      fun b : Fin 6 => program.evalE (program.reader e) 1 (.leaf 562) (t * 6 + b) :=
+  have hf : (fun b : Fin 6 => program.evalE (program.reader e) 1 (.leaf 561) (6 * t + b)) =
+      fun b : Fin 6 => program.evalE (program.reader e) 1 (.leaf 561) (t * 6 + b) :=
     funext fun b => by rw [Nat.mul_comm]
   have := h ⟨t, ht⟩
   unfold samLowered at this
@@ -315,8 +315,8 @@ converse of `checks`), the read origins' coordinates bits. -/
 theorem mem_holds_of_checks
     (hc : (samM program F0 FH).Checks (samLowered e) (memDelta (program.reader e)))
     (hbits : ∀ t < 39, ∀ b < 6,
-      program.evalE (program.reader e) 1 (.leaf 562) (t * 6 + b) = 0 ∨
-        program.evalE (program.reader e) 1 (.leaf 562) (t * 6 + b) = 1)
+      program.evalE (program.reader e) 1 (.leaf 561) (t * 6 + b) = 0 ∨
+        program.evalE (program.reader e) 1 (.leaf 561) (t * 6 + b) = 1)
     {q : ℕ} (hq : q ∈ [267, 268, 269, 270]) :
     program.HoldsWith (program.reader e) (program.predicate q).body := by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hq
@@ -328,4 +328,4 @@ theorem mem_holds_of_checks
   · exact mem269_of e hc.perm
   · exact mem270_of e hbits hc.fresh
 
-end GordieHowe.MLDSA44.Native.ROMParams
+end GordieHowe.MLDSA44

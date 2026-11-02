@@ -6,6 +6,7 @@ module
 public import GordieHowe.Language.Realizations.RealizeMod
 public import GordieHowe.Language.Realizations.MACEquality
 public import GordieHowe.Language.RealizedProgram.Affine
+public import GordieHoweNative.Language.Realizations.RealizeMac
 
 @[expose] public section
 
@@ -50,6 +51,9 @@ The H operand's Booleanity is not established here: the cross-field `equal`'s me
 coordinate of the H operand reads below `2`. ML-DSA's H operand `c_enc² + c_enc` is made with
 `bit_from_unchecked`; its Booleanity is established by the source program (the shuffle) and proved
 in the round-by-round soundness of `Π_P₀`.
+
+The definitions are in `GordieHoweNative/Language/Realizations/RealizeMac.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -108,12 +112,22 @@ def isMacTail (ir : RealizedProgram) (t : ℕ) : Bool :=
   | .equal _ (.add (.leaf _) (.apply (.macConv _ _ _ _) _)) (.leaf _) _ => true
   | _ => false
 
+/-- **Whether a predicate body is a MAC tail**: `isMacTail` at a predicate read from a walk of the
+predicates (`isMacTail_eq`). -/
+def PredBody.isMacTail : PredBody → Bool
+  | .mod _ 2 (.add (.leaf _) (.apply (.macConv _ _ _ _) _)) (.leaf _) _ => true
+  | .equal _ (.add (.leaf _) (.apply (.macConv _ _ _ _) _)) (.leaf _) _ => true
+  | _ => false
+
+theorem isMacTail_eq (ir : RealizedProgram) (t : ℕ) :
+    ir.isMacTail t = (ir.predicate t).body.isMacTail := rfl
+
 /-- **Every MAC tail of the program has its powers in field `f`, chunk width `w` and taps `taps`,
 and its target's bits computed by the opaque function `nm`, and no tail has characteristic `2`**
 (decided): the program's part of `Interp.MacModel` (`Interp.macModel_of_tails`). -/
 def macTailsAt (ir : RealizedProgram) (f w : ℕ) (taps : Finset ℕ) (nm : String) : Bool :=
-  (List.range ir.predicates.length).all fun t =>
-    match (ir.predicate t).body with
+  ir.predicates.all fun p =>
+    match p.body with
     | .mod _ 2 (.add (.leaf _) (.apply (.macConv r w' _ taps') _)) (.leaf tb) _ =>
       ir.valueField r == f && w' == w && decide (taps'.toFinset = taps) &&
         match (ir.value tb).kind with
@@ -133,7 +147,7 @@ theorem Interp.macModel_of_tails {I : Interp} {ir : RealizedProgram} {f w : ℕ}
     (hop : ∀ xs i, I.opaqueFn nm xs i = if ((xs.headD 0) 0).testBit i then 1 else 0) :
     I.MacModel ir := by
   refine ⟨fun t ht d b r w' nch taps' y tb real hb => ?_, fun t ht d b r w' nch taps' y tb tgt hb => ?_⟩
-  · have h1 := List.all_eq_true.1 h t (List.mem_range.2 ht)
+  · have h1 := List.all_eq_true.1 h _ (predicate_mem ht)
     simp only [hb, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h1
     obtain ⟨⟨⟨hr, rfl⟩, rfl⟩, hk⟩ := h1
     refine ⟨hr ▸ hF, fun nm' args hk' xs i => ?_⟩
@@ -141,13 +155,17 @@ theorem Interp.macModel_of_tails {I : Interp} {ir : RealizedProgram} {f w : ℕ}
     simp only [beq_iff_eq] at hk
     rw [hk]
     exact hop xs i
-  · have h1 := List.all_eq_true.1 h t (List.mem_range.2 ht)
+  · have h1 := List.all_eq_true.1 h _ (predicate_mem ht)
     simp [hb] at h1
 
 /-- **A program without MAC tails constrains no interpretation's MACs** (`Interp.MacModel` holds
-vacuously). -/
+vacuously), checked in one walk of the predicates. -/
 theorem Interp.macModel_of_noTail {I : Interp} {ir : RealizedProgram}
-    (h : ∀ t < ir.predicates.length, ir.isMacTail t = false) : I.MacModel ir := by
+    (hw : ir.predicates.all (fun p => !p.body.isMacTail) = true) : I.MacModel ir := by
+  have h : ∀ t < ir.predicates.length, ir.isMacTail t = false := fun t ht => by
+    have := List.all_eq_true.1 hw _ (predicate_mem ht)
+    rw [isMacTail_eq]
+    simpa using this
   refine ⟨fun t ht d b r w nch taps y tb real hb => ?_, fun t ht d b r w nch taps y tb tgt hb => ?_⟩
   · have := h t ht
     simp [RealizedProgram.isMacTail, hb] at this
@@ -1126,7 +1144,7 @@ theorem macFieldCheckAt_of_odd (hwf : ir.WellFormed) (hI : I.Registered ir)
           exact m.2
         have hT' := hT
         rw [hbt] at hT'
-        have h2d := hT' m hm
+        have h2d := hT'.1 m hm
         obtain ⟨bt, hbt2, hrdtb, hbtiff⟩ := reader_targetBits hwf hL e htb hd (by omega) htf m
         have hint : ir.evalIntWith rd d (.leaf tb) m = bt := by
           simp only [evalIntWith, Expr.evalInt]
@@ -1491,17 +1509,6 @@ structure MacHostedCore (pid dx : ℕ) (x : Expr) (dy : ℕ) (y : Expr) (k : Cro
   half : ir.macHalfB pid dx x real = true
   noBlindX : real.blindX = none
 
-variable (ir) in
-/-- **`MacHostedCore` as a Boolean.** -/
-def macHostedCoreB (pid dx : ℕ) (x : Expr) (dy : ℕ) (y : Expr) (k : CrossKind)
-    (real : MacRealization) : Bool :=
-  decide (k.width = 1) && decide (0 < real.width) && decide (real.macField < ir.fields.length) &&
-    decide (ir.domainField dx = real.macField) && ir.macKeyB pid real && ir.macTagB real &&
-    decide (ir.exprLen x ≤ real.chunks * real.width) &&
-    decide (ir.exprLen y = ir.exprLen x) && ir.macReadsBeforeB x y real &&
-    decide (2 < ir.charOf (ir.domainField dy)) && ir.macHalfB pid dx x real &&
-    decide (real.blindX = none)
-
 theorem MacHostedCore.of_B {pid dx : ℕ} {x : Expr} {dy : ℕ} {y : Expr} {k : CrossKind}
     {real : MacRealization} (h : ir.macHostedCoreB pid dx x dy y k real = true) :
     ir.MacHostedCore pid dx x dy y k real := by
@@ -1533,14 +1540,6 @@ structure MacTwoCore (pid : ℕ) (x y : Expr) (k : CrossKind) (real : MacRealiza
   lenX : ir.exprLen x = real.chunks * real.width
   lenY : ir.exprLen y = real.chunks * real.width
   before : ir.macReadsBeforeB x y real = true
-
-variable (ir) in
-/-- **`MacTwoCore` as a Boolean.** -/
-def macTwoCoreB (pid : ℕ) (x y : Expr) (k : CrossKind) (real : MacRealization) : Bool :=
-  decide (k.width = 1) && decide (0 < real.width) && decide (real.macField < ir.fields.length) &&
-    ir.macKeyB pid real && ir.macTagB real && decide (real.hPredicate = none) &&
-    decide (ir.exprLen x = real.chunks * real.width) &&
-    decide (ir.exprLen y = real.chunks * real.width) && ir.macReadsBeforeB x y real
 
 theorem MacTwoCore.of_B {pid : ℕ} {x y : Expr} {k : CrossKind} {real : MacRealization}
     (h : ir.macTwoCoreB pid x y k real = true) : ir.MacTwoCore pid x y k real := by

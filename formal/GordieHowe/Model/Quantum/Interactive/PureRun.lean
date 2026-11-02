@@ -159,7 +159,7 @@ namespace KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  (A : KindAlg X Y Req Resp O)
+  {ksA : KindShape X Y Req Resp} (A : KindAlg ksA O)
 
 /-- A vector of the adversary's registers with blank logs, as a vector of the game registers. -/
 noncomputable def liftLogs (v : QState (DReg A.W A.width X Y Req Resp)) : QState A.G :=

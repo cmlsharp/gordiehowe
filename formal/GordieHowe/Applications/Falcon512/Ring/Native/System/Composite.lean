@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Applications.Falcon512.Ring.Native.System.Algebra
+public import GordieHowe.Applications.Ring.StmtCodec
 public import GordieHowe.Foundations.Probability.RangeGroups
 public import GordieHowe.Applications.Falcon512.Native.System.Source
 public import GordieHowe.Applications.Falcon512.Ring.Native.System.Params
@@ -49,11 +50,12 @@ abbrev bindMsg : List PublicKey → (Fin msgLen → UInt8) → (Fin msgLen → U
 variable {G}
 
 /-- **The key at a position of the ring** (the default key past the end). -/
-def ringKey {N : ℕ} (x : RingStmt (scheme G) (Fin msgLen → UInt8) N) (j : ℕ) : PublicKey := x.ring.1.getD j (default : PublicKey)
+abbrev ringKey {N : ℕ} (x : RingStmt (scheme G) (Fin msgLen → UInt8) N) (j : ℕ) : PublicKey :=
+  x.keyAt j
 
-theorem ringKey_eq {N : ℕ} {x : RingStmt (scheme G) (Fin msgLen → UInt8) N} {j : ℕ} (hj : j < x.ring.1.length) : ringKey x j = x.ring.1[j]'hj := by
-  unfold ringKey
-  simp [hj]
+theorem ringKey_eq {N : ℕ} {x : RingStmt (scheme G) (Fin msgLen → UInt8) N} {j : ℕ}
+    (hj : j < x.ring.1.length) : ringKey x j = x.ring.1[j]'hj :=
+  RingStmt.keyAt_eq hj
 
 /-- **The challenge coefficients of a statement**: the coefficients of `HashToPoint(r ‖ m)` as
 naturals below `q` (zero if the hash fails). -/

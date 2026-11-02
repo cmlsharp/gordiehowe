@@ -272,6 +272,14 @@ theorem gf2_256Val_ne {a b : ℕ} (ha : Canon gf2_256Exec a) (hb : Canon gf2_256
     valVia gf2_256RingEquiv gf2_256Exec a ≠ valVia gf2_256RingEquiv gf2_256Exec b :=
   fun hv => h (gf2_256Rep.valVia_injective gf2_256RingEquiv ha hb hv)
 
+/-- **A spread product reads as the product** in `GF(2^256)`. -/
+theorem gf2_256OfNat_mul_of_spread {a b c : ℕ}
+    (h : gf2_256Exec.mul (gf2_256Exec.ofBits a) (gf2_256Exec.ofBits b) = gf2_256Exec.ofBits c) :
+    gf2_256OfNat a * gf2_256OfNat b = gf2_256OfNat c := by
+  rw [← gf2_256Val_ofBits a, ← gf2_256Val_ofBits b, ← gf2_256Val_ofBits c, ← h,
+    gf2_256Rep.valVia_mul gf2_256RingEquiv (BinarySpread.Rep.canon_ofBits _)
+      (BinarySpread.Rep.canon_ofBits _)]
+
 /-! ## The polynomial basis, cardinality and Frobenius order -/
 
 /-- The polynomial basis element `x^i`. -/

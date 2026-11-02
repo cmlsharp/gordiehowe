@@ -32,7 +32,7 @@ namespace KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] [Nonempty X] [AddGroup Y]
-  (A : KindAlg X Y Req Resp O) (C : Challenger X Y Req Resp)
+  {ksA : KindShape X Y Req Resp} (A : KindAlg ksA O) (C : Challenger X Y Req Resp)
 
 /-- **Consistent registers** of a composition with a challenger: the challenger's query registers
 hold the query pairs of its programs on the logged requests, with the answers of the oracle `H`

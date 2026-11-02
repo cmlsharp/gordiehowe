@@ -112,7 +112,8 @@ class BaselinesTest(unittest.TestCase):
     def test_medians_and_ranges(self):
         results, spread, _ = tables.parse_baselines(summary_dir())
         # P = witness + prover_ms; commit + prove (prover_ms) last.
-        self.assertEqual(results["ml-split"], (2048, 210, 50, 200))
+        # Verify adds the split driver's proof reading (2 ms).
+        self.assertEqual(results["ml-split"], (2048, 210, 52, 200))
         self.assertEqual(spread["ml-split"][1], (199, 221))
         self.assertEqual(spread["ml-split"][3], (190, 210))
 
@@ -122,7 +123,8 @@ class BaselinesTest(unittest.TestCase):
             for t in range(tables.TRIALS):
                 f.write(json.dumps({"case": "ml-split", "prover_ms": 200 + t,
                                     "verify_ms": 50,
-                                    "details": {"witness": 10 - t}}) + "\n")
+                                    "details": {"witness": 10 - t,
+                                                "v_proof_read": 2}}) + "\n")
         results, spread, _ = tables.parse_baselines(d)
         self.assertEqual(results["ml-split"][1], 210)
         self.assertEqual(spread["ml-split"][1], (210, 210))
@@ -146,11 +148,114 @@ class BaselinesTest(unittest.TestCase):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             tables.render_gordiehowe(results, {})
-        self.assertIn("| ML-DSA split baseline | 2.0 | 210.0 | 50.0 | 200.0 |",
+        self.assertIn("| ML-DSA split baseline | 2.0 | 210.0 | 52.0 | 200.0 |",
                       output.getvalue())
         self.assertIn("| ML-DSA native proof of possession | 1.0 | 105.0 | 5.0 "
-                      "| 100.0 | 51.2% smaller | 2.0× | 10.0× |",
+                      "| 100.0 | 51.2% smaller | 2.0× | 10.4× |",
                       output.getvalue())
+
+
+class ParameterSetsTest(unittest.TestCase):
+    """ML-DSA-65 and -87 and Falcon-1024 beside ML-DSA-44 and Falcon-512:
+    every set's proofs of possession and rings, against its own
+    baselines."""
+    POP = ("gh-ml65-native", "gh-ml65-emulated", "gh-ml87-native",
+           "gh-ml87-emulated", "gh-fn1024-native", "gh-fn1024-emulated")
+    RINGS = tuple(f"gh-{t}-ring-{arm}-{r}" for t in ("ml65", "ml87", "fn1024")
+                  for arm in ("native", "carrier") for r in tables.RING_SIZES)
+    BASES = ("ml65-split", "ml87-split", "ml65-monolith", "ml87-monolith",
+             "fn1024-split-native", "fn1024-split-emulated")
+
+    def results(self, lines):
+        results = tables.parse(lines)
+        results.update(tables.parse_baselines(summary_dir(cases=self.BASES))[0])
+        return results
+
+    def test_cases_known(self):
+        results = tables.parse(run_log(self.POP + self.RINGS))
+        self.assertEqual(set(results), set(self.POP + self.RINGS))
+        self.assertEqual(tables.NAMES["gh-ml87-emulated"], "ML-DSA-87 emulated")
+        self.assertEqual(tables.NAMES["gh-fn1024-ring-carrier-1024"],
+                         "Falcon-1024 ring, carrier (R=1024)")
+        self.assertEqual(tables.NAMES["fn1024-split-emulated"],
+                         "Falcon-1024 emulated baseline")
+        self.assertEqual(tables.GH_BASELINE_FOR["gh-fn1024-emulated"],
+                         "fn1024-split-native")
+        self.assertEqual(tables.GH_BASELINE_FOR["gh-ml65-native"], "ml65-split")
+
+    def test_baselines_known(self):
+        results = tables.parse_baselines(summary_dir(cases=self.BASES))[0]
+        self.assertEqual(set(results), set(self.BASES))
+        # The monolith's verify adds its proof reading (2 ms).
+        self.assertEqual(results["ml87-monolith"][2], 52)
+        self.assertEqual(results["ml87-split"][2], 52)
+        self.assertEqual(results["fn1024-split-native"][2], 50)
+
+    def test_proofs_of_possession_table(self):
+        results = self.results(run_log(self.POP))
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            tables.render_gordiehowe(results, {})
+        text = output.getvalue()
+        for base, gh, v, speed in (
+                ("ML-DSA-65 split baseline", "ML-DSA-65 native", "52.0", "10.4"),
+                ("ML-DSA-87 split baseline", "ML-DSA-87 emulated", "52.0", "10.4"),
+                ("Falcon-1024 native baseline", "Falcon-1024 emulated", "50.0",
+                 "10.0")):
+            self.assertIn(f"| {base} | 2.0 | 210.0 | {v} | 200.0 |", text)
+            self.assertIn(f"| {gh} proof of possession | 1.0 | 105.0 | 5.0 "
+                          f"| 100.0 | 51.2% smaller | 2.0× | {speed}× |", text)
+
+    def test_rings_table(self):
+        results = tables.parse(run_log(self.RINGS))
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            tables.render_gordiehowe(results, {})
+        text = output.getvalue()
+        for label in ("ML-DSA-65 native", "ML-DSA-87 carrier",
+                      "Falcon-1024 native", "Falcon-1024 carrier"):
+            self.assertIn(f"| {label} | 1.0 / 1.0 / 1.0 | 105.0 / 105.0 / 105.0 |",
+                          text)
+
+    def test_render_comparisons(self):
+        results = self.results(run_log(self.POP))
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            tables.render(results)
+        text = output.getvalue()
+        self.assertIn("## GordieHowe ML-DSA-65 against both baselines", text)
+        self.assertIn("## GordieHowe ML-DSA-87 against both baselines", text)
+        self.assertIn("## GordieHowe Falcon-1024 emulated against the emulated "
+                      "baseline", text)
+        self.assertIn("## GordieHowe Falcon-1024: native versus emulated", text)
+        self.assertIn("| native prover | 2.00× faster | 2.00× faster |", text)
+
+    def test_seq_par_groups(self):
+        lines = modes_log(self.POP + ("gh-ml87-ring-native-64",))
+        results = self.results(lines)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            tables.render_seq_par(results, tables.parse(lines, "multi"),
+                                  tables.parallel_cores(lines))
+        text = output.getvalue()
+        self.assertIn("| **ML-DSA-65 proof of possession**: ML-DSA-65 split "
+                      "baseline |  | 2.0 | 210.0 | 52.0 | 200.0 |", text)
+        self.assertIn("| **Falcon-1024 proof of possession**: Falcon-1024 native "
+                      "baseline |", text)
+        self.assertIn("| **Falcon-1024 emulated, against the emulated baseline**: "
+                      "Falcon-1024 emulated baseline |", text)
+        self.assertIn("| ML-DSA-87 emulated | GordieHowe (seq) | 1.0 | 110.0 | 50.0 | "
+                      "100.0 | 2.05× | 1.91× | 1.04× | 2.00× |  |  |", text)
+        self.assertIn("| **ML-DSA-87 ring** |", text)
+
+    def test_domain_split_pairs(self):
+        pairs = dict(tables.SPLIT_CASES)
+        self.assertEqual(pairs["gh-ml87-native"], "ml87-split")
+        self.assertEqual(pairs["gh-fn1024-emulated"], "fn1024-split-emulated")
+        self.assertIsNone(pairs["gh-fn1024-ring-native-256"])
+        for base in ("ml65-split", "ml87-split", "fn1024-split-native",
+                     "fn1024-split-emulated"):
+            self.assertIn(base, tables.BASELINE_SPLIT)
 
 
 class BaselinesSourceTest(unittest.TestCase):
@@ -356,11 +461,11 @@ class ModesTest(unittest.TestCase):
                                   tables.parallel_cores(lines))
         text = output.getvalue()
         self.assertIn("| **ML-DSA-44 proof of possession**: ML-DSA split baseline "
-                      "|  | 2.0 | 210.0 | 50.0 | 200.0 |", text)
+                      "|  | 2.0 | 210.0 | 52.0 | 200.0 |", text)
         self.assertIn("| ML-DSA native | GordieHowe (seq) | 1.0 | 110.0 | 50.0 | "
-                      "100.0 | 2.05× | 1.91× | 1.00× | 2.00× |  |  |", text)
+                      "100.0 | 2.05× | 1.91× | 1.04× | 2.00× |  |  |", text)
         self.assertIn("| ML-DSA native | GordieHowe (par) |  | 55.0 | 20.0 | 50.0 "
-                      "|  | 3.82× | 2.50× | 4.00× | 2.00× | 2.50× |", text)
+                      "|  | 3.82× | 2.60× | 4.00× | 2.00× | 2.50× |", text)
         self.assertIn("K = 4 cores (104-107)", text)
         all_cores = tables.parallel_cores(["PQ_BENCH_PAR_CPUS 0-255 K=256 scope=all"])
         output = io.StringIO()
@@ -1005,9 +1110,13 @@ class DomainSplitTest(unittest.TestCase):
         text = output.getvalue()
         self.assertIn("| Longfellow mdoc v7, 1 attribute | 52.0 | 2.00 |", text)
         self.assertIn("| ECDSA mDL, 1 attribute | 35.0 | 3.00 |", text)
-        # ml-split reads no serialized proof.
+        # ml-split reads its proofs apart (v_proof_read); the Falcon split
+        # parses inside verify_ms (v_read, shown, not added); pq-mdoc reads
+        # no serialized proof.
+        self.assertEqual(tables.baseline_parse(
+            summary_dir(cases=("ml-split",)))["ml-split"], 2)
         self.assertIsNone(tables.baseline_parse(
-            summary_dir(cases=("ml-split",)))["ml-split"])
+            summary_dir(cases=("pq-mdoc-1",)))["pq-mdoc-1"])
 
     def test_baseline_read_per_trial(self):
         d = summary_dir(cases=("rsa-fp128-64",))
@@ -1106,6 +1215,74 @@ class SkipAblationTest(unittest.TestCase):
         with contextlib.redirect_stdout(output):
             tables.render_skip_ablation({}, {}, [])
         self.assertEqual(output.getvalue(), "")
+
+
+def ring_split_log(names=("gh-ml-ring-native-64", "gh-fn-ring-carrier-1024"),
+                   multi=False):
+    """Each ring proof's GH_RING_SPLIT line: per ring 2 + trial, per message
+    3, per proof 95 (prover 100 + trial) and per ring 1, per message 0.5,
+    per proof 8.5 (verify 10), the warm-ups 100 times slower."""
+    lines = []
+    for trial in range(tables.WARMUPS + tables.TRIALS):
+        k = 100 if trial < tables.WARMUPS else 1
+        for name in names:
+            for label in (name, name + "@multi") if multi else (name,):
+                lines.append(
+                    f"[{label}] GH_RING_SPLIT ring_p={(2 + trial) * k} "
+                    f"message_p={3 * k} proof_p={95 * k} ring_v={1 * k} "
+                    f"message_v={0.5 * k} proof_v={8.5 * k} "
+                    f"prover={(100 + trial) * k} verify={10 * k}")
+    return lines
+
+
+class RingSplitTest(unittest.TestCase):
+    def test_medians_exclude_warmups(self):
+        split = tables.parse_ring_split(ring_split_log())
+        mid = tables.WARMUPS + (tables.TRIALS - 1) / 2
+        self.assertEqual(split["gh-ml-ring-native-64"],
+                         {"ring_p": 2 + mid, "message_p": 3, "proof_p": 95,
+                          "prover": 100 + mid, "ring_v": 1, "message_v": 0.5,
+                          "proof_v": 8.5, "verify": 10})
+
+    def test_modes_separate(self):
+        lines = ring_split_log(multi=True)
+        self.assertEqual(tables.parse_ring_split(lines),
+                         tables.parse_ring_split(lines, "multi"))
+        self.assertEqual(tables.parse_ring_split(ring_split_log(), "multi"), {})
+
+    def test_missing_trial(self):
+        with self.assertRaises(ValueError):
+            tables.parse_ring_split(ring_split_log()[1:])
+
+    def test_outside_rings(self):
+        with self.assertRaises(ValueError):
+            tables.parse_ring_split(ring_split_log(("gh-ml-native",)))
+
+    def test_table(self):
+        lines = ring_split_log(multi=True)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            tables.render_ring_split(tables.parse_ring_split(lines),
+                                     tables.parse_ring_split(lines, "multi"),
+                                     ("0-31", 32, "set"))
+        text = output.getvalue()
+        mid = 2 + tables.WARMUPS + (tables.TRIALS - 1) / 2
+        self.assertIn("(single-threaded)", text)
+        self.assertIn("(32 threads)", text)
+        self.assertIn(f"| ML-DSA native | 64 | {mid:.1f} | 3.0 | 95.0 | "
+                      f"{mid + 98:.1f} | 1.0 | 0.5 | 8.5 | 10.0 |", text)
+        self.assertIn(f"| Falcon carrier | 1024 | {mid:.1f} |", text)
+
+    def test_absent_no_table(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            tables.render_ring_split({}, {})
+        self.assertEqual(output.getvalue(), "")
+
+    def test_other_parsers_ignore_split(self):
+        # The split lines leave the run lines' parsers as they were.
+        lines = run_log() + ring_split_log()
+        self.assertEqual(tables.parse(lines), tables.parse(run_log()))
 
 
 if __name__ == "__main__":

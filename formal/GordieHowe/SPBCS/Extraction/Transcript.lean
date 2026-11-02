@@ -14,8 +14,8 @@ public import Mathlib.Logic.Equiv.Fin.Basic
 # Hash chains: items, chain-input encodings, samplers and salted statements
 
 The objects of a Fiat–Shamir hash chain over the domain-separated oracle of
-`GordieHowe/Model/QROM/Oracle.lean`, used by the spBCS compiler and its series–parallel base model
-(`GordieHowe/SPBCS/Basic.lean`, `GordieHowe/SPBCS/FullPast/Model.lean`). They follow
+`GordieHowe/Model/QROM/Oracle.lean`, used by the spBCS compiler
+(`GordieHowe/SPBCS/Basic.lean`). They follow
 Chiesa–Manohar–Spooner, "Succinct Arguments in the Quantum Random Oracle Model" (CMS19,
 ePrint 2019/834; printed page numbers), section 8.2 (the BCS hash chain, pp. 38–39).
 

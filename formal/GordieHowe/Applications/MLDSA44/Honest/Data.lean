@@ -20,7 +20,7 @@ inputs (`HashData.states`) are the honest Keccak inputs of `GordieHowe.MLDSA44.P
 of `GordieHowe.MLDSA44.PoP.Native` (the outputs are SHAKE256's, `c̃'` is the input's `c̃`) read through them.
 -/
 
-namespace GordieHowe.MLDSA44.Native.ROMParams
+namespace GordieHowe.MLDSA44
 
 open GordieHowe.Bits GordieHowe.Keccak GordieHowe.Shake256 GordieHowe.KeccakTrace GordieHowe.KeccakBatch
 open Native (honestW1Bytes honestMsg noCtx trWires)
@@ -42,7 +42,7 @@ def msgNat (y : MLDSA44.PoP.HonestInput 0 L) (k : ℕ) : ℕ :=
 /-- **The bytes of `w1Encode(w1)`** of an honest input, `0` past `768`. -/
 -- spec-side
 noncomputable def w1Nat (y : MLDSA44.PoP.HonestInput 0 L) (k : ℕ) : ℕ :=
-  if h : k < 768 then (honestW1Bytes y ⟨k, h⟩).toNat else 0
+  if h : k < 768 then (Native.honestW1Bytes y ⟨k, h⟩).toNat else 0
 
 /-- **The honest hash inputs before `μ`**: `tr`, the padded message buffer. -/
 -- spec-side
@@ -72,13 +72,13 @@ theorem honestData_bool (y : MLDSA44.PoP.HonestInput 0 L) : (honestData (K := K)
 
 /-- **`μ`'s input byte `i`, bit `b`**: `tr`, two zero bytes, the message. -/
 theorem muInput_bit (y : MLDSA44.PoP.HonestInput 0 L) (i : Fin (64 + (2 + (0 + L)))) (b : Fin 8) :
-    HashCircuit.muInput (trWires y.pk) noCtx (honestMsg (KH := K) y) i b =
+    HashCircuit.muInput (Native.trWires y.pk) Native.noCtx (Native.honestMsg (KH := K) y) i b =
       if (i : ℕ) < 64 then constBit (trNat y i) b else if (i : ℕ) < 66 then 0
       else constBit (msgNat y (i - 66)) b := by
   refine Fin.addCases (fun i => ?_) (fun j => ?_) i
   · have hi := i.isLt
     rw [HashCircuit.muInput, Fin.append_left]
-    simp only [Fin.val_castAdd, if_pos hi, Falcon512.HashCircuit.byteWires, trWires,
+    simp only [Fin.val_castAdd, if_pos hi, Falcon512.HashCircuit.byteWires, Native.trWires,
       Falcon512.HashCircuit.wiresOfByteVec, trNat, dif_pos hi]
     congr 2
     · show MLDSA44.PoP.Compose.trOf (Native.Statement.pk y.pk) _ =
@@ -101,7 +101,7 @@ theorem muInput_bit (y : MLDSA44.PoP.HonestInput 0 L) (i : Fin (64 + (2 + (0 + L
       · have hj := j.isLt
         rw [Fin.append_right]
         simp only [Fin.val_natAdd, show ¬ (64 + (2 + (0 + (j : ℕ))) < 64) by omega, if_false,
-          show ¬ (64 + (2 + (0 + (j : ℕ))) < 66) by omega, Falcon512.HashCircuit.byteWires, honestMsg,
+          show ¬ (64 + (2 + (0 + (j : ℕ))) < 66) by omega, Falcon512.HashCircuit.byteWires, Native.honestMsg,
           Falcon512.HashCircuit.wiresOfByteVec, msgNat]
         rw [dif_pos (by omega)]
         have h1 : (⟨(8 * (j : ℕ) + b) / 8, by omega⟩ : Fin L) = ⟨64 + (2 + (0 + (j : ℕ))) - 66, by omega⟩ :=
@@ -114,7 +114,7 @@ theorem constBit_zero' (b : ℕ) : constBit (K := K) 0 b = 0 := by simp [constBi
 (`KeccakTrace.spongeStart` at block `0`). -/
 theorem muState_eq_spongeStart (y : MLDSA44.PoP.HonestInput 0 L) (hL : L ≤ 32) :
     (data0 (K := K) y).muState =
-      spongeStart .shake256 (HashCircuit.muInput (trWires y.pk) noCtx (honestMsg (KH := K) y)) 0 := by
+      spongeStart .shake256 (HashCircuit.muInput (Native.trWires y.pk) Native.noCtx (Native.honestMsg (KH := K) y)) 0 := by
   have hab : Shake256.absorbBlocks Shake256.SpongeSpec.shake256 (64 + (2 + (0 + L))) = 1 := by
     unfold Shake256.absorbBlocks
     change (64 + (2 + (0 + L))) / 136 + 1 = 1
@@ -173,7 +173,7 @@ theorem muState_eq_spongeStart (y : MLDSA44.PoP.HonestInput 0 L) (hL : L ≤ 32)
 /-- **The bits of `Native`'s honest `μ` are the honest data's** (`μ`'s first `64` squeezed
 bytes). -/
 theorem honestMu_bit (y : MLDSA44.PoP.HonestInput 0 L) (hL : L ≤ 32) (o : Fin 64) (b : Fin 8) :
-    HashBatchedCircuit.honestMu (trWires y.pk) noCtx (honestMsg (KH := K) y) o b =
+    HashBatchedCircuit.honestMu (Native.trWires y.pk) Native.noCtx (Native.honestMsg (KH := K) y) o b =
       (honestData (K := K) y).mu (8 * o + b) := by
   have hab : Shake256.absorbBlocks Shake256.SpongeSpec.shake256 (64 + (2 + (0 + L))) = 1 := by
     unfold Shake256.absorbBlocks
@@ -182,9 +182,9 @@ theorem honestMu_bit (y : MLDSA44.PoP.HonestInput 0 L) (hL : L ≤ 32) (o : Fin 
   have ho := o.isLt
   unfold HashBatchedCircuit.honestMu
   rw [squeezeOut_stateOf (fin := fun k => keccakF (spongeStart .shake256
-      (HashCircuit.muInput (trWires y.pk) noCtx (honestMsg (KH := K) y)) k))
+      (HashCircuit.muInput (Native.trWires y.pk) Native.noCtx (Native.honestMsg (KH := K) y)) k))
     (fun k i => RealizedProgram.stateBit (keccakF (spongeStart .shake256
-      (HashCircuit.muInput (trWires y.pk) noCtx (honestMsg (KH := K) y)) k)) i)
+      (HashCircuit.muInput (Native.trWires y.pk) Native.noCtx (Native.honestMsg (KH := K) y)) k)) i)
     (fun k => (RealizedProgram.stateOf_stateBit _).symm) o b (by
       rw [hab]
       unfold Shake256.numBlocks Shake256.squeezeBlocks
@@ -198,7 +198,7 @@ theorem honestMu_bit (y : MLDSA44.PoP.HonestInput 0 L) (hL : L ≤ 32) (o : Fin 
 /-- `Native`'s honest `μ` of the honest input. -/
 -- spec-side
 abbrev muH (y : MLDSA44.PoP.HonestInput 0 L) : Fin 64 → BitWires K 8 :=
-  HashBatchedCircuit.honestMu (trWires y.pk) noCtx (honestMsg (KH := K) y)
+  HashBatchedCircuit.honestMu (Native.trWires y.pk) Native.noCtx (Native.honestMsg (KH := K) y)
 
 /-- **`c̃'`'s padded block `k`, byte `i`, bit `b`** is the honest data's padded input `ctIn` at
 `1088 k + 8 i + b`. -/
@@ -289,7 +289,7 @@ theorem ctState_eq_spongeStart (y : MLDSA44.PoP.HonestInput 0 L) (hL : L ≤ 32)
 /-- `Native`'s honest `c̃'` of the honest input. -/
 -- spec-side
 noncomputable abbrev ctH (y : MLDSA44.PoP.HonestInput 0 L) : Fin 32 → BitWires K 8 :=
-  HashBatchedCircuit.honestCommit (trWires y.pk) noCtx (honestMsg (KH := K) y)
+  HashBatchedCircuit.honestCommit (Native.trWires y.pk) Native.noCtx (Native.honestMsg (KH := K) y)
     (Native.honestW1 y)
 
 /-- **The bits of `Native`'s honest `c̃'`** are the last absorb's output bits. -/
@@ -446,4 +446,4 @@ theorem sibOut_honest_bit (y : MLDSA44.PoP.HonestInput 0 L) (hL : L ≤ 32)
 
 end Legacy
 
-end GordieHowe.MLDSA44.Native.ROMParams
+end GordieHowe.MLDSA44

@@ -212,4 +212,40 @@ theorem gf256Coord_pack (b : Fin (2 ^ 4) → Bool) (j : ℕ) :
 field `1` (and any other identifier) `GF(2^256)`; the opaque functions `targetBitsFn`. -/
 abbrev mldsaQROMInterp (F0 : FieldInterp) : Interp := mldsaInterpOf F0 gf256
 
+
+/-! ## The code arithmetic of `GF(2^256)` -/
+
+open BinarySpread in
+set_option exponentiation.threshold 70000 in
+/-- The spread representation of `GF(2^256)`'s code arithmetic: `gf2_256Exec`'s reduction with
+digits of `258` bits (`GKR.Fold.BinCode`: `k ≥ n + 2`). -/
+def gf2_256CodeExec : Exec where
+  k := 258
+  n := 256
+  tapN := 1 + 2 ^ (2 * 258) + 2 ^ (5 * 258) + 2 ^ (10 * 258)
+  mask := (2 ^ (258 * 256) - 1) / (2 ^ 258 - 1)
+
+open BinarySpread in
+set_option exponentiation.threshold 70000 in
+/-- The facts tying `gf2_256CodeExec` to `gf2_256Poly` (`GKR.Fold.Rep.widen` of `gf2_256Rep`). -/
+noncomputable def gf2_256CodeRep : Rep gf2_256CodeExec gf2_256Poly :=
+  GKR.Fold.Rep.widen gf2_256Rep gf2_256CodeExec rfl (by decide)
+    (by simp only [gf2_256Rep, gf2_256Tap, gf2_256CodeExec, Polynomial.eval_add,
+      Polynomial.eval_pow, Polynomial.eval_X, Polynomial.eval_one]; norm_num)
+    (by decide +kernel)
+
+set_option exponentiation.threshold 70000 in
+/-- **The code arithmetic of `GF(2^256)`** (`GKR.Fold.BinCode.arith`): exclusive or, and one spread
+product per multiplication. -/
+def gf2_256Code : GKR.Fold.BinCode := ⟨gf2_256CodeExec, (2 ^ (257 * 256) - 1) / (2 ^ 257 - 1)⟩
+
+/-- **The code arithmetic of `GF(2^256)` is the field's** (`GKR.Fold.BinCode.hom`: constants decode
+as their polynomial-basis bits, `BinarySpread.toSpec_ofNat`). -/
+theorem gf256_codeHom : gf256.CodeHom gf2_256Code.arith :=
+  GKR.Fold.BinCode.hom gf2_256Code gf2_256CodeRep (by decide) (by decide +kernel)
+    gf2_256ToSpec.toRingEquiv fun c => by
+      change gf2_256ToSpec (gf2_256OfNat c) = _
+      rw [gf2_256ToSpec_apply]
+      exact BinarySpread.toSpec_ofNat 256 c
+
 end GordieHowe.RealizedProgram

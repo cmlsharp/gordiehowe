@@ -201,8 +201,8 @@ TYPED_TEST(Composite, PrivateLengths) {
     const auto ew = ecdsa_witness(x.msg, x.pop_ecdsa_rs, kMax);
     EXPECT_TRUE(e.rel.verify(est, e.rel.prove(est, ew, rng)))
         << "ECDSA " << x.msg.size();
-    const auto mst = mldsa::mldsa_statement(x.mldsa_pk, {});
-    const auto mw = mldsa::mldsa_witness(x.msg, x.pop_mldsa, kMax, 0);
+    const auto mst = mldsa::mldsa_statement<MLDSA>(x.mldsa_pk, {});
+    const auto mw = mldsa::mldsa_witness<MLDSA>(x.msg, x.pop_mldsa, kMax, 0);
     EXPECT_TRUE(m.rel.verify(mst, m.rel.prove(mst, mw, rng)))
         << "ML-DSA " << x.msg.size();
   }

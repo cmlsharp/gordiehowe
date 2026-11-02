@@ -1,0 +1,158 @@
+structure GordieHowe.GKR.Certificate.Cert (params 0)
+  width : Nat
+  tables : List GordieHowe.GKR.Certificate.Table
+  outputs : List (Prod Nat Nat)
+  outWires : List Nat
+structure GordieHowe.GKR.Certificate.Dag (params 0)
+  tree : GordieHowe.GKR.Certificate.NTree
+  inputs : Nat
+  size : Nat
+  asserts : List Nat
+  outputs : List Nat
+structure GordieHowe.GKR.Certificate.Layered (params 0)
+  inputs : Nat
+  layers : List (List Nat)
+inductive GordieHowe.GKR.Certificate.NTree (params 0)
+  | nil
+  | leaf Nat
+  | node GordieHowe.GKR.Certificate.NTree GordieHowe.GKR.Certificate.NTree
+inductive GordieHowe.GKR.Certificate.Table (params 0)
+  | ident
+  | packed Nat GordieHowe.GKR.Certificate.NTree
+structure GordieHowe.GKR.Fold.Consts (params 0)
+  width : Nat
+  table : GordieHowe.GKR.Certificate.Table
+structure GordieHowe.GKR.Rel.Assert (params 0)
+  Z : Nat
+  U : Nat
+structure GordieHowe.GKR.Rel.EntryCert (params 0)
+  entry : Nat
+  lo : Nat
+  hi : Nat
+  root : Option Nat
+  asserts : List GordieHowe.GKR.Rel.Assert
+  fam : Option GordieHowe.GKR.Rel.FamCert
+inductive GordieHowe.GKR.Rel.FamCert (params 0)
+  | alignment Nat
+  | logup GordieHowe.GKR.Rel.LogupCert
+  | macH GordieHowe.GKR.Rel.MacHCert
+structure GordieHowe.GKR.Rel.Frac (params 0)
+  l : Nat
+  r : Nat
+  num : GordieHowe.GKR.Rel.Wire
+  den : GordieHowe.GKR.Rel.Wire
+structure GordieHowe.GKR.Rel.FracTree (params 0)
+  dens : List GordieHowe.GKR.Rel.Wire
+  inner : List GordieHowe.GKR.Rel.Frac
+structure GordieHowe.GKR.Rel.LogupCert (params 0)
+  alpha : Nat
+  needles : List Nat
+  hists : List Nat
+  weights : Nat
+  tree : GordieHowe.GKR.Rel.FracTree
+  sum : GordieHowe.GKR.Rel.Wire
+structure GordieHowe.GKR.Rel.MacHCert (params 0)
+  bits : Nat
+  powers : Nat
+  tag : Nat
+  chunks : List GordieHowe.GKR.Rel.Wire
+inductive GordieHowe.GKR.Rel.Place (params 0)
+  | block Nat
+  | late Nat Nat
+  | defined Nat
+structure GordieHowe.GKR.Rel.Wire (params 0)
+  c0 : Nat
+  c1 : Nat
+  n : Nat
+inductive GordieHowe.RealizedProgram.BinOp (params 0)
+  | add
+  | mul
+  | and
+  | or
+  | xor
+structure GordieHowe.RealizedProgram.CircuitData (params 0)
+  c : Nat
+  w : Nat
+  chr : Nat
+  prime : Nat
+  char2 : Bool
+  neg1 : Nat
+  half : Nat
+  consts : GordieHowe.GKR.Fold.Consts
+  dag : GordieHowe.GKR.Certificate.Dag
+  layered : GordieHowe.GKR.Certificate.Layered
+  sched : GordieHowe.GKR.Certificate.Cert
+  table : GordieHowe.RealizedProgram.ETable
+  entries : List GordieHowe.GKR.Rel.EntryCert
+inductive GordieHowe.RealizedProgram.CmpArg (params 0)
+  | node Nat
+  | imm Nat GordieHowe.RealizedProgram.IndexMap
+inductive GordieHowe.RealizedProgram.CmpOp (params 0)
+  | lt
+  | leq
+  | eq
+inductive GordieHowe.RealizedProgram.Coef (params 0)
+  | const Nat
+  | node Nat Nat
+inductive GordieHowe.RealizedProgram.ConvForm (params 0)
+  | coefficients
+  | ntt Nat
+  | nttNatural Nat
+inductive GordieHowe.RealizedProgram.ENode (params 0)
+  | lin (List GordieHowe.RealizedProgram.ETerm) Nat
+  | const Nat
+  | bin GordieHowe.RealizedProgram.BinOp Nat Nat
+  | scale Nat Nat
+  | sum Nat Nat
+  | prod Nat Nat
+  | broadcast GordieHowe.RealizedProgram.IndexMap Nat
+  | lnot Nat Nat
+  | mux Bool Nat Nat Nat
+  | cmp GordieHowe.RealizedProgram.CmpOp Nat Nat GordieHowe.RealizedProgram.CmpArg
+  | tree Bool Nat Nat
+  | materialize Nat
+  | gather GordieHowe.RealizedProgram.IndexMap (List Nat)
+  | apply GordieHowe.RealizedProgram.EOp Nat
+  | value Nat GordieHowe.GKR.Rel.Place
+structure GordieHowe.RealizedProgram.ENodeInfo (params 0)
+  node : GordieHowe.RealizedProgram.ENode
+  len : Nat
+  cut : Bool
+  ref : Option Nat
+  wires : List GordieHowe.GKR.Rel.Wire
+  aux : List GordieHowe.GKR.Rel.Wire
+inductive GordieHowe.RealizedProgram.EOp (params 0)
+  | view GordieHowe.RealizedProgram.IndexMap (Option Nat)
+  | named GordieHowe.RealizedProgram.NamedOp
+  | sparse (List (List (Prod Nat GordieHowe.RealizedProgram.Coef)))
+  | staged GordieHowe.RealizedProgram.NamedOp Nat
+structure GordieHowe.RealizedProgram.ETable (params 0)
+  size : Nat
+  tree : GordieHowe.RealizedProgram.Trie GordieHowe.RealizedProgram.ENodeInfo
+structure GordieHowe.RealizedProgram.ETerm (params 0)
+  scale : Nat
+  view : Nat
+  ops : List GordieHowe.RealizedProgram.EOp
+inductive GordieHowe.RealizedProgram.NamedOp (params 0)
+  | negacyclicConv Nat GordieHowe.RealizedProgram.ConvForm
+  | polyMatVec Nat Nat Nat GordieHowe.RealizedProgram.ConvForm
+  | polyBroadcast Nat Nat GordieHowe.RealizedProgram.ConvForm
+  | ntt Nat Nat GordieHowe.RealizedProgram.NttOrder
+  | inverseNtt Nat Nat
+  | nttTranspose Nat Nat
+  | rowDot Nat Nat Nat
+  | macConv Nat Nat Nat (List Nat)
+  | acyclicConv Nat Nat
+  | diagonal Nat
+  | scale Nat
+  | constDiagonal Nat
+  | sum Nat
+  | fromDigits Nat Nat
+  | batched Nat GordieHowe.RealizedProgram.NamedOp
+inductive GordieHowe.RealizedProgram.NttOrder (params 0)
+  | scheme
+  | natural
+inductive GordieHowe.RealizedProgram.Trie (params 1)
+  | nil
+  | leaf #0
+  | node (GordieHowe.RealizedProgram.Trie #0) (GordieHowe.RealizedProgram.Trie #0)

@@ -10,6 +10,7 @@ public import GordieHowe.Model.QROM.Lifting
 public import GordieHowe.ProofSystem.Program.Basic
 public import GordieHowe.ProofSystem.Program.Transcript.Format
 public import GordieHowe.ProofSystem.Program.ForkJoinFormat
+public import GordieHowe.ProofSystem.Program.Transcript.GrantedLoads
 
 @[expose] public section
 
@@ -22,9 +23,11 @@ built from, read by its setting with merges (`GordieHowe/ProofSystem/Program/Tra
 - `SPBCS.ProofSystemTranscript C`: the label, the digest length, the statement writes, the branch names of
   the proof system's labels, the codecs of the domains' commit rounds, of the application phase's
   messages, of every branch's and of every join part's messages, the leaf codecs and the challenge
-  readers of the same parts; `GordieHowe.SPBCS.ProofSystemTranscript.Bounds`: the facts the settings are built from.
-- The readers of every component (`readers`), the C++ stream length of every round (`stream`) and
-  the largest grant (`maxGrant`).
+  readers of the same parts, and the largest grant of a round (`maxGrant`, a declared number);
+  `GordieHowe.SPBCS.ProofSystemTranscript.Bounds`: the facts the settings are built from, among
+  them that the declared largest grant is the readers' (`Bounds.maxGrant_eq`).
+- The readers of every component (`readers`), the C++ stream length of every round (`stream`),
+  within `k + fsExtraBytes + maxGrant` (`stream_le`).
 - Length budgets: the writes before round 0 (`length_saltedCodec_le`), the
   roots of one write (`roots_le`), the rounds' writes (`rounds_mul_le`); the challenge count
   (`card_chIdx_le`); the digests of one chain input (`digests`).
@@ -49,7 +52,8 @@ variable (C : RealizedProgram.ProofSystem.IOP Stmt W rel) in
 domains `C`: the label, the digest length `k`, the statement writes, the branch names of the
 proof system's labels, the codecs of every domain's commit rounds, of the application phase's messages,
 of every branch's and of every join part's messages (each write at most `2^20` bytes), the leaf
-codec of every domain's tree and the challenge readers of the same parts. -/
+codec of every domain's tree, the challenge readers of the same parts and the largest grant of a
+round. -/
 structure ProofSystemTranscript where
   /-- The label write. -/
   label : List Byte
@@ -77,6 +81,8 @@ structure ProofSystemTranscript where
   branchReaders : ∀ d b, SpecReaders ((C.circuit d).branch b)
   /-- The challenge readers of every join part. -/
   joinReaders : ∀ d, SpecReaders (C.circuit d).join
+  /-- The largest grant of a round (`Bounds.maxGrant_eq`). -/
+  maxGrant : ℕ
 
 /-- **A bound on the series–parallel knowledge error**: at most `2^16` verifier queries, the digests
 of one input and the seeding's within `D` (`max 2 c + cP + 1 ≤ D`) and every round error within
@@ -119,7 +125,8 @@ variable {C : RealizedProgram.ProofSystem.IOP Stmt W rel}
 
 /-- **The facts the settings are built from**: statement writes of at most `2^20` bytes, a
 label, a digest and branch names of at most `2^10` bytes, leaves of at most `2^40` bytes, at most
-`2^8` domains of at most `2^8` branches each, and at most `maxRounds` rounds in all. -/
+`2^8` domains of at most `2^8` branches each, at most `maxRounds` rounds in all, and the declared
+largest grant the readers' largest grant. -/
 structure Bounds (T : ProofSystemTranscript C) : Prop where
   /-- The statement writes have at most `2^20` bytes. -/
   pre_le : ∀ x, (T.stmt.ser x).length ≤ 2 ^ 20
@@ -139,6 +146,10 @@ structure Bounds (T : ProofSystemTranscript C) : Prop where
   name_le : ∀ a, (T.name a).length ≤ 2 ^ 10
   /-- There are at most `maxRounds` rounds in all. -/
   n_le : ∑ q : C.shape.term.Leaf, C.rounds q.label ≤ Configurations.maxRounds
+  /-- The declared largest grant is the largest grant of a round of any component. -/
+  maxGrant_eq : Finset.univ.sup (fun q : C.term.Leaf =>
+    (C.readersOf T.commitReaders T.appReaders T.branchReaders T.joinReaders q.label).maxGrant) =
+      T.maxGrant
 
 variable (T : ProofSystemTranscript C)
 
@@ -151,21 +162,19 @@ abbrev readers : ∀ j, SpecReaders (C.P j) :=
 abbrev stream (j : C.shape.Idx) (i : (C.P j).ChallengeIdx) : ℕ :=
   (T.readers j).streamLength (T.k + Configurations.fsExtraBytes) i
 
-/-- **The largest grant of a round** of any component. -/
-def maxGrant : ℕ := Finset.univ.sup fun q : C.term.Leaf => (T.readers q.label).maxGrant
+variable {T}
 
 /-- Every component's largest grant is at most `maxGrant`. -/
-theorem maxGrant_le (j : C.shape.Idx) : (T.readers j).maxGrant ≤ T.maxGrant := by
+theorem grant_le (hb : T.Bounds) (j : C.shape.Idx) : (T.readers j).maxGrant ≤ T.maxGrant := by
   have h := Finset.le_sup (f := fun q : C.term.Leaf => (T.readers q.label).maxGrant)
     (Finset.mem_univ (RealizedProgram.ProofSystem.IOP.Shape.leafOf (S := C.shape) j))
-  rwa [RealizedProgram.ProofSystem.IOP.Shape.label_leafOf] at h
+  rw [RealizedProgram.ProofSystem.IOP.Shape.label_leafOf] at h
+  exact h.trans hb.maxGrant_eq.le
 
 /-- **Every round's stream fits in `k + fsExtraBytes + maxGrant` bytes.** -/
-theorem stream_le (j : C.shape.Idx) (i : (C.P j).ChallengeIdx) :
+theorem stream_le (hb : T.Bounds) (j : C.shape.Idx) (i : (C.P j).ChallengeIdx) :
     T.stream j i ≤ T.k + (Configurations.fsExtraBytes + T.maxGrant) :=
-  ((T.readers j).streamLength_le_maxGrant _ i).trans (by have := T.maxGrant_le j; omega)
-
-variable {T}
+  ((T.readers j).streamLength_le_maxGrant _ i).trans (by have := grant_le hb j; omega)
 
 /-- The roots of the domains' trees fit in one write. -/
 theorem roots_le (hb : T.Bounds) : C.m * (9 + T.k) ≤ 2 ^ 20 := by

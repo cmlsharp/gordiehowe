@@ -5,6 +5,8 @@ module
 
 public import GordieHowe.Language.Completeness.Mac
 public import GordieHowe.Language.Honest.Check
+public import GordieHoweNative.Language.Completeness.MacCheck
+public import GordieHowe.Language.RealizedProgram.Reader
 
 @[expose] public section
 
@@ -14,12 +16,15 @@ public import GordieHowe.Language.Honest.Check
 The MACs of a completeness certificate (`MacBaseC`, `DigitsMacC`, `OneDigitMacC`, `GroupedMacC`,
 `MacFormC`) built from Boolean checks on a MAC site (`macBaseCB`, `digitsMacCB`, `oneDigitMacCB`,
 `groupedMacCB`, `macTailCB`, `MacBaseC.ofB`, `DigitsMacC.ofB`, `OneDigitMacC.ofB`,
-`GroupedMacC.ofB`, `MacFormC.ofB`), the check that a predicate is one of a MAC's (`macRoleCB`,
-`roleC_of_macRoleCB`), and the MAC's source facts at the certificate's honest environment from an
-accepting execution (`MacBaseC.source_honestC`). The MAC checks over the fields of characteristic
-`2` (`TwoMacC`, from the check `twoMacCB` by `TwoMacC.ofB`): their tails hold at the honest
-environment (`TwoMacC.tail_honest`) from their source facts (`TwoMacC.source_honestC`), and their
-tags are honest (`TwoMacC.macTag_honest`).
+`GroupedMacC.ofB`, `MacFormC.ofB`), the check that a predicate plays a given role in a MAC
+(`macRoleAtB`, its twin `macRoleAtE`, `roleC_of_macRoleAtB`), and the MAC's source facts at the
+certificate's honest environment from an accepting execution (`MacBaseC.source_honestC`). The MAC
+checks over the fields of characteristic `2` (`TwoMacC`, from the check `twoMacCB` by
+`TwoMacC.ofB`): their tails hold at the honest environment (`TwoMacC.tail_honest`) from their source
+facts (`TwoMacC.source_honestC`), and their tags are honest (`TwoMacC.macTag_honest`).
+
+The definitions are in `GordieHoweNative/Language/Completeness/MacCheck.lean`
+(the compiled library `GordieHoweNative`); this module has their lemmas.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -29,70 +34,62 @@ open scoped NNReal
 
 section
 
-variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String}
+variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String} {S : Structure}
 
 variable (ir primeNodes) in
 /-- **Every cross-field `equal` has an interval-free MAC realization**: the structural checks
 (`EventsOk`) the MACs' checks over a field need. -/
 def MacsRealizable : Prop := ir.EventsOk primeNodes
 
-/-- **The facts of the MAC of site `st` with its tail, at the certificate's generators `G`**
-(`MacBaseC`): the site's check (`macFieldCheckB`), a blind, a tail (`macTailAtB`) that is a
-`mod_2` of the `y` domain in the MAC unit form with a leaf on the right; the tag late, of one
-coordinate; the operands, the unit's operand and the powers reading no late value; the blind the
-tag's pad copy; the MAC field of characteristic `2` holding the powers, of the units' width. -/
-structure MacBaseFactsC (G : Gens) (st : MacSite) : Prop where
-  lt : st.pid < ir.predicates.length
-  cross : ir.isCrossB st.pid = true
-  side : ir.macFieldCheckB primeNodes st = true
-  blind : (ir.macCross st.pid).real.blind.isSome = true
-  tail : ir.macTailAtB st.pid (ir.siteDom st) (ir.macCheckOp st) (ir.macBlind st)
-    (ir.macCross st.pid).real (ir.macTail st) = true
-  opOk : ir.macOpOkB st (ir.macCheckOp st) = true
-  dyLt : ir.siteDom st < ir.domains.length
-  opExpr : ir.ExprOk (ir.domainField (ir.siteDom st)) (ir.macCheckOp st)
-  tailMod : (ir.predicateT (ir.macTail st)).body.modParts?.isSome = true
-  tailD : (ir.macTailParts st).d = (ir.siteDom st)
-  tailQ : (ir.macTailParts st).q = 2
-  tailR : (ir.macTailParts st).rhs.isLeaf = true
-  units : (macUnits? (ir.macTailParts st).lhs).isSome = true
-  tagGen : G.at (ir.macCross st.pid).real.tag = .tag st.pid
-  tagNotSource : ¬ ir.IsSourceValue (ir.macCross st.pid).real.tag
-  tagLate : ir.IsLate (ir.macCross st.pid).real.tag
-  tag1 : (ir.value (ir.macCross st.pid).real.tag).size = 1
-  xNoLate : ∀ v ∈ ir.exprNodes (ir.macCross st.pid).x, ir.noLateReadB v = true
-  yNoLate : ∀ v ∈ ir.exprNodes (ir.macCross st.pid).y, ir.noLateReadB v = true
-  opNoLate : ∀ v ∈ ir.exprNodes (ir.macUnitsAt st).operand, ir.noLateReadB v = true
-  powNoLate : ir.noLateReadB (ir.macUnitsAt st).powers = true
-  blindCopy : ir.isPadCopyB (ir.macBlind st) (ir.macCross st.pid).real.tag "polynomialBits" = true
-  macChar : ir.charOf (ir.macCross st.pid).real.macField = 2
-  powField : ir.valueField (ir.macUnitsAt st).powers = (ir.macCross st.pid).real.macField
-  width : (ir.macUnitsAt st).width = (ir.macCross st.pid).real.width
+variable (ir primeNodes S) in
+/-- **`PReader.macBaseB` at the program is `macBaseCB`.** -/
+theorem macBaseB_ofProgram (G : Gens) (st : MacSite) :
+    @PReader.macBaseB ir (PReader.ofProgram ir) primeNodes S G st =
+      ir.macBaseCB primeNodes S G st := by
+  unfold PReader.macBaseB macBaseCB
+  rw [Bool.eq_iff_iff, decide_eq_true_iff]
+  simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.not_eq_true', decide_eq_false_iff_not,
+    List.all_eq_true, PReader.ofProgram_nPreds, PReader.ofProgram_nValues,
+    PReader.ofProgram_value, PReader.ofProgram_predicate]
+  constructor
+  · rintro ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩, h10⟩, h11⟩, h12⟩,
+      h13⟩, h14⟩, h15⟩, h16⟩, h17⟩, h18⟩, h19⟩, h20⟩, h21⟩, h22⟩, h23⟩, h24⟩, h25⟩
+    exact ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19,
+        h20, h21, h22, h23, h24, h25⟩
+  · intro h
+    exact ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨h.lt, h.cross⟩, h.side⟩, h.blind⟩, h.tail⟩, h.opOk⟩, h.dyLt⟩,
+        h.opExpr⟩, h.tailMod⟩, h.tailD⟩, h.tailQ⟩, h.tailR⟩, h.units⟩, h.tagGen⟩, h.tagNotSource⟩,
+        h.tagLate⟩, h.tag1⟩, h.xNoLate⟩, h.yNoLate⟩, h.opNoLate⟩, h.powNoLate⟩, h.blindCopy⟩,
+        h.macChar⟩, h.powField⟩, h.width⟩
 
-/-- **`MacBaseFactsC` is decidable**, as the conjunction of its fields. -/
-instance (G : Gens) (st : MacSite) : Decidable (ir.MacBaseFactsC (primeNodes := primeNodes) G st) :=
-  decidable_of_iff (_ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧
-    _ ∧ _ ∧ _ ∧ _ ∧ _)
-    ⟨fun ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19,
-      h20, h21, h22, h23, h24, h25⟩ => ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13,
-      h14, h15, h16, h17, h18, h19, h20, h21, h22, h23, h24, h25⟩,
-     fun ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19,
-      h20, h21, h22, h23, h24, h25⟩ => ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13,
-      h14, h15, h16, h17, h18, h19, h20, h21, h22, h23, h24, h25⟩⟩
-
-variable (ir primeNodes) in
-/-- **The MAC of site `st` with its tail at the generators `G`, as a check** (`MacBaseFactsC`). -/
-def macBaseCB (G : Gens) (st : MacSite) : Bool :=
-  decide (ir.MacBaseFactsC (primeNodes := primeNodes) G st)
+variable (ir) in
+/-- **`PReader.digitsMacB` at the program is `digitsMacCB`.** -/
+theorem digitsMacB_ofProgram (G : Gens) (st : MacSite) :
+    @PReader.digitsMacB ir (PReader.ofProgram ir) G st = ir.digitsMacCB G st := by
+  unfold PReader.digitsMacB digitsMacCB
+  rw [Bool.eq_iff_iff, decide_eq_true_iff]
+  simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.not_eq_true', decide_eq_false_iff_not,
+    List.all_eq_true, PReader.ofProgram_nPreds, PReader.ofProgram_nValues,
+    PReader.ofProgram_value, PReader.ofProgram_predicate]
+  constructor
+  · rintro ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩, h10⟩, h11⟩, h12⟩,
+      h13⟩, h14⟩, h15⟩, h16⟩, h17⟩, h18⟩, h19⟩, h20⟩, h21⟩, h22⟩, h23⟩, h24⟩, h25⟩, h26⟩
+    exact ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19,
+        h20, h21, h22, h23, h24, h25, h26⟩
+  · intro h
+    exact ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨h.tailForm, h.two⟩, h.derived⟩, h.accGen⟩, h.accNotSource⟩,
+        h.accLt⟩, h.accLate⟩, h.accField⟩, h.lowGen⟩, h.lowNotSource⟩, h.lowLt⟩, h.lowLate⟩,
+        h.lowField⟩, h.lowSize⟩, h.accSize⟩, h.topLen⟩, h.lNoLate⟩, h.hw⟩, h.conv⟩, h.convFit⟩,
+        h.accMax⟩, h.radixPos⟩, h.radixChar⟩, h.lowRoom⟩, h.topRoom⟩, h.wrapRoom⟩
 
 /-- **`macBaseCB` is sound** (`MacBaseFactsC`). -/
-theorem macBaseFactsC_of_B {G : Gens} {st : MacSite} (h : ir.macBaseCB primeNodes G st = true) :
-    ir.MacBaseFactsC (primeNodes := primeNodes) G st :=
+theorem macBaseFactsC_of_B {G : Gens} {st : MacSite} (h : ir.macBaseCB primeNodes S G st = true) :
+    ir.MacBaseFactsC (primeNodes := primeNodes) S G st :=
   of_decide_eq_true h
 
 namespace MacBaseFactsC
 
-variable {G : Gens} {st : MacSite} (F : ir.MacBaseFactsC (primeNodes := primeNodes) G st)
+variable {G : Gens} {st : MacSite} (F : ir.MacBaseFactsC (primeNodes := primeNodes) S G st)
 include F
 
 /-- **The site's predicate is its cross-field `equal`** (`body_eq_macCross`). -/
@@ -105,7 +102,7 @@ hosted MAC's interval-free shape from the structural checks (`hreal`, `MacHosted
 field, or, where no domain hosts the MAC, its interval-free two-tail shape (`MacTwoCore`) and the
 site's check over a field of odd characteristic. -/
 theorem macFieldCheck (hreal : ir.MacsRealizable primeNodes) :
-    ir.MacFieldCheck primeNodes st.pid (ir.macCross st.pid).dx (ir.macCross st.pid).x
+    ir.MacFieldCheck primeNodes S st.pid (ir.macCross st.pid).dx (ir.macCross st.pid).x
       (ir.macCross st.pid).dy (ir.macCross st.pid).y (ir.macCross st.pid).k
       (ir.macCross st.pid).real (ir.siteDom st) (ir.macCheckOp st) (ir.macBlind st) := by
   have hS := F.side
@@ -132,7 +129,7 @@ theorem macFieldCheck (hreal : ir.MacsRealizable primeNodes) :
     simp only [Bool.and_eq_true] at hS
     obtain ⟨hS, hch⟩ := hS
     have hch' : MacChars ir (ir.macCross st.pid).dx (ir.macCross st.pid).dy := of_decide_eq_true hch
-    have hodd := of_decide_eq_true hS
+    have hodd := macOddFieldOk_of_atB hS
     have hbs : ir.macBlind st = if st.xSide then bx else b := by simp [macBlind, hx, hb]
     cases hxs : st.xSide
     · simp only [hxs, Bool.false_eq_true, ite_false] at hbs
@@ -169,7 +166,7 @@ end MacBaseFactsC
 variable (primeNodes) in
 /-- **The MAC of a MAC site `st` with its tail at the certificate's generators** (`MacBaseC`), from the covered MAC realizations (`hreal`) and the check `macBaseCB`. -/
 def MacBaseC.ofB (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeNodes) {G : Gens}
-    (st : MacSite) (h : ir.macBaseCB primeNodes G st = true) : ir.MacBaseC primeNodes G where
+    (st : MacSite) (h : ir.macBaseCB primeNodes S G st = true) : ir.MacBaseC primeNodes S G where
   pid := st.pid
   dx := (ir.macCross st.pid).dx
   x := (ir.macCross st.pid).x
@@ -204,64 +201,6 @@ def MacBaseC.ofB (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeNodes) {G
   blindCopy := kind_of_isPadCopyB (macBaseFactsC_of_B h).blindCopy
   macChar := (macBaseFactsC_of_B h).macChar
 
-/-- **The facts of the ungrouped digit tail of the MAC of `st`, at the certificate's generators
-`G`** (`DigitsMacC`): the digit form with the digits
-`[low, top]`, the accumulator committing the left side and the top digit derived; the accumulator
-and the lower digit late values of the `y` domain's field of the units' width; the left side reading
-no late value; the convolutions, the accumulator and the radix fitting the characteristic; the
-lookups on the digits and the no-wrap range having room. -/
-structure DigitsMacFactsC (G : Gens) (st : MacSite) : Prop where
-  tailForm : (ir.macTailParts st).real.isDigitsTail = true
-  two : (match (ir.macTailParts st).real.digits with
-      | [.leaf _, _] => true
-      | _ => false) = true
-  accRow : ir.accRowB (ir.siteDom st) (ir.macDigitsAcc st) (ir.macTailParts st).lhs = true
-  derived : ir.topDerivedB (ir.siteDom st) 2 (ir.macTailParts st).rhs
-    (ir.macTailParts st).real (ir.macDigitsAcc st) = true
-  accGen : G.at (ir.macDigitsAcc st) = .digitsAcc (ir.macTail st)
-  accNotSource : ¬ ir.IsSourceValue (ir.macDigitsAcc st)
-  accLt : ir.macDigitsAcc st < ir.values.length
-  accLate : ir.IsLate (ir.macDigitsAcc st)
-  accField : ir.valueField (ir.macDigitsAcc st) = ir.domainField (ir.siteDom st)
-  lowGen : G.at (ir.macLow st) = .lowDigit (ir.macTail st) 0
-  lowNotSource : ¬ ir.IsSourceValue (ir.macLow st)
-  lowLt : ir.macLow st < ir.values.length
-  lowLate : ir.IsLate (ir.macLow st)
-  lowField : ir.valueField (ir.macLow st) = ir.domainField (ir.siteDom st)
-  lowSize : (ir.value (ir.macLow st)).size = (ir.macUnitsAt st).width
-  accSize : (ir.value (ir.macDigitsAcc st)).size = (ir.macUnitsAt st).width
-  topLen : ir.exprLen (ir.macTop st) = (ir.macUnitsAt st).width
-  lNoLate : ∀ v ∈ ir.exprNodes (ir.macTailParts st).lhs, ir.noLateReadB v = true
-  hw : 0 < (ir.macUnitsAt st).width
-  conv : (macConvMax? (ir.macUnitsAt st).width (ir.macUnitsAt st).taps).isSome = true
-  convFit : 2 * (ir.macUnitsAt st).width < ir.charOf (ir.domainField (ir.siteDom st))
-  accMax : 1 + (ir.macUnitsAt st).chunks * ir.macConvMaxAt st <
-      ir.charOf (ir.domainField (ir.siteDom st))
-  radixPos : 0 < (ir.macTailParts st).real.radix
-  radixChar : 2 * (ir.macTailParts st).real.radix < ir.charOf (ir.domainField (ir.siteDom st))
-  lowRoom : ir.digitsRoomB (ir.macLow st) (ir.siteDom st) (ir.macTailParts st).real.radix = true
-  topRoom : ir.topRoomB (ir.macTop st) (ir.siteDom st)
-      ((1 + (ir.macUnitsAt st).chunks * ir.macConvMaxAt st) /
-        (2 * (ir.macTailParts st).real.radix)) = true
-  wrapRoom : ir.wrapRoomB (ir.macWrapExpr st) (ir.siteDom st)
-      (1 + (ir.macUnitsAt st).chunks * ir.macConvMaxAt st) = true
-
-/-- **`DigitsMacFactsC` is decidable**, as the conjunction of its fields. -/
-instance (G : Gens) (st : MacSite) : Decidable (ir.DigitsMacFactsC G st) :=
-  decidable_of_iff (_ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧
-    _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _)
-    ⟨fun ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19,
-      h20, h21, h22, h23, h24, h25, h26, h27⟩ => ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11,
-      h12, h13, h14, h15, h16, h17, h18, h19, h20, h21, h22, h23, h24, h25, h26, h27⟩,
-     fun ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19,
-      h20, h21, h22, h23, h24, h25, h26, h27⟩ => ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11,
-      h12, h13, h14, h15, h16, h17, h18, h19, h20, h21, h22, h23, h24, h25, h26, h27⟩⟩
-
-variable (ir) in
-/-- **The ungrouped digit tail of the MAC of `st` at the generators `G`, as a check**
-(`DigitsMacFactsC`). -/
-def digitsMacCB (G : Gens) (st : MacSite) : Bool := decide (ir.DigitsMacFactsC G st)
-
 /-- **`digitsMacCB` is sound** (`DigitsMacFactsC`). -/
 theorem digitsMacFactsC_of_B {G : Gens} {st : MacSite} (h : ir.digitsMacCB G st = true) :
     ir.DigitsMacFactsC G st :=
@@ -282,8 +221,8 @@ variable (primeNodes) in
 (`DigitsMacC`), from the covered MAC realizations (`hreal`) and the checks
 `macBaseCB` and `digitsMacCB`. -/
 def DigitsMacC.ofB (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeNodes) {G : Gens}
-    (st : MacSite) (h : ir.macBaseCB primeNodes G st = true) (hd : ir.digitsMacCB G st = true) :
-    ir.DigitsMacC primeNodes G where
+    (st : MacSite) (h : ir.macBaseCB primeNodes S G st = true) (hd : ir.digitsMacCB G st = true) :
+    ir.DigitsMacC primeNodes S G where
   toMacBaseC := MacBaseC.ofB primeNodes hwf hreal st h
   acc := ir.macDigitsAcc st
   low := ir.macLow st
@@ -291,7 +230,6 @@ def DigitsMacC.ofB (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeNodes) 
   hdig := (digitsMacFactsC_of_B hd).hdig
   hT := (digitsMacFactsC_of_B hd).tailForm
   hacc := rfl
-  accRow := (digitsMacFactsC_of_B hd).accRow
   derived := (digitsMacFactsC_of_B hd).derived
   accGen := (digitsMacFactsC_of_B hd).accGen
   accNotSource := (digitsMacFactsC_of_B hd).accNotSource
@@ -333,44 +271,6 @@ def DigitsMacC.ofB (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeNodes) 
     rw [convMax_eq_macConvMaxAt (digitsMacFactsC_of_B hd).conv]
     exact wrapRoom_of_B (digitsMacFactsC_of_B hd).wrapRoom
 
-/-- **The facts of the one-digit tail of the MAC of `st`, at the certificate's generators `G`**
-(`OneDigitMacC`): the one-digit form, its quotient derived from the accumulator,
-which commits the left side; the accumulator a late value of the `y` domain's field of the units'
-width; the left side reading no late value; the convolutions and the accumulator fitting the
-characteristic; the lookups on the quotient having room. -/
-structure OneDigitMacFactsC (G : Gens) (st : MacSite) : Prop where
-  tailForm : (ir.macTailParts st).real.isOneDigitTail = true
-  derived : ir.quotDerivedAccB (ir.siteDom st) 2 (ir.macTailParts st).lhs (ir.macTailParts st).rhs
-    (ir.macTailParts st).real = true
-  accGen : G.at (ir.macOneAcc st) = .digitsAcc (ir.macTail st)
-  accNotSource : ¬ ir.IsSourceValue (ir.macOneAcc st)
-  accLt : ir.macOneAcc st < ir.values.length
-  accLate : ir.IsLate (ir.macOneAcc st)
-  accField : ir.valueField (ir.macOneAcc st) = ir.domainField (ir.siteDom st)
-  accSize : (ir.value (ir.macOneAcc st)).size = (ir.macUnitsAt st).width
-  quotLen : ir.exprLen (ir.macTailParts st).real.quotExpr = (ir.macUnitsAt st).width
-  lNoLate : ∀ v ∈ ir.exprNodes (ir.macTailParts st).lhs, ir.noLateReadB v = true
-  hw : 0 < (ir.macUnitsAt st).width
-  conv : (macConvMax? (ir.macUnitsAt st).width (ir.macUnitsAt st).taps).isSome = true
-  convFit : 2 * (ir.macUnitsAt st).width < ir.charOf (ir.domainField (ir.siteDom st))
-  accMax : 1 + (ir.macUnitsAt st).chunks * ir.macConvMaxAt st <
-      ir.charOf (ir.domainField (ir.siteDom st))
-  quotRoom : ir.topRoomB (ir.macTailParts st).real.quotExpr (ir.siteDom st)
-      ((1 + (ir.macUnitsAt st).chunks * ir.macConvMaxAt st) / 2) = true
-
-/-- **`OneDigitMacFactsC` is decidable**, as the conjunction of its fields. -/
-instance (G : Gens) (st : MacSite) : Decidable (ir.OneDigitMacFactsC G st) :=
-  decidable_of_iff (_ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _)
-    ⟨fun ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15⟩ =>
-      ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15⟩,
-     fun ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15⟩ =>
-      ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15⟩⟩
-
-variable (ir) in
-/-- **The one-digit tail of the MAC of `st` at the generators `G`, as a check**
-(`OneDigitMacFactsC`). -/
-def oneDigitMacCB (G : Gens) (st : MacSite) : Bool := decide (ir.OneDigitMacFactsC G st)
-
 /-- **`oneDigitMacCB` is sound** (`OneDigitMacFactsC`). -/
 theorem oneDigitMacFactsC_of_B {G : Gens} {st : MacSite} (h : ir.oneDigitMacCB G st = true) :
     ir.OneDigitMacFactsC G st :=
@@ -381,8 +281,8 @@ variable (primeNodes) in
 (`OneDigitMacC`), from the covered MAC realizations (`hreal`) and the checks
 `macBaseCB` and `oneDigitMacCB`. -/
 def OneDigitMacC.ofB (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeNodes) {G : Gens}
-    (st : MacSite) (h : ir.macBaseCB primeNodes G st = true) (hd : ir.oneDigitMacCB G st = true) :
-    ir.OneDigitMacC primeNodes G where
+    (st : MacSite) (h : ir.macBaseCB primeNodes S G st = true) (hd : ir.oneDigitMacCB G st = true) :
+    ir.OneDigitMacC primeNodes S G where
   toMacBaseC := MacBaseC.ofB primeNodes hwf hreal st h
   acc := ir.macOneAcc st
   hT := (oneDigitMacFactsC_of_B hd).tailForm
@@ -411,61 +311,15 @@ def OneDigitMacC.ofB (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeNodes
     rw [convMax_eq_macConvMaxAt (oneDigitMacFactsC_of_B hd).conv]
     exact topRoom_of_B (oneDigitMacFactsC_of_B hd).quotRoom
 
-/-- **The facts of the grouped tail of the MAC of `st`, at the certificate's generators `G`**
-(`GroupedMacC`): the grouped form, the accumulators
-and the quotient digits leaves, late values of the `y` domain's field; the groups' sums fit the
-digits; the lookups on the digits and the final quotient have room. -/
-structure GroupedMacFactsC (G : Gens) (st : MacSite) : Prop where
-  grouped : (ir.macTailParts st).real.grouped.isSome = true
-  form : ir.GroupedFormOk (ir.honestIvl primeNodes) (ir.siteDom st) 2 (ir.macTailParts st).lhs
-    (ir.macTailParts st).rhs (ir.macTailParts st).real
-  accLeaf : (match (ir.macGrouping st).accumulators with
-      | some (.leaf _) => true
-      | _ => false) = true
-  gqLeaf : (match (ir.macGrouping st).groupDigits with
-      | .leaf _ => true
-      | _ => false) = true
-  accGen : G.at (ir.macGroupAcc st) = .acc (ir.macTail st)
-  accNotSource : ¬ ir.IsSourceValue (ir.macGroupAcc st)
-  accLt : ir.macGroupAcc st < ir.values.length
-  accLate : ir.IsLate (ir.macGroupAcc st)
-  accField : ir.valueField (ir.macGroupAcc st) = ir.domainField (ir.siteDom st)
-  gqGen : G.at (ir.macGroupGq st) = .quotDigit (ir.macTail st)
-  gqNotSource : ¬ ir.IsSourceValue (ir.macGroupGq st)
-  gqLt : ir.macGroupGq st < ir.values.length
-  gqLate : ir.IsLate (ir.macGroupGq st)
-  gqField : ir.valueField (ir.macGroupGq st) = ir.domainField (ir.siteDom st)
-  conv : (macConvMax? (ir.macUnitsAt st).width (ir.macUnitsAt st).taps).isSome = true
-  fit : ∀ fc ∈ (ir.macGrouping st).groups, fc.2 * ir.macConvMaxAt st / 2 <
-      (ir.macGrouping st).base ^ (ir.macGrouping st).digitCount
-  digitsRoom : ir.digitsRoomB (ir.macGroupGq st) (ir.siteDom st) (ir.macGrouping st).base = true
-  finalRoom : ir.finalRoomB (ir.macTailParts st).real.quotExpr (ir.siteDom st)
-      (ir.macGrouping st).groups.length = true
-
-/-- **`GroupedMacFactsC` is decidable**, as the conjunction of its fields. -/
-instance (G : Gens) (st : MacSite) :
-    Decidable (ir.GroupedMacFactsC (primeNodes := primeNodes) G st) :=
-  decidable_of_iff (_ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _)
-    ⟨fun ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18⟩ =>
-      ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18⟩,
-     fun ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18⟩ =>
-      ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18⟩⟩
-
-variable (ir primeNodes) in
-/-- **The grouped tail of the MAC of `st` at the generators `G`, as a check**
-(`GroupedMacFactsC`). -/
-def groupedMacCB (G : Gens) (st : MacSite) : Bool :=
-  decide (ir.GroupedMacFactsC (primeNodes := primeNodes) G st)
-
 /-- **`groupedMacCB` is sound** (`GroupedMacFactsC`). -/
 theorem groupedMacFactsC_of_B {G : Gens} {st : MacSite}
-    (h : ir.groupedMacCB primeNodes G st = true) :
-    ir.GroupedMacFactsC (primeNodes := primeNodes) G st :=
+    (h : ir.groupedMacCB G st = true) :
+    ir.GroupedMacFactsC G st :=
   of_decide_eq_true h
 
 namespace GroupedMacFactsC
 
-variable {G : Gens} {st : MacSite} (F : ir.GroupedMacFactsC (primeNodes := primeNodes) G st)
+variable {G : Gens} {st : MacSite} (F : ir.GroupedMacFactsC G st)
 include F
 
 /-- **The tail's grouping** (`macGrouping`). -/
@@ -498,10 +352,11 @@ variable (primeNodes) in
 (`GroupedMacC`), from the covered MAC realizations (`hreal`) and the checks
 `macBaseCB` and `groupedMacCB`. -/
 def GroupedMacC.ofB (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeNodes) {G : Gens}
-    (st : MacSite) (h : ir.macBaseCB primeNodes G st = true)
-    (hg : ir.groupedMacCB primeNodes G st = true) : ir.GroupedMacC primeNodes G where
+    (st : MacSite) (h : ir.macBaseCB primeNodes S G st = true)
+    (hg : ir.groupedMacCB G st = true) : ir.GroupedMacC primeNodes S G where
   toMacBaseC := MacBaseC.ofB primeNodes hwf hreal st h
-  hgf := (groupedMacFactsC_of_B hg).form
+  core := (groupedMacFactsC_of_B hg).core
+  quotRange := (groupedMacFactsC_of_B hg).quotRange
   Gm := ir.macGrouping st
   hG := (groupedMacFactsC_of_B hg).hG
   acc := ir.macGroupAcc st
@@ -527,39 +382,30 @@ def GroupedMacC.ofB (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeNodes)
   finalRoom := finalRoom_of_B (groupedMacFactsC_of_B hg).finalRoom
 
 variable (ir primeNodes) in
-/-- **The tail of the MAC of `st` at the generators `G`, as a check**: a grouped tail
-(`groupedMacCB`), a one-digit tail (`oneDigitMacCB`) or an ungrouped digit tail (`digitsMacCB`), by
-the tail's form. -/
-def macTailCB (G : Gens) (st : MacSite) : Bool :=
-  if (ir.macTailParts st).real.grouped.isSome then ir.groupedMacCB primeNodes G st
-  else if (ir.macTailParts st).real.isOneDigitTail then ir.oneDigitMacCB G st
-  else ir.digitsMacCB G st
-
-variable (ir primeNodes) in
 /-- **A MAC check over a field with its tail's form, at the certificate's generators**
 (`MacFormC`): a grouped tail (`GroupedMacC`), an ungrouped digit
 tail (`DigitsMacC`) or a one-digit tail (`OneDigitMacC`). -/
-inductive MacFormC (G : Gens) where
+inductive MacFormC (S : Structure) (G : Gens) where
   /-- A MAC with a grouped tail. -/
-  | grouped (M : ir.GroupedMacC primeNodes G)
+  | grouped (M : ir.GroupedMacC primeNodes S G)
   /-- A MAC with an ungrouped digit tail. -/
-  | digits (M : ir.DigitsMacC primeNodes G)
+  | digits (M : ir.DigitsMacC primeNodes S G)
   /-- A MAC with a one-digit tail. -/
-  | oneDigit (M : ir.OneDigitMacC primeNodes G)
+  | oneDigit (M : ir.OneDigitMacC primeNodes S G)
 
 namespace MacFormC
 
 variable {G : Gens}
 
 /-- **The MAC with its tail** (`MacBaseC`). -/
-def base : ir.MacFormC primeNodes G → ir.MacBaseC primeNodes G
+def base : ir.MacFormC primeNodes S G → ir.MacBaseC primeNodes S G
   | .grouped M => M.toMacBaseC
   | .digits M => M.toMacBaseC
   | .oneDigit M => M.toMacBaseC
 
 /-- **The predicates the MAC's honest values satisfy** (`GroupedMacC.Role`, `DigitsMacC.Role`,
 `OneDigitMacC.Role`). -/
-def Role : ir.MacFormC primeNodes G → PredBody → Prop
+def Role : ir.MacFormC primeNodes S G → PredBody → Prop
   | .grouped M, b => M.Role b
   | .digits M, b => M.Role b
   | .oneDigit M, b => M.Role b
@@ -573,7 +419,7 @@ local notation "HE" =>
 
 /-- **The MAC's predicates hold at the honest values** (`Role`; `GroupedMacC.role_holds`,
 `DigitsMacC.role_holds`, `OneDigitMacC.role_holds`), where the source facts hold. -/
-theorem role_holds (M : ir.MacFormC primeNodes G) (hwf : ir.WellFormed) (hI : I.Registered ir)
+theorem role_holds (M : ir.MacFormC primeNodes S G) (hwf : ir.WellFormed) (hI : I.Registered ir)
     (hL : I.Lawful ir primeNodes) (hM : I.MacModel ir) (hB : ir.BlindsArePadCopies)
     (hpow2 : ∀ j < M.base.real.width,
       (I M.base.real.macField).decode (2 ^ j) = (I M.base.real.macField).decode 2 ^ j)
@@ -587,7 +433,7 @@ theorem role_holds (M : ir.MacFormC primeNodes G) (hwf : ir.WellFormed) (hI : I.
 
 /-- **The MAC's honest tag** (`MacTagAt`; `macTagC_honest`) at the honest environment of the
 certificate. -/
-theorem macTag_honest (M : ir.MacFormC primeNodes G) :
+theorem macTag_honest (M : ir.MacFormC primeNodes S G) :
     ir.MacTagAt HE M.base.dx M.base.x M.base.real (castElt ((ir.honestEnv I (stmtOf y) (val y)
         (ir.genLateOf I hgen stmtOf val SL y) c π).chal M.base.real.key 0)) := by
   cases M with
@@ -602,8 +448,8 @@ variable (primeNodes) in
 the ungrouped digit form (`DigitsMacC.ofB`), from the covered MAC realizations (`hreal`) and the
 checks `macBaseCB` and `macTailCB`. -/
 def MacFormC.ofB (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeNodes) {G : Gens}
-    (st : MacSite) (h : ir.macBaseCB primeNodes G st = true)
-    (ht : ir.macTailCB primeNodes G st = true) : ir.MacFormC primeNodes G :=
+    (st : MacSite) (h : ir.macBaseCB primeNodes S G st = true)
+    (ht : ir.macTailCB G st = true) : ir.MacFormC primeNodes S G :=
   if hg : (ir.macTailParts st).real.grouped.isSome = true then
     .grouped (GroupedMacC.ofB primeNodes hwf hreal st h (by
       unfold macTailCB at ht
@@ -620,7 +466,7 @@ def MacFormC.ofB (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeNodes) {G
 section OfB
 
 variable (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeNodes) {G : Gens} {st : MacSite}
-  (h : ir.macBaseCB primeNodes G st = true) (ht : ir.macTailCB primeNodes G st = true) {Inp : Type}
+  (h : ir.macBaseCB primeNodes S G st = true) (ht : ir.macTailCB G st = true) {Inp : Type}
   (hgen : ir.CGenFacts I G) (stmtOf val : Inp → ir.Valuation I) (SL : ir.SrcLate I Inp) (y : Inp)
   (c : ∀ k, (ir.layout I).Ch k) (π : (ir.layout I).Pads)
 
@@ -670,140 +516,160 @@ theorem MacFormC.ofB_macTag_honest :
 end OfB
 
 variable (ir primeNodes) in
-/-- **Predicate `q` is a predicate of the MAC of `st`** (`MacFormC.Role`), as a check: its tail, its
-H predicate, or a predicate of its tail's form (`groupedRoleB`, `oneDigitRoleB`, `digitsRoleB`). -/
-def macRoleCB (st : MacSite) (q : ℕ) : Bool :=
-  q == ir.macTail st || (ir.macCross st.pid).real.hPredicate == some q ||
-    if (ir.macTailParts st).real.grouped.isSome then
-      ir.groupedRoleB primeNodes st (ir.predicateT q).body
-    else if (ir.macTailParts st).real.isOneDigitTail then ir.oneDigitRoleB st (ir.predicateT q).body
-    else ir.digitsRoleB st (ir.predicateT q).body
+/-- **`macRoleAtB` as a check whose failure names the predicate** (`StructReason.macRole`). -/
+def macRoleAtE (S : Structure) (st : MacSite) (role : MacRole) (q : ℕ) :
+    Except StructFailure Unit :=
+  Twin.guardE (ir.macRoleAtB primeNodes S st role q) ⟨q, 0, .macRole⟩
 
-/-- **`groupedRoleB` is sound**: the body `b` is a predicate of the grouped tail of the MAC of `st`
-(`GroupedMacC.Role`). -/
-theorem groupedRoleC_of_B (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeNodes)
-    {G : Gens} {st : MacSite} (h : ir.macBaseCB primeNodes G st = true)
-    (hg : ir.groupedMacCB primeNodes G st = true) {b : PredBody}
-    (hr : ir.groupedRoleB primeNodes st b = true) :
-    (GroupedMacC.ofB primeNodes hwf hreal st h hg).Role b := by
-  unfold groupedRoleB at hr
-  simp only [Bool.or_eq_true, List.any_eq_true, List.mem_range] at hr
-  rcases hr with ((⟨g, hg', hrow⟩ | hres) | hgq) | hfin
-  · exact Or.inr (Or.inl ⟨g, hg', hrow⟩)
-  · refine Or.inr (Or.inr (Or.inl ?_))
-    split at hres
-    · rename_i d R₁ R₂ R₃ tgt
-      simp only [Bool.and_eq_true, beq_iff_eq] at hres
-      obtain ⟨⟨⟨hd, h1⟩, h2⟩, h3⟩ := hres
-      exact ⟨R₁, R₂, R₃, tgt, by rw [hd]; rfl, h1, h2, h3⟩
-    · cases hres
-  · refine Or.inr (Or.inr (Or.inr (Or.inl ?_)))
-    split at hgq
-    · rename_i d g N r
-      simp only [beq_iff_eq] at hgq
-      subst hgq
-      exact ⟨d, N, r, rfl⟩
-    · cases hgq
-  · refine Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ?_))))
-    split at hfin
-    · rename_i d D N r
-      exact ⟨d, D, N, r, rfl, hfin⟩
-    · cases hfin
+theorem okB_macRoleAtE (S : Structure) (st : MacSite) (role : MacRole) (q : ℕ) :
+    Twin.okB (ir.macRoleAtE primeNodes S st role q) = ir.macRoleAtB primeNodes S st role q :=
+  Twin.okB_guardE _ _
 
-/-- **`oneDigitRoleB` is sound**: the body `b` is a predicate of the one-digit tail of the MAC of
-`st` (`OneDigitMacC.Role`). -/
-theorem oneDigitRoleC_of_B (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeNodes)
-    {G : Gens} {st : MacSite} (h : ir.macBaseCB primeNodes G st = true)
-    (hd : ir.oneDigitMacCB G st = true) {b : PredBody} (hr : ir.oneDigitRoleB st b = true) :
-    (OneDigitMacC.ofB primeNodes hwf hreal st h hd).Role b := by
-  unfold oneDigitRoleB at hr
-  simp only [Bool.or_eq_true] at hr
-  rcases hr with hacc | hq
-  · refine Or.inr (Or.inl ?_)
-    split at hacc
-    · rename_i d Lr z tg
-      simp only [Bool.and_eq_true, beq_iff_eq] at hacc
-      obtain ⟨⟨hd', hz⟩, ht⟩ := hacc
-      exact ⟨Lr, z, tg, by rw [hd']; rfl, hz, ht⟩
-    · cases hacc
-  · refine Or.inr (Or.inr (Or.inl ?_))
-    split at hq
-    · rename_i d D N r
-      exact ⟨d, D, N, r, rfl, hq⟩
-    · cases hq
-
-/-- **`digitsRoleB` is sound**: the body `b` is a predicate of the digit tail of the MAC of `st`
-(`DigitsMacC.Role`). -/
-theorem digitsRoleC_of_B (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeNodes)
-    {G : Gens} {st : MacSite} (h : ir.macBaseCB primeNodes G st = true)
-    (hd : ir.digitsMacCB G st = true) {b : PredBody} (hr : ir.digitsRoleB st b = true) :
-    (DigitsMacC.ofB primeNodes hwf hreal st h hd).Role b := by
-  unfold digitsRoleB at hr
-  simp only [Bool.or_eq_true] at hr
-  rcases hr with ((hacc | hlow) | htop) | hwrap
-  · refine Or.inr (Or.inl ?_)
-    split at hacc
-    · rename_i d Lr z tg
-      simp only [Bool.and_eq_true, beq_iff_eq] at hacc
-      obtain ⟨⟨hd', hz⟩, ht⟩ := hacc
-      exact ⟨Lr, z, tg, by rw [hd']; rfl, hz, ht⟩
-    · cases hacc
-  · refine Or.inr (Or.inr (Or.inl ?_))
-    split at hlow
-    · rename_i d l N r
-      simp only [beq_iff_eq] at hlow
-      subst hlow
-      exact ⟨d, N, r, rfl⟩
-    · cases hlow
-  · refine Or.inr (Or.inr (Or.inr (Or.inl ?_)))
-    split at htop
-    · rename_i d D N r
-      exact ⟨d, D, N, r, rfl, htop⟩
-    · cases htop
-  · refine Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ?_))))
-    split at hwrap
-    · rename_i d D N r
-      exact ⟨d, D, N, r, rfl, hwrap⟩
-    · cases hwrap
-
-/-- **`macRoleCB` is sound**: predicate `q` is a predicate of the MAC of `st` (`MacFormC.Role`;
-`groupedRoleC_of_B`, `oneDigitRoleC_of_B`, `digitsRoleC_of_B`). -/
-theorem roleC_of_macRoleCB (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeNodes)
-    {G : Gens} {st : MacSite} {q : ℕ} (h : ir.macBaseCB primeNodes G st = true)
-    (ht : ir.macTailCB primeNodes G st = true) (hr : ir.macRoleCB primeNodes st q = true) :
+/-- **`macRoleAtB` is sound**: predicate `q` is a predicate of the MAC of `st` (`MacFormC.Role`),
+at every role. -/
+theorem roleC_of_macRoleAtB (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeNodes)
+    {G : Gens} {st : MacSite} {role : MacRole} {q : ℕ} (h : ir.macBaseCB primeNodes S G st = true)
+    (ht : ir.macTailCB G st = true) (hr : ir.macRoleAtB primeNodes S st role q = true) :
     (MacFormC.ofB primeNodes hwf hreal st h ht).Role (ir.predicate q).body := by
-  unfold macRoleCB at hr
-  simp only [Bool.or_eq_true, beq_iff_eq, predicateT_eq] at hr
   unfold MacFormC.ofB
   split
   · rename_i hg
-    rcases hr with (rfl | hp) | hr
-    · exact Or.inl rfl
-    · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨q, hp, rfl⟩))))
-    · rw [if_pos hg] at hr
-      exact groupedRoleC_of_B hwf hreal h _ hr
+    show (GroupedMacC.ofB primeNodes hwf hreal st h _).Role _
+    cases role with
+    | tail =>
+      simp only [macRoleAtB, beq_iff_eq] at hr
+      subst hr
+      exact Or.inl rfl
+    | h =>
+      simp only [macRoleAtB, beq_iff_eq] at hr
+      exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨q, hr, rfl⟩))))
+    | groupRow g =>
+      simp only [macRoleAtB, Bool.and_eq_true, decide_eq_true_eq, predicateT_eq] at hr
+      exact Or.inr (Or.inl ⟨g, hr.1.2, hr.2⟩)
+    | residues =>
+      simp only [macRoleAtB, Bool.and_eq_true, predicateT_eq] at hr
+      obtain ⟨-, hres⟩ := hr
+      refine Or.inr (Or.inr (Or.inl ?_))
+      split at hres
+      · rename_i d R₁ R₂ R₃ tgt hb
+        simp only [Bool.and_eq_true, beq_iff_eq] at hres
+        obtain ⟨⟨⟨hd, h1⟩, h2⟩, h3⟩ := hres
+        exact ⟨R₁, R₂, R₃, tgt, by rw [hb, hd]; rfl, h1, h2, h3⟩
+      · cases hres
+    | gqLookup =>
+      simp only [macRoleAtB, Bool.and_eq_true, predicateT_eq] at hr
+      obtain ⟨-, hgq⟩ := hr
+      refine Or.inr (Or.inr (Or.inr (Or.inl ?_)))
+      split at hgq
+      · rename_i d g N r hb
+        simp only [beq_iff_eq] at hgq
+        subst hgq
+        exact ⟨d, N, r, hb⟩
+      · cases hgq
+    | quotLookup =>
+      simp only [macRoleAtB, Bool.and_eq_true, predicateT_eq] at hr
+      obtain ⟨-, hfin⟩ := hr
+      refine Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ?_))))
+      split at hfin
+      · rename_i d D N r hb
+        exact ⟨d, D, N, r, hb, hfin⟩
+      · cases hfin
+    | accRow | lowLookup | topLookup | wrap =>
+      simp [macRoleAtB, hg] at hr
   · rename_i hg
     split
     · rename_i ho
-      rcases hr with (rfl | hp) | hr
-      · exact Or.inl rfl
-      · exact Or.inr (Or.inr (Or.inr ⟨q, hp, rfl⟩))
-      · rw [if_neg hg, if_pos ho] at hr
-        exact oneDigitRoleC_of_B hwf hreal h _ hr
+      show (OneDigitMacC.ofB primeNodes hwf hreal st h _).Role _
+      cases role with
+      | tail =>
+        simp only [macRoleAtB, beq_iff_eq] at hr
+        subst hr
+        exact Or.inl rfl
+      | h =>
+        simp only [macRoleAtB, beq_iff_eq] at hr
+        exact Or.inr (Or.inr (Or.inr ⟨q, hr, rfl⟩))
+      | accRow =>
+        simp only [macRoleAtB, Bool.and_eq_true, predicateT_eq, ho, if_true] at hr
+        obtain ⟨-, hacc⟩ := hr
+        refine Or.inr (Or.inl ?_)
+        split at hacc
+        · rename_i d Lr z tg hb
+          simp only [Bool.and_eq_true, beq_iff_eq] at hacc
+          obtain ⟨⟨hd', hz⟩, ht'⟩ := hacc
+          exact ⟨Lr, z, tg, by rw [hb, hd']; rfl, hz, ht'⟩
+        · cases hacc
+      | quotLookup =>
+        simp only [macRoleAtB, Bool.and_eq_true, predicateT_eq] at hr
+        obtain ⟨-, hq⟩ := hr
+        refine Or.inr (Or.inr (Or.inl ?_))
+        split at hq
+        · rename_i d D N r hb
+          exact ⟨d, D, N, r, hb, hq⟩
+        · cases hq
+      | groupRow _ | residues | gqLookup =>
+        simp [macRoleAtB, hg] at hr
+      | lowLookup | topLookup | wrap =>
+        simp [macRoleAtB, ho] at hr
     · rename_i ho
-      rcases hr with (rfl | hp) | hr
-      · exact Or.inl rfl
-      · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨q, hp, rfl⟩))))
-      · rw [if_neg hg, if_neg ho] at hr
-        exact digitsRoleC_of_B hwf hreal h _ hr
+      show (DigitsMacC.ofB primeNodes hwf hreal st h _).Role _
+      cases role with
+      | tail =>
+        simp only [macRoleAtB, beq_iff_eq] at hr
+        subst hr
+        exact Or.inl rfl
+      | h =>
+        simp only [macRoleAtB, beq_iff_eq] at hr
+        exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨q, hr, rfl⟩))))
+      | accRow =>
+        simp only [macRoleAtB, Bool.and_eq_true, predicateT_eq, ho, Bool.false_eq_true,
+          if_false] at hr
+        obtain ⟨-, hacc⟩ := hr
+        refine Or.inr (Or.inl ?_)
+        split at hacc
+        · rename_i d Lr z tg hb
+          simp only [Bool.and_eq_true, beq_iff_eq] at hacc
+          obtain ⟨⟨hd', hz⟩, ht'⟩ := hacc
+          exact ⟨Lr, z, tg, by rw [hb, hd']; rfl, hz, ht'⟩
+        · cases hacc
+      | lowLookup =>
+        simp only [macRoleAtB, Bool.and_eq_true, predicateT_eq] at hr
+        obtain ⟨-, hlow⟩ := hr
+        refine Or.inr (Or.inr (Or.inl ?_))
+        split at hlow
+        · rename_i d l N r hb
+          simp only [beq_iff_eq] at hlow
+          subst hlow
+          exact ⟨d, N, r, hb⟩
+        · cases hlow
+      | topLookup =>
+        simp only [macRoleAtB, Bool.and_eq_true, predicateT_eq] at hr
+        obtain ⟨-, htop⟩ := hr
+        refine Or.inr (Or.inr (Or.inr (Or.inl ?_)))
+        split at htop
+        · rename_i d D N r hb
+          exact ⟨d, D, N, r, hb, htop⟩
+        · cases htop
+      | wrap =>
+        simp only [macRoleAtB, Bool.and_eq_true, predicateT_eq] at hr
+        obtain ⟨-, hwrap⟩ := hr
+        refine Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ?_))))
+        split at hwrap
+        · rename_i d D N r hb
+          exact ⟨d, D, N, r, hb, hwrap⟩
+        · cases hwrap
+      | groupRow _ | residues | gqLookup =>
+        simp [macRoleAtB, hg] at hr
+      | quotLookup =>
+        simp [macRoleAtB, hg, ho] at hr
 
 /-- **The check `macIvlB` of a site gives its MAC's interval facts** (`macIvlAtB`): the
 cross-field `equal` is a source predicate and the check's operand reads within `[0, 1]` by the
 source values' intervals. -/
 theorem MacBaseC.ofB_ivl (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeNodes) {G : Gens}
-    {st : MacSite} (h : ir.macBaseCB primeNodes G st = true) (hi : ir.macIvlB primeNodes st = true) :
+    {st : MacSite} (h : ir.macBaseCB primeNodes S G st = true)
+    (hi : ir.macIvlB primeNodes S st = true) :
     ir.inSource (ir.predicate (MacBaseC.ofB primeNodes hwf hreal st h).pid) = true ∧
-      IvlWithin (ir.srcIvl (ir.srcLeafIvl primeNodes)
+      IvlWithin (ir.srcIvl (ir.srcLeafIvl primeNodes S)
         (ir.domainField (MacBaseC.ofB primeNodes hwf hreal st h).dy)
         (MacBaseC.ofB primeNodes hwf hreal st h).y) 0 1 := by
   unfold macIvlB macIvlAtB at hi
@@ -812,7 +678,7 @@ theorem MacBaseC.ofB_ivl (hwf : ir.WellFormed) (hreal : ir.MacsRealizable primeN
 
 namespace MacBaseC
 
-variable {G : Gens} (M : ir.MacBaseC primeNodes G)
+variable {G : Gens} (M : ir.MacBaseC primeNodes S G)
 
 /-- **The source facts depend only on the operands' readings**: readers
 agreeing on the `x` operand, the cross-field `equal`'s `y` operand and the check's operand. -/
@@ -847,7 +713,7 @@ holds and reads bits by the agreement on the source values (`SourceAcceptingAt.c
 check's operand's integer reading is its indicator by its interval from the source values' (`hw`,
 `exprIvl_within_of`). -/
 theorem source_srcEnvC (hbd : ir.StmtBounded I x) (hsrc : ir.inSource (ir.predicate M.pid) = true)
-    (hw : IvlWithin (ir.srcIvl (ir.srcLeafIvl primeNodes) (ir.domainField M.dy) M.y) 0 1) :
+    (hw : IvlWithin (ir.srcIvl (ir.srcLeafIvl primeNodes S) (ir.domainField M.dy) M.y) 0 1) :
     M.Source (ir.reader (ir.srcEnvL I x (ir.genCommitted I G x s) (ir.padSpaceLate I l) c π)) := by
   have hsat := sourceSatAt_srcEnvC hwf hI hL R hA π
   have hcb : ir.CrossBitsAt I (ir.srcEnvL I x (ir.genCommitted I G x s) (ir.padSpaceLate I l) c π) :=
@@ -862,7 +728,7 @@ theorem source_srcEnvC (hbd : ir.StmtBounded I x) (hsrc : ir.inSource (ir.predic
   refine ⟨hcr, hx, M.ybits_of hwf hI hL (fun _ _ hk i => reader_of_constant _ hk i) hx hy
     (by have := M.char; omega), fun j hj => ?_⟩
   obtain ⟨⟨h0, h1⟩, hc⟩ := exprIvl_within_of hwf hI hL (ivlFacts_srcEnvC hwf hI hL R hA π hbd)
-    (ir.leafIvl_justified primeNodes ir.declaredRanges) hyok.1 M.char hyok.2 hw hj
+    (ir.ivlTab_justified primeNodes S.ivlTrie ir.declaredRanges) hyok.1 M.char hyok.2 hw hj
   rcases (by omega : ir.evalIntWith (ir.reader (ir.srcEnvL I x (ir.genCommitted I G x s)
       (ir.padSpaceLate I l) c π)) M.dy M.y j = 0 ∨
       ir.evalIntWith (ir.reader (ir.srcEnvL I x (ir.genCommitted I G x s)
@@ -876,7 +742,7 @@ end MacBaseC
 
 namespace MacBaseC
 
-variable {G : Gens} (M : ir.MacBaseC primeNodes G) {Inp : Type} (hG : ir.CGenFacts I G)
+variable {G : Gens} (M : ir.MacBaseC primeNodes S G) {Inp : Type} (hG : ir.CGenFacts I G)
   (stmtOf val : Inp → ir.Valuation I) (SL : ir.SrcLate I Inp) (y : Inp)
   (c : ∀ k, (ir.layout I).Ch k) (π : (ir.layout I).Pads)
   (hwf : ir.WellFormed) (hI : I.Registered ir) (hL : I.Lawful ir primeNodes)
@@ -895,7 +761,7 @@ they read alike at the honest environment (`reader_honestEnvC_srcEnvL_of_noGen`)
 theorem source_honestC (hA : ir.SourceAcceptingAt I (ir.execEnv I (stmtOf y) s l c))
     (hbd : ir.StmtBounded I (stmtOf y)) (hval : val y = ir.genCommitted I G (stmtOf y) s)
     (hSL : SL.late y c = ir.padSpaceLate I l) (hsrc : ir.inSource (ir.predicate M.pid) = true)
-    (hw : IvlWithin (ir.srcIvl (ir.srcLeafIvl primeNodes) (ir.domainField M.dy) M.y) 0 1) :
+    (hw : IvlWithin (ir.srcIvl (ir.srcLeafIvl primeNodes S) (ir.domainField M.dy) M.y) 0 1) :
     M.Source (ir.reader HE) := by
   have hS := M.source_srcEnvC hwf hI hL R hA π hbd hsrc hw
   rw [← hval, ← hSL] at hS
@@ -1126,42 +992,6 @@ theorem tail_honest (hB : ir.BlindsArePadCopies) (hS : M.Source HE) :
 
 end TwoMacC
 
-/-- **The facts of a MAC check over a field of characteristic `2` with its tail, at the
-certificate's generators `G`** (`TwoMacC`): a cross-field `equal` with both blinds, the check's
-facts (`MacTwoFieldOk`), its tail (`macTailTwoB`); the tag late; the operands reading no late value;
-the blind the tag's pad copy; the cross-field `equal` a source predicate. -/
-structure TwoMacFactsC (G : Gens) (st : MacSite) : Prop where
-  lt : st.pid < ir.predicates.length
-  cross : ir.isCrossB st.pid = true
-  blind : (ir.macCross st.pid).real.blind.isSome = true
-  blindX : (ir.macCross st.pid).real.blindX.isSome = true
-  sideOk : ir.MacTwoFieldOk primeNodes st.pid (ir.siteDom st) (ir.siteOp st) (ir.macBlind st)
-    (ir.macCross st.pid).real
-  tail : ir.macTailTwoB st.pid (ir.siteDom st) (ir.siteOp st) (ir.macBlind st)
-    (ir.macCross st.pid).real (ir.twoTail st) = true
-  tagGen : G.at (ir.macCross st.pid).real.tag = .tag st.pid
-  tagNotSource : ¬ ir.IsSourceValue (ir.macCross st.pid).real.tag
-  tagLate : ir.IsLate (ir.macCross st.pid).real.tag
-  xNoLate : ∀ v ∈ ir.exprNodes (ir.macCross st.pid).x, ir.noLateReadB v = true
-  yNoLate : ∀ v ∈ ir.exprNodes (ir.macCross st.pid).y, ir.noLateReadB v = true
-  blindCopy : ir.isPadCopyB (ir.macBlind st) (ir.macCross st.pid).real.tag "polynomialBits" = true
-  source : ir.inSource (ir.predicate st.pid) = true
-  chars : MacChars ir (ir.macCross st.pid).dx (ir.macCross st.pid).dy
-
-/-- **`TwoMacFactsC` is decidable**, as the conjunction of its fields. -/
-instance (G : Gens) (st : MacSite) : Decidable (ir.TwoMacFactsC (primeNodes := primeNodes) G st) :=
-  decidable_of_iff (_ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _)
-    ⟨fun ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14⟩ => ⟨h1, h2, h3, h4, h5, h6,
-      h7, h8, h9, h10, h11, h12, h13, h14⟩,
-     fun ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14⟩ => ⟨h1, h2, h3, h4, h5, h6,
-      h7, h8, h9, h10, h11, h12, h13, h14⟩⟩
-
-variable (ir primeNodes) in
-/-- **A MAC check over a field of characteristic `2` with its tail at the generators `G`, as a
-check** (`TwoMacFactsC`). -/
-def twoMacCB (G : Gens) (st : MacSite) : Bool :=
-  decide (ir.TwoMacFactsC (primeNodes := primeNodes) G st)
-
 /-- **`twoMacCB` is sound** (`TwoMacFactsC`). -/
 theorem twoMacFactsC_of_B {G : Gens} {st : MacSite} (h : ir.twoMacCB primeNodes G st = true) :
     ir.TwoMacFactsC (primeNodes := primeNodes) G st :=
@@ -1197,7 +1027,7 @@ theorem side (hreal : ir.MacsRealizable primeNodes) :
   simp only [macCoreOkB] at hRz
   rw [hx, hb] at hRz
   have hc := MacTwoCore.of_B hRz
-  have hs := F.sideOk
+  have hs := macTwoFieldOk_of_atB F.sideOk
   have hbs : ir.macBlind st = if st.xSide then bx else b := by simp [macBlind, hx, hb]
   cases hxs : st.xSide
   · simp only [hxs, Bool.false_eq_true, ite_false] at hbs

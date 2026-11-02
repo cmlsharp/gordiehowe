@@ -114,6 +114,21 @@ structure Budget (q : ℕ) where
 
 variable {D}
 
+/-- **A budget carries over to a distinguisher with the same kind, initial state and steps**
+(the budget does not read `accept`), with the same invariant. -/
+def Budget.ofSteps {q : ℕ} {D' : Distinguisher W X Y Req A n m} (B : D.Budget q)
+    (hkind : D.kind = D'.kind) (hinit : D.init = D'.init) (hstep : D.step = D'.step) :
+    D'.Budget q where
+  inv := B.inv
+  init hm := by
+    rw [← hstep, ← hinit]
+    exact B.init hm
+  step k hk c b v hv := by
+    rw [← hstep]
+    rw [← hkind] at hv
+    exact B.step k hk c b v hv
+  cap k hk c w hw hk' := B.cap k hk c w hw (by rw [hkind]; exact hk')
+
 end Distinguisher
 
 end GordieHowe.Quantum

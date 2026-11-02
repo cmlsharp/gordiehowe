@@ -154,7 +154,7 @@ variable {ir I}
 theorem lt_of_kind_bits {v w : ℕ} {sel : IndexMap} (hk : (ir.value v).kind = .bits w sel) :
     v < ir.values.length := by
   by_contra h
-  rw [value, List.getD_eq_default _ _ (Nat.le_of_not_lt h)] at hk
+  rw [value_eq_getD, List.getD_eq_default _ _ (Nat.le_of_not_lt h)] at hk
   cases hk
 
 theorem bitViewOk_spec {d v : ℕ} (hv : ir.bitViewOk d v = true) :
@@ -459,11 +459,19 @@ def atomOf (d b : ℕ) : Expr → Bool :=
   | .bits => ir.bitsAtomB d
 
 variable (ir) in
-/-- **The coordinates part `j` occupies** in the batch's instances: its coordinates in whole lanes
-(`OperandMap.lane`). -/
-def partCount (d b j : ℕ) : ℕ :=
-  (ir.partLen d b j + ((ir.batch b).operands.lane - 1)) / (ir.batch b).operands.lane *
-    (ir.batch b).operands.lane
+/-- **The coordinates of batch `b`'s parts** in domain `d`: their coordinates side by side, read in
+one walk of the parts, or, when the batch merges its parts, one part's. -/
+def partsLen (d b : ℕ) : ℕ :=
+  if ir.merged b then ir.partLen d b 0
+  else ((ir.batch b).parts.map fun p => ir.predLen d b (ir.predicate p)).sum
+
+/-- **An unmerged batch's parts' coordinates** are the sum of each part's. -/
+theorem partsLen_of_unmerged {d b : ℕ} (h : ir.merged b = false) :
+    ir.partsLen d b = ∑ j : Fin (ir.batch b).parts.length, ir.partLen d b j := by
+  rw [partsLen, if_neg (by simp [h]), ← List.sum_ofFn]
+  congr 1
+  refine List.ext_getElem (by simp) fun j h1 h2 => ?_
+  simp [partLen_eq_predLen, partPred, List.getD_eq_getElem _ _ (by simpa using h1)]
 
 variable (ir) in
 /-- **Batch `b` is a batch of domain `d` the proof system covers**: of `d`; its parts with forms at
@@ -471,8 +479,9 @@ the operand map's atom test (`PartsOk`: one shape, or merged by its challenge wi
 coordinates), at least two parts when merged; a nonzero degree bounding every part's; an operand map
 on bits only in characteristic two; the characteristic's skip domain (`skipDomainName`: the
 integers, or the embedded bytes in characteristic two) with `D(w − 1) + 1` distinct points
-(`SkipFits`); a nonzero width; the instances the parts' coordinates in whole lanes, side by side or,
-merged, one part's; fitting the rows; the pads the masked skip's at the batch's relation
+(`SkipFits`); a nonzero width; the parts' coordinates (`partsLen`) fitting the instances, `N` lanes
+of `OperandMap.lane` coordinates (the compiler lays the parts out in lanes as its operand map does,
+`BitOperandMap::call_lanes`); the instances fitting the rows; the pads the masked skip's at the batch's relation
 (`(D − 1)(w − 1) + nD + k` and one per product cell, `Shape.cells`). -/
 structure BatchOk (d b : ℕ) : Prop where
   /-- An identifier of the program's batches. -/
@@ -493,10 +502,8 @@ structure BatchOk (d b : ℕ) : Prop where
   skip : SkipFits (ir.batch b).degree (ir.batch b).width (ir.field (ir.domainField d)).characteristic
   /-- The width is nonzero. -/
   width : 0 < (ir.batch b).width
-  /-- The instances are the parts' coordinates in whole lanes. -/
-  instances : (ir.batch b).operands.lane * (ir.batch b).instances =
-    if ir.merged b then ir.partCount d b 0
-    else ((List.range (ir.batch b).parts.length).map (ir.partCount d b)).sum
+  /-- The parts' coordinates fit the instances. -/
+  instances : ir.partsLen d b ≤ (ir.batch b).operands.lane * (ir.batch b).instances
   /-- The instances fit the rows. -/
   rows : (ir.batch b).operands.lane * (ir.batch b).instances ≤
     2 ^ (ir.batch b).rounds * (ir.batch b).width
@@ -520,9 +527,7 @@ def batchOkB (d b : ℕ) : Bool :=
     decide (SkipFits (ir.batch b).degree (ir.batch b).width
       (ir.field (ir.domainField d)).characteristic) &&
     decide (0 < (ir.batch b).width) &&
-    decide ((ir.batch b).operands.lane * (ir.batch b).instances =
-      if ir.merged b then ir.partCount d b 0
-      else ((List.range (ir.batch b).parts.length).map (ir.partCount d b)).sum) &&
+    decide (ir.partsLen d b ≤ (ir.batch b).operands.lane * (ir.batch b).instances) &&
     decide ((ir.batch b).operands.lane * (ir.batch b).instances ≤
       2 ^ (ir.batch b).rounds * (ir.batch b).width) &&
     decide ((ir.batch b).pads = ((ir.batch b).degree - 1) * ((ir.batch b).width - 1) +
@@ -919,7 +924,8 @@ theorem bitsBatchRelation_instance (hz : ir.ZeroDecodes I) {d b : ℕ}
   rw [bitsBatchRelation_Q_cellValuation hb hadd j hs hpf x r a i]
   exact (partForm_eval (leaf := ir.cellValuation I d x r a)
     (ref := ir.refVal (ir.cellValuation I d x r a) ir.exprs.length (ir.domainField d))
-    (rl := ir.refLen ir.exprs.length) (fun _ ha i => eval_cellValuation_zeroLeaf hz ha i) hpf i).symm
+    (rl := ir.refLen ir.exprs.length) (fun _ => rfl)
+    (fun _ ha i => eval_cellValuation_zeroLeaf hz ha i) hpf i).symm
 
 /-- **The batched relation on bits reads the cells through their valuation**: at cells of one
 valuation, it holds at both or at neither. -/

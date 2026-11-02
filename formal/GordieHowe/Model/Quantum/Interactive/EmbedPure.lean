@@ -46,7 +46,7 @@ namespace KindAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] [Nonempty X] [AddGroup Y]
-  [Nonempty Y] (K : KindAlg X Y Req Resp O) (C : Challenger X Y Req Resp)
+  [Nonempty Y] {ksK : KindShape X Y Req Resp} (K : KindAlg ksK O) (C : Challenger X Y Req Resp)
 
 /-- The composed register of `K`'s registers `d` with blank logs, clean challenger registers and
 the coins `c`. -/
@@ -132,21 +132,24 @@ namespace AdaptiveIAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  (A : AdaptiveIAlg X Y Req Resp O)
+  {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O)
+
+/-- **The shape of `core`**: the shape without the budget. -/
+def coreS : KindShape X Y Req Resp where
+  W := A.W
+  width := A.width
+  width_pos := A.width_pos
+  slots := A.slots
+  post := A.post
+  R := A.R
 
 /-- **The kind algorithm of an adversary with run-time kinds**: its fields without the budget
 (`core_toAdaptive`).
 
 Running time: that of `A`; the same registers, Kraus maps and output. This running time is argued
 here, not proved in Lean. -/
-def core : KindAlg X Y Req Resp O where
-  W := A.W
-  width := A.width
-  width_pos := A.width_pos
-  slots := A.slots
-  post := A.post
+def core : KindAlg A.coreS O where
   kind := A.kind
-  R := A.R
   init := A.init
   step := A.step
   out := A.out
@@ -252,13 +255,13 @@ theorem withTestStep_pureAt (T : A.QTest)
     ∃ r₀, (withTestStep T k).PureAt r₀ (A.withTestMat T U V k) := by
   unfold withTestStep withTestMat
   split_ifs with h1 h2
-  · obtain ⟨r, hr⟩ := hU ⟨k, by omega⟩
+  · obtain ⟨r, hr⟩ := hU ⟨k, by shape_omega⟩
     exact ⟨_, (A.liftCopy_pureAt hr).embedIdx (A.embA T.R)⟩
   · obtain ⟨r, hr⟩ := hU lastStep
     obtain ⟨s, hs⟩ := hV 0
     exact ⟨_, ((A.liftCopy_pureAt hs).comp
       ((A.liftCopy_pureAt hr).permConj (Equiv.refl _) A.copyOut)).embedIdx (A.embAT T.R)⟩
-  · obtain ⟨s, hs⟩ := hV ⟨k - (A.slots + A.post), by omega⟩
+  · obtain ⟨s, hs⟩ := hV ⟨k - (A.slots + A.post), by shape_omega⟩
     exact ⟨_, (A.liftCopy_pureAt hs).embedIdx (A.embT T.R)⟩
 
 /-- **The initial state of `A^Π` is pure** when `A`'s is: `A`'s vector with the blank copy. -/

@@ -1,7 +1,8 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 
-// GordieHowe: the Falcon-512 proof of possession, emulated arm. The prover
+// GordieHowe: the Falcon proof of possession of a parameter set S
+// (falcon_params.h: Falcon-512 or Falcon-1024), emulated arm. The prover
 // shows it holds a nonce, a message and s2 such that, for the public key h
 // and c = HashToPoint(nonce || message), s1 = c - s2 h mod q satisfies
 // ||(s1, s2)||^2 <= beta^2 and s2 fits Falcon's compressed encoding.
@@ -13,8 +14,8 @@
 // integer equations with range requests.
 //
 // The relation and magnitude gadgets also serve the Falcon rings, with a
-// committed key (CommittedKey, FalconBounds). The generators' host code is
-// in falcon_emulated_witness.h.
+// committed key (CommittedKey). The generators' host code is in
+// falcon_emulated_witness.h.
 
 #ifndef PRIVACY_PROOFS_ZK_LIB_GORDIEHOWE_EXAMPLES_FALCON_FALCON_EMULATED_H_
 #define PRIVACY_PROOFS_ZK_LIB_GORDIEHOWE_EXAMPLES_FALCON_FALCON_EMULATED_H_
@@ -40,42 +41,19 @@ namespace proofs::gordiehowe::examples::falcon::emulated {
 
 // ------------------------------------------------------------ parameters --
 
-using examples::falcon::kBetaSq;
-using examples::falcon::kBias;
+using examples::falcon::Falcon1024;
+using examples::falcon::Falcon512;
+using examples::falcon::FalconStatement;
+using examples::falcon::FalconWitness;
 using examples::falcon::kCutoff;
-using examples::falcon::kHighBudget;
 using examples::falcon::kLowRadix;
 using examples::falcon::kMagnitudeLimit;
-using examples::falcon::kN;
 using examples::falcon::kNonceBytes;
-using examples::falcon::kOutBytes;
 using examples::falcon::kQ;
-using examples::falcon::kSamples;
-
-// The committed-key relation's bias and its quotient's honest bound n and
-// maximum m, for the field characteristic p, with checked 128-bit
-// integers. The range lowering selects N in [n, m]. The bias is kBias by
-// default; a ring passes its own (FalconRingParams::kBias), whose c is
-// reduced below q.
-struct Interval {
-  Bound honest;
-  Bound max;
-};
-struct FalconBounds {
-  Bound bias = 0;
-  Interval quot;
-  static FalconBounds derive(Bound p, Bound bias = kBias) {
-    const Bound q = kQ;
-    FalconBounds r;
-    r.bias = bias;
-    r.quot = {(2 * bias + q - 1) / q, (p - 1) / q + 1};
-    return r;
-  }
-};
 
 // --------------------------------------------------------------- gadgets --
 
-// The key: the statement member HHAT, 512 NTT coordinates, each
+// The key: the statement member HHAT, n NTT coordinates, each
 // canonical below q (the member's codec: a malformed key fails
 // verification), as Subfield values of A.
 template <class D, class M>
@@ -90,21 +68,18 @@ auto falcon_key(D &A, const In<M> &hhat) {
 }
 
 // FalconDecodeSpectrum: h = INTT(key) over Z_q, the key's coefficients,
-// computed from the statement member HHAT's bytes (each coordinate a
-// little-endian 16-bit integer): a cached statement value bounded by q.
+// computed from the key's NTT coordinates KEY (falcon_key: the statement
+// member HHAT's 16-bit values in A): a cached statement value bounded by
+// q, a function of KEY, so the plan export gives it KEY as its argument.
 // The inverse transform reduces every coefficient mod q, so an honest
 // statement always meets the bound.
-template <class D, class AF, class M>
-Ref<AF, Subfield<>, Public> decode_key(const Scope &s, D &A,
-                                       const In<M> &hhat) {
-  const std::vector<uint64_t> z = falcon_ntt_zetas(kN, kQ);
+template <class S, class D, class AF, class R>
+Ref<AF, Subfield<>, Public> decode_key(const Scope &s, D &A, const R &key) {
+  const std::vector<uint64_t> z = falcon_ntt_zetas(S::kN, kQ);
   return s[A]
-      .pub(Subfield{}, "coefficients", kN, depends_on(hhat),
-           computes("falcon_decode_spectrum", {kN, kQ}),
-           [z](const std::vector<uint8_t> &b) {
-             std::vector<uint64_t> k(b.size() / 2);
-             for (size_t i = 0; i < k.size(); ++i)
-               k[i] = uint64_t(b[2 * i]) | (uint64_t(b[2 * i + 1]) << 8);
+      .pub(Subfield{}, "coefficients", S::kN, depends_on(key),
+           computes("falcon_decode_spectrum", {S::kN, kQ}),
+           [z](const std::vector<uint64_t> &k) {
              return host::decode_spectrum(k, z);
            })
       .cache()
@@ -157,14 +132,14 @@ Lin<AF> challenge_value(const Ref<AF, Subfield<>, P> &c) {
 // roots), derives the quotient's interval and commits it with the
 // relation as one affine row per coefficient. s1 has no range request: the
 // magnitudes bound it. Returns s1.
-template <class D, class AF, class C>
+template <class S, class D, class AF, class C>
 Ref<AF, Subfield<>, Committed> signature_relation(
     const Scope &s, D &A, const PublicKey<AF> &key, const C &c,
     const Ref<AF, Subfield<>, Committed> &s2) {
   using U64s = std::vector<uint64_t>;
-  const U64s z = falcon_ntt_zetas(kN, kQ);
+  const U64s z = falcon_ntt_zetas(S::kN, kQ);
   const auto s1 = s[A].priv(
-      Subfield{}, "s1", kN, depends_on(key.spectrum, c, s2),
+      Subfield{}, "s1", S::kN, depends_on(key.spectrum, c, s2),
       [z](const U64s &k, const Tensor<uint64_t> &cv, const U64s &s2v) {
         return host::s1_of(k, host::challenge_integers(cv), s2v, z);
       });
@@ -174,19 +149,22 @@ Ref<AF, Subfield<>, Committed> signature_relation(
 }
 
 // The signature relation of a committed key (a ring's selected member):
-// s1 = c - s2 h mod q and the quotient, with
-//   bias + c - h s2 - s1 - q quot = 0
-// over the integers (FalconBounds' bias and quotient interval), h s2 as a
-// spectral circuit. s1 has no range request: the magnitudes bound it.
-// Returns s1.
-template <class D, class AF, class C>
+// s1 = c - s2 h mod q, stated as
+//   c - s1 = h s2 (mod q)
+// over the integers, h s2 a spectral product of the key's spectrum. The
+// ring's table selects the spectrum, so h's coefficients lie in the hull
+// of the ring's bounded keys; the assert_mod lowering reads that interval,
+// c's statement bound and s1 and s2 in [0, q] (the magnitudes' roots),
+// derives the quotient's interval and commits it, and states the relation
+// as one spectral circuit. s1 has no range request: the magnitudes bound
+// it. Returns s1.
+template <class S, class D, class AF, class C>
 Ref<AF, Subfield<>, Committed> signature_relation(
     const Scope &s, D &A, const CommittedKey<AF> &key, const C &c,
-    const Ref<AF, Subfield<>, Committed> &s2, const FalconBounds &b) {
+    const Ref<AF, Subfield<>, Committed> &s2) {
   using U64s = std::vector<uint64_t>;
   using Elt = typename AF::Elt;
-  const U64s z = falcon_ntt_zetas(kN, kQ);
-  const uint64_t bias = uint64_t(b.bias);
+  const U64s z = falcon_ntt_zetas(S::kN, kQ);
   const AF *pa = &A.field();
   const auto t = key.ntt.spec->staged;
   const std::vector<size_t> cdims = c.dims();
@@ -209,25 +187,16 @@ Ref<AF, Subfield<>, Committed> signature_relation(
     return out;
   };
   const auto s1 = s[A].priv(
-      Subfield{}, "s1", kN, depends_on(key.spectrum, c, s2),
+      Subfield{}, "s1", S::kN, depends_on(key.spectrum, c, s2),
       [=](const std::vector<Elt> &spec, const std::vector<Elt> &cv,
           const std::vector<Elt> &s2v) {
         U64s hhat = host::key_coefficients(*pa, *t, spec);
         falcon_ntt_ref<kQ>(hhat, z);
         return elts(host::s1_of(hhat, c_ints(cv), ints(s2v), z));
       });
-  const auto quot = s[A].priv(
-      Subfield{}, "quot", kN, depends_on(key.spectrum, c, s2, s1),
-      [=](const std::vector<Elt> &spec, const std::vector<Elt> &cv,
-          const std::vector<Elt> &s2v, const std::vector<Elt> &s1v) {
-        return elts(host::quot_of(host::key_coefficients(*pa, *t, spec),
-                                  c_ints(cv), ints(s2v), ints(s1v), bias));
-      });
-  // Planned change 5 (docs/planned-changes.md): assert_mod, spectral side.
-  ops::assert_spectral(s, "equation",
-                       bias + challenge_value(c) - s1 - kQ * quot,
-                       ops::SpectralProduct(key.spectrum, s2, key.ntt));
-  assert_range(quot, b.quot.honest, MaxBound{b.quot.max}, s.name("quot"));
+  assert_mod(challenge_value(c) - s1,
+             ops::SpectralProduct(key.spectrum, s2, key.ntt), kQ,
+             s.name("equation"));
   return s1;
 }
 
@@ -239,7 +208,7 @@ Ref<AF, Subfield<>, Committed> centered_magnitude(
     const Scope &s, D &A, const Ref<AF, Subfield<>, Committed> &x,
     const std::string &x_name, const std::string &nm, uint64_t limit) {
   const auto mag =
-      s[A].priv(Subfield{}, nm, kN, depends_on(x), host::magnitude);
+      s[A].priv(Subfield{}, nm, x.n, depends_on(x), host::magnitude);
   assert_zero((mag - x) * (mag - (kQ - x)), s.name(x_name));
   assert_range(mag, limit, s.name(nm));
   return mag;
@@ -268,29 +237,41 @@ Magnitudes<AF> magnitudes(const Scope &s, D &A,
 // The encoding budget of Falcon's compressed encoding: the low part
 // low2 = mag2 mod 128, below 128, and mag2 = low2 (mod 128), whose quotient
 // is the high part mag2 / 128; the high parts sum to at most J, stated over
-// the integers as 128 J - sum (mag2 - low2) in [0, 128 J].
-template <class D, class AF>
+// the integers as 128 J - sum (mag2 - low2) in [0, 128 J], which needs
+// |128 J - sum (mag2 - low2)| below the characteristic p (S::kBudgetSpan,
+// a certify note).
+template <class S, class D, class AF>
 void assert_encoding_budget(const Scope &s, D &A,
                             const Ref<AF, Subfield<>, Committed> &mag2) {
+  s.note("certify", "budget.noWrap",
+         term("128 J + n (b - 1)", S::kBudgetSpan) <
+             term("p", field_characteristic(A.field())),
+         A);
   const auto low2 =
-      s[A].priv(Subfield{}, "low2", kN, depends_on(mag2), host::low_of);
+      s[A].priv(Subfield{}, "low2", S::kN, depends_on(mag2), host::low_of);
   assert_range(low2, kLowRadix, s.name("low2"));
   assert_mod(mag2, low2, kLowRadix, s.name("high2"));
-  assert_range(kLowRadix * kHighBudget - mag2.sum() + low2.sum(),
-               kLowRadix * kHighBudget + 1, s.name("budget"));
+  assert_range(kLowRadix * S::kHighBudget - mag2.sum() + low2.sum(),
+               kLowRadix * S::kHighBudget + 1, s.name("budget"));
 }
 
 // The norm: squares = sum mag1^2 + sum mag2^2 (the circuit) and
-// squares <= beta^2.
-template <class D, class AF>
+// squares <= beta^2. The equation holds over the integers when the sum's
+// largest value S::kNormMax (mag1 at most q / 2, mag2 below b) is below
+// the characteristic p (a certify note).
+template <class S, class D, class AF>
 void assert_norm(const Scope &s, D &A,
                  const Ref<AF, Subfield<>, Committed> &mag1,
                  const Ref<AF, Subfield<>, Committed> &mag2) {
+  s.note("certify", "sum.noWrap",
+         term("n floor(q / 2)^2 + n (b - 1)^2", S::kNormMax) <
+             term("p", field_characteristic(A.field())),
+         A);
   const auto squares = s[A].priv(Subfield{}, "squares", 1,
                                    depends_on(mag1, mag2),
                                    host::sum_of_squares);
   assert_zero(squares - (mag1 * mag1).sum() - (mag2 * mag2).sum(), s.name("sum"));
-  assert_range(squares, kBetaSq + 1, s.name("bound"));
+  assert_range(squares, S::kBetaSq + 1, s.name("bound"));
 }
 
 // ---------------------------------------------------------------- system --
@@ -299,40 +280,42 @@ void assert_norm(const Scope &s, D &A,
 // holds its needles in request order, so the gadgets are declared in a
 // fixed order: the signature relation, the magnitudes, the encoding
 // budget, the norm.
-template <class P>
+template <class P, class S>
 void falcon_emulated_relation(typename Env<P>::Sys &cs, const Env<P> &env,
-                              FalconStatement<In> st, FalconWitness<In> w,
-                              size_t max_bytes) {
+                              FalconStatement<S, In> st,
+                              FalconWitness<S, In> w, size_t max_bytes) {
   using AF = typename Env<P>::AF;
-  const auto hash = examples::falcon::falcon_hash_domain(
+  const auto hash = examples::falcon::falcon_hash_domain<S>(
       cs, domain_profile<P>(env.hf, env.rsh), w.nonce, w.message,
       w.msg_length, max_bytes);
   auto &A = cs.domain(domain_profile<P>(env.af, env.rsa.factory()), "A");
   const auto key = falcon_key(A, st.hhat);
   const auto h =
-      decode_key<std::decay_t<decltype(A)>, AF>(cs.scope("key"), A, st.hhat);
+      decode_key<S, std::decay_t<decltype(A)>, AF>(cs.scope("key"), A, key);
   const auto c_A = crossing(cs.scope("crossing"), A, hash.c_H);
   const auto s2 = A.priv(Subfield{}, w.s2);
-  const auto s1 = signature_relation(cs.scope("signature"), A,
-                                     PublicKey<AF>{key, h}, c_A, s2);
+  const auto s1 = signature_relation<S>(cs.scope("signature"), A,
+                                        PublicKey<AF>{key, h}, c_A, s2);
   const auto mag = magnitudes(cs.scope("magnitudes"), A, s1, s2);
-  assert_encoding_budget(cs.scope("encoding"), A, mag.mag2);
-  assert_norm(cs.scope("norm"), A, mag.mag1, mag.mag2);
+  assert_encoding_budget<S>(cs.scope("encoding"), A, mag.mag2);
+  assert_norm<S>(cs.scope("norm"), A, mag.mag1, mag.mag2);
 }
 
-// The relation for messages of at most MAX_BYTES bytes, compiled under
-// BUILD.
-template <class P>
-Relation<FalconStatement<Value>, FalconWitness<Value>> falcon_emulated(
+// The relation of set S for messages of at most MAX_BYTES bytes, compiled
+// under BUILD, named <S::kTag>-emulated-possession.
+template <class P, class S = Falcon512>
+Relation<FalconStatement<S, Value>, FalconWitness<S, Value>> falcon_emulated(
     const Env<P> &env, size_t max_bytes, const BuildOptions &build = {}) {
-  return compile<FalconStatement, FalconWitness>(
+  using I = examples::falcon::FalconInputs<S>;
+  return compile<I::template Statement, I::template Witness>(
       build.profile(compile_profile<P>()),
-      [&env, max_bytes](typename Env<P>::Sys &cs, FalconStatement<In> st,
-                        FalconWitness<In> w) {
-        falcon_emulated_relation<P>(cs, env, st, w, max_bytes);
+      [&env, max_bytes](typename Env<P>::Sys &cs, FalconStatement<S, In> st,
+                        FalconWitness<S, In> w) {
+        falcon_emulated_relation<P, S>(cs, env, st, w, max_bytes);
       },
-      "falcon-emulated-possession", FalconStatement<Value>{},
-      falcon_witness_shape(max_bytes), build.compile);
+      std::string(S::kTag) + "-emulated-possession",
+      FalconStatement<S, Value>{},
+      examples::falcon::falcon_witness_shape<S>(max_bytes), build.compile);
 }
 
 }  // namespace proofs::gordiehowe::examples::falcon::emulated

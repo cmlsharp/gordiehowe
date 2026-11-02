@@ -69,6 +69,31 @@
 // post-quantum mDL's PQMDOC_RUN and the composite's GH_COMPOSITE_RUN time
 // the prepares the same way (fresh_prepare) and carry the same split and
 // GH_DOMAINS lines.
+//
+// The ring split: a ring's bench (Setup::ring_split set) prints after each
+// GH_RUN line
+//   GH_RING_SPLIT ring_p=MS message_p=MS proof_p=MS ring_v=MS message_v=MS
+//                 proof_v=MS prover=MS verify=MS
+// prover is P (witness + PQ_RESULT's commit + prove) and verify PQ_RESULT's
+// verify; each is split into the work that depends on the ring's keys
+// alone (ring_*: a statement that keeps the ring reuses it for every
+// proof), the work that also reads the message (message_*: reused only by
+// proofs of the same message) and the rest (proof_*), so ring + message +
+// proof is the total. A public value's class follows its dependencies
+// (ring < message < proof, the largest of its dependencies'): the
+// statement is the ring's, and the application names the public values
+// that read a message member (RingSplit::message: ML-DSA's mu) or a member
+// that changes with every signature (RingSplit::proof: Falcon's challenge
+// c, which hashes the signature's salt). Constants and public values that
+// read no statement member are the relation's and count with the ring's;
+// challenges and every private value count per proof. The ring's
+// parts are the prepare (setup_p, setup_v: the statement's packing and
+// codecs, which the message member's few bytes share, and its cached
+// public computations, BasicPrepared::setup_node_ms), less any cached
+// computation of another class, plus phase 0's uncached public
+// computations of the ring's class (ProveTimes::public0, inside commit;
+// VerifyTimes::public0, inside the verify() call); the message's parts are
+// the cached and phase-0 computations of the message's class.
 
 #ifndef PRIVACY_PROOFS_ZK_LIB_BENCH_BENCH_HOOK_H_
 #define PRIVACY_PROOFS_ZK_LIB_BENCH_BENCH_HOOK_H_
@@ -79,6 +104,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
+#include <optional>
 #include <regex>
 #include <sstream>
 #include <stdexcept>
@@ -116,12 +142,21 @@ double relation_compile_ms(const T &t) {
   return t.rel.template typed<typename T::Sys>().compile_ms();
 }
 
+// A ring's public values that read a message member (MESSAGE) or a
+// statement member that changes with every signature (PROOF), by node
+// name: the roots of the ring split's classes (see the header).
+struct RingSplit {
+  std::vector<std::string> message, proof;
+};
+
 // The per-statement figures the worker reports once.
 struct Setup {
   const char *config = "";
   const char *profile = "";
   size_t ring = 0;
   double build = 0, compile = 0;
+  // Set for a ring: each run prints its GH_RING_SPLIT line.
+  std::optional<RingSplit> ring_split;
 };
 
 // A JSON object of numbers, strings, booleans and nested objects, keys in
@@ -442,12 +477,81 @@ auto fresh_prepare(const C &cs, const A &statement, double &ms) {
   return prep;
 }
 
+// The ring split's class of each node of CS under SPLIT (see the header):
+// 0 ring, 1 message, 2 proof. Throws when a named root is not a node.
+enum RingClass : uint8_t { kPerRing = 0, kPerMessage = 1, kPerProof = 2 };
+template <class C>
+std::vector<uint8_t> ring_classes(const C &cs, const RingSplit &split) {
+  const auto &N = cs.nodes();
+  // 3: no statement dependency yet.
+  constexpr uint8_t kNone = 3;
+  std::vector<uint8_t> cls(N.size(), kNone);
+  auto named = [](const std::vector<std::string> &names,
+                  const std::string &n) {
+    return std::find(names.begin(), names.end(), n) != names.end();
+  };
+  for (const auto &list : {split.message, split.proof})
+    for (const auto &nm : list)
+      if (std::none_of(N.begin(), N.end(),
+                       [&](const Node &n) { return n.name == nm; }))
+        throw std::runtime_error("ring split: no node named " + nm);
+  // A node's dependencies precede it, except across the pads compile()
+  // allocates; iterate to the fixed point.
+  for (bool changed = true; changed;) {
+    changed = false;
+    for (size_t id = 0; id < N.size(); ++id) {
+      const Node &n = N[id];
+      uint8_t c = kNone;
+      if (n.kind == Kind::kPublicInput) {
+        c = kPerRing;
+      } else if (n.kind == Kind::kConstant ||
+                 n.kind == Kind::kPublicCompute) {
+        for (size_t d : n.deps)
+          if (cls[d] != kNone) c = c == kNone ? cls[d] : std::max(c, cls[d]);
+      } else {
+        c = kPerProof;
+      }
+      if (named(split.message, n.name)) c = c == kPerProof ? c : kPerMessage;
+      if (named(split.proof, n.name)) c = kPerProof;
+      if (c != cls[id]) {
+        cls[id] = c;
+        changed = true;
+      }
+    }
+  }
+  // A constant or public value that reads no statement member is the
+  // relation's: every proof on the ring reuses it.
+  for (auto &c : cls)
+    if (c == kNone) c = kPerRing;
+  return cls;
+}
+
+// One party's ring split: (ring, message) of PREPARE (its prepare's time),
+// its cached computations SETUP and its phase-0 computations PUBLIC0.
+inline std::pair<double, double> ring_parts(
+    const std::vector<uint8_t> &cls, double prepare,
+    const std::vector<std::pair<size_t, double>> &setup,
+    const std::vector<std::pair<size_t, double>> &public0) {
+  double ring = prepare, message = 0;
+  for (const auto &[id, ms] : setup) {
+    if (cls[id] == kPerRing) continue;
+    ring -= ms;
+    if (cls[id] == kPerMessage) message += ms;
+  }
+  for (const auto &[id, ms] : public0) {
+    if (cls[id] == kPerRing) ring += ms;
+    if (cls[id] == kPerMessage) message += ms;
+  }
+  return {ring, message};
+}
+
 // One proof of WITNESS() on CS with its own prepares, its GH_RUN line
-// printed (see the header).
+// printed (see the header), and with SPLIT its GH_RING_SPLIT line.
 template <class S, class Witness>
 bench::RunResult prove_once(const BasicCompiledSystem<S> &cs,
                             const BasicAssignment<S> &statement,
-                            Witness &witness, SecureRandomEngine &rng) {
+                            Witness &witness, SecureRandomEngine &rng,
+                            const RingSplit *split = nullptr) {
   const auto ta = Clock::now();
   const auto w = witness();
   const double assemble = ms_since(ta);
@@ -459,13 +563,16 @@ bench::RunResult prove_once(const BasicCompiledSystem<S> &cs,
   opt.domain_bytes = &sections;
   bench::RunResult r;
   double setup_p = 0, setup_v = 0;
+  std::vector<std::pair<size_t, double>> nodes_p, nodes_v;
   std::vector<uint8_t> proof;
   {
     const auto prep = fresh_prepare(cs, statement, setup_p);
+    nodes_p = prep.setup_node_ms();
     proof = prep.prove(w, rng, opt);
   }
   {
     const auto prep = fresh_prepare(cs, statement, setup_v);
+    nodes_v = prep.setup_node_ms();
     const auto t0 = Clock::now();
     r.ok = prep.verify(proof, &vt, opt.multithreaded);
     r.verify_ms = setup_v + ms_since(t0);
@@ -484,6 +591,20 @@ bench::RunResult prove_once(const BasicCompiledSystem<S> &cs,
                                    r.verify_ms)
                           .c_str());
   std::printf("\n");
+  if (split != nullptr) {
+    const auto cls = ring_classes(cs, *split);
+    const double prover = assemble + pt.witness + r.commit_ms + r.prove_ms;
+    const auto [ring_p, message_p] =
+        ring_parts(cls, setup_p, nodes_p, pt.public0);
+    const auto [ring_v, message_v] =
+        ring_parts(cls, setup_v, nodes_v, vt.public0);
+    std::printf("GH_RING_SPLIT ring_p=%.3f message_p=%.3f proof_p=%.3f "
+                "ring_v=%.3f message_v=%.3f proof_v=%.3f prover=%.3f "
+                "verify=%.3f\n",
+                ring_p, message_p, prover - ring_p - message_p, ring_v,
+                message_v, r.verify_ms - ring_v - message_v, prover,
+                r.verify_ms);
+  }
   return r;
 }
 
@@ -500,8 +621,10 @@ void serve(const BasicCompiledSystem<S> &cs,
     print_params(cs, su, opts, prepare, prep.setup_ms());
   }
   SecureRandomEngine rng;
-  bench::serve(kOptimizations,
-               [&]() { return prove_once(cs, statement, witness, rng); });
+  const RingSplit *split = su.ring_split ? &*su.ring_split : nullptr;
+  bench::serve(kOptimizations, [&]() {
+    return prove_once(cs, statement, witness, rng, split);
+  });
 }
 
 // The same records without report_bench: GH_SETUP, then REPS proofs, each
@@ -518,9 +641,11 @@ bool run(const BasicCompiledSystem<S> &cs,
     print_params(cs, su, opts, prepare, prep.setup_ms());
   }
   SecureRandomEngine rng;
+  const RingSplit *split = su.ring_split ? &*su.ring_split : nullptr;
   bool ok = true;
   for (size_t i = 0; i < reps; ++i) {
-    const bench::RunResult r = prove_once(cs, statement, witness, rng);
+    const bench::RunResult r =
+        prove_once(cs, statement, witness, rng, split);
     std::printf("PQ_RESULT %.17g %.17g %.17g %zu %d\n", r.commit_ms,
                 r.prove_ms, r.verify_ms, r.proof_bytes, r.ok);
     std::fflush(stdout);

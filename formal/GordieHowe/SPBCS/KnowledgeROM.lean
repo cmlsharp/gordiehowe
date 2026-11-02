@@ -4,7 +4,7 @@
 module
 
 public import GordieHowe.SPBCS.Knowledge
-public import GordieHowe.SPBCS.FullPast.Verifier
+public import GordieHowe.SPBCS.Extractor
 public import GordieHowe.SPBCS.Extraction.KnowledgeError
 public import GordieHowe.Model.QROM.QueryBits
 public import GordieHowe.Model.QROM.QueryCount

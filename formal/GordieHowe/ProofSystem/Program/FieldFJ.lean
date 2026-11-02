@@ -19,7 +19,10 @@ parts (label, statement codec, branch names, the phases' codecs and readers) and
 field codec (`GordieHowe.RealizedProgram.FieldCodec`) and size bounds (`GordieHowe.RealizedProgram.ForkFits`):
 
 * **the transcript** (`GordieHowe.RealizedProgram.ProofSystem.fieldForkTranscript`): every domain's commit rounds, branches, join
-  and leaves by `FieldForkCodecs`;
+  and leaves by `FieldForkCodecs`, and a declared largest grant;
+* **the largest grant** (`GordieHowe.RealizedProgram.ProofSystem.sup_fieldForkTranscript_maxGrant`): when the fields' readers
+  grant nothing, the commit rounds and the branches grant nothing, so the largest grant of a round is
+  the application phase's and the joins' (`GordieHowe.RealizedProgram.ProofSystem.fieldForkGrant`), read off the plan;
 * **the loads** (`GordieHowe.RealizedProgram.ProofSystem.fieldForkLoads`): every round's load within its domain's `forkLoad`, the
   phases' given;
 * **the round errors** (`GordieHowe.RealizedProgram.ProofSystem.fieldForkError_le`): every domain's commit rounds within its
@@ -50,6 +53,39 @@ theorem readersOf_allGranted {rr : ∀ d, SpecReaders (C.circuit d).commitRounds
       (SpecReaders.AllGranted.append (SpecReaders.AllGranted.appendN C.m hr) happ)
   | .br d b => hbr d b
   | .jn d => hjn d
+
+/-- **The largest grant of a round of any component** is the application phase's and the join
+parts' when the domains' commit rounds and the branches grant nothing. -/
+theorem sup_readersOf_maxGrant {rr : ∀ d, SpecReaders (C.circuit d).commitRounds}
+    {rApp : SpecReaders C.app.spec} {rbr : ∀ d b, SpecReaders ((C.circuit d).branch b)}
+    {rjn : ∀ d, SpecReaders (C.circuit d).join} (hr : ∀ d, (rr d).Ungranted)
+    (hbr : ∀ d b, (rbr d b).Ungranted) :
+    Finset.univ.sup (fun q : C.term.Leaf => (C.readersOf rr rApp rbr rjn q.label).maxGrant) =
+      max rApp.maxGrant (Finset.univ.sup fun d => (rjn d).maxGrant) := by
+  have h0 : ∀ x : SpecReaders (commitSpec C.Com), x.maxGrant = 0 := fun x =>
+    SpecReaders.Ungranted.maxGrant_eq fun c => (commitSpec.not_challengeIdx c).elim
+  have hpre : (C.readersOf rr rApp rbr rjn .pre).maxGrant = rApp.maxGrant := by
+    change (((fun c => (commitSpec.not_challengeIdx c).elim : SpecReaders (commitSpec C.Com))) ++
+      (SpecReaders.appendN C.m rr ++ rApp)).maxGrant = _
+    rw [SpecReaders.maxGrant_append, SpecReaders.maxGrant_append, h0,
+      SpecReaders.Ungranted.maxGrant_eq (SpecReaders.AllGranted.appendN C.m hr)]
+    simp
+  have hleaf : ∀ j, (C.readersOf rr rApp rbr rjn j).maxGrant ≤
+      Finset.univ.sup (fun q : C.term.Leaf => (C.readersOf rr rApp rbr rjn q.label).maxGrant) := by
+    intro j
+    have h := Finset.le_sup (f := fun q : C.term.Leaf => (C.readersOf rr rApp rbr rjn q.label).maxGrant)
+      (Finset.mem_univ (Shape.leafOf (S := C.shape) j))
+    rwa [Shape.label_leafOf] at h
+  refine le_antisymm (Finset.sup_le fun q _ => ?_) (max_le ?_ (Finset.sup_le fun d _ => ?_))
+  · generalize q.label = j
+    match j with
+    | .pre => exact hpre.le.trans (le_max_left _ _)
+    | .br d b => exact ((hbr d b).maxGrant_eq).le.trans (Nat.zero_le _)
+    | .jn d =>
+      exact le_trans (Finset.le_sup (f := fun d => (rjn d).maxGrant) (Finset.mem_univ d))
+        (le_max_right _ _)
+  · exact hpre.symm.le.trans (hleaf .pre)
+  · exact hleaf (.jn d)
 
 end GordieHowe.RealizedProgram.ProofSystem.IOP
 
@@ -231,7 +267,7 @@ variable {P : Export.Plan} {ir : RealizedProgram} {I : Interp} (B : ir.ProofSyst
   (R : ∀ d : Fin ir.domains.length, ir.FieldReady I d P) {W Stmt : Type}
   {rel : Set (ir.Valuation I × W)}
   (Lw : Lowering (ir.layout I) (Constraint.guard (ir.stmtOk I) (Constraint.ofRel rel))
-    (GordieHowe.Domain.lowered (B.withFieldProofs R).guardedDomain))
+    (GordieHowe.Domain.lowered (B.withFieldProofs R).domains))
   (f : Stmt → ir.Valuation I) (cod : ∀ d : Fin ir.domains.length, FieldCodec (I (ir.domainField d)))
   (fits : ∀ d : Fin ir.domains.length, ForkFits B.src (R d) (cod d))
 
@@ -243,7 +279,7 @@ abbrev fieldIop := ((B.fieldBranches R).iopOf Lw).comap f
 def fieldForkTranscript (label : List Byte) (k : ℕ) (stmt : Codec Stmt)
     (name : (Σ d : Fin (B.fieldIop R Lw f).m, Fin ((B.fieldIop R Lw f).circuit d).nb) → List Byte)
     (appWrites : SpecWrites (B.fieldIop R Lw f).app.spec (2 ^ 20))
-    (appReaders : SpecReaders (B.fieldIop R Lw f).app.spec) :
+    (appReaders : SpecReaders (B.fieldIop R Lw f).app.spec) (maxGrant : ℕ) :
     ProofSystemTranscript (B.fieldIop R Lw f) where
   label := label
   k := k
@@ -258,16 +294,39 @@ def fieldForkTranscript (label : List Byte) (k : ℕ) (stmt : Codec Stmt)
   appReaders := appReaders
   branchReaders d b := forkBranchReaders B.src (R d) (cod d).rd b
   joinReaders d := forkJoinReaders B.src (R d) (cod d).rd (fits d).grants
+  maxGrant := maxGrant
+
+/-- **The largest grant of the transcript on the generic per-field domain proofs** at the joins'
+grants `g`: the application phase's readers' and every domain's join's (`forkJoinGrant`). -/
+def fieldForkGrant (g : Fin ir.domains.length → ForkGrants) {n : ℕ} {Q : ProtocolSpec n}
+    (appReaders : SpecReaders Q) : ℕ :=
+  max appReaders.maxGrant (Finset.univ.sup fun d => forkJoinGrant (R d) (g d))
+
+/-- **The largest grant of a round of the transcript** is `fieldForkGrant` when the fields'
+readers grant nothing: the commit rounds and the branches grant nothing
+(`IOP.sup_readersOf_maxGrant`). -/
+theorem sup_fieldForkTranscript_maxGrant (hrd : ∀ d, (cod d).rd.grant = 0) {label : List Byte}
+    {k : ℕ} {stmt : Codec Stmt}
+    {name : (Σ d : Fin (B.fieldIop R Lw f).m, Fin ((B.fieldIop R Lw f).circuit d).nb) → List Byte}
+    {appWrites : SpecWrites (B.fieldIop R Lw f).app.spec (2 ^ 20)}
+    {appReaders : SpecReaders (B.fieldIop R Lw f).app.spec} {mg : ℕ} :
+    Finset.univ.sup (fun q : (B.fieldIop R Lw f).term.Leaf => ((B.fieldForkTranscript R Lw f cod fits
+      label k stmt name appWrites appReaders mg).readers q.label).maxGrant) =
+      fieldForkGrant R (fun d => (fits d).grants) appReaders :=
+  ((B.fieldIop R Lw f).sup_readersOf_maxGrant (fun d => forkCommitReaders_ungranted (hrd d))
+    (fun d b => forkBranchReaders_ungranted (hrd d) b)).trans
+    (congrArg (max _) (Finset.sup_congr rfl fun d _ => maxGrant_forkJoinReaders (hrd d) _))
 
 /-- **Every round's load satisfies `good`** when every load within its domain's `forkLoad` does and
 the phases' readers' loads do. -/
 theorem fieldForkLoads {label : List Byte} {k : ℕ} {stmt : Codec Stmt}
     {name : (Σ d : Fin (B.fieldIop R Lw f).m, Fin ((B.fieldIop R Lw f).circuit d).nb) → List Byte}
     {appWrites : SpecWrites (B.fieldIop R Lw f).app.spec (2 ^ 20)}
-    {appReaders : SpecReaders (B.fieldIop R Lw f).app.spec} {good : Load → Prop}
+    {appReaders : SpecReaders (B.fieldIop R Lw f).app.spec} {mg : ℕ} {good : Load → Prop}
     (hgood : ∀ d L, L ≤ forkLoad B.src (R d) (cod d).rd (fits d).Lmax → good L)
     (happ : appReaders.AllLoads good) :
-    ∀ j, ((B.fieldForkTranscript R Lw f cod fits label k stmt name appWrites appReaders).readers j).AllLoads
+    ∀ j, ((B.fieldForkTranscript R Lw f cod fits label k stmt name appWrites appReaders
+      mg).readers j).AllLoads
       good :=
   (B.fieldIop R Lw f).readersOf_allLoads
     (fun d => (forkCommitReaders_allLoads (cod d).rd (fits d).loads.rest).mono fun _ h => hgood d _ h)
@@ -282,7 +341,7 @@ claim count, and the phases' readers do. -/
 theorem fieldForkLoadsGranted {label : List Byte} {k : ℕ} {stmt : Codec Stmt}
     {name : (Σ d : Fin (B.fieldIop R Lw f).m, Fin ((B.fieldIop R Lw f).circuit d).nb) → List Byte}
     {appWrites : SpecWrites (B.fieldIop R Lw f).app.spec (2 ^ 20)}
-    {appReaders : SpecReaders (B.fieldIop R Lw f).app.spec} {good : ℕ → Load → Prop}
+    {appReaders : SpecReaders (B.fieldIop R Lw f).app.spec} {mg : ℕ} {good : ℕ → Load → Prop}
     (hg : ∀ g L, good 0 L → good g L) {Lr : Fin ir.domains.length → ℕ}
     (hLr : ∀ d, ForkRestSizesLe B.src (R d) (Lr d))
     (hrest : ∀ d L, L ≤ forkLoad B.src (R d) (cod d).rd (Lr d) → good 0 L)
@@ -290,7 +349,8 @@ theorem fieldForkLoadsGranted {label : List Byte} {k : ℕ} {stmt : Codec Stmt}
       good ((CReader.pi n (cod d).rd).extend ((fits d).grants.stage 0)).grant
         ((cod d).rd.load.nsmul n))
     (happ : appReaders.AllGranted good) :
-    ∀ j, ((B.fieldForkTranscript R Lw f cod fits label k stmt name appWrites appReaders).readers j).AllGranted
+    ∀ j, ((B.fieldForkTranscript R Lw f cod fits label k stmt name appWrites appReaders
+      mg).readers j).AllGranted
       good :=
   (B.fieldIop R Lw f).readersOf_allGranted
     (fun d => SpecReaders.AllGranted.of_allLoads hg
@@ -313,7 +373,7 @@ def fieldForkTranscriptWith (chk : Stmt → Bool) (label : List Byte) (k : ℕ)
     (name : (Σ d : Fin (B.fieldIopWith R Lw f chk).m, Fin ((B.fieldIopWith R Lw f chk).circuit d).nb) →
       List Byte)
     (appWrites : SpecWrites (B.fieldIopWith R Lw f chk).app.spec (2 ^ 20))
-    (appReaders : SpecReaders (B.fieldIopWith R Lw f chk).app.spec) :
+    (appReaders : SpecReaders (B.fieldIopWith R Lw f chk).app.spec) (maxGrant : ℕ) :
     ProofSystemTranscript (B.fieldIopWith R Lw f chk) where
   label := label
   k := k
@@ -328,17 +388,34 @@ def fieldForkTranscriptWith (chk : Stmt → Bool) (label : List Byte) (k : ℕ)
   appReaders := appReaders
   branchReaders d b := forkBranchReaders B.src (R d) (cod d).rd b
   joinReaders d := forkJoinReaders B.src (R d) (cod d).rd (fits d).grants
+  maxGrant := maxGrant
+
+/-- **The largest grant of a round of `fieldForkTranscriptWith`** (as
+`sup_fieldForkTranscript_maxGrant`). -/
+theorem sup_fieldForkTranscriptWith_maxGrant (hrd : ∀ d, (cod d).rd.grant = 0)
+    {chk : Stmt → Bool} {label : List Byte} {k : ℕ} {stmt : Codec Stmt}
+    {name : (Σ d : Fin (B.fieldIopWith R Lw f chk).m, Fin ((B.fieldIopWith R Lw f chk).circuit d).nb) →
+      List Byte}
+    {appWrites : SpecWrites (B.fieldIopWith R Lw f chk).app.spec (2 ^ 20)}
+    {appReaders : SpecReaders (B.fieldIopWith R Lw f chk).app.spec} {mg : ℕ} :
+    Finset.univ.sup (fun q : (B.fieldIopWith R Lw f chk).term.Leaf =>
+      ((B.fieldForkTranscriptWith R Lw f cod fits chk label k stmt name appWrites appReaders
+        mg).readers q.label).maxGrant) =
+      fieldForkGrant R (fun d => (fits d).grants) appReaders :=
+  ((B.fieldIopWith R Lw f chk).sup_readersOf_maxGrant (fun d => forkCommitReaders_ungranted (hrd d))
+    (fun d b => forkBranchReaders_ungranted (hrd d) b)).trans
+    (congrArg (max _) (Finset.sup_congr rfl fun d _ => maxGrant_forkJoinReaders (hrd d) _))
 
 /-- **Every round's load of `fieldForkTranscriptWith` satisfies `good`** (as `fieldForkLoads`). -/
 theorem fieldForkLoadsWith {chk : Stmt → Bool} {label : List Byte} {k : ℕ} {stmt : Codec Stmt}
     {name : (Σ d : Fin (B.fieldIopWith R Lw f chk).m, Fin ((B.fieldIopWith R Lw f chk).circuit d).nb) →
       List Byte}
     {appWrites : SpecWrites (B.fieldIopWith R Lw f chk).app.spec (2 ^ 20)}
-    {appReaders : SpecReaders (B.fieldIopWith R Lw f chk).app.spec} {good : Load → Prop}
+    {appReaders : SpecReaders (B.fieldIopWith R Lw f chk).app.spec} {mg : ℕ} {good : Load → Prop}
     (hgood : ∀ d L, L ≤ forkLoad B.src (R d) (cod d).rd (fits d).Lmax → good L)
     (happ : appReaders.AllLoads good) :
     ∀ j, ((B.fieldForkTranscriptWith R Lw f cod fits chk label k stmt name appWrites
-      appReaders).readers j).AllLoads good :=
+      appReaders mg).readers j).AllLoads good :=
   (B.fieldIopWith R Lw f chk).readersOf_allLoads
     (fun d => (forkCommitReaders_allLoads (cod d).rd (fits d).loads.rest).mono fun _ h => hgood d _ h)
     happ
@@ -352,7 +429,7 @@ theorem fieldForkLoadsGrantedWith {chk : Stmt → Bool} {label : List Byte} {k :
     {name : (Σ d : Fin (B.fieldIopWith R Lw f chk).m, Fin ((B.fieldIopWith R Lw f chk).circuit d).nb) →
       List Byte}
     {appWrites : SpecWrites (B.fieldIopWith R Lw f chk).app.spec (2 ^ 20)}
-    {appReaders : SpecReaders (B.fieldIopWith R Lw f chk).app.spec} {good : ℕ → Load → Prop}
+    {appReaders : SpecReaders (B.fieldIopWith R Lw f chk).app.spec} {mg : ℕ} {good : ℕ → Load → Prop}
     (hg : ∀ g L, good 0 L → good g L) {Lr : Fin ir.domains.length → ℕ}
     (hLr : ∀ d, ForkRestSizesLe B.src (R d) (Lr d))
     (hrest : ∀ d L, L ≤ forkLoad B.src (R d) (cod d).rd (Lr d) → good 0 L)
@@ -361,7 +438,7 @@ theorem fieldForkLoadsGrantedWith {chk : Stmt → Bool} {label : List Byte} {k :
         ((cod d).rd.load.nsmul n))
     (happ : appReaders.AllGranted good) :
     ∀ j, ((B.fieldForkTranscriptWith R Lw f cod fits chk label k stmt name appWrites
-      appReaders).readers j).AllGranted good :=
+      appReaders mg).readers j).AllGranted good :=
   (B.fieldIopWith R Lw f chk).readersOf_allGranted
     (fun d => SpecReaders.AllGranted.of_allLoads hg
       ((forkCommitReaders_allLoads (cod d).rd (hLr d)).mono (hrest d)))
@@ -383,12 +460,11 @@ rounds within `max 3 (2 · gkrWidth)/|K|` each (`branchError_le`), the join's co
 (`RingSwitching.TreeFieldProof.error_le_of`); and the phases' given. -/
 theorem fieldForkError_le [Inhabited W] {proj : ir.Valuation I → ir.Assignment I → W}
     {S : KnowledgeStateFunction (ir.sourceVerifier I)} {ε : (ir.sourceSpec I).ChallengeIdx → ℝ≥0}
-    (T : (B.withFieldProofs R).CircuitsEnforce)
     (h : rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
     (hend : ∀ i, ir.rounds.get i.1 = .final → ε i = 0) {δ : ℝ≥0}
     (hk : ∀ d : Fin ir.domains.length, ir.FieldRoundsLe (R d) δ)
-    (happ : ∀ j, ((B.fieldBranches R).soundIOPSound (B.fieldBranchesSound R) T h hend).εapp j ≤ δ) :
-    ∀ c, (((B.fieldBranches R).soundIOPSound (B.fieldBranchesSound R) T h hend).comap f).error c ≤ δ := by
+    (happ : ∀ j, ((B.fieldBranches R).soundIOPSound (B.fieldBranchesSound R) h hend).εapp j ≤ δ) :
+    ∀ c, (((B.fieldBranches R).soundIOPSound (B.fieldBranchesSound R) h hend).comap f).error c ≤ δ := by
   have single : ∀ {ι : Type} [Fintype ι] (g : ι → ℝ≥0) (j : ι), g j ≤ ∑ i, g i := fun g j =>
     Finset.single_le_sum (f := g) (fun _ _ => zero_le) (Finset.mem_univ j)
   refine IOP.Sound.error_le _ (fun d j => ?_) happ (fun d b j => ?_) (fun d j => ?_)
@@ -397,7 +473,7 @@ theorem fieldForkError_le [Inhabited W] {proj : ir.Valuation I → ir.Assignment
       (congrArg Ligero.AgreementThreshold.Bounds.commit
         (Ligero.MaskRow.TreeLayout.Numbers.bounds_setup ..))
     exact (single _ j).trans (hsum.trans_le (hk d).commit)
-  · exact ir.branchError_le B.src (R d).rs T (hk d).batches (hk d).gkr _ j
+  · exact ir.branchError_le B.src (R d).rs B.enforce (hk d).batches (hk d).gkr _ j
   · refine (ir.fieldFork B.src (R d)).join.error_le_of
       (Rel := (ir.fieldForkSound B.src (R d)).joinRel) (ir.fieldForkSound B.src (R d)).joinSound
       ?_ ((congrArg Ligero.AgreementThreshold.Bounds.test
@@ -415,12 +491,11 @@ theorem fieldForkError_le [Inhabited W] {proj : ir.Valuation I → ir.Assignment
 /-- **Every round of the composite read through `f` and checked** (as `fieldForkError_le`). -/
 theorem fieldForkErrorWith_le [Inhabited W] {chk : Stmt → Bool} {proj : ir.Valuation I → ir.Assignment I → W}
     {S : KnowledgeStateFunction (ir.sourceVerifier I)} {ε : (ir.sourceSpec I).ChallengeIdx → ℝ≥0}
-    (T : (B.withFieldProofs R).CircuitsEnforce)
     (h : rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
     (hend : ∀ i, ir.rounds.get i.1 = .final → ε i = 0) {δ : ℝ≥0}
     (hk : ∀ d : Fin ir.domains.length, ir.FieldRoundsLe (R d) δ)
-    (happ : ∀ j, ((B.fieldBranches R).soundIOPSound (B.fieldBranchesSound R) T h hend).εapp j ≤ δ) :
-    ∀ c, (((B.fieldBranches R).soundIOPSound (B.fieldBranchesSound R) T h hend).comapWith f chk).error c ≤ δ := by
+    (happ : ∀ j, ((B.fieldBranches R).soundIOPSound (B.fieldBranchesSound R) h hend).εapp j ≤ δ) :
+    ∀ c, (((B.fieldBranches R).soundIOPSound (B.fieldBranchesSound R) h hend).comapWith f chk).error c ≤ δ := by
   have single : ∀ {ι : Type} [Fintype ι] (g : ι → ℝ≥0) (j : ι), g j ≤ ∑ i, g i := fun g j =>
     Finset.single_le_sum (f := g) (fun _ _ => zero_le) (Finset.mem_univ j)
   refine IOP.Sound.error_le _ (fun d j => ?_) happ (fun d b j => ?_) (fun d j => ?_)
@@ -429,7 +504,7 @@ theorem fieldForkErrorWith_le [Inhabited W] {chk : Stmt → Bool} {proj : ir.Val
       (congrArg Ligero.AgreementThreshold.Bounds.commit
         (Ligero.MaskRow.TreeLayout.Numbers.bounds_setup ..))
     exact (single _ j).trans (hsum.trans_le (hk d).commit)
-  · exact ir.branchError_le B.src (R d).rs T (hk d).batches (hk d).gkr _ j
+  · exact ir.branchError_le B.src (R d).rs B.enforce (hk d).batches (hk d).gkr _ j
   · refine (ir.fieldFork B.src (R d)).join.error_le_of
       (Rel := (ir.fieldForkSound B.src (R d)).joinRel) (ir.fieldForkSound B.src (R d)).joinSound
       ?_ ((congrArg Ligero.AgreementThreshold.Bounds.test

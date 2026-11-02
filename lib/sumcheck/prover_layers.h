@@ -11,18 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-// Modified 2026 by Chad Sharp and Paul Grubbs: templated on transcript hash, unit-coefficient shortcuts, per-phase profiling scopes, and optional unsatisfied-witness proving
+// Modified 2026 by Chad Sharp and Paul Grubbs: templated on transcript hash, unit-coefficient shortcuts, per-phase profiling scopes, optional unsatisfied-witness proving, the circuit evaluation and the hand products in parallel by output, and a GKR kernel trace
 
 #ifndef PRIVACY_PROOFS_ZK_LIB_SUMCHECK_PROVER_LAYERS_H_
 #define PRIVACY_PROOFS_ZK_LIB_SUMCHECK_PROVER_LAYERS_H_
 
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <optional>
-#include <algorithm>
-#include <array>
+#include <string>
 #include <vector>
 
 #include "arrays/affine.h"
@@ -46,6 +50,65 @@ template <class Field>
 const char* sumcheck_phase(const char* bin, const char* odd) {
   return Field::kCharacteristicTwo ? bin : odd;
 }
+
+// The GKR trace, a diagnostic off by default (GH_GKR_TRACE=1): each
+// kernel of the circuit evaluation and of the sum-check, per layer, round
+// and hand, with its size, its time and the chunks and distinct threads of
+// its parallel calls (util/parallel.h's ChunkTrace), printed as GKR_TRACE
+// lines to stderr when a proof's sum-check ends. It changes no result.
+class GkrTrace {
+ public:
+  static bool on() {
+    static const bool b = [] {
+      const char* e = std::getenv("GH_GKR_TRACE");
+      return e != nullptr && e[0] == '1';
+    }();
+    return b;
+  }
+  explicit GkrTrace(const char* field) : field_(field), on_(on()) {}
+  // Fields a kernel adds to its step's line.
+  static std::string& extra() {
+    thread_local std::string e;
+    return e;
+  }
+  ~GkrTrace() {
+    if (!on_ || out_.empty()) return;
+    std::fputs(out_.c_str(), stderr);
+  }
+  // FN() timed as KERNEL at (LAYER, ROUND, HAND) over N items.
+  template <class Fn>
+  void step(const char* kernel, size_t layer, size_t round, int hand,
+            size_t n, Fn&& fn) {
+    if (!on_) {
+      fn();
+      return;
+    }
+    parallel::ChunkTrace ct;
+    parallel::ChunkTrace* prev = parallel::trace;
+    parallel::trace = &ct;
+    const auto t0 = std::chrono::steady_clock::now();
+    fn();
+    const double us = std::chrono::duration<double, std::micro>(
+                          std::chrono::steady_clock::now() - t0)
+                          .count();
+    parallel::trace = prev;
+    char buf[400];
+    std::snprintf(buf, sizeof(buf),
+                  "GKR_TRACE %s layer=%zu round=%zu hand=%d kernel=%s n=%zu "
+                  "us=%.3f calls=%zu chunks=%zu split=%zu threads=%zu "
+                  "max_threads=%zu %s\n",
+                  field_, layer, round, hand, kernel, n, us, ct.calls,
+                  ct.chunks, ct.split, ct.threads, ct.max_threads,
+                  extra().c_str());
+    extra().clear();
+    out_ += buf;
+  }
+
+ private:
+  const char* field_;
+  bool on_;
+  std::string out_;
+};
 
 // A high level idea is partially described in chapter 4.6.7 "Leveraging Data
 // Parallelism for Further Speedups" in the book "Proofs, Arguments, and
@@ -76,6 +139,7 @@ class ProverLayers {
                                              const Field& F) {
     if (in == nullptr || circ == nullptr || W0 == nullptr) return nullptr;
     PerfRegion perf("eval");
+    GkrTrace trace(Field::kCharacteristicTwo ? "bin" : "odd");
 
     std::unique_ptr<Dense<Field>> finalV;
     size_t nl = circ->nl, nc = circ->nc;
@@ -100,8 +164,11 @@ class ProverLayers {
         V = finalV.get();
       }
 
-      bool ok = eval_quad(circ->l[l].quad.get(), V, W, F,
-                          circ->l[l].unit_coefficient_shortcuts);
+      bool ok = true;
+      trace.step("eval", l, 0, -1, circ->l[l].quad->size(), [&] {
+        ok = eval_quad(circ->l[l].quad.get(), V, W, F,
+                       circ->l[l].unit_coefficient_shortcuts);
+      });
       if (!ok) {
         // Early exit in case of assertion failure.
         // In this case IN is only partially allocated.
@@ -175,6 +242,7 @@ class ProverLayers {
     // Unpadded claims on the two hands, initially zero and updated in
     // layer()
     Elt WC[2] = {F.zero(), F.zero()};
+    GkrTrace trace(Field::kCharacteristicTwo ? "bin" : "odd");
 
     for (size_t ly = 0; ly < circ->nl; ++ly) {
       auto clr = &circ->l.at(ly);
@@ -184,13 +252,15 @@ class ProverLayers {
       bg.emplace(
           sumcheck_phase<Field>("bin.gkr.sc.bind_g", "odd.gkr.sc.bind_g"));
       Eqs<Field> EQ(logc, nc, bnd.q, F);
-      auto HQUAD =
-          clr->quad->bind_g(bnd.logv, bnd.g[0], bnd.g[1], alpha, beta, F,
-                            clr->unit_coefficient_shortcuts);
+      std::unique_ptr<HQuad<Field>> HQUAD;
+      trace.step("bind_g", ly, 0, -1, clr->quad->size(), [&] {
+        HQUAD = clr->quad->bind_g(bnd.logv, bnd.g[0], bnd.g[1], alpha, beta,
+                                  F, clr->unit_coefficient_shortcuts);
+      });
       bg.reset();
 
       layer(pr, pad, ts, bnd, ly, logc, clr->logw, &EQ, HQUAD.get(),
-            in.at(ly).get(), alpha, WC, F);
+            in.at(ly).get(), alpha, WC, F, trace);
 
       if (aux != nullptr) {
         aux->bound_quad[ly] = HQUAD->scalar();
@@ -219,7 +289,8 @@ class ProverLayers {
   void layer(Proof<Field>* pr, const Proof<Field>* pad,
              TranscriptSumcheck<Field, Hash>& ts, bindings& bnd, size_t layer,
              size_t logc, size_t logw, Eqs<Field>* EQ, HQuad<Field>* HQUAD,
-             Dense<Field>* W, const Elt& alpha, Elt WC[2], const Field& F) {
+             Dense<Field>* W, const Elt& alpha, Elt WC[2], const Field& F,
+             GkrTrace& trace) {
     check(EQ->n() == W->n0_, "EQ->n() == W->n0_");
 
     check(logw <= Proof<Field>::kMaxBindings, "logw <= kMaxBindings");
@@ -273,43 +344,50 @@ class ProverLayers {
         // In \sum_{l,r} eq0 Q[l,r] Wl[l] Wl[r], first precompute
         // QW[l] = \sum_{r} Q[l,r] W[r] as a dense array, and then do
         // a round on  \sum_{l} eq0 QW[l] W[l].
-        QW.assign(WH[hand]->n0_, Elt{});
-        size_t ohand = 1 - hand;
+        const size_t ohand = 1 - hand;
+        const int th = int(hand);
+        const size_t nw = WH[hand]->n0_, nq = HQUAD->n_;
 
         // QW[l] = \sum_{r} Q[l,r] W[r]
         std::optional<profiling::Scope> ph;
         ph.emplace(
             sumcheck_phase<Field>("bin.gkr.sc.qw", "odd.gkr.sc.qw"));
-        for (index_t i = 0; i < HQUAD->n_; ++i) {
-          const corner_t p0(HQUAD->hc_[i].h[hand]);
-          const corner_t p1(HQUAD->hc_[i].h[ohand]);
-          F.add(QW[p0], F.mulf(HQUAD->vc_[i].v, WH[ohand]->v_[p1]));
-        }
+        trace.step("qw", layer, round, th, nq, [&] {
+          hand_products(*HQUAD, hand, WH[ohand]->v_.data(), QW, nw, F);
+        });
 
         // Compute the binding of \sum_{l} eq0 QW[l] W[l] as
         // a quadratic polynomial.
         ph.emplace(
             sumcheck_phase<Field>("bin.gkr.sc.evals", "odd.gkr.sc.evals"));
-        WPoly evals = evaluations(WH[hand]->n0_, eq0, QW.data(),
-                                  &WH[hand]->v_[0], sum, F);
+        WPoly evals;
+        trace.step("evals", layer, round, th, nw, [&] {
+          evals = evaluations(nw, eq0, QW.data(), &WH[hand]->v_[0], sum, F);
+        });
         ph.reset();
 
-        Elt rnd = round_h(pr, pad, ts, layer, hand, round, evals, F);
+        Elt rnd;
+        trace.step("round", layer, round, th, 0, [&] {
+          rnd = round_h(pr, pad, ts, layer, hand, round, evals, F);
+        });
         bnd.g[hand][round] = rnd;
         sum = evals.eval_lagrange(rnd, F);
 
         // bind the r variable in W[hand] and QUAD
         ph.emplace(
             sumcheck_phase<Field>("bin.gkr.sc.wbind", "odd.gkr.sc.wbind"));
-        if (round == 0 && hand == 0) {
-          WH[0] = Wtmp.get();
-          WH[0]->bind(rnd, *W, F);
-        } else {
-          WH[hand]->bind(rnd, F);
-        }
+        trace.step("wbind", layer, round, th, nw, [&] {
+          if (round == 0 && hand == 0) {
+            WH[0] = Wtmp.get();
+            WH[0]->bind(rnd, *W, F);
+          } else {
+            WH[hand]->bind(rnd, F);
+          }
+        });
         ph.emplace(
             sumcheck_phase<Field>("bin.gkr.sc.hbind", "odd.gkr.sc.hbind"));
-        HQUAD->bind_h(rnd, hand, F);
+        trace.step("hbind", layer, round, th, nq,
+                   [&] { HQUAD->bind_h(rnd, hand, F); });
       }
     }
 
@@ -327,6 +405,11 @@ class ProverLayers {
   //         V[g,c] = QUAD[g|r,l] W[r,c] W[l,c]
   //
   // Returns false in the case the quad is an assert0 check that fails.
+  //
+  // Under a runner and at kParallelEval terms or more, in parallel by
+  // output: the terms by gate (Quad::by_gate), each chunk owning its
+  // gates. Field sums are exact, so V is the serial loop's.
+  static constexpr size_t kParallelEval = size_t(1) << 12;
   bool eval_quad(const Quad<Field>* quad, Dense<Field>* V,
                  const Dense<Field>* W, const Field& F,
                  bool unit_coefficient_shortcuts) {
@@ -334,6 +417,42 @@ class ProverLayers {
     corner_t n0 = V->n0_;
 
     V->clear(F);
+    if (parallel::current != nullptr && size_t(quad->size()) >= kParallelEval) {
+      const auto& bg = quad->by_gate();
+      const Elt* kv = quad->constants().data();
+      const size_t nch = bg.first.size() - 1;
+      std::atomic<bool> failed{false};
+      const bool req = require_satisfied;
+      parallel::for_chunks(
+          nch, parallel::grain_for(nch, parallel::kChunks),
+          [&](size_t cb, size_t ce) {
+            for (size_t i = bg.first[cb]; i < bg.first[ce]; ++i) {
+              const auto& t = bg.terms[i];
+              const corner_t g(t.g), r(t.h0), l(t.h1);
+              const Elt& v = kv[t.vi];
+              for (corner_t c = 0; c < n0; ++c) {
+                if (v == F.zero()) {
+                  Elt y = W->v_[n0 * l + c];
+                  F.mul(y, W->v_[n0 * r + c]);
+                  if (y != F.zero() && req) {
+                    failed.store(true, std::memory_order_relaxed);
+                    return;
+                  }
+                } else {
+                  Elt x = v;
+                  if (unit_coefficient_shortcuts && v == F.one()) {
+                    x = W->v_[n0 * l + c];
+                  } else {
+                    F.mul(x, W->v_[n0 * l + c]);
+                  }
+                  F.mul(x, W->v_[n0 * r + c]);
+                  F.add(V->v_[n0 * g + c], x);
+                }
+              }
+            }
+          });
+      return !failed.load();
+    }
     for (const auto& ec : *quad) {
       const corner_t g(ec.g);
       const corner_t r(ec.h[0]);
@@ -405,6 +524,166 @@ class ProverLayers {
     ts.write(tt, 1, 2);
   }
 
+  // QW[l] = \sum_{r} Q[l,r] W[r] for l < NW, the hand HAND being l and
+  // the other r. Under a runner and at kParallelQW corners or more, in
+  // parallel by output: QW is cut into blocks of 2^s entries and the
+  // corners into runs of consecutive corners whose l lies in one block
+  // (found in parallel chunks). A task owns consecutive blocks of about
+  // nq / kChunks corners, zeroes them and adds its runs' products into
+  // them; a block with more corners than that (a wire most corners read,
+  // such as the constant one) is cut into pieces of that many, each summed
+  // into its own buffer, and the pieces are added into QW in order after.
+  // Field sums are exact, so the result is the serial loop's.
+  // Measured break-even: 2^12 corners in odd characteristic; in
+  // characteristic two, whose products are cheap, the blocking costs more
+  // than it saves at every size measured (up to 2^14).
+  static constexpr size_t kParallelQW =
+      Field::kCharacteristicTwo ? size_t(1) << 16 : size_t(1) << 12;
+  static constexpr size_t kQWBlocks = 64;
+  static void hand_products(const HQuad<Field>& hq, size_t hand, const Elt* w,
+                            std::vector<Elt>& QW, size_t nw, const Field& F) {
+    const size_t nq = hq.n_, ohand = 1 - hand;
+    const auto* hc = hq.hc_.data();
+    const auto* vc = hq.vc_.data();
+    if (parallel::current == nullptr || nq < kParallelQW) {
+      QW.assign(nw, Elt{});
+      for (size_t i = 0; i < nq; ++i) {
+        const corner_t p0(hc[i].h[hand]);
+        const corner_t p1(hc[i].h[ohand]);
+        F.add(QW[p0], F.mulf(vc[i].v, w[p1]));
+      }
+      return;
+    }
+    QW.resize(nw);
+    size_t sh = 0;
+    while ((nw >> sh) > kQWBlocks) ++sh;
+    const size_t nb = ((nw - 1) >> sh) + 1;
+    // The runs, each its first corner and block, per chunk in order.
+    const size_t grain = parallel::grain_for(nq, parallel::kChunks);
+    const size_t nc = parallel::chunks(nq, grain);
+    std::vector<std::vector<std::pair<size_t, size_t>>> part(nc);
+    parallel::for_chunks(nq, grain, [&](size_t b, size_t e) {
+      auto& r = part[b / grain];
+      size_t prev = SIZE_MAX;
+      for (size_t i = b; i < e; ++i) {
+        const size_t blk = size_t(hc[i].h[hand]) >> sh;
+        if (blk != prev) r.push_back({i, blk});
+        prev = blk;
+      }
+    });
+    std::vector<size_t> rstart, rblock;
+    for (const auto& r : part)
+      for (const auto& x : r) {
+        rstart.push_back(x.first);
+        rblock.push_back(x.second);
+      }
+    const size_t nr = rstart.size();
+    rstart.push_back(nq);
+    // The runs by block (a counting sort), and each block's corners.
+    std::vector<size_t> bfirst(nb + 1, 0), load(nb, 0);
+    for (size_t k = 0; k < nr; ++k) {
+      ++bfirst[rblock[k] + 1];
+      load[rblock[k]] += rstart[k + 1] - rstart[k];
+    }
+    for (size_t b = 0; b < nb; ++b) bfirst[b + 1] += bfirst[b];
+    std::vector<size_t> order(nr), at(bfirst.begin(), bfirst.end() - 1);
+    for (size_t k = 0; k < nr; ++k) order[at[rblock[k]]++] = k;
+    // The tasks: QW entries [lo, hi), their corner ranges segs[s0, s1),
+    // and the buffer they sum into (SIZE_MAX: QW itself).
+    struct Task {
+      size_t lo, hi, s0, s1, buf;
+    };
+    std::vector<Task> tasks;
+    std::vector<std::pair<size_t, size_t>> segs;
+    struct Heavy {
+      size_t lo, hi, t0, t1;
+    };
+    std::vector<Heavy> heavy;
+    size_t nbuf = 0;
+    const size_t target = (nq + parallel::kChunks - 1) / parallel::kChunks;
+    {
+      size_t acc = 0, b0 = 0;
+      const auto close = [&](size_t b1) {
+        if (b1 == b0) return;
+        Task t{b0 << sh, std::min(nw, b1 << sh), segs.size(), 0, SIZE_MAX};
+        for (size_t k = bfirst[b0]; k < bfirst[b1]; ++k)
+          segs.push_back({rstart[order[k]], rstart[order[k] + 1]});
+        t.s1 = segs.size();
+        tasks.push_back(t);
+        acc = 0;
+      };
+      for (size_t b = 0; b < nb; ++b) {
+        if (load[b] > target) {
+          close(b);
+          const size_t lo = b << sh, hi = std::min(nw, (b + 1) << sh);
+          Heavy h{lo, hi, tasks.size(), 0};
+          size_t room = target;
+          Task t{lo, hi, segs.size(), 0, nbuf++};
+          for (size_t k = bfirst[b]; k < bfirst[b + 1]; ++k) {
+            size_t i = rstart[order[k]];
+            const size_t e = rstart[order[k] + 1];
+            while (i < e) {
+              const size_t m = std::min(room, e - i);
+              segs.push_back({i, i + m});
+              i += m;
+              room -= m;
+              if (room == 0) {
+                t.s1 = segs.size();
+                tasks.push_back(t);
+                t = Task{lo, hi, segs.size(), 0, nbuf++};
+                room = target;
+              }
+            }
+          }
+          t.s1 = segs.size();
+          if (t.s1 > t.s0) {
+            tasks.push_back(t);
+          } else {
+            --nbuf;
+          }
+          h.t1 = tasks.size();
+          heavy.push_back(h);
+          b0 = b + 1;
+          continue;
+        }
+        acc += load[b];
+        if (acc >= target) {
+          close(b + 1);
+          b0 = b + 1;
+        }
+      }
+      close(nb);
+    }
+    const size_t blen = size_t(1) << sh;
+    std::vector<Elt> bufs(nbuf * blen);
+    if (GkrTrace::on())
+      GkrTrace::extra() = "runs=" + std::to_string(nr) + " tasks=" +
+                          std::to_string(tasks.size()) + " heavy=" +
+                          std::to_string(heavy.size()) + " pieces=" +
+                          std::to_string(nbuf);
+    Elt* qw = QW.data();
+    parallel::for_each(tasks.size(), 1, [&](size_t k) {
+      const Task& t = tasks[k];
+      Elt* out = t.buf == SIZE_MAX ? qw + t.lo : bufs.data() + t.buf * blen;
+      std::fill(out, out + (t.hi - t.lo), Elt{});
+      for (size_t j = t.s0; j < t.s1; ++j)
+        for (size_t i = segs[j].first; i < segs[j].second; ++i) {
+          const corner_t p0(hc[i].h[hand]);
+          const corner_t p1(hc[i].h[ohand]);
+          F.add(out[p0 - t.lo], F.mulf(vc[i].v, w[p1]));
+        }
+    });
+    for (const Heavy& h : heavy) {
+      const size_t len = h.hi - h.lo;
+      std::copy(bufs.data() + tasks[h.t0].buf * blen,
+                bufs.data() + tasks[h.t0].buf * blen + len, qw + h.lo);
+      for (size_t k = h.t0 + 1; k < h.t1; ++k) {
+        const Elt* src = bufs.data() + tasks[k].buf * blen;
+        for (size_t i = 0; i < len; ++i) F.add(qw[h.lo + i], src[i]);
+      }
+    }
+  }
+
   // now
   //
   //   SUM = \sum_{l,r} eq0 Q[l,r] Wl[l] Wr[r]
@@ -416,6 +695,9 @@ class ProverLayers {
   // Return the quadratic polynomial p(t) that represents what SUM
   // will be after binding l to t in Q and Wl.
   //
+  // The pairs per chunk of evaluations below which splitting does not pay
+  // (measured): 1024 in odd characteristic, 4096 in characteristic two.
+  static constexpr size_t kEvalsGrain = Field::kCharacteristicTwo ? 4096 : 1024;
   WPoly evaluations(size_t n, const Elt& eq0, const Elt* QW, const Elt* W,
                     const Elt& sum, const Field& F) {
     // Compute the polynomial coefficients, and multiply the coefficients.
@@ -426,7 +708,9 @@ class ProverLayers {
     // from sum.
     // One pair of partial sums per fixed chunk (util/parallel.h), summed in
     // chunk order.
-    const size_t grain = std::max<size_t>(4096, parallel::grain_for(nodd, parallel::kChunks));
+    // At least kEvalsGrain pairs per chunk (measured break-even).
+    const size_t grain =
+        std::max<size_t>(kEvalsGrain, parallel::grain_for(nodd, parallel::kChunks));
     std::vector<std::array<Elt, 2>> part(parallel::chunks(nodd, grain));
     parallel::for_chunks(nodd, grain, [&](size_t b, size_t e) {
       Accum p0{}, p2{};

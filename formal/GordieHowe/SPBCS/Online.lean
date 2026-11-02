@@ -4,8 +4,14 @@
 module
 
 public import GordieHowe.SPBCS.KnowledgeROM
-public import GordieHowe.SPBCS.FullPast.Online
-public import GordieHowe.SPBCS.FullPast.ZeroKnowledge
+public import GordieHowe.SPBCS.Extractor
+public import GordieHowe.SPBCS.Extraction.KnowledgeError
+public import GordieHowe.Model.QROM.QueryBits
+public import GordieHowe.Model.QROM.QueryCount
+public import GordieHowe.SPBCS.Extraction.OnlineExtract
+public import GordieHowe.SPBCS.Extraction.OnlineExtractROM
+public import GordieHowe.Model.ROM.Model
+public import GordieHowe.SPBCS.ZeroKnowledge
 
 @[expose] public section
 
@@ -21,7 +27,7 @@ adversaries of `def:adversary` without proof queries (paper `thm:bcs-ks` and `th
 - `accepts_of_eqOn_queries`: the verifier reads the oracle only at its queries.
 - `queries_length_le_of_accepts`, `kqOf`: an accepting run makes at most
   `2 · t.size n + |Site| + NQ · (1 + ⌊log₂ 2N⌋)` queries (two per round, one final input per
-  branch, the openings of the trees) under the format bounds `NQ`, `N` (`GordieHowe.SPBCS.Base.FormatBounds`); this is
+  branch, the openings of the trees) under the format bounds `NQ`, `N` (`GordieHowe.SPBCS.FormatBounds`); this is
   the paper's `k_q` (`def:bcs-quantities`), with `n_B = |Site|`.
 - `toQVerifier`, `knowledgeBound`: the instance; its knowledge error is
   `knowledgeError k e kq b c_in nJ (max_c ε c)` (`knowledgeError_toQVerifier`).
@@ -119,7 +125,7 @@ theorem queries_length_le_of_accepts {Q : M.IOPQueries V x} {N : ℕ}
         exact Nat.mul_le_mul_left _ (Nat.add_le_add_left (Nat.log_mono_right (by
           have := hN τ.leaf τ.tree.msg τ.tree.tree; omega)) _)
     _ = ps.length * (1 + Nat.log 2 (2 * N)) := by
-        rw [List.sum_map_mul_right, Base.sum_length_openedIn hv.leaves_length]
+        rw [List.sum_map_mul_right, SPBCS.sum_length_openedIn _ hv.leaves_length]
 
 end QueryCount
 
@@ -166,6 +172,55 @@ theorem dbExtractBits_eq [DecidableEq X] {Wit : Type} (E : CausalExtractor P t X
     (x : X) (D : DB (Bits (queryBits k kN kS L)) (Out k e)) :
     M.dbExtractBits E x D = M.dbExtract E x (D.restrict Query.toBits) := by
   rw [dbExtractBits, DB.restrictBy_eq]
+
+/-- **The lexicographic order of bit strings**: `a ≤ b` when the list of the bits of `a` is at most
+that of `b` in the lexicographic order of lists (`List.ofFn`). A relation, not an instance: the
+pointwise order of `Fin m → Bool` is Mathlib's. -/
+def bitsLexLE {m : ℕ} (a b : Bits m) : Prop :=
+  List.ofFn a ≤ List.ofFn b
+
+/-- The lexicographic order of bit strings is decided by comparing the lists of bits. -/
+instance {m : ℕ} : DecidableRel (bitsLexLE (m := m)) := fun a b =>
+  inferInstanceAs (Decidable (List.ofFn a ≤ List.ofFn b))
+
+/-- The lexicographic order of bit strings is transitive. -/
+instance {m : ℕ} : IsTrans (Bits m) bitsLexLE :=
+  ⟨fun _ _ _ => le_trans (a := List.ofFn _)⟩
+
+/-- The lexicographic order of bit strings is antisymmetric (`List.ofFn` is injective). -/
+instance {m : ℕ} : Std.Antisymm (bitsLexLE (m := m)) :=
+  ⟨fun _ _ h h' => List.ofFn_injective (le_antisymm h h')⟩
+
+/-- The lexicographic order of bit strings is total. -/
+instance {m : ℕ} : Std.Total (bitsLexLE (m := m)) :=
+  ⟨fun a b => le_total (List.ofFn a) (List.ofFn b)⟩
+
+/-- **The database extractor of the spBCS argument as a list**: `dbExtractBits` with the entries of
+`D` read in the lexicographic order of their inputs (`bitsLexLE`), so that the witnesses come in an
+order (`coe_dbExtractBitsList`).
+
+Running time: sorting the inputs of `D`, `O(|D| log |D| · m)`, then the work of `dbExtractBits`
+(its paragraph). This running time is argued here, not proved in Lean. -/
+def dbExtractBitsList [DecidableEq X] {Wit : Type} (E : CausalExtractor P t X Wit)
+    (x : X) (D : DB (Bits (queryBits k kN kS L)) (Out k e)) : List Wit :=
+  (D.keys.sort bitsLexLE).filterMap fun w => (Query.ofBits w).bind
+    (M.candidate E x (D.restrictBy Query.toBits Query.ofBits fun _ _ => Query.ofBits_eq_some_iff))
+
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+/-- **The list extractor has the witnesses of `dbExtractBits`.** -/
+theorem coe_dbExtractBitsList [DecidableEq X] {Wit : Type} (E : CausalExtractor P t X Wit)
+    (x : X) (D : DB (Bits (queryBits k kN kS L)) (Out k e)) :
+    (M.dbExtractBitsList E x D : Multiset Wit) = M.dbExtractBits E x D := by
+  have hk : (D.restrictBy Query.toBits Query.ofBits fun _ _ => Query.ofBits_eq_some_iff).keys.val =
+      D.keys.val.filterMap Query.ofBits := by
+    rw [DB.restrictBy, Finmap.keysLookupEquiv_symm_apply_keys, Finset.filterMap_val]
+  rw [dbExtractBitsList, ← Multiset.filterMap_coe, Finset.sort_eq, dbExtractBits, dbExtract, hk,
+    Multiset.filterMap_filterMap]
+
+/-- **The list extractor read as multisets is `dbExtractBits`.** -/
+theorem coe_comp_dbExtractBitsList [DecidableEq X] {Wit : Type} (E : CausalExtractor P t X Wit) :
+    (fun x D => (M.dbExtractBitsList E x D : Multiset Wit)) = M.dbExtractBits E :=
+  funext fun x => funext fun D => M.coe_dbExtractBitsList E x D
 
 /-- **The database bound of the spBCS argument** at `b` queries:
 `6b² (max_c ε c + (max 2 c_in + nJ + 1) b / 2^(8k))`. -/
@@ -274,6 +329,19 @@ noncomputable def qVerifier (Qs : ∀ x, M.IOPQueries V x) (NQ N : ℕ) :
 noncomputable def rVerifier (Qs : ∀ x, M.IOPQueries V x) (NQ N : ℕ) :
     NARG.ROM.Verifier (Query k kN kS L) (Out k e) (Claim X M.NIProof) X :=
   M.toRVerifier Qs (kqOf Mg n NQ N)
+
+/-- **The compiled verifier at its query budget accepts exactly the claims the spBCS verifier
+accepts** under the oracle read through `Query.toBits`, for format bounds `NQ`, `N` (`hb`). -/
+theorem accepted_qVerifier_iff {Qs : ∀ x, M.IOPQueries V x} {NQ N : ℕ}
+    (hb : M.FormatBounds Qs NQ N) {h : Bits (queryBits k kN kS L) → Out k e}
+    {c : Claim X M.NIProof} :
+    (M.qVerifier Qs NQ N).Accepted h c ↔ M.Accepts (h ∘ Query.toBits) c.stmt c.proof (Qs c.stmt) :=
+  NARG.Verifier.ofOracle_accepted_iff fun _ _ c' hag hv =>
+    M.accepts_of_agree Qs (c := c') (fun _ _ _ hv => queries_length_le_of_formatBounds hb hv)
+      (fun i => by
+        have := hag i
+        rw [QROM.Expansion.queries_map] at this
+        exact this) hv
 
 variable {M rel E St}
 

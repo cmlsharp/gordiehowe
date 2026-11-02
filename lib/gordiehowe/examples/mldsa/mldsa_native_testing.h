@@ -1,9 +1,10 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 
-// Test support for the ML-DSA-44 native proof of possession
-// (mldsa_native.h): the host witness of a signed example (ml_dsa_witness's
-// compute_witness) and the values each GordieHowe generator must equal,
+// Test support for the ML-DSA native proof of possession (mldsa_native.h)
+// at a parameter set S: the host witness of a signed example
+// (ml_dsa_witness's compute_witness) and the values each GordieHowe
+// generator must equal,
 // helpers that read a proof's generated values by node name, and the plan
 // export (export_plan, the bench hook).
 
@@ -36,13 +37,16 @@ namespace proofs::gordiehowe::examples::mldsa {
 // CTX_BYTES bytes, with the assignments of example values, for the tests
 // and benchmarks that drive the prover directly. PACKING is the packing
 // ablation.
-template <class P>
+template <class P, class S>
 struct MLDSANativeSystem
-    : RelationSystem<typename Env<P>::Sys, MLDSAStatement<Value>,
-                     MLDSAWitness<Value>> {
+    : RelationSystem<typename Env<P>::Sys,
+                     typename MLDSAInputs<S>::template Statement<Value>,
+                     typename MLDSAInputs<S>::template Witness<Value>> {
   using E = Env<P>;
-  using Base = RelationSystem<typename E::Sys, MLDSAStatement<Value>,
-                              MLDSAWitness<Value>>;
+  using Base =
+      RelationSystem<typename E::Sys,
+                     typename MLDSAInputs<S>::template Statement<Value>,
+                     typename MLDSAInputs<S>::template Witness<Value>>;
   using typename Base::Assignment;
 
   size_t max_bytes, ctx_bytes;
@@ -50,17 +54,17 @@ struct MLDSANativeSystem
   MLDSANativeSystem(const E &env, size_t max, size_t ctx,
                     PackingAblation packing = PackingAblation::kNone,
                     const BuildOptions &build = {})
-      : Base(mldsa_native<P>(env, max, ctx, packing, build)),
+      : Base(mldsa_native<P, S>(env, max, ctx, packing, build)),
         max_bytes(max),
         ctx_bytes(ctx) {}
 
   Assignment statement(const std::vector<uint8_t> &pk,
                        const std::vector<uint8_t> &ctx) const {
-    return Base::statement(mldsa_statement(pk, ctx));
+    return Base::statement(mldsa_statement<S>(pk, ctx));
   }
   Assignment witness(const std::vector<uint8_t> &msg,
                      const Signature &sig) const {
-    return Base::witness(mldsa_witness(msg, sig, max_bytes, ctx_bytes));
+    return Base::witness(mldsa_witness<S>(msg, sig, max_bytes, ctx_bytes));
   }
 };
 
@@ -94,9 +98,15 @@ std::vector<uint64_t> realized_digits(const AV &av, const std::string &name,
   return out;
 }
 
-// The host witness of a signed example (ml_dsa_witness's compute_witness),
-// and the decoded signature the GordieHowe witness assignment takes.
+// The host witness of a signed example at the parameter set S
+// (ml_dsa_witness's compute_witness, the reference verifier: ok when it
+// accepts), and the decoded signature the GordieHowe witness assignment
+// takes.
+template <class S>
 struct Existing {
+  using Params = typename S::Reference;
+  static constexpr size_t kK = S::kK, kL = S::kL, kR1Bits = S::kR1Bits;
+  static constexpr uint64_t kGamma2 = S::kGamma2, kBound = S::kBound;
   const ml_dsa::MlDsa44SignatureExample &ex;
   std::unique_ptr<ml_dsa_witness<Params>> wg =
       std::make_unique<ml_dsa_witness<Params>>();
@@ -136,7 +146,7 @@ struct Existing {
     }
     return out;
   }
-  // UseHint's output bits, [K][N][6], least significant first.
+  // UseHint's output bits, [K][N][r1 bits], least significant first.
   std::vector<uint64_t> w1_bits() const {
     std::vector<uint64_t> out;
     for (size_t i = 0; i < kK; ++i)
@@ -240,7 +250,7 @@ std::string export_plan(const std::string &dir, const std::string &commit,
                         const std::string &run_id) {
   const auto &ex = ml_dsa::GetMlDsa44BenchmarkExample();
   const Env<P> env;
-  MLDSANativeSystem<P> t(env, ex.msg.size(), ex.ctx.size());
+  MLDSANativeSystem<P, MLDSA44> t(env, ex.msg.size(), ex.ctx.size());
   const auto c = t.compile();
   const compiler::ExportMeta meta{"mldsa-native", P::kId, commit,
                         run_id, ex.msg.size(), ex.ctx.size()};

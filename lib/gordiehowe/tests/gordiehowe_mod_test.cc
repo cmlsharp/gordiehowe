@@ -33,6 +33,7 @@
 #include "gf2k/lch14_reed_solomon.h"
 #include "gordiehowe/compiler/plan_export.h"
 #include "gordiehowe/compiler/plan_program.h"
+#include "gordiehowe/compiler/structure_records.h"
 #include "gordiehowe/examples/shared/program_testing.h"
 #include "gordiehowe/instances.h"
 #include "gordiehowe/system.h"
@@ -451,6 +452,57 @@ auto flip_at(const Fld &f, size_t id, size_t i) {
   };
 }
 
+// The MAC steps of the export of C (Certificates::comp_derivs): per
+// predicate name, its kMacRow or kTwoTail step as "record slot role"
+// (role the CStep::MacRole code, a group row's group after it).
+template <class C>
+std::map<std::string, std::string> mac_steps(const C &c) {
+  using CS = ir::Certificates::CStep;
+  const ir::Certificates certs = compiler::export_certificates(c);
+  const ir::Program &P = c.program();
+  std::map<std::string, std::string> out;
+  for (size_t q = 0; q < certs.comp_derivs.size(); ++q)
+    for (const CS &st : certs.comp_derivs[q])
+      if (st.kind == CS::kMacRow || st.kind == CS::kTwoTail)
+        out[P.predicates.at(q).name] =
+            std::to_string(st.id) + " " + std::to_string(st.slot) + " " +
+            (st.kind == CS::kTwoTail ? std::string("two")
+                                     : std::to_string(int(st.role)) +
+                                           (st.role == CS::kGroupRow
+                                                ? " " + std::to_string(st.group)
+                                                : std::string()));
+  return out;
+}
+
+// The role map of the MAC steps (mac_role): each name the
+// lowerings give a MAC's predicates has its role at the site's tail; a
+// name relative to another tail, a row named as the tail, and an unknown
+// suffix have none.
+TEST(GordieHoweMod, MacRoleNames) {
+  using CS = ir::Certificates::CStep;
+  auto role = [](const std::string &n, bool row = false, bool h = false) -> std::string {
+    CS st;
+    if (!compiler::program_builder_internal::mac_role(n, row, h, "mac", st)) return "none";
+    return std::to_string(int(st.role)) +
+           (st.role == CS::kGroupRow ? " " + std::to_string(st.group) : "");
+  };
+  EXPECT_EQ(role("mac"), std::to_string(int(CS::kTail)));
+  EXPECT_EQ(role("mac.H", false, true), std::to_string(int(CS::kH)));
+  EXPECT_EQ(role("mac.A", true), std::to_string(int(CS::kAccRow)));
+  EXPECT_EQ(role("mac.A.g0", true), std::to_string(int(CS::kGroupRow)) + " 0");
+  EXPECT_EQ(role("mac.A.g13", true), std::to_string(int(CS::kGroupRow)) + " 13");
+  EXPECT_EQ(role("mac.r.boolean"), std::to_string(int(CS::kResidues)));
+  EXPECT_EQ(role("mac.gq"), std::to_string(int(CS::kGqLookup)));
+  EXPECT_EQ(role("mac.final.q"), std::to_string(int(CS::kQuotLookup)));
+  EXPECT_EQ(role("mac.q"), std::to_string(int(CS::kQuotLookup)));
+  EXPECT_EQ(role("mac.low"), std::to_string(int(CS::kLowLookup)));
+  EXPECT_EQ(role("mac.high"), std::to_string(int(CS::kTopLookup)));
+  EXPECT_EQ(role("mac.nowrap"), std::to_string(int(CS::kWrap)));
+  for (const char *n : {"mac.A.g", "mac.A.gx", "mac.lo", "mac2.low", "mac.H", "macA"})
+    EXPECT_EQ(role(n), "none") << n;
+  EXPECT_EQ(role("mac", true), "none");
+}
+
 // Two equalities between H and A at one phase lower to one MAC over the
 // concatenation of their sides: one beta, blind, value and tail.
 TEST(GordieHoweMod, TwoEqualitiesOneMac) {
@@ -641,6 +693,42 @@ TEST(GordieHoweMod, TwoOddDomainsExport) {
                         "degree := 256 }"),
             std::string::npos);
   EXPECT_NE(p.text.find("field := some 2"), std::string::npos);
+  // The macSite record: [mac.equal, mac.A, mac.N] (the x side's tail
+  // first), values [mac.value, mac.beta], the MAC's field, chunks and width;
+  // the tag and the key originate there. The tails' steps name the record
+  // at slots 1 and 2, role tail.
+  auto pid = [&](const std::string &nm) {
+    for (size_t i = 0; i < p.predicates.size(); ++i)
+      if (p.predicates[i].name == nm) return i;
+    ADD_FAILURE() << "no predicate " << nm;
+    return SIZE_MAX;
+  };
+  auto vid = [&](const std::string &nm) {
+    for (size_t i = 0; i < p.values.size(); ++i)
+      if (p.values[i].name == nm) return i;
+    ADD_FAILURE() << "no value " << nm;
+    return SIZE_MAX;
+  };
+  const compiler::StructureRecords sr =
+      compiler::build_structure(*c, p, compiler::export_certificates(*c));
+  ASSERT_GE(sr.gadgets.size(), 1u);
+  const auto &g0 = sr.gadgets[0];
+  const ir::MacRealization &mr = c->program().predicates.at(equal).mac;
+  EXPECT_EQ(g0.kind, "macSite");
+  EXPECT_EQ(g0.preds, (std::vector<size_t>{equal, pid("mac.A"), pid("mac.N")}));
+  EXPECT_EQ(g0.values, (std::vector<size_t>{vid("mac.value"), vid("mac.beta")}));
+  EXPECT_EQ(g0.params, (std::vector<size_t>{2, mr.chunks, mr.width}));
+  EXPECT_NE(std::find(sr.origins.begin(), sr.origins.end(),
+                      std::make_pair(vid("mac.value"), std::make_pair(size_t(0), size_t(0)))),
+            sr.origins.end());
+  EXPECT_NE(std::find(sr.origins.begin(), sr.origins.end(),
+                      std::make_pair(vid("mac.beta"), std::make_pair(size_t(0), size_t(1)))),
+            sr.origins.end());
+  const auto steps = mac_steps(*c);
+  const std::string tail = std::to_string(int(ir::Certificates::CStep::kTail));
+  EXPECT_EQ(steps.at("mac.A"), "0 1 " + tail);
+  EXPECT_EQ(steps.at("mac.N"), "0 2 " + tail);
+  for (const auto &[nm, st] : steps) EXPECT_EQ(st.substr(0, 2), "0 ") << nm;
   // The plan module exports it too, the key with an empty domain.
   std::string plan;
   try {
@@ -684,6 +772,19 @@ void native_mac(const DomainProfile<HFld, RS, SHA384> &hp, const char *groups,
   for (const auto &t : N.range_tables())
     needles += t.static_needles + t.dynamic_needles;
   EXPECT_EQ(needles, (2 * ngroups + 1) * w + 1);
+  // The MAC's completeness steps: record 0, slot 1 (hosted), the role each
+  // predicate's name gives, the groups' rows 0 .. ngroups - 1.
+  {
+    using CS = ir::Certificates::CStep;
+    auto r = [](CS::MacRole x) { return "0 1 " + std::to_string(int(x)); };
+    std::map<std::string, std::string> want = {
+        {"mac", r(CS::kTail)},         {"mac.H", r(CS::kH)},
+        {"mac.r.boolean", r(CS::kResidues)}, {"mac.gq", r(CS::kGqLookup)},
+        {"mac.final.q", r(CS::kQuotLookup)}};
+    for (size_t g = 0; g < ngroups; ++g)
+      want["mac.A.g" + std::to_string(g)] = r(CS::kGroupRow) + " " + std::to_string(g);
+    EXPECT_EQ(mac_steps(*c), want);
+  }
   Assignment a;
   a.set(ch, bits_of(H.field(), 8192, 3));
   a.set(z, NV{nf().of_scalar(63)});

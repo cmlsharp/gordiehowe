@@ -23,8 +23,8 @@ Facts about the challenger's state after a list of logged proof queries (`Challe
 - `Challenger.mem_ass_stateAfter`: every assignment in force was appended by the program of one
   logged proof query numbered below `Q`, run on the oracle in force before it;
 - `Challenger.map_request_hist_stateAfter`: the proof queries in the history are the first `Q` proof queries;
-- `requestsBefore_prefix`, `requestsBefore_succ_of_some`: the logged proof queries of the slots below
-  `j` grow with `j`, by one at a logged slot.
+- `requestsBefore_succ_of_some`: the logged proof queries of the slots below `j` grow by one at a
+  logged slot (with `requestsBefore_prefix`, `GordieHowe/Model/Quantum/Pure/Game.lean`).
 -/
 
 open Finset
@@ -37,16 +37,6 @@ namespace GordieHowe
 section Requests
 
 variable {Req : Type*} {m : ℕ}
-
-theorem Quantum.requestsBefore_prefix (lg : LogReg Req m) {j j' : ℕ} (h : j ≤ j') :
-    requestsBefore lg j <+: requestsBefore lg j' := by
-  induction j' with
-  | zero => obtain rfl : j = 0 := by omega
-            exact List.prefix_refl _
-  | succ j' ih =>
-    rcases Nat.lt_succ_iff_lt_or_eq.1 (Nat.lt_succ_of_le h) with h' | rfl
-    · exact (ih (by omega)).trans (by rw [requestsBefore]; exact List.prefix_append _ _)
-    · exact List.prefix_refl _
 
 theorem Quantum.requestsBefore_succ_of_some (lg : LogReg Req m) (j : Fin m) {r : Req}
     (hr : lg j = some r) : requestsBefore lg (j + 1) = requestsBefore lg j ++ [r] := by
@@ -71,7 +61,7 @@ theorem Quantum.length_flatMap_logged_le {β : Type*} {Q q : ℕ} (lg : LogReg R
       (requestsBefore lg a).length < (requestsBefore lg b).length := by
     intro a b ha hab
     obtain ⟨r, hr⟩ := Option.isSome_iff_exists.1 ha
-    have h1 := (requestsBefore_prefix lg (show (a : ℕ) + 1 ≤ b from hab)).length_le
+    have h1 := (Quantum.requestsBefore_prefix lg (show (a : ℕ) + 1 ≤ b from hab)).length_le
     rw [requestsBefore_succ_of_some lg a hr] at h1
     simp at h1
     omega

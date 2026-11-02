@@ -4,8 +4,8 @@
 module
 
 public import GordieHowe.ProofSystem.Program.FieldModel
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNative20Relative
-public import GordieHowe.Applications.Falcon512.Native.Fields.FalconNativeCoords
+public import GordieHowe.Applications.Falcon512.Fields.FalconNative20Relative
+public import GordieHowe.Applications.Falcon512.Fields.FalconNativeCoords
 
 @[expose] public section
 
@@ -16,7 +16,8 @@ The field interpretation of `F_q^20` (`q = 12289`), shared by the native Falcon 
 QROM parameters (`Falcon512.Native.QROMParams`, `Falcon512.Ring.Native.QROMParams`):
 
 * **`F_q^20`** (`fq20`): the registry entry `falconNative20Entry`, `FalconNativeField20`; constants
-  are casts of naturals, the integer reading is the constant coefficient (`falconQuarticCoords` of
+  are coefficient vectors in the C++ encoding, over the quartic step's (`fq20Code`,
+  `fq20QuarticCode`), the integer reading is the constant coefficient (`falconQuarticCoords` of
   the first `falconNative20Coords` coordinate); the node `GF(p^1)` is the prime subfield `F_q`
   (`fq20Node`), every other node the whole field; no bit coordinates (an odd field).
 * **Its model** at `GF(p^1)` (`fq20_model`): the integer reading is below `q`, inverts the cast of
@@ -27,6 +28,21 @@ QROM parameters (`Falcon512.Native.QROMParams`, `Falcon512.Ring.Native.QROMParam
 namespace GordieHowe.RealizedProgram
 
 open Export RelativePacking
+
+/-- **The code arithmetic of the quartic step `F_q[u]/(u^4 - 11)` of `F_q^20`**
+(`GKR.Fold.ExtCode.overPrime`): four coefficients of `14` bits, the arithmetic modulo `12289` on
+each, `u^4 = 11`. -/
+def fq20QuarticCode : GKR.Fold.ExtCode := GKR.Fold.ExtCode.overPrime 12289 14 4 11
+
+/-- **The decoding of the quartic step**: coefficient `i` of `u^i` is digit `i` of `14` bits. -/
+def fq20QuarticDecode (c : ℕ) : FalconQuartic :=
+  GKR.Fold.extDecode (fun c : ℕ => (c : ZMod 12289)) 14 4 c
+
+/-- The quartic step decodes `0` to `0`. -/
+theorem fq20QuarticDecode_zero : fq20QuarticDecode 0 = 0 := by
+  rw [fq20QuarticDecode, GKR.Fold.ExtCode.extDecode_natCast_of_lt (by norm_num) (by norm_num),
+    Nat.cast_zero, PolyRep.const_zero]
+  rfl
 
 /-- **The nodes of `F_q^20`**: `GF(p^1)` is the prime subfield `F_q`, any other name the field. -/
 def fq20Node (s : String) : AddSubgroup FalconNativeField20 :=
@@ -40,12 +56,13 @@ instance fq20NodeDec (s : String) : DecidablePred (· ∈ fq20Node s) := fun x =
   · exact isTrue (AddSubgroup.mem_top x)
 
 /-- **`F_q^20` as a field of the program**: the registry entry, `FalconNativeField20`, constants as
-casts of naturals, the integer reading the constant coefficient, the nodes `fq20Node`, no bit
+coefficient vectors (`GKR.Fold.extDecode` over `fq20QuarticDecode`), the integer reading the
+constant coefficient, the nodes `fq20Node`, no bit
 coordinates (an odd field). -/
 def fq20 : FieldInterp where
   spec := falconNative20Entry.spec
   K := FalconNativeField20
-  decode n := (n : FalconNativeField20)
+  decode := GKR.Fold.extDecode fq20QuarticDecode 56 5
   toNat x := (falconQuarticCoords (falconNative20Coords x 0) 0).val
   node := fq20Node
   memDec := fq20NodeDec
@@ -59,6 +76,10 @@ theorem fq20_model : fq20.Model ["GF(p^1)"] [] :=
   FieldInterp.model_of_primeCoord (spec := falconNative20Entry.spec) (p := 12289)
     (c := fun x => falconQuarticCoords (falconNative20Coords x 0) 0)
     ⟨falconNative20Entry, by simp [fieldRegistry], rfl⟩ rfl falconNativeField20_card
+    (fun c hc => by
+      rw [GKR.Fold.extDecode_of_lt _ fq20QuarticDecode_zero (hc.trans (by norm_num)),
+        fq20QuarticDecode, GKR.Fold.ExtCode.extDecode_natCast_of_lt (by norm_num) hc]
+      rfl)
     falconNative20Coords_natCast falconNative20Coords_algebraMap
     (fun _ hx => by rwa [fq20Node, if_pos rfl] at hx)
     (by rw [fq20Node, if_neg (by decide)])
@@ -72,5 +93,38 @@ theorem fq20_toNat_zero : fq20.toNat 0 = 0 := by
 coordinate, additive (`falconNative20Coords_val_cast_add`). -/
 theorem fq20_readLinear : fq20.ReadLinear :=
   .of_add falconNative20Coords_val_cast_add (by rw [fq20_toNat_zero, Nat.cast_zero])
+
+/-- **The code arithmetic of `F_q^20`** (`GKR.Fold.ExtCode`): five coefficients of `56` bits, in
+`v^0, …, v^4`, over the quartic step's code arithmetic (`fq20QuarticCode`), `v^5 = u + 2` (code
+`2 + 2^14`). Its codes are the C++ encoding: `FalconField20 = NativeWide<Fp14, 20, 11, 2, …, true>`
+(`lib/algebra/fp_native_wide.h:628`) packs coordinate `e[4 j + i]`, the coefficient of `u^i v^j`
+(`lib/algebra/fp_native_wide.h:45`), in `kCoefficientBits = 14` bits at bit `14 (4 j + i)`
+(`lib/algebra/fp_native_wide.h:64`, `:388`), so bits `56 j` to `56 j + 55` are the quartic code of
+the coefficient of `v^j`. -/
+def fq20Code : GKR.Fold.ExtCode := ⟨fq20QuarticCode.arith, 56, 5, 16386⟩
+
+/-- `v^5 = u + 2`: the code `2 + 2^14` decodes to `u + 2`. -/
+theorem fq20QuarticDecode_beta : fq20QuarticDecode 16386 = falconU + 2 := by
+  change GKR.Fold.extDecode _ 14 4 16386 =
+    PolyRep.add PolyRep.gen (PolyRep.const ((2 : ℕ) : ZMod 12289))
+  refine Vector.ext fun i hi => ?_
+  interval_cases i <;> simp [GKR.Fold.digit, PolyRep.add, PolyRep.gen, PolyRep.const]
+
+/-- **The code arithmetic of `F_q^20` is the field's** (`GKR.Fold.ExtCode.hom`, over the quartic
+step's, `GKR.Fold.ExtCode.overPrime_hom`). -/
+theorem fq20_codeHom : fq20.CodeHom fq20Code.arith :=
+  GKR.Fold.ExtCode.hom falconNative20_polySpec
+    (GKR.Fold.ExtCode.overPrime_hom falconQuartic_polySpec Nat.cast_ofNat (by norm_num))
+    fq20QuarticDecode_beta
+    (fq20QuarticCode.arith_bounded (GKR.Fold.primeArith_bounded (by norm_num) (by decide)))
+
+/-- **`F_q^20`'s arithmetic is arithmetic modulo `q` on `F_q`** (A15: the tower over `F_q^4` over
+`F_q`), so its checks take the fast path `.withPrime 12289`. -/
+theorem fq20Code_primeOn : fq20Code.arith.PrimeOn 12289 :=
+  GKR.Fold.ExtCode.primeOn (E := fq20Code)
+    (GKR.Fold.ExtCode.overPrime_primeOn (p := 12289) (s := 14) (n := 4) (beta := 11)
+      (by norm_num) (by norm_num))
+    (GKR.Fold.ExtCode.absorbs (E := fq20QuarticCode) (GKR.Fold.primeArith_absorbs 12289))
+    (by norm_num) (by decide) (by decide)
 
 end GordieHowe.RealizedProgram

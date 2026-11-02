@@ -379,6 +379,86 @@ theorem forkCommitReaders_allLoads (rd : CReader (I (ir.domainField d)).K) {Lmax
   ((ir.fieldFork src R).join.cp.commitReaders_allLoads _ rd).mono fun _ h =>
     h.trans (nsmul_le_forkLoad rd (le_trans (Nat.le_add_right _ _) hL.2.2.2.2.2))
 
+/-! ## The grants -/
+
+/-- **The batch phase's rounds grant nothing** when the field reader grants nothing. -/
+theorem _root_.GordieHowe.BatchedZerocheck.roundReaders_ungranted {K : Type} [Field K] [Fintype K]
+    {r : CReader K} (hr : r.grant = 0) (D : ℕ) :
+    (k : ℕ) → (BatchedZerocheck.roundReaders r D k).Ungranted
+  | 0 => SpecReaders.Ungranted.empty
+  | k + 1 => SpecReaders.AllGranted.append (SpecReaders.Ungranted.oneP _)
+      (SpecReaders.AllGranted.append (SpecReaders.AllGranted.one r hr)
+        (GordieHowe.BatchedZerocheck.roundReaders_ungranted hr D k))
+
+/-- **A field batch's phase grants nothing** when the field reader grants nothing. -/
+theorem _root_.GordieHowe.BatchedZerocheck.readers_ungranted {K : Type} [Field K] [Fintype K]
+    {r : CReader K} (hr : r.grant = 0) (e D n k : ℕ) :
+    (BatchedZerocheck.readers r e D n k).Ungranted := by
+  have hpi : ∀ m, (CReader.pi m r).grant = 0 := fun m => by rw [CReader.pi_grant, hr, mul_zero]
+  exact SpecReaders.AllGranted.append (SpecReaders.AllGranted.one _ (hpi n))
+    (SpecReaders.AllGranted.append (SpecReaders.Ungranted.oneP _)
+      (SpecReaders.AllGranted.append (SpecReaders.AllGranted.one r hr)
+        (SpecReaders.AllGranted.append (BatchedZerocheck.roundReaders_ungranted hr D n)
+          (SpecReaders.AllGranted.append (SpecReaders.Ungranted.oneP _)
+            (SpecReaders.AllGranted.append (SpecReaders.AllGranted.one _ (hpi k))
+              SpecReaders.Ungranted.empty)))))
+
+/-- **Every branch's readers grant nothing** when the field reader grants nothing: the batch
+phases and GKR. -/
+theorem branchReaders_ungranted {rd : CReader (I (ir.domainField d)).K} (hrd : rd.grant = 0) :
+    (j : ir.BranchIdx d R.Pk) → (branchReaders src R rd j).Ungranted
+  | .inl (.inl (.inl _)) => BatchedZerocheck.readers_ungranted hrd _ _ _ _
+  | .inl (.inl (.inr _)) => SpecReaders.AllGranted.append
+      (BatchedZerocheck.readers_ungranted hrd _ _ _ _) (BatchedZerocheck.roundReaders_ungranted hrd 2 4)
+  | .inl (.inr (.inl _)) => SpecReaders.AllGranted.append (SpecReaders.AllGranted.one rd hrd)
+      (BatchedZerocheck.readers_ungranted hrd _ _ _ _)
+  | .inl (.inr (.inr _)) => SpecReaders.AllGranted.append
+      (SpecReaders.AllGranted.append (SpecReaders.AllGranted.one rd hrd)
+        (BatchedZerocheck.readers_ungranted hrd _ _ _ _))
+      (BatchedZerocheck.roundReaders_ungranted hrd 2 4)
+  | .inr _ => ofListReaders_ungranted
+      (fun i => SpecReaders.sourceInteraction_ungranted hrd (ir.circSource d src i) (ir.circNodes d src i))
+      (List.finRange _)
+
+/-- **The forked domain's branches grant nothing** when the field reader grants nothing. -/
+theorem forkBranchReaders_ungranted {rd : CReader (I (ir.domainField d)).K} (hrd : rd.grant = 0)
+    (b : Fin (ir.fieldFork src R).nb) : (forkBranchReaders src R rd b).Ungranted :=
+  branchReaders_ungranted hrd _
+
+/-- **The join's commit rounds grant nothing** when the field reader grants nothing. -/
+theorem forkCommitReaders_ungranted {rd : CReader (I (ir.domainField d)).K} (hrd : rd.grant = 0) :
+    (forkCommitReaders src R rd).Ungranted :=
+  (ir.fieldFork src R).join.cp.commitReaders_ungranted _ hrd
+
+/-- **The shapes of the planned edges** (`PEdge.shape`): each edge's relative degree and parent. -/
+def edgeShapes {F : FieldInterp} {Pk : F.Packing} (rs : List (REdge F Pk)) : List (ℕ × Option ℕ) :=
+  rs.mapIdx fun a e => (e.plan.degree, parentIdx (rs.map REdge.plan) a)
+
+theorem map_shape_fieldEdges {F : FieldInterp} {Pk : F.Packing} (rs : List (REdge F Pk))
+    (Pads : Type) : (ir.fieldEdges d Pk rs Pads).map PEdge.shape = edgeShapes rs :=
+  List.ext_getElem (by simp [fieldEdges, edgeShapes]) fun _ _ _ => by
+    simp [fieldEdges, edgeShapes, plannedEdge, PEdge.shape]
+
+variable (R) in
+/-- **The largest grant of the join's readers** at the grants `g`: the stages' combination
+challenges at which two or more claims touch (`PEdge.runGrant` at the plan's edge shapes and the
+claims' nodes) and Ligero's constraint challenge. -/
+def forkJoinGrant (g : ForkGrants) : ℕ :=
+  max (runGrant g.stage 0 (edgeShapes R.rs) (ir.claimCount (d := d) (Pk := R.Pk)) (claimReads R.rs))
+    g.linear
+
+/-- **The largest grant of the join's readers** is `forkJoinGrant` when the field reader grants
+nothing. -/
+theorem maxGrant_forkJoinReaders {rd : CReader (I (ir.domainField d)).K} (hrd : rd.grant = 0)
+    (g : ForkGrants) : (forkJoinReaders src R rd g).maxGrant = forkJoinGrant R g := by
+  unfold forkJoinReaders forkJoinGrant
+  refine (SpecReaders.maxGrant_append _ _).trans (congrArg₂ max ?_ ?_)
+  · refine (runReaders_maxGrant rd hrd _ _ _ _ _ _ _ _).trans ?_
+    rw [map_shape_fieldEdges]
+    refine max_eq_right ?_
+    exact (SpecReaders.Ungranted.maxGrant_eq fun i => i.1.elim0).le.trans (Nat.zero_le _)
+  · exact Ligero.MaskRow.Setup.maxGrant_readers _ _ hrd _
+
 end
 
 end GordieHowe.RealizedProgram

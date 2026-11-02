@@ -7,7 +7,10 @@
 //   P256Domain.SmallSystem      affine rows, quadratic triples, a circuit
 //                               predicate, a Bit cell and a field batch
 //                               prove, verify and reject tampering, at
-//                               original and at list-radius Ligero
+//                               original and at list-radius Ligero; the
+//                               circuit's entry blocks in its emission
+//                               walk, its circuit derivations' check and
+//                               its Subfield values typed Field
 //   P256Domain.SkipCharacteristic  the field skip's points are distinct
 //   P256Domain.DISABLED_Micro   the per-cell commit, per-term GKR and
 //                               per-instance field-batch rates
@@ -19,10 +22,14 @@
 #include <cstring>
 #include <memory>
 #include <random>
+#include <sstream>
 #include <string>
 #include <tuple>
 #include <vector>
 
+#include "gordiehowe/compiler/derivation_check.h"
+#include "gordiehowe/compiler/program_builder.h"
+#include "gordiehowe/compiler/program_printer.h"
 #include "gordiehowe/examples/p256/p256_testing.h"
 #include "gtest/gtest.h"
 
@@ -87,6 +94,83 @@ void small_system(bool list_radius) {
     c = compile(h->cs);
   }
   const SmallSystem &t = *h;
+  // The emission walk: per entry of the circuit's emission order, its
+  // block. A Bit cell's check and a placed predicate such as 'circ' have a
+  // root and one assertion per root coordinate; any other entry none.
+  // (A list-radius compile's circuit comes from its first compile: no
+  // walk.)
+  if (const auto *walk = static_cast<const EmitWalk<F> *>(
+          c->compiled_domain(0).gkr_emit_walk())) {
+    const auto entries = c->compiled_domain(0).plan().circuit_entries;
+    ASSERT_EQ(walk->blocks.size(), entries.size());
+    ASSERT_FALSE(entries.empty());
+    for (size_t i = 0; i < entries.size(); ++i) {
+      using CE = DomainPlan::CircuitEntry;
+      const auto &b = walk->blocks[i];
+      const bool rooted = entries[i].kind == CE::kTypeCheck ||
+                          entries[i].kind == CE::kPredicate;
+      EXPECT_EQ(b.root != SIZE_MAX, rooted) << i;
+      if (rooted) EXPECT_EQ(b.Z.size(), walk->nodes.at(b.root).len) << i;
+      EXPECT_LE(b.lo, b.hi) << i;
+    }
+  }
+  // The circuit derivations (Certificates::circuit_derivs): none listed,
+  // none printed; one listed entry citing its instance checks and prints;
+  // each malformed listing is refused.
+  if (!list_radius) {
+    ir::Certificates c0;
+    const ir::Program P = compiler::build_ir(*c, c0);
+    // The prime subfield of F_p256 is the field: a Subfield value is typed
+    // Field, which no node enforces.
+    size_t typed = 0;
+    for (const auto &v : P.values)
+      if (v.name == "x") {
+        ++typed;
+        EXPECT_EQ(v.type, ir::VType::kField);
+        EXPECT_EQ(v.type_source, ir::Value::TypeSource::kNone);
+      }
+    EXPECT_EQ(typed, 1u);
+    ASSERT_EQ(P.circuits.size(), 1u);
+    const size_t n = P.circuits[0].entries.size();
+    ASSERT_GE(n, 1u);
+    const std::string last = std::to_string(n - 1);
+    auto refused = [&](ir::Certificates cc) {
+      compiler::DerivChecker check(P, cc);
+      return check.check_circuit_derivs();
+    };
+    EXPECT_EQ(refused(c0), "");
+    EXPECT_EQ(compiler::print_derivations(P, c0).find("circuitDerivs"), std::string::npos);
+    ir::DStep ca;
+    ca.rule = ir::DStep::kCircuitAssert;
+    ca.id = n - 1;
+    ir::Certificates c1 = c0;
+    c1.circuit_derivs = {{0, {{n - 1, {ca}}}}};
+    EXPECT_EQ(refused(c1), "");
+    const std::string text = compiler::print_derivations(P, c1);
+    EXPECT_NE(text.find("(0, [(" + last + ", [.circuitAssert " + last + "])])"),
+              std::string::npos)
+        << text;
+    EXPECT_NE(text.find("circuitDerivs := circuitDerivs }"), std::string::npos) << text;
+    auto with = [&](auto edit) {
+      ir::Certificates cc = c1;
+      edit(cc.circuit_derivs);
+      return refused(cc);
+    };
+    EXPECT_NE(with([&](auto &d) { d[0].entries[0].second[0].id = n; }), "");
+    EXPECT_NE(with([&](auto &d) { d[0].entries[0].first = n; }), "");
+    EXPECT_NE(with([&](auto &d) { d[0].circuit = 1; }), "");
+    EXPECT_NE(with([&](auto &d) { d[0].entries.push_back(d[0].entries[0]); }), "");
+    EXPECT_NE(with([&](auto &d) { d[0].entries[0].second.clear(); }), "");
+    EXPECT_NE(with([&](auto &d) { d[0].entries[0].second[0].rule = ir::DStep::kRealized; }), "");
+    EXPECT_NE(with([&](auto &d) { d[0].entries[0].second[0].premises = {0}; }), "");
+    EXPECT_NE(with([&](auto &d) { d.push_back(d[0]); }), "");
+    // A program derivation concludes nothing from a circuit step.
+    const size_t pid = 0;
+    ir::Certificates c2 = c0;
+    c2.derivations.at(pid) = {ca};
+    compiler::DerivChecker check(P, c2);
+    EXPECT_NE(check.check(pid), "");
+  }
   const std::string rep = c->report();
   for (const char *want : {
            "assert_zero 'affine' n=4: affine rows (affine)",

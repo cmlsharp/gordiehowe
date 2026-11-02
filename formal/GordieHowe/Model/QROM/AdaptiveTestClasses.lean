@@ -29,7 +29,7 @@ namespace AdaptiveIAlg
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
-  {A : AdaptiveIAlg X Y Req Resp O} (T : A.QTest) (C : Challenger X Y Req Resp)
+  {shA : AlgShape X Y Req Resp} {A : AdaptiveIAlg shA O} (T : A.QTest) (C : Challenger X Y Req Resp)
 
 /-- **The copy register and the challenger's registers** of a composed register of `A^Π`. -/
 noncomputable def copyChal (v : (A.withTest T).toTPKindAlg.CW C) :
@@ -65,13 +65,15 @@ theorem keeps_tpStep_test {k : StepIdx (A.withTest T).slots (A.withTest T).post}
     have hnot : ¬ (k : ℕ) < (A.withTest T).slots := by
       show ¬ (k : ℕ) < A.slots
       omega
-    change (A.withTest T).tpOp k z y x ≠ 0 at h
+    simp only [AdaptiveIAlg.toTPKindAlg_step_op, AlgShape.tpStep_op] at h
+    change (A.withTest T).tpOp false k z y x ≠ 0 at h
     rcases z with r | r | c
-    · simp only [tpOp, hnot, if_false] at h
-      rw [cntKraus_op_apply] at h
+    · rw [tpOp_false, tpRaw_inl, if_neg hnot, cntKraus_op_apply] at h
       exact hks.keeps r _ _ (left_ne_zero_of_mul h)
-    · simp [tpOp, hnot] at h
-    · simp only [tpOp, Matrix.submatrix_apply, Matrix.kroneckerMap_apply] at h
+    · rw [tpOp_false, tpRaw_inr_inl, if_neg hnot] at h
+      exact absurd rfl h
+    · rw [tpOp_false, tpRaw_inr_inr] at h
+      simp only [Matrix.submatrix_apply, Matrix.kroneckerMap_apply] at h
       rw [KrausMap.haltOp_eq_zero (K := (A.withTest T).step k) hks.tp, Matrix.zero_apply,
         zero_mul] at h
       exact absurd rfl h
@@ -121,7 +123,6 @@ theorem fullCircBoth_withTest_split [Nonempty X] [AddGroup Y] :
       ((List.finRange W'.post).map (W'.postCirc C)) ++ _ = _
     rw [hsplit, ReprogrammedCircuit.concat_append]
     simp only [ReprogrammedCircuit.append_assoc]
-    rfl
   · refine ReprogrammedCircuit.headKeep_concat_finRange _ _ _ (fun _ => ?_) (fun hb => ?_)
       (fun _ => headKeep_postCirc_junction T C _) (fun i hi => allKeep_postCirc_test T C ?_)
     · exact ⟨_, inferInstance, _, _, rfl, trivial⟩

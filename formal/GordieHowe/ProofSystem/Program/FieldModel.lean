@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Language.RealizedProgram.CellsLowering
 public import GordieHowe.Language.Realizations.MaskSubfield
+public import GordieHowe.ProofSystem.GKR.FieldCodes
 
 @[expose] public section
 
@@ -33,7 +34,12 @@ decidable fact about the program. This module separates the two:
   model (`Interp.macModel_of_tails`, at a field's `FieldInterp.MacFieldOk`) and the field-form
   model (`Interp.fieldFormModel_of_field`, at a field's `FieldInterp.ReadLinear`) are per field;
 * **the model of a program's interpretation** (`Interp.Model I P ir orng`), the bundle the proof system
-  reads, from the models and the checks (`Interp.Model.of_models`).
+  reads, from the models and the checks (`Interp.Model.of_models`);
+* **the code arithmetic of a field** (`FieldInterp.CodeHom F ar`, the GKR relational check's sums
+  and products of codes are the field's), proved per field next to the field's definition; a field
+  decoding constants as casts has the arithmetic modulo its characteristic
+  (`FieldInterp.codeHom_cast`), an extension field decoding constants as coefficient vectors
+  the arithmetic of `GKR.Fold.ExtCode` (`GKR.Fold.ExtCode.hom`).
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -71,19 +77,36 @@ structure FieldInterp.Model (F : FieldInterp) (primes bits : List String) : Prop
   /-- The bit coordinates are additive. -/
   bitsAdditive : F.BitsAdditive
 
+/-- **The code arithmetic `ar` is the field's** under the decoding of the C++ constants
+(`GKR.Fold.CodeArith.Hom` at `decode`): the GKR relational check's sums and products of codes
+(`GKR.Rel.relOk`) are the field's. Proved per field next to the field's definition. -/
+def FieldInterp.CodeHom (F : FieldInterp) (ar : GKR.Fold.CodeArith) : Prop := ar.Hom F.decode
+
+/-- **A field decoding constants as casts of naturals has the arithmetic modulo its
+characteristic** (`GKR.Fold.primeArith_hom`), the characteristic being its model's. -/
+theorem FieldInterp.codeHom_cast {F : FieldInterp} {primes bits : List String}
+    (hM : F.Model primes bits) (hdec : ∀ n, F.decode n = (n : F.K)) :
+    F.CodeHom (GKR.Fold.primeArith F.spec.characteristic) := by
+  haveI : CharP F.K F.spec.characteristic := hM.ringChar ▸ ringChar.charP F.K
+  have h : F.decode = fun n : ℕ => (n : F.K) := funext hdec
+  unfold FieldInterp.CodeHom
+  rw [h]
+  exact GKR.Fold.primeArith_hom F.spec.characteristic
+
 /-- **An odd field read through a coordinate onto its prime field has the model at `GF(p^1)`**: the
-field `K` of characteristic `p` with the registry specification `spec`, constants decoded as casts,
-the integer reading the value of the coordinate `c` (which takes the cast of a natural to its cast
-and inverts the prime field's `algebraMap`), the node `GF(p^1)` in the prime subfield, the node of
-the field's own name the whole field, and no bit coordinates. -/
+field `K` of characteristic `p` with the registry specification `spec`, a decoding `decode` of
+constants that decodes a constant below `p` to its cast, the integer reading the value of the
+coordinate `c` (which takes the cast of a natural to its cast and inverts the prime field's
+`algebraMap`), the node `GF(p^1)` in the prime subfield, the node of the field's own name the whole
+field, and no bit coordinates. -/
 theorem FieldInterp.model_of_primeCoord {p : ℕ} [Fact p.Prime] {K : Type} [Field K] [Fintype K]
     [DecidableEq K] [Algebra (ZMod p) K] [CharP K p] [ExpChar K p] {spec : FieldSpec}
-    {node : String → AddSubgroup K} {memDec : ∀ s, DecidablePred (· ∈ node s)} {c : K → ZMod p}
-    (entry : ∃ e ∈ fieldRegistry, e.spec = spec) (hchar : spec.characteristic = p)
-    (hcard : Fintype.card K = p ^ spec.degree) (hnat : ∀ n : ℕ, c n = n)
-    (halg : ∀ z, c (algebraMap (ZMod p) K z) = z)
+    {decode : ℕ → K} {node : String → AddSubgroup K} {memDec : ∀ s, DecidablePred (· ∈ node s)}
+    {c : K → ZMod p} (entry : ∃ e ∈ fieldRegistry, e.spec = spec) (hchar : spec.characteristic = p)
+    (hcard : Fintype.card K = p ^ spec.degree) (hdec : ∀ n < p, decode n = n)
+    (hnat : ∀ n : ℕ, c n = n) (halg : ∀ z, c (algebraMap (ZMod p) K z) = z)
     (hnode : ∀ x ∈ node "GF(p^1)", x ∈ fixedField K p 1) (hroot : node spec.name = ⊤) :
-    (FieldInterp.mk spec K (fun n => (n : K)) (fun x => (c x).val) node memDec
+    (FieldInterp.mk spec K decode (fun x => (c x).val) node memDec
       fun _ _ _ => false).Model ["GF(p^1)"] [] where
   entry := entry
   ringChar := by
@@ -104,7 +127,7 @@ theorem FieldInterp.model_of_primeCoord {p : ℕ} [Fact p.Prime] {K : Type} [Fie
     change k < spec.characteristic at hk
     rw [hchar] at hk
     rw [hnat, ZMod.val_natCast, Nat.mod_eq_of_lt hk]
-  decode_natCast _ _ := rfl
+  decode_natCast n hn := hdec n (hchar ▸ hn)
   natCast_toNat E hE x hx := by
     rw [List.mem_singleton] at hE
     subst hE
@@ -132,6 +155,20 @@ def twoFieldNodes (a b : List String) : ℕ → List String
   | 0 => a
   | _ + 1 => b
 
+/-- **A two-field interpretation**: field `0` is `F0`, every other field identifier `F1`, with the
+opaque functions `ops` (the shape of `mldsaInterpOf` and `falconInterpOf`, at any opaque
+functions). -/
+abbrev Interp.twoField (F0 F1 : FieldInterp) (ops : String → List (ℕ → ℕ) → ℕ → ℕ) : Interp :=
+  ⟨fun n => match n with | 0 => F0 | _ => F1, ops⟩
+
+/-- **The field models of a two-field interpretation**: field `0` has `F0`'s model, every other
+field `F1`'s. -/
+theorem Interp.models_twoField {F0 F1 : FieldInterp} {ops : String → List (ℕ → ℕ) → ℕ → ℕ}
+    {p0 b0 p1 b1 : List String} (h0 : F0.Model p0 b0) (h1 : F1.Model p1 b1) :
+    (Interp.twoField F0 F1 ops).Models (twoFieldNodes p0 p1) (twoFieldNodes b0 b1)
+  | 0 => h0
+  | _ + 1 => h1
+
 /-! ## The program's checks -/
 
 /-- **The interpretation's fields have the program's names and characteristics** (decided). -/
@@ -158,9 +195,22 @@ def BitNodesIn (ir : RealizedProgram) (bits : ℕ → List String) : Prop :=
   ∀ v < ir.values.length, (ir.value v).type = .bit → (ir.value v).typeSource = .node →
     ((ir.value v).node.all fun nr => nr.name ∈ bits (ir.valueField v)) = true
 
-instance (ir : RealizedProgram) (bits : ℕ → List String) : Decidable (ir.BitNodesIn bits) := by
-  unfold RealizedProgram.BitNodesIn
-  infer_instance
+/-- **`BitNodesIn`, as a test**: one walk of the values (`allIdx`), each value read from the walk,
+where the `∀ v <` form looks each value up in the values' trie (`bitNodesInB_iff`). -/
+def bitNodesInB (ir : RealizedProgram) (bits : ℕ → List String) : Bool :=
+  allIdx (fun _ x => !(decide (x.type = .bit) && decide (x.typeSource = .node)) ||
+    x.node.all fun nr => decide (nr.name ∈ bits (ir.fieldOfV x))) ir.values 0
+
+theorem bitNodesInB_iff (ir : RealizedProgram) (bits : ℕ → List String) :
+    ir.bitNodesInB bits = true ↔ ir.BitNodesIn bits := by
+  rw [bitNodesInB, allIdx_iff]
+  refine forall₂_congr fun v hv => ?_
+  rw [← value_eq_getD, valueField_eq]
+  by_cases h1 : (ir.value v).type = .bit <;> by_cases h2 : (ir.value v).typeSource = .node <;>
+    simp [h1, h2]
+
+instance (ir : RealizedProgram) (bits : ℕ → List String) : Decidable (ir.BitNodesIn bits) :=
+  decidable_of_iff _ (ir.bitNodesInB_iff bits)
 
 /-- **The opaque `Bit` values computed from arguments return `0` or `1`** (the program's part of
 `Interp.Lawful.opaqueBit`). -/
