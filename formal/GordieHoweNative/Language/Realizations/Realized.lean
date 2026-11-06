@@ -195,6 +195,12 @@ def kernelSel? (q : ℕ) : Option SelShape :=
   (ir.selShape? q).filter fun sh =>
     !sh.records.isEmpty && ir.tilesB sh && decide (ir.IsPhaseChal sh.chal)
 
+/-- **The selection error terms at challenge `j`**: per selection a product form's kernel reads
+with its fingerprint at `j` (`kernelSel?`), the fingerprint's degree. -/
+def selErrorTerms (j : ℕ) : List (ℕ × ℕ) :=
+  (List.range ir.predicates.length).filterMap fun q =>
+    (ir.kernelSel? q).bind fun sh => if sh.chal = j then some (sh.deg, ir.tmaxOf j) else none
+
 /-- **A read fixed when challenge `j` is drawn**: a challenge drawn no later than `j`
 (`ChalBefore`, `j` itself included), a late value of a phase before `j`'s, or a pad. -/
 def ReadFixedAt (j : ℕ) : Read → Prop
@@ -208,5 +214,16 @@ instance (j : ℕ) (rd : Read) : Decidable (ir.ReadFixedAt j rd) := by
   all_goals infer_instance
 
 end
+
+/-- Whether a predicate body is a `mod_0` (an integer equality). -/
+def _root_.GordieHowe.RealizedProgram.PredBody.isIntEq : PredBody → Bool
+  | .mod _ 0 _ _ _ => true
+  | _ => false
+
+/-- **Whether a predicate body is a `mod_q` in the field form**: `isFieldForm` at a predicate read
+from a walk of the predicates (`isFieldForm_eq`). -/
+def PredBody.isFieldForm : PredBody → Bool
+  | .mod _ _ _ _ real => real.form == .field
+  | _ => false
 
 end GordieHowe.RealizedProgram

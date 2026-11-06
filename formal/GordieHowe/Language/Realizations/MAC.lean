@@ -7,7 +7,7 @@ public import Mathlib.Algebra.Polynomial.Roots
 public import Mathlib.Algebra.BigOperators.Fin
 public import GordieHowe.Language.Realizations.Bits
 public import GordieHowe.Foundations.Probability.ChallengeEvent
-public import GordieHowe.Applications.Params
+public import GordieHowe.Foundations.Algebra.ConvMatrix
 
 @[expose] public section
 

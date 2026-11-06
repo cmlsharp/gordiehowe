@@ -35,44 +35,46 @@ set_option maxRecDepth 4096 in
 instance : Emulated.MldsaEAlgebra program where
   layout := layout
   offsetBound_lt := by decide
-  lenWeight := by decide +kernel
-  lenSigL := by decide +kernel
-  pred0 := rfl
-  pred1 := rfl
-  pred2 := rfl
-  pred11 := ⟨_, rfl⟩
-  pred12 := ⟨_, rfl⟩
-  pred13 := ⟨_, rfl⟩
-  pred14 := ⟨_, rfl⟩
-  pred15 := ⟨_, rfl⟩
-  pred274 := ⟨_, rfl, rfl⟩
-  expr7 := rfl
-  expr8 := rfl
-  expr0 := rfl
-  expr1 := rfl
-  expr2 := rfl
-  expr3 := rfl
-  expr4 := rfl
-  expr5 := rfl
+  lenWeight := by shape_decide
+  lenSigL := by shape_decide
+  pred0 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicate_hint_2ew1_5fbound_body
+  pred1 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicate_hint_2edecompose_body
+  pred2 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicate_hint_2einterval_body
+  pred11 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicate_signature_2ew_body
+  pred12 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicate_norm_2ez_body
+  pred13 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicate_hint_2eoffset_body
+  pred14 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicate_hint_2eslack_body
+  pred15 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicate_hint_5fweight_2eweight_body
+  pred274 := by
+    obtain ⟨r, h, hf, -⟩ := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicate_signature_2erelation_2esource_body
+    exact ⟨r, h, by rw [hf]; rfl⟩
+  expr7 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.expr_signature_2erelation_2eshape_2eleft_2efirst_2esecond_2efirst_2efirst_eq
+  expr8 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.expr_signature_2erelation_2eshape_2eleft_2esecond_2efirst_2efirst_eq
+  expr0 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.expr_hint_2einterval_2eshape_2eright_2efirst_2eshared_2esecond_2eshared_2efirst_eq
+  expr1 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.expr_hint_2edecompose_2eshape_2eleft_2efirst_2eshared_2efirst_2efirst_2esecond_2efirst_2efirst_2efirst_2efirst_2esecond_2efirst_eq
+  expr2 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.expr_hint_2einterval_2eshape_2eright_2efirst_2eshared_2efirst_2esecond_eq
+  expr3 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.expr_hint_2einterval_2eshape_2eright_2efirst_2eshared_2esecond_eq
+  expr4 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.expr_hint_2einterval_2eshape_2eright_2efirst_eq
+  expr5 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.expr_hint_2edecompose_2eshape_2eleft_2efirst_eq
   inSource_A := by
-    decide +kernel
+    shape_decide
   lensA := by
-    decide +kernel
+    shape_decide
   boolChecks := by
-    decide +kernel
+    shape_decide
   constsA := by
-    decide +kernel
+    shape_decide
   constsU := by
-    decide +kernel
-  refsA := by decide +kernel
+    shape_decide
+  refsA := by shape_decide
   lensU := by
-    decide +kernel
+    shape_decide
   valsU := by
-    decide +kernel
+    shape_decide
   sigData := by
-    decide +kernel
+    shape_decide
   boundZW := by
-    decide +kernel
+    shape_decide
 
 /-- **Domain `A`'s obligation** (`Emulated.algebraSound`). -/
 theorem algebraSound : AlgebraSound := Emulated.algebraSound

@@ -103,6 +103,13 @@ section
 def IsLate (v : ℕ) : Prop :=
   (ir.value v).kind.isLate = true ∧ 1 ≤ (ir.value v).phase ∧ (ir.value v).phase ≤ ir.phases
 
+/-- A phase-zero value cannot be a late value. -/
+theorem not_IsLate_of_phase_zero {v : Nat} (h : (ir.value v).phase = 0) : ¬ ir.IsLate v := by
+  intro hv
+  have hp := hv.2.1
+  rw [h] at hp
+  exact Nat.not_succ_le_zero 0 hp
+
 instance (v : ℕ) : Decidable (ir.IsLate v) := inferInstanceAs (Decidable (_ ∧ _))
 
 /-- **The lengths of the shared expressions**, with `n` levels (`0`: every length `0`). -/

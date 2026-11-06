@@ -28,6 +28,7 @@
 #include <utility>
 #include <vector>
 
+#include "gordiehowe/compiler/ghc_derivs.h"
 #include "gordiehowe/compiler/lowering.h"
 #include "gordiehowe/compiler/plan_export.h"
 #include "gordiehowe/compiler/program_builder.h"
@@ -42,6 +43,8 @@ namespace proofs::gordiehowe::compiler {
 // The program as plain data, before rendering: what the export test
 // checks. Values and predicates are numbered as in the module.
 struct ProgramData {
+  ResolvedSourceMetadata source_metadata;
+
   struct Value {
     std::string name, kind, type;
     size_t domain = 0, phase = 0, size = 0;
@@ -131,6 +134,7 @@ struct ProgramData {
   // The derivations' module (print_derivations_module), and each
   // predicate without a derivation with its gap.
   std::string derivs;
+  std::vector<uint8_t> derivs_ghc;
   std::vector<std::pair<std::string, std::string>> deriv_gaps;
 };
 
@@ -283,9 +287,10 @@ inline ProgramData data_of(const ir::Program &p, std::string text) {
 // of its realized program, which must be byte for byte the program its
 // domains were built from (a compile cache hit's among them).
 template <class S>
-ir::Certificates export_certificates(const BasicCompiledSystem<S> &cs) {
+ir::Certificates export_certificates(const BasicCompiledSystem<S> &cs,
+                                      ResolvedSourceMetadata *metadata = nullptr) {
   ir::Certificates c;
-  const ir::Program fresh = build_ir(cs, c);
+  const ir::Program fresh = build_ir(cs, c, metadata);
   ir::Program held = cs.program();
   held.realizations.clear();
   if (ir::write_program(fresh) != ir::write_program(held))
@@ -300,11 +305,17 @@ ir::Certificates export_certificates(const BasicCompiledSystem<S> &cs) {
 template <class S>
 ProgramData build_program(const BasicCompiledSystem<S> &cs,
                           const ExportMeta &meta) {
-  const ir::Certificates c = export_certificates(cs);
+  ResolvedSourceMetadata metadata;
+  const ir::Certificates c = export_certificates(cs, &metadata);
   const ir::Program &p = cs.program();
   std::string text = print_program(p, meta, cs.digest());
   ProgramData out = plan_program_internal::data_of(p, std::move(text));
-  out.derivs = print_derivations_module(p, c, meta);
+  out.source_metadata = std::move(metadata);
+  out.derivs_ghc = ghc::derivations_file(p, c);
+  char derivs_hash[17];
+  std::snprintf(derivs_hash, sizeof(derivs_hash), "%016llx",
+                static_cast<unsigned long long>(ghc::fnv1a(out.derivs_ghc)));
+  out.derivs = print_derivations_module(p, c, meta, derivs_hash);
   for (size_t i = 0; i < c.deriv_gaps.size(); ++i)
     if (!c.deriv_gaps[i].empty())
       out.deriv_gaps.push_back({p.predicates.at(i).name, c.deriv_gaps[i]});

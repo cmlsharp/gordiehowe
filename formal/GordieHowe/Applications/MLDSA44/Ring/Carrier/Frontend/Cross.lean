@@ -243,7 +243,7 @@ theorem crossSgn (k : Fin _root_.MLDSA.ringDegree) :
   unfold cBits
   simpa using h.sgn k k.isLt
 
-variable [MLDSA44.AField F0]
+variable [RealizedProgram.PrimeCastField F0 pGold]
 
 /-- **A's challenge polynomial is H's decoded challenge**, given the crossing and the Booleanity
 of A's challenge bits. -/

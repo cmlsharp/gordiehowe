@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.ProofSystem.Program.ForkFigures
 public import GordieHowe.Applications.MLDSA44.Emulated.ROMParams.Theorem
+public import GordieHowe.Applications.MLDSA44.Native.ROMParams.Setting
 public import GordieHowe.ProofSystem.Program.BCSFormat
 public import GordieHowe.ProofSystem.Program.Transcript.ReaderLoads
 
@@ -43,17 +44,11 @@ open scoped NNReal ENNReal
 
 /-! ## The statement -/
 
-/-- **The statements of the BCS transformation**: encoded ML-DSA-44 public keys (with the empty
-context) whose decoded key's `ExpandA` finishes within `1008` SHAKE128 bytes per `RejNTTPoly`
-call (`MLDSA44.ExpandAWithin`, FIPS 204 Algorithm 32 with the bound Appendix C permits). At the
-other keys no signature verifies (`MLDSA44.Verifies.expandA`). -/
-abbrev KeyStmt : Type :=
-  {s : MLDSA44.PoP.Statement 0 // MLDSA44.ExpandAWithin _root_.MLDSA.mldsa44 (MLDSA44.pkDecode44 s.key).rho}
-
-/-- **Equality of statements is decidable**: `MLDSA44.PoP.Statement`'s derived instance on the
-subtype, which compares the `1312` key bytes. It is irreducible, so that unifying it with a
-configuration's `Configuration.decEq` unfolds the configuration, not the comparison. -/
-@[irreducible] instance instDecidableEqKeyStmt : DecidableEq KeyStmt := inferInstance
+/-- **The statements of the BCS transformation**: those of the native program at the ROM parameters
+(`Native.ROMParams.KeyStmt`), encoded ML-DSA-44 public keys whose `ExpandA` finishes within the byte
+budget. One type, with its one decidable equality (`Native.ROMParams.instDecidableEqKeyStmt`), serves
+every ML-DSA-44 configuration. -/
+abbrev KeyStmt : Type := Native.ROMParams.KeyStmt
 
 /-- **The codec of a statement**: the key-and-context codec (`keyContextCodec 0`), parsing only
 keys whose `ExpandA` finishes within the byte budget (decided by `MLDSA44.ExpandAWithin`'s
@@ -125,7 +120,7 @@ theorem keyOf_stmtOfKey (pk : MLDSA44.PublicKey44) : KeyOf pk (stmtOfKey pk) whe
     have hn : ((i : ℕ) * 4 + j) * 256 + k < 4096 := by omega
     rw [RealizedProgram.evalE_leaf]
     unfold stmtOfKey stmtOfKeyWith
-    rw [dif_pos ⟨rfl, hn⟩, castElt_castElt (by decide +kernel)]
+    rw [dif_pos ⟨rfl, hn⟩, castElt_castElt (by shape_decide)]
     have hr : aRow _ hn = i := Fin.ext (by simp only [aRow]; omega)
     have hc : aCol (((i : ℕ) * 4 + j) * 256 + k) = j := Fin.ext (by simp only [aCol]; omega)
     have hk : aIdx (((i : ℕ) * 4 + j) * 256 + k) = k := Fin.ext (by simp only [aIdx]; omega)
@@ -135,7 +130,7 @@ theorem keyOf_stmtOfKey (pk : MLDSA44.PublicKey44) : KeyOf pk (stmtOfKey pk) whe
     have hn : (i : ℕ) * 256 + k < 1024 := by omega
     rw [RealizedProgram.evalE_leaf]
     unfold stmtOfKey stmtOfKeyWith
-    rw [dif_neg (by omega), dif_pos ⟨rfl, hn⟩, castElt_castElt (by decide +kernel)]
+    rw [dif_neg (by omega), dif_pos ⟨rfl, hn⟩, castElt_castElt (by shape_decide)]
     have hi : (⟨((i : ℕ) * 256 + k) / 256, by change _ < 4; omega⟩ :
         Fin _root_.MLDSA.mldsa44.k) = i := Fin.ext (by simp; omega)
     have hk : aIdx ((i : ℕ) * 256 + k) = k := Fin.ext (by simp only [aIdx]; omega)
@@ -148,7 +143,7 @@ theorem keyOf_stmtOfKey (pk : MLDSA44.PublicKey44) : KeyOf pk (stmtOfKey pk) whe
     rw [RealizedProgram.evalE_leaf]
     unfold stmtOfKey stmtOfKeyWith
     rw [dif_neg (by omega), dif_neg (by omega), dif_pos ⟨rfl, by omega⟩,
-      castElt_castElt (by decide +kernel)]
+      castElt_castElt (by shape_decide)]
 
 /-- **A statement's values hold its decoded key's preprocessing** (`KeyOf`). -/
 theorem keyOf_stmtOf (s : KeyStmt) : KeyOf (MLDSA44.pkDecode44 s.1.key) (stmtOf s) := by
@@ -160,7 +155,8 @@ theorem keyOf_stmtOf (s : KeyStmt) : KeyOf (MLDSA44.pkDecode44 s.1.key) (stmtOf 
 theorem rangeValues : program.declaredRanges = [(56, 8380417), (57, 1024)] ∧
     True ∧ (program.value 56).size = 4096 ∧
     (program.value 57).size = 1024 ∧ program.valueField 56 = 0 ∧ program.valueField 57 = 0 := by
-  decide +kernel
+  refine ⟨Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.statement_ranges, trivial, ?_⟩
+  shape_decide
 
 /-- **A key's statement values lie within the declared bounds** (`RealizedProgram.StmtBounded`): `A`'s
 coefficients are below `q`, a decoded key's `t1` coefficients below `2^10`
@@ -175,7 +171,7 @@ theorem stmtBounded_stmtOf (s : KeyStmt) : program.StmtBounded interp (stmtOf s)
     refine ⟨_, KeyNTT.vals_lt (_root_.MLDSA.Concrete.invNTT
       (((MLDSA44.expandABounded _root_.MLDSA.mldsa44 (MLDSA44.pkDecode44 s.1.key).rho).get
         (aRow i hi)).get (aCol i))) (aIdx i), ?_⟩
-    rw [RealizedProgram.stmtRead_of_isStmtLeaf _ (by decide +kernel)]
+    rw [RealizedProgram.stmtRead_of_isStmtLeaf _ (by shape_decide)]
     show stmtOfKeyWith _ (MLDSA44.expandABounded _ _) 56 i = _
     unfold stmtOfKeyWith
     rw [dif_pos ⟨rfl, hi⟩]
@@ -188,7 +184,7 @@ theorem stmtBounded_stmtOf (s : KeyStmt) : program.StmtBounded interp (stmtOf s)
     rw [rangeValues.2.2.2.1] at hi
     refine ⟨_, MLDSA44.pkDecode44_t1_lt s.1.key ⟨i / 256, by change i / 256 < 4; omega⟩ (aIdx i),
       ?_⟩
-    rw [RealizedProgram.stmtRead_of_isStmtLeaf _ (by decide +kernel)]
+    rw [RealizedProgram.stmtRead_of_isStmtLeaf _ (by shape_decide)]
     show stmtOfKeyWith _ (MLDSA44.expandABounded _ _) 57 i = _
     unfold stmtOfKeyWith
     rw [dif_neg (show ¬ ((57 : ℕ) = 56 ∧ i < 4096) by omega), dif_pos ⟨rfl, hi⟩]

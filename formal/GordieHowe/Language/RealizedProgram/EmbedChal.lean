@@ -68,12 +68,6 @@ theorem probUniform_setChal_eq {j : ℕ} (hsz : (ir.challenge j).size = 1)
       (Uniform.of_equiv (Equiv.funUnique (Fin 1) F.K)) Q
   exact key _ _ hsz h0 _ hsm fun a => P (e.updChal j a)
 
-/-- **A uniform element read through a cast between equal field identifiers** is uniform. -/
-theorem probUniform_castElt {a b : ℕ} (h : a = b) (Q : (I b).K → Prop) :
-    Pr[x ← (I a).K : Q (castElt x)] = Pr[y ← (I b).K : Q y] := by
-  subst h
-  simp only [castElt_self]
-
 /-- **Setting the renamed challenge and reading through the renaming** is setting the challenge
 in the environment read through the renaming, when no other challenge is renamed to it. -/
 theorem pullEnv_updChal {σ : Renaming} {V : List ℕ} {j : ℕ}

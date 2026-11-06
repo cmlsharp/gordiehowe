@@ -16,6 +16,7 @@
 #ifndef PRIVACY_PROOFS_ZK_LIB_GORDIEHOWE_EXAMPLES_FALCON_FALCON_NATIVE_H_
 #define PRIVACY_PROOFS_ZK_LIB_GORDIEHOWE_EXAMPLES_FALCON_FALCON_NATIVE_H_
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -100,6 +101,159 @@ void encoding_budget(const Scope &s, D &A,
   lib::arith::assert_encodable_native(s, A, t, S::kHighBudget, "encoding");
 }
 
+// Named finite metadata for the checked Falcon512, 32-byte frontend.
+inline void native_shape_inputs(const Scope &cs) {
+  examples::falcon::falcon_hash_shape_inputs(cs);
+  using Root = ShapeExprSelector::Root;
+  using Edge = ShapeExprSelector::Edge;
+  cs.shape_predicate("signature.equation.realized", {"signature.equation",
+      PredicateShapeSelector::Role::kRealization, PredicateShapeSelector::Body::kEqual});
+  cs.shape_predicate("signature.equation.source", {"signature.equation",
+      PredicateShapeSelector::Role::kSource, PredicateShapeSelector::Body::kMod});
+  cs.shape_value("norm.zero",
+      {Root::kPredicateRight, "norm.top", {}});
+  cs.shape_expr("norm.center.shape.left.first.first",
+      {Root::kPredicateLeft, "norm.center", {{Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("norm.center.shape.left.second.first.first.first.first",
+      {Root::kPredicateLeft, "norm.center", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("norm.center.shape.left.second.first.first.first.second.first",
+      {Root::kPredicateLeft, "norm.center", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.center.shape.left.second.first.first.second.first",
+      {Root::kPredicateLeft, "norm.center", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.top.shape.left",
+      {Root::kPredicateLeft, "norm.top", {}});
+  cs.shape_expr("norm.column0.shape.left.first",
+      {Root::kPredicateLeft, "norm.column0", {{Edge::kFirst}}});
+  cs.shape_expr("norm.column0.shape.right.first",
+      {Root::kPredicateRight, "norm.column0", {{Edge::kFirst}}});
+  cs.shape_expr("norm.column0.shape.right.second.first",
+      {Root::kPredicateRight, "norm.column0", {{Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.column1.shape.left.first.first.second",
+      {Root::kPredicateLeft, "norm.column1", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kSecond}}});
+  cs.shape_expr("norm.column1.shape.left.second",
+      {Root::kPredicateLeft, "norm.column1", {{Edge::kSecond}}});
+  cs.shape_expr("norm.column1.shape.right.first",
+      {Root::kPredicateRight, "norm.column1", {{Edge::kFirst}}});
+  cs.shape_expr("norm.column1.shape.right.second.first",
+      {Root::kPredicateRight, "norm.column1", {{Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.column4.shape.left.first.first",
+      {Root::kPredicateLeft, "norm.column4", {{Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("norm.column2.shape.left.second",
+      {Root::kPredicateLeft, "norm.column2", {{Edge::kSecond}}});
+  cs.shape_expr("norm.column2.shape.right.first",
+      {Root::kPredicateRight, "norm.column2", {{Edge::kFirst}}});
+  cs.shape_expr("norm.column2.shape.right.second.first",
+      {Root::kPredicateRight, "norm.column2", {{Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.column3.shape.left.second",
+      {Root::kPredicateLeft, "norm.column3", {{Edge::kSecond}}});
+  cs.shape_expr("norm.column3.shape.right.first",
+      {Root::kPredicateRight, "norm.column3", {{Edge::kFirst}}});
+  cs.shape_expr("norm.column3.shape.right.second.first",
+      {Root::kPredicateRight, "norm.column3", {{Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.column4.shape.left.second",
+      {Root::kPredicateLeft, "norm.column4", {{Edge::kSecond}}});
+  cs.shape_expr("norm.column4.shape.right.first",
+      {Root::kPredicateRight, "norm.column4", {{Edge::kFirst}}});
+  cs.shape_expr("norm.column4.shape.right.second.first",
+      {Root::kPredicateRight, "norm.column4", {{Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.column5.shape.left",
+      {Root::kPredicateLeft, "norm.column5", {}});
+  cs.shape_expr("norm.column5.shape.right",
+      {Root::kPredicateRight, "norm.column5", {}});
+  cs.shape_expr("norm.normalize.shape.left.first.first",
+      {Root::kPredicateLeft, "norm.normalize", {{Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("norm.normalize.shape.left.first.second.first",
+      {Root::kPredicateLeft, "norm.normalize", {{Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.normalize.shape.left.second",
+      {Root::kPredicateLeft, "norm.normalize", {{Edge::kSecond}}});
+  cs.shape_expr("norm.normalize.shape.right.second.first",
+      {Root::kPredicateRight, "norm.normalize", {{Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.complement.shape.left.first.first",
+      {Root::kPredicateLeft, "norm.complement", {{Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("norm.complement.shape.left.second",
+      {Root::kPredicateLeft, "norm.complement", {{Edge::kSecond}}});
+  cs.shape_expr("encoding.b.boolean.shape.right.shared.second.first",
+      {Root::kPredicateRight, "encoding.b.boolean", {{Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("encoding.b.boolean.shape.right.shared.first",
+      {Root::kPredicateRight, "encoding.b.boolean", {{Edge::kShared}, {Edge::kFirst}}});
+  cs.shape_expr("encoding.b.boolean.shape.right",
+      {Root::kPredicateRight, "encoding.b.boolean", {}});
+  NamedShapeInputs inputs{
+    {
+      "norm.zero", "statement.hhat", "norm.target"
+    },
+    {
+      "norm.center", "norm.top", "norm.column0", "norm.column1", "norm.column2", "norm.column3",
+      "norm.column4", "norm.column5", "norm.normalize", "norm.complement",
+      "signature.equation.realized", "crossing.c_A.boolean", "norm.Dc.boolean",
+      "encoding.b.boolean", "norm.a", "norm.sq", "norm.cc", "norm.nd", "norm.nc", "norm.D",
+      "encoding.high", "encoding.slack", "signature.equation.source", "mac.equal"
+    },
+    {
+      "norm.center.shape.left.first.first",
+      "norm.center.shape.left.second.first.first.first.first",
+      "norm.center.shape.left.second.first.first.first.second.first",
+      "norm.center.shape.left.second.first.first.second.first", "norm.top.shape.left",
+      "norm.column0.shape.left.first", "norm.column0.shape.right.first",
+      "norm.column0.shape.right.second.first", "norm.column1.shape.left.first.first.second",
+      "norm.column1.shape.left.second", "norm.column1.shape.right.first",
+      "norm.column1.shape.right.second.first", "norm.column4.shape.left.first.first",
+      "norm.column2.shape.left.second", "norm.column2.shape.right.first",
+      "norm.column2.shape.right.second.first", "norm.column3.shape.left.second",
+      "norm.column3.shape.right.first", "norm.column3.shape.right.second.first",
+      "norm.column4.shape.left.second", "norm.column4.shape.right.first",
+      "norm.column4.shape.right.second.first", "norm.column5.shape.left",
+      "norm.column5.shape.right", "norm.normalize.shape.left.first.first",
+      "norm.normalize.shape.left.first.second.first", "norm.normalize.shape.left.second",
+      "norm.normalize.shape.right.second.first", "norm.complement.shape.left.first.first",
+      "norm.complement.shape.left.second", "encoding.b.boolean.shape.right.shared.second.first",
+      "encoding.b.boolean.shape.right.shared.first", "encoding.b.boolean.shape.right"
+    },
+    {}
+  };
+  const auto request_value = [&inputs](const std::string &name) {
+    if (std::find(inputs.values.begin(), inputs.values.end(), name) ==
+        inputs.values.end()) {
+      inputs.values.push_back(name);
+    }
+  };
+  const auto role = [&cs, &request_value](const std::string &name,
+                                        SourceRole tag, size_t slot) {
+    request_value(name);
+    cs.source_role(name, tag, slot);
+  };
+  role("crossing.c_A", SourceRole::kAWitness, 0);
+  role("s2", SourceRole::kAWitness, 1);
+  role("signature.s1", SourceRole::kAWitness, 2);
+  role("norm.a", SourceRole::kAWitness, 3);
+  role("norm.sq", SourceRole::kAWitness, 4);
+  role("norm.cc", SourceRole::kAWitness, 5);
+  role("norm.nd", SourceRole::kAWitness, 6);
+  role("norm.nc", SourceRole::kAWitness, 7);
+  role("norm.D", SourceRole::kAWitness, 8);
+  role("norm.Dc", SourceRole::kAWitness, 9);
+  role("statement.hhat", SourceRole::kStmtMember, 0);
+  // The complete post-hash predicate boundary is classified by checked roles.
+  for (const auto *name : {"mac.H", "mac.A.g0", "mac.A.g1",
+                           "mac.A.g2", "mac.A.g3", "range.encoding.slack.reconstruct",
+                           "range.encoding.slack.top", "mac.blind.boolean",
+                           "mac.r.boolean", "mac.gq", "mac.final.q", "mac"}) {
+    if (std::find(inputs.predicates.begin(), inputs.predicates.end(), name) ==
+        inputs.predicates.end()) {
+      inputs.predicates.push_back(name);
+    }
+  }
+  request_value("mac.blind");
+  request_value("encoding.slack.offset");
+  cs.shape_value("norm.center.constant.right", {Root::kPredicateRight, "norm.center", {}});
+  request_value("norm.center.constant.right");
+  // Constant leaves are selected from named gadget expressions.
+  cs.shape_value("signature.equation.realized.constant.right",
+      {Root::kPredicateRight, "signature.equation.realized", {}});
+  request_value("signature.equation.realized.constant.right");
+  cs.shape_inputs(inputs);
+}
+
 // ---------------------------------------------------------------- system --
 
 // The relation over the statement ST and the witness W. The norm is
@@ -121,6 +275,9 @@ void falcon_native_relation(typename Env<P>::Sys &cs, const Env<P> &env,
       signature_relation<S>(cs.scope("signature"), A, key, c_A, s2);
   const auto trace = norm<P, S>(cs, A, s1, s2);
   encoding_budget<S>(cs, A, trace);
+  if constexpr (S::kN == 512) {
+    if (max_bytes == 32) native_shape_inputs(cs);
+  }
 }
 
 // The relation of set S for messages of at most MAX_BYTES bytes, compiled

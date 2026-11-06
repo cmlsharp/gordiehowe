@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.RealizedProgram.BatchRelation
+public import GordieHoweNative.Language.RealizedProgram.Views
 
 @[expose] public section
 
@@ -448,6 +449,34 @@ def bitsAtomB (d : ℕ) (e : Expr) : Bool :=
   (ir.exprNodes e).all (ir.bitsLeafOk d) && (ir.closure Expr.coefNodes e).all (ir.bitsNd · == 0) &&
     decide (ir.degOf ir.bitsNd e ≤ 1)
 
+/-- **The batch forms on bits in one walk**: `bpoly (bitsAtomB d)` is `bpolySum`'s form at the leaf
+test `bitsLeafOk d` and the degrees `bitsNd`. -/
+theorem bpoly_bitsAtomB (d : ℕ) : ir.bpoly (ir.bitsAtomB d) =
+    fun e =>
+      (ir.bpolySum (ir.bitsLeafOk d) ir.bitsNd (ir.refSum (ir.bitsLeafOk d) ir.bitsNd) e).2 := by
+  have : ir.bitsAtomB d = fun x => (ir.atomSum (ir.bitsLeafOk d) ir.bitsNd x).atom :=
+    funext fun x => by rw [atomSum_atom]; rfl
+  funext e
+  rw [this, bpolySum_eq _ _ (refSum_eq _ _)]
+
+theorem bitsLeafOk_eq (d v : ℕ) : ir.bitsLeafOk d v = ir.bitsLeafV d (ir.value v) := by
+  unfold bitsLeafOk bitsLeafV bitViewOk
+  split <;> simp_all
+
+theorem bitsNd_eq (v : ℕ) : ir.bitsNd v = if bitsNdV (ir.value v) then 1 else 0 := by
+  unfold bitsNd bitsNdV
+  cases (ir.value v).kind <;> rfl
+
+theorem bitsLeafB_eq (d : ℕ) : ir.bitsLeafB d = ir.bitsLeafOk d := by
+  funext v
+  rw [bitsLeafB, bitsLeafFail, bitTest_eq (fun _ x => ir.bitsLeafV d x), bitsLeafOk_eq,
+    value_eq_getD]
+
+theorem bitsNdB_eq : ir.bitsNdB = ir.bitsNd := by
+  funext v
+  rw [bitsNdB, constFail, bitTest_eq (fun _ x => bitsNdV x), bitsNd_eq, value_eq_getD]
+  cases bitsNdV (ir.values.getD v default) <;> rfl
+
 /-! ## The batch check -/
 
 variable (ir) in
@@ -457,6 +486,23 @@ def atomOf (d b : ℕ) : Expr → Bool :=
   match (ir.batch b).operands with
   | .columns => ir.atomB
   | .bits => ir.bitsAtomB d
+
+variable (ir) in
+/-- **The batch forms of batch `b`** in domain `d`, each in one walk (`bpolySum`) with the leaf
+tests and the shared expressions' summaries by bit sets: `bpoly` at the atom test `atomOf d b`
+(`formsOf_eq`). -/
+def formsOf (d b : ℕ) : Expr → Option (List BMono) :=
+  match (ir.batch b).operands with
+  | .columns => fun e =>
+    (ir.bpolySum ir.batchLeafB ir.cellNdB (ir.refSum ir.batchLeafB ir.cellNdB) e).2
+  | .bits => fun e =>
+    (ir.bpolySum (ir.bitsLeafB d) ir.bitsNdB (ir.refSum (ir.bitsLeafB d) ir.bitsNdB) e).2
+
+theorem formsOf_eq (d b : ℕ) : ir.formsOf d b = ir.bpoly (ir.atomOf d b) := by
+  unfold formsOf atomOf
+  split
+  · rw [bpoly_atomB_eq_bits]
+  · rw [bpoly_bitsAtomB, bitsLeafB_eq, bitsNdB_eq]
 
 variable (ir) in
 /-- **The coordinates of batch `b`'s parts** in domain `d`: their coordinates side by side, read in
@@ -518,7 +564,7 @@ variable (ir) in
 /-- **`BatchOk`, decided.** -/
 def batchOkB (d b : ℕ) : Bool :=
   decide (b < ir.batches.length) && decide ((ir.batch b).domain = d) &&
-    ir.partsOkB (ir.atomOf d b) d b &&
+    ir.partsOkB (ir.formsOf d b) d b &&
     (!ir.merged b || decide (2 ≤ (ir.batch b).parts.length)) &&
     decide (0 < (ir.batch b).degree) &&
     (((ir.batch b).operands != .bits) ||
@@ -532,11 +578,13 @@ def batchOkB (d b : ℕ) : Bool :=
       2 ^ (ir.batch b).rounds * (ir.batch b).width) &&
     decide ((ir.batch b).pads = ((ir.batch b).degree - 1) * ((ir.batch b).width - 1) +
       ((ir.batch b).rounds * (ir.batch b).degree +
-        ((ir.relShape (ir.atomOf d b) d b).k + (ir.relShape (ir.atomOf d b) d b).cells)) +
+        ((ir.batchShape (ir.formsOf d b) d b).k + (ir.batchShape (ir.formsOf d b) d b).cells)) +
       (if (ir.batch b).operands = .bits then 2 * 4 else 0))
 
+/-- **A batch passing the batch check is a batch of the domain.** -/
 theorem batchOkB_iff (d b : ℕ) : ir.batchOkB d b = true ↔ ir.BatchOk d b := by
-  simp only [batchOkB, Bool.and_eq_true, decide_eq_true_eq, partsOkB_iff, Bool.or_eq_true,
+  simp only [batchOkB, formsOf_eq, ← relShape_eq_batchShape, Bool.and_eq_true, decide_eq_true_eq,
+    partsOkB_iff, Bool.or_eq_true,
     Bool.not_eq_true', bne_iff_ne, ne_eq]
   constructor
   · rintro ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h7'⟩, h8⟩, h9⟩, h10⟩, h11⟩
@@ -551,6 +599,10 @@ theorem batchOkB_iff (d b : ℕ) : ir.batchOkB d b = true ↔ ir.BatchOk d b := 
     · by_cases hb : (ir.batch b).operands = .bits
       · exact .inr (h.bits hb)
       · exact .inl hb
+
+/-- **A batch passing the batch check is a batch of the domain.** -/
+theorem batchOkB_domain {d b : ℕ} (h : ir.batchOkB d b = true) : (ir.batch b).domain = d :=
+  ((ir.batchOkB_iff d b).1 h).domain
 
 variable (ir) in
 /-- **A covered batch on columns**: `BatchOk` with the operand map `columns`. -/
@@ -841,7 +893,7 @@ operands at the cells' valuation (`bitsBatchRelation_operand`, `opValAt_bitsLift
 theorem bitsBatchRelation_Q_cellValuation {d b : ℕ} (hb : ir.bitsBatchOkB d b = true)
     (hadd : (I (ir.domainField d)).BitsAdditive) (j : Fin (ir.batch b).parts.length)
     {e e' : Expr} {pf : PartForm} (hs : ir.partSides d b j = some (e, e'))
-    (hpf : ir.partForm (ir.bitsAtomB d) e e' = some pf)
+    (hpf : ir.partForm (ir.bpoly (ir.bitsAtomB d)) e e' = some pf)
     (x : ir.Valuation I) (r : (ir.layout I).Run) (a : ir.Cell d → (I (ir.domainField d)).K)
     (i : Fin (ir.partLen d b j)) :
     (ir.bitsBatchRelation I d b hb hadd).Q (fun o =>
@@ -913,7 +965,7 @@ theorem bitsBatchRelation_instance (hz : ir.ZeroDecodes I) {d b : ℕ}
     (hb : ir.bitsBatchOkB d b = true)
     (hadd : (I (ir.domainField d)).BitsAdditive) (j : Fin (ir.batch b).parts.length)
     {e e' : Expr} {pf : PartForm} (hs : ir.partSides d b j = some (e, e'))
-    (hpf : ir.partForm (ir.bitsAtomB d) e e' = some pf)
+    (hpf : ir.partForm (ir.bpoly (ir.bitsAtomB d)) e e' = some pf)
     (x : ir.Valuation I) (r : (ir.layout I).Run) (a : ir.Cell d → (I (ir.domainField d)).K)
     (i : Fin (ir.partLen d b j)) :
     (ir.bitsBatchRelation I d b hb hadd).Q (fun o =>

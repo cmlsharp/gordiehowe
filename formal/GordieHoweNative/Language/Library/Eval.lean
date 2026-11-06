@@ -39,6 +39,21 @@ def isConstant (v : ℕ) : Bool :=
   | .constant _ => true
   | _ => false
 
+/-- The entries of a value whose checked kind is a constant. -/
+theorem constEntries_of_kind {v : Nat} {es : List Nat}
+    (h : (ir.value v).kind = .constant es) : ir.constEntries v = es := by
+  simp only [constEntries, h]
+
+/-- A checked constant kind passes the constant classifier. -/
+theorem isConstant_of_kind {v : Nat} {es : List Nat}
+    (h : (ir.value v).kind = .constant es) : ir.isConstant v = true := by
+  simp only [isConstant, h]
+
+/-- A checked private kind is not classified as a constant. -/
+theorem isConstant_of_priv {v : Nat} (h : (ir.value v).kind = .priv) :
+    ir.isConstant v = false := by
+  simp only [isConstant, h]
+
 end
 
 end GordieHowe.RealizedProgram

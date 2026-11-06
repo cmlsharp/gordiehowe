@@ -5,8 +5,9 @@
 // module, `def program : GordieHowe.RealizedProgram` in the namespace
 // GordieHowe.Generated.<lean_name>.Program.
 //
-// One definition per value, shared expression, predicate and circuit, each
-// on one line; the program lists them by name. Every distinct index map is
+// Definitions for the index maps, the constants' runs and entries, the
+// circuits' aliases, the predicates and the circuits; the values are written
+// inline in the program's list. Every distinct index map is
 // one definition idx<k>, written as runs and repetitions (IndexMap.ofSegs).
 // A field element is a natural; a negative integer is Int.negSucc.
 //
@@ -366,6 +367,9 @@ class Printer {
     return list_of(v, [](Id x) { return num(x); });
   }
 
+  // A constant's entries, as the program writes them.
+  std::string constant(const std::vector<std::string> &entries) { return const_text(entries); }
+
   std::string value(const ir::Value &v) {
     using K = ir::Value;
     if (!v.unmodeled.empty())
@@ -434,12 +438,17 @@ class Printer {
     return s + " }";
   }
 
-  std::string mod_real(const ir::ModRealization &m) {
+  // The text of a mod_q's form (Lean `ModForm`).
+  static std::string mod_form(ir::ModForm f) {
     static const char *forms[] = {".field",    ".constant",        ".bit",
                                   ".oneDigit", ".digits", ".committedDigits",
                                   ".grouped",  ".integer",         ".product",
                                   ".spectralProduct"};
-    std::string out = "{ form := " + std::string(forms[int(m.form)]);
+    return forms[int(f)];
+  }
+
+  std::string mod_real(const ir::ModRealization &m) {
+    std::string out = "{ form := " + mod_form(m.form);
     if (m.has_interval)
       out += ", lhsLo := " + int_text(m.lhs_lo) + ", lhsHi := " +
              int_text(m.lhs_hi) + ", rhsLo := " + int_text(m.rhs_lo) +
@@ -481,6 +490,10 @@ class Printer {
     return out + " }";
   }
 
+  // The text of a cross-field equality's kind (Lean `CrossKind`): the
+  // default, width 1.
+  static std::string cross_kind(const ir::Predicate &) { return "{}"; }
+
   std::string body(const ir::Predicate &q) {
     if (!q.unmodeled.empty())
       plan_export_internal::export_fail("predicate '" + q.name +
@@ -521,7 +534,7 @@ class Printer {
       case ir::Predicate::kCross: {
         const ir::MacRealization &m = q.mac;
         return ".cross " + d + " " + paren(expr(q.lhs)) + " " + num(q.dy) + " " +
-               paren(expr(q.rhs)) + " {} { macField := " + num(m.mac_field) +
+               paren(expr(q.rhs)) + " " + cross_kind(q) + " { macField := " + num(m.mac_field) +
                ", key := " + num(m.key) +
                (m.blind_x == kNone ? std::string()
                                    : ", blindX := some " + num(m.blind_x)) +
@@ -914,30 +927,6 @@ inline std::string print_closures(const ir::Certificates &c) {
          num(offw) + "⟩\n\n";
 }
 
-// The shared entries' structural annotations of certificates C as one Lean
-// definition, `exprAnn : RealizedProgram.ExprAnn`: the bounds, field sets and
-// lengths packed, the public mask, and the widths; NFIELDS fields.
-inline std::string print_expr_ann(const ir::Certificates &c, size_t nfields) {
-  using program_printer_internal::num;
-  using program_printer_internal::packed_decimal;
-  using program_printer_internal::width_below;
-  uint64_t top = 1, ltop = 1, dtop = 1;
-  for (uint64_t x : c.expr_max) top = std::max(top, x + 1);
-  for (uint64_t x : c.expr_len) ltop = std::max(ltop, x + 1);
-  for (uint64_t x : c.expr_deg) dtop = std::max(dtop, x + 1);
-  const size_t mw = width_below(top), fw = std::max<size_t>(1, nfields), lw = width_below(ltop),
-               dw = width_below(dtop);
-  return "/-- The shared expressions' structural annotations: per entry one past the values "
-         "it reads,\nthe fields it reads in its own field, whether its coefficient values are "
-         "public, its length. -/\n"
-         "def exprAnn : RealizedProgram.ExprAnn :=\n  ⟨" +
-         packed_decimal(c.expr_max, mw) + ",\n    " + packed_decimal(c.expr_fields, fw) +
-         ",\n    " + program_printer_internal::mask_decimal(c.expr_pub) + ",\n    " +
-         packed_decimal(c.expr_len, lw) + ",\n    " + packed_decimal(c.expr_deg, dw) + ",\n    " +
-         program_printer_internal::mask_decimal(c.expr_zero) + ", " + num(mw) + ", " + num(fw) +
-         ", " + num(lw) + ", " + num(dw) + "⟩\n\n";
-}
-
 // The degree annotations of certificates C as one Lean definition, `degAnn :
 // List RealizedProgram.DegAnn`: per challenge the values' and the shared
 // entries' degrees, packed, and their width.
@@ -981,81 +970,6 @@ inline std::string print_reads_ann(const ir::Certificates &c) {
          program_printer_internal::packed_decimal(ids, idw) + ",\n    " +
          program_printer_internal::packed_decimal(offs, offw) + ", " + num(idw) + ", " +
          num(offw) + "⟩⟩\n\n";
-}
-
-// The completeness certificate of certificates C as Lean definitions,
-// `gens : RealizedProgram.Gens` aligned with the program's values and
-// `cderivs : RealizedProgram.CDerivations` aligned with its predicates.
-inline std::string print_completion(const ir::Certificates &c) {
-  using program_printer_internal::num;
-  using G = ir::Certificates::Gen;
-  using S = ir::Certificates::CStep;
-  auto gen = [](const G &g) -> std::string {
-    switch (g.kind) {
-      case G::kNone: return ".none";
-      case G::kSource: return ".source";
-      case G::kLookupDigit:
-        return "(.lookupDigit " + num(g.a) + " " + (g.second ? "true" : "false") + " " +
-               num(g.b) + ")";
-      case G::kCommDigit:
-        return "(.commDigit " + num(g.a) + " " + num(g.b) + " " + num(g.c) + " " + num(g.d) +
-               ")";
-      case G::kSpec: return "(.spec " + num(g.a) + ")";
-      case G::kStaticHist: return "(.staticHist " + num(g.a) + " " + num(g.b) + ")";
-      case G::kTag: return "(.tag " + num(g.a) + ")";
-      case G::kAcc: return "(.acc " + num(g.a) + ")";
-      case G::kQuotDigit: return "(.quotDigit " + num(g.a) + ")";
-      case G::kDigitsAcc: return "(.digitsAcc " + num(g.a) + ")";
-      case G::kLowDigit: return "(.lowDigit " + num(g.a) + " " + num(g.b) + ")";
-      case G::kLateHist: return "(.lateHist " + num(g.a) + " " + num(g.b) + ")";
-    }
-    return ".none";
-  };
-  auto step = [](const S &x) -> std::string {
-    switch (x.kind) {
-      case S::kSource: return ".source";
-      case S::kQuotIn: return ".quotIn " + num(x.id);
-      case S::kDigitRow: return ".digitRow " + num(x.id);
-      case S::kMacRow: {
-        static const char *const roles[] = {".tail",       ".h",          ".accRow",
-                                            "",            ".residues",   ".gqLookup",
-                                            ".quotLookup", ".lowLookup",  ".topLookup",
-                                            ".wrap"};
-        const std::string role = x.role == S::kGroupRow ? "(.groupRow " + num(x.group) + ")"
-                                                        : std::string(roles[x.role]);
-        return "(.macRow " + num(x.id) + " " + num(x.slot) + " " + role + ")";
-      }
-      case S::kPadBool: return ".padBool";
-      case S::kHyp: return ".hyp " + num(x.id);
-      case S::kCommIn: return "(.commIn " + num(x.id) + " " + num(x.j) + ")";
-      case S::kCommRow: {
-        std::string l = "[";
-        for (size_t k = 0; k < x.lks.size(); ++k) l += (k ? ", " : "") + num(x.lks[k]);
-        return "(.commRow " + num(x.id) + " " + l + "])";
-      }
-      case S::kSpecProd: return ".specProd " + num(x.id);
-      case S::kSpecRow: return ".specRow " + num(x.id);
-      case S::kFieldRow: return ".fieldRow";
-      case S::kTwoTail:
-        return "(.twoTail " + num(x.id) + " " + num(x.slot) + ")";
-    }
-    return ".hyp 0";
-  };
-  std::string o =
-      "/-- The completeness certificate's generators, per value. -/\n"
-      "def gens : RealizedProgram.Gens :=\n  " +
-      aligned_list(c.gens.size(), [&](size_t i) { return gen(c.gens[i]); }) + "\n\n";
-  o += "/-- The completeness derivations, per predicate, and their packed ranks. -/\n"
-       "def cderivs : RealizedProgram.CDerivations :=\n  ⟨" +
-       aligned_list(c.comp_derivs.size(),
-                    [&](size_t i) {
-                      std::string d = "[";
-                      for (size_t k = 0; k < c.comp_derivs[i].size(); ++k)
-                        d += (k ? ", " : "") + step(c.comp_derivs[i][k]);
-                      return d + "]";
-                    }) +
-       ",\n    " + program_printer_internal::packed_decimal(c.comp_ranks, 32) + "⟩\n\n";
-  return o;
 }
 
 // The derivations of certificates C of program P (Lean `derivs : List
@@ -1310,15 +1224,19 @@ inline std::string print_derivations(
 // The derivations' module of program P with certificates C (META's
 // `Derivs`, beside its Program module): print_derivations under the
 // Program module's namespace, whose index maps its expressions read.
-inline std::string print_derivations_module(const ir::Program &p,
+inline std::string print_derivations_module(const ir::Program &,
                                             const ir::Certificates &c,
-                                            const ExportMeta &meta) {
+                                            const ExportMeta &meta, const std::string &hash) {
   const std::string prog = lean_module_name(meta, "Program");
   std::string o;
   o += kLeanLicenseHeader;
   o += "module\n\n"
        "public import GordieHowe.Language.Realizations.Derivation\n"
-       "public import " + prog + "\n\n";
+       "public import GordieHowe.Language.Realizations.Circuit.LoadNative\n"
+       "public import " + prog + "\n"
+       "meta import GordieHowe.Language.Realizations.Derivation\n"
+       "meta import GordieHowe.Language.Realizations.Circuit.LoadNative\n"
+       "meta import " + prog + "\n\n";
   o += "@[expose] public section\n\n";
   o += "/-!\n# GordieHowe derivations: " + meta.config + "-" + meta.profile +
        "\n\n";
@@ -1329,7 +1247,11 @@ inline std::string print_derivations_module(const ir::Program &p,
   o += kLeanModuleOptions;
   o += "namespace " + lean_module_name(meta, "Derivs") + "\n\n";
   o += "open GordieHowe.RealizedProgram " + prog + "\n\n";
-  o += print_derivations(p, c);
+  o += "load_program_ghc \"Derivs.ghc\" \"" + hash + "\"\n\n";
+  o += "/-- The derivations, as the checker reads them. -/\n"
+       "def derivations : Derivations := { derivs := derivs, ranks := ranks, shared := shared";
+  if (!c.circuit_derivs.empty()) o += ", circuitDerivs := circuitDerivs";
+  o += " }\n\n";
   o += "end " + lean_module_name(meta, "Derivs") + "\n";
   return o;
 }
@@ -1438,6 +1360,9 @@ inline std::string print_program(const ir::Program &p, const ExportMeta &meta,
     if (i < p.index_map_forms.size() && !p.index_map_forms[i].empty()) {
       o += "/-- An index map. -/\ndef idx" + std::to_string(i) +
            " : IndexMap :=\n  " + p.index_map_forms[i] + "\n\n";
+      o += "/-- The construction of this finite index map. -/\ntheorem idx" +
+           std::to_string(i) + "_eq : idx" + std::to_string(i) + " =\n  " +
+           p.index_map_forms[i] + " := rfl\n\n";
       continue;
     }
     auto inum = [](long long x) {
@@ -1460,6 +1385,9 @@ inline std::string print_program(const ir::Program &p, const ExportMeta &meta,
     }
     o += "/-- An index map. -/\ndef idx" + std::to_string(i) +
          " : IndexMap :=\n  IndexMap.ofSegs " + nat_list(xs, 2) + "\n\n";
+    o += "/-- The construction of this finite index map. -/\ntheorem idx" +
+         std::to_string(i) + "_eq : idx" + std::to_string(i) +
+         " =\n  IndexMap.ofSegs " + nat_list(xs, 2) + " := rfl\n\n";
   }
   o += runs;
   o += defs;
@@ -1508,7 +1436,9 @@ inline std::string print_program(const ir::Program &p, const ExportMeta &meta,
   }
   if (!checks.empty()) checks = ", checks := [" + checks + "]";
   o += "/-- The realized program of `" + meta.config + "-" + meta.profile +
-       "`. -/\ndef program : RealizedProgram :=\n  { phases := " +
+       "`. Sealed: importers see the name, not the body; only the modules that check the "
+       "program import it with `import all`. -/\n@[no_expose, irreducible] def program : "
+       "RealizedProgram :=\n  { phases := " +
        num(p.phases) + ",\n    statement := { msgLen := " + num(meta.msg_len) +
        ", ctxLen := " + num(meta.ctx_len) + checks + " },\n    fields := [" +
        fl + "],\n    domains := [" + doms + "],\n    values := " + values +

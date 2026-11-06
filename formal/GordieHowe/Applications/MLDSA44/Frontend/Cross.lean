@@ -3,8 +3,10 @@
 
 module
 
+public import GordieHowe.Generated.MLDSA44.Native.ROMParams.Certified
 public import GordieHowe.Applications.MLDSA44.Frontend.Basic
 public import GordieHowe.Language.Library.Eval
+public import GordieHowe.Generated.MLDSA44.Native.ROMParams.ShapeFacts
 
 @[expose] public section
 
@@ -25,41 +27,56 @@ namespace GordieHowe.MLDSA44
 open Generated.MLDSA44.Native.ROMParams.Program
 open GordieHowe.Bits
 
-/-! ## The program's data -/
+/-! ## The program's data
 
-/-! The program's predicate and shared-expression tables have `273` and `526` entries; reading an
-entry by `rfl` unfolds `List.getD` that deep, past the default recursion depth, so the identities
-below raise `maxRecDepth` (generated data, not a proof structure). -/
+The shared expressions the crossing reads, from the program's shape facts
+(`GordieHowe.Generated.MLDSA44.Native.ROMParams.ShapeFacts`). -/
 
-section Tables
-
-set_option maxRecDepth 4096
-
-theorem pred272 : program.predicate 272 = «p.mac.equal» := rfl
+open Generated.MLDSA44.Native.ROMParams.ShapeFacts in
 theorem expr525 : program.expr 525 =
-    .reindex idx83 (RealizedProgram.concatR (.leaf 70) [.ref 523, .ref 524]) := rfl
-theorem expr524 : program.expr 524 = .ref 522 := rfl
+    .reindex idx83 (RealizedProgram.concatR (.leaf 70) [.ref 523, .ref 524]) := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_eq
+open Generated.MLDSA44.Native.ROMParams.ShapeFacts in
+theorem expr524 : program.expr 524 = .ref 522 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_eq
+open Generated.MLDSA44.Native.ROMParams.ShapeFacts in
 theorem expr7 : program.expr 7 = .reindex idx10 (RealizedProgram.concatR (.leaf 62) [.leaf 59]) :=
-  rfl
-
-end Tables
+  Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eright_eq
 
 /-- The program's shared expressions read only earlier ones. -/
 theorem refsOrdered : program.RefsOrdered :=
-  (RealizedProgram.refsOrderedB_iff program).1 (by decide +kernel)
+  Generated.MLDSA44.Native.ROMParams.conditions.wellFormed.refsOrdered
 
 /-- The lengths the crossing reads. -/
-theorem len525 : program.exprLen (.ref 525) = 6656 := by decide +kernel
-theorem len523 : program.exprLen (.ref 523) = 256 := by decide +kernel
-theorem len524 : program.exprLen (.ref 524) = 256 := by decide +kernel
-theorem len71 : program.exprLen (.leaf 70) = 6144 := by decide +kernel
-theorem len63 : program.exprLen (.leaf 62) = 6144 := by decide +kernel
-theorem len60 : program.exprLen (.leaf 59) = 512 := by decide +kernel
-theorem crossFields : program.domainField 1 = 1 ∧ program.domainField 0 = 0 := by
-  decide +kernel
+theorem crossRefs' : 525 < program.exprs.length ∧ 524 < program.exprs.length ∧
+    7 < program.exprs.length ∧ 523 < program.exprs.length ∧ 522 < program.exprs.length := by
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> apply RealizedProgram.expr_lt_of_ne_default
+  · rw [Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_eq]; decide
+  · rw [Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_eq]; decide
+  · rw [Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eright_eq]; decide
+  · rw [Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2efirst_eq]; decide
+  · rw [Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2eshared_eq]; decide
+theorem len522 : program.exprLen (.ref 522) = 256 := by
+  rw [RealizedProgram.exprLen_ref refsOrdered crossRefs'.2.2.2.2,
+    Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2eshared_eq]
+  shape_decide
+theorem len525 : program.exprLen (.ref 525) = 6656 := by
+  rw [RealizedProgram.exprLen_ref refsOrdered crossRefs'.1, Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_eq]
+  shape_decide
+theorem len523 : program.exprLen (.ref 523) = 256 := by
+  rw [RealizedProgram.exprLen_ref refsOrdered crossRefs'.2.2.2.1,
+    Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2efirst_eq]
+  shape_decide
+theorem len524 : program.exprLen (.ref 524) = 256 := by
+  rw [RealizedProgram.exprLen_ref refsOrdered crossRefs'.2.1,
+    Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_eq, len522]
+theorem len71 : program.exprLen (.leaf 70) = 6144 := by shape_decide
+theorem len63 : program.exprLen (.leaf 62) = 6144 := by shape_decide
+theorem len60 : program.exprLen (.leaf 59) = 512 := by shape_decide
+theorem crossFields : program.domainField 1 = 1 ∧ program.domainField 0 = 0 :=
+  ⟨Generated.MLDSA44.Native.ROMParams.conditions.fieldTable.domainField_eq 1 (by decide),
+    Generated.MLDSA44.Native.ROMParams.conditions.fieldTable.domainField_eq 0 (by decide)⟩
 theorem crossRefs : 525 < program.exprs.length ∧ 524 < program.exprs.length ∧
-    7 < program.exprs.length := by
-  decide +kernel
+    7 < program.exprs.length :=
+  ⟨crossRefs'.1, crossRefs'.2.1, crossRefs'.2.2.1⟩
 
 /-! The index maps of the crossing: `x` reads `w1` below `6144`, then the support and the sign of
 each coefficient alternately; `y` reads its two parts in order. -/
@@ -111,7 +128,7 @@ instance : MldsaHCross program where
   len71 := len71
   len523 := len523
   len524 := len524
-  bitView71 := by decide +kernel
+  bitView71 := by shape_decide
   domainField1 := crossFields.1
 
 section H
@@ -198,7 +215,6 @@ class MldsaACross (program : RealizedProgram) : Prop extends MldsaABase program,
   /-- Predicate `272` (`mac.equal`) crosses `525` of domain `H` and `7` of domain `A`. -/
   crossPred : ∃ c, (program.predicate 272).body = .cross 1 (.ref 525) 0 (.ref 7) {} c
 
-set_option maxRecDepth 4096 in
 /-- The native program at the ROM parameters has the crossing's facts. -/
 instance : MldsaACross program where
   lt7 := crossRefs.2.2
@@ -207,8 +223,8 @@ instance : MldsaACross program where
   len60 := len60
   len525 := len525
   domainField0 := crossFields.2
-  src272 := ⟨by decide +kernel, by rw [pred272]; rfl⟩
-  crossPred := ⟨_, by rw [pred272]; rfl⟩
+  src272 := by shape_decide
+  crossPred := Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_mac_2eequal_body
 
 section A
 

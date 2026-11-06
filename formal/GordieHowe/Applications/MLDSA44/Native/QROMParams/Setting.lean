@@ -79,10 +79,30 @@ def stmtOfKeyWith (pk : MLDSA44.PublicKey44)
       (MLDSA44.PoP.Compose.trOf pk ⟨i / 8, by omega⟩).toNat (i % 8))
   else 0
 
+/-- Evaluate the statement constructor at one value coordinate. -/
+theorem stmtOfKeyWith_apply (pk : MLDSA44.PublicKey44)
+    (aHat : _root_.MLDSA.TqMatrix _root_.MLDSA.mldsa44.k _root_.MLDSA.mldsa44.l)
+    (v i : ℕ) : stmtOfKeyWith pk aHat v i =
+  if h : v = 55 ∧ i < 4096 then
+    RealizedProgram.castElt (a := 0) ((((aHat.get (aRow i h.2)).get (aCol i)).coeffs.get
+      (aIdx i)).val : (interp 0).K)
+  else if h : v = 56 ∧ i < 1024 then
+    RealizedProgram.castElt (a := 0) (((pk.t1.get (⟨i / 256, by change i / 256 < 4; omega⟩ :
+      Fin _root_.MLDSA.mldsa44.k)).get (aIdx i)).val : (interp 0).K)
+  else if h : v = 66 ∧ i < 512 then
+    RealizedProgram.castElt (a := 1) (Bits.constBit (K := (interp 1).K)
+      (MLDSA44.PoP.Compose.trOf pk ⟨i / 8, by omega⟩).toNat (i % 8))
+  else 0 := rfl
+
+
 /-- **The statement values of a key** (`stmtOfKeyWith` at `Â = ExpandA(ρ)`,
 `Rows.aHat`). -/
 noncomputable def stmtOfKey (pk : MLDSA44.PublicKey44) : program.Valuation interp :=
   stmtOfKeyWith pk (Rows.aHat pk)
+
+/-- A key statement uses the expanded public matrix. -/
+theorem stmtOfKey_apply (pk : MLDSA44.PublicKey44) (v i : ℕ) :
+    stmtOfKey pk v i = stmtOfKeyWith pk (Rows.aHat pk) v i := rfl
 
 /-- **The statement values of a statement**: the values of its decoded key, with
 `Â = ExpandA(ρ)` computed within the byte budget by `MLDSA44.expandABounded`.
@@ -111,7 +131,7 @@ theorem keyOf_stmtOfKey (pk : MLDSA44.PublicKey44) : KeyOf pk (stmtOfKey pk) whe
     unfold aHatAt
     rw [RealizedProgram.evalE_leaf]
     unfold stmtOfKey stmtOfKeyWith
-    rw [dif_pos ⟨rfl, hn⟩, castElt_castElt (by decide +kernel)]
+    rw [dif_pos ⟨rfl, hn⟩, castElt_castElt (by shape_decide)]
     have hr : aRow _ hn = i := Fin.ext (by simp only [aRow]; omega)
     have hc : aCol (((i : ℕ) * 4 + j) * 256 + k) = j := Fin.ext (by simp only [aCol]; omega)
     have hk : aIdx (((i : ℕ) * 4 + j) * 256 + k) = k := Fin.ext (by simp only [aIdx]; omega)
@@ -122,7 +142,7 @@ theorem keyOf_stmtOfKey (pk : MLDSA44.PublicKey44) : KeyOf pk (stmtOfKey pk) whe
     unfold t1At
     rw [RealizedProgram.evalE_leaf]
     unfold stmtOfKey stmtOfKeyWith
-    rw [dif_neg (by omega), dif_pos ⟨rfl, hn⟩, castElt_castElt (by decide +kernel)]
+    rw [dif_neg (by omega), dif_pos ⟨rfl, hn⟩, castElt_castElt (by shape_decide)]
     have hi : (⟨((i : ℕ) * 256 + k) / 256, by change _ < 4; omega⟩ :
         Fin _root_.MLDSA.mldsa44.k) = i := Fin.ext (by simp; omega)
     have hk : aIdx ((i : ℕ) * 256 + k) = k := Fin.ext (by simp only [aIdx]; omega)
@@ -135,7 +155,7 @@ theorem keyOf_stmtOfKey (pk : MLDSA44.PublicKey44) : KeyOf pk (stmtOfKey pk) whe
     rw [RealizedProgram.evalE_leaf]
     unfold stmtOfKey stmtOfKeyWith
     rw [dif_neg (by omega), dif_neg (by omega), dif_pos ⟨rfl, by omega⟩,
-      castElt_castElt (by decide +kernel)]
+      castElt_castElt (by shape_decide)]
 
 /-- **A statement's values hold its decoded key's preprocessing** (`KeyOf`). -/
 theorem keyOf_stmtOf (s : KeyStmt) : KeyOf (MLDSA44.pkDecode44 s.1.key) (stmtOf s) := by

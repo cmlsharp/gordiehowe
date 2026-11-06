@@ -6,6 +6,7 @@ module
 public import GordieHowe.Language.RealizedProgram.Cells
 public import GordieHowe.ProofSystem.Program.System
 public import GordieHowe.Language.RealizedProgram.Check
+public import GordieHoweNative.Language.RealizedProgram.Affine
 
 @[expose] public section
 
@@ -545,14 +546,6 @@ namespace GordieHowe.RealizedProgram
 
 open Export
 
-/-- **The sides of a predicate of domain `d` with target `affine`**: a field `equal`'s, or a
-`mod_0`'s field equation's. -/
-def PredBody.rowSides (b : PredBody) (d : ℕ) : Option (Expr × Expr) :=
-  match b with
-  | .equal d' e e' .affine => if d' = d then some (e, e') else none
-  | .mod d' 0 e e' real => if d' = d ∧ real.target = some .affine then some (e, e') else none
-  | _ => none
-
 section
 
 /-- **A row predicate placed holds exactly when its sides agree** (`PlacedHolds`: a field `equal`
@@ -585,24 +578,6 @@ theorem all_eq_all_of_mem {α : Type} {l : List α} {f g : α → Bool} (h : ∀
   | nil => rfl
   | cons x xs ih =>
     simp only [List.all_cons, h x List.mem_cons_self, ih fun y hy => h y (List.mem_cons_of_mem _ hy)]
-
-variable (ir) in
-/-- **The step of `pubT`**: whether value `v` reads nothing of the committed assignment, from
-whether the values it reads do (`r`; the step of `pubB`). -/
-def pubStep (r : ℕ → Bool) (_ : ℕ) (x : Value) : Bool :=
-  match x.kind with
-  | .pub .input => true
-  | .pub (.opaque _ args) => args.all r
-  | .pub (.expr e) => (ir.nodesOf e).all r
-  | .constant _ => true
-  | .challenge _ => true
-  | .message u => decide (u < ir.values.length ∧ ir.IsLate u)
-  | _ => false
-
-variable (ir) in
-/-- **The table of the values reading nothing of the committed assignment** (`pubB`), one entry
-per value. -/
-def pubT : NatTrie Bool := memo ir.pubStep false ir.values
 
 theorem pubStep_congr (hwf : ir.WellFormed) : MemoDeps ir.pubStep ir.values ir.valueDeps := by
   refine ⟨fun v hv => hwf.valueDeps_lt hv, fun v hv r r' h => ?_⟩
@@ -646,19 +621,6 @@ theorem pubB_fuel_eq_pubT (hwf : ir.WellFormed) (v : ℕ) :
 end PubTable
 
 variable (ir : RealizedProgram)
-
-/-- **A sum of constant multiples of committed values and constants**: a committed value, a
-constant, a sum, or a constant multiple. Its values are affine in the cells
-(`RealizedProgram.isAff_evalE_linPriv`). -/
-def linPrivB : Expr → Bool
-  | .leaf u =>
-    match (ir.value u).kind with
-    | .priv => true
-    | .constant _ => true
-    | _ => false
-  | .add a b => linPrivB a && linPrivB b
-  | .scale (.const _) a => linPrivB a
-  | _ => false
 
 /-- **A value a row may read**: a committed value, a pad copy or a late value (affine in the cells),
 a value bound to a sum of constant multiples of committed values and constants (its digits,

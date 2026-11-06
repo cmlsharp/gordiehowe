@@ -25,6 +25,8 @@
 #include <string>
 #include <type_traits>
 
+#include "gordiehowe/examples/mldsa/mldsa_shape_inputs.h"
+#include "gordiehowe/examples/mldsa/mldsa_source_roles.h"
 #include "gordiehowe/examples/mldsa/mldsa_gadgets.h"
 #include "gordiehowe/examples/mldsa/mldsa_hash.h"
 #include "gordiehowe/examples/mldsa/mldsa_params.h"
@@ -114,6 +116,17 @@ void mldsa_native_relation(
                                          w.msg_length, max_bytes);
   crossing(cs.scope("crossing"), hash, sig.c);
   pin_full_system_placement(H, packing);
+  if constexpr (std::is_same_v<S, MLDSA44>) {
+    auto shapes = mldsa_native_shape_inputs(cs);
+    shapes.phase_count = true;
+    shapes.families.push_back(mldsa_keccak_rounds(cs));
+    for (size_t p = 2; p <= 7; ++p)
+      shapes.exprs.push_back("h2c.c_tilde.r" + std::to_string(24 * (p - 1)) + ".shape.absorbed");
+    shapes.source_predicate_ranges.emplace_back("h2c.mu.blocks.r0", "h2c.sample.mem.fresh");
+    mldsa_source_roles<S>(cs, shapes, SourceFamily::kPossession,
+      mu_layout(st.ctx.dims().at(0), max_bytes).buffer() / 136, st.ctx.dims().at(0));
+    cs.shape_inputs(shapes);
+  }
 }
 
 // The relation over messages of at most MAX_BYTES bytes under contexts of

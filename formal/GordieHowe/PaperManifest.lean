@@ -88,7 +88,22 @@ public import GordieHowe.Foundations.ReedSolomon.BerlekampWelch
 public import GordieHowe.Foundations.ReedSolomon.AffineProximity
 public import GordieHowe.Applications.MLDSA44.Emulated.ROMParams.Theorem
 public import GordieHowe.Applications.MLDSA44.Emulated.QROMParams.Theorem
-public import GordieHowe.Applications.ZKFigures
+public import GordieHowe.Applications.Falcon512.Emulated.QROMParams.Figures
+public import GordieHowe.Applications.Falcon512.Emulated.ROMParams.Figures
+public import GordieHowe.Applications.Falcon512.Native.QROMParams.Figures
+public import GordieHowe.Applications.Falcon512.Native.ROMParams.Figures
+public import GordieHowe.Applications.Falcon512.Ring.Carrier.QROMParams.Figures
+public import GordieHowe.Applications.Falcon512.Ring.Carrier.ROMParams.Figures
+public import GordieHowe.Applications.Falcon512.Ring.Native.QROMParams.Figures
+public import GordieHowe.Applications.Falcon512.Ring.Native.ROMParams.Figures
+public import GordieHowe.Applications.MLDSA44.Emulated.QROMParams.Figures
+public import GordieHowe.Applications.MLDSA44.Emulated.ROMParams.Figures
+public import GordieHowe.Applications.MLDSA44.Native.QROMParams.Figures
+public import GordieHowe.Applications.MLDSA44.Native.ROMParams.Figures
+public import GordieHowe.Applications.MLDSA44.Ring.Carrier.QROMParams.Figures
+public import GordieHowe.Applications.MLDSA44.Ring.Carrier.ROMParams.Figures
+public import GordieHowe.Applications.MLDSA44.Ring.Native.QROMParams.Figures
+public import GordieHowe.Applications.MLDSA44.Ring.Native.ROMParams.Figures
 public import GordieHowe.Model.QROM.QueryCount
 public import GordieHowe.Model.QROM.CoherentBridgeCore
 public import GordieHowe.Model.Quantum.O2H.Budget
@@ -444,7 +459,7 @@ def entries : List Entry := [
   { key := "fieldok-generic", label := "thm:backend",
     decl := ``GordieHowe.RealizedProgram.fieldOkB_generic },
   { key := "field-ready-generic", label := "thm:backend",
-    decl := ``GordieHowe.RealizedProgram.FieldReady.generic },
+    decl := ``GordieHowe.RealizedProgram.FieldReady.exists_generic },
   { key := "tree-masking", label := "thm:backend",
     decl := ``GordieHowe.Ligero.MaskRow.TreeLayout.Masking },
   { key := "interp-model", label := "thm:backend",
@@ -721,10 +736,46 @@ def entries : List Entry := [
   -- for the proofs of possession of ML-DSA-44 (and of Falcon-512, the companion paper's).
   { key := "mldsa-zk-bits-rom", label := "tab:eval-params",
     decl := ``GordieHowe.MLDSA44.Emulated.ROMParams.zero_knowledge_bits_rom,
-    instances := [``GordieHowe.Falcon512.Native.ROMParams.zero_knowledge_bits_rom] },
+    instances := [
+      ``GordieHowe.MLDSA44.Native.ROMParams.zero_knowledge_bits_rom,
+      ``GordieHowe.Falcon512.Native.ROMParams.zero_knowledge_bits_rom,
+      ``GordieHowe.Falcon512.Emulated.ROMParams.zero_knowledge_bits_rom,
+      ``GordieHowe.MLDSA44.Ring.Native.ROMParams.zero_knowledge_bits_rom,
+      ``GordieHowe.MLDSA44.Ring.Carrier.ROMParams.zero_knowledge_bits_rom,
+      ``GordieHowe.Falcon512.Ring.Native.ROMParams.zero_knowledge_bits_rom,
+      ``GordieHowe.Falcon512.Ring.Carrier.ROMParams.zero_knowledge_bits_rom] },
   { key := "mldsa-zk-bits-qrom", label := "tab:eval-params",
     decl := ``GordieHowe.MLDSA44.Emulated.QROMParams.zero_knowledge_bits_qrom,
-    instances := [``GordieHowe.Falcon512.Native.QROMParams.zero_knowledge_bits_qrom] },
+    instances := [
+      ``GordieHowe.MLDSA44.Native.QROMParams.zero_knowledge_bits_qrom,
+      ``GordieHowe.Falcon512.Native.QROMParams.zero_knowledge_bits_qrom,
+      ``GordieHowe.Falcon512.Emulated.QROMParams.zero_knowledge_bits_qrom,
+      ``GordieHowe.MLDSA44.Ring.Native.QROMParams.zero_knowledge_bits_qrom,
+      ``GordieHowe.MLDSA44.Ring.Carrier.QROMParams.zero_knowledge_bits_qrom,
+      ``GordieHowe.Falcon512.Ring.Native.QROMParams.zero_knowledge_bits_qrom,
+      ``GordieHowe.Falcon512.Ring.Carrier.QROMParams.zero_knowledge_bits_qrom] },
+  -- `tab:eval-params`, the extraction column: the bit security of knowledge soundness and
+  -- soundness for the proof of possession of ML-DSA-44, and at every other configuration.
+  { key := "mldsa-soundness-bits-rom", label := "tab:eval-params",
+    decl := ``GordieHowe.MLDSA44.Emulated.ROMParams.soundness_bits_rom,
+    instances := [
+      ``GordieHowe.MLDSA44.Native.ROMParams.soundness_bits_rom,
+      ``GordieHowe.Falcon512.Native.ROMParams.soundness_bits_rom,
+      ``GordieHowe.Falcon512.Emulated.ROMParams.soundness_bits_rom,
+      ``GordieHowe.MLDSA44.Ring.Native.ROMParams.soundness_bits_rom,
+      ``GordieHowe.MLDSA44.Ring.Carrier.ROMParams.soundness_bits_rom,
+      ``GordieHowe.Falcon512.Ring.Native.ROMParams.soundness_bits_rom,
+      ``GordieHowe.Falcon512.Ring.Carrier.ROMParams.soundness_bits_rom] },
+  { key := "mldsa-soundness-bits-qrom", label := "tab:eval-params",
+    decl := ``GordieHowe.MLDSA44.Emulated.QROMParams.soundness_bits_qrom,
+    instances := [
+      ``GordieHowe.MLDSA44.Native.QROMParams.soundness_bits_qrom,
+      ``GordieHowe.Falcon512.Native.QROMParams.soundness_bits_qrom,
+      ``GordieHowe.Falcon512.Emulated.QROMParams.soundness_bits_qrom,
+      ``GordieHowe.MLDSA44.Ring.Native.QROMParams.soundness_bits_qrom,
+      ``GordieHowe.MLDSA44.Ring.Carrier.QROMParams.soundness_bits_qrom,
+      ``GordieHowe.Falcon512.Ring.Native.QROMParams.soundness_bits_qrom,
+      ``GordieHowe.Falcon512.Ring.Carrier.QROMParams.soundness_bits_qrom] },
   { key := "cfg-sse-rom", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.Common.weak_online_simulation_extractability_rom,
     instances := [
@@ -1391,6 +1442,11 @@ def appendixTable : List TableRow := [
       "\\(\\errzk(t, Q) \\le Q t\\, 2^{-180.19}\\) at the QROM parameters, for every " ++
       "\\(t \\ge 1\\) and \\(Q \\le 2^{{}64}\\), with \\(\\errc = 0\\)",
     lean := "{mldsa-zk-bits-rom}, {mldsa-zk-bits-qrom}" },
+  { statement := "\\Cref{tab:eval-params}, the extraction column for ML-DSA-44: " ++
+      "\\(\\min(1, \\errks^{\\mathrm{C}}(t)) \\le t\\, 2^{-101.36}\\) at the ROM parameters and " ++
+      "\\(\\min(1, \\errks(t)) \\le t\\, 2^{-116.87}\\) at the QROM parameters, for every " ++
+      "\\(t \\ge 1\\)",
+    lean := "{mldsa-soundness-bits-rom}, {mldsa-soundness-bits-qrom}" },
   { statement := "\\Cref{thm:e2e}(4)",
     lean := "{cfg-wi}, on the honest inputs, which every pair of the relation has at its " ++
       "statement ({cfg-honest-input-of-rel})" },

@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.RealizedProgram.Annotations
+public import GordieHoweNative.Language.RealizedProgram.ReadsAnn
 
 @[expose] public section
 
@@ -39,11 +40,6 @@ theorem Read.mem_of_code_mem {r : Read} {l : List Read} (h : r.code ∈ l.map Re
   obtain ⟨r', hr', he⟩ := List.mem_map.1 h
   rw [← Read.code_inj he]
   exact hr'
-
-/-- **The reads annotation**: per value, the codes of its reads. -/
-structure ReadsAnn where
-  /-- The values' reads, packed. -/
-  reads : PackedLists
 
 section Check
 

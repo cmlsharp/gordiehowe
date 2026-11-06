@@ -17,6 +17,7 @@
 #ifndef PRIVACY_PROOFS_ZK_LIB_GORDIEHOWE_EXAMPLES_FALCON_FALCON_HASH_H_
 #define PRIVACY_PROOFS_ZK_LIB_GORDIEHOWE_EXAMPLES_FALCON_FALCON_HASH_H_
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -128,6 +129,232 @@ FalconWitness<S, Value> falcon_witness_shape(size_t max) {
   FalconWitness<S, Value> w{};
   w.message.resize(falcon_layout(max).part);
   return w;
+}
+
+// Named finite metadata of the Falcon512 hash and selection, shared by the
+// checked frontends: the rounds as one family, their constants, the padding,
+// the selection and the hash's and selection's source roles.
+inline void falcon_hash_shape_inputs(const Scope &cs) {
+  using Root = ShapeExprSelector::Root;
+  using Edge = ShapeExprSelector::Edge;
+  cs.shape_expr("h2p.shake.padding.suffix.shape.left.second.first.shared.first.first.first.first.shared.first",
+      {Root::kPredicateLeft, "h2p.shake.padding.suffix", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}}});
+  cs.shape_expr("h2p.shake.padding.suffix.shape.left.second.first.shared.first.first.first.first",
+      {Root::kPredicateLeft, "h2p.shake.padding.suffix", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("h2p.shake.blocks.r0.shape.left.second.first.first.shared.first.first.first",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r0", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("h2p.shake.padding.suffix.shape.left.first.first",
+      {Root::kPredicateLeft, "h2p.shake.padding.suffix", {{Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("h2p.shake.padding.suffix.shape.left.second.first",
+      {Root::kPredicateLeft, "h2p.shake.padding.suffix", {{Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("h2p.shake.padding.output.shape.left.first.first.shared.first.first",
+      {Root::kPredicateLeft, "h2p.shake.padding.output", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("h2p.shake.padding.output.shape.left.first.first",
+      {Root::kPredicateLeft, "h2p.shake.padding.output", {{Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("h2p.shake.padding.output.shape.left.second.second.first",
+      {Root::kPredicateLeft, "h2p.shake.padding.output", {{Edge::kSecond}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("h2p.shake.squeeze.r0.shape.left.second.first.first.shared.first.first.first",
+      {Root::kPredicateLeft, "h2p.shake.squeeze.r0", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("h2p.select.route.shape.left.first.first.first.shared.first.first.first.shared.argument.0",
+      {Root::kPredicateLeft, "h2p.select.route", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kArgument, 0}}});
+  cs.shape_expr("h2p.select.route.shape.left.first.first.first",
+      {Root::kPredicateLeft, "h2p.select.route",
+       {{Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("h2p.select.route.shape.left.first.first.first.shared.first.first.first",
+      {Root::kPredicateLeft, "h2p.select.route",
+       {{Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst},
+        {Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_value("h2p.shake.blocks.r0.constant.left.second.first.first.shared.first.first.first.shared.first.first.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r0", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r0.constant.left.second.first.second.first.first",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r0", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_value("h2p.shake.blocks.r0.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r0", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r0.constant.right",
+      {Root::kPredicateRight, "h2p.shake.blocks.r0", {}});
+  cs.shape_value("h2p.shake.blocks.r1.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r1", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r2.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r2", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r3.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r3", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r4.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r4", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r5.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r5", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r6.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r6", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r7.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r7", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r8.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r8", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r9.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r9", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r10.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r10", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r11.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r11", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r12.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r12", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r13.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r13", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r14.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r14", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r15.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r15", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r16.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r16", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r17.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r17", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r18.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r18", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r19.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r19", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r21.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r21", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.blocks.r23.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.blocks.r23", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.padding.min.constant.left.second",
+      {Root::kPredicateLeft, "h2p.shake.padding.min", {{Edge::kSecond}}});
+  cs.shape_value("h2p.shake.padding.monotone.constant.right",
+      {Root::kPredicateRight, "h2p.shake.padding.monotone", {}});
+  cs.shape_value("h2p.shake.padding.max.constant.right",
+      {Root::kPredicateRight, "h2p.shake.padding.max", {}});
+  cs.shape_value("h2p.shake.padding.suffix.constant.left.second.first.shared.first.second.first",
+      {Root::kPredicateLeft, "h2p.shake.padding.suffix", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_value("h2p.shake.padding.suffix.constant.left.second.second",
+      {Root::kPredicateLeft, "h2p.shake.padding.suffix", {{Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.shake.padding.suffix.constant.right",
+      {Root::kPredicateRight, "h2p.shake.padding.suffix", {}});
+  cs.shape_value("h2p.shake.padding.zeros.constant.left.second.second.second",
+      {Root::kPredicateLeft, "h2p.shake.padding.zeros", {{Edge::kSecond}, {Edge::kSecond}, {Edge::kSecond}}});
+  cs.shape_value("h2p.select.route.constant.left.first.first.first.shared.first.first.first.shared.argument.1.first",
+      {Root::kPredicateLeft, "h2p.select.route", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kArgument, 1}, {Edge::kFirst}}});
+  cs.shape_value("h2p.select.route.constant.left.first.first.first.shared.first.second.second.first",
+      {Root::kPredicateLeft, "h2p.select.route", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_value("h2p.select.step.constant.left.second.second.second.first",
+      {Root::kPredicateLeft, "h2p.select.step", {{Edge::kSecond}, {Edge::kSecond}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_value("h2p.select.step.constant.right",
+      {Root::kPredicateRight, "h2p.select.step", {}});
+  cs.shape_value("h2p.select.done.constant.left.second.second.first",
+      {Root::kPredicateLeft, "h2p.select.done", {{Edge::kSecond}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_value("h2p.select.done.constant.right",
+      {Root::kPredicateRight, "h2p.select.done", {}});
+  cs.shape_value("h2p.select.route.constant.left.second.first.second.second.first.first.second.first",
+      {Root::kPredicateLeft, "h2p.select.route", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_value("h2p.select.route.constant.left.second.first.second.first",
+      {Root::kPredicateLeft, "h2p.select.route", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
+  NamedShapeInputs inputs{
+    {
+      "h2p.shake.out.p1", "h2p.shake.out.p2", "h2p.shake.out.p3", "h2p.shake.out.p4",
+      "h2p.shake.out.p5", "h2p.shake.out.p6", "h2p.shake.out.p7", "h2p.shake.out.p8",
+      "h2p.shake.out.p9", "h2p.shake.out.p10", "h2p.select.delta"
+    },
+    {
+      "h2p.shake.padding.monotone", "h2p.shake.padding.max", "h2p.shake.padding.min",
+      "h2p.shake.padding.suffix", "h2p.shake.padding.zeros", "h2p.shake.padding.output",
+      "h2p.select.start", "h2p.select.step", "h2p.select.done", "h2p.select.route"
+    },
+    {
+     
+      "h2p.shake.padding.suffix.shape.left.second.first.shared.first.first.first.first.shared.first",
+      "h2p.shake.padding.suffix.shape.left.second.first.shared.first.first.first.first",
+      "h2p.shake.blocks.r0.shape.left.second.first.first.shared.first.first.first",
+      "h2p.shake.padding.suffix.shape.left.first.first",
+      "h2p.shake.padding.suffix.shape.left.second.first",
+      "h2p.shake.padding.output.shape.left.first.first.shared.first.first",
+      "h2p.shake.padding.output.shape.left.first.first",
+      "h2p.shake.padding.output.shape.left.second.second.first",
+      "h2p.shake.squeeze.r0.shape.left.second.first.first.shared.first.first.first",
+      "h2p.select.route.shape.left.first.first.first.shared.first.first.first.shared.argument.0"
+    },
+    {
+      "h2p.shake.padding.monotone", "h2p.shake.padding.max", "h2p.shake.padding.min",
+      "h2p.shake.padding.suffix", "h2p.shake.padding.zeros", "h2p.shake.padding.output"
+    }
+  };
+  const auto request_value = [&inputs](const std::string &name) {
+    if (std::find(inputs.values.begin(), inputs.values.end(), name) == inputs.values.end())
+      inputs.values.push_back(name);
+  };
+  const auto role = [&cs, &request_value](const std::string &name, SourceRole tag, size_t slot) {
+    request_value(name);
+    cs.source_role(name, tag, slot);
+  };
+  role("nonce", SourceRole::kHashBit, 0);
+  role("message", SourceRole::kHashBit, 1);
+  role("message.in_message", SourceRole::kHashBit, 2);
+  role("h2p.shake.state.words", SourceRole::kHashWord, 0);
+  request_value("h2p.shake.state");
+  ShapeFamilyInput rounds{"rounds", {}};
+  for (size_t p = 0; p < 11; ++p) {
+    for (size_t t = 0; t < 24; ++t) {
+      const std::string round = p == 0
+          ? "h2p.shake.blocks.r" + std::to_string(t)
+          : "h2p.shake.squeeze.r" + std::to_string(24 * (p - 1) + t);
+      cs.source_role(round + ".value.words", SourceRole::kHashWord, 1 + 24 * p + t);
+      cs.shape_expr(round + ".linear",
+          {Root::kPredicateLeft, round,
+           {{Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}}});
+      cs.shape_expr(round + ".columns",
+          {Root::kPredicateLeft, round,
+           {{Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared},
+            {Edge::kFirst}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst},
+            {Edge::kFirst}}});
+      rounds.rows.push_back({{round}, {round + ".linear", round + ".columns"},
+                             {round + ".value", round + ".value.words"}});
+    }
+  }
+  inputs.families.push_back(std::move(rounds));
+  role("h2p.select.raw.words", SourceRole::kSelection, 0);
+  role("h2p.select.count", SourceRole::kSelection, 1);
+  role("h2p.select.full", SourceRole::kSelection, 2);
+  request_value("h2p.select.raw");
+  inputs.exprs.push_back("h2p.select.route.shape.left.first.first.first");
+  inputs.exprs.push_back("h2p.select.route.shape.left.first.first.first.shared.first.first.first");
+  request_value("h2p.shake.state");
+  request_value("h2p.select.raw");
+  request_value("h2p.shake.blocks.r0.constant.left.second.first.first.shared.first.first.first.shared.first.first.second");
+  request_value("h2p.shake.blocks.r0.constant.left.second.first.second.first.first");
+  request_value("h2p.shake.blocks.r0.constant.left.second.second");
+  request_value("h2p.shake.blocks.r0.constant.right");
+  request_value("h2p.shake.blocks.r1.constant.left.second.second");
+  request_value("h2p.shake.blocks.r2.constant.left.second.second");
+  request_value("h2p.shake.blocks.r3.constant.left.second.second");
+  request_value("h2p.shake.blocks.r4.constant.left.second.second");
+  request_value("h2p.shake.blocks.r5.constant.left.second.second");
+  request_value("h2p.shake.blocks.r6.constant.left.second.second");
+  request_value("h2p.shake.blocks.r7.constant.left.second.second");
+  request_value("h2p.shake.blocks.r8.constant.left.second.second");
+  request_value("h2p.shake.blocks.r9.constant.left.second.second");
+  request_value("h2p.shake.blocks.r10.constant.left.second.second");
+  request_value("h2p.shake.blocks.r11.constant.left.second.second");
+  request_value("h2p.shake.blocks.r12.constant.left.second.second");
+  request_value("h2p.shake.blocks.r13.constant.left.second.second");
+  request_value("h2p.shake.blocks.r14.constant.left.second.second");
+  request_value("h2p.shake.blocks.r15.constant.left.second.second");
+  request_value("h2p.shake.blocks.r16.constant.left.second.second");
+  request_value("h2p.shake.blocks.r17.constant.left.second.second");
+  request_value("h2p.shake.blocks.r18.constant.left.second.second");
+  request_value("h2p.shake.blocks.r19.constant.left.second.second");
+  request_value("h2p.shake.blocks.r21.constant.left.second.second");
+  request_value("h2p.shake.blocks.r23.constant.left.second.second");
+  request_value("h2p.shake.padding.min.constant.left.second");
+  request_value("h2p.shake.padding.monotone.constant.right");
+  request_value("h2p.shake.padding.max.constant.right");
+  request_value("h2p.shake.padding.suffix.constant.left.second.first.shared.first.second.first");
+  request_value("h2p.shake.padding.suffix.constant.left.second.second");
+  request_value("h2p.shake.padding.suffix.constant.right");
+  request_value("h2p.shake.padding.zeros.constant.left.second.second.second");
+  request_value("h2p.select.route.constant.left.first.first.first.shared.first.first.first.shared.argument.1.first");
+  request_value("h2p.select.route.constant.left.first.first.first.shared.first.second.second.first");
+  request_value("h2p.select.step.constant.left.second.second.second.first");
+  request_value("h2p.select.step.constant.right");
+  request_value("h2p.select.done.constant.left.second.second.first");
+  request_value("h2p.select.done.constant.right");
+  request_value("h2p.select.route.constant.left.second.first.second.second.first.first.second.first");
+  request_value("h2p.select.route.constant.left.second.first.second.first");
+  cs.shape_inputs(inputs);
 }
 
 }  // namespace proofs::gordiehowe::examples::falcon

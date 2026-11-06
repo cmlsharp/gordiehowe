@@ -3,7 +3,7 @@
 
 import GordieHowe
 
-/-! Every constant name of the environment outside the `GordieHowe` and `GordieHoweNative` modules,
+/-! Every constant name of the environment outside the `GordieHowe`, `GordieHoweNative` and `GordieHoweCheck` modules,
 one per line, with `protected` marked: `<name>\t<p or empty>`. Input of the rename rewriter's name
 resolution. -/
 
@@ -14,6 +14,6 @@ run_cmd liftTermElabM do
   for (n, _) in env.constants.map₁.toList do
     let some idx := env.getModuleIdxFor? n | continue
     let some m := env.header.moduleNames[idx.toNat]? | continue
-    if m.getRoot == `GordieHowe || m.getRoot == `GordieHoweNative then continue
+    if [`GordieHowe, `GordieHoweNative, `GordieHoweCheck].contains m.getRoot then continue
     if n.isInternal then continue
     IO.println s!"{n}\t{if isProtected env n then "p" else ""}"

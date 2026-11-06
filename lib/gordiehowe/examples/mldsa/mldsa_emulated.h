@@ -24,6 +24,8 @@
 #include <string>
 #include <vector>
 
+#include "gordiehowe/examples/mldsa/mldsa_shape_inputs.h"
+#include "gordiehowe/examples/mldsa/mldsa_source_roles.h"
 #include "gordiehowe/compiler/mod.h"
 #include "gordiehowe/examples/mldsa/mldsa_gadgets.h"
 #include "gordiehowe/examples/mldsa/mldsa_hash.h"
@@ -113,6 +115,15 @@ void mldsa_emulated_relation(
                                          w.msg_length, max_bytes);
   crossing(cs.scope("crossing"), hash, c);
   pin_full_system_placement(H, packing);
+  if constexpr (std::is_same_v<S, MLDSA44>) {
+    auto shapes = mldsa_emulated_shape_inputs(cs);
+    shapes.phase_count = true;
+    shapes.embeddings.push_back(mldsa_emulated_native_embedding());
+    mldsa_source_roles<S>(cs, shapes, SourceFamily::kPossession,
+      mu_layout(st.ctx.dims().at(0), max_bytes).buffer() / 136, st.ctx.dims().at(0),
+      "key.a");
+    cs.shape_inputs(shapes);
+  }
 }
 
 // The relation over messages of at most MAX_BYTES bytes under contexts of

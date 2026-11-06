@@ -6,7 +6,7 @@ module
 public import GordieHowe.Foundations.ToMathlib.MvPolynomial
 public import GordieHowe.Foundations.Probability.ChallengeEvent
 public import GordieHowe.Language.Realizations.OfflineMemory
-public import GordieHowe.Applications.Falcon512.Gadgets.SelectFirstN
+public import GordieHowe.Language.Library.Select.CutoffBits
 public import Mathlib.Algebra.MvPolynomial.Eval
 public import Mathlib.Data.List.Sort
 public import Mathlib.Data.Set.Function
@@ -348,16 +348,16 @@ and applying `GordieHowe.OfflineMemory.chronological` there recovers, for that a
 final cells with the reference shuffle by strong induction on the address. -/
 
 /-- A total inverse to `SelectionField.embed`, agreeing with it on the range
-`< 2 ^ falconSampleBits` it is injective on (`embed_injOn`).  Used only to
+`< 2 ^ selectionSampleBits` it is injective on (`embed_injOn`).  Used only to
 give a raw field element (the final read's origin, at one address, which the
 circuit never decomposes into bits) a natural-number label for
 `GordieHowe.OfflineMemory.chronological`; its behaviour off that range is never
 used. -/
 -- spec-side
 noncomputable def originOf (F : SelectionField K S) : K → ℕ :=
-  Function.invFunOn F.embed (Set.Iio (2 ^ falconSampleBits))
+  Function.invFunOn F.embed (Set.Iio (2 ^ selectionSampleBits))
 
-theorem originOf_embed (F : SelectionField K S) {v : ℕ} (hv : v < 2 ^ falconSampleBits) :
+theorem originOf_embed (F : SelectionField K S) {v : ℕ} (hv : v < 2 ^ selectionSampleBits) :
     originOf F (F.embed v) = v :=
   F.embed_injOn.leftInvOn_invFunOn (Set.mem_Iio.mpr hv)
 
@@ -497,7 +497,7 @@ theorem wit_chron [CharP K 2] {F : SelectionField K S} {Θ : Theta K} {wit : Wit
   have hcard : (replSet wit a).card = S.card := rfl
   have horig : ∀ s : Fin τ, Bits.AllBool (wit.read s).origin ∧
       Bits.natOfBits (wit.read s).origin < (s : ℕ) + 1 := fun s => ⟨hor.bool s, hor.lt s⟩
-  have hfsb : (2 : ℕ) ^ falconSampleBits = 65536 := by decide
+  have hfsb : (2 : ℕ) ^ selectionSampleBits = 65536 := by decide
   have hcreation_le : ∀ t0 : Fin τ, Bits.natOfBits (wit.positions t0) = a →
       creationLbl wit hτ a ha ≤ (t0 : ℕ) := by
     intro t0 ht0
@@ -550,7 +550,7 @@ theorem wit_chron [CharP K 2] {F : SelectionField K S} {Θ : Theta K} {wit : Wit
   · -- hperm
     have hSval : S.val = Multiset.filter (fun s : Fin τ => Bits.natOfBits (wit.positions s) = a)
         (↑(List.finRange τ) : Multiset (Fin τ)) := rfl
-    have hembed_lt : ∀ v : ℕ, v < N → v < 2 ^ falconSampleBits := fun v hv => by omega
+    have hembed_lt : ∀ v : ℕ, v < N → v < 2 ^ selectionSampleBits := fun v hv => by omega
     -- The address-filtered write triples: the creation, plus one replacement
     -- entry per step in `S`.
     have hfilterW : Multiset.filter (fun t : K × K × K => t.1 = F.embed a)

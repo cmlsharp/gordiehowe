@@ -1,0 +1,18 @@
+-- Copyright 2026 Chad Sharp and Paul Grubbs
+-- SPDX-License-Identifier: Apache-2.0
+
+module
+
+public import GordieHowe.Generated.MLDSA44.Native.ROMParams.GKR.H
+meta import GordieHowe.Generated.MLDSA44.Native.ROMParams.GKR.H
+import all GordieHowe.Generated.MLDSA44.Native.ROMParams.Program
+
+@[expose] public section
+
+/-! The relational check of leaves 7 to 14 of entry 5 of the GKR circuit of domain H (generated; do not edit). -/
+
+namespace GordieHowe.Generated.MLDSA44.Native.ROMParams.GKR.H
+
+check_entry_leaves cert ar 5 [1, 1024, 2, 1, 1024, 2, 0, 0, 4, 1, 341, 7, 0, 0, 4, 2, 1024, 1] 7 15
+
+end GordieHowe.Generated.MLDSA44.Native.ROMParams.GKR.H

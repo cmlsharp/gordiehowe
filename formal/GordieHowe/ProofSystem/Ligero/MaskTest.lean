@@ -5,7 +5,7 @@ module
 
 public import GordieHowe.ProofSystem.Ligero.MaskRow.Basic
 public import GordieHowe.ProofSystem.Ligero.MaskTest.PiecesHonest
-public import GordieHowe.Applications.Keccak.HashCircuit.Packed.Basic
+public import GordieHowe.ProofSystem.Ligero.SubfieldQuery
 
 @[expose] public section
 

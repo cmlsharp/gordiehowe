@@ -18,14 +18,14 @@ declarations keep their names. Their lemmas are in
 
 local notation "ℕ" => Nat
 
-@[expose] public section
+public section
 
 namespace GordieHowe.RealizedProgram
 
 mutual
 
 /-- **The expression with every reference `ref k` replaced by `g k`.** -/
-def Expr.substRefs (g : ℕ → Expr) : Expr → Expr
+@[expose] def Expr.substRefs (g : ℕ → Expr) : Expr → Expr
   | .leaf v => .leaf v
   | .add e e' => .add (e.substRefs g) (e'.substRefs g)
   | .sub e e' => .sub (e.substRefs g) (e'.substRefs g)
@@ -41,7 +41,7 @@ def Expr.substRefs (g : ℕ → Expr) : Expr → Expr
   | .logic op w args => .logic op w (Expr.substRefsList g args)
 
 /-- The expressions of a list with every reference `ref k` replaced by `g k`. -/
-def Expr.substRefsList (g : ℕ → Expr) : List Expr → List Expr
+@[expose] def Expr.substRefsList (g : ℕ → Expr) : List Expr → List Expr
   | [] => []
   | e :: es => e.substRefs g :: Expr.substRefsList g es
 
@@ -65,13 +65,13 @@ structure TEnv where
   inputs : ℕ
 
 /-- The Logic builder of a comparison. -/
-def CmpOp.logic : CmpOp → LogicOp
+@[expose] def CmpOp.logic : CmpOp → LogicOp
   | .lt => .lt
   | .leq => .leq
   | .eq => .eq
 
 /-- **The printed form of an operator around its operand `x`.** -/
-def EOp.wrap : EOp → Expr → Expr
+@[expose] def EOp.wrap : EOp → Expr → Expr
   | .view idx none, x => .reindex idx x
   | .view idx (some z), x => .reindex idx (.concat x (.leaf z))
   | .named op, x => .apply op x
@@ -80,18 +80,18 @@ def EOp.wrap : EOp → Expr → Expr
 
 /-- **A term's printed form**, its view written `.ref view`: the operators around the view, scaled
 by `.scale (.const scale)` unless the scale's code is `1`. -/
-def ETerm.row (t : ETerm) : Expr :=
+@[expose] def ETerm.row (t : ETerm) : Expr :=
   cond (Nat.beq t.scale 1) (t.ops.foldl (fun x op => op.wrap x) (.ref t.view))
     (.scale (.const t.scale) (t.ops.foldl (fun x op => op.wrap x) (.ref t.view)))
 
 /-- **An affine combination's printed form**: the terms left-nested by `.add`, the constant value
 `z` when there is no term. -/
-def linRow : List ETerm → ℕ → Expr
+@[expose] def linRow : List ETerm → ℕ → Expr
   | [], z => .leaf z
   | t :: ts, _ => ts.foldl (fun acc t' => .add acc t'.row) t.row
 
 /-- **A concatenation's printed form**, right-nested; one part alone; `.leaf 0` for none. -/
-def concatRow : List Expr → Expr
+@[expose] def concatRow : List Expr → Expr
   | [] => .leaf 0
   | [x] => x
   | x :: y :: xs => .concat x (concatRow (y :: xs))
@@ -101,7 +101,7 @@ instance : Inhabited ENode := ⟨.gather [] []⟩
 
 /-- **A node's printed form one level deep**, each kid `a` written `.ref a`, in the field whose
 characteristic-two flag and code of `2` the environment holds. -/
-def ENode.row (env : TEnv) : ENode → Expr
+@[expose] def ENode.row (env : TEnv) : ENode → Expr
   | .lin ts z => linRow ts z
   | .const v => .leaf v
   | .bin .add a b => .add (.ref a) (.ref b)
@@ -129,17 +129,17 @@ def ENode.row (env : TEnv) : ENode → Expr
 instance : Inhabited ENodeInfo := ⟨⟨default, 0, false, none, [], []⟩⟩
 
 /-- The entry at key `k`. -/
-def Trie.get {α : Type} [Inhabited α] : Trie α → ℕ → α
+@[expose] def Trie.get {α : Type} [Inhabited α] : Trie α → ℕ → α
   | .nil, _ => default
   | .leaf x, _ => x
   | .node l r, k => cond (Nat.beq (k % 2) 0) (l.get (k / 2)) (r.get (k / 2))
 
 /-- **Node `k`** of the table; the default entry at and past the node count. -/
-def ETable.get (E : ETable) (k : ℕ) : ENodeInfo := cond (Nat.blt k E.size) (E.tree.get k) default
+@[expose] def ETable.get (E : ETable) (k : ℕ) : ENodeInfo := cond (Nat.blt k E.size) (E.tree.get k) default
 
 /-- **Node `k` rendered with `n` levels**: its row with every kid rendered in turn; with `refs`, a
 node printed as `.ref j` is `.ref j`. -/
-def ETable.render (env : TEnv) (E : ETable) (refs : Bool) : ℕ → ℕ → Expr
+@[expose] def ETable.render (env : TEnv) (E : ETable) (refs : Bool) : ℕ → ℕ → Expr
   | 0, _ => default
   | n + 1, k =>
     match refs, (E.get k).ref with
@@ -147,9 +147,43 @@ def ETable.render (env : TEnv) (E : ETable) (refs : Bool) : ℕ → ℕ → Expr
     | _, _ => ((E.get k).node.row env).substRefs (E.render env refs n)
 
 /-- **The print of node `k`**: its printed form, stopping at every node printed as `.ref j`. -/
-def ETable.print (env : TEnv) (E : ETable) (k : ℕ) : Expr := E.render env true (k + 1) k
+@[expose] def ETable.print (env : TEnv) (E : ETable) (k : ℕ) : Expr := E.render env true (k + 1) k
 
 /-- **The check of a printed expression `e` against node `k`**: `e` is the node's print. -/
-def ETable.eqB (env : TEnv) (E : ETable) (k : ℕ) (e : Expr) : Bool := (E.print env k).beq e
+@[expose] def ETable.eqB (env : TEnv) (E : ETable) (k : ℕ) (e : Expr) : Bool := (E.print env k).beq e
+
+section HeaderChecks
+
+variable (ir : RealizedProgram)
+
+/-- **The checks of the environment's codes**, once per circuit: `−1 + 1 = 0`; in characteristic
+two `1 + 1 = 0`, otherwise `1/2 + 1/2 = 1`. -/
+@[expose] def TEnv.arithB (env : TEnv) : Bool :=
+  Nat.beq (env.ar.add env.neg1 1) 0 &&
+    cond env.char2 (Nat.beq (env.ar.add 1 1) 0) (Nat.beq (env.ar.add env.half env.half) 1)
+
+/-- **The check of entry `nd` as node `k`**: its kids lie below `k`, its length is its row's at the
+kids' lengths, and when it is printed as `.ref j`, the shared expression `j` exists and is its row
+at the kids' prints. -/
+@[expose] def nodeRowOkB (env : TEnv) (E : ETable) (k : ℕ) (nd : ENodeInfo) : Bool :=
+  (nd.node.row env).refs.all (fun a => Nat.blt a k) &&
+    Nat.beq nd.len (Expr.len ir (fun a => (E.get a).len) (nd.node.row env)) &&
+    match nd.ref with
+    | some j =>
+      Nat.blt j ir.exprs.length && ((nd.node.row env).substRefs (E.print env)).beq (ir.expr j)
+    | none => true
+
+/-- **The check of node `k`** (`nodeRowOkB` on its entry). -/
+@[expose] def nodeOkB (env : TEnv) (E : ETable) (k : ℕ) : Bool := ir.nodeRowOkB env E k (E.get k)
+
+/-- **`p` holds below `n`**, a `Bool` loop counting down. -/
+@[expose] def allBelow (p : ℕ → Bool) : ℕ → Bool
+  | 0 => true
+  | n + 1 => p n && allBelow p n
+
+/-- **The check of the table**, once per circuit: every node below the node count. -/
+@[expose] def emitTableOkB (env : TEnv) (E : ETable) : Bool := allBelow (ir.nodeOkB env E) E.size
+
+end HeaderChecks
 
 end GordieHowe.RealizedProgram

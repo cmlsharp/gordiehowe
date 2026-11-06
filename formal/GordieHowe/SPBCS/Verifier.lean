@@ -357,7 +357,7 @@ def queryProg {V : X → FullTr P t → Bool} (Q : M.IOPQueries V x) :
       M.treeProg π (Q.pos st.chains (M.chVOfAns st.answers)) τ
 
 /-- **The oracle queries of the spBCS verifier**: the trace of `queryProg`. -/
-noncomputable def queries (h : Query k kN kS L → Out k e) {V : X → FullTr P t → Bool}
+def queries (h : Query k kN kS L → Out k e) {V : X → FullTr P t → Bool}
     (Q : M.IOPQueries V x) : List (Query k kN kS L) :=
   (M.queryProg x π Q).trace h
 

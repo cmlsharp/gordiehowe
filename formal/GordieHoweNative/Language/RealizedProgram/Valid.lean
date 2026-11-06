@@ -284,6 +284,10 @@ def tableCols : PredBody → List ℕ
     | .expr e' => ir.exprNodes e'
   | _ => []
 
+/-- **The values a predicate reads**: those of its expressions, and the columns of the table it
+looks up into. -/
+def predNodes (b : PredBody) : List ℕ := b.exprs.flatMap (ir.exprNodes ·.2) ++ ir.tableCols b
+
 /-- Whether value `v` is committed in phase `0` (a committed value, a bit view of committed words, a
 pad copy, or a value bound to its digits, which the source program commits). -/
 def isCommitted (v : ℕ) : Bool :=
@@ -887,6 +891,52 @@ theorem circuitLaidOut_iff (c : Circuit) : CircuitLaidOut c ↔
 
 instance (c : Circuit) : Decidable (CircuitLaidOut c) :=
   decidable_of_iff _ (circuitLaidOut_iff c).symm
+
+end
+
+mutual
+
+/-- **The public values an expression reads directly as coefficients**: its coefficients' values
+and its named operators' operands. -/
+def Expr.coefNodes : Expr → List ℕ
+  | .leaf _ => []
+  | .add e e' => e.coefNodes ++ e'.coefNodes
+  | .sub e e' => e.coefNodes ++ e'.coefNodes
+  | .scale c e => c.nodes ++ e.coefNodes
+  | .mul e e' => e.coefNodes ++ e'.coefNodes
+  | .reindex _ e => e.coefNodes
+  | .concat e e' => e.coefNodes ++ e'.coefNodes
+  | .linear rows e => rows.flatMap (·.flatMap fun t => t.2.nodes) ++ e.coefNodes
+  | .prod _ e => e.coefNodes
+  | .mux b t e => b.coefNodes ++ t.coefNodes ++ e.coefNodes
+  | .apply op e => op.operands ++ op.foreignOperands ++ e.coefNodes
+  | .ref _ => []
+  | .logic _ _ args => Expr.coefNodesList args
+
+/-- The coefficient values a list of expressions reads directly. -/
+def Expr.coefNodesList : List Expr → List ℕ
+  | [] => []
+  | e :: es => e.coefNodes ++ Expr.coefNodesList es
+
+end
+
+section
+
+variable (ir : RealizedProgram)
+
+/-- **The degrees of the shared expressions**, the values having degrees `nd`, with `n` levels. -/
+def refDeg (nd : ℕ → ℕ) : ℕ → ℕ → ℕ
+  | 0, _ => 0
+  | n + 1, k => (ir.expr k).deg nd (refDeg nd n)
+
+/-- **An expression's degree** through its shared expressions, the values having degrees `nd`. -/
+def degOf (nd : ℕ → ℕ) (e : Expr) : ℕ := e.deg nd (ir.refDeg nd ir.exprs.length)
+
+/-- **The degree of an expression in the committed cells** (committed values, bit views, pad
+copies and late values, a late value being its message minus its pad; public values and
+coefficients have degree `0`). -/
+def cellDeg (e : Expr) : ℕ :=
+  ir.degOf (fun v => if ir.isCommitted v || ir.isLateNode v then 1 else 0) e
 
 end
 

@@ -7,6 +7,7 @@ public import Mathlib.Algebra.Field.ZMod
 public import Mathlib.RingTheory.AdjoinRoot
 public import GordieHowe.Foundations.ToMathlib.NatPolyDigits
 public import GordieHowe.Foundations.Fields.BinaryRep
+public import GordieHoweNative.Foundations.Fields.BinarySpread
 
 @[expose] public section
 
@@ -37,59 +38,6 @@ naturals into an inequality of field elements.
 namespace GordieHowe.BinarySpread
 
 open Polynomial
-
-/-- The executable parameters: digit width `k`, degree `n`, the natural `tapN` whose
-digits are the low coefficients of `f`, and the parity mask `mask` (one in the lowest bit
-of each of the `n` digits). -/
-structure Exec where
-  k : ℕ
-  n : ℕ
-  tapN : ℕ
-  mask : ℕ
-
-namespace Exec
-
-variable (E : Exec)
-
-/-- Replace the digits from position `n` on, `H`, by `H * tap`. -/
-def fold (N : ℕ) : ℕ := N % 2 ^ (E.k * E.n) + N / 2 ^ (E.k * E.n) * E.tapN
-
-/-- Multiplication: integer product, two folds, parity of each digit. -/
-def mul (a b : ℕ) : ℕ := E.fold (E.fold (a * b)) &&& E.mask
-
-/-- Addition: integer sum, parity of each digit. -/
-def add (a b : ℕ) : ℕ := (a + b) &&& E.mask
-
-/-- `r ^ (2 ^ j)`, by `j` squarings. -/
-def sqPow : ℕ → ℕ → ℕ
-  | 0, r => r
-  | j + 1, r => sqPow j (E.mul r r)
-
-/-- `b ^ e` for `e < 2 ^ j`, by square-and-multiply over the `j` low bits of `e`. -/
-def pow : ℕ → ℕ → ℕ → ℕ
-  | 0, _, _ => 1
-  | j + 1, e, b =>
-    if e % 2 = 1 then E.mul b (pow j (e / 2) (E.mul b b)) else pow j (e / 2) (E.mul b b)
-
-/-- The `i` low bits of `v`, bit `j` moved to bit `k * j`. -/
-def spread : ℕ → ℕ → ℕ
-  | 0, _ => 0
-  | i + 1, v => v % 2 + 2 ^ E.k * spread i (v / 2)
-
-/-- The representation of the element with polynomial-basis coordinates the bits of `v`. -/
-def ofBits (v : ℕ) : ℕ := E.spread E.n v
-
-/-- The sum of `g 0, …, g (m - 1)`. -/
-def sum : (m : ℕ) → (Fin m → ℕ) → ℕ
-  | 0, _ => 0
-  | m + 1, g => E.add (g 0) (sum m fun j => g j.succ)
-
-/-- `trace s m y = ∑_{j < m} y ^ (2 ^ (s * j))`. -/
-def trace (s : ℕ) : ℕ → ℕ → ℕ
-  | 0, _ => 0
-  | m + 1, y => E.add y (trace s m (E.sqPow s y))
-
-end Exec
 
 variable {f : (ZMod 2)[X]}
 

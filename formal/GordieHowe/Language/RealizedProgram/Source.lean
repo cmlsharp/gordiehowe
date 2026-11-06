@@ -44,37 +44,16 @@ namespace GordieHowe.RealizedProgram
 
 open Export
 
-/-- Whether a predicate body is an `in`. -/
-def PredBody.isMem : PredBody → Bool
-  | .mem _ _ _ _ => true
-  | _ => false
-
-/-- Whether a predicate body is a cross-field `equal`. -/
-def PredBody.isCross : PredBody → Bool
-  | .cross _ _ _ _ _ _ => true
-  | _ => false
-
 section
 
 variable (ir : RealizedProgram)
 
 /-! ## The source part -/
 
-/-- **A challenge of the source program**: a challenge of role `source`. -/
-def chalIsSource (j : ℕ) : Bool :=
-  decide (j < ir.challenges.length) && (ir.challenge j).role == .source
-
-/-- **The role of challenge `j` is admissible**: not `unmodeled`; the owner of a realization
-challenge is a predicate, an `in` for a table's challenge `α` (`alpha:<D>`), a cross-field
-`equal` for any other (the MAC key `<mac>.beta`). -/
-def chalRoleOk (j : ℕ) : Bool :=
-  match (ir.challenge j).role with
-  | .source => true
-  | .realization o =>
-    decide (o < ir.predicates.length) &&
-      if ir.tables.any (·.alpha == j) then PredBody.isMem (ir.predicate o).body
-      else PredBody.isCross (ir.predicate o).body
-  | .unmodeled => false
+/-- The source-challenge list contains exactly valid source-role challenges. -/
+theorem mem_sourceChallengeIds_iff {j : ℕ} :
+    j ∈ ir.sourceChallengeIds ↔ j < ir.challenges.length ∧ ir.chalIsSource j = true := by
+  simp only [sourceChallengeIds, List.mem_filter, List.mem_range]
 
 /-- **A read of the source program**: a source challenge, or a source value (a late value). A pad
 is never read by a value (`RealizedProgram.nodeReads`). -/
@@ -121,8 +100,9 @@ every node-typed source value lies in its type. Unchecked bits (`bit_from_unchec
 programmer's obligation, discharged in the source program's round-by-round soundness proof.
 `SourceSatAt` checks the type sets of node-typed values only, because the proof system cannot extract an
 unchecked value inside its type set. It coincides with the paper's accepting assignment
-(`def:o-semantics`) when the program has no unchecked values, as every paper program does; the
-completeness proof's obligation, with every source value in its type, is `SourceAcceptingAt`. -/
+(`def:o-semantics`) when no source value is unchecked: a bit from `bit_from_unchecked` (ML-DSA's
+sample-in-ball) is a shared expression of the program, not a value. The completeness proof's
+obligation, with every source value in its type, is `SourceAcceptingAt`. -/
 structure SourceSatAt (e : ir.Env I) : Prop where
   /-- Every source predicate holds. -/
   preds : ∀ p ∈ ir.predicates, ir.inSource p = true → ir.HoldsAt e p.body

@@ -185,8 +185,8 @@ def phasedHonestAt {DS : B.DomainSims} (HD : B.HonestDomains DS)
       (fun d => (HD d).In) fun d => (HD d).dom where
   wit d y π := (HD d).encode (ir.honestCells I d (H.val y) π)
   late := H.late
-  challengeCausal y π := challengeCausal_of_respectsReads B.valid.program.order (H.respects y) π
-  padOrder y := padOrder_of_respectsReads B.valid.program.pads (H.respects y)
+  challengeCausal y π := challengeCausal_of_respectsReads B.valid.order (H.respects y) π
+  padOrder y := padOrder_of_respectsReads B.valid.pads (H.respects y)
   bad := H.bad
   ok_honest x _ hy _ _ _ := stmtOk_iff.2 ⟨H.checks x _ hy, H.bounded x _ hy⟩
   dom_honest x _ hy _ _ hc d := (HD d).dom_of x _ _ (B.holds_honest H hy hc d)

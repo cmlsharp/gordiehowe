@@ -12,8 +12,7 @@ public import GordieHowe.Applications.Falcon512.Native.ROMParams.Setting
 # GordieHowe: the key relations of `Falcon512.Native.ROMParams`
 
 The relations the statements of `Falcon512.Native.ROMParams` read
-(`GordieHowe/Applications/Falcon512/Native/ROMParams.lean`) at the key (`keyWitRel`, `keyHonestRel`)
-and the completeness error of the honest-prover statements (`honestBound`).
+(`GordieHowe/Applications/Falcon512/Native/ROMParams.lean`) at the key (`keyWitRel`).
 -/
 
 namespace GordieHowe.Falcon512.Native.ROMParams
@@ -25,12 +24,6 @@ open GordieHowe.Falcon512.Emulated (PublicKey)
 open scoped NNReal ENNReal
 
 variable (C : ProofSystems)
-
-/-! ## The completeness error -/
-
-/-- The completeness error of the honest-prover statements: `0`, the honest strategy of
-`Falcon512.Native.ROMParams` has no completeness event (`honestStrategy_delta`). -/
-noncomputable abbrev honestBound : ℝ≥0 := 0
 
 /-! ## The knowledge statements at the key -/
 
@@ -47,14 +40,5 @@ theorem mem_keyWitRel {pk : PublicKey} {g : program.Valuation interp → VarWitn
   rw [keyOf_stmtOf, Option.some_inj] at hk
   subst hk
   exact hr
-
-/-! ## The honest-prover statements -/
-
-variable {Inp : Type}
-  {relH : Set (program.Valuation interp × Inp)} (H : program.HonestStrategy interp relH)
-
-/-- **The honest inputs at the key**: the strategy's honest inputs at the key's statement. -/
-abbrev keyHonestRel (relH : Set (program.Valuation interp × Inp)) : Set (PublicKey × Inp) :=
-  {p | (stmtOf p.1, p.2) ∈ relH}
 
 end GordieHowe.Falcon512.Native.ROMParams

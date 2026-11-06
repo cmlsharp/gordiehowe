@@ -42,12 +42,15 @@ class MldsaHSelect (program : RealizedProgram) : Prop extends MldsaHCross progra
   bitView556 : program.isBitView 555 = true
   /-- Value `559` is a bit view. -/
   bitView559 : program.isBitView 558 = true
-  /-- `pred264`. -/
-  pred264 : program.predicate 264 = «p.h2c.sample.select.start»
-  /-- `pred265`. -/
-  pred265 : program.predicate 265 = «p.h2c.sample.select.step»
-  /-- `pred266`. -/
-  pred266 : program.predicate 266 = «p.h2c.sample.select.route»
+  /-- `pred264`: the body of `h2c.sample.select.start`. -/
+  pred264 :
+    ∃ t, (program.predicate 264).body = .equal 1 (.add (.reindex idx50 (.ref 508)) (.leaf 42)) (.leaf 43) t
+  /-- `pred265`: the body of `h2c.sample.select.step`. -/
+  pred265 :
+    ∃ t, (program.predicate 265).body = .equal 1 (.add (.reindex idx51 (.ref 508)) (.add (.ref 509) (.reindex idx72 (.concat (.reindex idx70 (.concat (.reindex idx68 (.concat (.reindex idx66 (.concat (.reindex idx64 (.concat (.reindex idx62 (.concat (.reindex idx60 (.concat (.reindex idx58 (.ref 513)) (.reindex idx58 (.mul (.ref 513) (.ref 514))))) (.reindex idx58 (.mul (.ref 513) (.ref 515))))) (.reindex idx58 (.mul (.ref 513) (.mul (.ref 516) (.ref 515)))))) (.reindex idx58 (.mul (.ref 513) (.ref 517))))) (.reindex idx58 (.mul (.ref 513) (.mul (.ref 518) (.ref 517)))))) (.reindex idx58 (.mul (.ref 513) (.mul (.ref 519) (.ref 517)))))) (.reindex idx58 (.mul (.ref 513) (.mul (.mul (.reindex idx71 (.ref 509)) (.ref 519)) (.ref 517)))))))) (.leaf 45) t
+  /-- `pred266`: the body of `h2c.sample.select.route`. -/
+  pred266 :
+    ∃ t, (program.predicate 266).body = .equal 1 (.add (.prod 264 (.mux (.ref 512) (.add (.reindex idx73 (.leaf 559)) (.add (.apply (.sum 8) (.mul (.reindex idx74 (.ref 508)) (.reindex idx75 (.leaf 36)))) (.scale (.const 2) (.apply (.sum 8) (.mul (.reindex idx74 (.ref 510)) (.reindex idx75 (.leaf 36))))))) (.reindex idx73 (.leaf 6)))) (.prod 39 (.add (.reindex idx76 (.leaf 559)) (.add (.leaf 46) (.scale (.const 2) (.apply (.sum 8) (.mul (.reindex idx77 (.leaf 556)) (.reindex idx78 (.leaf 36))))))))) (.leaf 35) t
   /-- `expr508`. -/
   expr508 : program.expr 508 = .reindex idx49 (.concat (.leaf 558) (.reindex idx48 (.reindex idx47 (.logic .any 2 [.reindex idx46 (.leaf 558)]))))
   /-- `expr509`. -/
@@ -90,35 +93,35 @@ class MldsaHSelect (program : RealizedProgram) : Prop extends MldsaHCross progra
 set_option maxRecDepth 4096 in
 /-- The native program at the ROM parameters has these facts. -/
 instance : MldsaHSelect program where
-  bitView555 := by decide +kernel
-  bitView556 := by decide +kernel
-  bitView559 := by decide +kernel
-  pred264 := rfl
-  pred265 := rfl
-  pred266 := rfl
-  expr508 := rfl
-  expr509 := rfl
-  expr510 := rfl
-  expr511 := rfl
-  expr512 := rfl
-  expr513 := rfl
-  expr514 := rfl
-  expr515 := rfl
-  expr516 := rfl
-  expr517 := rfl
-  expr518 := rfl
-  expr519 := rfl
-  refsSel := by decide +kernel
+  bitView555 := by shape_decide
+  bitView556 := by shape_decide
+  bitView559 := by shape_decide
+  pred264 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_h2c_2esample_2eselect_2estart_body
+  pred265 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_h2c_2esample_2eselect_2estep_body
+  pred266 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_h2c_2esample_2eselect_2eroute_body
+  expr508 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2esample_2eselect_2estart_2eshape_2eleft_2efirst_2efirst_eq
+  expr509 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2esample_2eselect_2estep_2eshape_2eleft_2esecond_2efirst_eq
+  expr510 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2esample_2eselect_2eroute_2eshape_2eleft_2efirst_2efirst_2efirst_2eshared_2efirst_2efirst_2efirst_2eshared_2eargument0_eq
+  expr511 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2esample_2eselect_2eroute_2eshape_2eleft_2efirst_2efirst_2efirst_2eshared_2efirst_2efirst_2efirst_eq
+  expr512 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2esample_2eselect_2eroute_2eshape_2eleft_2efirst_2efirst_2efirst_eq
+  expr513 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2esample_2eselect_2estep_2eshape_2eleft_2esecond_2esecond_2efirst_2esecond_2efirst_2efirst_eq
+  expr514 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2esample_2eselect_2estep_2eshape_2eleft_2esecond_2esecond_2efirst_2esecond_2efirst_2esecond_2esecond_2eshared_2esecond_2eshared_2esecond_eq
+  expr515 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2esample_2eselect_2estep_2eshape_2eleft_2esecond_2esecond_2efirst_2esecond_2efirst_2esecond_2esecond_2eshared_2esecond_eq
+  expr516 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2esample_2eselect_2estep_2eshape_2eleft_2esecond_2esecond_2efirst_2esecond_2efirst_2esecond_2esecond_2eshared_2efirst_2esecond_eq
+  expr517 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2esample_2eselect_2estep_2eshape_2eleft_2esecond_2esecond_2efirst_2esecond_2efirst_2esecond_2esecond_eq
+  expr518 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2esample_2eselect_2estep_2eshape_2eleft_2esecond_2esecond_2efirst_2esecond_2efirst_2esecond_2efirst_2esecond_2eshared_2esecond_eq
+  expr519 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2esample_2eselect_2estep_2eshape_2eleft_2esecond_2esecond_2efirst_2esecond_2efirst_2esecond_2efirst_2esecond_eq
+  refsSel := by shape_decide
   selConstsA := by
-    decide +kernel
+    shape_decide
   jFacts := by
-    decide +kernel
-  selLens := by decide +kernel
+    shape_decide
+  selLens := by shape_decide
   stepConsts := by
-    decide +kernel
+    shape_decide
   routeConsts := by
-    decide +kernel
-  routeLens := by decide +kernel
+    shape_decide
+  routeLens := by shape_decide
 
 open GF2_128Exec in
 /-- **The embedding basis as spread products**: entry `j + 1` of the constant `37` is entry `j`
@@ -127,7 +130,7 @@ theorem gpow37_chain : ∀ j < 7, gf2_128Exec.mul
     (gf2_128Exec.ofBits (BitVec.ofNat 128 ((program.constEntries 36).getD j 0)).toNat)
     (gf2_128Exec.ofBits gf2_128SubfieldGenBV.toNat) =
     gf2_128Exec.ofBits (BitVec.ofNat 128 ((program.constEntries 36).getD (j + 1) 0)).toNat := by
-  decide +kernel
+  shape_decide
 
 open GF2_128Exec in
 /-- **Entry `j` of the constant `37` is `g^j`** (`gpow37_chain`, from entry `0 = 1`). -/
@@ -167,11 +170,14 @@ section Tables
 
 set_option maxRecDepth 4096
 
-theorem pred264 : program.predicate 264 = «p.h2c.sample.select.start» :=
+theorem pred264 :
+    ∃ t, (program.predicate 264).body = .equal 1 (.add (.reindex idx50 (.ref 508)) (.leaf 42)) (.leaf 43) t :=
   MldsaHSelect.pred264
-theorem pred265 : program.predicate 265 = «p.h2c.sample.select.step» :=
+theorem pred265 :
+    ∃ t, (program.predicate 265).body = .equal 1 (.add (.reindex idx51 (.ref 508)) (.add (.ref 509) (.reindex idx72 (.concat (.reindex idx70 (.concat (.reindex idx68 (.concat (.reindex idx66 (.concat (.reindex idx64 (.concat (.reindex idx62 (.concat (.reindex idx60 (.concat (.reindex idx58 (.ref 513)) (.reindex idx58 (.mul (.ref 513) (.ref 514))))) (.reindex idx58 (.mul (.ref 513) (.ref 515))))) (.reindex idx58 (.mul (.ref 513) (.mul (.ref 516) (.ref 515)))))) (.reindex idx58 (.mul (.ref 513) (.ref 517))))) (.reindex idx58 (.mul (.ref 513) (.mul (.ref 518) (.ref 517)))))) (.reindex idx58 (.mul (.ref 513) (.mul (.ref 519) (.ref 517)))))) (.reindex idx58 (.mul (.ref 513) (.mul (.mul (.reindex idx71 (.ref 509)) (.ref 519)) (.ref 517)))))))) (.leaf 45) t :=
   MldsaHSelect.pred265
-theorem pred266 : program.predicate 266 = «p.h2c.sample.select.route» :=
+theorem pred266 :
+    ∃ t, (program.predicate 266).body = .equal 1 (.add (.prod 264 (.mux (.ref 512) (.add (.reindex idx73 (.leaf 559)) (.add (.apply (.sum 8) (.mul (.reindex idx74 (.ref 508)) (.reindex idx75 (.leaf 36)))) (.scale (.const 2) (.apply (.sum 8) (.mul (.reindex idx74 (.ref 510)) (.reindex idx75 (.leaf 36))))))) (.reindex idx73 (.leaf 6)))) (.prod 39 (.add (.reindex idx76 (.leaf 559)) (.add (.leaf 46) (.scale (.const 2) (.apply (.sum 8) (.mul (.reindex idx77 (.leaf 556)) (.reindex idx78 (.leaf 36))))))))) (.leaf 35) t :=
   MldsaHSelect.pred266
 theorem expr508 : program.expr 508 = .reindex idx49 (.concat (.leaf 558) (.reindex idx48 (.reindex idx47 (.logic .any 2 [.reindex idx46 (.leaf 558)])))) :=
   MldsaHSelect.expr508
@@ -494,7 +500,8 @@ theorem idx52_eq {b : ℕ} (hb : b < 8) : idx50.entry b = b := by
 theorem initialOk_thr {e : program.Env interp} (hs : HSatCore e) :
     SelectFirstTau.initialOk 39 (thrBits (program.reader e)) = true := by
   have h := hs.preds 264 (by norm_num) (by norm_num)
-  rw [(pred264 (program := program))] at h
+  obtain ⟨_, h264⟩ := pred264 (program := program)
+  rw [h264] at h
   simp only [SelectFirstTau.initialOk, List.all_eq_true, List.mem_finRange, true_implies,
     Bool.or_eq_true, decide_eq_true_eq, ne_eq]
   intro i
@@ -726,10 +733,9 @@ end Columns
 
 /-- **`h2c.sample.select.step`**: the next threshold is the threshold plus the prefix ANDs' flips
 (`chain 8`). -/
-theorem pred265_body : (program.predicate 265).body = .equal 1 (.add (.reindex idx51 (.ref 508))
-    (.add (.ref 509) (chain 8))) (.leaf 45) (.gkr 1) := by
-  rw [(pred265 (program := program))]
-  rfl
+theorem pred265_body : ∃ t, (program.predicate 265).body = .equal 1 (.add (.reindex idx51 (.ref 508))
+    (.add (.ref 509) (chain 8))) (.leaf 45) t :=
+  pred265 (program := program)
 
 /-- The zeros of the steps (value `45`) read `0`. -/
 theorem evalE_46 (e : program.Env interp) (j : ℕ) : program.evalE (program.reader e) 1 (.leaf 45) j = 0 := by
@@ -745,7 +751,8 @@ theorem thr_succ {e : program.Env interp} (hs : HSatCore e) {i b : ℕ} (hi : i 
       program.evalE (program.reader e) 1 (.ref 512) i *
         ∏ j : Fin 8, if (j : ℕ) < b then thrAt (program.reader e) i j else 1 := by
   have h := hs.preds 265 (by norm_num) (by norm_num)
-  rw [pred265_body] at h
+  obtain ⟨_, h265⟩ := pred265_body (program := program)
+  rw [h265] at h
   have hh := h (8 * i + b) (by
     rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_reindex, stepSizes.2.2.2.2.2.2.2.2]
     omega)
@@ -874,7 +881,8 @@ theorem fingerprintOk_route {e : program.Env interp} (hs : HSatCore e) :
       (thrBits (program.reader e)) (selDelta (program.reader e)) = true := by
   have h36 := fun i => RealizedProgram.reader_of_constant e (RealizedProgram.kind_of_isConstant (selConstsA (program := program)).1) i
   have h := hs.preds 266 (by norm_num) (by norm_num)
-  rw [(pred266 (program := program))] at h
+  obtain ⟨_, h266⟩ := pred266 (program := program)
+  rw [h266] at h
   have h0 := h 0 (by
     rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_prod, RealizedProgram.exprLen_mux, RealizedProgram.exprLen_add,
       (routeLens (program := program))]

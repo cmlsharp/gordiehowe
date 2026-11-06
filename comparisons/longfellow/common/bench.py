@@ -8,7 +8,7 @@ usage: common/bench.py SPEC.json OUTDIR
 
 SPEC.json:
   {"name": "...", "warmup": 1, "trials": 9, "cpu": "100" or null,
-   "busy_exe_prefixes": ["/data/..."] or null, "busy_cpu_pct": 50 or null,
+   "busy_exe_prefixes": ["/path/to/build"] or null, "busy_cpu_pct": 50 or null,
    "busy_wait_s": 3600, "busy_cpus": "0-127", "setup_jobs": 4,
    "cases": [{"label": "...", "argv": ["path", "arg", ...],
               "env": {"K": "V"}, "cwd": "dir" or null,

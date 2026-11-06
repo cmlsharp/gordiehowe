@@ -137,6 +137,68 @@ abbrev BoundRecs (G : Gens) : Prop :=
   ∀ v < ir.values.length, (ir.value v).kind.isBound = true →
     ir.IsSourceValue v ∧ ∃ pid < ir.predicates.length, ir.boundRecAtB G v pid = true
 
+/-- **Direct operands of a non-offset bound digit expression are its committed digit cells**,
+with the bound value's size and field. The structural side condition excludes the separate
+`v + c` record form, whose final summand is the characteristic-minus-one multiple of `c`. -/
+theorem bound_digit_cells {ir : GordieHowe.RealizedProgram} {G : Gens}
+    (hB : ir.BoundRecs G) (hD : ir.DigitLookupsC G) {v : Nat} {x : Expr}
+    (hv : v < ir.values.length) (hk : (ir.value v).kind = .bound x)
+    (hsmall : ∀ rest c u, x = .add rest (.scale (.const c) (.leaf u)) →
+      c + 1 ≠ ir.charOf (ir.valueField v)) :
+    ∀ u ∈ x.directNodes, ir.privCellB u = true ∧
+      (ir.value u).size = (ir.value v).size ∧ ir.valueField u = ir.valueField v := by
+  have hb : (ir.value v).kind.isBound = true := by rw [hk]; rfl
+  obtain ⟨_, pid, hpid, hBv⟩ := hB v hv hb
+  obtain ⟨d, rec, N, r, hbody, hkr, hnc, hbd, hrec⟩ := exists_of_boundRecAtB hBv
+  have hF := hD pid hpid d rec N r hbody hkr hnc
+  rcases hrec with rfl | ⟨cst, es, rfl, _, _, _⟩
+  · rw [boundDigitsOk.eq_1, hk] at hbd
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hbd
+    obtain ⟨⟨_, hf⟩, hd⟩ := hbd
+    intro u hu
+    rw [directNodes_of_digitsExprOk hd] at hu
+    obtain ⟨hc, hsz, hfield, _⟩ := hF.cells u (List.mem_append_left _ hu)
+    exact ⟨hc, hsz, hfield.trans hf.symm⟩
+  · rw [boundDigitsOk.eq_2, hk] at hbd
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hbd
+    obtain ⟨⟨_, hf⟩, hd⟩ := hbd
+    split at hd
+    · rename_i x' c u he
+      simp only [Bool.and_eq_true, decide_eq_true_eq] at hd
+      exact False.elim (hsmall x' c u (by cases he; rfl) (hd.1.2.trans (congrArg ir.charOf hf.symm)))
+    · cases hd
+
+/-- **The digit prefix of an offset bound expression consists of committed cells**,
+with the bound value's size and field. The final scaled leaf is not classified as a digit. -/
+theorem bound_offset_digit_cells {ir : GordieHowe.RealizedProgram} {G : Gens}
+    (hB : ir.BoundRecs G) (hD : ir.DigitLookupsC G) {v : Nat} {x : Expr} {c u : Nat}
+    (hv : v < ir.values.length)
+    (hk : (ir.value v).kind = .bound (.add x (.scale (.const c) (.leaf u)))) :
+    ∀ w ∈ x.directNodes, ir.privCellB w = true ∧
+      (ir.value w).size = (ir.value v).size ∧ ir.valueField w = ir.valueField v := by
+  have hb : (ir.value v).kind.isBound = true := by rw [hk]; rfl
+  obtain ⟨_, pid, hpid, hBv⟩ := hB v hv hb
+  obtain ⟨d, rec, N, r, hbody, hkr, hnc, hbd, hrec⟩ := exists_of_boundRecAtB hBv
+  have hF := hD pid hpid d rec N r hbody hkr hnc
+  rcases hrec with rfl | ⟨cst, es, rfl, _, _, _⟩
+  · rw [boundDigitsOk.eq_1, hk] at hbd
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hbd
+    obtain ⟨⟨_, hf⟩, hd⟩ := hbd
+    intro w hw
+    have hw' : w ∈ (Expr.add x (.scale (.const c) (.leaf u))).directNodes := by
+      rw [Expr.directNodes.eq_2]
+      exact List.mem_append_left _ hw
+    rw [directNodes_of_digitsExprOk hd] at hw'
+    obtain ⟨hc, hsz, hfield, _⟩ := hF.cells w (List.mem_append_left _ hw')
+    exact ⟨hc, hsz, hfield.trans hf.symm⟩
+  · rw [boundDigitsOk.eq_2, hk] at hbd
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hbd
+    obtain ⟨⟨_, hf⟩, ⟨⟨_, _⟩, hd⟩⟩ := hbd
+    intro w hw
+    rw [directNodes_of_digitsExprOk hd] at hw
+    obtain ⟨hc, hsz, hfield, _⟩ := hF.cells w (List.mem_append_left _ hw)
+    exact ⟨hc, hsz, hfield.trans hf.symm⟩
+
 /-- **A value bound to its digits reads `0` past its size** at every honest assignment: its record is `v` or `v + c` of a two-sided or digit lookup whose
 digits are cells of `v`'s size, reading `0` past it, and the constant `c` has at most `v`'s size
 entries. -/

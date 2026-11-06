@@ -52,23 +52,6 @@ namespace GordieHowe.RealizedProgram
 
 open Export
 
-/-- **The domain of a predicate body**: a field `equal`'s, an `in`'s or a `mod_q`'s; none for a
-cross-field `equal`, which relates two domains. -/
-def PredBody.domain? : PredBody → Option ℕ
-  | .equal d .. => some d
-  | .mem d .. => some d
-  | .mod d .. => some d
-  | .cross .. => none
-
-/-- **The value of an input block**: a public, committed, pad or view block's; none for a
-realization input, filler or batch pads. -/
-def InputBlock.value? : InputBlock → Option ℕ
-  | .pub u _ _ => some u
-  | .committed u _ _ => some u
-  | .pad u _ _ => some u
-  | .view u _ _ => some u
-  | _ => none
-
 section
 
 variable (ir : RealizedProgram)
@@ -79,34 +62,9 @@ variable (ir : RealizedProgram)
 the committed assignment (`asgReads`) is a value of `d`. -/
 def ReadsIn (d v : ℕ) : Prop := ∀ u ∈ ir.asgReads ir.fuel v, (ir.value u).domain = d
 
-/-- **The values the rows of table `t` read** (`RealizedProgram.tableRow`): none for a range, the first
-column for a committed table, the values the expression reads for a table of an expression's
-coordinates. -/
-def tableNodes (t : ℕ) : List ℕ :=
-  match (ir.table t).rows with
-  | .range _ => []
-  | .columns cols => [cols.headD 0]
-  | .expr e' => ir.exprNodes e'
-
-/-- **The values the LogUp identity of group `g` of table `t` reads, the challenges' values
-read through `ch`**: the value holding the table's challenge, the values of its members' needles,
-its histograms, and the values its rows read (`tableNodes`). -/
-def logupNodesWith (ch : ℕ → Option ℕ) (t g : ℕ) : List ℕ :=
-  (ch (ir.alphaOf t)).toList ++
-    (ir.members t g).flatMap (fun m => ir.exprNodes (ir.needleExpr m.pred m.needle)) ++
-    (ir.groupOf t g).staticMult.toList ++ (ir.groupOf t g).lateMult.toList ++
-    ir.tableNodes t
-
 /-- **The values the LogUp identity of group `g` of table `t` reads** (`logupNodesWith` at the
 value holding each challenge, `chalNode`). -/
 def logupNodes (t g : ℕ) : List ℕ := ir.logupNodesWith ir.chalNode t g
-
-/-- **The values the H half of cross-field `equal` `p` reads, the challenges' values read through
-`ch`** (`MacHHolds`): the value holding the key, the tag, the values of the H operand. -/
-def macHNodesWith (ch : ℕ → Option ℕ) (p : ℕ) : List ℕ :=
-  match (ir.predicate p).body with
-  | .cross _ x _ _ _ real => (ch real.key).toList ++ real.tag :: ir.exprNodes x
-  | _ => []
 
 /-- **The values the H half of cross-field `equal` `p` reads** (`macHNodesWith` at `chalNode`). -/
 def macHNodes (p : ℕ) : List ℕ := ir.macHNodesWith ir.chalNode p
@@ -618,35 +576,8 @@ theorem mem_asgReadsT (hwf : ir.WellFormed) {v : ℕ} (hv : v < ir.values.length
     exact exists_congr fun u => and_congr_right fun hu => h u hu x
   · exact h w (List.mem_singleton_self _) x
 
-variable (ir) in
-/-- **The values outside domain `d`**, as a bit set (`failBits`), for `inDomB`. -/
-def domFailBits (d : ℕ) : ℕ := failBits (fun _ (x : Value) => x.domain == d) ir.values 0
-
-variable (ir) in
-/-- **Value `u` is of domain `d`, as a test** (`inDomB_eq`): one `Nat.testBit` of `domFailBits`, where
-`(ir.value u).domain` looks the value up in the values' trie. -/
-def inDomB (d u : ℕ) : Bool :=
-  bitTest (ir.domFailBits d) ir.values.length ((default : Value).domain == d) u
-
 theorem inDomB_eq (d u : ℕ) : ir.inDomB d u = ((ir.value u).domain == d) := by
   rw [inDomB, domFailBits, bitTest_eq (fun _ (x : Value) => x.domain == d), value_eq_getD]
-
-variable (ir) in
-/-- **What each value reads of the committed assignment, in value order** (`asgReadsT`'s entries,
-`getD_memoList`), for a walk of them. -/
-def asgReadsL : List (List ℕ) := memoList ir.asgStep [] ir.values
-
-variable (ir) in
-/-- **The values reading the committed assignment outside domain `d`**, as a bit set (`failBits`
-over `asgReadsL`, each read tested by `inDomB`). -/
-def readsInFail (d : ℕ) : ℕ := failBits (fun _ rs => rs.all (ir.inDomB d)) ir.asgReadsL 0
-
-variable (ir) in
-/-- **`ReadsIn`, through the tables** (`readsInB_eq`): a value of the program whose bit is clear in
-`readsInFail`, one `Nat.testBit` where a lookup of the reads' table and of each value read costs a
-walk down a trie. -/
-def readsInB (d v : ℕ) : Bool :=
-  decide (v < ir.values.length) && bitTest (ir.readsInFail d) ir.asgReadsL.length true v
 
 theorem readsInB_eq (d v : ℕ) : ir.readsInB d v =
     (decide (v < ir.values.length) && (ir.asgReadsT.getD v []).all fun u => (ir.value u).domain == d) := by
@@ -672,10 +603,6 @@ def entryLocalWithB (ch : ℕ → Option ℕ) (d : ℕ) : CircuitEntry → Bool
   | .realization (.logup t g) => (ir.logupNodesWith ch t g).all (ir.readsInB d)
   | .realization (.macH p) => (ir.macHNodesWith ch p).all (ir.readsInB d)
   | _ => true
-
-variable (ir) in
-/-- **A circuit entry of domain `d` is local** (`entryLocalWithB` at `chalNode`). -/
-def entryLocalB (d : ℕ) : CircuitEntry → Bool := ir.entryLocalWithB ir.chalNode d
 
 variable (ir) in
 /-- **An input block of a circuit of domain `d` holds a value of `d`.** -/

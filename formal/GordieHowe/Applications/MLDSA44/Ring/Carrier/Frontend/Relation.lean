@@ -4,7 +4,8 @@
 module
 
 public import GordieHowe.Applications.MLDSA44.Emulated.Rows
-public import GordieHowe.Applications.MLDSA44.Frontend.AField
+public import GordieHowe.Language.RealizedProgram.PrimeField
+public import GordieHowe.Foundations.Fields.Goldilocks
 public import GordieHowe.Applications.Spec.Rq
 public import GordieHowe.Foundations.Fields.GoldilocksRoot512
 public import GordieHowe.Language.Library.Cross
@@ -195,34 +196,35 @@ abbrev keyPoly (K : Type*) [Field K] (key : Fin 256 → ℕ) : ℕ → K :=
 
 section Field
 
-variable {I : RealizedProgram.Interp} [MLDSA44.AField (I 0)]
+variable {I : RealizedProgram.Interp} [RealizedProgram.PrimeCastField (I 0) pGold]
 
 theorem decode_lt0 {c : ℕ} (hc : c < pGold) : (I 0).decode c = (c : (I 0).K) :=
-  MLDSA44.AField.decode_lt c hc
+  RealizedProgram.PrimeCastField.decode_lt (p := pGold) c hc
 
 theorem toNat_lt0 {k : ℕ} (hk : k < pGold) : (I 0).toNat (k : (I 0).K) = k :=
-  MLDSA44.AField.toNat_natCast k hk
+  RealizedProgram.PrimeCastField.toNat_natCast (p := pGold) k hk
 
 /-- **The integer reading of a small integer's cast** is the integer. -/
 theorem coefInt_small {z : ℤ} (hz : 2 * |z| < pGold) : (I 0).coefInt (z : (I 0).K) = z :=
-  FieldInterp.coefInt_intCast MLDSA44.AField.char_spec MLDSA44.AField.charP
+  FieldInterp.coefInt_intCast (RealizedProgram.PrimeCastField.char_spec (p := pGold))
+    (RealizedProgram.PrimeCastField.charP (p := pGold))
     (fun _ hk => toNat_lt0 hk) hz
 
 /-- **A small natural's centred reading** is itself. -/
 theorem centered_small0 {c : ℕ} (hc : 2 * c < pGold) : (I 0).centered c = c := by
   unfold FieldInterp.centered
-  rw [MLDSA44.AField.char_spec, if_pos hc]
+  rw [RealizedProgram.PrimeCastField.char_spec (p := pGold), if_pos hc]
 
 /-- **`p − 1`'s centred reading** is `−1`. -/
 theorem centered_mOne : (I 0).centered 18446744069414584320 = -1 := by
   unfold FieldInterp.centered
-  rw [MLDSA44.AField.char_spec, if_neg (by norm_num [pGold])]
+  rw [RealizedProgram.PrimeCastField.char_spec (p := pGold), if_neg (by norm_num [pGold])]
   norm_num [pGold]
 
 /-- **`p − 2`'s centred reading** is `−2`. -/
 theorem centered_mTwo : (I 0).centered 18446744069414584319 = -2 := by
   unfold FieldInterp.centered
-  rw [MLDSA44.AField.char_spec, if_neg (by norm_num [pGold])]
+  rw [RealizedProgram.PrimeCastField.char_spec (p := pGold), if_neg (by norm_num [pGold])]
   norm_num [pGold]
 
 /-- **The polynomial of a key's spectrum is the key**: the inverse transform at `ψ = psi512` of
@@ -236,7 +238,8 @@ theorem coefInt_spectrum {f : ℕ} (hf : f = 0) {a : ℕ} {x : ℕ → (I a).K} 
       (NamedOp.formPoly (I := I) f 256 (fun s => castElt (x s)) (.ntt psi512)) k t) =
       Ops.negCoef 256 (keyZ key) k t := by
   subst hf
-  refine FieldInterp.coefInt_negCoef MLDSA44.AField.char_spec MLDSA44.AField.charP
+  refine FieldInterp.coefInt_negCoef (RealizedProgram.PrimeCastField.char_spec (p := pGold))
+    (RealizedProgram.PrimeCastField.charP (p := pGold))
     (fun _ hk => toNat_lt0 hk) (by norm_num [pGold]) 256 (fun s hs => ⟨?_, ?_⟩) k t
   · have h := hkey ⟨s, hs⟩
     change key ⟨s, hs⟩ < 8380417 at h
@@ -332,7 +335,7 @@ end Readings
 section Eval
 
 variable {program : RealizedProgram} [MldsaCarrierRelation program] {I : RealizedProgram.Interp}
-  [MLDSA44.AField (I 0)]
+  [RealizedProgram.PrimeCastField (I 0) pGold]
 
 /-- **A concatenation of four blocks of `256`** reads block `i` at `256 i + k`. -/
 theorem evalIntWith_concat4 (rd : program.Valuation I) (f : ℕ → Expr)
@@ -481,7 +484,7 @@ end Eval
 section Sound
 
 variable {program : RealizedProgram} [MldsaCarrierRelation program] {I : RealizedProgram.Interp}
-  [MLDSA44.AField (I 0)]
+  [RealizedProgram.PrimeCastField (I 0) pGold]
 
 /-- **A predicate the relation reads holds** where the source program holds. -/
 theorem holds_rel {e : program.Env I} (hs : program.SourceSatAt e) {p : ℕ}

@@ -33,28 +33,54 @@ The library declares no axioms and contains no `sorry`. The C++ compiler exports
 application's realized program as Lean definitions, and the kernel checks that it is valid and
 that its realizations meet their conditions.
 
-The plan and program certificates (the generated `Valid`, `Realize`, `Annotations`, `Completion`
-and `Facts` proofs) are closed by `decide +kernel`. The GKR circuit certificates are closed by the
-tactic `gh_cert_check` (`GordieHowe/Language/CertCheck.lean`), which runs `decide +kernel` by
-default. For development builds, `scripts/cert_mode.sh native` switches it to `native_decide` for
-the whole build, which trusts the compiled checkers through an axiom per check
-(`<theorem>._native.native_decide.ax_<i>_<j>`); `scripts/cert_mode.sh kernel` switches back. The
-switch is the definition `GordieHowe.certCheckNative`, which every module using the tactic imports,
-so Lake rebuilds those modules after a switch. The published check runs in kernel mode: there the
-library never uses `native_decide`, and `check.sh` reports the mode and every headline theorem
-whose axioms include such an axiom or `Lean.ofReduceBool` (none in kernel mode). With `--certs` in
-native mode `check.sh` fails unless given `--dev`, so a merge, commit or published check always runs
-in kernel mode.
+Each program's `programOk` checks validity, realization, the program facts, completeness, shapes,
+figures, source roles and the GKR certificates of its circuits. The generated `Core` and `Certified`
+modules project its soundness theorem. The field table, the tableaus and the packing descriptors'
+agreement with the field registry (`Pending/Small`) and the interpretation's model (`Pending/Model`)
+are separate kernel checks of each program.
 
-The GKR circuits are not exported. The configuration theorems take as hypotheses
-(`RealizedProgram.CircuitsEnforce`, `RealizedProgram.CircuitsAccept`,
-`GordieHowe/Language/Assumptions.lean`) that each compiled circuit enforces the checks assigned to
-it, accepts the honest input, and stays within its listed layer and wire counts. Beyond these we
-assume that the export records the program the prover and verifier use, that the C++ implements
-the Lean model, and that the ML-DSA, SHAKE128 and SHAKE256 specifications adapted from VCVio follow
-FIPS 204 and FIPS 202 (known-answer tests in `Vendor/HashSigTest/`). The extractors' and
-simulators' running times are argued in their docstrings, which `scripts/CostLint.lean` checks
-for.
+`scripts/cert_mode.sh kernel|native` selects the source directory of `GordieHoweCheck` in
+`lakefile.toml`. Kernel sources use `decide +kernel` leaves and compositions, with the GKR certificate
+checks as their own modules. Native sources run one `gh_native_check` per program, trusting the
+compiled checkers through an axiom per invocation (`<theorem>._native.native_decide.ax_<i>_<j>`). No
+mode definition or tactic option switches proof evaluation. Lake rebuilds the selected modules and
+their dependents after a switch. The published check runs in kernel mode. With `--certs` in native
+mode, `check.sh` requires `--dev` and reports every headline whose axioms include a compiled-check
+axiom or `Lean.ofReduceBool`.
+
+The GKR circuits are exported with certificates. `RealizedProgram.CircuitsEnforce` and
+`RealizedProgram.CircuitsAccept` (`GordieHowe/Language/Assumptions.lean`), that each circuit enforces
+the checks assigned to it, accepts the honest input and stays within its listed layer and wire
+counts, are fields of the proof system, proved from the checked certificates, and no headline takes
+them as hypotheses. The extractors' and simulators' running times are argued in their docstrings,
+which `scripts/CostLint.lean` checks for.
+
+### What the C++ and the Lean must agree on
+
+The Lean proves its theorems about the exported programs and its model of the proof system. These
+correspondences with the C++ are outside what it checks:
+
+- **The proof system.** The C++ prover and verifier implement the Lean model. Their transcripts are
+  not proved identical to the model's byte for byte.
+- **The export.** The exported program, circuits and plan, including the Ligero parameters and query
+  counts, are the ones the prover and verifier use.
+- **Specifications.** The ML-DSA, SHAKE128 and SHAKE256 specifications adapted from VCVio follow FIPS
+  204 and FIPS 202 (known-answer tests in `Vendor/HashSigTest/`).
+- **Opaque functions.** A public value computed outside the constraints (`mac.target_bits`,
+  `key.coefficients`, `device.e2_point`, `issuer.q_table`) is implemented separately in the C++ and
+  in the Lean (`OpaqueKey.fn`) and matched by name.
+- **Fields.** A plan's field specification selects a Lean field from the registry, and packing node
+  names select its subgroups. The packing facts are checked in the Lean; that the C++ computes in the
+  same field and tower is not.
+- **Encodings.** `FieldInterp.decode` and `toNat` read the C++ encoding of an element, and bit views
+  use its basis. The `.ghc` readers decode the C++ writer's format; this holds in both check modes.
+- **Other names.** The pad-copy map `polynomialBits`, statement members (`statement.<member>`), the
+  `codec` names and hash names carry their meaning by string.
+- **Reported sizes.** The byte sizes in the figures are stated in the model.
+
+The SHA-256, SHA3, RSA and mDL programs have certificates only: the exported program is checked, and
+no theorem relates it to the function it is meant to compute. The ML-DSA-44 and Falcon-512 source
+programs are proved against their schemes' verification relations.
 
 The cryptographic assumptions (Module-LWE, Module-SIS, SelfTargetMSIS, and the unforgeability
 of the base signature schemes) are defined games with hardness predicates on a class of
@@ -73,7 +99,7 @@ results that still carry an idealization-dependent term.
 - `GordieHowe/Generated/`: the exported plans and programs with their validity proofs, emitted by
   the C++ compiler. Each header names its configuration, C++ commit and system digest. Do not edit
   by hand.
-- `GordieHoweCerts.lean`, `GordieHoweCerts/`: the certificate library `GordieHoweCerts`, opt in. It
+- `GordieHoweCerts.lean`: the root of the certificate library `GordieHoweCerts`, opt in. It
   holds the modules of `GordieHowe/Generated/` and every module importing one (the applications'
   concrete instantiations with their headline theorems, the paper manifest), under their
   `GordieHowe.` names, and the gate's other certificates. The default target `GordieHowe` imports
@@ -110,14 +136,20 @@ on a smaller machine. Do not run a bare `lake build`, which bypasses the cap.
 
 ## Regenerating the exported plans
 
-From the repository root, inside the pinned Nix shell:
+Build the C++ (the exporters are its `*_bench` targets) and run the script from the repository
+root, inside the pinned Nix shell:
 
 ```sh
-./run_bench.sh --profile narrow --hash-check-only --export-lean
-./run_bench.sh --profile wide --hash-check-only --export-lean
+cmake --build build -j "$(nproc)"
+scripts/regenerate_exports.py --build build
 ```
 
-`narrow` writes the `ROMParams` files and `wide` the `QROMParams` files. Then rerun
+A list of `--target`s builds one target at a time, so build the whole directory.
+
+This regenerates every program's files under `GordieHowe/Generated/` and `Check/{Native,Kernel}/`,
+`.ghc` files included, from one build, with the run id `exports` and the commit placeholder
+`EXPORTER_COMMIT`. It removes the files an export no longer writes and compares the tree with the
+exports byte for byte. With `--check` it compares only, and a difference fails. Then rerun
 `scripts/check.sh`.
 
 ## License

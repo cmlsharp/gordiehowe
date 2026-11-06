@@ -236,12 +236,6 @@ end Subst
 
 /-! ## The environment -/
 
-/-- **The checks of the environment's codes**, once per circuit: `−1 + 1 = 0`; in characteristic
-two `1 + 1 = 0`, otherwise `1/2 + 1/2 = 1`. -/
-def TEnv.arithB (env : TEnv) : Bool :=
-  Nat.beq (env.ar.add env.neg1 1) 0 &&
-    cond env.char2 (Nat.beq (env.ar.add 1 1) 0) (Nat.beq (env.ar.add env.half env.half) 1)
-
 /-- **The environment's codes decode as named** under the decoding `κc`: the code arithmetic is the
 field's, `neg1` decodes to `−1`, `half` to an element whose double is `1` in odd characteristic,
 and `1 + 1 = 0` in characteristic two. -/
@@ -276,28 +270,6 @@ def ETable.treeErase (env : TEnv) (E : ETable) (k : ℕ) : Expr := E.render env 
 section Table
 
 variable (ir : RealizedProgram)
-
-/-- **The check of entry `nd` as node `k`**: its kids lie below `k`, its length is its row's at the
-kids' lengths, and when it is printed as `.ref j`, the shared expression `j` exists and is its row
-at the kids' prints. -/
-def nodeRowOkB (env : TEnv) (E : ETable) (k : ℕ) (nd : ENodeInfo) : Bool :=
-  (nd.node.row env).refs.all (fun a => Nat.blt a k) &&
-    Nat.beq nd.len (Expr.len ir (fun a => (E.get a).len) (nd.node.row env)) &&
-    match nd.ref with
-    | some j =>
-      Nat.blt j ir.exprs.length && ((nd.node.row env).substRefs (E.print env)).beq (ir.expr j)
-    | none => true
-
-/-- **The check of node `k`** (`nodeRowOkB` on its entry). -/
-def nodeOkB (env : TEnv) (E : ETable) (k : ℕ) : Bool := ir.nodeRowOkB env E k (E.get k)
-
-/-- **`p` holds below `n`**, a `Bool` loop counting down. -/
-def allBelow (p : ℕ → Bool) : ℕ → Bool
-  | 0 => true
-  | n + 1 => p n && allBelow p n
-
-/-- **The check of the table**, once per circuit: every node below the node count. -/
-def emitTableOkB (env : TEnv) (E : ETable) : Bool := allBelow (ir.nodeOkB env E) E.size
 
 /-- **Every node of the table checks.** -/
 def EmitTableOk (env : TEnv) (E : ETable) : Prop := ∀ k, ir.nodeOkB env E k = true

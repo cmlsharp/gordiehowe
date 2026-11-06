@@ -33,25 +33,28 @@ instance : Emulated.MldsaEMain program where
   chal_phase := by
     intro j
     rcases lt_or_ge j 4 with hj | hj
-    · interval_cases j <;> decide +kernel
-    · have h1 : program.challenges.length = 4 := by decide +kernel
-      have h2 : (Emulated.MldsaEmbed.nat program).challenges.length = 4 := by decide +kernel
+    · exact (holds).chalPhase j hj
+    · have h1 : program.challenges.length = 4 :=
+        Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.challenges_length
+      have h2 : (Emulated.MldsaEmbed.nat program).challenges.length = 4 := (holds).chalCount
       simp only [RealizedProgram.challenge, List.getD_eq_getElem?_getD]
       rw [List.getElem?_eq_none (by rw [h1]; exact hj), List.getElem?_eq_none (by rw [h2]; exact hj)]
-  isSourceChal_iff := by
-    intro j
-    constructor
-    · intro h
-      have hj : j < 4 := h.1
-      have key : ∀ j < 4, program.IsSourceChal j → j = 0 ∨ j = 1 := by decide +kernel
-      exact key j hj h
-    · rintro (rfl | rfl) <;> decide +kernel
-  chalFacts := by
-    decide +kernel
-  kinds59_60 := by
-    decide +kernel
-  trFields := by decide +kernel
-  projReadsN := by decide +kernel
+  isSourceChal_iff := fun {j} => by
+    rw [program.isSourceChal_iff_mem_sourceChallengeIds
+      Generated.MLDSA44.Emulated.ROMParams.conditions.wellFormed,
+      Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.source_challenges]
+    simp only [List.mem_cons, List.not_mem_nil, or_false]
+  chalFacts := ⟨Reads.chalSize0, Reads.chalSampler0, Reads.chalField0, Reads.chalSize1,
+    Reads.chalSampler1, Reads.chalField1, MLDSA44.Native.ROMParams.Reads.chalField0, MLDSA44.Native.ROMParams.Reads.chalField1⟩
+  kinds59_60 := by shape_decide
+  trFields := ⟨MLDSA44.Native.ROMParams.Reads.field66, Reads.field67⟩
+  projReadsN := by
+    intro v hv
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
+    rcases hv with rfl | rfl | rfl
+    · exact MLDSA44.Native.ROMParams.Reads.reads67
+    · exact MLDSA44.Native.ROMParams.Reads.reads68
+    · exact MLDSA44.Native.ROMParams.Reads.reads457
 
 /-- The native program's domain `H` facts at the emulated program's native program. -/
 instance : MLDSA44.MldsaHHash (Emulated.MldsaEmbed.nat program) :=

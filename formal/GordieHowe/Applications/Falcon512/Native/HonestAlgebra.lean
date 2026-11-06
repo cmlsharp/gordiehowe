@@ -119,6 +119,12 @@ noncomputable def hNat (program : RealizedProgram) [FalconNorm program] [FalconN
 
 variable {y}
 
+/-- **The crossing role reads the input samples as natural bits.** -/
+theorem hNat_594 (j : ℕ) : hNat program y 594 j =
+    (if h : j < 8192 then y.samples ⟨j / 16, by have : falcon512.n = 512 := rfl; omega⟩ /
+      2 ^ (j % 16) % 2 else 0) := by
+  simp only [hNat, if_true]
+
 theorem hNat_595 (j : ℕ) : hNat program y 595 j = (hIn y).nS2 j := by
   unfold hNat
   rw [if_neg (by norm_num), if_pos rfl]
@@ -211,6 +217,13 @@ noncomputable def algVal (program : RealizedProgram) [FalconACore program] [Falc
     [FalconNormHonest program] [FalconAHonest program] {L : ℕ}
     (y : Falcon512.PoP.HonestInput L) (v j : ℕ) : (interp (program.valueField v)).K :=
   if v ∈ NormValues program then RealizedProgram.castElt (a := 1) ((hNat program y v j : ℕ) : (interp 1).K) else 0
+
+/-- **The algebraic valuation embeds the named witness's natural value.** -/
+theorem algVal_of_mem {L : ℕ} (y : Falcon512.PoP.HonestInput L) {v : ℕ}
+    (hv : v ∈ NormValues program) (j : ℕ) :
+    algVal (FH := FH) (FA := FA) program y v j =
+      RealizedProgram.castElt (a := 1) (hNat program y v j : (interp 1).K) := by
+  simp only [algVal, if_pos hv]
 
 theorem normValues_sub : NormValues program ⊆ [594, 595, 596, 597, 598, 599, 600, 601, 602, 603] := by
   intro v hv

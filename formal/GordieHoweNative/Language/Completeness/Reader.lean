@@ -155,7 +155,10 @@ each slot of each structure record, and one for each predicate's committed-digit
     (G : Gens) : CCtx :=
   let base := PCtx.build ir
   let f := @siteCheckAtR ir (PReader.ofCtx base) primeNodes S G
-  let cm := @PReader.commModCB (ir.srcLeafIvl primeNodes S) ir (PReader.ofCtx base)
+  -- The interval inputs are shared and computed only when a committed-digit check reads them.
+  let intervals := Thunk.mk fun _ => S.ivlTrie
+  let ranges := Thunk.mk fun _ => ir.declaredRanges
+  let cm := @PReader.commModCB (ir.ivlTab primeNodes intervals.get ranges.get) ir (PReader.ofCtx base)
   { base := base
     siteFn := f
     site := ((List.range S.gadgets.length).map fun g =>

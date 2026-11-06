@@ -26,7 +26,8 @@ program `P₀` of `thm:backend`: the part of role `source` of the realized progr
   `GordieHowe.RealizedProgram.IsSourceLate`); the realization challenges (a table's `α`, a MAC key) and the
   realization late values are not rounds of `Π_P₀`;
 * the verifier sends a last challenge `γ_end` from a set of one element (`Round.final`), and accepts
-  if the statement passes the program's member checks (`GordieHowe.RealizedProgram.StatementOk`), every source
+  if the statement passes the program's member checks and lies within its declared bounds
+  (`GordieHowe.RealizedProgram.StatementIn`, as the Boolean `stmtOk`), every source
   predicate holds and every node-typed source value lies in its type (`GordieHowe.RealizedProgram.SourceSatAt`),
   reading every value (`GordieHowe.RealizedProgram.envOf`: the environment of a transcript).
 
@@ -183,6 +184,22 @@ def IsSourceChal (j : ℕ) : Prop :=
     ir.chalIsSource j = true
 
 instance (j : ℕ) : Decidable (ir.IsSourceChal j) := by unfold IsSourceChal; infer_instance
+
+/-- Well-formedness supplies the phase bounds of every source-role challenge. -/
+theorem isSourceChal_of_chalIsSource (hwf : ir.WellFormed) {j : ℕ}
+    (hj : j < ir.challenges.length) (hs : ir.chalIsSource j = true) : ir.IsSourceChal j := by
+  have hm : ir.challenge j ∈ ir.challenges := by
+    change ir.challenges.getD j default ∈ ir.challenges
+    rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hj, Option.getD_some]
+    exact List.getElem_mem hj
+  have hc := hwf.challenges _ hm
+  exact ⟨hj, hc.2.1, hc.2.2.1, hs⟩
+
+/-- Checked source-role coverage identifies the protocol's challenges under well-formedness. -/
+theorem isSourceChal_iff_mem_sourceChallengeIds (hwf : ir.WellFormed) {j : ℕ} :
+    ir.IsSourceChal j ↔ j ∈ ir.sourceChallengeIds := by
+  rw [ir.mem_sourceChallengeIds_iff]
+  exact ⟨fun h => ⟨h.1, h.2.2.2⟩, fun h => ir.isSourceChal_of_chalIsSource hwf h.1 h.2⟩
 
 /-- **A late value of `Π_P₀`**: a late value of the layout of role `source`. -/
 def IsSourceLate (v : ℕ) : Prop := ir.IsLate v ∧ ir.IsSourceValue v
@@ -419,7 +436,7 @@ def envOf {m : Fin (ir.rounds.length + 1)} (x : ir.Valuation I)
     | none => 0
 
 /-- **The verifier of `Π_P₀`**: it accepts when the statement passes the program's member checks
-(`RealizedProgram.stmtOk`, rejecting a statement a check refuses before reading the transcript), every
+and lies within its declared bounds (`RealizedProgram.stmtOk`, rejecting a statement a check refuses before reading the transcript), every
 source predicate holds and every node-typed source value lies in its type (`RealizedProgram.SourceSatAt`),
 in the environment of the transcript. -/
 def sourceVerifier : Verifier (ir.sourceSpec I) (ir.Valuation I) :=
@@ -696,7 +713,7 @@ variable (I) in
 of paper `lem:phases`): for round-by-round knowledge soundness of `Π_P₀` for `rel` at the extractor
 reading the statement and the phase-`0` values (`RealizedProgram.sourceExtractor proj`) and the state
 function `S`, at errors that are `0` at `γ_end` (`hS`, `SourceRbr`), the lowering from `rel` at the statements that pass the
-member checks (`Constraint.guard`: `Π_P₀`'s verifier rejects the others) to the source program
+member checks and the declared bounds (`Constraint.guard`: `Π_P₀`'s verifier rejects the others) to the source program
 (`SourcePred`) projecting the committed assignment by `proj`, whose event at phase `k + 1` is "the
 extractor fails and the state flips at a source challenge of phase `k + 1`" on the layout's
 transcript (`RealizedProgram.transcriptOf`). Its challenge-use rule holds because a flip reads only the

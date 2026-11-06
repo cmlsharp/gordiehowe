@@ -14,9 +14,10 @@ instantiation) pay for the tree, not for the shared graph: in MLDSAW1SlotLaws a 
 a constructed object (an algorithm term inside an implicit shape argument, repeated at every
 mention); the fix is at the definition that spells the type (audit/PERF.md).
 
-The count stops at `cap` per declaration, so that a pathological statement costs at most `cap`
-steps here. The report prints the declarations at or above the threshold, largest first (at the
-cap, the size is at least the cap), and exits successfully: it is not a gate.
+Counts saturate at `cap` per declaration. Shared expression subtrees are memoized,
+while each occurrence still contributes its full tree size. The report prints declarations at or
+above the threshold, largest first (at the cap, the size is at least the cap), and exits
+successfully: it is not a gate.
 -/
 
 open Lean Meta
@@ -29,46 +30,85 @@ def threshold : Nat := 1000000
 /-- The count stops here. -/
 def cap : Nat := 50000000
 
-/-- The tree size of `e`, counted up to `cap` nodes. -/
-partial def treeSize (e : Expr) : StateM Nat Unit := do
-  if (← get) ≥ cap then return
-  modify (· + 1)
-  match e with
-  | .app f a => treeSize f; treeSize a
-  | .lam _ t b _ => treeSize t; treeSize b
-  | .forallE _ t b _ => treeSize t; treeSize b
-  | .letE _ t v b _ => treeSize t; treeSize v; treeSize b
-  | .mdata _ b => treeSize b
-  | .proj _ _ b => treeSize b
-  | _ => pure ()
+/-- Tree sizes are memoized structurally, but every occurrence contributes its full
+size: this counts the unfolded tree, not distinct DAG nodes. Saturation commutes
+with addition, so storing capped sizes preserves the original result. -/
+partial def treeSizeMemo (e : Expr) : StateM (ExprStructMap Nat) Nat := do
+  if let some n := (← get).get? ⟨e⟩ then return n
+  let n ← match e with
+    | .app f a | .lam _ f a _ | .forallE _ f a _ =>
+      pure (min cap (1 + (← treeSizeMemo f) + (← treeSizeMemo a)))
+    | .letE _ t v b _ =>
+      pure (min cap (1 + (← treeSizeMemo t) + (← treeSizeMemo v) + (← treeSizeMemo b)))
+    | .mdata _ b | .proj _ _ b => pure (min cap (1 + (← treeSizeMemo b)))
+    | _ => pure 1
+  modify (·.insert ⟨e⟩ n)
+  return n
+
+def treeSize (e : Expr) : StateM Nat Unit :=
+  modify fun n => if n ≥ cap then n else min cap (n + ((treeSizeMemo e).run {}).1)
 
 /-- The subtree size from which an application counts in `bigHeads`. -/
 def bigSub : Nat := 10000
 
-/-- The tree size of `e` (counted up to `cap` nodes over the whole statement); for every
-application of a constant whose subtree has at least `bigSub` nodes, the number of such
-occurrences and their total tree size are recorded under the constant. The heads with the largest
-total name the repeated subterms that make a statement large. -/
-partial def bigHeads (e : Expr) : StateM (Nat × Std.HashMap Name (Nat × Nat)) Nat := do
-  if (← get).1 ≥ cap then return 0
-  modify fun (n, m) => (n + 1, m)
-  let sub ← match e with
-    | .app .. => do
+abbrev HeadCounts := Std.HashMap Name (Nat × Nat)
+
+/-- First-occurrence order is retained so replaying a summary inserts hash-map
+keys in the same order as the original traversal, including output ties. -/
+structure HeadSummary where
+  size : Nat
+  order : Array Name
+  heads : HeadCounts
+  deriving Inhabited
+
+def addHeads (a : HeadCounts) (b : HeadSummary) : HeadCounts := Id.run do
+  let mut a := a
+  for name in b.order do
+    let (k, z) := b.heads.getD name (0, 0)
+    let (k₀, z₀) := a.getD name (0, 0)
+    a := a.insert name (k₀ + k, z₀ + z)
+  return a
+
+/-- Summarize a prefix of the original flattened-application traversal. Only
+complete subtrees are cached; a budget-truncated subtree is never reused.
+The size and every head's multiplicity still count all repeated occurrences. -/
+partial def headSummary (e : Expr) (budget : Nat) :
+    StateM (ExprStructMap HeadSummary) HeadSummary := do
+  if budget == 0 then return ⟨0, #[], {}⟩
+  if let some summary := (← get).get? ⟨e⟩ then
+    if summary.size ≤ budget then return summary
+  let children := match e with
+    | .app .. =>
       let f := e.getAppFn
-      let mut t := 1
-      unless f.isConst do t := t + (← bigHeads f)
-      for a in e.getAppArgs do t := t + (← bigHeads a)
-      if let .const c _ := f then
-        if t ≥ bigSub then
-          modify fun (n, m) => (n, m.insert c (let (k, z) := m.getD c (0, 0); (k + 1, z + t)))
-      pure t
-    | .lam _ t b _ => return 1 + (← bigHeads t) + (← bigHeads b)
-    | .forallE _ t b _ => return 1 + (← bigHeads t) + (← bigHeads b)
-    | .letE _ t v b _ => return 1 + (← bigHeads t) + (← bigHeads v) + (← bigHeads b)
-    | .mdata _ b => return 1 + (← bigHeads b)
-    | .proj _ _ b => return 1 + (← bigHeads b)
-    | _ => pure 1
-  return sub
+      if f.isConst then e.getAppArgs else #[f] ++ e.getAppArgs
+    | .lam _ t b _ | .forallE _ t b _ => #[t, b]
+    | .letE _ t v b _ => #[t, v, b]
+    | .mdata _ b | .proj _ _ b => #[b]
+    | _ => #[]
+  let mut size := 1
+  let mut heads : HeadCounts := {}
+  let mut order := #[]
+  for child in children do
+    let summary ← headSummary child (budget - size)
+    size := size + summary.size
+    for name in summary.order do
+      unless heads.contains name do order := order.push name
+    heads := addHeads heads summary
+  if e.isApp then
+    if let .const c _ := e.getAppFn then
+      if size ≥ bigSub then
+        unless heads.contains c do order := order.push c
+        let (k, z) := heads.getD c (0, 0)
+        heads := heads.insert c (k + 1, z + size)
+  let summary := { size, order, heads }
+  if size < budget then modify (·.insert ⟨e⟩ summary)
+  return summary
+
+def bigHeads (e : Expr) : StateM (Nat × HeadCounts) Nat := do
+  let (used, heads) ← get
+  let summary := ((headSummary e (cap - used)).run {}).1
+  set (used + summary.size, addHeads heads summary)
+  return summary.size
 
 /-- How many of the largest statements get a breakdown by application head. -/
 def detailed : Nat := 10
@@ -78,7 +118,8 @@ def ownModule (env : Environment) (n : Name) : Bool :=
   match env.getModuleIdxFor? n with
   | none => false
   | some i =>
-    let m := env.header.moduleNames[i.toNat]!
+    -- `moduleNames` maps the entire module array; do not rebuild it per declaration.
+    let m := env.header.modules[i.toNat]!.module
     (`GordieHowe).isPrefixOf m && !(`GordieHowe.Generated).isPrefixOf m
 
 end StatementSize
@@ -86,17 +127,19 @@ end StatementSize
 open StatementSize in
 run_cmd Lean.Elab.Command.liftTermElabM do
   let env ← getEnv
+  let mut cache : ExprStructMap Nat := {}
   let mut rows : Array (Nat × Name) := #[]
   for (n, c) in env.constants.map₁.toList do
     unless ownModule env n do continue
     if n.isInternal then continue
-    let s := ((treeSize c.type).run 0).2
+    let (s, nextCache) := (treeSizeMemo c.type).run cache
+    cache := nextCache
     if s ≥ threshold then rows := rows.push (s, n)
   let sorted := rows.qsort (fun a b => a.1 > b.1)
   IO.println s!"statement size: {sorted.size} declaration(s) with a type of at least {threshold} \
     tree nodes (counted up to {cap})"
   for (s, n) in sorted do
-    let m := (env.getModuleIdxFor? n).map (env.header.moduleNames[·.toNat]!)
+    let m := (env.getModuleIdxFor? n).map (fun i => env.header.modules[i.toNat]!.module)
     IO.println s!"  {s}\t{n}\t{m.getD .anonymous}"
   IO.println s!"the heads of the largest repeated subterms of the {detailed} largest statements (tree nodes in subterms of at least {bigSub} nodes):"
   for (_, n) in sorted.toList.take detailed do

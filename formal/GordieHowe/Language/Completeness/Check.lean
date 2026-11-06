@@ -536,6 +536,52 @@ theorem macs_of_macCB {G : Gens} {pid : ℕ} (h : ir.macCB primeNodes S G pid = 
     · cases h
   · cases h
 
+/-- The completion check validates each value's bound record before deriving its semantics. -/
+theorem boundRecsV_of_completionB {primeNodes : Nat → List String}
+    {L : List (Nat × String)} {S : Structure} {G : Gens} {D : CDerivations}
+    (h : ir.completionB primeNodes L S G D = true) {v : Nat} (hv : v < ir.values.length) :
+    ir.boundRecsV (toTrie G) S.boundRecTab v (ir.value v) = true := by
+  rw [completionB_eq] at h
+  simp only [Bool.and_eq_true] at h
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨hval, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩ := h
+  have hvalue := of_allValuesB (ir.allValuesB_valueCB_of_V hval) hv
+  simp only [valueCB, Bool.and_eq_true] at hvalue
+  exact hvalue.1.1.1.1.1.2
+
+/-- A passing completion certificate checks the committed cells at every valid value. -/
+theorem cellB_of_completionB {L : List (ℕ × String)} {G : Gens} {D : CDerivations}
+    (h : ir.completionB primeNodes L S G D = true) {v : ℕ} (hv : v < ir.values.length) :
+    ir.cellB L v = true := by
+  rw [completionB_eq] at h
+  simp only [Bool.and_eq_true] at h
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨hval, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩ := h
+  have hvalue := of_allValuesB (ir.allValuesB_valueCB_of_V hval) hv
+  simp only [valueCB, Bool.and_eq_true] at hvalue
+  exact hvalue.1.1.2
+
+/-- A passing completion certificate checks generated value types at every valid value. -/
+theorem realTypeB_of_completionB {L : List (ℕ × String)} {G : Gens} {D : CDerivations}
+    (h : ir.completionB primeNodes L S G D = true) {v : ℕ} (hv : v < ir.values.length) :
+    ir.realTypeB L v = true := by
+  rw [completionB_eq] at h
+  simp only [Bool.and_eq_true] at h
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨hval, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩ := h
+  have hvalue := of_allValuesB (ir.allValuesB_valueCB_of_V hval) hv
+  simp only [valueCB, Bool.and_eq_true] at hvalue
+  exact hvalue.1.2
+
+/-- A passing completion certificate checks digit lookup facts at every valid predicate. -/
+theorem digitLookupCB_of_completionB {L : List (ℕ × String)} {G : Gens} {D : CDerivations}
+    (h : ir.completionB primeNodes L S G D = true) {q : ℕ} (hq : q < ir.predicates.length) :
+    ir.digitLookupCB G q = true := by
+  rw [completionB_eq] at h
+  simp only [Bool.and_eq_true] at h
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨_, hpred⟩, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩, _⟩ := h
+  have hp := of_allPredsB hpred hq
+  rw [predCB_eq] at hp
+  simp only [Bool.and_eq_true] at hp
+  exact hp.1.2
+
 /-- **The facts of a completeness certificate that checks** (`completionB`), at nodes known to
 contain `1`, for a well-formed program whose source part is well formed (`hwf`, `hsv`, facts the
 soundness proof shares). -/
@@ -747,119 +793,5 @@ theorem HonestStrategy.ofCompletionReady_δ (R : ir.CompletionReady I primeNodes
     (E : ir.SourceExecution I relH) : (HonestStrategy.ofCompletionReady R E).δ = E.δ := rfl
 
 end Ready
-
-/-! ## The check in ranges
-
-`completionB` splits into checks of ranges `[i, j)` of the values (`completionValuesIn`: the value
-passes in one walk, each value with its generator) and of the predicates (`completionPredsIn`: the
-predicates' checks and their completeness derivations, each predicate with its derivation), which
-join with no re-check (`…In_append`) and give the check from `[0, n)`, `n` at least the list's
-length, with the groups' checks, the message records and the derivations' count
-(`completionRestB`, `completionB_of_parts`). -/
-
-section Ranges
-
-variable (ir : RealizedProgram)
-
-/-- **`completionB`'s checks at value `v`** (`x`) with generator `g`, the generators read through
-`GT`, the bound values' records through `T`, the messages through `MT` and the reads through
-`RT`. -/
-def valueAllCV (L : List (ℕ × String)) (GT : NatTrie Gen) (T MT : NatTrie ℕ)
-    (RT : NatTrie (List Read)) (v : ℕ) (x : Value) (g : Gen) : Bool :=
-  ir.valueCV L GT T v x g && ir.boundNoCopyV v x && ir.coveredCV GT MT v x g &&
-    ir.typedNoLateL v x (RT.getD v []) && ir.typeRoleV v x
-
-/-- **`completionB`'s checks of the values `[i, j)`**, each with its generator. -/
-def completionValuesIn (L : List (ℕ × String)) (S : Structure) (G : Gens) (i j : ℕ) : Bool :=
-  allIdx2In (ir.valueAllCV L (toTrie G) S.boundRecTab S.messageTab ir.readsT) .none ir.values G i j
-
-/-- **`completionB`'s checks at predicate `pid`** (`pr`) with completeness derivation `s`. -/
-def predAllCB (primeNodes : ℕ → List String) (S : Structure) (G : Gens) (D : CDerivations)
-    (pid : ℕ) (pr : Predicate) (s : List CStep) : Bool :=
-  ir.predCB primeNodes S G pid && ir.blindsB pid &&
-    ir.cderivStepsB primeNodes S G D.ranks (rankOf D.ranks pid) pid pr s
-
-/-- **`completionB`'s checks of the predicates `[i, j)`**, each with its completeness
-derivation. -/
-def completionPredsIn (primeNodes : ℕ → List String) (S : Structure) (G : Gens)
-    (D : CDerivations) (i j : ℕ) : Bool :=
-  allIdx2In (ir.predAllCB primeNodes S G D) [] ir.predicates D.derivs i j
-
-/-- **`completionB`'s checks of the groups and the message records**, and one completeness
-derivation per predicate. -/
-def completionRestB (primeNodes : ℕ → List String) (S : Structure) (G : Gens)
-    (D : CDerivations) : Bool :=
-  ir.allGroupsB (ir.groupCB primeNodes S G D) && ir.allGroupsB ir.staticGroupNoLateB &&
-    ir.messageRecsB S && Nat.beq D.derivs.length ir.predicates.length
-
-variable {ir}
-
-theorem completionValuesIn_append {L : List (ℕ × String)} {S : Structure} {G : Gens}
-    {i j k : ℕ} (h₁ : ir.completionValuesIn L S G i j = true)
-    (h₂ : ir.completionValuesIn L S G j k = true) : ir.completionValuesIn L S G i k = true :=
-  allIdx2In_append h₁ h₂
-
-theorem completionPredsIn_append {primeNodes : ℕ → List String} {S : Structure} {G : Gens}
-    {D : CDerivations} {i j k : ℕ} (h₁ : ir.completionPredsIn primeNodes S G D i j = true)
-    (h₂ : ir.completionPredsIn primeNodes S G D j k = true) :
-    ir.completionPredsIn primeNodes S G D i k = true :=
-  allIdx2In_append h₁ h₂
-
-theorem allCDerivsB_of_forall {primeNodes : ℕ → List String} {S : Structure} {G : Gens} {P : ℕ} :
-    ∀ {pid : ℕ} {ps : List Predicate} {ds : List (List CStep)}, ds.length = ps.length →
-      (∀ k < ps.length, ir.cderivStepsB primeNodes S G P (rankOf P (pid + k)) (pid + k)
-        (ps.getD k default) (ds.getD k []) = true) →
-      ir.allCDerivsB primeNodes S G P pid ps ds = true
-  | _, [], [], _, _ => rfl
-  | _, [], _ :: _, hl, _ => by simp at hl
-  | _, _ :: _, [], hl, _ => by simp at hl
-  | pid, pr :: ps, s :: ds, hl, h => by
-    simp only [allCDerivsB, CReader.allCDerivsB, Bool.and_eq_true]
-    have h0 := h 0 (by simp)
-    simp only [Nat.add_zero, List.getD_cons_zero] at h0
-    refine ⟨h0, allCDerivsB_of_forall (by simpa using hl) fun k hk => ?_⟩
-    have := h (k + 1) (by simpa using hk)
-    rw [show pid + (k + 1) = pid + 1 + k by omega] at this
-    simpa using this
-
-/-- **`completionB` from its checks of the values and the predicates**, each on `[0, n)` for `n`
-at least the list's length, and of the groups and the message records. -/
-theorem completionB_of_parts {primeNodes : ℕ → List String} {L : List (ℕ × String)}
-    {S : Structure} {G : Gens} {D : CDerivations} {nv np : ℕ}
-    (h : ir.completionRestB primeNodes S G D = true)
-    (hv : ir.completionValuesIn L S G 0 nv = true) (hnv : ir.values.length ≤ nv)
-    (hp : ir.completionPredsIn primeNodes S G D 0 np = true) (hnp : ir.predicates.length ≤ np) :
-    ir.completionB primeNodes L S G D = true := by
-  simp only [completionRestB, Bool.and_eq_true, Nat.beq_eq] at h
-  obtain ⟨⟨⟨hg, hsg⟩, hm⟩, hd⟩ := h
-  have hv' := allIdx2_sound _ _ _ _ _ (allIdx2_of_allIdx2In hv hnv)
-  have hp' := allIdx2_sound _ _ _ _ _ (allIdx2_of_allIdx2In hp hnp)
-  have hvk : ∀ k < ir.values.length, _ := fun k hk => by
-    have := hv' k hk
-    simp only [Nat.zero_add, valueAllCV, Bool.and_eq_true] at this
-    exact this
-  have hpk : ∀ k < ir.predicates.length, _ := fun k hk => by
-    have := hp' k hk
-    simp only [Nat.zero_add, predAllCB, Bool.and_eq_true] at this
-    exact this
-  have hrange : ∀ (P : ℕ → Bool), (∀ k < ir.predicates.length, P k = true) →
-      ir.allPredsB P = true := fun P hP => by
-    rw [allPredsB, List.all_eq_true]
-    exact fun k hk => hP k (List.mem_range.1 hk)
-  rw [completionB_eq]
-  rw [(allIdx2_iff _ _ _ _ _).2 fun k hk => by simpa using (hvk k hk).1.1.1.1,
-    hrange _ fun k hk => (hpk k hk).1.1, hg, (allIdx_iff _ _ _).2 fun k hk => by
-      simpa using (hvk k hk).1.1.1.2,
-    (allIdx2_iff _ _ _ _ _).2 fun k hk => by simpa using (hvk k hk).1.1.2,
-    (allIdx2_iff _ _ _ _ _).2 fun k hk => by
-      rw [getD_readsL]
-      simpa using (hvk k hk).1.2,
-    hrange _ fun k hk => (hpk k hk).1.2, hsg,
-    show ir.cderivsB primeNodes S G D = true from
-      allCDerivsB_of_forall (by omega) fun k hk => by simpa using (hpk k hk).2,
-    (allIdx_iff _ _ _).2 fun k hk => by simpa using (hvk k hk).2, hm]
-  rfl
-
-end Ranges
 
 end GordieHowe.RealizedProgram

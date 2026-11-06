@@ -5,7 +5,7 @@ module
 
 public import GordieHowe.Language.Library.Eval
 public import GordieHowe.Language.Library.Cross
-public import GordieHowe.Applications.Falcon512.Gadgets.SelectFirstN
+public import GordieHowe.Language.Library.Select.CutoffBits
 public import GordieHowe.Foundations.ToMathlib.ListRange
 public import GordieHowe.Foundations.ToMathlib.List
 
@@ -16,7 +16,7 @@ public import GordieHowe.Foundations.ToMathlib.List
 
 The source program's selection of the first `n` of `S` samples below `bound` (the C++ `gp_select`):
 four predicates and three shared expressions of a binary domain, which together are the gadget
-`SelectFirstN.run` (`GordieHowe/Applications/Falcon512/Gadgets/SelectFirstN.lean`) on the samples, the selected words and
+`SelectFirstCutoff.run` (`GordieHowe/Language/Library/Select/CutoffBits.lean`) on the samples, the selected words and
 the route:
 
 * `start`: `count[0] + 1 = 0`;
@@ -36,11 +36,11 @@ are the program's constant values, whose decoded entries the caller supplies
   four bodies and the three shared expressions return their identifiers when they have the shape
   above, with `S`, `n`, `w` the index maps' lengths.
 * **The gadget** (`GordieHowe.RealizedProgram.SelectMatches.run`): where the four predicates and the source program
-  hold, `SelectFirstN.run` holds on the readings `SelectShape.sample`, `SelectShape.word`,
+  hold, `SelectFirstCutoff.run` holds on the readings `SelectShape.sample`, `SelectShape.word`,
   `SelectShape.route`, `SelectShape.deltaAt`.
 * **Its soundness** (`GordieHowe.RealizedProgram.SelectMatches.firstAccepted_or_badAt`): the selected words are the
   first accepted samples, or the challenge `δ` is a root of the gadget's event
-  (`SelectFirstN.badEvent`, degree `S`), which reads only the committed values
+  (`SelectFirstCutoff.badEvent`, degree `S`), which reads only the committed values
   (`GordieHowe.RealizedProgram.selectReadings_congr`).
 
 The native Falcon programs' selection (`h2p.select.*` at `(S, n, w) = (717, 512, 16)`,
@@ -478,6 +478,21 @@ theorem selectMatches_of_selectShape? {S n w pStart pStep pDone pRoute : ℕ} {s
     exact hsup
   · exact hcs
 
+/-- The stated symbolic selection parts satisfy the selection recognizer. -/
+theorem selectShape?_of_selectMatches {ir : RealizedProgram} {S n w pStart pStep pDone pRoute : ℕ}
+    {s : SelectShape} (h : ir.SelectMatches S n w pStart pStep pDone pRoute s) :
+    ir.selectShape? S n w pStart pStep pDone pRoute = some s := by
+  obtain ⟨t1, h1⟩ := h.start
+  obtain ⟨t2, h2⟩ := h.step
+  obtain ⟨t3, h3⟩ := h.done
+  obtain ⟨t4, h4⟩ := h.route
+  obtain ⟨sup, hsup, hlen⟩ := h.stream
+  have hcs := List.all_eq_true.mpr h.consts
+  simp only [selectShape?, h1, h2, h3, h4, h.acc, h.lt,
+    PredBody.selectStart?, PredBody.selectStep?, PredBody.selectDone?, PredBody.selectRoute?,
+    Expr.selectAcc?, Expr.selectLt?, and_self, ite_true, Option.bind_eq_bind, Option.bind_some,
+    hsup, h.acc_lt, h.lt_lt, h.stream_lt, h.raw, hlen, h.zeroConst, h.full, hcs]
+
 end
 
 /-! ## The readings -/
@@ -518,7 +533,7 @@ variable (ir) in
 /-- **The route at sample `i`**: the counter's coordinate `i`, and from sample `n` on the completion
 flag `i − n` (`0` before). -/
 def route {S : ℕ} (rd : ir.Valuation I) (n : ℕ) (i : Fin S) :
-    Falcon512.Route (I (s.field ir)).K :=
+    CutoffRoute (I (s.field ir)).K :=
   ⟨ir.evalE rd (s.field ir) (.leaf s.count) i,
     if n ≤ (i : ℕ) then ir.evalE rd (s.field ir) (.leaf s.full) (i - n) else 0⟩
 
@@ -766,17 +781,17 @@ theorem SelectMatches.lt_eq (hm : ir.SelectMatches S n w pStart pStep pDone pRou
     simpa using hc.cutoff t ht]
   exact Ops.ltWord_eq_ltConst (fun t ht => hm.stream_bool ho hc e (sample_coord_lt i.isLt ht)) hb
 
-/-- **The acceptance bit of sample `i`** is the gadget's `SelectFirstN.selected`: the comparison
+/-- **The acceptance bit of sample `i`** is the gadget's `SelectFirstCutoff.selected`: the comparison
 for the first `n` samples, the comparison times `1 − full` after. -/
 theorem SelectMatches.acc_eq (hm : ir.SelectMatches S n w pStart pStep pDone pRoute s)
     (ho : ir.RefsOrdered) {F : SelectionField (I (s.field ir)).K S w} {bound : ℕ}
     (hc : s.Consts ir I F n bound) (hb : bound < 2 ^ w) (e : ir.Env I) (i : Fin S) :
     ir.evalE (ir.reader e) (s.field ir) (.ref s.acc) i =
-      Falcon512.SelectFirstN.selected n bound (s.sample ir (w := w) (ir.reader e))
+      SelectFirstCutoff.selected n bound (s.sample ir (w := w) (ir.reader e))
         (s.route ir (ir.reader e) n) i := by
   rw [evalE_ref ho _ _ hm.acc_lt, hm.acc, evalE_reindex, IndexMap.entry_step_one i.isLt,
     Nat.zero_add, evalE_concat, exprLen_reindex, IndexMap.size_single]
-  unfold Falcon512.SelectFirstN.selected
+  unfold SelectFirstCutoff.selected
   by_cases hi : (i : ℕ) < n
   · rw [if_pos hi, if_pos hi, evalE_reindex, IndexMap.entry_step_one hi, Nat.zero_add]
     exact hm.lt_eq ho hc hb e i
@@ -820,7 +835,7 @@ theorem SelectMatches.count_succ (hm : ir.SelectMatches S n w pStart pStep pDone
     {e : ir.Env I} (h : ir.HoldsAt e (ir.predicate pStep).body) (i : Fin S) (hi : (i : ℕ) + 1 < S) :
     ir.evalE (ir.reader e) (s.field ir) (.leaf s.count) (i + 1) =
       ir.evalE (ir.reader e) (s.field ir) (.leaf s.count) i *
-        SelectScan.mux (Falcon512.SelectFirstN.selected n bound (s.sample ir (w := w) (ir.reader e))
+        SelectScan.mux (SelectFirstCutoff.selected n bound (s.sample ir (w := w) (ir.reader e))
           (s.route ir (ir.reader e) n) i) F.g 1 := by
   obtain ⟨t, hbody⟩ := hm.step
   rw [hbody] at h
@@ -913,12 +928,12 @@ theorem SelectMatches.fingerprint (hm : ir.SelectMatches S n w pStart pStep pDon
     (hc : s.Consts ir I F n bound) (hb : bound < 2 ^ w) [CharP (I (s.field ir)).K 2]
     (hS : 0 < S) {e : ir.Env I} (h : ir.HoldsAt e (ir.predicate pRoute).body) :
     (List.finRange S).foldl (fun acc i => acc *
-        SelectScan.mux (Falcon512.SelectFirstN.selected n bound (s.sample ir (w := w) (ir.reader e))
+        SelectScan.mux (SelectFirstCutoff.selected n bound (s.sample ir (w := w) (ir.reader e))
           (s.route ir (ir.reader e) n) i)
-          (s.deltaAt ir (ir.reader e) - Falcon512.SelectFirstN.enc F (s.route ir (ir.reader e) n i).count_enc
+          (s.deltaAt ir (ir.reader e) - SelectFirstCutoff.enc F (s.route ir (ir.reader e) n i).count_enc
             (s.sample ir (ir.reader e) i)) 1) 1 =
       (List.finRange n).foldl (fun acc (j : Fin n) => acc *
-        (s.deltaAt ir (ir.reader e) - Falcon512.SelectFirstN.enc F (F.g ^ (j : ℕ))
+        (s.deltaAt ir (ir.reader e) - SelectFirstCutoff.enc F (F.g ^ (j : ℕ))
           (s.word ir (w := w) (ir.reader e) j))) 1 := by
   obtain ⟨t, hbody⟩ := hm.route
   rw [hbody] at h
@@ -936,16 +951,16 @@ theorem SelectMatches.fingerprint (hm : ir.SelectMatches S n w pStart pStep pDon
     rw [Nat.zero_mul, Nat.zero_add, evalE_mux, hm.acc_eq ho hc hb e i, evalE_add, evalE_reindex,
       IndexMap.entry_step_zero i.isLt, evalE_add, evalE_scale_const, evalE_apply_sum,
       hm.sum_sample hc e i, evalE_reindex, IndexMap.entry_step_zero i.isLt,
-      hm.evalE_const e (v := s.one) (by simp), hc.one, hc.two, SelectScan.mux, Falcon512.SelectFirstN.enc,
+      hm.evalE_const e (v := s.one) (by simp), hc.one, hc.two, SelectScan.mux, SelectFirstCutoff.enc,
       CharTwo.sub_eq_add]
     rfl
   · refine Finset.prod_congr rfl fun j _ => ?_
     rw [Nat.zero_mul, Nat.zero_add, evalE_add, evalE_reindex, IndexMap.entry_step_zero j.isLt,
       evalE_add, hm.evalE_const e (v := s.gpow) (by simp), hc.gpow _ j.isLt, evalE_scale_const,
-      evalE_apply_sum, hm.sum_word hc e j, hc.two, Falcon512.SelectFirstN.enc, CharTwo.sub_eq_add]
+      evalE_apply_sum, hm.sum_word hc e j, hc.two, SelectFirstCutoff.enc, CharTwo.sub_eq_add]
     rfl
 
-/-- **The selection's predicates are the gadget `SelectFirstN.run`** on the stream's samples, the
+/-- **The selection's predicates are the gadget `SelectFirstCutoff.run`** on the stream's samples, the
 selected words, the route and `δ`, where they hold and the source program holds (the completion
 flags' Booleanity is the source program's type check). -/
 theorem SelectMatches.run (hm : ir.SelectMatches S n w pStart pStep pDone pRoute s)
@@ -956,9 +971,9 @@ theorem SelectMatches.run (hm : ir.SelectMatches S n w pStart pStep pDone pRoute
     (hstep : ir.HoldsAt e (ir.predicate pStep).body)
     (hdone : ir.HoldsAt e (ir.predicate pDone).body)
     (hroute : ir.HoldsAt e (ir.predicate pRoute).body) :
-    Falcon512.SelectFirstN.run F bound (s.sample ir (ir.reader e)) (s.word ir (n := n) (ir.reader e))
+    SelectFirstCutoff.run F bound (s.sample ir (ir.reader e)) (s.word ir (n := n) (ir.reader e))
       (s.route ir (ir.reader e) n) (s.deltaAt ir (ir.reader e)) = true := by
-  unfold Falcon512.SelectFirstN.run
+  unfold SelectFirstCutoff.run
   simp only [Bool.and_eq_true, List.all_eq_true, List.mem_finRange, forall_const,
     decide_eq_true_eq, Bool.or_eq_true]
   refine ⟨⟨⟨⟨fun i => Bits.ltConst_mul_sub_one (hm.stream_allBool ho hc e i) hb, fun i => ?_⟩,
@@ -982,17 +997,17 @@ theorem SelectMatches.run (hm : ir.SelectMatches S n w pStart pStep pDone pRoute
     · rfl
 
 /-- **The gadget's constraints give the selection's predicates** (the converse of
-`SelectMatches.run`): where `SelectFirstN.run` holds on the readings, `start`, `step`, `done` and
+`SelectMatches.run`): where `SelectFirstCutoff.run` holds on the readings, `start`, `step`, `done` and
 `route` hold. -/
 theorem SelectMatches.holds_of_run (hm : ir.SelectMatches S n w pStart pStep pDone pRoute s)
     (ho : ir.RefsOrdered) {F : SelectionField (I (s.field ir)).K S w} {bound : ℕ}
     (hc : s.Consts ir I F n bound) (hb : bound < 2 ^ w) [CharP (I (s.field ir)).K 2]
     (hS : 0 < S) {e : ir.Env I}
-    (h : Falcon512.SelectFirstN.run F bound (s.sample ir (ir.reader e)) (s.word ir (n := n) (ir.reader e))
+    (h : SelectFirstCutoff.run F bound (s.sample ir (ir.reader e)) (s.word ir (n := n) (ir.reader e))
       (s.route ir (ir.reader e) n) (s.deltaAt ir (ir.reader e)) = true) :
     ir.HoldsAt e (ir.predicate pStart).body ∧ ir.HoldsAt e (ir.predicate pStep).body ∧
       ir.HoldsAt e (ir.predicate pDone).body ∧ ir.HoldsAt e (ir.predicate pRoute).body := by
-  unfold Falcon512.SelectFirstN.run at h
+  unfold SelectFirstCutoff.run at h
   simp only [Bool.and_eq_true, List.all_eq_true, List.mem_finRange, forall_const,
     decide_eq_true_eq, Bool.or_eq_true] at h
   obtain ⟨⟨⟨⟨-, h1⟩, h2⟩, h3⟩, h4⟩ := h
@@ -1059,27 +1074,27 @@ theorem SelectMatches.holds_of_run (hm : ir.SelectMatches S n w pStart pStep pDo
           (.scale (.const 2) (.apply (.sum w) (.mul (.reindex [(0, 1, w * S)] (.ref s.stream))
             (.reindex (List.replicate S (0, 1, w)) (.leaf s.basis)))))))
         (.reindex [(0, 0, S)] (.leaf s.one))) (0 * S + i) =
-        ∏ i : Fin S, SelectScan.mux (Falcon512.SelectFirstN.selected n bound
+        ∏ i : Fin S, SelectScan.mux (SelectFirstCutoff.selected n bound
           (s.sample ir (w := w) (ir.reader e)) (s.route ir (ir.reader e) n) i)
-          (s.deltaAt ir (ir.reader e) - Falcon512.SelectFirstN.enc F (s.route ir (ir.reader e) n i).count_enc
+          (s.deltaAt ir (ir.reader e) - SelectFirstCutoff.enc F (s.route ir (ir.reader e) n i).count_enc
             (s.sample ir (ir.reader e) i)) 1 := by
       refine Finset.prod_congr rfl fun i _ => ?_
       rw [Nat.zero_mul, Nat.zero_add, evalE_mux, hm.acc_eq ho hc hb e i, evalE_add, evalE_reindex,
         IndexMap.entry_step_zero i.isLt, evalE_add, evalE_scale_const, evalE_apply_sum,
         hm.sum_sample hc e i, evalE_reindex, IndexMap.entry_step_zero i.isLt,
-        hm.evalE_const e (v := s.one) (by simp), hc.one, hc.two, SelectScan.mux, Falcon512.SelectFirstN.enc]
+        hm.evalE_const e (v := s.one) (by simp), hc.one, hc.two, SelectScan.mux, SelectFirstCutoff.enc]
       simp only [CharTwo.sub_eq_add]
       rfl
     have hr : ∏ j : Fin n, ir.evalE (ir.reader e) (s.field ir)
         (.add (.reindex [(0, 0, n)] (.leaf s.delta)) (.add (.leaf s.gpow)
           (.scale (.const 2) (.apply (.sum w) (.mul (.reindex [(0, 1, w * n)] (.leaf s.raw))
             (.reindex (List.replicate n (0, 1, w)) (.leaf s.basis))))))) (0 * n + j) =
-        ∏ j : Fin n, (s.deltaAt ir (ir.reader e) - Falcon512.SelectFirstN.enc F (F.g ^ (j : ℕ))
+        ∏ j : Fin n, (s.deltaAt ir (ir.reader e) - SelectFirstCutoff.enc F (F.g ^ (j : ℕ))
           (s.word ir (w := w) (ir.reader e) j)) := by
       refine Finset.prod_congr rfl fun j _ => ?_
       rw [Nat.zero_mul, Nat.zero_add, evalE_add, evalE_reindex, IndexMap.entry_step_zero j.isLt,
         evalE_add, hm.evalE_const e (v := s.gpow) (by simp), hc.gpow _ j.isLt, evalE_scale_const,
-        evalE_apply_sum, hm.sum_word hc e j, hc.two, Falcon512.SelectFirstN.enc]
+        evalE_apply_sum, hm.sum_word hc e j, hc.two, SelectFirstCutoff.enc]
       simp only [CharTwo.sub_eq_add]
       rfl
     rw [hl, hr]
@@ -1089,7 +1104,7 @@ theorem SelectMatches.holds_of_run (hm : ir.SelectMatches S n w pStart pStep pDo
 
 /-- **The selection's soundness**: where its predicates and the source program hold, the selected
 words are the first `n` samples below `bound` (`firstAccepted`), or `δ` is a root of the gadget's
-event (`SelectFirstN.badEvent`, fixed by the committed values). -/
+event (`SelectFirstCutoff.badEvent`, fixed by the committed values). -/
 theorem SelectMatches.firstAccepted_or_badAt
     (hm : ir.SelectMatches S n w pStart pStep pDone pRoute s)
     (ho : ir.RefsOrdered) {F : SelectionField (I (s.field ir)).K S w} {bound : ℕ}
@@ -1102,9 +1117,9 @@ theorem SelectMatches.firstAccepted_or_badAt
     firstAccepted (fun v => decide (v < bound))
         (fun i : Fin S => Bits.natOfBits (s.sample ir (w := w) (ir.reader e) i)) n =
         some (fun j => Bits.natOfBits (s.word ir (w := w) (ir.reader e) j)) ∨
-      (Falcon512.SelectFirstN.badEvent F bound (s.sample ir (ir.reader e)) (s.word ir (ir.reader e))
+      (SelectFirstCutoff.badEvent F bound (s.sample ir (ir.reader e)) (s.word ir (ir.reader e))
         (s.route ir (ir.reader e) n) hnS).BadAt (s.deltaAt ir (ir.reader e)) :=
-  Falcon512.SelectFirstN.sound hnS hb (hm.stream_allBool ho hc e) (hm.out_allBool e)
+  SelectFirstCutoff.sound hnS hb (hm.stream_allBool ho hc e) (hm.out_allBool e)
     (hm.run ho hc hb hS hs hstart hstep hdone hroute)
 
 /-- **The selection's readings depend only on the counter, the completion flags, the selected

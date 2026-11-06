@@ -14,7 +14,7 @@ public import GordieHoweNative.Language.Completeness.Basic
 The honest prover of a realized program extends an execution of the source program by the values
 the realizations add (`lem:core-red` (2)). A **completeness certificate** names, for every value,
 the generator that computes it (`GordieHowe.RealizedProgram.Gen`), so the honest values dispatch on
-the certificate and nothing is searched (`CERTIFICATE_REPRESENTATION.md`, C):
+the certificate and nothing is searched:
 
 * **the generators** (`GordieHowe.RealizedProgram.Gen`): the execution's own value (`source`), a
   lookup digit, a committed digit of a quotient, a transformed value, a static histogram (the

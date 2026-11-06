@@ -5,7 +5,6 @@ module
 
 public import GordieHowe.Foundations.ReedSolomon.Decoder
 public import GordieHowe.Foundations.Algebra.QuadraticSystem
-public import GordieHowe.Applications.Keccak.HashCircuit.Packed.Basic
 public import GordieHowe.ProofSystem.GKR.Transcript
 public import Mathlib.Algebra.MvPolynomial.Degrees
 public import GordieHowe.Foundations.Algebra.AffineFormCoeff

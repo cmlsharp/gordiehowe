@@ -50,10 +50,9 @@ The conditions of `Plan.Valid` that read the value table and the predicates of t
 No condition bounds the challenges' degrees: the exported degrees are data that the frontend's
 lowerings read.
 
-`GordieHowe.RealizedProgram.ValidAtNodes` is their conjunction for given packing-tree nodes;
-`RealizedProgram.Valid P ir` (`GordieHowe/Language/RealizedProgram/WithPlan.lean`) adds the plan's
-`Plan.Valid P` and the agreement of the program's domains with the plan's, the nodes being the
-plan's.
+Of these, the proof system reads `WellFormed`, `ChallengeOrder` and `PadOrderValid`
+(`RealizedProgram.Valid ir`, `GordieHowe/Language/RealizedProgram/WithPlan.lean`). No theorem reads
+the others, and the program checks (`GordieHowe.ProgramData.programOkB`) no longer certify them.
 
 **Shared expressions.** A property of an expression through its shared expressions is computed by
 `GordieHowe.RealizedProgram.closure` (lists, such as the values read) or by a table of the entries'
@@ -78,32 +77,6 @@ namespace GordieHowe.RealizedProgram
 open Export
 
 /-! ## Syntax: nodes, references, reads and degrees -/
-
-mutual
-
-/-- **The public values an expression reads directly as coefficients**: its coefficients' values
-and its named operators' operands. -/
-def Expr.coefNodes : Expr → List ℕ
-  | .leaf _ => []
-  | .add e e' => e.coefNodes ++ e'.coefNodes
-  | .sub e e' => e.coefNodes ++ e'.coefNodes
-  | .scale c e => c.nodes ++ e.coefNodes
-  | .mul e e' => e.coefNodes ++ e'.coefNodes
-  | .reindex _ e => e.coefNodes
-  | .concat e e' => e.coefNodes ++ e'.coefNodes
-  | .linear rows e => rows.flatMap (·.flatMap fun t => t.2.nodes) ++ e.coefNodes
-  | .prod _ e => e.coefNodes
-  | .mux b t e => b.coefNodes ++ t.coefNodes ++ e.coefNodes
-  | .apply op e => op.operands ++ op.foreignOperands ++ e.coefNodes
-  | .ref _ => []
-  | .logic _ _ args => Expr.coefNodesList args
-
-/-- The coefficient values a list of expressions reads directly. -/
-def Expr.coefNodesList : List Expr → List ℕ
-  | [] => []
-  | e :: es => e.coefNodes ++ Expr.coefNodesList es
-
-end
 
 /-- **The coordinates of its operand a named operator reads**: the operand's size for the
 convolutions, the transform-free products and the diagonals (`polyMatVec` and `polyBroadcast` read
@@ -212,14 +185,6 @@ variable (ir : RealizedProgram)
 
 /-! ## Through the shared expressions -/
 
-/-- **The degrees of the shared expressions**, the values having degrees `nd`, with `n` levels. -/
-def refDeg (nd : ℕ → ℕ) : ℕ → ℕ → ℕ
-  | 0, _ => 0
-  | n + 1, k => (ir.expr k).deg nd (refDeg nd n)
-
-/-- **An expression's degree** through its shared expressions, the values having degrees `nd`. -/
-def degOf (nd : ℕ → ℕ) (e : Expr) : ℕ := e.deg nd (ir.refDeg nd ir.exprs.length)
-
 /-- **Whether the shared expressions vanish at zero**, with `n` levels. -/
 def refZero : ℕ → ℕ → Bool
   | 0, _ => false
@@ -229,10 +194,6 @@ def refZero : ℕ → ℕ → Bool
 def zeroOf (e : Expr) : Bool := e.zeroAtZero (ir.refZero ir.exprs.length)
 
 /-! ## Reads and degrees -/
-
-/-- **The values a predicate reads**: those of its expressions, and the columns of the table it
-looks up into. -/
-def predNodes (b : PredBody) : List ℕ := b.exprs.flatMap (ir.exprNodes ·.2) ++ ir.tableCols b
 
 /-- **What a predicate reads from the run**, computed from its values (at the program's fuel). -/
 def predReads (b : PredBody) : List Read := (ir.predNodes b).flatMap (ir.nodeReads ir.fuel)
@@ -575,12 +536,6 @@ instance (treeNodes : ℕ → List String) : Decidable (ir.TypeSources treeNodes
 
 /-! ## Targets -/
 
-/-- **The degree of an expression in the committed cells** (committed values, bit views, pad
-copies and late values, a late value being its message minus its pad; public values and
-coefficients have degree `0`). -/
-def cellDeg (e : Expr) : ℕ :=
-  ir.degOf (fun v => if ir.isCommitted v || ir.isLateNode v then 1 else 0) e
-
 /-- **A cell of the quadratic test** (compiler/compiled_domain.h, `place_predicates`): a committed
 value of phase `0`, typed `Field` (so stored at the root, outside the relatively packed subfield
 region), unbound (a value node, not a derived value). -/
@@ -823,29 +778,6 @@ theorem targetsAdmit_iff : ir.TargetsAdmit ↔
         pid < ir.predicates.length ∧ PredBody.target (ir.predicate pid).body = some (.gkr c)) ∧
       (∀ c ∈ ir.circuits, CircuitLaidOut c) :=
   ⟨fun h => ⟨h.predicates, h.circuits, h.layouts⟩, fun ⟨h1, h2, h3⟩ => ⟨h1, h2, h3⟩⟩
-
-/-! ## The program's validity -/
-
-/-- **The program is valid** for the packing-tree nodes `treeNodes` of its domains. -/
-structure ValidAtNodes (treeNodes : ℕ → List String) : Prop where
-  /-- Well-formedness. -/
-  wellFormed : ir.WellFormed
-  /-- The messages are the late values in `MsgBefore` order. -/
-  messages : ir.MessagesMatch
-  /-- The exported reads are sound. -/
-  reads : ir.ReadsSound
-  /-- The exported degrees are sound. -/
-  degrees : ir.DegreesSound
-  /-- The challenge order. -/
-  order : ir.ChallengeOrder
-  /-- The pad order. -/
-  pads : ir.PadOrderValid
-  /-- Type sources. -/
-  types : ir.TypeSources treeNodes
-  /-- The targets admit their predicates. -/
-  targets : ir.TargetsAdmit
-  /-- Every late value is pad-realized. -/
-  padRealized : ir.PadRealized
 
 end
 

@@ -21,8 +21,9 @@ checks of `Plan.Valid` that read it are `GordieHowe/Language/RealizedProgram/Val
 **Identifiers.** Every table of the program is a list, and an identifier is a position in its
 list: value `v` is `values[v]`, predicate `p` is `predicates[p]`, and so on for fields, domains,
 challenges, lookup tables, batches and circuits. The names are provenance only. Value identifiers
-are in declaration order, which the message order `MsgBefore` refines (lexicographic in phase, then
-identifier).
+are in the compiler's order: the constants the expressions read first, then the values in
+declaration order (`lib/gordiehowe/compiler/program_builder.h`). The message order `MsgBefore`
+refines it (lexicographic in phase, then identifier).
 
 **Coordinates.** A value is a tensor; its coordinates are numbered row-major, `0` to
 `Value.size - 1`. An expression denotes a vector of coordinates of one field
@@ -69,17 +70,6 @@ theorem entry_eq_getD_toList : ∀ (m : IndexMap) (i : Nat), m.entry i = m.toLis
 end IndexMap
 
 /-! ## Values -/
-
-/-- Whether a kind is `priv`. -/
-def Kind.isPriv : Kind → Bool
-  | .priv => true
-  | _ => false
-
-/-- The packing-tree node of a value type (`bit`, or the subfield's name); none for `Field`. -/
-def VType.nodeName : VType → Option String
-  | .bit => some "bit"
-  | .sub E => some E
-  | .field => none
 
 /-! ## Predicates -/
 

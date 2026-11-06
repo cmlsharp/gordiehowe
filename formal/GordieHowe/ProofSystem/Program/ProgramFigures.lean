@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.ProofSystem.Program.ForkFigures
+public import GordieHoweNative.ProofSystem.Program.Figures
 
 @[expose] public section
 
@@ -15,8 +16,8 @@ positions, the digest length, the largest round error and the Chernoff exponent 
 numerals. Each figure is a function of the program's ready data (`GordieHowe.RealizedProgram.FieldReady`:
 the plan's Ligero numbers, the program's circuits and batches and the fields' packing facts),
 stated once here; one decidable check per program (`GordieHowe.RealizedProgram.ProgramFigures.Check`),
-proved by `decide +kernel` in the program's generated module `Figures`, ties the numerals to the
-functions, and its consequences are the facts a configuration reads.
+the part `figuresPartB` of the program's check, ties the numerals to the functions, and its
+consequences are the facts a configuration reads (the program's generated `Certified`).
 
 * **Ligero's error terms** (`FieldRoundsOk`, `FieldRoundsLe.of_ok`): every round charge of a
   domain as a fraction of naturals within `num / 2^e`, the commit, test and column bounds those of
@@ -235,33 +236,6 @@ noncomputable def figErrorMax (R : ∀ d : Fin ir.domains.length, ir.FieldReady 
 end ErrorMax
 
 /-! ## The figures of a program and their check -/
-
-/-- **The figures of a configuration's program**, as numerals: at most `rounds` rounds, trees of at
-most `N` leaves, `nq` queried leaves, `kq` verifier queries, `D` digests per chain input, `pos`
-positions, `k`-byte digests, every round error at most `errorMax / 2^errorExp` and every round's
-load passing the Chernoff test `2^-chernoff`. The program's generated module `Figures` states
-them and checks them (`ProgramFigures.Check`). -/
-structure ProgramFigures where
-  /-- The rounds of the composite. -/
-  rounds : ℕ
-  /-- The leaves of the largest tree. -/
-  N : ℕ
-  /-- The queried leaves. -/
-  nq : ℕ
-  /-- The verifier's queries. -/
-  kq : ℕ
-  /-- The digests of one chain input. -/
-  D : ℕ
-  /-- The positions. -/
-  pos : ℕ
-  /-- The digest length in bytes. -/
-  k : ℕ
-  /-- The numerator of the largest round error's bound. -/
-  errorMax : ℕ
-  /-- The exponent of its denominator. -/
-  errorExp : ℕ
-  /-- The Chernoff exponent of the loads. -/
-  chernoff : ℕ
 
 namespace ProgramFigures
 

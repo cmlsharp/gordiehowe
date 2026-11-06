@@ -28,7 +28,7 @@ open GordieHowe.Bits
 
 set_option linter.unusedSectionVars false
 
-variable {program : RealizedProgram} [MldsaEAlgebra program] {F0 FH : RealizedProgram.FieldInterp} [AField F0]
+variable {program : RealizedProgram} [MldsaEAlgebra program] {F0 FH : RealizedProgram.FieldInterp} [RealizedProgram.PrimeCastField F0 pGold]
   [HField FH]
 
 set_option hygiene false in
@@ -134,7 +134,8 @@ theorem weight15_of (h : ∃ k : ℕ, k < 81 ∧ ∑ t : Fin 1024, rdA e 59 t = 
 theorem w1bound0_of (hb : ∀ m < 1024, ∀ t < 6, rdA e 63 (6 * m + t) = 0 ∨ rdA e 63 (6 * m + t) = 1)
     (h : ∀ m < 1024, Bits.leConst (bitsA e m) (UseHint.hiCount mldsa44.γ₂ - 1) = 1) :
     program.HoldsWith (program.reader e) (program.predicate 0).body := by
-  rw [(pred0 (program := program))]
+  obtain ⟨_, hp0⟩ := pred0 (program := program)
+  rw [hp0]
   intro m hm
   rw [(lensU (program := program)).1] at hm
   change program.evalE (program.reader e) (program.domainField 0) _ m =
@@ -226,7 +227,8 @@ theorem decompose1_of (h : ∀ m < 1024,
         (rdA e 64 m) (rdA e 65 m) (UseHint.outputFromBits (UseHint.hiCount mldsa44.γ₂) (bitsA e m)) -
         ((_root_.MLDSA.modulus : ℕ) : (interp 0).K)) = 0) :
     program.HoldsWith (program.reader e) (program.predicate 1).body := by
-  rw [(pred1 (program := program))]
+  obtain ⟨_, hp1⟩ := pred1 (program := program)
+  rw [hp1]
   intro m hm
   rw [(lensU (program := program)).2.1] at hm
   change program.evalE (program.reader e) (program.domainField 0) _ m =
@@ -402,7 +404,8 @@ theorem interval2_of (hb : ∀ m < 1024, ∀ t < 6, rdA e 63 (6 * m + t) = 0 ∨
     (h : ∀ m < 1024, UseHint.IntervalEq mldsa44.γ₂ (rdA e 59 m) (rdA e 64 m) (rdA e 65 m)
       (rdA e 66 m) (UseHint.outputFromBits (UseHint.hiCount mldsa44.γ₂) (bitsA e m))) :
     program.HoldsWith (program.reader e) (program.predicate 2).body := by
-  rw [(pred2 (program := program))]
+  obtain ⟨_, hp2, -⟩ := pred2 (program := program)
+  rw [hp2]
   refine (RealizedProgram.holdsWith_mod_iff (q := 0) (.inr (by norm_num))).2 ?_
   intro m hm
   rw [(lensU (program := program)).2.2] at hm

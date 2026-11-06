@@ -129,7 +129,7 @@ def SourceParts.at (parts : SourceParts) (c : ℕ) : Certificate.Layered × ℕ 
   (parts.layered c, parts.width c, parts.consts c)
 
 /-- **The source parts of certificate data**: its layered circuit, term width and constant table
-(`load_records`'s `name.layered`, `name.w`, `name.consts`). -/
+(`load_ghc`'s `name.layered`, `name.w`, `name.consts`). -/
 def CircuitData.sourceParts (cd : CircuitData) : Certificate.Layered × ℕ × Consts :=
   (cd.layered, cd.w, cd.consts)
 
@@ -138,7 +138,7 @@ def CircuitData.sourceParts (cd : CircuitData) : Certificate.Layered × ℕ × C
 circuit's field meeting its codes (`field`), and the source parts `parts` being the certificates'
 (`hparts`, one equation per circuit: `rfl` where `parts` names the certificates' loaded parts).
 The source parts are given apart from `cd`: they are the certificate data with compiled code, the
-certificate itself has none (`load_records`). -/
+certificate itself has none (`load_ghc`). -/
 def ProgramCerts.ofParts (cd : ℕ → CircuitData) (ar : ℕ → CodeArith)
     (ok : ∀ c < ir.circuits.length, ir.circuitCertB c (ar c) (cd c) = true)
     (field : ∀ c < ir.circuits.length, ir.CircuitFieldOk I c (ar c) (cd c).chr)

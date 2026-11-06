@@ -62,6 +62,7 @@
 #include "algebra/fp_goldilocks.h"
 #include "gordiehowe/core.h"
 #include "gordiehowe/domain.h"
+#include "gordiehowe/compiler/field_registry.h"
 #include "gordiehowe/compiler/range.h"
 #include "gordiehowe/system.h"
 #include "util/crypto.h"
@@ -292,9 +293,13 @@ inline std::string lean_module_name(const ExportMeta &meta,
 inline std::string lean_module_file(const std::string &dir,
                                     const ExportMeta &meta,
                                     const std::string &leaf,
-                                    std::vector<std::string> titles = {}) {
-  const std::filesystem::path p =
-      std::filesystem::path(dir) / (lean_module_path(meta, leaf) + ".lean");
+                                    std::vector<std::string> titles = {});
+
+// DIR/REL.lean, a module of META's export at the path REL relative to
+// formal/, as lean_module_file.
+inline std::string lean_file_at(const std::string &dir, const std::string &rel,
+                                const ExportMeta &meta, std::vector<std::string> titles) {
+  const std::filesystem::path p = std::filesystem::path(dir) / (rel + ".lean");
   std::filesystem::create_directories(p.parent_path());
   if (std::filesystem::exists(p)) {
     std::ifstream in(p, std::ios::binary);
@@ -314,6 +319,11 @@ inline std::string lean_module_file(const std::string &dir,
                                meta.config + "-" + meta.profile);
   }
   return p.string();
+}
+
+inline std::string lean_module_file(const std::string &dir, const ExportMeta &meta,
+                                    const std::string &leaf, std::vector<std::string> titles) {
+  return lean_file_at(dir, lean_module_path(meta, leaf), meta, std::move(titles));
 }
 
 // DIR/<lean_plan_module>.lean, as lean_module_file.
@@ -751,6 +761,7 @@ class Exporter : Lowering {
         .f("msgLen", std::to_string(meta_.msg_len))
         .f("ctxLen", std::to_string(meta_.ctx_len))
         .f("hash", str(hash_name<typename S::Hash>()))
+        .f("opaqueSet", str(opaque_set()))
         .f("phases", std::to_string(cs_.phases()))
         .f("domains", domains)
         .f("requests", requests_)
@@ -827,14 +838,25 @@ class Exporter : Lowering {
     o += "\n-/\n\n";
     o += kLeanModuleOptions;
     o += "namespace " + ns + "\n\n";
-    o += "/-- The compiled plan of `" + config() + "`. -/\n";
-    o += "def plan : GordieHowe.RealizedProgram.Export.Plan :=\n  ";
+    o += "/-- The compiled plan of `" + config() + "`. Sealed: importers see the name, not the "
+         "body; only the modules that check the plan import it with `import all`. -/\n";
+    o += "@[no_expose, irreducible] def plan : GordieHowe.RealizedProgram.Export.Plan :=\n  ";
     o += plan.render(2) + "\n\nend " + ns + "\n";
     return o;
   }
 
  private:
   std::string config() const { return meta_.config + "-" + meta_.profile; }
+
+  // The opaque-function set of the program's interpretation
+  // (field_registry.h's opaque_set): whether an opaque value reads an
+  // argument, the configuration's frontend and the program's field count.
+  std::string opaque_set() const {
+    bool args = false;
+    for (const auto &v : cs_.program().values)
+      if (v.kind == ir::Value::kOpaque && !v.args.empty()) args = true;
+    return compiler::opaque_set(args, frontend_of(meta_.config), cs_.program().fields.size());
+  }
 
   // A packing-tree node of degree D of domain DM: the field's own name for
   // K, `bit` for GF(2), GF(2^D) or GF(p^D) otherwise.

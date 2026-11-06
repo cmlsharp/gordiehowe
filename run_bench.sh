@@ -310,7 +310,6 @@ do_composite=0
 do_rsa64=0
 do_vega=0
 pq_mdoc_attrs=1
-export_lean=0
 hash_check_only=0
 continue_on_screen_failure=0
 screen_targets=""
@@ -338,7 +337,6 @@ while (($#)); do
       fi
       pq_mdoc_attrs="$(tr , '\n' <<< "$2" | sort -nu | paste -sd,)"; shift 2 ;;
     --no-fsstat) do_fsstat=0; shift ;;
-    --export-lean) export_lean=1; shift ;;
     --hash-check-only) hash_check_only=1; shift ;;
     --allow-governor) allow_governor=1; shift ;;
     --continue-on-screen-failure) continue_on_screen_failure=1; shift ;;
@@ -385,7 +383,7 @@ while (($#)); do
       fi
       par_cpus="$2"; shift 2 ;;
     -h|--help)
-      echo "Usage: $0 [--no-build] [--output DIRECTORY] [--profile wide|narrow] [--export-lean]"
+      echo "Usage: $0 [--no-build] [--output DIRECTORY] [--profile wide|narrow]"
       echo "          [--no-binius] [--no-fsstat]"
       echo "          [--composite] [--pqmdoc-attrs LIST] [--rsa-64] [--vega-calib]"
       echo "          [--hash-check-only] [--allow-governor]"
@@ -408,8 +406,7 @@ while (($#)); do
       echo '--screen-targets FILE overrides the per-configuration targets (JSON; see screen_run.py).'
       echo 'Every run writes the GordieHowe plan data (lib/gordiehowe/plan_export.h) of all eight'
       echo 'constructions (and plain mdoc under the narrow profile), from this build, to DIRECTORY/lean;'
-      echo '--export-lean also copies the exports of the GordieHowe paper'"'"'s configurations (with the'
-      echo 'hash comparison'"'"'s from DIRECTORY/hash_plans) to formal/GordieHowe/Generated/.'
+      echo 'scripts/regenerate_exports.py regenerates the checked-in files under formal/.'
       echo '--profile selects the field profile every case runs (lib/params/param_sets.h); default wide.'
       echo 'Before timing, every system'"'"'s protocol hash is checked against the profile (SHA-256 narrow,'
       echo '  SHA-384 wide; hashes.json); a mismatch stops the run. --hash-check-only stops after the check.'
@@ -956,47 +953,6 @@ if (( $(printf '%s\n' "${hash_plan_files[@]}" | grep -c '/Program\.lean$') != 8 
   echo "Expected 8 hash-comparison plans and programs in $hash_plans" >&2
   exit 1
 fi
-# --export-lean copies the checked-in set: the constructions (the rings at
-# 64 members, from lean/ring-64/) and the configurations the GordieHowe
-# paper evaluates. From lean/: mdoc, RSA at 2 KB, SHA-256 at 8 blocks and
-# the post-quantum mDL's Goldilocks arm at 1 attribute; from hash_plans/,
-# SHA3-256 and SHA-256
-# batched at 1, 8 and 32 KiB and SHA-256 at 64 B and 2 KiB at the ROM
-# parameters, SHA-256 at 8 KiB at the QROM parameters. The copy keeps the
-# module paths: formal/GordieHowe/Generated/... is
-# laid out as the Lean library's.
-if ((export_lean)); then
-  dest="$repo_dir/formal/GordieHowe/Generated"
-  while IFS= read -r f; do
-    rel="${f#"$gen"/}"
-    case "$rel" in
-      RSA2048/*/Msg2KiB/*|MDL/MLDSA44/Attrs1/*) ;;
-      RSA2048/*|MDL/MLDSA44/*|MDL/MLDSA44Fq/*|*/Ring/*) continue ;;
-    esac
-    mkdir -p "$dest/$(dirname "$rel")"
-    cp "$f" "$dest/$rel"
-  done < <(find "$gen" -name '*.lean' | sort)
-  # The rings at 64 members, as checked in.
-  rgen="$results_dir/lean/ring-64/GordieHowe/Generated"
-  while IFS= read -r f; do
-    rel="${f#"$rgen"/}"
-    mkdir -p "$dest/$(dirname "$rel")"
-    cp "$f" "$dest/$rel"
-  done < <(find "$rgen" -name '*.lean' | sort)
-  hgen="$hash_plans/GordieHowe/Generated"
-  while IFS= read -r f; do
-    rel="${f#"$hgen"/}"
-    case "$rel" in
-      SHA3/Batched*KiB/ROMParams/*|SHA256/Batched*/ROMParams/*) ;;
-      SHA256/Batched8KiB/QROMParams/*|SHA3/Batched1KiB/QROMParams/*) ;;
-      *) continue ;;
-    esac
-    mkdir -p "$dest/$(dirname "$rel")"
-    cp "$f" "$dest/$rel"
-  done < <(find "$hgen" -name '*.lean' | sort)
-  echo "Lean plan data copied to formal/GordieHowe/Generated/"
-fi
-
 # The protocol hash of every system, before any timing: each field profile
 # fixes its hash (SHA-256 at the ROM parameters, SHA-384 at the QROM
 # parameters; lib/params/param_sets.h). The GordieHowe

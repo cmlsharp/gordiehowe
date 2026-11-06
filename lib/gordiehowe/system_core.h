@@ -722,6 +722,91 @@ class Scope {
     return ScopedDomain<F>(d, *this);
   }
 
+  // Frontend shape names declared next to the application, under this scope.
+  // The same declaration is used by every compilation profile.
+  void shape_inputs(NamedShapeInputs inputs) const {
+    auto append = [&](auto &dst, const auto &src) {
+      for (const auto &name : src) {
+        if (name.empty()) fail("shape input: empty name");
+        dst.push_back(scoped(name));
+      }
+    };
+    auto &out = records().source_metadata.shapes;
+    append(out.values, inputs.values);
+    append(out.predicates, inputs.predicates);
+    append(out.exprs, inputs.exprs);
+    append(out.equal_headers, inputs.equal_headers);
+    append(out.private_field_sources, inputs.private_field_sources);
+    for (const auto &family : inputs.families) {
+      ShapeFamilyInput scoped_family{family.name, {}};
+      for (const auto &row : family.rows) {
+        ShapeFamilyRow scoped_row;
+        append(scoped_row.predicates, row.predicates);
+        append(scoped_row.exprs, row.exprs);
+        append(scoped_row.values, row.values);
+        scoped_family.rows.push_back(std::move(scoped_row));
+      }
+      out.families.push_back(std::move(scoped_family));
+    }
+    for (const auto &[first, last] : inputs.source_predicate_ranges)
+      out.source_predicate_ranges.emplace_back(scoped(first), scoped(last));
+    out.embeddings.insert(out.embeddings.end(), inputs.embeddings.begin(), inputs.embeddings.end());
+    if (!inputs.expr_table_end.empty()) out.expr_table_end = scoped(inputs.expr_table_end);
+    out.phase_count = out.phase_count || inputs.phase_count;
+  }
+
+  // Semantic names for internal values and shared expressions. Recording an
+  // alias does not force sharing or add nodes to the compiled relation.
+  template <class F, class T, class P>
+  void shape_value(const std::string &name, const Ref<F, T, P> &x) const {
+    if (name.empty()) fail("shape value: empty name");
+    if (x.g != &sys_->mutable_graph()) fail("shape value belongs to another system");
+    records().source_metadata.values.push_back({scoped(name), x.id});
+  }
+  template <class F, class T, class P>
+  void shape_expr(const std::string &name, const Ref<F, T, P> &x) const {
+    if (name.empty()) fail("shape expression: empty name");
+    if (x.g != &sys_->mutable_graph()) fail("shape expression belongs to another system");
+    records().source_metadata.exprs.push_back({scoped(name), x.id, {}});
+  }
+  template <class F, class T>
+  void shape_expr(const std::string &name, const Expr<F, T> &x) const {
+    if (name.empty()) fail("shape expression: empty name");
+    if (!x.node || graph_of(x.node) != &sys_->mutable_graph())
+      fail("shape expression belongs to another system");
+    records().source_metadata.exprs.push_back({scoped(name), SIZE_MAX, x.node});
+  }
+  // Name an expression through a named predicate/value and structural path.
+  // Resolution happens after compilation and cannot influence expression sharing.
+  void shape_expr(const std::string &name, ShapeExprSelector selector) const {
+    if (name.empty() || selector.name.empty()) fail("shape expression: empty name");
+    selector.name = scoped(selector.name);
+    records().source_metadata.selected_exprs.push_back({scoped(name), std::move(selector)});
+  }
+  // A compiler-created leaf can be named through the same structural interface.
+  void shape_value(const std::string &name, ShapeExprSelector selector) const {
+    if (name.empty() || selector.name.empty()) fail("shape value: empty name");
+    selector.name = scoped(selector.name);
+    records().source_metadata.selected_values.push_back({scoped(name), std::move(selector)});
+  }
+  // Name a predicate by its semantic source/realization role and body kind.
+  void shape_predicate(const std::string &name, PredicateShapeSelector selector) const {
+    if (name.empty() || selector.name.empty()) fail("shape predicate: empty name");
+    selector.name = scoped(selector.name);
+    records().source_metadata.predicates.push_back({scoped(name), std::move(selector)});
+  }
+  // A source value introduced inside a gadget or bound during lowering can
+  // also be named explicitly; resolution rejects missing or ambiguous names.
+  void source_role(const std::string &name, SourceRole role, size_t slot) const {
+    if (name.empty()) fail("source role: empty name");
+    records().source_metadata.named_roles.push_back({scoped(name), role, slot});
+  }
+  template <class F, class T, class P>
+  void source_role(const Ref<F, T, P> &x, SourceRole role, size_t slot) const {
+    if (x.g != &sys_->mutable_graph()) fail("source role belongs to another system");
+    records().source_metadata.roles.push_back({x.id, role, slot});
+  }
+
   // ------------------------------------------------------------ metadata
   // note(kind, name, params[, domain]): plan-export metadata a library
   // function records (PlanRecords) under NAME in this scope. A note states
@@ -791,6 +876,12 @@ class Scope {
     note_kind(kind, "selection", name);
     rec.name = scoped(name);
     records().selections.push_back(std::move(rec));
+  }
+  void note(const std::string &kind, const std::string &name,
+            PlanRecords::TableSelection rec) const {
+    note_kind(kind, "table-selection", name);
+    rec.pred = scoped(name);
+    records().table_selections.push_back(std::move(rec));
   }
   void note(const std::string &kind, const std::string &name,
             PlanRecords::SampleInBall rec) const {

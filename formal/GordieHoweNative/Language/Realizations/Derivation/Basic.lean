@@ -64,7 +64,8 @@ inductive IvlSrc where
   | prime
   /-- An opaque `Bit` value computed from arguments: `[0, 1]`. -/
   | opaqueBit
-  /-- A shifted range (not implemented: concludes nothing). -/
+  /-- A shifted range: from premise `k`, a range fact on the value plus a constant, the value's
+  interval shifted by that constant (`GordieHoweNative/Language/Realizations/Derivation/Rules.lean`). -/
   | shift (k : ℕ)
   /-- The quadratic root equation of predicate `q`, its `m` with the interval of premise `r`
   (`quadSrcN`): `[0, c]`. -/

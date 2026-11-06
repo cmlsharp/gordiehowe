@@ -32,7 +32,7 @@ decidable fact about the program. This module separates the two:
 * **the interpretation facts from the models**: `Interp.registered_of_models`,
   `Interp.lawful_of_models`, `Interp.bitNodes_of_models`, `Interp.bitsAdditive_of_models`; the MAC
   model (`Interp.macModel_of_tails`, at a field's `FieldInterp.MacFieldOk`) and the field-form
-  model (`Interp.fieldFormModel_of_field`, at a field's `FieldInterp.ReadLinear`) are per field;
+  model (`Interp.fieldFormModel_of_fields`, at its fields' `FieldInterp.ReadLinear`) are per field;
 * **the model of a program's interpretation** (`Interp.Model I P ir orng`), the bundle the proof system
   reads, from the models and the checks (`Interp.Model.of_models`);
 * **the code arithmetic of a field** (`FieldInterp.CodeHom F ar`, the GKR relational check's sums
@@ -155,11 +155,17 @@ def twoFieldNodes (a b : List String) : ℕ → List String
   | 0 => a
   | _ + 1 => b
 
-/-- **A two-field interpretation**: field `0` is `F0`, every other field identifier `F1`, with the
-opaque functions `ops` (the shape of `mldsaInterpOf` and `falconInterpOf`, at any opaque
-functions). -/
+/-- **The fields of a two-field interpretation**: `F0` at field `0`, `F1` at every other field
+identifier. Structural and reducible, so at a numeral it reduces at reducible transparency. -/
+@[reducible] def Interp.twoFieldAt (F0 F1 : FieldInterp) : ℕ → FieldInterp
+  | 0 => F0
+  | _ + 1 => F1
+
+/-- **A two-field interpretation**: field `0` is `F0`, every other field identifier `F1`
+(`Interp.twoFieldAt`), with the opaque functions `ops` (the shape of `mldsaInterpOf` and
+`falconInterpOf`, at any opaque functions). -/
 abbrev Interp.twoField (F0 F1 : FieldInterp) (ops : String → List (ℕ → ℕ) → ℕ → ℕ) : Interp :=
-  ⟨fun n => match n with | 0 => F0 | _ => F1, ops⟩
+  ⟨Interp.twoFieldAt F0 F1, ops⟩
 
 /-- **The field models of a two-field interpretation**: field `0` has `F0`'s model, every other
 field `F1`'s. -/

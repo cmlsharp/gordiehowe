@@ -68,7 +68,7 @@ class MldsaCarrierQuot (program : RealizedProgram) : Prop where
 section Cast
 
 variable {program : RealizedProgram} [MldsaCarrierRelation program] {I : RealizedProgram.Interp}
-  [MLDSA44.AField (I 0)] (rd : program.Valuation I)
+  [RealizedProgram.PrimeCastField (I 0) pGold] (rd : program.Valuation I)
 
 /-- **An integer reading casting to its field value** at coordinate `i`, in domain `0`. -/
 def CastAt (e : Expr) (i : ℕ) : Prop :=
@@ -313,7 +313,7 @@ end Cast
 
 section Digits
 
-variable {program : RealizedProgram} {I : RealizedProgram.Interp} [MLDSA44.AField (I 0)]
+variable {program : RealizedProgram} {I : RealizedProgram.Interp} [RealizedProgram.PrimeCastField (I 0) pGold]
 
 /-- **The digits' sum from position `t` on reads its terms** in field `0`. -/
 theorem evalE_exprFrom0 (rd : program.Valuation I) (b j : ℕ) :
@@ -523,7 +523,7 @@ variable {program : RealizedProgram} [CarrierHEmbed program] [CarrierAEmbed prog
   [MldsaEAlgebra (CarrierAEmbed.emu program)] [MldsaCarrierHonest program]
   [MldsaCarrierRelation program] [MldsaRingStmt program] [TableSelect program]
   [MldsaCarrierFront program] [MldsaCarrierSelect program] [MldsaCarrierQuot program]
-  {F0 FH : FieldInterp} [MLDSA44.AField F0] [HField FH]
+  {F0 FH : FieldInterp} [RealizedProgram.PrimeCastField F0 pGold] [HField FH]
 
 set_option hygiene false in
 local notation "interp" => mldsaInterpOf F0 FH

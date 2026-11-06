@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Language.Honest.Packed
 public import GordieHoweNative.Language.Honest.Exec
+public import GordieHoweNative.Language.RealizedProgram.BoundedCheck
 
 @[expose] public section
 
@@ -38,14 +39,6 @@ namespace GordieHowe.RealizedProgram
 
 open Export ProofSystem.PhaseLayout IOP Range
 open scoped NNReal
-
-/-- **A value of a `kpriv` variable** (paper, `def:o-semantics`): committed, bound to its digits
-(a committed source value), or late. -/
-def Kind.isKpriv : Kind → Bool
-  | .priv => true
-  | .late => true
-  | .bound _ => true
-  | _ => false
 
 section
 
@@ -142,6 +135,8 @@ structure SourceExecutionCore {Inp : Type} (relH : Set (ir.Valuation I × Inp)) 
   /-- The honest statements lie within the declared bounds (automatic for a program declaring
   none, `stmtBounded_of_nil`). -/
   bounded : ∀ x y, (x, y) ∈ relH → ir.StmtBounded I x := by
+    -- TODO(sealed-data): this default runs `decide +kernel` on the program at each use, where
+    -- `ir` is generated data. Callers should pass the compiler-emitted fact `declaredRanges = []`.
     exact fun x _ _ => Program.stmtBounded_of_nil (by decide +kernel) x
   /-- Off the events, the source program accepts in the environment of the execution. -/
   accepting : ∀ x y, (x, y) ∈ relH → ∀ c : ∀ k, (ir.layout I).Ch k, (∀ k, ¬ bad k x y c) →
@@ -156,6 +151,8 @@ structure SourceExecutionCore {Inp : Type} (relH : Set (ir.Valuation I × Inp)) 
   `GordieHowe.prob_packCollision_le`). -/
   packFree : ∀ x y, (x, y) ∈ relH → ∀ c : ∀ k, (ir.layout I).Ch k, (∀ k, ¬ bad k x y c) →
     ir.PackFreeAt I (ir.execEnv I x (val y) (late y c) c) := by
+    -- TODO(sealed-data): this default runs `decide +kernel` on the program at each use, where
+    -- `ir` is generated data. Callers should pass the compiler-emitted fact `NoGammaTables`.
     exact fun _ _ _ _ _ => packFreeAt_of_noGamma (by decide +kernel) _
 
 open Classical in
@@ -252,6 +249,22 @@ structure Env.AgreeOnSourceVals (e e' : ir.Env I) : Prop where
   late : ∀ u, ir.IsSourceValue u → e.late u = e'.late u
   /-- The committed values at the source values agree. -/
   val : ∀ u, ir.IsSourceValue u → e.asg.val u = e'.asg.val u
+
+/-- **Equal source values at execution coordinates give equal source environments.** -/
+theorem agreeOnSourceVals_execEnv_of_values {I : Interp} (x s s' l : ir.Valuation I)
+    (c : ∀ k, (ir.layout I).Ch k)
+    (hv : ∀ v, ir.IsSourceValue v → ∀ i, ir.ExecCoord v i → s v i = s' v i) :
+    Env.AgreeOnSourceVals (ir.execEnv I x s l c) (ir.execEnv I x s' l c) where
+  stmt := rfl
+  chal _ _ := rfl
+  late _ _ := rfl
+  val v hs := by
+    funext i
+    change (if ir.ExecCoord v i then s v i else 0) =
+      (if ir.ExecCoord v i then s' v i else 0)
+    by_cases hc : ir.ExecCoord v i
+    · simp only [hc, ite_true, hv v hs i hc]
+    · simp only [hc, ite_false]
 
 /-- **The agreement on the source values is symmetric.** -/
 theorem Env.AgreeOnSourceVals.symm {e e' : ir.Env I} (h : Env.AgreeOnSourceVals e e') :
@@ -369,6 +382,17 @@ theorem Env.AgreeOnSourceVals.crossBitsAt (hs : ir.SourceValid) (hnm : ir.SrcNoM
     ← h.evalWith_eq hs hnm hp hsrc (by rw [hb]; simp [PredBody.exprs] : (dy, y) ∈ _)]
   exact ⟨hx, hy⟩
 
+/-- Agreement on every source value preserves source acceptance, including bound sources. -/
+theorem Env.AgreeOnSourceVals.sourceAcceptingAt {ir : RealizedProgram} {I : Interp}
+    (hs : ir.SourceValid) (hnm : ir.SrcNoMessage) {e e' : ir.Env I}
+    (h : Env.AgreeOnSourceVals e e') (ha : ir.SourceAcceptingAt I e) :
+    ir.SourceAcceptingAt I e' where
+  sat := (h.sourceSatAt_congr hs hnm).mp ha.sat
+  types v hv hsrc hk i hi := by
+    rw [← h.reader_eq hs hnm hsrc]
+    exact ha.types v hv hsrc hk i hi
+  crossBits := h.crossBitsAt hs hnm ha.crossBits
+
 /-- **Environments agreeing on the source values agree on the source field-form `mod_q`s' field
 equations.** -/
 theorem Env.AgreeOnSourceVals.fieldEqsAt (hs : ir.SourceValid) (hnm : ir.SrcNoMessage)
@@ -379,7 +403,57 @@ theorem Env.AgreeOnSourceVals.fieldEqsAt (hs : ir.SourceValid) (hnm : ir.SrcNoMe
     ← h.evalWith_eq hs hnm hp hsrc (by rw [hb]; simp [PredBody.exprs] : (d, b) ∈ _)]
   exact hf p hp hsrc d q a b real hb hform
 
-/-- **A program without field-form `mod_q`s has its field equations in every environment.** -/
+/-- Replace source values using an explicit agreement proof and the packing obligation. -/
+def SourceExecutionCore.withValues {ir : RealizedProgram} {I : Interp} {Inp : Type}
+    {relH : Set (ir.Valuation I × Inp)} (E : ir.SourceExecutionCore I relH)
+    (val : Inp → ir.Valuation I) (hs : ir.SourceValid) (hnm : ir.SrcNoMessage)
+    (hagree : ∀ x y, (x, y) ∈ relH → ∀ c,
+      Env.AgreeOnSourceVals (ir.execEnv I x (E.val y) (E.late y c) c)
+        (ir.execEnv I x (val y) (E.late y c) c))
+    (hpack : ∀ x y, (x, y) ∈ relH → ∀ c, (∀ k, ¬ E.bad k x y c) →
+      ir.PackFreeAt I (ir.execEnv I x (val y) (E.late y c) c)) :
+    ir.SourceExecutionCore I relH where
+  stmtOf := E.stmtOf
+  stmt := E.stmt
+  val := val
+  late := E.late
+  respects := E.respects
+  bad := E.bad
+  checks := E.checks
+  bounded := E.bounded
+  accepting x y hxy c hc :=
+    (hagree x y hxy c).sourceAcceptingAt hs hnm (E.accepting x y hxy c hc)
+  fieldEqs x y hxy c hc :=
+    (hagree x y hxy c).fieldEqsAt hs hnm (E.fieldEqs x y hxy c hc)
+  packFree := hpack
+/-- Replace source values without changing the charged events or phase error bounds. -/
+def SourceExecution.withValues {ir : RealizedProgram} {I : Interp} {Inp : Type}
+    {relH : Set (ir.Valuation I × Inp)} (E : ir.SourceExecution I relH)
+    (val : Inp → ir.Valuation I) (hs : ir.SourceValid) (hnm : ir.SrcNoMessage)
+    (hagree : ∀ x y, (x, y) ∈ relH → ∀ c,
+      Env.AgreeOnSourceVals (ir.execEnv I x (E.val y) (E.late y c) c)
+        (ir.execEnv I x (val y) (E.late y c) c))
+    (hpack : ∀ x y, (x, y) ∈ relH → ∀ c, (∀ k, ¬ E.bad k x y c) →
+      ir.PackFreeAt I (ir.execEnv I x (val y) (E.late y c) c)) :
+    ir.SourceExecution I relH :=
+  { E with toSourceExecutionCore := E.toSourceExecutionCore.withValues val hs hnm hagree hpack }
+
+/-- Replacing source values preserves every phase error bound. -/
+theorem SourceExecution.withValues_δ {ir : RealizedProgram} {I : Interp} {Inp : Type}
+    {relH : Set (ir.Valuation I × Inp)} (E : ir.SourceExecution I relH)
+    (val : Inp → ir.Valuation I) (hs : ir.SourceValid) (hnm : ir.SrcNoMessage)
+    (hagree : ∀ x y, (x, y) ∈ relH → ∀ c,
+      Env.AgreeOnSourceVals (ir.execEnv I x (E.val y) (E.late y c) c)
+        (ir.execEnv I x (val y) (E.late y c) c))
+    (hpack : ∀ x y, (x, y) ∈ relH → ∀ c, (∀ k, ¬ E.bad k x y c) →
+      ir.PackFreeAt I (ir.execEnv I x (val y) (E.late y c) c)) :
+    (E.withValues val hs hnm hagree hpack).δ = E.δ := rfl
+
+
+/-- **A program without field-form `mod_q`s has its field equations in every environment.** The
+hypothesis is the field table's checked `noFieldForm` claim: realization rows are not source
+predicates, so a program without field forms cannot establish the field rows' hypothesis of
+`fieldEqsAtC_of_srcEnv` without it. -/
 theorem fieldEqsAt_of_none (h : ∀ p < ir.predicates.length, ir.isFieldForm p = false)
     (e : ir.Env I) : ir.FieldEqsAt I e := by
   intro p hp _ d q a b real hb hform
@@ -832,6 +906,18 @@ def cellNodeInB (L : List (ℕ × String)) (v : ℕ) : Bool :=
   | some nr => L.contains (ir.domainField (ir.value v).domain, nr.name)
   | none => false
 
+/-- A checked cell node names an entry of the supplied node list. -/
+theorem cellNodeInB_spec {L : List (ℕ × String)} {v : ℕ}
+    (h : ir.cellNodeInB L v = true) :
+    ∃ nr, (ir.value v).node = some nr ∧
+      (ir.domainField (ir.value v).domain, nr.name) ∈ L := by
+  unfold cellNodeInB at h
+  cases hn : (ir.value v).node with
+  | none => simp only [hn, Bool.false_eq_true] at h
+  | some nr =>
+    refine ⟨nr, rfl, ?_⟩
+    simpa only [hn, List.contains_iff_mem] using h
+
 /-- **A committed cell at a listed node** passes the check that its node contains `1`. -/
 theorem oneMemB_of_cellNodeInB {L : List (ℕ × String)} (hL : OneNodes I L) {v : ℕ}
     (h : ir.cellNodeInB L v = true) : ir.oneMemB I v = true := by
@@ -970,10 +1056,6 @@ theorem holds_fieldRow (hwf : ir.WellFormed) (hI : I.Registered ir) (hL : I.Lawf
   exact (holdsAt_fieldRow_iff hwf hI hL e hrow).2
     (hE _ (predicate_mem hm) hsrc d q' a b real hb hf)
 
-variable (ir) in
-/-- **`fieldRowsE` as a `Bool`.** -/
-def fieldRowsB (S : Structure) : Bool := Twin.okB (ir.fieldRowsE S)
-
 /-- **The source field-form `mod_q`s hold as their field equations where their rows hold**
 (`fieldRowsB`, `holdsAt_fieldRow_iff`). -/
 theorem fieldEqsAt_of_rows (hwf : ir.WellFormed) (hI : I.Registered ir)
@@ -1038,6 +1120,24 @@ theorem typeRoles_of_typeRoleV (h : allIdx ir.typeRoleV ir.values 0 = true) :
     decide_eq_true_eq, beq_iff_eq, predicateT_eq] at this
   exact this.2
 
+/-- A type predicate is no field-form row. -/
+theorem fieldRowRealB_of_role_type {q v : ℕ} (h : (ir.predicate q).role = .type v) :
+    ir.fieldRowRealB q = false := by
+  simp only [fieldRowRealB, predicateT_eq, h]
+
+/-- A realization of a predicate that has no field form is no field-form row. -/
+theorem fieldRowRealB_of_not_field {q m : ℕ} (h : (ir.predicate q).role = .realization m)
+    (hm : ∀ d q' a b real, (ir.predicate m).body = .mod d q' a b real → real.form = .field → False) :
+    ir.fieldRowRealB q = false := by
+  simp only [fieldRowRealB, predicateT_eq, h, Bool.and_eq_false_iff]
+  right
+  split
+  · rename_i d q' a b real hb
+    by_cases hf : real.form = .field
+    · exact (hm d q' a b real hb hf).elim
+    · simp [hf]
+  · rfl
+
 /-- **A field `equal` that is the type predicate or a root equation of a source value is a source
 predicate** (`ivlSourceB`), where a type predicate's role names its value (`hrole`). -/
 theorem inSource_of_ivlSourceB_equal {q v : ℕ} (h : ir.ivlSourceB q = true)
@@ -1096,6 +1196,20 @@ theorem lt_of_isBound {v : ℕ} (h : (ir.value v).kind.isBound = true) : v < ir.
   rw [isBound_eq_false_of_le (Nat.le_of_not_lt hv)] at h
   cases h
 
+/-- **A source coordinate is private or bound**, using the checked absence of source pad copies. -/
+theorem ExecCoord.source_kind {v i : Nat} (h : ir.ExecCoord v i)
+    (hsrc : ir.IsSourceValue v)
+    (hpad : ∀ u < ir.values.length, ir.IsSourceValue u → (ir.value u).kind.isPadCopy = false) :
+    v < ir.values.length ∧ i < (ir.value v).size ∧
+      ((ir.value v).kind = .priv ∨ (ir.value v).kind.isBound = true) := by
+  rcases h with ⟨_, hc⟩ | ⟨hb, hi⟩
+  · obtain ⟨hv, hc, hi⟩ := ir.mem_cellKeys_val.mp hc
+    exact ⟨hv, hi, Or.inl (kind_priv_of_isCellValue (ir := ir) hc fun u m hk => by
+      have hp := hpad v hv hsrc
+      rw [hk] at hp
+      cases hp)⟩
+  · exact ⟨lt_of_isBound hb, hi, Or.inr hb⟩
+
 variable {Inp : Type} {relH : Set (ir.Valuation I × Inp)}
 
 /-- **The honest assignment reads a checked committed value** below its size as the committed
@@ -1144,6 +1258,24 @@ zero pads; a bound value reads no pad copy). The family proofs state the source 
 source environment of `V`; the execution's phase-`0` values are these. -/
 def execOf (V : ir.Valuation I) : ir.Valuation I := fun v i =>
   if (ir.value v).kind.isBound then (ir.bindAsg (ir.honestAsg I V 0)).val v i else V v i
+
+/-- The phase-zero execution reads a private value directly from its supplied valuation. -/
+theorem execOf_of_priv (V : ir.Valuation I) {v : Nat}
+    (hk : (ir.value v).kind = .priv) : ir.execOf I V v = V v := by
+  funext i
+  simp only [execOf, hk, Kind.isBound, Bool.false_eq_true, ite_false]
+
+/-- **The phase-zero execution reads a bound value through its committed digits.** -/
+theorem execOf_of_bound (V : ir.Valuation I) {v : Nat} {x : Expr}
+    (hk : (ir.value v).kind = .bound x) :
+    ir.execOf I V v = (ir.bindAsg (ir.honestAsg I V 0)).val v := by
+  funext i
+  simp only [execOf, hk, Kind.isBound, ite_true]
+/-- **The phase-zero execution and a realized source environment read a bound value alike.** -/
+theorem execOf_bound_eq_reader (V : ir.Valuation I) (e : ir.Env I)
+    (he : e.asg = ir.bindAsg (ir.honestAsg I V 0)) {v : Nat} {x : Expr}
+    (hk : (ir.value v).kind = .bound x) : ir.execOf I V v = ir.reader e v := by
+  rw [reader_of_bound e hk, he, execOf_of_bound V hk]
 
 /-- **A source environment agrees with the environment of an execution on the source values**
 where its source late values are the execution's (`hLl`), its committed values are the phase-`0`
@@ -1298,7 +1430,7 @@ def KprivTyped : Prop :=
 
 instance : Decidable ir.KprivTyped := by
   unfold KprivTyped
-  exact Nat.decidableBallLT _ _
+  exact decidableAllLt _ _
 
 variable (ir I) in
 /-- **The subfield type of every bound value contains `1`.** -/

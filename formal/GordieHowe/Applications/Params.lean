@@ -3,6 +3,7 @@
 
 module
 
+public import GordieHoweNative.Applications.FieldInterps.Codes
 public import Mathlib.Tactic.NormNum.Prime
 public import Mathlib.Tactic.NormNum
 public import Mathlib.Tactic.Ring
@@ -30,22 +31,8 @@ taps of `GF(2^w)`.
 
 namespace GordieHowe
 
-/-- The 128-bit MAC chunk width at the ROM parameters (`256` at the QROM parameters). -/
-abbrev macChunkBits : ℕ := 128
-
-/-- The `Conv(r)` coordinate bound at the 128-bit shape. -/
-theorem convMax_128 : Conv.convMax macChunkBits Conv.gf2_128Taps = 504 :=
-  Conv.convMax_gf2_128
-
 /-- Width of a raw Falcon HashToPoint candidate, before rejection sampling. -/
 abbrev falconSampleBits : ℕ := 16
-
-/-- The Goldilocks prime `2^64 − 2^32 + 1`, the characteristic of the emulated arms' field
-`F_{p²}` (`GordieHowe/Foundations/Fields/Goldilocks.lean`). -/
-def pGold : ℕ := 2 ^ 64 - 2 ^ 32 + 1
-
-theorem pGold_eq : pGold = 18446744069414584321 := by
-  unfold pGold; norm_num
 
 /-! ## ML-DSA -/
 

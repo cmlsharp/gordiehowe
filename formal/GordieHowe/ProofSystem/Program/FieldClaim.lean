@@ -1221,17 +1221,20 @@ def BatchesOk (Pk : (I (ir.domainField d)).Packing) : Prop :=
       ((ir.batch b).operands = .bits → (ir.batch b).bitSumcheck = true ∧ Pk.nodes.isSome)
 
 variable (d) in
-/-- **The covered batches are realized, as a test.** -/
+/-- **The covered batches are realized, as a test**: every batch of the domain `d` (a batch passing
+the batch check is one, `batchOkB_domain`) has a skip domain in the field and, on bits, the bit
+sumcheck and the field's interpolation nodes. The test reads only the batches' domains, not the
+batch check, which the cells check establishes (`RealizedProgram.CellsValid`). -/
 def batchesOkB (Pk : (I (ir.domainField d)).Packing) : Bool :=
   (List.finRange ir.batches.length).all fun b =>
-    !ir.batchOkB d b || ((Pk.skip (ir.batch b).width (ir.batch b).degree).isSome &&
+    (ir.batch b).domain != d || ((Pk.skip (ir.batch b).width (ir.batch b).degree).isSome &&
       (!decide ((ir.batch b).operands = .bits) || ((ir.batch b).bitSumcheck && Pk.nodes.isSome)))
 
 theorem BatchesOk.of_batchesOkB {Pk : (I (ir.domainField d)).Packing}
     (h : ir.batchesOkB d Pk = true) : ir.BatchesOk d Pk := by
   intro b hb
   have := List.all_eq_true.1 h b (List.mem_finRange b)
-  simp only [hb, Bool.not_true, Bool.false_or, Bool.and_eq_true] at this
+  simp only [ir.batchOkB_domain hb, bne_self_eq_false, Bool.false_or, Bool.and_eq_true] at this
   refine ⟨this.1, fun hom => ?_⟩
   simpa [hom] using this.2
 

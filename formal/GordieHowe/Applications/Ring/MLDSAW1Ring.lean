@@ -576,7 +576,7 @@ variable (p) in
 /-- **The ML-DSA ring signature publishing `w₁`**: `ofBase (w1Base …) PS adm`, the
 public value `w₁` with a proof of the ring relation by the proof system `PS` (a parameter) on the
 supported rings `adm`. -/
-noncomputable abbrev w1Scheme (enc : Vector prims.High p.k → BucketVec p)
+abbrev w1Scheme (enc : Vector prims.High p.k → BucketVec p)
     (O : W1Oracles X Y p prims Msg N reps) (M : MaskOracle X Y p T Msg) (βmin : ℚ≥0) (tol k D : ℕ)
     [NeZero D] {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
     (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg)
@@ -736,7 +736,7 @@ abbrev w1ConcreteBase (O : W1Oracles X Y p (concretePrimitivesKeyGen p) Msg N re
 variable (p) in
 /-- **The ML-DSA ring signature publishing `w₁` at the concrete primitives** of the parameter set
 `p`: `w1Scheme` at `concretePrimitivesKeyGen p` and `concreteEnc p`. -/
-noncomputable abbrev w1Concrete (O : W1Oracles X Y p (concretePrimitivesKeyGen p) Msg N reps)
+abbrev w1Concrete (O : W1Oracles X Y p (concretePrimitivesKeyGen p) Msg N reps)
     (M : MaskOracle X Y p T Msg) (βmin : ℚ≥0) (tol k D : ℕ) [NeZero D] {RMsg : Type}
     [Fintype RMsg] [DecidableEq RMsg]
     (bmsg : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → RMsg → Msg)
@@ -758,22 +758,22 @@ theorem correctWithin_w1ConcreteBase (hp : p.isApproved)
     tol k D bmsg
 
 /-- **The ML-DSA-44 ring signature publishing `w₁`** with hedged signing (`w1Concrete`). -/
-noncomputable abbrev w1Scheme44 :=
+abbrev w1Scheme44 :=
   w1Concrete (X := X) (Y := Y) (T := T) (Msg := Msg) (N := N) (reps := reps) _root_.MLDSA.mldsa44
 
 /-- **The ML-DSA-65 ring signature publishing `w₁`** with hedged signing (`w1Concrete`). -/
-noncomputable abbrev w1Scheme65 :=
+abbrev w1Scheme65 :=
   w1Concrete (X := X) (Y := Y) (T := T) (Msg := Msg) (N := N) (reps := reps) _root_.MLDSA.mldsa65
 
 /-- **The ML-DSA-87 ring signature publishing `w₁`** with hedged signing (`w1Concrete`). -/
-noncomputable abbrev w1Scheme87 :=
+abbrev w1Scheme87 :=
   w1Concrete (X := X) (Y := Y) (T := T) (Msg := Msg) (N := N) (reps := reps) _root_.MLDSA.mldsa87
 
 variable (p) in
 /-- **The ML-DSA ring signature publishing `w₁` with ring-binding base messages** at the concrete
 primitives of the parameter set `p`: `w1Concrete` at `bmsg := Prod.mk`, so the base message binds
 the ring: `(R, m)`. -/
-noncomputable abbrev w1BindConcrete {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
+abbrev w1BindConcrete {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
     (O : W1Oracles X Y p (concretePrimitivesKeyGen p)
       (KeyRing (PubKey p (concretePrimitivesKeyGen p)) N × RMsg) N reps)
     (M : MaskOracle X Y p T (KeyRing (PubKey p (concretePrimitivesKeyGen p)) N × RMsg))
@@ -786,19 +786,19 @@ noncomputable abbrev w1BindConcrete {RMsg : Type} [Fintype RMsg] [DecidableEq RM
 
 /-- **The ML-DSA-44 ring signature publishing `w₁` with ring-binding base messages**
 (`w1BindConcrete`). -/
-noncomputable abbrev w1BindScheme44 {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg] :=
+abbrev w1BindScheme44 {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg] :=
   w1BindConcrete (X := X) (Y := Y) (T := T) (N := N) (reps := reps) (RMsg := RMsg)
     _root_.MLDSA.mldsa44
 
 /-- **The ML-DSA-65 ring signature publishing `w₁` with ring-binding base messages**
 (`w1BindConcrete`). -/
-noncomputable abbrev w1BindScheme65 {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg] :=
+abbrev w1BindScheme65 {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg] :=
   w1BindConcrete (X := X) (Y := Y) (T := T) (N := N) (reps := reps) (RMsg := RMsg)
     _root_.MLDSA.mldsa65
 
 /-- **The ML-DSA-87 ring signature publishing `w₁` with ring-binding base messages**
 (`w1BindConcrete`). -/
-noncomputable abbrev w1BindScheme87 {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg] :=
+abbrev w1BindScheme87 {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg] :=
   w1BindConcrete (X := X) (Y := Y) (T := T) (N := N) (reps := reps) (RMsg := RMsg)
     _root_.MLDSA.mldsa87
 
@@ -806,7 +806,7 @@ variable (p) in
 /-- **The converted ML-DSA ring signature publishing `w₁`** at the concrete primitives of the
 parameter set `p`: `w1Concrete` at `bmsg := fun _ m => m`, so the base message is the ring
 message `m`. -/
-noncomputable abbrev w1ConvConcrete (O : W1Oracles X Y p (concretePrimitivesKeyGen p) Msg N reps)
+abbrev w1ConvConcrete (O : W1Oracles X Y p (concretePrimitivesKeyGen p) Msg N reps)
     (M : MaskOracle X Y p T Msg) (βmin : ℚ≥0) (tol k D : ℕ) [NeZero D]
     {TPS : PSTypes} (PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase p O M βmin tol k D (RMsg := Msg) fun _ m => m)) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS)
     (adm : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → Prop)
@@ -814,17 +814,17 @@ noncomputable abbrev w1ConvConcrete (O : W1Oracles X Y p (concretePrimitivesKeyG
   w1Concrete p O M βmin tol k D (RMsg := Msg) (fun _ m => m) PS adm
 
 /-- **The converted ML-DSA-44 ring signature publishing `w₁`** (`w1ConvConcrete`). -/
-noncomputable abbrev w1ConvScheme44 :=
+abbrev w1ConvScheme44 :=
   w1ConvConcrete (X := X) (Y := Y) (T := T) (Msg := Msg) (N := N) (reps := reps)
     _root_.MLDSA.mldsa44
 
 /-- **The converted ML-DSA-65 ring signature publishing `w₁`** (`w1ConvConcrete`). -/
-noncomputable abbrev w1ConvScheme65 :=
+abbrev w1ConvScheme65 :=
   w1ConvConcrete (X := X) (Y := Y) (T := T) (Msg := Msg) (N := N) (reps := reps)
     _root_.MLDSA.mldsa65
 
 /-- **The converted ML-DSA-87 ring signature publishing `w₁`** (`w1ConvConcrete`). -/
-noncomputable abbrev w1ConvScheme87 :=
+abbrev w1ConvScheme87 :=
   w1ConvConcrete (X := X) (Y := Y) (T := T) (Msg := Msg) (N := N) (reps := reps)
     _root_.MLDSA.mldsa87
 

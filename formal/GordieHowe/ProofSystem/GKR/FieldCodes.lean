@@ -7,6 +7,7 @@ public import GordieHowe.ProofSystem.GKR.Codes
 public import Mathlib.Algebra.CharP.Defs
 public import GordieHowe.Foundations.Fields.BinarySpread
 public import GordieHowe.Foundations.Fields.PolyRep
+public import GordieHoweNative.ProofSystem.GKR.FieldCodes
 
 @[expose] public section
 
@@ -40,12 +41,6 @@ decoding (`CodeArith.Hom`):
 namespace GordieHowe.GKR.Fold
 
 /-! ## Characteristic `p`, codes read as casts -/
-
-/-- **The code arithmetic modulo `p`**: the sum and the product of the naturals, reduced modulo
-`p`. -/
-def primeArith (p : ℕ) : CodeArith where
-  add a b := (a + b) % p
-  mul a b := a * b % p
 
 /-- **Casts of naturals into a ring of characteristic `p`** follow the arithmetic modulo `p`. -/
 theorem primeArith_hom {K : Type*} [CommRing K] (p : ℕ) [CharP K p] :
@@ -83,14 +78,6 @@ extension of an extension: the code of an element of the base is itself a digit 
 coefficients, as `PolyRep.mul` does, every coefficient operation the base's code arithmetic, so
 `ExtCode.hom` proves it is the field's from the base's (`CodeArith.Hom`), for every `K`, `n` and
 `β`. Every step is a few natural-number divisions, remainders and products. -/
-
-/-- **Digit `i` of `c` in base `2^s`**: bits `s i` to `s i + s - 1` of `c`. -/
-def digit (s c i : ℕ) : ℕ := c / 2 ^ (s * i) % 2 ^ s
-
-/-- **The natural with digits `g 0, …, g (n - 1)` in base `2^s`**: `Σ_{i<n} g i · 2^(s i)`. -/
-def undigits (s : ℕ) (g : ℕ → ℕ) : ℕ → ℕ
-  | 0 => 0
-  | n + 1 => undigits s g n + g n * 2 ^ (s * n)
 
 /-- Digits of `s` bits make a natural below `2^(s n)`. -/
 theorem undigits_lt {s : ℕ} {g : ℕ → ℕ} (hg : ∀ i, g i < 2 ^ s) :
@@ -153,43 +140,9 @@ theorem extDecode_of_lt {K : Type} [CommRing K] (κ : ℕ → K) (h0 : κ 0 = 0)
       (Nat.le_mul_of_pos_right s hpos))
     simp [Nat.div_eq_of_lt this, h0, hpos.ne']
 
-/-- **The code arithmetic of an extension `K[X] / (X^n - β)`** over a base code arithmetic, codes
-read as coefficient vectors (`extDecode`): `n` coefficients of `s` bits, `beta` the code of `β`. -/
-structure ExtCode where
-  /-- The code arithmetic of the base field `K`. -/
-  base : CodeArith
-  /-- The bits per coefficient. -/
-  s : ℕ
-  /-- The degree `n`. -/
-  n : ℕ
-  /-- The code of `β`, with `X^n = β`. -/
-  beta : ℕ
-
 namespace ExtCode
 
 variable (E : ExtCode)
-
-/-- The code of the sum: the coefficientwise sums. -/
-def add (a b : ℕ) : ℕ :=
-  undigits E.s (fun i => E.base.add (digit E.s a i) (digit E.s b i)) E.n
-
-/-- Coefficient `i` of `X · acc + b_j · a` (`PolyRep.mulStep`): coefficient `i - 1` of `acc`, or
-`β` times its top coefficient at `i = 0`, plus `b_j a_i`. -/
-def stepDigit (a b j acc i : ℕ) : ℕ :=
-  E.base.add (if i = 0 then E.base.mul E.beta (digit E.s acc (E.n - 1)) else digit E.s acc (i - 1))
-    (E.base.mul (digit E.s b j) (digit E.s a i))
-
-/-- One step of Horner's rule: the code of `X · acc + b_j · a`. -/
-def step (a b j acc : ℕ) : ℕ := undigits E.s (E.stepDigit a b j acc) E.n
-
-/-- The code of the product: Horner's rule on the coefficients of `b` from `X^(n-1)` down to `X^0`
-(`PolyRep.mul`). -/
-def mul (a b : ℕ) : ℕ := (List.range E.n).foldr (E.step a b) 0
-
-/-- **The code arithmetic of the extension.** -/
-def arith : CodeArith where
-  add := E.add
-  mul := E.mul
 
 /-- **The extension's codes stay below `2^(s n)`** when the base's stay below `2^s`. -/
 theorem arith_bounded (hb : E.base.Bounded E.s) : E.arith.Bounded (E.s * E.n) where
@@ -261,10 +214,6 @@ theorem hom (S : PolyRep.Spec (PolyRep.binomial β : Fin E.n → K) card f) (hκ
       exact zero_ne_one this
     rw [extDecode_of_lt κ hκ.zero (Nat.one_lt_two_pow hs), hκ.one]
 
-/-- **The code arithmetic of a binomial extension of `ZMod p`**: `n` coefficients of `s` bits, the
-arithmetic modulo `p` on each, `X^n = β` with `beta` the code of `β`. -/
-def overPrime (p s n beta : ℕ) : ExtCode := ⟨primeArith p, s, n, beta⟩
-
 /-- **The code arithmetic of a binomial extension of `ZMod p` is the field's** (`ExtCode.hom` at the
 arithmetic modulo `p`), when `p ≤ 2^s`. -/
 theorem overPrime_hom {p : ℕ} [Fact p.Prime] {s n beta card : ℕ} {β : ZMod p}
@@ -286,27 +235,6 @@ end ExtCode
 /-! ## Binary fields, codes read as polynomial-basis bits -/
 
 open Polynomial BinarySpread
-
-/-- **A binary field's code arithmetic**: the spread representation `E` (digits of `E.k` bits, `E.n`
-of them) and the repetition constant `rep = Σ_{i < n} 2^((k-1) i)` (`Nat.ones (k - 1) n`), kept as
-data so the kernel does not recompute it. -/
-structure BinCode where
-  /-- The spread representation. -/
-  E : Exec
-  /-- `Nat.ones (E.k - 1) E.n`. -/
-  rep : ℕ
-
-/-- The spread representation of the `n` low bits of `v`: `v` repeated every `k - 1` bits, bit `j`
-of the `j`-th copy kept. -/
-def BinCode.spread (B : BinCode) (v : ℕ) : ℕ := (v % 2 ^ B.E.n * B.rep) &&& B.E.mask
-
-/-- The code of a spread natural: its remainder modulo `2^(k-1) - 1`. -/
-def BinCode.unspread (B : BinCode) (N : ℕ) : ℕ := N % (2 ^ (B.E.k - 1) - 1)
-
-/-- **The code arithmetic of a binary field**: exclusive or, and the spread product. -/
-def BinCode.arith (B : BinCode) : CodeArith where
-  add a b := a ^^^ b
-  mul a b := B.unspread (B.E.mul (B.spread a) (B.spread b))
 
 /-- The bits of `u · Σ_{i<n} 2^(s i)`, for `u < 2^s`: bit `t` is bit `t mod s` of `u`, below
 `s n`. -/
@@ -483,12 +411,6 @@ structure CodeArith.PrimeOn (ar : CodeArith) (p : ℕ) : Prop where
   add : ∀ a b, a < p → b < p → ar.add a b = (a + b) % p
   /-- Products of codes below `p`. -/
   mul : ∀ a b, a < p → b < p → ar.mul a b = a * b % p
-
-/-- **The arithmetic with the fast path**: codes below `p` by arithmetic modulo `p`, any other pair
-by `ar`. -/
-def CodeArith.withPrime (ar : CodeArith) (p : ℕ) : CodeArith where
-  add a b := cond (Nat.blt a p && Nat.blt b p) ((a + b) % p) (ar.add a b)
-  mul a b := cond (Nat.blt a p && Nat.blt b p) (a * b % p) (ar.mul a b)
 
 /-- **The fast path is the arithmetic.** -/
 theorem CodeArith.withPrime_eq {ar : CodeArith} {p : ℕ} (h : ar.PrimeOn p) : ar.withPrime p = ar := by

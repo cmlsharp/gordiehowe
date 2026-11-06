@@ -23,6 +23,17 @@ namespace GordieHowe.RealizedProgram
 
 open Export
 
+/-- **A committed coordinate** of a program: coordinate `i` of the committed value `v`, coordinate
+`i` of the pad of late value `v`, or filler input `j` of circuit `c`. -/
+inductive CellKey where
+  /-- Coordinate `i` of committed value `v`. -/
+  | val (v i : ℕ)
+  /-- Coordinate `i` of the pad of late value `v`. -/
+  | pad (v i : ℕ)
+  /-- Filler input `j` of circuit `c`. -/
+  | filler (c j : ℕ)
+  deriving DecidableEq, Repr
+
 section
 
 variable (ir : RealizedProgram)
@@ -34,6 +45,11 @@ def isCellValue (d v : ℕ) : Bool :=
     | .priv => true
     | .padCopy _ _ => true
     | _ => false
+
+/-- A private value is a committed cell of its own domain. -/
+theorem isCellValue_self_of_kind_priv {v : ℕ} (hk : (ir.value v).kind = .priv) :
+    ir.isCellValue (ir.value v).domain v = true := by
+  simp only [isCellValue, hk, beq_self_eq_true, Bool.true_and]
 
 /-- **Value `v` is a late value of domain `d`**: a late value of `d` that lies in its domain (not
 the tag of a MAC that no domain hosts, whose field no domain commits and whose pad is a cell of no

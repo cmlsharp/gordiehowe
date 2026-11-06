@@ -101,4 +101,70 @@ theorem mem_of_subsetSorted : ∀ {xs ys : List ℕ}, subsetSorted xs ys = true 
         · exact hys' _ hz
     | [], h => simp at h
 
+
+/-- **`dropLt` drops a prefix of elements below `x`.** -/
+theorem dropLt_split (x : ℕ) : ∀ ys : List ℕ, ∃ pre, ys = pre ++ dropLt x ys ∧ ∀ y ∈ pre, y < x
+  | [] => ⟨[], rfl, by simp⟩
+  | y :: ys => by
+    cases hy : Nat.blt y x
+    · refine ⟨[], ?_, by simp⟩
+      simp only [dropLt, hy, Bool.cond_false, List.nil_append]
+    · obtain ⟨pre, h1, h2⟩ := dropLt_split x ys
+      refine ⟨y :: pre, ?_, fun z hz => ?_⟩
+      · simp only [dropLt, hy, Bool.cond_true, List.cons_append]
+        exact congrArg (y :: ·) h1
+      · rcases List.mem_cons.mp hz with rfl | hz
+        · simpa [Nat.blt_eq] using hy
+        · exact h2 z hz
+
+/-- **An element of an increasing list at or above `x` survives `dropLt x`.** -/
+theorem mem_dropLt_of {x m : ℕ} {ys : List ℕ} (hm : m ∈ ys) (hx : x ≤ m) : m ∈ dropLt x ys := by
+  obtain ⟨pre, h1, h2⟩ := dropLt_split x ys
+  rw [h1] at hm
+  rcases List.mem_append.mp hm with hm | hm
+  · exact absurd (h2 m hm) (Nat.not_lt.mpr hx)
+  · exact hm
+
+/-- **What `dropLt x` keeps of an increasing list is at or above `x`.** -/
+theorem le_of_mem_dropLt {x : ℕ} : ∀ {ys : List ℕ}, ys.Pairwise (· ≤ ·) → ∀ y ∈ dropLt x ys, x ≤ y
+  | [], _, y, h => by simp [dropLt] at h
+  | z :: zs, hs, y, h => by
+    cases hz : Nat.blt z x
+    · simp only [dropLt, hz, Bool.cond_false] at h
+      have hzx : x ≤ z := by
+        have : ¬ z < x := fun hlt => by simp [Nat.blt_eq.mpr hlt] at hz
+        omega
+      rcases List.mem_cons.mp h with rfl | h
+      · exact hzx
+      · exact Nat.le_trans hzx (List.rel_of_pairwise_cons hs h)
+    · simp only [dropLt, hz, Bool.cond_true] at h
+      exact le_of_mem_dropLt hs.of_cons y h
+
+/-- **The merge-join accepts an increasing list whose elements lie in a nondecreasing list**
+(`mem_of_subsetSorted`'s converse). -/
+theorem subsetSorted_of_mem : ∀ {xs ys : List ℕ}, xs.Pairwise (· < ·) → ys.Pairwise (· ≤ ·) →
+    (∀ m ∈ xs, m ∈ ys) → subsetSorted xs ys = true
+  | [], _, _, _, _ => rfl
+  | x :: xs, ys, hx, hy, hm => by
+    have hxd : x ∈ dropLt x ys := mem_dropLt_of (hm x List.mem_cons_self) (Nat.le_refl x)
+    have hds : (dropLt x ys).Pairwise (· ≤ ·) := by
+      obtain ⟨pre, hsplit, -⟩ := dropLt_split x ys
+      rw [hsplit] at hy
+      exact (List.pairwise_append.mp hy).2.1
+    have hge : ∀ y ∈ dropLt x ys, x ≤ y := le_of_mem_dropLt hy
+    have hrest : ∀ m ∈ xs, m ∈ dropLt x ys := fun m hm' =>
+      mem_dropLt_of (hm m (List.mem_cons_of_mem _ hm')) (Nat.le_of_lt (List.rel_of_pairwise_cons hx hm'))
+    simp only [subsetSorted]
+    generalize dropLt x ys = d at hxd hds hge hrest ⊢
+    match d, hxd, hds, hge, hrest with
+    | y :: ys', hxd, hds, hge, hrest =>
+      have hyx : y = x := by
+        rcases List.mem_cons.mp hxd with h | h
+        · exact h.symm
+        · exact Nat.le_antisymm (List.rel_of_pairwise_cons hds h) (hge y List.mem_cons_self)
+      subst hyx
+      simp only [Nat.beq_refl, Bool.true_and]
+      exact subsetSorted_of_mem hx.of_cons hds hrest
+    | [], hxd, _, _, _ => simp at hxd
+
 end GordieHowe.GKR.Fold

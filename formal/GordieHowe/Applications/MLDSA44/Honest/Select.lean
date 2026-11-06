@@ -37,7 +37,8 @@ variable (e : program.Env interp)
 (`SelectFirstTau.initialOk`). -/
 theorem sel264_of (h : SelectFirstTau.initialOk 39 (thrBits (program.reader e)) = true) :
     program.HoldsWith (program.reader e) (program.predicate 264).body := by
-  rw [(pred264 (program := program))]
+  obtain ⟨_, h264⟩ := pred264 (program := program)
+  rw [h264]
   simp only [SelectFirstTau.initialOk, List.all_eq_true, List.mem_finRange, true_implies,
     Bool.or_eq_true, decide_eq_true_eq, ne_eq] at h
   intro b hb
@@ -67,7 +68,8 @@ theorem sel264_of (h : SelectFirstTau.initialOk 39 (thrBits (program.reader e)) 
 theorem sel265_of (h : SelectFirstTau.stepOk 39 (candBits (program.reader e))
       (thrBits (program.reader e)) = true) :
     program.HoldsWith (program.reader e) (program.predicate 265).body := by
-  rw [pred265_body]
+  obtain ⟨_, h265⟩ := pred265_body (program := program)
+  rw [h265]
   intro n hn
   rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_reindex, stepSizes.2.2.2.2.2.2.2.2] at hn
   obtain ⟨i, b, hb, rfl⟩ : ∃ i b, b < 8 ∧ n = 8 * i + b := ⟨n / 8, n % 8, Nat.mod_lt _ (by norm_num),
@@ -126,7 +128,8 @@ theorem sel266_of (h : SelectFirstTau.fingerprintOk selF 39 (candBits (program.r
     program.HoldsWith (program.reader e) (program.predicate 266).body := by
   have h36 := fun i => RealizedProgram.reader_of_constant e
     (RealizedProgram.kind_of_isConstant (selConstsA (program := program)).1) i
-  rw [(pred266 (program := program))]
+  obtain ⟨_, h266⟩ := pred266 (program := program)
+  rw [h266]
   intro n hn
   rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_prod, RealizedProgram.exprLen_mux, RealizedProgram.exprLen_add,
     (routeLens (program := program))] at hn
@@ -200,7 +203,7 @@ theorem select_holds_of_run (h : SelectFirstTau.run selF 39 (candBits (program.r
 theorem mem267_of (h : ∀ t : Fin 39, (samLowered e).unit t =
       MemoryShuffle.unit (samM program F0 FH).Θ (signsH (program.reader e) t)) :
     program.HoldsWith (program.reader e) (program.predicate 267).body := by
-  obtain ⟨c, hp, -, hc0⟩ := MldsaHConsts.theta (program := program) (FH := FH)
+  obtain ⟨c, ⟨_, hp⟩, -, hc0⟩ := MldsaHConsts.theta (program := program) (FH := FH)
   rw [hp]
   intro t ht
   rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_leaf,
@@ -223,7 +226,8 @@ theorem mem267_of (h : ∀ t : Fin 39, (samLowered e).unit t =
 theorem mem268_of (h : ∀ t : Fin 39, (samLowered e).origin t =
       (samM program F0 FH).originOf ((samLowered e).readOrigin t)) :
     program.HoldsWith (program.reader e) (program.predicate 268).body := by
-  rw [(pred268 (program := program))]
+  obtain ⟨_, hp268⟩ := pred268 (program := program)
+  rw [hp268]
   intro t ht
   rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_leaf, (cellFacts (program := program)).2.2.2.2.2.2.2] at ht
   change program.evalE _ (program.domainField 1) _ _ =
@@ -255,7 +259,8 @@ theorem mem269_of (h : (((samM program F0 FH).readsPacked (samLowered e)).map
     program.HoldsWith (program.reader e) (program.predicate 269).body := by
   have h36 := fun i => RealizedProgram.reader_of_constant e
     (RealizedProgram.kind_of_isConstant (selConstsA (program := program)).1) i
-  rw [(pred269_body (program := program))]
+  obtain ⟨_, hp269⟩ := pred269_body (program := program)
+  rw [hp269]
   intro n hn
   rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_prod, (recLens (program := program)).2.2.2.2.2.2.2.2] at hn
   obtain rfl : n = 0 := by omega
@@ -281,7 +286,8 @@ theorem mem270_of (hbits : ∀ t < 39, ∀ b < 6,
         program.evalE (program.reader e) 1 (.leaf 561) (t * 6 + b) = 1)
     (h : ∀ t : Fin 39, Bits.ltConst ((samLowered e).readOrigin t) ((t : ℕ) + 1) = 1) :
     program.HoldsWith (program.reader e) (program.predicate 270).body := by
-  rw [(pred270 (program := program))]
+  obtain ⟨_, hp270⟩ := pred270 (program := program)
+  rw [hp270]
   intro t ht
   rw [(freshLen (program := program))] at ht
   change program.evalE _ (program.domainField 1) _ _ =

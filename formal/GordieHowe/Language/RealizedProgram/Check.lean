@@ -12,7 +12,7 @@ public import GordieHoweNative.Language.RealizedProgram.Check
 /-!
 # GordieHowe: the checker of the plan's program
 
-Boolean checks of the items of `GordieHowe.RealizedProgram.ValidAtNodes`, written for kernel reduction and run by
+Boolean checks of the validity conditions (`GordieHowe/Language/RealizedProgram/Valid.lean`), written for kernel reduction and run by
 `decide +kernel`: `WellFormed` takes its `Decidable` instance from `wellFormedB`
 (`wellFormedB_iff`), and `ReadsSound`, `DegreesSound` and `TargetsAdmit` are decided through
 `readsB`, `degreesB` and `targetsB` (`readsB_iff`, `degreesB_iff`, `targetsB_iff`). The other
@@ -54,6 +54,14 @@ The definitions are in `GordieHoweNative/Language/RealizedProgram/Check.lean`
 namespace GordieHowe.RealizedProgram
 
 open Export
+
+/-- A nondefault shared-expression lookup has a valid index. -/
+theorem expr_lt_of_ne_default {ir : RealizedProgram} {k : ℕ}
+    (h : ir.expr k ≠ default) : k < ir.exprs.length := by
+  by_contra hn
+  apply h
+  rw [ir.expr_eq_getD, List.getD_eq_getElem?_getD,
+    List.getElem?_eq_none (Nat.le_of_not_lt hn), Option.getD_none]
 
 /-! ## Lists -/
 
@@ -1202,9 +1210,6 @@ end
 /-- **The shared expressions read only entries of smaller index.** -/
 def RefsOrdered : Prop := ∀ k < ir.exprs.length, ∀ k' ∈ (ir.expr k).refs, k' < k
 
-/-- `RefsOrdered`, checked in one pass. -/
-def refsOrderedB : Bool := allIdx (fun k e => e.refs.all (· < k)) ir.exprs 0
-
 theorem refsOrderedB_iff : ir.refsOrderedB = true ↔ ir.RefsOrdered := by
   simp only [refsOrderedB, allIdx_iff, Nat.zero_add, List.all_eq_true, decide_eq_true_eq,
     RefsOrdered, expr_eq_getD]
@@ -1409,15 +1414,6 @@ theorem zeroM_eq (ho : ir.RefsOrdered) {e : Expr} (he : ∀ k ∈ e.refs, k < ir
 
 end Tables
 
-/-- **The values the definition of value `v` reads**: a public expression's values, an opaque
-function's arguments, a bit view's words. -/
-def valueDeps (v : ℕ) : List ℕ :=
-  match (ir.value v).kind with
-  | .pub (.expr e) => ir.exprNodes e
-  | .pub (.opaque _ args) => args
-  | .bits w _ => [w]
-  | _ => []
-
 /-- **The step of `nodeReads`.** -/
 def nodeReadsStep (r : ℕ → List Read) (v : ℕ) : List Read :=
   match (ir.value v).kind with
@@ -1470,9 +1466,47 @@ theorem WellFormed.pubExpr_refs (hwf : ir.WellFormed) {v : ℕ} (hv : v < ir.val
 theorem nodeReads_succ (n v : ℕ) : ir.nodeReads (n + 1) v = ir.nodeReadsStep (ir.nodeReads n) v :=
   rfl
 
+/-- A private value reads no challenges or late values, at any fuel. -/
+theorem nodeReads_of_priv {v : ℕ} (hk : (ir.value v).kind = .priv) :
+    ∀ n, ir.nodeReads n v = []
+  | 0 => rfl
+  | n + 1 => by rw [nodeReads_succ, nodeReadsStep, hk]
+
+/-- An opaque public value with no arguments reads no challenges or late values. -/
+theorem nodeReads_of_opaque_nil {v : ℕ} {name : String}
+    (hk : (ir.value v).kind = .pub (.opaque name [])) :
+    ∀ n, ir.nodeReads n v = []
+  | 0 => rfl
+  | n + 1 => by rw [nodeReads_succ, nodeReadsStep, hk]; rfl
+
+/-- A constant reads no challenges or late values, at any fuel. -/
+theorem nodeReads_of_constant {v : ℕ} {es : List ℕ} (hk : (ir.value v).kind = .constant es) :
+    ∀ n, ir.nodeReads n v = []
+  | 0 => rfl
+  | n + 1 => by rw [nodeReads_succ, nodeReadsStep, hk]
+
+/-- The values a shared expression without shared references reads are its direct values. -/
+theorem exprNodes_ref_of_refs_nil {k : ℕ} {e : Expr} (hk : k < ir.exprs.length)
+    (he : ir.expr k = e) (hr : e.refs = []) : ir.exprNodes (.ref k) = e.directNodes := by
+  obtain ⟨n, hn⟩ : ∃ n, ir.exprs.length = n + 1 := ⟨ir.exprs.length - 1, by omega⟩
+  simp only [exprNodes, closure, hn, Expr.refs, List.flatMap_cons, List.flatMap_nil,
+    Expr.directNodes, refClosure, he, hr, List.nil_append, List.append_nil]
+
 theorem value_eq_default {v : ℕ} (hv : ir.values.length ≤ v) : ir.value v = default := by
   rw [value_eq_getD, List.getD_eq_getElem?_getD, List.getElem?_eq_none hv]
   rfl
+
+/-- A value bound to its digits reads no challenges or late values, at any fuel. -/
+theorem nodeReads_of_bound {v : ℕ} {e : Expr} (hk : (ir.value v).kind = .bound e) :
+    ∀ n, ir.nodeReads n v = []
+  | 0 => rfl
+  | n + 1 => by rw [nodeReads_succ, nodeReadsStep, hk]
+
+/-- A bit view of a private value reads no challenges or late values, at any fuel. -/
+theorem nodeReads_of_bits_priv {v w : ℕ} {sel : IndexMap} (hk : (ir.value v).kind = .bits w sel)
+    (hw : (ir.value w).kind = .priv) : ∀ n, ir.nodeReads n v = []
+  | 0 => rfl
+  | n + 1 => by rw [nodeReads_succ, nodeReadsStep, hk]; exact nodeReads_of_priv hw n
 
 theorem nodeReads_of_le {v : ℕ} (hv : ir.values.length ≤ v) : ∀ n, ir.nodeReads n v = []
   | 0 => rfl
@@ -1675,9 +1709,6 @@ def degreesAtB (c : ℕ) : Bool :=
   ir.predicates.all (fun p => ir.exprDegM c p.body ≤ p.deg c) &&
     allIdx (fun v x => !x.kind.isPubExpr ||
       (ir.valDegM c v).maxUpTo x.size ≤ (x.degree.lookup c).getD 0) ir.values 0
-
-/-- The degree in the committed cells (`cellDeg`'s value degrees). -/
-def cellNd (v : ℕ) : ℕ := if ir.isCommitted v || ir.isLateNode v then 1 else 0
 
 theorem cellNdT_eq : ir.cellNdT = ir.cellNd := by
   funext v

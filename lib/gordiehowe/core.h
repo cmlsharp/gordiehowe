@@ -37,6 +37,7 @@
 #include "gf2k/gf2_128.h"
 #include "gf2k/gf2_256.h"
 #include "gordiehowe/subfield.h"
+#include "gordiehowe/source_metadata.h"
 #include "gordiehowe/wide_int.h"
 #include "random/random.h"
 #include "random/transcript.h"
@@ -1162,6 +1163,9 @@ using ViewSource = std::vector<std::pair<size_t, size_t>>;
 // plan export (plan_export.h). They restate what the system description
 // already fixes, so they do not enter the digest.
 struct PlanRecords {
+  // Frontend declarations from applications and their gadgets.
+  SourceMetadata source_metadata;
+
   // An affine expression over the integers (range_internal::plan_affine):
   // its terms (kind 'n' a node, 's' the sum operator on a node, 'o' another
   // operator chain written o(...(node))), one signed coefficient each, and
@@ -1382,6 +1386,24 @@ struct PlanRecords {
   std::vector<ModEq> mod_equalities;
   std::vector<Gadget> gadgets;
   std::vector<Selection> selections;
+  // A public-table row selection (select_row, lib/table.h), for the proof
+  // modules' selection certificates (Lean `SelCert`): the fingerprint
+  // predicate's name, the table's row map (each leaf's first cell, cells,
+  // transform, order and root, the root as the program prints a field
+  // element), its column blocks (each block's C++ node and width), its rows,
+  // the index bits' count and the index bits' node.
+  struct TableSelection {
+    struct Leaf {
+      size_t offset = 0, n = 0;
+      bool ntt = false, natural = false;
+      std::string psi = "0";
+    };
+    std::string pred;
+    std::vector<Leaf> leaves;
+    std::vector<std::pair<size_t, size_t>> blocks;
+    size_t rows = 0, bits = 0, index = SIZE_MAX;
+  };
+  std::vector<TableSelection> table_selections;
   std::vector<SampleInBall> sample_in_balls;
   std::vector<Permutation> permutations;
   std::vector<FilteredPermutation> filtered_permutations;

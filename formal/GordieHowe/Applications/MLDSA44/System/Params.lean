@@ -200,6 +200,6 @@ Ligero at an agreement threshold, with the mask test, at the tableaus of the pla
 domain's `ligero` entry: rate, `block_enc`, `N`, `k`, the opened columns `t` and the blinding width
 `r = t`). The agreement thresholds, exceptional counts and line certificates are those of
 `GordieHowe.Generated.MLDSA44.Native.QROMParams.Tableau.lineA` and
-`GordieHowe.Generated.MLDSA44.Native.ROMParams.Tableau.lineA` (domain A, the compiler's) and of `Tableau.gf256K339R2Line` and `Tableau.gf128K282R2Line` (domain H). -/
+`GordieHowe.Generated.MLDSA44.Native.ROMParams.tableaus` (domain A, the compiler's) and of `Tableau.gf256K339R2Line` and `Tableau.gf128K282R2Line` (domain H). -/
 
 end GordieHowe.MLDSA44.Native.Params

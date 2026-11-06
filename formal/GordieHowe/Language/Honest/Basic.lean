@@ -146,6 +146,8 @@ structure HonestCore {Inp : Type} (relH : Set (ir.Valuation I × Inp)) where
   /-- The honest statements lie within the declared bounds (automatic for a program declaring
   none, `stmtBounded_of_nil`). -/
   bounded : ∀ x y, (x, y) ∈ relH → ir.StmtBounded I x := by
+    -- TODO(sealed-data): this default runs `decide +kernel` on the program at each use, where
+    -- `ir` is generated data. Callers should pass the compiler-emitted fact `declaredRanges = []`.
     exact fun x _ _ => Program.stmtBounded_of_nil (by decide +kernel) x
   /-- On the relation and off the events, the honest committed values and their pad copies lie in
 their cells' bases (for a pad copy, a property of its map's values; for a source value, its type
@@ -313,9 +315,9 @@ theorem holds_honest (B : ir.ProofSystem P I) (H : ir.HonestCore I relH) {x : ir
       ((ir.layout I).honestRun (H.late y) c π)) (H.bounded x y hy)
   obtain ⟨D, hD⟩ := B.realization
   exact holds_of_sat_derivs (a := fun d => ir.honestCells I d (H.val y) π)
-    B.valid.program.wellFormed B.registered B.lawful B.cells B.locality hD
+    B.valid.wellFormed B.registered B.lawful B.cells B.locality hD
     (fun d => honestCells_mem_cellBase H hy hc π d) hsat
-    (realizedAt_of_honest_derivs B.valid.program.wellFormed hD B.registered B.lawful
+    (realizedAt_of_honest_derivs B.valid.wellFormed hD B.registered B.lawful
       (layoutEnv_sampled _ _ _) hsat (H.histograms x y hy c π hc) (H.digits x y hy c π hc)
       (macsHonest_honestEnv H hy hc) hS
       (fun _ hvl _ hk => reader_bindAsg_of_boundOk hD.bound rfl hvl hk)) d
@@ -331,8 +333,8 @@ def phasedHonest {DS : B.DomainSims} (HD : B.HonestDomains DS)
       (fun d => (HD d).In) fun d => (HD d).dom where
   wit d y π := (HD d).encode (ir.honestCells I d (H.val y) π)
   late := H.late
-  challengeCausal y π := challengeCausal_of_respectsReads B.valid.program.order (H.respects y) π
-  padOrder y := padOrder_of_respectsReads B.valid.program.pads (H.respects y)
+  challengeCausal y π := challengeCausal_of_respectsReads B.valid.order (H.respects y) π
+  padOrder y := padOrder_of_respectsReads B.valid.pads (H.respects y)
   bad := H.bad
   ok_honest x _ hy _ _ _ := stmtOk_iff.2 ⟨H.checks x _ hy, H.bounded x _ hy⟩
   dom_honest x _ hy _ _ hc d := (HD d).dom_of x _ _ (B.holds_honest H hy hc d)

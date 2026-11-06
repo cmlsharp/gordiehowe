@@ -7,7 +7,8 @@ import GordieHowe
 
 A headline has a compiler-trust hypothesis when one of its leading binders has a type whose weak
 head normal form is `CircuitsEnforce` or `CircuitsAccept`, or whose type mentions one of them or a
-constant of a GKR certificate module (`GordieHowe.Generated.<App>.<Params>.GKR.*`). The proof
+constant of a GKR data module (`GordieHowe.Generated.<App>.<Params>.GKR.*`) or a certificate
+check module (`GordieHoweCheck.*`). The proof
 system of a program carries both facts as fields (`RealizedProgram.ProofSystem.enforce`,
 `RealizedProgram.ProofSystem.accept`), proved from its certificates where an application builds it
 (`RealizedProgram.ProgramCerts.proofSystem`), so an application's headlines are stated at its proof
@@ -34,9 +35,10 @@ def moduleOf (env : Environment) (n : Name) : Option Name := do
   let idx ← env.getModuleIdxFor? n
   env.header.moduleNames[idx.toNat]?
 
-/-- Whether a module is a GKR certificate module: `GordieHowe.Generated.….GKR.…`. -/
+/-- A GKR data module or a certificate-check module. -/
 def isCertModule (m : Name) : Bool :=
-  (`GordieHowe.Generated).isPrefixOf m && m.components.contains `GKR
+  ((`GordieHowe.Generated).isPrefixOf m && m.components.contains `GKR) ||
+    (`GordieHoweCheck).isPrefixOf m
 
 run_cmd liftTermElabM do
   let env ← getEnv

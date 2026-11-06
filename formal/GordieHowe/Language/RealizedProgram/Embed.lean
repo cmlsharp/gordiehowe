@@ -7,6 +7,7 @@ public import GordieHowe.Language.Library.Eval
 public import GordieHowe.Language.RealizedProgram.Interval
 public import GordieHowe.Language.RealizedProgram.Affine
 public import GordieHowe.Language.RealizedProgram.Source
+public import GordieHoweNative.Language.RealizedProgram.Embed
 
 @[expose] public section
 
@@ -43,13 +44,6 @@ namespace GordieHowe.RealizedProgram
 
 /-! ## Operators that read no value -/
 
-/-- **A named operator reads no value**: the transforms, sums of groups and digit
-recompositions, possibly batched. Its block, rows and columns are the same in every program. -/
-def NamedOp.valueFree : NamedOp → Bool
-  | .ntt _ _ _ | .inverseNtt _ _ | .nttTranspose _ _ | .sum _ | .fromDigits _ _ => true
-  | .batched _ op => op.valueFree
-  | _ => false
-
 theorem NamedOp.cols_of_valueFree {ir ir' : RealizedProgram} :
     ∀ {op : NamedOp}, op.valueFree = true → NamedOp.cols ir op = NamedOp.cols ir' op
   | .ntt _ _ _, _ | .inverseNtt _ _, _ | .nttTranspose _ _, _ | .sum _, _
@@ -76,99 +70,15 @@ theorem NamedOp.block_of_valueFree {ir ir' : RealizedProgram} {I : Interp} {f : 
       NamedOp.cols_of_valueFree (ir := ir) (ir' := ir') (op := op) h,
       NamedOp.block_of_valueFree (leaf := leaf) (leaf' := leaf') (op := op) h]
 
-mutual
-
-/-- **Every named operator of an expression reads no value** (`NamedOp.valueFree`). -/
-def Expr.opsFree : Expr → Bool
-  | .leaf _ | .ref _ => true
-  | .add e e' | .sub e e' | .mul e e' | .concat e e' => e.opsFree && e'.opsFree
-  | .scale _ e | .reindex _ e | .linear _ e | .prod _ e => e.opsFree
-  | .mux b t e => b.opsFree && t.opsFree && e.opsFree
-  | .apply op e => op.valueFree && e.opsFree
-  | .logic _ _ args => Expr.opsFreeList args
-
-/-- Every named operator of a list of expressions reads no value. -/
-def Expr.opsFreeList : List Expr → Bool
-  | [] => true
-  | e :: es => e.opsFree && Expr.opsFreeList es
-
-end
-
 /-! ## The renaming -/
-
-/-- **A renaming of identifiers**: of values (`val`), of shared expressions (`ref`) and of
-challenges (`chal`). -/
-structure Renaming where
-  /-- The new identifier of a value. -/
-  val : ℕ → ℕ
-  /-- The new identifier of a shared expression. -/
-  ref : ℕ → ℕ
-  /-- The new identifier of a challenge. -/
-  chal : ℕ → ℕ
 
 namespace Renaming
 
 variable (σ : Renaming)
 
-/-- A coefficient, its value renamed. -/
-def coef : Coef → Coef
-  | .const c => .const c
-  | .node v i => .node (σ.val v) i
-
-mutual
-
-/-- **An expression renamed**: its leaves, coefficients' values and references. Named operators
-are kept (renamed expressions are read for operators that read no value, `Expr.opsFree`). -/
-def expr : Expr → Expr
-  | .leaf v => .leaf (σ.val v)
-  | .add e e' => .add (expr e) (expr e')
-  | .sub e e' => .sub (expr e) (expr e')
-  | .scale c e => .scale (σ.coef c) (expr e)
-  | .mul e e' => .mul (expr e) (expr e')
-  | .reindex idx e => .reindex idx (expr e)
-  | .concat e e' => .concat (expr e) (expr e')
-  | .linear rows e => .linear (rows.map (·.map fun t => (t.1, σ.coef t.2))) (expr e)
-  | .prod n e => .prod n (expr e)
-  | .mux b t e => .mux (expr b) (expr t) (expr e)
-  | .apply op e => .apply op (expr e)
-  | .ref k => .ref (σ.ref k)
-  | .logic op w args => .logic op w (exprs args)
-
-/-- A list of expressions renamed. -/
-def exprs : List Expr → List Expr
-  | [] => []
-  | e :: es => expr e :: exprs es
-
-end
-
-/-- **A value's kind renamed**, for the kinds an embedding holds: a challenge's identifier, a bit
-view's words, a pad copy's late value and a bound value's expression renamed, the others kept;
-`none` for a public expression, an opaque function of arguments and a message. -/
-def kind? : Kind → Option Kind
-  | .priv => some .priv
-  | .pub .input => some (.pub .input)
-  | .pub (.opaque n []) => some (.pub (.opaque n []))
-  | .constant es => some (.constant es)
-  | .challenge c => some (.challenge (σ.chal c))
-  | .late => some .late
-  | .bits w sel => some (.bits (σ.val w) sel)
-  | .padCopy v m => some (.padCopy (σ.val v) m)
-  | .bound e => some (.bound (σ.expr e))
-  | _ => none
-
-/-- **A value's kind corresponds**: the larger program's kind is the renamed kind (`kind?`). -/
-def kindCorr (k k' : Kind) : Bool :=
-  match σ.kind? k, k' with
-  | some .priv, .priv => true
-  | some (.pub .input), .pub .input => true
-  | some (.pub (.opaque n [])), .pub (.opaque n' []) => n == n'
-  | some (.constant es), .constant es' => es == es'
-  | some (.challenge c), .challenge c' => c == c'
-  | some .late, .late => true
-  | some (.bits w sel), .bits w' sel' => w == w' && decide (sel = sel')
-  | some (.padCopy v m), .padCopy v' m' => v == v' && m == m'
-  | some (.bound e), .bound e' => e.beq e'
-  | _, _ => false
+/-- Renaming a private value preserves its private kind. -/
+theorem kindCorr_priv {k : Kind} (h : σ.kindCorr .priv k = true) : k = .priv := by
+  cases k <;> simp_all [kindCorr, kind?]
 
 /-! ## Renamed expressions -/
 
@@ -773,16 +683,6 @@ theorem evalE_rename (hE : ir.Embedding ir' σ V R) (e' : ir'.Env I) {f : ℕ} {
   rw [Renaming.eval_expr σ e ho (fun v hv' => ⟨(hE.vals v (hv v hv')).2.2.2.1, hl v (hv v hv')⟩)
     fun k hk => ⟨refLen_rename hE k (hr k hk), refVal_rename hE hl k (hr k hk)⟩]
 
-variable (ir ir') in
-/-- **A predicate `equal` of `ir'` is a renamed one of `ir`**: one domain of one field in both,
-the renamed sides of `V` and `R`, whose named operators read no value. -/
-def equalCorrB (σ : Renaming) (V R : List ℕ) : PredBody → PredBody → Bool
-  | .equal d x y _, .equal d' x' y' _ =>
-    d == d' && ir'.domainField d == ir.domainField d && (σ.expr x).beq x' && (σ.expr y).beq y' &&
-      x.opsFree && y.opsFree && (x.directNodes ++ y.directNodes).all (· ∈ V) &&
-      (x.refs ++ y.refs).all (· ∈ R)
-  | _, _ => false
-
 /-- **A renamed predicate `equal` holds in an environment of `ir'`** exactly when the original
 holds in the environment read through the renaming. -/
 theorem holdsAt_pullEnv (hE : ir.Embedding ir' σ V R) (e' : ir'.Env I) {b b' : PredBody}
@@ -876,42 +776,9 @@ theorem evalIntWith_rename (hE : ir.Embedding ir' σ V R) (e' : ir'.Env I) {d : 
 
 /-! ## Ranges and congruences through the renaming -/
 
-/-- **An expression of the part**: its named operators read no value, it reads values of `V` and
-shared expressions of `R`. -/
-def partExprB (V R : List ℕ) (x : Expr) : Bool :=
-  x.opsFree && x.directNodes.all (· ∈ V) && x.refs.all (· ∈ R)
-
 theorem partExprB_iff {x : Expr} : partExprB V R x = true ↔
     x.opsFree = true ∧ (∀ v ∈ x.directNodes, v ∈ V) ∧ ∀ k ∈ x.refs, k ∈ R := by
   simp only [partExprB, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq, and_assoc]
-
-/-- **An expression of `ir'` is a renamed expression of the part.** -/
-def exprCorrB (σ : Renaming) (V R : List ℕ) (x x' : Expr) : Bool :=
-  (σ.expr x).beq x' && partExprB V R x
-
-/-- **A quotient of `ir'` is the renamed quotient of the part**, or neither program has one. -/
-def quotCorrB (σ : Renaming) (V R : List ℕ) : Option Expr → Option Expr → Bool
-  | none, none => true
-  | some Q, some Q' => exprCorrB σ V R Q Q'
-  | _, _ => false
-
-variable (ir ir') in
-/-- **A predicate of `ir'` is a renamed one of `ir`**, a body of the part: an `equal`
-(`equalCorrB`); a range `in` of one range, one domain of one field in both, the renamed
-nonempty records of the part; a `mod_q` of one modulus, one domain of one field in both, the
-renamed sides of the part, with one product flag, quotient bounds and renamed quotient. -/
-def bodyCorrB (σ : Renaming) (V R : List ℕ) : PredBody → PredBody → Bool
-  | .equal d x y t, .equal d' x' y' t' =>
-    ir.equalCorrB ir' σ V R (.equal d x y t) (.equal d' x' y' t')
-  | .mem d rs (.range n) _, .mem d' rs' (.range n') _ =>
-    d == d' && ir'.domainField d == ir.domainField d && n == n' && !rs.isEmpty &&
-      Expr.beqList (σ.exprs rs) rs' && rs.all (partExprB V R)
-  | .mod d q x y real, .mod d' q' x' y' real' =>
-    d == d' && ir'.domainField d == ir.domainField d && q == q' && exprCorrB σ V R x x' &&
-      exprCorrB σ V R y y' && real.form.isProduct == real'.form.isProduct &&
-      real.quotientLo == real'.quotientLo && real.qmax == real'.qmax &&
-      quotCorrB σ V R real.quotient real'.quotient
-  | _, _ => false
 
 theorem exprCorrB_iff {x x' : Expr} : exprCorrB σ V R x x' = true ↔
     x' = σ.expr x ∧ x.opsFree = true ∧ (∀ v ∈ x.directNodes, v ∈ V) ∧ ∀ k ∈ x.refs, k ∈ R := by
@@ -1002,5 +869,319 @@ theorem eqUpTo_pullEnv (hE : ir.Embedding ir' σ V R)
     · rfl
 
 end
+
+/-! ## The check of an embedding -/
+
+namespace Renaming
+
+mutual
+
+/-- Renamings that agree on what an expression reads rename it alike. -/
+theorem expr_congr {σ σ' : Renaming} : ∀ (e : Expr),
+    (∀ v ∈ e.directNodes, σ.val v = σ'.val v) → (∀ k ∈ e.refs, σ.ref k = σ'.ref k) →
+    σ.expr e = σ'.expr e
+  | .leaf v, hv, _ => by simp [expr, hv v (by simp [Expr.directNodes])]
+  | .add e e', hv, hr | .sub e e', hv, hr | .mul e e', hv, hr | .concat e e', hv, hr => by
+    simp only [Expr.directNodes, Expr.refs, List.mem_append] at hv hr
+    simp only [expr]
+    rw [expr_congr e (fun v h => hv v (.inl h)) fun k h => hr k (.inl h),
+      expr_congr e' (fun v h => hv v (.inr h)) fun k h => hr k (.inr h)]
+  | .scale c e, hv, hr => by
+    simp only [Expr.directNodes, Expr.refs, List.mem_append] at hv hr
+    simp only [expr]
+    rw [expr_congr e (fun v h => hv v (.inr h)) hr, coef_congr fun v h => hv v (.inl h)]
+  | .reindex _ e, hv, hr | .prod _ e, hv, hr => by
+    simp only [Expr.directNodes, Expr.refs] at hv hr
+    simp only [expr]
+    rw [expr_congr e hv hr]
+  | .apply op e, hv, hr => by
+    simp only [Expr.directNodes, Expr.refs, List.mem_append] at hv hr
+    simp only [expr]
+    rw [expr_congr e (fun v h => hv v (.inr h)) hr]
+  | .linear rows e, hv, hr => by
+    simp only [Expr.directNodes, Expr.refs, List.mem_append, List.mem_flatMap] at hv hr
+    simp only [expr]
+    rw [expr_congr e (fun v h => hv v (.inr h)) hr]
+    congr 1
+    refine List.map_congr_left fun row hrow => List.map_congr_left fun t ht => ?_
+    rw [coef_congr fun v h => hv v (.inl ⟨row, hrow, t, ht, h⟩)]
+  | .mux b t e, hv, hr => by
+    simp only [Expr.directNodes, Expr.refs, List.mem_append] at hv hr
+    simp only [expr]
+    rw [expr_congr b (fun v h => hv v (.inl (.inl h))) fun k h => hr k (.inl (.inl h)),
+      expr_congr t (fun v h => hv v (.inl (.inr h))) fun k h => hr k (.inl (.inr h)),
+      expr_congr e (fun v h => hv v (.inr h)) fun k h => hr k (.inr h)]
+  | .ref k, _, hr => by simp [expr, hr k (by simp [Expr.refs])]
+  | .logic op w args, hv, hr => by
+    simp only [Expr.directNodes, Expr.refs] at hv hr
+    simp only [expr]
+    rw [exprs_congr args hv hr]
+
+/-- Renamings that agree on what a list of expressions reads rename it alike. -/
+theorem exprs_congr {σ σ' : Renaming} : ∀ (es : List Expr),
+    (∀ v ∈ Expr.directNodesList es, σ.val v = σ'.val v) →
+    (∀ k ∈ Expr.refsList es, σ.ref k = σ'.ref k) → σ.exprs es = σ'.exprs es
+  | [], _, _ => rfl
+  | e :: es, hv, hr => by
+    simp only [Expr.directNodesList, Expr.refsList, List.mem_append] at hv hr
+    simp only [exprs]
+    rw [expr_congr e (fun v h => hv v (.inl h)) fun k h => hr k (.inl h),
+      exprs_congr es (fun v h => hv v (.inr h)) fun k h => hr k (.inr h)]
+
+/-- Renamings that agree on a coefficient's values rename it alike. -/
+theorem coef_congr {σ σ' : Renaming} {c : Coef} (h : ∀ v ∈ c.nodes, σ.val v = σ'.val v) :
+    σ.coef c = σ'.coef c := by
+  cases c with
+  | const _ => rfl
+  | node v i => simp [coef, h v (by simp [Coef.nodes])]
+
+end
+
+end Renaming
+
+/-- Each identifier of the data's lists has the image the renaming gives it. -/
+structure EmbedData.Agrees (d : EmbedData) (σ : Renaming) : Prop where
+  val : ∀ v < d.vals.length, σ.val v = d.vals.getD v v
+  ref : ∀ k < d.refs.length, σ.ref k = d.refs.getD k k
+  chal : ∀ j < d.chals.length, σ.chal j = d.chals.getD j j
+
+/-- **What the check of an embedding gives**, at every renaming that agrees with its data: the
+embedding, and the listed predicates' correspondences, each a source predicate of the larger
+program. -/
+structure EmbedData.Holds (d : EmbedData) (ir' : RealizedProgram) (σ : Renaming) : Prop where
+  embedding : d.source.Embedding ir' σ d.V d.R
+  equals : ∀ p ∈ d.equals, d.source.equalCorrB ir' σ d.V d.R (d.source.predicate p.1).body
+      (ir'.predicate p.2).body = true ∧ p.2 < ir'.predicates.length ∧
+    ir'.inSource (ir'.predicate p.2) = true
+  bodies : ∀ p ∈ d.bodies, d.source.bodyCorrB ir' σ d.V d.R (d.source.predicate p.1).body
+      (ir'.predicate p.2).body = true ∧ p.2 < ir'.predicates.length
+  sources : ∀ p ∈ d.sources, ir'.inSource (ir'.predicate p) = true
+  chalCount : d.source.challenges.length = d.chals.length
+  chalPhase : ∀ j < d.chals.length, (ir'.challenge (σ.chal j)).phase = (d.source.challenge j).phase
+
+theorem valuesOrdered_of_valuesOrderedB {ir : RealizedProgram} (h : valuesOrderedB ir = true) :
+    ir.ValuesOrdered := by
+  intro v hv u hu
+  have h1 := List.all_eq_true.mp h v (List.mem_range.mpr hv)
+  exact of_decide_eq_true (List.all_eq_true.mp h1 u hu)
+
+section Sound
+
+variable {d : EmbedData} {ir' : RealizedProgram} {σ : Renaming}
+
+theorem EmbedData.renaming_val (v : ℕ) : d.renaming.val v = d.vals.getD v v :=
+  NatTrie.getD_ofSeq _ _ _
+
+theorem EmbedData.renaming_ref (k : ℕ) : d.renaming.ref k = d.refs.getD k k :=
+  NatTrie.getD_ofSeq _ _ _
+
+theorem EmbedData.renaming_chal (j : ℕ) : d.renaming.chal j = d.chals.getD j j := rfl
+
+/-- The correspondence of an equality, read through two renamings that agree on the part. -/
+theorem equalCorrB_congr {ir ir' : RealizedProgram} {σ σ' : Renaming} {V R : List ℕ}
+    (hv : ∀ v ∈ V, σ.val v = σ'.val v) (hr : ∀ k ∈ R, σ.ref k = σ'.ref k) {b b' : PredBody}
+    (h : ir.equalCorrB ir' σ V R b b' = true) : ir.equalCorrB ir' σ' V R b b' = true := by
+  unfold equalCorrB at h ⊢
+  split at h
+  · simp only [Bool.and_eq_true, List.all_eq_true, List.mem_append, decide_eq_true_eq] at h ⊢
+    obtain ⟨⟨⟨⟨⟨⟨⟨hd, hf⟩, hx⟩, hy⟩, hox⟩, hoy⟩, hN⟩, hR⟩ := h
+    rw [← Renaming.expr_congr _ (fun v h => hv v (hN v (.inl h))) fun k h => hr k (hR k (.inl h)),
+      ← Renaming.expr_congr _ (fun v h => hv v (hN v (.inr h))) fun k h => hr k (hR k (.inr h))]
+    exact ⟨⟨⟨⟨⟨⟨⟨hd, hf⟩, hx⟩, hy⟩, hox⟩, hoy⟩, hN⟩, hR⟩
+  · simp at h
+
+theorem exprCorrB_congr {σ σ' : Renaming} {V R : List ℕ}
+    (hv : ∀ v ∈ V, σ.val v = σ'.val v) (hr : ∀ k ∈ R, σ.ref k = σ'.ref k) {x x' : Expr}
+    (h : exprCorrB σ V R x x' = true) : exprCorrB σ' V R x x' = true := by
+  rw [exprCorrB_iff] at h ⊢
+  obtain ⟨h1, h2, h3, h4⟩ := h
+  exact ⟨by
+    rw [h1]
+    exact Renaming.expr_congr _ (fun v h => hv v (h3 v h)) fun k h => hr k (h4 k h), h2, h3, h4⟩
+
+theorem quotCorrB_congr {σ σ' : Renaming} {V R : List ℕ}
+    (hv : ∀ v ∈ V, σ.val v = σ'.val v) (hr : ∀ k ∈ R, σ.ref k = σ'.ref k) {q q' : Option Expr}
+    (h : quotCorrB σ V R q q' = true) : quotCorrB σ' V R q q' = true := by
+  cases q <;> cases q' <;> simp_all only [quotCorrB]
+  exact exprCorrB_congr hv hr h
+
+/-- The correspondence of a body, read through two renamings that agree on the part. -/
+theorem bodyCorrB_congr {ir ir' : RealizedProgram} {σ σ' : Renaming} {V R : List ℕ}
+    (hv : ∀ v ∈ V, σ.val v = σ'.val v) (hr : ∀ k ∈ R, σ.ref k = σ'.ref k) {b b' : PredBody}
+    (h : ir.bodyCorrB ir' σ V R b b' = true) : ir.bodyCorrB ir' σ' V R b b' = true := by
+  unfold bodyCorrB at h ⊢
+  split at h
+  · exact equalCorrB_congr hv hr h
+  · simp only [Bool.and_eq_true] at h ⊢
+    obtain ⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩ := h
+    have hp := List.all_eq_true.mp h6
+    have he : σ'.exprs _ = σ.exprs _ := (Renaming.exprs_eq_map _ _).trans
+      ((List.map_congr_left fun e he => by
+        obtain ⟨-, h7, h8⟩ := partExprB_iff.mp (hp e he)
+        exact (Renaming.expr_congr e (fun v h => hv v (h7 v h)) fun k h => hr k (h8 k h)).symm).trans
+        (Renaming.exprs_eq_map _ _).symm)
+    exact ⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, by rw [he]; exact h5⟩, h6⟩
+  · simp only [Bool.and_eq_true] at h ⊢
+    obtain ⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩ := h
+    exact ⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, exprCorrB_congr hv hr h4⟩, exprCorrB_congr hv hr h5⟩, h6⟩, h7⟩, h8⟩,
+      quotCorrB_congr hv hr h9⟩
+  · simp at h
+
+theorem Renaming.kind?_congr {σ σ' : Renaming} {k : Kind}
+    (hc : ∀ c, k = .challenge c → σ.chal c = σ'.chal c)
+    (hb : ∀ w s, k = .bits w s → σ.val w = σ'.val w)
+    (hp : ∀ v m, k = .padCopy v m → σ.val v = σ'.val v)
+    (he : ∀ e, k = .bound e → σ.expr e = σ'.expr e) : σ.kind? k = σ'.kind? k := by
+  cases k with
+  | challenge c => simp only [Renaming.kind?, hc c rfl]
+  | bits w s => simp only [Renaming.kind?, hb w s rfl]
+  | padCopy v m => simp only [Renaming.kind?, hp v m rfl]
+  | bound e => simp only [Renaming.kind?, he e rfl]
+  | priv | constant _ | late | message _ => rfl
+  | pub d =>
+    cases d with
+    | input | expr _ => rfl
+    | «opaque» n args => cases args <;> rfl
+
+/-- **A list read as the images of the identifiers from `i` on** agrees with `f`, entry by entry.
+The check walks the list once. -/
+def listAgreesB (f : ℕ → ℕ) : ℕ → List ℕ → Bool
+  | _, [] => true
+  | i, x :: xs => f i == x && listAgreesB f (i + 1) xs
+
+theorem listAgreesB_getD {f : ℕ → ℕ} :
+    ∀ {i : ℕ} {l : List ℕ}, listAgreesB f i l = true →
+      ∀ k < l.length, f (i + k) = l.getD k (i + k)
+  | _, [], _, k, hk => absurd hk (Nat.not_lt_zero k)
+  | i, x :: xs, h, k, hk => by
+    simp only [listAgreesB, Bool.and_eq_true, beq_iff_eq] at h
+    cases k with
+    | zero => simpa using h.1
+    | succ k =>
+      have := listAgreesB_getD h.2 k (by simpa using hk)
+      simp only [List.getD_cons_succ]
+      rw [show i + (k + 1) = i + 1 + k by omega, this]
+
+/-- **An embedding's lists agree with a renaming**, checked by one walk over each list. -/
+theorem EmbedData.agrees_of_checks {d : EmbedData} {σ : Renaming}
+    (hv : listAgreesB σ.val 0 d.vals = true) (hr : listAgreesB σ.ref 0 d.refs = true)
+    (hc : listAgreesB σ.chal 0 d.chals = true) : d.Agrees σ where
+  val v h := by simpa using listAgreesB_getD hv v h
+  ref k h := by simpa using listAgreesB_getD hr k h
+  chal j h := by simpa using listAgreesB_getD hc j h
+
+theorem EmbedData.Agrees.val_eq (ha : d.Agrees σ) {v : ℕ} (h : v < d.vals.length) :
+    d.renaming.val v = σ.val v := by
+  rw [EmbedData.renaming_val, ha.val v h]
+
+theorem EmbedData.Agrees.ref_eq (ha : d.Agrees σ) {k : ℕ} (h : k < d.refs.length) :
+    d.renaming.ref k = σ.ref k := by
+  rw [EmbedData.renaming_ref, ha.ref k h]
+
+theorem EmbedData.Agrees.chal_eq (ha : d.Agrees σ) {j : ℕ} (h : j < d.chals.length) :
+    d.renaming.chal j = σ.chal j := by
+  rw [EmbedData.renaming_chal, ha.chal j h]
+
+theorem EmbedData.kindCorr_of_covered (ha : d.Agrees σ) {k k' : Kind}
+    (hc : d.kindCoveredB k = true) (h : d.renaming.kindCorr k k' = true) :
+    σ.kindCorr k k' = true := by
+  have he : d.renaming.kind? k = σ.kind? k := by
+    apply Renaming.kind?_congr
+    · rintro c rfl
+      exact ha.chal_eq (of_decide_eq_true hc)
+    · rintro w s rfl
+      exact ha.val_eq (of_decide_eq_true hc)
+    · rintro v m rfl
+      exact ha.val_eq (of_decide_eq_true hc)
+    · rintro e rfl
+      simp only [EmbedData.kindCoveredB, Bool.and_eq_true, List.all_eq_true,
+        decide_eq_true_eq] at hc
+      exact Renaming.expr_congr e (fun v hv => ha.val_eq (hc.1 v hv))
+        fun k hk => ha.ref_eq (hc.2 k hk)
+  unfold Renaming.kindCorr at h ⊢
+  rw [← he]
+  exact h
+
+/-- **The check of an embedding is sound**, at every renaming that agrees with its data. -/
+theorem embeddingB_sound (h : embeddingB ir' d = true) (ha : d.Agrees σ) : d.Holds ir' σ := by
+  simp only [embeddingB, Bool.and_eq_true, List.all_eq_true] at h
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, hV⟩, hR⟩, hE⟩, hB⟩, hS⟩, hC⟩, hP⟩ := h
+  have hVparts := fun v (hv : v ∈ d.V) => by
+    have := hV v hv
+    simp only [EmbedData.valueB, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq,
+      List.all_eq_true] at this
+    exact this
+  have hRparts := fun k (hk : k ∈ d.R) => by
+    have := hR k hk
+    simp only [EmbedData.refB, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at this
+    exact this
+  have hvσ : ∀ v ∈ d.V, d.renaming.val v = σ.val v := fun v hv =>
+    ha.val_eq (hVparts v hv).1.1.1.1.1.1.1.1.1.2
+  have hrσ : ∀ k ∈ d.R, d.renaming.ref k = σ.ref k := fun k hk =>
+    ha.ref_eq (hRparts k hk).1.1.1.1.1.2
+  refine ⟨⟨valuesOrdered_of_valuesOrderedB h1, valuesOrdered_of_valuesOrderedB h2,
+    (refsOrderedB_iff _).1 h3, (refsOrderedB_iff _).1 h4, ?_, ?_, ?_⟩, ?_, ?_, hS,
+    beq_iff_eq.mp hC, ?_⟩
+  · intro v hv
+    obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨a1, a2⟩, a3⟩, a4⟩, a5⟩, a6⟩, a7⟩, a8⟩, a9⟩, a10⟩, -⟩ := hVparts v hv
+    rw [hvσ v hv] at a3 a4 a5 a6 a7 a8
+    exact ⟨a1, a3, a4, a5, a6, a7, EmbedData.kindCorr_of_covered ha a9 a8, a10⟩
+  · intro v hv c hc
+    obtain ⟨-, a⟩ := hVparts v hv
+    cases hk : (d.source.value v).kind with
+    | challenge c' =>
+      rw [hk] at a hc
+      obtain rfl : c' = c := by simpa [Kind.challenge?] using hc
+      have hcv : c' < d.chals.length := by
+        have := (hVparts v hv).1.1.2
+        rw [hk] at this
+        exact of_decide_eq_true this
+      have a' : ir'.chalField (d.renaming.chal c') = d.source.chalField c' := by simpa using a
+      rw [← ha.chal_eq hcv]
+      exact a'
+    | _ => rw [hk] at hc; simp [Kind.challenge?] at hc
+  · intro k hk
+    obtain ⟨⟨⟨⟨⟨⟨a1, a2⟩, a3⟩, a4⟩, a5⟩, a6⟩, a7⟩ := hRparts k hk
+    rw [hrσ k hk] at a3 a4
+    have he : d.renaming.expr (d.source.expr k) = σ.expr (d.source.expr k) :=
+      Renaming.expr_congr _ (fun v hv => hvσ v (a6 v hv)) fun j hj => hrσ j (a7 j hj)
+    rw [he] at a4
+    exact ⟨a1, a3, a4, a5, a6, a7⟩
+  · intro p hp
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hE
+    obtain ⟨⟨a, b⟩, c⟩ := hE p hp
+    exact ⟨equalCorrB_congr hvσ hrσ a, b, c⟩
+  · intro p hp
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hB
+    obtain ⟨a, b⟩ := hB p hp
+    exact ⟨bodyCorrB_congr hvσ hrσ a, b⟩
+  · intro j hj
+    have := beq_iff_eq.mp (hP j (List.mem_range.mpr hj))
+    rwa [ha.chal_eq hj] at this
+
+/-- The embedding the check gives, at the data's program and lists named by the caller. -/
+theorem EmbedData.Holds.embedding_at {ir : RealizedProgram} {V R : List ℕ} (h : d.Holds ir' σ)
+    (hs : d.source = ir) (hV : d.V = V) (hR : d.R = R) : ir.Embedding ir' σ V R := by
+  subst hs hV hR
+  exact h.embedding
+
+/-- A listed equality's correspondence, at the data's program and lists named by the caller. -/
+theorem EmbedData.Holds.equals_at {ir : RealizedProgram} {V R : List ℕ} (h : d.Holds ir' σ)
+    (hs : d.source = ir) (hV : d.V = V) (hR : d.R = R) {p p' : ℕ} (hp : (p, p') ∈ d.equals) :
+    ir.equalCorrB ir' σ V R (ir.predicate p).body (ir'.predicate p').body = true ∧
+      p' < ir'.predicates.length ∧ ir'.inSource (ir'.predicate p') = true := by
+  subst hs hV hR
+  exact h.equals _ hp
+
+/-- A listed predicate's correspondence, at the data's program and lists named by the caller. -/
+theorem EmbedData.Holds.bodies_at {ir : RealizedProgram} {V R : List ℕ} (h : d.Holds ir' σ)
+    (hs : d.source = ir) (hV : d.V = V) (hR : d.R = R) {p p' : ℕ} (hp : (p, p') ∈ d.bodies) :
+    ir.bodyCorrB ir' σ V R (ir.predicate p).body (ir'.predicate p').body = true ∧
+      p' < ir'.predicates.length := by
+  subst hs hV hR
+  exact h.bodies _ hp
+
+end Sound
+
 
 end GordieHowe.RealizedProgram

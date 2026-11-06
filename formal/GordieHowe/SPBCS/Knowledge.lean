@@ -48,7 +48,7 @@ variable [∀ j i, Nonempty ((P j).Challenge i)] {V : X → FullTr P t → Bool}
 
 /-- **The spBCS verifier's query expansion** (`BCSExpand`, CMS19 p. 39) for claims:
 `queryProg` at the query phase of the claim's statement, padded with `.xof 0 0`. -/
-noncomputable def expansion (Qs : ∀ x, M.IOPQueries V x) :
+def expansion (Qs : ∀ x, M.IOPQueries V x) :
     Expansion (Query k kN kS L) (Out k e) (Claim X M.NIProof) :=
   GordieHowe.OracleProg.toExpansion (fun c => M.queryProg c.stmt c.proof (Qs c.stmt))
     (.xof (fun _ => 0) fun _ => 0)

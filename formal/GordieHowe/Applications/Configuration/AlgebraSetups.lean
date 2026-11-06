@@ -5,13 +5,13 @@ module
 
 public import GordieHowe.ProofSystem.Ligero.MaskTest.PiecesHonest
 public import GordieHowe.Model.IOP.Append
-public import GordieHowe.Applications.Rows.Basic
+public import GordieHowe.Foundations.Algebra.Rows
 public import GordieHowe.ProofSystem.GKR.SourceCircuit
 public import GordieHowe.ProofSystem.Zerocheck.Round
 public import GordieHowe.ProofSystem.Ligero.Preparation
 public import GordieHowe.Foundations.Algebra.QuadraticSystem
 public import GordieHowe.Foundations.Algebra.AffineForm
-public import GordieHowe.Applications.Keccak.HashCircuit.Packed.Basic
+public import GordieHowe.ProofSystem.Ligero.SubfieldQuery
 public import GordieHowe.ProofSystem.GKR.TranscriptRouting
 public import GordieHowe.ProofSystem.GKR.Transcript
 public import GordieHowe.Foundations.ReedSolomon.AffineProximity
@@ -39,7 +39,7 @@ public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative6
 public import GordieHowe.Applications.Falcon512.PoP.Relation
 public import GordieHowe.Foundations.Fields.GF2_128Conv
 public import GordieHowe.Applications.Rows.NativeLinear
-public import GordieHowe.Applications.Rows.MAC
+public import GordieHowe.Language.Realizations.MACRows
 public import GordieHowe.Foundations.Algebra.DFT
 public import GordieHowe.Foundations.Algebra.DFTExtra
 public import GordieHowe.Foundations.Algebra.ConvMatrix

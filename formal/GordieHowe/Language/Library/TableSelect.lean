@@ -1396,4 +1396,14 @@ theorem record_eq_of_not_bad [SelectField (I f) (shape program).mOne]
 
 end TableSelect
 
+/-- **The selection's body on a replica**, at any realization. -/
+theorem TableShape.bodyOk_congr {ir₁ ir₂ : RealizedProgram} {K : ℕ} (h : AgreesBelow ir₁ ir₂ K) (t : TableShape) {d c z : ℕ} {T F : Expr} {r r' : Target}
+    (hT : ∀ k ∈ T.refs, k < K) (hF : ∀ k ∈ F.refs, k < K) :
+    t.bodyOk ir₁ (.equal d (.add T (.scale (.const c) F)) (.leaf z) r) =
+      t.bodyOk ir₂ (.equal d (.add T (.scale (.const c) F)) (.leaf z) r') := by
+  rw [TableShape.bodyOk_eq, TableShape.bodyOk_eq]
+  simp only
+  rw [recTermsOk_congr h _ _ _ _ fun u hu k hk => hT k (refs_of_mem_addSpine T u hu k hk),
+    foldOf_congr h _ _ _ _ _ _ hF]
+
 end GordieHowe.RealizedProgram

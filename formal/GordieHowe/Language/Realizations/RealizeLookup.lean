@@ -593,6 +593,61 @@ theorem peel_spec (rd : ir.Valuation I) (f : ℕ) : ∀ (n : ℕ) (L : Expr) {h 
     · simp only [exprLen, Expr.len] at hlen ⊢
       exact hlen
 
+/-- Peeling a sum preserves the ordered list of direct value references. -/
+private theorem peel_directNodes : ∀ (n : Nat) (x : Expr) {h : Expr}
+    {ts : List (Nat × Nat)}, peel n x = some (h, ts) →
+      x.directNodes = h.directNodes ++ ts.map Prod.snd
+  | 0, x, h, ts, hp => by
+    simp only [peel.eq_1, Option.some.injEq, Prod.mk.injEq] at hp
+    obtain ⟨rfl, rfl⟩ := hp
+    simp
+  | n + 1, x, h, ts, hp => by
+    simp only [peel.eq_2, Option.bind_eq_some_iff, Option.map_eq_some_iff,
+      Prod.mk.injEq] at hp
+    obtain ⟨⟨rest, c, u⟩, hs, ⟨h', ts'⟩, hp', rfl, rfl⟩ := hp
+    rw [eq_of_peelStep hs]
+    simp only [Expr.directNodes.eq_2, Expr.directNodes.eq_4,
+      Coef.nodes.eq_1, Expr.directNodes.eq_1, List.nil_append,
+      peel_directNodes n rest hp', List.map_append, List.map_cons, List.map_nil,
+      List.append_assoc]
+
+/-- The positive positional check records exactly its ordered value references. -/
+private theorem posChainOk_nodes {p T : Nat} :
+    ∀ (pw : Nat) (ts : List (Nat × Nat)) (us : List Nat),
+      posChainOk p T pw ts us = true → ts.map Prod.snd = us
+  | _, [], [], _ => rfl
+  | pw, (c,u) :: ts, u' :: us, h => by
+    simp only [posChainOk.eq_2, Bool.and_eq_true, beq_iff_eq] at h
+    obtain ⟨⟨⟨rfl, _⟩, _⟩, hrest⟩ := h
+    simp only [List.map_cons, posChainOk_nodes (pw*T) ts us hrest]
+  | pw, [], u :: us, h => by
+    rw [posChainOk.eq_3 _ _ _ _ _ (by simp) (by simp)] at h
+    cases h
+  | pw, t :: ts, [], h => by
+    rw [posChainOk.eq_3 _ _ _ _ _ (by simp) (by simp)] at h
+    cases h
+
+/-- **A checked digit expression directly reads exactly its digit values**, in order and
+including repetitions. This is a structural consequence of the existing digit-expression check. -/
+theorem directNodes_of_digitsExprOk {p T : Nat} {x : Expr} :
+    ∀ {us : List Nat}, digitsExprOk p T x us = true → x.directNodes = us
+  | [], h => by simp only [digitsExprOk.eq_1, Bool.false_eq_true] at h
+  | u :: us, h => by
+    simp only [digitsExprOk.eq_2] at h
+    rcases hp : peel us.length x with _ | ⟨hd, ts⟩
+    · rw [hp] at h
+      cases h
+    · rw [hp] at h
+      cases hd with
+      | leaf w =>
+        simp only [Bool.and_eq_true, beq_iff_eq] at h
+        obtain ⟨rfl, hch⟩ := h
+        rw [peel_directNodes _ _ hp, Expr.directNodes.eq_1,
+          posChainOk_nodes T ts us hch]
+        rfl
+      | _ => simp at h
+
+
 /-- **The value of the digits `ys` in base `T`**, least significant first. -/
 def digitsVal {K : Type} [Semiring K] (T : K) (ys : List K) : K :=
   ys.foldr (fun y acc => y + T * acc) 0

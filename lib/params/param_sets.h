@@ -118,25 +118,16 @@ struct ROMParams {
   static constexpr FalconEmuArm kFalconEmu{2048, 128, 2, 2, 3, 3};
   static constexpr MLDSANativeArm kMLDSANative{512, 115};
   static constexpr MLDSAEmuArm kMLDSAEmu{4096, 115};
-  // 108-bit ROM target: rate 7 and 132 opened columns in every tableau, with
-  // block_enc from each tableau's size search.
-  static constexpr LigeroHalf kFalconEmuH{7, 132, 4096},
-      kFalconEmuA{7, 132, 4607};
-  static constexpr LigeroHalf kFalconNativeH{7, 132, 4096},
-      kFalconNativeA{7, 132, 4274};
-  static constexpr LigeroHalf kMLDSANativeH{7, 132, 4466},
-      kMLDSANativeA{7, 132, 4274};
-  static constexpr LigeroHalf kMLDSAEmuH{7, 132, 4466};
-  // The P-256 base field, ECDSA's domain, prime and unpacked. ROM
-  // parameters only, with no Params.lean counterpart:
-  // rate 7, and block_enc from LigeroParam's size search (0); the system
-  // sets list-radius t for the tableau the search gives.
+  // The Ligero halves read here: the Falcon ring's carrier domain
+  // (examples/rings/falcon_ring_params.h) and gordiehowe_batch_words_test.
+  // The compiled configurations take theirs from examples/shared/domain_profile.h.
+  static constexpr LigeroHalf kFalconEmuA{7, 132, 4607};
+  static constexpr LigeroHalf kFalconNativeH{7, 132, 4096};
+  // The P-256 base field, ECDSA's domain, prime and unpacked (ROM parameters
+  // only).
   using EcdsaField = Fp256Base;
-  static constexpr LigeroHalf kEcdsaA{7, 132, 0};
-  // The arithmetic domain of the RSA system (gordiehowe/examples/
-  // rsa_pkcs1.h): the emulated field at the Falcon emulated A's Ligero half.
+  // The arithmetic domain of the RSA system (gordiehowe/examples/rsa_pkcs1.h).
   using ArithField = EmulatedField;
-  static constexpr LigeroHalf kArithA = kFalconEmuA;
 };
 
 struct QROMParams {
@@ -163,32 +154,23 @@ struct QROMParams {
   // nreq: the smallest column count meeting the target at unique decoding
   // (the Lean listBounds, with the prefix-row subfield term), for the
   // tableau (N, k) that block_enc and rate fix.
-  static constexpr LigeroHalf kFalconEmuH{9, 269, 7039},
-      kFalconEmuA{6, 293, 8191};
-  static constexpr LigeroHalf kFalconNativeH{9, 269, 7039},
-      kFalconNativeA{9, 270, 8191};
-  static constexpr LigeroHalf kMLDSANativeH{6, 291, 5359},
-      kMLDSANativeA{6, 291, 5411};
-  static constexpr LigeroHalf kMLDSAEmuH{6, 291, 5359};
+  static constexpr LigeroHalf kFalconEmuA{6, 293, 8191};
+  static constexpr LigeroHalf kFalconNativeH{9, 269, 7039};
   // The arithmetic domain of the RSA system, as in ROMParams.
   using ArithField = EmulatedField;
-  static constexpr LigeroHalf kArithA = kFalconEmuA;
 };
 
 // ROMParams with the RSA system's arithmetic domain in the prime field Fp128
 // (p = 2^128 - 2^108 + 1, algebra/fp_p128.h): unpacked, its designated
 // subfield the field itself, with roots of unity of order 2^108 for the
 // Reed-Solomon encoder (algebra/reed_solomon_fp.h) and the
-// transforms. Rate 7 and 132 opened columns as ROMParams' A halves, block_enc
-// from the power-of-two search (0); the system sets list-radius t for the
-// tableau the search gives. ROM parameters only: the QROM target of 2^-236
+// transforms. ROM parameters only: the QROM target of 2^-236
 // per round needs a challenge field above 2^128. Not in AllProfiles: only the
 // RSA system reads it.
 struct ROMParamsFp128 : ROMParams {
   static constexpr char kId[] = "narrow-fp128";
   static constexpr char kName[] = "pq-narrow-v1-sha256-gf128-fp128";
   using ArithField = Fp128<>;
-  static constexpr LigeroHalf kArithA{7, 132, 0};
 };
 
 constexpr uint64_t power(uint64_t b, size_t e) {

@@ -4,7 +4,7 @@
 module
 
 public import GordieHowe.ProofSystem.Zerocheck.FieldSkipMasked
-public import GordieHowe.Applications.Keccak.HashCircuit.SkipHVZK
+public import GordieHowe.ProofSystem.Zerocheck.AltRounds
 
 @[expose] public section
 

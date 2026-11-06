@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Language.Library.Keccak
+public import GordieHowe.Applications.Keccak.Frontend.Rounds
 public import GordieHowe.Applications.Falcon512.Frontend.HashData
 public import GordieHowe.Language.RealizedProgram.Encoding
 

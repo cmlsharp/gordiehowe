@@ -7,7 +7,7 @@ public import GordieHowe.Applications.Falcon512.Gadgets.EmulatedNorm
 public import GordieHowe.Language.Realizations.Range
 public import GordieHowe.Foundations.Algebra.IntLift
 public import GordieHowe.Applications.Falcon512.Emulated.Rows
-public import GordieHowe.Applications.Rows.MAC
+public import GordieHowe.Language.Realizations.MACRows
 public import GordieHowe.Language.Realizations.Bits
 public import GordieHowe.Applications.Falcon512.Gadgets.EmulatedEncoding
 public import GordieHowe.Applications.Falcon512.Spec.Encoding

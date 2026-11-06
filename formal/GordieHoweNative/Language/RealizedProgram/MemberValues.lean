@@ -27,6 +27,10 @@ open GordieHowe.Twin
 built once. -/
 def Structure.memberValueTab (S : Structure) : NatTrie ℕ := NatTrie.ofList S.memberValues
 
+/-- The pointer lookup table is built from the emitted member-value entries. -/
+theorem Structure.memberValueTab_eq (S : Structure) :
+    S.memberValueTab = NatTrie.ofList S.memberValues := rfl
+
 section
 
 variable (ir : RealizedProgram)

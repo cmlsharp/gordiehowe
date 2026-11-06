@@ -235,6 +235,164 @@ void ring_carrier_relation(typename CarrierEnv<P>::Sys &cs,
   const auto mag = magnitudes(cs.scope("magnitudes"), A, s1, s2);
   assert_encoding_budget<S>(cs.scope("encoding"), A, mag.mag2);
   assert_norm<S>(cs.scope("norm"), A, mag.mag1, mag.mag2);
+  // The detailed frontend metadata describes Falcon512 rings with 64 rows.
+  if (S::kN == 512 && ring.keys.n == 64 * S::kN) {
+    using Root = ShapeExprSelector::Root;
+    using Edge = ShapeExprSelector::Edge;
+    cs.shape_value("member.one", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
+    cs.shape_value("member.zero", {Root::kPredicateRight, "member.signer", {}});
+    cs.shape_value("magnitudes.modulus", {Root::kPredicateLeft, "magnitudes.s1", {{Edge::kSecond}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
+    cs.shape_value("magnitudes.zero", {Root::kPredicateRight, "magnitudes.s1", {}});
+    cs.shape_expr("member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
+    cs.shape_expr("member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first.shared.first.shared.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kSecond}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}}});
+    cs.shape_expr("member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
+    cs.shape_expr("member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first.shared.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kSecond}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}}});
+    cs.shape_expr("member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
+    cs.shape_expr("member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kSecond}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}}});
+    cs.shape_expr("member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
+    cs.shape_expr("member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kSecond}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}}});
+    cs.shape_expr("member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
+    cs.shape_expr("member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kSecond}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}}});
+    cs.shape_expr("member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
+    cs.shape_expr("member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kSecond}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}}});
+    cs.shape_expr("member.ring.powers.shape.definition.first.first.shared.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
+    cs.shape_expr("member.ring.powers.shape.definition.first.second.shared.first.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kSecond}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
+    cs.shape_expr("member.ring.powers.shape.definition.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}}});
+    cs.shape_expr("member.ring.powers.shape.definition.first.second", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kSecond}}});
+    cs.shape_expr("member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first.shared.second.first.shared.second.first", {Root::kPredicateLeft, "member.signer", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}}});
+    cs.shape_expr("member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first.shared.second.first", {Root::kPredicateLeft, "member.signer", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}}});
+    cs.shape_expr("member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first", {Root::kPredicateLeft, "member.signer", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}}});
+    cs.shape_expr("member.signer.shape.left.second.first.second.first.shared.second.first", {Root::kPredicateLeft, "member.signer", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}}});
+    cs.shape_expr("member.signer.shape.left.second.first.second.first", {Root::kPredicateLeft, "member.signer", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
+    cs.shape_expr("range.encoding.budget.reconstruct.shape.left.first.first", {Root::kPredicateLeft, "range.encoding.budget.reconstruct", {{Edge::kFirst}, {Edge::kFirst}}});
+    cs.shape_inputs({
+        {"statement.ring", "statement.c", "key.spectrum",
+         "member.signer.index", "member.ring.gamma", "s2",
+         "signature.s1", "signature.equation.q", "magnitudes.mag1",
+         "magnitudes.mag2", "encoding.low2", "norm.squares",
+         "member.ring.powers", "member.ring.digests", "member.one",
+         "member.zero", "magnitudes.modulus", "magnitudes.zero",
+         "encoding.budget.offset", "range.signature.equation.q.d0", "range.signature.equation.q.d1",
+         "range.signature.equation.q.d2", "range.magnitudes.mag1.d0", "range.magnitudes.mag1.d1",
+         "range.norm.bound.d0", "range.norm.bound.d1", "range.norm.bound.d2"},
+        {"member.signer", "magnitudes.s1", "magnitudes.s2",
+         "norm.sum", "signature.equation", "range.magnitudes.mag1.top",
+         "range.encoding.budget.reconstruct", "range.encoding.budget.top", "range.norm.bound.top",
+         "member.signer.index.boolean", "magnitudes.mag1", "magnitudes.mag2",
+         "encoding.low2", "encoding.budget", "norm.bound",
+         "signature.equation.q", "encoding.high2.q", "encoding.high2"},
+        {"member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first",
+         "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first",
+         "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first",
+         "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first",
+         "member.ring.powers.shape.definition.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first", "member.ring.powers.shape.definition.first.first",
+         "member.ring.powers.shape.definition.first.second", "member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first.shared.second.first.shared.second.first", "member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first.shared.second.first",
+         "member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first", "member.signer.shape.left.second.first.second.first.shared.second.first", "member.signer.shape.left.second.first.second.first",
+         "range.encoding.budget.reconstruct.shape.left.first.first"}, {}});
+  } else {
+    cs.shape_inputs({
+        {"statement.ring", "statement.c", "key.spectrum", "member.signer.index",
+         "member.ring.gamma", "s2", "signature.s1", "signature.equation.q",
+         "magnitudes.mag1", "magnitudes.mag2", "encoding.low2", "norm.squares",
+         "member.ring.powers", "member.ring.digests"},
+        {"member.signer", "magnitudes.s1", "magnitudes.s2", "norm.sum",
+         "signature.equation", "member.signer.index.boolean", "magnitudes.mag1",
+         "magnitudes.mag2", "encoding.low2", "encoding.budget", "norm.bound",
+         "signature.equation.q", "encoding.high2"}, {}, {}});
+  }
+  cs.source_role("key.spectrum", SourceRole::kRingSigma, 0);
+  cs.source_role("member.signer.index", SourceRole::kSelection, 0);
+  cs.source_role("s2", SourceRole::kAWitness, 0);
+  cs.source_role("signature.s1", SourceRole::kAWitness, 1);
+  cs.source_role("magnitudes.mag1", SourceRole::kAWitness, 2);
+  cs.source_role("magnitudes.mag2", SourceRole::kAWitness, 3);
+  cs.source_role("encoding.low2", SourceRole::kAWitness, 4);
+  cs.source_role("signature.equation.q", SourceRole::kCarry, 0);
+  cs.source_role("norm.squares", SourceRole::kCarry, 1);
+  cs.source_role("statement.ring", SourceRole::kStmtMember, 0);
+  cs.source_role("statement.c", SourceRole::kStmtMember, 1);
+}
+
+// Named finite shape inputs and source meanings for the native relation.
+inline void ring_native_shape_inputs(const Scope &cs) {
+  using Root = ShapeExprSelector::Root;
+  using Edge = ShapeExprSelector::Edge;
+  cs.shape_value("member.one", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_value("member.zero", {Root::kPredicateRight, "member.signer", {}});
+  cs.shape_value("signature.zero", {Root::kPredicateRight, "signature.equation", {}});
+  cs.shape_value("norm.center.zero", {Root::kPredicateRight, "norm.center", {}});
+  cs.shape_expr("member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first.shared.first.shared.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kSecond}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}}});
+  cs.shape_expr("member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first.shared.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kSecond}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}}});
+  cs.shape_expr("member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kSecond}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}}});
+  cs.shape_expr("member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kSecond}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}}});
+  cs.shape_expr("member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kSecond}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}}});
+  cs.shape_expr("member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kSecond}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}}});
+  cs.shape_expr("member.ring.powers.shape.definition.first.first.shared.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("member.ring.powers.shape.definition.first.second.shared.first.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kSecond}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("member.ring.powers.shape.definition.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("member.ring.powers.shape.definition.first.second", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kSecond}}});
+  cs.shape_expr("member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first.shared.second.first.shared.second.first", {Root::kPredicateLeft, "member.signer", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first.shared.second.first", {Root::kPredicateLeft, "member.signer", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first", {Root::kPredicateLeft, "member.signer", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("member.signer.shape.left.second.first.second.first.shared.second.first", {Root::kPredicateLeft, "member.signer", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("member.signer.shape.left.second.first.second.first", {Root::kPredicateLeft, "member.signer", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.center.shape.left.first.first", {Root::kPredicateLeft, "norm.center", {{Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("norm.center.shape.left.second.first.first.first.first", {Root::kPredicateLeft, "norm.center", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("norm.center.shape.left.second.first.first.first.second.first", {Root::kPredicateLeft, "norm.center", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.center.shape.left.second.first.first.second.first", {Root::kPredicateLeft, "norm.center", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.top.shape.left", {Root::kPredicateLeft, "norm.top", {}});
+  cs.shape_expr("norm.column0.shape.left.first", {Root::kPredicateLeft, "norm.column0", {{Edge::kFirst}}});
+  cs.shape_expr("norm.column0.shape.right.first", {Root::kPredicateRight, "norm.column0", {{Edge::kFirst}}});
+  cs.shape_expr("norm.column0.shape.right.second.first", {Root::kPredicateRight, "norm.column0", {{Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.column1.shape.left.first.first.second", {Root::kPredicateLeft, "norm.column1", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kSecond}}});
+  cs.shape_expr("norm.column1.shape.left.second", {Root::kPredicateLeft, "norm.column1", {{Edge::kSecond}}});
+  cs.shape_expr("norm.column1.shape.right.first", {Root::kPredicateRight, "norm.column1", {{Edge::kFirst}}});
+  cs.shape_expr("norm.column1.shape.right.second.first", {Root::kPredicateRight, "norm.column1", {{Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.column4.shape.left.first.first", {Root::kPredicateLeft, "norm.column4", {{Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("norm.column2.shape.left.second", {Root::kPredicateLeft, "norm.column2", {{Edge::kSecond}}});
+  cs.shape_expr("norm.column2.shape.right.first", {Root::kPredicateRight, "norm.column2", {{Edge::kFirst}}});
+  cs.shape_expr("norm.column2.shape.right.second.first", {Root::kPredicateRight, "norm.column2", {{Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.column3.shape.left.second", {Root::kPredicateLeft, "norm.column3", {{Edge::kSecond}}});
+  cs.shape_expr("norm.column3.shape.right.first", {Root::kPredicateRight, "norm.column3", {{Edge::kFirst}}});
+  cs.shape_expr("norm.column3.shape.right.second.first", {Root::kPredicateRight, "norm.column3", {{Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.column4.shape.left.second", {Root::kPredicateLeft, "norm.column4", {{Edge::kSecond}}});
+  cs.shape_expr("norm.column4.shape.right.first", {Root::kPredicateRight, "norm.column4", {{Edge::kFirst}}});
+  cs.shape_expr("norm.column4.shape.right.second.first", {Root::kPredicateRight, "norm.column4", {{Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.column5.shape.left", {Root::kPredicateLeft, "norm.column5", {}});
+  cs.shape_expr("norm.column5.shape.right", {Root::kPredicateRight, "norm.column5", {}});
+  cs.shape_expr("norm.normalize.shape.left.first.first", {Root::kPredicateLeft, "norm.normalize", {{Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("norm.normalize.shape.left.first.second.first", {Root::kPredicateLeft, "norm.normalize", {{Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.normalize.shape.left.second", {Root::kPredicateLeft, "norm.normalize", {{Edge::kSecond}}});
+  cs.shape_expr("norm.normalize.shape.right.second.first", {Root::kPredicateRight, "norm.normalize", {{Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("norm.complement.shape.left.first.first", {Root::kPredicateLeft, "norm.complement", {{Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("norm.complement.shape.left.second", {Root::kPredicateLeft, "norm.complement", {{Edge::kSecond}}});
+  cs.shape_expr("enc.b.boolean.shape.right.shared.second.first", {Root::kPredicateRight, "enc.b.boolean", {{Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_expr("range.enc.slack.reconstruct.shape.left.first.first", {Root::kPredicateLeft, "range.enc.slack.reconstruct", {{Edge::kFirst}, {Edge::kFirst}}});
+  cs.shape_expr("enc.b.boolean.shape.right.shared.first", {Root::kPredicateRight, "enc.b.boolean", {{Edge::kShared}, {Edge::kFirst}}});
+  cs.shape_expr("enc.b.boolean.shape.right", {Root::kPredicateRight, "enc.b.boolean", {}});
+  cs.shape_inputs({
+      {"statement.ring", "statement.c", "key.spectrum", "member.signer.index", "member.ring.gamma", "s2", "signature.s1", "norm.a", "norm.sq", "norm.cc", "norm.nd", "norm.nc", "norm.D", "norm.Dc", "norm.target", "enc.slack.offset", "member.ring.powers", "member.ring.digests", "range.enc.high.top", "range.enc.slack.d0", "range.enc.slack.d1", "range.enc.slack.h0", "range.enc.slack.h1", "range.enc.slack.top", "range.static:A.64.g0", "range.static:A.64.g1", "range.static:A.64.g2", "range.static:A.189.g0", "range.static:A.189.g1", "alpha:A", "member.one", "member.zero", "signature.zero", "norm.center.zero"},
+      {"member.signer", "signature.equation", "norm.center", "norm.top", "norm.column0", "norm.column1", "norm.column2", "norm.column3", "norm.column4", "norm.column5", "norm.normalize", "norm.complement", "range.enc.slack.reconstruct", "range.enc.slack.top", "member.signer.index.boolean", "norm.Dc.boolean", "enc.b.boolean", "norm.a", "norm.sq", "norm.cc", "norm.nd", "norm.nc", "norm.D", "enc.high", "enc.slack"},
+      {"member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first", "member.ring.powers.shape.definition.first.first", "member.ring.powers.shape.definition.first.second", "member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first.shared.second.first.shared.second.first", "member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first.shared.second.first", "member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first", "member.signer.shape.left.second.first.second.first.shared.second.first", "member.signer.shape.left.second.first.second.first", "norm.center.shape.left.first.first", "norm.center.shape.left.second.first.first.first.first", "norm.center.shape.left.second.first.first.first.second.first", "norm.center.shape.left.second.first.first.second.first", "norm.top.shape.left", "norm.column0.shape.left.first", "norm.column0.shape.right.first", "norm.column0.shape.right.second.first", "norm.column1.shape.left.first.first.second", "norm.column1.shape.left.second", "norm.column1.shape.right.first", "norm.column1.shape.right.second.first", "norm.column4.shape.left.first.first", "norm.column2.shape.left.second", "norm.column2.shape.right.first", "norm.column2.shape.right.second.first", "norm.column3.shape.left.second", "norm.column3.shape.right.first", "norm.column3.shape.right.second.first", "norm.column4.shape.left.second", "norm.column4.shape.right.first", "norm.column4.shape.right.second.first", "norm.column5.shape.left", "norm.column5.shape.right", "norm.normalize.shape.left.first.first", "norm.normalize.shape.left.first.second.first", "norm.normalize.shape.left.second", "norm.normalize.shape.right.second.first", "norm.complement.shape.left.first.first", "norm.complement.shape.left.second", "enc.b.boolean.shape.right.shared.second.first", "range.enc.slack.reconstruct.shape.left.first.first", "enc.b.boolean.shape.right.shared.first", "enc.b.boolean.shape.right"}, {}});
+  cs.source_role("key.spectrum", SourceRole::kRingSigma, 0);
+  cs.source_role("member.signer.index", SourceRole::kSelection, 0);
+  cs.source_role("s2", SourceRole::kAWitness, 0);
+  cs.source_role("signature.s1", SourceRole::kAWitness, 1);
+  cs.source_role("norm.a", SourceRole::kAWitness, 2);
+  cs.source_role("norm.sq", SourceRole::kAWitness, 3);
+  cs.source_role("norm.cc", SourceRole::kAWitness, 4);
+  cs.source_role("norm.nd", SourceRole::kAWitness, 5);
+  cs.source_role("norm.nc", SourceRole::kAWitness, 6);
+  cs.source_role("norm.D", SourceRole::kAWitness, 7);
+  cs.source_role("norm.Dc", SourceRole::kAWitness, 8);
+  cs.source_role("statement.ring", SourceRole::kStmtMember, 0);
+  cs.source_role("statement.c", SourceRole::kStmtMember, 1);
 }
 
 // The native arm's relation of set S over the statement ST and the
@@ -258,6 +416,8 @@ void ring_native_relation(typename NativeEnv<P>::Sys &cs,
   const auto norm = lib::arith::assert_norm_native(
       cs, A, s1.concat(s2).named("norm.v"), native_norm<P, S>(), "norm");
   lib::arith::assert_encodable_native(cs, A, norm, S::kHighBudget, "enc");
+  // The checked frontend metadata describes Falcon512 rings with 64 rows.
+  if (S::kN == 512 && ring.keys.n == 64 * S::kN) ring_native_shape_inputs(cs);
 }
 
 }  // namespace proofs::gordiehowe::examples::falcon::ring

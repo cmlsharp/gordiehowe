@@ -5,7 +5,7 @@ module
 
 public import Mathlib.Algebra.CharP.Defs
 public import Mathlib.Algebra.BigOperators.Fin
-public import GordieHowe.Applications.Keccak.BitWires
+public import Mathlib.Algebra.Field.Defs
 
 @[expose] public section
 
@@ -21,7 +21,19 @@ else.
 
 Boolean logic on field bits: AND is `a * b`, NOT is `1 - a`, XOR is
 `a + b - 2ab`, which is `a + b` in characteristic two.
+
+`BitWires K n` names a vector of field wires intended to represent bits. The name does not
+constrain its values: raw committed witnesses are adversarial. `Bits.AllBool` is the separate
+proposition established by Booleanity constraints or hash-gadget soundness, and consumed by
+bit-operation semantics lemmas.
 -/
+
+namespace GordieHowe
+
+/-- Field wires intended to encode `n` bits, without assuming Booleanity. -/
+abbrev BitWires (K : Type*) (n : ℕ) := Fin n → K
+
+end GordieHowe
 
 namespace GordieHowe.Bits
 

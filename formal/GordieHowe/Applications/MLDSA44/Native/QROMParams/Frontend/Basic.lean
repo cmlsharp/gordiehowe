@@ -26,62 +26,58 @@ open ROMParams
 set_option maxRecDepth 8192 in
 /-- The native program at the QROM parameters has these facts. -/
 instance : MldsaABase program where
-  projReads := by decide +kernel
+  projReads := by shape_decide
 
 set_option maxRecDepth 8192 in
 /-- The native program at the QROM parameters has these facts. -/
 instance : MldsaACross program where
-  lt7 := by decide +kernel
-  expr7 := rfl
-  len63 := by decide +kernel
-  len60 := by decide +kernel
-  len525 := by decide +kernel
-  domainField0 := by decide +kernel
-  src272 := ⟨by decide +kernel, by decide +kernel⟩
-  crossPred := ⟨_, rfl⟩
+  lt7 := by shape_decide
+  expr7 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eright_eq
+  len63 := by shape_decide
+  len60 := by shape_decide
+  len525 := by shape_decide
+  domainField0 := by shape_decide
+  src272 := by shape_decide
+  crossPred := Generated.MLDSA44.Native.QROMParams.ShapeFacts.predicate_mac_2eequal_body
 
 set_option maxRecDepth 8192 in
 /-- The native program at the QROM parameters has these facts. -/
 instance : MldsaAAlgebra program where
-  kind56 := rfl
-  kind57 := rfl
-  lenWeight := by decide +kernel
-  pred0 := rfl
-  pred1 := rfl
-  pred2 := rfl
-  pred3 := rfl
-  pred6 := rfl
-  pred7 := rfl
-  pred8 := rfl
-  pred9 := rfl
-  pred11 := rfl
-  pred12 := rfl
-  pred13 := rfl
-  pred14 := rfl
-  expr0 := rfl
-  expr1 := rfl
-  expr2 := rfl
-  expr3 := rfl
-  expr4 := rfl
-  expr5 := rfl
-  expr6 := rfl
+  kind56 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.value_key_2ea_5fhat_kind
+  kind57 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.value_key_2et1_kind
+  lenWeight := by shape_decide
+  pred0 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.predicate_signature_2erelation_body
+  pred1 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.predicate_hint_2ew1_5fbound_body
+  pred2 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.predicate_hint_2edecompose_body
+  pred3 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.predicate_hint_2einterval_body
+  pred11 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.predicate_norm_2ez_body
+  pred12 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.predicate_hint_2eoffset_body
+  pred13 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.predicate_hint_2eslack_body
+  pred14 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.predicate_hint_5fweight_2eweight_body
+  expr0 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.expr_signature_2erelation_2eshape_2eleft_2efirst_2esecond_2efirst_2efirst_eq
+  expr1 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.expr_signature_2erelation_2eshape_2eleft_2esecond_2efirst_2efirst_eq
+  expr2 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.expr_hint_2einterval_2eshape_2eright_2efirst_2eshared_2esecond_2eshared_2efirst_eq
+  expr3 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.expr_hint_2edecompose_2eshape_2eleft_2efirst_2efirst_2esecond_2efirst_2efirst_2efirst_2efirst_2esecond_2efirst_eq
+  expr4 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.expr_hint_2einterval_2eshape_2eright_2efirst_2eshared_2efirst_2esecond_eq
+  expr5 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.expr_hint_2einterval_2eshape_2eright_2efirst_2eshared_2esecond_eq
+  expr6 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.expr_hint_2einterval_2eshape_2eright_2efirst_eq
   inSource_A := by
-    decide +kernel
-  predicates_length := by decide +kernel
+    shape_decide
+  predicates_length := by shape_decide
   lensA := by
-    decide +kernel
+    shape_decide
   boolChecks := by
-    decide +kernel
+    shape_decide
   constsA := by
-    decide +kernel
+    shape_decide
   constsU := by
-    decide +kernel
-  refsA := by decide +kernel
+    shape_decide
+  refsA := by shape_decide
   lensU := by
-    decide +kernel
+    shape_decide
   valsU := by
-    decide +kernel
+    shape_decide
   sigData := by
-    decide +kernel
+    shape_decide
 
 end GordieHowe.MLDSA44.Native.QROMParams

@@ -47,6 +47,14 @@ theorem real_le_two_rpow_of_le_ratio {x : ℝ} {M E n e : ℕ} {s : ℝ} (hn : n
   push_cast at h''
   exact hx.trans h''
 
+/-- **A real power of two below a natural**: `2^s ≤ U` in `ℝ` when `s · n = e` and
+`2^e ≤ U^n` for some `n ≠ 0`. -/
+theorem two_rpow_le_of_le_pow {U n e : ℕ} {s : ℝ} (hn : n ≠ 0) (hs : s * n = e)
+    (h : 2 ^ e ≤ U ^ n) : (2 : ℝ) ^ s ≤ U := by
+  refine (pow_le_pow_iff_left₀ (by positivity) (Nat.cast_nonneg U) hn).mp ?_
+  rw [← Real.rpow_natCast, ← Real.rpow_mul zero_le_two, hs, Real.rpow_natCast]
+  exact_mod_cast h
+
 /-- A real power of two is monotone in the exponent. -/
 theorem two_rpow_le_two_rpow {s s' : ℝ} (h : s ≤ s') : (2 : ℝ≥0) ^ s ≤ (2 : ℝ≥0) ^ s' :=
   NNReal.rpow_le_rpow_of_exponent_le one_le_two h

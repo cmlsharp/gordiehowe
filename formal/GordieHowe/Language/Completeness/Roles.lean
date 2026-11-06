@@ -5,6 +5,9 @@ module
 
 public import GordieHowe.Language.Honest.Exec
 public import GordieHowe.Language.RealizedProgram.CellsLowering
+public import GordieHowe.Language.RealizedProgram.Reader
+public import GordieHoweNative.Language.Completeness.Roles
+public import GordieHoweNative.Language.RealizedProgram.Shapes
 
 public section
 
@@ -74,6 +77,23 @@ table. -/
 @[expose] def honestRolesB (L : List (ℕ × String)) (S : Structure) : Bool :=
   (List.range ir.values.length).all (ir.valueRolesB L) && decide ir.KprivTyped &&
     ir.fieldRowsB S && decide ir.NoGammaTables
+
+theorem honestRolesB_eq_reader (L : List (ℕ × String)) (S : Structure) :
+    ir.honestRolesB L S = @PReader.honestRolesB ir (PReader.ofProgram ir) L S := by
+  have h : decide ir.KprivTyped =
+      @decide (@PReader.KprivTyped ir (PReader.ofProgram ir)) inferInstance := by
+    apply congrArg (@decide ir.KprivTyped)
+    exact Subsingleton.elim _ _
+  exact congrArg (fun b => (List.range ir.values.length).all (ir.valueRolesB L) && b &&
+    ir.fieldRowsB S && decide ir.NoGammaTables) h
+
+/-- **Compiled code runs the honest roles' check at the program's context built once**
+(`honestRolesBC`). -/
+@[csimp] theorem honestRolesB_csimp : @honestRolesB = @honestRolesBC := by
+  funext ir L S
+  rw [honestRolesB_eq_reader, honestRolesBC]
+  show _ = @PReader.honestRolesB ir (PReader.ofCtx (PCtx.build ir)) L S
+  rw [PReader.ofCtx_build]
 
 /-- **The honest roles of a program** at the nodes `L` and the structure records `S` (module
 docstring). Properties of the program, checked once per program (`honestRoles_of_B`). -/
@@ -197,6 +217,28 @@ variable (ir) in
     | .cross dx' x' dy' y' _ _ => dx' == dx && x'.beq x && dy' == dy && y'.beq y
     | _ => true
 
+/-- **The operands of every cross-field `equal`**, from the complete list of cross predicates. -/
+theorem crossOperandsB_of_crossPredicateIds {dx dy : ℕ} {x y : Expr} {ids : List ℕ}
+    (hids : ir.crossPredicateIds = ids)
+    (h : ∀ q ∈ ids, (match (ir.predicate q).body with
+      | .cross dx' x' dy' y' _ _ => dx' == dx && x'.beq x && dy' == dy && y'.beq y
+      | _ => true) = true) :
+    ir.crossOperandsB dx x dy y = true := by
+  unfold crossOperandsB
+  rw [List.all_eq_true]
+  intro p hp
+  obtain ⟨q, hq, rfl⟩ := List.getElem_of_mem hp
+  have hpq : ir.predicates[q] = ir.predicate q := by
+    rw [ir.predicate_eq_getD, List.getD_eq_getElem _ _ hq]
+  rw [hpq]
+  by_cases hc : (ir.predicate q).body.isCross = true
+  · refine h q ?_
+    rw [← hids, crossPredicateIds, List.mem_filter, predicateT_eq]
+    exact ⟨List.mem_range.2 hq, hc⟩
+  · cases hb : (ir.predicate q).body with
+    | cross => rw [hb] at hc; exact absurd rfl hc
+    | _ => rfl
+
 /-- **The operands of every cross-field `equal`**, from their check. -/
 theorem cross_operands_of_B {dx dy : ℕ} {x y : Expr} (h : ir.crossOperandsB dx x dy y = true)
     {p : Predicate} (hp : p ∈ ir.predicates) {dx' dy' : ℕ} {x' y' : Expr} {k : CrossKind}
@@ -206,6 +248,19 @@ theorem cross_operands_of_B {dx dy : ℕ} {x y : Expr} (h : ir.crossOperandsB dx
   rw [hb] at this
   simp only [Bool.and_eq_true, beq_iff_eq, Expr.beq_iff] at this
   exact ⟨this.1.1.1, this.1.1.2, this.1.2, this.2⟩
+
+/-- **The cross-field operand check follows from its pointwise specification.** -/
+theorem crossOperandsB_of_operands {dx dy : ℕ} {x y : Expr}
+    (h : ∀ p ∈ ir.predicates, ∀ dx' x' dy' y' k real,
+      p.body = .cross dx' x' dy' y' k real →
+      dx' = dx ∧ x' = x ∧ dy' = dy ∧ y' = y) :
+    ir.crossOperandsB dx x dy y = true := by
+  apply List.all_eq_true.mpr
+  intro p hp
+  cases hb : p.body <;> try rfl
+  rename_i dx' x' dy' y' k real
+  obtain ⟨rfl, rfl, rfl, rfl⟩ := h p hp dx' x' dy' y' k real hb
+  simp only [beq_self_eq_true, Expr.beq_iff, Bool.and_eq_true, and_self]
 
 /-- **The source cross-field `equal`s read bits in the environment `e`** where every cross-field
 `equal` crosses `x` of domain `dx` and `y` of domain `dy` (`crossOperandsB`) and both read bits

@@ -3,6 +3,7 @@
 
 module
 
+public import GordieHoweNative.Applications.FieldInterps.Codes
 public import GordieHowe.ProofSystem.Program.FieldModel
 public import GordieHowe.Foundations.Algebra.RelativePackingAdditive
 public import GordieHowe.Foundations.Fields.GF2_128Relative
@@ -262,12 +263,6 @@ theorem targetBitsFn_target (xs : List (ℕ → ℕ)) (i : ℕ) :
     targetBitsFn "mac.target_bits" xs i = if ((xs.headD 0) 0).testBit i then 1 else 0 :=
   if_pos rfl
 
-/-- **The code arithmetic of `F_q^9`** (`GKR.Fold.ExtCode.overPrime`): `Fp14_9 = Fp14_N<9, 2>`
-(`lib/algebra/fp14_n.h:286`, `:397`) writes coefficient `i` as `Fp14`'s two bytes
-(`lib/algebra/fp14.h:280`) at byte `2 i`, so a code is `Σ_i c_i 2^(16 i)` with `c_i` the
-coefficient of `X^i`; the arithmetic modulo `12289` on each of the `9` coefficients, `X^9 = 2`. -/
-def fq9Code : GKR.Fold.ExtCode := GKR.Fold.ExtCode.overPrime 12289 16 9 2
-
 /-- **The code arithmetic of `F_q^9` is the field's** (`GKR.Fold.ExtCode.overPrime_hom`). -/
 theorem fq9_codeHom : fq9.CodeHom fq9Code.arith :=
   GKR.Fold.ExtCode.overPrime_hom falconNative9_polySpec Nat.cast_ofNat (by norm_num)
@@ -281,16 +276,6 @@ theorem fq9Code_primeOn : fq9Code.arith.PrimeOn 12289 :=
 /-! ## The code arithmetic of `GF(2^128)` -/
 
 open BinarySpread in
-set_option exponentiation.threshold 20000 in
-/-- The spread representation of `GF(2^128)`'s code arithmetic: `gf2_128Exec`'s reduction with
-digits of `130` bits (`GKR.Fold.BinCode`: `k ≥ n + 2`). -/
-def gf2_128CodeExec : Exec where
-  k := 130
-  n := 128
-  tapN := 1 + 2 ^ 130 + 2 ^ 260 + 2 ^ 910
-  mask := (2 ^ (130 * 128) - 1) / (2 ^ 130 - 1)
-
-open BinarySpread in
 set_option exponentiation.threshold 70000 in
 /-- The facts tying `gf2_128CodeExec` to `gf2_128Poly` (`GKR.Fold.Rep.widen` of `gf2_128Rep`). -/
 noncomputable def gf2_128CodeRep : Rep gf2_128CodeExec gf2_128Poly :=
@@ -298,11 +283,6 @@ noncomputable def gf2_128CodeRep : Rep gf2_128CodeExec gf2_128Poly :=
     (by simp only [gf2_128Rep, gf2_128Tap, gf2_128CodeExec, Polynomial.eval_add,
       Polynomial.eval_pow, Polynomial.eval_X, Polynomial.eval_one]; norm_num)
     (by decide +kernel)
-
-set_option exponentiation.threshold 20000 in
-/-- **The code arithmetic of `GF(2^128)`** (`GKR.Fold.BinCode.arith`): exclusive or, and one spread
-product per multiplication. -/
-def gf2_128Code : GKR.Fold.BinCode := ⟨gf2_128CodeExec, (2 ^ (129 * 128) - 1) / (2 ^ 129 - 1)⟩
 
 /-- **The code arithmetic of `GF(2^128)` is the field's** (`GKR.Fold.BinCode.hom`: constants decode
 as their polynomial-basis bits, `gf2_128ToSpec_ofNat`). -/

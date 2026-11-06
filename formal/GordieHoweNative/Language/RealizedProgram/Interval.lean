@@ -366,6 +366,86 @@ def groupsIvl (A : Ivl) (w : ℕ) : ℕ → List ℤ → Option Ivl
   | 1, cs => some (groupSumIvl A (cs.take w))
   | n + 2, cs => (groupsIvl A w (n + 1) (cs.drop w)).map (groupSumIvl A (cs.take w)).hull
 
+/-- **The group hull accumulator**, comparing both endpoints before the next group.
+The comparisons prevent a chain of unevaluated endpoint minima and maxima in kernel checks. -/
+def groupsIvlAuxK (A : Ivl) (w : Nat) : Nat → List Int → Ivl → Ivl
+  | 0, _, acc => acc
+  | n+1, cs, acc =>
+    let cur := groupSumIvl A (cs.take w)
+    if cur.lo ≤ acc.lo then
+      if acc.hi ≤ cur.hi then groupsIvlAuxK A w n (cs.drop w) cur
+      else groupsIvlAuxK A w n (cs.drop w) ⟨cur.lo, acc.hi⟩
+    else
+      if acc.hi ≤ cur.hi then groupsIvlAuxK A w n (cs.drop w) ⟨acc.lo, cur.hi⟩
+      else groupsIvlAuxK A w n (cs.drop w) acc
+/-- **The group hull with evaluated accumulator endpoints** (`groupsIvlK_eq`).
+Compiled checks use `groupsIvl`; this fold bounds kernel reduction depth for long views. -/
+def groupsIvlK (A : Ivl) (w : Nat) : Nat → List Int → Option Ivl
+  | 0, _ => none
+  | n+1, cs => some (groupsIvlAuxK A w n (cs.drop w) (groupSumIvl A (cs.take w)))
+
+/-- **The hull operation is associative.** -/
+theorem Ivl.hull_assoc (a b c : Ivl) : (a.hull b).hull c = a.hull (b.hull c) := by
+  cases a; cases b; cases c
+  simp only [Ivl.hull]
+  congr 1 <;> omega
+
+private theorem groupsIvlAuxK_succ (A : Ivl) (w n : Nat) (cs : List Int) (acc : Ivl) :
+    groupsIvlAuxK A w (n+1) cs acc =
+      groupsIvlAuxK A w n (cs.drop w) (acc.hull (groupSumIvl A (cs.take w))) := by
+  simp only [groupsIvlAuxK]
+  split <;> split <;> apply congrArg (groupsIvlAuxK A w n (cs.drop w))
+  all_goals
+    cases hc : groupSumIvl A (cs.take w)
+    cases acc
+    simp only [hc] at *
+    simp only [Ivl.hull]
+    congr 1 <;> omega
+
+/-- **A positive number of groups has a hull, including when the group width is zero.** -/
+theorem groupsIvl_isSome (A : Ivl) (w n : Nat) (cs : List Int) :
+    (groupsIvl A w (n+1) cs).isSome = true := by
+  induction n generalizing cs with
+  | zero => rfl
+  | succ n ih => simpa only [groupsIvl, Option.isSome_map] using ih (cs.drop w)
+
+/-- **The forced accumulator returns the hull of its input interval and the remaining groups.** -/
+theorem groupsIvlAuxK_eq (A : Ivl) (w n : Nat) (cs : List Int) (acc : Ivl) :
+    groupsIvlAuxK A w n cs acc = ((groupsIvl A w n cs).map acc.hull).getD acc := by
+  induction n generalizing cs acc with
+  | zero => rfl
+  | succ n ih =>
+    rw [groupsIvlAuxK_succ, ih]
+    cases n with
+    | zero => rfl
+    | succ n =>
+      simp only [groupsIvl]
+      cases h : groupsIvl A w (n+1) (cs.drop w) <;> simp only [Option.map, Option.getD]
+      · have hs := groupsIvl_isSome A w n (cs.drop w)
+        simp only [h, Option.isSome_none, Bool.false_eq_true] at hs
+      · exact Ivl.hull_assoc _ _ _
+
+/-- **The kernel group fold returns exactly the canonical group hull for every input.** -/
+theorem groupsIvlK_eq (A : Ivl) (w n : Nat) (cs : List Int) :
+    groupsIvlK A w n cs = groupsIvl A w n cs := by
+  cases n with
+  | zero => rfl
+  | succ n =>
+    simp only [groupsIvlK, groupsIvlAuxK_eq]
+    cases n with
+    | zero => rfl
+    | succ n =>
+      simp only [groupsIvl]
+      cases h : groupsIvl A w (n+1) (cs.drop w)
+      · have hs := groupsIvl_isSome A w n (cs.drop w)
+        simp only [h, Option.isSome_none, Bool.false_eq_true] at hs
+      · rfl
+
+/-- **Compiled checks retain the original group-hull implementation.** -/
+@[csimp] theorem groupsIvlK_csimp : @groupsIvlK = @groupsIvl := by
+  funext A w n cs
+  exact groupsIvlK_eq A w n cs
+
 /-- **The coordinates of a constant view** at the characteristic `p`, read centred: a constant
 `leaf C` (its entries, `0` past them) or a view `reindex m (leaf C)` of one, where `C` has an
 interval (`leafI`); none otherwise. -/
@@ -430,10 +510,10 @@ def Expr.ivlGrouped (ir : RealizedProgram) (p : ℕ) (leafI : ℕ → Option Ivl
     (refI : ℕ → Option Ivl) (w : ℕ) : Expr → Option Ivl
   | .mul a c =>
     match constCoords ir p leafI c with
-    | some cs => (Expr.ivl ir p leafI refI a).bind fun A => groupsIvl A w (cs.length / w) cs
+    | some cs => (Expr.ivl ir p leafI refI a).bind fun A => groupsIvlK A w (cs.length / w) cs
     | none =>
       match constCoords ir p leafI a with
-      | some cs => (Expr.ivl ir p leafI refI c).bind fun A => groupsIvl A w (cs.length / w) cs
+      | some cs => (Expr.ivl ir p leafI refI c).bind fun A => groupsIvlK A w (cs.length / w) cs
       | none => none
   | _ => none
 

@@ -75,8 +75,8 @@ class MldsaHSelHonest (program : RealizedProgram) : Prop where
 set_option maxRecDepth 4096 in
 /-- The native program at the ROM parameters has these facts. -/
 instance : MldsaHSelHonest program where
-  sel_cells := by decide +kernel
-  mem_cells := by decide +kernel
+  sel_cells := Native.ROMParams.HonestWordFacts.sel_cells
+  mem_cells := Native.ROMParams.HonestWordFacts.mem_cells
 
 /-- **The nodes of domain `H`'s field** the honest values lie in: the selection subfield and the
 packed words lie in the node `GF(2^16)`, and the node `bit` is `{0, 1}`. Facts about the field
@@ -198,6 +198,37 @@ noncomputable def memF (i : MLDSA44.HonestInput) (v n : ℕ) : (interp 1).K :=
   else if v = 565 then (if h : n < 39 then (samM program F0 FH).originOf
       ((honestMemW program F0 FH i).read ⟨n, h⟩).origin else 0)
   else 0
+
+/-- **The `read_value` source reads its semantic memory trace column.** -/
+theorem memF_read_value (i : MLDSA44.HonestInput) (n : Nat) :
+    memF program F0 FH i 560 n =
+      (if h : n < 39 then ((honestMemW program F0 FH i).read ⟨n, h⟩).value else 0) := rfl
+
+/-- **The `read_origin` source reads its semantic memory trace column.** -/
+theorem memF_read_origin (i : MLDSA44.HonestInput) (n : Nat) :
+    memF program F0 FH i 561 n =
+      (if h : n < 234 then ((honestMemW program F0 FH i).read ⟨n / 6, by change n / 6 < 39; omega⟩).origin ⟨n % 6, by omega⟩ else 0) := rfl
+
+/-- **The `encoded` source reads its semantic memory trace column.** -/
+theorem memF_encoded (i : MLDSA44.HonestInput) (n : Nat) :
+    memF program F0 FH i 562 n =
+      (if h : n < 256 then (honestMemW program F0 FH i).cEnc ⟨n, h⟩ else 0) := rfl
+
+/-- **The `final_origin` source reads its semantic memory trace column.** -/
+theorem memF_final_origin (i : MLDSA44.HonestInput) (n : Nat) :
+    memF program F0 FH i 563 n =
+      (if h : n < 256 then (honestMemW program F0 FH i).finalOrigin ⟨n, h⟩ else 0) := rfl
+
+/-- **The `unit` source reads its semantic memory trace column.** -/
+theorem memF_unit (i : MLDSA44.HonestInput) (n : Nat) :
+    memF program F0 FH i 564 n =
+      (if h : n < 39 then MemoryShuffle.unit (samM program F0 FH).Θ ((honestMemW program F0 FH i).signs ⟨n, h⟩) else 0) := rfl
+
+/-- **The `origin` source reads its semantic memory trace column.** -/
+theorem memF_origin (i : MLDSA44.HonestInput) (n : Nat) :
+    memF program F0 FH i 565 n =
+      (if h : n < 39 then (samM program F0 FH).originOf ((honestMemW program F0 FH i).read ⟨n, h⟩).origin else 0) := rfl
+
 
 /-- The honest trace's final cells encode the shuffle (`MemoryShuffle.memoryTrace_cell_eq_shuffle`). -/
 theorem honestWit_cEnc {K : Type*} [Field K] [DecidableEq K] [CharP K 2] {S N τ : ℕ}

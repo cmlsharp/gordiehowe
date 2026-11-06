@@ -6,6 +6,7 @@ module
 public import GordieHowe.ProofSystem.Program.FieldPacking
 public import GordieHowe.Language.RealizedProgram.Views
 public import GordieHowe.Language.RealizedProgram.MemberValues
+public import GordieHoweNative.ProofSystem.Program.FieldTree
 
 @[expose] public section
 
@@ -57,17 +58,6 @@ def realizedEdges {F : FieldInterp} (Pk : F.Packing) (es : List PackingEdge) : L
   es.filterMap fun e => (Pk.edge e.childDegree e.degree e.mode).map fun k => ⟨e, k⟩
 
 /-! ## Nodes -/
-
-/-- The edge read outside a list of edges: no child, no parent, degree `0`. -/
-def noEdge : PackingEdge := ⟨"", "", .subfieldMasks, 0, 0, 0, 0, 0, 0, true, 0⟩
-
-/-- **The parent edge of edge `a`**: the edge whose child is `a`'s parent (`none`: the root). -/
-def parentIdx (es : List PackingEdge) (a : ℕ) : Option ℕ :=
-  es.findIdx? fun e => e.child == (es.getD a noEdge).parent
-
-/-- **The edge whose child is node `name`**. -/
-def nodeIdx (es : List PackingEdge) (name : String) : Option ℕ :=
-  es.findIdx? fun e => e.child == name
 
 /-- **The node name of a cell**: its value's node, its pad's space, none for a filler input or a
 value at no node. -/
@@ -286,22 +276,6 @@ structure TreeOk (es : List PackingEdge) (n : ℕ) : Prop where
     es[b].childDegree * es[b].degree = n
   /-- Every relative degree is positive. -/
   deg_pos : ∀ (b : ℕ) (hb : b < es.length), 0 < es[b].degree
-
-/-- **The tree condition at edge `b` (`e`)**, a sweep of the edges with no search: its relative
-degree is positive; every edge whose child is `e`'s parent comes later and spans `e`'s edge; and
-when no edge's child is `e`'s parent, `e` spans the field. -/
-def treeEdgeB (es : List PackingEdge) (n b : ℕ) (e : PackingEdge) : Bool :=
-  decide (0 < e.degree) &&
-    Twin.okB (Twin.allE (fun j f => Twin.guardE (f.child != e.parent ||
-      (decide (b < j) && f.childDegree == e.childDegree * e.degree)) ()) 0 es) &&
-    (es.any (·.child == e.parent) || e.childDegree * e.degree == n)
-
-/-- **The tree condition as a check** whose failure names the edge (`treeEdge`). -/
-def treeOkE (es : List PackingEdge) (n : ℕ) : Except StructFailure Unit :=
-  Twin.allE (fun b e => Twin.guardE (treeEdgeB es n b e) ⟨b, 0, .treeEdge⟩) 0 es
-
-/-- **The tree condition as a test** (`okB` of `treeOkE`). -/
-def treeOkB (es : List PackingEdge) (n : ℕ) : Bool := Twin.okB (treeOkE es n)
 
 theorem parentIdx_lt {es : List PackingEdge} {b j : ℕ} (h : parentIdx es b = some j) :
     j < es.length := by

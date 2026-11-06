@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Language.Honest.Source
 public import GordieHowe.Applications.MLDSA44.Frontend.Hash
+public import GordieHowe.Applications.MLDSA44.Native.ROMParams.HonestWordFacts
 
 @[expose] public section
 
@@ -61,12 +62,12 @@ class MldsaHHonest (program : RealizedProgram) : Prop extends MldsaHHash program
 set_option maxRecDepth 4096 in
 /-- The program of `MLDSA44.Native.ROMParams` has these facts. -/
 instance : MldsaHHonest program where
-  words_checks := by decide +kernel
-  idx1_entry := by decide +kernel
-  view121 := by decide +kernel
-  view71 := by decide +kernel
-  priv6869 := by decide +kernel
-  kind67 := rfl
+  words_checks := Native.ROMParams.HonestWordFacts.wordsChecks
+  idx1_entry := Native.ROMParams.HonestWordFacts.idx1_entry
+  view121 := Native.ROMParams.HonestWordFacts.view121
+  view71 := Native.ROMParams.HonestWordFacts.view71
+  priv6869 := Native.ROMParams.HonestWordFacts.priv6869
+  kind67 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_tr_kind
 
 set_option linter.unusedSectionVars false
 
@@ -93,7 +94,6 @@ theorem coord_castEltH {a : ℕ} (h : a = 1) (s : String) (y : (interp 1).K) (j 
     (interp a).coord s (RealizedProgram.castElt (a := 1) (b := a) y) j = FH.coord s y j := by
   subst h
   rw [RealizedProgram.castElt_self]
-  rfl
 
 /-- **A bit view of packed state words reads the state's bits** at an environment reading the
 words. -/
@@ -497,7 +497,8 @@ variable (e : program.Env interp)
 /-- **`h2c.mu.padding.monotone` holds** where every set flag's predecessor is set. -/
 theorem pad42_of (h : ∀ i < 135, flag e (i + 1) * (flag e i + 1) = 0) :
     program.HoldsWith (program.reader e) (program.predicate 42).body := by
-  rw [(pad_exprs (program := program)).1]
+  obtain ⟨_, hpad42⟩ := (pad_exprs (program := program)).1
+  rw [hpad42]
   intro i hi
   rw [RealizedProgram.exprLen_mul, RealizedProgram.exprLen_reindex, (pad_facts (program := program)).2.2.2.2.2.1]
     at hi
@@ -511,7 +512,8 @@ theorem pad42_of (h : ∀ i < 135, flag e (i + 1) * (flag e i + 1) = 0) :
 /-- **`h2c.mu.padding.max` holds** where flag `98` is clear. -/
 theorem pad43_of (h : flag e 98 = 0) :
     program.HoldsWith (program.reader e) (program.predicate 43).body := by
-  rw [(pad_exprs (program := program)).2.1]
+  obtain ⟨_, hpad43⟩ := (pad_exprs (program := program)).2.1
+  rw [hpad43]
   intro i hi
   rw [RealizedProgram.exprLen_reindex, (pad_facts (program := program)).2.2.2.2.2.2.1] at hi
   obtain rfl : i = 0 := by omega
@@ -524,7 +526,8 @@ theorem pad43_of (h : flag e 98 = 0) :
 /-- **`h2c.mu.padding.min` holds** where flag `65` is set. -/
 theorem pad44_of (h : flag e 65 = 1) :
     program.HoldsWith (program.reader e) (program.predicate 44).body := by
-  rw [(pad_exprs (program := program)).2.2.1]
+  obtain ⟨_, hpad44⟩ := (pad_exprs (program := program)).2.2.1
+  rw [hpad44]
   intro i hi
   rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_reindex, (pad_facts (program := program)).2.2.2.2.2.2.2.1]
     at hi
@@ -541,7 +544,8 @@ theorem pad44_of (h : flag e 65 = 1) :
 theorem pad45_of (h : ∀ i < 136, ((if i = 0 then 1 else flag e (i - 1)) + flag e i) *
       (selF.embedBits (by decide) (bufByte e i) + cH (program := program) (FH := FH) 37 i) = 0) :
     program.HoldsWith (program.reader e) (program.predicate 45).body := by
-  rw [(pad_exprs (program := program)).2.2.2.1]
+  obtain ⟨_, hpad45⟩ := (pad_exprs (program := program)).2.2.2.1
+  rw [hpad45]
   intro i hi
   rw [RealizedProgram.exprLen_mul, RealizedProgram.exprLen_add,
     RealizedProgram.exprLen_ref MldsaHCross.refsOrdered (by rw [(hash_sizes (program := program)).1]; norm_num),
@@ -558,7 +562,8 @@ theorem pad45_of (h : ∀ i < 136, ((if i = 0 then 1 else flag e (i - 1)) + flag
 theorem pad46_of (h : ∀ i < 136, ((if i = 0 then 1 else flag e (i - 1)) + 1) *
       (selF.embedBits (by decide) (bufByte e i) + cH (program := program) (FH := FH) 39 i) = 0) :
     program.HoldsWith (program.reader e) (program.predicate 46).body := by
-  rw [(pad_exprs (program := program)).2.2.2.2.1]
+  obtain ⟨_, hpad46⟩ := (pad_exprs (program := program)).2.2.2.2.1
+  rw [hpad46]
   intro i hi
   rw [RealizedProgram.exprLen_mul, RealizedProgram.exprLen_add,
     RealizedProgram.exprLen_ref MldsaHCross.refsOrdered (by rw [(hash_sizes (program := program)).1]; norm_num),
@@ -577,7 +582,8 @@ theorem pad46_of (h : ∀ i < 136, ((if i = 0 then 1 else flag e (i - 1)) + 1) *
 theorem pad47_of (h : ∀ j < 512, program.evalE (program.reader e) 1 (.leaf 120) j =
       program.evalE (program.reader e) 1 (.leaf 118) j) :
     program.HoldsWith (program.reader e) (program.predicate 47).body := by
-  rw [(pad_exprs (program := program)).2.2.2.2.2.1]
+  obtain ⟨_, hpad47⟩ := (pad_exprs (program := program)).2.2.2.2.2.1
+  rw [hpad47]
   intro j hj
   rw [RealizedProgram.exprLen_mul, RealizedProgram.exprLen_reindex,
     (pad_facts (program := program)).2.2.2.2.2.2.2.2.2.1] at hj

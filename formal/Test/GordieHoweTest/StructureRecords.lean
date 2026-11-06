@@ -2,7 +2,9 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 import GordieHowe.Language.RealizedProgram.StructureCheck
-import GordieHowe.Generated.Falcon512.Native.ROMParams.Valid.PlanNoWrap
+import GordieHowe.Language.Export.Valid
+import GordieHowe.Generated.Falcon512.Native.ROMParams.Plan
+import GordieHowe.Generated.Falcon512.Native.ROMParams.Structure
 
 /-!
 # Tests of the structure records' common pieces
@@ -52,7 +54,7 @@ example : ∃ g, ok.gadgets[1]? = some g ∧ g.preds.head? = some 9 :=
   Structure.gadgetAt_spec (p := 9) (by decide)
 
 open GordieHowe.Generated.Falcon512.Native.ROMParams in
-/-- The exported pointers are accepted (as `Valid.planNoWrap` decides). -/
+/-- The exported pointers are accepted (as `Plan.noWrapHolds_of_at` reads them). -/
 example : Plan.plan.NoWrapHoldsAt Structure.records.macRequests
     Structure.records.modRequests := by decide +kernel
 

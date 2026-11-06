@@ -5,6 +5,8 @@ module
 
 public import GordieHowe.Generated.Falcon512.Ring.Carrier.QROMParams.Certified
 public import GordieHowe.ProofSystem.Program.Headlines
+public import GordieHowe.Applications.Configuration.Certified
+public import GordieHowe.Applications.Falcon512.Ring.Honest
 public import GordieHowe.Applications.Falcon512.Ring.Carrier.QROMParams.Facts
 
 @[expose] public section
@@ -22,22 +24,15 @@ namespace GordieHowe.Falcon512.Ring.Carrier.QROMParams
 
 open RealizedProgram.Export RealizedProgram.ProofSystem.PhaseLayout IOP
 open Generated.Falcon512.Ring.Carrier.QROMParams.Program (program)
-open Generated.Falcon512.Ring.Carrier.QROMParams (interp ready ProofSystems)
+open Generated.Falcon512.Ring.Carrier.QROMParams (interp ready ProofSystems certified sourceErrors)
 open scoped NNReal
 
-/-- **The selections' error** (`RealizedProgram.SelSound`): the one selection the product form's
-kernel reads is the membership's, whose event implies the membership's event
-(`Ring.selSound_carrier`; the selections, the reads and the selection error decided). -/
-theorem selSound : program.SelSound interp :=
-  Ring.selSound_carrier (by decide +kernel) Generated.Falcon512.Ring.Carrier.QROMParams.Valid.wellFormed
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
-
 /-- **The proof system of `Falcon512.Ring.Carrier.QROMParams`**
-(`GordieHowe.Generated.Falcon512.Ring.Carrier.QROMParams.proofSystemOf`): the generic per-field
+(`GordieHowe.Generated.Falcon512.Ring.Carrier.QROMParams.proofSystem`): the generic per-field
 proof system at the certificates' sources, whose circuits enforce their entries and accept the
-honest inputs by the certificates, at the selections' soundness `selSound`. -/
+honest inputs by the certificates, at the selections' soundness from the program check. -/
 abbrev proofSystem : ProofSystems :=
-  Generated.Falcon512.Ring.Carrier.QROMParams.proofSystemOf selSound
+  Generated.Falcon512.Ring.Carrier.QROMParams.proofSystem
 
 /-- **Round-by-round knowledge soundness of `Π_P₀` for `Falcon512.Ring.Carrier.QROMParams`** at the ring
 relation `Ring.rel`, the extractor `Ring.extractor` and the errors `511/p^4` at
@@ -56,47 +51,37 @@ theorem sourceError_final :
   intro i hi
   simp only [RealizedProgram.roundError, hi]
 
-/-- **Soundness of `Falcon512.Ring.Carrier.QROMParams` at the realized program, in the series–parallel order of
-`prot:backend`** (`RealizedProgram.ProofSystem.FieldBranches.causal_rbr_knowledge_soundness` at the forked domains
-`RealizedProgram.ProofSystem.fieldBranches` of `proofSystem`): the series–parallel composite is round-by-round knowledge sound
-for `Ring.rel` at the proof system's extractor (`RealizedProgram.ProofSystem.FieldBranches.extractor`, reading the frontend's
-witness map at the realized assignment of the committed cells), with every challenge's own error
-(`RealizedProgram.ProofSystem.IOP.Sound.error`): at a phase's challenge round the sum over the phase's challenges of
-`Π_P₀`'s errors and the realization step's (`RealizedProgram.phaseError`), at every other challenge the
-error of that challenge in its domain's commit rounds, branches or join part. -/
-@[headline]
-theorem iop_rbr_knowledge_soundness :
-    CausalRBRKnowledgeSound Ring.rel ((proofSystem.fieldBranches ready).soundIOP source_rbr_knowledge_soundness sourceError_final).verifier
-      ((proofSystem.fieldBranches ready).extractor source_rbr_knowledge_soundness sourceError_final)
-      ((proofSystem.fieldBranches ready).soundIOPSound (proofSystem.fieldBranchesSound ready) source_rbr_knowledge_soundness sourceError_final).stateFn
-      ((proofSystem.fieldBranches ready).soundIOPSound (proofSystem.fieldBranchesSound ready) source_rbr_knowledge_soundness sourceError_final).error :=
-  (proofSystem.fieldBranches ready).causal_rbr_knowledge_soundness (proofSystem.fieldBranchesSound ready) source_rbr_knowledge_soundness sourceError_final
+/-- **The source challenge's error is within its fraction** (`sourceErrors`). -/
+theorem ringEps_le (j : ℕ) (_ : program.IsSourceChal j) :
+    Ring.ringEps interp j ≤ ((sourceErrors j).1 : ℝ≥0) / (sourceErrors j).2 := by
+  unfold Ring.ringEps
+  simp only [sourceErrors]
+  split_ifs
+  · rw [show Fintype.card _ = pGold ^ 4 from by convert goldilocksExt4_card <;> rfl]
+    norm_num [pGold]
+  · exact zero_le'
 
-variable {Inp : Type} {relH : Set (program.Valuation interp × Inp)}
+/-- Domain `A`'s node `GF(p^1)` is the prime subfield `F_p`. -/
+instance : Ring.PrimeNode (interp 0) :=
+  ⟨⟨RelativePacking.fixedField _ pGold 1, fun x => by
+    change x ∈ RealizedProgram.gold4Node "GF(p^1)" ↔ _
+    rw [RealizedProgram.gold4Node, if_pos rfl]
+    rfl⟩⟩
 
-/-- **Completeness of `Falcon512.Ring.Carrier.QROMParams` at the realized program** (`RealizedProgram.ProofSystem.FieldBranches.completeness` at
-the forked domains `RealizedProgram.ProofSystem.fieldBranches` of `proofSystem`, the domains' honest provers `RealizedProgram.ProofSystem.fieldHonestDomains`): in the
-series–parallel order of `prot:backend`, if the honest prover `H` has completeness error `errc` (a function of the statement)
-(`hc`), then at every value of the coins, on every honest input, the honest prover is rejected with
-probability at most `errc`. -/
-@[headline]
-theorem iop_completeness (H : program.HonestCore interp relH)
-    {errc : program.Valuation interp → ℝ≥0} (hc : H.Complete errc) (c : (proofSystem.fieldForkHonest ready H).Coins) :
-    CausalCompleteStmt relH (proofSystem.fieldBranches ready).protocol.verifier
-      (fun y => RealizedProgram.ProofSystem.IOP.honest (proofSystem.fieldForkHonest ready H) y c) errc :=
-  (proofSystem.fieldBranches ready).completeness (proofSystem.fieldHonestDomains ready) _ H hc c
+/-- **The source program's soundness of `Falcon512.Ring.Carrier.QROMParams`** (`Configuration.SourceFront`): the frontend's
+round-by-round knowledge soundness (`source_rbr_knowledge_soundness`) at the ring's errors
+(`Ring.ringEps`, within `ringEps_le`), and the honest nodes' `1` (`Ring.oneNodes`). -/
+noncomputable def source :=
+  ({ rel := Ring.rel,
+     proj := Ring.proj,
+     eps := Ring.ringEps interp,
+     sound := source_rbr_knowledge_soundness,
+     final := sourceError_final,
+     eps_le := ringEps_le,
+     oneNodes := Ring.oneNodes } :
+    Configuration.SourceFront certified Native.CoreWit _)
 
-/-- **Honest-verifier zero knowledge of `Falcon512.Ring.Carrier.QROMParams` at the realized program**
-(`RealizedProgram.ProofSystem.FieldBranches.hvzk` at the forked domains of `proofSystem`): in the series–parallel order of
-`prot:backend`, if the honest prover `H` has completeness error `errc` (a function of the statement) (`hc`), the simulator of the
-series–parallel composite is honest-verifier zero knowledge for the honest prover with error `errc`. -/
-@[headline]
-theorem iop_hvzk (H : program.HonestCore interp relH) {errc : program.Valuation interp → ℝ≥0}
-    (hc : H.Complete errc) :
-    CausalHVZKStmt (proofSystem.fieldBranches ready).protocol.toCausalIOP.views relH
-      (RealizedProgram.ProofSystem.IOP.honest (proofSystem.fieldForkHonest ready H)) id
-      (RealizedProgram.ProofSystem.IOP.simulator
-        ((proofSystem.fieldBranches ready).simData (proofSystem.fieldForkSims ready))) errc :=
-  (proofSystem.fieldBranches ready).hvzk (proofSystem.fieldHonestDomains ready) _ H hc
+instantiate_config GordieHowe.Falcon512.Ring.Carrier.QROMParams
+  from [GordieHowe.Configuration.CertifiedSource] certified source at proofSystem
 
 end GordieHowe.Falcon512.Ring.Carrier.QROMParams

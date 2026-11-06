@@ -4,7 +4,6 @@
 module
 
 public import GordieHowe.Language.Library.Eval
-public import GordieHowe.Applications.Falcon512.System.Algebra
 
 @[expose] public section
 

@@ -28,8 +28,6 @@ variable {G : Signer 32} (C : ProofSystems)
 
 /-! ## The figures -/
 
-/-- The completeness error of the honest-prover statements: `0`. -/
-noncomputable abbrev honestBound : ℝ≥0 := 0
 
 /-! ## The knowledge statements at the ring signature relation -/
 
@@ -41,16 +39,5 @@ theorem mem_ringRel64 {x : Ring.RStmt G} {g : program.Valuation interp → CoreW
     (h : (x, g) ∈ ringStmtRel) :
     (x, (g (Ring.stmtOf x)).withSalt (G := G) x.pub) ∈ Ring.ringRel64 G :=
   Ring.ringRel_of_rel h.1 h.2
-
-/-! ## The honest-prover statements -/
-
-variable {Inp : Type}
-  {relH : Set (program.Valuation interp × Inp)} (H : program.HonestStrategy interp relH)
-
-/-- **The honest inputs at the ring statement**: statements that pass the check and whose program
-statement is the strategy's. -/
-abbrev ringHonestRel (relH : Set (program.Valuation interp × Inp)) :
-    Set (Ring.RStmt G × Inp) :=
-  {p | Ring.ringOk p.1 = true ∧ (Ring.stmtOf p.1, p.2) ∈ relH}
 
 end GordieHowe.Falcon512.Ring.Carrier.QROMParams

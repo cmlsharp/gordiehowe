@@ -153,12 +153,12 @@ variable (T) (kS : ℕ) (hb : T.MergeBounds kS)
 
 /-- **The verifier with merges of the setting in the QROM** with `kq` queries, as a
 `NARG.QROM.Verifier` (`SPBCS.toQVerifier`). -/
-noncomputable abbrev verifier (kq : ℕ) :=
+abbrev verifier (kq : ℕ) :=
   (T.setting kS hb).model.toQVerifier (T.setting kS hb).queries kq
 
 /-- **The verifier with merges of the setting in the ROM** with `kq` queries, as a
 `NARG.ROM.Verifier` (`SPBCS.toRVerifier`). -/
-noncomputable abbrev verifierROM (kq : ℕ) :=
+abbrev verifierROM (kq : ℕ) :=
   (T.setting kS hb).model.toRVerifier (T.setting kS hb).queries kq
 
 /-- **The proof format of the zero-knowledge games at the setting** with the proof bound `pB`:

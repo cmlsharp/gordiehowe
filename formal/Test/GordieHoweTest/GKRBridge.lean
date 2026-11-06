@@ -2,15 +2,13 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 import GordieHowe.ProofSystem.GKR.CertificateBridge
-import GordieHowe.Language.CertCheck
-import GordieHowe.Language.Realizations.Circuit.LoadNative
 import GordieHoweTest.GKRCertificate
 
 /-!
 # The bridge from the certificate's layered circuit to the GKR source circuit, on small circuits
 
 For each small circuit of `GordieHoweTest.GKRCertificate` (the C++ test
-`lib/circuits/compiler/cert_export_test.cc`), `gh_cert_check` decides that every gate has at most
+`lib/circuits/compiler/cert_export_test.cc`), `decide +kernel` decides that every gate has at most
 one assertion term (`uniqueAssertsB`) and the circuit's shape (`shapeB`, at the width and layer
 count the plan export computes: `⌈log₂⌉` of the larger of the summed layer input widths and the
 input count, and the number of layers). Together with the accepted certificate these give, for
@@ -29,10 +27,10 @@ namespace Add
 open GordieHoweTest.GKRCertificate.Add
 
 /-- Every gate has at most one assertion term. -/
-theorem unique : uniqueAssertsB cert.width circuit = true := by gh_cert_check
+theorem unique : uniqueAssertsB cert.width circuit = true := by decide +kernel
 
 /-- The circuit has `1` layer(s) of at most `2 ^ 2` gates. -/
-theorem shape : shapeB circuit 2 1 = true := by gh_cert_check
+theorem shape : shapeB circuit 2 1 = true := by decide +kernel
 
 /-- A vector satisfying the GKR source circuit makes every assertion of the DAG hold. -/
 theorem holds {F : Type} [Field F] [DecidableEq F] {κ : ℕ → F} (hκ : κ 1 = 1) {d : ℕ}
@@ -52,10 +50,10 @@ namespace Mul
 open GordieHoweTest.GKRCertificate.Mul
 
 /-- Every gate has at most one assertion term. -/
-theorem unique : uniqueAssertsB cert.width circuit = true := by gh_cert_check
+theorem unique : uniqueAssertsB cert.width circuit = true := by decide +kernel
 
 /-- The circuit has `1` layer(s) of at most `2 ^ 2` gates. -/
-theorem shape : shapeB circuit 2 1 = true := by gh_cert_check
+theorem shape : shapeB circuit 2 1 = true := by decide +kernel
 
 /-- A vector satisfying the GKR source circuit makes every assertion of the DAG hold. -/
 theorem holds {F : Type} [Field F] [DecidableEq F] {κ : ℕ → F} (hκ : κ 1 = 1) {d : ℕ}
@@ -75,10 +73,10 @@ namespace Scale
 open GordieHoweTest.GKRCertificate.Scale
 
 /-- Every gate has at most one assertion term. -/
-theorem unique : uniqueAssertsB cert.width circuit = true := by gh_cert_check
+theorem unique : uniqueAssertsB cert.width circuit = true := by decide +kernel
 
 /-- The circuit has `1` layer(s) of at most `2 ^ 2` gates. -/
-theorem shape : shapeB circuit 2 1 = true := by gh_cert_check
+theorem shape : shapeB circuit 2 1 = true := by decide +kernel
 
 /-- A vector satisfying the GKR source circuit makes every assertion of the DAG hold. -/
 theorem holds {F : Type} [Field F] [DecidableEq F] {κ : ℕ → F} (hκ : κ 1 = 1) {d : ℕ}
@@ -98,10 +96,10 @@ namespace Copies
 open GordieHoweTest.GKRCertificate.Copies
 
 /-- Every gate has at most one assertion term. -/
-theorem unique : uniqueAssertsB cert.width circuit = true := by gh_cert_check
+theorem unique : uniqueAssertsB cert.width circuit = true := by decide +kernel
 
 /-- The circuit has `4` layer(s) of at most `2 ^ 5` gates. -/
-theorem shape : shapeB circuit 5 4 = true := by gh_cert_check
+theorem shape : shapeB circuit 5 4 = true := by decide +kernel
 
 /-- A vector satisfying the GKR source circuit makes every assertion of the DAG hold. -/
 theorem holds {F : Type} [Field F] [DecidableEq F] {κ : ℕ → F} (hκ : κ 1 = 1) {d : ℕ}
@@ -121,10 +119,10 @@ namespace Cse
 open GordieHoweTest.GKRCertificate.Cse
 
 /-- Every gate has at most one assertion term. -/
-theorem unique : uniqueAssertsB cert.width circuit = true := by gh_cert_check
+theorem unique : uniqueAssertsB cert.width circuit = true := by decide +kernel
 
 /-- The circuit has `2` layer(s) of at most `2 ^ 3` gates. -/
-theorem shape : shapeB circuit 3 2 = true := by gh_cert_check
+theorem shape : shapeB circuit 3 2 = true := by decide +kernel
 
 /-- A vector satisfying the GKR source circuit makes every assertion of the DAG hold. -/
 theorem holds {F : Type} [Field F] [DecidableEq F] {κ : ℕ → F} (hκ : κ 1 = 1) {d : ℕ}
@@ -144,10 +142,10 @@ namespace LastLayer
 open GordieHoweTest.GKRCertificate.LastLayer
 
 /-- Every gate has at most one assertion term. -/
-theorem unique : uniqueAssertsB cert.width circuit = true := by gh_cert_check
+theorem unique : uniqueAssertsB cert.width circuit = true := by decide +kernel
 
 /-- The circuit has `1` layer(s) of at most `2 ^ 2` gates. -/
-theorem shape : shapeB circuit 2 1 = true := by gh_cert_check
+theorem shape : shapeB circuit 2 1 = true := by decide +kernel
 
 /-- A vector satisfying the GKR source circuit makes every assertion of the DAG hold. -/
 theorem holds {F : Type} [Field F] [DecidableEq F] {κ : ℕ → F} (hκ : κ 1 = 1) {d : ℕ}
@@ -167,10 +165,10 @@ namespace OutputAnInput
 open GordieHoweTest.GKRCertificate.OutputAnInput
 
 /-- Every gate has at most one assertion term. -/
-theorem unique : uniqueAssertsB cert.width circuit = true := by gh_cert_check
+theorem unique : uniqueAssertsB cert.width circuit = true := by decide +kernel
 
 /-- The circuit has `1` layer(s) of at most `2 ^ 2` gates. -/
-theorem shape : shapeB circuit 2 1 = true := by gh_cert_check
+theorem shape : shapeB circuit 2 1 = true := by decide +kernel
 
 /-- A vector satisfying the GKR source circuit makes every assertion of the DAG hold. -/
 theorem holds {F : Type} [Field F] [DecidableEq F] {κ : ℕ → F} (hκ : κ 1 = 1) {d : ℕ}
@@ -190,10 +188,10 @@ namespace AliasLinearCopy
 open GordieHoweTest.GKRCertificate.AliasLinearCopy
 
 /-- Every gate has at most one assertion term. -/
-theorem unique : uniqueAssertsB cert.width circuit = true := by gh_cert_check
+theorem unique : uniqueAssertsB cert.width circuit = true := by decide +kernel
 
 /-- The circuit has `1` layer(s) of at most `2 ^ 1` gates. -/
-theorem shape : shapeB circuit 1 1 = true := by gh_cert_check
+theorem shape : shapeB circuit 1 1 = true := by decide +kernel
 
 /-- A vector satisfying the GKR source circuit makes every assertion of the DAG hold. -/
 theorem holds {F : Type} [Field F] [DecidableEq F] {κ : ℕ → F} (hκ : κ 1 = 1) {d : ℕ}
@@ -213,10 +211,10 @@ namespace Assert0
 open GordieHoweTest.GKRCertificate.Assert0
 
 /-- Every gate has at most one assertion term. -/
-theorem unique : uniqueAssertsB cert.width circuit = true := by gh_cert_check
+theorem unique : uniqueAssertsB cert.width circuit = true := by decide +kernel
 
 /-- The circuit has `1` layer(s) of at most `2 ^ 2` gates. -/
-theorem shape : shapeB circuit 2 1 = true := by gh_cert_check
+theorem shape : shapeB circuit 2 1 = true := by decide +kernel
 
 /-- A vector satisfying the GKR source circuit makes every assertion of the DAG hold. -/
 theorem holds {F : Type} [Field F] [DecidableEq F] {κ : ℕ → F} (hκ : κ 1 = 1) {d : ℕ}
@@ -236,10 +234,10 @@ namespace Canonicalization
 open GordieHoweTest.GKRCertificate.Canonicalization
 
 /-- Every gate has at most one assertion term. -/
-theorem unique : uniqueAssertsB cert.width circuit = true := by gh_cert_check
+theorem unique : uniqueAssertsB cert.width circuit = true := by decide +kernel
 
 /-- The circuit has `2` layer(s) of at most `2 ^ 3` gates. -/
-theorem shape : shapeB circuit 3 2 = true := by gh_cert_check
+theorem shape : shapeB circuit 3 2 = true := by decide +kernel
 
 /-- A vector satisfying the GKR source circuit makes every assertion of the DAG hold. -/
 theorem holds {F : Type} [Field F] [DecidableEq F] {κ : ℕ → F} (hκ : κ 1 = 1) {d : ℕ}
@@ -259,10 +257,10 @@ namespace MatMul
 open GordieHoweTest.GKRCertificate.MatMul
 
 /-- Every gate has at most one assertion term. -/
-theorem unique : uniqueAssertsB cert.width circuit = true := by gh_cert_check
+theorem unique : uniqueAssertsB cert.width circuit = true := by decide +kernel
 
 /-- The circuit has `4` layer(s) of at most `2 ^ 6` gates. -/
-theorem shape : shapeB circuit 6 4 = true := by gh_cert_check
+theorem shape : shapeB circuit 6 4 = true := by decide +kernel
 
 /-- A vector satisfying the GKR source circuit makes every assertion of the DAG hold. -/
 theorem holds {F : Type} [Field F] [DecidableEq F] {κ : ℕ → F} (hκ : κ 1 = 1) {d : ℕ}
@@ -278,18 +276,18 @@ theorem shapeAtMost {F : Type} [Field F] [DecidableEq F] {κ : ℕ → F} {d : �
 end MatMul
 
 /-- Accepted: a gate with one assertion term among two terms. -/
-example : uniqueAssertsB 4 ⟨4, [[0x311210704]]⟩ = true := by gh_cert_check
+example : uniqueAssertsB 4 ⟨4, [[0x311210704]]⟩ = true := by decide +kernel
 
 /-- Rejected: a gate with two assertion terms. -/
-example : uniqueAssertsB 4 ⟨4, [[0x311210704], [0x310210704]]⟩ = false := by gh_cert_check
+example : uniqueAssertsB 4 ⟨4, [[0x311210704], [0x310210704]]⟩ = false := by decide +kernel
 
 /-- Rejected: the matrix product's input layer has more than `2 ^ 3` gates. -/
-example : shapeB GordieHoweTest.GKRCertificate.MatMul.circuit 3 4 = false := by gh_cert_check
+example : shapeB GordieHoweTest.GKRCertificate.MatMul.circuit 3 4 = false := by decide +kernel
 
 /-- Rejected: the copies circuit has more than three layers. -/
-example : shapeB GordieHoweTest.GKRCertificate.Copies.circuit 5 3 = false := by gh_cert_check
+example : shapeB GordieHoweTest.GKRCertificate.Copies.circuit 5 3 = false := by decide +kernel
 
 /-- Rejected: a circuit without layers. -/
-example : shapeB ⟨4, []⟩ 4 4 = false := by gh_cert_check
+example : shapeB ⟨4, []⟩ 4 4 = false := by decide +kernel
 
 end GordieHoweTest.GKRBridge

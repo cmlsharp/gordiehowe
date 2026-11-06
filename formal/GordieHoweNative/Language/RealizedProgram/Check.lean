@@ -133,6 +133,32 @@ each entry without a lookup in the table. -/
 def memoList {γ β : Type} (F : (ℕ → β) → ℕ → γ → β) (d : β) (L : List γ) : List β :=
   (memoAuxL F d L 0 .nil []).2
 
+/-- An empty memo fold returns its initial table. -/
+theorem memoAux_nil {γ β : Type} (F : (ℕ → β) → ℕ → γ → β) (d : β)
+    (j : ℕ) (t : NatTrie β) : memoAux F d [] j t = t := rfl
+
+/-- A memo fold sets the current entry before visiting the remaining inputs. -/
+theorem memoAux_cons {γ β : Type} (F : (ℕ → β) → ℕ → γ → β) (d : β)
+    (x : γ) (xs : List γ) (j : ℕ) (t : NatTrie β) :
+    memoAux F d (x :: xs) j t =
+      memoAux F d xs (j + 1) (t.set j (F (t.getD · d) j x)) := rfl
+
+/-- An empty memo-list fold returns its accumulated entries in order. -/
+theorem memoAuxL_nil {γ β : Type} (F : (ℕ → β) → ℕ → γ → β) (d : β)
+    (j : ℕ) (t : NatTrie β) (acc : List β) :
+    memoAuxL F d [] j t acc = (t, acc.reverse) := rfl
+
+/-- A memo-list fold shares the current entry between its table and list. -/
+theorem memoAuxL_cons {γ β : Type} (F : (ℕ → β) → ℕ → γ → β) (d : β)
+    (x : γ) (xs : List γ) (j : ℕ) (t : NatTrie β) (acc : List β) :
+    memoAuxL F d (x :: xs) j t acc =
+      memoAuxL F d xs (j + 1) (t.set j (F (t.getD · d) j x))
+        (F (t.getD · d) j x :: acc) := rfl
+
+/-- The memo list starts with no supplied prefix or accumulated entries. -/
+theorem memoList_eq_aux {γ β : Type} (F : (ℕ → β) → ℕ → γ → β) (d : β)
+    (xs : List γ) : memoList F d xs = (memoAuxL F d xs 0 .nil []).2 := rfl
+
 /-- **A list as a `NatTrie`** (`NatTrie.ofSeq`): entry `j` at key `j`. -/
 def toTrie {γ : Type} [Inhabited γ] (L : List γ) : NatTrie γ := NatTrie.ofSeq L
 
@@ -162,6 +188,15 @@ theorem natSet_isSome (L : List ℕ) (v : ℕ) : ((natSet L).get? v).isSome = tr
   have h := foldl_set_isSome id L .nil v
   simp only [NatTrie.get?_nil, Option.isSome_none, Bool.false_eq_true, or_false, List.map_id] at h
   exact h
+
+/-- **The values the definition of value `v` reads**: a public expression's values, an opaque
+function's arguments, a bit view's words. -/
+def valueDeps (ir : RealizedProgram) (v : ℕ) : List ℕ :=
+  match (ir.value v).kind with
+  | .pub (.expr e) => ir.exprNodes e
+  | .pub (.opaque _ args) => args
+  | .bits w _ => [w]
+  | _ => []
 
 section ValueTable
 
@@ -485,6 +520,11 @@ entries it reads, each once. -/
 def closureT {α : Type} [DecidableEq α] (g : Expr → List α) : NatTrie (List α) :=
   memo (closureStep g) [] ir.exprs
 
+/-- Shared-expression closures use the same ordered memo recurrence as the
+compiled context; this equation exposes the table construction to its proofs. -/
+theorem closureT_eq_memo {α : Type} [DecidableEq α] (g : Expr → List α) :
+    ir.closureT g = memo (closureStep g) [] ir.exprs := rfl
+
 /-- **The table of the shared expressions' lengths.** -/
 def lenT : NatTrie ℕ := memo (fun rl _ e => ir.lenV rl e) 0 ir.exprs
 
@@ -751,6 +791,19 @@ theorem circuitT_getD {c : ℕ} (hc : c < ir.circuits.length) :
   rw [circuitT, toTrie_getD (by simpa using hc), List.getD_eq_getElem?_getD, List.getElem?_map,
     circuit, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hc]
   rfl
+
+end
+
+
+section
+
+variable (ir : RealizedProgram)
+
+/-- `RefsOrdered`, checked in one pass. -/
+def refsOrderedB : Bool := allIdx (fun k e => e.refs.all (· < k)) ir.exprs 0
+
+/-- The degree in the committed cells (`cellDeg`'s value degrees). -/
+def cellNd (v : ℕ) : ℕ := if ir.isCommitted v || ir.isLateNode v then 1 else 0
 
 end
 

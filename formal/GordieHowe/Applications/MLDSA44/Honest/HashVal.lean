@@ -68,6 +68,45 @@ noncomputable def hashVal (v i : ℕ) : (interp (program.valueField v)).K :=
         (iterRounds ((honestData (K := FH.K) y).states pt.1) ((pt.2 : ℕ) + 1)) i)
     | none => 0
 
+/-- **The hash buffer reads the honest message bits.** -/
+theorem hashVal_buffer (j : ℕ) :
+    hashVal (program := program) (F0 := F0) y 67 j =
+      RealizedProgram.castElt (a := 1) ((honestData (K := FH.K) y).buf j) := by
+  rfl
+
+/-- **The hash flags read the honest message prefix.** -/
+theorem hashVal_flags (j : ℕ) :
+    hashVal (program := program) (F0 := F0) y 68 j =
+      RealizedProgram.castElt (a := 1) ((flagNat L j : ℕ) : FH.K) := by
+  rfl
+
+/-- **The committed `w1` words pack the honest `w1` bits.** -/
+theorem hashVal_w1 (j : ℕ) :
+    hashVal (program := program) (F0 := F0) y 69 j =
+      RealizedProgram.castElt (a := 1) (packWord (honestData (K := FH.K) y).w1 j) := by
+  rfl
+
+/-- **The committed `mu` words pack the honest digest bits.** -/
+theorem hashVal_mu (j : ℕ) :
+    hashVal (program := program) (F0 := F0) y 119 j =
+      RealizedProgram.castElt (a := 1) (packWord (honestData (K := FH.K) y).mu j) := by
+  rfl
+
+/-- **A round's committed words read its honest Keccak state.** -/
+theorem hashVal_words (p : Fin 10) (t : Fin 24) (j : ℕ) :
+    hashVal (program := program) (F0 := F0) y (wordsVal p t) j =
+      RealizedProgram.castElt (a := 1) (RealizedProgram.stateWords HField.packing
+        (iterRounds ((honestData (K := FH.K) y).states p) ((t : ℕ) + 1)) j) := by
+  obtain ⟨hw, h67, h68, h69, h119⟩ := wordsOwner_checks
+  have hn : wordsVal p t ≠ 67 ∧ wordsVal p t ≠ 68 ∧ wordsVal p t ≠ 69 ∧
+      wordsVal p t ≠ 119 := by
+    refine ⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩ <;>
+      · have hp := hw p t
+        rw [h] at hp
+        simp_all
+  simp only [hashVal, ite_eq_right hn.1, ite_eq_right hn.2.1, ite_eq_right hn.2.2.1,
+    ite_eq_right hn.2.2.2, hw p t]
+
 /-- **Value `v` is a committed input of the hash.** -/
 def IsHashValue (v : ℕ) : Prop :=
   v = 67 ∨ v = 68 ∨ v = 69 ∨ v = 119 ∨ (wordsOwner? v).isSome

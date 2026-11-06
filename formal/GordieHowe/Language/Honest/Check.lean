@@ -215,11 +215,26 @@ def srcLatePadB (v : ℕ) : Bool :=
 def cellB (L : List (ℕ × String)) (v : ℕ) : Bool :=
   !ir.isCellValue (ir.value v).domain v || (ir.cellNodeB v && ir.cellNodeInB L v)
 
+/-- A checked committed cell lies at one of the listed nodes. -/
+theorem cellNodeInB_of_cellB {L : List (ℕ × String)} {v : ℕ}
+    (h : ir.cellB L v = true) (hc : ir.isCellValue (ir.value v).domain v = true) :
+    ir.cellNodeInB L v = true := by
+  simp only [cellB, hc, Bool.not_true, Bool.false_or, Bool.and_eq_true] at h
+  exact h.2
+
 /-- **A node-typed value that is no source value and no late value is a committed cell whose type
 contains the naturals by a node of `L`** (`HonestFacts.realTypes`), as a check at value `v`. -/
 def realTypeB (L : List (ℕ × String)) (v : ℕ) : Bool :=
   !((ir.value v).typeSource == .node) || decide (ir.IsLate v) || decide (ir.IsSourceValue v) ||
     (ir.privCellB v && ir.natTypedInB L v)
+
+/-- A checked node-typed realization value that is not late has committed cells. -/
+theorem privCellB_of_realTypeB {L : List (ℕ × String)} {v : ℕ}
+    (h : ir.realTypeB L v = true) (ht : (ir.value v).typeSource = .node)
+    (hl : ¬ ir.IsLate v) (hs : ¬ ir.IsSourceValue v) : ir.privCellB v = true := by
+  simp only [realTypeB, ht, beq_self_eq_true, Bool.not_true, decide_eq_false hl,
+    decide_eq_false hs, Bool.false_or, Bool.and_eq_true] at h
+  exact h.1
 
 end Honest
 

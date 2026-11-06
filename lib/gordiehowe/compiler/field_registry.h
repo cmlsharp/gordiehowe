@@ -31,6 +31,7 @@
 
 #include <cstddef>
 #include <string>
+#include <utility>
 
 namespace proofs::gordiehowe::compiler {
 
@@ -48,6 +49,8 @@ struct FieldModelEntry {
       *read_linear, *module, *edges;
   size_t bytes = 0;
   const char *codec = nullptr, *reader = nullptr;
+  // Degree of the subfield in which the packing kit's masks lie.
+  size_t mask_field_degree = 1;
 };
 
 // The module defining every field's packing facts.
@@ -62,12 +65,12 @@ inline const FieldModelEntry *field_model(const std::string &name) {
        "RealizedProgram.gf128Packing", "RealizedProgram.gf128_codeHom",
        "RealizedProgram.gf128_macFieldOk", "", "GordieHowe.Applications.FieldInterps.Basic",
        "1:16:s 16:4:m 64:2:m 16:8:m 16:2:m 32:4:m", 16, "SPBCS.Codec.FieldBytes.gf2_128",
-       "SPBCS.CReader.gf2_128"},
+       "SPBCS.CReader.gf2_128", 16},
       {"GF(2^256)", "`GF(2^256)`", "RealizedProgram.gf256", "RealizedProgram.gf256_model",
        "RealizedProgram.gf256Packing", "RealizedProgram.gf256_codeHom",
        "RealizedProgram.gf256_macFieldOk", "", "GordieHowe.Applications.FieldInterps.GF256",
        "1:16:s 16:4:m 64:4:m", 32, "SPBCS.Codec.FieldBytes.gf2_256",
-       "SPBCS.CReader.gf2_256"},
+       "SPBCS.CReader.gf2_256", 16},
       {"F_q^9", "`F_q^9`", "RealizedProgram.fq9", "RealizedProgram.fq9_model",
        "RealizedProgram.fq9Packing",
        "(RealizedProgram.fq9_codeHom.withPrime RealizedProgram.fq9Code_primeOn)", "",
@@ -113,6 +116,20 @@ inline const FieldModelEntry *field_model(const std::string &name) {
 inline bool field_has_edge(const FieldModelEntry &e, const std::string &edge) {
   const std::string all = std::string(" ") + e.edges + " ";
   return all.find(" " + edge + " ") != std::string::npos;
+}
+
+// The kit's prefix and own mask-cell counts at a queried edge. Unsupported
+// edges have no kit and answer zero, matching Packing.desc. Subfield masks
+// use relative_degree * [field:mask_subfield] prefix cells; a bit-chain kit
+// has relative_degree + relative_degree*(relative_degree-1)/2 own cells.
+inline std::pair<size_t, size_t> field_mask_nums(const FieldModelEntry &e,
+                                               size_t field_degree,
+                                               const std::string &edge) {
+  if (!field_has_edge(e, edge)) return {0, 0};
+  const size_t a = edge.find(':'), b = edge.find(':', a + 1);
+  const size_t d = std::stoull(edge.substr(a + 1, b - a - 1));
+  if (edge.substr(b + 1) == "s") return {0, d + d * (d - 1) / 2};
+  return {d * (field_degree / e.mask_field_degree), 0};
 }
 
 // A Ligero certificate the library proves, by its Ligero numbers (the mask
@@ -162,6 +179,41 @@ inline Frontend frontend_of(const std::string &config) {
 }
 
 // The module defining a frontend's interpretation builder and its lemmas.
+// The opaque-function set of a program's interpretation (the plan's
+// `opaqueSet`, Lean `GordieHowe.OpaqueKey`): `none` when no opaque value
+// reads an argument (OPAQUE_ARGS false), the mDL frontend's `mdoc`, the
+// Falcon frontend's `falcon` at two fields, and `targetBits` otherwise.
+inline const char *opaque_set(bool opaque_args, Frontend f, size_t fields) {
+  if (!opaque_args) return "none";
+  if (f == Frontend::kMdoc) return "mdoc";
+  if (f == Frontend::kFalcon && fields == 2) return "falcon";
+  return "targetBits";
+}
+
+// The Lean function of an opaque-function set (opaque_set).
+inline std::string opaque_fn(const std::string &set) {
+  if (set == "none") return "fun _ _ _ => 0";
+  if (set == "mdoc") return "RealizedProgram.mdocOps";
+  if (set == "falcon") return "RealizedProgram.falconOps";
+  return "RealizedProgram.targetBitsFn";
+}
+
+// The Lean key of a field entry (`GordieHowe.FieldKey`): its interpretation's
+// name in RealizedProgram (`RealizedProgram.gf128` is `.gf128`).
+inline std::string field_key(const FieldModelEntry &e) {
+  const std::string s = e.interp;
+  return s.substr(s.rfind('.') + 1);
+}
+
+// The Lean key of a library tableau (`GordieHowe.TableauKey`): its
+// certificate's name without `Cert` (`RealizedProgram.gf128K282R2Cert` is
+// `.gf128K282R2`).
+inline std::string tableau_key(const KnownTableau &t) {
+  std::string s = t.name;
+  s = s.substr(s.rfind('.') + 1);
+  return s.substr(0, s.size() - 4);
+}
+
 inline const char *frontend_module(Frontend f) {
   switch (f) {
     case Frontend::kFalcon:

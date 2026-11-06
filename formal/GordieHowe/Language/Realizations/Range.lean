@@ -7,7 +7,6 @@ public import Mathlib.Algebra.Polynomial.Roots
 public import Mathlib.Algebra.Polynomial.FieldDivision
 public import Mathlib.Algebra.BigOperators.Fin
 public import Mathlib.Algebra.CharP.Basic
-public import GordieHowe.Applications.Params
 public import GordieHowe.Foundations.Probability.ChallengeEvent
 public import GordieHowe.Foundations.ToMathlib.List
 public import GordieHowe.Language.Realizations.FractionTree

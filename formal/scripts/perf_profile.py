@@ -37,7 +37,7 @@ one that fails gets `<error>` (elab_s its running time) and its first error line
 
 Module selection (scripts/perf_profile.sh is the entry point): the modules changed since a git
 revision, an explicit list, or `--all`, the import closure of GordieHowe.lean. Certificate modules
-(GordieHowe.Generated.*, GordieHoweCerts*, and every module importing a generated one, as in
+(GordieHowe.Generated.*, GordieHoweCerts*, GordieHoweCheck.*, and every module importing a generated one, as in
 scripts/cert_boundary.py) and modules outside GordieHowe's closure are skipped, with a note.
 """
 import argparse
@@ -51,10 +51,16 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# The launcher uses Python's isolated mode, which omits the script directory from
+# sys.path. Trust only this script's own directory for the shared boundary helper.
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+from cert_boundary import check_source_dir
+
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 IMPORT = re.compile(r'^(?:public\s+)?(?:meta\s+)?import\s+(?:all\s+)?([A-Za-z0-9_.\']+)', re.M)
 GENERATED = 'GordieHowe.Generated.'
 CERTS = 'GordieHoweCerts'
+CHECK_SRC = check_source_dir()
 VENDOR_LIBS = ('ArkLib', 'CompPoly', 'VCVio', 'ToMathlib', 'PolyFun', 'ToCslib', 'Cslib',
                'LatticeCrypto', 'HashSig')
 
@@ -65,7 +71,7 @@ VENDOR_LIBS = ('ArkLib', 'CompPoly', 'VCVio', 'ToMathlib', 'PolyFun', 'ToCslib',
 def module_path(m):
     """Source path of module m, or None (GordieHowe* at formal/, vendored libraries under Vendor/)."""
     rel = m.replace('.', os.sep) + '.lean'
-    for base in (ROOT, os.path.join(ROOT, 'Vendor')):
+    for base in (ROOT, os.path.join(ROOT, 'Vendor'), os.path.join(ROOT, CHECK_SRC)):
         p = os.path.join(base, rel)
         if os.path.isfile(p):
             return p
@@ -80,7 +86,9 @@ def path_module(p):
     parts = rel[:-5].split(os.sep)
     if parts[0] == 'Vendor':
         parts = parts[1:]
-    if not parts or parts[0] not in ('GordieHowe', CERTS) + VENDOR_LIBS:
+    elif parts[:2] in (['Check', 'Kernel'], ['Check', 'Native']):
+        parts = parts[2:]
+    if not parts or parts[0] not in ('GordieHowe', CERTS, 'GordieHoweCheck') + VENDOR_LIBS:
         return None
     return '.'.join(parts)
 
@@ -112,7 +120,7 @@ _cert = {}
 
 def is_cert(m):
     """A certificate module: generated, GordieHoweCerts*, or importing a generated module."""
-    if m.startswith(GENERATED) or m == CERTS or m.startswith(CERTS + '.'):
+    if m.startswith((GENERATED, 'GordieHoweCheck.')) or m == CERTS or m.startswith(CERTS + '.'):
         return True
     if m in _cert:
         return _cert[m]

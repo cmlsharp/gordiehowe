@@ -8,7 +8,7 @@ The header is two comment lines, `Copyright 2026 Chad Sharp and Paul Grubbs` and
 `SPDX-License-Identifier: Apache-2.0`:
 
 * as `--` lines followed by a blank line at the top of every .lean file of `GordieHowe/`,
-  `GordieHoweCerts/`, `GordieHoweNative/`, `Test/` and `scripts/`, and of `GordieHowe.lean` and `GordieHoweCerts.lean`
+  `GordieHoweCerts/`, `GordieHoweNative/`, both modes under `Check/`, `Test/` and `scripts/`, and of `GordieHowe.lean` and `GordieHoweCerts.lean`
   (a comment before `module` is allowed);
 * as `#` lines after the shebang, if any, of every .py and .sh file of `scripts/` and
   `Test/scripts/`, and at the top of `lakefile.toml`.
@@ -29,7 +29,7 @@ LINES = ['Copyright 2026 Chad Sharp and Paul Grubbs', 'SPDX-License-Identifier: 
 
 
 def files():
-    for top in ('GordieHowe', 'GordieHoweCerts', 'GordieHoweNative', 'Test', 'scripts'):
+    for top in ('GordieHowe', 'GordieHoweCerts', 'GordieHoweNative', 'Check', 'Test', 'scripts'):
         for d, subdirs, names in os.walk(os.path.join(ROOT, top)):
             rel = os.path.relpath(d, ROOT)
             if rel == os.path.join('GordieHowe', 'Generated'):

@@ -4,7 +4,8 @@
 // GordieHowe: the realized program, one in-memory structure.
 //
 // ir::Program mirrors the Lean schema `GordieHowe.RealizedProgram`
-// (formal/GordieHowe/Language/RealizedProgram.lean) element for element:
+// (formal/GordieHoweNative/Language/RealizedProgram.lean; its lemmas are in
+// formal/GordieHowe/Language/RealizedProgram.lean) element for element:
 // fields, domains, values, the expression DAG with its shared entries,
 // predicates with their targets and roles, lookup tables and their groups,
 // challenges, messages, batches with their parts, GKR circuits with their

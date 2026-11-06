@@ -1867,12 +1867,6 @@ theorem probUniform_fullCoord {F : FieldInterp} {n : ℕ} (hn : n = 1) (h0 : 0 <
   exact Uniform.probUniform_comp (f := fun c : Fin 1 → F.K => c ⟨0, h0⟩)
     (Uniform.of_equiv (Equiv.funUnique (Fin 1) F.K)) P
 
-/-- **A uniform element read in an equal field identifier** is uniform there. -/
-theorem probUniform_castElt {a b : ℕ} (h : a = b) (P : (I b).K → Prop) :
-    Pr[x ← (I a).K : P (castElt x)] = Pr[y ← (I b).K : P y] := by
-  subst h
-  simp
-
 /-- **The MAC event's probability over its key** (`macKeyB`: one coordinate, uniform in the MAC
 field): an event of the MAC field fixed before the key (`macEvent` of an environment agreeing up to
 the key) has its key coordinate as a root with probability at most its degree over `|K|`; for the

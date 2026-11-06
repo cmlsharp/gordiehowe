@@ -296,12 +296,13 @@ ExpandA shape checks:
 
 ### ML-DSA known-answer tests (`Test/GordieHoweTest/`)
 
-`scripts/lake.sh build GordieHoweTest` runs `Test/GordieHoweTest/MLDSAVectors.lean`, which checks
-the vendored ML-DSA specification against known answers: `expandA` at ML-DSA-44 and ML-DSA-65 and
-`sampleInBall` at ML-DSA-44 against the vectors of the C++ reference implementation, `verify44`
-against an ML-DSA-44 signature made by OpenSSL, and `verify65` against an ML-DSA-65 example
-signature from the C++ tests, each with its flipped-byte rejection (the signature is rejected
-after one message byte is flipped):
+`scripts/lake.sh build GordieHoweTest` runs the three runner modules that
+`Test/GordieHoweTest/MLDSAVectors.lean` imports (`MLDSAVectorsVerify`, `MLDSAVectorsKeyGen`,
+`MLDSAVectorsSign`), which check the vendored ML-DSA specification against known answers: `expandA`
+at ML-DSA-44 and ML-DSA-65 and `sampleInBall` at ML-DSA-44 against the vectors of the C++ reference
+implementation, `verify44` against an ML-DSA-44 signature made by OpenSSL, and `verify65` against an
+ML-DSA-65 example signature from the C++ tests, each with its flipped-byte rejection (the signature
+is rejected after one message byte is flipped):
 
 ```
 (a) ExpandA (ML-DSA-44) vs kExpectedExpandAVectors[4][4][256]:

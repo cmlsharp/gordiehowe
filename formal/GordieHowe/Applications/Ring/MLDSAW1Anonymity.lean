@@ -251,23 +251,23 @@ variable (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   [DecidableEq RMsg] (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg)
 
 /-- The base signer with hedged signing (`w1Base`). -/
-noncomputable abbrev hedgedBase : BaseSigner X Y N (w1BaseT prims Msg RMsg (ringCoins (Bytes 32) k D)) :=
+abbrev hedgedBase : BaseSigner X Y N (w1BaseT prims Msg RMsg (ringCoins (Bytes 32) k D)) :=
   w1BaseSigner prims O βmin tol enc (hedgedLoop prims O M βmin k D) bmsg
 
 /-- **The base signer with fresh masks**: `w1BaseSigner` with the loop of the fresh source. -/
-noncomputable abbrev freshBase : BaseSigner X Y N (w1BaseT prims Msg RMsg (ringCoins (MaskPt T Msg → Y) k D)) :=
+abbrev freshBase : BaseSigner X Y N (w1BaseT prims Msg RMsg (ringCoins (MaskPt T Msg → Y) k D)) :=
   w1BaseSigner prims O βmin tol enc (freshLoop prims O M βmin k D) bmsg
 
 variable {TPS : PSTypes} (PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS)
   (adm : KeyRing (PubKey p prims) N → Prop) [DecidablePred adm]
 
 /-- The hedged scheme (`w1Scheme`). -/
-noncomputable abbrev hedgedScheme : RingScheme X Y N (ofBaseT (w1BaseT prims Msg RMsg (ringCoins (Bytes 32) k D)) TPS) :=
+abbrev hedgedScheme : RingScheme X Y N (ofBaseT (w1BaseT prims Msg RMsg (ringCoins (Bytes 32) k D)) TPS) :=
   RingSignature.ofBase (hedgedBase prims O M βmin tol enc k D bmsg) PS adm
 
 /-- **The scheme with fresh masks**: `ofBase` of the fresh base signer, with the proof system `PS`
 on the same rings. -/
-noncomputable abbrev freshScheme : RingScheme X Y N (ofBaseT (w1BaseT prims Msg RMsg (ringCoins (MaskPt T Msg → Y) k D)) TPS) :=
+abbrev freshScheme : RingScheme X Y N (ofBaseT (w1BaseT prims Msg RMsg (ringCoins (MaskPt T Msg → Y) k D)) TPS) :=
   @RingSignature.ofBase X Y N _ _ (freshBase prims O M βmin tol enc k D bmsg)
     (PS)
     adm ‹DecidablePred adm›

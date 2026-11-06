@@ -51,22 +51,19 @@ class MldsaHSample (program : RealizedProgram) : Prop extends MldsaHShuffle prog
 set_option maxRecDepth 4096 in
 /-- The native program at the ROM parameters has these facts. -/
 instance : MldsaHSample program where
-  kind560 := RealizedProgram.Kind.eq_of_challenge? (by decide +kernel)
-  field560 := by decide +kernel
-  kind567 := RealizedProgram.Kind.eq_of_challenge? (by decide +kernel)
-  field567 := by decide +kernel
+  kind560 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2esample_2eselect_2edelta_kind
+  field560 := by shape_decide
+  kind567 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2esample_2emem_2edelta_kind
+  field567 := by shape_decide
   sampleReads_nil := by
-    decide +kernel
-  isSourceChal_iff := by
-    intro j
-    constructor
-    · intro h
-      have hj : j < 4 := h.1
-      have key : ∀ j < 4, program.IsSourceChal j → j = 0 ∨ j = 1 := by decide +kernel
-      exact key j hj h
-    · rintro (rfl | rfl) <;> decide +kernel
+    shape_decide
+  isSourceChal_iff := fun {j} => by
+    rw [program.isSourceChal_iff_mem_sourceChallengeIds
+      Generated.MLDSA44.Native.ROMParams.conditions.wellFormed,
+      Generated.MLDSA44.Native.ROMParams.ShapeFacts.source_challenges]
+    simp only [List.mem_cons, List.not_mem_nil, or_false]
   chalFacts := by
-    decide +kernel
+    shape_decide
 
 /-- **The round errors of SampleInBall's challenges** over a field of `2^bits` elements:
 `264/2^bits` at `h2c.sample.select.delta` (challenge `0`), `295/2^bits` at `h2c.sample.mem.delta`

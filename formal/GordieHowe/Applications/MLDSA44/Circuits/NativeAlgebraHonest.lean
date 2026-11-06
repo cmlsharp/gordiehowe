@@ -5,7 +5,7 @@ module
 
 public import GordieHowe.Applications.MLDSA44.Circuits.NativeAlgebra
 public import GordieHowe.Applications.MLDSA44.PoP.ComposeHonest
-public import GordieHowe.Applications.Rows.MAC
+public import GordieHowe.Language.Realizations.MACRows
 public import GordieHowe.Model.IOP.PadMasked
 
 @[expose] public section

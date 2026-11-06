@@ -50,7 +50,7 @@ variable {program : RealizedProgram} [CarrierHEmbed program] [CarrierAEmbed prog
   [MldsaEAlgebra (CarrierAEmbed.emu program)] [MldsaCarrierHonest program]
   [MldsaCarrierRelation program] [MldsaRingStmt program] [TableSelect program]
   [MldsaCarrierFront program] [MldsaCarrierSelect program]
-  {F0 FH : FieldInterp} [MLDSA44.AField F0] [HField FH]
+  {F0 FH : FieldInterp} [RealizedProgram.PrimeCastField F0 pGold] [HField FH]
 
 set_option hygiene false in
 local notation "interp" => mldsaInterpOf F0 FH
@@ -98,7 +98,7 @@ theorem bitsOf_honest {i : ℕ} (hi : i < (TableSelect.shape program).bits) :
   have h6 := (MldsaCarrierFront.shape (program := program)).2.2.2.2.2.2.2.2
   unfold TableSelect.bitsOf
   rw [if_pos hi, MldsaCarrierSelect.idx58, evalE_idx y x c π (by rw [h6] at hi; exact hi)]
-  exact MLDSA44.AField.toNat_natCast _ (bit_lt_gold _ _)
+  exact RealizedProgram.PrimeCastField.toNat_natCast (p := pGold) _ (bit_lt_gold _ _)
 
 /-- **The index bits name the signer's position.** -/
 theorem idxOf_honest : TableSelect.idxOf 0 E = y.w.idx := by

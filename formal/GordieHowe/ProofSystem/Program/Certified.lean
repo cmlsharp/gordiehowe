@@ -43,7 +43,7 @@ interpretation's registry, lawful readings and MAC model, and the derivations' t
 theorem Checks.derivModel {orng : List (ℕ × ℕ)} (checks : ir.Checks P orng) (model : I.Model P ir orng) :
     ir.DerivModel I (primeNodesOf P ir) := by
   obtain ⟨_, hv⟩ := checks.realization
-  exact ⟨checks.valid.program.wellFormed, model.registered, model.lawful, hv.tables, model.macModel⟩
+  exact ⟨checks.valid.wellFormed, model.registered, model.lawful, hv.tables, model.macModel⟩
 
 /-- **Every bound value of a checked program reads committed values and constants**
 (`DerivationsValid.bound`). -/
@@ -128,6 +128,8 @@ def proofSystem (parts : SourceParts) (hc : Nonempty (ir.ProgramCerts I parts))
     (R : ∀ d : Fin ir.domains.length, ir.FieldReady I d P)
     (hdom : ∀ c < ir.circuits.length, (ir.circuit c).domain < ir.domains.length)
     (hnodes : ∀ c : Fin ir.circuits.length, (R ⟨_, hdom c c.2⟩).Pk.nodes.isSome = true)
+    -- TODO(sealed-data): this default runs `decide +kernel` on the program at each use, where
+    -- `ir` is generated data. Callers should pass a compiler-emitted fact (no product form).
     (hsel : ir.SelSound I := by exact RealizedProgram.selSound_of_noProduct _ (by decide +kernel)) :
     ir.ProofSystem P I :=
   ProofSystem.ofFieldProofs checks model (parts.src ir I (readyNodes R hdom hnodes))
@@ -148,6 +150,8 @@ with no source, which enforces and accepts vacuously (`h`: the program has no ci
 def proofSystemOfNoCircuits {orng : List (ℕ × ℕ)} (checks : ir.Checks P orng)
     (model : I.Model P ir orng) (R : ∀ d : Fin ir.domains.length, ir.FieldReady I d P)
     (h : ir.circuits.length = 0)
+    -- TODO(sealed-data): this default runs `decide +kernel` on the program at each use, where
+    -- `ir` is generated data. Callers should pass a compiler-emitted fact (no product form).
     (hsel : ir.SelSound I := by exact RealizedProgram.selSound_of_noProduct _ (by decide +kernel)) :
     ir.ProofSystem P I :=
   ProofSystem.ofFieldProofs checks model (fun c => (not_circuit h c).elim)

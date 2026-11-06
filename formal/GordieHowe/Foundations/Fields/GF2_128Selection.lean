@@ -4,8 +4,8 @@
 module
 
 public import GordieHowe.Foundations.Fields.GF2_128
-public import GordieHowe.Applications.Params
-public import GordieHowe.Applications.Spec.SelectionField
+public import GordieHowe.Language.Library.Select.Field
+public import Mathlib.Tactic.NormNum.Prime
 public import GordieHowe.Foundations.ToMathlib.FiniteField
 public import GordieHowe.Foundations.Algebra.RecordPacking
 
@@ -14,9 +14,9 @@ public import GordieHowe.Foundations.Algebra.RecordPacking
 /-!
 # The selection field data of `GF(2¹²⁸)`
 
-`gf2_128SelectionField` is the `SelectionField GF2_128 falcon512.S` the
-flagship uses, with the constants of `lib/gf2k/gf2_128.h` (class `GF2_128`,
-`subfield_log_bits = 4`):
+`gf2_128SelectionField` is the `SelectionField GF2_128 65534`: the generator's powers up to
+`2¹⁶ − 2` are distinct, its order being `2¹⁶ − 1` (a program takes `ofLE` at its own length). Its constants are those
+of `lib/gf2k/gf2_128.h` (class `GF2_128`, `subfield_log_bits = 4`):
 
 * `E` is the sixteen-bit subfield, the fixed points of `y ↦ y ^ 2¹⁶`;
 * `X` is the polynomial variable `x` (`kx_ = of_scalar_field(0b10)`, line 114);
@@ -169,7 +169,7 @@ theorem linearIndependent_gf2_128SubfieldBasis :
     (Fin.castLE_injective sixteen_le_natDegree_minpoly_subfieldGen)
 
 /-- The selection field data of the flagship `GF(2¹²⁸)` circuits. -/
-def gf2_128SelectionField : SelectionField GF2_128 falcon512.S where
+def gf2_128SelectionField : SelectionField GF2_128 65534 where
   E := gf2_128Subfield
   X := gf2_128Root
   X_not_mem := gf2_128_root_not_mem_subfield
@@ -179,7 +179,6 @@ def gf2_128SelectionField : SelectionField GF2_128 falcon512.S where
   g := gf2_128SubfieldGen
   g_mem := gf2_128SubfieldGen_mem
   g_order a b ha hb h := by
-    have hS : falcon512.S < 65535 := by decide
     refine pow_injOn_Iio_orderOf ?_ ?_ h <;>
       rw [Set.mem_Iio, orderOf_gf2_128SubfieldGen] <;> omega
 

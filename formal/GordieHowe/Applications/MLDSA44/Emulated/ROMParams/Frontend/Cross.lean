@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Applications.MLDSA44.Emulated.ROMParams.Frontend.Basic
 public import GordieHowe.Applications.MLDSA44.Emulated.Frontend.Cross
+public import GordieHowe.Generated.MLDSA44.Emulated.ROMParams.ShapeFacts
 
 @[expose] public section
 
@@ -22,11 +23,11 @@ open Generated.MLDSA44.Emulated.ROMParams.Program
 set_option maxRecDepth 4096 in
 /-- The emulated program at the ROM parameters has the crossing's facts. -/
 instance : Emulated.MldsaECross program where
-  expr6 := rfl
-  refsOrdered := (RealizedProgram.refsOrderedB_iff program).1 (by decide +kernel)
+  expr6 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eright_eq
+  refsOrdered := Generated.MLDSA44.Emulated.ROMParams.conditions.wellFormed.refsOrdered
   crossData := by
-    decide +kernel
-  crossPred := ⟨_, rfl⟩
+    shape_decide
+  crossPred := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicate_mac_2eequal_body
 
 /-- **`mac.equal` gives the crossing** (`Emulated.crossSound`). -/
 theorem crossSound : CrossSound := Emulated.crossSound

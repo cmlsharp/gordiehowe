@@ -1,8 +1,8 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 
-// The transcript forks and joins of the GordieHowe prover and verifier
-// (research branch parallel-domains): a series-parallel Fiat-Shamir
+// The transcript forks and joins of the GordieHowe prover and verifier: a
+// series-parallel Fiat-Shamir
 // schedule. Every byte they add is in this file and in
 // BasicTranscript::fork (random/transcript.h).
 //

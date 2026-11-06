@@ -4,9 +4,11 @@
 module
 
 public import GordieHoweNative.Terms
+public import GordieHoweNative.Language.RealizedProgram.Annotations
+public import GordieHoweNative.Language.Completeness.Deriv
 public meta import GordieHoweNative.Derive
 
-@[expose] public section
+public section
 
 /-!
 # GordieHowe: the decoders of the certificate types, and the section types
@@ -51,9 +53,90 @@ deriving instance Decode for EntryCert
 deriving instance Decode for Consts
 deriving instance Decode for CircuitData
 
-/-- **The types a section may have**: a GKR circuit's certificate (`CircuitData`) and its parts. -/
+/-- The numeral spelling retained by ordinary Lean constructor literals. -/
+def printedNatE (n : Nat) : Lean.Expr :=
+  Lean.mkApp3 (Lean.mkConst ``OfNat.ofNat [Lean.Level.zero]) (Lean.mkConst ``Nat)
+    (Lean.mkRawNatLit n) (Lean.mkApp (Lean.mkConst ``instOfNatNat) (Lean.mkRawNatLit n))
+
+/-- Program certificates retain their original value expressions; existing GKR sections keep raw
+literals. Only expression construction differs: both decoders read the same Nat bytes and value. -/
+@[instance_reducible] def printedNatDecode : Decode Nat :=
+  { (inferInstance : Decode Nat) with
+    toE := printedNatE
+    spineE := spineEWith (.const "Nat") printedNatE nat (throw "Nat: no constructor form") }
+
+section
+attribute [local instance] printedNatDecode
+deriving instance Decode for ExprAnn
+deriving instance Decode for Gen
+end
+
+/-- The binary let tree used by Lean's `%[... | tail]` list notation. The elements and their
+type are closed; the tail may reference an enclosing let. -/
+partial def printedListTree (t : Lean.Expr) (xs : Array Lean.Expr) (tail : Lean.Expr) : Lean.Expr :=
+  if xs.size < 8 then
+    xs.foldr (fun x rest => Lean.mkApp3 (Lean.mkConst ``List.cons [Lean.Level.zero]) t x rest) tail
+  else
+    let m := xs.size / 2
+    .letE `y (Lean.mkApp (Lean.mkConst ``List [Lean.Level.zero]) t)
+      (printedListTree t (xs.extract m xs.size) tail)
+      (printedListTree t (xs.extract 0 m) (.bvar 0)) true
+
+/-- The expression of the compiler's list notation, which has no trailing comma. Lean switches
+from a cons chain to binary lets when the syntax has at least 64 elements and separators,
+that is, at 33 list elements. -/
+def printedListE (t : Lean.Expr) (xs : Array Lean.Expr) : Lean.Expr :=
+  if xs.size <= 32 then listE t xs
+  else printedListTree t xs (Lean.mkApp (Lean.mkConst ``List.nil [Lean.Level.zero]) t)
+
+/-- A list decoder retaining the compiler's printed literal expression. Its wire format and
+runtime reader are unchanged; only expression construction uses the list notation's let tree. -/
+@[instance_reducible] def printedListDecode (α : Type) [Decode α] : Decode (List α) :=
+  let toE (xs : List α) := printedListE (Decode.tyE (α := α)) (xs.toArray.map Decode.toE)
+  { (inferInstance : Decode (List α)) with
+    toE
+    spineE := spineEWith (tyOf (listTyE (α := α))) toE listDec
+      (do pure (printedListE (Decode.tyE (α := α)) (← itemsE (← nat) (Decode.spineE (α := α))))) }
+
+section
+attribute [local instance] printedNatDecode
+local instance : Decode (List Nat) := printedListDecode Nat
+
+deriving instance Decode for LogicOp
+deriving instance Decode for RealizedProgram.Expr
+deriving instance Decode for IvlSrc
+deriving instance Decode for LinOpStep
+deriving instance Decode for Step
+deriving instance Decode for MacRole
+deriving instance Decode for CStep
+
+local instance : Decode (List CStep) := printedListDecode CStep
+local instance : Decode (List (List CStep)) := printedListDecode (List CStep)
+deriving instance Decode for CDerivations
+end
+
+/-- The completeness derivations retain their original constructor and list expressions. -/
+def cderivsEntry : Entry :=
+  { Entry.of CDerivations with splitLists := false }
+
+/-- The generator list keeps the original `Gens` alias in its declaration type and its whole
+literal body. The wire type and reader remain those of `List Gen`. -/
+def gensEntry : Entry :=
+  letI := printedListDecode Gen
+  { Entry.of (List Gen) with tyE := Lean.mkConst ``Gens, splitLists := false }
+
+/-- The honest nodes retain the original list of pairs, including ordinary numeral spelling.
+Their wire format and runtime reader are those of `List (Nat × String)`. -/
+def nodesEntry : Entry :=
+  letI := printedNatDecode
+  letI := printedListDecode (Nat × String)
+  { Entry.of (List (Nat × String)) with splitLists := false }
+
+/-- **The types a section may have**: a GKR circuit's certificate and its parts, and the
+realized program's packed annotations, completeness certificate, honest nodes and assignment-read hints. -/
 def sectionTypes : Array Entry := #[
   .of Nat, .of (List Nat), .of Consts, .of NTree, .of Dag, .of GKR.Certificate.Table, .of Layered,
-  .of Cert, .of (Trie ENodeInfo), .of ETable, .of (List EntryCert), .of CircuitData]
+  .of Cert, .of (Trie ENodeInfo), .of ETable, .of (List EntryCert), .of CircuitData, .of ExprAnn,
+  gensEntry, nodesEntry, cderivsEntry, .of (List (List Nat))]
 
 end GordieHowe.Ghc

@@ -76,6 +76,7 @@
 #include <functional>
 #include <memory>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -90,6 +91,7 @@
 #include "gf2k/lch14_reed_solomon.h"
 #include "gordiehowe/compiler/emit_export.h"
 #include "gordiehowe/compiler/plan_export.h"
+#include "gordiehowe/compiler/table_selections.h"
 #include "gordiehowe/instances.h"
 #include "gordiehowe/lib/table.h"
 #include "gordiehowe/ops/spectral.h"
@@ -613,7 +615,8 @@ TEST(GordieHoweEmitExport, RoundTrip) {
   EXPECT_EQ(x.domain, "A");
   EXPECT_GT(x.cuts, 0u);
   // The Lean modules: the data module, one per entry, the circuit's.
-  ASSERT_EQ(x.modules.size(), x.entries + 2);
+  ASSERT_EQ(x.modules.size(), 1u);
+  ASSERT_EQ(x.check_modules.size(), x.entries + 1);
   const std::string &t = x.modules[0].second;
   EXPECT_EQ(x.modules[0].first, "GKR/A.lean");
   char hash[17];
@@ -627,13 +630,22 @@ TEST(GordieHoweEmitExport, RoundTrip) {
                     "18446744069414584321"),
         "load_ghc \"A.ghc\" \"" + std::string(hash) + "\""})
     EXPECT_NE(t.find(want), std::string::npos) << want << "\n" << t;
-  EXPECT_EQ(x.modules[1].first, "GKR/A/E0.lean");
-  EXPECT_NE(x.modules[1].second.find("check_entry cert ar 0 ["), std::string::npos);
-  EXPECT_EQ(x.modules.back().first, "GKR/A/Circuit.lean");
-  EXPECT_NE(x.modules.back().second.find("check_circuit cert ar"), std::string::npos);
-  EXPECT_NE(x.modules.back().second.find(
-                "public import GordieHowe.Generated.Test.EmitExport.GKR.A.E0"),
+  const std::string root = "Check/Kernel/GordieHoweCheck/Test/EmitExport/GKR/A/";
+  const auto &entry = x.check_modules.front();
+  EXPECT_EQ(entry.first, root + "E0.lean");
+  EXPECT_NE(entry.second.find("check_entry cert ar 0 ["), std::string::npos);
+  EXPECT_NE(entry.second.find("\nmeta import GordieHowe.Generated.Test.EmitExport.GKR.A\n"),
             std::string::npos);
+  const auto &circuit = x.check_modules.back();
+  EXPECT_EQ(circuit.first, root + "Circuit.lean");
+  EXPECT_NE(circuit.second.find("check_circuit cert ar\n"), std::string::npos);
+  EXPECT_NE(circuit.second.find("public import GordieHoweCheck.Test.EmitExport.GKR.A.E0"),
+            std::string::npos);
+  for (const auto &[path, source] : x.check_modules) {
+    EXPECT_EQ(path.find("Check/Kernel/"), 0u);
+    EXPECT_EQ(source.find(" native\n"), std::string::npos);
+    EXPECT_EQ(source.find("CertCheck"), std::string::npos);
+  }
   // The GHC file reads by its schema, and holds the certificate and the table.
   const Decoded d = decode(x);
   const auto &C = *static_cast<const GkrCertificate<AF> *>(
@@ -1139,6 +1151,49 @@ TEST(GordieHoweEmitExport, ProductForm) {
 // A12: a product operand whose one-level form is no atom (here an operator
 // or affine node under a product), left uncut, is refused; the honest
 // marking is accepted.
+// The selection certificate (compiler/table_selections.h) of the product
+// system's select_row: the predicate `signer`, the table's values, the record
+// `spec` and the row map's one natural leaf; a record naming no predicate is
+// refused.
+TEST(GordieHoweEmitExport, TableSelectionCert) {
+  auto cs = product_system();
+  auto c = compile(*cs, table_profile());
+  const ir::Program &p = c->program();
+  const auto &recs = c->records().table_selections;
+  ASSERT_EQ(recs.size(), 1u);
+  EXPECT_EQ(recs[0].pred, "signer");
+  EXPECT_EQ(recs[0].rows, 8u);
+  EXPECT_EQ(recs[0].bits, 3u);
+  ASSERT_EQ(recs[0].leaves.size(), 1u);
+  EXPECT_TRUE(recs[0].leaves[0].ntt);
+  EXPECT_TRUE(recs[0].leaves[0].natural);
+  const auto certs = compiler::table_selection_certs(p, recs);
+  ASSERT_EQ(certs.size(), 1u);
+  auto id = [&](const std::string &name) {
+    for (size_t v = 0; v < p.values.size(); ++v)
+      if (p.values[v].name == name) return std::to_string(v);
+    return std::string("?");
+  };
+  size_t q = p.predicates.size();
+  for (size_t i = 0; i < p.predicates.size(); ++i)
+    if (p.predicates[i].name == "signer") q = i;
+  ASSERT_LT(q, p.predicates.size());
+  const std::string &x = certs[0];
+  EXPECT_EQ(x.rfind("⟨" + std::to_string(q) + ", { dom := 0,", 0), 0u) << x;
+  EXPECT_NE(x.find("gamma := " + id("ring.gamma") + ","), std::string::npos) << x;
+  EXPECT_NE(x.find("pow := " + id("ring.powers") + ","), std::string::npos) << x;
+  EXPECT_NE(x.find("dig := " + id("ring.digests") + ","), std::string::npos) << x;
+  EXPECT_NE(x.find("idx := " + id("signer.index") + ","), std::string::npos) << x;
+  EXPECT_NE(x.find("record := .leaf " + id("spec") + ","), std::string::npos) << x;
+  EXPECT_NE(x.find("parts := [(" + id("keys") + ", 16)], rows := 8, bits := 3 }⟩"),
+            std::string::npos)
+      << x;
+  EXPECT_NE(x.find("map := [⟨true, true, 16, 0, "), std::string::npos) << x;
+  auto bad = recs;
+  bad[0].pred = "missing";
+  EXPECT_THROW(compiler::table_selection_certs(p, bad), std::runtime_error);
+}
+
 TEST(GordieHoweEmitExport, UncutOperandRejected) {
   auto cs = product_system();
   auto c = compile(*cs, table_profile());

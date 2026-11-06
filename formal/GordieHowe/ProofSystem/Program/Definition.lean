@@ -18,7 +18,7 @@ multi-circuit IOP (`MultiCircuitIOP`) on the realized program's layout, the lowe
 GordieHowe core (`GordieHowe/ProofSystem/Program/System.lean`).
 
 **The proof system** (`RealizedProgram.ProofSystem P ir I`): the program's checks (`GordieHowe.RealizedProgram.Checks`, decided: the
-plan `P` with its realized program `ir` valid, `GordieHowe.RealizedProgram.Valid`; the realization condition,
+realized program `ir` valid, `GordieHowe.RealizedProgram.Valid`; the realization condition,
 `GordieHowe.RealizedProgram.Derivable`; the well-formed source part, `GordieHowe.RealizedProgram.SourceValid`; the cells checks,
 `GordieHowe.RealizedProgram.CellsValid`; the locality of the domains, `GordieHowe.RealizedProgram.Local`), the model of the interpretation
 (`Interp.Model`, `GordieHowe/ProofSystem/Program/FieldModel.lean`: the registry, lawful integer readings at the
@@ -40,7 +40,7 @@ domain proofs (`GordieHowe.RealizedProgram.ProofSystem.enforcement`) as the appl
 
 * **The protocol** (`GordieHowe.RealizedProgram.ProofSystem.protocol`, `GordieHowe.RealizedProgram.ProofSystem.verifier`, `GordieHowe.RealizedProgram.ProofSystem.iop`): `iopOf` at a lowering
   of `Set.univ` with no event (`GordieHowe.RealizedProgram.ProofSystem.baseLowering`), so it reads no soundness data.
-* **The soundness IOP** (`GordieHowe.RealizedProgram.ProofSystem.soundIOP` in `GordieHowe/ProofSystem/Program/Errors.lean`): for round-by-round
+* **The soundness IOP** (`GordieHowe.RealizedProgram.ProofSystem.soundIOP`): for round-by-round
   knowledge soundness `h` of `Π_P₀` for `rel` at `RealizedProgram.sourceExtractor proj`, `iopOf` at the
   lowering of `{(x, g) | (x, g x) ∈ rel}` (`GordieHowe.RealizedProgram.ProofSystem.relOf`, witnesses read from the statement, since
   a lowering's projection reads the committed assignment only) to the domains: the cells lowering
@@ -66,15 +66,16 @@ open scoped NNReal
 section
 
 /-- **The checks of a program** `ir` of the plan `P`, with the opaque ranges `orng` (decided per
-program): the plan with its program is valid, the realization condition
+program): the program is valid (`RealizedProgram.Valid`: well formed, with the challenge and pad
+orders), the realization condition
 (`RealizedProgram.Derivable`: the realization step has valid derivations at the value ranges: the
 declared statement bounds `declaredRanges`, which the verifier checks, and the opaque ranges), the
 source
 part is well formed, the cells checks (the committing domains enforce the realized program), and
 every domain's constraints read only its domain (`RealizedProgram.Local`). -/
 structure Checks (P : Export.Plan) (ir : RealizedProgram) (orng : List (ℕ × ℕ)) : Prop where
-  /-- The plan with its realized program is valid. -/
-  valid : RealizedProgram.Valid P ir
+  /-- The program is valid: well formed, with the challenge and pad orders. -/
+  valid : ir.Valid
   /-- `RealizedProgram.Derivable`: the realization step has valid derivations at the value ranges. -/
   realization : ir.Derivable (primeNodesOf P ir) (ir.declaredRanges ++ orng)
   /-- The source part is well formed. -/
@@ -197,8 +198,8 @@ abbrev Sound : Type := ∀ d, (B.proof d).proof.Sound
 
 /-! ## The checks and the model -/
 
-/-- The plan with its realized program is valid. -/
-theorem valid (B : ir.ProofSystem P I) : RealizedProgram.Valid P ir := B.checks.valid
+/-- The program is valid: well formed, with the challenge and pad orders. -/
+theorem valid (B : ir.ProofSystem P I) : ir.Valid := B.checks.valid
 
 /-- `RealizedProgram.Derivable`: the realization step has valid derivations at the value ranges. -/
 theorem realization :
@@ -335,12 +336,12 @@ event. -/
 def cellsLowering :
     Lowering (ir.layout I) (ir.Realized I) (GordieHowe.Domain.lowered B.domains) where
   proj := (ir.cellsLowering I B.cells B.locality B.bitsAdditive B.zeroDecodes B.bitNodes
-      B.valid.program.wellFormed B.registered B.lawful).proj
+      B.valid.wellFormed B.registered B.lawful).proj
   event _ _ _ _ := False
   challengeUse _ _ _ _ _ _ := Iff.rfl
   sound x a r h :=
     (ir.cellsLowering I B.cells B.locality B.bitsAdditive B.zeroDecodes B.bitNodes
-      B.valid.program.wellFormed B.registered B.lawful).sound x a r h
+      B.valid.wellFormed B.registered B.lawful).sound x a r h
 
 /-- **The realization step from the source program**: the realization step
 (`RealizedProgram.realizeLowering_of_derivable`), its source constraint weakened from the realized program's predicates
@@ -348,7 +349,7 @@ to the source program's (`RealizedProgram.Pred.toSource`). Same projection (`Rea
 events. -/
 def realizeSource :
     Lowering (ir.layout I) (Constraint.guard (ir.stmtOk I) (ir.SourcePred I)) (ir.Realized I) :=
-  (ir.realizeLowering_of_derivable I B.valid.program.wellFormed B.realization B.registered B.lawful
+  (ir.realizeLowering_of_derivable I B.valid.wellFormed B.realization B.registered B.lawful
     B.macModel B.opaqueModel).weaken
     fun _ _ _ h => Constraint.guard_of fun hok => Pred.toSource (Constraint.guard_of_check hok h)
 

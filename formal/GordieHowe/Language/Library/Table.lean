@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.Library.Eval
+public import GordieHoweNative.Language.Library.Table
 
 @[expose] public section
 
@@ -14,9 +15,11 @@ public import GordieHowe.Language.Library.Eval
 committed index bits `i` (`public_table`, `select_row`): one challenge `γ`, its powers
 (`<table>.powers`: `γ^0, …, γ^(wmax−1)`, then `γ^off` per leaf at a nonzero offset), the rows'
 digests against `Mᵀ g`, `g_c = γ^(e(c))` (`<table>.digests`), a multiplexer fold of the digests by
-the index bits, and one equality `Σ_c rec_c γ^(e(c)) = fold(digests, i)`. This file holds the
-data and the `Bool`/`Option` matchers the program facts are decided with; their soundness and the
-selection's theorems are `GordieHowe/Language/Library/TableSelect.lean`.
+the index bits, and one equality `Σ_c rec_c γ^(e(c)) = fold(digests, i)`. The data and the
+`Bool`/`Option` matchers the program facts are decided with are in
+`GordieHoweNative/Language/Library/Table.lean`, so that the program check runs them compiled; this
+file holds their equation lemmas and their congruence on a replica of the shared expressions, and
+their soundness and the selection's theorems are `GordieHowe/Language/Library/TableSelect.lean`.
 
 * **Row maps** (`RowLeaf`, `mapWidth`, `mapWfFrom`): a map is leaves end to end, each the identity
   or the negacyclic transform of length `n` at `ψ` in natural or scheme order (`RowMap::Leaf`);
@@ -39,189 +42,106 @@ namespace GordieHowe.RealizedProgram
 open Export IOP
 open scoped NNReal ENNReal
 
-/-! ## Row maps -/
-
-/-- **`⌊log₂ n⌋`** by recursion on a fuel (`n` itself suffices). -/
-def log2S : ℕ → ℕ → ℕ
-  | 0, _ => 0
-  | fuel + 1, n => if n < 2 then 0 else log2S fuel (n / 2) + 1
-
-/-- **A leaf of a row map** (`RowMap::Leaf`, `lib/gordiehowe/lib/table.h`). -/
-structure RowLeaf where
-  /-- A negacyclic transform (else the identity). -/
-  ntt : Bool
-  /-- The transform's natural order (else the scheme's). -/
-  natural : Bool
-  /-- The leaf's number of cells. -/
-  n : ℕ
-  /-- The leaf's first cell. -/
-  off : ℕ
-  /-- The transform's root, the natural of the C++ encoding. -/
-  psi : ℕ
-  deriving DecidableEq, Repr
-
-namespace RowLeaf
-
-/-- **A transform in the scheme's order.** -/
-def scheme (l : RowLeaf) : Bool := l.ntt && !l.natural
-
-/-- **The leaf's bit count** `⌊log₂ n⌋`. -/
-def lg (l : RowLeaf) : ℕ := log2S l.n l.n
-
-/-- **The power index of cell `k`** (`RowMap::perm`). -/
-def perm (l : RowLeaf) (k : ℕ) : ℕ := if l.scheme then bitRevNat l.lg k else k
-
-/-- **The power indices of the leaf's cells.** -/
-def permList (l : RowLeaf) : List ℕ := (List.range l.n).map l.perm
-
-/-- **A well-formed leaf.** -/
-def wf (l : RowLeaf) : Bool := 0 < l.n && (!l.scheme || l.n == 2 ^ l.lg)
-
-end RowLeaf
-
-/-- **The width of a row map.** -/
-def mapWidth (m : List RowLeaf) : ℕ := (m.map (·.n)).sum
-
-/-- **A well-formed row map from offset `o`.** -/
-def mapWfFrom : ℕ → List RowLeaf → Bool
-  | _, [] => true
-  | o, l :: ls => l.off == o && l.wf && mapWfFrom (o + l.n) ls
-
-/-! ## The symbolic powers -/
-
-/-- **The entries of one run of an index map.** -/
-def idxRunList (r : ℕ × ℤ × ℕ) : List ℕ :=
-  (List.range r.2.2).map fun t : ℕ => ((r.1 : ℤ) + r.2.1 * t).toNat
-
-/-- **The entries of `x` one run of an index map reads**: a slice for step `1`, a broadcast for step
-`0`; `none` past the end of `x`. -/
-def gatherRunL (x : List ℕ) (r : ℕ × ℤ × ℕ) : Option (List ℕ) :=
-  if r.2.1 = 1 then
-    if r.1 + r.2.2 ≤ x.length then some ((x.drop r.1).take r.2.2) else none
-  else if r.2.1 = 0 then
-    if r.2.2 = 0 then some [] else if r.1 < x.length then some (List.replicate r.2.2 (x.getD r.1 0))
-    else none
-  else if (idxRunList r).all (· < x.length) then some ((idxRunList r).map fun i => x.getD i 0) else none
-
-/-- **The entries of `x` an index map reads**, run by run. -/
-def gatherL (x : List ℕ) : IndexMap → Option (List ℕ)
-  | [] => some []
-  | r :: m =>
-    match gatherRunL x r, gatherL x m with
-    | some a, some b => some (a ++ b)
-    | _, _ => none
-
-/-- **What the symbolic powers read**: the exponents of values (`pub`) and of one known expression
-(`known`). -/
-structure PowCtx where
-  /-- The values' exponents. -/
-  pub : ℕ → Option (List ℕ)
-  /-- An expression and its exponents. -/
-  known : Option (Expr × List ℕ)
-
-/-- **Whether `E` is the context's known expression.** -/
-def PowCtx.knownOf? (c : PowCtx) (E : Expr) : Option (List ℕ) :=
-  match c.known with
-  | some (K, ks) => if E.beq K then some ks else none
-  | none => none
-
 variable (ir : RealizedProgram)
 
-/-- **The exponents of an expression of powers of `γ`**, with `n` levels: coordinate `i` is
-`γ^(l[i])` (`powSym_sound`). -/
-def powSym (c : PowCtx) : ℕ → Expr → Option (List ℕ)
-  | 0, _ => none
-  | n + 1, E =>
-    match c.knownOf? E with
-    | some ks => some ks
-    | none =>
-      match E with
-      | .leaf v => c.pub v
-      | .mul a b =>
-        match powSym c n a, powSym c n b with
-        | some x, some y => if x.length = y.length then some (List.zipWith (· + ·) x y) else none
-        | _, _ => none
-      | .concat a b =>
-        match powSym c n a, powSym c n b with
-        | some x, some y => some (x ++ y)
-        | _, _ => none
-      | .reindex m a =>
-        match powSym c n a with
-        | some x => gatherL x m
-        | none => none
-      | .ref k => powSym c n (ir.expr k)
-      | _ => none
+/-! ## Named matcher equations -/
 
-/-- **The constant `1` and `γ`** as exponent lists. -/
-def onePub (one gamma : ℕ) (v : ℕ) : Option (List ℕ) :=
-  if v = one then some [0] else if v = gamma then some [1] else none
+/-- Reading an explicitly given symbolic-power context. -/
+theorem PowCtx.knownOf?_eq (pub : Nat → Option (List Nat))
+    (known : Option (Expr × List Nat)) (E : Expr) :
+    (PowCtx.mk pub known).knownOf? E = match known with
+    | some (K, ks) => if E.beq K then some ks else none
+    | none => none := rfl
 
-/-- **The levels of the symbolic powers.** -/
-abbrev powFuel : ℕ := 64
+/-- The exponent lists attached to the constant one and challenge value. -/
+theorem onePub_eq (one gamma v : Nat) : onePub one gamma v =
+    (if v = one then some [0] else if v = gamma then some [1] else none) := rfl
 
-/-! ## The record's digest -/
 
-/-- **A slice `[s, s + c)` of `rec`.** -/
-def sliceOf? (rec : Expr) : Expr → Option (ℕ × ℕ)
-  | .reindex [(s, d, c)] e =>
-    if d = 1 then
-      if e.beq rec then some (s, c)
-      else
-        match sliceOf? rec e with
-        | some (s', c') => if s + c ≤ c' then some (s' + s, c) else none
-        | none => none
-    else none
-  | _ => none
+/-- A constructor equation for `powSym_leaf`, with no program-table reduction. -/
+theorem powSym_leaf_eq (c : PowCtx) (n : Nat) (v : Nat) :
+    ir.powSym c (n + 1) (.leaf v) =
+      (match c.knownOf? (.leaf v) with
+      | some ks => some ks
+      | none => c.pub v) := rfl
 
-/-- **A sum of products of the record's slice by powers**: `Σ_k rec[s + k] γ^(p_k)`. -/
-def sumTerm? (rec : Expr) (c : PowCtx) : Expr → Option (ℕ × ℕ × List ℕ)
+/-- A constructor equation for `powSym_ref`, with no program-table reduction. -/
+theorem powSym_ref_eq (c : PowCtx) (n : Nat) (k : Nat) :
+    ir.powSym c (n + 1) (.ref k) =
+      (match c.knownOf? (.ref k) with
+      | some ks => some ks
+      | none => ir.powSym c n (ir.expr k)) := rfl
+
+/-- A constructor equation for `powSym_mul`, with no program-table reduction. -/
+theorem powSym_mul_eq (c : PowCtx) (n : Nat) (a b : Expr) :
+    ir.powSym c (n + 1) (.mul a b) =
+      (match c.knownOf? (.mul a b) with
+      | some ks => some ks
+      | none => match ir.powSym c n a, ir.powSym c n b with
+      | some x, some y => if x.length = y.length then some (List.zipWith (· + ·) x y) else none
+      | _, _ => none) := rfl
+
+/-- A constructor equation for `powSym_concat`, with no program-table reduction. -/
+theorem powSym_concat_eq (c : PowCtx) (n : Nat) (a b : Expr) :
+    ir.powSym c (n + 1) (.concat a b) =
+      (match c.knownOf? (.concat a b) with
+      | some ks => some ks
+      | none => match ir.powSym c n a, ir.powSym c n b with
+      | some x, some y => some (x ++ y)
+      | _, _ => none) := rfl
+
+/-- A constructor equation for `powSym_reindex`, with no program-table reduction. -/
+theorem powSym_reindex_eq (c : PowCtx) (n : Nat) (m : IndexMap) (a : Expr) :
+    ir.powSym c (n + 1) (.reindex m a) =
+      (match c.knownOf? (.reindex m a) with
+      | some ks => some ks
+      | none => match ir.powSym c n a with
+      | some x => gatherL x m
+      | none => none) := rfl
+
+/-- A constructor equation for `recTermsOk_nil_nil`, with no program-table reduction. -/
+theorem recTermsOk_nil_nil (rec : Expr) (c : PowCtx) :
+    ir.recTermsOk rec c [] [] = true := rfl
+/-- A constructor equation for `recTermsOk_cons_cons`, with no program-table reduction. -/
+theorem recTermsOk_cons_cons (rec : Expr) (c : PowCtx) (l : RowLeaf) (ls : List RowLeaf)
+    (t : Expr) (ts : List Expr) :
+    ir.recTermsOk rec c (l :: ls) (t :: ts) =
+      (ir.recTermOk rec c l t && ir.recTermsOk rec c ls ts) := rfl
+
+/-- A constructor equation for `addSpine_apply`, with no program-table reduction. -/
+theorem addSpine_apply (op : NamedOp) (e : Expr) :
+    addSpine (.apply op e) = [.apply op e] := rfl
+/-- A constructor equation for `digG_apply_reindex`, with no program-table reduction. -/
+theorem digG_apply_reindex (op : NamedOp) (m : IndexMap) (e : Expr) (es : List Expr) :
+    digG (.apply op (.reindex m e) :: es) = e := rfl
+/-- The constructor equation for the symbolic table matcher `sumTerm?`. -/
+theorem sumTerm?_eq (rec : Expr) (c : PowCtx) (E : Expr) :
+    ir.sumTerm? rec c E = match E with
   | .apply (.sum n) (.mul R P) =>
     match sliceOf? rec R, ir.powSym c powFuel P with
     | some (s, w), some ps => if w = n ∧ ps.length = n then some (s, n, ps) else none
     | _, _ => none
-  | _ => none
+  | _ => none := by cases E <;> rfl
 
-/-- **Leaf `l`'s term of the record's digest** (`table_internal::record_digest`). -/
-def recTermOk (rec : Expr) (c : PowCtx) (l : RowLeaf) : Expr → Bool
+/-- The constructor equation for the symbolic table matcher `recTermOk`. -/
+theorem recTermOk_eq (rec : Expr) (c : PowCtx) (l : RowLeaf) (E : Expr) :
+    ir.recTermOk rec c l E = match E with
   | .mul M S =>
     l.off != 0 && decide (ir.powSym c powFuel M = some [l.off]) &&
       decide (ir.sumTerm? rec c S = some (l.off, l.n, l.permList))
-  | S => l.off == 0 && decide (ir.sumTerm? rec c S = some (l.off, l.n, l.permList))
+  | S => l.off == 0 && decide (ir.sumTerm? rec c S = some (l.off, l.n, l.permList)) := by cases E <;> rfl
 
-/-- **The terms of a left-nested sum.** -/
-def addSpine : Expr → List Expr
-  | .add a b => addSpine a ++ [b]
-  | e => [e]
-
-/-- **The terms of the record's digest, one per leaf.** -/
-def recTermsOk (rec : Expr) (c : PowCtx) : List RowLeaf → List Expr → Bool
-  | [], [] => true
-  | l :: ls, t :: ts => ir.recTermOk rec c l t && recTermsOk rec c ls ts
-  | _, _ => false
-
-/-! ## The fold -/
-
-/-- **The coordinates of `base` a chain of index maps reads.** -/
-def gatherIdx? (base : Expr) : Expr → Option (List ℕ)
-  | .reindex m e =>
-    if e.beq base then some m.toList
-    else
-      match gatherIdx? base e with
-      | some l => gatherL l m
-      | none => none
-  | _ => none
-
-/-- **The fold of the digests `dig` by the bits `idx`** (`table_internal::fold`), with `n` levels:
-`some (t, c)` for `t` levels and `c` entries. -/
-def foldOf? (idx dig nd kb : ℕ) : ℕ → Expr → Option (ℕ × ℕ)
+/-- The constructor equation for the symbolic table matcher `foldOf?`. -/
+theorem foldOf?_eq (idx dig nd kb n : ℕ) (E : Expr) :
+    ir.foldOf? idx dig nd kb n E = match n, E with
   | 0, _ => none
   | n + 1, E =>
     match E with
     | .leaf v => if v = dig then some (0, nd) else none
-    | .ref j => foldOf? idx dig nd kb n (ir.expr j)
+    | .ref j => ir.foldOf? idx dig nd kb n (ir.expr j)
     | .mux B (.reindex mh Xe) (.reindex ml Xe') =>
       if Xe.beq Xe' then
-        match foldOf? idx dig nd kb n Xe with
+        match ir.foldOf? idx dig nd kb n Xe with
         | some (t, c2) =>
           if t < kb ∧ c2 = 2 * mh.toList.length ∧
               mh.toList = (List.range mh.toList.length).map (fun i => 2 * i + 1) ∧
@@ -231,165 +151,330 @@ def foldOf? (idx dig nd kb : ℕ) : ℕ → Expr → Option (ℕ × ℕ)
           else none
         | none => none
       else none
-    | _ => none
+    | _ => none := by cases n <;> rfl
 
-/-! ## The digests -/
-
-/-- **Leaf `l`'s column vector of `Mᵀ g`** before its multiplier: `γ^k`, or the transposed
-transform of `γ^0, …, γ^(n−1)`. -/
-def xOk (c : PowCtx) (l : RowLeaf) : Expr → Bool
+/-- The constructor equation for the symbolic table matcher `xOk`. -/
+theorem xOk_eq (c : PowCtx) (l : RowLeaf) (E : Expr) :
+    ir.xOk c l E = match E with
   | .apply (.nttTranspose n psi) Ye =>
     l.ntt && n == l.n && psi == l.psi && decide (ir.powSym c powFuel Ye = some (List.range l.n))
   | .reindex m Ye =>
     !l.ntt && m.size == l.n && decide (ir.powSym c powFuel (.reindex m Ye) = some (List.range l.n))
-  | _ => false
+  | _ => false := by cases E <;> rfl
 
-/-- **Leaf `l`'s block of `Mᵀ g`** (`table_internal::digest_exprs`). -/
-def leafGOk (c : PowCtx) (l : RowLeaf) : Expr → Bool
+/-- The constructor equation for the symbolic table matcher `leafGOk`. -/
+theorem leafGOk_eq (c : PowCtx) (l : RowLeaf) (E : Expr) :
+    ir.leafGOk c l E = match E with
   | .mul M Xe =>
     l.off != 0 && decide (ir.powSym c powFuel M = some (List.replicate l.n l.off)) &&
       ir.xOk c l Xe
-  | E => l.off == 0 && ir.xOk c l E
+  | E => l.off == 0 && ir.xOk c l E := by cases E <;> rfl
 
-/-- **`Mᵀ g`** as concatenated leaf blocks, with `n` levels: the leaves left after the
-expression's. -/
-def gMatch (c : PowCtx) : ℕ → List RowLeaf → Expr → Option (List RowLeaf)
+/-- The constructor equation for the symbolic table matcher `gMatch`. -/
+theorem gMatch_eq (c : PowCtx) (n : ℕ) (ls : List RowLeaf) (E : Expr) :
+    ir.gMatch c n ls E = match n, ls, E with
   | 0, _, _ => none
   | _ + 1, [], _ => none
   | n + 1, l :: rest, E =>
     if ir.leafGOk c l E then some rest
     else
       match E with
-      | .ref j => gMatch c n (l :: rest) (ir.expr j)
+      | .ref j => ir.gMatch c n (l :: rest) (ir.expr j)
       | .concat a b =>
-        match gMatch c n (l :: rest) a with
-        | some ls' => gMatch c n ls' b
+        match ir.gMatch c n (l :: rest) a with
+        | some ls' => ir.gMatch c n ls' b
         | none => none
       | .reindex [(s, d, w)] e =>
         if s = 0 ∧ d = 1 then
-          match gMatch c n (l :: rest) e with
+          match ir.gMatch c n (l :: rest) e with
           | some ls' => if mapWidth (l :: rest) = w + mapWidth ls' then some ls' else none
           | none => none
         else none
-      | _ => none
+      | _ => none := by cases n <;> cases ls <;> rfl
 
-/-- **A block's term of the digests**: `rowDot` of the block's rows against `G[o, o + w)`. -/
-def digTermOk (rows o v w : ℕ) (G : Expr) : Expr → Bool
-  | .apply (.rowDot M R W) (.reindex [(o', d, c)] G') =>
-    M == v && R == rows && W == w && o' == o && d == 1 && c == w && G'.beq G
-  | _ => false
-
-/-- **The terms of the digests, one per column block, from offset `o`.** -/
-def digTermsOk (rows : ℕ) (G : Expr) : ℕ → List (ℕ × ℕ) → List Expr → Bool
-  | _, [], [] => true
-  | o, (v, w) :: ps, t :: ts => digTermOk rows o v w G t && digTermsOk rows G (o + w) ps ts
-  | _, _, _ => false
-
-/-- **The `Mᵀ g` the first term reads.** -/
-def digG : List Expr → Expr
-  | .apply _ (.reindex _ G) :: _ => G
-  | _ => .leaf 0
-
-/-- **The levels of the digests' matcher.** -/
-abbrev gFuel : ℕ := 64
-
-/-- **The digests' sum of block terms.** -/
-def digSumOk (c : PowCtx) (m : List RowLeaf) (parts : List (ℕ × ℕ)) (rows : ℕ) (S : Expr) :
-    Bool :=
-  digTermsOk rows (digG (addSpine S)) 0 parts (addSpine S) &&
-    decide (ir.gMatch c gFuel m (digG (addSpine S)) = some [])
-
-/-- **The digests** (`<table>.digests`), padded from `rows` to `nd` rows. -/
-def digestsOk (c : PowCtx) (m : List RowLeaf) (parts : List (ℕ × ℕ)) (rows nd : ℕ) :
-    Expr → Bool
+/-- The constructor equation for the symbolic table matcher `digestsOk`. -/
+theorem digestsOk_eq (c : PowCtx) (m : List RowLeaf) (parts : List (ℕ × ℕ)) (rows nd : ℕ) (E : Expr) :
+    ir.digestsOk c m parts rows nd E = match E with
   | .reindex pm S =>
     rows < nd && nd - rows ≤ rows && decide (pm = [(0, 1, rows), (0, 1, nd - rows)]) &&
       ir.digSumOk c m parts rows S
-  | S => nd == rows && ir.digSumOk c m parts rows S
+  | S => nd == rows && ir.digSumOk c m parts rows S := by cases E <;> rfl
+
+/-- The digest sum separates finite term checks from the shared-expression matcher. -/
+theorem digSumOk_eq (c : PowCtx) (m : List RowLeaf) (parts : List (ℕ × ℕ)) (rows : ℕ) (S : Expr) :
+    ir.digSumOk c m parts rows S = (
+  digTermsOk rows (digG (addSpine S)) 0 parts (addSpine S) &&
+    decide (ir.gMatch c gFuel m (digG (addSpine S)) = some [])) := rfl
 
 /-! ## The table's selection -/
-
-/-- **The widest leaf.** -/
-def mapWmax (m : List RowLeaf) : ℕ := m.foldr (fun l a => max l.n a) 0
-
-/-- **The powers' exponents** (`table_internal::digest_exprs`): `0, …, wmax − 1`, then each nonzero
-offset. -/
-def powerExps (m : List RowLeaf) : List ℕ :=
-  List.range (mapWmax m) ++ ((m.filter (·.off != 0)).map (·.off))
-
-/-- **The identifiers and the map of a table's selection** (`lib/gordiehowe/lib/table.h`,
-`public_table`, `select_row`). -/
-structure TableShape where
-  /-- The domain of the selection's predicate. -/
-  dom : ℕ
-  /-- The constant `1`. -/
-  one : ℕ
-  /-- The constant `0`. -/
-  zero : ℕ
-  /-- The natural of `−1`. -/
-  mOne : ℕ
-  /-- The challenge `γ`'s value. -/
-  gamma : ℕ
-  /-- The challenge `γ`. -/
-  chal : ℕ
-  /-- The powers (`<table>.powers`). -/
-  pow : ℕ
-  /-- The digests (`<table>.digests`). -/
-  dig : ℕ
-  /-- The index bits. -/
-  idx : ℕ
-  /-- The selection's predicate. -/
-  pred : ℕ
-  /-- The index bits' check. -/
-  idxPred : ℕ
-  /-- The record. -/
-  record : Expr
-  /-- The row map. -/
-  map : List RowLeaf
-  /-- The column blocks: value and width. -/
-  parts : List (ℕ × ℕ)
-  /-- The table's rows. -/
-  rows : ℕ
-  /-- The index bits' count. -/
-  bits : ℕ
 
 namespace TableShape
 
 variable (t : TableShape)
 
-/-- **The powers' expression.** -/
-def powExpr : Expr :=
-  match (ir.value t.pow).kind with
-  | .pub (.expr E) => E
-  | _ => .leaf t.pow
+/-- The public context uses the named powers expression. -/
+theorem pubCtx_eq : t.pubCtx ir = ⟨onePub t.one t.gamma, some (t.powExpr ir, powerExps t.map)⟩ := rfl
 
-/-- **The digests' expression.** -/
-def digExpr : Expr :=
-  match (ir.value t.dig).kind with
-  | .pub (.expr E) => E
-  | _ => .leaf t.dig
+/-- The selection predicate context reads only its named powers value. -/
+theorem predCtx_eq (t : TableShape) :
+    t.predCtx = ⟨fun v => if v = t.pow then some (powerExps t.map) else none, none⟩ := rfl
 
-/-- **The context of the public expressions**: the constant `1`, `γ` and the powers. -/
-def pubCtx : PowCtx := ⟨onePub t.one t.gamma, some (t.powExpr ir, powerExps t.map)⟩
-
-/-- **The context of the selection's predicate**: the powers as a value. -/
-def predCtx : PowCtx := ⟨fun v => if v = t.pow then some (powerExps t.map) else none, none⟩
-
-/-- **The selection's body.** -/
-def bodyOk : PredBody → Bool
+/-- The selection-body equation exposes only the finite matcher inputs. -/
+theorem bodyOk_eq (b : PredBody) : t.bodyOk ir b = match b with
   | .equal d (.add T (.scale (.const c) F)) (.leaf z) _ =>
     d == t.dom && c == t.mOne && z == t.zero &&
       ir.recTermsOk t.record t.predCtx t.map (addSpine T) &&
       decide (ir.foldOf? t.idx t.dig (2 ^ t.bits) t.bits (2 * t.bits + 2) F = some (t.bits, 1))
-  | _ => false
+  | _ => false := by cases b <;> rfl
 
-/-- **The shape's checks.** -/
-def okB : Bool :=
-  mapWfFrom 0 t.map && mapWidth t.map == (t.parts.map (·.2)).sum &&
-    decide (ir.powSym ⟨onePub t.one t.gamma, none⟩ powFuel (t.powExpr ir) = some (powerExps t.map)) &&
-    ir.digestsOk (t.pubCtx ir) t.map t.parts t.rows (2 ^ t.bits) (t.digExpr ir) &&
-    t.bodyOk ir (ir.predicate t.pred).body
+variable {ir t}
+
+/-- **The powers are their expression** when value `t.pow` is a public expression. -/
+theorem powKind_of_exists (h : ∃ E, (ir.value t.pow).kind = .pub (.expr E)) :
+    (ir.value t.pow).kind = .pub (.expr (t.powExpr ir)) := by
+  obtain ⟨E, hE⟩ := h
+  simp only [powExpr, hE]
+
+/-- **The digests are their expression** when value `t.dig` is a public expression. -/
+theorem digKind_of_exists (h : ∃ E, (ir.value t.dig).kind = .pub (.expr E)) :
+    (ir.value t.dig).kind = .pub (.expr (t.digExpr ir)) := by
+  obtain ⟨E, hE⟩ := h
+  simp only [digExpr, hE]
+
+/-- The powers expression follows the checked public-expression body. -/
+theorem powExpr_of_kind {e : Expr} (h : (ir.value t.pow).kind = .pub (.expr e)) :
+    t.powExpr ir = e := by simp only [powExpr, h]
+
+/-- The digests expression follows the checked public-expression body. -/
+theorem digExpr_of_kind {e : Expr} (h : (ir.value t.dig).kind = .pub (.expr e)) :
+    t.digExpr ir = e := by simp only [digExpr, h]
 
 end TableShape
+
+/-! ## The table's checks on a replica of the shared expressions
+
+The checks above (`powSym`, `foldOf?`, `gMatch` and their callers) read a program only through its
+shared expressions. So they compute the same result on a small program holding the entries they
+reach, which the kernel evaluates without reading the rest of the program. -/
+
+section Replica
+
+variable {ir₁ ir₂ : RealizedProgram} {K : ℕ}
+
+/-- **`ir₂` holds `ir₁`'s shared expressions below `K`**, and those read only entries below `K`. -/
+structure AgreesBelow (ir₁ ir₂ : RealizedProgram) (K : ℕ) : Prop where
+  /-- The entries below `K` agree. -/
+  expr_eq : ∀ k < K, ir₁.expr k = ir₂.expr k
+  /-- They read only entries below `K`. -/
+  closed : ∀ k < K, ∀ k' ∈ (ir₂.expr k).refs, k' < K
+
+/-- **The small program** holding the given shared expressions. -/
+def replica (es : List Expr) : RealizedProgram :=
+  { phases := 0, fields := [], domains := [], values := [], exprs := es, predicates := [] }
+
+/-- A program whose first shared expressions are a checked table agrees with the table's replica,
+where the table's entries read only table entries. -/
+theorem agreesBelow_replica {es : List Expr}
+    (h : ∀ j < es.length, ir₁.expr j = es.getD j default)
+    (hc : ∀ k < es.length, ∀ k' ∈ (es.getD k default).refs, k' < es.length) :
+    AgreesBelow ir₁ (replica es) es.length where
+  expr_eq k hk := by rw [h k hk, expr_eq_getD]; rfl
+  closed k hk k' hk' := hc k hk k' (by rw [expr_eq_getD] at hk'; exact hk')
+
+variable (h : AgreesBelow ir₁ ir₂ K)
+include h
+
+theorem powSym_congr (c : PowCtx) :
+    ∀ (n : ℕ) (e : Expr), (∀ k ∈ e.refs, k < K) → ir₁.powSym c n e = ir₂.powSym c n e := by
+  intro n
+  induction n with
+  | zero => intro e _; rfl
+  | succ n ih =>
+    intro e he
+    cases e with
+    | ref k =>
+      have hk := he k (by simp [Expr.refs])
+      simp only [powSym]
+      rw [h.expr_eq k hk, ih _ (h.closed k hk)]
+    | mul a b =>
+      simp only [Expr.refs, List.mem_append] at he
+      simp only [powSym]
+      rw [ih a fun k hk => he k (Or.inl hk), ih b fun k hk => he k (Or.inr hk)]
+    | concat a b =>
+      simp only [Expr.refs, List.mem_append] at he
+      simp only [powSym]
+      rw [ih a fun k hk => he k (Or.inl hk), ih b fun k hk => he k (Or.inr hk)]
+    | reindex m a =>
+      simp only [Expr.refs] at he
+      simp only [powSym]
+      rw [ih a he]
+    | _ => simp only [powSym]
+
+theorem foldOf_congr (idx dig nd kb : ℕ) :
+    ∀ (n : ℕ) (e : Expr), (∀ k ∈ e.refs, k < K) →
+      ir₁.foldOf? idx dig nd kb n e = ir₂.foldOf? idx dig nd kb n e := by
+  intro n
+  induction n with
+  | zero => intro e _; rfl
+  | succ n ih =>
+    intro e he
+    match e, he with
+    | .ref k, he =>
+      have hk := he k (by simp [Expr.refs])
+      simp only [foldOf?]
+      rw [h.expr_eq k hk, ih _ (h.closed k hk)]
+    | .mux B (.reindex mh Xe) (.reindex ml Xe'), he =>
+      simp only [Expr.refs, List.mem_append] at he
+      simp only [foldOf?]
+      rw [ih Xe fun k hk => he k (Or.inl (Or.inr hk))]
+    | .leaf _, _ | .add _ _, _ | .sub _ _, _ | .scale _ _, _ | .mul _ _, _ | .reindex _ _, _
+    | .concat _ _, _ | .linear _ _, _ | .prod _ _, _ | .apply _ _, _ | .logic _ _ _, _ =>
+      simp only [foldOf?]
+    | .mux _ (.leaf _) _, _ | .mux _ (.add _ _) _, _ | .mux _ (.sub _ _) _, _
+    | .mux _ (.scale _ _) _, _ | .mux _ (.mul _ _) _, _ | .mux _ (.concat _ _) _, _
+    | .mux _ (.linear _ _) _, _ | .mux _ (.prod _ _) _, _ | .mux _ (.mux _ _ _) _, _
+    | .mux _ (.apply _ _) _, _ | .mux _ (.ref _) _, _ | .mux _ (.logic _ _ _) _, _ =>
+      simp only [foldOf?]
+    | .mux _ (.reindex _ _) (.leaf _), _ | .mux _ (.reindex _ _) (.add _ _), _
+    | .mux _ (.reindex _ _) (.sub _ _), _ | .mux _ (.reindex _ _) (.scale _ _), _
+    | .mux _ (.reindex _ _) (.mul _ _), _ | .mux _ (.reindex _ _) (.concat _ _), _
+    | .mux _ (.reindex _ _) (.linear _ _), _ | .mux _ (.reindex _ _) (.prod _ _), _
+    | .mux _ (.reindex _ _) (.mux _ _ _), _ | .mux _ (.reindex _ _) (.apply _ _), _
+    | .mux _ (.reindex _ _) (.ref _), _ | .mux _ (.reindex _ _) (.logic _ _ _), _ =>
+      simp only [foldOf?]
+
+theorem xOk_congr (c : PowCtx) (l : RowLeaf) (e : Expr) (he : ∀ k ∈ e.refs, k < K) :
+    ir₁.xOk c l e = ir₂.xOk c l e := by
+  cases e with
+  | apply op a =>
+    cases op <;> simp only [xOk]
+    all_goals rw [powSym_congr h]; exact he
+  | reindex m a =>
+    simp only [xOk]
+    rw [powSym_congr h _ _ _ he]
+  | _ => simp only [xOk]
+
+theorem leafGOk_congr (c : PowCtx) (l : RowLeaf) (e : Expr) (he : ∀ k ∈ e.refs, k < K) :
+    ir₁.leafGOk c l e = ir₂.leafGOk c l e := by
+  cases e with
+  | mul M Xe =>
+    simp only [Expr.refs, List.mem_append] at he
+    simp only [leafGOk]
+    rw [powSym_congr h _ _ M fun k hk => he k (Or.inl hk), xOk_congr h _ _ Xe fun k hk => he k (Or.inr hk)]
+  | _ => simp only [leafGOk]; rw [xOk_congr h _ _ _ he]
+
+theorem gMatch_congr (c : PowCtx) :
+    ∀ (n : ℕ) (ls : List RowLeaf) (e : Expr), (∀ k ∈ e.refs, k < K) →
+      ir₁.gMatch c n ls e = ir₂.gMatch c n ls e := by
+  intro n
+  induction n with
+  | zero => intro ls e _; simp only [gMatch]
+  | succ n ih =>
+    intro ls e he
+    cases ls with
+    | nil => simp only [gMatch]
+    | cons l rest =>
+      simp only [gMatch]
+      rw [leafGOk_congr h c l e he]
+      match e, he with
+      | .ref k, he =>
+        have hk := he k (by simp [Expr.refs])
+        simp only
+        rw [h.expr_eq k hk, ih _ _ (h.closed k hk)]
+      | .concat a b, he =>
+        simp only [Expr.refs, List.mem_append] at he
+        simp only
+        rw [ih _ a fun k hk => he k (Or.inl hk)]
+        cases ir₂.gMatch c n (l :: rest) a with
+        | none => rfl
+        | some ls' => simp only [ih ls' b fun k hk => he k (Or.inr hk)]
+      | .reindex [(s, d, w)] a, he =>
+        simp only [Expr.refs] at he
+        simp only
+        rw [ih _ a he]
+      | .reindex [] _, _ | .reindex (_ :: _ :: _) _, _ | .leaf _, _ | .add _ _, _ | .sub _ _, _
+      | .scale _ _, _ | .mul _ _, _ | .linear _ _, _ | .prod _ _, _ | .mux _ _ _, _ | .apply _ _, _
+      | .logic _ _ _, _ => rfl
+
+omit h in
+theorem addSpine_ne_nil (e : Expr) : addSpine e ≠ [] := by
+  cases e <;> simp [addSpine]
+
+omit h in
+/-- The blocks the digests' first term reads are read by the digests. -/
+theorem refs_digG_addSpine : ∀ (S : Expr), ∀ k ∈ (digG (addSpine S)).refs, k ∈ S.refs
+  | .add a b, k, hk => by
+    have hne := addSpine_ne_nil a
+    have hd : digG (addSpine a ++ [b]) = digG (addSpine a) := by
+      cases hl : addSpine a with
+      | nil => exact absurd hl hne
+      | cons x xs => cases x <;> try rfl
+                     all_goals rename_i ax
+                     all_goals cases ax <;> rfl
+    simp only [addSpine, hd] at hk
+    simp only [Expr.refs, List.mem_append]
+    exact Or.inl (refs_digG_addSpine a k hk)
+  | .apply _ (.reindex _ G), k, hk => by simpa [addSpine, digG, Expr.refs] using hk
+  | .leaf _, _, hk | .sub _ _, _, hk | .scale _ _, _, hk | .mul _ _, _, hk | .reindex _ _, _, hk
+  | .concat _ _, _, hk | .linear _ _, _, hk | .prod _ _, _, hk | .mux _ _ _, _, hk
+  | .ref _, _, hk | .logic _ _ _, _, hk => by simp [addSpine, digG, Expr.refs] at hk
+  | .apply _ (.leaf _), _, hk | .apply _ (.add _ _), _, hk | .apply _ (.sub _ _), _, hk
+  | .apply _ (.scale _ _), _, hk | .apply _ (.mul _ _), _, hk | .apply _ (.concat _ _), _, hk
+  | .apply _ (.linear _ _), _, hk | .apply _ (.prod _ _), _, hk | .apply _ (.mux _ _ _), _, hk
+  | .apply _ (.apply _ _), _, hk | .apply _ (.ref _), _, hk | .apply _ (.logic _ _ _), _, hk => by
+    simp [addSpine, digG, Expr.refs] at hk
+
+theorem digSumOk_congr (c : PowCtx) (m : List RowLeaf) (parts : List (ℕ × ℕ)) (rows : ℕ) (S : Expr)
+    (hS : ∀ k ∈ S.refs, k < K) : ir₁.digSumOk c m parts rows S = ir₂.digSumOk c m parts rows S := by
+  simp only [digSumOk]
+  rw [gMatch_congr h c _ _ _ fun k hk => hS k (refs_digG_addSpine S k hk)]
+
+theorem sumTerm_congr (rec : Expr) (c : PowCtx) (e : Expr) (he : ∀ k ∈ e.refs, k < K) :
+    ir₁.sumTerm? rec c e = ir₂.sumTerm? rec c e := by
+  unfold sumTerm?
+  split
+  · rename_i n R P
+    simp only [Expr.refs, List.mem_append] at he
+    rw [powSym_congr h c _ P fun k hk => he k (Or.inr hk)]
+  · rfl
+
+theorem recTermOk_congr (rec : Expr) (c : PowCtx) (l : RowLeaf) (e : Expr)
+    (he : ∀ k ∈ e.refs, k < K) : ir₁.recTermOk rec c l e = ir₂.recTermOk rec c l e := by
+  cases e with
+  | mul M S =>
+    simp only [Expr.refs, List.mem_append] at he
+    simp only [recTermOk]
+    rw [powSym_congr h c _ M fun k hk => he k (Or.inl hk),
+      sumTerm_congr h rec c S fun k hk => he k (Or.inr hk)]
+  | _ => simp only [recTermOk]; rw [sumTerm_congr h rec c _ he]
+
+theorem recTermsOk_congr (rec : Expr) (c : PowCtx) :
+    ∀ (ls : List RowLeaf) (ts : List Expr), (∀ t ∈ ts, ∀ k ∈ t.refs, k < K) →
+      ir₁.recTermsOk rec c ls ts = ir₂.recTermsOk rec c ls ts
+  | [], [], _ => rfl
+  | [], _ :: _, _ => rfl
+  | _ :: _, [], _ => rfl
+  | l :: ls, t :: ts, ht => by
+    simp only [recTermsOk]
+    rw [recTermOk_congr h rec c l t (ht t (by simp)),
+      recTermsOk_congr rec c ls ts fun t' ht' => ht t' (by simp [ht'])]
+
+omit h in
+theorem refs_of_mem_addSpine : ∀ (T t : Expr), t ∈ addSpine T → ∀ k ∈ t.refs, k ∈ T.refs
+  | .add a b, t, ht, k, hk => by
+    simp only [addSpine, List.mem_append, List.mem_singleton] at ht
+    simp only [Expr.refs, List.mem_append]
+    rcases ht with ht | rfl
+    · exact Or.inl (refs_of_mem_addSpine a t ht k hk)
+    · exact Or.inr hk
+  | .leaf _, t, ht, k, hk | .sub _ _, t, ht, k, hk | .scale _ _, t, ht, k, hk | .mul _ _, t, ht, k, hk
+  | .reindex _ _, t, ht, k, hk | .concat _ _, t, ht, k, hk | .linear _ _, t, ht, k, hk
+  | .prod _ _, t, ht, k, hk | .mux _ _ _, t, ht, k, hk | .apply _ _, t, ht, k, hk
+  | .ref _, t, ht, k, hk | .logic _ _ _, t, ht, k, hk => by
+    simp only [addSpine, List.mem_singleton] at ht
+    subst ht
+    exact hk
+
+end Replica
 
 end GordieHowe.RealizedProgram

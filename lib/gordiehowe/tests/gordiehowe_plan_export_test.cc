@@ -27,16 +27,123 @@
 #include "algebra/reed_solomon_fp.h"
 #include "gf2k/gf2_256.h"
 #include "gf2k/lch14_reed_solomon.h"
+#include "gordiehowe/compiler/assignment_reads.h"
 #include "gordiehowe/compiler/plan_export.h"
 #include "gordiehowe/compiler/plan_program.h"
 #include "gordiehowe/compiler/plan_proofs.h"
 #include "gordiehowe/instances.h"
+#include "gordiehowe/examples/mldsa/mldsa_shape_inputs.h"
+#include "gordiehowe/examples/mldsa/mldsa_source_roles.h"
 #include "gordiehowe/lib/cutoff_select.h"
 #include "gordiehowe/system.h"
 #include "gtest/gtest.h"
 
 namespace proofs::gordiehowe {
 namespace {
+
+// Exact list order matters: the producer is checked against Lean list equality,
+// not set equality. Nested shared entries also distinguish the prefix closure
+// from the duplicate-retaining bounded closure used by bound values.
+TEST(AssignmentReads, OrderedRowsAndRepeatedSharedReferences) {
+  ir::Program p;
+  auto node = [&](ir::Expr::Op op, uint64_t x = 0,
+                  ir::Id a = ir::kNone, ir::Id b = ir::kNone) {
+    ir::Expr e;
+    e.op = op;
+    e.x = x;
+    e.a = a;
+    e.b = b;
+    p.nodes.push_back(e);
+    return static_cast<ir::Id>(p.nodes.size() - 1);
+  };
+  const auto zero = node(ir::Expr::kLeaf, 0);
+  const auto two = node(ir::Expr::kLeaf, 2);
+  const auto leaves = node(ir::Expr::kAdd, 0, two, zero);
+  const auto ref0 = node(ir::Expr::kRef, 0);
+  const auto twice = node(ir::Expr::kAdd, 0, ref0, ref0);
+  const auto ref1 = node(ir::Expr::kRef, 1);
+  p.exprs = {leaves, twice};
+  p.values.resize(11);
+  p.values[3].kind = ir::Value::kPubExpr;
+  p.values[3].expr = ref1;
+  p.values[4].kind = ir::Value::kPubExpr;
+  p.values[4].expr = ref0;
+  p.values[5].kind = ir::Value::kBound;
+  p.values[5].expr = ref1;
+  p.values[6].kind = ir::Value::kOpaque;
+  p.values[6].args = {5, 4, 5};
+  p.values[7].kind = ir::Value::kBits;
+  p.values[7].ref = 5;
+  p.values[8].kind = ir::Value::kBits;
+  p.values[8].ref = 9;
+  p.values[10].kind = ir::Value::kOpaque;
+  p.values[10].args = {10, 0};
+  const compiler::AssignmentReads::Rows expected{
+      {0}, {1}, {2}, {0, 2}, {2, 0}, {2, 0, 2, 0},
+      {0, 2}, {2, 0, 2, 0}, {}, {9}, {0}};
+  EXPECT_EQ(compiler::assignment_reads(p), expected);
+
+  // An absent shared entry defaults to leaf 0 in the bounded closure, but
+  // defaults to [] in the prefix table used by a public expression.
+  const auto missing = node(ir::Expr::kRef, 99);
+  p.values[3].expr = missing;
+  p.values[5].expr = missing;
+  auto rows = compiler::assignment_reads(p);
+  EXPECT_TRUE(rows[3].empty());
+  EXPECT_EQ(rows[5], (compiler::AssignmentReads::Row{0}));
+
+  // Cyclic shared references terminate at the declared number of entries;
+  // they are not rejected by an extra DAG precondition.
+  p.exprs = {node(ir::Expr::kAdd, 0, two, ref0)};
+  p.values[5].expr = ref0;
+  rows = compiler::assignment_reads(p);
+  EXPECT_EQ(rows[5], (compiler::AssignmentReads::Row{2}));
+}
+
+TEST(AssignmentReads, CoefficientsAndNamedOperators) {
+  ir::Program p;
+  p.values.resize(4);
+  p.coefs = {{false, "", 2, 0}, {false, "", 1, 0}};
+  p.linears.push_back({{{0, 0}, {1, 1}}, {{0, 0}}});
+  ir::NamedOp mac;
+  mac.kind = ir::NamedOp::kMacConv;
+  mac.value = 3;
+  ir::NamedOp batched;
+  batched.kind = ir::NamedOp::kBatched;
+  batched.inner = 0;
+  p.ops = {mac, batched};
+  ir::Expr leaf;
+  leaf.x = 0;
+  ir::Expr linear;
+  linear.op = ir::Expr::kLinear;
+  linear.a = 0;
+  ir::Expr apply;
+  apply.op = ir::Expr::kApply;
+  apply.x = 1;
+  apply.a = 1;
+  p.nodes = {leaf, linear, apply};
+  ir::Value bound;
+  bound.kind = ir::Value::kBound;
+  bound.expr = 2;
+  p.values.push_back(bound);
+  EXPECT_EQ(compiler::assignment_reads(p).back(),
+            (compiler::AssignmentReads::Row{3, 2, 1, 2, 0}));
+  p.ops[0].kind = ir::NamedOp::kSum;
+  EXPECT_EQ(compiler::assignment_reads(p).back(),
+            (compiler::AssignmentReads::Row{2, 1, 2, 0}));
+}
+
+TEST(AssignmentReads, RejectUnrepresentableArena) {
+  ir::Program p;
+  ir::Expr e;
+  e.op = ir::Expr::kReindex;
+  e.a = 0;
+  p.nodes.push_back(e);
+  p.exprs.push_back(0);
+  EXPECT_THROW(compiler::assignment_reads(p), std::runtime_error);
+  p.nodes[0].a = 99;
+  EXPECT_THROW(compiler::assignment_reads(p), std::runtime_error);
+}
 
 // The cutoff selection (lib/cutoff_select.h).
 using namespace ::proofs::gordiehowe::lib::select;  // NOLINT
@@ -148,8 +255,8 @@ set_option maxRecDepth 100000
 
 namespace GordieHowe.Generated.Toy.QROMParams.Plan
 
-/-- The compiled plan of `toy-wide`. -/
-def plan : GordieHowe.RealizedProgram.Export.Plan :=
+/-- The compiled plan of `toy-wide`. Sealed: importers see the name, not the body; only the modules that check the plan import it with `import all`. -/
+@[no_expose, irreducible] def plan : GordieHowe.RealizedProgram.Export.Plan :=
   { schemaVersion := 3,
     config := "toy-wide",
     cppCommit := "c0ffee",
@@ -158,6 +265,7 @@ def plan : GordieHowe.RealizedProgram.Export.Plan :=
     msgLen := 0,
     ctxLen := 0,
     hash := "SHA-384",
+    opaqueSet := "targetBits",
     phases := 2,
     domains := [{ name := "H",
                   field := { name := "GF(2^256)",
@@ -803,6 +911,776 @@ TEST(GordieHowePlanExport, OpaqueOfStatementBytesHasNoArguments) {
       << p.text;
 }
 
+// Constant shapes preserve every entry, including zeros and repeated entries.
+TEST(GordieHowePlanExport, ShapeConstant) {
+  ir::Program prog;
+  ir::Value value;
+  value.name = "constant";
+  value.kind = ir::Value::kConstant;
+  value.entries = {"38", "0", "38", "1"};
+  prog.values.push_back(value);
+  const auto facts = compiler::shape_facts_of(prog, {"constant-test", {0}, {}});
+  ASSERT_EQ(facts.size(), 1u);
+  EXPECT_EQ(facts[0].claim, ".kindConstant 0 [38, 0, 38, 1]");
+  EXPECT_EQ(facts[0].statement,
+            "(Program.program.value 0).kind = .constant [38, 0, 38, 1]");
+  EXPECT_EQ(facts[0].sound, "kindConstant");
+}
+
+TEST(GordieHowePlanExport, ShapeEqualityHeader) {
+  ir::Program prog;
+  ir::Predicate q;
+  q.name = "padding";
+  q.reads = {{ir::Read::kChal, 2}};
+  q.degree = {{2, 3}};
+  q.role = ir::Predicate::Role::kType;
+  q.owner = 7;
+  q.target = {ir::Target::kGkr, 4};
+  // No expression arena is needed to read only the predicate header.
+  prog.predicates.push_back(q);
+  const compiler::ShapeInputs inputs{"header-test", {}, {}, {}, {0}};
+  const auto facts = compiler::shape_facts_of(prog, inputs);
+  ASSERT_EQ(facts.size(), 1u);
+  EXPECT_EQ(facts[0].name, "predicate_0_header");
+  EXPECT_EQ(facts[0].claim,
+      ".equalHeader 0 (\"padding\", [.chal 2], [(2, 3)], .type 7, some (.gkr 4))");
+  EXPECT_EQ(facts[0].sound, "equalHeader");
+  prog.predicates[0].body = ir::Predicate::kMem;
+  EXPECT_THROW(compiler::shape_facts_of(prog, inputs), std::runtime_error);
+  prog.predicates.clear();
+  EXPECT_THROW(compiler::shape_facts_of(prog, inputs), std::runtime_error);
+}
+
+// The shape facts (shape_facts_of, shapes_module, shape_check_modules): one claim and one
+// named fact per listed value (its kind) and predicate (its body's parts),
+// checked once by shapesB; a kind or body no claim states is refused; a
+// configuration with no shape inputs has no Shapes module.
+TEST(GordieHowePlanExport, ShapeFacts) {
+  static const Env *e = new Env;
+  const AF &af = e->af;
+  Sys cs{"gh-plan-export-shape-facts"};
+  auto &A = cs.domain(e->a_profile(), "A");
+  auto t = A.pub(Subfield{}, "t", 2);
+  auto w = A.pub(Subfield{}, "w", 2, depends_on(t), computes("w_of_t"),
+                 [&af](const std::vector<AF::Elt> &tv) {
+                   AV out;
+                   for (size_t i = 0; i < 2; ++i) out.push_back(af.addf(tv[i], tv[i]));
+                   return out;
+                 });
+  auto y = A.priv(Subfield{}, "y", 2);
+  assert_zero(y - w);
+  const auto c = compile(cs);
+  const ir::Program &prog = c->program();
+  auto id = [&](const std::string &nm) {
+    for (size_t i = 0; i < prog.values.size(); ++i)
+      if (prog.values[i].name == nm) return i;
+    ADD_FAILURE() << "no value " << nm;
+    return size_t(0);
+  };
+  size_t eq = SIZE_MAX;
+  for (size_t i = 0; i < prog.predicates.size(); ++i)
+    if (prog.predicates[i].body == ir::Predicate::kEqual && eq == SIZE_MAX) eq = i;
+  ASSERT_NE(eq, SIZE_MAX);
+  const size_t vy = id("y"), vw = id("w");
+  const compiler::ShapeInputs in{"shape-test", {vy, vw}, {eq}};
+  const auto facts = compiler::shape_facts_of(prog, in);
+  ASSERT_EQ(facts.size(), 3u);
+  EXPECT_EQ(facts[0].claim, ".kindPriv " + std::to_string(vy));
+  EXPECT_EQ(facts[0].name, "value_" + std::to_string(vy) + "_kind");
+  EXPECT_EQ(facts[0].statement,
+            "(Program.program.value " + std::to_string(vy) + ").kind = .priv");
+  EXPECT_EQ(facts[1].claim, ".kindOpaque " + std::to_string(vw) + " \"w\" [" +
+                                std::to_string(id("t")) + "]");
+  EXPECT_EQ(facts[1].sound, "kindOpaque");
+  EXPECT_EQ(facts[2].name, "predicate_" + std::to_string(eq) + "_body");
+  EXPECT_EQ(facts[2].claim.rfind(".equalParts " + std::to_string(eq) + " ", 0), 0u)
+      << facts[2].claim;
+  EXPECT_EQ(facts[2].statement.rfind("∃ t, (Program.program.predicate " +
+                                         std::to_string(eq) + ").body = .equal ",
+                                     0),
+            0u)
+      << facts[2].statement;
+  // The claim's parts are the statement's.
+  const std::string parts = facts[2].claim.substr(std::string(".equalParts ").size() +
+                                                  std::to_string(eq).size() + 1);
+  EXPECT_NE(facts[2].statement.find(".equal " + parts + " t"), std::string::npos)
+      << facts[2].statement;
+  // Plain public inputs have no claim; out-of-range indices are refused.
+  const compiler::ShapeInputs input{"shape-test", {id("t")}, {}};
+  EXPECT_THROW(compiler::shape_facts_of(prog, input), std::runtime_error);
+  const compiler::ShapeInputs past{"shape-test", {prog.values.size()}, {}};
+  EXPECT_THROW(compiler::shape_facts_of(prog, past), std::runtime_error);
+  const compiler::ShapeInputs past_expr{"shape-test", {}, {}, {prog.exprs.size()}};
+  EXPECT_THROW(compiler::shape_facts_of(prog, past_expr), std::runtime_error);
+  // A shared expression's entry: its claim and its fact name the same text.
+  if (!prog.exprs.empty()) {
+    const auto ef = compiler::shape_facts_of(prog, {"shape-test", {}, {}, {0}});
+    ASSERT_EQ(ef.size(), 1u);
+    EXPECT_EQ(ef[0].claim.rfind(".exprEq 0 (", 0), 0u) << ef[0].claim;
+    EXPECT_EQ(ef[0].statement, "Program.program.expr 0 = " + ef[0].claim.substr(9));
+    EXPECT_EQ(ef[0].sound, "exprEq");
+  }
+  // The modules: the data, the condition from the program's check, then one
+  // fact per claim at its position.
+  compiler::ProofModuleData d;
+  d.meta = compiler::ExportMeta{"toy", "wide", "c0ffee", "run-0", 0};
+  for (const auto &m : compiler::proof_modules(d))
+    EXPECT_EQ(m.leaf.rfind("Shape", 0), std::string::npos) << m.leaf;
+  d.shape_facts = facts;
+  const compiler::ProofModule shapes = compiler::shapes_module(d);
+  EXPECT_EQ(shapes.leaf, "Shapes");
+  const auto mods = compiler::shape_check_modules(d);
+  ASSERT_EQ(mods.size(), 2u);
+  EXPECT_EQ(mods[0].leaf, "ShapesCheck");
+  EXPECT_EQ(mods[1].leaf, "ShapeFacts");
+  const std::string &data = shapes.text;
+  EXPECT_NE(data.find("public import GordieHoweNative.Language.RealizedProgram.Shapes\n"),
+            std::string::npos);
+  EXPECT_NE(data.find("def shapes : List ShapeClaim := [\n  .kindPriv " + std::to_string(vy) +
+                      ",\n  " + facts[1].claim + ",\n  " + facts[2].claim + "]"),
+            std::string::npos)
+      << data;
+  const std::string &check = mods[0].text;
+  EXPECT_NE(check.find("public import GordieHoweCheck.Toy.QROMParams\n"), std::string::npos)
+      << check;
+  EXPECT_NE(check.find("theorem shapesHold : ShapesHold Program.program Shapes.shapes :=\n"
+                       "  (programOk_sound data GordieHoweCheck.Toy.QROMParams.programOk)."
+                       "shapes\n"),
+            std::string::npos)
+      << check;
+  const std::string &text = mods[1].text;
+  for (size_t i = 0; i < facts.size(); ++i) {
+    EXPECT_NE(text.find("theorem " + facts[i].name + " :\n    " + facts[i].statement +
+                        " :=\n  ShapesCheck.shapesHold." + facts[i].sound + " (k := " +
+                        std::to_string(i) + ") rfl"),
+              std::string::npos)
+        << text;
+  }
+
+}
+
+TEST(GordieHowePlanExport, EmbeddingFactsSelectTheProfileAndNameTheSource) {
+  compiler::ExportMeta meta;
+  meta.config = "mldsa-emulated";
+  meta.profile = "narrow";
+  ProgramEmbeddingDecl d;
+  d.name = "native.H";
+  d.source_config = "mldsa-native";
+  d.vals = {1, 2};
+  d.refs = {2};
+  d.chals = {0};
+  d.values = {0, 1};
+  d.exprs = {0};
+  d.equals = {{3, 5}};
+  ProgramEmbeddingDecl other = d;
+  other.profile = "wide";
+  std::vector<compiler::ProofModuleData::ShapeFact> facts;
+  compiler::append_embedding_facts(meta, {d, other}, facts);
+  ASSERT_EQ(facts.size(), 1u);
+  EXPECT_EQ(facts[0].claim, ".embedding embedding_native_2eH_data");
+  EXPECT_EQ(facts[0].import_module, "GordieHowe.Generated.MLDSA44.Native.ROMParams.Program");
+  EXPECT_NE(facts[0].definition.find("source := GordieHowe.Generated.MLDSA44.Native.ROMParams.Program.program"),
+            std::string::npos);
+  EXPECT_NE(facts[0].definition.find("equals := [(3, 5)]"), std::string::npos);
+}
+
+TEST(GordieHowePlanExport, RequestedPhaseCountAndExprTableAreClaimed) {
+  ir::Program p;
+  p.phases = 3;
+  p.nodes.resize(1);
+  p.nodes[0].op = ir::Expr::kLeaf;
+  p.exprs = {0, 0};
+  p.values.resize(1);
+  compiler::ResolvedShapeInputs in;
+  in.names.phase_count = true;
+  in.names.exprs = {"first"};
+  in.exprs = {0};
+  in.names.expr_table_end = "first";
+  std::vector<compiler::ProofModuleData::ShapeFact> facts;
+  compiler::append_named_shape_metadata(p, in, facts);
+  auto named = [&](const std::string &name) {
+    return std::find_if(facts.begin(), facts.end(),
+        [&](const auto &f) { return f.name == name; });
+  };
+  ASSERT_NE(named("phases_count"), facts.end());
+  EXPECT_EQ(named("phases_count")->claim, ".phaseCount 3");
+  ASSERT_NE(named("expr_table_holds"), facts.end());
+  EXPECT_EQ(named("expr_table_holds")->claim, ".exprTable exprTable");
+  in.names.expr_table_end = "absent";
+  facts.clear();
+  EXPECT_THROW(compiler::append_named_shape_metadata(p, in, facts), std::runtime_error);
+}
+
+TEST(GordieHowePlanExport, SourcePredicateRangesResolveByName) {
+  NamedShapeInputs names;
+  names.source_predicate_ranges = {{"first", "last"}};
+  const compiler::NamedIds predicates{{"first", 2}, {"last", 7}};
+  const auto in = compiler::resolve_shape_inputs(names, {}, predicates, {});
+  ASSERT_EQ(in.source_predicate_ranges.size(), 1u);
+  EXPECT_EQ(in.source_predicate_ranges[0], (std::pair<size_t, size_t>{2, 7}));
+  names.source_predicate_ranges = {{"last", "first"}};
+  EXPECT_THROW(compiler::resolve_shape_inputs(names, {}, predicates, {}), std::runtime_error);
+}
+
+TEST(GordieHowePlanExport, MldsaRingFrontendsNameTheirConsumerInputs) {
+  using namespace examples::mldsa;
+  auto has = [](const std::vector<std::string> &names, const char *name) {
+    return std::find(names.begin(), names.end(), name) != names.end();
+  };
+  auto check = [&](const NamedShapeInputs &shapes) {
+    EXPECT_EQ(std::set<std::string>(shapes.values.begin(), shapes.values.end()).size(),
+              shapes.values.size());
+    EXPECT_EQ(std::set<std::string>(shapes.exprs.begin(), shapes.exprs.end()).size(),
+              shapes.exprs.size());
+    EXPECT_EQ(std::set<std::string>(shapes.predicates.begin(), shapes.predicates.end()).size(),
+              shapes.predicates.size());
+    for (const char *name : {"member.select.shape.right", "hint.decompose.shape.one",
+        "norm.z.offset"})
+      EXPECT_TRUE(has(shapes.values, name)) << name;
+    for (const char *name : {"member.select", "member.mu.boolean", "challenge.c.boolean"})
+      EXPECT_TRUE(has(shapes.predicates, name)) << name;
+    for (const char *name : {"member.table.powers.shape.definition.first.first",
+        "member.table.powers.shape.definition.first.second",
+        "member.table.digests.shape.definition.first.first.first",
+        "mac.equal.shape.left.shared.first.second.second.first",
+        "mac.equal.shape.left.shared.first.second.second.second"})
+      EXPECT_TRUE(has(shapes.exprs, name)) << name;
+  };
+  Sys native("mldsa-ring-native-metadata");
+  check(mldsa_ring_native_shape_inputs(native));
+  Sys carrier("mldsa-ring-carrier-metadata");
+  check(mldsa_ring_carrier_shape_inputs(carrier));
+}
+
+TEST(GordieHowePlanExport, MldsaSemanticMetadataUsesUniqueNames) {
+  using namespace examples::mldsa;
+  Sys cs("mldsa-semantic-metadata");
+  auto shapes = mldsa_native_shape_inputs(cs);
+  EXPECT_EQ(shapes.private_field_sources, std::vector<std::string>({"w1.words"}));
+  mldsa_source_roles<MLDSA44>(cs, shapes, SourceFamily::kPossession);
+  EXPECT_EQ(std::set<std::string>(shapes.values.begin(), shapes.values.end()).size(),
+            shapes.values.size());
+  for (const char *name : {"z", "h", "challenge.c", "signature.w", "hint.w1",
+      "hint.nonpositive", "hint.offset", "hint.slack", "msg", "msg.in_message",
+      "h2c.mu.blocks.r0.value.words", "h2c.mu.blocks.r0.value",
+      "h2c.c_tilde.r167.value.words", "h2c.c_tilde.r167.value",
+      "h2c.sib.r47.value.words", "h2c.sib.r47.value", "h2c.sample.mem.origin",
+      "h2c.sample.select.threshold", "z.digit.low", "z.digit.high",
+      "z.completion.low", "z.completion.high", "hint.offset.digit.low",
+      "hint.offset.digit.high", "hint.slack.digit.low", "hint.slack.digit.high",
+      "range.static:A.512", "mac.blind"})
+    EXPECT_NE(std::find(shapes.values.begin(), shapes.values.end(), name), shapes.values.end());
+  EXPECT_THROW(mldsa_source_roles<MLDSA44>(cs, shapes,
+      static_cast<SourceFamily>(999)), std::runtime_error);
+  EXPECT_THROW(mldsa_source_roles<MLDSA44>(cs, shapes,
+      SourceFamily::kPossession, 0), std::runtime_error);
+  Sys coeff("mldsa-coefficient-metadata");
+  auto coefficient_shapes = mldsa_emulated_shape_inputs(coeff);
+  mldsa_source_roles<MLDSA44>(coeff, coefficient_shapes,
+      SourceFamily::kPossession, 1, 0, "key.a");
+  EXPECT_NE(std::find(coefficient_shapes.values.begin(), coefficient_shapes.values.end(),
+                      "key.a"), coefficient_shapes.values.end());
+  EXPECT_EQ(std::find(coefficient_shapes.values.begin(), coefficient_shapes.values.end(),
+                      "key.a_hat"), coefficient_shapes.values.end());
+}
+
+TEST(GordieHowePlanExport, PadCopyAndNamedPrivateFieldOwnership) {
+  ir::Program p;
+  p.values.resize(2);
+  p.domains.resize(2);
+  p.domains[0].field = 3;
+  p.domains[1].field = 4;
+  p.values[0].name = "mac.blind";
+  p.values[0].kind = ir::Value::kPadCopy;
+  p.values[0].ref = 7;
+  p.values[0].domain = 0;
+  p.values[1].name = "w1.words";
+  p.values[1].kind = ir::Value::kPriv;
+  p.values[1].domain = 1;
+  compiler::ShapeInputs raw{"test", {0}, {}};
+  auto kinds = compiler::shape_facts_of(p, raw);
+  ASSERT_EQ(kinds.size(), 1);
+  EXPECT_EQ(kinds[0].claim, ".kindPadCopy 0 7 \"polynomialBits\"");
+  NamedShapeInputs names;
+  names.private_field_sources = {"w1.words"};
+  auto resolved = compiler::resolve_shape_inputs(names, {{"mac.blind", 0}, {"w1.words", 1}}, {}, {});
+  std::vector<compiler::ProofModuleData::ShapeFact> facts;
+  compiler::append_named_shape_metadata(p, resolved, facts);
+  ASSERT_FALSE(facts.empty());
+  EXPECT_EQ(facts[0].claim, ".privateFieldSources 4");
+  EXPECT_EQ(facts[0].name, "value_w1_2ewords_private_field_sources");
+  std::swap(p.values[0], p.values[1]);
+  resolved = compiler::resolve_shape_inputs(names, {{"w1.words", 0}, {"mac.blind", 1}}, {}, {});
+  facts.clear();
+  compiler::append_named_shape_metadata(p, resolved, facts);
+  EXPECT_EQ(facts[0].claim, ".privateFieldSources 4");
+  names.private_field_sources = {"absent"};
+  EXPECT_THROW(compiler::resolve_shape_inputs(names, {{"w1.words", 0}}, {}, {}), std::runtime_error);
+  names.private_field_sources = {"w1.words", "w1.words"};
+  EXPECT_THROW(compiler::resolve_shape_inputs(names, {{"w1.words", 0}}, {}, {}), std::runtime_error);
+}
+
+TEST(GordieHowePlanExport, ShapeFamilyRowsGroupByShape) {
+  ir::Program p;
+  p.values.resize(4);
+  p.domains.resize(1);
+  p.values[0].name = "a0";
+  p.values[1].name = "a1";
+  p.values[2].name = "view";
+  p.values[3].name = "constant";
+  for (auto &v : p.values) {
+    v.kind = ir::Value::kPriv;
+    v.domain = 0;
+  }
+  p.values[2].kind = ir::Value::kBits;
+  p.values[2].ref = 1;
+  p.values[2].select = 0;
+  p.values[3].kind = ir::Value::kConstant;
+  const compiler::NamedIds values{{"a0", 0}, {"a1", 1}, {"view", 2}, {"constant", 3}};
+  NamedShapeInputs names;
+  names.families = {{"f", {{{}, {}, {"a0"}}, {{}, {}, {"a1"}}, {{}, {}, {"view"}}}}};
+  auto resolved = compiler::resolve_shape_inputs(names, values, {}, {});
+  std::vector<compiler::ProofModuleData::ShapeFact> facts;
+  compiler::append_shape_families(p, resolved, facts);
+  // The two committed rows share one template; the bit view has its own.
+  ASSERT_EQ(facts.size(), 2);
+  EXPECT_EQ(facts[0].rows_name, "family_f_0_rows");
+  EXPECT_NE(facts[0].definition.find("[[0],\n  [1]]"), std::string::npos);
+  EXPECT_EQ(facts[0].claim.rfind(".family family_f_0_rows [\n      .kindPriv 0,", 0), 0);
+  ASSERT_EQ(facts[0].parts.size(), 3);
+  EXPECT_EQ(facts[0].parts[0].name, "family_f_0_value0_kind");
+  EXPECT_EQ(facts[0].parts[0].statement, "(Program.program.value (r.getD 0 0)).kind = .priv");
+  EXPECT_NE(facts[1].definition.find("[[2, 1]]"), std::string::npos);
+  EXPECT_EQ(facts[1].parts[0].statement,
+            "(Program.program.value (r.getD 0 0)).kind = .bits (r.getD 1 0) idx0");
+  // Expressions whose ids Expr.atRow keeps literal are export failures.
+  compiler::ShapeFamilyRowBuilder builder;
+  EXPECT_THROW(builder.expr("(.logic .lt 16 [.leaf 1])"), std::runtime_error);
+  EXPECT_THROW(builder.expr("(.linear [] (.leaf 1))"), std::runtime_error);
+  EXPECT_THROW(builder.expr("(.scale (.value 3) (.leaf 1))"), std::runtime_error);
+  EXPECT_EQ(builder.expr("(.scale (.const 3) (.leaf 9))").first, "(.scale (.const 3) (.leaf 0))");
+  // A value kind a family cannot state is an export failure.
+  names.families = {{"f", {{{}, {}, {"constant"}}}}};
+  resolved = compiler::resolve_shape_inputs(names, values, {}, {});
+  facts.clear();
+  EXPECT_THROW(compiler::append_shape_families(p, resolved, facts), std::runtime_error);
+  names.families = {{"f", {{{}, {}, {"absent"}}}}};
+  EXPECT_THROW(compiler::resolve_shape_inputs(names, values, {}, {}), std::runtime_error);
+}
+
+TEST(GordieHowePlanExport, PrivateFieldOwnershipOnlyRequestIsEmitted) {
+  Env e;
+  Sys cs("private-field-only");
+  auto &A = cs.domain(e.a_profile(), "A");
+  const auto x = A.priv(Subfield{}, "x", 4);
+  const auto y = A.priv(Subfield{}, "y", 4);
+  assert_equal(y, x, "copy");
+  NamedShapeInputs names;
+  names.private_field_sources = {"x"};
+  cs.shape_inputs(std::move(names));
+  const auto compiled = compile(cs);
+  const compiler::ExportMeta meta{"private-field-only", "narrow", "EXPORTER_COMMIT", "exports", 0};
+  const auto program = compiler::build_program(*compiled, meta);
+  ASSERT_TRUE(program.source_metadata.shapes.values.empty());
+  ASSERT_EQ(program.source_metadata.shapes.private_field_sources.size(), 1);
+  const auto data = compiler::proof_module_data(*compiled, meta, program);
+  ASSERT_FALSE(data.shape_facts.empty());
+  EXPECT_EQ(data.shape_facts[0].name, "value_x_private_field_sources");
+  EXPECT_EQ(data.shape_facts[0].claim, ".privateFieldSources 0");
+}
+
+TEST(GordieHowePlanExport, NamedShapesFollowActualProfileIndices) {
+  const std::vector<std::string> names = {"ring.keys", "ring.mu", "member.select.index",
+      "member.table.gamma", "member.table.powers", "member.table.digests"};
+  const std::vector<size_t> rom = {53, 54, 58, 59, 527, 528};
+  const std::vector<size_t> qrom = {52, 53, 57, 58, 526, 527};
+  compiler::NamedIds a, b;
+  for (size_t i = 0; i < names.size(); ++i) {
+    a.emplace_back(names[i], rom[i]);
+    b.emplace_back(names[i], qrom[i]);
+  }
+  EXPECT_EQ(compiler::resolve_shape_names("value", a, names), rom);
+  EXPECT_EQ(compiler::resolve_shape_names("value", b, names), qrom);
+  std::swap(b[0], b[4]);
+  EXPECT_EQ(compiler::resolve_shape_names("value", b, names), qrom);
+  EXPECT_THROW(compiler::resolve_shape_names("value", a, {"absent"}), std::runtime_error);
+  EXPECT_THROW(compiler::resolve_shape_names("value", a, {""}), std::runtime_error);
+  EXPECT_THROW(compiler::resolve_shape_names("value", a, {"ring.keys", "ring.keys"}),
+               std::runtime_error);
+  a.push_back(a[0]);
+  EXPECT_THROW(compiler::resolve_shape_names("value", a, {"ring.keys"}), std::runtime_error);
+  a.back().second = 999;
+  EXPECT_THROW(compiler::resolve_shape_names("value", a, {"ring.keys"}), std::runtime_error);
+  EXPECT_THROW(compiler::resolve_shape_names("expression", {}, {"norm.squares"}),
+               std::runtime_error);
+  EXPECT_NE(compiler::shape_fact_name("value", "a.b", "kind"),
+            compiler::shape_fact_name("value", "a_2eb", "kind"));
+  EXPECT_NE(compiler::shape_fact_name("value", "a-b", "kind"),
+            compiler::shape_fact_name("value", "a_b", "kind"));
+}
+
+TEST(GordieHowePlanExport, NamedExpressionSelectorsFollowStructure) {
+  using Root = ShapeExprSelector::Root;
+  using Edge = ShapeExprSelector::Edge;
+  ir::Program p;
+  p.values.resize(1);
+  p.values[0].kind = ir::Value::kBound;
+  p.values[0].expr = 3;
+  p.nodes.resize(5);
+  p.nodes[0].op = ir::Expr::kLeaf;
+  p.nodes[1].op = ir::Expr::kRef;
+  p.nodes[1].x = 0;
+  p.nodes[2].op = ir::Expr::kAdd;
+  p.nodes[2].a = 1;
+  p.nodes[2].b = 0;
+  p.nodes[3].op = ir::Expr::kRef;
+  p.nodes[3].x = 1;
+  p.nodes[4].op = ir::Expr::kLogic;
+  p.nodes[4].args = {3};
+  p.exprs = {0, 2};
+  p.predicates.resize(1);
+  p.predicates[0].lhs = 3;
+  compiler::NamedIds values{{"bound", 0}}, predicates{{"equation", 0}};
+  const ShapeExprSelector outer{Root::kPredicateLeft, "equation", {}};
+  const ShapeExprSelector inner{Root::kPredicateLeft, "equation",
+      {{Edge::kShared}, {Edge::kFirst}}};
+  EXPECT_EQ(compiler::resolve_shape_expr(p, values, predicates, outer), 1);
+  EXPECT_EQ(compiler::resolve_shape_expr(p, values, predicates, inner), 0);
+  EXPECT_EQ(compiler::resolve_shape_expr(p, values, predicates,
+      {Root::kValueDefinition, "bound", {{Edge::kShared}, {Edge::kFirst}}}), 0);
+  // The same semantic selectors survive different profile pool positions.
+  auto shifted = p;
+  shifted.exprs.insert(shifted.exprs.begin(), 0);
+  ++shifted.nodes[1].x;
+  ++shifted.nodes[3].x;
+  EXPECT_EQ(compiler::resolve_shape_expr(shifted, values, predicates, outer), 2);
+  EXPECT_EQ(compiler::resolve_shape_expr(shifted, values, predicates, inner), 1);
+  auto logic = p;
+  logic.predicates[0].lhs = 4;
+  EXPECT_EQ(compiler::resolve_shape_expr(logic, values, predicates,
+      {Root::kPredicateLeft, "equation", {{Edge::kArgument, 0}}}), 1);
+  EXPECT_THROW(compiler::resolve_shape_expr(logic, values, predicates,
+      {Root::kPredicateLeft, "equation", {{Edge::kArgument, 1}}}), std::runtime_error);
+  EXPECT_THROW(compiler::resolve_shape_expr(p, values, predicates,
+      {Root::kPredicateLeft, "absent", {}}), std::runtime_error);
+  EXPECT_THROW(compiler::resolve_shape_expr(p, values, {{"equation", 0}, {"equation", 0}},
+      outer), std::runtime_error);
+  EXPECT_THROW(compiler::resolve_shape_expr(p, values, predicates,
+      {Root::kPredicateLeft, "equation", {{Edge::kFirst}}}), std::runtime_error);
+  EXPECT_THROW(compiler::resolve_shape_expr(p, values, predicates,
+      {Root::kPredicateLeft, "equation", {{Edge::kShared}, {Edge::kSecond}}}), std::runtime_error);
+  EXPECT_EQ(compiler::resolve_shape_value(p, values, predicates,
+      {Root::kPredicateLeft, "equation", {{Edge::kShared}, {Edge::kSecond}}}), 0);
+  EXPECT_THROW(compiler::resolve_shape_value(p, values, predicates, outer), std::runtime_error);
+  auto bad = p;
+  bad.nodes[3].x = bad.exprs.size();
+  EXPECT_THROW(compiler::resolve_shape_expr(bad, values, predicates, outer), std::runtime_error);
+  bad = p;
+  bad.values[0].kind = ir::Value::kPriv;
+  EXPECT_THROW(compiler::resolve_shape_expr(bad, values, predicates,
+      {Root::kValueDefinition, "bound", {}}), std::runtime_error);
+}
+
+TEST(GordieHowePlanExport, PredicateAliasesDistinguishSourceAndRealization) {
+  using Role = PredicateShapeSelector::Role;
+  using Body = PredicateShapeSelector::Body;
+  const PredicateShapeSelector source{"equation", Role::kSource, Body::kMod};
+  const PredicateShapeSelector realized{"equation", Role::kRealization, Body::kEqual};
+  ir::Program p;
+  ir::Predicate q;
+  q.name = "equation";
+  q.body = ir::Predicate::kMod;
+  p.predicates.push_back(q);
+  q.role = ir::Predicate::Role::kRealization;
+  q.body = ir::Predicate::kEqual;
+  p.predicates.push_back(q);
+  EXPECT_EQ(compiler::resolve_shape_predicate(p, source), 0);
+  EXPECT_EQ(compiler::resolve_shape_predicate(p, realized), 1);
+  std::swap(p.predicates[0], p.predicates[1]);
+  EXPECT_EQ(compiler::resolve_shape_predicate(p, source), 1);
+  EXPECT_EQ(compiler::resolve_shape_predicate(p, realized), 0);
+  EXPECT_THROW(compiler::resolve_shape_predicate(p, {"missing", Role::kSource, Body::kMod}),
+               std::runtime_error);
+  EXPECT_THROW(compiler::resolve_shape_predicate(p, {"equation", Role::kSource, Body::kEqual}),
+               std::runtime_error);
+  EXPECT_THROW(compiler::resolve_shape_predicate(p, {"equation", Role::kType, Body::kMod}),
+               std::runtime_error);
+  EXPECT_THROW(compiler::resolve_shape_predicate(p, {"", Role::kSource, Body::kMod}),
+               std::runtime_error);
+  p.predicates.push_back(p.predicates[1]);
+  EXPECT_THROW(compiler::resolve_shape_predicate(p, source), std::runtime_error);
+}
+
+TEST(GordieHowePlanExport, ApplicationShapeAliasesResolveWithoutChangingProgram) {
+  Env e;
+  auto make = [&](bool metadata) {
+    auto sys = std::make_unique<Sys>("named-shape-aliases");
+    Sys &cs = *sys;
+    auto &A = cs.domain(e.a_profile(), "A");
+    auto x = A.priv(Subfield{}, "x", 4);
+    auto y = A.priv(Subfield{}, "y", 4);
+    auto z = A.priv(Subfield{}, "z", 4);
+    const auto square = x * x;
+    assert_equal(y, square, "square");
+    assert_equal(z, square, "square.again");
+    if (metadata) {
+      cs.shape_value("witness.x", x);
+      cs.shape_predicate("square.body", {"square", PredicateShapeSelector::Role::kSource,
+          PredicateShapeSelector::Body::kEqual});
+      const auto owners = square.node.use_count();
+      cs.shape_expr("witness.square", square);
+      EXPECT_EQ(square.node.use_count(), owners);
+      cs.shape_expr("witness.square.fromPredicate",
+          {ShapeExprSelector::Root::kPredicateLeft, "square",
+              {{ShapeExprSelector::Edge::kSecond}, {ShapeExprSelector::Edge::kFirst}}});
+      cs.shape_value("equation.zero",
+          {ShapeExprSelector::Root::kPredicateRight, "square", {}});
+      cs.source_role(x, SourceRole::kAWitness, 0);
+      cs.shape_inputs({{"witness.x", "equation.zero"}, {"square.body"},
+          {"witness.square", "witness.square.fromPredicate"}, {"square"}});
+    }
+    auto c = compile(cs);
+    return Toy{std::move(sys), std::move(c)};
+  };
+  auto plain = make(false);
+  auto named = make(true);
+  const compiler::ExportMeta meta{"alias-toy", "narrow", "EXPORTER_COMMIT", "exports", 0};
+  // Includes the realized circuits and all program records; metadata changes
+  // neither these bytes nor the plan, digest or emitted Lean program.
+  EXPECT_EQ(ir::write_program(plain.c->program()), ir::write_program(named.c->program()));
+  EXPECT_EQ(compiler::export_lean_plan(*plain.c, meta), compiler::export_lean_plan(*named.c, meta));
+  EXPECT_EQ(compiler::export_lean_program(*plain.c, meta),
+            compiler::export_lean_program(*named.c, meta));
+  auto p = compiler::build_program(*named.c, meta);
+  const auto &m = p.source_metadata;
+  ASSERT_EQ(m.shapes.values.size(), 2);
+  EXPECT_EQ(named.c->program().values.at(m.shapes.values[1]).kind, ir::Value::kConstant);
+  ASSERT_EQ(m.shapes.predicates.size(), 1);
+  ASSERT_EQ(m.shapes.exprs.size(), 2);
+  EXPECT_EQ(m.shapes.exprs[0], m.shapes.exprs[1]);
+  EXPECT_EQ(named.c->program().values.at(m.shapes.values[0]).name, "x");
+  EXPECT_EQ(named.c->program().predicates.at(m.shapes.predicates[0]).name, "square");
+  EXPECT_LT(m.shapes.exprs[0], named.c->program().exprs.size());
+  ASSERT_EQ(m.roles.size(), 1);
+  EXPECT_EQ(m.roles[0].value, m.shapes.values[0]);
+  EXPECT_EQ(m.roles[0].role, SourceRole::kAWitness);
+  const auto data = compiler::proof_module_data(*named.c, meta, p);
+  ASSERT_EQ(data.shape_facts.size(), 20);
+  EXPECT_EQ(data.shape_facts[0].name, "value_witness_2ex_kind");
+  EXPECT_EQ(data.shape_facts[1].name, "value_equation_2ezero_kind");
+  EXPECT_EQ(data.shape_facts[2].name, "predicate_square_2ebody_body");
+  EXPECT_EQ(data.shape_facts[3].name, "expr_witness_2esquare_eq");
+  EXPECT_EQ(data.shape_facts[4].name, "expr_witness_2esquare_2efromPredicate_eq");
+  EXPECT_EQ(data.shape_facts[5].name, "predicate_square_header");
+  EXPECT_EQ(data.shape_facts[6].name, "value_witness_2ex_header");
+  EXPECT_EQ(data.shape_facts[7].name, "value_equation_2ezero_header");
+  EXPECT_EQ(data.shape_facts[8].name, "predicate_square_2ebody_role");
+  EXPECT_EQ(data.shape_facts[9].name, "values_length");
+  EXPECT_EQ(data.shape_facts[10].name, "predicates_length");
+  EXPECT_EQ(data.shape_facts[11].name, "statement_checks");
+  EXPECT_EQ(data.shape_facts[12].name, "statement_ranges");
+  EXPECT_EQ(data.shape_facts[13].name, "cross_predicates");
+  const compiler::ShapeInputs numeric{"test", m.shapes.values,
+      m.shapes.predicates, m.shapes.exprs, m.shapes.equal_headers};
+  auto malformed = named.c->program();
+  malformed.predicates.at(m.shapes.equal_headers.at(0)).body = ir::Predicate::kCross;
+  EXPECT_THROW(compiler::named_shape_facts_of(malformed, m.shapes), std::runtime_error);
+  auto unresolved = m.shapes;
+  unresolved.equal_headers[0] = malformed.predicates.size();
+  EXPECT_THROW(compiler::named_shape_facts_of(named.c->program(), unresolved),
+               std::runtime_error);
+  const auto prior = compiler::shape_facts_of(named.c->program(), numeric);
+  for (size_t i = 0; i < prior.size(); ++i) {
+    EXPECT_EQ(data.shape_facts[i].claim, prior[i].claim);
+    EXPECT_EQ(data.shape_facts[i].statement, prior[i].statement);
+    EXPECT_EQ(data.shape_facts[i].sound, prior[i].sound);
+  }
+}
+
+TEST(GordieHowePlanExport, NamedMetadataUsesResolvedFieldsAndCompleteSummaries) {
+  ir::Program p;
+  p.domains.resize(1);
+  p.domains[0].field = 3;
+  ir::Value x;
+  x.name = "witness";
+  x.shape = {2, 3};
+  x.node = "packing";
+  x.type_source = ir::Value::TypeSource::kNode;
+  x.phase = 2;
+  x.owner = 4;
+  p.values.push_back(x);
+  x.kind = ir::Value::kChallenge;
+  x.domain = ir::kNone;
+  x.field = 9;
+  x.shape = {};
+  x.owner = ir::kNone;
+  x.type_source = ir::Value::TypeSource::kNone;
+  p.values.push_back(x);
+  x.kind = ir::Value::kOpaque;
+  x.opaque = "statement.ring";
+  x.bound = "12289";
+  p.values.push_back(x);
+  // A non-statement bound must not leak into the declared statement summary.
+  x.kind = ir::Value::kPriv;
+  p.values.push_back(x);
+  ir::Predicate q;
+  q.body = ir::Predicate::kCross;
+  q.role = ir::Predicate::Role::kType;
+  q.owner = 0;
+  p.predicates.push_back(q);
+  q.body = ir::Predicate::kEqual;
+  p.predicates.push_back(q);
+  q.body = ir::Predicate::kCross;
+  p.predicates.push_back(q);
+  compiler::ResolvedShapeInputs in;
+  in.values = {0, 1};
+  in.names.values = {"witness", "challenge"};
+  in.predicates = {0};
+  in.names.predicates = {"crossing"};
+  std::vector<compiler::ProofModuleData::ShapeFact> facts;
+  compiler::append_named_shape_metadata(p, in, facts);
+  ASSERT_EQ(facts.size(), 14);
+  EXPECT_NE(facts[0].claim.find("domain := 0, field := 3, size := 6, phase := 2"), std::string::npos);
+  EXPECT_NE(facts[0].claim.find("node := some { name := \"packing\" }"), std::string::npos);
+  EXPECT_NE(facts[0].claim.find("typeSource := .node, role := .realization 4"), std::string::npos);
+  EXPECT_NE(facts[1].claim.find("domain := 0, field := 9, size := 1"), std::string::npos);
+  EXPECT_NE(facts[1].claim.find("node := none"), std::string::npos);
+  EXPECT_EQ(facts[2].claim, ".predicateRole 0 (.type 0)");
+  EXPECT_EQ(facts[3].claim, ".valueCount 4");
+  EXPECT_EQ(facts[4].claim, ".predicateCount 3");
+  EXPECT_EQ(facts[5].claim, ".statementChecks []");
+  EXPECT_EQ(facts[6].claim, ".statementRanges [(2, 12289)]");
+  EXPECT_EQ(facts[7].claim, ".crossPredicates [0, 2]");
+  EXPECT_EQ(facts[8].claim, ".valueType 0 (.field)");
+  EXPECT_EQ(facts[9].claim, ".valueType 1 (.field)");
+
+  EXPECT_EQ(facts[11].claim, ".exprCount 0");
+  EXPECT_EQ(facts[12].claim, ".domainCount 1");
+  EXPECT_EQ(facts[13].claim, ".challengeCount 0");
+
+  // A packing node is independent of the declared type.
+  p.values[0].type = ir::VType::kSub;
+  p.values[0].sub = "actual-subfield";
+  p.values[1].kind = ir::Value::kPubExpr;
+  p.values[1].type = ir::VType::kBit;
+  ir::Expr leaf;
+  leaf.op = ir::Expr::kLeaf;
+  leaf.x = 0;
+  leaf.n = 6;
+  p.nodes.push_back(leaf);
+  p.values[1].expr = 0;
+  facts.clear();
+  compiler::append_named_shape_metadata(p, in, facts);
+  ASSERT_EQ(facts.size(), 15);
+  EXPECT_EQ(facts[8].claim, ".valueType 0 (.sub \"actual-subfield\")");
+  EXPECT_EQ(facts[9].claim, ".valueType 1 (.bit)");
+  EXPECT_EQ(facts[10].claim, ".kindExprEq 1 (.leaf 0)");
+  EXPECT_EQ(facts[10].sound, "kindExprEq");
+}
+
+TEST(GordieHowePlanExport, NamedChallengesKeepSamplerAndSourceCoverageSeparate) {
+  ir::Program p;
+  ir::Challenge c;
+  c.name = "gamma"; c.field = 3; c.size = 2;
+  p.challenges.push_back(c);
+  c.name = "alpha"; c.field = 4; c.size = 1;
+  c.role = ir::Challenge::Role::kRealization;
+  c.sampler = ir::Challenge::Sampler::kNode;
+  c.node = "bit";
+  p.challenges.push_back(c);
+  c.name = "delta"; c.field = 5;
+  c.role = ir::Challenge::Role::kSource;
+  c.sampler = ir::Challenge::Sampler::kFull;
+  p.challenges.push_back(c);
+  compiler::ResolvedShapeInputs in;
+  std::vector<compiler::ProofModuleData::ShapeFact> facts;
+  compiler::append_named_shape_metadata(p, in, facts);
+  ASSERT_EQ(facts.size(), 11);
+  EXPECT_EQ(facts[5].name, "challenge_gamma_full");
+  EXPECT_EQ(facts[5].claim, ".fullChallenge 0 3 2");
+  EXPECT_EQ(facts[6].name, "challenge_delta_full");
+  EXPECT_EQ(facts[6].claim, ".fullChallenge 2 5 1");
+  EXPECT_EQ(facts[7].claim, ".sourceChallenges [0, 2]");
+  EXPECT_EQ(facts[8].claim, ".exprCount 0");
+  EXPECT_EQ(facts[9].claim, ".domainCount 0");
+  EXPECT_EQ(facts[10].claim, ".challengeCount 3");
+  std::swap(p.challenges[0], p.challenges[1]);
+  facts.clear();
+  compiler::append_named_shape_metadata(p, in, facts);
+  EXPECT_EQ(facts[5].name, "challenge_gamma_full");
+  EXPECT_EQ(facts[5].claim, ".fullChallenge 1 3 2");
+  EXPECT_EQ(facts[7].claim, ".sourceChallenges [1, 2]");
+}
+
+TEST(GordieHowePlanExport, NamedSourceRolesResolveAndRejectMalformedNames) {
+  Env e;
+  auto make = [&](int mode) {
+    auto sys = std::make_unique<Sys>("named-source-roles");
+    Sys &cs = *sys;
+    auto &A = cs.domain(e.a_profile(), "A");
+    auto x = A.priv(Subfield{}, "x", 4);
+    auto y = A.priv(Subfield{}, "y", 4);
+    assert_equal(y, x, "copy");
+    if (mode == 0) cs.source_role("x", SourceRole::kAWitness, 3);
+    if (mode == 1) cs.source_role("absent", SourceRole::kAWitness, 3);
+    if (mode == 2) {
+      cs.shape_value("x", y);
+      cs.source_role("x", SourceRole::kAWitness, 3);
+    }
+    if (mode == 3) {
+      cs.source_role(x, SourceRole::kAWitness, 3);
+      cs.source_role("x", SourceRole::kCarry, 4);
+    }
+    auto c = compile(cs);
+    return Toy{std::move(sys), std::move(c)};
+  };
+  const compiler::ExportMeta meta{"role-toy", "narrow", "EXPORTER_COMMIT", "exports", 0};
+  auto good = make(0);
+  const auto p = compiler::build_program(*good.c, meta);
+  ASSERT_EQ(p.source_metadata.roles.size(), 1);
+  const auto &role = p.source_metadata.roles.front();
+  EXPECT_EQ(good.c->program().values.at(role.value).name, "x");
+  EXPECT_EQ(role.role, SourceRole::kAWitness);
+  EXPECT_EQ(role.slot, 3);
+  EXPECT_EQ(role.name, "x");
+  const auto data = compiler::proof_module_data(*good.c, meta, p);
+  const auto module = compiler::source_roles_module(data);
+  EXPECT_NE(module.text.find("def roles : List SourceRoleEntry"), std::string::npos);
+  EXPECT_NE(module.text.find(".aWitness, 3"), std::string::npos);
+  EXPECT_NE(module.text.find("theorem roles_eq : roles = ["), std::string::npos);
+  EXPECT_NE(module.text.find("def classifier : SourceRoleClassifier := sourceRoleClassifier roles"),
+            std::string::npos);
+  EXPECT_EQ(module.text.find("noncomputable"), std::string::npos);
+  EXPECT_EQ(module.text.find("ProgramData"), std::string::npos);
+  const auto facts = compiler::source_role_facts_module(data);
+  EXPECT_NE(facts.text.find("theorem role_x_lookup"), std::string::npos);
+  EXPECT_NE(facts.text.find(" = some (.aWitness, 3)"), std::string::npos);
+  EXPECT_NE(facts.text.find("rolesOk.lookup_at (k := 0) (by rw [SourceRoles.roles_eq]; rfl)"), std::string::npos);
+  EXPECT_NE(facts.text.find("programOk_sound data"), std::string::npos);
+  EXPECT_NE(facts.text.find(".sourceRoles.present rfl"), std::string::npos);
+  for (int mode : {1, 2, 3}) {
+    auto bad = make(mode);
+    EXPECT_THROW(compiler::build_program(*bad.c, meta), std::runtime_error);
+  }
+  Sys empty("empty-source-role");
+  EXPECT_THROW(empty.source_role("", SourceRole::kInput, 0), std::runtime_error);
+}
+
+TEST(GordieHowePlanExport, NamedShapeExpiredAliasIsRejected) {
+  Env e;
+  Sys cs("expired-shape-alias");
+  auto &A = cs.domain(e.a_profile(), "A");
+  auto x = A.priv(Subfield{}, "x", 4);
+  {
+    const auto unused = x * x;
+    cs.shape_expr("unused", unused);
+  }
+  cs.shape_inputs({{}, {}, {"unused"}, {}});
+  auto c = compile(cs);
+  const compiler::ExportMeta meta{"alias-toy", "narrow", "EXPORTER_COMMIT", "exports", 0};
+  EXPECT_THROW(compiler::build_program(*c, meta), std::runtime_error);
+}
+
 TEST(GordieHowePlanExport, ToyIsStable) {
   const std::string out = toy_export();
   if (std::getenv("GH_PRINT_GOLDEN")) std::printf("%s", out.c_str());
@@ -993,6 +1871,23 @@ TEST(GordieHowePlanExport, ToyProgram) {
 // its entries (constEntries definitions chained by their tails); a long
 // constant with repeats as its runs (constRuns definitions). Both decode to
 // their entries, and a changed entry does not.
+TEST(GordieHowePlanExport, IndexMapsHaveNamedConstructionEquations) {
+  ir::Program p;
+  p.index_maps = {{0, 1, 2}, {1, 3}};
+  p.index_map_forms = {"[(0, 1, 3)]", ""};
+  const auto text = compiler::print_program(
+      p, compiler::ExportMeta{"map-equations", "wide", "c0ffee", "run-0", 0}, {});
+  EXPECT_NE(text.find("def idx0 : IndexMap :=\n  [(0, 1, 3)]\n\n"), std::string::npos);
+  EXPECT_NE(text.find("theorem idx0_eq : idx0 =\n  [(0, 1, 3)] := rfl"), std::string::npos);
+  const auto start = text.find("def idx1 : IndexMap :=\n  ");
+  ASSERT_NE(start, std::string::npos);
+  const auto body = start + std::string("def idx1 : IndexMap :=\n  ").size();
+  const auto end = text.find("\n\n", body);
+  ASSERT_NE(end, std::string::npos);
+  EXPECT_NE(text.find("theorem idx1_eq : idx1 =\n  " + text.substr(body, end - body) + " := rfl"),
+            std::string::npos);
+}
+
 TEST(GordieHowePlanExport, LongConstantForms) {
   ir::Program P;
   P.domains.push_back({"A", 0});
@@ -1075,213 +1970,116 @@ TEST(GordieHowePlanExport, LongListsChainedByTails) {
   EXPECT_FALSE(compiler::index_map_errors(compiler::plan_program_internal::data_of(P, bad)).empty());
 }
 
-// The toy's proof modules (plan_proofs.h): every condition in a module of
-// its own, in its group's namespace; Valid and Realize import their
-// conditions, name the toy's modules, read their counts and nodes from its
-// program, and follow the template's choices; the certificates (Cert) with
-// their checked annotations, the structure records (Structure) and the
-// completeness certificate's check (Completion).
+// The toy's proof modules (plan_proofs.h): the certificates (Cert), the
+// structure records (Structure), the challenge order and the pad order, the
+// nodes containing `1`, and with a proof system the program's data and its
+// check; every import written before its importer, the check's tactic
+// imported with each import also as `meta`, and the data and check modules
+// with no heartbeat options.
 TEST(GordieHowePlanExport, ToyProofModules) {
   const Toy t = toy_system();
   const compiler::ExportMeta meta{"toy", "wide", "c0ffee", "run-0", 0};
   const auto p = compiler::build_program(*t.c, meta);
   const compiler::ProofModuleData d = compiler::proof_module_data(*t.c, meta, p);
-  EXPECT_EQ(d.domains, (std::vector<std::string>{"H", "A"}));
   // The toy's mod_q has the digit form, not the field form.
   EXPECT_FALSE(d.field_form);
-  EXPECT_EQ(d.values, p.values.size());
-  EXPECT_EQ(d.predicates, p.predicates.size());
-  const auto mods = compiler::proof_modules(d, {});
+  const auto mods = compiler::proof_modules(d);
   std::map<std::string, std::string> text;
   std::vector<std::string> order;
   for (const auto &m : mods) {
-    EXPECT_TRUE(text.emplace(m.leaf, m.text).second) << m.leaf;
-    order.push_back(m.leaf);
+    const std::string key = m.root.empty() ? m.leaf : m.root + ":" + m.leaf;
+    EXPECT_TRUE(text.emplace(key, m.text).second) << key;
+    order.push_back(m.root.empty() ? compiler::lean_module_name(meta, m.leaf)
+                                   : compiler::check_module_name(meta, m.leaf));
   }
-  // Cert, the 3 annotation checks and Annotations, Structure and its keys'
-  // check, 9 program conditions and a degree check per challenge, 8 plan
-  // conditions, Valid, Realize, the 4 program facts and Facts, Honest's
-  // nodes and Completion, and the proof system's modules.
-  EXPECT_EQ(d.challenges, p.challenges.size());
-  EXPECT_EQ(mods.size(), 1u + 4u + 2u + 9u + d.challenges + 8u + 1u + 1u + 5u + 1u + 1u +
-                             compiler::system_modules(d).size());
-  for (size_t c = 0; c < d.challenges; ++c) {
-    const std::string leaf = "Valid.DegreesAt" + std::to_string(c);
-    ASSERT_EQ(text.count(leaf), 1u) << leaf;
-    EXPECT_NE(text["Valid.Degrees"].find(" degreesAt" + std::to_string(c) + ")"),
-              std::string::npos);
-  }
-  for (const char *leaf : {"Valid", "Valid.WellFormed", "Valid.Targets", "Valid.PlanLigero",
-                           "Valid.DomainsMatch", "Valid.StructureKeys", "Cert", "Structure",
-                           "Realize", "Honest.Nodes", "Completion", "Facts",
-                           "Facts.SourceValid", "Facts.CellsValid", "Facts.Locality",
-                           "Facts.Domains"})
+  const bool sys = compiler::system_plan(d).ok;
+  for (const char *leaf : {"Cert", "Structure", "Honest.Nodes"})
     EXPECT_EQ(text.count(leaf), 1u) << leaf;
-  // No honest condition module and no Honest.
-  for (const char *leaf : {"Honest", "Honest.Classify", "Honest.MacForms"})
+  // The removed modules: the dropped conditions and the modules the library
+  // core absorbs.
+  for (const char *leaf :
+       {"Valid", "Valid.WellFormed", "Valid.Targets", "Valid.Messages", "Valid.Reads",
+        "Valid.Degrees", "Valid.Types", "Valid.PadRealized", "Valid.DomainsMatch",
+        "Valid.PlanLigero", "Valid.StructureKeys", "Annotations", "Annotations.ExprAnn",
+        "Annotations.DegZero", "Annotations.Closures", "Realize", "Facts", "Facts.Model",
+        "Facts.SourceValid", "Ready", "Interp", "CertifiedProgram", "Valid.Order", "Valid.Pads"})
     EXPECT_EQ(text.count(leaf), 0u) << leaf;
-  // The program facts: each in Facts' namespace, Facts combining them into
-  // the program's checks.
-  EXPECT_TRUE(text["Facts"].find("theorem checks : Program.program.Checks Plan.plan [] :=\n"
-                                 "  ⟨Valid.valid, Realize.derivable, sourceValid, cellsValid, "
-                                 "locality⟩\n") != std::string::npos);
-  for (const char *leaf : {"SourceValid", "CellsValid", "Locality", "Domains"}) {
-    EXPECT_TRUE(text["Facts"].find("public import GordieHowe.Generated.Toy.QROMParams.Facts." +
-                                   std::string(leaf) + "\n") != std::string::npos)
-        << leaf;
-    EXPECT_TRUE(text[std::string("Facts.") + leaf].find(
-                    "namespace GordieHowe.Generated.Toy.QROMParams.Facts\n") !=
-                std::string::npos)
-        << leaf;
+  if (sys) {
+    for (const char *leaf : {"FieldTable", "Tableau", "Data", "Pending.Small", "Pending.Model",
+                             "Core", "Certified"})
+      EXPECT_EQ(text.count(leaf), 1u) << leaf;
+    EXPECT_EQ(text.count("Check/Native:"), 1u);
+    EXPECT_EQ(text.count("Check/Kernel:"), 1u);
+    EXPECT_EQ(text.count("Check/Kernel:GKR"), 1u);
+    EXPECT_EQ(text.count("Pending.Circuits"), 0u);
+    // The toy states no figures: no Figures, no honest strategy's modules.
+    for (const char *leaf : {"Figures", "Pending.Figures", "Completion"})
+      EXPECT_EQ(text.count(leaf), 0u) << leaf;
   }
-  EXPECT_TRUE(text["Facts.SourceValid"].find(
-                  "theorem sourceValid : Program.program.SourceValid :=\n  .of_checks "
-                  "Valid.wellFormed") != std::string::npos);
-  EXPECT_TRUE(text["Facts.Locality"].find("RealizedProgram.chalNode_eq_chalOf (S := "
-                                          "Structure.records)") != std::string::npos);
   auto has = [](const std::string &s, const std::string &x) {
     return s.find(x) != std::string::npos;
   };
   const std::string ns = "GordieHowe.Generated.Toy.QROMParams.";
-  const std::string gen = "public import " + ns;
-  // A module imports only modules written before it, and sets the options.
   for (size_t i = 0; i < mods.size(); ++i) {
     const std::string &m = mods[i].text;
-    EXPECT_TRUE(has(m, compiler::kLeanModuleOptions)) << mods[i].leaf;
-    for (size_t at = m.find(gen); at != std::string::npos; at = m.find(gen, at + 1)) {
-      const size_t from = at + gen.size();
-      const std::string leaf = m.substr(from, m.find('\n', from) - from);
-      // The data modules and the GKR modules, written beside the proof
-      // modules.
-      if (leaf == "Program" || leaf == "Plan" || leaf == "Derivs" ||
-          leaf.rfind("GKR.", 0) == 0)
+    // The data and check modules (no heartbeat options) and the others.
+    const bool core = mods[i].leaf != "Cert" &&
+                      mods[i].leaf != "Structure" && mods[i].leaf != "Honest.Nodes";
+    EXPECT_EQ(has(m, compiler::kLeanModuleOptions), !core) << mods[i].leaf;
+    // A module closing a native check or registering loaded data readers
+    // imports their implementation, and each import also as `meta`.
+    const bool checks = has(m, "gh_native_check") || has(m, "load_ghc") ||
+                        has(m, "load_program_ghc");
+    EXPECT_EQ(checks, has(m, "public import " +
+                                 std::string(compiler::plan_proofs_internal::kCheckModule) + "\n"))
+        << mods[i].leaf;
+    EXPECT_EQ(checks, has(m, "\nmeta import ")) << mods[i].leaf;
+    for (size_t at = m.find("\npublic import "); at != std::string::npos;
+         at = m.find("\npublic import ", at + 1)) {
+      const size_t from = at + 15;
+      const std::string imp = m.substr(from, m.find('\n', from) - from);
+      if (checks) EXPECT_TRUE(has(m, "\nmeta import " + imp + "\n")) << mods[i].leaf << " " << imp;
+      // An import of the export is written before its importer, or by the
+      // data modules' and the GKR modules' writers.
+      std::string leaf;
+      if (imp.rfind(ns, 0) == 0) leaf = imp.substr(ns.size());
+      else if (imp.rfind("GordieHoweCheck.", 0) != 0) continue;
+      if (leaf == "Program" || leaf == "Plan" || leaf == "Derivs" || leaf.rfind("GKR.", 0) == 0)
         continue;
-      const auto it = std::find(order.begin(), order.end(), leaf);
-      ASSERT_NE(it, order.end()) << leaf;
-      EXPECT_LT(size_t(it - order.begin()), i) << mods[i].leaf << " " << leaf;
+      const auto it = std::find(order.begin(), order.end(), imp);
+      ASSERT_NE(it, order.end()) << imp;
+      EXPECT_LT(size_t(it - order.begin()), i) << mods[i].leaf << " " << imp;
     }
   }
-  const std::string &valid = text["Valid"];
-  EXPECT_EQ(valid.rfind(std::string(compiler::kLeanLicenseHeader) +
-                            "module\n\npublic import "
-                        "GordieHowe.Generated.Toy.QROMParams.Program\n"
-                        "public import GordieHowe.Generated.Toy.QROMParams.Plan\n",
-                        0),
-            0u)
-      << valid;
-  EXPECT_TRUE(has(valid, "\n# The realized program of `toy-wide` is valid\n"));
-  EXPECT_TRUE(has(valid, "\n- C++ commit: `c0ffee`\n- bench run: `run-0`\n"));
-  EXPECT_TRUE(has(valid, "\n- domains: `H`, `A`\n"));
-  EXPECT_TRUE(has(valid, "namespace " + ns + "Valid\n"));
-  EXPECT_TRUE(has(valid, "\nend " + ns + "Valid\n"));
-  EXPECT_TRUE(has(valid, "\ntheorem program_valid "));
-  EXPECT_TRUE(has(valid, "\ntheorem valid "));
-  // Every theorem `valid` and `program_valid` combine is declared in a
-  // module Valid imports, in Valid's namespace.
-  for (const auto &[n, leaf] : std::vector<std::pair<std::string, std::string>>{
-           {"wellFormed", "WellFormed"}, {"messages", "Messages"},
-           {"reads", "Reads"}, {"degrees", "Degrees"}, {"order", "Order"},
-           {"pads", "Pads"}, {"types", "Types"}, {"targets", "Targets"},
-           {"padRealized", "PadRealized"}, {"planPacking", "PlanPacking"},
-           {"planFields", "PlanFields"}, {"planLookups", "PlanLookups"},
-           {"planNoWrap", "PlanNoWrap"}, {"planLigero", "PlanLigero"},
-           {"planTranscript", "PlanTranscript"},
-           {"planMessages", "PlanMessages"}, {"domainsMatch", "DomainsMatch"}}) {
-    const std::string &m = text["Valid." + leaf];
-    EXPECT_TRUE(has(m, "\ntheorem " + n + " :")) << n;
-    EXPECT_TRUE(has(m, "namespace " + ns + "Valid\n")) << n;
-    EXPECT_TRUE(has(valid, gen + "Valid." + leaf + "\n")) << n;
-  }
-  // Valid imports the keys' check, so it is checked with the validity.
-  EXPECT_TRUE(has(valid, gen + "Valid.StructureKeys\n"));
-  // The no-wrap conditions read the range requests at the structure
-  // records' pointers.
-  EXPECT_TRUE(has(text["Valid.PlanNoWrap"], gen + "Structure\n"));
-  EXPECT_TRUE(has(text["Valid.PlanNoWrap"],
-                  "theorem planNoWrap : Plan.plan.NoWrapHolds :=\n"
-                  "  RealizedProgram.Export.Plan.noWrapHolds_of_at\n"
-                  "    (macPtrs := Structure.records.macRequests)\n"
-                  "    (modPtrs := Structure.records.modRequests) (by decide +kernel)\n"));
-  EXPECT_TRUE(has(text["Valid.StructureKeys"],
-                  "public import GordieHowe.Language.RealizedProgram.StructureCheck\n"));
-  EXPECT_TRUE(has(text["Valid.StructureKeys"],
-                  "theorem structureKeys : Structure.records.keysOkB = true := by\n"
-                  "  decide +kernel\n"));
-  // The structure records: one definition, every field printed.
+  // The structure records retain one typed compiled payload with a checked hash.
   const std::string &st = text["Structure"];
   EXPECT_TRUE(has(st, "\n# The structure records of `toy-wide`\n"));
   EXPECT_TRUE(has(st, "public import GordieHoweNative.Language.RealizedProgram.Structure\n"));
   EXPECT_TRUE(has(st, "namespace " + ns + "Structure\n"));
-  EXPECT_TRUE(has(st, "\ndef records : RealizedProgram.Structure where\n  gadgets := "));
-  for (const char *f : {"origins", "messages", "boundRecs", "memberValues", "routes",
-                        "logupHosts", "macHosts", "chalValues", "ivlSources", "tableGadgets",
-                        "macRequests", "modRequests"})
-    EXPECT_TRUE(has(st, std::string("\n  ") + f + " := [")) << f;
-  EXPECT_TRUE(has(text["Valid.Targets"], gen + "Valid.WellFormed\n"));
-  EXPECT_TRUE(has(text["Valid.Targets"], gen + "Structure\n"));
-  EXPECT_TRUE(has(text["Valid.Targets"],
-                  "  RealizedProgram.targetsAdmit_of_ann Structure.records wellFormed "
-                  "Annotations.exprAnnOk\n"
-                  "    Annotations.degZeroOk Annotations.closuresOk (by decide +kernel)\n"));
-  EXPECT_TRUE(has(text["Annotations.DegZero"], "theorem degZeroOk :"));
-  EXPECT_TRUE(has(text["Annotations.Closures"], "theorem closuresOk :"));
-  EXPECT_TRUE(has(text["Annotations"], gen + "Annotations.Closures\n"));
-  EXPECT_TRUE(has(text["Annotations.ExprAnn"],
-                  "theorem exprAnnOk : Program.program.exprAnnOkB Cert.exprAnn = true := by\n"));
-  // The member checks at the structure records' pointers.
-  EXPECT_TRUE(has(text["Valid.WellFormed"],
-                  "  RealizedProgram.wellFormed_of_ann_members Annotations.exprAnnOk "
-                  "Structure.records\n"
-                  "    (by decide +kernel) (by decide +kernel)\n"));
-  EXPECT_TRUE(has(text["Valid.WellFormed"], gen + "Annotations\n"));
-  EXPECT_TRUE(has(text["Valid.WellFormed"], gen + "Structure\n"));
-  EXPECT_TRUE(has(text["Valid.DegreesAt0"],
-                  "RealizedProgram.degreesAtB_of_ann wellFormed\n    (a := Cert.degAnn.getD 0 "
-                  "default) (by decide +kernel)"));
-  EXPECT_TRUE(has(text["Valid.Reads"],
-                  "RealizedProgram.readsSound_of_ann wellFormed Annotations.closuresOk\n"
-                  "    (a := Cert.readsAnn) (by decide +kernel)"));
-  const std::string &realize = text["Realize"];
-  EXPECT_EQ(text.count("Realize.RealizationValid"), 0u);
-  for (const char *leaf : {"Valid", "Derivs", "Plan", "Structure"})
-    EXPECT_TRUE(has(realize, gen + leaf + "\n")) << leaf;
-  EXPECT_TRUE(has(realize, "\n# The realizations of `toy-wide` are valid\n"));
-  EXPECT_TRUE(has(realize, "\n- declared statement bounds: " +
-                               std::to_string(d.declared_bounds) + "\n"));
-  EXPECT_TRUE(has(realize, "namespace " + ns + "Realize\n"));
-  EXPECT_TRUE(has(realize, "theorem derivable :\n    Program.program.Derivable\n"
-                           "      (primeNodesOf Plan.plan Program.program)\n"
-                           "      (Program.program.declaredRanges ++ []) :=\n"
-                           "  ⟨Derivs.derivations,\n"
-                           "    RealizedProgram.derivationsValid_of_derivsB (S := "
-                           "Structure.records) Valid.wellFormed\n"
-                           "      (by decide +kernel)⟩\n"));
-  // Cert holds the certificates the compiler printed, and no honest
-  // certificate.
-  const ir::Certificates certs = compiler::export_certificates(*t.c);
-  EXPECT_EQ(d.cert_defs, compiler::print_closures(certs) +
-                             compiler::print_expr_ann(certs, t.c->program().fields.size()) +
-                             compiler::print_deg_ann(certs) + compiler::print_reads_ann(certs) +
-                             compiler::print_completion(certs));
+  EXPECT_TRUE(has(st, "load_program_ghc \"Structure.ghc\""));
+  EXPECT_FALSE(has(st, "def records"));
+  EXPECT_TRUE(has(st, "theorem memberValues_eq : records.memberValues = "));
+  const auto structure_sections = ghc::read(d.structure_ghc, ghc::gkr_schema());
+  ASSERT_EQ(structure_sections.size(), 1u);
+  EXPECT_EQ(structure_sections[0].name, "records");
+  EXPECT_EQ(structure_sections[0].type.text(), "GordieHowe.RealizedProgram.Structure");
+  EXPECT_EQ(structure_sections[0].flags, uint64_t(ghc::kCompile | ghc::kReader));
+  // Cert holds the annotations and the completeness certificate the
+  // compiler printed, and nothing the dropped conditions read.
+  EXPECT_FALSE(d.cert_ghc.empty());
   const std::string &cert = text["Cert"];
+  EXPECT_TRUE(has(cert, "load_ghc \"Cert.ghc\""));
+  EXPECT_FALSE(has(cert, "def exprAnn"));
+  EXPECT_FALSE(has(cert, "def closures"));
+  EXPECT_FALSE(has(cert, "def degAnn"));
+  EXPECT_FALSE(has(cert, "def readsAnn"));
   EXPECT_FALSE(has(cert, "HonestCert"));
-  EXPECT_FALSE(has(cert, "HonestTables"));
-  EXPECT_FALSE(has(cert, "GordieHowe.Language.Honest."));
-  EXPECT_TRUE(has(cert, "def closures : RealizedProgram.PackedLists :=\n  ⟨"));
-  EXPECT_TRUE(has(cert, "def gens : RealizedProgram.Gens :=\n  ["));
-  EXPECT_TRUE(has(cert, "def cderivs : RealizedProgram.CDerivations :=\n  ⟨"));
+  EXPECT_FALSE(has(cert, "def gens"));
+  EXPECT_FALSE(has(cert, "def cderivs"));
   // The MAC's tail is derived at site 1 of the macSite record 0, its first
   // gadget record (Structure).
-  EXPECT_TRUE(has(cert, "(.macRow 0 1 .tail)")) << cert;
-  EXPECT_FALSE(has(cert, ".macRow ⟨"));
-  EXPECT_TRUE(has(text["Structure"], "  gadgets := [\n    { kind := .macSite, preds := ["));
-  const std::string &completion = text["Completion"];
-  EXPECT_TRUE(has(completion, gen + "Structure\n"));
-  EXPECT_TRUE(has(completion,
-                  "    Program.program.completionB (primeNodesOf Plan.plan Program.program) "
-                  "Honest.nodes\n      Structure.records Cert.gens Cert.cderivs = true := by\n"));
-  // The toy has no figures, so no honest roles.
-  EXPECT_FALSE(has(completion, "rolesOk")) << completion;
+  EXPECT_TRUE(has(ghc::show(d.cert_ghc, ghc::gkr_schema()), "(.macRow 0 1 .tail)"));
+  EXPECT_TRUE(has(ghc::show(d.structure_ghc, ghc::gkr_schema()), ".macSite"));
   // The nodes containing 1: every committed cell's node and every subfield
   // type, in its field (Lean domainField / valueField), each once, in field
   // order.
@@ -1301,12 +2099,8 @@ TEST(GordieHowePlanExport, ToyProofModules) {
   EXPECT_EQ(d.one_nodes.size(), want.size());
   for (size_t i = 1; i < d.one_nodes.size(); ++i)
     EXPECT_LE(d.one_nodes[i - 1].first, d.one_nodes[i].first);
-  std::string list;
-  for (const auto &[f, n] : d.one_nodes)
-    list += (list.empty() ? "(" : ", (") + std::to_string(f) + ", \"" + n + "\")";
-  EXPECT_TRUE(has(text["Honest.Nodes"],
-                  "\ndef nodes : List (ℕ × String) := [" + list + "]\n"))
-      << text["Honest.Nodes"];
+  EXPECT_TRUE(has(text["Honest.Nodes"], "load_ghc \"Nodes.ghc\""));
+  EXPECT_FALSE(has(text["Honest.Nodes"], "def nodes"));
   // No docstring line runs past 100 columns but for one backticked span.
   for (const auto &m : mods) {
     const std::string &s = m.text;
@@ -1325,25 +2119,11 @@ TEST(GordieHowePlanExport, ToyProofModules) {
       start = end + 1;
     }
   }
-
-  // The template's choices flip: the plan's conditions inline, and the
-  // declared bounds only when declared.
-  compiler::ProofTemplate tpl;
-  tpl.split_plan_conditions = false;
-  tpl.declared_ranges = compiler::ProofTemplate::Ranges::kWhenDeclared;
-  compiler::ProofModuleData none = d;
-  none.declared_bounds = 0;
-  const std::string inline_valid = compiler::export_lean_valid(none, tpl);
-  EXPECT_FALSE(has(inline_valid, "planPacking"));
-  EXPECT_TRUE(has(inline_valid,
-                  "  ⟨by decide +kernel, by decide +kernel, program_valid⟩\n"));
-  EXPECT_EQ(compiler::proof_modules(none, tpl).size(), mods.size() - 8);
-  EXPECT_TRUE(has(compiler::export_lean_realize(none, tpl), "declaredRanges ++ []"));
   // A second build renders the same modules.
   const Toy t2 = toy_system();
   const auto d2 = compiler::proof_module_data(
       *t2.c, meta, compiler::build_program(*t2.c, meta));
-  const auto mods2 = compiler::proof_modules(d2, {});
+  const auto mods2 = compiler::proof_modules(d2);
   ASSERT_EQ(mods2.size(), mods.size());
   for (size_t i = 0; i < mods.size(); ++i) {
     EXPECT_EQ(mods2[i].leaf, mods[i].leaf);
@@ -1351,20 +2131,40 @@ TEST(GordieHowePlanExport, ToyProofModules) {
   }
 }
 
-// The proof system's modules (plan_proofs.h's system_modules, the Lean
-// objects from field_registry.h): the interpretation by the fields' names
-// and the frontend, the model's parts, every domain's tableau (the
-// library's by its Ligero numbers, or the export's own from the compiler's
-// line certificate), the certificates of the circuits and the proof system;
-// none for a field the library has no model of.
-TEST(GordieHowePlanExport, SystemModules) {
+// The opaque-function set (field_registry.h's opaque_set, the plan's
+// `opaqueSet`): one row per kind, in the table's order.
+TEST(GordieHowePlanExport, OpaqueSet) {
+  using compiler::Frontend;
+  EXPECT_STREQ(compiler::opaque_set(false, Frontend::kMdoc, 2), "none");
+  EXPECT_STREQ(compiler::opaque_set(false, Frontend::kFalcon, 2), "none");
+  EXPECT_STREQ(compiler::opaque_set(true, Frontend::kMdoc, 2), "mdoc");
+  EXPECT_STREQ(compiler::opaque_set(true, Frontend::kFalcon, 2), "falcon");
+  EXPECT_STREQ(compiler::opaque_set(true, Frontend::kFalcon, 1), "targetBits");
+  EXPECT_STREQ(compiler::opaque_set(true, Frontend::kMLDSA, 2), "targetBits");
+  EXPECT_STREQ(compiler::opaque_set(true, Frontend::kNone, 2), "targetBits");
+  // The toy's opaque values read arguments, and it has no frontend.
+  EXPECT_NE(toy_export().find("    hash := \"SHA-384\",\n    opaqueSet := \"targetBits\",\n"),
+            std::string::npos);
+}
+
+// The program's data and check modules (plan_proofs.h's program_data_modules,
+// the descriptors from field_registry.h): the field table's interpretation
+// descriptor by the fields' keys and the opaque-function set, every domain's
+// tableau descriptor (the library's by its Ligero numbers, or the compiler's
+// Johnson certificate), the data, the check (native and kernel), the pending
+// conditions, the core conditions and the certified program; none for a
+// field the library has no model of.
+TEST(GordieHowePlanExport, ProgramDataModules) {
   using Data = compiler::ProofModuleData;
   auto has = [](const std::string &s, const std::string &x) {
     return s.find(x) != std::string::npos;
   };
   auto modules = [](const Data &d) {
     std::map<std::string, std::string> out;
-    for (const auto &m : compiler::system_modules(d)) out[m.leaf] = m.text;
+    const compiler::SystemPlan sp = compiler::system_plan(d);
+    if (!sp.ok) return out;
+    for (const auto &m : compiler::program_data_modules(d, sp))
+      out[m.root.empty() ? m.leaf : m.root + ":" + m.leaf] = m.text;
     return out;
   };
   auto domain = [](const std::string &name, size_t field, size_t rate, size_t t,
@@ -1387,90 +2187,209 @@ TEST(GordieHowePlanExport, SystemModules) {
   Data f;
   f.meta = compiler::ExportMeta{"falcon-native", "narrow", "c0ffee", "run-0", 0, 0,
                                 "Sys.Falcon.ROMParams"};
+  // A profile with no figure inputs: the core conditions only.
+  f.meta.profile = "test";
   f.fields = {{"GF(2^128)", "2", 128}, {"F_q^9", "12289", 9}};
   f.domain_data = {domain("H", 0, 12, 63, 4203, 2), domain("A", 1, 5, 90, 2369, 2)};
   f.circuit_domains = {0, 1};
   f.opaque_args = true;
   f.mac_field = 0;
   f.field_form_fields = {1};
+  f.field_form = true;
   ASSERT_TRUE(compiler::system_plan(f).ok) << compiler::system_plan(f).why;
+  EXPECT_EQ(compiler::system_plan(f).opaque, "falcon");
   auto t = modules(f);
   std::vector<std::string> leaves;
-  for (const auto &m : compiler::system_modules(f)) leaves.push_back(m.leaf);
-  EXPECT_EQ(leaves, (std::vector<std::string>{"Interp", "Facts.Model", "Facts.FieldOkH",
-                                              "Facts.FieldOkA", "Ready", "Certified"}));
+  for (const auto &m : compiler::program_data_modules(f, compiler::system_plan(f)))
+    leaves.push_back(m.root.empty() ? m.leaf : m.root + ":" + m.leaf);
+  EXPECT_EQ(leaves,
+            (std::vector<std::string>{
+                "FieldTable", "Tableau", "Data", "Check/Native:", "Check/Kernel:WellFormed",
+                "Check/Kernel:Order", "Check/Kernel:Pads",
+                "Check/Kernel:ExprAnn", "Check/Kernel:Derivs", "Check/Kernel:Cells",
+                "Check/Kernel:Source", "Check/Kernel:AssignmentReads", "Check/Kernel:Locality", "Check/Kernel:Fields",
+                "Check/Kernel:Tableaus", "Check/Kernel:Selections", "Check/Kernel:Completion", "Check/Kernel:Roles", "Check/Kernel:NoFieldForm", "Check/Kernel:Shapes", "Check/Kernel:Figures", "Check/Kernel:SourceRoles", "Check/Kernel:OpaqueSet", "Check/Kernel:",
+                "Pending.Small", "Pending.Model", "Check/Kernel:GKR", "Core", "Certified"}));
   const std::string g = "public import GordieHowe.Generated.Sys.Falcon.ROMParams.";
-  EXPECT_TRUE(has(t["Interp"], "abbrev interp : RealizedProgram.Interp :=\n"
-                               "  RealizedProgram.falconInterpOf RealizedProgram.gf128 "
-                               "RealizedProgram.fq9\n"));
-  EXPECT_TRUE(has(t["Interp"], "namespace GordieHowe.Generated.Sys.Falcon.ROMParams\n"));
-  EXPECT_TRUE(has(t["Interp"], "public import GordieHowe.Applications.Falcon512.Frontend.Fields\n"));
-  EXPECT_TRUE(has(t["Interp"], "abbrev fieldPkA : (interp.field (Program.program.domainField 1)).Packing :=\n"
-                               "  RealizedProgram.fq9Packing\n"));
-  EXPECT_TRUE(has(t["Interp"], "theorem domains_length : Program.program.domains.length = 2 :="));
-  EXPECT_TRUE(has(t["Interp"], "abbrev domainH : Fin Program.program.domains.length := ⟨0, by decide⟩\n"));
-  const std::string &model = t["Facts.Model"];
-  EXPECT_TRUE(has(model, "  .of_models (RealizedProgram.falconInterpOf_models "
-                         "RealizedProgram.gf128_model RealizedProgram.fq9_model)\n"));
-  EXPECT_TRUE(has(model, "(RealizedProgram.falconOps_opaqueBit (by decide +kernel))"));
-  EXPECT_TRUE(has(model, "RealizedProgram.Interp.macModel_of_tails (f := 0) (nm := "
-                         "\"mac.target_bits\") (by decide +kernel)\n      "
-                         "RealizedProgram.gf128_macFieldOk RealizedProgram.falconOps_target_bits"));
-  EXPECT_TRUE(has(model, "RealizedProgram.Interp.fieldFormModel_of_field (f := 1) (by decide "
-                         "+kernel)\n      RealizedProgram.fq9_readLinear"));
-  EXPECT_TRUE(has(t["Facts.FieldOkH"], "Program.program.fieldOkB (I := interp) 0 Plan.plan "
-                                       "fieldPkH\n      RealizedProgram.gf128K300R2Cert = true"));
-  EXPECT_TRUE(has(t["Facts.FieldOkA"], "RealizedProgram.falconNativeROMACert = true"));
+  EXPECT_TRUE(has(t["FieldTable"], "  { interp := .two .gf128 .fq9 .falcon, domainFields := "
+                                   "[0, 1],\n    circuitDomains := [0, 1],\n    packing := [\n"
+                                   "      { n := 128, q := 2 ^ 2 ^ 4,\n        edges := [],\n"))
+      << t["FieldTable"];
+  // Each field's packing descriptor (no queries here), by field identifier;
+  // its check against the registry's packing facts and the tableaus' fit
+  // pending.
+  EXPECT_TRUE(has(t["FieldTable"], "        hasNodes := true,\n        masks := [] },\n      { n := 9, q := 12289,\n"))
+      << t["FieldTable"];
+  EXPECT_TRUE(has(t["FieldTable"], "        hasNodes := true,\n        masks := [] }],\n    noFieldForm := false }\n"))
+      << t["FieldTable"];
+  EXPECT_TRUE(has(t["Pending.Small"], "theorem packingsOk : data.PackingsOk := by\n"
+                                      "  decide +kernel\n"));
+  EXPECT_FALSE(has(t["Pending.Small"], "tableausFit"));
+  EXPECT_TRUE(has(t["Check/Kernel:Tableaus"],
+                  "theorem tableausFitOk : data.tableausB = true := by\n  decide +kernel\n"));
+  EXPECT_TRUE(has(t["Check/Kernel:Fields"],
+                  "theorem fieldsOk : data.fieldsB = true := by\n"
+                  "  rw [← ProgramData.fieldsWithAssignmentReadsB_eq data assignmentReadsOk]\n"
+                  "  decide +kernel\n"));
+  EXPECT_TRUE(has(t["Check/Kernel:AssignmentReads"],
+                  "theorem assignmentReadsOk : data.assignmentReadsB = true := by\n"
+                  "  decide +kernel\n"));
+  EXPECT_TRUE(has(t["Tableau"], "  [.library .gf128K300R2,\n    .library .falconNativeROMA]\n"))
+      << t["Tableau"];
+  EXPECT_TRUE(has(t["Data"], "  { inputs := runtimeInputs, completion := completionInputs, "
+                             "hints := hints,\n    circuits := [GKR.H.cert, GKR.A.cert],\n"
+                             "    shapes := [],\n    sourceRoles := none }\n"))
+      << t["Data"];
+  EXPECT_TRUE(has(t["Data"], "abbrev runtimeInputs : GordieHowe.RuntimeInputs :=\n"
+                             "  { program := Program.program, plan := Plan.plan, fieldTable := "
+                             "fieldTable,\n    tableaus := tableaus, figures := "
+                             "GordieHowe.FiguresData.none }\n"))
+      << t["Data"];
+  EXPECT_TRUE(has(t["Data"], "abbrev completionInputs : GordieHowe.CompletionInputs :=\n"));
+  EXPECT_TRUE(has(t["Data"], "  { exprAnn := Cert.exprAnn, derivs := Derivs.derivations,\n"
+                             "    assignmentReads := Cert.assignmentReads }\n"))
+      << t["Data"];
+  for (const char *x : {"GKR.H\n", "GKR.A\n", "Tableau\n", "FieldTable\n"})
+    EXPECT_TRUE(has(t["Data"], g + x)) << x;
+  EXPECT_FALSE(has(t["Data"], g + "Figures\n"));
+  // The check: one compiled run at the unfolded data; for the kernel, a leaf
+  // per part and their composition in the shape of programOkB.
+  const std::string &native = t["Check/Native:"];
+  EXPECT_TRUE(has(native, "namespace GordieHoweCheck.Sys.Falcon.ROMParams\n"));
+  EXPECT_TRUE(has(native, "theorem programOk : data.programOkB = true := by\n  delta data\n"
+                          "  gh_native_check\n"));
+  EXPECT_TRUE(has(native, "meta import GordieHowe.Generated.Sys.Falcon.ROMParams.GKR.A\n"));
+  EXPECT_FALSE(has(native, compiler::kLeanModuleOptions));
+  EXPECT_TRUE(has(t["Check/Kernel:Locality"],
+                  "theorem localityOk : data.localityB = true := by\n"
+                  "  rw [← ProgramData.localityWithAssignmentReadsB_eq data assignmentReadsOk]\n"
+                  "  decide +kernel\n"));
+  EXPECT_FALSE(has(t["Check/Kernel:Locality"], "meta import"));
+  const std::string &kernel = t["Check/Kernel:"];
+  EXPECT_TRUE(has(kernel, "and_intro assignmentReadsOk"));
+  EXPECT_TRUE(has(kernel, "public import GordieHoweCheck.Sys.Falcon.ROMParams.Shapes\n"));
+  EXPECT_TRUE(has(kernel, "public import GordieHoweCheck.Sys.Falcon.ROMParams.Figures\n"));
+  EXPECT_TRUE(has(kernel, "            shapesOk)\n          figuresPartOk)\n        sourceRolesOk)\n      gkrOk)\n    opaqueSetOk\n"));
+  EXPECT_TRUE(has(kernel, "public import GordieHoweCheck.Sys.Falcon.ROMParams.OpaqueSet\n"));
+  EXPECT_TRUE(has(t["Check/Kernel:OpaqueSet"],
+                  "theorem opaqueSetOk : data.opaqueSetB = true := by\n  decide +kernel\n"));
+  EXPECT_TRUE(has(t["Check/Kernel:Figures"],
+                  "theorem figuresPartOk : data.figuresPartB = true := by\n  decide +kernel\n"));
+  EXPECT_TRUE(has(t["Check/Kernel:SourceRoles"],
+                  "theorem sourceRolesOk : data.sourceRolesB = true := by\n  decide +kernel\n"));
+  EXPECT_FALSE(has(t["Data"], g + "SourceRoles\n"));
+  // The pending conditions, the core conditions from the check.
+  EXPECT_TRUE(has(t["Pending.Small"], "theorem coded : data.CodedOk :=\n"));
+  EXPECT_FALSE(has(t["Pending.Small"], "selections"));
+  EXPECT_TRUE(has(t["Core"], "  selections := checked.selections\n"));
+  const std::string &model = t["Pending.Model"];
+  EXPECT_TRUE(has(model, "  .of_models data.fieldTable.interp.models (by decide +kernel) "));
+  EXPECT_TRUE(has(model, "(falconOps_opaqueBit (by decide +kernel))"));
+  EXPECT_TRUE(has(model, "Interp.macModel_of_tails (f := 0) (nm := \"mac.target_bits\") (by "
+                         "decide +kernel)\n      RealizedProgram.gf128_macFieldOk "
+                         "falconOps_target_bits"));
+  EXPECT_TRUE(has(model, "Interp.fieldFormModel_of_fields (L := [1]) (by decide +kernel)\n      "
+                         "RealizedProgram.fq9_readLinear"));
+  EXPECT_TRUE(has(model, "public import GordieHowe.Applications.Falcon512.Frontend.Fields\n"));
+  EXPECT_TRUE(has(t["Check/Kernel:GKR"], "  | 1, _ => exact ⟨GKR.A.cert.circuit_ok, rfl⟩\n"));
+  EXPECT_TRUE(has(t["Check/Kernel:GKR"], "GordieHoweCheck.Sys.Falcon.ROMParams.GKR.A.Circuit\n"));
+  EXPECT_TRUE(has(t["Check/Kernel:GKR"], "apply (ProgramData.gkrPartB_iff data).2"));
+  EXPECT_FALSE(has(t["Check/Kernel:GKR"], "decide +kernel"));
+  EXPECT_EQ(t.count("Pending.Circuits"), 0u);
+  const std::string &core = t["Core"];
+  EXPECT_TRUE(has(core, "public import GordieHoweCheck.Sys.Falcon.ROMParams\n"));
+  EXPECT_TRUE(has(core, "  programOk_sound data GordieHoweCheck.Sys.Falcon.ROMParams.programOk\n"));
+  EXPECT_TRUE(has(core, "  fields := .of_descs fieldTableOk checked.fieldDescs packingsOk\n"
+                        "    (.of_descs packingsOk checked.tableaus)\n"));
+  EXPECT_TRUE(has(core, "  order := checked.order\n  pads := checked.pads\n"));
+  EXPECT_TRUE(has(core, "  circuits := checked.circuits\n"));
+  EXPECT_FALSE(has(core, "Pending.Circuits"));
+  // No figures: the proof system at the core conditions.
   const std::string &cert = t["Certified"];
-  for (const char *x : {"GKR.H.Circuit\n", "GKR.A.Circuit\n", "Facts\n", "Facts.Model\n",
-                        "Completion\n"})
-    EXPECT_TRUE(has(cert, g + x)) << x;
-  EXPECT_TRUE(has(t["Ready"], g + "Facts.FieldOkA\n"));
-  EXPECT_TRUE(has(cert, g + "Ready\n"));
-  EXPECT_TRUE(has(t["Ready"], "  | ⟨0, _⟩ => readyH\n  | ⟨1, _⟩ => readyA\n"
-                        "  | ⟨_ + 2, h⟩ => absurd h (by rw [domains_length]; omega)"));
-  // The names the applications share, emitted once: the domains as indices,
-  // named from the plan's domain names, and the type of the proof systems.
-  EXPECT_TRUE(has(t["Interp"], "abbrev domainA : Fin Program.program.domains.length := ⟨1, "));
-  EXPECT_TRUE(has(t["Ready"], "abbrev ProofSystems : Type 1 :=\n"
-                              "  Program.program.ProofSystem Plan.plan interp\n"));
-  EXPECT_TRUE(has(cert, "def proofSystem : ProofSystems :=\n"));
-  EXPECT_TRUE(has(cert, "noncomputable def certData : ℕ → RealizedProgram.CircuitData :=\n"
-                        "  fun c => match c with\n    | 0 => GKR.H.cert\n    | _ => GKR.A.cert\n"));
-  EXPECT_TRUE(has(cert, "  layered := fun c => match c with\n    | 0 => GKR.H.cert.layered\n"));
-  EXPECT_TRUE(has(cert, "  | 1, _ => exact CircuitFieldOk.of_model RealizedProgram.fq9_model\n              "
-                        "(RealizedProgram.fq9_codeHom.withPrime RealizedProgram.fq9Code_primeOn) rfl"));
-  EXPECT_TRUE(has(cert, "theorem circuitsOk :\n    ∀ c < Program.program.circuits.length,\n"
-                        "      Program.program.circuitCertB c (codeArith c) (certData c) = true "
-                        ":= by\n  intro c hc\n  match c, hc with\n"
-                        "  | 0, _ => exact GKR.H.cert.circuit_ok\n"));
-  EXPECT_TRUE(has(cert, "  ProgramCerts.ofParts certData codeArith circuitsOk circuitsField "
-                        "partsEq\n"));
-  EXPECT_TRUE(has(cert, "  ProgramCerts.proofSystem parts ⟨certs⟩ Facts.checks Facts.interpModel "
-                        "ready Facts.hdom\n    nodes_isSome\n"));
-  EXPECT_TRUE(has(cert, "- C++ commit: `c0ffee`\n"));
-  // An ML-DSA-like program reads the ML-DSA frontend's interpretation.
+  EXPECT_TRUE(has(cert, "abbrev interp : Interp :=\n  Interp.twoField RealizedProgram.gf128 "
+                        "RealizedProgram.fq9 RealizedProgram.falconOps\n"));
+  EXPECT_TRUE(has(cert, "theorem interp_eq : interp = data.interp := by\n  with_reducible rfl\n"));
+  EXPECT_TRUE(has(cert, "def proofSystem : ProofSystems :=\n"
+                        "  runtimeInputs.proofSystemOf runtimeParts (core.certs runtimeParts_eq)\n"
+                        "    core.coreFacts\n"));
+  EXPECT_FALSE(has(cert, "SelSound"));
+  EXPECT_FALSE(has(cert, "theorem conditions"));
+  EXPECT_FALSE(has(cert, "noncomputable"));
+  EXPECT_TRUE(has(cert, "theorem runtimeParts_eq : runtimeParts = data.parts :=\n"
+                        "  data.sourceParts_eq\n"));
+  EXPECT_FALSE(has(cert, "abbrev runtimeInputs"));
+  EXPECT_FALSE(has(cert, "CertifiedCore"));
+  EXPECT_TRUE(has(cert, "def runtimeParts : SourceParts :=\n  .ofTriples ["));
+  // An ML-DSA-like program: domain A's tableau is the compiler's Johnson
+  // certificate (agreement threshold 975), the MAC in field 1.
   Data ml = f;
   ml.meta.config = "mldsa-native";
   ml.meta.lean_name = "Sys.MLDSA.ROMParams";
   ml.fields = {{"F_q^6", "8380417", 6}, {"GF(2^128)", "2", 128}};
-  // Domain A's tableau has no library certificate: the export's own, at the
-  // compiler's line certificate (agreement threshold 975).
   Data::Domain ma = domain("A", 0, 9, 74, 3376, 1);
   ma.agree = 975;
   ma.line = compiler::ligero_choice_detail::best_line_exhaustive(ma.N, ma.k, ma.agree);
   ml.domain_data = {ma, domain("H", 1, 12, 63, 3955, 2)};
   ml.mac_field = 1;
   ml.field_form_fields = {};
+  ml.field_form = false;
+  EXPECT_EQ(compiler::system_plan(ml).opaque, "targetBits");
   t = modules(ml);
-  EXPECT_TRUE(has(t["Interp"], "  RealizedProgram.mldsaInterp RealizedProgram.fq6\n"));
-  EXPECT_TRUE(has(t["Facts.Model"], "RealizedProgram.Interp.opaqueBit_of_lt_two "
-                                    "RealizedProgram.targetBitsFn_lt_two"));
-  EXPECT_TRUE(has(t["Facts.Model"], "RealizedProgram.Interp.fieldFormModel_of_none"));
-  EXPECT_TRUE(has(t["Facts.FieldOkA"], "Tableau.certA = true"));
-  EXPECT_TRUE(has(t["Tableau"], "  agree := 975\n  exceptions := 17258473\n"));
-  // A one-field program with no circuit and a tableau of its own: the
-  // compiler's line certificate at its threshold.
+  EXPECT_TRUE(has(t["Tableau"], "  [.johnson ⟨9, 74, 3376, 1, 74, 975, 17258473, 8, 24, 163⟩,\n"
+                                "    .library .gf128K282R2]\n"))
+      << t["Tableau"];
+  EXPECT_TRUE(has(t["Certified"], "  Interp.twoField RealizedProgram.fq6 RealizedProgram.gf128 "
+                                  "RealizedProgram.targetBitsFn\n"));
+  EXPECT_TRUE(has(t["Pending.Model"], "Interp.opaqueBit_of_lt_two targetBitsFn_lt_two"));
+  EXPECT_TRUE(has(t["Pending.Model"], "Interp.fieldFormModel_of_fields (L := []) (by decide "
+                                      "+kernel)\n      trivial"));
+  // A configuration with figures: the figures, the honest strategy's
+  // conditions and the certified program.
+  Data mf = ml;
+  mf.meta.config = "mldsa-native";
+  mf.meta.profile = "narrow";
+  mf.phases = 2;
+  mf.digest_bytes = 32;
+  mf.source_challenges = {{0, 1, "264"}, {1, 1, "295"}};
+  t = modules(mf);
+  for (const char *leaf : {"Figures", "Completion", "Check/Kernel:Figures"})
+    EXPECT_EQ(t.count(leaf), 1u) << leaf;
+  EXPECT_TRUE(has(t["FieldTable"], " noFieldForm := true }\n"));
+  EXPECT_TRUE(has(t["Figures"], "def sourceErrors (j : Nat) : Nat × Nat :=\n  if j = 0 then "
+                                "(264, 2 ^ 128) else (295, 2 ^ 128)\n"));
+  EXPECT_TRUE(has(t["Figures"], "  { present := true, figures := figures, maxArray := [1024, 1024], maxRead := "
+                                "[2200, 1250],\n    restRead := [2200, 1250], grants := [], "
+                                "grantMax := 0, sourceErrors := sourceErrors,\n"
+                                "    defaultLoads := true }\n"))
+      << t["Figures"];
+  EXPECT_TRUE(has(t["Data"], "figures := figuresData"));
+  EXPECT_TRUE(has(t["Completion"], "theorem rolesOk : data.RolesOk data.completion :=\n"
+                                   "  (programOk_sound data GordieHoweCheck.Sys.MLDSA.ROMParams.programOk).roles\n"));
+  EXPECT_TRUE(has(t["Completion"], ".programOk).noFieldForm\n"));
+  EXPECT_FALSE(has(t["Completion"], "gh_native_check"));
+  EXPECT_FALSE(has(t["Completion"], "meta import"));
+  EXPECT_EQ(t.count("Pending.Figures"), 0u);
+  const std::string &mc = t["Certified"];
+  EXPECT_TRUE(has(mc, "theorem figuresPresent : data.figures.present = true := rfl"));
+  EXPECT_TRUE(has(mc, "  .of_descs data packingsOk figuresPresent checked.figures"));
+  EXPECT_FALSE(has(mc, "noncomputable"));
+  EXPECT_FALSE(has(mc, "def system"));
+  EXPECT_TRUE(has(mc, "  runtimeInputs.ready conditions.readyFacts\n"));
+  EXPECT_TRUE(has(mc, "theorem conditions : ProgramConditions data :=\n  { core with\n"));
+  EXPECT_TRUE(has(mc, "def certified : CertifiedProgram Plan.plan Program.program interp :=\n"
+                      "  { runtimeInputs.certified completionInputs conditions.fullFacts with\n"
+                      "    ready := ready }\n"));
+  EXPECT_TRUE(has(mc, "def proofSystem : ProofSystems :=\n"
+                      "  runtimeInputs.proofSystemOf runtimeParts "
+                      "(conditions.toCoreConditions.certs runtimeParts_eq)\n"
+                      "    conditions.toCoreConditions.coreFacts\n"));
+  // A field-form mod_q: no noFieldForm in the field table.
+  Data mff = mf;
+  mff.field_form = true;
+  t = modules(mff);
+  EXPECT_TRUE(has(t["FieldTable"], " noFieldForm := false }\n"));
+  EXPECT_TRUE(has(t["Completion"], ".programOk).noFieldForm\n"));
+  // A one-field program with no circuit and a Johnson tableau.
   Data sha;
   sha.meta = compiler::ExportMeta{"sha256-batched-1024", "narrow", "c0ffee", "run-0", 0, 0,
                                   "Sys.SHA.ROMParams"};
@@ -1481,25 +2400,21 @@ TEST(GordieHowePlanExport, SystemModules) {
   ASSERT_TRUE(h.line.has_value());
   ASSERT_FALSE(h.line->unique_decoding);
   sha.domain_data = {h};
+  EXPECT_EQ(compiler::system_plan(sha).opaque, "none");
   t = modules(sha);
-  ASSERT_EQ(t.count("Tableau"), 1u);
-  EXPECT_TRUE(has(t["Tableau"], "theorem lineH {F : Type} [Field F] (C : GordieHowe.RSCode F " +
-                                    std::to_string(h.N) + ") (hk : C.k = " +
-                                    std::to_string(h.k) + ") :\n"));
-  EXPECT_TRUE(has(t["Tableau"], "(m := " + std::to_string(h.line->m) + ") (B := " +
-                                    std::to_string(h.line->bj) + ")\n    (H := " +
-                                    std::to_string(h.line->h) + ")"));
-  EXPECT_TRUE(has(t["Tableau"], "  Sh := ⟨12, 63, 4096, 2, 63⟩\n  agree := 1100\n"
-                                "  exceptions := " + std::to_string(h.line->count) + "\n"));
-  EXPECT_TRUE(has(t["Interp"], "  ⟨fun _ => RealizedProgram.gf128, fun _ _ _ => 0⟩\n"));
-  EXPECT_TRUE(has(t["Facts.Model"], "RealizedProgram.Interp.models_const RealizedProgram.gf128_model"));
-  EXPECT_TRUE(has(t["Facts.Model"], "RealizedProgram.Interp.macModel_of_noTail"));
-  EXPECT_TRUE(has(t["Facts.FieldOkH"], "      Tableau.certH = true"));
-  EXPECT_TRUE(has(t["Facts.FieldOkH"], "public import GordieHowe.Generated.Sys.SHA.ROMParams.Tableau\n"));
-  EXPECT_TRUE(has(t["Certified"], "ProgramCerts.proofSystemOfNoCircuits Facts.checks "
-                                  "Facts.interpModel ready"));
-  EXPECT_FALSE(has(t["Certified"], "certData"));
-  // Two fields with no frontend: the library's two-field interpretation.
+  EXPECT_TRUE(has(t["FieldTable"], "{ interp := .one .gf128 .none, domainFields := [0],\n"));
+  EXPECT_TRUE(has(t["Tableau"], "  [.johnson ⟨12, 63, 4096, 2, 63, 1100, " +
+                                    std::to_string(h.line->count) + ", " +
+                                    std::to_string(h.line->m) + ", " +
+                                    std::to_string(h.line->bj) + ", " +
+                                    std::to_string(h.line->h) + "⟩]\n"))
+      << t["Tableau"];
+  EXPECT_TRUE(has(t["Certified"], "  ⟨fun _ => RealizedProgram.gf128, fun _ _ _ => 0⟩\n"));
+  EXPECT_TRUE(has(t["Pending.Model"], "Interp.macModel_of_noTail"));
+  EXPECT_TRUE(has(t["Data"], "    circuits := [],\n"));
+  EXPECT_TRUE(has(t["Check/Kernel:GKR"],
+                  "  have hl : data.fieldTable.circuitDomains.length = 0 := rfl\n  omega\n"));
+  // Two fields with no frontend: the two-field interpretation.
   Data rsa = f;
   rsa.meta.config = "rsa-auto_t9_m2_2048_batched";
   rsa.meta.lean_name = "Sys.RSA.ROMParams";
@@ -1507,38 +2422,43 @@ TEST(GordieHowePlanExport, SystemModules) {
   rsa.domain_data = {domain("H", 0, 12, 63, 4203, 2), domain("A", 1, 5, 96, 3583, 2)};
   rsa.field_form_fields = {};
   t = modules(rsa);
-  EXPECT_TRUE(has(t["Interp"], "  RealizedProgram.Interp.twoField RealizedProgram.gf128 "
-                               "RealizedProgram.gold2 (RealizedProgram.targetBitsFn)\n"));
-  EXPECT_TRUE(has(t["Facts.Model"], "RealizedProgram.targetBitsFn_target"));
-  // A product form: the proof system at the selections' soundness.
+  EXPECT_TRUE(has(t["Certified"], "  Interp.twoField RealizedProgram.gf128 RealizedProgram.gold2 "
+                                  "RealizedProgram.targetBitsFn\n"));
+  EXPECT_TRUE(has(t["Pending.Model"], "targetBitsFn_target"));
+  // Table selections: their certificates in Selections, read by the data; the
+  // proof system is the same.
   Data prod = f;
-  prod.product_form = true;
+  prod.selections = {"⟨0, { dom := 0 }⟩"};
   t = modules(prod);
-  EXPECT_TRUE(has(t["Certified"], "def proofSystemOf (hsel : Program.program.SelSound interp) : "
-                                  "ProofSystems :=\n"));
-  EXPECT_TRUE(has(t["Certified"], "    nodes_isSome hsel\n"));
-  EXPECT_FALSE(has(t["Certified"], "def proofSystem :"));
+  EXPECT_FALSE(has(t["FieldTable"], "productFree"));
+  EXPECT_TRUE(has(t["Selections"], "abbrev selections : List GordieHowe.RealizedProgram.SelCert :=\n"
+                                   "  [⟨0, { dom := 0 }⟩]\n"));
+  EXPECT_TRUE(has(t["Data"], ",\n    selections := selections }"));
+  EXPECT_TRUE(has(t["Certified"], "def proofSystem : ProofSystems :=\n"));
+  EXPECT_FALSE(has(t["Certified"], "proofSystemOf (hsel"));
   // No proof system for a field the library has no model of, nor for a
   // tableau with neither a library certificate nor the compiler's.
   Data p384 = rsa;
   p384.fields[1] = {"F_p384", "3940", 1};
-  EXPECT_TRUE(compiler::system_modules(p384).empty());
+  EXPECT_FALSE(compiler::system_plan(p384).ok);
   EXPECT_TRUE(has(compiler::system_plan(p384).why, "F_p384"));
+  for (const auto &m : compiler::proof_modules(p384)) EXPECT_NE(m.leaf, "Data");
   Data bare = rsa;
   bare.domain_data[0] = domain("H", 0, 12, 63, 4096, 2);
-  EXPECT_TRUE(compiler::system_modules(bare).empty());
+  EXPECT_FALSE(compiler::system_plan(bare).ok);
   EXPECT_TRUE(has(compiler::system_plan(bare).why, "tableau"));
   // A packing edge the field's packing facts do not realize.
   Data edge = sha;
   edge.domain_data[0].edges = {"1:16:s", "16:2:m", "32:2:m", "64:2:m"};
-  EXPECT_TRUE(compiler::system_modules(edge).empty());
+  EXPECT_FALSE(compiler::system_plan(edge).ok);
   EXPECT_TRUE(has(compiler::system_plan(edge).why, "32:2:m"));
   edge.domain_data[0].edges = {"1:16:s", "16:8:m"};
-  EXPECT_FALSE(compiler::system_modules(edge).empty());
+  EXPECT_TRUE(compiler::system_plan(edge).ok);
   // The tree through GF(2^32).
   edge.domain_data[0].edges = {"1:16:s", "16:2:m", "32:4:m"};
-  EXPECT_FALSE(compiler::system_modules(edge).empty());
-  // The ECDSA mDL: domain A over F_p256, the mDL frontend's opaque functions.
+  EXPECT_TRUE(compiler::system_plan(edge).ok);
+  // The ECDSA mDL: domain A over F_p256, the mDL frontend's opaque
+  // functions; P-256 has no codec, so no `coded`.
   Data md = rsa;
   md.meta.config = "mdoc-narrow";
   md.meta.lean_name = "Sys.MDL.ROMParams";
@@ -1547,39 +2467,51 @@ TEST(GordieHowePlanExport, SystemModules) {
                 "115792089210356248762697446949407573530086143415290314195533631308867097853951",
                 1}};
   ASSERT_TRUE(compiler::system_plan(md).ok) << compiler::system_plan(md).why;
+  EXPECT_EQ(compiler::system_plan(md).opaque, "mdoc");
   t = modules(md);
-  EXPECT_TRUE(has(t["Interp"], "  RealizedProgram.Interp.twoField RealizedProgram.gf128 "
-                               "RealizedProgram.p256 (RealizedProgram.mdocOps)\n"));
-  EXPECT_TRUE(has(t["Interp"], "public import GordieHowe.Applications.MDL.Frontend\n"));
-  EXPECT_TRUE(has(t["Interp"], "public import GordieHowe.Applications.FieldInterps.P256\n"));
-  EXPECT_TRUE(has(t["Interp"], "  RealizedProgram.p256Packing\n"));
-  EXPECT_TRUE(has(t["Facts.Model"], "(RealizedProgram.mdocOps_opaqueBit rfl (by decide +kernel))"));
-  EXPECT_TRUE(has(t["Facts.Model"], "RealizedProgram.gf128_macFieldOk "
-                                    "RealizedProgram.mdocOps_target_bits"));
-  EXPECT_TRUE(has(t["Certified"], "exact CircuitFieldOk.of_model RealizedProgram.p256_model\n"
-                                  "              (RealizedProgram.p256_codeHom.withPrime "
-                                  "RealizedProgram.p256Code_primeOn) rfl"));
-  // Every program has its cells check and its checks, whatever its
-  // batches' sizes (the checker walks a batch's parts in order).
-  std::map<std::string, std::string> facts;
-  for (const auto &m : compiler::facts_modules(rsa)) facts[m.leaf] = m.text;
-  EXPECT_EQ(facts.count("Facts.CellsValid"), 1u);
-  EXPECT_TRUE(has(facts["Facts.CellsValid"], "cellsValid_of_placementB"));
-  EXPECT_TRUE(has(facts["Facts"], "theorem checks"));
+  EXPECT_TRUE(has(t["FieldTable"], "{ interp := .two .gf128 .p256 .mdoc,"));
+  EXPECT_TRUE(has(t["Certified"], "  Interp.twoField RealizedProgram.gf128 RealizedProgram.p256 "
+                                  "RealizedProgram.mdocOps\n"));
+  EXPECT_TRUE(has(t["Pending.Model"], "public import GordieHowe.Applications.MDL.Frontend\n"));
+  EXPECT_TRUE(has(t["Pending.Model"], "(mdocOps_opaqueBit rfl (by decide +kernel))"));
+  EXPECT_TRUE(has(t["Pending.Model"], "RealizedProgram.gf128_macFieldOk mdocOps_target_bits"));
+  EXPECT_FALSE(has(t["Pending.Small"], "coded"));
+  // P-256's q has a Lean name outside GordieHoweNative (`P256.p`), which the field table does not
+  // import: the descriptor prints its numeral.
+  EXPECT_TRUE(has(t["FieldTable"], "{ n := 1, q := 1157920892103562487626974469494075735300861434152"
+                                   "90314195533631308867097853951,"))
+      << t["FieldTable"];
+  EXPECT_FALSE(has(t["FieldTable"], "P256.p"));
   // A field-form mod_q in a field without a linear reading.
   Data form = rsa;
   form.field_form_fields = {1};
-  EXPECT_TRUE(compiler::system_modules(form).empty());
+  EXPECT_FALSE(compiler::system_plan(form).ok);
+}
+
+// Typed record diagnostics keep the established textual assertions readable.
+std::vector<std::pair<size_t, std::string>> route_text(const compiler::StructureRecords &r) {
+  std::vector<std::pair<size_t, std::string>> out;
+  for (const auto &[key, value] : r.routes)
+    out.push_back({key, compiler::structure_records_internal::route(value)});
+  return out;
+}
+
+std::vector<std::pair<size_t, std::string>> ivl_text(const compiler::StructureRecords &r) {
+  std::vector<std::pair<size_t, std::string>> out;
+  for (const auto &[key, value] : r.ivl_sources)
+    out.push_back({key, compiler::structure_records_internal::ivl_source(value)});
+  return out;
 }
 
 // The structure records' printer: every list keyed and sorted, a list out
 // of order refused.
 TEST(GordieHowePlanExport, StructureRecordsPrint) {
   compiler::StructureRecords r;
-  r.gadgets.push_back({"macSite", {7, 5}, {3, 4}, {1, 2, 3}, {}});
+  r.gadgets.push_back({compiler::StructureRecords::GadgetKind::macSite, {7, 5}, {3, 4}, {1, 2, 3}, {}});
   r.origins = {{3, {0, 0}}, {4, {0, 1}}};
   r.logup_hosts = {{{0, 1}, {2, 3}}};
-  r.ivl_sources = {{3, ".prime"}, {9, "(.range 4)"}};
+  using K = compiler::StructureRecords::IvlSource::Kind;
+  r.ivl_sources = {{3, {K::prime, {}}}, {9, {K::range, {4}}}};
   r.mac_requests = {{0, {5, 6, 7}}};
   const std::string o = compiler::print_structure(r);
   EXPECT_NE(o.find("  gadgets := [\n    { kind := .macSite, preds := [7, 5], values := [3, 4], "
@@ -1588,7 +2520,7 @@ TEST(GordieHowePlanExport, StructureRecordsPrint) {
       << o;
   EXPECT_NE(o.find("  origins := [(3, ⟨0, 0⟩),\n    (4, ⟨0, 1⟩)]\n"), std::string::npos) << o;
   EXPECT_NE(o.find("  logupHosts := [((0, 1), (2, 3))]\n"), std::string::npos) << o;
-  EXPECT_NE(o.find("  ivlSources := [(3, .prime),\n    (9, (.range 4))]\n"), std::string::npos)
+  EXPECT_NE(o.find("  ivlSources := [(3, .prime),\n    (9, .range 4)]\n"), std::string::npos)
       << o;
   EXPECT_NE(o.find("  macRequests := [(0, [5, 6, 7])]\n"), std::string::npos) << o;
   EXPECT_NE(o.find("  messages := []\n"), std::string::npos) << o;
@@ -1743,9 +2675,12 @@ TEST(GordieHowePlanExport, HonestNodesModuleText) {
   compiler::ProofModuleData d;
   d.meta = compiler::ExportMeta{"mldsa-native", "narrow", "d42b085", "exports", 0};
   d.one_nodes = {{0, "GF(p^1)"}, {1, "bit"}, {1, "GF(2^16)"}};
-  const std::string golden = R"lean(module
+  std::string golden = R"lean(module
 
 public import GordieHowe.Language.Honest.Check
+public import GordieHowe.Language.Realizations.Circuit.LoadNative
+meta import GordieHowe.Language.Honest.Check
+meta import GordieHowe.Language.Realizations.Circuit.LoadNative
 
 @[expose] public section
 
@@ -1767,18 +2702,25 @@ set_option maxRecDepth 100000
 
 namespace GordieHowe.Generated.MLDSA44.Native.ROMParams.Honest
 
-/-- **The nodes containing `1`** in the program's fields, by field identifier and name. -/
-def nodes : List (ℕ × String) := [(0, "GF(p^1)"), (1, "bit"), (1, "GF(2^16)")]
+load_ghc "Nodes.ghc" "NODES_HASH"
+
+/-- The finite node list used by the completion checks. -/
+theorem nodes_eq : nodes = [(0, "GF(p^1)"), (1, "bit"), (1, "GF(2^16)")] := rfl
 
 end GordieHowe.Generated.MLDSA44.Native.ROMParams.Honest
 )lean";
+  char hash[17];
+  std::snprintf(hash, sizeof(hash), "%016llx", static_cast<unsigned long long>(
+      ghc::fnv1a(ghc::honest_nodes_file(d.one_nodes))));
+  golden.replace(golden.find("NODES_HASH"), 10, hash);
   const compiler::ProofModule m = compiler::honest_nodes_module(d);
   EXPECT_EQ(m.leaf, "Honest.Nodes");
   EXPECT_EQ(m.text, std::string(compiler::kLeanLicenseHeader) + golden);
-  // No node: an empty list.
+  // No node: the same module shape, loading a typed empty list.
   d.one_nodes.clear();
-  EXPECT_NE(compiler::honest_nodes_module(d).text.find(
-                "\ndef nodes : List (ℕ × String) := []\n"),
+  EXPECT_NE(compiler::honest_nodes_module(d).text.find("load_ghc \"Nodes.ghc\""),
+            std::string::npos);
+  EXPECT_NE(ghc::show(ghc::honest_nodes_file(d.one_nodes), ghc::gkr_schema()).find("[]"),
             std::string::npos);
 }
 
@@ -1838,36 +2780,55 @@ TEST(GordieHowePlanExport, FigureInputs) {
   EXPECT_EQ(compiler::figure_inputs("toy-wide"), nullptr);
   compiler::ProofModuleData d;
   d.meta = compiler::ExportMeta{"toy", "wide", "c0ffee", "run-0", 0};
-  d.domains = {"A"};
-  for (const auto &m : compiler::proof_modules(d, {})) EXPECT_NE(m.leaf, "Figures");
+  for (const auto &m : compiler::proof_modules(d)) EXPECT_NE(m.leaf, "Figures");
 }
 
-// The honest roles in Completion: with ROLES the check `rolesOk`, and
-// `noFieldForm` only where no mod_q has the field form; without, neither.
-TEST(GordieHowePlanExport, CompletionHonestRoles) {
-  auto has = [](const std::string &s, const std::string &x) {
-    return s.find(x) != std::string::npos;
-  };
+// The packing descriptors: one per field a domain has, at its queries (an
+// edge the field does not realize answered `false`).
+TEST(GordieHowePlanExport, PackingDescriptors) {
   compiler::ProofModuleData d;
   d.meta = compiler::ExportMeta{"toy", "wide", "c0ffee", "run-0", 0};
-  d.domains = {"A"};
-  const std::string plain = compiler::completion_module(d).text;
-  EXPECT_FALSE(has(plain, "rolesOk"));
-  EXPECT_FALSE(has(plain, "noFieldForm"));
-  EXPECT_FALSE(has(plain, "RealizeField"));
-  const std::string roles = compiler::completion_module(d, true).text;
-  EXPECT_TRUE(has(roles, "theorem rolesOk :\n    Program.program.honestRolesB Honest.nodes "
-                         "Structure.records = true := by\n  decide +kernel\n"))
-      << roles;
-  EXPECT_TRUE(has(roles, "theorem noFieldForm :\n    ∀ p < Program.program.predicates.length, "
-                         "Program.program.isFieldForm p = false := by\n  decide +kernel\n"))
-      << roles;
-  EXPECT_TRUE(has(roles, "public import GordieHowe.Language.Realizations.RealizeField\n")) << roles;
-  d.field_form = true;
-  const std::string form = compiler::completion_module(d, true).text;
-  EXPECT_TRUE(has(form, "theorem rolesOk :"));
-  EXPECT_FALSE(has(form, "noFieldForm"));
-  EXPECT_FALSE(has(form, "RealizeField"));
+  d.fields = {{"GF(2^128)", "2", 128}};
+  compiler::ProofModuleData::Domain h;
+  h.name = "H";
+  h.field = 0;
+  h.edges = {"1:16:s", "16:8:m", "64:2:m"};
+  d.domain_data = {h};
+  d.packing_queries.resize(1);
+  d.packing_queries[0].edges = h.edges;
+  d.packing_queries[0].nodes = {{"GF(2^16)", 16}, {"bit", 1}};
+  d.packing_queries[0].skips = {{16, 2}};
+  const compiler::SystemPlan sp = compiler::system_plan(d);
+  EXPECT_EQ(compiler::packing_desc_text(d, sp, 0),
+            "{ n := 128, q := 2 ^ 2 ^ 4,\n"
+            "  edges := [(1, 16, .squaringChain, true), (16, 8, .subfieldMasks, true), "
+            "(64, 2, .subfieldMasks, true)],\n"
+            "  nodeDegs := [(\"GF(2^16)\", some 16), (\"bit\", some 1)],\n"
+            "  skips := [(16, 2, true)],\n  hasNodes := true,\n"
+            "  masks := [(1, 16, .squaringChain, 0, 136), "
+            "(16, 8, .subfieldMasks, 64, 0), (64, 2, .subfieldMasks, 16, 0)] }");
+  d.packing_queries[0].edges.push_back("2:8:s");
+  EXPECT_NE(compiler::packing_desc_text(d, sp, 0).find("(2, 8, .squaringChain, false)"),
+            std::string::npos);
+  EXPECT_NE(compiler::packing_desc_text(d, sp, 0).find("(2, 8, .squaringChain, 0, 0)"),
+            std::string::npos);
+}
+
+// Mask counts for both a non-prime mask subfield and the multi-stage odd
+// field. A key that the registry does not recognize must not invent a kit.
+TEST(GordieHowePlanExport, PackingMaskCounts) {
+  const auto *binary = compiler::field_model("GF(2^256)");
+  const auto *odd = compiler::field_model("F_q^20");
+  ASSERT_NE(binary, nullptr);
+  ASSERT_NE(odd, nullptr);
+  EXPECT_EQ(compiler::field_mask_nums(*binary, 256, "16:4:m"),
+            (std::pair<size_t, size_t>{64, 0}));
+  EXPECT_EQ(compiler::field_mask_nums(*odd, 20, "1:4:m"),
+            (std::pair<size_t, size_t>{80, 0}));
+  EXPECT_EQ(compiler::field_mask_nums(*odd, 20, "4:5:m"),
+            (std::pair<size_t, size_t>{100, 0}));
+  EXPECT_EQ(compiler::field_mask_nums(*odd, 20, "bad-key"),
+            (std::pair<size_t, size_t>{0, 0}));
 }
 
 // A proof module's path is guarded like the data modules': a rerun of the
@@ -1881,13 +2842,12 @@ TEST(GordieHowePlanExport, ProofModulePathsAreNotShared) {
   const compiler::ExportMeta toy{"toy", "wide", "c0ffee", "run-0", 0};
   compiler::ProofModuleData d;
   d.meta = toy;
-  d.domains = {"A"};
   compiler::ExportMeta other{"other", "wide", "c0ffee", "run-0", 0};
   other.lean_name = "Toy.QROMParams";
   compiler::ProofModuleData od = d;
   od.meta = other;
-  const auto mods = compiler::proof_modules(d, {});
-  const auto others = compiler::proof_modules(od, {});
+  const auto mods = compiler::proof_modules(d);
+  const auto others = compiler::proof_modules(od);
   ASSERT_EQ(others.size(), mods.size());
   for (size_t i = 0; i < mods.size(); ++i) {
     const auto &mod = mods[i];
@@ -1902,6 +2862,15 @@ TEST(GordieHowePlanExport, ProofModulePathsAreNotShared) {
     EXPECT_THROW(compiler::lean_proof_file(dir.string(), other, others[i]),
                  std::runtime_error);
   }
+  // A check module is below its source tree, the root at the program's path.
+  const compiler::ProofModule leaf{"WellFormed", "# leaf", "",
+                                   compiler::plan_proofs_internal::kKernelCheckRoot};
+  EXPECT_EQ(compiler::lean_proof_file(dir.string(), toy, leaf),
+            (dir / "Check/Kernel/GordieHoweCheck/Toy/QROMParams/WellFormed.lean").string());
+  const compiler::ProofModule root{"", "# root", "",
+                                   compiler::plan_proofs_internal::kNativeCheckRoot};
+  EXPECT_EQ(compiler::lean_proof_file(dir.string(), toy, root),
+            (dir / "Check/Native/GordieHoweCheck/Toy/QROMParams.lean").string());
   std::filesystem::remove_all(dir);
 }
 
@@ -1927,7 +2896,7 @@ TEST(GordieHowePlanExport, StructureModField) {
       compiler::build_structure(*comp, p, compiler::export_certificates(*comp));
   std::vector<const compiler::StructureRecords::Gadget *> fields;
   for (const auto &g : r.gadgets)
-    if (g.kind == "modField") fields.push_back(&g);
+    if (g.kind == compiler::StructureRecords::GadgetKind::modField) fields.push_back(&g);
   ASSERT_EQ(fields.size(), 1u);
   ASSERT_EQ(fields[0]->preds.size(), 2u);
   EXPECT_EQ(fields[0]->preds[0], m);
@@ -2002,7 +2971,8 @@ TEST(GordieHowePlanExport, StructureIvlSources) {
       *t.c, compiler::ExportMeta{"ivl", "wide", "c0ffee", "run-0", 0});
   const compiler::StructureRecords r =
       compiler::build_structure(*t.c, p, compiler::export_certificates(*t.c));
-  std::map<size_t, std::string> src(r.ivl_sources.begin(), r.ivl_sources.end());
+  const auto ivls = ivl_text(r);
+  std::map<size_t, std::string> src(ivls.begin(), ivls.end());
   auto value = [&](const std::string &nm) {
     for (size_t i = 0; i < p.values.size(); ++i)
       if (p.values[i].name == nm) return i;
@@ -2016,7 +2986,7 @@ TEST(GordieHowePlanExport, StructureIvlSources) {
     return SIZE_MAX;
   };
   if (std::getenv("GH_PRINT_GOLDEN") != nullptr) {
-    for (const auto &[v, s] : r.ivl_sources)
+    for (const auto &[v, s] : ivl_text(r))
       std::printf("ivl %zu %s %s: %s\n", v, p.values[v].name.c_str(),
                   p.values[v].kind.c_str(), s.c_str());
     for (size_t i = 0; i < p.predicates.size(); ++i)
@@ -2107,7 +3077,8 @@ TEST(GordieHowePlanExport, StructureIvlDeclaredWiderFails) {
 // table group and every MAC whose H half no domain checks has a host, and
 // each challenge's value is the least holding it.
 void check_placement(const ir::Program &P, const compiler::StructureRecords &r) {
-  std::map<size_t, std::string> routes(r.routes.begin(), r.routes.end());
+  const auto texts = route_text(r);
+  std::map<size_t, std::string> routes(texts.begin(), texts.end());
   EXPECT_EQ(routes.size(), r.routes.size());
   size_t needs = 0;
   for (size_t pid = 0; pid < P.predicates.size(); ++pid) {
@@ -2231,13 +3202,13 @@ TEST(GordieHowePlanExport, StructurePlacement) {
   EXPECT_FALSE(r.logup_hosts.empty());
   EXPECT_FALSE(r.chal_values.empty());
   if (std::getenv("GH_PRINT_GOLDEN") != nullptr) {
-    for (const auto &[pid, s] : r.routes)
+    for (const auto &[pid, s] : route_text(r))
       std::printf("route %zu %s: %s\n", pid, P.predicates[pid].name.c_str(), s.c_str());
   }
   const std::string o = compiler::print_structure(r);
   ASSERT_FALSE(r.routes.empty());
   EXPECT_NE(o.find("  routes := [(" + std::to_string(r.routes[0].first) + ", " +
-                   r.routes[0].second + ")"),
+                   compiler::structure_records_internal::route(r.routes[0].second) + ")"),
             std::string::npos)
       << o;
   // The other structure tests' programs.
@@ -2342,8 +3313,8 @@ TEST(GordieHowePlanExport, StructureRealizedMismatchOrder) {
     compiler::StructureRecords out;
     compiler::structure_records_internal::place::routes(P, out);
     ASSERT_EQ(out.routes.size(), 2u);
-    EXPECT_EQ(out.routes[0], (std::pair<size_t, std::string>{0, ".realized 1 [1, 0, 0]"}));
-    EXPECT_EQ(out.routes[1], (std::pair<size_t, std::string>{1, ".affine false"}));
+    EXPECT_EQ(route_text(out)[0], (std::pair<size_t, std::string>{0, ".realized 1 [1, 0, 0]"}));
+    EXPECT_EQ(route_text(out)[1], (std::pair<size_t, std::string>{1, ".affine false"}));
   }
   // No conversions: the realized predicate's own sides.
   {
@@ -2352,7 +3323,7 @@ TEST(GordieHowePlanExport, StructureRealizedMismatchOrder) {
     Q.predicates[0].rhs = rr;
     compiler::StructureRecords out;
     compiler::structure_records_internal::place::routes(Q, out);
-    EXPECT_EQ(out.routes.at(0).second, ".realized 1 []");
+    EXPECT_EQ(route_text(out).at(0).second, ".realized 1 []");
   }
   // A difference other than at shared entries: another leaf.
   {
@@ -2385,6 +3356,16 @@ TEST(GordieHowePlanExport, StructureRealizedMismatchOrder) {
 // The other routes and the hosts on the hand-built program: a batch part,
 // a circuit entry, a row on bit views; rejections: a predicate its target
 // batch lacks, a group with no host, a MAC with no H host.
+TEST(GordieHowePlanExport, StructureUnknownTargetRejects) {
+  ir::Program P = placement_program();
+  P.predicates.resize(1);
+  P.predicates[0].target.kind = static_cast<ir::Target::Kind>(255);
+  compiler::StructureRecords out;
+  EXPECT_THROW(compiler::structure_records_internal::place::routes(P, out),
+               std::runtime_error);
+  EXPECT_TRUE(out.routes.empty());
+}
+
 TEST(GordieHowePlanExport, StructurePlacementRejects) {
   using ir::Expr;
   ir::Program P = placement_program();
@@ -2425,7 +3406,7 @@ TEST(GordieHowePlanExport, StructurePlacementRejects) {
   compiler::StructureRecords out;
   compiler::structure_records_internal::place::routes(P, out);
   compiler::structure_records_internal::place::hosts(P, out);
-  EXPECT_EQ(out.routes, (std::vector<std::pair<size_t, std::string>>{
+  EXPECT_EQ(route_text(out), (std::vector<std::pair<size_t, std::string>>{
                             {0, ".batch 0 1"}, {1, ".gkr 0 1"}, {2, ".affine true"}}));
   EXPECT_EQ(out.logup_hosts.size(), 1u);
   EXPECT_EQ(out.logup_hosts.at(0).second, (std::pair<size_t, size_t>{0, 2}));
@@ -2475,3 +3456,21 @@ TEST(GordieHowePlanExport, StructurePlacementRejects) {
 
 }  // namespace
 }  // namespace proofs::gordiehowe
+
+TEST(GordieHoweDerivsExport, ExplicitLiteralProfile) {
+  using namespace proofs::gordiehowe;
+  const compiler::ExportMeta meta{"toy", "wide", "EXPORTER_COMMIT", "exports", 0};
+  ir::Program p;
+  ir::Certificates c;
+  const std::string text = compiler::print_derivations_module(p, c, meta, "0123456789abcdef");
+  EXPECT_NE(text.find("load_program_ghc \"Derivs.ghc\" \"0123456789abcdef\""), std::string::npos);
+  EXPECT_NE(text.find("public import GordieHowe.Language.Realizations.Circuit.LoadNative"),
+            std::string::npos);
+  EXPECT_NE(text.find("meta import GordieHowe.Language.Realizations.Circuit.LoadNative"),
+            std::string::npos);
+  EXPECT_EQ(text.find("def derivs :"), std::string::npos);
+  EXPECT_EQ(text.find("def ranks :"), std::string::npos);
+  EXPECT_EQ(text.find("def shared :"), std::string::npos);
+  EXPECT_NE(text.find("def derivations : Derivations := { derivs := derivs, ranks := ranks, shared := shared }"),
+            std::string::npos);
+}

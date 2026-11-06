@@ -11,7 +11,7 @@ public import GordieHowe.Foundations.Algebra.ReconstructSum
 public import GordieHowe.Language.Realizations.Bits
 public import GordieHowe.Language.Realizations.Range
 public import GordieHowe.Applications.Falcon512.Native.Rows
-public import GordieHowe.Applications.Rows.MAC
+public import GordieHowe.Language.Realizations.MACRows
 public import GordieHowe.Foundations.Algebra.DFT
 public import GordieHowe.Foundations.Algebra.DFTExtra
 public import GordieHowe.Applications.Falcon512.Spec.Encoding

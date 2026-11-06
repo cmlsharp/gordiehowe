@@ -13,7 +13,7 @@ public import GordieHowe.Foundations.Algebra.ConvMatrix
 public import GordieHowe.Foundations.Algebra.ReconstructSum
 public import GordieHowe.Applications.Falcon512.System.Source
 public import GordieHowe.Language.Realizations.Lowering
-public import GordieHowe.Applications.Falcon512.Gadgets.SelectFirstN
+public import GordieHowe.Language.Library.Select.CutoffBits
 public import GordieHowe.Language.Realizations.MaskSubfield
 public import GordieHowe.Applications.Falcon512.PoP.Relation
 

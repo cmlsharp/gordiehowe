@@ -53,11 +53,11 @@ class MldsaHShuffle (program : RealizedProgram) : Prop extends MldsaHSelect prog
   /-- The program has a phase. -/
   phases_pos : 0 < program.phases
   /-- `pred268`. -/
-  pred268 : program.predicate 268 = «p.h2c.sample.mem.origin»
-  /-- `pred269`. -/
-  pred269 : program.predicate 269 = «p.h2c.sample.mem»
+  pred268 :
+    ∃ t, (program.predicate 268).body = .equal 1 (.add (.leaf 565) (.apply (.sum 6) (.mul (.reindex idx79 (.leaf 561)) (.reindex idx80 (.leaf 48))))) (.leaf 47) t
   /-- `pred270`. -/
-  pred270 : program.predicate 270 = «p.h2c.sample.mem.fresh»
+  pred270 :
+    ∃ t, (program.predicate 270).body = .equal 1 (.logic .lt 6 [.leaf 561, .leaf 53]) (.leaf 54) t
   /-- `expr520`. -/
   expr520 : program.expr 520 = .reindex idx54 (.leaf 554)
   /-- `expr521`. -/
@@ -73,7 +73,7 @@ class MldsaHShuffle (program : RealizedProgram) : Prop extends MldsaHSelect prog
   /-- `freshLen`. -/
   freshLen : program.exprLen (.logic .lt 6 [.leaf 561, .leaf 53]) = 39
   /-- `pred269_body`. -/
-  pred269_body : (program.predicate 269).body = .equal 1 (.add (.prod 295 memR) (.prod 295 memW)) (.leaf 35) (.gkr 1)
+  pred269_body : ∃ t, (program.predicate 269).body = .equal 1 (.add (.prod 295 memR) (.prod 295 memW)) (.leaf 35) t
   /-- The constants of the records. -/
   recConsts : program.isConstant 49 = true ∧ program.valueField 49 = 1 ∧ (∀ k < 256, (program.constEntries 49).getD k 0 = RealizedProgram.xorSel k fun u => (program.constEntries 36).getD u 0) ∧ program.isConstant 50 = true ∧ program.valueField 50 = 1 ∧ (∀ k < 217, (program.constEntries 50).getD k 0 = RealizedProgram.xorSel k fun u => (program.constEntries 36).getD u 0) ∧ program.isConstant 51 = true ∧ program.valueField 51 = 1 ∧ program.constEntries 51 = List.replicate 217 0 ∧ program.isConstant 52 = true ∧ program.valueField 52 = 1 ∧ (∀ t < 39, (program.constEntries 52).getD t 0 = RealizedProgram.xorSel (t + 1) fun u => (program.constEntries 36).getD u 0)
   /-- The lengths of the records' parts. -/
@@ -82,24 +82,24 @@ class MldsaHShuffle (program : RealizedProgram) : Prop extends MldsaHSelect prog
 set_option maxRecDepth 4096 in
 /-- The native program at the ROM parameters has these facts. -/
 instance : MldsaHShuffle program where
-  phases_pos := by decide
-  pred268 := rfl
-  pred269 := rfl
-  pred270 := rfl
-  expr520 := rfl
-  expr521 := rfl
-  expr522 := rfl
-  refsMem := by decide +kernel
+  phases_pos := by shape_decide
+  pred268 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_h2c_2esample_2emem_2eorigin_body
+  pred270 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_h2c_2esample_2emem_2efresh_body
+  expr520 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2esample_2emem_2eunit_2eshape_2eleft_2esecond_2efirst_2efirst_eq
+  expr521 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2esample_2emem_2eshape_2eleft_2efirst_2efirst_2esecond_2efirst_2efirst_2efirst_2efirst_2efirst_eq
+  expr522 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2eshared_eq
+  refsMem := by shape_decide
   cellFacts := by
-    decide +kernel
+    shape_decide
   memConsts := by
-    decide +kernel
-  freshLen := by decide +kernel
-  pred269_body := rfl
+    shape_decide
+  freshLen := by shape_decide
+  pred269_body := Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_h2c_2esample_2emem_body
   recConsts := by
-    decide +kernel
+    shape_decide
   recLens := by
-    decide +kernel
+    simp only [memR]
+    shape_decide
 
 /-- **`θ = g^21845`**, computed in the spread representation. -/
 theorem thetaPow : GF2_128Exec.gfPow 15 21845 gf2_128SubfieldGenBV =
@@ -117,28 +117,22 @@ theorem decode_theta1 : gf2_128OfNat 54969562866131847669016652494142573320 =
     gf2_128OfNat_one]
   rfl
 
-/-- **`h2c.sample.mem.unit` at the constant `c`** (`θ + 1` in domain `H`'s field): the unit written
-at step `t` is `1 + c · sign_t`. -/
-def memUnitPred (c : ℕ) : RealizedProgram.Predicate :=
-  { name := "h2c.sample.mem.unit",
-    body := .equal 1 (.add (.leaf 564) (.add (.scale (.const c) (.ref 520)) (.reindex idx76 (.leaf 6))))
-      (.leaf 47) .affine,
-    reads := [], degree := [], role := .source }
-
 /-- **The program-and-field facts of domain `H` SampleInBall's memory check reads**
 (`MldsaHConstsSelect` and): predicate `267` and the shared expression `523` scale by a constant that
 decodes to `θ + 1`. Each program and field instantiates it once. -/
 class MldsaHConsts (program : RealizedProgram) (FH : RealizedProgram.FieldInterp) [HField FH] : Prop
     extends MldsaHConstsSelect program FH where
   /-- The constant `θ + 1` of predicate `267` and the shared expression `523`. -/
-  theta : ∃ c, program.predicate 267 = memUnitPred c ∧
+  theta : ∃ c, (∃ t, (program.predicate 267).body = .equal 1
+      (.add (.leaf 564) (.add (.scale (.const c) (.ref 520)) (.reindex idx76 (.leaf 6)))) (.leaf 47) t) ∧
     program.expr 523 = .add (.leaf 562) (.scale (.const c) (.ref 522)) ∧
     FH.decode c = (HField.Θ (FH := FH)).θ + 1
 
 set_option maxRecDepth 4096 in
 /-- The native program at the ROM parameters, over `GF(2^128)`: the constant is `θ + 1 = g^21845 + 1`. -/
 instance : MldsaHConsts program RealizedProgram.gf128 where
-  theta := ⟨54969562866131847669016652494142573320, rfl, rfl, decode_theta1⟩
+  theta := ⟨54969562866131847669016652494142573320, Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_h2c_2esample_2emem_2eunit_body, Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2efirst_eq,
+    decode_theta1⟩
 
 set_option linter.unusedSectionVars false
 
@@ -154,10 +148,12 @@ section Tables
 
 set_option maxRecDepth 4096
 
-theorem pred268 : program.predicate 268 = «p.h2c.sample.mem.origin» :=
+theorem pred268 :
+    ∃ t, (program.predicate 268).body = .equal 1 (.add (.leaf 565) (.apply (.sum 6) (.mul (.reindex idx79 (.leaf 561)) (.reindex idx80 (.leaf 48))))) (.leaf 47) t :=
   MldsaHShuffle.pred268
 
-theorem pred270 : program.predicate 270 = «p.h2c.sample.mem.fresh» :=
+theorem pred270 :
+    ∃ t, (program.predicate 270).body = .equal 1 (.logic .lt 6 [.leaf 561, .leaf 53]) (.leaf 54) t :=
   MldsaHShuffle.pred270
 
 theorem expr520 : program.expr 520 = .reindex idx54 (.leaf 554) :=
@@ -318,7 +314,7 @@ theorem unitRow {e : program.Env interp} (hs : HSatCore e) (t : Fin 39) :
     (samLowered e).unit t = MemoryShuffle.unit (samM program F0 FH).Θ (signsH (program.reader e) t) := by
   have ht := t.isLt
   have h := hs.preds 267 (by norm_num) (by norm_num)
-  obtain ⟨c, hp, -, hc0⟩ := MldsaHConsts.theta (program := program) (FH := FH)
+  obtain ⟨c, ⟨_, hp⟩, -, hc0⟩ := MldsaHConsts.theta (program := program) (FH := FH)
   rw [hp] at h
   have hh := h t (by rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_leaf, (cellFacts (program := program)).2.2.2.2.2.2.1]; exact ht)
   change program.evalE _ (program.domainField 1) _ _ =
@@ -345,7 +341,8 @@ theorem originRow {e : program.Env interp} (hs : HSatCore e) (t : Fin 39) :
     (samLowered e).origin t = (samM program F0 FH).originOf ((samLowered e).readOrigin t) := by
   have ht := t.isLt
   have h := hs.preds 268 (by norm_num) (by norm_num)
-  rw [(pred268 (program := program))] at h
+  obtain ⟨_, hp268⟩ := pred268 (program := program)
+  rw [hp268] at h
   have hh := h t (by rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_leaf, (cellFacts (program := program)).2.2.2.2.2.2.2]; exact ht)
   change program.evalE _ (program.domainField 1) _ _ =
     program.evalE _ (program.domainField 1) _ _ at hh
@@ -369,7 +366,8 @@ theorem freshRow {e : program.Env interp} (hs : HSatCore e) (t : Fin 39) :
     Bits.ltConst ((samLowered e).readOrigin t) ((t : ℕ) + 1) = 1 := by
   have ht := t.isLt
   have h := hs.preds 270 (by norm_num) (by norm_num)
-  rw [(pred270 (program := program))] at h
+  obtain ⟨_, hp270⟩ := pred270 (program := program)
+  rw [hp270] at h
   have hh := h t (by rw [(freshLen (program := program))]; exact ht)
   change program.evalE _ (program.domainField 1) _ _ =
     program.evalE _ (program.domainField 1) _ _ at hh
@@ -412,7 +410,7 @@ theorem decodeRow (e : program.Env interp) (k : Fin 256) :
 
 /-! ## The permutation -/
 
-theorem pred269_body : (program.predicate 269).body = .equal 1 (.add (.prod 295 memR) (.prod 295 memW)) (.leaf 35) (.gkr 1) :=
+theorem pred269_body : ∃ t, (program.predicate 269).body = .equal 1 (.add (.prod 295 memR) (.prod 295 memW)) (.leaf 35) t :=
   MldsaHShuffle.pred269_body
 
 /-- The constants of the records. -/
@@ -621,7 +619,8 @@ theorem permRow {e : program.Env interp} (hs : HSatCore e) :
       (((samM program F0 FH).writesPacked (samLowered e)).map fun x => memDelta (program.reader e) - x).prod := by
   have h36 := fun i => RealizedProgram.reader_of_constant e (RealizedProgram.kind_of_isConstant (selConstsA (program := program)).1) i
   have h := hs.preds 269 (by norm_num) (by norm_num)
-  rw [(pred269_body (program := program))] at h
+  obtain ⟨_, hp269⟩ := pred269_body (program := program)
+  rw [hp269] at h
   have h0 := h 0 (by
     rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_prod, (recLens (program := program)).2.2.2.2.2.2.2.2]
     norm_num)

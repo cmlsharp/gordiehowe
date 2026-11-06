@@ -3,7 +3,7 @@
 
 import GordieHowe.Language.Honest.Exec
 import GordieHowe.Language.Realizations.Derivation
-import GordieHowe.Generated.Falcon512.Native.ROMParams.Realize
+import GordieHowe.Generated.Falcon512.Native.ROMParams.Data
 
 /-!
 # Tests of the companion rows, the interval sources and the type roles

@@ -4,7 +4,7 @@
 module
 
 public import GordieHowe.SPBCS.Sampler.ChallengeReader
-public import GordieHowe.Applications.Keccak.HashCircuit.Skip
+public import GordieHowe.ProofSystem.Zerocheck.AltRounds
 public import GordieHowe.ProofSystem.GKR.Transcript
 public import GordieHowe.ProofSystem.Ligero.Tableau
 public import GordieHowe.ProofSystem.Program.AppPhase

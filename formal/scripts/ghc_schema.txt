@@ -70,6 +70,24 @@ inductive GordieHowe.RealizedProgram.BinOp (params 0)
   | and
   | or
   | xor
+structure GordieHowe.RealizedProgram.CDerivations (params 0)
+  derivs : List (List GordieHowe.RealizedProgram.CStep)
+  ranks : Nat
+inductive GordieHowe.RealizedProgram.CStep (params 0)
+  | pure GordieHowe.RealizedProgram.Step
+  | conclude Nat
+  | source
+  | quotIn Nat
+  | digitRow Nat
+  | macRow Nat Nat GordieHowe.RealizedProgram.MacRole
+  | padBool
+  | commIn Nat Nat
+  | commRow Nat (List Nat)
+  | hyp Nat
+  | specProd Nat
+  | specRow Nat
+  | fieldRow
+  | twoTail Nat Nat
 structure GordieHowe.RealizedProgram.CircuitData (params 0)
   c : Nat
   w : Nat
@@ -133,6 +151,128 @@ structure GordieHowe.RealizedProgram.ETerm (params 0)
   scale : Nat
   view : Nat
   ops : List GordieHowe.RealizedProgram.EOp
+inductive GordieHowe.RealizedProgram.Expr (params 0)
+  | leaf Nat
+  | add GordieHowe.RealizedProgram.Expr GordieHowe.RealizedProgram.Expr
+  | sub GordieHowe.RealizedProgram.Expr GordieHowe.RealizedProgram.Expr
+  | scale GordieHowe.RealizedProgram.Coef GordieHowe.RealizedProgram.Expr
+  | mul GordieHowe.RealizedProgram.Expr GordieHowe.RealizedProgram.Expr
+  | reindex GordieHowe.RealizedProgram.IndexMap GordieHowe.RealizedProgram.Expr
+  | concat GordieHowe.RealizedProgram.Expr GordieHowe.RealizedProgram.Expr
+  | linear (List (List (Prod Nat GordieHowe.RealizedProgram.Coef))) GordieHowe.RealizedProgram.Expr
+  | prod Nat GordieHowe.RealizedProgram.Expr
+  | mux GordieHowe.RealizedProgram.Expr GordieHowe.RealizedProgram.Expr GordieHowe.RealizedProgram.Expr
+  | apply GordieHowe.RealizedProgram.NamedOp GordieHowe.RealizedProgram.Expr
+  | ref Nat
+  | logic GordieHowe.RealizedProgram.LogicOp Nat (List GordieHowe.RealizedProgram.Expr)
+structure GordieHowe.RealizedProgram.ExprAnn (params 0)
+  maxId : Nat
+  fields : Nat
+  pub : Nat
+  len : Nat
+  deg : Nat
+  zero : Nat
+  maxW : Nat
+  fieldW : Nat
+  lenW : Nat
+  degW : Nat
+inductive GordieHowe.RealizedProgram.Fact (params 0)
+  | eq Nat GordieHowe.RealizedProgram.Expr GordieHowe.RealizedProgram.Expr
+  | nat Nat GordieHowe.RealizedProgram.Expr Nat
+  | ivl Nat GordieHowe.RealizedProgram.Expr Int Int
+  | intEq Nat GordieHowe.RealizedProgram.Expr GordieHowe.RealizedProgram.Expr
+  | dvd Nat GordieHowe.RealizedProgram.Expr Nat
+  | inRows Nat GordieHowe.RealizedProgram.Expr
+  | holds Nat
+  | kernel Nat Nat Nat Nat Nat Bool Int Int
+  | real GordieHowe.RealizedProgram.RealCircuit
+structure GordieHowe.RealizedProgram.Gadget (params 0)
+  kind : GordieHowe.RealizedProgram.GadgetKind
+  preds : List Nat
+  values : List Nat
+  params : List Nat
+  parts : List GordieHowe.RealizedProgram.GadgetPart
+inductive GordieHowe.RealizedProgram.GadgetKind (params 0)
+  | selectRow
+  | spectralProduct
+  | selectFirst
+  | keccak
+  | macSite
+  | modField
+  | modCommitted
+  | modGrouped
+  | modDigits
+  | modOneDigit
+  | lookupTwoSided
+  | lookupDigits
+  | packedTable
+inductive GordieHowe.RealizedProgram.GadgetPart (params 0)
+  | expr GordieHowe.RealizedProgram.Expr
+  | kernel Nat Nat Nat Nat Nat Nat
+  | stream Nat (Option Nat)
+  | kernelOf Nat Nat Nat
+inductive GordieHowe.RealizedProgram.Gen (params 0)
+  | none
+  | source
+  | lookupDigit Nat Bool Nat
+  | commDigit Nat Nat Nat Nat
+  | spec Nat
+  | staticHist Nat Nat
+  | tag Nat
+  | acc Nat
+  | quotDigit Nat
+  | digitsAcc Nat
+  | lowDigit Nat Nat
+  | lateHist Nat Nat
+inductive GordieHowe.RealizedProgram.IvlSource (params 0)
+  | const
+  | opaqueBit
+  | declared Nat
+  | shiftRange Nat
+  | range Nat
+  | quadRoot Nat Nat
+  | rootSet (List Nat)
+  | prime
+inductive GordieHowe.RealizedProgram.IvlSrc (params 0)
+  | const
+  | declared Nat
+  | nat Nat
+  | prime
+  | opaqueBit
+  | shift Nat
+  | quadRoot Nat Nat
+  | rootSet (List Nat)
+  | tableHull (List Nat) Int Int
+  | tableKernel Nat Nat (List Nat) Int Int
+inductive GordieHowe.RealizedProgram.LinOpStep (params 0)
+  | congr Nat GordieHowe.RealizedProgram.Expr
+  | rows GordieHowe.RealizedProgram.NamedOp GordieHowe.RealizedProgram.Expr (List (List (Prod Nat GordieHowe.RealizedProgram.Coef))) (List (List (Prod Nat GordieHowe.RealizedProgram.Coef)))
+  | spectral Nat Nat
+  | nttInv Nat Nat GordieHowe.RealizedProgram.Expr
+  | inttInv Nat Nat GordieHowe.RealizedProgram.Expr
+  | convNtt Nat Nat GordieHowe.RealizedProgram.Expr
+  | convCoef Nat Nat GordieHowe.RealizedProgram.Expr
+  | transposeInv Nat Nat Nat GordieHowe.RealizedProgram.Expr
+  | convBcastNtt Nat Nat Nat GordieHowe.RealizedProgram.Expr
+  | convMatNtt Nat Nat Nat Nat GordieHowe.RealizedProgram.Expr
+  | adjoint Nat Nat GordieHowe.RealizedProgram.Expr GordieHowe.RealizedProgram.Expr
+inductive GordieHowe.RealizedProgram.LogicOp (params 0)
+  | lt
+  | leq
+  | eq
+  | any
+  | all
+inductive GordieHowe.RealizedProgram.MacRole (params 0)
+  | tail
+  | h
+  | accRow
+  | groupRow Nat
+  | residues
+  | gqLookup
+  | quotLookup
+  | lowLookup
+  | topLookup
+  | wrap
 inductive GordieHowe.RealizedProgram.NamedOp (params 0)
   | negacyclicConv Nat GordieHowe.RealizedProgram.ConvForm
   | polyMatVec Nat Nat Nat GordieHowe.RealizedProgram.ConvForm
@@ -152,6 +292,73 @@ inductive GordieHowe.RealizedProgram.NamedOp (params 0)
 inductive GordieHowe.RealizedProgram.NttOrder (params 0)
   | scheme
   | natural
+structure GordieHowe.RealizedProgram.Origin (params 0)
+  gadget : Nat
+  slot : Nat
+inductive GordieHowe.RealizedProgram.RealCircuit (params 0)
+  | logup Nat Nat
+  | macH Nat
+  | named String
+  | unmodeled Nat
+inductive GordieHowe.RealizedProgram.Route (params 0)
+  | affine Bool
+  | quadratic
+  | batch Nat Nat
+  | gkr Nat Nat
+  | realized Nat (List Nat)
+structure GordieHowe.RealizedProgram.SharedEntry (params 0)
+  fact : GordieHowe.RealizedProgram.Fact
+  rank : Nat
+  steps : List GordieHowe.RealizedProgram.Step
+inductive GordieHowe.RealizedProgram.Step (params 0)
+  | realized Nat
+  | subst GordieHowe.RealizedProgram.Expr GordieHowe.RealizedProgram.Expr
+  | linear (List (Prod Nat Int)) GordieHowe.RealizedProgram.Expr GordieHowe.RealizedProgram.Expr
+  | lookup (List (Prod Nat (Prod Nat Nat)))
+  | rangeNat Nat
+  | holdsIn Nat
+  | src Nat GordieHowe.RealizedProgram.IvlSrc
+  | ivlNat Nat
+  | ivlExpr (List Nat) GordieHowe.RealizedProgram.Expr Int Int
+  | ivlSolve Nat (List Nat) GordieHowe.RealizedProgram.Expr Nat Int Int
+  | ivlApply Nat (Option Nat) GordieHowe.RealizedProgram.Expr Int Int
+  | ivlLogic (List Nat) GordieHowe.RealizedProgram.Expr
+  | ivlMeet Nat Nat
+  | ivlDisjoint Nat Nat
+  | fieldDvd Nat Nat Nat
+  | natIvl Nat
+  | natComp Nat Nat
+  | natLin Nat (List Nat)
+  | natBool Nat
+  | liftConst Nat Nat
+  | transport Nat Nat
+  | lift Nat Nat Nat
+  | digits Nat (List Nat) Nat
+  | congr Nat
+  | mac (List Nat) (Option Nat) (List Nat)
+  | linop GordieHowe.RealizedProgram.LinOpStep
+  | conclude Nat
+  | hyp Nat
+  | fact Nat
+  | inDom Nat GordieHowe.RealizedProgram.Step
+  | groupedMod (List Nat) (List Nat)
+  | productMod (List Nat)
+  | circuitAssert Nat
+  | inputPremise Nat
+structure GordieHowe.RealizedProgram.Structure (params 0)
+  gadgets : List GordieHowe.RealizedProgram.Gadget
+  origins : List (Prod Nat GordieHowe.RealizedProgram.Origin)
+  messages : List (Prod Nat Nat)
+  boundRecs : List (Prod Nat Nat)
+  memberValues : List (Prod Nat Nat)
+  routes : List (Prod Nat GordieHowe.RealizedProgram.Route)
+  logupHosts : List (Prod (Prod Nat Nat) (Prod Nat Nat))
+  macHosts : List (Prod Nat (Prod Nat Nat))
+  chalValues : List (Prod Nat Nat)
+  ivlSources : List (Prod Nat GordieHowe.RealizedProgram.IvlSource)
+  tableGadgets : List (Prod Nat Nat)
+  macRequests : List (Prod Nat (List Nat))
+  modRequests : List (Prod Nat (List Nat))
 inductive GordieHowe.RealizedProgram.Trie (params 1)
   | nil
   | leaf #0

@@ -154,14 +154,6 @@ def PackFreeAt (e : ir.Env I) : Prop :=
       packWith (fun c => (castElt (ir.reader e P c) : (I (ir.chalField (ir.alphaOf t))).K)) a =
         packWith (fun c => castElt (ir.reader e P c)) a' → a = a'
 
-variable (ir) in
-/-- **No table is packed at a value.** -/
-def NoGammaTables : Prop := ∀ t < ir.tables.length, ir.gammaPack? t = none
-
-instance : Decidable ir.NoGammaTables := by
-  unfold NoGammaTables
-  infer_instance
-
 /-- **A program with no table packed at a value has injective packings** in every environment. -/
 theorem packFreeAt_of_noGamma (h : ir.NoGammaTables) (e : ir.Env I) : ir.PackFreeAt I e := by
   intro t ht P A b hp

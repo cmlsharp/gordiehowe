@@ -3,10 +3,14 @@
 
 import Lean
 import GordieHoweNative.Data
+import GordieHoweNative.Language.RealizedProgram.Annotations
+import GordieHoweNative.Language.Completeness.Deriv
+import GordieHoweNative.Language.RealizedProgram.Structure
 
 /-! The schema of the `.ghc` data types as text: every inductive type `GordieHoweNative/Data.lean`
-declares, sorted by name, with its parameter count and its constructors in Lean's order; a
-structure with its fields' names and types, any other inductive with each constructor's name and
+declares and the program certificate types and their constructor dependencies, sorted by name, with their
+parameter counts and constructors in Lean's order; a structure with its fields' names and types,
+any other inductive with each constructor's name and
 field types. A type is printed as the C++ schema prints it (`ghc::Ty::text`): full constant names,
 applications parenthesized as arguments, `#i` for the type's parameter `i`. The C++ writer's schema
 (`lib/gordiehowe/compiler/ghc_gkr.h`, `gkr_schema`) prints the same text (`ghc::Schema::dump`, the
@@ -39,6 +43,19 @@ run_cmd liftTermElabM do
   for (n, ci) in env.constants.map₁.toList do
     if env.getModuleIdxFor? n != some mod || n.isInternal then continue
     if let .inductInfo v := ci then types := types.push (n, v)
+  for name in #[``GordieHowe.RealizedProgram.ExprAnn, ``GordieHowe.RealizedProgram.Gen,
+      ``GordieHowe.RealizedProgram.LogicOp, ``GordieHowe.RealizedProgram.Expr,
+      ``GordieHowe.RealizedProgram.IvlSrc, ``GordieHowe.RealizedProgram.LinOpStep,
+      ``GordieHowe.RealizedProgram.Step, ``GordieHowe.RealizedProgram.MacRole,
+      ``GordieHowe.RealizedProgram.CStep, ``GordieHowe.RealizedProgram.CDerivations,
+      ``GordieHowe.RealizedProgram.RealCircuit, ``GordieHowe.RealizedProgram.Fact,
+      ``GordieHowe.RealizedProgram.SharedEntry, ``GordieHowe.RealizedProgram.GadgetKind,
+      ``GordieHowe.RealizedProgram.GadgetPart, ``GordieHowe.RealizedProgram.Gadget,
+      ``GordieHowe.RealizedProgram.Origin, ``GordieHowe.RealizedProgram.Route,
+      ``GordieHowe.RealizedProgram.IvlSource, ``GordieHowe.RealizedProgram.Structure] do
+    let .inductInfo value ← getConstInfo name
+      | throwError "{name} is not an inductive type"
+    types := types.push (value.name, value)
   for (n, v) in types.qsort (fun a b => a.1.toString < b.1.toString) do
     let isStr := isStructure env n
     IO.println s!"{if isStr then "structure" else "inductive"} {n.toString (escape := false)} \

@@ -23,6 +23,8 @@
 #include <string>
 #include <vector>
 
+#include "gordiehowe/examples/mldsa/mldsa_shape_inputs.h"
+#include "gordiehowe/examples/mldsa/mldsa_source_roles.h"
 #include "gordiehowe/examples/mldsa/mldsa_gadgets.h"
 #include "gordiehowe/examples/mldsa/mldsa_hash.h"
 #include "gordiehowe/examples/mldsa/mldsa_params.h"
@@ -84,6 +86,15 @@ void mldsa_ring_native_relation(
   const auto w1 = signature_checks<S>(cs, A, z, h, w_prime, UseHintArm{});
   const auto hash = mldsa_hash_domain_on_mu<S>(cs, H, member.mu, w1);
   ring_crossing(cs.scope("crossing"), hash, c);
+  if constexpr (std::is_same_v<S, MLDSA44>) {
+    auto shapes = mldsa_ring_native_shape_inputs(cs);
+    shapes.phase_count = true;
+    shapes.expr_table_end = "member.select.shape.left.second.first.second.first";
+    shapes.embeddings.push_back(mldsa_ring_native_embedding("narrow"));
+    shapes.embeddings.push_back(mldsa_ring_native_embedding("wide"));
+    mldsa_source_roles<S>(cs, shapes, SourceFamily::kRingNative);
+    cs.shape_inputs(shapes);
+  }
 }
 
 }  // namespace proofs::gordiehowe::examples::mldsa

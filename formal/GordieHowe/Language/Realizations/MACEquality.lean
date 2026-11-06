@@ -5,7 +5,7 @@ module
 
 public import GordieHowe.Language.Realizations.Lowering
 public import GordieHowe.Foundations.Algebra.IntLift
-public import GordieHowe.Applications.Rows.MAC
+public import GordieHowe.Language.Realizations.MACRows
 
 @[expose] public section
 

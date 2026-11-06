@@ -126,7 +126,7 @@ set_option linter.unusedSectionVars false
 
 variable {program : RealizedProgram} [CarrierHEmbed program] [MldsaCarrierRelation program]
   [MldsaRingStmt program] [TableSelect program] [MldsaCarrierFront program]
-  {F0 FH : RealizedProgram.FieldInterp} [MLDSA44.AField F0]
+  {F0 FH : RealizedProgram.FieldInterp} [RealizedProgram.PrimeCastField F0 pGold]
 
 set_option hygiene false in
 local notation "interp" => RealizedProgram.mldsaInterpOf F0 FH
@@ -140,15 +140,15 @@ theorem natCast_pm1 : ((18446744069414584320 : ℕ) : (interp 0).K) = -1 := by
 /-- **The field facts the selection reads in a Goldilocks extension**: `p − 1` decodes to `−1`,
 `0` and `1` to themselves and read back as `0` and `1`. -/
 theorem selectField : RealizedProgram.SelectField (interp 0) 18446744069414584320 where
-  decode_negOne := (MLDSA44.AField.decode_lt (F0 := F0) _ (by norm_num [pGold])).trans natCast_pm1
-  decode_zero := (MLDSA44.AField.decode_lt (F0 := F0) 0 (by norm_num [pGold])).trans Nat.cast_zero
-  decode_one := (MLDSA44.AField.decode_lt (F0 := F0) 1 (by norm_num [pGold])).trans Nat.cast_one
+  decode_negOne := (RealizedProgram.PrimeCastField.decode_lt (p := pGold) (F := F0) _ (by norm_num [pGold])).trans natCast_pm1
+  decode_zero := (RealizedProgram.PrimeCastField.decode_lt (p := pGold) (F := F0) 0 (by norm_num [pGold])).trans Nat.cast_zero
+  decode_one := (RealizedProgram.PrimeCastField.decode_lt (p := pGold) (F := F0) 1 (by norm_num [pGold])).trans Nat.cast_one
   toNat_zero := by
-    have h := MLDSA44.AField.toNat_natCast (F0 := F0) 0 (by norm_num [pGold])
+    have h := RealizedProgram.PrimeCastField.toNat_natCast (p := pGold) (F := F0) 0 (by norm_num [pGold])
     rw [Nat.cast_zero] at h
     exact h
   toNat_one := by
-    have h := MLDSA44.AField.toNat_natCast (F0 := F0) 1 (by norm_num [pGold])
+    have h := RealizedProgram.PrimeCastField.toNat_natCast (p := pGold) (F := F0) 1 (by norm_num [pGold])
     rw [Nat.cast_one] at h
     exact h
 
@@ -164,7 +164,7 @@ theorem domainField_shape : program.domainField (TableSelect.shape program).dom 
 
 /-- A Goldilocks constant below `p` decodes to its cast. -/
 theorem decode_gold {c : ℕ} (hc : c < pGold) : (interp 0).decode c = (c : (interp 0).K) :=
-  MLDSA44.AField.decode_lt c hc
+  RealizedProgram.PrimeCastField.decode_lt (p := pGold) c hc
 
 /-! ## The record -/
 

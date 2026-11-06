@@ -1174,8 +1174,7 @@ class TableBuilder : Lowering {
   size_t cur_ = 0;
 };
 
-// The check points (cuts) of table T, the one rule of the redesign's
-// amendments A9 and A12: a node is cut iff it is an operand the relational
+// The check points (cuts) of table T, by one rule: a node is cut iff it is an operand the relational
 // check reads as an atom (a leaf of a mul, and, or chain, or of an xor
 // chain in odd characteristic; a mux operand; a prod, cmp or tree input; a
 // staged transform's input) whose one-level form is no atom already (a
@@ -3108,8 +3107,8 @@ void dump_shape(std::string &o, const ExprNode<F> &x, const F &f, size_t depth,
 }
 
 // The export of one emitted circuit: its certificate file, its Lean
-// modules (path relative to the plan's directory, text), its certificate
-// text, and counts for the report.
+// modules (path relative to the plan's directory, text), and counts for the
+// report.
 struct EmitExport {
   std::string domain;
   std::vector<uint8_t> ghc;
@@ -3117,7 +3116,8 @@ struct EmitExport {
   ghc::GkrCore core;
   ghc::GkrTable table;
   std::vector<std::pair<std::string, std::string>> modules;
-  std::string cert_text;
+  // Mode-specific proofs, relative to the export root (Check/<mode>/GordieHoweCheck/...).
+  std::vector<std::pair<std::string, std::string>> check_modules;
   size_t nodes = 0, wires = 0, aux = 0, entries = 0, cuts = 0;
 };
 
@@ -3379,12 +3379,21 @@ std::vector<EmitExport> emit_tables(const BasicCompiledSystem<S> &cs,
         const EntryPlan &pl = plans[k];
         const std::string ks = std::to_string(k);
         const std::string ps = plan_text(pl.parts);
+        // A module whose command checks leaves (check_entry, check_entry_leaves)
+        // also imports the circuit's data module as `meta`: native mode's check
+        // compiles the checker and the data in the module's own environment
+        // (LoadNative.lean). It evaluates the sealed program, so it imports the
+        // program module with `import all`. A compose_entry module checks nothing.
         auto module = [&](const std::string &what, const std::string &how,
                           const std::string &imports, const std::string &cmd) {
           std::string o = head;
           o += "public import " + mod + "\n";
           o += imports;
-          o += "public import GordieHowe.Language.CertCheck\n\n";
+          if (cmd.rfind("compose_entry", 0) != 0) {
+            o += "meta import " + mod + "\n";
+            o += "import all " + prog + "\n";
+          }
+          o += "\n";
           o += "@[expose] public section\n\n";
           o += "/-! The relational check of " + what + " of the GKR circuit of domain " +
                d.name + how + " (generated; do not edit). -/\n\n";
@@ -3423,16 +3432,37 @@ std::vector<EmitExport> emit_tables(const BasicCompiledSystem<S> &cs,
       // Per entry: index, plan cost, leaf theorems, modules.
       std::fprintf(stderr, "GH_EMIT_PLAN config=%s-%s domain=%s %s\n", meta.config.c_str(),
                    meta.profile.c_str(), d.name.c_str(), planlog.c_str());
-      circuit += "public import GordieHowe.Language.CertCheck\n\n";
+      // check_circuit checks the header's parts: the data module as `meta` too,
+      // and the sealed program with `import all`, which the parts evaluate.
+      circuit += "meta import " + mod + "\n";
+      circuit += "import all " + prog + "\n\n";
       circuit += "@[expose] public section\n\n";
       circuit += "/-! The relational check of the GKR circuit of domain " + d.name +
                  ", from its entries' (generated; do not edit). -/\n\n";
       circuit += "namespace " + mod + "\n\ncheck_circuit cert ar\n\nend " + mod + "\n";
       ex.modules.emplace_back("GKR/" + d.name + "/Circuit.lean", std::move(circuit));
+      // Data is mode independent. The kernel retains its bounded proof modules;
+      // Native checks the complete GKR part once inside programOkB.
+      const std::string check_mod = "GordieHoweCheck." + lean_name(meta) + ".GKR." + d.name;
+      std::string check_path = check_mod;
+      std::replace(check_path.begin(), check_path.end(), '.', '/');
+      for (size_t i = 1; i < ex.modules.size(); ++i) {
+        const auto &[path, source] = ex.modules[i];
+        std::string text = source;
+        const std::string old_import = "public import " + mod + ".";
+        const std::string new_import = "public import " + check_mod + ".";
+        size_t at = 0;
+        while ((at = text.find(old_import, at)) != std::string::npos) {
+          text.replace(at, old_import.size(), new_import);
+          at += new_import.size();
+        }
+        const std::string suffix = path.substr(("GKR/" + d.name).size());
+        ex.check_modules.emplace_back("Check/Kernel/" + check_path + suffix, std::move(text));
+      }
+      ex.modules.resize(1);
       ex.ghc = std::move(bytes);
       ex.core = std::move(core);
       ex.table = std::move(gt);
-      ex.cert_text = C.text(f);
       ex.nodes = t.nodes.size();
       ex.wires = nwires;
       ex.aux = naux;

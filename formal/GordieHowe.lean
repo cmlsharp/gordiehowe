@@ -5,6 +5,8 @@ module
 
 public import GordieHowe.Applications.Configuration
 public import GordieHowe.Applications.Configuration.AlgebraSetups
+public import GordieHowe.Applications.Configuration.Certified
+public import GordieHowe.Applications.Configuration.SoundnessBits
 public import GordieHowe.Applications.Configuration.ZKBits
 public import GordieHowe.Applications.Falcon512.Circuits.EmulatedAlgebra
 public import GordieHowe.Applications.Falcon512.Circuits.EmulatedAlgebraHonest
@@ -23,7 +25,6 @@ public import GordieHowe.Applications.Falcon512.Gadgets.EmulatedNorm
 public import GordieHowe.Applications.Falcon512.Gadgets.NativeEncoding
 public import GordieHowe.Applications.Falcon512.Gadgets.NativeNorm
 public import GordieHowe.Applications.Falcon512.Gadgets.NativeNormGroups
-public import GordieHowe.Applications.Falcon512.Gadgets.SelectFirstN
 public import GordieHowe.Applications.Falcon512.Fields.FalconNative20
 public import GordieHowe.Applications.Falcon512.Fields.FalconNative20Relative
 public import GordieHowe.Applications.Falcon512.Fields.FalconNative20Tower
@@ -35,7 +36,6 @@ public import GordieHowe.Applications.Falcon512.Native.Rows
 public import GordieHowe.Applications.Falcon512.Native.System.Algebra
 public import GordieHowe.Applications.Falcon512.Native.System.Application
 public import GordieHowe.Applications.Falcon512.Native.System.Source
-public import GordieHowe.Applications.Falcon512.NegacyclicSpectrum
 public import GordieHowe.Applications.Falcon512.PoP.Configuration
 public import GordieHowe.Applications.Falcon512.PoP.Relation
 public import GordieHowe.Applications.Falcon512.Ring.Native.System.Algebra
@@ -59,6 +59,9 @@ public import GordieHowe.Applications.FieldInterps.Basic
 public import GordieHowe.Applications.FieldInterps.Fq20
 public import GordieHowe.Applications.FieldInterps.GF256
 public import GordieHowe.Applications.FieldInterps.Odd
+public import GordieHowe.Applications.FieldInterps.Registry
+public import GordieHowe.Applications.Program.Runtime
+public import GordieHowe.Applications.Program.Conditions
 public import GordieHowe.Applications.FieldInterps.P256
 public import GordieHowe.Applications.Keccak.Bytes
 public import GordieHowe.Applications.Keccak.Gadgets.Basic
@@ -70,12 +73,8 @@ public import GordieHowe.Applications.Keccak.Gadgets.Sponge
 public import GordieHowe.Applications.Keccak.Gadgets.Trace
 public import GordieHowe.Applications.Keccak.Gadgets.WordAbsorb
 public import GordieHowe.Applications.Keccak.HashCircuit.KeccakOperands
-public import GordieHowe.Applications.Keccak.HashCircuit.Packed.Basic
 public import GordieHowe.Applications.Keccak.HashCircuit.Packed.Opening
 public import GordieHowe.Applications.Keccak.HashCircuit.Relation
-public import GordieHowe.Applications.Keccak.HashCircuit.Skip
-public import GordieHowe.Applications.Keccak.HashCircuit.SkipCompleteness
-public import GordieHowe.Applications.Keccak.HashCircuit.SkipHVZK
 public import GordieHowe.Applications.Keccak.Sponge
 public import GordieHowe.Applications.Keccak.Xof
 public import GordieHowe.Applications.MDL.Frontend
@@ -144,7 +143,6 @@ public import GordieHowe.Applications.MLDSA44.Emulated.System.Params
 public import GordieHowe.Applications.MLDSA44.Emulated.System.Source
 public import GordieHowe.Applications.MLDSA44.Fields.GF2_128
 public import GordieHowe.Applications.MLDSA44.Fields.GF2_256
-public import GordieHowe.Applications.MLDSA44.Frontend.AField
 public import GordieHowe.Applications.MLDSA44.Frontend.HField
 public import GordieHowe.Applications.MLDSA44.Gadgets.HintWeight
 public import GordieHowe.Applications.MLDSA44.Gadgets.InfinityNorm
@@ -199,6 +197,7 @@ public import GordieHowe.Applications.MLDSA44.System.RisingSelection
 public import GordieHowe.Applications.MLDSA44.System.SampleInBall
 public import GordieHowe.Applications.MLDSA44.System.Source
 public import GordieHowe.Applications.Params
+public import GordieHowe.Applications.Program.FiguresCheck
 public import GordieHowe.Applications.Ring.AnonCoupling
 public import GordieHowe.Applications.Ring.AnonReplay
 public import GordieHowe.Applications.Ring.Anonymity
@@ -361,8 +360,6 @@ public import GordieHowe.Applications.Ring.StmtAnon
 public import GordieHowe.Applications.Ring.StmtBase
 public import GordieHowe.Applications.Ring.StrongForger
 public import GordieHowe.Applications.Ring.Unforgeability
-public import GordieHowe.Applications.Rows.Basic
-public import GordieHowe.Applications.Rows.MAC
 public import GordieHowe.Applications.Rows.NativeLinear
 public import GordieHowe.Applications.Shared.MACProfiles
 public import GordieHowe.Applications.Shared.Tableaux
@@ -385,6 +382,7 @@ public import GordieHowe.Foundations.Algebra.FiniteFieldStages
 public import GordieHowe.Foundations.Algebra.FrobeniusOrder
 public import GordieHowe.Foundations.Algebra.IntLift
 public import GordieHowe.Foundations.Algebra.KummerTrace
+public import GordieHowe.Foundations.Algebra.NegacyclicSpectrum
 public import GordieHowe.Foundations.Algebra.PackingTower
 public import GordieHowe.Foundations.Algebra.ReconstructSum
 public import GordieHowe.Foundations.Algebra.RecordPacking
@@ -392,6 +390,7 @@ public import GordieHowe.Foundations.Algebra.RelativeBasisChange
 public import GordieHowe.Foundations.Algebra.RelativePacking
 public import GordieHowe.Foundations.Algebra.RelativePackingAdditive
 public import GordieHowe.Foundations.Algebra.RelativePackingBijective
+public import GordieHowe.Foundations.Algebra.Rows
 public import GordieHowe.Foundations.Fields.BinaryRep
 public import GordieHowe.Foundations.Fields.BinarySpread
 public import GordieHowe.Foundations.Fields.Counter
@@ -507,13 +506,14 @@ public import GordieHowe.Foundations.ToMathlib.UniformFunctionHoeffding
 public import GordieHowe.Foundations.ToMathlib.Vector
 public import GordieHowe.Headline
 public import GordieHowe.Language.Assumptions
-public import GordieHowe.Language.CertCheck
 public import GordieHowe.Language.Completeness.Check
 public import GordieHowe.Language.Completeness.Execution
 public import GordieHowe.Language.Completeness.Late
 public import GordieHowe.Language.Completeness.Mac
 public import GordieHowe.Language.Completeness.MacCheck
 public import GordieHowe.Language.Export
+public import GordieHowe.Language.FiguresCheck
+public import GordieHowe.Language.ProgramCheck
 public import GordieHowe.Language.Export.PackingTree
 public import GordieHowe.Language.Export.Valid
 public import GordieHowe.Language.Honest.Basic
@@ -524,9 +524,10 @@ public import GordieHowe.Language.Honest.Source
 public import GordieHowe.Language.Honest.TwoFields
 public import GordieHowe.Language.Library.Cross
 public import GordieHowe.Language.Library.Eval
-public import GordieHowe.Language.Library.Keccak
+public import GordieHowe.Applications.Keccak.Frontend.Rounds
 public import GordieHowe.Language.Library.Select
-public import GordieHowe.Language.Library.Sponge
+public import GordieHowe.Language.Library.Select.CutoffBits
+public import GordieHowe.Applications.Keccak.Frontend.Sponge
 public import GordieHowe.Language.Library.Table
 public import GordieHowe.Language.Library.TableSelect
 public import GordieHowe.Language.Realizations.Bits
@@ -561,6 +562,7 @@ public import GordieHowe.Language.Realizations.Lowering
 public import GordieHowe.Language.Realizations.MAC
 public import GordieHowe.Language.Realizations.MACEquality
 public import GordieHowe.Language.Realizations.MACProfile
+public import GordieHowe.Language.Realizations.MACRows
 public import GordieHowe.Language.Realizations.MaskSubfield
 public import GordieHowe.Language.Realizations.MemoryShuffle
 public import GordieHowe.Language.Realizations.MemoryShuffleSubfield
@@ -584,11 +586,13 @@ public import GordieHowe.Language.Realizations.SharedNorm
 public import GordieHowe.Language.RealizedProgram
 public import GordieHowe.Language.RealizedProgram.Affine
 public import GordieHowe.Language.RealizedProgram.Annotations
+public import GordieHowe.Language.RealizedProgram.WellFormedReader
 public import GordieHowe.Language.RealizedProgram.BatchRelation
 public import GordieHowe.Language.RealizedProgram.Cells
 public import GordieHowe.Language.RealizedProgram.CellsLowering
 public import GordieHowe.Language.RealizedProgram.Check
 public import GordieHowe.Language.RealizedProgram.DegAnn
+public import GordieHowe.Language.RealizedProgram.CellsReader
 public import GordieHowe.Language.RealizedProgram.Embed
 public import GordieHowe.Language.RealizedProgram.EmbedChal
 public import GordieHowe.Language.RealizedProgram.Encoding
@@ -598,6 +602,7 @@ public import GordieHowe.Language.RealizedProgram.Kinds
 public import GordieHowe.Language.RealizedProgram.Lemmas
 public import GordieHowe.Language.RealizedProgram.MemberValues
 public import GordieHowe.Language.RealizedProgram.Locality
+public import GordieHowe.Language.RealizedProgram.LocalityReader
 public import GordieHowe.Language.RealizedProgram.NatTrie
 public import GordieHowe.Language.RealizedProgram.Ops
 public import GordieHowe.Language.RealizedProgram.Placement
@@ -606,6 +611,9 @@ public import GordieHowe.Language.RealizedProgram.ReadsAnn
 public import GordieHowe.Language.RealizedProgram.RealizationValid
 public import GordieHowe.Language.RealizedProgram.RunVec
 public import GordieHowe.Language.RealizedProgram.Semantics
+public import GordieHowe.Language.RealizedProgram.ShapeReads
+public import GordieHowe.Language.RealizedProgram.ShapeReadsAttr
+public import GordieHowe.Language.RealizedProgram.Shapes
 public import GordieHowe.Language.RealizedProgram.Source
 public import GordieHowe.Language.RealizedProgram.SourceCheck
 public import GordieHowe.Language.RealizedProgram.SourcePaper
@@ -996,6 +1004,7 @@ public import GordieHowe.ProofSystem.Ligero.MaskedConstraintList
 public import GordieHowe.ProofSystem.Ligero.MaskedConstraintTest
 public import GordieHowe.ProofSystem.Ligero.PlacementHiding
 public import GordieHowe.ProofSystem.Ligero.RelativeLayout
+public import GordieHowe.ProofSystem.Ligero.SubfieldQuery
 public import GordieHowe.ProofSystem.Ligero.SubfieldTest
 public import GordieHowe.ProofSystem.Ligero.TwoStageKnowledge
 public import GordieHowe.ProofSystem.Ligero.TwoStageTest
@@ -1005,6 +1014,7 @@ public import GordieHowe.ProofSystem.Program.AppPhase
 public import GordieHowe.ProofSystem.Program.BCSFormat
 public import GordieHowe.ProofSystem.Program.Basic
 public import GordieHowe.ProofSystem.Program.Certified
+public import GordieHowe.ProofSystem.Program.CertifiedProgram
 public import GordieHowe.ProofSystem.Program.Comap
 public import GordieHowe.ProofSystem.Program.Definition
 public import GordieHowe.ProofSystem.Program.Domain
@@ -1014,7 +1024,11 @@ public import GordieHowe.ProofSystem.Program.FieldForkHonest
 public import GordieHowe.ProofSystem.Program.FieldModel
 public import GordieHowe.ProofSystem.Program.FieldPackingGeneric
 public import GordieHowe.ProofSystem.Program.FieldReadyGeneric
+public import GordieHowe.ProofSystem.Program.FieldTable
+public import GordieHowe.ProofSystem.Program.FieldReader
+public import GordieHowe.ProofSystem.Program.FiguresCheck
 public import GordieHowe.ProofSystem.Program.ForkJoinShape
+public import GordieHowe.ProofSystem.Program.ForkNums
 public import GordieHowe.ProofSystem.Program.Headlines
 public import GordieHowe.ProofSystem.Program.HonestReady
 public import GordieHowe.ProofSystem.Program.Phased
@@ -1042,6 +1056,7 @@ public import GordieHowe.ProofSystem.RingSwitching.TreeDomain
 public import GordieHowe.ProofSystem.RingSwitching.TreeLayoutDomain
 public import GordieHowe.ProofSystem.RingSwitching.TreePaper
 public import GordieHowe.ProofSystem.Zerocheck.AffineBatch
+public import GordieHowe.ProofSystem.Zerocheck.AltRounds
 public import GordieHowe.ProofSystem.Zerocheck.BatchedCodecs
 public import GordieHowe.ProofSystem.Zerocheck.Coefficient
 public import GordieHowe.ProofSystem.Zerocheck.EqFactored

@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Language.RealizedProgram.Locality
 public import GordieHowe.Language.RealizedProgram.SpectralSound
+public import GordieHoweNative.Language.RealizedProgram.CellsLowering
 
 @[expose] public section
 
@@ -79,17 +80,6 @@ section
 variable (ir : RealizedProgram)
 
 /-! ## The checks -/
-
-/-- **Whether a predicate body needs a lowering route** (`Structure.routes`): a field `equal`, a
-`mod_0` or a product-form `mod_q`, the predicates `CellsValid.equal` covers. -/
-def _root_.GordieHowe.RealizedProgram.PredBody.needsRoute (b : PredBody) : Bool :=
-  b.isEqual || b.isIntEq || b.isProductMod
-
-/-- **Whether a predicate body needs its H half hosted by a circuit** (`Structure.macHosts`): a
-hosted cross-field `equal` (no `x`-side blind) with no `<mac>.H` predicate. -/
-def _root_.GordieHowe.RealizedProgram.PredBody.needsH : PredBody → Bool
-  | .cross _ _ _ _ _ real => real.hPredicate.isNone && real.blindX.isNone
-  | _ => false
 
 /-- **Predicate `p` is lowered into its own domain** (`PredBody.domain?`), a domain of the program
 (`RealizedProgram.Lowered`). -/
@@ -193,7 +183,8 @@ structure CellsValid : Prop where
   /-- A value of `α`'s field holds every table's challenge. -/
   alpha : ∀ t < ir.tables.length, ∃ v, ir.chalNode (ir.alphaOf t) = some v ∧
     ir.valueField v = ir.chalField (ir.alphaOf t)
-  /-- Every node-typed value is a committed value of its domain at its type's node. -/
+  /-- Every node-typed value is a committed value of its domain at its type's node, a bit view, or a
+  late value masked over its type's node (`typeOwnB`). -/
   types : ∀ v < ir.values.length, (ir.value v).typeSource = .node → ir.typeOwnB v = true
   /-- Every entry of every GKR circuit is covered by the honest prover. -/
   entries : ∀ c < ir.circuits.length, ∀ e ∈ (ir.circuit c).entries, ir.EntryOk e

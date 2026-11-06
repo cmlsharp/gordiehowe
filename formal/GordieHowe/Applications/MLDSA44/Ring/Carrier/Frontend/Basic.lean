@@ -153,7 +153,7 @@ theorem proj_sig (e : program.Env interp) :
 
 /-! ## The events -/
 
-variable [MLDSA44.AField F0] [MLDSA44.HField FH]
+variable [RealizedProgram.PrimeCastField F0 pGold] [MLDSA44.HField FH]
 variable (sv : MLDSA44.SampleView nat F0 FH)
 
 /-- **The source program's events**: the selection's at `member.table.gamma` (challenge `0`) and
@@ -237,12 +237,12 @@ theorem muH_eq {e : program.Env interp} (hs : program.SourceSatAt e)
   rw [muA_eq hs hno hrows ht] at h
   split_ifs at h ⊢ with hb
   · have h1 : (interp 0).toNat ((1 : ℕ) : (interp 0).K) = 1 :=
-      MLDSA44.AField.toNat_natCast (F0 := F0) 1 (by norm_num [pGold])
+      RealizedProgram.PrimeCastField.toNat_natCast (p := pGold) (F := F0) 1 (by norm_num [pGold])
     rw [show (1 : (interp 0).K) = ((1 : ℕ) : (interp 0).K) from Nat.cast_one.symm, h1] at h
     have := MLDSA44.HField.eq_of_toNat_lt_two (FH := FH) h.symm (by norm_num)
     simpa using this
   · have h0 : (interp 0).toNat ((0 : ℕ) : (interp 0).K) = 0 :=
-      MLDSA44.AField.toNat_natCast (F0 := F0) 0 (by norm_num [pGold])
+      RealizedProgram.PrimeCastField.toNat_natCast (p := pGold) (F := F0) 0 (by norm_num [pGold])
     rw [show (0 : (interp 0).K) = ((0 : ℕ) : (interp 0).K) from Nat.cast_zero.symm, h0] at h
     have := MLDSA44.HField.eq_of_toNat_lt_two (FH := FH) h.symm (by norm_num)
     simpa using this
@@ -288,7 +288,7 @@ theorem mem_rel_of_source (hv : MLDSA44.HashViewCore nat F0 FH)
     (hno : ∀ j, program.IsSourceChal j → ¬ ringEvent sv j e) :
     (e.stmt, proj e.stmt e.asg) ∈ rel := by
   intro len x hok hrows
-  have hAF : MLDSA44.AField (interp 0) := inferInstanceAs (MLDSA44.AField F0)
+  have hAF : RealizedProgram.PrimeCastField (interp 0) pGold := inferInstanceAs (RealizedProgram.PrimeCastField F0 pGold)
   have hsel : ¬ TableSelect.SelBad 0 0 e := fun h => hno 0 MldsaCarrierFront.chal0 (.inl h)
   have hnoN : ∀ j, (nat).IsSourceChal j → ¬ sv.event j (pullH e) := fun j hj h =>
     hno (j + 1) ((MldsaCarrierFront.chalIff j).2 hj) (.inr ⟨j, rfl, h⟩)

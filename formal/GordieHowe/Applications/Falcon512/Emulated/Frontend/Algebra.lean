@@ -471,7 +471,7 @@ theorem cA_bool {e : program.Env interp} (hs : program.SourceSatAt e) {t : ℕ} 
   obtain ⟨pb, hpb, hbc, hsrcb⟩ := FalconACore.cABoolean (program := program)
   have hsz := (FalconACore.raw_facts (program := program)).2.2
   rw [FalconEAlg.cA_eq] at hbc hsz
-  have hbool := hs.holdsAt_of_predNameB hpb hsrcb
+  have hbool := hs.holdsAt_of_lt hpb hsrcb
   have := RealizedProgram.bool_of_boolCheck hbc hbool (i := t)
     (by change t < (program.value 595).size; rw [hsz]; exact ht)
   rw [FalconACore.domainField1] at this

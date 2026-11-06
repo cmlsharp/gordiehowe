@@ -3,13 +3,14 @@
 
 import GordieHowe.Language.Realizations.Circuit.ProgramCerts
 import GordieHowe.Applications.FieldInterps.Odd
-import GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.H.Circuit
+import GordieHowe.Applications.Program.Conditions
+import GordieHoweCheck.RSA2048.Goldilocks2.Msg2KiB.ROMParams
 
 /-!
 # A program's certificates discharge its trust base: RSA-2048's circuit `H`
 
 RSA-2048's program has two circuits: `H` (circuit `0`, `GF(2^128)`), whose certificate passes
-(`GKR.H.cert.circuit_ok`), and `A` (circuit `1`, Goldilocks²). The program's certificates
+(the program's check `programOk`, in either check mode), and `A` (circuit `1`, Goldilocks²). The program's certificates
 (`RealizedProgram.ProgramCerts`, built by `ProgramCerts.ofParts`) are `H`'s, with its field's model
 and code arithmetic, and any certificate of `A` given as an argument, with the source parts of
 both. From them, the certificates' sources enforce the circuits' entries (`CircuitsEnforce`) and
@@ -24,6 +25,9 @@ open GordieHowe GordieHowe.RealizedProgram GordieHowe.GKR.Fold
 open GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams (GKR.H.cert GKR.H.ar)
 open GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Program (program)
 
+-- The statements below read the sealed program's circuits and fields.
+attribute [local semireducible] program
+
 /-- The fields of RSA-2048's program: field `0` is `GF(2^128)`, field `1` Goldilocks²; no opaque
 function. -/
 def interp : Interp := ⟨fun n => match n with | 0 => gf128 | _ => gold2, fun _ _ _ => 0⟩
@@ -33,11 +37,14 @@ theorem circuits_length : program.circuits.length = 2 := rfl
 /-- `H` is the program's circuit `0`. -/
 theorem cert_c : GKR.H.cert.c = 0 := rfl
 
-/-- **`H`'s certificate passes** (`GKR.H.cert.circuit_ok`). -/
-theorem circuitCertB_H : program.circuitCertB 0 GKR.H.ar GKR.H.cert = true := by
-  have h := GKR.H.cert.circuit_ok
-  rw [cert_c] at h
-  exact h
+/-- **`H`'s certificate passes**: the circuit part of the program's check, which has this statement
+in both check modes (`Check/Kernel` from `GKR.H.cert.circuit_ok`, `Check/Native` from one compiled
+run). -/
+theorem circuitCertB_H : program.circuitCertB 0 GKR.H.ar GKR.H.cert = true :=
+  ((programOk_sound GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.data
+    GordieHoweCheck.RSA2048.Goldilocks2.Msg2KiB.ROMParams.programOk).circuits 0
+      (by rw [show GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.data.program = program
+        from rfl, circuits_length]; omega)).1
 
 /-- **`H`'s field meets its codes**: `GF(2^128)` with its model and code arithmetic. -/
 theorem circuitFieldOk_H : program.CircuitFieldOk interp 0 GKR.H.ar GKR.H.cert.chr :=

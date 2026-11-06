@@ -166,6 +166,12 @@ def privCellB (v : ℕ) : Bool :=
     decide (v < ir.values.length) && decide ((ir.value v).domain < ir.domains.length) &&
     ir.isCellValue (ir.value v).domain v
 
+/-- A private value with valid value and domain indices has committed cells. -/
+theorem privCellB_of_kind_priv {v : ℕ} (hv : v < ir.values.length)
+    (hd : (ir.value v).domain < ir.domains.length) (hk : (ir.value v).kind = .priv) :
+    ir.privCellB v = true := by
+  simp [privCellB, hk, hv, hd, ir.isCellValue_self_of_kind_priv hk]
+
 end
 
 end GordieHowe.RealizedProgram

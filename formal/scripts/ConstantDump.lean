@@ -4,7 +4,7 @@
 import GordieHowe
 
 /-!
-# Every constant of the `GordieHowe` and `GordieHoweNative` modules
+# Every constant of the `GordieHowe`, `GordieHoweNative` and `GordieHoweCheck` modules
 
 One line per constant: `<name>\t<module>\t<kind>\t<flags>`, flags a comma-separated subset of
 `instance`, `protected`, `private`, `internal`, `aux` (recursor, `noConfusion`, matcher),
@@ -20,7 +20,7 @@ run_cmd liftTermElabM do
   for (n, ci) in env.constants.map₁.toList do
     let some idx := env.getModuleIdxFor? n | continue
     let some m := env.header.moduleNames[idx.toNat]? | continue
-    unless m.getRoot == `GordieHowe || m.getRoot == `GordieHoweNative do continue
+    unless [`GordieHowe, `GordieHoweNative, `GordieHoweCheck].contains m.getRoot do continue
     let kind := match ci with
       | .thmInfo _ => "thm" | .defnInfo _ => "def" | .inductInfo _ => "ind"
       | .ctorInfo _ => "ctor" | .recInfo _ => "rec" | .opaqueInfo _ => "opaque"

@@ -60,7 +60,7 @@ class MldsaEMain (program : RealizedProgram) extends MldsaEmbed program where
 
 set_option linter.unusedSectionVars false
 
-variable {program : RealizedProgram} [MldsaEMain program] {F0 FH : RealizedProgram.FieldInterp} [AField F0]
+variable {program : RealizedProgram} [MldsaEMain program] {F0 FH : RealizedProgram.FieldInterp} [RealizedProgram.PrimeCastField F0 pGold]
   [HField FH]
 
 set_option hygiene false in
@@ -315,9 +315,9 @@ theorem toNat_bool {v : (interp 0).K} (hv : v = 0 ∨ v = 1) : (interp 0).toNat 
   rcases hv with rfl | rfl
   · rw [if_neg (zero_ne_one), show (0 : (interp 0).K) = ((0 : ℕ) : (interp 0).K) from
       Nat.cast_zero.symm]
-    exact AField.toNat_natCast 0 (by norm_num [pGold])
+    exact RealizedProgram.PrimeCastField.toNat_natCast (p := pGold) 0 (by norm_num [pGold])
   · rw [if_pos rfl, show (1 : (interp 0).K) = ((1 : ℕ) : (interp 0).K) from Nat.cast_one.symm]
-    exact AField.toNat_natCast 1 (by norm_num [pGold])
+    exact RealizedProgram.PrimeCastField.toNat_natCast (p := pGold) 1 (by norm_num [pGold])
 
 /-- **A Boolean element of domain `A`'s field as a coefficient** is its integer reading. -/
 theorem bitCoeff_eq_toNat {v : (interp 0).K} (hv : v = 0 ∨ v = 1) :

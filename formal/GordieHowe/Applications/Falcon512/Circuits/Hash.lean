@@ -6,7 +6,7 @@ module
 public import GordieHowe.Applications.Falcon512.Spec.Basic
 public import GordieHowe.Applications.Keccak.Gadgets.Shake256
 public import GordieHowe.Language.Realizations.MAC
-public import GordieHowe.Applications.Falcon512.Gadgets.SelectFirstN
+public import GordieHowe.Language.Library.Select.CutoffBits
 
 @[expose] public section
 

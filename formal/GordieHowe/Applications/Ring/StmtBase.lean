@@ -252,7 +252,7 @@ variable [Inhabited W] [DecidableEq X₀] (V₀ : StmtVerifiesRing rel₀ relI B
 
 /-- **The compiled verifier of the proof system, read at ring statements** (`NARG.Verifier.comap`
 of spBCS's verifier at the setting with merges of `TD`, proofs in the format `pB`). -/
-noncomputable abbrev verifier :=
+abbrev verifier :=
   NARG.Verifier.comap ((TD.setting kS hb).model.qVerifier (TD.setting kS hb).queries pB pB)
     V₀.stmt V₀.check
 

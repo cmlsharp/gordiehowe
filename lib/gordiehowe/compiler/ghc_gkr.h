@@ -36,7 +36,8 @@
 
 namespace proofs::gordiehowe::ghc {
 
-// The Lean types of a GKR circuit's certificate (Data.lean), in its order,
+// The Lean types of a GKR circuit's certificate (Data.lean), ExprAnn
+// (Annotations.lean), and completeness derivations (Completeness.Deriv), in declaration order,
 // each structure's fields named as in Lean (their text, Schema::dump, is
 // formal/scripts/ghc_schema.txt, which formal/scripts/check.sh compares with
 // the Lean types' and gordiehowe_ghc_test with this schema's).
@@ -131,6 +132,99 @@ inline const Schema &gkr_schema() {
                  "half : Nat", "consts : " + fold + "Consts", "dag : " + cert + "Dag",
                  "layered : " + cert + "Layered", "sched : " + cert + "Cert",
                  "table : " + rp + "ETable", "entries : List " + rel + "EntryCert"});
+    s.structure(rp + "ExprAnn", 0,
+                {"maxId : Nat", "fields : Nat", "pub : Nat", "len : Nat", "deg : Nat",
+                 "zero : Nat", "maxW : Nat", "fieldW : Nat", "lenW : Nat", "degW : Nat"});
+    s.inductive(rp + "Gen", 0,
+                {{"none", {}}, {"source", {}}, {"lookupDigit", {N, "Bool", N}},
+                 {"commDigit", {N, N, N, N}}, {"spec", {N}}, {"staticHist", {N, N}},
+                 {"tag", {N}}, {"acc", {N}}, {"quotDigit", {N}}, {"digitsAcc", {N}},
+                 {"lowDigit", {N, N}}, {"lateHist", {N, N}}});
+    s.inductive(rp + "LogicOp", 0,
+                {{"lt", {}}, {"leq", {}}, {"eq", {}}, {"any", {}}, {"all", {}}});
+    const std::string ex = rp + "Expr", st = rp + "Step", ns = "List Nat",
+                      rows = "List (List (Prod Nat " + rp + "Coef))";
+    s.inductive(ex, 0,
+                {{"leaf", {N}}, {"add", {ex, ex}}, {"sub", {ex, ex}},
+                 {"scale", {rp + "Coef", ex}}, {"mul", {ex, ex}},
+                 {"reindex", {im, ex}}, {"concat", {ex, ex}}, {"linear", {rows, ex}},
+                 {"prod", {N, ex}}, {"mux", {ex, ex, ex}}, {"apply", {rp + "NamedOp", ex}},
+                 {"ref", {N}}, {"logic", {rp + "LogicOp", N, "List " + ex}}});
+    s.inductive(rp + "IvlSrc", 0,
+                {{"const", {}}, {"declared", {N}}, {"nat", {N}}, {"prime", {}},
+                 {"opaqueBit", {}}, {"shift", {N}}, {"quadRoot", {N, N}},
+                 {"rootSet", {ns}}, {"tableHull", {ns, "Int", "Int"}},
+                 {"tableKernel", {N, N, ns, "Int", "Int"}}});
+    s.inductive(rp + "LinOpStep", 0,
+                {{"congr", {N, ex}}, {"rows", {rp + "NamedOp", ex, rows, rows}},
+                 {"spectral", {N, N}}, {"nttInv", {N, N, ex}}, {"inttInv", {N, N, ex}},
+                 {"convNtt", {N, N, ex}}, {"convCoef", {N, N, ex}},
+                 {"transposeInv", {N, N, N, ex}}, {"convBcastNtt", {N, N, N, ex}},
+                 {"convMatNtt", {N, N, N, N, ex}}, {"adjoint", {N, N, ex, ex}}});
+    s.inductive(st, 0,
+                {{"realized", {N}}, {"subst", {ex, ex}},
+                 {"linear", {"List (Prod Nat Int)", ex, ex}},
+                 {"lookup", {"List (Prod Nat (Prod Nat Nat))"}},
+                 {"rangeNat", {N}}, {"holdsIn", {N}}, {"src", {N, rp + "IvlSrc"}},
+                 {"ivlNat", {N}}, {"ivlExpr", {ns, ex, "Int", "Int"}},
+                 {"ivlSolve", {N, ns, ex, N, "Int", "Int"}},
+                 {"ivlApply", {N, "Option Nat", ex, "Int", "Int"}},
+                 {"ivlLogic", {ns, ex}}, {"ivlMeet", {N, N}}, {"ivlDisjoint", {N, N}},
+                 {"fieldDvd", {N, N, N}}, {"natIvl", {N}}, {"natComp", {N, N}},
+                 {"natLin", {N, ns}}, {"natBool", {N}}, {"liftConst", {N, N}},
+                 {"transport", {N, N}}, {"lift", {N, N, N}}, {"digits", {N, ns, N}},
+                 {"congr", {N}}, {"mac", {ns, "Option Nat", ns}},
+                 {"linop", {rp + "LinOpStep"}}, {"conclude", {N}}, {"hyp", {N}},
+                 {"fact", {N}}, {"inDom", {N, st}}, {"groupedMod", {ns, ns}},
+                 {"productMod", {ns}}, {"circuitAssert", {N}}, {"inputPremise", {N}}});
+    s.inductive(rp + "MacRole", 0,
+                {{"tail", {}}, {"h", {}}, {"accRow", {}}, {"groupRow", {N}},
+                 {"residues", {}}, {"gqLookup", {}}, {"quotLookup", {}},
+                 {"lowLookup", {}}, {"topLookup", {}}, {"wrap", {}}});
+    s.inductive(rp + "CStep", 0,
+                {{"pure", {st}}, {"conclude", {N}}, {"source", {}}, {"quotIn", {N}},
+                 {"digitRow", {N}}, {"macRow", {N, N, rp + "MacRole"}}, {"padBool", {}},
+                 {"commIn", {N, N}}, {"commRow", {N, ns}}, {"hyp", {N}},
+                 {"specProd", {N}}, {"specRow", {N}}, {"fieldRow", {}}, {"twoTail", {N, N}}});
+    s.structure(rp + "CDerivations", 0,
+                {"derivs : List (List " + rp + "CStep)", "ranks : Nat"});
+    s.inductive(rp + "RealCircuit", 0,
+                {{"logup", {N, N}}, {"macH", {N}}, {"named", {"String"}}, {"unmodeled", {N}}});
+    s.inductive(rp + "Fact", 0,
+                {{"eq", {N, ex, ex}}, {"nat", {N, ex, N}}, {"ivl", {N, ex, "Int", "Int"}},
+                 {"intEq", {N, ex, ex}}, {"dvd", {N, ex, N}}, {"inRows", {N, ex}},
+                 {"holds", {N}}, {"kernel", {N, N, N, N, N, "Bool", "Int", "Int"}},
+                 {"real", {rp + "RealCircuit"}}});
+    s.structure(rp + "SharedEntry", 0,
+                {"fact : " + rp + "Fact", "rank : Nat", "steps : List " + st});
+    s.inductive(rp + "GadgetKind", 0,
+                {{"selectRow", {}}, {"spectralProduct", {}}, {"selectFirst", {}},
+                 {"keccak", {}}, {"macSite", {}}, {"modField", {}}, {"modCommitted", {}},
+                 {"modGrouped", {}}, {"modDigits", {}}, {"modOneDigit", {}},
+                 {"lookupTwoSided", {}}, {"lookupDigits", {}}, {"packedTable", {}}});
+    s.inductive(rp + "GadgetPart", 0,
+                {{"expr", {rp + "Expr"}}, {"kernel", {"Nat", "Nat", "Nat", "Nat", "Nat", "Nat"}},
+                 {"stream", {"Nat", "Option Nat"}}, {"kernelOf", {"Nat", "Nat", "Nat"}}});
+    s.structure(rp + "Gadget", 0,
+                {"kind : " + rp + "GadgetKind", "preds : List Nat", "values : List Nat",
+                 "params : List Nat", "parts : List " + rp + "GadgetPart"});
+    s.structure(rp + "Origin", 0, {"gadget : Nat", "slot : Nat"});
+    s.inductive(rp + "Route", 0,
+                {{"affine", {"Bool"}}, {"quadratic", {}}, {"batch", {"Nat", "Nat"}},
+                 {"gkr", {"Nat", "Nat"}}, {"realized", {"Nat", "List Nat"}}});
+    s.inductive(rp + "IvlSource", 0,
+                {{"const", {}}, {"opaqueBit", {}}, {"declared", {"Nat"}},
+                 {"shiftRange", {"Nat"}}, {"range", {"Nat"}}, {"quadRoot", {"Nat", "Nat"}},
+                 {"rootSet", {"List Nat"}}, {"prime", {}}});
+    s.structure(rp + "Structure", 0,
+                {"gadgets : List " + rp + "Gadget", "origins : List (Prod Nat " + rp + "Origin)",
+                 "messages : List (Prod Nat Nat)", "boundRecs : List (Prod Nat Nat)",
+                 "memberValues : List (Prod Nat Nat)", "routes : List (Prod Nat " + rp + "Route)",
+                 "logupHosts : List (Prod (Prod Nat Nat) (Prod Nat Nat))",
+                 "macHosts : List (Prod Nat (Prod Nat Nat))", "chalValues : List (Prod Nat Nat)",
+                 "ivlSources : List (Prod Nat " + rp + "IvlSource)",
+                 "tableGadgets : List (Prod Nat Nat)", "macRequests : List (Prod Nat (List Nat))",
+                 "modRequests : List (Prod Nat (List Nat))"});
     return s;
   }();
   return s;

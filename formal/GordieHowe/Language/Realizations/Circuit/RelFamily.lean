@@ -67,13 +67,6 @@ section
 
 variable (ir : RealizedProgram)
 
-/-- **Every challenge's value lies in the challenge's field** (a sweep of the values). -/
-def chalFieldsB : Bool :=
-  (List.range ir.values.length).all fun v =>
-    match (ir.value v).kind with
-    | .challenge j => Nat.beq (ir.valueField v) (ir.chalField j)
-    | _ => true
-
 variable (c : ℕ) (ar : CodeArith) (cd : CircuitData)
 
 /-! ## The range LogUp -/

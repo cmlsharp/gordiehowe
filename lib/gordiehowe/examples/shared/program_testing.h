@@ -59,14 +59,13 @@ std::string write_program(const C &cs, const std::string &dir,
 // The plan export of the compiled system CS (plan_export.h), written to
 // DIR/<lean_plan_module>.lean, its realized program
 // (DIR/<lean_program_module>.lean), its proof modules
-// (compiler::proof_modules, at the template TPL) and the GKR export of each
+// (compiler::proof_modules) and the GKR export of each
 // domain whose circuit was emitted here (compiler::emit_tables), beside the
 // plan. Every text is built before any file is written, so an export that
 // throws leaves no file behind. Returns the plan's path.
 template <class C>
 std::string write_plan(const C &cs, const std::string &dir,
-                       const compiler::ExportMeta &meta,
-                       const compiler::ProofTemplate &tpl = {}) {
+                       const compiler::ExportMeta &meta) {
   const std::string plan = compiler::export_lean_plan(cs, meta);
   const compiler::ProgramData program = compiler::build_program(cs, meta);
   const compiler::ProofModuleData data =
@@ -75,11 +74,21 @@ std::string write_plan(const C &cs, const std::string &dir,
   modules.emplace_back(compiler::lean_plan_file(dir, meta), plan);
   modules.emplace_back(compiler::lean_program_file(dir, meta), program.text);
   modules.emplace_back(compiler::lean_derivs_file(dir, meta), program.derivs);
-  for (const auto &mod : compiler::proof_modules(data, tpl))
+  for (const auto &mod : compiler::proof_modules(data))
     modules.emplace_back(compiler::lean_proof_file(dir, meta, mod), mod.text);
   const std::filesystem::path base =
       std::filesystem::path(modules.front().first).parent_path();
   const std::filesystem::path gkr = base / "GKR";
+  modules.emplace_back((base / "Derivs.ghc").string(),
+                       std::string(program.derivs_ghc.begin(), program.derivs_ghc.end()));
+  if (!data.cert_ghc.empty())
+    modules.emplace_back((base / "Cert.ghc").string(),
+                         std::string(data.cert_ghc.begin(), data.cert_ghc.end()));
+  modules.emplace_back((base / "Structure.ghc").string(),
+                       std::string(data.structure_ghc.begin(), data.structure_ghc.end()));
+  const auto nodes = ghc::honest_nodes_file(data.one_nodes);
+  modules.emplace_back((base / "Honest" / "Nodes.ghc").string(),
+                       std::string(nodes.begin(), nodes.end()));
   // Each domain's certificate text (checked against its circuit).
   for (size_t d = 0; d < cs.num_domains(); ++d) {
     std::string cert = cs.compiled_domain(d).gkr_certificate();
@@ -94,6 +103,8 @@ std::string write_plan(const C &cs, const std::string &dir,
                          std::string(ex.ghc.begin(), ex.ghc.end()));
     for (auto &[rel, text] : ex.modules)
       modules.emplace_back((base / rel).string(), std::move(text));
+    for (auto &[rel, text] : ex.check_modules)
+      modules.emplace_back((std::filesystem::path(dir) / rel).string(), std::move(text));
   }
   for (const auto &[path, text] : modules) {
     std::filesystem::create_directories(

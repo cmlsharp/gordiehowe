@@ -71,6 +71,12 @@ coefficients of a binary-field element as a natural, bit `j` the coefficient of 
 additive subgroup of each packing-tree node by name (`node`), with decidable membership, and the
 coordinates of an element in a node's basis (`coord E x j`: the coefficient of the basis element
 `β_j` of node `E`, `Domain::bits`; for the designated subfield `β_j = g^j`). -/
+-- TODO(instance-hazard): `K` and its `Field`/`Fintype`/`DecidableEq` instances are fields, so two
+-- constructions can give equal carriers with unequal instances. Every `FieldInterp` is a named
+-- constant of the field registry (`GordieHowe/Applications/FieldInterps/Registry.lean`), whose
+-- instance fields come from instance search on its named carrier, and no construction rebuilds
+-- them (`Interp.twoField` takes the constants as arguments). Kept as is: `Interp.field`, which
+-- every headline mentions, has this type.
 structure FieldInterp where
   /-- The registry specification. -/
   spec : FieldSpec
@@ -120,7 +126,7 @@ instance (t : VType) (x : F.K) : Decidable (F.InType t x) := by
 `[0, tmax)` (`Range.LookupChallenge`, LogUp's `α`). The packed rows of public tables
 (`Excluded.packedRows`) and unions (`Excluded.union`) are given no meaning here: their `U` depends on an earlier challenge `γ`
 under the `gamma` packing, which a layout's fixed challenge types cannot express, and
-`RealizedProgram.ValidAtNodes` rejects them (`RealizedProgram.SamplerOk`). -/
+well-formedness (`RealizedProgram.WellFormed`) rejects them (`RealizedProgram.SamplerOk`). -/
 def SamplerTy : Sampler → Type
   | .full => F.K
   | .node E => F.node E
@@ -528,6 +534,12 @@ theorem reader_of_priv (e : ir.Env I) {v : ℕ} (hk : (ir.value v).kind = .priv)
     ir.reader e v = e.asg.val v := by
   funext i
   simp [reader, fuel, read, hk]
+
+/-- **A value bound to its digits reads the assignment in the source environment.** -/
+theorem reader_of_bound (e : ir.Env I) {v : ℕ} {x : Expr}
+    (hk : (ir.value v).kind = .bound x) : ir.reader e v = e.asg.val v := by
+  funext i
+  simp only [reader, fuel, read, hk]
 
 /-- **A pad copy reads the committed assignment.** -/
 theorem reader_of_padCopy (e : ir.Env I) {v u : ℕ} {m : String}

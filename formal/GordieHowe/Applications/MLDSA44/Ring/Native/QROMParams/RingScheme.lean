@@ -121,7 +121,7 @@ variable {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
 /-- **The ML-DSA-44 base signer of the scheme**: the FIPS 204 hedged signer with at most
 `maxAttempts` attempts on the base message `bmsg R m` (`mldsaOn` at `fipsPrims`), on the compiled
 oracle of `ringTranscript msgLen C` at `48`-byte salts. -/
-noncomputable abbrev baseSigner (maxAttempts : ℕ) (bmsg : KeyRing FipsKey 64 → RMsg → _root_.MLDSA.Bytes msgLen) :=
+abbrev baseSigner (maxAttempts : ℕ) (bmsg : KeyRing FipsKey 64 → RMsg → _root_.MLDSA.Bytes msgLen) :=
   mldsaOn _root_.MLDSA.mldsa44 fipsPrims maxAttempts (ringTranscript msgLen C) 48 bmsg
 
 /-- **The supported rings of the base signer are decidable** (`adm`, at the base signer's key

@@ -38,8 +38,8 @@
 // The rates are constants of the domain's profile (DomainProfile::rates),
 // measured once and never timed at compile time, so a plan is a function of
 // the system and its profile. A profile without measured rates costs every
-// unit 1 (PlacementRates::unit). A measured profile without the batch rate
-// a candidate needs fails the compile. A pin (Predicate::pin,
+// unit 1 (PlacementRates::unit). A batch candidate a measured profile has no
+// rate for is left out of the choice ("no rates"). A pin (Predicate::pin,
 // Domain::pin_bit_checks) overrides the costs.
 //
 // Proof bytes are counted (no measurement): a batch's messages and

@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.ProofSystem.Program.FieldClaimSupport
+public import GordieHoweNative.ProofSystem.Program.FieldDomain
 
 @[expose] public section
 
@@ -38,11 +39,6 @@ open scoped NNReal
 section
 
 variable (ir : RealizedProgram) {I : Interp}
-
-/-- **The packing edges of the plan's domain of `d`**, the plan's domain at position `d`
-(`Export.Plan.domainAt`; none when the plan has no domain there). -/
-def planPacking (_ : RealizedProgram) (P : Export.Plan) (d : ℕ) : List PackingEdge :=
-  ((P.domainAt d).map (·.packing)).getD []
 
 /-- **The plan's Ligero numbers of `d` are the certificate's.** -/
 def planLigeroB (_ : RealizedProgram) (P : Export.Plan) (d : ℕ) (c : LigeroCert) : Bool :=

@@ -20,16 +20,19 @@ of the decoded value, built as follows:
 * **Shared.** Each plain value's expression is shared (`Ghc.valueExpr`: `ShareCommon.shareCommon'`
   merges structurally equal subterms into one object), and every later step keeps the sharing, so
   the kernel and the compiler see a repeated subterm once.
-* **Raw literals.** Every natural number is a raw literal (`Decode Nat`'s `toE`).
+* **Numerals.** The default `Decode Nat` uses raw literals. Program identity codecs retain the
+  ordinary numeral expressions of their original printed declarations.
 * **The index maps by name.** An index map is read as a stand-in and its expression replaced by the
   constant `idx<j>` in scope (`Ghc.replaceStubs`).
 * **Earlier definitions by name.** A spine-form value's references to earlier sections are their
   definitions' constants.
-* **Long lists chained** (`chainLists`): a list literal of more than `listRun` items keeps its first
+* **Long lists chained** (`chainLists`), when the entry enables `splitLists`: a list literal of
+  more than `listRun` items keeps its first
   `listRun` items, and each later run of `listRun` items is the definition `<def>_l<i>`, whose
   tail is the next run's definition. A term then nests about `listRun` deep however long its lists
   are. The walk is memoized by subterm where it adds no definition, so a shared subterm is walked
-  once.
+  once. Existing GKR entries use this transformation; program identity entries disable it and
+  retain the list expressions of their original printed declarations.
 
 This file is part of the precompiled library `GordieHoweNative`, so the term building runs as
 native code. The terms add no trust: the kernel checks every added definition.
@@ -52,6 +55,9 @@ structure Entry where
   plainE : D Expr
   /-- A spine-form section's expression. -/
   spineE : D Expr
+  /-- Split long list literals into auxiliary declarations. Existing circuit sections use this;
+  program literals disable it when their original declaration expressions must be preserved. -/
+  splitLists : Bool := true
 
 /-- The registry entry of a type with a decoder. -/
 def Entry.of (α : Type) [Decode α] : Entry where
@@ -154,7 +160,8 @@ def loadDefs (types : Array Entry) (ns : Name) (bytes : ByteArray) (secs : Array
       pure v
     let v ← (d.run' s.off).run { bytes, secs, cur := j, idx, names, idxNames }
       |>.mapError (s!"section {s.name}: " ++ ·)
-    defs := defs ++ chainedDefs names[j]! e.tyE v s.compile
+    defs := defs ++ if e.splitLists then chainedDefs names[j]! e.tyE v s.compile
+      else #[{ name := names[j]!, type := e.tyE, value := v, compile := s.compile }]
   pure defs
 
 end GordieHowe.Ghc

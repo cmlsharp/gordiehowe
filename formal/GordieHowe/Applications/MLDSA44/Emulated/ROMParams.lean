@@ -3,14 +3,13 @@
 
 module
 
-public import GordieHowe.Applications.MLDSA44.Emulated.ROMParams.GadgetFacts
+public import GordieHowe.Applications.MLDSA44.Emulated.ROMParams.Facts
 public import GordieHowe.ProofSystem.Program.HonestReady
-public import GordieHowe.Generated.MLDSA44.Emulated.ROMParams.Completion
+public import GordieHowe.Generated.MLDSA44.Emulated.ROMParams.Certified
 public import GordieHowe.Applications.MLDSA44.Emulated.ROMParams.Relations
-public import GordieHowe.Generated.MLDSA44.Emulated.ROMParams.Figures
 public import GordieHowe.ProofSystem.Program.Transcript.MergeSetting
 public import GordieHowe.ProofSystem.Program.ForkJoinComap
-public import GordieHowe.Applications.Configuration
+public import GordieHowe.Applications.Configuration.Certified
 public import GordieHowe.ProofSystem.Program.EndToEnd
 
 @[expose] public section
@@ -25,6 +24,12 @@ proof-of-possession relation at the key `keyWitRel` with the witness read at the
 values, the honest prover, the honest strategy `honestStrategy`, and the figures), its facts
 `configurationFacts`, and the instances of the templates of the families `Common`, `GordieHowe.Configuration.ZeroKnowledgeROM` and
 `GordieHowe.Configuration.AdaptiveCompleteness`.
+
+The configuration is `GordieHowe.Configuration.ofCertified` at the generated certified data
+(`GordieHowe.Generated.MLDSA44.Emulated.ROMParams.certified`), the source program's soundness (`source`) and the
+frontend (`frontend`): its IOP, transcript, honest strategy and honest relation are the instances
+of the generic templates (`GordieHowe.Configuration.CertifiedSource`,
+`GordieHowe.Configuration.CertifiedHonest`, `GordieHowe.Configuration.CertifiedFront`).
 
 The figures: at most `2333` rounds, every round's load within `2^-2780`, trees of at most `3392`
 leaves, `159` queried leaves, `6737` verifier queries (`2 · 2333 + 4 + 159 · 13`), round errors at
@@ -51,182 +56,74 @@ namespace GordieHowe.MLDSA44.Emulated.ROMParams
 
 open RealizedProgram.Export RealizedProgram.ProofSystem.PhaseLayout IOP RelativePacking GordieHowe.SPBCS GordieHowe.QROM SPBCS.Configurations GordieHowe.Configuration
 open Generated.MLDSA44.Emulated.ROMParams.Program (program)
-open Generated.MLDSA44.Emulated.ROMParams (interp ready ProofSystems figures figuresOk numbers
-  branchName branchName_le fieldBytes msgB_le
-  samplerReaders chalLoadMax chalLoad_le grantMax
-  sourceErrors fieldCard loadsOk)
-open Generated.MLDSA44.Emulated.ROMParams.Facts (interpModel sourceValid)
+open Generated.MLDSA44.Emulated.ROMParams (interp certified conditions)
 open MLDSA44 (HonestInput)
 open scoped NNReal ENNReal
 
-/-! ## The honest strategy -/
+/-! ## The frontend -/
 
 /-- **The honest relation of `MLDSA44.Emulated.ROMParams`**: the statement is the input's key's. -/
 abbrev relH : Set (program.Valuation interp × HonestInput) :=
   Emulated.relH program RealizedProgram.gold2 RealizedProgram.gf128
 
-/-- **The ready data of the honest strategy of `MLDSA44.Emulated.ROMParams`**
-(`RealizedProgram.CompletionReady.ofGenerated`): the honest nodes, which contain `1`
-(`Emulated.oneNodes`), and the generated facts: validity, the interpretation's model, the
-realizations, the source part, and the checks of the completeness certificate and the honest roles
-(`GordieHowe.Generated.MLDSA44.Emulated.ROMParams.Completion.completionOk`, `GordieHowe.Generated.MLDSA44.Emulated.ROMParams.Completion.rolesOk`). -/
-def completionReady : program.CompletionReady interp (Emulated.MldsaEmulatedHonest.PN (program := program))
-    Generated.MLDSA44.Emulated.ROMParams.Structure.records
-    Generated.MLDSA44.Emulated.ROMParams.Cert.gens Generated.MLDSA44.Emulated.ROMParams.Cert.cderivs :=
-  .ofGenerated Emulated.oneNodes Generated.MLDSA44.Emulated.ROMParams.Valid.wellFormed interpModel
-    Generated.MLDSA44.Emulated.ROMParams.Realize.derivable sourceValid Generated.MLDSA44.Emulated.ROMParams.Completion.completionOk
-    Generated.MLDSA44.Emulated.ROMParams.Completion.rolesOk
+/-- **The source program's execution of `MLDSA44.Emulated.ROMParams`** at ready data of its honest strategy. -/
+noncomputable def sourceExec (R : certified.Ready) :
+    program.SourceExecution interp relH :=
+  Emulated.sourceExecution program RealizedProgram.gold2 RealizedProgram.gf128 R.facts.committed
+    R.facts.boundNoCopy R.roles R.oneNodes
+    conditions.model.bitNodes (conditions.noFieldForm rfl)
 
-/-- **The honest strategy of `MLDSA44.Emulated.ROMParams`** (`RealizedProgram.HonestStrategy.ofCompletionReady` at the execution
-`Emulated.sourceExecution` at the program's honest roles `completionReady.roles`): the honest
-valuation `Emulated.honestVal` read off by `execOf`, the generated late values, no completeness
-event. -/
-noncomputable def honestStrategy : program.HonestStrategy interp relH :=
-  RealizedProgram.HonestStrategy.ofCompletionReady completionReady
-    (Emulated.sourceExecution program RealizedProgram.gold2 RealizedProgram.gf128 completionReady.facts.committed
-      completionReady.facts.boundNoCopy completionReady.roles completionReady.oneNodes
-      interpModel.bitNodes Generated.MLDSA44.Emulated.ROMParams.Completion.noFieldForm)
+/-- The execution has no completeness event. -/
+theorem sourceExec_δ (R : certified.Ready) : ∑ k, (sourceExec R).δ k = 0 := by
+  rw [sourceExec, Emulated.sourceExecution_δ]
+  simp
 
-/-- The honest strategy's completeness errors are `0`. -/
-theorem honestStrategy_delta : ∑ k, honestStrategy.δ k ≤ honestBound := by
-  rw [honestStrategy, RealizedProgram.HonestStrategy.ofCompletionReady_δ, Emulated.sourceExecution_δ]
-  simp [honestBound]
+/-- **The statement's writes have at most `2^20` bytes.** -/
+theorem stmtCodec_ser_le (x : KeyStmt) : (keyStmtCodec.ser x).length ≤ 2 ^ 20 := by
+  change ((MLDSA44.PoP.StatementWrites.keyContext 0).pre x.1).length ≤ _
+  rw [MLDSA44.PoP.StatementWrites.keyContext_pre_length]
+  norm_num
 
-/-! ## The multi-circuit IOP with forked domains -/
+/-- The label has at most `2^10` bytes. -/
+theorem label_le : label.length ≤ 2 ^ 10 :=
+  Nat.le_of_ble_eq_true rfl
 
-variable (C : ProofSystems)
+/-- **The frontend of `MLDSA44.Emulated.ROMParams`** (`Configuration.Frontend`): the statements `KeyStmt` with the codec
+`keyStmtCodec`, read as their statement values (`stmtOf`), the headline relation `keyWitRel`, the honest
+inputs `HonestInput` at `relH` with the execution `sourceExec`, and the label `label`. -/
+noncomputable def frontend :
+    Configuration.Frontend certified source KeyStmt MLDSA44.VarWitness HonestInput where
+  codec := keyStmtCodec
+  stmtOf := stmtOf
+  rel' := keyWitRel
+  g s w := w (stmtOf s)
+  relH := relH
+  exec := sourceExec
+  keyStmtOf := keyStmtOf
+  label := label
 
-/-- The lowering of the soundness theorem on the generic per-field domain proofs
-(`RealizedProgram.ProofSystem.lowering`). -/
-abbrev forkLowering :=
-  (C.withFieldProofs ready).lowering ⟨_, source_rbr_knowledge_soundness, (sourceError_final MLDSA44.sampleEps)⟩
+/-- **The facts of `frontend`**: the statement's writes (`stmtCodec_ser_le`), the label
+(`label_le`), the witness map, the execution (`sourceExec_δ`) and the honest inputs' statements. -/
+theorem frontendFacts : frontend.Facts :=
+  ⟨stmtCodec_ser_le, label_le, (fun _ _ h => mem_keyWitRel h), sourceExec_δ,
+    fun y => stmtOf_eq (keyStmtOf y)⟩
 
-/-- **`MLDSA44.Emulated.ROMParams` as a multi-circuit IOP with forked domains at the key**: the generic
-per-field domain proofs (`RealizedProgram.ProofSystem.fieldIop`) with the proof system's application phase at the
-frontend's round-by-round knowledge soundness (`source_rbr_knowledge_soundness`), the statement read as the key's
-statement values (`stmtOf`). -/
-abbrev forkIop : RealizedProgram.ProofSystem.IOP KeyStmt
-    (program.Valuation interp → MLDSA44.VarWitness) keyRel :=
-  C.fieldIop ready (forkLowering C) stmtOf
-
-/-- The soundness data of `forkIop` (`RealizedProgram.ProofSystem.FieldBranches.soundIOPSound`, `RealizedProgram.ProofSystem.IOP.Sound.comap`). -/
-noncomputable abbrev forkIopSound : (forkIop C).Sound :=
-  ((C.fieldBranches ready).soundIOPSound (C.fieldBranchesSound ready) source_rbr_knowledge_soundness
-    (sourceError_final MLDSA44.sampleEps)).comap stmtOf
-
-/-- **The C++ series–parallel transcript of `MLDSA44.Emulated.ROMParams`** (`RealizedProgram.ProofSystem.fieldForkTranscript`): the
-label `label`, `figures.k`-byte digests (SHA-256), the key-and-context writes (`keyStmtCodec`), every
-branch named by its domain's field (`branchName`), the phases' codecs (`RealizedProgram.appWrites` at
-`fieldBytes`) and readers (`RealizedProgram.appReaders` at `samplerReaders`), every domain's at `numbers`. The largest grant of a round is `grantMax`. -/
-abbrev forkTranscript : ProofSystemTranscript (forkIop C) :=
-  C.fieldForkTranscript ready (forkLowering C) stmtOf numbers.cod
-    (numbers.fits C.enforce) label figures.k
-    keyStmtCodec (fun a => branchName a.1) (program.appWrites fieldBytes msgB_le)
-    (program.appReaders samplerReaders (fun _ => chalLoadMax) chalLoad_le) grantMax
-
-/-- **The facts the setting with merges is built from**: the transcript's
-(`RealizedProgram.ProgramFigures.Check.transcript_bounds`: the statement's writes, the label and the
-branch names) and `32`-byte salts. -/
-theorem transcriptMergeBounds : (forkTranscript C).MergeBounds 32 :=
-  ⟨figuresOk.transcript_bounds
-    (fun x => by
-      change ((MLDSA44.PoP.StatementWrites.keyContext 0).pre x.1).length ≤ _
-      rw [MLDSA44.PoP.StatementWrites.keyContext_pre_length]
-      norm_num)
-    (Nat.le_of_ble_eq_true rfl) (fun a => branchName_le a.1), by norm_num⟩
-
-/-- **The source challenges' errors are within their fractions** (`sourceErrors`). -/
-theorem sampleEps_le (j : ℕ) (_ : program.IsSourceChal j) :
-    MLDSA44.sampleEps j ≤ ((sourceErrors j).1 : ℝ≥0) / (sourceErrors j).2 := by
-  unfold MLDSA44.sampleEps MLDSA44.sampleEpsOf
-  simp only [sourceErrors]
-  split_ifs <;> norm_num
-
-/-- **The largest round error of the series–parallel composite** is at most
-`figures.errorMax / 2^figures.errorExp` (`RealizedProgram.ProofSystem.fieldForkError_le`): every
-domain's round charges and every phase's error (`RealizedProgram.ProgramFigures.Check.fieldRoundsLe`,
-`RealizedProgram.ProgramFigures.Check.phaseError_le`). -/
-theorem maxRoundError_le :
-    maxError (forkIopSound C).error ≤ (figures.errorMax : ℝ≥0) / 2 ^ figures.errorExp :=
-  maxError_le_iff.2 (C.fieldForkError_le ready stmtOf source_rbr_knowledge_soundness
-    (sourceError_final MLDSA44.sampleEps) (figuresOk.fieldRoundsLe fieldCard)
-    (fun _ => figuresOk.phaseError_le fieldCard MLDSA44.sampleEps sampleEps_le _))
+instantiate_config GordieHowe.MLDSA44.Emulated.ROMParams
+  from [GordieHowe.Configuration.CertifiedHonest, GordieHowe.Configuration.CertifiedFront]
+  folding [keyRel] certified source frontend
 
 /-! ## The configuration -/
 
-/-- **`MLDSA44.Emulated.ROMParams` as a configuration under spBCS** (module docstring).
-The honest prover at a strategy `H`: the proof system's phased honest prover and every forked domain's honest
-prover on the generic per-field domain proofs (`RealizedProgram.ProofSystem.FieldBranches.honestAt`, `RealizedProgram.ProofSystem.fieldHonestDomains`,
-`RealizedProgram.ProofSystem.fieldForkHonestDomains`) read through the key's statement values
-(`RealizedProgram.ProofSystem.IOP.Honest.comap`); its completeness error is the strategy's summed completeness errors
-(`err`). -/
-noncomputable def configuration : Configuration where
-  ProofSystem := ProofSystems
-  Stmt := KeyStmt
-  Wit := program.Valuation interp → MLDSA44.VarWitness
-  rel := keyRel
-  iop := forkIop
-  sound := forkIopSound
-  T := forkTranscript
-  kS := 32
-  Wit' := MLDSA44.VarWitness
-  rel' := keyWitRel
-  g s w := w (stmtOf s)
-  Val := program.Valuation interp
-  Strategy _ relH := program.HonestStrategy interp relH
-  hrel := keyHonestRel
-  sim C := C.fieldIopSimData (forkLowering C) stmtOf
-  honest C _ _ H := C.fieldIopHonest (forkLowering C) stmtOf H.toHonestCore
-  err H := ∑ k, H.δ k
-  HonestIn := HonestInput
-  relH := relH
-  strategy := honestStrategy
-  keyStmtOf := keyStmtOf
-  inh := inferInstance
-  rounds := figures.rounds
-  chernoff := figures.chernoff
-  N := figures.N
-  nq := figures.nq
-  kq := figures.kq
-  errorMax := figures.errorMax
-  errorExp := figures.errorExp
-  D := figures.D
-  qQ := 2 ^ 40
-  qR := 2 ^ 64
-  pos := figures.pos
-  k := figures.k
+/-- **`MLDSA44.Emulated.ROMParams` as a configuration under spBCS** (module docstring,
+`Configuration.ofCertified`): `32`-byte salts and the query cap `2 ^ 40`. -/
+noncomputable def configuration : Configuration :=
+  .ofCertified certified source frontend 32 (2 ^ 40)
 
-/-- **The facts of `configuration`**: the figures' bounds, from the generated check
-(`GordieHowe.Generated.MLDSA44.Emulated.ROMParams.figuresOk`: `RealizedProgram.ProgramFigures.Check.figures`,
-`RealizedProgram.ProgramFigures.Check.loads`, `maxRoundError_le`), the setting's facts
-(`transcriptMergeBounds`), the end-to-end theorem at the configuration's IOP
-(`RealizedProgram.ProofSystem.FieldBranches.e2e_knowledge`, `RealizedProgram.ProofSystem.FieldBranches.e2e`, at the witness
-map `mem_keyWitRel` and the domains' generic honest provers) and the honest strategy's
-(`honestStrategy_delta`). -/
-theorem configurationFacts : configuration.Facts where
-  hb := transcriptMergeBounds
-  knowledge C _ hkq := (C.fieldBranches ready).e2e_knowledge (C.fieldBranchesSound ready) source_rbr_knowledge_soundness
-    (sourceError_final MLDSA44.sampleEps) stmtOf (forkTranscript C) 32
-    (transcriptMergeBounds C) (fun _ _ h => mem_keyWitRel h) hkq
-  e2e C _ _ H _ hkq hf := (C.fieldBranches ready).e2e (C.fieldBranchesSound ready) source_rbr_knowledge_soundness
-    (sourceError_final MLDSA44.sampleEps) stmtOf (forkTranscript C) 32
-    (transcriptMergeBounds C) (fun _ _ h => mem_keyWitRel h) hkq hf
-    (C.fieldHonestDomains ready)
-    (C.fieldForkHonestDomains ready) H.toHonestCore
-    H.complete
-  rounds_le C := (figuresOk.figures (B := C) (Lw := forkLowering C) (f := stmtOf)).rounds_le
-  loads C := figuresOk.loads loadsOk (B := C) (Lw := forkLowering C) (f := stmtOf)
-  loadsGranted C := figuresOk.loadsGranted (B := C) (Lw := forkLowering C) (f := stmtOf)
-  leaves_le C := (figuresOk.figures (B := C) (Lw := forkLowering C) (f := stmtOf)).leaves_le
-  queries_le C := (figuresOk.figures (B := C) (Lw := forkLowering C) (f := stmtOf)).queries_le
-  kq_ge C := (figuresOk.figures (B := C) (Lw := forkLowering C) (f := stmtOf)).kq_ge
-  kq_le := figuresOk.kq_le
-  error_le := maxRoundError_le
-  digests_le C := (figuresOk.figures (B := C) (Lw := forkLowering C) (f := stmtOf)).digests_le
-  pos_eq C := (figuresOk.figures (B := C) (Lw := forkLowering C) (f := stmtOf)).pos_eq
-  k_eq _ := rfl
-  exact := nonpos_iff_eq_zero.1 honestStrategy_delta
-  keyStmtOf_mem y := stmtOf_eq (keyStmtOf y)
+/-- **The facts of `configuration`** (`Configuration.ofCertified_facts`): the frontend's
+(`frontendFacts`) and the generated loads' check (`GordieHowe.RuntimeInputs.FiguresFacts.loads`). -/
+theorem configurationFacts : configuration.Facts :=
+  Configuration.ofCertified_facts certified source frontendFacts (by norm_num) _
+    (conditions.fullFacts.figures.loads rfl)
 
 /-- **The honest inputs of the paper's relation** (`Configuration.HonestOf` at `keyWitRel`, the
 paper's relation `MLDSA44.PoP.relUpTo 32` at the key): every pair has the honest input
@@ -240,7 +137,7 @@ def honestOfRel : configuration.HonestOf where
 instantiate_config GordieHowe.MLDSA44.Emulated.ROMParams
   from [GordieHowe.Configuration.Common, GordieHowe.Configuration.ZeroKnowledgeROM,
     GordieHowe.Configuration.AdaptiveCompleteness,
-    GordieHowe.Configuration.PaperRelation] configuration configurationFacts
+    GordieHowe.Configuration.PaperRelation] folding [keyRel] configuration configurationFacts
     honestOfRel at proofSystem
 
 end GordieHowe.MLDSA44.Emulated.ROMParams

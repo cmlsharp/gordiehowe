@@ -5,6 +5,8 @@ module
 
 public import GordieHowe.Language.RealizedProgram.Source
 public import GordieHowe.Language.RealizedProgram.Check
+public import GordieHowe.Language.RealizedProgram.Reader
+public import GordieHoweNative.Language.RealizedProgram.SourceCheck
 
 @[expose] public section
 
@@ -41,37 +43,7 @@ def valueDepsM (v : ℕ) : List ℕ :=
   | .bits w _ => [w]
   | _ => []
 
-/-- **The values the definition of a value `x` reads, through the table**: `valueDepsM` at a
-value read from the walk (`valueDepsM_eq`). -/
-def valueDepsOf (x : Value) : List ℕ :=
-  match x.kind with
-  | .pub (.expr e) => ir.nodesOf e
-  | .pub (.opaque _ args) => args
-  | .bits w _ => [w]
-  | _ => []
-
 theorem valueDepsM_eq (v : ℕ) : ir.valueDepsM v = ir.valueDepsOf (ir.value v) := rfl
-
-/-- **The values of another role than `source`**, as a bit set (`failBits`): bit `v` set when value
-`v` exists and its role is not `source`. -/
-def nonSourceBits : ℕ := failBits (fun _ (x : Value) => x.role == .source) ir.values 0
-
-/-- **Value `v` is a source value, as a test**: its bit is clear in `nonSourceBits` (`srcB_iff`). A
-value past the end is the default value, of role `source`, as `IsSourceValue` reads it. -/
-def srcB (v : ℕ) : Bool := bitTest ir.nonSourceBits ir.values.length true v
-
-/-- **`inSource` with the value read by `srcB`** (`inSourceB_eq`). -/
-def inSourceB (p : Predicate) : Bool :=
-  match p.role with
-  | .source => true
-  | .type v => ir.srcB v
-  | .realization _ => false
-
-/-- **`SourceRead` as a test**, a late value read by `srcB` (`srcReadB_iff`). -/
-def srcReadB : Read → Bool
-  | .chal c => ir.chalIsSource c
-  | .late u => ir.srcB u
-  | .pad _ => false
 
 variable {ir}
 
@@ -147,5 +119,31 @@ theorem SourceValid.of_checks (hwf : ir.WellFormed)
     rw [hz, show ((ir.value v).role == .source) = true from beq_iff_eq.2 hs,
       Bool.not_true, Bool.false_or, List.all_eq_true] at h
     exact (srcReadB_iff rd).1 (h rd ((mem_readsT hwf v rd).1 hrd))
+
+/-- **The source part is well formed from its four checks in one** (`sourceChecksB`, the four
+checks of `SourceValid.of_checks`). -/
+theorem SourceValid.of_sourceChecksB (hwf : ir.WellFormed) (h : ir.sourceChecksB = true) :
+    ir.SourceValid := by
+  simp only [sourceChecksB, Bool.and_eq_true] at h
+  exact .of_checks hwf h.1.1.1 h.1.1.2 h.1.2 h.2
+
+/-! ## The compiled checks -/
+
+/-- **The compiled source checks' reader of the program's context is the kernel's.** -/
+theorem SReader.ofCtx_build (ir : RealizedProgram) :
+    SReader.ofCtx (SCtx.build ir) = SReader.ofProgram ir := by
+  rw [SReader.ofCtx, SCtx.build, SReader.ofProgram, PReader.ofCtx_build]
+  rfl
+
+theorem sourceChecksB_eq_reader (ir : RealizedProgram) :
+    ir.sourceChecksB = @SReader.sourceChecksB ir (SReader.ofProgram ir) := rfl
+
+/-- **Compiled code runs the source part's checks at the context built once**
+(`sourceChecksBC`). -/
+@[csimp] theorem sourceChecksB_csimp : @sourceChecksB = @sourceChecksBC := by
+  funext ir
+  rw [sourceChecksB_eq_reader, sourceChecksBC]
+  show _ = @SReader.sourceChecksB ir (SReader.ofCtx (SCtx.build ir))
+  rw [SReader.ofCtx_build]
 
 end GordieHowe.RealizedProgram

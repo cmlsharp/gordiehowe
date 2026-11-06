@@ -70,7 +70,6 @@ theorem coord_castElt {a : ℕ} (h : a = 0) (s : String) (y : (interp 0).K) (j :
     (interp a).coord s (RealizedProgram.castElt (a := 0) (b := a) y) j = FH.coord s y j := by
   subst h
   rw [RealizedProgram.castElt_self]
-  rfl
 
 /-- **A bit view of packed state words reads the state's bits** at the source environment. -/
 theorem evalE_words {val : program.Valuation interp} {x : program.Valuation interp}
@@ -561,6 +560,11 @@ theorem wordsOwner_checks : (∀ p t, wordsOwner? (wordsVal p t) = some (p, t)) 
     wordsOwner? 96 = none := by
   decide +kernel
 
+/-- A round found for a value has that value as its words. -/
+theorem wordsOwner?_eq {v : ℕ} {pt : Fin 11 × Fin 24} (h : wordsOwner? v = some pt) :
+    wordsVal pt.1 pt.2 = v := by
+  simpa only [beq_iff_eq] using List.find?_some h
+
 section Values
 
 variable {L : ℕ} (y : Falcon512.PoP.HonestInput L)
@@ -584,6 +588,47 @@ noncomputable def hashVal (v i : ℕ) : (interp (program.valueField v)).K :=
     | some pt => RealizedProgram.castElt (a := 0)
         (RealizedProgram.stateWords HField.packing (iterRounds (hStarts FH y pt.1) ((pt.2 : ℕ) + 1)) i)
     | none => 0
+
+/-- **The nonce role reads the first forty bytes of the padded input.** -/
+theorem hashVal_nonce (i : ℕ) :
+    hashVal (program := program) (FH := FH) (FA := FA) y 45 i =
+      (if h : i < 320 then RealizedProgram.castElt (a := 0)
+        (hBlock FH y ⟨i / 8, by omega⟩ ⟨i % 8, by omega⟩) else 0) := by
+  simp only [hashVal, if_true]
+
+/-- **The message role reads the remaining padded-input bytes.** -/
+theorem hashVal_message (i : ℕ) :
+    hashVal (program := program) (FH := FH) (FA := FA) y 46 i =
+      (if h : i < 768 then RealizedProgram.castElt (a := 0)
+        (hBlock FH y ⟨40 + i / 8, by omega⟩ ⟨i % 8, by omega⟩) else 0) := by
+  simp only [hashVal, show (46 : ℕ) ≠ 45 by decide, if_false, if_true]
+
+/-- **The flag role records the actual input prefix.** -/
+theorem hashVal_flags (i : ℕ) :
+    hashVal (program := program) (FH := FH) (FA := FA) y 47 i = RealizedProgram.castElt (a := 0) (if i < 40 + L then 1 else 0) := by
+  simp only [hashVal, show (47 : ℕ) ≠ 45 by decide, show (47 : ℕ) ≠ 46 by decide,
+    if_false, if_true]
+
+/-- **The initial squeeze-state role reads its packed state words.** -/
+theorem hashVal_state (i : ℕ) :
+    hashVal (program := program) (FH := FH) (FA := FA) y 96 i = RealizedProgram.castElt (a := 0)
+      (RealizedProgram.stateWords HField.packing (hStarts FH y 1) i) := by
+  simp only [hashVal, show (96 : ℕ) ≠ 45 by decide, show (96 : ℕ) ≠ 46 by decide,
+    show (96 : ℕ) ≠ 47 by decide, if_false, if_true]
+
+/-- **A round role reads the packed state after that round.** -/
+theorem hashVal_round (p : Fin 11) (t : Fin 24) (i : ℕ) :
+    hashVal (program := program) (FH := FH) (FA := FA) y (wordsVal p t) i = RealizedProgram.castElt (a := 0)
+      (RealizedProgram.stateWords HField.packing
+        (iterRounds (hStarts FH y p) ((t : ℕ) + 1)) i) := by
+  obtain ⟨hw, h45, h46, h47, h96⟩ := wordsOwner_checks
+  have hv : wordsVal p t ≠ 45 ∧ wordsVal p t ≠ 46 ∧ wordsVal p t ≠ 47 ∧ wordsVal p t ≠ 96 := by
+    refine ⟨fun h' => ?_, fun h' => ?_, fun h' => ?_, fun h' => ?_⟩ <;>
+      · have := hw p t
+        rw [h'] at this
+        simp_all
+  simp only [hashVal, if_neg hv.1, if_neg hv.2.1, if_neg hv.2.2.1,
+    if_neg hv.2.2.2, hw p t]
 
 /-- **Value `v` is a committed input of the hash**: the nonce, the message part, the flags, the
 state's or a round's words. -/

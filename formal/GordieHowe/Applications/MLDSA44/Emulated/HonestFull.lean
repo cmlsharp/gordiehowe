@@ -6,6 +6,8 @@ module
 public import GordieHowe.Applications.MLDSA44.Emulated.HonestSource
 public import GordieHowe.Language.Honest.Exec
 public import GordieHowe.Language.Completeness.Execution
+public import GordieHowe.Applications.FieldInterps.Odd
+public import GordieHowe.Language.Realizations.MaskSubfield
 
 @[expose] public section
 
@@ -42,6 +44,26 @@ class MldsaANodes (F0 : FieldInterp) : Prop where
   /-- The naturals lie in the node `GF(p^1)`. -/
   natCast_mem : ∀ n : ℕ, (n : F0.K) ∈ F0.node "GF(p^1)"
 
+/-- **Goldilocks²'s prime subfield holds the naturals.** -/
+instance : MldsaANodes RealizedProgram.gold2 where
+  natCast_mem n := by
+    change (n : GoldilocksExt2) ∈ RealizedProgram.gold2Node "GF(p^1)"
+    rw [RealizedProgram.gold2Node, if_pos rfl]
+    have h : (n : GoldilocksExt2) ∈ Set.range (algebraMap (ZMod pGold) GoldilocksExt2) :=
+      ⟨n, map_natCast _ n⟩
+    rw [GordieHowe.range_algebraMap_eq_fixedField] at h
+    exact h
+
+/-- **Goldilocks⁴'s prime subfield holds the naturals.** -/
+instance : MldsaANodes RealizedProgram.gold4 where
+  natCast_mem n := by
+    change (n : GoldilocksExt4) ∈ RealizedProgram.gold4Node "GF(p^1)"
+    rw [RealizedProgram.gold4Node, if_pos rfl]
+    have h : (n : GoldilocksExt4) ∈ Set.range (algebraMap (ZMod pGold) GoldilocksExt4) :=
+      ⟨n, map_natCast _ n⟩
+    rw [GordieHowe.range_algebraMap_eq_fixedField] at h
+    exact h
+
 section Prime
 
 variable {F0 FH : FieldInterp} [MldsaANodes F0]
@@ -61,7 +83,7 @@ theorem dite_mem_zero {K : Type*} [Field K] {S : AddSubgroup K} {p : Prop} [Deci
 
 end Prime
 
-variable {program : RealizedProgram} [MldsaEAlgebra program] {F0 FH : FieldInterp} [AField F0]
+variable {program : RealizedProgram} [MldsaEAlgebra program] {F0 FH : FieldInterp} [RealizedProgram.PrimeCastField F0 pGold]
   [MldsaANodes F0] [HField FH] [MldsaHHonest nat] [MldsaHSample nat] [MldsaHSelHonest nat]
   [MldsaHConsts nat FH] [MLDSA44.MldsaHNativeData FH] [MldsaHNodes FH]
   [hE : MldsaEmulatedHonest program F0 FH]

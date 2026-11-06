@@ -352,9 +352,10 @@ inductive TypeSource where
   | none
   deriving Repr, DecidableEq, Inhabited
 
-/-- **How a late value is realized**: masked by a pad uniform over `padSpace` (a node of its
-domain's packing tree; `Plan.MessageSpacesValid`), sent as `x + P`; or committed in a Ligero
-commitment of its own phase `k` (reserved; `Plan.Valid` rejects it). -/
+/-- **How a late value is realized**: masked by a pad uniform over `padSpace` (the whole field or a
+node of its domain's packing tree, which the locality part of the program's check confirms), sent as
+`x + P`; or committed in a Ligero commitment of its own phase `k` (reserved: no exporter writes
+it). -/
 inductive LateRealization where
   /-- A pad over `padSpace`. -/
   | pad (padSpace : Space)
@@ -441,7 +442,7 @@ def Value.padSpace (x : Value) : Space :=
   | .pad s => s
   | .commitment _ => .full
 
-/-- **The target of a field `equal`** (`RealizedProgram.TargetsAdmit`): affine rows, the quadratic test, the
+/-- **The target of a field `equal`**: affine rows, the quadratic test, the
 batch `id` (an identifier in `RealizedProgram.batches`), the GKR circuit `circuit` (in
 `RealizedProgram.circuits`), or the realization predicate `pred`: an `equal` whose sides are this
 predicate's sides with each convolution read through its spectral realization
@@ -730,8 +731,8 @@ inductive TableRows where
   | expr (e : Expr)
   deriving Repr, DecidableEq, Inhabited
 
-/-- **A group of a lookup table**: its needle capacity (below the characteristic,
-`Plan.LookupsFit`), its multiplicity values (the static histogram, committed in phase `0`, and the
+/-- **A group of a lookup table**: its needle capacity (the planner's bound, which no part of the
+program's check states), its multiplicity values (the static histogram, committed in phase `0`, and the
 late histogram, a late value; a `merged` group's late histogram counts every needle, and it has no
 static histogram), and the members of its LogUp sum. -/
 structure TableGroup where
@@ -1287,5 +1288,16 @@ def isMemberOf (member : String) (v : Nat) : Bool :=
   | _ => false
 
 end
+
+/-- Whether a kind is `priv`. -/
+def Kind.isPriv : Kind → Bool
+  | .priv => true
+  | _ => false
+
+/-- The packing-tree node of a value type (`bit`, or the subfield's name); none for `Field`. -/
+def VType.nodeName : VType → Option String
+  | .bit => some "bit"
+  | .sub E => some E
+  | .field => none
 
 end GordieHowe.RealizedProgram

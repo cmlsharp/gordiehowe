@@ -4,8 +4,8 @@
 module
 
 public import GordieHowe.Foundations.Fields.GF2_256
-public import GordieHowe.Applications.Params
-public import GordieHowe.Applications.Spec.SelectionField
+public import GordieHowe.Language.Library.Select.Field
+public import Mathlib.Tactic.NormNum.Prime
 public import GordieHowe.Foundations.ToMathlib.OrderOf
 public import GordieHowe.Foundations.Algebra.RecordPacking
 
@@ -160,7 +160,7 @@ theorem linearIndependent_gf2_256SubfieldBasis :
     (Fin.castLE_injective sixteen_le_natDegree_minpoly_gf2_256SubfieldGen)
 
 /-- The selection field data of the `GF(2²⁵⁶)` H circuit. -/
-def gf2_256SelectionField : SelectionField GF2_256 falcon512.S where
+def gf2_256SelectionField : SelectionField GF2_256 65534 where
   E := gf2_256Subfield
   X := gf2_256Root
   X_not_mem := gf2_256_root_not_mem_subfield
@@ -170,7 +170,6 @@ def gf2_256SelectionField : SelectionField GF2_256 falcon512.S where
   g := gf2_256SubfieldGen
   g_mem := gf2_256SubfieldGen_mem
   g_order a b ha hb h := by
-    have hS : falcon512.S < 65535 := by decide
     refine pow_injOn_Iio_orderOf ?_ ?_ h <;>
       rw [Set.mem_Iio, orderOf_gf2_256SubfieldGen] <;> omega
 

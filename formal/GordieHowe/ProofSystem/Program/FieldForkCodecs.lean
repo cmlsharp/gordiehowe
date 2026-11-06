@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.ProofSystem.Program.FieldFork
+public import GordieHoweNative.ProofSystem.Program.Figures
 public import GordieHowe.ProofSystem.RingSwitching.PlanTreeCodecs
 public import GordieHowe.ProofSystem.Zerocheck.BatchedCodecs
 public import GordieHowe.ProofSystem.Program.Transcript.PrefixCodecs
@@ -143,14 +144,6 @@ def forkBranchReaders (rd : CReader (I (ir.domainField d)).K)
   branchReaders src R rd (ir.branchEquiv d R.Pk b)
 
 /-! ## The join -/
-
-/-- **The stream grants of a forked domain's join**: the extra stream bytes of every stage's
-combination challenge, by the stage's position, and of Ligero's constraint challenge. -/
-structure ForkGrants where
-  /-- The grant of the stage at each position. -/
-  stage : ℕ → ℕ := fun _ => 0
-  /-- The grant of Ligero's constraint challenge. -/
-  linear : ℕ := 0
 
 /-- **The join's masked row reduction**: the join's tree closed on the fixed masked reduction. -/
 abbrev forkJoinIp := (ir.fieldFork src R).join.path.close (ir.fieldFork src R).join.maskedReduction

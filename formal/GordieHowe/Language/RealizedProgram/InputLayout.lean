@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.Assumptions
+public import GordieHoweNative.Language.RealizedProgram.InputLayout
 
 @[expose] public section
 
@@ -180,17 +181,6 @@ section
 section Blocks
 
 variable (ir : RealizedProgram) (I : Interp)
-
-/-- **The inputs of circuit `c` holding batch pads**: the lengths of its batch-pad blocks. -/
-def batchPadInputs (c : ℕ) : ℕ :=
-  ((ir.circuit c).inputs.map fun b => match b with
-    | .batchPads _ _ n => n
-    | _ => 0).sum
-
-/-- **The end of circuit `c`'s private block**: the input count less the batch-pad inputs. The C++
-allocates a batch's pads as the circuit's last inputs, which no gate reads; the Lean commits them at
-full-field cells beside the circuit's input, so the private block ends before them. -/
-abbrev privEnd (c : ℕ) : ℕ := (ir.circuit c).inputCount - ir.batchPadInputs c
 
 /-- **The public input of a domain's circuit proof**: the statement and the run, from which the
 verifier computes the circuit's public inputs. -/

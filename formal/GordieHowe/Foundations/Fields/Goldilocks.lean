@@ -16,7 +16,8 @@ public import Mathlib.RingTheory.RootsOfUnity.PrimitiveRoots
 public import Mathlib.Tactic.ComputeDegree
 public import GordieHowe.Foundations.Algebra.PowMod
 public import GordieHowe.Foundations.Algebra.PowModOrder
-public import GordieHowe.Applications.Params
+public import GordieHoweNative.Applications.FieldInterps.Codes
+public import Mathlib.Tactic.NormNum.Prime
 public import GordieHowe.Foundations.ToMathlib.Polynomial
 
 @[expose] public section

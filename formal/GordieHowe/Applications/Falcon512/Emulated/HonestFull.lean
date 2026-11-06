@@ -286,7 +286,7 @@ theorem honest_cell_mem (i : HonestIn) {v : ℕ} (hv : v < program.values.length
         refine mem_castElt_of_eq (a := SelectShape.field program selShape) (hsf.trans hf.symm) ?_
         by_cases hj : j < 717
         · simp only [hj, ↓reduceDIte]
-          unfold hRoute SelectFirstN.Model.hashToPointRoute
+          unfold hRoute SelectFirstCutoff.Model.honestRoute
           exact gf16_mem_gpow _
         · simp only [hj, ↓reduceDIte]
           exact zero_mem _
@@ -322,7 +322,7 @@ theorem honest_cell_mem (i : HonestIn) {v : ℕ} (hv : v < program.values.length
       by_cases hj : j < 205
       · simp only [hj, ↓reduceDIte]
         refine bit_mem_sel ?_
-        unfold hRoute SelectFirstN.Model.hashToPointRoute
+        unfold hRoute SelectFirstCutoff.Model.honestRoute
         dsimp only
         split_ifs
         · exact Or.inr rfl

@@ -82,11 +82,6 @@ variable (ir : RealizedProgram) (c : ℕ) (env : TEnv) (E : ETable)
 /-- **The cuts of value leaf `k`** (frozen interface): `placeCutsE` as an option. -/
 def placeCuts (k : ℕ) : Option (List (Wire × TE)) := (ir.placeCutsE c env E k).toOption
 
-/-! ## The node kinds -/
-
-/-- **The cuts of node `k`**, as an option. -/
-def nodeCuts (k : ℕ) : Option (List (Wire × TE)) := (ir.nodeCutsE c env E k).toOption
-
 end Cuts
 
 end GordieHowe.RealizedProgram

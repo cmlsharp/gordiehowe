@@ -84,7 +84,8 @@ theorem mem_of_natBelow {rd : program.Valuation interp} {n : ℕ} {r : RealizedP
 theorem norm11_of (h : ∀ i < 1024, ∃ k : ℕ, k < 261987 ∧
       Native.rdA e 57 i + ((130993 : ℕ) : (interp 0).K) = k) :
     program.HoldsWith (program.reader e) (program.predicate 11).body := by
-  rw [(Native.pred11 (program := program))]
+  obtain ⟨_, h11⟩ := Native.pred11 (program := program)
+  rw [h11]
   refine mem_of_natBelow fun i hi => ?_
   rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_leaf, (Native.lensA (program := program)).1] at hi
   obtain ⟨k, hk, hkv⟩ := h i hi
@@ -97,7 +98,8 @@ theorem norm11_of (h : ∀ i < 1024, ∃ k : ℕ, k < 261987 ∧
 /-- **`hint.offset` holds** where the offset is a natural below `512^2`. -/
 theorem offset12_of (h : ∀ i < 1024, ∃ k : ℕ, k < 262144 ∧ Native.rdA e 64 i = k) :
     program.HoldsWith (program.reader e) (program.predicate 12).body := by
-  rw [(Native.pred12 (program := program))]
+  obtain ⟨_, h12⟩ := Native.pred12 (program := program)
+  rw [h12]
   refine mem_of_natBelow fun i hi => ?_
   rw [RealizedProgram.exprLen_leaf, (Native.lensA (program := program)).2.2.2.2.2.2.1] at hi
   exact h i hi
@@ -105,7 +107,8 @@ theorem offset12_of (h : ∀ i < 1024, ∃ k : ℕ, k < 262144 ∧ Native.rdA e 
 /-- **`hint.slack` holds** where the slack is a natural below `512^2`. -/
 theorem slack13_of (h : ∀ i < 1024, ∃ k : ℕ, k < 262144 ∧ Native.rdA e 65 i = k) :
     program.HoldsWith (program.reader e) (program.predicate 13).body := by
-  rw [(Native.pred13 (program := program))]
+  obtain ⟨_, h13⟩ := Native.pred13 (program := program)
+  rw [h13]
   refine mem_of_natBelow fun i hi => ?_
   rw [RealizedProgram.exprLen_leaf, (Native.lensA (program := program)).2.2.2.2.2.2.2.1] at hi
   exact h i hi
@@ -113,7 +116,8 @@ theorem slack13_of (h : ∀ i < 1024, ∃ k : ℕ, k < 262144 ∧ Native.rdA e 6
 /-- **`hint_weight.weight` holds** where the hint's sum is a natural below `81`. -/
 theorem weight14_of (h : ∃ k : ℕ, k < 81 ∧ ∑ t : Fin 1024, Native.rdA e 58 t = k) :
     program.HoldsWith (program.reader e) (program.predicate 14).body := by
-  rw [(Native.pred14 (program := program))]
+  obtain ⟨_, h14⟩ := Native.pred14 (program := program)
+  rw [h14]
   refine mem_of_natBelow fun i hi => ?_
   have hlen : program.exprLen (.apply (.sum 1024) (.leaf 58)) = 1 := by
     simp only [RealizedProgram.exprLen, RealizedProgram.Expr.len, (Native.lensA (program := program)).2.1, RealizedProgram.NamedOp.cols,
@@ -130,7 +134,8 @@ theorem weight14_of (h : ∃ k : ℕ, k < 81 ∧ ∑ t : Fin 1024, Native.rdA e 
 theorem w1bound1_of (hb : ∀ m < 1024, ∀ t < 6, Native.rdA e 62 (6 * m + t) = 0 ∨ Native.rdA e 62 (6 * m + t) = 1)
     (h : ∀ m < 1024, Bits.leConst (Native.bitsA e m) (UseHint.hiCount mldsa44.γ₂ - 1) = 1) :
     program.HoldsWith (program.reader e) (program.predicate 1).body := by
-  rw [(Native.pred1 (program := program))]
+  obtain ⟨_, h1⟩ := Native.pred1 (program := program)
+  rw [h1]
   intro m hm
   rw [(Native.lensU (program := program)).1] at hm
   change program.evalE (program.reader e) (program.domainField 0) _ m =
@@ -200,7 +205,8 @@ theorem decompose2_of (h : ∀ m < 1024, Native.rdA e 60 m = UseHint.relationRes
       (UseHint.hiCount mldsa44.γ₂) (Native.rdA e 58 m) (Native.rdA e 63 m) (Native.rdA e 64 m)
       (UseHint.outputFromBits (UseHint.hiCount mldsa44.γ₂) (Native.bitsA e m))) :
     program.HoldsWith (program.reader e) (program.predicate 2).body := by
-  rw [(Native.pred2 (program := program))]
+  obtain ⟨_, h2⟩ := Native.pred2 (program := program)
+  rw [h2]
   intro m hm
   simp only [RealizedProgram.exprLen_add] at hm
   rw [(Native.lensU (program := program)).2.1] at hm
@@ -408,8 +414,9 @@ theorem interval3_of (hb : ∀ m < 1024, ∀ t < 6, Native.rdA e 62 (6 * m + t) 
     (h : ∀ m < 1024, UseHint.IntervalEq mldsa44.γ₂ (Native.rdA e 58 m) (Native.rdA e 63 m) (Native.rdA e 64 m)
       (Native.rdA e 65 m) (UseHint.outputFromBits (UseHint.hiCount mldsa44.γ₂) (Native.bitsA e m))) :
     program.HoldsWith (program.reader e) (program.predicate 3).body := by
-  rw [(Native.pred3 (program := program))]
-  refine ⟨?_, RealizedProgram.productQuotWith_of_not (.inl rfl)⟩
+  obtain ⟨_, h3, hf3, -⟩ := Native.pred3 (program := program)
+  rw [h3]
+  refine ⟨?_, RealizedProgram.productQuotWith_of_not (.inl (by rw [hf3]; rfl))⟩
   intro m hm
   rw [RealizedProgram.exprLen_add, (Native.lensU (program := program)).2.2] at hm
   obtain ⟨ko, hko, hov⟩ := hoff m hm
@@ -526,7 +533,8 @@ theorem sig0_of {pk : MLDSA44.PublicKey44} (hk : KeyOf pk e.stmt)
             (fun k' => (2 ^ _root_.MLDSA.droppedBits : _root_.MLDSA.Coeff) *
               MLDSA44.coeff (pk.t1.get i) k') k) :
     program.HoldsWith (program.reader e) (program.predicate 0).body := by
-  rw [(Native.pred0 (program := program))]
+  obtain ⟨_, h0⟩ := Native.pred0 (program := program)
+  rw [h0]
   intro m hm
   simp only [RealizedProgram.exprLen_add] at hm
   rw [(Native.sigData (program := program)).2.2] at hm

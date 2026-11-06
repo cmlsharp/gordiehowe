@@ -3,12 +3,12 @@
 
 module
 
+public import GordieHowe.Applications.MLDSA44.Emulated.QROMParams.Frontend.Reads
 public import GordieHowe.Applications.MLDSA44.Emulated.Frontend.Algebra
 public import GordieHowe.Applications.MLDSA44.Native.QROMParams.Frontend.Shape
-public import GordieHowe.Generated.MLDSA44.Emulated.QROMParams.Interp
-public import GordieHowe.Generated.MLDSA44.Emulated.QROMParams.Valid
+public import GordieHowe.Generated.MLDSA44.Emulated.QROMParams.Certified
 public import GordieHowe.ProofSystem.Program.FieldHonest
-public import GordieHowe.Generated.MLDSA44.Emulated.QROMParams.Ready
+public import GordieHowe.Generated.MLDSA44.Emulated.QROMParams.ShapeFacts
 
 @[expose] public section
 
@@ -18,7 +18,7 @@ public import GordieHowe.Generated.MLDSA44.Emulated.QROMParams.Ready
 The emulated ML-DSA frontend (`GordieHowe.MLDSA44.Emulated`) at the emulated ML-DSA-44 program at the QROM parameters
 (`GordieHowe.Generated.MLDSA44.Emulated.QROMParams.Program.program`, export `c825eb05`): it holds the native
 program's domain `H` under `Emulated.σ` (`MldsaEmbed`), its program facts (`MldsaEMain`,
-`MldsaECross`, `MldsaEAlgebra`) are decided here, domain `A` is Goldilocks⁴ (`GordieHowe.MLDSA44.AField`), domain
+`MldsaECross`, `MldsaEAlgebra`) are decided here, domain `A` is Goldilocks⁴ (`GordieHowe.RealizedProgram.PrimeCastField`), domain
 `H` is `GF(2^256)` (`gf256`).
 -/
 
@@ -38,23 +38,38 @@ abbrev σ : RealizedProgram.Renaming := Emulated.σ
 /-- The native shared expressions of domain `H`'s part (`Emulated.hR`). -/
 abbrev hR : List ℕ := Emulated.hR
 
+theorem agrees : Generated.MLDSA44.Emulated.QROMParams.Shapes.embedding_native_2eH_data.Agrees σ :=
+  ⟨by decide +kernel, by decide +kernel, by decide +kernel⟩
+
+theorem holds : Generated.MLDSA44.Emulated.QROMParams.Shapes.embedding_native_2eH_data.Holds program σ :=
+  Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.embedding_native_2eH_holds σ agrees
+
 /-- **The emulated program holds the native program's domain `H`** (`RealizedProgram.Embedding`). -/
 theorem embedding : nat.Embedding program σ Emulated.hV hR :=
-  RealizedProgram.embedding_iff.2 (by decide +kernel)
+  holds.embedding_at rfl (by decide +kernel) (by decide +kernel)
 
 /-- **Native predicate `k` of domain `H` is emulated predicate `k + 2`**, renamed. -/
 theorem predCorr : ∀ k, 18 ≤ k → k ≤ 270 →
     nat.equalCorrB program σ Emulated.hV hR (nat.predicate k).body
       (program.predicate (k + 2)).body = true ∧
       k + 2 < program.predicates.length ∧ program.inSource (program.predicate (k + 2)) = true := by
-  decide +kernel
+  have hm : ∀ k, 18 ≤ k → k ≤ 270 →
+      (k, k + 2) ∈ Generated.MLDSA44.Emulated.QROMParams.Shapes.embedding_native_2eH_data.equals := by
+    decide +kernel
+  exact fun k h1 h2 => holds.equals_at rfl (by decide +kernel) (by decide +kernel) (hm k h1 h2)
 
 /-- **The values the frontend reads by their node types** are renamed to node-typed source
 values. -/
 theorem typedCorr : ∀ v ∈ MLDSA44.hTyped, v ∈ Emulated.hV ∧
     σ.val v < program.values.length ∧ program.IsSourceValue (σ.val v) ∧
     (program.value (σ.val v)).typeSource = .node := by
-  decide +kernel
+  intro v hv
+  simp only [MLDSA44.hTyped, List.mem_cons, List.not_mem_nil, or_false] at hv
+  rcases hv with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+  all_goals
+    refine ⟨by decide +kernel, ?_⟩
+    simp only [σ, Emulated.σ, Nat.reduceAdd]
+    shape_decide
 
 /-- **The emulated program at the QROM parameters holds the native program's domain `H`.** -/
 instance : Emulated.MldsaEmbed program where
@@ -64,7 +79,7 @@ instance : Emulated.MldsaEmbed program where
   typedCorr := typedCorr
 
 /-- Goldilocks⁴ has domain `A`'s field facts. -/
-instance : AField RealizedProgram.gold4 where
+instance : RealizedProgram.PrimeCastField RealizedProgram.gold4 pGold where
   charP := inferInstanceAs (CharP GoldilocksExt4 pGold)
   char_spec := rfl
   decode_lt c hc := RealizedProgram.gold4_model.decode_natCast c hc
@@ -78,34 +93,37 @@ instance : Emulated.MldsaEMain program where
   chal_phase := by
     intro j
     rcases lt_or_ge j 4 with hj | hj
-    · interval_cases j <;> decide +kernel
-    · have h1 : program.challenges.length = 4 := by decide +kernel
-      have h2 : (Emulated.MldsaEmbed.nat program).challenges.length = 4 := by decide +kernel
+    · exact (holds).chalPhase j hj
+    · have h1 : program.challenges.length = 4 :=
+        Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.challenges_length
+      have h2 : (Emulated.MldsaEmbed.nat program).challenges.length = 4 := (holds).chalCount
       simp only [RealizedProgram.challenge, List.getD_eq_getElem?_getD]
       rw [List.getElem?_eq_none (by rw [h1]; exact hj), List.getElem?_eq_none (by rw [h2]; exact hj)]
-  isSourceChal_iff := by
-    intro j
-    constructor
-    · intro h
-      have hj : j < 4 := h.1
-      have key : ∀ j < 4, program.IsSourceChal j → j = 0 ∨ j = 1 := by decide +kernel
-      exact key j hj h
-    · rintro (rfl | rfl) <;> decide +kernel
-  chalFacts := by
-    decide +kernel
-  kinds59_60 := by
-    decide +kernel
-  trFields := by decide +kernel
-  projReadsN := by decide +kernel
+  isSourceChal_iff := fun {j} => by
+    rw [program.isSourceChal_iff_mem_sourceChallengeIds
+      Generated.MLDSA44.Emulated.QROMParams.conditions.wellFormed,
+      Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.source_challenges]
+    simp only [List.mem_cons, List.not_mem_nil, or_false]
+  chalFacts := ⟨Reads.chalSize0, Reads.chalSampler0, Reads.chalField0, Reads.chalSize1,
+    Reads.chalSampler1, Reads.chalField1, MLDSA44.Native.QROMParams.Reads.chalField0, MLDSA44.Native.QROMParams.Reads.chalField1⟩
+  kinds59_60 := by shape_decide
+  trFields := ⟨MLDSA44.Native.QROMParams.Reads.field66, Reads.field67⟩
+  projReadsN := by
+    intro v hv
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
+    rcases hv with rfl | rfl | rfl
+    · exact MLDSA44.Native.QROMParams.Reads.reads67
+    · exact MLDSA44.Native.QROMParams.Reads.reads68
+    · exact MLDSA44.Native.QROMParams.Reads.reads457
 
 set_option maxRecDepth 4096 in
 /-- The emulated program at the QROM parameters has the crossing's facts. -/
 instance : Emulated.MldsaECross program where
-  expr6 := rfl
-  refsOrdered := (RealizedProgram.refsOrderedB_iff program).1 (by decide +kernel)
+  expr6 := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eright_eq
+  refsOrdered := Generated.MLDSA44.Emulated.QROMParams.conditions.wellFormed.refsOrdered
   crossData := by
-    decide +kernel
-  crossPred := ⟨_, rfl⟩
+    shape_decide
+  crossPred := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.predicate_mac_2eequal_body
 
 /-- **The digit layout of `MLDSA44.Emulated.QROMParams`**: `w'`, `z + 130993`, the offset and the slack in
 two base-`4096` digits each (`577`, `578`; `579`, `580`; `584`, `585`; `586`, `587`); the offset's
@@ -122,44 +140,46 @@ set_option maxRecDepth 4096 in
 instance : Emulated.MldsaEAlgebra program where
   layout := layout
   offsetBound_lt := by decide
-  lenWeight := by decide +kernel
-  lenSigL := by decide +kernel
-  pred0 := rfl
-  pred1 := rfl
-  pred2 := rfl
-  pred11 := ⟨_, rfl⟩
-  pred12 := ⟨_, rfl⟩
-  pred13 := ⟨_, rfl⟩
-  pred14 := ⟨_, rfl⟩
-  pred15 := ⟨_, rfl⟩
-  pred274 := ⟨_, rfl, rfl⟩
-  expr7 := rfl
-  expr8 := rfl
-  expr0 := rfl
-  expr1 := rfl
-  expr2 := rfl
-  expr3 := rfl
-  expr4 := rfl
-  expr5 := rfl
+  lenWeight := by shape_decide
+  lenSigL := by shape_decide
+  pred0 := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.predicate_hint_2ew1_5fbound_body
+  pred1 := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.predicate_hint_2edecompose_body
+  pred2 := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.predicate_hint_2einterval_body
+  pred11 := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.predicate_signature_2ew_body
+  pred12 := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.predicate_norm_2ez_body
+  pred13 := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.predicate_hint_2eoffset_body
+  pred14 := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.predicate_hint_2eslack_body
+  pred15 := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.predicate_hint_5fweight_2eweight_body
+  pred274 := by
+    obtain ⟨r, h, hf, -⟩ := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.predicate_signature_2erelation_2esource_body
+    exact ⟨r, h, by rw [hf]; rfl⟩
+  expr7 := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.expr_signature_2erelation_2eshape_2eleft_2efirst_2esecond_2efirst_2efirst_eq
+  expr8 := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.expr_signature_2erelation_2eshape_2eleft_2esecond_2efirst_2efirst_eq
+  expr0 := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.expr_hint_2einterval_2eshape_2eright_2efirst_2eshared_2esecond_2eshared_2efirst_eq
+  expr1 := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.expr_hint_2edecompose_2eshape_2eleft_2efirst_2eshared_2efirst_2efirst_2esecond_2efirst_2efirst_2efirst_2efirst_2esecond_2efirst_eq
+  expr2 := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.expr_hint_2einterval_2eshape_2eright_2efirst_2eshared_2efirst_2esecond_eq
+  expr3 := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.expr_hint_2einterval_2eshape_2eright_2efirst_2eshared_2esecond_eq
+  expr4 := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.expr_hint_2einterval_2eshape_2eright_2efirst_eq
+  expr5 := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.expr_hint_2edecompose_2eshape_2eleft_2efirst_eq
   inSource_A := by
-    decide +kernel
+    shape_decide
   lensA := by
-    decide +kernel
+    shape_decide
   boolChecks := by
-    decide +kernel
+    shape_decide
   constsA := by
-    decide +kernel
+    shape_decide
   constsU := by
-    decide +kernel
-  refsA := by decide +kernel
+    shape_decide
+  refsA := by shape_decide
   lensU := by
-    decide +kernel
+    shape_decide
   valsU := by
-    decide +kernel
+    shape_decide
   sigData := by
-    decide +kernel
+    shape_decide
   boundZW := by
-    decide +kernel
+    shape_decide
 
 /-- The native program's domain `H` facts at the emulated program's native program. -/
 instance : MLDSA44.MldsaHHash (Emulated.MldsaEmbed.nat program) :=

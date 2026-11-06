@@ -42,7 +42,7 @@ class MldsaECross (program : RealizedProgram) extends MldsaEMain program where
 
 set_option linter.unusedSectionVars false
 
-variable {program : RealizedProgram} [MldsaECross program] {F0 FH : RealizedProgram.FieldInterp} [AField F0]
+variable {program : RealizedProgram} [MldsaECross program] {F0 FH : RealizedProgram.FieldInterp} [RealizedProgram.PrimeCastField F0 pGold]
   [HField FH]
 
 set_option hygiene false in

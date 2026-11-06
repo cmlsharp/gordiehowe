@@ -367,21 +367,6 @@ structure CircuitsAccept (src : ∀ c : Fin ir.circuits.length, ir.CircuitSource
 
 /-! ## Public values do not read the committed assignment -/
 
-/-- **Value `v` reads nothing of the committed assignment**, with `n` levels (as `RealizedProgram.read`): a
-statement value, a constant, a challenge value, a message of a late value, an opaque value or a
-public expression reading only such values. -/
-def pubB : ℕ → ℕ → Bool
-  | 0, _ => true
-  | n + 1, v =>
-    match (ir.value v).kind with
-    | .pub .input => true
-    | .pub (.opaque _ args) => args.all (pubB n)
-    | .pub (.expr x) => (ir.exprNodes x).all (pubB n)
-    | .constant _ => true
-    | .challenge _ => true
-    | .message u => decide (u < ir.values.length ∧ ir.IsLate u)
-    | _ => false
-
 variable {ir I}
 
 /-- **A value reading nothing of the committed assignment reads the same at two assignments**

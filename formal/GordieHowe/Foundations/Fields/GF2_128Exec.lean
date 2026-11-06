@@ -17,7 +17,8 @@ GCM's `0x87` reduction constant is usually quoted in): the shift-and-add multipl
 
 `GordieHowe.Foundations.Fields.GF2_128` builds the field `GF2_128` on `BitVec 128` with `gfMul` as its multiplication,
 and checks the irreducibility certificate for the reduction polynomial with `sqPow` and `gfMul`.
-`Test/PQTest/FieldEvals.lean` checks `gfMul` against `Conv.ConvBasis.conv_parity` by evaluation.
+`Test/GordieHoweTest/FieldEvals.lean` checks `gfMul` against `Conv.applyConv` by evaluation at
+every coordinate (the theorem is `gf2_128_conv_parity`).
 -/
 
 namespace GordieHowe.GF2_128Exec

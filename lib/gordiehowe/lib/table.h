@@ -722,6 +722,34 @@ Selected<F> select_row_at(const Scope &s, const PublicTable<F> &t,
                table_internal::fold(Expr<F>(dg.digests), out.index),
                s.name(name));
   note_records(t, parts, s.name(name));
+  // The proof modules' selection certificate (Lean `SelCert`): the
+  // predicate, the row map, the column blocks, the rows and the index bits.
+  {
+    PlanRecords::TableSelection rec;
+    for (const auto &l : t.map.leaves()) {
+      PlanRecords::TableSelection::Leaf x;
+      x.offset = l.offset;
+      x.n = l.n;
+      x.ntt = l.ntt;
+      x.natural = l.natural;
+      if (l.ntt) {
+        if constexpr (F::kCharacteristicTwo) {
+          fail(what + ": a transform leaf in characteristic two");
+        } else {
+          if (!subfield_contains(D.field(), l.psi))
+            fail(what + ": a transform root outside the prime subfield");
+          x.psi = bound_str(nat_of(D.field(), l.psi));
+        }
+      }
+      rec.leaves.push_back(std::move(x));
+    }
+    for (size_t b = 0; b < t.parts.size(); ++b)
+      rec.blocks.emplace_back(t.parts[b].id, t.widths[b]);
+    rec.rows = t.rows;
+    rec.bits = t.index_bits;
+    rec.index = out.index.id;
+    s.note("table-selection", name, std::move(rec));
+  }
   return out;
 }
 }  // namespace table_internal

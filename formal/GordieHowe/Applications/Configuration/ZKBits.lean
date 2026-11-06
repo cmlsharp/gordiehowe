@@ -3,7 +3,8 @@
 
 module
 
-public import GordieHowe.Applications.Configuration
+public import GordieHowe.Applications.Configuration.Certified
+public import GordieHowe.Foundations.ToMathlib.NNRealRpow
 public import GordieHowe.SPBCS.Merkle.LeafBoundBits
 
 @[expose] public section
@@ -22,7 +23,13 @@ zero-knowledge errors of a configuration in that form, for `Q ≤ 2^64` proof qu
 * `GordieHowe.Configuration.ZKBits.zkErrorROM_le_bits`, `GordieHowe.Configuration.ZKBits.zkError_le_bits`: if the budget is at most
   `2^-λ`, then `zkErrorROM 0 t Q` and `zkError 0 t Q` are at most `Q · t · 2^-λ` for `t ≥ 1` and
   `Q ≤ 2^64`. At `Q = 1` this is `λ(err) ≥ λ`; at `Q` proof queries the bit security loses at most
-  `log₂ Q` bits.
+  `log₂ Q` bits;
+* `GordieHowe.Configuration.ReadsFigures`: a configuration whose salts and figures are given
+  numerals (`ofCertified_readsFigures`, `ofCertifiedWith_readsFigures` at the generated figures),
+  and `GordieHowe.Configuration.zkBudgetROM_le_two_rpow`, `GordieHowe.Configuration.zkBudget_le_two_rpow`:
+  the budget below `2^s` from a bound by a dyadic ratio `M / 2^E` at those numerals and
+  `M^100 · 2^(-100 s) ≤ 2^(100 E)` (`real_le_two_rpow_of_le_ratio`). A configuration's figures
+  module instantiates these at its numbers.
 -/
 
 namespace GordieHowe.Configuration
@@ -49,7 +56,88 @@ noncomputable def zkBudget : ℝ :=
   4 / 2 ^ (4 * R.kS) + 2 ^ 64 / 2 ^ (8 * R.kS) + (R.rounds.choose 2 : ℝ) / 2 ^ (8 * R.k) +
     R.rounds / 2 ^ R.chernoff + R.pos * (1 / (2 * 2 ^ (4 * R.k)) + 2 ^ 21 / 2 ^ (8 * R.k))
 
+/-- **A configuration reads its figures from `f`** at `kS`-byte salts: its salt length, rounds,
+Chernoff exponent, positions, digest length, verifier queries, digests per chain input and largest
+round error's bound are those of `f`. The configurations of certified programs read the generated
+figures (`ofCertified_readsFigures`, `ofCertifiedWith_readsFigures`). -/
+structure ReadsFigures (kS : ℕ) (f : RealizedProgram.ProgramFigures) : Prop where
+  /-- The salt length. -/
+  kS_eq : R.kS = kS
+  /-- The rounds. -/
+  rounds_eq : R.rounds = f.rounds
+  /-- The Chernoff exponent. -/
+  chernoff_eq : R.chernoff = f.chernoff
+  /-- The positions. -/
+  pos_eq : R.pos = f.pos
+  /-- The digest length. -/
+  k_eq : R.k = f.k
+  /-- The verifier's queries. -/
+  kq_eq : R.kq = f.kq
+  /-- The digests of one chain input. -/
+  D_eq : R.D = f.D
+  /-- The numerator of the largest round error's bound. -/
+  errorMax_eq : R.errorMax = f.errorMax
+  /-- The exponent of its denominator. -/
+  errorExp_eq : R.errorExp = f.errorExp
+
 end
+
+section ReadsFigures
+
+open RealizedProgram
+
+variable {P : Export.Plan} {ir : RealizedProgram} {I : Interp}
+  {cp : CertifiedProgram P ir I} {W : Type}
+  {S : KnowledgeStateFunction (ir.sourceVerifier I)} {src : SourceFront cp W S}
+  {Stmt W' HonestIn : Type} [DecidableEq Stmt] [Inhabited W] {kS qQ : ℕ}
+  {f : ProgramFigures}
+
+/-- **The configuration of a certified program reads the program's figures.** -/
+theorem ofCertified_readsFigures {F : Frontend cp src Stmt W' HonestIn} (hf : cp.figures = f) :
+    (ofCertified cp src F kS qQ).ReadsFigures kS f := by
+  subst hf
+  exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+
+/-- **The configuration of a certified program with a statement check reads the program's
+figures.** -/
+theorem ofCertifiedWith_readsFigures {F : FrontendWith cp src Stmt W' HonestIn}
+    (hf : cp.figures = f) : (ofCertifiedWith cp src F kS qQ).ReadsFigures kS f := by
+  subst hf
+  exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+
+end ReadsFigures
+
+section Numerals
+
+variable {R : Configuration} {kS : ℕ} {f : RealizedProgram.ProgramFigures}
+
+/-- **The ROM zero-knowledge budget below a real power of two**, from its value at the figures
+`f` (`ReadsFigures`) bounded by a dyadic ratio `M / 2^E`, with `s · 100 = −e` and
+`M^100 · 2^e ≤ (2^E)^100` (`real_le_two_rpow_of_le_ratio`). -/
+theorem zkBudgetROM_le_two_rpow (hR : R.ReadsFigures kS f) {M E e : ℕ} {s : ℝ}
+    (hs : s * 100 = -(e : ℝ))
+    (hx : 1 / 2 ^ (8 * kS) + 2 ^ 64 / (2 * 2 ^ (8 * kS)) + (f.rounds.choose 2 : ℝ) / 2 ^ (8 * f.k) +
+      f.rounds / 2 ^ f.chernoff + f.pos * (1 / (2 * 2 ^ (4 * f.k)) + 2 ^ 21 / 2 ^ (8 * f.k)) ≤
+        M / 2 ^ E)
+    (h : M ^ 100 * 2 ^ e ≤ (2 ^ E) ^ 100) : R.zkBudgetROM ≤ 2 ^ s := by
+  refine real_le_two_rpow_of_le_ratio (n := 100) (by norm_num) (by exact_mod_cast hs) ?_ h
+  rw [zkBudgetROM, hR.kS_eq, hR.rounds_eq, hR.chernoff_eq, hR.pos_eq, hR.k_eq]
+  exact hx
+
+/-- **The QROM zero-knowledge budget below a real power of two**, from its value at the figures
+`f` (`ReadsFigures`) bounded by a dyadic ratio `M / 2^E`, with `s · 100 = −e` and
+`M^100 · 2^e ≤ (2^E)^100` (`real_le_two_rpow_of_le_ratio`). -/
+theorem zkBudget_le_two_rpow (hR : R.ReadsFigures kS f) {M E e : ℕ} {s : ℝ}
+    (hs : s * 100 = -(e : ℝ))
+    (hx : 4 / 2 ^ (4 * kS) + 2 ^ 64 / 2 ^ (8 * kS) + (f.rounds.choose 2 : ℝ) / 2 ^ (8 * f.k) +
+      f.rounds / 2 ^ f.chernoff + f.pos * (1 / (2 * 2 ^ (4 * f.k)) + 2 ^ 21 / 2 ^ (8 * f.k)) ≤
+        M / 2 ^ E)
+    (h : M ^ 100 * 2 ^ e ≤ (2 ^ E) ^ 100) : R.zkBudget ≤ 2 ^ s := by
+  refine real_le_two_rpow_of_le_ratio (n := 100) (by norm_num) (by exact_mod_cast hs) ?_ h
+  rw [zkBudget, hR.kS_eq, hR.rounds_eq, hR.chernoff_eq, hR.pos_eq, hR.k_eq]
+  exact hx
+
+end Numerals
 
 namespace ZKBits
 

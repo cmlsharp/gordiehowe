@@ -280,6 +280,55 @@ void assert_norm(const Scope &s, D &A,
 // holds its needles in request order, so the gadgets are declared in a
 // fixed order: the signature relation, the magnitudes, the encoding
 // budget, the norm.
+// Named finite metadata for the checked Falcon512, 32-byte frontend: the
+// hash's and selection's, and domain A's values, predicates and source roles.
+inline void emulated_shape_inputs(const Scope &cs) {
+  using Root = ShapeExprSelector::Root;
+  using Edge = ShapeExprSelector::Edge;
+  examples::falcon::falcon_hash_shape_inputs(cs);
+  cs.shape_predicate("signature.equation.realized", {"signature.equation",
+      PredicateShapeSelector::Role::kRealization, PredicateShapeSelector::Body::kEqual});
+  cs.shape_predicate("signature.equation.source", {"signature.equation",
+      PredicateShapeSelector::Role::kSource, PredicateShapeSelector::Body::kMod});
+  cs.shape_value("magnitudes.shift",
+      {Root::kPredicateLeft, "magnitudes.s1",
+       {{Edge::kSecond}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
+  cs.shape_value("magnitudes.zero", {Root::kPredicateRight, "magnitudes.s1", {}});
+  cs.shape_value("norm.sum.zero", {Root::kPredicateRight, "norm.sum", {}});
+  NamedShapeInputs inputs{
+    {
+      "magnitudes.shift", "magnitudes.zero", "norm.sum.zero", "statement.hhat", "key.coefficients",
+      "encoding.budget.offset", "mac.blind", "range.magnitudes.mag1.d0", "range.magnitudes.mag1.d1",
+      "range.norm.bound.d0", "range.norm.bound.d1", "range.norm.bound.d2"
+    },
+    {
+      "mac.H", "magnitudes.s1", "magnitudes.s2", "norm.sum", "mac.A",
+      "signature.equation.realized", "range.magnitudes.mag1.top",
+      "range.encoding.budget.reconstruct", "range.encoding.budget.top", "range.norm.bound.top",
+      "crossing.c_A.boolean", "mac.blind.boolean", "magnitudes.mag1", "magnitudes.mag2",
+      "encoding.low2", "encoding.budget", "norm.bound", "mac.low", "mac.high", "mac.nowrap",
+      "signature.equation.q", "encoding.high2.q", "mac", "signature.equation.source",
+      "encoding.high2", "mac.equal"
+    },
+    {},
+    {}
+  };
+  const auto role = [&cs, &inputs](const std::string &name, SourceRole tag, size_t slot) {
+    inputs.values.push_back(name);
+    cs.source_role(name, tag, slot);
+  };
+  role("crossing.c_A", SourceRole::kAWitness, 0);
+  role("s2", SourceRole::kAWitness, 1);
+  role("signature.s1", SourceRole::kAWitness, 2);
+  role("magnitudes.mag1", SourceRole::kAWitness, 3);
+  role("magnitudes.mag2", SourceRole::kAWitness, 4);
+  role("encoding.low2", SourceRole::kAWitness, 5);
+  role("norm.squares", SourceRole::kAWitness, 6);
+  cs.source_role("statement.hhat", SourceRole::kStmtMember, 0);
+  cs.source_role("key.coefficients", SourceRole::kStmtMember, 1);
+  cs.shape_inputs(inputs);
+}
+
 template <class P, class S>
 void falcon_emulated_relation(typename Env<P>::Sys &cs, const Env<P> &env,
                               FalconStatement<S, In> st,
@@ -299,6 +348,9 @@ void falcon_emulated_relation(typename Env<P>::Sys &cs, const Env<P> &env,
   const auto mag = magnitudes(cs.scope("magnitudes"), A, s1, s2);
   assert_encoding_budget<S>(cs.scope("encoding"), A, mag.mag2);
   assert_norm<S>(cs.scope("norm"), A, mag.mag1, mag.mag2);
+  if constexpr (S::kN == 512) {
+    if (max_bytes == 32) emulated_shape_inputs(cs);
+  }
 }
 
 // The relation of set S for messages of at most MAX_BYTES bytes, compiled

@@ -287,7 +287,7 @@ section Source
 
 variable {program : RealizedProgram} [CarrierHEmbed program] [CarrierAEmbed program]
   [MldsaEAlgebra (CarrierAEmbed.emu program)] [MldsaCarrierHonest program]
-  {F0 FH : FieldInterp} [AField F0] [HField FH]
+  {F0 FH : FieldInterp} [RealizedProgram.PrimeCastField F0 pGold] [HField FH]
 
 set_option hygiene false in
 local notation "interp" => mldsaInterpOf F0 FH

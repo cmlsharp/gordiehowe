@@ -84,10 +84,9 @@ theorem sum_map_treesAt {A : Type*} [AddCommMonoid A] (g : ℕ) (f : M.Tree → 
   ext τ
   simp [M.mem_treeList]
 
-open Classical in
 /-- The default-leaf program of global round `g`: if a tree of the round has no leaves, the `leaf`
 query of the default leaf, returning its digest; otherwise no query. -/
-noncomputable def defaultAt (g : ℕ) : OracleProg (Query k kN kS L) (Out k e) (Digest k) :=
+def defaultAt (g : ℕ) : OracleProg (Query k kN kS L) (Out k e) (Digest k) :=
   if ∃ τ : M.Tree, τ.leaf.off n + τ.tree.msg.1.1 = g ∧
       (M.comp τ.leaf.label).nLeaves τ.tree.msg τ.tree.tree = 0 then
     MerkleTree.leafProg (⟨fun _ => 0, ⟨0, Fin.elim0⟩⟩ : MerkleLeaf kN L)
@@ -119,15 +118,15 @@ def proverInitState : M.PState := (fun _ => SPBCS.defaultOut, fun _ _ _ => 0)
 
 /-- The writes at a state: the honest write of the causal prover's message at the challenges read
 from the streams, at the roots of the heaps. -/
-noncomputable def stateWrites (st : M.PState) : M.WriteAll :=
+def stateWrites (st : M.PState) : M.WriteAll :=
   fun p i => honestWrite' E prv x st.1 p i fun τ => st.2 ⟨p, ⟨i, τ⟩⟩ 1
 
 /-- The chains at a state: every leaf's chain with the writes and the streams of the state. -/
-noncomputable def stateChains (st : M.PState) : (q : t.Leaf) → M.Items q :=
+def stateChains (st : M.PState) : (q : t.Leaf) → M.Items q :=
   fun q => M.writeLeaf st.1 (M.stateWrites E prv x st) q (n q.label)
 
 /-- **Global round `g` of the prover program** from the state `st` (module docstring). -/
-noncomputable def proverStep (kp : M.KeyProg) (g : ℕ) (st : M.PState) :
+def proverStep (kp : M.KeyProg) (g : ℕ) (st : M.PState) :
     OracleProg (Query k kN kS L) (Out k e) M.PState :=
   match (t.slots n)[g]? with
   | none => .pure st
@@ -147,7 +146,7 @@ noncomputable def proverStep (kp : M.KeyProg) (g : ℕ) (st : M.PState) :
 /-- **The proof at the end of the prover program**: from the state after the global rounds, the
 proof from the writes, the opened leaves at the query phase's positions and the heaps, in the
 format `B` by the format bounds `hb`. -/
-noncomputable def proverOut {V : X → FullTr P t → Bool} {Qs : ∀ x, M.IOPQueries V x} {B : ℕ}
+def proverOut {V : X → FullTr P t → Bool} {Qs : ∀ x, M.IOPQueries V x} {B : ℕ}
     (hb : M.FormatBounds Qs B B) (st : M.PState) : M.BProof B :=
   ⟨M.proofOfHeaps σ (honestWrite' E prv x st.1) st.2
     (honestOpened E prv x ν st.1 ((Qs x).pos (M.stateChains E prv x st) (M.chOfStreams st.1)))
@@ -164,7 +163,7 @@ theorem proverOut_val {V : X → FullTr P t → Bool} {Qs : ∀ x, M.IOPQueries 
 
 /-- **The prover program** over the compiler's oracle: the global rounds from the initial state,
 then the proof `proverOut`. -/
-noncomputable def proverProg (kp : M.KeyProg) {V : X → FullTr P t → Bool}
+def proverProg (kp : M.KeyProg) {V : X → FullTr P t → Bool}
     {Qs : ∀ x, M.IOPQueries V x} {B : ℕ} (hb : M.FormatBounds Qs B B) :
     OracleProg (Query k kN kS L) (Out k e) (M.BProof B) :=
   (OracleProg.iterate (M.proverStep E prv x ν σ kp) (t.size n) M.proverInitState).bind fun st =>

@@ -157,11 +157,6 @@ coordinate `0` of the table's challenge. -/
 def LogupHolds (e : ir.Env I) (t g : ℕ) : Prop :=
   ir.logupAt (ir.reader e) t g (e.chal (ir.alphaOf t) 0) = true
 
-/-- Whether a predicate body is a `mod_0` (an integer equality). -/
-def _root_.GordieHowe.RealizedProgram.PredBody.isIntEq : PredBody → Bool
-  | .mod _ 0 _ _ _ => true
-  | _ => false
-
 /-! ## The MAC of a cross-field `equal` -/
 
 /-- **Coordinate `i` of the expression `e` padded by zeros** (compiler/mac.h: a MAC's operand of
@@ -371,12 +366,6 @@ number `tmax` of values `j` avoids; per MAC keyed by `j`, its binding polynomial
 def lmErrorTerms (j : ℕ) : List (ℕ × ℕ) :=
   (ir.realGroups j).map (fun tg => (ir.groupCount tg.1 tg.2 + ir.tableSize tg.1 - 1, ir.tmaxOf j)) ++
     (ir.macChunksAt j).map fun n => (n, ir.tmaxOf j)
-
-/-- **The selection error terms at challenge `j`**: per selection a product form's kernel reads
-with its fingerprint at `j` (`kernelSel?`), the fingerprint's degree. -/
-def selErrorTerms (j : ℕ) : List (ℕ × ℕ) :=
-  (List.range ir.predicates.length).filterMap fun q =>
-    (ir.kernelSel? q).bind fun sh => if sh.chal = j then some (sh.deg, ir.tmaxOf j) else none
 
 /-- **The error terms at challenge `j`**: the lookup and MAC terms (`lmErrorTerms`) and the
 selection terms (`selErrorTerms`). -/

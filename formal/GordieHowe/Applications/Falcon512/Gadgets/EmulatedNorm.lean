@@ -5,7 +5,7 @@ module
 
 public import GordieHowe.Language.Realizations.Range
 public import GordieHowe.Foundations.Algebra.IntLift
-public import GordieHowe.Applications.Spec.Centered
+public import GordieHowe.Foundations.Algebra.CenteredMagnitude
 public import GordieHowe.Applications.Falcon512.Spec.Basic
 
 @[expose] public section

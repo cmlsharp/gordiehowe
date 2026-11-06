@@ -15,8 +15,8 @@ public meta section
 `deriving instance GordieHowe.Ghc.Decode for T` derives `T`'s instance of `Ghc.Decode`
 (`Ghc.lean`) from its constructors: a structure is read as its fields in order, any other inductive
 as its constructor's index then its fields, each field by its own type's instance (a field of type
-`T` itself by the instance being defined), in the plain and in the spine form; a value's
-expression is its constructor applied to the type's parameters and the fields' expressions, as
+`T` or `List T` uses the recursive operations being defined), in the plain and in the spine form;
+a value's expression is its constructor applied to the type's parameters and the fields' expressions, as
 Lean's derived `ToExpr` builds it. `T`'s parameters must be types (each gets a `Decode` instance
 argument) and `T` must have no universe parameters and no indices; a field's type is built from
 constants, applications and the parameters.
@@ -70,7 +70,8 @@ def mkCommands (T : Name) : TermElabM (Array String) := do
     let tyE := s!"(Lean.mkAppN (Lean.mkConst `{T} []) #[{tyEs}])"
     let tyD := s!"(_root_.GordieHowe.Ghc.tyOf ({aux "tyE"} {named}))"
     let D := "_root_.GordieHowe.Ghc.D"
-    -- per constructor: its index, name, and fields (text of the type, recursive or not)
+    -- Per constructor: index, name and fields (type text, whether recursive).
+    -- Direct recursion has empty type text; recursive lists keep their container type.
     let mut ctors : Array (Nat × Name × Array (String × Bool)) := #[]
     for (c, i) in ind.ctors.zipIdx do
       let ci ← getConstInfoCtor c
@@ -84,8 +85,12 @@ def mkCommands (T : Name) : TermElabM (Array String) := do
             fs := fs.push ("", true)
           else
             if t.find? (fun e => e.isConstOf T) |>.isSome then
-              throwError "Ghc.Decode: {c}: a nested occurrence of {T}"
-            fs := fs.push (← typeText t, false)
+              unless t.isAppOfArity ``List 1 && t.getAppArgs[0]!.isAppOf T &&
+                  t.getAppArgs[0]!.getAppArgs == ps do
+                throwError "Ghc.Decode: {c}: unsupported nested occurrence of {T}"
+              fs := fs.push (← typeText t, true)
+            else
+              fs := fs.push (← typeText t, false)
         pure fs
       ctors := ctors.push (i, c, fields)
     -- a constructor's application: its fields read by `field`
@@ -105,8 +110,13 @@ def mkCommands (T : Name) : TermElabM (Array String) := do
         let arms := ctors.toList.map fun (i, c, fs) => s!"  | {i} => {pure_ (app c fs)}\n"
         s!"do\n  match (← _root_.GordieHowe.Ghc.nat) with\n{String.join arms}  | k => \
           _root_.GordieHowe.Ghc.badCtor \"{T}\" k"
+    -- A nested list uses the existing container codec with the current recursive operations.
+    let selfCodec := s!"letI : _root_.GordieHowe.Ghc.Decode {tApp} := \
+      ⟨{aux "tyE"} {named}, {aux "toE"}, {aux "dec"}, {aux "spine"}, \
+      {aux "spineE"} {named}⟩; "
     let decField (m r : String) : String × Bool → String
-      | (_, true) => s!"(← {aux r} {named})"
+      | ("", true) => s!"(← {aux r} {named})"
+      | (t, true) => s!"(← ({selfCodec}_root_.GordieHowe.Ghc.Decode.{m} (α := {t})))"
       | (t, false) => s!"(← _root_.GordieHowe.Ghc.Decode.{m} (α := {t}))"
     let pureV (s : String) := s!"pure {s}"
     let dec := reader pureV fun c fs => ctorApp c fs (decField "dec" "dec")
@@ -117,8 +127,10 @@ def mkCommands (T : Name) : TermElabM (Array String) := do
       let vars := (List.range fs.size).map fun j => s!"a{j}"
       let pat := s!"@{rootId c} {" ".intercalate (List.replicate pnames.size "_")} {" ".intercalate vars}"
       let args := (pnames.toList.map fun a => s!"(_root_.GordieHowe.Ghc.Decode.tyE (α := {a}))") ++
-        (fs.toList.zip vars).map fun ((_, r), v) =>
-          if r then s!"({aux "toE"} {v})" else s!"(_root_.GordieHowe.Ghc.Decode.toE {v})"
+        (fs.toList.zip vars).map fun ((t, r), v) =>
+          if r && t.isEmpty then s!"({aux "toE"} {v})"
+          else if r then s!"({selfCodec}_root_.GordieHowe.Ghc.Decode.toE {v})"
+          else s!"(_root_.GordieHowe.Ghc.Decode.toE {v})"
       s!"  | {pat} => Lean.mkAppN (Lean.mkConst `{c} []) #[{", ".intercalate args}]\n"
     let cmds := #[
       s!"def {auxD "tyE"} {binders} : Lean.Expr := {tyE}",

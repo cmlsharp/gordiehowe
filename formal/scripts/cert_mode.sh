@@ -2,26 +2,20 @@
 # Copyright 2026 Chad Sharp and Paul Grubbs
 # SPDX-License-Identifier: Apache-2.0
 
-# Switch how the GKR circuit certificates are checked (`gh_cert_check`,
-# GordieHowe/Language/CertCheck.lean), or print the current mode.
-#
+# Select the source directory of GordieHoweCheck, or report it.
 # Usage: scripts/cert_mode.sh [kernel|native|status]
-#   kernel  `decide +kernel` (the default; every published check runs in this mode)
-#   native  `native_decide`, for development builds (trusts the compiled checkers)
-#   status  print the mode (the default action)
-#
-# The mode is the one definition `GordieHowe.certCheckNative` in CertCheck.lean; every module that
-# uses `gh_cert_check` imports that file, so Lake rebuilds them after a switch.
+# Kernel is the release default; native uses compiled checks for development.
+# The selected source tree contains every mode-dependent certificate proof.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-file=GordieHowe/Language/CertCheck.lean
-line_kernel='def certCheckNative : Bool := false'
-line_native='def certCheckNative : Bool := true'
+lake=lakefile.toml
+src_kernel='srcDir = "Check/Kernel"'
+src_native='srcDir = "Check/Native"'
 
 mode() {
-  if grep -qxF "$line_kernel" "$file"; then echo kernel
-  elif grep -qxF "$line_native" "$file"; then echo native
-  else echo "cert_mode.sh: no certCheckNative definition in $file" >&2; exit 2
+  if grep -qxF "$src_kernel" "$lake"; then echo kernel
+  elif grep -qxF "$src_native" "$lake"; then echo native
+  else echo "cert_mode.sh: no check source directory in $lake" >&2; exit 2
   fi
 }
 
@@ -30,12 +24,12 @@ case "${1:-status}" in
   kernel|native)
     cur=$(mode)
     if [ "$cur" != "$1" ]; then
-      if [ "$1" = native ]; then from=$line_kernel to=$line_native
-      else from=$line_native to=$line_kernel
+      if [ "$1" = native ]; then from=$src_kernel to=$src_native
+      else from=$src_native to=$src_kernel
       fi
-      tmp=$(mktemp "$file.XXXXXX")
-      sed "s/^$from\$/$to/" "$file" > "$tmp"
-      cat "$tmp" > "$file"
+      tmp=$(mktemp "$lake.XXXXXX")
+      sed "s|^$from\$|$to|" "$lake" > "$tmp"
+      cat "$tmp" > "$lake"
       rm -f "$tmp"
     fi
     mode

@@ -12,9 +12,9 @@ public import GordieHowe.Applications.Falcon512.Honest.Hash
 
 The honest values of `h2p.select` (`selVal`): the selected words (`select.raw.words`) the packed
 samples of the honest input, the counter and the completion flags the honest route of the
-selection model (`Model.hashToPointRoute`) on Falcon's candidate stream, in the selection's field
+selection model (`Model.honestRoute`) on Falcon's candidate stream, in the selection's field
 (`selF`). At the source environment of honest values, the stream is the candidate stream
-(`natOfBits_selSample_hash`), so the gadget holds at every `δ` (`SelectFirstN.complete`) and with
+(`natOfBits_selSample_hash`), so the gadget holds at every `δ` (`SelectFirstCutoff.complete`) and with
 it the four predicates (`SelectMatches.holds_of_run`). Generic in the program (`FalconHSelHonest`:
 the selection's committed values, decided per program) and the fields.
 -/
@@ -60,8 +60,8 @@ variable (program FH FA) in
 /-- **The honest route** of the selection: the model's route on the candidate stream, in the
 selection's field. -/
 -- spec-side
-noncomputable def hRoute : Fin 717 → Route (interp (RealizedProgram.SelectShape.field program selShape)).K :=
-  SelectFirstN.Model.hashToPointRoute 512 (selF (program := program) (FH := FH) (FA := FA)) 61445
+noncomputable def hRoute : Fin 717 → CutoffRoute (interp (RealizedProgram.SelectShape.field program selShape)).K :=
+  SelectFirstCutoff.Model.honestRoute 512 (selF (program := program) (FH := FH) (FA := FA)) 61445
     (hStream y)
 
 variable (program FH FA) in
@@ -81,6 +81,25 @@ noncomputable def selVal (v i : ℕ) : (interp (program.valueField v)).K :=
   else if v = 591 then RealizedProgram.castElt (a := RealizedProgram.SelectShape.field program selShape)
     (if h : i < 205 then (hRoute program FH FA y ⟨512 + i, by omega⟩).full else 0)
   else 0
+
+/-- **The selected-sample role packs the input's sample bits.** -/
+theorem selVal_raw (i : ℕ) : selVal program FH FA y 588 i =
+    RealizedProgram.castElt (a := 0) (PackedClaim.pack (HField.packing (FH := FH)) fun b =>
+      decide (Bits.constBit (K := FH.K) (if h : i < 512 then y.samples ⟨i, h⟩ else 0) b = 1)) := by
+  simp only [selVal, if_true]
+
+/-- **The selection-counter role reads the honest route's counter.** -/
+theorem selVal_count (i : ℕ) : selVal program FH FA y 590 i =
+    RealizedProgram.castElt (a := RealizedProgram.SelectShape.field program selShape)
+      (if h : i < 717 then (hRoute program FH FA y ⟨i, h⟩).count_enc else 0) := by
+  simp only [selVal, show (590 : ℕ) ≠ 588 by decide, if_false, if_true]
+
+/-- **The completion-flag role reads the honest route's full flag.** -/
+theorem selVal_full (i : ℕ) : selVal program FH FA y 591 i =
+    RealizedProgram.castElt (a := RealizedProgram.SelectShape.field program selShape)
+      (if h : i < 205 then (hRoute program FH FA y ⟨512 + i, by omega⟩).full else 0) := by
+  simp only [selVal, show (591 : ℕ) ≠ 588 by decide, show (591 : ℕ) ≠ 590 by decide,
+    if_false, if_true]
 
 end Values
 
@@ -156,9 +175,9 @@ theorem selRoute_honest (h : ∀ v ∈ [588, 590, 591], val v = selVal program F
       simp only [hlt, ↓reduceDIte, hfin]
     rw [e2]
   · rw [if_neg hi]
-    have := SelectFirstN.Model.hashToPointRoute_full_zero 512
+    have := SelectFirstCutoff.Model.honestRoute_full_zero 512
       (selF (program := program) (FH := FH) (FA := FA)) 61445 (hStream y) i (by omega)
-    exact congrArg (fun f => (⟨(hRoute program FH FA y i).count_enc, f⟩ : Route _)) this.symm
+    exact congrArg (fun f => (⟨(hRoute program FH FA y i).count_enc, f⟩ : CutoffRoute _)) this.symm
 
 /-- **The honest selection holds**: at the source environment of honest values (`hashVal` on the
 hash's inputs, `selVal` on the selection's), the predicates `h2p.select.start`, `.step`, `.done`
@@ -185,11 +204,11 @@ theorem select_holds (hL : L ≤ 32) (hy : y.Valid)
       512 = some fun j => Bits.natOfBits (selWord e j) := by
     rw [hstream, hword]
     exact hy.samples
-  have hrun := SelectFirstN.complete selF (bound := 61445) (by norm_num)
+  have hrun := SelectFirstCutoff.complete selF (bound := 61445) (by norm_num)
     (selectMatches.stream_allBool FalconHBase.refsOrdered selConsts e)
     (selectMatches.out_allBool e) hout (selShape.deltaAt program (program.reader e))
   rw [hstream] at hrun
-  change SelectFirstN.run (selF (program := program) (FH := FH) (FA := FA)) 61445 _ _
+  change SelectFirstCutoff.run (selF (program := program) (FH := FH) (FA := FA)) 61445 _ _
     (hRoute program FH FA y) _ = true at hrun
   rw [← selRoute_honest hsel] at hrun
   exact selectMatches.holds_of_run FalconHBase.refsOrdered selConsts (by norm_num) (by decide) hrun

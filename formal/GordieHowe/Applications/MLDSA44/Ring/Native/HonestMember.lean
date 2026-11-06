@@ -233,11 +233,11 @@ theorem select_honest (hx : RowsOf y.x x) :
   by_cases h' : cc < 5120
   · rw [if_pos h', if_pos h']
     unfold RealizedProgram.rowRead
-    rw [read_opaque E MldsaRingStmt.keysKind]
+    rw [read_of_opaque_nil E TableSelect.values_pos MldsaRingStmt.keysKind]
     rfl
   · rw [if_neg h', if_neg h', if_pos (by omega)]
     unfold RealizedProgram.rowRead
-    rw [read_opaque E MldsaRingStmt.muKind]
+    rw [read_of_opaque_nil E TableSelect.values_pos MldsaRingStmt.muKind]
     rfl
 
 end GordieHowe.MLDSA44.Ring.Native

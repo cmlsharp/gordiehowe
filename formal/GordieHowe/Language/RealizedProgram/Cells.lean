@@ -29,17 +29,6 @@ namespace GordieHowe.RealizedProgram
 
 open Export
 
-/-- **A committed coordinate** of a program: coordinate `i` of the committed value `v`, coordinate
-`i` of the pad of late value `v`, or filler input `j` of circuit `c`. -/
-inductive CellKey where
-  /-- Coordinate `i` of committed value `v`. -/
-  | val (v i : ℕ)
-  /-- Coordinate `i` of the pad of late value `v`. -/
-  | pad (v i : ℕ)
-  /-- Filler input `j` of circuit `c`. -/
-  | filler (c j : ℕ)
-  deriving DecidableEq, Repr
-
 /-- The cell keys as a sum of pairs of naturals. -/
 def CellKey.equivSum : CellKey ≃ (ℕ × ℕ) ⊕ (ℕ × ℕ) ⊕ (ℕ × ℕ) where
   toFun
@@ -84,6 +73,11 @@ instance (d : ℕ) : DecidableEq (ir.Cell d) := inferInstanceAs (DecidableEq {k 
 
 /-- The cells are encoded by their keys. -/
 instance (d : ℕ) : Encodable (ir.Cell d) := inferInstanceAs (Encodable {k // k ∈ ir.cellKeys d})
+
+/-- **A committed value that is not a pad copy is private.** -/
+theorem kind_priv_of_isCellValue {d v : Nat} (h : ir.isCellValue d v = true)
+    (hpad : ∀ u m, (ir.value v).kind ≠ .padCopy u m) : (ir.value v).kind = .priv := by
+  cases hk : (ir.value v).kind <;> simp_all [isCellValue]
 
 theorem mem_cellKeys_val {d u i : ℕ} :
     CellKey.val u i ∈ ir.cellKeys d ↔

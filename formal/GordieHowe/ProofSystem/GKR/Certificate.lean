@@ -33,8 +33,8 @@ access touches a number that grows with the circuit.
 quad terms grouped by gate, each gate's terms in its node's term order. The C++ circuit stores
 the same terms as a Morton-sorted quad (`EQuad::canonicalize`); per gate the two are the same
 multiset of terms, which the C++ exporter checks when it writes the certificate
-(`compiler.h`, `write_cert`). That correspondence is part of the existing export-fidelity
-assumption, not of this file.
+(`GkrCertificate::mismatch`, `lib/circuits/compiler/gkr_certificate.h`). That correspondence is
+part of the existing export-fidelity assumption, not of this file.
 
 **The DAG** is the compiler's node table as `push_node` creates it: inputs and quadratic forms
 `Σ κ k · n_a · n_b` over a constant table, `assert0 n` being the form `κ 0 · n_0 · n_n`. Its
@@ -47,7 +47,8 @@ copy gate is one term `1 · a · b` whose wires carry node `0` (the input `0`, t
 and `r`. Inputs carry input nodes with their own index. The DAG's asserted nodes are the
 non-copy nodes with an assertion term (`k = 0`) and the nodes `0 · a · b` whose operand is
 an output wire (`Longfellow`'s last-layer assertions become outputs); the checker sorts them and
-compares with the DAG's list.
+compares with the DAG's list. The kernel's proof of a program's certificate avoids the sort
+(`assertsOk_of_cover`, `GordieHowe/Language/Realizations/Circuit/Load.lean`).
 
 **Soundness.** If the checker accepts, every wire's value is the value of its node
 (`layerOk_carried`), and if the layered circuit is satisfied (every assertion product
@@ -60,25 +61,9 @@ The definitions are in `GordieHoweNative/ProofSystem/GKR/Certificate.lean`
 
 namespace GordieHowe.GKR.Certificate
 
-/-- A chunk's flag: a copy wire (gate) or an input (DAG node). -/
-def flagged (w c : ℕ) : Bool := Nat.beq (c % 2 ^ w % 2) 1
-
-/-- A gate chunk's wire index (the field after the header). -/
-def gateIndex (w c : ℕ) : ℕ := (c >>> w) % 2 ^ w
-
-/-- The node a gate chunk carries (the second field after the header). -/
-def gateNode (w c : ℕ) : ℕ := (c >>> (2 * w)) % 2 ^ w
-
-/-- A gate chunk's terms, after its header, index and node. -/
-def gateTerms (w c : ℕ) : List Term := decodeTerms w (c % 2 ^ w / 2) (c >>> (3 * w))
-
 section Semantics
 
 variable {F : Type*} [CommSemiring F]
-
-/-- A node's terms: none for an input. -/
-def nodeTerms (w : ℕ) (D : Dag) (n : ℕ) : List Term :=
-  cond (Nat.blt n D.inputs) [] (terms w (D.tree.get n))
 
 /-- The value of every DAG node on the input `x` with constants `κ`: an input node is its
 input, any other node the sum of its terms (a term reading a node not below it counts zero;
@@ -116,144 +101,6 @@ end Semantics
 
 section Checker
 
-/-- `a` and `b` carry `A` and `B` in some order. -/
-def carries (w : ℕ) (T : Table) (a b A B : ℕ) : Bool :=
-  (Nat.beq (cell w T a) A && Nat.beq (cell w T b) B) ||
-    (Nat.beq (cell w T a) B && Nat.beq (cell w T b) A)
-
-/-- A gate's terms against its node's: pairwise equal constants, wires below `wp` carrying the
-node's operands, operands below `r`. -/
-def termsOk (w : ℕ) (T : Table) (wp r : ℕ) : List Term → List Term → Bool
-  | [], [] => true
-  | t :: ts, u :: us =>
-    Nat.beq t.k u.k && Nat.blt t.a wp && Nat.blt t.b wp && Nat.blt u.a r && Nat.blt u.b r &&
-      carries w T t.a t.b u.a u.b && termsOk w T wp r ts us
-  | _, _ => false
-
-/-- A copy gate's terms: one term `1 · a · b`, its wires carrying node `0` and `r`. -/
-def copyOk (w : ℕ) (T : Table) (wp r : ℕ) : List Term → Bool
-  | [t] => Nat.beq t.k 1 && Nat.blt t.a wp && Nat.blt t.b wp && carries w T t.a t.b 0 r
-  | _ => false
-
-/-- The gate chunk `c` of a layer whose wires the table `Tc` maps to nodes, over the previous
-depth's table `Tp` and width `wp`: the table maps its index to its node. -/
-def gateOk (w : ℕ) (D : Dag) (Tp : Table) (wp : ℕ) (Tc : Table) (c : ℕ) : Bool :=
-  Nat.beq (cell w Tc (gateIndex w c)) (gateNode w c) && Nat.blt (gateNode w c) D.size &&
-    cond (flagged w c) (copyOk w Tp wp (gateNode w c) (gateTerms w c))
-      (Nat.ble D.inputs (gateNode w c) &&
-        termsOk w Tp wp (gateNode w c) (gateTerms w c) (terms w (D.tree.get (gateNode w c))))
-
-/-- The gates from wire `g` on, each chunk carrying its index (so no index is a growing sum). -/
-def gatesOk (w : ℕ) (D : Dag) (Tp : Table) (wp : ℕ) (Tc : Table) : ℕ → List ℕ → Bool
-  | _, [] => true
-  | g, c :: cs =>
-    Nat.beq (gateIndex w c) g && gateOk w D Tp wp Tc c && gatesOk w D Tp wp Tc (gateIndex w c + 1) cs
-
-/-- One layer. -/
-def layerOk (w : ℕ) (D : Dag) (Tp : Table) (wp : ℕ) (Tc : Table) (gates : List ℕ) : Bool :=
-  gatesOk w D Tp wp Tc 0 gates
-
-/-- A last-layer assertion: the node `n` is an assertion `0 · 1 · b` (one term, constant `0`, first
-operand the constant one, node `0`), and the output wire `g` carries its operand `b`. -/
-def outputOk (w : ℕ) (D : Dag) (T : Table) (wl : ℕ) (o : ℕ × ℕ) : Bool :=
-  Nat.blt o.1 wl && Nat.ble D.inputs o.2 &&
-    match terms w (D.tree.get o.2) with
-    | [t] => Nat.beq t.k 0 && Nat.beq t.a 0 && Nat.beq (cell w T o.1) t.b
-    | _ => false
-
-/-- Output nodes against output wires: each wire is in the last layer and carries its node. -/
-def outWiresOk (w : ℕ) (T : Table) (wl : ℕ) : List ℕ → List ℕ → Bool
-  | [], [] => true
-  | n :: ns, g :: gs => Nat.blt g wl && Nat.beq (cell w T g) n && outWiresOk w T wl ns gs
-  | _, _ => false
-
-/-- Merge two lists, smaller first (`fuel` bounds the steps; out of fuel, concatenation). -/
-def mergeNat : ℕ → List ℕ → List ℕ → List ℕ
-  | 0, xs, ys => xs ++ ys
-  | _ + 1, [], ys => ys
-  | _ + 1, x :: xs, [] => x :: xs
-  | f + 1, x :: xs, y :: ys =>
-    cond (Nat.ble x y) (x :: mergeNat f xs (y :: ys)) (y :: mergeNat f (x :: xs) ys)
-
-/-- Merge adjacent runs pairwise. -/
-def mergePairs : List (List ℕ) → List (List ℕ)
-  | a :: b :: rest => mergeNat (a.length + b.length) a b :: mergePairs rest
-  | l => l
-
-/-- Merge the runs until one is left (`fuel` rounds). -/
-def mergeAll : ℕ → List (List ℕ) → List ℕ
-  | _, [] => []
-  | _, [a] => a
-  | 0, ls => ls.flatten
-  | f + 1, a :: b :: rest => mergeAll f (mergePairs (a :: b :: rest))
-
-/-- Bottom-up merge sort of a list of naturals. -/
-def sortNat (l : List ℕ) : List ℕ := mergeAll l.length (l.map fun n => [n])
-
-/-- **The wires `g, …, g + n − 1` all occur in the sorted list `l`**: past the entries below `g`,
-the next one is `g`. -/
-def coverRun : ℕ → ℕ → List ℕ → Bool
-  | 0, _, _ => true
-  | n + 1, g, l =>
-    match l.dropWhile (fun y => Nat.blt y g) with
-    | y :: ys => Nat.beq y g && coverRun n (g + 1) (y :: ys)
-    | [] => false
-
-/-- Every layer, then the last-layer assertions and the output nodes against the last table. -/
-def layersOk (w : ℕ) (D : Dag) (outs : List (ℕ × ℕ)) (outw : List ℕ) :
-    Table → ℕ → List Table → List (List ℕ) → Bool
-  | Tp, wp, [], [] => outs.all (outputOk w D Tp wp) && outWiresOk w Tp wp D.outputs outw
-  | Tp, wp, T :: Ts, l :: ls => layerOk w D Tp wp T l && layersOk w D outs outw T l.length Ts ls
-  | _, _, _, _ => false
-
-/-- Whether a term list has an assertion term. -/
-def hasAssert : List Term → Bool
-  | [] => false
-  | t :: ts => Nat.beq t.k 0 || hasAssert ts
-
-/-- The nodes of a layer's non-copy gates with an assertion term, prepended to `acc` in
-reverse wire order. -/
-def collectGates (w : ℕ) : List ℕ → List ℕ → List ℕ
-  | [], acc => acc
-  | c :: cs, acc =>
-    collectGates w cs (cond (!flagged w c && hasAssert (gateTerms w c)) (gateNode w c :: acc) acc)
-
-/-- The asserted nodes the circuit carries, from `acc` on. -/
-def collect (w : ℕ) : List (List ℕ) → List ℕ → List ℕ
-  | l :: ls, acc => collect w ls (collectGates w l acc)
-  | [], acc => acc
-
-/-- List equality by `Nat.beq`. -/
-def listEq : List ℕ → List ℕ → Bool
-  | [], [] => true
-  | a :: as, b :: bs => Nat.beq a b && listEq as bs
-  | _, _ => false
-
-/-- **The wires of a layer's assertion gates**: the gates every term of which is an assertion term
-(`k = 0`; such a gate's value is zero). -/
-def zeroGates (w : ℕ) (l : List ℕ) : List ℕ :=
-  l.zipIdx.filterMap fun p => cond ((gateTerms w p.1).all fun t => Nat.beq t.k 0) (some p.2) none
-
-/-- **Every wire of the last layer is constrained to zero**: an assertion's output wire, an output
-node's wire, or an assertion gate; at least one layer. -/
-def lastCoverB (w : ℕ) (outs : List (ℕ × ℕ)) (outw : List ℕ) (layers : List (List ℕ)) : Bool :=
-  match layers.getLast? with
-  | some l => coverRun l.length 0 (sortNat (outs.map Prod.fst ++ outw ++ zeroGates w l))
-  | none => false
-
-/-- The node `0` is the input `0`. -/
-def oneOk (D : Dag) : Bool := Nat.blt 0 D.inputs
-
-/-- The asserted nodes, in increasing id order, are the ones the circuit carries, sorted. -/
-def assertsOk (D : Dag) (C : Layered) (K : Cert) : Bool :=
-  listEq D.asserts (sortNat (collect K.width C.layers (K.outputs.map Prod.snd)))
-
-/-- The checker. -/
-def check (D : Dag) (C : Layered) (K : Cert) : Bool :=
-  oneOk D && Nat.beq C.inputs D.inputs &&
-    layersOk K.width D K.outputs K.outWires .ident C.inputs K.tables C.layers && assertsOk D C K &&
-      lastCoverB K.width K.outputs K.outWires C.layers
-
 /-- The checker from its parts, one theorem each. -/
 theorem check_of_parts {D : Dag} {C : Layered} {K : Cert} (h1 : oneOk D = true)
     (h2 : Nat.beq C.inputs D.inputs = true)
@@ -276,13 +123,6 @@ theorem gatesOk_append {w : ℕ} {D : Dag} {Tp Tc : Table} {wp : ℕ} :
     refine ⟨⟨hi, hc⟩, gatesOk_append hrest ?_ h₂⟩
     simp only [List.length_cons] at hl
     omega
-
-/-- **A slice of a layer**: the `n` gates from position `s` on (every gate from `s` on when
-`n = 0`), the first carrying the index `s`. A large layer is checked slice by slice, one theorem
-each, so no kernel check grows with the layer. -/
-def layerSliceOk (w : ℕ) (D : Dag) (Tp : Table) (wp : ℕ) (Tc : Table) (gates : List ℕ)
-    (s n : ℕ) : Bool :=
-  gatesOk w D Tp wp Tc s (cond (Nat.beq n 0) (gates.drop s) ((gates.drop s).take n))
 
 /-- **A slice and the rest after it** check as the rest from the slice's start. -/
 theorem layerSliceOk_cons {w : ℕ} {D : Dag} {Tp : Table} {wp : ℕ} {Tc : Table} {gates : List ℕ}
@@ -412,7 +252,7 @@ theorem gateOk_value {w : ℕ} {D : Dag} {κ x : ℕ → F} {Tp Tc : Table} {wp 
     (hκ : κ 1 = 1) (hone : D.val w κ x 0 = 1) (hv : Carried w D κ x Tp wp v)
     (h : gateOk w D Tp wp Tc c = true) :
     ((gateTerms w c).map fun t => κ t.k * v t.a * v t.b).sum = D.val w κ x (gateNode w c) := by
-  unfold gateOk at h
+  rw [gateOk_eq] at h
   simp only [Bool.and_eq_true, Nat.blt_eq] at h
   obtain ⟨_, h⟩ := h
   cases hf : flagged w c
@@ -432,7 +272,7 @@ theorem gateOk_value {w : ℕ} {D : Dag} {κ x : ℕ → F} {Tp Tc : Table} {wp 
 /-- An accepted gate's table entry is its node. -/
 theorem gateOk_cell {w : ℕ} {D : Dag} {Tp Tc : Table} {wp c : ℕ}
     (h : gateOk w D Tp wp Tc c = true) : cell w Tc (gateIndex w c) = gateNode w c := by
-  unfold gateOk at h
+  rw [gateOk_eq] at h
   simp only [Bool.and_eq_true, Nat.beq_eq] at h
   exact h.1.1
 
@@ -441,7 +281,7 @@ theorem gateOk_assert {w : ℕ} {D : Dag} {κ x : ℕ → F} {Tp Tc : Table} {wp
     (hv : Carried w D κ x Tp wp v) (h : gateOk w D Tp wp Tc c = true)
     (hcopy : flagged w c = false) (ha : ∀ t ∈ gateTerms w c, t.k = 0 → v t.a * v t.b = 0) :
     D.AssertHolds w κ x (gateNode w c) := by
-  unfold gateOk at h
+  rw [gateOk_eq] at h
   simp only [Bool.and_eq_true, hcopy, Bool.cond_false] at h
   intro u hu
   rw [nodeTerms_of_le h.2.1] at hu
@@ -703,7 +543,7 @@ theorem mem_collectGates_of_cell {w : ℕ} {D : Dag} {Tp Tc : Table} {wp n : ℕ
   obtain ⟨hi, hok⟩ := gatesOk_get 0 l h g hg
   rw [Nat.zero_add] at hi
   have hnode : gateNode w (l.getD g 0) = n := by rw [← gateOk_cell hok, hi, hc]
-  unfold gateOk at hok
+  rw [gateOk_eq] at hok
   simp only [Bool.and_eq_true] at hok
   cases hf : flagged w (l.getD g 0)
   · rw [hf, Bool.cond_false] at hok
@@ -852,9 +692,6 @@ asserted ones, so the collected nodes, sorted, are the asserted ones. -/
 
 section Slices
 
-/-- **The `n` entries of `l` from position `s`** (every entry from `s` on when `n = 0`). -/
-def sliceL (l : List ℕ) (s n : ℕ) : List ℕ := cond (Nat.beq n 0) (l.drop s) ((l.drop s).take n)
-
 /-- A slice and the rest after it are the rest from the slice's start. -/
 theorem sliceL_append {l : List ℕ} {s n : ℕ} (hn : 0 < n) :
     sliceL l s n ++ sliceL l (s + n) 0 = sliceL l s 0 := by
@@ -866,12 +703,6 @@ theorem sliceL_append {l : List ℕ} {s n : ℕ} (hn : 0 < n) :
 
 /-- The slice from position `0` on is the list. -/
 @[simp] theorem sliceL_zero (l : List ℕ) : sliceL l 0 0 = l := by simp [sliceL]
-
-/-- The number of a layer's non-copy gates with an assertion term, the nodes `collectGates`
-adds. -/
-def countGates (w : ℕ) : List ℕ → ℕ
-  | [] => 0
-  | c :: cs => cond (!flagged w c && hasAssert (gateTerms w c)) 1 0 + countGates w cs
 
 /-- The count of a concatenation. -/
 theorem countGates_append (w : ℕ) :
@@ -886,13 +717,6 @@ theorem length_collectGates (w : ℕ) :
   | c :: cs, acc => by
     simp only [collectGates, countGates, length_collectGates w cs]
     cases (!flagged w c && hasAssert (gateTerms w c)) <;> simp; omega
-
-/-- **Per layer, its gate count and asserting-gate count.** -/
-def layersCountB (w : ℕ) : List (List ℕ) → List ℕ → List ℕ → Bool
-  | [], [], [] => true
-  | l :: ls, m :: ms, c :: cs =>
-    Nat.beq l.length m && Nat.beq (countGates w l) c && layersCountB w ls ms cs
-  | _, _, _ => false
 
 /-- The layers' gate counts. -/
 theorem map_length_of_layersCountB {w : ℕ} :
@@ -917,11 +741,6 @@ theorem length_collect_of_layersCountB {w : ℕ} :
     omega
   | [], _ :: _, _, _, h | [], [], _ :: _, _, h | _ :: _, [], _, _, h
   | _ :: _, _ :: _, [], _, h => by simp [layersCountB] at h
-
-/-- **`lo < l₀ < l₁ < ⋯`, the last of `lo :: l` being `hi`.** -/
-def chainLast : ℕ → List ℕ → ℕ → Bool
-  | lo, [], hi => Nat.beq lo hi
-  | lo, x :: xs, hi => Nat.blt lo x && chainLast x xs hi
 
 /-- Chains join at their common end. -/
 theorem chainLast_append :
@@ -949,24 +768,6 @@ theorem pairwise_of_chainLast :
     · exact h.1
     · exact Nat.lt_trans h.1 (h₁ y hy)
 
-/-- **A witness that the asserted node `n` is collected** by the layers `Ts`, of widths `ws`:
-`(0, j)`, the node of the `j`-th last-layer assertion `outs`; `(d + 1, g)`, a wire `g` below
-the width of layer `d` whose table entry is `n`, a node with an assertion term. Either way `n` is
-at or above the inputs. -/
-def assertWitOk (w : ℕ) (D : Dag) (outs : List (ℕ × ℕ)) (Ts : List Table) (ws : List ℕ) (n : ℕ)
-    (p : ℕ × ℕ) : Bool :=
-  Nat.ble D.inputs n &&
-    cond (Nat.beq p.1 0) (Nat.beq (outs.getD p.2 (0, 0)).2 n)
-      (hasAssert (terms w (D.tree.get n)) && Nat.blt p.2 (ws.getD (p.1 - 1) 0) &&
-        Nat.beq (cell w (Ts.getD (p.1 - 1) .ident) p.2) n)
-
-/-- Witnesses for a list of asserted nodes, one each. -/
-def witsOk (w : ℕ) (D : Dag) (outs : List (ℕ × ℕ)) (Ts : List Table) (ws : List ℕ) :
-    List ℕ → List (ℕ × ℕ) → Bool
-  | [], [] => true
-  | n :: ns, p :: ps => assertWitOk w D outs Ts ws n p && witsOk w D outs Ts ws ns ps
-  | _, _ => false
-
 /-- Every node with accepted witnesses has one. -/
 theorem witsOk_mem {w : ℕ} {D : Dag} {outs : List (ℕ × ℕ)} {Ts : List Table} {ws : List ℕ} :
     ∀ {ns : List ℕ} {ps : List (ℕ × ℕ)}, witsOk w D outs Ts ws ns ps = true →
@@ -978,12 +779,6 @@ theorem witsOk_mem {w : ℕ} {D : Dag} {outs : List (ℕ × ℕ)} {Ts : List Tab
     · exact ⟨p, h.1⟩
     · exact witsOk_mem h.2 x hx
   | _ :: _, [], h, _, _ => by simp [witsOk] at h
-
-/-- **A slice of the asserted nodes**: the `n` from position `s` (every one from `s` on when
-`n = 0`) increase from above `lo` to `hi`, with the witnesses `wit`. -/
-def assertSliceOk (w : ℕ) (D : Dag) (outs : List (ℕ × ℕ)) (Ts : List Table) (ws : List ℕ)
-    (s n lo hi : ℕ) (wit : List (ℕ × ℕ)) : Bool :=
-  chainLast lo (sliceL D.asserts s n) hi && witsOk w D outs Ts ws (sliceL D.asserts s n) wit
 
 /-- **The asserted nodes from position `s` on** increase from above `lo` to `hi`, each with a
 witness. -/

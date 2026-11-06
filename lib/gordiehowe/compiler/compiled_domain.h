@@ -23,8 +23,9 @@
 // domain packs its subfield cells (packing.h), and its subfield step checks
 // the prefix rows.
 //
-// A domain's reductions run in a fixed order before its opening: each
-// batched relation's masked skip, in declaration order, then masked GKR.
+// A domain's reductions run before its opening in a nested fork of its
+// transcript: one branch per batched relation's masked skip and one for
+// masked GKR, then a join (system.h).
 //
 // A domain with no circuit constraint (its predicates affine rows,
 // quadratic triples or field batches, and no Boolean check, late bit or

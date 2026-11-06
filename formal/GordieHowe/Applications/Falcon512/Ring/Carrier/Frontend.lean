@@ -34,9 +34,6 @@ expression and predicate) and the field facts `GordieHowe.Falcon512.EField`:
   `GordieHowe.Falcon512.Ring.rel` at the extracted values (`mem_rel_of_source_carrier`).
 * **Round-by-round knowledge soundness of `Π_P₀`** (`rbr_carrier`): `GordieHowe.RealizedProgram.rbr_of_events` at the
   membership's event, error `511/|F|` at `member.ring.gamma`.
-* **The selection's error** (`selSound_carrier`): the realization's selection event
-  (`GordieHowe.RealizedProgram.SelEvent`, the spectrum the product form's kernel reads is no ring key's transform)
-  implies the membership's event, so its probability is at most `511/|F|`.
 -/
 
 
@@ -740,117 +737,6 @@ theorem rbr_carrier :
       (program.eventState I rel proj ringEvent ringEvent_use sound_carrier)
       (program.roundError I (ringEps I)) :=
   program.rbr_of_events I rel proj ringEvent (ringEps I) ringEvent_use ringEvent_bound sound_carrier
-
-/-! ## The selection's error -/
-
-/-- **The selection a carrier's product form reads**: the committed spectrum (value `6`, one block)
-as the natural-order transform at `ψ = psiG` of a row of the `64 × 512` ring (value `4`),
-fingerprinted at `member.ring.gamma` with degree `511`. -/
-def carrierSel : RealizedProgram.SelShape := ⟨0, [6], 4, 64, 512, 512, psiG, true, 0, 511⟩
-
-/-- **The selection event implies the membership's event**: where `member.signer` and the index
-bits' check hold and the committed spectrum is no row's transform, the fingerprint's polynomial is
-nonzero and `γ` is one of its roots (`member_eq`). -/
-theorem ringEvent_of_selEvent
-    (hk : ∀ q < program.predicates.length,
-      program.kernelSel? q = if q = 0 then some carrierSel else none)
-    (hwf : program.WellFormed)
-    (h0 : (program.predicate 0).body.isEqual = true ∧
-      (program.predNodes (program.predicate 0).body).all (program.readsFixedB 0) = true)
-    (h9 : (program.predicate (FalconRingMember.idxPred program)).body.isEqual = true ∧
-      (program.predNodes (program.predicate (FalconRingMember.idxPred program)).body).all
-        (program.readsFixedB 0) = true)
-    {j : ℕ} {e : program.Env I} (h : program.SelEvent j e) : ringEvent j e := by
-  obtain ⟨q, hq, sh, hsh, hj, -, heqs, hx⟩ := h
-  rw [hk q hq] at hsh
-  split_ifs at hsh with hq0 <;> cases hsh
-  subst hj
-  obtain ⟨h4, -, h6, -, -, hpsi, -⟩ := FalconCarrierBase.ids (program := program)
-  have hlen : ∀ p ∈ [0, FalconRingMember.idxPred program], p < program.predicates.length :=
-    fun p hp => (FalconRingMember.inSource (program := program) p hp).1
-  have hm : MemberPreds e := by
-    intro p hp
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
-    rcases hp with rfl | rfl
-    · exact heqs 0 (hlen 0 (by simp)) h0.1
-        (RealizedProgram.predReads_fixed_of_readsFixedB hwf h0.2)
-    · exact heqs _ (hlen _ (by simp)) h9.1
-        (RealizedProgram.predReads_fixed_of_readsFixedB hwf h9.2)
-  refine ⟨rfl, ?_, ?_⟩
-  · rw [fpEvent_poly]
-    intro hz
-    apply hx
-    have hs6 : (program.value 6).size = 512 := by
-      have := (FalconRingMember.sizes (program := program)).2.1
-      rwa [h6] at this
-    refine ⟨idxOf e, idxOf_lt e hm, fun i hi b hb m hm' => ?_⟩
-    simp only [carrierSel, List.length_singleton] at hi
-    obtain rfl : i = 0 := by omega
-    have hb0 : b = 0 := by
-      simp only [RealizedProgram.recBlocks, carrierSel, List.getD_cons_zero, hs6] at hb
-      omega
-    subst hb0
-    simp only [carrierSel, List.getD_cons_zero, RealizedProgram.blockStart, List.take_zero,
-      List.map_nil, List.sum_nil, Nat.zero_mul, Nat.zero_add, Nat.add_zero,
-      RealizedProgram.Ops.nttOf, ite_true]
-    have := coeffPoly_coeff (n := 512) (fun m => specOf e m - keySpec e m) hm'
-    rw [← fpPoly, hz, Polynomial.coeff_zero] at this
-    have hsk := (sub_eq_zero.1 this.symm)
-    unfold specOf keySpec ringEntry at hsk
-    rw [h6, RealizedProgram.evalE_leaf, h4, hpsi] at hsk
-    have hd := FalconRingMember.domainField0 (program := program)
-    have hr := RealizedProgram.reader_of_opaque_nil e
-      (h4 ▸ FalconRingMember.ringKind (program := program))
-    rw [hr]
-    have key : ∀ f, f = 0 →
-        (RealizedProgram.castElt (program.reader e 6 m) : (I f).K) =
-          RealizedProgram.Ops.nttNatural 512 ((I f).decode psiG)
-            (fun c => (RealizedProgram.castElt (e.stmt 4 (idxOf e * 512 + c)) : (I f).K)) m := by
-      rintro f rfl
-      exact hsk
-    exact key _ hd
-  · rw [fpEvent_poly, fpPoly, coeffPoly_eval, ← Fin.sum_univ_eq_sum_range
-      (fun m => (specOf e m - keySpec e m) * gammaOf e ^ m) 512]
-    have := member_eq hm
-    simp only [sub_mul, Finset.sum_sub_distrib]
-    rw [this, sub_eq_zero]
-    exact Finset.sum_congr rfl fun m _ => _root_.mul_comm _ _
-
-/-- **The selections of a Falcon ring carrier have error at most their fingerprint's**
-(`RealizedProgram.SelSound`): the one selection a product form reads is the membership's
-(`carrierSel`, `hk`), whose event implies the membership's event (`ringEvent_of_selEvent`), of
-probability at most `511/|F|` at `member.ring.gamma` (`ringEvent_bound`), the selection error
-there (`hterms`); at any other challenge there is no selection event. -/
-theorem selSound_carrier
-    (hk : ∀ q < program.predicates.length,
-      program.kernelSel? q = if q = 0 then some carrierSel else none)
-    (hwf : program.WellFormed)
-    (h0 : (program.predicate 0).body.isEqual = true ∧
-      (program.predNodes (program.predicate 0).body).all (program.readsFixedB 0) = true)
-    (h9 : (program.predicate (FalconRingMember.idxPred program)).body.isEqual = true ∧
-      (program.predNodes (program.predicate (FalconRingMember.idxPred program)).body).all
-        (program.readsFixedB 0) = true)
-    (hterms : program.selErrorTerms 0 = [(511, 0)]) : program.SelSound I := by
-  intro j e
-  by_cases hj : j = 0
-  · subst hj
-    have hb := ringEvent_bound (program := program) (I := I) 0
-      ((FalconRingMember.isSourceChal_iff (program := program) 0).2 rfl) e
-    have hsub : Pr[c ← program.ChalVal I 0 : program.SelEvent 0 (e.setChal 0 c)] ≤
-        Pr[c ← program.ChalVal I 0 : ringEvent 0 (e.setChal 0 c)] :=
-      (PMF.uniformOfFintype _).toOuterMeasure.mono fun c hc => ringEvent_of_selEvent hk hwf h0 h9 hc
-    refine hsub.trans (hb.trans (le_of_eq ?_))
-    obtain ⟨-, -, hf⟩ := FalconRingMember.chal0 (program := program)
-    rw [RealizedProgram.selError, hterms, hf]
-    simp [ringEps]
-  · have hn : ∀ c, ¬ program.SelEvent j (e.setChal j c) := fun c ⟨q, hq, sh, hsh, hjs, _⟩ => by
-      rw [hk q hq] at hsh
-      split_ifs at hsh <;> cases hsh
-      exact hj hjs.symm
-    have : {c : program.ChalVal I j | program.SelEvent j (e.setChal j c)} = ∅ :=
-      Set.eq_empty_of_forall_notMem hn
-    simp only [IOP.probUniform, this, MeasureTheory.measure_empty]
-    exact zero_le
 
 end Sound
 

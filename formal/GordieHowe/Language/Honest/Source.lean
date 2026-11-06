@@ -1241,6 +1241,12 @@ theorem kind_of_isPadCopyB {v w : ℕ} {m : String} (h : ir.isPadCopyB v w m = t
     rw [hk, h.1, h.2]
   · cases h
 
+/-- A private value of a well-formed program has a committed cell at each coordinate. -/
+theorem WellFormed.privCellB_of_kind_priv (hwf : ir.WellFormed) {v : ℕ}
+    (hv : v < ir.values.length) (hk : (ir.value v).kind = .priv) :
+    ir.privCellB v = true :=
+  RealizedProgram.privCellB_of_kind_priv (ir := ir) hv (hwf.values v hv).1 hk
+
 /-- **A committed value of a domain with a cell at each coordinate is a cell value of its
 domain.** -/
 theorem isCellValue_of_privCellB {v : ℕ} (h : ir.privCellB v = true) :
@@ -1294,6 +1300,11 @@ def isBitsB (v w : ℕ) (sel : IndexMap) : Bool :=
   match (ir.value v).kind with
   | .bits w' sel' => w' == w && sel' == sel
   | _ => false
+
+/-- A named bit-view kind discharges the corresponding view check. -/
+theorem isBitsB_of_kind {v w : ℕ} {sel : IndexMap}
+    (h : (ir.value v).kind = .bits w sel) : ir.isBitsB v w sel = true := by
+  simp only [isBitsB, h, beq_self_eq_true, Bool.and_self]
 
 theorem kind_of_isBitsB {v w : ℕ} {sel : IndexMap} (h : ir.isBitsB v w sel = true) :
     (ir.value v).kind = .bits w sel := by

@@ -12,7 +12,7 @@ public import GordieHowe.Applications.Falcon512.Emulated.QROMParams.Setting
 # GordieHowe: the key relations of `Falcon512.Emulated.QROMParams`
 
 The relations the statements of `Falcon512.Emulated.QROMParams` read
-(`GordieHowe/Applications/Falcon512/Emulated/QROMParams.lean`) at the key (`keyWitRel`, `keyHonestRel`).
+(`GordieHowe/Applications/Falcon512/Emulated/QROMParams.lean`) at the key (`keyWitRel`).
 -/
 
 namespace GordieHowe.Falcon512.Emulated.QROMParams
@@ -39,14 +39,5 @@ theorem mem_keyWitRel {pk : PublicKey} {g : program.Valuation interp → VarWitn
   rw [keyOf_stmtOf, Option.some_inj] at hk
   subst hk
   exact hr
-
-/-! ## The honest-prover statements -/
-
-variable {Inp : Type}
-  {relH : Set (program.Valuation interp × Inp)} (H : program.HonestStrategy interp relH)
-
-/-- **The honest inputs at the key**: the strategy's honest inputs at the key's statement. -/
-abbrev keyHonestRel (relH : Set (program.Valuation interp × Inp)) : Set (PublicKey × Inp) :=
-  {p | (stmtOf p.1, p.2) ∈ relH}
 
 end GordieHowe.Falcon512.Emulated.QROMParams

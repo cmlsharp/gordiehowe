@@ -46,6 +46,7 @@
 
 #include "gordiehowe/compiler/derivation_check.h"
 #include "gordiehowe/compiler/lowering.h"
+#include "gordiehowe/compiler/named_shapes.h"
 #include "gordiehowe/compiler/plan_export.h"
 #include "gordiehowe/compiler/realized_program.h"
 #include "gordiehowe/expr.h"
@@ -242,6 +243,63 @@ class ProgramBuilder : Lowering {
     step_ones();
     finish();
     return std::move(P_);
+  }
+
+  // Resolve frontend metadata after run(), without changing the runtime IR.
+  ResolvedSourceMetadata source_metadata(const ir::Program &p) const {
+    const auto &notes = cs_.records().source_metadata;
+    NamedIds values, predicates, exprs;
+    for (size_t i = 0; i < p.values.size(); ++i)
+      values.emplace_back(p.values[i].name, i);
+    for (size_t i = 0; i < p.predicates.size(); ++i)
+      predicates.emplace_back(p.predicates[i].name, i);
+    for (const auto &a : notes.predicates)
+      predicates.emplace_back(a.name, resolve_shape_predicate(p, a.selector));
+    for (const auto &a : notes.values) {
+      const size_t id = value_id(a.node);
+      if (id == SIZE_MAX) export_fail("shape alias '" + a.name + "' is not a value");
+      values.emplace_back(a.name, id);
+    }
+    for (const auto &a : notes.selected_values)
+      values.emplace_back(a.name, resolve_shape_value(p, values, predicates, a.selector));
+    for (const auto &a : notes.exprs) {
+      Id id;
+      if (a.derived != SIZE_MAX) {
+        id = printed_derived(a.derived);
+      } else {
+        // Lock only after run() has finished; no expression construction or
+        // optimization observes the temporary reference.
+        const auto expression = a.expression.lock();
+        if (!expression) export_fail("shape alias '" + a.name + "' has expired");
+        id = printed_expr(expression.get());
+      }
+      if (id == ir::kNone || id >= p.nodes.size() || p.nodes[id].op != ir::Expr::kRef)
+        export_fail("shape alias '" + a.name + "' is not a shared expression");
+      exprs.emplace_back(a.name, p.nodes[id].x);
+    }
+    for (const auto &a : notes.selected_exprs)
+      exprs.emplace_back(a.name, resolve_shape_expr(p, values, predicates, a.selector));
+    ResolvedSourceMetadata out;
+    out.shapes = resolve_shape_inputs(notes.shapes, values, predicates, exprs);
+    auto add_role = [&](const std::string &name, size_t id, SourceRole role, size_t slot) {
+      if (id == SIZE_MAX || id >= p.values.size())
+        export_fail("source role names a node that is not a value");
+      const auto &v = p.values[id];
+      if (v.owner != ir::kNone) export_fail("source role names a realization value");
+      const size_t field = v.domain == ir::kNone ? v.field : p.domains.at(v.domain).field;
+      out.roles.push_back({name.empty() ? v.name : name, id, role, slot, field, v.node});
+    };
+    for (const auto &r : notes.roles) add_role("", value_id(r.node), r.role, r.slot);
+    for (const auto &r : notes.named_roles) {
+      const auto ids = resolve_shape_names("source role", values, {r.name});
+      add_role(r.name, ids.front(), r.role, r.slot);
+    }
+    std::sort(out.roles.begin(), out.roles.end(),
+        [](const auto &a, const auto &b) { return a.value < b.value; });
+    for (size_t i = 1; i < out.roles.size(); ++i)
+      if (out.roles[i - 1].value == out.roles[i].value)
+        export_fail("duplicate source role for value " + std::to_string(out.roles[i].value));
+    return out;
   }
 
  private:
@@ -5183,11 +5241,13 @@ ir::Program build_ir(const BasicCompiledSystem<S> &cs) {
 }
 // The same with the export's certificates (ir::Certificates) in CERTS.
 template <class S>
-ir::Program build_ir(const BasicCompiledSystem<S> &cs, ir::Certificates &certs) {
+ir::Program build_ir(const BasicCompiledSystem<S> &cs, ir::Certificates &certs,
+                     ResolvedSourceMetadata *metadata = nullptr) {
   program_builder_internal::ProgramBuilder<S> b(cs);
   b.want_derivations();
   ir::Program p = b.run();
   certs = b.take_certificates();
+  if (metadata) *metadata = b.source_metadata(p);
   return p;
 }
 

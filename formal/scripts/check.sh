@@ -15,7 +15,7 @@
 # Without --certs the audits read GordieHowe's environment; with it, GordieHoweCerts', which imports
 # GordieHowe.
 #
-# The GKR certificate check mode (gh_cert_check; scripts/cert_mode.sh: kernel, the default, or
+# The certificate check mode (GordieHoweCheck; scripts/cert_mode.sh: kernel, the default, or
 # native) is the build's; the report prints it and every headline theorem that depends on a
 # compiler-trust axiom: Lean.ofReduceBool, Lean.trustCompiler, or the axiom
 # `<decl>._native.native_decide.ax_<i>_<j>` that native_decide adds per use in Lean v4.34. A
@@ -71,7 +71,7 @@ vendor_proofs="Vendor/ArkLib Vendor/CompPoly Vendor/VCVio Vendor/ToMathlib Vendo
 
 mathlib_imports() {
   grep -rhoE '^(public )?import (all )?Mathlib[A-Za-z0-9_.]*' \
-    GordieHowe GordieHowe.lean GordieHoweCerts.lean $vendor_proofs |
+    GordieHowe GordieHowe.lean GordieHoweCerts.lean Check $vendor_proofs |
     sed -E 's/^(public )?import (all )?//' | sort -u
 }
 
@@ -84,16 +84,19 @@ fi
 if [ -n "$certs" ]; then lib=GordieHoweCerts; else lib=GordieHowe; fi
 
 # Run a Lean script of scripts/ against $lib's environment: the scripts import GordieHowe, and with
-# --certs a copy under .lake/check/ imports GordieHoweCerts instead.
+# --certs a copy under .lake/check/ imports GordieHoweCerts instead. An optional second
+# argument bounds the script in seconds; it does not change the report itself.
 run_script() {
+  local -a script_limit=()
+  if [ "$#" -ge 2 ]; then script_limit=(timeout "$2"); fi
   if [ -n "$certs" ]; then
     mkdir -p .lake/check
     grep -qx 'import GordieHowe' "scripts/$1" ||
       { echo "check.sh: scripts/$1 has no line 'import GordieHowe'" >&2; return 2; }
     sed 's/^import GordieHowe$/import GordieHoweCerts/' "scripts/$1" > ".lake/check/$1"
-    scripts/lake.sh env lean ".lake/check/$1"
+    "${script_limit[@]}" scripts/lake.sh env lean ".lake/check/$1"
   else
-    scripts/lake.sh env lean "scripts/$1"
+    "${script_limit[@]}" scripts/lake.sh env lean "scripts/$1"
   fi
 }
 
@@ -107,7 +110,7 @@ python3 -I scripts/cert_boundary.py || status=1
 echo
 
 echo "== kernel evaluation and unfolding outside the certificate checks (report only) =="
-echo "(decide +kernel, native_decide, gh_cert_check, with_unfolding_all and unseal outside"
+echo "(decide +kernel, native_decide, gh_native_check, with_unfolding_all and unseal outside"
 echo " GordieHowe/Generated/ and the modules defining the checks; a site of the rule on sealed and"
 echo " generated data in CLAUDE.md is marked when its declaration has a TODO; scripts/cert_boundary.py)"
 python3 -I scripts/cert_boundary.py --kernel-report || true
@@ -161,7 +164,7 @@ fi
 
 echo
 echo "== .ghc schema: the Lean data types against the C++ writer's (report only) =="
-echo "(scripts/GhcSchema.lean prints the types of GordieHoweNative/Data.lean; scripts/ghc_schema.txt"
+echo "(scripts/GhcSchema.lean prints the certificate data types; scripts/ghc_schema.txt"
 echo " is the C++ schema's text, ghc_gkr.h's gkr_schema, which gordiehowe_ghc_test compares with it)"
 if scripts/lake.sh env lean scripts/GhcSchema.lean > .lake/ghc_schema.txt 2>&1; then
   if diff -u scripts/ghc_schema.txt .lake/ghc_schema.txt > .lake/ghc_schema.diff; then
@@ -177,7 +180,40 @@ fi
 echo
 echo "== running-time lint =="
 echo "(every extractor and simulator definition documents its running time; scripts/CostLint.lean, over $lib)"
+python3 scripts/test_cost_lint.py 2>&1 || status=1
+# The performance profiler's launcher (scripts/perf_profile.sh), on a fixture without Lean.
+python3 -I scripts/perf_profile_test.py 2>&1 || status=1
 run_script CostLint.lean 2>&1 || status=1
+
+echo
+echo "== computability regression against develop f1aca4f11 =="
+echo "(every surviving definition, including types outside CostLint's procedure coverage)"
+python3 scripts/test_computability_regression.py 2>&1 || status=1
+# The simulation verifiers keep compiled code (a small module over GordieHowe's environment).
+scripts/lake.sh env lean scripts/tests/SimVerifierComputability.lean 2>&1 || status=1
+mkdir -p .lake/check
+export COST_LINT_INVENTORY_OUTPUT="$PWD/.lake/check/computability-current.tsv"
+rm -f "$COST_LINT_INVENTORY_OUTPUT"
+if run_script ComputabilityInventory.lean 120 2>&1; then
+  python3 scripts/computability_regression.py "$COST_LINT_INVENTORY_OUTPUT" \
+    --output .lake/check/computability-regression.json 2>&1 || status=1
+else
+  status=1
+fi
+unset COST_LINT_INVENTORY_OUTPUT
+
+if [ -n "$certs" ]; then
+  echo
+  echo "== runtime smoke test of the generated programs =="
+  echo "(each family's actual proof system, prover, verifier, simulator, extractor and the converted"
+  echo " Ring simulators compiled to C with compiler IR; scripts/test_runtime_smoke.py)"
+  python3 scripts/tests/test_runtime_smoke_manifest.py 2>&1 || status=1
+  # Every case runs. The honest provers (role prover, one case per family) depend on the parked
+  # PMF/coin-law work and are counted under CostLint's runtime ceiling, so their status is reported
+  # without failing the check; drop --report-role prover when they all compile.
+  python3 scripts/test_runtime_smoke.py --output .lake/check/runtime-smoke --report-role prover \
+    2>&1 || status=1
+fi
 
 echo
 echo "== ring-signature guardrails =="
@@ -192,38 +228,38 @@ echo "(declarations a reader must trust to read the headline theorems; scripts/S
 # closure of GordieHowe's headlines goes to .lake/ and is compared with the ledger the same way.
 if [ -n "$certs" ]; then closure=audit/statement_closure.txt; else closure=.lake/statement_closure_lib.txt; fi
 if run_script StatementClosure.lean > "$closure.tmp" 2>&1; then
+  # the previous closure, for the headlines' transitive fingerprints
+  if [ -f "$closure" ]; then cp "$closure" .lake/statement_closure_prev.txt; else : > .lake/statement_closure_prev.txt; fi
   mv "$closure.tmp" "$closure"
   grep '^# total' "$closure" | tail -1
-  CLOSURE="$closure" python3 - <<'PY'
-import os
-cur = {}
-for l in open(os.environ['CLOSURE']):
-    if l.startswith('#'): continue
-    p = l.rstrip('\n').split('\t')
-    if len(p) >= 3: cur[p[1]] = p[2]
-aud = {}
-for l in open('audit/audited.txt'):
-    if l.startswith('#') or not l.strip(): continue
-    p = l.rstrip('\n').split('\t')
-    aud[p[0]] = p[3] if len(p) > 3 else ''
-unaudited = [n for n in cur if n not in aud]
-stale = [n for n in cur if n in aud and aud[n] and aud[n] != cur[n]]
-nofp = [n for n in cur if n in aud and not aud[n]]
-gone = [n for n in aud if n not in cur]
-print(f"not yet recorded in audit/audited.txt: {len(unaudited)}; changed since audit (re-audit): {len(stale)}; recorded without fingerprint: {len(nofp)}; ledger entries no longer in the closure: {len(gone)} (non-blocking; see audit/README.md)")
-for n in sorted(stale)[:20]: print("  changed:", n)
-PY
+  python3 scripts/test_audit_ledger.py 2>&1 || status=1
+  python3 scripts/audit_ledger.py "$closure" .lake/statement_closure_prev.txt audit/audited.txt 2>&1 || status=1
   [ -n "$certs" ] || echo "(GordieHowe's headlines only; --certs adds the instantiations' and writes audit/statement_closure.txt)"
 else
   echo "statement closure script failed:" && tail -5 "$closure.tmp"
   status=1
 fi
 
-# The textual checks read every source, both libraries' in either mode.
+
+echo
+echo "== statement sizes =="
+echo "(complete report over $lib; counts are informational, a failed report fails the check)"
+# The report's tree traversals against independent ones, on small terms (Lean only).
+python3 scripts/tests/test_statement_size.py 2>&1 || status=1
+if run_script StatementSize.lean 600 > .lake/statement_size.txt.tmp 2>&1; then
+  mv .lake/statement_size.txt.tmp .lake/statement_size.txt
+  cat .lake/statement_size.txt
+else
+  echo "statement-size report failed (600-second limit):"
+  tail -20 .lake/statement_size.txt.tmp
+  status=1
+fi
+
+# The textual checks read every source, including both check modes.
 echo
 echo "== sorry per file =="
-grep -rc 'sorry' GordieHowe GordieHoweCerts.lean GordieHoweNative $vendor_proofs --include='*.lean' | awk -F: '$2 > 0 {print}' | sort -t: -k2 -nr || true
-total=$(grep -rho 'sorry' GordieHowe GordieHoweCerts.lean GordieHoweNative $vendor_proofs --include='*.lean' | wc -l || true)
+grep -rc 'sorry' GordieHowe GordieHoweCerts.lean GordieHoweNative Check $vendor_proofs --include='*.lean' | awk -F: '$2 > 0 {print}' | sort -t: -k2 -nr || true
+total=$(grep -rho 'sorry' GordieHowe GordieHoweCerts.lean GordieHoweNative Check $vendor_proofs --include='*.lean' | wc -l || true)
 echo "total: $total"
 
 echo
@@ -241,29 +277,29 @@ grep -rnE "[A-Za-z_.'₀₁₂₃₄₅₆₇₈₉]+( _){4,}" GordieHowe --incl
 
 echo
 echo "== declared axioms =="
-grep -rn '^axiom ' GordieHowe GordieHoweCerts.lean GordieHoweNative $vendor_proofs --include='*.lean' || echo "none"
+grep -rn '^axiom ' GordieHowe GordieHoweCerts.lean GordieHoweNative Check $vendor_proofs --include='*.lean' || echo "none"
 
 echo
-echo "== GKR certificate check mode =="
-echo "(gh_cert_check, GordieHowe/Language/CertCheck.lean; set by scripts/cert_mode.sh)"
+echo "== certificate check mode =="
+echo "(GordieHoweCheck source directory; set by scripts/cert_mode.sh)"
 case "$cert_mode" in
-  kernel) echo "kernel: the GKR certificates are checked by decide +kernel" ;;
+  kernel) echo "kernel: every part of each program's check is decided by the kernel (decide +kernel)" ;;
   native)
-    echo "native: the GKR certificates are checked by compiled code (trusts Lean's compiler, the"
+    echo "native: each program's check runs as compiled code (trusts Lean's compiler, the"
     echo " C compiler of its toolchain and its run time, the certificate files read at run time,"
     echo " the .ghc decoders and checkers of GordieHoweNative and Ghc.loadDefs)" ;;
 esac
 if [ -z "$certs" ]; then
-  echo "(no certificate checked: GordieHowe uses no gh_cert_check; --certs checks them in this mode)"
+  echo "(no certificate checked: the default library imports no program check; --certs checks them in this mode)"
 elif [ "$cert_mode" = native ] && [ -z "$dev" ]; then
   echo "FAIL: native mode is a development mode; run scripts/cert_mode.sh kernel for this check, or pass --dev for a development check"
   status=1
 fi
 
 echo
-echo "== native_decide trust steps outside gh_cert_check =="
-grep -rn '\bnative_decide\b' GordieHowe GordieHoweCerts.lean GordieHoweNative $vendor_proofs --include='*.lean' \
-  | grep -vE '^GordieHowe/Language/(CertCheck|Realizations/Circuit/LoadNative)\.lean:' \
+echo "== native_decide trust steps outside gh_native_check =="
+grep -rn '\bnative_decide\b' GordieHowe GordieHoweCerts.lean GordieHoweNative Check $vendor_proofs --include='*.lean' \
+  | grep -vE '^GordieHowe/Language/Realizations/Circuit/LoadNative\.lean:' \
   || echo "none"
 
 echo

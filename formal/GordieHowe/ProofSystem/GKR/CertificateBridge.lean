@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.ProofSystem.GKR.Certificate
+public import GordieHoweNative.ProofSystem.GKR.CertificateBridge
 public import GordieHowe.Language.Assumptions
 
 @[expose] public section
@@ -44,44 +45,27 @@ open Certificate RealizedProgram
 
 /-! ## The checks on the layered circuit -/
 
-/-- A gate's terms have at most one assertion term (constant index `0`). -/
-def atMostOneAssert : List Term → Bool
-  | [] => true
-  | t :: ts => cond (Nat.beq t.k 0) (!hasAssert ts) (atMostOneAssert ts)
-
-/-- Every gate of the layer `l` has at most one assertion term. -/
-def layerUniqueB (w : ℕ) (l : List ℕ) : Bool := l.all fun c => atMostOneAssert (gateTerms w c)
-
-/-- **Every gate of `C` has at most one assertion term.** -/
-def uniqueAssertsB (w : ℕ) (C : Layered) : Bool := C.layers.all (layerUniqueB w)
-
 /-- A layer's check from its blocks' (one kernel check per block, as `gatesOk_append`). -/
 theorem layerUniqueB_append {w : ℕ} {l₁ l₂ : List ℕ} (h₁ : layerUniqueB w l₁ = true)
     (h₂ : layerUniqueB w l₂ = true) : layerUniqueB w (l₁ ++ l₂) = true := by
-  simp only [layerUniqueB, List.all_append, Bool.and_eq_true] at h₁ h₂ ⊢
+  simp only [layerUniqueB_eq, List.all_append, Bool.and_eq_true] at h₁ h₂ ⊢
   exact ⟨h₁, h₂⟩
 
 /-- The check from the first layer's and the rest's (one kernel check per layer). -/
 theorem uniqueAssertsB_cons {w n : ℕ} {l : List ℕ} {ls : List (List ℕ)}
     (h₁ : layerUniqueB w l = true) (h₂ : uniqueAssertsB w ⟨n, ls⟩ = true) :
     uniqueAssertsB w ⟨n, l :: ls⟩ = true := by
-  simp only [uniqueAssertsB, List.all_cons, Bool.and_eq_true] at h₂ ⊢
+  simp only [uniqueAssertsB_eq, List.all_cons, Bool.and_eq_true] at h₂ ⊢
   exact ⟨h₁, h₂⟩
 
 /-- The check on a circuit without layers. -/
 theorem uniqueAssertsB_nil {w n : ℕ} : uniqueAssertsB w ⟨n, []⟩ = true := rfl
 
-/-- **The shape of `C`**: at least one and at most `depth` layers, each of at most `2 ^ width`
-gates. -/
-def shapeB (C : Layered) (width depth : ℕ) : Bool :=
-  Nat.blt 0 C.layers.length && Nat.ble C.layers.length depth &&
-    C.layers.all fun l => Nat.ble l.length (2 ^ width)
-
 /-- The shape check from its parts, so that a layer's length can be bounded block by block. -/
 theorem shapeB_intro {C : Layered} {width depth : ℕ} (h0 : 0 < C.layers.length)
     (hd : C.layers.length ≤ depth) (hl : ∀ l ∈ C.layers, l.length ≤ 2 ^ width) :
     shapeB C width depth = true := by
-  simp only [shapeB, Bool.and_eq_true, Nat.blt_eq, Nat.ble_eq, List.all_eq_true]
+  simp only [shapeB_eq, Bool.and_eq_true, Nat.blt_eq, Nat.ble_eq, List.all_eq_true]
   exact ⟨⟨h0, hd⟩, hl⟩
 
 /-- **A slice of the layer `l`** (`sliceL l s n`): every gate has at most one assertion term,
@@ -365,7 +349,7 @@ theorem atMostOneAssert_sum (f : Term → F) :
     · have hb : Nat.beq u.k 0 = true := by
         rw [hu]
         rfl
-      rw [atMostOneAssert, hb, Bool.cond_true, Bool.not_eq_true'] at h
+      rw [atMostOneAssert_cons, hb, Bool.cond_true, Bool.not_eq_true'] at h
       have hz := sum_asserts_of_not_hasAssert f ts h
       rcases List.mem_cons.mp ht with rfl | ht
       · simp [hu, hz]
@@ -375,7 +359,7 @@ theorem atMostOneAssert_sum (f : Term → F) :
         cases h' : Nat.beq u.k 0
         · rfl
         · exact absurd (Nat.eq_of_beq_eq_true h') hu
-      rw [atMostOneAssert, hb, Bool.cond_false] at h
+      rw [atMostOneAssert_cons, hb, Bool.cond_false] at h
       rcases List.mem_cons.mp ht with rfl | ht
       · exact absurd hk hu
       · simp [hu, atMostOneAssert_sum f ts h t ht hk]
@@ -549,7 +533,7 @@ theorem toSource_satisfied {C : Layered} {w : ℕ} {κ : ℕ → F} {d : ℕ}
     C.Satisfied w κ (vecRead v) := by
   have hU : ∀ l ∈ C.layers.reverse, ∀ c ∈ l, atMostOneAssert (gateTerms w c) = true := by
     intro l hl c hc
-    simp only [uniqueAssertsB, layerUniqueB, List.all_eq_true] at hu
+    simp only [uniqueAssertsB_eq, layerUniqueB_eq, List.all_eq_true] at hu
     exact hu l (List.mem_reverse.mp hl) c hc
   have hR := revReads_reverse w C.layers C.inputs hr
   unfold Layered.Satisfied
@@ -682,7 +666,7 @@ at most `2 ^ width` wires in every layer and at most `depth` layers. -/
 theorem toSource_shapeAtMost {C : Layered} {w : ℕ} {κ : ℕ → F} {d width depth : ℕ}
     (hs : shapeB C width depth = true) (hd : d ≤ width) :
     (toSource C w κ d).ShapeAtMost width depth := by
-  simp only [shapeB, Bool.and_eq_true, Nat.blt_eq, Nat.ble_eq, List.all_eq_true] at hs
+  simp only [shapeB_eq, Bool.and_eq_true, Nat.blt_eq, Nat.ble_eq, List.all_eq_true] at hs
   obtain ⟨⟨hpos, hdep⟩, hlen⟩ := hs
   have hlen' : ∀ l ∈ C.layers.reverse, l.length ≤ 2 ^ width :=
     fun l hl => hlen l (List.mem_reverse.mp hl)

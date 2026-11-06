@@ -341,6 +341,51 @@ theorem matrix_rowSum_eq_applyConv (T : Finset ℕ) (rb : Fin w → ℕ) (m : Fi
   rw [applyConv_eq_mulVec]
   simp [Matrix.mulVec, dotProduct]
 
+section AllCoords
+
+/-! ### Every coordinate at once
+
+`applyConv` at one coordinate sums over all `2w − 1` product degrees, so evaluating it at each of
+the `w` coordinates recomputes every product coefficient and every row `X^k mod φ` `w` times.
+`applyConvList` computes the pairs `(c_k, X^k mod φ)` of each degree once (`convPairs`, the row
+as a bit mask) and reads every coordinate from them; `applyConvList_eq` proves it equal to
+`applyConv` at every coordinate. -/
+
+/-- The product coefficient of each degree `k < 2w − 1` paired with the bit mask of
+`X^k mod φ`. -/
+def convPairs (T : Finset ℕ) (rb x : Fin w → ℕ) : List (ℕ × ℕ) :=
+  (List.range (2 * w - 1)).map fun k => (prodCoeffs rb x k, powModPacked 1 w (phiPacked 1 w T) k)
+
+/-- Coordinate `m` read from the pairs: `Σ c_k · (bit m of X^k mod φ)`. -/
+def coordOfPairs (pairs : List (ℕ × ℕ)) (m : ℕ) : ℕ :=
+  (pairs.map fun p => p.1 * lane 1 p.2 m).sum
+
+/-- **`applyConv` at every coordinate**, from the pairs computed once. -/
+def applyConvList (T : Finset ℕ) (rb x : Fin w → ℕ) : List ℕ :=
+  (List.range w).map (coordOfPairs (convPairs T rb x))
+
+/-- A sum over `List.range` is the sum over `Finset.range`. -/
+theorem sum_map_range (f : ℕ → ℕ) (n : ℕ) :
+    ((List.range n).map f).sum = ∑ k ∈ Finset.range n, f k := by
+  induction n with
+  | zero => simp
+  | succ n ih => rw [List.range_succ, List.map_append, List.sum_append, ih, Finset.sum_range_succ]; simp
+
+theorem coordOfPairs_convPairs (T : Finset ℕ) (rb x : Fin w → ℕ) (m : Fin w) :
+    coordOfPairs (convPairs T rb x) m = applyConv T rb x m := by
+  rw [coordOfPairs, convPairs, List.map_map, applyConv, ← sum_map_range]
+  rfl
+
+/-- **`applyConvList` is `applyConv` at every coordinate.** -/
+theorem applyConvList_eq (T : Finset ℕ) (rb x : Fin w → ℕ) :
+    applyConvList T rb x = List.ofFn (applyConv T rb x) := by
+  apply List.ext_getElem (by simp [applyConvList])
+  intro m h₁ h₂
+  simp only [applyConvList, List.getElem_map, List.getElem_range, List.getElem_ofFn]
+  exact coordOfPairs_convPairs T rb x ⟨m, by simpa using h₂⟩
+
+end AllCoords
+
 theorem prodCoeffs_mono {rb rb' x x' : Fin w → ℕ}
     (hr : ∀ i, rb i ≤ rb' i) (hx : ∀ i, x i ≤ x' i) (m : ℕ) :
     prodCoeffs rb x m ≤ prodCoeffs rb' x' m := by
@@ -607,3 +652,14 @@ theorem applyConv_eval {R : Type*} [CommRing R] [CharP R 2] {T : Finset ℕ}
 end Eval
 
 end GordieHowe.Conv
+
+namespace GordieHowe
+
+/-- The 128-bit MAC chunk width at the ROM parameters (`256` at the QROM parameters). -/
+abbrev macChunkBits : ℕ := 128
+
+/-- The `Conv(r)` coordinate bound at the 128-bit shape. -/
+theorem convMax_128 : Conv.convMax macChunkBits Conv.gf2_128Taps = 504 :=
+  Conv.convMax_gf2_128
+
+end GordieHowe

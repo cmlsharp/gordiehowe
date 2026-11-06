@@ -23,8 +23,8 @@ projection `x ↦ (toNat x : K)`:
 * **The model** (`FieldInterp.ReadLinear`, a property of the interpretation): the projection is
   additive and commutes with multiplication by the casts of naturals (for `F_q^9` the integer
   reading is the first coordinate in the power basis, an `F_q`-linear map). `Interp.FieldFormModel`
-  asks it of the field of every `mod_q` in the field form (vacuous for a program without one,
-  `Interp.fieldFormModel_of_none`).
+  asks it of the field of every `mod_q` in the field form (`Interp.fieldFormModel_of_fields`, at the
+  fields that carry field forms, none for most programs).
 * **The linear operators** (`NamedOp.block_eq_sum`): the negacyclic convolution, a number from its
   digits, a sum of groups and their batches are linear in their input, so their matrix entries
   (`NamedOp.applyInt`) give their values.
@@ -67,43 +67,42 @@ def isFieldForm (ir : RealizedProgram) (p : ℕ) : Bool :=
   | .mod _ _ _ _ real => real.form == .field
   | _ => false
 
-/-- **Whether a predicate body is a `mod_q` in the field form**: `isFieldForm` at a predicate read
-from a walk of the predicates (`isFieldForm_eq`). -/
-def PredBody.isFieldForm : PredBody → Bool
-  | .mod _ _ _ _ real => real.form == .field
-  | _ => false
-
 theorem isFieldForm_eq (ir : RealizedProgram) (p : ℕ) :
     ir.isFieldForm p = (ir.predicate p).body.isFieldForm := rfl
 
+/-- **No predicate is a field-form `mod_q`**, from one walk of the predicates. -/
+theorem isFieldForm_eq_false_of_all {ir : RealizedProgram}
+    (h : ir.predicates.all (fun p => !p.body.isFieldForm) = true) :
+    ∀ p < ir.predicates.length, ir.isFieldForm p = false := by
+  intro p hp
+  have := List.all_eq_true.1 h _ (predicate_mem hp)
+  rw [isFieldForm_eq]
+  simpa using this
+
 end
 
-/-- **A program without field-form `mod_q`s constrains no interpretation's integer readings**
-(`Interp.FieldFormModel` holds vacuously), checked in one walk of the predicates. -/
-theorem Interp.fieldFormModel_of_none {I : Interp} {ir : RealizedProgram}
-    (h : ir.predicates.all (fun p => !p.body.isFieldForm) = true) : I.FieldFormModel ir := by
-  intro p hp d q e e' real hb hf
-  have := List.all_eq_true.1 h _ (predicate_mem hp)
-  simp [PredBody.isFieldForm, hb, hf] at this
-
-/-- **Whether every field-form `mod_q` of the program is in a domain of field `f`** (decided): the
-program's part of `Interp.FieldFormModel` (`Interp.fieldFormModel_of_field`). -/
-def fieldFormsIn (ir : RealizedProgram) (f : ℕ) : Bool :=
+/-- **Whether every field-form `mod_q` of the program is in a domain of a field of `L`** (decided):
+the program's part of `Interp.FieldFormModel` (`Interp.fieldFormModel_of_fields`). -/
+def fieldFormsIn (ir : RealizedProgram) (L : List ℕ) : Bool :=
   ir.predicates.all fun p =>
     match p.body with
-    | .mod d _ _ _ real => !(real.form == .field) || ir.domainField d == f
+    | .mod d _ _ _ real => !(real.form == .field) || L.contains (ir.domainField d)
     | _ => true
 
-/-- **The field-form model from one linear field** (`RealizedProgram.fieldFormsIn`): where every field-form
-`mod_q` is in a domain of field `f`, the interpretation is a field-form model when `f` reads
-linearly. -/
-theorem Interp.fieldFormModel_of_field {I : Interp} {ir : RealizedProgram} {f : ℕ}
-    (h : ir.fieldFormsIn f = true) (hRL : (I f).ReadLinear) : I.FieldFormModel ir := by
+/-- **The field-form model from the fields that carry field forms**
+(`RealizedProgram.fieldFormsIn`): where every field-form `mod_q` is in a domain of a field of `L`,
+the interpretation is a field-form model when every field of `L` reads linearly. A program without
+field-form `mod_q`s takes `L = []`, and both hypotheses are then checked by one walk of the
+predicates. The completeness side still needs the field table's checked `noFieldForm` claim
+(`fieldEqsAt_of_none`): realization rows are not source predicates, so a program without field
+forms cannot establish the field rows' hypothesis of `fieldEqsAtC_of_srcEnv` without that claim. -/
+theorem Interp.fieldFormModel_of_fields {I : Interp} {ir : RealizedProgram} {L : List ℕ}
+    (h : ir.fieldFormsIn L = true) (hRL : L.Forall fun f => (I f).ReadLinear) :
+    I.FieldFormModel ir := by
   intro p hp d q e e' real hb hf
   have h1 := List.all_eq_true.1 h _ (predicate_mem hp)
-  simp only [hb, hf, beq_self_eq_true, Bool.not_true, Bool.false_or, beq_iff_eq] at h1
-  rw [h1]
-  exact hRL
+  simp only [hb, hf, beq_self_eq_true, Bool.not_true, Bool.false_or, List.contains_iff_mem] at h1
+  exact List.forall_iff_forall_mem.1 hRL _ h1
 
 /-! ## The projection -/
 

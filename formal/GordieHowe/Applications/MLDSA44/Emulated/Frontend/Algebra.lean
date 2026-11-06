@@ -60,12 +60,17 @@ class MldsaEAlgebra (program : RealizedProgram) extends MldsaECross program wher
   lenWeight : 0 < program.exprLen (.apply (.sum 1024) (.leaf 59))
   /-- The left side of the signature relation has `1024` coordinates. -/
   lenSigL : program.exprLen sigL = 1024
-  /-- `pred0`. -/
-  pred0 : program.predicate 0 = «p.hint.w1_bound»
-  /-- `pred1`. -/
-  pred1 : program.predicate 1 = «p.hint.decompose»
-  /-- `pred2`. -/
-  pred2 : program.predicate 2 = «p.hint.interval»
+  /-- `pred0`: the body of `hint.w1_bound`. -/
+  pred0 :
+    ∃ t, (program.predicate 0).body = .equal 0 (.logic .leq 6 [.leaf 63, .reindex idx6 (.leaf 0)]) (.leaf 1) t
+  /-- `pred1`: the body of `hint.decompose`. -/
+  pred1 :
+    ∃ t, (program.predicate 1).body = .equal 0 (.mul (.ref 5) (.add (.ref 5) (.reindex idx7 (.leaf 4)))) (.leaf 5) t
+  /-- `pred2`: the body of `hint.interval`. -/
+  pred2 :
+    ∃ real, (program.predicate 2).body = .mod 0 0 (.add (.leaf 65) (.leaf 66)) (.add (.ref 4) (.reindex idx7 (.leaf 6))) real ∧
+      real.form = .integer ∧ real.quotient = none ∧ real.quotientLo = 0 ∧
+      real.qmax = 0
   /-- `signature.w`: `w'` below `2^24`. -/
   pred11 : ∃ real, (program.predicate 11).body = .mem 0 [.leaf 61] (.range 16777216) real
   /-- `norm.z`: `z + 130993` below `261987`. -/
@@ -118,7 +123,7 @@ class MldsaEAlgebra (program : RealizedProgram) extends MldsaECross program wher
 
 set_option linter.unusedSectionVars false
 
-variable {program : RealizedProgram} [MldsaEAlgebra program] {F0 FH : RealizedProgram.FieldInterp} [AField F0]
+variable {program : RealizedProgram} [MldsaEAlgebra program] {F0 FH : RealizedProgram.FieldInterp} [RealizedProgram.PrimeCastField F0 pGold]
   [HField FH]
 
 set_option hygiene false in
@@ -135,13 +140,18 @@ section Tables
 
 set_option maxRecDepth 4096
 
-theorem pred0 : program.predicate 0 = «p.hint.w1_bound» :=
+theorem pred0 :
+    ∃ t, (program.predicate 0).body = .equal 0 (.logic .leq 6 [.leaf 63, .reindex idx6 (.leaf 0)]) (.leaf 1) t :=
   MldsaEAlgebra.pred0
 
-theorem pred1 : program.predicate 1 = «p.hint.decompose» :=
+theorem pred1 :
+    ∃ t, (program.predicate 1).body = .equal 0 (.mul (.ref 5) (.add (.ref 5) (.reindex idx7 (.leaf 4)))) (.leaf 5) t :=
   MldsaEAlgebra.pred1
 
-theorem pred2 : program.predicate 2 = «p.hint.interval» :=
+theorem pred2 :
+    ∃ real, (program.predicate 2).body = .mod 0 0 (.add (.leaf 65) (.leaf 66)) (.add (.ref 4) (.reindex idx7 (.leaf 6))) real ∧
+      real.form = .integer ∧ real.quotient = none ∧ real.quotientLo = 0 ∧
+      real.qmax = 0 :=
   MldsaEAlgebra.pred2
 
 theorem pred11 : ∃ real, (program.predicate 11).body = .mem 0 [.leaf 61] (.range 16777216) real :=
@@ -236,19 +246,19 @@ theorem lensA : (program.value 58).size = 1024 ∧ (program.value 59).size = 102
 
 /-! ## domain `A`'s Goldilocks extension -/
 
-instance charP_interp0 : CharP (interp 0).K pGold := AField.charP
+instance charP_interp0 : CharP (interp 0).K pGold := RealizedProgram.PrimeCastField.charP (p := pGold)
 
 /-- The constants below `p` that domain `A`'s Goldilocks extension decodes are casts. -/
 theorem decode_gold {c : ℕ} (hc : c < 18446744069414584321) :
     (interp 0).decode c = (c : (interp 0).K) :=
-  AField.decode_lt c (pGold_eq ▸ hc)
+  RealizedProgram.PrimeCastField.decode_lt (p := pGold) c (pGold_eq ▸ hc)
 
 /-- The characteristic of domain `A`'s Goldilocks extension as the program reads it. -/
-theorem gold_char : (interp 0).spec.characteristic = pGold := AField.char_spec
+theorem gold_char : (interp 0).spec.characteristic = pGold := RealizedProgram.PrimeCastField.char_spec (p := pGold)
 
 /-- The integer reading of domain `A`'s Goldilocks extension reads a natural below `p` as itself. -/
 theorem toNat_gold_natCast {k : ℕ} (hk : k < pGold) : (interp 0).toNat (k : (interp 0).K) = k :=
-  AField.toNat_natCast k hk
+  RealizedProgram.PrimeCastField.toNat_natCast (p := pGold) k hk
 
 /-- **A small natural's centred reading** is itself. -/
 theorem centered_small {c : ℕ} (hc : 2 * c < pGold) : (interp 0).centered c = c := by
@@ -575,7 +585,8 @@ theorem lensU : program.exprLen (.logic .leq 6 [.leaf 63, .reindex idx6 (.leaf 0
 theorem w1Bound {e : program.Env interp} (hs : EASat e) {m : ℕ} (hm : m < 1024) :
     Bits.leConst (bitsA e m) (UseHint.hiCount mldsa44.γ₂ - 1) = 1 := by
   have h := holdsAS hs (p := 0) (by simp)
-  rw [(pred0 (program := program))] at h
+  obtain ⟨_, hp0⟩ := pred0 (program := program)
+  rw [hp0] at h
   have hm' := h m (by rw [(lensU (program := program)).1]; exact hm)
   change program.evalE (program.reader e) (program.domainField 0) _ m =
     program.evalE (program.reader e) (program.domainField 0) _ m at hm'
@@ -631,7 +642,8 @@ theorem decompose {e : program.Env interp} (hs : EASat e) {m : ℕ} (hm : m < 10
         (rdA e 64 m) (rdA e 65 m) (UseHint.outputFromBits (UseHint.hiCount mldsa44.γ₂) (bitsA e m)) -
         ((_root_.MLDSA.modulus : ℕ) : (interp 0).K)) = 0 := by
   have h := holdsAS hs (p := 1) (by simp)
-  rw [(pred1 (program := program))] at h
+  obtain ⟨_, hp1⟩ := pred1 (program := program)
+  rw [hp1] at h
   have hm' := h m (by rw [(lensU (program := program)).2.1]; exact hm)
   change program.evalE (program.reader e) (program.domainField 0) _ m =
     program.evalE (program.reader e) (program.domainField 0) _ m at hm'
@@ -746,7 +758,8 @@ theorem interval {e : program.Env interp} (hs : EASat e) {m : ℕ} (hm : m < 102
     UseHint.IntervalEq mldsa44.γ₂ (rdA e 59 m) (rdA e 64 m) (rdA e 65 m) (rdA e 66 m)
       (UseHint.outputFromBits (UseHint.hiCount mldsa44.γ₂) (bitsA e m)) := by
   have h := holdsAS hs (p := 2) (by simp)
-  rw [(pred2 (program := program))] at h
+  obtain ⟨_, hp2, -⟩ := pred2 (program := program)
+  rw [hp2] at h
   have hm' := congrArg (Int.cast : ℤ → (interp 0).K) (eq_of_modZero h (i := m) (by
     rw [(lensU (program := program)).2.2]
     exact hm))

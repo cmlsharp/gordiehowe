@@ -6,6 +6,8 @@ module
 public import GordieHowe.ProofSystem.RingSwitching.PlanTree
 public import GordieHowe.Language.RealizedProgram.Views
 public import GordieHowe.ProofSystem.Zerocheck.AffineBatch
+public import GordieHoweNative.Language.PackingDesc
+public import GordieHoweNative.Language.TableauNums
 
 @[expose] public section
 
@@ -20,7 +22,8 @@ characteristic two, that a node's bit coordinates (`FieldInterp.coord`) are the 
 bit stage. They are a property of the field interpretation, stated and proved once per field
 (`FieldInterp.Packing`, a class), never per program. The class is no restriction on the field:
 every finite field of `p^n` elements with an interpretation whose named nodes are subfields has a
-member (`Plan/FieldPackingGeneric.lean`), realizing every edge `F_{p^m} <d F_{p^(m d)}` with
+member (`GordieHowe/ProofSystem/Program/FieldPackingGeneric.lean`), realizing every edge
+`F_{p^m} <d F_{p^(m d)}` with
 `1 < d` and `m d ∣ n` (subfield masks when `s0 ∣ m`; squaring-chain masks in characteristic two at
 `m = 1` where the interpretation reads bits in a basis), `q ≤ p^s0` evaluation points and every skip
 domain of at most `|K|` points.
@@ -29,7 +32,7 @@ domain of at most `|K|` points.
   `F_p` (`top_eq`: `F_{p^n} = K`), the masking subfield `S0 = F_{p^s0}`, the realized edges by
   child degree, relative degree and masking mode (`edge`, `EdgeKit`), the degree of every node
   name with its subgroup the subfield of that degree (`nodeDeg`, `node_eq`), the evaluation points
-  in `S0`, and the bit coordinates of a degree-16 node (`coord_eq`).
+  in `S0`, and the bit coordinates of a node of any degree (`coord_eq`).
 * **The Ligero certificates** (`LigeroCert`): a Ligero shape with the agreement threshold and the
   exceptional count of the low-degree test, its line certificate, and the masking of the responses
   (untested masks with their list hypotheses, or the mask test, `LigeroCert.Masking`); the
@@ -45,7 +48,8 @@ open Export PackingStage RelativePacking Ligero.MaskRow
 over (see the module docstring). Every finite field whose named nodes are subfields and whose bit
 coordinates at the bit edges are basis coordinates has a member realizing every edge, node, point
 count and skip domain its size allows (`FieldInterp.genericPacking`, `genericPacking_realizes`);
-the concrete fields register computable instances (`Plan/FieldPackings.lean`). -/
+the concrete fields register computable instances
+(`GordieHowe/ProofSystem/Program/FieldPackings.lean`). -/
 class FieldInterp.Packing (F : FieldInterp) where
   /-- The characteristic. -/
   p : ℕ
@@ -87,6 +91,24 @@ class FieldInterp.Packing (F : FieldInterp) where
   nodes : Option (Sumcheck.Nodes F.K)
 
 attribute [instance] FieldInterp.Packing.expChar FieldInterp.Packing.decS0
+
+/-- **The packing descriptor of `Pk` at the queries of `D`**: the part of a packing the field
+checks read (`fieldOkB`, through `fieldOkBD`), as naturals and Booleans: the degree `n`, the
+evaluation domain's size `q`, at each of `D`'s queried edges (child degree, relative degree,
+masking mode) whether `Pk` realizes it, at each of `D`'s queried node names its degree, at each of
+`D`'s queried widths and degrees whether `Pk` has the skip domain, and whether `Pk` has the bit
+sumcheck's interpolation nodes, and at each of `D`'s queried edges its kit's mask cells (before the
+rows and in them). It reads `Pk` only at `D`'s keys, so `Pk.desc D = D` is a finite
+check (`fieldOkB_of_desc`). -/
+def FieldInterp.Packing.desc {F : FieldInterp} (Pk : F.Packing) (D : PackingDesc) : PackingDesc where
+  n := Pk.n
+  q := Pk.q
+  edges := D.edges.map fun x => (x.1, x.2.1, x.2.2.1, (Pk.edge x.1 x.2.1 x.2.2.1).isSome)
+  nodeDegs := D.nodeDegs.map fun x => (x.1, Pk.nodeDeg x.1)
+  skips := D.skips.map fun x => (x.1, x.2.1, (Pk.skip x.1 x.2.1).isSome)
+  hasNodes := Pk.nodes.isSome
+  masks := D.masks.map fun x => (x.1, x.2.1, x.2.2.1,
+    ((Pk.edge x.1 x.2.1 x.2.2.1).map fun kit => (kit.masks.nPre, kit.masks.nOwn)).getD (0, 0))
 
 /-- **The masking of a certified Ligero shape** at message length `block` and block length `N`:
 untested masks (`untested`) with the mask agreement threshold `a`, the mask list size `l` and the
@@ -156,6 +178,23 @@ def LigeroCert.matchesB (c : LigeroCert) (lg : Export.Ligero) : Bool :=
   lg.masking == c.masking.kind && lg.rate == c.Sh.rate && lg.blockEnc == c.Sh.blockEnc &&
     lg.t == c.Sh.nreq && lg.r == c.Sh.r && lg.N == c.Sh.N && lg.k == c.Sh.block &&
     lg.ldtReps == c.Sh.nrep
+
+/-- **The numbers of a certified Ligero shape** (`TableauNums`): its Ligero numbers, whether its
+masking is the mask test, its agreement threshold and exceptional count. -/
+def LigeroCert.nums (c : LigeroCert) : TableauNums :=
+  ⟨c.Sh.rate, c.Sh.nreq, c.Sh.blockEnc, c.Sh.nrep, c.Sh.r, c.masking.kind == .split, c.agree,
+    c.exceptions⟩
+
+/-- **`validB` reads the numbers only.** -/
+theorem LigeroCert.validB_eq_nums (c : LigeroCert) (q : ℕ) : c.validB q = c.nums.validB q := by
+  obtain ⟨Sh, agree, exceptions, line, masking⟩ := c
+  cases masking <;> rfl
+
+/-- **`matchesB` reads the numbers only.** -/
+theorem LigeroCert.matchesB_eq_nums (c : LigeroCert) (lg : Export.Ligero) :
+    c.matchesB lg = c.nums.matchesB lg := by
+  obtain ⟨Sh, agree, exceptions, line, masking⟩ := c
+  cases masking <;> rfl
 
 /-- **The tree layout's masking** of a certified shape at a code of the shape: untested masks with
 the line certificate and the list hypotheses, or the mask test with the line certificate. -/

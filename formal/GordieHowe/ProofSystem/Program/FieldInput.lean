@@ -7,6 +7,7 @@ public import GordieHowe.ProofSystem.Program.FieldTree
 public import GordieHowe.Language.RealizedProgram.InputLayout
 public import GordieHowe.Language.RealizedProgram.CellsLowering
 public import GordieHowe.Language.Realizations.CircuitInput
+public import GordieHoweNative.ProofSystem.Program.FieldInput
 
 @[expose] public section
 
@@ -84,12 +85,6 @@ def entryNodesM : CircuitEntry → List ℕ
   | .realization (.logup t g) => ir.logupNodes t g
   | .realization (.macH p) => ir.macHNodes p
   | _ => []
-
-/-- **Entry `e` names a predicate of the program**, when it names one. -/
-def entryPredOkB : CircuitEntry → Bool
-  | .pred p => decide (p < ir.predicates.length)
-  | .typeCheck p => decide (p < ir.predicates.length)
-  | _ => true
 
 /-- **The values circuit `c`'s entries read** (`entryNodesM`). -/
 def circValues (c : ℕ) : List ℕ := (ir.circuit c).entries.flatMap ir.entryNodesM
@@ -347,20 +342,6 @@ committed value of `d`, a pad block when it is a late value of `d`. -/
 def CoveredT (c w : ℕ) : Prop :=
   (ir.isCellValue d w = true → (ir.circuit c).inputs.any (·.isCommittedOf w) = true) ∧
     (ir.isLateOf d w = true → (ir.circuit c).inputs.any (·.isPadOf w) = true)
-
-/-- **A bit edge**: `F_2 <16` with squaring-chain masks (`isView` without its parent). -/
-def isBitEdge (e : PackingEdge) : Bool :=
-  e.childDegree == 1 && e.degree == 16 && e.mode == .squaringChain
-
-/-- **The words of value `w` are viewed**: its type is named after its node, some edge's child is
-its node, and some bit edge's parent is its node (a sweep of the edges; `viewableB_iff` is the
-lookup form, `nodeIdx` then `viewChild`). -/
-def viewableB (es : List PackingEdge) (w : ℕ) : Bool :=
-  match (ir.value w).node with
-  | some nr => ((ir.value w).type.nodeName.getD "") == nr.name &&
-      es.any (fun e => e.child == nr.name) &&
-      es.any (fun e => isBitEdge e && e.parent == nr.name)
-  | none => false
 
 /-- **The sweep is the lookup**: value `w` is viewed iff its node is the child of the edge
 `nodeIdx` names, that node has a view child, and its type is named after that edge's child. -/

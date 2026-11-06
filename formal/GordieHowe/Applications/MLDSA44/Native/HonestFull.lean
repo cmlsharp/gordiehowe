@@ -200,6 +200,17 @@ noncomputable def sourceExecution {Gn : RealizedProgram.Gens} (R : program.Commi
       (by rw [RealizedProgram.srcEnvL_zero]; exact source_crossBits i)
   fieldEqs _ _ _ _ _ := RealizedProgram.fieldEqsAt_of_none hff _
 
+/-- **The source execution reads the existing honest values at execution coordinates.**
+Source-role interpreters use this equation to transport the execution without unfolding its
+construction or the generated program. -/
+theorem sourceExecution_val {Gn : RealizedProgram.Gens} (R : program.CommittedFacts interp Gn)
+    (hbc : program.BoundNoCopy) {L : List (ℕ × String)} {S : RealizedProgram.Structure}
+    (hR : program.HonestRoles L S) (hO : OneNodes interp L) (hbit : (interp).BitNodes program)
+    (hff : ∀ p < program.predicates.length, program.isFieldForm p = false)
+    (i : MLDSA44.HonestInput) :
+    (sourceExecution program F0 FH R hbc hR hO hbit hff).val i =
+      program.execOf interp (honestVal program F0 FH i) := rfl
+
 /-- **The execution of a native ML-DSA program's source program has no completeness error.** -/
 theorem sourceExecution_δ {Gn : RealizedProgram.Gens} (R : program.CommittedFacts interp Gn)
     (hbc : program.BoundNoCopy) {L : List (ℕ × String)} {S : RealizedProgram.Structure}

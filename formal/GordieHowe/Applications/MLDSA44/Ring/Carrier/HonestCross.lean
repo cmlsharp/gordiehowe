@@ -37,7 +37,7 @@ variable {program : RealizedProgram} [CarrierHEmbed program] [CarrierAEmbed prog
   [MldsaEAlgebra (CarrierAEmbed.emu program)] [MldsaCarrierHonest program]
   [MldsaCarrierRelation program] [MldsaRingStmt program] [TableSelect program]
   [MldsaCarrierFront program] [MldsaCarrierSelect program] [MldsaCarrierQuot program]
-  {F0 FH : FieldInterp} [MLDSA44.AField F0] [HField FH]
+  {F0 FH : FieldInterp} [RealizedProgram.PrimeCastField F0 pGold] [HField FH]
 
 set_option hygiene false in
 local notation "interp" => mldsaInterpOf F0 FH

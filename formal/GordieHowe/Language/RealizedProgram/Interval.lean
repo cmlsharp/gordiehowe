@@ -2195,7 +2195,7 @@ theorem Expr.evalInt_mem_ivlGrouped {f p : ℕ} (hp : (I f).spec.characteristic 
         (fun s hs => hA ⟨s, hs⟩)
       rwa [← Fin.sum_univ_eq_sum_range (fun s => cs.getD (j * w + s) 0 *
         Expr.evalInt ir f leaf il iref rl a (j * w + s)) w] at this
-    simp only [Expr.ivlGrouped] at h
+    simp only [Expr.ivlGrouped, groupsIvlK_eq] at h
     simp only [Expr.evalInt]
     cases hc : constCoords ir p leafI c with
     | some cs =>

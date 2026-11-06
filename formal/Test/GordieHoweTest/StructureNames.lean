@@ -5,7 +5,7 @@ import GordieHowe.Language.Completeness.Check
 import GordieHowe.ProofSystem.Program.FieldDomain
 import GordieHowe.ProofSystem.Program.FieldTree
 import GordieHowe.Generated.Falcon512.Native.ROMParams.Plan
-import GordieHowe.Generated.Falcon512.Native.ROMParams.Interp
+import GordieHowe.Generated.Falcon512.Native.ROMParams.Certified
 import GordieHowe.Generated.Falcon512.Native.ROMParams.Structure
 
 /-!
@@ -132,6 +132,10 @@ example : failOf (ir.predNameE 271 "h2p.select.start") = some ⟨271, 0, .nameMi
   decide +kernel
 
 /-! ## The packing tree (FT) -/
+
+/-- Domain `H`'s packing facts at its field, field `0`. -/
+abbrev fieldPkH := interp.packingAt (show 0 = ir.domainField 0 by decide +kernel)
+  RealizedProgram.gf128Packing
 
 /-- Domain `H`'s plan edges. -/
 abbrev edgesH : List Export.PackingEdge := ir.planPacking Plan.plan 0

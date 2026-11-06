@@ -437,7 +437,7 @@ noncomputable abbrev simQueries : ℕ :=
 variable (pB) in
 /-- **The compiled verifier of the ring signature**: spBCS's verifier at the setting with merges of
 `TD`, proofs in the format `pB` (`SPBCS.qVerifier`). -/
-noncomputable abbrev verifier :=
+abbrev verifier :=
   (TD.setting kS hb).model.qVerifier (TD.setting kS hb).queries pB pB
 
 variable (pB) in

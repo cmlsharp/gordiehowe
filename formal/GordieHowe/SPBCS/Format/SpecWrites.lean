@@ -7,7 +7,7 @@ public import GordieHowe.SPBCS.Format.Codec
 public import GordieHowe.Model.IOP.AppendView
 public import GordieHowe.ProofSystem.GKR.SourceCircuit
 public import GordieHowe.ProofSystem.GKR.Transcript
-public import GordieHowe.Applications.Keccak.HashCircuit.Skip
+public import GordieHowe.ProofSystem.Zerocheck.AltRounds
 public import GordieHowe.ProofSystem.Ligero.Tableau
 public import GordieHowe.Model.IOP.AppendN
 public import GordieHowe.Model.IOP.DropMessage

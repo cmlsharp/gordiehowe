@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.RealizedProgram.Check
+public import GordieHoweNative.Language.RealizedProgram.DegAnn
 
 @[expose] public section
 
@@ -135,33 +136,6 @@ theorem Expr.degAtList_le {nd rd : ℕ → ℕ → ℕ} {ndU rdU : ℕ → ℕ} 
 end
 
 end
-
-/-! ## The annotation -/
-
-/-- **A degree annotation in one challenge**: packed tables of `w`-bit bounds on the degrees of the
-values' (`vals`) and the shared expressions' (`refs`) coordinates. -/
-structure DegAnn where
-  /-- The values' bounds. -/
-  vals : ℕ
-  /-- The shared expressions' bounds. -/
-  refs : ℕ
-  /-- The width of a bound. -/
-  w : ℕ
-  deriving Repr, Inhabited
-
-namespace DegAnn
-
-/-- **Entry `i` of a packed table** of `w`-bit entries: bits `[w i, w (i + 1))` of `T`. -/
-def entry (T w i : ℕ) : ℕ := (T >>> (w * i)) % 2 ^ w
-
-/-- The bound of value `v`. -/
-def val (a : DegAnn) (v : ℕ) : ℕ := entry a.vals a.w v
-
-/-- The bound of shared expression `k` among `n` (past them, value `0`'s: what the default
-expression `leaf 0` reads). -/
-def ref (a : DegAnn) (n k : ℕ) : ℕ := if k < n then entry a.refs a.w k else a.val 0
-
-end DegAnn
 
 section Check
 

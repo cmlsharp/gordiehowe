@@ -3,6 +3,7 @@
 
 module
 
+public import GordieHoweNative.Applications.FieldInterps.Codes
 public import GordieHowe.ProofSystem.Program.FieldModel
 public import GordieHowe.Applications.Falcon512.Fields.FalconNative20Relative
 public import GordieHowe.Applications.Falcon512.Fields.FalconNativeCoords
@@ -28,11 +29,6 @@ QROM parameters (`Falcon512.Native.QROMParams`, `Falcon512.Ring.Native.QROMParam
 namespace GordieHowe.RealizedProgram
 
 open Export RelativePacking
-
-/-- **The code arithmetic of the quartic step `F_q[u]/(u^4 - 11)` of `F_q^20`**
-(`GKR.Fold.ExtCode.overPrime`): four coefficients of `14` bits, the arithmetic modulo `12289` on
-each, `u^4 = 11`. -/
-def fq20QuarticCode : GKR.Fold.ExtCode := GKR.Fold.ExtCode.overPrime 12289 14 4 11
 
 /-- **The decoding of the quartic step**: coefficient `i` of `u^i` is digit `i` of `14` bits. -/
 def fq20QuarticDecode (c : ℕ) : FalconQuartic :=
@@ -93,15 +89,6 @@ theorem fq20_toNat_zero : fq20.toNat 0 = 0 := by
 coordinate, additive (`falconNative20Coords_val_cast_add`). -/
 theorem fq20_readLinear : fq20.ReadLinear :=
   .of_add falconNative20Coords_val_cast_add (by rw [fq20_toNat_zero, Nat.cast_zero])
-
-/-- **The code arithmetic of `F_q^20`** (`GKR.Fold.ExtCode`): five coefficients of `56` bits, in
-`v^0, …, v^4`, over the quartic step's code arithmetic (`fq20QuarticCode`), `v^5 = u + 2` (code
-`2 + 2^14`). Its codes are the C++ encoding: `FalconField20 = NativeWide<Fp14, 20, 11, 2, …, true>`
-(`lib/algebra/fp_native_wide.h:628`) packs coordinate `e[4 j + i]`, the coefficient of `u^i v^j`
-(`lib/algebra/fp_native_wide.h:45`), in `kCoefficientBits = 14` bits at bit `14 (4 j + i)`
-(`lib/algebra/fp_native_wide.h:64`, `:388`), so bits `56 j` to `56 j + 55` are the quartic code of
-the coefficient of `v^j`. -/
-def fq20Code : GKR.Fold.ExtCode := ⟨fq20QuarticCode.arith, 56, 5, 16386⟩
 
 /-- `v^5 = u + 2`: the code `2 + 2^14` decodes to `u + 2`. -/
 theorem fq20QuarticDecode_beta : fq20QuarticDecode 16386 = falconU + 2 := by

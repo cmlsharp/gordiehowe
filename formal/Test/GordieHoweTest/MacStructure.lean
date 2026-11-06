@@ -1,9 +1,9 @@
 -- Copyright 2026 Chad Sharp and Paul Grubbs
 -- SPDX-License-Identifier: Apache-2.0
 
-import GordieHowe.Generated.Falcon512.Native.ROMParams.Completion
-import GordieHowe.Generated.MLDSA44.Native.ROMParams.Completion
-import GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Completion
+import GordieHowe.Generated.Falcon512.Native.ROMParams.Core
+import GordieHowe.Generated.MLDSA44.Native.ROMParams.Data
+import GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Data
 
 /-!
 # Tests of the MAC sites read at the structure records
@@ -41,7 +41,7 @@ abbrev S : Structure := Structure.records
 
 /-- The exported certificate checks at the exported records. -/
 example : ir.completionB N Honest.nodes S Cert.gens Cert.cderivs = true :=
-  Completion.completionOk
+  checked.completion
 
 /-- Record 0 names the MAC's only site: `mac.equal` (309), over `y`'s field, tail `mac` (307). -/
 example : triple (ir.macSiteAt S 0 1) = some (309, false, 307) := by decide +kernel

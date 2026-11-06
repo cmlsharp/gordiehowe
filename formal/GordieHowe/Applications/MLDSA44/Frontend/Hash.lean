@@ -79,7 +79,7 @@ class MldsaHHashMu (program : RealizedProgram) : Prop extends MldsaHBaseMu progr
   /-- The shared expressions of `μ`'s buffer and absorbed state (generated data). -/
   mu_exprs : program.expr 11 = .reindex idx15 (.concat (.reindex idx13 (.concat (.reindex idx12 (.leaf 66)) (.leaf 8))) (.reindex idx14 (.leaf 67))) ∧ program.expr 12 = .reindex idx16 (.reindex idx16 (.concat (.reindex idx15 (.reindex idx15 (.ref 11))) (.leaf 9)))
   /-- `μ`'s padding predicates and shared expressions (generated data). -/
-  pad_exprs : program.predicate 42 = «p.h2c.mu.padding.monotone» ∧ program.predicate 43 = «p.h2c.mu.padding.max» ∧ program.predicate 44 = «p.h2c.mu.padding.min» ∧ program.predicate 45 = «p.h2c.mu.padding.suffix» ∧ program.predicate 46 = «p.h2c.mu.padding.zeros» ∧ program.predicate 47 = «p.h2c.mu.padding.output» ∧ program.expr 61 = .reindex idx30 (.concat (.leaf 6) (.reindex idx26 (.leaf 68))) ∧ program.expr 62 = .apply (.sum 8) (.mul (.reindex idx15 (.reindex idx15 (.ref 11))) (.reindex idx31 (.leaf 36))) ∧ program.expr 63 = .reindex idx33 (.concat (.leaf 6) (.leaf 35)) ∧ program.expr 64 = .add (.reindex idx34 (.ref 63)) (.reindex idx35 (.ref 63)) ∧ program.expr 65 = .reindex idx12 (.leaf 118)
+  pad_exprs : (∃ t, (program.predicate 42).body = .equal 1 (.mul (.reindex idx25 (.leaf 68)) (.add (.reindex idx26 (.leaf 68)) (.reindex idx27 (.leaf 6)))) (.leaf 34) t) ∧ (∃ t, (program.predicate 43).body = .equal 1 (.reindex idx28 (.leaf 68)) (.leaf 35) t) ∧ (∃ t, (program.predicate 44).body = .equal 1 (.add (.reindex idx29 (.leaf 68)) (.leaf 6)) (.leaf 35) t) ∧ (∃ t, (program.predicate 45).body = .equal 1 (.mul (.add (.ref 61) (.leaf 68)) (.add (.ref 62) (.leaf 37))) (.leaf 38) t) ∧ (∃ t, (program.predicate 46).body = .equal 1 (.mul (.add (.ref 61) (.reindex idx32 (.leaf 6))) (.add (.ref 62) (.mul (.reindex idx32 (.ref 64)) (.leaf 39)))) (.leaf 38) t) ∧ (∃ t, (program.predicate 47).body = .equal 1 (.mul (.reindex idx36 (.ref 64)) (.add (.reindex idx12 (.leaf 120)) (.reindex idx12 (.ref 65)))) (.leaf 9) t) ∧ program.expr 61 = .reindex idx30 (.concat (.leaf 6) (.reindex idx26 (.leaf 68))) ∧ program.expr 62 = .apply (.sum 8) (.mul (.reindex idx15 (.reindex idx15 (.ref 11))) (.reindex idx31 (.leaf 36))) ∧ program.expr 63 = .reindex idx33 (.concat (.leaf 6) (.leaf 35)) ∧ program.expr 64 = .add (.reindex idx34 (.ref 63)) (.reindex idx35 (.ref 63)) ∧ program.expr 65 = .reindex idx12 (.leaf 118)
   /-- Facts of the flags and the padding's constants, decided. -/
   pad_facts : (68 < program.values.length ∧ program.IsSourceValue 68 ∧ (program.value 68).typeSource = .node ∧ (program.value 68).type = .bit) ∧ (67 < program.values.length ∧ program.IsSourceValue 67 ∧ (program.value 67).typeSource = .node ∧ (program.value 67).type = .bit) ∧ (program.value 68).size = 136 ∧ (program.value 67).size = 560 ∧ (program.value 6).size = 1 ∧ RealizedProgram.IndexMap.size idx25 = 135 ∧ RealizedProgram.IndexMap.size idx28 = 1 ∧ RealizedProgram.IndexMap.size idx29 = 1 ∧ RealizedProgram.IndexMap.size idx30 = 136 ∧ RealizedProgram.IndexMap.size idx36 = 512 ∧ idx28.entry 0 = 98 ∧ idx29.entry 0 = 65 ∧ idx33.entry 0 = 0 ∧ idx33.entry 1 = 1 ∧ idx34.entry 0 = 0 ∧ idx35.entry 0 = 1 ∧ (program.value 6).size = 1 ∧ program.constEntries 6 = [1] ∧ program.constEntries 35 = [0] ∧ program.constEntries 34 = List.replicate 135 0 ∧ program.constEntries 38 = List.replicate 136 0 ∧ (∀ i < 135, (program.constEntries 37).getD i 0 = RealizedProgram.xorSel 0x1F fun u => (program.constEntries 36).getD u 0) ∧ (∀ i < 135, (program.constEntries 39).getD i 0 = 0) ∧ (program.constEntries 39).getD 135 0 = RealizedProgram.xorSel 0x80 (fun u => (program.constEntries 36).getD u 0) ∧ (∀ v ∈ [6, 34, 35, 37, 38, 39], program.isConstant v = true ∧ program.valueField v = 1) ∧ (∀ q ∈ [42, 43, 44, 45, 46, 47], q < program.predicates.length ∧ program.inSource (program.predicate q) = true)
 
@@ -98,7 +98,7 @@ class MldsaHHash (program : RealizedProgram) : Prop extends MldsaHHashData progr
   /-- Facts of the inputs' sizes and constants, decided. -/
   hash_sizes : program.exprs.length = 526 ∧ RealizedProgram.IndexMap.size idx12 = 512 ∧ RealizedProgram.IndexMap.size idx13 = 528 ∧ RealizedProgram.IndexMap.size idx14 = 560 ∧ RealizedProgram.IndexMap.size idx15 = 1088 ∧ RealizedProgram.IndexMap.size idx16 = 1600 ∧ RealizedProgram.IndexMap.size idx37 = 6144 ∧ RealizedProgram.IndexMap.size idx10 = 6656 ∧ RealizedProgram.IndexMap.size idx38 = 7616 ∧ RealizedProgram.IndexMap.size idx45 = 256 ∧ (program.value 8).size = 16 ∧ (program.value 9).size = 512 ∧ (program.value 40).size = 960 ∧ (program.value 41).size = 832 ∧ program.constEntries 8 = List.replicate 16 0 ∧ program.constEntries 9 = List.replicate 512 0 ∧ program.constEntries 40 = List.ofFn (fun r : Fin 960 => if (r : ℕ) < 5 ∨ (r : ℕ) = 959 then 1 else 0) ∧ program.constEntries 41 = List.ofFn (fun r : Fin 832 => if (r : ℕ) < 5 ∨ (r : ℕ) = 831 then 1 else 0) ∧ (∀ v ∈ [8, 9, 40, 41], program.isConstant v = true ∧ program.valueField v = 1)
   /-- `μ`'s padding predicates and shared expressions (generated data). -/
-  pad_exprs : program.predicate 42 = «p.h2c.mu.padding.monotone» ∧ program.predicate 43 = «p.h2c.mu.padding.max» ∧ program.predicate 44 = «p.h2c.mu.padding.min» ∧ program.predicate 45 = «p.h2c.mu.padding.suffix» ∧ program.predicate 46 = «p.h2c.mu.padding.zeros» ∧ program.predicate 47 = «p.h2c.mu.padding.output» ∧ program.expr 61 = .reindex idx30 (.concat (.leaf 6) (.reindex idx26 (.leaf 68))) ∧ program.expr 62 = .apply (.sum 8) (.mul (.reindex idx15 (.reindex idx15 (.ref 11))) (.reindex idx31 (.leaf 36))) ∧ program.expr 63 = .reindex idx33 (.concat (.leaf 6) (.leaf 35)) ∧ program.expr 64 = .add (.reindex idx34 (.ref 63)) (.reindex idx35 (.ref 63)) ∧ program.expr 65 = .reindex idx12 (.leaf 118)
+  pad_exprs : (∃ t, (program.predicate 42).body = .equal 1 (.mul (.reindex idx25 (.leaf 68)) (.add (.reindex idx26 (.leaf 68)) (.reindex idx27 (.leaf 6)))) (.leaf 34) t) ∧ (∃ t, (program.predicate 43).body = .equal 1 (.reindex idx28 (.leaf 68)) (.leaf 35) t) ∧ (∃ t, (program.predicate 44).body = .equal 1 (.add (.reindex idx29 (.leaf 68)) (.leaf 6)) (.leaf 35) t) ∧ (∃ t, (program.predicate 45).body = .equal 1 (.mul (.add (.ref 61) (.leaf 68)) (.add (.ref 62) (.leaf 37))) (.leaf 38) t) ∧ (∃ t, (program.predicate 46).body = .equal 1 (.mul (.add (.ref 61) (.reindex idx32 (.leaf 6))) (.add (.ref 62) (.mul (.reindex idx32 (.ref 64)) (.leaf 39)))) (.leaf 38) t) ∧ (∃ t, (program.predicate 47).body = .equal 1 (.mul (.reindex idx36 (.ref 64)) (.add (.reindex idx12 (.leaf 120)) (.reindex idx12 (.ref 65)))) (.leaf 9) t) ∧ program.expr 61 = .reindex idx30 (.concat (.leaf 6) (.reindex idx26 (.leaf 68))) ∧ program.expr 62 = .apply (.sum 8) (.mul (.reindex idx15 (.reindex idx15 (.ref 11))) (.reindex idx31 (.leaf 36))) ∧ program.expr 63 = .reindex idx33 (.concat (.leaf 6) (.leaf 35)) ∧ program.expr 64 = .add (.reindex idx34 (.ref 63)) (.reindex idx35 (.ref 63)) ∧ program.expr 65 = .reindex idx12 (.leaf 118)
   /-- Facts of the flags and the padding's constants, decided. -/
   pad_facts : (68 < program.values.length ∧ program.IsSourceValue 68 ∧ (program.value 68).typeSource = .node ∧ (program.value 68).type = .bit) ∧ (67 < program.values.length ∧ program.IsSourceValue 67 ∧ (program.value 67).typeSource = .node ∧ (program.value 67).type = .bit) ∧ (program.value 68).size = 136 ∧ (program.value 67).size = 560 ∧ (program.value 6).size = 1 ∧ RealizedProgram.IndexMap.size idx25 = 135 ∧ RealizedProgram.IndexMap.size idx28 = 1 ∧ RealizedProgram.IndexMap.size idx29 = 1 ∧ RealizedProgram.IndexMap.size idx30 = 136 ∧ RealizedProgram.IndexMap.size idx36 = 512 ∧ idx28.entry 0 = 98 ∧ idx29.entry 0 = 65 ∧ idx33.entry 0 = 0 ∧ idx33.entry 1 = 1 ∧ idx34.entry 0 = 0 ∧ idx35.entry 0 = 1 ∧ (program.value 6).size = 1 ∧ program.constEntries 6 = [1] ∧ program.constEntries 35 = [0] ∧ program.constEntries 34 = List.replicate 135 0 ∧ program.constEntries 38 = List.replicate 136 0 ∧ (∀ i < 135, (program.constEntries 37).getD i 0 = RealizedProgram.xorSel 0x1F fun u => (program.constEntries 36).getD u 0) ∧ (∀ i < 135, (program.constEntries 39).getD i 0 = 0) ∧ (program.constEntries 39).getD 135 0 = RealizedProgram.xorSel 0x80 (fun u => (program.constEntries 36).getD u 0) ∧ (∀ v ∈ [6, 34, 35, 37, 38, 39], program.isConstant v = true ∧ program.valueField v = 1) ∧ (∀ q ∈ [42, 43, 44, 45, 46, 47], q < program.predicates.length ∧ program.inSource (program.predicate q) = true)
   /-- The kinds of `μ`'s output, `w1` and `c̃'` (bit views, generated data). -/
@@ -109,20 +109,28 @@ class MldsaHHash (program : RealizedProgram) : Prop extends MldsaHHashData progr
 set_option maxRecDepth 4096 in
 /-- The native program at the ROM parameters has these facts. -/
 instance : MldsaHHash program where
-  view_kinds := ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  view_kinds := ⟨Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2ec_5ftilde_2eout_kind, Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2ec_5ftilde_2er167_2evalue_kind, Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2ec_5ftilde_2er167_2evalue_2ewords_kind, Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2esib_2eout_2ep0_kind, Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2esib_2er23_2evalue_kind, Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2esib_2er23_2evalue_2ewords_kind, Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2esib_2eout_2ep1_kind, Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2esib_2er47_2evalue_kind, Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2esib_2er47_2evalue_2ewords_kind⟩
   view_facts := by
-    decide +kernel
-  hash_exprs := ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
-  expr_blk := by
-    intro p h2 h7
-    fin_cases p <;> first | (exfalso; simp at h2 h7; done) | exact ⟨rfl, rfl⟩
+    shape_decide
+  hash_exprs := ⟨Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2emu_2epadding_2esuffix_2eshape_2eleft_2esecond_2efirst_2eshared_2efirst_2efirst_2efirst_2efirst_eq, Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2emu_2eblocks_2er0_2eshape_2eleft_2esecond_2efirst_2efirst_2eshared_2efirst_2efirst_2efirst_eq, Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2ec_5ftilde_2er0_2eshape_2eleft_2esecond_2efirst_2efirst_2eshared_2efirst_2efirst_2efirst_2eshared_2efirst_2efirst_2efirst_2efirst_eq, Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2ec_5ftilde_2er0_2eshape_2eleft_2esecond_2efirst_2efirst_2eshared_2efirst_2efirst_2efirst_eq, Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2esib_2er0_2eshape_2eleft_2esecond_2efirst_2efirst_2eshared_2efirst_2efirst_2efirst_eq, Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2esib_2er24_2eshape_2eleft_2esecond_2efirst_2efirst_2eshared_2efirst_2efirst_2efirst_eq⟩
+  expr_blk := fun
+    | ⟨0, _⟩, h, _ => absurd h (by simp)
+    | ⟨1, _⟩, h, _ => absurd h (by simp)
+    | ⟨2, _⟩, _, _ => ⟨Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2ec_5ftilde_2er24_2eshape_2eabsorbed_eq, by simp only [Fin.val_mk]; decide +kernel⟩
+    | ⟨3, _⟩, _, _ => ⟨Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2ec_5ftilde_2er48_2eshape_2eabsorbed_eq, by simp only [Fin.val_mk]; decide +kernel⟩
+    | ⟨4, _⟩, _, _ => ⟨Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2ec_5ftilde_2er72_2eshape_2eabsorbed_eq, by simp only [Fin.val_mk]; decide +kernel⟩
+    | ⟨5, _⟩, _, _ => ⟨Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2ec_5ftilde_2er96_2eshape_2eabsorbed_eq, by simp only [Fin.val_mk]; decide +kernel⟩
+    | ⟨6, _⟩, _, _ => ⟨Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2ec_5ftilde_2er120_2eshape_2eabsorbed_eq, by simp only [Fin.val_mk]; decide +kernel⟩
+    | ⟨7, _⟩, _, _ => ⟨Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2ec_5ftilde_2er144_2eshape_2eabsorbed_eq, by simp only [Fin.val_mk]; decide +kernel⟩
+    | ⟨8, _⟩, _, h => absurd h (by simp)
+    | ⟨9, _⟩, _, h => absurd h (by simp)
   hash_sizes := by
-    decide +kernel
-  pad_exprs := ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    shape_decide
+  pad_exprs := ⟨Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_h2c_2emu_2epadding_2emonotone_body, Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_h2c_2emu_2epadding_2emax_body, Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_h2c_2emu_2epadding_2emin_body, Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_h2c_2emu_2epadding_2esuffix_body, Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_h2c_2emu_2epadding_2ezeros_body, Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_h2c_2emu_2epadding_2eoutput_body, Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2emu_2epadding_2esuffix_2eshape_2eleft_2efirst_2efirst_eq, Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2emu_2epadding_2esuffix_2eshape_2eleft_2esecond_2efirst_eq, Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2emu_2epadding_2eoutput_2eshape_2eleft_2efirst_2efirst_2eshared_2efirst_2efirst_eq, Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2emu_2epadding_2eoutput_2eshape_2eleft_2efirst_2efirst_eq, Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_h2c_2emu_2epadding_2eoutput_2eshape_2eleft_2esecond_2esecond_2efirst_eq⟩
   pad_facts := by
-    decide +kernel
-  bit_kinds := ⟨rfl, rfl⟩
-  kind458 := rfl
+    shape_decide
+  bit_kinds := ⟨Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2emu_2eout_kind, Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_w1_kind⟩
+  kind458 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2ec_5ftilde_2eout_kind
 
 
 /-- A program with domain `H`'s SHAKE256 calls has its core's facts. -/
@@ -933,7 +941,7 @@ theorem evalE_ref12 (e : program.Env interp) {j : ℕ} (hj : j < 1600) :
 
 set_option maxRecDepth 4096 in
 /-- `μ`'s padding predicates and shared expressions (generated data). -/
-theorem pad_exprs : program.predicate 42 = «p.h2c.mu.padding.monotone» ∧ program.predicate 43 = «p.h2c.mu.padding.max» ∧ program.predicate 44 = «p.h2c.mu.padding.min» ∧ program.predicate 45 = «p.h2c.mu.padding.suffix» ∧ program.predicate 46 = «p.h2c.mu.padding.zeros» ∧ program.predicate 47 = «p.h2c.mu.padding.output» ∧ program.expr 61 = .reindex idx30 (.concat (.leaf 6) (.reindex idx26 (.leaf 68))) ∧ program.expr 62 = .apply (.sum 8) (.mul (.reindex idx15 (.reindex idx15 (.ref 11))) (.reindex idx31 (.leaf 36))) ∧ program.expr 63 = .reindex idx33 (.concat (.leaf 6) (.leaf 35)) ∧ program.expr 64 = .add (.reindex idx34 (.ref 63)) (.reindex idx35 (.ref 63)) ∧ program.expr 65 = .reindex idx12 (.leaf 118) :=
+theorem pad_exprs : (∃ t, (program.predicate 42).body = .equal 1 (.mul (.reindex idx25 (.leaf 68)) (.add (.reindex idx26 (.leaf 68)) (.reindex idx27 (.leaf 6)))) (.leaf 34) t) ∧ (∃ t, (program.predicate 43).body = .equal 1 (.reindex idx28 (.leaf 68)) (.leaf 35) t) ∧ (∃ t, (program.predicate 44).body = .equal 1 (.add (.reindex idx29 (.leaf 68)) (.leaf 6)) (.leaf 35) t) ∧ (∃ t, (program.predicate 45).body = .equal 1 (.mul (.add (.ref 61) (.leaf 68)) (.add (.ref 62) (.leaf 37))) (.leaf 38) t) ∧ (∃ t, (program.predicate 46).body = .equal 1 (.mul (.add (.ref 61) (.reindex idx32 (.leaf 6))) (.add (.ref 62) (.mul (.reindex idx32 (.ref 64)) (.leaf 39)))) (.leaf 38) t) ∧ (∃ t, (program.predicate 47).body = .equal 1 (.mul (.reindex idx36 (.ref 64)) (.add (.reindex idx12 (.leaf 120)) (.reindex idx12 (.ref 65)))) (.leaf 9) t) ∧ program.expr 61 = .reindex idx30 (.concat (.leaf 6) (.reindex idx26 (.leaf 68))) ∧ program.expr 62 = .apply (.sum 8) (.mul (.reindex idx15 (.reindex idx15 (.ref 11))) (.reindex idx31 (.leaf 36))) ∧ program.expr 63 = .reindex idx33 (.concat (.leaf 6) (.leaf 35)) ∧ program.expr 64 = .add (.reindex idx34 (.ref 63)) (.reindex idx35 (.ref 63)) ∧ program.expr 65 = .reindex idx12 (.leaf 118) :=
   MldsaHHashMu.pad_exprs
 
 /-- Facts of the flags and the padding's constants, decided. -/
@@ -1005,7 +1013,8 @@ theorem constPad (v : ℕ) (hv : v ∈ [6, 34, 35, 37, 38, 39]) :
 theorem flag_mono {e : program.Env interp} (hs : HSatMu e) {i : ℕ} (hi : i < 135)
     (h : flag e (i + 1) = 1) : flag e i = 1 := by
   have hh := pad_holds hs (q := 42) (by simp)
-  rw [(pad_exprs (program := program)).1] at hh
+  obtain ⟨_, hpad42⟩ := (pad_exprs (program := program)).1
+  rw [hpad42] at hh
   have := hh i (by rw [RealizedProgram.exprLen_mul, RealizedProgram.exprLen_reindex, (pad_facts (program := program)).2.2.2.2.2.1]; exact hi)
   rw [RealizedProgram.evalWith_eq_iff MldsaHCross.domainField1] at this
   rw [evalE_zeroConst e (constPad 34 (by simp)).1 (constPad 34 (by simp)).2
@@ -1019,7 +1028,8 @@ theorem flag_mono {e : program.Env interp} (hs : HSatMu e) {i : ℕ} (hi : i < 1
 /-- **`h2c.mu.padding.min`**: flag `65` (`tr ‖ 0x00 ‖ 0x00`'s last byte) is set. -/
 theorem flag_65 {e : program.Env interp} (hs : HSatMu e) : flag e 65 = 1 := by
   have hh := pad_holds hs (q := 44) (by simp)
-  rw [(pad_exprs (program := program)).2.2.1] at hh
+  obtain ⟨_, hpad44⟩ := (pad_exprs (program := program)).2.2.1
+  rw [hpad44] at hh
   have := hh 0 (by rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_reindex, (pad_facts (program := program)).2.2.2.2.2.2.2.1]; norm_num)
   rw [RealizedProgram.evalWith_eq_iff MldsaHCross.domainField1] at this
   rw [evalE_listConst e (constPad 35 (by simp)).1 (constPad 35 (by simp)).2
@@ -1030,7 +1040,8 @@ theorem flag_65 {e : program.Env interp} (hs : HSatMu e) : flag e 65 = 1 := by
 /-- **`h2c.mu.padding.max`**: flag `98` (past the maximum message) is clear. -/
 theorem flag_98 {e : program.Env interp} (hs : HSatMu e) : flag e 98 = 0 := by
   have hh := pad_holds hs (q := 43) (by simp)
-  rw [(pad_exprs (program := program)).2.1] at hh
+  obtain ⟨_, hpad43⟩ := (pad_exprs (program := program)).2.1
+  rw [hpad43] at hh
   have := hh 0 (by rw [RealizedProgram.exprLen_reindex, (pad_facts (program := program)).2.2.2.2.2.2.1]; norm_num)
   rw [RealizedProgram.evalWith_eq_iff MldsaHCross.domainField1] at this
   rw [evalE_listConst e (constPad 35 (by simp)).1 (constPad 35 (by simp)).2
@@ -1159,7 +1170,8 @@ theorem suffix_eq {e : program.Env interp} (hs : HSatMu e) {i : ℕ} (hi : i < 1
       (selF.embedBits (by decide) (bufByte e i) +
         cH (program := program) (FH := FH) 37 i) = 0 := by
   have hh := pad_holds hs (q := 45) (by simp)
-  rw [(pad_exprs (program := program)).2.2.2.1] at hh
+  obtain ⟨_, hpad45⟩ := (pad_exprs (program := program)).2.2.2.1
+  rw [hpad45] at hh
   have := hh i (by
     rw [RealizedProgram.exprLen_mul, RealizedProgram.exprLen_add,
       RealizedProgram.exprLen_ref MldsaHCross.refsOrdered (by rw [(hash_sizes (program := program)).1]; norm_num), (pad_exprs (program := program)).2.2.2.2.2.2.1,
@@ -1179,7 +1191,8 @@ theorem zeros_eq {e : program.Env interp} (hs : HSatMu e) {i : ℕ} (hi : i < 13
       (selF.embedBits (by decide) (bufByte e i) +
         cH (program := program) (FH := FH) 39 i) = 0 := by
   have hh := pad_holds hs (q := 46) (by simp)
-  rw [(pad_exprs (program := program)).2.2.2.2.1] at hh
+  obtain ⟨_, hpad46⟩ := (pad_exprs (program := program)).2.2.2.2.1
+  rw [hpad46] at hh
   have := hh i (by
     rw [RealizedProgram.exprLen_mul, RealizedProgram.exprLen_add,
       RealizedProgram.exprLen_ref MldsaHCross.refsOrdered (by rw [(hash_sizes (program := program)).1]; norm_num), (pad_exprs (program := program)).2.2.2.2.2.2.1,
@@ -1366,7 +1379,8 @@ theorem evalE_muOut {e : program.Env interp} (hs : HSatMu e) {j : ℕ} (hj : j <
     program.evalE (program.reader e) 1 (.leaf 120) j =
       program.evalE (program.reader e) 1 (.leaf 118) j := by
   have hh := pad_holds hs (q := 47) (by simp)
-  rw [(pad_exprs (program := program)).2.2.2.2.2.1] at hh
+  obtain ⟨_, hpad47⟩ := (pad_exprs (program := program)).2.2.2.2.2.1
+  rw [hpad47] at hh
   have := hh j (by rw [RealizedProgram.exprLen_mul, RealizedProgram.exprLen_reindex, (pad_facts (program := program)).2.2.2.2.2.2.2.2.2.1]; exact hj)
   rw [RealizedProgram.evalWith_eq_iff MldsaHCross.domainField1] at this
   rw [evalE_zeroConst e ((hash_sizes (program := program)).2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2 9 (by simp)).1

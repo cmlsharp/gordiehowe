@@ -252,18 +252,12 @@ variable {program : RealizedProgram} [FalconRingPowers program] [FalconRingSelec
 set_option hygiene false in
 local notation "vIdx" => FalconRingSelect.idx program
 
-/-- **An element read in an equal field identifier** is the expression's value there. -/
-theorem castElt_evalE {rd : program.Valuation I} {a b : ℕ} (h : a = b) (E : RealizedProgram.Expr) (i : ℕ) :
-    (RealizedProgram.castElt (program.evalE rd a E i) : (I b).K) = program.evalE rd b E i := by
-  subst h
-  exact RealizedProgram.castElt_self _
-
 /-- **A public expression's leaf** reads its expression one level down. -/
 theorem evalE_leaf_pubExpr (e : program.Env I) {v f : ℕ} {E : RealizedProgram.Expr}
     (hk : (program.value v).kind = .pub (.expr E)) (hf : program.valueField v = f) (i : ℕ) :
     program.evalE (program.reader e) f (.leaf v) i =
       program.evalE (program.read e program.values.length) f E i := by
-  rw [RealizedProgram.evalE_leaf, RealizedProgram.reader_of_pubExpr e hk, castElt_evalE hf]
+  rw [RealizedProgram.evalE_leaf, RealizedProgram.reader_of_pubExpr e hk, RealizedProgram.castElt_evalE hf]
 
 /-- The program has a value. -/
 theorem values_length_succ : ∃ n, program.values.length = n + 1 :=
@@ -287,10 +281,8 @@ theorem holdsAt_equal0 {e : program.Env I} {lhs rhs : RealizedProgram.Expr} {t :
     (h : program.HoldsAt e (.equal 0 lhs rhs t)) :
     ∀ i < program.exprLen lhs,
       program.evalE (program.reader e) 0 lhs i = program.evalE (program.reader e) 0 rhs i :=
-  fun i hi => by
-    have := h i hi
-    unfold RealizedProgram.evalWith at this
-    rwa [FalconRingMember.domainField0 (program := program)] at this
+  (RealizedProgram.holdsWith_equal_iff_of_domainField
+    (FalconRingMember.domainField0 (program := program))).1 h
 
 /-- **A membership predicate holds** where the source program holds. -/
 theorem holdsAt_src {e : program.Env I} (hs : program.SourceSatAt e) {p : ℕ}

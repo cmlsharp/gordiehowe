@@ -9,8 +9,9 @@ public import GordieHowe.Language.Realizations.SharedNorm
 public import GordieHowe.Language.Realizations.Circuit.Load
 public import GordieHowe.Language.Realizations.Circuit.LoadNative
 public import GordieHoweNative.Language.Realizations.Circuit.RelEntry
+public import GordieHowe.Language.Realizations.Circuit.Width
 
-@[expose] public section
+public section
 
 /-!
 # GordieHowe: the per-entry and per-circuit checks of a GKR circuit's certificate
@@ -34,8 +35,10 @@ public import GordieHoweNative.Language.Realizations.Circuit.RelEntry
 
 Every checker is its failure-reporting twin's success (`Twin.okB`).
 
-The definitions are in `GordieHoweNative/Language/Realizations/Circuit/RelEntry.lean`
-(the compiled library `GordieHoweNative`); this module has their lemmas.
+The pure entry checks are in `GordieHoweNative/Language/Realizations/Circuit/RelEntry.lean`.
+The canonical header and circuit checks remain here for kernel evaluation; their compiled
+counterparts use the existing numeric circuit-width API, related by `circuitCertB_eq_compiled`.
+Native compilation selects that counterpart through `circuitCertB_csimp`.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -66,30 +69,7 @@ theorem famHead_of_entryHeadE {k : ℕ} (h : okB (ir.entryHeadE c ar cd k) = tru
   | none => exact fun h => absurd h (by simp [okB])
   | some f => exact fun h => ⟨f, rfl, h⟩
 
-/-- **Entry `k` checks**, as its failure-reporting twin: its head, its block's nodes, and its family
-cuts. -/
-def entryCertE (k : ℕ) : Except CertFailure Unit :=
-  let en := cd.entries.getD k default
-  seqE (ir.entryHeadE c ar cd k)
-    (seqE (ir.entryNodesE c ar cd k en.lo (en.hi - en.lo)) (ir.famSliceE c ar cd k 0 0))
-
-/-- **Entry `k` checks.** -/
-def entryCertB (k : ℕ) : Bool := okB (ir.entryCertE c ar cd k)
-
 /-! ## The header -/
-
-/-- **Every asserted DAG node is some entry's** (merge-join against the sorted nonzero `Z`s). -/
-def assertsCoveredB : Bool :=
-  subsetSorted cd.dag.asserts
-    (sortNat ((cd.entries.flatMap fun en => en.asserts.map (·.Z)).filter fun z => !(z == 0)))
-
-/-- **Every asserted DAG node is an assertion `0 · 1 · U`**: one term, constant `0`, first operand
-the constant one (node `0`). -/
-def assertTermsB : Bool :=
-  cd.dag.asserts.all fun z =>
-    match nodeTerms cd.w cd.dag z with
-    | [t] => Nat.beq t.k 0 && Nat.beq t.a 0
-    | _ => false
 
 /-- **The header of circuit `c`'s certificate**, as its twin: the circuit's index; the constant of
 index `1` is the code `1`; the constant one is a public input; the scheduling
@@ -98,7 +78,7 @@ width and layers (the bridge); the layered circuit's inputs the circuit's input 
 table's check against the printed program; the environment's codes; one block per entry of the
 circuit, the last ending at the table's size; every asserted DAG node an entry's; every challenge's
 value in the challenge's field; no DAG output node; every asserted node an assertion `0 · 1 · U`. -/
-def headerE : Except CertFailure Unit :=
+@[expose] def headerE : Except CertFailure Unit :=
   let env := cd.env ar
   let n := cd.entries.length
   seqE (guardE (Nat.beq cd.c c && Nat.beq cd.sched.width cd.w &&
@@ -118,11 +98,11 @@ def headerE : Except CertFailure Unit :=
                     (guardE (assertTermsB cd) ⟨0, 9, .header⟩)))))))))
 
 /-- **The header checks.** -/
-def headerB : Bool := okB (ir.headerE c ar cd)
+@[expose] def headerB : Bool := okB (ir.headerE c ar cd)
 
 /-- **Part `i` of the header** (`headerE`'s guards in order, `i < 10`): a large circuit's header is
 checked part by part, the scheduling certificate (part `1`) layer by layer. -/
-def headerPartB (i : ℕ) : Bool :=
+@[expose] def headerPartB (i : ℕ) : Bool :=
   let env := cd.env ar
   let n := cd.entries.length
   match i with
@@ -154,9 +134,75 @@ theorem headerB_of_parts (h0 : ir.headerPartB c ar cd 0 = true)
   simp only [headerB, headerE, okB_seqE, okB_guardE, h0, h1, h2, h3, h4, h5, h6, h7, h8, h9,
     Bool.and_self]
 
+/-! ## The asserted nodes' header parts
+
+Parts `6` and `9` of the header read every asserted DAG node:
+
+* **part 9** (`assertTermsB`): in slices of the asserted nodes (`sliceL`), each its own
+  declaration, each slice's nodes assertions `0 · 1 · U` (`assertTermsSliceB`), joined by
+  `assertTermsSliceB_cons`;
+* **part 6** (`assertsCoveredB`): checked without its sort, by the merge-join against the entries'
+  asserted nodes in entry order (`assertsCoveredMergeB`, one linear walk), with the asserted nodes
+  increasing above `0` (`chainLast`, the scheduling certificate's slices) (`headerPartB_six`). -/
+
+theorem assertTermsB_eq : assertTermsB cd = cd.dag.asserts.all (assertTermOk cd) := rfl
+
+/-- **A slice of part 9, then the rest after it.** -/
+theorem assertTermsSliceB_cons {s n : ℕ} (hn : 0 < n) (h : assertTermsSliceB cd s n = true)
+    (h' : assertTermsSliceB cd (s + n) 0 = true) : assertTermsSliceB cd s 0 = true := by
+  rw [assertTermsSliceB_eq, ← sliceL_append hn, List.all_append]
+  exact Bool.and_eq_true_iff.mpr ⟨h, h'⟩
+
+/-- **Part 9 from its slices.** -/
+theorem headerPartB_nine (h : assertTermsSliceB cd 0 0 = true) :
+    ir.headerPartB c ar cd 9 = true := by
+  rw [headerPartB, assertTermsB_eq]
+  simpa [assertTermsSliceB_eq] using h
+
+/-- **Part 6 from the merge without the sort**: the asserted nodes increase above `0`
+(`chainLast`, from the scheduling certificate's slices), and each is an entry's nonzero asserted
+node (`assertsCoveredMergeB`, `mem_of_subsetSorted`), so the merge-join against their sort accepts
+(`subsetSorted_of_mem`). -/
+theorem headerPartB_six {hi : ℕ} (hc : chainLast 0 (sliceL cd.dag.asserts 0 0) hi = true)
+    (h : assertsCoveredMergeB cd = true) : ir.headerPartB c ar cd 6 = true := by
+  rw [sliceL_zero] at hc
+  rw [headerPartB, assertsCoveredB_eq]
+  exact subsetSorted_of_mem (pairwise_of_chainLast hc).2 (pairwise_sortNat _)
+    fun m hm => (perm_sortNat _).mem_iff.mpr (mem_of_subsetSorted h m hm)
+
 /-- **The circuit's certificate checks**: its header and every entry. -/
-def circuitCertB : Bool :=
+@[expose] def circuitCertB : Bool :=
   ir.headerB c ar cd && (List.range cd.entries.length).all (ir.entryCertB c ar cd)
+
+/-- The numeric header checks exactly the canonical header at the semantic circuit width. -/
+theorem headerE_eq_compiled : ir.headerE c ar cd = ir.headerEC c ar cd := by
+  rw [headerEC_eq]
+  simp only [headerE, circuitWidth_eq]
+
+/-- The compiled and kernel header verdicts coincide. -/
+theorem headerB_eq_compiled : ir.headerB c ar cd = ir.headerBC c ar cd := by
+  rw [headerBC_eq]
+  exact congrArg okB (headerE_eq_compiled ir c ar cd)
+
+/-- The compiled and kernel circuit checks coincide for arbitrary certificate data. -/
+theorem circuitCertB_eq_compiled : ir.circuitCertB c ar cd = ir.circuitCertBC c ar cd := by
+  rw [circuitCertBC_eq]
+  simp only [circuitCertB, headerB_eq_compiled]
+
+/-- Native header execution uses the numeric width without changing kernel reduction. -/
+@[csimp] theorem headerE_csimp : @headerE = @headerEC := by
+  funext ir c ar cd
+  exact headerE_eq_compiled ir c ar cd
+
+/-- Native header verdicts use the compiled counterpart. -/
+@[csimp] theorem headerB_csimp : @headerB = @headerBC := by
+  funext ir c ar cd
+  exact headerB_eq_compiled ir c ar cd
+
+/-- Native circuit execution uses the same checked header and entry conditions. -/
+@[csimp] theorem circuitCertB_csimp : @circuitCertB = @circuitCertBC := by
+  funext ir c ar cd
+  exact circuitCertB_eq_compiled ir c ar cd
 
 /-- **The circuit check from its parts**, one declaration per entry. -/
 theorem circuitCertB_of_entries (h0 : ir.headerB c ar cd = true)
@@ -185,7 +231,7 @@ theorem entryCertB_of_parts {k lo n : ℕ} (hlo : (cd.entries.getD k default).lo
     (h0 : okB (ir.entryHeadE c ar cd k) = true) (h1 : okB (ir.entryNodesE c ar cd k lo n) = true)
     (h2 : okB (ir.famSliceE c ar cd k 0 0) = true) :
     ir.entryCertB c ar cd k = true := by
-  unfold entryCertB entryCertE
+  rw [entryCertB_eq, entryCertE_eq]
   simp only [okB_seqE, h0, h2, Bool.true_and, Bool.and_true]
   rw [hn, hlo]
   exact h1

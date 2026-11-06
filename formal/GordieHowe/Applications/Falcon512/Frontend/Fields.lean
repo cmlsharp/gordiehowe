@@ -106,7 +106,7 @@ theorem RealizedProgram.falconOps_opaqueBit {ir : RealizedProgram}
 /-- **The interpretation of a Falcon program**: field `0` (domain `H`) is `FH`, field `1` (domain
 `A`, and any other identifier) `FA`; the opaque functions `falconOps`. -/
 abbrev RealizedProgram.falconInterpOf (FH FA : FieldInterp) : Interp :=
-  ⟨fun n => match n with | 0 => FH | _ => FA, falconOps⟩
+  Interp.twoField FH FA falconOps
 
 /-- **The field models of a Falcon interpretation**: field `0` has `FH`'s model, every other field
 `FA`'s. -/
@@ -166,12 +166,33 @@ class Falcon512.HField (FH : RealizedProgram.FieldInterp) where
   /-- The selection's generator lies in `GF(2^16)`. -/
   g_mem : sel.g ∈ fixedField FH.K 2 16
 
+namespace Falcon512
+
+/-- Transport all hash-field data together along an equality of interpretations. -/
+def HField.transport {F F' : RealizedProgram.FieldInterp} (H : HField F)
+    (h : F = F') : HField F' := h ▸ H
+
+/-- Transport preserves the hash field's bit length. -/
+theorem HField.transport_bits {F F' : RealizedProgram.FieldInterp} (H : HField F)
+    (h : F = F') : (H.transport h).bits = H.bits := by
+  cases h
+  rfl
+
+/-- Transport preserves decoding as a power of the selection generator. -/
+theorem HField.transport_decode_pow {F F' : RealizedProgram.FieldInterp} (H : HField F)
+    (h : F = F') {n j : Nat} (hg : F.decode n = H.sel.g ^ j) :
+    F'.decode n = (H.transport h).sel.g ^ j := by
+  cases h
+  exact hg
+
+end Falcon512
+
 instance Falcon512.HField.instCharP (FH : RealizedProgram.FieldInterp) [h : HField FH] : CharP FH.K 2 :=
   h.charTwo
 
 /-- `GF(2^128)` has domain `H`'s field data (`gf2_128SelectionField`). -/
 instance : Falcon512.HField RealizedProgram.gf128 where
-  sel := gf2_128SelectionField
+  sel := gf2_128SelectionField.ofLE (by decide)
   e_eq _ := rfl
   e_li := linearIndependent_gf2_128SubfieldBasis
   bits := 128
@@ -200,7 +221,7 @@ instance : Falcon512.HField RealizedProgram.gf128 where
 
 /-- `GF(2^256)` has domain `H`'s field data (`gf2_256SelectionField`). -/
 instance : Falcon512.HField RealizedProgram.gf256 where
-  sel := gf2_256SelectionField
+  sel := gf2_256SelectionField.ofLE (by decide)
   e_eq _ := rfl
   e_li := linearIndependent_gf2_256SubfieldBasis
   bits := 256

@@ -161,7 +161,7 @@ class PlanRounds(unittest.TestCase):
                 self.assertEqual(pr.domain_ip(a, plan["domains"][name], i),
                                  pr.domain_ip(b, plan["domains"][name], j), (rel, name))
             n += 1
-        # The checked-in set (run_bench.sh --export-lean): 8 constructions at both
+        # The checked-in set (scripts/regenerate_exports.py): 8 constructions at both
         # parameter sets, the ECDSA mDL, the post-quantum mDL at both, RSA in two fields and the
         # 12 SHA-256 and SHA3-256 systems (SHA3-256 1 KiB at both parameter sets).
         self.assertEqual(n, 33)

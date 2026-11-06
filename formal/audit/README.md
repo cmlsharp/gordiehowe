@@ -9,10 +9,29 @@ every declaration that newly enters, or leaves, the surface a reader must trust.
 
 The roots are the theorems tagged `@[headline]` (`GordieHowe/Headline.lean`): the paper's main theorems
 and their instance corollaries, which are stated at concrete settings, so none is vacuous. The
-closure follows `GordieHowe`, `LatticeCrypto`, `HashSig` and the vendored
-`ArkLib` and `CompPoly`; every other constant reached (Lean core, Batteries, Mathlib) is listed
+closure follows `GordieHowe`, `GordieHoweNative`, `GordieHoweCheck`, `LatticeCrypto`, `HashSig`
+and the vendored `ArkLib` and `CompPoly`; every other constant reached (Lean core, Batteries, Mathlib) is listed
 by name after the line `# ==== external constants`, as `# external<TAB><module root><TAB><name>`,
 and not followed.
+
+For `ProgramData`, `Hints` and `CircuitData`, the closure follows the fields read by the
+proof system, verifier, honest strategy, figures or interpretation. Values used only as checked
+witnesses are omitted: expression annotations, realization derivations, shape claims, and the GKR
+DAG, schedule, node table and entries. The precise field list is `readFields` in
+`scripts/StatementClosure.lean`; layered circuits, widths, constants, generators, completion
+derivations, honest nodes, tableaus and records remain in the closure. A moved check declaration
+is still project code because the closure includes `GordieHoweCheck`.
+
+A declaration's fingerprint covers its own type and body only, so a headline's meaning can change
+through a dependency (a configuration constant's field read through a named constant) while every
+headline's own fingerprint stays put. The closure therefore also gives each headline a transitive
+fingerprint, on a line `# transitive<TAB><headline><TAB><fingerprint>` after the `# headline`
+lines: a hash over the fingerprints of every own declaration the headline reaches (itself
+included, compiler auxiliaries such as matchers too), in name order. A change in the type or body
+of any declaration in a headline's closure, or a declaration entering or leaving it, changes the
+headline's transitive fingerprint. `git diff audit/statement_closure.txt` shows them among the
+headline lines, and `check.sh` counts the headlines whose transitive fingerprint changed since the
+previous closure, listing those whose own fingerprint did not.
 
 `audited.txt` records audited declarations, one per line:
 `<declaration>\t<commit>\t<audit reference>\t<fingerprint>`, where the fingerprint is the hash of
@@ -20,9 +39,9 @@ the declaration's type (and body, for a definition) that `statement_closure.txt`
 third column at the audit. An entry certifies that the declaration's statement
 (and body, for a definition) was reviewed adversarially at that commit for faithfulness to its
 source, vacuity, hypotheses that weaken the headlines, and off-by-one errors. A declaration whose
-statement or body changes after its audit must be re-audited: `check.sh` reports closure
-declarations not yet recorded, recorded declarations whose fingerprint changed (listing them), and
-entries recorded without a fingerprint (non-blocking).
+statement or body changes after its audit must be re-audited: `check.sh` fails on a recorded
+declaration whose fingerprint changed, listing every such row (`scripts/audit_ledger.py`). It reports
+closure declarations not yet recorded and entries recorded without a fingerprint without failing.
 
 A declaration renaming does not void its audits. `renames.tsv` lists the renames of the last
 renaming pass (`<old>\t<new>`, under a header line naming the pass); the closure's optional fourth
@@ -30,3 +49,24 @@ column is the fingerprint with every renamed constant replaced by its old
 name. `scripts/carry_audits.py <tag> --write` moves each ledger entry whose normalized fingerprint
 equals the recorded one to the new name, appends `; renamed <tag>` to its reference and records
 the new fingerprint; the other entries keep their old fingerprint and are reported for re-audit.
+
+## Computability baseline
+
+`computability-f1.tsv.gz` records 331,435 definitions and 3,852 opaque declarations in the public certificate environment at
+develop `f1aca4f113b14b0549a5fe7e5e7dd4fe5373a0b6`, including dependencies and compiler auxiliaries.
+The accompanying JSON records the toolchain, source-inventory hash and compressed/uncompressed
+hashes. Each row contains the exact declaration name, whether either the declaration or its
+compiler unsafe-recursion companion is marked noncomputable, and whether compiled IR exists.
+
+The gate runs `scripts/ComputabilityInventory.lean` on its actual library environment, then
+`scripts/computability_regression.py` compares every surviving definition and opaque declaration with this fixed
+baseline. A newly set noncomputable flag or loss of previously present IR fails the gate,
+regardless of the definition's result type or CostLint classification. New and removed names
+are recorded separately in `.lake/check/computability-regression.json`; removal is not a
+computability regression in a surviving definition and remains part of closure review. A check
+without certificates compares only definitions present in its smaller imported environment.
+
+This baseline check is separate from CostLint's strict extractor/simulator coverage and its
+capped report for newly covered prover/verifier/runtime definitions. It does not add any
+`knownNoncomputable` exception. Do not replace the baseline with a later snapshot to hide a
+regression; a toolchain change requires an explicit baseline migration and review.

@@ -25,7 +25,7 @@ node is read as its *peeled atom* (`peel`: a node with the one term `k · 1 · z
 repeated). The tree side (`TE.poly`) reads each wire `c0 + c1 · n` as `c0 + c1 · [peel n]` and each
 product of wires or constants over peeled atoms.
 
-**The lazy difference check** (A14, `diffLoop`). For a cut, `P = c0 + c1 · [peel W.n]` and `Q` the
+**The lazy difference check** (`diffLoop`). For a cut, `P = c0 + c1 · [peel W.n]` and `Q` the
 tree side's polynomial. While `P − Q` has a linear atom, its largest one is unfolded on each side
 that carries it (an atom with equal coefficients on both sides cancels): the node is replaced by its
 terms, `k · a · b` becoming `k · [peel a] · [peel b]` (`unfold`). An input atom refuses. With no
@@ -53,7 +53,7 @@ rejection, never a wrong fact.
 **Fast arithmetic.** Codes below `p` of an arithmetic that is arithmetic modulo `p` there (its prime
 subfield, `GKR.Fold.CodeArith.PrimeOn`) take `(a + b) % p` and `a * b % p` directly
 (`GKR.Fold.CodeArith.withPrime`), which equals the arithmetic (`GKR.Fold.CodeArith.withPrime_eq`).
-One rule for every field (A15): the characteristic `p` for a prime field or an extension tower of
+One rule for every field: the characteristic `p` for a prime field or an extension tower of
 any depth over `ZMod p` (`GKR.Fold.ExtCode.overPrime_primeOn`, `GKR.Fold.ExtCode.primeOn`), `0` (no
 fast path) for a binary field.
 

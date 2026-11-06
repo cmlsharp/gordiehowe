@@ -5,8 +5,6 @@ module
 
 public import GordieHowe.ProofSystem.Program.Transcript.Format
 public import GordieHowe.ProofSystem.Program.Transcript.CircuitCodecs
-public import GordieHowe.Applications.Falcon512.PoP.Configuration
-public import GordieHowe.Applications.MLDSA44.PoP.Configuration
 
 @[expose] public section
 

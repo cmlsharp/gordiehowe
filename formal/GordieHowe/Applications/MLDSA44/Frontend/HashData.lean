@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Language.Library.Keccak
+public import GordieHowe.Applications.Keccak.Frontend.Rounds
 public import GordieHowe.Applications.MLDSA44.Frontend.Basic
 
 @[expose] public section
@@ -95,17 +95,143 @@ class MldsaHHashData (program : RealizedProgram) : Prop extends MldsaHBase progr
   /-- The round constants' states: the bits of `rc t` in lane `(0, 0)`. -/
   const_rc : ∀ t : Fin 24, program.constEntries (rcLeaf t) = List.ofFn (fun j : Fin 1600 => if (j : ℕ) < 64 ∧ (rc t).testBit j then 1 else 0) ∧ program.isConstant (rcLeaf t) = true ∧ program.valueField (rcLeaf t) = 1
 
+/-- A row of the checked round family has its round's shapes, with the given state source. -/
+private theorem round_of_row {r : List ℕ} {src : RealizedProgram.StateSrc}
+    (hb : ∃ t, (program.predicate (r.getD 0 0)).body = .equal 1 (.add (.leaf (r.getD 1 0))
+      (.add (.add (.ref (r.getD 2 0)) (.mul (.sub (.leaf (r.getD 3 0)) (.reindex idx23
+      (.ref (r.getD 2 0)))) (.reindex idx24 (.ref (r.getD 2 0))))) (.leaf (r.getD 4 0))))
+      (.leaf (r.getD 5 0)) t)
+    (hl : program.expr (r.getD 2 0) = .reindex idx22 (.add (.add src.expr (.reindex idx19
+      (.reindex idx18 (.ref (r.getD 7 0))))) (.reindex idx19 (.reindex idx21 (.reindex idx20
+      (.ref (r.getD 7 0)))))))
+    (hc : program.expr (r.getD 7 0) = .apply (.sum 5) (.reindex idx17 src.expr)) :
+    (program.predicate (r.getD 0 0)).body.roundShape? =
+        some ⟨1, r.getD 1 0, r.getD 2 0, r.getD 4 0, r.getD 3 0, r.getD 5 0, idx23, idx24⟩ ∧
+      (program.expr (r.getD 2 0)).linShape? =
+        some ⟨src, r.getD 7 0, idx18, idx19, idx20, idx21, idx22⟩ ∧
+      (program.expr (r.getD 7 0)).colShape? = some (src, idx17) := by
+  obtain ⟨t, ht⟩ := hb
+  exact ⟨RealizedProgram.PredBody.roundShape?_of_eq ht, RealizedProgram.Expr.linShape?_of_eq hl,
+    RealizedProgram.Expr.colShape?_of_eq hc⟩
+
+/-- Each round has a row of the checked round family: the first permutation round reads the
+permutation's input expression, every later round the previous round's output. -/
+private theorem round_rows : ∀ p : Fin 10, ∀ t : Fin 24,
+    ((t : ℕ) = 0 → ∃ r ∈ Generated.MLDSA44.Native.ROMParams.Shapes.family_keccak_rounds_0_rows, r.getD 0 0 = roundPred p t ∧
+      r.getD 1 0 = outVal p t ∧ r.getD 2 0 = linRef p t ∧ r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = linRef p 0 - 2 ∧
+      r.getD 7 0 = linRef p t - 1) ∧
+    ((t : ℕ) ≠ 0 → ∃ r ∈ Generated.MLDSA44.Native.ROMParams.Shapes.family_keccak_rounds_1_rows, r.getD 0 0 = roundPred p t ∧
+      r.getD 1 0 = outVal p t ∧ r.getD 2 0 = linRef p t ∧ r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = outVal p (t - 1) ∧
+      r.getD 7 0 = linRef p t - 1) := by
+  decide +kernel
+
+/-- The rounds' checked shapes and table facts. -/
+private theorem rounds_checked (p : Fin 10) (t : Fin 24) :
+    ((program.predicate (roundPred p t)).body.roundShape? =
+        some ⟨1, outVal p t, linRef p t, rcLeaf t, 10, 12, idx23, idx24⟩ ∧
+      (program.expr (linRef p t)).linShape? =
+        some ⟨roundSrc p t.castSucc, linRef p t - 1, idx18, idx19, idx20, idx21, idx22⟩ ∧
+      (program.expr (linRef p t - 1)).colShape? = some (roundSrc p t.castSucc, idx17)) ∧
+    (roundPred p t < program.predicates.length ∧
+      program.inSource (program.predicate (roundPred p t)) = true ∧
+      linRef p t < program.exprs.length ∧ linRef p t - 1 < program.exprs.length ∧
+      1600 ≤ (program.value (outVal p t)).size) := by
+  by_cases h0 : (t : ℕ) = 0
+  · obtain ⟨r, hr, e0, e1, e2, e3, e4, e5, e6, e7⟩ := (round_rows p t).1 h0
+    have hsrc : roundSrc p t.castSucc = .ref (r.getD 6 0) := by
+      rw [e6]; simp only [roundSrc, Fin.coe_castSucc, h0, ↓reduceIte]
+    have hrow := round_of_row (src := .ref (r.getD 6 0)) (Generated.MLDSA44.Native.ROMParams.ShapeFacts.family_keccak_rounds_0_predicate0_body hr)
+      (Generated.MLDSA44.Native.ROMParams.ShapeFacts.family_keccak_rounds_0_expr0_eq hr) (Generated.MLDSA44.Native.ROMParams.ShapeFacts.family_keccak_rounds_0_expr1_eq hr)
+    have hrole := Generated.MLDSA44.Native.ROMParams.ShapeFacts.family_keccak_rounds_0_predicate0_role hr
+    have hhead := Generated.MLDSA44.Native.ROMParams.ShapeFacts.family_keccak_rounds_0_value0_header hr
+    rw [e0, e1, e2, e3, e4, e5, e7] at hrow
+    rw [e0] at hrole
+    rw [e1] at hhead
+    rw [hsrc]
+    refine ⟨hrow, hrole.1, program.inSource_of_source hrole.2, ?_, ?_, ?_⟩
+    · rw [← e2]; exact RealizedProgram.expr_lt_of_ne_default (by
+        rw [Generated.MLDSA44.Native.ROMParams.ShapeFacts.family_keccak_rounds_0_expr0_eq hr]; intro h; cases h)
+    · rw [← e7]; exact RealizedProgram.expr_lt_of_ne_default (by
+        rw [Generated.MLDSA44.Native.ROMParams.ShapeFacts.family_keccak_rounds_0_expr1_eq hr]; intro h; cases h)
+    · exact (RealizedProgram.valueShape_size hhead.2).ge
+  · obtain ⟨r, hr, e0, e1, e2, e3, e4, e5, e6, e7⟩ := (round_rows p t).2 h0
+    have hsrc : roundSrc p t.castSucc = .leaf (r.getD 6 0) := by
+      rw [e6]; simp only [roundSrc, Fin.coe_castSucc, h0, if_false]
+    have hrow := round_of_row (src := .leaf (r.getD 6 0)) (Generated.MLDSA44.Native.ROMParams.ShapeFacts.family_keccak_rounds_1_predicate0_body hr)
+      (Generated.MLDSA44.Native.ROMParams.ShapeFacts.family_keccak_rounds_1_expr0_eq hr) (Generated.MLDSA44.Native.ROMParams.ShapeFacts.family_keccak_rounds_1_expr1_eq hr)
+    have hrole := Generated.MLDSA44.Native.ROMParams.ShapeFacts.family_keccak_rounds_1_predicate0_role hr
+    have hhead := Generated.MLDSA44.Native.ROMParams.ShapeFacts.family_keccak_rounds_1_value0_header hr
+    rw [e0, e1, e2, e3, e4, e5, e7] at hrow
+    rw [e0] at hrole
+    rw [e1] at hhead
+    rw [hsrc]
+    refine ⟨hrow, hrole.1, program.inSource_of_source hrole.2, ?_, ?_, ?_⟩
+    · rw [← e2]; exact RealizedProgram.expr_lt_of_ne_default (by
+        rw [Generated.MLDSA44.Native.ROMParams.ShapeFacts.family_keccak_rounds_1_expr0_eq hr]; intro h; cases h)
+    · rw [← e7]; exact RealizedProgram.expr_lt_of_ne_default (by
+        rw [Generated.MLDSA44.Native.ROMParams.ShapeFacts.family_keccak_rounds_1_expr1_eq hr]; intro h; cases h)
+    · exact (RealizedProgram.valueShape_size hhead.2).ge
+
 set_option maxRecDepth 8192 in
 /-- The native program at the ROM parameters has these facts. -/
 instance : MldsaHHashData program where
-  roundShapes := by
-    decide +kernel
-  round_facts := by
-    decide +kernel
+  roundShapes := fun p t => (rounds_checked p t).1
+  round_facts := fun p t => (rounds_checked p t).2
   const_states := by
-    decide +kernel
+    shape_decide
   const_rc := by
-    decide +kernel
+    intro t
+    fin_cases t
+    · show program.constEntries 11 = _ ∧ program.isConstant 11 = true ∧ program.valueField 11 = 1
+      shape_decide
+    · show program.constEntries 13 = _ ∧ program.isConstant 13 = true ∧ program.valueField 13 = 1
+      shape_decide
+    · show program.constEntries 14 = _ ∧ program.isConstant 14 = true ∧ program.valueField 14 = 1
+      shape_decide
+    · show program.constEntries 15 = _ ∧ program.isConstant 15 = true ∧ program.valueField 15 = 1
+      shape_decide
+    · show program.constEntries 16 = _ ∧ program.isConstant 16 = true ∧ program.valueField 16 = 1
+      shape_decide
+    · show program.constEntries 17 = _ ∧ program.isConstant 17 = true ∧ program.valueField 17 = 1
+      shape_decide
+    · show program.constEntries 18 = _ ∧ program.isConstant 18 = true ∧ program.valueField 18 = 1
+      shape_decide
+    · show program.constEntries 19 = _ ∧ program.isConstant 19 = true ∧ program.valueField 19 = 1
+      shape_decide
+    · show program.constEntries 20 = _ ∧ program.isConstant 20 = true ∧ program.valueField 20 = 1
+      shape_decide
+    · show program.constEntries 21 = _ ∧ program.isConstant 21 = true ∧ program.valueField 21 = 1
+      shape_decide
+    · show program.constEntries 22 = _ ∧ program.isConstant 22 = true ∧ program.valueField 22 = 1
+      shape_decide
+    · show program.constEntries 23 = _ ∧ program.isConstant 23 = true ∧ program.valueField 23 = 1
+      shape_decide
+    · show program.constEntries 24 = _ ∧ program.isConstant 24 = true ∧ program.valueField 24 = 1
+      shape_decide
+    · show program.constEntries 25 = _ ∧ program.isConstant 25 = true ∧ program.valueField 25 = 1
+      shape_decide
+    · show program.constEntries 26 = _ ∧ program.isConstant 26 = true ∧ program.valueField 26 = 1
+      shape_decide
+    · show program.constEntries 27 = _ ∧ program.isConstant 27 = true ∧ program.valueField 27 = 1
+      shape_decide
+    · show program.constEntries 28 = _ ∧ program.isConstant 28 = true ∧ program.valueField 28 = 1
+      shape_decide
+    · show program.constEntries 29 = _ ∧ program.isConstant 29 = true ∧ program.valueField 29 = 1
+      shape_decide
+    · show program.constEntries 30 = _ ∧ program.isConstant 30 = true ∧ program.valueField 30 = 1
+      shape_decide
+    · show program.constEntries 31 = _ ∧ program.isConstant 31 = true ∧ program.valueField 31 = 1
+      shape_decide
+    · show program.constEntries 18 = _ ∧ program.isConstant 18 = true ∧ program.valueField 18 = 1
+      shape_decide
+    · show program.constEntries 32 = _ ∧ program.isConstant 32 = true ∧ program.valueField 32 = 1
+      shape_decide
+    · show program.constEntries 17 = _ ∧ program.isConstant 17 = true ∧ program.valueField 17 = 1
+      shape_decide
+    · show program.constEntries 33 = _ ∧ program.isConstant 33 = true ∧ program.valueField 33 = 1
+      shape_decide
 
 /-- **The program facts of domain `H`'s core Keccak trace** (`MldsaHBaseCore` and): the shapes and
 table facts of the `192` rounds of permutations `1 … 9` (`c̃'`'s absorbs and the SampleInBall

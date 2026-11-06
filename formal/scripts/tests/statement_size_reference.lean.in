@@ -1,0 +1,81 @@
+-- Copyright 2026 Chad Sharp and Paul Grubbs
+-- SPDX-License-Identifier: Apache-2.0
+
+-- Combined with the actual StatementSize definitions by test_statement_size.py.
+-- These reference traversals retain the original implementation, with a variable
+-- limit so truncation and threshold boundaries can be tested cheaply.
+
+namespace Reference
+open StatementSize
+partial def treeSize (limit : Nat) (e : Expr) : StateM Nat Unit := do
+  if (← get) ≥ limit then return
+  modify (· + 1)
+  match e with
+  | .app f a => treeSize limit f; treeSize limit a
+  | .lam _ t b _ => treeSize limit t; treeSize limit b
+  | .forallE _ t b _ => treeSize limit t; treeSize limit b
+  | .letE _ t v b _ => treeSize limit t; treeSize limit v; treeSize limit b
+  | .mdata _ b => treeSize limit b
+  | .proj _ _ b => treeSize limit b
+  | _ => pure ()
+
+partial def bigHeads (limit : Nat) (e : Expr) : StateM (Nat × Std.HashMap Name (Nat × Nat)) Nat := do
+  if (← get).1 ≥ limit then return 0
+  modify fun (n, m) => (n + 1, m)
+  let sub ← match e with
+    | .app .. => do
+      let f := e.getAppFn
+      let mut t := 1
+      unless f.isConst do t := t + (← bigHeads limit f)
+      for a in e.getAppArgs do t := t + (← bigHeads limit a)
+      if let .const c _ := f then
+        if t ≥ bigSub then
+          modify fun (n, m) => (n, m.insert c (let (k, z) := m.getD c (0, 0); (k + 1, z + t)))
+      pure t
+    | .lam _ t b _ => return 1 + (← bigHeads limit t) + (← bigHeads limit b)
+    | .forallE _ t b _ => return 1 + (← bigHeads limit t) + (← bigHeads limit b)
+    | .letE _ t v b _ => return 1 + (← bigHeads limit t) + (← bigHeads limit v) + (← bigHeads limit b)
+    | .mdata _ b => return 1 + (← bigHeads limit b)
+    | .proj _ _ b => return 1 + (← bigHeads limit b)
+    | _ => pure 1
+  return sub
+
+end Reference
+open StatementSize in
+run_cmd do
+  let mut fixtures : Array Expr := #[mkConst `Nat, mkBVar 0, mkSort .zero,
+    mkFVar ⟨`x⟩, mkMVar ⟨`m⟩, mkNatLit 37]
+  for i in [0:60] do
+    let a := fixtures[i % fixtures.size]!
+    let b := fixtures[(i * 7 + 1) % fixtures.size]!
+    let e := match i % 7 with
+      | 0 => mkApp a b
+      | 1 => .lam `x a b .default
+      | 2 => .forallE `x a b .implicit
+      | 3 => .letE `x a b a false
+      | 4 => .mdata {} a
+      | 5 => .proj `Prod 0 a
+      | _ => mkApp2 (mkConst `f) a b
+    fixtures := fixtures.push e
+  let mut shared := mkConst `leaf
+  for _ in [0:26] do shared := mkApp2 (mkConst `branch) shared shared
+  fixtures := fixtures.push shared
+  let mut cache : ExprStructMap Nat := {}
+  let mut checks := 0
+  for e in fixtures do
+    let (actual, next) := (treeSizeMemo e).run cache
+    cache := next
+    let expected := ((Reference.treeSize cap e).run 0).2
+    unless actual == expected do throwError "tree mismatch: {actual} != {expected}"
+    for budget in #[0, 1, 2, 3, 10, 99, 10000, 20000, 50000] do
+      let expected := (Reference.bigHeads budget e).run (0, {})
+      let actual := ((headSummary e budget).run {}).1
+      unless actual.size == expected.1 && actual.size == expected.2.1 do
+        throwError "size mismatch at budget {budget}"
+      unless actual.heads.toList.all (fun (n, v) => expected.2.2.get? n == some v) &&
+          expected.2.2.toList.all (fun (n, v) => actual.heads.get? n == some v) do
+        throwError "heads mismatch at budget {budget}"
+      unless actual.heads.toArray == expected.2.2.toArray do
+        throwError "head iteration order mismatch at budget {budget}"
+      checks := checks + 1
+  IO.println s!"PASS: {fixtures.size} tree cases; {checks} head-prefix cases"

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # Copyright 2026 Chad Sharp and Paul Grubbs
 # SPDX-License-Identifier: Apache-2.0
-"""Export paper configurations and hash plans, masking only provenance headers."""
+"""Export paper configurations and hash plans for scripts/extraction/gate.py, masking only
+provenance headers. scripts/regenerate_exports.py regenerates the checked-in files."""
 
 import argparse
 import hashlib
@@ -19,9 +20,9 @@ EXPORTS = ("falcon_emulated_bench", "falcon_native_bench", "mldsa_native_bench",
            "sha256_compare_bench", "pq_mdoc_bench", "composite_bench")
 RSA_CONFIGS = ("auto:9:64:batched:2:narrow,auto:9:2048:batched:2:narrow,"
                "auto:11:64:batched:3:narrow-fp128,auto:11:2048:batched:3:narrow-fp128")
-# The modules every export writes per configuration: the data modules and
-# the proof modules (lib/gordiehowe/compiler/plan_proofs.h).
-MODULES = ("Plan.lean", "Program.lean", "Valid.lean", "Realize.lean", "Honest/Nodes.lean")
+# The modules every export writes per configuration
+# (lib/gordiehowe/compiler/plan_proofs.h).
+MODULES = ("Plan.lean", "Program.lean", "Honest/Nodes.lean")
 
 
 # The license header every exported module opens with (plan_export.h's

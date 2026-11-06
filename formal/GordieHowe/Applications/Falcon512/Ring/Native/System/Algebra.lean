@@ -6,7 +6,7 @@ module
 public import GordieHowe.Applications.Falcon512.Native.System.Algebra
 public import GordieHowe.Applications.Falcon512.Ring.Native.System.Params
 public import GordieHowe.Applications.Falcon512.Ring.Native.System.Scheme
-public import GordieHowe.Applications.Falcon512.NegacyclicSpectrum
+public import GordieHowe.Foundations.Algebra.NegacyclicSpectrum
 public import GordieHowe.Applications.Falcon512.Spec.KeyNTT
 
 @[expose] public section

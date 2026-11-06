@@ -6,7 +6,7 @@
 // export).
 //
 // The compiler names the objects it creates, so the Lean checkers read
-// pointers instead of searching (`_agent/gkr-step3-spec.md`): gadget records
+// pointers instead of searching: gadget records
 // (kind, predicates, values, parameters, parts), value back-pointers
 // (origins, messages, bound records, member checks' values), placement
 // pointers (routes, hosting circuit entries, challenge values), each value's
@@ -16,7 +16,8 @@
 // pointer; nothing here is trusted.
 //
 // build_structure() fills the records, one function per group of records
-// (fill_*); print_structure() prints them as the module's Lean definition.
+// (fill_*). The export writes them to Structure.ghc, which Structure.lean
+// loads; print_structure() prints them as a Lean definition, for tests.
 
 #ifndef PRIVACY_PROOFS_ZK_LIB_GORDIEHOWE_COMPILER_STRUCTURE_RECORDS_H_
 #define PRIVACY_PROOFS_ZK_LIB_GORDIEHOWE_COMPILER_STRUCTURE_RECORDS_H_
@@ -24,54 +25,16 @@
 #include <algorithm>
 #include <cstddef>
 #include <map>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "gordiehowe/compiler/plan_program.h"
+#include "gordiehowe/compiler/structure_data.h"
 
 namespace proofs::gordiehowe::compiler {
-
-// The structure records (Lean `Structure`), field for field. Every list of
-// pairs is sorted by its key with no repeated key (print_structure checks).
-struct StructureRecords {
-  // A gadget record (Lean `Gadget`): KIND a `GadgetKind` constructor name
-  // (`selectRow`, …), PARTS each a `GadgetPart` term as Lean text.
-  struct Gadget {
-    std::string kind;
-    std::vector<size_t> preds, values, params;
-    std::vector<std::string> parts;
-  };
-  std::vector<Gadget> gadgets;
-  // Per created value, its gadget and slot (Lean `Origin`).
-  std::vector<std::pair<size_t, std::pair<size_t, size_t>>> origins;
-  // Per late value, its message value.
-  std::vector<std::pair<size_t, size_t>> messages;
-  // Per bound value, the lookup whose record it is.
-  std::vector<std::pair<size_t, size_t>> bound_recs;
-  // Per member check (its index), the value it reads.
-  std::vector<std::pair<size_t, size_t>> member_values;
-  // Per predicate, its route (a Lean `Route` term).
-  std::vector<std::pair<size_t, std::string>> routes;
-  // Per table group (table, group), the hosting circuit entry.
-  std::vector<std::pair<std::pair<size_t, size_t>, std::pair<size_t, size_t>>>
-      logup_hosts;
-  // Per cross-field equal with a circuit-hosted H half, the hosting entry.
-  std::vector<std::pair<size_t, std::pair<size_t, size_t>>> mac_hosts;
-  // Per challenge, the value holding it.
-  std::vector<std::pair<size_t, size_t>> chal_values;
-  // Per value with an interval, its source (a Lean `IvlSource` term).
-  std::vector<std::pair<size_t, std::string>> ivl_sources;
-  // Per γ-packed table, its packedTable gadget record.
-  std::vector<std::pair<size_t, size_t>> table_gadgets;
-  // Per MAC record of the plan (its index in the plan's macs), the indices
-  // in the plan's requests of the range requests its lowering reads, in its
-  // form's order; per modular equality of the plan (its index in the plan's
-  // modEqualities), its quotient digits' requests (Lean
-  // `Export.ModEquality.digitRequests`).
-  std::vector<std::pair<size_t, std::vector<size_t>>> mac_requests, mod_requests;
-};
 
 namespace structure_records_internal {
 
@@ -145,7 +108,7 @@ void fill_mac_sites(const BasicCompiledSystem<S> &cs, const ProgramData &,
     std::vector<std::string> tails = {macs[first].tail};
     if (!hosted) tails.push_back(macs[first + 1].tail);
     StructureRecords::Gadget g;
-    g.kind = "macSite";
+    g.kind = StructureRecords::GadgetKind::macSite;
     g.preds = {pid};
     for (const std::string &t : tails) {
       size_t found = SIZE_MAX;
@@ -215,7 +178,7 @@ inline void mod_fields(const ir::Program &P, const std::vector<PlanRecords::ModR
           "structure records: the field row '" + r.name + "' (" + std::to_string(rid) +
           ") of the field-form mod_q '" + q.name + "' (" + std::to_string(m) +
           ") is not its realization");
-    out.gadgets.push_back({"modField", {m, rid}, {}, {}, {}});
+    out.gadgets.push_back({StructureRecords::GadgetKind::modField, {m, rid}, {}, {}, {}});
   }
 }
 
@@ -672,26 +635,32 @@ class Mirror {
     return o;
   }
 
-  // The source of value V's interval, "" when leafIvl gives none at every
+  // The source of value V's interval, none when leafIvl gives none at every
   // source; DECLARED: V's entry of the declared statement bounds.
-  std::string source(uint64_t v, size_t declared) {
+  std::optional<StructureRecords::IvlSource> source(uint64_t v, size_t declared) {
+    using Src = StructureRecords::IvlSource;
+    using K = Src::Kind;
     const ir::Value &x = value(v);
     const uint64_t f = value_field(v);
-    if (!(f < chars_.size() && I(2) < char_of(f))) return "";
+    if (!(f < chars_.size() && I(2) < char_of(f))) return std::nullopt;
     switch (x.kind) {
       case ir::Value::kConstant:
-        return ".const";
+        return Src{K::constant, {}};
       case ir::Value::kOpaque:
-        if (declared != SIZE_MAX) return ".declared " + std::to_string(declared);
-        if (!x.args.empty()) return x.type == ir::VType::kBit ? ".opaqueBit" : "";
+        if (declared != SIZE_MAX) return Src{K::declared, {declared}};
+        if (!x.args.empty()) {
+          if (x.type == ir::VType::kBit) return Src{K::opaqueBit, {}};
+          return std::nullopt;
+        }
         {
           const Rest r = rest(v);
-          if (r.range != SIZE_MAX) return ".range " + std::to_string(r.range);
+          if (r.range != SIZE_MAX) return Src{K::range, {size_t(r.range)}};
         }
-        return ".prime";
+        return Src{K::prime, {}};
       case ir::Value::kBound: {
         const auto b = bound_ivl(v);
-        return b.first == SIZE_MAX ? "" : ".shiftRange " + std::to_string(b.first);
+        if (b.first == SIZE_MAX) return std::nullopt;
+        return Src{K::shiftRange, {size_t(b.first)}};
       }
       default:
         break;
@@ -702,7 +671,7 @@ class Mirror {
       const auto b = bound_ivl(mc->first);
       if (!b.second) continue;
       if (b.second->lo.is_zero() && b.second->hi <= mc->second)
-        return ".quadRoot " + std::to_string(q) + " " + std::to_string(b.first);
+        return Src{K::quadRoot, {size_t(q), size_t(b.first)}};
     }
     if (x.type != ir::VType::kBit) {
       std::vector<RootSet> ws;
@@ -713,14 +682,12 @@ class Mirror {
           qs.push_back(q);
         }
       if (!ws.empty() && root_set_hull(v, ws)) {
-        std::string s = ".rootSet [";
-        for (size_t i = 0; i < qs.size(); ++i) s += (i ? ", " : "") + std::to_string(qs[i]);
-        return s + "]";
+        return Src{K::rootSet, std::vector<size_t>(qs.begin(), qs.end())};
       }
     }
     const Rest r = rest(v);
-    if (r.range != SIZE_MAX) return ".range " + std::to_string(r.range);
-    return ".prime";
+    if (r.range != SIZE_MAX) return Src{K::range, {size_t(r.range)}};
+    return Src{K::prime, {}};
   }
 
   // The export check (decision D1): the honest checks read an opaque
@@ -757,10 +724,10 @@ class Mirror {
       // Lean declaredRanges: the statement values with a bound.
       size_t k = SIZE_MAX;
       if (ir::is_stmt_value(P_, size_t(v)) && !x.bound.empty()) k = declared++;
-      const std::string s = source(v, k);
-      if (s.empty()) continue;
-      if (s.rfind(".declared", 0) == 0) check_declared(v);
-      out.ivl_sources.push_back({size_t(v), s});
+      const auto s = source(v, k);
+      if (!s) continue;
+      if (s->kind == StructureRecords::IvlSource::Kind::declared) check_declared(v);
+      out.ivl_sources.push_back({size_t(v), *s});
     }
   }
 
@@ -1014,6 +981,8 @@ inline bool reads_bits(const ir::Program &P, const std::vector<ir::Id> &roots) {
 // that needs one (Lean `PredBody.needsRoute`: a field equal, a mod_0, a
 // product-form mod_q), by its printed target.
 inline void routes(const ir::Program &P, StructureRecords &out) {
+  using Route = StructureRecords::Route;
+  using K = Route::Kind;
   // The first circuit entry placing or type-checking each predicate.
   std::map<size_t, std::pair<size_t, size_t>> entry_of;
   for (size_t c = 0; c < P.circuits.size(); ++c)
@@ -1023,7 +992,7 @@ inline void routes(const ir::Program &P, StructureRecords &out) {
         entry_of.emplace(e.id, std::make_pair(c, k));
     }
   auto gkr = [&](size_t c, size_t k) {
-    return ".gkr " + std::to_string(c) + " " + std::to_string(k);
+    return Route{K::gkr, {c, k}};
   };
   for (size_t pid = 0; pid < P.predicates.size(); ++pid) {
     const ir::Predicate &q = P.predicates[pid];
@@ -1036,7 +1005,7 @@ inline void routes(const ir::Program &P, StructureRecords &out) {
     const ir::Target *t = q.body == ir::Predicate::kEqual ? &q.target
                           : q.mod.target                  ? &*q.mod.target
                                                           : nullptr;
-    std::string r;
+    Route r;
     if (t == nullptr) {
       auto it = entry_of.find(pid);
       if (it == entry_of.end())
@@ -1046,10 +1015,10 @@ inline void routes(const ir::Program &P, StructureRecords &out) {
     } else {
       switch (t->kind) {
         case ir::Target::kAffine:
-          r = reads_bits(P, {q.lhs, q.rhs}) ? ".affine true" : ".affine false";
+          r = {K::affine, {}, reads_bits(P, {q.lhs, q.rhs})};
           break;
         case ir::Target::kQuadratic:
-          r = ".quadratic";
+          r = {K::quadratic, {}};
           break;
         case ir::Target::kBatch: {
           if (t->id >= P.batches.size())
@@ -1062,8 +1031,7 @@ inline void routes(const ir::Program &P, StructureRecords &out) {
             plan_export_internal::export_fail("structure records: " + who +
                                               " is no part of its target batch " +
                                               std::to_string(t->id));
-          r = ".batch " + std::to_string(t->id) + " " +
-              std::to_string(size_t(it - parts.begin()));
+          r = {K::batch, {size_t(t->id), size_t(it - parts.begin())}};
           break;
         }
         case ir::Target::kGkr: {
@@ -1093,11 +1061,13 @@ inline void routes(const ir::Program &P, StructureRecords &out) {
           std::vector<size_t> js;
           mismatches(P, q.lhs, rq.lhs, js, who);
           mismatches(P, q.rhs, rq.rhs, js, who);
-          r = ".realized " + std::to_string(t->id) + " [";
-          for (size_t i = 0; i < js.size(); ++i) r += (i ? ", " : "") + std::to_string(js[i]);
-          r += "]";
+          js.insert(js.begin(), size_t(t->id));
+          r = {K::realized, std::move(js)};
           break;
         }
+        default:
+          plan_export_internal::export_fail("structure records: " + who +
+                                            " has an unknown target kind");
       }
     }
     out.routes.push_back({pid, r});
@@ -1367,110 +1337,6 @@ StructureRecords build_structure(const BasicCompiledSystem<S> &cs, const Program
   fill_member_values(cs, p, r);
   fill_requests(cs, p, r);
   return r;
-}
-
-namespace structure_records_internal {
-
-inline std::string nat_list(const std::vector<size_t> &v) {
-  std::string o = "[";
-  for (size_t i = 0; i < v.size(); ++i) o += (i ? ", " : "") + std::to_string(v[i]);
-  return o + "]";
-}
-
-inline std::string pair(size_t a, size_t b) {
-  return "(" + std::to_string(a) + ", " + std::to_string(b) + ")";
-}
-
-// The keyed list L as Lean text, its keys strictly increasing (KEY gives a
-// key's order, TEXT an entry's text); FIELD names the list in the error.
-template <class T, class Key, class Text>
-std::string keyed(const std::vector<T> &l, Key key, Text text, const std::string &field) {
-  for (size_t i = 1; i < l.size(); ++i)
-    if (!(key(l[i - 1]) < key(l[i])))
-      throw std::runtime_error("structure records: " + field +
-                               " is not sorted by its key, or repeats one");
-  std::string o = "[";
-  for (size_t i = 0; i < l.size(); ++i) o += (i ? ",\n    " : "") + text(l[i]);
-  return o + "]";
-}
-
-}  // namespace structure_records_internal
-
-// The structure records R as the body of the Lean definition
-// `records : RealizedProgram.Structure`.
-inline std::string print_structure(const StructureRecords &r) {
-  namespace in = structure_records_internal;
-  auto first = [](const auto &e) { return e.first; };
-  auto nat_pair = [](const std::pair<size_t, size_t> &e) { return in::pair(e.first, e.second); };
-  std::string gadgets = "[";
-  for (size_t i = 0; i < r.gadgets.size(); ++i) {
-    const auto &g = r.gadgets[i];
-    std::string parts = "[";
-    for (size_t j = 0; j < g.parts.size(); ++j) parts += (j ? ", " : "") + g.parts[j];
-    parts += "]";
-    // Each record on a line of its own (a record runs to about 100 columns).
-    gadgets += (i ? ",\n    " : "\n    ") + std::string("{ kind := .") + g.kind +
-               ", preds := " + in::nat_list(g.preds) + ", values := " +
-               in::nat_list(g.values) + ", params := " + in::nat_list(g.params) +
-               ", parts := " + parts + " }";
-  }
-  gadgets += "]";
-  std::string o;
-  o += "  gadgets := " + gadgets + "\n";
-  o += "  origins := " +
-       in::keyed(r.origins, first,
-                 [](const auto &e) {
-                   return "(" + std::to_string(e.first) + ", ⟨" +
-                          std::to_string(e.second.first) + ", " +
-                          std::to_string(e.second.second) + "⟩)";
-                 },
-                 "origins") +
-       "\n";
-  o += "  messages := " + in::keyed(r.messages, first, nat_pair, "messages") + "\n";
-  o += "  boundRecs := " + in::keyed(r.bound_recs, first, nat_pair, "boundRecs") + "\n";
-  o += "  memberValues := " +
-       in::keyed(r.member_values, first, nat_pair, "memberValues") + "\n";
-  o += "  routes := " +
-       in::keyed(r.routes, first,
-                 [](const auto &e) {
-                   return "(" + std::to_string(e.first) + ", " + e.second + ")";
-                 },
-                 "routes") +
-       "\n";
-  o += "  logupHosts := " +
-       in::keyed(r.logup_hosts, first,
-                 [](const auto &e) {
-                   return "(" + in::pair(e.first.first, e.first.second) + ", " +
-                          in::pair(e.second.first, e.second.second) + ")";
-                 },
-                 "logupHosts") +
-       "\n";
-  o += "  macHosts := " +
-       in::keyed(r.mac_hosts, first,
-                 [](const auto &e) {
-                   return "(" + std::to_string(e.first) + ", " +
-                          in::pair(e.second.first, e.second.second) + ")";
-                 },
-                 "macHosts") +
-       "\n";
-  o += "  chalValues := " + in::keyed(r.chal_values, first, nat_pair, "chalValues") + "\n";
-  o += "  ivlSources := " +
-       in::keyed(r.ivl_sources, first,
-                 [](const auto &e) {
-                   return "(" + std::to_string(e.first) + ", " + e.second + ")";
-                 },
-                 "ivlSources") +
-       "\n";
-  o += "  tableGadgets := " +
-       in::keyed(r.table_gadgets, first, nat_pair, "tableGadgets") + "\n";
-  auto nat_lists = [](const auto &e) {
-    return "(" + std::to_string(e.first) + ", " + in::nat_list(e.second) + ")";
-  };
-  o += "  macRequests := " + in::keyed(r.mac_requests, first, nat_lists, "macRequests") +
-       "\n";
-  o += "  modRequests := " + in::keyed(r.mod_requests, first, nat_lists, "modRequests") +
-       "\n";
-  return o;
 }
 
 }  // namespace proofs::gordiehowe::compiler

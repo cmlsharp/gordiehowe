@@ -3,19 +3,20 @@
 
 module
 
-public import GordieHowe.Applications.Keccak.HashCircuit.Skip
+public import GordieHowe.ProofSystem.Zerocheck.AltRounds
 public import GordieHowe.ProofSystem.Ligero.Routing
 public import GordieHowe.Foundations.Algebra.AffineForm
 public import GordieHowe.Applications.Falcon512.Circuits.HashStep
-public import GordieHowe.Applications.Keccak.HashCircuit.SkipCompleteness
+public import GordieHowe.ProofSystem.Ligero.Tableau
+public import GordieHowe.ProofSystem.GKR.SourceCircuit
 public import GordieHowe.Foundations.Algebra.QuadraticSystem
-public import GordieHowe.Applications.Keccak.HashCircuit.Packed.Basic
+public import GordieHowe.ProofSystem.Ligero.SubfieldQuery
 public import GordieHowe.ProofSystem.Ligero.Preparation
 public import GordieHowe.ProofSystem.GKR.TranscriptRouting
 public import GordieHowe.ProofSystem.GKR.SourceCircuit
 public import GordieHowe.Foundations.ReedSolomon.AffineProximity
 public import GordieHowe.Model.IOP.Append
-public import GordieHowe.Applications.Rows.Basic
+public import GordieHowe.Foundations.Algebra.Rows
 public import GordieHowe.Foundations.Probability.ChallengeEvent
 public import GordieHowe.ProofSystem.GKR.HonestTranscript
 public import GordieHowe.ProofSystem.Ligero.ShapeEncoding
@@ -57,7 +58,7 @@ public import GordieHowe.Foundations.Fields.GF2_256Conv
 public import GordieHowe.Applications.Falcon512.Fields.FalconNative20Relative
 public import GordieHowe.Foundations.Fields.GoldilocksQuarticRelative
 public import GordieHowe.Applications.Rows.NativeLinear
-public import GordieHowe.Applications.Rows.MAC
+public import GordieHowe.Language.Realizations.MACRows
 public import GordieHowe.Foundations.Algebra.DFT
 public import GordieHowe.Foundations.Algebra.DFTExtra
 public import GordieHowe.Foundations.Algebra.ConvMatrix
@@ -98,7 +99,7 @@ public import GordieHowe.Applications.MLDSA44.PoP.Relation
 public import GordieHowe.Applications.MLDSA44.PoP.Compose
 public import GordieHowe.Applications.MLDSA44.Fields.GF2_128
 public import GordieHowe.Applications.Configuration.AlgebraSetups
-public import GordieHowe.Applications.Spec.SelectionField
+public import GordieHowe.Language.Library.Select.Field
 public import GordieHowe.Foundations.Algebra.RelativePacking
 public import GordieHowe.ProofSystem.Zerocheck.UnivariateSkip
 public import GordieHowe.Language.Realizations.MemoryShuffle

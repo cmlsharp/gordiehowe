@@ -3,15 +3,17 @@
 
 module
 
+public import GordieHowe.Generated.MLDSA44.Native.QROMParams.ShapeFacts
+
 public import GordieHowe.Applications.MLDSA44.Ring.Carrier.Frontend.Basic
-public import GordieHowe.Applications.MLDSA44.Ring.Carrier.Frontend.SelSound
+public import GordieHowe.Generated.MLDSA44.Ring.Carrier.QROMParams.ShapeFacts
 public import GordieHowe.Applications.MLDSA44.Ring.Carrier.QROMParams.Frontend.Embed
 public import GordieHowe.Applications.MLDSA44.Ring.Carrier.QROMParams.Frontend.RelationFacts
 public import GordieHowe.Applications.MLDSA44.Ring.Carrier.QROMParams.Frontend.Table
 public import GordieHowe.Applications.MLDSA44.Native.QROMParams.Frontend.Basic
 public import GordieHowe.Applications.MLDSA44.Native.QROMParams.Frontend.Shape
 public import GordieHowe.Applications.MLDSA44.Emulated.QROMParams.Frontend.Basic
-public import GordieHowe.Generated.MLDSA44.Ring.Carrier.QROMParams.Interp
+public import GordieHowe.Generated.MLDSA44.Ring.Carrier.QROMParams.Certified
 
 @[expose] public section
 
@@ -30,21 +32,22 @@ native program's `MldsaHHash`, `MldsaHSample`, `MldsaHConsts`) at the emulated p
 domain `A` gadgets the carrier holds. With the native frontend's hash view
 (`MLDSA44.hashViewCore`) and SampleInBall's view (`MLDSA44.sampleView`, at the
 native program at the QROM parameters), `source_rbr_knowledge_soundness` is the frontend's
-round-by-round knowledge soundness of `Π_P₀` (`Ring.Carrier.rbr_of_views`), and `selSound` the
-selections' error bound the proof system takes (`Ring.Carrier.selSound_carrier`).
+round-by-round knowledge soundness of `Π_P₀` (`Ring.Carrier.rbr_of_views`).
 -/
 
 namespace GordieHowe.MLDSA44.Ring.Carrier.QROMParams
 
 open Generated.MLDSA44.Ring.Carrier.QROMParams.Program RealizedProgram IOP
+open Generated.MLDSA44.Ring.Carrier.QROMParams.ShapeFacts
 
 /-- The carrier at the QROM parameters has the statement values' facts. -/
 instance : Native.MldsaRingStmt program where
   keys := 53
   mu := 54
-  keysKind := rfl
-  muKind := rfl
-  fields := by decide +kernel
+  keysKind := Generated.MLDSA44.Ring.Carrier.QROMParams.ShapeFacts.value_ring_2ekeys_kind
+  muKind := Generated.MLDSA44.Ring.Carrier.QROMParams.ShapeFacts.value_ring_2emu_kind
+  fields := ⟨RealizedProgram.valueShape_field Generated.MLDSA44.Ring.Carrier.QROMParams.ShapeFacts.value_ring_2ekeys_header.2,
+    RealizedProgram.valueShape_field Generated.MLDSA44.Ring.Carrier.QROMParams.ShapeFacts.value_ring_2emu_header.2⟩
   keys_ne := by decide
 
 /-- The native program the carrier holds has SampleInBall's facts. -/
@@ -97,50 +100,97 @@ theorem idx161_even : ∀ k < 256, idx161.entry (6656 + 2 * k) = 6656 + k := by 
 theorem idx161_odd : ∀ k < 256, idx161.entry (6656 + (2 * k + 1)) = 6912 + k := by decide +kernel
 theorem idx104_eq : idx104 = [(0, 1, 7168)] := by decide +kernel
 
-/-- The challenge facts of the carrier and the native program. -/
-theorem chalLens : program.challenges.length = 5 ∧ nat.challenges.length = 4 := by decide +kernel
-
 set_option maxRecDepth 8192 in
 /-- The carrier at the QROM parameters has the frontend's facts. -/
 instance : MldsaCarrierFront program where
   shape := ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
-  domains := by decide +kernel
-  lt505 := by decide +kernel
-  expr0 := rfl
-  expr1 := rfl
-  muSize := by decide +kernel
-  muBool := by decide +kernel
-  cross := ⟨by decide +kernel, by decide +kernel, _, rfl⟩
-  exprH := ⟨idx161, rfl, idx161_lo, idx161_even, idx161_odd⟩
-  expr504 := rfl
-  exprA := ⟨idx104, rfl, fun t ht => by rw [idx104_eq, IndexMap.entry_step_one ht, Nat.zero_add]⟩
-  lens := by decide +kernel
-  bitViews := by decide +kernel
-  chal0 := by decide +kernel
+  domains := ⟨Generated.MLDSA44.Ring.Carrier.QROMParams.conditions.fieldTable.domainField_eq 0 (by decide),
+    Generated.MLDSA44.Ring.Carrier.QROMParams.conditions.fieldTable.domainField_eq 1 (by decide)⟩
+  lt505 := expr_lt_of_ne_default (by
+    rw [expr_mac_2eequal_2eshape_2eleft_eq]
+    decide)
+  expr0 := Generated.MLDSA44.Ring.Carrier.QROMParams.ShapeFacts.expr_member_2eselect_2eshape_2eleft_2efirst_2esecond_2esecond_2efirst_2efirst_2efirst_2eshared_2efirst_2esecond_2efirst_2efirst_eq
+  expr1 := Generated.MLDSA44.Ring.Carrier.QROMParams.ShapeFacts.expr_member_2eselect_2eshape_2eleft_2efirst_2esecond_2esecond_2efirst_2efirst_2efirst_eq
+  muSize := RealizedProgram.valueShape_size Generated.MLDSA44.Ring.Carrier.QROMParams.ShapeFacts.value_member_2emu_header.2
+  muBool := by
+    obtain ⟨t, ht⟩ := predicate_member_2emu_2eboolean_body
+    refine ⟨?_, predicate_member_2emu_2eboolean_role.1,
+      program.inSource_of_type predicate_member_2emu_2eboolean_role.2
+        (valueShape_role value_member_2emu_header.2)⟩
+    rw [ht]
+    rfl
+  cross := ⟨Generated.MLDSA44.Ring.Carrier.QROMParams.ShapeFacts.predicate_mac_2eequal_role.1,
+    program.inSource_of_source Generated.MLDSA44.Ring.Carrier.QROMParams.ShapeFacts.predicate_mac_2eequal_role.2,
+    Generated.MLDSA44.Ring.Carrier.QROMParams.ShapeFacts.predicate_mac_2eequal_body⟩
+  exprH := ⟨idx161, Generated.MLDSA44.Ring.Carrier.QROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_eq, idx161_lo, idx161_even, idx161_odd⟩
+  expr504 := Generated.MLDSA44.Ring.Carrier.QROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_eq
+  exprA := ⟨idx104, Generated.MLDSA44.Ring.Carrier.QROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eright_eq, fun t ht => by rw [idx104_eq, IndexMap.entry_step_one ht, Nat.zero_add]⟩
+  lens := by
+    have hk : program.expr 505 ≠ default := by
+      rw [expr_mac_2eequal_2eshape_2eleft_eq]
+      decide
+    refine ⟨?_, valueShape_size value_mu_header.2, valueShape_size value_w1_header.2, ?_, ?_,
+      valueShape_size value_hint_2ew1_header.2⟩
+    · rw [exprLen_ref Generated.MLDSA44.Ring.Carrier.QROMParams.conditions.wellFormed.refsOrdered
+          (expr_lt_of_ne_default hk), expr_mac_2eequal_2eshape_2eleft_eq, exprLen_reindex, idx161_eq]
+      decide
+    · have hk' : program.expr 503 ≠ default := by
+        rw [expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2efirst_eq]
+        decide
+      rw [exprLen_ref Generated.MLDSA44.Ring.Carrier.QROMParams.conditions.wellFormed.refsOrdered
+          (expr_lt_of_ne_default hk'), expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2efirst_eq,
+        exprLen_add, exprLen_leaf]
+      exact valueShape_size value_h2c_2esample_2emem_2ec_5fenc_header.2
+    · have hk' : program.expr 502 ≠ default := by
+        rw [expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_2eshared_eq]
+        decide
+      have hk'' : program.expr 504 ≠ default := by
+        rw [expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_eq]
+        decide
+      change program.exprLen (.ref 504) = 256
+      rw [exprLen_ref Generated.MLDSA44.Ring.Carrier.QROMParams.conditions.wellFormed.refsOrdered (expr_lt_of_ne_default hk''), expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_eq,
+        exprLen_ref Generated.MLDSA44.Ring.Carrier.QROMParams.conditions.wellFormed.refsOrdered (expr_lt_of_ne_default hk'), expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_2eshared_eq]
+      rw [exprLen_add, exprLen_mul, exprLen_leaf]
+      exact valueShape_size value_h2c_2esample_2emem_2ec_5fenc_header.2
+  bitViews := ⟨by simp only [isBitView, value_mu_kind], by simp only [isBitView, value_w1_kind]⟩
+  chal0 := by
+    rw [program.isSourceChal_iff_mem_sourceChallengeIds Generated.MLDSA44.Ring.Carrier.QROMParams.conditions.wellFormed,
+      source_challenges]
+    decide +kernel
   chalIff j := by
-    rcases lt_or_ge j 4 with hj | hj
-    · interval_cases j <;> decide +kernel
-    · refine iff_of_false (fun h => ?_) (fun h => ?_)
-      · have h1 : j + 1 < program.challenges.length := h.1
-        rw [chalLens.1] at h1
-        omega
-      · have h1 : j < nat.challenges.length := h.1
-        rw [chalLens.2] at h1
-        omega
+    change program.IsSourceChal (j + 1) ↔ nat.IsSourceChal j
+    rw [program.isSourceChal_iff_mem_sourceChallengeIds Generated.MLDSA44.Ring.Carrier.QROMParams.conditions.wellFormed,
+      nat.isSourceChal_iff_mem_sourceChallengeIds Generated.MLDSA44.Native.QROMParams.conditions.wellFormed,
+      source_challenges, Generated.MLDSA44.Native.QROMParams.ShapeFacts.source_challenges]
+    simp only [List.mem_cons, List.not_mem_nil, or_false]
+    omega
   chalShape j hj := by
-    have hj4 : j < 4 := lt_of_lt_of_eq hj.1 chalLens.2
-    revert hj
-    interval_cases j <;> decide +kernel
-  projReads := by decide +kernel
+    change nat.IsSourceChal j at hj
+    rw [nat.isSourceChal_iff_mem_sourceChallengeIds Generated.MLDSA44.Native.QROMParams.conditions.wellFormed,
+      Generated.MLDSA44.Native.QROMParams.ShapeFacts.source_challenges] at hj
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hj
+    rcases hj with rfl | rfl
+    · exact ⟨challenge_h2c_2esample_2eselect_2edelta_full.2.2.2,
+        challenge_h2c_2esample_2eselect_2edelta_full.2.1,
+        Generated.MLDSA44.Native.QROMParams.ShapeFacts.challenge_h2c_2esample_2eselect_2edelta_full.2.2.2,
+        Generated.MLDSA44.Native.QROMParams.ShapeFacts.challenge_h2c_2esample_2eselect_2edelta_full.2.1,
+        challenge_h2c_2esample_2eselect_2edelta_full.2.2.1.trans
+          Generated.MLDSA44.Native.QROMParams.ShapeFacts.challenge_h2c_2esample_2eselect_2edelta_full.2.2.1.symm⟩
+    · exact ⟨challenge_h2c_2esample_2emem_2edelta_full.2.2.2,
+        challenge_h2c_2esample_2emem_2edelta_full.2.1,
+        Generated.MLDSA44.Native.QROMParams.ShapeFacts.challenge_h2c_2esample_2emem_2edelta_full.2.2.2,
+        Generated.MLDSA44.Native.QROMParams.ShapeFacts.challenge_h2c_2esample_2emem_2edelta_full.2.1,
+        challenge_h2c_2esample_2emem_2edelta_full.2.2.1.trans
+          Generated.MLDSA44.Native.QROMParams.ShapeFacts.challenge_h2c_2esample_2emem_2edelta_full.2.2.1.symm⟩
+  projReads := by
+    intro v hv
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
+    rcases hv with rfl | rfl | rfl
+    · exact program.nodeReads_of_bits_priv value_h2c_2ec_5ftilde_2eout_kind value_h2c_2ec_5ftilde_2er167_2evalue_2ewords_kind _
+    · exact program.nodeReads_of_bound value_z_kind _
+    · exact program.nodeReads_of_priv value_h_kind _
 
 open Generated.MLDSA44.Emulated.QROMParams (interp)
-
-/-- **The selections' error** (`RealizedProgram.SelSound`): the one selection the product form's
-kernel reads is `carrierSel`, whose event implies the public table's event
-(`Ring.Carrier.selSound_carrier`; the selections, the reads and the selection error decided). -/
-theorem selSound : program.SelSound interp :=
-  selSound_carrier (by decide +kernel) Generated.MLDSA44.Ring.Carrier.QROMParams.Valid.wellFormed rfl
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
 
 /-- **Round-by-round knowledge soundness of `Π_P₀` for `MLDSA44.Ring.Carrier.QROMParams`**
 (`Ring.Carrier.rbr_of_views` at the native frontend's `sampleView` and `hashViewCore`): the

@@ -8,7 +8,7 @@ public import GordieHowe.ProofSystem.Zerocheck.SkipBatch
 public import GordieHowe.ProofSystem.Zerocheck.BitSumcheckIP
 public import GordieHowe.Headline
 public import GordieHowe.ProofSystem.FieldProof.MaskedReduction
-public import GordieHowe.Applications.Keccak.HashCircuit.Skip
+public import GordieHowe.ProofSystem.Zerocheck.AltRounds
 public import GordieHowe.ProofSystem.Ligero.Routing
 public import GordieHowe.Foundations.Algebra.AffineForm
 

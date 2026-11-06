@@ -60,4 +60,17 @@ def memberBase? (P A : ℕ) (m : Member) : Option Expr :=
 
 end
 
+section
+
+variable (ir : RealizedProgram)
+
+/-- **No table is packed at a value.** -/
+def NoGammaTables : Prop := ∀ t < ir.tables.length, ir.gammaPack? t = none
+
+instance : Decidable ir.NoGammaTables := by
+  unfold NoGammaTables
+  infer_instance
+
+end
+
 end GordieHowe.RealizedProgram

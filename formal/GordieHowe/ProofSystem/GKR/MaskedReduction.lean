@@ -8,7 +8,7 @@ public import GordieHowe.ProofSystem.GKR.OrdinaryCompleteness
 public import GordieHowe.ProofSystem.FieldProof.MaskedRowReduction
 public import GordieHowe.ProofSystem.GKR.SourceCircuit
 public import GordieHowe.ProofSystem.GKR.HonestTranscript
-public import GordieHowe.Applications.Keccak.HashCircuit.Packed.Basic
+public import GordieHowe.ProofSystem.Ligero.SubfieldQuery
 public import GordieHowe.Foundations.Probability.IdentDistrib
 public import GordieHowe.Foundations.Algebra.QuadraticSystem
 public import GordieHowe.Foundations.Algebra.AffineForm

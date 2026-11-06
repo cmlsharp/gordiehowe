@@ -222,4 +222,21 @@ def ivlSourceB (q : ℕ) : Bool :=
 
 end
 
+/-- **A value of a `kpriv` variable** (paper, `def:o-semantics`): committed, bound to its digits
+(a committed source value), or late. -/
+def Kind.isKpriv : Kind → Bool
+  | .priv => true
+  | .late => true
+  | .bound _ => true
+  | _ => false
+
+section
+
+variable (ir : RealizedProgram)
+
+/-- **`fieldRowsE` as a `Bool`.** -/
+def fieldRowsB (S : Structure) : Bool := Twin.okB (ir.fieldRowsE S)
+
+end
+
 end GordieHowe.RealizedProgram

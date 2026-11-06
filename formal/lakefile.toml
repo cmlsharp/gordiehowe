@@ -42,6 +42,16 @@ roots = []
 globs = ["GordieHoweNative.+"]
 precompileModules = true
 
+# Each program's check (GordieHoweCheck.<P>, written by lib/gordiehowe/compiler/plan_proofs.h):
+# the kernel's leaves, one per part of the check, and their composition (Check/Kernel), or one
+# compiled run (Check/Native). scripts/cert_mode.sh switches the source directory with the mode of
+# the check library. Each program's Core module imports its check.
+[[lean_lib]]
+name = "GordieHoweCheck"
+srcDir = "Check/Kernel"
+roots = []
+globs = ["GordieHoweCheck.+"]
+
 [[lean_lib]]
 name = "LatticeCrypto"
 srcDir = "Vendor"

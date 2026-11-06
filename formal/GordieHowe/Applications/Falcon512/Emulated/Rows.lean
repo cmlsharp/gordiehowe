@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Applications.Rows.Basic
+public import GordieHowe.Foundations.Algebra.Rows
 public import GordieHowe.Language.Realizations.Range
 public import GordieHowe.Language.Realizations.Bits
 public import GordieHowe.Foundations.Algebra.IntLift

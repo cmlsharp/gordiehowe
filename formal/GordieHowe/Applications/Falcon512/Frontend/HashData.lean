@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Language.Library.Keccak
+public import GordieHowe.Applications.Keccak.Frontend.Rounds
 public import GordieHowe.Applications.Falcon512.Frontend.Basic
 public import GordieHowe.Generated.Falcon512.Native.ROMParams.Program
 
@@ -47,6 +47,32 @@ def roundSrc (p : Fin 11) (t : Fin 25) : RealizedProgram.StateSrc :=
     (if (p : ℕ) = 0 then .ref 2 else if (p : ℕ) = 1 then .ref 56 else .leaf (outVal (p - 1) 23))
   else .leaf (outVal p (t - 1))
 
+/-- **The identifier round `t` of permutation `p` reads its state from.** -/
+def roundSrcId (p : Fin 11) (t : Fin 24) : ℕ :=
+  match roundSrc p t.castSucc with
+  | .leaf v => v
+  | .ref k => k
+
+/-- **Whether round `t` of permutation `p` reads its state from a shared expression.** -/
+def roundSrcIsRef (p : Fin 11) (t : Fin 24) : Bool :=
+  match roundSrc p t.castSucc with
+  | .leaf _ => false
+  | .ref _ => true
+
+/-- A round reading a shared expression reads the identified one. -/
+theorem roundSrc_of_isRef {p : Fin 11} {t : Fin 24} (h : roundSrcIsRef p t = true) :
+    roundSrc p t.castSucc = .ref (roundSrcId p t) := by
+  unfold roundSrcIsRef at h
+  unfold roundSrcId
+  split at h <;> simp_all
+
+/-- A round reading a value reads the identified one. -/
+theorem roundSrc_of_not_isRef {p : Fin 11} {t : Fin 24} (h : roundSrcIsRef p t = false) :
+    roundSrc p t.castSucc = .leaf (roundSrcId p t) := by
+  unfold roundSrcIsRef at h
+  unfold roundSrcId
+  split at h <;> simp_all
+
 /-- **The value of round `t`'s constant** (`h2p.shake`'s `ι` states). -/
 def rcLeaf (t : Fin 24) : ℕ :=
   [2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 9, 23, 8, 24].getD t 0
@@ -58,6 +84,13 @@ def viewVal (k : ℕ) : ℕ := if k = 0 then 97 else outVal k 23 + 1
 /-- **The zero slot of view `k`**: its size, where the stream's maps send the other blocks'
 samples. -/
 def zslot (k : ℕ) : ℕ := if k = 0 then 1600 else if k = 10 then 592 else 1088
+
+/-- **The row of round `t` of permutation `p`** in the rounds' shape families: the predicate, the
+output, the linear part, the all-ones state, the round constant, the zero state, the source, the
+column parities and the committed words. -/
+def roundRow (p : Fin 11) (t : Fin 24) : List ℕ :=
+  [roundPred p t, outVal p t, linRef p t, 1, rcLeaf t, 3, roundSrcId p t, linRef p t - 1,
+    outVal p t - 1]
 
 /-- **The index maps of the linear part** (`KeccakMaps`), by `decide` (about a minute). -/
 theorem keccakMaps : RealizedProgram.KeccakMaps idx6 idx7 idx8 idx9 idx10 idx11 idx12 idx13 := by

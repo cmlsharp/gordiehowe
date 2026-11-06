@@ -227,7 +227,7 @@ class MldsaEmulatedHonest (program : RealizedProgram) [MldsaEAlgebra program] (F
       (program.valueField v == 0 && (program.value v).node.map (·.name) == some "GF(p^1)" &&
         (aValues L).contains v)) = true
 
-variable {program : RealizedProgram} [MldsaEAlgebra program] {F0 FH : FieldInterp} [AField F0]
+variable {program : RealizedProgram} [MldsaEAlgebra program] {F0 FH : FieldInterp} [RealizedProgram.PrimeCastField F0 pGold]
   [HField FH] [MldsaHHonest nat] [MldsaHSample nat] [MldsaHSelHonest nat]
   [MldsaHConsts nat FH] [MLDSA44.MldsaHNativeData FH] [MldsaHNodes FH]
   [hE : MldsaEmulatedHonest program F0 FH]

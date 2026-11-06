@@ -15,7 +15,7 @@ public import GordieHowe.Applications.Configuration.Instantiate
 A configuration with forked domains (`GordieHowe.RealizedProgram.ProofSystem.IOP`) is compiled by spBCS
 at its spBCS setting (`GordieHowe.SPBCS.ProofSystemTranscript.setting`). Its headline statements
 are the statements of that setting (`GordieHowe/ProofSystem/Program/Transcript/MergeSetting.lean`,
-`GordieHowe/ProofSystem/Program/Transcript/MergeCompletenessAdaptive.lean`) at the configuration's IOP, transcript, salt
+`GordieHowe/SPBCS/CompleteAdaptive.lean`) at the configuration's IOP, transcript, salt
 length, relations, honest prover and figures, with the figures' side conditions discharged once.
 
 This module states them once, generically:
@@ -311,13 +311,13 @@ theorem verifierQueries_le (C : R.ProofSystem) (x : R.Stmt) (h) (π : (setting R
 
 /-- **The spBCS verifier in the QROM**, at its `kq` queries. -/
 @[config_template]
-noncomputable abbrev verifierQROM (C : R.ProofSystem) :=
+abbrev verifierQROM (C : R.ProofSystem) :=
   (R.T C).verifier R.kS (F.hb C) R.kq
 
 
 /-- **The spBCS verifier in the ROM**, at `kq` queries. -/
 @[config_template]
-noncomputable abbrev verifierROM (C : R.ProofSystem) :=
+abbrev verifierROM (C : R.ProofSystem) :=
   (R.T C).verifierROM R.kS (F.hb C) R.kq
 
 /-- **The overrun of the spBCS setting**: at most `rounds / 2^chernoff`

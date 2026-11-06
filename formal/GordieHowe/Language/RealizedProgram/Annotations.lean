@@ -17,10 +17,10 @@ its shared expressions under three node functions (`closAll` through `closureT`:
 the values read in the expression's field, the public coefficient values) and their lengths
 (`lenT`). The kernel builds each of these tables, one `NatTrie` of lists or lengths per module.
 
-The compiler emits, per shared expression, four **annotations** (`ExprAnn`): an upper bound on the
-values its closure reads (`maxId`, one past the largest), the set of fields of the values it reads
-in its own field (`fields`, a bit set), whether every coefficient value it reads is public (`pub`,
-a bit mask over the shared expressions), and its length (`len`). The first, second and fourth are
+The compiler emits **annotations** (`ExprAnn`) per shared expression. The checks read four: an
+upper bound on the values its closure reads (`maxId`, one past the largest), the set of fields of
+the values it reads in its own field (`fields`, a bit set), whether every coefficient value it
+reads is public (`pub`, a bit mask over the shared expressions), and its length (`len`). The first, second and fourth are
 packed tables of fixed-width entries (`packedGet`), read with `Nat` shifts. Each is checked by one
 local rule per shared expression, from the expression and the annotations of the entries it
 references (`exprAnnOkB`), in one pass; the rules give the closures' facts at every entry
@@ -800,136 +800,5 @@ theorem degreesAt_of_ann (hwf : ir.WellFormed) {a : ExprAnn} (h : ir.exprAnnOkB 
   exact hA
 
 end Degrees
-
-/-! ## The checks in ranges
-
-Each check of this file over the shared expressions, the values or the predicates splits into checks
-of ranges of positions `[i, j)` (`allIdxIn`): two consecutive ranges join with no re-check
-(`…In_append`), and the range `[0, n)`, `n` at least the list's length, gives the check (`…_of_In`,
-`…_of_parts`). A large program's check is then a module per range and a module joining them. A
-range's check visits its positions in one walk. -/
-
-section Ranges
-
-variable (ir : RealizedProgram)
-
-/-- **`exprAnnOkB` on the shared expressions `[i, j)`.** -/
-def exprAnnOkIn (a : ExprAnn) (i j : ℕ) : Bool := allIdxIn (ir.annAtB a) ir.exprs i j
-
-/-- **`closuresOkB` on the shared expressions `[i, j)`.** -/
-def closuresOkIn (c : PackedLists) (i j : ℕ) : Bool :=
-  allIdxIn (fun k e => e.refs.all (· < k) &&
-    sameMemB (c.get k) (e.directNodes ++ e.refs.flatMap c.get)) ir.exprs i j
-
-/-- **`degZeroOkB` on the shared expressions `[i, j)`.** -/
-def degZeroOkIn (a : ExprAnn) (i j : ℕ) : Bool :=
-  allIdxIn (fun k e => e.refs.all (· < k) && a.degAt k == e.deg ir.cellNdT a.degAt &&
-    a.zeroAt k == e.zeroAtZero a.zeroAt) ir.exprs i j
-
-/-- **`wellFormedA`'s checks of the values `[i, j)`**: the domain and kind, and the field. -/
-def wellFormedValuesIn (a : ExprAnn) (i j : ℕ) : Bool :=
-  allIdxIn (fun v x => (x.domain < ir.domains.length && ir.kindOkA a v x.kind) && ir.fieldOkV x)
-    ir.values i j
-
-/-- **`wellFormedA`'s check of the shared expressions `[i, j)`.** -/
-def wellFormedExprsIn (a : ExprAnn) (i j : ℕ) : Bool :=
-  allIdxIn (fun _ e => ir.shapeOkV a.lenAt e) ir.exprs i j
-
-/-- **`wellFormedA`'s check of the predicates `[i, j)`.** -/
-def wellFormedPredsIn (a : ExprAnn) (i j : ℕ) : Bool :=
-  allIdxIn (fun _ p => ir.predOkA a p.body) ir.predicates i j
-
-/-- **`wellFormedA`'s checks of the domains and the challenges.** -/
-def wellFormedRestB : Bool :=
-  decide (∀ d ∈ ir.domains, d.field < ir.fields.length) &&
-    decide (∀ c ∈ ir.challenges, ir.ChallengeOk c)
-
-/-- **`targetsA`'s check of the predicates `[i, j)`.** -/
-def targetsPredsIn (a : ExprAnn) (c : PackedLists) (S : Structure) (i j : ℕ) : Bool :=
-  allIdxIn (fun pid p => ir.bodyAdmittedA a c S pid p.body) ir.predicates i j
-
-/-- **`targetsA`'s checks of the circuits.** -/
-def targetsRestB : Bool :=
-  allIdx (fun cc C => C.predicates.all fun pid =>
-      decide (pid < ir.predicates.length ∧
-        PredBody.target (ir.predT.getD pid default).body = some (.gkr cc))) ir.circuits 0 &&
-    decide (∀ cc ∈ ir.circuits, CircuitLaidOut cc)
-
-variable {ir}
-
-theorem exprAnnOkIn_append {a : ExprAnn} {i j k : ℕ} (h₁ : ir.exprAnnOkIn a i j = true)
-    (h₂ : ir.exprAnnOkIn a j k = true) : ir.exprAnnOkIn a i k = true :=
-  allIdxIn_append h₁ h₂
-
-theorem exprAnnOkB_of_In {a : ExprAnn} {n : ℕ} (h : ir.exprAnnOkIn a 0 n = true)
-    (hn : ir.exprs.length ≤ n) : ir.exprAnnOkB a = true :=
-  allIdx_of_allIdxIn h hn
-
-theorem closuresOkIn_append {c : PackedLists} {i j k : ℕ} (h₁ : ir.closuresOkIn c i j = true)
-    (h₂ : ir.closuresOkIn c j k = true) : ir.closuresOkIn c i k = true :=
-  allIdxIn_append h₁ h₂
-
-theorem closuresOkB_of_In {c : PackedLists} {n : ℕ} (h : ir.closuresOkIn c 0 n = true)
-    (hn : ir.exprs.length ≤ n) : ir.closuresOkB c = true :=
-  allIdx_of_allIdxIn h hn
-
-theorem degZeroOkIn_append {a : ExprAnn} {i j k : ℕ} (h₁ : ir.degZeroOkIn a i j = true)
-    (h₂ : ir.degZeroOkIn a j k = true) : ir.degZeroOkIn a i k = true :=
-  allIdxIn_append h₁ h₂
-
-theorem degZeroOkB_of_In {a : ExprAnn} {n : ℕ} (h : ir.degZeroOkIn a 0 n = true)
-    (hn : ir.exprs.length ≤ n) : ir.degZeroOkB a = true :=
-  allIdx_of_allIdxIn h hn
-
-theorem wellFormedValuesIn_append {a : ExprAnn} {i j k : ℕ}
-    (h₁ : ir.wellFormedValuesIn a i j = true) (h₂ : ir.wellFormedValuesIn a j k = true) :
-    ir.wellFormedValuesIn a i k = true :=
-  allIdxIn_append h₁ h₂
-
-theorem wellFormedExprsIn_append {a : ExprAnn} {i j k : ℕ}
-    (h₁ : ir.wellFormedExprsIn a i j = true) (h₂ : ir.wellFormedExprsIn a j k = true) :
-    ir.wellFormedExprsIn a i k = true :=
-  allIdxIn_append h₁ h₂
-
-theorem wellFormedPredsIn_append {a : ExprAnn} {i j k : ℕ}
-    (h₁ : ir.wellFormedPredsIn a i j = true) (h₂ : ir.wellFormedPredsIn a j k = true) :
-    ir.wellFormedPredsIn a i k = true :=
-  allIdxIn_append h₁ h₂
-
-/-- **`wellFormedA` from its checks of the values, the shared expressions and the predicates**,
-each on `[0, n)` for `n` at least the list's length, and of the domains and the challenges. -/
-theorem wellFormedA_of_parts {a : ExprAnn} {nv ne np : ℕ} (h : ir.wellFormedRestB = true)
-    (hv : ir.wellFormedValuesIn a 0 nv = true) (hnv : ir.values.length ≤ nv)
-    (he : ir.wellFormedExprsIn a 0 ne = true) (hne : ir.exprs.length ≤ ne)
-    (hp : ir.wellFormedPredsIn a 0 np = true) (hnp : ir.predicates.length ≤ np) :
-    ir.wellFormedA a = true := by
-  have hv' := allIdx_of_allIdxIn hv hnv
-  rw [allIdx_and] at hv'
-  have he' := allIdx_of_allIdxIn he hne
-  have hp' : ir.predicates.all (fun p => ir.predOkA a p.body) = true := by
-    rw [all_eq_allIdx _ _ 0]
-    exact allIdx_of_allIdxIn hp hnp
-  simp only [wellFormedRestB, Bool.and_eq_true] at h hv'
-  unfold wellFormedA
-  rw [h.1, h.2, hv'.1, hv'.2, he', hp']
-  rfl
-
-theorem targetsPredsIn_append {a : ExprAnn} {c : PackedLists} {S : Structure} {i j k : ℕ}
-    (h₁ : ir.targetsPredsIn a c S i j = true) (h₂ : ir.targetsPredsIn a c S j k = true) :
-    ir.targetsPredsIn a c S i k = true :=
-  allIdxIn_append h₁ h₂
-
-/-- **`targetsA` from its check of the predicates on `[0, n)`**, `n` at least their number, and of
-the circuits. -/
-theorem targetsA_of_parts {a : ExprAnn} {c : PackedLists} {S : Structure} {n : ℕ}
-    (h : ir.targetsRestB = true) (hp : ir.targetsPredsIn a c S 0 n = true)
-    (hn : ir.predicates.length ≤ n) : ir.targetsA a c S = true := by
-  have hp' := allIdx_of_allIdxIn hp hn
-  simp only [targetsRestB, Bool.and_eq_true] at h
-  unfold targetsA
-  rw [h.1, h.2, hp']
-  rfl
-
-end Ranges
 
 end GordieHowe.RealizedProgram

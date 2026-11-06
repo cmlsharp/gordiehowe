@@ -233,11 +233,11 @@ variable (E : (j : ι) → (M.comp j).Encoder) (prv : CausalProver P t X) (x : X
   (ν : M.Pos → MerkleSalt kN) (σ : FiatShamirSalt kS) (h : Query k kN kS L → Out k e)
 
 /-- The honest writes at the challenges read from the streams `ρ`. -/
-noncomputable def honestWrite' (ρ : ChIdx P t → Out k e) : M.RootWriteFn := fun p i rts =>
+def honestWrite' (ρ : ChIdx P t → Out k e) : M.RootWriteFn := fun p i rts =>
   (E p.label).write i (prv.run x (M.chOfStreams ρ) p i.1) rts
 
 /-- The honest opened leaves at the positions `ps`, at the challenges read from `ρ`. -/
-noncomputable def honestOpened (ρ : ChIdx P t → Out k e) (ps : List M.Pos) :
+def honestOpened (ρ : ChIdx P t → Out k e) (ps : List M.Pos) :
     List (MerkleLeaf kN L) :=
   ps.map fun q => ⟨ν q, (E q.leaf.label).cols q.pos.msg
     (prv.run x (M.chOfStreams ρ) q.leaf q.pos.msg.1) q.pos.tree q.pos.leaf⟩

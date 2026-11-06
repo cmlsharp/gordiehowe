@@ -4,7 +4,7 @@
 module
 
 public import GordieHowe.Language.Library.Select
-public import GordieHowe.Language.Library.Sponge
+public import GordieHowe.Applications.Keccak.Frontend.Sponge
 public import GordieHowe.Applications.Falcon512.Frontend.Fields
 public import GordieHowe.Applications.Falcon512.Native.System.Application
 public import GordieHowe.Applications.Falcon512.Spec.KeyNTT
@@ -76,11 +76,8 @@ statement's member check of `hhat` (value `593`) and the values the extractor re
 class FalconHBase (program : RealizedProgram) : Prop where
   /-- The selection's predicates are `h2p.select.start`, `.step`, `.done` and `.route`, source
   predicates. -/
-  selectPreds : program.predNameB 270 "h2p.select.start" = true ∧
-    program.predNameB 271 "h2p.select.step" = true ∧
-    program.predNameB 272 "h2p.select.done" = true ∧
-    program.predNameB 273 "h2p.select.route" = true ∧
-    (∀ p ∈ [270, 271, 272, 273], program.inSource (program.predicate p) = true)
+  selectPreds : ∀ p ∈ [270, 271, 272, 273],
+    p < program.predicates.length ∧ program.inSource (program.predicate p) = true
   /-- The selection has the first-`n` shape at `(S, n, w) = (717, 512, 16)`. -/
   selectShape_eq : program.selectShape? 717 512 16 270 271 272 273 = some selShape
   /-- The program's shared expressions read only earlier entries. -/
@@ -125,11 +122,11 @@ class FalconACore (program : RealizedProgram) where
   /-- Domain `A` has field `1`. -/
   domainField1 : program.domainField 1 = 1
   /-- `mac.equal` is `cross(H, select.raw, A, c_A)` of width `1`, a source predicate. -/
-  macEqual : ∃ p, program.predNameB p "mac.equal" = true ∧
+  macEqual : ∃ p, p < program.predicates.length ∧
     (program.predicate p).body.crossLeaves? = some ⟨0, 589, 1, cA⟩ ∧
     program.inSource (program.predicate p) = true
   /-- `crossing.c_A.boolean` is `c_A · c_A = c_A` in `A`, a source predicate. -/
-  cABoolean : ∃ p, program.predNameB p "crossing.c_A.boolean" = true ∧
+  cABoolean : ∃ p, p < program.predicates.length ∧
     (program.predicate p).body.boolCheck? = some ⟨1, cA⟩ ∧
     program.inSource (program.predicate p) = true
   /-- `select.raw` is a bit view; it and `c_A` have `8192` coordinates. -/
@@ -193,6 +190,19 @@ variable [HField FH] [FalconHBase program]
 
 /-- The selection's field identifier is `0`. -/
 theorem selField : RealizedProgram.SelectShape.field program selShape = 0 := FalconHBase.domainField0
+
+/-- The selection uses the hash-field interpretation because its domain is field zero. -/
+theorem selField_eq_hash : SelField program FH FA = FH := by
+  change (RealizedProgram.falconInterpOf FH FA).field
+    (RealizedProgram.SelectShape.field program selShape) = FH
+  rw [selField]
+
+/-- Build selection labels by transporting the hash-field data and its constant equations together. -/
+def FalconSelField.ofHash [FalconHConsts program FH] : FalconSelField program FH FA where
+  inst := (inferInstance : HField FH).transport (selField_eq_hash (program := program) (FH := FH) (FA := FA)).symm
+  bits_eq := HField.transport_bits _ _
+  gpow j hj := HField.transport_decode_pow _ _ (FalconHConsts.gpow j hj)
+  gN := HField.transport_decode_pow _ _ FalconHConsts.gN
 
 /-- **The selection field** of the selection's field (`HField.sel`: `GF(2^16)`, `X`, `g` the
 subfield's generator, `e_u = g^u`). -/
@@ -263,14 +273,14 @@ abbrev selWord (e : program.Env interp) :
 
 /-- **The route** (`count`, and `full` from sample `512` on). -/
 abbrev selRoute (e : program.Env interp) :
-    Fin 717 → Route (interp (RealizedProgram.SelectShape.field program selShape)).K :=
+    Fin 717 → CutoffRoute (interp (RealizedProgram.SelectShape.field program selShape)).K :=
   selShape.route program (program.reader e) 512
 
-/-- **The selection's event** at the committed values: `SelectFirstN.badEvent` of the samples, the
+/-- **The selection's event** at the committed values: `SelectFirstCutoff.badEvent` of the samples, the
 selected words and the route (degree `717`). -/
 noncomputable def selBad [FalconSelField program FH FA] (e : program.Env interp) :
     ChallengeEvent (interp (RealizedProgram.SelectShape.field program selShape)).K :=
-  SelectFirstN.badEvent selF 61445 (selSample e) (selWord e) (selRoute e) (by decide)
+  SelectFirstCutoff.badEvent selF 61445 (selSample e) (selWord e) (selRoute e) (by decide)
 
 /-- **The selection's event has degree `717`.** -/
 theorem selBad_deg [FalconSelField program FH FA] (e : program.Env interp) : (selBad e).deg = 717 := rfl
@@ -282,12 +292,12 @@ theorem firstAccepted_or_badAt [FalconSelField program FH FA] {e : program.Env i
     firstAccepted (fun v => decide (v < 61445)) (fun i => Bits.natOfBits (selSample e i)) 512 =
         some (fun j => Bits.natOfBits (selWord e j)) ∨
       (selBad e).BadAt (selShape.deltaAt program (program.reader e)) := by
-  obtain ⟨h1, h2, h3, h4, hsrc⟩ := FalconHBase.selectPreds (program := program)
+  have hsrc := FalconHBase.selectPreds (program := program)
   exact selectMatches.firstAccepted_or_badAt FalconHBase.refsOrdered selConsts (by norm_num)
-    (by decide) (by decide) hs (hs.holdsAt_of_predNameB h1 (hsrc 270 (by simp)))
-    (hs.holdsAt_of_predNameB h2 (hsrc 271 (by simp)))
-    (hs.holdsAt_of_predNameB h3 (hsrc 272 (by simp)))
-    (hs.holdsAt_of_predNameB h4 (hsrc 273 (by simp)))
+    (by decide) (by decide) hs (hs.holdsAt_of_lt (hsrc 270 (by simp)).1 (hsrc 270 (by simp)).2)
+    (hs.holdsAt_of_lt (hsrc 271 (by simp)).1 (hsrc 271 (by simp)).2)
+    (hs.holdsAt_of_lt (hsrc 272 (by simp)).1 (hsrc 272 (by simp)).2)
+    (hs.holdsAt_of_lt (hsrc 273 (by simp)).1 (hsrc 273 (by simp)).2)
 
 /-- **`δ` is challenge `0`** (`h2p.select.delta`), read in the selection's field. -/
 theorem selDelta_eq (e : program.Env interp) :
@@ -372,26 +382,18 @@ theorem natOfBits_selSample0 (e : program.Env interp) (i : Fin falcon512.S) :
     Bits.natOfBits (selSample0 e i) = Bits.natOfBits (selSample e i) :=
   natOfBits_castElt selField _
 
-/-- **An equation read in a domain of field `f`** is the equation read in field `f`. -/
-theorem evalWith_eq_iff_of_domainField {I : RealizedProgram.Interp} {rd : program.Valuation I} {d f : ℕ}
-    (h : program.domainField d = f) {a b : RealizedProgram.Expr} {i j : ℕ} :
-    program.evalWith rd d a i = program.evalWith rd d b j ↔
-      program.evalE rd f a i = program.evalE rd f b j := by
-  unfold RealizedProgram.evalWith
-  rw [h]
-
 /-- **A field `equal` of domain `H` holds coordinatewise in field `0`.** -/
 theorem holdsAt_equal0 {e : program.Env interp} {lhs rhs : RealizedProgram.Expr} {t : RealizedProgram.Target}
     (h : program.HoldsAt e (.equal 0 lhs rhs t)) :
     ∀ i < program.exprLen lhs,
       program.evalE (program.reader e) 0 lhs i = program.evalE (program.reader e) 0 rhs i :=
-  fun i hi => (evalWith_eq_iff_of_domainField FalconHBase.domainField0).1 (h i hi)
+  (RealizedProgram.holdsWith_equal_iff_of_domainField FalconHBase.domainField0).1 h
 
 /-- **A field `equal` of domain `H` holds when it holds coordinatewise in field `0`.** -/
 theorem holdsWith_equal0_of {rd : program.Valuation interp} {lhs rhs : RealizedProgram.Expr} {t : RealizedProgram.Target}
     (h : ∀ i < program.exprLen lhs, program.evalE rd 0 lhs i = program.evalE rd 0 rhs i) :
     program.HoldsWith rd (.equal 0 lhs rhs t) :=
-  fun i hi => (evalWith_eq_iff_of_domainField FalconHBase.domainField0).2 (h i hi)
+  (RealizedProgram.holdsWith_equal_iff_of_domainField FalconHBase.domainField0).2 h
 
 /-- **The natural of a word read at a field identifier equal to `f`** is the natural read at `f`. -/
 theorem natOfBits_wordAt_congr {I : RealizedProgram.Interp} {rd : program.Valuation I} {f f' : ℕ} (h : f = f')
@@ -481,7 +483,7 @@ variable [AReading FA] [FalconACore program]
 theorem holdsWith_equal1_of {rd : program.Valuation interp} {lhs rhs : RealizedProgram.Expr} {t : RealizedProgram.Target}
     (h : ∀ i < program.exprLen lhs, program.evalE rd 1 lhs i = program.evalE rd 1 rhs i) :
     program.HoldsWith rd (.equal 1 lhs rhs t) :=
-  fun i hi => (evalWith_eq_iff_of_domainField FalconACore.domainField1).2 (h i hi)
+  (RealizedProgram.holdsWith_equal_iff_of_domainField FalconACore.domainField1).2 h
 
 /-! ## The crossing -/
 
@@ -500,8 +502,8 @@ theorem natOfBits_raw_eq {e : program.Env interp} (h : program.SourceSatAt e)
   obtain ⟨hraw, hsize, hsizeA⟩ := FalconACore.raw_facts (program := program)
   obtain ⟨pm, hpm, hcl, hsrcm⟩ := FalconACore.macEqual (program := program)
   obtain ⟨pb, hpb, hbc, hsrcb⟩ := FalconACore.cABoolean (program := program)
-  have hcross := h.holdsAt_of_predNameB hpm hsrcm
-  have hbool := h.holdsAt_of_predNameB hpb hsrcb
+  have hcross := h.holdsAt_of_lt hpm hsrcm
+  have hbool := h.holdsAt_of_lt hpb hsrcb
   have hj : (j : ℕ) * 16 + 16 ≤ (program.value 589).size := by
     rw [hsize]
     have := j.isLt

@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Applications.Spec.SelectionModel
+public import GordieHowe.Language.Library.Select.Scan
 public import GordieHowe.Applications.MLDSA44.Spec.Sampler
 
 @[expose] public section

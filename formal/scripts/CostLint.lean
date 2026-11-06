@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 import GordieHowe
+import GordieHowe.Applications.Program.Runtime
 
 /-!
 # Running-time lint for extractors and simulators
@@ -51,9 +52,11 @@ Structure projections, constructors, recursors, matchers and other auxiliary dec
 skipped. An extractor or simulator written inline inside a statement is not a declaration and is
 not seen by this lint.
 
-The second check (section "Computability" below) requires every extractor, simulator and
-decoder to be a computable definition, with the open exceptions listed in
-`knownNoncomputable`.
+The second check (section "Computability" below) strictly checks extractors, simulators, decoders
+and reductions, with the existing exceptions in `knownNoncomputable`. The additional prover,
+verifier and runtime-bundle coverage is reported under a fixed failure ceiling. Independently,
+the gate compares every imported definition with the pinned computability baseline, so a
+previously computable definition cannot become a ceiling item.
 
 The third check (section "Classical decisions passed to extractors" below) requires every
 decision an extractor takes as an instance argument (the statement comparison of the database
@@ -70,8 +73,8 @@ Every name listed in `extractorFunctions`, `configProcedures`, `notExtractors` o
 dropping out of the checks.
 
 Run by `scripts/check.sh` as `lake env lean scripts/CostLint.lean`; it fails with the list of
-offending declarations. `COST_LINT_COMPUTABILITY=report` turns the computability failures into a
-warning.
+offending strict declarations or a runtime failure count above the recorded ceiling.
+The strict checks cannot be disabled by an environment variable.
 -/
 
 open Lean Meta Elab Command
@@ -339,8 +342,10 @@ def undocumentedCostDefs : MetaM (Array Name × List (Name × Nat)) := do
 
 /-! ### Computability
 
-Every extractor, simulator and decoder is a computable definition: it has compiled code, and no
-constant it uses outside types and proofs is `noncomputable` or an axiom (`Classical.choice`
+Extractor, simulator, decoder and reduction failures are strict. Additional prover, verifier
+and runtime-bundle failures are reported under `runtimeFailureCeiling`. The full-definition
+baseline comparison is a separate strict gate check. The detector tests for compiled code and
+whether a constant used outside types and proofs is `noncomputable` or an axiom (`Classical.choice`
 behind `Classical.choose`, `Classical.dec`, `Classical.arbitrary`). Checked for
 
 * every definition whose type ends in one of `computableTypes` (the cost-bearing types, the
@@ -353,14 +358,41 @@ behind `Classical.choose`, `Classical.dec`, `Classical.arbitrary`). Checked for
   The other fields of these structures (the proofs) are not checked.
 -/
 
-/-- The types whose definitions must have compiled code: the cost-bearing types, the message
-decoders, and the data-only simulator structures (each honest prover takes its simulator as a
-parameter, so a simulator is a definition of one of these types). -/
-def computableTypes : List Name :=
+/-- Strict computability coverage: cost-bearing procedures, message decoders and all simulator
+structures. In particular, `Program.IOP.SimData` includes the concrete Ring `convertedSim`
+definitions. These types can never use the additional-runtime allowance. -/
+def strictComputableTypes : List Name :=
   costTypes ++ [``GordieHowe.IOP.MessageView.Decoder, ``GordieHowe.IOP.TranscriptSim,
     ``GordieHowe.FieldProof.CommitProve.Sim, ``GordieHowe.FieldProof.Sim,
     ``GordieHowe.RingSwitching.TreeFieldProof.SimData, ``GordieHowe.TreeFork.SimData,
     ``GordieHowe.RealizedProgram.ProofSystem.IOP.SimData, ``GordieHowe.MultiCircuitIOP.SimData]
+
+/-- Additional runtime interface coverage, reported under the fixed failure ceiling. -/
+def runtimeComputableTypes : List Name :=
+  [``GordieHowe.RealizedProgram.ProofSystem, ``GordieHowe.RealizedProgram.FieldReady,
+    ``GordieHowe.RealizedProgram.CertifiedProgram, ``GordieHowe.RuntimeInputs, ``GordieHowe.CompletionInputs, ``GordieHowe.RealizedProgram.ProofSystem.IOP,
+    ``GordieHowe.SPBCS.ProofSystemTranscript, ``GordieHowe.NARG.ProverFn,
+    ``GordieHowe.NARG.Prover, ``GordieHowe.NARG.Verifier,
+    ``GordieHowe.IOP.IOP, ``GordieHowe.MultiCircuitIOP,
+    ``GordieHowe.IOP.Prover, ``GordieHowe.IOP.Verifier,
+    ``GordieHowe.RingSignature.ProofSystem, ``GordieHowe.RingSignature.PSTypes,
+    ``GordieHowe.RingSignature.RingScheme, ``GordieHowe.RingSignature.RingTypes,
+    ``GordieHowe.RingSignature.BaseSigner, ``GordieHowe.RingSignature.BaseTypes]
+
+/-- All result types checked for compiled code. -/
+def computableTypes : List Name := strictComputableTypes ++ runtimeComputableTypes
+
+/-- The computational result type, including function-valued interfaces such as `IOP.Verifier`.
+Check before peeling each binder: reducing the whole telescope first would consume a verifier's
+statement and transcript arguments and leave only `Bool`, losing its computational interface. -/
+partial def computableResult? (type : Expr) : MetaM (Option Name) := do
+  if let some n := computableTypes.find? type.getAppFn.isConstOf then return some n
+  let type ← whnfR type
+  if let some n := computableTypes.find? type.getAppFn.isConstOf then return some n
+  match type with
+  | .forallE n domain body bi =>
+    withLocalDecl n bi domain fun x => computableResult? (body.instantiate1 x)
+  | _ => return none
 
 /-- The interface structures and their extractor, decoder and simulator fields. -/
 def computableFields : List (Name × List Name) :=
@@ -448,10 +480,13 @@ partial def fieldRejected? (S : Name) (field : Name) (e : Expr) : MetaM (Option 
 /-- The computability failures: definitions of a type in `computableTypes` without compiled
 code (and the reductions without compiled code), and interface definitions whose extractor,
 decoder or simulator fields use rejected
-constants (or whose fields cannot be found and that have no compiled code). -/
-def computabilityFailures (reductions : Array Name) : MetaM (Array (Name × String) × Nat) := do
+constants (or whose fields cannot be found and that have no compiled code), partitioned into
+strict failures and additional-runtime failures, with the total number checked. -/
+def computabilityFailureClasses (reductions : Array Name) :
+    MetaM (Array (Name × String) × Array (Name × String) × Nat) := do
   let env ← getEnv
-  let mut bad := #[]
+  let mut strictBad := #[]
+  let mut runtimeBad := #[]
   let mut checked := 0
   for (n, ci) in env.constants.toList do
     let un := (privateToUserName? n).getD n
@@ -461,9 +496,13 @@ def computabilityFailures (reductions : Array Name) : MetaM (Array (Name × Stri
         isMatcherCore env n || (un.getPrefix.getRoot == `GordieHowe && un.components.contains `Experiments) then
       continue
     let hasIR := (IR.findEnvDecl env n).isSome
+    let resultType ← computableResult? ci.type
+    let computational := resultType.isSome
+    let strict := isExtractorProcedure un || reductions.contains un ||
+      (resultType.map strictComputableTypes.contains).getD true
     let res ← forallTelescopeReducing ci.type fun xs body => do
       let body ← whnfR body
-      if computableTypes.any body.getAppFn.isConstOf || isExtractorProcedure un ||
+      if computational || isExtractorProcedure un ||
           reductions.contains un then
         return some (if hasIR then [] else [(un, s!"{un}: no compiled code")])
       let some (S, fields) := computableFields.find? (body.getAppFn.isConstOf ·.1) | return none
@@ -478,13 +517,25 @@ def computabilityFailures (reductions : Array Name) : MetaM (Array (Name × Stri
       return some out
     let some msgs := res | continue
     checked := checked + 1
-    bad := bad ++ msgs.toArray
-  return (bad, checked)
+    if strict then strictBad := strictBad ++ msgs.toArray
+    else runtimeBad := runtimeBad ++ msgs.toArray
+  return (strictBad, runtimeBad, checked)
 
-/-- Whether the computability check only reports (the environment variable
-`COST_LINT_COMPUTABILITY=report`) instead of failing. -/
-def computabilityReportOnly : IO Bool := do
-  return (← IO.getEnv "COST_LINT_COMPUTABILITY") == some "report"
+/-- Every detector failure, without the gate's strict/runtime partition. -/
+def computabilityFailures (reductions : Array Name) : MetaM (Array (Name × String) × Nat) := do
+  let (strict, runtime, checked) ← computabilityFailureClasses reductions
+  return (strict ++ runtime, checked)
+
+/-- The measured additional-runtime failure ceiling at `ff9135ad5`: 84. This ceiling may be
+lowered as repairs land; raising it is not permitted. Extractors, simulators and regressions
+against the pinned baseline never belong to this allowance. -/
+def runtimeFailureCeiling : Nat := 84
+
+/-- Fail when additional runtime failures exceed the fixed allowance. The explicit limit also
+lets the regression fixture exercise the boundary with a small pair of actual failures. -/
+def enforceRuntimeCeiling (limit : Nat) (bad : Array (Name × String)) : MetaM Unit := do
+  if bad.size > limit then
+    throwError "cost lint: runtime failure ceiling exceeded: {bad.size} > {limit}"
 
 /-- The reason a quantum reduction has no compiled code: its states, Kraus operators and unitaries
 are matrices over Mathlib's `ℂ`, whose real parts are Cauchy sequences without compiled
@@ -848,6 +899,8 @@ def missingListedNames : MetaM (List Name) := do
     (fs.filter fun f => !(getStructureInfo? env S).any (·.fieldNames.contains f)).map (S ++ ·)
   return listed.filter (fun n => !env.contains n) ++ fields
 
+/-! ### Lint commands -/
+
 run_cmd liftTermElabM do
   let missing ← missingListedNames
   unless missing.isEmpty do
@@ -904,17 +957,22 @@ run_cmd liftTermElabM do
     paragraph; {notReductions.length} constructions exempt as model translations"
 
 run_cmd liftTermElabM do
-  let (bad, checked) ← computabilityFailures (← reductionDefs)
+  let (strictBad, runtimeBad, checked) ← computabilityFailureClasses (← reductionDefs)
+  let bad := strictBad ++ runtimeBad
   let known := knownNoncomputable.map (·.1)
-  let unexpected := bad.filter fun (n, _) => !known.contains n
+  let strict := strictBad.filter fun (n, _) => !known.contains n
+  let runtime := runtimeBad.filter fun (n, _) => !known.contains n
   let stale := knownNoncomputable.filter fun (n, _) => !bad.any (·.1 == n)
   let knownMsgs := knownNoncomputable.filterMap fun (n, why) =>
     if bad.any (·.1 == n) then some s!"{n}: {why}" else none
-  logInfo m!"cost lint: {checked} extractor, simulator and decoder definitions checked; \
+  logInfo m!"cost lint: {checked} computational definitions checked; \
     {knownMsgs.length} known noncomputable:\n{String.intercalate "\n" knownMsgs}"
-  unless unexpected.isEmpty && stale.isEmpty do
-    let msg := m!"cost lint: {unexpected.size} unexpected computability failure(s):\n\
-      {String.intercalate "\n" (unexpected.map (·.2)).toList}\n\
+  logInfo m!"cost lint: {runtime.size} additional runtime computability failure(s), \
+    ceiling {runtimeFailureCeiling}:\n{String.intercalate "\n" (runtime.map (·.2)).toList}"
+  unless strict.isEmpty && stale.isEmpty do
+    throwError m!"cost lint: {strict.size} strict computability failure(s):\n\
+      {String.intercalate "\n" (strict.map (·.2)).toList}\n\
       {stale.length} entr(y/ies) of `knownNoncomputable` now computable (remove them): \
       {stale.map (·.1)}"
-    if ← computabilityReportOnly then logWarning msg else throwError msg
+  enforceRuntimeCeiling runtimeFailureCeiling runtime
+  logInfo m!"cost lint: strict computability passed; runtime count is within its fixed ceiling"

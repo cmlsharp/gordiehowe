@@ -25,7 +25,7 @@ namespace GordieHowe.RealizedProgram
 `mac.target_bits` returns bit `i` of the integer reading of its argument (`targetBitsFn`), and the
 program's other opaque values take no arguments. -/
 abbrev mldsaInterpOf (F0 FH : FieldInterp) : Interp :=
-  ⟨fun n => match n with | 0 => F0 | _ => FH, targetBitsFn⟩
+  Interp.twoField F0 FH targetBitsFn
 
 /-- **The interpretation of an ML-DSA program at the ROM parameters** with domain `A` over `F0`: domain `H` over
 `GF(2^128)` (`mldsaInterpOf F0 gf128`). -/

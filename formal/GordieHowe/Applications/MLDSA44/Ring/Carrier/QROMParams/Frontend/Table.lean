@@ -3,7 +3,11 @@
 
 module
 
+public import GordieHowe.Language.Realizations.SelectionCheck
 public import GordieHowe.Generated.MLDSA44.Ring.Carrier.QROMParams.Program
+public import GordieHowe.Generated.MLDSA44.Ring.Carrier.QROMParams.Core
+public import GordieHowe.Generated.MLDSA44.Ring.Carrier.QROMParams.ShapeFacts
+public import GordieHowe.Generated.MLDSA44.Ring.Carrier.QROMParams.Certified
 public import GordieHowe.Applications.MLDSA44.Ring.Table
 
 @[expose] public section
@@ -13,7 +17,7 @@ public import GordieHowe.Applications.MLDSA44.Ring.Table
 
 The selection `member.select` of the ring's public table (`GordieHowe.RealizedProgram.TableSelect`,
 `lib/gordiehowe/lib/table.h`'s `select_row`) in
-`GordieHowe.Generated.MLDSA44.Ring.Carrier.QROMParams.Program.program`, decided on its tables: the record
+`GordieHowe.Generated.MLDSA44.Ring.Carrier.QROMParams.Program.program`, from the program check's certificate (`selectionsB`): the record
 (shared expression `1`, `member.a_hat ‖ member.t1 ‖` the `24` limbs of `μ`), the map
 `GordieHowe.MLDSA44.Ring.carrierMap`, the column blocks `ring.keys` (value `53`) and `ring.mu` (value `54`),
 `64` rows, `6` index bits (`member.select.index`, value `58`), the challenge
@@ -24,48 +28,11 @@ namespace GordieHowe.MLDSA44.Ring.Carrier.QROMParams
 
 open Generated.MLDSA44.Ring.Carrier.QROMParams.Program RealizedProgram
 
-/-- **The table's selection**: identifiers and row map. -/
-def tableShape : TableShape where
-  dom := 0
-  one := 1
-  zero := 0
-  mOne := 18446744069414584320
-  gamma := 59
-  chal := 0
-  pow := 528
-  dig := 529
-  idx := 58
-  pred := 0
-  idxPred := 8
-  record := .ref 1
-  map := carrierMap
-  parts := [(53, 5120), (54, 24)]
-  rows := 64
-  bits := 6
-
-set_option maxRecDepth 100000 in
-/-- **The table's selection** of the program, decided on its tables. -/
-instance : TableSelect program where
-  shape := tableShape
-  refsOrdered := (refsOrderedB_iff program).1 (by decide +kernel)
-  exprs_pos := by decide +kernel
-  values_pos := by decide +kernel
-  mapWf := by decide +kernel
-  width := by decide +kernel
-  powOk := by decide +kernel
-  digOk := by decide +kernel
-  bodyOk := by decide +kernel
-  powKind := rfl
-  digKind := rfl
-  idxBool := ⟨_, rfl⟩
-  inSource := by decide +kernel
-  consts := by decide +kernel
-  gammaKind := rfl
-  chalOk := by decide +kernel
-  fields := by decide +kernel
-  sizes := by decide +kernel
-  idxPriv := rfl
-  recordReads := by decide +kernel
-  rowReads := by decide +kernel
+/-- **The table's selection**, from the program check's certificate
+(`GordieHowe.RealizedProgram.TableSelect.ofSelections` at `Generated.MLDSA44.Ring.Carrier.QROMParams.selections`). -/
+instance : TableSelect program :=
+  TableSelect.ofSelections (ir := program) (cs := Generated.MLDSA44.Ring.Carrier.QROMParams.selections)
+    Generated.MLDSA44.Ring.Carrier.QROMParams.core.wellFormed
+    Generated.MLDSA44.Ring.Carrier.QROMParams.checked.selections ⟨0, by decide⟩
 
 end GordieHowe.MLDSA44.Ring.Carrier.QROMParams

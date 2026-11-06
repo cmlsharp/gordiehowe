@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Applications.Falcon512.NegacyclicSpectrum
+public import GordieHowe.Foundations.Algebra.NegacyclicSpectrum
 public import GordieHowe.Foundations.Algebra.BitReverse
 public import GordieHowe.Foundations.Algebra.ConvMatrix
 

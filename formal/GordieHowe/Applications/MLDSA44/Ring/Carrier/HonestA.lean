@@ -236,7 +236,7 @@ end Facts
 
 section Holds
 
-variable {program : RealizedProgram} [MldsaEAlgebra program] {F0 FH : FieldInterp} [AField F0]
+variable {program : RealizedProgram} [MldsaEAlgebra program] {F0 FH : FieldInterp} [RealizedProgram.PrimeCastField F0 pGold]
   [HField FH]
 
 set_option hygiene false in

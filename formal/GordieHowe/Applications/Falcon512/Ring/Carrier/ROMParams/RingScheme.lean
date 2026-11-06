@@ -67,10 +67,8 @@ open RealizedProgram.Export RealizedProgram.ProofSystem.PhaseLayout IOP Relative
   GordieHowe.SPBCS GordieHowe.QROM SPBCS.Configurations GordieHowe.Ring GordieHowe.RingSignature
 open Generated.Falcon512.Ring.Carrier.ROMParams.Program (program)
 open Generated.Falcon512.Ring.Carrier.ROMParams (interp ready ProofSystems figures figures_eq
-  figuresOk numbers branchName branchName_le
-  fieldBytes msgB_le samplerReaders chalLoadMax
-  chalLoad_le grantMax)
-open Generated.Falcon512.Ring.Carrier.ROMParams.Facts (interpModel)
+  certified)
+open Generated.Falcon512.Ring.Carrier.ROMParams (conditions)
 open _root_.GordieHowe.Falcon512.Ring.Native (Signer CoreWit)
 open scoped NNReal ENNReal
 
@@ -97,11 +95,12 @@ message length): the label, `figures.k`-byte digests, the ring statement's write
 (`Native.stmtCodecN` at `64` keys), the branch name, the phase's and the domain's codecs and
 readers. The largest grant of a round is `grantMax`. -/
 abbrev ringTranscript : ProofSystemTranscript (ringIop G C) :=
-  C.fieldForkTranscriptWith ready (forkLowering C) Ring.stmtOf numbers.cod
-    (numbers.fits C.enforce)
+  C.fieldForkTranscriptWith ready (forkLowering C) Ring.stmtOf certified.numbers.cod
+    (certified.numbers.fits C.enforce)
     Ring.ringOk label figures.k (_root_.GordieHowe.Falcon512.Ring.Native.stmtCodecN G 64)
-    (fun a => branchName a.1) (program.appWrites fieldBytes msgB_le)
-    (program.appReaders samplerReaders (fun _ => chalLoadMax) chalLoad_le) grantMax
+    (fun a => certified.branchName a.1) (program.appWrites certified.fieldBytes certified.msgB_le)
+    (program.appReaders certified.samplerReaders (fun _ => certified.chalLoadMax)
+      certified.chalLoad_le) certified.grantMax
 
 /-- **At `32`-byte messages `ringIop` is the configuration's IOP.** -/
 theorem ringIop_eq (G : Signer 32) : ringIop G C = forkIop G C :=
@@ -116,9 +115,10 @@ variable {G} in
 statement writes within `2^20` bytes, the label and the branch name, the rest from the generated
 check (`RealizedProgram.ProgramFigures.Check.transcriptWith_bounds`). -/
 theorem ringTranscript_bounds (hmsg : msgLen ≤ 2 ^ 19) : (ringTranscript G C).Bounds :=
-  figuresOk.transcriptWith_bounds Ring.ringOk (fun x => (_root_.GordieHowe.Falcon512.Ring.Native.length_ser_stmtCodecN_le x).trans
+  certified.figuresOk.transcriptWith_bounds Ring.ringOk (fun x =>
+    (_root_.GordieHowe.Falcon512.Ring.Native.length_ser_stmtCodecN_le x).trans
       (by omega))
-    (Nat.le_of_ble_eq_true rfl) (fun a => branchName_le a.1)
+    (Nat.le_of_ble_eq_true rfl) (fun a => certified.branchName_le a.1)
 
 variable {G} in
 /-- **The setting's facts with `32`-byte salts** at messages of at most `2^19` bytes. -/
@@ -130,8 +130,8 @@ figures),
 the configuration's: at most `955` rounds, trees of at most `2560` leaves, `96` queried leaves,
 `3160` verifier queries, `958` digests per input and `2560` positions. -/
 theorem ringFigures : (ringIop G C).Figures 955 2560 96 3160 958 2560 :=
-  by simpa only [figures_eq] using
-    figuresOk.figuresWith (B := C) (Lw := forkLowering C) (f := Ring.stmtOf) Ring.ringOk
+  by simpa only [figures_eq, show certified.figures = figures from rfl] using
+    certified.figuresOk.figuresWith (B := C) (Lw := forkLowering C) (f := Ring.stmtOf) Ring.ringOk
 
 variable {G} in
 /-- **The proof format `max 2560 96`**: every tree has at most `2560` leaves and every query phase opens
@@ -146,13 +146,25 @@ theorem ringProofFormat (hmsg : msgLen ≤ 2 ^ 19) :
 
 /-- **The honest strategy at the ring statements of `G`** (`honestStrategy` at every message
 length): `RealizedProgram.HonestStrategy.ofCompletionReady` at the execution
-`Ring.carrierSourceExecution`. -/
+`Ring.carrierSourceExecution` with values selected by the checked source roles. -/
 noncomputable def ringHonestStrategy :
     program.HonestStrategy interp (Ring.relH G program interp) :=
+  let E := Ring.carrierSourceExecution program interp _ conditions.model.registered
+    conditions.model.lawful
+    completionReady.facts.committed completionReady.facts.boundNoCopy completionReady.roles
+    completionReady.oneNodes conditions.model.bitNodes
+      (Generated.Falcon512.Ring.Carrier.ROMParams.conditions.noFieldForm rfl)
+  let val := fun y : Ring.RingIn G =>
+    (⟨Ring.specK program y, y.w.idx, y.normIn.nS2, y.normIn.nS1,
+      Carrier.quot y.normIn, Carrier.mag1 y.normIn, Carrier.mag2 y.normIn,
+      Carrier.squares y.normIn⟩ : Carrier.SourceValues (interp 0).K).valuation
+        (program := program) Generated.Falcon512.Ring.Carrier.ROMParams.SourceRoles.classifier
   RealizedProgram.HonestStrategy.ofCompletionReady completionReady
-    (Ring.carrierSourceExecution program interp _ interpModel.registered interpModel.lawful
-      completionReady.facts.committed completionReady.facts.boundNoCopy completionReady.roles
-      completionReady.oneNodes interpModel.bitNodes Generated.Falcon512.Ring.Carrier.ROMParams.Completion.noFieldForm)
+    (E.withValues val
+    completionReady.facts.committed.sourceValid completionReady.facts.committed.srcNoMessage
+    (fun x y _ c => RealizedProgram.agreeOnSourceVals_execEnv_of_values x _ _ (E.late y c) c
+      fun _v hs _j hc => (role_source_coordinates y hs hc completionReady.facts.committed.srcNoPadCopy).symm)
+    (fun _ _ _ _ _ => RealizedProgram.packFreeAt_of_noGamma completionReady.roles.noGamma _))
 
 /-- **At `32`-byte messages `ringHonestStrategy` is the configuration's.** -/
 theorem ringHonestStrategy_eq (G : Signer 32) : ringHonestStrategy G = honestStrategy G :=
@@ -160,7 +172,7 @@ theorem ringHonestStrategy_eq (G : Signer 32) : ringHonestStrategy G = honestStr
 
 /-- **The honest strategy's completeness errors are `0`.** -/
 theorem ringHonestStrategy_delta : ∑ k, (ringHonestStrategy G).δ k = 0 := by
-  rw [ringHonestStrategy, RealizedProgram.HonestStrategy.ofCompletionReady_δ, Ring.carrierSourceExecution_δ (I := interp)]
+  rw [ringHonestStrategy, RealizedProgram.HonestStrategy.ofCompletionReady_δ, RealizedProgram.SourceExecution.withValues_δ, Ring.carrierSourceExecution_δ (I := interp)]
   simp
 
 /-- **The honest prover of `ringIop`** at the honest strategy `ringHonestStrategy G`

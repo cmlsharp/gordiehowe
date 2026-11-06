@@ -6,6 +6,8 @@ module
 public import GordieHowe.Generated.MLDSA44.Ring.Native.ROMParams.Certified
 public import GordieHowe.Applications.MLDSA44.Ring.Native.ROMParams.Frontend.Front
 public import GordieHowe.ProofSystem.Program.Headlines
+public import GordieHowe.Applications.Configuration.Certified
+public import GordieHowe.Applications.MLDSA44.Native.HonestFull
 
 @[expose] public section
 
@@ -19,15 +21,15 @@ holds, the extractor `GordieHowe.MLDSA44.Ring.Native.extractor`, the errors `sou
 `5143/|F_q^6|` at `member.table.gamma`, SampleInBall's `264/2^128` and `295/2^128` at the ring's
 challenges `1` and `2`), composed with the proof system
 (`GordieHowe.RealizedProgram.ProofSystem.FieldBranches.causal_rbr_knowledge_soundness` at the forked
-domains of `proofSystem`) in the headline `iop_rbr_knowledge_soundness`, whose only hypothesis is
-the compiler trust `CircuitsEnforce`.
+domains of `proofSystem`) in the headline `iop_rbr_knowledge_soundness`. Circuit enforcement
+follows from the generated certificates.
 -/
 
 namespace GordieHowe.MLDSA44.Ring.Native.ROMParams
 
-open RealizedProgram.Export RealizedProgram.ProofSystem.PhaseLayout IOP
+open RealizedProgram RealizedProgram.Export RealizedProgram.ProofSystem.PhaseLayout IOP
 open Generated.MLDSA44.Ring.Native.ROMParams.Program (program)
-open Generated.MLDSA44.Ring.Native.ROMParams (interp ready ProofSystems)
+open Generated.MLDSA44.Ring.Native.ROMParams (interp ready ProofSystems certified sourceErrors)
 open scoped NNReal
 
 /-- **The proof system of `MLDSA44.Ring.Native.ROMParams`**
@@ -51,51 +53,43 @@ theorem sourceError_final (ε : ℕ → ℝ≥0) :
   intro i hi
   simp only [RealizedProgram.roundError, hi]
 
-/-- **Soundness of `MLDSA44.Ring.Native.ROMParams` at the realized program, in the series–parallel order of
-`prot:backend`** (`RealizedProgram.ProofSystem.FieldBranches.causal_rbr_knowledge_soundness` at the forked domains
-`RealizedProgram.ProofSystem.fieldBranches` of `proofSystem`): the series–parallel composite is round-by-round
-knowledge sound for the relation at the proof system's extractor, with every challenge's own error
-(`RealizedProgram.ProofSystem.IOP.Sound.error`). -/
-@[headline]
-theorem iop_rbr_knowledge_soundness :
-    CausalRBRKnowledgeSound (Native.rel (program := program) (F0 := RealizedProgram.fq6)
-        (FH := RealizedProgram.gf128))
-      ((proofSystem.fieldBranches ready).soundIOP source_rbr_knowledge_soundness (sourceError_final sourceEps)).verifier
-      ((proofSystem.fieldBranches ready).extractor source_rbr_knowledge_soundness (sourceError_final sourceEps))
-      ((proofSystem.fieldBranches ready).soundIOPSound (proofSystem.fieldBranchesSound ready)
-        source_rbr_knowledge_soundness (sourceError_final sourceEps)).stateFn
-      ((proofSystem.fieldBranches ready).soundIOPSound (proofSystem.fieldBranchesSound ready)
-        source_rbr_knowledge_soundness (sourceError_final sourceEps)).error :=
-  (proofSystem.fieldBranches ready).causal_rbr_knowledge_soundness (proofSystem.fieldBranchesSound ready)
-    source_rbr_knowledge_soundness (sourceError_final sourceEps)
+/-- **The nodes of the program contain `1`.** -/
+theorem oneNodes : OneNodes interp Generated.MLDSA44.Ring.Native.ROMParams.Honest.nodes := by
+  intro p hp
+  exact MLDSA44.Native.oneNodes (F0 := RealizedProgram.fq6) (FH := RealizedProgram.gf128) p
+    (by simp only [Generated.MLDSA44.Ring.Native.ROMParams.Honest.nodes, List.mem_cons,
+      List.not_mem_nil, or_false] at hp ⊢; tauto)
 
-variable {Inp : Type} {relH : Set (program.Valuation interp × Inp)}
+/-- **The source challenges' errors are within their fractions** (`sourceErrors`). -/
+theorem sourceEps_le (j : ℕ) (_ : program.IsSourceChal j) :
+    sourceEps j ≤ ((sourceErrors j).1 : ℝ≥0) / (sourceErrors j).2 := by
+  rcases j with _ | _ | _ | j
+  · change ((5143 : ℕ) : ℝ≥0) / Fintype.card (interp 0).K ≤ _
+    rw [show Fintype.card (interp 0).K = 8380417 ^ 6 from by convert mldsaNativeField_card <;> rfl]
+    simp only [sourceErrors, ↓reduceIte]
+    norm_num [pGold]
+  · change MLDSA44.sampleEpsOf 128 0 ≤ _
+    norm_num [MLDSA44.sampleEpsOf, sourceErrors]
+  · change MLDSA44.sampleEpsOf 128 1 ≤ _
+    norm_num [MLDSA44.sampleEpsOf, sourceErrors]
+  · change MLDSA44.sampleEpsOf 128 (j + 2) ≤ _
+    simp [MLDSA44.sampleEpsOf]
 
-/-- **Completeness of `MLDSA44.Ring.Native.ROMParams` at the realized program** (`RealizedProgram.ProofSystem.FieldBranches.completeness` at
-the forked domains `RealizedProgram.ProofSystem.fieldBranches` of `proofSystem`, the domains' honest provers
-`RealizedProgram.ProofSystem.fieldHonestDomains`): in the series–parallel order of `prot:backend`, if the honest
-prover `H` has completeness error `errc` (a function of the statement) (`hc`), then at every value
-of the coins, on every honest input, the honest prover is rejected with probability at most
-`errc`. -/
-@[headline]
-theorem iop_completeness (H : program.HonestCore interp relH)
-    {errc : program.Valuation interp → ℝ≥0} (hc : H.Complete errc)
-    (c : (proofSystem.fieldForkHonest ready H).Coins) :
-    CausalCompleteStmt relH (proofSystem.fieldBranches ready).protocol.verifier
-      (fun y => RealizedProgram.ProofSystem.IOP.honest (proofSystem.fieldForkHonest ready H) y c) errc :=
-  (proofSystem.fieldBranches ready).completeness (proofSystem.fieldHonestDomains ready) _ H hc c
+/-- **The source program's soundness of `MLDSA44.Ring.Native.ROMParams`** (`Configuration.SourceFront`): the frontend's
+round-by-round knowledge soundness (`source_rbr_knowledge_soundness`) at the source challenges'
+errors (`sourceEps`, within `sourceEps_le`), and the honest nodes' `1`. -/
+noncomputable def source :=
+  ({ rel := Native.rel (program := program) (F0 := RealizedProgram.fq6) (FH := RealizedProgram.gf128),
+     proj := proj,
+     eps := sourceEps,
+     sound := source_rbr_knowledge_soundness,
+     final := sourceError_final sourceEps,
+     eps_le := sourceEps_le,
+     oneNodes := oneNodes } :
+    Configuration.SourceFront certified Native.RingW _)
 
-/-- **Honest-verifier zero knowledge of `MLDSA44.Ring.Native.ROMParams` at the realized program**
-(`RealizedProgram.ProofSystem.FieldBranches.hvzk` at the forked domains of `proofSystem`): in the series–parallel order of
-`prot:backend`, if the honest prover `H` has completeness error `errc` (a function of the statement) (`hc`), the simulator of the
-series–parallel composite is honest-verifier zero knowledge for the honest prover with error `errc`. -/
-@[headline]
-theorem iop_hvzk (H : program.HonestCore interp relH) {errc : program.Valuation interp → ℝ≥0}
-    (hc : H.Complete errc) :
-    CausalHVZKStmt (proofSystem.fieldBranches ready).protocol.toCausalIOP.views relH
-      (RealizedProgram.ProofSystem.IOP.honest (proofSystem.fieldForkHonest ready H)) id
-      (RealizedProgram.ProofSystem.IOP.simulator
-        ((proofSystem.fieldBranches ready).simData (proofSystem.fieldForkSims ready))) errc :=
-  (proofSystem.fieldBranches ready).hvzk (proofSystem.fieldHonestDomains ready) _ H hc
+instantiate_config GordieHowe.MLDSA44.Ring.Native.ROMParams
+  from [GordieHowe.Configuration.CertifiedSource] renaming forkLowering → ringLowering
+  certified source at proofSystem
 
 end GordieHowe.MLDSA44.Ring.Native.ROMParams

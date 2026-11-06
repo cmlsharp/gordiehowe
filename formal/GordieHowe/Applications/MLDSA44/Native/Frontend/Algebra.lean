@@ -50,30 +50,32 @@ class MldsaAAlgebra (program : RealizedProgram) : Prop extends MldsaACross progr
   kind57 : (program.value 56).kind = .pub (.opaque "key.t1" [])
   /-- The hint's sum has a coordinate. -/
   lenWeight : 0 < program.exprLen (.apply (.sum 1024) (.leaf 58))
-  /-- `pred0`. -/
-  pred0 : program.predicate 0 = «p.signature.relation»
-  /-- `pred1`. -/
-  pred1 : program.predicate 1 = «p.hint.w1_bound»
-  /-- `pred2`. -/
-  pred2 : program.predicate 2 = «p.hint.decompose»
-  /-- `pred3`. -/
-  pred3 : program.predicate 3 = «p.hint.interval»
-  /-- `pred6`. -/
-  pred6 : program.predicate 6 = «p.h.boolean»
-  /-- `pred7`. -/
-  pred7 : program.predicate 7 = «p.challenge.c.boolean»
-  /-- `pred8`. -/
-  pred8 : program.predicate 8 = «p.hint.w1.boolean»
-  /-- `pred9`. -/
-  pred9 : program.predicate 9 = «p.hint.nonpositive.boolean»
-  /-- `pred11`. -/
-  pred11 : program.predicate 11 = «p.norm.z»
-  /-- `pred12`. -/
-  pred12 : program.predicate 12 = «p.hint.offset»
-  /-- `pred13`. -/
-  pred13 : program.predicate 13 = «p.hint.slack»
-  /-- `pred14`. -/
-  pred14 : program.predicate 14 = «p.hint_weight.weight»
+  /-- `pred0`: the body of `signature.relation`. -/
+  pred0 :
+    ∃ t, (program.predicate 0).body = .equal 0 (.add (.add (.add (.leaf 60) (.scale (.const 8380416) (.apply (.polyMatVec 55 4 4 (.ntt 1753)) (.leaf 57)))) (.scale (.const 8192) (.apply (.polyBroadcast 56 4 .coefficients) (.ref 0)))) (.scale (.const 8364033) (.apply (.polyBroadcast 56 4 .coefficients) (.ref 1)))) (.leaf 0) t
+  /-- `pred1`: the body of `hint.w1_bound`. -/
+  pred1 :
+    ∃ t, (program.predicate 1).body = .equal 0 (.logic .leq 6 [.leaf 62, .reindex idx8 (.leaf 1)]) (.leaf 2) t
+  /-- `pred2`: the body of `hint.decompose`. -/
+  pred2 :
+    ∃ t, (program.predicate 2).body = .equal 0 (.add (.add (.add (.leaf 60) (.scale (.const 8380416) (.scale (.const 190464) (.add (.add (.add (.apply (.batched 1024 (.fromDigits 6 2)) (.leaf 62)) (.scale (.const 8380416) (.ref 3))) (.ref 2)) (.scale (.const 44) (.add (.mul (.ref 3) (.ref 4)) (.scale (.const 8380416) (.ref 5)))))))) (.scale (.const 8380416) (.add (.add (.scale (.const 8380416) (.scale (.const 95232) (.leaf 63))) (.reindex idx9 (.leaf 4))) (.scale (.const 8380416) (.ref 6))))) (.scale (.const 8380416) (.leaf 64))) (.leaf 0) t
+  /-- `pred3`: the body of `hint.interval`. -/
+  pred3 :
+    ∃ real, (program.predicate 3).body = .mod 0 0 (.add (.leaf 64) (.leaf 65)) (.add (.ref 6) (.reindex idx9 (.leaf 5))) real ∧
+      real.form = .integer ∧ real.quotient = none ∧ real.quotientLo = 0 ∧
+      real.qmax = 0
+  /-- `pred11`: the body of `norm.z`. -/
+  pred11 :
+    ∃ r, (program.predicate 11).body = .mem 0 [.add (.leaf 57) (.leaf 61)] (.range 261987) r
+  /-- `pred12`: the body of `hint.offset`. -/
+  pred12 :
+    ∃ r, (program.predicate 12).body = .mem 0 [.leaf 64] (.range 262144) r
+  /-- `pred13`: the body of `hint.slack`. -/
+  pred13 :
+    ∃ r, (program.predicate 13).body = .mem 0 [.leaf 65] (.range 262144) r
+  /-- `pred14`: the body of `hint_weight.weight`. -/
+  pred14 :
+    ∃ r, (program.predicate 14).body = .mem 0 [.apply (.sum 1024) (.leaf 58)] (.range 81) r
   /-- `expr0`. -/
   expr0 : program.expr 0 = .reindex idx6 (.leaf 59)
   /-- `expr1`. -/
@@ -112,46 +114,42 @@ class MldsaAAlgebra (program : RealizedProgram) : Prop extends MldsaACross progr
 set_option maxRecDepth 4096 in
 /-- The native program at the ROM parameters has these facts. -/
 instance : MldsaAAlgebra program where
-  kind56 := rfl
-  kind57 := rfl
-  lenWeight := by decide +kernel
-  pred0 := rfl
-  pred1 := rfl
-  pred2 := rfl
-  pred3 := rfl
-  pred6 := rfl
-  pred7 := rfl
-  pred8 := rfl
-  pred9 := rfl
-  pred11 := rfl
-  pred12 := rfl
-  pred13 := rfl
-  pred14 := rfl
-  expr0 := rfl
-  expr1 := rfl
-  expr2 := rfl
-  expr3 := rfl
-  expr4 := rfl
-  expr5 := rfl
-  expr6 := rfl
+  kind56 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_key_2ea_5fhat_kind
+  kind57 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_key_2et1_kind
+  lenWeight := by shape_decide
+  pred0 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_signature_2erelation_body
+  pred1 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_hint_2ew1_5fbound_body
+  pred2 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_hint_2edecompose_body
+  pred3 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_hint_2einterval_body
+  pred11 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_norm_2ez_body
+  pred12 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_hint_2eoffset_body
+  pred13 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_hint_2eslack_body
+  pred14 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_hint_5fweight_2eweight_body
+  expr0 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_signature_2erelation_2eshape_2eleft_2efirst_2esecond_2efirst_2efirst_eq
+  expr1 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_signature_2erelation_2eshape_2eleft_2esecond_2efirst_2efirst_eq
+  expr2 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_hint_2einterval_2eshape_2eright_2efirst_2eshared_2esecond_2eshared_2efirst_eq
+  expr3 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_hint_2edecompose_2eshape_2eleft_2efirst_2efirst_2esecond_2efirst_2efirst_2efirst_2efirst_2esecond_2efirst_eq
+  expr4 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_hint_2einterval_2eshape_2eright_2efirst_2eshared_2efirst_2esecond_eq
+  expr5 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_hint_2einterval_2eshape_2eright_2efirst_2eshared_2esecond_eq
+  expr6 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_hint_2einterval_2eshape_2eright_2efirst_eq
   inSource_A := by
-    decide +kernel
-  predicates_length := by decide +kernel
+    shape_decide
+  predicates_length := by shape_decide
   lensA := by
-    decide +kernel
+    shape_decide
   boolChecks := by
-    decide +kernel
+    shape_decide
   constsA := by
-    decide +kernel
+    shape_decide
   constsU := by
-    decide +kernel
-  refsA := by decide +kernel
+    shape_decide
+  refsA := by shape_decide
   lensU := by
-    decide +kernel
+    shape_decide
   valsU := by
-    decide +kernel
+    shape_decide
   sigData := by
-    decide +kernel
+    shape_decide
 
 set_option linter.unusedSectionVars false
 
@@ -167,28 +165,38 @@ section Tables
 
 set_option maxRecDepth 4096
 
-theorem pred0 : program.predicate 0 = «p.signature.relation» :=
+theorem pred0 :
+    ∃ t, (program.predicate 0).body = .equal 0 (.add (.add (.add (.leaf 60) (.scale (.const 8380416) (.apply (.polyMatVec 55 4 4 (.ntt 1753)) (.leaf 57)))) (.scale (.const 8192) (.apply (.polyBroadcast 56 4 .coefficients) (.ref 0)))) (.scale (.const 8364033) (.apply (.polyBroadcast 56 4 .coefficients) (.ref 1)))) (.leaf 0) t :=
   MldsaAAlgebra.pred0
 
-theorem pred1 : program.predicate 1 = «p.hint.w1_bound» :=
+theorem pred1 :
+    ∃ t, (program.predicate 1).body = .equal 0 (.logic .leq 6 [.leaf 62, .reindex idx8 (.leaf 1)]) (.leaf 2) t :=
   MldsaAAlgebra.pred1
 
-theorem pred2 : program.predicate 2 = «p.hint.decompose» :=
+theorem pred2 :
+    ∃ t, (program.predicate 2).body = .equal 0 (.add (.add (.add (.leaf 60) (.scale (.const 8380416) (.scale (.const 190464) (.add (.add (.add (.apply (.batched 1024 (.fromDigits 6 2)) (.leaf 62)) (.scale (.const 8380416) (.ref 3))) (.ref 2)) (.scale (.const 44) (.add (.mul (.ref 3) (.ref 4)) (.scale (.const 8380416) (.ref 5)))))))) (.scale (.const 8380416) (.add (.add (.scale (.const 8380416) (.scale (.const 95232) (.leaf 63))) (.reindex idx9 (.leaf 4))) (.scale (.const 8380416) (.ref 6))))) (.scale (.const 8380416) (.leaf 64))) (.leaf 0) t :=
   MldsaAAlgebra.pred2
 
-theorem pred3 : program.predicate 3 = «p.hint.interval» :=
+theorem pred3 :
+    ∃ real, (program.predicate 3).body = .mod 0 0 (.add (.leaf 64) (.leaf 65)) (.add (.ref 6) (.reindex idx9 (.leaf 5))) real ∧
+      real.form = .integer ∧ real.quotient = none ∧ real.quotientLo = 0 ∧
+      real.qmax = 0 :=
   MldsaAAlgebra.pred3
 
-theorem pred11 : program.predicate 11 = «p.norm.z» :=
+theorem pred11 :
+    ∃ r, (program.predicate 11).body = .mem 0 [.add (.leaf 57) (.leaf 61)] (.range 261987) r :=
   MldsaAAlgebra.pred11
 
-theorem pred12 : program.predicate 12 = «p.hint.offset» :=
+theorem pred12 :
+    ∃ r, (program.predicate 12).body = .mem 0 [.leaf 64] (.range 262144) r :=
   MldsaAAlgebra.pred12
 
-theorem pred13 : program.predicate 13 = «p.hint.slack» :=
+theorem pred13 :
+    ∃ r, (program.predicate 13).body = .mem 0 [.leaf 65] (.range 262144) r :=
   MldsaAAlgebra.pred13
 
-theorem pred14 : program.predicate 14 = «p.hint_weight.weight» :=
+theorem pred14 :
+    ∃ r, (program.predicate 14).body = .mem 0 [.apply (.sum 1024) (.leaf 58)] (.range 81) r :=
   MldsaAAlgebra.pred14
 
 theorem expr0 : program.expr 0 = .reindex idx6 (.leaf 59) :=
@@ -319,7 +327,8 @@ theorem rdA_62 (e : program.Env interp) {i : ℕ} (hi : i < 1024) :
 theorem norm_range {e : program.Env interp} (hs : ASat e) {i : ℕ} (hi : i < 1024) :
     ∃ k : ℕ, k < 261987 ∧ rdA e 57 i + ((130993 : ℕ) : (interp 0).K) = k := by
   have h := hs.preds 11 (by simp)
-  rw [(pred11 (program := program))] at h
+  obtain ⟨_, hp11⟩ := pred11 (program := program)
+  rw [hp11] at h
   have hlen : i < program.exprLen (.add (.leaf 57) (.leaf 61)) := by
     rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_leaf, (lensA (program := program)).1]
     exact hi
@@ -332,21 +341,24 @@ theorem norm_range {e : program.Env interp} (hs : ASat e) {i : ℕ} (hi : i < 10
 theorem offset_range {e : program.Env interp} (hs : ASat e) {i : ℕ} (hi : i < 1024) :
     ∃ k : ℕ, k < 262144 ∧ rdA e 64 i = k := by
   have h := hs.preds 12 (by simp)
-  rw [(pred12 (program := program))] at h
+  obtain ⟨_, hp12⟩ := pred12 (program := program)
+  rw [hp12] at h
   exact natBelow_of_mem h (by rw [RealizedProgram.exprLen_leaf, (lensA (program := program)).2.2.2.2.2.2.1]; exact hi)
 
 /-- **`hint.slack` bounds the slack** below `512^2`. -/
 theorem slack_range {e : program.Env interp} (hs : ASat e) {i : ℕ} (hi : i < 1024) :
     ∃ k : ℕ, k < 262144 ∧ rdA e 65 i = k := by
   have h := hs.preds 13 (by simp)
-  rw [(pred13 (program := program))] at h
+  obtain ⟨_, hp13⟩ := pred13 (program := program)
+  rw [hp13] at h
   exact natBelow_of_mem h (by rw [RealizedProgram.exprLen_leaf, (lensA (program := program)).2.2.2.2.2.2.2.1]; exact hi)
 
 /-- **`hint_weight.weight` bounds the hint's sum** below `81`. -/
 theorem weight_range {e : program.Env interp} (hs : ASat e) :
     ∃ k : ℕ, k < 81 ∧ ∑ t : Fin 1024, rdA e 58 t = k := by
   have h := hs.preds 14 (by simp)
-  rw [(pred14 (program := program))] at h
+  obtain ⟨_, hp14⟩ := pred14 (program := program)
+  rw [hp14] at h
   obtain ⟨k, hk, hkv⟩ := natBelow_of_mem h (i := 0) MldsaAAlgebra.lenWeight
   refine ⟨k, hk, ?_⟩
   rw [RealizedProgram.evalE_apply_sum] at hkv
@@ -558,7 +570,8 @@ theorem lensU : program.exprLen (.logic .leq 6 [.leaf 62, .reindex idx8 (.leaf 1
 theorem w1Bound {e : program.Env interp} (hs : ASat e) {m : ℕ} (hm : m < 1024) :
     Bits.leConst (bitsA e m) (UseHint.hiCount mldsa44.γ₂ - 1) = 1 := by
   have h := hs.preds 1 (by simp)
-  rw [(pred1 (program := program))] at h
+  obtain ⟨_, hp1⟩ := pred1 (program := program)
+  rw [hp1] at h
   have hm' := h m (by rw [(lensU (program := program)).1]; exact hm)
   change program.evalE (program.reader e) (program.domainField 0) _ m =
     program.evalE (program.reader e) (program.domainField 0) _ m at hm'
@@ -602,7 +615,8 @@ theorem decompose {e : program.Env interp} (hs : ASat e) {m : ℕ} (hm : m < 102
     rdA e 60 m = UseHint.relationResult mldsa44.γ₂ (UseHint.hiCount mldsa44.γ₂) (rdA e 58 m)
       (rdA e 63 m) (rdA e 64 m) (UseHint.outputFromBits (UseHint.hiCount mldsa44.γ₂) (bitsA e m)) := by
   have h := hs.preds 2 (by simp)
-  rw [(pred2 (program := program))] at h
+  obtain ⟨_, hp2⟩ := pred2 (program := program)
+  rw [hp2] at h
   have hm' := h m (by
     simp only [RealizedProgram.exprLen_add]
     rw [(lensU (program := program)).2.1]
@@ -730,7 +744,8 @@ theorem interval {e : program.Env interp} (hs : ASat e) {m : ℕ} (hm : m < 1024
     UseHint.IntervalEq mldsa44.γ₂ (rdA e 58 m) (rdA e 63 m) (rdA e 64 m) (rdA e 65 m)
       (UseHint.outputFromBits (UseHint.hiCount mldsa44.γ₂) (bitsA e m)) := by
   have h := hs.preds 3 (by simp)
-  rw [(pred3 (program := program))] at h
+  obtain ⟨_, hp3, -⟩ := pred3 (program := program)
+  rw [hp3] at h
   have hm' := congrArg (Int.cast : ℤ → (interp 0).K) (eq_of_modZero h (i := m) (by
     rw [RealizedProgram.exprLen_add, (lensU (program := program)).2.2]
     exact hm))
@@ -1081,7 +1096,8 @@ theorem signature_coeff {e : program.Env interp} (hs : program.SourceSatAt e) {p
   have hdiv : ((i : ℕ) * 256 + k) / 256 = i := by omega
   have hmod : ((i : ℕ) * 256 + k) % 256 = k := by omega
   have h := holdsA hs (p := 0) (by simp)
-  rw [(pred0 (program := program))] at h
+  obtain ⟨_, hp0⟩ := pred0 (program := program)
+  rw [hp0] at h
   have hm' := h ((i : ℕ) * 256 + k) (by
     simp only [RealizedProgram.exprLen_add]
     rw [(sigData (program := program)).2.2]

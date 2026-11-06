@@ -4,8 +4,8 @@
 module
 
 public meta import Lean.Elab.Command
-public meta import GordieHowe.Language.CertCheck
-public meta import GordieHoweNative.Codecs
+public meta import Lean.Elab.Tactic.ElabTerm
+public meta import GordieHoweNative.ProgramCodecs
 
 public meta section
 
@@ -17,19 +17,25 @@ written by the C++ compiler's GHC writer) beside the current source file at elab
 checks its FNV-1a 64 hash against `hash` (so the `.lean` text changes whenever the data does, and
 Lake rebuilds), and adds one definition per section, in the file's order, named by the section
 under the current namespace and of the section's type (`Ghc.loadDefs`). The value is the
-expression of the section's decoded value: every natural number a raw literal, each value's
+expression of the section's decoded value. In the default GKR entries, naturals are raw literals;
+program-specific entries preserve their original printed literals. Each value's
 repeated subterms shared, an index map the program's `idx<j>` resolved in scope, a reference to an
-earlier section that section's definition, and a list longer than `Ghc.listRun` items continued in
+earlier section that section's definition. Default GKR entries continue lists longer than
+`Ghc.listRun` items in
 definitions `<def>_l<i>` of `Ghc.listRun` items each, so no term nests deeper than about
 `Ghc.listRun`. Nothing is elaborated per value. The decoding and the term building are compiled
 code (the precompiled library `GordieHoweNative`). A section flagged `compile` gets compiled code
 with its runs; the writer flags the parts a proof system built from the data runs (for a GKR
 circuit, the parts its GKR source reads, `ProgramCerts.src`: `name.consts`, every
 `name.layer<d>`, `name.layered`, `name.width`), and the data only the checks read gets none. Both
-check modes load the file this way (`loadFile`); in native mode (`GordieHowe.certCheckNative`)
+check modes load the file this way (`loadFile`); when `LoadNative` is imported
 `LoadNative.lean` elaborates the command, adding run-time readers for the sections flagged
 `reader` after the definitions. The kernel checks every added definition, so loading adds no
 trust; it is not a search.
+
+`load_program_ghc` uses the same container and reader registration with an explicit program
+registry. Its expected-type-guided formatter retains the compiler's numeral and list spelling,
+without changing public declaration types, named references, or the default GKR registry.
 
 A GKR circuit's certificate file (`GKR/<domain>.ghc`) has the sections of `name : CircuitData`
 (`name.consts`, the DAG's large subtrees `name.dagPart<i>` and `name.dag`, per layer
@@ -44,8 +50,8 @@ writes into the module text: a list of triples, `(0, 0, m)` a run of `m` consecu
 `(1, S, m)` one node's cuts in `m` slices of `S` (the last one every cut left), and last
 `(2, S, m)` the family cuts in `m` slices of `S`. Its **leaf theorems**, numbered in order, are the
 entry's head (`entry<k>_head`), then per part its nodes' theorem (`entry<k>_p<j>`) or its slices'
-(`entry<k>_p<j>_s<i>`, `entry<k>_f<i>`), each by `gh_cert_check`. They are composed with no
-re-check: the parts in a balanced tree by `entryNodesB_append` (a large node's slices by
+(`entry<k>_p<j>_s<i>`, `entry<k>_f<i>`), each by the command's explicit mode (`native` or kernel
+by default). They are composed with no re-check: the parts in a balanced tree by `entryNodesB_append` (a large node's slices by
 `nodeSliceB_append` and `nodeSliceB_cons`), the family slices by `famSliceB_cons`, and the whole by
 `entryCertB_of_parts`. A plan is untrusted: a wrong one fails a check or the composition.
 
@@ -56,7 +62,8 @@ An entry too large for one module is checked in part modules that build in paral
 `check_entry`'s. `check_circuit name ar` adds
 `name.circuit_ok : circuitCertB Program.program name.c ar name = true` from the header and the
 entries' theorems (`circuitCertB_of_entries`). The header is checked by parts (`headerB_of_parts`),
-each by `gh_cert_check` except two whose checks read every gate:
+each by the command's explicit mode (`native` or kernel by default), except two whose checks read
+every gate:
 
 * the scheduling certificate (part 1, `check_of_parts`): the layers one by one (`layersOk_cons`), a
   layer of more than `layerSliceGates` gates in slices of that many gates (`layerSliceOk_cons`,
@@ -66,12 +73,24 @@ each by `gh_cert_check` except two whose checks read every gate:
   witness the elaborator finds, an asserting gate's layer and wire or a last-layer assertion's
   index (`assertSliceOk`, `assertsFrom_cons`), and their number against the counts;
 * the bridge's checks (part 2, `uniqueAssertsB_shapeB_of_info`): the same per-layer theorems, and
-  the shape from the gate counts (`shapeLensB`).
+  the shape from the gate counts (`shapeLensB`);
+* the asserted nodes' assertion terms (part 9) in the same slices of the asserted nodes
+  (`assertTermsSliceB`, `assertTermsSliceB_cons`, `headerPartB_nine`), and their cover (part 6)
+  by one merge-join against the entries' asserted nodes in entry order, with no sort evaluated
+  (`assertsCoveredMergeB`, `headerPartB_six`, with the asserted nodes' increase from part 1's
+  slices), when the elaborator finds that merge accepts; otherwise part 6 as is.
 
 Part 2 and `assertsOk`'s theorem are composed with every argument named and checked by the kernel
 alone: the elaborator, comparing the data's two spellings of the width, would evaluate the checks. Every circuit takes
 this path; a small layer, or a small set of asserted nodes, is one slice.
 -/
+
+namespace GordieHowe
+
+/-- **A compiled certificate check**, elaborated by `Realizations.Circuit.LoadNative`. -/
+syntax (name := ghNativeCheck) "gh_native_check" : tactic
+
+end GordieHowe
 
 namespace GordieHowe.Load
 
@@ -109,7 +128,8 @@ structure Loaded where
 /-- **The file of `load_ghc "path.ghc" "hash"`, read and loaded**, in either check mode: the file
 beside the current source file, its hash checked, its sections decoded (the index maps as
 stand-ins) and the definitions of `Ghc.loadDefs` added in order. -/
-def loadFile (stx : Syntax) : CommandElabM Loaded := do
+def loadFile (stx : Syntax) (types : Array Ghc.Entry := Ghc.sectionTypes) :
+    CommandElabM Loaded := do
   let some rel := stx[1].isStrLit? | throwError "load_ghc: expected a file name"
   let some hash := stx[2].isStrLit? | throwError "load_ghc: expected a hash"
   let dir := (System.FilePath.mk (← getFileName)).parent.getD "."
@@ -135,7 +155,7 @@ def loadFile (stx : Syntax) : CommandElabM Loaded := do
   let secs ← match Ghc.sections bytes with
     | .ok s => pure s
     | .error s => throwError "load_ghc: {rel}: {s}"
-  let defs ← match Ghc.loadDefs Ghc.sectionTypes ns bytes secs
+  let defs ← match Ghc.loadDefs types ns bytes secs
       (fun j => if j < nIdx then some (Ghc.stub j) else none) idxs with
     | .ok defs => pure defs
     | .error s => throwError "load_ghc: {rel}: {s}"
@@ -145,13 +165,22 @@ def loadFile (stx : Syntax) : CommandElabM Loaded := do
 /-- `load_ghc "path.ghc" "hash"`: see the module docstring. -/
 syntax (name := loadGhc) "load_ghc " str str : command
 
-/-- The elaborator of `load_ghc` in kernel mode (`loadFile`). In native mode `LoadNative.lean`
-elaborates the command: the same loading, then its readers. -/
+/-- The elaborator of `load_ghc` without readers (`loadFile`). When `LoadNative.lean` is
+imported, its elaborator adds the same definitions and their readers. -/
 @[command_elab loadGhc]
 def elabLoadGhc : CommandElab := fun stx => do
-  if GordieHowe.certCheckNative then throwUnsupportedSyntax
   let l ← loadFile stx
   logInfo m!"load_ghc: {stx[1].isStrLit?.getD ""}: {l.secs.size} sections"
+
+/-- `load_program_ghc "path.ghc" "hash"` preserves program literal type and value expressions. -/
+syntax (name := loadProgramGhc) "load_program_ghc " str str : command
+
+/-- Program literal loading uses the same checked container and definitions, with an explicit
+registry whose numeral and list expressions match compiler-printed program literals. -/
+@[command_elab loadProgramGhc]
+def elabLoadProgramGhc : CommandElab := fun stx => do
+  let l ← loadFile stx (Ghc.programSectionTypes (← getEnv))
+  logInfo m!"load_program_ghc: {stx[1].isStrLit?.getD ""}: {l.secs.size} sections"
 
 /-! ## The checks -/
 
@@ -238,20 +267,22 @@ where
       | none, y => y
 
 /-- `check_entry name ar k [parts]`: see the module docstring. -/
-syntax (name := checkEntry) "check_entry " ident ident num "[" num,* "]" : command
+syntax (name := checkEntry) "check_entry " ident ident num "[" num,* "]" (" native")? : command
 
 /-- `check_entry_leaves name ar k [parts] i j`: see the module docstring. -/
-syntax (name := checkEntryLeaves) "check_entry_leaves " ident ident num "[" num,* "]" num num :
+syntax (name := checkEntryLeaves) "check_entry_leaves " ident ident num "[" num,* "]" num num (" native")? :
   command
 
 /-- `compose_entry name ar k [parts]`: see the module docstring. -/
 syntax (name := composeEntry) "compose_entry " ident ident num "[" num,* "]" : command
 
 /-- **An entry's check by its parts** (see the module docstring): its leaf theorems numbered
-`i` in `leaves` (`[i, j)`; `none` for all) each by `gh_cert_check`, then, when `compose`,
-`name.entry<k>_ok` from all of its leaf theorems, which must exist. -/
+`i` in `leaves` (`[i, j)`; `none` for all) each by the command's explicit mode (`native` or kernel
+by default), then, when `compose`, `name.entry<k>_ok` from all of its leaf theorems, which must exist. -/
 def runCheckEntry (stx : Syntax) (leaves : Option (Nat × Nat)) (compose : Bool) :
     CommandElabM Unit := do
+  let tac ← if stx.getArgs.back!.getArgs.isEmpty then `(tacticSeq| decide +kernel)
+    else `(tacticSeq| gh_native_check)
   let cert := (← getCurrNamespace) ++ stx[1].getId
   let k := stx[3].isNatLit?.getD 0
   let parts := (stx[5].getSepArgs.map fun x => x.isNatLit?.getD 0).toList
@@ -273,7 +304,7 @@ def runCheckEntry (stx : Syntax) (leaves : Option (Nat × Nat)) (compose : Bool)
     if leaves.all fun (lo, hi) => lo ≤ i && i < hi then
       elabCommand (← `(command| theorem $(mkIdent (`_root_ ++ n)) :
           $(mkIdent `GordieHowe.Twin.okB) $t = true := by
-        gh_cert_check))
+        $tac))
     else if compose && !(← getEnv).contains n then
       throwError "compose_entry: no leaf theorem {n} (leaf {i}); import its part module"
     pure (mkConst n)
@@ -388,7 +419,7 @@ default heartbeat limit (50,000). -/
 def assertSliceNodes : Nat := 512
 
 /-- `check_circuit name ar`: see the module docstring. -/
-syntax (name := checkCircuit) "check_circuit " ident ident : command
+syntax (name := checkCircuit) "check_circuit " ident ident (" native")? : command
 
 /-- A gate chunk's fields, as the checker reads them (`gateNode`, `flagged`, and whether its terms
 have an assertion term): the chunk `x` at the term width `w`. -/
@@ -427,9 +458,20 @@ def numList (xs : List Nat) : CommandElabM Term := do
   let ts : Array Term := xs.toArray.map fun x => Syntax.mkNumLit (toString x)
   `([$ts,*])
 
+/-- **Whether the merge-join accepts**: `subsetSorted xs ys` (`GKR.Fold.subsetSorted`), at
+elaboration. -/
+def mergeCovers : List Nat → List Nat → Bool
+  | [], _ => true
+  | x :: xs, ys =>
+    match ys.dropWhile (· < x) with
+    | y :: ys' => x == y && mergeCovers xs (y :: ys')
+    | [] => false
+
 /-- The elaborator of `check_circuit`. -/
 @[command_elab checkCircuit]
 def elabCheckCircuit : CommandElab := fun stx => do
+  let tac ← if stx[3].getArgs.isEmpty then `(tacticSeq| decide +kernel)
+    else `(tacticSeq| gh_native_check)
   let cert := (← getCurrNamespace) ++ stx[1].getId
   let ir ← programIdent
   let arN ← constOf stx[2]
@@ -446,11 +488,11 @@ def elabCheckCircuit : CommandElab := fun stx => do
   -- the header's parts, each its own theorem; the scheduling certificate (part 1) and the bridge's
   -- checks (part 2) from per-layer and per-slice theorems
   let partN (i : Nat) := base ++ Name.mkSimple s!"header_p{i}"
-  for i in [0, 3, 4, 5, 6, 7, 8, 9] do
+  for i in [0, 3, 4, 5, 7, 8] do
     elabCommand (← `(command| theorem $(mkIdent (`_root_ ++ partN i)) :
         $(mkIdent `GordieHowe.RealizedProgram.headerPartB) $ir ($certI).c $arI $certI
           $(Syntax.mkNumLit (toString i)) = true := by
-      gh_cert_check))
+      $tac))
   -- the layers: `cert.layer<i>` against the tables `cert.wtab<i>`
   let env ← getEnv
   let mut nl := 0
@@ -492,20 +534,20 @@ def elabCheckCircuit : CommandElab := fun stx => do
     if m == 1 then
       elabCommand (← `(command| theorem $(chk s!"chk_layer{i}") :
           $(cc "layerOk") $args* = true := by
-        gh_cert_check))
+        $tac))
       elabCommand (← `(command| theorem $(chk s!"chk_info{i}") :
           $(cb "infoSliceB") $infoArgs* 0 0 $(num g) $(num sc[0]!) = true := by
-        gh_cert_check))
+        $tac))
       continue
     for j in [0:m] do
       let len := if j + 1 == m then 0 else S
       elabCommand (← `(command| theorem $(chk s!"chk_layer{i}_s{j}") :
           $(cc "layerSliceOk") $args* $(num (j * S)) $(num len) = true := by
-        gh_cert_check))
+        $tac))
       elabCommand (← `(command| theorem $(chk s!"chk_info{i}_s{j}") :
           $(cb "infoSliceB") $infoArgs* $(num (j * S)) $(num len)
             $(num (if j + 1 == m then g - j * S else S)) $(num sc[j]!) = true := by
-        gh_cert_check))
+        $tac))
     let mut rest : Term := chk s!"chk_layer{i}_s{m - 1}"
     let mut restI : Term := chk s!"chk_info{i}_s{m - 1}"
     let mut cRest := sc[m - 1]!
@@ -526,7 +568,7 @@ def elabCheckCircuit : CommandElab := fun stx => do
   elabCommand (← `(command| theorem $(chk s!"chk_suffix{nl}") :
       $lo ($certI).sched.width ($certI).dag ($certI).sched.outputs ($certI).sched.outWires
         $(← tp nl) $(← wp nl) [] [] = true := by
-    gh_cert_check))
+    $tac))
   for i' in [0:nl] do
     let i := nl - 1 - i'
     let ts : Array Term := (Array.range (nl - i)).map fun j => tabI (i + j)
@@ -548,7 +590,7 @@ def elabCheckCircuit : CommandElab := fun stx => do
   elabCommand (← `(command| theorem $(chk "chk_shape") :
       $(cb "shapeLensB") $msT (($ir).circuitWidth ($certI).c) (($ir).circuit ($certI).c).layers
         = true := by
-    gh_cert_check))
+    $tac))
   -- the compositions name every argument and are checked by the kernel alone
   let cdE (f : String) := mkApp (mkConst (`GordieHowe.RealizedProgram.CircuitData ++ f.toName))
     (mkConst cert)
@@ -592,7 +634,7 @@ def elabCheckCircuit : CommandElab := fun stx => do
     let hiV := if e == 0 then 0 else at? (e - 1)
     elabCommand (← `(command| theorem $(chk s!"chk_asserts_s{j}") :
         $(cc "assertSliceOk") $aArgs* $(num s) $(num len) $(num loV) $(num hiV) [$ps,*] = true := by
-      gh_cert_check))
+      $tac))
   let hiAll := if na == 0 then 0 else at? (na - 1)
   let mut cover : Term ← `($(cc "assertsFrom_of_slice") $(chk s!"chk_asserts_s{ma - 1}"))
   for j' in [1:ma] do
@@ -603,13 +645,49 @@ def elabCheckCircuit : CommandElab := fun stx => do
       (Nat.zero_lt_succ $(num (A - 1))) $(chk s!"chk_asserts_s{j}") $cover)
   elabCommand (← `(command| theorem $(chk "chk_assertsFrom") :
       $(cc "AssertsFrom") $aArgs* 0 0 $(num hiAll) := $cover))
+  -- part 9 in the slices of the asserted nodes (`assertTermsSliceB`, joined by
+  -- `assertTermsSliceB_cons`); part 6 by the merge without the sort (`assertsCoveredMergeB`) when
+  -- the entries' nonzero asserted nodes cover the asserted nodes in entry order, otherwise as is
+  let rq (s : String) := mkIdent (`GordieHowe.RealizedProgram ++ s.toName)
+  for j in [0:ma] do
+    let s := j * A
+    let len := if j + 1 == ma then 0 else A
+    elabCommand (← `(command| theorem $(chk s!"chk_terms_s{j}") :
+        $(rq "assertTermsSliceB") $certI $(num s) $(num len) = true := by
+      $tac))
+  let mut terms : Term := chk s!"chk_terms_s{ma - 1}"
+  for j' in [1:ma] do
+    let j := ma - 1 - j'
+    terms ← `($(rq "assertTermsSliceB_cons") $certI (Nat.zero_lt_succ $(num (A - 1)))
+      $(chk s!"chk_terms_s{j}") $terms)
+  elabCommand (← `(command| theorem $(mkIdent (`_root_ ++ partN 9)) :
+      $(mkIdent `GordieHowe.RealizedProgram.headerPartB) $ir ($certI).c $arI $certI 9 = true :=
+    $(rq "headerPartB_nine") $ir ($certI).c $arI $certI $terms))
+  let mut zs : Array Nat := #[]
+  for e in ← listsOfExpr (← resolveExpr (← defValue (cert ++ `entries))) do
+    let eArgs ← ctorArgs (← resolveExpr e)
+    for x in ← listsOfExpr (← resolveExpr (eArgs[4]?.getD (mkConst ``List.nil))) do
+      let z := natOfExpr (← resolveExpr ((← ctorArgs (← resolveExpr x))[0]?.getD (lit 0)))
+      unless z == 0 do zs := zs.push z
+  if mergeCovers asserts.toList zs.toList then
+    elabCommand (← `(command| theorem $(chk "chk_covered") :
+        $(rq "assertsCoveredMergeB") $certI = true := by
+      $tac))
+    elabCommand (← `(command| theorem $(mkIdent (`_root_ ++ partN 6)) :
+        $(mkIdent `GordieHowe.RealizedProgram.headerPartB) $ir ($certI).c $arI $certI 6 = true :=
+      $(rq "headerPartB_six") $ir ($certI).c $arI $certI ($(chk "chk_assertsFrom")).1
+        $(chk "chk_covered")))
+  else
+    elabCommand (← `(command| theorem $(mkIdent (`_root_ ++ partN 6)) :
+        $(mkIdent `GordieHowe.RealizedProgram.headerPartB) $ir ($certI).c $arI $certI 6 = true := by
+      $tac))
   for (n, t) in [("chk_one", ← `($(cc "oneOk") ($certI).dag)),
       ("chk_inputs", ← `(Nat.beq ($certI).layered.inputs ($certI).dag.inputs)),
       ("chk_count", ← `(Nat.ble (List.length ($certI).sched.outputs + List.sum $csT)
         (List.length ($certI).dag.asserts))),
       ("chk_cover", ← `($(cc "lastCoverB") ($certI).sched.width
         ($certI).sched.outputs ($certI).sched.outWires ($certI).layered.layers))] do
-    elabCommand (← `(command| theorem $(chk n) : $t = true := by gh_cert_check))
+    elabCommand (← `(command| theorem $(chk n) : $t = true := by $tac))
   let hiE := ((← getConstInfo (chkN "chk_assertsFrom")).type.getAppArgs.back?).getD (lit 0)
   let gc (n : String) := mkConst (`GordieHowe.GKR.Certificate ++ n.toName)
   addThm (chkN "chk_asserts")

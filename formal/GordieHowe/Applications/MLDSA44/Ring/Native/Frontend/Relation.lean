@@ -350,15 +350,6 @@ theorem evalE_nttS (rd : program.Valuation interp) (E : Expr) {k : ℕ} (hk : k 
     RealizedProgram.NamedOp.rows, RealizedProgram.NamedOp.cols, Nat.mod_eq_of_lt hk,
     Nat.div_eq_of_lt hk, zero_mul, zero_add]
 
-/-- **The scheme-order transform reads only the first `n` coordinates.** -/
-theorem nttScheme_congr {K : Type*} [Field K] {n : ℕ} {ψ : K} {x y : ℕ → K}
-    (hxy : ∀ t < n, x t = y t) (m : ℕ) :
-    RealizedProgram.Ops.nttScheme n ψ x m = RealizedProgram.Ops.nttScheme n ψ y m := by
-  unfold RealizedProgram.Ops.nttScheme
-  split_ifs
-  · exact RealizedProgram.NamedOp.nttNatural_congr hxy _
-  · rfl
-
 /-- **A shared expression of the relation** reads its definition. -/
 theorem evalE_ref' (rd : program.Valuation interp) {r : ℕ} (hr : r ≤ 44) :
     program.evalE rd 0 (.ref r) = program.evalE rd 0 (program.expr r) :=
@@ -450,8 +441,8 @@ theorem evalE_rowLhs (rd : program.Valuation interp) (i : Fin 4) {k : ℕ} (hk :
     RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex,
     rowSlice, RealizedProgram.IndexMap.entry_step_one hk, zero_mul, zero_add,
     RealizedProgram.IndexMap.entry_step_one hk, zero_add, evalE_refT rd i hk, evalE_nttS rd _ hk,
-    nttScheme_congr (fun t ht => evalE_refW rd i ht),
-    nttScheme_congr (fun t ht => evalE_chal rd ht), Fin.sum_univ_four]
+    RealizedProgram.nttScheme_congr (fun t ht => evalE_refW rd i ht),
+    RealizedProgram.nttScheme_congr (fun t ht => evalE_chal rd ht), Fin.sum_univ_four]
   simp only [Fin.val_zero, Fin.val_one, Fin.val_two]
   norm_num
   ring

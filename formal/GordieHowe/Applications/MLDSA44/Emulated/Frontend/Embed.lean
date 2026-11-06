@@ -5,7 +5,8 @@ module
 
 public import GordieHowe.Language.RealizedProgram.Embed
 public import GordieHowe.Applications.MLDSA44.Frontend.Basic
-public import GordieHowe.Applications.MLDSA44.Frontend.AField
+public import GordieHowe.Language.RealizedProgram.PrimeField
+public import GordieHowe.Foundations.Fields.Goldilocks
 
 @[expose] public section
 

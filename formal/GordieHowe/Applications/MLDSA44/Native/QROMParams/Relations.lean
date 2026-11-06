@@ -12,8 +12,7 @@ public import GordieHowe.Applications.MLDSA44.Native.QROMParams.Setting
 # GordieHowe: the key relations of `MLDSA44.Native.QROMParams`
 
 The relations the statements of `MLDSA44.Native.QROMParams` read
-(`GordieHowe/Applications/MLDSA44/Native/QROMParams.lean`) at the key (`keyWitRel`, `keyHonestRel`)
-and the completeness error of the honest-prover statements (`honestBound`).
+(`GordieHowe/Applications/MLDSA44/Native/QROMParams.lean`) at the key (`keyWitRel`).
 -/
 
 namespace GordieHowe.MLDSA44.Native.QROMParams
@@ -24,12 +23,6 @@ open Generated.MLDSA44.Native.QROMParams (interp ProofSystems)
 open scoped NNReal ENNReal
 
 variable (C : ProofSystems)
-
-/-! ## The completeness error -/
-
-/-- The completeness error of the honest-prover headlines: the honest strategies have no completeness
-error (`RealizedProgram.HonestStrategy.ofCompletion`, `δ = 0`). -/
-noncomputable abbrev honestBound : ℝ≥0 := 0
 
 /-! ## The knowledge statements at the key -/
 
@@ -47,15 +40,5 @@ finishes within the byte budget. -/
 theorem mem_keyWitRel {s : KeyStmt} {g : program.Valuation interp → VarWitness}
     (h : (s, g) ∈ keyRel) : (s, g (stmtOf s)) ∈ keyWitRel :=
   h s.1 s.2 (keyOf_stmtOf s)
-
-/-! ## The honest-prover statements -/
-
-variable {Inp : Type}
-  {relH : Set (program.Valuation interp × Inp)} (H : program.HonestStrategy interp relH)
-
-/-- **The honest inputs at the key**: the strategy's honest inputs at the key's statement
-values. -/
-abbrev keyHonestRel (relH : Set (program.Valuation interp × Inp)) : Set (KeyStmt × Inp) :=
-  {p | (stmtOf p.1, p.2) ∈ relH}
 
 end GordieHowe.MLDSA44.Native.QROMParams

@@ -714,7 +714,7 @@ TEST(GordieHoweMod, TwoOddDomainsExport) {
   ASSERT_GE(sr.gadgets.size(), 1u);
   const auto &g0 = sr.gadgets[0];
   const ir::MacRealization &mr = c->program().predicates.at(equal).mac;
-  EXPECT_EQ(g0.kind, "macSite");
+  EXPECT_EQ(g0.kind, compiler::StructureRecords::GadgetKind::macSite);
   EXPECT_EQ(g0.preds, (std::vector<size_t>{equal, pid("mac.A"), pid("mac.N")}));
   EXPECT_EQ(g0.values, (std::vector<size_t>{vid("mac.value"), vid("mac.beta")}));
   EXPECT_EQ(g0.params, (std::vector<size_t>{2, mr.chunks, mr.width}));

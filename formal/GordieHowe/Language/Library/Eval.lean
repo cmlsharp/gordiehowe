@@ -34,7 +34,11 @@ The library the frontend's proofs read the program through (the plan-level theor
   (in any field, `castElt_bool`); a challenge value is its challenge; a value that reads nothing
   from the run is fixed by the statement and the committed assignment; a constant reads its entries
   (`constRead`). A committed value is `GordieHowe.RealizedProgram.reader_of_priv`; the statement's values are
-  `GordieHowe.RealizedProgram.reader_of_input` and `GordieHowe.RealizedProgram.reader_of_opaque_nil` (`GordieHowe/Language/RealizedProgram/Views.lean`).
+  `GordieHowe.RealizedProgram.reader_of_input` and `GordieHowe.RealizedProgram.reader_of_opaque_nil` (`GordieHowe/Language/RealizedProgram/Views.lean`), and an
+  opaque statement value at any positive fuel is `read_of_opaque_nil`.
+* **Equations in a domain's field** (`evalWith_eq_iff_of_domainField`,
+  `holdsWith_equal_iff_of_domainField`): an equation or a field `equal` read in a domain is the
+  same read in the domain's field.
 * **Predicates at given identifiers** (`GordieHowe.RealizedProgram.predNameB`, its twin
   `predNameE`): the predicate at an identifier exists and has the given name, checked at the
   pointer; a source predicate of a satisfied source program holds
@@ -336,6 +340,9 @@ def partBase (ir : RealizedProgram) (ps : List Expr) (j : ℕ) : ℕ :=
   ((ps.take j).map ir.exprLen).sum
 
 /-- **The length of a right-nested concatenation** is the sum of its parts' lengths. -/
+theorem exprLen_logic_cons (op : LogicOp) (w : ℕ) (a : Expr) (as : List Expr) :
+    ir.exprLen (.logic op w (a :: as)) = ir.exprLen a / w := rfl
+
 theorem exprLen_concatR (a : Expr) : ∀ as : List Expr,
     ir.exprLen (concatR a as) = ((a :: as).map ir.exprLen).sum
   | [] => by simp [concatR]
@@ -501,6 +508,30 @@ theorem bitView_bool (rd : ir.Valuation I) (v w : ℕ) (sel : IndexMap) (i : ℕ
   simp only [bitView, FieldInterp.ofBool]
   split <;> simp
 
+/-- **An opaque value of no argument read at any positive fuel** is the statement's coordinate
+(`reader_of_opaque_nil` at the reader's fuel). -/
+theorem read_of_opaque_nil (e : ir.Env I) {n v : ℕ} (hn : 0 < n) {name : String}
+    (hk : (ir.value v).kind = .pub (.opaque name [])) : ir.read e n v = e.stmt v := by
+  obtain ⟨m, rfl⟩ := Nat.exists_eq_add_one_of_ne_zero hn.ne'
+  funext i
+  simp [read, hk]
+
+/-- **An equation read in a domain of field `f`** is the equation read in field `f`. -/
+theorem evalWith_eq_iff_of_domainField {rd : ir.Valuation I} {d f : ℕ}
+    (h : ir.domainField d = f) {a b : Expr} {i j : ℕ} :
+    ir.evalWith rd d a i = ir.evalWith rd d b j ↔ ir.evalE rd f a i = ir.evalE rd f b j := by
+  subst h
+  rfl
+
+/-- **A field `equal` of a domain of field `f` holds** exactly when it holds coordinatewise in
+field `f`. -/
+theorem holdsWith_equal_iff_of_domainField {rd : ir.Valuation I} {d f : ℕ}
+    (h : ir.domainField d = f) {lhs rhs : Expr} {t : Target} :
+    ir.HoldsWith rd (.equal d lhs rhs t) ↔
+      ∀ i < ir.exprLen lhs, ir.evalE rd f lhs i = ir.evalE rd f rhs i := by
+  subst h
+  rfl
+
 /-- **A bit view reads its words from the committed assignment** when they are committed values:
 coordinate `i` is the `0`/`1` of coordinate `i mod e` of word `sel[i / e]` in its subfield's basis,
 `e` the bits per word. -/
@@ -541,6 +572,11 @@ def isBitView (v : ℕ) : Bool :=
   match (ir.value v).kind with
   | .bits _ _ => true
   | _ => false
+
+/-- A value of bit-view kind is a bit view. -/
+theorem isBitView_of_kind {v w : ℕ} {sel : IndexMap} (h : (ir.value v).kind = .bits w sel) :
+    ir.isBitView v = true := by
+  simp only [isBitView, h]
 
 /-- **A bit view reads `0` or `1`**, cast into any field. -/
 theorem evalE_leaf_bool_of_isBitView (e : ir.Env I) {v : ℕ} (h : ir.isBitView v = true)
@@ -660,6 +696,12 @@ theorem setChal_chal_zero {j : ℕ} (e : ir.Env I) (c : ir.ChalVal I j)
     (e.setChal j c).chal j 0 = (I (ir.chalField j)).samplerVal _ (c ⟨0, h0⟩) := by
   simp only [Env.setChal, Function.update_self]
   exact dite_eq_left_of_eq_true (eq_true h0)
+
+/-- **A uniform element read in an equal field identifier** is uniform there. -/
+theorem probUniform_castElt {a b : ℕ} (h : a = b) (P : (I b).K → Prop) :
+    Pr[x ← (I a).K : P (castElt x)] = Pr[y ← (I b).K : P y] := by
+  subst h
+  simp
 
 /-- **An event at a challenge of one coordinate drawn from the field** (`size = 1`, sampler
 `full`), read in an equal field identifier `f`: the challenge is a root with probability at most

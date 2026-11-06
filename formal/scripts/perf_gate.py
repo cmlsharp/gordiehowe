@@ -28,7 +28,8 @@ budget (remove them, so the list shrinks), entries the allowlist records but the
 show, a module's `<unattributed>` residual over budget (steps under the profiler threshold),
 modules whose profile failed to elaborate (`<error>`: the build reports the error; under the
 profiler, heartbeat-limited declarations can time out where the build passes), and an unsorted
-allowlist. Certificate modules (GordieHowe.Generated.*, GordieHoweCerts*) are outside the budget.
+allowlist. Certificate modules (GordieHowe.Generated.*, GordieHoweCerts*, GordieHoweCheck.*) are
+outside the budget.
 
 With --base, it prints a delta report: per declaration of the profiled modules, the change of
 max(elab_s, kernel_s) against the base profile, the largest regressions and improvements first.
@@ -46,7 +47,7 @@ ALLOW_COLS = ['declaration', 'module', 'elab_s', 'kernel_s', 'budget_s', 'reason
 
 def is_cert_module(m):
     return m.startswith('GordieHowe.Generated.') or m == 'GordieHoweCerts' or \
-        m.startswith('GordieHoweCerts.')
+        m.startswith('GordieHoweCerts.') or m.startswith('GordieHoweCheck.')
 
 
 def read_profile(path):

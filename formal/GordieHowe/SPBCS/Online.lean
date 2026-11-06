@@ -149,7 +149,7 @@ theorem queries_length_le_of_formatBounds {Qs : ∀ x, M.IOPQueries V x} {NQ N :
 into `{0,1}^m` by `Query.toBits`; on the answers to these queries it accepts when an oracle with
 these answers at its queries is accepted, read through `Query.toBits`
 (`NARG.Verifier.ofOracle`). -/
-noncomputable def toQVerifier (Qs : ∀ x, M.IOPQueries V x) (kq : ℕ) :
+def toQVerifier (Qs : ∀ x, M.IOPQueries V x) (kq : ℕ) :
     NARG.QROM.Verifier (queryBits k kN kS L) k e (Claim X M.NIProof) X :=
   NARG.Verifier.ofOracle kq ((M.expansion Qs).map Query.toBits)
     (fun h c => M.Accepts (h ∘ Query.toBits) c.stmt c.proof (Qs c.stmt)) Claim.stmt
@@ -278,7 +278,7 @@ theorem knowledgeError_toQVerifier (Qs : ∀ x, M.IOPQueries V x) (kq : ℕ) (b 
 /-- **The spBCS verifier as a `NARG.ROM.Verifier`**: its query expansion with `kq` queries; on the
 answers to these queries it accepts when an oracle with these answers at its queries is accepted
 (`NARG.Verifier.ofOracle`). -/
-noncomputable def toRVerifier (Qs : ∀ x, M.IOPQueries V x) (kq : ℕ) :
+def toRVerifier (Qs : ∀ x, M.IOPQueries V x) (kq : ℕ) :
     NARG.ROM.Verifier (Query k kN kS L) (Out k e) (Claim X M.NIProof) X :=
   NARG.Verifier.ofOracle kq (M.expansion Qs) (fun h c => M.Accepts h c.stmt c.proof (Qs c.stmt))
     Claim.stmt
@@ -320,13 +320,13 @@ theorem jointBound [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε
 
 /-- **The spBCS verifier at its query budget** under format bounds `NQ`, `N` (`toQVerifier` at
 `kqOf Mg n NQ N`). -/
-noncomputable def qVerifier (Qs : ∀ x, M.IOPQueries V x) (NQ N : ℕ) :
+def qVerifier (Qs : ∀ x, M.IOPQueries V x) (NQ N : ℕ) :
     NARG.QROM.Verifier (queryBits k kN kS L) k e (Claim X M.NIProof) X :=
   M.toQVerifier Qs (kqOf Mg n NQ N)
 
 /-- **The spBCS verifier at its query budget, classically** (`toRVerifier` at
 `kqOf Mg n NQ N`). -/
-noncomputable def rVerifier (Qs : ∀ x, M.IOPQueries V x) (NQ N : ℕ) :
+def rVerifier (Qs : ∀ x, M.IOPQueries V x) (NQ N : ℕ) :
     NARG.ROM.Verifier (Query k kN kS L) (Out k e) (Claim X M.NIProof) X :=
   M.toRVerifier Qs (kqOf Mg n NQ N)
 

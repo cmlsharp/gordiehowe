@@ -3,9 +3,11 @@
 
 module
 
-public import GordieHowe.Language.Library.Sponge
+public import GordieHowe.Applications.MLDSA44.Frontend.Reads
+public import GordieHowe.Applications.Keccak.Frontend.Sponge
 public import GordieHowe.Applications.MLDSA44.Interp
 public import GordieHowe.Generated.MLDSA44.Native.ROMParams.Program
+public import GordieHowe.Generated.MLDSA44.Native.ROMParams.ShapeFacts
 public import GordieHowe.Applications.MLDSA44.Frontend.HField
 public import GordieHowe.Applications.MLDSA44.Frontend.QField
 public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative6Coords
@@ -518,9 +520,9 @@ end H
 
 /-- The native program at the ROM parameters has domain `H`'s base facts. -/
 instance : MldsaHBase program where
-  hPreds := by decide +kernel
-  hTyped := by decide +kernel
-  trKind := rfl
+  hPreds := Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_h2c_2emu_2eblocks_2er0_source_range
+  hTyped := by shape_decide
+  trKind := Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_tr_kind
 
 /-- **The program facts of domain `A` the native frontend's composition reads** (`MldsaHBase` and):
 the values the extractor reads read nothing from the run. Each program instantiates it by
@@ -531,7 +533,7 @@ class MldsaABase (program : RealizedProgram) : Prop extends MldsaHBase program w
 
 /-- The native program at the ROM parameters has the composition's facts. -/
 instance : MldsaABase program where
-  projReads := by decide +kernel
+  projReads := by shape_decide
 
 section A
 

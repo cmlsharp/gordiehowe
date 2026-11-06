@@ -3,6 +3,7 @@
 
 module
 
+public import GordieHowe.Applications.FieldInterps.Odd
 public import GordieHowe.Applications.MLDSA44.Ring.Carrier.HonestCross
 public import GordieHowe.Applications.MLDSA44.Ring.Native.HonestFull
 
@@ -90,6 +91,28 @@ extension). A fact about the field interpretation, instantiated for Goldilocks²
 class CarrierANode (F0 : FieldInterp) : Prop where
   /-- The node `GF(p^1)` is a subfield. -/
   subfield : ∃ S : Subfield F0.K, ∀ x, x ∈ F0.node "GF(p^1)" ↔ x ∈ S
+
+/-- **Goldilocks² has characteristic `pGold`** (`ExpChar`), at the field interpretation. -/
+instance instExpCharGold2 : ExpChar RealizedProgram.gold2.K pGold :=
+  inferInstanceAs (ExpChar GoldilocksExt2 pGold)
+
+/-- **Goldilocks²'s node `GF(p^1)` is the prime subfield `F_p`.** -/
+instance : CarrierANode RealizedProgram.gold2 :=
+  ⟨⟨RelativePacking.fixedField _ pGold 1, fun x => by
+    change x ∈ RealizedProgram.gold2Node "GF(p^1)" ↔ _
+    rw [RealizedProgram.gold2Node, if_pos rfl]
+    rfl⟩⟩
+
+/-- **Goldilocks⁴ has characteristic `pGold`** (`ExpChar`), at the field interpretation. -/
+instance instExpCharGold4 : ExpChar RealizedProgram.gold4.K pGold :=
+  inferInstanceAs (ExpChar GoldilocksExt4 pGold)
+
+/-- **Goldilocks⁴'s node `GF(p^1)` is the prime subfield `F_p`.** -/
+instance : CarrierANode RealizedProgram.gold4 :=
+  ⟨⟨RelativePacking.fixedField _ pGold 1, fun x => by
+    change x ∈ RealizedProgram.gold4Node "GF(p^1)" ↔ _
+    rw [RealizedProgram.gold4Node, if_pos rfl]
+    rfl⟩⟩
 
 /-! ## The renamings' inverses -/
 
@@ -197,7 +220,7 @@ variable {program : RealizedProgram} [CarrierHEmbed program] [CarrierAEmbed prog
   [MldsaCarrierRelation program] [MldsaRingStmt program] [TableSelect program]
   [MldsaCarrierFront program] [MldsaCarrierSelect program] [MldsaCarrierQuot program]
   [MldsaCarrierExec program]
-  {F0 FH : FieldInterp} [MLDSA44.AField F0] [CarrierANode F0] [HField FH]
+  {F0 FH : FieldInterp} [RealizedProgram.PrimeCastField F0 pGold] [CarrierANode F0] [HField FH]
 
 set_option hygiene false in
 local notation "interp" => mldsaInterpOf F0 FH

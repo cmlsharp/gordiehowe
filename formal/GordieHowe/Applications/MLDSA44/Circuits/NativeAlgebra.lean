@@ -10,7 +10,7 @@ public import GordieHowe.Language.Realizations.Range
 public import GordieHowe.Foundations.Algebra.IntLift
 public import GordieHowe.Language.Realizations.MAC
 public import GordieHowe.Applications.MLDSA44.Native.Rows
-public import GordieHowe.Applications.Rows.MAC
+public import GordieHowe.Language.Realizations.MACRows
 public import GordieHowe.Foundations.Algebra.CheckOps
 public import GordieHowe.Applications.MLDSA44.Circuits.Hash
 

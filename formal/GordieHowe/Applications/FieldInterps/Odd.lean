@@ -3,6 +3,7 @@
 
 module
 
+public import GordieHoweNative.Applications.FieldInterps.Codes
 public import GordieHowe.ProofSystem.Program.FieldModel
 public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative6Coords
 public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative11Coords
@@ -69,13 +70,6 @@ theorem _root_.GordieHowe.RealizedProgram.fq6_model : RealizedProgram.fq6.Model 
     (fun _ hx => by rwa [RealizedProgram.fq6Node, if_pos rfl] at hx)
     (by rw [RealizedProgram.fq6Node, if_neg (by decide)])
 
-/-- **The code arithmetic of `F_q^6`** (`GKR.Fold.ExtCode.overPrime`): `Fp24_6`
-(`lib/algebra/fp24_6.h:225`) writes coefficient `i` as `Fp24`'s three bytes
-(`lib/algebra/fp24.h:273`) at byte `3 i`, so a code is `Σ_i c_i 2^(24 i)` with `c_i` the coefficient
-of `X^i`; the arithmetic modulo `8380417` on each of the `6` coefficients, `X^6 = 7`. -/
-def _root_.GordieHowe.RealizedProgram.fq6Code : GKR.Fold.ExtCode :=
-  GKR.Fold.ExtCode.overPrime 8380417 24 6 7
-
 /-- **The code arithmetic of `F_q^6` is the field's** (`GKR.Fold.ExtCode.overPrime_hom`). -/
 theorem _root_.GordieHowe.RealizedProgram.fq6_codeHom :
     RealizedProgram.fq6.CodeHom RealizedProgram.fq6Code.arith :=
@@ -127,14 +121,6 @@ theorem _root_.GordieHowe.RealizedProgram.fq11_model : RealizedProgram.fq11.Mode
     mldsaNative11Coords_natCast mldsaNative11Coords_algebraMap
     (fun _ hx => by rwa [RealizedProgram.fq11Node, if_pos rfl] at hx)
     (by rw [RealizedProgram.fq11Node, if_neg (by decide)])
-
-/-- **The code arithmetic of `F_q^11`** (`GKR.Fold.ExtCode.overPrime`): `MlDsaField11 =
-NativeWide<Fp24, 11, 2, …>` (`lib/algebra/fp_native_wide.h:631`) packs coefficient `i` in
-`kCoefficientBits = 23` bits at bit `23 i` (`lib/algebra/fp_native_wide.h:64`, `:388`), so a code is
-`Σ_i c_i 2^(23 i)` with `c_i` the coefficient of `X^i`; the arithmetic modulo `8380417` on each of
-the `11` coefficients, `X^11 = 2`. -/
-def _root_.GordieHowe.RealizedProgram.fq11Code : GKR.Fold.ExtCode :=
-  GKR.Fold.ExtCode.overPrime 8380417 23 11 2
 
 /-- **The code arithmetic of `F_q^11` is the field's** (`GKR.Fold.ExtCode.overPrime_hom`). -/
 theorem _root_.GordieHowe.RealizedProgram.fq11_codeHom :
@@ -190,13 +176,6 @@ theorem _root_.GordieHowe.RealizedProgram.gold2_model : RealizedProgram.gold2.Mo
     (fun _ hx => by rwa [RealizedProgram.gold2Node, if_pos rfl] at hx)
     (by rw [RealizedProgram.gold2Node, if_neg (by decide)])
 
-/-- **The code arithmetic of Goldilocks²** (`GKR.Fold.ExtCode.overPrime`): `Fp64G2`
-(`lib/algebra/fp_goldilocks.h:402`) writes the coefficients of `1` and `X` as eight bytes each
-(`lib/algebra/fp_goldilocks.h:188`), so a code is `Σ_i c_i 2^(64 i)` with `c_i` the coefficient of
-`X^i`; the arithmetic modulo `18446744069414584321` on each of the `2` coefficients, `X^2 = 7`. -/
-def _root_.GordieHowe.RealizedProgram.gold2Code : GKR.Fold.ExtCode :=
-  GKR.Fold.ExtCode.overPrime pGold 64 2 7
-
 /-- **The code arithmetic of Goldilocks² is the field's** (`GKR.Fold.ExtCode.overPrime_hom`). -/
 theorem _root_.GordieHowe.RealizedProgram.gold2_codeHom :
     RealizedProgram.gold2.CodeHom RealizedProgram.gold2Code.arith :=
@@ -250,13 +229,6 @@ theorem _root_.GordieHowe.RealizedProgram.gold4_model : RealizedProgram.gold4.Mo
     goldilocksExt4Coords_natCast goldilocksExt4Coords_algebraMap
     (fun _ hx => by rwa [RealizedProgram.gold4Node, if_pos rfl] at hx)
     (by rw [RealizedProgram.gold4Node, if_neg (by decide)])
-
-/-- **The code arithmetic of Goldilocks⁴** (`GKR.Fold.ExtCode.overPrime`): `Fp64G4`
-(`lib/algebra/fp_goldilocks4.h:196`) writes coefficient `i` as eight bytes at byte `8 i`, so a code
-is `Σ_i c_i 2^(64 i)` with `c_i` the coefficient of `X^i`; the arithmetic modulo
-`18446744069414584321` on each of the `4` coefficients, `X^4 = 7`. -/
-def _root_.GordieHowe.RealizedProgram.gold4Code : GKR.Fold.ExtCode :=
-  GKR.Fold.ExtCode.overPrime pGold 64 4 7
 
 /-- **The code arithmetic of Goldilocks⁴ is the field's** (`GKR.Fold.ExtCode.overPrime_hom`). -/
 theorem _root_.GordieHowe.RealizedProgram.gold4_codeHom :

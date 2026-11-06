@@ -11,14 +11,14 @@ public import GordieHowe.Foundations.Algebra.RelativePackingBijective
 public import GordieHowe.ProofSystem.Ligero.MaskTest.PiecesHonest
 public import GordieHowe.ProofSystem.Ligero.MaskTest.Pieces
 public import GordieHowe.Model.IOP.Append
-public import GordieHowe.Applications.Rows.Basic
+public import GordieHowe.Foundations.Algebra.Rows
 public import GordieHowe.ProofSystem.GKR.SourceInput
 public import GordieHowe.ProofSystem.GKR.SourceCircuit
 public import GordieHowe.ProofSystem.Zerocheck.Round
 public import GordieHowe.ProofSystem.Ligero.Preparation
 public import GordieHowe.Foundations.Algebra.QuadraticSystem
 public import GordieHowe.Foundations.Algebra.AffineForm
-public import GordieHowe.Applications.Keccak.HashCircuit.Packed.Basic
+public import GordieHowe.ProofSystem.Ligero.SubfieldQuery
 public import GordieHowe.ProofSystem.GKR.TranscriptRouting
 public import GordieHowe.ProofSystem.GKR.Transcript
 public import GordieHowe.ProofSystem.GKR.CircuitBudget
@@ -34,7 +34,7 @@ public import GordieHowe.Foundations.Probability.IdentDistrib
 public import GordieHowe.ProofSystem.Zerocheck.SkipBatchPhase
 public import GordieHowe.ProofSystem.Zerocheck.SkipBatch
 public import GordieHowe.ProofSystem.FieldProof.MaskedReduction
-public import GordieHowe.Applications.Keccak.HashCircuit.Skip
+public import GordieHowe.ProofSystem.Zerocheck.AltRounds
 public import GordieHowe.ProofSystem.Ligero.Routing
 public import GordieHowe.ProofSystem.Zerocheck.AffineBatch
 public import GordieHowe.ProofSystem.Ligero.RelativeLayout

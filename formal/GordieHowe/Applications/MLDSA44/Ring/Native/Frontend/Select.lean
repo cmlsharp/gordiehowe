@@ -153,14 +153,6 @@ def rowEntry (x : program.Valuation interp) (j c : ℕ) : (interp 0).K :=
   if c < 5120 then RealizedProgram.castElt (x (MldsaRingStmt.keys program) (j * 5120 + c))
   else RealizedProgram.castElt (x (MldsaRingStmt.mu program) (j * 24 + (c - 5120)))
 
-/-- **An opaque statement value reads the statement** at the table's fuel. -/
-theorem read_opaque (e : program.Env interp) {v : ℕ} {name : String}
-    (hk : (program.value v).kind = .pub (.opaque name [])) (i : ℕ) :
-    program.read e program.values.length v i = e.stmt v i := by
-  obtain ⟨n, hn⟩ := TableSelect.values_length_succ (program := program)
-  rw [hn]
-  simp only [RealizedProgram.read, hk, if_true]
-
 /-- **The selected index is below `64`** where the source program holds. -/
 theorem idxOf_lt64 {e : program.Env interp} (hs : program.SourceSatAt e) :
     TableSelect.idxOf 0 e < 64 := by
@@ -192,10 +184,10 @@ theorem record_row {e : program.Env interp} (hs : program.SourceSatAt e)
   by_cases h' : c < 5120
   · rw [if_pos h', if_pos h']
     unfold RealizedProgram.rowRead
-    rw [read_opaque e MldsaRingStmt.keysKind]
+    rw [read_of_opaque_nil e TableSelect.values_pos MldsaRingStmt.keysKind]
   · rw [if_neg h', if_neg h', if_pos (by omega)]
     unfold RealizedProgram.rowRead
-    rw [read_opaque e MldsaRingStmt.muKind]
+    rw [read_of_opaque_nil e TableSelect.values_pos MldsaRingStmt.muKind]
 
 variable {len : ℕ}
 

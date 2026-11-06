@@ -19,10 +19,9 @@ against the source part of the realized program (`GordieHowe/Language/RealizedPr
 * **Sharing of bits**. The cross-field `equal` of the realized program
   (`GordieHowe.RealizedProgram.HoldsWith`) states that every reading of `y` is below `2^w` and that the readings of
   `x` and `y` agree where every reading of `x` is below `2^w`. Where both operands read bits, it
-  is the paper's `pshare`, and `pshare` implies it in
-  every environment. An accepting environment of the source
-  program reads bits at both operands (`SourceAcceptingAt.crossBits`), so every source cross-field
-  `equal` holds there as `pshare`.
+  is the paper's `pshare`. An accepting environment of the source program reads bits at both
+  operands (`SourceAcceptingAt.crossBits`). No theorem here states that `pshare` implies the
+  cross-field `equal` in every environment.
 * **The interactive proof of the source program** (`def:o-ip`, `GordieHowe.RealizedProgram.paperSpec`). The source
   protocol `Π_P₀` of the realized program (`GordieHowe.RealizedProgram.sourceSpec`) sends the committed assignment in its first
   message: the phase-`0` values and the pads of the late values. The paper's first message is the
@@ -56,8 +55,6 @@ open scoped NNReal ENNReal
 section
 
 variable (ir : RealizedProgram) {I : Interp}
-
-/-! ## Sharing of bits -/
 
 variable {ir}
 

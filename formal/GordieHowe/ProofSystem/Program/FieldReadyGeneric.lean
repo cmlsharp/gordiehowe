@@ -27,8 +27,10 @@ checks at one member of the class passes them at every member that realizes at l
   (`FieldInterp.Packing.generic`), when `s0 ∣ n`, the tops of `Pk`'s bit edges are named by their
   degree (`BitNodesNamed`), and the plan's edges meet the generic member's masking conditions
   (`genericEdgesOkB`: subfield masks over a child containing `S0`, squaring-chain masks over `F_2`);
-* **the ready data** (`FieldReady.generic`): the domain's ready data at the generic member, so the
-  domain's circuit proof (`fieldProof`, `fieldSound`) holds at it.
+* **existence of ready data** (`FieldReady.exists_generic`): the generic packing has ready data
+  with the original certificate, so the domain's circuit proof (`fieldProof`, `fieldSound`)
+  holds at it. The generic packing is a mathematical existence witness, not an executable
+  choice of a field representation.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -213,17 +215,18 @@ theorem fieldOkB_generic {P : Export.Plan} {c : LigeroCert}
   · intro w D hs
     exact (hR.skip w D).2 (Pk.skip_le hs)
 
-/-- **The ready data of domain `d` at the generic member** of the class at the numbers of `R`'s
-member (`fieldOkB_generic`): the domain's circuit proof (`fieldProof`, `fieldSound`) holds at the
-generic member. -/
-noncomputable def FieldReady.generic {P : Export.Plan} (R : ir.FieldReady I d P)
+/-- **Ready data exists at the generic member** of the class at the numbers of `R`'s member
+(`fieldOkB_generic`), with the same Ligero certificate. The domain's circuit proof (`fieldProof`,
+`fieldSound`) therefore holds at this member; choosing its field representation is not an
+executable operation. -/
+theorem FieldReady.exists_generic {P : Export.Plan} (R : ir.FieldReady I d P)
     (hK : Fintype.card (I (ir.domainField d)).K = R.Pk.p ^ R.Pk.n) (hs0 : R.Pk.s0 ∣ R.Pk.n)
     (hcov : R.Pk.BitNodesNamed) (hE : ir.genericEdgesOkB P d R.Pk.p R.Pk.s0 = true) :
-    ir.FieldReady I d P where
-  Pk := R.Pk.generic hK hs0 hcov
-  cert := R.cert
-  ok := fieldOkB_generic R.ok hK hs0 hcov hE
-  wf := R.wf
+    ∃ R' : ir.FieldReady I d P, R'.Pk = R.Pk.generic hK hs0 hcov ∧ R'.cert = R.cert := by
+  exact ⟨{ Pk := R.Pk.generic hK hs0 hcov
+           cert := R.cert
+           ok := fieldOkB_generic R.ok hK hs0 hcov hE
+           wf := R.wf }, rfl, rfl⟩
 
 end
 

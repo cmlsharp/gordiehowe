@@ -56,7 +56,7 @@ variable (C : ProofSystems)
 
 /-- **The base signer of `bindingScheme`**: `baseSigner` at the ring-binding base message
 `bindingMsg`. -/
-noncomputable abbrev bindingBase (maxAttempts : ℕ) :=
+abbrev bindingBase (maxAttempts : ℕ) :=
   baseSigner (2 + ringMsgLen) C maxAttempts
     (bindingMsg (GordieHowe.MLDSA.Spec.expandS _root_.MLDSA.mldsa44)
       (GordieHowe.MLDSA.Spec.expandMask _root_.MLDSA.mldsa44))
@@ -260,7 +260,7 @@ theorem bindingScheme.keyReuseForgeProb_le (maxAttempts : ℕ) {n t : ℕ}
 
 /-- **The base signer of `convertedScheme`**: `baseSigner` at the converted base message
 `convertedMsg`. -/
-noncomputable abbrev convertedBase (maxAttempts : ℕ) :=
+abbrev convertedBase (maxAttempts : ℕ) :=
   baseSigner (2 + 32) C maxAttempts
     (convertedMsg (GordieHowe.MLDSA.Spec.expandS _root_.MLDSA.mldsa44)
       (GordieHowe.MLDSA.Spec.expandMask _root_.MLDSA.mldsa44))

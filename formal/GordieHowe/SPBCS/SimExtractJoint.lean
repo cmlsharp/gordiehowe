@@ -345,9 +345,9 @@ noncomputable abbrev simRunModel :
 extraction queries (`ctrlExpansion`, `kq + Q · q` of them); on their answers it accepts when an
 oracle with these answers accepts the adversary's output under the oracle reprogrammed by the
 assignments in force (`AcceptsFinal`, `NARG.Verifier.ofOracle`); and the adversary's statement. -/
-noncomputable def simVerifier :
+def simVerifier :
     NARG.QROM.Verifier (queryBits k kN kS L) k e (SPBCS.Ctrl A.toTPKindAlg Psim Q) X :=
-  NARG.Verifier.ofOracle (kq + Q * Psim.q) (ctrlExpansion A.toTPKindAlg Psim Q Qs)
+  NARG.Verifier.ofOracle (kq + Q * Psim.q) (ctrlExpansionAt Psim Q Qs A.slots)
     (fun h c => AcceptsFinal Qs A Psim Q ((outEquiv k e).symm ∘ h) c) fun c => c.1.stmt
 
 /-- **A win of the base game of `simVerifier` wins the verdict game** (`expand_mem_verdictGame_iff`).
@@ -363,18 +363,30 @@ theorem mem_verdictGame_of_mem_game
   rw [← he, hh]
   exact (expand_mem_verdictGame_iff Qs A Psim Q kq hkq _ o.out).2 hv
 
+/-- **The classical control of the composed registers**, read using the adversary's shape.
+The explicit register type keeps the projections' width and slot arguments independent of the
+quantum completion `A.toTPKindAlg`; only the supplied output function `A.out` is evaluated. -/
+def simExtControl (v : SPBCS.Reg A Psim Q) : SPBCS.CtrlAt Psim Q A.slots :=
+  let v : CWork shA.CntW shA.width (Bits (queryBits k kN kS L)) (XOut k e) X'
+      (M.Response B) shA.slots (simExtChallenger Psim Q).q (simExtChallenger Psim Q).Coins := v
+  (A.out v.adv.workspace.1, v.chal)
+
+/-- Reading the classical control agrees with the quantum completion's control projection. -/
+theorem simExtControl_eq (v : SPBCS.Reg A Psim Q) :
+    simExtControl A Psim Q v = SPBCS.ctrlOf A.toTPKindAlg Psim Q v := rfl
+
 /-- **The simulation-extraction game as a `NARG.QROM.Verifier` on the composed registers**
 (proof-internal): the extraction queries; on their answers it accepts when the queries computed
 from the answers, the answers and the registers win `simExtGame`, which also asks for a fresh
 statement and the structure of the assignments; and the adversary's statement. Its extraction run
 is `extRunFull`. -/
-noncomputable def simExtVerifier (fx : X' → X) :
+def simExtVerifier (fx : X' → X) :
     NARG.QROM.Verifier (queryBits k kN kS L) k e (SPBCS.Reg A Psim Q) X where
   kq := kq + Q * Psim.q
-  expansion := simExtractionExpansion A.toTPKindAlg Psim Q Qs
+  expansion := (ctrlExpansionAt Psim Q Qs A.slots).comapIn (simExtControl A Psim Q)
   AcceptsOn v a := (⟨(simExtractionExpansion A.toTPKindAlg Psim Q Qs).queriesOn v a, a, v⟩ :
     GordieHowe.QROM.BaseGame.Tuple _ _ _ _) ∈ simExtGame A.toTPKindAlg Psim Q Qs fx (kq + Q * Psim.q)
-  stmt v := (SPBCS.advOut A.toTPKindAlg Psim Q v).stmt
+  stmt v := (simExtControl A Psim Q v).1.stmt
 
 /-- **The base game of `simExtVerifier` is `simExtGame` on the tuples whose queries are computed
 from their answers.** -/

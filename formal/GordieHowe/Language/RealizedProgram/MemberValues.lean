@@ -34,26 +34,6 @@ The definitions are in `GordieHoweNative/Language/RealizedProgram/MemberValues.l
 
 namespace GordieHowe.Twin
 
-/-- **A list check passes exactly when it passes at every index** (`allE`, from index `i`). -/
-theorem okB_allE_iff {ε α : Type} {f : ℕ → α → Except ε Unit} :
-    ∀ {i : ℕ} {l : List α}, okB (allE f i l) = true ↔
-      ∀ j (hj : j < l.length), okB (f (i + j) l[j]) = true
-  | _, [] => by simp [allE, okB]
-  | i, x :: xs => by
-    rw [allE, okB_seqE, Bool.and_eq_true, okB_allE_iff]
-    constructor
-    · rintro ⟨h0, h⟩ j hj
-      cases j with
-      | zero => simpa using h0
-      | succ j =>
-        rw [show i + (j + 1) = i + 1 + j by omega]
-        simpa using h j (by simpa using hj)
-    · intro h
-      refine ⟨h 0 (by simp), fun j hj => ?_⟩
-      have := h (j + 1) (by simpa using hj)
-      rw [show i + (j + 1) = i + 1 + j by omega] at this
-      simpa using this
-
 /-- **A list check passing passes at every index** (`allE`, from index `i`). -/
 theorem okB_allE_getElem {ε α : Type} {f : ℕ → α → Except ε Unit} {i : ℕ} {l : List α}
     (h : okB (allE f i l) = true) : ∀ j (hj : j < l.length), okB (f (i + j) l[j]) = true :=
