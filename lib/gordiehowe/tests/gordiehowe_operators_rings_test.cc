@@ -1,8 +1,10 @@
 // Copyright 2026 Chad Sharp and Paul Grubbs
 // SPDX-License-Identifier: Apache-2.0
 
-// GordieHowe tests (gordiehowe_operators_test binary): DISABLED_Timings.
+// GordieHowe tests (gordiehowe_operators_test binary): DISABLED_Timings and
+// DISABLED_MACConvTimings.
 
+#include "ec/p256.h"
 #include "gordiehowe/tests/gordiehowe_operators_test.h"
 
 namespace proofs::gordiehowe {
@@ -70,8 +72,8 @@ class CarrierConvBefore final : public LinearOperator<F> {
   std::vector<Elt> s_, st_;
 };
 
-template <class F, class MF>
-void time_field(const char *name, size_t nch) {
+template <class F>
+void time_field(const char *name) {
   const F &f = field<F>();
   const size_t n = ring_n<F>();
   const auto h = lift<F>(random_mod(n, modulus<F>(), 15));
@@ -91,28 +93,60 @@ void time_field(const char *name, size_t nch) {
                                             scheme_ntt<F>(n)),
                  1);
   }
-  if constexpr (!kCarrier<F>) {
-    MF mf;
-    SecureRandomEngine rng;
-    std::vector<typename MF::Elt> r(nch);
-    for (auto &v : r) v = rng.elt(mf);
-    time_pair<F>(name, ("MACConv nch=" + std::to_string(nch)).c_str(),
-                 ops::MACConvReference<F, MF>(f, mf, r),
-                 ops::MACConvOperator<F, MF>(f, mf, r), 1);
+}
+
+// MACConv per chunk (its window K): construction, apply and
+// transpose_apply, at the MAC sizes of the programs (nch up to the
+// post-quantum mDL's 920 chunks of 128 bits).
+template <class F, class MF>
+void time_mac(const F &f, const char *name, size_t nch) {
+  MF mf;
+  SecureRandomEngine rng;
+  std::vector<typename MF::Elt> r(nch);
+  for (auto &v : r) v = rng.elt(mf);
+  std::vector<typename F::Elt> x(nch * MF::kBits), y(MF::kBits),
+      ox(MF::kBits), oy(nch * MF::kBits);
+  for (auto &v : x) v = rng.elt(f);
+  for (auto &v : y) v = rng.elt(f);
+  std::unique_ptr<ops::MACConvOperator<F, MF>> op;
+  const double make = best_ms(
+      [&] { op = std::make_unique<ops::MACConvOperator<F, MF>>(f, mf, r); }, 3);
+  const double a = best_ms([&] { op->apply(x.data(), ox.data()); }, 5);
+  const double t =
+      best_ms([&] { op->transpose_apply(y.data(), oy.data()); }, 5);
+  std::printf("%-14s w=%3zu nch=%4zu K=%zu make %9.4f  apply %9.4f  "
+              "transpose %9.4f ms  (per chunk: %7.2f %7.2f %7.2f us)\n",
+              name, MF::kBits, nch, op->window(), make, a, t,
+              1e3 * make / nch, 1e3 * a / nch, 1e3 * t / nch);
+}
+TEST(GordieHoweOperators, DISABLED_MACConvTimings) {
+  for (size_t nch : {2, 6, 16, 52, 64, 920}) {
+    time_mac<Fp256Base, GF2_128<>>(p256_base, "Fp256Base", nch);
+    time_mac<Fp24_6, GF2_128<>>(field<Fp24_6>(), "Fp24_6", nch);
+    time_mac<Fp14_9, GF2_128<>>(field<Fp14_9>(), "Fp14_9", nch);
+    time_mac<Fp64G2, GF2_128<>>(field<Fp64G2>(), "Fp64G2", nch);
+  }
+  for (size_t nch : {3, 26, 32, 460}) {
+    time_mac<Fp256Base, GF2_256<>>(p256_base, "Fp256Base", nch);
+    time_mac<MlDsaField11, GF2_256<>>(field<MlDsaField11>(), "MlDsaField11",
+                                      nch);
+    time_mac<FalconField18, GF2_256<>>(field<FalconField18>(), "FalconField18",
+                                       nch);
+    time_mac<Fp64G4, GF2_256<>>(field<Fp64G4>(), "Fp64G4", nch);
   }
 }
 
 TEST(GordieHoweOperators, DISABLED_Timings) {
-  time_field<Fp64G2, GF2_128<>>("Fp64G2", 0);
-  time_field<Fp64G4, GF2_256<>>("Fp64G4", 0);
-  time_field<Fp14_9, GF2_128<>>("Fp14_9", 64);
-  time_field<FalconField18, GF2_256<>>("FalconField18", 32);
-  time_field<FalconField19, GF2_256<>>("FalconField19", 32);
-  time_field<FalconField20, GF2_256<>>("FalconField20", 32);
-  time_field<FalconField24, GF2_256<>>("FalconField24", 32);
-  time_field<Fp24_6, GF2_128<>>("Fp24_6", 52);
-  time_field<MlDsaField11, GF2_256<>>("MlDsaField11", 26);
-  time_field<MlDsaField12, GF2_256<>>("MlDsaField12", 26);
+  time_field<Fp64G2>("Fp64G2");
+  time_field<Fp64G4>("Fp64G4");
+  time_field<Fp14_9>("Fp14_9");
+  time_field<FalconField18>("FalconField18");
+  time_field<FalconField19>("FalconField19");
+  time_field<FalconField20>("FalconField20");
+  time_field<FalconField24>("FalconField24");
+  time_field<Fp24_6>("Fp24_6");
+  time_field<MlDsaField11>("MlDsaField11");
+  time_field<MlDsaField12>("MlDsaField12");
 }
 
 }  // namespace

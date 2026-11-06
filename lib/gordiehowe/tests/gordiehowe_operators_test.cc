@@ -2,17 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // GordieHowe tests: the native-field NTT plans of NegacyclicConv,
-// PolyMatVec, PolyBroadcast and MACConv against their O(n^2) references at
-// the real sizes in every supported field; the NTT-domain forms against the
+// PolyMatVec and PolyBroadcast against their O(n^2) references at the real
+// sizes in every supported field; MACConv against the prover's integer
+// accumulators, linear, with its transpose the adjoint and every window
+// width agreeing (also over F_p256); the NTT-domain forms against the
 // coefficient forms; the staged Ntt against the schemes' reference
-// transforms. The binary also holds gordiehowe_operators_systems_test.cc
-// (systems over Goldilocks^4 that prove with the operators) and
-// gordiehowe_operators_rings_test.cc (DISABLED_Timings, which measures
-// apply and transpose_apply, reference against transform; run it with
-// --gtest_also_run_disabled_tests).
+// transforms. The binary also
+// holds gordiehowe_operators_systems_test.cc (systems over Goldilocks^4 that
+// prove with the operators) and gordiehowe_operators_rings_test.cc
+// (DISABLED_Timings, which measures apply and transpose_apply, reference
+// against transform, and DISABLED_MACConvTimings, MACConv per chunk; run
+// them with --gtest_also_run_disabled_tests).
 
 #include <array>
+#include <random>
+#include <string>
 
+#include "ec/p256.h"
 #include "gordiehowe/tests/gordiehowe_operators_test.h"
 
 namespace proofs::gordiehowe {
@@ -93,29 +99,226 @@ TEST(GordieHoweOperators, PolyMatVecMatchesReference) {
   matvec_matches_reference<MlDsaField12>();
 }
 
-// MACConv at the PoP sizes: Falcon crosses 8192 bits (64 chunks of 128 or
-// 32 of 256), ML-DSA 6656 (52 or 26).
-template <class F, class MF>
-void mac_matches_reference(size_t nch) {
+// ------------------------------------------------------------ MACConv --
+
+// Random chunk powers with the edge kernels r_c = 0, r_c = 1 and r_c with
+// every bit set.
+template <class MF>
+std::vector<typename MF::Elt> mac_edge_powers(size_t nch, uint64_t seed) {
   MF mf;
-  SecureRandomEngine rng;
+  std::mt19937_64 g(seed);
   std::vector<typename MF::Elt> r(nch);
-  for (auto &v : r) v = rng.elt(mf);
-  r[0] = mf.zero();
-  r[1] = mf.one();
-  ops::MACConvOperator<F, MF> op(field<F>(), mf, r);
-  ops::MACConvReference<F, MF> ref(field<F>(), mf, r);
-  expect_matches<F>(op, ref);
+  for (auto &v : r) {
+    v = mf.zero();
+    auto xb = mf.one();
+    for (size_t b = 0; b < MF::kBits; ++b) {
+      if (g() & 1) mf.add(v, xb);
+      xb = mf.mulf(xb, mf.of_scalar_field(0b10));
+    }
+  }
+  auto ones = mf.zero(), xb = mf.one();
+  for (size_t b = 0; b < MF::kBits; ++b) {
+    mf.add(ones, xb);
+    xb = mf.mulf(xb, mf.of_scalar_field(0b10));
+  }
+  const typename MF::Elt edge[3] = {mf.zero(), mf.one(), ones};
+  for (size_t e = 0; e < 3 && e < nch; ++e) r[(e * 7) % nch] = edge[e];
+  return r;
 }
-TEST(GordieHoweOperators, MACConvMatchesReference) {
-  mac_matches_reference<Fp14_9, GF2_128<>>(64);
-  mac_matches_reference<Fp24_6, GF2_128<>>(52);
-  mac_matches_reference<FalconField18, GF2_256<>>(32);
-  mac_matches_reference<FalconField19, GF2_256<>>(32);
-  mac_matches_reference<FalconField20, GF2_256<>>(32);
-  mac_matches_reference<FalconField24, GF2_256<>>(32);
-  mac_matches_reference<MlDsaField11, GF2_256<>>(26);
-  mac_matches_reference<MlDsaField12, GF2_256<>>(26);
+
+// The integer n in F (reduced by the characteristic), by doubling.
+template <class F>
+typename F::Elt field_of_integer(const F &f, uint64_t n) {
+  auto out = f.zero(), pow = f.one();
+  for (; n != 0; n >>= 1) {
+    if (n & 1) f.add(out, pow);
+    const auto copy = pow;
+    f.add(pow, copy);
+  }
+  return out;
+}
+
+// sum_i a_i b_i.
+template <class F>
+typename F::Elt inner(const F &f, const std::vector<typename F::Elt> &a,
+                      const std::vector<typename F::Elt> &b) {
+  auto s = f.zero();
+  for (size_t i = 0; i < a.size(); ++i) f.add(s, f.mulf(a[i], b[i]));
+  return s;
+}
+
+// MACConvOperator(r) at every window width 0..8 (0: by the supports), then
+// at the width it picks.
+template <class F, class MF>
+std::vector<std::unique_ptr<ops::MACConvOperator<F, MF>>> mac_windows(
+    const F &f, const MF &mf, const std::vector<typename MF::Elt> &r) {
+  std::vector<std::unique_ptr<ops::MACConvOperator<F, MF>>> out;
+  for (size_t k = 0; k <= 8; ++k)
+    out.push_back(std::make_unique<ops::MACConvOperator<F, MF>>(f, mf, r, k));
+  out.push_back(std::make_unique<ops::MACConvOperator<F, MF>>(f, mf, r));
+  return out;
+}
+template <class F, class MF>
+std::string mac_label(const ops::MACConvOperator<F, MF> &op, size_t nch) {
+  return "window " + std::to_string(op.window()) +
+         " w=" + std::to_string(MF::kBits) + " nch=" + std::to_string(nch);
+}
+template <class F>
+std::vector<typename F::Elt> random_vec(const F &f, size_t n) {
+  SecureRandomEngine rng;
+  std::vector<typename F::Elt> v(n);
+  for (auto &x : v) x = rng.elt(f);
+  return v;
+}
+
+// apply on random 0/1 inputs equals mac_integer_accumulators (the prover's
+// popcount path) mapped into F.
+template <class F, class MF>
+void mac_matches_integer_accumulators(const F &f, const MF &mf,
+                                      const std::vector<typename MF::Elt> &r,
+                                      uint64_t seed) {
+  constexpr size_t W = MF::kBits;
+  const size_t n = r.size() * W;
+  std::mt19937_64 g(seed);
+  for (int trial = 0; trial < 2; ++trial) {
+    std::vector<uint8_t> bits(n);
+    for (auto &b : bits) b = uint8_t(g() & 1);
+    const auto acc =
+        ops::mac_integer_accumulators<MF>(bits, r, ops::mac_taps(mf));
+    std::vector<typename F::Elt> x(n), want(W), got(W);
+    for (size_t j = 0; j < n; ++j) x[j] = bits[j] ? f.one() : f.zero();
+    for (size_t b = 0; b < W; ++b) want[b] = field_of_integer(f, acc[b]);
+    for (const auto &op : mac_windows(f, mf, r)) {
+      ASSERT_EQ(op->rows(), W);
+      ASSERT_EQ(op->cols(), n);
+      op->apply(x.data(), got.data());
+      EXPECT_TRUE(got == want) << mac_label(*op, r.size());
+    }
+  }
+}
+
+// apply(a x + b x') = a apply(x) + b apply(x') on random field inputs.
+template <class F, class MF>
+void mac_is_linear(const F &f, const MF &mf,
+                   const std::vector<typename MF::Elt> &r, uint64_t) {
+  constexpr size_t W = MF::kBits;
+  const size_t n = r.size() * W;
+  SecureRandomEngine rng;
+  const auto x = random_vec(f, n), x2 = random_vec(f, n);
+  const auto a = rng.elt(f), b = rng.elt(f);
+  std::vector<typename F::Elt> z(n);
+  for (size_t j = 0; j < n; ++j) {
+    z[j] = f.mulf(a, x[j]);
+    f.add(z[j], f.mulf(b, x2[j]));
+  }
+  for (const auto &op : mac_windows(f, mf, r)) {
+    std::vector<typename F::Elt> ax(W), ax2(W), az(W), want(W);
+    op->apply(x.data(), ax.data());
+    op->apply(x2.data(), ax2.data());
+    op->apply(z.data(), az.data());
+    for (size_t i = 0; i < W; ++i) {
+      want[i] = f.mulf(a, ax[i]);
+      f.add(want[i], f.mulf(b, ax2[i]));
+    }
+    EXPECT_TRUE(az == want) << mac_label(*op, r.size());
+  }
+}
+
+// <y, apply(x)> = <transpose_apply(y), x> on random field x, y.
+template <class F, class MF>
+void mac_transpose_is_adjoint(const F &f, const MF &mf,
+                              const std::vector<typename MF::Elt> &r,
+                              uint64_t) {
+  constexpr size_t W = MF::kBits;
+  const size_t n = r.size() * W;
+  const auto x = random_vec(f, n), y = random_vec(f, W);
+  for (const auto &op : mac_windows(f, mf, r)) {
+    std::vector<typename F::Elt> ax(W), aty(n);
+    op->apply(x.data(), ax.data());
+    op->transpose_apply(y.data(), aty.data());
+    EXPECT_EQ(inner(f, y, ax), inner(f, aty, x)) << mac_label(*op, r.size());
+  }
+}
+
+// Every window width gives the same apply and transpose_apply on random
+// field inputs.
+template <class F, class MF>
+void mac_windows_agree(const F &f, const MF &mf,
+                       const std::vector<typename MF::Elt> &r, uint64_t) {
+  constexpr size_t W = MF::kBits;
+  const size_t n = r.size() * W;
+  const auto x = random_vec(f, n), y = random_vec(f, W);
+  const auto ops_ = mac_windows(f, mf, r);
+  std::vector<typename F::Elt> ax0(W), aty0(n), ax(W), aty(n);
+  ops_[0]->apply(x.data(), ax0.data());
+  ops_[0]->transpose_apply(y.data(), aty0.data());
+  for (size_t o = 1; o < ops_.size(); ++o) {
+    ops_[o]->apply(x.data(), ax.data());
+    ops_[o]->transpose_apply(y.data(), aty.data());
+    EXPECT_TRUE(ax == ax0) << mac_label(*ops_[o], r.size());
+    EXPECT_TRUE(aty == aty0) << mac_label(*ops_[o], r.size());
+  }
+}
+
+// CHECK(f, mf, r, seed) at each chunk count of NCHS (mac_edge_powers), and
+// at the chunk powers 0 and 1 alone (few additions: the support form).
+template <class F, class MF, class Check>
+void mac_cases(const F &f, const std::vector<size_t> &nchs, Check check) {
+  const MF mf;
+  for (size_t nch : nchs) check(f, mf, mac_edge_powers<MF>(nch, 17 + nch), nch);
+  check(f, mf, std::vector<typename MF::Elt>{mf.zero(), mf.one()}, 2);
+}
+// Over F_p256 (no NTT) and the NTT fields, at w = 128 and 256, from one
+// chunk to 130, including the PoP sizes: Falcon crosses 8192 bits (64
+// chunks of 128 or 32 of 256), ML-DSA 6656 (52 or 26).
+template <class Check>
+void mac_all_fields(Check check) {
+  mac_cases<Fp256Base, GF2_128<>>(p256_base, {1, 2, 6, 52, 130}, check);
+  mac_cases<Fp256Base, GF2_256<>>(p256_base, {1, 3, 26}, check);
+  mac_cases<Fp24_6, GF2_128<>>(field<Fp24_6>(), {1, 6, 52, 130}, check);
+  mac_cases<Fp14_9, GF2_128<>>(field<Fp14_9>(), {16, 64}, check);
+  mac_cases<Fp64G2, GF2_128<>>(field<Fp64G2>(), {3, 64}, check);
+  mac_cases<MlDsaField11, GF2_256<>>(field<MlDsaField11>(), {3, 26}, check);
+  mac_cases<MlDsaField12, GF2_256<>>(field<MlDsaField12>(), {26}, check);
+  mac_cases<FalconField18, GF2_256<>>(field<FalconField18>(), {32}, check);
+  mac_cases<FalconField19, GF2_256<>>(field<FalconField19>(), {32}, check);
+  mac_cases<FalconField20, GF2_256<>>(field<FalconField20>(), {32}, check);
+  mac_cases<FalconField24, GF2_256<>>(field<FalconField24>(), {32}, check);
+  mac_cases<Fp64G4, GF2_256<>>(field<Fp64G4>(), {5, 32}, check);
+}
+
+TEST(GordieHoweOperators, MACConvOperatorMatchesIntegerAccumulators) {
+  mac_all_fields([](const auto &f, const auto &mf, const auto &r, uint64_t s) {
+    mac_matches_integer_accumulators(f, mf, r, s);
+  });
+}
+TEST(GordieHoweOperators, MACConvOperatorIsLinear) {
+  mac_all_fields([](const auto &f, const auto &mf, const auto &r, uint64_t s) {
+    mac_is_linear(f, mf, r, s);
+  });
+}
+TEST(GordieHoweOperators, MACConvOperatorTransposeIsAdjoint) {
+  mac_all_fields([](const auto &f, const auto &mf, const auto &r, uint64_t s) {
+    mac_transpose_is_adjoint(f, mf, r, s);
+  });
+}
+TEST(GordieHoweOperators, MACConvOperatorWindowsAgree) {
+  mac_all_fields([](const auto &f, const auto &mf, const auto &r, uint64_t s) {
+    mac_windows_agree(f, mf, r, s);
+  });
+}
+// At the chunk powers 0 and 1 alone the operator picks the support form.
+TEST(GordieHoweOperators, MACConvOperatorSparsePowersUseSupports) {
+  const GF2_128<> m128;
+  const GF2_256<> m256;
+  EXPECT_EQ((ops::MACConvOperator<Fp24_6, GF2_128<>>(
+                 field<Fp24_6>(), m128, {m128.zero(), m128.one()})
+                 .window()),
+            0u);
+  EXPECT_EQ((ops::MACConvOperator<Fp256Base, GF2_256<>>(
+                 p256_base, m256, {m256.zero(), m256.one()})
+                 .window()),
+            0u);
 }
 
 // --------------------------------------------------------- NTT forms --

@@ -32,6 +32,8 @@ gordiehowe_add_test(gordiehowe_threads_test)
 gordiehowe_add_test(gordiehowe_operators_test
                     gordiehowe_operators_systems_test.cc
                     gordiehowe_operators_rings_test.cc SETS gold4)
+# The MACConv tests over F_p256.
+target_link_libraries(gordiehowe_operators_test ec)
 # One Keccak batch shared by several sponge calls.
 gordiehowe_add_test(gordiehowe_keccak_test SETS gf128_sha256 gf128 gf256)
 target_link_libraries(gordiehowe_keccak_test sha3 xkcp)

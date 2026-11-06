@@ -121,35 +121,6 @@ TEST(GordieHowe, NegacyclicNttMatchesReference) {
   negacyclic_matches_reference<Fp64G4>(kN);
 }
 
-template <class MF>
-void mac_matches_reference(size_t nch) {
-  const AF &af = env().af;
-  MF mf;
-  SecureRandomEngine rng;
-  std::vector<typename MF::Elt> r(nch);
-  for (auto &v : r) v = rng.elt(mf);
-  // Edge cases: chunk powers 0, 1, and the element with every bit set.
-  if (nch >= 3) {
-    r[0] = mf.zero();
-    r[1] = mf.one();
-    r[2] = mf.zero();
-    auto xb = mf.one();
-    for (size_t b = 0; b < MF::kBits; ++b) {
-      mf.add(r[2], xb);
-      xb = mf.mulf(xb, mf.of_scalar_field(0b10));
-    }
-  }
-  ops::MACConvOperator<AF, MF> op(af, mf, r);
-  ops::MACConvReference<AF, MF> ref(af, mf, r);
-  expect_matches_reference(af, op, ref);
-}
-
-TEST(GordieHowe, MACConvNttMatchesReference) {
-  mac_matches_reference<GF2_128<>>(4);
-  mac_matches_reference<GF2_256<>>(4);
-  mac_matches_reference<GF2_256<>>(32);
-}
-
 // The bits of x^k in M, by M's own multiplication.
 template <class MF>
 std::vector<uint8_t> mac_power_bits(const MF &mf, size_t k) {
@@ -187,9 +158,6 @@ void mac_matches_definition(size_t nch) {
   ops::MACConvOperator<F, MF> op(f, mf, r);
   std::vector<typename F::Elt> acc(W);
   op.apply(x.data(), acc.data());
-  EXPECT_TRUE(acc == want);
-  ops::MACConvReference<F, MF> ref(f, mf, r);
-  ref.apply(x.data(), acc.data());
   EXPECT_TRUE(acc == want);
 }
 

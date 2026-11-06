@@ -10,6 +10,7 @@
 #define PRIVACY_PROOFS_ZK_LIB_GORDIEHOWE_OPS_OPERATORS_H_
 
 #include <algorithm>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -920,157 +921,162 @@ uint64_t mac_acc_max(const MF &mf, size_t nch) {
   return nch * mac_conv_max(mf) + 1;
 }
 
-// Direct O(nch * w^2) evaluation: the reference for the NTT operator.
-template <class F, class MF>
-class MACConvReference final : public LinearOperator<F> {
-  using Elt = typename F::Elt;
-
- public:
-  MACConvReference(const F &f, const MF &mf,
-                   const std::vector<typename MF::Elt> &r)
-      : f_(f), nch_(r.size()) {
-    const size_t w = MF::kBits;
-    const auto red = mac_reduction(w, mac_taps(mf));
-    m_.assign(nch_ * w * w, f.zero());
-    for (size_t c = 0; c < nch_; ++c) {
-      const auto col = mac_columns<MF>(r[c], red);
-      for (size_t i = 0; i < w; ++i)
-        for (size_t b = 0; b < w; ++b)
-          m_[(c * w + i) * w + b] = f.of_scalar(col[i][b]);
-    }
-  }
-  size_t rows() const override { return MF::kBits; }
-  size_t cols() const override { return nch_ * MF::kBits; }
-  void apply(const Elt *x, Elt *y) const override {
-    const size_t w = MF::kBits;
-    for (size_t b = 0; b < w; ++b) y[b] = f_.zero();
-    for (size_t j = 0; j < nch_ * w; ++j)
-      for (size_t b = 0; b < w; ++b)
-        f_.add(y[b], f_.mulf(m_[j * w + b], x[j]));
-  }
-  void transpose_apply(const Elt *y, Elt *x) const override {
-    const size_t w = MF::kBits;
-    for (size_t j = 0; j < nch_ * w; ++j) {
-      x[j] = f_.zero();
-      for (size_t b = 0; b < w; ++b)
-        f_.add(x[j], f_.mulf(m_[j * w + b], y[b]));
-    }
-  }
-
- private:
-  const F &f_;
-  size_t nch_;
-  std::vector<Elt> m_;
-};
-
-// The same operator by cyclic NTTs of length 2w (host_ntt::Plan), with
-// mac_reduce after the inverse transform and mac_transpose_reduce before the
-// forward one. The constructor computes, once per instance and in the base
-// field where the 0/1 kernels and the twiddles lie, the spectrum of each R_c
-// and of its reversal rev[(2w - k) mod 2w] = R_c[k], and the reduction table. apply runs one forward transform per chunk
-// and one inverse; transpose_apply one forward and one inverse per chunk.
-// Every field with a base-field root of order 2w runs it (the carriers and
-// the native fields over F_q, e.g. Falcon's order-512 root of F_q); other
-// fields use the reference.
+// MACConv(r) by field additions alone: each chunk power R_c is a 0/1
+// vector and reduce adds entries. With L = mac_transpose_reduce(y) (2w
+// entries), transpose_apply is
+//   x_c[i] = sum_{j in supp R_c} L[i + j],
+// computed by windows of K bits (the method of four Russians): R_c's bits
+// [tK, tK + K) form a pattern p_ct, and with the table
+//   T_p[m] = sum_{b in p} L[m + b]   (p < 2^K, m < w + (nwin - 1) K),
+// one per call and shared by every chunk, x_c[i] = sum_t T_(p_ct)[i + tK].
+// apply is its transpose: it adds x_c[i] into U_(p_ct)[i + tK], spreads each
+// U_p over the bits of p into the product a (2w - 1 entries) and runs
+// mac_reduce. A call costs (2^K - 1) (w + (nwin - 1) K) additions for the
+// table and nwin w per chunk; K minimizes the total, and K = 0 (no table,
+// |R_c| w additions per chunk, over the supports) wins at few chunks. The
+// choice reads only the shape and the public chunk powers (WINDOW, when
+// given, fixes K, for tests). No multiplication and no matrix.
 template <class F, class MF>
 class MACConvOperator final : public LinearOperator<F> {
   using Elt = typename F::Elt;
   static constexpr size_t W = MF::kBits;
+  static constexpr size_t kMaxWindow = 8;
 
  public:
   MACConvOperator(const F &f, const MF &mf,
-                  const std::vector<typename MF::Elt> &r)
-      : f_(f), nch_(r.size()), acc_max_(mac_acc_max(mf, r.size())) {
-    if constexpr (kFieldNtt<F>) {
-      if (build(mf, r)) return;
+                  const std::vector<typename MF::Elt> &r,
+                  std::optional<size_t> window = std::nullopt)
+      : f_(f), nch_(r.size()), acc_max_(mac_acc_max(mf, r.size())),
+        red_(mac_reduction(W, mac_taps(mf))), support_(r.size()) {
+    size_t ones = 0;
+    for (size_t c = 0; c < nch_; ++c)
+      for (size_t j = 0; j < W; ++j)
+        if (r[c][j]) support_[c].push_back(j);
+    for (const auto &s : support_) ones += s.size();
+    if (window) {
+      check(*window <= kMaxWindow, "MACConv: a window of 8 bits at most");
+      k_ = *window;
+    } else {
+      // The window by total additions; ties keep the smaller window.
+      size_t best = ones * W;
+      for (size_t k = 1; k <= kMaxWindow; ++k) {
+        const size_t nwin = (W + k - 1) / k;
+        const size_t cost =
+            ((size_t(1) << k) - 1) * (W + (nwin - 1) * k) + nch_ * nwin * W;
+        if (cost < best) {
+          best = cost;
+          k_ = k;
+        }
+      }
     }
-    reference_ = std::make_unique<MACConvReference<F, MF>>(f, mf, r);
+    if (k_ == 0) return;
+    nwin_ = (W + k_ - 1) / k_;
+    m_ = W + (nwin_ - 1) * k_;
+    pattern_.assign(nch_ * nwin_, 0);
+    for (size_t c = 0; c < nch_; ++c)
+      for (size_t j = 0; j < W; ++j)
+        if (r[c][j]) pattern_[c * nwin_ + j / k_] |= uint8_t(1) << (j % k_);
   }
   size_t rows() const override { return W; }
   size_t cols() const override { return nch_ * W; }
   // Every accumulator of 0/1 inputs is below this bound.
   uint64_t acc_max() const { return acc_max_; }
+  // The window width K (0: over the supports).
+  size_t window() const { return k_; }
   void apply(const Elt *x, Elt *y) const override {
-    if (reference_) {
-      reference_->apply(x, y);
-      return;
-    }
-    if constexpr (kFieldNtt<F>) {
-      constexpr size_t N = 2 * W;
-      std::vector<Elt> sum(N, f_.zero()), a(N);
+    std::vector<Elt> a;
+    if (k_ == 0) {
+      a.assign(2 * W - 1, f_.zero());
       for (size_t c = 0; c < nch_; ++c) {
-        std::copy(x + c * W, x + (c + 1) * W, a.begin());
-        std::fill(a.begin() + W, a.end(), f_.zero());
-        plan_->transform(a, false);
-        const auto &sp = forward_[c];
-        for (size_t k = 0; k < N; ++k) f_.add(sum[k], f_.mulf(a[k], sp[k]));
+        const Elt *xc = x + c * W;
+        for (size_t j : support_[c]) {
+          Elt *at = a.data() + j;
+          for (size_t i = 0; i < W; ++i) f_.add(at[i], xc[i]);
+        }
       }
-      plan_->transform(sum, true);
-      mac_reduce(f_, sum, W, red_);
-      std::copy(sum.begin(), sum.begin() + W, y);
+    } else {
+      const size_t np = size_t(1) << k_;
+      std::vector<Elt> u(np * m_, f_.zero());
+      for (size_t c = 0; c < nch_; ++c) {
+        const Elt *xc = x + c * W;
+        const uint8_t *pc = pattern_.data() + c * nwin_;
+        for (size_t t = 0; t < nwin_; ++t) {
+          if (pc[t] == 0) continue;
+          Elt *at = u.data() + pc[t] * m_ + t * k_;
+          for (size_t i = 0; i < W; ++i) f_.add(at[i], xc[i]);
+        }
+      }
+      // The transpose of the table's construction (transpose_apply), from
+      // the largest pattern down: U_p adds into a shifted by its lowest bit
+      // b and into U_(p without b). Every product term lands below 2w - 1.
+      a.assign(m_ + k_, f_.zero());
+      for (size_t p = np - 1; p >= 1; --p) {
+        const size_t b = size_t(std::countr_zero(p)), rest = p & (p - 1);
+        const Elt *row = u.data() + p * m_;
+        Elt *at = a.data() + b;
+        for (size_t i = 0; i < m_; ++i) f_.add(at[i], row[i]);
+        if (rest != 0) {
+          Elt *prev = u.data() + rest * m_;
+          for (size_t i = 0; i < m_; ++i) f_.add(prev[i], row[i]);
+        }
+      }
+      a.resize(2 * W - 1);
     }
+    mac_reduce(f_, a, W, red_);
+    std::copy(a.begin(), a.end(), y);
   }
   void transpose_apply(const Elt *y, Elt *x) const override {
-    if (reference_) {
-      reference_->transpose_apply(y, x);
+    auto lifted = mac_transpose_reduce(f_, y, W, red_);
+    if (k_ == 0) {
+      for (size_t c = 0; c < nch_; ++c) {
+        Elt *xc = x + c * W;
+        std::fill(xc, xc + W, f_.zero());
+        for (size_t j : support_[c]) {
+          const Elt *at = lifted.data() + j;
+          for (size_t i = 0; i < W; ++i) f_.add(xc[i], at[i]);
+        }
+      }
       return;
     }
-    if constexpr (kFieldNtt<F>) {
-      constexpr size_t N = 2 * W;
-      auto lifted = mac_transpose_reduce(f_, y, W, red_);
-      plan_->transform(lifted, false);
-      std::vector<Elt> a(N);
-      for (size_t c = 0; c < nch_; ++c) {
-        const auto &sp = reversed_[c];
-        for (size_t k = 0; k < N; ++k) a[k] = f_.mulf(lifted[k], sp[k]);
-        plan_->transform(a, true);
-        std::copy(a.begin(), a.begin() + W, x + c * W);
+    // T_p = T_(p without its lowest bit b) + L shifted by b, over m_
+    // offsets; L padded with zeros so that the last window's rows stay in it.
+    const size_t np = size_t(1) << k_;
+    lifted.resize(m_ + k_, f_.zero());
+    std::vector<Elt> table(np * m_, f_.zero());
+    for (size_t p = 1; p < np; ++p) {
+      const size_t b = size_t(std::countr_zero(p));
+      const Elt *prev = table.data() + (p & (p - 1)) * m_;
+      const Elt *at = lifted.data() + b;
+      Elt *row = table.data() + p * m_;
+      for (size_t i = 0; i < m_; ++i) {
+        row[i] = prev[i];
+        f_.add(row[i], at[i]);
+      }
+    }
+    for (size_t c = 0; c < nch_; ++c) {
+      Elt *xc = x + c * W;
+      std::fill(xc, xc + W, f_.zero());
+      const uint8_t *pc = pattern_.data() + c * nwin_;
+      for (size_t t = 0; t < nwin_; ++t) {
+        if (pc[t] == 0) continue;
+        const Elt *at = table.data() + pc[t] * m_ + t * k_;
+        for (size_t i = 0; i < W; ++i) f_.add(xc[i], at[i]);
       }
     }
   }
 
  private:
-  using Scalar = typename FieldNtt<F>::Scalar;
-
-  // False when the base field has no root of order 2w.
-  bool build(const MF &mf, const std::vector<typename MF::Elt> &r) {
-    if constexpr (kFieldNtt<F>) {
-      constexpr size_t N = 2 * W;
-      using Base = typename FieldNtt<F>::Base;
-      red_ = mac_reduction(W, mac_taps(mf));
-      // A primitive 2w-th root in the base field. Any one gives the same
-      // cyclic convolution.
-      const auto root = FieldNtt<F>::root(f_, N);
-      if (!root) return false;
-      plan_ = std::make_shared<const host_ntt::Plan<F>>(f_, N, *root);
-      const Base &bf = FieldNtt<F>::base(f_);
-      const host_ntt::Plan<Base> kernel(bf, N, FieldNtt<F>::scalar(*root));
-      for (size_t c = 0; c < nch_; ++c) {
-        std::vector<Scalar> fwd(N, bf.zero()), rev(N, bf.zero());
-        for (size_t k = 0; k < W; ++k) {
-          const Scalar bit = r[c][k] ? bf.one() : bf.zero();
-          fwd[k] = bit;
-          rev[(N - k) % N] = bit;
-        }
-        kernel.transform(fwd, false);
-        kernel.transform(rev, false);
-        forward_.push_back(std::move(fwd));
-        reversed_.push_back(std::move(rev));
-      }
-      return true;
-    }
-    return false;
-  }
-
   const F &f_;
   size_t nch_;
   uint64_t acc_max_;
-  std::shared_ptr<const host_ntt::Plan<F>> plan_;
   // The reduction table of M (mac_reduction).
   std::vector<std::vector<size_t>> red_;
-  // Kernel spectra by chunk.
-  std::vector<std::vector<Scalar>> forward_, reversed_;
-  std::unique_ptr<MACConvReference<F, MF>> reference_;
+  // The support of each chunk power, ascending.
+  std::vector<std::vector<size_t>> support_;
+  // The window width K, the windows per chunk, the table's offsets, and
+  // pattern_[c nwin + t] the bits [tK, tK + K) of R_c.
+  size_t k_ = 0, nwin_ = 0, m_ = 0;
+  std::vector<uint8_t> pattern_;
 };
 
 template <class F, class MF, class T, class P>
