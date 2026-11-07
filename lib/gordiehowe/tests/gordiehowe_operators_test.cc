@@ -481,6 +481,84 @@ TEST(GordieHoweOperators, TransposeRunAccumulateMatchesRun) {
   }
 }
 
+// An operator that counts its transposes (TransposeRunSharesSuffix).
+template <class F>
+class CountingTranspose final : public LinearOperator<F> {
+  using Elt = typename F::Elt;
+
+ public:
+  explicit CountingTranspose(std::shared_ptr<const LinearOperator<F>> op)
+      : op_(std::move(op)) {}
+  size_t rows() const override { return op_->rows(); }
+  size_t cols() const override { return op_->cols(); }
+  void apply(const Elt *x, Elt *y) const override { op_->apply(x, y); }
+  void transpose_apply(const Elt *y, Elt *x) const override {
+    ++count;
+    op_->transpose_apply(y, x);
+  }
+  mutable size_t count = 0;
+
+ private:
+  std::shared_ptr<const LinearOperator<F>> op_;
+};
+
+// TransposeRun::accumulate transposes the operators after the first once
+// for consecutive terms that share them and their multipliers, and again
+// when the operators or the multipliers change; every term's result is
+// its own chain's transpose, computed operator by operator.
+TEST(GordieHoweOperators, TransposeRunSharesSuffix) {
+  using F = Fp24_6;
+  using Elt = F::Elt;
+  using Ops = ops::TransposeRun<F>::Ops;
+  const F &f = field<F>();
+  const size_t m = 40, n = 24;
+  auto gather = [&](size_t s) {
+    std::vector<size_t> idx(n);
+    for (size_t i = 0; i < n; ++i)
+      idx[i] = (i + s) % 7 == 3 ? kGatherNone : (5 * i + 3 * s) % m;
+    return std::make_shared<GatherOperator<F>>(f, idx, m);
+  };
+  auto diag = std::make_shared<DiagonalOperator<F>>(f, random_full<F>(n));
+  auto diag2 = std::make_shared<DiagonalOperator<F>>(f, random_full<F>(n));
+  auto sum = std::make_shared<CountingTranspose<F>>(
+      std::make_shared<SumOperator<F>>(f, n));
+  const auto lam = random_full<F>(1), lam2 = random_full<F>(1);
+  const auto g0 = gather(0), g1 = gather(1), g2 = gather(2);
+  struct Term {
+    Ops ops;
+    const std::vector<Elt> *lam;
+    size_t transposes;  // the shared operator's count after the term
+  };
+  const std::vector<Term> terms = {
+      {{g0, diag, sum}, &lam, 1},  {{g1, diag, sum}, &lam, 1},
+      {{g2, diag, sum}, &lam, 1},  {{g0, diag2, sum}, &lam, 2},
+      {{g1, diag, sum}, &lam, 3},  {{g1, diag, sum}, &lam2, 4},
+      {{g2, diag, sum}, &lam2, 4},
+  };
+  ops::TransposeRun<F> run;
+  for (size_t t = 0; t < terms.size(); ++t) {
+    const Term &tm = terms[t];
+    const Elt scale = random_full<F>(1)[0];
+    const auto base = random_full<F>(m);
+    std::vector<Elt> got = base;
+    run.accumulate(f, tm.ops, tm.lam->data(), 1, scale, got.data());
+    EXPECT_EQ(sum->count, tm.transposes) << "term " << t;
+    // The chain's transpose, operator by operator, outside the counter.
+    std::vector<Elt> y = *tm.lam;
+    for (size_t k = tm.ops.size(); k-- > 0;) {
+      std::vector<Elt> x(tm.ops[k]->cols());
+      if (k == 2)
+        SumOperator<F>(f, n).transpose_apply(y.data(), x.data());
+      else
+        tm.ops[k]->transpose_apply(y.data(), x.data());
+      y = std::move(x);
+    }
+    std::vector<Elt> want = base;
+    for (size_t j = 0; j < m; ++j) f.add(want[j], f.mulf(scale, y[j]));
+    EXPECT_TRUE(got == want) << "term " << t;
+  }
+}
+
 // ------------------------------------------------------ staged transforms --
 
 // The staged transform's host evaluation equals the schemes' reference

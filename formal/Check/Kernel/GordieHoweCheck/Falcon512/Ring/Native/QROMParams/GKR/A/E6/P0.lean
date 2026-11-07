@@ -3,9 +3,9 @@
 
 module
 
-public import GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.GKR.A
-meta import GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.GKR.A
-import all GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.Program
+public import GordieHoweCerts.Generated.Falcon512.Ring.Native.QROMParams.GKR.A
+meta import GordieHoweCerts.Generated.Falcon512.Ring.Native.QROMParams.GKR.A
+import all GordieHoweCerts.Generated.Falcon512.Ring.Native.QROMParams.Program
 
 @[expose] public section
 

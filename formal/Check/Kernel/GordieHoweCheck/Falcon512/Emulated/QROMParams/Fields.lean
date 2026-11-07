@@ -3,12 +3,12 @@
 
 module
 
-public import GordieHowe.Generated.Falcon512.Emulated.QROMParams.Data
+public import GordieHoweCerts.Generated.Falcon512.Emulated.QROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 public import GordieHoweCheck.Falcon512.Emulated.QROMParams.AssignmentReads
 
-import all GordieHowe.Generated.Falcon512.Emulated.QROMParams.Program
-import all GordieHowe.Generated.Falcon512.Emulated.QROMParams.Plan
+import all GordieHoweCerts.Generated.Falcon512.Emulated.QROMParams.Program
+import all GordieHoweCerts.Generated.Falcon512.Emulated.QROMParams.Plan
 @[expose] public section
 
 /-!

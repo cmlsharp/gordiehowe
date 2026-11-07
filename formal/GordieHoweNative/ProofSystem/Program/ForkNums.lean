@@ -291,6 +291,10 @@ structure BatchNums where
   /-- The skip pads. -/
   e : Nat
 
+/-- **The elements of a covered batch's first challenge point**: the zerocheck point `ρ`, and the
+merging challenge `γ` with it when the batch is merged. -/
+@[expose] def BatchNums.firstReads (b : BatchNums) : Nat := bif b.merged then b.rounds + 1 else b.rounds
+
 /-- **The numbers of domain `d`'s forked proof** that its size bounds read. -/
 structure DomainNums where
   /-- Each covered batch. -/
@@ -383,7 +387,7 @@ variable (N : DomainNums) (t : TableauNums)
 
 /-- **`ForkRestNumbers` on the numbers.** -/
 @[expose] def restB (Lmax : Nat) : Bool :=
-  N.batches.all (fun b => decide (max (max b.rounds b.k) 3 ≤ Lmax)) &&
+  N.batches.all (fun b => decide (max (max b.firstReads b.k) 3 ≤ Lmax)) &&
   N.circuits.all (fun c => decide (max c.1 2 ≤ Lmax)) && decide (N.later ≤ Lmax) &&
   decide (t.nrep * N.rBound t + ((N.linBound + N.qBound * 3) + (N.qBound + w t - 1) / w t) ≤ Lmax)
 

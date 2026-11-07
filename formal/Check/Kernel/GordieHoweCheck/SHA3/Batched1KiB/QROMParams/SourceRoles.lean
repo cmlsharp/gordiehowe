@@ -3,11 +3,11 @@
 
 module
 
-public import GordieHowe.Generated.SHA3.Batched1KiB.QROMParams.Data
+public import GordieHoweCerts.Generated.SHA3.Batched1KiB.QROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 
-import all GordieHowe.Generated.SHA3.Batched1KiB.QROMParams.Program
-import all GordieHowe.Generated.SHA3.Batched1KiB.QROMParams.Plan
+import all GordieHoweCerts.Generated.SHA3.Batched1KiB.QROMParams.Program
+import all GordieHoweCerts.Generated.SHA3.Batched1KiB.QROMParams.Plan
 @[expose] public section
 
 /-!

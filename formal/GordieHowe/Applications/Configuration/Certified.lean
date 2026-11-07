@@ -376,6 +376,8 @@ strategy and the generated figures, with the query caps `qQ` (quantum) and `2^64
   inh := inferInstance
   rounds := cp.figures.rounds
   chernoff := cp.figures.chernoff
+  zNum := cp.figures.zNum
+  zDen := cp.figures.zDen
   N := cp.figures.N
   nq := cp.figures.nq
   kq := cp.figures.kq
@@ -417,6 +419,8 @@ strategy and the generated figures, with the query caps `qQ` (quantum) and `2^64
   inh := inferInstance
   rounds := cp.figures.rounds
   chernoff := cp.figures.chernoff
+  zNum := cp.figures.zNum
+  zDen := cp.figures.zDen
   N := cp.figures.N
   nq := cp.figures.nq
   kq := cp.figures.kq

@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Generated.MDL.ECDSA.ROMParams.GKR.H
+public import GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.GKR.H
 public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E25.P0
 public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E25.P1
 public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E25.P2

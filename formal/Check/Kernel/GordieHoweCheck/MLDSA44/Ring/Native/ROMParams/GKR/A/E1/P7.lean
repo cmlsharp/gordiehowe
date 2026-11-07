@@ -3,9 +3,9 @@
 
 module
 
-public import GordieHowe.Generated.MLDSA44.Ring.Native.ROMParams.GKR.A
-meta import GordieHowe.Generated.MLDSA44.Ring.Native.ROMParams.GKR.A
-import all GordieHowe.Generated.MLDSA44.Ring.Native.ROMParams.Program
+public import GordieHoweCerts.Generated.MLDSA44.Ring.Native.ROMParams.GKR.A
+meta import GordieHoweCerts.Generated.MLDSA44.Ring.Native.ROMParams.GKR.A
+import all GordieHoweCerts.Generated.MLDSA44.Ring.Native.ROMParams.Program
 
 @[expose] public section
 

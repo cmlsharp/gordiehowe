@@ -53,6 +53,7 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -78,6 +79,84 @@ struct has_scalar_mul<
     F, std::void_t<decltype(std::declval<const F &>().mulf(
            std::declval<typename F::Elt>(),
            std::declval<typename F::Elt>().e[0]))>> : std::true_type {};
+
+// The coordinates of an odd-characteristic K over its prime field F_p: an
+// element's N residues in [0, p) as stored (the native fields' e[i],
+// Goldilocks^2's re and im). Every F_p-linear map of K is an N x N matrix
+// on them: an element of stored residues x_i is sum_i x_i u_i, u_i the
+// element whose residue i is 1 and the others 0, in any representation
+// whose residues are a fixed F_p-multiple of the value's coordinates.
+// Wide sums of products of residues: Acc, reduced once (mod p).
+template <class F, class = void>
+struct PrimeCoordinates {
+  static constexpr bool kSupported = false;
+};
+template <class F>
+struct PrimeCoordinates<
+    F, std::enable_if_t<!F::kCharacteristicTwo &&
+                        !std::is_same_v<F, Fp64G2> &&
+                        std::is_same_v<typename F::Scalar,
+                                       typename F::BaseField::Elt>,
+                        std::void_t<decltype(std::declval<typename F::Elt>()
+                                                 .e[0]
+                                                 .n)>>> {
+  using Elt = typename F::Elt;
+  static constexpr bool kSupported = true;
+  static constexpr size_t N = std::tuple_size_v<decltype(Elt{}.e)>;
+  static constexpr bool kWide = std::is_same_v<typename F::BaseField, Fp64G>;
+  static uint64_t get(const Elt &x, size_t i) { return x.e[i].n; }
+  static void set(Elt &x, size_t i, uint64_t v) {
+    x.e[i].n = decltype(x.e[i].n)(v);
+  }
+  static uint64_t modulus() {
+    if constexpr (kWide) {
+      return Fp64G::kP;
+    } else {
+      return F::BaseField::m_;
+    }
+  }
+  // Residues below 2^32 (Fp14, Fp24): products below 2^64 / 2^18, so a
+  // 64-bit sum of up to 2^18 of them is exact. Goldilocks: 128 bits and a
+  // carry count (Fp64G::reduce192).
+  struct WideAcc {
+    unsigned __int128 lo = 0;
+    uint64_t top = 0;
+  };
+  struct NarrowAcc {
+    uint64_t lo = 0;
+  };
+  using Acc = std::conditional_t<kWide, WideAcc, NarrowAcc>;
+  static void mac(Acc &a, uint64_t m, uint64_t x) {
+    if constexpr (kWide) {
+      const unsigned __int128 p = (unsigned __int128)m * x;
+      a.lo += p;
+      a.top += uint64_t(a.lo < p);
+    } else {
+      a.lo += m * x;
+    }
+  }
+  static uint64_t reduce(const Acc &a) {
+    if constexpr (kWide) {
+      return Fp64G::reduce192(a.lo, a.top);
+    } else {
+      return a.lo % modulus();
+    }
+  }
+};
+template <>
+struct PrimeCoordinates<Fp64G2> {
+  using Elt = Fp64G2::Elt;
+  static constexpr bool kSupported = true;
+  static constexpr size_t N = 2;
+  static uint64_t get(const Elt &x, size_t i) { return i == 0 ? x.re.n : x.im.n; }
+  static void set(Elt &x, size_t i, uint64_t v) { (i == 0 ? x.re : x.im).n = v; }
+  static uint64_t modulus() { return Fp64G::kP; }
+  using Acc = PrimeCoordinates<Fp64G4>::Acc;
+  static void mac(Acc &a, uint64_t m, uint64_t x) {
+    PrimeCoordinates<Fp64G4>::mac(a, m, x);
+  }
+  static uint64_t reduce(const Acc &a) { return PrimeCoordinates<Fp64G4>::reduce(a); }
+};
 
 template <class F>
 class PackingStage {
@@ -129,7 +208,18 @@ class PackingStage {
     for (size_t k = 0; k < d; ++k)
       for (size_t j = 0; j < d; ++j) twisted_dual[k * d + j] = phi(f, dual[j], k);
     twist_tables(f);
+    monomial_forms(f);
+    if constexpr (F::kCharacteristicTwo) {
+      constexpr size_t kCols = 8 * sizeof(Elt);
+      phi_inv_columns.resize(d * kCols);
+      for (size_t k = 0; k < d; ++k)
+        for (size_t c = 0; c < kCols; ++c)
+          phi_inv_columns[k * kCols + c] = phi_inv(f, LinearMap<F>::unit(c), k);
+    }
   }
+  // Characteristic 2: [k * 8 sizeof(Elt) + c] = phi^-k of memory bit c
+  // (LinearMap::unit), the columns of phi^-k.
+  std::vector<Elt> phi_inv_columns;
 
   bool squaring_chain() const { return mode == StageMode::kSquaringChain; }
   // The Frobenius twists phi^k and phi^-k on K.
@@ -192,6 +282,10 @@ class PackingStage {
                  std::vector<Elt> &a) const {
     a.resize(d * ng, f.zero());
     if (!F::kCharacteristicTwo && legacy_root) {
+      if (!mono_out_.empty()) {
+        add_monomial_forms(f, c, ncoord, ng, a);
+        return;
+      }
       // zk_extension_packed.h's odd path: dual multiplication through the
       // native basis maps.
       const auto &eb = ExtensionBasis<F>::get(f);
@@ -243,46 +337,16 @@ class PackingStage {
         });
   }
 
-  // Whether add_coefficients serves the stage: in characteristic 2 the
-  // forms are the twisted-dual sums above, and phi^-k is GF(2)-linear.
-  static constexpr bool kCoefficients = F::kCharacteristicTwo;
+  // Whether add_coefficients serves the stage: phi^-k is GF(2)-linear in
+  // characteristic 2, and F_p-linear on K's prime coordinates otherwise
+  // (PrimeCoordinates).
+  static constexpr bool kCoefficients =
+      F::kCharacteristicTwo || PrimeCoordinates<F>::kSupported;
 
   // Adds into v[g] (g < ng) the coefficient sum_k w_k a_k[g] of the forms
-  // add_forms builds from C, without building them. Since
-  // phi^-k(phi^k(beta*_j)) = beta*_j,
-  //
-  //     a_k[g] = sum_j beta*_j phi^-k(c_{g,j}),
-  //     sum_k w_k a_k[g] = sum_j beta*_j R(c_{g,j}),  R = sum_k w_k phi^-k,
-  //
-  // and R is one GF(2)-linear map (LinearMap): one map and one product per
-  // coordinate in place of d products and d twists per group. W and C are
-  // public, so the map's byte tables are no leak.
+  // add_forms builds from C, without building them (StageCoefficients).
   void add_coefficients(const F &f, const Elt *w, const Elt *c, size_t ncoord,
-                        size_t ng, Elt *v) const {
-    static_assert(kCoefficients, "coefficients without forms: characteristic 2");
-    const LinearMap<F> r(f, [&](const Elt &x) {
-      Elt y = f.mulf(w[0], x);
-      for (size_t k = 1; k < d; ++k)
-        f.add(y, f.mulf(w[k], phi_inv_public(f, x, k)));
-      return y;
-    });
-    parallel::for_chunks(
-        ng, parallel::grain_for(ng, parallel::kChunks),
-        [&](size_t g0, size_t g1) {
-          // The chunk's coordinates through R; a short last group's missing
-          // coordinates stay zero.
-          const size_t c0 = std::min(g0 * d, ncoord);
-          const size_t c1 = std::min(g1 * d, ncoord);
-          std::vector<Elt> x((g1 - g0) * d, f.zero());
-          r.apply(c + c0, x.data(), c1 - c0);
-          for (size_t g = g0; g < g1; ++g) {
-            typename F::Accum sum{};
-            for (size_t j = 0; j < d; ++j)
-              f.mac(sum, dual[j], x[(g - g0) * d + j]);
-            f.add(v[g], f.reduce(sum));
-          }
-        });
-  }
+                        size_t ng, Elt *v) const;
 
   // The forms of a GKR input claim on bits packed d to a group (the bit
   // stage, zk_packed.h's PackedForms over d-bit groups): the claim is
@@ -457,6 +521,79 @@ class PackingStage {
         }
     }
   }
+  // An odd legacy root stage over a native field, whose phi^-k and
+  // multiplication by beta*_j are scaled permutations of the prime
+  // coordinates (ExtensionBasis::Native): their composition x -> beta*_j
+  // phi^-k(x), the term of coordinate j in form k, sends residue i to
+  // residue mono_out_[(k d + j) N + i] times mono_scale_ of the same index.
+  // Each form's residue then gets one wide sum of d products and one
+  // reduction (PrimeCoordinates) in place of 2 d reduced products per
+  // coordinate. Found by evaluation on the prime units; empty when a
+  // composition is not monomial.
+  std::vector<uint32_t> mono_out_;
+  std::vector<uint64_t> mono_scale_;
+  void monomial_forms(const F &f) {
+    if constexpr (!F::kCharacteristicTwo && PrimeCoordinates<F>::kSupported &&
+                  ExtensionBasis<F>::Native) {
+      if (!legacy_root) return;
+      using PC = PrimeCoordinates<F>;
+      constexpr size_t N = PC::N;
+      if (N != d) return;
+      const auto &eb = ExtensionBasis<F>::get(f);
+      std::vector<uint32_t> out(d * d * N);
+      std::vector<uint64_t> sc(d * d * N);
+      for (size_t k = 0; k < d; ++k)
+        for (size_t j = 0; j < d; ++j)
+          for (size_t i = 0; i < N; ++i) {
+            Elt u = f.zero();
+            PC::set(u, i, 1);
+            const Elt y = eb.mul_dual(j, eb.phi_public(u, d - k, f), f);
+            size_t nz = 0;
+            for (size_t o = 0; o < N; ++o)
+              if (PC::get(y, o) != 0) {
+                ++nz;
+                out[(k * d + j) * N + i] = uint32_t(o);
+                sc[(k * d + j) * N + i] = PC::get(y, o);
+              }
+            if (nz != 1) return;
+          }
+      mono_out_ = std::move(out);
+      mono_scale_ = std::move(sc);
+    }
+  }
+  void add_monomial_forms(const F &f, const Elt *c, size_t ncoord, size_t ng,
+                          std::vector<Elt> &a) const {
+    if constexpr (!F::kCharacteristicTwo && PrimeCoordinates<F>::kSupported) {
+      using PC = PrimeCoordinates<F>;
+      constexpr size_t N = PC::N;
+      // Each (k, g) adds into its own a[k * ng + g]: under a runner the
+      // groups run in chunks.
+      parallel::for_chunks(
+          ng, parallel::grain_for(ng, parallel::kChunks),
+          [&](size_t g0, size_t g1) {
+            for (size_t g = g0; g < g1; ++g) {
+              const size_t nj = std::min(d, ncoord - std::min(ncoord, g * d));
+              bool any = false;
+              for (size_t j = 0; j < nj; ++j)
+                any = any || c[g * d + j] != f.zero();
+              if (!any) continue;
+              for (size_t k = 0; k < d; ++k) {
+                typename PC::Acc acc[N];
+                for (size_t j = 0; j < nj; ++j) {
+                  const Elt &x = c[g * d + j];
+                  const size_t at = (k * d + j) * N;
+                  for (size_t i = 0; i < N; ++i)
+                    PC::mac(acc[mono_out_[at + i]], mono_scale_[at + i],
+                            PC::get(x, i));
+                }
+                Elt y = f.zero();
+                for (size_t o = 0; o < N; ++o) PC::set(y, o, PC::reduce(acc[o]));
+                f.add(a[k * ng + g], y);
+              }
+            }
+          });
+    }
+  }
   // GF(2) in T: T's prime basis and its dual for Tr_{T/GF(2)} (PackedBasis).
   void bit_basis(const F &f) {
     const auto &s = SubfieldInfo<F>::get(f, t);
@@ -551,6 +688,220 @@ class PackingStage {
       for (size_t j = 0; j < d; ++j) f.add(dual[i], f.mulf(M[i][d + j], beta[j]));
   }
 };
+
+// A stage's Ligero coefficients without its forms: the combination
+// sum_k w_k a_k[g] of the forms add_forms builds from coefficients C on
+// the groups' B-coordinates. Since phi^-k(phi^k(beta*_j)) = beta*_j,
+//
+//     a_k[g] = sum_j beta*_j phi^-k(c_{g,j}),
+//     sum_k w_k a_k[g] = sum_j M_j(c_{g,j}),  M_j(x) = beta*_j R(x),
+//     R = sum_k w_k phi^-k,
+//
+// and each M_j is linear over the prime field: in characteristic 2 one
+// GF(2)-linear map (LinearMap), otherwise an N x N matrix on the prime
+// coordinates (PrimeCoordinates). So a coordinate costs one map in place
+// of the forms' d products and twists per group and the combination's d
+// products. W and C are public, so the maps' tables are no leak.
+template <class F>
+class StageCoefficients {
+ public:
+  using Elt = typename F::Elt;
+  StageCoefficients(const F &f, const PackingStage<F> &st, const Elt *w)
+      : f_(f), d_(st.d) {
+    static_assert(PackingStage<F>::kCoefficients,
+                  "coefficients without forms: a linear twist");
+    if constexpr (F::kCharacteristicTwo) {
+      // R's columns from phi^-k's, then M_j's.
+      constexpr size_t kCols = 8 * sizeof(Elt);
+      std::vector<Elt> r(kCols), col(kCols);
+      for (size_t c = 0; c < kCols; ++c) {
+        typename F::Accum sum{};
+        for (size_t k = 0; k < d_; ++k)
+          f.mac(sum, w[k], st.phi_inv_columns[k * kCols + c]);
+        r[c] = f.reduce(sum);
+      }
+      maps_.reserve(d_);
+      for (size_t j = 0; j < d_; ++j) {
+        for (size_t c = 0; c < kCols; ++c) col[c] = f.mulf(st.dual[j], r[c]);
+        maps_.push_back(LinearMap<F>::of_columns(f, col.data()));
+      }
+    } else {
+      // m_[(j N + i) N + o]: residue o of M_j(u_i), from R(u_i).
+      constexpr size_t N = PC::N;
+      m_.assign(d_ * N * N, 0);
+      for (size_t i = 0; i < N; ++i) {
+        Elt u = f.zero();
+        PC::set(u, i, 1);
+        Elt ru = f.mulf(w[0], u);
+        for (size_t k = 1; k < d_; ++k)
+          f.add(ru, f.mulf(w[k], st.phi_inv(f, u, k)));
+        for (size_t j = 0; j < d_; ++j) {
+          const Elt y = f.mulf(st.dual[j], ru);
+          for (size_t o = 0; o < N; ++o)
+            m_[(j * N + i) * N + o] = PC::get(y, o);
+        }
+      }
+    }
+  }
+
+  // Characteristic 2: M_j as a map.
+  const LinearMap<F> &map(size_t j) const { return maps_[j]; }
+
+  // v[g] += sum_j M_j(c_{g,j}) for g < NG, C over NCOORD coordinates (a
+  // short last group's missing ones zero). Groups whose coordinates are
+  // all zero add nothing and are skipped. Under a runner the groups run in
+  // chunks, each adding into its own v[g].
+  void add(const Elt *c, size_t ncoord, size_t ng, Elt *v) const {
+    const size_t d = d_;
+    parallel::for_chunks(
+        ng, parallel::grain_for(ng, parallel::kChunks),
+        [&](size_t g0, size_t g1) {
+          if constexpr (F::kCharacteristicTwo) {
+            // A block's groups with a nonzero coordinate, then per j their
+            // coordinates j through M_j.
+            constexpr size_t kBlock = 128;
+            Elt x[kBlock];
+            size_t live[kBlock];
+            for (size_t b = g0; b < g1; b += kBlock) {
+              const size_t e = std::min(g1, b + kBlock);
+              size_t nl = 0;
+              for (size_t g = b; g < e; ++g) {
+                bool any = false;
+                for (size_t j = 0; j < d && g * d + j < ncoord; ++j)
+                  any = any || c[g * d + j] != f_.zero();
+                if (any) live[nl++] = g;
+              }
+              if (nl == 0) continue;
+              for (size_t j = 0; j < d; ++j) {
+                for (size_t t = 0; t < nl; ++t) {
+                  const size_t i = live[t] * d + j;
+                  x[t] = i < ncoord ? c[i] : f_.zero();
+                }
+                maps_[j].apply(x, x, nl);
+                for (size_t t = 0; t < nl; ++t) f_.add(v[live[t]], x[t]);
+              }
+            }
+          } else {
+            constexpr size_t N = PC::N;
+            for (size_t g = g0; g < g1; ++g) {
+              const size_t nj = std::min(d, ncoord - std::min(ncoord, g * d));
+              bool any = false;
+              for (size_t j = 0; j < nj; ++j)
+                any = any || c[g * d + j] != f_.zero();
+              if (!any) continue;
+              typename PC::Acc acc[N];
+              for (size_t j = 0; j < nj; ++j) {
+                const Elt &x = c[g * d + j];
+                const uint64_t *mj = &m_[j * N * N];
+                for (size_t i = 0; i < N; ++i) {
+                  const uint64_t xi = PC::get(x, i);
+                  for (size_t o = 0; o < N; ++o) PC::mac(acc[o], mj[i * N + o], xi);
+                }
+              }
+              Elt y = f_.zero();
+              for (size_t o = 0; o < N; ++o) PC::set(y, o, PC::reduce(acc[o]));
+              f_.add(v[g], y);
+            }
+          }
+        });
+  }
+
+ private:
+  using PC = PrimeCoordinates<F>;
+  const F &f_;
+  size_t d_;
+  std::vector<LinearMap<F>> maps_;
+  std::vector<uint64_t> m_;
+};
+
+// v[g] += M_j(alpha[y]) for each word y < AT.size() at coordinate
+// i = AT[y] - OFF of a characteristic-2 stage's region, group g = i / d and
+// position j = i % d, with M the stage's d maps (d a power of two): the
+// root's product parts (tree_zk.h's add_products). Words of one group may
+// come in any order. Under a runner the words' values are computed in
+// chunks and added in word order.
+template <class F>
+void add_word_maps(const F &f, const std::vector<LinearMap<F>> &m, size_t off,
+                   const std::vector<size_t> &at, const typename F::Elt *alpha,
+                   typename F::Elt *v) {
+  using Elt = typename F::Elt;
+  const size_t d = m.size(), ny = at.size();
+  // Group and position by a shift and a mask.
+  size_t log_d = 0;
+  while ((size_t(1) << log_d) < d) ++log_d;
+  check((size_t(1) << log_d) == d, "word maps: a power of two");
+  // Words B .. E through their maps; SINK(y, group, value). A group's d
+  // words at consecutive positions (the common layout) join a tile of 8
+  // groups, which takes each M_j once on 8 words; other words go by
+  // position j into blocks of their own.
+  auto run = [&](size_t b, size_t e, auto &&sink) {
+    constexpr size_t kTile = 8, kBlock = 128;
+    std::vector<Elt> tile(d * kTile), buf(d * kBlock);
+    std::vector<size_t> ty(kTile), tg(kTile), who(d * kBlock), cnt(d, 0);
+    size_t nt = 0, nb = 0;
+    auto flush_tile = [&] {
+      for (size_t j = 0; j < d; ++j) {
+        Elt *z = &tile[j * kTile];
+        m[j].apply(z, z, nt);
+        for (size_t t = 0; t < nt; ++t) sink(ty[t] + j, tg[t], z[t]);
+      }
+      nt = 0;
+    };
+    auto flush_block = [&] {
+      for (size_t j = 0; j < d; ++j) {
+        Elt *z = &buf[j * kBlock];
+        m[j].apply(z, z, cnt[j]);
+        for (size_t q = 0; q < cnt[j]; ++q) {
+          const size_t y = who[j * kBlock + q];
+          sink(y, (at[y] - off) >> log_d, z[q]);
+        }
+        cnt[j] = 0;
+      }
+      nb = 0;
+    };
+    for (size_t y = b; y < e;) {
+      const size_t i = at[y] - off;
+      bool whole = (i & (d - 1)) == 0 && y + d <= e;
+      for (size_t j = 1; whole && j < d; ++j) whole = at[y + j] == at[y] + j;
+      if (whole) {
+        for (size_t j = 0; j < d; ++j) tile[j * kTile + nt] = alpha[y + j];
+        ty[nt] = y;
+        tg[nt++] = i >> log_d;
+        if (nt == kTile) flush_tile();
+        y += d;
+        continue;
+      }
+      const size_t j = i & (d - 1);
+      buf[j * kBlock + cnt[j]] = alpha[y];
+      who[j * kBlock + cnt[j]++] = y;
+      // A block holds kBlock words of each position: flush before one
+      // could overflow.
+      if (cnt[j] == kBlock) flush_block();
+      ++nb;
+      ++y;
+    }
+    if (nt != 0) flush_tile();
+    if (nb != 0) flush_block();
+  };
+  const size_t grain = parallel::grain_for(ny, parallel::kChunks);
+  if (parallel::chunks(ny, grain) < 2) {
+    run(0, ny, [&](size_t, size_t g, const Elt &x) { f.add(v[g], x); });
+    return;
+  }
+  // Under a runner: the words' values in chunks, then added in word
+  // order (a group's words may fall in two chunks).
+  std::vector<Elt> u(ny);
+  parallel::for_chunks(ny, grain, [&](size_t b, size_t e) {
+    run(b, e, [&](size_t y, size_t, const Elt &x) { u[y] = x; });
+  });
+  for (size_t y = 0; y < ny; ++y) f.add(v[(at[y] - off) >> log_d], u[y]);
+}
+
+template <class F>
+void PackingStage<F>::add_coefficients(const F &f, const Elt *w, const Elt *c,
+                                       size_t ncoord, size_t ng, Elt *v) const {
+  StageCoefficients<F>(f, *this, w).add(c, ncoord, ng, v);
+}
 
 // The bits of GF(2^D) words viewed through the packing tree's path
 // GF(2) < N_1 < N_2 < ... < GF(2^D): the bit stage GF(2) < N_1 and the

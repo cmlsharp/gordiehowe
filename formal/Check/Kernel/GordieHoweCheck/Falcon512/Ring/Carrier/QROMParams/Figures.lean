@@ -3,11 +3,11 @@
 
 module
 
-public import GordieHowe.Generated.Falcon512.Ring.Carrier.QROMParams.Data
+public import GordieHoweCerts.Generated.Falcon512.Ring.Carrier.QROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 
-import all GordieHowe.Generated.Falcon512.Ring.Carrier.QROMParams.Program
-import all GordieHowe.Generated.Falcon512.Ring.Carrier.QROMParams.Plan
+import all GordieHoweCerts.Generated.Falcon512.Ring.Carrier.QROMParams.Program
+import all GordieHoweCerts.Generated.Falcon512.Ring.Carrier.QROMParams.Plan
 @[expose] public section
 
 /-!
@@ -26,8 +26,8 @@ namespace GordieHoweCheck.Falcon512.Ring.Carrier.QROMParams
 
 open GordieHowe RealizedProgram GordieHowe.Generated.Falcon512.Ring.Carrier.QROMParams
 
-/-- **The figures when present** (`GordieHowe.ProgramData.figuresPartB`). -/
-theorem figuresPartOk : data.figuresPartB = true := by
+/-- **The figures** (`GordieHowe.ProgramData.figuresPartB`). -/
+theorem figuresPartOk : data.figuresPartB true = true := by
   decide +kernel
 
 end GordieHoweCheck.Falcon512.Ring.Carrier.QROMParams

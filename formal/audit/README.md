@@ -41,7 +41,22 @@ third column at the audit. An entry certifies that the declaration's statement
 source, vacuity, hypotheses that weaken the headlines, and off-by-one errors. A declaration whose
 statement or body changes after its audit must be re-audited: `check.sh` fails on a recorded
 declaration whose fingerprint changed, listing every such row (`scripts/audit_ledger.py`). It reports
-closure declarations not yet recorded and entries recorded without a fingerprint without failing.
+entries recorded without a fingerprint and entries no longer in the closure without failing.
+
+`unrecorded.txt` lists the closure declarations that have no ledger row, one name per line. It
+holds the declarations that were unaudited when the check was introduced, so that only additions
+fail: `check.sh` fails on a closure declaration that is neither recorded in `audited.txt` nor
+listed in `unrecorded.txt`, and names each one with its fingerprint. The author of a change that
+brings a new declaration into a headline's statement audits it and records it in `audited.txt`.
+The baseline is refreshed after a `check.sh --certs` run, which writes the full closure:
+
+    python3 scripts/audit_ledger.py audit/statement_closure.txt audit/audited.txt \
+      --baseline audit/unrecorded.txt --write-baseline
+
+This removes the names since recorded or no longer in the closure and adds none. Adding
+`--accept-new` also lists the new unrecorded declarations, which defers their audit; the additions
+appear in the diff of `unrecorded.txt` for review. Run on a smaller closure (`check.sh` without
+`--certs`), `--write-baseline` would drop the names that closure does not reach.
 
 A declaration renaming does not void its audits. `renames.tsv` lists the renames of the last
 renaming pass (`<old>\t<new>`, under a header line naming the pass); the closure's optional fourth
@@ -49,10 +64,11 @@ column is the fingerprint with every renamed constant replaced by its old
 name. `scripts/carry_audits.py <tag> --write` moves each ledger entry whose normalized fingerprint
 equals the recorded one to the new name, appends `; renamed <tag>` to its reference and records
 the new fingerprint; the other entries keep their old fingerprint and are reported for re-audit.
+With `--write` it also renames the entries of `unrecorded.txt`.
 
 ## Computability baseline
 
-`computability-f1.tsv.gz` records 331,435 definitions and 3,852 opaque declarations in the public certificate environment at
+`computability-f1.tsv.gz` records all 331,488 definitions and 3,852 opaque declarations in the certificate environment at
 develop `f1aca4f113b14b0549a5fe7e5e7dd4fe5373a0b6`, including dependencies and compiler auxiliaries.
 The accompanying JSON records the toolchain, source-inventory hash and compressed/uncompressed
 hashes. Each row contains the exact declaration name, whether either the declaration or its

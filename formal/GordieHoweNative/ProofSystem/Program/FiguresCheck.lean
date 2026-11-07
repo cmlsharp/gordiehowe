@@ -39,11 +39,12 @@ abbrev LoadN := Nat × Nat
 /-- `Load.max`. -/
 @[expose] def maxL (L L' : LoadN) : LoadN := (max L.1 L'.1, max L.2 L'.2)
 
-/-- **The Chernoff test `2^-E` of a load on `N`-byte streams** (`ChernoffOk`). -/
-@[expose] def chernoffB (E N : Nat) (L : LoadN) : Bool :=
-  decide (65 ^ L.2 < 2 * 64 ^ L.2) &&
-    decide (65 ^ (L.2 * L.1) * 64 ^ (N + 1) * 2 ^ (E + 1) ≤ (2 * 64 ^ L.2 - 65 ^ L.2) ^ L.1 *
-      65 ^ (N + 1)) &&
+/-- **The Chernoff test `2^-E` of a load on `N`-byte streams at the point `a / c`**
+(`ChernoffOk`). -/
+@[expose] def chernoffB (a c E N : Nat) (L : LoadN) : Bool :=
+  decide (0 < c) && decide (c ≤ a) && decide (a ^ L.2 < 2 * c ^ L.2) &&
+    decide (a ^ (L.2 * L.1) * c ^ (N + 1) * 2 ^ (E + 1) ≤ (2 * c ^ L.2 - a ^ L.2) ^ L.1 *
+      a ^ (N + 1)) &&
     decide (L.1 * 2 ^ (E + 1) ≤ 2 ^ N)
 
 /-- The bits of `n` (`Nat.size`). -/
@@ -178,7 +179,7 @@ variable (x : DomainFig)
 /-- `forkRoundsAt`: the batches' rounds, one per circuit, the join's and every circuit's. -/
 @[expose] def rounds : Nat :=
   (x.N.batches.map fun b =>
-      2 * b.rounds + 5 + (if b.bits then 8 else 0) + (if b.merged then 1 else 0)).sum +
+      2 * b.rounds + 5 + (if b.bits then 8 else 0)).sum +
     x.N.circuits.length + (2 * x.N.degrees.length + 3) +
     (x.N.circuits.map fun c => (2 + 4 * c.1) * c.2 + 1).sum
 
@@ -222,13 +223,13 @@ variable (x : DomainFig)
     decide (max 3 (2 * x.gkrWidth) * 2 ^ e ≤ num * x.q) &&
     decide (x.N.degrees.length * 2 ^ e ≤ num * x.q)
 
-/-- `restGood` at the Chernoff exponent `E` and the digest length `k`. -/
-@[expose] def restGoodB (E k : Nat) : Bool :=
-  chernoffB E (k + extraBytes) (maxL (nsmulL x.Lr x.load) (x.t.nreq, byteLenN x.t.N))
+/-- `restGood` at the Chernoff point `a / c`, the exponent `E` and the digest length `k`. -/
+@[expose] def restGoodB (a c E k : Nat) : Bool :=
+  chernoffB a c E (k + extraBytes) (maxL (nsmulL x.Lr x.load) (x.t.nreq, byteLenN x.t.N))
 
 /-- `stageGood`, including the first combination's stream grant. -/
-@[expose] def stageGoodB (E k : Nat) : Bool :=
-  chernoffB E (k + extraBytes + x.grants.stage 0) (nsmulL x.N.claims x.load)
+@[expose] def stageGoodB (a c E k : Nat) : Bool :=
+  chernoffB a c E (k + extraBytes + x.grants.stage 0) (nsmulL x.N.claims x.load)
 
 /-- **A sufficient check for the largest stage grant.** Every visited stage after the first
 must grant zero. A nonzero first-stage grant requires at least two touching claims, certified
@@ -243,8 +244,8 @@ are unrestricted. -/
 @[expose] def joinGrant : Nat := max (x.grants.stage 0) x.grants.linear
 
 /-- `DefaultLoadsOk` at one domain. -/
-@[expose] def defaultGoodB (E k : Nat) : Bool :=
-  chernoffB E (k + extraBytes) (maxL (nsmulL x.Lmax x.load) (x.t.nreq, byteLenN x.t.N))
+@[expose] def defaultGoodB (a c E k : Nat) : Bool :=
+  chernoffB a c E (k + extraBytes) (maxL (nsmulL x.Lmax x.load) (x.t.nreq, byteLenN x.t.N))
 
 end DomainFig
 
@@ -281,8 +282,9 @@ variable (ds : List DomainFig)
 
 /-- **The figures' check** (`ProgramFigures.Check`, `FitsOk`, the messages' bound, `ReadersOk`
 and `DefaultLoadsOk`) on the numbers: the domains `ds`, the plan's hash `hash`, the fields' reader
-loads `rdl` and sizes `cf`, and the figures' data `F`. Each join's grants pass `DomainFig.grantsB`; the field readers grant
-none, and the transcript's largest grant is the largest join grant. -/
+loads `rdl` and sizes `cf`, and the figures' data `F`. Each join's grants pass `DomainFig.grantsB`,
+and the transcript's largest grant is the largest join grant. The field readers grant none by the
+registry (`ProgramData.fieldReader_grant_zero`), so the check does not test it. -/
 @[expose] def figuresB [PReader] (hash : String) (rdl : Nat → LoadN) (cf : Nat → Nat) (fb : Nat → Nat)
     (F : FiguresData) : Bool :=
   let G := F.figures
@@ -295,17 +297,16 @@ none, and the transcript's largest grant is the largest join grant. -/
   decide (0 < G.k) && decide (G.k ≤ 2 ^ 10) &&
   decide (ds.length ≤ 2 ^ 8) && ds.all (fun x => decide (x.branches ≤ 2 ^ 8)) &&
   ds.all (fun x => decide (x.leafBytes ≤ 2 ^ 40)) && decide (roundsTotal ir ds ≤ maxRoundsN) &&
-  ds.all (fun x => x.grant == 0) &&
   ds.all (·.grantsB) && F.grantMax == (ds.map (·.joinGrant)).foldr max 0 &&
   ds.all (fun x => x.N.restB x.t x.Lr) &&
-  ds.all (fun x => x.restGoodB G.chernoff G.k) &&
-  ds.all (fun x => x.stageGoodB G.chernoff G.k) &&
+  ds.all (fun x => x.restGoodB G.zNum G.zDen G.chernoff G.k) &&
+  ds.all (fun x => x.stageGoodB G.zNum G.zDen G.chernoff G.k) &&
   (List.range ir.phases).all (fun k =>
-    chernoffB G.chernoff (G.k + extraBytes) (nsmulL (chalsOf ir k).length (chalLoadN ir rdl))) &&
+    chernoffB G.zNum G.zDen G.chernoff (G.k + extraBytes) (nsmulL (chalsOf ir k).length (chalLoadN ir rdl))) &&
   ds.all (fun x => x.fieldRoundsB G.errorMax G.errorExp) &&
   phaseErrorsB ir cf F.sourceErrors G.errorMax G.errorExp &&
   decide (G.errorMax = errorMaxN ir ds cf F.sourceErrors G.errorExp) &&
-  (!F.defaultLoads || ds.all (fun x => x.defaultGoodB G.chernoff G.k))
+  (!F.defaultLoads || ds.all (fun x => x.defaultGoodB G.zNum G.zDen G.chernoff G.k))
 
 end FigCheck
 

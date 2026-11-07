@@ -2,8 +2,8 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 import GordieHowe.Language.Completeness.Check
-import GordieHowe.Generated.MLDSA44.Native.ROMParams.Cert
-import GordieHowe.Generated.MLDSA44.Native.ROMParams.Structure
+import GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.Cert
+import GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.Structure
 
 /-!
 # Tests of the lookup checks at the structure records' pointers

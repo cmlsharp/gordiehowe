@@ -3,11 +3,11 @@
 
 module
 
-public import GordieHowe.Generated.MLDSA44.Native.ROMParams.Data
+public import GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 
-import all GordieHowe.Generated.MLDSA44.Native.ROMParams.Program
-import all GordieHowe.Generated.MLDSA44.Native.ROMParams.Plan
+import all GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.Program
+import all GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.Plan
 @[expose] public section
 
 /-!
@@ -26,8 +26,8 @@ namespace GordieHoweCheck.MLDSA44.Native.ROMParams
 
 open GordieHowe RealizedProgram GordieHowe.Generated.MLDSA44.Native.ROMParams
 
-/-- **The figures when present** (`GordieHowe.ProgramData.figuresPartB`). -/
-theorem figuresPartOk : data.figuresPartB = true := by
+/-- **The figures** (`GordieHowe.ProgramData.figuresPartB`). -/
+theorem figuresPartOk : data.figuresPartB true = true := by
   decide +kernel
 
 end GordieHoweCheck.MLDSA44.Native.ROMParams

@@ -1,7 +1,7 @@
 -- Copyright 2026 Chad Sharp and Paul Grubbs
 -- SPDX-License-Identifier: Apache-2.0
 
-import GordieHowe.Generated.MLDSA44.Native.ROMParams.Certified
+import GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.Certified
 
 /-!
 # Types through the field table
@@ -83,8 +83,8 @@ example : ({ data with program := { data.program with values := [] } }
   decide +kernel
 
 /-- The program's check rejects a wrong `none`, through the soundness of `programOkB`. -/
-example (d : ProgramData) (hk : d.fieldTable.interp.opaque = .none) (hf : d.opaqueFreeB = false) :
-    d.programOkB ≠ true := fun h => by
+example (d : ProgramData) (w : Bool) (hk : d.fieldTable.interp.opaque = .none)
+    (hf : d.opaqueFreeB = false) : d.programOkB w ≠ true := fun h => by
   have := (programOk_sound d h).opaqueFree.1 hk
   simp [hf] at this
 

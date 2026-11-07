@@ -16,11 +16,11 @@ FAKE = """#!/bin/sh
 while [ $# -gt 0 ]; do [ "$1" = --dir ] && dir=$2; shift; done
 {body}
 """
-WRITE_ALL = """mkdir -p "$dir/GordieHowe/Generated/P/ROMParams" "$dir/Check/Native/GordieHoweCheck/P"
+WRITE_ALL = """mkdir -p "$dir/GordieHoweCerts/Generated/P/ROMParams" "$dir/Check/Native/GordieHoweCheck/P"
 mkdir -p "$dir/Check/Kernel/GordieHoweCheck/P/ROMParams"
-printf %s '{text}' > "$dir/GordieHowe/Generated/P/ROMParams/Plan.lean"
-printf 'x' > "$dir/GordieHowe/Generated/P/ROMParams/Cert.ghc"
-printf 'x' > "$dir/GordieHowe/Generated/P/ROMParams/A.cert"
+printf %s '{text}' > "$dir/GordieHoweCerts/Generated/P/ROMParams/Plan.lean"
+printf 'x' > "$dir/GordieHoweCerts/Generated/P/ROMParams/Cert.ghc"
+printf 'x' > "$dir/GordieHoweCerts/Generated/P/ROMParams/A.cert"
 printf 'x' > "$dir/Check/Native/GordieHoweCheck/P/ROMParams.lean"
 printf 'x' > "$dir/Check/Kernel/GordieHoweCheck/P/ROMParams/Leaf.lean"
 """
@@ -48,16 +48,16 @@ class RegenerateTests(unittest.TestCase):
         return status, out.getvalue()
 
     def test_owner_reads_all_three_trees(self):
-        for rel in ("GordieHowe/Generated/P/ROMParams/Plan.lean",
+        for rel in ("GordieHoweCerts/Generated/P/ROMParams/Plan.lean",
                     "Check/Native/GordieHoweCheck/P/ROMParams.lean",
                     "Check/Kernel/GordieHoweCheck/P/ROMParams/Leaf.lean"):
             self.assertEqual(re_exports.owner(rel, PROGRAMS), "P/ROMParams")
-        self.assertIsNone(re_exports.owner("GordieHowe/Generated/Q/ROMParams/Plan.lean", PROGRAMS))
+        self.assertIsNone(re_exports.owner("GordieHoweCerts/Generated/Q/ROMParams/Plan.lean", PROGRAMS))
 
     def test_write_then_check_passes_and_excludes_raw_certificates(self):
         self.fake(WRITE_ALL.format(text=GOOD))
         self.assertEqual(self.run_it()[0], 0)
-        generated = self.formal / "GordieHowe/Generated/P/ROMParams"
+        generated = self.formal / "GordieHoweCerts/Generated/P/ROMParams"
         self.assertEqual((generated / "Plan.lean").read_text(), GOOD)
         self.assertTrue((generated / "Cert.ghc").is_file())
         self.assertFalse((generated / "A.cert").exists())
@@ -67,13 +67,13 @@ class RegenerateTests(unittest.TestCase):
     def test_check_reports_difference_and_stale_file_without_writing(self):
         self.fake(WRITE_ALL.format(text=GOOD))
         self.run_it()
-        plan = self.formal / "GordieHowe/Generated/P/ROMParams/Plan.lean"
+        plan = self.formal / "GordieHoweCerts/Generated/P/ROMParams/Plan.lean"
         stale = self.formal / "Check/Kernel/GordieHoweCheck/P/ROMParams/Old.lean"
         plan.write_text("edited")
         stale.write_text("old")
         status, output = self.run_it(check=True)
         self.assertEqual(status, 1)
-        self.assertIn("differs: GordieHowe/Generated/P/ROMParams/Plan.lean", output)
+        self.assertIn("differs: GordieHoweCerts/Generated/P/ROMParams/Plan.lean", output)
         self.assertIn("no longer exported: Check/Kernel/GordieHoweCheck/P/ROMParams/Old.lean", output)
         self.assertEqual(plan.read_text(), "edited")
         self.assertTrue(stale.exists())
@@ -104,21 +104,21 @@ class RegenerateTests(unittest.TestCase):
             self.run_it(case_list=(("narrow", "fake", ()), ("narrow", "other", ())))
 
     def test_unexported_program_and_unowned_file_fail(self):
-        self.fake('mkdir -p "$dir/GordieHowe/Generated/Q/ROMParams"; '
-                  'printf x > "$dir/GordieHowe/Generated/Q/ROMParams/Plan.lean"')
+        self.fake('mkdir -p "$dir/GordieHoweCerts/Generated/Q/ROMParams"; '
+                  'printf x > "$dir/GordieHoweCerts/Generated/Q/ROMParams/Plan.lean"')
         with self.assertRaisesRegex(RuntimeError, "no export of: P/ROMParams"):
             self.run_it()
         self.fake(WRITE_ALL.format(text=GOOD))
-        unowned = self.formal / "GordieHowe/Generated/Q/ROMParams/Plan.lean"
+        unowned = self.formal / "GordieHoweCerts/Generated/Q/ROMParams/Plan.lean"
         unowned.parent.mkdir(parents=True)
         unowned.write_text("x")
         status, output = self.run_it(check=True)
         self.assertEqual(status, 1)
-        self.assertIn("GordieHowe/Generated/Q/ROMParams/Plan.lean", output)
+        self.assertIn("GordieHoweCerts/Generated/Q/ROMParams/Plan.lean", output)
 
     def test_listed_programs_match_the_checked_in_tree(self):
         formal = Path(__file__).resolve().parent.parent / "formal"
-        generated = formal / "GordieHowe/Generated"
+        generated = formal / "GordieHoweCerts/Generated"
         programs = {p.parent.relative_to(generated).as_posix() for p in generated.rglob("Plan.lean")}
         self.assertEqual(programs, set(re_exports.PROGRAMS))
 

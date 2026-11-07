@@ -201,7 +201,7 @@
 #                     times; the rings at
 #                     64 and 1024 members in lean/ring-64/ and lean/ring-1024/;
 #                     each export as the Lean module path of
-#                     GordieHowe/Generated/<Lean name>/{Plan,Program}.lean
+#                     GordieHoweCerts/Generated/<Lean name>/{Plan,Program}.lean
 #                     (lean_plan_module), with its proof modules Valid.lean,
 #                     Realize.lean and Honest.lean beside them;
 #                     export_plan.log
@@ -895,7 +895,7 @@ for ring in 64 1024; do
   done
 done
 # Each checked system exports its plan, its realized program and their
-# proof and certificate modules (GordieHowe/Generated/<Lean name>/: Plan,
+# proof and certificate modules (GordieHoweCerts/Generated/<Lean name>/: Plan,
 # Program, Valid, Realize, Cert, Completion, Derivs, Annotations and its
 # Annotations/ modules; Valid and Realize with their per-condition modules
 # in directories of the same names). The check counts one Plan.lean and one
@@ -910,7 +910,7 @@ if [[ "$profile" == narrow ]]; then
   IFS=, read -r -a ex_rsa <<< "$rsa_configs"
   n_exports=$((n_exports + 1 + ${#ex_rsa[@]}))
 fi
-gen="$results_dir/lean/GordieHowe/Generated"
+gen="$results_dir/lean/GordieHoweCerts/Generated"
 checked=()
 while IFS= read -r f; do
   case "${f#"$gen"/}" in

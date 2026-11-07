@@ -40,14 +40,17 @@ part in one compiled run, while kernel composition retains the sliced proofs.
 (`fieldOkBD`), every domain's tableau at its descriptor's numbers (`tableauFitB`), the table
 selections (`selectionsB`), the completion certificate
 (`completionB`), honest roles (`honestRolesB`), the absence of field-form predicates, the shapes
-the frontends read (`shapesB`), figures when present (`figuresPartB`), optional source-role
-placement and coverage (`sourceRolesB`), every circuit certificate (`gkrPartB`), and the plan's
+the frontends read (`shapesB`), the figures (`figuresPartB`: present and checked at a program
+with figures, `withFigures`, absent at a program certified only for its proof system), optional
+source-role placement and coverage (`sourceRolesB`), every circuit certificate (`gkrPartB`), and the plan's
 opaque-function set and the opaque values' arguments against the field table's interpretation
 (`opaqueSetB`). The other conditions of `GordieHowe.ProgramConditions` (the tableaus, the field
 table, the packing descriptors and the interpretation's model) are proved per program in a module of
 their own. A checker that `programOkB` does not run certifies nothing.
 
-**The kernel composition.** A program's check module proves `programOk : data.programOkB = true`.
+**The kernel composition.** A program's check module proves
+`programOk : data.programOkB withFigures = true`, with `withFigures` true exactly when the program
+states figures.
 In kernel mode the proof is a term over leaf theorems, each stating one part (or a slice of one) at
 `data` with the part's own arguments, joined by `and_intro`: the kernel unfolds `programOkB`, its
 groups and `data` only, compares each leaf's statement with its part syntactically, and evaluates
@@ -211,10 +214,11 @@ program and supplied row list, including malformed or omitted rows. -/
 /-- **The check of the proof system's conditions** (`GordieHowe.CoreConditions`). -/
 @[expose] def coreOkB : Bool := d.validB && d.realizationB && d.factsB
 
-/-- **The check of a program** (module docstring). -/
-@[expose] def programOkB : Bool :=
-  d.coreOkB && d.completeB && d.shapesB && d.figuresPartB && d.sourceRolesB && d.gkrPartB &&
-    d.opaqueSetB
+/-- **The check of a program** (module docstring), with figures present and checked
+(`withFigures`) or absent. -/
+@[expose] def programOkB (withFigures : Bool) : Bool :=
+  d.coreOkB && d.completeB && d.shapesB && d.figuresPartB withFigures && d.sourceRolesB &&
+    d.gkrPartB && d.opaqueSetB
 
 end ProgramData
 
@@ -233,11 +237,13 @@ theorem and_right {a b : Bool} (h : (a && b) = true) : b = true := by
   cases a <;> cases b <;> simp_all
 
 /-- **The proof system's check from the program's.** -/
-theorem ProgramData.coreOkB_of {d : ProgramData} (h : d.programOkB = true) : d.coreOkB = true :=
+theorem ProgramData.coreOkB_of {d : ProgramData} {w : Bool} (h : d.programOkB w = true) :
+    d.coreOkB = true :=
   and_left (and_left (and_left (and_left (and_left (and_left h)))))
 
 /-- The member-value pointers are checked by the program's well-formedness part. -/
-theorem ProgramData.memberValuesB_of_programOk {d : ProgramData} (h : d.programOkB = true) :
+theorem ProgramData.memberValuesB_of_programOk {d : ProgramData} {w : Bool}
+    (h : d.programOkB w = true) :
     d.program.memberValuesB d.records = true := by
   have hv : d.validB = true := and_left (and_left (coreOkB_of h))
   have hw : d.wellFormedB = true := and_left (and_left hv)

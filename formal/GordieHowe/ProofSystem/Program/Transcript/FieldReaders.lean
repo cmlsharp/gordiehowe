@@ -12,6 +12,7 @@ public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative6
 public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative11
 public import GordieHowe.Foundations.Fields.Goldilocks
 public import GordieHowe.Foundations.Fields.GoldilocksQuartic
+public import GordieHowe.Foundations.Fields.P256
 
 @[expose] public section
 
@@ -38,6 +39,7 @@ configuration of `lib/gordiehowe/examples` draws its challenges in that profile'
 | `MLDSANativeField11` | `NativeWide<Fp24,11,2,0,…>` | 11 `Fp24` coordinates of `X^11 - 2` |
 | `GoldilocksExt2` | `Fp64G2` | 2 Goldilocks coordinates of `X^2 - 7` (`fp_goldilocks.h` lines 344–349) |
 | `GoldilocksExt4` | `Fp64G4` | 4 Goldilocks coordinates of `X^4 - 7` (`fp_goldilocks4.h` line 180) |
+| `ZMod P256.p` | `Fp256Base` | 32 bytes, masked to 256 bits, rejected if `≥ p` (`fp_generic.h` lines 393–404) |
 
 The binary fields read their bytes as a little-endian integer whose bit `i` is the coefficient of
 `X^i` (`GF2Poly::of_bytes`, `gf2poly.h` line 55): bit `i` of byte `j` is the coefficient of
@@ -80,6 +82,10 @@ theorem byteLen_eq {n l : ℕ} (h1 : n < 256 ^ l) (h2 : 256 ^ (l - 1) ≤ n) (hl
 
 theorem byteLen_12289 : Rejection.byteLen 12289 = 2 := byteLen_eq (by norm_num) (by norm_num) (by norm_num)
 
+/-- The P-256 prime has `32` bytes. -/
+theorem byteLen_p256 : Rejection.byteLen P256.p = 32 :=
+  byteLen_eq (by rw [P256.p_eq]; norm_num) (by rw [P256.p_eq]; norm_num) (by norm_num)
+
 /-! ### The readers -/
 
 namespace CReader
@@ -119,10 +125,15 @@ def goldilocksExt2 : CReader GoldilocksExt2 :=
 def goldilocksExt4 : CReader GoldilocksExt4 :=
   ext (zmod pGold) goldilocksExt4Coords.symm
 
+/-- A P-256 base-field element (the ECDSA arm, `Fp256Base`). -/
+def p256 : CReader (ZMod P256.p) := zmod P256.p
+
 @[simp] theorem gf2_128_load : gf2_128.load = ⟨1, 16⟩ := rfl
 @[simp] theorem gf2_256_load : gf2_256.load = ⟨1, 32⟩ := rfl
 @[simp] theorem falconNative20_load : falconNative20.load = ⟨20, 2⟩ := by
   simp [falconNative20, zmod, Load.nsmul, byteLen_12289]
+@[simp] theorem p256_load : p256.load = ⟨1, 32⟩ := by
+  rw [p256, zmod, prime_load, byteLen_p256]
 
 end CReader
 

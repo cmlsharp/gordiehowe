@@ -446,6 +446,8 @@ struct Batch {
   bool bit_sumcheck = false;
   bool char2 = false;  // skipDomain gf256, else integers
   std::vector<Id> parts;
+  // Its parts' relations merged as sum_i gamma^i Q_i (Lean's Batch.merged).
+  bool merged = false;
 };
 
 // A realization circuit (Lean `RealCircuit`) or input (`RealPub`).

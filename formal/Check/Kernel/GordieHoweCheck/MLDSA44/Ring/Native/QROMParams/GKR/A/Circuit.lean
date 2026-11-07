@@ -12,8 +12,8 @@ public import GordieHoweCheck.MLDSA44.Ring.Native.QROMParams.GKR.A.E5
 public import GordieHoweCheck.MLDSA44.Ring.Native.QROMParams.GKR.A.E6
 public import GordieHoweCheck.MLDSA44.Ring.Native.QROMParams.GKR.A.E7
 public import GordieHoweCheck.MLDSA44.Ring.Native.QROMParams.GKR.A.E8
-meta import GordieHowe.Generated.MLDSA44.Ring.Native.QROMParams.GKR.A
-import all GordieHowe.Generated.MLDSA44.Ring.Native.QROMParams.Program
+meta import GordieHoweCerts.Generated.MLDSA44.Ring.Native.QROMParams.GKR.A
+import all GordieHoweCerts.Generated.MLDSA44.Ring.Native.QROMParams.Program
 
 @[expose] public section
 

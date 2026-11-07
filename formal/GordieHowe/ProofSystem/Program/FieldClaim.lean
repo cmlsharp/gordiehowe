@@ -5,7 +5,7 @@ module
 
 public import GordieHowe.ProofSystem.Program.FieldInput
 public import GordieHowe.Language.RealizedProgram.ViewsLemmas
-public import GordieHowe.ProofSystem.Zerocheck.MergedAffineBatch
+public import GordieHowe.ProofSystem.Zerocheck.MergedAffineBatchFused
 public import GordieHowe.ProofSystem.GKR.MaskedReduction
 public import GordieHowe.ProofSystem.FieldProof.MaskedReductionList
 
@@ -25,8 +25,9 @@ number of batches and GKR circuits:
 * **the covered merged batches on columns** (`GordieHowe.RealizedProgram.mbatches`): every batch of
   `d` on columns that passes the batch check with a merging challenge, with the field's skip
   domain; each as a merged batch `Σ_p γ^p Q_p` on the parts' operands summed
-  (`GordieHowe.RealizedProgram.mergedForm`, `GordieHowe.BatchedZerocheck.MergedAffineBatch`, error
-  `(np − 1)/|K|` at the merging challenge);
+  (`GordieHowe.RealizedProgram.mergedForm`, `GordieHowe.BatchedZerocheck.MergedAffineBatch`), the
+  merging challenge drawn with the zerocheck point in one verifier move
+  (`GordieHowe.BatchedZerocheck.MergedAffineBatch.fusedIp`, error `(np − 1)/|K|` added at that move);
 * **the covered batches on bits** (`GordieHowe.RealizedProgram.sumBatches` unmerged,
   `GordieHowe.RealizedProgram.sumMBatches` merged): the batch on affine operands of the tree's
   coordinates (`GordieHowe.RealizedProgram.bitsBatchAt`, `GordieHowe.RealizedProgram.mergedForm`;
@@ -520,7 +521,7 @@ def bitLayoutAt (pad : BitPad → ir.FCell src Pk rs)
     (nodes : Sumcheck.Nodes (I (ir.domainField d)).K) :
     BitLayout (I (ir.domainField d)).K (ir.FCell src Pk rs) (ir.FLog src Pk rs) 4
       (ir.cellKeys d).length where
-  bit q b := ir.viewPlace d rs (ir.ClaimPads d src Pk) (ir.bitWord d q) (Fin.cast (by norm_num) b)
+  coord q b := ir.viewPlace d rs (ir.ClaimPads d src Pk) (ir.bitWord d q) (Fin.cast (by norm_num) b)
   pad r j := pad (r, j)
   nodes := nodes
 
@@ -545,12 +546,12 @@ def sumIP (i : Fin (ir.sumBatches d Pk).length) :
     (fun q : ((ir.sumBatches d Pk)[i]).cb.Pad => ir.sumPadCell src rs i (.inl q)) (ir.treeLevel d rs (ir.ClaimPads d src Pk))
     (ir.bitLayoutAt src rs (fun r => ir.sumPadCell src rs i (.inr r)) ((ir.sumBatches d Pk)[i]).nodes)
 
-/-- **The masked reduction of the `i`-th covered merged batch on columns**
-(`BatchedZerocheck.MergedAffineBatch.ip`). -/
+/-- **The masked reduction of the `i`-th covered merged batch on columns**, the merging challenge and
+the zerocheck point in one verifier move (`BatchedZerocheck.MergedAffineBatch.fusedIp`). -/
 def mergedIP (i : Fin (ir.mbatches d Pk).length) :
     FieldProof.MaskedReduction (I (ir.domainField d)).K (ir.FCell src Pk rs) (ir.DomainPub I)
       (ir.FCell src Pk rs → (I (ir.domainField d)).K) id (ir.FLog src Pk rs) 1 :=
-  (ir.mergedBatchAt rs (ir.ClaimPads d src Pk) (ir.mbatches d Pk)[i]).ip (ir.DomainPub I)
+  (ir.mergedBatchAt rs (ir.ClaimPads d src Pk) (ir.mbatches d Pk)[i]).fusedIp (ir.DomainPub I)
     (ir.mergedPadCell src rs i) (ir.treeLevel d rs (ir.ClaimPads d src Pk))
 
 /-- **The masked reduction of the `i`-th covered merged batch on bits**
@@ -668,13 +669,14 @@ noncomputable def branchError : (j : ir.BranchIdx d Pk) →
     (ir.colsBatchAt rs (ir.ClaimPads d src Pk) (ir.cbatches d Pk)[i]).error
   | .inl (.inl (.inr i)) =>
     (ir.bitsBatchAt rs (ir.ClaimPads d src Pk) ((ir.sumBatches d Pk)[i]).cb).bitError 4
-  | .inl (.inr (.inl i)) => (ir.mergedBatchAt rs (ir.ClaimPads d src Pk) (ir.mbatches d Pk)[i]).error
+  | .inl (.inr (.inl i)) =>
+    (ir.mergedBatchAt rs (ir.ClaimPads d src Pk) (ir.mbatches d Pk)[i]).fusedError
   | .inl (.inr (.inr i)) =>
     (ir.mergedBatchAt rs (ir.ClaimPads d src Pk) ((ir.sumMBatches d Pk)[i]).mb).bitError 4
   | .inr _ => FieldProof.MaskedReduction.ofListError (ncOf := fun _ => 1) (ir.gkrIP src rs)
       (fun i => (ir.circSource d src i).error (ir.circNodes d src i)) (List.finRange _)
 
-/-- **Soundness of branch `j`** (`BatchedZerocheck.AffineBatch.sound`, `BatchedZerocheck.MergedAffineBatch.sound`,
+/-- **Soundness of branch `j`** (`BatchedZerocheck.AffineBatch.sound`, `BatchedZerocheck.MergedAffineBatch.fusedSound`,
 `GKR.LayeredCircuit.maskedSound` in sequence). -/
 noncomputable def branchSound : (j : ir.BranchIdx d Pk) →
     (ir.branchIP src rs j).Sound (ir.treeLevel d rs (ir.ClaimPads d src Pk)).view (ir.branchSat src rs j) (ir.branchError src rs j)
@@ -686,7 +688,7 @@ noncomputable def branchSound : (j : ir.BranchIdx d Pk) →
       (fun q : ((ir.sumBatches d Pk)[i]).cb.Pad => ir.sumPadCell src rs i (.inl q)) (ir.treeLevel d rs (ir.ClaimPads d src Pk))
       (ir.bitLayoutAt src rs (fun r => ir.sumPadCell src rs i (.inr r)) ((ir.sumBatches d Pk)[i]).nodes)
   | .inl (.inr (.inl i)) =>
-    (ir.mergedBatchAt rs (ir.ClaimPads d src Pk) (ir.mbatches d Pk)[i]).sound
+    (ir.mergedBatchAt rs (ir.ClaimPads d src Pk) (ir.mbatches d Pk)[i]).fusedSound
       (ir.mergedPadCell src rs i) (ir.treeLevel d rs (ir.ClaimPads d src Pk))
   | .inl (.inr (.inr i)) =>
     (ir.mergedBatchAt rs (ir.ClaimPads d src Pk) ((ir.sumMBatches d Pk)[i]).mb).bitSumcheckSound
@@ -807,8 +809,8 @@ theorem sum_map_finRange_getElem {α : Type} (l : List α) (f : α → ℝ≥0) 
   congr 1
   exact List.ext_getElem (by simp) fun n h1 h2 => by simp
 
-/-- **The phase error of a covered merged batch** (`BatchedZerocheck.MergedAffineBatch.error_sum`):
-`(np − 1)/|K|` at the merging challenge, then the batch phase's. -/
+/-- **The phase error of a covered merged batch** (`BatchedZerocheck.MergedAffineBatch.sum_fusedError`):
+`(np − 1)/|K|` for the merging challenge, then the batch phase's. -/
 noncomputable def mbError (cb : ir.MBatch I d) : ℝ≥0 :=
   (((ir.batch cb.idx).parts.length - 1 : ℕ) : ℝ≥0) / Fintype.card (I (ir.domainField d)).K +
     (((ir.batch cb.idx).rounds : ℝ≥0) / Fintype.card (I (ir.domainField d)).K +
@@ -878,7 +880,7 @@ theorem gkrBranchError_le (T : ir.CircuitsEnforce I src) (u : Unit) (k) :
 
 /-- **Every round of branch `j` is at most `δ`** when the covered batches' phase errors together are
 (`batchesError`) and a GKR round's charge is (`gkrRoundError`): a batch branch's round within its
-batch's summed phase error (`AffineBatch.error_sum`, `MergedAffineBatch.error_sum`), a round of GKR's
+batch's summed phase error (`AffineBatch.error_sum`, `MergedAffineBatch.sum_fusedError`), a round of GKR's
 branch within `gkrRoundError` (`gkrBranchError_le`). -/
 theorem branchError_le (T : ir.CircuitsEnforce I src) {δ : ℝ≥0} (hb : ir.batchesError d Pk ≤ δ)
     (hg : ir.gkrRoundError I d ≤ δ) (j : ir.BranchIdx d Pk) (k) : ir.branchError src rs j k ≤ δ := by
@@ -900,7 +902,7 @@ theorem branchError_le (T : ir.CircuitsEnforce I src) {δ : ℝ≥0} (hb : ir.ba
     exact single.trans ((entry _ _ i).trans ((le_add_self.trans (le_self_add.trans
       le_self_add)).trans hb))
   · have e : ∑ k, ir.branchError src rs (.inl (.inr (.inl i))) k = mbError (ir.mbatches d Pk)[i] :=
-      MergedAffineBatch.error_sum _
+      MergedAffineBatch.sum_fusedError _
     rw [e] at single
     exact single.trans ((entry _ _ i).trans ((le_add_self.trans le_self_add).trans hb))
   · have e : ∑ k, ir.branchError src rs (.inl (.inr (.inr i))) k =

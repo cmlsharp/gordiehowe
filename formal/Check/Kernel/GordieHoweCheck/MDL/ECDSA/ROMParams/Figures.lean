@@ -3,11 +3,11 @@
 
 module
 
-public import GordieHowe.Generated.MDL.ECDSA.ROMParams.Data
+public import GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 
-import all GordieHowe.Generated.MDL.ECDSA.ROMParams.Program
-import all GordieHowe.Generated.MDL.ECDSA.ROMParams.Plan
+import all GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.Program
+import all GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.Plan
 @[expose] public section
 
 /-!
@@ -26,8 +26,8 @@ namespace GordieHoweCheck.MDL.ECDSA.ROMParams
 
 open GordieHowe RealizedProgram GordieHowe.Generated.MDL.ECDSA.ROMParams
 
-/-- **The figures when present** (`GordieHowe.ProgramData.figuresPartB`). -/
-theorem figuresPartOk : data.figuresPartB = true := by
+/-- **The figures** (`GordieHowe.ProgramData.figuresPartB`). -/
+theorem figuresPartOk : data.figuresPartB true = true := by
   decide +kernel
 
 end GordieHoweCheck.MDL.ECDSA.ROMParams

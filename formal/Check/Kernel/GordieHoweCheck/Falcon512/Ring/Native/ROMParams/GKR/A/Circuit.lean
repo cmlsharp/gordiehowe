@@ -13,8 +13,8 @@ public import GordieHoweCheck.Falcon512.Ring.Native.ROMParams.GKR.A.E6
 public import GordieHoweCheck.Falcon512.Ring.Native.ROMParams.GKR.A.E7
 public import GordieHoweCheck.Falcon512.Ring.Native.ROMParams.GKR.A.E8
 public import GordieHoweCheck.Falcon512.Ring.Native.ROMParams.GKR.A.E9
-meta import GordieHowe.Generated.Falcon512.Ring.Native.ROMParams.GKR.A
-import all GordieHowe.Generated.Falcon512.Ring.Native.ROMParams.Program
+meta import GordieHoweCerts.Generated.Falcon512.Ring.Native.ROMParams.GKR.A
+import all GordieHoweCerts.Generated.Falcon512.Ring.Native.ROMParams.Program
 
 @[expose] public section
 

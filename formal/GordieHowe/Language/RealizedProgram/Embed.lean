@@ -946,24 +946,34 @@ structure EmbedData.Agrees (d : EmbedData) (σ : Renaming) : Prop where
   chal : ∀ j < d.chals.length, σ.chal j = d.chals.getD j j
 
 /-- **What the check of an embedding gives**, at every renaming that agrees with its data: the
-embedding, and the listed predicates' correspondences, each a source predicate of the larger
-program. -/
+embedding, and the listed predicates' correspondences, each pair a predicate of the smaller program
+and one of the larger program, which for an equality is a source predicate. -/
 structure EmbedData.Holds (d : EmbedData) (ir' : RealizedProgram) (σ : Renaming) : Prop where
   embedding : d.source.Embedding ir' σ d.V d.R
   equals : ∀ p ∈ d.equals, d.source.equalCorrB ir' σ d.V d.R (d.source.predicate p.1).body
-      (ir'.predicate p.2).body = true ∧ p.2 < ir'.predicates.length ∧
-    ir'.inSource (ir'.predicate p.2) = true
+      (ir'.predicate p.2).body = true ∧ p.1 < d.source.predicates.length ∧
+    p.2 < ir'.predicates.length ∧ ir'.inSource (ir'.predicate p.2) = true
   bodies : ∀ p ∈ d.bodies, d.source.bodyCorrB ir' σ d.V d.R (d.source.predicate p.1).body
-      (ir'.predicate p.2).body = true ∧ p.2 < ir'.predicates.length
+      (ir'.predicate p.2).body = true ∧ p.1 < d.source.predicates.length ∧
+    p.2 < ir'.predicates.length
   sources : ∀ p ∈ d.sources, ir'.inSource (ir'.predicate p) = true
   chalCount : d.source.challenges.length = d.chals.length
   chalPhase : ∀ j < d.chals.length, (ir'.challenge (σ.chal j)).phase = (d.source.challenge j).phase
 
-theorem valuesOrdered_of_valuesOrderedB {ir : RealizedProgram} (h : valuesOrderedB ir = true) :
-    ir.ValuesOrdered := by
+theorem valuesOrdered_of_valuesOrderedB {ir : RealizedProgram} (ho : ir.RefsOrdered)
+    (h : valuesOrderedB ir = true) : ir.ValuesOrdered := by
   intro v hv u hu
-  have h1 := List.all_eq_true.mp h v (List.mem_range.mpr hv)
-  exact of_decide_eq_true (List.all_eq_true.mp h1 u hu)
+  have h1 := (allIdx_iff _ ir.values 0).1 h v hv
+  rw [zero_add, ← value_eq_getD, Bool.and_eq_true, List.all_eq_true] at h1
+  refine of_decide_eq_true (h1.2 u ?_)
+  obtain ⟨hr, -⟩ := h1
+  rw [valueDeps] at hu
+  rw [valueDepsOf]
+  rw [refsInB] at hr
+  rcases hk : (ir.value v).kind with _ | ⟨_ | ⟨_, args⟩ | e⟩ | _ | _ | _ | ⟨w, sel⟩ | _ | _ <;>
+    rw [hk] at hu hr <;> try exact hu
+  rw [List.all_eq_true] at hr
+  exact (mem_nodesOf ho (fun k hk => of_decide_eq_true (hr k hk)) u).2 hu
 
 section Sound
 
@@ -1119,7 +1129,8 @@ theorem embeddingB_sound (h : embeddingB ir' d = true) (ha : d.Agrees σ) : d.Ho
     ha.val_eq (hVparts v hv).1.1.1.1.1.1.1.1.1.2
   have hrσ : ∀ k ∈ d.R, d.renaming.ref k = σ.ref k := fun k hk =>
     ha.ref_eq (hRparts k hk).1.1.1.1.1.2
-  refine ⟨⟨valuesOrdered_of_valuesOrderedB h1, valuesOrdered_of_valuesOrderedB h2,
+  refine ⟨⟨valuesOrdered_of_valuesOrderedB ((refsOrderedB_iff _).1 h3) h1,
+    valuesOrdered_of_valuesOrderedB ((refsOrderedB_iff _).1 h4) h2,
     (refsOrderedB_iff _).1 h3, (refsOrderedB_iff _).1 h4, ?_, ?_, ?_⟩, ?_, ?_, hS,
     beq_iff_eq.mp hC, ?_⟩
   · intro v hv
@@ -1148,13 +1159,13 @@ theorem embeddingB_sound (h : embeddingB ir' d = true) (ha : d.Agrees σ) : d.Ho
     rw [he] at a4
     exact ⟨a1, a3, a4, a5, a6, a7⟩
   · intro p hp
-    simp only [Bool.and_eq_true, decide_eq_true_eq] at hE
-    obtain ⟨⟨a, b⟩, c⟩ := hE p hp
-    exact ⟨equalCorrB_congr hvσ hrσ a, b, c⟩
+    simp only [decide_eq_true_eq] at hE
+    obtain ⟨⟨⟨a, b⟩, c⟩, e⟩ := hE p hp
+    exact ⟨equalCorrB_congr hvσ hrσ a, b, c, e⟩
   · intro p hp
-    simp only [Bool.and_eq_true, decide_eq_true_eq] at hB
-    obtain ⟨a, b⟩ := hB p hp
-    exact ⟨bodyCorrB_congr hvσ hrσ a, b⟩
+    simp only [decide_eq_true_eq] at hB
+    obtain ⟨⟨a, b⟩, c⟩ := hB p hp
+    exact ⟨bodyCorrB_congr hvσ hrσ a, b, c⟩
   · intro j hj
     have := beq_iff_eq.mp (hP j (List.mem_range.mpr hj))
     rwa [ha.chal_eq hj] at this
@@ -1171,7 +1182,8 @@ theorem EmbedData.Holds.equals_at {ir : RealizedProgram} {V R : List ℕ} (h : d
     ir.equalCorrB ir' σ V R (ir.predicate p).body (ir'.predicate p').body = true ∧
       p' < ir'.predicates.length ∧ ir'.inSource (ir'.predicate p') = true := by
   subst hs hV hR
-  exact h.equals _ hp
+  obtain ⟨a, -, b, c⟩ := h.equals _ hp
+  exact ⟨a, b, c⟩
 
 /-- A listed predicate's correspondence, at the data's program and lists named by the caller. -/
 theorem EmbedData.Holds.bodies_at {ir : RealizedProgram} {V R : List ℕ} (h : d.Holds ir' σ)
@@ -1179,7 +1191,8 @@ theorem EmbedData.Holds.bodies_at {ir : RealizedProgram} {V R : List ℕ} (h : d
     ir.bodyCorrB ir' σ V R (ir.predicate p).body (ir'.predicate p').body = true ∧
       p' < ir'.predicates.length := by
   subst hs hV hR
-  exact h.bodies _ hp
+  obtain ⟨a, -, b⟩ := h.bodies _ hp
+  exact ⟨a, b⟩
 
 end Sound
 

@@ -8,11 +8,13 @@ gordiehowe_add_test(gordiehowe_test gordiehowe_structure_test.cc
                     gordiehowe_expr_ops_test.cc gordiehowe_relation_test.cc
                     gordiehowe_compile_cache_test.cc
                     gordiehowe_batch_form_test.cc
+                    gordiehowe_coord_sumcheck_test.cc
                     SETS gold4_gf128_sha256 gold4_gf128 gf128 gf256)
 # Batched relations and the Keccak instance.
 gordiehowe_add_test(gordiehowe_batch_test gordiehowe_batch_mac_test.cc
                     gordiehowe_batch_shake_test.cc
                     gordiehowe_batch_words_test.cc
+                    gordiehowe_batch_merge_test.cc
                     gordiehowe_live_rows_test.cc
                     SETS gf128_sha256 gold4 gf128_3 qrom_emu gf256)
 target_link_libraries(gordiehowe_batch_test sha3)
@@ -68,7 +70,7 @@ set_source_files_properties(gordiehowe_ghc_test.cc PROPERTIES COMPILE_DEFINITION
 # The Ligero parameter choice (compiler/ligero_choice.h).
 gordiehowe_add_test(gordiehowe_ligero_choice_test)
 # The compiled plan as Lean data (plan_export.h).
-gordiehowe_add_test(gordiehowe_plan_export_test SETS gold4_gf256)
+gordiehowe_add_test(gordiehowe_plan_export_test SETS gold4_gf256 gf128_sha256)
 # Public tables, ordered selection and record permutations.
 gordiehowe_add_test(gordiehowe_table_test SETS gold4_gf256)
 # F_p256: a prime, unpacked domain, and its per-cell, per-term and

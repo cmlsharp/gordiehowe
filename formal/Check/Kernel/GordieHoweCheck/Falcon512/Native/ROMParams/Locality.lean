@@ -3,12 +3,12 @@
 
 module
 
-public import GordieHowe.Generated.Falcon512.Native.ROMParams.Data
+public import GordieHoweCerts.Generated.Falcon512.Native.ROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 public import GordieHoweCheck.Falcon512.Native.ROMParams.AssignmentReads
 
-import all GordieHowe.Generated.Falcon512.Native.ROMParams.Program
-import all GordieHowe.Generated.Falcon512.Native.ROMParams.Plan
+import all GordieHoweCerts.Generated.Falcon512.Native.ROMParams.Program
+import all GordieHoweCerts.Generated.Falcon512.Native.ROMParams.Plan
 @[expose] public section
 
 /-!

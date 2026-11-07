@@ -16,8 +16,8 @@
 //   export     the plan export and realized program of the GordieHowe
 //              column --mode (gkr or batched) at --blocks or --bytes, as
 //              serve builds it, in --dir:
-//              GordieHowe/Generated/SHA256/<Mode><Blocks>Blocks/ or
-//              GordieHowe/Generated/SHA256/<Mode><size>/ (size 1KiB or
+//              GordieHoweCerts/Generated/SHA256/<Mode><Blocks>Blocks/ or
+//              GordieHoweCerts/Generated/SHA256/<Mode><size>/ (size 1KiB or
 //              <L>B), then the parameter set, Plan.lean and Program.lean
 //              (config sha256-<mode>-<blocks> or sha256-<mode>-<L>B, as the
 //              serve command's PQ_HASH line)

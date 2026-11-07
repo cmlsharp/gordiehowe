@@ -313,6 +313,9 @@ class Predicate {
     return *this;
   }
   Placement pinned() const { return p_ ? *p_ : Placement::kAuto; }
+  // The predicate's identity in its domain (Domain::merge_batch); null for
+  // a predicate without a placement.
+  const Placement *key() const { return p_.get(); }
 
  private:
   std::shared_ptr<Placement> p_;

@@ -3,11 +3,13 @@
 
 module
 
-public import GordieHowe.Generated.MLDSA44.Ring.Carrier.ROMParams.Data
+public import GordieHoweCerts.Generated.MLDSA44.Ring.Carrier.ROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 
-import all GordieHowe.Generated.MLDSA44.Ring.Carrier.ROMParams.Program
-import all GordieHowe.Generated.MLDSA44.Ring.Carrier.ROMParams.Plan
+import all GordieHoweCerts.Generated.MLDSA44.Ring.Carrier.ROMParams.Program
+import all GordieHoweCerts.Generated.MLDSA44.Ring.Carrier.ROMParams.Plan
+import all GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.Program
+import all GordieHoweCerts.Generated.MLDSA44.Emulated.ROMParams.Program
 @[expose] public section
 
 /-!

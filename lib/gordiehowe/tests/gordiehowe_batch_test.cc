@@ -5,8 +5,8 @@
 // domain (GF(2^256), source subfield GF(2^16)): a custom relation of degree
 // 3 over a lane-affine operand map, and the bit views. Each proves,
 // verifies, and rejects tampered witnesses and messages. The binary also
-// holds gordiehowe_batch_mac_test.cc, gordiehowe_batch_shake_test.cc and
-// gordiehowe_batch_words_test.cc.
+// holds gordiehowe_batch_mac_test.cc, gordiehowe_batch_shake_test.cc,
+// gordiehowe_batch_words_test.cc and gordiehowe_batch_merge_test.cc.
 
 #include "gordiehowe/tests/gordiehowe_batch_test.h"
 

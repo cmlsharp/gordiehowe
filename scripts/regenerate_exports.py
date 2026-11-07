@@ -5,7 +5,7 @@
 
 Runs each program's bench executable (BUILD/bench/<target> export) into a scratch directory, with
 one run id and the commit placeholder, and compares the results byte for byte with
-formal/GordieHowe/Generated/<program>/ and formal/Check/{Native,Kernel}/GordieHoweCheck/<program>
+formal/GordieHoweCerts/Generated/<program>/ and formal/Check/{Native,Kernel}/GordieHoweCheck/<program>
 (.lean and directory). Nothing is masked: a file whose provenance differs is a difference. Without
 --check the tree is updated, files an export no longer writes are removed, and the result is compared
 again. With --check nothing is written and any difference fails. No file is written unless every
@@ -28,7 +28,7 @@ import tempfile
 
 COMMIT = "EXPORTER_COMMIT"
 RUN_ID = "exports"
-GENERATED = "GordieHowe/Generated/"
+GENERATED = "GordieHoweCerts/Generated/"
 CHECKS = ("Check/Native/GordieHoweCheck/", "Check/Kernel/GordieHoweCheck/")
 
 CONSTRUCTIONS = ("Falcon512/Emulated", "Falcon512/Native", "Falcon512/Ring/Carrier",

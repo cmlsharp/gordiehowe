@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Generated.Falcon512.Native.ROMParams.GKR.A
+public import GordieHoweCerts.Generated.Falcon512.Native.ROMParams.GKR.A
 public import GordieHoweCheck.Falcon512.Native.ROMParams.GKR.A.E2.P0
 public import GordieHoweCheck.Falcon512.Native.ROMParams.GKR.A.E2.P1
 public import GordieHoweCheck.Falcon512.Native.ROMParams.GKR.A.E2.P2

@@ -14,6 +14,6 @@ import GordieHoweTest.StructureNames
 import GordieHoweTest.ProgramCerts
 import GordieHoweTest.SelectionCheck
 
-/-! The tests that read exported programs, plans or certificates (`GordieHowe/Generated/`). Their
+/-! The tests that read exported programs, plans or certificates (`GordieHoweCerts/Generated/`). Their
 modules keep the `GordieHoweTest` names; this root collects them apart from `GordieHoweTest`, so
 `lake build GordieHoweTest` checks no certificate. -/

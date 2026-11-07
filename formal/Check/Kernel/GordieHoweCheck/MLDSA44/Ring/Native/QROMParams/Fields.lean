@@ -3,12 +3,12 @@
 
 module
 
-public import GordieHowe.Generated.MLDSA44.Ring.Native.QROMParams.Data
+public import GordieHoweCerts.Generated.MLDSA44.Ring.Native.QROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 public import GordieHoweCheck.MLDSA44.Ring.Native.QROMParams.AssignmentReads
 
-import all GordieHowe.Generated.MLDSA44.Ring.Native.QROMParams.Program
-import all GordieHowe.Generated.MLDSA44.Ring.Native.QROMParams.Plan
+import all GordieHoweCerts.Generated.MLDSA44.Ring.Native.QROMParams.Program
+import all GordieHoweCerts.Generated.MLDSA44.Ring.Native.QROMParams.Plan
 @[expose] public section
 
 /-!

@@ -3,9 +3,9 @@
 
 module
 
-public import GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.Data
+public import GordieHoweCerts.Generated.Falcon512.Ring.Native.QROMParams.Data
 public import GordieHowe.Applications.Program.Conditions
-public import GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.Pending.Small
+public import GordieHoweCerts.Generated.Falcon512.Ring.Native.QROMParams.Pending.Small
 public import GordieHoweCheck.Falcon512.Ring.Native.QROMParams.GKR.A.Circuit
 
 @[expose] public section

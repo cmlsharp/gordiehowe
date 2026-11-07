@@ -66,7 +66,7 @@ public import GordieHowe.Model.RingSignature.BaseCompleteness
   rings `adm'`), `restrHopAns`, `restrAns_eq_restrHopAns`, `saltFreshPairOn` (a
   `Challenger.SaltFreshPairOn` at `sp.toEquiv`, when the mask decoding reads only the base
   component and the honest prover reads the base component only off a set containing the mask
-  points), and `gameAdvantage_restrChallenger_le`, `w1Concrete.gameAdvantage_restrChallenger_le`:
+  points), and `gameAdvantage_restrChallenger_le`:
   the bound of `hedgedScheme.anonAdvantage_le` between the runs against
   `restrChallenger … adm' keys false Q` and `… true …`, with `idealDist` on the rings `adm'`.
 
@@ -965,45 +965,6 @@ theorem w1Concrete.anonAdvantage_le (hp : p.isApproved) (hM : Function.Injective
         2 * ((Q * k).choose 2 * (2 ^ 256 : ℝ)⁻¹ + 2 * t * √((Q * k : ℕ) * (2 ^ 256 : ℝ)⁻¹)) := by
   have h := hedgedScheme.anonAdvantage_le (concretePrimitivesKeyGen p) O M βmin tol
     (concreteEnc p) k D bmsg PS adm n hM hdisj hPS hV hwi hC
-    (correctWithin_w1BaseSigner _ (signingLaws_concreteKeyGen p hp) (verifyLaws_concreteKeyGen hp)
-      (concreteEnc_highBitsVec_keyGen hp) (fun seed => keyGenFromSeed_s2_bounded hp seed)
-      (MaskSource.fresh M) O βmin tol k D bmsg) A Q
-  simpa only [NNReal.coe_zero, mul_zero, add_zero] using h
-
-open Classical in
-/-- **`gameAdvantage_restrChallenger_le` at the concrete primitives** of an approved parameter set
-(the fresh-mask signer's correctness error is `0`, `correctWithin_w1BaseSigner`): the advantage
-between the runs against the hedged challengers on the rings `adm'` is at most
-`𝔼_{keys, ω₂} (Q · idealDist + Q · wi (Q · C)) + 2 (C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256))`, with
-`idealDist` of the scheme on the rings `adm'`. -/
-theorem w1Concrete.gameAdvantage_restrChallenger_le {Y₁ Y₂ : Type} [AddGroup Y₁] [AddGroup Y₂]
-    [Fintype Y₁] [Fintype Y₂] (sp : RingSignature.OracleSplit Y Y₁ Y₂) (hp : p.isApproved)
-    (adm' : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → Prop) [DecidablePred adm']
-    (hM : Function.Injective M.pt) (hdisj : ∀ x, O.IsPt x → x ∉ Set.range M.pt)
-    (hMsp : M.ReadsFst sp) {B : Set X} (hB : Set.range M.pt ⊆ B) (hPS : PS.ReadsOff sp B)
-    {V : OracleView X Y} (hV : V.ReadsOff sp B) {wi : ℕ → ℝ}
-    (hwi : ∀ ω₂ h₁, PubWI (fun h => PS.proofLaw (O.split.symm (ω₂, h)))
-      RingSignature.RingStmtOf.pub
-      (RingSignature.ringRel (w1ConcreteBase p O M βmin tol k D bmsg) adm' (O.split.symm (ω₂, h₁)))
-      wi)
-    {C : ℕ} (hC : ∀ keys : Fin n → Bytes 32, (Finset.univ.filter fun c :
-      RingSignature.AnonRequest (w1Concrete p O M βmin tol k D bmsg PS adm') n =>
-        c.Valid keys).card ≤ C)
-    {t : ℕ} (A : AnonAdversary (w1Concrete p O M βmin tol k D bmsg PS adm) n V t) (Q : ℕ) :
-    gameAdvantage (runLaw (fun keys H => A (keys, V.view H))
-        (fun keys => restrChallenger (concretePrimitivesKeyGen p) O M βmin tol (concreteEnc p) k D
-          bmsg PS adm n adm' keys false Q))
-      (runLaw (fun keys H => A (keys, V.view H))
-        (fun keys => restrChallenger (concretePrimitivesKeyGen p) O M βmin tol (concreteEnc p) k D
-          bmsg PS adm n adm' keys true Q))
-      anonAccepts ≤
-      (𝔼 keys : (Fin n → (w1Concrete p O M βmin tol k D bmsg PS adm).KeyCoins),
-        𝔼 ω₂ : ({x // O.IsPt x} → Y),
-        ((Q : ℝ) * idealDist (concretePrimitivesKeyGen p) O M βmin tol (concreteEnc p) k D bmsg
-          PS adm' n keys ω₂ + Q * wi (Q * C))) +
-        2 * ((Q * k).choose 2 * (2 ^ 256 : ℝ)⁻¹ + 2 * t * √((Q * k : ℕ) * (2 ^ 256 : ℝ)⁻¹)) := by
-  have h := GordieHowe.Ring.MLDSAW1.gameAdvantage_restrChallenger_le (concretePrimitivesKeyGen p) O M
-    βmin tol (concreteEnc p) k D bmsg PS adm n sp adm' hM hdisj hMsp hB hPS hV hwi hC
     (correctWithin_w1BaseSigner _ (signingLaws_concreteKeyGen p hp) (verifyLaws_concreteKeyGen hp)
       (concreteEnc_highBitsVec_keyGen hp) (fun seed => keyGenFromSeed_s2_bounded hp seed)
       (MaskSource.fresh M) O βmin tol k D bmsg) A Q

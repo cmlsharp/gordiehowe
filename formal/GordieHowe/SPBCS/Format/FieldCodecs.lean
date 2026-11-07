@@ -12,6 +12,7 @@ public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative6
 public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative11
 public import GordieHowe.Foundations.Fields.Goldilocks
 public import GordieHowe.Foundations.Fields.GoldilocksQuartic
+public import GordieHowe.Foundations.Fields.P256
 
 @[expose] public section
 
@@ -20,7 +21,7 @@ public import GordieHowe.Foundations.Fields.GoldilocksQuartic
 
 The bytes of a field element as the C++ `to_bytes_field` writes them (`Codec.FieldBytes.ofCoords`:
 the coordinates in the C++ basis, coordinate `i` as the bits `[b · i, b · i + b)` of a
-little-endian integer), for the eight fields of the configurations:
+little-endian integer), for the nine fields of the configurations:
 
 | field | C++ class | basis | bits per coordinate | bytes |
 |---|---|---|---|---|
@@ -32,6 +33,7 @@ little-endian integer), for the eight fields of the configurations:
 | `GF(8380417^11)` | `MlDsaField11` | `x^i` mod `x^11 - 2` | `23` | `32` |
 | `GF(p^2)`, Goldilocks | `Fp64G2` | `x^i` mod `x^2 - 7` | `64` | `16` |
 | `GF(p^4)`, Goldilocks | `Fp64G4` | `v^i` mod `v^4 - 7` | `64` | `32` |
+| `F_p`, P-256 base field | `Fp256Base` | the residue itself | `256` | `32` |
 
 Sources (`lib/`): `gf2k/gf2_128.h` lines 193–195 and `gf2k/gf2_256.h` lines 191–193 (the bits of the
 polynomial as a little-endian integer, `algebra/limb.h` lines 69–73); `algebra/fp14_n.h` lines
@@ -39,7 +41,10 @@ polynomial as a little-endian integer, `algebra/limb.h` lines 69–73); `algebra
 `algebra/fp_native_wide.h` lines 387–401 (a little-endian bitstream of `floor(log2 p) + 1` bits per
 coefficient, `e[4j + i]` the coefficient of `u^i v^j` in the tower `u^4 = 11`, `v^5 = u + 2`, lines
 43–45); `algebra/fp_goldilocks.h` lines 330–333 and `algebra/fp_goldilocks4.h` lines 166–169 (each
-coefficient as `8` little-endian bytes). Every coefficient is written as its residue in `[0, p)`.
+coefficient as `8` little-endian bytes); `algebra/fp_generic.h` lines 377–384 and 411–413 with
+`third_party/longfellow/lib/algebra/nat.h` lines 100–107 and `limb.h` lines 69–73 and 152–155 (the
+canonical value as a `32`-byte little-endian integer, parsed back only below `p`). Every coefficient
+is written as its residue in `[0, p)`.
 -/
 
 namespace GordieHowe.SPBCS
@@ -100,6 +105,11 @@ each. -/
 def goldilocksExt4 : FieldBytes GoldilocksExt4 32 :=
   ofCoords goldilocksExt4Coords (b := 64)
     (by norm_num [pGold]) (by norm_num)
+
+/-- The bytes of an element of the P-256 base field: its residue, `32` little-endian bytes. -/
+def p256 : FieldBytes (ZMod P256.p) 32 :=
+  ofCoords (Equiv.funUnique (Fin 1) (ZMod P256.p)).symm (b := 256)
+    (by rw [P256.p_eq]; norm_num) (by norm_num)
 
 end Codec.FieldBytes
 

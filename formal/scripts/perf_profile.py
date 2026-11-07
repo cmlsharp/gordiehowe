@@ -37,7 +37,7 @@ one that fails gets `<error>` (elab_s its running time) and its first error line
 
 Module selection (scripts/perf_profile.sh is the entry point): the modules changed since a git
 revision, an explicit list, or `--all`, the import closure of GordieHowe.lean. Certificate modules
-(GordieHowe.Generated.*, GordieHoweCerts*, GordieHoweCheck.*, and every module importing a generated one, as in
+(GordieHoweCerts*, GordieHoweCheck.*, and every module importing a generated one, as in
 scripts/cert_boundary.py) and modules outside GordieHowe's closure are skipped, with a note.
 """
 import argparse
@@ -58,7 +58,7 @@ from cert_boundary import check_source_dir
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 IMPORT = re.compile(r'^(?:public\s+)?(?:meta\s+)?import\s+(?:all\s+)?([A-Za-z0-9_.\']+)', re.M)
-GENERATED = 'GordieHowe.Generated.'
+GENERATED = 'GordieHoweCerts.Generated.'
 CERTS = 'GordieHoweCerts'
 CHECK_SRC = check_source_dir()
 VENDOR_LIBS = ('ArkLib', 'CompPoly', 'VCVio', 'ToMathlib', 'PolyFun', 'ToCslib', 'Cslib',

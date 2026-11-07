@@ -10,7 +10,7 @@ public import GordieHoweNative.Language.Export
 /-!
 # GordieHowe: the plan data schema
 
-The schema of the generated plan files `GordieHowe/Generated/<Scheme>/<Arm>/<Params>/Plan.lean`. The
+The schema of the generated plan files `GordieHoweCerts/Generated/<Scheme>/<Arm>/<Params>/Plan.lean`. The
 C++ writes one such file per configuration from a bench binary: a single `def` of type
 `GordieHowe.RealizedProgram.Export.Plan` holding the compiled plan and its parameters. The files hold data only (no proofs,
 no tactics). `Plan.Valid` (`GordieHowe/Language/Export/Valid.lean`) states the planner's conditions

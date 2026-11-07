@@ -3,11 +3,11 @@
 
 module
 
-public import GordieHowe.Generated.SHA256.Batched8Blocks.ROMParams.Data
+public import GordieHoweCerts.Generated.SHA256.Batched8Blocks.ROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 
-import all GordieHowe.Generated.SHA256.Batched8Blocks.ROMParams.Program
-import all GordieHowe.Generated.SHA256.Batched8Blocks.ROMParams.Plan
+import all GordieHoweCerts.Generated.SHA256.Batched8Blocks.ROMParams.Program
+import all GordieHoweCerts.Generated.SHA256.Batched8Blocks.ROMParams.Plan
 @[expose] public section
 
 /-!

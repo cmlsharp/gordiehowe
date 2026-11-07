@@ -7,8 +7,8 @@
 Usage: python3 analysis/eval_params_test.py
 
 The run tests read the ROM run of fixtures/ (fixtures.py) with its own plan exports; the other
-tests read the plan exports of formal/GordieHowe/Generated, which the Lean's configurations are
-stated at, and the Lean's figures in formal/GordieHowe/Applications.
+tests read the plan exports of formal/GordieHoweCerts/Generated, which the Lean's configurations are
+stated at, and the Lean's figures in formal/GordieHoweCerts/Applications.
 """
 
 import gzip
@@ -28,8 +28,8 @@ import eval_params as ep  # noqa: E402
 import fixtures  # noqa: E402
 import plan_rounds as pr  # noqa: E402
 
-PLANS = ROOT / "formal/GordieHowe/Generated"
-APPLICATIONS = ROOT / "formal/GordieHowe/Applications"
+PLANS = ROOT / "formal/GordieHoweCerts/Generated"
+APPLICATIONS = ROOT / "formal/GordieHoweCerts/Applications"
 # The ROM run's results directory and its plan exports (lean/: the default ring size, 256
 # members; lean/ring-64/ and lean/ring-1024/ the others).
 RUN = fixtures.run(fixtures.ROM_RUN) / "narrow"
@@ -68,18 +68,16 @@ def without_ring(plans, size, dest):
 
 def lean_source_figures(cfg, profile):
     """(errorMax, errorExp, kq, U, k, rounds) of configuration CFG at PROFILE as the Lean states
-    them: errorMax in <Params>/RoundErrors.lean, forkFigures' rounds, kq and positions, and the
-    configuration's errorExp and k."""
-    params = "ROMParams" if profile == "narrow" else "QROMParams"
-    base = APPLICATIONS / LEAN_MODULES[cfg]
-    text = (base / f"{params}.lean").read_text()
-    a = re.search(r"abbrev errorMax : ℕ := (\d+)", (base / params / "RoundErrors.lean").read_text())
-    fig = re.search(r"theorem forkFigures : .*\.Figures (\d+) (\d+) (\d+) (\d+) (\d+) (\d+) :=",
-                    text)
-    E = re.search(r"^  errorExp := (\d+)$", text, re.M)
-    k = re.search(r"^  k := (\d+)$", text, re.M)
-    rounds, _, _, kq, _, U = (int(x) for x in fig.groups())
-    return int(a.group(1)), int(E.group(1)), kq, U, int(k.group(1)), rounds
+    them: the numerals of `figures_eq` in the configuration's generated Figures.lean."""
+    name = f"{cfg}-{profile}"
+    for fig in sorted(ROOT.glob("formal/*/Generated/**/Figures.lean")):
+        text = fig.read_text()
+        if f"# The figures of `{name}`" not in text:
+            continue
+        m = re.search(r"theorem figures_eq : figures =\s*⟨([\d,\s]+)⟩", text)
+        rounds, _, _, kq, _, U, k, a, E, _, _, _ = (int(x) for x in m.group(1).split(","))
+        return a, E, kq, U, k, rounds
+    raise KeyError(name)
 
 
 class BitSecurity(unittest.TestCase):
@@ -107,7 +105,7 @@ class BitSecurity(unittest.TestCase):
         for cfg, model, lam in (
                 ("mldsa-emulated-narrow", "rom", 101.36), ("mldsa-emulated-narrow", "zk", 96.46),
                 ("mldsa-emulated-wide", "qrom", 116.87), ("mldsa-emulated-wide", "zk", 160.20),
-                ("falcon-native-narrow", "rom", 95.55), ("falcon-native-narrow", "zk", 96.69),
+                ("falcon-native-narrow", "rom", 95.55), ("falcon-native-narrow", "zk", 96.63),
                 ("falcon-native-wide", "qrom", 116.87), ("falcon-native-wide", "zk", 160.16),
                 ("falcon-ring-native-narrow", "rom", 96.63),
                 ("falcon-ring-native-wide", "qrom", 116.91)):
@@ -435,7 +433,7 @@ class Run(unittest.TestCase):
 
 class ForkRounds(unittest.TestCase):
     """n_bound is the Lean's forkRoundsTotal (Plan/ForkFigures.lean), which each configuration's
-    forkFigures certifies by decide at the plan exports of formal/GordieHowe/Generated."""
+    forkFigures certifies by decide at the plan exports of formal/GordieHoweCerts/Generated."""
 
     # forkFigures' rounds figure per configuration.
     LEAN_ROUNDS = {"falcon-native-narrow": 2357, "falcon-native-wide": 2315,

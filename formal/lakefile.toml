@@ -21,12 +21,13 @@ rev = "5ed2965256430c3649e86755f9576b54eca72435"
 name = "GordieHowe"
 
 # The certificate library, opt in: the exported programs, plans and certificates
-# (GordieHowe/Generated/), each program's proof system from them, and every module importing one,
-# imported by the root GordieHoweCerts.lean under their GordieHowe.* names. The default target
-# builds none of them; GordieHowe imports no module of this library (scripts/cert_boundary.py).
+# (GordieHoweCerts/Generated/), each program's proof system from them, and every module importing
+# one, all named GordieHoweCerts.<path> and imported by the root GordieHoweCerts.lean. Their
+# declarations keep the GordieHowe namespaces. The default target builds none of them; GordieHowe
+# imports no module of this library (scripts/cert_boundary.py).
 [[lean_lib]]
 name = "GordieHoweCerts"
-globs = ["GordieHoweCerts"]
+globs = ["GordieHoweCerts", "GordieHoweCerts.+"]
 
 # The .ghc container and its type-directed decoders (GordieHoweNative/Ghc.lean, Derive.lean,
 # Codecs.lean), the loader's term building (Terms.lean), the data types they build

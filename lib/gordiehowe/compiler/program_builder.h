@@ -4130,6 +4130,7 @@ class ProgramBuilder : Lowering {
       o.pads = B.pads;
       o.bit_sumcheck = B.bit_phase > 0;
       o.char2 = char2;
+      o.merged = B.merged;
       const TargetRec want{ir::Target::kBatch, di, B.name};
       // Its parts: the predicates it is the target of (an equal's, or an
       // integer mod_0's realization's).

@@ -117,22 +117,22 @@ end Domain
 
 /-! ## The Chernoff test as numbers -/
 
-/-- **The Chernoff test `2^-E` of a load `⟨D, b⟩` on `N`-byte streams, as numbers** (the
-hypotheses of `passesChernoff_of_nat_at`). -/
-def ChernoffOk (E N : ℕ) (L : Load) : Prop :=
-  65 ^ L.bytes < 2 * 64 ^ L.bytes ∧
-    65 ^ (L.bytes * L.draws) * 64 ^ (N + 1) * 2 ^ (E + 1) ≤
-      (2 * 64 ^ L.bytes - 65 ^ L.bytes) ^ L.draws * 65 ^ (N + 1) ∧
+/-- **The Chernoff test `2^-E` of a load `⟨D, b⟩` on `N`-byte streams at the point `a / c`, as
+numbers** (the hypotheses of `passesChernoff_of_nat_at`). -/
+def ChernoffOk (a c E N : ℕ) (L : Load) : Prop :=
+  0 < c ∧ c ≤ a ∧ a ^ L.bytes < 2 * c ^ L.bytes ∧
+    a ^ (L.bytes * L.draws) * c ^ (N + 1) * 2 ^ (E + 1) ≤
+      (2 * c ^ L.bytes - a ^ L.bytes) ^ L.draws * a ^ (N + 1) ∧
     L.draws * 2 ^ (E + 1) ≤ 2 ^ N
 
-instance (E N : ℕ) (L : Load) : Decidable (ChernoffOk E N L) := by
+instance (a c E N : ℕ) (L : Load) : Decidable (ChernoffOk a c E N L) := by
   unfold ChernoffOk
   infer_instance
 
 /-- **A load passing the numeric Chernoff test passes it** (`passesChernoff_of_nat_at`). -/
-theorem ChernoffOk.passes {E N : ℕ} {L : Load} (h : ChernoffOk E N L) :
-    PassesChernoff (65 / 64) ((1 / 2) ^ E) N L :=
-  passesChernoff_of_nat_at E (b := L.bytes) (D := L.draws) h.1 h.2.1 h.2.2
+theorem ChernoffOk.passes {a c E N : ℕ} {L : Load} (h : ChernoffOk a c E N L) :
+    PassesChernoff ((a : ℝ) / c) ((1 / 2) ^ E) N L :=
+  passesChernoff_of_nat_at E (b := L.bytes) (D := L.draws) h.1 h.2.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2
 
 /-! ## The largest load of the challenges' readers -/
 
@@ -251,8 +251,8 @@ combination, and the transcript's largest grant `mg`:
   the plan's hash's (`Export.hashBytes`), the verifier's queries at most `2^16`, the digest length
   between `1` and `2^10`;
 * the transcript's bounds (`ForkNumbers.BoundsOk`) and its largest grant;
-* every load passes the Chernoff test `2^-chernoff` on its stream: every domain's reads at `Lr`, its
-  first combination at its grant, the phases' challenges;
+* every load passes the Chernoff test `2^-chernoff` at the point `zNum / zDen` on its stream: every
+  domain's reads at `Lr`, its first combination at its grant, the phases' challenges;
 * every domain's round charges and every phase's error within `errorMax / 2^errorExp`, on fields
   of their specifications' sizes (`Interp.specCard`), and `errorMax` the largest of them rounded
   up (`figErrorMax`). -/
@@ -286,15 +286,15 @@ structure Check (F : ProgramFigures) (Nm : ForkNumbers R) (src : ℕ → ℕ × 
   /-- The rest reads of every domain. -/
   rest : ∀ d : Fin ir.domains.length, ForkRestNumbers (R d) (ir.padBound d) (ir.circL d) (Lr d)
   /-- Every domain's reads at `Lr` pass on the default stream. -/
-  restGood : ∀ d, ChernoffOk F.chernoff (F.k + fsExtraBytes)
+  restGood : ∀ d, ChernoffOk F.zNum F.zDen F.chernoff (F.k + fsExtraBytes)
     (((Nm.cod d).rd.load.nsmul (Lr d)).max
       ⟨(R d).cert.Sh.nreq, Rejection.byteLen (R d).cert.Sh.N⟩)
   /-- Every domain's first combination passes on its stream with its grant. -/
   stageGood : ∀ d : Fin ir.domains.length,
-    ChernoffOk F.chernoff (F.k + fsExtraBytes + (Nm.grants d).stage 0)
+    ChernoffOk F.zNum F.zDen F.chernoff (F.k + fsExtraBytes + (Nm.grants d).stage 0)
       ((Nm.cod d).rd.load.nsmul (ir.claimCount (d := (d : ℕ)) (Pk := (R d).Pk)))
   /-- The phases' challenges pass on the default stream. -/
-  phaseGood : ∀ k : Fin ir.phases, ChernoffOk F.chernoff (F.k + fsExtraBytes)
+  phaseGood : ∀ k : Fin ir.phases, ChernoffOk F.zNum F.zDen F.chernoff (F.k + fsExtraBytes)
     (chal.nsmul (ir.chalList k).length)
   /-- Every domain's round charges. -/
   errors : ∀ d : Fin ir.domains.length,
@@ -317,13 +317,13 @@ theorem check_iff : Check F Nm src rd chal hL Lr mg ↔
       Nm.BoundsOk ∧
       mg = ProofSystem.fieldForkGrant R Nm.grants (ir.appReaders rd (fun _ => chal) hL) ∧
       (∀ d : Fin ir.domains.length, ForkRestNumbers (R d) (ir.padBound d) (ir.circL d) (Lr d)) ∧
-      (∀ d, ChernoffOk F.chernoff (F.k + fsExtraBytes)
+      (∀ d, ChernoffOk F.zNum F.zDen F.chernoff (F.k + fsExtraBytes)
         (((Nm.cod d).rd.load.nsmul (Lr d)).max
           ⟨(R d).cert.Sh.nreq, Rejection.byteLen (R d).cert.Sh.N⟩)) ∧
       (∀ d : Fin ir.domains.length,
-        ChernoffOk F.chernoff (F.k + fsExtraBytes + (Nm.grants d).stage 0)
+        ChernoffOk F.zNum F.zDen F.chernoff (F.k + fsExtraBytes + (Nm.grants d).stage 0)
           ((Nm.cod d).rd.load.nsmul (ir.claimCount (d := (d : ℕ)) (Pk := (R d).Pk)))) ∧
-      (∀ k : Fin ir.phases, ChernoffOk F.chernoff (F.k + fsExtraBytes)
+      (∀ k : Fin ir.phases, ChernoffOk F.zNum F.zDen F.chernoff (F.k + fsExtraBytes)
         (chal.nsmul (ir.chalList k).length)) ∧
       (∀ d : Fin ir.domains.length,
         FieldRoundsOk (R d) (I.specCard (ir.domainField d)) F.errorMax F.errorExp) ∧
@@ -344,7 +344,7 @@ noncomputable instance Check.decidable : Decidable (Check F Nm src rd chal hL Lr
 numbers: the check of a program whose transcript grants no extended stream, whose loads then pass
 at `k + fsExtraBytes` (`Check.loads`). -/
 def DefaultLoadsOk (F : ProgramFigures) (Nm : ForkNumbers R) : Prop :=
-  ∀ d, ChernoffOk F.chernoff (F.k + fsExtraBytes)
+  ∀ d, ChernoffOk F.zNum F.zDen F.chernoff (F.k + fsExtraBytes)
     (((Nm.cod d).rd.load.nsmul (Nm.Lmax d)).max
       ⟨(R d).cert.Sh.nreq, Rejection.byteLen (R d).cert.Sh.N⟩)
 
@@ -425,14 +425,14 @@ theorem transcriptWith_bounds (h : Check F Nm src rd chal hL Lr mg) (chk : Stmt 
       appWrites (ir.appReaders rd (fun _ => chal) hL) mg).Bounds :=
   B.fieldForkTranscriptWith_bounds Lw f Nm chk hpre hlabel h.k_le h.k_pos hname h.bounds h.grant
 
-/-- The Chernoff test `2^-chernoff` at a round's own stream length, `k + fsExtraBytes` plus its
-grant. -/
+/-- The Chernoff test `2^-chernoff` at the point `zNum / zDen` at a round's own stream length,
+`k + fsExtraBytes` plus its grant. -/
 abbrev GoodAt (F : ProgramFigures) (g : ℕ) (L : Load) : Prop :=
-  PassesChernoff (65 / 64) ((1 / 2) ^ F.chernoff) (F.k + fsExtraBytes + g) L
+  PassesChernoff ((F.zNum : ℝ) / F.zDen) ((1 / 2) ^ F.chernoff) (F.k + fsExtraBytes + g) L
 
 /-- Larger grants keep the test. -/
 theorem goodAt_mono (F : ProgramFigures) (g : ℕ) (L : Load) (h : GoodAt F 0 L) : GoodAt F g L :=
-  h.anti (by norm_num) (by omega)
+  h.anti (by omega)
 
 /-- The rest reads of every domain (`forkRestSizesLe_ofOk`). -/
 theorem restSizes (h : Check F Nm src rd chal hL Lr mg) (d : Fin ir.domains.length) :
@@ -443,7 +443,7 @@ theorem restSizes (h : Check F Nm src rd chal hL Lr mg) (d : Fin ir.domains.leng
 theorem restGoodAt (h : Check F Nm src rd chal hL Lr mg) (d : Fin ir.domains.length) (L : Load)
     (hle : L ≤ forkLoad B.src (R d) (Nm.cod d).rd (Lr d)) : GoodAt F 0 L := by
   rw [forkLoad_eq] at hle
-  exact ((h.restGood d).passes.anti (by norm_num) (by omega)).of_le (by norm_num) hle
+  exact ((h.restGood d).passes.anti (by omega)).of_le hle
 
 /-- Every domain's first combination passes on its stream with its grant. -/
 theorem stageGoodAt (h : Check F Nm src rd chal hL Lr mg) (d : Fin ir.domains.length) (n : ℕ)
@@ -451,7 +451,7 @@ theorem stageGoodAt (h : Check F Nm src rd chal hL Lr mg) (d : Fin ir.domains.le
     GoodAt F ((CReader.pi n (Nm.cod d).rd).extend ((Nm.fits B.enforce d).grants.stage 0)).grant
       ((Nm.cod d).rd.load.nsmul n) := by
   rw [CReader.extend_grant, CReader.pi_grant, h.bounds.2.2.2.2 d, Nat.mul_zero, Nat.zero_add]
-  refine (h.stageGood d).passes.of_le (by norm_num) ?_
+  refine (h.stageGood d).passes.of_le ?_
   simp only [Load.nsmul, Load.le_iff]
   exact ⟨Nat.mul_le_mul_right _ hn, le_rfl⟩
 
@@ -493,13 +493,13 @@ theorem loads (h : Check F Nm src rd chal hL Lr mg) (hu : DefaultLoadsOk F Nm) {
     {appWrites : SpecWrites (B.fieldIop R Lw f).app.spec (2 ^ 20)} :
     ∀ j, ((B.fieldForkTranscript R Lw f Nm.cod (Nm.fits B.enforce) label F.k stmt name appWrites
       (ir.appReaders rd (fun _ => chal) hL) mg).readers j).AllLoads
-      (PassesChernoff (65 / 64) ((1 / 2) ^ F.chernoff)
+      (PassesChernoff ((F.zNum : ℝ) / F.zDen) ((1 / 2) ^ F.chernoff)
         ((B.fieldForkTranscript R Lw f Nm.cod (Nm.fits B.enforce) label F.k stmt name appWrites
           (ir.appReaders rd (fun _ => chal) hL) mg).k + fsExtraBytes)) :=
   B.fieldForkLoads R Lw f Nm.cod (Nm.fits B.enforce)
     (fun d L hle => by
       rw [Nm.forkLoad_fits B.enforce d] at hle
-      exact (hu d).passes.of_le (by norm_num) hle)
+      exact (hu d).passes.of_le hle)
     (ir.appReaders_allLoads rd (fun _ => chal) hL fun k => (h.phaseGood k).passes)
 
 /-- **Every round's load of the transcript checked by `chk` passes the Chernoff test
@@ -511,13 +511,13 @@ theorem loadsWith (h : Check F Nm src rd chal hL Lr mg) (hu : DefaultLoadsOk F N
     {appWrites : SpecWrites (B.fieldIopWith R Lw f chk).app.spec (2 ^ 20)} :
     ∀ j, ((B.fieldForkTranscriptWith R Lw f Nm.cod (Nm.fits B.enforce) chk label F.k stmt name
       appWrites (ir.appReaders rd (fun _ => chal) hL) mg).readers j).AllLoads
-      (PassesChernoff (65 / 64) ((1 / 2) ^ F.chernoff)
+      (PassesChernoff ((F.zNum : ℝ) / F.zDen) ((1 / 2) ^ F.chernoff)
         ((B.fieldForkTranscriptWith R Lw f Nm.cod (Nm.fits B.enforce) chk label F.k stmt name
           appWrites (ir.appReaders rd (fun _ => chal) hL) mg).k + fsExtraBytes)) :=
   B.fieldForkLoadsWith R Lw f Nm.cod (Nm.fits B.enforce)
     (fun d L hle => by
       rw [Nm.forkLoad_fits B.enforce d] at hle
-      exact (hu d).passes.of_le (by norm_num) hle)
+      exact (hu d).passes.of_le hle)
     (ir.appReaders_allLoads rd (fun _ => chal) hL fun k => (h.phaseGood k).passes)
 
 end Check

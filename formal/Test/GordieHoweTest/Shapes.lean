@@ -53,6 +53,23 @@ example : program.shapesB [.sourcePredicates 7 7] = false := by decide +kernel
 example : program.shapesB [.embedding selfEmbedding] = true := by decide +kernel
 example : program.shapesB [.embedding wrongEmbedding] = false := by decide +kernel
 
+/-- The test program with one predicate, the default one, which reads value `0`. -/
+@[expose] def defaultPredicateProgram : RealizedProgram :=
+  { program with predicates := [default] }
+
+/-- A part listing its first equality at the same predicate of the larger program. -/
+@[expose] def equalEmbedding : EmbedData :=
+  { selfEmbedding with source := defaultPredicateProgram, equals := [(0, 0)] }
+
+/-- The same equality listed for a part with no predicate: index `0` is out of range in the
+smaller program, whose `predicate 0` is still the default predicate. -/
+@[expose] def outOfRangeEmbedding : EmbedData :=
+  { selfEmbedding with equals := [(0, 0)] }
+
+example : defaultPredicateProgram.shapesB [.embedding equalEmbedding] = true := by decide +kernel
+example : defaultPredicateProgram.shapesB [.embedding outOfRangeEmbedding] = false := by
+  decide +kernel
+
 
 /-- An equality whose metadata must be checked separately from its body. -/
 @[expose] def headerPredicate : Predicate where

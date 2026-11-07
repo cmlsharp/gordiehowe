@@ -11,7 +11,8 @@ public import GordieHoweNative.ProofSystem.Program.FiguresCheck
 # The figures part at program data
 
 The field and tableau descriptors supply the numbers used by `FigCheck`. The part checks
-batch validity, coverage of every packing mask query, split masking, and the figures. Batch
+batch validity, coverage of every packing mask query, split masking, and the figures, which must
+be present; a program certified only for its proof system checks instead that it has none. Batch
 validity uses the structurally recursive product-cell counter so the kernel can evaluate it.
 The compiled form shares one cells context across domains, batches and messages; soundness
 transports the descriptor checks to the ready data using the checked packing descriptors.
@@ -55,12 +56,17 @@ variable (d : ProgramData)
     @FigCheck.figuresB d.program (d.figuresDomains) r.toPReader d.plan.hash
       d.fieldTable.interp.loadN d.fieldTable.interp.cardN d.fieldTable.interp.fbN d.figures
 
-/-- **The figures part in kernel mode**, with the program reader. -/
-@[expose] def figuresPartB : Bool :=
-  !d.figures.present || @figuresReaderB d (CellsReader.ofProgram d.program)
+/-- **The figures part in kernel mode**, with the program reader. With `withFigures` the figures
+are present and pass the check; without, they are absent (`FiguresData.present` is false), which a
+program certified only for its proof system states. -/
+@[expose] def figuresPartB (withFigures : Bool) : Bool :=
+  if withFigures then d.figures.present && @figuresReaderB d (CellsReader.ofProgram d.program)
+  else !d.figures.present
 
 /-- **The figures part in compiled mode**, with the cells context built once. -/
-@[expose] def figuresPartBC : Bool :=
-  !d.figures.present || @figuresReaderB d (CellsReader.ofCtx d.program (CellsCtx.build d.program))
+@[expose] def figuresPartBC (withFigures : Bool) : Bool :=
+  if withFigures then
+    d.figures.present && @figuresReaderB d (CellsReader.ofCtx d.program (CellsCtx.build d.program))
+  else !d.figures.present
 
 end GordieHowe.ProgramData

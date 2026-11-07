@@ -2,8 +2,8 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 import GordieHoweTest.GKRRelUnitData
-import GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.H
-import GordieHowe.Generated.MLDSA44.Native.ROMParams.GKR.H
+import GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.H
+import GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.GKR.H
 
 /-!
 # Family records of exported H circuits

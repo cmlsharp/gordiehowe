@@ -3,11 +3,11 @@
 
 module
 
-public import GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Data
+public import GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 
-import all GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Program
-import all GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Plan
+import all GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Program
+import all GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Plan
 @[expose] public section
 
 /-!
@@ -26,8 +26,8 @@ namespace GordieHoweCheck.RSA2048.Goldilocks2.Msg2KiB.ROMParams
 
 open GordieHowe RealizedProgram GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams
 
-/-- **The figures when present** (`GordieHowe.ProgramData.figuresPartB`). -/
-theorem figuresPartOk : data.figuresPartB = true := by
+/-- **The figures** (`GordieHowe.ProgramData.figuresPartB`). -/
+theorem figuresPartOk : data.figuresPartB false = true := by
   decide +kernel
 
 end GordieHoweCheck.RSA2048.Goldilocks2.Msg2KiB.ROMParams

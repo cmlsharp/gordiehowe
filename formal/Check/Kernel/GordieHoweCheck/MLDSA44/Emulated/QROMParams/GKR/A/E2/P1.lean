@@ -3,9 +3,9 @@
 
 module
 
-public import GordieHowe.Generated.MLDSA44.Emulated.QROMParams.GKR.A
-meta import GordieHowe.Generated.MLDSA44.Emulated.QROMParams.GKR.A
-import all GordieHowe.Generated.MLDSA44.Emulated.QROMParams.Program
+public import GordieHoweCerts.Generated.MLDSA44.Emulated.QROMParams.GKR.A
+meta import GordieHoweCerts.Generated.MLDSA44.Emulated.QROMParams.GKR.A
+import all GordieHoweCerts.Generated.MLDSA44.Emulated.QROMParams.Program
 
 @[expose] public section
 

@@ -44,10 +44,10 @@ phase and see every other oracle whole.
   `ρ = 1 - s̄` and `k ≈ t / s̄` the error is about `2 Q e^{-t} + (Q + 1) q Q t / (|R| s̄)`.
 
 The adversary class is classical, with at most `q` queries to the mask oracle per choice and for
-the distinguisher (`ROM.Alg`, CY24 p. 20), and the whole oracles otherwise. The step for
-superposition queries to the mask oracle is `GordieHowe/Applications/Ring/PublicW1/MaskOracleQROM.lean`
-(one-way to hiding on the slices at the drawn nonces). Deterministic signing (a fixed nonce) is
-not covered: the bound charges the queries that hit a fresh nonce.
+the distinguisher (`ROM.Alg`, CY24 p. 20), and the whole oracles otherwise. Superposition
+queries to the mask oracle are covered by the `RingScheme` anonymity headlines
+(`GordieHowe/Applications/Ring/MLDSAW1AnonQuery.lean`, `MLDSAW1AnonOracle.lean`). Deterministic
+signing (a fixed nonce) is not covered: the bound charges the queries that hit a fresh nonce.
 -/
 
 open scoped NNReal ENNReal BigOperators

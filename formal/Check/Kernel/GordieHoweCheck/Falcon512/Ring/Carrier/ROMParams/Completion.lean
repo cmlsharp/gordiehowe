@@ -3,11 +3,11 @@
 
 module
 
-public import GordieHowe.Generated.Falcon512.Ring.Carrier.ROMParams.Data
+public import GordieHoweCerts.Generated.Falcon512.Ring.Carrier.ROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 
-import all GordieHowe.Generated.Falcon512.Ring.Carrier.ROMParams.Program
-import all GordieHowe.Generated.Falcon512.Ring.Carrier.ROMParams.Plan
+import all GordieHoweCerts.Generated.Falcon512.Ring.Carrier.ROMParams.Program
+import all GordieHoweCerts.Generated.Falcon512.Ring.Carrier.ROMParams.Plan
 @[expose] public section
 
 /-!

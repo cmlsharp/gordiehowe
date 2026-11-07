@@ -4,8 +4,9 @@
 
 """Report imports that run against the layering of the library's parts.
 
-A part is a top-level directory of `GordieHowe/`; a file may import from its own part and from the
-parts before it:
+A part is a top-level directory of `GordieHowe/` or of `GordieHoweCerts/` (the certificate library,
+whose parts are named as the library's); a file may import from its own part and from the parts
+before it:
 
   0    Foundations/, Headline.lean            (Mathlib supplements, probability, algebra, codes, fields)
   1    Model/                                 (IOPs, the quantum and classical oracle models)
@@ -24,7 +25,8 @@ import sys
 RANK = {'Foundations': 0, 'Headline.lean': 0, 'Model': 1, 'Language': 2, 'ProofSystem': 3.0,
         'ProofSystem/Program': 3.1, 'SPBCS': 3.5, 'Applications': 4, 'Errata': 4, 'Generated': 4,
         'PaperManifest.lean': 5}
-IMPORT = re.compile(r'^(?:public )?import (?:all )?GordieHowe\.([A-Za-z0-9_.]+)\s*$')
+LIBS = ('GordieHowe', 'GordieHoweCerts')
+IMPORT = re.compile(r'^(?:public )?import (?:all )?(GordieHowe(?:Certs)?)\.([A-Za-z0-9_.]+)\s*$')
 
 
 def rank(rel):
@@ -46,22 +48,24 @@ def allowed(a, b):
 
 
 def main():
-    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'GordieHowe')
+    formal = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
     bad = []
-    for d, _, fs in os.walk(root):
-        for f in fs:
-            if not f.endswith('.lean'):
-                continue
-            path = os.path.join(d, f)
-            a = os.path.relpath(path, root)
-            for line in open(path, encoding='utf-8'):
-                m = IMPORT.match(line)
-                if m:
-                    b = m.group(1).replace('.', '/') + '.lean'
-                    if not allowed(a, b):
-                        bad.append((a, b))
+    for lib in LIBS:
+        root = os.path.join(formal, lib)
+        for d, _, fs in os.walk(root):
+            for f in fs:
+                if not f.endswith('.lean'):
+                    continue
+                path = os.path.join(d, f)
+                a = os.path.relpath(path, root)
+                for line in open(path, encoding='utf-8'):
+                    m = IMPORT.match(line)
+                    if m:
+                        b = m.group(2).replace('.', '/') + '.lean'
+                        if not allowed(a, b):
+                            bad.append((f'{lib}/{a}', f'{m.group(1)}/{b}'))
     for a, b in sorted(bad):
-        print(f'GordieHowe/{a} imports GordieHowe/{b}')
+        print(f'{a} imports {b}')
     print(f'layering violations: {len(bad)} (non-blocking)')
     return 0
 

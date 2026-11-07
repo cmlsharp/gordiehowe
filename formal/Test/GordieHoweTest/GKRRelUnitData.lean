@@ -1,7 +1,7 @@
 -- Copyright 2026 Chad Sharp and Paul Grubbs
 -- SPDX-License-Identifier: Apache-2.0
 
-import GordieHowe.Generated.Falcon512.Native.ROMParams.Program
+import GordieHoweCerts.Generated.Falcon512.Native.ROMParams.Program
 import GordieHowe.Language.Realizations.Circuit.RelEntry
 import GordieHowe.Applications.FieldInterps.Basic
 

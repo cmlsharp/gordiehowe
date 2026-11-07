@@ -118,6 +118,10 @@ query-bounded quantum adversaries in the QROM with classical requests to a chall
 These are models of the game, not assumptions: a result proved in an idealized game says nothing
 about the concrete function it replaces.
 
+- **`ExpandA`, `ExpandS` and `SampleInBall` as random oracles in the ring signature's anonymity
+  headlines.** `w1Scheme.expect_anonAdvantage_le_mldsa{44,65,87}` and their `_bind` and `_conv`
+  forms (`Applications/Ring/MLDSAW1AnonOracle.lean`) average the advantage over the three
+  oracles (`randomOraclePrimitives`), with the adversary indexed by them.
 - **`ExpandA` as a random oracle (`Â` uniform).** `withExpandA`, `expect_regGap_withExpandA`,
   `idealAnonError`, `advantage_le_ideal` (`Applications/Ring/PublicW1/MLDSAPublicW1.lean`); the
   three-oracle anonymity headlines `advantage_le_bkm06` and `advantage_le_bkm06_mldsa{44,65,87}`
@@ -139,7 +143,8 @@ about the concrete function it replaces.
 - **Terms left unevaluated at the concrete FIPS 204 functions.** `regGapAt` and `collAt`
   (`Applications/Ring/MLDSAW1IdealDist.lean`) enter `w1Concrete.anonAdvantage_le_coupling` and its
   instances as defined averages: the numeric regularity and collision bounds hold for the
-  random-oracle `ExpandA`, `ExpandS` and `SampleInBall` and are not applied to the concrete ones.
+  random-oracle `ExpandA`, `ExpandS` and `SampleInBall`, where the headlines
+  `w1Scheme.expect_anonAdvantage_le_mldsa{44,65,87}` apply them.
 
 ## Gaps
 
@@ -153,6 +158,7 @@ about the concrete function it replaces.
 - Barbosa et al. (ePrint 2023/246) is checked against its local copy; Devevey et al. (ePrint
   2023/245) and FIPS 206 are cited without a local copy checked.
 - The text of Langlois–Stehlé has not been checked against the Module-LWE and Module-SIS forms.
-- `regGapAt` and `collAt` at the concrete `ExpandA` would need an assumption on `ExpandA` (a PRF or
-  a random oracle) that the library does not state.
+- `regGapAt` and `collAt` at the concrete `ExpandA` would need an assumption on `ExpandA` (a PRF)
+  that the library does not state; the numeric anonymity headlines take `ExpandA`, `ExpandS` and
+  `SampleInBall` as random oracles instead.
 -/

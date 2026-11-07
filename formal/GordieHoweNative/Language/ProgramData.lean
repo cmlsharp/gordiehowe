@@ -186,7 +186,9 @@ largest array, largest challenge read and reads besides its first combination, e
 stream grants, the transcript's largest grant, the source challenges'
 error fractions, and whether the transcript grants no extended stream (`defaultLoads`). -/
 structure FiguresData where
-  /-- Whether an application consumes these figures; core-only certificates set this false. -/
+  /-- Whether the program states figures. The program's check (`ProgramData.programOkB`) requires
+  them present at a program with figures and absent at a program certified only for its proof
+  system. -/
   present : Bool := true
   /-- The figures. -/
   figures : ProgramFigures
@@ -209,7 +211,7 @@ structure FiguresData where
 which no configuration reads. -/
 def FiguresData.none : FiguresData where
   present := false
-  figures := ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0⟩
+  figures := ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0⟩
   maxArray := []
   maxRead := []
   restRead := []

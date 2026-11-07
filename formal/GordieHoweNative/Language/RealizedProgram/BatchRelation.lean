@@ -517,9 +517,9 @@ def partSides (d b j : ℕ) : Option (Expr × Expr) :=
 /-- **The instances of part `j`**: the coordinates of its left side. -/
 def partLen (d b j : ℕ) : ℕ := ((ir.partSides d b j).map fun s => ir.exprLen s.1).getD 0
 
-/-- **Batch `b` merges its parts** (`batch.h`, `FieldOperands::relation(gamma)`): it has a merging
-challenge. -/
-def merged (b : ℕ) : Bool := (ir.batch b).gamma.isSome
+/-- **Batch `b` merges its parts** (`batch.h`, `FieldOperands::relation(gamma)`): its `merged`
+flag is set. -/
+def merged (b : ℕ) : Bool := (ir.batch b).merged
 
 /-- **The shape of batch `b`'s relation at the batch forms `bp`**: `relShape` from the parts'
 predicates' shapes (`relShape_eq_batchShape`). -/

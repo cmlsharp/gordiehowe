@@ -3,11 +3,11 @@
 
 module
 
-public import GordieHowe.Generated.MLDSA44.Emulated.ROMParams.Data
+public import GordieHoweCerts.Generated.MLDSA44.Emulated.ROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 
-import all GordieHowe.Generated.MLDSA44.Emulated.ROMParams.Program
-import all GordieHowe.Generated.MLDSA44.Emulated.ROMParams.Plan
+import all GordieHoweCerts.Generated.MLDSA44.Emulated.ROMParams.Program
+import all GordieHoweCerts.Generated.MLDSA44.Emulated.ROMParams.Plan
 @[expose] public section
 
 /-!

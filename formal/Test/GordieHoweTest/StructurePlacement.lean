@@ -2,8 +2,8 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 import GordieHowe.Language.RealizedProgram.Placement
-import GordieHowe.Generated.MLDSA44.Native.ROMParams.Program
-import GordieHowe.Generated.MLDSA44.Native.ROMParams.Structure
+import GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.Program
+import GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.Structure
 
 /-!
 # Tests of the cells checks at the structure records' placement pointers

@@ -3,11 +3,11 @@
 
 module
 
-public import GordieHowe.Generated.SHA256.Batched8Blocks.ROMParams.Data
+public import GordieHoweCerts.Generated.SHA256.Batched8Blocks.ROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 
-import all GordieHowe.Generated.SHA256.Batched8Blocks.ROMParams.Program
-import all GordieHowe.Generated.SHA256.Batched8Blocks.ROMParams.Plan
+import all GordieHoweCerts.Generated.SHA256.Batched8Blocks.ROMParams.Program
+import all GordieHoweCerts.Generated.SHA256.Batched8Blocks.ROMParams.Plan
 @[expose] public section
 
 /-!
@@ -26,8 +26,8 @@ namespace GordieHoweCheck.SHA256.Batched8Blocks.ROMParams
 
 open GordieHowe RealizedProgram GordieHowe.Generated.SHA256.Batched8Blocks.ROMParams
 
-/-- **The figures when present** (`GordieHowe.ProgramData.figuresPartB`). -/
-theorem figuresPartOk : data.figuresPartB = true := by
+/-- **The figures** (`GordieHowe.ProgramData.figuresPartB`). -/
+theorem figuresPartOk : data.figuresPartB false = true := by
   decide +kernel
 
 end GordieHoweCheck.SHA256.Batched8Blocks.ROMParams

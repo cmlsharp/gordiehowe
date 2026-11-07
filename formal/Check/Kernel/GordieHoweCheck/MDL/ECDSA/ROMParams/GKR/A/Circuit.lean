@@ -101,8 +101,8 @@ public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.A.E94
 public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.A.E95
 public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.A.E96
 public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.A.E97
-meta import GordieHowe.Generated.MDL.ECDSA.ROMParams.GKR.A
-import all GordieHowe.Generated.MDL.ECDSA.ROMParams.Program
+meta import GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.GKR.A
+import all GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.Program
 
 @[expose] public section
 

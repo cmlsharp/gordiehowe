@@ -152,6 +152,10 @@ class CompiledDomain final : public CompiledDomainBase<S> {
     std::string name;
     PlacementChoice choice;
     bool pinned = false;
+    // Its predicates' relations merged as sum_i gamma^i Q_i
+    // (Domain::merge_batch), one predicate per relation; otherwise one
+    // relation whose instances are its predicates'.
+    bool merged = false;
     // Its counted work in one proof (op_counts.h), as placed.
     OpCounts work;
   };
@@ -804,6 +808,7 @@ class CompiledDomain final : public CompiledDomainBase<S> {
       b.rounds = sh.rounds;
       b.bit_phase = bp.kernel->bit_phase_rounds();
       b.parts = sh.parts;
+      b.merged = bp.kernel->relations() > 1;
       b.work = bp.work;
       const auto &tables = btables_[size_t(&bp - bplan_.data())];
       if (!sh.call_instances.empty()) {
@@ -2597,10 +2602,31 @@ class CompiledDomain final : public CompiledDomainBase<S> {
   std::shared_ptr<const BatchOperands<G>> group_operands(
       const G &fg, const Group &g, bool provisional,
       std::vector<BatchSpace> &spaces) const {
+    spaces.clear();
+    if (g.merged) {
+      // One part per predicate, each over its own spaces, the parts'
+      // spaces in order.
+      std::vector<std::shared_ptr<const BatchOperands<G>>> parts;
+      std::vector<size_t> counts;
+      for (size_t k : g.preds) {
+        Group part = g;
+        part.merged = false;
+        part.preds = {k};
+        part.name = d_.preds_[k].name;
+        part.degree = pplan_[k].form->degree();
+        std::vector<BatchSpace> sp;
+        parts.push_back(group_operands(fg, part, provisional, sp));
+        counts.push_back(sp.size());
+        spaces.insert(spaces.end(), sp.begin(), sp.end());
+      }
+      const std::string e = merged_batch_error(parts);
+      if (!e.empty()) fail("merged batch '" + g.name + "': " + e);
+      return std::make_shared<MergedOperands<G>>(
+          fg, std::move(parts), kernel_width(g.width), std::move(counts));
+    }
     const std::vector<Node> &N = nodes();
     const F &f = d_.field();
     const bool bits = g.eval == BatchEval::kBitSliced;
-    spaces.clear();
     std::map<size_t, uint32_t> space_of;
     auto space = [&](BatchSpace::Kind k, size_t node, size_t size) {
       auto it = space_of.find(node);
@@ -3110,6 +3136,7 @@ class CompiledDomain final : public CompiledDomainBase<S> {
           d.preds[q.origin.index].group = long(i);
         }
         g.width = unsigned(bt->width);
+        g.merged = bt->merged;
       }
       g.pinned = r.u64() != 0;
       g.work = get_counts(r);
@@ -3615,6 +3642,54 @@ void CompiledDomain<F, RSF, S>::place_predicates(const Decisions *dec) {
     return pplan_[k].eval == BatchEval::kBitSliced ? (n + 63) / 64 * 64 : n;
   };
 
+  // The merged batches (Domain::merge_batch): each one group of its
+  // predicates, in declaration order, of one operand class and the same
+  // coordinates, at the class's skip width.
+  std::vector<bool> in_merge(d_.preds_.size(), false);
+  std::vector<Group> merges;
+  for (const auto &m : d_.merges_) {
+    Group g;
+    g.merged = true;
+    g.pinned = true;
+    g.name = m.name;
+    for (const Placement *key : m.preds) {
+      size_t k = 0;
+      while (k < d_.preds_.size() && d_.preds_[k].pin.get() != key) ++k;
+      if (k == d_.preds_.size())
+        fail("merge_batch '" + m.name + "' of domain " + d_.name +
+             ": a predicate of another domain");
+      if (in_merge[k])
+        fail("merge_batch '" + m.name + "': the predicate '" +
+             d_.preds_[k].name + "' is merged twice");
+      in_merge[k] = true;
+      g.preds.push_back(k);
+    }
+    if (g.preds.size() < 2)
+      fail("merge_batch '" + m.name + "': fewer than two predicates");
+    std::sort(g.preds.begin(), g.preds.end());
+    const size_t k0 = g.preds[0];
+    g.eval = pplan_[k0].eval;
+    g.word_degree = pplan_[k0].word_degree;
+    g.n = instances(k0);
+    for (size_t k : g.preds) {
+      const PredPlan &pp = pplan_[k];
+      if (pp.eval != g.eval || pp.word_degree != g.word_degree)
+        fail("merge_batch '" + m.name + "': the predicates '" +
+             d_.preds_[k0].name + "' and '" + d_.preds_[k].name +
+             "' read operands of different classes");
+      if (d_.preds_[k].e->n != d_.preds_[k0].e->n)
+        fail("merge_batch '" + m.name + "': the predicates '" +
+             d_.preds_[k0].name + "' and '" + d_.preds_[k].name +
+             "' have different coordinates");
+      g.degree = std::max(g.degree, pp.form->degree());
+    }
+    g.choice.where = Placement::kBatch;
+    g.choice.width = batch_width(g.eval);
+    g.choice.why = "merged";
+    g.width = g.choice.width;
+    merges.push_back(std::move(g));
+  }
+
   // Groups by form: the evaluator, the leaves' degree and Q.
   auto key_of = [&](size_t k) {
     const PredPlan &pp = pplan_[k];
@@ -3627,7 +3702,7 @@ void CompiledDomain<F, RSF, S>::place_predicates(const Decisions *dec) {
   std::vector<Group> autos, pins;
   for (size_t k : pending) {
     const PredPlan &pp = pplan_[k];
-    if (!pp.form) continue;
+    if (!pp.form || in_merge[k]) continue;
     const bool pinned = pp.pin == Placement::kBatch;
     auto &of = pinned ? pin_of : auto_of;
     auto &gs = pinned ? pins : autos;
@@ -3734,7 +3809,7 @@ void CompiledDomain<F, RSF, S>::place_predicates(const Decisions *dec) {
   for (Group &g : pins) {
     bool joined = false;
     for (Group &a : groups_) {
-      if (a.choice.where != Placement::kBatch) continue;
+      if (a.choice.where != Placement::kBatch || a.merged) continue;
       if (key_of(a.preds[0]) != key_of(g.preds[0])) continue;
       for (size_t k : g.preds) {
         a.preds.push_back(k);
@@ -3758,6 +3833,15 @@ void CompiledDomain<F, RSF, S>::place_predicates(const Decisions *dec) {
       pplan_[k].why = "pinned";
     }
     groups_.push_back(g);
+  }
+  // The merged batches.
+  for (Group &g : merges) {
+    const long gi = long(groups_.size());
+    for (size_t k : g.preds) {
+      assign(k, g.choice, gi);
+      pplan_[k].why = "merged";
+    }
+    groups_.push_back(std::move(g));
   }
   // Forms are kept for the batches only.
   for (PredPlan &pp : pplan_)
@@ -4284,6 +4368,7 @@ void CompiledDomain<F, RSF, S>::build() {
     if (donor != nullptr) {
       const Group &h = donor->groups_[gi];
       if (h.choice.where == Placement::kBatch && h.preds == g.preds &&
+          h.merged == g.merged &&
           h.eval == g.eval && h.word_degree == g.word_degree &&
           h.width == g.width && h.n == g.n && h.degree == g.degree &&
           donor->group_kernels_.at(gi) && donor_space < donor->group_spaces_.size()) {

@@ -6,8 +6,8 @@ module
 public import GordieHoweCheck.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.A.E0
 public import GordieHoweCheck.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.A.E1
 public import GordieHoweCheck.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.A.E2
-meta import GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.A
-import all GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Program
+meta import GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.A
+import all GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Program
 
 @[expose] public section
 

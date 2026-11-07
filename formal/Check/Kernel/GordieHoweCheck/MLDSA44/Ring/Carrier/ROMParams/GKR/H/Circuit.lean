@@ -10,8 +10,8 @@ public import GordieHoweCheck.MLDSA44.Ring.Carrier.ROMParams.GKR.H.E3
 public import GordieHoweCheck.MLDSA44.Ring.Carrier.ROMParams.GKR.H.E4
 public import GordieHoweCheck.MLDSA44.Ring.Carrier.ROMParams.GKR.H.E5
 public import GordieHoweCheck.MLDSA44.Ring.Carrier.ROMParams.GKR.H.E6
-meta import GordieHowe.Generated.MLDSA44.Ring.Carrier.ROMParams.GKR.H
-import all GordieHowe.Generated.MLDSA44.Ring.Carrier.ROMParams.Program
+meta import GordieHoweCerts.Generated.MLDSA44.Ring.Carrier.ROMParams.GKR.H
+import all GordieHoweCerts.Generated.MLDSA44.Ring.Carrier.ROMParams.Program
 
 @[expose] public section
 

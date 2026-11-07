@@ -3,9 +3,9 @@
 
 module
 
-public import GordieHowe.Generated.SHA256.Batched8KiB.QROMParams.Data
+public import GordieHoweCerts.Generated.SHA256.Batched8KiB.QROMParams.Data
 public import GordieHowe.Applications.Program.Conditions
-public import GordieHowe.Generated.SHA256.Batched8KiB.QROMParams.Pending.Small
+public import GordieHoweCerts.Generated.SHA256.Batched8KiB.QROMParams.Pending.Small
 
 @[expose] public section
 

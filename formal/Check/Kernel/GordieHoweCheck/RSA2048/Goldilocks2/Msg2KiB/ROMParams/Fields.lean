@@ -3,12 +3,12 @@
 
 module
 
-public import GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Data
+public import GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 public import GordieHoweCheck.RSA2048.Goldilocks2.Msg2KiB.ROMParams.AssignmentReads
 
-import all GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Program
-import all GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Plan
+import all GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Program
+import all GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Plan
 @[expose] public section
 
 /-!

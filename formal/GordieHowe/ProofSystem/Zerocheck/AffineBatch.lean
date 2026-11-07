@@ -5,7 +5,7 @@ module
 
 public import GordieHowe.ProofSystem.Zerocheck.SkipBatchPhase
 public import GordieHowe.ProofSystem.Zerocheck.SkipBatch
-public import GordieHowe.ProofSystem.Zerocheck.BitSumcheckIP
+public import GordieHowe.ProofSystem.Zerocheck.CoordSumcheckIP
 public import GordieHowe.Headline
 public import GordieHowe.ProofSystem.FieldProof.MaskedReduction
 public import GordieHowe.ProofSystem.Zerocheck.AltRounds
@@ -298,7 +298,7 @@ variable (m) in
 round. -/
 noncomputable abbrev bitError :
     (spec K B.e B.D B.n B.k ++ HashCircuit.Skip.alt (Fin 2 → K) K m).ChallengeIdx → ℝ≥0 :=
-  FieldProof.MaskedReduction.bitSumcheckError (K := K) m B.error
+  FieldProof.MaskedReduction.coordSumcheckError (K := K) m B.error
 
 omit [DecidableEq K] [DecidableEq V] in
 /-- **The total error of the batch with the bit sumcheck**: the batch's, `n/|K|`,
@@ -307,7 +307,7 @@ theorem bitError_sum : ∑ i, B.bitError m i = (B.n : ℝ≥0) / Fintype.card K 
     ((B.D * (B.w - 1) : ℕ) : ℝ≥0) / Fintype.card K +
       ((B.D + 1 : ℕ) : ℝ≥0) * B.n / Fintype.card K + 1 / Fintype.card K +
         ((2 * m : ℕ) : ℝ≥0) / Fintype.card K := by
-  rw [FieldProof.MaskedReduction.sum_bitSumcheckError, B.error_sum]
+  rw [FieldProof.MaskedReduction.sum_coordSumcheckError, B.error_sum]
 
 /-- **Soundness of the batch with the bit sumcheck**: the batch's relation (the batch on the
 logical assignment and the pads' products), with the batch's errors and `2/|K|` per bit round. -/
@@ -317,12 +317,12 @@ noncomputable def bitSumcheckSound (e : B.Pad → ι) (Lv : Level K ι V) (L : B
 
 variable (Pub) in
 /-- **The simulator of the batch with the bit sumcheck**: the batch's simulator, then uniform values
-(`MaskedReduction.Sim.bitSumcheck`).
+(`MaskedReduction.Sim.coordSumcheck`).
 
 Running time: the batch's simulator's and a copy of `2m` coins, linear in the transcript. This
 running time is argued here, not proved in Lean. -/
 def bitSim (e : B.Pad → ι) (Lv : Level K ι V) (L : BitLayout K ι V m nw) : (B.bitIp Pub e Lv L).Sim :=
-  FieldProof.MaskedReduction.Sim.bitSumcheck L (B.sim Pub e Lv)
+  FieldProof.MaskedReduction.Sim.coordSumcheck L (B.sim Pub e Lv)
 
 variable (Pub) in
 /-- **The honest batch with the bit sumcheck**, on assignments where the batch holds: the honest
@@ -330,25 +330,25 @@ batch, then the honest bit rounds at the assignment's bits (`MaskedReduction.Hon
 simulated by `bitSim`. -/
 noncomputable def bitHonest (e : B.Pad → ι) (Lv : Level K ι V) (L : BitLayout K ι V m nw) :
     (B.bitIp Pub e Lv L).Honest Lv.view (V → K) (fun p z => B.Holds p z) (B.bitSim Pub e Lv L) :=
-  (B.honest Pub e Lv).bitSumcheck L fun _ z => L.bits z
+  (B.honest Pub e Lv).bitSumcheck L fun _ z => L.values z
 
 /-- **The cells commit the honest batch with the bit sumcheck** when they commit the honest batch,
 the bit rounds' pads and the assignment's bits. -/
 theorem bitCommits_of (e : B.Pad → ι) (Lv : Level K ι V) (L : BitLayout K ι V m nw) (p : Pub)
     (z : V → K) (φ : FreePads K B.w B.D B.n B.k) (ψ : Fin m → Fin 2 → K) (x : ι → K)
-    (hb : (B.honest Pub e Lv).Commits p z φ x) (hl : L.Commits Lv (L.bits z) ψ x) :
+    (hb : (B.honest Pub e Lv).Commits p z φ x) (hl : L.Commits Lv (L.values z) ψ x) :
     (B.bitHonest Pub e Lv L).Commits p z (φ, ψ) x :=
   ⟨hb, hl⟩
 
 /-- The message types of the batch's masked reduction with the bit sumcheck are finite. -/
 instance bitIp_typeFintype (e : B.Pad → ι) (Lv : Level K ι V) (L : BitLayout K ι V m nw) :
     ∀ i, Fintype ((B.bitIp Pub e Lv L).spec.Type i) :=
-  FieldProof.MaskedReduction.bitSumcheck_typeFintype (M := B.ip Pub e Lv)
+  FieldProof.MaskedReduction.coordSumcheck_typeFintype (M := B.ip Pub e Lv)
 
 /-- The message types of the batch's masked reduction with the bit sumcheck are nonempty. -/
 instance bitIp_typeNonempty (e : B.Pad → ι) (Lv : Level K ι V) (L : BitLayout K ι V m nw) :
     ∀ i, Nonempty ((B.bitIp Pub e Lv L).spec.Type i) :=
-  FieldProof.MaskedReduction.bitSumcheck_typeNonempty (M := B.ip Pub e Lv)
+  FieldProof.MaskedReduction.coordSumcheck_typeNonempty (M := B.ip Pub e Lv)
 
 /-- The simulator of the batch with the bit sumcheck is a bijection onto the full transcripts. -/
 theorem bitHonest_simBijective (e : B.Pad → ι) (Lv : Level K ι V) (L : BitLayout K ι V m nw) :

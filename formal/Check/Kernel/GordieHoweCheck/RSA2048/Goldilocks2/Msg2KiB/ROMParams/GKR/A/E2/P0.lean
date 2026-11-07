@@ -3,9 +3,9 @@
 
 module
 
-public import GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.A
-meta import GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.A
-import all GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Program
+public import GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.A
+meta import GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.A
+import all GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Program
 
 @[expose] public section
 

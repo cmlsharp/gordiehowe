@@ -7,7 +7,7 @@ import GordieHowe
 
 A headline has a compiler-trust hypothesis when one of its leading binders has a type whose weak
 head normal form is `CircuitsEnforce` or `CircuitsAccept`, or whose type mentions one of them or a
-constant of a GKR data module (`GordieHowe.Generated.<App>.<Params>.GKR.*`) or a certificate
+constant of a GKR data module (`GordieHoweCerts.Generated.<App>.<Params>.GKR.*`) or a certificate
 check module (`GordieHoweCheck.*`). The proof
 system of a program carries both facts as fields (`RealizedProgram.ProofSystem.enforce`,
 `RealizedProgram.ProofSystem.accept`), proved from its certificates where an application builds it
@@ -15,7 +15,8 @@ system of a program carries both facts as fields (`RealizedProgram.ProofSystem.e
 system and take neither.
 
 Prints `<headline>\t<binders>` for each headline with such a binder, then one line `trust: …`. A
-headline of an application module (`GordieHowe.Applications.*`) with such a binder fails. The
+headline of an application module (`GordieHowe.Applications.*` or
+`GordieHoweCerts.Applications.*`) with such a binder fails. The
 generic theorems are printed only.
 
 Whether a headline's statement, outside its binders, reaches certificate data is a question of the
@@ -37,7 +38,7 @@ def moduleOf (env : Environment) (n : Name) : Option Name := do
 
 /-- A GKR data module or a certificate-check module. -/
 def isCertModule (m : Name) : Bool :=
-  ((`GordieHowe.Generated).isPrefixOf m && m.components.contains `GKR) ||
+  ((`GordieHoweCerts.Generated).isPrefixOf m && m.components.contains `GKR) ||
     (`GordieHoweCheck).isPrefixOf m
 
 run_cmd liftTermElabM do
@@ -69,7 +70,8 @@ run_cmd liftTermElabM do
       trusting := trusting + 1
       IO.println s!"{n}\t{", ".intercalate bad.toList}"
       let app := match moduleOf env n with
-        | some m => (`GordieHowe.Applications).isPrefixOf m
+        | some m =>
+          (`GordieHowe.Applications).isPrefixOf m || (`GordieHoweCerts.Applications).isPrefixOf m
         | none => false
       if app then
         failures := failures.push n

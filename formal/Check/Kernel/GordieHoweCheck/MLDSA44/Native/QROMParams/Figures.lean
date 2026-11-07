@@ -3,11 +3,11 @@
 
 module
 
-public import GordieHowe.Generated.MLDSA44.Native.QROMParams.Data
+public import GordieHoweCerts.Generated.MLDSA44.Native.QROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 
-import all GordieHowe.Generated.MLDSA44.Native.QROMParams.Program
-import all GordieHowe.Generated.MLDSA44.Native.QROMParams.Plan
+import all GordieHoweCerts.Generated.MLDSA44.Native.QROMParams.Program
+import all GordieHoweCerts.Generated.MLDSA44.Native.QROMParams.Plan
 @[expose] public section
 
 /-!
@@ -26,8 +26,8 @@ namespace GordieHoweCheck.MLDSA44.Native.QROMParams
 
 open GordieHowe RealizedProgram GordieHowe.Generated.MLDSA44.Native.QROMParams
 
-/-- **The figures when present** (`GordieHowe.ProgramData.figuresPartB`). -/
-theorem figuresPartOk : data.figuresPartB = true := by
+/-- **The figures** (`GordieHowe.ProgramData.figuresPartB`). -/
+theorem figuresPartOk : data.figuresPartB true = true := by
   decide +kernel
 
 end GordieHoweCheck.MLDSA44.Native.QROMParams

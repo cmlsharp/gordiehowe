@@ -3,7 +3,7 @@
 The Lean 4 formalization of the security analysis in "GordieHowe: Fast Hash-Based Zero-Knowledge
 Proofs Bridging Binary and Large-Characteristic Fields", by Chad Sharp and Paul Grubbs, built on
 Mathlib. Appendix J of the paper ("Machine-checked results") maps each machine-checked result to
-its Lean declarations; `GordieHowe/PaperManifest.lean` holds that map, and the theorems the paper
+its Lean declarations; `GordieHoweCerts/PaperManifest.lean` holds that map, and the theorems the paper
 claims carry `@[headline]`. Names below are relative to the namespace `GordieHowe`.
 
 ## What is proved
@@ -96,14 +96,15 @@ results that still carry an idealization-dependent term.
   quantum model, QROM, ROM), `Language/` (realized programs), `ProofSystem/`, `SPBCS/`,
   `Applications/`, and `Errata/` (machine-checked counterexamples to published analyses of
   Ligero's masked tests).
-- `GordieHowe/Generated/`: the exported plans and programs with their validity proofs, emitted by
-  the C++ compiler. Each header names its configuration, C++ commit and system digest. Do not edit
-  by hand.
-- `GordieHoweCerts.lean`: the root of the certificate library `GordieHoweCerts`, opt in. It
-  holds the modules of `GordieHowe/Generated/` and every module importing one (the applications'
-  concrete instantiations with their headline theorems, the paper manifest), under their
-  `GordieHowe.` names, and the gate's other certificates. The default target `GordieHowe` imports
-  none of them (`scripts/cert_boundary.py`).
+- `GordieHoweCerts/`: the certificate library `GordieHoweCerts`, opt in, with modules named
+  `GordieHoweCerts.<path>`. `GordieHoweCerts/Generated/` holds the exported plans and programs with
+  their validity proofs, emitted by the C++ compiler; each header names its configuration, C++
+  commit and system digest; do not edit them by hand. The rest are the modules importing one (the
+  applications' concrete instantiations with their headline theorems, the paper manifest). The
+  declarations keep their `GordieHowe.` namespaces. The root `GordieHoweCerts.lean` imports them and
+  the gate's other certificates. Every module of the library imports a generated one, directly or
+  through another, and the default target `GordieHowe` imports none of them
+  (`scripts/cert_boundary.py`).
 - `Vendor/`: vendored Lean code from VCVio and ArkLib and its dependencies; `Vendor/README.md`
   records the provenance file by file.
 - `Test/`: `#guard`/`#eval` tests of the ML-DSA specification against OpenSSL and the C++
@@ -146,7 +147,7 @@ scripts/regenerate_exports.py --build build
 
 A list of `--target`s builds one target at a time, so build the whole directory.
 
-This regenerates every program's files under `GordieHowe/Generated/` and `Check/{Native,Kernel}/`,
+This regenerates every program's files under `GordieHoweCerts/Generated/` and `Check/{Native,Kernel}/`,
 `.ghc` files included, from one build, with the run id `exports` and the commit placeholder
 `EXPORTER_COMMIT`. It removes the files an export no longer writes and compares the tree with the
 exports byte for byte. With `--check` it compares only, and a difference fails. Then rerun

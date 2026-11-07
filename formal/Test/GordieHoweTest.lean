@@ -11,6 +11,7 @@ import GordieHoweTest.ExprAnnLoad
 import GordieHoweTest.GensLoad
 import GordieHoweTest.NodesLoad
 import GordieHoweTest.GhcRecursive
+import GordieHoweTest.GhcMalformed
 import GordieHoweTest.CDerivationsLoad
 import GordieHoweTest.DerivationsLoad
 import GordieHoweTest.StructureLoad

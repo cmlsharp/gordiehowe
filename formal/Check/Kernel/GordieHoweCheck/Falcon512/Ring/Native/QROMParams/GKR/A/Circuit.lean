@@ -16,8 +16,8 @@ public import GordieHoweCheck.Falcon512.Ring.Native.QROMParams.GKR.A.E9
 public import GordieHoweCheck.Falcon512.Ring.Native.QROMParams.GKR.A.E10
 public import GordieHoweCheck.Falcon512.Ring.Native.QROMParams.GKR.A.E11
 public import GordieHoweCheck.Falcon512.Ring.Native.QROMParams.GKR.A.E12
-meta import GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.GKR.A
-import all GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.Program
+meta import GordieHoweCerts.Generated.Falcon512.Ring.Native.QROMParams.GKR.A
+import all GordieHoweCerts.Generated.Falcon512.Ring.Native.QROMParams.Program
 
 @[expose] public section
 

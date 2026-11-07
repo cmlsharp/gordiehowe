@@ -23,8 +23,8 @@ This module states them once, generically:
 * `GordieHowe.Configuration`: the data of a configuration (the type of proof systems its code is generic over, the IOP, its soundness
   data, its transcript, the Fiat–Shamir salt length, the headline relation and the witness map,
   the honest prover and its completeness error as type families, the fixed honest strategy, and the
-  figures: rounds, Chernoff exponent, leaves, queried leaves, verifier queries, the largest round
-  error, digests per input, query caps, positions and the digest length);
+  figures: rounds, Chernoff exponent and point, leaves, queried leaves, verifier queries, the
+  largest round error, digests per input, query caps, positions and the digest length);
 * `GordieHowe.Configuration.GrantedFacts`: the facts the generic proofs use, and `GordieHowe.Configuration.Facts`, the form
   of a configuration without granted points, which extends it. Among them are the guarantees of
   the end-to-end theorem at the configuration's IOP (`knowledge`, `e2e`), which a configuration
@@ -55,11 +55,11 @@ variable {Stmt W : Type} {rel : Set (Stmt × W)} {C : RealizedProgram.ProofSyste
   {T : ProofSystemTranscript C} {kS : ℕ}
 
 /-- **The overrun of the spBCS setting at a Chernoff exponent `E` with granted points**: when
-every round's load passes the test `2^-E` at `z = 65/64` on `k + fsExtraBytes` bytes plus its grant
+every round's load passes the test `2^-E` at a point `z` on `k + fsExtraBytes` bytes plus its grant
 (`SpecReaders.AllGranted`), the overrun is at most the round count over `2^E`. -/
-theorem overrun_le_at_granted (hb : T.MergeBounds kS) (E : ℕ)
+theorem overrun_le_at_granted (hb : T.MergeBounds kS) (z : ℝ) (E : ℕ)
     (h : ∀ j, (T.readers j).AllGranted fun g L =>
-      Configurations.PassesChernoff (65 / 64) ((1 / 2) ^ E) (T.k + Configurations.fsExtraBytes + g) L) :
+      Configurations.PassesChernoff z ((1 / 2) ^ E) (T.k + Configurations.fsExtraBytes + g) L) :
     (T.setting kS hb).model.overrun ≤ (∑ q : C.shape.term.Leaf, C.rounds q.label : ℕ) / 2 ^ E := by
   have hc := card_chIdx_le (C := C)
   calc (T.setting kS hb).model.overrun
@@ -67,11 +67,11 @@ theorem overrun_le_at_granted (hb : T.MergeBounds kS) (E : ℕ)
           c.leaf.label c.idx).rejectionProb := rfl
     _ ≤ ∑ _c : ChIdx C.P C.term, ENNReal.ofReal ((1 / 2) ^ E) := by
         refine Finset.sum_le_sum fun c _ => ?_
-        have hc' : Configurations.PassesChernoff (65 / 64) ((1 / 2) ^ E) (T.stream c.leaf.label c.idx)
+        have hc' : Configurations.PassesChernoff z ((1 / 2) ^ E) (T.stream c.leaf.label c.idx)
             ((T.readers c.leaf.label) c.idx).load := h c.leaf.label c.idx
         unfold RealizedProgram.ProofSystem.IOP.samplersOf
         rw [SpecReaders.sampler_rejectionProb _ (stream_le hb.toBounds c.leaf.label c.idx)]
-        exact ((T.readers c.leaf.label c.idx).failProb_le (by norm_num) hc'.pow_lt _ _).trans
+        exact ((T.readers c.leaf.label c.idx).failProb_le hc'.one_le hc'.pow_lt _ _).trans
           (ENNReal.ofReal_le_ofReal hc'.bound_le)
     _ = Fintype.card (ChIdx C.P C.term) * ENNReal.ofReal ((1 / 2) ^ E) := by
         rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
@@ -145,6 +145,11 @@ structure _root_.GordieHowe.Configuration.{u} where
   /-- The Chernoff exponent of every round's load: each round's stream overruns with probability at
   most `2^-chernoff`. -/
   chernoff : ℕ
+  /-- The numerator of the point `zNum / zDen` at which every round's load passes the Chernoff
+  test. -/
+  zNum : ℕ
+  /-- The denominator of that point. -/
+  zDen : ℕ
   /-- The bound on the leaves of every domain's tree. -/
   N : ℕ
   /-- The bound on the leaves the verifier queries. -/
@@ -198,10 +203,10 @@ structure GrantedFacts : Prop where
     (R.T C).Guarantees R.kS (hb C) (R.sound C) R.rel' R.g hkq hf (R.honest C H) (R.err H)
   /-- The composite has at most `rounds` rounds. -/
   rounds_le : ∀ C, ∑ q : (R.iop C).shape.term.Leaf, (R.iop C).rounds q.label ≤ R.rounds
-  /-- Every round's load passes the Chernoff test `2^-chernoff` on the round's own stream length,
-  `k + fsExtraBytes` plus its grant. -/
+  /-- Every round's load passes the Chernoff test `2^-chernoff` at the point `zNum / zDen` on the
+  round's own stream length, `k + fsExtraBytes` plus its grant. -/
   loadsGranted : ∀ C j, ((R.T C).readers j).AllGranted fun g L =>
-    PassesChernoff (65 / 64) ((1 / 2) ^ R.chernoff) ((R.T C).k + fsExtraBytes + g) L
+    PassesChernoff ((R.zNum : ℝ) / R.zDen) ((1 / 2) ^ R.chernoff) ((R.T C).k + fsExtraBytes + g) L
   /-- Every domain's tree has at most `N` leaves. -/
   leaves_le : ∀ C d, ((R.iop C).oracle d).nLeaves ≤ R.N
   /-- The verifier queries at most `nq` leaves. -/
@@ -229,11 +234,11 @@ structure GrantedFacts : Prop where
 load passing the Chernoff test on `k + fsExtraBytes` bytes (`loads`), which a grant keeps
 (`PassesChernoff.anti`, `SpecReaders.AllGranted.of_allLoads`). -/
 structure Facts : Prop extends R.GrantedFacts where
-  /-- Every round's load passes the Chernoff test `2^-chernoff`. -/
+  /-- Every round's load passes the Chernoff test `2^-chernoff` at the point `zNum / zDen`. -/
   loads : ∀ C j, ((R.T C).readers j).AllLoads
-    (PassesChernoff (65 / 64) ((1 / 2) ^ R.chernoff) ((R.T C).k + fsExtraBytes))
+    (PassesChernoff ((R.zNum : ℝ) / R.zDen) ((1 / 2) ^ R.chernoff) ((R.T C).k + fsExtraBytes))
   loadsGranted := fun C j => SpecReaders.AllGranted.of_allLoads
-    (fun _ _ h => h.anti (by norm_num) (Nat.le_add_right _ _)) (loads C j)
+    (fun _ _ h => h.anti (Nat.le_add_right _ _)) (loads C j)
 
 /-- The facts of a configuration without granted points are its facts. -/
 instance {R : Configuration} : CoeOut R.Facts R.GrantedFacts :=
@@ -326,7 +331,7 @@ its own stream length). -/
 @[config_template]
 theorem overrun_le (C : R.ProofSystem) :
     (setting R F C).model.overrun ≤ (R.rounds : ℝ≥0∞) / 2 ^ R.chernoff :=
-  ((R.T C).overrun_le_at_granted (F.hb C) R.chernoff (F.loadsGranted C)).trans
+  ((R.T C).overrun_le_at_granted (F.hb C) _ R.chernoff (F.loadsGranted C)).trans
     (ENNReal.div_le_div_right (by exact_mod_cast F.rounds_le C) _)
 
 /-- **The positions of the spBCS setting**: `pos`, the leaves of all trees

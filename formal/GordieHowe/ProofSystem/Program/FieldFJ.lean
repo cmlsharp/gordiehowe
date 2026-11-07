@@ -144,11 +144,12 @@ theorem colsIP_n (i : Fin (ir.cbatches d Pk).length) :
   rw [GKR.Schedule.roundLength_eq]
   omega
 
-/-- A covered merged batch on columns has its merging challenge and its batch phase's `2 n + 5` rounds. -/
+/-- A covered merged batch on columns has its batch phase's `2 n + 5` rounds: the merging challenge
+is drawn in the zerocheck point's move. -/
 theorem mergedIP_n (i : Fin (ir.mbatches d Pk).length) :
     (ir.mergedIP src rs i).n =
-      2 * (ir.mergedBatchAt rs (ir.ClaimPads d src Pk) (ir.mbatches d Pk)[i]).n + 6 := by
-  change 1 + (1 + (1 + (1 + (GKR.Schedule.roundLength _ + (1 + (1 + 0)))))) = _
+      2 * (ir.mergedBatchAt rs (ir.ClaimPads d src Pk) (ir.mbatches d Pk)[i]).n + 5 := by
+  change 1 + (1 + (1 + (GKR.Schedule.roundLength _ + (1 + (1 + 0))))) = _
   rw [GKR.Schedule.roundLength_eq]
   omega
 
@@ -162,12 +163,12 @@ theorem sumIP_n (i : Fin (ir.sumBatches d Pk).length) :
   rw [GKR.Schedule.roundLength_eq, GKR.Schedule.roundLength_eq]
   omega
 
-/-- A covered merged batch on bits has its merging challenge, its batch phase's
-`2 n + 5` rounds and the `8` moves of the `4` bit rounds. -/
+/-- A covered merged batch on bits has its batch phase's `2 n + 5` rounds (the merging challenge
+drawn in the zerocheck point's move) and the `8` moves of the `4` bit rounds. -/
 theorem sumMergedIP_n (i : Fin (ir.sumMBatches d Pk).length) :
     (ir.sumMergedIP src rs i).n =
-      2 * (ir.mergedBatchAt rs (ir.ClaimPads d src Pk) ((ir.sumMBatches d Pk)[i]).mb).n + 14 := by
-  change 1 + (1 + (1 + (1 + (GKR.Schedule.roundLength _ + (1 + (1 + 0)))))) +
+      2 * (ir.mergedBatchAt rs (ir.ClaimPads d src Pk) ((ir.sumMBatches d Pk)[i]).mb).n + 13 := by
+  change 1 + (1 + (1 + (GKR.Schedule.roundLength _ + (1 + (1 + 0))))) +
     GKR.Schedule.roundLength 4 = _
   rw [GKR.Schedule.roundLength_eq, GKR.Schedule.roundLength_eq]
   omega
@@ -189,7 +190,7 @@ variable {ir : RealizedProgram} {I : Interp} {d : ℕ} {P : Export.Plan}
   (src : ∀ c : Fin ir.circuits.length, ir.CircuitSource I c) (R : ir.FieldReady I d P)
 
 /-- **The rounds of domain `d`'s branches and join besides the circuits' lengths**, at `Unit` pads:
-every covered batch's `2 n + 5` (`2 n + 6` merged, `8` more on bits for the bit sumcheck), one
+every covered batch's `2 n + 5`, merged or not (`8` more on bits for the bit sumcheck), one
 per circuit, the join's at most `2 · #edges + 3`. -/
 noncomputable def forkRoundsConst : ℕ :=
   ∑ i : Fin (ir.cbatches d R.Pk).length,
@@ -197,9 +198,9 @@ noncomputable def forkRoundsConst : ℕ :=
     ∑ i : Fin (ir.sumBatches d R.Pk).length,
       (2 * (ir.bitsBatchAt R.rs Unit ((ir.sumBatches d R.Pk)[i]).cb).n + 13) +
     ∑ i : Fin (ir.mbatches d R.Pk).length,
-      (2 * (ir.mergedBatchAt R.rs Unit (ir.mbatches d R.Pk)[i]).n + 6) +
+      (2 * (ir.mergedBatchAt R.rs Unit (ir.mbatches d R.Pk)[i]).n + 5) +
     ∑ i : Fin (ir.sumMBatches d R.Pk).length,
-      (2 * (ir.mergedBatchAt R.rs Unit ((ir.sumMBatches d R.Pk)[i]).mb).n + 14) +
+      (2 * (ir.mergedBatchAt R.rs Unit ((ir.sumMBatches d R.Pk)[i]).mb).n + 13) +
     (ir.circs d).length + (2 * R.rs.length + 3)
 
 /-- **The rounds of domain `d`'s branches and join**: at most `forkRoundsConst` and every
@@ -227,12 +228,12 @@ theorem fieldFork_rounds :
   have hm : ∑ i : Fin (ir.mbatches d R.Pk).length,
       (ir.branchIP src R.rs (.inl (.inr (.inl i)))).n =
       ∑ i : Fin (ir.mbatches d R.Pk).length,
-        (2 * (ir.mergedBatchAt R.rs Unit (ir.mbatches d R.Pk)[i]).n + 6) :=
+        (2 * (ir.mergedBatchAt R.rs Unit (ir.mbatches d R.Pk)[i]).n + 5) :=
     Finset.sum_congr rfl fun i _ => mergedIP_n src R.rs i
   have hsm : ∑ i : Fin (ir.sumMBatches d R.Pk).length,
       (ir.branchIP src R.rs (.inl (.inr (.inr i)))).n =
       ∑ i : Fin (ir.sumMBatches d R.Pk).length,
-        (2 * (ir.mergedBatchAt R.rs Unit ((ir.sumMBatches d R.Pk)[i]).mb).n + 14) :=
+        (2 * (ir.mergedBatchAt R.rs Unit ((ir.sumMBatches d R.Pk)[i]).mb).n + 13) :=
     Finset.sum_congr rfl fun i _ => sumMergedIP_n src R.rs i
   have hg : (ir.branchIP src R.rs (.inr ())).n =
       (ir.circs d).length + ∑ i, GKR.Schedule.circuitLength _ (ir.circSource d src i).circuit := by

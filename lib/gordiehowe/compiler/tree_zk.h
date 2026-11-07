@@ -509,16 +509,28 @@ class TreeRows {
  public:
   using Elt = typename F::Elt;
   using Llc = LigeroLinearConstraint<F>;
+  // A stage's coefficients on its region, kept by the verifier in place of
+  // its forms (stage): form k of group g is a_k[g] over C (add_forms), at
+  // the group's word AT[g].
+  struct Coefs {
+    const PackingStage<F> *st;
+    std::vector<Elt> c;
+    size_t groups;
+    const std::vector<size_t> *at;
+  };
   // SCALE * a[y] at positions AT[y]: a word claim's form in a measurement
   // row, kept structured (it has as many terms as the batch has words). A
   // product part (ALPHA set, A null) is the form of a claim in product
   // form (bit_phase.h): SCALE * Frob^-TWIST(alpha[y]), SCALE holding D_k.
+  // A coefficient part (COEFS set, A null) is SCALE * a_TWIST[g] of a
+  // stage's kept coefficients (Coefs), AT its group words.
   struct Part {
     const std::vector<size_t> *at;
     const Elt *a;
     Elt scale;
     const Elt *alpha = nullptr;
     size_t twist = 0;
+    const Coefs *coefs = nullptr;
   };
   // A claim on words W at AT in Frobenius form, sum_{k<e} phi^k(c_k <a_k,
   // W>) with phi = x^(p^BASE), from a word claim whose degree exceeds the
@@ -713,6 +725,9 @@ class TreeRows {
       std::vector<std::pair<size_t, Elt>> terms;
     };
     std::vector<ProdParts> prod_parts;
+    // The routed rows' coefficient parts and their scales (add_coefs).
+    std::vector<const Part *> coef_parts;
+    std::vector<Elt> coef_scales;
     for (size_t i = 0; i < touching.size(); ++i) {
       const Item &it = order[touching[i]];
       if (it.extra) {
@@ -721,7 +736,7 @@ class TreeRows {
           if (cl.product) {
             // A claim in product form on words of the stage's top field.
             check(st.squaring_chain() && st.b == 1 &&
-                      cl.product->d.size() == d &&
+                      cl.product->base == st.b && cl.product->d.size() == d &&
                       cl.product->alpha.size() == cl.word_at.size(),
                   "a product-form word-bits claim on the bit node's stage");
             Scaled sc{&cl.word_at, {}, {}, cl.product.get()};
@@ -757,6 +772,11 @@ class TreeRows {
       }
       for (const auto &pt : r.parts) {
         const Elt c = f_.mulf(w[i], pt.scale);
+        if (pt.coefs != nullptr) {
+          coef_parts.push_back(&pt);
+          coef_scales.push_back(c);
+          continue;
+        }
         if (pt.alpha != nullptr) {
           size_t q = 0;
           while (q < prod_parts.size() && (prod_parts[q].at != pt.at ||
@@ -802,6 +822,7 @@ class TreeRows {
                            });
       for (size_t y = 0; y < ny; ++y) f_.add(rest[(*pp.at)[y]], v[y]);
     }
+    add_coefs(rest.data(), coef_parts, coef_scales);
     if (any_extra) extra->accumulate(rest.data(), xw.data());
     // The region's coordinates move to CX, in chunks.
     parallel::Buffer<Elt> &cx = scratch != nullptr ? scratch->region : cx_own;
@@ -814,6 +835,12 @@ class TreeRows {
                            }
                          });
     phase = std::make_unique<profiling::Scope>(GH_TREE_KEY(F, "stage.forms"));
+    // The verifier (which measures nothing) keeps the region's coefficients
+    // in place of their forms, when its stage has add_coefficients and the
+    // measurement rows hold parts: the stage combining the rows applies
+    // add_coefficients (add_coefs).
+    const bool parts = test_switches().stage_opt_on(StageOpt::kParts);
+    const bool keep = vals == nullptr && parts && PackingStage<F>::kCoefficients;
     // Forms over the groups. A composed view's coefficients take its basis
     // change (ComposedBits).
     std::vector<Elt> a;
@@ -826,7 +853,15 @@ class TreeRows {
         l_.bases.at(v.degree).add_forms(f_, st, &cx[lo], rg.groups, v.group, a);
         for (size_t i = 0; i < v.degree; ++i) cx[lo + i] = f_.zero();
       }
-    st.add_forms(f_, cx.data(), rg.n, rg.groups, a);
+    const Coefs *kept_coefs = nullptr;
+    if (keep) {
+      coefs_.push_back({&st, std::vector<Elt>(cx.begin(), cx.end()), rg.groups,
+                        &rg.group_at});
+      kept_coefs = &coefs_.back();
+      if (eq_part && x == l_.bits) a.resize(d * rg.groups, f_.zero());
+    } else {
+      st.add_forms(f_, cx.data(), rg.n, rg.groups, a);
+    }
     if (eq_part && x == l_.bits) {
       // The eq forms index absolute input groups; take the run's.
       std::vector<Elt> ae;
@@ -880,7 +915,7 @@ class TreeRows {
     //       = D_k Frob^-k(sum_i Frob^k(gamma_i) G_i),
     // with y_q = sum_i gamma_i g_{q,i} by its pivot bits and G_i = sum_q
     // alpha_q g_{q,i}: one bit-plane pass for all k. Without the kernel its
-    // forms are materialized (phase_forms) and measured as the others.
+    // forms are materialized (product_forms) and measured as the others.
     std::vector<std::array<Elt, BitPlaneDots<F>::kBits>> prod_g(words.size());
     std::deque<BitForms<F>> prod_forms;
     std::vector<std::vector<const Elt *>> prod_a(words.size());
@@ -905,7 +940,7 @@ class TreeRows {
             for (size_t j = 0; j < kB; ++j) f_.add(prod_g[i][j], pc[j]);
           continue;
         }
-        prod_forms.push_back(phase_forms(f_, *sc.prod));
+        prod_forms.push_back(product_forms(f_, *sc.prod));
         for (size_t k = 0; k < d; ++k)
           prod_a[i].push_back(prod_forms.back().a.data() + k * sc.at->size());
       }
@@ -988,9 +1023,8 @@ class TreeRows {
     rem.formed = std::move(kept);
     rem.nodes = rem_nodes;
     phase = std::make_unique<profiling::Scope>(GH_TREE_KEY(F, "stage.meas_rows"));
-    const bool parts = test_switches().stage_opt_on(StageOpt::kParts);
     const Elt *stored = nullptr;
-    if (parts) {
+    if (parts && !a.empty()) {
       forms_.push_back(std::move(a));
       stored = forms_.back().data();
     }
@@ -1004,9 +1038,12 @@ class TreeRows {
           // Every group, a zero coefficient's included: the row's
           // routing is structural. The parts optimization keeps them as
           // one part of scale one over the forms, which it stores.
-          if (parts) {
+          if (kept_coefs != nullptr)
+            mr.parts.push_back({&rg.group_at, nullptr, f_.one(), nullptr, k,
+                                kept_coefs});
+          if (stored != nullptr) {
             mr.parts.push_back({&rg.group_at, stored + k * rg.groups, f_.one()});
-          } else {
+          } else if (!parts) {
             for (size_t g = 0; g < rg.groups; ++g)
               mr.terms.push_back({rg.group_at[g], a[k * rg.groups + g]});
           }
@@ -1050,10 +1087,19 @@ class TreeRows {
     // coefficients come without them (the verifier, add_coefficients).
     std::vector<std::vector<Elt>> forms;
     std::vector<int> children;
+    // Per root child without forms: the product parts (bit_phase.h) on its
+    // region, by claim, kept out of COEFF (root_accumulate).
+    struct Products {
+      const std::vector<size_t> *at;
+      const Elt *alpha;
+      std::vector<std::pair<size_t, Elt>> terms;  // (twist, scale)
+    };
+    std::vector<std::vector<Products>> products;
   };
   // With FORMS false (the verifier, which measures nothing), a root child
   // whose stage has add_coefficients gets no forms; root_accumulate then
-  // computes its coefficients from COEFF.
+  // computes its coefficients from COEFF and from the product parts on its
+  // region, which stay out of COEFF.
   template <class Hash>
   Root root(BasicTranscript<Hash> &ts, bool forms = true) const {
     static const char tag[] = "relative-pack/linear-batch/v1";
@@ -1096,6 +1142,12 @@ class TreeRows {
     }
     sub_phase =
         std::make_unique<profiling::Scope>(GH_TREE_KEY(F, "root.combine.parts"));
+    add_coefs(r.coeff.data(), parts, scales);
+    r.children = l_.packed_children();
+    r.products.resize(r.children.size());
+    if constexpr (F::kCharacteristicTwo && PackingStage<F>::kCoefficients) {
+      if (!forms) defer_products(r, parts, scales);
+    }
     add_parts(r.coeff.data(), parts, scales);
     sub_phase =
         std::make_unique<profiling::Scope>(GH_TREE_KEY(F, "root.combine.extra"));
@@ -1106,7 +1158,6 @@ class TreeRows {
     }
     sub_phase.reset();
     phase = std::make_unique<profiling::Scope>(GH_TREE_KEY(F, "root.forms"));
-    r.children = l_.packed_children();
     for (int c : r.children) {
       const auto &rg = l_.region[size_t(c)];
       std::vector<Elt> a;
@@ -1197,8 +1248,17 @@ class TreeRows {
       if (r.forms[ci].empty()) {
         if constexpr (PackingStage<F>::kCoefficients) {
           std::vector<Elt> v(rg.groups, f_.zero());
-          st.add_coefficients(f_, &alpha[row], r.coeff.data() + rg.off, rg.n,
-                              rg.groups, v.data());
+          auto phase = std::make_unique<profiling::Scope>(
+              GH_TREE_KEY(F, "root.accumulate.coefficients"));
+          const StageCoefficients<F> sc(f_, st, &alpha[row]);
+          sc.add(r.coeff.data() + rg.off, rg.n, rg.groups, v.data());
+          if constexpr (F::kCharacteristicTwo) {
+            phase = std::make_unique<profiling::Scope>(
+                GH_TREE_KEY(F, "root.accumulate.products"));
+            for (const auto &pp : r.products[ci])
+              add_products(sc, st, rg, pp, v.data());
+          }
+          phase.reset();
           for (size_t g = 0; g < rg.groups; ++g)
             f_.add(out[rg.group_at[g]], v[g]);
         }
@@ -1267,6 +1327,19 @@ class TreeRows {
       check(row.formed.empty(), "flat rows: a word claim in Frobenius form");
       for (const auto &[pos, k] : row.terms) a.push_back(Llc{ci, pos, k});
       for (const auto &pt : row.parts) {
+        if (pt.coefs != nullptr) {
+          // Its form TWIST alone: add_coefficients at the unit weight.
+          if constexpr (PackingStage<F>::kCoefficients) {
+            const Coefs &cf = *pt.coefs;
+            std::vector<Elt> w(cf.st->d, f_.zero()), v(cf.groups, f_.zero());
+            w[pt.twist] = pt.scale;
+            cf.st->add_coefficients(f_, w.data(), cf.c.data(), cf.c.size(),
+                                    cf.groups, v.data());
+            for (size_t g = 0; g < cf.groups; ++g)
+              a.push_back(Llc{ci, (*cf.at)[g], v[g]});
+          }
+          continue;
+        }
         if (pt.alpha != nullptr) {
           const auto v = product_part(pt, pt.scale);
           for (size_t y = 0; y < pt.at->size(); ++y)
@@ -1448,6 +1521,107 @@ class TreeRows {
       });
     }
   }
+  // The coefficient parts among PS (scales CS) into COEFF, removed from PS:
+  // per kept stage (Coefs) the weight w_k of its form k, the sum of its
+  // parts' scales, then sum_k w_k a_k[g] by add_coefficients
+  // (StageCoefficients) at its group words.
+  void add_coefs(Elt *coeff, std::vector<const Part *> &ps,
+                 std::vector<Elt> &cs) const {
+    if constexpr (PackingStage<F>::kCoefficients) {
+      std::vector<std::pair<const Coefs *, std::vector<Elt>>> ws;
+      size_t kept = 0;
+      for (size_t i = 0; i < ps.size(); ++i) {
+        const Part &p = *ps[i];
+        if (p.coefs == nullptr) {
+          ps[kept] = ps[i];
+          cs[kept] = cs[i];
+          ++kept;
+          continue;
+        }
+        size_t q = 0;
+        while (q < ws.size() && ws[q].first != p.coefs) ++q;
+        if (q == ws.size())
+          ws.push_back({p.coefs, std::vector<Elt>(p.coefs->st->d, f_.zero())});
+        f_.add(ws[q].second[p.twist], cs[i]);
+      }
+      ps.resize(kept);
+      cs.resize(kept);
+      for (const auto &[cf, w] : ws) {
+        std::vector<Elt> v(cf->groups, f_.zero());
+        cf->st->add_coefficients(f_, w.data(), cf->c.data(), cf->c.size(),
+                                 cf->groups, v.data());
+        for (size_t g = 0; g < cf->groups; ++g) f_.add(coeff[(*cf->at)[g]], v[g]);
+      }
+    } else {
+      check(ps.empty() || std::none_of(ps.begin(), ps.end(),
+                                       [](const Part *p) { return p->coefs; }),
+            "coefficient parts without add_coefficients");
+    }
+  }
+  // The verifier's product parts whose positions all lie in one root
+  // child's region: moved from PS (scales CS) into R.products, by claim.
+  void defer_products(Root &r, std::vector<const Part *> &ps,
+                      std::vector<Elt> &cs) const {
+    const size_t none = r.children.size();
+    // Each position list's root child, or NONE: by its least and greatest
+    // position.
+    std::vector<std::pair<const std::vector<size_t> *, size_t>> child_of;
+    size_t kept = 0;
+    for (size_t i = 0; i < ps.size(); ++i) {
+      const Part &p = *ps[i];
+      size_t ci = none;
+      if (p.alpha != nullptr && !p.at->empty()) {
+        size_t q = 0;
+        while (q < child_of.size() && child_of[q].first != p.at) ++q;
+        if (q == child_of.size()) {
+          const auto [mn, mx] = std::minmax_element(p.at->begin(), p.at->end());
+          size_t c = none;
+          for (size_t k = 0; k < none; ++k) {
+            const auto &rg = l_.region[size_t(r.children[k])];
+            if (*mn >= rg.off && *mx < rg.off + rg.n) c = k;
+          }
+          child_of.push_back({p.at, c});
+        }
+        ci = child_of[q].second;
+      }
+      if (ci == none) {
+        ps[kept] = ps[i];
+        cs[kept] = cs[i];
+        ++kept;
+        continue;
+      }
+      auto &list = r.products[ci];
+      size_t q = 0;
+      while (q < list.size() && (list[q].at != p.at || list[q].alpha != p.alpha))
+        ++q;
+      if (q == list.size()) list.push_back({p.at, p.alpha, {}});
+      list[q].terms.push_back({p.twist, cs[i]});
+    }
+    ps.resize(kept);
+    cs.resize(kept);
+  }
+  // A root child's product parts PP of one claim into its Ligero
+  // coefficients V (characteristic 2). Word y at coordinate i = at[y] - off
+  // (group i / d, position j = i % d) adds M_j(T(alpha[y])), with T = sum C
+  // Frob^-k (twist_sum) its coefficient and M_j the stage's map
+  // (StageCoefficients): one composed GF(2)-linear map per word, in place
+  // of T into the root's coefficients and M_j after. Field sums are exact,
+  // so V is the same.
+  void add_products(const StageCoefficients<F> &sc, const PackingStage<F> &st,
+                    const typename TreeLayout<F>::Region &rg,
+                    const typename Root::Products &pp, Elt *v) const {
+    const size_t d = st.d;
+    // The composed maps' columns: M_j of T's.
+    const std::vector<Elt> tc = twist_columns(f_, pp.terms);
+    std::vector<Elt> col(tc.size());
+    std::vector<LinearMap<F>> m;
+    m.reserve(d);
+    for (size_t j = 0; j < d; ++j) {
+      sc.map(j).apply(tc.data(), col.data(), tc.size());
+      m.push_back(LinearMap<F>::of_columns(f_, col.data()));
+    }
+    add_word_maps(f_, m, rg.off, *pp.at, pp.alpha, v);
+  }
   // A product part's coefficients times C: C Frob^-twist(alpha[y]).
   std::vector<Elt> product_part(const Part &pt, const Elt &c) const {
     const size_t ny = pt.at->size();
@@ -1515,6 +1689,9 @@ class TreeRows {
   // The parts optimization's stored forms, which measurement rows point
   // into (a deque: its elements never move).
   std::deque<std::vector<Elt>> forms_;
+  // The verifier's kept stage coefficients, which coefficient parts point
+  // into (a deque likewise).
+  std::deque<Coefs> coefs_;
 };
 
 // One domain's circuit, layout and Ligero parameters, shared by its prover

@@ -22,8 +22,8 @@ program's check (`programOk`) reads (the expression annotations, the realization
 the assignment reads, the shapes, the source roles, the certificates' DAG, schedule, node table and entries) are not followed: under the
 sealed-data rule a checked witness cannot change a headline's meaning (`certifiedFields`).
 
-Own code, followed: `GordieHowe`, `GordieHoweNative`, `GordieHoweCheck`, `LatticeCrypto`, `HashSig`
-and the vendored `ArkLib` and `CompPoly`.
+Own code, followed: `GordieHowe`, `GordieHoweCerts`, `GordieHoweNative`, `GordieHoweCheck`,
+`LatticeCrypto`, `HashSig` and the vendored `ArkLib` and `CompPoly`.
 Every other constant reached (Lean core, Batteries, Mathlib, ...) is listed by name, grouped by
 the root of its module, and not followed.
 
@@ -52,7 +52,8 @@ open Lean Meta Elab Command
 
 /-- The libraries followed as own code. -/
 def ownRoots : List Name :=
-  [`GordieHowe, `GordieHoweNative, `GordieHoweCheck, `LatticeCrypto, `HashSig, `ArkLib, `CompPoly]
+  [`GordieHowe, `GordieHoweCerts, `GordieHoweNative, `GordieHoweCheck, `LatticeCrypto, `HashSig,
+    `ArkLib, `CompPoly]
 
 /-- Whether a module belongs to this project (including the vendored libraries). -/
 def ownModule (m : Name) : Bool :=

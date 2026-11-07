@@ -8,8 +8,8 @@
 #
 # GordieHowe holds the generic statements and proofs and checks no certificate. GordieHoweCerts
 # (lakefile.toml, GordieHoweCerts.lean) holds the exported programs, plans and certificates
-# (GordieHowe/Generated/), each program's proof system from its certificates
-# (GordieHowe/Generated/<program>/Certified.lean), and every module importing one (the applications'
+# (GordieHoweCerts/Generated/), each program's proof system from its certificates
+# (GordieHoweCerts/Generated/<program>/Certified.lean), and every module importing one (the applications'
 # concrete instantiations with their headline theorems, the paper manifest), all imported by
 # GordieHoweCerts.lean. GordieHowe imports none of them (scripts/cert_boundary.py, a blocking step).
 # Without --certs the audits read GordieHowe's environment; with it, GordieHoweCerts', which imports
@@ -32,7 +32,7 @@
 #   --certs          also build the certificate library GordieHoweCerts and its tests
 #                    (GordieHoweCertsTest) and run the audits over it
 #                    (the headline theorems of the applications' instantiations are there).
-#   --paper-dir DIR  also check the paper's LaTeX source in DIR against GordieHowe/PaperManifest.lean
+#   --paper-dir DIR  also check the paper's LaTeX source in DIR against GordieHoweCerts/PaperManifest.lean
 #                    (scripts/paper_manifest.py --check); without it that step is skipped.
 #   --perf REF       at the end, profile the modules changed since REF's merge base and run the
 #                    performance gate on them (scripts/perf_profile.sh, scripts/perf_gate.py,
@@ -71,7 +71,7 @@ vendor_proofs="Vendor/ArkLib Vendor/CompPoly Vendor/VCVio Vendor/ToMathlib Vendo
 
 mathlib_imports() {
   grep -rhoE '^(public )?import (all )?Mathlib[A-Za-z0-9_.]*' \
-    GordieHowe GordieHowe.lean GordieHoweCerts.lean Check $vendor_proofs |
+    GordieHowe GordieHowe.lean GordieHoweCerts GordieHoweCerts.lean Check $vendor_proofs |
     sed -E 's/^(public )?import (all )?//' | sort -u
 }
 
@@ -104,14 +104,14 @@ status=0
 cert_mode=$(scripts/cert_mode.sh status) || exit 2
 
 echo "== certificate library boundary =="
-echo "(GordieHowe imports no generated module and no module of GordieHoweCerts; every module"
-echo " GordieHoweCerts.lean imports imports a generated one; scripts/cert_boundary.py)"
+echo "(GordieHowe imports no generated module and no module of GordieHoweCerts; every module of"
+echo " GordieHoweCerts imports a generated one; scripts/cert_boundary.py)"
 python3 -I scripts/cert_boundary.py || status=1
 echo
 
 echo "== kernel evaluation and unfolding outside the certificate checks (report only) =="
 echo "(decide +kernel, native_decide, gh_native_check, with_unfolding_all and unseal outside"
-echo " GordieHowe/Generated/ and the modules defining the checks; a site of the rule on sealed and"
+echo " GordieHoweCerts/Generated/ and the modules defining the checks; a site of the rule on sealed and"
 echo " generated data in CLAUDE.md is marked when its declaration has a TODO; scripts/cert_boundary.py)"
 python3 -I scripts/cert_boundary.py --kernel-report || true
 echo
@@ -130,7 +130,7 @@ echo
 echo "== certificate library =="
 if [ -n "$certs" ]; then
   echo "(GordieHoweCerts: the exported programs, plans and certificates, every program's proof"
-  echo " system from its certificates (GordieHowe/Generated/<program>/Certified.lean) and the"
+  echo " system from its certificates (GordieHoweCerts/Generated/<program>/Certified.lean) and the"
   echo " applications' instantiations and headline theorems, all imported by GordieHoweCerts.lean;"
   echo " in the build's check mode)"
   scripts/lake.sh build GordieHoweCerts 2>&1 |
@@ -233,7 +233,10 @@ if run_script StatementClosure.lean > "$closure.tmp" 2>&1; then
   mv "$closure.tmp" "$closure"
   grep '^# total' "$closure" | tail -1
   python3 scripts/test_audit_ledger.py 2>&1 || status=1
-  python3 scripts/audit_ledger.py "$closure" .lake/statement_closure_prev.txt audit/audited.txt 2>&1 || status=1
+  # a stale ledger row, or a closure declaration with no ledger row that audit/unrecorded.txt does
+  # not list, fails
+  python3 scripts/audit_ledger.py "$closure" audit/audited.txt --previous .lake/statement_closure_prev.txt \
+    --baseline audit/unrecorded.txt 2>&1 || status=1
   [ -n "$certs" ] || echo "(GordieHowe's headlines only; --certs adds the instantiations' and writes audit/statement_closure.txt)"
 else
   echo "statement closure script failed:" && tail -5 "$closure.tmp"
@@ -258,8 +261,8 @@ fi
 # The textual checks read every source, including both check modes.
 echo
 echo "== sorry per file =="
-grep -rc 'sorry' GordieHowe GordieHoweCerts.lean GordieHoweNative Check $vendor_proofs --include='*.lean' | awk -F: '$2 > 0 {print}' | sort -t: -k2 -nr || true
-total=$(grep -rho 'sorry' GordieHowe GordieHoweCerts.lean GordieHoweNative Check $vendor_proofs --include='*.lean' | wc -l || true)
+grep -rc 'sorry' GordieHowe GordieHoweCerts GordieHoweCerts.lean GordieHoweNative Check $vendor_proofs --include='*.lean' | awk -F: '$2 > 0 {print}' | sort -t: -k2 -nr || true
+total=$(grep -rho 'sorry' GordieHowe GordieHoweCerts GordieHoweCerts.lean GordieHoweNative Check $vendor_proofs --include='*.lean' | wc -l || true)
 echo "total: $total"
 
 echo
@@ -273,11 +276,11 @@ python3 scripts/check_layers.py | tail -1 || true
 echo
 echo "== applications with four or more consecutive explicit placeholders =="
 echo "(arguments unification can infer should be implicit)"
-grep -rnE "[A-Za-z_.'₀₁₂₃₄₅₆₇₈₉]+( _){4,}" GordieHowe --include='*.lean' || echo "none"
+grep -rnE "[A-Za-z_.'₀₁₂₃₄₅₆₇₈₉]+( _){4,}" GordieHowe GordieHoweCerts --include='*.lean' || echo "none"
 
 echo
 echo "== declared axioms =="
-grep -rn '^axiom ' GordieHowe GordieHoweCerts.lean GordieHoweNative Check $vendor_proofs --include='*.lean' || echo "none"
+grep -rn '^axiom ' GordieHowe GordieHoweCerts GordieHoweCerts.lean GordieHoweNative Check $vendor_proofs --include='*.lean' || echo "none"
 
 echo
 echo "== certificate check mode =="
@@ -298,7 +301,7 @@ fi
 
 echo
 echo "== native_decide trust steps outside gh_native_check =="
-grep -rn '\bnative_decide\b' GordieHowe GordieHoweCerts.lean GordieHoweNative Check $vendor_proofs --include='*.lean' \
+grep -rn '\bnative_decide\b' GordieHowe GordieHoweCerts GordieHoweCerts.lean GordieHoweNative Check $vendor_proofs --include='*.lean' \
   | grep -vE '^GordieHowe/Language/Realizations/Circuit/LoadNative\.lean:' \
   || echo "none"
 
@@ -334,8 +337,8 @@ else
 fi
 
 echo
-echo "== paper manifest (GordieHowe/PaperManifest.lean against the paper; scripts/paper_manifest.py) =="
-# The manifest's name literals elaborate only in the build of GordieHowe.PaperManifest, a module
+echo "== paper manifest (GordieHoweCerts/PaperManifest.lean against the paper; scripts/paper_manifest.py) =="
+# The manifest's name literals elaborate only in the build of GordieHoweCerts.PaperManifest, a module
 # of GordieHoweCerts; paper_manifest.py reads its text.
 [ -n "$certs" ] || echo "(the manifest's declarations are checked to exist only with --certs, which builds it)"
 if [ -n "$paper_dir" ]; then

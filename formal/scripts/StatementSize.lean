@@ -120,7 +120,8 @@ def ownModule (env : Environment) (n : Name) : Bool :=
   | some i =>
     -- `moduleNames` maps the entire module array; do not rebuild it per declaration.
     let m := env.header.modules[i.toNat]!.module
-    (`GordieHowe).isPrefixOf m && !(`GordieHowe.Generated).isPrefixOf m
+    ((`GordieHowe).isPrefixOf m || (`GordieHoweCerts).isPrefixOf m) &&
+      !(`GordieHoweCerts.Generated).isPrefixOf m
 
 end StatementSize
 

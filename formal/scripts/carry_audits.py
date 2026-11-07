@@ -14,6 +14,8 @@ rename-normalized fingerprint equals the recorded fingerprint, the statement is 
 to the renaming: the entry moves to the new name, keeps its commit and audit reference, gains
 `; renamed <tag>` in the reference column and records the new fingerprint. Otherwise the entry is
 left for re-audit (renamed, with its old fingerprint, so `check.sh` reports it as changed).
+With `--write`, the baseline of unrecorded declarations (`audit/unrecorded.txt`) lists each renamed
+declaration under its new name.
 
 Usage: scripts/carry_audits.py <tag> [--write]
 """
@@ -89,3 +91,14 @@ if write:
             f.write('\t'.join(e) + '\n')
     import os
     os.replace('audit/audited.txt.tmp', 'audit/audited.txt')
+    lines = open('audit/unrecorded.txt').read().splitlines()
+    names = {renames.get(n, n) for n in lines if n and not n.startswith('#')}
+    moved = sum(1 for n in lines if n in renames)
+    with open('audit/unrecorded.txt.tmp', 'w') as f:
+        for h in lines:
+            if h.startswith('#'):
+                f.write(h + '\n')
+        for n in sorted(names):
+            f.write(n + '\n')
+    os.replace('audit/unrecorded.txt.tmp', 'audit/unrecorded.txt')
+    print(f'audit/unrecorded.txt: {moved} names renamed')

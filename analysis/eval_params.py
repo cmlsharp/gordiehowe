@@ -71,7 +71,7 @@ coefficient takes cP = max_d (batches_d + 1) more digests (BCS/ForkJoin/Knowledg
 KnowledgeROM.lean:29-30); the figures are reported beside the headline's.
 
 --lean-figures: evaluates the Lean-certified figures (errorMax/2^E, kq, U, k of each
-Plan/*Config.lean) with the same functions, for comparison.
+configuration's generated Figures.lean) with the same functions, for comparison.
 """
 import json
 import math
@@ -90,22 +90,34 @@ MAX_ROUNDS = 20795
 COLLISION = 2 ** 16
 OVERRUN = 2.0 ** -256
 
-# The Lean figures (formal/GordieHowe/Applications/<scheme>/<variant>/<ROM|QROM>Params.lean:
-# errorMax/2^errorExp, errorMax from <ROM|QROM>Params/RoundErrors.lean; kq and the positions U
-# from forkFigures; k), the model of the headline. eval_params_test.py checks them against the
-# Lean source.
-LEAN_FIGURES = {
-    "falcon-native-narrow": (3586440187, 140, 6711, 5086, 32),
-    "falcon-native-wide": (13358901, 260, 7951, 7327, 48),
-    "falcon-ring-carrier-narrow": (43660620, 140, 3160, 2560, 32),
-    "falcon-ring-carrier-wide": (16484193, 260, 4525, 3072, 48),
-    "falcon-ring-native-narrow": (3515138756, 140, 3233, 1506, 32),
-    "falcon-ring-native-wide": (12734825, 260, 3730, 3258, 48),
-    "mldsa-emulated-narrow": (63455233, 140, 6737, 5952, 32),
-    "mldsa-emulated-wide": (13358901, 260, 8609, 7141, 48),
-    "mldsa-native-narrow": (69439724, 140, 6323, 6155, 32),
-    "mldsa-native-wide": (13358901, 260, 8078, 7568, 48),
-}
+# The Lean figures, the model of the headline: (errorMax, errorExp, kq, U, k) of each
+# configuration, read from the figures module the C++ exports beside each configuration's plan
+# (Figures.lean, lib/gordiehowe/compiler/plan_proofs.h: `figures_eq`, the numerals rounds, N, nq,
+# kq, D, pos, k, errorMax, errorExp, chernoff, zNum, zDen), found under formal/. U is the positions
+# `pos`.
+FORMAL = HERE.parent / "formal"
+_FIGURES_CFG = re.compile(r"^# The figures of `([^`]+)`$", re.M)
+_FIGURES_EQ = re.compile(r"theorem figures_eq : figures =\s*⟨([\d,\s]+)⟩")
+
+
+def lean_figures_table(root=FORMAL):
+    """config -> (errorMax, errorExp, kq, U, k) of every generated Figures.lean under ROOT."""
+    import os
+    out = {}
+    for d, dirs, files in os.walk(root):
+        dirs[:] = sorted(x for x in dirs if not x.startswith("."))
+        if "Figures.lean" not in files:
+            continue
+        text = (Path(d) / "Figures.lean").read_text()
+        cfg, eq = _FIGURES_CFG.search(text), _FIGURES_EQ.search(text)
+        if cfg is None or eq is None:
+            continue
+        _, _, _, kq, _, pos, k, a, E, _, _, _ = (int(x) for x in eq.group(1).split(","))
+        out[cfg.group(1)] = (a, E, kq, pos, k)
+    return dict(sorted(out.items()))
+
+
+LEAN_FIGURES = lean_figures_table()
 
 
 # ------------------------------------------------------------------ figures --

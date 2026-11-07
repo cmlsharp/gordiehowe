@@ -4,7 +4,7 @@
 
 """The non-Ligero round errors of a GordieHowe configuration, from its plan exports.
 
-The plan export (GordieHowe/Generated/<Lean name>/Plan.lean, lib/gordiehowe/plan_export.h) and
+The plan export (GordieHoweCerts/Generated/<Lean name>/Plan.lean, lib/gordiehowe/plan_export.h) and
 the realized program (Program.lean beside it, lib/gordiehowe/compiler/plan_program.h; plan_files
 also reads the flat layout <Name>.lean and <Name>Program.lean) of a configuration hold every count
 the Lean's round errors read. This module evaluates them with the Lean's formulas, exactly
@@ -129,7 +129,7 @@ def program_from_plan(text):
     domains' circuits, each with its domain's input count (the plan records the inputs per
     domain, so a domain with several circuits is refused); a batch on bits with its bit-index
     sumcheck (_plan_bit_phase).
-    eval_params_test.py checks it against every program in formal/GordieHowe/Generated."""
+    eval_params_test.py checks it against every program in formal/GordieHoweCerts/Generated."""
     plan = parse_plan(text)
     names = list(plan["domains"])
     fields = [plan["domains"][n]["F"] for n in names]
@@ -477,7 +477,7 @@ def read_lean(path):
 
 def plan_files(plans_dir):
     """[(plan, program)] paths of every plan export (.lean or .lean.gz) in the directory or below
-    it, sorted: GordieHowe/Generated/<Lean name>/Plan.lean with Program.lean beside it, or
+    it, sorted: GordieHoweCerts/Generated/<Lean name>/Plan.lean with Program.lean beside it, or
     the flat layout <Name>.lean with <Name>Program.lean. The program need not exist."""
     from pathlib import Path
     plans_dir = Path(plans_dir)

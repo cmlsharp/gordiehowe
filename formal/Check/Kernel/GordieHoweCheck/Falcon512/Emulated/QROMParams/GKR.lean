@@ -3,9 +3,9 @@
 
 module
 
-public import GordieHowe.Generated.Falcon512.Emulated.QROMParams.Data
+public import GordieHoweCerts.Generated.Falcon512.Emulated.QROMParams.Data
 public import GordieHowe.Applications.Program.Conditions
-public import GordieHowe.Generated.Falcon512.Emulated.QROMParams.Pending.Small
+public import GordieHoweCerts.Generated.Falcon512.Emulated.QROMParams.Pending.Small
 public import GordieHoweCheck.Falcon512.Emulated.QROMParams.GKR.H.Circuit
 public import GordieHoweCheck.Falcon512.Emulated.QROMParams.GKR.A.Circuit
 

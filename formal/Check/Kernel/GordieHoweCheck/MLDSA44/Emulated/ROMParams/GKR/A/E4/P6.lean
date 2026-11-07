@@ -3,9 +3,9 @@
 
 module
 
-public import GordieHowe.Generated.MLDSA44.Emulated.ROMParams.GKR.A
-meta import GordieHowe.Generated.MLDSA44.Emulated.ROMParams.GKR.A
-import all GordieHowe.Generated.MLDSA44.Emulated.ROMParams.Program
+public import GordieHoweCerts.Generated.MLDSA44.Emulated.ROMParams.GKR.A
+meta import GordieHoweCerts.Generated.MLDSA44.Emulated.ROMParams.GKR.A
+import all GordieHoweCerts.Generated.MLDSA44.Emulated.ROMParams.Program
 
 @[expose] public section
 

@@ -24,8 +24,7 @@ namespace GordieHowe
 
 open RealizedProgram RealizedProgram.Export
 
-/-- **The bytes of an element** of a key's field (`FieldKey.codec`'s `fb`; `0` for P-256, which has
-no codec). -/
+/-- **The bytes of an element** of a key's field (`FieldKey.codec`'s `fb`). -/
 @[expose] def FieldKey.fbN : FieldKey → Nat
   | .gf128 => 16
   | .gf256 => 32
@@ -35,7 +34,7 @@ no codec). -/
   | .fq20 => 35
   | .gold2 => 16
   | .gold4 => 32
-  | .p256 => 0
+  | .p256 => 32
 
 /-- **The load of a key's challenge reader**: its draws and bytes per draw (`CReader.load`). -/
 @[expose] def FieldKey.loadN : FieldKey → Nat × Nat
@@ -47,7 +46,7 @@ no codec). -/
   | .fq20 => (20, 2)
   | .gold2 => (2, 8)
   | .gold4 => (4, 8)
-  | .p256 => (0, 0)
+  | .p256 => (1, 32)
 
 /-- **The stream grant of a key's challenge reader** (`CReader.grant`): none. -/
 @[expose] def FieldKey.grantN (_ : FieldKey) : Nat := 0

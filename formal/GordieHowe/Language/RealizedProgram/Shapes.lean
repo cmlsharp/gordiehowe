@@ -15,7 +15,7 @@ public import GordieHowe.Language.RealizedProgram.Embed
 
 A program's shapes (the kinds of the values and the bodies of the predicates its applications'
 frontends name) are data: a list of claims (`ShapeClaim`) the compiler emits per program
-(`GordieHowe/Generated/<P>/Shapes.lean`). Their check `shapesB` is one part of the program's
+(`GordieHoweCerts/Generated/<P>/Shapes.lean`). Their check `shapesB` is one part of the program's
 checks; this module has its condition and soundness:
 
 * **the condition** (`ShapesHold ir cs`): every claim of the list holds (`ShapeClaim.Holds`, the
@@ -27,7 +27,7 @@ checks; this module has its condition and soundness:
   condition, the claim at position `k` of the list (`cs[k]? = some c`, by `rfl` on the list) is
   its fact.
 
-The generated named facts (`GordieHowe/Generated/<P>/ShapeFacts.lean`) are the last, one per
+The generated named facts (`GordieHoweCerts/Generated/<P>/ShapeFacts.lean`) are the last, one per
 claim. A frontend reads a value's kind or a predicate's body off a named fact and compares its
 parts with its own terms by `rfl` on small closed expressions, never through the program.
 

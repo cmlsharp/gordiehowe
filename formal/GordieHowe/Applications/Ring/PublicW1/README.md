@@ -93,37 +93,11 @@ preserving involution for distinct nonces), and charges the query phases that hi
 nonce collisions, and the rounds whose `k` calls all reject. Deterministic signing (`rnd = 0`) is
 not covered.
 
-In the quantum random-oracle model the adversary queries the mask derivation in superposition: in
-its round and for its guess it runs a quantum algorithm with `q` queries to the mask oracle (the
-answers encoded in any finite additive group, `MaskedSigner.QAdversary`, `MaskedSigner.QDist`) and
-the outcome is measured; it keeps no quantum state between the choice and the guess. The theorems
-`advantage_le_bkm06_mldsa{44,65,87}_hedged_keep_qrom`
-(`Applications/Ring/PublicW1/MLDSAPublicW1HedgedQROM.lean`) bound the advantage by the ideal-mask
-bound plus
-
-```
-2 · (k² / 2^256 + 4 q √(k / 2^256) + 2 · ((1 − β_min θ / 64)^k + 2 · (regularity + McD) + C / 2^240))
-```
-
-(`_hedged_qrom` with `KeepBound` a hypothesis). The proof
-(`MaskedSigner.advantage_le_advantageAt`, `Applications/Ring/PublicW1/MaskOracleQROM.lean`) is
-the swap above with the union bound over the classical queries replaced by one-way to hiding
-(AHU19 Theorem 3) for each of the two quantum phases, on the mask points at the `k` drawn nonces:
-`2 q √(k / 2^256)` each, the drawn nonces being fresh for the rounds with the given masks. At a
-fixed mask oracle the ideal-mask signer does not read it, so the quantum adversary is a mixture,
-over tables of its measured challenges, of classical adversaries with its set of challenges
-(`QAdversary.exists_advantageAt_le`), and the classical bound applies to the best of them. At
-`q = 2^64` and `k = 2^20` the query term `2 · 4 q √(k / 2^256)` is `2^-51`.
-
-When the round's quantum algorithm is computed from `q` classical queries to the check oracle
-(`QCheckQueryBounded`), the theorems `advantage_le_bkm06_mldsa{44,65,87}_hedged_qrom_query` and
-`…_hedged_keep_qrom_query` (`Applications/Ring/PublicW1/MLDSAPublicW1HedgedQROMQuery.lean`) have
-`2 (q + 1) / 2^240` in place of `C / 2^240`, with no check term inside the hedged error. The
-quantum game against the hedged signer and against the hedged signer that also refuses the rings
-of defect above `1/2` are identical until the measured challenge is admitted with defect above
-`1/2` (`QAdversary.advantage_le_restrict_one`). The measured challenge's ring is drawn from a law
-that the classical algorithm's output fixes, and the search lemma holds for such draws
-(`ROM.expect_weighted_label_le`), so that event has probability at most `(q + 1) / 2^240`.
+Superposition queries to the mask derivation, together with superposition queries to `G` and the
+other hashes, quantum memory across rounds and `Q` adaptive challenges, are covered by the
+anonymity headlines over the ring signature's `RingScheme`
+([below](#the-ring-signature-as-a-ringscheme)), where the mask derivation is reprogrammed at the
+`Q · k` hidden nonces by one-way to hiding (`2 (C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256))`).
 
 ## The construction
 
@@ -402,6 +376,46 @@ generation and functions) and a proof system `PS` for its ring relation. Its hea
 
   The rows at check error `2^-300` need 439, 407, 405 and 401 samples per member for tolerances
   2, 8, 16 and 40 (`checkError_tol{2,8,16,40}_le_300`). The defaults stay at 355 samples.
+- Anonymity with `SampleInBall`, `ExpandS` and `ExpandA` random oracles, every term numeric:
+  `w1Scheme.expect_anonAdvantage_le_mldsa{44,65,87}`, with ring-binding (`…_bind_mldsa{44,65,87}`)
+  and converted (`…_conv_mldsa{44,65,87}`) base messages (`Applications/Ring/MLDSAW1AnonOracle.lean`).
+  The scheme is `w1Scheme` at the concrete primitives with the three oracles `G_B`, `G_S`, `G_A`
+  in place of `SampleInBall`, `ExpandS` and `ExpandA` (`randomOraclePrimitives`), the concrete
+  encoding and the oracle placement `O` (`W1Oracles.atRandomOracles`). The
+  adversary is a family indexed by the three oracles, so it holds them whole, with the access to
+  the joint oracle above. For every such family and every `Q`, the advantage averaged over the
+  three oracles is at most
+
+  ```
+  Q · (2 (2/((1 − s)θ) · n ρ / β_min + √(N n log(C + 1)) / (2^2000 θ(1 − θ)(1 − s) β_min))
+       + 2 k / D + 2 (1 − β_min θ (1 − s) / 32)^k)
+    + Q · wi(Q · C) + 2 (C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256)) + 2 (√Q + 2 t)² / 2^240
+  ```
+
+  with `ρ` the regularity bound times the weight factor of [the result](#the-result) (`11·2^−101 ·
+  24/5`, `11·2^−199 · 9/2` and `12·2^−294 · 33/5` at ML-DSA-44, -65 and -87) and `C` a bound on
+  the valid challenges per key vector, for `β_min ∈ (0, 1]`, `n ≥ 1`, `θ ∈ (0, 1)` and
+  any row of check parameters with `0 ≤ s`. The proof applies
+  `hedgedScheme.anonAdvantage_le_coupling` (the bound above at any primitives with the signing and
+  verification laws) at each triple of oracles, with keep level `β_min θ (1 − s) / 32`, and
+  averages `w1CouplingError` over the oracles (`expect_w1CouplingError_randomOracle_le`): the
+  regularity gap enters linearly (`expect_regGapAt_withExpandA`, `expect_regGapAvg_le_mldsa*`),
+  the collision probability under a square root (Jensen's inequality,
+  `expect_w1CouplingError_le`; `expect_collAt_withExpandA_le`).
+
+  We floor the security bits of the whole bound except `Q · wi (Q · C)`, at `n = N = 1024`,
+  `C = 2^64`, `θ = β_min = 1/2`, tolerance 2 (`s = 1/2`), `t = 2^64`, `k = 2^16` and `D = 2^128`:
+
+  | `Q` | ML-DSA-44 | ML-DSA-65 | ML-DSA-87 |
+  |---|---|---|---|
+  | `1` | 53 | 53 | 53 |
+  | `2^32` | 37 | 37 | 37 |
+  | `2^64` | 16 | 21 | 21 |
+
+  The reprogramming term `4 t √(Q k / 2^256)` dominates, except at ML-DSA-44 with `Q = 2^64`, where
+  the regularity term `Q · 2^−80.27` does. At `Q = 1` the other terms are `2^−80.27` (regularity,
+  ML-DSA-44), `2^−111` (`2 k / D`), `2^−369` (`2 (1 − 1/256)^k`), `2^−1982` (McDiarmid) and
+  `2^−109` (check).
 
 ## Lean statements
 
@@ -428,11 +442,10 @@ generation and functions) and a proof system `PS` for its ring relation. Its hea
 | Headlines | `advantage_le_bkm06_mldsa{44,65,87}_query_checkParams`, `…_query`, `…_checkParams`, `advantage_le_bkm06_mldsa{44,65,87}`, `expect_regGapAvg_le_mldsa{44,65,87}` | `Applications/Ring/PublicW1/MLDSAPublicW1Regularity.lean` |
 | FIPS 204 hedged signing (query-bounded mask derivation) | `MaskedSigner.advantage_le_atMask`, `advantage_le_bkm06_mldsa{44,65,87}_hedged`, `…_hedged_keep`, `KeepBound`, `keepBound_of_keepGood` | `Applications/Ring/PublicW1/MaskOracle.lean`, `MLDSAPublicW1Hedged.lean` |
 | Hedged signing against `q` check-oracle queries | `MaskedSigner.restrict`, `advantage_hedged_le_restrictLow`, `advantage_restrictLow_le_hedged`, `advantage_le_bkm06_mldsa{44,65,87}_hedged_query`, `…_hedged_keep_query` | `Applications/Ring/PublicW1/MLDSAPublicW1HedgedQuery.lean` |
-| Hedged signing with superposition queries to the mask derivation | `MaskedSigner.advantage_le_advantageAt`, `advantage_le_bkm06_mldsa{44,65,87}_hedged_qrom`, `…_hedged_keep_qrom` | `Applications/Ring/PublicW1/MaskOracleQROM.lean`, `MLDSAPublicW1HedgedQROM.lean` |
-| The same against `q` check-oracle queries | `QCheckQueryBounded`, `QAdversary.advantage_le_restrict_one`, `expect_restrictBadQ_le`, `advantage_le_bkm06_mldsa{44,65,87}_hedged_qrom_query`, `…_hedged_keep_qrom_query` | `Applications/Ring/PublicW1/MLDSAPublicW1HedgedQROMQuery.lean` |
 | QROM search over a whole interactive run | `Distinguisher.eventProb_searchLogs_le`, `RingSignature.toReal_runLaw_hit_le` | `Model/Quantum/O2H/Search.lean`, `Model/RingSignature/Search.lean` |
 | Identical until a bad request | `RingSignature.gameAdvantage_runLaw_le_untilBad` | `Model/RingSignature/UntilBad.lean` |
-| The `RingScheme` anonymity headlines (check oracle by superposition queries) | `w1Concrete.anonAdvantage_le_coupling`, `…_checkParams`, `w1Scheme{44,65,87}.anonAdvantage_le` | `Applications/Ring/MLDSAW1AnonQuery.lean` |
+| The `RingScheme` anonymity headlines (check oracle by superposition queries) | `hedgedScheme.anonAdvantage_le_coupling`, `w1Concrete.anonAdvantage_le_coupling`, `…_checkParams`, `w1Scheme{44,65,87}.anonAdvantage_le` | `Applications/Ring/MLDSAW1AnonQuery.lean` |
+| The same with `SampleInBall`, `ExpandS` and `ExpandA` random oracles, numeric | `randomOraclePrimitives`, `W1Oracles.atRandomOracles`, `expect_w1CouplingError_randomOracle_le`, `w1Scheme.expect_anonAdvantage_le_mldsa{44,65,87}`, `…_bind_mldsa{44,65,87}`, `…_conv_mldsa{44,65,87}` | `Applications/Ring/MLDSAW1AnonOracle.lean`, `Applications/Ring/MLDSAW1IdealDist.lean` |
 
 ## What is not shown
 
@@ -446,9 +459,10 @@ generation and functions) and a proof system `PS` for its ring relation. Its hea
 - **`t0` is not bound to the key.** An adversary may publish a false `t0` under an honest member's
   `(ρ, t1)`. Members could self-certify `(ρ, t1, t0)`; this is not formalized.
 - **The model:**
-  - It is the classical random-oracle model, with `SampleInBall`, `ExpandA` and `ExpandS` as random
-    oracles onto their ranges. The query-bounded adversaries make classical queries to `G`, in the quantum headlines too: their
-    superposition queries go to the mask derivation only.
+  - The `advantage_le_bkm06_*` headlines are in the classical random-oracle model, with
+    `SampleInBall`, `ExpandA` and `ExpandS` as random oracles onto their ranges; their
+    query-bounded adversaries make classical queries to `G`. The `RingScheme` headlines are in the
+    quantum random-oracle model (below).
   - The headlines `advantage_le_bkm06_mldsa{44,65,87}` are for the ideal-mask signer
     (`Applications/MLDSA/Signing/Ideal.lean`: `y` uniform on the mask box, the commitment hash from
     the oracle). FIPS 204 hedged signing is not statistically anonymous against an adversary with
@@ -467,9 +481,11 @@ generation and functions) and a proof system `PS` for its ring relation. Its hea
   - The query-bounded check terms of the `advantage_le_bkm06_*` headlines are proved for one
     challenge and classical check-oracle queries. The `RingScheme` headlines have the check term
     `2 (√Q + 2 t)² · checkError` against superposition queries, for every `Q`.
-  - The `RingScheme` headlines are in the quantum random-oracle model, with `ExpandA`, `ExpandS`
-    and `SampleInBall` the FIPS 204 functions. The numeric regularity bounds of this directory are
-    for those functions as random oracles and are not applied to `regGapAt` and `collAt`.
+  - The `RingScheme` headlines are in the quantum random-oracle model. In
+    `w1Concrete.anonAdvantage_le_coupling` and `w1Scheme{44,65,87}.anonAdvantage_le`, `ExpandA`,
+    `ExpandS` and `SampleInBall` are the FIPS 204 functions, and `regGapAt` and `collAt` stay
+    defined averages. In `w1Scheme.expect_anonAdvantage_le_mldsa{44,65,87}` they are random
+    oracles held whole by the adversary, and every term is numeric.
   - Efficiency is not formalized.
 - **No implementation or measurements.** The signing cost above is an estimate.
 

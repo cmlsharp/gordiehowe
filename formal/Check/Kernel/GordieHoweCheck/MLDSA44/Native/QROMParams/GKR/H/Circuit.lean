@@ -15,8 +15,8 @@ public import GordieHoweCheck.MLDSA44.Native.QROMParams.GKR.H.E8
 public import GordieHoweCheck.MLDSA44.Native.QROMParams.GKR.H.E9
 public import GordieHoweCheck.MLDSA44.Native.QROMParams.GKR.H.E10
 public import GordieHoweCheck.MLDSA44.Native.QROMParams.GKR.H.E11
-meta import GordieHowe.Generated.MLDSA44.Native.QROMParams.GKR.H
-import all GordieHowe.Generated.MLDSA44.Native.QROMParams.Program
+meta import GordieHoweCerts.Generated.MLDSA44.Native.QROMParams.GKR.H
+import all GordieHoweCerts.Generated.MLDSA44.Native.QROMParams.Program
 
 @[expose] public section
 

@@ -716,6 +716,18 @@ class Scope {
                             width);
   }
 
+  // Several bit relations merged into one zerocheck (Domain::batch).
+  template <class F, class Sb>
+  void batch(const std::string &nm,
+             std::vector<Ref<F, Subfield<Sb>, Committed>> tables,
+             std::vector<compiler::BitBatchPart<NonDeduced<F>>> parts,
+             unsigned width = 16) const {
+    std::vector<size_t> ids;
+    for (const auto &t : tables) ids.push_back(t.id);
+    infer<F>(ids, nm).batch(scoped(nm), std::move(tables), std::move(parts),
+                            width);
+  }
+
   // Domain D through this scope: its declarations' names are prefixed.
   template <class F>
   ScopedDomain<F> operator[](Domain<F> &d) const {

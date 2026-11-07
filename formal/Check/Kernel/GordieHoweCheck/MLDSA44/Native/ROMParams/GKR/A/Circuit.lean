@@ -7,8 +7,8 @@ public import GordieHoweCheck.MLDSA44.Native.ROMParams.GKR.A.E0
 public import GordieHoweCheck.MLDSA44.Native.ROMParams.GKR.A.E1
 public import GordieHoweCheck.MLDSA44.Native.ROMParams.GKR.A.E2
 public import GordieHoweCheck.MLDSA44.Native.ROMParams.GKR.A.E3
-meta import GordieHowe.Generated.MLDSA44.Native.ROMParams.GKR.A
-import all GordieHowe.Generated.MLDSA44.Native.ROMParams.Program
+meta import GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.GKR.A
+import all GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.Program
 
 @[expose] public section
 

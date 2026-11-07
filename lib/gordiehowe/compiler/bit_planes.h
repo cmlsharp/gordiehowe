@@ -415,9 +415,9 @@ class BitPlaneSums {
 // On GFNI and AVX-512 (fields with a GFNI kernel) eight elements at a time:
 // their bytes are transposed into 64-bit lanes by input byte, and output
 // byte i of all eight is sum_j M_ij x_j, one GF2P8AFFINEQB per input byte
-// and 8 output bytes (the 8 x 8 blocks M_ij of a register's lanes). The
-// rest, and the other targets, by byte tables. The inputs are public, so a
-// table indexed by them is no leak.
+// and 8 output bytes (the 8 x 8 blocks M_ij of a register's lanes); a last
+// block of fewer than eight is zero-padded. The other targets apply byte
+// tables. The inputs are public, so a table indexed by them is no leak.
 template <class F>
 class LinearMap {
  public:
@@ -429,16 +429,58 @@ class LinearMap {
   LinearMap() = default;
   template <class Map>
   LinearMap(const F &f, const Map &map) {
-    // Column c: the image of memory bit c.
-    std::vector<std::array<uint8_t, B>> col(8 * B);
-    for (size_t c = 0; c < 8 * B; ++c) {
-      uint8_t in[B] = {};
-      in[c / 8] = uint8_t(1u << (c % 8));
-      Elt x;
-      std::memcpy(&x, in, B);
-      const Elt y = map(x);
-      std::memcpy(col[c].data(), &y, B);
+    std::vector<Elt> col(8 * B);
+    for (size_t c = 0; c < 8 * B; ++c) col[c] = map(unit(c));
+    build(f, col.data());
+  }
+  // From its columns COL[c], the images of the 8 B memory bits.
+  static LinearMap of_columns(const F &f, const Elt *col) {
+    LinearMap m;
+    m.build(f, col);
+    return m;
+  }
+  // Memory bit c alone: COL[c] is the map's image of it.
+  static Elt unit(size_t c) {
+    uint8_t in[B] = {};
+    in[c / 8] = uint8_t(1u << (c % 8));
+    Elt x;
+    std::memcpy(&x, in, B);
+    return x;
+  }
+
+  // OUT[i] = M IN[i] for i < N (OUT may be IN).
+  void apply(const Elt *in, Elt *out, size_t n) const {
+    size_t i = 0;
+#if PROOFS_SKIP_GFNI
+    if constexpr (kGfniBytes != 0) {
+      for (; i + 8 <= n; i += 8) gfni8(in + i, out + i);
+      if (i < n) {
+        alignas(64) uint8_t x[8 * B] = {}, y[8 * B];
+        std::memcpy(x, in + i, (n - i) * B);
+        gfni8(reinterpret_cast<const Elt *>(x), reinterpret_cast<Elt *>(y));
+        std::memcpy(out + i, y, (n - i) * B);
+      }
+      return;
     }
+#endif
+    for (; i < n; ++i) out[i] = by_tables(in[i]);
+  }
+
+ private:
+  void build(const F &f, const Elt *cols) {
+    (void)f;
+    std::vector<std::array<uint8_t, B>> col(8 * B);
+    for (size_t c = 0; c < 8 * B; ++c) std::memcpy(col[c].data(), &cols[c], B);
+#if PROOFS_SKIP_GFNI
+    // The kernel applies every element, so no tables.
+    if constexpr (kGfniBytes == 0)
+#endif
+      tables(f, col);
+#if PROOFS_SKIP_GFNI
+    if constexpr (kGfniBytes != 0) gfni_matrices(col);
+#endif
+  }
+  void tables(const F &f, const std::vector<std::array<uint8_t, B>> &col) {
     // Byte tables: tab[j][v] = M (v at byte j).
     tab_.assign(B * 256, f.zero());
     for (size_t j = 0; j < B; ++j)
@@ -452,53 +494,57 @@ class LinearMap {
         std::memcpy(&y, o, B);
         tab_[j * 256 + v] = y;
       }
+  }
 #if PROOFS_SKIP_GFNI
-    if constexpr (kGfniBytes != 0) {
-      // mat_[j * H + h], lane i: the block M_{8 h + i, j}, the
-      // GF2P8AFFINEQB matrix sending input byte j to output byte 8 h + i.
-      mat_.resize(B * H);
-      for (size_t j = 0; j < B; ++j)
-        for (size_t h = 0; h < H; ++h) {
-          alignas(64) uint64_t m[8];
-          for (size_t i = 0; i < 8; ++i) {
-            uint8_t cb[8];
-            for (size_t s = 0; s < 8; ++s) cb[s] = col[8 * j + s][8 * h + i];
-            m[i] = skip_gfni::matrix(cb);
-          }
-          mat_[j * H + h] = _mm512_load_si512(m);
-        }
-      // Input: register h, byte 8 j' + e = byte 8 h + j' of element e.
-      // Output: element e's byte m from accumulator m / 8, byte 8 (m % 8) + e.
-      alignas(64) uint8_t idx[64];
+  void gfni_matrices(const std::vector<std::array<uint8_t, B>> &col) {
+    // mat_[j * H + h], lane i: the block M_{8 h + i, j}, the
+    // GF2P8AFFINEQB matrix sending input byte j to output byte 8 h + i:
+    // skip_gfni::matrix of the bytes cb[s] = col[8 j + s][8 h + i], which
+    // is the byte-reversed transpose of the 8 x 8 bit matrix with rows
+    // cb[s] (transpose8).
+    mat_.resize(B * H);
+    for (size_t j = 0; j < B; ++j)
       for (size_t h = 0; h < H; ++h) {
-        for (size_t jj = 0; jj < 8; ++jj)
-          for (size_t e = 0; e < 8; ++e)
-            idx[8 * jj + e] = uint8_t((B * e + 8 * h + jj) % 128);
-        in_idx_[h] = _mm512_load_si512(idx);
-      }
-      for (size_t q = 0; q < 8 * B / 64; ++q) {
-        for (size_t i = 0; i < 64; ++i) {
-          const size_t e = (64 * q + i) / B, m = (64 * q + i) % B;
-          idx[i] = uint8_t((64 * ((m / 8) % 2) + 8 * (m % 8) + e) % 128);
+        alignas(64) uint64_t m[8];
+        uint8_t cb[8][8];
+        for (size_t s = 0; s < 8; ++s)
+          for (size_t i = 0; i < 8; ++i) cb[i][s] = col[8 * j + s][8 * h + i];
+        for (size_t i = 0; i < 8; ++i) {
+          uint64_t x;
+          std::memcpy(&x, cb[i], 8);
+          m[i] = __builtin_bswap64(transpose8(x));
         }
-        out_idx_[q] = _mm512_load_si512(idx);
+        mat_[j * H + h] = _mm512_load_si512(m);
       }
+    // Input: register h, byte 8 j' + e = byte 8 h + j' of element e.
+    // Output: element e's byte m from accumulator m / 8, byte 8 (m % 8) + e.
+    alignas(64) uint8_t idx[64];
+    for (size_t h = 0; h < H; ++h) {
+      for (size_t jj = 0; jj < 8; ++jj)
+        for (size_t e = 0; e < 8; ++e)
+          idx[8 * jj + e] = uint8_t((B * e + 8 * h + jj) % 128);
+      in_idx_[h] = _mm512_load_si512(idx);
     }
-#endif
-  }
-
-  // OUT[i] = M IN[i] for i < N (OUT may be IN).
-  void apply(const Elt *in, Elt *out, size_t n) const {
-    size_t i = 0;
-#if PROOFS_SKIP_GFNI
-    if constexpr (kGfniBytes != 0) {
-      for (; i + 8 <= n; i += 8) gfni8(in + i, out + i);
+    for (size_t q = 0; q < 8 * B / 64; ++q) {
+      for (size_t i = 0; i < 64; ++i) {
+        const size_t e = (64 * q + i) / B, m = (64 * q + i) % B;
+        idx[i] = uint8_t((64 * ((m / 8) % 2) + 8 * (m % 8) + e) % 128);
+      }
+      out_idx_[q] = _mm512_load_si512(idx);
     }
-#endif
-    for (; i < n; ++i) out[i] = by_tables(in[i]);
   }
-
- private:
+#endif
+  // The transpose of the 8 x 8 bit matrix whose row r is byte r of X:
+  // bit 8 r + c moves to bit 8 c + r.
+  static uint64_t transpose8(uint64_t x) {
+    uint64_t t = (x ^ (x >> 7)) & 0x00AA00AA00AA00AAull;
+    x ^= t ^ (t << 7);
+    t = (x ^ (x >> 14)) & 0x0000CCCC0000CCCCull;
+    x ^= t ^ (t << 14);
+    t = (x ^ (x >> 28)) & 0x00000000F0F0F0F0ull;
+    x ^= t ^ (t << 28);
+    return x;
+  }
   Elt by_tables(const Elt &x) const {
     uint8_t b[B];
     std::memcpy(b, &x, B);

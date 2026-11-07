@@ -23,7 +23,7 @@ namespace GordieHowe.RealizedProgram
 /-- **The figures of a configuration's program**, as numerals: at most `rounds` rounds, trees of at
 most `N` leaves, `nq` queried leaves, `kq` verifier queries, `D` digests per chain input, `pos`
 positions, `k`-byte digests, every round error at most `errorMax / 2^errorExp` and every round's
-load passing the Chernoff test `2^-chernoff`. The program's generated module `Figures` states
+load passing the Chernoff test `2^-chernoff` at the point `zNum / zDen`. The program's generated module `Figures` states
 them; the part `figuresPartB` of the program's check checks them (`ProgramFigures.Check`). -/
 structure ProgramFigures where
   /-- The rounds of the composite. -/
@@ -46,6 +46,10 @@ structure ProgramFigures where
   errorExp : Nat
   /-- The Chernoff exponent of the loads. -/
   chernoff : Nat
+  /-- The numerator of the point at which the loads' Chernoff test is evaluated. -/
+  zNum : Nat
+  /-- The denominator of that point. -/
+  zDen : Nat
 
 /-- **The stream grants of a forked domain's join**: the extra stream bytes of every stage's
 combination challenge, by the stage's position, and of Ligero's constraint challenge. -/

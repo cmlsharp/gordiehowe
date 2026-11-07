@@ -33,8 +33,8 @@ Bit `l` of the bit index `b` is variable `l`, bound low first (`GKR.ClaimEvaluat
   claim to `h(ρ)`.
 
 The weights `W` and the bits `t` are arbitrary tables; the masked reduction that runs these rounds
-(`GordieHowe/ProofSystem/Zerocheck/BitSumcheckIP.lean`) reads them from the opening claim and the
-committed bits.
+(`GordieHowe/ProofSystem/Zerocheck/CoordSumcheckIP.lean`) reads them from a claim and the committed
+coordinates of its words, zero-extended from `d` to `2^m` entries.
 -/
 
 namespace GordieHowe.BitSumcheck

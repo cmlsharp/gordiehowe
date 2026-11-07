@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Generated.Falcon512.Native.QROMParams.GKR.H
+public import GordieHoweCerts.Generated.Falcon512.Native.QROMParams.GKR.H
 public import GordieHoweCheck.Falcon512.Native.QROMParams.GKR.H.E6.P0
 public import GordieHoweCheck.Falcon512.Native.QROMParams.GKR.H.E6.P1
 public import GordieHoweCheck.Falcon512.Native.QROMParams.GKR.H.E6.P2

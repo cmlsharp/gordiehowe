@@ -34,7 +34,7 @@ Contents:
 * **The program facts** (`MldsaRingRelation`): the value numbering, the four rows' bodies and
   shared expressions (`rowLhs`), the zero constant, the challenge's Boolean check, `norm.z`, the
   prime-typed source values `member.a_hat`, `member.t1`, `signature.w`. Each program decides
-  them (`GordieHowe/Applications/MLDSA44/Ring/Native/{ROMParams,QROMParams}/Frontend/RelationFacts.lean`).
+  them (`GordieHoweCerts/Applications/MLDSA44/Ring/Native/{ROMParams,QROMParams}/Frontend/RelationFacts.lean`).
 * **The readers** (`wVals`, `wOf`, `zVals`, `zOf`, `cBits`, `cPoly`, `aHatVals`, `t1HatVals`):
   the shapes of the proof-of-possession frontend's (`GordieHowe.MLDSA44.wOf`,
   `zOf`, `cPolyA`) at the ring program's values.

@@ -237,9 +237,6 @@ instance (c : CompletionInputs) : Decidable (r.RolesOk c) := by unfold RolesOk; 
 instance (c : CompletionInputs) : Decidable (r.CompletionOk c) := by
   unfold CompletionOk; infer_instance
 
-/-- **Every field of the interpretation has a byte codec.** -/
-def CodedOk : Prop := ∀ f, (r.fieldTable.interp.key f).Coded
-
 /-! ## The ready data and the figures -/
 
 /-- **The facts the ready data reads**: well-formedness, the tableaus and every domain's checks. -/
@@ -259,30 +256,30 @@ def ready (h : r.ReadyFacts) (i : Fin r.program.domains.length) :
     h.fields i h.tableaus, h.wellFormed⟩
 
 /-- **The codec of domain `i`'s field.** -/
-def cod (hc : r.CodedOk) (i : Fin r.program.domains.length) :
+def cod (i : Fin r.program.domains.length) :
     FieldCodec (r.interp (r.program.domainField i)) :=
-  r.fieldTable.interp.codec hc _
+  r.fieldTable.interp.codec _
 
 /-- **The bytes of the fields' elements.** -/
-def fieldBytes (hc : r.CodedOk) : FieldBytesOf r.interp := r.fieldTable.interp.bytes hc
+def fieldBytes : FieldBytesOf r.interp := r.fieldTable.interp.bytes
 
 /-- **The readers of the fields' elements.** -/
-def fieldReader (hc : r.CodedOk) (f : ℕ) : SPBCS.CReader (r.interp f).K :=
-  r.fieldTable.interp.reader hc f
+def fieldReader (f : ℕ) : SPBCS.CReader (r.interp f).K :=
+  r.fieldTable.interp.reader f
 
 /-- **The largest load of a challenge** (`RealizedProgram.stdChalLoad`). -/
-def chalLoadMax (hc : r.CodedOk) : Load :=
-  r.program.stdChalLoad fun f => (r.fieldReader hc f).load
+def chalLoadMax : Load :=
+  r.program.stdChalLoad fun f => (r.fieldReader f).load
 
 /-- **The readers' check** (`RealizedProgram.ReadersOk` at the fields' sizes). -/
-def ReadersOk (hc : r.CodedOk) : Prop :=
-  r.program.ReadersOk (fun f => (r.fieldReader hc f).load) r.interp.specCard
+def ReadersOk : Prop :=
+  r.program.ReadersOk (fun f => (r.fieldReader f).load) r.interp.specCard
 
-instance (hc : r.CodedOk) : Decidable (r.ReadersOk hc) := by unfold ReadersOk; infer_instance
+instance : Decidable r.ReadersOk := by unfold ReadersOk; infer_instance
 
 /-- **The readers of the challenges' values** (`RealizedProgram.stdReaders`). -/
-def samplerReaders (hc : r.CodedOk) (hr : r.ReadersOk hc) : SamplerReaders r.interp r.program :=
-  stdReaders (r.fieldReader hc) r.fieldTable.interp.card hr
+def samplerReaders (hr : r.ReadersOk) : SamplerReaders r.interp r.program :=
+  stdReaders r.fieldReader r.fieldTable.interp.card hr
 
 /-- Domain `i`'s largest array. -/
 def maxArray (i : Fin r.program.domains.length) : ℕ := nthOr r.figures.maxArray i
@@ -298,16 +295,16 @@ def branchName (i : Fin r.program.domains.length) : List Byte :=
   SPBCS.Configurations.asciiBytes (r.fieldTable.interp.key (r.fieldTable.domainField i)).name
 
 /-- **The domains' size bounds** (`RealizedProgram.FitsOk`). -/
-def FitsOk (h : r.ReadyFacts) (hc : r.CodedOk) : Prop :=
-  ∀ i, RealizedProgram.FitsOk (r.ready h i) (r.cod hc i).fb (r.maxArray i) (r.maxRead i)
+def FitsOk (h : r.ReadyFacts) : Prop :=
+  ∀ i, RealizedProgram.FitsOk (r.ready h i) (r.cod i).fb (r.maxArray i) (r.maxRead i)
 
-instance (h : r.ReadyFacts) (hc : r.CodedOk) : Decidable (r.FitsOk h hc) := by
+instance (h : r.ReadyFacts) : Decidable (r.FitsOk h) := by
   unfold FitsOk; infer_instance
 
 /-- **The numbers of the domains** (`RealizedProgram.ForkNumbers`). -/
-def numbers (h : r.ReadyFacts) (hc : r.CodedOk) (hf : r.FitsOk h hc) :
+def numbers (h : r.ReadyFacts) (hf : r.FitsOk h) :
     ForkNumbers (r.ready h) where
-  cod := r.cod hc
+  cod := r.cod
   Mx := r.maxArray
   Lmax := r.maxRead
   ok := hf
@@ -315,20 +312,20 @@ def numbers (h : r.ReadyFacts) (hc : r.CodedOk) (hf : r.FitsOk h hc) :
 
 /-- **The figures' facts at the ready data**: the readers, the size bounds, the messages' bound,
 the figures' check (`ProgramFigures.Check`) and the loads on the default stream. -/
-structure FiguresFacts (h : r.ReadyFacts) (hc : r.CodedOk) : Prop where
+structure FiguresFacts (h : r.ReadyFacts) : Prop where
   /-- The readers' check. -/
-  readers : r.ReadersOk hc
+  readers : r.ReadersOk
   /-- The size bounds. -/
-  fits : r.FitsOk h hc
+  fits : r.FitsOk h
   /-- The messages' bound. -/
-  msg : ∀ k, r.program.msgB (r.fieldBytes hc) k ≤ 2 ^ 20
+  msg : ∀ k, r.program.msgB r.fieldBytes k ≤ 2 ^ 20
   /-- The figures' check. -/
-  check : r.figures.figures.Check (r.numbers h hc fits) r.figures.sourceErrors
-    (r.samplerReaders hc readers) (r.chalLoadMax hc)
-    (chalLoad_stdReaders_le_std (r.fieldReader hc) r.fieldTable.interp.card readers)
+  check : r.figures.figures.Check (r.numbers h fits) r.figures.sourceErrors
+    (r.samplerReaders readers) r.chalLoadMax
+    (chalLoad_stdReaders_le_std r.fieldReader r.fieldTable.interp.card readers)
     r.restRead r.figures.grantMax
   /-- The loads on the default stream. -/
-  loads : r.figures.defaultLoads = true → r.figures.figures.DefaultLoadsOk (r.numbers h hc fits)
+  loads : r.figures.defaultLoads = true → r.figures.figures.DefaultLoadsOk (r.numbers h fits)
 
 end RuntimeInputs
 
@@ -388,10 +385,10 @@ structure CoreConditions (d : ProgramData) : Prop where
 theorem CoreConditions.readyFacts {d : ProgramData} (h : CoreConditions d) : d.ReadyFacts :=
   ⟨h.wellFormed, h.tableaus, h.fields⟩
 
-/-- **The figures' facts** (`RuntimeInputs.FiguresFacts`), at every proof of the core conditions
-and the codecs. -/
+/-- **The figures' facts** (`RuntimeInputs.FiguresFacts`), at every proof of the core
+conditions. -/
 def ProgramData.FiguresOk (d : ProgramData) : Prop :=
-  ∀ (h : CoreConditions d) (hc : d.CodedOk), d.FiguresFacts h.readyFacts hc
+  ∀ h : CoreConditions d, d.FiguresFacts h.readyFacts
 
 /-- **Everything a configuration needs about a program** (module docstring). -/
 structure ProgramConditions (d : ProgramData) : Prop extends CoreConditions d where
@@ -401,8 +398,6 @@ structure ProgramConditions (d : ProgramData) : Prop extends CoreConditions d wh
   roles : d.RolesOk d.completion
   /-- No field-form `mod_q`, when the field table says so. -/
   noFieldForm : d.NoFieldForm
-  /-- Every field has a byte codec. -/
-  coded : d.CodedOk
   /-- The figures. -/
   figures : d.FiguresOk
   /-- The shapes the frontends read. -/
@@ -416,9 +411,10 @@ structure ProgramConditions (d : ProgramData) : Prop extends CoreConditions d wh
 derivations, the cells, the source part, locality, every domain's checks at its packing descriptor,
 every domain's tableau at its descriptor's numbers, the table selections, the absence of
 field-form `mod_q` where the field table states it, the completion certificate, the honest roles, the shapes,
-the figures, the optional source roles, the GKR part and the opaque-function set. Applications transport the checked figures to `FiguresOk` with
-the packing descriptors and an explicit proof that figures are present. -/
-structure CheckedConditions (d : ProgramData) : Prop where
+the figures (present and checked at `withFigures`, absent otherwise), the optional source roles,
+the GKR part and the opaque-function set. Applications transport the checked figures to
+`FiguresOk` with the packing descriptors. -/
+structure CheckedConditions (d : ProgramData) (withFigures : Bool) : Prop where
   wellFormed : d.program.WellFormed
   order : d.program.ChallengeOrder
   pads : d.program.PadOrderValid
@@ -433,7 +429,7 @@ structure CheckedConditions (d : ProgramData) : Prop where
   roles : d.RolesOk d.completion
   noFieldForm : d.NoFieldForm
   shapes : ShapesHold d.program d.shapes
-  figures : d.figuresPartB = true
+  figures : d.figuresPartB withFigures = true
   /-- Checked placement and coverage of the optional source-role table. -/
   sourceRoles : SourceRolesPartOk d.program d.sourceRoles
   circuits : d.CircuitsOk
@@ -445,10 +441,12 @@ structure CheckedConditions (d : ProgramData) : Prop where
 
 /-- **The check of a program is sound** (`ProgramData.programOkB`), each part by its checker's
 soundness lemma. -/
-theorem programOk_sound (d : ProgramData) (hall : d.programOkB = true) : CheckedConditions d :=
-  have h : (d.coreOkB && d.completeB && d.shapesB && d.figuresPartB && d.sourceRolesB &&
-      d.gkrPartB) = true := and_left hall
-  have hparts : (d.coreOkB && d.completeB && d.shapesB && d.figuresPartB) = true := and_left (and_left h)
+theorem programOk_sound (d : ProgramData) {withFigures : Bool}
+    (hall : d.programOkB withFigures = true) : CheckedConditions d withFigures :=
+  have h : (d.coreOkB && d.completeB && d.shapesB && d.figuresPartB withFigures &&
+      d.sourceRolesB && d.gkrPartB) = true := and_left hall
+  have hparts : (d.coreOkB && d.completeB && d.shapesB && d.figuresPartB withFigures) = true :=
+    and_left (and_left h)
   have hcc : (d.coreOkB && d.completeB) = true := and_left (and_left hparts)
   have hcore : d.coreOkB = true := and_left hcc
   have hv : d.validB = true := and_left (and_left hcore)

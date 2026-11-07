@@ -15,7 +15,7 @@ public import GordieHoweNative.Language.RealizedProgram
 
 The realized program of a compiled plan (its values, predicates, lookups, challenges and messages,
 and GKR circuits), as plain data an exporter writes as Lean terms, like the generated plan files
-(`GordieHowe/Generated/*`). The meaning of the data is `GordieHowe/Language/RealizedProgram/Semantics.lean`; the
+(`GordieHoweCerts/Generated/*`). The meaning of the data is `GordieHowe/Language/RealizedProgram/Semantics.lean`; the
 checks of `Plan.Valid` that read it are `GordieHowe/Language/RealizedProgram/Valid.lean`.
 
 **Identifiers.** Every table of the program is a list, and an identifier is a position in its

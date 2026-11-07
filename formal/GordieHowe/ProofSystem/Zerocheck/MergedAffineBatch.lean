@@ -27,7 +27,10 @@ operand map (`OperandMap.affine`), as `AffineBatch` is the single relation's:
   the errors `(np − 1)/|K|` at `γ` and the batch phase's (`error_sum`); its honest prover (`honest`)
   on assignments where every relation holds, with the honest pad values (`padValue`) and the
   commitment condition (`commits_of`).
-* **A batch stage** (`BatchStage.merged`), as `BatchStage.one` is for `AffineBatch`.
+
+`ip` sends `γ` and `ρ` as two verifier moves. The C++ draws them from one challenge point, and the
+program's masked reduction is `ip` with the two moves fused into one
+(`MergedAffineBatchFused.lean`, `fusedIp`, with the bit sumcheck `bitIp`).
 -/
 
 namespace GordieHowe.BatchedZerocheck
@@ -241,95 +244,6 @@ transcript under uniform challenges and uniform free pads is a uniform full tran
 @[headline]
 theorem hvzk (e : B.Pad → ι) (Lv : Level K ι V) : (B.honest Pub e Lv).UniformHVZK :=
   (B.honest_simBijective e Lv).uniformHVZK
-
-/-! ### The bit sumcheck -/
-
-section BitSumcheck
-
-variable [DecidableEq V] {m nw : ℕ}
-
-variable (Pub) in
-/-- **The merged batch's masked reduction with the bit sumcheck** (`MaskedReduction.bitSumcheck`) at the bit
-layout `L`: the merged batch's masked reduction, then the masked sumcheck over the bit-index variables of
-its words, whose output claim replaces the opening claim. -/
-def bitIp (e : B.Pad → ι) (Lv : Level K ι V) (L : BitLayout K ι V m nw) :
-    FieldProof.MaskedReduction K ι Pub (ι → K) id V 1 :=
-  (B.ip Pub e Lv).bitSumcheck L Lv
-
-omit [DecidableEq K] [DecidableEq V] in
-variable (m) in
-/-- **The errors of the merged batch with the bit sumcheck**: the merged batch's, then `2/|K|`
-per bit round. -/
-noncomputable abbrev bitError :
-    ((GKR.Schedule.one .V_to_P K ++ spec K B.e B.D B.n B.k) ++
-      HashCircuit.Skip.alt (Fin 2 → K) K m).ChallengeIdx → ℝ≥0 :=
-  FieldProof.MaskedReduction.bitSumcheckError (K := K) m B.error
-
-omit [DecidableEq K] [DecidableEq V] in
-/-- **The total error of the merged batch with the bit sumcheck**: `(np − 1)/|K|` for `γ`, the
-batch phase's, plus `2m/|K|` for the `m` bit rounds. -/
-theorem bitError_sum : ∑ i, B.bitError m i = ((B.np - 1 : ℕ) : ℝ≥0) / Fintype.card K +
-    ((B.n : ℝ≥0) / Fintype.card K + ((B.D * (B.w - 1) : ℕ) : ℝ≥0) / Fintype.card K +
-      ((B.D + 1 : ℕ) : ℝ≥0) * B.n / Fintype.card K + 1 / Fintype.card K) +
-        ((2 * m : ℕ) : ℝ≥0) / Fintype.card K := by
-  rw [FieldProof.MaskedReduction.sum_bitSumcheckError, B.error_sum]
-
-/-- **Soundness of the merged batch with the bit sumcheck**: the merged batch's relation, with
-the merged batch's errors and `2/|K|` per bit round. -/
-noncomputable def bitSumcheckSound (e : B.Pad → ι) (Lv : Level K ι V) (L : BitLayout K ι V m nw) :
-    (B.bitIp Pub e Lv L).Sound Lv.view (B.Sat e Lv) (B.bitError m) :=
-  (B.sound e Lv).bitSumcheck
-
-variable (Pub) in
-/-- **The simulator of the merged batch with the bit sumcheck**: the merged batch's simulator, then
-uniform values (`MaskedReduction.Sim.bitSumcheck`).
-
-Running time: the merged batch's simulator's and a copy of `2m` coins, linear in the transcript.
-This running time is argued here, not proved in Lean. -/
-def bitSim (e : B.Pad → ι) (Lv : Level K ι V) (L : BitLayout K ι V m nw) : (B.bitIp Pub e Lv L).Sim :=
-  FieldProof.MaskedReduction.Sim.bitSumcheck L (B.sim Pub e Lv)
-
-variable (Pub) in
-/-- **The honest merged batch with the bit sumcheck**, on assignments where the batch holds: the
-honest merged batch, then the honest bit rounds at the assignment's bits, simulated by `bitSim`. -/
-noncomputable def bitHonest (e : B.Pad → ι) (Lv : Level K ι V) (L : BitLayout K ι V m nw) :
-    (B.bitIp Pub e Lv L).Honest Lv.view (V → K) (fun p z => B.Holds p z) (B.bitSim Pub e Lv L) :=
-  (B.honest Pub e Lv).bitSumcheck L fun _ z => L.bits z
-
-/-- **The cells commit the honest merged batch with the bit sumcheck** when they commit the
-honest merged batch, the bit rounds' pads and the assignment's bits. -/
-theorem bitCommits_of (e : B.Pad → ι) (Lv : Level K ι V) (L : BitLayout K ι V m nw) (p : Pub)
-    (z : V → K) (φ : FreePads K B.w B.D B.n B.k) (ψ : Fin m → Fin 2 → K) (x : ι → K)
-    (hb : (B.honest Pub e Lv).Commits p z φ x) (hl : L.Commits Lv (L.bits z) ψ x) :
-    (B.bitHonest Pub e Lv L).Commits p z (φ, ψ) x :=
-  ⟨hb, hl⟩
-
-/-- The message types of the merged batch's masked reduction with the bit sumcheck are finite. -/
-instance bitIp_typeFintype (e : B.Pad → ι) (Lv : Level K ι V) (L : BitLayout K ι V m nw) :
-    ∀ i, Fintype ((B.bitIp Pub e Lv L).spec.Type i) :=
-  FieldProof.MaskedReduction.bitSumcheck_typeFintype (M := B.ip Pub e Lv)
-
-/-- The message types of the merged batch's masked reduction with the bit sumcheck are nonempty. -/
-instance bitIp_typeNonempty (e : B.Pad → ι) (Lv : Level K ι V) (L : BitLayout K ι V m nw) :
-    ∀ i, Nonempty ((B.bitIp Pub e Lv L).spec.Type i) :=
-  FieldProof.MaskedReduction.bitSumcheck_typeNonempty (M := B.ip Pub e Lv)
-
-/-- The simulator of the merged batch with the bit sumcheck is a bijection onto the full
-transcripts. -/
-theorem bitHonest_simBijective (e : B.Pad → ι) (Lv : Level K ι V) (L : BitLayout K ι V m nw) :
-    (B.bitHonest Pub e Lv L).SimBijective :=
-  (B.honest_simBijective e Lv).bitSumcheck _
-
-/-- **Honest-verifier zero knowledge of the merged batch with the bit sumcheck** with error `0`
-with respect to the uniform simulator (paper `def:red-sec` (c)): at every public input and every
-logical assignment, the honest transcript under uniform challenges, uniform free pads and uniform
-bit-round pads is a uniform full transcript. -/
-@[headline]
-theorem bitHvzk (e : B.Pad → ι) (Lv : Level K ι V) (L : BitLayout K ι V m nw) :
-    (B.bitHonest Pub e Lv L).UniformHVZK :=
-  (B.bitHonest_simBijective e Lv L).uniformHVZK
-
-end BitSumcheck
 
 end MergedAffineBatch
 

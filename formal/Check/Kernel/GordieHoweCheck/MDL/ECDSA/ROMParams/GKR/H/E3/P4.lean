@@ -3,9 +3,9 @@
 
 module
 
-public import GordieHowe.Generated.MDL.ECDSA.ROMParams.GKR.H
-meta import GordieHowe.Generated.MDL.ECDSA.ROMParams.GKR.H
-import all GordieHowe.Generated.MDL.ECDSA.ROMParams.Program
+public import GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.GKR.H
+meta import GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.GKR.H
+import all GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.Program
 
 @[expose] public section
 

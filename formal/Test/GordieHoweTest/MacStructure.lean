@@ -1,9 +1,9 @@
 -- Copyright 2026 Chad Sharp and Paul Grubbs
 -- SPDX-License-Identifier: Apache-2.0
 
-import GordieHowe.Generated.Falcon512.Native.ROMParams.Core
-import GordieHowe.Generated.MLDSA44.Native.ROMParams.Data
-import GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Data
+import GordieHoweCerts.Generated.Falcon512.Native.ROMParams.Core
+import GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.Data
+import GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Data
 
 /-!
 # Tests of the MAC sites read at the structure records

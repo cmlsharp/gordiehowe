@@ -28,7 +28,7 @@ field of domain A is Goldilocks⁴ at the QROM parameters and Goldilocks² at th
 subfield `F_p`).
 
 Names are the C++'s scoped node names (`signature.w`, `signature.relation.d0`, `alpha:A`, …),
-as in the generated plan data (`GordieHowe/Generated/MLDSA44/Emulated/{QROMParams,ROMParams}/Plan.lean`). Citations are
+as in the generated plan data (`GordieHoweCerts/Generated/MLDSA44/Emulated/{QROMParams,ROMParams}/Plan.lean`). Citations are
 `file:line` at `28705d8e`, relative to `lib/gordiehowe/` unless they name another directory.
 -/
 

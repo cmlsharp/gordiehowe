@@ -3,8 +3,8 @@
 
 import GordieHowe.Language.RealizedProgram.StructureCheck
 import GordieHowe.Language.Export.Valid
-import GordieHowe.Generated.Falcon512.Native.ROMParams.Plan
-import GordieHowe.Generated.Falcon512.Native.ROMParams.Structure
+import GordieHoweCerts.Generated.Falcon512.Native.ROMParams.Plan
+import GordieHoweCerts.Generated.Falcon512.Native.ROMParams.Structure
 
 /-!
 # Tests of the structure records' common pieces

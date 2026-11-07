@@ -810,9 +810,9 @@ theorem inNodes_treeLevel_cell (Pads : Type) [Fintype Pads] {N : Finset ℕ}
 theorem inNodes_bitLayout {N : Finset ℕ} (pad : BitPad → ir.FCell src Pk rs)
     (nodes : Sumcheck.Nodes (I (ir.domainField d)).K) (q : Fin (ir.cellKeys d).length) (b b')
     (h : InNodes 0 (ir.fieldEdges d Pk rs (ir.ClaimPads d src Pk)) N
-      ((ir.bitLayoutAt src rs pad nodes).bit q b')) :
+      ((ir.bitLayoutAt src rs pad nodes).coord q b')) :
     InNodes 0 (ir.fieldEdges d Pk rs (ir.ClaimPads d src Pk)) N
-      ((ir.bitLayoutAt src rs pad nodes).bit q b) := fun n hn => h n (by
+      ((ir.bitLayoutAt src rs pad nodes).coord q b) := fun n hn => h n (by
   change nodeOf 0 _ (ir.viewPlace d rs _ _ _) = some n at hn ⊢
   rwa [nodeOf_viewPlace_eq] at hn)
 
@@ -856,16 +856,16 @@ theorem readsOnly_branchIP : (j : ir.BranchIdx d Pk) →
       (fun c => InNodes 0 (ir.fieldEdges d Pk rs (ir.ClaimPads d src Pk)) (branchReads rs j c))
   | .inl (.inl (.inl i)) => BatchedZerocheck.AffineBatch.readsOnly_ip _ _ _ _
       (fun p t o => readsOnly_colsForm src rs _ p t o) (inNodes_treeLevel_cell rs _)
-  | .inl (.inl (.inr i)) => FieldProof.MaskedReduction.ReadsOnly.bitSumcheck
+  | .inl (.inl (.inr i)) => FieldProof.MaskedReduction.ReadsOnly.coordSumcheck
       (BatchedZerocheck.AffineBatch.readsOnly_ip _ _ _ _
         (fun p t o => readsOnly_bitsForm src rs _ p t o) (inNodes_treeLevel_cell rs _))
       (fun _ _ => inNodes_treeLevel_cell rs _ _)
       (fun q b b' h => inNodes_bitLayout src rs _ _ q b b' h)
-  | .inl (.inr (.inl i)) => BatchedZerocheck.MergedAffineBatch.readsOnly_ip _ _ _ _
+  | .inl (.inr (.inl i)) => BatchedZerocheck.MergedAffineBatch.readsOnly_fusedIp _ _ _ _
       (fun p t o => readsOnly_mergedForm_cols src rs _
         (om_of_mem_mbatches (List.getElem_mem _)) p t o) (inNodes_treeLevel_cell rs _)
-  | .inl (.inr (.inr i)) => FieldProof.MaskedReduction.ReadsOnly.bitSumcheck
-      (BatchedZerocheck.MergedAffineBatch.readsOnly_ip _ _ _ _
+  | .inl (.inr (.inr i)) => FieldProof.MaskedReduction.ReadsOnly.coordSumcheck
+      (BatchedZerocheck.MergedAffineBatch.readsOnly_fusedIp _ _ _ _
         (fun p t o => readsOnly_mergedForm_bits src rs _ ((ir.sumMBatches d Pk)[i]).bits p t o)
         (inNodes_treeLevel_cell rs _))
       (fun _ _ => inNodes_treeLevel_cell rs _ _)

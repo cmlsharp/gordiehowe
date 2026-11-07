@@ -105,7 +105,8 @@ inline const FieldModelEntry *field_model(const std::string &name) {
       {"F_p256", "`F_p256`", "RealizedProgram.p256", "RealizedProgram.p256_model",
        "RealizedProgram.p256Packing",
        "(RealizedProgram.p256_codeHom.withPrime RealizedProgram.p256Code_primeOn)", "", "",
-       "GordieHowe.Applications.FieldInterps.P256", "", 32, nullptr, nullptr},
+       "GordieHowe.Applications.FieldInterps.P256", "", 32, "SPBCS.Codec.FieldBytes.p256",
+       "SPBCS.CReader.p256"},
   };
   for (const FieldModelEntry &e : entries)
     if (name == e.name) return &e;

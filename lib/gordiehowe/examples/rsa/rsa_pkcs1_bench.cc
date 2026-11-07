@@ -14,7 +14,7 @@
 //              among them).
 //   export     the plan export (plan_export.h) and the realized program
 //              (plan_program.h) of every configuration of the same lists,
-//              in --dir: GordieHowe/Generated/RSA2048/<Goldilocks2|Fp128>/
+//              in --dir: GordieHoweCerts/Generated/RSA2048/<Goldilocks2|Fp128>/
 //              Msg<size>/ROMParams/{Plan,Program}.lean (lean_config_name),
 //              config rsa-<key>, as its PQ_HASH line. A configuration the
 //              exporters do not cover prints one GH_EXPORT_UNSUPPORTED line

@@ -17,7 +17,7 @@ construction's scheme (`mldsaScheme`, `w1BindScheme44`, the Falcon `convertedSch
 `bindingScheme`). The model's generic constructors (`ofBase`, `RingScheme.trivial`) are not scheme
 constants, so a generic headline (over `ofBase B PS adm` with `B` and `PS` variables, or over a
 program form such as `StmtVerifiesRing`) names none, and neither do the
-constructors generic in the base message (`w1Concrete`, `w1Scheme44`). The rule:
+constructors generic in the base message (`w1Scheme`, `w1Concrete`, `w1Scheme44`). The rule:
 
 1. every ring headline names at most one scheme constant;
 2. for every scheme constant named by a ring headline, the ring headlines naming it cover the three
@@ -104,7 +104,8 @@ def knownMissingGames : List (Name × String × String) :=
 headlines about them cover no concrete constant. -/
 def genericConstructors : List Name :=
   [`GordieHowe.Ring.MLDSAW1.w1Concrete, `GordieHowe.Ring.MLDSAW1.w1Scheme44,
-   `GordieHowe.Ring.MLDSAW1.w1Scheme65, `GordieHowe.Ring.MLDSAW1.w1Scheme87]
+   `GordieHowe.Ring.MLDSAW1.w1Scheme65, `GordieHowe.Ring.MLDSAW1.w1Scheme87,
+   `GordieHowe.Ring.MLDSAW1.w1Scheme]
 
 /-- How a hypothesis predicate is known to be satisfiable. -/
 inductive Witness where

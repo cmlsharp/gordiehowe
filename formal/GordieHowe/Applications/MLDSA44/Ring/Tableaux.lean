@@ -18,7 +18,7 @@ public import GordieHowe.Foundations.Fields.GF2_128
 # Ligero tableaus of the ML-DSA-44 rings
 
 Ligero at an agreement threshold, with the mask test, over a relatively packed commitment, at the
-two tableaus of the compiled ML-DSA-44 rings (`GordieHowe/Generated/MLDSA44/Ring/`) that no
+two tableaus of the compiled ML-DSA-44 rings (`GordieHoweCerts/Generated/MLDSA44/Ring/`) that no
 earlier configuration uses (the rings' other domains reuse `Tableau.gold2K512R2…` and
 `Tableau.gf256K339R2…`, `GordieHowe/Applications/Shared/Tableaux.lean`):
 

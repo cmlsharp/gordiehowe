@@ -54,7 +54,7 @@ public import GordieHowe.SPBCS.Sampler.Avoid
 # The transcript pieces of the proofs of possession
 
 The data the configurations' settings share (for example
-`GordieHowe/Applications/Falcon512/Native/ROMParams/Setting.lean`):
+`GordieHoweCerts/Applications/Falcon512/Native/ROMParams/Setting.lean`):
 
 - the Falcon statement `FalconPublicKey` and the statement writes: Falcon writes the public key's
   `512` coefficients as one array of elements of `ℤ_q`, two little-endian bytes each
@@ -238,58 +238,69 @@ def excludedListing (F : Type) [Field F] [Fintype F] [DecidableEq F] (T : ℕ) :
 (`lib/random/transcript.h` line 60). -/
 def fsExtraBytes : ℕ := 206848
 
-/-- **A load passes the Chernoff test** `ε` at `z` on streams of `N` bytes: the attempt
-generating function is finite at `z` (`pow_lt`), and the per-round Chernoff bound on `N`-byte
-streams with attempt bound `N` is at most `ε` (`bound_le`). -/
+/-- **A load passes the Chernoff test** `ε` at `z` on streams of `N` bytes: the point is at least
+`1` (`one_le`), the attempt generating function is finite at `z` (`pow_lt`), and the per-round
+Chernoff bound on `N`-byte streams with attempt bound `N` is at most `ε` (`bound_le`). -/
 structure PassesChernoff (z ε : ℝ) (N : ℕ) (L : Load) : Prop where
+  /-- `1 ≤ z`, the range of points at which the Chernoff bound holds. -/
+  one_le : 1 ≤ z
   /-- `z ^ bytes < 2`, so the attempt generating function is finite at `z`. -/
   pow_lt : z ^ L.bytes < 2
   /-- The Chernoff bound is at most `ε`. -/
   bound_le : L.bound z N N ≤ ε
 
-theorem PassesChernoff.of_le {z ε : ℝ} (hz : 1 ≤ z) {N : ℕ} {L L' : Load}
+theorem PassesChernoff.of_le {z ε : ℝ} {N : ℕ} {L L' : Load}
     (h : PassesChernoff z ε N L') (hL : L ≤ L') : PassesChernoff z ε N L :=
-  ⟨(pow_le_pow_right₀ hz hL.bytes).trans_lt h.pow_lt, (Load.bound_mono hz hL h.pow_lt).trans h.bound_le⟩
+  ⟨h.one_le, (pow_le_pow_right₀ h.one_le hL.bytes).trans_lt h.pow_lt,
+    (Load.bound_mono h.one_le hL h.pow_lt).trans h.bound_le⟩
 
-theorem PassesChernoff.anti {z ε : ℝ} (hz : 1 ≤ z) {N N' : ℕ} {L : Load}
+theorem PassesChernoff.anti {z ε : ℝ} {N N' : ℕ} {L : Load}
     (h : PassesChernoff z ε N L) (hN : N ≤ N') : PassesChernoff z ε N' L :=
-  ⟨h.pow_lt, (Load.bound_anti hz h.pow_lt hN hN).trans h.bound_le⟩
+  ⟨h.one_le, h.pow_lt, (Load.bound_anti h.one_le h.pow_lt hN hN).trans h.bound_le⟩
 
-theorem geomPgf_65_64 (b : ℕ) (hb : 65 ^ b < 2 * 64 ^ b) :
-    geomPgf (65 / 64) b = (65 : ℝ) ^ b / ((2 * 64 ^ b - 65 ^ b : ℕ) : ℝ) := by
-  have h64 : (0 : ℝ) < 64 ^ b := by positivity
+/-- **The attempt generating function at a ratio of naturals**: at `z = a / c` with `a^b < 2 c^b`,
+`geomPgf z b = a^b / (2 c^b − a^b)`. -/
+theorem geomPgf_div {a c : ℕ} (hc : 0 < c) (b : ℕ) (hb : a ^ b < 2 * c ^ b) :
+    geomPgf ((a : ℝ) / c) b = (a : ℝ) ^ b / ((2 * c ^ b - a ^ b : ℕ) : ℝ) := by
+  have hcb : (0 : ℝ) < (c : ℝ) ^ b := by positivity
   rw [geomPgf, Nat.cast_sub hb.le]
   push_cast
   rw [div_pow]
   field_simp
 
-/-- **A numeric Chernoff certificate at `ε = 2^-E`**: `D` draws of at most `b` bytes pass the test
-at `z = 65/64` on streams of `N` bytes when both terms are at most `2^-(E+1)`. -/
-theorem passesChernoff_of_nat_at (E : ℕ) {b D N : ℕ} (hb : 65 ^ b < 2 * 64 ^ b)
-    (h1 : 65 ^ (b * D) * 64 ^ (N + 1) * 2 ^ (E + 1) ≤ (2 * 64 ^ b - 65 ^ b) ^ D * 65 ^ (N + 1))
+/-- **A numeric Chernoff certificate at `z = a / c` and `ε = 2^-E`**: `D` draws of at most `b`
+bytes pass the test on streams of `N` bytes when `1 ≤ a / c`, `(a / c)^b < 2` and both terms of the
+bound are at most `2^-(E+1)`. -/
+theorem passesChernoff_of_nat_at (E : ℕ) {a c b D N : ℕ} (hc : 0 < c) (hca : c ≤ a)
+    (hb : a ^ b < 2 * c ^ b)
+    (h1 : a ^ (b * D) * c ^ (N + 1) * 2 ^ (E + 1) ≤ (2 * c ^ b - a ^ b) ^ D * a ^ (N + 1))
     (h2 : D * 2 ^ (E + 1) ≤ 2 ^ N) :
-    PassesChernoff (65 / 64) ((1 / 2) ^ E) N ⟨D, b⟩ := by
-  have hpos : (0 : ℝ) < ((2 * 64 ^ b - 65 ^ b : ℕ) : ℝ) := by
-    have : 0 < 2 * 64 ^ b - 65 ^ b := by omega
+    PassesChernoff ((a : ℝ) / c) ((1 / 2) ^ E) N ⟨D, b⟩ := by
+  have hcR : (0 : ℝ) < c := by exact_mod_cast hc
+  have haR : (0 : ℝ) < a := by exact_mod_cast hc.trans_le hca
+  have hpos : (0 : ℝ) < ((2 * c ^ b - a ^ b : ℕ) : ℝ) := by
+    have : 0 < 2 * c ^ b - a ^ b := by omega
     exact_mod_cast this
-  refine ⟨?_, ?_⟩
-  · show (65 / 64 : ℝ) ^ b < 2
+  refine ⟨?_, ?_, ?_⟩
+  · rw [le_div_iff₀ hcR, one_mul]
+    exact_mod_cast hca
+  · show ((a : ℝ) / c) ^ b < 2
     rw [div_pow, div_lt_iff₀ (by positivity)]
     exact_mod_cast hb
-  · show geomPgf (65 / 64) b ^ D / (65 / 64) ^ (N + 1) + D * (1 / 2) ^ N ≤ (1 / 2) ^ E
-    rw [geomPgf_65_64 b hb]
-    have e1 : ((65 : ℝ) ^ b / ((2 * 64 ^ b - 65 ^ b : ℕ) : ℝ)) ^ D / (65 / 64) ^ (N + 1) ≤
+  · show geomPgf ((a : ℝ) / c) b ^ D / ((a : ℝ) / c) ^ (N + 1) + D * (1 / 2) ^ N ≤ (1 / 2) ^ E
+    rw [geomPgf_div hc b hb]
+    have e1 : ((a : ℝ) ^ b / ((2 * c ^ b - a ^ b : ℕ) : ℝ)) ^ D / ((a : ℝ) / c) ^ (N + 1) ≤
         (1 / 2) ^ (E + 1) := by
-      have hc : ((65 : ℝ) ^ (b * D) * 64 ^ (N + 1)) * 2 ^ (E + 1) ≤
-          ((2 * 64 ^ b - 65 ^ b : ℕ) : ℝ) ^ D * 65 ^ (N + 1) := by exact_mod_cast h1
-      have heq : ((65 : ℝ) ^ b / ((2 * 64 ^ b - 65 ^ b : ℕ) : ℝ)) ^ D / (65 / 64) ^ (N + 1) =
-          ((65 : ℝ) ^ (b * D) * 64 ^ (N + 1)) /
-            (((2 * 64 ^ b - 65 ^ b : ℕ) : ℝ) ^ D * 65 ^ (N + 1)) := by
+      have hh : ((a : ℝ) ^ (b * D) * (c : ℝ) ^ (N + 1)) * 2 ^ (E + 1) ≤
+          ((2 * c ^ b - a ^ b : ℕ) : ℝ) ^ D * (a : ℝ) ^ (N + 1) := by exact_mod_cast h1
+      have heq : ((a : ℝ) ^ b / ((2 * c ^ b - a ^ b : ℕ) : ℝ)) ^ D / ((a : ℝ) / c) ^ (N + 1) =
+          ((a : ℝ) ^ (b * D) * (c : ℝ) ^ (N + 1)) /
+            (((2 * c ^ b - a ^ b : ℕ) : ℝ) ^ D * (a : ℝ) ^ (N + 1)) := by
         rw [div_pow, div_pow, pow_mul]
         field_simp
       rw [heq, div_le_iff₀ (by positivity), one_div_pow, div_mul_eq_mul_div, one_mul,
         le_div_iff₀ (by positivity)]
-      exact hc
+      exact hh
     have e2 : (D : ℝ) * (1 / 2) ^ N ≤ (1 / 2) ^ (E + 1) := by
       rw [one_div_pow, one_div_pow, mul_one_div, div_le_div_iff₀ (by positivity) (by positivity),
         one_mul]

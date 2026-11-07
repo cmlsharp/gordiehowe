@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Generated.MDL.MLDSA44.Attrs1.QROMParams.GKR.A
+public import GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.QROMParams.GKR.A
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.A.E10.P0
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.A.E10.P1
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.A.E10.P2

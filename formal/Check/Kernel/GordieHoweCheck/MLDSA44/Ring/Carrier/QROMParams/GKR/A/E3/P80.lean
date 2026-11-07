@@ -3,9 +3,9 @@
 
 module
 
-public import GordieHowe.Generated.MLDSA44.Ring.Carrier.QROMParams.GKR.A
-meta import GordieHowe.Generated.MLDSA44.Ring.Carrier.QROMParams.GKR.A
-import all GordieHowe.Generated.MLDSA44.Ring.Carrier.QROMParams.Program
+public import GordieHoweCerts.Generated.MLDSA44.Ring.Carrier.QROMParams.GKR.A
+meta import GordieHoweCerts.Generated.MLDSA44.Ring.Carrier.QROMParams.GKR.A
+import all GordieHoweCerts.Generated.MLDSA44.Ring.Carrier.QROMParams.Program
 
 @[expose] public section
 

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Compare an export's proof modules (Valid.lean, Realize.lean, Honest.lean) with a Lean library's.
 
-EXPORT is a directory holding GordieHowe/Generated/... as the exporters write it
+EXPORT is a directory holding GordieHoweCerts/Generated/... as the exporters write it
 (a run's lean/ or an export_plans.py output's <profile>/<group>/); LEAN is the
 Lean library's root (formal/). Every proof module the Lean library has is
 compared with the export's after both drop their provenance lines (`- C++ commit:`
@@ -31,12 +31,12 @@ def main():
     parser.add_argument("--lean", type=Path, required=True)
     parser.add_argument("--diff", action="store_true")
     args = parser.parse_args()
-    lean = args.lean / "GordieHowe/Generated"
+    lean = args.lean / "GordieHoweCerts/Generated"
     exported = {}
     for root in args.export:
         for leaf in LEAVES:
-            for path in (root / "GordieHowe/Generated").rglob(leaf):
-                exported[path.relative_to(root / "GordieHowe/Generated")] = path
+            for path in (root / "GordieHoweCerts/Generated").rglob(leaf):
+                exported[path.relative_to(root / "GordieHoweCerts/Generated")] = path
     status = 0
     for leaf in LEAVES:
         for ref in sorted(lean.rglob(leaf)):

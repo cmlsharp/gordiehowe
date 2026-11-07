@@ -19,7 +19,7 @@ public import GordieHowe.Applications.Falcon512.Fields.FalconNative20Tower
 
 Ligero at an agreement threshold, with the mask test, over `F_q^20`, `q = 12289`, at the tableau the
 compiler chooses for domain A of `Falcon512.Native.QROMParams` and of `Falcon512.Ring.Native.QROMParams`
-(`GordieHowe/Generated/`): `(rate, block_enc) = (12, 3799)`,
+(`GordieHoweCerts/Generated/`): `(rate, block_enc) = (12, 3799)`,
 `(N, k) = (3258, 271)`, `t = 127`, one low-degree repetition, and the compiler's agreement threshold
 `A = 944`.
 

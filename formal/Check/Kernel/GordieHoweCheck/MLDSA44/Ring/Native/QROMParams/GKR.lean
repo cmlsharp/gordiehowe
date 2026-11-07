@@ -3,9 +3,9 @@
 
 module
 
-public import GordieHowe.Generated.MLDSA44.Ring.Native.QROMParams.Data
+public import GordieHoweCerts.Generated.MLDSA44.Ring.Native.QROMParams.Data
 public import GordieHowe.Applications.Program.Conditions
-public import GordieHowe.Generated.MLDSA44.Ring.Native.QROMParams.Pending.Small
+public import GordieHoweCerts.Generated.MLDSA44.Ring.Native.QROMParams.Pending.Small
 public import GordieHoweCheck.MLDSA44.Ring.Native.QROMParams.GKR.A.Circuit
 public import GordieHoweCheck.MLDSA44.Ring.Native.QROMParams.GKR.H.Circuit
 

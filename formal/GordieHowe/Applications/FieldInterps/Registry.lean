@@ -83,15 +83,6 @@ def InterpDesc.provide {P : FieldInterp → Sort _} (h : ∀ k : FieldKey, P k.i
   | .two k0 _ _, 0 => h k0
   | .two _ k1 _, _ + 1 => h k1
 
-/-- **A provider at every field identifier from a property of its key**: `h k hk` at each key with
-`S k`, read at the identifier's key (`hS`). -/
-def InterpDesc.provideOn {P : FieldInterp → Sort _} {S : FieldKey → Prop}
-    (h : ∀ k : FieldKey, S k → P k.interp) :
-    (D : InterpDesc) → (∀ f, S (D.key f)) → ∀ f, P (D.interp f)
-  | .one k _, hS, f => h k (hS f)
-  | .two k0 _ _, hS, 0 => h k0 (hS 0)
-  | .two _ k1 _, hS, n + 1 => h k1 (hS (n + 1))
-
 /-! ## Per key -/
 
 /-- **The packing facts of a key's field.** -/
@@ -145,22 +136,17 @@ theorem FieldKey.codeHom : (k : FieldKey) → k.interp.CodeHom k.code
   | .gold4 => gold4_codeHom.withPrime gold4Code_primeOn
   | .p256 => p256_codeHom.withPrime p256Code_primeOn
 
-/-- **A key's field has a C++ byte codec**: every key but P-256's. -/
-def FieldKey.Coded (k : FieldKey) : Prop := k ≠ .p256
-
-instance (k : FieldKey) : Decidable k.Coded := by unfold FieldKey.Coded; infer_instance
-
-/-- **The C++ byte codec and reader of a coded key's field.** -/
-def FieldKey.codec : (k : FieldKey) → k.Coded → FieldCodec k.interp
-  | .gf128, _ => ⟨16, SPBCS.Codec.FieldBytes.gf2_128, SPBCS.CReader.gf2_128⟩
-  | .gf256, _ => ⟨32, SPBCS.Codec.FieldBytes.gf2_256, SPBCS.CReader.gf2_256⟩
-  | .fq6, _ => ⟨18, SPBCS.Codec.FieldBytes.mldsaNative, SPBCS.CReader.mldsaNative⟩
-  | .fq9, _ => ⟨18, SPBCS.Codec.FieldBytes.falconNative, SPBCS.CReader.falconNative⟩
-  | .fq11, _ => ⟨32, SPBCS.Codec.FieldBytes.mldsaNative11, SPBCS.CReader.mldsaNative11⟩
-  | .fq20, _ => ⟨35, SPBCS.Codec.FieldBytes.falconNative20, SPBCS.CReader.falconNative20⟩
-  | .gold2, _ => ⟨16, SPBCS.Codec.FieldBytes.goldilocksExt2, SPBCS.CReader.goldilocksExt2⟩
-  | .gold4, _ => ⟨32, SPBCS.Codec.FieldBytes.goldilocksExt4, SPBCS.CReader.goldilocksExt4⟩
-  | .p256, h => absurd rfl h
+/-- **The C++ byte codec and reader of a key's field.** -/
+def FieldKey.codec : (k : FieldKey) → FieldCodec k.interp
+  | .gf128 => ⟨16, SPBCS.Codec.FieldBytes.gf2_128, SPBCS.CReader.gf2_128⟩
+  | .gf256 => ⟨32, SPBCS.Codec.FieldBytes.gf2_256, SPBCS.CReader.gf2_256⟩
+  | .fq6 => ⟨18, SPBCS.Codec.FieldBytes.mldsaNative, SPBCS.CReader.mldsaNative⟩
+  | .fq9 => ⟨18, SPBCS.Codec.FieldBytes.falconNative, SPBCS.CReader.falconNative⟩
+  | .fq11 => ⟨32, SPBCS.Codec.FieldBytes.mldsaNative11, SPBCS.CReader.mldsaNative11⟩
+  | .fq20 => ⟨35, SPBCS.Codec.FieldBytes.falconNative20, SPBCS.CReader.falconNative20⟩
+  | .gold2 => ⟨16, SPBCS.Codec.FieldBytes.goldilocksExt2, SPBCS.CReader.goldilocksExt2⟩
+  | .gold4 => ⟨32, SPBCS.Codec.FieldBytes.goldilocksExt4, SPBCS.CReader.goldilocksExt4⟩
+  | .p256 => ⟨32, SPBCS.Codec.FieldBytes.p256, SPBCS.CReader.p256⟩
 
 /-- **The branch name of a key's field**: the C++ field name. -/
 def FieldKey.name : FieldKey → String
@@ -235,54 +221,35 @@ theorem packing_nodes (f : ℕ) : (D.packing f).nodes.isSome = true := by
 theorem card (f : ℕ) : Fintype.card (D.interp f).K = D.interp.specCard f :=
   (D.models f).card
 
-/-- **Every field has a byte codec**: no field is P-256's. -/
-def Coded : Prop := ∀ f, (D.key f).Coded
+/-- **The byte codec and reader of every field.** -/
+def codec : ∀ f, FieldCodec (D.interp f) := D.provide FieldKey.codec
 
-/-- **Every field has a byte codec**, as a test. -/
-def codedB : InterpDesc → Bool
-  | .one k _ => decide k.Coded
-  | .two k0 k1 _ => decide k0.Coded && decide k1.Coded
+/-- **The bytes of the fields' elements.** -/
+def bytes : FieldBytesOf D.interp where
+  fb f := (D.codec f).fb
+  bytes f := (D.codec f).FB
 
-/-- **The test gives the codecs.** -/
-theorem coded_of_codedB {D : InterpDesc} (h : D.codedB = true) : D.Coded := by
-  intro f
-  cases D with
-  | one k o => exact of_decide_eq_true h
-  | two k0 k1 o =>
-    simp only [codedB, Bool.and_eq_true, decide_eq_true_eq] at h
-    cases f with
-    | zero => exact h.1
-    | succ n => exact h.2
-
-/-- **The byte codec and reader of every field of a coded descriptor.** -/
-def codec (h : D.Coded) : ∀ f, FieldCodec (D.interp f) := D.provideOn FieldKey.codec h
-
-/-- **The bytes of the fields' elements** of a coded descriptor. -/
-def bytes (h : D.Coded) : FieldBytesOf D.interp where
-  fb f := (D.codec h f).fb
-  bytes f := (D.codec h f).FB
-
-/-- **The C++ readers of the fields' elements** of a coded descriptor. -/
-def reader (h : D.Coded) (f : ℕ) : SPBCS.CReader (D.interp f).K := (D.codec h f).rd
+/-- **The C++ readers of the fields' elements.** -/
+def reader (f : ℕ) : SPBCS.CReader (D.interp f).K := (D.codec f).rd
 
 /-! ## The registry's numbers -/
 
 /-- **The bytes of an element are the numeral.** -/
-theorem fb_eq (h : D.Coded) (f : ℕ) : (D.codec h f).fb = D.fbN f := by
-  have key : ∀ (k : FieldKey) (hk : k.Coded), (k.codec hk).fb = k.fbN := by
-    intro k hk; cases k <;> first | rfl | exact absurd rfl hk
+theorem fb_eq (f : ℕ) : (D.codec f).fb = D.fbN f := by
+  have key : ∀ k : FieldKey, k.codec.fb = k.fbN := by
+    intro k; cases k <;> rfl
   cases D with
-  | one k o => exact key k (h f)
+  | one k o => exact key k
   | two k0 k1 o => cases f with
-    | zero => exact key k0 (h 0)
-    | succ n => exact key k1 (h (n + 1))
+    | zero => exact key k0
+    | succ n => exact key k1
 
 /-- **The challenge reader's load is the numeral.** -/
-theorem load_eq (h : D.Coded) (f : ℕ) :
-    (D.reader h f).load.draws = (D.loadN f).1 ∧ (D.reader h f).load.bytes = (D.loadN f).2 := by
-  have key : ∀ (k : FieldKey) (hk : k.Coded),
-      (k.codec hk).rd.load.draws = k.loadN.1 ∧ (k.codec hk).rd.load.bytes = k.loadN.2 := by
-    intro k hk
+theorem load_eq (f : ℕ) :
+    (D.reader f).load.draws = (D.loadN f).1 ∧ (D.reader f).load.bytes = (D.loadN f).2 := by
+  have key : ∀ k : FieldKey,
+      k.codec.rd.load.draws = k.loadN.1 ∧ k.codec.rd.load.bytes = k.loadN.2 := by
+    intro k
     cases k
     · exact ⟨rfl, rfl⟩
     · exact ⟨rfl, rfl⟩
@@ -302,17 +269,19 @@ theorem load_eq (h : D.Coded) (f : ℕ) :
     · change SPBCS.CReader.goldilocksExt4.load.draws = 4 ∧
         SPBCS.CReader.goldilocksExt4.load.bytes = 8
       decide +kernel
-    · exact absurd rfl hk
+    · change SPBCS.CReader.p256.load.draws = 1 ∧ SPBCS.CReader.p256.load.bytes = 32
+      rw [SPBCS.CReader.p256_load]
+      exact ⟨rfl, rfl⟩
   cases D with
-  | one k o => exact key k (h f)
+  | one k o => exact key k
   | two k0 k1 o => cases f with
-    | zero => exact key k0 (h 0)
-    | succ n => exact key k1 (h (n + 1))
+    | zero => exact key k0
+    | succ n => exact key k1
 
 /-- **The challenge reader grants no stream.** -/
-theorem grant_eq (h : D.Coded) (f : ℕ) : (D.reader h f).grant = D.grantN f := by
-  have key : ∀ (k : FieldKey) (hk : k.Coded), (k.codec hk).rd.grant = k.grantN := by
-    intro k hk
+theorem grant_eq (f : ℕ) : (D.reader f).grant = D.grantN f := by
+  have key : ∀ k : FieldKey, k.codec.rd.grant = k.grantN := by
+    intro k
     cases k
     · change SPBCS.CReader.gf2_128.grant = 0; decide +kernel
     · change SPBCS.CReader.gf2_256.grant = 0; decide +kernel
@@ -322,12 +291,12 @@ theorem grant_eq (h : D.Coded) (f : ℕ) : (D.reader h f).grant = D.grantN f := 
     · change SPBCS.CReader.falconNative20.grant = 0; decide +kernel
     · change SPBCS.CReader.goldilocksExt2.grant = 0; decide +kernel
     · change SPBCS.CReader.goldilocksExt4.grant = 0; decide +kernel
-    · exact absurd rfl hk
+    · change SPBCS.CReader.p256.grant = 0; decide +kernel
   cases D with
-  | one k o => exact key k (h f)
+  | one k o => exact key k
   | two k0 k1 o => cases f with
-    | zero => exact key k0 (h 0)
-    | succ n => exact key k1 (h (n + 1))
+    | zero => exact key k0
+    | succ n => exact key k1
 
 /-- The interpretation selects the full numeric specification at its descriptor's field key. -/
 theorem spec_eq (f : ℕ) : (D.interp f).spec = (D.key f).specN := by

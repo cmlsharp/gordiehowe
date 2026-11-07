@@ -27,6 +27,12 @@
 //     the same instances may be merged as sum_i gamma^i Q_i. Its first
 //     round is evaluated generically in F, and its row's part on the table
 //     words is one form, opened from the subfield's node.
+//   - MergedOperands<F>: several single-relation realizations of the same
+//     instances (bit parts, say) merged as sum_i gamma^i Q_i. Its first
+//     round runs each part's kernel and sums the skip values with gamma's
+//     powers; its row's part on the table words is the parts' forms side
+//     by side.
+// A merged batch draws gamma with the zerocheck's first challenges.
 
 #ifndef PRIVACY_PROOFS_ZK_LIB_GORDIEHOWE_COMPILER_BATCH_H_
 #define PRIVACY_PROOFS_ZK_LIB_GORDIEHOWE_COMPILER_BATCH_H_
@@ -38,6 +44,8 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -214,6 +222,8 @@ class BatchKernel {
 
   size_t words() const { return ops_->words(); }
   bool bit_operands() const { return ops_->bit_operands(); }
+  // The relations merged as sum_i gamma^i Q_i (one when not merged).
+  size_t relations() const { return ops_->relations(); }
   std::vector<size_t> public_nodes() const { return ops_->public_nodes(); }
   size_t word_degree() const { return ops_->word_degree(); }
   // The skip polynomial's D (w - 1) + 1 points.
@@ -362,65 +372,41 @@ class BatchKernel {
     using X = PhaseExpr<F>;
     const size_t pad0 = skip_.layout.count;
     const size_t at0 = skip_.message_elts();
+    constexpr CoordShape kShape = BitPhaseShape::kShape;
     // The opening claim C = sum_j u_j (m_j - P_j) - constant. The constant
     // comes with the word weights after the rounds; each round scales the
-    // claim by L1, so CC is its coefficient in the claim so far.
+    // claim by L1, so its coefficient in the output claim is minus the
+    // rounds' CC.
     X claim{f.zero(), {}};
     for (unsigned j = 0; j < skip.K; ++j)
       claim.add(f, X::scaled(f, X::message(f, ctx.terminal[j],
                                            pad_at + skip.layout.terminal + j),
                              ctx.u[j]));
-    Elt cc = f.mone();
-    t.write(reinterpret_cast<const uint8_t *>(BitPhaseShape::kLabel),
-            sizeof(BitPhaseShape::kLabel) - 1);
-    std::unique_ptr<BitPhaseProver<F>> prover;
+    std::unique_ptr<CoordSumcheckProver<F>> prover;
     if (words != nullptr) {
       profiling::Scope sc("batch.bitphase.tables");
       std::vector<Elt> sigma, g;
       ops_->bit_phase_tables(skip, ctx, *words, sigma, g);
-      prover = std::make_unique<BitPhaseProver<F>>(f, std::move(sigma),
-                                                   std::move(g));
+      prover = std::make_unique<CoordSumcheckProver<F>>(
+          f, kShape, std::move(sigma), std::move(g));
     }
     auto rounds_scope =
         std::make_unique<profiling::Scope>("batch.bitphase.rounds");
-    std::vector<Elt> rho(BitPhaseShape::kRounds);
-    for (size_t i = 0; i < BitPhaseShape::kRounds; ++i) {
-      std::array<Elt, 2> m;
-      if (prover) {
-        m = prover->message();
-        // Tests only: the round's two pads swapped (Tamper::swap_round).
-        const bool swap = swap_round == int(i);
-        for (size_t d = 0; d < 2; ++d) {
-          f.add(m[d], pads[pad0 + 2 * i + (swap ? 1 - d : d)]);
-          if (!delta.empty()) f.add(m[d], delta[2 * i + d]);
-          messages.push_back(m[d]);
-        }
-      } else {
-        m = {messages[at0 + 2 * i], messages[at0 + 2 * i + 1]};
-      }
-      t.write(m.data(), 1, 2, f);
-      rho[i] = skip.challenge(t);
-      if (prover) prover->bind(rho[i]);
-      // p(1) = claim - p(0); claim' = L0 p(0) + L1 p(1) + L2 p(g).
-      const auto l = phase_lagrange(f, rho[i]);
-      const X p0 = X::message(f, m[0], pad_at + pad0 + 2 * i);
-      const X pg = X::message(f, m[1], pad_at + pad0 + 2 * i + 1);
-      X next = X::scaled(f, claim, l[1]);
-      next.add(f, X::scaled(f, p0, f.subf(l[0], l[1])));
-      next.add(f, X::scaled(f, pg, l[2]));
-      claim = std::move(next);
-      f.mul(cc, l[1]);
-    }
+    CoordRounds<F> r = coord_sumcheck_rounds(
+        f, t, kShape,
+        std::string_view(BitPhaseShape::kLabel,
+                         sizeof(BitPhaseShape::kLabel) - 1),
+        std::move(claim), prover.get(),
+        pads != nullptr ? pads + pad0 : nullptr, pad_at + pad0, messages,
+        at0, delta, swap_round,
+        [&skip](Transcript &tr) { return skip.challenge(tr); });
     rounds_scope.reset();
+    claim = std::move(r.claim);
+    const Elt cc = f.negf(r.cc);
     // The word weights alpha at eq(rho, .) and the constant, then the
     // claim's forms on the bit stage.
     auto forms_scope = std::make_unique<profiling::Scope>("batch.forms");
-    const size_t kW = size_t(1) << BitPhaseShape::kLogW;
-    std::vector<Elt> eq(kW);
-    {
-      Eqs<F> e(BitPhaseShape::kLogW, kW, rho.data(), f);
-      for (size_t b = 0; b < kW; ++b) eq[b] = e.at(b);
-    }
+    const std::vector<Elt> eq = coord_eq(f, kShape, r.rho);
     BitForms<F> alpha = ops_->word_weights(skip, ctx, pub, eq);
     forms_scope.reset();
     f.add(claim.known, f.mulf(cc, alpha.constant));
@@ -429,12 +415,12 @@ class BatchKernel {
     // materializes its 16 forms instead.
     auto pc_scope = std::make_unique<profiling::Scope>("batch.product_claim");
     auto pc = std::make_shared<ProductClaim<F>>(
-        product_claim(f, std::move(alpha.a), eq, ops_->bit_dual()));
+        bit_product_claim(f, std::move(alpha.a), eq, ops_->bit_dual()));
     pc_scope.reset();
     std::shared_ptr<const BitForms<F>> forms;
     if (test_switches().bit_phase_bridge) {
       profiling::Scope sc("batch.bitphase.forms");
-      forms = std::make_shared<BitForms<F>>(phase_forms(f, *pc));
+      forms = std::make_shared<BitForms<F>>(product_forms(f, *pc));
       pc.reset();
     }
     // The opening row: the claim on the bits equals claim_4, its pads'
@@ -1111,6 +1097,362 @@ class FieldOperands final : public BatchOperands<F> {
   size_t word_degree_;
 };
 
+// ---------------------------------------------------- merged realization --
+
+// The first round of a merged batch: each part's first round on its own
+// operands, the skip values sum_i gamma^i S_i and the bound operands
+// concatenated in part order. Each S_i is linear in its relation, so the
+// sum is the skip polynomial of sum_i gamma^i Q_i, and each part keeps its
+// own kernel (a bit part its bit-sliced one). A part of degree D_i below
+// the batch's D sends S_i at its own points w .. D_i (w - 1); S_i has degree
+// D_i (w - 1) and is zero on the w-point zero domain (each instance
+// satisfies Q_i), so its values at the batch's further points are its
+// interpolation from those D_i (w - 1) + 1 points.
+template <class F>
+class MergedSkipOperands final : public SkipOperands<F> {
+ public:
+  using Elt = typename F::Elt;
+  using Skip = MaskedFieldSkip<F>;
+  using Table = typename SkipOperands<F>::Table;
+  // SKIPS[i]: part i's skip (its relation at gamma = 1); WEIGHTS[i] =
+  // gamma^i.
+  MergedSkipOperands(std::vector<const Skip *> skips,
+                     std::vector<std::unique_ptr<SkipOperands<F>>> parts,
+                     std::vector<Elt> weights)
+      : skips_(std::move(skips)), parts_(std::move(parts)),
+        weights_(std::move(weights)) {}
+  std::vector<Elt> skip_values(const Skip &sk,
+                               const std::vector<Elt> &e) const override {
+    const F &f = sk.f;
+    const unsigned w = sk.dom.width();
+    std::vector<Elt> out(sk.extra(), f.zero());
+    for (size_t i = 0; i < parts_.size(); ++i) {
+      const Skip &pk = *skips_[i];
+      const std::vector<Elt> v = parts_[i]->skip_values(pk, e);
+      check(v.size() == pk.extra(), "merged batch: a part's skip values");
+      // The part's points w .. D_i (w - 1), then its interpolation.
+      const unsigned n = pk.dom.points();
+      for (size_t j = 0; j < out.size(); ++j) {
+        Elt x;
+        if (j < v.size()) {
+          x = v[j];
+        } else {
+          const auto l = sk.dom.basis(f, n, sk.dom.point(unsigned(w + j)));
+          x = f.zero();
+          for (size_t q = 0; q < v.size(); ++q) f.add(x, f.mulf(l[w + q], v[q]));
+        }
+        f.add(out[j], f.mulf(weights_[i], x));
+      }
+    }
+    return out;
+  }
+  // Part i's tables at operands off_i .. off_i + K_i - 1 of OUT (each
+  // part's binds into OUT's own tables, which keep their capacity).
+  void bind_into(const Skip &sk, const Elt &r,
+                 std::vector<Table> &out) const override {
+    out.resize(sk.K);
+    size_t off = 0;
+    std::vector<Table> part;
+    for (size_t i = 0; i < parts_.size(); ++i) {
+      const unsigned k = skips_[i]->K;
+      part.resize(k);
+      for (unsigned j = 0; j < k; ++j) std::swap(part[j], out[off + j]);
+      parts_[i]->bind_into(*skips_[i], r, part);
+      check(part.size() == k, "merged batch: a part's bound operands");
+      for (unsigned j = 0; j < k; ++j) std::swap(part[j], out[off + j]);
+      off += k;
+    }
+    check(off == sk.K, "merged batch: the bound operands");
+  }
+
+ private:
+  std::vector<const Skip *> skips_;
+  std::vector<std::unique_ptr<SkipOperands<F>>> parts_;
+  std::vector<Elt> weights_;
+};
+
+// Why PARTS, single-relation realizations, cannot merge into one batch, or
+// "": they must have the same operand kind, word degree and instances.
+template <class F>
+std::string merged_batch_error(
+    const std::vector<std::shared_ptr<const BatchOperands<F>>> &parts) {
+  if (parts.empty()) return "a merged batch has no part";
+  for (const auto &p : parts) {
+    if (p == nullptr) return "a merged batch's part has no realization";
+    if (p->relations() != 1) return "a merged batch's part is merged";
+    if (p->bit_operands() != parts[0]->bit_operands())
+      return "a merged batch's parts read bits and field elements";
+    if (p->word_degree() != parts[0]->word_degree())
+      return "a merged batch's parts read words of degrees " +
+             std::to_string(parts[0]->word_degree()) + " and " +
+             std::to_string(p->word_degree());
+    if (p->instances() != parts[0]->instances())
+      return "a merged batch's parts have " +
+             std::to_string(parts[0]->instances()) + " and " +
+             std::to_string(p->instances()) + " instances";
+  }
+  return "";
+}
+
+// Several relations on the same instances, each a single-relation
+// realization (BitOperands, FieldOperands, ...), merged into one zerocheck
+// of sum_i gamma^i Q_i over the concatenated operands (merged_batch_error
+// holds). Part i reads its own words, the parts' words concatenated in
+// order. The first round runs each part's kernel and combines them
+// (MergedSkipOperands); the rounds after it evaluate the merged relation
+// on the bound operands. The terminal operand claims, combined by u, are
+// the sum of the parts' claims on their words: one opening row, its forms
+// the parts' forms side by side (the W Frobenius trace forms of bit parts,
+// one form of field parts), and with the bit phase the parts' word weights
+// and weight classes side by side.
+template <class F>
+class MergedOperands final : public BatchOperands<F> {
+ public:
+  using Elt = typename F::Elt;
+  using Skip = MaskedFieldSkip<F>;
+  using Part = std::shared_ptr<const BatchOperands<F>>;
+
+  // SPACES[i]: the operand spaces of part i (BatchPublics' indices), the
+  // parts' numbered in order; empty when no part reads a public value.
+  MergedOperands(const F &f, std::vector<Part> parts, unsigned width,
+                 std::vector<size_t> spaces = {})
+      : f_(f), parts_(std::move(parts)), spaces_(std::move(spaces)) {
+    const std::string e = merged_batch_error(parts_);
+    check(e.empty(), e.c_str());
+    check(spaces_.empty() || spaces_.size() == parts_.size(),
+          "a merged batch's spaces");
+    for (size_t i = 0; i < parts_.size(); ++i)
+      check(spaces_.empty() ? parts_[i]->public_nodes().empty()
+                            : parts_[i]->public_nodes().empty() ||
+                                  parts_[i]->public_nodes().size() ==
+                                      spaces_[i],
+            "a merged batch's part reads public values of no space");
+    for (const auto &p : parts_) {
+      rels_.push_back(p->relation(f.one()));
+      check(!rels_.back().monomials.empty() &&
+                rels_.back().monomials[0].coeff != f.zero(),
+            "a merged batch's part has no leading coefficient");
+      skips_.push_back(std::make_unique<Skip>(f, rels_.back(),
+                                              p->instances(), width));
+    }
+  }
+
+  size_t words() const override {
+    size_t n = 0;
+    for (const auto &p : parts_) n += p->words();
+    return n;
+  }
+  size_t word_degree() const override { return parts_[0]->word_degree(); }
+  bool bit_operands() const override { return parts_[0]->bit_operands(); }
+  size_t instances() const override { return parts_[0]->instances(); }
+  size_t relations() const override { return parts_.size(); }
+  FieldRelation<F> relation(const Elt &gamma) const override {
+    const F &f = f_;
+    FieldRelation<F> out;
+    Elt g = f.one();
+    unsigned off = 0;
+    for (const auto &r : rels_) {
+      out.name += (out.name.empty() ? "" : "+") + r.name;
+      for (const auto &m : r.monomials) {
+        typename FieldRelation<F>::Monomial mm{f.mulf(g, m.coeff), {}};
+        for (unsigned j : m.ops) mm.ops.push_back(j + off);
+        out.monomials.push_back(std::move(mm));
+      }
+      off += r.operands;
+      f.mul(g, gamma);
+    }
+    out.operands = off;
+    return out;
+  }
+  void describe(std::vector<uint8_t> &out, unsigned width) const override {
+    put_str(out, "merged-skip");
+    put_u64(out, parts_.size());
+    for (const auto &p : parts_) p->describe(out, width);
+  }
+  std::string report(const Skip &sk, size_t pads,
+                     size_t message_elts) const override {
+    std::string names;
+    for (const auto &r : rels_)
+      names += (names.empty() ? "" : " + gamma ") + r.name;
+    std::string r = "merged skip: " + names + ", degree " +
+                    std::to_string(sk.D) + " in " + std::to_string(sk.K) +
+                    " operands, " + std::to_string(sk.layout.logs) +
+                    " rounds, " + std::to_string(pads) + " pads, " +
+                    std::to_string(message_elts) + " message elements; parts:";
+    for (size_t i = 0; i < parts_.size(); ++i)
+      r += (i ? "; " : " ") +
+           parts_[i]->report(*skips_[i], skips_[i]->layout.count,
+                             skips_[i]->message_elts());
+    return r;
+  }
+  size_t shape_instances() const override {
+    return parts_[0]->shape_instances();
+  }
+  std::vector<std::string> parts() const override {
+    std::vector<std::string> out;
+    for (const auto &p : parts_)
+      for (auto &n : p->parts()) out.push_back(std::move(n));
+    return out;
+  }
+  // The parts' public nodes, by the parts' spaces in order.
+  std::vector<size_t> public_nodes() const override {
+    std::vector<size_t> out;
+    bool any = false;
+    for (size_t i = 0; i < parts_.size() && !spaces_.empty(); ++i) {
+      auto p = parts_[i]->public_nodes();
+      any = any || !p.empty();
+      p.resize(spaces_[i], SIZE_MAX);
+      out.insert(out.end(), p.begin(), p.end());
+    }
+    return any ? out : std::vector<size_t>{};
+  }
+
+  // Each part's first round on its words; gamma^i read off the merged
+  // relation SK proves (part i's leading monomial over its own).
+  std::unique_ptr<SkipOperands<F>> first_round(
+      const Skip &sk, const std::vector<Elt> &words,
+      const BatchPublics<F> &pub, BatchScratch<F> *) const override {
+    const F &f = f_;
+    check(words.size() == this->words(), "merged batch: table words");
+    std::vector<const Skip *> skips;
+    std::vector<std::unique_ptr<SkipOperands<F>>> ops;
+    std::vector<Elt> weights;
+    size_t at = 0, mono = 0;
+    for (size_t i = 0; i < parts_.size(); ++i) {
+      const size_t n = parts_[i]->words();
+      const std::vector<Elt> w(words.begin() + long(at),
+                               words.begin() + long(at + n));
+      ops.push_back(
+          parts_[i]->first_round(*skips_[i], w, part_pub(pub, i), nullptr));
+      skips.push_back(skips_[i].get());
+      weights.push_back(f.mulf(sk.rel.monomials.at(mono).coeff,
+                               f.invertf(rels_[i].monomials[0].coeff)));
+      at += n;
+      mono += rels_[i].monomials.size();
+    }
+    check(mono == sk.rel.monomials.size(), "merged batch: the relation");
+    return std::make_unique<MergedSkipOperands<F>>(
+        std::move(skips), std::move(ops), std::move(weights));
+  }
+  // sum_i (part i's claims combined by its u): the parts' forms side by
+  // side on the concatenated words.
+  BitForms<F> forms(const Skip &, const typename Skip::Context &ctx,
+                    const BatchPublics<F> &pub) const override {
+    std::vector<BitForms<F>> fs;
+    for (size_t i = 0; i < parts_.size(); ++i)
+      fs.push_back(
+          parts_[i]->forms(*skips_[i], part_ctx(ctx, i), part_pub(pub, i)));
+    return side_by_side(fs);
+  }
+  OpCounts lane_work(unsigned width) const override {
+    OpCounts c;
+    for (const auto &p : parts_) {
+      const OpCounts x = p->lane_work(width);
+      c.lane_lookup += x.lane_lookup;
+      c.lane_mul += x.lane_mul;
+      c.lane_term += x.lane_term;
+    }
+    return c;
+  }
+  SkipKind skip_kind() const override { return parts_[0]->skip_kind(); }
+  void map_work(unsigned width) const override {
+    for (const auto &p : parts_) p->map_work(width);
+  }
+
+  bool bit_phase_supported() const override {
+    for (const auto &p : parts_)
+      if (!p->bit_phase_supported()) return false;
+    return true;
+  }
+  void prepare_bit_phase() const override {
+    for (const auto &p : parts_) p->prepare_bit_phase();
+  }
+  BitForms<F> word_weights(const Skip &, const typename Skip::Context &ctx,
+                           const BatchPublics<F> &pub,
+                           const std::vector<Elt> &eq) const override {
+    std::vector<BitForms<F>> fs;
+    for (size_t i = 0; i < parts_.size(); ++i)
+      fs.push_back(parts_[i]->word_weights(*skips_[i], part_ctx(ctx, i),
+                                           part_pub(pub, i), eq));
+    return side_by_side(fs);
+  }
+  // The parts' weight classes, in part order: h sums over every class.
+  void bit_phase_tables(const Skip &, const typename Skip::Context &ctx,
+                        const std::vector<Elt> &words, std::vector<Elt> &sigma,
+                        std::vector<Elt> &g) const override {
+    sigma.clear();
+    g.clear();
+    size_t at = 0;
+    for (size_t i = 0; i < parts_.size(); ++i) {
+      const size_t n = parts_[i]->words();
+      const std::vector<Elt> w(words.begin() + long(at),
+                               words.begin() + long(at + n));
+      std::vector<Elt> s, h;
+      parts_[i]->bit_phase_tables(*skips_[i], part_ctx(ctx, i), w, s, h);
+      sigma.insert(sigma.end(), s.begin(), s.end());
+      g.insert(g.end(), h.begin(), h.end());
+      at += n;
+    }
+  }
+  std::vector<Elt> bit_dual() const override { return parts_[0]->bit_dual(); }
+
+ private:
+  // Part I's public values: its spaces' of PUB.
+  BatchPublics<F> part_pub(const BatchPublics<F> &pub, size_t i) const {
+    BatchPublics<F> out;
+    if (spaces_.empty()) return out;
+    size_t at = 0;
+    for (size_t j = 0; j < i; ++j) at += spaces_[j];
+    for (size_t s = at; s < at + spaces_[i]; ++s)
+      out.values.push_back(s < pub.values.size() ? pub.values[s] : nullptr);
+    return out;
+  }
+  // Part I's view of the terminal claims: the point, and its operands'
+  // values and combination.
+  typename Skip::Context part_ctx(const typename Skip::Context &ctx,
+                                  size_t i) const {
+    size_t off = 0;
+    for (size_t j = 0; j < i; ++j) off += rels_[j].operands;
+    const size_t k = rels_[i].operands;
+    typename Skip::Context c;
+    c.r = ctx.r;
+    c.s = ctx.s;
+    c.u.assign(ctx.u.begin() + long(off), ctx.u.begin() + long(off + k));
+    c.terminal.assign(ctx.terminal.begin() + long(off),
+                      ctx.terminal.begin() + long(off + k));
+    return c;
+  }
+  // Forms on each part's words, side by side on the concatenated words
+  // (form k of part i at k * words() + its first word); the constants
+  // summed.
+  BitForms<F> side_by_side(const std::vector<BitForms<F>> &fs) const {
+    const F &f = f_;
+    const size_t n = words();
+    const size_t forms = fs[0].stride ? fs[0].a.size() / fs[0].stride : 0;
+    BitForms<F> out{std::vector<Elt>(forms * n, f.zero()), f.zero(), n};
+    size_t at = 0;
+    for (size_t i = 0; i < fs.size(); ++i) {
+      const auto &x = fs[i];
+      check(x.stride == parts_[i]->words() &&
+                x.a.size() == forms * x.stride,
+            "merged batch: a part's forms");
+      for (size_t k = 0; k < forms; ++k)
+        std::copy(x.a.begin() + long(k * x.stride),
+                  x.a.begin() + long((k + 1) * x.stride),
+                  out.a.begin() + long(k * n + at));
+      f.add(out.constant, x.constant);
+      at += x.stride;
+    }
+    return out;
+  }
+
+  const F &f_;
+  std::vector<Part> parts_;
+  std::vector<size_t> spaces_;
+  std::vector<FieldRelation<F>> rels_;
+  std::vector<std::unique_ptr<Skip>> skips_;
+};
+
 // Why PARTS at skip WIDTH are no field batch of F, or "".
 template <class F>
 std::string field_batch_error(const F &f,
@@ -1150,6 +1492,42 @@ std::shared_ptr<const BatchOperands<F>> bit_batch_operands(
     const F &f, std::shared_ptr<const BitOperandMap<F, R, W>> map,
     unsigned width) {
   return std::make_shared<BitOperands<F, R, W>>(f, std::move(map), width);
+}
+
+// One relation of a merged bit batch: a relation tag R on the bits a
+// BitOperandMap reads (bit_batch_part), realized at the batch's skip width.
+template <class F>
+struct BitBatchPart {
+  // Why R has no realization at a skip width, or "" (relation_error<R>).
+  std::function<std::string(unsigned)> error;
+  std::function<std::shared_ptr<const BatchOperands<F>>(const F &, unsigned)>
+      make;
+};
+template <class F, class R, class Map>
+BitBatchPart<F> bit_batch_part(std::shared_ptr<const Map> map) {
+  constexpr size_t W = Map::kWordBits;
+  static_assert(std::is_base_of_v<BitOperandMap<F, R, W>, Map>,
+                "a bit batch part takes a BitOperandMap<F, R, W>");
+  std::shared_ptr<const BitOperandMap<F, R, W>> m = std::move(map);
+  return {[](unsigned width) { return relation_error<R>(width); },
+          [m](const F &f, unsigned width) {
+            return bit_batch_operands<F, R, W>(f, m, width);
+          }};
+}
+// The merged operands of bit PARTS at skip WIDTH, or null with ERROR set.
+template <class F>
+std::shared_ptr<const BatchOperands<F>> merged_bit_batch_operands(
+    const F &f, const std::vector<BitBatchPart<F>> &parts, unsigned width,
+    std::string &error) {
+  std::vector<std::shared_ptr<const BatchOperands<F>>> ops;
+  for (const auto &p : parts) {
+    error = p.error(width);
+    if (!error.empty()) return nullptr;
+    ops.push_back(p.make(f, width));
+  }
+  error = merged_batch_error(ops);
+  if (!error.empty()) return nullptr;
+  return std::make_shared<MergedOperands<F>>(f, std::move(ops), width);
 }
 
 // The batch of PARTS (field_batch_error holds) on words of degree

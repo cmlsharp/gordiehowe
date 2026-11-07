@@ -137,7 +137,7 @@ def adversaryTypes : List Name :=
     ``GordieHowe.Quantum.OracleAlg, ``GordieHowe.Quantum.MixedAlg, ``GordieHowe.SPBCS.SimExtractionAdversary,
     ``GordieHowe.SPBCS.WIAdversary, ``GordieHowe.ROM.Alg, ``GordieHowe.ROM.Adversary,
     ``GordieHowe.Ring.ExtractionForger, ``GordieHowe.Ring.RingAdversary, ``GordieHowe.Ring.PubAnonAdversary,
-    ``GordieHowe.Ring.KeyedAnonAdversary, ``GordieHowe.Ring.MaskedSigner.QAdversary]
+    ``GordieHowe.Ring.KeyedAnonAdversary]
 
 /-- **Constructions on adversaries that are not reductions**, each with the reason: the
 translations that define the semantics of the model and the
@@ -193,10 +193,6 @@ def notReductions : List (Name × String) :=
       same outcome law for an adversary within its budget (`WithinBudget.outLaw_compose_abortAlg`)"),
     (`GordieHowe.Quantum.Alg.halting, "the same algorithm with a halting flag, an equivalent form"),
     (`GordieHowe.Quantum.QueryAlg.mapOut, "the same algorithm with its output relabelled"),
-    (`GordieHowe.Quantum.QueryAlg.withOut, "the same algorithm with its output read from the work \
-      register by another function"),
-    (`GordieHowe.Ring.MaskedSigner.QAdversary.entryAlg, "the quantum adversary's algorithm at one \
-      input with its output read as an entry of a table, the same algorithm"),
     (`GordieHowe.Quantum.QueryAlg.toOracleAlg, "the same algorithm as an oracle algorithm of AHU19"),
     (`GordieHowe.Quantum.OracleAlg.relabel, "the same algorithm on relabelled basis states"),
     (`GordieHowe.Quantum.O2HSetting.dilAlg, "the dilation of a mixed algorithm in the O2H statement, \

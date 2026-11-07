@@ -3338,6 +3338,8 @@ std::vector<EmitExport> emit_tables(const BasicCompiledSystem<S> &cs,
                     static_cast<unsigned long long>(ghc::fnv1a(bytes)));
       const std::string mod = lean_module_name(meta, "GKR." + d.name);
       const std::string prog = lean_module_name(meta, "Program");
+      const std::string ns = lean_namespace(meta, "GKR." + d.name);
+      const std::string prog_ns = lean_namespace(meta, "Program");
       const std::string head = std::string(kLeanLicenseHeader) + "module\n\n";
       std::string arith = "(" + ar.ar + ")";
       if (fast) arith += ".withPrime " + fd.characteristic;
@@ -3359,14 +3361,14 @@ std::vector<EmitExport> emit_tables(const BasicCompiledSystem<S> &cs,
              "circuit entry its block, assertion pairs and family record.\n\n";
         o += "- C++ commit: `" + meta.cpp_commit + "`\n";
         o += "- bench run: `" + meta.run_id + "`\n-/\n\n";
-        o += "namespace " + mod + "\n\n";
+        o += "namespace " + ns + "\n\n";
         o += "open GordieHowe GordieHowe.RealizedProgram GordieHowe.GKR.Certificate "
              "GordieHowe.GKR.Fold GordieHowe.GKR.Rel\n";
-        o += "open " + prog + "\n\n";
+        o += "open " + prog_ns + "\n\n";
         o += "/-- The code arithmetic of the circuit's field. -/\n";
         o += "def ar : CodeArith := " + arith + "\n\n";
         o += "load_ghc \"" + d.name + ".ghc\" \"" + hash + "\"\n\n";
-        o += "end " + mod + "\n";
+        o += "end " + ns + "\n";
         ex.modules.emplace_back("GKR/" + d.name + ".lean", std::move(o));
       }
       // The entries' modules, by the check plan: an entry over the module
@@ -3397,9 +3399,9 @@ std::vector<EmitExport> emit_tables(const BasicCompiledSystem<S> &cs,
           o += "@[expose] public section\n\n";
           o += "/-! The relational check of " + what + " of the GKR circuit of domain " +
                d.name + how + " (generated; do not edit). -/\n\n";
-          o += "namespace " + mod + "\n\n";
+          o += "namespace " + ns + "\n\n";
           o += cmd + "\n\n";
-          o += "end " + mod + "\n";
+          o += "end " + ns + "\n";
           return o;
         };
         if (pl.modules.empty()) {
@@ -3439,7 +3441,7 @@ std::vector<EmitExport> emit_tables(const BasicCompiledSystem<S> &cs,
       circuit += "@[expose] public section\n\n";
       circuit += "/-! The relational check of the GKR circuit of domain " + d.name +
                  ", from its entries' (generated; do not edit). -/\n\n";
-      circuit += "namespace " + mod + "\n\ncheck_circuit cert ar\n\nend " + mod + "\n";
+      circuit += "namespace " + ns + "\n\ncheck_circuit cert ar\n\nend " + ns + "\n";
       ex.modules.emplace_back("GKR/" + d.name + "/Circuit.lean", std::move(circuit));
       // Data is mode independent. The kernel retains its bounded proof modules;
       // Native checks the complete GKR part once inside programOkB.

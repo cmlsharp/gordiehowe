@@ -32,12 +32,18 @@ public import GordieHowe.Applications.Falcon512.Fields.FalconNative9
 public import GordieHowe.Applications.Falcon512.Fields.FalconNative9Relative
 public import GordieHowe.Applications.Falcon512.Fields.FalconNativeCoords
 public import GordieHowe.Applications.Falcon512.Frontend.Basic
+public import GordieHowe.Applications.Falcon512.Honest.SourceRoles
 public import GordieHowe.Applications.Falcon512.Native.Rows
+public import GordieHowe.Applications.Falcon512.Native.SourceRoles
 public import GordieHowe.Applications.Falcon512.Native.System.Algebra
 public import GordieHowe.Applications.Falcon512.Native.System.Application
 public import GordieHowe.Applications.Falcon512.Native.System.Source
 public import GordieHowe.Applications.Falcon512.PoP.Configuration
 public import GordieHowe.Applications.Falcon512.PoP.Relation
+public import GordieHowe.Applications.Falcon512.Ring.Carrier.Frontend
+public import GordieHowe.Applications.Falcon512.Ring.Carrier.Honest
+public import GordieHowe.Applications.Falcon512.Ring.Carrier.SourceRoles
+public import GordieHowe.Applications.Falcon512.Ring.Native.SourceRoles
 public import GordieHowe.Applications.Falcon512.Ring.Native.System.Algebra
 public import GordieHowe.Applications.Falcon512.Ring.Native.System.Codecs
 public import GordieHowe.Applications.Falcon512.Ring.Native.System.Composite
@@ -144,6 +150,8 @@ public import GordieHowe.Applications.MLDSA44.Emulated.System.Source
 public import GordieHowe.Applications.MLDSA44.Fields.GF2_128
 public import GordieHowe.Applications.MLDSA44.Fields.GF2_256
 public import GordieHowe.Applications.MLDSA44.Frontend.HField
+public import GordieHowe.Applications.MLDSA44.Frontend.Key
+public import GordieHowe.Applications.MLDSA44.Frontend.QField
 public import GordieHowe.Applications.MLDSA44.Gadgets.HintWeight
 public import GordieHowe.Applications.MLDSA44.Gadgets.InfinityNorm
 public import GordieHowe.Applications.MLDSA44.Gadgets.SelectFirstTau
@@ -156,7 +164,11 @@ public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative11Relative
 public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative6
 public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative6Coords
 public import GordieHowe.Applications.MLDSA44.Fields.MLDSANative6Relative
+public import GordieHowe.Applications.MLDSA44.Honest.AlgebraSourceRoles
+public import GordieHowe.Applications.MLDSA44.Honest.SelectionSourceRoles
+public import GordieHowe.Applications.MLDSA44.Honest.SourceRoles
 public import GordieHowe.Applications.MLDSA44.Native.Rows
+public import GordieHowe.Applications.MLDSA44.Native.SourceValues
 public import GordieHowe.Applications.MLDSA44.Native.System.Algebra
 public import GordieHowe.Applications.MLDSA44.Native.System.Application
 public import GordieHowe.Applications.MLDSA44.Native.System.Honest
@@ -167,6 +179,7 @@ public import GordieHowe.Applications.MLDSA44.PoP.Configuration
 public import GordieHowe.Applications.MLDSA44.PoP.Native.Algebra
 public import GordieHowe.Applications.MLDSA44.PoP.Relation
 public import GordieHowe.Applications.MLDSA44.Ring.Scheme
+public import GordieHowe.Applications.MLDSA44.Ring.SourceValues
 public import GordieHowe.Applications.MLDSA44.Ring.RingEncoding
 public import GordieHowe.Applications.MLDSA44.Ring.Codecs
 public import GordieHowe.Applications.MLDSA44.Ring.RingBase
@@ -175,6 +188,7 @@ public import GordieHowe.Applications.MLDSA44.Ring.Native.Frontend.NTTMul
 public import GordieHowe.Applications.MLDSA44.Ring.Carrier.Frontend.Relation
 public import GordieHowe.Applications.MLDSA44.Ring.Carrier.Frontend.Statement
 public import GordieHowe.Applications.MLDSA44.Ring.Native.Frontend.Embed
+public import GordieHowe.Applications.MLDSA44.Ring.Native.Frontend.Relation
 public import GordieHowe.Applications.MLDSA44.Ring.Table
 public import GordieHowe.Applications.MLDSA44.Ring.Native.Frontend.Verify
 public import GordieHowe.Applications.MLDSA44.Ring.Native.Frontend.Statement
@@ -244,6 +258,7 @@ public import GordieHowe.Applications.Ring.MLDSAW1Guess
 public import GordieHowe.Applications.Ring.MLDSAW1IdealDist
 public import GordieHowe.Applications.Ring.MLDSAW1OracleFacts
 public import GordieHowe.Applications.Ring.MLDSAW1AnonQuery
+public import GordieHowe.Applications.Ring.MLDSAW1AnonOracle
 public import GordieHowe.Applications.Ring.MLDSAW1KeyFree
 public import GordieHowe.Applications.Ring.MLDSAW1KeyFreeBase
 public import GordieHowe.Applications.Ring.MLDSAW1KeyFreeHop
@@ -332,8 +347,6 @@ public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1
 public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1Concentration
 public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1ExpandS
 public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1Hedged
-public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1HedgedQROM
-public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1HedgedQROMQuery
 public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1HedgedQuery
 public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1Keys
 public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1Query
@@ -341,7 +354,6 @@ public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1Refusal
 public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1Regularity
 public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1Unforgeability
 public import GordieHowe.Applications.Ring.PublicW1.MaskOracle
-public import GordieHowe.Applications.Ring.PublicW1.MaskOracleQROM
 public import GordieHowe.Applications.Ring.PublicW1.PublicValue
 public import GordieHowe.Applications.Ring.PublicW1.Restrict
 public import GordieHowe.Applications.Ring.SPBCSAnon
@@ -521,6 +533,7 @@ public import GordieHowe.Language.Honest.CheckP
 public import GordieHowe.Language.Honest.Digits
 public import GordieHowe.Language.Honest.Packed
 public import GordieHowe.Language.Honest.Source
+public import GordieHowe.Language.Honest.SourceRoles
 public import GordieHowe.Language.Honest.TwoFields
 public import GordieHowe.Language.Library.Cross
 public import GordieHowe.Language.Library.Eval
@@ -1051,6 +1064,7 @@ public import GordieHowe.ProofSystem.RingSwitching.PackingTree
 public import GordieHowe.ProofSystem.RingSwitching.PackingUniform
 public import GordieHowe.ProofSystem.RingSwitching.RouteSupport
 public import GordieHowe.ProofSystem.RingSwitching.StageAlgebra
+public import GordieHowe.ProofSystem.RingSwitching.StageCoords
 public import GordieHowe.ProofSystem.RingSwitching.TowerPaper
 public import GordieHowe.ProofSystem.RingSwitching.TreeDomain
 public import GordieHowe.ProofSystem.RingSwitching.TreeLayoutDomain

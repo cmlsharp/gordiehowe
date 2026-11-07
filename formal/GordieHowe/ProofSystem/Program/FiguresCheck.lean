@@ -30,9 +30,11 @@ namespace FigCheck
 /-- A load's numbers. -/
 abbrev ofLoad (L : Load) : LoadN := (L.draws, L.bytes)
 
-theorem chernoffB_iff (E N : ℕ) (L : Load) : chernoffB E N (ofLoad L) = true ↔ ChernoffOk E N L := by
+theorem chernoffB_iff (a c E N : ℕ) (L : Load) :
+    chernoffB a c E N (ofLoad L) = true ↔ ChernoffOk a c E N L := by
   simp only [chernoffB, Bool.and_eq_true, decide_eq_true_eq, ChernoffOk]
-  exact ⟨fun ⟨⟨a, b⟩, c⟩ => ⟨a, b, c⟩, fun ⟨a, b, c⟩ => ⟨⟨a, b⟩, c⟩⟩
+  exact ⟨fun ⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩ => ⟨h1, h2, h3, h4, h5⟩,
+    fun ⟨h1, h2, h3, h4, h5⟩ => ⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩⟩
 
 theorem nsmulL_eq (n : ℕ) (L : Load) : nsmulL n (ofLoad L) = ofLoad (L.nsmul n) := rfl
 
@@ -318,14 +320,14 @@ theorem nBranch_eq (hbat : ir.batchesB = true) :
 /-- **`forkRoundsConst` is the numbers'.** -/
 theorem forkRoundsConst_eq (hbat : ir.batchesB = true) :
     forkRoundsConst R = ((N).batches.map fun b =>
-      2 * b.rounds + 5 + (if b.bits then 8 else 0) + (if b.merged then 1 else 0)).sum +
+      2 * b.rounds + 5 + (if b.bits then 8 else 0)).sum +
         (N).circuits.length + (2 * (N).degrees.length + 3) := by
   have hB := R.batchesOk
   rw [forkRoundsConst]
   have h1 := sum_fin_idx (cbatches_idx hbat hB) (fun b => 2 * (ir.batch b).rounds + 5)
   have h2 := sum_fin_idx (sumBatches_idx hbat hB) (fun b => 2 * (ir.batch b).rounds + 13)
-  have h3 := sum_fin_idx (mbatches_idx hbat hB) (fun b => 2 * (ir.batch b).rounds + 6)
-  have h4 := sum_fin_idx (sumMBatches_idx hbat hB) (fun b => 2 * (ir.batch b).rounds + 14)
+  have h3 := sum_fin_idx (mbatches_idx hbat hB) (fun b => 2 * (ir.batch b).rounds + 5)
+  have h4 := sum_fin_idx (sumMBatches_idx hbat hB) (fun b => 2 * (ir.batch b).rounds + 13)
   erw [h1, h2, h3, h4]
   have hc : (N).circuits.length = (ForkReader.circs ir d).length := List.length_map ..
   rw [hc, ← circs_length, rs_length (D := D) R, batches_eq]

@@ -23,7 +23,7 @@
 //                v7's 40 blocks and at Vega's bound (kVegaBlocks)
 //   export       the plan export of the list-radius build at 1 attribute
 //                (its tableaus chosen as the bench chooses them, on doc 3):
-//                GordieHowe/Generated/MDL/ECDSA/ROMParams/{Plan,Program}.lean.
+//                GordieHoweCerts/Generated/MDL/ECDSA/ROMParams/{Plan,Program}.lean.
 //                Plain mdoc has no fixed message, so msgLen is 0; the MSO's
 //                buffer is in the sha256-varlen and filtered-permutation
 //                records.

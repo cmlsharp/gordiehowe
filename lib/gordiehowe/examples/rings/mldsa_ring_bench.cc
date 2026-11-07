@@ -10,7 +10,7 @@
 //            arm --ring-arm at --ring-size members
 //   bench    the same records and --reps proofs without report_bench
 //   export   both arms' plan exports and realized programs at --ring-size
-//            members: GordieHowe/Generated/MLDSA44/Ring/{Native,Carrier}/
+//            members: GordieHoweCerts/Generated/MLDSA44/Ring/{Native,Carrier}/
 //            <parameter set>/{Plan,Program}.lean
 //   report   the arm's compile report, with each domain's sizes on one line
 

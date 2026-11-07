@@ -619,7 +619,10 @@ class Printer {
            num(b.rounds) + ", pads := " + num(b.pads) +
            // The bit-index sumcheck (compiler/bit_phase.h; the Lean's
            // Batch.bitSumcheck, default false): only when the batch has it.
-           (b.bit_sumcheck ? ", bitSumcheck := true" : "") + ", skipDomain := " +
+           (b.bit_sumcheck ? ", bitSumcheck := true" : "") +
+           // A merged batch (Lean's Batch.merged, default false): only when
+           // the batch merges its parts.
+           (b.merged ? ", merged := true" : "") + ", skipDomain := " +
            (b.char2 ? "\"gf256\"" : "\"integers\"") + ", parts := " +
            ids(b.parts) + " }";
   }
@@ -1228,6 +1231,7 @@ inline std::string print_derivations_module(const ir::Program &,
                                             const ir::Certificates &c,
                                             const ExportMeta &meta, const std::string &hash) {
   const std::string prog = lean_module_name(meta, "Program");
+  const std::string ns = lean_namespace(meta, "Derivs");
   std::string o;
   o += kLeanLicenseHeader;
   o += "module\n\n"
@@ -1245,14 +1249,14 @@ inline std::string print_derivations_module(const ir::Program &,
   o += "- C++ commit: `" + meta.cpp_commit + "`\n";
   o += "- bench run: `" + meta.run_id + "`\n-/\n\n";
   o += kLeanModuleOptions;
-  o += "namespace " + lean_module_name(meta, "Derivs") + "\n\n";
-  o += "open GordieHowe.RealizedProgram " + prog + "\n\n";
+  o += "namespace " + ns + "\n\n";
+  o += "open GordieHowe.RealizedProgram " + lean_namespace(meta, "Program") + "\n\n";
   o += "load_program_ghc \"Derivs.ghc\" \"" + hash + "\"\n\n";
   o += "/-- The derivations, as the checker reads them. -/\n"
        "def derivations : Derivations := { derivs := derivs, ranks := ranks, shared := shared";
   if (!c.circuit_derivs.empty()) o += ", circuitDerivs := circuitDerivs";
   o += " }\n\n";
-  o += "end " + lean_module_name(meta, "Derivs") + "\n";
+  o += "end " + ns + "\n";
   return o;
 }
 
@@ -1335,7 +1339,7 @@ inline std::string print_program(const ir::Program &p, const ExportMeta &meta,
           ", characteristic := " + p.fields[i].characteristic +
           ", degree := " + num(p.fields[i].degree) + " }";
 
-  const std::string mod = lean_module_name(meta, "Program");
+  const std::string prog_ns = lean_namespace(meta, "Program");
   std::string o;
   o += kLeanLicenseHeader;
   o += "module\n\n"
@@ -1354,7 +1358,7 @@ inline std::string print_program(const ir::Program &p, const ExportMeta &meta,
   // compiler does not extract their closed terms (the module's peak
   // memory).
   o += "set_option compiler.extract_closed false\n\n";
-  o += "namespace " + mod + "\n\n";
+  o += "namespace " + prog_ns + "\n\n";
   o += "open GordieHowe.RealizedProgram\n\n";
   for (size_t i = 0; i < p.index_maps.size(); ++i) {
     if (i < p.index_map_forms.size() && !p.index_map_forms[i].empty()) {
@@ -1446,7 +1450,7 @@ inline std::string print_program(const ir::Program &p, const ExportMeta &meta,
        ",\n    tables := [" + tables + "],\n    challenges := [" + chals +
        "],\n    messages := [" + msgs + "],\n    batches := [" + bts +
        "],\n    circuits := " + circs + ",\n    realizationCircuits := [" +
-       reals + "]" + convs + " }\n\nend " + mod + "\n";
+       reals + "]" + convs + " }\n\nend " + prog_ns + "\n";
   return o;
 }
 

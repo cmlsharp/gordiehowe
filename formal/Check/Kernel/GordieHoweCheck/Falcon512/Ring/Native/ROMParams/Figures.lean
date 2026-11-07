@@ -3,11 +3,11 @@
 
 module
 
-public import GordieHowe.Generated.Falcon512.Ring.Native.ROMParams.Data
+public import GordieHoweCerts.Generated.Falcon512.Ring.Native.ROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 
-import all GordieHowe.Generated.Falcon512.Ring.Native.ROMParams.Program
-import all GordieHowe.Generated.Falcon512.Ring.Native.ROMParams.Plan
+import all GordieHoweCerts.Generated.Falcon512.Ring.Native.ROMParams.Program
+import all GordieHoweCerts.Generated.Falcon512.Ring.Native.ROMParams.Plan
 @[expose] public section
 
 /-!
@@ -26,8 +26,8 @@ namespace GordieHoweCheck.Falcon512.Ring.Native.ROMParams
 
 open GordieHowe RealizedProgram GordieHowe.Generated.Falcon512.Ring.Native.ROMParams
 
-/-- **The figures when present** (`GordieHowe.ProgramData.figuresPartB`). -/
-theorem figuresPartOk : data.figuresPartB = true := by
+/-- **The figures** (`GordieHowe.ProgramData.figuresPartB`). -/
+theorem figuresPartOk : data.figuresPartB true = true := by
   decide +kernel
 
 end GordieHoweCheck.Falcon512.Ring.Native.ROMParams

@@ -6,6 +6,7 @@ module
 public import GordieHowe.ProofSystem.FieldProof.MaskedReduction
 public import GordieHowe.Model.IOP.FuseChallenges
 public import GordieHowe.ProofSystem.FieldProof.UniformSim
+public import GordieHowe.ProofSystem.FieldProof.ClaimSupport
 
 @[expose] public section
 
@@ -17,7 +18,8 @@ masked reduction on one verifier move `(a, b) ∈ A × B` followed by `Q` (`fuse
 are read on the original transcript (`GordieHowe.IOP.unfuseFull`). Its soundness (`Sound.fuse`) has the
 error `ε₀ + ε₁` at the fused move and each later move's error (`GordieHowe.IOP.fuseError`,
 `ClaimReduction.fuse`); its honest prover and simulator are the original ones read through the
-transcript bijection `GordieHowe.IOP.fuseEquiv` (`Honest.fuse`, `Honest.fuse_sim`).
+transcript bijection `GordieHowe.IOP.fuseEquiv` (`Honest.fuse`, `Honest.fuse_sim`). Its claims read
+what the original claims read (`ReadsOnly.fuse`).
 -/
 
 namespace GordieHowe
@@ -55,6 +57,12 @@ theorem outHolds_fuse_iff (M : MaskedReduction F ι Pub Wit cells Z nc) (hM : M.
     (x : ι → F) :
     (M.fuse hM).OutHolds view p tr x ↔ M.OutHolds view p (specTranscript hM (unfuseFull tr)) x :=
   ⟨fun h => ⟨h.rows, h.claims⟩, fun h => ⟨h.rows, h.claims⟩⟩
+
+/-- **The fused claims read what the original claims read**: they are the original claims on the
+original transcript. -/
+theorem ReadsOnly.fuse [DecidableEq Z] {M : MaskedReduction F ι Pub Wit cells Z nc}
+    (hM : M.SpecIs A B Q) {T : Fin nc → Z → Prop} (h : M.ReadsOnly T) : (M.fuse hM).ReadsOnly T :=
+  fun p _ c => h p _ c
 
 /-- **Soundness with the two leading verifier moves fused**: the same relation, the error
 `ε₀ + ε₁` at the fused move and each later move's error (`ClaimReduction.fuse`). -/

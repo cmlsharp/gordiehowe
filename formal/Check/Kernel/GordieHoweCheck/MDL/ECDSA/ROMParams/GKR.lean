@@ -3,9 +3,9 @@
 
 module
 
-public import GordieHowe.Generated.MDL.ECDSA.ROMParams.Data
+public import GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.Data
 public import GordieHowe.Applications.Program.Conditions
-public import GordieHowe.Generated.MDL.ECDSA.ROMParams.Pending.Small
+public import GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.Pending.Small
 public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.Circuit
 public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.A.Circuit
 

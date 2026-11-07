@@ -27,7 +27,7 @@ The parameters of the Falcon-512 proofs of possession (`lib/gordiehowe/examples/
 Falcon emulated and Falcon native share: Falcon's constants (`q`, `n`, `betaSq`), the ordered
 selection's cutoff (`cutoff`) and the MAC field profiles. The configurations' range plans, domain
 sizes, challenge points with extended stream budgets and Ligero tableaus are the generated plan data's
-(`GordieHowe/Generated/`), whose validity `Plan.Valid` states (`GordieHowe/Language/Export/Valid.lean`). Falcon
+(`GordieHoweCerts/Generated/`), whose validity `Plan.Valid` states (`GordieHowe/Language/Export/Valid.lean`). Falcon
 emulated's remaining parameters are in `GordieHowe/Applications/Falcon512/Emulated/System/Params.lean`.
 -/
 

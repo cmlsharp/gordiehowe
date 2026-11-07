@@ -910,8 +910,9 @@ structure Batch where
   skipDomain : String := ""
   /-- The predicates sharing the batch. -/
   parts : List Nat := []
-  /-- The merging challenge. -/
-  gamma : Option Nat := none
+  /-- Whether the batch merges its parts' relations into one by a challenge `γ`
+  (`Σ_i γ^i Q_i`), which the verifier draws with the zerocheck point. -/
+  merged : Bool := false
   /-- Whether the C++ reduces the batch's opening claim by the masked bit sumcheck
   (`GordieHowe.FieldProof.MaskedReduction.bitSumcheck`). Every batch on bits takes the bit sumcheck, and
   the domain's batch check (`GordieHowe.RealizedProgram.BatchesOk`) requires this flag on every

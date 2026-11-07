@@ -266,7 +266,7 @@ inline std::string cert_title(const ExportMeta &meta) {
 // The module Cert: the export's certificates, data the proof modules check.
 inline ProofModule cert_module(const ProofModuleData &d) {
   const ExportMeta &m = d.meta;
-  const std::string ns = lean_module_name(m, "Cert");
+  const std::string ns = lean_namespace(m, "Cert");
   std::vector<std::string> imports = {
       "GordieHowe.Language.Completeness.Deriv",
       "GordieHoweNative.Language.RealizedProgram.Annotations"};
@@ -274,7 +274,7 @@ inline ProofModule cert_module(const ProofModuleData &d) {
   std::string o = plan_proofs_internal::header(
       m, imports, cert_title(m), {},
       "The compiler's certificates of the realized program `" +
-          lean_module_name(m, "Program") +
+          lean_namespace(m, "Program") +
           ".program`, from its lowerings' records: the shared expressions' "
           "annotations, the completeness certificate (`gens`, `cderivs`) and the assignment "
           "reads (`assignmentReads`). Data, not trusted: "
@@ -298,18 +298,18 @@ inline std::string structure_title(const ExportMeta &meta) {
 // the checkers read by pointer.
 inline ProofModule structure_module(const ProofModuleData &d) {
   const ExportMeta &m = d.meta;
-  const std::string ns = lean_module_name(m, "Structure");
+  const std::string ns = lean_namespace(m, "Structure");
   std::string o = plan_proofs_internal::header(
       m, {lean_module_name(m, "Program"), "GordieHoweNative.Language.RealizedProgram.Structure",
           plan_proofs_internal::kCheckModule},
       structure_title(m), {},
-      "The structure records of the realized program `" + lean_module_name(m, "Program") +
+      "The structure records of the realized program `" + lean_namespace(m, "Program") +
           ".program` (`GordieHowe.RealizedProgram.Structure`): the objects the compiler "
           "created, named by pointer, with the plan's range requests the MAC records and "
           "modular equalities read. Data, not trusted: every record is checked at its "
           "pointer.");
   o += "namespace " + ns + "\n\nopen GordieHowe.RealizedProgram " +
-       lean_module_name(m, "Program") + "\n\n";
+       lean_namespace(m, "Program") + "\n\n";
   char hash[17];
   std::snprintf(hash, sizeof(hash), "%016llx",
                 static_cast<unsigned long long>(ghc::fnv1a(d.structure_ghc)));
@@ -328,7 +328,7 @@ inline ProofModule structure_module(const ProofModuleData &d) {
 // (`GordieHowe.RealizedProgram.OneNodes`).
 inline ProofModule honest_nodes_module(const ProofModuleData &d) {
   const ExportMeta &m = d.meta;
-  const std::string ns = lean_module_name(m, "Honest");
+  const std::string ns = lean_namespace(m, "Honest");
   const std::string title =
       "# The nodes containing `1` in `" + plan_proofs_internal::config(m) + "`";
   std::string o = plan_proofs_internal::header(
@@ -583,7 +583,8 @@ inline std::vector<std::string> distinct(std::vector<std::string> xs) {
 // leaves, which decide the program's check parts (19 per program, 608 over the
 // 32 programs), and the pending conditions (Pending.Small, Pending.Model, 64),
 // which decide the tableaus, field table, packings and the interpretation's
-// model. Each imports the program and plan modules with `import all`. The GKR
+// model. Each imports the program and plan modules with `import all`, and the
+// shapes leaf also the source programs of its embedding claims. The GKR
 // certificate checks (emit_export.h) import the program the same way: each
 // check entry E<k>, its leaves E<k>/P<j> and the Circuit module, 2254 modules
 // over the 20 programs with GKR certificates. Every other module reads them
@@ -609,10 +610,15 @@ inline std::string data_module_text(const ExportMeta &m, const std::vector<std::
 
 // The configuration's inputs to its figures: the Chernoff exponent of the
 // loads, the bound on the largest round error `error_max / 2^error_exp`,
-// and per domain (by name) the largest array, the largest challenge read,
-// the reads besides its first combination and whether its first packing
-// stage's and Ligero's linear test's extended streams are granted. They
-// are design choices of the configuration; Lean checks that they pass
+// per domain (by name) the largest array, the largest challenge read, the
+// reads besides its first combination and whether its first packing
+// stage's and Ligero's linear test's extended streams are granted, the
+// point `z_num / z_den` at which the loads' Chernoff test is evaluated
+// (`z^bytes < 2` for every load's bytes per draw), and whether a
+// configuration reads the figures (its certified program is
+// `GordieHowe.Certified`; otherwise the program's check certifies the
+// figures and its certified program stays `GordieHowe.CertifiedCore`).
+// They are design choices of the configuration; Lean checks that they pass
 // (figuresOk), and that `error_max` is the largest round error rounded up.
 struct FigureInputs {
   struct Domain {
@@ -625,6 +631,8 @@ struct FigureInputs {
   uint64_t error_max;
   size_t error_exp;
   std::vector<Domain> domains;
+  uint64_t z_num = 65, z_den = 64;
+  bool configuration = true;
 };
 
 // The figures' inputs of the configuration CONFIG (`<config>-<profile>`),
@@ -660,6 +668,13 @@ inline const FigureInputs *figure_inputs(const std::string &config) {
        {{"A", 1024, 2200, 2200}, {"H", 1024, 1250, 1250}}},
       {"mldsa-ring-native-wide", 990, 13358901, 260,
        {{"A", 1024, 2400, 2400}, {"H", 1024, 1250, 1250}}},
+      // The ECDSA mDL: its range challenges draw 64 bytes per value
+      // (P-256's 32-byte reader, twice), past `(65/64)^64 < 2`. At
+      // `z = 93/92`, the largest `1 + 1/m` with `z^64 < 2`, its loads pass
+      // up to `2^-2896` (domain H's reads bind). No configuration reads its
+      // figures yet.
+      {"mdoc-narrow", 2890, 68153926, 140, {{"H", 16, 597, 597}, {"A", 1, 214, 214}},
+       93, 92, false},
   };
   for (const FigureInputs &e : entries)
     if (config == e.config) return &e;
@@ -814,14 +829,14 @@ inline ProofModule figures_module(const ProofModuleData &d, const SystemPlan &sp
       "` verifier queries, `" + num(v.D) + "` digests per chain input, `" + num(v.pos) +
       "` positions, `" + num(d.digest_bytes) + "`-byte digests, every round error at most `" +
       num(in->error_max) + " / 2^" + num(in->error_exp) +
-      "`, every load passing the Chernoff test `2^-" + num(in->chernoff) +
-      "`; the domains' largest arrays (" + and_list(adesc) +
+      "`, every load passing the Chernoff test `2^-" + num(in->chernoff) + "` at `z = " +
+      num(in->z_num) + " / " + num(in->z_den) + "`; the domains' largest arrays (" + and_list(adesc) +
       "), largest challenge reads and other reads (" + and_list(rdesc) + "; " +
       and_list(rrdesc) + "), " + (g.any ? "the grants " + and_list(gdesc) : "no grants") +
       ", and the source challenges' errors " + (sc.empty() ? "none" : and_list(sdesc)) +
       ". The rounds, leaves, queries, verifier queries, digests, positions and the digest "
-      "length are the compiler's; the Chernoff exponent, the largest arrays and reads, the "
-      "grants and the largest round error's bound are the configuration's inputs. The check "
+      "length are the compiler's; the Chernoff exponent and point, the largest arrays and reads, "
+      "the grants and the largest round error's bound are the configuration's inputs. The check "
       "of the figures is `GordieHowe.ProgramData.FiguresOk`.";
   std::string body = theorem(
       "**The figures of the program.**",
@@ -829,12 +844,14 @@ inline ProofModule figures_module(const ProofModuleData &d, const SystemPlan &sp
           "\n  nq := " + num(v.nq) + "\n  kq := " + num(v.kq) + "\n  D := " + num(v.D) +
           "\n  pos := " + num(v.pos) + "\n  k := " + num(d.digest_bytes) +
           "\n  errorMax := " + num(in->error_max) + "\n  errorExp := " + num(in->error_exp) +
-          "\n  chernoff := " + num(in->chernoff));
+          "\n  chernoff := " + num(in->chernoff) + "\n  zNum := " + num(in->z_num) +
+          "\n  zDen := " + num(in->z_den));
   body += theorem("**The figures as numerals**, for the statements that evaluate them.",
                   "theorem figures_eq : figures = ⟨" + num(v.rounds) + ", " + num(v.N) + ", " +
                       num(v.nq) + ", " + num(v.kq) + ", " + num(v.D) + ", " + num(v.pos) + ", " +
                       num(d.digest_bytes) + ", " + num(in->error_max) + ", " +
-                      num(in->error_exp) + ", " + num(in->chernoff) + "⟩ :=\n  rfl");
+                      num(in->error_exp) + ", " + num(in->chernoff) + ", " + num(in->z_num) +
+                      ", " + num(in->z_den) + "⟩ :=\n  rfl");
   std::string se;
   if (sc.empty()) {
     se = "def sourceErrors (_ : Nat) : Nat × Nat := (0, 1)";
@@ -866,12 +883,20 @@ inline ProofModule figures_module(const ProofModuleData &d, const SystemPlan &sp
 }
 
 
-// Whether the library builds the export's honest strategy and figures (its
-// configuration states figures, figure_inputs): its certified program is
-// `GordieHowe.Certified` at its program conditions; otherwise
-// `GordieHowe.CertifiedCore` at its core conditions.
-inline bool certified_program(const ProofModuleData &d) {
+// Whether the export states figures (figure_inputs): its data carries them
+// and its check (`programOkB true`) requires them present and checked;
+// otherwise its check requires them absent (`programOkB false`).
+inline bool has_figures(const ProofModuleData &d) {
   return figure_inputs(plan_proofs_internal::config(d.meta)) != nullptr;
+}
+
+// Whether the library builds the export's honest strategy and a
+// configuration reads its figures (figure_inputs, `configuration`): its
+// certified program is `GordieHowe.Certified` at its program conditions;
+// otherwise `GordieHowe.CertifiedCore` at its core conditions.
+inline bool certified_program(const ProofModuleData &d) {
+  const FigureInputs *in = figure_inputs(plan_proofs_internal::config(d.meta));
+  return in != nullptr && in->configuration;
 }
 
 // The name of the export's check module, `GordieHoweCheck.<lean_name>`, or
@@ -905,7 +930,7 @@ inline const std::vector<CheckPart> &check_parts() {
       {"Roles", "rolesOk", "rolesB", "The honest roles"},
       {"NoFieldForm", "noFieldFormOk", "noFieldFormB", "No field-form predicates"},
       {"Shapes", "shapesOk", "shapesB", "The shapes"},
-      {"Figures", "figuresPartOk", "figuresPartB", "The figures when present"},
+      {"Figures", "figuresPartOk", "figuresPartB", "The figures"},
       {"SourceRoles", "sourceRolesOk", "sourceRolesB", "The source-role contract"},
       {"GKR", "gkrOk", "gkrPartB", "Every circuit certificate"},
       {"OpaqueSet", "opaqueSetOk", "opaqueSetB",
@@ -948,11 +973,11 @@ inline std::vector<ProofModule> program_data_modules(const ProofModuleData &d,
   const std::string cfg = config(m);
   const size_t nd = d.domain_data.size(), nc = d.circuit_domains.size();
   const bool full = certified_program(d);
+  const bool figs = has_figures(d);
+  const std::string figs_arg = figs ? "true" : "false";
   const bool shapes = !d.shape_facts.empty();
   // The program has no field-form `mod_q` and the honest strategy reads it.
   const bool no_field_form = full && !d.field_form;
-  bool p256 = false;
-  for (const auto *f : sp.fields) p256 = p256 || field_key(*f) == "p256";
   auto num = [](size_t x) { return std::to_string(x); };
   auto mod = [&](const std::string &leaf) { return lean_module_name(m, leaf); };
   auto b = [](bool x) { return std::string(x ? "true" : "false"); };
@@ -1042,7 +1067,7 @@ inline std::vector<ProofModule> program_data_modules(const ProofModuleData &d,
                                                 list + "]"))});
   }
   // Figures.
-  if (full) out.push_back(figures_module(d, sp));
+  if (figs) out.push_back(figures_module(d, sp));
   // Data.
   const std::vector<std::string> circuits = plan_proofs_internal::circuit_modules(d);
   const std::vector<std::string> gkr = plan_proofs_internal::distinct(circuits);
@@ -1050,7 +1075,7 @@ inline std::vector<ProofModule> program_data_modules(const ProofModuleData &d,
                                            mod("Cert"), mod("Derivs"), mod("Honest.Nodes")};
   for (const std::string &g : gkr) data_imports.push_back(mod(g));
   data_imports.push_back(mod("FieldTable"));
-  if (full) data_imports.push_back(mod("Figures"));
+  if (figs) data_imports.push_back(mod("Figures"));
   data_imports.push_back(mod("Tableau"));
   if (shapes) data_imports.push_back(mod("Shapes"));
   if (!d.source_roles.empty()) data_imports.push_back(mod("SourceRoles"));
@@ -1064,7 +1089,7 @@ inline std::vector<ProofModule> program_data_modules(const ProofModuleData &d,
         "`data`: the program's `GordieHowe.ProgramData`, a constructor literal of the "
         "program's named constants: its computational inputs (`runtimeInputs`: the program, the "
         "plan, the field table, the tableaus and the figures" +
-        std::string(full ? "" : " (none: the configuration states none)") +
+        std::string(figs ? "" : " (none: the configuration states none)") +
         "; `completionInputs`: the structure records and the completion certificate), the "
         "hints, " +
         std::string(nc == 0 ? "no GKR certificate" : "the GKR certificates") + " and the shapes.";
@@ -1073,7 +1098,7 @@ inline std::vector<ProofModule> program_data_modules(const ProofModuleData &d,
         "abbrev runtimeInputs : GordieHowe.RuntimeInputs :=\n"
         "  { program := Program.program, plan := Plan.plan, fieldTable := fieldTable,\n"
         "    tableaus := tableaus, figures := " +
-            std::string(full ? "figuresData" : "GordieHowe.FiguresData.none") + " }");
+            std::string(figs ? "figuresData" : "GordieHowe.FiguresData.none") + " }");
     body += theorem(
         "**The computational inputs of the honest strategy.**",
         "abbrev completionInputs : GordieHowe.CompletionInputs :=\n"
@@ -1106,7 +1131,8 @@ inline std::vector<ProofModule> program_data_modules(const ProofModuleData &d,
     imports.push_back(kCheckModule);
     const std::string title = "# The check of `" + cfg + "`";
     const std::string doc =
-        "The program passes its check (`GordieHowe.ProgramData.programOkB`), one compiled run "
+        "The program passes its check (`GordieHowe.ProgramData.programOkB`, figures " +
+        std::string(figs ? "present" : "absent") + "), one compiled run "
         "at the unfolded data, each GKR certificate read through its reader "
         "(`gh_native_check`). The kernel source of this module states the same theorem from one "
         "leaf per part.";
@@ -1114,7 +1140,8 @@ inline std::vector<ProofModule> program_data_modules(const ProofModuleData &d,
                    data_module_text(
                        m, imports, title, doc, check, opens + " " + root,
                        theorem("**The program passes its check**, compiled at the unfolded data.",
-                               "theorem programOk : data.programOkB = true := by\n  delta data\n"
+                               "theorem programOk : data.programOkB " + figs_arg +
+                                   " = true := by\n  delta data\n"
                                "  gh_native_check")),
                    plan_proofs_internal::kNativeCheckRoot});
   }
@@ -1127,6 +1154,9 @@ inline std::vector<ProofModule> program_data_modules(const ProofModuleData &d,
       if (std::string(p.leaf) == "GKR") continue;
       std::vector<std::string> imports = {mod("Data"), plan_proofs_internal::kProgramCheckModule};
       std::string proof = "by\n  decide +kernel";
+      // The figures part states whether the program has figures.
+      const std::string part =
+          std::string(p.part) + (std::string(p.leaf) == "Figures" ? " " + figs_arg : "");
       if (std::string(p.leaf) == "Fields" || std::string(p.leaf) == "Locality") {
         imports.push_back(check_module_name(m, "AssignmentReads"));
         const std::string transport = std::string(p.leaf) == "Fields"
@@ -1135,6 +1165,14 @@ inline std::vector<ProofModule> program_data_modules(const ProofModuleData &d,
         proof = "by\n  rw [← ProgramData." + transport + " data assignmentReadsOk]\n"
                 "  decide +kernel";
       }
+      // The generated programs the part evaluates, each imported with `import all`:
+      // the program and its plan, and for the shapes part the source program of
+      // each embedding claim, which the claim's check reads.
+      std::vector<std::string> sealed = {mod("Program"), mod("Plan")};
+      if (std::string(p.leaf) == "Shapes")
+        for (const auto &f : d.shape_facts)
+          if (!f.import_module.empty()) sealed.push_back(f.import_module);
+      sealed = plan_proofs_internal::distinct(sealed);
       out.push_back(
           {p.leaf, title,
            plan_proofs_internal::with_import_all(data_module_text(
@@ -1144,15 +1182,16 @@ inline std::vector<ProofModule> program_data_modules(const ProofModuleData &d,
                check, opens + " " + root,
                theorem("**" + std::string(p.doc) + "** (`GordieHowe.ProgramData." + p.part +
                            "`).",
-                       "theorem " + std::string(p.name) + " : data." + p.part +
+                       "theorem " + std::string(p.name) + " : data." + part +
                            " = true := " + proof)),
-                           {mod("Program"), mod("Plan")}),
+                           sealed),
            plan_proofs_internal::kKernelCheckRoot});
     }
     leaves.push_back(plan_proofs_internal::kProgramCheckModule);
     const std::string title = "# The check of `" + cfg + "`";
     const std::string doc =
-        "The program passes its check (`GordieHowe.ProgramData.programOkB`): its parts, each "
+        "The program passes its check (`GordieHowe.ProgramData.programOkB`, figures " +
+        std::string(figs ? "present" : "absent") + "): its parts, each "
         "decided by the kernel in a leaf module, joined by `GordieHowe.and_intro` in the shape "
         "of `programOkB`. The kernel unfolds `programOkB` and its groups only.";
     out.push_back(
@@ -1160,7 +1199,7 @@ inline std::vector<ProofModule> program_data_modules(const ProofModuleData &d,
          data_module_text(
              m, leaves, title, doc, check, opens + " " + root,
              theorem("**The program passes its check**, from its parts.",
-                     "theorem programOk : data.programOkB = true :=\n"
+                     "theorem programOk : data.programOkB " + figs_arg + " = true :=\n"
                      "  and_intro\n"
                      "    (and_intro\n"
                      "      (and_intro\n"
@@ -1192,9 +1231,6 @@ inline std::vector<ProofModule> program_data_modules(const ProofModuleData &d,
     body += theorem("**The field table is the program's.**",
                     "theorem fieldTableOk : data.FieldTableOk :=\n"
                     "  .of_fieldTableB (by decide +kernel)");
-    if (!p256)
-      body += theorem("**Every field has a byte codec.**",
-                      "theorem coded : data.CodedOk :=\n  InterpDesc.coded_of_codedB rfl");
     body += theorem("**The packing descriptors are the registry's packing facts** at their "
                     "queries.",
                     "theorem packingsOk : data.PackingsOk := by\n  decide +kernel");
@@ -1282,7 +1318,7 @@ inline std::vector<ProofModule> program_data_modules(const ProofModuleData &d,
     std::vector<std::string> imports = {check, kConditionsModule, mod("Pending.Small"),
                                         mod("Pending.Model")};
     std::string body = theorem("**The conditions the check gives.**",
-                               "theorem checked : CheckedConditions data :=\n"
+                               "theorem checked : CheckedConditions data " + figs_arg + " :=\n"
                                "  programOk_sound data " + check + ".programOk");
     body += theorem("**The core conditions of the program.**",
                     "theorem core : CoreConditions data where\n"
@@ -1306,10 +1342,8 @@ inline std::vector<ProofModule> program_data_modules(const ProofModuleData &d,
   // Certified.
   {
     std::vector<std::string> imports = {mod("Core")};
-    if (full) {
-      imports.push_back(mod("Completion"));
-      imports.push_back("GordieHowe.Applications.Program.FiguresCheck");
-    }
+    if (full) imports.push_back(mod("Completion"));
+    if (figs) imports.push_back("GordieHowe.Applications.Program.FiguresCheck");
     imports.push_back(plan_proofs_internal::kCertifiedModule);
     std::string body = theorem(
         "**The interpretation of the program**: the registry's at its field table, written out "
@@ -1338,17 +1372,16 @@ inline std::vector<ProofModule> program_data_modules(const ProofModuleData &d,
     const std::string runtime_system =
         "runtimeInputs.proofSystemOf runtimeParts (" + at + ".certs runtimeParts_eq)\n"
         "    " + at + ".coreFacts";
-    if (full) {
-      body += theorem("**Application figures are present.**",
-                      "theorem figuresPresent : data.figures.present = true := rfl");
+    if (figs)
       body += theorem("**The full figures statement, from the program check.**",
                       "theorem figuresOk : data.FiguresOk :=\n"
-                      "  .of_descs data packingsOk figuresPresent checked.figures");
+                      "  .of_descs data packingsOk checked.figures");
+    if (full) {
       body += theorem("**The conditions of the program.**",
                       "theorem conditions : ProgramConditions data :=\n"
                       "  { core with\n    completion := checked.completion\n"
                       "    roles := rolesOk\n    noFieldForm := noFieldForm\n"
-                      "    coded := coded\n    figures := figuresOk\n"
+                      "    figures := figuresOk\n"
                       "    shapes := checked.shapes\n    sourceRoles := checked.sourceRoles }");
       body += theorem("**The ready data of the domains** (`GordieHowe.RuntimeInputs.ready`).",
                       "def ready : ∀ d : Fin Program.program.domains.length,\n"
@@ -1373,6 +1406,9 @@ inline std::vector<ProofModule> program_data_modules(const ProofModuleData &d,
                           full ? "The program's conditions, its certified data and its proof "
                                  "system, built from its computational inputs "
                                  "(`GordieHowe.RuntimeInputs`)."
+                          : figs ? "The program's proof system at its core conditions, built "
+                                   "from its computational inputs (`GordieHowe.RuntimeInputs`), "
+                                   "and its figures' facts; no configuration reads them."
                                : "The program's proof system at its core conditions, built "
                                  "from its computational inputs (`GordieHowe.RuntimeInputs`): "
                                  "the configuration states no figures.",
@@ -1780,7 +1816,7 @@ inline void append_embedding_facts(const ExportMeta &meta,
     f.import_module = lean_module_name(source, "Program");
     f.definition = "/-- The part `" + d.name + "` of `" + d.source_config +
         "` this program holds. -/\ndef " + def + " : EmbedData where\n  source := " +
-        lean_module_name(source, "Program") + ".program\n  vals := " + nums(d.vals) +
+        lean_namespace(source, "Program") + ".program\n  vals := " + nums(d.vals) +
         "\n  refs := " + nums(d.refs) + "\n  chals := " + nums(d.chals) + "\n  V := " +
         nums(d.values) + "\n  R := " + nums(d.exprs) + "\n  equals := " + pairs(d.equals) +
         "\n  bodies := " + pairs(d.bodies) + "\n  sources := " + nums(d.sources) + "\n\n";
@@ -1982,8 +2018,9 @@ inline ProofModule shapes_module(const ProofModuleData &d) {
   using plan_proofs_internal::theorem;
   const ExportMeta &m = d.meta;
   const std::string prog = lean_module_name(m, "Program");
+  const std::string prog_ns = lean_namespace(m, "Program");
   const std::string count = "shape claims: " + std::to_string(d.shape_facts.size());
-  const std::string ns = lean_module_name(m, "Shapes");
+  const std::string ns = lean_namespace(m, "Shapes");
   const std::string title = "# The shapes of `" + config(m) + "`";
   std::vector<std::string> imports = {prog, "GordieHoweNative.Language.RealizedProgram.Shapes"};
   std::string definitions;
@@ -1993,10 +2030,10 @@ inline ProofModule shapes_module(const ProofModuleData &d) {
   }
   std::string o = header(
       m, imports, title, {count},
-      "The values' kinds and the predicates' bodies of `" + prog +
+      "The values' kinds and the predicates' bodies of `" + prog_ns +
           ".program` that its applications' frontends read, as data: shape claims "
           "(`RealizedProgram.ShapeClaim`) over small shape data only.");
-  o += "namespace " + ns + "\n\nopen RealizedProgram " + prog + "\n\n";
+  o += "namespace " + ns + "\n\nopen RealizedProgram " + prog_ns + "\n\n";
   o += definitions;
   std::string list;
   for (size_t i = 0; i < d.shape_facts.size(); ++i)
@@ -2026,7 +2063,7 @@ inline std::string source_role_tag(SourceRole r) {
 inline ProofModule source_roles_module(const ProofModuleData &d) {
   using plan_proofs_internal::header;
   using plan_proofs_internal::theorem;
-  const std::string ns = lean_module_name(d.meta, "SourceRoles");
+  const std::string ns = lean_namespace(d.meta, "SourceRoles");
   const std::string title = "# The source roles of `" + plan_proofs_internal::config(d.meta) + "`";
   std::string o = header(d.meta, {"GordieHoweNative.Language.RealizedProgram.SourceRoles"},
       title, {"source roles: " + std::to_string(d.source_roles.size())},
@@ -2060,7 +2097,7 @@ inline ProofModule source_role_facts_module(const ProofModuleData &d) {
   using plan_proofs_internal::theorem;
   const auto &m = d.meta;
   const std::string root = "GordieHowe.Generated." + lean_name(m);
-  const std::string ns = lean_module_name(m, "SourceRoleFacts");
+  const std::string ns = lean_namespace(m, "SourceRoleFacts");
   const std::string title = "# The checked source roles of `" + plan_proofs_internal::config(m) + "`";
   std::string o = header(m,
       {check_module_name(m), plan_proofs_internal::kConditionsModule,
@@ -2095,15 +2132,16 @@ inline std::vector<ProofModule> shape_check_modules(const ProofModuleData &d) {
   using plan_proofs_internal::theorem;
   const ExportMeta &m = d.meta;
   const std::string prog = lean_module_name(m, "Program");
+  const std::string prog_ns = lean_namespace(m, "Program");
   const std::string count = "shape claims: " + std::to_string(d.shape_facts.size());
   std::vector<ProofModule> out;
   {
-    const std::string ns = lean_module_name(m, "ShapesCheck");
+    const std::string ns = lean_namespace(m, "ShapesCheck");
     const std::string title = "# The shapes check of `" + config(m) + "`";
     const std::string check = check_module_name(m);
     std::string o = header(
         m, {check, plan_proofs_internal::kConditionsModule}, title, {},
-        "The shapes `" + lean_module_name(m, "Shapes") + ".shapes` hold of `" + prog +
+        "The shapes `" + lean_namespace(m, "Shapes") + ".shapes` hold of `" + prog_ns +
             ".program` (`RealizedProgram.ShapesHold`): the part "
             "`GordieHowe.ProgramData.shapesB` of the program's check (`" + check +
             ".programOk`), through its soundness (`GordieHowe.programOk_sound`).",
@@ -2115,14 +2153,14 @@ inline std::vector<ProofModule> shape_check_modules(const ProofModuleData &d) {
     out.push_back({"ShapesCheck", title, o + "end " + ns + "\n"});
   }
   {
-    const std::string ns = lean_module_name(m, "ShapeFacts");
+    const std::string ns = lean_namespace(m, "ShapeFacts");
     const std::string title = "# The shape facts of `" + config(m) + "`";
     std::string o = header(
         m, {prog, lean_module_name(m, "ShapesCheck")}, title, {count},
-        "One named fact per shape claim of `" + lean_module_name(m, "Shapes") +
-            ".shapes`: the shapes condition (`" + lean_module_name(m, "ShapesCheck") +
+        "One named fact per shape claim of `" + lean_namespace(m, "Shapes") +
+            ".shapes`: the shapes condition (`" + lean_namespace(m, "ShapesCheck") +
             ".shapesHold`) at the claim's position.");
-    o += "namespace " + ns + "\n\nopen RealizedProgram " + prog + "\n\n";
+    o += "namespace " + ns + "\n\nopen RealizedProgram " + prog_ns + "\n\n";
     for (size_t i = 0; i < d.shape_facts.size(); ++i) {
       const ProofModuleData::ShapeFact &f = d.shape_facts[i];
       for (size_t j = 0; j < f.parts.size(); ++j) {

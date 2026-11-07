@@ -288,7 +288,7 @@ def gkrHonest (hok : ir.ClaimOk rs) (TA : ir.CircuitsAccept I src)
 
 variable (ir src rs) in
 /-- **The simulator of branch `j`**: the batch's (`BatchedZerocheck.AffineBatch.sim`,
-`BatchedZerocheck.MergedAffineBatch.sim`), with the bit sumcheck on bits (`bitSim`), or every circuit's
+`BatchedZerocheck.MergedAffineBatch.fusedSim`), with the bit sumcheck on bits (`bitSim`), or every circuit's
 GKR simulator in order (`gkrSim`).
 
 Running time: one run of the branch's simulators (their docstrings). This running time is argued
@@ -304,7 +304,7 @@ def branchSim : (j : ir.BranchIdx d Pk) → (ir.branchIP src rs j).Sim
       (ir.bitLayoutAt src rs (fun r => ir.sumPadCell src rs i (.inr r))
         ((ir.sumBatches d Pk)[i]).nodes)
   | .inl (.inr (.inl i)) =>
-    (ir.mergedBatchAt rs (ir.ClaimPads d src Pk) (ir.mbatches d Pk)[i]).sim
+    (ir.mergedBatchAt rs (ir.ClaimPads d src Pk) (ir.mbatches d Pk)[i]).fusedSim
       (ir.DomainPub I) (ir.mergedPadCell src rs i) (ir.treeLevel d rs (ir.ClaimPads d src Pk))
   | .inl (.inr (.inr i)) =>
     (ir.mergedBatchAt rs (ir.ClaimPads d src Pk) ((ir.sumMBatches d Pk)[i]).mb).bitSim
@@ -318,7 +318,7 @@ def branchSim : (j : ir.BranchIdx d Pk) → (ir.branchIP src rs j).Sim
 variable (ir src rs) in
 /-- **The honest masked reduction of branch `j`** on the honest domain (`HonestDom`) at the honest logical
 assignment (`fieldHonestLog`): the honest batch (`BatchedZerocheck.AffineBatch.honest`,
-`BatchedZerocheck.MergedAffineBatch.honest`) where the domain's batched relation holds on the cells
+`BatchedZerocheck.MergedAffineBatch.fusedHonest`) where the domain's batched relation holds on the cells
 (`colsBatchAt_holds_iff`, `bitsBatchAt_holds_iff`, `mergedBatchAt_holds_iff`,
 `mergedBatchAt_holds_iff_bits`), with the bit sumcheck on bits (`bitHonest`), or the honest GKR of
 every circuit (`GKR.LayeredCircuit.maskedHonest`) through the compiler's completeness; simulated by
@@ -346,7 +346,7 @@ noncomputable def branchHonest (hok : ir.ClaimOk rs) (TA : ir.CircuitsAccept I s
         rw [treeDecode_treeHonestCells hok.tree hok.place h.1.base 0 0 0]
         exact h.1.batch (.inr ⟨_, bitsBatchOkB_of _, Pk.bitsAdditive⟩)
   | .inl (.inr (.inl i)) =>
-    ((ir.mergedBatchAt rs (ir.ClaimPads d src Pk) (ir.mbatches d Pk)[i]).honest
+    ((ir.mergedBatchAt rs (ir.ClaimPads d src Pk) (ir.mbatches d Pk)[i]).fusedHonest
       (ir.DomainPub I) (ir.mergedPadCell src rs i) (ir.treeLevel d rs (ir.ClaimPads d src Pk))).comap
       (fun _ a => ir.fieldHonestLog src rs a) fun p a h => by
         have hom : ((ir.mbatches d Pk)[i]).om = .columns := om_of_mem_mbatches (List.getElem_mem _)
@@ -675,7 +675,7 @@ theorem branch_commits (hok : ir.ClaimOk rs) (TA : ir.CircuitsAccept I src) (p :
       ⟨fun _ _ => rfl, funext fun q => funext fun b =>
         congrFun (fieldHonestCells_place hbase bp mp).2 (ir.bitWord d q, Fin.cast (by norm_num) b)⟩
   | .inl (.inr (.inl i)) =>
-    BatchedZerocheck.MergedAffineBatch.commits_of _ _ _ p _ _ _
+    BatchedZerocheck.MergedAffineBatch.fusedCommits_of _ _ _ p _ _ _
       (mergedBatchAt_ops_congr hok _ p ((treeDecode_treeHonestCells hok.tree hok.place hbase _ _ _).trans
         (treeDecode_treeHonestCells hok.tree hok.place hbase 0 0 0).symm)) (funext fun _ => rfl)
   | .inl (.inr (.inr i)) =>
@@ -686,7 +686,7 @@ theorem branch_commits (hok : ir.ClaimOk rs) (TA : ir.CircuitsAccept I src) (p :
         ((ir.sumMBatches d Pk)[i]).nodes)
       p (ir.fieldHonestLog src rs a) (padsOfIdx bp (.inl (.inr (.inr i)))).1
       (padsOfIdx bp (.inl (.inr (.inr i)))).2 (ir.fieldHonestCells a bp mp)
-      (BatchedZerocheck.MergedAffineBatch.commits_of _ _ _ p _ _ _
+      (BatchedZerocheck.MergedAffineBatch.fusedCommits_of _ _ _ p _ _ _
         (mergedBatchAt_ops_congr hok _ p ((treeDecode_treeHonestCells hok.tree hok.place hbase _ _ _).trans
           (treeDecode_treeHonestCells hok.tree hok.place hbase 0 0 0).symm)) (funext fun _ => rfl))
       ⟨fun _ _ => rfl, funext fun q => funext fun b =>

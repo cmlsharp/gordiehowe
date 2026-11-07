@@ -71,20 +71,27 @@ The w₁ ring:
   `𝔼_{keys, ω₂} idealDist ≤ w1CouplingError` when every supported ring has defect at most `s`, an
   explicit expression in the average regularity gap `regGapAt` and commitment collision
   probability `collAt` of one honest key, `N`, `n`, `C`, `k`, `D` and the keep level `Lk`.
+- `collAt_nonneg`, `expect_w1CouplingError_le`: the average of `w1CouplingError` over a family of
+  primitives is at most `w1CouplingError` with bounds on the averages of `regGapAt` and `collAt`
+  in their place (Jensen's inequality for the square root over `collAt`).
+- `expect_regGapAt_withExpandA`, `expect_collAt_withExpandA_le`: with `ExpandA` a random oracle,
+  the average of `regGapAt` over the oracle is `regGapAvg`, and that of `collAt` is at most the
+  collision bound `commitCollisionBound`.
 - `uniformSplit_sumOracles`, `SatY`, `satMu`, `satCh`, `satMask`, `map_uniformOfFintype_triple`,
   `map_satMu`, `map_satCh`, `map_satMask`, `uniformSplit_sumOracles_satY`, `keepLevel_div_le_one`,
-  `div_le_keepLevel_mldsa44`, `div_le_keepLevel_mldsa65`, `div_le_keepLevel_mldsa87`:
-  satisfiability of the hypotheses of the headlines: `sumOracles` and `sumMask` over the additive
-  group `SatY` with uniform decodings satisfy `hO` and `hMask`, and `Lk = β_min θ / 64` satisfies
+  `mul_div_le_keepLevel`, `div_le_keepLevel_mldsa44`, `div_le_keepLevel_mldsa65`,
+  `div_le_keepLevel_mldsa87`: satisfiability of the hypotheses of the headlines: `sumOracles` and
+  `sumMask` over the additive group `SatY` with uniform decodings satisfy `hO` and `hMask`,
+  `Lk = β_min θ (1 - s) / 32` satisfies `hLk` when `K |V| ≥ 1/16`, `Lk = β_min θ / 64` satisfies
   `hLk` at `s = 1/2` for `θ ≥ 0`, and `hLk1` for `β_min ≤ 1` and `θ ∈ [0, 1]`.
 
 ## What the bound leaves open
 
-- **The regularity and collision terms are the defined averages `regGapAt` and `collAt` at the
-  concrete primitives.** The numeric bounds of `MLDSAPublicW1Regularity.lean` and
-  `MLDSAPublicW1Concentration.lean` are for the game with `ExpandA`, `ExpandS` and `SampleInBall`
-  random oracles and are not applied here: the scheme constants use the FIPS 204 functions, and
-  their key generation reads no oracle.
+- **At the concrete primitives the regularity and collision terms are the defined averages
+  `regGapAt` and `collAt`.** The numeric bounds of `MLDSAPublicW1Regularity.lean` and
+  `MLDSAPublicW1Concentration.lean` hold for `ExpandA`, `ExpandS` and `SampleInBall` random
+  oracles; `MLDSAW1AnonOracle.lean` applies them, averaged over those oracles
+  (`expect_w1CouplingError_randomOracle_le`).
 -/
 
 open Finset
@@ -1271,7 +1278,91 @@ noncomputable def w1CouplingError : ℝ :=
       √(N / ((1 - θ) ^ 2 * (1 - s) ^ 2 * Fintype.card (BucketVec p)) * Real.log (C + 1) / 2)) +
     2 * (k * (D : ℝ)⁻¹) + 2 * (1 - Lk) ^ k
 
+/-- The average commitment collision probability is nonnegative. -/
+theorem collAt_nonneg : 0 ≤ collAt prims :=
+  Finset.expect_nonneg fun _ _ => commitCollision_nonneg _
+
+/-- **The average coupling error over a family of primitives**: for a uniform index `i`, if the
+average of `regGapAt` is at most `R` and the average of `collAt` at most `ε`, the average of
+`w1CouplingError` is at most `w1CouplingError` with `R` in place of `regGapAt` and `ε` in place of
+`collAt`. `regGapAt` enters linearly, and `collAt` under a square root (Jensen's inequality,
+`Real.expect_sqrt_le_sqrt_expect`). -/
+theorem expect_w1CouplingError_le {ι : Type*} [Fintype ι] [Nonempty ι] (P : ι → Primitives p)
+    (hs1 : s < 1) (hθ0 : 0 ≤ θ) {R ε : ℝ} (hR : 𝔼 i, regGapAt (P i) βmin ≤ R)
+    (hε : 𝔼 i, collAt (P i) ≤ ε) :
+    𝔼 i, w1CouplingError (P i) βmin N n s θ C k D Lk ≤
+      2 * (2 * (1 - s)⁻¹ / θ * (n * R) +
+        √(4 * N / (θ * (1 - s)) ^ 2 *
+            (2 * (n * ε) / ((standinScale p * βmin).toReal * Fintype.card (BucketVec p)) ^ 2 +
+              2 / Fintype.card (BucketVec p)) * Real.log C / 2) +
+        √(N / ((1 - θ) ^ 2 * (1 - s) ^ 2 * Fintype.card (BucketVec p)) * Real.log (C + 1) / 2)) +
+      2 * (k * (D : ℝ)⁻¹) + 2 * (1 - Lk) ^ k := by
+  set W : ℝ := (Fintype.card (BucketVec p) : ℝ)
+  set Xs : ℝ := (standinScale p * βmin).toReal * W
+  set A : ℝ := 4 * N / (θ * (1 - s)) ^ 2
+  set L : ℝ := Real.log C
+  set S2 : ℝ := √(N / ((1 - θ) ^ 2 * (1 - s) ^ 2 * W) * Real.log (C + 1) / 2)
+  set K : ℝ := 2 * (k * (D : ℝ)⁻¹) + 2 * (1 - Lk) ^ k
+  set a : ℝ := 2 * (1 - s)⁻¹ / θ
+  have hs : 0 < 1 - s := by linarith
+  have ha : 0 ≤ a := by positivity
+  have hA : 0 ≤ A := by positivity
+  have hL : 0 ≤ L := Real.log_natCast_nonneg C
+  have hW : 0 ≤ W := Nat.cast_nonneg _
+  have hlin : ∀ c : ℝ, A * (2 * (n * c) / Xs ^ 2 + 2 / W) * L / 2 =
+      A * L * n / Xs ^ 2 * c + A * (2 / W) * L / 2 := fun c => by ring
+  have hsq : 𝔼 i, √(A * (2 * (n * collAt (P i)) / Xs ^ 2 + 2 / W) * L / 2) ≤
+      √(A * (2 * (n * ε) / Xs ^ 2 + 2 / W) * L / 2) := by
+    refine (Real.expect_sqrt_le_sqrt_expect _ fun i => ?_).trans (Real.sqrt_le_sqrt ?_)
+    · have := collAt_nonneg (P i)
+      rw [hlin]
+      positivity
+    · simp only [hlin]
+      rw [Finset.expect_add_distrib, ← Finset.mul_expect, Finset.expect_const Finset.univ_nonempty]
+      exact add_le_add (mul_le_mul_of_nonneg_left hε
+        (div_nonneg (mul_nonneg (mul_nonneg hA hL) (Nat.cast_nonneg n)) (sq_nonneg _))) le_rfl
+  have hsplit : ∀ i, w1CouplingError (P i) βmin N n s θ C k D Lk =
+      2 * a * n * regGapAt (P i) βmin +
+        2 * √(A * (2 * (n * collAt (P i)) / Xs ^ 2 + 2 / W) * L / 2) + (2 * S2 + K) := fun i => by
+    rw [w1CouplingError]
+    ring
+  simp only [hsplit]
+  rw [Finset.expect_add_distrib, Finset.expect_add_distrib, ← Finset.mul_expect,
+    ← Finset.mul_expect, Finset.expect_const Finset.univ_nonempty]
+  have hR' : 2 * a * n * 𝔼 i, regGapAt (P i) βmin ≤ 2 * a * n * R :=
+    mul_le_mul_of_nonneg_left hR (by positivity)
+  linarith
+
 end Average
+
+section OracleExpandA
+
+variable (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : NTTRingOps]
+  [Nonempty (MaskBox p)] (βmin : ℚ≥0)
+
+/-- **With `ExpandA` a random oracle, the average of `regGapAt` over the oracle is `regGapAvg`**
+(`expect_regGap_withExpandA`). -/
+theorem expect_regGapAt_withExpandA [Inhabited prims.Hint] [Fintype prims.Hint]
+    [DecidableEq prims.Hint] [Fintype prims.Power2High] [DecidableEq prims.Power2High] :
+    𝔼 G : Bytes 32 → TqMatrix p.k p.l, regGapAt (withExpandA prims G) βmin =
+      regGapAvg prims βmin := by
+  simp only [regGapAt]
+  exact expect_regGap_withExpandA prims βmin
+
+/-- **With `ExpandA` a random oracle, the average of `collAt` over the oracle is at most the
+collision bound** `(((4γ₂ + 1)/q)^k + (2γ₁)^-ℓ)^256`: the oracle's value at `ρ` is uniform
+(`PMF.expect_apply_eval`), and `expect_commitCollision_le` bounds the average at a uniform
+matrix. -/
+theorem expect_collAt_withExpandA_le [NTTRingLaws nttOps] (hp : SigningParams p) :
+    𝔼 G : Bytes 32 → TqMatrix p.k p.l, collAt (withExpandA prims G) ≤ commitCollisionBound p := by
+  simp only [collAt]
+  rw [Finset.expect_comm]
+  refine le_of_eq_of_le (Finset.expect_congr rfl fun seed _ =>
+    PMF.expect_apply_eval (prims.expandSeed seed).1 commitCollision) ?_
+  exact (Finset.expect_le_expect fun _ _ => expect_commitCollision_le hp).trans_eq
+    (Finset.expect_const Finset.univ_nonempty _)
+
+end OracleExpandA
 
 section AverageBound
 
@@ -1546,6 +1637,21 @@ theorem keepLevel_div_le_one {βmin : ℚ≥0} (hβ1 : (βmin : ℝ≥0∞) ≤ 
   have hb1 : (βmin : ℝ≥0∞).toReal ≤ 1 := ENNReal.toReal_le_one_of_le_one hβ1
   have : (βmin : ℝ≥0∞).toReal * θ ≤ 1 * 1 := mul_le_mul hb1 hθ1 hθ0 zero_le_one
   linarith
+
+/-- **The keep level is at least `β_min θ (1 - s) / 32`** when the stand-in scale satisfies
+`K |V| ≥ 1/16`, for `θ ≥ 0` and `s ≤ 1`. -/
+theorem mul_div_le_keepLevel {p : Params}
+    (hK : 1 / 16 ≤ (standinScale p).toReal * Fintype.card (BucketVec p)) (βmin : ℚ≥0) {s θ : ℝ}
+    (hθ0 : 0 ≤ θ) (hs1 : s ≤ 1) :
+    (βmin : ℝ≥0∞).toReal * θ * (1 - s) / 32 ≤ keepLevel p βmin s θ := by
+  have hb : 0 ≤ (βmin : ℝ≥0∞).toReal * θ * (1 - s) :=
+    mul_nonneg (mul_nonneg ENNReal.toReal_nonneg hθ0) (by linarith)
+  rw [keepLevel, ENNReal.toReal_mul]
+  calc (βmin : ℝ≥0∞).toReal * θ * (1 - s) / 32
+      = 1 / 16 * ((βmin : ℝ≥0∞).toReal * θ * (1 - s)) / 2 := by ring
+    _ ≤ (standinScale p).toReal * Fintype.card (BucketVec p) *
+          ((βmin : ℝ≥0∞).toReal * θ * (1 - s)) / 2 := by gcongr
+    _ = _ := by ring
 
 /-- **The keep level at ML-DSA-44** at the defect budget `1/2` is at least `β_min θ / 64`
 (`K |V| ≥ 1/16`, `one_div_sixteen_le_standinScale_mul_card_mldsa44`): the hypothesis `hLk` of

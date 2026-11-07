@@ -19,7 +19,8 @@ The write codecs and challenge readers of the forked domain `d` (`GordieHowe.Rea
 byte codec `FB` and challenge reader `rd`:
 
 * **the branches** (`GordieHowe.RealizedProgram.forkBranchWrites`, `GordieHowe.RealizedProgram.forkBranchReaders`): a covered batch's
-  batch phase (`GordieHowe.BatchedZerocheck.writes`), a merged batch's merging challenge and batch phase, GKR's every
+  batch phase (`GordieHowe.BatchedZerocheck.writes`), a merged batch's merging challenge and zerocheck point in one
+  move and the rest of its batch phase (`GordieHowe.BatchedZerocheck.fusedWrites`), GKR's every
   circuit in sequence (`SpecWrites.sourceInteraction`, `ofListWrites`);
 * **the join** (`GordieHowe.RealizedProgram.forkJoinWrites`, `GordieHowe.RealizedProgram.forkJoinReaders`): the join's masked row reduction (the
   fixed masked reduction, no rounds; every stage's combination challenge and measurements,
@@ -89,7 +90,8 @@ variable (src R)
 /-! ## The branches -/
 
 /-- **The codecs of branch `j`**: a covered batch's batch phase (`BatchedZerocheck.writes`), a merged
-batch's merging challenge (no codec) and batch phase, every circuit's GKR in sequence
+batch's (`BatchedZerocheck.fusedWrites`: the merging challenge and the zerocheck point in one move,
+no codec, then the rest of the batch phase), every circuit's GKR in sequence
 (`SpecWrites.sourceInteraction`). -/
 def branchWrites {fb B Mx : ℕ} (FB : SPBCS.Codec.FieldBytes (I (ir.domainField d)).K fb)
     (hMx : 9 + Mx * fb ≤ B) (hs : ForkSizesLe R Mx) (hgkr : 2 * (1 + fb) ≤ B) :
@@ -102,13 +104,11 @@ def branchWrites {fb B Mx : ℕ} (FB : SPBCS.Codec.FieldBytes (I (ir.domainField
         (fits_of_le hMx (hs.2.1 i).2.1) (fits_of_le hMx (hs.2.1 i).2.2.1) ++
       BatchedZerocheck.roundWrites FB 2 (fits_of_le hMx (hs.2.1 i).2.2.2) 4
   | .inl (.inr (.inl i)) =>
-    SpecWrites.oneV (M := (I (ir.domainField d)).K) (B := B) ++
-      BatchedZerocheck.writes FB _ _ _ _ (fits_of_le hMx (hs.2.2.1.1 i).1)
-        (fits_of_le hMx (hs.2.2.1.1 i).2.1) (fits_of_le hMx (hs.2.2.1.1 i).2.2)
+    BatchedZerocheck.fusedWrites FB _ _ _ _ (fits_of_le hMx (hs.2.2.1.1 i).1)
+      (fits_of_le hMx (hs.2.2.1.1 i).2.1) (fits_of_le hMx (hs.2.2.1.1 i).2.2)
   | .inl (.inr (.inr i)) =>
-    (SpecWrites.oneV (M := (I (ir.domainField d)).K) (B := B) ++
-      BatchedZerocheck.writes FB _ _ _ _ (fits_of_le hMx (hs.2.2.1.2 i).1)
-        (fits_of_le hMx (hs.2.2.1.2 i).2.1) (fits_of_le hMx (hs.2.2.1.2 i).2.2.1)) ++
+    BatchedZerocheck.fusedWrites FB _ _ _ _ (fits_of_le hMx (hs.2.2.1.2 i).1)
+        (fits_of_le hMx (hs.2.2.1.2 i).2.1) (fits_of_le hMx (hs.2.2.1.2 i).2.2.1) ++
       BatchedZerocheck.roundWrites FB 2 (fits_of_le hMx (hs.2.2.1.2 i).2.2.2) 4
   | .inr _ =>
     ofListWrites (M := ir.gkrIP src R.rs)
@@ -116,17 +116,17 @@ def branchWrites {fb B Mx : ℕ} (FB : SPBCS.Codec.FieldBytes (I (ir.domainField
       (List.finRange _)
 
 /-- **The challenge readers of branch `j`**: a covered batch's (`BatchedZerocheck.readers`), a merged
-batch's merging challenge and batch phase, every circuit's GKR (`SpecReaders.sourceInteraction`). -/
+batch's (`BatchedZerocheck.fusedReaders`: the merging challenge and the zerocheck point from one
+challenge point, then the rest of the batch phase), every circuit's GKR
+(`SpecReaders.sourceInteraction`). -/
 def branchReaders (rd : CReader (I (ir.domainField d)).K) :
     (j : ir.BranchIdx d R.Pk) → SpecReaders (ir.branchIP src R.rs j).spec
   | .inl (.inl (.inl _)) => BatchedZerocheck.readers rd _ _ _ _
   | .inl (.inl (.inr _)) =>
     BatchedZerocheck.readers rd _ _ _ _ ++ BatchedZerocheck.roundReaders rd 2 4
-  | .inl (.inr (.inl _)) =>
-    SpecReaders.one (I (ir.domainField d)).K rd ++ BatchedZerocheck.readers rd _ _ _ _
+  | .inl (.inr (.inl _)) => BatchedZerocheck.fusedReaders rd _ _ _ _
   | .inl (.inr (.inr _)) =>
-    (SpecReaders.one (I (ir.domainField d)).K rd ++ BatchedZerocheck.readers rd _ _ _ _) ++
-      BatchedZerocheck.roundReaders rd 2 4
+    BatchedZerocheck.fusedReaders rd _ _ _ _ ++ BatchedZerocheck.roundReaders rd 2 4
   | .inr _ =>
     ofListReaders (M := ir.gkrIP src R.rs)
       (fun i => SpecReaders.sourceInteraction rd (ir.circSource d src i) (ir.circNodes d src i))
@@ -237,18 +237,18 @@ def forkLoad (rd : CReader (I (ir.domainField d)).K) (Lmax : ℕ) : Load :=
   (rd.load.nsmul Lmax).max ⟨(ir.fieldFork src R).join.cp.t, Rejection.byteLen (ir.fieldFork src R).join.N⟩
 
 /-- **The challenge reads of domain `d`'s forked proof have at most `Lmax` elements**: every
-batch's `max (max n k) 3`, every circuit's GKR `max outDim 2`, the first combination's `nc`, every
-later stage's at most `laterBound`, the Ligero test's `nrep · R + nL + nQ`. -/
+batch's `max (max n k) 3` (`max (max (n + 1) k) 3` merged, `γ` read with `ρ`), every circuit's
+GKR `max outDim 2`, the first combination's `nc`, every later stage's at most `laterBound`, the Ligero test's `nrep · R + nL + nQ`. -/
 def ForkLoadSizesLe (Lmax : ℕ) : Prop :=
   (∀ i : Fin (ir.cbatches d R.Pk).length, max (max (ir.colsBatchAt R.rs (ir.ClaimPads d src R.Pk) (ir.cbatches d R.Pk)[i]).n
       (ir.colsBatchAt R.rs (ir.ClaimPads d src R.Pk) (ir.cbatches d R.Pk)[i]).k) 3 ≤ Lmax) ∧
   (∀ i : Fin (ir.sumBatches d R.Pk).length,
       max (max (ir.bitsBatchAt R.rs (ir.ClaimPads d src R.Pk) ((ir.sumBatches d R.Pk)[i]).cb).n
         (ir.bitsBatchAt R.rs (ir.ClaimPads d src R.Pk) ((ir.sumBatches d R.Pk)[i]).cb).k) 3 ≤ Lmax) ∧
-  ((∀ i : Fin (ir.mbatches d R.Pk).length, max (max (ir.mergedBatchAt R.rs (ir.ClaimPads d src R.Pk) (ir.mbatches d R.Pk)[i]).n
+  ((∀ i : Fin (ir.mbatches d R.Pk).length, max (max ((ir.mergedBatchAt R.rs (ir.ClaimPads d src R.Pk) (ir.mbatches d R.Pk)[i]).n + 1)
       (ir.mergedBatchAt R.rs (ir.ClaimPads d src R.Pk) (ir.mbatches d R.Pk)[i]).k) 3 ≤ Lmax) ∧
     ∀ i : Fin (ir.sumMBatches d R.Pk).length,
-      max (max (ir.mergedBatchAt R.rs (ir.ClaimPads d src R.Pk) ((ir.sumMBatches d R.Pk)[i]).mb).n
+      max (max ((ir.mergedBatchAt R.rs (ir.ClaimPads d src R.Pk) ((ir.sumMBatches d R.Pk)[i]).mb).n + 1)
         (ir.mergedBatchAt R.rs (ir.ClaimPads d src R.Pk) ((ir.sumMBatches d R.Pk)[i]).mb).k) 3 ≤ Lmax) ∧
   (∀ i : Fin (ir.circs d).length, max (ir.circSource d src i).outDim 2 ≤ Lmax) ∧ ir.claimCount (d := d) (Pk := R.Pk) ≤ Lmax ∧ laterBound R.rs ≤ Lmax ∧
   (ir.fieldFork src R).join.cp.nrep * (ir.fieldFork src R).join.R +
@@ -262,10 +262,10 @@ def ForkRestSizesLe (Lmax : ℕ) : Prop :=
   (∀ i : Fin (ir.sumBatches d R.Pk).length,
       max (max (ir.bitsBatchAt R.rs (ir.ClaimPads d src R.Pk) ((ir.sumBatches d R.Pk)[i]).cb).n
         (ir.bitsBatchAt R.rs (ir.ClaimPads d src R.Pk) ((ir.sumBatches d R.Pk)[i]).cb).k) 3 ≤ Lmax) ∧
-  ((∀ i : Fin (ir.mbatches d R.Pk).length, max (max (ir.mergedBatchAt R.rs (ir.ClaimPads d src R.Pk) (ir.mbatches d R.Pk)[i]).n
+  ((∀ i : Fin (ir.mbatches d R.Pk).length, max (max ((ir.mergedBatchAt R.rs (ir.ClaimPads d src R.Pk) (ir.mbatches d R.Pk)[i]).n + 1)
       (ir.mergedBatchAt R.rs (ir.ClaimPads d src R.Pk) (ir.mbatches d R.Pk)[i]).k) 3 ≤ Lmax) ∧
     ∀ i : Fin (ir.sumMBatches d R.Pk).length,
-      max (max (ir.mergedBatchAt R.rs (ir.ClaimPads d src R.Pk) ((ir.sumMBatches d R.Pk)[i]).mb).n
+      max (max ((ir.mergedBatchAt R.rs (ir.ClaimPads d src R.Pk) ((ir.sumMBatches d R.Pk)[i]).mb).n + 1)
         (ir.mergedBatchAt R.rs (ir.ClaimPads d src R.Pk) ((ir.sumMBatches d R.Pk)[i]).mb).k) 3 ≤ Lmax) ∧
   (∀ i : Fin (ir.circs d).length, max (ir.circSource d src i).outDim 2 ≤ Lmax) ∧ laterBound R.rs ≤ Lmax ∧
   (ir.fieldFork src R).join.cp.nrep * (ir.fieldFork src R).join.R +
@@ -293,18 +293,11 @@ theorem branchReaders_allLoads (rd : CReader (I (ir.domainField d)).K) {Lmax : �
       (BatchedZerocheck.roundReaders_allLoads rd 2 _ ((show rd.load ≤ rd.load.nsmul 1 from
         ⟨by simp [Load.nsmul], by simp [Load.nsmul]⟩).trans
         (nsmul_le_forkLoad rd (le_trans (by omega) (hL.2.1 i)))) 4)
-  | .inl (.inr (.inl i)) => SpecReaders.append_allLoads
-      (SpecReaders.one_allLoads _ ((show rd.load ≤ rd.load.nsmul 1 from
-        ⟨by simp [Load.nsmul], by simp [Load.nsmul]⟩).trans
-        (nsmul_le_forkLoad rd (le_trans (by omega) (hL.2.2.1.1 i)))))
-      ((BatchedZerocheck.readers_allLoads rd).mono fun _ h =>
-        h.trans (nsmul_le_forkLoad rd (hL.2.2.1.1 i)))
-  | .inl (.inr (.inr i)) => SpecReaders.append_allLoads (SpecReaders.append_allLoads
-      (SpecReaders.one_allLoads _ ((show rd.load ≤ rd.load.nsmul 1 from
-        ⟨by simp [Load.nsmul], by simp [Load.nsmul]⟩).trans
-        (nsmul_le_forkLoad rd (le_trans (by omega) (hL.2.2.1.2 i)))))
-      ((BatchedZerocheck.readers_allLoads rd).mono fun _ h =>
-        h.trans (nsmul_le_forkLoad rd (hL.2.2.1.2 i))))
+  | .inl (.inr (.inl i)) => (BatchedZerocheck.fusedReaders_allLoads rd).mono fun _ h =>
+      h.trans (nsmul_le_forkLoad rd (hL.2.2.1.1 i))
+  | .inl (.inr (.inr i)) => SpecReaders.append_allLoads
+      ((BatchedZerocheck.fusedReaders_allLoads rd).mono fun _ h =>
+        h.trans (nsmul_le_forkLoad rd (hL.2.2.1.2 i)))
       (BatchedZerocheck.roundReaders_allLoads rd 2 _ ((show rd.load ≤ rd.load.nsmul 1 from
         ⟨by simp [Load.nsmul], by simp [Load.nsmul]⟩).trans
         (nsmul_le_forkLoad rd (le_trans (by omega) (hL.2.2.1.2 i)))) 4)
@@ -383,18 +376,36 @@ theorem _root_.GordieHowe.BatchedZerocheck.roundReaders_ungranted {K : Type} [Fi
       (SpecReaders.AllGranted.append (SpecReaders.AllGranted.one r hr)
         (GordieHowe.BatchedZerocheck.roundReaders_ungranted hr D k))
 
+/-- **A field batch's phase after `ρ` grants nothing** when the field reader grants nothing. -/
+theorem _root_.GordieHowe.BatchedZerocheck.tailReaders_ungranted {K : Type} [Field K] [Fintype K]
+    {r : CReader K} (hr : r.grant = 0) (e D n k : ℕ) :
+    (BatchedZerocheck.tailReaders r e D n k).Ungranted := by
+  have hpi : (CReader.pi k r).grant = 0 := by rw [CReader.pi_grant, hr, mul_zero]
+  exact SpecReaders.AllGranted.append (SpecReaders.Ungranted.oneP _)
+    (SpecReaders.AllGranted.append (SpecReaders.AllGranted.one r hr)
+      (SpecReaders.AllGranted.append (BatchedZerocheck.roundReaders_ungranted hr D n)
+        (SpecReaders.AllGranted.append (SpecReaders.Ungranted.oneP _)
+          (SpecReaders.AllGranted.append (SpecReaders.AllGranted.one _ hpi)
+            SpecReaders.Ungranted.empty))))
+
 /-- **A field batch's phase grants nothing** when the field reader grants nothing. -/
 theorem _root_.GordieHowe.BatchedZerocheck.readers_ungranted {K : Type} [Field K] [Fintype K]
     {r : CReader K} (hr : r.grant = 0) (e D n k : ℕ) :
     (BatchedZerocheck.readers r e D n k).Ungranted := by
-  have hpi : ∀ m, (CReader.pi m r).grant = 0 := fun m => by rw [CReader.pi_grant, hr, mul_zero]
-  exact SpecReaders.AllGranted.append (SpecReaders.AllGranted.one _ (hpi n))
-    (SpecReaders.AllGranted.append (SpecReaders.Ungranted.oneP _)
-      (SpecReaders.AllGranted.append (SpecReaders.AllGranted.one r hr)
-        (SpecReaders.AllGranted.append (BatchedZerocheck.roundReaders_ungranted hr D n)
-          (SpecReaders.AllGranted.append (SpecReaders.Ungranted.oneP _)
-            (SpecReaders.AllGranted.append (SpecReaders.AllGranted.one _ (hpi k))
-              SpecReaders.Ungranted.empty)))))
+  have hpi : (CReader.pi n r).grant = 0 := by rw [CReader.pi_grant, hr, mul_zero]
+  exact SpecReaders.AllGranted.append (SpecReaders.AllGranted.one _ hpi)
+    (BatchedZerocheck.tailReaders_ungranted hr e D n k)
+
+/-- **A merged field batch's phase grants nothing** when the field reader grants nothing: `γ` and
+`ρ` read by `r` and its tuple, then the moves after `ρ`. -/
+theorem _root_.GordieHowe.BatchedZerocheck.fusedReaders_ungranted {K : Type} [Field K] [Fintype K]
+    {r : CReader K} (hr : r.grant = 0) (e D n k : ℕ) :
+    (BatchedZerocheck.fusedReaders r e D n k).Ungranted := by
+  have hp : (r.prod (CReader.pi n r)).grant = 0 := by
+    change r.grant + (CReader.pi n r).grant = 0
+    rw [CReader.pi_grant, hr, mul_zero, add_zero]
+  exact SpecReaders.AllGranted.append (SpecReaders.AllGranted.one _ hp)
+    (BatchedZerocheck.tailReaders_ungranted hr e D n k)
 
 /-- **Every branch's readers grant nothing** when the field reader grants nothing: the batch
 phases and GKR. -/
@@ -403,11 +414,9 @@ theorem branchReaders_ungranted {rd : CReader (I (ir.domainField d)).K} (hrd : r
   | .inl (.inl (.inl _)) => BatchedZerocheck.readers_ungranted hrd _ _ _ _
   | .inl (.inl (.inr _)) => SpecReaders.AllGranted.append
       (BatchedZerocheck.readers_ungranted hrd _ _ _ _) (BatchedZerocheck.roundReaders_ungranted hrd 2 4)
-  | .inl (.inr (.inl _)) => SpecReaders.AllGranted.append (SpecReaders.AllGranted.one rd hrd)
-      (BatchedZerocheck.readers_ungranted hrd _ _ _ _)
+  | .inl (.inr (.inl _)) => BatchedZerocheck.fusedReaders_ungranted hrd _ _ _ _
   | .inl (.inr (.inr _)) => SpecReaders.AllGranted.append
-      (SpecReaders.AllGranted.append (SpecReaders.AllGranted.one rd hrd)
-        (BatchedZerocheck.readers_ungranted hrd _ _ _ _))
+      (BatchedZerocheck.fusedReaders_ungranted hrd _ _ _ _)
       (BatchedZerocheck.roundReaders_ungranted hrd 2 4)
   | .inr _ => ofListReaders_ungranted
       (fun i => SpecReaders.sourceInteraction_ungranted hrd (ir.circSource d src i) (ir.circNodes d src i))

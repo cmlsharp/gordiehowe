@@ -21,8 +21,8 @@ ring's profile constants): the membership table's transform root
 (`GordieHowe.Falcon512.Ring.Native.Params.aRingROMShape`), with their line certificates (`GordieHowe.Falcon512.Ring.Native.Params.aNativeROMMaskTest`, `GordieHowe.Falcon512.Ring.Native.Params.aRingROMMaskTest`). The round bounds are the library's, at the certificates'
 fractions (`GordieHowe.RealizedProgram.FieldRoundsLe.of_ok`). The notes below
 record the C++'s range plan, phase layout, domain A and its packing tree, which the generated
-plan data carries (`GordieHowe/Generated/Falcon512/Ring/Native/QROMParams/Plan.lean`,
-`GordieHowe/Generated/Falcon512/Ring/Native/ROMParams/Plan.lean`). The system has one domain, `A`, and no MAC: the
+plan data carries (`GordieHoweCerts/Generated/Falcon512/Ring/Native/QROMParams/Plan.lean`,
+`GordieHoweCerts/Generated/Falcon512/Ring/Native/ROMParams/Plan.lean`). The system has one domain, `A`, and no MAC: the
 salt and the message are public, so `c = HashToPoint(r ‖ m)` is a statement value and the relation
 is proved in `A` alone. Names are the C++'s scoped node names (`member.ring.gamma`, `norm.a`,
 `enc.high`, `alpha:A`, …), as in the generated plan data. Citations are `file:line` at

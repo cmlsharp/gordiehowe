@@ -3,9 +3,9 @@
 
 module
 
-public import GordieHowe.Generated.MLDSA44.Emulated.ROMParams.Data
+public import GordieHoweCerts.Generated.MLDSA44.Emulated.ROMParams.Data
 public import GordieHowe.Applications.Program.Conditions
-public import GordieHowe.Generated.MLDSA44.Emulated.ROMParams.Pending.Small
+public import GordieHoweCerts.Generated.MLDSA44.Emulated.ROMParams.Pending.Small
 public import GordieHoweCheck.MLDSA44.Emulated.ROMParams.GKR.A.Circuit
 public import GordieHoweCheck.MLDSA44.Emulated.ROMParams.GKR.H.Circuit
 

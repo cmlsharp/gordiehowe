@@ -280,6 +280,9 @@ struct DomainPlan {
     // program's bitSumcheck (plan_program.h).
     size_t bit_phase = 0;
     std::vector<std::string> parts;
+    // Its relations merged as sum_i gamma^i Q_i, one per part (batch.h's
+    // relations() > 1). Exported as the program's gamma.
+    bool merged = false;
     // The first of its pad inputs (PADS of them).
     size_t pad_input = 0;
     // Several calls sharing the relation: each call's table node and
@@ -687,6 +690,11 @@ class Domain : public virtual DomainCore {
   };
   struct QuadDecl {
     size_t a, b, c;
+  };
+  // A merged batch (merge_batch): its name and its predicates' pins.
+  struct MergeDecl {
+    std::string name;
+    std::vector<const Placement *> preds;
   };
   // A batched relation: its operands and skip width, which the domain's
   // compiler makes a kernel of (BatchKernel, under the protocol hash).
@@ -1256,6 +1264,49 @@ class Domain : public virtual DomainCore {
     if (b.missing.empty())
       b.ops = compiler::field_batch_operands(*f_, std::move(parts), d);
     batches_.push_back(std::move(b));
+  }
+  // Several relations on bit operands (characteristic 2) with the same
+  // instances, merged into one zerocheck of Q_1 + gamma Q_2 + ... (batch.h,
+  // MergedOperands); part i (compiler::bit_batch_part) reads its part of
+  // TABLES (the parts' words concatenated in order; a table may recur).
+  void batch(std::string nm, std::vector<Ref<F, Subfield<>, Committed>> tables,
+             std::vector<compiler::BitBatchPart<F>> parts,
+             unsigned width = 16) {
+    batch<Designated>(std::move(nm), std::move(tables), std::move(parts),
+                      width);
+  }
+  template <class Sb>
+  void batch(std::string nm,
+             std::vector<Ref<F, Subfield<Sb>, Committed>> tables,
+             std::vector<compiler::BitBatchPart<F>> parts,
+             unsigned width = 16) {
+    BatchDecl b{std::move(nm), {}, nullptr, width, ""};
+    for (const auto &t : tables) b.tables.push_back(t.id);
+    if constexpr (F::kCharacteristicTwo)
+      b.ops = compiler::merged_bit_batch_operands(*f_, parts, width,
+                                                  b.missing);
+    else
+      b.missing = "bit operands exist in characteristic 2";
+    batches_.push_back(std::move(b));
+  }
+  // The predicates PREDS of this domain, each of a batched form, with the
+  // same coordinates and the same operand class, merged into one batch NM:
+  // one zerocheck of Q_1 + gamma Q_2 + ... over their operands side by side
+  // (batch.h, MergedOperands), in declaration order. Each is pinned to a
+  // batch. The domain is not cached (describe_declarations).
+  // TODO: profile merging, and decide whether the compiler should ever
+  // merge. On three bit relations of 4096 lanes the merged batch proved
+  // about 28% slower and verified about 45% slower than three separate
+  // batches, for a 2% smaller proof; no program merges today.
+  void merge_batch(std::string nm, const std::vector<Predicate> &preds) {
+    MergeDecl m{std::move(nm), {}};
+    for (const auto &p : preds) {
+      if (p.key() == nullptr)
+        fail("merge_batch '" + m.name + "': a predicate without a placement");
+      p.pin(Placement::kBatch);
+      m.preds.push_back(p.key());
+    }
+    merges_.push_back(std::move(m));
   }
   // The default skip width: 16 for bit operands, 4 for field operands.
   template <class Map>
@@ -2617,6 +2668,21 @@ class Domain : public virtual DomainCore {
       put_bound(out, r.realization.established);
     }
     put_bound(out, max_table_);
+    // Merged batches, only when there are some (the other domains'
+    // descriptions are unchanged); their predicates by declaration index.
+    if (!merges_.empty()) {
+      put_u64(out, merges_.size());
+      for (const auto &m : merges_) {
+        put_str(out, m.name);
+        put_u64(out, m.preds.size());
+        for (const Placement *key : m.preds)
+          for (size_t k = 0; k < preds_.size(); ++k)
+            if (preds_[k].pin.get() == key) put_u64(out, k);
+      }
+      if (uncacheable.empty())
+        uncacheable = "domain " + this->name + " merges predicates into a "
+                      "batch (merge_batch)";
+    }
     return uncacheable;
   }
 
@@ -3003,6 +3069,7 @@ class Domain : public virtual DomainCore {
   std::vector<PredDecl> preds_;
   std::vector<QuadDecl> quads_;
   std::vector<BatchDecl> batches_;
+  std::vector<MergeDecl> merges_;
   // Each value's definition (set_def): the one source of truth.
   std::map<size_t, ValueDef<F>> defs_;
   // Indexes of the definitions by form, written by set_def only: the

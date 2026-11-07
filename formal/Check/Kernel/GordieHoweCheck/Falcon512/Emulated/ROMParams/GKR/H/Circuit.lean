@@ -12,8 +12,8 @@ public import GordieHoweCheck.Falcon512.Emulated.ROMParams.GKR.H.E5
 public import GordieHoweCheck.Falcon512.Emulated.ROMParams.GKR.H.E6
 public import GordieHoweCheck.Falcon512.Emulated.ROMParams.GKR.H.E7
 public import GordieHoweCheck.Falcon512.Emulated.ROMParams.GKR.H.E8
-meta import GordieHowe.Generated.Falcon512.Emulated.ROMParams.GKR.H
-import all GordieHowe.Generated.Falcon512.Emulated.ROMParams.Program
+meta import GordieHoweCerts.Generated.Falcon512.Emulated.ROMParams.GKR.H
+import all GordieHoweCerts.Generated.Falcon512.Emulated.ROMParams.Program
 
 @[expose] public section
 

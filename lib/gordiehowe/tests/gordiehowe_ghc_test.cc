@@ -18,6 +18,11 @@
 //                             on a type with no constructor form, and a
 //                             second section of one name; the writer
 //                             refuses the same values
+//   GordieHoweGhc.UnknownTags the writer and the reader refuse a section
+//                             flag outside kKnownFlags; the reader refuses
+//                             a natural not minimally encoded (a tag, a
+//                             count, a value, a flag) and a tag of more
+//                             than 64 bits, which it read truncated before
 //   GordieHoweGhc.UnknownType the writer and the reader refuse a section of
 //                             a type the schema does not know, at a wrong
 //                             arity, or naming an unknown argument
@@ -33,6 +38,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
+#include <initializer_list>
 #include <iterator>
 #include <string>
 #include <vector>
@@ -228,6 +234,52 @@ TEST(GordieHoweGhc, Malformed) {
   Bytes rr;
   rr.ref(0);
   EXPECT_NO_THROW(f.section("p2", ty("T.Point"), kSpine, rr));
+}
+
+TEST(GordieHoweGhc, UnknownTags) {
+  const Schema s = test_schema();
+  const std::vector<uint8_t> pt = {0x05, 0x02, 0x01};  // ⟨5, 1, true⟩
+  auto bad = [&](const std::vector<uint8_t> &x) { EXPECT_THROW(read(x, s), Error); };
+  // Flags: each known combination reads, any other bit is refused by the
+  // reader and the writer.
+  for (uint64_t f : std::initializer_list<uint64_t>{0, 1, 4, 5}) EXPECT_NO_THROW(read(one("p", ty("T.Point"), f, pt, 3), s)) << f;
+  for (uint64_t f : std::initializer_list<uint64_t>{8, 9, 64, uint64_t(1) << 20}) {
+    bad(one("p", ty("T.Point"), f, pt, 3));
+    File w(s);
+    Bytes v;
+    v.bytes(pt);
+    EXPECT_THROW(w.section("p", ty("T.Point"), f, v), Error) << f;
+  }
+  // A flag byte 0x80 0x00 (zero, not minimal).
+  {
+    std::vector<uint8_t> x = {0x47, 0x48, 0x43, 0x03, 0x01, 'p', 0x00, 0x07};
+    for (char ch : std::string("T.Point")) x.push_back(uint8_t(ch));
+    x.insert(x.end(), {0x80, 0x00, 0x03});
+    x.insert(x.end(), pt.begin(), pt.end());
+    x.push_back(0x00);
+    bad(x);
+    x.erase(x.end() - 7);
+    EXPECT_NO_THROW(read(x, s));
+  }
+  // Values: a Bool tag 1 as 0x81 0x00, a natural 5 as 0x85 0x00, an
+  // integer 1 as 0x82 0x00, a constructor index 1 as 0x81 0x00, a spine tag
+  // 0 as 0x80 0x00.
+  bad(one("p", ty("T.Point"), 0, {0x05, 0x02, 0x81, 0x00}, 4));
+  bad(one("p", ty("T.Point"), 0, {0x85, 0x00, 0x02, 0x01}, 4));
+  bad(one("p", ty("T.Point"), 0, {0x05, 0x82, 0x00, 0x01}, 4));
+  bad(one("s", ty("T.Shape"), 0, {0x81, 0x00, 0x05, 0x02, 0x01, 0x05, 0x02, 0x01}, 8));
+  EXPECT_NO_THROW(read(one("s", ty("T.Shape"), 0, {0x01, 0x05, 0x02, 0x01, 0x05, 0x02, 0x01}, 7), s));
+  bad(one("n", ty("Nat"), kSpine, {0x80, 0x00, 0x05}, 3));
+  // A Bool tag 2^64 + 1 (ten groups): refused, not read as 1.
+  std::vector<uint8_t> wide = {0x05, 0x02, 0x81};
+  wide.insert(wide.end(), 8, 0x80);
+  wide.push_back(0x02);
+  bad(one("p", ty("T.Point"), 0, wide, wide.size()));
+  // A natural value of more than 64 bits still reads.
+  std::vector<uint8_t> big = {0x81};
+  big.insert(big.end(), 8, 0x80);
+  big.insert(big.end(), {0x02, 0x02, 0x01});
+  EXPECT_NO_THROW(read(one("p", ty("T.Point"), 0, big, big.size()), s));
 }
 
 TEST(GordieHoweGhc, UnknownType) {

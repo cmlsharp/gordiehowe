@@ -75,7 +75,7 @@ class Case:
 def family_case(family: Family, role: str) -> Case:
     generated = f"GordieHowe.Generated.{family.program}"
     app = f"GordieHowe.{family.program}"
-    imports = (f"{generated}.Certified",)
+    imports = (f"GordieHoweCerts.Generated.{family.program}.Certified",)
     scope = "actual application" if family.application else "actual core program"
     if role == "source_width":
         return Case(
@@ -87,7 +87,7 @@ def family_case(family: Family, role: str) -> Case:
             scope=scope,
         )
     if family.application:
-        imports += (f"GordieHowe.Applications.{family.program}",)
+        imports += (f"GordieHoweCerts.Applications.{family.program}",)
         system = f"{app}.proofSystem"
         binder = ""
         signer_arg = ""
@@ -157,7 +157,7 @@ def cases() -> list[Case]:
             app = f"GordieHowe.{program}"
             result.append(Case(
                 f"converted_{variant.lower()}_{profile.lower()}",
-                (f"GordieHowe.Applications.{program}.RingForger",),
+                (f"GordieHoweCerts.Applications.{program}.RingForger",),
                 f"def data := {app}.convertedSim {app}.proofSystem\n"
                 "def witness := GordieHowe.RealizedProgram.ProofSystem.IOP.simulator data",
                 ("data", "witness"), "actual converted Ring simulator",

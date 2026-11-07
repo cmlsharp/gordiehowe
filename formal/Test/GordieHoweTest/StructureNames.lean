@@ -4,9 +4,9 @@
 import GordieHowe.Language.Completeness.Check
 import GordieHowe.ProofSystem.Program.FieldDomain
 import GordieHowe.ProofSystem.Program.FieldTree
-import GordieHowe.Generated.Falcon512.Native.ROMParams.Plan
-import GordieHowe.Generated.Falcon512.Native.ROMParams.Certified
-import GordieHowe.Generated.Falcon512.Native.ROMParams.Structure
+import GordieHoweCerts.Generated.Falcon512.Native.ROMParams.Plan
+import GordieHoweCerts.Generated.Falcon512.Native.ROMParams.Certified
+import GordieHoweCerts.Generated.Falcon512.Native.ROMParams.Structure
 
 /-!
 # Tests of the name checks at the structure records' pointers

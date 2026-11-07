@@ -9,9 +9,10 @@
 // marker (an empty name). A section is its name (the Lean definition it
 // becomes, relative to the loading namespace), its Lean type (Ty), its flags
 // (kCompile: the definition gets compiled code; kSpine: the value is in
-// spine form; kReader: native mode reads it at run time), its value's byte
-// count and its value. A value is written by its Lean type: a natural as
-// LEB128 (least significant group first, minimal), an integer zigzag, a
+// spine form; kReader: native mode reads it at run time; no other bit), its
+// value's byte count and its value. A value is written by its Lean type: a
+// natural as LEB128 (least significant group first, minimal: the readers
+// reject a multi-byte natural whose last group is zero), an integer zigzag, a
 // Bool as 0/1, a string as its byte count then its UTF-8 bytes, an Option
 // as 0, or 1 then the value, a List as its count then its items, a
 // structure (Prod included) as its fields in order, any other inductive as
@@ -360,25 +361,41 @@ class Schema {
     if (prims_.count(name) || types_.count(name)) throw Error("schema: " + name + " twice");
     types_[name] = std::move(t);
   }
-  static uint64_t nat(Cursor &c) {
-    uint64_t x = 0;
-    for (size_t shift = 0;; shift += 7) {
-      if (c.pos >= c.n) throw Error("unexpected end of data at byte " + std::to_string(c.pos));
-      const uint8_t v = c.b[c.pos++];
-      if (shift < 64) x |= uint64_t(v & 0x7f) << shift;
-      if ((v & 0x80) == 0) return x;
-    }
-  }
-  // A natural of any size, rendered in hex when it exceeds 64 bits.
-  static void big(Cursor &c) {
+
+
+ public:
+  // The LEB128 groups of a natural of any size at C, which must be minimal
+  // (a multi-byte natural's last group nonzero).
+  static std::vector<uint8_t> groups(Cursor &c) {
     const size_t start = c.pos;
-    std::vector<uint8_t> groups;
+    std::vector<uint8_t> g;
     for (;;) {
       if (c.pos >= c.n) throw Error("unexpected end of data at byte " + std::to_string(c.pos));
       const uint8_t v = c.b[c.pos++];
-      groups.push_back(v & 0x7f);
+      g.push_back(v & 0x7f);
       if ((v & 0x80) == 0) break;
     }
+    if (g.size() > 1 && g.back() == 0)
+      throw Error("a natural at byte " + std::to_string(start) + " is not minimally encoded");
+    return g;
+  }
+  // A natural below 2^64 at C (a tag, a count, a length): a minimal LEB128
+  // natural of more bits is rejected, not truncated.
+  static uint64_t nat(Cursor &c) {
+    const size_t start = c.pos;
+    const std::vector<uint8_t> g = groups(c);
+    if (g.size() > 10 || (g.size() == 10 && g.back() > 1))
+      throw Error("a natural at byte " + std::to_string(start) + " exceeds 64 bits");
+    uint64_t x = 0;
+    for (size_t i = 0; i < g.size(); ++i) x |= uint64_t(g[i]) << (7 * i);
+    return x;
+  }
+
+ private:
+  // A natural of any size, rendered in hex when it exceeds 64 bits.
+  static void big(Cursor &c) {
+    const size_t start = c.pos;
+    const std::vector<uint8_t> groups = Schema::groups(c);
     if (c.text == nullptr) return;
     if (groups.size() <= 9) {
       Cursor d{c.b, c.n, start};
@@ -426,9 +443,10 @@ class Schema {
       if (t.name == "Nat") return big(c);
       if (t.name == "Int") {
         Cursor d = c;
-        const uint64_t z = nat(c);
+        groups(c);
         if (c.text == nullptr) return;
         if (c.pos - d.pos > 9) return big(d);
+        const uint64_t z = nat(d);
         *c.text += (z & 1) ? "-" + std::to_string(z / 2 + 1) : std::to_string(z / 2);
         return;
       }
@@ -479,6 +497,9 @@ class Schema {
 // ----------------------------------------------------------------- files --
 
 enum Flags : uint64_t { kCompile = 1, kSpine = 2, kReader = 4 };
+// The flag bits a section may set; the writer and the reader reject any
+// other.
+inline constexpr uint64_t kKnownFlags = kCompile | kSpine | kReader;
 
 // A file's section: name, type, flags, value.
 struct Section {
@@ -500,6 +521,8 @@ class File {
     if (name.empty()) throw Error("a section with no name");
     if (names_.count(name)) throw Error("section " + name + ": a second one");
     if (!schema_.knows(type)) throw Error("section " + name + ": unknown type " + type.text());
+    if (flags & ~kKnownFlags)
+      throw Error("section " + name + ": unknown flags " + std::to_string(flags));
     try {
       check(schema_, type, flags, value.out, types_);
     } catch (const Error &e) {
@@ -548,15 +571,7 @@ inline std::vector<Section> read(const std::vector<uint8_t> &b, const Schema &sc
   if (b.size() < 4 || b[0] != 0x47 || b[1] != 0x48 || b[2] != 0x43 || b[3] != 3)
     throw Error("not a GHC version 3 file");
   Schema::Cursor c{b.data(), b.size(), 4};
-  auto nat = [&]() {
-    uint64_t x = 0;
-    for (size_t shift = 0;; shift += 7) {
-      if (c.pos >= c.n) throw Error("unexpected end of data at byte " + std::to_string(c.pos));
-      const uint8_t v = c.b[c.pos++];
-      if (shift < 64) x |= uint64_t(v & 0x7f) << shift;
-      if ((v & 0x80) == 0) return x;
-    }
-  };
+  auto nat = [&]() { return Schema::nat(c); };
   auto string = [&]() {
     const uint64_t n = nat();
     if (n > c.n - c.pos) throw Error("unexpected end of data in a section name");
@@ -581,6 +596,8 @@ inline std::vector<Section> read(const std::vector<uint8_t> &b, const Schema &sc
     if (!names.insert(name).second) throw Error("section " + name + ": a second one");
     Section s{name, type(), 0, {}};
     s.flags = nat();
+    if (s.flags & ~kKnownFlags)
+      throw Error("section " + name + ": unknown flags " + std::to_string(s.flags));
     const uint64_t len = nat();
     if (len > c.n - c.pos) throw Error("section " + name + ": length past the end");
     s.value.assign(b.begin() + c.pos, b.begin() + c.pos + len);

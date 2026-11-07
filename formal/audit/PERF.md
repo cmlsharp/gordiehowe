@@ -5,8 +5,8 @@ A declaration over budget fails the gate unless `perf_allowlist.tsv` lists it wi
 The allowlist is sorted by cost, max(elab_s, kernel_s), descending. Its top entries are the
 performance backlog: work on them first.
 
-Certificate modules (`GordieHowe.Generated.*`, `GordieHoweCerts*` and every module importing a
-generated one) are outside the budget, and so are modules outside GordieHowe's import closure.
+Certificate modules (`GordieHoweCerts*`: the generated modules and every module importing one)
+are outside the budget, and so are modules outside GordieHowe's import closure.
 
 ## Running
 

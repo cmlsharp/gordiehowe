@@ -4,8 +4,8 @@
 // The held-out programs' plan export (heldout_programs.h):
 //   heldout_export --dir DIR [--commit C] [--only CONFIG,...] [--list]
 // writes each configuration's plan, realized program and proof modules
-// under DIR (GordieHowe/Generated/Heldout/<lean>/ROMParams/), and prints
-//   GH_EXPORT_PLAN config=<c> module=GordieHowe.Generated.Heldout.<lean>.ROMParams path=<plan>
+// under DIR (GordieHoweCerts/Generated/Heldout/<lean>/ROMParams/), and prints
+//   GH_EXPORT_PLAN config=<c> module=GordieHoweCerts.Generated.Heldout.<lean>.ROMParams path=<plan>
 // or, when the compiler or the exporter refuses the program,
 //   GH_EXPORT_FAIL config=<c> what=<the error>
 // It exits 0 when every selected configuration exported.
@@ -45,7 +45,7 @@ int main(int argc, char **argv) {
   int failed = 0;
   for (const auto &e : exports()) {
     if (!only.empty() && !only.count(e.config)) continue;
-    const std::string module = "GordieHowe.Generated.Heldout." + e.lean + "." +
+    const std::string module = "GordieHoweCerts.Generated.Heldout." + e.lean + "." +
                                proofs::gordiehowe::compiler::lean_param_set(
                                    P::kId);
     if (list) {

@@ -4,16 +4,16 @@
 
 """Check the boundary between the library GordieHowe and the certificate library GordieHoweCerts.
 
-The certificate library (lakefile.toml) holds the exported programs, plans and certificates, the
-modules `GordieHowe.Generated.*`, every module importing one of them, and the modules
-`GordieHoweCerts.*` and `GordieHoweCheck.*` (from the selected check source directory). The default build target `GordieHowe` checks none of them. Two checks, over the
-import lines of the sources:
+The certificate library (lakefile.toml) holds the modules `GordieHoweCerts.*`: the exported
+programs, plans and certificates (`GordieHoweCerts.Generated.*`) and every module importing one of
+them; it imports the modules `GordieHoweCheck.*` (from the selected check source directory). The
+default build target `GordieHowe` checks none of them. Two checks, over the import lines of the
+sources:
 
-1. the import closure of `GordieHowe.lean` contains no `GordieHowe.Generated.*` and no
-   `GordieHoweCerts.*` or `GordieHoweCheck.*` module, so `lake build` checks no certificate;
-2. every module `GordieHoweCerts.lean` imports, other than `GordieHowe`, imports a generated module
-   (directly or through another), so a module that imports none is imported by `GordieHowe.lean`
-   instead and checked by the default build.
+1. the import closure of `GordieHowe.lean` contains no `GordieHoweCerts.*` and no
+   `GordieHoweCheck.*` module, so `lake build` checks no certificate;
+2. every module `GordieHoweCerts.*` imports a generated module (directly or through another), so
+   a module that imports none lives in the library GordieHowe and is checked by the default build.
 
 With `--kernel-report`, it instead reports (and never fails on) the sites that break the rule of
 `CLAUDE.md` on sealed and generated data outside the certificate-check modules (`CHECK_MODULES`):
@@ -58,7 +58,7 @@ import sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 IMPORT = re.compile(r'^(?:public\s+)?(?:meta\s+)?import\s+(?:all\s+)?([A-Za-z0-9_.\']+)', re.M)
-GENERATED = 'GordieHowe.Generated.'
+GENERATED = 'GordieHoweCerts.Generated.'
 CERTS = 'GordieHoweCerts'
 
 
@@ -156,22 +156,21 @@ def main():
     else:
         print(f'GordieHowe: {len(parent)} modules, none of the certificate library')
 
-    # 2. GordieHoweCerts' imports.
-    if CERTS in imports:
-        roots = [i for i in imports[CERTS] if i != 'GordieHowe']
-        generic = [m for m in roots if not reaches_generated(m)]
-        if generic:
-            status = 1
-            print(f'FAIL: GordieHoweCerts.lean imports {len(generic)} module(s) that import no '
-                  'generated module (import them from GordieHowe.lean):')
-            for m in generic:
-                print('  ' + m)
-        else:
-            print(f'GordieHoweCerts: {len(roots)} imported modules, each importing a generated module')
+    # 2. GordieHoweCerts' modules.
+    certs = sorted(m for m in mods if m.startswith(CERTS + '.'))
+    generic = [m for m in certs if not reaches_generated(m)]
+    if generic:
+        status = 1
+        print(f'FAIL: {len(generic)} module(s) of GordieHoweCerts import no generated module (move '
+              'them to GordieHowe/ and import them from GordieHowe.lean):')
+        for m in generic:
+            print('  ' + m)
+    else:
+        print(f'GordieHoweCerts: {len(certs)} modules, each importing a generated module')
     return status
 
 
-# The certificate-check modules: every generated module (`GordieHowe/Generated/**`), whose checks
+# The certificate-check modules: every generated module (`GordieHoweCerts/Generated/**`), whose checks
 # are the certificates' soundness facts, and the modules defining the checks themselves: the tactic
 # native mode's check (LoadNative) and the loader whose commands emit
 # the GKR certificate checks into the generated modules (Load).
@@ -445,7 +444,7 @@ def kernel_report(sites_path):
 
     libs = ('GordieHowe', 'GordieHoweCerts', 'GordieHoweNative', 'tests')
     kinds = [k for k, _ in KINDS]
-    print('report only: sites outside the certificate-check modules (GordieHowe/Generated/** and '
+    print('report only: sites outside the certificate-check modules (GordieHoweCerts/Generated/** and '
           + ', '.join(CHECK_MODULES) + ')')
     for lib in libs:
         ls = [s for s in sites if s[0] == lib]

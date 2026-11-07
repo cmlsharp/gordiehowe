@@ -201,7 +201,7 @@ void mutants_for(const R &rel, const std::string &config, const std::string &lea
                   "\ndef expected : List Bool :=\n  [";
   for (size_t i = 0; i < ok.size(); ++i) t += std::string(i ? ", " : "") + (ok[i] ? "true" : "false");
   t += "]\n\nend " + ns + ".Mutants\n";
-  const auto path = std::filesystem::path(dir) / "GordieHowe/Generated/Heldout" / lean /
+  const auto path = std::filesystem::path(dir) / "GordieHoweCerts/Generated/Heldout" / lean /
                     compiler::lean_param_set(P::kId) / "Mutants.lean";
   std::ofstream(path) << t;
 }

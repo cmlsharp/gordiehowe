@@ -13,7 +13,7 @@
 //            nothing.
 //   export   the plan and the realized program (plan_export.h,
 //            plan_program.h) of the composite on the bench's instance:
-//            GordieHowe/Generated/Composite/<ROMParams|QROMParams>/
+//            GordieHoweCerts/Generated/Composite/<ROMParams|QROMParams>/
 //            {Plan,Program}.lean in --dir, the program checked
 //            (program_testing.h's program_problems).
 

@@ -8,12 +8,14 @@
 // GH_PRINT_GOLDEN=1 prints the output.
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <map>
 #include <memory>
+#include <random>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -25,6 +27,7 @@
 
 #include "algebra/fp_goldilocks4.h"
 #include "algebra/reed_solomon_fp.h"
+#include "gf2k/gf2_128.h"
 #include "gf2k/gf2_256.h"
 #include "gf2k/lch14_reed_solomon.h"
 #include "gordiehowe/compiler/assignment_reads.h"
@@ -34,8 +37,11 @@
 #include "gordiehowe/instances.h"
 #include "gordiehowe/examples/mldsa/mldsa_shape_inputs.h"
 #include "gordiehowe/examples/mldsa/mldsa_source_roles.h"
+#include "gordiehowe/examples/shared/domain_profile.h"
+#include "gordiehowe/examples/shared/program_testing.h"
 #include "gordiehowe/lib/cutoff_select.h"
 #include "gordiehowe/system.h"
+#include "random/secure_random_engine.h"
 #include "gtest/gtest.h"
 
 namespace proofs::gordiehowe {
@@ -721,6 +727,91 @@ TEST(GordieHowePlanExport, LateSubfieldPadSpace) {
       << out;
 }
 
+// Two bit-sliced predicates of different forms on the same coordinates,
+// merged into one batch (Domain::merge_batch): s = m & y (m y + s = 0) and
+// t = m ^ y (m + y + t = 0). The program has one batch of both parts with
+// its merged flag set, the plan its merge group; an honest proof verifies, and a
+// witness that violates one relation is rejected.
+TEST(GordieHowePlanExport, MergedBitBatch) {
+  static const Env *e = new Env;
+  const HF &f = e->hf;
+  constexpr size_t n = 128;
+  Sys cs{"gh-plan-export-merged"};
+  auto &H = cs.domain(e->h_profile(), "H");
+  auto m = H.priv(Bit{}, "m", n);
+  auto y = H.priv(Bit{}, "y", n);
+  auto s = H.priv(Bit{}, "s", n);
+  auto t = H.priv(Bit{}, "t", n);
+  const auto chi = assert_zero((m & y) ^ s, "chi");
+  const auto xr = assert_zero(m ^ y ^ t, "xor");
+  H.merge_batch("merged", {chi, xr});
+  const auto comp = compile(cs);
+  const compiler::ExportMeta meta{"merged", "wide", "c0ffee", "run-0", 0};
+  const auto p = compiler::build_program(*comp, meta);
+  for (const auto &x : compiler::program_errors(p)) ADD_FAILURE() << x;
+  for (const auto &x : compiler::module_errors(p)) ADD_FAILURE() << x;
+  const std::string prog = compiler::export_lean_program(*comp, meta);
+  const size_t at = prog.find("name := \"merged\"");
+  ASSERT_NE(at, std::string::npos) << prog;
+  const std::string batch = prog.substr(at, prog.find('}', at) - at);
+  EXPECT_NE(batch.find("operands := .bits"), std::string::npos) << batch;
+  EXPECT_NE(batch.find("degree := 2"), std::string::npos) << batch;
+  EXPECT_NE(batch.find("merged := true"), std::string::npos) << batch;
+  EXPECT_NE(batch.find("bitSumcheck := true"), std::string::npos) << batch;
+  const std::string plan = compiler::export_lean_plan(*comp, meta);
+  EXPECT_NE(plan.find("mergeGroup := some \"merged\""), std::string::npos)
+      << plan;
+  EXPECT_EQ(comp->compiled_domain(0).plan().batches.size(), 1u);
+  EXPECT_TRUE(comp->compiled_domain(0).plan().batches[0].merged);
+  // With GH_MERGED_LEAN_DIR set, the same relations on the default narrow
+  // GF(2^128) domain profile (whose masks, tableau and packing edges the
+  // Lean check accepts) are exported there as
+  // GordieHowe.Generated.Heldout.MergedBits.ROMParams, for a Lean check of a
+  // merged batch.
+  if (const char *dir = std::getenv("GH_MERGED_LEAN_DIR")) {
+    using P = param_sets::ROMParams;
+    using NF = GF2_128<>;
+    static const NF *nf = new NF;
+    static const auto *nrs = new LCH14ReedSolomonFactory<NF>(*nf);
+    ConstraintSystem<P::ProtocolHash, NF> ls{"gh-plan-export-merged-lean"};
+    auto &LH = ls.domain(examples::domain_profile<P>(*nf, *nrs), "H");
+    auto lm = LH.priv(Bit{}, "m", n);
+    auto ly = LH.priv(Bit{}, "y", n);
+    auto lsv = LH.priv(Bit{}, "s", n);
+    auto lt = LH.priv(Bit{}, "t", n);
+    const auto lchi = assert_zero((lm & ly) ^ lsv, "chi");
+    const auto lxr = assert_zero(lm ^ ly ^ lt, "xor");
+    LH.merge_batch("merged", {lchi, lxr});
+    compiler::ExportMeta lean{"merged", P::kId, "c0ffee", "run-0", 0};
+    lean.lean_name = "Heldout.MergedBits.ROMParams";
+    examples::write_plan(*compile(ls), dir, lean);
+  }
+
+  std::mt19937_64 g(9);
+  HV vm(n), vy(n), vs(n), vt(n);
+  for (size_t i = 0; i < n; ++i) {
+    const bool a = g() & 1, b = g() & 1;
+    vm[i] = a ? f.one() : f.zero();
+    vy[i] = b ? f.one() : f.zero();
+    vs[i] = (a && b) ? f.one() : f.zero();
+    vt[i] = (a != b) ? f.one() : f.zero();
+  }
+  Sys::Assignment w;
+  w.set(m, vm).set(y, vy).set(s, vs).set(t, vt);
+  auto prep = comp->prepare(Sys::Assignment{});
+  SecureRandomEngine rng;
+  EXPECT_TRUE(prep.verify(prep.prove(w, rng))) << comp->report();
+  Sys::ProveOptions opt;
+  opt.require_satisfied = false;
+  for (auto *v : {&vs, &vt}) {
+    auto cheat = w;
+    HV bad = *v;
+    f.add(bad[37], f.one());
+    cheat.set(v == &vs ? s : t, bad);
+    EXPECT_FALSE(prep.verify(prep.prove(cheat, rng, opt)));
+  }
+}
+
 // A domain with no circuit constraint runs no GKR: its plan lists no
 // circuit, and its first stream point counts its own rows only.
 TEST(GordieHowePlanExport, CircuitFreeDomain) {
@@ -1078,7 +1169,7 @@ TEST(GordieHowePlanExport, EmbeddingFactsSelectTheProfileAndNameTheSource) {
   compiler::append_embedding_facts(meta, {d, other}, facts);
   ASSERT_EQ(facts.size(), 1u);
   EXPECT_EQ(facts[0].claim, ".embedding embedding_native_2eH_data");
-  EXPECT_EQ(facts[0].import_module, "GordieHowe.Generated.MLDSA44.Native.ROMParams.Program");
+  EXPECT_EQ(facts[0].import_module, "GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.Program");
   EXPECT_NE(facts[0].definition.find("source := GordieHowe.Generated.MLDSA44.Native.ROMParams.Program.program"),
             std::string::npos);
   EXPECT_NE(facts[0].definition.find("equals := [(3, 5)]"), std::string::npos);
@@ -1766,15 +1857,17 @@ TEST(GordieHowePlanExport, LeanNames) {
 
   const compiler::ExportMeta ring{"falcon-ring-carrier", "narrow", "c", "r", 0};
   EXPECT_EQ(compiler::lean_plan_module(ring),
-            "GordieHowe/Generated/Falcon512/Ring/Carrier/ROMParams/Plan");
+            "GordieHoweCerts/Generated/Falcon512/Ring/Carrier/ROMParams/Plan");
   EXPECT_EQ(compiler::lean_program_module(ring),
-            "GordieHowe/Generated/Falcon512/Ring/Carrier/ROMParams/Program");
+            "GordieHoweCerts/Generated/Falcon512/Ring/Carrier/ROMParams/Program");
   EXPECT_EQ(compiler::lean_module_name(ring, "Plan"),
+            "GordieHoweCerts.Generated.Falcon512.Ring.Carrier.ROMParams.Plan");
+  EXPECT_EQ(compiler::lean_namespace(ring, "Plan"),
             "GordieHowe.Generated.Falcon512.Ring.Carrier.ROMParams.Plan");
   compiler::ExportMeta named_toy{"toy", "wide", "c0ffee", "run-0", 0};
   named_toy.lean_name = "Toy.Named.QROMParams";
   EXPECT_EQ(compiler::lean_plan_module(named_toy),
-            "GordieHowe/Generated/Toy/Named/QROMParams/Plan");
+            "GordieHoweCerts/Generated/Toy/Named/QROMParams/Plan");
 }
 
 // Two exports never write one module path: an export to a path that holds
@@ -1787,7 +1880,7 @@ TEST(GordieHowePlanExport, ModulePathsAreNotShared) {
   std::filesystem::remove_all(dir);
   const compiler::ExportMeta toy{"toy", "wide", "c0ffee", "run-0", 0};
   const std::string path = compiler::lean_plan_file(dir.string(), toy);
-  EXPECT_EQ(path, (dir / "GordieHowe/Generated/Toy/QROMParams/Plan.lean")
+  EXPECT_EQ(path, (dir / "GordieHoweCerts/Generated/Toy/QROMParams/Plan.lean")
                       .string());
   std::ofstream(path, std::ios::binary) << toy_export();
   EXPECT_EQ(compiler::lean_plan_file(dir.string(), toy), path);
@@ -2020,6 +2113,7 @@ TEST(GordieHowePlanExport, ToyProofModules) {
     return s.find(x) != std::string::npos;
   };
   const std::string ns = "GordieHowe.Generated.Toy.QROMParams.";
+  const std::string mod_prefix = "GordieHoweCerts.Generated.Toy.QROMParams.";
   for (size_t i = 0; i < mods.size(); ++i) {
     const std::string &m = mods[i].text;
     // The data and check modules (no heartbeat options) and the others.
@@ -2042,7 +2136,7 @@ TEST(GordieHowePlanExport, ToyProofModules) {
       // An import of the export is written before its importer, or by the
       // data modules' and the GKR modules' writers.
       std::string leaf;
-      if (imp.rfind(ns, 0) == 0) leaf = imp.substr(ns.size());
+      if (imp.rfind(mod_prefix, 0) == 0) leaf = imp.substr(mod_prefix.size());
       else if (imp.rfind("GordieHoweCheck.", 0) != 0) continue;
       if (leaf == "Program" || leaf == "Plan" || leaf == "Derivs" || leaf.rfind("GKR.", 0) == 0)
         continue;
@@ -2210,7 +2304,7 @@ TEST(GordieHowePlanExport, ProgramDataModules) {
                 "Check/Kernel:Source", "Check/Kernel:AssignmentReads", "Check/Kernel:Locality", "Check/Kernel:Fields",
                 "Check/Kernel:Tableaus", "Check/Kernel:Selections", "Check/Kernel:Completion", "Check/Kernel:Roles", "Check/Kernel:NoFieldForm", "Check/Kernel:Shapes", "Check/Kernel:Figures", "Check/Kernel:SourceRoles", "Check/Kernel:OpaqueSet", "Check/Kernel:",
                 "Pending.Small", "Pending.Model", "Check/Kernel:GKR", "Core", "Certified"}));
-  const std::string g = "public import GordieHowe.Generated.Sys.Falcon.ROMParams.";
+  const std::string g = "public import GordieHoweCerts.Generated.Sys.Falcon.ROMParams.";
   EXPECT_TRUE(has(t["FieldTable"], "  { interp := .two .gf128 .fq9 .falcon, domainFields := "
                                    "[0, 1],\n    circuitDomains := [0, 1],\n    packing := [\n"
                                    "      { n := 128, q := 2 ^ 2 ^ 4,\n        edges := [],\n"))
@@ -2256,9 +2350,9 @@ TEST(GordieHowePlanExport, ProgramDataModules) {
   // per part and their composition in the shape of programOkB.
   const std::string &native = t["Check/Native:"];
   EXPECT_TRUE(has(native, "namespace GordieHoweCheck.Sys.Falcon.ROMParams\n"));
-  EXPECT_TRUE(has(native, "theorem programOk : data.programOkB = true := by\n  delta data\n"
+  EXPECT_TRUE(has(native, "theorem programOk : data.programOkB false = true := by\n  delta data\n"
                           "  gh_native_check\n"));
-  EXPECT_TRUE(has(native, "meta import GordieHowe.Generated.Sys.Falcon.ROMParams.GKR.A\n"));
+  EXPECT_TRUE(has(native, "meta import GordieHoweCerts.Generated.Sys.Falcon.ROMParams.GKR.A\n"));
   EXPECT_FALSE(has(native, compiler::kLeanModuleOptions));
   EXPECT_TRUE(has(t["Check/Kernel:Locality"],
                   "theorem localityOk : data.localityB = true := by\n"
@@ -2274,12 +2368,12 @@ TEST(GordieHowePlanExport, ProgramDataModules) {
   EXPECT_TRUE(has(t["Check/Kernel:OpaqueSet"],
                   "theorem opaqueSetOk : data.opaqueSetB = true := by\n  decide +kernel\n"));
   EXPECT_TRUE(has(t["Check/Kernel:Figures"],
-                  "theorem figuresPartOk : data.figuresPartB = true := by\n  decide +kernel\n"));
+                  "theorem figuresPartOk : data.figuresPartB false = true := by\n  decide +kernel\n"));
   EXPECT_TRUE(has(t["Check/Kernel:SourceRoles"],
                   "theorem sourceRolesOk : data.sourceRolesB = true := by\n  decide +kernel\n"));
   EXPECT_FALSE(has(t["Data"], g + "SourceRoles\n"));
   // The pending conditions, the core conditions from the check.
-  EXPECT_TRUE(has(t["Pending.Small"], "theorem coded : data.CodedOk :=\n"));
+  EXPECT_FALSE(has(t["Pending.Small"], "coded"));
   EXPECT_FALSE(has(t["Pending.Small"], "selections"));
   EXPECT_TRUE(has(t["Core"], "  selections := checked.selections\n"));
   const std::string &model = t["Pending.Model"];
@@ -2298,7 +2392,8 @@ TEST(GordieHowePlanExport, ProgramDataModules) {
   EXPECT_EQ(t.count("Pending.Circuits"), 0u);
   const std::string &core = t["Core"];
   EXPECT_TRUE(has(core, "public import GordieHoweCheck.Sys.Falcon.ROMParams\n"));
-  EXPECT_TRUE(has(core, "  programOk_sound data GordieHoweCheck.Sys.Falcon.ROMParams.programOk\n"));
+  EXPECT_TRUE(has(core, "theorem checked : CheckedConditions data false :=\n"
+                        "  programOk_sound data GordieHoweCheck.Sys.Falcon.ROMParams.programOk\n"));
   EXPECT_TRUE(has(core, "  fields := .of_descs fieldTableOk checked.fieldDescs packingsOk\n"
                         "    (.of_descs packingsOk checked.tableaus)\n"));
   EXPECT_TRUE(has(core, "  order := checked.order\n  pads := checked.pads\n"));
@@ -2370,8 +2465,14 @@ TEST(GordieHowePlanExport, ProgramDataModules) {
   EXPECT_FALSE(has(t["Completion"], "meta import"));
   EXPECT_EQ(t.count("Pending.Figures"), 0u);
   const std::string &mc = t["Certified"];
-  EXPECT_TRUE(has(mc, "theorem figuresPresent : data.figures.present = true := rfl"));
-  EXPECT_TRUE(has(mc, "  .of_descs data packingsOk figuresPresent checked.figures"));
+  EXPECT_FALSE(has(mc, "figuresPresent"));
+  EXPECT_TRUE(has(mc, "  .of_descs data packingsOk checked.figures"));
+  EXPECT_TRUE(has(t["Core"], "theorem checked : CheckedConditions data true :=\n"));
+  EXPECT_TRUE(has(t["Check/Native:"], "theorem programOk : data.programOkB true = true := by\n"));
+  EXPECT_TRUE(has(t["Check/Kernel:Figures"],
+                  "theorem figuresPartOk : data.figuresPartB true = true := by\n"));
+  EXPECT_TRUE(has(t["Figures"], "  chernoff := 2800\n  zNum := 65\n  zDen := 64\n"))
+      << t["Figures"];
   EXPECT_FALSE(has(mc, "noncomputable"));
   EXPECT_FALSE(has(mc, "def system"));
   EXPECT_TRUE(has(mc, "  runtimeInputs.ready conditions.readyFacts\n"));
@@ -2458,7 +2559,7 @@ TEST(GordieHowePlanExport, ProgramDataModules) {
   edge.domain_data[0].edges = {"1:16:s", "16:2:m", "32:4:m"};
   EXPECT_TRUE(compiler::system_plan(edge).ok);
   // The ECDSA mDL: domain A over F_p256, the mDL frontend's opaque
-  // functions; P-256 has no codec, so no `coded`.
+  // functions; every field, P-256's included, has a codec.
   Data md = rsa;
   md.meta.config = "mdoc-narrow";
   md.meta.lean_name = "Sys.MDL.ROMParams";
@@ -2777,7 +2878,16 @@ TEST(GordieHowePlanExport, FigureInputs) {
   ASSERT_NE(w, nullptr);
   EXPECT_TRUE(w->domains[1].grant_stage);
   EXPECT_EQ(w->domains[1].rest_read, 200u);
+  EXPECT_EQ(in->z_num, 65u);
+  EXPECT_EQ(in->z_den, 64u);
+  EXPECT_TRUE(in->configuration);
   EXPECT_EQ(compiler::figure_inputs("toy-wide"), nullptr);
+  // The ECDSA mDL states figures that no configuration reads, at a point `z`
+  // with `z^64 < 2` (its range challenges draw 64 bytes per value).
+  const compiler::FigureInputs *md = compiler::figure_inputs("mdoc-narrow");
+  ASSERT_NE(md, nullptr);
+  EXPECT_FALSE(md->configuration);
+  EXPECT_LT(std::pow(double(md->z_num) / double(md->z_den), 64.0), 2.0);
   compiler::ProofModuleData d;
   d.meta = compiler::ExportMeta{"toy", "wide", "c0ffee", "run-0", 0};
   for (const auto &m : compiler::proof_modules(d)) EXPECT_NE(m.leaf, "Figures");
@@ -2854,7 +2964,7 @@ TEST(GordieHowePlanExport, ProofModulePathsAreNotShared) {
     const std::string path = compiler::lean_proof_file(dir.string(), toy, mod);
     std::string rel = mod.leaf;
     std::replace(rel.begin(), rel.end(), '.', '/');
-    EXPECT_EQ(path, (dir / ("GordieHowe/Generated/Toy/QROMParams/" + rel +
+    EXPECT_EQ(path, (dir / ("GordieHoweCerts/Generated/Toy/QROMParams/" + rel +
                             ".lean"))
                         .string());
     std::ofstream(path, std::ios::binary) << mod.text;

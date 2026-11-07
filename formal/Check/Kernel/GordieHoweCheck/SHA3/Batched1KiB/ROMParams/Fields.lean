@@ -3,12 +3,12 @@
 
 module
 
-public import GordieHowe.Generated.SHA3.Batched1KiB.ROMParams.Data
+public import GordieHoweCerts.Generated.SHA3.Batched1KiB.ROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 public import GordieHoweCheck.SHA3.Batched1KiB.ROMParams.AssignmentReads
 
-import all GordieHowe.Generated.SHA3.Batched1KiB.ROMParams.Program
-import all GordieHowe.Generated.SHA3.Batched1KiB.ROMParams.Plan
+import all GordieHoweCerts.Generated.SHA3.Batched1KiB.ROMParams.Program
+import all GordieHoweCerts.Generated.SHA3.Batched1KiB.ROMParams.Plan
 @[expose] public section
 
 /-!

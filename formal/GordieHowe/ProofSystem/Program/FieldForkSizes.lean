@@ -314,10 +314,10 @@ def ForkLoadNumbers (gp gt : Fin (ir.circs d).length → ℕ) (Lmax : ℕ) : Pro
       max (max (ir.bitsBatchAt R.rs Unit ((ir.sumBatches d R.Pk)[i]).cb).n
         (ir.bitsBatchAt R.rs Unit ((ir.sumBatches d R.Pk)[i]).cb).k) 3 ≤ Lmax) ∧
   ((∀ i : Fin (ir.mbatches d R.Pk).length,
-      max (max (ir.mergedBatchAt R.rs Unit (ir.mbatches d R.Pk)[i]).n
+      max (max ((ir.mergedBatchAt R.rs Unit (ir.mbatches d R.Pk)[i]).n + 1)
         (ir.mergedBatchAt R.rs Unit (ir.mbatches d R.Pk)[i]).k) 3 ≤ Lmax) ∧
     ∀ i : Fin (ir.sumMBatches d R.Pk).length,
-      max (max (ir.mergedBatchAt R.rs Unit ((ir.sumMBatches d R.Pk)[i]).mb).n
+      max (max ((ir.mergedBatchAt R.rs Unit ((ir.sumMBatches d R.Pk)[i]).mb).n + 1)
         (ir.mergedBatchAt R.rs Unit ((ir.sumMBatches d R.Pk)[i]).mb).k) 3 ≤ Lmax) ∧
   (∀ i : Fin (ir.circs d).length, max (ir.circuitWidth (ir.circAt d i)) 2 ≤ Lmax) ∧ ir.claimCount (d := d) (Pk := R.Pk) ≤ Lmax ∧ laterBound R.rs ≤ Lmax ∧
   R.numbers.Sh.nrep * forkRBound R gp gt +
@@ -339,10 +339,10 @@ def ForkRestNumbers (gp gt : Fin (ir.circs d).length → ℕ) (Lmax : ℕ) : Pro
       max (max (ir.bitsBatchAt R.rs Unit ((ir.sumBatches d R.Pk)[i]).cb).n
         (ir.bitsBatchAt R.rs Unit ((ir.sumBatches d R.Pk)[i]).cb).k) 3 ≤ Lmax) ∧
   ((∀ i : Fin (ir.mbatches d R.Pk).length,
-      max (max (ir.mergedBatchAt R.rs Unit (ir.mbatches d R.Pk)[i]).n
+      max (max ((ir.mergedBatchAt R.rs Unit (ir.mbatches d R.Pk)[i]).n + 1)
         (ir.mergedBatchAt R.rs Unit (ir.mbatches d R.Pk)[i]).k) 3 ≤ Lmax) ∧
     ∀ i : Fin (ir.sumMBatches d R.Pk).length,
-      max (max (ir.mergedBatchAt R.rs Unit ((ir.sumMBatches d R.Pk)[i]).mb).n
+      max (max ((ir.mergedBatchAt R.rs Unit ((ir.sumMBatches d R.Pk)[i]).mb).n + 1)
         (ir.mergedBatchAt R.rs Unit ((ir.sumMBatches d R.Pk)[i]).mb).k) 3 ≤ Lmax) ∧
   (∀ i : Fin (ir.circs d).length, max (ir.circuitWidth (ir.circAt d i)) 2 ≤ Lmax) ∧ laterBound R.rs ≤ Lmax ∧
   R.numbers.Sh.nrep * forkRBound R gp gt +

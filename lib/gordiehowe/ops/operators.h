@@ -240,8 +240,11 @@ class NegacyclicConvOperator final : public PolyMatVecOperator<F> {
 // The transposes of the terms of one affine row, run with the forward
 // transforms of the row's multipliers shared: a term whose last operator is
 // spectral starts from the cached spectrum of its row's multipliers under
-// that transform. One instance serves one accumulation (one multiplier
-// vector).
+// that transform. accumulate also keeps the last chain's transpose up to
+// its first operator: consecutive terms of one row whose chains differ only
+// in the first operator (the members of a concatenation under one operator,
+// such as the MAC's) transpose the shared operators once. One instance
+// serves one accumulation (one multiplier vector).
 template <class F>
 class TransposeRun {
  public:
@@ -264,13 +267,32 @@ class TransposeRun {
       for (size_t j = 0; j < out_n; ++j) f.add(A[j], f.mulf(scale, lam[j]));
       return;
     }
-    // Every operator but the first; a spectral last operator may take it.
-    std::vector<Elt> y = run_to(ops, lam, out_n, k, 1);
-    if (k == 0) {
-      for (size_t j = 0; j < y.size(); ++j) f.add(A[j], f.mulf(scale, y[j]));
+    if (k == 1) {
+      // A spectral operator may take the whole chain.
+      std::vector<Elt> y = run_to(ops, lam, out_n, k, 1);
+      if (k == 0) {
+        for (size_t j = 0; j < y.size(); ++j) f.add(A[j], f.mulf(scale, y[j]));
+        return;
+      }
+      ops[0]->transpose_accumulate(f, y.data(), scale, A);
       return;
     }
-    ops[0]->transpose_accumulate(f, y.data(), scale, A);
+    // Every operator but the first, unless the last term transposed the same
+    // operators from the same multipliers.
+    const bool same = last_.lam == lam && last_.n == out_n &&
+                      last_.ops.size() == k - 1 &&
+                      std::equal(ops.begin() + 1, ops.end(), last_.ops.begin(),
+                                 [](const auto &a, const auto *b) {
+                                   return a.get() == b;
+                                 });
+    if (!same) {
+      last_.lam = lam;
+      last_.n = out_n;
+      last_.ops.clear();
+      for (size_t j = 1; j < k; ++j) last_.ops.push_back(ops[j].get());
+      last_.y = run_to(ops, lam, out_n, k, 1);
+    }
+    ops[0]->transpose_accumulate(f, last_.y.data(), scale, A);
   }
   size_t forward_transforms() const { return transforms_; }
 
@@ -326,6 +348,15 @@ class TransposeRun {
   }
   std::vector<Entry> cache_;
   size_t transforms_ = 0;
+  // The last chain of two or more operators accumulate ran: its
+  // multipliers, its operators but the first, and their transpose.
+  struct Suffix {
+    const Elt *lam = nullptr;
+    size_t n = 0;
+    std::vector<const LinearOperator<F> *> ops;
+    std::vector<Elt> y;
+  };
+  Suffix last_;
 };
 
 namespace poly_detail {

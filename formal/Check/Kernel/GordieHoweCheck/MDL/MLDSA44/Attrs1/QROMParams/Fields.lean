@@ -3,12 +3,12 @@
 
 module
 
-public import GordieHowe.Generated.MDL.MLDSA44.Attrs1.QROMParams.Data
+public import GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.QROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.AssignmentReads
 
-import all GordieHowe.Generated.MDL.MLDSA44.Attrs1.QROMParams.Program
-import all GordieHowe.Generated.MDL.MLDSA44.Attrs1.QROMParams.Plan
+import all GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.QROMParams.Program
+import all GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.QROMParams.Plan
 @[expose] public section
 
 /-!

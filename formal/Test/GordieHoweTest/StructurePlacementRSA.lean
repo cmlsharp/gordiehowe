@@ -2,8 +2,8 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 import GordieHowe.Language.RealizedProgram.Placement
-import GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Program
-import GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Structure
+import GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Program
+import GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Structure
 
 /-!
 # Tests of the realized route at the structure records' pointer

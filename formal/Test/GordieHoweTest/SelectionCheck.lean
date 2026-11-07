@@ -4,11 +4,11 @@
 module
 
 public import GordieHowe.Language.Realizations.SelectionCheck
-public import GordieHowe.Generated.Falcon512.Ring.Carrier.ROMParams.Program
-public import GordieHowe.Generated.MLDSA44.Ring.Native.ROMParams.Program
+public import GordieHoweCerts.Generated.Falcon512.Ring.Carrier.ROMParams.Program
+public import GordieHoweCerts.Generated.MLDSA44.Ring.Native.ROMParams.Program
 -- The checks below evaluate the sealed programs.
-import all GordieHowe.Generated.Falcon512.Ring.Carrier.ROMParams.Program
-import all GordieHowe.Generated.MLDSA44.Ring.Native.ROMParams.Program
+import all GordieHoweCerts.Generated.Falcon512.Ring.Carrier.ROMParams.Program
+import all GordieHoweCerts.Generated.MLDSA44.Ring.Native.ROMParams.Program
 
 public section
 

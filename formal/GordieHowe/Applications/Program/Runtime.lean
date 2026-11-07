@@ -53,8 +53,7 @@ structure CoreFacts : Prop where
 
 /-- Additional facts used by the certified program and its honest strategy. -/
 structure FullFacts (c : CompletionInputs) : Prop extends r.CoreFacts where
-  coded : r.CodedOk
-  figures : r.FiguresFacts ready coded
+  figures : r.FiguresFacts ready
   completion : r.CompletionOk c
   roles : r.RolesOk c
 
@@ -71,17 +70,17 @@ ready data. -/
     CertifiedProgram r.plan r.program r.interp where
   ready := r.ready h.ready
   figures := r.figures.figures
-  numbers := r.numbers h.ready h.coded h.figures.fits
+  numbers := r.numbers h.ready h.figures.fits
   sourceErrors := r.figures.sourceErrors
-  samplerReaders := r.samplerReaders h.coded h.figures.readers
-  chalLoadMax := r.chalLoadMax h.coded
-  chalLoad_le := chalLoad_stdReaders_le_std (r.fieldReader h.coded) r.fieldTable.interp.card
+  samplerReaders := r.samplerReaders h.figures.readers
+  chalLoadMax := r.chalLoadMax
+  chalLoad_le := chalLoad_stdReaders_le_std r.fieldReader r.fieldTable.interp.card
     h.figures.readers
   restRead := r.restRead
   grantMax := r.figures.grantMax
   figuresOk := h.figures.check
   fieldCard := r.fieldTable.interp.card
-  fieldBytes := r.fieldBytes h.coded
+  fieldBytes := r.fieldBytes
   msgB_le := h.figures.msg
   branchName := r.branchName
   branchName_le _ := FieldKey.name_le _
@@ -178,8 +177,7 @@ end CoreConditions
 theorem ProgramConditions.fullFacts {d : ProgramData} (h : ProgramConditions d) :
     d.FullFacts d.completion :=
   { h.coreFacts with
-    coded := h.coded
-    figures := h.figures h.toCoreConditions h.coded
+    figures := h.figures h.toCoreConditions
     completion := h.completion
     roles := h.roles }
 

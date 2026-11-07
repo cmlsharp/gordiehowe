@@ -92,8 +92,8 @@ public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.H.E85
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.H.E86
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.H.E87
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.H.E88
-meta import GordieHowe.Generated.MDL.MLDSA44.Attrs1.ROMParams.GKR.H
-import all GordieHowe.Generated.MDL.MLDSA44.Attrs1.ROMParams.Program
+meta import GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.ROMParams.GKR.H
+import all GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.ROMParams.Program
 
 @[expose] public section
 

@@ -24,10 +24,10 @@ more than one configuration uses:
 
 * **Goldilocks⁴ with `k = 512`** (`gold4K512…`): `(rate, block_enc) = (6, 4095)`, `(N, k) =
   (3072, 512)`, `t = 201`, the compiler's choice for domain A of `Falcon512.Ring.Carrier.QROMParams`
-  (`GordieHowe/Generated/`);
+  (`GordieHoweCerts/Generated/`);
 * **Goldilocks⁴ with `k = 512` at two low-degree repetitions** (`gold4K512R2…`): `(rate,
   block_enc) = (6, 4095)`, `(N, k) = (3072, 512)`, `t = 175`, `nrep = 2`, the compiler's choice for
-  domain A of `MLDSA44.Emulated.QROMParams` (`GordieHowe/Generated/`);
+  domain A of `MLDSA44.Emulated.QROMParams` (`GordieHoweCerts/Generated/`);
 * **`GF(2^128)` with `k = 282` at two low-degree repetitions** (`gf128K282R2…`): `(rate,
   block_enc) = (12, 3955)`, `(N, k) = (3392, 282)`, `t = 63`, `nrep = 2`, the compiler's choice for
   domain H of `MLDSA44.Native.ROMParams` and `MLDSA44.Emulated.ROMParams` (the same export);
@@ -54,7 +54,7 @@ the line certificate's at threshold `A` (checked by `decide`). The round errors 
 (`GordieHowe.RealizedProgram.FieldRoundsLe.of_ok`), checked once per program in its generated module
 `Figures`. A configuration's setting uses these
 values by name (for example `Tableau.gf256K339R2Shape` in
-`GordieHowe/Applications/Falcon512/Native/QROMParams/Setting.lean`).
+`GordieHoweCerts/Applications/Falcon512/Native/QROMParams/Setting.lean`).
 -/
 
 namespace GordieHowe.Tableau

@@ -3,9 +3,9 @@
 
 module
 
-public import GordieHowe.Generated.SHA3.Batched1KiB.ROMParams.Data
+public import GordieHoweCerts.Generated.SHA3.Batched1KiB.ROMParams.Data
 public import GordieHowe.Applications.Program.Conditions
-public import GordieHowe.Generated.SHA3.Batched1KiB.ROMParams.Pending.Small
+public import GordieHoweCerts.Generated.SHA3.Batched1KiB.ROMParams.Pending.Small
 
 @[expose] public section
 

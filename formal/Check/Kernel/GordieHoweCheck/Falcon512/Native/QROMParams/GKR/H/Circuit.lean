@@ -12,8 +12,8 @@ public import GordieHoweCheck.Falcon512.Native.QROMParams.GKR.H.E5
 public import GordieHoweCheck.Falcon512.Native.QROMParams.GKR.H.E6
 public import GordieHoweCheck.Falcon512.Native.QROMParams.GKR.H.E7
 public import GordieHoweCheck.Falcon512.Native.QROMParams.GKR.H.E8
-meta import GordieHowe.Generated.Falcon512.Native.QROMParams.GKR.H
-import all GordieHowe.Generated.Falcon512.Native.QROMParams.Program
+meta import GordieHoweCerts.Generated.Falcon512.Native.QROMParams.GKR.H
+import all GordieHoweCerts.Generated.Falcon512.Native.QROMParams.Program
 
 @[expose] public section
 

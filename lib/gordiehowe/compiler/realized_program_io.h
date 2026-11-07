@@ -723,7 +723,9 @@ inline std::vector<uint8_t> write_program(const Program &p) {
     w2.u(b.width);
     w2.u(b.rounds);
     w2.u(b.pads);
-    w2.u(b.bit_sumcheck);
+    // Bit 1 of the bit sumcheck's flag: merged (format 8's bytes for an
+    // unmerged batch).
+    w2.u(uint64_t(b.bit_sumcheck) | (b.merged ? 2 : 0));
     w2.u(b.char2);
     w2.ids(b.parts);
   });
@@ -867,7 +869,12 @@ inline std::optional<Program> read_program(const std::vector<uint8_t> &b) {
     x.width = r2.z();
     x.rounds = r2.z();
     x.pads = r2.z();
-    x.bit_sumcheck = r2.flag();
+    {
+      const uint64_t v = r2.u();
+      x.bit_sumcheck = (v & 1) != 0;
+      x.merged = (v & 2) != 0;
+      if (v > 3) r2.ok = false;
+    }
     x.char2 = r2.flag();
     r2.ids(x.parts);
   });

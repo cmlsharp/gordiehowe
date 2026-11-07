@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.H
+public import GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.H
 public import GordieHoweCheck.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.H.E1.P0
 public import GordieHoweCheck.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.H.E1.P1
 

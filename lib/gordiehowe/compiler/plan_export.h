@@ -264,21 +264,29 @@ inline std::string lean_name(const ExportMeta &meta) {
                                 : meta.lean_name;
 }
 
-// The module GordieHowe.Generated.<lean_name>.<LEAF> as a path relative to
-// formal/, without `.lean`:
-// GordieHowe/Generated/MLDSA44/Native/ROMParams/Plan. A dotted LEAF
+// The module GordieHoweCerts.Generated.<lean_name>.<LEAF> as a path relative
+// to formal/, without `.lean`:
+// GordieHoweCerts/Generated/MLDSA44/Native/ROMParams/Plan. A dotted LEAF
 // (`Valid.WellFormed`) is a module below LEAF's first component
-// (GordieHowe/Generated/.../Valid/WellFormed).
+// (GordieHoweCerts/Generated/.../Valid/WellFormed).
 inline std::string lean_module_path(const ExportMeta &meta,
                                     const std::string &leaf) {
   std::string l = lean_name(meta) + "." + leaf;
   std::replace(l.begin(), l.end(), '.', '/');
-  return "GordieHowe/Generated/" + l;
+  return "GordieHoweCerts/Generated/" + l;
 }
 
-// The module name GordieHowe.Generated.<lean_name>.<LEAF>.
+// The module name GordieHoweCerts.Generated.<lean_name>.<LEAF>: the module
+// lies in the certificate library GordieHoweCerts (formal/lakefile.toml).
 inline std::string lean_module_name(const ExportMeta &meta,
                                     const std::string &leaf) {
+  return "GordieHoweCerts.Generated." + lean_name(meta) + "." + leaf;
+}
+
+// The namespace GordieHowe.Generated.<lean_name>.<LEAF> of the declarations of
+// the module lean_module_name(META, LEAF).
+inline std::string lean_namespace(const ExportMeta &meta,
+                                  const std::string &leaf) {
   return "GordieHowe.Generated." + lean_name(meta) + "." + leaf;
 }
 
@@ -807,7 +815,7 @@ class Exporter : Lowering {
              return m;
            }));
 
-    const std::string ns = lean_module_name(meta_, "Plan");
+    const std::string ns = lean_namespace(meta_, "Plan");
     std::string o;
     o += kLeanLicenseHeader;
     o += "module\n\npublic import GordieHowe.Language.Export\n\n";
@@ -1533,7 +1541,7 @@ std::string export_lean_plan(const BasicCompiledSystem<S> &cs,
   return plan_export_internal::Exporter<S>(cs, meta).run();
 }
 // Its module's path relative to formal/, without `.lean`:
-// GordieHowe/Generated/<lean_name with '/' for '.'>/Plan.
+// GordieHoweCerts/Generated/<lean_name with '/' for '.'>/Plan.
 inline std::string lean_plan_module(const ExportMeta &meta) {
   return lean_module_path(meta, "Plan");
 }

@@ -39,7 +39,7 @@ selection's labels in `FH`, read by the hash's padding) and `FalconSelField` (th
 * **The hash** (`FalconHashView`): one SHAKE256 call (`SpongeView`) whose input is the nonce and
   the message bytes at the length the in-message flags encode (`lenOf`, `messageBytes`) and whose
   output, two bytes per sample, is the stream the selection reads. Its instance is
-  `falconHashView` (`GordieHowe/Applications/Falcon512/Frontend/Hash.lean`).
+  `falconHashView` (`GordieHoweCerts/Applications/Falcon512/Frontend/Hash.lean`).
 * **The composition so far** (`mem_rel_of_source`): at a statement that passes the member checks,
   where the source program holds and the selection's event did not occur, the relation holds at
   `proj`, given the hash view and, at the key, some algebra advice satisfying Falcon native's
@@ -47,8 +47,8 @@ selection's labels in `FH`, read by the hash's padding) and `FalconSelField` (th
 * **Round-by-round knowledge soundness of `Π_P₀`** (`rbr_of_views`): `GordieHowe.RealizedProgram.rbr_of_events` at the
   selection's event (`selectEvent`, `717/2^bits` at `h2p.select.delta`), the two obligations as
   hypotheses. Domain `A`'s (`AlgebraSound`) is proved in
-  `GordieHowe/Applications/Falcon512/Native/Frontend/Algebra.lean` (`algebraSound`), the hash
-  view in `GordieHowe/Applications/Falcon512/Frontend/Hash.lean` (`falconHashView`).
+  `GordieHoweCerts/Applications/Falcon512/Native/Frontend/Algebra.lean` (`algebraSound`), the hash
+  view in `GordieHoweCerts/Applications/Falcon512/Frontend/Hash.lean` (`falconHashView`).
 -/
 
 namespace GordieHowe.Falcon512
@@ -455,7 +455,7 @@ squeezing `2 · 717` bytes (`SpongeView`), whose input bytes are the nonce's the
 the length the in-message flags encode (`input_bytes`, `messageBytes`), and whose output, two bytes
 per sample (`HashCircuit.sampleAt`: byte `2i + 1` as bits `0 … 7`, byte `2i` as bits `8 … 15`), is
 the stream the selection reads (`samples`), where the source program holds. The instance reads the
-Keccak trace (`falconHashView`, `GordieHowe/Applications/Falcon512/Frontend/Hash.lean`). -/
+Keccak trace (`falconHashView`, `GordieHoweCerts/Applications/Falcon512/Frontend/Hash.lean`). -/
 structure FalconHashView where
   /-- The SHAKE256 call. -/
   sponge : RealizedProgram.SpongeView program interp 0 (2 * falcon512.S)

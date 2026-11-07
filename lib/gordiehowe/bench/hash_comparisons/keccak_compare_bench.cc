@@ -8,11 +8,11 @@
 //   bench    the same records and --reps proofs without report_bench
 //   export   the plan exports and realized programs of the batched perms
 //            and sha3 presets at N = --perms permutations, in --dir:
-//            GordieHowe/Generated/KeccakPerms/Batched<N>/<parameter set>/
-//            and GordieHowe/Generated/SHA3/Batched<N>Perms/<parameter set>/
+//            GordieHoweCerts/Generated/KeccakPerms/Batched<N>/<parameter set>/
+//            and GordieHoweCerts/Generated/SHA3/Batched<N>Perms/<parameter set>/
 //            (configs keccak-perms-batched-N and sha3-256-batched-N). With
 //            --bytes L, the sha3 preset alone at an L-byte message:
-//            GordieHowe/Generated/SHA3/Batched<size>/ (config
+//            GordieHoweCerts/Generated/SHA3/Batched<size>/ (config
 //            sha3-256-batched-<L>B, size 1KiB or <L>B; lean_config_name),
 //            as the serve command builds it. The message is private and the
 //            output words public: msgLen 0.

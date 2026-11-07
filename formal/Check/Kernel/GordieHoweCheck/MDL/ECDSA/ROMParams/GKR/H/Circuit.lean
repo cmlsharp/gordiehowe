@@ -32,8 +32,8 @@ public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E25
 public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E26
 public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E27
 public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E28
-meta import GordieHowe.Generated.MDL.ECDSA.ROMParams.GKR.H
-import all GordieHowe.Generated.MDL.ECDSA.ROMParams.Program
+meta import GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.GKR.H
+import all GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.Program
 
 @[expose] public section
 

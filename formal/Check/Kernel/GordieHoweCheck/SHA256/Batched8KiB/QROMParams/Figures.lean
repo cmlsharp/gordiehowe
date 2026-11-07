@@ -3,11 +3,11 @@
 
 module
 
-public import GordieHowe.Generated.SHA256.Batched8KiB.QROMParams.Data
+public import GordieHoweCerts.Generated.SHA256.Batched8KiB.QROMParams.Data
 public import GordieHowe.Language.ProgramCheck
 
-import all GordieHowe.Generated.SHA256.Batched8KiB.QROMParams.Program
-import all GordieHowe.Generated.SHA256.Batched8KiB.QROMParams.Plan
+import all GordieHoweCerts.Generated.SHA256.Batched8KiB.QROMParams.Program
+import all GordieHoweCerts.Generated.SHA256.Batched8KiB.QROMParams.Plan
 @[expose] public section
 
 /-!
@@ -26,8 +26,8 @@ namespace GordieHoweCheck.SHA256.Batched8KiB.QROMParams
 
 open GordieHowe RealizedProgram GordieHowe.Generated.SHA256.Batched8KiB.QROMParams
 
-/-- **The figures when present** (`GordieHowe.ProgramData.figuresPartB`). -/
-theorem figuresPartOk : data.figuresPartB = true := by
+/-- **The figures** (`GordieHowe.ProgramData.figuresPartB`). -/
+theorem figuresPartOk : data.figuresPartB false = true := by
   decide +kernel
 
 end GordieHoweCheck.SHA256.Batched8KiB.QROMParams

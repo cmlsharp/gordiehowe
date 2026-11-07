@@ -951,7 +951,7 @@ inline std::vector<size_t> maps_without_runs(const ProgramData &p) {
 }
 
 // Its module's path relative to formal/, without `.lean`:
-// GordieHowe/Generated/<lean_name with '/' for '.'>/Program.
+// GordieHoweCerts/Generated/<lean_name with '/' for '.'>/Program.
 inline std::string lean_program_module(const ExportMeta &meta) {
   return lean_module_path(meta, "Program");
 }

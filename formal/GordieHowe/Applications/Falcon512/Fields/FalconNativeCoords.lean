@@ -17,8 +17,8 @@ The constant coordinate of an element of `FalconNativeField9` (`falconNative9Coo
 `ZMod 12289` a natural or the prime field's `algebraMap` casts to it: the casts are the constant
 polynomials of the coefficient-vector representations (`PolyRep.const`). The realized programs' integer
 readings of these fields read the constant coordinate
-(`GordieHowe/Generated/Falcon512/Ring/Native/ROMParams/Interp.lean`,
-`GordieHowe/Generated/Falcon512/Ring/Native/QROMParams/Interp.lean`).
+(`GordieHoweCerts/Generated/Falcon512/Ring/Native/ROMParams/Interp.lean`,
+`GordieHoweCerts/Generated/Falcon512/Ring/Native/QROMParams/Interp.lean`).
 -/
 
 namespace GordieHowe

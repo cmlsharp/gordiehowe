@@ -14,8 +14,8 @@ public import GordieHoweCheck.MLDSA44.Emulated.ROMParams.GKR.H.E7
 public import GordieHoweCheck.MLDSA44.Emulated.ROMParams.GKR.H.E8
 public import GordieHoweCheck.MLDSA44.Emulated.ROMParams.GKR.H.E9
 public import GordieHoweCheck.MLDSA44.Emulated.ROMParams.GKR.H.E10
-meta import GordieHowe.Generated.MLDSA44.Emulated.ROMParams.GKR.H
-import all GordieHowe.Generated.MLDSA44.Emulated.ROMParams.Program
+meta import GordieHoweCerts.Generated.MLDSA44.Emulated.ROMParams.GKR.H
+import all GordieHoweCerts.Generated.MLDSA44.Emulated.ROMParams.Program
 
 @[expose] public section
 

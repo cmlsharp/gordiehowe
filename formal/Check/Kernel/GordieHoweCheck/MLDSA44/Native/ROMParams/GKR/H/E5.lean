@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Generated.MLDSA44.Native.ROMParams.GKR.H
+public import GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.GKR.H
 public import GordieHoweCheck.MLDSA44.Native.ROMParams.GKR.H.E5.P0
 public import GordieHoweCheck.MLDSA44.Native.ROMParams.GKR.H.E5.P1
 

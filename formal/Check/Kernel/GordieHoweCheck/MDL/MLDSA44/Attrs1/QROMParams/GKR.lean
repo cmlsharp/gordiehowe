@@ -3,9 +3,9 @@
 
 module
 
-public import GordieHowe.Generated.MDL.MLDSA44.Attrs1.QROMParams.Data
+public import GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.QROMParams.Data
 public import GordieHowe.Applications.Program.Conditions
-public import GordieHowe.Generated.MDL.MLDSA44.Attrs1.QROMParams.Pending.Small
+public import GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.QROMParams.Pending.Small
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.H.Circuit
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.A.Circuit
 

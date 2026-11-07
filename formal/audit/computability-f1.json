@@ -1,20 +1,18 @@
 {
   "revision": "f1aca4f113b14b0549a5fe7e5e7dd4fe5373a0b6",
   "toolchain": "leanprover/lean4:v4.34.0",
-  "definitions": 335287,
+  "definitions": 335340,
   "noncomputable_semantics": "isNoncomputable(name) or isNoncomputable(Compiler.mkUnsafeRecName(name))",
   "has_ir_semantics": "IR.findEnvDecl(environment, name).isSome",
   "source_inventory_sha256": {
     "definitions": "93e935b29f7a9cb15780750fa949453a088bbea4de4d8643fd348c150ad09ff8",
     "opaque": "5c683b9856e01bbe2a9aa79517e9334dbfc764ce8b897f3e6b3e728dc6a178de"
   },
-  "compressed_sha256": "d3ddf33308d040229f203b9ba445a5f762a14bfae4d414698b8863e415c37ba6",
-  "uncompressed_sha256": "8a121f9de903611e2318cb77bad24584e536cca7706ceb897d228f2bc618bdcb",
-  "scope": "Every definition and opaque declaration in the certificate environment at the recorded revision, restricted to the public module boundary, including imported dependencies and auxiliary declarations.",
+  "compressed_sha256": "039a6a298c8a14b68228d0d651a90bda360124b993fb91ff2057dfb30047a1c9",
+  "uncompressed_sha256": "b3a988c2288885afc42178f88a581ebaa18e16fb55ecdcd82b3440ea86c8f8cd",
+  "scope": "Every definition and opaque declaration in the GordieHoweCerts environment at the recorded revision, including imported dependencies and auxiliary declarations.",
   "declaration_kinds": {
-    "definitions": 331435,
+    "definitions": 331488,
     "opaque": 3852
-  },
-  "public_boundary_removed_declarations": 53,
-  "original_compressed_sha256": "039a6a298c8a14b68228d0d651a90bda360124b993fb91ff2057dfb30047a1c9"
+  }
 }

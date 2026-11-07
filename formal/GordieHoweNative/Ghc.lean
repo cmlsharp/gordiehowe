@@ -23,10 +23,12 @@ version byte `3`, then its sections, then an end marker. Each section is
 * `type`, the Lean type of the definition (`Ty`: `0` then a constant's full name, or `1` then a
   function and its argument);
 * `flags`: bit 0, the definition gets compiled code; bit 1, the value is in spine form (below);
-  bit 2, native mode adds a run-time reader for it (`LoadNative.lean`);
+  bit 2, native mode adds a run-time reader for it (`LoadNative.lean`); a file with any other bit
+  set is rejected;
 * `length`, the value's byte count, and `value`, the encoding of one value of `type`.
 
-**A value is written by its type** (`Decode`): a natural as LEB128, an integer zigzag then LEB128,
+**A value is written by its type** (`Decode`): a natural as minimal LEB128 (a natural of more
+than one byte has a nonzero last byte; any other encoding is rejected), an integer zigzag then LEB128,
 a `Bool` as `0` or `1`, a string as its byte count then its UTF-8 bytes, an `Option` as `0`, or `1`
 then the value, a `List` as its count then its items, a structure (a pair included) as its fields
 in order, any other inductive as its constructor's index then its fields. A type may override its
@@ -102,6 +104,9 @@ def Section.spine (s : Section) : Bool := s.flags &&& 2 != 0
 /-- Native mode adds a run-time reader for the definition. -/
 def Section.reader (s : Section) : Bool := s.flags &&& 4 != 0
 
+/-- The flag bits a section may set (`compile`, `spine`, `reader`); `sectionsD` rejects any other. -/
+def knownFlags : Nat := 7
+
 /-! ## The reader monad -/
 
 /-- **What a decoding reads**: the file's bytes and sections, the section being decoded (a
@@ -150,13 +155,16 @@ partial def groups (b : ByteArray) (i j : Nat) : Nat :=
     let m := i + (j - i) / 2
     groups b i m ||| (groups b m j <<< (7 * (m - i)))
 
-/-- An unsigned LEB128 natural. -/
+/-- An unsigned LEB128 natural, in its minimal encoding: a natural of more than one byte whose
+last byte is zero (a group that adds no bits) is rejected, so each natural, and each tag, has one
+encoding. -/
 def nat : D Nat := do
   let c ← read
   let i ← get
   let mut j := i
   while j < c.bytes.size && c.bytes[j]! &&& 128 != 0 do j := j + 1
   unless j < c.bytes.size do throw s!"unexpected end of data at byte {c.bytes.size}"
+  if j > i && c.bytes[j]! == 0 then throw s!"a natural at byte {i} is not minimally encoded"
   set (j + 1)
   pure (groups c.bytes i (j + 1))
 
@@ -464,7 +472,8 @@ def fnv1a (b : ByteArray) : String := Id.run do
   pure (String.ofList (List.replicate (16 - s.length) '0') ++ s)
 
 /-- **The file's sections**: the magic `GHC 3`, then each section's header (its value skipped), up
-to the end marker, then the end of the file. Section names are distinct. -/
+to the end marker, then the end of the file. Section names are distinct, and a section's flags set
+no bit outside `knownFlags`. -/
 def sectionsD : D (Array Section) := do
   let b0 ← byte
   let b1 ← byte
@@ -480,6 +489,7 @@ def sectionsD : D (Array Section) := do
     names := names.insert name
     let t ← ty
     let flags ← nat
+    unless flags ||| knownFlags == knownFlags do throw s!"section {name}: unknown flags {flags}"
     let len ← nat
     let off ← get
     unless off + len ≤ (← read).bytes.size do throw s!"section {name}: length {len} past the end"

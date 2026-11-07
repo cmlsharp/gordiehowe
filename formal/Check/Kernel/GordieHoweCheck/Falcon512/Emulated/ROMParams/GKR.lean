@@ -3,9 +3,9 @@
 
 module
 
-public import GordieHowe.Generated.Falcon512.Emulated.ROMParams.Data
+public import GordieHoweCerts.Generated.Falcon512.Emulated.ROMParams.Data
 public import GordieHowe.Applications.Program.Conditions
-public import GordieHowe.Generated.Falcon512.Emulated.ROMParams.Pending.Small
+public import GordieHoweCerts.Generated.Falcon512.Emulated.ROMParams.Pending.Small
 public import GordieHoweCheck.Falcon512.Emulated.ROMParams.GKR.H.Circuit
 public import GordieHoweCheck.Falcon512.Emulated.ROMParams.GKR.A.Circuit
 

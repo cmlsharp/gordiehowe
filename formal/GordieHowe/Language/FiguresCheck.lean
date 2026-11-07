@@ -20,7 +20,7 @@ open RealizedProgram
 
 /-- **Compiled figures share the cells context**, with the same checked result. -/
 @[csimp] theorem figuresPartB_csimp : @figuresPartB = @figuresPartBC := by
-  funext d
+  funext d w
   rw [figuresPartB, figuresPartBC, CellsReader.ofCtx_build]
 
 end GordieHowe.ProgramData

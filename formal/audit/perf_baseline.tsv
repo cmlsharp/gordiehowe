@@ -29,9 +29,6 @@ GordieHowe.MLDSA.Regularity.envelope_box_seven_mldsa44	GordieHowe.Applications.M
 GordieHowe.RingSignature.KeyFree.kfChain_le_sideω	GordieHowe.Applications.Ring.KeyFreeChainOmega	5.62	0.10	0.05
 GordieHowe.SPBCS.simExtractionExpansion_absorbTab_next_congr	GordieHowe.Applications.Ring.RingForgerZK	0.56	5.57	0.01
 GordieHowe.Ring.MLDSAW1.w1SlotLaw_h2_of_eqOn	GordieHowe.Applications.Ring.MLDSAW1SlotLaws	5.56	0.47	0.15
-GordieHowe.Ring.MLDSAW1.advantage_le_bkm06_mldsa87_hedged_keep_qrom_query	GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1HedgedQROMQuery	5.28	0.24	2.55
-GordieHowe.Ring.MLDSAW1.advantage_le_bkm06_mldsa44_hedged_keep_qrom_query	GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1HedgedQROMQuery	5.24	0.18	2.55
-GordieHowe.Ring.MLDSAW1.advantage_le_bkm06_mldsa65_hedged_keep_qrom_query	GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1HedgedQROMQuery	5.22	0.19	2.52
 GordieHowe.MLDSA.Regularity.envelope_mldsa87	GordieHowe.Applications.MLDSA.Regularity.Envelope	4.79	0.15	4.33
 GordieHowe.MLDSA.Regularity.envelope_five_mldsa65	GordieHowe.Applications.MLDSA.Regularity.EnvelopeFive	4.67	0.15	4.23
 GordieHowe.Ring.MLDSAW1.advantage_le_bkm06_mldsa65_hedged_keep_query	GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1HedgedQuery	4.66	0.16	2.45
@@ -46,13 +43,10 @@ GordieHowe.Ring.MLDSAW1.advantage_le_bkm06_mldsa87_hedged_keep	GordieHowe.Applic
 GordieHowe.Ring.MLDSAW1.w1KFChainAvg_le_cases	GordieHowe.Applications.Ring.MLDSAW1H3Assembly	3.86	0.33	0.13
 GordieHowe.QROM.densityRun_block_mass	GordieHowe.Model.QROM.DensityRunBlock	3.81	0.07	0.17
 GordieHowe.Ring.MLDSAW1.toOuterMeasure_simPMF_absorbAssign_withStep	GordieHowe.Applications.Ring.MLDSAW1SlotLaws	3.78	0.28	0.03
-GordieHowe.Ring.MLDSAW1.advantage_le_bkm06_mldsa44_hedged_keep_qrom	GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1HedgedQROM	3.67	0.11	1.98
 GordieHowe.MLDSA.Regularity.expect_expect_expect_inv_sq_mldsa44OracleWeight_le	GordieHowe.Applications.MLDSA.Regularity.WeightTail44	3.66	0.12	1.24
 GordieHowe.RealizedProgram.groupSum_named	GordieHowe.Language.Realizations.RealizeGrouped	3.63	0.07	3.12
 GordieHowe.Ring.MLDSAW1.w1SlotLaw_h1_of_eqOn	GordieHowe.Applications.Ring.MLDSAW1SlotLaws	3.63	0.36	0.08
 GordieHowe.MLDSA44.Ring.RingIn.verifies	GordieHowe.Applications.MLDSA44.Ring.HonestInput	3.61	0.00	0.01
-GordieHowe.Ring.MLDSAW1.advantage_le_bkm06_mldsa87_hedged_keep_qrom	GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1HedgedQROM	3.57	0.13	1.96
-GordieHowe.Ring.MLDSAW1.advantage_le_bkm06_mldsa65_hedged_keep_qrom	GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1HedgedQROM	3.56	0.13	1.95
 GordieHowe.SPBCS.winTestProb_withTest_le	GordieHowe.SPBCS.SimOracle	3.53	0.28	0.35
 GordieHowe.RealizedProgram.groupSum	GordieHowe.Language.Realizations.RealizeGrouped	3.50	0.06	3.02
 GordieHowe.Ring.MLDSAW1.w1CaseUAvgC_le	GordieHowe.Applications.Ring.MLDSAW1H3Assembly	3.46	0.27	0.05
@@ -157,13 +151,10 @@ GordieHowe.Quantum.AdaptiveIAlg.AddsW.simLaw_reinit_precomp_dropAt	GordieHowe.Mo
 GordieHowe.RingSignature.KeyFree.kfExtAdds_le_muEufNmaProb	GordieHowe.Applications.Ring.KeyFreeForger	1.87	0.26	0.10
 GordieHowe.Errata.CHVY25.Family.facts28	GordieHowe.Errata.CHVY25FamilyData	0.01	1.86	0.00
 GordieHowe.Quantum.AdaptiveIAlg.innerSwap_pureD	GordieHowe.Model.Quantum.Interactive.RelayBlockInner	1.85	0.07	0.15
-GordieHowe.Ring.MLDSAW1.advantage_le_bkm06_mldsa44_hedged_qrom_query	GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1HedgedQROMQuery	1.85	0.12	0.23
-GordieHowe.Ring.MLDSAW1.advantage_le_bkm06_mldsa65_hedged_qrom_query	GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1HedgedQROMQuery	1.85	0.12	0.23
 GordieHowe.Quantum.IsUniformOnLabels.sum_mul_eq	GordieHowe.Model.Quantum.O2H.LabelBlocks	1.85	0.01	0.06
 MvPolynomial.sum_affineHilbertFunction_le_iInf	ArkLib.ToMathlib.RingTheory.MvPolynomial.AffineHilbertComponents	1.84	0.07	0.03
 GordieHowe.RealizedProgram.ivlApplyFact_sound	GordieHowe.Language.Realizations.Derivation.OpIvl	1.84	0.05	0.61
 GordieHowe.RealizedProgram.readsOnly_branchIP	GordieHowe.ProofSystem.Program.FieldClaimSupport	1.84	0.02	0.01
-GordieHowe.Ring.MLDSAW1.advantage_le_bkm06_mldsa87_hedged_qrom_query	GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1HedgedQROMQuery	1.83	0.10	0.22
 GordieHowe.gf2_256RelDual_trace_lt_12	GordieHowe.Foundations.Fields.GF2_256Relative	0.01	1.83	0.00
 GordieHowe.RingSignature.Insider.sum_simProb_extAdv_le_muEufProb	GordieHowe.Applications.Ring.RingForgerZK	1.82	0.30	0.08
 GordieHowe.Quantum.Distinguisher.avg_abs_sum_acceptWithAt_sub_le	GordieHowe.Model.Quantum.O2H.RevealedAvg	1.81	0.07	0.50
@@ -212,7 +203,6 @@ BerlekampWelch.E_and_Q_unique	ArkLib.Data.CodingTheory.BerlekampWelch.Condition	
 AffineMCALemmas.exists_line_bound	ArkLib.Data.CodingTheory.ProximityGenerator.AffineGenerator	1.51	0.04	0.28
 ReedSolomon.ordinaryFrobenius_unified_factor	ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Ordinary.FactorBudget	1.50	0.05	0.99
 GordieHowe.QROM.SimFrame.map_simQuery	GordieHowe.Model.QROM.CircuitCount	1.50	0.07	0.05
-GordieHowe.Ring.sum_uniform_hedged_closeQ	GordieHowe.Applications.Ring.PublicW1.MaskOracleQROM	1.49	0.03	0.38
 GordieHowe.ROM.NIZK.abs_lHybProb_sub_le	GordieHowe.Model.ROM.HiddenLeaves	1.48	0.05	0.21
 GordieHowe.SPBCS.Multiproof.length_trace_reconProg_le	GordieHowe.SPBCS.Merkle.Multiproof	1.47	0.15	1.12
 GordieHowe.SPBCS.winTestProbWith_oracleTestQB	GordieHowe.SPBCS.OracleTest	1.47	0.06	0.14
@@ -563,7 +553,6 @@ GordieHowe.RingSignature.KeyFree.sim_le_winTestProbKF	GordieHowe.Applications.Ri
 ReedSolomon.aeval_map_commonTaylorNumeratorOver_mul_pow_eq_jet	ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.ComponentDimension	0.71	0.07	0.01
 GordieHowe.MLDSA.Regularity.coeffPairMap	GordieHowe.Applications.MLDSA.Regularity.SecondMoment	0.71	0.01	0.00
 GordieHowe.MLDSA.Regularity.spectralSum_two_mul_le_fibre	GordieHowe.Applications.MLDSA.Regularity.SmallSupportWindows	0.71	0.03	0.11
-GordieHowe.Ring.MaskedSigner.advantage_le_advantageAt	GordieHowe.Applications.Ring.PublicW1.MaskOracleQROM	0.71	0.03	0.11
 GordieHowe.gf2_128RelDual_trace	GordieHowe.Foundations.Fields.GF2_128Relative	0.00	0.71	0.00
 GordieHowe.Quantum.Distinguisher.RequestBudget.supported_notAccept_gameStep	GordieHowe.Model.Quantum.O2H.RequestBudget	0.71	0.07	0.02
 GordieHowe.SPBCS.MTerm.Site.eq_of_part_of_mem	GordieHowe.SPBCS.Term	0.71	0.06	0.02
@@ -635,7 +624,6 @@ GordieHowe.RealizedProgram.evalWith_rowsAt	GordieHowe.Language.Realizations.Deri
 GordieHowe.RealizedProgram.kernelIvl_sound	GordieHowe.Language.Realizations.Derivation.ProductMod	0.65	0.04	0.20
 GordieHowe.QROM.norm_goodD_wOp_le	GordieHowe.Model.QROM.OracleSimulation	0.65	0.04	0.06
 GordieHowe.QROM.kernelOp_appendS	GordieHowe.Model.QROM.QueryCountExpand	0.65	0.01	0.01
-GordieHowe.Ring.MLDSAW1.w1Concrete.gameAdvantage_restrChallenger_le	GordieHowe.Applications.Ring.MLDSAW1Anonymity	0.64	0.02	0.01
 GordieHowe.Ring.MLDSAW1.w1GuessAvg_le	GordieHowe.Applications.Ring.MLDSAW1H3Cases	0.64	0.11	0.03
 GordieHowe.Quantum.AdaptiveIAlg.expandAdv_wsInv	GordieHowe.Model.Quantum.Interactive.ExtRunLogs	0.64	0.05	0.01
 ps_degY_bound	ArkLib.Data.CodingTheory.PolishchukSpielman.Degrees	0.64	0.04	0.05
@@ -807,7 +795,6 @@ GordieHowe.MLDSA.Regularity.expect_atypical_uniform_le	GordieHowe.Applications.M
 GordieHowe.MLDSA44.UseHint.emulated_sound	GordieHowe.Applications.MLDSA44.Gadgets.UseHint	0.54	0.05	0.16
 GordieHowe.Ring.MLDSAW1.advantage_le_bkm06_mldsa87_hedged_query	GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1HedgedQuery	0.54	0.05	0.06
 GordieHowe.Ring.sum_uniform_not_distinct_le	GordieHowe.Applications.Ring.PublicW1.MaskOracle	0.54	0.01	0.05
-GordieHowe.Ring.MaskedSigner.QAdversary.gameAt_apply_eq	GordieHowe.Applications.Ring.PublicW1.MaskOracleQROM	0.54	0.04	0.03
 GordieHowe.Interaction.sum_uniform_guess_le	GordieHowe.Foundations.Probability.InteractionGuess	0.54	0.01	0.03
 GordieHowe.RealizedProgram.evalE_linForm	GordieHowe.Language.Realizations.RealizeMod	0.54	0.02	0.02
 GordieHowe.Quantum.ReqQueryAlg.simStage_instLog_eq	GordieHowe.Model.Quantum.Interactive.ReqBridgeCore	0.54	0.05	0.02
@@ -825,7 +812,6 @@ MvPolynomial.X_none_mul_rename_some_sub_one_mem_awayPresentationIdeal	ArkLib.ToM
 CompPoly.CPolynomial.Raw.mul_add	CompPoly.Univariate.Raw.Proofs	0.53	0.02	0.08
 GordieHowe.MLDSA.Regularity.smallSupportBounds_seven_of_isKernelBound	GordieHowe.Applications.MLDSA.Regularity.SmallSupportWindows	0.53	0.08	0.01
 GordieHowe.MLDSA44.decomposeCoeff_of_repr	GordieHowe.Applications.MLDSA44.Spec.Rounding	0.53	0.41	0.03
-GordieHowe.Ring.MLDSAW1.expect_restrictBadQ_le	GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1HedgedQROMQuery	0.53	0.03	0.06
 GordieHowe.Errata.CHVY25.Family.facts14	GordieHowe.Errata.CHVY25FamilyData	0.01	0.53	0.00
 GordieHowe.RealizedProgram.NamedOp.block_eq_sum	GordieHowe.Language.Realizations.RealizeField	0.53	0.03	0.15
 GordieHowe.RealizedProgram.leafOk_cellValuation	GordieHowe.Language.RealizedProgram.Affine	0.53	0.01	0.02

@@ -624,7 +624,7 @@ TEST(GordieHoweEmitExport, RoundTrip) {
                 static_cast<unsigned long long>(ghc::fnv1a(x.ghc)));
   for (const std::string &want :
        {std::string("namespace GordieHowe.Generated.Test.EmitExport.GKR.A"),
-        std::string("public import GordieHowe.Generated.Test.EmitExport.Program"),
+        std::string("public import GordieHoweCerts.Generated.Test.EmitExport.Program"),
         std::string("public import GordieHowe.Language.Realizations.Circuit.RelEntry"),
         std::string("def ar : CodeArith := (RealizedProgram.gold4Code.arith).withPrime "
                     "18446744069414584321"),
@@ -634,7 +634,7 @@ TEST(GordieHoweEmitExport, RoundTrip) {
   const auto &entry = x.check_modules.front();
   EXPECT_EQ(entry.first, root + "E0.lean");
   EXPECT_NE(entry.second.find("check_entry cert ar 0 ["), std::string::npos);
-  EXPECT_NE(entry.second.find("\nmeta import GordieHowe.Generated.Test.EmitExport.GKR.A\n"),
+  EXPECT_NE(entry.second.find("\nmeta import GordieHoweCerts.Generated.Test.EmitExport.GKR.A\n"),
             std::string::npos);
   const auto &circuit = x.check_modules.back();
   EXPECT_EQ(circuit.first, root + "Circuit.lean");

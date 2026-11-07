@@ -6,6 +6,7 @@ module
 public import GordieHoweNative.Language.RealizedProgram.ValueShape
 public import GordieHoweNative.Language.RealizedProgram.Source
 public import GordieHoweNative.Language.Honest.Source
+public import GordieHoweNative.Language.RealizedProgram.SourceCheck
 
 /-!
 # GordieHowe: the compiled definitions of `GordieHowe.Language.RealizedProgram.Embed`
@@ -242,23 +243,34 @@ def EmbedData.refB (d : EmbedData) (ir' : RealizedProgram) (k : ℕ) : Bool :=
     (ir.expr k).opsFree && (ir.expr k).directNodes.all (· ∈ d.V) &&
     (ir.expr k).refs.all (· ∈ d.R)
 
-/-- Whether a program's values read values of smaller identifiers. -/
+/-- Whether a value's public expression reads only shared expressions of the program. -/
+def refsInB (ir : RealizedProgram) (x : Value) : Bool :=
+  match x.kind with
+  | .pub (.expr e) => e.refs.all (· < ir.exprs.length)
+  | _ => true
+
+/-- Whether a program's values read values of smaller identifiers, each value's reads taken through
+the closure table (`valueDepsOf`) and its shared expressions checked to exist. The kernel builds
+the table once; a walk of each value's shared expressions repeats the walk of every entry they
+share. -/
 def valuesOrderedB (ir : RealizedProgram) : Bool :=
-  (List.range ir.values.length).all fun v => (valueDeps ir v).all (· < v)
+  allIdx (fun v x => ir.refsInB x && (ir.valueDepsOf x).all (· < v)) ir.values 0
 
 /-- **The larger program holds the part**: both programs read in identifier order, the part's
-values and shared expressions correspond, and so do the listed predicates, which are source
-predicates of the larger program. The check reads both programs, element by element. -/
+values and shared expressions correspond, and so do the listed predicates, each a predicate of the
+smaller program and a source predicate of the larger one. The check reads both programs, element
+by element. -/
 def embeddingB (ir' : RealizedProgram) (d : EmbedData) : Bool :=
   let ir := d.source
   let σ := d.renaming
   valuesOrderedB ir && valuesOrderedB ir' && ir.refsOrderedB && ir'.refsOrderedB &&
     d.V.all (d.valueB ir') && d.R.all (d.refB ir') &&
     d.equals.all (fun p => ir.equalCorrB ir' σ d.V d.R (ir.predicate p.1).body
-        (ir'.predicate p.2).body &&
+        (ir'.predicate p.2).body && decide (p.1 < ir.predicates.length) &&
       decide (p.2 < ir'.predicates.length) && ir'.inSource (ir'.predicate p.2)) &&
     d.bodies.all (fun p => ir.bodyCorrB ir' σ d.V d.R (ir.predicate p.1).body
-        (ir'.predicate p.2).body && decide (p.2 < ir'.predicates.length)) &&
+        (ir'.predicate p.2).body && decide (p.1 < ir.predicates.length) &&
+      decide (p.2 < ir'.predicates.length)) &&
     d.sources.all (fun p => ir'.inSource (ir'.predicate p)) &&
     ir.challenges.length == d.chals.length &&
     (List.range d.chals.length).all fun j =>

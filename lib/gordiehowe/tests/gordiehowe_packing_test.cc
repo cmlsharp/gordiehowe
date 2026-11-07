@@ -977,6 +977,57 @@ TEST(GordieHowe, OddCharacteristicBatches) {
   }
 }
 
+// A merged batch draws gamma from the challenge point that then draws the
+// zerocheck's first challenges (batch.h reduce, field_skip.h rows_of), so
+// its reduction opens as many challenge points as the batch of one relation
+// and has the same sumcheck rounds. The Lean model sends gamma in the
+// zerocheck point's verifier move (MergedAffineBatch.fusedIp), and its
+// figures count a merged batch's rounds as an unmerged one's
+// (DomainFig.rounds, plan_proofs.h program_figures).
+TEST(GordieHowe, MergedBatchChallengePoints) {
+  const AF &af = env().af;
+  constexpr size_t m = 37;
+  compiler::FieldRelation<AF> sq{
+      "u0^2-u1", 2, {{af.one(), {0, 0}}, {af.mone(), {1}}}};
+  compiler::FieldRelation<AF> prod{
+      "v0v1-v2", 3, {{af.one(), {0, 1}}, {af.mone(), {2}}}};
+  // The prover's challenge points in a batch's reduction and its sumcheck
+  // rounds, of one relation and of the two merged.
+  auto points = [&](size_t parts) {
+    std::vector<compiler::FieldBatchPart<AF>> ps = {
+        {sq, compiler::AffineOperandMap<AF>::columns(af, "columns", 2, m)}};
+    if (parts == 2)
+      ps.push_back(
+          {prod, compiler::AffineOperandMap<AF>::columns(af, "columns", 3, m)});
+    const auto kb = compiler::make_field_batch<SHA384>(af, ps, 2, 1);
+    std::mt19937_64 g(5);
+    std::vector<AF::Elt> words;
+    for (size_t i = 0; i < m; ++i) words.push_back(af.of_scalar(g() & 0xfff));
+    for (size_t i = 0; i < m; ++i)
+      words.push_back(af.mulf(words[i], words[i]));
+    if (parts == 2) {
+      for (size_t i = 0; i < 2 * m; ++i)
+        words.push_back(af.of_scalar(g() & 0xfff));
+      for (size_t i = 0; i < m; ++i)
+        words.push_back(af.mulf(words[2 * m + i], words[3 * m + i]));
+    }
+    std::vector<AF::Elt> pads(kb->pads());
+    SecureRandomEngine rng;
+    kb->fill_pads(pads.data(), rng);
+    static const uint8_t kLabel[] = "merged-challenge-points";
+    BasicProofSeed<SHA384> seed;
+    std::memset(seed.bytes, 0, sizeof(seed.bytes));
+    BasicTranscript<SHA384> t(kLabel, sizeof(kLabel) - 1, seed);
+    const size_t before = t.stats().points;
+    std::vector<AF::Elt> msgs;
+    (void)kb->reduce(t, msgs, words.size(), &words, pads.data(), {});
+    return std::make_pair(t.stats().points - before, kb->shape().rounds);
+  };
+  const auto one = points(1), two = points(2);
+  EXPECT_EQ(two.second, one.second);
+  EXPECT_EQ(two.first, one.first);
+}
+
 // The masked field skip's algebra (field_skip.h), with zero pads: the
 // terminal check row's right-hand side is 0 and the terminal values are
 // the instance-weighted operands, in odd characteristic and in
@@ -1155,27 +1206,23 @@ void bit_plane_dots(const F &f) {
 TEST(GordieHowe, BitPlaneDots128) { bit_plane_dots(GF2_128<>()); }
 TEST(GordieHowe, BitPlaneDots256) { bit_plane_dots(GF2_256<>()); }
 
-// A root stage's forms and its Ligero coefficients without forms
+// A stage's forms and its Ligero coefficients without forms
 // (compiler/stage.h): add_forms against the definition
 // a_k[g] = phi^-k(sum_j phi^k(beta*_j) c_{g,j}) by phi_inv, and
-// add_coefficients against sum_k w_k a_k[g], for random, partly zero and
-// zero coefficients, group counts around the linear maps' blocks of eight,
-// and a short last group. On a target without GFNI the maps run on their
-// byte tables.
-template <class F>
-void root_coefficients(const F &f, size_t base) {
+// add_coefficients (StageCoefficients) against sum_k w_k a_k[g], for
+// random, partly zero and zero coefficients, group counts around the
+// linear maps' blocks of eight and the kernel's blocks of 128, and a short
+// last group. Root and inner stages in characteristic 2 (on a target
+// without GFNI the maps run on their byte tables) and the odd fields'
+// stages, whose maps are matrices on prime coordinates.
+template <class F, class Rand>
+void stage_coefficients(const F &f, size_t base, size_t top, Rand &&elt) {
   using Elt = typename F::Elt;
-  const compiler::PackingStage<F> st(f, base, field_degree<F>());
-  ASSERT_TRUE(st.root);
+  static_assert(compiler::PackingStage<F>::kCoefficients);
+  const compiler::PackingStage<F> st(f, base, top);
   const size_t d = st.d;
-  std::mt19937_64 rng(17 + base);
-  auto elt = [&] {
-    std::array<uint64_t, F::kBytes / 8> raw;
-    for (auto &x : raw) x = rng();
-    return f.of_scalar_field(raw);
-  };
   for (int pattern = 0; pattern < 3; ++pattern)
-    for (size_t ng : {1, 7, 8, 9, 64, 65, 1000})
+    for (size_t ng : {1, 7, 8, 9, 64, 65, 127, 128, 129, 1000})
       for (bool short_last : {false, true}) {
         const size_t ncoord = ng * d - (short_last ? d / 2 : 0);
         std::vector<Elt> c(ncoord, f.zero());
@@ -1206,17 +1253,160 @@ void root_coefficients(const F &f, size_t base) {
         st.add_coefficients(f, w.data(), c.data(), ncoord, ng, v.data());
         for (size_t g = 0; g < ng; ++g)
           EXPECT_EQ(f.subf(v[g], offset[g]), want[g])
-              << "pattern " << pattern << ", group " << g << " of " << ng
+              << "GF(p^" << base << ") < GF(p^" << top << "), pattern "
+              << pattern << ", group " << g << " of " << ng
               << (short_last ? ", short last group" : "");
       }
 }
-TEST(GordieHowe, RootCoefficients128) {
-  root_coefficients(GF2_128<>(), 16);
-  root_coefficients(GF2_128<>(), 32);
+// Random elements: of the binary fields by their bits, of the odd ones by
+// their prime coordinates.
+template <class F>
+auto binary_elts(const F &f, uint64_t seed) {
+  return [&f, rng = std::mt19937_64(seed)]() mutable {
+    std::array<uint64_t, F::kBytes / 8> raw;
+    for (auto &x : raw) x = rng();
+    return f.of_scalar_field(raw);
+  };
 }
-TEST(GordieHowe, RootCoefficients256) {
-  root_coefficients(GF2_256<>(), 16);
-  root_coefficients(GF2_256<>(), 64);
+template <class F>
+auto odd_elts(const F &f, uint64_t seed) {
+  using PC = compiler::PrimeCoordinates<F>;
+  return [&f, rng = std::mt19937_64(seed)]() mutable {
+    typename F::Elt x = f.zero();
+    for (size_t i = 0; i < PC::N; ++i) PC::set(x, i, rng() % PC::modulus());
+    return x;
+  };
+}
+TEST(GordieHowe, StageCoefficients128) {
+  const GF2_128<> f;
+  for (auto [b, t] : {std::pair<size_t, size_t>{16, 128}, {32, 128}, {64, 128},
+                      {16, 64}, {16, 32}, {32, 64}, {1, 16}})
+    stage_coefficients(f, b, t, binary_elts(f, 17 + b + t));
+}
+TEST(GordieHowe, StageCoefficients256) {
+  const GF2_256<> f;
+  for (auto [b, t] : {std::pair<size_t, size_t>{16, 256}, {64, 256},
+                      {16, 64}, {1, 16}})
+    stage_coefficients(f, b, t, binary_elts(f, 17 + b + t));
+}
+// The root's composed maps for a claim in product form (tree_zk.h's
+// add_products): the map with columns M_j(T(memory bit c)), T =
+// twist_columns of random terms and M_j StageCoefficients' map j, against
+// beta*_j sum_k w_k phi^-k(T(x)) with T(x) = sum C Frob^-K(x) by
+// frobenius_inverse, on random elements at counts around the kernel's
+// blocks of eight.
+template <class F>
+void composed_product_maps(const F &f, size_t base) {
+  using Elt = typename F::Elt;
+  const compiler::PackingStage<F> st(f, base, field_degree<F>());
+  auto elt = binary_elts(f, 31 + base);
+  std::vector<Elt> w(st.d);
+  for (auto &x : w) x = elt();
+  std::vector<std::pair<size_t, Elt>> terms;
+  for (size_t k : {0, 1, 5, 15, 3, 1}) terms.push_back({k, elt()});
+  const compiler::StageCoefficients<F> sc(f, st, w.data());
+  const auto tc = compiler::twist_columns(f, terms);
+  for (size_t j = 0; j < st.d; ++j) {
+    std::vector<Elt> col(tc.size());
+    sc.map(j).apply(tc.data(), col.data(), tc.size());
+    const auto m = compiler::LinearMap<F>::of_columns(f, col.data());
+    for (size_t n : {1, 7, 8, 9, 17}) {
+      std::vector<Elt> x(n), y(n);
+      for (auto &e : x) e = elt();
+      m.apply(x.data(), y.data(), n);
+      for (size_t i = 0; i < n; ++i) {
+        Elt t = f.zero();
+        for (const auto &[k, c] : terms)
+          f.add(t, f.mulf(c, compiler::frobenius_inverse(f, x[i], k)));
+        Elt r = f.zero();
+        for (size_t k = 0; k < st.d; ++k)
+          f.add(r, f.mulf(w[k], st.phi_inv(f, t, k)));
+        EXPECT_EQ(y[i], f.mulf(st.dual[j], r)) << "position " << j << ", element " << i;
+      }
+    }
+  }
+}
+// add_word_maps (compiler/stage.h) against v[g] += M_j(alpha[y]) word by
+// word: whole groups at consecutive positions (its tiles), groups out of
+// order or split, positions off a group boundary, a lone word, short
+// lists; on one chunk and in chunks under a runner.
+struct InlineRunner : parallel::Runner {
+  void run(size_t n, const std::function<void(size_t)> &fn) override {
+    for (size_t i = n; i-- > 0;) fn(i);
+  }
+};
+TEST(GordieHowe, WordMaps) {
+  using F = GF2_128<>;
+  using Elt = F::Elt;
+  const F f;
+  auto elt = binary_elts(f, 41);
+  std::mt19937_64 rng(43);
+  for (size_t d : {2, 8, 16}) {
+    std::vector<compiler::LinearMap<F>> m;
+    std::vector<Elt> col(128);
+    for (size_t j = 0; j < d; ++j) {
+      for (auto &c : col) c = elt();
+      m.push_back(compiler::LinearMap<F>::of_columns(f, col.data()));
+    }
+    const size_t off = 1000, ng = 300;
+    for (int layout = 0; layout < 5; ++layout)
+      for (size_t ny : {1, 7, 64, 2000}) {
+        std::vector<size_t> at;
+        for (size_t i = 0; at.size() < ny; ++i) {
+          // 0: consecutive from a group boundary; 1: from position 3;
+          // 2: shuffled; 3: consecutive with every fifth group reversed;
+          // 4: every other position.
+          const size_t g = (i / d) % ng;
+          size_t pos = g * d + i % d;
+          if (layout == 1) pos = (pos + 3) % (ng * d);
+          if (layout == 3 && g % 5 == 0) pos = g * d + (d - 1 - i % d);
+          if (layout == 4) pos = (2 * i) % (ng * d);
+          at.push_back(off + pos);
+        }
+        if (layout == 2) std::shuffle(at.begin(), at.end(), rng);
+        std::vector<Elt> alpha(ny);
+        for (auto &x : alpha) x = elt();
+        std::vector<Elt> want(ng, f.zero());
+        for (size_t y = 0; y < ny; ++y) {
+          Elt z;
+          m[(at[y] - off) % d].apply(&alpha[y], &z, 1);
+          f.add(want[(at[y] - off) / d], z);
+        }
+        for (bool chunks : {false, true}) {
+          InlineRunner runner;
+          parallel::Scope scope(chunks ? &runner : nullptr);
+          std::vector<Elt> v(ng, f.zero());
+          compiler::add_word_maps(f, m, off, at, alpha.data(), v.data());
+          EXPECT_EQ(v, want) << "d " << d << ", layout " << layout << ", "
+                             << ny << " words" << (chunks ? ", chunks" : "");
+        }
+      }
+  }
+}
+TEST(GordieHowe, ComposedProductMaps) {
+  composed_product_maps(GF2_128<>(), 16);
+  composed_product_maps(GF2_256<>(), 16);
+}
+TEST(GordieHowe, StageCoefficientsOdd) {
+  const Fp64G2 g2;
+  stage_coefficients(g2, 1, 2, odd_elts(g2, 3));
+  const Fp64G4 g4;
+  stage_coefficients(g4, 1, 4, odd_elts(g4, 4));
+  stage_coefficients(g4, 2, 4, odd_elts(g4, 5));
+  stage_coefficients(g4, 1, 2, odd_elts(g4, 6));
+  const Fp24 p24(8380417);
+  const Fp24_6 f6(p24, Fp24_6::beta_);
+  stage_coefficients(f6, 1, 6, odd_elts(f6, 7));
+  stage_coefficients(f6, 2, 6, odd_elts(f6, 8));
+  const Fp14 p14(12289);
+  const Fp14_9 f9(p14, Fp14_9::beta_);
+  stage_coefficients(f9, 1, 9, odd_elts(f9, 9));
+  stage_coefficients(f9, 3, 9, odd_elts(f9, 10));
+  const MlDsaField11 f11(p24);
+  stage_coefficients(f11, 1, 11, odd_elts(f11, 11));
+  const FalconField20 f20(p14);
+  stage_coefficients(f20, 4, 20, odd_elts(f20, 12));
+  stage_coefficients(f20, 1, 4, odd_elts(f20, 13));
 }
 
 // The bit phase's kernels (compiler/bit_planes.h) against their

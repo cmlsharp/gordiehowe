@@ -35,6 +35,10 @@ oracle `G` by superposition queries only.
 - `restrAns_admLow_congr`, `toReal_runLaw_badReq_le`: the signer on `admLow` reads the oracle off
   the labels, so a bad request is answered with probability at most `(√Q + 2 t)² · checkError`
   (`RingSignature.toReal_runLaw_hit_le`, `GordieHowe/Model/RingSignature/Search.lean`).
+- `hedgedScheme.anonAdvantage_le_coupling`: the anonymity bound of the headlines at any primitives
+  with the signing and verification laws, a coherent encoding and `‖s₂‖∞ ≤ η` for every honest key, with
+  `w1CouplingError` at those primitives (`MLDSAW1AnonOracle.lean` applies it at random-oracle
+  `ExpandA`, `ExpandS` and `SampleInBall`).
 - `w1Concrete.anonAdvantage_le_coupling`, `w1Concrete.anonAdvantage_le_coupling_checkParams`,
   `w1Scheme44.anonAdvantage_le`, `w1Scheme65.anonAdvantage_le`, `w1Scheme87.anonAdvantage_le`:
   **the anonymity headlines** at the scheme constants: for every anonymity adversary with `t`
@@ -43,8 +47,9 @@ oracle `G` by superposition queries only.
   `Q · w1CouplingError + Q · wi (Q · C) + 2 (C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256)) +
   2 (√Q + 2 t)² · checkError reps tol s x` (`2 (√Q + 2 t)² / 2^240` at check parameters): the two
   until-bad steps, and the reprogramming hop and coupling for the scheme on `admLow`
-  (`w1Concrete.gameAdvantage_restrChallenger_le`, `MLDSAW1Anonymity.lean`;
-  `expect_idealDist_le`, `MLDSAW1IdealDist.lean`).
+  (`gameAdvantage_restrChallenger_le`, `MLDSAW1Anonymity.lean`;
+  `expect_idealDist_le`, `MLDSAW1IdealDist.lean`), at any primitives with the signing and
+  verification laws (`hedgedScheme.anonAdvantage_le_coupling`).
 -/
 
 namespace GordieHowe.Ring.MLDSAW1
@@ -459,6 +464,110 @@ theorem toReal_runLaw_badReq_le (hO : O.UniformSplit) (hdisj : ∀ x, O.IsPt x �
 
 end BadSearch
 
+/-! ### The headline at any primitives -/
+
+section Generic
+
+variable (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : NTTRingOps]
+  [Fintype prims.Power2High] [DecidableEq prims.Power2High] [Fintype prims.Hint]
+  [DecidableEq prims.Hint] [Inhabited prims.Hint] [Nonempty (MaskBox p)] [Fintype Msg]
+  [DecidableEq Msg] [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y]
+  [AddGroup Y] [Nonempty Y] {O : W1Oracles X Y p prims Msg N reps} {M : MaskOracle X Y p T Msg}
+  {βmin : ℚ≥0} {tol : ℕ} {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D]
+  {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
+  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
+  {adm : KeyRing (PubKey p prims) N → Prop} [DecidablePred adm] {n : ℕ}
+  {Y₁ Y₂ : Type} [AddGroup Y₁] [AddGroup Y₂] [Fintype Y₁] [DecidableEq Y₁] [Fintype Y₂]
+
+open Classical in
+/-- **Anonymity of the ML-DSA ring signature publishing `w₁`, against check-oracle queries**, at
+any primitives `prims` with the signing and verification laws (`h_laws`, `hv`), an encoding `enc`
+coherent with `bucketsOf` (`henc`) and `‖s₂‖∞ ≤ η` for every honest key (`hs2`): for every
+anonymity adversary with `t` superposition queries whose table reads the base components of the
+oracle only off the mask oracle's points and the check oracle's points (`hV`), and every number
+`Q` of challenges, the advantage is at most
+`Q · w1CouplingError + Q · wi (Q · C) + 2 (C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256)) +
+2 (√Q + 2 t)² · checkError reps tol s x`, with `w1CouplingError` at `prims`.
+The proof compares, in each experiment, the scheme with the scheme on the rings of defect at most
+`s` (`admLow`) until a bad request (`gameAdvantage_anon_restr_le_bad`), bounds the bad requests by
+the QROM search lemma (`toReal_runLaw_badReq_le`), and bounds the scheme on `admLow` by the
+reprogramming hop with the fresh-mask signer's correctness error `0`
+(`gameAdvantage_restrChallenger_le`, `correctWithin_w1BaseSigner`) and the coupling
+(`expect_idealDist_le`). -/
+theorem hedgedScheme.anonAdvantage_le_coupling (sp : RingSignature.OracleSplit Y Y₁ Y₂)
+    (hp : SigningParams p) (hT : 0 < T) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβt : (βmin : ℝ≥0∞) ≠ ⊤)
+    (hO : O.UniformSplit)
+    (hMask : (PMF.uniformOfFintype Y).map M.ans = PMF.uniformOfFintype (MaskBox p))
+    (h_laws : SigningLaws prims) (hv : VerifyLaws prims)
+    (henc : ∀ w : RqVec p.k, enc (prims.highBitsVec w) = bucketsOf (rqVecCoeffs w))
+    (hs2 : ∀ seed, polyVecBounded (keyGen prims seed).2.s2 p.eta)
+    (hM : Function.Injective M.pt) (hdisj : ∀ x, O.IsPt x → x ∉ Set.range M.pt)
+    (hsp : O.ReadsFst sp) (hMsp : M.ReadsFst sp)
+    (hPS : PS.ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
+    {V : OracleView X Y} (hV : V.ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
+    {wi : ℕ → ℝ}
+    (hwi : ∀ ω₂ h₁, PubWI (fun h => PS.proofLaw (O.split.symm (ω₂, h)))
+      RingSignature.RingStmtOf.pub
+      (RingSignature.ringRel (hedgedBase prims O M βmin tol enc k D bmsg) adm
+        (O.split.symm (ω₂, h₁))) wi)
+    {C : ℕ} (hC : ∀ keys : Fin n → Bytes 32, (Finset.univ.filter fun c :
+      RingSignature.AnonRequest (hedgedScheme prims O M βmin tol enc k D bmsg PS adm) n =>
+        c.Valid keys).card ≤ C)
+    {s θ x Lk : ℝ} (hθ0 : 0 < θ) (hθ1 : θ < 1) (hs1 : s < 1) (hx : 1 ≤ x)
+    (hLk : Lk ≤ keepLevel p βmin s θ) (hLk1 : Lk ≤ 1)
+    {t : ℕ} (A : AnonAdversary (hedgedScheme prims O M βmin tol enc k D bmsg PS adm) n V t)
+    (Q : ℕ) :
+    anonAdvantage A Q ≤
+      Q * w1CouplingError prims βmin N n s θ C k D Lk + Q * wi (Q * C) +
+        2 * ((Q * k).choose 2 * (2 ^ 256 : ℝ)⁻¹ + 2 * t * √((Q * k : ℕ) * (2 ^ 256 : ℝ)⁻¹)) +
+        2 * ((√Q + 2 * t) ^ 2 * checkError reps tol s x) := by
+  have h0 := (gameAdvantage_anon_restr_le_bad prims O M βmin tol enc k D bmsg adm PS A s false Q).trans
+    (toReal_runLaw_badReq_le prims O M βmin tol enc k D bmsg adm PS hO hdisj hsp hPS Set.subset_union_right hV A s hx false Q)
+  have h1 := (gameAdvantage_anon_restr_le_bad prims O M βmin tol enc k D bmsg adm PS A s true Q).trans
+    (toReal_runLaw_badReq_le prims O M βmin tol enc k D bmsg adm PS hO hdisj hsp hPS Set.subset_union_right hV A s hx true Q)
+  rw [gameAdvantage_comm] at h1
+  have hwi' : ∀ ω₂ h₁, PubWI (fun h => PS.proofLaw (O.split.symm (ω₂, h)))
+      RingSignature.RingStmtOf.pub
+      (RingSignature.ringRel (hedgedBase prims O M βmin tol enc k D bmsg)
+        (admLow prims βmin adm s)
+        (O.split.symm (ω₂, h₁))) wi := fun ω₂ h₁ =>
+    (hwi ω₂ h₁).mono (RingSignature.ringRel_mono _ (fun _ h => h.1) _)
+  have hC' : ∀ keys : Fin n → Bytes 32, (Finset.univ.filter fun c :
+      RingSignature.AnonRequest (hedgedScheme prims O M βmin tol enc k D bmsg PS
+        (admLow prims βmin adm s)) n =>
+        c.Valid keys).card ≤ C := fun keys =>
+    le_of_eq_of_le (Finset.card_equiv (show RingSignature.AnonRequest
+        (hedgedScheme prims O M βmin tol enc k D bmsg PS
+          (admLow prims βmin adm s)) n ≃
+        RingSignature.AnonRequest (hedgedScheme prims O M βmin tol enc k D bmsg PS adm) n from
+      ⟨fun c => ⟨c.ring, c.msg, c.user₀, c.user₁⟩, fun c => ⟨c.ring, c.msg, c.user₀, c.user₁⟩,
+        fun _ => rfl, fun _ => rfl⟩) fun c => by
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and]; rfl) (hC keys)
+  have hmid := gameAdvantage_restrChallenger_le prims O M βmin tol enc k D bmsg PS adm n sp
+    (admLow prims βmin adm s) hM hdisj hMsp Set.subset_union_left hPS hV hwi' hC'
+    (correctWithin_w1BaseSigner prims h_laws hv henc hs2 (MaskSource.fresh M) O βmin tol k D bmsg)
+    A Q
+  simp only [NNReal.coe_zero, mul_zero, add_zero] at hmid
+  have hE := expect_idealDist_le prims O M βmin tol enc k D bmsg PS (admLow prims βmin adm s) n hp
+    hβ0 hβt hT hO hMask h_laws hv henc hs2 hθ0 hθ1 hs1 hLk hLk1 (fun _ h => h.2) hC'
+  have hlin : (𝔼 keys : (Fin n → Bytes 32), 𝔼 ω₂ : ({x // O.IsPt x} → Y),
+        ((Q : ℝ) * idealDist prims O M βmin tol enc k D bmsg
+          PS (admLow prims βmin adm s) n
+          keys ω₂ + Q * wi (Q * C))) =
+      Q * 𝔼 keys : (Fin n → Bytes 32), 𝔼 ω₂ : ({x // O.IsPt x} → Y),
+        idealDist prims O M βmin tol enc k D bmsg PS
+          (admLow prims βmin adm s) n keys
+          ω₂ + Q * wi (Q * C) := by
+    simp only [Finset.expect_add_distrib, Finset.expect_const Finset.univ_nonempty,
+      ← Finset.mul_expect]
+  have hmid' := (hmid.trans_eq (congrArg (· + _) hlin)).trans (add_le_add (add_le_add
+    (mul_le_mul_of_nonneg_left hE (Nat.cast_nonneg _)) le_rfl) le_rfl)
+  refine le_trans (gameAdvantage_le_add₃ _ _ _ _ anonAccepts)
+    (le_trans (add_le_add (add_le_add h0 hmid') h1) (le_of_eq ?_))
+  ring
+
+end Generic
+
 /-! ### The headline at the concrete primitives -/
 
 section Concrete
@@ -486,11 +595,9 @@ only), and every number `Q` of challenges, the advantage is at most
 2 (√Q + 2 t)² · checkError reps tol s x`.
 The oracle's values split as `Y ≃+ Y₁ × Y₂` (`sp`): the base signer's decodings and the mask
 decoding read `Y₁` (`hsp`, `hMsp`), and the honest prover reads `Y₁` only off the mask and check
-points (`hPS`). The proof compares, in each experiment, the scheme with the scheme on the rings of
-defect at most `s` (`admLow`) until a bad request (`gameAdvantage_anon_restr_le_bad`), bounds the
-bad requests by the QROM search lemma (`toReal_runLaw_badReq_le`), and bounds the scheme on
-`admLow` by the reprogramming hop and the coupling (`w1Concrete.gameAdvantage_restrChallenger_le`,
-`expect_idealDist_le`). -/
+points (`hPS`). It is `hedgedScheme.anonAdvantage_le_coupling` with the signing and verification
+laws of the concrete primitives, the coherence of `concreteEnc` and `‖s₂‖∞ ≤ η` for every honest
+key. -/
 @[headline]
 theorem w1Concrete.anonAdvantage_le_coupling (sp : RingSignature.OracleSplit Y Y₁ Y₂)
     (hp : p.isApproved) (hT : 0 < T) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβt : (βmin : ℝ≥0∞) ≠ ⊤)
@@ -515,57 +622,12 @@ theorem w1Concrete.anonAdvantage_le_coupling (sp : RingSignature.OracleSplit Y Y
       Q * w1CouplingError (concretePrimitivesKeyGen p) βmin N n s θ C k D Lk +
         Q * wi (Q * C) +
         2 * ((Q * k).choose 2 * (2 ^ 256 : ℝ)⁻¹ + 2 * t * √((Q * k : ℕ) * (2 ^ 256 : ℝ)⁻¹)) +
-        2 * ((√Q + 2 * t) ^ 2 * checkError reps tol s x) := by
-  have h0 := (gameAdvantage_anon_restr_le_bad (concretePrimitivesKeyGen p) O M βmin tol
-    (concreteEnc p) k D bmsg adm PS A s false Q).trans
-    (toReal_runLaw_badReq_le (concretePrimitivesKeyGen p) O M βmin tol (concreteEnc p) k D bmsg
-      adm PS hO hdisj hsp hPS Set.subset_union_right hV A s hx false Q)
-  have h1 := (gameAdvantage_anon_restr_le_bad (concretePrimitivesKeyGen p) O M βmin tol
-    (concreteEnc p) k D bmsg adm PS A s true Q).trans
-    (toReal_runLaw_badReq_le (concretePrimitivesKeyGen p) O M βmin tol (concreteEnc p) k D bmsg
-      adm PS hO hdisj hsp hPS Set.subset_union_right hV A s hx true Q)
-  rw [gameAdvantage_comm] at h1
-  have hwi' : ∀ ω₂ h₁, PubWI (fun h => PS.proofLaw (O.split.symm (ω₂, h)))
-      RingSignature.RingStmtOf.pub
-      (RingSignature.ringRel (w1ConcreteBase p O M βmin tol k D bmsg)
-        (admLow (concretePrimitivesKeyGen p) βmin adm s)
-        (O.split.symm (ω₂, h₁))) wi := fun ω₂ h₁ =>
-    (hwi ω₂ h₁).mono (RingSignature.ringRel_mono _ (fun _ h => h.1) _)
-  have hC' : ∀ keys : Fin n → Bytes 32, (Finset.univ.filter fun c :
-      RingSignature.AnonRequest (w1Concrete p O M βmin tol k D bmsg PS
-        (admLow (concretePrimitivesKeyGen p) βmin adm s)) n =>
-        c.Valid keys).card ≤ C := fun keys =>
-    le_of_eq_of_le (Finset.card_equiv (show RingSignature.AnonRequest
-        (w1Concrete p O M βmin tol k D bmsg PS
-          (admLow (concretePrimitivesKeyGen p) βmin adm s)) n ≃
-        RingSignature.AnonRequest (w1Concrete p O M βmin tol k D bmsg PS adm) n from
-      ⟨fun c => ⟨c.ring, c.msg, c.user₀, c.user₁⟩, fun c => ⟨c.ring, c.msg, c.user₀, c.user₁⟩,
-        fun _ => rfl, fun _ => rfl⟩) fun c => by
-      simp only [Finset.mem_filter, Finset.mem_univ, true_and]; rfl) (hC keys)
-  have hmid := w1Concrete.gameAdvantage_restrChallenger_le sp hp
-    (admLow (concretePrimitivesKeyGen p) βmin adm s) hM hdisj hMsp
-    Set.subset_union_left hPS hV hwi' hC' A Q
-  have hE := expect_idealDist_le (concretePrimitivesKeyGen p) O M βmin tol (concreteEnc p) k D
-    bmsg PS (admLow (concretePrimitivesKeyGen p) βmin adm s) n
-    (SigningParams.of_isApproved hp) hβ0 hβt hT hO hMask
-    (signingLaws_concreteKeyGen p hp) (verifyLaws_concreteKeyGen hp)
-    (concreteEnc_highBitsVec_keyGen hp) (fun seed => keyGenFromSeed_s2_bounded hp seed) hθ0 hθ1
-    hs1 hLk hLk1 (fun _ h => h.2) hC'
-  have hlin : (𝔼 keys : (Fin n → Bytes 32), 𝔼 ω₂ : ({x // O.IsPt x} → Y),
-        ((Q : ℝ) * idealDist (concretePrimitivesKeyGen p) O M βmin tol (concreteEnc p) k D bmsg
-          PS (admLow (concretePrimitivesKeyGen p) βmin adm s) n
-          keys ω₂ + Q * wi (Q * C))) =
-      Q * 𝔼 keys : (Fin n → Bytes 32), 𝔼 ω₂ : ({x // O.IsPt x} → Y),
-        idealDist (concretePrimitivesKeyGen p) O M βmin tol (concreteEnc p) k D bmsg PS
-          (admLow (concretePrimitivesKeyGen p) βmin adm s) n keys
-          ω₂ + Q * wi (Q * C) := by
-    simp only [Finset.expect_add_distrib, Finset.expect_const Finset.univ_nonempty,
-      ← Finset.mul_expect]
-  have hmid' := (hmid.trans_eq (congrArg (· + _) hlin)).trans (add_le_add (add_le_add
-    (mul_le_mul_of_nonneg_left hE (Nat.cast_nonneg _)) le_rfl) le_rfl)
-  refine le_trans (gameAdvantage_le_add₃ _ _ _ _ anonAccepts)
-    (le_trans (add_le_add (add_le_add h0 hmid') h1) (le_of_eq ?_))
-  ring
+        2 * ((√Q + 2 * t) ^ 2 * checkError reps tol s x) :=
+  hedgedScheme.anonAdvantage_le_coupling (concretePrimitivesKeyGen p) sp
+    (SigningParams.of_isApproved hp) hT hβ0 hβt hO hMask (signingLaws_concreteKeyGen p hp)
+    (verifyLaws_concreteKeyGen hp) (concreteEnc_highBitsVec_keyGen hp)
+    (fun seed => keyGenFromSeed_s2_bounded hp seed) hM hdisj hsp hMsp hPS hV hwi hC hθ0 hθ1 hs1 hx
+    hLk hLk1 A Q
 
 open Classical in
 /-- **`w1Concrete.anonAdvantage_le_coupling` at check parameters** (`CheckParams`: check error at

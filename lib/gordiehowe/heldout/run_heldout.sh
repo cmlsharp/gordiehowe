@@ -12,12 +12,12 @@
 #
 #   --lean FORMAL   a Lean tree (the repository's formal/ with its .lake
 #                   built): the exports are copied into
-#                   FORMAL/GordieHowe/Generated/Heldout/, replacing what is
+#                   FORMAL/GordieHoweCerts/Generated/Heldout/, replacing what is
 #                   there
 #   --export BIN    the heldout_export executable (build/bench/heldout_export);
 #                   the run writes OUT/export/ and OUT/export.log
 #   --exports DIR   exports written earlier (a directory holding
-#                   GordieHowe/Generated/Heldout/), in place of --export
+#                   GordieHoweCerts/Generated/Heldout/), in place of --export
 #   --out OUT       the results: OUT/results.tsv (one line per module),
 #                   OUT/logs/<module>.log, OUT/summary.txt
 #   --jobs J        modules built at once (default 2)
@@ -69,21 +69,21 @@ if [[ -n $export_bin ]]; then
   timeout 1800 "$export_bin" --dir "$exports" --commit "$commit" > "$out/export.log" 2>&1
   echo "export exit $?" >> "$out/export.log"
 fi
-src="$exports/GordieHowe/Generated/Heldout"
-dst="$lean/GordieHowe/Generated/Heldout"
+src="$exports/GordieHoweCerts/Generated/Heldout"
+dst="$lean/GordieHoweCerts/Generated/Heldout"
 [[ -d $src ]] || { echo "no exports in $src" >&2; exit 1; }
 rm -rf "$dst"
 mkdir -p "$dst"
 cp -r "$src/." "$dst/"
 # Lake's outputs of earlier exports, so every module is checked afresh.
-rm -rf "$lean/.lake/build/lib/lean/GordieHowe/Generated/Heldout" \
-  "$lean/.lake/build/ir/GordieHowe/Generated/Heldout"
+rm -rf "$lean/.lake/build/lib/lean/GordieHoweCerts/Generated/Heldout" \
+  "$lean/.lake/build/ir/GordieHoweCerts/Generated/Heldout"
 
 # The configurations: directories holding Program.lean.
 configs=()
 while IFS= read -r p; do
   d=${p%/Program.lean}
-  name=${d#"$lean/GordieHowe/Generated/Heldout/"}
+  name=${d#"$lean/GordieHoweCerts/Generated/Heldout/"}
   name=${name//\//.}
   name=${name%.ROMParams}
   if [[ -n $only && ",$only," != *",$name,"* ]]; then continue; fi
@@ -130,7 +130,7 @@ build_one() {
 
 # The generated imports of the module file F that lie in its configuration.
 imports_of() {
-  grep -oE '^public import GordieHowe\.Generated\.Heldout\.[A-Za-z0-9_.]+' "$1" |
+  grep -oE '^public import GordieHoweCerts\.Generated\.Heldout\.[A-Za-z0-9_.]+' "$1" |
     awk '{print $3}'
 }
 

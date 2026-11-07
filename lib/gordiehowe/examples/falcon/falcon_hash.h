@@ -256,7 +256,6 @@ inline void falcon_hash_shape_inputs(const Scope &cs) {
       "h2p.select.start", "h2p.select.step", "h2p.select.done", "h2p.select.route"
     },
     {
-     
       "h2p.shake.padding.suffix.shape.left.second.first.shared.first.first.first.first.shared.first",
       "h2p.shake.padding.suffix.shape.left.second.first.shared.first.first.first.first",
       "h2p.shake.blocks.r0.shape.left.second.first.first.shared.first.first.first",

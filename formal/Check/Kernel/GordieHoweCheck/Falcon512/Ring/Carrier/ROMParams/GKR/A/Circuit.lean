@@ -10,8 +10,8 @@ public import GordieHoweCheck.Falcon512.Ring.Carrier.ROMParams.GKR.A.E3
 public import GordieHoweCheck.Falcon512.Ring.Carrier.ROMParams.GKR.A.E4
 public import GordieHoweCheck.Falcon512.Ring.Carrier.ROMParams.GKR.A.E5
 public import GordieHoweCheck.Falcon512.Ring.Carrier.ROMParams.GKR.A.E6
-meta import GordieHowe.Generated.Falcon512.Ring.Carrier.ROMParams.GKR.A
-import all GordieHowe.Generated.Falcon512.Ring.Carrier.ROMParams.Program
+meta import GordieHoweCerts.Generated.Falcon512.Ring.Carrier.ROMParams.GKR.A
+import all GordieHoweCerts.Generated.Falcon512.Ring.Carrier.ROMParams.Program
 
 @[expose] public section
 

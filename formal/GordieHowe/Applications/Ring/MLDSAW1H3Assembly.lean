@@ -1396,18 +1396,6 @@ theorem _root_.GordieHowe.ENNReal.add_regroup7 (k h g x c s z : ℝ≥0∞) :
     k + (h + (g + (x + c + s + z))) = k + (h + (g + x + c + s + z)) := by
   simp only [add_assoc]
 
--- TODO(unbundle-M4): the elaborator's `rfl` unfolds the abbrev shape functions
--- (`AlgShape.absorbAssignS`, ...) instead of comparing arguments, and the two sides differ only in
--- proofs (the definition's abstracted `_proof_n`), so the check is left to the kernel.
-open Lean Elab Tactic Meta in
-/-- Closes `l = r` by `Eq.refl l`, leaving the definitional check to the kernel. -/
-elab "kernel_eq_refl" : tactic => do
-  let g ← getMainGoal
-  let ty ← instantiateMVars (← g.getType)
-  let some (α, l, _) := ty.eq? | throwError "kernel_eq_refl: not an equation"
-  g.assign (mkApp2 (mkConst ``Eq.refl [← getLevel α]) α l)
-  replaceMainGoal []
-
 open Classical in
 /-- **The unforgeability bound of the converted ML-DSA ring signature publishing `w₁`, by case**
 (BKM06 Definition 7, at the concrete primitives): for an adversary `A` against the converted
@@ -1460,10 +1448,7 @@ theorem w1ConvConcrete.insiderForgeProb_le
   refine congrArg₂ (· + ·) rfl (congrArg₂ (· + ·) rfl (congrArg₂ (· + ·)
     (congrArg₂ (· + ·) ?_ (w1SimExtF_eq (Sc := Sc)))
     (congrArg ENNReal.ofReal (w1ZkF_eq (Sc := Sc)))))
-  -- TODO(unbundle-M4): the accepted `kernel_eq_refl` exception (the elaborator unfolds the shape
-  -- functions of the two sides instead of comparing their arguments, and the definition's side
-  -- holds its abstracted proofs).
-  kernel_eq_refl
+  rw [w1H3CaseError_eq]
 
 
 end GordieHowe.Ring.MLDSAW1

@@ -41,7 +41,7 @@
 //            (plan_program.h) of each arm of --arm (default fq,goldilocks)
 //            at each count of --attrs (default 1), built as the bench
 //            builds them, in --dir:
-//            GordieHowe/Generated/MDL/{MLDSA44,MLDSA44Fq}/Attrs<n>/
+//            GordieHoweCerts/Generated/MDL/{MLDSA44,MLDSA44Fq}/Attrs<n>/
 //            <parameter set>/{Plan,Program}.lean (config pq-mdoc-<arm>-<n>,
 //            as the bench's PQ_HASH line). A system the exporters do not
 //            cover prints one GH_EXPORT_UNSUPPORTED line with the exporter's

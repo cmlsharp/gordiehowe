@@ -13,7 +13,7 @@ The header is two comment lines, `Copyright 2026 Chad Sharp and Paul Grubbs` and
 * as `#` lines after the shebang, if any, of every .py and .sh file of `scripts/` and
   `Test/scripts/`, and at the top of `lakefile.toml`.
 
-`GordieHowe/Generated/` is excluded: the C++ plan exporter writes those files and emits the
+`GordieHoweCerts/Generated/` is excluded: the C++ plan exporter writes those files and emits the
 header itself. `Vendor/` is excluded: third-party code under its own licenses. A file that
 already starts with the header (after its shebang) is left unchanged, so the script is
 idempotent, and only the first lines of a file change.
@@ -32,7 +32,7 @@ def files():
     for top in ('GordieHowe', 'GordieHoweCerts', 'GordieHoweNative', 'Check', 'Test', 'scripts'):
         for d, subdirs, names in os.walk(os.path.join(ROOT, top)):
             rel = os.path.relpath(d, ROOT)
-            if rel == os.path.join('GordieHowe', 'Generated'):
+            if rel == os.path.join('GordieHoweCerts', 'Generated'):
                 subdirs[:] = []
                 continue
             subdirs.sort()
