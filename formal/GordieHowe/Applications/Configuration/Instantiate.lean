@@ -24,7 +24,7 @@ reads the configuration's own definitions (its IOP and transcript) and not the r
 compiled code although the record's soundness and honest-prover fields do not. The kernel compares
 the value with `G a₁ … aₙ` by unfolding.
 
-The stated type is `G`'s type at `a₁ … aₙ`, made readable in two ways, both definitional:
+The stated type is `G`'s type at `a₁ … aₙ`, made readable in three ways, all definitional:
 
 * a projection of one of the arguments `aᵢ` that is a constant defined as a structure instance
   (`R.kq` for the configuration record `R`) is replaced by the field's value, so a configuration's
@@ -39,9 +39,12 @@ max R.N R.nq`) is unfolded in a definition's value wherever it is applied to one
 so that its fields are reduced as well and the instance's code does not read the record. The
 stated type keeps the definition's name.
 
-`@[config_template headline]` also tags the instance `@[headline]` (`GordieHowe/Headline.lean`), so the
-statement closure and the audit see the configuration's theorems under their own names. The
-instance carries the template's docstring.
+`@[config_template headline]` also tags the template `@[headline]` (`GordieHowe/Headline.lean`): the
+generic statement is the claimed result, and its instances are not tagged. A configuration whose
+instance backs a printed figure tags that instance itself (`attribute [headline] N.g` after its
+`instantiate_config`). The instance's docstring is the line "Instance of `G`." followed by the template's docstring, so a
+reader of an instance (whose declaration range is the `instantiate_config` command) finds its
+template.
 
 Each argument `aᵢ` is elaborated at the type of the corresponding argument of the first marked
 declaration, so a coercion (a configuration's facts to the facts the templates take) is inserted.
@@ -91,15 +94,12 @@ open Lean Meta Elab Command
 
 namespace GordieHowe.Configuration.Template
 
-/-- A marked template: the generic declaration, the instance's last name component, and whether
-the instance is a headline. -/
+/-- A marked template: the generic declaration and the instance's last name component. -/
 structure Template where
   /-- The generic declaration. -/
   decl : Name
   /-- The last component of the instance's name. -/
   target : Name
-  /-- Whether the instance is tagged `@[headline]`. -/
-  headline : Bool
   /-- Whether a definition's instance keeps the kinds of `instantiate_config`'s binders (an
   implicit binder stays implicit), as a theorem's does. -/
   keepBinders : Bool := false
@@ -127,13 +127,15 @@ initialize registerBuiltinAttribute {
     add := fun decl stx kind => do
       unless kind == AttributeKind.global do
         throwError "@[config_template] must be global"
-      let headline := !stx[1].isNone
       let keepBinders := !stx[2].isNone
       let target := if stx[3].isNone then decl.componentsRev.head! else stx[3][0].getId
+      unless stx[1].isNone do
+        unless wasOriginallyTheorem (← getEnv) decl do
+          throwError "@[config_template headline] applies only to theorems: {decl}"
+        modifyEnv (GordieHowe.headlineExt.addEntry · decl)
       let doc ← findDocString? (← getEnv) decl
       modifyEnv (templateExt.addEntry ·
-        { decl := decl, target := target, headline := headline, keepBinders := keepBinders,
-          doc := doc })
+        { decl := decl, target := target, keepBinders := keepBinders, doc := doc })
   }
 
 /-- An instance made by `instantiate_config`: the template, the instance, the number of the
@@ -557,11 +559,11 @@ def elabInstantiateConfig : CommandElab := fun stx => do
       let doc? ← match t.doc with
         | some d => pure (some d)
         | none => findDocString? env t.decl
-      if let some doc := doc? then
-        addDocStringCore name doc
+      let doc := match doc? with
+        | some d => s!"Instance of `{t.decl}`.\n\n{d}"
+        | none => s!"Instance of `{t.decl}`."
+      addDocStringCore name doc
       addDeclarationRangesFromSyntax name ref
-      if t.headline then
-        modifyEnv (GordieHowe.headlineExt.addEntry · name)
       if atP.isNone then
         let pats ← args.mapM fun a => do return (← instantiateMVars a).abstract bs
         let ent : InstanceEntry := { decl := t.decl, name := name, nb := bs.size, args := pats }

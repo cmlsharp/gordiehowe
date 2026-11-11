@@ -4,16 +4,15 @@
 module
 
 public import GordieHoweCerts.Generated.Falcon512.Ring.Native.ROMParams.GKR.A
-public import GordieHoweCheck.Falcon512.Ring.Native.ROMParams.GKR.A.E7.P0
-public import GordieHoweCheck.Falcon512.Ring.Native.ROMParams.GKR.A.E7.P1
-public import GordieHoweCheck.Falcon512.Ring.Native.ROMParams.GKR.A.E7.P2
+meta import GordieHoweCerts.Generated.Falcon512.Ring.Native.ROMParams.GKR.A
+import all GordieHoweCerts.Generated.Falcon512.Ring.Native.ROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of entry 7 of the GKR circuit of domain A, composed from its part modules (generated; do not edit). -/
+/-! The relational check of entry 7 of the GKR circuit of domain A (generated; do not edit). -/
 
 namespace GordieHowe.Generated.Falcon512.Ring.Native.ROMParams.GKR.A
 
-compose_entry cert ar 7 [0, 0, 4, 0, 0, 6, 2, 256, 21]
+check_entry cert ar 7 [0, 0, 10, 2, 2599, 2]
 
 end GordieHowe.Generated.Falcon512.Ring.Native.ROMParams.GKR.A

@@ -16,8 +16,9 @@ public import GordieHowe.Applications.MLDSA44.Emulated.System.Honest
 
 The honest committed values of an emulated ML-DSA program (`MLDSA44.Emulated.ROMParams`,
 `MLDSA44.Emulated.QROMParams`) on an honest input (`honestVal`): domain `H`'s are the native program's
-(`GordieHowe.MLDSA44.hVal` at the embedded native program, one identifier lower), and domain `A`'s
-(`aVal`) `GordieHowe.MLDSA44.Emulated`'s honest assignment's hint, challenge bits, UseHint output bits and
+(`GordieHowe.MLDSA44.hVal` at the embedded native program, read at the renaming's inverse
+`eOf`), and domain `A`'s (`aVal`) `GordieHowe.MLDSA44.Emulated`'s honest assignment's hint,
+challenge bits, UseHint output bits and
 signs (`GordieHowe.MLDSA44.Emulated.honestAssignment`) and the digits of `w'`, of `z + 130993`, of the UseHint
 offset and of the slack, in the bases and at the values of the program's digit layout
 (`MldsaEAlgebra.layout`, `MldsaELayout`). The realization's values (the complement's digits, the
@@ -130,7 +131,24 @@ set_option hygiene false in
 local notation "nat" => MldsaEmbed.nat program
 
 set_option hygiene false in
+local notation "σ" => MldsaEmbed.σ program
+
+set_option hygiene false in
+local notation "hV" => MldsaEmbed.V program
+
+set_option hygiene false in
 local notation "L" => MldsaEAlgebra.layout program
+
+/-- **Domain `A`'s predicates of an emulated ML-DSA program**: `hint.w1_bound`, `hint.decompose`,
+`hint.interval`, the Booleanity of `h`, `challenge.c`, `hint.w1` and `hint.nonpositive`,
+`signature.w`, `norm.z`, `hint.offset`, `hint.slack`, `hint_weight.weight` and the signature
+relation's source predicate `signature.relation` (`MldsaEAlgebra`'s predicate facts). -/
+def algebraPreds : List ℕ := [0, 1, 2, 6, 7, 8, 9, 11, 12, 13, 14, 15, 274]
+
+/-- **The realization's predicates of an emulated ML-DSA program**: `mac.A`, the realized
+`signature.relation`, `range.norm.z.top`, `mac.blind.boolean`, `mac.low`, `mac.high`, `mac.nowrap`,
+`signature.relation.q` and the tail `mac`. -/
+def emulatedRealizationPreds : List ℕ := [3, 4, 5, 10, 16, 17, 18, 19, 273]
 
 /-- **The program facts of an emulated ML-DSA program's honest strategy** (each program
 instantiates them by `decide`): the statement of a key (`stmtOfKey`) with what the honest prover
@@ -152,9 +170,11 @@ class MldsaEmulatedHonest (program : RealizedProgram) [MldsaEAlgebra program] (F
   /-- The key's statement holds the bits of `tr` at value `67`. -/
   stmt68 : ∀ pk, ∀ j (hj : j < 512), (castElt (b := 1) (stmtOfKey pk 67 j) : (interp 1).K) =
     constBit (MLDSA44.PoP.Compose.trOf pk ⟨j / 8, by omega⟩).toNat (j % 8)
-  /-- Domain `H`'s committed cells are the native program's, one identifier higher. -/
+  /-- Domain `H`'s committed cells are the native program's, renamed. -/
   hCells : ∀ v < (nat).values.length, (nat).privCellB v = true → (nat).valueField v = 1 →
-    v ∈ hV ∧ program.privCellB (v + 1) = true
+    v ∈ hV ∧ program.privCellB ((σ).val v) = true
+  /-- `eOf` inverts the renaming on the part's values. -/
+  eOf_val : ∀ u ∈ hV, eOf program ((σ).val u) = some u
   /-- Domain `A`'s committed values are distinct. -/
   a_nodup : (aValues L).Nodup
   /-- Domain `A`'s committed values are cells of field `0`. -/
@@ -202,28 +222,34 @@ class MldsaEmulatedHonest (program : RealizedProgram) [MldsaEAlgebra program] (F
   bounded : ∀ i : HonestInput, program.StmtBounded interp (stmtOfKey i.y.key)
   /-- The statement has no member checks. -/
   checks : program.statement.checks = []
-  /-- The realization's predicates and the MAC's role predicates (`mac.A`, the lower and the top
-  digit's ranges, the no-wrap check, the tail `mac`) are no source predicates. -/
-  realPreds : ∀ q ∈ [3, 4, 5, 10, 16, 17, 18, 19, 273], program.inSource (program.predicate q) = false
-  /-- The program has `276` predicates. -/
-  predicates_length : program.predicates.length = 276
+  /-- The realization's predicates and the MAC's role predicates are no source predicates. -/
+  realPreds : ∀ q ∈ emulatedRealizationPreds, program.inSource (program.predicate q) = false
+  /-- **Every predicate is a held one, one of the program's own or a realization's**: the emulated
+  predicate of a held native predicate of domain `H` (`hPredLo … hPredHi`); one of domain `A`'s
+  (`algebraPreds`) or the crossing (`MldsaECross.crossPred`); or one of
+  `emulatedRealizationPreds`. -/
+  coverage : ∀ q < program.predicates.length,
+    (∃ p ∈ MldsaEmbed.held program, p.2 = q ∧ hPredLo ≤ p.1 ∧ p.1 ≤ hPredHi) ∨
+      q ∈ algebraPreds ∨ q = MldsaECross.crossPred program ∨ q ∈ emulatedRealizationPreds
   /-- The A operand of the crossing has `6656` coordinates. -/
   len6 : program.exprLen (.ref 6) = 6656
   /-- The MAC realization of `mac.equal`. -/
   macReal : MacRealization
-  /-- `mac.equal` is predicate `275`, crossing `ref 527` of domain `H` and `ref 6` of domain `A`. -/
-  hb : (program.predicate 275).body = .cross 1 (.ref 527) 0 (.ref 6) {} macReal
-  /-- Every cross-field `equal` crosses `ref 527` of domain `H` and `ref 6` of domain `A`. -/
-  crossOperands : program.crossOperandsB 1 (.ref 527) 0 (.ref 6) = true
+  /-- `mac.equal` crosses the native operand `525`, renamed, of domain `H` and `ref 6` of domain
+  `A`. -/
+  hb : (program.predicate (MldsaECross.crossPred program)).body =
+    .cross 1 (.ref ((σ).ref 525)) 0 (.ref 6) {} macReal
+  /-- Every cross-field `equal` crosses the native operand `525`, renamed, of domain `H` and `ref 6`
+  of domain `A`. -/
+  crossOperands : program.crossOperandsB 1 (.ref ((σ).ref 525)) 0 (.ref 6) = true
   /-- The committed source cells' classes. -/
   cell_classes : (List.range program.values.length).all (fun v =>
     !program.privCellB v || !decide (program.IsSourceValue v) ||
       (program.valueField v == 1 && (program.value v).node.map (·.name) == some "GF(2^16)" &&
-        decide (1 ≤ v) && decide (v - 1 ∈ hV) &&
-        ((MLDSA44.wordsOwner? (v - 1)).isSome ||
-          [69, 119, 557, 560, 562, 563, 564, 565].contains (v - 1))) ||
+        (eOf program v).any fun u => (MLDSA44.wordsOwner? u).isSome ||
+          [69, 119, 557, 560, 562, 563, 564, 565].contains u) ||
       (program.valueField v == 1 && (program.value v).node.map (·.name) == some "bit" &&
-        decide (1 ≤ v) && decide (v - 1 ∈ hV) && [67, 68, 556, 561].contains (v - 1)) ||
+        (eOf program v).any fun u => [67, 68, 556, 561].contains u) ||
       (program.valueField v == 0 && (program.value v).node.map (·.name) == some "GF(p^1)" &&
         (aValues L).contains v)) = true
 
@@ -377,16 +403,17 @@ noncomputable def aVal (L' : MldsaELayout) (i : HonestInput) (v j : ℕ) : F0.K 
 
 variable (program F0 FH) in
 /-- **The honest committed values of an emulated program** on an honest input: domain `A`'s
-values (`aVal` at the program's layout) and domain `H`'s, the native program's (`hVal`) one
-identifier lower.
+values (`aVal` at the program's layout) and domain `H`'s, the native program's (`hVal`) at the
+renaming's inverse (`eOf`).
 
 Running time: a prover computing these values would take the time of `hVal` and of `aVal`.
 This running time is argued here, not proved in Lean. -/
 -- spec-side
 noncomputable def honestVal (i : HonestInput) (v j : ℕ) : (interp (program.valueField v)).K :=
   if v ∈ aValues L then castElt (a := 0) (aVal F0 L i v j)
-  else if 1 ≤ v ∧ v - 1 ∈ hV then castElt (hVal nat F0 FH i (v - 1) j)
-  else 0
+  else match eOf program v with
+    | some u => castElt (hVal nat F0 FH i u j)
+    | none => 0
 
 /-! ## The honest values by class -/
 
@@ -413,17 +440,14 @@ theorem readsCells_honest (x : program.Valuation interp) (c : ∀ k, (program.la
     exact hp.1.1.2
   obtain ⟨hvV, hp'⟩ := hCells (program := program) v hl hp hf
   obtain ⟨-, -, hfE, hsz, -⟩ := (MldsaEmbed.embedding (program := program)).vals v hvV
-  have hfE' : program.valueField (v + 1) = (nat).valueField v := hfE
-  have hsz' : (program.value (v + 1)).size = ((nat).value v).size := hsz
-  have hnA : v + 1 ∉ aValues L := fun h => by
-    have := (a_cells (program := program) (v + 1) h).2
+  have hnA : (σ).val v ∉ aValues L := fun h => by
+    have := (a_cells (program := program) _ h).2
     omega
-  rw [reader_pull _ hvV, RealizedProgram.reader_srcEnv_of_privCellB x _ c π hp' (by rw [hsz']; exact hj)]
+  rw [reader_pull _ hvV, RealizedProgram.reader_srcEnv_of_privCellB x _ c π hp' (by rw [hsz]; exact hj)]
   unfold honestVal
-  rw [if_neg hnA, if_pos ⟨by omega, by simpa using hvV⟩]
-  rw [castElt_castElt_eq]
-  simp only [Nat.add_sub_cancel]
-  rw [if_pos hfE'.symm]
+  rw [if_neg hnA, MldsaEmulatedHonest.eOf_val v hvV]
+  dsimp only
+  rw [castElt_castElt_eq, if_pos hfE.symm]
   exact castElt_self _
 
 end Classes

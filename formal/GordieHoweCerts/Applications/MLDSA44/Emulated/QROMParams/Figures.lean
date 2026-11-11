@@ -15,8 +15,8 @@ The bit security of the emulated ML-DSA-44 proof of possession at the QROM param
 paper's measure `λ(err) = min over t ≥ 1 of log₂ (t / min(1, err(t)))` (`sec:eval-params`),
 certified from the generated figures (`GordieHowe.Generated.MLDSA44.Emulated.QROMParams.figures`).
 
-Zero knowledge: for every `t ≥ 1` hash queries and `Q ≤ 2^64` proof queries, the error of
-`everlasting_zero_knowledge_qrom` is at most `Q · t · 2^-λ`.
+Zero knowledge: for every `t ≥ 1` hash queries and `Q ≤ proofQueryCap = 2^64` proof queries, the error `zkError 0` of
+`everlasting_zero_knowledge_honest_qrom` is at most `Q · t · 2^-λ`.
 
 Knowledge soundness: for every `t ≥ 1` hash queries, the quantum knowledge error of
 `knowledge_soundness_qrom_at` and `soundness_qrom_at` against `t`-query adversaries,
@@ -46,18 +46,17 @@ most `7150/2^193` (`zkBudget_le_two_rpow` at the generated figures). -/
 theorem zkBudget_le : configuration.zkBudget ≤ (2 : ℝ) ^ (-180.19 : ℝ) :=
   zkBudget_le_two_rpow
     (ofCertified_readsFigures Generated.MLDSA44.Emulated.QROMParams.figures_eq)
-    (M := 7150) (E := 193) (e := 18019) (by norm_num) (by norm_num [Nat.choose_two_right])
+    (M := 7150) (E := 193) (e := 18019) (by norm_num) (by norm_num [Nat.choose_two_right, ParamSet.rom, ParamSet.qrom])
     (by decide +kernel)
 
 /-- **The bit security of everlasting zero knowledge of the emulated ML-DSA-44 proof of possession
-at the QROM parameters** (`tab:eval-params`): for every `t ≥ 1` hash queries and `Q ≤ 2^64` proof
-queries, the error of `everlasting_zero_knowledge_qrom` is at most `Q · t · 2^-180.19`. -/
+at the QROM parameters** (`tab:eval-params`): for every `t ≥ 1` hash queries and `Q ≤ proofQueryCap = 2^64` proof
+queries, the error `zkError 0` of `everlasting_zero_knowledge_honest_qrom` is at most `Q · t · 2^-180.19`. -/
 @[headline]
-theorem zero_knowledge_bits_qrom {t Q : ℕ} (ht : 1 ≤ t) (hQ : Q ≤ 2 ^ 64) :
-    (Configuration.Common.setting configuration configurationFacts proofSystem).model.zkError 0 t Q ≤
-      Q * t * (2 : ℝ) ^ (-180.19 : ℝ) :=
+theorem zero_knowledge_bits_qrom :
+    ZKBitSecurityAtLeast ((argument proofSystem).zkError 0) 180.19 :=
   Configuration.ZKBits.zkError_le_bits configuration configurationFacts proofSystem
-    zkBudget_le ht hQ
+    zkBudget_le
 
 -- The budget's exponents (up to `2^384`) exceed `norm_num`'s default evaluation threshold.
 set_option exponentiation.threshold 400 in
@@ -76,10 +75,9 @@ quantum knowledge error of `knowledge_soundness_qrom_at` and `soundness_qrom_at`
 adversaries, evaluated at `t + kq` as in the paper's `errks(t)` and `analysis/eval_params.py`,
 satisfies `min(1, err) ≤ t · 2^-116.87`, so `λ(errks) ≥ 116.87`. -/
 @[headline]
-theorem soundness_bits_qrom {t : ℕ} (ht : 1 ≤ t) :
-    (min 1 (Configuration.Common.knowledgeErrorQROM configuration configurationFacts
-      (t + configuration.kq))).toReal ≤ t * (2 : ℝ) ^ (-116.87 : ℝ) :=
+theorem soundness_bits_qrom :
+    BitSecurityAtLeast extractionErrorQROM 116.87 :=
   SoundnessBits.knowledgeErrorQROM_le_bits configuration configurationFacts (e := 11687)
-    (by norm_num) (by decide +kernel) (knowledgeBudgetQROM_le) ht
+    (by norm_num) (by decide +kernel) (knowledgeBudgetQROM_le)
 
 end GordieHowe.MLDSA44.Emulated.QROMParams

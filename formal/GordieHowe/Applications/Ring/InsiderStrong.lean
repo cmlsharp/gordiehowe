@@ -69,6 +69,8 @@ noncomputable def pubTable (keys : Fin n → Sch.KeyCoins) {Q : ℕ} (tabs : Fin
     Fin Q → Fin n × Sch.Msg → Sch.Pub :=
   fun j e => Sch.pub (Sch.signWith (Sch.sk (keys e.1)) e.2 (tabs j e))
 
+variable [Nonempty Sch.KeyCoins] [Nonempty Sch.SignCoins]
+
 /-- **The public values of a request read from public values per table entry `v`**: for a
 ring-signing request `(s, R, m)`, the value at the entry `(s, bind R m)`. -/
 noncomputable def pubsOfTable (bind : List Sch.PK → RMsg → Sch.Msg) {Q : ℕ}
@@ -84,6 +86,11 @@ theorem sigPubs_rdTable [Nonempty RMsg] (keys : Fin n → Sch.KeyCoins)
     sigPubs (N := N) keys bind (rdTable Sch n) tabs = pubsOfTable bind (pubTable keys tabs) := by
   funext r j
   cases r <;> rfl
+
+variable [Fintype Sch.PK] [DecidableEq Sch.PK] [Fintype Sch.Msg] [DecidableEq Sch.Msg]
+  [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub] [DecidableEq Sch.Pub] [Nonempty Sch.Pub]
+  [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins] [Fintype Sch.SignCoins]
+  [DecidableEq Sch.SignCoins]
 
 omit [Nonempty RMsg] in
 /-- **At equal public values of the tables, the signing relay is the same.** -/
@@ -105,6 +112,8 @@ variable {Sch : SigScheme} {n N : ℕ} {RMsg : Type} [Fintype RMsg] [DecidableEq
   [Nonempty RMsg] {m k e : ℕ} {Resp SC : Type} [Fintype SC] [DecidableEq SC]
   (bind : List Sch.PK → RMsg → Sch.Msg) (adm : List Sch.PK → Prop)
 
+variable [DecidableEq Sch.PK] [Nonempty Sch.Pub]
+
 open Classical in
 /-- **The reply of the simulated challenger at a base signature `σ`**: `simReplySig` with the
 public value of `σ`, without a test. -/
@@ -117,6 +126,8 @@ noncomputable def simReplyAt (S : NARG.Simulator (Bits m) (XOut k e) (RingStmt S
         (some o.proof), o.assignments⟩
   else .pure ⟨sideAnswer (fun i => Sch.pk (κ i)) κ adm (fun _ : Fin Q => Sch.pub σ) i r none, []⟩
 
+variable [Nonempty Sch.KeyCoins] [Nonempty Sch.SignCoins]
+
 omit [Fintype RMsg] [DecidableEq RMsg] [Fintype SC] [DecidableEq SC] in
 /-- The unchecked reply reads the coins only through the request's base signature. -/
 theorem simReplySig_eq_simReplyAt
@@ -128,7 +139,9 @@ theorem simReplySig_eq_simReplyAt
   unfold simReplySig simReplyAt
   split_ifs <;> first | rfl | (exfalso; tauto)
 
-omit [Fintype RMsg] [DecidableEq RMsg] in
+variable [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Fintype Sch.SignCoins]
+
+omit [Fintype RMsg] [DecidableEq RMsg] [DecidableEq Sch.PK] [Nonempty Sch.Pub] in
 /-- **The law of a request's base signature is the same at per-request coins and at a uniform
 table**: the table's entry is uniform (`PMF.uniformOfFintype_map_eval`). -/
 theorem map_sigOf_rdCoins_eq_rdTable (κ : Fin n → Sch.KeyCoins) (r : BKMRequest Sch n N RMsg) :
@@ -142,6 +155,8 @@ theorem map_sigOf_rdCoins_eq_rdTable (κ : Fin n → Sch.KeyCoins) (r : BKMReque
     rw [show (fun t : SignTable Sch n => Sch.signWith (Sch.sk (κ s)) (bind R.1 m) (t (s, bind R.1 m)))
         = (fun c => Sch.signWith (Sch.sk (κ s)) (bind R.1 m) c) ∘ (fun t => t (s, bind R.1 m))
         from rfl, ← PMF.map_comp, PMF.uniformOfFintype_map_eval]
+
+variable [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins] [DecidableEq Sch.SignCoins]
 
 omit [Fintype RMsg] [DecidableEq RMsg] in
 /-- **The reply laws of the unchecked simulated challenger agree at per-request coins and at
@@ -258,14 +273,18 @@ end Average
 
 section SPBCS
 
-variable {Sch : SigScheme} {n : ℕ} {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg] {N : ℕ}
+variable {Sch : SigScheme} [Fintype Sch.PK] [DecidableEq Sch.PK] [Fintype Sch.Msg]
+  [DecidableEq Sch.Msg] [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub]
+  [DecidableEq Sch.Pub] [Nonempty Sch.Pub] [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins]
+  [Nonempty Sch.KeyCoins] [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins]
+  [Nonempty Sch.SignCoins] {n : ℕ} {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg] {N : ℕ}
   {k e : ℕ} {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)] {kN kS L : ℕ}
   {M : SPBCS Mg P (RingStmt Sch RMsg N) k kN kS L e} (Λ : SiteLayout Mg) {B : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] {E : (j : ι) → (M.comp j).Encoder}
   {Vr : RingStmt Sch RMsg N → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  (hb : M.FormatBounds Qs B B) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs B B) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : RingWit Sch → R → CausalProver P τ (RingStmt Sch RMsg N))
   (VE : M.ViewEncoder E Qs) {Pub : Type} (pub : RingStmt Sch RMsg N → Pub)
   (Sim : CausalJointSimulator VE.MV Pub) (T : M.Preimages)
@@ -274,8 +293,11 @@ variable {Sch : SigScheme} {n : ℕ} {RMsg : Type} [Fintype RMsg] [DecidableEq R
 
 namespace BKMAdversary
 
-variable [Nonempty RMsg] [NeZero n] [Nonempty Sch.Sig]
+variable [Nonempty RMsg] [NeZero n]
 
+variable [Nonempty Sch.Sig]
+
+omit [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins] in
 /-- **The distinguisher of zero knowledge with the public values of real signatures** at the
 auxiliary input `a` and the side coins `s`: the adversary with its side requests absorbed
 (`zkRelaySig`), followed by `forgeryTest`.
@@ -320,6 +342,7 @@ theorem atKeys_bkmSignRelay_route_injective (s : TableCoins Sch n Q) (c : ℕ) :
   rw [atKeys_bkmSignRelay]
   exact seRelayPub_route_injective _ _ _ _ c
 
+omit [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins] in
 /-- **The adversary of the simulation-extraction game with real public values** at the side
 coins `s = (keys, tabs)`: the adversary with its requests absorbed through the signing relay at the
 users' coins `keys` and the signing tables `tabs` (`bkmSignRelay`, which is `seRelayPub` with the
@@ -338,11 +361,13 @@ noncomputable def seAdversarySig (s : TableCoins Sch n Q) :
     (atKeys_bkmSignRelay_route_injective bind adm s) (A.withinBudget a)
   queries_le a := A.queries_le a
 
+omit [Nonempty Sch.Sig] in
 /-- The shape of `seAdversarySig` at `a` is `A`'s shape absorbed (`AlgShape.absorbS`). -/
 @[simp] theorem seAdversarySig_sh (s : TableCoins Sch n Q) (a : A.Aux) :
     (A.seAdversarySig bind adm s).sh a = (A.sh a).absorbS :=
   rfl
 
+omit [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins] in
 /-- **The forger of the multi-user strong-unforgeability game built from the adversary of
 BKM06** (`SignRelayForger`): the adversary's requests relayed through the base oracles
 (`bkmSignRelay`: public keys and corruptions forwarded; a member's ring-signing request asks one
@@ -367,6 +392,7 @@ noncomputable def signForger (Ext : CausalExtractor P τ (RingStmt Sch RMsg N) (
   extractor := M.dbExtractBits Ext
   decode := decodeRing bind
 
+omit [DecidableEq Sch.SignCoins] in
 /-- **The success probability of the forger of the multi-user strong-unforgeability game** built
 from the adversary of BKM06 (`signForger`, `SignRelayForger.success`): the forger reads the keys
 only through the base oracles (public keys, signatures, and the key-generation coins of the users
@@ -382,31 +408,32 @@ open Classical in
 values against the real challenger**, at each value of the auxiliary input and each oracle. -/
 theorem outLaw_bkm_eq_sum_real_sig (a : A.Aux) (H : Bits (queryBits k kN kS L) → XOut k e) :
     (((A.alg a).toKindAlg.composeBothOut
-        ((checkedBkmLayer (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind
+        ((checkedBkmLayer (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) (PMF.uniformOfFintype _) bind
           adm).challenger Q) id).outLaw H).toOuterMeasure
         {o | ∃ v ∈ o, A.WinAt a v.chal.coins.1 v.adv.workspace.1 v.chal.logs H} =
       ∑ s, PMF.uniformOfFintype (SideCoins Sch n Q) s *
         (((A.distinguisherSig bind adm a s).alg ()).compose
           (realChallenger (relayRel bind adm)
             ((((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding).comap Prod.fst
-              RelayWit.toWit) Q)).outLaw H (some true) := by
+              RelayWit.toWit) (PMF.uniformOfFintype _) Q)).outLaw H (some true) := by
   have hnil := KindAlg.postAss_eq_nil (A.alg a).toKindAlg
-    ((checkedBkmLayer (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind
+    ((checkedBkmLayer (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) (PMF.uniformOfFintype _) bind
       adm).challenger Q) (hopRS_outWith_challenger_assignments _ Q)
   have h := (A.alg a).outLaw_absorb (σ := PMF.uniformOfFintype (SideCoins Sch n Q))
     (F' := zkRelaySig (N := N) (Resp := M.Response B) adm bind)
-    (C := (checkedBkmLayer (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind
+    (C := (checkedBkmLayer (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) (PMF.uniformOfFintype _) bind
       adm).challenger Q)
     (e := drawEquiv (checkedBkmLayer (((M.niProver Λ honest E hb).mapOutput some).encode
-      queryEncoding) bind adm) Q)
+      queryEncoding) (PMF.uniformOfFintype _) bind adm) Q)
     (C' := realChallenger (relayRel bind adm)
       ((((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding).comap Prod.fst
-        RelayWit.toWit) Q)
+        RelayWit.toWit) (PMF.uniformOfFintype _) Q)
     (fun s c => drawLaw_drawEquiv_symm
-      (checkedBkmLayer (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind adm)
+      (checkedBkmLayer (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) (PMF.uniformOfFintype _) bind adm)
         Q s c)
     (fun H s c => (relays_bkm_real_sig
-      (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind adm Q s c).relays
+      (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding)
+        (PMF.uniformOfFintype _) bind adm Q s c).relays
         H _)
     (zkRelaySig_route_injective adm bind) H
     (fun adv lg _ c G => A.WinAt a c.1 adv.workspace.1 lg G)
@@ -503,7 +530,7 @@ theorem acceptProb_real_le_sig {δ : ℝ≥0}
     (s : SideCoins Sch n Q) :
     (A.distinguisherSig bind adm a s).acceptProb (realChallenger (relayRel bind adm)
         ((((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding).comap Prod.fst
-          RelayWit.toWit) Q) ≤
+          RelayWit.toWit) (PMF.uniformOfFintype _) Q) ≤
       (A.distinguisherSig bind adm a s).acceptProb (simChallenger (relayRel bind adm)
         ((M.niJointSimulatorProg Λ VE.toViewRead B pub Sim T).comap Prod.fst) Q) +
         ENNReal.ofReal (M.zkError δ t Q) := by
@@ -597,7 +624,9 @@ def okAtKeys (keys : Fin n → Sch.KeyCoins) (a : A.Aux)
   ∀ pk ∈ ((A.alg a).out w.work).stmt.ring.1, ∃ i, Sch.pk (keys i) = pk ∧
     BKMRequest.corrupt i ∉ (requests w.logs).take Q
 
-omit [Fintype RMsg] [DecidableEq RMsg] [NeZero n] [Nonempty Sch.Sig] in
+omit [Fintype RMsg] [DecidableEq RMsg] [NeZero n] [Nonempty Sch.Sig] [Fintype Sch.PK]
+  [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub]
+  [DecidableEq Sch.Pub] [Nonempty Sch.KeyCoins] [Nonempty Sch.SignCoins] in
 /-- **The relayed statements of the first `Q` requests differ from a fresh statement with a
 nonempty ring**, for the relay of statements with request-dependent public values (as
 `hopSE_fresh`). -/
@@ -689,6 +718,7 @@ theorem hopSE_simTable_le (a : A.Aux) :
   rw [hq] at hx'
   exact hf x' hx'
 
+omit [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins] in
 /-- **A valid extracted candidate** at the side coins `s`, the auxiliary value `a`, the run's
 registers `c` and the database `D`: some witness the database extractor returns for the claim's
 statement decodes to a candidate that verifies under the key of a member not corrupted by the
@@ -725,6 +755,8 @@ theorem extractFreshTestProb_le_sig {Ext : CausalExtractor P τ (RingStmt Sch RM
 
 /-! #### The forger's run in a view independent of the relay -/
 
+omit [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Nonempty Sch.KeyCoins] [Fintype Sch.SignCoins]
+  [DecidableEq Sch.SignCoins] [Nonempty Sch.SignCoins] in
 /-- **The law of the forger's run in a view independent of the relay**: the extraction run of the
 adversary absorbed through the relay `X`, read as the first `Q` requests made, the claim's
 statement and the measured database. -/
@@ -741,7 +773,8 @@ noncomputable def viewLaw (a : A.Aux)
     (simLaw (outEquiv k e) (extAdv Qs ((A.alg a).absorb X)
       ((seSimulator (B := B) Λ VE pub Sim T).comap Prod.fst) Q (kqOf Mg nr B B)))
 
-omit [Nonempty Sch.Sig] in
+omit [Nonempty Sch.Sig] [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Nonempty Sch.KeyCoins]
+  [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins] [Nonempty Sch.SignCoins] in
 /-- **The view law averages**: it is the image of the Born weights of the simulated run, of total
 weight one (`simLaw_univ`). -/
 theorem isAvg_viewLaw (a : A.Aux)
@@ -766,6 +799,9 @@ def ValidView (Ext : CausalExtractor P τ (RingStmt Sch RMsg N) (RingWit Sch))
   ∃ f ∈ candsOf (M := M) bind Ext x, BaseForgery keys (fun i => BKMRequest.corrupt i ∈ x.1)
     (fun _ _ => False) f
 
+omit [Fintype Sch.PK] [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Fintype Sch.Sig]
+  [DecidableEq Sch.Sig] [Fintype Sch.Pub] [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins]
+  [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins] in
 /-- **The strong forger wins in a view** at the users' coins `keys` and the signing tables `tabs`:
 the candidate it picks is a strong forgery for the corruptions of the view's requests and the
 signatures the signing relay returned on them. -/
@@ -836,7 +872,7 @@ theorem viewLaw_atKeys_eq (a : A.Aux) (keys : Fin n → Sch.KeyCoins)
         (pubsOfTable bind (pubTable keys tabs))) := by
   rw [atKeys_bkmSignRelay, sigPubs_rdTable]
 
-omit [Nonempty Sch.Sig] in
+omit [Nonempty Sch.Sig] [DecidableEq Sch.SignCoins] in
 /-- **The collision at request `j` has probability at most `γ` over the signing tables** for a
 scheme whose signatures are guessed from their public values with probability at most `γ`
 (`hγ`): the run depends on the tables only through the public values of their entries
@@ -1062,7 +1098,8 @@ theorem insiderWinProb_le_of_strongUnforgeability (hk : 0 < k) {εc : ℝ≥0∞
     {Ext : CausalExtractor P τ (RingStmt Sch RMsg N) (RingWit Sch)}
     {St : CausalStateFn P τ (RingStmt Sch RMsg N)} {ε : ChIdx P τ → ℝ≥0}
     (hrbr : CausalRBRKnowledgeSound (ringRel adm bind) Vr Ext St ε) :
-    A.insiderWinProb (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind adm ≤
+    A.insiderWinProb (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding)
+        (PMF.uniformOfFintype _) bind adm ≤
       A.strongForgerSuccess Λ VE pub Sim T bind adm Ext + Q * γ +
         ENNReal.ofReal (M.zkError δ t Q) +
         M.simExtractionError (kqOf Mg nr B B) (maxError ε)
@@ -1075,11 +1112,11 @@ theorem insiderWinProb_le_of_strongUnforgeability (hk : 0 < k) {εc : ℝ≥0∞
   have hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kqOf Mg nr B B :=
     fun _ _ _ hv => queries_length_le_of_formatBounds hb hv
   have h0 := A.emptyRing_le_knowledgeError (((M.niProver Λ honest E hb).mapOutput some).encode
-    queryEncoding) bind adm (fun _ => rfl)
+    queryEncoding) (PMF.uniformOfFintype _) bind adm (fun _ => rfl)
     (M.knowledgeBound (ringRel adm bind) Ext St hrbr Qs _ hkq)
   have hse := (weak_online_simulation_extractability_qrom (B := B) Qs hkq hrbr
     (seSimulator (B := B) Λ VE pub Sim T)
-    (simAssignsAtKeys_seSimulator Λ VE pub Sim T hk)).unruhSimExtraction_of_queryFreeTest
+    (simAssignsAtKeys_seSimulator Λ VE pub Sim T hk)).unruhSimExtraction_of_queryFreeTest hkq
   have hs : ∀ s : TableCoins Sch n Q, ∑' a, A.aux a *
       winTestProb Qs ((A.seAdversarySig bind adm s).alg a)
         ((seSimulator (B := B) Λ VE pub Sim T).comap Prod.fst) Q Prod.fst (A.okAtKeys s.1 a) ≤
@@ -1102,7 +1139,7 @@ theorem insiderWinProb_le_of_strongUnforgeability (hk : 0 < k) {εc : ℝ≥0∞
     rwa [tsum_fintype] at h1
   have ha : ∀ a, ∑' H, PMF.uniformOfFintype (Bits (queryBits k kN kS L) → XOut k e) H *
       (((A.alg a).toKindAlg.composeBothOut
-        (challenger (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind adm
+        (challenger (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) (PMF.uniformOfFintype _) bind adm
           (Q := Q)) id).outLaw H).toOuterMeasure
         {o | ∃ v ∈ o, A.WinAt a v.chal.coins.1 v.adv.workspace.1 v.chal.logs H} ≤
       ∑ s, PMF.uniformOfFintype (TableCoins Sch n Q) s *
@@ -1127,7 +1164,7 @@ theorem insiderWinProb_le_of_strongUnforgeability (hk : 0 < k) {εc : ℝ≥0∞
       exact A.hopSE_simTable_le Λ hb VE pub Sim T bind adm a
     have hreal : ∑' H, PMF.uniformOfFintype (Bits (queryBits k kN kS L) → XOut k e) H *
         (((A.alg a).toKindAlg.composeBothOut
-          ((checkedBkmLayer (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind
+          ((checkedBkmLayer (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) (PMF.uniformOfFintype _) bind
             adm).challenger Q) id).outLaw H).toOuterMeasure
           {o | ∃ v ∈ o, A.WinAt a v.chal.coins.1 v.adv.workspace.1 v.chal.logs H} ≤
         ∑' H, PMF.uniformOfFintype (Bits (queryBits k kN kS L) → XOut k e) H *
@@ -1161,10 +1198,10 @@ theorem insiderWinProb_le_of_strongUnforgeability (hk : 0 < k) {εc : ℝ≥0∞
             hcorr a H
       _ ≤ _ := add_le_add (hreal.trans (add_le_add hsim le_rfl)) le_rfl
       _ = _ := by ring
-  refine (A.insiderWinProb_le_add _ bind adm).trans ?_
+  refine (A.insiderWinProb_le_add _ _ bind adm).trans ?_
   have hmain : ∑' a, A.aux a * ∑' H, PMF.uniformOfFintype (Bits (queryBits k kN kS L) → XOut k e) H *
         (((A.alg a).toKindAlg.composeBothOut
-          (challenger (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind adm
+          (challenger (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) (PMF.uniformOfFintype _) bind adm
             (Q := Q)) id).outLaw H).toOuterMeasure
           {o | ∃ v ∈ o, A.WinAt a v.chal.coins.1 v.adv.workspace.1 v.chal.logs H} ≤
       A.strongForgerSuccess Λ VE pub Sim T bind adm Ext + Q * γ + ENNReal.ofReal (M.zkError δ t Q) +

@@ -387,6 +387,18 @@ def WeakOnlineSimulationExtractableROM {Wit : Type} (rel : Set (X × Wit))
   ∀ (X' Z : Type) (fx : X' → X) (tq Q : ℕ) (𝒜 : M.SimExtractionAdversaryROM B X' (Claim X M.NIProof × Z) tq),
     WeakOnlineSimExtractsROM Qs (fun r a => Sim (fx r) a) 𝒜 Q kq q fx rel E (ε tq Q)
 
+/-- **A larger error bound.** -/
+theorem WeakOnlineSimulationExtractableROM.mono {Wit : Type} {rel : Set (X × Wit)}
+    {E : CausalExtractor P t X Wit} {kq : ℕ}
+    {Sim : X → SaltedCoins (FiatShamirSalt kS) C →
+      OracleProg (Query k kN kS L) (Out k e) (NARG.SimOutput (Query k kN kS L) (Out k e) (M.Response B))}
+    {q : ℕ} {ε ε' : ℕ → ℕ → ℝ≥0∞} (hse : M.WeakOnlineSimulationExtractableROM B Qs rel E kq Sim q ε)
+    (hε : ∀ tq Q, ε tq Q ≤ ε' tq Q) :
+    M.WeakOnlineSimulationExtractableROM B Qs rel E kq Sim q ε' :=
+  fun X' Z fx tq Q 𝒜 =>
+    let h := hse X' Z fx tq Q 𝒜
+    ⟨h.extractionLaw_eq, h.winsNotExtracts_le.trans (hε tq Q)⟩
+
 /-! ### The spBCS compiler satisfies them -/
 
 namespace SimExtractionAdversaryROM
@@ -478,7 +490,7 @@ theorem winsROM_of_winsNotExtracts {Wit : Type} {rel : Set (X × Wit)}
 variable (hA : ∀ r a, M.AssignsAtKeys (sp r a) ⟨a.salt, fx r⟩) {Wit : Type}
   {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
   {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε)
-  (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq)
+  (hkq : M.QueriesAtMost Qs kq)
 include hA hrbr hkq
 
 omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
@@ -536,7 +548,7 @@ theorem weak_online_simulation_extractability_rom
     (hqs : ∀ x a G, ((Sim x a).trace G).length ≤ q) {Wit : Type} {rel : Set (X × Wit)}
     {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X} {ε : ChIdx P t → ℝ≥0}
     (hrbr : CausalRBRKnowledgeSound rel V E St ε) {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) :
+    (hkq : M.QueriesAtMost Qs kq) :
     M.WeakOnlineSimulationExtractableROM B Qs rel E kq Sim q
       (M.simExtractionErrorROM kq (maxError ε) q) := fun _ _ fx _ _ 𝒜 =>
   𝒜.weakOnlineSimExtractsROM (fun r a G => hqs (fx r) a G) (fun r a => hA (fx r) a) hrbr hkq

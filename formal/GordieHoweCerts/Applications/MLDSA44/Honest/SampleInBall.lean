@@ -733,8 +733,10 @@ theorem sample_holds {q : ℕ} (hq : q ∈ [264, 265, 266, 267, 268, 269, 270]) 
 
 /-- **Domain `H`'s predicates `18 … 270` hold** at the honest values: the hash's and
 SampleInBall's. -/
-theorem hPreds_holds {q : ℕ} (h18 : 18 ≤ q) (h270 : q ≤ 270) :
+theorem hPreds_holds {q : ℕ} (h18 : hPredLo ≤ q) (h270 : q ≤ hPredHi) :
     program.HoldsWith (program.reader e) (program.predicate q).body := by
+  unfold hPredLo at h18
+  unfold hPredHi at h270
   by_cases h : q < 264
   · exact hash_holds i hr htr h18 h
   · exact sample_holds i hr (by simp only [List.mem_cons, List.not_mem_nil, or_false]; omega)

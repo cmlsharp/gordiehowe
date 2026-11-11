@@ -1370,50 +1370,6 @@ std::optional<Interval> table_hull(const Domain<F> &d, const Graph &g,
   return out;
 }
 
-// The interval of the coefficients of the polynomial whose spectrum under
-// the negacyclic transform of length N at root PSI (in natural order when
-// NATURAL, ntt.h's spectrum order otherwise) is coordinates [AT, AT + N)
-// of node ID: when those coordinates are, in order, one negacyclic leaf
-// of that transform in one table record (through views on either side),
-// the selection makes them the leaf's transform of some row, so the
-// polynomial is that row's slice and its coefficients lie in the hull of
-// the leaf's columns (table_columns_hull). None otherwise.
-// PREDS, when given, receives the predicate of the record that bounds it
-// (TableRecord::pred).
-template <class F>
-std::optional<Interval> table_preimage_hull(
-    const Domain<F> &d, const Graph &g, Bound p, size_t id, size_t at,
-    size_t n, const typename F::Elt &psi, bool natural,
-    std::vector<std::string> *preds = nullptr) {
-  if (n == 0) return std::nullopt;
-  const auto src = table_sources(d, id, at, n);
-  for (const auto &[s, k] : src)
-    if (s == kZeroCoordinate) return std::nullopt;
-  std::optional<Interval> best;
-  for (const auto &r : d.table_records()) {
-    const auto j0 = record_coordinate(d, r, src[0].first, src[0].second);
-    if (!j0) continue;
-    bool in_order = true;
-    for (size_t t = 1; t < n && in_order; ++t) {
-      const auto j = record_coordinate(d, r, src[t].first, src[t].second);
-      in_order = j && *j == *j0 + t;
-    }
-    if (!in_order) continue;
-    const size_t col = (r.at + *j0) % r.width;
-    for (const auto &l : r.leaves) {
-      if (!l.ntt || l.offset != col || l.n != n || l.psi != psi ||
-          l.natural != natural)
-        continue;
-      const auto iv = table_columns_hull(d, g, p, r, col, col + n);
-      if (iv && (!best || iv->second - iv->first < best->second - best->first)) {
-        best = iv;
-        if (preds != nullptr) *preds = {r.pred};
-      }
-    }
-  }
-  return best;
-}
-
 // E over the integers, for the plan export (PlanRecords::Affine): each
 // term's signed coefficient and operand, and the constants per coordinate
 // (a constant of one coordinate broadcasts).
@@ -1730,6 +1686,10 @@ class RangeLoweringImpl : Lowering {
                  " (raise it with max_table on the request or domain)");
           continue;
         }
+        if (r.direct_only && kind != RealizationKind::kDirect) {
+          reject(at + "the request takes a direct lookup only");
+          continue;
+        }
         Candidate c;
         c.kind_rank = kr;
         c.r.kind = kind;
@@ -1878,6 +1838,20 @@ class RangeLoweringImpl : Lowering {
     }
   }
 
+  // A direct-only request (assert_range_direct: assert_mod's one-digit
+  // quotient) left without a direct lookup: an internal compiler error.
+  // mod.h gives a quotient one digit only when a table of its bound is a
+  // candidate within the domain's cap, so the planner always has one; the
+  // message must not read as a rejection of the program.
+  std::string direct_only_ice(const RangeRequest<F> &r,
+                              const std::string &detail) const {
+    const Bound cap = table_cap(r);
+    return "internal compiler error (please report): the one-digit quotient '" +
+           r.name + "' (below nq = " + bound_str(r.n) + ", MaxBound " +
+           bound_str(r.m) + ", table cap " + bound_str(cap) +
+           ") must be looked up directly, and no direct lookup was "
+           "selected; the program itself is not rejected by this. " + detail;
+  }
   std::string describe_request(const RangeRequest<F> &r) const {
     return "range request '" + r.name + "' of domain " + d_.name +
            (r.interval ? " (n = " + bound_str(r.n) + ", m = " +
@@ -2498,6 +2472,7 @@ class RangeLoweringImpl : Lowering {
       else if (auto jt = pl_.not_implied.find(i); jt != pl_.not_implied.end())
         msg += "\n  implied: " + jt->second;
       for (const auto &w : why) msg += "\n  " + w;
+      if (reqs[i].direct_only) msg = direct_only_ice(reqs[i], msg);
       if (explain) fail(msg);
       c.ok = false;
       c.why = msg;
@@ -2569,6 +2544,8 @@ class RangeLoweringImpl : Lowering {
     put_bound(b, r.m);
     put_u64(b, r.interval ? 1 : 0);
     put_u64(b, r.implied_only ? 1 : 0);
+    // A direct-only request duplicates only another one.
+    if (r.direct_only) put_u64(b, 1);
     return b;
   }
 
@@ -2959,6 +2936,9 @@ class RangeLoweringImpl : Lowering {
       }();
       const size_t first_needle = needles.size();
       r.realization.late = late;
+      if (r.direct_only && R.kind != RealizationKind::kDirect)
+        fail(direct_only_ice(r, std::string("the planner realized it as ") +
+                                    realization_name(R.kind)));
       if (R.kind == RealizationKind::kImplied) {
         put_str(descr, r.name);
         put_u64(descr, static_cast<uint64_t>(R.kind));

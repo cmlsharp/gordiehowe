@@ -141,13 +141,14 @@ variable {X Y Stmt Wit Proof Coins SimCoins : Type}
 
 variable (rel : Stmt → Wit → Prop) [DecidableRel rel]
 
-/-- **The real challenger** answering `Q` proof queries: proof query number `c` with `(x, w)` is answered
-by the honest prover's program on the coins of proof query `c` if `rel x w`, by `none` otherwise; it
-assigns nothing. -/
+/-- **The real challenger** answering `Q` proof queries, the prover's coins for each drawn
+independently from `μ`: proof query number `c` with `(x, w)` is answered by the honest prover's
+program on the coins of proof query `c` if `rel x w`, by `none` otherwise; it assigns nothing. -/
 noncomputable def realChallenger [Fintype Coins] [DecidableEq Coins]
-    (P : NARG.Prover X Y Stmt Wit Proof Coins) (Q : ℕ) : Quantum.Challenger X Y (ProofQuery Stmt Wit) Proof where
+    (P : NARG.Prover X Y Stmt Wit Proof Coins) (μ : PMF Coins) (Q : ℕ) :
+    Quantum.Challenger X Y (ProofQuery Stmt Wit) Proof where
   Coins := Fin Q → Coins
-  coins := PMF.pi fun _ => P.coins
+  coins := PMF.pi fun _ => μ
   Q := Q
   q := P.q
   respond ω hist req :=
@@ -192,8 +193,9 @@ variable [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y]
 real challenger: the challenger's state has the tape's oracle, no assignments and one history
 entry per proof query numbered below `Q`. -/
 theorem bisimulation_real [Fintype Coins] [DecidableEq Coins]
-    (P : NARG.Prover X Y Stmt Wit Proof Coins) (Q : ℕ) (ω : (X → Y) × (Fin Q → Coins)) :
-    (realEnv rel P.toFn Q).Bisimulation (realChallenger rel P Q).toPureEnv ω ω
+    (P : NARG.Prover X Y Stmt Wit Proof Coins) (μ : PMF Coins) (Q : ℕ)
+      (ω : (X → Y) × (Fin Q → Coins)) :
+    (realEnv rel P.toFn μ Q).Bisimulation (realChallenger rel P μ Q).toPureEnv ω ω
       fun i H s => H = ω.1 ∧ s.base = ω.1 ∧ s.ass = [] ∧ s.hist.length = min i Q where
   init := by simp [realEnv, Quantum.Challenger.toPureEnv]
   step i h req H s := by
@@ -257,14 +259,14 @@ variable [AddGroup Y] {W : Type} [Fintype W] [Fintype Stmt] [Fintype Wit] [Decid
 probability of every distinguisher against the real challenger, as an environment, is that
 against `realEnv` for the honest prover's pure image. -/
 theorem acceptProb_real [Fintype Coins] [DecidableEq Coins]
-    (P : NARG.Prover X Y Stmt Wit Proof Coins) (Q : ℕ)
+    (P : NARG.Prover X Y Stmt Wit Proof Coins) (μ : PMF Coins) (Q : ℕ)
     (D : Quantum.Distinguisher W X Y (ProofQuery Stmt Wit) Proof n m)
     (post : (X → Y) → Quantum.QState (Quantum.DReg W n X Y (ProofQuery Stmt Wit) Proof) ≃ₗᵢ[ℂ]
       Quantum.QState (Quantum.DReg W n X Y (ProofQuery Stmt Wit) Proof)) :
-    D.acceptProb (realChallenger rel P Q).toPureEnv post =
-      D.acceptProb (realEnv rel P.toFn Q) post :=
+    D.acceptProb (realChallenger rel P μ Q).toPureEnv post =
+      D.acceptProb (realEnv rel P.toFn μ Q) post :=
   Fintype.sum_congr _ _ fun ω => by
-    rw [D.acceptProbAt_eq_of_bisimulation post (bisimulation_real rel P Q ω)]
+    rw [D.acceptProbAt_eq_of_bisimulation post (bisimulation_real rel P μ Q ω)]
     rfl
 
 /-- **The simulated challenger's game is the simulated game of the pure image**. -/

@@ -13,9 +13,9 @@ public import GordieHowe.Language.Realizations.MAC
 /-!
 # The ML-DSA-44 proof-of-possession relation
 
-* The statement `PoP.MLDSA44.Statement ctxLen` is an encoded public key `key` (the 1312 bytes
+* The statement `MLDSA44.PoP.Statement ctxLen` is an encoded public key `key` (the 1312 bytes
   `pkEncode(ρ, t₁)` the C++ absorbs first after the two circuit ids)
-  and a context `ctx` of `ctxLen` bytes; the witness `PoP.MLDSA44.Witness msgLen` is `msgLen`
+  and a context `ctx` of `ctxLen` bytes; the witness `MLDSA44.PoP.Witness msgLen` is `msgLen`
   message bytes and the signature bytes.
 * The relation `GordieHowe.MLDSA44.PoP.rel`: `GordieHowe.MLDSA44.VerifiesBytes` (FIPS 204 Algorithm 3,
   with `ExpandA` within `1008` SHAKE128 bytes per `RejNTTPoly` call (`ExpandAWithin`) and
@@ -28,6 +28,15 @@ public import GordieHowe.Language.Realizations.MAC
 -/
 
 namespace GordieHowe
+
+namespace MLDSA44
+
+/-- **The vendored ML-DSA-44 parameter set** (`_root_.MLDSA.mldsa44`, FIPS 204 Table 1), named so
+that statements need not write the `_root_` path that `GordieHowe.mldsa44` (the circuits' parameter
+record) forces. -/
+abbrev fipsParams : _root_.MLDSA.Params := _root_.MLDSA.mldsa44
+
+end MLDSA44
 
 namespace MLDSA44.PoP
 
@@ -49,21 +58,45 @@ Algorithm 3, `ML-DSA.Verify`, with `ExpandA` within `1008` SHAKE128 bytes per `R
 (`ExpandAWithin`) and `SampleInBall` within `272` SHAKE256 bytes) holds for the witness's message
 bytes and signature bytes under the decoded key and the context. -/
 def rel (ctxLen msgLen : ℕ) : Set (Statement ctxLen × Witness msgLen) :=
-  {p | MLDSA44.VerifiesBytes (MLDSA44.pkDecode44 p.1.key) (List.ofFn p.1.ctx) (List.ofFn p.2.message)
-    p.2.signature}
+  Function.uncurry fun s w =>
+    MLDSA44.VerifiesBytes (MLDSA44.pkDecode44 s.key) (List.ofFn s.ctx) (List.ofFn w.message) w.signature
 
 /-- **A witness of a message of at most `nm` bytes**: its length `L ≤ nm` and a witness at
-`L`. -/
-abbrev VarWitness (nm : ℕ) : Type := Σ L : Fin (nm + 1), Witness L
+`L` (`Configuration.VarWitness` at the signature bytes). -/
+abbrev VarWitness (nm : ℕ) : Type := Configuration.VarWitness nm ByteArray
 
 instance (nm : ℕ) : Inhabited (VarWitness nm) := ⟨⟨0, default⟩⟩
 
 /-- **The ML-DSA-44 proof-of-possession relation for messages of at most `nm` bytes**, the
 paper's `R_ML-DSA = {(pk, (m, σ)) : ML-DSA.Verify(pk, m, σ)}` for ML-DSA-44 with the empty
 context and messages of at most `nm` bytes, for a fixed public maximal length `nm`: the witness's
-message, of its length `L ≤ nm`, and signature are in `rel 0 L`. -/
+message, of its length `L ≤ nm`, and signature are in `rel 0 L` (`Configuration.relUpTo`). -/
 def relUpTo (nm : ℕ) : Set (Statement 0 × VarWitness nm) :=
-  {p | (p.1, p.2.2) ∈ rel 0 p.2.1}
+  Configuration.relUpTo (rel 0) nm
+
+/-- **`ExpandA(ρ)` of the decoded key finishes within the byte budget**: within `rejNTTByteBudget`
+SHAKE128 bytes per `RejNTTPoly` call (`MLDSA44.ExpandAWithin`). -/
+abbrev Statement.ExpandAWithin (s : Statement 0) : Prop :=
+  MLDSA44.ExpandAWithin fipsParams (MLDSA44.pkDecode44 s.key).rho
+
+/-- **The statements of the proofs of possession**: encoded ML-DSA-44 public keys (with the empty
+context) whose decoded key's `ExpandA` finishes within the byte budget. At the other keys no
+signature verifies (`relUpTo_expandAWithin`). -/
+abbrev KeyStmt : Type := {s : Statement 0 // s.ExpandAWithin}
+
+/-- **`relUpTo nm` (the paper's `R_ML-DSA`) on the statements `KeyStmt`**: a pair is in the relation
+when its key, read as an encoded key, and its witness are in `relUpTo nm`. -/
+def relOnKeys (nm : ℕ) : Set (KeyStmt × VarWitness nm) :=
+  Prod.map Subtype.val id ⁻¹' relUpTo nm
+
+/-- **Restricting `relUpTo` to `KeyStmt` loses no pair**: the key of every pair of `relUpTo nm`
+has its `ExpandA` within the byte budget (`MLDSA44.Verifies.expandA`). -/
+theorem relUpTo_expandAWithin {nm : ℕ} {p : Statement 0 × VarWitness nm} (h : p ∈ relUpTo nm) :
+    p.1.ExpandAWithin := by
+  have hv : MLDSA44.VerifiesBytes (MLDSA44.pkDecode44 p.1.key) (List.ofFn p.1.ctx)
+      (List.ofFn p.2.2.message) p.2.2.signature := h
+  obtain ⟨_, _, _, _, hv⟩ := hv.decode
+  exact hv.expandA
 
 end MLDSA44.PoP
 

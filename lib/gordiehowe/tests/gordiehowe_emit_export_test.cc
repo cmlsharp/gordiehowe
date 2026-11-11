@@ -45,9 +45,6 @@
 //   GordieHoweEmitExport.BooleanStepsChar2  derive<Bit> over GF(2^128): the
 //                                      view check's steps ones - x and
 //                                      x (ones - x) export and check
-//   GordieHoweEmitExport.ProductForm   a spectral product form placed in
-//                                      the circuit exports and checks (its
-//                                      NTTs' stage aux wires)
 //   GordieHoweEmitExport.Walk          the walk numbers kids below their
 //                                      node and flattened chain nodes
 //                                      before their root, and gives a view
@@ -55,13 +52,17 @@
 //                                      address reused with other contents,
 //                                      and a node completed twice, are
 //                                      recorded as problems
-//   GordieHoweEmitExport.Plan          the check plan: a node's cost
-//                                      follows its uncut cone, small nodes
-//                                      run together, a costly node and the
-//                                      family cuts are sliced; an entry
-//                                      over the module budget splits into
-//                                      contiguous leaf ranges covering
-//                                      every leaf, under budget it does not
+//   GordieHoweEmitExport.Plan          the check plan: a node's rebuild
+//                                      follows its uncut cone, a node of
+//                                      one-wire cuts that fits the leaf
+//                                      budget is not sliced, small nodes
+//                                      run together, a node or family whose
+//                                      rebuild exceeds the budget is sliced
+//                                      into the fewest slices under its
+//                                      cap; an entry over the module
+//                                      budget splits into contiguous leaf
+//                                      ranges covering every leaf, under
+//                                      budget it does not
 //   GordieHoweEmitExport.WiringView    a circuit reading a view of two
 //                                      sources with a zero coordinate
 //                                      exports and checks
@@ -562,39 +563,86 @@ TEST(GordieHoweEmitExport, Leb128) {
 
 TEST(GordieHoweEmitExport, Plan) {
   using PN = ex::PlanNode;
-  // 0, 1 uncut leaves of node 2 (cut, len 4, aux 1): its cone has 2 nodes
-  // and their aux 3 + 5, so n = 4 + 1 + 8 and l = 13 * 3; node 3 is a
-  // small cut node; node 4 a cut node of 2000 cuts, over the part budget.
-  const std::vector<PN> info = {{1, false, 3, {}},
-                                {1, false, 5, {}},
-                                {4, true, 1, {0, 1}},
-                                {7, true, 0, {}},
-                                {2000, true, 0, {3}}};
-  const auto c = ex::plan_node_costs(info);
-  ASSERT_EQ(c.size(), 5u);
-  EXPECT_EQ(c[0].l, 0u);
-  EXPECT_EQ(c[2].n, 13u);
-  EXPECT_EQ(c[2].l, 39u);
-  EXPECT_EQ(c[2].S, 1024u / 3);
-  EXPECT_EQ(c[3].l, 7u);
-  EXPECT_EQ(c[4].l, 2000u);
-  // A LogUp family of 600 cuts in slices of 256.
-  const auto e = ex::plan_entry(c, 600, ex::kLogupSlice, ex::kLogupCutCost);
-  EXPECT_EQ(e.parts, (std::vector<size_t>{0, 0, 4, 1, 1024, 2, 2, 256, 3}));
-  // the head, one run, two slices, three family slices
-  ASSERT_EQ(e.leaves.size(), 7u);
-  EXPECT_EQ(e.leaves[0], ex::kHeadCost);
-  EXPECT_EQ(e.leaves[1], 1u + 1u + 39u + 7u);
-  EXPECT_EQ(e.leaves[2] + e.leaves[3], 2000u);
-  EXPECT_EQ(e.leaves[6], (600u - 512u) * ex::kLogupCutCost);
+  // Blocks of COUNT cuts, each one wire (FREE) or reading LEAVES wires and
+  // SCALES scales.
+  auto cuts = [](size_t count, bool free, size_t leaves, size_t scales) {
+    std::vector<ex::CutBlock> v;
+    for (size_t left = count; left > 0;) {
+      const size_t b = std::min(left, ex::kCutBlock);
+      v.push_back({b, free ? b : 0, free ? 0 : b * leaves, free ? 0 : b * scales});
+      left -= b;
+    }
+    return v;
+  };
+  // 0: a value leaf of length 4; 1, 2: uncut nodes of length 4 over it; 3: a
+  // cut node of length 4 over both, two wires per cut, its rebuild its own
+  // coordinates and its cone's and their kids' reads; 4: a value leaf of
+  // 94,208 one-wire cuts; 5: a lin node of 4,096 cuts through an operator
+  // over 4, each 23 wires and 22 scales; 6: a gather of 117,760 one-wire
+  // cuts over 4.
+  std::vector<PN> info(7);
+  info[0] = {4, true, 0, PN::kPlace, {}, cuts(4, true, 0, 0)};
+  info[1] = {4, false, 0, PN::kOwn, {0}, {}};
+  info[2] = {4, false, 0, PN::kOwn, {0}, {}};
+  info[3] = {4, true, 0, PN::kOwn, {1, 2}, cuts(4, false, 2, 0)};
+  info[4] = {94208, true, 0, PN::kPlace, {}, cuts(94208, true, 0, 0)};
+  info[5] = {4096, true, 0, PN::kOperator, {4}, cuts(4096, false, 23, 22)};
+  info[6] = {117760, true, 0, PN::kIndex, {4}, cuts(117760, true, 0, 0)};
+  const auto o = ex::plan_node_objects(info);
+  ASSERT_EQ(o.size(), 7u);
+  EXPECT_EQ(o[1].cuts(), 0u);
+  EXPECT_NEAR(o[3].F, ex::kOwnMs * (4 + 8 + 2 * 8), 1e-9);
+  EXPECT_EQ(o[3].cuts(), 4u);
+  EXPECT_NEAR(o[3].total(), 4 * (ex::kCutMs + 2 * ex::kTermMs), 1e-9);
+  EXPECT_NEAR(o[5].F, ex::kOwnMs * 4096 + (ex::kOperatorMs + ex::kRampMs) * 94208, 1e-6);
+  // the value leaf fits one leaf; the lin node and the gather do not
+  const auto whole = ex::plan_slices(o[4]);
+  EXPECT_EQ(whole.m, 1u);
+  EXPECT_LE(whole.leaves[0], ex::kLeafBudgetMs);
+  const auto lin = ex::plan_slices(o[5]);
+  const auto gather = ex::plan_slices(o[6]);
+  for (const auto *sp : {&lin, &gather}) {
+    EXPECT_GT(sp->m, 1u);
+    EXPECT_EQ(sp->leaves.size(), sp->m);
+    EXPECT_LE((sp->m - 1) * sp->S, sp == &lin ? 4096u : 117760u);
+    EXPECT_GT(sp->m * sp->S, sp == &lin ? 4095u : 117759u);
+  }
+  // the lin node's rebuild alone exceeds the budget: its leaves stay under
+  // twice it, and one slice fewer would not
+  for (double x : lin.leaves) EXPECT_LE(x, 2 * ex::kLeafBudgetMs);
+  {
+    const size_t S = (4096 + lin.m - 2) / (lin.m - 1);
+    double worst = 0;
+    for (double x : ex::slice_costs(o[5], S)) worst = std::max(worst, x);
+    EXPECT_GT(worst, 2 * ex::kLeafBudgetMs);
+  }
+  // the gather's drop to its end exceeds the budget: a few slices of
+  // thousands of cuts, not one per thousand cuts
+  EXPECT_LE(gather.m, 16u);
+  EXPECT_GE(gather.S, 4096u);
+  // A LogUp family of 600 two-wire cuts, under the budget: one slice.
+  const auto fam = ex::plan_family_object(ex::kLogupBuildMs * 600, {}, 600, 2 * ex::kTermMs);
+  const std::vector<ex::PlanObject> entry(o.begin(), o.begin() + 5);
+  const auto e = ex::plan_entry(entry, fam);
+  // nodes 0 to 4 run together, then the family
+  EXPECT_EQ(e.parts, (std::vector<size_t>{0, 0, 5, 2, 600, 1}));
+  ASSERT_EQ(e.leaves.size(), 3u);
+  EXPECT_EQ(e.leaves[0], size_t(ex::kHeadMs));
   EXPECT_TRUE(e.modules.empty());
-  // A budget below the cost: contiguous ranges covering every leaf, at most
-  // ceil(cost / budget) of them, none empty.
-  for (size_t budget : {1500u, 2000u, 3000u}) {
-    const auto s = ex::plan_entry(c, 600, ex::kLogupSlice, ex::kLogupCutCost, budget);
-    EXPECT_EQ(s.parts, e.parts);
+  // A MAC H family of 920 chunks of 128 bits: sliced under its cap.
+  const auto mac = ex::plan_family_object(ex::kMacBuildMs * 117760, cuts(920, false, 128, 127),
+                                          0, 0);
+  const auto ms = ex::plan_slices(mac);
+  EXPECT_GT(ms.m, 1u);
+  for (double x : ms.leaves) EXPECT_LE(x, 2 * ex::kLeafBudgetMs);
+  // An entry with the lin node: a budget below the cost gives contiguous
+  // ranges covering every leaf, at most ceil(cost / budget) of them, none
+  // empty.
+  const std::vector<ex::PlanObject> big(o.begin(), o.begin() + 6);
+  for (double budget : {300000.0, 600000.0, 1200000.0}) {
+    const auto s = ex::plan_entry(big, fam, budget);
     ASSERT_GE(s.modules.size(), 2u) << budget;
-    EXPECT_LE(s.modules.size(), (s.cost + budget - 1) / budget);
+    EXPECT_LE(s.modules.size(), (s.cost + size_t(budget) - 1) / size_t(budget));
     size_t at = 0;
     for (const auto &[lo, hi] : s.modules) {
       EXPECT_EQ(lo, at);
@@ -604,6 +652,46 @@ TEST(GordieHoweEmitExport, Plan) {
     EXPECT_EQ(at, s.leaves.size());
   }
   EXPECT_EQ(ex::plan_text({0, 0, 4, 2, 256, 1}), "[0, 0, 4, 2, 256, 1]");
+  // A node of 8,192 cuts that are not one wire, cheap enough for one leaf
+  // by its price, is checked in slices of at most kMaxSliceHard cuts; the
+  // gather's one-wire cuts (node 6) are not limited. A LogUp family's cut
+  // pays its base, and 106,752 of them are checked in slices under the cap.
+  std::vector<PN> ap(2);
+  ap[0] = {1024, true, 0, PN::kPlace, {}, cuts(1024, true, 0, 0)};
+  ap[1] = {1024, true, 7168, PN::kOwn, {0}, cuts(8192, false, 1, 0)};
+  const auto ao = ex::plan_node_objects(ap);
+  EXPECT_EQ(ao[1].hard, 8192u);
+  EXPECT_LE(ex::kLeafMs + ao[1].F + ao[1].total(), ex::kLeafBudgetMs);
+  const auto as = ex::plan_slices(ao[1]);
+  EXPECT_EQ(as.m, 8u);
+  EXPECT_EQ(as.S, ex::kMaxSliceHard);
+  EXPECT_EQ(o[6].hard, 0u);
+  const auto lf = ex::plan_family_object(ex::kLogupBuildMs * 106752, {}, 106752, 2 * ex::kTermMs,
+                                         ex::kLogupCutMs);
+  EXPECT_NEAR(lf.total(), 106752 * (2 * ex::kTermMs + ex::kLogupCutMs), 1e-3);
+  const auto ls = ex::plan_slices(lf);
+  EXPECT_GT(ls.m, 9u);
+  for (double x : ls.leaves) EXPECT_LE(x, 2 * ex::kLeafBudgetMs + 0.25 * ex::kLeafBudgetMs);
+}
+
+TEST(GordieHoweEmitExport, HeaderPlan) {
+  // Leaves in Load.lean's order: six header parts; a layer of 100,000 gates in 49 slices (each its
+  // check and counts, all but the last its next tail's equation); a layer of 60,000 gates in 30
+  // slices after its previous layer's length; a small layer's check and counts; the last suffix
+  // and the shape; 49 slices of asserted nodes twice; part 6 and four small checks.
+  const auto h = ex::plan_header({100000, 60000, 1000}, 25000, 2743);
+  EXPECT_EQ(h.leaves.size(), 6u + (49 * 3 - 1) + (1 + 30 * 3 - 1) + 2 + 2 + 2 * 49 + 1 + 4);
+  size_t sum = 0;
+  for (size_t x : h.leaves) sum += x;
+  EXPECT_EQ(h.cost, sum);
+  // Part modules under the module budget, contiguous and covering every leaf.
+  ASSERT_GT(h.modules.size(), 1u);
+  EXPECT_EQ(h.modules.front().first, 0u);
+  EXPECT_EQ(h.modules.back().second, h.leaves.size());
+  for (size_t j = 1; j < h.modules.size(); ++j)
+    EXPECT_EQ(h.modules[j].first, h.modules[j - 1].second);
+  // A small circuit's header is one module.
+  EXPECT_TRUE(ex::plan_header({10, 5}, 3, 20).modules.empty());
 }
 
 TEST(GordieHoweEmitExport, RoundTrip) {
@@ -614,9 +702,9 @@ TEST(GordieHoweEmitExport, RoundTrip) {
   const auto &x = out[0];
   EXPECT_EQ(x.domain, "A");
   EXPECT_GT(x.cuts, 0u);
-  // The Lean modules: the data module, one per entry, the circuit's.
+  // The Lean modules: the data module, one per entry, the header's, the circuit's.
   ASSERT_EQ(x.modules.size(), 1u);
-  ASSERT_EQ(x.check_modules.size(), x.entries + 1);
+  ASSERT_EQ(x.check_modules.size(), x.entries + 2);
   const std::string &t = x.modules[0].second;
   EXPECT_EQ(x.modules[0].first, "GKR/A.lean");
   char hash[17];
@@ -636,10 +724,18 @@ TEST(GordieHoweEmitExport, RoundTrip) {
   EXPECT_NE(entry.second.find("check_entry cert ar 0 ["), std::string::npos);
   EXPECT_NE(entry.second.find("\nmeta import GordieHoweCerts.Generated.Test.EmitExport.GKR.A\n"),
             std::string::npos);
+  // The header imports no entry; the circuit's module composes the header's and the entries'.
+  const auto &header = x.check_modules[x.check_modules.size() - 2];
+  EXPECT_EQ(header.first, root + "Header.lean");
+  EXPECT_NE(header.second.find("check_header_leaves cert ar 0 "), std::string::npos);
+  EXPECT_NE(header.second.find("compose_header cert ar\n"), std::string::npos);
+  EXPECT_EQ(header.second.find("GKR.A.E0"), std::string::npos);
   const auto &circuit = x.check_modules.back();
   EXPECT_EQ(circuit.first, root + "Circuit.lean");
-  EXPECT_NE(circuit.second.find("check_circuit cert ar\n"), std::string::npos);
+  EXPECT_NE(circuit.second.find("compose_circuit cert ar\n"), std::string::npos);
   EXPECT_NE(circuit.second.find("public import GordieHoweCheck.Test.EmitExport.GKR.A.E0"),
+            std::string::npos);
+  EXPECT_NE(circuit.second.find("public import GordieHoweCheck.Test.EmitExport.GKR.A.Header\n"),
             std::string::npos);
   for (const auto &[path, source] : x.check_modules) {
     EXPECT_EQ(path.find("Check/Kernel/"), 0u);
@@ -1099,11 +1195,11 @@ TEST(GordieHoweEmitExport, BooleanStepsChar2) {
   }
 }
 
-// A system whose domain A's circuit holds a spectral product form
-// (gordiehowe_table_test's SpectralMod): w = h s mod q for the selected
-// row h of a public ring, stated in the spectrum of a negacyclic NTT of
-// 16 coefficients.
-std::unique_ptr<Sys> product_system() {
+// A system whose domain A's circuit holds a spectral product
+// (ops::assert_spectral): Ntt(w) = h_hat * Ntt(s) for the selected row
+// h_hat of a public ring of spectra under a negacyclic NTT of 16
+// coefficients.
+std::unique_ptr<Sys> spectral_system() {
   const size_t n = 16, R = 8;
   const uint64_t q = 12289;
   auto cs = std::make_unique<Sys>("gh-emit-export-product");
@@ -1121,42 +1217,19 @@ std::unique_ptr<Sys> product_system() {
       lib::table::RowMap<AF>::negacyclic(af(), n, psi, ops::NttOrder::kNatural);
   const auto ring = lib::table::public_table(*cs, A, "ring", keys, map);
   lib::table::select_row(*cs, ring, "signer", spec);
-  assert_mod(w, ops::SpectralProduct(spec, sv, ntt), q, "rel");
+  ops::assert_spectral(*cs, "rel", w, ops::SpectralProduct(spec, sv, ntt));
   return cs;
-}
-
-TEST(GordieHoweEmitExport, ProductForm) {
-  auto cs = product_system();
-  auto c = compile(*cs, table_profile());
-  ASSERT_EQ(c->records().product_mod_equalities.size(), 1u);
-  ASSERT_TRUE(c->records().product_mod_equalities[0].spectral);
-  // The equation's nodes have printed forms: the table exports and checks.
-  const auto out = tables(*c);
-  ASSERT_EQ(out.size(), 1u);
-  EXPECT_EQ(out[0].domain, "A");
-  EXPECT_GT(out[0].aux, 0u);
-  decode(out[0]);
-  // The equation's constant -m qlo (one entry) is the last value; every
-  // value before it keeps its id (constants, then nodes, in node order).
-  const ir::Program &p = c->program();
-  ASSERT_FALSE(p.values.empty());
-  EXPECT_EQ(p.values.back().kind, ir::Value::kConstant);
-  EXPECT_EQ(p.values.back().entries.size(), 1u);
-  size_t last_node = 0;
-  for (size_t k = 0; k < p.values.size(); ++k)
-    if (p.values[k].kind != ir::Value::kConstant) last_node = k;
-  EXPECT_LT(last_node, p.values.size() - 1);
 }
 
 // A12: a product operand whose one-level form is no atom (here an operator
 // or affine node under a product), left uncut, is refused; the honest
 // marking is accepted.
-// The selection certificate (compiler/table_selections.h) of the product
+// The selection certificate (compiler/table_selections.h) of the spectral
 // system's select_row: the predicate `signer`, the table's values, the record
 // `spec` and the row map's one natural leaf; a record naming no predicate is
 // refused.
 TEST(GordieHoweEmitExport, TableSelectionCert) {
-  auto cs = product_system();
+  auto cs = spectral_system();
   auto c = compile(*cs, table_profile());
   const ir::Program &p = c->program();
   const auto &recs = c->records().table_selections;
@@ -1195,7 +1268,7 @@ TEST(GordieHoweEmitExport, TableSelectionCert) {
 }
 
 TEST(GordieHoweEmitExport, UncutOperandRejected) {
-  auto cs = product_system();
+  auto cs = spectral_system();
   auto c = compile(*cs, table_profile());
   using T = ex::EmitTable<AF>;
   auto refused = [&](std::function<void(T &)> edit) {

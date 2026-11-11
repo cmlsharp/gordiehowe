@@ -12,6 +12,8 @@ public import GordieHowe.ProofSystem.GKR.InitialChallenge
 /-!
 # Round-by-round reduction for the concrete GKR protocol
 
+The GKR protocol (Goldwasser, Kalai and Rothblum, STOC 2008) in Longfellow's form.
+
 The error function follows the actual typed schedule. Initial evaluation,
 shared batching, degree-two sumcheck, assertion tracking, and final scalar
 batching have proved finite counting bounds.

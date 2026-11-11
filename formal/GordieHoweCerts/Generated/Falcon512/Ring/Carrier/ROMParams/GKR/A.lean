@@ -27,6 +27,6 @@ open GordieHowe.Generated.Falcon512.Ring.Carrier.ROMParams.Program
 /-- The code arithmetic of the circuit's field. -/
 def ar : CodeArith := (RealizedProgram.gold2Code.arith).withPrime 18446744069414584321
 
-load_ghc "A.ghc" "71453838b50bd7cb"
+load_ghc "A.ghc" "a8329178b236f23c"
 
 end GordieHowe.Generated.Falcon512.Ring.Carrier.ROMParams.GKR.A

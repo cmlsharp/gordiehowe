@@ -6,6 +6,7 @@ module
 public import GordieHowe.Applications.Falcon512.Frontend.Norm
 public import GordieHowe.Applications.Falcon512.Ring.Native.System.Composite
 public import GordieHowe.Language.Library.TableSelect
+public import GordieHowe.Language.Library.EvalPoint
 
 @[expose] public section
 
@@ -27,7 +28,17 @@ program facts `FalconRingPowers`, `FalconRingSelect`, `FalconRingMember` and `Fa
   signer's key's (`GordieHowe.RealizedProgram.TableSelect.evalE_lhs`); unless `γ` is a root of the
   nonzero difference polynomial (degree at most `511`, probability `511/|F|`, Schwartz–Zippel),
   the spectrum is the transform of the signer's key.
-* **The signature equation** (`sig_eq`): `Ntt(c − s1) = spectrum ⊙ Ntt(s2)`.
+* **The signature equation at a random point** (`FalconRandomPoint`, `FalconRandomPointField`,
+  `sigPoly`, `sigEvent`, `evalE_sigLhs`, `holdsAt_sig_iff`, `sig_spectral`, `eOf_eq_negacyclic`),
+  shared by the native rings and the carriers (`GordieHowe/Applications/Falcon512/Ring/Carrier/Frontend.lean`):
+  the program checks `E = h · s2` in `F[X]/(X^512 + 1)` at one challenge `r` (`signature.r`) with a
+  committed high half `Q` by `X^512 + 1`, the key read through the interpolation weights
+  `λ(r) = 512⁻¹ Ntt_{ψ⁻¹}(1, r, …, r^511)` (`GordieHowe/Language/Library/EvalPoint.lean`). The
+  predicate is the polynomial `E − H · s2 + (X^512 + 1) Q` at `r` (`H` the interpolation of the
+  spectrum); unless `r` is a root of it while it is nonzero (degree at most `1022`,
+  Schwartz–Zippel), it is `0`, so at the roots of `X^512 + 1` it reads
+  `Ntt(E) = spectrum ⊙ Ntt(s2)`, and coefficientwise `E` is the negacyclic product `H · s2`.
+  The native rings' first vector is `E = c − s1` (`FalconRingBase`, `eOf_eq`, `sig_eq`).
 * **The relation and the extractor** (`rel`, `proj`, `extractor`): the signer's position is below
   `64` and, at its key (`ringKey`) and the statement's challenge (`chalNat`), Falcon's algebraic
   verifier accepts the extracted `s2` and `s2` is encodable; `proj` reads the index bits and the
@@ -36,7 +47,8 @@ program facts `FalconRingPowers`, `FalconRingSelect`, `FalconRingMember` and `Fa
   `GordieHowe.Falcon512.Ring.Native.ringAlgebra_sound` gives the relation, given the norm's advice (`NormSound`,
   discharged per program by the generic norm `FalconNorm`).
 * **Round-by-round knowledge soundness of `Π_P₀`** (`rbr_of_norm`): `GordieHowe.RealizedProgram.rbr_of_events` at the
-  membership's event, error `511/|F|` at `member.ring.gamma` (`ringEps`).
+  membership's and the signature equation's events (`nativeEvent`), errors `511/|F|` at
+  `member.ring.gamma` and `1022/|F|` at `signature.r` (`nativeEps`).
 -/
 
 namespace GordieHowe.Falcon512.Ring
@@ -92,13 +104,17 @@ def memberLhs (spec pow idx mOne : ℕ) : RealizedProgram.Expr :=
     (.scale (.const mOne) (.mux (.reindex [(5, 0, 1)] (.leaf idx)) (.reindex [(1, 0, 1)] (.ref 20))
       (.reindex [(0, 0, 1)] (.ref 20))))
 
-/-- **The signature equation's left side** (`signature.equation`) of a native ring:
-`Ntt(c − s1) − spectrum ⊙ Ntt(s2)`. -/
-def sigLhs : RealizedProgram.Expr :=
-  .add (.apply (.ntt 512 10302 .natural) (.add (.leaf 5) (.scale (.const 12288) (.leaf 10))))
-    (.scale (.const 12288) (.mul (.reindex [(0, 1, 512)] (.reindex [(0, 1, 512)] (.leaf 6)))
-      (.reindex [(0, 1, 512)] (.reindex [(0, 1, 512)] (.apply (.ntt 512 10302 .natural)
-        (.leaf 9))))))
+/-- **The signature equation's left side** (`signature.equation`) of a Falcon ring, one
+coordinate: `Σ_t E_t r^t − (Σ_m spectrum_m λ_m) (Σ_t s2_t r^t) + (r^512 + 1) Σ_t Q_t r^t`, at the
+equation's first vector `E` (the native rings' `c − s1`, the carriers'
+`c − s1 − q · equation.q + q · 6291457`), the spectrum `spec`, `s2`, the high half `q`, the powers
+`r^t` (`pw`), the weights `λ = 512⁻¹ Ntt_{ψ⁻¹}(1, r, …, r^511)` (`lam`), `r^512 + 1` (`rn`) and the
+field's `−1` (`mOne`). -/
+def sigLhs (E : RealizedProgram.Expr) (spec s2 q pw lam rn mOne : ℕ) : RealizedProgram.Expr :=
+  .add (.add (.apply (.sum 512) (.mul E (.leaf pw)))
+      (.scale (.const mOne) (.mul (.apply (.sum 512) (.mul (.leaf spec) (.leaf lam)))
+        (.apply (.sum 512) (.mul (.leaf s2) (.leaf pw))))))
+    (.mul (.leaf rn) (.apply (.sum 511) (.mul (.leaf q) (.reindex [(0, 1, 511)] (.leaf pw)))))
 
 /-- **The field facts the membership reads** in a field interpretation: the constant `negOne`
 decodes to `−1`, `0` and `1` decode to themselves and read back as `0` and `1`. -/
@@ -203,46 +219,150 @@ class FalconRingMember (program : RealizedProgram) [FalconRingPowers program] [F
   /-- Challenge `0` is one full coordinate of field `0`. -/
   chal0 : (program.challenge 0).size = 1 ∧ (program.challenge 0).sampler = .full ∧
     program.chalField 0 = 0
-  /-- The source program's one challenge is `member.ring.gamma`. -/
-  isSourceChal_iff : ∀ j, program.IsSourceChal j ↔ j = 0
+  /-- `member.ring.gamma` is a challenge of the source program (the native rings also draw the
+  signature equation's `signature.r`). -/
+  isSourceChal_zero : program.IsSourceChal 0
   /-- The program has values. -/
   values_length : 0 < program.values.length
   /-- The spectrum, the index bits and `s2` are committed. -/
   privKinds : (program.value spec).kind = .priv ∧
     (program.value (FalconRingSelect.idx program)).kind = .priv ∧ (program.value s2).kind = .priv
 
-/-- **The program facts of a native Falcon ring outside the membership** (decided per program):
-the values' numbering (`statement.ring` `4`, `statement.c` `5`, `key.spectrum` `6`, `s2` `9`,
-`signature.s1` `10`), the signature equation `signature.equation` (predicate `1`), a source
-predicate; the zero constant `0^512` (value `2`); the challenge's kind; the fields, sizes and types
-of `s2` and `s1`. -/
-class FalconRingBase (program : RealizedProgram) [FalconRingPowers program] [FalconRingSelect program]
-    [FalconRingMember program] : Prop where
-  /-- The numbering of the membership's values. -/
-  ids : FalconRingMember.ring program = 4 ∧ FalconRingMember.spec program = 6 ∧
-    FalconRingMember.mOne program = 12288 ∧ FalconRingMember.psi program = 10302 ∧
-    FalconRingSelect.idx program = 7 ∧ FalconRingMember.idxPred program = 14 ∧
-    FalconRingMember.chal program = 5 ∧ FalconRingMember.s2 program = 9
-  /-- `signature.equation`: `Ntt(c − s1) = spectrum ⊙ Ntt(s2)`. -/
-  sig : ∃ t, (program.predicate 1).body = .equal 0 sigLhs (.leaf 2) t
+/-- **The program facts of a Falcon ring's signature equation at a random point** (decided per
+program; the native rings and the carriers number their values differently, and both extend
+them, `FalconRingBase`, `FalconCarrierBase`): the equation's first vector `sigE` (`512`
+coordinates, headed by `statement.c`), the high half `signature.Q` (`q`), `signature.r` and its
+challenge, the constants `1` and `0`, the public values `r^t` (`pw`), `λ` (`lam`) and `r^512 + 1`
+(`rn`), the shared expressions of `r^t` and `r^256`; the predicate `signature.equation`, a source
+predicate; the program's `512⁻¹` and `ψ⁻¹` (`nInv`, `psiInv`, read in a field by
+`FalconRandomPointField`); the challenge `signature.r`, a source challenge of one full coordinate;
+the public values' definitions and the powers the symbolic-power matcher reads; the fields and
+kinds of the values read. -/
+class FalconRandomPoint (program : RealizedProgram) [FalconRingPowers program]
+    [FalconRingSelect program] [FalconRingMember program] where
+  /-- The equation's first vector `E`. -/
+  sigE : RealizedProgram.Expr
+  /-- `signature.Q`, the high half of the product by `X^512 + 1`. -/
+  q : ℕ
+  /-- `signature.r`. -/
+  r : ℕ
+  /-- `signature.r`'s challenge. -/
+  rChal : ℕ
+  /-- The constant `1` (one coordinate). -/
+  one : ℕ
+  /-- The constant `0` (one coordinate). -/
+  zero1 : ℕ
+  /-- `r^t`, `t < 512` (`signature.equation.public0`). -/
+  pw : ℕ
+  /-- `λ = 512⁻¹ Ntt_{ψ⁻¹}(1, r, …, r^511)` (`signature.lambda`). -/
+  lam : ℕ
+  /-- `r^512 + 1` (`signature.equation.public1`). -/
+  rn : ℕ
+  /-- The shared expression of `r^t`. -/
+  pwRef : ℕ
+  /-- The shared expression of `r^256`. -/
+  r256Ref : ℕ
+  /-- `signature.equation`. -/
+  sigPred : ℕ
+  /-- The constant `512⁻¹`. -/
+  nInv : ℕ
+  /-- The constant `ψ⁻¹`. -/
+  psiInv : ℕ
+  /-- `signature.equation`: the signature equation at `r`. -/
+  sig : ∃ t, (program.predicate sigPred).body = .equal 0
+    (sigLhs sigE (FalconRingMember.spec program) (FalconRingMember.s2 program) q pw lam rn
+      (FalconRingMember.mOne program)) (.leaf zero1) t
+  /-- The first vector has the length of `statement.c`. -/
+  sigELen : program.exprLen sigE = program.exprLen (.leaf (FalconRingMember.chal program))
   /-- The signature equation is a source predicate. -/
-  inSource1 : 1 < program.predicates.length ∧ program.inSource (program.predicate 1) = true
-  /-- The constant `0^512`. -/
-  const2 : program.isConstant 2 = true ∧ program.constEntries 2 = List.replicate 512 0
-  /-- The challenge is an opaque statement value with no arguments. -/
-  chalKind : (program.value 5).kind = .pub (.opaque "statement.c" [])
+  inSourceSig : sigPred < program.predicates.length ∧
+    program.inSource (program.predicate sigPred) = true
+  /-- The zero constant. -/
+  const0 : program.isConstant zero1 = true ∧ program.constEntries zero1 = [0]
   /-- The values read are of field `0`. -/
-  fields : ∀ v ∈ [2, 5, 9, 10], program.valueField v = 0
+  sigFields : ∀ v ∈ [zero1, q, pw, lam, rn], program.valueField v = 0
+  /-- `Q` is committed. -/
+  qPriv : (program.value q).kind = .priv
+  /-- `signature.r` and the constant `1`. -/
+  rPow : RealizedProgram.ChalPowers program one r rChal 0
+  /-- `signature.r` is one coordinate drawn from the field. -/
+  chalR : (program.challenge rChal).size = 1 ∧ (program.challenge rChal).sampler = .full
+  /-- The source program's challenges are `member.ring.gamma` (`0`) and `signature.r`. -/
+  isSourceChal_iff : ∀ j, program.IsSourceChal j ↔ j = 0 ∨ j = rChal
+  /-- The two challenges are distinct. -/
+  rChal_ne : rChal ≠ 0
+  /-- `r^t`'s definition. -/
+  pwKind : (program.value pw).kind = .pub (.expr (.ref pwRef))
+  /-- `λ`'s definition. -/
+  lamKind : (program.value lam).kind =
+    .pub (.expr (.scale (.const nInv) (.apply (.ntt 512 psiInv .natural) (.ref pwRef))))
+  /-- `r^512 + 1`'s definition. -/
+  rnKind : (program.value rn).kind =
+    .pub (.expr (.add (.mul (.ref r256Ref) (.ref r256Ref)) (.leaf one)))
+  /-- Shared expressions refer only to earlier ones. -/
+  refsOrdered : program.RefsOrdered
+  /-- The program has shared expressions. -/
+  exprs_pos : 0 < program.exprs.length
+  /-- `r^t`, `t < 512`, by the symbolic-power matcher. -/
+  powPw : program.powSym ⟨RealizedProgram.onePub one r, none⟩ RealizedProgram.powFuel (.ref pwRef) =
+    some (List.range 512)
+  /-- `r^256`. -/
+  pow256 : program.powSym ⟨RealizedProgram.onePub one r, none⟩ RealizedProgram.powFuel
+    (.ref r256Ref) = some [256]
+
+/-- **The signature equation's left side** of a program (`signature.equation`). -/
+abbrev FalconRandomPoint.lhs (program : RealizedProgram) [FalconRingPowers program]
+    [FalconRingSelect program] [FalconRingMember program] [FalconRandomPoint program] :
+    RealizedProgram.Expr :=
+  sigLhs (FalconRandomPoint.sigE program) (FalconRingMember.spec program)
+    (FalconRingMember.s2 program) (FalconRandomPoint.q program) (FalconRandomPoint.pw program)
+    (FalconRandomPoint.lam program) (FalconRandomPoint.rn program) (FalconRingMember.mOne program)
+
+/-- **The field facts of the signature equation at a random point** in a field interpretation:
+the membership's (`RingField` at the program's `−1`), the program's `512⁻¹` and `ψ⁻¹` decoding to
+the inverses of `512` and of the transform root `ψ`, which is a primitive `1024`-th root of unity,
+and `512 ≠ 0`. The native rings (characteristic `q`, `ψ = 10302`) and the carriers
+(characteristic `p`, `ψ = psiG`) each give them. -/
+class FalconRandomPointField (program : RealizedProgram) [FalconRingPowers program]
+    [FalconRingSelect program] [FalconRingMember program] [FalconRandomPoint program]
+    (F : RealizedProgram.FieldInterp) : Prop extends RingField F (FalconRingMember.mOne program) where
+  /-- The constant `512⁻¹`. -/
+  decode_nInv : F.decode (FalconRandomPoint.nInv program) = ((512 : ℕ) : F.K)⁻¹
+  /-- The constant `ψ⁻¹`. -/
+  decode_psiInv : F.decode (FalconRandomPoint.psiInv program) =
+    (F.decode (FalconRingMember.psi program))⁻¹
+  /-- `ψ` is a primitive `1024`-th root of unity. -/
+  psi_isPrimitiveRoot : IsPrimitiveRoot (F.decode (FalconRingMember.psi program)) (2 * 512)
+  /-- `512` is invertible. -/
+  n_ne_zero : ((512 : ℕ) : F.K) ≠ 0
+
+/-- **The program facts of a native Falcon ring outside the membership** (decided per program):
+the signature equation's at a random point (`FalconRandomPoint`) with the first vector
+`E = c − s1` (`sigE_eq`, at `signature.s1`), the native transform data (`consts`, `invConsts`:
+`−1 = 12288`, `ψ = 10302`, `512⁻¹ = 12265`, `ψ⁻¹ = 8974` in `F_q`); the field, sizes, types and
+kinds of `signature.s1` and the sizes of the equation's values. -/
+class FalconRingBase (program : RealizedProgram) [FalconRingPowers program] [FalconRingSelect program]
+    [FalconRingMember program] extends FalconRandomPoint program where
+  /-- `signature.s1`. -/
+  s1 : ℕ
+  /-- The transform root and `−1`. -/
+  consts : FalconRingMember.mOne program = 12288 ∧ FalconRingMember.psi program = 10302
+  /-- `512⁻¹` and `ψ⁻¹`. -/
+  invConsts : nInv = 12265 ∧ psiInv = 8974
+  /-- The first vector is `c − s1` (`12288 = −1`). -/
+  sigE_eq : sigE = .add (.leaf (FalconRingMember.chal program)) (.scale (.const 12288) (.leaf s1))
+  /-- `signature.s1` is of field `0`. -/
+  s1Field : program.valueField s1 = 0
   /-- The sizes of the values read. -/
-  sizes : (program.value 9).size = 512 ∧ (program.value 10).size = 512 ∧
-    (program.value 5).size = 512
-  /-- The program has the values read. -/
-  values_length : 10 < program.values.length
+  sizes : (program.value s1).size = 512 ∧ (program.value q).size = 511 ∧
+    (program.value pw).size = 512 ∧ (program.value lam).size = 512 ∧
+    (program.value rn).size = 1 ∧ (program.value zero1).size = 1
   /-- `s2` and `signature.s1` are prime-typed source values. -/
-  primeVals : ∀ v ∈ [9, 10], program.IsSourceValue v ∧ (program.value v).typeSource = .node ∧
+  primeVals : ∀ v ∈ [FalconRingMember.s2 program, s1], v < program.values.length ∧
+    program.IsSourceValue v ∧ (program.value v).typeSource = .node ∧
     (program.value v).type = .sub "GF(p^1)"
-  /-- `s2` and `s1` are committed. -/
-  privKinds : (program.value 9).kind = .priv ∧ (program.value 10).kind = .priv
+  /-- `s1` is committed. -/
+  s1Priv : (program.value s1).kind = .priv
 
 section Member
 
@@ -251,13 +371,6 @@ variable {program : RealizedProgram} [FalconRingPowers program] [FalconRingSelec
 
 set_option hygiene false in
 local notation "vIdx" => FalconRingSelect.idx program
-
-/-- **A public expression's leaf** reads its expression one level down. -/
-theorem evalE_leaf_pubExpr (e : program.Env I) {v f : ℕ} {E : RealizedProgram.Expr}
-    (hk : (program.value v).kind = .pub (.expr E)) (hf : program.valueField v = f) (i : ℕ) :
-    program.evalE (program.reader e) f (.leaf v) i =
-      program.evalE (program.read e program.values.length) f E i := by
-  rw [RealizedProgram.evalE_leaf, RealizedProgram.reader_of_pubExpr e hk, RealizedProgram.castElt_evalE hf]
 
 /-- The program has a value. -/
 theorem values_length_succ : ∃ n, program.values.length = n + 1 :=
@@ -581,8 +694,12 @@ noncomputable def ringEps (I : RealizedProgram.Interp) (j : ℕ) : NNReal :=
 `member.ring.gamma` (`RealizedProgram.probUniform_badAt_setChal_le`, Schwartz–Zippel). -/
 theorem ringEvent_bound : ∀ j, program.IsSourceChal j → ∀ e : program.Env I,
     Pr[c ← program.ChalVal I j : ringEvent j (e.setChal j c)] ≤ (ringEps I j : ENNReal) := by
-  intro j hj e
-  obtain rfl := (FalconRingMember.isSourceChal_iff (program := program) j).1 hj
+  intro j _ e
+  by_cases hj0 : j = 0
+  swap
+  · rw [QROM.probUniform_eq_zero fun _ h => hj0 h.1]
+    exact zero_le
+  subst hj0
   have hset : ∀ c, ringEvent 0 (e.setChal 0 c) ↔
       (fpEvent e).BadAt (RealizedProgram.castElt ((e.setChal 0 c).chal 0 0)) := fun c => by
     simp only [ringEvent, true_and]
@@ -620,28 +737,10 @@ theorem spec_eq_of_not_event {e : program.Env I} (hs : MemberPreds e)
 
 end Event
 
-/-! ## The transforms -/
-
-section Ntt
-
-variable {program : RealizedProgram} {I : RealizedProgram.Interp}
-
-/-- **A natural-order transform of `512` coordinates** at the root `ψ`, read at coordinate
-`k < 512` of its named operator. -/
-theorem evalE_apply_ntt (rd : program.Valuation I) (ψ : ℕ) (E : RealizedProgram.Expr) {k : ℕ} (hk : k < 512) :
-    program.evalE rd 0 (.apply (.ntt 512 ψ .natural) E) k =
-      RealizedProgram.Ops.nttNatural 512 ((I 0).decode ψ) (program.evalE rd 0 E) k := by
-  rw [RealizedProgram.evalE_apply]
-  simp only [RealizedProgram.NamedOp.apply, RealizedProgram.NamedOp.block, RealizedProgram.NamedOp.rows, RealizedProgram.NamedOp.cols, Nat.mod_eq_of_lt hk,
-    Nat.div_eq_of_lt hk, zero_mul, zero_add]
-
-end Ntt
-
 /-! ## The relation and the extractor -/
 
 section Relation
 
-open Emulated (PublicKey)
 open Native (CoreWit)
 
 variable {program : RealizedProgram} [FalconRingPowers program] [FalconRingSelect program]
@@ -699,76 +798,397 @@ theorem proj_s2 (e : program.Env I) :
 
 end Relation
 
-/-! ## The signature equation -/
+/-! ## The signature equation at a random point -/
 
 section Signature
 
 variable {program : RealizedProgram} [FalconRingPowers program] [FalconRingSelect program]
+  [FalconRingMember program] [FalconRandomPoint program] {I : RealizedProgram.Interp}
+
+open Polynomial RealizedProgram.Ops
+
+/-- **The signature equation's first vector** `E` read in field `0`. -/
+def eOf (e : program.Env I) (i : ℕ) : (I 0).K :=
+  program.evalE (program.reader e) 0 (FalconRandomPoint.sigE program) i
+
+/-- **`signature.Q`**: the high half of `h · s2` by `X^512 + 1`. -/
+def qOf (e : program.Env I) (i : ℕ) : (I 0).K :=
+  program.evalE (program.reader e) 0 (.leaf (FalconRandomPoint.q program)) i
+
+/-- **The challenge `r`** (`signature.r`) read in field `0`. -/
+def rOf (e : program.Env I) : (I 0).K :=
+  RealizedProgram.castElt (e.chal (FalconRandomPoint.rChal program) 0)
+
+/-- **The signature equation's polynomial** over the field: `E − H · s2 + (X^512 + 1) Q`, `H` the
+polynomial whose natural-order transform at `ψ` is the committed spectrum
+(`Ops.inverseNttNatural`). -/
+noncomputable def sigPoly (e : program.Env I) : (I 0).K[X] :=
+  polyOf 512 (eOf e) -
+    polyOf 512 (inverseNttNatural 512 ((I 0).decode (FalconRingMember.psi program)) (specOf e)) *
+      polyOf 512 (s2Of e) +
+    (Polynomial.X ^ 512 + 1 : (I 0).K[X]) * polyOf 511 (qOf e)
+
+theorem sigPoly_natDegree (e : program.Env I) : (sigPoly e).natDegree ≤ 1022 := by
+  unfold sigPoly
+  refine (natDegree_add_le _ _).trans (max_le ((natDegree_sub_le _ _).trans (max_le ?_ ?_)) ?_)
+  · exact (Polynomial.ofFn_natDegree_lt (n := 512) (by norm_num) _).le.trans (by norm_num)
+  · exact natDegree_polyOf_mul_le (n := 512) (by norm_num) _ _
+  · exact natDegree_quotient_le (n := 512) (by norm_num) (qOf e)
+
+/-- **The signature equation's event**: `r` is a root of the signature equation's polynomial, which
+is nonzero (degree at most `1022`). -/
+noncomputable def sigEvent (e : program.Env I) : ChallengeEvent (I 0).K :=
+  ⟨sigPoly e, 1022, sigPoly_natDegree e⟩
+
+theorem sigEvent_poly (e : program.Env I) : (sigEvent e).poly = sigPoly e := rfl
+
+/-- **A committed value reads alike** in two environments of one assignment. -/
+theorem leaf_priv_congr {e e' : program.Env I} {v : ℕ} (hk : (program.value v).kind = .priv)
+    (ha : e.asg = e'.asg) (t : ℕ) :
+    program.evalE (program.reader e) 0 (.leaf v) t = program.evalE (program.reader e') 0 (.leaf v) t := by
+  rw [RealizedProgram.evalE_leaf, RealizedProgram.evalE_leaf, RealizedProgram.reader_of_priv e hk,
+    RealizedProgram.reader_of_priv e' hk, ha]
+
+/-- **The signature equation's polynomial reads the first vector and the assignment**: two
+environments of one assignment whose first vectors read alike below `512` have one polynomial
+(`Q`, `s2` committed, the spectrum `specOf_congr`). -/
+theorem sigPoly_congr {e e' : program.Env I} (hE : ∀ t < 512, eOf e t = eOf e' t)
+    (ha : e.asg = e'.asg) : sigPoly e = sigPoly e' := by
+  have h2 : qOf e = qOf e' :=
+    funext (leaf_priv_congr (FalconRandomPoint.qPriv (program := program)) ha)
+  have h3 : s2Of e = s2Of e' :=
+    funext (leaf_priv_congr (FalconRingMember.privKinds (program := program)).2.2 ha)
+  unfold sigPoly
+  rw [polyOf_congr hE, h2, h3, specOf_congr ha]
+
+theorem sigEvent_congr {e e' : program.Env I} (hE : ∀ t < 512, eOf e t = eOf e' t)
+    (ha : e.asg = e'.asg) : sigEvent e = sigEvent e' := by
+  rw [sigEvent, sigEvent, ChallengeEvent.mk.injEq]
+  exact ⟨sigPoly_congr hE ha, rfl⟩
+
+variable [FalconRandomPointField program (I 0)]
+
+/-- **The powers of `r`**, one level down: `r^t`. -/
+theorem evalE_pwRef (e : program.Env I) {t : ℕ} (ht : t < 512) :
+    program.evalE (program.read e program.values.length) 0
+      (.ref (FalconRandomPoint.pwRef program)) t = rOf e ^ t :=
+  (FalconRandomPoint.rPow (program := program)).evalE_range (I := I)
+    (RingField.decode_one (negOne := FalconRingMember.mOne program))
+    FalconRandomPoint.refsOrdered FalconRandomPoint.exprs_pos e FalconRandomPoint.powPw ht
+
+/-- **The powers of `r`** (`signature.equation.public0`): `r^t`. -/
+theorem evalE_pw (e : program.Env I) {t : ℕ} (ht : t < 512) :
+    program.evalE (program.reader e) 0 (.leaf (FalconRandomPoint.pw program)) t = rOf e ^ t := by
+  rw [RealizedProgram.evalE_leaf_pubExpr e FalconRandomPoint.pwKind
+    ((FalconRandomPoint.sigFields (program := program)) _ (by simp)), evalE_pwRef e ht]
+
+/-- **`r^512 + 1`** (`signature.equation.public1`). -/
+theorem evalE_rn (e : program.Env I) :
+    program.evalE (program.reader e) 0 (.leaf (FalconRandomPoint.rn program)) 0 =
+      rOf e ^ 512 + 1 := by
+  rw [RealizedProgram.evalE_leaf_pubExpr e FalconRandomPoint.rnKind
+    ((FalconRandomPoint.sigFields (program := program)) _ (by simp)),
+    (FalconRandomPoint.rPow (program := program)).evalE_sq_add_one (I := I)
+      (RingField.decode_one (negOne := FalconRingMember.mOne program))
+      FalconRandomPoint.refsOrdered FalconRandomPoint.exprs_pos e FalconRandomPoint.pow256]
+  rfl
+
+/-- **The interpolation weights** (`signature.lambda`): `512⁻¹ Ntt_{ψ⁻¹}(1, r, …, r^511)`. -/
+theorem evalE_lam (e : program.Env I) {t : ℕ} (ht : t < 512) :
+    program.evalE (program.reader e) 0 (.leaf (FalconRandomPoint.lam program)) t =
+      ((512 : ℕ) : (I 0).K)⁻¹ *
+        nttNatural 512 ((I 0).decode (FalconRingMember.psi program))⁻¹ (fun s => rOf e ^ s) t := by
+  rw [RealizedProgram.evalE_leaf_pubExpr e FalconRandomPoint.lamKind
+    ((FalconRandomPoint.sigFields (program := program)) _ (by simp)),
+    (FalconRandomPoint.rPow (program := program)).evalE_lambda_natural (I := I)
+      (RingField.decode_one (negOne := FalconRingMember.mOne program))
+      FalconRandomPoint.refsOrdered FalconRandomPoint.exprs_pos e FalconRandomPoint.powPw _ _ ht,
+    FalconRandomPointField.decode_nInv, FalconRandomPointField.decode_psiInv]
+  rfl
+
+/-- The zero constant (one coordinate) reads `0` in field `0`. -/
+theorem evalE_zero1 (e : program.Env I) :
+    program.evalE (program.reader e) 0 (.leaf (FalconRandomPoint.zero1 program)) 0 = 0 :=
+  RealizedProgram.evalE_zeroConst e (FalconRandomPoint.const0 (program := program)).1
+    ((FalconRandomPoint.sigFields (program := program)) _ (by simp))
+    (FalconRandomPoint.const0 (program := program)).2
+    (RingField.decode_zero (negOne := FalconRingMember.mOne program))
+
+theorem exprLen_sigLhs : program.exprLen (FalconRandomPoint.lhs program) = 1 := by
+  rw [FalconRandomPoint.lhs, sigLhs, RealizedProgram.exprLen_add, RealizedProgram.exprLen_add,
+    RealizedProgram.exprLen_apply, RealizedProgram.exprLen_mul, FalconRandomPoint.sigELen,
+    RealizedProgram.exprLen_leaf, (FalconRingMember.sizes (program := program)).2.2.2.1]
+  simp [RealizedProgram.NamedOp.rows, RealizedProgram.NamedOp.cols]
+
+/-- **The signature equation's left side** (`signature.equation`, one coordinate) is the
+signature equation's polynomial at `r`. -/
+theorem evalE_sigLhs (e : program.Env I) :
+    program.evalE (program.reader e) 0 (FalconRandomPoint.lhs program) 0 =
+      (sigPoly e).eval (rOf e) := by
+  have hA : ∀ t : Fin 512,
+      program.evalE (program.reader e) 0 (FalconRandomPoint.sigE program) t *
+      program.evalE (program.reader e) 0 (.leaf (FalconRandomPoint.pw program)) t =
+      eOf e t * rOf e ^ (t : ℕ) := fun t => by
+    rw [evalE_pw e t.isLt]; rfl
+  have hB : ∀ t : Fin 512,
+      program.evalE (program.reader e) 0 (.leaf (FalconRingMember.spec program)) t *
+      program.evalE (program.reader e) 0 (.leaf (FalconRandomPoint.lam program)) t =
+      specOf e t * (((512 : ℕ) : (I 0).K)⁻¹ *
+        nttNatural 512 ((I 0).decode (FalconRingMember.psi program))⁻¹ (fun s => rOf e ^ s) t) :=
+    fun t => by rw [evalE_lam e t.isLt]; rfl
+  have hC : ∀ t : Fin 512,
+      program.evalE (program.reader e) 0 (.leaf (FalconRingMember.s2 program)) t *
+      program.evalE (program.reader e) 0 (.leaf (FalconRandomPoint.pw program)) t =
+      s2Of e t * rOf e ^ (t : ℕ) := fun t => by
+    rw [evalE_pw e t.isLt]; rfl
+  have hQ : ∀ t : Fin 511,
+      program.evalE (program.reader e) 0 (.leaf (FalconRandomPoint.q program)) t *
+      program.evalE (program.reader e) 0 (.leaf (FalconRandomPoint.pw program))
+        (RealizedProgram.IndexMap.entry [(0, 1, 511)] t) = qOf e t * rOf e ^ (t : ℕ) := fun t => by
+    rw [RealizedProgram.IndexMap.entry_step_one t.isLt, Nat.zero_add, evalE_pw e (by omega)]; rfl
+  unfold sigPoly
+  rw [eval_add, eval_sub, eval_mul, eval_mul, eval_inverseNttNatural, polyOf_eval, polyOf_eval,
+    polyOf_eval, eval_add, eval_pow, eval_X, eval_one, ← Fin.sum_univ_eq_sum_range,
+    ← Fin.sum_univ_eq_sum_range, ← Fin.sum_univ_eq_sum_range]
+  simp only [FalconRandomPoint.lhs, sigLhs, RealizedProgram.evalE_add,
+    RealizedProgram.evalE_scale_const, RingField.decode_negOne, RealizedProgram.evalE_mul,
+    RealizedProgram.evalE_apply_sum, zero_mul, zero_add, RealizedProgram.evalE_reindex, evalE_rn,
+    hA, hB, hC, hQ]
+  ring
+
+/-- **The signature equation holds exactly where its polynomial vanishes at `r`**
+(`signature.equation`, one coordinate: its left side is the polynomial at `r`, its right side the
+zero constant). -/
+theorem holdsAt_sig_iff (e : program.Env I) :
+    program.HoldsAt e (program.predicate (FalconRandomPoint.sigPred program)).body ↔
+      (sigPoly e).eval (rOf e) = 0 := by
+  obtain ⟨t, hb⟩ := FalconRandomPoint.sig (program := program)
+  rw [RealizedProgram.HoldsAt, hb, RealizedProgram.holdsWith_equal_iff_of_domainField
+    (FalconRingMember.domainField0 (program := program))]
+  show (∀ i < program.exprLen (FalconRandomPoint.lhs program),
+      program.evalE (program.reader e) 0 (FalconRandomPoint.lhs program) i =
+        program.evalE (program.reader e) 0 (.leaf (FalconRandomPoint.zero1 program)) i) ↔ _
+  rw [exprLen_sigLhs]
+  constructor
+  · intro h
+    have hx := h 0 Nat.one_pos
+    rwa [evalE_zero1, evalE_sigLhs] at hx
+  · intro h i hi
+    obtain rfl : i = 0 := by omega
+    rwa [evalE_zero1, evalE_sigLhs]
+
+/-- **The signature equation's polynomial vanishes at `r`** where the source program holds. -/
+theorem sigPoly_eval {e : program.Env I} (hs : program.SourceSatAt e) :
+    (sigPoly e).eval (rOf e) = 0 :=
+  (holdsAt_sig_iff e).1 (hs.preds _
+    (RealizedProgram.predicate_mem (FalconRandomPoint.inSourceSig (program := program)).1)
+    (FalconRandomPoint.inSourceSig (program := program)).2)
+
+/-- **The signature equation's polynomial is `0`** where the source program holds and `r` is not a
+root of it while it is nonzero. -/
+theorem sigPoly_eq_zero {e : program.Env I} (hs : program.SourceSatAt e)
+    (hev : ¬ (sigEvent e).BadAt (rOf e)) : sigPoly e = 0 := by
+  by_contra hne
+  exact hev ⟨by rw [sigEvent_poly]; exact hne, by rw [sigEvent_poly]; exact sigPoly_eval hs⟩
+
+/-- **The signature equation at the roots** (`signature.equation`): where the source program holds
+and `r` is not a root of the signature equation's nonzero polynomial, `Ntt(E)_k = spectrum_k ·
+Ntt(s2)_k` at every frequency `k < 512`: the polynomial is `0`, and at the root `ψ^(2k+1)` of
+`X^512 + 1` it reads the transforms. -/
+theorem sig_spectral {e : program.Env I} (hs : program.SourceSatAt e)
+    (hev : ¬ (sigEvent e).BadAt (rOf e)) {k : ℕ} (hk : k < 512) :
+    nttNatural 512 ((I 0).decode (FalconRingMember.psi program)) (eOf e) k =
+      specOf e k * nttNatural 512 ((I 0).decode (FalconRingMember.psi program)) (s2Of e) k := by
+  have hz := sigPoly_eq_zero hs hev
+  have hψ := FalconRandomPointField.psi_isPrimitiveRoot (program := program) (F := I 0)
+  have hψn : ((I 0).decode (FalconRingMember.psi program)) ^ 512 = -1 :=
+    DFT.IsPrimitiveRoot.pow_half_eq_neg_one hψ (by decide)
+  have hn0 := FalconRandomPointField.n_ne_zero (program := program) (F := I 0)
+  have h := congrArg (fun P => P.eval (((I 0).decode (FalconRingMember.psi program)) ^ (2 * k + 1))) hz
+  simp only [eval_zero] at h
+  rw [sigPoly, eval_add, eval_sub, eval_mul, eval_mul, eval_X_pow_add_one_root hψn k, zero_mul,
+    add_zero, polyOf_eval_root_natural _ _ _ hk, polyOf_eval_root_natural _ _ _ hk,
+    polyOf_eval_root_natural _ _ _ hk, nttNatural_inverseNttNatural hψ hn0 _ hk] at h
+  exact sub_eq_zero.1 h
+
+/-- **The signature equation's coefficients** where the source program holds and `r` is not a root
+of the signature equation's nonzero polynomial: the polynomial is `0`, so (`Ops.polyOf_mul_polyOf`)
+`polyOf(E − H · s2 mod X^512 + 1) + (X^512 + 1)(Q − high(H · s2)) = 0`, whose low part
+vanishes (`Ops.polyOf_eq_zero_of_add_mul`): `E_t` is the negacyclic product's coefficient `t`. -/
+theorem eOf_eq_negacyclic {e : program.Env I} (hs : program.SourceSatAt e)
+    (hev : ¬ (sigEvent e).BadAt (rOf e)) {t : ℕ} (ht : t < 512) :
+    eOf e t = negacyclic 512
+      (inverseNttNatural 512 ((I 0).decode (FalconRingMember.psi program)) (specOf e)) (s2Of e) t := by
+  have hz := sigPoly_eq_zero hs hev
+  set H := inverseNttNatural 512 ((I 0).decode (FalconRingMember.psi program)) (specOf e)
+  have hmul := polyOf_mul_polyOf (K := (I 0).K) (n := 512) (by norm_num) H (s2Of e)
+  rw [show (512 : ℕ) - 1 = 511 from rfl] at hmul
+  have h0 : polyOf 512 (eOf e - negacyclic 512 H (s2Of e)) +
+      (Polynomial.X ^ 512 + 1 : (I 0).K[X]) * (polyOf 511 (qOf e) - polyOf 511 (high 512 H (s2Of e))) =
+      0 := by
+    rw [polyOf_sub]
+    unfold sigPoly at hz
+    linear_combination hz + hmul
+  have h1 := eq_zero_of_polyOf_eq_zero (polyOf_eq_zero_of_add_mul (n := 512) (by norm_num) h0).1 ht
+  rw [Pi.sub_apply] at h1
+  exact sub_eq_zero.1 h1
+
+end Signature
+
+/-! ## The native ring's signature equation -/
+
+section NativeSignature
+
+variable {program : RealizedProgram} [FalconRingPowers program] [FalconRingSelect program]
   [FalconRingMember program] [FalconRingBase program] {I : RealizedProgram.Interp}
 
+open Polynomial RealizedProgram.Ops
 
-/-- **`signature.s1`** (value `10`). -/
+/-- **`signature.s1`**. -/
 def s1Of (e : program.Env I) (i : ℕ) : (I 0).K :=
-  program.evalE (program.reader e) 0 (.leaf 10) i
-
+  program.evalE (program.reader e) 0 (.leaf (FalconRingBase.s1 program)) i
 
 variable [AField (I 0)]
 
 theorem decode_q1 : (I 0).decode 12288 = -1 := RingField.decode_negOne
 
-/-- **The signature equation's left side** at frequency `k < 512`:
-`Ntt(c − s1)_k − spectrum_k · Ntt(s2)_k`. -/
-theorem evalE_sigLhs (e : program.Env I) {k : ℕ} (hk : k < 512) :
-    program.evalE (program.reader e) 0 sigLhs k =
-      RealizedProgram.Ops.nttNatural 512 ((I 0).decode 10302) (fun i => chalEntry e.stmt i - s1Of e i) k -
-        specOf e k * RealizedProgram.Ops.nttNatural 512 ((I 0).decode 10302) (s2Of e) k := by
-  rw [sigLhs, RealizedProgram.evalE_add, evalE_apply_ntt _ 10302 _ hk, RealizedProgram.evalE_scale_const, decode_q1,
-    RealizedProgram.evalE_mul, RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex,
-    RealizedProgram.evalE_reindex, RealizedProgram.IndexMap.entry_step_one hk, Nat.zero_add,
-    RealizedProgram.IndexMap.entry_step_one hk, Nat.zero_add, evalE_apply_ntt _ 10302 _ hk]
-  have hc : RealizedProgram.Ops.nttNatural 512 ((I 0).decode 10302)
-      (program.evalE (program.reader e) 0 (.add (.leaf 5) (.scale (.const 12288) (.leaf 10)))) k =
-      RealizedProgram.Ops.nttNatural 512 ((I 0).decode 10302) (fun i => chalEntry e.stmt i - s1Of e i) k := by
-    refine RealizedProgram.NamedOp.nttNatural_congr (fun i _ => ?_) k
-    rw [RealizedProgram.evalE_add, RealizedProgram.evalE_scale_const, decode_q1, RealizedProgram.evalE_leaf,
-      RealizedProgram.reader_of_opaque_nil e (FalconRingBase.chalKind (program := program))]
-    unfold chalEntry s1Of
-    rw [(FalconRingBase.ids (program := program)).2.2.2.2.2.2.1]
-    ring
-  rw [hc]
-  unfold specOf s2Of
-  rw [(FalconRingBase.ids (program := program)).2.1,
-    (FalconRingBase.ids (program := program)).2.2.2.2.2.2.2]
+/-- **A native ring's field facts at its constant `−1`** (`12288`). -/
+theorem ringField_base : RingField (I 0) (FalconRingMember.mOne program) := by
+  rw [(FalconRingBase.consts (program := program)).1]
+  infer_instance
+
+/-- `512⁻¹ = 12265` and `ψ⁻¹ = 8974` in a field of characteristic `q`
+(`Ops.natCast_eq_inv_of_mul_mod`, `RealizedProgram.decode_eq_inv_of_mul_mod`). -/
+theorem decode_nInv : (I 0).decode 12265 = ((512 : ℕ) : (I 0).K)⁻¹ := by
+  rw [AField.decode_lt _ (by norm_num)]
+  exact RealizedProgram.Ops.natCast_eq_inv_of_mul_mod 12289 (by norm_num)
+
+theorem decode_psiInv : (I 0).decode 8974 = ((I 0).decode 10302)⁻¹ :=
+  RealizedProgram.decode_eq_inv_of_mul_mod 12289 (AField.decode_lt _ (by norm_num))
+    (AField.decode_lt _ (by norm_num)) (by norm_num)
+
+/-- `ψ = 10302` decodes to the transform root. -/
+theorem decode_psi' : (I 0).decode 10302 = Native.psiF (I 0).K := by
+  rw [AField.decode_lt _ (by norm_num)]
+  rfl
+
+/-- **The signature equation's field facts** in a native ring's field (`FalconRandomPointField`):
+`−1 = 12288`, `512⁻¹ = 12265`, `ψ⁻¹ = 8974` at the primitive `1024`-th root `ψ = 10302`. -/
+instance instRandomPointFieldNative : FalconRandomPointField program (I 0) where
+  toRingField := ringField_base
+  decode_nInv := by rw [(FalconRingBase.invConsts (program := program)).1]; exact decode_nInv
+  decode_psiInv := by
+    rw [(FalconRingBase.invConsts (program := program)).2,
+      (FalconRingBase.consts (program := program)).2]
+    exact decode_psiInv
+  psi_isPrimitiveRoot := by
+    rw [(FalconRingBase.consts (program := program)).2, decode_psi']
+    exact Native.isPrimitiveRoot_psiF (I 0).K
+  n_ne_zero := Native.natCast_n_ne_zero (I 0).K
+
+/-- **A native ring's first vector** is `c − s1`. -/
+theorem eOf_eq (e : program.Env I) (t : ℕ) : eOf e t = chalEntry e.stmt t - s1Of e t := by
+  have hc : program.evalE (program.reader e) 0 (.leaf (FalconRingMember.chal program)) t =
+      chalEntry e.stmt t := by
+    rw [RealizedProgram.evalE_leaf, RealizedProgram.reader_of_opaque_nil e
+      (FalconRingMember.chalKind (program := program))]
+    rfl
+  unfold eOf
+  rw [FalconRingBase.sigE_eq, RealizedProgram.evalE_add, RealizedProgram.evalE_scale_const,
+    decode_q1, hc]
+  unfold s1Of
   ring
 
-theorem exprLen_sigLhs : program.exprLen sigLhs = 512 := by
-  rw [sigLhs, RealizedProgram.exprLen_add, RealizedProgram.exprLen_apply, RealizedProgram.exprLen_add, RealizedProgram.exprLen_leaf,
-    (FalconRingBase.sizes (program := program)).2.2]
-  simp [RealizedProgram.NamedOp.rows, RealizedProgram.NamedOp.cols]
+omit [AField (I 0)] in
+/-- **A native ring's first vector reads the statement and the assignment.** -/
+theorem eOf_congr {e e' : program.Env I} (hs : e.stmt = e'.stmt) (ha : e.asg = e'.asg) :
+    ∀ t < 512, eOf e t = eOf e' t := fun t _ => by
+  unfold eOf
+  rw [FalconRingBase.sigE_eq]
+  simp only [RealizedProgram.evalE_add, RealizedProgram.evalE_scale_const,
+    RealizedProgram.evalE_leaf,
+    RealizedProgram.reader_of_opaque_nil e (FalconRingMember.chalKind (program := program)),
+    RealizedProgram.reader_of_opaque_nil e' (FalconRingMember.chalKind (program := program)),
+    RealizedProgram.reader_of_priv e (FalconRingBase.s1Priv (program := program)),
+    RealizedProgram.reader_of_priv e' (FalconRingBase.s1Priv (program := program)), hs, ha]
 
-/-- The zero constant `2` reads `0` in field `0`. -/
-theorem evalE_leaf2 (e : program.Env I) {k : ℕ} (hk : k < 512) :
-    program.evalE (program.reader e) 0 (.leaf 2) k = 0 := by
-  obtain ⟨c2, e2⟩ := FalconRingBase.const2 (program := program)
-  rw [RealizedProgram.evalE_leaf_of_isConstant e c2, RealizedProgram.constRead_of_valueField
-    ((FalconRingBase.fields (program := program)) 2 (by simp)), e2, List.getD_eq_getElem?_getD,
-    List.getElem?_replicate, if_pos hk, Option.getD_some, AField.decode_lt _ (by norm_num),
-    Nat.cast_zero]
+/-- **The signature equation** (`signature.equation`): where the source program holds and `r` is
+not a root of the signature equation's nonzero polynomial, `Ntt(c − s1)_k = spectrum_k ·
+Ntt(s2)_k` at every frequency `k < 512` (`sig_spectral` at `E = c − s1`, `ψ = 10302`). -/
+theorem sig_eq {e : program.Env I} (hs : program.SourceSatAt e)
+    (hev : ¬ (sigEvent e).BadAt (rOf e)) {k : ℕ} (hk : k < 512) :
+    nttNatural 512 ((I 0).decode 10302) (fun i => chalEntry e.stmt i - s1Of e i) k =
+      specOf e k * nttNatural 512 ((I 0).decode 10302) (s2Of e) k := by
+  have h := sig_spectral hs hev hk
+  rw [(FalconRingBase.consts (program := program)).2, show eOf e = fun i => chalEntry e.stmt i - s1Of e i
+    from funext (eOf_eq e)] at h
+  exact h
 
-/-- **The signature equation** (`signature.equation`): where the source program holds,
-`Ntt(c − s1)_k = spectrum_k · Ntt(s2)_k` at every frequency `k < 512`. -/
-theorem sig_eq {e : program.Env I} (hs : program.SourceSatAt e) {k : ℕ} (hk : k < 512) :
-    RealizedProgram.Ops.nttNatural 512 ((I 0).decode 10302) (fun i => chalEntry e.stmt i - s1Of e i) k =
-      specOf e k * RealizedProgram.Ops.nttNatural 512 ((I 0).decode 10302) (s2Of e) k := by
-  obtain ⟨t, hb⟩ := FalconRingBase.sig (program := program)
-  have h := hs.preds _ (RealizedProgram.predicate_mem (FalconRingBase.inSource1 (program := program)).1)
-    (FalconRingBase.inSource1 (program := program)).2
-  rw [hb] at h
-  have hx := holdsAt_equal0 h k (by rw [exprLen_sigLhs]; exact hk)
-  rw [evalE_leaf2 e hk, evalE_sigLhs e hk] at hx
-  exact sub_eq_zero.1 hx
+end NativeSignature
 
-end Signature
+/-! ## The native ring's events -/
+
+section NativeEvent
+
+variable {program : RealizedProgram} [FalconRingPowers program] [FalconRingSelect program]
+  [FalconRingMember program] [FalconRingBase program] {I : RealizedProgram.Interp}
+
+variable [AField (I 0)]
+
+/-- **The native ring's events**: the membership's at `member.ring.gamma` (challenge `0`) and the
+signature equation's at `signature.r`. -/
+def nativeEvent (j : ℕ) (e : program.Env I) : Prop :=
+  ringEvent j e ∨ (j = FalconRandomPoint.rChal program ∧ (sigEvent e).BadAt (rOf e))
+
+omit [AField (I 0)] in
+/-- **The challenge-use rule** (`RealizedProgram.ChallengeUseAt`): each event reads the statement,
+the committed assignment and its challenge. -/
+theorem nativeEvent_use : RealizedProgram.ChallengeUseAt program I nativeEvent := by
+  intro j e e' h
+  unfold nativeEvent
+  rw [ringEvent_use j h]
+  by_cases hj : j = FalconRandomPoint.rChal program
+  · subst hj
+    have hr : rOf e = rOf e' := by
+      unfold rOf
+      rw [h.chal _ (Or.inr ⟨rfl, le_refl _⟩)]
+    rw [sigEvent_congr (eOf_congr h.stmt h.asg) h.asg, hr]
+  · simp [hj]
+
+/-- **The events' errors**: `511/|F|` at `member.ring.gamma`, `1022/|F|` at `signature.r`, `0`
+elsewhere. -/
+noncomputable def nativeEps (I : RealizedProgram.Interp) (j : ℕ) : NNReal :=
+  if j = 0 then 511 / Fintype.card (I 0).K
+  else if j = FalconRandomPoint.rChal program then 1022 / Fintype.card (I 0).K else 0
+
+/-- **The events' probabilities** (`RealizedProgram.rbr_of_events`' `hbound`): the membership's
+(`ringEvent_bound`) and the signature equation's, at most `1022/|F|` at `signature.r`
+(`RealizedProgram.probUniform_badAt_setChal_le`, Schwartz–Zippel). -/
+theorem nativeEvent_bound : ∀ j, program.IsSourceChal j → ∀ e : program.Env I,
+    Pr[c ← program.ChalVal I j : nativeEvent j (e.setChal j c)] ≤
+      (nativeEps (program := program) I j : ENNReal) := by
+  intro j hj e
+  have hne := FalconRandomPoint.rChal_ne (program := program)
+  rcases (FalconRandomPoint.isSourceChal_iff (program := program) j).1 hj with rfl | rfl
+  · have hset : ∀ c, nativeEvent 0 (e.setChal 0 c) ↔ ringEvent 0 (e.setChal 0 c) := fun c => by
+      simp [nativeEvent, Ne.symm hne]
+    simp only [hset]
+    refine (ringEvent_bound 0 hj e).trans ?_
+    simp [ringEps, nativeEps]
+  · have hset : ∀ c, nativeEvent (FalconRandomPoint.rChal program) (e.setChal _ c) ↔
+        (sigEvent e).BadAt (RealizedProgram.castElt
+          ((e.setChal (FalconRandomPoint.rChal program) c).chal (FalconRandomPoint.rChal program) 0)) :=
+      fun c => by
+      simp only [nativeEvent, ringEvent, hne, false_and, true_and, false_or]
+      rw [sigEvent_congr (e := e.setChal _ c) (e' := e) (eOf_congr rfl rfl) rfl]
+      rfl
+    simp only [hset]
+    obtain ⟨hsz, hsm⟩ := FalconRandomPoint.chalR (program := program)
+    refine (RealizedProgram.probUniform_badAt_setChal_le hsz hsm
+      (FalconRandomPoint.rPow (program := program)).chalField (sigEvent e) e).trans ?_
+    simp [nativeEps, sigEvent, hne]
+
+end NativeEvent
 
 /-! ## The relation and the extractor -/
 
@@ -780,7 +1200,6 @@ theorem castElt_mem_node_of_eq {I : RealizedProgram.Interp} {a b : ℕ} (h : a =
 
 section Extract
 
-open Emulated (PublicKey)
 open Native (CoreWit keyRecord psiF RingAlgebra SpectralRows)
 open Falcon512.Native (Committed AlgRequests)
 open AField (φq φq_apply coord0_φq_mul)
@@ -788,38 +1207,32 @@ open AField (φq φq_apply coord0_φq_mul)
 variable {program : RealizedProgram} [FalconRingPowers program] [FalconRingSelect program]
   [FalconRingMember program] [FalconRingBase program] {I : RealizedProgram.Interp} [AField (I 0)]
 
-/-- **A native ring's field facts at its constant `−1`** (`12288`). -/
-theorem ringField_base : RingField (I 0) (FalconRingMember.mOne program) := by
-  rw [(FalconRingBase.ids (program := program)).2.2.1]
-  infer_instance
-
 attribute [local instance] ringField_base
 
 /-- **A prime-typed source value is in the prime subfield** where the source program holds. -/
-theorem prime_of_mem {e : program.Env I} (hs : program.SourceSatAt e) {v : ℕ} (hv : v ∈ [9, 10])
+theorem prime_of_mem {e : program.Env I} (hs : program.SourceSatAt e) {v : ℕ}
+    (hv : v ∈ [FalconRingMember.s2 program, FalconRingBase.s1 program])
     {j : ℕ} (hj : j < 512) :
     program.evalE (program.reader e) 0 (.leaf v) j ∈ (I 0).node "GF(p^1)" := by
-  obtain ⟨hsrc, hts, hty⟩ := FalconRingBase.primeVals (program := program) v hv
+  obtain ⟨hvl, hsrc, hts, hty⟩ := FalconRingBase.primeVals (program := program) v hv
   have hsz : (program.value v).size = 512 := by
     rcases List.mem_pair.1 hv with rfl | rfl
+    · exact (FalconRingMember.sizes (program := program)).2.2.2.2
     · exact (FalconRingBase.sizes (program := program)).1
-    · exact (FalconRingBase.sizes (program := program)).2.1
-  have hvl : v < program.values.length := by
-    have := FalconRingBase.values_length (program := program)
-    rcases List.mem_pair.1 hv with rfl | rfl <;> omega
+  have hf : program.valueField v = 0 := by
+    rcases List.mem_pair.1 hv with rfl | rfl
+    · exact (FalconRingMember.fields (program := program)) _ (by simp)
+    · exact FalconRingBase.s1Field (program := program)
   have hmem := hs.types v hvl hsrc hts j (by rw [hsz]; exact hj)
   rw [hty] at hmem
-  exact castElt_mem_node_of_eq ((FalconRingBase.fields (program := program)) v (by
-    rcases List.mem_pair.1 hv with rfl | rfl <;> simp)) hmem
+  exact castElt_mem_node_of_eq hf hmem
 
 theorem prime_s2 {e : program.Env I} (hs : program.SourceSatAt e) (j : Fin falcon512.n) :
     s2Of e j ∈ (I 0).node "GF(p^1)" := by
-  unfold s2Of
-  rw [(FalconRingBase.ids (program := program)).2.2.2.2.2.2.2]
-  exact prime_of_mem hs (v := 9) (by simp) j.isLt
+  exact prime_of_mem hs (v := FalconRingMember.s2 program) (by simp) j.isLt
 
 theorem prime_s1 {e : program.Env I} (hs : program.SourceSatAt e) (j : Fin falcon512.n) :
-    s1Of e j ∈ (I 0).node "GF(p^1)" := prime_of_mem hs (v := 10) (by simp) j.isLt
+    s1Of e j ∈ (I 0).node "GF(p^1)" := prime_of_mem hs (v := FalconRingBase.s1 program) (by simp) j.isLt
 
 /-- **The coefficients of a ring key** are the ring's entries read as naturals. -/
 theorem keyCoeffs_ringKey (x : program.Valuation I) (r : ℕ) (j : Fin falcon512.n) :
@@ -889,7 +1302,8 @@ theorem nttNatural_eq_negSpectrum (x : ℕ → (I 0).K) (k : Fin falcon512.n) :
 projection onto the prime field is the ring's algebra at the signer's key (`RingAlgebra` at
 `ringKey`), and `Native.ringAlgebra_sound` gives the relation. -/
 theorem mem_rel_of_source (hN : NormSound (program := program) (I := I)) {e : program.Env I}
-    (hs : program.SourceSatAt e) (hev : ¬ ringEvent 0 e) :
+    (hs : program.SourceSatAt e) (hev : ¬ nativeEvent 0 e)
+    (hev1 : ¬ nativeEvent (FalconRandomPoint.rChal program) e) :
     (e.stmt, proj e.stmt e.asg) ∈ rel := by
   obtain ⟨alg, hs1, hnorm, henc, hreq⟩ := hN e hs
   set pk := ringKey e.stmt (idxOf e) with hpk
@@ -902,8 +1316,8 @@ theorem mem_rel_of_source (hN : NormSound (program := program) (I := I)) {e : pr
     apply DFT.negSpectrum_injective hψ hn0
     rw [DFT.negSpectrum_negacyclicConvCoeff (Native.psiF_pow _)]
     funext k
-    have h := sig_eq hs k.isLt
-    rw [spec_eq_of_not_event (memberPreds_of_source hs) hev k, keySpec, (FalconRingBase.ids (program := program)).2.2.2.1,
+    have h := sig_eq hs (fun hb => hev1 (Or.inr ⟨rfl, hb⟩)) k.isLt
+    rw [spec_eq_of_not_event (memberPreds_of_source hs) (fun hb => hev (Or.inl hb)) k, keySpec, (FalconRingBase.consts (program := program)).2,
       nttNatural_eq_negSpectrum,
       nttNatural_eq_negSpectrum, nttNatural_eq_negSpectrum] at h
     exact h
@@ -953,23 +1367,25 @@ section Rbr
 variable {program : RealizedProgram} [FalconRingPowers program] [FalconRingSelect program]
   [FalconRingMember program] [FalconRingBase program] {I : RealizedProgram.Interp} [AField (I 0)]
 
-/-- **The relation from the source program without the event** (`RealizedProgram.rbr_of_events`'
+/-- **The relation from the source program without the events** (`RealizedProgram.rbr_of_events`'
 `hsound`), given the norm's obligation. -/
 theorem sound_of_norm (hN : NormSound (program := program) (I := I)) :
     ∀ e : program.Env I, program.StatementOk I e.stmt → program.SourceSatAt e →
-      (∀ j, program.IsSourceChal j → ¬ ringEvent j e) → (e.stmt, proj e.stmt e.asg) ∈ rel :=
+      (∀ j, program.IsSourceChal j → ¬ nativeEvent j e) → (e.stmt, proj e.stmt e.asg) ∈ rel :=
   fun _ _ hs hno =>
-    mem_rel_of_source hN hs (hno 0 ((FalconRingMember.isSourceChal_iff (program := program) 0).2 rfl))
+    mem_rel_of_source hN hs (hno 0 (FalconRingMember.isSourceChal_zero (program := program)))
+      (hno _ ((FalconRandomPoint.isSourceChal_iff (program := program) _).2 (Or.inr rfl)))
 
 /-- **Round-by-round knowledge soundness of `Π_P₀` for a native Falcon ring**
 (`RealizedProgram.rbr_of_events`), given the norm's obligation (`NormSound`, discharged per program by the
-generic norm): the relation `rel`, the extractor `extractor`, the error `511/|F|` at
-`member.ring.gamma` and `0` elsewhere (`ringEps`). -/
+generic norm): the relation `rel`, the extractor `extractor`, the errors `511/|F|` at
+`member.ring.gamma`, `1022/|F|` at `signature.r` and `0` elsewhere (`nativeEps`). -/
 theorem rbr_of_norm (hN : NormSound (program := program) (I := I)) :
-    rbrKnowledgeSoundness rel (program.sourceVerifier I) extractor
-      (program.eventState I rel proj ringEvent ringEvent_use (sound_of_norm hN))
-      (program.roundError I (ringEps I)) :=
-  program.rbr_of_events I rel proj ringEvent (ringEps I) ringEvent_use ringEvent_bound
+    RBRKnowledgeSound rel (program.sourceVerifier I) extractor
+      (program.eventState I rel proj nativeEvent nativeEvent_use (sound_of_norm hN))
+      (program.roundError I (nativeEps (program := program) I)) :=
+  program.rbr_of_events I rel proj nativeEvent (nativeEps (program := program) I) nativeEvent_use
+    nativeEvent_bound
     (sound_of_norm hN)
 
 end Rbr

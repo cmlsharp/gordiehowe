@@ -43,15 +43,24 @@ namespace GordieHowe
 open Quantum Signature RingSignature QROM IOP
 open scoped ENNReal
 
-variable {m k e N : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits m) (XOut k e) N TB}
-  {TPS : PSTypes} {PS : ProofSystem (Bits m) (XOut k e) (RingStmt B) (RingWit B) TPS}
+variable {m k e N : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
+  {B : BaseSigner (Bits m) (XOut k e) N TB}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem (Bits m) (XOut k e) (RingStmt B) (RingWit B) TPS}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {n t : ℕ} [NeZero n]
-  {SO : SideOracle (ofBase B PS adm)} {O : SignOracle B}
+  {SO : SideOracle (ofBase B PS adm)} {O : SignOracle B.core}
   {Cl : Type} {V : NARG.QROM.Verifier m k e Cl (RingStmt B)}
   {rel : Set (RingStmt B × RingWit B)}
   {ext : RingStmt B → DB (Bits m) (Out k e) → List (RingWit B)} {β : ℕ → ℝ≥0∞}
 
 /-! ### The count of the relayed forger's requests -/
+
+variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins] [Fintype SO.BMsg] [DecidableEq SO.BMsg] [Fintype SO.BSig] [DecidableEq SO.BSig]
+
+variable [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins]
 
 variable (B PS adm) in
 /-- **The count of the relayed forger's logged requests**: for every list of public keys `pks` and
@@ -67,20 +76,24 @@ def RelayCountLE
         (ringRelAlg B PS adm A F pks Q p).post + 1),
       (Finset.univ.filter fun j => (x.2 j).any MURequest.isSignOrCorrupt = true).card ≤ Q
 
-omit [DecidablePred adm] in
+omit [DecidablePred adm] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype TB.Msg] [DecidableEq TB.Msg]
+  [Fintype TB.Pub] [DecidableEq TB.Pub] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
+  [DecidableEq TB.Coins] [Nonempty TB.Coins] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins] in
 /-- **The bridge's logged requests hold at most `Qs` signing and corruption requests** on every
 basis state of nonzero amplitude of its simulation, when sets carried by the absorbed adversary's
 steps (`hT`) bound the count of its absorbed logs on the last one (`hTQ`). -/
 theorem countP_requests_bridge_le (keys : Fin n → B.KeyCoins) (i₂ : Fin n)
-    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B)} {A : AdaptiveIAlg shA (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof))} (hA : A.TracePreserving)
+    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B.core)} {A : AdaptiveIAlg shA (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof))} (hA : A.TracePreserving)
     (C₁ : Challenger (Bits m) (XOut k e) (MURequest O n) Unit)
-    (E : Expansion (Bits m) (Out k e) (ExtReg A C₁ (MURequest O n) (MUResponse B))) (kq : ℕ)
-    (d₀ : ExtReg A C₁ (MURequest O n) (MUResponse B))
+    (E : Expansion (Bits m) (Out k e) (ExtReg A C₁ (MURequest O n) (MUResponse B.core))) (kq : ℕ)
+    (d₀ : ExtReg A C₁ (MURequest O n) (MUResponse B.core))
     {T : ℕ → Set ((A.W × MURequest O n) × LogReg (MURequest O n) A.slots)}
     (hT : A.LogInv (muRelayAt O keys i₂) (tab₀ A) T) {Qs : ℕ}
     (hTQ : ∀ x ∈ T (A.slots + A.post + 1),
       (Finset.univ.filter fun j => (x.2 j).any MURequest.isSignOrCorrupt = true).card ≤ Qs)
-    (a : ℕ → MURequest O n → Option (MUResponse B)) {b}
+    (a : ℕ → MURequest O n → Option (MUResponse B.core)) {b}
     (hb : simState (outEquiv k e) ((bridgeAlg (outEquiv k e) A C₁
       (muRelayAt O keys i₂) (.publicKey 0) E kq d₀).inst a) b ≠ 0) :
     (requests b.1.1.2).countP MURequest.isSignOrCorrupt ≤ Qs := by
@@ -92,19 +105,22 @@ theorem countP_requests_bridge_le (keys : Fin n → B.KeyCoins) (i₂ : Fin n)
   simp only [isSignOrCorrupt_muTwoRelay_outer]
   exact hTQ _ hTb
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The extraction's event on the bridge is a forgery with at most `Qs` signing and corruption
 requests** (`simLaw_bridge_le_forgesReq` with the count of `countP_requests_bridge_le`). -/
 theorem simLaw_bridge_le_forgesReq_within (hC : PS.CompiledBy V) (c₀ : Cl)
     (f₀ : B.PK × B.BMsg × B.BSig)
     (keys : Fin n → B.KeyCoins) (i₂ : Fin n) (H : Bits m → XOut k e)
     (hB : B.VerifiesWithoutOracle) (hrel : ∀ x w, (x, w) ∈ rel → RingRel B adm 0 x w) (Q' : ℕ)
-    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B)} (A : AdaptiveIAlg shA (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof))) (hA : A.TracePreserving)
+    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B.core)} (A : AdaptiveIAlg shA (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof))) (hA : A.TracePreserving)
     (hslots : A.slots ≤ Q')
     (C₁ : Challenger (Bits m) (XOut k e) (MURequest O n) Unit)
     (E : Expansion (Bits m) (Out k e)
-      (ExtReg A C₁ (MURequest O n) (MUResponse B))) (kq : ℕ)
-    (d₀ : ExtReg A C₁ (MURequest O n) (MUResponse B))
-    (a : ℕ → MURequest O n → Option (MUResponse B))
+      (ExtReg A C₁ (MURequest O n) (MUResponse B.core))) (kq : ℕ)
+    (d₀ : ExtReg A C₁ (MURequest O n) (MUResponse B.core))
+    (a : ℕ → MURequest O n → Option (MUResponse B.core))
     {T : ℕ → Set ((A.W × MURequest O n) × LogReg (MURequest O n) A.slots)}
     (hT : A.LogInv (muRelayAt O keys i₂) (tab₀ A) T) {Qs : ℕ}
     (hTQ : ∀ x ∈ T (A.slots + A.post + 1),
@@ -197,6 +213,8 @@ theorem bornWeight_eq_zero_of_support {ι : Type*} [Fintype ι] {v : QState ι} 
 
 /-! ### The count for relays of one main request per request -/
 
+omit [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+  [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **The count holds for relays of one main request per request** whose idle request is neither a
 signing nor a corruption request (`Quantum.AdaptiveIAlg.relayAdv_logs_le` with `K = 1`). -/
 theorem relayCountLE_of_K_one (F : RelayFam (Bits m) (XOut k e) B PS adm n SO O)
@@ -243,6 +261,7 @@ theorem forgeProb_le_muEufProbWithin_schedule (hO : O.NoQuery)
     (fun pks p => ringRelAlg_slots_le hS F hL pks Q p)
     (relayCountLE_of_K_one F hK hidle A i₂ Q)
 
+omit [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The simulated bridge holds at most `Q` logged signing and corruption requests**: the Born
 weight of the outcomes with more is `0`, for relays of one main request per request whose idle
 request is neither a signing nor a corruption request. -/
@@ -272,6 +291,7 @@ theorem bornWeight_ringBridgeAlg_count (hC : PS.CompiledBy V) (c₀ : Cl)
   exact bornWeight_eq_zero_of_support fun b hb hlt => absurd hlt (not_lt.2 (hcount b hb))
 
 
+omit [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **On every branch, the multi-user forger asks at most `Q` signatures and corruptions**: for a
 signing oracle without queries, relays of one main request per request whose idle request is
 neither a signing nor a corruption request, and `Q'` at least the bridge's request points, the

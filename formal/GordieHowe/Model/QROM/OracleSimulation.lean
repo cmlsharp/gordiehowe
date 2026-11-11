@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Model.QROM.FourierCompression
 public import Mathlib.Algebra.Order.Chebyshev
+public import GordieHowe.Headline
 
 @[expose] public section
 
@@ -32,7 +33,7 @@ Write `α = fourStage A t` for the final state of the Fourier-basis run. By Zha1
 - `p = ‖mask GoodO (fourier α)‖²`, the truth table `h` satisfying `h(a_i) = b_i`;
 - `p′ = ‖mask GoodD (dbFun α)‖²` (`simLaw_win_eq`, `norm_goodSim_compress`), where `dbFun` applies
   the entry kernel `fk` of `GordieHowe/Model/QROM/FourierCompression.lean` to every input (the database written as
-  a function `Bits m → Option B`) and `GoodD` asks `D(a_i) = b_i`.
+  a function `Bits m → Option B`) and `goodD` asks `D(a_i) = b_i`.
 
 As in App. B.3, the two differ only in the terms whose Fourier index vanishes at some `a_i`:
 - an isometry `Gop` (the embedding `y ↦ some y` at the queried inputs `A_r = {a_i}`, the
@@ -612,6 +613,7 @@ theorem sqrt_div_card_eq :
 `√Pr[(a, b, c) ∈ G ∧ h(a_i) = b_i] ≤ √Pr[(a, b, c) ∈ G ∧ D(a_i) = b_i] + √(k/|B|)`, the first
 probability for a uniformly random oracle `h` (`QueryAlg.realLaw`), the second for the output and
 the measured database of `Sim*(A)` (`simLaw`). Repeated `a_i` and `k = 0` are included. -/
+@[headline]
 theorem oracle_sim_sets :
     (A.realLaw e).toOuterMeasure {p | p.out ∈ G ∧ p.out.AnsweredBy p.oracle} ^ (1 / 2 : ℝ) ≤
       simLaw e A {p | p.1 ∈ G ∧ p.1.InDB p.2} ^ (1 / 2 : ℝ) +

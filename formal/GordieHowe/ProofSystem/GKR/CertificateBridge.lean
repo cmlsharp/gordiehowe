@@ -83,6 +83,13 @@ theorem infoSliceB_cons {w : ℕ} {l : List ℕ} {s n m₁ c₁ m₂ c₂ : ℕ}
   rw [← sliceL_append hn, List.length_append, countGates_append]
   exact ⟨⟨layerUniqueB_append h₁.1.1 h₂.1.1, by omega⟩, by omega⟩
 
+/-- **A slice read at its tail**: when the layer from position `s` on is the list `T`, the slice
+from `s` is `T`'s from `0`. -/
+theorem infoSliceB_of_tail {w : ℕ} {l T : List ℕ} {s n m c : ℕ} (hT : l.drop s = T)
+    (h : infoSliceB w T 0 n m c = true) : infoSliceB w l s n m c = true := by
+  subst hT
+  simpa [infoSliceB, sliceL] using h
+
 /-- **Per layer, the slice from `0` on**: its gates' unique assertion terms and its counts. -/
 def layersInfoB (w : ℕ) : List (List ℕ) → List ℕ → List ℕ → Bool
   | [], [], [] => true

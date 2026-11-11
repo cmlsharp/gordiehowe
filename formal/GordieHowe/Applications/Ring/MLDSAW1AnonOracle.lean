@@ -85,7 +85,7 @@ primitives. -/
     (GB : CommitHashBytes p → ChallengeBall p.tau) (GS : Bytes 64 → SecretCoeffs p)
     (GA : Bytes 32 → TqMatrix p.k p.l) :
     W1Oracles X Y p (randomOraclePrimitives GB GS GA) Msg N reps :=
-  ⟨O.muPt, O.muAns, O.chPt, O.chAns, O.gPt, O.gAns⟩
+  ⟨⟨O.muPt, O.muAns, O.chPt, O.chAns⟩, O.gPt, O.gAns⟩
 
 variable {O : W1Oracles X Y p (concretePrimitivesKeyGen p) Msg N reps}
 
@@ -211,7 +211,7 @@ variable [NeZero (bucketCount p)] [Nonempty (MaskBox p)] [Fintype Msg] [Decidabl
   [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y]
   {O : W1Oracles X Y p (concretePrimitivesKeyGen p) Msg N reps} {M : MaskOracle X Y p T Msg}
   {βmin : ℚ≥0} {tol k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
-  {bmsg : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → RMsg → Msg} {TPS : PSTypes}
+  {bmsg : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → RMsg → Msg} {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
   {PS : ∀ (GB : CommitHashBytes p → ChallengeBall p.tau) (GS : Bytes 64 → SecretCoeffs p)
     (GA : Bytes 32 → TqMatrix p.k p.l),
     ProofSystem X Y
@@ -318,7 +318,7 @@ section Instances
 variable [Fintype Msg] [DecidableEq Msg] [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y]
   [DecidableEq Y] [AddGroup Y] [Nonempty Y] {βmin : ℚ≥0} {tol k D : ℕ} [NeZero D] {RMsg : Type}
   [Fintype RMsg] [DecidableEq RMsg] {n : ℕ} {Y₁ Y₂ : Type} [AddGroup Y₁] [AddGroup Y₂]
-  [Fintype Y₁] [DecidableEq Y₁] [Fintype Y₂] {TPS : PSTypes}
+  [Fintype Y₁] [DecidableEq Y₁] [Fintype Y₂] {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
 
 section P44
 

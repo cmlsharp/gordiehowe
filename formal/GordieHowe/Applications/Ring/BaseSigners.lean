@@ -4,8 +4,11 @@
 module
 
 public import GordieHowe.Model.RingSignature.Base
+public import GordieHowe.Applications.Falcon512.Scheme
 public import GordieHowe.Applications.Falcon512.Ring.Native.System.Scheme
 public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1
+public import GordieHowe.Applications.MLDSA.Scheme
+public import GordieHowe.Applications.MLDSA.SchemeT0
 
 @[expose] public section
 
@@ -17,9 +20,9 @@ The shapes of the three constructions as `RingSignature.BaseSigner`s
 `RingSignature.ofBase B PS adm` for its base signer `B`, its proof system `PS` and its supported
 rings `adm`. Their completeness facts are in `GordieHowe/Applications/Ring/BaseSignerFacts.lean`.
 
-- `falconBaseSigner G bmsg`: Falcon-512 (`Falcon512.Ring.Native`, FIPS 206 / Falcon specification
-  v1.2) with the signer `G` (key generation and signing are not specified in Lean). The base
-  signer reads the ring only through `bmsg` (`m`, or `m ‖ encode R`) and never refuses
+- `falconBaseSigner G bmsg`: the Falcon-512 signature scheme `Falcon512.falconBaseScheme G`
+  (`GordieHowe/Applications/Falcon512/Scheme.lean`; FIPS 206 / Falcon specification v1.2) with the
+  signer `G` (key generation and signing are not specified in Lean). The base signer reads the ring only through `bmsg` (`m`, or `m ‖ encode R`) and never refuses
   (`falconBaseSigner_refuseAtWithin`); the public value is the salt, read off the signature;
   verification is the vendored verifier and reads no oracle
   (`falconBaseSigner_verifiesWithoutOracle`).
@@ -40,18 +43,19 @@ rings `adm`. Their completeness facts are in `GordieHowe/Applications/Ring/BaseS
 - `MLDSAW1.w1BaseSigner`: the ML-DSA ring publishing `w₁`. Published keys `(ρ, t₁, t₀)`; the base
   signature `(c̃, z, h)` without `w₁`; the public value `w₁ = enc(UseHint(h, Â·z − c·t₁·2^d))`
   recomputed from the key and the signature (`w1Of`); verification `ringVerify` against the
-  commitment hash `H(H_µ(tr, m), w₁)` read from the oracle (`W1Oracles.hOrc`). The base signer
+  commitment hash `H(H_µ(tr, m), w₁)` read from the oracle (`MLDSAOracles.hOrc`). The base signer
   reads the ring: it refuses rings failing the public check `RingCheck` against the check oracle
   `G`, which it reads by at most `N · reps` classical queries (`ringCheckProg`,
   `run_ringCheckProg`, `ringCheckProg_queries`), and rings whose members' message representatives
   `µ_j = H_µ(tr_j, m)` are not pairwise distinct (`MuDistinct`, by at most `N` queries:
   `muDistinctProg`, `run_muDistinctProg`, `muDistinctProg_queries`), and otherwise runs the ring
   loop `L.sign` (a parameter `L : W1Loop …`; `GordieHowe/Applications/Ring/MLDSAW1Ring.lean`
-  builds the flattened hedged loop). Its ordinary signer is `L.std`.
-- `W1Oracles`: the message-representative oracle `H_µ`, the commitment-hash oracle `H` on
-  `(µ, w₁)` and the check oracle `G` as parts of the one random oracle `X → Y`: their points
-  embedded in `X` and their values decoded from `Y` (domain separation); `W1Oracles.gameOrc`: the
-  game's oracles `((H_µ, H), G)` of `GordieHowe/Applications/Ring/PublicW1/MLDSAPublicW1.lean`.
+  builds the flattened hedged loop). Its ordinary signer is `L.std` (`w1BaseSigner_ssign`).
+- `W1Oracles`: the oracles of ML-DSA (`MLDSAOracles`, `Applications/MLDSA/Signing/Oracles.lean`)
+  and the check oracle `G` as parts of the one random oracle `X → Y`: their points embedded in `X`
+  and their values decoded from `Y` (domain separation);
+  `W1Oracles.gameOrc`: the game's oracles `((H_µ, H), G)` of
+  `GordieHowe/Applications/Ring/PublicW1/MLDSAPublicW1.lean`.
 -/
 
 namespace GordieHowe.Ring
@@ -64,42 +68,22 @@ variable {X Y : Type} {N : ℕ}
 
 section Falcon
 
-open GordieHowe.Falcon512.Ring.Native
+open GordieHowe.Falcon512 (Signer PublicKey falconSchemeT falconBaseScheme)
 
 variable {msgLen : ℕ}
 
-/-- The types of `falconBaseSigner G bmsg`: Falcon-512 public keys, the keys and coins of `G`, the
-ring messages `RMsg`, base messages of `msgLen` bytes, signatures, and the salt as the public value.
--/
-abbrev falconBaseT (G : Signer msgLen) (RMsg : Type) [Fintype RMsg] [DecidableEq RMsg] :
-    BaseTypes where
-  PK := PublicKey
-  SK := G.SK
-  KeyCoins := G.KeyCoins
-  Msg := RMsg
-  BMsg := Fin msgLen → UInt8
-  BSig := Sig
-  Pub := Salt
-  Coins := Salt × G.SignCoins
+/-- The types of `falconBaseSigner G bmsg`: those of `falconBaseScheme G` and the ring messages
+`RMsg`. -/
+abbrev falconBaseT (G : Signer msgLen) (RMsg : Type) : BaseTypes :=
+  BaseTypes.ofCore (falconSchemeT G) RMsg
 
 /-- **The Falcon-512 base signer** with the signer `G` and the base message `bmsg` of a ring and a
-ring message: keys from `G`, signing `G.signWith` on `bmsg R m` with the drawn salt and private
-coins (the ring read only through `bmsg`; no refusal), the ordinary signer on a base message
-likewise, verification the vendored Falcon-512 verifier (no oracle), public value the salt. -/
-def falconBaseSigner (G : Signer msgLen) {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
+ring message: the Falcon-512 signature scheme `falconBaseScheme G` signing `bmsg R m` (the ring read
+only through `bmsg`). -/
+def falconBaseSigner (G : Signer msgLen) {RMsg : Type}
     (bmsg : KeyRing PublicKey N → RMsg → (Fin msgLen → UInt8)) :
-    BaseSigner X Y N (falconBaseT G RMsg) where
-  keyGen := G.keyGen
-  bmsg := bmsg
-  q := 0
-  bsign sk R _ m c := .pure (some (G.signWith sk (bmsg R m) c.1 c.2))
-  bsign_queries _ _ _ _ _ := OracleProg.QueriesLE.pure _ _
-  ssign sk bm c := .pure (some (G.signWith sk bm c.1 c.2))
-  ssign_queries _ _ _ := OracleProg.QueriesLE.pure _ _
-  bverify _ pk bm σ := verifySig pk bm σ
-  qPub := 0
-  pub _ σ := .pure σ.1.salt
-  pub_queries _ _ := OracleProg.QueriesLE.pure _ _
+    BaseSigner X Y N (falconBaseT G RMsg) :=
+  BaseSigner.ofCore (falconBaseScheme G) bmsg
 
 end Falcon
 
@@ -107,140 +91,29 @@ end Falcon
 
 section MLDSA
 
-open _root_.MLDSA LatticeCrypto TransformOps
+open _root_.MLDSA GordieHowe.MLDSA LatticeCrypto TransformOps
 
 variable (p : Params) (prims : Primitives p) [nttOps : NTTRingOps]
 
-/-- An ML-DSA public key `(ρ, t₁)` as a pair. -/
-def publicKeyEquiv : PublicKey p prims ≃ Bytes 32 × Vector prims.Power2High p.k where
-  toFun pk := (pk.rho, pk.t1)
-  invFun x := ⟨x.1, x.2⟩
-  left_inv _ := rfl
-  right_inv _ := rfl
-
-instance [Fintype prims.Power2High] : Fintype (PublicKey p prims) :=
-  Fintype.ofEquiv _ (publicKeyEquiv p prims).symm
-
-instance [DecidableEq prims.Power2High] : DecidableEq (PublicKey p prims) :=
-  (publicKeyEquiv p prims).decidableEq
-
-/-- **The bounded-sampling acceptance check of FIPS 204 Appendix C** at the concrete primitives:
-`ExpandA(ρ)` finishes within the vendored bound of every `RejNTTPoly` call (`expandA?`) and
-`SampleInBall(c̃)` within its `272` SHAKE256 bytes (`sampleInBallPoly?`). The check is that of
-the concrete SHAKE-based samplers at every parameter set, whatever primitives the signer uses. -/
-def boundedOk (p : Params) (rho : Bytes 32) (cTilde : CommitHashBytes p) : Bool :=
-  (Concrete.expandA? p rho).isSome && (Concrete.sampleInBallPoly? p cTilde).isSome
-
-/-- **The commitment hash of a signing attempt** (FIPS 204 Algorithm 7, lines 11–15): with
-`y = ExpandMask(ρ'', κ)`, `c̃ = H(µ ‖ w1Encode(HighBits(Â·y)))`, the commitment hash
-`fipsSignAttempt` computes and outputs. -/
-def fipsAttemptCommit (aHat : TqMatrix p.k p.l) (mu : Bytes 64) (rhoDoublePrime : Bytes 64)
-    (kappa : ℕ) : CommitHashBytes p :=
-  prims.hashCommitment mu (prims.w1Encode (prims.highBitsVec (aHat * prims.expandMask rhoDoublePrime
-    kappa)))
-
-/-- **A signature of an attempt carries the attempt's commitment hash.** -/
-theorem cTilde_of_fipsSignAttempt {sk : SecretKey p} {aHat : TqMatrix p.k p.l} {mu rhoDoublePrime :
-    Bytes 64} {kappa : ℕ} {σ : FIPSSignature p prims}
-    (h : fipsSignAttempt p prims sk aHat mu rhoDoublePrime kappa = some σ) :
-    σ.cTilde = fipsAttemptCommit p prims aHat mu rhoDoublePrime kappa := by
-  unfold fipsSignAttempt at h
-  dsimp only at h
-  split_ifs at h
-  rw [Option.some.injEq] at h
-  subst h
-  rfl
-
-/-- **The hedged FIPS 204 signer** (Algorithm 7) at the coins `rnd`, with the bounded `ExpandA` and
-`SampleInBall` of FIPS 204 Appendix C: `µ = H(tr ‖ M)`, `ρ'' = H(K ‖ rnd ‖ µ)`; abort (`none`)
-when the bounded `ExpandA(ρ)` runs out of bytes; then at most `maxAttempts` attempts of the
-vendored `fipsSignAttempt` (counter `κ = i · l`): an attempt whose bounded `SampleInBall` of its
-commitment hash (`fipsAttemptCommit`) runs out of bytes aborts the signer (Appendix C: "return a
-constant that represents an error and no other output"), and otherwise the first attempt that is
-not rejected is the signature; `none` when every attempt is rejected. -/
-def fipsSignWith (maxAttempts : ℕ) (sk : SecretKey p) (msg : List Byte) (rnd : Bytes 32) :
-    Option (FIPSSignature p prims) :=
-  if (Concrete.expandA? p sk.rho).isSome then
-    ((List.range maxAttempts).findSome? fun i =>
-      if (Concrete.sampleInBallPoly? p (fipsAttemptCommit p prims (prims.expandA sk.rho)
-          (prims.hashMessage sk.tr msg)
-          (prims.hashPrivateSeed sk.key rnd (prims.hashMessage sk.tr msg)) (i * p.l))).isSome then
-        (fipsSignAttempt p prims sk (prims.expandA sk.rho) (prims.hashMessage sk.tr msg)
-          (prims.hashPrivateSeed sk.key rnd (prims.hashMessage sk.tr msg)) (i * p.l)).map some
-      else some none).join
-  else none
-
-/-- **A signature of the signer is an attempt's signature passing the bounded-sampling check**: it
-is the output of `fipsSignAttempt` at some counter `κ = i · l`, and `boundedOk p ρ c̃` holds at the
-signer's `ρ`. -/
-theorem exists_attempt_of_fipsSignWith {maxAttempts : ℕ} {sk : SecretKey p} {msg : List Byte}
-    {rnd : Bytes 32} {σ : FIPSSignature p prims}
-    (h : fipsSignWith p prims maxAttempts sk msg rnd = some σ) :
-    ∃ i, fipsSignAttempt p prims sk (prims.expandA sk.rho) (prims.hashMessage sk.tr msg)
-        (prims.hashPrivateSeed sk.key rnd (prims.hashMessage sk.tr msg)) (i * p.l) = some σ ∧
-      boundedOk p sk.rho σ.cTilde = true := by
-  unfold fipsSignWith at h
-  split_ifs at h with hA
-  · rw [Option.join_eq_some_iff] at h
-    obtain ⟨i, -, hi⟩ := List.exists_of_findSome?_eq_some h
-    split_ifs at hi with hS
-    · rw [Option.map_eq_some_iff] at hi
-      obtain ⟨σ', hσ', hσσ'⟩ := hi
-      cases hσσ'
-      refine ⟨i, hσ', ?_⟩
-      rw [boundedOk, cTilde_of_fipsSignAttempt p prims hσ', hA, hS, Bool.and_self]
-    · simp at hi
-
-/-- **A signature of the signer passes the bounded-sampling check** at the signer's `ρ`. -/
-theorem boundedOk_of_fipsSignWith {maxAttempts : ℕ} {sk : SecretKey p} {msg : List Byte}
-    {rnd : Bytes 32} {σ : FIPSSignature p prims}
-    (h : fipsSignWith p prims maxAttempts sk msg rnd = some σ) :
-    boundedOk p sk.rho σ.cTilde = true :=
-  (exists_attempt_of_fipsSignWith p prims h).choose_spec.2
+/-- The types of `mldsaBaseSigner`: those of `mldsaBaseScheme` and the ring messages `RMsg`. -/
+abbrev mldsaBaseT (len : ℕ) (RMsg : Type) : BaseTypes :=
+  BaseTypes.ofCore (mldsaSchemeT p prims len) RMsg
 
 variable [Fintype prims.Power2High] [DecidableEq prims.Power2High] [Fintype prims.Hint]
   [DecidableEq prims.Hint]
 
-/-- The types of `mldsaBaseSigner`: ML-DSA keys from 32-byte seeds, the ring messages `RMsg`, base
-messages of `len` bytes, FIPS 204 signatures, no public value, 32-byte signing coins. -/
-abbrev mldsaBaseT (len : ℕ) (RMsg : Type) [Fintype RMsg] [DecidableEq RMsg] : BaseTypes where
-  PK := PublicKey p prims
-  SK := SecretKey p
-  KeyCoins := Bytes 32
-  Msg := RMsg
-  BMsg := Bytes len
-  BSig := FIPSSignature p prims
-  Pub := Unit
-  Coins := Bytes 32
-
-/-- **The ML-DSA base signer of the generic ring** with base messages of `len` bytes: keys from a
-seed (`keyGenFromSeed`, Algorithm 6), the hedged FIPS 204 signer `fipsSignWith` on `bmsg R m` (the
-ring read only through `bmsg`; it refuses when a bounded sampler runs out of bytes or every attempt
-is rejected), the ordinary signer
-on a base message likewise, and FIPS 204 verification (Algorithm 8 with the bounded `ExpandA` and
-`SampleInBall` of Appendix C): the bounded-sampling check `boundedOk p ρ c̃` and `fipsVerify`,
-the shape of the vendored `MLDSA.Concrete.verify` (`mldsaBaseSigner_bverify_concrete`). Public
-value `Unit`. No oracle is read. -/
-def mldsaBaseSigner (maxAttempts : ℕ) {len : ℕ} {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
+/-- **The ML-DSA base signer of the generic ring** with base messages of `len` bytes: the ML-DSA
+signature scheme `mldsaBaseScheme` signing `bmsg R m` (the ring read only through `bmsg`). -/
+def mldsaBaseSigner (maxAttempts : ℕ) {len : ℕ} {RMsg : Type}
     (bmsg : KeyRing (PublicKey p prims) N → RMsg → Bytes len) :
-    BaseSigner X Y N (mldsaBaseT p prims len RMsg) where
-  keyGen := keyGenFromSeed p prims
-  bmsg := bmsg
-  q := 0
-  bsign sk R _ m rnd := .pure (fipsSignWith p prims maxAttempts sk (bmsg R m).toList rnd)
-  bsign_queries _ _ _ _ _ := OracleProg.QueriesLE.pure _ _
-  ssign sk bm rnd := .pure (fipsSignWith p prims maxAttempts sk bm.toList rnd)
-  ssign_queries _ _ _ := OracleProg.QueriesLE.pure _ _
-  bverify _ pk bm σ := boundedOk p pk.rho σ.cTilde && fipsVerify p prims pk bm.toList σ
-  qPub := 0
-  pub _ _ := .pure ()
-  pub_queries _ _ := OracleProg.QueriesLE.pure _ _
+    BaseSigner X Y N (mldsaBaseT p prims len RMsg) :=
+  BaseSigner.ofCore (mldsaBaseScheme p prims maxAttempts len) bmsg
 
 end MLDSA
 
 section MLDSAConcrete
 
-open _root_.MLDSA
+open _root_.MLDSA GordieHowe.MLDSA
 
 /-- **At the concrete primitives and `boundedOk`, the base verification is the vendored
 `MLDSA.Concrete.verify`**: FIPS 204 Algorithm 8, rejecting when the bounded `ExpandA` or the
@@ -270,39 +143,17 @@ open _root_.MLDSA GordieHowe.MLDSA
 variable {p : Params} (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   {Msg : Type} {reps : ℕ}
 
-/-- **The oracles of the ring publishing `w₁` inside the one random oracle `X → Y`**: the points of
-the message-representative oracle `H_µ(tr, m)` (`µ = H(tr ‖ M′)`, FIPS 204 Algorithm 7 line 6), of
-the commitment-hash oracle `H(µ, w₁)` (`c̃ = H(µ ‖ w1Encode(w₁))`, line 15) and of the check oracle
-`G(R, j, r)` embedded in `X`, and their values decoded from `Y`. Distinct embeddings are the domain
-separation of the oracles. -/
-structure W1Oracles (X Y : Type) (p : Params) (prims : Primitives p) (Msg : Type) (N reps : ℕ) where
-  /-- The points of the message-representative oracle. -/
-  muPt : Bytes 64 × Msg → X
-  /-- The values of the message-representative oracle. -/
-  muAns : Y → Bytes 64
-  /-- The points of the commitment-hash oracle. -/
-  chPt : Bytes 64 × BucketVec p → X
-  /-- The values of the commitment-hash oracle. -/
-  chAns : Y → CommitHashBytes p
+/-- **The oracles of the ring publishing `w₁` inside the one random oracle `X → Y`**: the oracles
+of ML-DSA (`MLDSAOracles`) and the check oracle `G(R, j, r)`, its points embedded in `X` and its
+values decoded from `Y`. Distinct embeddings are the domain separation of the oracles. -/
+structure W1Oracles (X Y : Type) (p : Params) (prims : Primitives p) (Msg : Type) (N reps : ℕ)
+    extends MLDSAOracles X Y p Msg where
   /-- The points of the check oracle. -/
   gPt : KeyRing (PubKey p prims) N × Fin N × Fin reps → X
   /-- The values of the check oracle. -/
   gAns : Y → CommitHashBytes p
 
 variable {prims}
-
-/-- The message-representative oracle `H_µ` read from the oracle. -/
-def W1Oracles.muOrc (O : W1Oracles X Y p prims Msg N reps) (H : X → Y) : MuOrc Msg :=
-  fun pt => O.muAns (H (O.muPt pt))
-
-/-- The commitment-hash oracle on `(µ, w₁)` read from the oracle. -/
-def W1Oracles.chOrc (O : W1Oracles X Y p prims Msg N reps) (H : X → Y) : ChOrc p :=
-  fun pt => O.chAns (H (O.chPt pt))
-
-/-- **The commitment hash** `H((tr, m), w₁) = H(H_µ(tr, m), w₁)` read from the oracle
-(`schemeOrc`). -/
-def W1Oracles.hOrc (O : W1Oracles X Y p prims Msg N reps) (H : X → Y) : Orc p Msg :=
-  schemeOrc (O.muOrc H, O.chOrc H)
 
 /-- The check oracle `G` read from the oracle. -/
 def W1Oracles.gOrc (O : W1Oracles X Y p prims Msg N reps) (H : X → Y) :
@@ -315,14 +166,6 @@ def W1Oracles.gameOrc (O : W1Oracles X Y p prims Msg N reps) (H : X → Y) :
   ((O.muOrc H, O.chOrc H), O.gOrc H)
 
 variable (prims)
-
-/-- **The recomputed commitment** of a signature `(c̃, z, h)` under a published key `(ρ, t₁, t₀)`:
-`w₁ = enc(UseHint(h, Â·z − c·t₁·2^d))` with `Â = ExpandA(ρ)` and `c = SampleInBall(c̃)` (FIPS 204
-Algorithm 8, lines 9–10). -/
-def w1Of (enc : Vector prims.High p.k → BucketVec p) (pk : PubKey p prims)
-    (σ : FIPSSignature p prims) : BucketVec p :=
-  enc (prims.useHintVec σ.h (computeWApprox p prims (prims.expandA pk.1)
-    (prims.sampleInBall σ.cTilde) σ.z pk.2.1))
 
 /-- **The public ring check as a classical oracle program**: query the check oracle at
 `(R, j, r)` for every `j < N` and `r < reps`, then decide `RingCheck` at the cut-off `β_min` with
@@ -396,29 +239,21 @@ structure W1Loop (X Y : Type) (p : Params) (prims : Primitives p) (Msg : Type) (
   /-- It makes at most `q` queries. -/
   std_queries : ∀ sk m c, (std sk m c).QueriesLE q
 
-variable [Fintype prims.Power2High] [DecidableEq prims.Power2High] [Fintype prims.Hint]
-  [DecidableEq prims.Hint] [Fintype Msg] [DecidableEq Msg]
+variable {prims} in
+/-- **The ring loop's ordinary signer** at the ring signer's query bound `N · reps + (N + L.q)`
+(a base signer has one bound for both signers): `L.std`. -/
+def W1Loop.stdSigner {CL : Type} (L : W1Loop X Y p prims Msg N CL) (reps : ℕ) :
+    T0Signer X Y p prims Msg CL :=
+  ⟨N * reps + (N + L.q), L.std, fun sk m c => (L.std_queries sk m c).mono (by omega)⟩
 
 variable (Msg) in
 /-- The types of the base signer of the ML-DSA ring publishing `w₁` with the signing coins `Coins`:
-published keys, secret keys from 32-byte seeds, the ring messages `RMsg`, the base messages `Msg`,
-FIPS 204 signatures and the public value `w₁`. -/
-abbrev w1BaseT (RMsg Coins : Type) [Fintype RMsg] [DecidableEq RMsg] [Fintype Coins]
-    [DecidableEq Coins] [Nonempty Coins] : BaseTypes where
-  PK := PubKey p prims
-  SK := SecretKey p
-  KeyCoins := Bytes 32
-  Msg := RMsg
-  BMsg := Msg
-  BSig := FIPSSignature p prims
-  Pub := BucketVec p
-  Coins := Coins
-  -- the instance constants themselves, not their eta-expansions, so that a projection of this
-  -- record and concrete instance search reach the same terms
-  instDecEqPK := instDecidableEqPubKeyOf
-  instDecEqKeyCoins := instDecidableEqVector
-  instDecEqBSig := instDecEqFIPSSignature prims
-  instDecEqPub := Fintype.decidablePiFintype
+those of ML-DSA with `t₀` published (`mldsaT0SchemeT`) and the ring messages `RMsg`. -/
+abbrev w1BaseT (RMsg Coins : Type) : BaseTypes :=
+  BaseTypes.ofCore (mldsaT0SchemeT prims Msg Coins) RMsg
+
+variable [Fintype prims.Power2High] [DecidableEq prims.Power2High] [Fintype prims.Hint]
+  [DecidableEq prims.Hint] [Fintype Msg] [DecidableEq Msg]
 
 /-- **The base signer of the ML-DSA ring publishing `w₁`** with the oracles `O`, the check's
 cut-off `β_min` and tolerance `tol`, the encoding `enc` of recomputed commitments, the ring loop `L`
@@ -428,31 +263,41 @@ public value `w₁ = w1Of enc pk σ`. The base signer refuses rings failing the 
 (`muDistinctProg`), and otherwise runs `L.sign`; the ordinary signer is `L.std`. Verification is
 `ringVerify` against the commitment hash read from the oracle, at the recomputed `w₁`. -/
 def w1BaseSigner (O : W1Oracles X Y p prims Msg N reps) (βmin : ℚ≥0) (tol : ℕ)
-    (enc : Vector prims.High p.k → BucketVec p) {CL : Type} [Fintype CL] [DecidableEq CL] [Nonempty CL] (L : W1Loop X Y p prims Msg N CL) {RMsg : Type}
-    [Fintype RMsg] [DecidableEq RMsg] (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg) :
-    BaseSigner X Y N (w1BaseT prims Msg RMsg CL) where
-  keyGen := keyGen prims
-  bmsg := bmsg
-  q := N * reps + (N + L.q)
-  bsign sk R i m c := (ringCheckProg prims O βmin tol R).bind fun ok =>
-    (muDistinctProg prims O R (bmsg R m)).bind fun ok' =>
-      if ok ∧ ok' then L.sign sk R i (bmsg R m) c else .pure none
-  bsign_queries sk R i m c := (ringCheckProg_queries prims O βmin tol R).bind fun ok =>
-    (muDistinctProg_queries prims O R (bmsg R m)).bind fun ok' => by
-      split_ifs
-      · exact L.sign_queries _ _ _ _ _
-      · exact OracleProg.QueriesLE.pure _ _
-  ssign sk bm c := L.std sk bm c
-  ssign_queries sk bm c := (L.std_queries sk bm c).mono (by omega)
-  bverify H pk bm σ := ringVerify prims (O.hOrc H) enc (pubPk prims pk) bm (w1Of prims enc pk σ) σ
-  qPub := 0
-  pub pk σ := .pure (w1Of prims enc pk σ)
-  pub_queries _ _ := OracleProg.QueriesLE.pure _ _
+    (enc : Vector prims.High p.k → BucketVec p) {CL : Type} (L : W1Loop X Y p prims Msg N CL)
+    {RMsg : Type} (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg) :
+    BaseSigner X Y N (w1BaseT prims Msg RMsg CL) :=
+  ⟨mldsaT0BaseScheme prims O.toMLDSAOracles enc (L.stdSigner reps), bmsg,
+    fun sk R i m c => (ringCheckProg prims O βmin tol R).bind fun ok =>
+      (muDistinctProg prims O R (bmsg R m)).bind fun ok' =>
+        if ok ∧ ok' then L.sign sk R i (bmsg R m) c else .pure none,
+    fun sk R i m c => (ringCheckProg_queries prims O βmin tol R).bind fun ok =>
+      (muDistinctProg_queries prims O R (bmsg R m)).bind fun ok' => by
+        split_ifs
+        · exact L.sign_queries _ _ _ _ _
+        · exact OracleProg.QueriesLE.pure _ _⟩
+
+/-- The scheme of the base signer publishing `w₁` is ML-DSA with `t₀` published at the ring
+loop's ordinary signer. -/
+theorem w1BaseSigner_core (O : W1Oracles X Y p prims Msg N reps) (βmin : ℚ≥0) (tol : ℕ)
+    (enc : Vector prims.High p.k → BucketVec p) {CL : Type} (L : W1Loop X Y p prims Msg N CL)
+    {RMsg : Type} (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg) :
+    (w1BaseSigner prims O βmin tol enc L bmsg).core =
+      mldsaT0BaseScheme prims O.toMLDSAOracles enc (L.stdSigner reps) :=
+  rfl
+
+omit [NeZero (bucketCount p)] in
+/-- The ordinary signer of the base signer publishing `w₁` is the ring loop's ordinary signer. -/
+theorem w1BaseSigner_ssign (O : W1Oracles X Y p prims Msg N reps) (βmin : ℚ≥0) (tol : ℕ)
+    (enc : Vector prims.High p.k → BucketVec p) {CL : Type} [Fintype CL] [DecidableEq CL]
+    [Nonempty CL] (L : W1Loop X Y p prims Msg N CL) {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
+    (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg) (sk : SecretKey p) (bm : Msg) (c : CL) :
+    (w1BaseSigner prims O βmin tol enc L bmsg).ssign sk bm c = L.std sk bm c :=
+  rfl
 
 /-- The public values of the base signer publishing `w₁` are inhabited. -/
 instance [NeZero (bucketCount p)] (O : W1Oracles X Y p prims Msg N reps) (βmin : ℚ≥0) (tol : ℕ)
-    (enc : Vector prims.High p.k → BucketVec p) {CL : Type} [Fintype CL] [DecidableEq CL] [Nonempty CL] (L : W1Loop X Y p prims Msg N CL) {RMsg : Type}
-    [Fintype RMsg] [DecidableEq RMsg] (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg) :
+    (enc : Vector prims.High p.k → BucketVec p) {CL : Type} (L : W1Loop X Y p prims Msg N CL)
+    {RMsg : Type} (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg) :
     Inhabited (w1BaseSigner prims O βmin tol enc L bmsg).Pub :=
   inferInstanceAs (Inhabited (BucketVec p))
 

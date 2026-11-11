@@ -40,27 +40,28 @@ namespace GordieHowe.Ring
 open Quantum GordieHowe.QROM GordieHowe.SPBCS IOP SPTerm GordieHowe.RingSignature GordieHowe.IOP
 open scoped ENNReal
 
-variable {k kN kS L e N : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N : ℕ} {TB : BaseTypes}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)] {X₀ Wit₀ : Type}
   (M : SPBCS Mg P X₀ k kN kS L e) (Λ : SiteLayout Mg) {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] (E : (j : ι) → (M.comp j).Encoder)
   {Vr : X₀ → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : Wit₀ → R → CausalProver P τ X₀) (stmt : RingStmt B → X₀) (check : RingStmt B → Bool)
   (input : RingStmt B → RingWit B → Option Wit₀)
 
 /-- **The compiled honest prover read at ring statements**: on a ring statement `x` and a ring
 witness `w` with the honest input `input x w = some y`, the spBCS prover `niProver` (proofs in the
 format `b`, run through `queryEncoding`) on the statement `stmt x` with the honest input `y`; the
-missing proof `none`, with no query, when `input x w = none`; uniform coins. -/
-noncomputable def spbcsComapProver :
+missing proof `none`, with no query, when `input x w = none`. The law of its coins is an argument
+of each statement (`NARG.Prover.uniformLaw` is the uniform one). -/
+def spbcsComapProver :
     NARG.Prover (Bits (queryBits k kN kS L)) (XOut k e) (RingStmt B) (RingWit B) (M.Response b)
       (SaltedCoins (FiatShamirSalt kS) (M.ProverCoins R)) where
   prog x w c := (input x w).elim (.pure none) fun y =>
     (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding).prog (stmt x) y c
-  coins := PMF.uniformOfFintype _
   q := (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding).q
   prog_queries x w c := match input x w with
     | none => OracleProg.QueriesLE.pure _ _
@@ -85,13 +86,15 @@ noncomputable def spbcsComapProofSystem :
     fun H x π => check x &&
       decide (∃ c ∈ spbcsComapClaim M stmt x π, (M.qVerifier Qs b b).Accepted (outEquiv k e ∘ H) c)
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The prover of the proof system is the compiled honest prover read at ring statements.** -/
 theorem prover_spbcsComapProofSystem :
     (spbcsComapProofSystem M Λ E hb honest stmt check input).prover =
       spbcsComapProver M Λ E hb honest stmt input := by
   classical
-  exact ProofSystem.prover_ofProver _ _ rfl
+  exact ProofSystem.prover_ofProver _ _
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The proof system accepts exactly the checked statements whose claims the compiled verifier
 accepts.** -/
 theorem verify_spbcsComapProofSystem_eq_true_iff (H : Bits (queryBits k kN kS L) → XOut k e)
@@ -103,6 +106,7 @@ theorem verify_spbcsComapProofSystem_eq_true_iff (H : Bits (queryBits k kN kS L)
   change (check x && decide _) = true ↔ _
   rw [Bool.and_eq_true, decide_eq_true_iff]
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The proof system rejects the missing proof.** -/
 theorem verify_spbcsComapProofSystem_none (H : Bits (queryBits k kN kS L) → XOut k e)
     (x : RingStmt B) :
@@ -123,6 +127,7 @@ theorem stmt_of_mem_spbcsComapClaim {x : RingStmt B} {π : M.Response b}
     subst hc
     rfl
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **An honest proof is the compiled proof of the causal honest prover** at the honest input
 `y = input x w`, on the statement `stmt x`, against `chainOracle H`, for a query phase with view
 laws `VE`. -/
@@ -146,6 +151,7 @@ theorem run_prove_spbcsComapProofSystem (VE : M.ViewEncoder E Qs)
     simp only [NARG.Prover.toFn_prove] at h
     exact h
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **The honest proof of a checked statement at an honest input `y = input x w` is accepted when
 the composite verifier accepts it** against `chainOracle H`. -/
 theorem verify_spbcsComapProofSystem_of_accepts (VE : M.ViewEncoder E Qs)
@@ -164,6 +170,7 @@ theorem verify_spbcsComapProofSystem_of_accepts (VE : M.ViewEncoder E Qs)
   rw [hpv]
   exact hacc
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **The spBCS proof system read at ring statements is adaptively complete for the ring
 relation**: if every pair `(x, w)` of the ring relation at every oracle passes the check and has an
 honest input `y ∈ input x w` with `(stmt x, y)` in `rel₀` (`hrel`), and the composite verifier rejects the run of the
@@ -251,16 +258,18 @@ namespace GordieHowe.Ring
 
 open GordieHowe.QROM GordieHowe.SPBCS IOP GordieHowe.RingSignature
 
-variable {k kN kS L e N : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N : ℕ} {TB : BaseTypes}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
   (M : SPBCS Mg P (RingStmt B) k kN kS L e) (Λ : SiteLayout Mg) {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] (E : (j : ι) → (M.comp j).Encoder)
   {Vr : RingStmt B → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : RingWit B → R → CausalProver P τ (RingStmt B))
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **`spbcsProofSystem` is `spbcsComapProofSystem` at the ring statements themselves**: the
 identity statement map, the check accepting every statement and the ring witness as the honest
 input. -/

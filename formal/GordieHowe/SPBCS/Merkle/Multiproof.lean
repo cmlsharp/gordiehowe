@@ -41,7 +41,7 @@ For an `n`-leaf tree in the heap layout of `GordieHowe/SPBCS/Merkle/Extract.lean
   which is what the top-down recursion computes. The node queries are the same set; their order
   differs (post-order here, descending positions in the C++), which the base game does not see.
 - `treeProg` first makes the leaf queries `leaf salt column` of the opened leaves in order
-  (`merkle_commitment.h` lines 99–106), then `reconProg` at the root; `format.check` is acceptance:
+  (`merkle_commitment.h` lines 99–106), then `reconProg` at the root; `format.Check` is acceptance:
   distinct in-range indices (the C++ panics otherwise, `merkle_tree.h` lines 84–86), one opened
   leaf per index, exactly one path digest per proof position (lines 186–195), and the recomputed
   root is the root (line 213).
@@ -230,7 +230,7 @@ theorem trace_treeProg (lvs : List (MerkleLeaf kN L)) (path : List (Digest k)) :
   rfl
 
 /-- **The compressed-multiproof format**: the proof positions `sibNodes n js` and the C++
-verifier's program `treeProg`. Its acceptance `format.check` is that of
+verifier's program `treeProg`. Its acceptance `format.Check` is that of
 `BasicMerkleCommitmentVerifier::verify` (`merkle_commitment.h` lines 95–111, and
 `verify_compressed_proof`, `merkle_tree.h` lines 165–214): the indices are distinct and below `n`
 (lines 84–86, where the C++ panics), there is one leaf per index, the path has one digest per
@@ -295,7 +295,7 @@ the leaf that `extract` reads. -/
 theorem leafAt_of_check (hcol : D ∉ digestCollision) {rt : Digest k}
     {lvs : List (MerkleLeaf kN L)} {path : List (Digest k)}
     (hq : ∀ q ∈ (treeProg n js lvs path).trace h, D.lookup q = some (h q))
-    (hc : format.check h n rt js lvs path) {j : ℕ} {a : MerkleLeaf kN L} (hja : (j, a) ∈ js.zip lvs)
+    (hc : format.Check h n rt js lvs path) {j : ℕ} {a : MerkleLeaf kN L} (hja : (j, a) ∈ js.zip lvs)
     (hj : j < n) : leafAt D n rt ⟨j, hj⟩ = some a := by
   obtain ⟨hnd, hjs, -, -, hrt⟩ := hc
   change (treeProg n js lvs path).run h = some rt at hrt
@@ -379,7 +379,7 @@ decreasing_by all_goals (have := hi.1; omega)
 `n`, at least one, with the honest path, are accepted against the honest root. -/
 theorem check_path (hnd : js.Nodup) (hjs : ∀ j ∈ js, j < n) (hne : js ≠ [])
     (hlv : List.Forall₂ (fun j a => a = lf j) js lvs) :
-    format.check h n (root h n lf) js lvs (format.path h n js lf) := by
+    format.Check h n (root h n lf) js lvs (format.path h n js lf) := by
   obtain ⟨j, hj⟩ := List.exists_mem_of_ne_nil js hne
   refine ⟨hnd, hjs, hlv.length_eq.symm, by simp [MerkleFormat.path, format], ?_⟩
   change (treeProg n js lvs (format.path h n js lf)).run h = some (root h n lf)

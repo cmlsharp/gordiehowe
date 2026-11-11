@@ -21,7 +21,7 @@ holds, the extractor `GordieHowe.MLDSA44.Ring.Native.extractor`, the errors `sou
 `5143/|F_q^6|` at `member.table.gamma`, SampleInBall's `264/2^128` and `295/2^128` at the ring's
 challenges `1` and `2`), composed with the proof system
 (`GordieHowe.RealizedProgram.ProofSystem.FieldBranches.causal_rbr_knowledge_soundness` at the forked
-domains of `proofSystem`) in the headline `iop_rbr_knowledge_soundness`. Circuit enforcement
+domains of `proofSystem`) in `iop_rbr_knowledge_soundness`. Circuit enforcement
 follows from the generated certificates.
 -/
 
@@ -63,11 +63,16 @@ theorem oneNodes : OneNodes interp Generated.MLDSA44.Ring.Native.ROMParams.Hones
 /-- **The source challenges' errors are within their fractions** (`sourceErrors`). -/
 theorem sourceEps_le (j : ℕ) (_ : program.IsSourceChal j) :
     sourceEps j ≤ ((sourceErrors j).1 : ℝ≥0) / (sourceErrors j).2 := by
-  rcases j with _ | _ | _ | j
+  have hc : Fintype.card (interp 0).K = 8380417 ^ 6 := by convert mldsaNativeField_card <;> rfl
+  rcases j with _ | _ | _ | _ | j
   · change ((5143 : ℕ) : ℝ≥0) / Fintype.card (interp 0).K ≤ _
-    rw [show Fintype.card (interp 0).K = 8380417 ^ 6 from by convert mldsaNativeField_card <;> rfl]
+    rw [hc]
     simp only [sourceErrors, ↓reduceIte]
     norm_num [pGold]
+  · change ((2040 : ℕ) : ℝ≥0) / Fintype.card (interp 0).K ≤ _
+    rw [hc]
+    simp only [sourceErrors, ↓reduceIte]
+    norm_num
   · change MLDSA44.sampleEpsOf 128 0 ≤ _
     norm_num [MLDSA44.sampleEpsOf, sourceErrors]
   · change MLDSA44.sampleEpsOf 128 1 ≤ _

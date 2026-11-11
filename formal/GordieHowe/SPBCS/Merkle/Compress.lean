@@ -194,7 +194,7 @@ theorem sibNodes_nil (n : ℕ) : sibNodes n [] = [] := by
 
 /-- An accepted multiproof opens some index. -/
 theorem ne_nil_of_check {rt : Digest k} {lvs : List (MerkleLeaf kN L)} {path : List (Digest k)}
-    (hc : format.check h n rt js lvs path) : js ≠ [] := by
+    (hc : format.Check h n rt js lvs path) : js ≠ [] := by
   rintro rfl
   obtain ⟨-, -, -, -, hrt⟩ := hc
   change (treeProg n [] lvs path).run h = some rt at hrt
@@ -204,7 +204,7 @@ theorem ne_nil_of_check {rt : Digest k} {lvs : List (MerkleLeaf kN L)} {path : L
 /-- The leaf program of an opened leaf along the path read off an accepted multiproof reaches
 the root, with its queries among the multiproof verifier's. -/
 theorem leafRootProg_decompress {rt : Digest k} {lvs : List (MerkleLeaf kN L)}
-    {path : List (Digest k)} (hc : format.check h n rt js lvs path) {j : ℕ} {a : MerkleLeaf kN L}
+    {path : List (Digest k)} (hc : format.Check h n rt js lvs path) {j : ℕ} {a : MerkleLeaf kN L}
     (hja : (j, a) ∈ js.zip lvs) :
     (PerLeaf.leafRootProg n j a ((PerLeaf.authPos n j).map
         (reconAt h n js (leafDigests h js lvs) (lookupAns (sibNodes n js) path)))).run h = some rt ∧
@@ -233,8 +233,8 @@ theorem leafRootProg_decompress {rt : Digest k} {lvs : List (MerkleLeaf kN L)}
 (`decompress`) are accepted by the per-leaf verifier against the same root. -/
 @[headline]
 theorem check_decompress {rt : Digest k} {lvs : List (MerkleLeaf kN L)} {path : List (Digest k)}
-    (hc : format.check h n rt js lvs path) :
-    (PerLeaf.format (kS := kS) (e := e)).check h n rt js lvs (decompress h n js lvs path) := by
+    (hc : format.Check h n rt js lvs path) :
+    (PerLeaf.format (kS := kS) (e := e)).Check h n rt js lvs (decompress h n js lvs path) := by
   have hne := ne_nil_of_check h hc
   obtain ⟨hnd, hjs, hl, -, -⟩ := id hc
   refine ⟨hnd, hjs, hl, by simp [decompress, PerLeaf.format], ?_⟩
@@ -251,7 +251,7 @@ theorem check_decompress {rt : Digest k} {lvs : List (MerkleLeaf kN L)} {path : 
 multiproof verifier's queries.** -/
 @[headline]
 theorem trace_decompress_subset {rt : Digest k} {lvs : List (MerkleLeaf kN L)}
-    {path : List (Digest k)} (hc : format.check h n rt js lvs path) :
+    {path : List (Digest k)} (hc : format.Check h n rt js lvs path) :
     (PerLeaf.treeProg n js lvs (decompress h n js lvs path)).trace h ⊆
       (treeProg n js lvs path).trace h := by
   obtain ⟨-, -, hl, -, -⟩ := id hc

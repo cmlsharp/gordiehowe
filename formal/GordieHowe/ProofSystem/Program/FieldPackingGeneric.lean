@@ -140,8 +140,8 @@ noncomputable def genericStageBasis (hK : Fintype.card K = p ^ n) {m d : ℕ} (h
 /-- **The edge `F_{p^m} <d F_{p^(m d)}` with subfield masks over `F_{p^s0}`**, for `m d ∣ n` and
 `s0 ∣ m`: the stage basis `genericStageBasis`, the order `n / m`, and the masks in the basis
 `maskBasis` of `K` over `F_{p^s0}`. -/
-noncomputable def subfieldEdgeKit (hK : Fintype.card K = p ^ n) {s0 m d : ℕ} (hmd : m * d ∣ n)
-    (hs0 : s0 ∣ m) : EdgeKit K p (fixedField K p s0) m d :=
+noncomputable def subfieldEdgeKit [DecidableEq K] (hK : Fintype.card K = p ^ n) {s0 m d : ℕ}
+    (hmd : m * d ∣ n) (hs0 : s0 ∣ m) : EdgeKit K p (fixedField K p s0) m d :=
   have hm : m ∣ n := Dvd.dvd.trans (Dvd.intro d rfl) hmd
   have hs0n : s0 ∣ n := hs0.trans hm
   letI := relFrobeniusOrder_div hK hs0n
@@ -155,8 +155,9 @@ noncomputable def subfieldEdgeKit (hK : Fintype.card K = p ^ n) {s0 m d : ℕ} (
 
 /-- **The bit edge `F_p <d F_{p^d}` with squaring-chain masks**, in characteristic two, for
 `d ∣ n`, in the basis `β` of the stage. -/
-noncomputable def squaringEdgeKit (hK : Fintype.card K = p ^ n) (h2 : p = 2) {S0 : Subfield K}
-    {d : ℕ} (hd : d ∣ n) {β : Fin d → K} (hβ : StageIndependent p 1 d β) : EdgeKit K p S0 1 d where
+noncomputable def squaringEdgeKit [DecidableEq K] (hK : Fintype.card K = p ^ n) (h2 : p = 2)
+    {S0 : Subfield K} {d : ℕ} (hd : d ∣ n) {β : Fin d → K} (hβ : StageIndependent p 1 d β) :
+    EdgeKit K p S0 1 d where
   e := n
   order := RelFrobeniusOrder.of_card (by rw [hK, one_mul]) (Nat.pos_of_ne_zero
     (ne_zero_of_card_eq_pow hK))
@@ -168,8 +169,8 @@ noncomputable def squaringEdgeKit (hK : Fintype.card K = p ^ n) (h2 : p = 2) {S0
     exact MaskKit.bitChain
 
 /-- **The coordinates of the bit edge** are the coefficients in its basis. -/
-theorem squaringEdgeKit_coord (hK : Fintype.card K = p ^ n) (h2 : p = 2) {S0 : Subfield K}
-    {d : ℕ} (hd : d ∣ n) {β : Fin d → K} (hβ : StageIndependent p 1 d β)
+theorem squaringEdgeKit_coord [DecidableEq K] (hK : Fintype.card K = p ^ n) (h2 : p = 2)
+    {S0 : Subfield K} {d : ℕ} (hd : d ∣ n) {β : Fin d → K} (hβ : StageIndependent p 1 d β)
     (c : Fin d → fixedField K p 1) (j : Fin d) :
     (squaringEdgeKit (S0 := S0) hK h2 hd hβ).basis.coord (∑ i, β i * (c i : K)) j = c j :=
   hβ.coord_stageBasis _ _ _ _ c j
@@ -267,8 +268,9 @@ noncomputable def FieldInterp.genericPacking (hK : Fintype.card F.K = p ^ n) (hs
     F.Packing where
   p := p
   n := n
-  top_eq := fixedField_eq_top hK
+  card_eq := hK
   s0 := s0
+  s0_dvd := hs0
   decS0 := Classical.decPred _
   edge := genericEdges F s0 hK bb
   nodeDeg := genericNodeDeg F (p := p) (n := n)
@@ -405,26 +407,24 @@ theorem FieldInterp.BitBases.ofPacking_isSome (Pk : F.Packing) (hcov : Pk.BitNod
 
 /-- **A member of a field of `p^n` elements has at most `p^s0` evaluation points**, for
 `s0 ∣ n`. -/
-theorem FieldInterp.Packing.q_le_pow (Pk : F.Packing) (hK : Fintype.card F.K = Pk.p ^ Pk.n)
-    (hs0 : Pk.s0 ∣ Pk.n) : Pk.q ≤ Pk.p ^ Pk.s0 := by
+theorem FieldInterp.Packing.q_le_pow (Pk : F.Packing) : Pk.q ≤ Pk.p ^ Pk.s0 := by
   have := Pk.q_le_card
-  rwa [card_fixedField_of_dvd hK (ne_zero_of_card_eq_pow hK) hs0 (one_lt_of_card_eq_pow hK)] at this
+  rwa [card_fixedField_of_dvd Pk.card_eq (ne_zero_of_card_eq_pow Pk.card_eq) Pk.s0_dvd
+    (one_lt_of_card_eq_pow Pk.card_eq)] at this
 
 /-- **The generic member at a member's numbers**: the same characteristic, degree `n`, masking
 degree `s0` and point count `q`, the bit bases of the member's bit edges and its additive bit
 coordinates (`genericPacking`), for a field of `p^n` elements with `s0 ∣ n`. -/
 @[instance_reducible]
-noncomputable def FieldInterp.Packing.generic (Pk : F.Packing)
-    (hK : Fintype.card F.K = Pk.p ^ Pk.n) (hs0 : Pk.s0 ∣ Pk.n) (hcov : Pk.BitNodesNamed) :
+noncomputable def FieldInterp.Packing.generic (Pk : F.Packing) (hcov : Pk.BitNodesNamed) :
     F.Packing :=
-  F.genericPacking hK hs0 (Pk.q_le_pow hK hs0) (FieldInterp.BitBases.ofPacking Pk hcov)
+  F.genericPacking Pk.card_eq Pk.s0_dvd Pk.q_le_pow (FieldInterp.BitBases.ofPacking Pk hcov)
     Pk.bitsAdditive Pk.nodes
 
-theorem FieldInterp.Packing.generic_realizes (Pk : F.Packing)
-    (hK : Fintype.card F.K = Pk.p ^ Pk.n) (hs0 : Pk.s0 ∣ Pk.n) (hcov : Pk.BitNodesNamed) :
-    (Pk.generic hK hs0 hcov).Realizes Pk.n Pk.s0 Pk.q
+theorem FieldInterp.Packing.generic_realizes (Pk : F.Packing) (hcov : Pk.BitNodesNamed) :
+    (Pk.generic hcov).Realizes Pk.n Pk.s0 Pk.q
       fun d => (Pk.edge 1 d .squaringChain).isSome := by
-  have h := F.genericPacking_realizes hK hs0 (Pk.q_le_pow hK hs0)
+  have h := F.genericPacking_realizes Pk.card_eq Pk.s0_dvd Pk.q_le_pow
     (FieldInterp.BitBases.ofPacking Pk hcov) Pk.bitsAdditive Pk.nodes
   simp only [FieldInterp.BitBases.ofPacking_isSome] at h
   exact h

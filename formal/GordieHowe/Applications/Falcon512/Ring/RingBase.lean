@@ -118,14 +118,14 @@ variable (G program I) in
 and the realized program's relation holds at its program statement, on the witness read from that
 statement. -/
 abbrev ringStmtRelOf : Set (RStmt G × (program.Valuation I → CoreWit)) :=
-  {p | ringOk p.1 = true ∧ (stmtOf p.1, p.2) ∈ relOf Ring.rel}
+  checkedRel stmtOf ringOk (relOf Ring.rel)
 
 variable (G program I) in
 /-- **The honest relation of the native Falcon rings' IOP**: the statement passes the check and
 its program statement is the honest input's (`relH`). -/
 abbrev ringHonestRelOf [FalconRingRoles program] [FalconRingRoleFacts program]
     [FalconRingSource program] : Set (RStmt G × RingIn G) :=
-  {p | ringOk p.1 = true ∧ (stmtOf p.1, p.2) ∈ relH G program I}
+  checkedRel stmtOf ringOk (relH G program I)
 
 variable [FalconRingRoles program] [FalconRingRoleFacts program] [FalconRingSource program]
 

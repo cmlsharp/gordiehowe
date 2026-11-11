@@ -32,11 +32,14 @@ namespace GordieHowe.Falcon512.Ring.Native.QROMParams
 open RealizedProgram RealizedProgram.ProofSystem GordieHowe.Ring GordieHowe.RingSignature
 open Generated.Falcon512.Ring.Native.QROMParams.Program (program)
 open Generated.Falcon512.Ring.Native.QROMParams (interp ready ProofSystems)
-open _root_.GordieHowe.Falcon512.Ring.Native (Signer CoreWit PublicKey)
+open _root_.GordieHowe.Falcon512.Ring.Native (CoreWit)
 open _root_.GordieHowe.Falcon512.Ring (toRStmt toRWit ofRWit adm64)
 open scoped NNReal ENNReal
 
 variable {msgLen : ℕ} (G : Signer msgLen) (C : ProofSystems)
+
+variable [Fintype G.KeyCoins] [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins]
+  [DecidableEq G.SignCoins] [Nonempty G.SignCoins]
 
 /-- **The honest strategy's prover is complete with error `0`** (`HonestStrategy.complete`,
 `ringHonestStrategy_delta`). -/
@@ -44,6 +47,8 @@ theorem ringHonestStrategy_complete : (ringHonestStrategy G).toHonestCore.Comple
   have h := (ringHonestStrategy G).complete
   rwa [ringHonestStrategy_delta] at h
 
+omit [Fintype G.KeyCoins] [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins]
+  [DecidableEq G.SignCoins] [Nonempty G.SignCoins] in
 /-- **The plan-level hypotheses of the program form at `Falcon512.Ring.Native.QROMParams`**
 (`Ring.ProgramHypotheses`, the paper's Theorem 5.2): the forked domain proofs of the
 configuration's proof system (`fieldBranches`, sound by `fieldBranchesSound`), the source

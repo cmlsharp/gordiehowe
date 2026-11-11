@@ -21,22 +21,22 @@ public section
 
 namespace GordieHowe.GKR.Rel
 
-open GordieHowe.RealizedProgram (Trie teW)
+open GordieHowe.RealizedProgram (PTree teW)
 
 /-- **The first leaf of fraction `i`'s span**, with `fuel` levels: a leaf (`i < n`) itself, an inner
 node its left kid's first leaf. `T` holds the inner nodes. -/
-@[expose] def fracLo (T : Trie Frac) (n : ℕ) : ℕ → ℕ → ℕ
+@[expose] def fracLo (T : PTree Frac) (n : ℕ) : ℕ → ℕ → ℕ
   | 0, i => i
   | f + 1, i => cond (Nat.blt i n) i (fracLo T n f (T.get (i - n)).l)
 
 /-- **One past the last leaf of fraction `i`'s span**, with `fuel` levels. -/
-@[expose] def fracHi (T : Trie Frac) (n : ℕ) : ℕ → ℕ → ℕ
+@[expose] def fracHi (T : PTree Frac) (n : ℕ) : ℕ → ℕ → ℕ
   | 0, i => i + 1
   | f + 1, i => cond (Nat.blt i n) (i + 1) (fracHi T n f (T.get (i - n)).r)
 
 /-- **Inner node `k` of a tree of `n` leaves is well placed**: its kids lie below it (fraction
 `n + k`), and the left kid's span ends where the right kid's begins. -/
-@[expose] def fracNodeOkB (T : Trie Frac) (n : ℕ) (f : Frac) (k : ℕ) : Bool :=
+@[expose] def fracNodeOkB (T : PTree Frac) (n : ℕ) (f : Frac) (k : ℕ) : Bool :=
   Nat.blt f.l (n + k) && Nat.blt f.r (n + k) &&
     Nat.beq (fracHi T n (n + k) f.l) (fracLo T n (n + k) f.r)
 
@@ -45,17 +45,17 @@ last fraction) spanning every leaf. -/
 @[expose] def FracTree.okB (tr : FracTree) : Bool :=
   let n := tr.dens.length
   let m := tr.inner.length
-  let T := Trie.ofList tr.inner
+  let T := PTree.ofList tr.inner
   Nat.blt 0 n && tr.inner.zipIdx.all (fun p => fracNodeOkB T n p.1 p.2) &&
     Nat.beq (fracLo T n (n + m) (n + m - 1)) 0 && Nat.beq (fracHi T n (n + m) (n + m - 1)) n
 
 /-- **The fractions by index**: per leaf no numerator (one) and its denominator, then per inner node
 its numerator and denominator. -/
-@[expose] def FracTree.fracs (tr : FracTree) : Trie (Option Wire × Wire) :=
-  Trie.ofList (tr.dens.map (fun d => (none, d)) ++ tr.inner.map fun f => (some f.num, f.den))
+@[expose] def FracTree.fracs (tr : FracTree) : PTree (Option Wire × Wire) :=
+  PTree.ofList (tr.dens.map (fun d => (none, d)) ++ tr.inner.map fun f => (some f.num, f.den))
 
 /-- **`n_a · d_b`** over the fractions `F`: `d_b` alone when `a`'s numerator is one. -/
-@[expose] def fracTerm (F : Trie (Option Wire × Wire)) (a b : ℕ) : TE :=
+@[expose] def fracTerm (F : PTree (Option Wire × Wire)) (a b : ℕ) : TE :=
   match (F.get a).1 with
   | none => teW (F.get b).2
   | some na => .mul (teW na) (teW (F.get b).2)
@@ -85,13 +85,13 @@ open GordieHowe.GKR.Rel (Wire TE EntryCert Assert Frac FracTree LogupCert MacHCe
 /-- **Wire `i` of table node `k`.** -/
 @[expose] def wireAt (E : ETable) (k i : ℕ) : Wire := (E.get k).wires.getD i default
 
-/-- **Table node `k`'s wires as a trie**, with their count: read many times, a node's wires are
+/-- **Table node `k`'s wires as a positional tree**, with their count: read many times, a node's wires are
 looked up by key (`wireAtT`), not walked as a list. -/
-@[expose] def wiresT (E : ETable) (k : ℕ) : Trie Wire × ℕ :=
-  (Trie.ofList (E.get k).wires, (E.get k).wires.length)
+@[expose] def wiresT (E : ETable) (k : ℕ) : PTree Wire × ℕ :=
+  (PTree.ofList (E.get k).wires, (E.get k).wires.length)
 
-/-- **Wire `i` of a node's wire trie** (the default past its count). -/
-@[expose] def wireAtT (T : Trie Wire × ℕ) (i : ℕ) : Wire := cond (Nat.blt i T.2) (T.1.get i) default
+/-- **Wire `i` of a node's wire tree** (the default past its count). -/
+@[expose] def wireAtT (T : PTree Wire × ℕ) (i : ℕ) : Wire := cond (Nat.blt i T.2) (T.1.get i) default
 
 /-- **The needle coordinates of a group**: per member, in order, its node `y` and each coordinate
 `first, …, first + count − 1` it reads. -/
@@ -100,7 +100,7 @@ looked up by key (`wireAtT`), not walked as a list. -/
     (p.2, Member.first p.1 + j)
 
 /-- **The needles' wires of a group**: per member, its node's wires at its coordinates, read through
-the node's wire trie (`needleCoords`' wires, `needleWires_eq`). -/
+the node's wire tree (`needleCoords`' wires, `needleWires_eq`). -/
 @[expose] def needleWires (E : ETable) (ms : List Member) (ys : List ℕ) : List Wire :=
   (ms.zip ys).flatMap fun p =>
     let T := wiresT E p.2
@@ -238,7 +238,7 @@ input `a + i` of the block `.filler a n`. -/
     | _ => false
 
 /-- **`logupCuts`, its wires read by key**: the needles' and the histograms' wires through their
-nodes' wire tries (`logupCutsT_eq`). -/
+nodes' wire trees (`logupCutsT_eq`). -/
 @[expose] def logupCutsT (t g : ℕ) (lc : LogupCert) : List (Wire × TE) :=
   let E := cd.table
   let aT := teW (wireAt E lc.alpha 0)
@@ -255,7 +255,7 @@ nodes' wire tries (`logupCutsT_eq`). -/
   match (ir.predicate p).body with
   | .cross _ _ _ _ _ real =>
     let w := real.width
-    let G := Trie.ofList (powList ar 2 w 1)
+    let G := PTree.ofList (powList ar 2 w 1)
     let B := wiresT cd.table mc.bits
     mc.chunks.zipIdx.map fun q =>
       (q.1, TE.sumL ((List.range w).map fun i =>

@@ -98,7 +98,7 @@ theorem macFact_sound (hwf : ir.WellFormed) (hI : I.Registered ir) (hL : I.Lawfu
         show ir.HoldsWith (ir.reader e) (ir.predicate pid).body
         rw [hb]
         exact hres
-      · exact .inr ⟨real.key, .inr (.inl ⟨pid, hpid, dx, x, dy, y, k, real, hb, rfl, hbad⟩)⟩
+      · exact .inr ⟨real.key, .inr ⟨pid, hpid, dx, x, dy, y, k, real, hb, rfl, hbad⟩⟩
     split at hf
     · rename_i b t iy ib hbx hbl
       split_ifs at hf with hcond

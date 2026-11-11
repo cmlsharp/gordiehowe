@@ -76,7 +76,7 @@ variable {m t : ℕ} {I J B Req Resp O : Type} [Fintype I] [Fintype J] [Decidabl
 
 /-- The workspace of the distinguisher: `G`'s simulation register, the store of the replies, and
 the phase (`true` before a request slot, `false` before a query slot). A named type, so that instance
-search over the registers stops at its own instances (design rule R2). -/
+search over the registers stops at its own instances. -/
 def WD : Type := G.SimW (I := I) (J := J) (m := m) × Bool
 
 /-- The registers of the distinguisher. -/

@@ -20,11 +20,11 @@ leaves, `3730` verifier queries, `1042` digests per chain input, `3258` position
 digests, every round error at most `12734825 / 2^260`, every load passing the Chernoff test
 `2^-4260` at `z = 65 / 64`; the domains' largest arrays (`1024`), largest challenge reads and other
 reads (`1250`; `200`), the grants `161560` bytes to `A`'s first packing stage and `840` bytes to
-`A`'s linear test, and the source challenges' errors `511 / 12289 ^ 20` at challenge `0`. The
-rounds, leaves, queries, verifier queries, digests, positions and the digest length are the
-compiler's; the Chernoff exponent and point, the largest arrays and reads, the grants and the
-largest round error's bound are the configuration's inputs. The check of the figures is
-`GordieHowe.ProgramData.FiguresOk`.
+`A`'s linear test, and the source challenges' errors `511 / 12289 ^ 20` at challenge `0` and
+`1022 / 12289 ^ 20` at challenge `1`. The rounds, leaves, queries, verifier queries, digests,
+positions and the digest length are the compiler's; the Chernoff exponent and point, the largest
+arrays and reads, the grants and the largest round error's bound are the configuration's inputs. The
+check of the figures is `GordieHowe.ProgramData.FiguresOk`.
 -/
 
 namespace GordieHowe.Generated.Falcon512.Ring.Native.QROMParams
@@ -51,8 +51,10 @@ theorem figures_eq : figures = ⟨1038, 3258, 127, 3730, 1042, 3258, 48, 1273482
   rfl
 
 /-- **The error fractions of the source challenges** (the plan's degree bounds of their events over
-their fields' sizes): `511 / 12289 ^ 20` at challenge `0`. -/
-def sourceErrors (_ : Nat) : Nat × Nat := (511, 12289 ^ 20)
+their fields' sizes): `511 / 12289 ^ 20` at challenge `0` and `1022 / 12289 ^ 20` at challenge `1`.
+-/
+def sourceErrors (j : Nat) : Nat × Nat :=
+  if j = 0 then (511, 12289 ^ 20) else (1022, 12289 ^ 20)
 
 /-- **The figures' data.** -/
 abbrev figuresData : GordieHowe.FiguresData :=

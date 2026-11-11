@@ -12,6 +12,8 @@ public import GordieHowe.ProofSystem.GKR.LayerProtocol
 /-!
 # Recursive Longfellow GKR transcript semantics
 
+The GKR protocol (Goldwasser, Kalai and Rothblum, STOC 2008) in Longfellow's form.
+
 Every intermediate wire table is computed from the fixed input. The checker
 uses shared alpha/beta binding, interleaved two-value sumcheck rounds, two
 revealed wire claims, and a final scalar input batching challenge. Escape

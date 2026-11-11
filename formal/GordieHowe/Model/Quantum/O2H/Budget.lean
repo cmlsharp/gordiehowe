@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Model.Quantum.Pure.Budget
 public import GordieHowe.Model.Quantum.O2H.Game
+public import GordieHowe.Headline
 
 @[expose] public section
 
@@ -533,6 +534,7 @@ on `σ`; suppose that along every run the branches record their oracle steps (`S
 If every input lies in `T σ` with probability at most `ε`, then
 `|P_left − P_right| ≤ 2 q √(n ε)`: each branch is charged for the at most `q` oracle steps at
 which it lies in `M`, wherever they fall. -/
+@[headline]
 theorem o2h_fresh_secret_of_count {μV : PMF V} {ν : PMF R} {T : R → Set X} {ε : ℝ} (M : Set W)
     (G C : ℕ → Set W) (q : ℕ) (hμ : ∀ v σ, s.μ (v, σ) = μV v * ν σ)
     (hS : ∀ v σ w, w ∈ M → s.S (v, σ) w = T σ) (hS' : ∀ v σ w, w ∉ M → s.S (v, σ) w = ∅)

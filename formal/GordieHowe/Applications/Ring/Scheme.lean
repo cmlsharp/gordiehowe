@@ -59,7 +59,9 @@ Falcon these include the salt `r`, specification v1.2 Algorithm 10, p. 39, line 
 `signWith sk m c`. `pub σ` is the public value of a signature, read off the signature: the part of
 it that the ring statement fixes (Falcon's salt, which `HashToPoint(r ‖ m)` needs outside the
 circuit; `Unit` for ML-DSA; `w₁` for the ring that publishes it). Verification is deterministic.
-Messages are a finite type (messages of bounded length). -/
+The scheme holds types only: the finiteness, decidable equality and nonemptiness the games read
+(messages are a finite type, of bounded length) are instance-implicit binders on its projections
+(`[Fintype Sch.Msg]`), found by instance search on the named types of a concrete scheme. -/
 structure SigScheme where
   /-- Public keys. -/
   PK : Type
@@ -75,21 +77,6 @@ structure SigScheme where
   KeyCoins : Type
   /-- The coins of signing. -/
   SignCoins : Type
-  [instFintypePK : Fintype PK]
-  [instDecEqPK : DecidableEq PK]
-  [instFintypeMsg : Fintype Msg]
-  [instDecEqMsg : DecidableEq Msg]
-  [instFintypeSig : Fintype Sig]
-  [instDecEqSig : DecidableEq Sig]
-  [instFintypePub : Fintype Pub]
-  [instDecEqPub : DecidableEq Pub]
-  [instNonemptyPub : Nonempty Pub]
-  [instFintypeKeyCoins : Fintype KeyCoins]
-  [instDecEqKeyCoins : DecidableEq KeyCoins]
-  [instNonemptyKeyCoins : Nonempty KeyCoins]
-  [instFintypeSignCoins : Fintype SignCoins]
-  [instDecEqSignCoins : DecidableEq SignCoins]
-  [instNonemptySignCoins : Nonempty SignCoins]
   /-- Key generation from its coins. -/
   keyGen : KeyCoins → PK × SK
   /-- The public value of a signature. -/
@@ -98,12 +85,6 @@ structure SigScheme where
   signWith : SK → Msg → SignCoins → Sig
   /-- Verification. -/
   verify : PK → Msg → Sig → Bool
-
-attribute [instance] SigScheme.instFintypePK SigScheme.instDecEqPK SigScheme.instFintypeMsg
-  SigScheme.instDecEqMsg SigScheme.instFintypeSig SigScheme.instDecEqSig SigScheme.instFintypePub
-  SigScheme.instDecEqPub SigScheme.instNonemptyPub SigScheme.instFintypeKeyCoins
-  SigScheme.instDecEqKeyCoins SigScheme.instNonemptyKeyCoins SigScheme.instFintypeSignCoins
-  SigScheme.instDecEqSignCoins SigScheme.instNonemptySignCoins
 
 namespace SigScheme
 
@@ -121,7 +102,7 @@ uniform signing coins fails to verify under the public key of `kc` with probabil
 A bounded signer can fail: the vendored Falcon verifier rejects when the bounded `HashToPoint`
 runs out of candidates for the drawn salt, and ML-DSA's rejection loop is truncated by the finite
 signing coins. -/
-def CorrectWithin (ε : ℝ≥0∞) : Prop :=
+def CorrectWithin [Fintype Sch.SignCoins] [Nonempty Sch.SignCoins] (ε : ℝ≥0∞) : Prop :=
   ∀ kc m, (PMF.uniformOfFintype Sch.SignCoins).toOuterMeasure
     {c | Sch.verify (Sch.pk kc) m (Sch.signWith (Sch.sk kc) m c) ≠ true} ≤ ε
 
@@ -132,7 +113,8 @@ def Correct : Prop :=
 
 variable {Sch} in
 /-- A perfectly correct scheme has correctness error `0`. -/
-theorem Correct.correctWithin (h : Sch.Correct) : Sch.CorrectWithin 0 := fun kc m => by
+theorem Correct.correctWithin [Fintype Sch.SignCoins] [Nonempty Sch.SignCoins] (h : Sch.Correct) :
+    Sch.CorrectWithin 0 := fun kc m => by
   have : {c | Sch.verify (Sch.pk kc) m (Sch.signWith (Sch.sk kc) m c) ≠ true} = ∅ :=
     Set.eq_empty_iff_forall_notMem.2 fun c hc => hc (h kc m c)
   rw [this, MeasureTheory.measure_empty]
@@ -168,7 +150,6 @@ structure RingStmt (Sch : SigScheme) (RMsg : Type) (N : ℕ) where
   msg : RMsg
   /-- The public value of the signature. -/
   pub : Sch.Pub
-deriving DecidableEq
 
 /-- **A ring witness**: the signer's position in the ring and a base signature. -/
 structure RingWit (Sch : SigScheme) where
@@ -176,7 +157,48 @@ structure RingWit (Sch : SigScheme) where
   idx : ℕ
   /-- The base signature. -/
   sig : Sch.Sig
-deriving DecidableEq
+
+/-! The decidable equality of statements and witnesses is the definition `deriving DecidableEq`
+generates, written out: it reads the instances of the field types `Sch.PK`, `Sch.Pub` and `Sch.Sig`
+from binders, which a deriving handler does not see. -/
+
+section DecEq
+
+/-- Decidable equality of ring statements, field by field. -/
+def instDecidableEqRingStmt.decEq {RMsg : Type} {N : ℕ} [DecidableEq RMsg] [DecidableEq Sch.PK]
+    [DecidableEq Sch.Pub] (x y : RingStmt Sch RMsg N) : Decidable (x = y) :=
+  match x, y with
+  | @RingStmt.mk _ _ _ a0 a1 a2, @RingStmt.mk _ _ _ b0 b1 b2 =>
+    if h0 : @a0 = @b0 then by
+      subst h0
+      exact
+        if h1 : @a1 = @b1 then by
+          subst h1
+          exact
+            if h2 : @a2 = @b2 then by subst h2; exact isTrue rfl
+            else isFalse (by intro n; injection n; apply h2 _; assumption)
+        else isFalse (by intro n; injection n; apply h1 _; assumption)
+    else isFalse (by intro n; injection n; apply h0 _; assumption)
+
+instance instDecidableEqRingStmt {RMsg : Type} {N : ℕ} [DecidableEq RMsg] [DecidableEq Sch.PK]
+    [DecidableEq Sch.Pub] : DecidableEq (RingStmt Sch RMsg N) :=
+  instDecidableEqRingStmt.decEq
+
+/-- Decidable equality of ring witnesses, field by field. -/
+def instDecidableEqRingWit.decEq [DecidableEq Sch.Sig] (x y : RingWit Sch) : Decidable (x = y) :=
+  match x, y with
+  | @RingWit.mk _ a0 a1, @RingWit.mk _ b0 b1 =>
+    if h0 : @a0 = @b0 then by
+      subst h0
+      exact
+        if h1 : @a1 = @b1 then by subst h1; exact isTrue rfl
+        else isFalse (by intro n; injection n; apply h1 _; assumption)
+    else isFalse (by intro n; injection n; apply h0 _; assumption)
+
+instance instDecidableEqRingWit [DecidableEq Sch.Sig] : DecidableEq (RingWit Sch) :=
+  instDecidableEqRingWit.decEq
+
+end DecEq
 
 variable {RMsg : Type} {N : ℕ}
 
@@ -262,7 +284,45 @@ inductive BaseRequest where
   | sign (i : Fin n) (m : Sch.Msg)
   /-- The corruption of user `i`. -/
   | corrupt (i : Fin n)
-deriving DecidableEq, Fintype
+
+/-! The decidable equality and finiteness of requests are the definitions `deriving DecidableEq,
+Fintype` generate, written out: they read the instances of `Sch.Msg` from binders. -/
+
+section BaseRequestInstances
+
+variable {Sch n}
+
+/-- Decidable equality of requests, constructor by constructor and field by field. -/
+def instDecidableEqBaseRequest.decEq [DecidableEq Sch.Msg] (x y : BaseRequest Sch n) :
+    Decidable (x = y) :=
+  match x, y with
+  | @BaseRequest.publicKey _ _ a0, @BaseRequest.publicKey _ _ b0 =>
+    if h : @a0 = @b0 then by subst h; exact isTrue rfl
+    else isFalse (by intro n; injection n; apply h _; assumption)
+  | BaseRequest.publicKey .., BaseRequest.sign .. => isFalse (by intro h; injection h)
+  | BaseRequest.publicKey .., BaseRequest.corrupt .. => isFalse (by intro h; injection h)
+  | BaseRequest.sign .., BaseRequest.publicKey .. => isFalse (by intro h; injection h)
+  | @BaseRequest.sign _ _ a0 a1, @BaseRequest.sign _ _ b0 b1 =>
+    if h0 : @a0 = @b0 then by
+      subst h0
+      exact
+        if h1 : @a1 = @b1 then by subst h1; exact isTrue rfl
+        else isFalse (by intro n; injection n; apply h1 _; assumption)
+    else isFalse (by intro n; injection n; apply h0 _; assumption)
+  | BaseRequest.sign .., BaseRequest.corrupt .. => isFalse (by intro h; injection h)
+  | BaseRequest.corrupt .., BaseRequest.publicKey .. => isFalse (by intro h; injection h)
+  | BaseRequest.corrupt .., BaseRequest.sign .. => isFalse (by intro h; injection h)
+  | @BaseRequest.corrupt _ _ a0, @BaseRequest.corrupt _ _ b0 =>
+    if h : @a0 = @b0 then by subst h; exact isTrue rfl
+    else isFalse (by intro n; injection n; apply h _; assumption)
+
+instance instDecidableEqBaseRequest [DecidableEq Sch.Msg] : DecidableEq (BaseRequest Sch n) :=
+  instDecidableEqBaseRequest.decEq
+
+instance instFintypeBaseRequest [Fintype Sch.Msg] : Fintype (BaseRequest Sch n) :=
+  derive_fintype% _
+
+end BaseRequestInstances
 
 variable {Sch n} in
 /-- The request is a signing request. -/
@@ -278,7 +338,44 @@ inductive BaseResponse where
   | signature (σ : Sch.Sig)
   /-- The key-generation coins of a corrupted user. -/
   | keyCoins (kc : Sch.KeyCoins)
-deriving DecidableEq, Fintype
+
+/-! The decidable equality and finiteness of answers are the definitions `deriving DecidableEq,
+Fintype` generate, written out: they read the instances of `Sch.PK`, `Sch.Sig` and `Sch.KeyCoins`
+from binders. -/
+
+section BaseResponseInstances
+
+variable {Sch}
+
+/-- Decidable equality of answers, constructor by constructor. -/
+def instDecidableEqBaseResponse.decEq [DecidableEq Sch.PK] [DecidableEq Sch.Sig]
+    [DecidableEq Sch.KeyCoins] (x y : BaseResponse Sch) : Decidable (x = y) :=
+  match x, y with
+  | @BaseResponse.publicKey _ a0, @BaseResponse.publicKey _ b0 =>
+    if h : @a0 = @b0 then by subst h; exact isTrue rfl
+    else isFalse (by intro n; injection n; apply h _; assumption)
+  | BaseResponse.publicKey .., BaseResponse.signature .. => isFalse (by intro h; injection h)
+  | BaseResponse.publicKey .., BaseResponse.keyCoins .. => isFalse (by intro h; injection h)
+  | BaseResponse.signature .., BaseResponse.publicKey .. => isFalse (by intro h; injection h)
+  | @BaseResponse.signature _ a0, @BaseResponse.signature _ b0 =>
+    if h : @a0 = @b0 then by subst h; exact isTrue rfl
+    else isFalse (by intro n; injection n; apply h _; assumption)
+  | BaseResponse.signature .., BaseResponse.keyCoins .. => isFalse (by intro h; injection h)
+  | BaseResponse.keyCoins .., BaseResponse.publicKey .. => isFalse (by intro h; injection h)
+  | BaseResponse.keyCoins .., BaseResponse.signature .. => isFalse (by intro h; injection h)
+  | @BaseResponse.keyCoins _ a0, @BaseResponse.keyCoins _ b0 =>
+    if h : @a0 = @b0 then by subst h; exact isTrue rfl
+    else isFalse (by intro n; injection n; apply h _; assumption)
+
+instance instDecidableEqBaseResponse [DecidableEq Sch.PK] [DecidableEq Sch.Sig]
+    [DecidableEq Sch.KeyCoins] : DecidableEq (BaseResponse Sch) :=
+  instDecidableEqBaseResponse.decEq
+
+instance instFintypeBaseResponse [Fintype Sch.PK] [Fintype Sch.Sig] [Fintype Sch.KeyCoins] :
+    Fintype (BaseResponse Sch) :=
+  derive_fintype% _
+
+end BaseResponseInstances
 
 variable {Sch n}
 

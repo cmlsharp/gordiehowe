@@ -254,7 +254,9 @@ def prodCoeffs (rb x : Fin w → ℕ) (m : ℕ) : ℕ :=
 
 
 /-- `ApplyConv`: the product coefficients, each monomial `X^k` replaced by the coefficients of
-`X^k mod φ` (`reduceBit`). -/
+`X^k mod φ` (`reduceBit`). The lift to `ℕ` reduces each monomial before summing and never reduces
+mod `2`, as the C++ `ops::mac_conv_max` does; the bounds `convMax` (`504` at width `128`, `1017` at
+width `256`) are of this lift. -/
 def applyConv (T : Finset ℕ) (rb x : Fin w → ℕ) (m : Fin w) : ℕ :=
   ∑ k ∈ Finset.range (2 * w - 1), prodCoeffs rb x k * reduceBit w T k m
 

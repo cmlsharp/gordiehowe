@@ -27,6 +27,11 @@
 // handles, affine expressions, expressions), emitted once in the domain's
 // circuit: the ML-DSA ring's challenge support - 2 sign and its carrier left
 // side w' + q dq - bias need no cell. The spectra are values.
+//
+// These are field equalities. An integer congruence lhs = rhs (mod m) is
+// assert_mod over expressions (system_core.h): affine sides, or the product
+// form for sides with products, conv or operators, e.g. assert_mod(a * b,
+// c, q) or assert_mod(conv(h, x), c, q) with h private.
 
 #ifndef PRIVACY_PROOFS_ZK_LIB_GORDIEHOWE_OPS_SPECTRAL_H_
 #define PRIVACY_PROOFS_ZK_LIB_GORDIEHOWE_OPS_SPECTRAL_H_
@@ -42,7 +47,6 @@
 #include "gordiehowe/domain.h"
 #include "gordiehowe/expr.h"
 #include "gordiehowe/ops/operators.h"
-#include "gordiehowe/ops/integer_congruence.h"
 #include "gordiehowe/ops/spectral_sum.h"
 #include "gordiehowe/predicates.h"
 
@@ -209,61 +213,6 @@ void assert_spectral(Sc &&sc, std::string nm, const X &lhs,
   assert_spectral(sc, std::move(nm),
                   std::vector<SpectralRow<F>>{
                       spectral_row(lhs, std::move(rhs))});
-}
-
-// rows[i].lhs = rows[i].rhs (mod M) as integers, for every row, M >= 2:
-// the product form of assert_mod (system_core.h's assert_mod_congruence,
-// lowered by mod.h) over the congruence whose row i is
-// +lhs_i - rhs_i, lhs_i an expression term and rhs_i a spectral product
-// term (ops/integer_congruence.h): the integer value of a spectral sum is
-// sum_t scale_t (h_t * x_t) in Z[X]/(X^n + 1), h_t the polynomial whose
-// spectrum spec_t is, which a public table selects (its coefficients'
-// interval is the hull of the table's columns,
-// range_internal::table_preimage_hull). The lowering derives the
-// quotient's interval and its sound bound, commits it (one value of shape
-// [rows][n]), and states each row, normalized, as the spectral predicate
-//   Ntt(lhs_i - m qlo - m q_i) == rhs_i
-// pinned to the circuit, as assert_spectral does. NM names it.
-template <class F>
-Predicate assert_mod(const std::vector<SpectralRow<F>> &rows, Bound m,
-                     const Name &nm = {}) {
-  if (rows.empty() || rows[0].rhs.terms.empty())
-    fail("assert_mod '" + nm.name + "': no spectral rows");
-  const Scope sc = internal::predicate_scope(
-      internal::operand_graph(rows[0].rhs.terms[0].spec), nm, "assert_mod");
-  using T = std::shared_ptr<const IntegerTerm<F>>;
-  std::vector<typename Congruence<F>::Row> cr;
-  for (const auto &r : rows)
-    cr.push_back({plus<F>(T(std::make_shared<const ExprTerm<F>>(r.lhs))),
-                  minus<F>(T(std::make_shared<const SpectralProductTerm<F>>(r.rhs)))});
-  return internal::Predicates::mod_congruence(
-      sc,
-      std::make_shared<const Congruence<F>>(std::move(cr),
-                                            "assert_mod '" + nm.name + "'"),
-      m, nm.name);
-}
-// D = 0 (mod M) as integers for the congruence of ROWS
-// (ops/integer_congruence.h: each row a list of signed terms, any an
-// expression or a spectral product, none distinguished), M >= 2, declared
-// in scope SC: the product form of assert_mod (mod.h). NM names it.
-template <class F>
-Predicate assert_congruence(const Scope &sc,
-                            std::vector<typename Congruence<F>::Row> rows,
-                            Bound m, const std::string &nm) {
-  return internal::Predicates::mod_congruence(
-      sc,
-      std::make_shared<const Congruence<F>>(std::move(rows),
-                                            "assert_mod '" + sc.scoped(nm) + "'"),
-      m, nm);
-}
-// lhs = rhs (mod M) for one spectral row: LHS a handle or an expression of
-// n coordinates, RHS a spectral sum.
-template <class X, class F = PolyField<X>>
-Predicate assert_mod(const X &lhs, SpectralSum<F> rhs, Bound m,
-                     const Name &nm = {}) {
-  return assert_mod(std::vector<SpectralRow<F>>{
-                        spectral_row(lhs, std::move(rhs))},
-                    m, nm);
 }
 
 }  // namespace proofs::gordiehowe::ops

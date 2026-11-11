@@ -437,28 +437,49 @@ end BlindExtractor
 
 end Lemma1
 
+/-! ### Negligible and polynomially bounded functions -/
+
+/-- **A negligible function of the security parameter** (Unruh 2017, Definition 14, p. 21, "a
+negligible `µ`"): for every `j`, eventually `η^j · µ η ≤ 1`. -/
+def Negligible (μ : ℕ → ℝ) : Prop :=
+  ∀ j : ℕ, ∀ᶠ η : ℕ in Filter.atTop, (η : ℝ) ^ j * μ η ≤ 1
+
+/-- **A polynomially bounded function of the security parameter** (Unruh 2017, Definition 14,
+p. 21, "a polynomial `p`"): eventually at most `C η^c`, for some constants `C` and `c`. -/
+def PolyBounded (p : ℕ → ℝ) : Prop :=
+  ∃ (C : ℝ) (c : ℕ), ∀ᶠ η : ℕ in Filter.atTop, p η ≤ C * (η : ℝ) ^ c
+
+/-- **Eq. (6) fails at one value of the security parameter** (Unruh 2017, Definition 14, p. 21,
+eq. (6)): the extraction probability `extract` is below `(1/p) prove^d − µ`, for the probability
+`prove` of Prove, the polynomial's value `p`, the degree `d` and the negligible function's value
+`µ`. -/
+def Eq6Fails (extract prove p : ℝ) (d : ℕ) (μ : ℝ) : Prop :=
+  extract < p⁻¹ * prove ^ d - μ
+
 /-- **Eq. (6) fails eventually when Prove is near `1` and Extract is negligible** (the arithmetic
 after the oracle-test gap lemma): if Prove succeeds with probability at least `1 − ε`,
 `ε` eventually at most `1/2`, Extract with probability at most `a`, and `a` and `µ` are negligible
-(below `η^-k` eventually, for every `k`; Unruh 2017, Definition 14, p. 21, quantifies over "a
-negligible `µ`"), then for every `p` bounded by `C η^c` and every `d`, eventually
-`Pr[Extract] < (1/p) Pr[Prove]^d − µ`. -/
-theorem eq6_fails_eventually {prove extract a μ ε p : ℕ → ℝ} {C : ℝ} {c d : ℕ} (hC : 0 < C)
-    (hp : ∀ η, 0 < p η) (hpoly : ∀ η, p η ≤ C * (η : ℝ) ^ c)
+(Unruh 2017, Definition 14, p. 21, quantifies over "a negligible `µ`"), then for every positive
+polynomially bounded `p` and every `d`, eventually `Pr[Extract] < (1/p) Pr[Prove]^d − µ`. -/
+theorem eq6_fails_eventually {prove extract a μ ε p : ℕ → ℝ} {d : ℕ}
+    (hp : ∀ η, 0 < p η) (hpoly : PolyBounded p)
     (hprove : ∀ᶠ η in Filter.atTop, 1 - ε η ≤ prove η) (hε : ∀ᶠ η in Filter.atTop, ε η ≤ 1 / 2)
-    (hext : ∀ᶠ η in Filter.atTop, extract η ≤ a η)
-    (ha : ∀ k : ℕ, ∀ᶠ η : ℕ in Filter.atTop, (η : ℝ) ^ k * a η ≤ 1)
-    (hμ : ∀ k : ℕ, ∀ᶠ η : ℕ in Filter.atTop, (η : ℝ) ^ k * μ η ≤ 1) :
-    ∀ᶠ η in Filter.atTop, extract η < (p η)⁻¹ * prove η ^ d - μ η := by
-  filter_upwards [hprove, hε, hext, ha (c + 1), hμ (c + 1),
-    Filter.eventually_gt_atTop ⌈4 * C * 2 ^ d⌉₊] with η h1 h2 h3 h4 h5 h6
+    (hext : ∀ᶠ η in Filter.atTop, extract η ≤ a η) (ha : Negligible a) (hμ : Negligible μ) :
+    ∀ᶠ η in Filter.atTop, Eq6Fails (extract η) (prove η) (p η) d (μ η) := by
+  obtain ⟨C₀, c, hpoly⟩ := hpoly
+  obtain ⟨C, hC, hpoly⟩ : ∃ C : ℝ, 0 < C ∧ ∀ᶠ η : ℕ in Filter.atTop, p η ≤ C * (η : ℝ) ^ c :=
+    ⟨max C₀ 1, lt_of_lt_of_le one_pos (le_max_right _ _), hpoly.mono fun η h =>
+      h.trans (mul_le_mul_of_nonneg_right (le_max_left _ _) (by positivity))⟩
+  filter_upwards [hprove, hε, hext, ha (c + 1), hμ (c + 1), hpoly,
+    Filter.eventually_gt_atTop ⌈4 * C * 2 ^ d⌉₊] with η h1 h2 h3 h4 h5 h7 h6
+  show extract η < (p η)⁻¹ * prove η ^ d - μ η
   have hx : 4 * C * 2 ^ d < (η : ℝ) := Nat.lt_of_ceil_lt h6
   have hx0 : (0 : ℝ) < η := lt_of_le_of_lt (by positivity) hx
   have hxc : (0 : ℝ) < (η : ℝ) ^ c := pow_pos hx0 c
   have hxc1 : (0 : ℝ) < (η : ℝ) ^ (c + 1) := pow_pos hx0 (c + 1)
   have hprove' : (1 / 2 : ℝ) ≤ prove η := by linarith
   have hpow : (1 / 2 : ℝ) ^ d ≤ prove η ^ d := pow_le_pow_left₀ (by norm_num) hprove' d
-  have hpinv : (C * (η : ℝ) ^ c)⁻¹ ≤ (p η)⁻¹ := inv_anti₀ (hp η) (hpoly η)
+  have hpinv : (C * (η : ℝ) ^ c)⁻¹ ≤ (p η)⁻¹ := inv_anti₀ (hp η) h7
   have hlow : (C * (η : ℝ) ^ c)⁻¹ * (1 / 2 : ℝ) ^ d ≤ (p η)⁻¹ * prove η ^ d :=
     mul_le_mul hpinv hpow (by positivity) (inv_nonneg.2 (hp η).le)
   have ha' : a η ≤ 1 / (η : ℝ) ^ (c + 1) := (le_div_iff₀' hxc1).2 h4

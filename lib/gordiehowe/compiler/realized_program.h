@@ -272,14 +272,7 @@ struct InRealization {
   LookupRealization lookup;
 };
 
-// A mod predicate's realization form (Lean `ModForm`). The product forms
-// (compiler/mod.h's product_sides) are a source mod_m lhs R whose target
-// checks lhs - R - m (qlo + Q) = 0 coordinate by coordinate in F_p
-// (kProduct), or, for kSpectralProduct, the transform of each row of that
-// equation: Ntt(lhs_i - m qlo - m Q_i) = sum_t s_t spec_t * Ntt(x_t) for R_i
-// = sum_t s_t (h_t * x_t), each term of R a convolution by a spectrum
-// (NamedOp kNegacyclicConv or kPolyBroadcast in NTT form) read at one
-// block; Q is the quotient (none for m = p).
+// A mod predicate's realization form (Lean `ModForm`).
 enum class ModForm : uint8_t {
   kField,
   kConstant,
@@ -288,9 +281,7 @@ enum class ModForm : uint8_t {
   kDigits,
   kCommittedDigits,
   kGrouped,
-  kInteger,
-  kProduct,
-  kSpectralProduct
+  kInteger
 };
 
 struct GroupedMod {
@@ -516,6 +507,14 @@ struct SpectralConv {
   Id source = 0, read = 0, products = 0;
   size_t blocks = 0, left = 0, right = 0, length = 0;
   Nat root;
+  // A conv read in a predicate not affine in its convs: the shared
+  // expression COMMITTED (the committed C's leaf) the predicate reads it as,
+  // and the affine row ROW, C = read (kNone for neither).
+  Id committed = kNone, row = kNone;
+  // The direct realization: READ is C's shared leaf, PRODUCTS the predicate
+  // C = sum_{u+v=k} a_u b_v, SQUARES its blocks that sum a square once.
+  bool direct = false;
+  std::vector<bool> squares;
 };
 
 struct MemberCheck {
@@ -591,7 +590,6 @@ struct DStep {
     kConclude,
     kHyp,
     kIvlDisjoint,
-    kProductMod,
     // Only in a GKR circuit's derivations (Certificates::circuit_derivs):
     // the fact of template instance ID of the circuit's emission log, and
     // the circuit's input premise ID (Lean circStepFact).
@@ -600,9 +598,7 @@ struct DStep {
   };
   // An interval source (Lean `IvlSrc`). kTableHull: the hull of the public
   // entries the selections or lookups TAILS place the value among (INTS lo
-  // hi); kTableKernel: the coefficient hull (INTS lo hi) of block INTS[2]
-  // of the kernel of operator SRC_ARG (a convolution by a spectrum, whose
-  // value is the step's), from the selections TAILS.
+  // hi).
   enum Src : uint8_t {
     kConst,
     kDeclared,
@@ -612,8 +608,7 @@ struct DStep {
     kQuadRoot,
     kRootSet,
     kShift,
-    kTableHull,
-    kTableKernel
+    kTableHull
   };
   Rule rule = kConclude;
   // The domain the step reads in when not its predicate's (Lean inDom).
@@ -747,7 +742,8 @@ struct Certificates {
       kQuotDigit,
       kDigitsAcc,
       kLowDigit,
-      kLateHist
+      kLateHist,
+      kSpecC
     };
     Kind kind = kNone;
     size_t a = 0, b = 0, c = 0, d = 0;
@@ -766,7 +762,8 @@ struct Certificates {
       kSpecProd,
       kSpecRow,
       kFieldRow,
-      kTwoTail
+      kTwoTail,
+      kSpecC
     };
     // The role of a predicate in a MAC (Lean `MacRole`).
     enum MacRole : uint8_t {

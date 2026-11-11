@@ -349,7 +349,6 @@ theorem IAlg.queryCount_liftReq {m : ℕ} (A : IAlg X Y Stmt Wit Proof m)
 def _root_.GordieHowe.NARG.ProverFn.liftReq {Coins : Type} (P : NARG.ProverFn X Y Stmt Wit Proof Coins) :
     NARG.ProverFn X Y (ProofQuery Stmt Wit) Unit Proof Coins where
   prove H r _ c := P.prove H r.stmt r.wit c
-  coins := P.coins
 
 /-- **A kernel as a simulator of the proof queries**: on the statement `r` it runs the kernel on `r`.
 
@@ -368,16 +367,17 @@ instance : DecidableRel (liftRel rel (Stmt := Stmt) (Wit := Wit)) := fun r _ =>
 
 /-- The lifted algorithm in the real game of the lifted prover is the algorithm in the real game. -/
 theorem acceptProb_liftReq_realEnv {m : ℕ} (A : IAlg X Y Stmt Wit Proof m) {Coins : Type}
-    [Fintype Coins] (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (Q : ℕ) :
-    A.liftReq.acceptProb (realEnv (liftRel rel) P.liftReq Q) = A.acceptProb (realEnv rel P Q) := by
+    [Fintype Coins] (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ : PMF Coins) (Q : ℕ) :
+    A.liftReq.acceptProb (realEnv (liftRel rel) P.liftReq μ Q) = A.acceptProb
+        (realEnv rel P μ Q) := by
   have h : ∀ ω : (X → Y) × (Fin Q → Coins),
-      A.liftReq.accepts (envResponder (realEnv (liftRel rel) P.liftReq Q) ω) ω.1 =
-        A.accepts (envResponder (realEnv rel P Q) ω) ω.1 := fun ω => by
-    rw [IAlg.accepts, IAlg.accepts, A.run_liftReq (R := envResponder (realEnv rel P Q) ω)
+      A.liftReq.accepts (envResponder (realEnv (liftRel rel) P.liftReq μ Q) ω) ω.1 =
+        A.accepts (envResponder (realEnv rel P μ Q) ω) ω.1 := fun ω => by
+    rw [IAlg.accepts, IAlg.accepts, A.run_liftReq (R := envResponder (realEnv rel P μ Q) ω)
       (fun i r => rfl)]
     rfl
   unfold IAlg.acceptProb
-  have hμ : (realEnv (liftRel rel) P.liftReq Q).μ = (realEnv rel P Q).μ := rfl
+  have hμ : (realEnv (liftRel rel) P.liftReq μ Q).μ = (realEnv rel P μ Q).μ := rfl
   rw [hμ]
   congr 1
   ext ω
@@ -419,13 +419,15 @@ def Adversary.liftReq {m t : ℕ} (𝒜 : Adversary X Y Stmt Wit Proof m t) :
 /-- **Zero knowledge of a prover against a kernel's simulator on the proof queries gives the bound
 between the prover's real game and the kernel's game**, for every classical adversary. -/
 theorem abs_acceptProb_realEnv_sub_progEnv_le {Coins C : Type} [Fintype Coins] [Fintype C]
-    [Nonempty C] {P : NARG.ProverFn X Y Stmt Wit Proof Coins} {K : Kernel X Y Stmt Wit Proof C}
-    {ε : ℕ → ℕ → ℝ} (h : ZeroKnowledge (liftRel rel) P.liftReq K.toSimulator ε) {m t : ℕ}
+    [Nonempty C] {P : NARG.ProverFn X Y Stmt Wit Proof Coins} {μ : PMF Coins}
+        {K : Kernel X Y Stmt Wit Proof C}
+    {ε : ℕ → ℕ → ℝ} (h : ZeroKnowledge (liftRel rel) P.liftReq μ K.toSimulator ε) {m t : ℕ}
     (𝒜 : Adversary X Y Stmt Wit Proof m t) (Q : ℕ) :
-    GordieHowe.advantage (𝒜.acceptProb (realEnv rel P Q)) (𝒜.acceptProb (progEnv rel K Q)) ≤ ε t Q := by
+    GordieHowe.advantage (𝒜.acceptProb (realEnv rel P μ Q))
+        (𝒜.acceptProb (progEnv rel K Q)) ≤ ε t Q := by
   have := h m t Q 𝒜.liftReq
-  have e1 : 𝒜.liftReq.acceptProb (realEnv (liftRel rel) P.liftReq Q) =
-      𝒜.acceptProb (realEnv rel P Q) := by
+  have e1 : 𝒜.liftReq.acceptProb (realEnv (liftRel rel) P.liftReq μ Q) =
+      𝒜.acceptProb (realEnv rel P μ Q) := by
     simp only [Adversary.acceptProb, Adversary.liftReq, acceptProb_liftReq_realEnv]
     rfl
   have e2 : 𝒜.liftReq.acceptProb (simEnv (liftRel rel) K.toSimulator Q) =

@@ -590,7 +590,7 @@ theorem opTE_binds (hA : env.ar.Hom (I (ir.circField c)).decode)
     rw [getD_map_lt' _ (by rw [IndexMap.length_toList]; exact hj)]
     rw [show idx.toList.getD j default = idx.entry j from
         (IndexMap.entry_eq_getD_toList idx j).symm,
-      Trie.get_ofList _ he, hxv _ he]
+      PTree.get_ofList _ he, hxv _ he]
   · simp only [opTE] at h
     obtain ⟨hr, rfl⟩ := cond_ok_eq_ok h
     simp only [Bool.and_eq_true, Nat.beq_eq] at hr
@@ -606,7 +606,7 @@ theorem opTE_binds (hA : env.ar.Hom (I (ir.circField c)).decode)
     by_cases hlt : idx.entry j < xs.length
     · have hb : Nat.blt (idx.entry j) xs.length = true := by simpa using hlt
       simp only [hlt, ↓reduceIte, hb, Bool.cond_true]
-      rw [Trie.get_ofList _ hlt, hxv _ hlt]
+      rw [PTree.get_ofList _ hlt, hxv _ hlt]
     · have hb : Nat.blt (idx.entry j) xs.length = false :=
         Bool.eq_false_iff.2 fun h' => hlt (by simpa using h')
       simp only [hlt, ↓reduceIte, hb, Bool.cond_false, TE.eval, hA.zero]
@@ -637,7 +637,7 @@ theorem opTE_binds (hA : env.ar.Hom (I (ir.circField c)).decode)
         (fun a => ir.nodeSem env E rd (ir.circuit c).domain a) (fun a => (E.get a).len) x)
         fun t ht => by
           have htl : t.1 < xs.length := by simpa using List.all_eq_true.1 hcols t ht
-          rw [Trie.get_ofList _ htl, hxv _ htl]]
+          rw [PTree.get_ofList _ htl, hxv _ htl]]
       rw [hrow, rowEval_shift, hRv _ _ (Nat.mod_lt _ hR0)]
       simp only [EOp.wrap, Expr.eval, NamedOp.apply]
   · simp only [opTE] at h
@@ -656,7 +656,7 @@ theorem opTE_binds (hA : env.ar.Hom (I (ir.circField c)).decode)
         (fun a => ir.nodeSem env E rd (ir.circuit c).domain a) (fun a => (E.get a).len) x)
         fun t ht => by
           have htl : t.1 < xs.length := by simpa using List.all_eq_true.1 hcols t ht
-          rw [Trie.get_ofList _ htl, hxv _ htl]]
+          rw [PTree.get_ofList _ htl, hxv _ htl]]
       have hrow := hF.2 j hjr
       have hF2 : List.Forall₂ (fun t p => p.1 = t.1 ∧
           (I (ir.circField c)).decode p.2 = Coef.eval ir (ir.circField c) rd t.2)
@@ -1678,12 +1678,12 @@ theorem wordBit_eval {xs : List TE} {n w j t : ℕ} {f : ℕ → (I (ir.circFiel
     (hl : xs.length = n * w)
     (hv : ∀ i < n * w, (xs.getD i default).eval (I (ir.circField c)).decode V = f i)
     (hj : j < n) (ht : t < w) :
-    ((Trie.ofList xs).get (j * w + t)).eval (I (ir.circField c)).decode V = f (j * w + t) := by
+    ((PTree.ofList xs).get (j * w + t)).eval (I (ir.circField c)).decode V = f (j * w + t) := by
   have hlt : j * w + t < n * w := by
     have : (j + 1) * w ≤ n * w := Nat.mul_le_mul_right _ hj
     rw [add_mul, one_mul] at this
     omega
-  rw [Trie.get_ofList _ (by omega), hv _ hlt]
+  rw [PTree.get_ofList _ (by omega), hv _ hlt]
 
 theorem prodStep_sound (hAr : env.ArithOk (I (ir.circField c)).decode)
     (hE : ir.EmitTableOk env E)
@@ -1726,7 +1726,7 @@ theorem treeStep_sound (hAr : env.ArithOk (I (ir.circField c)).decode)
   rw [hk]
   cases any
   · have := balTree_sound (g := (· * ·)) (fun x y => rfl)
-      (T := Ops.andTree fun t => ((Trie.ofList r'.1).get (j * w + t)).eval
+      (T := Ops.andTree fun t => ((PTree.ofList r'.1).get (j * w + t)).eval
         (I (ir.circField c)).decode V)
       (fun i0 => by simp [Ops.andTree.eq_1, TE.eval, hA.one])
       (fun i0 => by simp [Ops.andTree.eq_2]) (fun n i0 => by rw [Ops.andTree.eq_3])
@@ -1739,7 +1739,7 @@ theorem treeStep_sound (hAr : env.ArithOk (I (ir.circField c)).decode)
       exact (wordBit_eval hxl hxv hj ht).symm
   · have := balTree_sound (g := Ops.lor) (fun x y => by
         simp only [Bool.cond_true, lorT, lnotT_eval hAr, TE.eval, Ops.lor])
-      (T := Ops.orTree fun t => ((Trie.ofList r'.1).get (j * w + t)).eval
+      (T := Ops.orTree fun t => ((PTree.ofList r'.1).get (j * w + t)).eval
         (I (ir.circField c)).decode V)
       (fun i0 => by simp [Ops.orTree.eq_1, TE.eval, hA.zero])
       (fun i0 => by simp [Ops.orTree.eq_2]) (fun n i0 => by rw [Ops.orTree.eq_3])
@@ -1790,9 +1790,11 @@ theorem cmpStep_sound (hAr : env.ArithOk (I (ir.circField c)).decode)
         · cases hes
           assumption
         · cases hes
-      refine ⟨fun i => castElt (rd v (idx.entry i)), by simp, fun i hi => ?_, fun j => ?_⟩
-      · rw [getD_range_map _ hi]
-        simp only [TE.eval]
+      refine ⟨fun i => castElt (rd v (idx.entry i)), by simp [length_padTo], fun i hi => ?_,
+        fun j => ?_⟩
+      · rw [getD_map_lt' _ (by rw [length_padTo]; exact hi)]
+        simp only [show (default : ℕ) = 0 from rfl, getD_padTo _ hi,
+          ← IndexMap.entry_eq_getD_toList, TE.eval]
         exact (constCodes?_read hK rfl hes' _).symm
       · rw [hk]
         simp only [ENode.row, Expr.eval, Expr.evalList]
@@ -1953,7 +1955,7 @@ theorem bflyT_eval (hAr : env.ArithOk (I (ir.circField c)).decode) {n h : ℕ} {
   by_cases hlt : p % (2 * h) < h
   · have hb : Nat.blt (p % (2 * h)) h = true := by simpa using hlt
     simp only [hb, Bool.cond_true, hlt, ↓reduceIte, TE.eval]
-    rw [Trie.get_ofList _ (by omega), Trie.get_ofList _ (by omega), hA p hp, hA (p + h) (by omega),
+    rw [PTree.get_ofList _ (by omega), PTree.get_ofList _ (by omega), hA p hp, hA (p + h) (by omega),
       hw p hp hlt]
   · have hb : Nat.blt (p % (2 * h)) h = false :=
       Bool.eq_false_iff.2 fun h' => hlt (by simpa using h')
@@ -1961,7 +1963,7 @@ theorem bflyT_eval (hAr : env.ArithOk (I (ir.circField c)).decode) {n h : ℕ} {
     have hlo : (p - h) % (2 * h) < h := by
       rw [mod_two_mul_sub (by omega)]
       omega
-    rw [Trie.get_ofList _ (by omega), Trie.get_ofList _ (by omega), hA (p - h) (by omega),
+    rw [PTree.get_ofList _ (by omega), PTree.get_ofList _ (by omega), hA (p - h) (by omega),
       hA p hp, hw (p - h) (by omega) hlo]
     ring
 
@@ -2026,26 +2028,26 @@ theorem nttBlockT_sound (hAr : env.ArithOk (I (ir.circField c)).decode) {n L psi
   set ψ := (I (ir.circField c)).decode psi
   set x : ℕ → (I (ir.circField c)).K := fun t => (xs.getD t default).eval
     (I (ir.circField c)).decode V
-  set Tw := Trie.ofList (powList env.ar psi n 1)
+  set Tw := PTree.ofList (powList env.ar psi n 1)
   have hpl : (powList env.ar psi n 1).length = n := by
     have := congrArg List.length (map_powList hA psi n 1)
     simpa using this
   have hTw : ∀ e < n, (I (ir.circField c)).decode (Tw.get e) = ψ ^ e := fun e he => by
-    rw [Trie.get_ofList _ (by rw [hpl]; exact he), powList_getD hAr _ _ _ he, hA.one, one_mul]
+    rw [PTree.get_ofList _ (by rw [hpl]; exact he), powList_getD hAr _ _ _ he, hA.one, one_mul]
   have hn0 : 0 < n := hn ▸ Nat.two_pow_pos L
-  have h0 : ∀ q < n, ((nttInT n L Tw (Trie.ofList xs) o).getD q default).eval
+  have h0 : ∀ q < n, ((nttInT n L Tw (PTree.ofList xs) o).getD q default).eval
       (I (ir.circField c)).decode V = nttInF L ψ x o q := fun q hq => by
     cases o with
     | scheme =>
       simp only [nttInT, nttInF]
-      rw [getD_range_map _ hq, Trie.get_ofList _ (by omega)]
+      rw [getD_range_map _ hq, PTree.get_ofList _ (by omega)]
     | natural =>
       have hb : bitRevNat L q < n := hn ▸ bitRevNat_lt L q
       simp only [nttInT, nttInF]
       rw [getD_range_map _ hq]
       simp only [TE.eval]
-      rw [hTw _ hb, Trie.get_ofList _ (by omega)]
-  have hl0 : (nttInT n L Tw (Trie.ofList xs) o).length = n := by
+      rw [hTw _ hb, PTree.get_ofList _ (by omega)]
+  have hl0 : (nttInT n L Tw (PTree.ofList xs) o).length = n := by
     cases o <;> simp [nttInT]
   have hdvd : ∀ s < L, 2 * (nttSchedT n L Tw o s).1 ∣ n := fun s hs => by
     rw [← hn]

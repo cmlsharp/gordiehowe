@@ -12,7 +12,8 @@ public import GordieHowe.Foundations.Probability.ChallengeEvent
 /-!
 # Sumcheck with coefficient messages
 
-Round `i` of an `n`-variable sumcheck sends the `d + 1` coefficients of its
+The sumcheck protocol (Lund, Fortnow, Karloff and Nisan, J. ACM 1992). Round `i` of an
+`n`-variable sumcheck sends the `d + 1` coefficients of its
 round polynomial `Σ_k c_k X^k`; the verifier checks `p(0) + p(1)` against the
 incoming claim, samples `s i`, and continues with `p(s i)`. Variables are
 bound in index order, coordinate `0` first, as in `BooleanSkip::prove`/`verify`

@@ -68,7 +68,7 @@ theorem verifiesBytes_of_parts {C : ℕ} {pk : PublicKey44} {msg : List UInt8}
   have hball? := fixedStreamChallenge_agree hC hball
   have hball' := fixedStreamChallenge_agree_prims hC hball
   have hverify : Verifies pk (frame [] msg) ⟨cTilde, z, h⟩ := by
-    refine ⟨hexp, by rw [hball?]; rfl, ?_⟩
+    refine ⟨hexp, by rw [SampleInBallWithin, hball?]; rfl, ?_⟩
     unfold verifyChecks
     simp only [Bool.and_eq_true, decide_eq_true_eq]
     refine ⟨⟨polyVecNorm_lt hnorm (by decide), ?_⟩, hwt⟩

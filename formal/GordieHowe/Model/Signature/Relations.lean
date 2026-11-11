@@ -43,7 +43,8 @@ namespace GordieHowe.Signature
 open GordieHowe.Quantum GordieHowe.RingSignature
 open scoped ENNReal
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB} (O : SignOracle B) {n : ℕ}
+variable {X Y : Type} {TB : SchemeTypes}
+  {B : BaseScheme X Y TB} (O : SignOracle B) {n : ℕ}
 
 /-! ### The embedding of the game without messages -/
 
@@ -66,8 +67,13 @@ def nmaRelay (i₀ : Fin n) :
   qR := 0
   idle := .publicKey i₀
 
+variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins]
+
 variable {O}
 
+omit [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins] in
 /-- **The relay's histories relay the game without messages** (`HistRelay`): if every request of
 `hist'` is the idle request or one that a request of `hist` relays to, `hist'` has no signing
 request and corrupts only users that `hist` corrupts. -/
@@ -115,6 +121,8 @@ theorem _root_.PMF.eq_of_subsingleton {α : Type} [Subsingleton α] (p p' : PMF 
   ext a
   rw [h p a, h p' a]
 
+omit [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins] in
 /-- **The reply of the challenger without messages is the reply at `O` to the embedded
 request.** -/
 theorem muReply_none (keys : Fin n → B.KeyCoins) (H : X → Y) (u : Unit) (c : O.Coins)
@@ -125,8 +133,25 @@ theorem muReply_none (keys : Fin n → B.KeyCoins) (H : X → Y) (u : Unit) (c :
   · exact sm.elim
   · rfl
 
+variable (B) in
+/-- **A signing oracle that queries the oracle**: the base scheme's ordinary signer
+(`SignOracle.std`) after one query of `x₀`. -/
+@[reducible] def SignOracle.queryStd (x₀ : X) : SignOracle B where
+  SMsg := B.BMsg
+  Coins := B.Coins
+  q := B.q + 1
+  sign kp bm c := .query x₀ fun _ => B.ssign kp.2 bm c
+  sign_queries kp bm c H := by
+    simp only [OracleProg.trace, List.length_cons]
+    have := B.ssign_queries kp.2 bm c H
+    omega
+  base bm := bm
+
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
   [AddGroup Y] [Nonempty Y]
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
 
 /-- **The challenger without messages is the relay `nmaRelay` of the challenger at `O`**
 (`MultiRelay.RelaysChallenger`), both answering `Q` requests: each request is answered as the
@@ -191,6 +216,8 @@ theorem transcriptLaw_le_nmaEmbed (i₀ : Fin n) (A : MUAdversary (SignOracle.no
     (relaysChallenger_nmaRelay keys i₀ Q) H E E'
     fun f hist hist' hE hrel => himp f hist hist' hE (histRelay_nmaRelay i₀ hrel)
 
+variable [Nonempty TB.KeyCoins]
+
 /-- **The embedding for an event of the run**: an event of the run of the game without messages
 has at most the probability of an event of the embedded adversary's run at `O`, when every relayed
 history keeps it at the same key coins and oracle. -/
@@ -237,6 +264,12 @@ theorem suEufNmaProb_le_suSufProb_nmaEmbed (A : SUAdversary (SignOracle.none B) 
 
 /-! ### Many users from one user -/
 
+variable [Fintype TB.Pub]
+  [DecidableEq TB.Pub]
+
+variable [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins]
+
 section Guess
 
 variable [NeZero n]
@@ -269,6 +302,8 @@ theorem sum5_reorder {α β γ δ ε : Type} [Fintype α] [Fintype β] [Fintype 
   refine (Finset.sum_congr rfl fun b _ => Finset.sum_comm).trans ?_
   rfl
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **MU-EUF-CMA^corr is at most `n` times EUF-CMA**: for every signing oracle, the single-user
 adversary `suGuess O A Q` (`GordieHowe/Model/Signature/GuessUser.lean`: it guesses the target user
 and answers the other users' requests itself, making the signer's oracle queries) with at most
@@ -319,6 +354,8 @@ theorem muEufProb_le_card_mul_suEufProb (A : MUAdversary O n V t) (Q : ℕ) :
           _ = _ := by ring
 
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **MU-EUF-CMA^corr with at most `Qs` signing and corruption requests is at most `n` times
 EUF-CMA with at most `Qs` of them** (`muEufProbWithin` at `n` and at one user): for every signing
 oracle, the single-user adversary `suGuess O A Q` with at most `t + Q · O.q` queries and the same
@@ -369,6 +406,8 @@ theorem muEufProbWithin_le_card_mul_suEufProbWithin (A : MUAdversary O n V t) (Q
               rw [hn, one_mul]
           _ = _ := by ring
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **MU-SUF-CMA^corr is at most `n` times SUF-CMA**: for every signing oracle, the single-user
 adversary `suGuess O A Q` with at most `t + Q · O.q` queries and the same number `Q` of requests has
 at least `1 / n` of `A`'s success probability in the strong game. -/
@@ -416,22 +455,10 @@ theorem muSufProb_le_card_mul_suSufProb (A : MUAdversary O n V t) (Q : ℕ) :
               rw [hn, one_mul]
           _ = _ := by ring
 
-omit [NeZero n] in
-variable (B) in
-/-- **A signing oracle that queries the oracle**: the base scheme's ordinary signer
-(`SignOracle.std`) after one query of `x₀`. -/
-def SignOracle.queryStd (x₀ : X) : SignOracle B where
-  SMsg := B.BMsg
-  Coins := B.Coins
-  q := B.q + 1
-  sign kp bm c := .query x₀ fun _ => B.ssign kp.2 bm c
-  sign_queries kp bm c H := by
-    simp only [OracleProg.trace, List.length_cons]
-    have := B.ssign_queries kp.2 bm c H
-    omega
-  base bm := bm
-
-omit [NeZero n] in
+omit [NeZero n] [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Coins]
+  [DecidableEq TB.Coins] in
 /-- **The oracle-querying signer queries the oracle**: it is not without queries. -/
 theorem SignOracle.not_noQuery_queryStd [Nonempty B.BMsg] (x₀ : X) :
     ¬ (SignOracle.queryStd B x₀).NoQuery := fun h => by
@@ -439,6 +466,7 @@ theorem SignOracle.not_noQuery_queryStd [Nonempty B.BMsg] (x₀ : X) :
     (Classical.arbitrary B.Coins) fun _ => Classical.arbitrary Y
   simp [SignOracle.queryStd, OracleProg.trace] at this
 
+omit [Fintype TB.Pub] [DecidableEq TB.Pub] in
 /-- **The guessing bound at a signer that queries the oracle** (`muEufProb_le_card_mul_suEufProb`
 at `SignOracle.queryStd`, `SignOracle.not_noQuery_queryStd`). -/
 theorem muEufProb_le_card_mul_suEufProb_queryStd (x₀ : X)

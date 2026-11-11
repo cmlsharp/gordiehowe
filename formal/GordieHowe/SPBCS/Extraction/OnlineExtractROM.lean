@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Model.NARG.ROM
+public import GordieHowe.Headline
 
 @[expose] public section
 
@@ -35,10 +36,11 @@ variable {A B Cl Stmt : Type} [Fintype A] [DecidableEq A] [Fintype B] [Nonempty 
 bound, every classical `t`-query adversary with an auxiliary output is online extractable with the
 law of the lazily sampled oracle (`NARG.ROM.OracleSampler.lazy`) and the extractor reading its
 table, at simulation error `0` and extraction error `β (t + kq)`. -/
+@[headline]
 theorem onlineExtracts (hβ : V.JointBound rel ext β) {Z : Type} {t : ℕ}
     (𝒢 : NARG.ROM.Adversary A B (Cl × Z) t) :
     𝒢.OnlineExtracts V NARG.ROM.OracleSampler.lazy.law rel ext 0 (β (t + V.kq)) := by
-  refine ⟨(𝒢.tvDist_extractionLaw_lazy V).le, 𝒢.tsum_le fun r => ?_⟩
+  refine ⟨by rw [𝒢.tvDist_extractionLaw_lazy V, ENNReal.ofReal_zero], 𝒢.tsum_le fun r => ?_⟩
   rw [NARG.ROM.Adversary.extractionRun, NARG.ROM.OracleSim.run_lazy, PMF.toOuterMeasure_map_apply]
   refine le_of_eq_of_le ?_ (hβ ((𝒢.queryAlg r).mapOut Prod.fst))
   unfold probUniform
@@ -52,6 +54,7 @@ theorem onlineExtracts (hβ : V.JointBound rel ext β) {Z : Type} {t : ℕ}
 classical `t`-query adversary outputs an accepted claim for a statement without a witness with
 probability at most `β (t + kq)` (`lem:ks-sound`, `NARG.ROM.Adversary.acceptsFalse_le`, at the
 online extractability of `onlineExtracts`, simulation error `0`). -/
+@[headline]
 theorem soundness (hβ : V.JointBound rel ext β) {t : ℕ} (𝒜 : NARG.ROM.Adversary A B Cl t) :
     𝒜.acceptsFalse V rel ≤ β (t + V.kq) :=
   (𝒜.acceptsFalse_le V (onlineExtracts hβ 𝒜.withUnit)).trans_eq (by simp)

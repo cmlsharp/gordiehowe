@@ -21,7 +21,7 @@ How a compiled proof opens the queried leaves of one Merkle tree. The spBCS comp
   `lvs` and the path digests `path`, which returns the root it reconstructs or `none`; and a bound
   `pathCap B` on the number of digests of an opening of at most `B` leaves of a tree with at most
   `B` leaves.
-- `MerkleFormat.check`: acceptance: distinct indices below `n`, one leaf per index, one path digest
+- `MerkleFormat.Check`: acceptance: distinct indices below `n`, one leaf per index, one path digest
   per position of `sibs n js`, and the reconstructed root is the root.
 - `MerkleFormat.path`: the honest opening, the honest tree's digests at the positions `sibs n js`.
 - `MerkleOpening`: a format with the laws the compiler's proofs use: the positions lie in
@@ -66,16 +66,32 @@ variable (F : MerkleFormat k kN kS L e) (h : Query k kN kS L → Out k e)
 /-- **Acceptance of an opening** of the leaves `lvs` at the indices `js` of an `n`-leaf tree with
 root `rt`: the indices are distinct and below `n`, there is one leaf per index, the path has one
 digest per position of `sibs n js`, and the reconstructed root is `rt`. -/
-def check (n : ℕ) (rt : Digest k) (js : List ℕ) (lvs : List (MerkleLeaf kN L))
-    (path : List (Digest k)) : Prop :=
-  js.Nodup ∧ (∀ j ∈ js, j < n) ∧ lvs.length = js.length ∧
-    path.length = (F.sibs n js).length ∧ (F.treeProg n js lvs path).run h = some rt
+structure Check (n : ℕ) (rt : Digest k) (js : List ℕ) (lvs : List (MerkleLeaf kN L))
+    (path : List (Digest k)) : Prop where
+  /-- The indices are distinct. -/
+  nodup : js.Nodup
+  /-- The indices are below `n`. -/
+  lt : ∀ j ∈ js, j < n
+  /-- One leaf per index. -/
+  leaves_length : lvs.length = js.length
+  /-- One path digest per position of `sibs n js`. -/
+  path_length : path.length = (F.sibs n js).length
+  /-- The reconstructed root is `rt`. -/
+  root_eq : (F.treeProg n js lvs path).run h = some rt
+
+/-- **Acceptance of an opening as a conjunction**, the form its `Decidable` instance decides. -/
+theorem check_iff {n : ℕ} {rt : Digest k} {js : List ℕ} {lvs : List (MerkleLeaf kN L)}
+    {path : List (Digest k)} :
+    F.Check h n rt js lvs path ↔ js.Nodup ∧ (∀ j ∈ js, j < n) ∧ lvs.length = js.length ∧
+      path.length = (F.sibs n js).length ∧ (F.treeProg n js lvs path).run h = some rt :=
+  ⟨fun c => ⟨c.nodup, c.lt, c.leaves_length, c.path_length, c.root_eq⟩,
+    fun ⟨a, b, c, d, e⟩ => ⟨a, b, c, d, e⟩⟩
 
 /-- **Acceptance of an opening is decided**: distinctness, the bounds and lengths, and one run of
 the tree program. -/
 instance (n : ℕ) (rt : Digest k) (js : List ℕ) (lvs : List (MerkleLeaf kN L))
-    (path : List (Digest k)) : Decidable (F.check h n rt js lvs path) :=
-  inferInstanceAs (Decidable (_ ∧ _))
+    (path : List (Digest k)) : Decidable (F.Check h n rt js lvs path) :=
+  decidable_of_iff' _ (F.check_iff h)
 
 /-- **The honest opening** of the indices `js` of the honest tree over the leaves `lf`: the
 honest tree's digests at the positions `sibs n js`, in order. -/
@@ -106,7 +122,7 @@ structure MerkleOpening (k kN kS L e : ℕ) extends MerkleFormat k kN kS L e whe
   leafAt_of_check : ∀ {h : Query k kN kS L → Out k e} {D : ODB k kN kS L e} {n : ℕ}
     {rt : Digest k} {js : List ℕ} {lvs : List (MerkleLeaf kN L)} {path : List (Digest k)},
     D ∉ digestCollision → (∀ q ∈ (treeProg n js lvs path).trace h, D.lookup q = some (h q)) →
-    (MerkleFormat.mk sibs treeProg pathCap).check h n rt js lvs path →
+    (MerkleFormat.mk sibs treeProg pathCap).Check h n rt js lvs path →
     ∀ {j : ℕ} {a : MerkleLeaf kN L}, (j, a) ∈ js.zip lvs → (hj : j < n) →
       leafAt D n rt ⟨j, hj⟩ = some a
   /-- **Completeness**: the honest leaves at distinct indices below `n`, at least one, with the
@@ -114,7 +130,7 @@ structure MerkleOpening (k kN kS L e : ℕ) extends MerkleFormat k kN kS L e whe
   check_path : ∀ (h : Query k kN kS L → Out k e) {n : ℕ} {js : List ℕ} {lf : ℕ → MerkleLeaf kN L}
     {lvs : List (MerkleLeaf kN L)}, js.Nodup → (∀ j ∈ js, j < n) → js ≠ [] →
     List.Forall₂ (fun j a => a = lf j) js lvs →
-    (MerkleFormat.mk sibs treeProg pathCap).check h n (MerkleTree.root h n lf) js lvs
+    (MerkleFormat.mk sibs treeProg pathCap).Check h n (MerkleTree.root h n lf) js lvs
       ((MerkleFormat.mk sibs treeProg pathCap).path h n js lf)
 
 namespace MerkleOpening

@@ -288,7 +288,10 @@ section AbsorbAssignKF
 open GordieHowe.SPBCS IOP SPTerm Quantum.AdaptiveIAlg Classical
 
 variable {k kN kS L e N n : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq Yb]
-  {TB : BaseTypes} {B : BaseSigner Xb Yb N TB}
+  {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
+  [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  {B : BaseSigner Xb Yb N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -297,12 +300,12 @@ variable {k kN kS L e N n : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq Yb
   {Stmt Wit R Frg : Type} [Fintype Stmt] [DecidableEq Stmt] [Inhabited Stmt]
   [Fintype R] [DecidableEq R] [Inhabited R]
   {rel : Stmt → Wit → Prop} [DecidableRel rel]
-  {enc : MURequest (SignOracle.none B) n ⊕ R → ProofQuery Stmt Wit} {dummyS : Stmt}
+  {enc : MURequest (SignOracle.none B.core) n ⊕ R → ProofQuery Stmt Wit} {dummyS : Stmt}
   [Inhabited M.NIProof] {SC' : Type} [Fintype SC'] [DecidableEq SC']
 
 local notation "Xq" => Bits (queryBits k kN kS L)
 
-local notation "MUR" => MURequest (SignOracle.none B) n
+local notation "MUR" => MURequest (SignOracle.none B.core) n
 
 
 
@@ -317,13 +320,13 @@ theorem kfSwapBlock_absorbAssign
     [DecidableEq Ys] [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
     [Inhabited Req] [AddGroup Y] [Nonempty Y]
     {shA : AlgShape Xq Y Req Resp} {A : AdaptiveIAlg shA O}
-    {G : AssignRelay Xq Y Req Resp (MUR ⊕ R) (MUResponse B ⊕ M.Response b) Xs Ys} {Q : ℕ}
+    {G : AssignRelay Xq Y Req Resp (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) Xs Ys} {Q : ℕ}
     {p' : (Req × Fin (Q + 1)) × (Xq → Option Y) → OracleProg ((Xq ⊕ Xs) ⊕ (MUR ⊕ R))
-      ((Y ⊕ Ys) ⊕ Option (MUResponse B ⊕ M.Response b))
-      (Option (AssignRelay.RespD Xq Y Resp (MUR ⊕ R) (MUResponse B ⊕ M.Response b)))}
+      ((Y ⊕ Ys) ⊕ Option (MUResponse B.core ⊕ M.Response b))
+      (Option (AssignRelay.RespD Xq Y Resp (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)))}
     {Y₁ : Type} [Fintype Y₁] [DecidableEq Y₁] [AddGroup Y₁] {sp : Y ≃+ Y₁ × XOut k e}
     {H₁ : Xq → Y₁} {f : O × (Xq → Option Y) → Frg × X₀} {j : ℕ} {σR : Equiv.Perm R}
-    {swO : Equiv.Perm (AssignRelay.RespD Xq Y Resp (MUR ⊕ R) (MUResponse B ⊕ M.Response b))}
+    {swO : Equiv.Perm (AssignRelay.RespD Xq Y Resp (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b))}
     {r₀ : (Req × Fin (Q + 1)) × (Xq → Option Y)}
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
@@ -388,10 +391,10 @@ variable (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins) (Qk : �
 /-- **The extraction adversary of an adversary with other Kraus maps and another output** is that
 of the adversary with another output with the steps `absorbTabStep` (rfl). -/
 theorem seAlgKF_mapOut_withStep {O₂ : Type}
-    {shAb : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (Ab : AdaptiveIAlg shAb O₂)
+    {shAb : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (Ab : AdaptiveIAlg shAb O₂)
     (st : StepIdx Ab.slots Ab.post → KrausMap Ab.R
-      (DReg Ab.W Ab.width Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b))
-      (DReg Ab.W Ab.width Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)))
+      (DReg Ab.W Ab.width Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b))
+      (DReg Ab.W Ab.width Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)))
     (g : O₂ → Frg × X₀) :
     seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf keys Qk
         ((Ab.withStep st).mapOut g) =
@@ -406,7 +409,7 @@ theorem seAlgKF_mapOut_withStep {O₂ : Type}
 adversaries** at the base part `H₁` and with the output `f`. -/
 theorem seAlgKF_restrictAt_mapOut_heq {Y O : Type} [Fintype Y] [DecidableEq Y] [AddGroup Y]
     {Y₁ : Type} [Fintype Y₁] [DecidableEq Y₁] [AddGroup Y₁]
-    {s₁ s₂ : AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (hs : s₁ = s₂)
+    {s₁ s₂ : AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (hs : s₁ = s₂)
     {A₁ : AdaptiveIAlg s₁ O} {A₂ : AdaptiveIAlg s₂ O} (h : A₁ ≍ A₂) (sp : Y ≃+ Y₁ × XOut k e)
     (H₁ : Xq → Y₁) (f : O → Frg × X₀) :
     seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf keys Qk
@@ -425,13 +428,13 @@ theorem seAlgKF_absorbAssign_eq_withStep
     [DecidableEq Ys] [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
     [Inhabited Req] [AddGroup Y] [Nonempty Y]
     {shA : AlgShape Xq Y Req Resp} {A : AdaptiveIAlg shA O}
-    {G : AssignRelay Xq Y Req Resp (MUR ⊕ R) (MUResponse B ⊕ M.Response b) Xs Ys} {Q : ℕ}
+    {G : AssignRelay Xq Y Req Resp (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) Xs Ys} {Q : ℕ}
     {p' : (Req × Fin (Q + 1)) × (Xq → Option Y) → OracleProg ((Xq ⊕ Xs) ⊕ (MUR ⊕ R))
-      ((Y ⊕ Ys) ⊕ Option (MUResponse B ⊕ M.Response b))
-      (Option (AssignRelay.RespD Xq Y Resp (MUR ⊕ R) (MUResponse B ⊕ M.Response b)))}
+      ((Y ⊕ Ys) ⊕ Option (MUResponse B.core ⊕ M.Response b))
+      (Option (AssignRelay.RespD Xq Y Resp (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)))}
     {Y₁ : Type} [Fintype Y₁] [DecidableEq Y₁] [AddGroup Y₁] {sp : Y ≃+ Y₁ × XOut k e}
     {H₁ : Xq → Y₁} {f : O × (Xq → Option Y) → Frg × X₀}
-    {G' : AssignRelay Xq Y Req Resp (MUR ⊕ R) (MUResponse B ⊕ M.Response b) Xs Ys}
+    {G' : AssignRelay Xq Y Req Resp (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) Xs Ys}
     (hG : G'.relayOf Q = (G.relayOf Q).withProg p') (hS : (G.relayOf Q).SameShape p') :
     seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf keys Qk
         (((A.absorbAssign G' Q).restrictAt sp H₁).mapOut f) ≍
@@ -465,13 +468,13 @@ theorem seAlgKF_absorbAssign_toShape_eq
     [DecidableEq Ys] [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
     [Inhabited Req] [AddGroup Y] [Nonempty Y]
     {shA : AlgShape Xq Y Req Resp} {A : AdaptiveIAlg shA O}
-    {G : AssignRelay Xq Y Req Resp (MUR ⊕ R) (MUResponse B ⊕ M.Response b) Xs Ys} {Q : ℕ}
+    {G : AssignRelay Xq Y Req Resp (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) Xs Ys} {Q : ℕ}
     {p' : (Req × Fin (Q + 1)) × (Xq → Option Y) → OracleProg ((Xq ⊕ Xs) ⊕ (MUR ⊕ R))
-      ((Y ⊕ Ys) ⊕ Option (MUResponse B ⊕ M.Response b))
-      (Option (AssignRelay.RespD Xq Y Resp (MUR ⊕ R) (MUResponse B ⊕ M.Response b)))}
+      ((Y ⊕ Ys) ⊕ Option (MUResponse B.core ⊕ M.Response b))
+      (Option (AssignRelay.RespD Xq Y Resp (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)))}
     {Y₁ : Type} [Fintype Y₁] [DecidableEq Y₁] [AddGroup Y₁] {sp : Y ≃+ Y₁ × XOut k e}
     {H₁ : Xq → Y₁} {f : O × (Xq → Option Y) → Frg × X₀}
-    {G' : AssignRelay Xq Y Req Resp (MUR ⊕ R) (MUResponse B ⊕ M.Response b) Xs Ys}
+    {G' : AssignRelay Xq Y Req Resp (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) Xs Ys}
     (hG : G'.relayOf Q = (G.relayOf Q).withProg p') :
     (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf keys Qk
         (((A.absorbAssign G' Q).restrictAt sp H₁).mapOut f)).toShape =
@@ -482,9 +485,109 @@ theorem seAlgKF_absorbAssign_toShape_eq
           ((A.absorbAssign G Q).restrictStep
             ((A.absorbAssignP _ _ Q).relayStepWith (G.relayOf Q) Q p'
               ((A.absorbAssignP _ _ Q).relayOut (G.relayOf Q))) sp H₁))).toShape :=
-  congrArg (fun s : AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b) =>
+  congrArg (fun s : AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) =>
     seAlgKFS (Stmt := Stmt) (M := M) (B := B) (s.restrictAtS Y₁ (XOut k e)))
     (AdaptiveIAlg.absorbAssignS_eq_of_relayOf (shA := shA) hG)
+
+/-- **Heterogeneously equal laws give an event of a shared outcome type the same probability**,
+read through casts of their outcome types to `Ω`. -/
+theorem _root_.PMF.toOuterMeasure_cast_preimage_heq {α β Ω : Type} {μ : PMF α} {ν : PMF β}
+    (h : μ ≍ ν) (h₂ : α = Ω) (h' : β = Ω) (S : Set Ω) :
+    μ.toOuterMeasure (cast h₂ ⁻¹' S) = ν.toOuterMeasure (cast h' ⁻¹' S) := by
+  subst h₂ h'
+  cases h
+  rfl
+
+-- TODO(unbundle-M4): adversaries of two equal shapes are compared through their outcome types
+/-- **The outcome types of the extraction runs of the absorbed adversary with `G'` and of `G`'s with
+the steps of `p'` are equal** (`seAlgKF_absorbAssign_eq_withStep`, `seAlgKF_absorbAssign_toShape_eq`),
+for a relay `G'` that is `G` with the programs `p'` of the same shape. -/
+theorem tuple_seAlgKF_absorbAssign_withStep_eq
+    {Y Req Resp O Xs Ys : Type} [Fintype Y] [DecidableEq Y] [AddGroup Ys] [Fintype Ys]
+    [DecidableEq Ys] [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
+    [Inhabited Req] [AddGroup Y] [Nonempty Y]
+    {shA : AlgShape Xq Y Req Resp} {A : AdaptiveIAlg shA O}
+    {G : AssignRelay Xq Y Req Resp (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) Xs Ys} {Q : ℕ}
+    {p' : (Req × Fin (Q + 1)) × (Xq → Option Y) → OracleProg ((Xq ⊕ Xs) ⊕ (MUR ⊕ R))
+      ((Y ⊕ Ys) ⊕ Option (MUResponse B.core ⊕ M.Response b))
+      (Option (AssignRelay.RespD Xq Y Resp (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)))}
+    {Y₁ : Type} [Fintype Y₁] [DecidableEq Y₁] [AddGroup Y₁] {sp : Y ≃+ Y₁ × XOut k e}
+    {H₁ : Xq → Y₁} {f : O × (Xq → Option Y) → Frg × X₀}
+    {G' : AssignRelay Xq Y Req Resp (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) Xs Ys}
+    (hG : G'.relayOf Q = (G.relayOf Q).withProg p') (hS : (G.relayOf Q).SameShape p')
+    (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (kq : ℕ) :
+    (BaseGame.Tuple Xq (Out k e) (SPBCS.Reg (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf keys Qk
+        (((A.absorbAssign G' Q).restrictAt sp H₁).mapOut f)) Psim Qk) (kq + Qk * Psim.q) ×
+      DB Xq (Out k e)) =
+      (BaseGame.Tuple Xq (Out k e) (SPBCS.Reg ((seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf keys Qk
+        (((A.absorbAssign G Q).restrictAt sp H₁).mapOut f)).withStep
+        (AdaptiveIAlg.absorbTabStep (((A.absorbAssign G Q).restrictAt sp H₁).mapOut f)
+          (seTwoKF (Proof := M.Response b) B rel enc dummyS (B.pk ∘ keys) Qk)
+          ((A.absorbAssign G Q).restrictStep
+            ((A.absorbAssignP _ _ Q).relayStepWith (G.relayOf Q) Q p'
+              ((A.absorbAssignP _ _ Q).relayOut (G.relayOf Q))) sp H₁))) Psim Qk) (kq + Qk * Psim.q) ×
+        DB Xq (Out k e)) := by
+  have hs := seAlgKF_absorbAssign_toShape_eq (rel := rel) (enc := enc) (dummyS := dummyS)
+    (Stmt := Stmt) prf keys Qk (A := A) (sp := sp) (H₁ := H₁) (f := f) hG
+  have h := seAlgKF_absorbAssign_eq_withStep (rel := rel) (enc := enc) (dummyS := dummyS)
+    (Stmt := Stmt) prf keys Qk (A := A) (sp := sp) (H₁ := H₁) (f := f) hG hS
+  congr 3
+
+/-- **The extraction laws of the absorbed adversary with `G'` and of `G`'s with the steps of `p'`
+agree on an event of a shared outcome type**, at the preimages `S₂` and `S'` of `S` under the casts
+of their outcome types to `Ω`. -/
+theorem toOuterMeasure_simPMF_seAlgKF_absorbAssign_withStep
+    {Y Req Resp O Xs Ys : Type} [Fintype Y] [DecidableEq Y] [AddGroup Ys] [Fintype Ys]
+    [DecidableEq Ys] [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
+    [Inhabited Req] [AddGroup Y] [Nonempty Y]
+    {shA : AlgShape Xq Y Req Resp} {A : AdaptiveIAlg shA O}
+    {G : AssignRelay Xq Y Req Resp (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) Xs Ys} {Q : ℕ}
+    {p' : (Req × Fin (Q + 1)) × (Xq → Option Y) → OracleProg ((Xq ⊕ Xs) ⊕ (MUR ⊕ R))
+      ((Y ⊕ Ys) ⊕ Option (MUResponse B.core ⊕ M.Response b))
+      (Option (AssignRelay.RespD Xq Y Resp (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)))}
+    {Y₁ : Type} [Fintype Y₁] [DecidableEq Y₁] [AddGroup Y₁] {sp : Y ≃+ Y₁ × XOut k e}
+    {H₁ : Xq → Y₁} {f : O × (Xq → Option Y) → Frg × X₀}
+    {G' : AssignRelay Xq Y Req Resp (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) Xs Ys}
+    (hG : G'.relayOf Q = (G.relayOf Q).withProg p') (hS : (G.relayOf Q).SameShape p')
+    (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (kq : ℕ)
+    {Vr : X₀ → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x} {Ω : Type}
+    (h₂ : (BaseGame.Tuple Xq (Out k e) (SPBCS.Reg (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf keys Qk
+        (((A.absorbAssign G' Q).restrictAt sp H₁).mapOut f)) Psim Qk) (kq + Qk * Psim.q) ×
+      DB Xq (Out k e)) = Ω)
+    (h' : (BaseGame.Tuple Xq (Out k e) (SPBCS.Reg ((seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf keys Qk
+        (((A.absorbAssign G Q).restrictAt sp H₁).mapOut f)).withStep
+        (AdaptiveIAlg.absorbTabStep (((A.absorbAssign G Q).restrictAt sp H₁).mapOut f)
+          (seTwoKF (Proof := M.Response b) B rel enc dummyS (B.pk ∘ keys) Qk)
+          ((A.absorbAssign G Q).restrictStep
+            ((A.absorbAssignP _ _ Q).relayStepWith (G.relayOf Q) Q p'
+              ((A.absorbAssignP _ _ Q).relayOut (G.relayOf Q))) sp H₁))) Psim Qk) (kq + Qk * Psim.q) ×
+      DB Xq (Out k e)) = Ω) (S : Set Ω) {S₂ S' : Set _} (hS₂ : cast h₂ ⁻¹' S = S₂)
+    (hS' : cast h' ⁻¹' S = S') :
+    (simPMF (outEquiv k e) (extAdv Qs (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf keys Qk
+        (((A.absorbAssign G' Q).restrictAt sp H₁).mapOut f)) Psim Qk kq)).toOuterMeasure S₂ =
+      (simPMF (outEquiv k e) (extAdv Qs ((seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf keys Qk
+        (((A.absorbAssign G Q).restrictAt sp H₁).mapOut f)).withStep
+        (AdaptiveIAlg.absorbTabStep (((A.absorbAssign G Q).restrictAt sp H₁).mapOut f)
+          (seTwoKF (Proof := M.Response b) B rel enc dummyS (B.pk ∘ keys) Qk)
+          ((A.absorbAssign G Q).restrictStep
+            ((A.absorbAssignP _ _ Q).relayStepWith (G.relayOf Q) Q p'
+              ((A.absorbAssignP _ _ Q).relayOut (G.relayOf Q))) sp H₁))) Psim Qk kq)).toOuterMeasure S' := by
+  subst hS₂ hS'
+  have hs := seAlgKF_absorbAssign_toShape_eq (rel := rel) (enc := enc) (dummyS := dummyS)
+    (Stmt := Stmt) prf keys Qk (A := A) (sp := sp) (H₁ := H₁) (f := f) hG
+  have h := seAlgKF_absorbAssign_eq_withStep (rel := rel) (enc := enc) (dummyS := dummyS)
+    (Stmt := Stmt) prf keys Qk (A := A) (sp := sp) (H₁ := H₁) (f := f) hG hS
+  have hμ : simPMF (outEquiv k e) (extAdv Qs (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf keys Qk
+        (((A.absorbAssign G' Q).restrictAt sp H₁).mapOut f)) Psim Qk kq) ≍
+      simPMF (outEquiv k e) (extAdv Qs ((seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf keys Qk
+        (((A.absorbAssign G Q).restrictAt sp H₁).mapOut f)).withStep
+        (AdaptiveIAlg.absorbTabStep (((A.absorbAssign G Q).restrictAt sp H₁).mapOut f)
+          (seTwoKF (Proof := M.Response b) B rel enc dummyS (B.pk ∘ keys) Qk)
+          ((A.absorbAssign G Q).restrictStep
+            ((A.absorbAssignP _ _ Q).relayStepWith (G.relayOf Q) Q p'
+              ((A.absorbAssignP _ _ Q).relayOut (G.relayOf Q))) sp H₁))) Psim Qk kq) := by
+    congr
+  exact PMF.toOuterMeasure_cast_preimage_heq hμ h₂ h' S
 
 end AbsorbAssignKF
 

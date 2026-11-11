@@ -98,8 +98,10 @@ def BadReq {n : ℕ} {TPS : PSTypes} (PS : ProofSystem X Y (RingSignature.RingSt
   c.Valid keys ∧ adm c.ring ∧ s < ringDefect prims βmin c.ring.1 ∧
     RingCheck prims βmin tol (O.gOrc H) c.ring
 
-variable {TPS : PSTypes} (PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS)
+variable {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] (PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS)
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **Off the bad rings, the hedged scheme and the hedged scheme on the rings of low defect sign
 alike**: unless the ring is supported, of defect above `s` and passes the check against the check
 oracle read from `H`, both refuse or both sign identically. On a supported ring of defect above `s`
@@ -117,7 +119,6 @@ theorem hedgedScheme.run_sign_admLow (s : ℝ)
         (admLow prims βmin adm s)).sign kp R m c).run H := by
   obtain ⟨cb, cp⟩ := c
   dsimp only [hedgedScheme, RingSignature.ofBase_sign]
-  simp only [RingSignature.idxOf_decEq_eq]
   change (if R.1.idxOf kp.1 < R.1.length ∧ adm R then
       signAt (hedgedBase prims O M βmin tol enc k D bmsg) PS kp.1 kp.2 R (R.1.idxOf kp.1) m (cb, cp)
       else OracleProg.pure none).run H =
@@ -191,7 +192,9 @@ theorem gameAdvantage_anon_restr_le_bad {n : ℕ} {V : OracleView X Y} {t : ℕ}
   · rfl
 
 omit [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype X] [DecidableEq X] [Nonempty X]
-  [AddGroup Y] in
+  [AddGroup Y]
+  [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **Signing by the hedged scheme on the rings `adm'`** at the oracle `H`: on a ring holding the
 key and supported by `adm'`, the base signature at the key's position with its public value and
 its proof (`run_signAt_eq`); `none` otherwise. -/
@@ -211,7 +214,6 @@ theorem hedgedScheme.run_sign_eq (adm' : KeyRing (PubKey p prims) N → Prop)
               ⟨R.1.idxOf kp.1, σ⟩ cp).run H)
       else none := by
   dsimp only [RingSignature.ofBase_sign]
-  simp only [RingSignature.idxOf_decEq_eq]
   change (if R.1.idxOf kp.1 < R.1.length ∧ adm' R then
       signAt (hedgedBase prims O M βmin tol enc k D bmsg) PS kp.1 kp.2 R (R.1.idxOf kp.1) m (cb, cp)
       else OracleProg.pure none).run H = _
@@ -335,12 +337,14 @@ variable (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   (enc : Vector prims.High p.k → BucketVec p) (k D : ℕ) [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg)
   (adm : KeyRing (PubKey p prims) N → Prop) [DecidablePred adm]
-  {TPS : PSTypes} (PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS)
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] (PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS)
   [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype X] [DecidableEq X] [Nonempty X] [AddGroup Y]
   {Y₁ Y₂ : Type} [AddGroup Y₁] [AddGroup Y₂] [Fintype Y₁] [DecidableEq Y₁]
   {sp : OracleSplit Y Y₁ Y₂}
 
-omit [DecidableEq Y] [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y₁] [DecidableEq Y₁] in
+omit [DecidableEq Y] [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y₁] [DecidableEq Y₁]
+  [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **The signer on the rings of low defect reads the oracle off the labels**: at two oracles with
 the same second components and the same values off the check points of the rings of defect above
 `s` (`Quantum.AgreeOffLabels`), its answers agree, for a domain separation (`hO`), a mask oracle
@@ -363,12 +367,12 @@ theorem restrAns_admLow_congr (hO : O.UniformSplit) (hdisj : ∀ x, O.IsPt x →
     hPS x w cp H H' (fun z => (h z).2) fun z hz =>
       hoff z (checkLabel_eq_none_of_notMem O βmin fun hr => hz (hB hr))
   have hmu : O.muOrc H = O.muOrc H' := funext fun a => by
-    simp only [W1Oracles.muOrc]
+    simp only [MLDSAOracles.muOrc]
     rw [hoff _ (checkLabel_eq_none_of_notMem O βmin fun ⟨b', hb'⟩ => hO.muPt_ne_gPt a b' hb'.symm)]
   have hch : O.chOrc H = O.chOrc H' := funext fun a => by
-    simp only [W1Oracles.chOrc]
+    simp only [MLDSAOracles.chOrc]
     rw [hoff _ (checkLabel_eq_none_of_notMem O βmin fun ⟨b', hb'⟩ => hO.chPt_ne_gPt a b' hb'.symm)]
-  have hh : O.hOrc H = O.hOrc H' := by simp only [W1Oracles.hOrc, hmu, hch]
+  have hh : O.hOrc H = O.hOrc H' := by simp only [MLDSAOracles.hOrc, hmu, hch]
   have hm : ∀ (rv : (MaskSource.hedged M).Rnd) u,
       ((MaskSource.hedged M).read rv u).run H = ((MaskSource.hedged M).read rv u).run H' :=
     fun rv u => by
@@ -475,7 +479,7 @@ variable (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   [AddGroup Y] [Nonempty Y] {O : W1Oracles X Y p prims Msg N reps} {M : MaskOracle X Y p T Msg}
   {βmin : ℚ≥0} {tol : ℕ} {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D]
   {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
   {adm : KeyRing (PubKey p prims) N → Prop} [DecidablePred adm] {n : ℕ}
   {Y₁ Y₂ : Type} [AddGroup Y₁] [AddGroup Y₂] [Fintype Y₁] [DecidableEq Y₁] [Fintype Y₂]
 
@@ -581,7 +585,7 @@ variable [NeZero (bucketCount p)] [Nonempty (MaskBox p)] [Fintype Msg] [Decidabl
   {O : W1Oracles X Y p (concretePrimitivesKeyGen p) Msg N reps} {M : MaskOracle X Y p T Msg}
   {βmin : ℚ≥0} {tol k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
   {bmsg : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase p O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase p O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS}
   {adm : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → Prop} [DecidablePred adm] {n : ℕ}
   {Y₁ Y₂ : Type} [AddGroup Y₁] [AddGroup Y₂] [Fintype Y₁] [DecidableEq Y₁] [Fintype Y₂]
 
@@ -685,7 +689,7 @@ local notation "Kg" => concretePrimitivesKeyGen _root_.MLDSA.mldsa44
 
 variable {O : W1Oracles X Y Pm Kg Msg N reps} {M : MaskOracle X Y Pm T Msg}
   {bmsg : KeyRing (PubKey Pm Kg) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing (PubKey Pm (concretePrimitivesKeyGen Pm)) N → Prop} [DecidablePred adm]
 
 open Classical in
@@ -729,7 +733,7 @@ local notation "Kg" => concretePrimitivesKeyGen _root_.MLDSA.mldsa65
 
 variable {O : W1Oracles X Y Pm Kg Msg N reps} {M : MaskOracle X Y Pm T Msg}
   {bmsg : KeyRing (PubKey Pm Kg) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing (PubKey Pm (concretePrimitivesKeyGen Pm)) N → Prop} [DecidablePred adm]
 
 open Classical in
@@ -773,7 +777,7 @@ local notation "Kg" => concretePrimitivesKeyGen _root_.MLDSA.mldsa87
 
 variable {O : W1Oracles X Y Pm Kg Msg N reps} {M : MaskOracle X Y Pm T Msg}
   {bmsg : KeyRing (PubKey Pm Kg) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing (PubKey Pm (concretePrimitivesKeyGen Pm)) N → Prop} [DecidablePred adm]
 
 open Classical in
@@ -830,7 +834,7 @@ section BindGeneric
 variable {O : W1Oracles X Y p (concretePrimitivesKeyGen p)
     (KeyRing (PubKey p (concretePrimitivesKeyGen p)) N × RMsg) N reps}
   {M : MaskOracle X Y p T (KeyRing (PubKey p (concretePrimitivesKeyGen p)) N × RMsg)}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase p O M βmin tol k D Prod.mk)) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase p O M βmin tol k D Prod.mk)) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS}
   {adm : KeyRing
     (w1ConcreteBase p O M βmin tol k D Prod.mk).PK N → Prop}
   [DecidablePred adm]
@@ -876,7 +880,7 @@ local notation "Kg" => concretePrimitivesKeyGen _root_.MLDSA.mldsa44
 variable {O : W1Oracles X Y Pm Kg
     (KeyRing (PubKey Pm Kg) N × RMsg) N reps}
   {M : MaskOracle X Y Pm T (KeyRing (PubKey Pm Kg) N × RMsg)}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D Prod.mk)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D Prod.mk)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing
     (w1ConcreteBase Pm O M βmin tol k D Prod.mk).PK N → Prop}
   [DecidablePred adm]
@@ -922,7 +926,7 @@ local notation "Kg" => concretePrimitivesKeyGen _root_.MLDSA.mldsa65
 variable {O : W1Oracles X Y Pm Kg
     (KeyRing (PubKey Pm Kg) N × RMsg) N reps}
   {M : MaskOracle X Y Pm T (KeyRing (PubKey Pm Kg) N × RMsg)}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D Prod.mk)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D Prod.mk)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing
     (w1ConcreteBase Pm O M βmin tol k D Prod.mk).PK N → Prop}
   [DecidablePred adm]
@@ -968,7 +972,7 @@ local notation "Kg" => concretePrimitivesKeyGen _root_.MLDSA.mldsa87
 variable {O : W1Oracles X Y Pm Kg
     (KeyRing (PubKey Pm Kg) N × RMsg) N reps}
   {M : MaskOracle X Y Pm T (KeyRing (PubKey Pm Kg) N × RMsg)}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D Prod.mk)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D Prod.mk)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing
     (w1ConcreteBase Pm O M βmin tol k D Prod.mk).PK N → Prop}
   [DecidablePred adm]
@@ -1011,7 +1015,7 @@ section ConvGeneric
 variable {O : W1Oracles X Y p (concretePrimitivesKeyGen p)
     Msg N reps}
   {M : MaskOracle X Y p T Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase p O M βmin tol k D (RMsg := Msg) (fun _ m => m))) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase p O M βmin tol k D (RMsg := Msg) (fun _ m => m))) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS}
   {adm : KeyRing
     (w1ConcreteBase p O M βmin tol k D (RMsg := Msg) (fun _ m => m)).PK N → Prop}
   [DecidablePred adm]
@@ -1057,7 +1061,7 @@ local notation "Kg" => concretePrimitivesKeyGen _root_.MLDSA.mldsa44
 variable {O : W1Oracles X Y Pm Kg
     Msg N reps}
   {M : MaskOracle X Y Pm T Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D (RMsg := Msg) (fun _ m => m))) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D (RMsg := Msg) (fun _ m => m))) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing
     (w1ConcreteBase Pm O M βmin tol k D (RMsg := Msg) (fun _ m => m)).PK N → Prop}
   [DecidablePred adm]
@@ -1103,7 +1107,7 @@ local notation "Kg" => concretePrimitivesKeyGen _root_.MLDSA.mldsa65
 variable {O : W1Oracles X Y Pm Kg
     Msg N reps}
   {M : MaskOracle X Y Pm T Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D (RMsg := Msg) (fun _ m => m))) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D (RMsg := Msg) (fun _ m => m))) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing
     (w1ConcreteBase Pm O M βmin tol k D (RMsg := Msg) (fun _ m => m)).PK N → Prop}
   [DecidablePred adm]
@@ -1149,7 +1153,7 @@ local notation "Kg" => concretePrimitivesKeyGen _root_.MLDSA.mldsa87
 variable {O : W1Oracles X Y Pm Kg
     Msg N reps}
   {M : MaskOracle X Y Pm T Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D (RMsg := Msg) (fun _ m => m))) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D (RMsg := Msg) (fun _ m => m))) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing
     (w1ConcreteBase Pm O M βmin tol k D (RMsg := Msg) (fun _ m => m)).PK N → Prop}
   [DecidablePred adm]

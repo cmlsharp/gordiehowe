@@ -29,7 +29,7 @@ section Defs
 
 variable (ir : RealizedProgram)
 
-/-- **The quadratic root equation on value `v`** in predicate `pr` (`quadRootOf`'s shape): the
+/-- **The quadratic root equation on value `v`** in predicate `pr` (`quadRootView`'s shape): the
 value `m` and the constant `c` of the field `equal` `(m + a v) · (m + a (a v + C)) = z`, `a = p − 1`,
 `z` a constant holding `0`, `C` a constant expression holding `c` (`constOf`). -/
 def quadView (v : ℕ) (pr : Predicate) : Option (ℕ × ℕ) :=
@@ -61,7 +61,7 @@ def rootSetViewsAt (v : ℕ) (qs : List ℕ) : List ((ℕ → ℕ) × ℕ × Ivl
   qs.filterMap fun q => if q < ir.predicates.length then ir.rootSetView v (ir.predicate q) else none
 
 /-- **The interval of value `v` from the root-set equations of the listed predicates `qs`**: as
-`rootSetIvl`, over the listed equations only (`rootSetViewsAt`). -/
+`rootSetIvlAt`, over the listed equations only (`rootSetViewsAt`). -/
 def rootSetSrc (v : ℕ) (qs : List ℕ) : Option Ivl :=
   if (ir.value v).type = .bit then none else
   let ws := ir.rootSetViewsAt v qs

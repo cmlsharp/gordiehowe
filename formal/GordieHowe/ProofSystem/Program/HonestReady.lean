@@ -13,9 +13,9 @@ public section
 
 `CompletionReady.ofGenerated` assembles the ready data of the honest strategy
 (`RealizedProgram.CompletionReady`) from the facts every generated program has, each a generated
-constant: its well-formedness (`Valid.wellFormed`), its interpretation's model (`Facts.interpModel`),
-its derivable realizations (`Realize.derivable`), its source part (`Facts.sourceValid`), and the
-checks of its completeness certificate and honest roles (`Completion.completionOk`,
+constant: its well-formedness (`Valid.wellFormed`), its interpretation's model (`Interp.Model`), its
+derivable realizations (`Realize.derivable`), its source part (`CompletionReady.sourceValid`), and
+the checks of its completeness certificate and honest roles (`Completion.completionOk`,
 `Completion.rolesOk`), at the honest nodes (`Honest.nodes`) and a proof that they contain `1`.
 -/
 

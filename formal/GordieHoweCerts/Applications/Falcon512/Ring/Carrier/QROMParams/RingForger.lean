@@ -41,21 +41,25 @@ open RealizedProgram.Export RealizedProgram.ProofSystem.PhaseLayout IOP Relative
   GordieHowe.SPBCS GordieHowe.QROM SPBCS.Configurations GordieHowe.Ring GordieHowe.RingSignature
 open Generated.Falcon512.Ring.Carrier.QROMParams.Program (program)
 open Generated.Falcon512.Ring.Carrier.QROMParams (interp ProofSystems)
-open _root_.GordieHowe.Falcon512.Ring.Native (Signer CoreWit)
+open _root_.GordieHowe.Falcon512.Ring.Native (CoreWit)
 open scoped NNReal ENNReal
 
 variable (C : ProofSystems)
 
 /-- **The proof system of `bindingScheme`**: the configuration's compiled program read at the
 ring statements of the ring-binding base signer. -/
-noncomputable abbrev bindingPS (G : Signer ringMsgLen) :=
+noncomputable abbrev bindingPS (G : Signer ringMsgLen) [Fintype G.KeyCoins]
+    [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins] [DecidableEq G.SignCoins]
+    [Nonempty G.SignCoins] :=
   (Falcon512.Ring.ringVerifies G encodeRingMsg _ _ program interp).proofSystem
     (ringHonest G C) (ringMergeBounds C ringMsgLen_le) (ringProofFormat C ringMsgLen_le)
 
 /-- **The number of multi-user requests of the reduction** for `bindingScheme` (`ringQ'` at the read
 verifier and relays of length `1 + qPub + PS.q`), for `Q` requests and the schedule bound `S`, `w`,
 `P`. -/
-noncomputable abbrev bindingQ' (G : Signer ringMsgLen)
+noncomputable abbrev bindingQ' (G : Signer ringMsgLen) [Fintype G.KeyCoins]
+    [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins] [DecidableEq G.SignCoins]
+    [Nonempty G.SignCoins]
     (Q S w P : ℕ) : ℕ :=
   ringQ' (StmtVerifiesRing.verifier (ringMergeBounds C ringMsgLen_le) (pB := max 3072 201)
       (Falcon512.Ring.ringVerifies G encodeRingMsg _ _ program interp)) Q S w P
@@ -68,7 +72,9 @@ Falcon-512 ring signature from MU-EUF-CMA^corr**
 (`hS`), the forgery probability is at most the success probability of the multi-user forger with
 `max n 2` users and `bindingQ'` requests, plus spBCS's knowledge error at
 `t + Q · (qPub + PS.q) + kq` queries. -/
-theorem bindingScheme.insiderForgeProb_le_muEufProb (G : Signer ringMsgLen) {n t : ℕ}
+theorem bindingScheme.insiderForgeProb_le_muEufProb (G : Signer ringMsgLen) [Fintype G.KeyCoins]
+    [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins] [DecidableEq G.SignCoins]
+    [Nonempty G.SignCoins] {n t : ℕ}
     (c₀ : RingSignature.RingStmt (baseSigner G C encodeRingMsg) ×
       Claim (Ring.RStmt G)
         ((ringTranscript G C).setting 48 (ringMergeBounds C ringMsgLen_le)).model.NIProof)
@@ -106,7 +112,9 @@ the multi-user forger wins with at most `Q` signing and corruption requests
 asks at most `Q` signing and corruption requests on every branch
 (`muLaw_ringMUForger_signCorruptCount`), and on the bridge each of them is a logged request of
 the relayed forger (`mem_requests_of_bridgeLogs`). -/
-theorem bindingScheme.insiderForgeProb_le_muEufProbWithin (G : Signer ringMsgLen) {n t : ℕ}
+theorem bindingScheme.insiderForgeProb_le_muEufProbWithin (G : Signer ringMsgLen)
+    [Fintype G.KeyCoins] [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins]
+    [DecidableEq G.SignCoins] [Nonempty G.SignCoins] {n t : ℕ}
     (c₀ : RingSignature.RingStmt (baseSigner G C encodeRingMsg) ×
       Claim (Ring.RStmt G)
         ((ringTranscript G C).setting 48 (ringMergeBounds C ringMsgLen_le)).model.NIProof)
@@ -141,7 +149,9 @@ theorem bindingScheme.insiderForgeProb_le_muEufProbWithin (G : Signer ringMsgLen
 with the ring-aware and the ordinary signing oracle**
 (`Ring.StmtVerifiesRing.keyReuseForgeProb_le_muEufProb`): the bound of
 `bindingScheme.insiderForgeProb_le_muEufProb` for the key-reuse game. -/
-theorem bindingScheme.keyReuseForgeProb_le_muEufProb (G : Signer ringMsgLen) {n t : ℕ}
+theorem bindingScheme.keyReuseForgeProb_le_muEufProb (G : Signer ringMsgLen) [Fintype G.KeyCoins]
+    [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins] [DecidableEq G.SignCoins]
+    [Nonempty G.SignCoins] {n t : ℕ}
     (c₀ : RingSignature.RingStmt (baseSigner G C encodeRingMsg) ×
       Claim (Ring.RStmt G)
         ((ringTranscript G C).setting 48 (ringMergeBounds C ringMsgLen_le)).model.NIProof)
@@ -180,7 +190,9 @@ the multi-user forger wins with at most `Q` signing and corruption requests
 asks at most `Q` signing and corruption requests on every branch
 (`muLaw_ringMUForger_signCorruptCount`), and on the bridge each of them is a logged request of
 the relayed forger (`mem_requests_of_bridgeLogs`). -/
-theorem bindingScheme.keyReuseForgeProb_le_muEufProbWithin (G : Signer ringMsgLen) {n t : ℕ}
+theorem bindingScheme.keyReuseForgeProb_le_muEufProbWithin (G : Signer ringMsgLen)
+    [Fintype G.KeyCoins] [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins]
+    [DecidableEq G.SignCoins] [Nonempty G.SignCoins] {n t : ℕ}
     (c₀ : RingSignature.RingStmt (baseSigner G C encodeRingMsg) ×
       Claim (Ring.RStmt G)
         ((ringTranscript G C).setting 48 (ringMergeBounds C ringMsgLen_le)).model.NIProof)
@@ -218,7 +230,9 @@ oracle reduced to the ordinary one (`muEufProbWithin_ringStd_le_std`, the Falcon
 signing a ring as the ordinary signer on the base message, `falconBaseSigner_ringSignsStd`), with
 the same numbers of requests and of signing and corruption requests. -/
 @[headline]
-theorem bindingScheme.keyReuseForgeProb_le (G : Signer ringMsgLen) {n t : ℕ}
+theorem bindingScheme.keyReuseForgeProb_le (G : Signer ringMsgLen) [Fintype G.KeyCoins]
+    [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins] [DecidableEq G.SignCoins]
+    [Nonempty G.SignCoins] {n t : ℕ}
     (c₀ : RingSignature.RingStmt (baseSigner G proofSystem encodeRingMsg) ×
       Claim (Ring.RStmt G)
         ((ringTranscript G proofSystem).setting 48 (ringMergeBounds proofSystem ringMsgLen_le)).model.NIProof)
@@ -258,7 +272,9 @@ oracle reduced to the ordinary one (`muEufProbWithin_ring_le_std`, the Falcon-51
 signing a ring as the ordinary signer on the base message, `falconBaseSigner_ringSignsStd`), with
 the same numbers of requests and of signing and corruption requests. -/
 @[headline]
-theorem bindingScheme.insiderForgeProb_le (G : Signer ringMsgLen) {n t : ℕ}
+theorem bindingScheme.insiderForgeProb_le (G : Signer ringMsgLen) [Fintype G.KeyCoins]
+    [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins] [DecidableEq G.SignCoins]
+    [Nonempty G.SignCoins] {n t : ℕ}
     (c₀ : RingSignature.RingStmt (baseSigner G proofSystem encodeRingMsg) ×
       Claim (Ring.RStmt G)
         ((ringTranscript G proofSystem).setting 48 (ringMergeBounds proofSystem ringMsgLen_le)).model.NIProof)
@@ -300,7 +316,9 @@ signer carrying the salt (`hG`), correctness error `εc` (`hcorr`) and an advers
 bound `S`, `w`, `P'` (`hS`). The forger's multi-user requests are `publicKey 0` or corruptions
 among the adversary's first `Q` requests (`zk_bridge_requests`). -/
 @[headline]
-theorem convertedScheme.insiderForgeProb_le {msgLen : ℕ} (G : Signer msgLen)
+theorem convertedScheme.insiderForgeProb_le {msgLen : ℕ} (G : Signer msgLen) [Fintype G.KeyCoins]
+    [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins] [DecidableEq G.SignCoins]
+    [Nonempty G.SignCoins]
     (hmsg : msgLen ≤ 2 ^ 19) (hG : G.CarriesSalt) {εc : ℝ≥0∞}
     (hcorr : (baseSigner G proofSystem (RMsg := Fin msgLen → UInt8) fun _ m => m).CorrectWithin εc)
     (T : ((ringTranscript G proofSystem).setting 48 (ringMergeBounds proofSystem hmsg)).model.Preimages) {n t : ℕ}

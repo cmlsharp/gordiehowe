@@ -41,11 +41,6 @@ inductive Fact where
   | inRows (t : ℕ) (e : Expr)
   /-- The body of predicate `p` holds. -/
   | holds (p : ℕ)
-  /-- The polynomial whose spectrum, under the negacyclic transform of length `n` at the root `psi`
-  (in natural order when `natural`, in scheme order otherwise), is coordinates `[b n, (b + 1) n)`
-  of value `v` has every coefficient's integer reading (`FieldInterp.coefInt`) in `[lo, hi]`,
-  casting to the coefficient, in domain `d`'s field (`kernelPoly`). -/
-  | kernel (d v b n psi : ℕ) (natural : Bool) (lo hi : ℤ)
   /-- The realization circuit `rc` holds (`RealizedProgram.RealHolds`): a LogUp identity or the H
   half of a cross-field `equal`. Only a GKR circuit's template instance concludes it
   (`Step.circuitAssert`). -/
@@ -74,13 +69,8 @@ inductive IvlSrc where
   roots (`rootSetSrc`). -/
   | rootSet (qs : List ℕ)
   /-- The public-table selections or lookups `qs` place the value's coordinates among the entries
-  of their tables' columns: `[lo, hi]` within the hull of those entries (`tableHullFact`). -/
+  of their tables' columns: `[lo, hi]` within the hull of those entries. -/
   | tableHull (qs : List ℕ) (lo hi : ℤ)
-  /-- Block `b` of the kernel of the C++ operator `op` (a convolution by the spectrum the value
-  holds) is, by the public-table selections `qs`, the transform of a row of their table: its
-  polynomial's coefficients within the hull `[lo, hi]` of the row's entries (`tableKernelFact`,
-  a `kernel` fact). -/
-  | tableKernel (op b : ℕ) (qs : List ℕ) (lo hi : ℤ)
   deriving Repr, Inhabited
 
 /-- **An instance of the linear-operator rule** (`linopFact`). -/
@@ -193,10 +183,6 @@ inductive Step where
   | inDom (d : ℕ) (s : Step)
   /-- A `mod_q` in the grouped form (`groupedFact`): its rows cited by rank, its facts by index. -/
   | groupedMod (rows ivs : List ℕ)
-  /-- The product form of the derivation's predicate (`productModFact`): its quotient's range
-  (premise `ks[0]`) and the intervals of its sides' parts (the other premises, `kernel` facts and
-  `ivl` facts in the order of the parts). -/
-  | productMod (ks : List ℕ)
   /-- The fact of template instance `k` of a GKR circuit's emission log, in the circuit's domain
   (`circStepFact`). Only a circuit derivation (`circDerivsB`) cites it; the program's derivations
   conclude nothing from it. -/
@@ -271,8 +257,6 @@ def Fact.beq : Fact → Fact → Bool
   | .dvd d e q, .dvd d' e' q' => d == d' && e.beq e' && q == q'
   | .inRows t e, .inRows t' e' => t == t' && e.beq e'
   | .holds p, .holds p' => p == p'
-  | .kernel d v b n psi o lo hi, .kernel d' v' b' n' psi' o' lo' hi' =>
-    d == d' && v == v' && b == b' && n == n' && psi == psi' && o == o' && lo == lo' && hi == hi'
   | .real rc, .real rc' => decide (rc = rc')
   | _, _ => false
 
@@ -285,7 +269,6 @@ def Fact.dom : Fact → ℕ
   | .dvd d _ _ => d
   | .inRows _ _ => 0
   | .holds _ => 0
-  | .kernel d _ _ _ _ _ _ _ => d
   | .real _ => 0
 
 /-- **The body a shared entry is checked against** in domain `d`: an `in` with no records, which

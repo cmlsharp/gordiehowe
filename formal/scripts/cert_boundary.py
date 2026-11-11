@@ -100,6 +100,20 @@ def is_cert(m):
     return m.startswith((GENERATED, 'GordieHoweCheck.')) or m == CERTS or m.startswith(CERTS + '.')
 
 
+def perf_exempt(m):
+    """Why module m is outside the performance gate (audit/PERF.md), or None.
+
+    The generated modules (`GordieHoweCerts.Generated.*`) hold exported data and the certificate
+    checks over it, and the check modules (`GordieHoweCheck.*` and `CHECK_MODULES`) run those
+    checks; their cost is tracked by the build (stage 0, build_times.txt). Every other module, the
+    hand-written modules of GordieHoweCerts included, is profiled under the budget."""
+    if m.startswith(GENERATED):
+        return 'generated module'
+    if m == 'GordieHoweCheck' or m.startswith('GordieHoweCheck.') or m in CHECK_MODULES:
+        return 'certificate-check module'
+    return None
+
+
 def main():
     mods = modules()
     imports = {m: [i for i in IMPORT.findall(open(p, encoding='utf-8').read()) if i in mods]

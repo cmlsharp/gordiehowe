@@ -48,7 +48,7 @@ theorem everlastingZeroKnowledge_of_sampler {E : (j : ι) → (M.comp j).Encoder
     {X' W' : Type} [Fintype X'] [DecidableEq X'] [Fintype W'] [DecidableEq W'] (fx : X' → X)
     (fw : W' → U) (hvzk : CausalHVZK VE.MV rel honest pub Sim δ) :
     EverlastingZeroKnowledgePure (fun x u => (fx x, fw u) ∈ relU)
-      ((M.niProverZKM B (drawProver honest D.draw) E Qs).comap fx fw)
+      ((M.niProverZKM B (drawProver honest D.draw) E Qs).comap fx fw) (PMF.uniformOfFintype _)
       ((M.niJointSimulator VE.toViewRead B pub Sim T).comap fx)
       (fun tq Q => M.zkError δ tq Q + Q * η) := by
   have hcl : SliceClose M.saltOfBits (fun x u => (x, u) ∈ relU)
@@ -56,7 +56,7 @@ theorem everlastingZeroKnowledge_of_sampler {E : (j : ι) → (M.comp j).Encoder
       (M.niJointSimulator VE.toViewRead B pub Sim T) fun H => M.oneProofBound δ H + η :=
     SliceClose.of_draw (e := M.drawCoinsEquiv D.Coins R) (fun _ _ _ _ _ _ => rfl)
       (sliceClose B VE honest pub Sim T hvzk) hD
-  have hzk := everlastingZeroKnowledgePure_of_sliceClose _ _ _ _
+  have hzk := everlastingZeroKnowledgePure_of_sliceClose _ _ _ _ _
     ((saltedLocal B VE (drawProver honest D.draw) pub Sim T).comap fx fw) (hcl.comap fx fw)
   refine EverlastingZeroKnowledgePure.mono hzk fun tq Q => ?_
   unfold SPBCS.zkError
@@ -88,8 +88,8 @@ def ZeroKnowledgeOfSampler {E : (j : ι) → (M.comp j).Encoder}
   ∀ (X' W' : Type) [Fintype X'] [DecidableEq X'] [Fintype W'] [DecidableEq W'] (fx : X' → X)
     (fw : W' → U),
     GordieHowe.NARG.QROM.EverlastingZeroKnowledge (fun x u => (fx x, fw u) ∈ relU) queryEncoding
-      ((M.niProver Λ (drawProver honest D.draw) E hb).comap fx fw)
-      ((M.niSimulator Λ VE.toViewRead B (ViewEncoder.formatBounds M E VE hb) pub Sim T).comap fx) ε
+      ((M.niProver Λ (drawProver honest D.draw) E hb).comap fx fw) (PMF.uniformOfFintype _)
+      ((VE.niSimulator Λ hb pub Sim T).comap fx) ε
 
 open Classical in
 /-- **Zero knowledge of the spBCS compiler at drawn witnesses, in the statement form**

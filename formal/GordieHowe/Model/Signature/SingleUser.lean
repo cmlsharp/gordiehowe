@@ -48,7 +48,7 @@ namespace GordieHowe.Signature
 open GordieHowe.Quantum GordieHowe.RingSignature
 open scoped ENNReal
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB} {O : SignOracle B}
+variable {X Y : Type} {TB : SchemeTypes} {B : BaseScheme X Y TB} {O : SignOracle B}
 
 /-! ### The winning conditions with one user -/
 
@@ -99,12 +99,19 @@ theorem strongForges_one_iff {keys : Fin 1 → B.KeyCoins} {H : X → Y}
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
   [Nonempty Y]
 
+variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty O.Coins]
+
 variable (O) in
 /-- **An adversary of the single-user game**: an adversary of the multi-user game with one user. -/
 abbrev SUAdversary (V : OracleView X Y) (t : ℕ) : Type 1 :=
   MUAdversary O 1 V t
 
 variable {V : OracleView X Y} {t : ℕ}
+
+variable [Nonempty TB.KeyCoins]
 
 /-- **The success probability of the adversary in EUF-CMA** (KLS18 Figure 7, UF-CMA) with `Q`
 requests: `muEufProb` with one user. -/

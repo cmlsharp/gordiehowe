@@ -3,8 +3,7 @@
 
 // GordieHowe: the spectral sums of spectral.h as values, without its
 // builders, and the two sides of spectral rows as expressions
-// (spectral_sides), so that an integer congruence's spectral product term
-// (ops/integer_congruence.h) can hold and state one.
+// (spectral_sides), which assert_spectral states.
 
 #ifndef PRIVACY_PROOFS_ZK_LIB_GORDIEHOWE_OPS_SPECTRAL_SUM_H_
 #define PRIVACY_PROOFS_ZK_LIB_GORDIEHOWE_OPS_SPECTRAL_SUM_H_

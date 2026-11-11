@@ -32,14 +32,15 @@ open scoped ENNReal
 section System
 
 variable {k kN kS L e N : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁]
-  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
+  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)] {X₀ Wit₀ : Type}
   (M : SPBCS Mg P X₀ k kN kS L e) (Λ : SiteLayout Mg) {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] (E : (j : ι) → (M.comp j).Encoder)
   {Vr : X₀ → FullTr P τ → Bool} (Qs : ∀ x, M.IOPQueries Vr x)
-  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : Wit₀ → R → CausalProver P τ X₀)
   (stmtProg : RingSignature.RingStmt B → OracleProg (Bits (queryBits k kN kS L)) Y₁ X₀) (qS : ℕ)
   (hS : ∀ x, (stmtProg x).QueriesLE qS) (check : RingSignature.RingStmt B → Bool)
@@ -57,6 +58,7 @@ noncomputable def spbcsSplitVerifyProg (x : RingSignature.RingStmt B) (π : M.Re
         ((M.qVerifier Qs b b).prog ⟨x₀, p.1⟩).mapQuery id fun y => outEquiv k e (sp y).2
   else .pure false
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The verifier of `spbcsSplitProofSystem` is the program `spbcsSplitVerifyProg`**, with at
 most `qS + kq` queries. -/
 theorem verifiesBy_spbcsSplitProofSystem :
@@ -110,11 +112,12 @@ variable {k kN kS L e : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁]
   (M : SPBCS Mg P (W1ExpStmt prims RMsg N) k kN kS L e) (Λ : SiteLayout Mg)
   {b : ℕ} [∀ j i, Fintype ((M.comp j).MessageWrite i)] (E : (j : ι) → (M.comp j).Encoder)
   {Vr : W1ExpStmt prims RMsg N → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : RingSignature.RingWit (w1BaseSigner prims O βmin tol enc Lp bmsg) → R →
     CausalProver P τ (W1ExpStmt prims RMsg N))
 
-omit [NeZero (bucketCount p)] in
+omit [NeZero (bucketCount p)]
+  [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The verifier of the proof system of the ML-DSA ring publishing `w₁` is a program** with
 at most `2 N + kq` queries: the members' commitment hashes, then the compiled verifier. -/
 theorem verifiesBy_w1PS :

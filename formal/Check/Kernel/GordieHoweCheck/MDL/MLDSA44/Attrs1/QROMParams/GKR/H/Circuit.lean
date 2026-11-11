@@ -92,15 +92,16 @@ public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.H.E85
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.H.E86
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.H.E87
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.H.E88
+public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.H.Header
 meta import GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.QROMParams.GKR.H
 import all GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.QROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of the GKR circuit of domain H, from its entries' (generated; do not edit). -/
+/-! The relational check of the GKR circuit of domain H, from its header's and entries' (generated; do not edit). -/
 
 namespace GordieHowe.Generated.MDL.MLDSA44.Attrs1.QROMParams.GKR.H
 
-check_circuit cert ar
+compose_circuit cert ar
 
 end GordieHowe.Generated.MDL.MLDSA44.Attrs1.QROMParams.GKR.H

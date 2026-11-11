@@ -13,8 +13,8 @@ public import GordieHoweCerts.Applications.MLDSA44.Frontend.Cross
 # GordieHowe frontend: an emulated ML-DSA program, the crossing
 
 The crossing's obligation (`GordieHowe.MLDSA44.Emulated.ROMParams.CrossSound`, `crossSound`): `mac.equal` (predicate
-`275`) is `cross(H, x, A, y)` of width `1` with `x` the shared expression `527`, the native
-program's `525` renamed (H's `w1` bits, then H's decoded support and sign alternately; read through
+`crossPred`) is `cross(H, x, A, y)` of width `1` with `x` the native program's shared expression
+`525` renamed (H's `w1` bits, then H's decoded support and sign alternately; read through
 the renaming, `GordieHowe.RealizedProgram.evalE_rename`, and the native frontend's `x_lo`, `x_even`, `x_odd`) and `y`
 the shared expression `6` (A's `hint.w1` bits, then A's challenge bits `challenge.c`). The
 compiler's contract (`GordieHowe.RealizedProgram.HoldsWith`) gives the readings' equality where every reading of `x`
@@ -28,17 +28,20 @@ open GordieHowe.Bits
 
 /-- **The program facts of an emulated program's crossing** (`MldsaEMain` and): the shared expression
 `6` (A's operand, with the index maps of the program at the ROM parameters), the shared expressions' order, the lengths
-and fields the crossing reads, and `mac.equal` (predicate `275`) a crossing of `527` and `6`. Each
-emulated program instantiates it by `decide`. -/
+and fields the crossing reads, and `mac.equal` (predicate `crossPred`) a crossing of the native
+operand `525`, renamed, and `6`. Each emulated program instantiates it by `decide`. -/
 class MldsaECross (program : RealizedProgram) extends MldsaEMain program where
   /-- `expr6`. -/
   expr6 : program.expr 6 = .reindex idx8 (RealizedProgram.concatR (.leaf 63) [.leaf 60])
   /-- The program's shared expressions read only earlier ones. -/
   refsOrdered : program.RefsOrdered
+  /-- `mac.equal`, the crossing. -/
+  crossPred : ℕ
   /-- The lengths and fields the crossing reads. -/
-  crossData : program.exprLen (.ref 527) = 6656 ∧ program.exprLen (.leaf 63) = 6144 ∧ program.exprLen (.leaf 60) = 512 ∧ program.domainField 1 = 1 ∧ program.domainField 0 = 0 ∧ 6 < program.exprs.length ∧ 275 < program.predicates.length ∧ program.inSource (program.predicate 275) = true ∧ (525 : ℕ) ∈ hR
-  /-- Predicate `275` (`mac.equal`) crosses `527` of domain `H` and `6` of domain `A`. -/
-  crossPred : ∃ c, (program.predicate 275).body = .cross 1 (.ref 527) 0 (.ref 6) {} c
+  crossData : program.exprLen (.ref ((MldsaEmbed.σ program).ref 525)) = 6656 ∧ program.exprLen (.leaf 63) = 6144 ∧ program.exprLen (.leaf 60) = 512 ∧ program.domainField 1 = 1 ∧ program.domainField 0 = 0 ∧ 6 < program.exprs.length ∧ crossPred < program.predicates.length ∧
+    program.inSource (program.predicate crossPred) = true ∧ (525 : ℕ) ∈ MldsaEmbed.R program
+  /-- `mac.equal` crosses the native operand `525`, renamed, of domain `H` and `6` of domain `A`. -/
+  cross : ∃ c, (program.predicate crossPred).body = .cross 1 (.ref ((MldsaEmbed.σ program).ref 525)) 0 (.ref 6) {} c
 
 set_option linter.unusedSectionVars false
 
@@ -47,6 +50,12 @@ variable {program : RealizedProgram} [MldsaECross program] {F0 FH : RealizedProg
 
 set_option hygiene false in
 local notation "nat" => MldsaEmbed.nat program
+
+set_option hygiene false in
+local notation "σ" => MldsaEmbed.σ program
+
+set_option hygiene false in
+local notation "hV" => MldsaEmbed.V program
 
 variable [MldsaHHash nat] [MldsaHSample nat] [MldsaHConsts nat FH]
 
@@ -73,7 +82,11 @@ theorem refsOrdered : program.RefsOrdered :=
   MldsaECross.refsOrdered
 
 /-- The lengths and fields the crossing reads. -/
-theorem crossData : program.exprLen (.ref 527) = 6656 ∧ program.exprLen (.leaf 63) = 6144 ∧ program.exprLen (.leaf 60) = 512 ∧ program.domainField 1 = 1 ∧ program.domainField 0 = 0 ∧ 6 < program.exprs.length ∧ 275 < program.predicates.length ∧ program.inSource (program.predicate 275) = true ∧ (525 : ℕ) ∈ hR :=
+theorem crossData : program.exprLen (.ref ((σ).ref 525)) = 6656 ∧ program.exprLen (.leaf 63) = 6144 ∧
+    program.exprLen (.leaf 60) = 512 ∧ program.domainField 1 = 1 ∧ program.domainField 0 = 0 ∧
+    6 < program.exprs.length ∧ MldsaECross.crossPred program < program.predicates.length ∧
+    program.inSource (program.predicate (MldsaECross.crossPred program)) = true ∧
+    (525 : ℕ) ∈ MldsaEmbed.R program :=
   MldsaECross.crossData
 
 /-! The index map of the crossing: `y` reads its two parts in order. -/
@@ -90,7 +103,7 @@ section Operands
 variable (e : program.Env interp)
 
 /-- **`x`** is the native program's crossing operand, read through the renaming. -/
-theorem x_eq (i : ℕ) : program.evalE (program.reader e) 1 (.ref 527) i =
+theorem x_eq (i : ℕ) : program.evalE (program.reader e) 1 (.ref ((σ).ref 525)) i =
     (nat).evalE ((nat).reader (pull e)) 1 (.ref 525) i :=
   congrFun (RealizedProgram.evalE_rename MldsaEmbed.embedding e (e := .ref 525) rfl (by simp [RealizedProgram.Expr.directNodes])
     (by simpa [RealizedProgram.Expr.refs] using (crossData (program := program)).2.2.2.2.2.2.2.2)) i
@@ -125,22 +138,22 @@ end Operands
 and sign are bits: the compiler's contract at its premise, every reading of `x` below `2`. -/
 theorem crossSound : CrossSound (program := program) (F0 := F0) (FH := FH) := by
   intro e hs hsup hsgn
-  have hmac : program.HoldsAt e (program.predicate 275).body :=
+  have hmac : program.HoldsAt e (program.predicate (MldsaECross.crossPred program)).body :=
     hs.preds _ (RealizedProgram.predicate_mem (crossData (program := program)).2.2.2.2.2.2.1)
       (crossData (program := program)).2.2.2.2.2.2.2.1
-  obtain ⟨c, hc⟩ := MldsaECross.crossPred (program := program)
+  obtain ⟨c, hc⟩ := MldsaECross.cross (program := program)
   rw [hc] at hmac
   obtain ⟨-, hxy⟩ := hmac
-  change (∀ i < program.exprLen (.ref 527),
+  change (∀ i < program.exprLen (.ref ((σ).ref 525)),
       (interp (program.domainField 1)).toNat (program.evalE (program.reader e)
-        (program.domainField 1) (.ref 527) i) < 2) → ∀ i < program.exprLen (.ref 527),
+        (program.domainField 1) (.ref ((σ).ref 525)) i) < 2) → ∀ i < program.exprLen (.ref ((σ).ref 525)),
       (interp (program.domainField 1)).toNat (program.evalE (program.reader e)
-        (program.domainField 1) (.ref 527) i) =
+        (program.domainField 1) (.ref ((σ).ref 525)) i) =
       (interp (program.domainField 0)).toNat (program.evalE (program.reader e)
         (program.domainField 0) (.ref 6) i) at hxy
   rw [(crossData (program := program)).2.2.2.1, (crossData (program := program)).2.2.2.2.1, (crossData (program := program)).1] at hxy
   have hpre : ∀ i < 6656,
-      (interp 1).toNat (program.evalE (program.reader e) 1 (.ref 527) i) < 2 := by
+      (interp 1).toNat (program.evalE (program.reader e) 1 (.ref ((σ).ref 525)) i) < 2 := by
     intro i hi
     rw [x_eq]
     by_cases hlo : i < 6144

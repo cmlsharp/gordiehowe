@@ -107,7 +107,7 @@ class BitSecurity(unittest.TestCase):
                 ("mldsa-emulated-wide", "qrom", 116.87), ("mldsa-emulated-wide", "zk", 160.20),
                 ("falcon-native-narrow", "rom", 95.55), ("falcon-native-narrow", "zk", 96.63),
                 ("falcon-native-wide", "qrom", 116.87), ("falcon-native-wide", "zk", 160.16),
-                ("falcon-ring-native-narrow", "rom", 96.63),
+                ("falcon-ring-native-narrow", "rom", 96.54),
                 ("falcon-ring-native-wide", "qrom", 116.91)):
             self.assertAlmostEqual(got[cfg][model]["lambda"], lam, delta=0.006, msg=(cfg, model))
 
@@ -133,9 +133,10 @@ class PlanRounds(unittest.TestCase):
         plan, prog = load("falcon-native-narrow", RUN_PLANS)
         phases, _ = pr.phase_errors(prog, plan["degree"])
         F = 12289 ** 9
-        # Applications/Falcon512/Native/ROMParams/RoundErrors.lean: the source challenges' 639
-        # over 2^128 at the first phase with the MAC's 64, LogUp's 16448/(q^9 - 189) at the second.
-        self.assertEqual(phases[1], Fraction(639 + 64, 2 ** 128))
+        # The source challenges' 717 over 2^128 at the first phase (the Lean's sourceErrors,
+        # Generated/Falcon512/Native/ROMParams/Figures.lean: HashToPoint's K = 717 since
+        # 18d5878d3) with the MAC's 64, LogUp's 16448/(q^9 - 189) at the second.
+        self.assertEqual(phases[1], Fraction(717 + 64, 2 ** 128))
         self.assertEqual(phases[2], Fraction(16448, F - 189))
         names = [n for n, _ in prog["domains"]]
         # The relative domain: no combinations (aIpError_le), and GKR summed at 16 layers,
@@ -160,9 +161,10 @@ class PlanRounds(unittest.TestCase):
                                  pr.domain_ip(b, plan["domains"][name], j), (rel, name))
             n += 1
         # The checked-in set (scripts/regenerate_exports.py): 8 constructions at both
-        # parameter sets, the ECDSA mDL, the post-quantum mDL at both, RSA in two fields and the
-        # 12 SHA-256 and SHA3-256 systems (SHA3-256 1 KiB at both parameter sets).
-        self.assertEqual(n, 33)
+        # parameter sets, the ECDSA mDL, the post-quantum mDL at both, RSA (one field,
+        # Goldilocks2, its one RSA_CONFIG) and the 12 SHA-256 and SHA3-256 systems (SHA3-256
+        # 1 KiB at both parameter sets): 16 + 1 + 2 + 1 + 12.
+        self.assertEqual(n, 32)
 
     def test_flat_and_compressed_exports(self):
         # plan_files also reads the flat layout <Name>.lean with <Name>Program.lean (the
@@ -409,13 +411,24 @@ class Run(unittest.TestCase):
         self.assertEqual(self.cases["gh-ml-emulated"]["kappa"]["lean"]["binding"], "phase2")
 
     def test_skips_other_ring_sizes(self):
-        # The run exports every ring size; without lean/ring-1024 that size has no plan.
+        # The run exports every ring size of the rings it exports (Falcon-512 and ML-DSA-44);
+        # without lean/ring-1024 that size has no plan.
         with tempfile.TemporaryDirectory() as d:
             plans = without_ring(RUN_PLANS, 1024, pathlib.Path(d) / "lean")
             out = ep.evaluate(RUN, plans)
         self.assertIn("gh-ml-ring-native-1024", out["skipped"])
         self.assertNotIn("gh-ml-ring-native-64", out["skipped"])
-        self.assertEqual([k for k in self.out["skipped"] if "-ring-" in k], [])
+        # The run also times the rings at ML-DSA-65 and -87 and Falcon-1024, which it does not
+        # export at any size: those are skipped for that reason only, and no ring case of an
+        # exported configuration is skipped.
+        exported = {re.search(r'^    config := "([^"]+)"', pr.read_lean(plan), re.M).group(1)
+                    for plan, _ in pr.plan_files(RUN_PLANS)}
+        for k, why in self.out["skipped"].items():
+            if "-ring-" not in k:
+                continue
+            m = re.fullmatch(r"no plan export for (\S+)", why)
+            self.assertIsNotNone(m, (k, why))
+            self.assertNotIn(m.group(1), exported, k)
 
     def test_hash_outside_the_setting(self):
         with tempfile.TemporaryDirectory() as d:

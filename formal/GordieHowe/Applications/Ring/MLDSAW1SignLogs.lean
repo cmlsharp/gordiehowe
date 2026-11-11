@@ -37,7 +37,7 @@ variable {prims : Primitives p} [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   {O : W1Oracles X Y p prims Msg N reps} {Mo : MaskOracle X Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O Mo βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O Mo βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
   {adm : KeyRing (PubKey p prims) N → Prop}
   [hadm : DecidablePred adm] {n Q : ℕ}
   {Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] {Frg : Type}
@@ -50,20 +50,26 @@ local notation "X₀f" => W1ExpStmt prims RMsg N
 attribute [local instance] admDecF
 
 
-omit [AddGroup Y] in
+omit [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 /-- **The dummy proof request is not a signing entry.** -/
 theorem w1SignEntry_dummyR (r : RingSignature.Insider.Req Bf PSf adm n × ℕ) :
     w1SignEntry (.inr (w1DummyR (prims := prims) (O := O) (Mo := Mo) (βmin := βmin) (tol := tol)
       (enc := enc) (k := k) (D := D) (bmsg := bmsg) (PS := PS) (Q := Q) r)) = none :=
   rfl
 
-omit [AddGroup Y] in
+omit [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 /-- **A corruption is not a signing entry.** -/
 theorem w1SignEntry_corrupt (i : Fin n) :
     w1SignEntry (.inl (.corrupt i) :
-      MURequest (SignOracle.none Bf) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q) = none :=
+      MURequest (SignOracle.none (Bf).core) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q) = none :=
   rfl
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **A signed request of the relay at the base component that is a signing entry `(s, R, m, xb)`**
 (`KFSignedAsk` at `w1KFFactors`, `w1StmtPω` and `w1ToR`): for request number `c < Q`, a table `T`
 and an answer `y` at the kept point, `s` is a member of the supported ring `R`, the public part
@@ -73,7 +79,7 @@ by the published value `q.1.2` with the second component of `y`; the entry is th
 of `xb` tagged with the request and its capped number, with the signature `q.2`. -/
 theorem w1SignEntry_of_kfSignedAsk [DecidableEq X] (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
     (pks : Fin n → PubKey p prims) (sc : Fin Q → KFCoins k D Y₁) (ω : X → Y₁)
-    {e : MURequest (SignOracle.none Bf) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q}
+    {e : MURequest (SignOracle.none (Bf).core) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q}
     (he : KFSignedAsk (PS := PSf) (adm := adm) sp Bf pks
       (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
       (w1StmtPω prims O Mo βmin tol enc k D bmsg sp) (w1ToR (Q := Q)) sc ω e)

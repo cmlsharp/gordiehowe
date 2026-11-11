@@ -20,39 +20,41 @@ open scoped Classical
 
 variable {n : ℕ} {P : ProtocolSpec n} {Stmt Wit : Type}
 
-/-- **Completeness of the honest prover family `honest`**: on every valid statement/witness
-pair `honest w` is rejected with probability at most `δ` over uniform verifier challenges.
-The challenge types are nonempty, so the uniform distribution exists;
-`completenessAt_iff_count` is the equivalent counting form. -/
-def completenessAt [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty (P.Challenge i)]
+/-- **Completeness of the honest prover family `honest`** with completeness error `δ` (the
+paper's `def:iop-complete`, after DFMS22 p. 10, at a constant error and a deterministic honest
+prover; Chiesa–Yogev 2024 §23.1 define only perfect completeness, `δ = 0`): on every valid
+statement/witness pair `honest w` is rejected with probability at most `δ` over uniform verifier
+challenges. The challenge types are nonempty, so the uniform distribution exists;
+`completeAt_iff_count` is the equivalent counting form. -/
+def CompleteAt [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty (P.Challenge i)]
     (rel : Set (Stmt × Wit)) (V : Verifier P Stmt) (honest : Wit → Prover P Stmt) (δ : ℝ≥0) :
     Prop :=
   ∀ x w, (x, w) ∈ rel → Pr[ch ← P.Challenges : V x ((honest w).run x ch) ≠ true] ≤ δ
 
-/-- Completeness for some honest prover family: `completenessAt` at some `honest`. A statement
-about a named prover uses `completenessAt`. -/
-def completeness [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty (P.Challenge i)]
+/-- Completeness for some honest prover family: `CompleteAt` at some `honest`. A statement
+about a named prover uses `CompleteAt`. -/
+def Complete [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty (P.Challenge i)]
     (rel : Set (Stmt × Wit)) (V : Verifier P Stmt) (δ : ℝ≥0) : Prop :=
-  ∃ honest : Wit → Prover P Stmt, completenessAt rel V honest δ
+  ∃ honest : Wit → Prover P Stmt, CompleteAt rel V honest δ
 
 /-- **Completeness transfers to a decoded honest input**: if the honest prover family `honest`
 on inputs `I` is complete for `relI`, and `dec` decodes an input of `relI` from every pair of
 `rel`, then the prover that decodes its input from the statement and the witness
 (`Prover.ofStatement`) is complete for `rel` with the same error. -/
-theorem completenessAt.decode [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty (P.Challenge i)]
+theorem CompleteAt.decode [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty (P.Challenge i)]
     {I : Type} {relI : Set (Stmt × I)} {rel : Set (Stmt × Wit)} {V : Verifier P Stmt}
-    {honest : I → Prover P Stmt} {δ : ℝ≥0} (h : completenessAt relI V honest δ)
+    {honest : I → Prover P Stmt} {δ : ℝ≥0} (h : CompleteAt relI V honest δ)
     (dec : Stmt → Wit → I) (hdec : ∀ x w, (x, w) ∈ rel → (x, dec x w) ∈ relI) :
-    completenessAt rel V (fun w => Prover.ofStatement fun x => honest (dec x w)) δ :=
+    CompleteAt rel V (fun w => Prover.ofStatement fun x => honest (dec x w)) δ :=
   fun x w hw => by
     simp only [Prover.run_ofStatement]
     exact h x (dec x w) (hdec x w hw)
 
-/-- `completenessAt` as a count: at most `δ · |C|` challenge tuples make the verifier reject the
+/-- `CompleteAt` as a count: at most `δ · |C|` challenge tuples make the verifier reject the
 honest run. -/
-theorem completenessAt_iff_count [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty (P.Challenge i)]
+theorem completeAt_iff_count [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty (P.Challenge i)]
     {rel : Set (Stmt × Wit)} {V : Verifier P Stmt} {honest : Wit → Prover P Stmt} {δ : ℝ≥0} :
-    completenessAt rel V honest δ ↔
+    CompleteAt rel V honest δ ↔
       ∀ x w, (x, w) ∈ rel →
         ((Finset.univ.filter fun ch : P.Challenges =>
           V x ((honest w).run x ch) ≠ true).card : ℝ≥0) ≤
@@ -60,19 +62,19 @@ theorem completenessAt_iff_count [∀ i, Fintype (P.Challenge i)] [∀ i, Nonemp
   forall_congr' fun _ => forall_congr' fun _ => forall_congr' fun _ =>
     (card_le_iff_probUniform_le P.Challenges _ _).symm
 
-/-- `completeness` as a count. -/
-theorem completeness_iff_count [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty (P.Challenge i)]
+/-- `Complete` as a count. -/
+theorem complete_iff_count [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty (P.Challenge i)]
     {rel : Set (Stmt × Wit)} {V : Verifier P Stmt} {δ : ℝ≥0} :
-    completeness rel V δ ↔
+    Complete rel V δ ↔
       ∃ honest : Wit → Prover P Stmt, ∀ x w, (x, w) ∈ rel →
         ((Finset.univ.filter fun ch : P.Challenges =>
           V x ((honest w).run x ch) ≠ true).card : ℝ≥0) ≤
             δ * Fintype.card P.Challenges :=
-  exists_congr fun _ => completenessAt_iff_count
+  exists_congr fun _ => completeAt_iff_count
 
 /-- Acceptance of `honest` outside a counted failure event yields its completeness. The event
 may depend on the honest input; it cannot be silently excluded from the coins. -/
-theorem completenessAt_of_failure_event [∀ i, Fintype (P.Challenge i)]
+theorem completeAt_of_failure_event [∀ i, Fintype (P.Challenge i)]
     [∀ i, Nonempty (P.Challenge i)]
     (rel : Set (Stmt × Wit)) (V : Verifier P Stmt) (δ : ℝ≥0)
     (honest : Wit → Prover P Stmt) (bad : Stmt → Wit → P.Challenges → Prop)
@@ -80,8 +82,8 @@ theorem completenessAt_of_failure_event [∀ i, Fintype (P.Challenge i)]
       V x ((honest w).run x ch) = true)
     (hcount : ∀ x w, (x,w) ∈ rel →
       ((Finset.univ.filter (bad x w)).card : ℝ≥0) ≤ δ * Fintype.card P.Challenges) :
-    completenessAt rel V honest δ := by
-  rw [completenessAt_iff_count]
+    CompleteAt rel V honest δ := by
+  rw [completeAt_iff_count]
   intro x w hw
   apply le_trans _ (hcount x w hw)
   apply Nat.cast_le.mpr
@@ -92,15 +94,15 @@ theorem completenessAt_of_failure_event [∀ i, Fintype (P.Challenge i)]
   exact hch (haccept x w hw ch hb)
 
 /-- Acceptance outside a counted failure event yields completeness. -/
-theorem completeness_of_failure_event [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty (P.Challenge i)]
+theorem complete_of_failure_event [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty (P.Challenge i)]
     (rel : Set (Stmt × Wit)) (V : Verifier P Stmt) (δ : ℝ≥0)
     (honest : Wit → Prover P Stmt) (bad : Stmt → Wit → P.Challenges → Prop)
     (haccept : ∀ x w, (x,w) ∈ rel → ∀ ch, ¬ bad x w ch →
       V x ((honest w).run x ch) = true)
     (hcount : ∀ x w, (x,w) ∈ rel →
       ((Finset.univ.filter (bad x w)).card : ℝ≥0) ≤ δ * Fintype.card P.Challenges) :
-    completeness rel V δ :=
-  ⟨honest, completenessAt_of_failure_event rel V δ honest bad haccept hcount⟩
+    Complete rel V δ :=
+  ⟨honest, completeAt_of_failure_event rel V δ honest bad haccept hcount⟩
 
 /-- A failure predicate on one fresh challenge has the same probability
 bound inside the full product of verifier coins. -/
@@ -222,7 +224,7 @@ end CausalTranscript
 /-- **Completeness of a prover that runs a causal family**: if every run of `honest w` is the
 transcript of the family `H w`, acceptance of the family outside a counted failure event gives
 the completeness of `honest`. -/
-theorem completenessAt_of_causal [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty (P.Challenge i)]
+theorem completeAt_of_causal [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty (P.Challenge i)]
     (rel : Set (Stmt × Wit)) (V : Verifier P Stmt) (δ : ℝ≥0) (honest : Wit → Prover P Stmt)
     (H : Wit → Stmt → CausalTranscript P)
     (hrun : ∀ w x ch, (honest w).run x ch = (H w x).transcript ch)
@@ -231,14 +233,14 @@ theorem completenessAt_of_causal [∀ i, Fintype (P.Challenge i)] [∀ i, Nonemp
       V x ((H w x).transcript ch) = true)
     (hcount : ∀ x w, (x,w) ∈ rel →
       ((Finset.univ.filter (bad x w)).card : ℝ≥0) ≤ δ * Fintype.card P.Challenges) :
-    completenessAt rel V honest δ :=
-  completenessAt_of_failure_event rel V δ honest bad
+    CompleteAt rel V honest δ :=
+  completeAt_of_failure_event rel V δ honest bad
     (fun x w hw ch hch => (hrun w x ch).symm ▸ haccept x w hw ch hch) hcount
 
 /-- A causally constructed family and an explicit failure-event count give
 the online completeness statement. Future coins are filled with `default`
 only to realize the strategy; causality makes that choice immaterial. -/
-theorem completeness_of_causal [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty (P.Challenge i)]
+theorem complete_of_causal [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty (P.Challenge i)]
     (rel : Set (Stmt × Wit)) (V : Verifier P Stmt) (δ : ℝ≥0)
     (H : Wit → Stmt → CausalTranscript P) (default : P.Challenges)
     (bad : Stmt → Wit → P.Challenges → Prop)
@@ -246,8 +248,8 @@ theorem completeness_of_causal [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty
       V x ((H w x).transcript ch) = true)
     (hcount : ∀ x w, (x,w) ∈ rel →
       ((Finset.univ.filter (bad x w)).card : ℝ≥0) ≤ δ * Fintype.card P.Challenges) :
-    completeness rel V δ :=
-  ⟨_, completenessAt_of_causal rel V δ (fun w => CausalTranscript.proverFor (H w) default) H
+    Complete rel V δ :=
+  ⟨_, completeAt_of_causal rel V δ (fun w => CausalTranscript.proverFor (H w) default) H
     (fun w x ch => CausalTranscript.run_proverFor (H w) default ch x) bad haccept hcount⟩
 
 end GordieHowe.IOP

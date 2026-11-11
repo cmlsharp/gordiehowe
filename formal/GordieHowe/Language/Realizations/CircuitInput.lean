@@ -12,8 +12,9 @@ public import GordieHowe.Language.Realizations.RealizeLookup
 /-!
 # GordieHowe: the valuation decoded from a circuit's input vector
 
-Facts about the valuation the trust bundle decodes from an input vector `v` of circuit `c`
-(`GordieHowe.RealizedProgram.inputValuation`), which the circuit certificates read:
+Facts about the valuation the circuits' correspondence (`CircuitsEnforce`) decodes from an input
+vector `v` of circuit `c` (`GordieHowe.RealizedProgram.inputValuation`), which the circuit
+certificates read:
 
 * **The leaves** (`GordieHowe.RealizedProgram.inputValuation_committed`, `inputValuation_view`,
   `inputValuation_pub`): a committed value's coordinate is the input its committed block holds, a

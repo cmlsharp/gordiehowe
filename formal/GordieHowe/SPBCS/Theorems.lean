@@ -33,7 +33,7 @@ the honest run over uniform coins and uniform challenges (the completeness error
 
 * `completeness`: for `(x, w) ∈ rel`, any Merkle salts `ν` and Fiat–Shamir salt `σ`, the honest
   proof is rejected over uniform coins and a uniform oracle with probability at most
-  `εc + overrun + keyCollision (t.size n) k` (part (2) at `t = 0`);
+  `completenessError εc = εc + overrun + keyCollisionBound` (part (2) at `t = 0`);
 * `completenessOfSampler`: the same at a witness drawn by a witness sampler that misses `rel` on
   the proof query `u` for `x` with probability at most `η`, with `η` added;
 
@@ -42,10 +42,11 @@ Part (1), for a prover with fixed coins, is `prob_not_accepts_prove_le`. The cla
 adversaries choosing `(x, w)` after their queries (`def:narg-complete`) is `GordieHowe.SPBCS.complete_rom`
 (`NARG.ROM.Complete`, extra term `t / 2^(8kS)`) and `GordieHowe.SPBCS.complete_qrom`
 (`NARG.QROM.Complete`, extra term `2t / 2^(4kS)`), at the honest prover `niProver` with uniform
-coins, Merkle salts and Fiat–Shamir salt.
+coins, Merkle salts and Fiat–Shamir salt. The clauses above are stated for the compiled proof
+`prove`, the classical semantics of `niProver` (`toFn_niProver`).
 
-The key-collision term is the paper's `errkey = binom(nmsg, 2) 2^(-8b)` with `nmsg = t.size n`,
-the rounds of all leaves; the final inputs of the branches add no key.
+The key-collision term `keyCollisionBound` is the paper's `errkey = binom(nmsg, 2) 2^(-8b)` with
+`nmsg = t.size n`, the rounds of all leaves; the final inputs of the branches add no key.
 ## Zero knowledge and witness indistinguishability
 
 `GordieHowe.SPBCS.PrivacyGuarantees`, `GordieHowe.SPBCS.privacyGuarantees` (paper `thm:bcs-zk`, `thm:bcs-wi`): for the honest prover
@@ -97,27 +98,26 @@ structure CompletenessGuarantees (E : (j : ι) → (M.comp j).Encoder) {V : X �
   completeness : ∀ x w (ν : M.Pos → MerkleSalt kN) (σ : FiatShamirSalt kS), (x, w) ∈ rel →
     Pr[q ← R × (Query k kN kS L → Out k e) :
         ¬ M.Accepts q.2 x (prove (honest w q.1) x σ E ν q.2 (Qs x)) (Qs x)] ≤
-      εc + M.overrun + SPBCS.keyCollision (t.size n) k
+      M.completenessError εc
   /-- Completeness at a witness drawn by a witness sampler, averaged over uniform coins. -/
   completenessOfSampler : ∀ {U : Type} (D : WitnessSampler U Wit) x u (η : ℝ≥0),
     D.MissesAtMostAt rel x u η → ∀ (ν : M.Pos → MerkleSalt kN) (σ : FiatShamirSalt kS),
     ∑ r, (Fintype.card R : ℝ≥0∞)⁻¹ * Pr[d ← D.Draw (Query k kN kS L → Out k e) :
         ¬ M.Accepts d.oracle x
           (prove (honest (D.draw u d.coins) r) x σ E ν d.oracle (Qs x)) (Qs x)] ≤
-      εc + M.overrun + SPBCS.keyCollision (t.size n) k + η
+      M.completenessError εc + η
 
 variable {M}
 
 /-- **The spBCS compiler is complete** (`CompletenessGuarantees`, paper `thm:bcs-complete`)
-when the IOP has completeness error at most `εc` (`def:iop-complete`): for every pair in `rel`, the
-composite verifier rejects the run of the honest causal prover with probability at most `εc` over
-its uniform coins and uniform challenges (`hc`). -/
+when the IOP has completeness error at most `εc` (`def:iop-complete`, `CausalCompletenessError`):
+for every pair in `rel`, the composite verifier rejects the run of the honest causal prover with
+probability at most `εc` over its uniform coins and uniform challenges (`hc`). -/
 @[headline]
 theorem completenessGuarantees {E : (j : ι) → (M.comp j).Encoder} {V : X → FullTr P t → Bool}
     {Qs : ∀ x, M.IOPQueries V x} {Wit R : Type} [Fintype R] [Nonempty R]
     {honest : Wit → R → CausalProver P t X} {rel : Set (X × Wit)} {εc : ℝ≥0∞}
-    (hc : ∀ x w, (x, w) ∈ rel →
-      Pr[q ← R × Chs P t : V x ((honest w q.1).run x q.2) ≠ true] ≤ εc) :
+    (hc : CausalCompletenessError rel V honest εc) :
     M.CompletenessGuarantees E Qs honest rel εc where
   completeness x w ν σ hw := prob_not_accepts_prove_coins_le x σ E ν (Qs x) (honest w) (hc x w hw)
   completenessOfSampler D x _ _ hD ν σ :=
@@ -144,7 +144,7 @@ that of the paper's `def:narg-wi`: it chooses each statement and witness pair as
 oracle and the earlier proofs. -/
 structure PrivacyGuarantees (E : (j : ι) → (M.comp j).Encoder) {V : X → FullTr P t → Bool}
     (Qs : ∀ x, M.IOPQueries V x) (VE : M.ViewEncoder E Qs) {B : ℕ} (hb : M.FormatBounds Qs B B)
-    (Λ : SiteLayout Mg) {Wit R : Type} [Fintype R] [Nonempty R]
+    (Λ : SiteLayout Mg) {Wit R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
     (honest : Wit → R → CausalProver P t X) {Pub : Type} (pub : X → Pub)
     (Sim : CausalJointSimulator VE.MV Pub) (T : M.Preimages) (rel : Set (X × Wit)) (δ : ℝ≥0) :
     Prop where
@@ -152,8 +152,8 @@ structure PrivacyGuarantees (E : (j : ι) → (M.comp j).Encoder) {V : X → Ful
   zeroKnowledge : ∀ (X' W' : Type) [Fintype X'] [DecidableEq X'] [Fintype W'] [DecidableEq W']
     (fx : X' → X) (fw : W' → Wit),
     GordieHowe.NARG.QROM.EverlastingZeroKnowledge (fun x w => (fx x, fw w) ∈ rel) queryEncoding
-      ((M.niProver Λ honest E hb).comap fx fw)
-      ((M.niSimulator Λ VE.toViewRead B (ViewEncoder.formatBounds M E VE hb) pub Sim T).comap fx)
+      ((M.niProver Λ honest E hb).comap fx fw) (PMF.uniformOfFintype _)
+      ((VE.niSimulator Λ hb pub Sim T).comap fx)
       (M.zkError δ)
   /-- Zero knowledge in the QROM against query-bounded adversaries at witnesses drawn by a witness
   sampler. -/
@@ -163,24 +163,25 @@ structure PrivacyGuarantees (E : (j : ι) → (M.comp j).Encoder) {V : X → Ful
   /-- Unconditional witness indistinguishability against adaptively chosen statements of bounded
   encoding length. -/
   witnessIndist : ∀ (eX : SPBCS.BitEncoding X) (eW : SPBCS.BitEncoding Wit) (Q ℓ : ℕ),
-    M.WitnessIndistinguishableOfLength (M.niProver Λ honest E hb) eX eW rel Q ℓ
+    M.WitnessIndistinguishableOfLength (M.niProver Λ honest E hb)
+        (PMF.uniformOfFintype _) eX eW rel Q ℓ
       (Q * M.wiError δ (SPBCS.choiceCount ℓ))
   /-- Zero knowledge in the ROM against query-bounded classical adversaries. -/
   zeroKnowledgeROM : GordieHowe.NARG.ROM.EverlastingZeroKnowledge (fun x w => (x, w) ∈ rel)
-    (M.niProver Λ honest E hb)
-    (M.niSimulator Λ VE.toViewRead B (ViewEncoder.formatBounds M E VE hb) pub Sim T)
+    (M.niProver Λ honest E hb) (PMF.uniformOfFintype _)
+    (VE.niSimulator Λ hb pub Sim T)
     (M.zkErrorROM δ)
   /-- Zero knowledge in the QROM against adversaries all of whose queries are counted. -/
   zeroKnowledgeQueryCounted : ∀ (X' W' : Type) [Fintype X'] [DecidableEq X'] [Fintype W']
     [DecidableEq W'] (fx : X' → X) (fw : W' → Wit),
     GordieHowe.NARG.QROM.ZeroKnowledge (fun x w => (fx x, fw w) ∈ rel) queryEncoding
-      ((M.niProver Λ honest E hb).comap fx fw)
-      ((M.niSimulator Λ VE.toViewRead B (ViewEncoder.formatBounds M E VE hb) pub Sim T).comap fx)
+      ((M.niProver Λ honest E hb).comap fx fw) (PMF.uniformOfFintype _)
+      ((VE.niSimulator Λ hb pub Sim T).comap fx)
       (M.zkErrorQuery δ)
   /-- Zero knowledge in the ROM against classical adversaries all of whose queries are counted. -/
   zeroKnowledgeROMQuery : NARG.ROM.ZeroKnowledge (fun x w => (x, w) ∈ rel)
-    (M.niProver Λ honest E hb)
-    (M.niSimulator Λ VE.toViewRead B (ViewEncoder.formatBounds M E VE hb) pub Sim T)
+    (M.niProver Λ honest E hb) (PMF.uniformOfFintype _)
+    (VE.niSimulator Λ hb pub Sim T)
     (M.zkErrorROMQuery δ)
 
 open Classical in
@@ -190,7 +191,7 @@ simulator `Sim` with error `δ` (`hvzk`, CY24 Definition 23.1.8). -/
 @[headline]
 theorem privacyGuarantees {E : (j : ι) → (M.comp j).Encoder} {V : X → FullTr P t → Bool}
     {Qs : ∀ x, M.IOPQueries V x} (VE : M.ViewEncoder E Qs) {B : ℕ} (hb : M.FormatBounds Qs B B)
-    (Λ : SiteLayout Mg) {Wit R : Type} [Fintype R] [Nonempty R]
+    (Λ : SiteLayout Mg) {Wit R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
     {honest : Wit → R → CausalProver P t X} {Pub : Type} (pub : X → Pub)
     (Sim : CausalJointSimulator VE.MV Pub) (T : M.Preimages) {rel : Set (X × Wit)} {δ : ℝ≥0}
     (hvzk : CausalHVZK VE.MV rel honest pub Sim δ) :

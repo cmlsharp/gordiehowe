@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Model.Quantum.Core.Kernel
 public import GordieHowe.Model.QROM.Compressed
+public import GordieHowe.Headline
 
 @[expose] public section
 
@@ -342,6 +343,7 @@ theorem shiftPerm_symm_apply (b : PurReg W I J m) : (shiftPerm W).symm b = shift
 
 /-- **Zha19 Lemma 3** (p. 12; CMS19 section 3.6, p. 16, `O_h = (I^m ⊗ H^n) O′_h (I^m ⊗ H^n)`): the
 standard query is the phase query between two Hadamard transforms of the answer register. -/
+@[headline]
 theorem stO_eq (v : QState (PurReg W I J m)) : stO W v = ansH W _ (phO W (ansH W _ v)) := by
   ext ⟨r, h⟩
   rw [stO_apply, ansH_apply]

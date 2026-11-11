@@ -24,6 +24,24 @@ namespace GordieHowe
 open IOP
 open scoped NNReal
 
+namespace RealizedProgram.ProofSystem
+
+/-- **The relation at the checked statements**: the pairs `(x', w)` whose statement `x'` passes the
+check `chk` and whose statement read through `f` is related to `w` by `rel`,
+`{(x', w) | chk x' ∧ (f x', w) ∈ rel}`. A definition, so that statements over it name the relation
+instead of spelling the set at every mention. -/
+def checkedRel {Stmt Stmt' W : Type} (f : Stmt' → Stmt) (chk : Stmt' → Bool)
+    (rel : Set (Stmt × W)) : Set (Stmt' × W) :=
+  {p | chk p.1 = true ∧ (f p.1, p.2) ∈ rel}
+
+@[simp]
+theorem mem_checkedRel {Stmt Stmt' W : Type} {f : Stmt' → Stmt} {chk : Stmt' → Bool}
+    {rel : Set (Stmt × W)} {p : Stmt' × W} :
+    p ∈ checkedRel f chk rel ↔ chk p.1 = true ∧ (f p.1, p.2) ∈ rel :=
+  Iff.rfl
+
+end RealizedProgram.ProofSystem
+
 namespace RealizedProgram.ProofSystem.PhaseStep
 
 variable {Stmt Stmt' W : Type} {rel : Set (Stmt × W)} {m : ℕ} {Pub Wit : Fin m → Type}
@@ -91,7 +109,7 @@ theorem EventBound.comap {A : PhaseStep Stmt W rel Pub Wit holds} {ε : A.spec.C
 checks `chk` on the statement, read through `f`, for the relation
 `{(x', w) | chk x' ∧ (f x', w) ∈ rel}`. -/
 def comapWith (A : PhaseStep Stmt W rel Pub Wit holds) (f : Stmt' → Stmt) (chk : Stmt' → Bool) :
-    PhaseStep Stmt' W {p | chk p.1 = true ∧ (f p.1, p.2) ∈ rel} Pub Wit holds where
+    PhaseStep Stmt' W (checkedRel f chk rel) Pub Wit holds where
   n := A.n
   spec := A.spec
   ok x tr := chk x && A.ok (f x) tr
@@ -117,7 +135,7 @@ def Sim.comapWith {A : PhaseStep Stmt W rel Pub Wit holds} (SA : A.Sim) (f : Stm
 statements pass the check, simulated by `Sim.comapWith`. -/
 def Honest.comapWith {A : PhaseStep Stmt W rel Pub Wit holds} {SA : A.Sim}
     (Ah : A.Honest I relI In dom SA) (f : Stmt' → Stmt) (chk : Stmt' → Bool) :
-    (A.comapWith f chk).Honest I {p | chk p.1 = true ∧ (f p.1, p.2) ∈ relI} In dom
+    (A.comapWith f chk).Honest I (checkedRel f chk relI) In dom
       (SA.comapWith f chk) where
   Pads := Ah.Pads
   wit := Ah.wit
@@ -142,7 +160,7 @@ theorem Honest.CoinErrorBound.comapWith {A : PhaseStep Stmt W rel Pub Wit holds}
     {SA : A.Sim} {Ah : A.Honest I relI In dom SA} {J Ω : Type} [Fintype Ω] [Nonempty Ω] {relJ : Set (Stmt × J)}
     {inp : J → Ω → I} {e : Stmt → ℝ≥0} (h : Ah.CoinErrorBound relJ inp e) (f : Stmt' → Stmt)
     (chk : Stmt' → Bool) :
-    (Ah.comapWith f chk).CoinErrorBound {p | chk p.1 = true ∧ (f p.1, p.2) ∈ relJ} inp
+    (Ah.comapWith f chk).CoinErrorBound (checkedRel f chk relJ) inp
       fun x => e (f x) := by
   intro x y hy
   refine le_trans (QROM.probUniform_mono fun u hu => ?_) (h (f x) y hy.2)

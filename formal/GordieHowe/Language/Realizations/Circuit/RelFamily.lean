@@ -46,7 +46,7 @@ open GordieHowe.GKR.Rel (Wire TE EntryCert Assert Frac FracTree LogupCert MacHCe
 
 /-! ## Reading the record -/
 
-/-- **The trie reads the node's wires.** -/
+/-- **The wire tree reads the node's wires.** -/
 theorem wireAtT_wiresT (E : ETable) (k i : ℕ) : wireAtT (wiresT E k) i = wireAt E k i := by
   unfold wireAtT wiresT wireAt
   cases h : Nat.blt i (E.get k).wires.length
@@ -55,7 +55,7 @@ theorem wireAtT_wiresT (E : ETable) (k i : ℕ) : wireAtT (wiresT E k) i = wireA
     exact (List.getD_eq_default _ _ (Nat.not_lt.mp h')).symm
   · simp only [Nat.blt_eq] at h
     simp only [Bool.cond_true]
-    exact Trie.get_ofList _ h
+    exact PTree.get_ofList _ h
 
 
 theorem needleWires_eq (E : ETable) (ms : List Member) (ys : List ℕ) :
@@ -83,7 +83,7 @@ def macHCuts (p : ℕ) (mc : MacHCert) : List (Wire × TE) :=
   match (ir.predicate p).body with
   | .cross _ _ _ _ _ real =>
     let w := real.width
-    let G := Trie.ofList (powList ar 2 w 1)
+    let G := PTree.ofList (powList ar 2 w 1)
     mc.chunks.zipIdx.map fun q =>
       (q.1, TE.sumL ((List.range w).map fun i =>
         TE.scale (G.get i) (teW (wireAt cd.table mc.bits (q.2 * w + i)))))

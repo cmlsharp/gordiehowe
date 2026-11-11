@@ -15,11 +15,26 @@ public section
 
 The classes of the committed source values (`MldsaCarrierExec.cell_classes`) and the witness
 meaning of each source role, checked on the finite source-role rows. A row's renamed value is found
-by a constant-time inverse; `hOf_val` and `aOf_val` then evaluate the first-match inverses `hOf` and
-`aOf` in no kernel reduction.
+by the renamings' inverse tables (`hOf`, `aOf`), read through `MldsaCarrierHonest.hOf_val` and
+`MldsaCarrierHonest.aOf_val`.
 -/
 
 namespace GordieHowe.MLDSA44.Ring.Carrier
+
+set_option hygiene false in
+local notation "σH" => CarrierHEmbed.σ program
+
+set_option hygiene false in
+local notation "hV" => CarrierHEmbed.V program
+
+set_option hygiene false in
+local notation "σA" => CarrierAEmbed.σ program
+
+set_option hygiene false in
+local notation "aV" => CarrierAEmbed.V program
+
+set_option hygiene false in
+local notation "predMapA" => CarrierAEmbed.pred program
 
 open RealizedProgram GordieHowe.Keccak GordieHowe.KeccakTrace
 open GordieHowe.MLDSA44.Ring.Native (natGF16B wordsB coreHashB_of_wordsB exists_words_of_wordsB
@@ -27,40 +42,46 @@ open GordieHowe.MLDSA44.Ring.Native (natGF16B wordsB coreHashB_of_wordsB exists_
   hashValCore)
 open MLDSA44.Emulated (aValues MldsaEAlgebra MldsaEmulatedHonest)
 
-/-- **The inverse of `valH` on the values with source roles**: the core's values from `w1`. -/
-@[expose] def invH (v : ℕ) : ℕ := if v < 72 then v + 49 else if v < 74 then v - 3 else v + 47
+/-- **The inverse of the renaming of domain `H`** on its held values, from the table (`hOf`); `v`
+itself where none is. -/
+@[expose] def invHOf (program : RealizedProgram) [CarrierHEmbed program] (v : ℕ) : ℕ :=
+  (hOf program v).getD v
 
-/-- **The inverse of `valA` on the values with source roles.** -/
-@[expose] def invA (v : ℕ) : ℕ := if v < 64 then v - 2 else v - 3
+/-- **The inverse of the renaming of domain `A`** on its held values, from the table (`aOf`). -/
+@[expose] def invAOf (program : RealizedProgram) [CarrierAEmbed program] (v : ℕ) : ℕ :=
+  (aOf program v).getD v
 
-/-- Membership in `hV` of the values with source roles. -/
-@[expose] def hVB (u : ℕ) : Bool := u == 69 || u == 70 || (119 ≤ u && u < 567)
+/-- **Whether a native value is held**, by the table: the table gives it back at its image. -/
+@[expose] def heldHB (program : RealizedProgram) [CarrierHEmbed program] (u : ℕ) : Bool :=
+  hOf program ((σH).val u) == some u
 
-theorem mem_hV_of_hVB {u : ℕ} (h : hVB u = true) : u ∈ hV := by
-  simp only [hVB, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
-  simp only [hV, List.mem_append, List.mem_range'_1, List.mem_cons, List.not_mem_nil, or_false]
-  omega
+/-- **Whether an emulated value is held**, by the table. -/
+@[expose] def heldAB (program : RealizedProgram) [CarrierAEmbed program] (u : ℕ) : Bool :=
+  aOf program ((σA).val u) == some u
 
-/-- Membership in `aV` of the values with source roles. -/
-@[expose] def aVB (u : ℕ) : Bool := 58 ≤ u && u < 67
+theorem mem_of_heldHB {program : RealizedProgram} [CarrierHEmbed program] {u : ℕ}
+    (h : heldHB program u = true) : u ∈ hV :=
+  (hOf_spec (beq_iff_eq.mp h)).1
 
-theorem mem_aV_of_aVB {u : ℕ} (h : aVB u = true) : u ∈ aV := by
-  simp only [aVB, Bool.and_eq_true, decide_eq_true_eq] at h
-  simp only [aV, List.mem_append, List.mem_range'_1]
-  omega
+theorem mem_of_heldAB {program : RealizedProgram} [CarrierAEmbed program] {u : ℕ}
+    (h : heldAB program u = true) : u ∈ aV :=
+  (aOf_spec (beq_iff_eq.mp h)).1
 
-/-- **One source-role row's class**: a value in `skip`, a member value of field `0`, or a renamed
-native or emulated value of the honest values' classes. -/
-@[expose] def rowB (skip : List ℕ) (r : SourceRoleEntry) : Bool :=
+/-- **One source-role row's class** at the renamings `valH`, `valA` with inverses `invH`, `invA` on
+the values `heldH`, `heldA` accept: a value in `skip`, a member value or the high halves of field
+`0`, or a renamed native or emulated value of the honest values' classes. -/
+@[expose] def rowB (valH valA invH invA : ℕ → ℕ) (heldH heldA : ℕ → Bool) (skip : List ℕ)
+    (r : SourceRoleEntry) : Bool :=
   skip.contains r.value ||
-  ([55, 56, 57, 58].contains r.value && r.field == 0 && r.node.map (·.name) == some "GF(p^1)") ||
-  (hVB (invH r.value) && valH (invH r.value) == r.value &&
+  ([56, 57, 58, 59, 66].contains r.value && r.field == 0 &&
+    r.node.map (·.name) == some "GF(p^1)") ||
+  (heldH (invH r.value) && valH (invH r.value) == r.value &&
     (((invH r.value == 69 || invH r.value == 119 || wordsB r.slot (invH r.value) ||
         [557, 560, 562, 563, 564, 565].contains (invH r.value)) && r.field == 1 &&
         r.node.map (·.name) == some "GF(2^16)") ||
       ([556, 561].contains (invH r.value) && r.field == 1 &&
         r.node.map (·.name) == some "bit"))) ||
-  (aVB (invA r.value) && valA (invA r.value) == r.value &&
+  (heldA (invA r.value) && valA (invA r.value) == r.value &&
     [59, 60, 63, 64].contains (invA r.value) && r.field == 0 &&
     r.node.map (·.name) == some "GF(p^1)")
 
@@ -84,14 +105,17 @@ of a native value. -/
     (u == 65 && slot == 6) || (u == 66 && slot == 7)
   | _ => false
 
-/-- **One source-role row's meaning**: a value that is not executed (`skip`), a member's value, the
-quotient, or a renamed native or emulated value. -/
-@[expose] def roleRowB (skip : List ℕ) (r : SourceRoleEntry) : Bool :=
-  skip.contains r.value || memberRoleB 55 56 57 58 r ||
-  (r.value == 64 && (match r.role with | .carry => r.slot == 0 | _ => false)) ||
-  (hVB (invH r.value) && valH (invH r.value) == r.value &&
+/-- **One source-role row's meaning** at the renamings and inverses of `rowB`: a value that is not
+executed (`skip`), a member's value, the quotient, the high halves, or a renamed native or emulated
+value. -/
+@[expose] def roleRowB (valH valA invH invA : ℕ → ℕ) (heldH heldA : ℕ → Bool) (skip : List ℕ)
+    (r : SourceRoleEntry) : Bool :=
+  skip.contains r.value || memberRoleB 56 57 58 59 r ||
+  (r.value == 65 && (match r.role with | .carry => r.slot == 0 | _ => false)) ||
+  (r.value == 66 && (match r.role with | .aWitness => r.slot == 8 | _ => false)) ||
+  (heldH (invH r.value) && valH (invH r.value) == r.value &&
     heldHRoleB r.role r.slot (invH r.value)) ||
-  (aVB (invA r.value) && valA (invA r.value) == r.value &&
+  (heldA (invA r.value) && valA (invA r.value) == r.value &&
     heldARoleB r.role r.slot (invA r.value))
 
 variable {msgLen : ℕ} {program : RealizedProgram} [CarrierHEmbed program] [CarrierAEmbed program]
@@ -110,18 +134,21 @@ local notation "L" => MldsaEAlgebra.layout (CarrierAEmbed.emu program)
 /-- **The committed source values' classes from the checked role rows.** `skip` lists source values
 that are not committed; the rows' classes then give `MldsaCarrierExec.cell_classes`. -/
 theorem cell_classes_of_rows {rs : List SourceRoleEntry} (hrs : SourceRolesOk program rs)
-    {skip : List ℕ} (hrows : rs.all (rowB skip) = true)
+    {valH valA invH invA : ℕ → ℕ} {heldH heldA : ℕ → Bool} {skip : List ℕ}
+    (hrows : rs.all (rowB valH valA invH invA heldH heldA skip) = true)
+    (hσH : (σH).val = valH) (hσA : (σA).val = valA) (hheldH : ∀ u, heldH u = true → u ∈ hV)
+    (hheldA : ∀ u, heldA u = true → u ∈ aV)
     (hskip : ∀ v ∈ skip, (program.value v).kind ≠ .priv) :
     (List.range program.values.length).all (fun v =>
       !program.privCellB v || !decide (program.IsSourceValue v) ||
-        (([55, 56, 57, 58] ++ (MldsaCarrierHonest.qD program).ids).contains v &&
+        (([56, 57, 58, 59, 66] ++ (MldsaCarrierHonest.qD program).ids).contains v &&
           program.valueField v == 0 && (program.value v).node.map (·.name) == some "GF(p^1)") ||
-        (match hOf v with
+        (match hOf program v with
           | some u => (natGF16B u && program.valueField v == 1 &&
               (program.value v).node.map (·.name) == some "GF(2^16)") ||
             ([556, 561].contains u && program.valueField v == 1 &&
               (program.value v).node.map (·.name) == some "bit")
-          | none => match aOf v with
+          | none => match aOf program v with
             | some u => (aValues (MldsaEAlgebra.layout (CarrierAEmbed.emu program))).contains u &&
               program.valueField v == 0 && (program.value v).node.map (·.name) == some "GF(p^1)"
             | none => false)) = true := by
@@ -148,9 +175,9 @@ theorem cell_classes_of_rows {rs : List SourceRoleEntry} (hrs : SourceRolesOk pr
   · exact absurd hk (hskip _ (List.contains_iff_mem.mp hx))
   · simp only [Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq, List.contains_iff_mem]
     exact Or.inl ⟨⟨List.mem_append_left _ (List.contains_iff_mem.mp hx), hf0⟩, hn0⟩
-  · have hh : hOf r.value = some (invH r.value) := by
-      have h := hOf_val _ (mem_hV_of_hVB hu)
-      rwa [show σH.val (invH r.value) = r.value from huv] at h
+  · have hh : hOf program r.value = some (invH r.value) := by
+      have h := MldsaCarrierHonest.hOf_val _ (hheldH _ hu)
+      rwa [show (σH).val (invH r.value) = r.value by rw [hσH]; exact huv] at h
     rw [hh]
     simp only [natGF16B, Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq]
     refine Or.inr ?_
@@ -162,12 +189,12 @@ theorem cell_classes_of_rows {rs : List SourceRoleEntry} (hrs : SourceRolesOk pr
       · exact Or.inl (coreHashB_of_wordsB h)
       · exact Or.inr h
     · exact Or.inr hb
-  · have hnH : hOf r.value = none := by
-      have h := hOf_valA _ (mem_aV_of_aVB hu)
-      rwa [show σA.val (invA r.value) = r.value from huv] at h
-    have hA : aOf r.value = some (invA r.value) := by
-      have h := aOf_val _ (mem_aV_of_aVB hu)
-      rwa [show σA.val (invA r.value) = r.value from huv] at h
+  · have hnH : hOf program r.value = none := by
+      have h := MldsaCarrierHonest.hOf_valA _ (hheldA _ hu)
+      rwa [show (σA).val (invA r.value) = r.value by rw [hσA]; exact huv] at h
+    have hA : aOf program r.value = some (invA r.value) := by
+      have h := MldsaCarrierHonest.aOf_val _ (hheldA _ hu)
+      rwa [show (σA).val (invA r.value) = r.value by rw [hσA]; exact huv] at h
     rw [hnH, hA]
     simp only [Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq, List.contains_iff_mem]
     exact Or.inr ⟨⟨MLDSA44.Emulated.fixed_mem_aValues (List.contains_iff_mem.mp hc), hf0⟩, hn0⟩
@@ -179,14 +206,15 @@ section Meanings
 variable (y : RingIn msgLen)
 
 variable (F0 FH) in
-/-- **The selected member's inputs**: the spectra of its key, `μ`'s bits, the index bits and the
-signature relation's quotient. -/
+/-- **The selected member's inputs**: the spectra of its key, `μ`'s bits, the index bits, the
+signature relation's quotient and the rows' high halves (`qHonC`). -/
 @[expose] noncomputable def memberInputs : MemberSourceValues (interp 0).K where
   aHat j := if j < 4096 then specE y (interp 0).K j else 0
   t1 j := if j < 1024 then specE y (interp 0).K (4096 + j) else 0
   mu j := ((muBitNat y.mu j : ℕ) : (interp 0).K)
   index j := ((y.w.idx / 2 ^ j % 2 : ℕ) : (interp 0).K)
   quotient j := ((quotN y j : ℕ) : (interp 0).K)
+  high j := if h : j < 1020 then qHonC y (interp 0).K ⟨j / 255, by omega⟩ (j % 255) else 0
 
 variable (program F0 FH) in
 /-- **The algebra witness**: `z`, `w′`, the hint's offset and slack as numbers, the rest committed. -/
@@ -224,7 +252,7 @@ variable (program F0 FH) in
 
 /-- A renamed native committed value executes as its core honest value. -/
 theorem exec_heldH {u : ℕ} (hu : u ∈ hV) (hk : ((nat).value u).kind = .priv) (j : ℕ) :
-    program.execOf interp (honestVal program F0 FH y) (σH.val u) j =
+    program.execOf interp (honestVal program F0 FH y) ((σH).val u) j =
       castElt (hValCore nat F0 FH y u j) := by
   have hc := ((CarrierHEmbed.embedding (program := program)).vals u hu).2.2.2.2.2.2.1
   rw [hk] at hc
@@ -233,12 +261,12 @@ theorem exec_heldH {u : ℕ} (hu : u ∈ hV) (hk : ((nat).value u).kind = .priv)
 /-- **A hash word slot** reads the honest word of domain `H`'s core. -/
 theorem role_hash {classifier : SourceRoleClassifier} {u slot : ℕ} (hu : u ∈ hV)
     (hk : ((nat).value u).kind = .priv) (hf : (nat).valueField u = 1) (hh : MLDSA44.IsHashValue u)
-    (hr : classifier.lookup (σH.val u) = some (.hashWord, slot)) (j : ℕ)
+    (hr : classifier.lookup ((σH).val u) = some (.hashWord, slot)) (j : ℕ)
     (hm : (castElt ((Native.hashInputs F0 FH y).meaning .hashWord slot j) :
         (interp ((nat).valueField u)).K) =
       hashValCore (program := nat) (F0 := F0) (FH := FH) y u j) :
-    roleVal program F0 FH y classifier (σH.val u) j =
-      program.execOf interp (honestVal program F0 FH y) (σH.val u) j := by
+    roleVal program F0 FH y classifier ((σH).val u) j =
+      program.execOf interp (honestVal program F0 FH y) ((σH).val u) j := by
   rw [exec_heldH y hu hk, roleVal, Ring.sourceVal_hashWord _ _ _ _ hr,
     HashSourceValues.valuation_of_lookup _ hr, hValCore, if_pos hh, ← hm]
   exact (castElt_castElt_left hf.symm _).symm
@@ -246,21 +274,21 @@ theorem role_hash {classifier : SourceRoleClassifier} {u slot : ℕ} (hu : u ∈
 /-- **A selection slot** reads the honest cell of SampleInBall. -/
 theorem role_selection {classifier : SourceRoleClassifier} {u slot : ℕ} (hu : u ∈ hV)
     (hk : ((nat).value u).kind = .priv) (hf : (nat).valueField u = 1) (hs : slot ≠ 8)
-    (hr : classifier.lookup (σH.val u) = some (.selection, slot)) (j : ℕ)
+    (hr : classifier.lookup ((σH).val u) = some (.selection, slot)) (j : ℕ)
     (hm : (castElt ((selectionInputs program F0 FH y).meaning .selection slot j) :
         (interp ((nat).valueField u)).K) = hValCore nat F0 FH y u j) :
-    roleVal program F0 FH y classifier (σH.val u) j =
-      program.execOf interp (honestVal program F0 FH y) (σH.val u) j := by
+    roleVal program F0 FH y classifier ((σH).val u) j =
+      program.execOf interp (honestVal program F0 FH y) ((σH).val u) j := by
   rw [exec_heldH y hu hk, roleVal, Ring.sourceVal_selection _ _ _ _ hr hs,
     SelectionSourceValues.valuation_of_lookup _ hr, ← hm]
   exact (castElt_castElt_left hf.symm _).symm
 
 /-- **A renamed native value's slot** reads the honest value. -/
 theorem role_heldH {classifier : SourceRoleClassifier} {u slot : ℕ} {role : SourceRole}
-    (hu : u ∈ hV) (hl : classifier.lookup (σH.val u) = some (role, slot))
+    (hu : u ∈ hV) (hl : classifier.lookup ((σH).val u) = some (role, slot))
     (h : heldHRoleB role slot u = true) (j : ℕ) :
-    roleVal program F0 FH y classifier (σH.val u) j =
-      program.execOf interp (honestVal program F0 FH y) (σH.val u) j := by
+    roleVal program F0 FH y classifier ((σH).val u) j =
+      program.execOf interp (honestVal program F0 FH y) ((σH).val u) j := by
   cases role <;> simp only [heldHRoleB, Bool.false_eq_true, Bool.or_eq_true, Bool.and_eq_true,
     beq_iff_eq] at h
   case hashWord =>
@@ -327,21 +355,21 @@ local notation "E0" => program.srcEnv interp (fun _ _ => 0) (honestVal program F
 include hE in
 /-- **A committed algebra slot** reads the honest value of domain `A`. -/
 theorem role_a_cell {classifier : SourceRoleClassifier} {u slot : ℕ} (hu : u ∈ aValues L)
-    (hr : classifier.lookup (σA.val u) = some (.aWitness, slot)) (j : ℕ)
+    (hr : classifier.lookup ((σA).val u) = some (.aWitness, slot)) (j : ℕ) (hs : slot ≠ 8)
     (hm : (algebraInputs program F0 FH y).meaning .aWitness slot j = aValE y (interp 0).K L u j) :
-    roleVal program F0 FH y classifier (σA.val u) j =
-      program.execOf interp (honestVal program F0 FH y) (σA.val u) j := by
+    roleVal program F0 FH y classifier ((σA).val u) j =
+      program.execOf interp (honestVal program F0 FH y) ((σA).val u) j := by
   obtain ⟨hp, -⟩ := MldsaEmulatedHonest.a_cells (program := emu) (F0 := F0) (FH := FH) u hu
   have huV := MldsaCarrierHonest.aVals (program := program) u (List.mem_append_left _ hu)
   have hc := ((CarrierAEmbed.embedding (program := program)).vals u huV).2.2.2.2.2.2.1
   rw [kind_of_privCellB hp] at hc
   rw [execOf_of_priv _ (Renaming.kindCorr_priv _ hc), honestVal_heldA y hu j, roleVal,
-    Ring.sourceVal_algebra _ _ _ _ hr, AlgebraSourceValues.valuation_of_lookup _ hr, hm]
+    Ring.sourceVal_algebra _ _ _ _ hr hs, AlgebraSourceValues.valuation_of_lookup _ hr, hm]
 
 /-- **A bound slot** executes as its emulated read in the source environment. -/
 theorem exec_boundA {u : ℕ} {Ex : Expr} (hu : u ∈ aV) (hk : ((emu).value u).kind = .bound Ex)
     (hf : (emu).valueField u = 0) (j : ℕ) :
-    program.execOf interp (honestVal program F0 FH y) (σA.val u) j =
+    program.execOf interp (honestVal program F0 FH y) ((σA).val u) j =
       castElt (MLDSA44.Emulated.rdA (pullA E0) u j) := by
   obtain ⟨-, -, hfu, -, -, -, hc, -⟩ := (CarrierAEmbed.embedding (program := program)).vals u hu
   rw [hk] at hc
@@ -353,10 +381,10 @@ theorem exec_boundA {u : ℕ} {Ex : Expr} (hu : u ∈ aV) (hk : ((emu).value u).
 
 /-- **A renamed emulated value's slot** reads the honest value, on the value's coordinates. -/
 theorem role_heldA {classifier : SourceRoleClassifier} {u slot : ℕ} {role : SourceRole}
-    (hu : u ∈ aV) (hl : classifier.lookup (σA.val u) = some (role, slot))
-    (h : heldARoleB role slot u = true) {j : ℕ} (hj : j < (program.value (σA.val u)).size) :
-    roleVal program F0 FH y classifier (σA.val u) j =
-      program.execOf interp (honestVal program F0 FH y) (σA.val u) j := by
+    (hu : u ∈ aV) (hl : classifier.lookup ((σA).val u) = some (role, slot))
+    (h : heldARoleB role slot u = true) {j : ℕ} (hj : j < (program.value ((σA).val u)).size) :
+    roleVal program F0 FH y classifier ((σA).val u) j =
+      program.execOf interp (honestVal program F0 FH y) ((σA).val u) j := by
   have hsz := ((CarrierAEmbed.embedding (program := program)).vals u hu).2.2.2.1
   rw [hsz] at hj
   have hbv := MldsaEmulatedHonest.boundVals (program := emu) (F0 := F0) (FH := FH)
@@ -372,57 +400,79 @@ theorem role_heldA {classifier : SourceRoleClassifier} {u slot : ℕ} {role : So
       ⟨rfl, rfl⟩) | ⟨rfl, rfl⟩
     · have hm : j < 1024 := hlen.1 ▸ hj
       rw [exec_boundA y hu (MldsaEmulatedHonest.kind59 (program := emu) (F0 := F0) (FH := FH))
-          (hbv 58 (by simp)).2, roleVal, Ring.sourceVal_algebra _ _ _ _ hl,
+          (hbv 58 (by simp)).2, roleVal, Ring.sourceVal_algebra _ _ _ _ hl (by decide),
         AlgebraSourceValues.valuation_of_lookup _ hl, AlgebraSourceValues.meaning_z,
         rdAE_58 hr hm]
       simp only [algebraInputs, dite_eq_left hm]
-    · exact role_a_cell y (hfix 59 (by simp)) hl j rfl
-    · exact role_a_cell y (hfix 60 (by simp)) hl j rfl
+    · exact role_a_cell y (hfix 59 (by simp)) hl j (by decide) rfl
+    · exact role_a_cell y (hfix 60 (by simp)) hl j (by decide) rfl
     · have hm : j < 1024 := hlen.2.2.2.1 ▸ hj
       rw [exec_boundA y hu (MldsaEmulatedHonest.kind62 (program := emu) (F0 := F0) (FH := FH))
-          (hbv 61 (by simp)).2, roleVal, Ring.sourceVal_algebra _ _ _ _ hl,
+          (hbv 61 (by simp)).2, roleVal, Ring.sourceVal_algebra _ _ _ _ hl (by decide),
         AlgebraSourceValues.valuation_of_lookup _ hl, AlgebraSourceValues.meaning_w,
         rdAE_61 hr hm]
       simp only [algebraInputs, dite_eq_left hm]
-    · exact role_a_cell y (hfix 63 (by simp)) hl j rfl
-    · exact role_a_cell y (hfix 64 (by simp)) hl j rfl
+    · exact role_a_cell y (hfix 63 (by simp)) hl j (by decide) rfl
+    · exact role_a_cell y (hfix 64 (by simp)) hl j (by decide) rfl
     · have hm : j < 1024 := hlen.2.2.2.2.2.2.1 ▸ hj
       rw [exec_boundA y hu (MldsaEmulatedHonest.kind66 (program := emu) (F0 := F0) (FH := FH))
-          (hbv 65 (by simp)).2, roleVal, Ring.sourceVal_algebra _ _ _ _ hl,
+          (hbv 65 (by simp)).2, roleVal, Ring.sourceVal_algebra _ _ _ _ hl (by decide),
         AlgebraSourceValues.valuation_of_lookup _ hl, AlgebraSourceValues.meaning_offset,
         rdAE_65 hr hm]
       simp only [algebraInputs, dite_eq_left hm]
     · have hm : j < 1024 := hlen.2.2.2.2.2.2.2.1 ▸ hj
       rw [exec_boundA y hu (MldsaEmulatedHonest.kind67 (program := emu) (F0 := F0) (FH := FH))
-          (hbv 66 (by simp)).2, roleVal, Ring.sourceVal_algebra _ _ _ _ hl,
+          (hbv 66 (by simp)).2, roleVal, Ring.sourceVal_algebra _ _ _ _ hl (by decide),
         AlgebraSourceValues.valuation_of_lookup _ hl, AlgebraSourceValues.meaning_slack,
         rdAE_66 hr hm]
       simp only [algebraInputs, dite_eq_left hm]
 
 /-- **The quotient's slot** reads the honest quotient. -/
-theorem role_quot {classifier : SourceRoleClassifier} (hl : classifier.lookup 64 = some (.carry, 0))
-    {j : ℕ} (hj : j < (program.value 64).size) :
-    roleVal program F0 FH y classifier 64 j =
-      program.execOf interp (honestVal program F0 FH y) 64 j := by
-  have hf := MldsaCarrierQuot.field64 (program := program)
-  have hm : j < 1024 := MldsaCarrierQuot.size64 (program := program) ▸ hj
+theorem role_quot {classifier : SourceRoleClassifier} (hl : classifier.lookup 65 = some (.carry, 0))
+    {j : ℕ} (hj : j < (program.value 65).size) :
+    roleVal program F0 FH y classifier 65 j =
+      program.execOf interp (honestVal program F0 FH y) 65 j := by
+  have hf := MldsaCarrierQuot.field65 (program := program)
+  have hm : j < 1024 := MldsaCarrierQuot.size65 (program := program) ▸ hj
   have hq := rd_q (program := program) (F0 := F0) (FH := FH) y (fun _ _ => 0)
     (program.chal0 interp) 0 hm
   rw [evalE_leaf] at hq
-  rw [execOf_bound_eq_reader (honestVal program F0 FH y) E0 rfl MldsaCarrierHonest.kind64, roleVal,
+  rw [execOf_bound_eq_reader (honestVal program F0 FH y) E0 rfl MldsaCarrierHonest.kind65, roleVal,
     Ring.sourceVal_quotient _ _ _ _ hl]
   change castElt (a := 0) ((quotN y j : ℕ) : (interp 0).K) = _
   rw [← hq]
   exact castElt_castElt_of_eq hf _
 
+omit [MldsaCarrierFront program] [MldsaCarrierSelect program] [MldsaCarrierQuot program]
+  [RealizedProgram.PrimeCastField F0 pGold] [MLDSA44.MldsaHNativeData FH]
+  [MLDSA44.MldsaHSample (MLDSA44.Emulated.MldsaEmbed.nat emu)]
+  [MLDSA44.MldsaHConsts (MLDSA44.Emulated.MldsaEmbed.nat emu) FH]
+  [MldsaHHonest (MLDSA44.Emulated.MldsaEmbed.nat emu)]
+  [MldsaHSelHonest (MLDSA44.Emulated.MldsaEmbed.nat emu)] [MLDSA44.MldsaHNodes FH]
+  [MldsaEmulatedHonest emu F0 FH] in
+omit [MldsaCarrierRelation program] [MldsaRingStmt program] [TableSelect program] in
+/-- **The high halves' slot** (algebra slot `8`) reads the honest high halves. -/
+theorem role_high {classifier : SourceRoleClassifier}
+    (hl : classifier.lookup 66 = some (.aWitness, 8)) (j : ℕ) :
+    roleVal program F0 FH y classifier 66 j =
+      program.execOf interp (honestVal program F0 FH y) 66 j := by
+  have hc := MldsaCarrierHonest.member_cells (program := program) 66 (by simp)
+  have hm := (honestVal_member (program := program) (F0 := F0) (FH := FH) y j).2.2.2.2.1
+  rw [execOf_of_priv _ (kind_of_privCellB hc.1), roleVal, Ring.sourceVal_high _ _ _ _ hl]
+  change castElt (a := 0) (if h : j < 1020 then qHonC y (interp 0).K ⟨j / 255, by omega⟩ (j % 255)
+    else 0) = _
+  rw [← hm]
+  exact castElt_castElt_of_eq hc.2 _
+
 /-- **A member's slot** reads the honest member value. -/
 theorem role_member {classifier : SourceRoleClassifier} {r : SourceRoleEntry}
     (hl : classifier.lookup r.value = some (r.role, r.slot))
-    (h : memberRoleB 55 56 57 58 r = true) (j : ℕ) :
+    (h : memberRoleB 56 57 58 59 r = true) (j : ℕ) :
     roleVal program F0 FH y classifier r.value j =
       program.execOf interp (honestVal program F0 FH y) r.value j := by
-  have hkind : ∀ v ∈ [55, 56, 57, 58], (program.value v).kind = .priv := fun v hv =>
-    kind_of_privCellB (MldsaCarrierHonest.member_cells v (List.mem_append_left _ hv)).1
+  have hkind : ∀ v ∈ [56, 57, 58, 59], (program.value v).kind = .priv := fun v hv =>
+    kind_of_privCellB (MldsaCarrierHonest.member_cells v (List.mem_append_left _ (by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hv ⊢; omega))).1
   rcases r with ⟨v, role, slot, field, node⟩
   simp only at hl h ⊢
   cases role <;> simp only [memberRoleB, Bool.false_eq_true, Bool.or_eq_true, Bool.and_eq_true,
@@ -447,7 +497,10 @@ theorem role_member {classifier : SourceRoleClassifier} {r : SourceRoleEntry}
 /-- **Every executed source coordinate agrees with the honest values**, from the checked role rows
 of the program's classifier: `skip` lists the source values that are not executed. -/
 theorem role_source_coordinates {rs : List SourceRoleEntry} (hrs : SourceRolesOk program rs)
-    {skip : List ℕ} (hrows : rs.all (roleRowB skip) = true)
+    {valH valA invH invA : ℕ → ℕ} {heldH heldA : ℕ → Bool} {skip : List ℕ}
+    (hrows : rs.all (roleRowB valH valA invH invA heldH heldA skip) = true)
+    (hσH : (σH).val = valH) (hσA : (σA).val = valA) (hheldH : ∀ u, heldH u = true → u ∈ hV)
+    (hheldA : ∀ u, heldA u = true → u ∈ aV)
     (hskip : ∀ v ∈ skip, (program.value v).kind ≠ .priv ∧ (program.value v).kind.isBound = false)
     {v j : ℕ} (hs : program.IsSourceValue v) (hc : program.ExecCoord v j)
     (hpad : ∀ u < program.values.length, program.IsSourceValue u →
@@ -461,7 +514,7 @@ theorem role_source_coordinates {rs : List SourceRoleEntry} (hrs : SourceRolesOk
     hrs.lookup_of_mem hm
   have hrow := List.all_eq_true.mp hrows r hm
   simp only [roleRowB, Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq] at hrow
-  rcases hrow with (((hx | hx) | ⟨hx, hq⟩) | ⟨⟨hu, huv⟩, hh⟩) | ⟨⟨hu, huv⟩, hh⟩
+  rcases hrow with ((((hx | hx) | ⟨hx, hq⟩) | ⟨hx, hq⟩) | ⟨⟨hu, huv⟩, hh⟩) | ⟨⟨hu, huv⟩, hh⟩
   · obtain ⟨h1, h2⟩ := hskip _ (List.contains_iff_mem.mp hx)
     rcases hk with hk | hk
     · exact absurd hk h1
@@ -475,14 +528,21 @@ theorem role_source_coordinates {rs : List SourceRoleEntry} (hrs : SourceRolesOk
     case carry =>
       subst hq
       exact role_quot y hl hj
-  · have hval : σH.val (invH r.value) = r.value := huv
+  · rcases r with ⟨v, role, slot, field, node⟩
+    simp only at hx hq hl hj ⊢
+    subst hx
+    cases role <;> simp only [beq_iff_eq, Bool.false_eq_true] at hq
+    case aWitness =>
+      subst hq
+      exact role_high y hl j
+  · have hval : (σH).val (invH r.value) = r.value := by rw [hσH]; exact huv
     have hl' := hl
     rw [← hval] at hl' ⊢
-    exact role_heldH y (mem_hV_of_hVB hu) hl' hh j
-  · have hval : σA.val (invA r.value) = r.value := huv
+    exact role_heldH y (hheldH _ hu) hl' hh j
+  · have hval : (σA).val (invA r.value) = r.value := by rw [hσA]; exact huv
     have hl' := hl
     rw [← hval] at hl' hj ⊢
-    exact role_heldA y (mem_aV_of_aVB hu) hl' hh hj
+    exact role_heldA y (hheldA _ hu) hl' hh hj
 
 end Meanings
 

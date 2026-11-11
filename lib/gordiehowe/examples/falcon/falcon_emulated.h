@@ -99,9 +99,8 @@ auto crossing(const Scope &s, D &A, const Ref<HF, Bit, P> &c_H) {
 //                 through NegacyclicConv(h): the relation is one affine
 //                 row per coefficient.
 //   CommittedKey  a ring's selected member: its spectrum under the staged
-//                 transform NTT, read through SpectralProduct: the relation
-//                 is one circuit: the transforms of s2 and of the
-//                 left-hand side, and n pointwise products.
+//                 transform NTT (examples/rings/falcon_ring.h states its
+//                 relations).
 template <class AF>
 struct PublicKey {
   Ref<AF, Subfield<>, Public> spectrum;
@@ -145,58 +144,6 @@ Ref<AF, Subfield<>, Committed> signature_relation(
       });
   assert_mod(s1 + ops::NegacyclicConv(key.h, ops::EntryBound{kQ})(s2),
              challenge_value(c), kQ, s.name("equation"));
-  return s1;
-}
-
-// The signature relation of a committed key (a ring's selected member):
-// s1 = c - s2 h mod q, stated as
-//   c - s1 = h s2 (mod q)
-// over the integers, h s2 a spectral product of the key's spectrum. The
-// ring's table selects the spectrum, so h's coefficients lie in the hull
-// of the ring's bounded keys; the assert_mod lowering reads that interval,
-// c's statement bound and s1 and s2 in [0, q] (the magnitudes' roots),
-// derives the quotient's interval and commits it, and states the relation
-// as one spectral circuit. s1 has no range request: the magnitudes bound
-// it. Returns s1.
-template <class S, class D, class AF, class C>
-Ref<AF, Subfield<>, Committed> signature_relation(
-    const Scope &s, D &A, const CommittedKey<AF> &key, const C &c,
-    const Ref<AF, Subfield<>, Committed> &s2) {
-  using U64s = std::vector<uint64_t>;
-  using Elt = typename AF::Elt;
-  const U64s z = falcon_ntt_zetas(S::kN, kQ);
-  const AF *pa = &A.field();
-  const auto t = key.ntt.spec->staged;
-  const std::vector<size_t> cdims = c.dims();
-  // Field form: the spectrum is read as elements; c, s2 and s1 are
-  // canonical integers below 2^16.
-  auto ints = [pa](const std::vector<Elt> &v) {
-    uint64_t ok = 1;
-    U64s out(v.size());
-    for (size_t i = 0; i < v.size(); ++i)
-      out[i] = uint64_t(nat_of_ct(*pa, v[i], ok));
-    return out;
-  };
-  auto c_ints = [ints, cdims](const std::vector<Elt> &cv) {
-    const U64s v = ints(cv);
-    return host::challenge_integers(Tensor<uint64_t>(v, cdims));
-  };
-  auto elts = [pa](const U64s &v) {
-    std::vector<Elt> out(v.size());
-    for (size_t i = 0; i < v.size(); ++i) out[i] = pa->of_scalar(v[i]);
-    return out;
-  };
-  const auto s1 = s[A].priv(
-      Subfield{}, "s1", S::kN, depends_on(key.spectrum, c, s2),
-      [=](const std::vector<Elt> &spec, const std::vector<Elt> &cv,
-          const std::vector<Elt> &s2v) {
-        U64s hhat = host::key_coefficients(*pa, *t, spec);
-        falcon_ntt_ref<kQ>(hhat, z);
-        return elts(host::s1_of(hhat, c_ints(cv), ints(s2v), z));
-      });
-  assert_mod(challenge_value(c) - s1,
-             ops::SpectralProduct(key.spectrum, s2, key.ntt), kQ,
-             s.name("equation"));
   return s1;
 }
 

@@ -51,12 +51,6 @@ noncomputable def refuseError (reps tol : ℕ) (d x : ℝ) : ℝ :=
 
 omit [NeZero (bucketCount p)] [Nonempty (MaskBox p)] [Fintype Msg] [DecidableEq Msg]
   [Inhabited prims.Hint] [Fintype prims.Hint] [DecidableEq prims.Hint] in
-/-- The check defect is nonnegative. -/
-theorem checkDefect_nonneg (βmin : ℚ≥0) (t0 : RqVec p.k) : 0 ≤ checkDefect prims βmin t0 :=
-  Finset.expect_nonneg fun _ _ => by split_ifs <;> norm_num
-
-omit [NeZero (bucketCount p)] [Nonempty (MaskBox p)] [Fintype Msg] [DecidableEq Msg]
-  [Inhabited prims.Hint] [Fintype prims.Hint] [DecidableEq prims.Hint] in
 open Classical in
 /-- **A ring fails the check with probability at most the Chernoff product**: over a uniform
 check oracle, more than `tol` of the `reps · |R|` samples fail with probability at most
@@ -67,7 +61,8 @@ theorem expect_not_ringCheck_le_prod (βmin : ℚ≥0) (tol : ℕ) {N reps : ℕ
     (l : RingOf (PubKey p prims) N) {x : ℝ} (hx : 1 ≤ x) :
     𝔼 G : CheckOrc p prims N reps, (if RingCheck prims βmin tol G l then 0 else 1 : ℝ) ≤
       (x ^ (tol + 1))⁻¹ *
-        ∏ j, (1 + (x - 1) * checkDefect prims βmin (ringT0s prims l.1 j)) ^ reps := by
+        ∏ j, (1 + (x - 1) * checkDefect prims (Cutoff.const βmin) (ringT0s prims l.1 j)) ^ reps :=
+            by
   have hx0 : 0 < x := zero_lt_one.trans_le hx
   set ψ : Fin l.1.length × Fin reps → CommitHashBytes p → ℝ := fun jr c =>
     if checkWeight prims (ringT0s prims l.1 jr.1) c < βmin then x else 1
@@ -89,7 +84,7 @@ theorem expect_not_ringCheck_le_prod (βmin : ℚ≥0) (tol : ℕ) {N reps : ℕ
       rw [inv_mul_eq_div, le_div_iff₀ (pow_pos hx0 _), one_mul]
       exact pow_le_pow_right₀ hx h
   have hψ : ∀ jr, 𝔼 c, ψ jr c =
-      1 + (x - 1) * checkDefect prims βmin (ringT0s prims l.1 jr.1) := fun jr => by
+      1 + (x - 1) * checkDefect prims (Cutoff.const βmin) (ringT0s prims l.1 jr.1) := fun jr => by
     have h : ∀ c, ψ jr c = 1 + (x - 1) *
         (if checkWeight prims (ringT0s prims l.1 jr.1) c < βmin then 1 else 0) := fun c => by
       simp only [ψ]
@@ -103,7 +98,8 @@ theorem expect_not_ringCheck_le_prod (βmin : ℚ≥0) (tol : ℕ) {N reps : ℕ
         rw [← Finset.mul_expect, PMF.expect_comp_embedding e (fun g => ∏ jr, ψ jr (g jr)),
           PMF.expect_prod_apply]
     _ = (x ^ (tol + 1))⁻¹ *
-        ∏ j, (1 + (x - 1) * checkDefect prims βmin (ringT0s prims l.1 j)) ^ reps := by
+        ∏ j, (1 + (x - 1) * checkDefect prims (Cutoff.const βmin) (ringT0s prims l.1 j)) ^ reps :=
+            by
         simp only [hψ]
         rw [Fintype.prod_prod_type]
         simp
@@ -122,14 +118,16 @@ theorem expect_not_ringCheck_le (βmin : ℚ≥0) (tol : ℕ) {N reps : ℕ}
   refine (expect_not_ringCheck_le_prod prims βmin tol l hx).trans ?_
   unfold refuseError
   refine mul_le_mul_of_nonneg_left ?_ (inv_nonneg.2 (pow_nonneg (zero_le_one.trans hx) _))
-  calc ∏ j, (1 + (x - 1) * checkDefect prims βmin (ringT0s prims l.1 j)) ^ reps
+  calc ∏ j, (1 + (x - 1) * checkDefect prims (Cutoff.const βmin) (ringT0s prims l.1 j)) ^ reps
       ≤ ∏ j : Fin l.1.length,
-          Real.exp ((x - 1) * checkDefect prims βmin (ringT0s prims l.1 j)) ^ reps :=
+          Real.exp ((x - 1) * checkDefect prims (Cutoff.const βmin) (ringT0s prims l.1 j)) ^ reps :=
         Finset.prod_le_prod₀ (fun j _ => pow_nonneg (by
-          nlinarith [checkDefect_nonneg prims βmin (ringT0s prims l.1 j)]) _) fun j _ =>
-          pow_le_pow_left₀ (by nlinarith [checkDefect_nonneg prims βmin (ringT0s prims l.1 j)])
+          nlinarith [checkDefect_nonneg prims (Cutoff.const βmin) (ringT0s prims l.1 j)]) _) fun j
+              _ =>
+          pow_le_pow_left₀ (by nlinarith [checkDefect_nonneg prims (Cutoff.const βmin) (ringT0s
+              prims l.1 j)])
             (by linarith [Real.add_one_le_exp ((x - 1) *
-              checkDefect prims βmin (ringT0s prims l.1 j))]) _
+              checkDefect prims (Cutoff.const βmin) (ringT0s prims l.1 j))]) _
     _ = Real.exp ((x - 1) * (reps * ringDefect prims βmin l.1)) := by
         simp only [← Real.exp_nat_mul, ← Real.exp_sum, ringDefect]
         congr 1
@@ -156,11 +154,13 @@ theorem expect_not_ringCheck_honestRing_le (βmin : ℚ≥0) (tol : ℕ) {N N' r
     𝔼 seeds : Fin N' → Bytes 32, 𝔼 G : CheckOrc p prims N reps,
         (if RingCheck prims βmin tol G (honestRing prims seeds hN) then 0 else 1 : ℝ) ≤
       (x ^ (tol + 1))⁻¹ * (𝔼 seed : Bytes 32,
-        (1 + (x - 1) * checkDefect prims βmin (keyGen prims seed).1.2.2) ^ reps) ^ N' := by
+        (1 + (x - 1) * checkDefect prims (Cutoff.const βmin) (keyGen prims seed).1.2.2) ^ reps) ^
+            N' := by
   have hpt : ∀ seeds : Fin N' → Bytes 32,
-      ∏ j, (1 + (x - 1) * checkDefect prims βmin
+      ∏ j, (1 + (x - 1) * checkDefect prims (Cutoff.const βmin)
           (ringT0s prims (honestRing prims seeds hN).1 j)) ^ reps =
-        ∏ j : Fin N', (1 + (x - 1) * checkDefect prims βmin (keyGen prims (seeds j)).1.2.2) ^ reps :=
+        ∏ j : Fin N', (1 + (x - 1) * checkDefect prims (Cutoff.const βmin) (keyGen prims (seeds
+            j)).1.2.2) ^ reps :=
     fun seeds => by
     refine Fintype.prod_equiv (finCongr (List.length_ofFn)) _ _ fun j => ?_
     simp only [ringT0s, honestRing, List.get_eq_getElem, List.getElem_ofFn]
@@ -169,7 +169,7 @@ theorem expect_not_ringCheck_honestRing_le (βmin : ℚ≥0) (tol : ℕ) {N N' r
     expect_not_ringCheck_le_prod prims βmin tol (honestRing prims seeds hN) hx).trans_eq ?_
   simp only [hpt]
   rw [← Finset.mul_expect, PMF.expect_prod_apply (fun _ seed =>
-    (1 + (x - 1) * checkDefect prims βmin (keyGen prims seed).1.2.2) ^ reps),
+    (1 + (x - 1) * checkDefect prims (Cutoff.const βmin) (keyGen prims seed).1.2.2) ^ reps),
     Finset.prod_const, Finset.card_univ, Fintype.card_fin]
 
 omit [NeZero (bucketCount p)] nttOps [Nonempty (MaskBox p)] [DecidableEq Msg]

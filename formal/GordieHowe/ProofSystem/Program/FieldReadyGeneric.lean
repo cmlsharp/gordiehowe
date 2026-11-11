@@ -24,7 +24,7 @@ checks at one member of the class passes them at every member that realizes at l
   skip domain that `Pk` does;
 * **the generic member** (`fieldOkB_generic`): a program passing the checks at a member `Pk` of a
   field of `p^n` elements passes them at the generic member at `Pk`'s numbers
-  (`FieldInterp.Packing.generic`), when `s0 ∣ n`, the tops of `Pk`'s bit edges are named by their
+  (`FieldInterp.Packing.generic`), when the tops of `Pk`'s bit edges are named by their
   degree (`BitNodesNamed`), and the plan's edges meet the generic member's masking conditions
   (`genericEdgesOkB`: subfield masks over a child containing `S0`, squaring-chain masks over `F_2`);
 * **existence of ready data** (`FieldReady.exists_generic`): the generic packing has ready data
@@ -177,16 +177,15 @@ def genericEdgesOkB (P : Export.Plan) (d p s0 : ℕ) : Bool :=
     | .squaringChain => p == 2 && e.childDegree == 1
 
 /-- **A program passing the checks at a member passes them at the generic member at its
-numbers** (`FieldInterp.Packing.generic`), for a field of `p^n` elements with `s0 ∣ n`, when the
-tops of the member's bit edges are named by their degree and the plan's edges meet the generic
+numbers** (`FieldInterp.Packing.generic`; a member's field has `p^n` elements and `s0 ∣ n`,
+`Packing.card_eq`, `Packing.s0_dvd`), when the tops of the member's bit edges are named by their degree and the plan's edges meet the generic
 member's masking conditions. -/
 @[headline]
 theorem fieldOkB_generic {P : Export.Plan} {c : LigeroCert}
     {Pk : (I (ir.domainField d)).Packing} (h : ir.fieldOkB d P Pk c = true)
-    (hK : Fintype.card (I (ir.domainField d)).K = Pk.p ^ Pk.n) (hs0 : Pk.s0 ∣ Pk.n)
     (hcov : Pk.BitNodesNamed) (hE : ir.genericEdgesOkB P d Pk.p Pk.s0 = true) :
-    ir.fieldOkB d P (Pk.generic hK hs0 hcov) c = true := by
-  have hR := Pk.generic_realizes hK hs0 hcov
+    ir.fieldOkB d P (Pk.generic hcov) c = true := by
+  have hR := Pk.generic_realizes hcov
   have ht : TreeOk (ir.planPacking P d) Pk.n := by
     have h' := h
     simp only [fieldOkB, Bool.and_eq_true, beq_iff_eq] at h'
@@ -220,12 +219,11 @@ theorem fieldOkB_generic {P : Export.Plan} {c : LigeroCert}
 `fieldSound`) therefore holds at this member; choosing its field representation is not an
 executable operation. -/
 theorem FieldReady.exists_generic {P : Export.Plan} (R : ir.FieldReady I d P)
-    (hK : Fintype.card (I (ir.domainField d)).K = R.Pk.p ^ R.Pk.n) (hs0 : R.Pk.s0 ∣ R.Pk.n)
     (hcov : R.Pk.BitNodesNamed) (hE : ir.genericEdgesOkB P d R.Pk.p R.Pk.s0 = true) :
-    ∃ R' : ir.FieldReady I d P, R'.Pk = R.Pk.generic hK hs0 hcov ∧ R'.cert = R.cert := by
-  exact ⟨{ Pk := R.Pk.generic hK hs0 hcov
+    ∃ R' : ir.FieldReady I d P, R'.Pk = R.Pk.generic hcov ∧ R'.cert = R.cert := by
+  exact ⟨{ Pk := R.Pk.generic hcov
            cert := R.cert
-           ok := fieldOkB_generic R.ok hK hs0 hcov hE
+           ok := fieldOkB_generic R.ok hcov hE
            wf := R.wf }, rfl, rfl⟩
 
 end

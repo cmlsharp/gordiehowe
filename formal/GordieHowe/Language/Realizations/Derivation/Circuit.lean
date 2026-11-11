@@ -71,21 +71,12 @@ def placedFactB : PredBody → Fact → Bool
   | .mod d q e e' real, f => (Nat.beq q 0 || decide (real.form = .field)) && f.beq (.eq d e e')
   | _, _ => false
 
-/-- **A final fact a product form accepts**: for a product form `mod_q P N` (`q > 2`) in domain
-`d`, the fact `eq d X (X − X)`, which states `X = 0`, of its asserted equation `X`
-(`productEquationB`). -/
-def productFactB : PredBody → Fact → Bool
-  | .mod d q P N real, .eq d' «X» «Z» =>
-    real.form.isProduct && Nat.blt 2 q && Nat.beq d d' && «Z».beq (.sub «X» «X») &&
-      ir.productEquationB d q «X» P N real
-  | _, _ => false
-
 /-- **A final fact an entry of a circuit's emission order accepts**: a Boolean check's or placed
-predicate's field equation (`placedFactB`), a product form's asserted equation (`productFactB`), a
-realization circuit's `real` fact, anything for an alignment entry. -/
+predicate's field equation (`placedFactB`), a realization circuit's `real` fact, anything for an
+alignment entry. -/
 def entryFactB : CircuitEntry → Fact → Bool
   | .typeCheck p, f => placedFactB (ir.predicate p).body f
-  | .pred p, f => placedFactB (ir.predicate p).body f || ir.productFactB (ir.predicate p).body f
+  | .pred p, f => placedFactB (ir.predicate p).body f
   | .alignment _, _ => true
   | .realization rc, f =>
     match f with
@@ -124,12 +115,10 @@ end
 
 variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String}
 
-/-- **An accepted final fact gives its entry's meaning**, at a reader whose constants read their
-entries (`hK`) and whose bound values read their expressions (`hB`). -/
-theorem entryHolds_of_entryFactB (hM : ir.DerivModel I primeNodes) {rd : ir.Valuation I}
-    (hK : ∀ v es, (ir.value v).kind = .constant es → ∀ i,
-      rd v i = (I (ir.valueField v)).decode (es.getD i 0))
-    (hB : ir.BoundReads rd) {en : CircuitEntry} {f : Fact} (h : ir.entryFactB en f = true)
+/-- **An accepted final fact gives its entry's meaning** at any reader: the fact and the entry's
+meaning are the same proposition. -/
+theorem entryHolds_of_entryFactB {rd : ir.Valuation I} {en : CircuitEntry} {f : Fact}
+    (h : ir.entryFactB en f = true)
     (hf : f.HoldsWith ir rd) : ir.EntryHolds rd en := by
   have placed : ∀ b, placedFactB b f = true → ir.PlacedHolds rd b := by
     intro b hb
@@ -146,33 +135,9 @@ theorem entryHolds_of_entryFactB (hM : ir.DerivModel I primeNodes) {rd : ir.Valu
       exact hf
     | mem _ _ _ _ => simp [placedFactB] at hb
     | cross _ _ _ _ _ _ => simp [placedFactB] at hb
-  have productHolds : ∀ b, ir.productFactB b f = true → ir.PlacedHolds rd b := by
-    intro b hb
-    unfold productFactB at hb
-    split at hb
-    · rename_i d q P N real d' X' Z'
-      simp only [Bool.and_eq_true, Nat.blt_eq, Nat.beq_eq] at hb
-      obtain ⟨⟨⟨⟨hform, h2q⟩, rfl⟩, hZ⟩, hb⟩ := hb
-      obtain rfl := Expr.eq_of_beq hZ
-      have hX : ∀ i < ir.exprLen X', ir.evalWith rd d X' i = 0 := fun i hi => by
-        have := hf i hi
-        simp only [evalWith, evalE_sub, sub_self] at this
-        exact this
-      have hfield : ¬(q = 0 ∨ real.form = .field) := by
-        rintro (rfl | hq)
-        · exact absurd h2q (by decide)
-        · rw [hq] at hform
-          cases hform
-      simp only [PlacedHolds, if_neg hfield, hform, h2q, and_self, ite_true]
-      exact productPlaced_of_productEquationB hM hK hB hb hX
-    · cases hb
   cases en with
   | typeCheck p => exact placed _ h
-  | pred p =>
-    simp only [entryFactB, Bool.or_eq_true] at h
-    rcases h with h | h
-    · exact placed _ h
-    · exact productHolds _ h
+  | pred p => exact placed _ h
   | alignment _ => trivial
   | realization rc =>
     simp only [entryFactB] at h
@@ -235,7 +200,7 @@ theorem circEntriesB_sound (hM : ir.DerivModel I primeNodes) {rd : ir.Valuation 
           (List.mem_of_getLast? hl)
         intro en' hen'
         rcases List.mem_cons.1 hen' with rfl | hen'
-        · exact entryHolds_of_entryFactB hM hK hB he hf
+        · exact entryHolds_of_entryFactB he hf
         · exact circEntriesB_sound hM hK hB hc hp hcs' h en' hen'
       · cases h
     · split at h
@@ -244,7 +209,7 @@ theorem circEntriesB_sound (hM : ir.DerivModel I primeNodes) {rd : ir.Valuation 
         obtain ⟨he, h⟩ := h
         intro en' hen'
         rcases List.mem_cons.1 hen' with rfl | hen'
-        · exact entryHolds_of_entryFactB hM hK hB he (hcs f (by simp))
+        · exact entryHolds_of_entryFactB he (hcs f (by simp))
         · exact circEntriesB_sound hM hK hB hc hp (fun g hg => hcs g (by simp [hg])) h en' hen'
       · cases h
 

@@ -4,16 +4,15 @@
 module
 
 public import GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.ROMParams.GKR.H
-public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.H.E25.P0
-public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.H.E25.P1
-public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.H.E25.P2
+meta import GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.ROMParams.GKR.H
+import all GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.ROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of entry 25 of the GKR circuit of domain H, composed from its part modules (generated; do not edit). -/
+/-! The relational check of entry 25 of the GKR circuit of domain H (generated; do not edit). -/
 
 namespace GordieHowe.Generated.MDL.MLDSA44.Attrs1.ROMParams.GKR.H
 
-compose_entry cert ar 25 [1, 1024, 4, 0, 0, 4, 1, 256, 16, 1, 512, 8, 2, 1024, 1]
+check_entry cert ar 25 [0, 0, 5, 1, 986, 4, 1, 986, 4, 2, 1, 1]
 
 end GordieHowe.Generated.MDL.MLDSA44.Attrs1.ROMParams.GKR.H

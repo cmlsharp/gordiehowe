@@ -45,9 +45,9 @@ inductive CStep where
   | macRow (g i : ℕ) (role : MacRole)
   /-- The derivation's predicate is the Boolean check of a pad copy (`padCopyBoolB`). -/
   | padBool
-  /-- The derivation's predicate is the digit lookup whose record is quotient digit `j` of the
-  committed-digits `mod_q` `m`, its digits generated as committed digits (`commLookupCB`), `m` with
-  its honest-quotient facts (`commModCB`). -/
+  /-- The derivation's predicate is the digit or direct lookup whose record is quotient digit `j`
+  of the committed-digits `mod_q` `m`, its digits or its record generated as committed digits
+  (`commRecCB`), `m` with its honest-quotient facts (`commModCB`). -/
   | commIn (m j : ℕ)
   /-- The derivation's predicate is the field equation of the committed-digits `mod_q` `m`, whose
   quotient digit `j` is the record of the lookup `lks[j]` (`commRowCB`). -/
@@ -57,8 +57,9 @@ inductive CStep where
   /-- The derivation's predicate is the products predicate of the spectrally realized convolution
   `k` of `RealizedProgram.convs`, whose honest facts check (`specHonestCB`). -/
   | specProd (k : ℕ)
-  /-- The derivation's predicate realizes the field equation of the source predicate `m` through
-  the spectrally realized convolutions (`specRowCB`). -/
+  /-- The derivation's predicate realizes the field equation of the predicate `m` through the
+  spectrally realized convolutions (`specRowCB`), `m` a source predicate or of smaller rank reading
+  no generated late value. -/
   | specRow (m : ℕ)
   /-- The derivation's predicate is the field equation of a source field-form `mod_q`
   (`fieldRowRealB`). -/
@@ -67,6 +68,9 @@ inductive CStep where
   site `i` of the `macSite` structure record `g` (`macSiteAt`, `twoTail`), whose facts check
   (`twoMacCB`). -/
   | twoTail (g i : ℕ)
+  /-- The derivation's predicate is the row `C = read` of the committed reading of the spectrally
+  realized convolution `k` of `RealizedProgram.convs`, whose honest facts check (`specHonestCB`). -/
+  | specC (k : ℕ)
   deriving Repr, Inhabited
 
 /-- **The completeness derivations of a program**: one per predicate (aligned with the
@@ -121,7 +125,7 @@ def CReader.cstepFact (ir : RealizedProgram) [r : CReader] (primeNodes : ℕ →
     if ir.padCopyBoolB pid = true ∧ PReader.noGenPredB ir pr.body = true then some (.holds pid)
     else none
   | .commIn m j =>
-    if ir.commLookupCB G pid m j = true ∧ r.commMod m = true ∧
+    if ir.commRecCB G pid m j = true ∧ r.commMod m = true ∧
         PReader.noGenPredB ir pr.body = true
     then some (.holds pid) else none
   | .commRow m lks =>
@@ -133,7 +137,11 @@ def CReader.cstepFact (ir : RealizedProgram) [r : CReader] (primeNodes : ℕ →
         ir.specHonestCB primeNodes S G k = true ∧ PReader.noGenPredB ir pr.body = true
     then some (.holds pid) else none
   | .specRow m =>
-    if ir.specRowCB primeNodes S G m pid = true ∧ PReader.noGenPredB ir pr.body = true
+    if ir.specRowCB primeNodes S G m pid = true ∧
+        (ir.inSource (ir.predicate m) = true ∨
+          (m < r.nPreds ∧ rankOf P m < self ∧
+            PReader.noGenPredB ir (ir.predicate m).body = true)) ∧
+        PReader.noGenPredB ir pr.body = true
     then some (.holds pid) else none
   | .fieldRow =>
     if ir.fieldRowRealB pid = true ∧ PReader.noGenPredB ir pr.body = true then some (.holds pid)
@@ -143,6 +151,10 @@ def CReader.cstepFact (ir : RealizedProgram) [r : CReader] (primeNodes : ℕ →
     | some st =>
       if r.site .two g i = true ∧ pid = ir.twoTail st then some (.holds pid) else none
     | none => none
+  | .specC k =>
+    if (ir.convs[k]?.bind fun c => c.committed.map Prod.snd) = some pid ∧
+        ir.specHonestCB primeNodes S G k = true ∧ PReader.noGenPredB ir pr.body = true
+    then some (.holds pid) else none
 
 /-- **The conclusion of a step** of the completeness derivation of predicate `pid` (`pr`, zipped
 with the derivations) at rank `self`, with packed ranks `P`, from the facts `fs` of the earlier

@@ -50,7 +50,7 @@ variable {prims : Primitives p} [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   {O : W1Oracles X Y p prims Msg N reps} {M : MaskOracle X Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
   {adm : KeyRing (PubKey p prims) N → Prop}
   [hadm : DecidablePred adm]
   {Of : SideOracle (freshScheme prims O M βmin tol enc k D bmsg PS adm)} {n : ℕ}
@@ -58,7 +58,9 @@ variable {prims : Primitives p} [NeZero (bucketCount p)] [nttOps : NTTRingOps]
 
 local notation "Sf" => freshScheme prims O M βmin tol enc k D bmsg PS adm
 
-omit [Fintype X] [AddGroup Y] in
+omit [Fintype X] [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 /-- The points of a request read the history only through its length (`w1Pts_congr`), so they
 are those at the canonical history of its requests. -/
 theorem w1Pts_eq_histOf (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q → (Sf).SignCoins)
@@ -68,7 +70,9 @@ theorem w1Pts_eq_histOf (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q �
       w1Pts Of keys c (Challenger.histOf (hist.map HistoryEntry.request)) req :=
   w1Pts_congr keys c _ _ req (by simp [Challenger.histOf])
 
-omit [Fintype X] [AddGroup Y] in
+omit [Fintype X] [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 /-- **The points read request `|hist|`'s coins only.** -/
 theorem w1Pts_congr_coins (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c c' : Fin Q → (Sf).SignCoins)
     (hist : List (HistoryEntry (UnforgeRequest (S := Sf) n Of) (UnforgeResponse (S := Sf) Of)))
@@ -78,7 +82,7 @@ theorem w1Pts_congr_coins (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c c' : Fin
   unfold w1Pts
   simp only [h, ↓reduceDIte, hc]
 
-omit [Fintype X] [DecidableEq X] [AddGroup Y] in
+omit [Fintype X] [DecidableEq X] [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **The challenger reads request `|hist|`'s coins only.** -/
 theorem unforgeChallenger_respond_congr_coins (keys : Fin n → (Sf).KeyCoins) {Q : ℕ}
     (c c' : Fin Q → (Sf).SignCoins)
@@ -90,7 +94,7 @@ theorem unforgeChallenger_respond_congr_coins (keys : Fin n → (Sf).KeyCoins) {
   unfold unforgeChallenger
   simp only [h, ↓reduceDIte, hc]
 
-omit [Fintype X] [DecidableEq X] [AddGroup Y] in
+omit [Fintype X] [DecidableEq X] [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **From request `Q` on the challenger reads no coins.** -/
 theorem unforgeChallenger_respond_of_le (keys : Fin n → (Sf).KeyCoins) {Q : ℕ}
     (c c' : Fin Q → (Sf).SignCoins)
@@ -144,6 +148,7 @@ noncomputable def w1HiddenPair (sp : Y ≃+ Y₁ × Y₂)
     exact w1Pts_reads hdisj keys c _ req O₁ O₂ hoff
   · exact w1Pts_inter_w1KeptPts_eq sp hch hdisj hdisjg hPS h_laws hv henc keys hs2
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **The hidden-point condition of the pair** (`toReal_guess_mem_hidden_le`): a guess from the
 kept-only challenger's response to request number `j` is a hidden point of that request with
 probability at most `2 k T Σ_s commitPointMax(Â_s)` over its signing coins; the oracle in force
@@ -250,6 +255,7 @@ theorem hfind_w1HiddenPair (sp : Y ≃+ Y₁ × Y₂)
   rw [hh a, hr a]
   rfl
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **The kept-only against the full reprogramming challenger** (hidden points with the
 challenger's reads as queries, `AdaptiveIAlg.advantage_outLaw_le_of_hiddenReadsPair`, at the
 pair `w1HiddenPair` and the point bound of `hfind_w1HiddenPair`): the probabilities that an

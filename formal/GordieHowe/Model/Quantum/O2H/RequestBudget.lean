@@ -818,9 +818,8 @@ theorem advantage_acceptProbOn_made_le_of_fresh_secret_requestBudget (rb : D.Req
           simp only [hg, mul_sum]
           rw [sum_comm]
           refine sum_congr rfl fun i _ => sum_congr rfl fun σ _ => ?_
-          rw [hq, hMO, hMO i (ψ i)]
-          congr 3
-          exact D.mask_pre_eq post E _ (hfreshAnswer v σ σ₀) (hfreshOracle v σ σ₀) i
+          rw [hq, hMO, hMO i (ψ i),
+            D.mask_pre_eq post E _ (hfreshAnswer v σ σ₀) (hfreshOracle v σ σ₀) i]
       _ ≤ ∑ i : Fin m, n * ε * prob (Mr i) (ψ i) := by
           refine sum_le_sum fun i _ => ?_
           refine (sum_mul_prob_queried_le_mul_norm_sq ν T _ htuple).trans_eq ?_

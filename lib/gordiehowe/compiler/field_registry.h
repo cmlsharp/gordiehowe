@@ -32,11 +32,14 @@
 #include <cstddef>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace proofs::gordiehowe::compiler {
 
-// A field's Lean objects. MAC_OK and READ_LINEAR are empty where the
-// library has no such fact; MODULE defines the field's interpretation,
+// A field's Lean objects. MAC_OK is empty where the library has no such
+// fact; READ_LINEAR, the field's linear integer reading (the model of a
+// field-form mod_q), is named for every field of odd characteristic and
+// empty for GF(2^k), which carries no mod_q; MODULE defines the field's interpretation,
 // model and code homomorphism; the packings are FieldPackings'.
 // EDGES lists the packing edges the field's packing facts realize, each
 // `m:d:mode` (child degree, relative degree, `s` squaring-chain or `m`
@@ -57,10 +60,9 @@ struct FieldModelEntry {
 inline constexpr char kFieldPackingsModule[] =
     "GordieHowe.ProofSystem.Program.FieldPackings";
 
-// The entry of the field named NAME, or null when the library has no model
-// of it.
-inline const FieldModelEntry *field_model(const std::string &name) {
-  static const FieldModelEntry entries[] = {
+// Every field the library has a model of.
+inline const std::vector<FieldModelEntry> &field_models() {
+  static const std::vector<FieldModelEntry> entries = {
       {"GF(2^128)", "`GF(2^128)`", "RealizedProgram.gf128", "RealizedProgram.gf128_model",
        "RealizedProgram.gf128Packing", "RealizedProgram.gf128_codeHom",
        "RealizedProgram.gf128_macFieldOk", "", "GordieHowe.Applications.FieldInterps.Basic",
@@ -84,31 +86,42 @@ inline const FieldModelEntry *field_model(const std::string &name) {
        "SPBCS.CReader.falconNative20"},
       {"F_q^6", "`F_q^6`", "RealizedProgram.fq6", "RealizedProgram.fq6_model",
        "RealizedProgram.fq6Packing",
-       "(RealizedProgram.fq6_codeHom.withPrime RealizedProgram.fq6Code_primeOn)", "", "",
+       "(RealizedProgram.fq6_codeHom.withPrime RealizedProgram.fq6Code_primeOn)", "",
+       "RealizedProgram.fq6_readLinear",
        "GordieHowe.Applications.FieldInterps.Odd", "1:6:m", 18,
        "SPBCS.Codec.FieldBytes.mldsaNative", "SPBCS.CReader.mldsaNative"},
       {"F_q^11", "`F_q^11`", "RealizedProgram.fq11", "RealizedProgram.fq11_model",
        "RealizedProgram.fq11Packing",
-       "(RealizedProgram.fq11_codeHom.withPrime RealizedProgram.fq11Code_primeOn)", "", "",
+       "(RealizedProgram.fq11_codeHom.withPrime RealizedProgram.fq11Code_primeOn)", "",
+       "RealizedProgram.fq11_readLinear",
        "GordieHowe.Applications.FieldInterps.Odd", "1:11:m", 32,
        "SPBCS.Codec.FieldBytes.mldsaNative11", "SPBCS.CReader.mldsaNative11"},
       {"Goldilocks^2", "Goldilocks²", "RealizedProgram.gold2", "RealizedProgram.gold2_model",
        "RealizedProgram.gold2Packing",
-       "(RealizedProgram.gold2_codeHom.withPrime RealizedProgram.gold2Code_primeOn)", "", "",
+       "(RealizedProgram.gold2_codeHom.withPrime RealizedProgram.gold2Code_primeOn)", "",
+       "RealizedProgram.gold2_readLinear",
        "GordieHowe.Applications.FieldInterps.Odd", "1:2:m", 16,
        "SPBCS.Codec.FieldBytes.goldilocksExt2", "SPBCS.CReader.goldilocksExt2"},
       {"Goldilocks^4", "Goldilocks⁴", "RealizedProgram.gold4", "RealizedProgram.gold4_model",
        "RealizedProgram.gold4Packing",
-       "(RealizedProgram.gold4_codeHom.withPrime RealizedProgram.gold4Code_primeOn)", "", "",
+       "(RealizedProgram.gold4_codeHom.withPrime RealizedProgram.gold4Code_primeOn)", "",
+       "RealizedProgram.gold4_readLinear",
        "GordieHowe.Applications.FieldInterps.Odd", "1:4:m", 32,
        "SPBCS.Codec.FieldBytes.goldilocksExt4", "SPBCS.CReader.goldilocksExt4"},
       {"F_p256", "`F_p256`", "RealizedProgram.p256", "RealizedProgram.p256_model",
        "RealizedProgram.p256Packing",
-       "(RealizedProgram.p256_codeHom.withPrime RealizedProgram.p256Code_primeOn)", "", "",
+       "(RealizedProgram.p256_codeHom.withPrime RealizedProgram.p256Code_primeOn)", "",
+       "RealizedProgram.p256_readLinear",
        "GordieHowe.Applications.FieldInterps.P256", "", 32, "SPBCS.Codec.FieldBytes.p256",
        "SPBCS.CReader.p256"},
   };
-  for (const FieldModelEntry &e : entries)
+  return entries;
+}
+
+// The entry of the field named NAME, or null when the library has no model
+// of it.
+inline const FieldModelEntry *field_model(const std::string &name) {
+  for (const FieldModelEntry &e : field_models())
     if (name == e.name) return &e;
   return nullptr;
 }

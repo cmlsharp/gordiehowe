@@ -19,7 +19,10 @@ environments (`GordieHowe.NARG.ProverFn`, `GordieHowe.NARG.SimulatorFn`, `Gordie
 or to make a proof query, a statement with a witness (`Action`), and receives the oracle's answer
 or the response (`Reply`). After its `m` steps it outputs a bit computed from the replies and the
 whole oracle in force at the end (`IAlg.post`), so it may make any number of classical queries
-after its steps. An adversary draws coins independently of the oracle and runs a deterministic
+after its steps; this is what lets the everlasting notion be stated. The standard query-bounded
+notion is `GordieHowe.ROM.ZeroKnowledge`, over query-bounded adversaries with
+`OutputOracleFree`, which map to adversaries with `IAlg.PostOracleFree` through `toNIZK`. An
+adversary draws coins independently of the oracle and runs a deterministic
 algorithm for each value of the coins, as in `GordieHowe/Model/ROM/Model.lean`. Its query budget
 (`IAlg.Budget t`) is per run: against every environment and every oracle, at most `t` of its `m`
 steps are queries; proof queries are not counted.
@@ -30,9 +33,9 @@ is answered by the environment's reply to proof query `i` on the oracle in force
 response and the oracle after it (`envResponder`); proof queries from number `Q` on are answered by
 `none` and leave the oracle unchanged, in both games.
 
-`ZeroKnowledge rel P S ε`: for all `m`, `t` and `Q`, every adversary with `m` steps and a budget
+`ZeroKnowledge rel P μ S ε`: for all `m`, `t` and `Q`, every adversary with `m` steps and a budget
 of `t` queries has advantage (`GordieHowe.advantage`) at most `ε t Q` between the real environment of
-`P` and the simulated environment of `S`.
+`P`, its coins drawn from `μ`, and the simulated environment of `S`.
 
 The definition is Unruh 2017 Definition 6 (ePrint 2017/398, p. 14) with classical adversaries,
 the knob settings of `GordieHowe/Model/QROM/NIZK.lean` with K5 classical: many proof queries (K1), adaptive
@@ -86,7 +89,10 @@ adversary may make any number of classical queries after its steps). -/
 structure IAlg (X Y Stmt Wit Proof : Type) (m : ℕ) where
   /-- The next action, from the replies so far. -/
   next : List (Reply Y Proof) → Action X Stmt Wit
-  /-- The output bit, from the oracle in force at the end and the replies. -/
+  /-- The output bit, from the oracle in force at the end and the replies. It reads the final
+  oracle so that the everlasting notion can be stated; the standard query-bounded notion is
+  `GordieHowe.ROM.ZeroKnowledge` with `OutputOracleFree`, which maps to `IAlg.PostOracleFree`
+  through `toNIZK`. -/
   post : (X → Y) → List (Reply Y Proof) → Bool
 
 /-- **A responder**: the reply to proof query number `i` with proof query `req` on the oracle in force
@@ -296,27 +302,30 @@ variable [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] (rel : Stmt → Wi
 
 /-- **The advantage of a classical adversary** with `Q` proof queries answered: the difference
 (`GordieHowe.advantage`) of its acceptance probabilities against the real environment of the prover `P`
-and the simulated environment of the simulator `S` (`GordieHowe.QROM.realEnv`,
+with coins drawn from `μ` and the simulated environment of the simulator `S` (`GordieHowe.QROM.realEnv`,
 `GordieHowe.QROM.simEnv`). -/
 noncomputable def Adversary.advantage {m t : ℕ} (𝒜 : Adversary X Y Stmt Wit Proof m t)
-    (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (S : NARG.SimulatorFn X Y Stmt Proof SimCoins) (Q : ℕ) : ℝ :=
-  GordieHowe.advantage (𝒜.acceptProb (realEnv rel P Q)) (𝒜.acceptProb (simEnv rel S Q))
+    (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ : PMF Coins)
+    (S : NARG.SimulatorFn X Y Stmt Proof SimCoins) (Q : ℕ) : ℝ :=
+  GordieHowe.advantage (𝒜.acceptProb (realEnv rel P μ Q)) (𝒜.acceptProb (simEnv rel S Q))
 
 /-- **Zero knowledge in the classical random-oracle model** (Unruh 2017 Definition 6, p. 14, with
 classical adversaries; the module docstring lists the knob settings): for all `m`, `t` and `Q`,
 every classical adversary with `m` steps and a budget of `t` queries, whose first `Q` proof queries are
-answered, has advantage at most `ε t Q` between the honest prover `P` and the simulator `S`. After
+answered, has advantage at most `ε t Q` between the honest prover `P`, with coins drawn from `μ`,
+and the simulator `S`. After
 its steps the adversary reads the whole oracle in force, so its queries after the last proof query are
 unbounded. -/
-def ZeroKnowledge (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (S : NARG.SimulatorFn X Y Stmt Proof SimCoins)
-    (ε : ℕ → ℕ → ℝ) : Prop :=
-  ∀ (m t Q : ℕ) (𝒜 : Adversary X Y Stmt Wit Proof m t), 𝒜.advantage rel P S Q ≤ ε t Q
+def ZeroKnowledge (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ : PMF Coins)
+    (S : NARG.SimulatorFn X Y Stmt Proof SimCoins) (ε : ℕ → ℕ → ℝ) : Prop :=
+  ∀ (m t Q : ℕ) (𝒜 : Adversary X Y Stmt Wit Proof m t), 𝒜.advantage rel P μ S Q ≤ ε t Q
 
 variable {rel} in
 /-- A larger error bound. -/
-theorem ZeroKnowledge.mono {P : NARG.ProverFn X Y Stmt Wit Proof Coins}
-    {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} {ε ε' : ℕ → ℕ → ℝ} (h : ZeroKnowledge rel P S ε)
-    (hε : ∀ t Q, ε t Q ≤ ε' t Q) : ZeroKnowledge rel P S ε' :=
+theorem ZeroKnowledge.mono {P : NARG.ProverFn X Y Stmt Wit Proof Coins} {μ : PMF Coins}
+    {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} {ε ε' : ℕ → ℕ → ℝ}
+        (h : ZeroKnowledge rel P μ S ε)
+    (hε : ∀ t Q, ε t Q ≤ ε' t Q) : ZeroKnowledge rel P μ S ε' :=
   fun m t Q 𝒜 => (h m t Q 𝒜).trans (hε t Q)
 
 end GordieHowe.ROM.NIZK

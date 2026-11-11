@@ -26,7 +26,7 @@ The ML-DSA-44 ring carrier at the QROM parameters as a configuration under spBCS
 witness read at the statement's program statement (`ringWit`), the honest prover, the honest
 strategy `honestStrategy 34`, and the figures), its facts `configurationFacts`, and the instances
 of the templates of the families `Common`, `GordieHowe.Configuration.ZeroKnowledgeQROM` and
-`GordieHowe.Configuration.AdaptiveCompleteness`. The extractor is `ringKeyExtractor`. The ring
+`GordieHowe.Configuration.AdaptiveCompleteness`. The extractor is `extractor`. The ring
 signatures at every message length are in
 `GordieHoweCerts/Applications/MLDSA44/Ring/Carrier/QROMParams/RingScheme.lean`.
 
@@ -38,7 +38,7 @@ of the generic templates (`GordieHowe.Configuration.CertifiedSource`,
 
 The figures: at most `2273` rounds, every round's load within `2^-940`, trees of at most `6144`
 leaves, `342` queried leaves, `9338` verifier queries, round errors at most `16329473 / 2^260`,
-`4549` digests per input, the query caps `2^100` (QROM) and `2^64` (ROM), `10213` positions and
+`4549` digests per input, the quantum query cap `2^100` and the classical query cap `2^64`, `10213` positions and
 `48`-byte digests.
 
 * **The honest relation** (`ringHonestRel msgLen relH`): statements that pass the check and whose
@@ -109,11 +109,11 @@ noncomputable def frontend (msgLen : ℕ) :
       (RingIn msgLen) where
   codec := stmtCodecN msgLen 64
   stmtOf := Carrier.stmtOf (program := program) (I := interp)
-  rel' := ringRel64 msgLen
-  g := ringWit
+  rel := ringRel64 msgLen
+  witnessMap := ringWit
   relH := relH (msgLen := msgLen)
   exec := sourceExec
-  keyStmtOf y := y.x
+  stmtOfHonest y := y.x
   label := labelNative
   ok := ringOk
 
@@ -173,21 +173,20 @@ theorem msgLen_le : 2 + 32 ≤ 2 ^ 19 := by norm_num
 /-! ## The configuration -/
 
 /-- **`MLDSA44.Ring.Carrier.QROMParams` as a configuration under spBCS** at `34`-byte message representatives
-(module docstring, `Configuration.ofCertifiedWith`): `48`-byte salts and the query cap `2 ^ 100`. -/
+(module docstring, `Configuration.ofCertifiedWith`): the QROM parameter set `ParamSet.qrom` (`48`-byte salts and the quantum query cap `2 ^ 100`). -/
 noncomputable def configuration : Configuration :=
-  .ofCertifiedWith certified source (frontend (2 + 32)) 48 (2 ^ 100)
+  .ofCertifiedWith certified source (frontend (2 + 32)) .qrom
 
 /-- **The facts of `configuration`** (`Configuration.ofCertifiedWith_facts`): the frontend's
 (`frontendFacts` at `msgLen_le`) and the generated loads' check
 (`GordieHowe.RuntimeInputs.FiguresFacts.loads`). -/
 theorem configurationFacts : configuration.Facts :=
-  Configuration.ofCertifiedWith_facts certified source (frontendFacts msgLen_le) (by norm_num) _
+  Configuration.ofCertifiedWith_facts certified source (frontendFacts msgLen_le) (Nat.le_of_ble_eq_true rfl)
     (conditions.fullFacts.figures.loads rfl)
 
 instantiate_config GordieHowe.MLDSA44.Ring.Carrier.QROMParams
   from [GordieHowe.Configuration.Common, GordieHowe.Configuration.ZeroKnowledgeQROM,
     GordieHowe.Configuration.AdaptiveCompleteness]
-  renaming keyExtractor → ringKeyExtractor
   folding [ringStmtRel] configuration configurationFacts at proofSystem
 
 end GordieHowe.MLDSA44.Ring.Carrier.QROMParams

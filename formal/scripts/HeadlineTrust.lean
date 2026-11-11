@@ -20,9 +20,9 @@ headline of an application module (`GordieHowe.Applications.*` or
 generic theorems are printed only.
 
 Whether a headline's statement, outside its binders, reaches certificate data is a question of the
-roles of the statement's parts (`_agent/scratch/audit/closure-design.md`: the proof system a
-headline is about is its subject, whose closure stops at the data); it is checked once the
-property-head registry that assigns those roles exists. -/
+roles of the statement's parts (the proof system a headline is about is its subject, whose closure
+stops at the data); it is checked once the property-head registry that assigns those roles
+exists. -/
 
 open Lean Meta Elab Command
 

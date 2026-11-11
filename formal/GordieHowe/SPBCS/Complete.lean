@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.SPBCS.Basic
+public import GordieHowe.Headline
 public import GordieHowe.Model.IOP.Append
 public import GordieHowe.Model.IOP.Completeness
 public import GordieHowe.Model.IOP.CausalRun
@@ -94,6 +95,16 @@ noncomputable def overrun : ℝ≥0∞ :=
 theorem overrun_ne_top : M.overrun ≠ ⊤ :=
   ENNReal.sum_ne_top.2 fun _ _ =>
     ne_top_of_le_ne_top ENNReal.one_ne_top (Sampler.rejectionProb_le_one _)
+
+/-- **The key-collision bound of the composite**, the paper's `errkey` (`def:bcs-quantities`):
+`keyCollision (t.size n) k`, a bound on the probability that two of the `t.size n` rounds of all
+leaves derive the same key; the final inputs of the branches add no key. -/
+noncomputable def keyCollisionBound (_ : SPBCS Mg P X k kN kS L e) : ℝ≥0∞ :=
+  SPBCS.keyCollision (t.size n) k
+
+/-- **The completeness error of the compiled argument** at the completeness error `εc` of the
+IOP, the paper's `errcpl(0)` (`thm:bcs-main`(1)): `εc + overrun + keyCollisionBound`. -/
+noncomputable def completenessError (εc : ℝ≥0∞) : ℝ≥0∞ := εc + M.overrun + M.keyCollisionBound
 
 /-- A write function: the write of each prover round of each leaf as a function of its message. -/
 abbrev WriteFn : Type := (p : t.Leaf) → (i : (P p.label).MessageIdx) → (P p.label).Type i.1 →
@@ -1073,13 +1084,15 @@ open Classical in
 /-- **Completeness of the spBCS compiler for a fixed statement** (paper `thm:bcs-complete`
 (1)): over a uniform oracle, the honest proof of the causal prover `prv`, with any Merkle salts `ν`
 and Fiat–Shamir salt `σ`, is rejected with probability at most
-`ε + overrun + keyCollision (t.size n) k`, where `ε` bounds the probability that the composite
+`completenessError ε = ε + overrun + keyCollisionBound`, where `ε` bounds the probability that the composite
 verifier rejects the run of `prv` over uniform challenges. -/
+@[headline]
 theorem prob_not_accepts_prove_le {M : SPBCS Mg P X k kN kS L e}
     (E : (j : ι) → (M.comp j).Encoder) (ν : M.Pos → MerkleSalt kN) {V : X → FullTr P t → Bool}
     (Q : M.IOPQueries V x) {ε : ℝ≥0∞} (hε : Pr[ch ← Chs P t : V x (prv.run x ch) ≠ true] ≤ ε) :
     Pr[h ← (Query k kN kS L → Out k e) : ¬ M.Accepts h x (prove prv x σ E ν h Q) Q] ≤
-      ε + M.overrun + SPBCS.keyCollision (t.size n) k := by
+      M.completenessError ε := by
+  rw [completenessError, keyCollisionBound]
   refine le_trans (QROM.probUniform_mono fun h hv => ?_)
     ((prob_sample_none_or_chOfW_mem_le prv x σ (SPBCS.honestWrite E ν)
       (fun _ _ hq => SPBCS.honestWrite_congr_oracle E ν hq)

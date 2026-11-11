@@ -34,7 +34,7 @@ namespace GordieHowe.Generated.MDL.MLDSA44.Attrs1.QROMParams.Structure
 
 open GordieHowe.RealizedProgram GordieHowe.Generated.MDL.MLDSA44.Attrs1.QROMParams.Program
 
-load_program_ghc "Structure.ghc" "231d1806eac1d5a2"
+load_program_ghc "Structure.ghc" "cd63907d0e53c38b"
 
 /-- The member-value pointers in the emitted structure metadata. -/
 theorem memberValues_eq : records.memberValues = [] := rfl

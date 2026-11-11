@@ -87,6 +87,7 @@ inline void write_gen(Bytes &out, const ir::Certificates::Gen &g) {
     case G::kDigitsAcc: out.nat(9); out.nat(g.a); break;
     case G::kLowDigit: out.nat(10); out.nat(g.a); out.nat(g.b); break;
     case G::kLateHist: out.nat(11); out.nat(g.a); out.nat(g.b); break;
+    case G::kSpecC: out.nat(12); out.nat(g.a); break;
     default: throw Error("unknown program generator");
   }
 }
@@ -126,6 +127,7 @@ inline void write_cstep(Bytes &out, const ir::Certificates::CStep &s) {
     case S::kSpecRow: out.ctor(11); out.nat(s.id); break;
     case S::kFieldRow: out.ctor(12); break;
     case S::kTwoTail: out.ctor(13); out.nat(s.id); out.nat(s.slot); break;
+    case S::kSpecC: out.ctor(14); out.nat(s.id); break;
     default: throw Error("unknown completeness step");
   }
 }

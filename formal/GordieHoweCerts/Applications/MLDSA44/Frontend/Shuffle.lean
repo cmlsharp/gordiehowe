@@ -313,7 +313,7 @@ theorem evalE_ref520 (e : program.Env interp) {t : ℕ} (ht : t < 39) :
 theorem unitRow {e : program.Env interp} (hs : HSatCore e) (t : Fin 39) :
     (samLowered e).unit t = MemoryShuffle.unit (samM program F0 FH).Θ (signsH (program.reader e) t) := by
   have ht := t.isLt
-  have h := hs.preds 267 (by norm_num) (by norm_num)
+  have h := hs.preds 267 (by decide) (by decide)
   obtain ⟨c, ⟨_, hp⟩, -, hc0⟩ := MldsaHConsts.theta (program := program) (FH := FH)
   rw [hp] at h
   have hh := h t (by rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_leaf, (cellFacts (program := program)).2.2.2.2.2.2.1]; exact ht)
@@ -340,7 +340,7 @@ theorem idx83_eq {t b : ℕ} (ht : t < 39) (hb : b < 6) : idx80.entry (6 * t + b
 theorem originRow {e : program.Env interp} (hs : HSatCore e) (t : Fin 39) :
     (samLowered e).origin t = (samM program F0 FH).originOf ((samLowered e).readOrigin t) := by
   have ht := t.isLt
-  have h := hs.preds 268 (by norm_num) (by norm_num)
+  have h := hs.preds 268 (by decide) (by decide)
   obtain ⟨_, hp268⟩ := pred268 (program := program)
   rw [hp268] at h
   have hh := h t (by rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_leaf, (cellFacts (program := program)).2.2.2.2.2.2.2]; exact ht)
@@ -365,7 +365,7 @@ theorem freshLen : program.exprLen (.logic .lt 6 [.leaf 561, .leaf 53]) = 39 :=
 theorem freshRow {e : program.Env interp} (hs : HSatCore e) (t : Fin 39) :
     Bits.ltConst ((samLowered e).readOrigin t) ((t : ℕ) + 1) = 1 := by
   have ht := t.isLt
-  have h := hs.preds 270 (by norm_num) (by norm_num)
+  have h := hs.preds 270 (by decide) (by decide)
   obtain ⟨_, hp270⟩ := pred270 (program := program)
   rw [hp270] at h
   have hh := h t (by rw [(freshLen (program := program))]; exact ht)
@@ -618,7 +618,7 @@ theorem permRow {e : program.Env interp} (hs : HSatCore e) :
     (((samM program F0 FH).readsPacked (samLowered e)).map fun x => memDelta (program.reader e) - x).prod =
       (((samM program F0 FH).writesPacked (samLowered e)).map fun x => memDelta (program.reader e) - x).prod := by
   have h36 := fun i => RealizedProgram.reader_of_constant e (RealizedProgram.kind_of_isConstant (selConstsA (program := program)).1) i
-  have h := hs.preds 269 (by norm_num) (by norm_num)
+  have h := hs.preds 269 (by decide) (by decide)
   obtain ⟨_, hp269⟩ := pred269_body (program := program)
   rw [hp269] at h
   have h0 := h 0 (by

@@ -41,7 +41,7 @@ variable [∀ j i, Nonempty ((P j).Challenge i)] {Wit : Type} (M : SPBCS Mg P X 
   (St : CausalStateFn P t X) {ε : ChIdx P t → ℝ≥0}
 
 /-- **The log of a classical `tq`-query algorithm lies in `bad ∪ P_col`** with probability at
-most `knowledgeErrorROM k tq c_in nJ (max_c ε c)`. -/
+most `knowledgeErrorROM k tq c nJ (maxError ε)`. -/
 theorem prob_log_bad_union_le (hrbr : CausalRBRKnowledgeSound rel V E St ε) {C : Type}
     {tq : ℕ} (𝒜 : ROM.Alg (Query k kN kS L) (Out k e) C tq) :
     Pr[h ← (Query k kN kS L → Out k e) : 𝒜.log h tq ∈ M.bad rel E St ∪ digestCollision] ≤
@@ -65,10 +65,10 @@ theorem prob_log_bad_union_le (hrbr : CausalRBRKnowledgeSound rel V E St ε) {C 
 /-- **Knowledge soundness of the spBCS argument in the ROM, joint form** (CY24 Definition
 5.1.1, p. 48): the probability that the spBCS verifier accepts the claim of `𝒜` and the
 database extractor at `E` returns no witness from the log of `𝒜` followed by the verifier's `kq`
-queries is at most `knowledgeErrorROM k (t + kq) c_in nJ κ`. -/
+queries is at most `knowledgeErrorROM k (t + kq) c nJ κ`. -/
 theorem knowledge_of_causalRBR_rom_joint [DecidableEq X] (Qs : ∀ x, M.IOPQueries V x)
     (hrbr : CausalRBRKnowledgeSound rel V E St ε) {κ : ℝ≥0} (hκ : ∀ c, ε c ≤ κ) {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) {tq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {tq : ℕ}
     (𝒜 : ROM.Alg (Query k kN kS L) (Out k e) (Claim X M.NIProof) tq) :
     Pr[h ← (Query k kN kS L → Out k e) :
         M.Accepts h (𝒜.output h).stmt (𝒜.output h).proof (Qs (𝒜.output h).stmt) ∧

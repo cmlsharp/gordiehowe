@@ -24,7 +24,7 @@ the native ML-DSA program's predicates give through the renaming
   values the honest values are read through.
 * **The honest values** (`honestVal`): `member.a_hat` and `member.t1` the signer's key's row
   (`keyEntry`), `member.mu` the bits of the signer's `μ` (`muBitNat` of `RingIn.mu`), the index
-  bits the signer's position's; at every value the renaming holds, the native program's honest
+  bits the signer's position's, `signature.Q` the rows' quotients (`qHon`); at every value the renaming holds, the native program's honest
   value at the ring input (`natVal`: domain `A`'s `aValR`, domain `H`'s core `hValCore`).
 * **The native program's view** (`readsCells_pull`, `readsA_pull`): at the source environment of
   the honest values, the environment read as the native program's (`pull`) reads the native
@@ -49,16 +49,28 @@ set_option hygiene false in
 local notation "σ" => MldsaRingEmbed.σ program
 
 set_option hygiene false in
-local notation "vA" => MldsaRingRelation.aHat program
+local notation "ringV" => MldsaRingEmbed.V program
 
 set_option hygiene false in
-local notation "vT" => MldsaRingRelation.t1 program
+local notation "ringR" => MldsaRingEmbed.R program
+
+set_option hygiene false in
+local notation "predMap" => MldsaRingEmbed.pred program
+
+set_option hygiene false in
+local notation "vA" => MldsaRandomPoint.aHat program
+
+set_option hygiene false in
+local notation "vT" => MldsaRandomPoint.t1 program
 
 set_option hygiene false in
 local notation "vI" => (TableSelect.shape program).idx
 
 set_option hygiene false in
 local notation "vMu" => MldsaRingFront.muA program
+
+set_option hygiene false in
+local notation "vQ" => MldsaRandomPoint.q program
 
 /-! ## The program facts -/
 
@@ -74,11 +86,11 @@ class MldsaRingHonest (program : RealizedProgram) [MldsaRingEmbed program] [Mlds
   /-- `inv` inverts the renaming on `ringV`. -/
   inv_val : ∀ u ∈ ringV, inv ((σ).val u) = u
   /-- The member's values are no renamed values. -/
-  member_ne : ∀ u ∈ ringV, ∀ v ∈ [vA, vT, vMu, vI], (σ).val u ≠ v
+  member_ne : ∀ u ∈ ringV, ∀ v ∈ [vA, vT, vMu, vI, vQ], (σ).val u ≠ v
   /-- The member's values are distinct. -/
-  member_nodup : [vA, vT, vMu, vI].Nodup
+  member_nodup : [vA, vT, vMu, vI, vQ].Nodup
   /-- The member's values are committed values of field `0`. -/
-  memberCells : ∀ v ∈ [vA, vT, vMu, vI], program.privCellB v = true ∧ program.valueField v = 0
+  memberCells : ∀ v ∈ [vA, vT, vMu, vI, vQ], program.privCellB v = true ∧ program.valueField v = 0
   /-- The held committed values are committed values of the ring program. -/
   privCell : ∀ u ∈ ringV, (nat).privCellB u = true → program.privCellB ((σ).val u) = true
   /-- Domain `H`'s core hash values are held. -/
@@ -95,13 +107,69 @@ class MldsaRingHonest (program : RealizedProgram) [MldsaRingEmbed program] [Mlds
   /-- Every value bound to its digits reads committed values and constants. -/
   bound : ∀ v < program.values.length, program.BoundOk v
   /-- The crossing's `y` has `7168` coordinates. -/
-  len50 : program.exprLen (.ref 50) = 7168
+  len50 : program.exprLen (.ref (MldsaRingFront.crossA program)) = 7168
   /-- Every cross-field `equal` crosses `ref 513` of domain `H` and `ref 50` of domain `A`. -/
-  crossOperands : program.crossOperandsB 1 (.ref 513) 0 (.ref 50) = true
+  crossOperands : program.crossOperandsB 1 (.ref (MldsaRingFront.crossH program)) 0 (.ref (MldsaRingFront.crossA program)) = true
 
-/-- **The inverse of a renaming of values on `ringV`**: the first held value renamed to `v`
-(`v` itself where none is). -/
-def ringInv (σ' : Renaming) (v : ℕ) : ℕ := (ringV.find? fun u => σ'.val u == v).getD v
+/-! ## The honest quotients -/
+
+/-- **Coefficient `t` of a polynomial**, `0` past `256`. -/
+def cf (f : _root_.MLDSA.Rq) (t : ℕ) : _root_.MLDSA.Coeff :=
+  if h : t < 256 then MLDSA44.coeff f ⟨t, h⟩ else 0
+
+theorem cf_get (f : _root_.MLDSA.Rq) : ∀ t (ht : t < 256), cf f t = f.get ⟨t, ht⟩ := fun t ht => by
+  unfold cf
+  rw [dif_pos ht, MLDSA44.coeff_apply]
+
+section Quot
+
+variable {K : Type*} [Field K] (y : RingIn msgLen)
+
+/-- Block `(i, j)` of the signer's `Â` at `k`, in a field (`keyEntry`). -/
+def aKey (i j k : ℕ) : K := ((keyEntry y.key (i * 1024 + (j * 256 + k)) : ℕ) : K)
+
+/-- Row `i` of the signer's `NTT(2^d · t1)` at `k`, in a field (`keyEntry` from `4096`). -/
+def tKey (i k : ℕ) : K := ((keyEntry y.key (4096 + (i * 256 + k)) : ℕ) : K)
+
+/-- Coefficient `t` of the signature's `z_j`, in a field. -/
+def zKey (j : Fin 4) (t : ℕ) : K := (((cf (y.z.get j) t).val : ℕ) : K)
+
+/-- Coefficient `t` of the challenge polynomial, in a field. -/
+def cKey (t : ℕ) : K :=
+  (((cf (MLDSA44.ofCoeff fun k => (y.c k : _root_.MLDSA.Coeff)) t).val : ℕ) : K)
+
+/-- **The honest quotient of row `i`** at `t` (`signature.Q`, ψ the root): the high half of
+`Σ_j A_ij z_j − T_i c`, `A_ij`, `T_i` the inverse transforms of the signer's `â_ij`, `t̂_i`
+(`Ops.high`), so that row `i`'s polynomial is `(X^256 + 1)`-free. -/
+noncomputable def qHon (ψ : K) (i t : ℕ) : K :=
+  ∑ j : Fin 4, Ops.high 256 (Ops.inverseNtt 256 ψ (aKey y i j)) (zKey y j) t -
+    Ops.high 256 (Ops.inverseNtt 256 ψ (tKey y i)) (cKey y) t
+
+/-- **The inverse transform stays in a subfield** holding the root and the input. -/
+theorem inverseNtt_mem (S : Subfield K) {n : ℕ} {ψ : K} (hψ : ψ ∈ S) {a : ℕ → K}
+    (ha : ∀ m, a m ∈ S) (t : ℕ) : Ops.inverseNtt n ψ a t ∈ S := by
+  unfold Ops.inverseNtt
+  split_ifs
+  · exact mul_mem (inv_mem (natCast_mem S n))
+      (sum_mem fun m _ => mul_mem (ha m) (pow_mem (inv_mem hψ) _))
+  · exact zero_mem S
+
+/-- **The high half stays in a subfield** holding its operands. -/
+theorem high_mem (S : Subfield K) {n : ℕ} {a b : ℕ → K} (ha : ∀ m, a m ∈ S) (hb : ∀ m, b m ∈ S)
+    (t : ℕ) : Ops.high n a b t ∈ S := by
+  unfold Ops.high
+  refine sum_mem fun i _ => sum_mem fun k _ => ?_
+  split_ifs
+  · exact mul_mem (ha _) (hb _)
+  · exact zero_mem S
+
+/-- **The honest quotients lie in a subfield** holding the root. -/
+theorem qHon_mem (S : Subfield K) {ψ : K} (hψ : ψ ∈ S) (i t : ℕ) : qHon y ψ i t ∈ S :=
+  sub_mem (sum_mem fun j _ => high_mem S (inverseNtt_mem S hψ fun _ => natCast_mem S _)
+      (fun _ => natCast_mem S _) t)
+    (high_mem S (inverseNtt_mem S hψ fun _ => natCast_mem S _) (fun _ => natCast_mem S _) t)
+
+end Quot
 
 /-! ## The honest values -/
 
@@ -126,11 +194,13 @@ variable (program F0 FH) in
 /-- **The honest committed values of a native ML-DSA-44 ring program** on an honest input:
 `member.a_hat` the signer's `Â` (`keyEntry`, coordinates below `4096`), `member.t1` its
 `NTT(2^d · t1)` (`keyEntry` from `4096`), `member.mu` the bits of the signer's `μ`, the index bits
-the bits of the signer's position; at the renamed value of every held native value its native
+the bits of the signer's position, `signature.Q` the rows' quotients by `X^256 + 1` (`qHon`, row
+`j / 255`, coefficient `j % 255`); at the renamed value of every held native value its native
 honest value (`natVal`); `0` elsewhere (the realization's values are generated,
 `RealizedProgram.genCommitted`).
 
-Running time: one `ExpandA` and four NTTs of the signer's key, `μ = H(tr ‖ M′)`, and the time of
+Running time: one `ExpandA` and four NTTs of the signer's key, twenty inverse NTTs and twenty
+schoolbook products for the quotients, `μ = H(tr ‖ M′)`, and the time of
 `natVal` (`aValR` and `hValCore`). This running time is argued here, not proved in Lean. -/
 -- spec-side
 noncomputable def honestVal (y : RingIn msgLen) (v j : ℕ) : (interp (program.valueField v)).K :=
@@ -138,6 +208,7 @@ noncomputable def honestVal (y : RingIn msgLen) (v j : ℕ) : (interp (program.v
   else if v = vT then castElt (a := 0) ((keyEntry y.key (4096 + j) : ℕ) : (interp 0).K)
   else if v = vMu then castElt (a := 0) ((muBitNat y.mu j : ℕ) : (interp 0).K)
   else if v = vI then castElt (a := 0) ((y.w.idx / 2 ^ j % 2 : ℕ) : (interp 0).K)
+  else if v = vQ then castElt (a := 0) (qHon y ((interp 0).decode 1753) (j / 255) (j % 255))
   else if MldsaRingHonest.inv program v ∈ ringV ∧ (σ).val (MldsaRingHonest.inv program v) = v then
     castElt (natVal program F0 FH y (MldsaRingHonest.inv program v) j)
   else 0
@@ -155,7 +226,7 @@ theorem honestVal_held (y : RingIn msgLen) {u : ℕ} (hu : u ∈ ringV) (j : ℕ
   have hinv := MldsaRingHonest.inv_val (program := program) u hu
   unfold honestVal
   rw [if_neg (hne _ (by simp)), if_neg (hne _ (by simp)), if_neg (hne _ (by simp)),
-    if_neg (hne _ (by simp)), if_pos ⟨by rw [hinv]; exact hu, by rw [hinv]⟩]
+    if_neg (hne _ (by simp)), if_neg (hne _ (by simp)), if_pos ⟨by rw [hinv]; exact hu, by rw [hinv]⟩]
   exact castElt_dep (I := interp) (fun n => natVal program F0 FH y n j) hinv
 
 end Values
@@ -339,11 +410,11 @@ theorem valN_mem : ∀ v, v ∈ [560, 561, 562, 563, 564, 565] → ∀ n < ((nat
   rw [if_neg (nm v hv), if_neg h7, if_neg h8, if_pos hv]
   exact castElt_castElt_of_eq hf.2.symm _
 
-/-- **Domain `H`'s core holds at the honest values**: ring predicate `k − 24` for every native
+/-- **Domain `H`'s core holds at the honest values**: ring predicate `predMap k` for every native
 core predicate `k` (`48 … 270`), by the renaming (`MldsaRingEmbed.hPredCorr`,
 `holdsAt_pullEnv`) at the native core's honest values (`hPreds_core`). -/
-theorem core_holds {k : ℕ} (h48 : 48 ≤ k) (h270 : k ≤ 270) :
-    program.HoldsAt E (program.predicate (k - 24)).body :=
+theorem core_holds {k : ℕ} (h48 : corePredLo ≤ k) (h270 : k ≤ hPredHi) :
+    program.HoldsAt E (program.predicate (predMap k)).body :=
   (holdsAt_pullEnv (MldsaRingEmbed.embedding (program := program)) E
     (MldsaRingEmbed.hPredCorr k h48 h270).1).2
     (hPreds_core y (readsCells_pull y x c π) (valN_hash y) (valN_556 y) (valN_557 y)

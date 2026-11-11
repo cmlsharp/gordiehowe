@@ -413,8 +413,8 @@ theorem sig284_honest (hy : y.Valid) (hx : keyOf x = some y.pk)
     (h : ∀ v ∈ NormValues program, val v = algVal program y v) :
     program.HoldsAt (program.srcEnv interp x val c π) (program.predicate (FalconAAlg.pSig program)).body := by
   set e := program.srcEnv interp x val c π
-  obtain ⟨_, hpb, hnp⟩ := FalconAAlg.sig (program := program)
-  rw [hpb, RealizedProgram.HoldsAt, RealizedProgram.holdsWith_mod_iff (.inl hnp)]
+  obtain ⟨_, hpb⟩ := FalconAAlg.sig (program := program)
+  rw [hpb, RealizedProgram.HoldsAt, RealizedProgram.holdsWith_mod_iff]
   intro i hi
   rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_leaf, (FalconAAlg.sizes_sig (program := program)).2] at hi
   refine (ZMod.intCast_zmod_eq_zero_iff_dvd _ 12289).1 ?_

@@ -183,6 +183,12 @@ theorem reader_of_pubExpr (e : ir.Env I) {v : ℕ} {E : Expr} (hk : (ir.value v)
     (i : ℕ) : ir.reader e v i = ir.evalE (ir.read e ir.values.length) (ir.valueField v) E i := by
   simp only [reader, fuel, read, hk]
 
+/-- **A public expression's leaf** reads its expression one level down, in its field. -/
+theorem evalE_leaf_pubExpr (e : ir.Env I) {v f : ℕ} {E : Expr}
+    (hk : (ir.value v).kind = .pub (.expr E)) (hf : ir.valueField v = f) (i : ℕ) :
+    ir.evalE (ir.reader e) f (.leaf v) i = ir.evalE (ir.read e ir.values.length) f E i := by
+  rw [evalE_leaf, reader_of_pubExpr e hk, castElt_evalE hf]
+
 /-- **A challenge value reads its challenge** at any positive level. -/
 theorem read_of_challenge (e : ir.Env I) {v c n : ℕ} (hk : (ir.value v).kind = .challenge c)
     (hn : 0 < n) (i : ℕ) : ir.read e n v i = castElt (e.chal c i) := by
@@ -1144,7 +1150,7 @@ theorem macFieldCheckAt_of_odd (hwf : ir.WellFormed) (hI : I.Registered ir)
           exact m.2
         have hT' := hT
         rw [hbt] at hT'
-        have h2d := hT'.1 m hm
+        have h2d := hT' m hm
         obtain ⟨bt, hbt2, hrdtb, hbtiff⟩ := reader_targetBits hwf hL e htb hd (by omega) htf m
         have hint : ir.evalIntWith rd d (.leaf tb) m = bt := by
           simp only [evalIntWith, Expr.evalInt]

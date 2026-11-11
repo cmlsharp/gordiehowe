@@ -62,17 +62,6 @@ inline E apply_in(std::string name, bool row) {
   e.row = row;
   return e;
 }
-// The operand of part A of the product-form predicate NAME's congruence
-// (counted over its rows, terms and their parts, in order), as the
-// realized program writes it: an expression part's expression, a kernel
-// part's operand before the slice it reads (mod.h's derive_product).
-inline E term_operand(std::string name, size_t a) {
-  E e;
-  e.kind = E::kTermOperand;
-  e.item = std::move(name);
-  e.a = a;
-  return e;
-}
 // The definition of derived node ID (its shared entry's root).
 inline E def(size_t id) {
   E e;
@@ -292,32 +281,6 @@ class Deriv {
     s.src.kind = Src::kTableHull;
     s.names = std::move(preds);
     s.ints = {lo, hi};
-    return push(std::move(s));
-  }
-  // The coefficient interval [LO, HI] of the polynomial whose spectrum is
-  // coordinates [AT, AT + n) of node NODE, a kernel of the product form
-  // (tableKernel), from the table selections PREDS: those coordinates are
-  // a leaf's transform of a row, whose public coefficients lie in
-  // [LO, HI]. The export names the kernel's operator and block.
-  size_t src_kernel(size_t node, size_t at, std::vector<std::string> preds,
-                    SignedInt lo, SignedInt hi) {
-    Step s = make(Step::kSrc);
-    s.node = node;
-    s.a = at;
-    s.src.kind = Src::kTableKernel;
-    s.names = std::move(preds);
-    s.ints = {lo, hi};
-    return push(std::move(s));
-  }
-  // holds (the product form's mod_m P N for the congruence D = P - N;
-  // mod.h's product_sides) by the rule productMod from the premises KS:
-  // nat Q, then for P and for N the part's interval, one ivl, or for a
-  // part with spectral products per part of its terms its kernel's
-  // interval (src_kernel) and ivl of its operand, or ivl of an expression
-  // part (derivation_check.h states the rule).
-  size_t product_mod(std::vector<size_t> ks) {
-    Step s = make(Step::kProductMod);
-    s.premises = std::move(ks);
     return push(std::move(s));
   }
   // ivl E by interval propagation from the ivl premises KS, at the bounds

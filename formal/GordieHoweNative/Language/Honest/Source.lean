@@ -132,7 +132,7 @@ def srcCoveredB (MT : NatTrie ℕ) (rs : List Read) (w : ℕ) : Bool :=
   @PReader.srcCoveredB ir (PReader.ofProgram ir) MT rs w
 
 variable (ir) in
-/-- **`GroupedMac.digitsRoom`, as a check**: every lookup of the single record `gq` into a range
+/-- **`GroupedMacC.digitsRoom`, as a check**: every lookup of the single record `gq` into a range
 `[0, N)` is of domain `dy` with `0 < base ≤ N`. -/
 def digitsRoomB (gq dy base : ℕ) : Bool :=
   ir.predicates.all fun p =>
@@ -141,7 +141,7 @@ def digitsRoomB (gq dy base : ℕ) : Bool :=
     | _ => true
 
 variable (ir) in
-/-- **`GroupedMac.finalRoom`, as a check**: every lookup of a single record `D` with
+/-- **`GroupedMacC.finalRoom`, as a check**: every lookup of a single record `D` with
 `D.beq Q` into a range `[0, N)` is of domain `dy` with `groups + 1 < 2N`. -/
 def finalRoomB (Q : Expr) (dy groups : ℕ) : Bool :=
   ir.predicates.all fun p =>

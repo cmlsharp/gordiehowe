@@ -36,12 +36,12 @@ namespace GordieHowe.Signature
 open GordieHowe.Quantum GordieHowe.RingSignature
 open scoped ENNReal
 
-variable {X Y : Type} {N : ℕ}
+variable {X Y : Type}
 
-variable {TB : BaseTypes} (B : BaseSigner X Y N TB) in
+variable {TB : SchemeTypes} (B : BaseScheme X Y TB) in
 /-- **The signing oracle with no messages**: `SMsg := Empty`, so the game with it has public-key
 requests and corruptions only. -/
-def SignOracle.none : SignOracle B where
+@[reducible] def SignOracle.none : SignOracle B where
   SMsg := Empty
   Coins := Unit
   q := 0
@@ -49,7 +49,8 @@ def SignOracle.none : SignOracle B where
   sign_queries _ sm _ := sm.elim
   base sm := sm.elim
 
-variable {TB : BaseTypes} {B : BaseSigner X Y N TB} {n : ℕ}
+variable {TB : SchemeTypes}
+  {B : BaseScheme X Y TB} {n : ℕ}
 
 /-- **No user was asked to sign** in a history of the game without messages. -/
 theorem not_signed_none (hist : MUHist (SignOracle.none B) n) (i : Fin n) (bm : B.BMsg) :
@@ -72,6 +73,9 @@ theorem strongForges_none_iff {keys : Fin n → B.KeyCoins} {H : X → Y}
 
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
   [Nonempty Y] {V : OracleView X Y} {t : ℕ}
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
 
 /-- **The success probability of the adversary in MU-EUF-NMA^corr** with `Q` requests:
 `muEufProb` at the signing oracle without messages. -/

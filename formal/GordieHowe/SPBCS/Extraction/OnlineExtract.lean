@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Model.NARG.QROM
+public import GordieHowe.Headline
 
 @[expose] public section
 
@@ -202,6 +203,7 @@ end Pure
 
 /-- **The extraction run leaves `(output, Z)` in the real run's state** (DFMS22 Definition 3.1,
 p. 10, first condition, with `εsim = 0` and a quantum auxiliary output). -/
+@[headline]
 theorem extractionOutputState_eq (A : Quantum.Alg (Bits m) (XOut k e) O) (o₀ : O)
     (vo : VerifiedOutput O) :
     V.extractionOutputState claimOf (compressedSim) A o₀ vo = V.realOutputState claimOf A vo := by
@@ -308,6 +310,7 @@ theorem cohOnlineExtracts_requestFree (K : V.KnowledgeBound rel ext β)
 with the compressed oracle `compressedSim` at `εsim = 0`): every `t`-query adversary of
 `def:adversary` without proof queries with an auxiliary output is online extractable with error
 `knowledgeError β (t + kq)`. -/
+@[headline]
 theorem onlineExtracts (K : V.KnowledgeBound rel ext β) {Z : Type}
     (𝒢 : NARG.QROM.Adversary m k e (Cl × Z) t) :
     𝒢.OnlineExtracts V (compressedSim) rel (compressedExt ext) 0
@@ -318,6 +321,7 @@ theorem onlineExtracts (K : V.KnowledgeBound rel ext β) {Z : Type}
 chosen by the adversary): every `t`-query adversary without proof queries outputs a statement without a
 witness and a claim the verifier accepts with probability at most `knowledgeError β (t + kq)`
 (`NARG.QROM.Adversary.acceptsFalse_le` at the compressed oracle). -/
+@[headline]
 theorem soundness (K : V.KnowledgeBound rel ext β) (𝒜 : NARG.QROM.Adversary m k e Cl t) :
     𝒜.acceptsFalse V rel ≤ V.knowledgeError β (t + V.kq) := by
   simpa using NARG.QROM.Adversary.acceptsFalse_le (cohOnlineExtracts_requestFree V id K 𝒜)

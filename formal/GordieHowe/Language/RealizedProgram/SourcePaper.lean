@@ -283,8 +283,8 @@ pads `0`, the state function read with zero pads and the same error at each chal
 theorem rbr_paper_of_source {W : Type} {rel : Set (ir.Valuation I × W)}
     {proj : ir.Valuation I → ir.Assignment I → W} {S : KnowledgeStateFunction (ir.sourceVerifier I)}
     {ε : (ir.sourceSpec I).ChallengeIdx → ℝ≥0}
-    (h : rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε) :
-    rbrKnowledgeSoundness rel (ir.paperVerifier I) (ir.paperExtractor I fun x v => proj x ⟨v, 0⟩)
+    (h : RBRKnowledgeSound rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε) :
+    RBRKnowledgeSound rel (ir.paperVerifier I) (ir.paperExtractor I fun x v => proj x ⟨v, 0⟩)
       (S.comap (ir.zeroPads I) fun _ _ h => h) fun i => ε ((ir.zeroPads I).chalIdx i) := by
   have h' := h.comap (ir.zeroPads I) (V' := ir.paperVerifier I) fun _ _ h => h
   rwa [sourceExtractor_comap_zeroPads] at h'
@@ -297,8 +297,8 @@ without the pads and the same error at each challenge round. The pads in the fir
 theorem rbr_source_of_paper (hs : ir.SourceValid) (hnm : ir.SrcNoMessage) {W : Type}
     {rel : Set (ir.Valuation I × W)} {proj : ir.Valuation I → ir.Valuation I → W}
     {S : KnowledgeStateFunction (ir.paperVerifier I)} {ε : (ir.paperSpec I).ChallengeIdx → ℝ≥0}
-    (h : rbrKnowledgeSoundness rel (ir.paperVerifier I) (ir.paperExtractor I proj) S ε) :
-    rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I fun x a => proj x a.val)
+    (h : RBRKnowledgeSound rel (ir.paperVerifier I) (ir.paperExtractor I proj) S ε) :
+    RBRKnowledgeSound rel (ir.sourceVerifier I) (ir.sourceExtractor I fun x a => proj x a.val)
       (S.comap (ir.forgetPads I) (paperVerifier_forgetPads hs hnm))
       fun i => ε ((ir.forgetPads I).chalIdx i) := by
   have h' := h.comap (ir.forgetPads I) (paperVerifier_forgetPads hs hnm)

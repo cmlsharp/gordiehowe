@@ -461,7 +461,7 @@ rounds within `max 3 (2 · gkrWidth)/|K|` each (`branchError_le`), the join's co
 (`RingSwitching.TreeFieldProof.error_le_of`); and the phases' given. -/
 theorem fieldForkError_le [Inhabited W] {proj : ir.Valuation I → ir.Assignment I → W}
     {S : KnowledgeStateFunction (ir.sourceVerifier I)} {ε : (ir.sourceSpec I).ChallengeIdx → ℝ≥0}
-    (h : rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
+    (h : RBRKnowledgeSound rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
     (hend : ∀ i, ir.rounds.get i.1 = .final → ε i = 0) {δ : ℝ≥0}
     (hk : ∀ d : Fin ir.domains.length, ir.FieldRoundsLe (R d) δ)
     (happ : ∀ j, ((B.fieldBranches R).soundIOPSound (B.fieldBranchesSound R) h hend).εapp j ≤ δ) :
@@ -492,7 +492,7 @@ theorem fieldForkError_le [Inhabited W] {proj : ir.Valuation I → ir.Assignment
 /-- **Every round of the composite read through `f` and checked** (as `fieldForkError_le`). -/
 theorem fieldForkErrorWith_le [Inhabited W] {chk : Stmt → Bool} {proj : ir.Valuation I → ir.Assignment I → W}
     {S : KnowledgeStateFunction (ir.sourceVerifier I)} {ε : (ir.sourceSpec I).ChallengeIdx → ℝ≥0}
-    (h : rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
+    (h : RBRKnowledgeSound rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
     (hend : ∀ i, ir.rounds.get i.1 = .final → ε i = 0) {δ : ℝ≥0}
     (hk : ∀ d : Fin ir.domains.length, ir.FieldRoundsLe (R d) δ)
     (happ : ∀ j, ((B.fieldBranches R).soundIOPSound (B.fieldBranchesSound R) h hend).εapp j ≤ δ) :

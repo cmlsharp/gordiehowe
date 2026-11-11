@@ -13,6 +13,6 @@ import all GordieHoweCerts.Generated.Falcon512.Native.ROMParams.Program
 
 namespace GordieHowe.Generated.Falcon512.Native.ROMParams.GKR.H
 
-check_entry cert ar 0 [2, 1024, 1]
+check_entry cert ar 0 [2, 1, 1]
 
 end GordieHowe.Generated.Falcon512.Native.ROMParams.GKR.H

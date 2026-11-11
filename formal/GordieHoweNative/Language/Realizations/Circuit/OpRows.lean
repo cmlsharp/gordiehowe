@@ -87,20 +87,56 @@ end Entries
 
 end OpList
 
-section TrieOfList
+section ListTree
 
 variable {α : Type}
 
-/-- **A list as a trie**, with fuel: the even positions left, the odd ones right. -/
-def Trie.ofListF : ℕ → List α → Trie α
-  | _, [] => .nil
-  | _, [x] => .leaf x
-  | 0, _ :: _ :: _ => .nil
-  | fuel + 1, x :: y :: l =>
-    .node (ofListF fuel (evenPart (x :: y :: l))) (ofListF fuel (oddPart (x :: y :: l)))
+/-- **A complete binary tree in positional order**: a leaf, an empty subtree (the padding past
+the list's end), or a node whose left subtree holds the first half of its positions. -/
+inductive PNode (α : Type) where
+  /-- No entry. -/
+  | nil
+  /-- One entry. -/
+  | leaf (x : α)
+  /-- The first half of the positions left, the second half right. -/
+  | node (l r : PNode α)
 
-/-- **A list as a trie** (`Trie.get` reads entry `k` in `O(log n)`). -/
-def Trie.ofList (l : List α) : Trie α := Trie.ofListF l.length l
+/-- **Adjacent subtrees paired**, the last one with an empty one when their number is odd: one level
+of `PTree.ofList`. -/
+def PNode.pairUp : List (PNode α) → List (PNode α)
+  | a :: b :: rest => .node a b :: pairUp rest
+  | [a] => [.node a .nil]
+  | [] => []
+
+/-- **Subtrees of height `h` paired up to one**, with fuel: the tree and its height. -/
+def PNode.build : ℕ → ℕ → List (PNode α) → PNode α × ℕ
+  | _, h, [] => (.nil, h)
+  | _, h, [t] => (t, h)
+  | 0, h, _ :: _ :: _ => (.nil, h)
+  | f + 1, h, a :: b :: ts => build f (h + 1) (pairUp (a :: b :: ts))
+
+/-- **Position `i` of a tree of height `h`**: the left subtree below `2^(h−1)`; the default at an
+empty subtree. -/
+def PNode.getH [Inhabited α] : PNode α → ℕ → ℕ → α
+  | .leaf x, _, _ => x
+  | .node l r, h + 1, i => cond (Nat.blt i (2 ^ h)) (getH l h i) (getH r h (i - 2 ^ h))
+  | _, _, _ => default
+
+/-- **A list as a positional tree** of its height: built bottom-up by pairing, one pass per
+level (`2n` steps for `n` entries), so the kernel builds it in linear time. -/
+structure PTree (α : Type) where
+  /-- The tree. -/
+  tree : PNode α
+  /-- Its height. -/
+  height : ℕ
+
+/-- **A list as a positional tree** (`PTree.get` reads entry `k` in `O(log n)`). -/
+def PTree.ofList (l : List α) : PTree α :=
+  let r := PNode.build l.length 0 (l.map .leaf)
+  ⟨r.1, r.2⟩
+
+/-- **Entry `i`** of a positional tree (`PTree.get_ofList`: entry `i` of its list below its length). -/
+def PTree.get [Inhabited α] (T : PTree α) (i : ℕ) : α := T.tree.getH T.height i
 
 /-- **The first `n` entries of `l`, of length `L`**: `l` itself when `n = L`, with no pass over
 it. -/
@@ -113,32 +149,32 @@ def flattenL : List (List α) → List α
 
 /-- **One run `(s, d, c)` of an index map read from `xs`** (of length `L`): a run of step `1` is
 the slice of `c` entries from `s`, a run of step `0` entry `s` repeated, any other run read entry
-by entry from the trie `T` of `xs`. A run that starts past its own count `c` (`c < s`) is read from
-the trie too, so reaching its start costs no more than its entries. -/
-def pickRun [Inhabited α] (xs : List α) (L : ℕ) (T : Trie α) (s : ℕ) (d : ℤ) (c : ℕ) : List α :=
+by entry from the positional tree `T` of `xs`. A run that starts past its own count `c` (`c < s`)
+is read from the tree too, so reaching its start costs no more than its entries. -/
+def pickRun [Inhabited α] (xs : List α) (L : ℕ) (T : PTree α) (s : ℕ) (d : ℤ) (c : ℕ) : List α :=
   cond (d == 1 && Nat.ble s c) (cond (Nat.beq s 0) (takeL c L xs) ((xs.drop s).take c))
     (cond (d == 0) (List.replicate c (cond (Nat.ble s c) (xs.getD s default) (T.get s)))
       ((List.range c).map fun t : ℕ => T.get ((s : ℤ) + d * t).toNat))
 
 /-- **The entries of `xs` (of length `L`) at an index map's entries**, run by run (`pickRun`), `T`
-the trie of `xs` for the runs of other steps. -/
-def pickRuns [Inhabited α] (xs : List α) (L : ℕ) (T : Trie α) : IndexMap → List α
+^the positional tree of `xs` for the runs of other steps. -/
+def pickRuns [Inhabited α] (xs : List α) (L : ℕ) (T : PTree α) : IndexMap → List α
   | [] => []
   | (s, d, c) :: rest => pickRun xs L T s d c ++ pickRuns xs L T rest
 
-/-- **The entries of `xs` at the entries of `idx`**: `idx.toList.map (Trie.ofList xs).get` for
-an index map in range of `xs` (`pickL_eq`), with no trie for runs of step `0` or `1` that start
+/-- **The entries of `xs` at the entries of `idx`**: `idx.toList.map (PTree.ofList xs).get` for
+an index map in range of `xs` (`pickL_eq`), with no tree for runs of step `0` or `1` that start
 within their count. -/
 def pickL [Inhabited α] (xs : List α) (idx : IndexMap) : List α :=
-  pickRuns xs xs.length (Trie.ofList xs) idx
+  pickRuns xs xs.length (PTree.ofList xs) idx
 
-end TrieOfList
+end ListTree
 
 section Codes
 
 variable (ir : RealizedProgram)
 
-/-- **The codes of a constant of circuit `c`'s field** (`Logic.constInB`): its entries; `none` for
+/-- **The codes of a constant of circuit `c`'s field**: its entries; `none` for
 a value of another field or of another kind. -/
 def constCodes? (c v : ℕ) : Option (List ℕ) :=
   cond (Nat.beq (ir.valueField v) (ir.circField c) && ir.isConstant v) (some (ir.constEntries v))

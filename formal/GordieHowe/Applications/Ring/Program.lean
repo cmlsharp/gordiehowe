@@ -148,7 +148,11 @@ namespace GordieHowe.SPBCS.ProofSystemTranscript
 open IOP GordieHowe.QROM Quantum GordieHowe.Ring
 open scoped NNReal ENNReal
 
-variable {Sch : SigScheme} {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg] {N n : ℕ} {W : Type}
+variable {Sch : SigScheme} [Fintype Sch.PK] [DecidableEq Sch.PK] [Fintype Sch.Msg]
+  [DecidableEq Sch.Msg] [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub]
+  [DecidableEq Sch.Pub] [Nonempty Sch.Pub] [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins]
+  [Nonempty Sch.KeyCoins] [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins]
+  [Nonempty Sch.SignCoins] {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg] {N n : ℕ} {W : Type}
   {relC : Set (RingStmt Sch RMsg N × W)}
   {C : RealizedProgram.ProofSystem.IOP (RingStmt Sch RMsg N) W relC}
   {SD : C.SimData} {Inp : Type} {relI : Set (RingStmt Sch RMsg N × Inp)}
@@ -173,7 +177,7 @@ theorem insiderWinProb_le [Inhabited W] [Nonempty RMsg] [NeZero n] [Nonempty Sch
     (A : BKMAdversary ((TD.setting kS hb).model.qVerifier (TD.setting kS hb).queries pB pB)
       ((TD.setting kS hb).model.Response pB) n t Q) :
     A.insiderWinProb (((TD.prover kS hb hf (ringHonest Hc input)).mapOutput some).encode
-        queryEncoding) bind adm ≤
+        queryEncoding) (PMF.uniformOfFintype _) bind adm ≤
       A.simForgerSuccess (TD.setting kS hb).layout (TD.setting kS hb).viewEncoder id
           (RealizedProgram.ProofSystem.IOP.simulator SD) (TD.preimages kS hb) bind adm pubOf
           (C.extractor.mapWit g) +
@@ -195,6 +199,7 @@ theorem insiderWinProb_le [Inhabited W] [Nonempty RMsg] [NeZero n] [Nonempty Sch
     (bind := bind) (adm := adm) (pubOf := pubOf) (A := A) (hk := hb.k_pos) (hcorr := hcorr)
     (hpub := hpub) (hvzk := causalHVZK_ringHonest Hc hin hE) (hrbr := Sd.causal_rbr.mapWit hg)
 
+omit [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Nonempty Sch.Pub] in
 /-- **Unforgeability with respect to insider corruption (BKM06 Definition 7) for a base message
 that binds the ring** (`BindsRing`) of the ring signature compiled at the transcript `TD`
 (`BKMAdversary.insiderWinProb_le` at the setting with merges), from the soundness `Sd` of `C`
@@ -205,9 +210,9 @@ theorem insiderWinProb_le_of_bindsRing [Inhabited W] (hbind : BindsRing N bind)
     (A : BKMAdversary ((TD.setting kS hb).model.qVerifier (TD.setting kS hb).queries pB pB)
       ((TD.setting kS hb).model.Response pB) n t Q) :
     A.insiderWinProb (((TD.prover kS hb hf (ringHonest Hc input)).mapOutput some).encode
-        queryEncoding) bind adm ≤
+        queryEncoding) (PMF.uniformOfFintype _) bind adm ≤
       (A.forger (((TD.prover kS hb hf (ringHonest Hc input)).mapOutput some).encode
-          queryEncoding) bind adm
+          queryEncoding) (PMF.uniformOfFintype _) bind adm
           ((TD.setting kS hb).model.dbExtractBits (C.extractor.mapWit g))).success +
         knowledgeError TD.k (Configurations.fsExtraBytes + TD.maxGrant)
           (kqOf C.merges C.rounds pB pB)
@@ -218,6 +223,7 @@ theorem insiderWinProb_le_of_bindsRing [Inhabited W] (hbind : BindsRing N bind)
     (honest := ringHonest Hc input) (bind := bind) (adm := adm) (A := A) (hbind := hbind)
     (hrbr := Sd.causal_rbr.mapWit hg)
 
+omit [Nonempty Sch.Pub] in
 /-- **Unforgeability in the converted-signature game** of the ring signature compiled at the
 transcript `TD` (`RingAdversary.convertedWinProb_le` at the setting with merges), from the
 soundness `Sd` of `C` with the witness map `g` into the ring relation (`hg`). -/
@@ -226,9 +232,9 @@ theorem convertedWinProb_le [Inhabited W] (Sd : C.Sound) {g : RingStmt Sch RMsg 
     (A : RingAdversary ((TD.setting kS hb).model.qVerifier (TD.setting kS hb).queries pB pB)
       ((TD.setting kS hb).model.Response pB) n t Q) :
     A.convertedWinProb (((TD.prover kS hb hf (ringHonest Hc input)).mapOutput some).encode
-        queryEncoding) bind ≤
+        queryEncoding) (PMF.uniformOfFintype _) bind ≤
       (A.forger (((TD.prover kS hb hf (ringHonest Hc input)).mapOutput some).encode
-          queryEncoding) bind
+          queryEncoding) (PMF.uniformOfFintype _) bind
           ((TD.setting kS hb).model.dbExtractBits (C.extractor.mapWit g))).success +
         knowledgeError TD.k (Configurations.fsExtraBytes + TD.maxGrant)
           (kqOf C.merges C.rounds pB pB)
@@ -259,7 +265,10 @@ theorem keyedAnon_le [DecidablePred adm] {εc : ℝ≥0} (hcorr : Sch.CorrectWit
   keyedAnon_le_of_correctWithin (TD.setting kS hb).model hcorr hpub
     (TD.setting kS hb).viewEncoder.toReveal (causalHVZK_ringHonest Hc hin hE) A hA D
 
-omit [Fintype RMsg] in
+omit [Fintype RMsg] [Fintype Sch.PK] [DecidableEq Sch.PK] [Fintype Sch.Msg] [DecidableEq Sch.Msg]
+  [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub] [DecidableEq Sch.Pub] [Nonempty Sch.Pub]
+  [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins] [Nonempty Sch.KeyCoins] [Fintype Sch.SignCoins]
+  [DecidableEq Sch.SignCoins] [Nonempty Sch.SignCoins] in
 /-- **The completeness guarantees of spBCS for the honest prover of a ring witness** at the
 transcript `TD` (`SPBCS.completenessGuarantees`): on the ring relation, the composite verifier
 rejects the honest run with probability at most `errc` (`RealizedProgram.ProofSystem.IOP.completeness_of_errorBound`
@@ -306,7 +315,7 @@ structure ProgramHypotheses (F : B.FieldBranches) {W : Type} (rel : Set (ir.Valu
   /-- The round errors of the source protocol. -/
   sourceError : (ir.sourceSpec I).ChallengeIdx → ℝ≥0
   /-- The source protocol is round-by-round knowledge sound for `rel`. -/
-  source_rbr : rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) stateFn
+  source_rbr : RBRKnowledgeSound rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) stateFn
     sourceError
   /-- Its errors vanish at `γ_end`. -/
   sourceError_final : ∀ i, ir.rounds.get i.1 = .final → sourceError i = 0
@@ -417,6 +426,11 @@ abbrev extractor [Inhabited W] :
 /-- The verifier's query budget at proofs in the format `pB` (`kqOf`). -/
 abbrev kq (pB : ℕ) : ℕ := kqOf (V.ringIOP G).merges (V.ringIOP G).rounds pB pB
 
+variable [Fintype Sch.PK] [DecidableEq Sch.PK] [Fintype Sch.Msg] [DecidableEq Sch.Msg]
+  [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub] [DecidableEq Sch.Pub] [Nonempty Sch.Pub]
+  [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins] [Nonempty Sch.KeyCoins] [Fintype Sch.SignCoins]
+  [DecidableEq Sch.SignCoins] [Nonempty Sch.SignCoins]
+
 variable [Fintype RMsg] [DecidableEq RMsg] {TD : SPBCS.ProofSystemTranscript (V.ringIOP G)}
   {kS : ℕ} (hb : TD.MergeBounds kS) {pB : ℕ} (hf : TD.ProofFormat kS hb pB)
 
@@ -474,7 +488,7 @@ theorem insiderWinProb_le [Inhabited W] [Nonempty RMsg] {n : ℕ} [NeZero n] [No
     {εc : ℝ≥0} (hcorr : Sch.CorrectWithin εc) {pubOf : Sch.SignCoins → Sch.Pub}
     (hpub : Sch.PubOfCoins pubOf) {t Q : ℕ}
     (A : BKMAdversary (V.verifier G hb pB) (V.Proof G hb pB) n t Q) :
-    A.insiderWinProb (V.signer G hb hf) bind adm ≤
+    A.insiderWinProb (V.signer G hb hf) (PMF.uniformOfFintype _) bind adm ≤
       A.simForgerSuccess (TD.setting kS hb).layout (TD.setting kS hb).viewEncoder id
           (V.simulator G) (TD.preimages kS hb) bind adm pubOf (V.extractor G) +
         ENNReal.ofReal ((TD.setting kS hb).model.zkError errc t Q) +
@@ -488,6 +502,7 @@ theorem insiderWinProb_le [Inhabited W] [Nonempty RMsg] {n : ℕ} [NeZero n] [No
     (fun x w h => V.mem_ringRel x w h) (fun x w h => V.mem_honestRel x w h)
     (G.errorBound.comapWith _ _) A
 
+omit [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Nonempty Sch.Pub] in
 /-- **Unforgeability with respect to insider corruption (BKM06 Definition 7) for a base message
 that binds the ring** (`BindsRing`: `bind` injective on the rings of at most `N` keys), of the ring
 signature of a program that verifies `Sch` signatures for the ring relation, under the hypotheses
@@ -498,8 +513,8 @@ at the largest round error of the program and `t + Q · q_P + kq` queries. No co
 base scheme is used: the forger asks the base signatures of the ring-signing requests. -/
 theorem insiderWinProb_le_of_bindsRing [Inhabited W] {n : ℕ} (hbind : BindsRing N bind) {t Q : ℕ}
     (A : BKMAdversary (V.verifier G hb pB) (V.Proof G hb pB) n t Q) :
-    A.insiderWinProb (V.signer G hb hf) bind adm ≤
-      (A.forger (V.signer G hb hf) bind adm
+    A.insiderWinProb (V.signer G hb hf) (PMF.uniformOfFintype _) bind adm ≤
+      (A.forger (V.signer G hb hf) (PMF.uniformOfFintype _) bind adm
           ((TD.setting kS hb).model.dbExtractBits (V.extractor G))).success +
         knowledgeError TD.k (Configurations.fsExtraBytes + TD.maxGrant) (V.kq G pB)
           (t + Q * (V.signer G hb hf).q + V.kq G pB) (TD.setting kS hb).model.senc.digestsPerInput
@@ -507,6 +522,7 @@ theorem insiderWinProb_le_of_bindsRing [Inhabited W] {n : ℕ} (hbind : BindsRin
   TD.insiderWinProb_le_of_bindsRing hb hf (V.ringHonestIOP G) V.input hbind (V.ringSound G)
     (fun x w h => V.mem_ringRel x w h) A
 
+omit [Nonempty Sch.Pub] in
 /-- **Unforgeability in the converted-signature game** (`RingAdversary.convertedWinProb`:
 a valid ring signature on `(R*, m*)` by uncorrupted honest keys implies that some member of `R*`
 was asked to sign `bind R* m*`), of the ring signature of a program that verifies `Sch` signatures
@@ -516,8 +532,8 @@ signature game with adaptive corruption (`RingAdversary.forger`), plus the knowl
 largest round error of the program and `t + Q · q_P + kq` queries. -/
 theorem convertedWinProb_le [Inhabited W] {n : ℕ} {t Q : ℕ}
     (A : RingAdversary (V.verifier G hb pB) (V.Proof G hb pB) n t Q) :
-    A.convertedWinProb (V.signer G hb hf) bind ≤
-      (A.forger (V.signer G hb hf) bind
+    A.convertedWinProb (V.signer G hb hf) (PMF.uniformOfFintype _) bind ≤
+      (A.forger (V.signer G hb hf) (PMF.uniformOfFintype _) bind
           ((TD.setting kS hb).model.dbExtractBits (V.extractor G))).success +
         knowledgeError TD.k (Configurations.fsExtraBytes + TD.maxGrant) (V.kq G pB)
           (t + Q * (V.signer G hb hf).q + V.kq G pB) (TD.setting kS hb).model.senc.digestsPerInput
@@ -525,7 +541,10 @@ theorem convertedWinProb_le [Inhabited W] {n : ℕ} {t Q : ℕ}
   TD.convertedWinProb_le hb hf (V.ringHonestIOP G) V.input (V.ringSound G)
     (fun x w h => V.mem_ringRel x w h) A
 
-omit [Fintype RMsg] in
+omit [Fintype RMsg] [Fintype Sch.PK] [DecidableEq Sch.PK] [Fintype Sch.Msg] [DecidableEq Sch.Msg]
+  [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub] [DecidableEq Sch.Pub] [Nonempty Sch.Pub]
+  [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins] [Nonempty Sch.KeyCoins]
+  [DecidableEq Sch.SignCoins] in
 /-- **Completeness of the ring signature of a program that verifies `Sch` signatures for the ring
 relation** (BKM06 Definition 1, ePrint 2005/304, p. 3), under the hypotheses of Theorem 5.2 (`G`):
 on an admissible ring (`hadm`) holding the key of `kc` at position `i` (`hi`, `hR`), the honest

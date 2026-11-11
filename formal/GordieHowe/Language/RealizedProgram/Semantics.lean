@@ -649,31 +649,8 @@ instance (rd : ir.Valuation I) (d : ℕ) (records : List Expr) (i : ℕ) (set : 
     Decidable (ir.InSetWith rd d records i set) := by
   cases set <;> unfold InSetWith <;> infer_instance
 
-/-- **The quotient equation of a product form**, reading values by `rd`: for a `mod_q` `e ≡ e'`
-whose realization is the product form (`ModForm.isProduct`) with a quotient `Q` (a value the
-program declares, read by the source program) and `q > 2`, at every coordinate the integers satisfy
-`e − e' = q (quotientLo + Q)` with `Q ∈ [0, qmax]`, and the integer readings of `e`, `e'` and `Q`
-are their field elements' (they cast to them); nothing for any other `mod_q`. -/
-def ProductQuotWith (rd : ir.Valuation I) (d q : ℕ) (e e' : Expr) (real : ModRealization) :
-    Prop :=
-  match real.quotient with
-  | some Q => real.form.isProduct = true → 2 < q → ∀ i < ir.exprLen e,
-      ir.evalIntWith rd d e i - ir.evalIntWith rd d e' i =
-          q * (real.quotientLo + ir.evalIntWith rd d Q i) ∧
-        0 ≤ ir.evalIntWith rd d Q i ∧ ir.evalIntWith rd d Q i ≤ real.qmax ∧
-        ((ir.evalIntWith rd d e i : ℤ) : (I (ir.domainField d)).K) = ir.evalWith rd d e i ∧
-        ((ir.evalIntWith rd d e' i : ℤ) : (I (ir.domainField d)).K) = ir.evalWith rd d e' i ∧
-        ((ir.evalIntWith rd d Q i : ℤ) : (I (ir.domainField d)).K) = ir.evalWith rd d Q i
-  | none => True
-
-/-- The quotient equation of a product form is decidable. -/
-instance (rd : ir.Valuation I) (d q : ℕ) (e e' : Expr) (real : ModRealization) :
-    Decidable (ir.ProductQuotWith rd d q e e' real) := by
-  unfold ProductQuotWith
-  split <;> infer_instance
-
-/-- **A predicate body holds**, reading values by `rd`. A `mod_q` holds on the integers, and a
-product form also states its quotient's equation (`ProductQuotWith`). A cross-field `equal(x, y)` (`x` in domain
+/-- **A predicate body holds**, reading values by `rd`. A `mod_q` holds on the integers. A
+cross-field `equal(x, y)` (`x` in domain
 `dx`, `y` in domain `dy`) holds in the compiler's contract (compiler/mac.h): every reading of `y` is
 below `2^width`, and where every reading of `x` is, the readings of `x` and `y` are equal. The MAC
 binds the packed chunks of `x` to those of `y` and so states nothing about `x` when `x` holds field
@@ -685,9 +662,8 @@ def HoldsWith (rd : ir.Valuation I) : PredBody → Prop
   | .equal d e e' _ => ∀ i < ir.exprLen e, ir.evalWith rd d e i = ir.evalWith rd d e' i
   | .mem d records set _ =>
       ∀ i < ir.exprLen (records.headD default), ir.InSetWith rd d records i set
-  | .mod d q e e' real =>
-      (∀ i < ir.exprLen e, (q : ℤ) ∣ ir.evalIntWith rd d e i - ir.evalIntWith rd d e' i) ∧
-        ir.ProductQuotWith rd d q e e' real
+  | .mod d q e e' _ =>
+      ∀ i < ir.exprLen e, (q : ℤ) ∣ ir.evalIntWith rd d e i - ir.evalIntWith rd d e' i
   | .cross dx ex dy ey k _ =>
       (∀ i < ir.exprLen ex, (I (ir.domainField dy)).toNat (ir.evalWith rd dy ey i) < 2 ^ k.width) ∧
         ((∀ i < ir.exprLen ex, (I (ir.domainField dx)).toNat (ir.evalWith rd dx ex i) < 2 ^ k.width) →
@@ -698,27 +674,11 @@ instance (rd : ir.Valuation I) (b : PredBody) : Decidable (ir.HoldsWith rd b) :=
   cases b <;> unfold HoldsWith <;> infer_instance
 
 variable {ir} in
-/-- **A `mod_q` not in the product form, or with `q ≤ 2`, states no quotient equation.** -/
-theorem productQuotWith_of_not {rd : ir.Valuation I} {d q : ℕ} {e e' : Expr}
-    {real : ModRealization} (h : real.form.isProduct = false ∨ q ≤ 2) :
-    ir.ProductQuotWith rd d q e e' real := by
-  unfold ProductQuotWith
-  split
-  · intro h1 h2
-    rcases h with h | h
-    · rw [h] at h1
-      cases h1
-    · omega
-  · trivial
-
-variable {ir} in
-/-- **A `mod_q` not in the product form, or with `q ≤ 2`, holds** exactly when its sides' integer
-readings are congruent. -/
-theorem holdsWith_mod_iff {rd : ir.Valuation I} {d q : ℕ} {e e' : Expr} {real : ModRealization}
-    (h : real.form.isProduct = false ∨ q ≤ 2) :
+/-- **A `mod_q` holds** exactly when its sides' integer readings are congruent. -/
+theorem holdsWith_mod_iff {rd : ir.Valuation I} {d q : ℕ} {e e' : Expr} {real : ModRealization} :
     ir.HoldsWith rd (.mod d q e e' real) ↔
       ∀ i < ir.exprLen e, (q : ℤ) ∣ ir.evalIntWith rd d e i - ir.evalIntWith rd d e' i :=
-  ⟨fun h' => h'.1, fun h' => ⟨h', productQuotWith_of_not h⟩⟩
+  Iff.rfl
 
 /-- **A predicate body holds in the environment `e`**: `RealizedProgram.HoldsWith` at the environment's
 reader. -/

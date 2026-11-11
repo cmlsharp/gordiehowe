@@ -95,7 +95,7 @@ variable {prims : Primitives p} [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   {O : W1Oracles X Y p prims Msg N reps} {M : MaskOracle X Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
   {adm : KeyRing (PubKey p prims) N → Prop} [DecidablePred adm]
   {Of : SideOracle (freshScheme prims O M βmin tol enc k D bmsg PS adm)} {n : ℕ}
 
@@ -122,6 +122,8 @@ noncomputable def w1Pts (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q �
     | _ => .pure ∅
   else .pure ∅
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **At most `k · T` points.** -/
 theorem card_w1Pts_le (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q → (Sf).SignCoins) hist req
     (H : X → Y) : ((w1Pts Of keys c hist req).run H).card ≤ k * T := by
@@ -137,6 +139,8 @@ theorem card_w1Pts_le (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q → 
     · simp
   · simp
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **One query** (the signer's message representative). -/
 theorem w1Pts_queries (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q → (Sf).SignCoins) hist req :
     (w1Pts Of keys c hist req).QueriesLE 1 := by
@@ -152,6 +156,7 @@ theorem w1Pts_queries (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q → 
     · simp
   · simp
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- **A given point is among the points of a request with probability at most
 `k · T · Σ_s commitPointMax(Â_s)`** over that request's signing coins (module docstring). -/
 theorem toReal_w1Pts_le
@@ -258,7 +263,7 @@ theorem toReal_w1Pts_le
   · refine le_of_eq_of_le ?_ hnn
     simp [w1Pts]
 
-omit [DecidableEq X] in
+omit [DecidableEq X] [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- The challenger of the unforgeability game assigns nothing. -/
 theorem unforgeChallenger_plain (keys : Fin n → (Sf).KeyCoins) (Q : ℕ) c hist req (H : X → Y) :
     (((unforgeChallenger Sf n Of keys Q).respond c hist req).run H).assignments = [] := by
@@ -277,7 +282,7 @@ theorem unforgeChallenger_plain (keys : Fin n → (Sf).KeyCoins) (Q : ℕ) c his
       rfl
   · rfl
 
-omit [DecidableEq X] in
+omit [DecidableEq X] [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- The challenger of the unforgeability game reads the history only through its length. -/
 theorem unforgeChallenger_respond_congr (keys : Fin n → (Sf).KeyCoins) (Q : ℕ) c
     (hist hist' :
@@ -288,6 +293,8 @@ theorem unforgeChallenger_respond_congr (keys : Fin n → (Sf).KeyCoins) (Q : �
   unfold unforgeChallenger
   simp only [hl]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- The points read the history only through its length. -/
 theorem w1Pts_congr (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q → (Sf).SignCoins)
     (hist hist' :
@@ -297,6 +304,7 @@ theorem w1Pts_congr (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q → (S
   unfold w1Pts
   simp only [hl]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- The coins of the unforgeability challenger: the uniform signing coins of each request. -/
 theorem unforgeChallenger_coins_eq (keys : Fin n → (Sf).KeyCoins) (Q : ℕ) :
     (PMF.uniformOfFintype (Fin Q → (Sf).SignCoins)) =
@@ -305,7 +313,7 @@ theorem unforgeChallenger_coins_eq (keys : Fin n → (Sf).KeyCoins) (Q : ℕ) :
   rw [prodLaw, PMF.pure_bind, PMF.map_comp, PMF.pi_uniformOfFintype]
   exact (PMF.map_id _).symm
 
-omit [DecidableEq X] in
+omit [DecidableEq X] [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- The reply to request `|hist|` reads only that request's signing coins. -/
 theorem unforgeChallenger_causal (keys : Fin n → (Sf).KeyCoins) (Q : ℕ)
     (c c' : Fin Q → (Sf).SignCoins)
@@ -320,6 +328,8 @@ theorem unforgeChallenger_causal (keys : Fin n → (Sf).KeyCoins) (Q : ℕ)
   · rw [hc ⟨hist.length, h⟩ le_rfl]
   · rfl
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- The points read only the signing coins of request `|rs|`. -/
 theorem w1Pts_causal (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c c' : Fin Q → (Sf).SignCoins)
     (rs : List (UnforgeRequest (S := Sf) n Of)) (req : UnforgeRequest (S := Sf) n Of) (H : X → Y)
@@ -333,6 +343,8 @@ theorem w1Pts_causal (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c c' : Fin Q �
   · rw [hc ⟨_, h⟩ (le_of_eq hlen)]
   · rfl
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- The points are commitment-hash points. -/
 theorem w1Pts_subset (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q → (Sf).SignCoins)
     (rs : List (UnforgeRequest (S := Sf) n Of)) (req : UnforgeRequest (S := Sf) n Of) (H : X → Y) :
@@ -352,6 +364,8 @@ theorem w1Pts_subset (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q → (
     · simp at hx
   · simp at hx
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- The points read the oracle only at a message-representative point, not a commitment-hash
 point when the two kinds of points differ (`hdisj`). -/
 theorem w1Pts_reads (hdisj : ∀ a b, O.muPt a ≠ O.chPt b) (keys : Fin n → (Sf).KeyCoins) {Q : ℕ}
@@ -401,7 +415,9 @@ noncomputable def w1RevealedPair (sp : Y ≃+ Y₁ × Y₂)
     (fun _ c rs req O₁ O₂ hoff _ => w1Pts_reads hdisj keys c rs req O₁ O₂ hoff)
     (fun _ c rs req H x h => toReal_w1Pts_le hMask hch keys c rs req H x h)
 
-omit [Fintype X] [AddGroup Y] in
+omit [Fintype X] [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 /-- The point bound is nonnegative. -/
 theorem w1PointBound_nonneg (keys : Fin n → (Sf).KeyCoins) :
     0 ≤ (k * T : ℝ) * ∑ s, commitPointMax (prims.expandA ((Sf).sk (keys s)).rho) :=

@@ -22,10 +22,13 @@ accepted-cell functions (`realMass_sub_standinMass_eq`), so the regularity bound
 `ℓ²` form (`sum_sq_norm_regularity_le`) the mean square over the matrix of the column error
 (`sum_sq_sum_abs_realMass_sub_le`). By Cauchy–Schwarz over the matrix, the mean regularity gap is
 then at most `R / β_min · √(𝔼_Â w(Â)⁻²)` for every positive lower bound `w(Â)` on the mean member
-weights (`expect_ringRegGap_le_sqrt`). The bound also holds for a lower bound `w(Â) ≥ 0` that
-vanishes only where every mean member weight vanishes (`expect_ringRegGap_le_sqrt_of_nonneg`):
-such a matrix has `ringRegGap = 0` (`ringRegGap_eq_zero`, each column `x / 0 = 0`) and
+weights (`expect_signerRegGap_le_sqrt`). The bound also holds for a lower bound `w(Â) ≥ 0` that
+vanishes only where every mean member weight vanishes (`expect_signerRegGap_le_sqrt_of_nonneg`):
+such a matrix has `signerRegGap = 0` (`signerRegGap_eq_zero`, each column `x / 0 = 0`) and
 `w(Â)⁻² = 0`.
+
+At the concrete NTT, `Â · s₁ = A s₁` with `A = NTT⁻¹(Â)` as vectors (`mul_eq_ofFn_keyMap`), so the
+key `keyOf sk₀ (A s₁)` has the `t₀` of `t = Â s₁ + s₂`.
 -/
 
 open Finset
@@ -496,48 +499,65 @@ theorem averagedSecondMoment_signerCells_le_hybrid [Nonempty (CoeffIndex p)]
     slotRoot_injective slotRoot_ne_zero (kernelBounds_signerCells hp sk₀ cTilde ha t τ hS₁ hfS)
     hq (fun i c => sum_normWeight_signerCells_sq_le hp sk₀ cTilde ha t τ i c) hδ _ 0
 
-/-- `ringRegGap` with the mean member weights bounded below by `μ > 0`. -/
-theorem ringRegGap_le [Nonempty (MaskBox p)] (hp : SigningParams p) (prims : Primitives p)
-    (sk : SecretKey p) (aHat : TqMatrix p.k p.l) {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0∞) ≠ 0)
-    (hβt : (βmin : ℝ≥0∞) ≠ ⊤) {μ : ℝ} (hμ : 0 < μ)
-    (hmw : ∀ v, μ ≤ 𝔼 c, (memberWeight prims βmin sk.t0 (v, c) : ℝ≥0∞).toReal) :
-    ringRegGap prims sk aHat βmin ≤
+/-- `signerRegGap` with the column means of the flattened weight times the shape bounded below by
+`μ > 0`. -/
+theorem signerRegGap_le [Nonempty (MaskBox p)] (hp : SigningParams p) (prims : Primitives p)
+    (sk : SecretKey p) (aHat : TqMatrix p.k p.l) {cut : Cutoff p} (hβ0 : (cut.top : ℝ≥0∞) ≠ 0)
+    (hβt : (cut.top : ℝ≥0∞) ≠ ⊤) {μ : ℝ} (hμ : 0 < μ)
+    (hmw : ∀ v, μ ≤ 𝔼 c,
+      ((flatWeight prims cut sk.t0 (v, c) : ℝ≥0∞) * (cut.shape c : ℝ≥0∞)).toReal) :
+    signerRegGap prims sk aHat cut ≤
       (∑ v, 𝔼 c, |(realMass prims sk aHat v c).toReal -
           (zAcceptFraction p * standinMass prims sk v c).toReal|) /
-        (μ * ((standinScale p * βmin).toReal * Fintype.card (BucketVec p))) := by
-  have hden : 0 < (standinScale p * βmin).toReal * Fintype.card (BucketVec p) :=
-    mul_pos (ringLevel_pos hp hβ0 hβt) (by exact_mod_cast Fintype.card_pos)
-  unfold ringRegGap
+        (μ * ((standinScale p * cut.top).toReal * Fintype.card (BucketVec p))) := by
+  have hden : 0 < (standinScale p * cut.top).toReal * Fintype.card (BucketVec p) :=
+    mul_pos (flatLevel_pos hp hβ0 hβt) (by exact_mod_cast Fintype.card_pos)
+  rw [signerRegGap]
   refine (div_le_div_of_nonneg_right (Finset.sum_le_sum fun v _ =>
     div_le_div_of_nonneg_left (Finset.expect_nonneg fun _ _ => abs_nonneg _) hμ (hmw v))
       hden.le).trans (le_of_eq ?_)
   rw [← Finset.sum_div, div_div]
 
-/-- **Zero mean member weights give a zero regularity gap**: if the mean member weight of every
-bucket vector is `0`, `ringRegGap = 0` (each column is `x / 0 = 0`). -/
-theorem ringRegGap_eq_zero (prims : Primitives p) [Nonempty (MaskBox p)] (sk : SecretKey p)
-    (aHat : TqMatrix p.k p.l) {βmin : ℚ≥0}
-    (h : ∀ v, 𝔼 c, (memberWeight prims βmin sk.t0 (v, c) : ℝ≥0∞).toReal = 0) :
-    ringRegGap prims sk aHat βmin = 0 := by
-  unfold ringRegGap
-  simp [h]
+/-- `signerRegGap` at a constant cut-off `β` with the mean member weights bounded below by
+`μ > 0`. -/
+theorem signerRegGap_le_const [Nonempty (MaskBox p)] (hp : SigningParams p) (prims : Primitives p)
+    (sk : SecretKey p) (aHat : TqMatrix p.k p.l) {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0∞) ≠ 0)
+    (hβt : (βmin : ℝ≥0∞) ≠ ⊤) {μ : ℝ} (hμ : 0 < μ)
+    (hmw : ∀ v, μ ≤ 𝔼 c, (flatWeight prims (Cutoff.const βmin) sk.t0 (v, c) : ℝ≥0∞).toReal) :
+    signerRegGap prims sk aHat (Cutoff.const βmin) ≤
+      (∑ v, 𝔼 c, |(realMass prims sk aHat v c).toReal -
+          (zAcceptFraction p * standinMass prims sk v c).toReal|) /
+        (μ * ((standinScale p * βmin).toReal * Fintype.card (BucketVec p))) :=
+  signerRegGap_le hp prims sk aHat (cut := Cutoff.const βmin) hβ0 hβt hμ fun v => by
+    simpa only [ENNReal.nnratCast_one, mul_one] using hmw v
+
+/-- **Zero column means give a zero regularity gap**: if the mean of the flattened weight times
+the shape is `0` for every bucket vector, `signerRegGap = 0` (each column is `x / 0 = 0`). -/
+theorem signerRegGap_eq_zero (prims : Primitives p) [Nonempty (MaskBox p)] (sk : SecretKey p)
+    (aHat : TqMatrix p.k p.l) {cut : Cutoff p}
+    (h : ∀ v, 𝔼 c,
+      ((flatWeight prims cut sk.t0 (v, c) : ℝ≥0∞) * (cut.shape c : ℝ≥0∞)).toReal = 0) :
+    signerRegGap prims sk aHat cut = 0 := by
+  rw [signerRegGap]
+  simp only [h, div_zero, Finset.sum_const_zero, zero_div]
 
 /-- **The mean regularity gap by Cauchy–Schwarz over the matrix, with a weight that may
-vanish.** As `expect_ringRegGap_le_sqrt`, for a lower bound `w Â ≥ 0` on the mean member weights
+vanish.** As `expect_signerRegGap_le_sqrt`, for a lower bound `w Â ≥ 0` on the mean member weights
 of every bucket vector such that `w Â = 0` only when every mean member weight of `Â` is `0`:
-`𝔼_Â ringRegGap ≤ R / β_min · √(𝔼_Â (w Â)⁻²)`, with `0⁻¹ = 0`. -/
-theorem expect_ringRegGap_le_sqrt_of_nonneg [Nonempty (MaskBox p)] (hp : SigningParams p)
+`𝔼_Â signerRegGap ≤ R / β_min · √(𝔼_Â (w Â)⁻²)`, with `0⁻¹ = 0`. -/
+theorem expect_signerRegGap_le_sqrt_of_nonneg [Nonempty (MaskBox p)] (hp : SigningParams p)
     (prims : Primitives p) (sk : TqMatrix p.k p.l → SecretKey p) {βmin : ℚ≥0}
     (hβ0 : (βmin : ℝ≥0∞) ≠ 0)
     (hβt : (βmin : ℝ≥0∞) ≠ ⊤) {w : TqMatrix p.k p.l → ℝ} (hw0 : ∀ aHat, 0 ≤ w aHat)
-    (hw : ∀ aHat v, w aHat ≤ 𝔼 c, (memberWeight prims βmin (sk aHat).t0 (v, c) : ℝ≥0∞).toReal)
+    (hw : ∀ aHat v, w aHat ≤ 𝔼 c, (flatWeight prims (Cutoff.const βmin) (sk aHat).t0 (v, c) :
+        ℝ≥0∞).toReal)
     (hzero : ∀ aHat, w aHat = 0 → ∀ v,
-      𝔼 c, (memberWeight prims βmin (sk aHat).t0 (v, c) : ℝ≥0∞).toReal = 0)
+      𝔼 c, (flatWeight prims (Cutoff.const βmin) (sk aHat).t0 (v, c) : ℝ≥0∞).toReal = 0)
     {R : ℝ} (hR : 0 ≤ R)
     (hnum : 𝔼 aHat, (∑ v, 𝔼 c, |(realMass prims (sk aHat) aHat v c).toReal -
         (zAcceptFraction p * standinMass prims (sk aHat) v c).toReal|) ^ 2 ≤
       ((standinScale p).toReal * Fintype.card (BucketVec p) * R) ^ 2) :
-    𝔼 aHat, ringRegGap prims (sk aHat) aHat βmin ≤
+    𝔼 aHat, signerRegGap prims (sk aHat) aHat (Cutoff.const βmin) ≤
       R / (βmin : ℝ≥0∞).toReal * √(𝔼 aHat, (w aHat ^ 2)⁻¹) := by
   set K := (standinScale p).toReal
   set V : ℝ := ((Fintype.card (BucketVec p) : ℕ) : ℝ)
@@ -547,12 +567,13 @@ theorem expect_ringRegGap_le_sqrt_of_nonneg [Nonempty (MaskBox p)] (hp : Signing
   set N : TqMatrix p.k p.l → ℝ := fun aHat => ∑ v, 𝔼 c,
     |(realMass prims (sk aHat) aHat v c).toReal -
       (zAcceptFraction p * standinMass prims (sk aHat) v c).toReal|
-  have hstep : ∀ aHat, ringRegGap prims (sk aHat) aHat βmin ≤
+  have hstep : ∀ aHat, signerRegGap prims (sk aHat) aHat (Cutoff.const βmin) ≤
       N aHat * (w aHat)⁻¹ / (K * (βmin : ℝ≥0∞).toReal * V) := fun aHat => by
     rcases (hw0 aHat).eq_or_lt with h | h
-    · rw [ringRegGap_eq_zero prims (sk aHat) aHat (hzero aHat h.symm), ← h, inv_zero, mul_zero,
-        zero_div]
-    refine (ringRegGap_le hp prims (sk aHat) aHat hβ0 hβt h (hw aHat)).trans_eq ?_
+    · rw [signerRegGap_eq_zero prims (sk aHat) aHat (cut := Cutoff.const βmin) (fun v => by
+          simpa only [ENNReal.nnratCast_one, mul_one] using hzero aHat h.symm v),
+        ← h, inv_zero, mul_zero, zero_div]
+    refine (signerRegGap_le_const hp prims (sk aHat) aHat hβ0 hβt h (hw aHat)).trans_eq ?_
     have := h.ne'
     have hK' : (standinScale p).toReal ≠ 0 := hK.ne'
     rw [ENNReal.toReal_mul]
@@ -562,7 +583,7 @@ theorem expect_ringRegGap_le_sqrt_of_nonneg [Nonempty (MaskBox p)] (hp : Signing
     rw [← Real.sqrt_sq (by positivity : 0 ≤ K * V * R)]
     exact Real.sqrt_le_sqrt hnum
   have hS : 0 ≤ √(𝔼 aHat, (w aHat ^ 2)⁻¹) := Real.sqrt_nonneg _
-  calc 𝔼 aHat, ringRegGap prims (sk aHat) aHat βmin
+  calc 𝔼 aHat, signerRegGap prims (sk aHat) aHat (Cutoff.const βmin)
       ≤ 𝔼 aHat, N aHat * (w aHat)⁻¹ / (K * (βmin : ℝ≥0∞).toReal * V) :=
         Finset.expect_le_expect fun aHat _ => hstep aHat
     _ = (𝔼 aHat, N aHat * (w aHat)⁻¹) / (K * (βmin : ℝ≥0∞).toReal * V) :=
@@ -578,19 +599,42 @@ theorem expect_ringRegGap_le_sqrt_of_nonneg [Nonempty (MaskBox p)] (hp : Signing
 /-- **The mean regularity gap by Cauchy–Schwarz over the matrix.** For keys `sk Â`, a positive
 lower bound `w Â` on the mean member weights of every bucket vector, and the `ℓ²` numerator bound
 `𝔼_Â (∑_v 𝔼_c̃ |realMass v c̃ - ρ_z standinMass v c̃|)² ≤ (K |V| R)²` with `K = standinScale`,
-`𝔼_Â ringRegGap ≤ R / β_min · √(𝔼_Â (w Â)⁻²)` (`expect_ringRegGap_le_sqrt_of_nonneg`). -/
-theorem expect_ringRegGap_le_sqrt [Nonempty (MaskBox p)] (hp : SigningParams p)
+`𝔼_Â signerRegGap ≤ R / β_min · √(𝔼_Â (w Â)⁻²)` (`expect_signerRegGap_le_sqrt_of_nonneg`). -/
+theorem expect_signerRegGap_le_sqrt [Nonempty (MaskBox p)] (hp : SigningParams p)
     (prims : Primitives p) (sk : TqMatrix p.k p.l → SecretKey p) {βmin : ℚ≥0}
     (hβ0 : (βmin : ℝ≥0∞) ≠ 0)
     (hβt : (βmin : ℝ≥0∞) ≠ ⊤) {w : TqMatrix p.k p.l → ℝ} (hw0 : ∀ aHat, 0 < w aHat)
-    (hw : ∀ aHat v, w aHat ≤ 𝔼 c, (memberWeight prims βmin (sk aHat).t0 (v, c) : ℝ≥0∞).toReal)
+    (hw : ∀ aHat v, w aHat ≤ 𝔼 c, (flatWeight prims (Cutoff.const βmin) (sk aHat).t0 (v, c) :
+        ℝ≥0∞).toReal)
     {R : ℝ} (hR : 0 ≤ R)
     (hnum : 𝔼 aHat, (∑ v, 𝔼 c, |(realMass prims (sk aHat) aHat v c).toReal -
         (zAcceptFraction p * standinMass prims (sk aHat) v c).toReal|) ^ 2 ≤
       ((standinScale p).toReal * Fintype.card (BucketVec p) * R) ^ 2) :
-    𝔼 aHat, ringRegGap prims (sk aHat) aHat βmin ≤
+    𝔼 aHat, signerRegGap prims (sk aHat) aHat (Cutoff.const βmin) ≤
       R / (βmin : ℝ≥0∞).toReal * √(𝔼 aHat, (w aHat ^ 2)⁻¹) :=
-  expect_ringRegGap_le_sqrt_of_nonneg hp prims sk hβ0 hβt (fun aHat => (hw0 aHat).le) hw
+  expect_signerRegGap_le_sqrt_of_nonneg hp prims sk hβ0 hβt (fun aHat => (hw0 aHat).le) hw
     (fun aHat h => absurd h (hw0 aHat).ne') hR hnum
+
+end GordieHowe.MLDSA.Regularity
+
+/-! ### The key map at the concrete NTT -/
+
+namespace GordieHowe.MLDSA.Regularity
+
+open _root_.MLDSA _root_.MLDSA.Concrete GordieHowe.MLDSA
+open LatticeCrypto TransformOps
+
+attribute [local instance] concreteNTTRingOps
+
+/-- `Â · s₁ = A s₁` with `A = NTT⁻¹(Â)`, as a vector. -/
+theorem mul_eq_ofFn_keyMap {k l : ℕ} (aHat : TqMatrix k l) (s : RqVec l) :
+    aHat * s = Vector.ofFn (keyMap (fun b => s.get b) (matOfHat aHat)) := by
+  have := concreteNTTRingLaws
+  apply (rqVecCoeffEquiv k).injective
+  change rqVecCoeffs (aHat * s) = rqVecCoeffs _
+  rw [rqVecCoeffs_mul_eq_matAct]
+  funext ic
+  rw [rqVecCoeffs_apply, Vector.get_ofFn]
+  rfl
 
 end GordieHowe.MLDSA.Regularity

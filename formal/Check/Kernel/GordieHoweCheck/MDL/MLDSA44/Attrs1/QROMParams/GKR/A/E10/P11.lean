@@ -9,10 +9,10 @@ import all GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.QROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of leaves 112 to 121 of entry 10 of the GKR circuit of domain A (generated; do not edit). -/
+/-! The relational check of leaves 53 to 55 of entry 10 of the GKR circuit of domain A (generated; do not edit). -/
 
 namespace GordieHowe.Generated.MDL.MLDSA44.Attrs1.QROMParams.GKR.A
 
-check_entry_leaves cert ar 10 [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 4, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 2, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 4, 0, 0, 2, 1, 1024, 4, 0, 0, 2, 2, 256, 421] 112 122
+check_entry_leaves cert ar 10 [0, 0, 34, 2, 1655, 65] 53 56
 
 end GordieHowe.Generated.MDL.MLDSA44.Attrs1.QROMParams.GKR.A

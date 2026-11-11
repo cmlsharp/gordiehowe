@@ -48,8 +48,6 @@ structure CoreFacts : Prop where
   model : r.interp.Model r.plan r.program []
   hdom : ∀ c < r.program.circuits.length,
     (r.program.circuit c).domain < r.program.domains.length
-  /-- The selections' soundness (`RealizedProgram.SelSound`). -/
-  selSound : r.program.SelSound r.interp
 
 /-- Additional facts used by the certified program and its honest strategy. -/
 structure FullFacts (c : CompletionInputs) : Prop extends r.CoreFacts where
@@ -63,7 +61,7 @@ ready data. -/
     (hc : Nonempty (r.program.ProgramCerts r.interp parts)) (h : r.CoreFacts) :
     r.program.ProofSystem r.plan r.interp :=
   ProgramCerts.proofSystem parts hc h.checks h.model (r.ready h.ready) h.hdom
-    (fun _ => r.fieldTable.interp.packing_nodes _) h.selSound
+    (fun _ => r.fieldTable.interp.packing_nodes _)
 
 /-- **The certified data of a program** (`RealizedProgram.CertifiedProgram`). -/
 @[expose] def certified (c : CompletionInputs) (h : r.FullFacts c) :
@@ -154,8 +152,7 @@ theorem checks (h : CoreConditions d) : d.program.Checks d.plan [] :=
 
 /-- **The facts the proof system reads**, from the core conditions. -/
 theorem coreFacts (h : CoreConditions d) : d.CoreFacts :=
-  ⟨h.readyFacts, h.checks, h.model, h.hdom,
-    selSound_of_selectionsB h.wellFormed h.model.registered h.model.lawful h.selections⟩
+  ⟨h.readyFacts, h.checks, h.model, h.hdom⟩
 
 /-- **The certificates of the program exist** at the executable source parts
 (`ProgramCerts.ofParts`): every circuit's at its field's code arithmetic, its field's model and

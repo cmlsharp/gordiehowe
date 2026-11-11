@@ -95,16 +95,18 @@ end Format
 
 section ProofLaw
 
-variable {k kN kS L e N : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N : ℕ} {TB : BaseTypes}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
   (M : SPBCS Mg P (RingSignature.RingStmt B) k kN kS L e) (Λ : SiteLayout Mg) {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] (E : (j : ι) → (M.comp j).Encoder)
   {Vr : RingSignature.RingStmt B → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : RingSignature.RingWit B → R → CausalProver P τ (RingSignature.RingStmt B))
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **The law of a proof of the spBCS proof system** at the oracle `H` is the spBCS proof law
 (`SPBCS.proofLaw`) at `chainOracle H`, each proof in the format. -/
 theorem proofLaw_spbcsProofSystem (VE : M.ViewEncoder E Qs)
@@ -125,6 +127,7 @@ theorem proofLaw_spbcsProofSystem (VE : M.ViewEncoder E Qs)
   rw [hp, ← hp1, toResponse, dite_eq_left p.2]
   rfl
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **Witness indistinguishability of the spBCS proof system with public outputs** at error
 `wiError δ`, for a relation `rel` at which the compiled composite's honest prover has
 honest-verifier zero knowledge at error `δ` (`hz`, what the proof reveals read off the view by
@@ -147,6 +150,10 @@ theorem pubWI_spbcsProofSystem (VE : M.ViewEncoder E Qs)
     (mul_le_mul_of_nonneg_left (SPBCS.wiError_mono δ hc) (Nat.cast_nonneg _))
 
 /-! ### Anonymity of the ring signature compiled by spBCS -/
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
 
 variable (adm : KeyRing B.PK N → Prop) [DecidablePred adm] {n : ℕ}
 
@@ -207,6 +214,10 @@ theorem anonAdvantage_ofBase_spbcs_le_of_pubOfCoins (VE : M.ViewEncoder E Qs) {P
   anonAdvantage_ofBase_le_of_pubOfCoins hB
     (fun H => pubWI_spbcsProofSystem M Λ E hb honest VE (hz H)) hC hpub hcorr hρ A Q
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] [Fintype TB.PK]
+  [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **Witness indistinguishability of the spBCS proof system at the oracles with a fixed off-query
 part** `ω₂`, at error `wiError δ` under the hypothesis `hz` of `pubWI_spbcsProofSystem` (the proofs
 read the oracle through `chainOracle`, the second part of `chainSplit`). -/
@@ -320,10 +331,10 @@ noncomputable def toWIAdversaryVia {rel₀ : Set (X₀ × W₀)}
     | some c => exact hF _ _ _ _ hc
 
 variable {E : (j : ι) → (M.comp j).Encoder} {Vr : X₀ → FullTr P τ → Bool}
-  {Qs : ∀ x, M.IOPQueries Vr x} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ x, M.IOPQueries Vr x} {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : W₀ → R → CausalProver P τ X₀)
 
-omit [∀ j i, Nonempty ((P j).Challenge i)] in
+omit [∀ j i, Nonempty ((P j).Challenge i)] [DecidableEq R] in
 /-- **The witness-indistinguishability experiment with its history recomputed** is the experiment
 with public outputs of the selector, the proofs of statements `σ x` with witnesses `ι' x w`. -/
 theorem map_wiRun_replayVia {rel₀ : Set (X₀ × W₀)}
@@ -358,6 +369,7 @@ theorem map_wiRun_replayVia {rel₀ : Set (X₀ × W₀)}
       congr 1
       · cases bs j <;> rfl
 
+omit [DecidableEq R] in
 /-- **Witness indistinguishability with public outputs through a statement map**: for the spBCS
 compilation `M` whose honest prover has honest-verifier zero knowledge at error `δ` for `rel₀`
 (`hz`), proofs of statements `σ x` with witnesses `ι' x w` have witness indistinguishability at

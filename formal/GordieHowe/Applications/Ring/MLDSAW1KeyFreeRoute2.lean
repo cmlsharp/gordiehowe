@@ -40,9 +40,8 @@ its outputs.
 - `w1HPS`, `comap_w1HPS`, `w1PrfOf`, `w1MainProver`, `w1ProverRelays`: the hedged proof system
   read back from the spBCS proof system of the fresh base signer at any check of the ring
   statements (`w1PS` at the check `fun _ => true`), the proof of a forgery, and
-  `ProverRelays` for the main prover `encProver` read through `w1StmtX` and the second component;
-  `w1MainProver_coins`: the main prover's coins are uniform (the hypothesis `hPc` of the
-  bridge, `transcriptLawIn_w1C1_le_w1C2`).
+  `ProverRelays` for the main prover `encProver` read through `w1StmtX` and the second component,
+  whose coins the bridge `transcriptLawIn_w1C1_le_w1C2` draws uniformly (its hypothesis `hPc`).
 - `instDecEqW1BStmt`, `instDecEqW1Tag`, `instDecEqW1Stmt`, `instDecEqW1Rq`: decidable equality of
   the new types (their finiteness is inferred).
 - `w1KFEncoding`: the main-request encoding is well formed (`KFEncoding`).
@@ -66,7 +65,7 @@ variable {prims : Primitives p} [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   {O : W1Oracles X Y p prims Msg N reps} {Mo : MaskOracle X Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O Mo βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O Mo βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
   {adm : KeyRing (PubKey p prims) N → Prop}
   [hadm : DecidablePred adm] {n Q : ℕ}
 
@@ -92,7 +91,7 @@ variable (prims O Mo βmin tol enc k D bmsg PS adm n Q) in
 /-- **The tags of the main statements**: a multi-user request, or a signed request (`inl`) or a
 dummy request (`inr`) of the insider game with its request number capped at `Q` (`w1Num`). -/
 abbrev W1Tag : Type :=
-  MURequest (SignOracle.none Bf) n ⊕
+  MURequest (SignOracle.none (Bf).core) n ⊕
     ((RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1)) ⊕
       (RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1)))
 
@@ -137,7 +136,7 @@ noncomputable instance instDecEqW1BStmt :
 /-- The tags have decidable equality. -/
 noncomputable instance instDecEqW1Tag [DecidableEq X] :
     DecidableEq (W1Tag prims O Mo βmin tol enc k D bmsg PS adm n Q) :=
-  @instDecidableEqSum _ _ (inferInstance : DecidableEq (MURequest (SignOracle.none Bf) n))
+  @instDecidableEqSum _ _ (inferInstance : DecidableEq (MURequest (SignOracle.none (Bf).core) n))
     (@instDecidableEqSum _ _
       (inferInstance : DecidableEq (RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1)))
       (inferInstance : DecidableEq (RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1))))
@@ -165,6 +164,8 @@ def w1Rel (s : W1Stmt prims O Mo βmin tol enc k D bmsg PS adm n Q)
   (w1StmtX s, RingSignature.Insider.RelayWit.toWit (B := Bf) w) ∈
     w1ExpRel prims enc bmsg adm
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **`w1Rel` is `w1ExpRel` read through the program statement and the ring witness.** -/
 theorem w1Rel_iff (s : W1Stmt prims O Mo βmin tol enc k D bmsg PS adm n Q)
     (w : RingSignature.Insider.RelayWit Bf) :
@@ -197,7 +198,7 @@ statement tagged `m`; a proof request `(x₀, r, σ)` as `x₀` tagged with `r` 
 capped number), with the signer's position `w1Idx` and `σ`; a dummy request as the dummy
 statement tagged with it. -/
 noncomputable def w1Enc (pks : Fin n → PubKey p prims) :
-    MURequest (SignOracle.none Bf) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q →
+    MURequest (SignOracle.none (Bf).core) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q →
       QROM.ProofQuery (W1Stmt prims O Mo βmin tol enc k D bmsg PS adm n Q)
         (RingSignature.Insider.RelayWit Bf)
   | .inl m => ⟨(w1DummyX prims, .inl m),
@@ -206,6 +207,8 @@ noncomputable def w1Enc (pks : Fin n → PubKey p prims) :
   | .inr (.inr r) => ⟨(w1DummyX prims, .inr (.inr r)),
       w1W0 prims O Mo βmin tol enc k D bmsg⟩
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The encoding of the requests is injective.** -/
 theorem w1Enc_injective (pks : Fin n → PubKey p prims) :
     Function.Injective (w1Enc (PS := PS) (adm := adm) (Q := Q) pks) := by
@@ -231,7 +234,7 @@ def w1DummyR (r : RingSignature.Insider.Req Bf PSf adm n × ℕ) :
 
 /-- **The idle main request**: the public key of user `0`. -/
 def w1Idle [NeZero n] :
-    MURequest (SignOracle.none Bf) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q :=
+    MURequest (SignOracle.none (Bf).core) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q :=
   .inl (.publicKey 0)
 
 variable (PS adm n Q) in
@@ -259,6 +262,8 @@ theorem not_mem_w1ExpRel_nil {x₀ : X₀f} (h : x₀.1.ring.1 = [])
   change w.idx < x₀.1.ring.1.length at hi
   simp [h] at hi
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The dummy statements** (`DummyStmts`): the dummy statement and the statements of the
 multi-user requests have the empty ring, which has no witness. -/
 theorem w1DummyStmts [NeZero n] (pks : Fin n → PubKey p prims)
@@ -280,12 +285,16 @@ theorem w1Disj {Pf : Type} (x : X₀f) (hx : w1IsDummy x = true)
   rw [hq.1] at hx
   exact hq.2 hx
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The dummy requests have dummy statements**: the empty ring. -/
 theorem w1DumS (pks : Fin n → PubKey p prims)
     (r : RingSignature.Insider.Req Bf PSf adm n × ℕ) :
     w1IsDummy (w1StmtX (w1Enc (PS := PS) (Q := Q) pks (.inr (w1DummyR r))).stmt) = true := by
   simp [w1IsDummy, w1StmtX, w1Enc, w1DummyR, w1DummyX]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The idle request is not a proof request**, so its proof requests have dummy statements
 vacuously. -/
 theorem w1IdleS [NeZero n] (pks : Fin n → PubKey p prims)
@@ -293,9 +302,11 @@ theorem w1IdleS [NeZero n] (pks : Fin n → PubKey p prims)
     w1IsDummy (w1StmtX (w1Enc pks (.inr q)).stmt) = true :=
   absurd hq (by simp [w1Idle])
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The idle request is not a corruption.** -/
 theorem w1IdleC [NeZero n] (i : Fin n) :
-    (w1Idle : MURequest (SignOracle.none Bf) n ⊕
+    (w1Idle : MURequest (SignOracle.none (Bf).core) n ⊕
       W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q) ≠ .inl (.corrupt i) := by
   simp [w1Idle]
 
@@ -321,20 +332,22 @@ noncomputable def w1StmtP (sp : OracleSplit Y Y₁ Y₂) (x : RingSignature.Ring
     OracleProg X Y X₀f :=
   (w1StmtProg sp prims O bmsg x).mapQuery id fun y => (sp y).1
 
-omit [Nonempty RMsg] [Nonempty (FIPSSignature p prims)] in
+omit [Nonempty RMsg] [Nonempty (FIPSSignature p prims)] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 /-- **The statement program at an oracle** is the program statement at its base component. -/
 theorem run_w1StmtP (sp : OracleSplit Y Y₁ Y₂) (x : RingSignature.RingStmt Bf) (H : X → Y) :
     (w1StmtP sp x).run H = (w1StmtProg sp prims O bmsg x).run (base sp H) :=
   OracleProg.run_mapQuery _ _ _ _
 
-omit [Nonempty RMsg] [Nonempty (FIPSSignature p prims)] in
+omit [Nonempty RMsg] [Nonempty (FIPSSignature p prims)] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The statement program makes at most `2N` queries.** -/
 theorem w1StmtP_queries (sp : OracleSplit Y Y₁ Y₂) (x : RingSignature.RingStmt Bf) :
     (w1StmtP sp x).QueriesLE (2 * N) := fun H => by
   rw [w1StmtP, OracleProg.length_trace_mapQuery]
   exact w1StmtProg_queries sp prims O bmsg _ _
 
-omit [Nonempty RMsg] [Nonempty (FIPSSignature p prims)] in
+omit [Nonempty RMsg] [Nonempty (FIPSSignature p prims)] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 /-- **The statement program's outputs** read back its input and carry hash lists of the ring's
 length, on every path. -/
 theorem allOut_w1StmtP (sp : OracleSplit Y Y₁ Y₂) (x : RingSignature.RingStmt Bf) :
@@ -342,13 +355,16 @@ theorem allOut_w1StmtP (sp : OracleSplit Y Y₁ Y₂) (x : RingSignature.RingStm
   OracleProg.AllOut.mapQuery _ _ (OracleProg.AllOut.mapOutput _
     ((allOut_hashesProg_length sp O _ _ _).mono fun _ h => ⟨rfl, h⟩))
 
-omit [Nonempty RMsg] [Nonempty (FIPSSignature p prims)] in
+omit [Nonempty RMsg] [Nonempty (FIPSSignature p prims)] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 /-- **The statement program's outputs read back its input** (`hfst`). -/
 theorem w1Fst (sp : OracleSplit Y Y₁ Y₂) (x : RingSignature.RingStmt Bf) :
     (w1StmtP sp x).AllOut fun x₀ => x₀.1 = x :=
   (allOut_w1StmtP sp x).mono fun _ h => h.1
 
-omit [AddGroup Y] in
+omit [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 /-- **A proof request carries a program statement with at most `N` hashes.** -/
 theorem w1StmtX_enc_toR (pks : Fin n → PubKey p prims) {x₀ : X₀f} (h : x₀.2.length ≤ N)
     (r : RingSignature.Insider.Req Bf PSf adm n × ℕ) (σ : FIPSSignature p prims) :
@@ -356,6 +372,8 @@ theorem w1StmtX_enc_toR (pks : Fin n → PubKey p prims) {x₀ : X₀f} (h : x�
   change (x₀.1, x₀.2.take N) = x₀
   rw [List.take_of_length_le h]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **`w1ToR` carries the statement program's outputs** (`htoR`). -/
 theorem w1ToROut (pks : Fin n → PubKey p prims) (sp : OracleSplit Y Y₁ Y₂)
     (x : RingSignature.RingStmt Bf) :
@@ -364,14 +382,18 @@ theorem w1ToROut (pks : Fin n → PubKey p prims) (sp : OracleSplit Y Y₁ Y₂)
   (allOut_w1StmtP sp x).mono fun _ h r σ =>
     w1StmtX_enc_toR pks (h.2.trans_le x.ring.2) r σ
 
-omit [Nonempty RMsg] [Nonempty (FIPSSignature p prims)] [AddGroup Y] in
+omit [Nonempty RMsg] [Nonempty (FIPSSignature p prims)] [AddGroup Y] [Fintype TPS.Proof]
+  [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
+  [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The signer's position of a signing request** is the position `idxOf` of the signer's key. -/
 theorem val_w1Idx_sign (pks : Fin n → PubKey p prims) (s : Fin n) (R : KeyRing (PubKey p prims) N)
     (m : RMsg) :
     (w1Idx (PS := PS) (adm := adm) pks (.sign s R m)).val = R.1.idxOf (pks s) :=
   min_eq_left (List.idxOf_le_length.trans R.2)
 
-omit [AddGroup Y] in
+omit [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 /-- **The relayed witness of a signed request** is the signer's position and the signature. -/
 theorem toWit_w1Enc_toR (pks : Fin n → PubKey p prims) (x₀ : X₀f) (s : Fin n)
     (R : KeyRing (PubKey p prims) N) (m : RMsg) (c : ℕ) (σ : FIPSSignature p prims) :
@@ -382,6 +404,8 @@ theorem toWit_w1Enc_toR (pks : Fin n → PubKey p prims) (x₀ : X₀f) (s : Fin
     RingSignature.RingWitOf (FIPSSignature p prims)) = _
   rw [val_w1Idx_sign]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **Kept signatures are in the relation** (`KeptInRel`), for decodings reading only the first
 component: a signature of a member of a supported ring verifying at `H'` is a witness of the ring
 relation at `H'`, hence of the fixed relation for the program statement read at `H'`
@@ -434,7 +458,8 @@ variable {kh kN kS L e : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁] [Fint
   {Λ : SiteLayout Mg} {b : ℕ} [∀ j i, Fintype ((Mc.comp j).MessageWrite i)]
   {E : (j : ι) → (Mc.comp j).Encoder}
   {Vr : W1ExpStmt prims RMsg N → FullTr P τ → Bool}
-  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R]
+  [DecidableEq R] [Nonempty R]
   {honest : RingSignature.RingWit (freshBase prims O Mo βmin tol enc k D bmsg) → R →
     CausalProver P τ (W1ExpStmt prims RMsg N)}
   {adm : KeyRing (PubKey p prims) N → Prop}
@@ -458,6 +483,8 @@ noncomputable abbrev w1HPS (check : RingSignature.RingStmt Bf → Bool) :
   (Ring.spbcsSplitProofSystem sp Mc Λ E hb honest (w1StmtProg sp prims O bmsg)
     (2 * N) (w1StmtProg_queries sp prims O bmsg) check fun _ w => some w)
 
+omit [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R]
+  [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **`w1HPS` read at the fresh statements is the spBCS proof system checking `chk`**, for any
 check; at `check := fun _ => true` it is `w1PS`. -/
 theorem comap_w1HPS :
@@ -484,13 +511,10 @@ noncomputable abbrev w1MainProver :
   ((RingSignature.Insider.encProver Mc Λ E hb honest).comap w1StmtX
     (RingSignature.Insider.RelayWit.toWit (B := Bf))).mapQuery id fun y => (sp y).2
 
-/-- **The main prover's coins are uniform.** -/
-theorem w1MainProver_coins :
-    (w1MainProver (adm := adm) sp Mc Λ E hb honest n Q chk).coins = PMF.uniformOfFintype _ :=
-  rfl
-
 variable [Nonempty RMsg] [Nonempty (FIPSSignature p prims)]
 
+omit [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R]
+  [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The ring prover is the main prover after the statement program** (`ProverRelays`), for any
 check of `w1HPS`: the
 ring proof of `(R, m, w1Of pk σ)` at an oracle reprogrammed by an assignment keeping the second
@@ -525,6 +549,8 @@ theorem w1ProverRelays (keys : Fin n → (Bf).KeyCoins) :
   exact (OracleProg.run_mapQuery id (fun y => (sp y).2) H _).symm
 
 variable (sp) in
+omit [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R]
+  [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The main-request encoding of the ML-DSA ring publishing `w₁` is well formed**
 (`RingSignature.KeyFree.KFEncoding`) at the users' key coins `keys`: `w1Enc`, `w1StmtX`,
 `w1IsDummy`, `w1Idle`, `w1DummyR`, `w1ToR`, `w1StmtP` and the first component. -/
@@ -584,6 +610,7 @@ structure W1Route2Hyps [Nonempty RMsg]
     (w1Rel prims O Mo βmin tol enc k D bmsg PSh adm n Q)
     (w1Enc fun i => (Bf).pk (keys i)) (w1StmtP sp) w1ToR keys
 
+omit [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The hypotheses of the key-free chain and of route 2 hold at the ML-DSA ring publishing
 `w₁`**, for any check of `w1HPS` and decodings reading only the first component. -/
 theorem w1Route2Hyps [NeZero n] [Fintype Y₁] [DecidableEq Y₁]

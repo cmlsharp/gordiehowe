@@ -196,6 +196,15 @@ theorem exprLen_ref (ho : ir.RefsOrdered) {k : ℕ} (hk : k < ir.exprs.length) :
     have := ho k hk k' hk'
     rw [lenT_getD ho this (by omega), lenT_getD ho (by omega) (by omega)]
 
+/-- **A sum over `List.range w`** is the sum over `Finset.range w`. -/
+theorem sum_map_range {M : Type*} [AddCommMonoid M] (g : ℕ → M) :
+    ∀ w : ℕ, ((List.range w).map g).sum = ∑ i ∈ Finset.range w, g i
+  | 0 => rfl
+  | w + 1 => by
+    rw [List.range_succ, List.map_append, List.sum_append, sum_map_range g w,
+      Finset.sum_range_succ]
+    simp
+
 /-! ## One step of evaluation -/
 
 /-- **A leaf's coordinate** is the value's coordinate, cast into the field. -/

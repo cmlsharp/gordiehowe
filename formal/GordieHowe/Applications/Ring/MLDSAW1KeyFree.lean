@@ -86,7 +86,7 @@ theorem idealCallLaw_ring_eq_keyFreeCallLaw (T D : ℕ) [NeZero D] (h_laws : Sig
     (i : Fin R.1.length) (hRi : R.1.get i = (keyGen prims seed).1) (βmin : ℚ≥0)
     (H : Fin R.1.length × BucketVec p → CommitHashBytes p) :
     idealCallLaw prims T D (keyGen prims seed).2 (prims.expandA (keyGen prims seed).2.rho)
-        (fun vc => flattenCoin prims (keyGen prims seed).2 βmin vc *
+        (fun vc => flattenCoin prims (keyGen prims seed).2 (Cutoff.const βmin) vc *
           (ringWeights prims βmin (ringT0s prims R.1)).otherWeight i H vc.1) =
       keyFreeCallLaw prims T D (pubPk prims (R.1.get i)) (R.1.get i).2.2
         (fun vc => PMF.flattenKeep (fun a => (t0Weight prims (R.1.get i).2.2 a : ℝ≥0∞)) βmin vc *
@@ -117,7 +117,7 @@ theorem idealCallLaw_ring_eq_keyFreeCallLaw_concrete (hp : p.isApproved) (T D : 
     idealCallLaw (concretePrimitivesKeyGen p) T D (keyGen (concretePrimitivesKeyGen p) seed).2
         ((concretePrimitivesKeyGen p).expandA (keyGen (concretePrimitivesKeyGen p) seed).2.rho)
         (fun vc => flattenCoin (concretePrimitivesKeyGen p)
-          (keyGen (concretePrimitivesKeyGen p) seed).2 βmin vc *
+          (keyGen (concretePrimitivesKeyGen p) seed).2 (Cutoff.const βmin) vc *
           (ringWeights (concretePrimitivesKeyGen p) βmin
             (ringT0s (concretePrimitivesKeyGen p) R.1)).otherWeight i H vc.1) =
       keyFreeCallLaw (concretePrimitivesKeyGen p) T D

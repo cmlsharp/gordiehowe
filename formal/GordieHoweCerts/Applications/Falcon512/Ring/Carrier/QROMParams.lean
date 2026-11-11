@@ -23,8 +23,8 @@ forked domains `forkIop G`, its transcript `forkTranscript G`, `48`-byte Fiat–
 signature relation `FalconRing.ringRel64 G` with the witness read at the statement's program
 statement and the signature encoded with the statement's salt, the honest prover, the honest strategy
 `honestStrategy G`, and the figures), its facts `mergeFacts G`, and the instances of the
-templates of the families `Common`, `Query` and `GordieHowe.Configuration.AdaptiveCompleteness`, each abstracted over `G`. The extractor is
-`ringKeyExtractor`.
+templates of the families `Common`, `GordieHowe.Configuration.ZeroKnowledgeQROM` and `GordieHowe.Configuration.AdaptiveCompleteness`, each abstracted over `G`. The extractor is
+`extractor`.
 
 The configuration is `GordieHowe.Configuration.ofCertifiedWith` at the generated certified data
 (`GordieHowe.Generated.Falcon512.Ring.Carrier.QROMParams.certified`), the source program's soundness (`source`) and the
@@ -35,7 +35,7 @@ of the generic templates (`GordieHowe.Configuration.CertifiedSource`,
 The figures: at most `955` rounds, every round's load within `2^-3700`, a tree of at most
 `3072` leaves, `201` queried leaves, `4525` verifier queries
 (`2 · 955 + 2 + 201 · 13`), round errors at most `16484193 / 2^260`, `958` digests per input
-(`max 2 (955 · 1) + 2 + 1`), the query caps `2^100` (QROM) and `2^64` (ROM), `3072` positions and
+(`max 2 (955 · 1) + 2 + 1`), the quantum query cap `2^100` and the classical query cap `2^64`, `3072` positions and
 `48`-byte digests.
 
 The honest strategy (`honestStrategy`): `GordieHowe.RealizedProgram.HonestStrategy.ofCompletionReady` at the carriers' execution
@@ -55,7 +55,7 @@ namespace GordieHowe.Falcon512.Ring.Carrier.QROMParams
 open RealizedProgram.Export RealizedProgram.ProofSystem.PhaseLayout IOP RelativePacking GordieHowe.SPBCS GordieHowe.QROM SPBCS.Configurations GordieHowe.Ring GordieHowe.Configuration
 open Generated.Falcon512.Ring.Carrier.QROMParams.Program (program)
 open Generated.Falcon512.Ring.Carrier.QROMParams (interp certified conditions)
-open Native (Signer CoreWit scheme)
+open Native (CoreWit scheme)
 open Ring (RingIn relH)
 open scoped NNReal ENNReal
 
@@ -71,7 +71,7 @@ noncomputable def sourceExec {G : Signer 32} (R : certified.Ready) :
   let val := fun y : Ring.RingIn G =>
     (⟨Ring.specK program y, y.w.idx, y.normIn.nS2, y.normIn.nS1,
       Carrier.quot y.normIn, Carrier.mag1 y.normIn, Carrier.mag2 y.normIn,
-      Carrier.squares y.normIn⟩ : Carrier.SourceValues (interp 0).K).valuation
+      Carrier.squares y.normIn, Carrier.high y.normIn⟩ : Carrier.SourceValues (interp 0).K).valuation
         (program := program) Generated.Falcon512.Ring.Carrier.QROMParams.SourceRoles.classifier
   E.withValues val
     R.facts.committed.sourceValid R.facts.committed.srcNoMessage
@@ -103,11 +103,11 @@ noncomputable def frontend (G : Signer 32) :
     Configuration.FrontendWith certified source (Ring.RStmt G) (RingWit (scheme G)) (RingIn G) where
   codec := Native.stmtCodecN G 64
   stmtOf := Ring.stmtOf
-  rel' := Ring.ringRel64 G
-  g x w := (w (Ring.stmtOf x)).withSalt (G := G) x.pub
+  rel := Ring.ringRel64 G
+  witnessMap x w := (w (Ring.stmtOf x)).withSalt (G := G) x.pub
   relH := relH G program interp
   exec := sourceExec
-  keyStmtOf y := y.x
+  stmtOfHonest y := y.x
   label := label
   ok := Ring.ringOk
 
@@ -129,20 +129,19 @@ instantiate_config GordieHowe.Falcon512.Ring.Carrier.QROMParams
 /-! ## The configuration -/
 
 /-- **`Falcon512.Ring.Carrier.QROMParams` as a configuration under spBCS** at the signer `G` (module docstring,
-`Configuration.ofCertifiedWith`): `48`-byte salts and the query cap `2 ^ 100`. -/
+`Configuration.ofCertifiedWith`): the QROM parameter set `ParamSet.qrom` (`48`-byte salts and the quantum query cap `2 ^ 100`). -/
 noncomputable def configuration (G : Signer 32) : Configuration :=
-  .ofCertifiedWith certified source (frontend G) 48 (2 ^ 100)
+  .ofCertifiedWith certified source (frontend G) .qrom
 
 /-- **The facts of `configuration G`** (`Configuration.ofCertifiedWith_facts`): the frontend's
 (`frontendFacts`) and the generated loads' check (`GordieHowe.RuntimeInputs.FiguresFacts.loads`). -/
 theorem configurationFacts (G : Signer 32) : (configuration G).Facts :=
-  Configuration.ofCertifiedWith_facts certified source (frontendFacts G) (by norm_num) _
+  Configuration.ofCertifiedWith_facts certified source (frontendFacts G) (Nat.le_of_ble_eq_true rfl)
     (conditions.fullFacts.figures.loads rfl)
 
 instantiate_config GordieHowe.Falcon512.Ring.Carrier.QROMParams
   from [GordieHowe.Configuration.Common, GordieHowe.Configuration.ZeroKnowledgeQROM,
     GordieHowe.Configuration.AdaptiveCompleteness]
-  renaming keyExtractor → ringKeyExtractor
   folding [ringStmtRel] {G : Signer 32} => (configuration G) (configurationFacts G) at proofSystem
 
 end GordieHowe.Falcon512.Ring.Carrier.QROMParams

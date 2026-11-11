@@ -418,7 +418,7 @@ theorem honest_cell_mem (i : HonestIn) {v : ℕ} (hv : v < program.values.length
     exact mem_castElt_of_eq (a := 1) hf.symm (natCast_mem_prime _)
 
 /-- **A key's statement passes the member check** (`falcon_key_canonical`: `key_hat` below `q`). -/
-theorem checks_stmtOf (pk : Emulated.PublicKey) :
+theorem checks_stmtOf (pk : PublicKey) :
     program.StatementOk interp (stmtOf pk : program.Valuation interp) := by
   intro m hm
   rw [FalconHonestFull.checks_list (program := program), List.mem_singleton] at hm

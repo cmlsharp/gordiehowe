@@ -30,7 +30,8 @@ byte codec `FB` and challenge reader `rd`:
   `GordieHowe.RealizedProgram.forkJoinReaders_allLoads`, `GordieHowe.RealizedProgram.forkCommitReaders_allLoads`) under the decidable
   size bound `GordieHowe.RealizedProgram.ForkLoadSizesLe`;
 * **the sizes**: the join's commit phase's `2` rounds, its tree's `N` leaves, its `t` queries, its
-  `2` rounds per stage and Ligero's `3` (`GordieHowe.RealizedProgram.forkJoin_n`).
+  `2` rounds per stage and Ligero's `3` (`GordieHowe.RealizedProgram.forkJoin_nc`,
+  `GordieHowe.RealizedProgram.forkJoin_nLeaves`, `GordieHowe.RealizedProgram.forkJoin_n_le`).
 
 The array sizes enter through one decidable bound (`GordieHowe.RealizedProgram.ForkSizesLe`).
 -/

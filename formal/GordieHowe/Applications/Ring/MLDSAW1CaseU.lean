@@ -47,7 +47,7 @@ variable {prims : Primitives p} [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   {O : W1Oracles X Y p prims Msg N reps} {Mo : MaskOracle X Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O Mo βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O Mo βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
   {adm : KeyRing (PubKey p prims) N → Prop}
   [hadm : DecidablePred adm] {n Q : ℕ}
   {Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] {Frg : Type}
@@ -56,7 +56,7 @@ local notation "Bf" => freshBase prims O Mo βmin tol enc k D bmsg
 local notation "Lf" => freshLoop prims O Mo βmin k D
 local notation "X₀f" => W1ExpStmt prims RMsg N
 local notation "Rq" => W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q
-local notation "MUR" => MURequest (SignOracle.none Bf) n
+local notation "MUR" => MURequest (SignOracle.none (RingSignature.BaseSigner.core Bf)) n
 
 attribute [local instance] admDecF
 
@@ -80,6 +80,8 @@ def w1Goal (sp : Y ≃+ Y₁ × Y₂) (pks : Fin n → PubKey p prims) (ω : X �
     (rs : List (MUR ⊕ Rq)) (w : RingSignature.RingWitOf (FIPSSignature p prims)) : Prop :=
   w1Ok prims O Mo βmin tol enc k D bmsg adm pks f rs w ∧ w1Side (adm := adm) O sp pks ω f rs
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The goal holds at every fresh witness of `w1ExpRel`** (`hgoal` of `kfChain_le` at
 `side := w1Side`, `relK := w1ExpRel` and `wit := fun _ w => w`): the honest ring of `kfFresh`
 gives the honest member. -/
@@ -113,6 +115,8 @@ def w1CaseS (pks : Fin n → PubKey p prims) (f : Frg × X₀f) (rs : List (MUR 
       xb.1.ring = R' ∧ xb.1.msg = m' ∧ xb.1.pub = f.2.1.pub ∧
       xb.2.val[R'.1.idxOf (pks s)]? = some c
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The goal at one witness splits every witness passing the test** into case U and case S
 (`hsplit` of `forgerWinsKF_canon`): `w1Side` decides every listed hash. -/
 theorem w1Goal_split (sp : Y ≃+ Y₁ × Y₂) (pks : Fin n → PubKey p prims) (ω : X → Y₁)
@@ -149,6 +153,8 @@ theorem w1Readout_some (f₀ : PubKey p prims × Msg × FIPSSignature p prims) (
     w1Readout bmsg f₀ f (some w) = (f.2.1.ring.1[w.idx]'hi, bmsg f.2.1.ring f.2.1.msg, w.sig) := by
   simp only [w1Readout, hi, ↓reduceDIte]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **Case U at the canonical witness gives base verification** (`bverify_join_of_w1Side`): the
 readout of a witness passing `w1Ok` and in case U at `ω` verifies at `join sp ω h`, for every
 second component `h` and decodings reading only the first component. -/
@@ -165,7 +171,8 @@ theorem bverify_w1Readout (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp) (ω : 
   rw [w1Readout_some f₀ f w hi]
   exact hv
 
-omit [AddGroup Y] in
+omit [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The readout of a witness passing `w1Ok` has an honest key**: it is the key of a user whose
 corruption is not among the requests. -/
 theorem honest_w1Readout (f₀ : PubKey p prims × Msg × FIPSSignature p prims)

@@ -4,15 +4,15 @@
 module
 
 public import GordieHoweCerts.Generated.Falcon512.Ring.Native.QROMParams.GKR.A
-public import GordieHoweCheck.Falcon512.Ring.Native.QROMParams.GKR.A.E12.P0
-public import GordieHoweCheck.Falcon512.Ring.Native.QROMParams.GKR.A.E12.P1
+meta import GordieHoweCerts.Generated.Falcon512.Ring.Native.QROMParams.GKR.A
+import all GordieHoweCerts.Generated.Falcon512.Ring.Native.QROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of entry 12 of the GKR circuit of domain A, composed from its part modules (generated; do not edit). -/
+/-! The relational check of entry 12 of the GKR circuit of domain A (generated; do not edit). -/
 
 namespace GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.GKR.A
 
-compose_entry cert ar 12 [0, 0, 1, 2, 256, 12]
+check_entry cert ar 12 [0, 0, 1, 2, 3071, 1]
 
 end GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.GKR.A

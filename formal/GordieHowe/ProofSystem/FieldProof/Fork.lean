@@ -169,6 +169,7 @@ structure Honest (In : Type) where
   Coins : Type
   [fintype : Fintype Coins]
   [nonempty : Nonempty Coins]
+  [decEq : DecidableEq Coins]
   /-- The oracle message for the input. -/
   commit : In → Coins → sh.Com
   /-- The commit rounds for the input. -/
@@ -178,7 +179,7 @@ structure Honest (In : Type) where
   /-- The join on the public input, the commit rounds and the branches' transcripts. -/
   join : Pub → In → Coins → sh.Rounds → sh.BranchTrs → CausalTranscript sh.join
 
-attribute [instance] Honest.fintype Honest.nonempty
+attribute [instance] Honest.fintype Honest.nonempty Honest.decEq
 
 variable {sh}
 

@@ -257,7 +257,7 @@ oracle, folded into the adversary** (`SimulationSoundExtractableFolded`): at the
 with `q` the queries of one run of `Sim`; the test's queries count as adversary queries. The
 extractor depends on the test, so this is not Unruh's Extract game. -/
 theorem simulation_sound_extractability_folded [DecidableEq X] {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) {Wit : Type}
+    (hkq : M.QueriesAtMost Qs kq) {Wit : Type}
     {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
     {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     (Sim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X (M.Response B)
@@ -276,7 +276,7 @@ Unruh's Prove with the test is at most the probability that `dbExtract` at `E`, 
 simulated adversary followed by the test (`A^Π`), returns a witness, the statement is fresh and
 the test accepts, plus `simExtractionError kq (max_c ε c) q tq Q`. -/
 theorem simulation_sound_extractability_query_free [DecidableEq X] {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) {Wit : Type}
+    (hkq : M.QueriesAtMost Qs kq) {Wit : Type}
     {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
     {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     (Sim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X (M.Response B)

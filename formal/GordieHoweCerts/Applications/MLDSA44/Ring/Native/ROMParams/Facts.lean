@@ -47,10 +47,10 @@ noncomputable instance : MLDSA44.Native.MldsaNativeHonest (MldsaRingEmbed.nat pr
     RealizedProgram.gf128)
 
 /-- A renamed committed value of the held program is committed. -/
-theorem privCell_held {u : ℕ} (hu : u ∈ ringV) (h : nat.privCellB u = true) :
-    program.privCellB (σR.val u) = true := by
+theorem privCell_held {u : ℕ} (hu : u ∈ embedData.V) (h : nat.privCellB u = true) :
+    program.privCellB (σ.val u) = true := by
   have hv := embedding.vals u hu
-  have hk : (program.value (σR.val u)).kind = .priv := by
+  have hk : (program.value (σ.val u)).kind = .priv := by
     have hc := hv.2.2.2.2.2.2.1
     rw [kind_of_privCellB h] at hc
     exact Renaming.kindCorr_priv _ hc
@@ -58,20 +58,22 @@ theorem privCell_held {u : ℕ} (hu : u ∈ ringV) (h : nat.privCellB u = true) 
 
 /-- **The ring program's honest values' facts.** -/
 instance : MldsaRingHonest program where
-  inv := ringInv σR
-  inv_val := fun u hu => ringInv_eq_of_leftInverse (σ' := σR) invR_valR hu
+  inv := heldInv σ embedData.V
+  inv_val := by
+    change ∀ u ∈ embedData.V, heldInv σ embedData.V (σ.val u) = u
+    decide +kernel
   member_ne := by
-    change ∀ u ∈ ringV, ∀ v ∈ [55, 56, 57, 58], valR u ≠ v
+    change ∀ u ∈ embedData.V, ∀ v ∈ [54, 55, 56, 57, 63], σ.val u ≠ v
     decide +kernel
   member_nodup := by
-    change ([55, 56, 57, 58] : List ℕ).Nodup
+    change ([54, 55, 56, 57, 63] : List ℕ).Nodup
     decide
   memberCells := by
     intro v hv
-    change v ∈ [55, 56, 57, 58] at hv
+    change v ∈ [54, 55, 56, 57, 63] at hv
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
     have hc := Generated.MLDSA44.Ring.Native.ROMParams.conditions.wellFormed
-    rcases hv with rfl | rfl | rfl | rfl
+    rcases hv with rfl | rfl | rfl | rfl | rfl
     · exact ⟨hc.privCellB_of_kind_priv value_member_2ea_5fhat_header.1 value_member_2ea_5fhat_kind,
         valueShape_field value_member_2ea_5fhat_header.2⟩
     · exact ⟨hc.privCellB_of_kind_priv value_member_2et1_header.1 value_member_2et1_kind,
@@ -81,13 +83,22 @@ instance : MldsaRingHonest program where
     · exact ⟨hc.privCellB_of_kind_priv value_member_2eselect_2eindex_header.1
           value_member_2eselect_2eindex_kind,
         valueShape_field value_member_2eselect_2eindex_header.2⟩
+    · exact ⟨hc.privCellB_of_kind_priv value_signature_2eQ_header.1 value_signature_2eQ_kind,
+        valueShape_field value_signature_2eQ_header.2⟩
   privCell := fun _ hu h => privCell_held hu h
-  coreV := coreV_held
-  selV := selV_held
-  aV := aV_held
+  coreV := by
+    change (69 ∈ embedData.V ∧ 119 ∈ embedData.V) ∧ ∀ p : Fin 10, (p : ℕ) ≠ 0 → ∀ t : Fin 24,
+      wordsVal p t ∈ embedData.V
+    decide +kernel
+  selV := by
+    change ∀ u ∈ [556, 557, 560, 561, 562, 563, 564, 565], u ∈ embedData.V
+    decide +kernel
+  aV := by
+    change ∀ u ∈ MLDSA44.Native.AValues ++ [57, 64, 65], u ∈ embedData.V
+    decide +kernel
   boundExprs := by
     change ([57, 64, 65] : List ℕ).all (fun u => match (nat.value u).kind with
-      | .bound E => E.opsFree && E.directNodes.all (· ∈ ringV) && E.refs.isEmpty
+      | .bound E => E.opsFree && E.directNodes.all (· ∈ embedData.V) && E.refs.isEmpty
       | _ => true) = true
     simp only [List.all_cons, List.all_nil, Bool.and_true,
       Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_z_kind,
@@ -95,12 +106,13 @@ instance : MldsaRingHonest program where
       Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_hint_2eslack_kind]
     decide +kernel
   len50 := by
-    have hk : program.expr 50 ≠ default := by
+    change program.exprLen (.ref 90) = 7168
+    have hk : program.expr 90 ≠ default := by
       rw [expr_mac_2eequal_2eshape_2eright_eq]
       decide
     rw [exprLen_ref Generated.MLDSA44.Ring.Native.ROMParams.conditions.wellFormed.refsOrdered
         (expr_lt_of_ne_default hk),
-      expr_mac_2eequal_2eshape_2eright_eq, exprLen_reindex, idx106_eq]
+      expr_mac_2eequal_2eshape_2eright_eq, exprLen_reindex, idx107_eq]
     decide
   crossOperands := by
     apply crossOperandsB_of_operands
@@ -118,10 +130,10 @@ instance : MldsaRingHonest program where
   bound := Generated.MLDSA44.Ring.Native.ROMParams.conditions.derivable.elim fun _ hD => hD.bound
 
 /-- The realization's predicates are no source predicates. -/
-theorem nonSource : ∀ q ∈ [8, 9, 16, 21, 22, 23, 247],
+theorem nonSource : ∀ q ∈ realizationPreds,
     program.inSource (program.predicate q) = false := by
   intro q hq
-  simp only [List.mem_cons, List.not_mem_nil, or_false] at hq
+  simp only [realizationPreds, List.mem_cons, List.not_mem_nil, or_false] at hq
   rcases hq with rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · exact program.inSource_of_realization predicate_mac_2eA_role.2
   · exact program.inSource_of_realization predicate_range_2enorm_2ez_2etop_role.2
@@ -132,14 +144,14 @@ theorem nonSource : ∀ q ∈ [8, 9, 16, 21, 22, 23, 247],
   · exact program.inSource_of_realization predicate_mac_2enowrap_role.2
   · exact program.inSource_of_realization predicate_mac_role.2
 
-/-- The committed source values' classes, from the checked source roles at the renaming's piecewise
-inverse. -/
+/-- The committed source values' classes, from the checked source roles at the renaming's inverse
+table. -/
 theorem cell_classes : (List.range program.values.length).all (fun v =>
     !program.privCellB v || !decide (program.IsSourceValue v) ||
-      ([MldsaRingRelation.aHat program, MldsaRingRelation.t1 program, MldsaRingFront.muA program,
-          (TableSelect.shape program).idx].contains v && program.valueField v == 0 &&
+      ([MldsaRandomPoint.aHat program, MldsaRandomPoint.t1 program, MldsaRingFront.muA program,
+          (TableSelect.shape program).idx, MldsaRandomPoint.q program].contains v && program.valueField v == 0 &&
         (program.value v).node.map (·.name) == some "GF(p^1)") ||
-      (decide (MldsaRingHonest.inv program v ∈ ringV) &&
+      (decide (MldsaRingHonest.inv program v ∈ MldsaRingEmbed.V program) &&
         (MldsaRingEmbed.σ program).val (MldsaRingHonest.inv program v) == v &&
         ((MLDSA44.Native.AValues.contains (MldsaRingHonest.inv program v) && program.valueField v == 0 &&
             (program.value v).node.map (·.name) == some "GF(p^1)") ||
@@ -149,9 +161,11 @@ theorem cell_classes : (List.range program.values.length).all (fun v =>
             (program.value v).node.map (·.name) == some "bit")))) = true := by
   refine cell_classes_of_rows
     Generated.MLDSA44.Ring.Native.ROMParams.SourceRoleFacts.rolesOk
-    (skip := [52, 53, 54, 60, 67, 68, 527, 528]) (val := valR) (inv := invR) ?_ rfl ?_
+    (skip := [51, 52, 53, 59, 68, 69, 528, 529]) (val := σ.val) (inv := heldInv σ embedData.V)
+    (held := heldB σ embedData.V) ?_ rfl (fun _ h => mem_of_heldB h) ?_
   · change Generated.MLDSA44.Ring.Native.ROMParams.SourceRoles.roles.all
-      (rowB [52, 53, 54, 60, 67, 68, 527, 528] [55, 56, 57, 58] valR invR) = true
+      (rowB [51, 52, 53, 59, 68, 69, 528, 529] [54, 55, 56, 57, 63] σ.val
+        (heldInv σ embedData.V) (heldB σ embedData.V)) = true
     rw [Generated.MLDSA44.Ring.Native.ROMParams.SourceRoles.roles_eq]
     decide +kernel
   · intro v hv
@@ -169,9 +183,10 @@ theorem cell_classes : (List.range program.values.length).all (fun v =>
 /-- **The ring program's execution facts.** -/
 instance : MldsaRingExec program where
   wf := Generated.MLDSA44.Ring.Native.ROMParams.conditions.wellFormed
-  predicates_length := predicates_length
   nonSource := nonSource
-  predIds := ⟨rfl, rfl⟩
+  coverage := by
+    rw [predicates_length]
+    decide +kernel
   checks := statement_checks
   noBounds := statement_ranges
   cell_classes := cell_classes
@@ -186,9 +201,11 @@ theorem role_coordinates {msgLen : ℕ} (y : RingIn msgLen) {v j : ℕ}
       program.execOf (mldsaInterpOf RealizedProgram.fq6 RealizedProgram.gf128)
         (honestVal program RealizedProgram.fq6 RealizedProgram.gf128 y) v j := by
   refine role_source_coordinates y Generated.MLDSA44.Ring.Native.ROMParams.SourceRoleFacts.rolesOk
-    (skip := [52, 53, 54, 527, 528]) (val := valR) (inv := invR) ?_ rfl ?_ hs hc hpad
+    (skip := [51, 52, 53, 528, 529]) (val := σ.val) (inv := heldInv σ embedData.V)
+    (held := heldB σ embedData.V) ?_ rfl (fun _ h => mem_of_heldB h) ?_ hs hc hpad
   · change Generated.MLDSA44.Ring.Native.ROMParams.SourceRoles.roles.all
-      (roleRowB [52, 53, 54, 527, 528] 55 56 57 58 valR invR) = true
+      (roleRowB [51, 52, 53, 528, 529] 54 55 56 57 63 σ.val (heldInv σ embedData.V)
+        (heldB σ embedData.V)) = true
     rw [Generated.MLDSA44.Ring.Native.ROMParams.SourceRoles.roles_eq]
     decide +kernel
   · intro v hv

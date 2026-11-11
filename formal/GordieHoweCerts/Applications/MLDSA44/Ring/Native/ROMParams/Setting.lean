@@ -49,9 +49,8 @@ variable (msgLen : ℕ) in
 statement passes the check (`ringOk`) and the realized program's relation `Native.rel` holds at its
 program statement (`Native.stmtOf`), on the witness read from that statement. -/
 abbrev ringStmtRel : Set (RStmt msgLen × (program.Valuation interp → Native.RingW)) :=
-  {p | ringOk p.1 = true ∧
-    (Native.stmtOf (program := program) (I := interp) p.1, p.2) ∈
-      RealizedProgram.ProofSystem.relOf
-        (Native.rel (program := program) (F0 := RealizedProgram.fq6) (FH := RealizedProgram.gf128))}
+  RealizedProgram.ProofSystem.checkedRel (Native.stmtOf (program := program) (I := interp)) ringOk
+    (RealizedProgram.ProofSystem.relOf
+      (Native.rel (program := program) (F0 := RealizedProgram.fq6) (FH := RealizedProgram.gf128)))
 
 end GordieHowe.MLDSA44.Ring.Native.ROMParams

@@ -12,8 +12,9 @@ public import GordieHoweCerts.Applications.MLDSA44.Emulated.HonestValues
 
 At the source environment of the honest values (`honestVal`) on an honest input at its key's
 statement, every predicate of an emulated ML-DSA program other than the MAC's holds
-(`source_holds`): domain `H`'s predicates `20 … 272` are the native program's `18 … 270` renamed
-(`MldsaEmbed`), which hold in the environment read as the native program's
+(`source_holds`, by `MldsaEmulatedHonest.coverage`): domain `H`'s predicates are the native
+program's `hPredLo … hPredHi`, paired by the embedding data (`MldsaEmbed.held`) and renamed, which
+hold in the environment read as the native program's
 (`GordieHowe.MLDSA44.hPreds_holds`, `GordieHowe.RealizedProgram.holdsAt_pullEnv`); domain `A`'s
 (`GordieHoweCerts/Applications/MLDSA44/Emulated/HonestValues.lean`); the blind's Booleanity and the crossing `mac.equal` (here). This
 file also proves that the crossing's operands read bits (`cross_bits`).
@@ -32,6 +33,12 @@ local notation "interp" => mldsaInterpOf F0 FH
 
 set_option hygiene false in
 local notation "nat" => MldsaEmbed.nat program
+
+set_option hygiene false in
+local notation "σ" => MldsaEmbed.σ program
+
+set_option hygiene false in
+local notation "hV" => MldsaEmbed.V program
 
 variable {program : RealizedProgram} [MldsaEAlgebra program] {F0 FH : FieldInterp} [RealizedProgram.PrimeCastField F0 pGold]
   [HField FH] [MldsaHHonest nat] [MldsaHSample nat] [MldsaHSelHonest nat]
@@ -53,11 +60,10 @@ at the key's statement. -/
 theorem htr_pull (hx : x = hE.stmtOfKey i.y.key) : ∀ j < 512,
     (castElt (b := 1) ((pull E).stmt 66 j) : (interp 1).K) = (honestData (K := FH.K) i.y).tr j := by
   intro j hj
-  have h67 : (66 : ℕ) ∈ hV := by decide
+  have h67 : (66 : ℕ) ∈ hV := MldsaEmbed.readV
   have hst : (pull E).stmt 66 j = castElt (x 67 j) := by
-    change (if (66 : ℕ) ∈ hV then castElt (x (σ.val 66) j) else 0) = _
-    rw [if_pos h67]
-    rfl
+    change (if (66 : ℕ) ∈ hV then castElt (x ((σ).val 66) j) else 0) = _
+    rw [if_pos h67, MldsaEMain.trLink]
   obtain ⟨hn, hf⟩ := MldsaEMain.trFields (program := program)
   rw [hst, castElt_castElt_eq, if_pos (hf.trans hn.symm), hx, stmt68 (program := program) i.y.key j hj]
   change _ = constBit (trNat i.y (j / 8)) (j % 8)
@@ -65,13 +71,11 @@ theorem htr_pull (hx : x = hE.stmtOfKey i.y.key) : ∀ j < 512,
   rw [dif_pos (by omega)]
 
 /-- **Domain `H`'s predicates hold** at the honest values: the native program's, renamed. -/
-theorem hash_holds (hx : x = hE.stmtOfKey i.y.key) {q : ℕ} (h20 : 20 ≤ q) (h272 : q ≤ 272) :
-    program.HoldsWith (program.reader E) (program.predicate q).body := by
-  obtain ⟨hc, -, -⟩ := MldsaEmbed.predCorr (program := program) (q - 2) (by omega) (by omega)
-  rw [show q = q - 2 + 2 by omega]
+theorem hash_holds (hx : x = hE.stmtOfKey i.y.key) {k : ℕ} (h1 : hPredLo ≤ k) (h2 : k ≤ hPredHi) :
+    program.HoldsWith (program.reader E) (program.predicate (MldsaEmbed.pred program k)).body := by
+  obtain ⟨hc, -, -⟩ := MldsaEmbed.predCorr (program := program) k h1 h2
   exact (RealizedProgram.holdsAt_pullEnv MldsaEmbed.embedding E hc).2
-    (MLDSA44.hPreds_holds i (readsCells_honest i x c π) (htr_pull i hx) (by omega)
-      (by omega))
+    (MLDSA44.hPreds_holds i (readsCells_honest i x c π) (htr_pull i hx) h1 h2)
 
 /-! ## The crossing `mac.equal` -/
 
@@ -87,7 +91,7 @@ theorem toNatA_ite (p : Prop) [Decidable p] :
 /-- **The crossing's coordinates agree** at the honest values: H's `w1` bits and decoded challenge
 bits are A's `hint.w1` and challenge bits, read as naturals; A's are bits. -/
 theorem cross_coords (hx : x = hE.stmtOfKey i.y.key) {j : ℕ} (hj : j < 6656) :
-    (interp 1).toNat (program.evalE (program.reader E) 1 (.ref 527) j) =
+    (interp 1).toNat (program.evalE (program.reader E) 1 (.ref ((σ).ref 525)) j) =
         (interp 0).toNat (program.evalE (program.reader E) 0 (.ref 6) j) ∧
       (program.evalE (program.reader E) 0 (.ref 6) j = 0 ∨
         program.evalE (program.reader E) 0 (.ref 6) j = 1) := by
@@ -164,9 +168,9 @@ theorem cross_coords (hx : x = hE.stmtOfKey i.y.key) {j : ℕ} (hj : j < 6656) :
 
 /-- **`mac.equal` holds** at the honest values. -/
 theorem cross_holds (hx : x = hE.stmtOfKey i.y.key) :
-    program.HoldsWith (program.reader E) (program.predicate 275).body := by
+    program.HoldsWith (program.reader E) (program.predicate (MldsaECross.crossPred program)).body := by
   rw [hb (program := program)]
-  have hl : program.exprLen (.ref 527) = 6656 := (crossData (program := program)).1
+  have hl : program.exprLen (.ref ((σ).ref 525)) = 6656 := (crossData (program := program)).1
   have h1 : program.domainField 1 = 1 := (crossData (program := program)).2.2.2.1
   have h0 : program.domainField 0 = 0 := (crossData (program := program)).2.2.2.2.1
   refine ⟨fun j hj => ?_, fun _ j hj => ?_⟩
@@ -189,57 +193,38 @@ statement (the realization's and the MAC's role predicates are no source predica
 theorem source_holds (hx : x = hE.stmtOfKey i.y.key) {q : ℕ} (hq : q < program.predicates.length)
     (hsrc : program.inSource (program.predicate q) = true) :
     program.HoldsWith (program.reader E) (program.predicate q).body := by
-  have hreal : ∀ q ∈ [3, 4, 5, 10, 16, 17, 18, 19, 273],
-      program.inSource (program.predicate q) = true → False :=
-    fun q hq h => by
-      rw [MldsaEmulatedHonest.realPreds (program := program) q hq] at h
-      cases h
-  have hlen := predicates_length (program := program)
-  rw [hlen] at hq
-  by_cases hh : 20 ≤ q ∧ q ≤ 272
-  · exact hash_holds i hx hh.1 hh.2
-  by_cases h273 : q = 273
-  · subst h273
-    exact (hreal 273 (by decide) hsrc).elim
-  by_cases h275 : q = 275
-  · subst h275
-    exact cross_holds i hx
-  by_cases h274 : q = 274
-  · subst h274
-    exact sig274_honest i hx
-  have hA : q < 20 := by omega
-  interval_cases q
-  · exact w1bound_honest i
-  · exact decompose_honest i
-  · exact interval_honest i
-  · exact (hreal 3 (by decide) hsrc).elim
-  · exact (hreal 4 (by decide) hsrc).elim
-  · exact (hreal 5 (by decide) hsrc).elim
-  · exact bools_honest i (by simp)
-  · exact bools_honest i (by simp)
-  · exact bools_honest i (by simp)
-  · exact bools_honest i (by simp)
-  · exact (hreal 10 (by decide) hsrc).elim
-  · exact w_honest i
-  · exact norm_honest i
-  · exact offset_honest i
-  · exact slack_honest i
-  · exact weight_honest i
-  · exact (hreal 16 (by decide) hsrc).elim
-  · exact (hreal 17 (by decide) hsrc).elim
-  · exact (hreal 18 (by decide) hsrc).elim
-  · exact (hreal 19 (by decide) hsrc).elim
+  rcases MldsaEmulatedHonest.coverage (program := program) q hq with ⟨p, hp, rfl, hk⟩ | ho | rfl | hr
+  · rw [← MldsaEmbed.pred_held p hp]
+    exact hash_holds i hx hk.1 hk.2
+  · simp only [algebraPreds, List.mem_cons, List.not_mem_nil, or_false] at ho
+    rcases ho with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    · exact w1bound_honest i
+    · exact decompose_honest i
+    · exact interval_honest i
+    · exact bools_honest i (by simp)
+    · exact bools_honest i (by simp)
+    · exact bools_honest i (by simp)
+    · exact bools_honest i (by simp)
+    · exact w_honest i
+    · exact norm_honest i
+    · exact offset_honest i
+    · exact slack_honest i
+    · exact weight_honest i
+    · exact sig274_honest i hx
+  · exact cross_holds i hx
+  · rw [MldsaEmulatedHonest.realPreds q hr] at hsrc
+    cases hsrc
 
-/-- **The crossing's operands read bits** at the honest values: `ref 527` in domain `H` and
+/-- **The crossing's operands read bits** at the honest values: the native operand `525`, renamed, in domain `H` and
 `ref 6` in domain `A`. -/
 theorem cross_bits (hx : x = hE.stmtOfKey i.y.key) :
-    (∀ j < program.exprLen (.ref 527),
-      program.evalWith (program.reader E) 1 (.ref 527) j = 0 ∨
-        program.evalWith (program.reader E) 1 (.ref 527) j = 1) ∧
+    (∀ j < program.exprLen (.ref ((σ).ref 525)),
+      program.evalWith (program.reader E) 1 (.ref ((σ).ref 525)) j = 0 ∨
+        program.evalWith (program.reader E) 1 (.ref ((σ).ref 525)) j = 1) ∧
     ∀ j < program.exprLen (.ref 6),
       program.evalWith (program.reader E) 0 (.ref 6) j = 0 ∨
         program.evalWith (program.reader E) 0 (.ref 6) j = 1 := by
-  have hl : program.exprLen (.ref 527) = 6656 := (crossData (program := program)).1
+  have hl : program.exprLen (.ref ((σ).ref 525)) = 6656 := (crossData (program := program)).1
   have hl6 := len6 (program := program)
   have h1 : program.domainField 1 = 1 := (crossData (program := program)).2.2.2.1
   have h0 : program.domainField 0 = 0 := (crossData (program := program)).2.2.2.2.1

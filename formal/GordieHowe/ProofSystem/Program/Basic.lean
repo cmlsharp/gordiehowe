@@ -25,13 +25,13 @@ A **multi-circuit IOP** (`MultiCircuitIOP`) proves a relation `rel` with `m` cir
 | circuit proofs | the `m` circuits' proof phases in order (`GordieHowe.FieldProof.Shape.pi`, `appendN`) |
 
 Each circuit proof runs on the public input the application phase fixes (`app.pub i`) and its own
-commit phase. Longfellow's protocol is the instance with two circuits (H and A) and the
+commit phase. The proofs of possession are the instances with two circuits (H and A) and the
 proof-of-possession phase; the ML-DSA ring is another.
 
 The protocol, the verifier, the extractor, the honest prover, the view and the simulator are
 defined on the computational parts of the circuits (`GordieHowe.FieldProof.Shape`, `GordieHowe.RealizedProgram.ProofSystem.PhaseStep.fullVerifier` and
 the definitions after it), so that none of them reads a round error; soundness reads the
-circuits' soundness (`GordieHowe.FieldProof.Shape.Sound`, `GordieHowe.RealizedProgram.ProofSystem.PhaseStep.rbrKnowledgeSoundness_full`). For a
+circuits' soundness (`GordieHowe.FieldProof.Shape.Sound`, `GordieHowe.RealizedProgram.ProofSystem.PhaseStep.rbrKnowledgeSound_full`). For a
 `MultiCircuitIOP` the errors are in `MultiCircuitIOP.Sound`, and the protocol, the extractor,
 the honest prover and the simulator read `MultiCircuitIOP` only.
 
@@ -42,7 +42,7 @@ challenge (of the application phase, or of the circuit proofs when the phase has
 `GordieHowe.RealizedProgram.ProofSystem.PhaseStep.drawn`), the phase's condition (`GordieHowe.RealizedProgram.ProofSystem.PhaseStep.cond`) or the circuit proofs' state. So an
 application phase with no challenge round of its own needs no extra round: its condition switches
 on at the first challenge of the circuit proofs, where a flip of the state is a flip of the
-circuit proofs' state (`GordieHowe.RealizedProgram.ProofSystem.PhaseStep.rbrKnowledgeSoundness_full`). The commit events enter the round
+circuit proofs' state (`GordieHowe.RealizedProgram.ProofSystem.PhaseStep.rbrKnowledgeSound_full`). The commit events enter the round
 errors at the commit rounds.
 
 **Soundness**: `MultiCircuitIOP.rbr_knowledge_soundness` (round-by-round knowledge soundness at the
@@ -293,11 +293,11 @@ only when the circuits' state flips, including at the first challenge of the cir
 application phase has none: there a true circuits' state gives the circuits' claim, hence a bad
 commit phase or the phase's condition, which without events is the extracted witness in the
 relation. -/
-theorem rbrKnowledgeSoundness_full {ε : A.spec.ChallengeIdx → ℝ≥0} (hε : A.EventBound ε)
+theorem rbrKnowledgeSound_full {ε : A.spec.ChallengeIdx → ℝ≥0} (hε : A.EventBound ε)
     (hch : A.HasChallenge sh) :
-    rbrKnowledgeSoundness rel (A.fullVerifier sh) (A.fullExtractor sh) (A.fullStateFn S hch)
+    RBRKnowledgeSound rel (A.fullVerifier sh) (A.fullExtractor sh) (A.fullStateFn S hch)
       (A.fullError S ε) := by
-  refine rbrKnowledgeSoundness_iff_count.mpr ?_
+  refine rbrKnowledgeSound_iff_count.mpr ?_
   intro x i tr
   rcases ChallengeIdx.inl_or_inr i with ⟨j, rfl⟩ | ⟨j, rfl⟩
   · refine le_trans (Nat.cast_le.mpr (Finset.card_le_card fun c hc => ?_))
@@ -358,6 +358,7 @@ def coinsEquiv : A.Coins Ah Hon ≃ Ah.Pads × (FieldProof.Shape.Honest.pi Hon).
 
 instance : Fintype (A.Coins Ah Hon) := Fintype.ofEquiv _ (A.coinsEquiv Ah Hon).symm
 instance : Nonempty (A.Coins Ah Hon) := (A.coinsEquiv Ah Hon).nonempty
+instance : DecidableEq (A.Coins Ah Hon) := (A.coinsEquiv Ah Hon).decidableEq
 
 /-- The honest commitment round: the commitment `O`. -/
 def commitFamily {Com : Type} (O : Com) : CausalTranscript (commitSpec Com) :=
@@ -474,13 +475,13 @@ theorem prob_not_avoids {e : ℝ≥0} (hE : Ah.ErrorBound fun _ => e) (x : Stmt)
 /-- **Completeness over circuits**: at every value of the prover's coins, the honest prover is
 rejected with probability at most the application phase's completeness error `e` (`hE`).
 `haccept`: every circuit's verdict accepts its honest commit rounds and proof on its domain. -/
-theorem completenessAt_full (c : A.Coins Ah Hon) {e : ℝ≥0} (hE : Ah.ErrorBound fun _ => e)
+theorem completeAt_full (c : A.Coins Ah Hon) {e : ℝ≥0} (hE : Ah.ErrorBound fun _ => e)
     (haccept : ∀ i p x, dom i p x → ∀ ρ chc ch,
       (sh i).V p ((Hon i).commit x ρ) ((Hon i).rounds x ρ chc)
         (((Hon i).prove p x ρ ((Hon i).rounds x ρ chc)).transcript ch) = true) :
-    completenessAt relI (A.fullVerifier sh) (fun y => A.fullHonest Ah Hon y c) e := by
+    CompleteAt relI (A.fullVerifier sh) (fun y => A.fullHonest Ah Hon y c) e := by
   classical
-  refine completenessAt_of_causal relI (A.fullVerifier sh) e
+  refine completeAt_of_causal relI (A.fullVerifier sh) e
     (fun y => A.fullHonest Ah Hon y c) (fun y x => A.fullFamily Ah Hon y c x)
     (fun y x ch => CausalTranscript.run_realize _ ch x)
     (fun x y ch => ¬ Ah.Avoids x y (A.appChallenge sh ch)) (fun x y hy ch hch => ?_)
@@ -760,8 +761,8 @@ round-by-round knowledge sound for `rel` at the named extractor `extractor` and 
 application phase's events, every masked row reduction's reduction errors and every commit-and-prove system's
 errors). -/
 theorem rbr_knowledge_soundness [Inhabited W] (S : C.Sound) :
-    rbrKnowledgeSoundness rel C.verifier C.extractor (C.stateFn S) (C.error S) :=
-  C.app.rbrKnowledgeSoundness_full S.circuits S.appBound (hasChallenge C)
+    RBRKnowledgeSound rel C.verifier C.extractor (C.stateFn S) (C.error S) :=
+  C.app.rbrKnowledgeSound_full S.circuits S.appBound (hasChallenge C)
 
 /-! ### Completeness and zero knowledge -/
 
@@ -820,8 +821,8 @@ completeness events together have probability at most `e`); the circuit proofs a
 complete on their domains. -/
 theorem completeness (Hc : C.Honest S I relI) (c : Hc.Coins) {e : ℝ≥0}
     (hE : Hc.app.ErrorBound fun _ => e) :
-    completenessAt relI C.verifier (fun y => C.honest Hc y c) e :=
-  C.app.completenessAt_full Hc.app (fun i => (Hc.circuit i).toShape) c hE
+    CompleteAt relI C.verifier (fun y => C.honest Hc y c) e :=
+  C.app.completeAt_full Hc.app (fun i => (Hc.circuit i).toShape) c hE
     fun i _ _ hx ρ chc ch => FieldProof.completeness (Hc.circuit i) hx ρ chc ch
 
 /-- **Honest-verifier zero knowledge of a multi-circuit IOP** at the named simulator `simulator`,

@@ -59,10 +59,16 @@ def RingStmt.equivProd (Sch : SigScheme) (RMsg : Type) (N : ℕ) :
   left_inv _ := rfl
   right_inv _ := rfl
 
+variable [Fintype Sch.PK] [Fintype Sch.Pub]
+
 noncomputable instance : Fintype (RingStmt Sch RMsg N) :=
   Fintype.ofEquiv _ (RingStmt.equivProd Sch RMsg N).symm
 
 /-! ### Relayed statements and witnesses -/
+
+variable [DecidableEq Sch.PK] [Nonempty Sch.Pub] [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins]
+  [Nonempty Sch.KeyCoins] [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins]
+  [Nonempty Sch.SignCoins]
 
 variable (Sch n N RMsg) in
 /-- **The statement register of a relayed request**: a ring statement and the request. -/
@@ -79,7 +85,8 @@ def RelayWit.toWit (w : RelayWit Sch N) : RingWit Sch := ⟨w.1, w.2⟩
 variable [Nonempty RMsg]
 
 /-- **The statement of the side requests**: the empty ring, which has no witness. -/
-noncomputable def dummyStmt (Sch : SigScheme) (RMsg : Type) [Nonempty RMsg] (N : ℕ) :
+noncomputable def dummyStmt (Sch : SigScheme) [Nonempty Sch.Pub] (RMsg : Type) [Nonempty RMsg]
+    (N : ℕ) :
     RingStmt Sch RMsg N :=
   ⟨⟨[], Nat.zero_le _⟩, Classical.arbitrary _, Classical.arbitrary _⟩
 
@@ -88,6 +95,7 @@ noncomputable def dummySig (bind : List Sch.PK → RMsg → Sch.Msg) : Sch.Sig :
   Sch.signWith (Sch.sk (Classical.arbitrary _)) (bind [] (Classical.arbitrary _))
     (Classical.arbitrary _)
 
+omit [Fintype Sch.PK] [Fintype Sch.Pub] [Nonempty Sch.KeyCoins] [Nonempty Sch.SignCoins] in
 noncomputable instance [NeZero n] : Inhabited (RelayStmt Sch n N RMsg) :=
   ⟨(dummyStmt Sch RMsg N, .publicKey 0)⟩
 
@@ -105,6 +113,7 @@ def signerIn (pkOf : Fin n → Sch.PK) (adm : List Sch.PK → Prop) : BKMRequest
   | .ringSign s R _ => adm R.1 ∧ R.1.idxOf (pkOf s) < R.1.length
   | _ => False
 
+omit [Fintype Sch.PK] [Fintype Sch.Pub] [Nonempty Sch.KeyCoins] [Nonempty Sch.SignCoins] in
 open Classical in
 /-- **The statement of request number `c`**: for a ring-signing request `(s, R, m)` by a member,
 `(R, m, ρ_c)` with the public value `ρ_c` of the request; otherwise `dummyStmt`. -/
@@ -170,6 +179,7 @@ noncomputable def sideAnswer {Resp : Type} (pkOf : Fin n → Sch.PK) (kcOf : Fin
       if signerIn pkOf adm (.ringSign s R m) then a.map (.ringSignature (pubs ⟨c, h⟩)) else none
   else none
 
+omit [Fintype Sch.PK] [Fintype Sch.Pub] [Nonempty Sch.KeyCoins] [Nonempty Sch.SignCoins] in
 /-- **The relay of statements** (to the simulator of the simulation-extraction game): request
 number `c` is sent as its statement `stmtAt` with the request, and answered by `sideAnswer` from
 the public keys `pkOf`, the key-generation coins `kcOf` (read only for corrupted users) and the
@@ -184,6 +194,7 @@ noncomputable def seRelay {Resp : Type} (pkOf : Fin n → Sch.PK) (kcOf : Fin n 
   route c r := (stmtAt pkOf adm pubs c r, r)
   answer := sideAnswer pkOf kcOf adm pubs
 
+omit [Fintype Sch.PK] [Fintype Sch.Pub] in
 /-- **The relay of proof queries** (to the real and the simulated zero-knowledge challengers) at
 the side coins `(keys, draws)`, with the public values `pubOf` of the drawn signing coins: request
 number `c` is sent as the proof query of its statement `stmtAt` (with the request) and its witness
@@ -200,13 +211,16 @@ noncomputable def zkRelay {Resp : Type} (adm : List Sch.PK → Prop)
     witAt s.1 adm bind s.2 c r⟩
   answer := sideAnswer (fun i => Sch.pk (s.1 i)) s.1 adm fun j => pubOf (s.2 j)
 
-omit [Fintype RMsg] [DecidableEq RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype Sch.PK] [Fintype Sch.Pub] [Nonempty Sch.KeyCoins]
+  [Nonempty Sch.SignCoins] [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins] [Fintype Sch.SignCoins]
+  [DecidableEq Sch.SignCoins] in
 theorem seRelay_route_injective {Resp : Type} (pkOf : Fin n → Sch.PK) (kcOf : Fin n → Sch.KeyCoins)
     (adm : List Sch.PK → Prop) {Q : ℕ} (pubs : Fin Q → Sch.Pub) (c : ℕ) :
     Function.Injective ((seRelay (Resp := Resp) (N := N) (RMsg := RMsg) pkOf kcOf adm pubs).route c) :=
   fun _ _ h => congrArg Prod.snd h
 
-omit [Fintype RMsg] [DecidableEq RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype Sch.PK] [Fintype Sch.Pub] [Fintype Sch.KeyCoins]
+  [DecidableEq Sch.KeyCoins] [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins] in
 theorem zkRelay_route_injective {Resp : Type} (adm : List Sch.PK → Prop)
     (bind : List Sch.PK → RMsg → Sch.Msg) (pubOf : Sch.SignCoins → Sch.Pub) {Q : ℕ}
     (s : SideCoins Sch n Q) (c : ℕ) :
@@ -215,7 +229,8 @@ theorem zkRelay_route_injective {Resp : Type} (adm : List Sch.PK → Prop)
 
 /-! ### The relation on the relayed proof queries -/
 
-omit [Fintype RMsg] [DecidableEq RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype Sch.PK] [Fintype Sch.Pub] [Fintype Sch.KeyCoins]
+  [DecidableEq Sch.KeyCoins] [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins] in
 /-- **The relayed proof query is in the ring relation exactly for a member's ring-signing
 request** numbered below `Q` whose drawn signature verifies, when the public value of an honest
 signature is `pubOf` of its coins (`hpub`). -/
@@ -249,7 +264,9 @@ theorem mem_ringRel_iff_signerIn {pubOf : Sch.SignCoins → Sch.Pub} (hpub : Sch
     rw [stmtAt, dite_eq_right_of_eq_false (eq_false hs)] at hl
     exact absurd hl (Nat.not_lt_zero _)
 
-omit [Fintype RMsg] [DecidableEq RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype Sch.PK] [Fintype Sch.Pub] [Nonempty Sch.KeyCoins]
+  [Nonempty Sch.SignCoins] [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins] [Fintype Sch.SignCoins]
+  [DecidableEq Sch.SignCoins] in
 /-- **The statement of a member's ring-signing request has a nonempty ring**; every other request
 has the empty ring of `dummyStmt`. -/
 theorem stmtAt_ring_eq_nil_iff (pkOf : Fin n → Sch.PK) (adm : List Sch.PK → Prop) {Q : ℕ}
@@ -270,7 +287,9 @@ theorem stmtAt_ring_eq_nil_iff (pkOf : Fin n → Sch.PK) (adm : List Sch.PK → 
   · rw [stmtAt, dite_eq_right_of_eq_false (eq_false h)]
     exact iff_of_true rfl h
 
-omit [Fintype RMsg] [DecidableEq RMsg] [Nonempty RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Nonempty RMsg] [Fintype Sch.PK] [Fintype Sch.Pub]
+  [Nonempty Sch.Pub] [Nonempty Sch.KeyCoins] [Nonempty Sch.SignCoins] [Fintype Sch.KeyCoins]
+  [DecidableEq Sch.KeyCoins] [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins] in
 /-- **The reply to a request that is not a member's ring-signing request** does not read the main
 reply. -/
 theorem sideAnswer_of_not_signerIn {Resp : Type} {pkOf : Fin n → Sch.PK}
@@ -282,7 +301,9 @@ theorem sideAnswer_of_not_signerIn {Resp : Type} {pkOf : Fin n → Sch.PK}
   · cases r <;> simp only [h, ite_false]
   · rfl
 
-omit [Fintype RMsg] [DecidableEq RMsg] [Nonempty RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Nonempty RMsg] [Fintype Sch.PK] [Fintype Sch.Pub]
+  [Nonempty Sch.Pub] [Nonempty Sch.KeyCoins] [Nonempty Sch.SignCoins] [Fintype Sch.KeyCoins]
+  [DecidableEq Sch.KeyCoins] [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins] in
 /-- The reply to a request depends on the public values only at its own number. -/
 theorem sideAnswer_pubs_congr {Resp : Type} {pkOf : Fin n → Sch.PK}
     {kcOf : Fin n → Sch.KeyCoins} {adm : List Sch.PK → Prop} {Q : ℕ} {pubs pubs' : Fin Q → Sch.Pub}
@@ -293,7 +314,9 @@ theorem sideAnswer_pubs_congr {Resp : Type} {pkOf : Fin n → Sch.PK}
   · rw [hc h]
   · rfl
 
-omit [Fintype RMsg] [DecidableEq RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype Sch.PK] [Fintype Sch.Pub] [Nonempty Sch.KeyCoins]
+  [Nonempty Sch.SignCoins] [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins] [Fintype Sch.SignCoins]
+  [DecidableEq Sch.SignCoins] in
 /-- The statement of a request depends on the public values only at its own number. -/
 theorem stmtAt_pubs_congr {pkOf : Fin n → Sch.PK} {adm : List Sch.PK → Prop} {Q : ℕ}
     {pubs pubs' : Fin Q → Sch.Pub} {c : ℕ} (hc : ∀ h : c < Q, pubs ⟨c, h⟩ = pubs' ⟨c, h⟩)
@@ -307,8 +330,9 @@ theorem stmtAt_pubs_congr {pkOf : Fin n → Sch.PK} {adm : List Sch.PK → Prop}
 
 variable {m k e : ℕ} {Resp SC : Type} [Fintype SC] [DecidableEq SC]
 
-variable {Coins : Type} [Fintype Coins]
+variable {Coins : Type} [Fintype Coins] [DecidableEq Coins]
   (Pv : NARG.Prover (Bits m) (XOut k e) (RingStmt Sch RMsg N) (RingWit Sch) Resp Coins)
+    (μ : PMF Coins)
   (bind : List Sch.PK → RMsg → Sch.Msg) (adm : List Sch.PK → Prop)
 
 omit [Fintype RMsg] [DecidableEq RMsg] [Nonempty RMsg] [Fintype Coins] in
@@ -327,6 +351,7 @@ noncomputable def checkedRingSignAfterKey (s : Fin n) (ring : RingOf Sch.PK N) (
       | _ => .pure (.pure none)
   else .pure (.pure none)
 
+omit [Fintype Coins] in
 open Classical in
 /-- **The checked layer of BKM06** for the admissible rings `adm`: `bkmLayer`, with the signer
 replying `none` when its base signature fails to verify (`checkedRingSignAfterKey`). A proof
@@ -334,8 +359,7 @@ device: it differs from `bkmLayer` only on a drawn signature that fails to verif
 noncomputable def checkedBkmLayer :
     OracleLayer Sch n (Bits m) (XOut k e) (BKMRequest Sch n N RMsg) (RingResponse Sch Resp) where
   Coins := Coins
-  instDecEqCoins := Classical.decEq _
-  coins := Pv.coins
+  coins := μ
   prog r c := if r.Admissible Sch n adm then
       match r with
       | .publicKey i => .query (.publicKey i) fun a => .pure (.pure (some (.base a)))
@@ -388,6 +412,23 @@ noncomputable def checkedBkmLayer :
         · simp [List.filter, BaseRequest.isSign]
     · simp
 
+/-! The instances of the checked layer's coins: those of the honest prover's coins `Coins`. -/
+
+section CheckedBkmLayerInstances
+
+variable {Pv μ bind adm}
+
+instance checkedBkmLayer.instFintypeCoins :
+    Fintype (checkedBkmLayer (n := n) Pv μ bind adm).Coins :=
+  inferInstanceAs (Fintype Coins)
+
+omit [Fintype Coins] in
+instance checkedBkmLayer.instDecEqCoins [DecidableEq Coins] :
+    DecidableEq (checkedBkmLayer (n := n) Pv μ bind adm).Coins :=
+  inferInstanceAs (DecidableEq Coins)
+
+end CheckedBkmLayerInstances
+
 /-! ### The simulated challengers of BKM06 -/
 
 omit [Nonempty RMsg] in
@@ -403,6 +444,8 @@ noncomputable def simCoinsLaw (Q : ℕ) (μ : PMF SC) : PMF (SimCoins Sch n Q SC
     (PMF.pi fun _ : Fin Q => (PMF.uniformOfFintype Sch.SignCoins).bind fun c =>
       μ.map fun d => (c, d)).map fun r => (keys, r)
 
+omit [Fintype Sch.PK] [Fintype Sch.Pub] [Fintype Sch.KeyCoins] [Nonempty Sch.KeyCoins]
+  [Fintype Sch.SignCoins] [Nonempty Sch.SignCoins] in
 open Classical in
 /-- **The reply of the simulated challengers** to request number `i` at the keys `κ` and the
 draw `d` (signing coins and simulator coins), with the test `ok` of the drawn signature: a
@@ -424,6 +467,7 @@ noncomputable def simReply (S : NARG.Simulator (Bits m) (XOut k e) (RingStmt Sch
     else .pure ⟨none, []⟩
   else .pure ⟨sideAnswer (fun i => Sch.pk (κ i)) κ adm (fun _ : Fin Q => pubOf d.1) i r none, []⟩
 
+omit [Fintype Sch.PK] [Fintype Sch.Pub] in
 /-- **The simulated challengers as split challengers** (`Quantum.SplitChallenger`): uniform keys,
 per request uniform signing coins and simulator coins, the replies `simReply` with the test `ok`. -/
 noncomputable def simSplit (S : NARG.Simulator (Bits m) (XOut k e) (RingStmt Sch RMsg N) Resp SC)
@@ -444,6 +488,7 @@ noncomputable def simSplit (S : NARG.Simulator (Bits m) (XOut k e) (RingStmt Sch
     · simp
     · simp
 
+omit [Fintype Sch.PK] [Fintype Sch.Pub] in
 /-- **The challenger of BKM06 Definition 7 with simulated ring signatures** answering `Q`
 requests, for a simulator `S` of the ring statements and the public values `pubOf` of the drawn
 signing coins: uniform keys and, per request, signing coins and simulator coins; a ring-signing
@@ -455,6 +500,7 @@ noncomputable abbrev simBKMChallenger
     Challenger (Bits m) (XOut k e) (BKMRequest Sch n N RMsg) (RingResponse Sch Resp) :=
   (simSplit S adm pubOf Q fun _ _ _ => True).toChallenger
 
+omit [Fintype Sch.PK] [Fintype Sch.Pub] in
 /-- **The checked challenger of BKM06 with simulated ring signatures**: `simBKMChallenger`,
 answering `none` to a ring-signing request by a member whose drawn signature fails to verify
 (`simSplit` with the test `drawOk`). A proof device: it reads the secret keys. -/
@@ -504,6 +550,8 @@ theorem bind_map_pair_apply {α β : Type} (μ : PMF α) (ν : α → PMF β) (a
     simp
   · rw [PMF.map_apply, ENNReal.tsum_eq_zero.2 fun b' => by simp [Ne.symm ha'], mul_zero]
 
+omit [Fintype Sch.PK] [DecidableEq Sch.PK] [Fintype Sch.Pub] [Nonempty Sch.Pub]
+  [DecidableEq Sch.KeyCoins] [DecidableEq Sch.SignCoins] in
 /-- **The uniform side coins are uniform key-generation coins and independent uniform draws per
 request.** -/
 theorem uniformOfFintype_sideCoins_apply (Q : ℕ) (s : SideCoins Sch n Q) :
@@ -516,7 +564,8 @@ theorem uniformOfFintype_sideCoins_apply (Q : ℕ) (s : SideCoins Sch n Q) :
   exact ENNReal.mul_inv (Or.inr (ENNReal.pow_ne_top (ENNReal.natCast_ne_top _)))
     (Or.inl (ENNReal.pow_ne_top (ENNReal.natCast_ne_top _)))
 
-omit [DecidableEq SC] in
+omit [DecidableEq SC] [Fintype Sch.PK] [DecidableEq Sch.PK] [Fintype Sch.Pub] [Nonempty Sch.Pub]
+  [DecidableEq Sch.KeyCoins] [DecidableEq Sch.SignCoins] in
 /-- **Keys and per-request pairs drawn as `simCoinsLaw` are uniform side coins and independent
 second components.** -/
 theorem simCoinsLaw_splitEquiv_symm (Q : ℕ) (μ : PMF SC) (s : SideCoins Sch n Q) (c : Fin Q → SC) :
@@ -529,15 +578,21 @@ theorem simCoinsLaw_splitEquiv_symm (Q : ℕ) (μ : PMF SC) (s : SideCoins Sch n
   funext i
   exact bind_map_pair_apply _ _ _ _
 
-omit [Fintype RMsg] [DecidableEq RMsg] [Nonempty RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Nonempty RMsg] [Fintype Sch.PK] [DecidableEq Sch.PK]
+  [Fintype Sch.Pub] [Nonempty Sch.Pub] [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins]
+  [Nonempty Sch.KeyCoins] [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins]
+  [Nonempty Sch.SignCoins] in
 /-- The draw of side coins `s` and layer coins `c`. -/
 theorem drawEquiv_symm_apply {X Y Req Resp : Type} (L : OracleLayer Sch n X Y Req Resp) (Q : ℕ)
     (s : SideCoins Sch n Q) (c : Fin Q → L.Coins) :
     (drawEquiv L Q).symm (s, c) = (s.1, fun i => (s.2 i, c i)) :=
   rfl
 
+omit [Fintype Sch.PK] [DecidableEq Sch.PK] [Fintype Sch.Pub] [Nonempty Sch.Pub]
+  [DecidableEq Sch.KeyCoins] [DecidableEq Sch.SignCoins] in
 /-- **The draws of the challenger of BKM06 are uniform side coins and independent layer coins.** -/
-theorem drawLaw_drawEquiv_symm {X Y Req Resp : Type} (L : OracleLayer Sch n X Y Req Resp) (Q : ℕ)
+theorem drawLaw_drawEquiv_symm {X Y Req Resp : Type} (L : OracleLayer Sch n X Y Req Resp)
+    [Fintype L.Coins] (Q : ℕ)
     (s : SideCoins Sch n Q) (c : Fin Q → L.Coins) :
     L.drawLaw Q ((drawEquiv L Q).symm (s, c)) =
       PMF.uniformOfFintype (SideCoins Sch n Q) s * (PMF.pi fun _ => L.coins) c :=
@@ -545,7 +600,7 @@ theorem drawLaw_drawEquiv_symm {X Y Req Resp : Type} (L : OracleLayer Sch n X Y 
 
 /-! ### The relays -/
 
-omit [Fintype RMsg] [DecidableEq RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype Sch.PK] [Fintype Sch.Pub] in
 open Classical in
 /-- **The checked challenger of BKM06 relays the real challenger** of the honest prover `Pv` on
 the relayed proof queries (`zkRelay`), at the side coins of its draws, when the public value of an
@@ -553,10 +608,10 @@ honest signature is `pubOf` of its coins (`hpub`). -/
 theorem relays_bkm_real {pubOf : Sch.SignCoins → Sch.Pub} (hpub : Sch.PubOfCoins pubOf) (Q : ℕ)
     (s : SideCoins Sch n Q) (c : Fin Q → Coins) :
     (zkRelay (N := N) (Resp := Resp) adm bind pubOf s).RelaysChallenger
-      ((checkedBkmLayer Pv bind adm).challenger Q)
-      ((drawEquiv (checkedBkmLayer Pv bind adm) Q).symm (s, c))
+      ((checkedBkmLayer Pv μ bind adm).challenger Q)
+      ((drawEquiv (checkedBkmLayer Pv μ bind adm) Q).symm (s, c))
       (realChallenger (fun x w => (x.1, RelayWit.toWit w) ∈ ringRel adm bind)
-        (Pv.comap Prod.fst RelayWit.toWit) Q) c := by
+        (Pv.comap Prod.fst RelayWit.toWit) μ Q) c := by
   refine ⟨rfl, ?_, ?_⟩
   · intro hist hist' r G hrel hQ
     have hlen : hist.length = hist'.length := by
@@ -607,7 +662,7 @@ theorem relays_bkm_real {pubOf : Sch.SignCoins → Sch.Pub} (hpub : Sch.PubOfCoi
     change Q ≤ i at h
     simp only [zkRelay, sideAnswer, show ¬ i < Q from not_lt.2 h, dite_false]
 
-omit [Fintype RMsg] [DecidableEq RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype Sch.PK] [Fintype Sch.Pub] in
 open Classical in
 /-- **The checked simulated challenger of BKM06 relays the simulated zero-knowledge challenger** of
 the simulator `S` on the relayed proof queries (`zkRelay`), when the public value of an honest
@@ -653,7 +708,7 @@ theorem relays_sim_zk {pubOf : Sch.SignCoins → Sch.Pub} (hpub : Sch.PubOfCoins
     change Q ≤ i at h
     simp only [zkRelay, sideAnswer, show ¬ i < Q from not_lt.2 h, dite_false]
 
-omit [Fintype RMsg] [DecidableEq RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype Sch.PK] [Fintype Sch.Pub] in
 /-- **The simulated challenger of BKM06 relays the simulation-extraction challenger** of the
 simulator inert on the empty ring (`inertOnEmpty`) on the relayed statements (`seRelay`). -/
 theorem relays_sim_se (S : NARG.Simulator (Bits m) (XOut k e) (RingStmt Sch RMsg N) Resp SC)
@@ -720,7 +775,9 @@ theorem toOuterMeasure_bind_map_fst {α β : Type} [Fintype α] [Nonempty α] (�
     rw [this, MeasureTheory.measure_empty, mul_zero,
       Set.indicator_of_notMem (show a ∉ {a | p a} from ha)]
 
-omit [Fintype RMsg] [DecidableEq RMsg] [Nonempty RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Nonempty RMsg] [Fintype Sch.PK] [DecidableEq Sch.PK]
+  [Fintype Sch.Pub] [Nonempty Sch.Pub] [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins]
+  [Nonempty Sch.KeyCoins] [DecidableEq Sch.SignCoins] in
 /-- **A signature that fails `drawOk` has at most the correctness error**, over uniform signing
 coins, at every request. -/
 theorem toOuterMeasure_not_drawOk_le {ε : ℝ≥0∞} (hcorr : Sch.CorrectWithin ε)
@@ -731,24 +788,30 @@ theorem toOuterMeasure_not_drawOk_le {ε : ℝ≥0∞} (hcorr : Sch.CorrectWithi
   · simp [drawOk]
   · exact hcorr (κ s) (bind R.1 m)
 
-variable {m k e : ℕ} {Resp : Type} {Coins : Type} [Fintype Coins]
+variable {m k e : ℕ} {Resp : Type} {Coins : Type} [Fintype Coins] [DecidableEq Coins]
   (Pv : NARG.Prover (Bits m) (XOut k e) (RingStmt Sch RMsg N) (RingWit Sch) Resp Coins)
+    (μ : PMF Coins)
   (bind : List Sch.PK → RMsg → Sch.Msg) (adm : List Sch.PK → Prop)
 
-omit [Fintype RMsg] [DecidableEq RMsg] [Nonempty RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Nonempty RMsg] [Fintype Sch.PK] [Fintype Sch.Pub]
+  [Nonempty Sch.Pub] in
 /-- **The checked layer of BKM06 is the layer of BKM06 with other replies**, as split
 challengers. -/
 theorem split_checkedBkmLayer (Q : ℕ) :
-    (checkedBkmLayer (n := n) Pv bind adm).split Q = ((bkmLayer (n := n) Pv bind adm).split Q).withReply
-      ((checkedBkmLayer (n := n) Pv bind adm).split Q).reply ((checkedBkmLayer (n := n) Pv bind adm).split Q).reply_queries :=
+    (checkedBkmLayer (n := n) Pv μ bind adm).split Q =
+      ((bkmLayer (n := n) Pv μ bind adm).split Q).withReply
+      ((checkedBkmLayer (n := n) Pv μ bind adm).split Q).reply
+        ((checkedBkmLayer (n := n) Pv μ bind adm).split Q).reply_queries :=
   rfl
 
-omit [Fintype RMsg] [DecidableEq RMsg] [Nonempty RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Nonempty RMsg] [Fintype Sch.PK] [Fintype Sch.Pub]
+  [Nonempty Sch.Pub] in
 open Classical in
 /-- **The two layers of BKM06 reply alike** when the signature drawn for the request verifies. -/
 theorem reply_bkmLayer_eq_checked (Q : ℕ) (κ : Fin n → Sch.KeyCoins) (d : Sch.SignCoins × Coins)
     (i : ℕ) (r : BKMRequest Sch n N RMsg) (h : drawOk Sch N RMsg bind κ d.1 r) :
-    ((bkmLayer (n := n) Pv bind adm).split Q).reply κ d i r = ((checkedBkmLayer (n := n) Pv bind adm).split Q).reply κ d i r := by
+    ((bkmLayer (n := n) Pv μ bind adm).split Q).reply κ d i r =
+      ((checkedBkmLayer (n := n) Pv μ bind adm).split Q).reply κ d i r := by
   simp only [OracleLayer.split, bkmLayer, checkedBkmLayer]
   split_ifs with ha
   · rcases r with j | j | ⟨s, R, m⟩
@@ -766,23 +829,25 @@ theorem reply_bkmLayer_eq_checked (Q : ℕ) (κ : Fin n → Sch.KeyCoins) (d : S
       · rfl
   · rfl
 
-omit [Fintype RMsg] [DecidableEq RMsg] [Nonempty RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Nonempty RMsg] [Fintype Sch.PK] [Fintype Sch.Pub]
+  [Nonempty Sch.Pub] in
 /-- **The two layers of BKM06 disagree with at most the correctness error** at every request. -/
 theorem draw_bkmLayer_ne_checked_le {ε : ℝ≥0∞} (hcorr : Sch.CorrectWithin ε) (Q : ℕ)
     (κ : Fin n → Sch.KeyCoins) (i : ℕ) (r : BKMRequest Sch n N RMsg) :
-    ((bkmLayer (n := n) Pv bind adm).split Q).draw.toOuterMeasure
-      {d | ((bkmLayer (n := n) Pv bind adm).split Q).reply κ d i r ≠
-        ((checkedBkmLayer (n := n) Pv bind adm).split Q).reply κ d i r} ≤ ε := by
+    ((bkmLayer (n := n) Pv μ bind adm).split Q).draw.toOuterMeasure
+      {d | ((bkmLayer (n := n) Pv μ bind adm).split Q).reply κ d i r ≠
+        ((checkedBkmLayer (n := n) Pv μ bind adm).split Q).reply κ d i r} ≤ ε := by
   refine le_trans (MeasureTheory.measure_mono fun d hd =>
-    show ¬ drawOk Sch N RMsg bind κ d.1 r from fun h => hd (reply_bkmLayer_eq_checked Pv bind adm Q κ d i r h)) ?_
-  change ((PMF.uniformOfFintype Sch.SignCoins).bind fun s => Pv.coins.map fun c => (s, c)).toOuterMeasure
+    show ¬ drawOk Sch N RMsg bind κ d.1 r from fun h => hd
+        (reply_bkmLayer_eq_checked Pv μ bind adm Q κ d i r h)) ?_
+  change ((PMF.uniformOfFintype Sch.SignCoins).bind fun s => μ.map fun c => (s, c)).toOuterMeasure
     {d | ¬ drawOk Sch N RMsg bind κ d.1 r} ≤ ε
   rw [toOuterMeasure_bind_map_fst (p := fun c => ¬ drawOk Sch N RMsg bind κ c r)]
   exact toOuterMeasure_not_drawOk_le hcorr bind κ r
 
 variable {SC : Type} [Fintype SC] [DecidableEq SC]
 
-omit [Fintype RMsg] [DecidableEq RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype Sch.PK] [Fintype Sch.Pub] in
 /-- **The simulated challenger is the checked simulated challenger with other replies**, as split
 challengers. -/
 theorem simSplit_withReply (S : NARG.Simulator (Bits m) (XOut k e) (RingStmt Sch RMsg N) Resp SC)
@@ -792,7 +857,7 @@ theorem simSplit_withReply (S : NARG.Simulator (Bits m) (XOut k e) (RingStmt Sch
       (simSplit (n := n) S adm pubOf Q (fun _ _ _ => True)).reply_queries :=
   rfl
 
-omit [Fintype RMsg] [DecidableEq RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype Sch.PK] [Fintype Sch.Pub] in
 /-- **The checked and the unchecked simulated challengers disagree with at most the correctness
 error** at every request. -/
 theorem draw_simSplit_ne_le {ε : ℝ≥0∞} (hcorr : Sch.CorrectWithin ε)

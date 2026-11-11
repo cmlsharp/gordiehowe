@@ -36,7 +36,7 @@ namespace GordieHowe.Falcon512.Ring.Carrier.ROMParams
 open RealizedProgram.Export RealizedProgram.ProofSystem.PhaseLayout IOP RelativePacking GordieHowe.SPBCS GordieHowe.QROM SPBCS.Configurations GordieHowe.Ring
 open Generated.Falcon512.Ring.Carrier.ROMParams.Program (program)
 open Generated.Falcon512.Ring.Carrier.ROMParams (interp ProofSystems)
-open Native (Signer CoreWit scheme)
+open Native (CoreWit scheme)
 open scoped NNReal ENNReal
 
 variable (G : Signer 32)
@@ -48,8 +48,8 @@ variable {G} (C : ProofSystems)
 /-- **The relation of the BCS transformation**: the statement passes the check (`ringOk`) and the
 realized program's relation holds at its program statement, on the witness read from that statement. -/
 abbrev ringStmtRel : Set (Ring.RStmt G × (program.Valuation interp → CoreWit)) :=
-  {p | Ring.ringOk p.1 = true ∧
-    (Ring.stmtOf p.1, p.2) ∈ RealizedProgram.ProofSystem.relOf Ring.rel}
+  RealizedProgram.ProofSystem.checkedRel Ring.stmtOf Ring.ringOk
+    (RealizedProgram.ProofSystem.relOf Ring.rel)
 
 /-! ## The transcript -/
 

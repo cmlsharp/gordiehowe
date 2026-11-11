@@ -66,7 +66,8 @@ variable {p : Params} {T : ℕ} {Msg : Type} {N reps : ℕ}
   {Λ : SiteLayout Mg} {b : ℕ} [∀ j i, Fintype ((Sc.comp j).MessageWrite i)]
   {E : (j : ι) → (Sc.comp j).Encoder}
   {Vr : W1ExpStmt (concretePrimitivesKeyGen p) Msg N → FullTr P τ → Bool}
-  {Qs : ∀ x, Sc.IOPQueries Vr x} {hb : Sc.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ x, Sc.IOPQueries Vr x} {hb : Sc.FormatBounds Qs b b} {R : Type} [Fintype R]
+  [DecidableEq R] [Nonempty R]
   {honest : RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p)) → R →
     CausalProver P τ (W1ExpStmt (concretePrimitivesKeyGen p) Msg N)}
   {adm : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → Prop}
@@ -183,7 +184,8 @@ hedged ones. -/
   ‹Inhabited Sc.NIProof›
 
 omit [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁] [Nonempty Msg]
-  [Nonempty (FIPSSignature p (concretePrimitivesKeyGen p))] [Inhabited Sc.NIProof] in
+  [Nonempty (FIPSSignature p (concretePrimitivesKeyGen p))] [Inhabited Sc.NIProof]
+  [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The width bound of the chain's adversary, scaled by the statement program's `2N` reads**: the
 bound passed to `thenProgOut`. A named proof whose arguments are variables, so definitions keep it
 as it is and statements and definitions spell the same term. -/
@@ -226,7 +228,7 @@ local notation "PsimC" => ((inertOnDummy w1IsDummy ((Sc).niJointSimulatorProg Λ
 local notation "AdvRc" keys:max sc:max ω:max a:max =>
   (((((TPA keys).alg a.1).absorbAssign
     (Resp' := MUResponse (freshBase (concretePrimitivesKeyGen p) O MO βmin tol (concreteEnc p) kr D
-      bmc) ⊕ (Sc).Response b)
+      bmc).core ⊕ (Sc).Response b)
     (kfRelaySide sp (freshBase (concretePrimitivesKeyGen p) O MO βmin tol (concreteEnc p) kr D bmc)
       (fun j => (freshBase (concretePrimitivesKeyGen p) O MO βmin tol (concreteEnc p) kr D bmc).pk
         (keys j))
@@ -240,7 +242,7 @@ local notation "AdvRc" keys:max sc:max ω:max a:max =>
 local notation "AdvRcP" keys:max sc:max ω:max a:max =>
   (((((TPA keys).alg a.1).absorbAssign
     (Resp' := MUResponse (freshBase (concretePrimitivesKeyGen p) O MO βmin tol (concreteEnc p) kr D
-      bmc) ⊕ Sc.Response b)
+      bmc).core ⊕ Sc.Response b)
     (w1SideRelay sp (concretePrimitivesKeyGen p) O MO βmin tol (concreteEnc p) kr D bmc
         (Sc) Λ
       E (hb) (honest) adm chkN h keys sc ω) Q).restrictAt sp
@@ -279,8 +281,8 @@ local notation "CanRc" keys:max sc:max ω:max a:max Gl:max =>
         (concreteEnc p) kr D bmc adm (fun j => (Bf).pk (keys j))) Gl)
 
 /-- The forger's win at `w1Goal` for an algorithm `B` at `keys` and `ω`. -/
-local notation "WinFc" keys:max ω:max => fun {shB : AlgShape Xq (XOut kh e) (MURequest (SignOracle.none (Bf)) n ⊕ W1Rq (concretePrimitivesKeyGen p) O MO βmin tol
-      (concreteEnc p) kr D bmc PSh adm n Q) (MUResponse (Bf) ⊕ (Sc).Response b)} (B : AdaptiveIAlg shB ((KeyRing (PubKey p (concretePrimitivesKeyGen p)) N × Msg × (BucketVec p × (Sc).Response
+local notation "WinFc" keys:max ω:max => fun {shB : AlgShape Xq (XOut kh e) (MURequest (SignOracle.none (Bf).core) n ⊕ W1Rq (concretePrimitivesKeyGen p) O MO βmin tol
+      (concreteEnc p) kr D bmc PSh adm n Q) (MUResponse (Bf).core ⊕ (Sc).Response b)} (B : AdaptiveIAlg shB ((KeyRing (PubKey p (concretePrimitivesKeyGen p)) N × Msg × (BucketVec p × (Sc).Response
       b))
       × X₀f)) =>
   simProb (outEquiv kh e) (extAdv (Qs) (seAlgKF (rel := w1Rel
@@ -296,8 +298,8 @@ local notation "WinFc" keys:max ω:max => fun {shB : AlgShape Xq (XOut kh e) (MU
         (fun j => (Bf).pk (keys j)) ω))
 
 /-- The forger's win at `w1Goal` for an algorithm with the responses of `PSf`. -/
-local notation "WinFcP" keys:max ω:max => fun {shB : AlgShape Xq (XOut kh e) (MURequest (SignOracle.none (Bf)) n ⊕ W1Rq (concretePrimitivesKeyGen p) O MO βmin tol
-      (concreteEnc p) kr D bmc PSh adm n Q) (MUResponse (Bf) ⊕ Sc.Response b)} (B : AdaptiveIAlg shB ((KeyRing (PubKey p (concretePrimitivesKeyGen p)) N × Msg × (BucketVec p × (Sc).Response
+local notation "WinFcP" keys:max ω:max => fun {shB : AlgShape Xq (XOut kh e) (MURequest (SignOracle.none (Bf).core) n ⊕ W1Rq (concretePrimitivesKeyGen p) O MO βmin tol
+      (concreteEnc p) kr D bmc PSh adm n Q) (MUResponse (Bf).core ⊕ Sc.Response b)} (B : AdaptiveIAlg shB ((KeyRing (PubKey p (concretePrimitivesKeyGen p)) N × Msg × (BucketVec p × (Sc).Response
       b))
       × X₀f)) =>
   simProb (outEquiv kh e) (extAdv (Qs) (seAlgKF (rel := w1Rel
@@ -383,6 +385,8 @@ set_option quotPrecheck true
 set_option hygiene true
 
 open Classical in
+omit [DecidableEq R] in
+omit [DecidableEq R] in
 /-- **`tsum_simProb_w1Goal_le` at the adversary of the chain.** -/
 theorem tsum_simProb_w1Goal_le_chain
     [DecidableRel (w1Rel (concretePrimitivesKeyGen p) O MO βmin tol (concreteEnc p) kr D bmc PSh adm
@@ -443,7 +447,7 @@ theorem tsum_simProb_w1Goal_le_chain
     (fun ξ _ _ a => (TPA ξ).alg a.1) PsimC Ext
   exact hR
 
-omit [Nonempty Y₁] in
+omit [Nonempty Y₁] [DecidableEq R] in
 open Classical in
 /-- **The backbone's summand at `keys`, `sc` and `ω` is the summand of
 `tsum_simProb_w1Goal_le`** (`QueryBoundedAdversary.tsum_absorbAssign_restrictAt_mapOut`). -/
@@ -476,7 +480,7 @@ theorem WbbC_eq
   -- TODO(unbundle-M4): read the right side at the relay and win of `AdvRc` through one equality of
   -- response types (comparing the two algorithm shapes inside the win times out).
   have hR := QueryBoundedAdversary.tsum_absorbAssign_restrictAt_mapOut_congr
-    (Resp₂ := MUResponse (Bf) ⊕ (Sc).Response b) (TPA keys)
+    (Resp₂ := MUResponse (Bf).core ⊕ (Sc).Response b) (TPA keys)
     (w1SideRelay sp (concretePrimitivesKeyGen p) O MO βmin tol (concreteEnc p) kr D bmc
         (Sc) Λ
       E (hb) (honest) adm chkN h keys sc ω)
@@ -492,6 +496,7 @@ theorem WbbC_eq
   exact hR.trans (tsum_congr fun a => congrArg (_ * ·) rfl)
 
 open Classical in
+omit [DecidableEq R] in
 /-- **The backbone's average is the average of `tsum_simProb_w1Goal_le`** at the adversary of the
 chain. -/
 theorem tsum_WbbC_eq
@@ -529,6 +534,7 @@ theorem tsum_WbbC_eq
     pub Sim Tp hvzk hrbr p₀ keys sc ω
 
 open Classical in
+omit [DecidableEq R] in
 /-- **The backbone's average splits into the three cases** (`tsum_simProb_w1Goal_le` at the
 adversary of the chain): the average over the key coins, the side coins and the base components of
 the forger's win at `w1Goal` plus the simulation-extraction and zero-knowledge errors is at most the
@@ -964,7 +970,8 @@ theorem w1ConvConcrete.insiderForgeProb_le_backbone
 
 omit [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁] [Nonempty Msg]
   [Nonempty (FIPSSignature p (concretePrimitivesKeyGen p))]
-  [Inhabited Sc.NIProof] in
+  [Inhabited Sc.NIProof]
+  [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The width of the chain's adversary is the adversary's**: a schedule bound of `A` with width
 `w` bounds the query width of `w1ChainAdv (w1ConvAdv A) pks` by `w`. -/
 theorem w1ChainAdv_width_le {t : ℕ}
@@ -1021,7 +1028,7 @@ local notation "Gkf" => fun (pks : Fin n → (Bf).PK) (sc : Fin Q → KFCoins (p
 /-- The queries of the simulator of the main proofs. -/
 local notation "PsimQ" => (PsimC : NARG.Simulator Xq (XOut kh e)
   (W1Stmt (concretePrimitivesKeyGen p) O MO βmin tol (concreteEnc p) kr D bmc PSh adm n Q ×
-    (MURequest (SignOracle.none Bf) n ⊕
+    (MURequest (SignOracle.none (Bf).core) n ⊕
       W1Rq (concretePrimitivesKeyGen p) O MO βmin tol (concreteEnc p) kr D bmc PSh adm n Q))
   ((Sc).Response b) _).q
 
@@ -1040,6 +1047,7 @@ local notation "UForgerC" => w1UForger (PS := PSh) (adm := adm) sp (Qs) UAdvC Gk
   (fun _ _ => ⟨rfl, rfl, rfl⟩)
 
 open Classical in
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **Case U of the chain as MU-EUF-NMA^corr** (`w1UAvg_le` at the chain's adversaries at the public keys, the key-free relays
 `Gkf`, whose relay at `ω` is the relay at zero with side `ω` by `relayOf_kfRelaySide`): the
 average of case U at the canonical witness over the users' key coins, the side coins, the base
@@ -1080,7 +1088,7 @@ theorem w1CaseUAvgC_le (h : W1OracleFacts O MO sp) {t : ℕ}
 /-- The guess event of case S at the canonical witness: a logged signing entry with the witness's
 signature, asked by a signed request of the key-free relay. -/
 local notation "GlS" ξ:max sc:max ω:max => fun (_ : (KeyRing (PubKey p (concretePrimitivesKeyGen p)) N ×
-    Msg × (BucketVec p × (Sc).Response b)) × X₀f) (rs : List (MURequest (SignOracle.none (Bf)) n ⊕
+    Msg × (BucketVec p × (Sc).Response b)) × X₀f) (rs : List (MURequest (SignOracle.none (Bf).core) n ⊕
       W1Rq (concretePrimitivesKeyGen p) O MO βmin tol (concreteEnc p) kr D bmc PSh adm n Q))
     (w : RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) =>
   ∃ e' ∈ rs, (w1SignEntry e').isSome = true ∧ w1EntrySig e' = some w.sig ∧
@@ -1089,6 +1097,7 @@ local notation "GlS" ξ:max sc:max ω:max => fun (_ : (KeyRing (PubKey p (concre
       (w1StmtPω Pc O MO βmin tol (concreteEnc p) kr D bmc sp) (w1ToR (Q := Q)) sc ω e'
 
 open Classical in
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The guess event at the canonical witness is the slot guess of the run's outcome**
 (`simProb_forgerCanonKF_eq`, `w1CanonSig_eq`, `cast_natOutcome`): the canonical witness satisfies
 the guess event `GlS` only if the outcome's readout is the signature of a logged signing entry
@@ -1131,6 +1140,7 @@ theorem w1CanS_le_slotGuess (h : W1OracleFacts O MO sp) {t : ℕ}
     (concretePrimitivesKeyGen p))) => w.sig) hwt, e', he', hs, hsig, hask⟩
 
 open Classical in
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The guess of case S at the chain** (`w1GuessAvg_le` through `w1CanS_le_slotGuess`, the
 averages over the side coins innermost, `ENNReal.tsum4_le_of_second`): the average of the guess
 event at the canonical witness is at most `Q · kr · T · |BucketVec| / |MaskBox|`. -/
@@ -1212,6 +1222,7 @@ noncomputable def w1H3CaseError (h : W1OracleFacts O MO sp) {t : ℕ}
         (w1MsisReadout sp h.hO ξ)))
 
 open Classical in
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- The terms of `w1H3CaseError`: collision + ((case U + case S=) + case S≠). -/
 @[simp] theorem w1H3CaseError_eq (h : W1OracleFacts O MO sp) {t : ℕ}
     (A : InsiderAdversary (w1ConvConcrete p O MO βmin tol kr D PSc adm) n
@@ -1246,6 +1257,88 @@ open Classical in
               (fun ξ => w1Ok Pc O MO βmin tol (concreteEnc p) kr D bmc adm
                 (fun j => (Bf).pk (ξ j))) ξ sc ω).map fun o => (o.1, sc, ω, o.2.1, o.2.2)).map
           (w1MsisReadout sp h.hO ξ))) :=
+  rfl
+
+open Classical in
+/-- **`w1H3CaseError` with the case-U term `u`** in place of the success probability of the
+MU-EUF-NMA^corr forger `w1UForger` (`w1H3CaseError_eq_with`), so that a bound on that game can
+replace it (`Applications/Ring/MLDSAW1NamedAssumptions.lean`). It sits here because the terms
+are written with this file's local notations. -/
+noncomputable def w1H3CaseErrorWith (h : W1OracleFacts O MO sp) {t : ℕ}
+    (A : InsiderAdversary (w1ConvConcrete p O MO βmin tol kr D PSc adm) n
+      (OracleView.queriesOnly Xq (BitStr I J)) t) {S w P' : ℕ}
+    (hS : GameAdversary.ScheduleLE A S w P') (VE : Sc.ViewEncoder E Qs) {Pub : Type}
+    (pub : X₀f → Pub) (Sim : CausalJointSimulator VE.MV Pub) (Tp : Sc.Preimages)
+    (p₀ : Sc.Response b) (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))))
+    (_f₀ : PubKey p (concretePrimitivesKeyGen p) × Msg × FIPSSignature p (concretePrimitivesKeyGen p))
+    (u : ℝ≥0∞) : ℝ≥0∞ :=
+  have hw := w1ChainAdv_width_le hS
+  (12 * ((t + Q * (w1KFq N reps kr T + 2 * N +
+      max 0 (w1MainProver (adm := adm) sp (Sc) Λ E (hb)
+          (honest) n Q
+        chkN).q) + (N + Q) : ℕ) :
+      ℝ≥0∞) ^ 2 *
+    ((t + Q * (w1KFq N reps kr T + 2 * N +
+      max 0 (w1MainProver (adm := adm) sp (Sc) Λ E (hb)
+          (honest) n Q
+        chkN).q) + (N + Q) - 1 : ℕ) :
+      ℝ≥0∞) / Fintype.card (MLDSA.Bytes 64) +
+    2 * (N + Q : ℕ) / Fintype.card (BitStr I J)) +
+  ((u +
+      Q * (kr * T * Fintype.card (BucketVec p) / Fintype.card (MaskBox p))) +
+    Lattice.keyGenMsisMultiWinProb p Pc (Lattice.msisStrictBoundZ p) (Lattice.msisBoundU p) n
+      (fun ξ => ((PMF.uniformOfFintype (Fin Q → KFCoins (p := p) (T := T) kr D Y₁)).bind fun sc =>
+        (PMF.uniformOfFintype (Xq → Y₁)).bind fun ω =>
+          (w1SecondRunLaw (rel := w1Rel Pc O MO βmin tol (concreteEnc p) kr D bmc PSh adm n Q)
+            (dummyS := w1DummyS PSh adm n Q) (Qs) (kqOf Mg nr b b) pencC w1PrfOf
+            (fun ξ _ _ => auxC ξ)
+            (fun ξ sc ω a => AdvRc ξ sc ω a) PsimC Ext
+            (fun ξ => w1Ok Pc O MO βmin tol (concreteEnc p) kr D bmc adm
+              (fun j => (Bf).pk (ξ j))) ξ sc ω).map fun o => (o.1, sc, ω, o.2.1, o.2.2)).map
+        (w1MsisReadout sp h.hO ξ)))
+
+open Classical in
+/-- **The case-U forger of `w1H3CaseError`**: the MU-EUF-NMA^corr forger `w1UForger` against the
+signer with fresh masks. -/
+noncomputable def w1H3UForger (h : W1OracleFacts O MO sp) {t : ℕ}
+    (A : InsiderAdversary (w1ConvConcrete p O MO βmin tol kr D PSc adm) n
+      (OracleView.queriesOnly Xq (BitStr I J)) t) {S w P' : ℕ}
+    (hS : GameAdversary.ScheduleLE A S w P') (VE : Sc.ViewEncoder E Qs) {Pub : Type}
+    (pub : X₀f → Pub) (Sim : CausalJointSimulator VE.MV Pub) (Tp : Sc.Preimages)
+    (p₀ : Sc.Response b) (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))))
+    (f₀ : PubKey p (concretePrimitivesKeyGen p) × Msg × FIPSSignature p (concretePrimitivesKeyGen p)) :=
+  have hw := w1ChainAdv_width_le hS
+  UForgerC
+
+open Classical in
+/-- **The requests of the case-U game of `w1H3CaseError`.** -/
+noncomputable def w1H3URequests (h : W1OracleFacts O MO sp) {t : ℕ}
+    (A : InsiderAdversary (w1ConvConcrete p O MO βmin tol kr D PSc adm) n
+      (OracleView.queriesOnly Xq (BitStr I J)) t) {S w P' : ℕ}
+    (hS : GameAdversary.ScheduleLE A S w P') (VE : Sc.ViewEncoder E Qs) {Pub : Type}
+    (pub : X₀f → Pub) (Sim : CausalJointSimulator VE.MV Pub) (Tp : Sc.Preimages)
+    (p₀ : Sc.Response b) (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))))
+    (f₀ : PubKey p (concretePrimitivesKeyGen p) × Msg × FIPSSignature p (concretePrimitivesKeyGen p)) : ℕ :=
+  kfAbsorbSideRequests S (P' + 2 * N) w PsimQ (kqOf Mg nr b b + Q * PsimQ)
+
+open Classical in
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
+/-- **`w1H3CaseError` at its case-U term** (`w1H3CaseErrorWith`). -/
+theorem w1H3CaseError_eq_with (h : W1OracleFacts O MO sp) {t : ℕ}
+    (A : InsiderAdversary (w1ConvConcrete p O MO βmin tol kr D PSc adm) n
+      (OracleView.queriesOnly Xq (BitStr I J)) t) {S w P' : ℕ}
+    (hS : GameAdversary.ScheduleLE A S w P') (VE : Sc.ViewEncoder E Qs) {Pub : Type}
+    (pub : X₀f → Pub) (Sim : CausalJointSimulator VE.MV Pub) (Tp : Sc.Preimages)
+    (p₀ : Sc.Response b) (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))))
+    (f₀ : PubKey p (concretePrimitivesKeyGen p) × Msg × FIPSSignature p (concretePrimitivesKeyGen p)) :
+    w1H3CaseError (Λ := Λ) (E := E) (hb := hb) (honest := honest) (Q := Q) h A hS VE pub Sim
+        Tp p₀ Ext f₀ =
+      w1H3CaseErrorWith (Λ := Λ) (E := E) (hb := hb) (honest := honest) (Q := Q) h A hS VE pub Sim
+        Tp p₀ Ext f₀
+        (muEufNmaProb (w1H3UForger (Λ := Λ) (E := E) (hb := hb) (honest := honest) (Q := Q) h A hS VE pub Sim
+          Tp p₀ Ext f₀)
+          (w1H3URequests (Λ := Λ) (E := E) (hb := hb) (honest := honest) (Q := Q) h A hS VE pub Sim
+            Tp p₀ Ext f₀)) :=
   rfl
 
 set_option quotPrecheck true

@@ -145,6 +145,30 @@ theorem layerOk_of_slices {w : ℕ} {D : Dag} {Tp : Table} {wp : ℕ} {Tc : Tabl
     (h : layerSliceOk w D Tp wp Tc gates 0 0 = true) : layerOk w D Tp wp Tc gates = true := by
   simpa [layerSliceOk, layerOk] using h
 
+/-- **A slice read at its tail**: when the gates from position `s` on are the list `T`, the slice
+from `s` is `T`'s first `n` gates (every one when `n = 0`), from index `s`. A large layer's slices
+name the loaded list's tails, so no slice's check drops past the gates before it. -/
+theorem layerSliceOk_of_tail {w : ℕ} {D : Dag} {Tp : Table} {wp : ℕ} {Tc : Table}
+    {gates T : List ℕ} {s n : ℕ} (hT : gates.drop s = T)
+    (h : gatesOk w D Tp wp Tc s (sliceL T 0 n) = true) :
+    layerSliceOk w D Tp wp Tc gates s n = true := by
+  subst hT
+  simpa [layerSliceOk, sliceL] using h
+
+/-- **The tail `n` past a tail**: the list from `s` on is `T`, and `T` from `n` on is `T'`. -/
+theorem drop_tail_step {l T T' : List ℕ} {s n : ℕ} (hT : l.drop s = T) (h : T.drop n = T') :
+    l.drop (s + n) = T' := by
+  subst hT h
+  rw [List.drop_drop]
+
+/-- **A layer at its previous layer's width given as a numeral**: the width `N` is the previous
+layer's length, checked once, so the layer's slices do not each count the previous layer. -/
+theorem layerOk_of_width {w : ℕ} {D : Dag} {Tp : Table} {Tc : Table} {l gates : List ℕ} {N : ℕ}
+    (hN : Nat.beq l.length N = true) (h : layerOk w D Tp N Tc gates = true) :
+    layerOk w D Tp l.length Tc gates = true := by
+  rw [Nat.eq_of_beq_eq_true hN]
+  exact h
+
 /-- The layers' checker from the first layer's and the rest's. -/
 theorem layersOk_cons {w : ℕ} {D : Dag} {outs : List (ℕ × ℕ)} {outw : List ℕ} {Tp T : Table} {wp : ℕ} {Ts : List Table}
     {l : List ℕ} {ls : List (List ℕ)} (h1 : layerOk w D Tp wp T l = true)

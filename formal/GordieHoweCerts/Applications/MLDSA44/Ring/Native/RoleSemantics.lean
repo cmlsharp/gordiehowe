@@ -37,6 +37,15 @@ local notation "nat" => MldsaRingEmbed.nat program
 set_option hygiene false in
 local notation "σ" => MldsaRingEmbed.σ program
 
+set_option hygiene false in
+local notation "ringV" => MldsaRingEmbed.V program
+
+set_option hygiene false in
+local notation "ringR" => MldsaRingEmbed.R program
+
+set_option hygiene false in
+local notation "predMap" => MldsaRingEmbed.pred program
+
 /-- **A cast of a cast between equal first fields is one cast.** -/
 theorem castElt_castElt_left {I : Interp} {a b c : ℕ} (h : a = b) (x : (I a).K) :
     (castElt (castElt x : (I b).K) : (I c).K) = castElt x := by
@@ -46,14 +55,16 @@ theorem castElt_castElt_left {I : Interp} {a b c : ℕ} (h : a = b) (x : (I a).K
 variable (y : RingIn msgLen)
 
 variable (F0 FH) in
-/-- **The selected member's algebra inputs**: its key's coordinates, `μ`'s bits and the index bits.
-A native ring has no quotient. -/
+/-- **The selected member's algebra inputs**: its key's coordinates, `μ`'s bits, the index bits
+and the rows' quotients by `X^256 + 1` (`signature.Q`, `qHon`); the native rings have no quotient
+by `q`. -/
 @[expose] noncomputable def memberInputs : MemberSourceValues (interp 0).K where
   aHat j := if j < 4096 then ((keyEntry y.key j : ℕ) : (interp 0).K) else 0
   t1 j := ((keyEntry y.key (4096 + j) : ℕ) : (interp 0).K)
   mu j := ((muBitNat y.mu j : ℕ) : (interp 0).K)
   index j := ((y.w.idx / 2 ^ j % 2 : ℕ) : (interp 0).K)
   quotient _ := 0
+  high j := qHon y ((interp 0).decode 1753) (j / 255) (j % 255)
 
 variable (F0 FH) in
 /-- **The algebra witness**: `z`, the hint's offset and slack as numbers, the rest committed. -/
@@ -111,12 +122,13 @@ variable {classifier : SourceRoleClassifier}
 /-- **A committed algebra slot** reads the honest value of domain `A`. -/
 theorem role_a_cell {u slot : ℕ} (hu : u ∈ Native.AValues)
     (hr : classifier.lookup ((σ).val u) = some (.aWitness, slot)) (j : ℕ)
+    (hs : slot ≠ 8)
     (hm : (algebraInputs F0 FH y).meaning .aWitness slot j = aValR y (interp 0).K u j) :
     roleVal program F0 FH y classifier ((σ).val u) j =
       program.execOf interp (honestVal program F0 FH y) ((σ).val u) j := by
   obtain ⟨hp, hf⟩ := Native.MldsaNativeHonest.a_cells (program := nat) u hu
   have huV := MldsaRingHonest.aV (program := program) u (List.mem_append_left _ hu)
-  rw [exec_held y huV (kind_of_privCellB hp), roleVal, Ring.sourceVal_algebra _ _ _ _ hr,
+  rw [exec_held y huV (kind_of_privCellB hp), roleVal, Ring.sourceVal_algebra _ _ _ _ hr hs,
     AlgebraSourceValues.valuation_of_lookup _ hr, hm, natVal, if_pos hu]
   exact (castElt_castElt_left hf.symm _).symm
 
@@ -201,24 +213,29 @@ theorem exists_words_of_wordsB {slot u : ℕ} (h : wordsB slot u = true) :
     (u == 564 && slot == 6) || (u == 565 && slot == 7)
   | _ => false
 
+/-- **The quotients' role**: algebra slot `8` at `signature.Q`. -/
+@[expose] def quotRoleB (q : ℕ) (r : SourceRoleEntry) : Bool :=
+  r.value == q && (match r.role with | .aWitness => r.slot == 8 | _ => false)
+
 /-- **One source-role row's meaning**: a value that is not executed (`skip`), a member's value or a
 renamed native value. -/
-@[expose] def roleRowB (skip : List ℕ) (a t mu i : ℕ) (val inv : ℕ → ℕ) (r : SourceRoleEntry) : Bool :=
-  skip.contains r.value || memberRoleB a t mu i r ||
-  (ringVB (inv r.value) && val (inv r.value) == r.value && heldRoleB r.role r.slot (inv r.value))
+@[expose] def roleRowB (skip : List ℕ) (a t mu i q : ℕ) (val inv : ℕ → ℕ) (held : ℕ → Bool)
+    (r : SourceRoleEntry) : Bool :=
+  skip.contains r.value || memberRoleB a t mu i r || quotRoleB q r ||
+  (held (inv r.value) && val (inv r.value) == r.value && heldRoleB r.role r.slot (inv r.value))
 
 /-- **A member's slot** reads the honest member value. -/
 theorem role_member {classifier : SourceRoleClassifier} {r : SourceRoleEntry}
     (hl : classifier.lookup r.value = some (r.role, r.slot))
-    (h : memberRoleB (MldsaRingRelation.aHat program) (MldsaRingRelation.t1 program)
+    (h : memberRoleB (MldsaRandomPoint.aHat program) (MldsaRandomPoint.t1 program)
       (MldsaRingFront.muA program) (TableSelect.shape program).idx r = true) (j : ℕ) :
     roleVal program F0 FH y classifier r.value j =
       program.execOf interp (honestVal program F0 FH y) r.value j := by
   have hnd := MldsaRingHonest.member_nodup (program := program)
   simp only [List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or] at hnd
-  obtain ⟨⟨ha1, ha2, ha3⟩, ⟨ht1, ht2⟩, hm1, -⟩ := hnd
-  have hkind : ∀ v ∈ [MldsaRingRelation.aHat program, MldsaRingRelation.t1 program,
-      MldsaRingFront.muA program, (TableSelect.shape program).idx],
+  obtain ⟨⟨ha1, ha2, ha3, -⟩, ⟨ht1, ht2, -⟩, ⟨hm1, -⟩, -⟩ := hnd
+  have hkind : ∀ v ∈ [MldsaRandomPoint.aHat program, MldsaRandomPoint.t1 program,
+      MldsaRingFront.muA program, (TableSelect.shape program).idx, MldsaRandomPoint.q program],
       (program.value v).kind = .priv := fun v hv =>
     kind_of_privCellB (MldsaRingHonest.memberCells v hv).1
   rcases r with ⟨v, role, slot, field, node⟩
@@ -242,6 +259,27 @@ theorem role_member {classifier : SourceRoleClassifier} {r : SourceRoleEntry}
       if_neg (Ne.symm ha3), if_neg (Ne.symm ht2), if_neg (Ne.symm hm1), if_pos rfl]
     rfl
 
+/-- **The quotients' slot** reads the honest quotients. -/
+theorem role_quot {classifier : SourceRoleClassifier} {r : SourceRoleEntry}
+    (hl : classifier.lookup r.value = some (r.role, r.slot))
+    (h : quotRoleB (MldsaRandomPoint.q program) r = true) (j : ℕ) :
+    roleVal program F0 FH y classifier r.value j =
+      program.execOf interp (honestVal program F0 FH y) r.value j := by
+  have hnd := MldsaRingHonest.member_nodup (program := program)
+  simp only [List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or] at hnd
+  obtain ⟨⟨-, -, -, ha4⟩, ⟨-, -, ht3⟩, ⟨-, hm2⟩, hi1, -⟩ := hnd
+  have hk : (program.value (MldsaRandomPoint.q program)).kind = .priv :=
+    kind_of_privCellB (MldsaRingHonest.memberCells _ (by simp)).1
+  rcases r with ⟨v, role, slot, field, node⟩
+  simp only [quotRoleB, Bool.and_eq_true, beq_iff_eq] at h hl ⊢
+  obtain ⟨rfl, h2⟩ := h
+  cases role <;> simp only [Bool.false_eq_true, beq_iff_eq] at h2
+  subst h2
+  rw [roleVal, Ring.sourceVal_high _ _ _ _ hl, execOf_of_priv _ hk, honestVal,
+    if_neg (Ne.symm ha4), if_neg (Ne.symm ht3), if_neg (Ne.symm hm2), if_neg (Ne.symm hi1),
+    if_pos rfl]
+  rfl
+
 /-- **A renamed native value's slot** reads the honest value, on the value's coordinates. -/
 theorem role_held {classifier : SourceRoleClassifier} {u slot : ℕ} {role : SourceRole}
     (hu : u ∈ ringV) (hl : classifier.lookup ((σ).val u) = some (role, slot))
@@ -262,22 +300,22 @@ theorem role_held {classifier : SourceRoleClassifier} {u slot : ℕ} {role : Sou
     rcases h with ((((((⟨rfl, rfl⟩ | ⟨rfl, rfl⟩) | ⟨rfl, rfl⟩) | ⟨rfl, rfl⟩) | ⟨rfl, rfl⟩) | ⟨rfl, rfl⟩) |
       ⟨rfl, rfl⟩) | ⟨rfl, rfl⟩
     · have hm : j < 1024 := hlen.1 ▸ hj
-      rw [exec_bound y hu hz f57, roleVal, Ring.sourceVal_algebra _ _ _ _ hl,
+      rw [exec_bound y hu hz f57, roleVal, Ring.sourceVal_algebra _ _ _ _ hl (by decide),
         AlgebraSourceValues.valuation_of_lookup _ hl, AlgebraSourceValues.meaning_z,
         rdA_58 hr hm]
       simp only [algebraInputs, dite_eq_left hm]
-    · exact role_a_cell y (by decide) hl j rfl
-    · exact role_a_cell y (by decide) hl j rfl
-    · exact role_a_cell y (by decide) hl j rfl
-    · exact role_a_cell y (by decide) hl j rfl
-    · exact role_a_cell y (by decide) hl j rfl
+    · exact role_a_cell y (by decide) hl j (by decide) rfl
+    · exact role_a_cell y (by decide) hl j (by decide) rfl
+    · exact role_a_cell y (by decide) hl j (by decide) rfl
+    · exact role_a_cell y (by decide) hl j (by decide) rfl
+    · exact role_a_cell y (by decide) hl j (by decide) rfl
     · have hm : j < 1024 := hlen.2.2.2.2.2.2.1 ▸ hj
-      rw [exec_bound y hu hoff f64, roleVal, Ring.sourceVal_algebra _ _ _ _ hl,
+      rw [exec_bound y hu hoff f64, roleVal, Ring.sourceVal_algebra _ _ _ _ hl (by decide),
         AlgebraSourceValues.valuation_of_lookup _ hl, AlgebraSourceValues.meaning_offset,
         rdA_65 hr hm]
       simp only [algebraInputs, dite_eq_left hm]
     · have hm : j < 1024 := hlen.2.2.2.2.2.2.2.1 ▸ hj
-      rw [exec_bound y hu hsl f65, roleVal, Ring.sourceVal_algebra _ _ _ _ hl,
+      rw [exec_bound y hu hsl f65, roleVal, Ring.sourceVal_algebra _ _ _ _ hl (by decide),
         AlgebraSourceValues.valuation_of_lookup _ hl, AlgebraSourceValues.meaning_slack,
         rdA_66 hr hm]
       simp only [algebraInputs, dite_eq_left hm]
@@ -330,13 +368,14 @@ theorem role_held {classifier : SourceRoleClassifier} {u slot : ℕ} {role : Sou
       rfl
 
 /-- **Every executed source coordinate agrees with the honest values**, from the checked role rows
-of the program's classifier: `skip` lists the source values that are not executed, and `val`, `inv`
-are the renaming and its inverse. -/
+of the program's classifier: `skip` lists the source values that are not executed, `val`, `inv`
+are the renaming and its inverse, on the held values `held` accepts. -/
 theorem role_source_coordinates {rs : List SourceRoleEntry} (hrs : SourceRolesOk program rs)
-    {skip : List ℕ} {val inv : ℕ → ℕ}
-    (hrows : rs.all (roleRowB skip (MldsaRingRelation.aHat program) (MldsaRingRelation.t1 program)
-      (MldsaRingFront.muA program) (TableSelect.shape program).idx val inv) = true)
-    (hσ : (σ).val = val)
+    {skip : List ℕ} {val inv : ℕ → ℕ} {held : ℕ → Bool}
+    (hrows : rs.all (roleRowB skip (MldsaRandomPoint.aHat program) (MldsaRandomPoint.t1 program)
+      (MldsaRingFront.muA program) (TableSelect.shape program).idx (MldsaRandomPoint.q program)
+      val inv held) = true)
+    (hσ : (σ).val = val) (hheld : ∀ u, held u = true → u ∈ ringV)
     (hskip : ∀ v ∈ skip, (program.value v).kind ≠ .priv ∧ (program.value v).kind.isBound = false)
     {v j : ℕ} (hs : program.IsSourceValue v) (hc : program.ExecCoord v j)
     (hpad : ∀ u < program.values.length, program.IsSourceValue u →
@@ -350,16 +389,17 @@ theorem role_source_coordinates {rs : List SourceRoleEntry} (hrs : SourceRolesOk
     hrs.lookup_of_mem hm
   have hrow := List.all_eq_true.mp hrows r hm
   simp only [roleRowB, Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq] at hrow
-  rcases hrow with (hx | hx) | ⟨⟨hu, huv⟩, hh⟩
+  rcases hrow with ((hx | hx) | hx) | ⟨⟨hu, huv⟩, hh⟩
   · obtain ⟨h1, h2⟩ := hskip _ (List.contains_iff_mem.mp hx)
     rcases hk with hk | hk
     · exact absurd hk h1
     · rw [h2] at hk
       cases hk
   · exact role_member y hl hx j
+  · exact role_quot y hl hx j
   · have hval : (σ).val (inv r.value) = r.value := by rw [hσ, huv]
     have hl' := hl
     rw [← hval] at hl' hj ⊢
-    exact role_held y (mem_ringV_of_ringVB hu) hl' hh hj
+    exact role_held y (hheld _ hu) hl' hh hj
 
 end GordieHowe.MLDSA44.Ring.Native

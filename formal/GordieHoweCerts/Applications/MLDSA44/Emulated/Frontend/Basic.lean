@@ -55,6 +55,8 @@ class MldsaEMain (program : RealizedProgram) extends MldsaEmbed program where
   kinds59_60 : (program.value 58).kind.isBound = true ∧ (program.value 59).kind.isPriv = true
   /-- `tr` lies in domain `H`'s field in both programs. -/
   trFields : nat.valueField 66 = 1 ∧ program.valueField 67 = 1
+  /-- The native `tr` (`66`) is renamed to the emulated `tr` (`67`). -/
+  trLink : (MldsaEmbed.σ program).val 66 = 67
   /-- The native values the extractor reads read nothing from the run. -/
   projReadsN : ∀ v ∈ [67, 68, 457], nat.nodeReads nat.fuel v = []
 
@@ -65,6 +67,12 @@ variable {program : RealizedProgram} [MldsaEMain program] {F0 FH : RealizedProgr
 
 set_option hygiene false in
 local notation "nat" => MldsaEmbed.nat program
+
+set_option hygiene false in
+local notation "σ" => MldsaEmbed.σ program
+
+set_option hygiene false in
+local notation "hV" => MldsaEmbed.V program
 
 variable [MldsaHHash nat] [MldsaHSample nat] [MldsaHConsts nat FH]
 
@@ -98,11 +106,10 @@ structure KeyOf (pk : MLDSA44.PublicKey44) (x : program.Valuation interp) : Prop
 decoded key's `ExpandA` finishes within the byte budget (`MLDSA44.ExpandAWithin`) and whose
 preprocessing the statement
 holds (`KeyOf`), the ML-DSA-44 proof-of-possession relation for messages of at most `32` bytes holds
-for the witness (`PoP.MLDSA44.relUpTo 32`). -/
+for the witness (`MLDSA44.PoP.relUpTo 32`). -/
 def rel : Set (program.Valuation interp × MLDSA44.VarWitness) :=
-  {p | ∀ s : MLDSA44.PoP.Statement 0,
-    MLDSA44.ExpandAWithin _root_.MLDSA.mldsa44 (MLDSA44.pkDecode44 s.key).rho →
-    KeyOf (MLDSA44.pkDecode44 s.key) p.1 → (s, p.2) ∈ MLDSA44.PoP.relUpTo 32}
+  Function.uncurry fun x w => ∀ s : MLDSA44.PoP.Statement 0, s.ExpandAWithin →
+    KeyOf (MLDSA44.pkDecode44 s.key) x → (s, w) ∈ MLDSA44.PoP.relUpTo MLDSA44.msgLenMax
 
 /-! ## The readings -/
 
@@ -241,8 +248,10 @@ theorem chal_phase : ∀ j, (program.challenge j).phase = ((nat).challenge j).ph
 /-- **The challenge-use rule** (`RealizedProgram.ChallengeUseAt`), through the native one. -/
 theorem sampleEvent_use : RealizedProgram.ChallengeUseAt program interp sampleEvent :=
   fun _ _ _ h => MLDSA44.sampleEvent_use _
-    (RealizedProgram.eqUpTo_pullEnv MldsaEmbed.embedding (chal_phase (program := program))
-      monotone_id h)
+    (RealizedProgram.eqUpTo_pullEnv MldsaEmbed.embedding
+      (fun j => by rw [MldsaEmbed.chalId]; exact chal_phase (program := program) j)
+      (fun a b hab => by rw [MldsaEmbed.chalId, MldsaEmbed.chalId]; exact hab)
+      (by rw [MldsaEmbed.chalId]; exact h))
 
 /-- **The source program's challenges are `h2c.sample.select.delta` and `h2c.sample.mem.delta`.** -/
 theorem isSourceChal_iff : ∀ {j : ℕ}, program.IsSourceChal j ↔ j = 0 ∨ j = 1 :=
@@ -259,6 +268,8 @@ theorem pull_chal (e : program.Env interp) {j : ℕ} (hj : j = 0 ∨ j = 1) :
     rcases hj with rfl | rfl
     · rw [(chalFacts (program := program)).2.2.1, (chalFacts (program := program)).2.2.2.2.2.2.1]
     · rw [(chalFacts (program := program)).2.2.2.2.2.1, (chalFacts (program := program)).2.2.2.2.2.2.2]
+  change (RealizedProgram.castElt (RealizedProgram.castElt (e.chal ((σ).chal j) 0)) : (interp 1).K) = _
+  rw [MldsaEmbed.chalId]
   exact RealizedProgram.castElt_castElt_of_src hf _
 
 /-- **The events' probabilities**: at most `264/2^128` and `295/2^128`
@@ -305,9 +316,10 @@ theorem trBits_pull (e : program.Env interp) :
     MLDSA44.trBits (pull e).stmt = trBits e.stmt := by
   funext k
   simp only [MLDSA44.trBits, trBits, RealizedProgram.evalE_leaf, pull, RealizedProgram.pullEnv,
-    if_pos (show (66 : ℕ) ∈ hV by decide)]
+    if_pos (MldsaEmbed.readV (program := program))]
   have h1 : (nat).valueField 66 = 1 := (MldsaEMain.trFields (program := program)).1
   have h2 : program.valueField 67 = 1 := (MldsaEMain.trFields (program := program)).2
+  rw [MldsaEMain.trLink]
   exact RealizedProgram.castElt_castElt_of_src (h2.trans h1.symm) _
 
 /-- A Boolean element of domain `A`'s field is read as `0` or `1`. -/
@@ -525,7 +537,7 @@ headline's hypothesis (`RealizedProgram.rbr_of_events`), given the crossing and 
 events at `h2c.sample.select.delta` and `h2c.sample.mem.delta` with errors `264/2^bits` and
 `295/2^bits`. -/
 theorem rbr_of_views (hx : CrossSound (program := program) (F0 := F0) (FH := FH)) (hA : AlgebraSound (program := program) (F0 := F0) (FH := FH)) :
-    rbrKnowledgeSoundness rel (program.sourceVerifier interp) extractor
+    RBRKnowledgeSound rel (program.sourceVerifier interp) extractor
       (program.eventState interp rel proj sampleEvent sampleEvent_use (sound_of_views hx hA))
       (program.roundError interp (MLDSA44.sampleEpsOf (HField.bits FH))) :=
   program.rbr_of_events interp rel proj sampleEvent (MLDSA44.sampleEpsOf (HField.bits FH)) sampleEvent_use

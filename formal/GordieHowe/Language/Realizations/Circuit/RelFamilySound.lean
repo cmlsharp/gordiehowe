@@ -27,7 +27,7 @@ public import GordieHowe.Language.Realizations.RealizeMac
 
 namespace GordieHowe.GKR.Rel
 
-open GordieHowe.RealizedProgram (Trie teW teW_eval Trie.get_ofList)
+open GordieHowe.RealizedProgram (PTree teW teW_eval PTree.get_ofList)
 
 /-- **The leaves `[lo, hi)`** of a list. -/
 def spanSlice {α : Type*} (ds : List α) (lo hi : ℕ) : List α := (ds.drop lo).take (hi - lo)
@@ -46,22 +46,22 @@ theorem spanSlice_succ {α : Type*} (ds : List α) {i : ℕ} (h : i < ds.length)
 
 theorem FracTree.fracs_get_leaf (tr : FracTree) {i : ℕ} (h : i < tr.dens.length) :
     tr.fracs.get i = (none, tr.dens[i]) := by
-  rw [FracTree.fracs, Trie.get_ofList _ (by simp; omega), List.getD_eq_getElem _ _ (by simp; omega),
+  rw [FracTree.fracs, PTree.get_ofList _ (by simp; omega), List.getD_eq_getElem _ _ (by simp; omega),
     List.getElem_append_left (by simp; omega)]
   simp
 
 theorem FracTree.fracs_get_inner (tr : FracTree) {i : ℕ} (h : tr.dens.length ≤ i)
     (h' : i < tr.dens.length + tr.inner.length) :
     tr.fracs.get i = (some tr.inner[i - tr.dens.length].num, tr.inner[i - tr.dens.length].den) := by
-  rw [FracTree.fracs, Trie.get_ofList _ (by simp; omega), List.getD_eq_getElem _ _ (by simp; omega),
+  rw [FracTree.fracs, PTree.get_ofList _ (by simp; omega), List.getD_eq_getElem _ _ (by simp; omega),
     List.getElem_append_right (by simp; omega)]
   simp
 
 /-- **The numerator of fraction `a`**: one for a leaf. -/
-def fracNumV {F : Type*} [CommRing F] (κc V : ℕ → F) (Fr : Trie (Option Wire × Wire)) (a : ℕ) : F :=
+def fracNumV {F : Type*} [CommRing F] (κc V : ℕ → F) (Fr : PTree (Option Wire × Wire)) (a : ℕ) : F :=
   ((Fr.get a).1.map (·.val κc V)).getD 1
 
-theorem fracTerm_eval {F : Type*} [CommRing F] (κc V : ℕ → F) (Fr : Trie (Option Wire × Wire))
+theorem fracTerm_eval {F : Type*} [CommRing F] (κc V : ℕ → F) (Fr : PTree (Option Wire × Wire))
     (a b : ℕ) : (fracTerm Fr a b).eval κc V = fracNumV κc V Fr a * (Fr.get b).2.val κc V := by
   unfold fracTerm fracNumV
   cases (Fr.get a).1 <;> simp [TE.eval, teW_eval]
@@ -69,11 +69,11 @@ theorem fracTerm_eval {F : Type*} [CommRing F] (κc V : ℕ → F) (Fr : Trie (O
 /-- **Every fraction spans a run of leaves** whose fold is its value. -/
 theorem FracTree.span_fold {F : Type*} [CommRing F] {κc V : ℕ → F} {tr : FracTree}
     (hall : ∀ k (hk : k < tr.inner.length),
-      fracNodeOkB (Trie.ofList tr.inner) tr.dens.length tr.inner[k] k = true)
+      fracNodeOkB (PTree.ofList tr.inner) tr.dens.length tr.inner[k] k = true)
     (hc : ∀ q ∈ tr.cuts, q.1.val κc V = q.2.eval κc V) :
     ∀ i < tr.dens.length + tr.inner.length, ∃ lo hi, lo < hi ∧ hi ≤ tr.dens.length ∧
-      (∀ f, i < f → fracLo (Trie.ofList tr.inner) tr.dens.length f i = lo ∧
-        fracHi (Trie.ofList tr.inner) tr.dens.length f i = hi) ∧
+      (∀ f, i < f → fracLo (PTree.ofList tr.inner) tr.dens.length f i = lo ∧
+        fracHi (PTree.ofList tr.inner) tr.dens.length f i = hi) ∧
       (fracNumV κc V tr.fracs i, (tr.fracs.get i).2.val κc V) =
         FractionTree.fold (spanSlice (tr.dens.map (·.val κc V)) lo hi) := by
   intro i
@@ -95,8 +95,8 @@ theorem FracTree.span_fold {F : Type*} [CommRing F] {κc V : ℕ → F} {tr : Fr
     obtain ⟨lol, hil, h1l, h2l, hfl, hvl⟩ := ih fr.l hl (by omega)
     obtain ⟨lor, hir, h1r, h2r, hfr', hvr⟩ := ih fr.r hr (by omega)
     rw [(hfl i hl).2, (hfr' i hr).1] at hmid
-    have hT : (Trie.ofList tr.inner).get (i - tr.dens.length) = fr := by
-      rw [Trie.get_ofList _ hk, List.getD_eq_getElem _ _ hk, hfr]
+    have hT : (PTree.ofList tr.inner).get (i - tr.dens.length) = fr := by
+      rw [PTree.get_ofList _ hk, List.getD_eq_getElem _ _ hk, hfr]
     refine ⟨lol, hir, by omega, h2r, fun f hf => ?_, ?_⟩
     · obtain ⟨f, rfl⟩ : ∃ f', f = f' + 1 := ⟨f - 1, by omega⟩
       have hb : Nat.blt i tr.dens.length = false := by
@@ -127,7 +127,7 @@ theorem FracTree.root_eq_fold {F : Type*} [CommRing F] {κc V : ℕ → F} {tr :
   simp only [FracTree.okB, Bool.and_eq_true, Nat.blt_eq, Nat.beq_eq, List.all_eq_true] at h
   obtain ⟨⟨⟨hn, hall⟩, hlo⟩, hhi⟩ := h
   have hall' : ∀ k (hk : k < tr.inner.length),
-      fracNodeOkB (Trie.ofList tr.inner) tr.dens.length tr.inner[k] k = true := fun k hk => by
+      fracNodeOkB (PTree.ofList tr.inner) tr.dens.length tr.inner[k] k = true := fun k hk => by
     have := hall (tr.inner.zipIdx[k]'(by simpa using hk)) (List.getElem_mem _)
     simpa [List.getElem_zipIdx] using this
   obtain ⟨lo, hi, -, -, hf, hv⟩ := FracTree.span_fold hall' hc _ (by omega : tr.dens.length +
@@ -552,13 +552,13 @@ theorem macHHolds_of_macHB (hM : ir.DerivModel I primeNodes)
         show ir.evalE _ _ (cd.table.treeErase (cd.env ar) mc.bits) j = ir.evalE _ _ _ j
         rw [(print_spec ho hE (ir.reader e) mc.bits).2]
       have hG : ∀ i < real.width,
-          (I (ir.circField c)).decode ((Trie.ofList (powList ar 2 real.width 1)).get i) =
+          (I (ir.circField c)).decode ((PTree.ofList (powList ar 2 real.width 1)).get i) =
             (I (ir.circField c)).decode 2 ^ i := by
         intro i hi
         have hm := map_powList hC.hom 2 real.width 1
         have hl : (powList ar 2 real.width 1).length = real.width := by
           simpa using congrArg List.length hm
-        rw [Trie.get_ofList _ (by omega), List.getD_eq_getElem _ _ (by omega)]
+        rw [PTree.get_ofList _ (by omega), List.getD_eq_getElem _ _ (by omega)]
         have h1 := congrArg (fun l => l[i]?) hm
         simp only [List.getElem?_map, List.getElem?_range hi, Option.map_some,
           List.getElem?_eq_getElem (by omega : i < (powList ar 2 real.width 1).length),

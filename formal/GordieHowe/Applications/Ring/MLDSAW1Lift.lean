@@ -17,7 +17,7 @@ publishing `w₁` (`w1ConcreteBase`, `GordieHowe/Applications/Ring/MLDSAW1Ring.l
 form (`IsRejectionOn`, `GordieHowe/Model/Signature/Rejection.lean`) whose attempt is one call of the
 FIPS 204 signer at one nonce (`w1Rejection`, `GordieHowe/Applications/Ring/MLDSAW1Rejection.lean`),
 and its ordinary signer is its first attempt (`IsStdOn`). The lifting lemmas of
-`GordieHowe/Model/Signature/RejectionRelay.lean` then bound each MU game of the ring-aware signing
+`GordieHowe/Model/Signature/RejectionCtx.lean` then bound each MU game of the ring-aware signing
 oracle by the same game of the standard call oracle (`Rejection.stdOracle`) at `k · Q` requests.
 
 The standard call game is the multi-user game (MU-EUF-CMA^corr) of FIPS 204 with public keys that

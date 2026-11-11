@@ -279,7 +279,7 @@ section Groups
 variable (ir)
 
 /-- **A group without a late histogram reads no late value, nor do its table's rows**
-(`RealizeFacts.staticGroups`), as a check at a program reader. -/
+(`CompletionFacts.staticGroups`), as a check at a program reader. -/
 def PReader.staticGroupNoLateB (ir : RealizedProgram) [r : PReader] (t g : ℕ) : Bool :=
   match (ir.groupOf t g).lateMult with
   | none => (ir.members t g).all (fun m =>
@@ -289,7 +289,7 @@ def PReader.staticGroupNoLateB (ir : RealizedProgram) [r : PReader] (t g : ℕ) 
   | some _ => true
 
 /-- **A group without a late histogram reads no late value, nor do its table's rows**
-(`RealizeFacts.staticGroups`), as a check (`PReader.staticGroupNoLateB` at the program). -/
+(`CompletionFacts.staticGroups`), as a check (`PReader.staticGroupNoLateB` at the program). -/
 def staticGroupNoLateB (t g : ℕ) : Bool := @PReader.staticGroupNoLateB ir (PReader.ofProgram ir) t g
 
 /-- **A property of every group of every table**, as a check. -/
@@ -350,8 +350,8 @@ variable (ir)
 
 variable (L) in
 /-- **The cross-field `equal` of MAC site `st` is a source predicate and the site's operand reads
-within `[0, 1]` by the source values' intervals** (`HonestFacts.macIvls`), as a check at the values'
-intervals `L`. -/
+within `[0, 1]` by the source values' intervals** (the facts of `MacBaseC.ofB_ivl`), as a check at
+the values' intervals `L`. -/
 def macIvlAtB (st : MacSite) : Bool :=
   ir.inSource (ir.predicateT st.pid) &&
     decide (IvlWithin (ir.srcIvl L (ir.domainField (ir.siteDom st)) (ir.macCheckOp st)) 0 1)

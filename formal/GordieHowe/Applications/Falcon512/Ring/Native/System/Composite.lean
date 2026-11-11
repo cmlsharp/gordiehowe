@@ -61,20 +61,20 @@ theorem ringKey_eq {N : ℕ} {x : RingStmt (scheme G) (Fin msgLen → UInt8) N} 
 naturals below `q` (zero if the hash fails). -/
 def stmtChallenge {N : ℕ} (x : RingStmt (scheme G) (Fin msgLen → UInt8) N) :
     Fin falcon512.n → ℕ :=
-  match ringChallenge x.pub x.msg with
+  match challenge x.pub x.msg with
   | some c => fun i => (Falcon512.coeff c i).val
   | none => 0
 
 /-- The challenge coefficients are below `q`. -/
 theorem stmtChallenge_lt {N : ℕ} (x : RingStmt (scheme G) (Fin msgLen → UInt8) N)
     (i : Fin falcon512.n) : stmtChallenge x i < 12289 := by
-  cases h : ringChallenge x.pub x.msg with
+  cases h : challenge x.pub x.msg with
   | some c => simp only [stmtChallenge, h]; exact ZMod.val_lt _
   | none => simp only [stmtChallenge, h, Pi.zero_apply]; decide
 
 /-- On a successful hash, the challenge polynomial is the polynomial of the coefficients. -/
 theorem ofCoeff_stmtChallenge {N : ℕ} {x : RingStmt (scheme G) (Fin msgLen → UInt8) N} {c : _root_.Falcon.Rq falcon512.n}
-    (hc : ringChallenge x.pub x.msg = some c) :
+    (hc : challenge x.pub x.msg = some c) :
     Falcon512.ofCoeff (fun i => (stmtChallenge x i : _root_.Falcon.Coeff)) = c := by
   have h1 : Falcon512.coeff c = fun i => (stmtChallenge x i : _root_.Falcon.Coeff) := by
     funext i
@@ -99,14 +99,14 @@ theorem honestAlgebra_of_mem {N : ℕ} {adm : List PublicKey → Prop}
     {x : RingStmt (scheme G) (Fin msgLen → UInt8) N} {w : RingWit (scheme G)}
     (hw : (x, w) ∈ GordieHowe.Ring.ringRel adm bindMsg) :
     HonestAlgebra (ringKey x w.idx) (stmtChallenge x) (witnessS2 w) ∧
-      (ringChallenge x.pub x.msg).isSome = true := by
+      (challenge x.pub x.msg).isSome = true := by
   obtain ⟨-, hrel⟩ := hw
   have hver : GordieHowe.Falcon512.verify (x.ring.1[w.idx]'hrel.idx_lt) (List.ofFn x.msg) w.sig.1 :=
     verifySig_eq_true_iff.mp hrel.verify_eq
   obtain ⟨s, c, hd, hc, ha⟩ := (GordieHowe.Falcon512.verify_iff_algebraOk _ _ _).mp hver
   have hpub : w.sig.1.salt = x.pub := hrel.pub_eq
-  have hc' : ringChallenge x.pub x.msg = some c := by
-    rw [← hpub, ← hashToPoint_eq_ringChallenge _
+  have hc' : challenge x.pub x.msg = some c := by
+    rw [← hpub, ← hashToPoint_eq_challenge _
       (GordieHowe.Falcon512.prims512.publicKeyBytes (x.ring.1[w.idx]'hrel.idx_lt).h)]
     exact hc
   have hs : witnessS2 w = s := by

@@ -505,9 +505,9 @@ omit [NeZero (bucketCount p)] [Nonempty (MaskBox p)] in
 /-- **The signer's flattening coin is a function of its published `t₀`**: `min(1, β_min / aw)`
 with `aw` the acceptance weight `t0Weight` of `t₀` (`signerWeight_eq_t0Weight`). -/
 theorem flattenCoin_eq_flattenKeep_t0Weight (sk : SecretKey p) (βmin : ℚ≥0) :
-    (fun a => (flattenCoin prims sk βmin a : ℝ≥0∞)) =
+    (fun a => (flattenCoin prims sk (Cutoff.const βmin) a : ℝ≥0∞)) =
       PMF.flattenKeep (fun a => (t0Weight prims sk.t0 a : ℝ≥0∞)) βmin :=
-  funext (coe_flattenCoin prims sk βmin)
+  funext (coe_flattenCoin prims sk (Cutoff.const βmin))
 
 /-- **The ring call at the flattening weight**: the ideal call kept with weight
 `min(1, β_min / aw_i) · og(w₁)` (the signer's flattening coin `flattenCoin` and a weight `og` of
@@ -520,7 +520,7 @@ theorem idealCallLaw_flattenCoin_eq (T D : ℕ) [NeZero D] (h_laws : SigningLaws
     (hkeygen : keyGenFromSeed p prims seed = (pk, sk)) (hs1 : polyVecBounded sk.s1 p.eta)
     (hs2 : polyVecBounded sk.s2 p.eta) (βmin : ℚ≥0) (og : BucketVec p → ℝ≥0∞) :
     idealCallLaw prims T D sk (prims.expandA pk.rho)
-        (fun vc => flattenCoin prims sk βmin vc * og vc.1) =
+        (fun vc => flattenCoin prims sk (Cutoff.const βmin) vc * og vc.1) =
       keyFreeCallLaw prims T D pk sk.t0
         (fun vc => PMF.flattenKeep (fun a => (t0Weight prims sk.t0 a : ℝ≥0∞)) βmin vc * og vc.1) :=
           by
@@ -533,7 +533,7 @@ end Call
 
 section Concrete
 
-open _root_.MLDSA.Concrete GordieHowe.MLDSA.Spec GordieHowe.Ring.MLDSAW1
+open _root_.MLDSA.Concrete GordieHowe.MLDSA.Spec
 
 attribute [local instance] concreteNTTRingOps
 

@@ -16,9 +16,10 @@ An encoding `enc : NARG.OracleEncoding A B X Y` of an oracle `A → B` into an o
 `X → Y` that encodes its queries and decodes the answers (`IAlg.decode`). Against a uniform oracle
 `H : X → Y`, the decoded oracle `enc.decode H` is uniform (`OracleEncoding.map_uniform_decode`), so
 the adversary's acceptance probability against the encoded prover and simulator is its acceptance
-probability against the prover and simulator themselves (`acceptProb_decode_realEnv`,
-`acceptProb_decode_simEnv`). Zero knowledge at the encoded oracle therefore gives zero knowledge at
-the oracle `A → B` (`GordieHowe.NARG.ROM.zeroKnowledge_of_encode`).
+probability against the prover and simulator themselves. This module proves the run-level facts
+(`run_decode`, `out_decode_run`, `queryCountBefore_decode`). Zero knowledge at the encoded oracle
+therefore gives zero knowledge at the oracle `A → B` (`GordieHowe.NARG.ROM.ZeroKnowledge.of_encode`,
+`GordieHowe.NARG.ROM.EverlastingZeroKnowledge.of_encode`).
 -/
 
 namespace GordieHowe
@@ -86,8 +87,10 @@ def decode : IAlg X Y Req Resp Out' m where
 responder `R'` gives a response that `fr` reads as the response of `R` at the decoded oracle, and an
 oracle after the request whose decoding is the oracle `R` gives. -/
 structure ResponderDecode (R' : Responder X Y Req Resp) (R : Responder A B Req Resp') : Prop where
-  response : ∀ i r O', fr (R' i r O').1 = (R i r (enc.decode O')).1
-  oracle : ∀ i r O', enc.decode (R' i r O').2 = (R i r (enc.decode O')).2
+  /-- The responses agree through `fr`. -/
+  response : ∀ i r O', fr (R' i r O').response = (R i r (enc.decode O')).response
+  /-- The oracles after the request agree through the decoding. -/
+  oracle : ∀ i r O', enc.decode (R' i r O').oracle = (R i r (enc.decode O')).oracle
 
 /-- **Responders that agree through the encoding along the run** from `O'` before step `n`: at
 every request of the encoded algorithm's run, `R'` gives a response that `fr` reads as the response
@@ -96,13 +99,14 @@ of `R` at the decoded oracle in force, and an oracle after the request whose dec
 def DecodeAlong (R' : Responder X Y Req Resp) (R : Responder A B Req Resp') (O' : X → Y) (n : ℕ) :
     Prop :=
   ∀ k < n, ∀ r, (𝒜.decode enc fr g).next ((𝒜.decode enc fr g).run R' O' k).hist = .request r →
-    fr (R' ((𝒜.decode enc fr g).run R' O' k).nreq r ((𝒜.decode enc fr g).run R' O' k).oracle).1 =
+    fr (R' ((𝒜.decode enc fr g).run R' O' k).nreq r
+          ((𝒜.decode enc fr g).run R' O' k).oracle).response =
         (R ((𝒜.decode enc fr g).run R' O' k).nreq r
-          (enc.decode ((𝒜.decode enc fr g).run R' O' k).oracle)).1 ∧
+          (enc.decode ((𝒜.decode enc fr g).run R' O' k).oracle)).response ∧
       enc.decode (R' ((𝒜.decode enc fr g).run R' O' k).nreq r
-          ((𝒜.decode enc fr g).run R' O' k).oracle).2 =
+          ((𝒜.decode enc fr g).run R' O' k).oracle).oracle =
         (R ((𝒜.decode enc fr g).run R' O' k).nreq r
-          (enc.decode ((𝒜.decode enc fr g).run R' O' k).oracle)).2
+          (enc.decode ((𝒜.decode enc fr g).run R' O' k).oracle)).oracle
 
 /-- Responders that agree through the encoding agree along every run. -/
 theorem ResponderDecode.decodeAlong {R' : Responder X Y Req Resp} {R : Responder A B Req Resp'}
@@ -228,9 +232,9 @@ noncomputable def alongResponder (R' : Responder X Y Req Resp) (O' : X → Y) :
     Responder A B Req Resp' := fun i r O =>
   if h : ∃ k r₀, k < m ∧ ((𝒜.decode enc fr g).run R' O' k).nreq = i ∧
       (𝒜.decode enc fr g).next ((𝒜.decode enc fr g).run R' O' k).hist = .request r₀ then
-    (fr (R' i r ((𝒜.decode enc fr g).run R' O' h.choose).oracle).1,
-      enc.decode (R' i r ((𝒜.decode enc fr g).run R' O' h.choose).oracle).2)
-  else (fr (R' i r O').1, O)
+    ⟨fr (R' i r ((𝒜.decode enc fr g).run R' O' h.choose).oracle).response,
+      enc.decode (R' i r ((𝒜.decode enc fr g).run R' O' h.choose).oracle).oracle⟩
+  else ⟨fr (R' i r O').response, O⟩
 
 /-- The responder read off the run agrees with `R'` along the run. -/
 theorem decodeAlong_alongResponder (R' : Responder X Y Req Resp) (O' : X → Y) :
@@ -345,7 +349,7 @@ variable [Fintype A] [DecidableEq A] [Fintype B] [Nonempty B] [Fintype X] [Decid
 against `O'`, read by `fp`, is the proof of `P` against the decoded oracle. -/
 def ProverDecode (P' : NARG.ProverFn X Y Stmt Wit Proof Coins)
     (P : NARG.ProverFn A B Stmt Wit Proof' Coins) : Prop :=
-  P'.coins = P.coins ∧ ∀ O' x w c, rel x w → fp (P'.prove O' x w c) = P.prove (enc.decode O') x w c
+  ∀ O' x w c, rel x w → fp (P'.prove O' x w c) = P.prove (enc.decode O') x w c
 
 /-- **Simulators that agree through the encoding**: on a statement with a witness in the relation,
 the proof of `S'` against `O'`, read by `fp`, is that of `S` against the decoded oracle, and the
@@ -358,13 +362,14 @@ def SimulatorDecode (S' : NARG.SimulatorFn X Y Stmt Proof SimCoins)
 
 variable {enc fp} in
 theorem responderDecode_realEnv {P' : NARG.ProverFn X Y Stmt Wit Proof Coins}
-    {P : NARG.ProverFn A B Stmt Wit Proof' Coins} (hP : ProverDecode enc fp (rel := rel) P' P) {Q : ℕ}
-    (ω' : (X → Y) × (Fin Q → Coins)) :
-    IAlg.ResponderDecode enc (Option.map fp) (toResponder (NIZK.envResponder (QROM.realEnv rel P' Q) ω'))
-      (toResponder (NIZK.envResponder (QROM.realEnv rel P Q) (enc.decode ω'.1, ω'.2))) := by
+    {P : NARG.ProverFn A B Stmt Wit Proof' Coins} (hP : ProverDecode enc fp (rel := rel) P' P)
+    (μ : PMF Coins) {Q : ℕ} (ω' : (X → Y) × (Fin Q → Coins)) :
+    IAlg.ResponderDecode enc (Option.map fp)
+      (toResponder (NIZK.envResponder (QROM.realEnv rel P' μ Q) ω'))
+      (toResponder (NIZK.envResponder (QROM.realEnv rel P μ Q) (enc.decode ω'.1, ω'.2))) := by
   constructor <;> intro i req O' <;>
     simp only [toResponder, NIZK.envResponder, QROM.realEnv] <;> split_ifs with hi hr <;>
-    first | rfl | simp [hP.2 _ _ _ _ hr]
+    first | rfl | simp [hP _ _ _ _ hr]
 
 variable {enc fp} in
 theorem responderDecode_simEnv {S' : NARG.SimulatorFn X Y Stmt Proof SimCoins}
@@ -385,10 +390,11 @@ theorem QueryBoundedAdversary.advantage_decode {t : ℕ}
     {P' : NARG.ProverFn X Y Stmt Wit Proof Coins} {P : NARG.ProverFn A B Stmt Wit Proof' Coins}
     {S' : NARG.SimulatorFn X Y Stmt Proof SimCoins} {S : NARG.SimulatorFn A B Stmt Proof' SimCoins}
     (hP : ProverDecode enc fp (rel := rel) P' P) (hS : SimulatorDecode enc fp (rel := rel) S' S)
-    (Q : ℕ) : (𝒜.decode enc fp).advantage rel P' S' Q = 𝒜.advantage rel P S Q := by
+    (μ : PMF Coins) (Q : ℕ) :
+      (𝒜.decode enc fp).advantage rel P' μ S' Q = 𝒜.advantage rel P μ S Q := by
   unfold QueryBoundedAdversary.advantage
-  rw [𝒜.acceptProb_decode enc fp P.coins _ _ (by rw [← hP.1]; rfl) rfl (fun _ => rfl) (fun _ => rfl)
-      (responderDecode_realEnv hP),
+  rw [𝒜.acceptProb_decode enc fp μ _ _ rfl rfl (fun _ => rfl) (fun _ => rfl)
+      (responderDecode_realEnv hP μ),
     𝒜.acceptProb_decode enc fp (NARG.SimulatorFn.coins S) _ _ rfl rfl (fun _ => rfl) (fun _ => rfl)
       (responderDecode_simEnv hS)]
 
@@ -398,9 +404,9 @@ adversary against the encoded oracle with the same advantage and the same query 
 theorem ZeroKnowledge.of_decode {P' : NARG.ProverFn X Y Stmt Wit Proof Coins}
     {P : NARG.ProverFn A B Stmt Wit Proof' Coins} {S' : NARG.SimulatorFn X Y Stmt Proof SimCoins}
     {S : NARG.SimulatorFn A B Stmt Proof' SimCoins} (hP : ProverDecode enc fp (rel := rel) P' P)
-    (hS : SimulatorDecode enc fp (rel := rel) S' S) {ε : ℕ → ℕ → ℝ}
-    (h : ZeroKnowledge rel P' S' ε) : ZeroKnowledge rel P S ε := fun t Q 𝒜 h𝒜 =>
-  (𝒜.advantage_decode hP hS Q).symm.trans_le
+    (hS : SimulatorDecode enc fp (rel := rel) S' S) {μ : PMF Coins} {ε : ℕ → ℕ → ℝ}
+    (h : ZeroKnowledge rel P' μ S' ε) : ZeroKnowledge rel P μ S ε := fun t Q 𝒜 h𝒜 =>
+  (𝒜.advantage_decode hP hS μ Q).symm.trans_le
     (h t Q (𝒜.decode enc fp) (𝒜.outputOracleFree_decode enc fp h𝒜))
 
 /-- **Everlasting zero knowledge at an encoded oracle gives everlasting zero knowledge at the oracle
@@ -408,9 +414,9 @@ theorem ZeroKnowledge.of_decode {P' : NARG.ProverFn X Y Stmt Wit Proof Coins}
 theorem EverlastingZeroKnowledge.of_decode {P' : NARG.ProverFn X Y Stmt Wit Proof Coins}
     {P : NARG.ProverFn A B Stmt Wit Proof' Coins} {S' : NARG.SimulatorFn X Y Stmt Proof SimCoins}
     {S : NARG.SimulatorFn A B Stmt Proof' SimCoins} (hP : ProverDecode enc fp (rel := rel) P' P)
-    (hS : SimulatorDecode enc fp (rel := rel) S' S) {ε : ℕ → ℕ → ℝ}
-    (h : EverlastingZeroKnowledge rel P' S' ε) : EverlastingZeroKnowledge rel P S ε :=
-  fun T t Q 𝒜 h𝒜 => (𝒜.advantage_decode hP hS Q).symm.trans_le
+    (hS : SimulatorDecode enc fp (rel := rel) S' S) {μ : PMF Coins} {ε : ℕ → ℕ → ℝ}
+    (h : EverlastingZeroKnowledge rel P' μ S' ε) : EverlastingZeroKnowledge rel P μ S ε :=
+  fun T t Q 𝒜 h𝒜 => (𝒜.advantage_decode hP hS μ Q).symm.trans_le
     (h T t Q (𝒜.decode enc fp) (𝒜.queriesBeforeLastProofQuery_decode enc fp h𝒜))
 
 end ZeroKnowledge

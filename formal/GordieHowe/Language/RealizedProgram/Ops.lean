@@ -6,6 +6,7 @@ module
 public import GordieHowe.Foundations.Algebra.NegacyclicSpectrum
 public import GordieHowe.Foundations.Algebra.BitReverse
 public import GordieHowe.Foundations.Algebra.ConvMatrix
+public import Mathlib.Algebra.Polynomial.OfFn
 
 @[expose] public section
 
@@ -28,8 +29,9 @@ formula:
   root of unity (`nttScheme_inverseNtt`), and the inverse natural-order transform one of the
   natural-order transform (`nttNatural_inverseNttNatural`);
 * the MAC's carry-free convolution is `Conv.matrix` (`GordieHowe/Foundations/Algebra/ConvMatrix.lean`, the
-  transcription of `ApplyConv` and of the C++ `mac_fold`), column `i` of chunk `c` being
-  `fold(R_c · x^i)` (`macConv_natCast`: on naturals it is `Σ_c ApplyConv(r_c, x_c)`).
+  transcription of `Conv.applyConv` and of the C++ `mac_columns` and `mac_reduce`), column `i` of
+  chunk `c` being `fold(R_c · x^i)` (`macConv_natCast`: on naturals it is
+  `Σ_c Conv.applyConv(r_c, x_c)`).
 
 The others are new definitions, transcribing the operators' defining formulas: the transposed
 transform, the acyclic convolution, the row products, the diagonals, the sums and the digit
@@ -92,6 +94,182 @@ theorem negacyclic_apply (n : ℕ) (h x : ℕ → K) {j : ℕ} (hj : j < n) :
     · rw [Nat.mod_eq_sub_mod (by omega), Nat.mod_eq_of_lt (by omega)]
   rw [hmod]
   split_ifs <;> first | (exfalso; omega) | ring
+
+/-! ### Polynomials of `n` coefficients and the negacyclic product -/
+
+/-- **The polynomial of `n` coefficients** `Σ_{t < n} a_t X^t`: Mathlib's `Polynomial.ofFn` at the
+first `n` coordinates. -/
+noncomputable def polyOf [DecidableEq K] (n : ℕ) (a : ℕ → K) : Polynomial K := Polynomial.ofFn n (toFin n a)
+
+open Polynomial in
+theorem polyOf_eq_sum [DecidableEq K] (n : ℕ) (a : ℕ → K) : polyOf n a = ∑ t ∈ Finset.range n, C (a t) * X ^ t := by
+  rw [polyOf, ofFn_eq_sum_monomial, ← Fin.sum_univ_eq_sum_range (fun t => C (a t) * X ^ t)]
+  simp only [toFin_apply, C_mul_X_pow_eq_monomial]
+
+open Polynomial in
+theorem polyOf_eval [DecidableEq K] (n : ℕ) (a : ℕ → K) (x : K) :
+    (polyOf n a).eval x = ∑ t ∈ Finset.range n, a t * x ^ t := by
+  rw [polyOf_eq_sum, eval_finsetSum]
+  refine Finset.sum_congr rfl fun t _ => ?_
+  rw [eval_mul, eval_C, eval_pow, eval_X]
+
+theorem polyOf_congr [DecidableEq K] {n : ℕ} {a b : ℕ → K} (h : ∀ t < n, a t = b t) : polyOf n a = polyOf n b :=
+  congrArg (Polynomial.ofFn n) (funext fun t => h t t.isLt)
+
+/-- `polyOf n` is `ofFn n` on the first `n` coordinates, so linear (`map_add`, `map_sub`,
+`map_sum`), stated at `polyOf` for rewriting. -/
+theorem polyOf_add [DecidableEq K] (n : ℕ) (a b : ℕ → K) : polyOf n (a + b) = polyOf n a + polyOf n b :=
+  map_add (Polynomial.ofFn n) (toFin n a) (toFin n b)
+
+theorem polyOf_sub [DecidableEq K] (n : ℕ) (a b : ℕ → K) : polyOf n (a - b) = polyOf n a - polyOf n b :=
+  map_sub (Polynomial.ofFn n) (toFin n a) (toFin n b)
+
+theorem polyOf_sum [DecidableEq K] {ι : Type*} (s : Finset ι) (n : ℕ) (a : ι → ℕ → K) :
+    polyOf n (fun t => ∑ j ∈ s, a j t) = ∑ j ∈ s, polyOf n (a j) :=
+  (congrArg (Polynomial.ofFn n) (funext fun t => (Finset.sum_apply t s fun j => toFin n (a j)).symm)).trans
+    (map_sum (Polynomial.ofFn n) (fun j => toFin n (a j)) s)
+
+/-- **The high half of the product** `a · b` of two polynomials of `n` coefficients: coefficient
+`n + t`, `Σ_{i + k = n + t} a_i b_k`, the quotient's coefficient `t` by `X^n + 1`. -/
+def high (n : ℕ) (a b : ℕ → K) (t : ℕ) : K :=
+  ∑ i : Fin n, ∑ k : Fin n, if (i : ℕ) + k = t + n then a i * b k else 0
+
+/-- `high_{n−1} = 0`: no two indices below `n` sum to `2n − 1`. -/
+theorem high_last {n : ℕ} (a b : ℕ → K) : high n a b (n - 1) = 0 := by
+  unfold high
+  refine Finset.sum_eq_zero fun i _ => Finset.sum_eq_zero fun k _ => if_neg ?_
+  have := i.isLt
+  have := k.isLt
+  omega
+
+open Polynomial in
+/-- The low part: `Σ_{j < n} (Σ_{i+k=j} a_i b_k) X^j = Σ_{i,k: i+k<n} a_i b_k X^(i+k)`. -/
+private theorem sum_low (n : ℕ) (a b : ℕ → K) :
+    ∑ j ∈ Finset.range n, C (∑ i : Fin n, ∑ k : Fin n,
+        if (i : ℕ) + k = j then a i * b k else 0) * X ^ j =
+      ∑ i : Fin n, ∑ k : Fin n,
+        if (i : ℕ) + k < n then C (a i * b k) * X ^ ((i : ℕ) + k) else 0 := by
+  have h : ∀ j : ℕ, C (∑ i : Fin n, ∑ k : Fin n, if (i : ℕ) + k = j then a i * b k else 0) *
+      X ^ j = ∑ i : Fin n, ∑ k : Fin n,
+        if (i : ℕ) + k = j then C (a i * b k) * X ^ ((i : ℕ) + k) else 0 := fun j => by
+    rw [map_sum, Finset.sum_mul]
+    refine Finset.sum_congr rfl fun i _ => ?_
+    rw [map_sum, Finset.sum_mul]
+    refine Finset.sum_congr rfl fun k _ => ?_
+    split_ifs with hik
+    · rw [hik]
+    · simp
+  simp only [h]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun k _ => ?_
+  rw [Finset.sum_ite_eq]
+  simp [Finset.mem_range]
+
+open Polynomial in
+/-- The high part: `Σ_{t < n−1} high_t X^(n+t) = Σ_{i,k: i+k ≥ n} a_i b_k X^(i+k)`. -/
+private theorem sum_high (n : ℕ) (a b : ℕ → K) :
+    ∑ t ∈ Finset.range (n - 1), C (high n a b t) * X ^ (t + n) =
+      ∑ i : Fin n, ∑ k : Fin n,
+        if n ≤ (i : ℕ) + k then C (a i * b k) * X ^ ((i : ℕ) + k) else 0 := by
+  have h : ∀ t : ℕ, C (high n a b t) * X ^ (t + n) = ∑ i : Fin n, ∑ k : Fin n,
+      if (i : ℕ) + k - n = t ∧ n ≤ (i : ℕ) + k then C (a i * b k) * X ^ ((i : ℕ) + k) else 0 :=
+    fun t => by
+    rw [high, map_sum, Finset.sum_mul]
+    refine Finset.sum_congr rfl fun i _ => ?_
+    rw [map_sum, Finset.sum_mul]
+    refine Finset.sum_congr rfl fun k _ => ?_
+    by_cases hik : (i : ℕ) + k = t + n
+    · rw [if_pos hik, if_pos ⟨by omega, by omega⟩, hik]
+    · rw [if_neg hik, if_neg (fun h => hik (by omega)), map_zero, zero_mul]
+  simp only [h]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun k _ => ?_
+  by_cases hn : n ≤ (i : ℕ) + k
+  · rw [if_pos hn]
+    have hlt : (i : ℕ) + k - n < n - 1 := by have := i.isLt; have := k.isLt; omega
+    rw [Finset.sum_eq_single ((i : ℕ) + k - n)]
+    · rw [if_pos ⟨rfl, hn⟩]
+    · intro t _ ht
+      rw [if_neg (fun h => ht h.1.symm)]
+    · intro h
+      exact absurd (Finset.mem_range.2 hlt) h
+  · rw [if_neg hn]
+    exact Finset.sum_eq_zero fun t _ => if_neg (fun h => hn h.2)
+
+open Polynomial in
+/-- **The product of two polynomials of `n` coefficients** in `K[X]`: the negacyclic product's
+polynomial plus `X^n + 1` times the high half's (`n ≥ 1`). -/
+theorem polyOf_mul_polyOf [DecidableEq K] {n : ℕ} (hn : 1 ≤ n) (a b : ℕ → K) :
+    polyOf n a * polyOf n b =
+      polyOf n (negacyclic n a b) + (X ^ n + 1) * polyOf (n - 1) (high n a b) := by
+  have hprod : polyOf n a * polyOf n b =
+      ∑ i : Fin n, ∑ k : Fin n, C (a i * b k) * X ^ ((i : ℕ) + k) := by
+    rw [polyOf_eq_sum, polyOf_eq_sum, Finset.sum_mul]
+    rw [← Fin.sum_univ_eq_sum_range (fun i => C (a i) * X ^ i * ∑ k ∈ Finset.range n, C (b k) * X ^ k)]
+    refine Finset.sum_congr rfl fun i _ => ?_
+    rw [Finset.mul_sum, ← Fin.sum_univ_eq_sum_range (fun k => C (a i) * X ^ (i : ℕ) * (C (b k) * X ^ k))]
+    refine Finset.sum_congr rfl fun k _ => ?_
+    rw [C_mul, pow_add]
+    ring
+  -- the negacyclic product's polynomial is the low part less the high half
+  have hneg : polyOf n (negacyclic n a b) =
+      (∑ j ∈ Finset.range n, C (∑ i : Fin n, ∑ k : Fin n,
+        if (i : ℕ) + k = j then a i * b k else 0) * X ^ j) - polyOf (n - 1) (high n a b) := by
+    have hh : polyOf (n - 1) (high n a b) = polyOf n (high n a b) := by
+      rw [polyOf_eq_sum, polyOf_eq_sum, show Finset.range n = Finset.range (n - 1 + 1) by congr 1; omega,
+        Finset.sum_range_succ, high_last, map_zero, zero_mul, add_zero]
+    rw [hh, polyOf_eq_sum, polyOf_eq_sum, ← Finset.sum_sub_distrib]
+    refine Finset.sum_congr rfl fun j hj => ?_
+    rw [negacyclic_apply n a b (Finset.mem_range.1 hj), map_sub, sub_mul, high]
+  rw [hneg, hprod, sum_low]
+  have hX : (X ^ n + 1 : K[X]) * polyOf (n - 1) (high n a b) =
+      (∑ t ∈ Finset.range (n - 1), C (high n a b t) * X ^ (t + n)) + polyOf (n - 1) (high n a b) := by
+    rw [add_mul, one_mul, polyOf_eq_sum (n - 1), Finset.mul_sum]
+    congr 1
+    refine Finset.sum_congr rfl fun t _ => ?_
+    rw [pow_add]
+    ring
+  rw [hX, sum_high, sub_add_add_cancel, ← Finset.sum_add_distrib]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  rw [← Finset.sum_add_distrib]
+  refine Finset.sum_congr rfl fun k _ => ?_
+  by_cases h : (i : ℕ) + k < n
+  · rw [if_pos h, if_neg (by omega), add_zero]
+  · rw [if_neg h, if_pos (by omega), zero_add]
+
+open Polynomial in
+/-- **A polynomial of `n` coefficients plus a multiple of `X^n + 1` is `0` only when both are**
+(`n ≥ 1`): the multiple of a nonzero `B` has degree at least `n`, the polynomial below `n`. -/
+theorem polyOf_eq_zero_of_add_mul [DecidableEq K] {n : ℕ} (hn : 1 ≤ n) {a : ℕ → K} {B : K[X]}
+    (h : polyOf n a + (X ^ n + 1) * B = 0) : polyOf n a = 0 ∧ B = 0 := by
+  have hB : B = 0 := by
+    by_contra hB
+    have hX : (X ^ n + 1 : K[X]) ≠ 0 := X_pow_add_C_ne_zero (by omega) 1
+    have hdeg : ((X ^ n + 1) * B).natDegree = n + B.natDegree := by
+      rw [natDegree_mul hX hB, show (X ^ n + 1 : K[X]) = X ^ n + C 1 by rw [map_one],
+        natDegree_X_pow_add_C]
+    have hlt := ofFn_natDegree_lt hn (toFin n a)
+    have heq : polyOf n a = -((X ^ n + 1) * B) := eq_neg_of_add_eq_zero_left h
+    have := congrArg natDegree heq
+    rw [natDegree_neg, hdeg] at this
+    unfold polyOf at this
+    omega
+  refine ⟨?_, hB⟩
+  rw [hB, mul_zero, add_zero] at h
+  exact h
+
+open Polynomial in
+/-- **The coefficients of a polynomial of `n` coefficients that is `0`** are `0`. -/
+theorem eq_zero_of_polyOf_eq_zero [DecidableEq K] {n : ℕ} {a : ℕ → K} (h : polyOf n a = 0)
+    {t : ℕ} (ht : t < n) : a t = 0 := by
+  have := congrArg (fun P => P.coeff t) h
+  simp only [coeff_zero] at this
+  rw [polyOf, ofFn_coeff_eq_val_of_lt _ ht] at this
+  exact this
 
 /-- **The negacyclic transform in natural order**: `DFT.negSpectrum`, the evaluation at
 `ψ^(2m+1)` (`nttNatural_apply`). -/
@@ -327,6 +505,43 @@ theorem map_inverseNttNatural {K' : Type*} [Field K'] (f : K →+* K') (n : ℕ)
     simp only [map_mul, map_pow, map_inv₀]
   · exact map_zero f
 
+/-- **The interpolation in natural order**: the polynomial whose natural-order transform is `y`
+takes the value `Σ_m y_m · n⁻¹ Ntt_{ψ⁻¹}(1, r, …, r^{n−1})_m` at `r`. -/
+theorem eval_inverseNttNatural [DecidableEq K] (n : ℕ) (ψ : K) (y : ℕ → K) (r : K) :
+    (polyOf n (inverseNttNatural n ψ y)).eval r =
+      ∑ m : Fin n, y m * ((n : K)⁻¹ * nttNatural n ψ⁻¹ (fun t => r ^ t) m) := by
+  rw [polyOf_eval, ← Fin.sum_univ_eq_sum_range]
+  have hl : ∀ i : Fin n, inverseNttNatural n ψ y i * r ^ (i : ℕ) =
+      ∑ m : Fin n, y m * ((n : K)⁻¹ * (r ^ (i : ℕ) * ψ⁻¹ ^ ((2 * (m : ℕ) + 1) * i))) := by
+    intro i
+    rw [inverseNttNatural, if_pos i.isLt, mul_assoc, Finset.sum_mul, Finset.mul_sum]
+    refine Finset.sum_congr rfl fun m _ => ?_
+    ring
+  simp only [hl]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun m _ => ?_
+  rw [nttNatural_apply n ψ⁻¹ _ m.isLt, Finset.mul_sum, Finset.mul_sum]
+
+/-- **The interpolation in scheme order** (`n = 2^k`): the polynomial whose scheme-order transform
+is `y` takes the value `Σ_m y_m · n⁻¹ Ntt_{ψ⁻¹}(1, r, …, r^{n−1})_m` at `r`, the transform in
+scheme order. -/
+theorem eval_inverseNtt [DecidableEq K] {k n : ℕ} (hn : n = 2 ^ k) (ψ : K) (y : ℕ → K) (r : K) :
+    (polyOf n (inverseNtt n ψ y)).eval r =
+      ∑ m : Fin n, y m * ((n : K)⁻¹ * nttScheme n ψ⁻¹ (fun t => r ^ t) m) := by
+  have hlog : Nat.log2 n = k := by rw [hn, Nat.log2_two_pow]
+  rw [polyOf_eval, ← Fin.sum_univ_eq_sum_range]
+  have hl : ∀ i : Fin n, inverseNtt n ψ y i * r ^ (i : ℕ) =
+      ∑ m : Fin n, y m * ((n : K)⁻¹ *
+        (r ^ (i : ℕ) * ψ⁻¹ ^ ((2 * bitRevNat k m + 1) * i))) := by
+    intro i
+    rw [inverseNtt, if_pos i.isLt, hlog, mul_assoc, Finset.sum_mul, Finset.mul_sum]
+    refine Finset.sum_congr rfl fun m _ => ?_
+    ring
+  simp only [hl]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun m _ => ?_
+  rw [nttScheme_apply hn ψ⁻¹ _ m.isLt, Finset.mul_sum, Finset.mul_sum]
+
 /-- **The transposed transform** (`nttTranspose n ψ`, the operator's defining formula):
 `x_i = Σ_m ψ^((2m+1) i) y_m`, the transpose of the natural-order transform. -/
 def nttTranspose (n : ℕ) (ψ : K) (y : ℕ → K) (i : ℕ) : K :=
@@ -361,17 +576,17 @@ def fromDigits (k : ℕ) (base : K) (x : ℕ → K) (j : ℕ) : K :=
 /-- **The MAC's carry-free convolution** (`macConv r w nch taps`):
 `y_b = Σ_c Σ_i x[c·w + i] · Conv(r_c)[b][i]`, `Conv(r_c)` the integer matrix of multiplication by
 `r_c` in the binary field of reduction polynomial `x^w + Σ_{d ∈ taps} x^d` (`Conv.matrix`: column
-`i` is `fold(R_c · x^i)`, `R_c` the bits `rb c` of `r_c`, `fold` the C++ `mac_fold`), its entries
+`i` is `fold(R_c · x^i)`, `R_c` the bits `rb c` of `r_c`, `fold` the C++ `mac_reduce`), its entries
 read in `K`. The reduction substitutes `x^w = Σ_{d ∈ taps} x^d`, with positive coefficients, as the
-C++ (`mac_fold`, `lib/gordiehowe/ops/operators.h`) and `Conv.applyConv` do. -/
+C++ (`mac_reduce`, `lib/gordiehowe/ops/operators.h`) and `Conv.applyConv` do. -/
 def macConv (w nch : ℕ) (taps : List ℕ) (rb : ℕ → Fin w → ℕ) (x : ℕ → K) (b : ℕ) : K :=
   if h : b < w then
     ∑ c : Fin nch, ∑ i : Fin w, (Conv.matrix taps.toFinset (rb c) ⟨b, h⟩ i : K) * x (c * w + i)
   else 0
 
-/-- **The MAC's convolution on naturals is `ApplyConv`** (`Conv.applyConv`, the defining formula
+/-- **The MAC's convolution on naturals is `Conv.applyConv`** (the defining formula
 `Σ_c fold(R_c · X_c)`): on inputs cast from naturals `xs`, output `b` is the cast of
-`Σ_c ApplyConv(r_c, X_c)[b]`, `X_c` the `c`-th chunk of `w`. -/
+`Σ_c applyConv(r_c, X_c)[b]`, `X_c` the `c`-th chunk of `w`. -/
 theorem macConv_natCast (w nch : ℕ) (taps : List ℕ) (rb : ℕ → Fin w → ℕ) (xs : ℕ → ℕ) {b : ℕ}
     (hb : b < w) :
     macConv w nch taps rb (fun t => (xs t : K)) b =

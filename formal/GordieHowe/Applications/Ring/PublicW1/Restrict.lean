@@ -37,11 +37,55 @@ variable {N : ℕ} {RMsg : Type}
 /-- **The signer that also refuses the rings outside `Ok`**: `S` with the refusal rule
 `S.Admit H R m ∧ Ok H R m`. `Ok` reads only the oracle, the ring and the message, so the rule
 stays the same for every signer. -/
-noncomputable def PubSigner.restrict (S : PubSigner N RMsg) (Ok : S.Orc → RingOf S.PK N → RMsg → Prop) :
+def PubSigner.restrict (S : PubSigner N RMsg) (Ok : S.Orc → RingOf S.PK N → RMsg → Prop) :
     PubSigner N RMsg :=
-  { S with
-    Admit := fun H R m => S.Admit H R m ∧ Ok H R m
-    instDecAdmit := fun _ _ _ => @instDecidableAnd _ _ _ (Classical.dec _) }
+  { S with Admit := fun H R m => S.Admit H R m ∧ Ok H R m }
+
+/-! The instances of the restricted signer's types: those of `S`; its refusal rule is decided by
+`S`'s and classically on `Ok`. -/
+
+section RestrictInstances
+
+variable (S : PubSigner N RMsg) (Ok : S.Orc → RingOf S.PK N → RMsg → Prop)
+
+instance PubSigner.restrict.instFintypePK [Fintype S.PK] : Fintype (S.restrict Ok).PK :=
+  inferInstanceAs (Fintype S.PK)
+
+instance PubSigner.restrict.instDecEqPK [DecidableEq S.PK] : DecidableEq (S.restrict Ok).PK :=
+  inferInstanceAs (DecidableEq S.PK)
+
+instance PubSigner.restrict.instFintypeKeyCoins [Fintype S.KeyCoins] :
+    Fintype (S.restrict Ok).KeyCoins :=
+  inferInstanceAs (Fintype S.KeyCoins)
+
+instance PubSigner.restrict.instNonemptyKeyCoins [Nonempty S.KeyCoins] :
+    Nonempty (S.restrict Ok).KeyCoins :=
+  inferInstanceAs (Nonempty S.KeyCoins)
+
+instance PubSigner.restrict.instFintypePub [Fintype S.Pub] : Fintype (S.restrict Ok).Pub :=
+  inferInstanceAs (Fintype S.Pub)
+
+instance PubSigner.restrict.instDecEqPub [DecidableEq S.Pub] : DecidableEq (S.restrict Ok).Pub :=
+  inferInstanceAs (DecidableEq S.Pub)
+
+instance PubSigner.restrict.instFintypeSig [Fintype S.Sig] : Fintype (S.restrict Ok).Sig :=
+  inferInstanceAs (Fintype S.Sig)
+
+instance PubSigner.restrict.instDecEqSig [DecidableEq S.Sig] : DecidableEq (S.restrict Ok).Sig :=
+  inferInstanceAs (DecidableEq S.Sig)
+
+instance PubSigner.restrict.instFintypeOrc [Fintype S.Orc] : Fintype (S.restrict Ok).Orc :=
+  inferInstanceAs (Fintype S.Orc)
+
+instance PubSigner.restrict.instNonemptyOrc [Nonempty S.Orc] : Nonempty (S.restrict Ok).Orc :=
+  inferInstanceAs (Nonempty S.Orc)
+
+noncomputable instance PubSigner.restrict.instDecAdmit [hA : ∀ H R m, Decidable (S.Admit H R m)]
+    (H : (S.restrict Ok).Orc) (R : RingOf (S.restrict Ok).PK N) (m : RMsg) :
+    Decidable ((S.restrict Ok).Admit H R m) :=
+  @instDecidableAnd _ _ (hA H R m) (Classical.dec _)
+
+end RestrictInstances
 
 @[simp] theorem PubSigner.restrict_admit (S : PubSigner N RMsg)
     (Ok : S.Orc → RingOf S.PK N → RMsg → Prop) (H : S.Orc)
@@ -63,7 +107,9 @@ theorem ite_some_ne_ite_some_iff {α : Type*} (p q : Prop) {_ : Decidable p}
 
 section Game
 
-variable [DecidableEq RMsg] {S : PubSigner N RMsg} (Ok : S.Orc → RingOf S.PK N → RMsg → Prop)
+variable [DecidableEq RMsg] {S : PubSigner N RMsg} [DecidableEq S.PK] [Fintype S.KeyCoins]
+  [Nonempty S.KeyCoins] [Fintype S.Pub] [Fintype S.Sig] [Fintype S.Orc] [Nonempty S.Orc]
+  [∀ H R m, Decidable (S.Admit H R m)] (Ok : S.Orc → RingOf S.PK N → RMsg → Prop)
   {k kN kS L e : ℕ} {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)}
   [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)]
@@ -80,13 +126,16 @@ def restrict (A : PubAnonAdversary S M n Q) : PubAnonAdversary (S.restrict Ok) M
   choose_mem := A.choose_mem
   choose_valid := A.choose_valid
 
+omit [DecidableEq S.PK] [Fintype S.Sig] [Fintype S.Pub] [Fintype S.KeyCoins] [Nonempty S.KeyCoins]
+  [Fintype S.Orc] [Nonempty S.Orc] in
 @[simp] theorem restrict_choose (A : PubAnonAdversary S M n Q) :
     (A.restrict Ok).choose = A.choose := rfl
 
 variable (A : PubAnonAdversary S M n Q) (E : (j : ι) → (M.comp j).Encoder)
   {V : S.Orc → S.Stmt → FullTr P τ → Bool} (Qs : ∀ H x, M.IOPQueries (V H) x) {R : Type}
-  [Fintype R] [Nonempty R] (honest : S.Orc → S.Wit → R → CausalProver P τ S.Stmt)
+  [Fintype R] [DecidableEq R] [Nonempty R] (honest : S.Orc → S.Wit → R → CausalProver P τ S.Stmt)
 
+omit [DecidableEq R] in
 /-- **The experiments against `S` and `S.restrict Ok` are identical until the selectors
 differ**: the experiment `b` against the two signers are within the average, over the users'
 coins, the oracle and the signature table, of the sum over the rounds of the probability that the
@@ -109,6 +158,7 @@ theorem tvDist_game_restrict_le (b : Bool) :
   exact (PMF.tvDist_map_le _ _ _).trans (tvDist_pubRun_le _ _ Q le_rfl)
 
 open Classical in
+omit [DecidableEq R] in
 /-- **With one challenge, the selectors differ only on a bad choice**: the experiments `b`
 against `S` and `S.restrict Ok` are within the probability, over the users' coins, the oracle `H`
 and the proof system's oracle `h`, that `S` admits the ring of the challenge chosen at the empty
@@ -152,6 +202,7 @@ theorem tvDist_game_restrict_le_one (A : PubAnonAdversary S M n 1) (b : Bool) :
   rw [← Finset.sum_mul, PMF.sum_toReal, one_mul]
 
 open Classical in
+omit [DecidableEq R] in
 /-- **The advantage against `S` from the advantage against `S.restrict Ok`** with one challenge:
 at most the advantage against the restricted signer plus twice the probability, over the users'
 coins, the oracle and the proof system's oracle, that `S` admits the chosen ring and `Ok`

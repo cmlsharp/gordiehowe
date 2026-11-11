@@ -62,26 +62,39 @@ theorem Parameters.rate_le {C : GordieHowe.RSCode F N} {a l : ℕ} (B : Paramete
   have := rate_of_johnson B.agreement_le B.johnson
   omega
 
-/-- **The linear test's list event on the rows `fs`** at the mask row `u`: the list cancellation
-event of the linear family (`MaskedConstraintList.BadChallenge`) at the linear challenge `r`. -/
-def linearBad (fs : Fin (R + 1) → F[X]) (u : Fin N → F) (r : Fin nL → F) : Prop :=
-  MaskedConstraintList.BadChallenge (MaskedPolynomialTest.maskCode C hrate) a u
-    (dotCheck C P) (dotPolynomials C P L fs) L.target r
+/-- **The mask code of the list parameters**: the Reed–Solomon code of the masks, of dimension
+`2k − 1` on the code's `N` points (`MaskedPolynomialTest.maskCode`), at the rate condition
+`Parameters.rate_le`. -/
+abbrev Parameters.maskCode {C : GordieHowe.RSCode F N} {a l : ℕ} (B : Parameters C a l) :
+    GordieHowe.RSCode F N :=
+  MaskedPolynomialTest.maskCode C B.rate_le
 
+variable {a} in
+/-- **The linear test's list event on the rows `fs`** at the mask row `u`: the list cancellation
+event of the linear family (`MaskedConstraintList.BadChallenge`) at the linear challenge `r`, on
+the mask code of the list parameters `B` (`Parameters.maskCode`) at their agreement threshold. -/
+def linearBad {l : ℕ} (B : Parameters C a l) (fs : Fin (R + 1) → F[X]) (u : Fin N → F)
+    (r : Fin nL → F) : Prop :=
+  MaskedConstraintList.BadChallenge B.maskCode a u (dotCheck C P) (dotPolynomials C P L fs) L.target r
+
+variable {a} in
 /-- **The quadratic test's list event on the rows `fs`** at the mask row `u`: the list
 cancellation event of the quadratic family (`MaskedConstraintList.FamilyBadChallenge`) at the
-quadratic challenge `r`. -/
-def quadBad (fs : Fin (R + 1) → F[X]) (u : Fin N → F) (r : Fin nQ → F) : Prop :=
-  MaskedConstraintList.FamilyBadChallenge (MaskedPolynomialTest.maskCode C hrate) a u
-    (quadCheck C P) (quadPolynomials C P fs) (fun _ _ => 0) r
+quadratic challenge `r`, on the mask code of the list parameters `B` (`Parameters.maskCode`). -/
+def quadBad {l : ℕ} (B : Parameters C a l) (fs : Fin (R + 1) → F[X]) (u : Fin N → F)
+    (r : Fin nQ → F) : Prop :=
+  MaskedConstraintList.FamilyBadChallenge B.maskCode a u (quadCheck C P) (quadPolynomials C P fs)
+    (fun _ _ => 0) r
 
+variable {a} in
 /-- **The selected list event on the rows `fs`**: the list cancellation event of the linear
-family when the linear checks fail on `fs`, else of the quadratic family. -/
-def constraintBad (fs : Fin (R + 1) → F[X]) (u : Aux F N)
+family when the linear checks fail on `fs`, else of the quadratic family. The choice reads only
+`fs`, so the family is fixed before the batching coefficients `r` are drawn. -/
+def constraintBad {l : ℕ} (B : Parameters C a l) (fs : Fin (R + 1) → F[X]) (u : Aux F N)
     (r : (Fin nL → F) × (Fin nQ → F)) : Prop :=
-  if ¬ ∀ l, dotCheck C P (dotPolynomials C P L fs l) = L.target l then
-    linearBad C P L hrate a fs u.1 r.1
-  else quadBad C P hrate a fs u.2 r.2
+  if ¬ ∀ i, dotCheck C P (dotPolynomials C P L fs i) = L.target i then
+    linearBad C P L B fs u.dot r.1
+  else quadBad C P B fs u.quad r.2
 
 /-- **Paper `lem:untested-masks` for the linear test, the column count**: for rows `fs` of degree
 `< k`, a mask row `u` and a linear challenge `r` outside the linear list event, every response `w` of degree `< 2k − 1` that passes the linear test's algebraic check
@@ -89,7 +102,7 @@ passes its column check on at most `a.descFactorial t` query tuples. -/
 @[headline]
 theorem linear_query_count {l : ℕ} (B : Parameters C a l) (fs : Fin (R + 1) → F[X])
     (hfs : ∀ row, (fs row).natDegree < C.k) (u : Fin N → F) (r : Fin nL → F)
-    (hbad : ¬ linearBad C P L B.rate_le a fs u r) (w : F[X])
+    (hbad : ¬ linearBad C P L B fs u r) (w : F[X])
     (hw : w.natDegree < 2 * C.k - 1) (hcheck : dotCheck C P w = ∑ l, r l * L.target l) (t : ℕ) :
     (Finset.univ.filter fun q : Query N t => ∀ s, u (q s) +
       (MaskedConstraintTest.batch (dotPolynomials C P L fs) r).eval (C.D (q s)) =
@@ -107,7 +120,7 @@ theorem quad_query_count {l : ℕ} (B : Parameters C a l) (fs : Fin (R + 1) → 
     (hfs : ∀ row, (fs row).natDegree < C.k) (u : Fin N → F)
     (hfalse : ¬ MaskedConstraintFamily.Claim (quadCheck C P) (quadPolynomials C P fs)
       (fun _ _ => 0))
-    (r : Fin nQ → F) (hbad : ¬ quadBad C P B.rate_le a fs u r) (w : F[X])
+    (r : Fin nQ → F) (hbad : ¬ quadBad C P B fs u r) (w : F[X])
     (hw : w.natDegree < 2 * C.k - 1) (hcheck : ∀ j, quadCheck C P j w = 0) (t : ℕ) :
     (Finset.univ.filter fun q : Query N t => ∀ s, u (q s) +
       (MaskedConstraintTest.batch (quadPolynomials C P fs) r).eval (C.D (q s)) =
@@ -123,18 +136,19 @@ claim fails, `quad_query_count` otherwise). -/
 theorem selected_query_count {l : ℕ} (B : Parameters C a l) (fs : Fin (R + 1) → F[X])
     (hfs : ∀ row, (fs row).natDegree < C.k)
     (u : Aux F N) (hfalse : ¬ Holds C P L fs) (r : Challenge F R nL nQ nrep)
-    (hbad : ¬ constraintBad C P L B.rate_le a fs u r.2)
+    (hbad : ¬ constraintBad C P L B fs u r.constraint)
     (p : Response F C.k nrep) (hp : Valid C P L r p) (t : ℕ) :
     (Finset.univ.filter (selectedAccept C P L fs u r p (t := t))).card ≤ a.descFactorial t := by
   change (Finset.univ.filter fun q => selectedAccept C P L fs u r p q).card ≤ _
-  by_cases hd : ¬ ∀ l, dotCheck C P (dotPolynomials C P L fs l) = L.target l
+  by_cases hd : ¬ ∀ i, dotCheck C P (dotPolynomials C P L fs i) = L.target i
   · simp only [selectedAccept, ite_eq_left hd]
-    exact linear_query_count C P L a B fs hfs u.1 r.2.1
-      (by simpa only [constraintBad, ite_eq_left hd] using hbad) (p.dot C)
+    exact linear_query_count C P L a B fs hfs u.dot r.lin
+      (by simpa only [constraintBad, ite_eq_left hd, Challenge.fst_constraint] using hbad) (p.dot C)
       (Response.natDegree_dot_lt C B.rate_le p) hp.1 t
   · simp only [selectedAccept, ite_eq_right hd]
-    exact quad_query_count C P a B fs hfs u.2 (fun hq => hfalse ⟨not_not.mp hd, hq⟩) r.2.2
-      (by simpa only [constraintBad, ite_eq_right hd] using hbad) (p.quad C)
+    exact quad_query_count C P a B fs hfs u.quad (fun hq => hfalse ⟨not_not.mp hd, hq⟩) r.quad
+      (by simpa only [constraintBad, ite_eq_right hd, Challenge.snd_constraint] using hbad)
+      (p.quad C)
       (Response.natDegree_quad_lt C B.rate_le p) hp.2 t
 
 theorem count_left {A B : Type} [Fintype A] [Fintype B] (p : A → Prop) :
@@ -197,8 +211,8 @@ some linear claim fails and every mask row `u`, the linear list event holds on a
 fraction of the linear challenges. -/
 @[headline]
 theorem linear_bad_count (fs : Fin (R + 1) → F[X]) (u : Fin N → F)
-    (hfalse : ∃ l, dotCheck C P (dotPolynomials C P L fs l) ≠ L.target l) :
-    (Finset.univ.filter (linearBad C P L B.rate_le a fs u)).card * Fintype.card F ≤
+    (hfalse : ∃ i, dotCheck C P (dotPolynomials C P L fs i) ≠ L.target i) :
+    (Finset.univ.filter (linearBad C P L B fs u)).card * Fintype.card F ≤
       l * Fintype.card (Fin nL → F) := by
   have hrate := B.rate_le
   have hj : N * ((MaskedPolynomialTest.maskCode C hrate).k - 1) < (a + 1) ^ 2 := by
@@ -216,7 +230,7 @@ and every mask row `u`, the quadratic list event holds on at most an `l / |F|` f
 quadratic challenges (it is empty when every product constraint holds). -/
 @[headline]
 theorem quad_bad_count (fs : Fin (R + 1) → F[X]) (u : Fin N → F) :
-    (Finset.univ.filter (quadBad C P B.rate_le a fs u)).card * Fintype.card F ≤
+    (Finset.univ.filter (quadBad C P B fs u)).card * Fintype.card F ≤
       l * Fintype.card (Fin nQ → F) := by
   have hrate := B.rate_le
   have hj : N * ((MaskedPolynomialTest.maskCode C hrate).k - 1) < (a + 1) ^ 2 := by
@@ -235,19 +249,18 @@ constraint challenges, for all rows `fs` and masks `u`: the linear test's event
 (`linear_bad_count`) when a linear claim fails, the quadratic test's (`quad_bad_count`)
 otherwise. -/
 theorem constraint_bad_count (fs : Fin (R + 1) → F[X]) (u : Aux F N) :
-    (Finset.univ.filter (constraintBad C P L B.rate_le a fs u)).card * Fintype.card F ≤
+    (Finset.univ.filter (constraintBad C P L B fs u)).card * Fintype.card F ≤
       l * Fintype.card ((Fin nL → F) × (Fin nQ → F)) := by
-  have hrate := B.rate_le
-  change (Finset.univ.filter fun r => constraintBad C P L hrate a fs u r).card * _ ≤ _
-  by_cases hd : ¬ ∀ l, dotCheck C P (dotPolynomials C P L fs l) = L.target l
+  change (Finset.univ.filter fun r => constraintBad C P L B fs u r).card * _ ≤ _
+  by_cases hd : ¬ ∀ i, dotCheck C P (dotPolynomials C P L fs i) = L.target i
   · simp only [constraintBad, ite_eq_left hd]
     rw [count_left, Fintype.card_prod]
     have h := Nat.mul_le_mul_right (Fintype.card (Fin nQ → F))
-      (linear_bad_count C P L a B fs u.1 (not_forall.mp hd))
+      (linear_bad_count C P L a B fs u.dot (not_forall.mp hd))
     linarith
   · simp only [constraintBad, ite_eq_right hd]
     rw [count_right, Fintype.card_prod]
-    have h := Nat.mul_le_mul_left (Fintype.card (Fin nL → F)) (quad_bad_count C P a B fs u.2)
+    have h := Nat.mul_le_mul_left (Fintype.card (Fin nL → F)) (quad_bad_count C P a B fs u.quad)
     linarith
 
 end

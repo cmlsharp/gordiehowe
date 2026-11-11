@@ -16,6 +16,7 @@ public import GordieHowe.Foundations.ToMathlib.DegreeLT
 /-!
 # Longfellow's prepared Ligero tableau
 
+The Ligero tableau (AHIV17 §4) as Longfellow prepares it.
 The low-degree test uses ILDT with fixed coefficient one. Linear checks use
 public coefficient rows interpolated from zero privacy coordinates and witness
 coefficients. Their response is checked by summing only the witness positions.
@@ -338,8 +339,100 @@ def LdtResponse.equivFin {F : Type} {k nrep : ℕ} : LdtResponse F k nrep ≃ (F
 
 /-- **The challenge round**: the low-degree challenges (`LdtChallenge`), and the batching
 coefficients of the linear equations and of the quadratic triples. -/
-abbrev Challenge (F : Type) (R nL nQ nrep : ℕ) :=
-  LdtChallenge F R nrep × ((Fin nL → F) × (Fin nQ → F))
+@[ext]
+structure Challenge (F : Type) (R nL nQ nrep : ℕ) where
+  /-- The low-degree challenges. -/
+  ldt : LdtChallenge F R nrep
+  /-- The batching coefficients of the linear equations. -/
+  lin : Fin nL → F
+  /-- The batching coefficients of the quadratic triples. -/
+  quad : Fin nQ → F
+
+namespace Challenge
+
+variable {F : Type} {R nL nQ nrep : ℕ}
+
+/-- **The constraint challenge**: the batching coefficients of the linear equations and of the
+quadratic triples, as a pair. -/
+def constraint (r : Challenge F R nL nQ nrep) : (Fin nL → F) × (Fin nQ → F) :=
+  (r.lin, r.quad)
+
+@[simp] theorem fst_constraint (r : Challenge F R nL nQ nrep) : r.constraint.1 = r.lin :=
+  rfl
+
+@[simp] theorem snd_constraint (r : Challenge F R nL nQ nrep) : r.constraint.2 = r.quad :=
+  rfl
+
+/-- **The challenge of given low-degree challenges `r` and constraint challenge `rc`**. -/
+def ofConstraint (r : LdtChallenge F R nrep) (rc : (Fin nL → F) × (Fin nQ → F)) :
+    Challenge F R nL nQ nrep :=
+  ⟨r, rc.1, rc.2⟩
+
+@[simp] theorem ldt_ofConstraint (r : LdtChallenge F R nrep) (rc : (Fin nL → F) × (Fin nQ → F)) :
+    (ofConstraint r rc).ldt = r :=
+  rfl
+
+@[simp] theorem lin_ofConstraint (r : LdtChallenge F R nrep) (rc : (Fin nL → F) × (Fin nQ → F)) :
+    (ofConstraint r rc).lin = rc.1 :=
+  rfl
+
+@[simp] theorem quad_ofConstraint (r : LdtChallenge F R nrep) (rc : (Fin nL → F) × (Fin nQ → F)) :
+    (ofConstraint r rc).quad = rc.2 :=
+  rfl
+
+@[simp] theorem constraint_ofConstraint (r : LdtChallenge F R nrep)
+    (rc : (Fin nL → F) × (Fin nQ → F)) : (ofConstraint r rc).constraint = rc :=
+  rfl
+
+/-- **The challenges as pairs** of the low-degree challenges and the constraint challenge. -/
+def equivProd :
+    Challenge F R nL nQ nrep ≃ LdtChallenge F R nrep × ((Fin nL → F) × (Fin nQ → F)) where
+  toFun r := (r.ldt, r.constraint)
+  invFun p := ofConstraint p.1 p.2
+  left_inv _ := rfl
+  right_inv _ := rfl
+
+@[simp] theorem equivProd_apply (r : Challenge F R nL nQ nrep) :
+    equivProd r = (r.ldt, r.constraint) :=
+  rfl
+
+/-- The challenges of a finite field are finite (`equivProd`). -/
+instance instFintype [Fintype F] : Fintype (Challenge F R nL nQ nrep) :=
+  Fintype.ofEquiv _ equivProd.symm
+
+/-- Challenges have decidable equality when the field does (`equivProd`). -/
+instance instDecidableEq [DecidableEq F] : DecidableEq (Challenge F R nL nQ nrep) :=
+  equivProd.decidableEq
+
+/-- There are challenges over a nonempty field. -/
+instance instNonempty [Nonempty F] : Nonempty (Challenge F R nL nQ nrep) :=
+  equivProd.nonempty
+
+/-- **The number of challenges**: the number of low-degree challenges times the number of
+constraint challenges. -/
+theorem card [Fintype F] : Fintype.card (Challenge F R nL nQ nrep) =
+    Fintype.card (LdtChallenge F R nrep) * Fintype.card ((Fin nL → F) × (Fin nQ → F)) := by
+  rw [Fintype.card_congr equivProd, Fintype.card_prod]
+
+/-- **The challenges whose low-degree challenges satisfy `p`**: those low-degree challenges, each
+with every constraint challenge. -/
+theorem card_filter_ldt [Fintype F] (p : LdtChallenge F R nrep → Prop) [DecidablePred p] :
+    (Finset.univ.filter fun r : Challenge F R nL nQ nrep => p r.ldt).card =
+      (Finset.univ.filter p).card * Fintype.card ((Fin nL → F) × (Fin nQ → F)) := by
+  rw [← Finset.card_univ, ← Finset.card_product]
+  exact Finset.card_equiv equivProd fun r => by simp
+
+/-- **The challenges whose constraint challenge satisfies `p`**: every low-degree challenge, each
+with those constraint challenges. -/
+theorem card_filter_constraint [Fintype F] (p : (Fin nL → F) × (Fin nQ → F) → Prop)
+    [DecidablePred p] :
+    (Finset.univ.filter fun r : Challenge F R nL nQ nrep => p r.constraint).card =
+      Fintype.card (LdtChallenge F R nrep) * (Finset.univ.filter p).card := by
+  rw [← Finset.card_univ, ← Finset.card_product]
+  exact Finset.card_equiv equivProd fun r => by simp
+
+end Challenge
+
 /-- **The response round's message**: the low-degree responses (`LdtResponse`, each the values of
 a polynomial at the first `k` response nodes) and the values of the linear and quadratic responses
 at the first `2k − 1` (`responseNode`: the code's first evaluation points, which in the relative
@@ -355,8 +448,37 @@ below `k` (or `2k − 1`). The values determine the polynomials of the same degr
 format. The omitted `y_quad` values are those at the witness positions, where the verifier
 requires the quadratic polynomial to vanish; the Lean checks the vanishing at the message nodes
 (`Valid`, conjunct `quadCheck`). -/
-abbrev Response (F : Type) (k nrep : ℕ) :=
-  LdtResponse F k nrep × ((Fin (2 * k - 1) → F) × (Fin (2 * k - 1) → F))
+@[ext]
+structure Response (F : Type) (k nrep : ℕ) where
+  /-- The low-degree responses. -/
+  ldt : LdtResponse F k nrep
+  /-- The linear response's values at the first `2k − 1` response nodes. -/
+  dotValues : Fin (2 * k - 1) → F
+  /-- The quadratic response's values at the first `2k − 1` response nodes. -/
+  quadValues : Fin (2 * k - 1) → F
+
+namespace Response
+
+variable {F : Type} {k nrep : ℕ}
+
+/-- **The masked responses**: the values of the linear and of the quadratic response, as a pair. -/
+def masked (p : Response F k nrep) : (Fin (2 * k - 1) → F) × (Fin (2 * k - 1) → F) :=
+  (p.dotValues, p.quadValues)
+
+/-- **The response of given low-degree responses `w` and masked responses `m`**. -/
+def ofMasked (w : LdtResponse F k nrep) (m : (Fin (2 * k - 1) → F) × (Fin (2 * k - 1) → F)) :
+    Response F k nrep :=
+  ⟨w, m.1, m.2⟩
+
+@[simp] theorem ldt_ofMasked (w : LdtResponse F k nrep)
+    (m : (Fin (2 * k - 1) → F) × (Fin (2 * k - 1) → F)) : (ofMasked w m).ldt = w :=
+  rfl
+
+@[simp] theorem masked_ofMasked (w : LdtResponse F k nrep)
+    (m : (Fin (2 * k - 1) → F) × (Fin (2 * k - 1) → F)) : (ofMasked w m).masked = m :=
+  rfl
+
+end Response
 
 /-- **The query round**: `t` distinct opened columns among the `N` columns of the tableau. -/
 abbrev Query (N t : ℕ) := Fin t ↪ Fin N
@@ -375,7 +497,9 @@ abbrev Query.fintype (N t : ℕ) : Fintype (Query N t) :=
 /-- **The response nodes**: the `i`-th point `C.D i` of the code's evaluation domain, for the
 first `m` points; zero beyond the domain. In the relative layout `C.D i` is the point of opened
 column `i` (`code.D j = P.pt (dblock + j)`), not a C++ interpolation point; the responses
-correspond to the C++ ones by re-interpolation (`Response`). -/
+correspond to the C++ ones by re-interpolation (`Response`). The zero is not read where the
+responses use the nodes: they take `m = k` and `m = 2k − 1`, both at most `N` under the rate
+hypothesis `2k − 1 ≤ N`, where the nodes are distinct (`responseNode_injective`). -/
 def responseNode (m : ℕ) (i : Fin m) : F := if h : (i : ℕ) < N then C.D ⟨i, h⟩ else 0
 
 theorem responseNode_injective {m : ℕ} (hm : m ≤ N) : Function.Injective (responseNode C m) := by
@@ -391,27 +515,27 @@ variable {nrep : ℕ}
 /-- The low-degree response polynomial of repetition `j`: the interpolant of its values on the
 response nodes. -/
 noncomputable def Response.code (p : Response F C.k nrep) (j : Fin nrep) : F[X] :=
-  LigeroInterpolation.interpolate (responseNode C C.k) (p.1 j)
+  LigeroInterpolation.interpolate (responseNode C C.k) (p.ldt j)
 
 /-- The linear response polynomial. -/
 noncomputable def Response.dot (p : Response F C.k nrep) : F[X] :=
-  LigeroInterpolation.interpolate (responseNode C (2 * C.k - 1)) p.2.1
+  LigeroInterpolation.interpolate (responseNode C (2 * C.k - 1)) p.dotValues
 
 /-- The quadratic response polynomial. -/
 noncomputable def Response.quad (p : Response F C.k nrep) : F[X] :=
-  LigeroInterpolation.interpolate (responseNode C (2 * C.k - 1)) p.2.2
+  LigeroInterpolation.interpolate (responseNode C (2 * C.k - 1)) p.quadValues
 
 /-- The low-degree response of repetition `j` at `x`, by field operations. -/
 def Response.codeEval (p : Response F C.k nrep) (j : Fin nrep) (x : F) : F :=
-  LigeroInterpolation.interpolateEval (responseNode C C.k) (p.1 j) x
+  LigeroInterpolation.interpolateEval (responseNode C C.k) (p.ldt j) x
 
 /-- The linear response's value at `x`, by field operations. -/
 def Response.dotEval (p : Response F C.k nrep) (x : F) : F :=
-  LigeroInterpolation.interpolateEval (responseNode C (2 * C.k - 1)) p.2.1 x
+  LigeroInterpolation.interpolateEval (responseNode C (2 * C.k - 1)) p.dotValues x
 
 /-- The quadratic response's value at `x`, by field operations. -/
 def Response.quadEval (p : Response F C.k nrep) (x : F) : F :=
-  LigeroInterpolation.interpolateEval (responseNode C (2 * C.k - 1)) p.2.2 x
+  LigeroInterpolation.interpolateEval (responseNode C (2 * C.k - 1)) p.quadValues x
 
 theorem Response.eval_code (p : Response F C.k nrep) (j : Fin nrep) (x : F) :
     (p.code C j).eval x = p.codeEval C j x :=
@@ -447,8 +571,8 @@ theorem Response.natDegree_quad_lt (hrate : 2 * C.k - 1 ≤ N) (p : Response F C
 `Response.code`, `Response.dot`, `Response.quad` (`code_ofPolys`, `dot_ofPolys`,
 `quad_ofPolys`). -/
 def Response.ofPolys (a : Fin nrep → F[X]) (b c : F[X]) : Response F C.k nrep :=
-  (fun j i => (a j).eval (responseNode C C.k i), fun i => b.eval (responseNode C (2 * C.k - 1) i),
-    fun i => c.eval (responseNode C (2 * C.k - 1) i))
+  ⟨fun j i => (a j).eval (responseNode C C.k i), fun i => b.eval (responseNode C (2 * C.k - 1) i),
+    fun i => c.eval (responseNode C (2 * C.k - 1) i)⟩
 
 theorem Response.code_ofPolys {a : Fin nrep → F[X]} (ha : ∀ j, (a j).natDegree < C.k)
     (b c : F[X]) (j : Fin nrep) : (Response.ofPolys C a b c).code C j = a j := by
@@ -477,7 +601,7 @@ theorem Response.quad_ofPolys (hrate : 2 * C.k - 1 ≤ N) (a : Fin nrep → F[X]
 witness positions, and the quadratic response vanishes at every witness node. Its degree bounds
 are in its type (`Response`). -/
 def Valid (r : Challenge F R nL nQ nrep) (p : Response F C.k nrep) : Prop :=
-  dotCheck C P (p.dot C) = ∑ i, r.2.1 i * L.target i ∧
+  dotCheck C P (p.dot C) = ∑ i, r.lin i * L.target i ∧
   ∀ j, quadCheck C P j (p.quad C) = 0
 
 /-- **The low-degree checks at the opened columns**: in every repetition `j`, the combination of
@@ -502,7 +626,7 @@ def QuadAccept (U : RSCode.Matrix F (R + 1) N) (u : Fin N → F)
 /-- `Valid` by field operations: the witness-position sum of the linear response's values and
 its values at the witness nodes of the quadratic response (`valid_iff_validDec`). -/
 def ValidDec (r : Challenge F R nL nQ nrep) (p : Response F C.k nrep) : Prop :=
-  ∑ j ∈ P.witness, p.dotEval C (P.nodes j) = ∑ i, r.2.1 i * L.target i ∧
+  ∑ j ∈ P.witness, p.dotEval C (P.nodes j) = ∑ i, r.lin i * L.target i ∧
   ∀ j, j ∈ P.witness → p.quadEval C (P.nodes j) = 0
 
 theorem valid_iff_validDec (r : Challenge F R nL nQ nrep) (p : Response F C.k nrep) :
@@ -520,8 +644,9 @@ low-degree checks of every repetition, and the linear and quadratic column check
 (`accept`, `accept_eq_true_iff`). -/
 def AcceptProp [NeZero nrep] (O : Rows F N R nrep) (u : Aux F N)
     (r : Challenge F R nL nQ nrep) (p : Response F C.k nrep) {t : ℕ} (q : Query N t) : Prop :=
-  Valid C P L r p ∧ CodeAccept C O r.1 (p.code C) q ∧
-    DotAccept C P L O.tableau u.1 r.2.1 (p.dot C) q ∧ QuadAccept C P O.tableau u.2 r.2.2 (p.quad C) q
+  Valid C P L r p ∧ CodeAccept C O r.ldt (p.code C) q ∧
+    DotAccept C P L O.tableau u.dot r.lin (p.dot C) q ∧
+    QuadAccept C P O.tableau u.quad r.quad (p.quad C) q
 
 /-- **The tableau verifier**, computed on the response values: the response's algebraic checks
 (`ValidDec`), the low-degree checks of every repetition and the linear and quadratic column
@@ -530,13 +655,13 @@ checks at the queried columns, each response evaluated at the column's point by 
 (`accept_eq_true_iff`). -/
 def accept [DecidableEq F] [NeZero nrep] (O : Rows F N R nrep) (u : Aux F N)
     (r : Challenge F R nL nQ nrep) (p : Response F C.k nrep) {t : ℕ} (q : Query N t) : Bool :=
-  decide ((∑ j ∈ P.witness, p.dotEval C (P.nodes j) = ∑ i, r.2.1 i * L.target i ∧
+  decide ((∑ j ∈ P.witness, p.dotEval C (P.nodes j) = ∑ i, r.lin i * L.target i ∧
       ∀ j, j ∈ P.witness → p.quadEval C (P.nodes j) = 0) ∧
-    (∀ j s, AffineCodeTest.projection (O.ldtMatrix j) (r.1 j) (q s) =
+    (∀ j s, AffineCodeTest.projection (O.ldtMatrix j) (r.ldt j) (q s) =
       p.codeEval C j (C.D (q s))) ∧
-    (∀ s, u.1 (q s) + ∑ l, r.2.1 l * dotColumn C P L O.tableau l (q s) =
+    (∀ s, u.dot (q s) + ∑ l, r.lin l * dotColumn C P L O.tableau l (q s) =
       p.dotEval C (C.D (q s))) ∧
-    (∀ s, u.2 (q s) + ∑ l, r.2.2 l * quadColumn C P O.tableau l (q s) =
+    (∀ s, u.quad (q s) + ∑ l, r.quad l * quadColumn C P O.tableau l (q s) =
       p.quadEval C (C.D (q s))))
 
 theorem accept_eq_true_iff [DecidableEq F] [NeZero nrep] (O : Rows F N R nrep) (u : Aux F N)
@@ -553,7 +678,6 @@ theorem accept_congr [DecidableEq F] [NeZero nrep] {O O' : Rows F N R nrep} {u u
     (hquad : ∀ s, u.quad (q s) = u'.quad (q s)) :
     accept C P L O u r p q = accept C P L O' u' r p q := by
   refine decide_eq_decide.mpr ?_
-  simp only [Aux.dot, Aux.quad] at hdot hquad
   have hU : ∀ j row s, O.ldtMatrix j row (q s) = O'.ldtMatrix j row (q s) :=
     fun j row s => Rows.ldtMatrix_congr (hO s) j row
   simp only [AffineCodeTest.projection, dotColumn, quadColumn, Rows.tableau, hU, hdot, hquad]
@@ -581,14 +705,15 @@ theorem quadColumn_eq_of_agree (U : RSCode.Matrix F (R + 1) N) (fs : Fin (R + 1)
 
 /-- **Decoded acceptance of the selected family on the rows `fs`**: the linear family's column
 identity at every queried column when the linear checks fail on `fs`, else the quadratic
-family's. -/
+family's. The choice reads only `fs`, so the family is fixed before the batching coefficients
+`r` are drawn. -/
 def selectedAccept (fs : Fin (R + 1) → F[X]) (u : Aux F N)
     (r : Challenge F R nL nQ nrep) (p : Response F C.k nrep) {t : ℕ} (q : Query N t) : Prop :=
   if ¬ ∀ l, dotCheck C P (dotPolynomials C P L fs l) = L.target l then
-    ∀ s, u.1 (q s) + (MaskedConstraintTest.batch (dotPolynomials C P L fs) r.2.1).eval
+    ∀ s, u.dot (q s) + (MaskedConstraintTest.batch (dotPolynomials C P L fs) r.lin).eval
       (C.D (q s)) = (p.dot C).eval (C.D (q s))
   else
-    ∀ s, u.2 (q s) + (MaskedConstraintTest.batch (quadPolynomials C P fs) r.2.2).eval
+    ∀ s, u.quad (q s) + (MaskedConstraintTest.batch (quadPolynomials C P fs) r.quad).eval
       (C.D (q s)) = (p.quad C).eval (C.D (q s))
 
 /-- At queried columns where the rows of `U` are the evaluations of `fs`, the linear and
@@ -596,8 +721,8 @@ quadratic column checks give the selected family's acceptance on `fs`. -/
 theorem selectedAccept_of_agree (U : RSCode.Matrix F (R + 1) N) (fs : Fin (R + 1) → F[X])
     (u : Aux F N) (r : Challenge F R nL nQ nrep) (p : Response F C.k nrep) {t : ℕ}
     (q : Query N t) (hq : ∀ s row, U row (q s) = (fs row).eval (C.D (q s)))
-    (hdot : DotAccept C P L U u.1 r.2.1 (p.dot C) q)
-    (hquad : QuadAccept C P U u.2 r.2.2 (p.quad C) q) :
+    (hdot : DotAccept C P L U u.dot r.lin (p.dot C) q)
+    (hquad : QuadAccept C P U u.quad r.quad (p.quad C) q) :
     selectedAccept C P L fs u r p q := by
   by_cases hd : ¬ ∀ l, dotCheck C P (dotPolynomials C P L fs l) = L.target l
   · simp only [selectedAccept, ite_eq_left hd]

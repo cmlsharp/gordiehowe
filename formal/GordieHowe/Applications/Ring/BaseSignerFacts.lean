@@ -24,7 +24,8 @@ The hypotheses of the completeness theorems (`GordieHowe/Model/RingSignature/Bas
   oracle (`BaseSigner.OracleFree.verifiesWithoutOracle`).
 - `falconBaseSigner_pubOfCoins`: for a signer whose signatures carry the drawn salt
   (`Signer.CarriesSalt`), the public value is the salt of the coins (`BaseSigner.PubOfCoins`);
-  `exists_carriesSalt`: some signer carries the salt (satisfiability).
+  some signer carries the salt (`Falcon512.exists_carriesSalt`,
+  `GordieHowe/Applications/Falcon512/Spec/Signer.lean`).
 - `mldsaBaseSigner_refusal_le_one`: the ML-DSA base signer refuses with probability at most `1` at
   every input (satisfiability of a refusal bound).
 - `fipsVerify_of_fipsSignWith`: a signature of the hedged signer `fipsSignWith` verifies by FIPS
@@ -54,10 +55,12 @@ variable {X Y : Type} {N : ℕ}
 
 section Falcon
 
-open GordieHowe.Falcon512.Ring.Native
+open GordieHowe.Falcon512 (Signer PublicKey)
 
 variable {msgLen : ℕ} (G : Signer msgLen) {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
   (bmsg : KeyRing PublicKey N → RMsg → (Fin msgLen → UInt8))
+
+variable [Fintype G.SignCoins] [Nonempty G.SignCoins]
 
 /-- **The Falcon-512 base signer never refuses**: its per-key refusal rate is `0` on every set
 `adm` of supported rings. -/
@@ -81,6 +84,7 @@ theorem falconBaseSigner_refusal_le_zero (H : X → Y) (kc : G.KeyCoins) (R : Ke
   simp only [Set.mem_ofPred_eq] at hc
   exact Option.some_ne_none _ hc
 
+omit [Fintype G.SignCoins] [Nonempty G.SignCoins] in
 /-- **The Falcon-512 base signer never refuses, as a function of the coins**: its refusals are the
 empty predicate (`BaseSigner.RefusalOfCoins`). -/
 theorem falconBaseSigner_refusalOfCoins :
@@ -88,6 +92,7 @@ theorem falconBaseSigner_refusalOfCoins :
   intro H kc R i _ m c
   exact ⟨fun h => Option.some_ne_none _ h, False.elim⟩
 
+omit [Fintype G.SignCoins] [Nonempty G.SignCoins] in
 /-- **The Falcon-512 base signer is oracle-free**: its signers and public value make no queries
 and its verification reads no oracle. -/
 theorem falconBaseSigner_oracleFree : (falconBaseSigner (X := X) (Y := Y) G bmsg).OracleFree where
@@ -96,12 +101,14 @@ theorem falconBaseSigner_oracleFree : (falconBaseSigner (X := X) (Y := Y) G bmsg
   pub_noQuery := (falconBaseSigner (X := X) (Y := Y) G bmsg).pub_queries
   bverify_eq _ _ := rfl
 
+omit [Fintype G.SignCoins] [Nonempty G.SignCoins] in
 /-- **Falcon-512's base verification and salt read no oracle** (`falconBaseSigner_oracleFree`,
 `OracleFree.verifiesWithoutOracle`). -/
 theorem falconBaseSigner_verifiesWithoutOracle :
     (falconBaseSigner (X := X) (Y := Y) G bmsg).VerifiesWithoutOracle :=
   (falconBaseSigner_oracleFree G bmsg).verifiesWithoutOracle
 
+omit [Fintype G.SignCoins] [Nonempty G.SignCoins] in
 /-- **The public value of an honest Falcon-512 base signature is the drawn salt** for a signer
 whose signatures carry it (`hG`). -/
 theorem falconBaseSigner_pubOfCoins (hG : G.CarriesSalt) :
@@ -110,17 +117,6 @@ theorem falconBaseSigner_pubOfCoins (hG : G.CarriesSalt) :
   change some (G.signWith _ (bmsg R m) c.1 c.2) = some σ at hσ
   obtain rfl := Option.some.inj hσ
   exact hG _ _ _ _
-
-variable (msgLen) in
-/-- **Some Falcon-512 signer carries the drawn salt**: the signer with one key and one private coin
-whose signature is the salt with zero compressed bytes (`Sig.equiv`). -/
-theorem exists_carriesSalt : ∃ G : Signer msgLen, G.CarriesSalt :=
-  ⟨{ SK := Unit
-     KeyCoins := Unit
-     SignCoins := Unit
-     keyGen := fun _ => (default, ())
-     signWith := fun _ _ r _ => Sig.equiv.symm (r, Vector.replicate sigBytes 0) },
-    fun _ _ _ _ => rfl⟩
 
 end Falcon
 
@@ -162,72 +158,6 @@ theorem mldsaBaseSigner_refusal_le_one (H : X → Y) (kc : Bytes 32)
 section Correctness
 
 open GordieHowe.MLDSA LatticeCrypto TransformOps
-
-/-- **A signature of the hedged signer verifies by FIPS 204** (Algorithm 8, `fipsVerify`) under
-the key generated with it: for the key `(pk, sk)` of `seed` (Algorithm 6) with `‖s₂‖∞ ≤ η`, every
-signature `fipsSignWith` outputs is accepted, given the signing and verification laws. The
-argument of the vendored `fipsSign_fipsVerify_correct'` at the kept attempt. -/
-theorem fipsVerify_of_fipsSignWith {p : Params} {prims : Primitives p} (h_laws : SigningLaws prims)
-    (hv : VerifyLaws prims)
-    {seed : Bytes 32} {pk : PublicKey p prims} {sk : SecretKey p}
-    (hkeygen : keyGenFromSeed p prims seed = (pk, sk)) (hs2 : polyVecBounded sk.s2 p.eta)
-    {maxAttempts : ℕ} {msg : List Byte} {rnd : Bytes 32} {σ : FIPSSignature p prims}
-    (h : fipsSignWith p prims maxAttempts sk msg rnd = some σ) :
-    fipsVerify p prims pk msg σ = true := by
-  have hpk := congrArg Prod.fst hkeygen
-  have hsk := congrArg Prod.snd hkeygen
-  subst hpk hsk
-  obtain ⟨i, hatt, -⟩ := exists_attempt_of_fipsSignWith p prims h
-  have hrho : (keyGenFromSeed p prims seed).2.rho = (keyGenFromSeed p prims seed).1.rho := rfl
-  rw [hrho] at hatt
-  set aHat := prims.expandA (keyGenFromSeed p prims seed).1.rho
-  set sk := (keyGenFromSeed p prims seed).2
-  set pk := (keyGenFromSeed p prims seed).1
-  have htr : sk.tr = prims.hashPublicKey pk.rho pk.t1 := rfl
-  set mu := prims.hashMessage sk.tr msg
-  set y := prims.expandMask (prims.hashPrivateSeed sk.key rnd mu) (i * p.l)
-  set cT := prims.hashCommitment mu (prims.w1Encode (prims.highBitsVec (aHat * y)))
-  set c := prims.sampleInBall cT
-  unfold fipsSignAttempt at hatt
-  dsimp only at hatt
-  split_ifs at hatt with h_outer h_inner
-  rw [Option.some.injEq] at hatt
-  subst hatt
-  obtain ⟨hz, hr0⟩ := h_outer
-  obtain ⟨hct0, hw⟩ := h_inner
-  have hcs2 : polyVecNorm (c • sk.s2) ≤ p.beta :=
-    SigningLaws.polyVecNorm_sampleInBall_smul_le prims h_laws cT sk.s2 hs2
-  have hrec : prims.useHintVec (prims.makeHintVec (-(c • sk.t0)) (aHat * y - c • sk.s2 + c • sk.t0))
-      (computeWApprox p prims aHat c (y + c • sk.s1) pk.t1) = prims.highBitsVec (aHat * y) := by
-    rw [hv.wApprox_eq prims (pk := pk) (sk := sk) seed rfl c y]
-    refine useHintVec_makeHintVec_eq_highBitsVec p prims hv.useHint_makeHint h_laws.hide_low
-      (aHat * y) (c • sk.s2) (c • sk.t0) hct0 hr0 fun j => ?_
-    have hj : polyNorm ((c • sk.s2).get j) ≤ p.beta :=
-      le_trans (LatticeCrypto.PolyVec.component_cInfNorm_le normOps (c • sk.s2) j) hcs2
-    unfold polyNorm normOps at hj
-    simpa [LatticeCrypto.zmodPolyNormOps, LatticeCrypto.normOpsOfCenteredView,
-      LatticeCrypto.cInfNorm] using hj
-  unfold fipsVerify
-  simp only [Bool.and_eq_true, decide_eq_true_eq]
-  refine ⟨⟨hz, ?_⟩, hw⟩
-  rw [← htr]
-  exact congrArg (fun w => prims.hashCommitment mu (prims.w1Encode w)) hrec
-
-/-- **A signature of the hedged signer passes the base verification** of `mldsaBaseSigner`
-(`boundedOk p ρ c̃ && fipsVerify`) under the key generated with it: the bounded-sampling check
-holds at `pk.ρ = sk.ρ` by the signer's filter (`boundedOk_of_fipsSignWith`), and FIPS 204
-verification by `fipsVerify_of_fipsSignWith`. -/
-theorem bverify_of_fipsSignWith {p : Params} {prims : Primitives p} (h_laws : SigningLaws prims)
-    (hv : VerifyLaws prims)
-    {seed : Bytes 32} (hs2 : polyVecBounded (keyGenFromSeed p prims seed).2.s2 p.eta)
-    {maxAttempts : ℕ} {msg : List Byte} {rnd : Bytes 32} {σ : FIPSSignature p prims}
-    (h : fipsSignWith p prims maxAttempts (keyGenFromSeed p prims seed).2 msg rnd = some σ) :
-    (boundedOk p (keyGenFromSeed p prims seed).1.rho σ.cTilde &&
-      fipsVerify p prims (keyGenFromSeed p prims seed).1 msg σ) = true := by
-  have hrho : (keyGenFromSeed p prims seed).2.rho = (keyGenFromSeed p prims seed).1.rho := rfl
-  rw [Bool.and_eq_true, ← hrho]
-  exact ⟨boundedOk_of_fipsSignWith p prims h,
-    fipsVerify_of_fipsSignWith h_laws hv rfl hs2 h⟩
 
 variable (h_laws : SigningLaws prims) (hv : VerifyLaws prims)
   (hs2 : ∀ seed, polyVecBounded (keyGenFromSeed p prims seed).2.s2 p.eta)
@@ -271,30 +201,6 @@ open _root_.MLDSA _root_.MLDSA.Concrete GordieHowe.MLDSA GordieHowe.MLDSA.Spec
 
 variable {p : Params}
 
-/-- **The signing laws do not read `ExpandS` or `ExpandMask`**: they hold at
-`{P with expandS := eS, expandMask := eM}` when they hold at `P` (stated for an abstract bundle
-`P`, so that no concrete primitive is unfolded). -/
-theorem _root_.GordieHowe.MLDSA.SigningLaws.withSigning [NTTRingOps] {P : Primitives p}
-    (h : SigningLaws P)    (eS : Bytes 64 → RqVec p.l × RqVec p.k) (eM : Bytes 64 → ℕ → RqVec p.l) :
-    SigningLaws { P with expandS := eS, expandMask := eM } :=
-  ⟨h.transform, h.hide_low, h.sampleInBall_smul_bound⟩
-
-/-- **The verification laws do not read `ExpandS` or `ExpandMask`** (for an abstract bundle
-`P`). -/
-theorem _root_.GordieHowe.MLDSA.VerifyLaws.withSigning [NTTRingOps] {P : Primitives p}
-    (h : VerifyLaws P)    (eS : Bytes 64 → RqVec p.l × RqVec p.k) (eM : Bytes 64 → ℕ → RqVec p.l) :
-    VerifyLaws { P with expandS := eS, expandMask := eM } :=
-  ⟨h.transform, h.power2Round_decomp, h.useHint_makeHint⟩
-
-/-- **Key generation does not read `ExpandMask`**: the secret `s₂` generated at
-`{P with expandS := eS, expandMask := eM}` is the one generated at `{P with expandS := eS}` (for
-an abstract bundle `P`). -/
-theorem keyGenFromSeed_s2_withSigning [NTTRingOps] (P : Primitives p)
-    (eS : Bytes 64 → RqVec p.l × RqVec p.k) (eM : Bytes 64 → ℕ → RqVec p.l) (seed : Bytes 32) :
-    (keyGenFromSeed p { P with expandS := eS, expandMask := eM } seed).2.s2 =
-      (keyGenFromSeed p { P with expandS := eS } seed).2.s2 :=
-  rfl
-
 attribute [local instance] concreteNTTRingOps
 
 /-- **The ML-DSA base signer at the concrete primitives with the FIPS 204 `ExpandS` and any
@@ -321,7 +227,7 @@ theorem mldsaBaseSigner_correctWithin_zero_concrete (hp : p.isApproved)
       bmsg).CorrectWithin 0 :=
   mldsaBaseSigner_correctWithin_zero p _ maxAttempts bmsg
     ((signingLaws_concrete p hp).withSigning _ eM)
-    ((MLDSAW1.verifyLaws_concrete hp).withSigning _ eM)
+    ((verifyLaws_concrete hp).withSigning _ eM)
     fun seed => (keyGenFromSeed_s2_withSigning _ _ eM seed).symm ▸
       keyGenFromSeed_s2_bounded hp seed
 
@@ -347,7 +253,7 @@ theorem mldsaBaseSigner_stdCorrectWithin_zero_concrete (hp : p.isApproved)
       bmsg).StdCorrectWithin 0 :=
   mldsaBaseSigner_stdCorrectWithin_zero p _ maxAttempts bmsg
     ((signingLaws_concrete p hp).withSigning _ eM)
-    ((MLDSAW1.verifyLaws_concrete hp).withSigning _ eM)
+    ((verifyLaws_concrete hp).withSigning _ eM)
     fun seed => (keyGenFromSeed_s2_withSigning _ _ eM seed).symm ▸
       keyGenFromSeed_s2_bounded hp seed
 
@@ -363,8 +269,8 @@ theorem mldsaBaseSigner_correctWithin_zero_concreteKeyGen (hp : p.isApproved)
     (bmsg : KeyRing (PublicKey p (concretePrimitivesKeyGen p)) N → RMsg → Bytes len) :
     (mldsaBaseSigner (X := X) (Y := Y) p (concretePrimitivesKeyGen p) maxAttempts
       bmsg).CorrectWithin 0 :=
-  mldsaBaseSigner_correctWithin_zero p _ maxAttempts bmsg (MLDSAW1.signingLaws_concreteKeyGen p hp)
-    (MLDSAW1.verifyLaws_concreteKeyGen hp) (keyGenFromSeed_s2_bounded hp)
+  mldsaBaseSigner_correctWithin_zero p _ maxAttempts bmsg (signingLaws_concreteKeyGen p hp)
+    (verifyLaws_concreteKeyGen hp) (keyGenFromSeed_s2_bounded hp)
 
 /-- **The ordinary ML-DSA signer at `concretePrimitivesKeyGen` has correctness error `0`**, at
 every approved parameter set (`mldsaBaseSigner_stdCorrectWithin_zero`). -/
@@ -377,7 +283,7 @@ theorem mldsaBaseSigner_stdCorrectWithin_zero_concreteKeyGen (hp : p.isApproved)
     (mldsaBaseSigner (X := X) (Y := Y) p (concretePrimitivesKeyGen p) maxAttempts
       bmsg).StdCorrectWithin 0 :=
   mldsaBaseSigner_stdCorrectWithin_zero p _ maxAttempts bmsg
-    (MLDSAW1.signingLaws_concreteKeyGen p hp) (MLDSAW1.verifyLaws_concreteKeyGen hp)
+    (signingLaws_concreteKeyGen p hp) (verifyLaws_concreteKeyGen hp)
     (keyGenFromSeed_s2_bounded hp)
 
 end MLDSAConcrete

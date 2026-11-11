@@ -43,7 +43,7 @@ the ring signature read as that scheme.
 
 namespace GordieHowe.MLDSA44.Ring
 
-open GordieHowe.Ring GordieHowe.RingSignature _root_.MLDSA _root_.MLDSA.Concrete
+open GordieHowe.Ring GordieHowe.RingSignature _root_.MLDSA _root_.MLDSA.Concrete GordieHowe.MLDSA
 
 attribute [local instance] concreteNTTRingOps
 

@@ -9,7 +9,7 @@ public import GordieHowe.ProofSystem.Program.FieldModel
 @[expose] public section
 
 /-!
-# GordieHowe: a program's GKR certificates discharge its trust base
+# GordieHowe: a program's GKR certificates prove the circuits' correspondence
 
 A program's certificates (`GordieHowe.RealizedProgram.ProgramCerts`): per circuit its certificate
 data and code arithmetic, every circuit's certificate passing the relational check

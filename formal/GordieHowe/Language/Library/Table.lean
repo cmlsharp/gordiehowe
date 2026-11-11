@@ -58,21 +58,21 @@ theorem onePub_eq (one gamma v : Nat) : onePub one gamma v =
     (if v = one then some [0] else if v = gamma then some [1] else none) := rfl
 
 
-/-- A constructor equation for `powSym_leaf`, with no program-table reduction. -/
+/-- The equation of `powSym` at `.leaf v`, with no program-table reduction. -/
 theorem powSym_leaf_eq (c : PowCtx) (n : Nat) (v : Nat) :
     ir.powSym c (n + 1) (.leaf v) =
       (match c.knownOf? (.leaf v) with
       | some ks => some ks
       | none => c.pub v) := rfl
 
-/-- A constructor equation for `powSym_ref`, with no program-table reduction. -/
+/-- The equation of `powSym` at `.ref k`, with no program-table reduction. -/
 theorem powSym_ref_eq (c : PowCtx) (n : Nat) (k : Nat) :
     ir.powSym c (n + 1) (.ref k) =
       (match c.knownOf? (.ref k) with
       | some ks => some ks
       | none => ir.powSym c n (ir.expr k)) := rfl
 
-/-- A constructor equation for `powSym_mul`, with no program-table reduction. -/
+/-- The equation of `powSym` at `.mul a b`, with no program-table reduction. -/
 theorem powSym_mul_eq (c : PowCtx) (n : Nat) (a b : Expr) :
     ir.powSym c (n + 1) (.mul a b) =
       (match c.knownOf? (.mul a b) with
@@ -81,7 +81,7 @@ theorem powSym_mul_eq (c : PowCtx) (n : Nat) (a b : Expr) :
       | some x, some y => if x.length = y.length then some (List.zipWith (· + ·) x y) else none
       | _, _ => none) := rfl
 
-/-- A constructor equation for `powSym_concat`, with no program-table reduction. -/
+/-- The equation of `powSym` at `.concat a b`, with no program-table reduction. -/
 theorem powSym_concat_eq (c : PowCtx) (n : Nat) (a b : Expr) :
     ir.powSym c (n + 1) (.concat a b) =
       (match c.knownOf? (.concat a b) with
@@ -90,7 +90,7 @@ theorem powSym_concat_eq (c : PowCtx) (n : Nat) (a b : Expr) :
       | some x, some y => some (x ++ y)
       | _, _ => none) := rfl
 
-/-- A constructor equation for `powSym_reindex`, with no program-table reduction. -/
+/-- The equation of `powSym` at `.reindex m a`, with no program-table reduction. -/
 theorem powSym_reindex_eq (c : PowCtx) (n : Nat) (m : IndexMap) (a : Expr) :
     ir.powSym c (n + 1) (.reindex m a) =
       (match c.knownOf? (.reindex m a) with

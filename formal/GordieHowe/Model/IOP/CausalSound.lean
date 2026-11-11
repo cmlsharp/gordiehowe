@@ -137,6 +137,7 @@ statements carrying `a`'s full transcripts, reduces `claim₂` to `claimOut₂` 
 statement part (`ε₂ ∘ Prod.fst`), and `claim₂` implies `claimOut₁` (`h`). Then `seq a b` reduces
 `claim₁` to `claimOut₂` read on the transcripts, and at every statement every challenge keeps its
 error. -/
+@[headline]
 theorem CausalRBRStmt.seq {E₁ : CausalExtractor P a Stmt Wit}
     {E₂ : CausalExtractor P b (SeqStmt Stmt P a) Wit} {S₁ : CausalStateFn P a Stmt}
     {S₂ : CausalStateFn P b (SeqStmt Stmt P a)} {ε₁ : Stmt → ChIdx P a → ℝ≥0}
@@ -178,6 +179,7 @@ theorem CausalRBR.seq {E₁ : CausalExtractor P a Stmt Wit}
 statements, composed by a node in which `b` does not read `a`'s transcripts (side by side, or `b`
 after `a`), reduce the conjunction of their input claims to the conjunction of their output claims,
 and at every statement every challenge keeps its error. -/
+@[headline]
 theorem CausalRBRStmt.par {k : Comp} {E₁ : CausalExtractor P a Stmt Wit}
     {E₂ : CausalExtractor P b Stmt Wit}
     {S₁ : CausalStateFn P a Stmt} {S₂ : CausalStateFn P b Stmt} {ε₁ : Stmt → ChIdx P a → ℝ≥0}
@@ -317,8 +319,8 @@ theorem ProtocolSpec.Transcript.exists_flip {m : ℕ} {Q : ProtocolSpec m}
       ¬ S k.castSucc tr → ¬ S k.succ (Q.concat tr msg))
     (tr : Q.Transcript (Fin.last m)) (h0 : ¬ S 0 (tr.take 0 (Fin.zero_le _)))
     (hlast : S (Fin.last m) tr) :
-    ∃ i : Q.ChallengeIdx, ¬ S i.1.castSucc (tr.take i.1.castSucc (Fin.le_last _)) ∧
-      S i.1.succ (Q.concat (tr.take i.1.castSucc (Fin.le_last _)) (tr i.1)) := by
+    ∃ i : Q.ChallengeIdx, ¬ S i.before (tr.take i.before (Fin.le_last _)) ∧
+      S i.after (Q.concat (tr.take i.before (Fin.le_last _)) (tr i.1)) := by
   by_contra hne
   push Not at hne
   have hall : ∀ k : Fin (m + 1), ¬ S k (tr.take k (Fin.le_last _)) := by
@@ -398,8 +400,8 @@ theorem CausalPast.eq_here {j : ι} {i : (P j).ChallengeIdx}
 theorem flipAt_here_iff {j : ι} {Stmt : Type} {S : CausalStateFn P (leaf j) Stmt}
     {i : (P j).ChallengeIdx} {x : Stmt} {past : CausalPast P (⟨.here j, i⟩ : ChIdx P (leaf j))}
     {ch : (P j).Challenge i} :
-    FlipAt S ⟨.here j, i⟩ x past ch ↔ ¬ S (.here j) i.1.castSucc x (CausalCtx.here j) past.own ∧
-      S (.here j) i.1.succ x (CausalCtx.here j) ((P j).concat past.own ch) := by
+    FlipAt S ⟨.here j, i⟩ x past ch ↔ ¬ S (.here j) i.before x (CausalCtx.here j) past.own ∧
+      S (.here j) i.after x (CausalCtx.here j) ((P j).concat past.own ch) := by
   rw [CausalPast.eq_here past]
   rfl
 
@@ -412,18 +414,18 @@ def FullTr.ofHere {j : ι} (tr : (P j).Transcript (Fin.last (n j))) : FullTr P (
 causal state `S` is false on that prefix and true on `tr`. -/
 def TotalFlip {j : ι} {Stmt Wit : Type} (rel : Set (Stmt × Wit)) (E : Extractor (P j) Stmt Wit)
     (S : CausalStateFn P (leaf j) Stmt) (i : (P j).ChallengeIdx) (x : Stmt)
-    (tr : (P j).Transcript i.1.succ) : Prop :=
-  (x, E i.1.castSucc x (tr.take i.1.castSucc (Fin.castSucc_le_succ _))) ∈ rel ∨
-    ¬ S (.here j) i.1.castSucc x (CausalCtx.here j)
-        (tr.take i.1.castSucc (Fin.castSucc_le_succ _)) ∧
-      S (.here j) i.1.succ x (CausalCtx.here j) tr
+    (tr : (P j).Transcript i.after) : Prop :=
+  (x, E i.before x (tr.take i.before (Fin.castSucc_le_succ _))) ∈ rel ∨
+    ¬ S (.here j) i.before x (CausalCtx.here j)
+        (tr.take i.before (Fin.castSucc_le_succ _)) ∧
+      S (.here j) i.after x (CausalCtx.here j) tr
 
 /-- **The prefix state of a causal state on one component**: true on a prefix when the flip event
 `TotalFlip` happens at some challenge round in it. Not required to be efficient. -/
 def totalState {j : ι} {Stmt Wit : Type} (rel : Set (Stmt × Wit)) (E : Extractor (P j) Stmt Wit)
     (S : CausalStateFn P (leaf j) Stmt) (m : Fin (n j + 1)) (x : Stmt) (tr : (P j).Transcript m) :
     Prop :=
-  ∃ (i : (P j).ChallengeIdx) (hi : i.1.succ ≤ m), TotalFlip rel E S i x (tr.take i.1.succ hi)
+  ∃ (i : (P j).ChallengeIdx) (hi : i.after ≤ m), TotalFlip rel E S i x (tr.take i.after hi)
 
 section Leaf
 
@@ -435,8 +437,8 @@ open Classical in
 /-- The round-by-round count of a claim-producing phase, as a probability. -/
 theorem ClaimPhase.rbr_prob {ε : (P j).ChallengeIdx → ℝ≥0} (A : ClaimPhase (P j) Stmt Wit rel ε)
     (x : Stmt) (i : (P j).ChallengeIdx) (past : CausalPast P (⟨.here j, i⟩ : ChIdx P (leaf j))) :
-    Pr[ch ← (P j).Challenge i : (x, A.E i.1.castSucc x past.own) ∉ rel ∧
-      ¬ A.S i.1.castSucc x past.own ∧ A.S i.1.succ x ((P j).concat past.own ch)] ≤ ε i :=
+    Pr[ch ← (P j).Challenge i : (x, A.E i.before x past.own) ∉ rel ∧
+      ¬ A.S i.before x past.own ∧ A.S i.after x ((P j).concat past.own ch)] ≤ ε i :=
   (card_le_iff_probUniform_le _ _ _).mp (A.rbr x i past.own)
 
 open Classical in
@@ -459,8 +461,8 @@ open Classical in
 /-- The round-by-round count of a claim-proving phase, as a probability. -/
 theorem ClaimProof.rbr_prob {ε : (P j).ChallengeIdx → ℝ≥0} (B : ClaimProof (P j) Stmt ε) (x : Stmt)
     (i : (P j).ChallengeIdx) (past : CausalPast P (⟨.here j, i⟩ : ChIdx P (leaf j))) :
-    Pr[ch ← (P j).Challenge i : ¬ B.S i.1.castSucc x past.own ∧
-      B.S i.1.succ x ((P j).concat past.own ch)] ≤ ε i :=
+    Pr[ch ← (P j).Challenge i : ¬ B.S i.before x past.own ∧
+      B.S i.after x ((P j).concat past.own ch)] ≤ ε i :=
   (card_le_iff_probUniform_le _ _ _).mp (B.rbr x i past.own)
 
 /-- **A claim-proving phase as a one-component composite**: the phase's state and errors, reducing
@@ -505,7 +507,7 @@ may depend on the statement: the same extractor, state and errors, for the verif
 leaf's transcript. -/
 theorem CausalRBRStmt.ofKnowledge {V : Verifier (P j) Stmt} {E : Extractor (P j) Stmt Wit}
     {S : KnowledgeStateFunction V} {ε : Stmt → (P j).ChallengeIdx → ℝ≥0}
-    (h : rbrKnowledgeSoundnessStmt rel V E S ε) :
+    (h : RBRKnowledgeSoundStmt rel V E S ε) :
     CausalRBRKnowledgeSoundStmt rel (fun x f => V x (f (.here j))) (CausalExtractor.ofLeaf E)
       (CausalStateFn.ofLeaf S.toFun) (fun x => errLeaf (ε x)) where
   exists_flip x f hV _ _ := by
@@ -523,7 +525,7 @@ extractor, state and errors, for the verifier read on the leaf's transcript
 (`CausalRBRStmt.ofKnowledge` at errors that do not depend on the statement). -/
 theorem CausalRBR.ofKnowledge {V : Verifier (P j) Stmt} {E : Extractor (P j) Stmt Wit}
     {S : KnowledgeStateFunction V} {ε : (P j).ChallengeIdx → ℝ≥0}
-    (h : rbrKnowledgeSoundness rel V E S ε) :
+    (h : RBRKnowledgeSound rel V E S ε) :
     CausalRBRKnowledgeSound rel (fun x f => V x (f (.here j))) (CausalExtractor.ofLeaf E)
       (CausalStateFn.ofLeaf S.toFun) (errLeaf ε) :=
   CausalRBRStmt.ofKnowledge (ε := fun _ => ε) h
@@ -572,7 +574,7 @@ theorem CausalRBRKnowledgeSoundStmt.toKnowledge {V : Verifier (P j) Stmt}
     {ε : Stmt → (P j).ChallengeIdx → ℝ≥0}
     (h : CausalRBRKnowledgeSoundStmt rel (fun x f => V x (f (.here j))) (CausalExtractor.ofLeaf E)
       S (fun x => errLeaf (ε x))) :
-    rbrKnowledgeSoundnessStmt rel V E (KnowledgeStateFunction.ofCausal h) ε := by
+    RBRKnowledgeSoundStmt rel V E (KnowledgeStateFunction.ofCausal h) ε := by
   intro x i tr
   refine (probUniform_mono fun ch hch => ?_).trans (h.rbr ⟨.here j, i⟩ x ⟨CausalCtx.here j, tr⟩)
   obtain ⟨hE, hn, i', hi', hflip⟩ := hch
@@ -593,13 +595,13 @@ theorem CausalRBRKnowledgeSoundStmt.toKnowledge {V : Verifier (P j) Stmt}
 /-- **`lem:rbr-total`: under a total order the two round-by-round knowledge notions agree.** A
 component protocol, whose messages are totally ordered, has round-by-round knowledge errors `ε` in
 the sense of CMS19 Definition 8.5 (p. 40), with per-round errors as in Chiesa–Yogev 2024
-Definition 31.1.6 (p. 386) that may depend on the statement (`rbrKnowledgeSoundnessStmt`), at the
+Definition 31.1.6 (p. 386) that may depend on the statement (`RBRKnowledgeSoundStmt`), at the
 extractor `E` if and only if, as a one-component composite, it has causal round-by-round knowledge
 errors `ε` (`CausalRBRKnowledgeSoundStmt`) at the same extractor. -/
 @[headline]
-theorem rbrKnowledgeSoundness_total_iff (j : ι) {V : Verifier (P j) Stmt}
+theorem rbrKnowledgeSound_total_iff (j : ι) {V : Verifier (P j) Stmt}
     {E : Extractor (P j) Stmt Wit} {ε : Stmt → (P j).ChallengeIdx → ℝ≥0} :
-    (∃ S : KnowledgeStateFunction V, rbrKnowledgeSoundnessStmt rel V E S ε) ↔
+    (∃ S : KnowledgeStateFunction V, RBRKnowledgeSoundStmt rel V E S ε) ↔
       ∃ S : CausalStateFn P (leaf j) Stmt, CausalRBRKnowledgeSoundStmt rel
         (fun x f => V x (f (.here j))) (CausalExtractor.ofLeaf E) S (fun x => errLeaf (ε x)) :=
   ⟨fun ⟨_, h⟩ => ⟨_, CausalRBRStmt.ofKnowledge h⟩, fun ⟨_, h⟩ => ⟨_, h.toKnowledge⟩⟩
@@ -617,7 +619,7 @@ composite. While `σ y` has no witness the component's extractor fails, so its f
 its round-by-round knowledge soundness. -/
 theorem CausalRBR.ofLanguage {Y W StmtC WitC : Type} {relC : Set (StmtC × WitC)}
     {V : Verifier (P j) StmtC} {Ec : Extractor (P j) StmtC WitC} {S : KnowledgeStateFunction V}
-    {ε : (P j).ChallengeIdx → ℝ≥0} (h : rbrKnowledgeSoundness relC V Ec S ε) (σ : Y → StmtC)
+    {ε : (P j).ChallengeIdx → ℝ≥0} (h : RBRKnowledgeSound relC V Ec S ε) (σ : Y → StmtC)
     (rel : Set (Y × W)) (E : CausalExtractor P (leaf j) Y W) :
     CausalRBR rel E (languageState relC S σ) (errLeaf ε) (fun y => ∃ w, (σ y, w) ∈ relC)
       fun y f => V (σ y) (f (.here j)) = true where

@@ -96,8 +96,8 @@ theorem honestVal_idx (j : ℕ) :
   have hf := (MldsaRingHonest.memberCells (program := program) vI (by simp)).2
   simp only [List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or] at hd
   unfold honestVal
-  rw [if_neg (fun h => hd.1.2.2 h.symm), if_neg (fun h => hd.2.1.2 h.symm),
-    if_neg (fun h => hd.2.2.1 h.symm), if_pos rfl]
+  rw [if_neg (fun h => hd.1.2.2.1 h.symm), if_neg (fun h => hd.2.1.2.1 h.symm),
+    if_neg (fun h => hd.2.2.1.1 h.symm), if_pos rfl]
   exact castElt_castElt_of_eq hf.symm _
 
 /-- **`member.mu` reads the bits of the signer's `μ`.** -/
@@ -154,7 +154,8 @@ theorem idxBool_honest :
   rcases Nat.mod_two_eq_zero_or_one (y.w.idx / 2 ^ i) with h | h <;> rw [h] <;> simp
 
 /-- **`member.mu.boolean` holds**: the committed `μ` bits are bits. -/
-theorem muBool_honest : program.HoldsAt E (program.predicate 10).body := by
+theorem muBool_honest :
+    program.HoldsAt E (program.predicate (MldsaRingFront.muBoolPred program)).body := by
   obtain ⟨hc, -, -⟩ := MldsaRingFront.muBool (program := program)
   refine holdsWith_of_boolCheck hc fun i hi => ?_
   rw [MldsaRingFront.muSize] at hi

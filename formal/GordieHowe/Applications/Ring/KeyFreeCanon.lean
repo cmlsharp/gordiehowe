@@ -43,7 +43,10 @@ open GordieHowe.SPBCS IOP SPTerm RingSignature.Insider
 section Canon
 
 variable {k kN kS L e N n : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq Yb]
-  {TB : BaseTypes} {B : BaseSigner Xb Yb N TB}
+  {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
+  [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  {B : BaseSigner Xb Yb N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -52,12 +55,12 @@ variable {k kN kS L e N n : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq Yb
   {Stmt Wit R Frg : Type} [Fintype Stmt] [DecidableEq Stmt] [Inhabited Stmt]
   [Fintype R] [DecidableEq R] [Inhabited R]
   {rel : Stmt → Wit → Prop} [DecidableRel rel]
-  {enc : MURequest (SignOracle.none B) n ⊕ R → ProofQuery Stmt Wit} {dummyS : Stmt}
+  {enc : MURequest (SignOracle.none B.core) n ⊕ R → ProofQuery Stmt Wit} {dummyS : Stmt}
   [Inhabited M.NIProof]
 
 local notation "Xq" => Bits (queryBits k kN kS L)
 
-local notation "MUR" => MURequest (SignOracle.none B) n
+local notation "MUR" => MURequest (SignOracle.none B.core) n
 
 open Classical in
 /-- **The canonical extracted witness** for the explicit statement `x₀` and the database `D`: the
@@ -118,7 +121,7 @@ adversary's explicit statement `x₀`, at the test `ok` at the output and the fi
 requests, exists and satisfies `G` there. -/
 def forgerCanonKF {SC' WitK W : Type} [Fintype SC'] [DecidableEq SC']
     (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins) (Q : ℕ)
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → W)
     (ok G : Frg × X₀ → List (MUR ⊕ R) → W → Prop)
@@ -142,7 +145,7 @@ passes the test `ok` (`hok`), and the goal at one witness gives `G₁` or `G₂`
 passing `ok` (`hsplit`), a win at `Goal` is a win of the canonical witness at `G₁` or at `G₂`. -/
 theorem forgerWinsKF_canon {SC' WitK W : Type} [Fintype SC'] [DecidableEq SC']
     (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins) (Q : ℕ)
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → W)
     (Goal ok G₁ G₂ : Frg × X₀ → List (MUR ⊕ R) → W → Prop)
@@ -168,7 +171,7 @@ omit [∀ j i, Nonempty ((P j).Challenge i)] in
 theorem simProb_forgerWinsKF_le_canon {SC' WitK W : Type} [Fintype SC'] [DecidableEq SC']
     (Qs : ∀ x, M.IOPQueries Vr x) (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins)
     (Q kq : ℕ)
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → W)
     (Goal ok G₁ G₂ : Frg × X₀ → List (MUR ⊕ R) → W → Prop)
@@ -194,7 +197,7 @@ registers `c` and the database `D`: the canonical witness (`kfCanon`) at the tes
 adversary's output, and its first `Q` logged requests. -/
 noncomputable def kfCanonOut {SC' WitK W : Type} [Fintype SC'] [DecidableEq SC']
     (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins) (Q : ℕ)
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → W)
     (ok : Frg × X₀ → List (MUR ⊕ R) → W → Prop)
@@ -219,7 +222,7 @@ and the logged requests, under the distribution of `kfCanonOut` (`simPMF`). -/
 theorem simProb_forgerCanonKF_eq {SC' WitK W : Type} [Fintype SC'] [DecidableEq SC']
     (Qs : ∀ x, M.IOPQueries Vr x) (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins)
     (Q kq : ℕ)
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → W)
     (ok G : Frg × X₀ → List (MUR ⊕ R) → W → Prop) :
@@ -241,7 +244,11 @@ section Bridge
 
 variable {k kN kS L e N n : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁] [Fintype Y]
   [DecidableEq Y] [Fintype Y₁] [DecidableEq Y₁]
-  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
+  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
+  [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins]
+  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -250,12 +257,12 @@ variable {k kN kS L e N n : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁] [F
   {Stmt Wit R Frg : Type} [Fintype Stmt] [DecidableEq Stmt] [Inhabited Stmt]
   [Fintype R] [DecidableEq R] [Inhabited R]
   (rel : Stmt → Wit → Prop) [DecidableRel rel]
-  (enc : (Fin n → B.PK) → MURequest (SignOracle.none B) n ⊕ R → ProofQuery Stmt Wit)
+  (enc : (Fin n → B.PK) → MURequest (SignOracle.none B.core) n ⊕ R → ProofQuery Stmt Wit)
   (dummyS : Stmt) [Inhabited M.NIProof] {SC' : Type} [Fintype SC'] [DecidableEq SC']
 
 local notation "Xq" => Bits (queryBits k kN kS L)
 
-local notation "MUR" => MURequest (SignOracle.none B) n
+local notation "MUR" => MURequest (SignOracle.none B.core) n
 
 
 omit [∀ j i, Nonempty ((P j).Challenge i)] in
@@ -263,13 +270,13 @@ omit [∀ j i, Nonempty ((P j).Challenge i)] in
 logs of the extraction run's registers (`extForgery`, `extLogs`). -/
 theorem forgerCanonKF_kfIns_iff {WitK W : Type}
     (Aux : (Fin n → B.PK) → Type)
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q : ℕ)
     (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Xq → Y₁)
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → W)
     (ok G : Frg × X₀ → List (MUR ⊕ R) → W → Prop)
-    (x : ExtReg ((A _ p).restrictAt sp ω) (simExtChallenger Psim Q) MUR (MUResponse B))
+    (x : ExtReg ((A _ p).restrictAt sp ω) (simExtChallenger Psim Q) MUR (MUResponse B.core))
     (D : DB Xq (Out k e)) :
     forgerCanonKF (rel := rel) (enc := enc (fun i => B.pk (keys i))) (dummyS := dummyS) prf keys Q
         ((A _ p).restrictAt sp ω) Psim Ext wit ok G
@@ -284,7 +291,7 @@ omit [∀ j i, Nonempty ((P j).Challenge i)] in
 (`hW` of `kfExt_le_muEufNmaProb`). -/
 theorem forgerCanonKF_kfIns_dropTabCW_iff {WitK W : Type}
     (Aux : (Fin n → B.PK) → Type)
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q : ℕ)
     (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Xq → Y₁)

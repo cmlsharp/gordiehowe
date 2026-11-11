@@ -11,6 +11,7 @@ public import GordieHowe.Model.QROM.QueryStep
 public import GordieHowe.Model.QROM.OracleSimulation
 public import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 public import Mathlib.Analysis.InnerProductSpace.Basic
+public import GordieHowe.Headline
 
 @[expose] public section
 
@@ -677,6 +678,7 @@ theorem measured_le (𝒜 : Adv (Bits m) (BitStr I J) B C k t) (R : Set (DB (Bit
 ω*_D(G, t) ≤ t² · 6I(P_G, t)." The hypothesis `∅ ∉ P_G` is needed for Lemma 5.9 and is
 absent from the paper's statement, as for Lemma 5.13; it holds for `k > 0`
 (`BaseGame.empty_notMem_dbProperty`). -/
+@[headline]
 theorem basic_lifting (G : BaseGame (Bits m) B C k) (hG : (∅ : DB (Bits m) B) ∉ G.dbProperty) :
     ωD e G t ≤ (t : ℝ≥0∞) ^ 2 * 6 * instab G.dbProperty t :=
   iSup_le fun 𝒜 => measured_le e 𝒜 _ hG

@@ -55,7 +55,10 @@ structure PubWit (Sig : Type) where
 
 section Game
 
-variable {N : ℕ} {RMsg : Type} [DecidableEq RMsg] {S : PubSigner N RMsg}
+variable {N : ℕ} {RMsg : Type} [DecidableEq RMsg] {S : PubSigner N RMsg} [Fintype S.PK]
+  [DecidableEq S.PK] [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Pub] [DecidableEq S.Pub]
+  [Fintype S.Sig] [DecidableEq S.Sig] [Fintype S.Orc] [Nonempty S.Orc]
+  [∀ H R m, Decidable (S.Admit H R m)]
   {k kN kS L e : ℕ} {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)}
   [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)]
@@ -72,6 +75,8 @@ def SignsValidly (H : S.Orc) (keys : Fin n → S.KeyCoins) : Prop :=
   ∀ c ∈ A.choices, c.Valid S keys → S.Admit H c.ring c.msg → ∀ (b : Bool) (x : S.Pub × S.Sig),
     x ∈ (c.signLaw H keys b).support → c.ValidAt H b x
 
+omit [Fintype S.PK] [DecidableEq S.PK] [Fintype S.Sig] [DecidableEq S.Sig] [Fintype S.Pub]
+  [DecidableEq S.Pub] [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc] [Nonempty S.Orc] in
 /-- A correct signer signs validly at every oracle. -/
 theorem signsValidly_of_correct (hS : S.Correct) (H : S.Orc) (keys : Fin n → S.KeyCoins) :
     A.SignsValidly H keys := by
@@ -80,6 +85,8 @@ theorem signsValidly_of_correct (hS : S.Correct) (H : S.Orc) (keys : Fin n → S
   · exact hS H (keys c.user₀) c.ring c.idx₀ c.msg hc.idx₀_lt hA hc.key₀ x hx
   · exact hS H (keys c.user₁) c.ring c.idx₁ c.msg hc.idx₁_lt hA hc.key₁ x hx
 
+omit [Fintype S.PK] [DecidableEq S.PK] [Fintype S.Sig] [DecidableEq S.Sig] [Fintype S.Pub]
+  [DecidableEq S.Pub] [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc] [Nonempty S.Orc] in
 /-- **Signers that sign validly on the good event have invalidity bound `0`.** -/
 theorem SignerBounds.of_signsValidly {Good : (Fin n → S.KeyCoins) → S.Orc → Prop}
     (hS : ∀ keys H, Good keys H → A.SignsValidly H keys)
@@ -96,9 +103,10 @@ theorem SignerBounds.of_signsValidly {Good : (Fin n → S.KeyCoins) → S.Orc �
     exact Set.disjoint_left.2 fun x hx hn => hn (hS keys H hG c hcm hc hA b x hx)
 
 variable {E : (j : ι) → (M.comp j).Encoder} {V : S.Orc → S.Stmt → FullTr P τ → Bool}
-  {Qs : ∀ H x, M.IOPQueries (V H) x} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ H x, M.IOPQueries (V H) x} {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   {honest : S.Orc → S.Wit → R → CausalProver P τ S.Stmt}
 
+omit [DecidableEq R] in
 /-- **Anonymity against full key exposure for signers that sign validly on a good event**
 (`advantage_le` at `η = 0`; BKM06 Definition 4, ePrint 2005/304, p. 6, keys given at the start as
 in CCLM22 Experiment 2, p. 21, `Q` adaptive challenges, both oracles visible, deterministic

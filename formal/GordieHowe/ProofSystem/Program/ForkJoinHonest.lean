@@ -83,6 +83,7 @@ def Honest.coinsEquiv : Hc.Coins ≃ Hc.app.Pads × ∀ d, (Hc.circuit d).Coins 
 
 instance : Fintype Hc.Coins := Fintype.ofEquiv _ Hc.coinsEquiv.symm
 instance : Nonempty Hc.Coins := Hc.coinsEquiv.nonempty
+instance : DecidableEq Hc.Coins := Hc.coinsEquiv.decidableEq
 
 /-- Domain `d`'s honest input at the honest input `y` and the pads `π`. -/
 abbrev Honest.wit (y : I) (π : Hc.app.Pads) (d : Fin C.m) : Hc.In d := Hc.app.wit d y π
@@ -325,12 +326,12 @@ theorem prob_not_avoids_coins {e : Stmt → ℝ≥0} (hE : Hc.app.CoinErrorBound
     (x, inp y ω) ∉ relI ∨ ¬ Hc.app.Avoids x (inp y ω) a).trans_le (hE x y hy)
 
 /-- **Completeness of a multi-circuit IOP with forked domains over the prover's coins**
-(`causalCompletenessCoins`): for honest inputs `J` read with uniform coins `ω` as the honest inputs
+(`CausalCompleteCoins`): for honest inputs `J` read with uniform coins `ω` as the honest inputs
 `inp y ω`, at every value `c` of the honest prover's coins, on `relJ`, the composite verifier rejects
 the honest run with probability at most the application phase's completeness error over the coins
 `e` (`hE`), over uniform coins `ω` and challenges. -/
 theorem completeness_coins {e : Stmt → ℝ≥0} (hE : Hc.app.CoinErrorBound relJ inp e) (c : Hc.Coins) :
-    causalCompletenessCoins relJ C.verifier (fun y ω => honest Hc (inp y ω) c) e :=
+    CausalCompleteCoins relJ C.verifier (fun y ω => honest Hc (inp y ω) c) e :=
   fun x y hy => (probUniform_mono fun u hu => by
       by_contra hn
       exact hu (verifier_honest Hc (inp y u.1) c x u.2 (not_not.mp (not_or.mp hn).1)

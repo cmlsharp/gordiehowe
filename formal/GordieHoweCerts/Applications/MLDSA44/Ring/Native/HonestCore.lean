@@ -897,8 +897,10 @@ theorem chalPair_core (k : Fin 256) :
 include hr hh h557 h558 hm in
 /-- **Domain `H`'s core holds at the honest values**: the predicates `48 … 270` (the rounds of
 `c̃'` and of the stream, SampleInBall's selection and memory check). -/
-theorem hPreds_core {q : ℕ} (h48 : 48 ≤ q) (h270 : q ≤ 270) :
+theorem hPreds_core {q : ℕ} (h48 : corePredLo ≤ q) (h270 : q ≤ hPredHi) :
     program.HoldsWith RD (program.predicate q).body := by
+  unfold corePredLo at h48
+  unfold hPredHi at h270
   by_cases h : q < 264
   · have := rounds_honest y hr hh ⟨(q - 48) / 24 + 1, by omega⟩ (by simp) ⟨(q - 48) % 24, by omega⟩
     have hq : roundPred ⟨(q - 48) / 24 + 1, by omega⟩ ⟨(q - 48) % 24, by omega⟩ = q := by

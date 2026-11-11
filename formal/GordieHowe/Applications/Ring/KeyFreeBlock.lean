@@ -75,9 +75,10 @@ end Quantum.AdaptiveIAlg
 
 namespace RingSignature.KeyFree
 
-variable {X Y Xb Yb : Type} {N n : ℕ} {TB : BaseTypes} (B : BaseSigner Xb Yb N TB) {Stmt Wit Proof R : Type}
+variable {X Y Xb Yb : Type} {N n : ℕ} {TB : BaseTypes}
+  (B : BaseSigner Xb Yb N TB) {Stmt Wit Proof R : Type}
   (rel : Stmt → Wit → Prop) [DecidableRel rel]
-  (enc : MURequest (SignOracle.none B) n ⊕ R → ProofQuery Stmt Wit) (dummyS : Stmt)
+  (enc : MURequest (SignOracle.none B.core) n ⊕ R → ProofQuery Stmt Wit) (dummyS : Stmt)
 
 /-- **The statement sent for a swapped proof query** is the statement sent for the query, for a
 swap keeping the statements and the relation. -/
@@ -85,7 +86,7 @@ theorem stmtOf_sumCongr {σR : Equiv.Perm R}
     (hstmt : ∀ q, (enc (.inr (σR q))).stmt = (enc (.inr q)).stmt)
     (hrel : ∀ q, rel (enc (.inr (σR q))).stmt (enc (.inr (σR q))).wit ↔
       rel (enc (.inr q)).stmt (enc (.inr q)).wit)
-    (r : MURequest (SignOracle.none B) n ⊕ R) :
+    (r : MURequest (SignOracle.none B.core) n ⊕ R) :
     stmtOf B rel enc dummyS (Equiv.sumCongr (Equiv.refl _) σR r) = stmtOf B rel enc dummyS r := by
   rcases r with m | q
   · rfl
@@ -96,13 +97,13 @@ theorem stmtOf_sumCongr {σR : Equiv.Perm R}
 statements and whether their witnesses are in the relation: with `sw` the swap on the right
 summand and `σ₁` the swap on the tagged statement's request, when `σ₁` fixes the blank inner
 request. -/
-theorem seTwoKF_swapInv [Inhabited (Stmt × (MURequest (SignOracle.none B) n ⊕ R))]
+theorem seTwoKF_swapInv [Inhabited (Stmt × (MURequest (SignOracle.none B.core) n ⊕ R))]
     (pks : Fin n → B.PK) (Q : ℕ) {σR : Equiv.Perm R}
     (hstmt : ∀ q, (enc (.inr (σR q))).stmt = (enc (.inr q)).stmt)
     (hrel : ∀ q, rel (enc (.inr (σR q))).stmt (enc (.inr (σR q))).wit ↔
       rel (enc (.inr q)).stmt (enc (.inr q)).wit)
     (hdef : ((Equiv.refl Stmt).prodCongr (Equiv.sumCongr (Equiv.refl _) σR))
-      (default : Stmt × (MURequest (SignOracle.none B) n ⊕ R)) = default) :
+      (default : Stmt × (MURequest (SignOracle.none B.core) n ⊕ R)) = default) :
     (seTwoKF (Proof := Proof) B rel enc dummyS pks Q).SwapInv
       (Equiv.sumCongr (Equiv.refl _) σR)
       ((Equiv.refl Stmt).prodCongr (Equiv.sumCongr (Equiv.refl _) σR)) where

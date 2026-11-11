@@ -48,20 +48,23 @@ open GordieHowe.QROM GordieHowe.SPBCS IOP SPTerm RingSignature.Insider
 section SPBCS
 
 variable {k kN kS L e N n t : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq Yb]
-  {TB : BaseTypes} {B : BaseSigner Xb Yb N TB}
+  {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
+  [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  {B : BaseSigner Xb Yb N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
   {X₀ Wit₀ : Type} {M : SPBCS Mg P X₀ k kN kS L e} {Λ : SiteLayout Mg} {b : ℕ}
   {E : (j : ι) → (M.comp j).Encoder}
   {Vr : X₀ → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  {R : Type} [Fintype R] [Nonempty R] {honest : Wit₀ → R → CausalProver P τ X₀}
+  {R : Type} [Fintype R] [DecidableEq R] [Nonempty R] {honest : Wit₀ → R → CausalProver P τ X₀}
   {Stmt Wit Rq Frg : Type} {rel : Stmt → Wit → Prop}
-  {enc : MURequest (SignOracle.none B) n ⊕ Rq → ProofQuery Stmt Wit} {stmtX : Stmt → X₀}
+  {enc : MURequest (SignOracle.none B.core) n ⊕ Rq → ProofQuery Stmt Wit} {stmtX : Stmt → X₀}
 
 local notation "Xq" => Bits (queryBits k kN kS L)
 
-local notation "MUR" => MURequest (SignOracle.none B) n
+local notation "MUR" => MURequest (SignOracle.none B.core) n
 
 variable (enc stmtX) in
 /-- **The freshness of the key-free route**: no logged proof query `q` in `rs` whose statement is
@@ -109,7 +112,8 @@ noncomputable def kfWinTest {Ω : Type} (isDummy : X₀ → Bool) (pks : Fin n �
       .pure (v && (checkX p.2 p.1 &&
         decide (kfFresh enc stmtX isDummy pks fstX side ω p (rs.take Q))))
 
-omit [DecidableEq Xb] [DecidableEq Yb] in
+omit [DecidableEq Xb] [DecidableEq Yb] [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
 /-- The test of a key-free win makes at most the verifier's `kq` queries. -/
 theorem kfWinTest_queriesLE {Ω : Type} (isDummy : X₀ → Bool) (pks : Fin n → B.PK)
     (fstX : X₀ → RingStmt B) (side : Ω → Frg × X₀ → List (MUR ⊕ Rq) → Prop)
@@ -126,7 +130,8 @@ theorem kfWinTest_queriesLE {Ω : Type} (isDummy : X₀ → Bool) (pks : Fin n �
       OracleProg.length_trace_mapQuery]
     exact NARG.Verifier.prog_queriesLE _ _ _
 
-omit [DecidableEq Xb] [DecidableEq Yb] in
+omit [DecidableEq Xb] [DecidableEq Yb] [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
 /-- **The test of a key-free win accepts exactly on a key-free win** (`WinsKF` with the
 condition `kfFresh` at `ω`) at the oracle read through `outEquiv`. -/
 theorem run_kfWinTest {Ω : Type} (isDummy : X₀ → Bool) (pks : Fin n → B.PK)
@@ -153,7 +158,7 @@ variable [DecidableEq X₀] [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fint
   [Inhabited (ProofQuery Stmt Wit)] [Fintype Rq] [DecidableEq Rq] [Inhabited Rq] [DecidableRel rel]
   [Inhabited M.NIProof] {dummyS : Stmt} {isDummy : X₀ → Bool}
   (A' : QueryBoundedAdversary (Bits (queryBits k kN kS L)) (XOut k e)
-    (MURequest (SignOracle.none B) n ⊕ Rq) (MUResponse B ⊕ M.Response b) (Frg × X₀) t)
+    (MURequest (SignOracle.none B.core) n ⊕ Rq) (MUResponse B.core ⊕ M.Response b) (Frg × X₀) t)
 
 omit [DecidableEq X₀] [Fintype Wit] [DecidableEq Wit] [Inhabited (ProofQuery Stmt Wit)] in
 include A' in
@@ -206,7 +211,7 @@ theorem acceptKAt_kfMain_le_winTestProb (hb : M.FormatBounds Qs b b)
     (T : M.Preimages) {δ : NNReal} (hvzk : CausalHVZK VE.MV relH honest pub Sim δ)
     (p₀ : M.Response b) (keys : Fin n → B.KeyCoins) (Q : ℕ) (a : A'.Aux) :
     acceptKAt A' (kfWinTest M b Qs enc stmtX isDummy pks fstX side prf checkX Q ω)
-        (kfMain B rel ((encProver M Λ E hb honest).comap stmtX fw) enc keys Q) a ≤
+        (kfMain B rel ((encProver M Λ E hb honest).comap stmtX fw) (PMF.uniformOfFintype _) enc keys Q) a ≤
       winTestProb Qs (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) prf keys Q (A'.alg a))
         ((inertOnDummy isDummy (M.niJointSimulatorProg Λ VE.toViewRead b pub Sim T) p₀).comap
           (stmtX ∘ Prod.fst)) Q (stmtX ∘ Prod.fst)
@@ -249,7 +254,7 @@ theorem kfChainAt_le (hk : 0 < k) (hb : M.FormatBounds Qs b b)
       (p.2, w) ∈ relK → Goal ω p rs (wit p.2 w))
     (p₀ : M.Response b) (keys : Fin n → B.KeyCoins) (Q : ℕ) :
     acceptK A' (kfWinTest M b Qs enc stmtX isDummy pks fstX side prf checkX Q ω)
-        (kfMain B rel ((encProver M Λ E hb honest).comap stmtX fw) enc keys Q) ≤
+        (kfMain B rel ((encProver M Λ E hb honest).comap stmtX fw) (PMF.uniformOfFintype _) enc keys Q) ≤
       ∑' a, A'.aux a * simProb (outEquiv k e)
           (extAdv Qs (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) prf keys Q (A'.alg a))
             ((inertOnDummy isDummy (M.niJointSimulatorProg Λ VE.toViewRead b pub Sim T)

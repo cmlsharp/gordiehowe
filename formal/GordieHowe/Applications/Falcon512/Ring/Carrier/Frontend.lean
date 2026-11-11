@@ -8,7 +8,8 @@ public import GordieHowe.Applications.Falcon512.Emulated.Interp
 public import GordieHowe.Applications.Falcon512.Emulated.System.Algebra
 public import GordieHowe.Foundations.Algebra.PowModOrder
 public import GordieHowe.Foundations.ToMathlib.RootsOfUnity
-public import GordieHowe.Language.Realizations.Derivation.TableKernel
+public import GordieHowe.Language.Realizations.Derivation.Rules
+public import GordieHowe.Language.Realizations.Derivation.Events
 
 @[expose] public section
 
@@ -16,24 +17,36 @@ public import GordieHowe.Language.Realizations.Derivation.TableKernel
 # GordieHowe frontend: the Falcon ring carriers
 
 The frontend of the theorem at the realized program for the Falcon ring carriers (`Falcon512.Ring.Carrier.ROMParams` and
-`Falcon512.Ring.Carrier.QROMParams`, export `5d775ae1`: Falcon's arithmetic modulo `q` emulated over a
+`Falcon512.Ring.Carrier.QROMParams`: Falcon's arithmetic modulo `q` emulated over a
 Goldilocks extension), generic in the program and its interpretation at the program facts
 `FalconCarrierBase` (decided per program; the two programs agree on every value, shared
 expression and predicate) and the field facts `GordieHowe.Falcon512.EField`:
 
 * **The membership** is the Falcon rings' (`GordieHowe.Falcon512.Ring.FalconRingMember`, at the Goldilocks
   transform root `ψ = psiG`, a primitive `1024`-th root of unity, `psiG_isPrimitiveRoot`).
-* **The signature equation** (`signature.equation`, the integer congruence
-  `c − s1 ≡ h · s2 (mod q)` of the product form): its right side is the negacyclic product by the
-  polynomial whose spectrum the committed spectrum holds. Without the membership's event the spectrum
-  is the transform of the signer's key, so that polynomial is the key, whose coefficients are below
-  `q` (`evalIntWith_carrierSigN`); the congruence is Falcon's (`Emulated.Rows.Congruent`).
+* **The signature equation** (`signature.equation`, `eOf_eqLeft`, `congruent_carrier`) is the
+  Falcon rings' at a random point (`GordieHowe.Falcon512.Ring.FalconRandomPoint`, `sigPoly`,
+  `sigEvent`, `eOf_eq_negacyclic`, in `GordieHowe/Applications/Falcon512/Ring/Frontend/Basic.lean`)
+  at the carriers' transform data (`instRandomPointFieldCarrier`) and first vector: the program
+  checks, at one challenge `r` (`signature.r`), `E = H · s2` in `F[X]/(X^512 + 1)` with
+  `E = c − s1 − q · equation.q + q · 6291457` (`eqLeft`; the quotient `equation.q` below `2^33`)
+  and a committed high half `Q`, the key `H` read through the interpolation weights
+  `λ(r) = 512⁻¹ Ntt_{ψ⁻¹}(1, r, …, r^511)` (`GordieHowe/Language/Library/EvalPoint.lean`): the
+  predicate is the polynomial `E − H · s2 + (X^512 + 1) Q` at `r`. Unless `r` is a root of it
+  while it is nonzero (degree at most `1022`, Schwartz–Zippel) it is `0`, so
+  (`Ops.polyOf_mul_polyOf`, `Ops.polyOf_eq_zero_of_add_mul`) `E_k` is the negacyclic coefficient
+  `(H · s2)_k` in the field.
+  Without the membership's event `H` is the signer's key, whose coefficients are below `q`; the
+  constant coordinates (`EField.coord0`) read the coefficient equation on the integers modulo `p`,
+  and its sides differ by less than `p`, so `c − s1 − h · s2 = q (equation.q − 6291457)`: the
+  congruence is Falcon's (`Emulated.Rows.Congruent`).
 * **The magnitudes, the norm and the encoding** (`magnitudes.s1`, `magnitudes.s2`, `norm.sum`, the
   ranges of `mag1`, `mag2`, `low2`, the budget and the norm, `encoding.high2`) are Falcon
   emulated's (`GordieHowe.Falcon512.Emulated.algebraSpec_of_congruent`), which gives the relation
   `GordieHowe.Falcon512.Ring.rel` at the extracted values (`mem_rel_of_source_carrier`).
 * **Round-by-round knowledge soundness of `Π_P₀`** (`rbr_carrier`): `GordieHowe.RealizedProgram.rbr_of_events` at the
-  membership's event, error `511/|F|` at `member.ring.gamma`.
+  membership's and the signature equation's events (`carrierEvent`), errors `511/|F|` at
+  `member.ring.gamma` and `1022/|F|` at `signature.r` (`carrierEps`).
 -/
 
 
@@ -101,63 +114,7 @@ theorem natCast_512_ne_zero : ((512 : ℕ) : K) ≠ 0 := by
 
 end Root
 
-/-- **A natural-order transform is the negacyclic spectrum** at any root. -/
-theorem nttNatural_eq_negSpectrum' {K : Type*} [Field K] (ψ : K) (x : ℕ → K) (k : Fin 512) :
-    RealizedProgram.Ops.nttNatural 512 ψ x k = DFT.negSpectrum ψ (fun j : Fin 512 => x j) k := by
-  rw [RealizedProgram.Ops.nttNatural_apply 512 _ _ k.isLt, DFT.negSpectrum]
-  refine Finset.sum_congr rfl fun j _ => ?_
-  rw [Nat.mul_comm]
-
-
-/-! ## The integer reading of a negacyclic coefficient -/
-
-section Coef
-
-variable {FA : RealizedProgram.FieldInterp} [EField FA]
-
-/-- **The constant coordinate of an integer's cast** is its cast. -/
-theorem coord0_intCast (w : ℤ) : EField.coord0 (FA := FA) (w : FA.K) = (w : ZMod pGold) := by
-  rcases w with n | n
-  · rw [Int.ofNat_eq_natCast, Int.cast_natCast, Int.cast_natCast, EField.coord0_natCast]
-  · rw [Int.cast_negSucc, Int.cast_negSucc, map_neg, EField.coord0_natCast]
-
-/-- **The integer reading of a negacyclic coefficient** of entries whose integer readings are
-naturals below `p/2` is the coefficient of those naturals: the integer reading reads the constant
-coordinate, which is additive (`EField.coord0`). -/
-theorem coefInt_negCoef_E (n : ℕ) {h : ℕ → FA.K} {z : ℕ → ℕ}
-    (hz : ∀ s < n, FA.toNat (h s) = z s ∧ 2 * z s < pGold) (j k : ℕ) :
-    FA.coefInt (RealizedProgram.Ops.negCoef n h j k) =
-      RealizedProgram.Ops.negCoef n (fun s => (z s : ℤ)) j k := by
-  set w := RealizedProgram.Ops.negCoef n (fun s => (z s : ℤ)) j k with hw
-  have hsmall : 2 * |w| < (pGold : ℤ) := by
-    rcases RealizedProgram.Ops.negCoef_signed n (fun s => (z s : ℤ)) j k with h0 | ⟨i, hi, h1 | h1⟩
-    · rw [hw, h0]
-      norm_num [pGold]
-    · rw [hw, h1, abs_of_nonneg (Int.natCast_nonneg _)]
-      exact_mod_cast (hz i hi).2
-    · rw [hw, h1, abs_neg, abs_of_nonneg (Int.natCast_nonneg _)]
-      exact_mod_cast (hz i hi).2
-  have hc : EField.coord0 (FA := FA) (RealizedProgram.Ops.negCoef n h j k) = (w : ZMod pGold) := by
-    rw [RealizedProgram.Ops.negCoef_map, hw,
-      show ((RealizedProgram.Ops.negCoef n (fun s => (z s : ℤ)) j k : ℤ) : ZMod pGold) =
-        Int.castAddHom (ZMod pGold) (RealizedProgram.Ops.negCoef n (fun s => (z s : ℤ)) j k) from rfl,
-      RealizedProgram.Ops.negCoef_map, RealizedProgram.Ops.negCoef_eq, RealizedProgram.Ops.negCoef_eq]
-    have he : ∀ s < n, EField.coord0 (FA := FA) (h s) = (Int.castAddHom (ZMod pGold)) (z s : ℤ) := by
-      intro s hs
-      show _ = (((z s : ℤ)) : ZMod pGold)
-      rw [Int.cast_natCast, ← (hz s hs).1, EField.toNat_eq, ZMod.natCast_zmod_val]
-    split_ifs with h1 h2 h2
-    · rw [he _ h1.2, he _ h2.2]
-    · rw [he _ h1.2]
-    · rw [he _ h2.2]
-    · rfl
-  have htn : ∀ k < pGold, FA.toNat (k : FA.K) = k := fun k hk => EField.toNat_natCast hk
-  have h1 : FA.toNat (RealizedProgram.Ops.negCoef n h j k) = FA.toNat ((w : ℤ) : FA.K) := by
-    rw [EField.toNat_eq, EField.toNat_eq, hc, coord0_intCast]
-  have h2 := RealizedProgram.FieldInterp.coefInt_intCast EField.spec_char EField.charP htn hsmall
-  unfold RealizedProgram.FieldInterp.coefInt at h2 ⊢
-  rw [h1]
-  exact h2
+/-! ## The negacyclic coefficients -/
 
 /-- **A negacyclic coefficient of `512` naturals is the single-sum convolution weight**
 (`Emulated.Rows.convWeight`). -/
@@ -172,106 +129,134 @@ theorem negCoef_eq_convWeight (z : ℕ → ℕ) (i k : Fin 512) :
   · rw [dif_neg hki, if_neg (by omega), if_pos ⟨by omega, by omega⟩, zero_sub,
       show (i : ℕ) + 512 - k = 512 + i - k by omega]
 
-end Coef
-
 /-! ## The program facts -/
 
-/-- **The carriers' signature equation's left side** (`signature.equation`): `c − s1`. -/
-def carrierSigP : RealizedProgram.Expr :=
-  .add (.leaf 5) (.scale (.const mOneG) (.leaf 10))
+/-- **The constant `−q`** of the Goldilocks fields: `p − 12289`. -/
+abbrev mQG : ℕ := 18446744069414572032
 
-/-- **The carriers' signature equation's right side** (`signature.equation`): the negacyclic
-product of `s2` by the polynomial whose natural-order spectrum (at `ψ = psiG`) the committed
-spectrum holds. -/
-def carrierSigN : RealizedProgram.Expr :=
-  .apply (.negacyclicConv 6 (.nttNatural psiG)) (.leaf 9)
+/-- **The signature equation's offset** `q · 6291457 = −q · qlo` (`Carrier.bias`): the quotient
+`signature.equation.q` is committed from the lower end `qlo = −6291457`. -/
+abbrev qloG : ℕ := 77315715073
 
 /-- **A magnitude equation** `(mag − s)(mag − (q − s)) = 0` of the value `s` at the magnitude
-`mag`. -/
+`mag` (`q` the constant `3`). -/
 def magLhs (mag s : ℕ) : RealizedProgram.Expr :=
   .mul (.add (.leaf mag) (.scale (.const mOneG) (.leaf s)))
     (.add (.leaf mag) (.scale (.const mOneG) (.add (.scale (.const mOneG) (.leaf s))
-      (.reindex [(0, 0, 512)] (.leaf 2)))))
+      (.reindex [(0, 0, 512)] (.leaf 3)))))
 
 /-- **The norm's left side** (`norm.sum`): `squares − Σ mag1² − Σ mag2²`. -/
 def normLhs : RealizedProgram.Expr :=
-  .add (.add (.leaf 16) (.scale (.const mOneG) (.apply (.sum 512) (.mul (.leaf 12) (.leaf 12)))))
-    (.scale (.const mOneG) (.apply (.sum 512) (.mul (.leaf 13) (.leaf 13))))
+  .add (.add (.leaf 19) (.scale (.const mOneG) (.apply (.sum 512) (.mul (.leaf 15) (.leaf 15)))))
+    (.scale (.const mOneG) (.apply (.sum 512) (.mul (.leaf 16) (.leaf 16))))
 
 /-- **The encoding budget's expression**: `50176 − Σ mag2 + Σ low2`. -/
 def budgetExpr : RealizedProgram.Expr :=
-  .add (.add (.scale (.const mOneG) (.apply (.sum 512) (.leaf 13))) (.apply (.sum 512) (.leaf 14)))
-    (.leaf 15)
+  .add (.add (.scale (.const mOneG) (.apply (.sum 512) (.leaf 16))) (.apply (.sum 512) (.leaf 17)))
+    (.leaf 18)
 
 /-- **The program facts of a Falcon ring carrier outside the membership** (decided per program):
-the numbering (`statement.ring` `4`, `statement.c` `5`, `key.spectrum` `6`, `s2` `9`,
-`signature.s1` `10`, the quotient `signature.equation.q` `11`, `magnitudes.mag1` `12`,
-`magnitudes.mag2` `13`, `encoding.low2` `14`, the budget offset `15`, `norm.squares` `16`, `q` at
-`2`, the zero row `3`); the signature equation (predicate `4`, the spectral product form with
-quotient `11`), the magnitudes (`1`, `2`), the norm (`3`), the ranges (`10` … `15`) and
-`encoding.high2` (`17`), source predicates; the constants; the fields, sizes and types of the
-values read. -/
+the signature equation's at a random point (`FalconRandomPoint`) at the carriers' numbering
+(`sigIds`: the high half `signature.Q` `13`, `signature.r`'s challenge `1`, `signature.equation`
+predicate `1`), transform data (`invConsts`: `512⁻¹` and `ψ⁻¹` modulo `p`) and first vector
+`E = c − s1 − q · equation.q + q · 6291457` (`sigE_eq`); the numbering (`statement.ring` `5`,
+`statement.c` `6`, `key.spectrum` `7`, `s2` `10`, `signature.s1` `11`, the quotient
+`signature.equation.q` `12`, `magnitudes.mag1` `15`, `magnitudes.mag2` `16`, `encoding.low2` `17`,
+the budget offset `18`, `norm.squares` `19`; the constants `0` (`1`), the offset `q · 6291457`
+(`2`), `q` (`3`), the zero row (`4`)); the magnitudes (predicates `2`, `3`), the norm (`4`), the
+ranges (`10` … `15`) and `encoding.high2` (`17`), source predicates; the constants; the fields,
+sizes and kinds of the values read; the statement's checks. -/
 class FalconCarrierBase (program : RealizedProgram) [FalconRingPowers program] [FalconRingSelect program]
-    [FalconRingMember program] : Prop where
+    [FalconRingMember program] extends FalconRandomPoint program where
   /-- The numbering of the membership's values. -/
-  ids : FalconRingMember.ring program = 4 ∧ FalconRingMember.chal program = 5 ∧
-    FalconRingMember.spec program = 6 ∧ FalconRingMember.s2 program = 9 ∧
+  ids : FalconRingMember.ring program = 5 ∧ FalconRingMember.chal program = 6 ∧
+    FalconRingMember.spec program = 7 ∧ FalconRingMember.s2 program = 10 ∧
     FalconRingMember.mOne program = mOneG ∧ FalconRingMember.psi program = psiG ∧
     FalconRingMember.zero program = 1
-  /-- `signature.equation`: `c − s1 ≡ h · s2 (mod q)` in the spectral product form, its quotient
-  `11` from `−6291457`, at most `12570625`. -/
-  sig : ∃ real, (program.predicate 4).body = .mod 0 12289 carrierSigP carrierSigN real ∧
-    real.form = .spectralProduct ∧ real.quotient = some (.leaf 11) ∧
-    real.quotientLo = -6291457 ∧ real.qmax = 12570625
+  /-- The numbering of the signature equation's high half, challenge and predicate. -/
+  sigIds : q = 13 ∧ rChal = 1 ∧ sigPred = 1
+  /-- `512⁻¹` and `ψ⁻¹` modulo `p`. -/
+  invConsts : nInv = 18410715272404008961 ∧ psiInv = 4295002282146690441
+  /-- The first vector `c − s1 − q · equation.q + q · 6291457` (the constant `2`). -/
+  sigE_eq : sigE = .add (.add (.add (.leaf 6) (.scale (.const mOneG) (.leaf 11)))
+    (.scale (.const mQG) (.leaf 12))) (.reindex [(0, 0, 512)] (.leaf 2))
   /-- `magnitudes.s1`. -/
-  magS1 : ∃ t, (program.predicate 1).body = .equal 0 (magLhs 12 10) (.leaf 3) t
+  magS1 : ∃ t, (program.predicate 2).body = .equal 0 (magLhs 15 11) (.leaf 4) t
   /-- `magnitudes.s2`. -/
-  magS2 : ∃ t, (program.predicate 2).body = .equal 0 (magLhs 13 9) (.leaf 3) t
+  magS2 : ∃ t, (program.predicate 3).body = .equal 0 (magLhs 16 10) (.leaf 4) t
   /-- `norm.sum`. -/
-  normSum : ∃ t, (program.predicate 3).body = .equal 0 normLhs (.leaf 1) t
-  /-- `magnitudes.mag1`. -/
-  rMag1 : ∃ r, (program.predicate 10).body = .mem 0 [.leaf 12] (.range 6145) r
-  /-- `magnitudes.mag2`. -/
-  rMag2 : ∃ r, (program.predicate 11).body = .mem 0 [.leaf 13] (.range 2048) r
-  /-- `encoding.low2`. -/
-  rLow2 : ∃ r, (program.predicate 12).body = .mem 0 [.leaf 14] (.range 128) r
-  /-- `encoding.budget`. -/
-  rBudget : ∃ r, (program.predicate 13).body = .mem 0 [budgetExpr] (.range 50177) r
-  /-- `norm.bound`. -/
-  rNorm : ∃ r, (program.predicate 14).body = .mem 0 [.leaf 16] (.range 34034727) r
+  normSum : ∃ t, (program.predicate 4).body = .equal 0 normLhs (.leaf 1) t
   /-- `signature.equation.q`. -/
-  rQuot : ∃ r, (program.predicate 15).body = .mem 0 [.leaf 11] (.range 8589934592) r
-  /-- `encoding.high2`, not in a product form. -/
-  high2 : ∃ r, (program.predicate 17).body = .mod 0 128 (.leaf 13) (.leaf 14) r ∧
-    r.form.isProduct = false
-  /-- The predicates read are source predicates. -/
-  inSource : ∀ p ∈ [1, 2, 3, 4, 10, 11, 12, 13, 14, 15, 17],
+  rQuot : ∃ r, (program.predicate 10).body = .mem 0 [.leaf 12] (.range 8589934592) r
+  /-- `magnitudes.mag1`. -/
+  rMag1 : ∃ r, (program.predicate 11).body = .mem 0 [.leaf 15] (.range 6145) r
+  /-- `magnitudes.mag2`. -/
+  rMag2 : ∃ r, (program.predicate 12).body = .mem 0 [.leaf 16] (.range 2048) r
+  /-- `encoding.low2`. -/
+  rLow2 : ∃ r, (program.predicate 13).body = .mem 0 [.leaf 17] (.range 128) r
+  /-- `encoding.budget`. -/
+  rBudget : ∃ r, (program.predicate 14).body = .mem 0 [budgetExpr] (.range 50177) r
+  /-- `norm.bound`. -/
+  rNorm : ∃ r, (program.predicate 15).body = .mem 0 [.leaf 19] (.range 34034727) r
+  /-- `encoding.high2`. -/
+  high2 : ∃ r, (program.predicate 17).body = .mod 0 128 (.leaf 16) (.leaf 17) r
+  /-- The predicates read beside the signature equation are source predicates. -/
+  inSource : ∀ p ∈ [2, 3, 4, 10, 11, 12, 13, 14, 15, 17],
     p < program.predicates.length ∧ program.inSource (program.predicate p) = true
   /-- The constants: `q`, the zero row, the budget offset. -/
-  consts : program.isConstant 2 = true ∧ (program.constEntries 2).getD 0 0 = 12289 ∧
-    program.isConstant 3 = true ∧ program.constEntries 3 = List.replicate 512 0 ∧
-    program.isConstant 15 = true ∧ (program.constEntries 15).getD 0 0 = 50176
-  /-- The values read are of field `0`. -/
-  fields : ∀ v ∈ [2, 3, 10, 11, 12, 13, 14, 15, 16], program.valueField v = 0
+  consts : program.isConstant 3 = true ∧ (program.constEntries 3).getD 0 0 = 12289 ∧
+    program.isConstant 4 = true ∧ program.constEntries 4 = List.replicate 512 0 ∧
+    program.isConstant 18 = true ∧ (program.constEntries 18).getD 0 0 = 50176
+  /-- The signature equation's offset `q · 6291457`. -/
+  qloConst : program.isConstant 2 = true ∧ (program.constEntries 2).getD 0 0 = qloG
+  /-- The values read beside the signature equation's are of field `0`. -/
+  fields : ∀ v ∈ [2, 3, 4, 11, 12, 15, 16, 17, 18, 19], program.valueField v = 0
   /-- The sizes of the values read. -/
-  sizes : (program.value 10).size = 512 ∧ (program.value 11).size = 512 ∧
-    (program.value 12).size = 512 ∧ (program.value 13).size = 512 ∧
-    (program.value 14).size = 512 ∧ (program.value 16).size = 1
+  sizes : (program.value 11).size = 512 ∧ (program.value 12).size = 512 ∧
+    (program.value 15).size = 512 ∧ (program.value 16).size = 512 ∧
+    (program.value 17).size = 512 ∧ (program.value 19).size = 1
+  /-- The sizes of the signature equation's other values: `Q`, `r^t`, `λ`, `r^512 + 1`. -/
+  sigSizes : (program.value 13).size = 511 ∧ (program.value 22).size = 512 ∧
+    (program.value 23).size = 512 ∧ (program.value 24).size = 1
   /-- `signature.s1`, `magnitudes.mag2` and `encoding.low2` are committed. -/
-  privKinds : (program.value 10).kind = .priv ∧ (program.value 13).kind = .priv ∧
-    (program.value 14).kind = .priv
-  /-- The statement's checks bound the keys (value `4`) below `q`. -/
+  privKinds : (program.value 11).kind = .priv ∧ (program.value 16).kind = .priv ∧
+    (program.value 17).kind = .priv
+  /-- `signature.equation.q` is bound to its digits. -/
+  quotBound : ∃ x, (program.value 12).kind = .bound x
+  /-- The statement's checks bound the keys (value `5`) below `q`. -/
   ringCheck : ∃ m ∈ program.statement.checks,
-    program.memberValue? m.member = some 4 ∧ m.entryBound? = some 12289
-  /-- The statement's checks bound the challenge (value `5`) below `q`. -/
-  chalCheck : ∃ m ∈ program.statement.checks,
     program.memberValue? m.member = some 5 ∧ m.entryBound? = some 12289
+  /-- The statement's checks bound the challenge (value `6`) below `q`. -/
+  chalCheck : ∃ m ∈ program.statement.checks,
+    program.memberValue? m.member = some 6 ∧ m.entryBound? = some 12289
+
+section Ids
+
+variable {program : RealizedProgram} [FalconRingPowers program] [FalconRingSelect program]
+  [FalconRingMember program] [FalconCarrierBase program]
+
+/-- **The carriers' challenges**: `member.ring.gamma` (`0`) and `signature.r` (`1`). -/
+theorem isSourceChal_iff_carrier : ∀ j, program.IsSourceChal j ↔ j = 0 ∨ j = 1 := by
+  intro j
+  rw [FalconRandomPoint.isSourceChal_iff, (FalconCarrierBase.sigIds (program := program)).2.1]
+
+/-- **`signature.Q`** (value `13`) is committed. -/
+theorem qPriv_carrier : (program.value 13).kind = .priv := by
+  rw [← (FalconCarrierBase.sigIds (program := program)).1]
+  exact FalconRandomPoint.qPriv
+
+/-- **The challenge `r`** is the carriers' challenge `1`. -/
+theorem rOf_eqC {I : RealizedProgram.Interp} (e : program.Env I) :
+    rOf e = RealizedProgram.castElt (e.chal 1 0) := by
+  unfold rOf
+  rw [(FalconCarrierBase.sigIds (program := program)).2.1]
+
+end Ids
 
 /-! ## Soundness -/
 
 section Sound
 
-open Emulated (PublicKey)
 open Native (CoreWit)
 
 variable {program : RealizedProgram} [FalconRingPowers program] [FalconRingSelect program]
@@ -286,7 +271,7 @@ attribute [local instance] ringField_carrier
 
 /-- **A carrier predicate holds** where the source program holds. -/
 theorem holdsAt_carrier {e : program.Env I} (hs : program.SourceSatAt e) {p : ℕ}
-    (hp : p ∈ [1, 2, 3, 4, 10, 11, 12, 13, 14, 15, 17]) :
+    (hp : p ∈ [2, 3, 4, 10, 11, 12, 13, 14, 15, 17]) :
     program.HoldsAt e (program.predicate p).body :=
   hs.preds _ (RealizedProgram.predicate_mem (FalconCarrierBase.inSource p hp).1)
     (FalconCarrierBase.inSource p hp).2
@@ -314,23 +299,38 @@ theorem rdC_const {e : program.Env I} {v c i : ℕ} (hc : program.isConstant v =
   rw [RealizedProgram.evalE_leaf_of_isConstant e hc, RealizedProgram.constRead_of_valueField hf, he,
     EField.decode_lt _ hcp]
 
-theorem rdC_q (e : program.Env I) : rdC e 2 0 = (12289 : ℕ) := by
-  obtain ⟨c2, e2, -⟩ := FalconCarrierBase.consts (program := program)
+theorem rdC_q (e : program.Env I) : rdC e 3 0 = (12289 : ℕ) := by
+  obtain ⟨c3, e3, -⟩ := FalconCarrierBase.consts (program := program)
+  exact rdC_const c3 ((FalconCarrierBase.fields (program := program)) 3 (by simp)) e3
+    (by norm_num [pGold])
+
+theorem rdC_off (e : program.Env I) : rdC e 18 0 = (50176 : ℕ) := by
+  obtain ⟨-, -, -, -, c18, e18⟩ := FalconCarrierBase.consts (program := program)
+  exact rdC_const c18 ((FalconCarrierBase.fields (program := program)) 18 (by simp)) e18
+    (by norm_num [pGold])
+
+theorem rdC_zeros (e : program.Env I) {i : ℕ} (hi : i < 512) : rdC e 4 i = 0 := by
+  obtain ⟨-, -, c4, e4, -⟩ := FalconCarrierBase.consts (program := program)
+  rw [rdC_const c4 ((FalconCarrierBase.fields (program := program)) 4 (by simp)) (c := 0)
+    (by rw [e4, List.getD_eq_getElem?_getD, List.getElem?_replicate, if_pos hi]; rfl)
+    (by norm_num [pGold]), Nat.cast_zero]
+
+/-- **The signature equation's offset** reads `q · 6291457`. -/
+theorem rdC_qlo (e : program.Env I) : rdC e 2 0 = ((77315715073 : ℕ) : (I 0).K) := by
+  obtain ⟨c2, e2⟩ := FalconCarrierBase.qloConst (program := program)
   exact rdC_const c2 ((FalconCarrierBase.fields (program := program)) 2 (by simp)) e2
     (by norm_num [pGold])
 
-theorem rdC_off (e : program.Env I) : rdC e 15 0 = (50176 : ℕ) := by
-  obtain ⟨-, -, -, -, c15, e15⟩ := FalconCarrierBase.consts (program := program)
-  exact rdC_const c15 ((FalconCarrierBase.fields (program := program)) 15 (by simp)) e15
-    (by norm_num [pGold])
-
-theorem rdC_zeros (e : program.Env I) {i : ℕ} (hi : i < 512) : rdC e 3 i = 0 := by
-  obtain ⟨-, -, c3, e3, -⟩ := FalconCarrierBase.consts (program := program)
-  rw [rdC_const c3 ((FalconCarrierBase.fields (program := program)) 3 (by simp)) (c := 0)
-    (by rw [e3, List.getD_eq_getElem?_getD, List.getElem?_replicate, if_pos hi]; rfl)
-    (by norm_num [pGold]), Nat.cast_zero]
-
 theorem decode_mOneG : (I 0).decode mOneG = -1 := RingField.decode_negOne
+
+/-- **The constant `−q`** decodes to `−12289`. -/
+theorem decode_mQG : (I 0).decode mQG = -((12289 : ℕ) : (I 0).K) := by
+  rw [EField.decode_lt _ (by norm_num [pGold])]
+  have h0 : ((pGold : ℕ) : (I 0).K) = 0 := CharP.cast_eq_zero _ pGold
+  have : (mQG : ℕ) + 12289 = pGold := by norm_num [pGold]
+  rw [← this] at h0
+  push_cast at h0 ⊢
+  linear_combination h0
 
 /-- **A magnitude equation's left side** at coordinate `i < 512`: `(mag − s)(mag − (q − s))`. -/
 theorem evalE_magLhs (e : program.Env I) (mag v : ℕ) {i : ℕ} (hi : i < 512) :
@@ -347,8 +347,8 @@ theorem evalE_magLhs (e : program.Env I) (mag v : ℕ) {i : ℕ} (hi : i < 512) 
 /-- **The magnitude equations** (`magnitudes.s1`, `magnitudes.s2`): at every coordinate,
 `(mag − s)(mag − (q − s)) = 0`. -/
 theorem mag_eq {e : program.Env I} (hs : program.SourceSatAt e) {p mag v : ℕ}
-    (hp : p ∈ [1, 2, 3, 4, 10, 11, 12, 13, 14, 15, 17])
-    (hb : ∃ t, (program.predicate p).body = .equal 0 (magLhs mag v) (.leaf 3) t)
+    (hp : p ∈ [2, 3, 4, 10, 11, 12, 13, 14, 15, 17])
+    (hb : ∃ t, (program.predicate p).body = .equal 0 (magLhs mag v) (.leaf 4) t)
     (hsz : (program.value mag).size = 512) {i : ℕ} (hi : i < 512) :
     (rdC e mag i - rdC e v i) * (rdC e mag i - ((12289 : ℕ) - rdC e v i)) = 0 := by
   obtain ⟨t, hbd⟩ := hb
@@ -358,7 +358,7 @@ theorem mag_eq {e : program.Env I} (hs : program.SourceSatAt e) {p mag v : ℕ}
     rw [magLhs, RealizedProgram.exprLen_mul, RealizedProgram.exprLen_add, RealizedProgram.exprLen_leaf, hsz]
     exact hi)
   rw [evalE_magLhs e mag v hi] at hx
-  change _ = rdC e 3 i at hx
+  change _ = rdC e 4 i at hx
   rw [rdC_zeros e hi] at hx
   exact hx
 
@@ -371,8 +371,8 @@ theorem rdC_zero1 (e : program.Env I) :
 
 /-- **The norm's left side**: `squares − Σ mag1² − Σ mag2²`. -/
 theorem evalE_normLhs (e : program.Env I) :
-    program.evalE (program.reader e) 0 normLhs 0 = rdC e 16 0 - ∑ i : Fin 512, rdC e 12 i * rdC e 12 i -
-      ∑ i : Fin 512, rdC e 13 i * rdC e 13 i := by
+    program.evalE (program.reader e) 0 normLhs 0 = rdC e 19 0 - ∑ i : Fin 512, rdC e 15 i * rdC e 15 i -
+      ∑ i : Fin 512, rdC e 16 i * rdC e 16 i := by
   rw [normLhs, RealizedProgram.evalE_add, RealizedProgram.evalE_add, RealizedProgram.evalE_scale_const,
     RealizedProgram.evalE_scale_const, RealizedProgram.evalE_apply_sum, RealizedProgram.evalE_apply_sum, decode_mOneG]
   simp only [Nat.zero_mul, Nat.zero_add, RealizedProgram.evalE_mul]
@@ -385,10 +385,10 @@ theorem exprLen_normLhs : program.exprLen normLhs = 1 := by
 
 /-- **The norm's equation** (`norm.sum`): `squares − Σ mag1² − Σ mag2² = 0`. -/
 theorem norm_eq {e : program.Env I} (hs : program.SourceSatAt e) :
-    rdC e 16 0 - ∑ i : Fin 512, rdC e 12 i * rdC e 12 i -
-      ∑ i : Fin 512, rdC e 13 i * rdC e 13 i = 0 := by
+    rdC e 19 0 - ∑ i : Fin 512, rdC e 15 i * rdC e 15 i -
+      ∑ i : Fin 512, rdC e 16 i * rdC e 16 i = 0 := by
   obtain ⟨t, hbd⟩ := FalconCarrierBase.normSum (program := program)
-  have h := holdsAt_carrier hs (p := 3) (by simp)
+  have h := holdsAt_carrier hs (p := 4) (by simp)
   rw [hbd] at h
   have hx := holdsAt_equal0 h 0 (by rw [exprLen_normLhs]; norm_num)
   rw [rdC_zero1, evalE_normLhs] at hx
@@ -398,7 +398,7 @@ theorem norm_eq {e : program.Env I} (hs : program.SourceSatAt e) :
 theorem stmt_lt {x : program.Valuation I} (hok : program.StatementOk I x) :
     (∀ i < 32768, (I 0).toNat (ringEntry x i) < 12289) ∧
       ∀ i < 512, (I 0).toNat (chalEntry x i) < 12289 := by
-  obtain ⟨h5, hc5, -, -, -, -, -⟩ := FalconCarrierBase.ids (program := program)
+  obtain ⟨h5, hc6, -, -, -, -, -⟩ := FalconCarrierBase.ids (program := program)
   obtain ⟨m, hm, hv, hq⟩ := FalconCarrierBase.ringCheck (program := program)
   obtain ⟨m', hm', hv', hq'⟩ := FalconCarrierBase.chalCheck (program := program)
   have H := hok m hm
@@ -406,24 +406,24 @@ theorem stmt_lt {x : program.Valuation I} (hok : program.StatementOk I x) :
   unfold RealizedProgram.MemberHolds at H H'
   rw [hv, hq] at H
   rw [hv', hq'] at H'
-  have hf5 : program.valueField 4 = 0 := by
+  have hf5 : program.valueField 5 = 0 := by
     have := (FalconRingMember.fields (program := program)) (FalconRingMember.ring program) (by simp)
     rwa [h5] at this
-  have hf6 : program.valueField 5 = 0 := by
+  have hf6 : program.valueField 6 = 0 := by
     have := (FalconRingMember.fields (program := program)) (FalconRingMember.chal program) (by simp)
-    rwa [hc5] at this
-  have hs5 : (program.value 4).size = 32768 := by
+    rwa [hc6] at this
+  have hs5 : (program.value 5).size = 32768 := by
     have := (FalconRingMember.sizes (program := program)).2.2.1
     rwa [h5] at this
-  have hs6 : (program.value 5).size = 512 := by
+  have hs6 : (program.value 6).size = 512 := by
     have := (FalconRingMember.sizes (program := program)).2.2.2.1
-    rwa [hc5] at this
+    rwa [hc6] at this
   refine ⟨fun i hi => ?_, fun i hi => ?_⟩
   · unfold ringEntry
     rw [h5, RealizedProgram.toNat_castElt hf5]
     exact H i (by rw [hs5]; exact hi)
   · unfold chalEntry
-    rw [hc5, RealizedProgram.toNat_castElt hf6]
+    rw [hc6, RealizedProgram.toNat_castElt hf6]
     exact H' i (by rw [hs6]; exact hi)
 
 /-- **The coefficients of a ring key with entries below `q`** are the entries read as naturals. -/
@@ -434,99 +434,9 @@ theorem keyCoeffs_ringKey_of_lt {x : program.Valuation I} {r : ℕ}
   simp only [ringKey, EmulatedAlgebraCircuit.keyCoeffs, Falcon512.coeff_ofCoeff, ZMod.val_natCast]
   exact Nat.mod_eq_of_lt (h j)
 
-/-- **The centred reading of `p − 1`** is `−1`. -/
-theorem centered_mOneG : (I 0).centered mOneG = -1 := by
-  rw [RealizedProgram.FieldInterp.centered_eq, EField.spec_char]
-  unfold RealizedProgram.centeredZ
-  norm_num [pGold]
-
-/-- **The signature equation has `512` coordinates.** -/
-theorem exprLen_carrierSigP : program.exprLen carrierSigP = 512 := by
-  obtain ⟨-, hc5, -⟩ := FalconCarrierBase.ids (program := program)
-  have hs5 : (program.value 5).size = 512 := by
-    have := (FalconRingMember.sizes (program := program)).2.2.2.1
-    rwa [hc5] at this
-  rw [carrierSigP, RealizedProgram.exprLen_add, RealizedProgram.exprLen_leaf, hs5]
-
-/-- **The signature equation's left side on the integers**: `c − s1`, both read as naturals. -/
-theorem evalIntWith_carrierSigP (e : program.Env I) (i : ℕ) :
-    program.evalIntWith (program.reader e) 0 carrierSigP i =
-      ((I 0).toNat (chalEntry e.stmt i) : ℤ) - ((I 0).toNat (rdC e 10 i) : ℤ) := by
-  obtain ⟨-, hc5, -⟩ := FalconCarrierBase.ids (program := program)
-  have hk5 : (program.value 5).kind = .pub (.opaque "statement.c" []) := by
-    have := FalconRingMember.chalKind (program := program)
-    rwa [hc5] at this
-  have hf5 : program.valueField 5 = 0 := by
-    have := (FalconRingMember.fields (program := program)) (FalconRingMember.chal program) (by simp)
-    rwa [hc5] at this
-  have hf10 := (FalconCarrierBase.fields (program := program)) 10 (by simp)
-  have hk10 := (FalconCarrierBase.privKinds (program := program)).1
-  rw [carrierSigP, RealizedProgram.evalIntWith_add, RealizedProgram.evalIntWith_scale_const,
-    RealizedProgram.evalIntWith_leaf, RealizedProgram.evalIntWith_leaf,
-    FalconRingMember.domainField0 (program := program), centered_mOneG]
-  unfold RealizedProgram.intOf
-  rw [hk5, hk10]
-  simp only
-  unfold chalEntry rdC
-  rw [hc5, RealizedProgram.toNat_castElt hf5, RealizedProgram.evalE_leaf,
-    RealizedProgram.toNat_castElt hf10, RealizedProgram.reader_of_opaque_nil e hk5]
-  ring
-
-/-- **The signature equation's right side on the integers**, at a polynomial whose spectrum the
-committed spectrum holds with coefficients read as naturals `z` below `p/2`: the negacyclic
-coefficients of `z` against `s2` read as naturals. -/
-theorem evalIntWith_carrierSigN (e : program.Env I) {z : ℕ → ℕ}
-    (hz : ∀ s < 512, (I 0).toNat
-      (RealizedProgram.Ops.inverseNttNatural 512 (psiG : (I 0).K) (specOf e) s) = z s ∧ 2 * z s < pGold)
-    {i : ℕ} (hi : i < 512) :
-    program.evalIntWith (program.reader e) 0 carrierSigN i =
-      ∑ k : Fin 512, RealizedProgram.Ops.negCoef 512 (fun s => (z s : ℤ)) i k *
-        ((I 0).toNat (s2Of e k) : ℤ) := by
-  obtain ⟨-, -, h6, h9, -, -, -⟩ := FalconCarrierBase.ids (program := program)
-  have hs6 : (program.value 6).size = 512 := by
-    have := (FalconRingMember.sizes (program := program)).2.1
-    rwa [h6] at this
-  have hf9 : program.valueField 9 = 0 := by
-    have := (FalconRingMember.fields (program := program)) (FalconRingMember.s2 program) (by simp)
-    rwa [h9] at this
-  have hk9 : (program.value 9).kind = .priv := by
-    have := (FalconRingMember.privKinds (program := program)).2.2
-    rwa [h9] at this
-  have hd := FalconRingMember.domainField0 (program := program)
-  rw [carrierSigN, RealizedProgram.evalIntWith_apply,
-    RealizedProgram.NamedOp.applyInt_negacyclicConv _ _ _ _ _ (by rw [hs6]; norm_num), hs6,
-    Nat.mod_eq_of_lt hi, Nat.div_eq_of_lt hi]
-  simp only [Nat.zero_mul, Nat.zero_add]
-  rw [hd]
-  have hpoly : RealizedProgram.NamedOp.formPoly (I := I) 0 512
-      (fun s => RealizedProgram.castElt (program.reader e 6 s)) (.nttNatural psiG) =
-      RealizedProgram.Ops.inverseNttNatural 512 (psiG : (I 0).K) (specOf e) := by
-    funext s
-    show RealizedProgram.Ops.inverseNttNatural 512 ((I 0).decode psiG)
-      (fun s => RealizedProgram.castElt (program.reader e 6 s)) s = _
-    rw [EField.decode_lt _ (by norm_num [pGold])]
-    unfold specOf
-    rw [h6]
-    rfl
-  rw [hpoly]
-  refine Finset.sum_congr rfl fun k _ => ?_
-  rw [coefInt_negCoef_E 512 hz, RealizedProgram.evalIntWith_leaf]
-  unfold RealizedProgram.intOf s2Of
-  rw [hk9, h9, RealizedProgram.evalE_leaf, RealizedProgram.toNat_castElt hf9]
-
-/-- **The signature equation's sides differ by a multiple of `q`** where the source program holds
-(`signature.equation`, the congruence of the product form). -/
-theorem sig_dvd_carrier {e : program.Env I} (hs : program.SourceSatAt e) {i : ℕ} (hi : i < 512) :
-    (12289 : ℤ) ∣ program.evalIntWith (program.reader e) 0 carrierSigP i -
-      program.evalIntWith (program.reader e) 0 carrierSigN i := by
-  obtain ⟨real, hb, -⟩ := FalconCarrierBase.sig (program := program)
-  have h := holdsAt_carrier hs (p := 4) (by simp)
-  rw [hb] at h
-  exact_mod_cast h.1 i (by rw [exprLen_carrierSigP]; exact hi)
-
 /-- **A leaf of domain `0` below a bound**, from its range. -/
 theorem leaf_natBelow {e : program.Env I} (hs : program.SourceSatAt e) {p v n : ℕ}
-    (hp : p ∈ [1, 2, 3, 4, 10, 11, 12, 13, 14, 15, 17])
+    (hp : p ∈ [2, 3, 4, 10, 11, 12, 13, 14, 15, 17])
     (hb : ∃ r, (program.predicate p).body = .mem 0 [.leaf v] (.range n) r)
     {sz : ℕ} (hsz : (program.value v).size = sz) (i : Fin sz) :
     ∃ k < n, rdC e v i = (k : (I 0).K) := by
@@ -547,41 +457,143 @@ theorem intOf_priv {e : program.Env I} {v i n : ℕ} (hk : (program.value v).kin
   rw [RealizedProgram.toNat_castElt hf, EField.toNat_natCast hn] at h
   simp only [h]
 
-/-- **The signature congruence** where the source program holds without the membership's event:
-the spectrum is the transform of the signer's key (`spec_eq_of_not_event`), so the kernel's
-polynomial is the key, whose coefficients are below `q` (`stmt_lt`); the product form's congruence
-on the integers (`sig_dvd_carrier`) is `c ≡ s1 + h · s2 (mod q)`. -/
+end Sound
+
+/-! ## The signature equation -/
+
+section Signature
+
+variable {program : RealizedProgram} [FalconRingPowers program] [FalconRingSelect program]
+  [FalconRingMember program] [FalconCarrierBase program] {I : RealizedProgram.Interp} [EField (I 0)]
+
+open Polynomial RealizedProgram.Ops
+
+attribute [local instance] ringField_carrier
+
+/-- `512⁻¹` and `ψ⁻¹` in a field of characteristic `p` (`Ops.natCast_eq_inv_of_mul_mod`). -/
+theorem decode_nInvG : (I 0).decode 18410715272404008961 = ((512 : ℕ) : (I 0).K)⁻¹ := by
+  rw [EField.decode_lt _ (by norm_num [pGold])]
+  exact RealizedProgram.Ops.natCast_eq_inv_of_mul_mod pGold (by norm_num [pGold])
+
+theorem decode_psiInvG : (I 0).decode 4295002282146690441 = (psiG : (I 0).K)⁻¹ := by
+  rw [EField.decode_lt _ (by norm_num [pGold])]
+  exact RealizedProgram.Ops.natCast_eq_inv_of_mul_mod pGold (by norm_num [pGold])
+
+/-- **The carriers' transform root** decodes to `psiG`. -/
+theorem decode_psiC : (I 0).decode (FalconRingMember.psi program) = (psiG : (I 0).K) := by
+  rw [(FalconCarrierBase.ids (program := program)).2.2.2.2.2.1, EField.decode_lt _ (by norm_num [pGold])]
+
+/-- **The signature equation's field facts** in a carrier's field (`FalconRandomPointField`):
+`−1 = p − 1`, `512⁻¹`, `ψ⁻¹` modulo `p` at the primitive `1024`-th root `ψ = psiG`. -/
+instance instRandomPointFieldCarrier : FalconRandomPointField program (I 0) where
+  toRingField := ringField_carrier
+  decode_nInv := by
+    rw [(FalconCarrierBase.invConsts (program := program)).1]; exact decode_nInvG
+  decode_psiInv := by
+    rw [(FalconCarrierBase.invConsts (program := program)).2, decode_psiC]; exact decode_psiInvG
+  psi_isPrimitiveRoot := by rw [decode_psiC]; exact psiG_isPrimitiveRoot
+  n_ne_zero := natCast_512_ne_zero
+
+/-- **The signature equation's left coefficients** `E = c − s1 − q · equation.q + q · 6291457`. -/
+def eqLeft (e : program.Env I) (t : ℕ) : (I 0).K :=
+  chalEntry e.stmt t - rdC e 11 t - ((12289 : ℕ) : (I 0).K) * rdC e 12 t +
+    ((77315715073 : ℕ) : (I 0).K)
+
+omit [EField (I 0)] in
+/-- **The statement's challenge** (`statement.c`, `6`). -/
+theorem evalE_chalC (e : program.Env I) (t : ℕ) :
+    program.evalE (program.reader e) 0 (.leaf 6) t = chalEntry e.stmt t := by
+  obtain ⟨-, hc6, -⟩ := FalconCarrierBase.ids (program := program)
+  have hk6 : (program.value 6).kind = .pub (.opaque "statement.c" []) := by
+    have := FalconRingMember.chalKind (program := program)
+    rwa [hc6] at this
+  rw [RealizedProgram.evalE_leaf, RealizedProgram.reader_of_opaque_nil e hk6]
+  unfold chalEntry
+  rw [hc6]
+
+/-- **A carrier's first vector** is `E = c − s1 − q · equation.q + q · 6291457` below `512`. -/
+theorem eOf_eqLeft (e : program.Env I) {t : ℕ} (ht : t < 512) : eOf e t = eqLeft e t := by
+  have h2 := rdC_qlo (program := program) e
+  unfold rdC at h2
+  unfold eOf
+  rw [FalconCarrierBase.sigE_eq, RealizedProgram.evalE_add, RealizedProgram.evalE_add,
+    RealizedProgram.evalE_add, RealizedProgram.evalE_scale_const, RealizedProgram.evalE_scale_const,
+    RealizedProgram.evalE_reindex, RealizedProgram.IndexMap.entry_step_zero ht, evalE_chalC,
+    decode_mOneG, decode_mQG, h2]
+  unfold eqLeft rdC
+  ring
+
+end Signature
+
+/-! ## The integer reading of the signature equation -/
+
+section Coord
+
+variable {FA : RealizedProgram.FieldInterp} [EField FA]
+
+/-- **The constant coordinate** is the integer reading. -/
+theorem coord0_eq_toNat (x : FA.K) : EField.coord0 (FA := FA) x = ((FA.toNat x : ℕ) : ZMod pGold) := by
+  rw [EField.toNat_eq, ZMod.natCast_zmod_val]
+
+/-- **The constant coordinate of a negacyclic coefficient** against naturals' casts is the
+coefficient of the coordinates (`EField.coord0` is additive and commutes with natural multiples). -/
+theorem coord0_negacyclicConvCoeff {n : ℕ} (h : Fin n → FA.K) (s : Fin n → ℕ) (k : Fin n) :
+    EField.coord0 (FA := FA) (LatticeCrypto.negacyclicConvCoeff h (fun j => (s j : FA.K)) k) =
+      LatticeCrypto.negacyclicConvCoeff (fun j => EField.coord0 (FA := FA) (h j))
+        (fun j => (s j : ZMod pGold)) k := by
+  have hm : ∀ (a : FA.K) (m : ℕ), EField.coord0 (FA := FA) (a * (m : FA.K)) =
+      EField.coord0 (FA := FA) a * (m : ZMod pGold) := fun a m => by
+    rw [_root_.mul_comm, ← nsmul_eq_mul, map_nsmul, nsmul_eq_mul, _root_.mul_comm]
+  unfold LatticeCrypto.negacyclicConvCoeff
+  rw [map_sum]
+  refine Finset.sum_congr rfl fun ij _ => ?_
+  split_ifs
+  · exact hm _ _
+  · rw [map_neg, hm]
+  · exact map_zero _
+
+end Coord
+
+/-! ## The relation -/
+
+section Relation
+
+open Native (CoreWit)
+open RealizedProgram.Ops
+
+variable {program : RealizedProgram} [FalconRingPowers program] [FalconRingSelect program]
+  [FalconRingMember program] [FalconCarrierBase program] {I : RealizedProgram.Interp} [EField (I 0)]
+
+attribute [local instance] ringField_carrier
+
+/-- **The signature congruence** where the source program holds without the events: the spectrum
+is the transform of the signer's key (`spec_eq_of_not_event`), so the signature equation's
+coefficients are `E = h · s2` in the field (`eOf_eq_negacyclic`). Their constant coordinates
+(`EField.coord0`) give `c − s1 − q · equation.q + q · 6291457 ≡ h · s2 (mod p)` on the integers
+read, whose sides differ by less than `p` (the keys below `q`, `s1`, `s2` at most `q`, the
+quotient below `2^33`): so they are equal, and `c ≡ s1 + h · s2 (mod q)`. -/
 theorem congruent_carrier {e : program.Env I} (hok : program.StatementOk I e.stmt)
-    (hs : program.SourceSatAt e) (hev : ¬ ringEvent 0 e) {s1N s2N : Fin 512 → ℕ}
-    (hs1 : ∀ i : Fin 512, rdC e 10 i = (s1N i : (I 0).K) ∧ s1N i ≤ 12289)
+    (hs : program.SourceSatAt e) (hev : ¬ ringEvent 0 e)
+    (hev1 : ¬ (sigEvent e).BadAt (rOf e)) {s1N s2N : Fin 512 → ℕ}
+    (hs1 : ∀ i : Fin 512, rdC e 11 i = (s1N i : (I 0).K) ∧ s1N i ≤ 12289)
     (hs2 : ∀ i : Fin 512, s2Of e i = (s2N i : (I 0).K) ∧ s2N i ≤ 12289) :
     Emulated.Rows.Congruent q
       (EmulatedAlgebraCircuit.keyCoeffs (ringKey e.stmt (idxOf e)).h) (chalNat e.stmt) s1N s2N := by
   obtain ⟨-, -, -, -, -, hpsi, -⟩ := FalconCarrierBase.ids (program := program)
   obtain ⟨hring, hchal⟩ := stmt_lt (program := program) hok
-  have hidx := idxOf_lt e (memberPreds_of_source hs)
+  obtain ⟨-, hz12, -⟩ := FalconCarrierBase.sizes (program := program)
   have hh : ∀ j : Fin 512, (I 0).toNat (ringEntry e.stmt (idxOf e * 512 + j)) < 12289 :=
-    fun j => hring _ (by have := j.isLt; omega)
-  set z : ℕ → ℕ := fun s => (I 0).toNat (ringEntry e.stmt (idxOf e * 512 + s)) with hzdef
+    fun j => hring _ (by have := idxOf_lt e (memberPreds_of_source hs); have := j.isLt; omega)
+  set z : Fin 512 → ℕ := fun s => (I 0).toNat (ringEntry e.stmt (idxOf e * 512 + s)) with hzdef
   -- the kernel's polynomial is the signer's key
   have hspec := spec_eq_of_not_event (memberPreds_of_source hs) hev
-  have hz : ∀ s < 512, (I 0).toNat
-      (RealizedProgram.Ops.inverseNttNatural 512 (psiG : (I 0).K) (specOf e) s) = z s ∧
-        2 * z s < pGold := by
-    intro s hs'
-    have hinv : RealizedProgram.Ops.inverseNttNatural 512 (psiG : (I 0).K) (specOf e) s =
-        ringEntry e.stmt (idxOf e * 512 + s) := by
-      rw [RealizedProgram.Ops.inverseNttNatural_congr (y := RealizedProgram.Ops.nttNatural 512
-          (psiG : (I 0).K) (fun c => ringEntry e.stmt (idxOf e * 512 + c))) fun m hm => by
-          rw [hspec ⟨m, hm⟩, keySpec, hpsi, EField.decode_lt _ (by norm_num [pGold])],
-        RealizedProgram.Ops.inverseNttNatural_nttNatural (psiG_isPrimitiveRoot (K := (I 0).K))
-          (natCast_512_ne_zero (K := (I 0).K)) _ hs']
-    refine ⟨by rw [hinv], ?_⟩
-    have := hh ⟨s, hs'⟩
-    change (I 0).toNat (ringEntry e.stmt (idxOf e * 512 + s)) < 12289 at this
-    simp only [hzdef]
-    norm_num [pGold]
-    omega
+  have hinv : ∀ s < 512, inverseNttNatural 512 (psiG : (I 0).K) (specOf e) s =
+      ringEntry e.stmt (idxOf e * 512 + s) := fun s hs' => by
+    rw [inverseNttNatural_congr (y := nttNatural 512
+        (psiG : (I 0).K) (fun c => ringEntry e.stmt (idxOf e * 512 + c))) fun m hm => by
+        rw [hspec ⟨m, hm⟩, keySpec, hpsi, EField.decode_lt _ (by norm_num [pGold])],
+      inverseNttNatural_nttNatural (psiG_isPrimitiveRoot (K := (I 0).K))
+        (natCast_512_ne_zero (K := (I 0).K)) _ hs']
   rw [show EmulatedAlgebraCircuit.keyCoeffs (ringKey e.stmt (idxOf e)).h =
       fun j : Fin falcon512.n => (I 0).toNat (ringEntry e.stmt (idxOf e * 512 + j)) from
     funext (keyCoeffs_ringKey_of_lt hh)]
@@ -589,91 +601,132 @@ theorem congruent_carrier {e : program.Env I} (hok : program.StatementOk I e.stm
       (s1N i : ZMod 12289) + LatticeCrypto.negacyclicConvCoeff
         (fun j : Fin 512 => (z j : ZMod 12289)) (fun j => (s2N j : ZMod 12289)) i from fun i => H i
   intro i
-  have hd := sig_dvd_carrier hs i.isLt
-  rw [evalIntWith_carrierSigP, evalIntWith_carrierSigN e hz i.isLt] at hd
-  have hs1i : (I 0).toNat (rdC e 10 i) = s1N i := by
-    rw [(hs1 i).1, EField.toNat_natCast (by have := (hs1 i).2; norm_num [pGold]; omega)]
-  have hs2k : ∀ k : Fin 512, (I 0).toNat (s2Of e k) = s2N k := fun k => by
-    rw [(hs2 k).1, EField.toNat_natCast (by have := (hs2 k).2; norm_num [pGold]; omega)]
-  simp only [hs1i, hs2k] at hd
-  have hsum : ∑ k : Fin 512, RealizedProgram.Ops.negCoef 512 (fun s => (z s : ℤ)) i k * (s2N k : ℤ) =
-      LatticeCrypto.negacyclicConvCoeff (fun k : Fin 512 => ((z k : ℕ) : ℤ)) (fun k => (s2N k : ℤ)) i := by
-    exact (Finset.sum_congr rfl fun k _ => by rw [negCoef_eq_convWeight z i k]).trans
-      (Emulated.Rows.sum_convWeight_eq_negacyclicConvCoeff (fun t : Fin 512 => z t) _ i)
-  rw [hsum] at hd
-  have hc := (ZMod.intCast_zmod_eq_zero_iff_dvd _ 12289).2 hd
-  rw [Int.cast_sub, Int.cast_sub, Int.cast_natCast, Int.cast_natCast,
-    Emulated.Rows.intCast_negacyclicConvCoeff (fun t : Fin 512 => z t) s2N i] at hc
-  linear_combination hc
+  -- the quotient read as a natural below `2^33`
+  obtain ⟨k, hk, hkv⟩ := leaf_natBelow (e := e) hs (p := 10) (by simp)
+    FalconCarrierBase.rQuot hz12 i
+  -- the signature equation's coefficient `i` in the field
+  have hE := (eOf_eqLeft e i.isLt).symm.trans (eOf_eq_negacyclic hs hev1 i.isLt)
+  rw [decode_psiC, negacyclic, ofFin_of_lt _ i.isLt] at hE
+  simp only [Fin.eta] at hE
+  have hN : (toFin 512 (inverseNttNatural 512 (psiG : (I 0).K) (specOf e))) =
+      fun j : Fin 512 => ringEntry e.stmt (idxOf e * 512 + j) :=
+    funext fun j => by rw [toFin_apply, hinv j j.isLt]
+  have hS : toFin 512 (s2Of e) = fun j : Fin 512 => (s2N j : (I 0).K) :=
+    funext fun j => by rw [toFin_apply, (hs2 j).1]
+  rw [hN, hS] at hE
+  -- its constant coordinate
+  set Nint : ℤ := LatticeCrypto.negacyclicConvCoeff (fun j : Fin 512 => ((z j : ℕ) : ℤ))
+    (fun j => (s2N j : ℤ)) i with hNint
+  have hc := congrArg (EField.coord0 (FA := I 0)) hE
+  rw [coord0_negacyclicConvCoeff] at hc
+  have hzc : ∀ j : Fin 512, EField.coord0 (FA := I 0) (ringEntry e.stmt (idxOf e * 512 + j)) =
+      ((z j : ℕ) : ZMod pGold) := fun j => coord0_eq_toNat _
+  simp only [hzc] at hc
+  rw [← Emulated.Rows.intCast_negacyclicConvCoeff, ← hNint] at hc
+  unfold eqLeft at hc
+  rw [(hs1 i).1, hkv, map_add, map_sub, map_sub, coord0_eq_toNat (chalEntry e.stmt i),
+    show ((12289 : ℕ) : (I 0).K) * (k : (I 0).K) = ((12289 * k : ℕ) : (I 0).K) by push_cast; ring,
+    EField.coord0_natCast, EField.coord0_natCast, EField.coord0_natCast] at hc
+  set cN : ℕ := (I 0).toNat (chalEntry e.stmt i) with hcN
+  have hcl : cN < 12289 := hchal i i.isLt
+  set W : ℤ := (cN : ℤ) - (s1N i : ℤ) - 12289 * (k : ℤ) + 77315715073 - Nint with hW
+  have hW0 : ((W : ℤ) : ZMod pGold) = 0 := by
+    have hWc : ((W : ℤ) : ZMod pGold) = (cN : ZMod pGold) - (s1N i : ZMod pGold) -
+        ((12289 * k : ℕ) : ZMod pGold) + ((77315715073 : ℕ) : ZMod pGold) -
+          ((Nint : ℤ) : ZMod pGold) := by
+      rw [hW]
+      push_cast
+      ring
+    rw [hWc, hc, sub_self]
+  have hdvd : (pGold : ℤ) ∣ W := (ZMod.intCast_zmod_eq_zero_iff_dvd W pGold).1 hW0
+  -- the sides differ by less than `p`
+  have hconv := Emulated.Rows.negacyclicConv_natAbs_le_mul (A := 12288) (B := 12289)
+    (h := z) (s := s2N) (fun j => Nat.le_of_lt_succ (hh j)) (fun j => (hs2 j).2) i
+  have hb := LatticeCrypto.neg_le_and_le_of_natAbs_le hconv
+  rw [← hNint] at hb
+  have hs1i := (hs1 i).2
+  have hWlt : |W| < (pGold : ℤ) := by
+    rw [abs_lt]
+    norm_num [pGold] at hb ⊢
+    constructor <;> omega
+  have hW0' : W = 0 := Int.eq_zero_of_abs_lt_dvd hdvd hWlt
+  rw [hW] at hW0'
+  have hd : (12289 : ℤ) ∣ (cN : ℤ) - (s1N i : ℤ) - Nint :=
+    ⟨(k : ℤ) - 6291457, by linear_combination hW0'⟩
+  have hcq := (ZMod.intCast_zmod_eq_zero_iff_dvd _ 12289).2 hd
+  rw [Int.cast_sub, Int.cast_sub, Int.cast_natCast, Int.cast_natCast, hNint,
+    Emulated.Rows.intCast_negacyclicConvCoeff z s2N i] at hcq
+  linear_combination hcq
 
-/-- **Soundness of a carrier's source program without the membership's event**: the signature
-congruence (`congruent_carrier`) with the magnitudes, the norm and the encoding budget, by Falcon
-emulated's `algebraSpec_of_congruent`, gives the relation. -/
+/-- **Soundness of a carrier's source program without the events**: the signature congruence
+(`congruent_carrier`) with the magnitudes, the norm and the encoding budget, by Falcon emulated's
+`algebraSpec_of_congruent`, gives the relation. -/
 theorem mem_rel_of_source_carrier {e : program.Env I} (hok : program.StatementOk I e.stmt)
-    (hs : program.SourceSatAt e) (hev : ¬ ringEvent 0 e) :
+    (hs : program.SourceSatAt e) (hev : ¬ ringEvent 0 e)
+    (hev1 : ¬ (sigEvent e).BadAt (rOf e)) :
     (e.stmt, proj e.stmt e.asg) ∈ rel := by
   classical
-  obtain ⟨-, -, -, h9, -, -, -⟩ := FalconCarrierBase.ids (program := program)
-  obtain ⟨hz10, -, hz12, hz13, hz14, hz16⟩ := FalconCarrierBase.sizes (program := program)
-  obtain ⟨-, hk13, hk14⟩ := FalconCarrierBase.privKinds (program := program)
-  have hf : ∀ v ∈ [2, 3, 10, 11, 12, 13, 14, 15, 16], program.valueField v = 0 :=
+  obtain ⟨-, -, -, h10, -, -, -⟩ := FalconCarrierBase.ids (program := program)
+  obtain ⟨hz11, -, hz15, hz16, hz17, hz19⟩ := FalconCarrierBase.sizes (program := program)
+  obtain ⟨-, hk16, hk17⟩ := FalconCarrierBase.privKinds (program := program)
+  have hf : ∀ v ∈ [2, 3, 4, 11, 12, 15, 16, 17, 18, 19], program.valueField v = 0 :=
     FalconCarrierBase.fields (program := program)
   -- the ranges
-  choose mag1N hmag1N hmag1C using leaf_natBelow (e := e) hs (p := 10) (by simp)
-    FalconCarrierBase.rMag1 hz12
-  choose mag2N hmag2N hmag2C using leaf_natBelow (e := e) hs (p := 11) (by simp)
-    FalconCarrierBase.rMag2 hz13
-  choose low2N hlow2N hlow2C using leaf_natBelow (e := e) hs (p := 12) (by simp)
-    FalconCarrierBase.rLow2 hz14
-  obtain ⟨sq, hsqN, hsqC⟩ := leaf_natBelow (e := e) hs (p := 14) (by simp)
-    FalconCarrierBase.rNorm hz16 ⟨0, by norm_num⟩
+  choose mag1N hmag1N hmag1C using leaf_natBelow (e := e) hs (p := 11) (by simp)
+    FalconCarrierBase.rMag1 hz15
+  choose mag2N hmag2N hmag2C using leaf_natBelow (e := e) hs (p := 12) (by simp)
+    FalconCarrierBase.rMag2 hz16
+  choose low2N hlow2N hlow2C using leaf_natBelow (e := e) hs (p := 13) (by simp)
+    FalconCarrierBase.rLow2 hz17
+  obtain ⟨sq, hsqN, hsqC⟩ := leaf_natBelow (e := e) hs (p := 15) (by simp)
+    FalconCarrierBase.rNorm hz19 ⟨0, by norm_num⟩
   -- the magnitudes
-  have hm1 : ∀ i : Fin 512, (rdC e 12 i - rdC e 10 i) * (rdC e 12 i - ((12289 : ℕ) - rdC e 10 i)) = 0 :=
-    fun i => mag_eq hs (p := 1) (by simp) FalconCarrierBase.magS1 hz12 i.isLt
-  have hm2 : ∀ i : Fin 512, (rdC e 13 i - rdC e 9 i) * (rdC e 13 i - ((12289 : ℕ) - rdC e 9 i)) = 0 :=
-    fun i => mag_eq hs (p := 2) (by simp) FalconCarrierBase.magS2 hz13 i.isLt
-  have hs1R : ∀ i : Fin 512, Range.IsNatBelow (12289 + 1) (rdC e 10 i) := fun i =>
+  have hm1 : ∀ i : Fin 512, (rdC e 15 i - rdC e 11 i) * (rdC e 15 i - ((12289 : ℕ) - rdC e 11 i)) = 0 :=
+    fun i => mag_eq hs (p := 2) (by simp) FalconCarrierBase.magS1 hz15 i.isLt
+  have hm2 : ∀ i : Fin 512, (rdC e 16 i - rdC e 10 i) * (rdC e 16 i - ((12289 : ℕ) - rdC e 10 i)) = 0 :=
+    fun i => mag_eq hs (p := 3) (by simp) FalconCarrierBase.magS2 hz16 i.isLt
+  have hs1R : ∀ i : Fin 512, Range.IsNatBelow (12289 + 1) (rdC e 11 i) := fun i =>
     EmulatedNorm.isNatBelow_of_centering ⟨mag1N i, by have := hmag1N i; omega, (hmag1C i).symm⟩ (hm1 i)
-  have hs2R : ∀ i : Fin 512, Range.IsNatBelow (12289 + 1) (rdC e 9 i) := fun i =>
+  have hs2R : ∀ i : Fin 512, Range.IsNatBelow (12289 + 1) (rdC e 10 i) := fun i =>
     EmulatedNorm.isNatBelow_of_centering ⟨mag2N i, by have := hmag2N i; omega, (hmag2C i).symm⟩ (hm2 i)
   choose s1N hs1N hs1C using hs1R
   choose s2N hs2N hs2C using hs2R
   have hs2Of : ∀ i : Fin 512, s2Of e i = (s2N i : (I 0).K) := fun i => by
     unfold s2Of
-    rw [h9]
+    rw [h10]
     exact (hs2C i).symm
   -- the signature congruence
-  have hcong := congruent_carrier hok hs hev (s1N := s1N) (s2N := s2N)
+  have hcong := congruent_carrier hok hs hev hev1 (s1N := s1N) (s2N := s2N)
     (fun i => ⟨(hs1C i).symm, Nat.le_of_lt_succ (hs1N i)⟩)
     (fun i => ⟨hs2Of i, Nat.le_of_lt_succ (hs2N i)⟩)
   have hidx := idxOf_lt e (memberPreds_of_source hs)
   -- the encoding budget
   have hlow : ∀ i : Fin 512, low2N i = mag2N i % 128 := by
     intro i
-    obtain ⟨r, hbd, -⟩ := FalconCarrierBase.high2 (program := program)
+    obtain ⟨r, hbd⟩ := FalconCarrierBase.high2 (program := program)
     have h := holdsAt_carrier hs (p := 17) (by simp)
     rw [hbd] at h
-    have hd := h.1 i (by rw [RealizedProgram.exprLen_leaf, hz13]; exact i.isLt)
+    have hd := h i (by rw [RealizedProgram.exprLen_leaf, hz16]; exact i.isLt)
     rw [RealizedProgram.evalIntWith_leaf, RealizedProgram.evalIntWith_leaf,
-      intOf_priv hk13 (hf 13 (by simp)) (hmag2C i) (by have := hmag2N i; norm_num [pGold]; omega),
-      intOf_priv hk14 (hf 14 (by simp)) (hlow2C i) (by have := hlow2N i; norm_num [pGold]; omega)] at hd
+      intOf_priv hk16 (hf 16 (by simp)) (hmag2C i) (by have := hmag2N i; norm_num [pGold]; omega),
+      intOf_priv hk17 (hf 17 (by simp)) (hlow2C i) (by have := hlow2N i; norm_num [pGold]; omega)] at hd
     obtain ⟨m, hm⟩ := hd
     have := hlow2N i
     omega
   have hbudget : ∑ i : Fin 512, mag2N i / 128 ≤ 392 := by
     obtain ⟨r, hbd⟩ := FalconCarrierBase.rBudget (program := program)
-    have h := holdsAt_carrier hs (p := 13) (by simp)
+    have h := holdsAt_carrier hs (p := 14) (by simp)
     rw [hbd] at h
     obtain ⟨b, hb, hbv⟩ := natBelow_mem0 h (i := 0) (by
       rw [budgetExpr, RealizedProgram.exprLen_add, RealizedProgram.exprLen_add, RealizedProgram.exprLen_scale,
         RealizedProgram.exprLen_apply]
-      simp [RealizedProgram.NamedOp.rows, RealizedProgram.NamedOp.cols, RealizedProgram.exprLen_leaf, hz13])
+      simp [RealizedProgram.NamedOp.rows, RealizedProgram.NamedOp.cols, RealizedProgram.exprLen_leaf, hz16])
     rw [budgetExpr, RealizedProgram.evalE_add, RealizedProgram.evalE_add, RealizedProgram.evalE_scale_const,
       RealizedProgram.evalE_apply_sum, RealizedProgram.evalE_apply_sum, decode_mOneG] at hbv
-    change _ + rdC e 15 0 = _ at hbv
+    change _ + rdC e 18 0 = _ at hbv
     rw [rdC_off] at hbv
     simp only [Nat.zero_mul, Nat.zero_add] at hbv
-    change -1 * ∑ t : Fin 512, rdC e 13 t + ∑ t : Fin 512, rdC e 14 t + _ = _ at hbv
+    change -1 * ∑ t : Fin 512, rdC e 16 t + ∑ t : Fin 512, rdC e 17 t + _ = _ at hbv
     simp only [hmag2C, hlow2C] at hbv
     have hcast : (((∑ t : Fin 512, low2N t) + 50176 : ℕ) : (I 0).K) =
         ((b + ∑ t : Fin 512, mag2N t : ℕ) : (I 0).K) := by
@@ -697,8 +750,8 @@ theorem mem_rel_of_source_carrier {e : program.Env I} (hok : program.StatementOk
   -- the algebra
   have hA := Emulated.algebraSpec_of_congruent (F := (I 0).K)
     (h := (ringKey e.stmt (idxOf e)).h) (c := chalNat e.stmt)
-    (s1 := fun i => rdC e 10 i) (s2 := fun i => s2Of e i) (mag1 := fun i => rdC e 12 i)
-    (mag2 := fun i => rdC e 13 i) (norm := rdC e 16 0) (s1N := s1N) (s2N := s2N) (mag2N := mag2N)
+    (s1 := fun i => rdC e 11 i) (s2 := fun i => s2Of e i) (mag1 := fun i => rdC e 15 i)
+    (mag2 := fun i => rdC e 16 i) (norm := rdC e 19 0) (s1N := s1N) (s2N := s2N) (mag2N := mag2N)
     (fun i => ⟨Nat.le_of_lt_succ (hs1N i), hs1C i⟩)
     (fun i => ⟨Nat.le_of_lt_succ (hs2N i), (hs2Of i).symm⟩)
     (fun i => ⟨mag1N i, hmag1N i, (hmag1C i).symm⟩)
@@ -706,7 +759,7 @@ theorem mem_rel_of_source_carrier {e : program.Env I} (hok : program.StatementOk
     (fun i => hm1 i)
     (fun i => by
       have := hm2 i
-      have h2 : s2Of e i = rdC e 9 i := by rw [hs2Of i]; exact hs2C i
+      have h2 : s2Of e i = rdC e 10 i := by rw [hs2Of i]; exact hs2C i
       rw [h2]
       exact this)
     (norm_eq hs) ⟨sq, hsqN, hsqC.symm⟩ hbudget hcong
@@ -721,23 +774,119 @@ theorem mem_rel_of_source_carrier {e : program.Env I} (hok : program.StatementOk
     rw [proj_s2]
     exact hA.encoding
 
-/-- **The relation from the source program without the event** (`RealizedProgram.rbr_of_events`'
+end Relation
+
+/-! ## The carriers' events -/
+
+section CarrierEvent
+
+variable {program : RealizedProgram} [FalconRingPowers program] [FalconRingSelect program]
+  [FalconRingMember program] [FalconCarrierBase program] {I : RealizedProgram.Interp} [EField (I 0)]
+
+omit [EField (I 0)] in
+/-- **A carrier's first vector reads the statement and the assignment.** -/
+theorem eOf_congrC {e e' : program.Env I} (hs : e.stmt = e'.stmt) (ha : e.asg = e'.asg) :
+    ∀ t < 512, eOf e t = eOf e' t := fun t _ => by
+  obtain ⟨x, hx⟩ := FalconCarrierBase.quotBound (program := program)
+  obtain ⟨-, hc6, -⟩ := FalconCarrierBase.ids (program := program)
+  have hk6 : (program.value 6).kind = .pub (.opaque "statement.c" []) := by
+    have := FalconRingMember.chalKind (program := program)
+    rwa [hc6] at this
+  have hk11 := (FalconCarrierBase.privKinds (program := program)).1
+  have h2 : ∀ i, program.reader e 2 i = program.reader e' 2 i := by
+    obtain ⟨c2, -⟩ := FalconCarrierBase.qloConst (program := program)
+    unfold RealizedProgram.isConstant at c2
+    split at c2
+    · rename_i es hk
+      intro i
+      rw [RealizedProgram.reader_of_constant e hk, RealizedProgram.reader_of_constant e' hk]
+    · cases c2
+  unfold eOf
+  rw [FalconCarrierBase.sigE_eq]
+  simp only [RealizedProgram.evalE_add, RealizedProgram.evalE_scale_const,
+    RealizedProgram.evalE_reindex, RealizedProgram.evalE_leaf,
+    RealizedProgram.reader_of_opaque_nil e hk6, RealizedProgram.reader_of_opaque_nil e' hk6,
+    RealizedProgram.reader_of_priv e hk11, RealizedProgram.reader_of_priv e' hk11,
+    RealizedProgram.reader_of_bound e hx, RealizedProgram.reader_of_bound e' hx, hs, ha, h2]
+
+/-- **The carriers' events**: the membership's at `member.ring.gamma` (challenge `0`) and the
+signature equation's at `signature.r` (challenge `1`). -/
+def carrierEvent (j : ℕ) (e : program.Env I) : Prop :=
+  ringEvent j e ∨ (j = 1 ∧ (sigEvent e).BadAt (rOf e))
+
+omit [EField (I 0)] in
+/-- **The challenge-use rule** (`RealizedProgram.ChallengeUseAt`): each event reads the statement,
+the committed assignment and its challenge. -/
+theorem carrierEvent_use : RealizedProgram.ChallengeUseAt program I carrierEvent := by
+  intro j e e' h
+  unfold carrierEvent
+  rw [ringEvent_use j h]
+  by_cases hj : j = 1
+  · subst hj
+    have hr : rOf e = rOf e' := by
+      rw [rOf_eqC, rOf_eqC, h.chal _ (Or.inr ⟨rfl, le_refl _⟩)]
+    rw [sigEvent_congr (eOf_congrC h.stmt h.asg) h.asg, hr]
+  · simp [hj]
+
+/-- **The events' errors**: `511/|F|` at `member.ring.gamma`, `1022/|F|` at `signature.r`, `0`
+elsewhere. -/
+noncomputable def carrierEps (I : RealizedProgram.Interp) (j : ℕ) : NNReal :=
+  if j = 0 then 511 / Fintype.card (I 0).K
+  else if j = 1 then 1022 / Fintype.card (I 0).K else 0
+
+/-- **The events' probabilities** (`RealizedProgram.rbr_of_events`' `hbound`): the membership's
+(`ringEvent_bound`) and the signature equation's, at most `1022/|F|` at `signature.r`
+(`RealizedProgram.probUniform_badAt_setChal_le`, Schwartz–Zippel). -/
+theorem carrierEvent_bound : ∀ j, program.IsSourceChal j → ∀ e : program.Env I,
+    Pr[c ← program.ChalVal I j : carrierEvent j (e.setChal j c)] ≤ (carrierEps I j : ENNReal) := by
+  intro j hj e
+  rcases (isSourceChal_iff_carrier (program := program) j).1 hj with rfl | rfl
+  · have hset : ∀ c, carrierEvent 0 (e.setChal 0 c) ↔ ringEvent 0 (e.setChal 0 c) := fun c => by
+      simp [carrierEvent]
+    simp only [hset]
+    refine (ringEvent_bound 0 hj e).trans ?_
+    simp [ringEps, carrierEps]
+  · have hset : ∀ c, carrierEvent 1 (e.setChal 1 c) ↔
+        (sigEvent e).BadAt (RealizedProgram.castElt ((e.setChal 1 c).chal 1 0)) :=
+      fun c => by
+      simp only [carrierEvent, ringEvent, one_ne_zero, false_and, true_and, false_or]
+      rw [sigEvent_congr (e := e.setChal 1 c) (e' := e) (eOf_congrC rfl rfl) rfl, rOf_eqC]
+    simp only [hset]
+    obtain ⟨hsz, hsm⟩ := FalconRandomPoint.chalR (program := program)
+    have hcf := (FalconRandomPoint.rPow (program := program)).chalField
+    rw [(FalconCarrierBase.sigIds (program := program)).2.1] at hsz hsm hcf
+    refine (RealizedProgram.probUniform_badAt_setChal_le hsz hsm hcf (sigEvent e) e).trans ?_
+    simp [carrierEps, sigEvent]
+
+end CarrierEvent
+
+/-! ## Round-by-round knowledge soundness of `Π_P₀` -/
+
+section Rbr
+
+variable {program : RealizedProgram} [FalconRingPowers program] [FalconRingSelect program]
+  [FalconRingMember program] [FalconCarrierBase program] {I : RealizedProgram.Interp} [EField (I 0)]
+
+/-- **The relation from the source program without the events** (`RealizedProgram.rbr_of_events`'
 `hsound`). -/
 theorem sound_carrier :
     ∀ e : program.Env I, program.StatementOk I e.stmt → program.SourceSatAt e →
-      (∀ j, program.IsSourceChal j → ¬ ringEvent j e) → (e.stmt, proj e.stmt e.asg) ∈ rel :=
+      (∀ j, program.IsSourceChal j → ¬ carrierEvent j e) → (e.stmt, proj e.stmt e.asg) ∈ rel :=
   fun _ hok hs hno => mem_rel_of_source_carrier hok hs
-    (hno 0 ((FalconRingMember.isSourceChal_iff (program := program) 0).2 rfl))
+    (fun hb => hno 0 (FalconRingMember.isSourceChal_zero (program := program)) (Or.inl hb))
+    (fun hb => hno 1 ((isSourceChal_iff_carrier (program := program) 1).2 (Or.inr rfl))
+      (Or.inr ⟨rfl, hb⟩))
 
 /-- **Round-by-round knowledge soundness of `Π_P₀` for a Falcon ring carrier**
-(`RealizedProgram.rbr_of_events`): the relation `rel`, the extractor `extractor`, the error `511/|F|` at
-`member.ring.gamma` and `0` elsewhere (`ringEps`). -/
+(`RealizedProgram.rbr_of_events`): the relation `rel`, the extractor `extractor`, the errors
+`511/|F|` at `member.ring.gamma`, `1022/|F|` at `signature.r` and `0` elsewhere (`carrierEps`). -/
 theorem rbr_carrier :
-    rbrKnowledgeSoundness rel (program.sourceVerifier I) extractor
-      (program.eventState I rel proj ringEvent ringEvent_use sound_carrier)
-      (program.roundError I (ringEps I)) :=
-  program.rbr_of_events I rel proj ringEvent (ringEps I) ringEvent_use ringEvent_bound sound_carrier
+    RBRKnowledgeSound rel (program.sourceVerifier I) extractor
+      (program.eventState I rel proj carrierEvent carrierEvent_use sound_carrier)
+      (program.roundError I (carrierEps I)) :=
+  program.rbr_of_events I rel proj carrierEvent (carrierEps I) carrierEvent_use carrierEvent_bound
+    sound_carrier
 
-end Sound
+end Rbr
 
 end GordieHowe.Falcon512.Ring

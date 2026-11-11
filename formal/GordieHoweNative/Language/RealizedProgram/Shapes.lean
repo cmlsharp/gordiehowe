@@ -8,7 +8,8 @@ public import GordieHoweNative.Language.RealizedProgram.Source
 public import GordieHoweNative.Language.Honest.Source
 public import GordieHoweNative.Language.RealizedProgram.Embed
 public import GordieHoweNative.Language.Realizations.Realized
-public import GordieHoweNative.Language.Realizations.Derivation.TableKernel
+public import GordieHoweNative.Language.Realizations.Derivation.Events
+public import GordieHoweNative.Language.Realizations.Derivation.Rules
 
 /-!
 # GordieHowe: the compiled definitions of `GordieHowe.Language.RealizedProgram.Shapes`

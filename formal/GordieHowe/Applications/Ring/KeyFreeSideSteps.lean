@@ -204,9 +204,10 @@ open RingSignature.Insider
 
 variable {m : ℕ} {Y Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] [Fintype Y]
   [DecidableEq Y] [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁]
-  (sp : OracleSplit Y Y₁ Y₂) {N n : ℕ} {TB : BaseTypes} (B : BaseSigner (Bits m) Y N TB)
-  {Pf PC : Type} {iFP : Fintype Pf} {iDP : DecidableEq Pf} {iFC : Fintype PC}
-  {iDC : DecidableEq PC} {iNC : Nonempty PC}
+  (sp : OracleSplit Y Y₁ Y₂) {N n : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
+  (B : BaseSigner (Bits m) Y N TB)
+  {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
+  [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) ⟨Pf, PC⟩}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {SC X₀ R Pb : Type}
   (pks : Fin n → B.PK)
@@ -217,19 +218,21 @@ variable {m : ℕ} {Y Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y
   (toR : X₀ → Req B PS adm n × ℕ → B.BSig → R) (dummyR : Req B PS adm n × ℕ → R) {Q : ℕ}
   (sc : Fin Q → SC) [Inhabited B.Pub]
 
-omit [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁] in
+omit [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁]
+  [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The relay at a base component is the relay at zero with that side function.** -/
-theorem relayOf_kfRelaySide (ω : Bits m → Y₁) (idle : MURequest (SignOracle.none B) n ⊕ R)
+theorem relayOf_kfRelaySide (ω : Bits m → Y₁) (idle : MURequest (SignOracle.none B.core) n ⊕ R)
     (Q' : ℕ) :
     AssignRelay.relayOf (kfRelaySide sp B pks F S toR dummyR sc ω idle) Q' =
       (AssignRelay.relayOf (kfRelaySide sp B pks F S toR dummyR sc 0 idle) Q').withSide ω :=
   rfl
 
-omit [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁] in
+omit [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁]
+  [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The numbers of the key-free relay**: one oracle read, `qOut + qSt` side reads, one pad
 sub-slot. -/
 theorem kfRelaySide_numbers (ω : Bits m → Y₁)
-    (idle : MURequest (SignOracle.none B) n ⊕ R) :
+    (idle : MURequest (SignOracle.none B.core) n ⊕ R) :
     (kfRelaySide sp B pks F S toR dummyR sc ω idle).qG = 1 ∧
       (kfRelaySide sp B pks F S toR dummyR sc ω idle).qS = F.qOut + S.qSt ∧
       (kfRelaySide sp B pks F S toR dummyR sc ω idle).qP = 1 :=
@@ -237,11 +240,11 @@ theorem kfRelaySide_numbers (ω : Bits m → Y₁)
 
 variable [Fintype (Req B PS adm n)] [DecidableEq (Req B PS adm n)] [Inhabited (Req B PS adm n)]
   [Fintype (Resp B PS adm)] [DecidableEq (Resp B PS adm)] [Fintype R] [DecidableEq R]
-  [Fintype (MUResponse B ⊕ Pf)] [DecidableEq (MUResponse B ⊕ Pf)]
-  [Fintype (MURequest (SignOracle.none B) n)] [DecidableEq (MURequest (SignOracle.none B) n)]
-  [Inhabited (MURequest (SignOracle.none B) n ⊕ R)]
+  [Fintype (MUResponse B.core ⊕ Pf)] [DecidableEq (MUResponse B.core ⊕ Pf)]
+  [Fintype (MURequest (SignOracle.none B.core) n)] [DecidableEq (MURequest (SignOracle.none B.core) n)]
+  [Inhabited (MURequest (SignOracle.none B.core) n ⊕ R)]
   {O : Type} {shA₀ : AlgShape (Bits m) Y (Req B PS adm n) (Resp B PS adm)} (A₀ : AdaptiveIAlg shA₀ O)
-  (idle : MURequest (SignOracle.none B) n ⊕ R) (Q' : ℕ)
+  (idle : MURequest (SignOracle.none B.core) n ⊕ R) (Q' : ℕ)
 
 /-- **The relayed adversary of the key-free relay at zero**, at side zero: the base of its side
 reads (`sideSteps_absorbAssign_kfRelaySide`).
@@ -262,15 +265,16 @@ noncomputable abbrev kfRelaySideSteps (ω : Bits m → Y₁) :
       KrausMap (kfRelaySideBase sp B pks F S toR dummyR sc A₀ idle Q').R
         (DReg (kfRelaySideBase sp B pks F S toR dummyR sc A₀ idle Q').W
           (kfRelaySideBase sp B pks F S toR dummyR sc A₀ idle Q').width (Bits m) Y
-          (MURequest (SignOracle.none B) n ⊕ R) (MUResponse B ⊕ Pf))
+          (MURequest (SignOracle.none B.core) n ⊕ R) (MUResponse B.core ⊕ Pf))
         (DReg (kfRelaySideBase sp B pks F S toR dummyR sc A₀ idle Q').W
           (kfRelaySideBase sp B pks F S toR dummyR sc A₀ idle Q').width (Bits m) Y
-          (MURequest (SignOracle.none B) n ⊕ R) (MUResponse B ⊕ Pf)) :=
+          (MURequest (SignOracle.none B.core) n ⊕ R) (MUResponse B.core ⊕ Pf)) :=
   (A₀.absorbAssignP _ _ Q').relaySideSt
     (AssignRelay.relayOf (kfRelaySide sp B pks F S toR dummyR sc 0 idle) Q') Q'
     ((A₀.absorbAssignP _ _ Q').relayOut
       (AssignRelay.relayOf (kfRelaySide sp B pks F S toR dummyR sc 0 idle) Q')) ω
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The absorbed adversary is the relayed adversary at the relay at zero with side zero.** -/
 theorem absorbAssign_kfRelaySide_eq : A₀.absorbAssign (kfRelaySide sp B pks F S toR dummyR sc 0 idle) Q' =
     (A₀.absorbAssignP _ _ Q').relayAdv
@@ -278,6 +282,7 @@ theorem absorbAssign_kfRelaySide_eq : A₀.absorbAssign (kfRelaySide sp B pks F 
       ((A₀.absorbAssignP _ _ Q').relayOut
           (AssignRelay.relayOf (kfRelaySide sp B pks F S toR dummyR sc 0 idle) Q')) := rfl
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The absorbed adversary at a base component is the one at zero with the Kraus maps at that
 component** (`AdaptiveIAlg.relaySideSt`, `relayAdv_withSide_eq_withStep`). -/
 theorem absorbAssign_kfRelaySide_eq_withStep (ω : Bits m → Y₁) :
@@ -303,6 +308,7 @@ noncomputable def sideSteps_absorbAssign_kfRelaySide :
       (kfRelaySideSteps sp B pks F S toR dummyR sc A₀ idle Q') :=
   AdaptiveIAlg.sideSteps_relayAdv _ _ Q' _
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The numbers of the relayed adversary of the key-free relay**: width one, no post batches,
 and `relaySlotsS` slots at `A₀`'s width and its slots and post batches. -/
 theorem kfRelaySideBase_numbers :
@@ -312,6 +318,7 @@ theorem kfRelaySideBase_numbers :
         Distinguisher.relaySlotsS A₀.width (A₀.slots + A₀.post) 1 1 1 :=
   ⟨rfl, rfl, rfl⟩
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The side reads of the key-free relay**: at most `qOut + qSt` before each Kraus map. -/
 theorem sideSteps_absorbAssign_kfRelaySide_nb_le
     (j : StepIdx (kfRelaySideBase sp B pks F S toR dummyR sc A₀ idle Q').slots
@@ -321,6 +328,7 @@ theorem sideSteps_absorbAssign_kfRelaySide_nb_le
   change (if (j : ℕ) = 0 then 0 else (if 0 < _ then F.qOut + S.qSt else 0)) ≤ _
   split_ifs <;> omega
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The side reads of the key-free relay in all**: at most `qOut + qSt` per Kraus map. -/
 theorem sum_sideSteps_absorbAssign_kfRelaySide_nb_le :
     ∑ j, (sideSteps_absorbAssign_kfRelaySide sp B pks F S toR dummyR sc A₀ idle Q').S.nb j ≤

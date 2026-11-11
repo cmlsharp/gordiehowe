@@ -9,10 +9,10 @@ import all GordieHoweCerts.Generated.MLDSA44.Ring.Carrier.ROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of leaves 8 to 15 of entry 5 of the GKR circuit of domain A (generated; do not edit). -/
+/-! The relational check of leaves 11 to 18 of entry 5 of the GKR circuit of domain A (generated; do not edit). -/
 
 namespace GordieHowe.Generated.MLDSA44.Ring.Carrier.ROMParams.GKR.A
 
-check_entry_leaves cert ar 5 [0, 0, 9, 2, 256, 40] 8 16
+check_entry_leaves cert ar 5 [0, 0, 3, 1, 1024, 16, 2, 1, 1] 11 19
 
 end GordieHowe.Generated.MLDSA44.Ring.Carrier.ROMParams.GKR.A

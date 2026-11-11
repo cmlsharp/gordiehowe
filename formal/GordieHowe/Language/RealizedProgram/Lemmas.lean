@@ -332,20 +332,7 @@ theorem holdsWith_congr {rd rd' : ir.Valuation I} {b : PredBody}
   | mod d q e e' real =>
     have he := hint d e (by simp [PredBody.exprs])
     have he' := hint d e' (by simp [PredBody.exprs])
-    have hv := hev d e (by simp [PredBody.exprs])
-    have hv' := hev d e' (by simp [PredBody.exprs])
     simp only [HoldsWith, he, he']
-    refine and_congr_right fun _ => ?_
-    unfold ProductQuotWith
-    cases hq : real.quotient with
-    | none => exact Iff.rfl
-    | some Q =>
-      cases hf : real.form.isProduct with
-      | false => simp
-      | true =>
-        have hmem : (d, Q) ∈ (PredBody.mod d q e e' real).exprs := by
-          simp [PredBody.exprs, hq, hf]
-        simp only [he, he', hv, hv', hint d Q hmem, hev d Q hmem]
   | cross dx x dy y k real =>
     simp only [HoldsWith, hev dx x (by simp [PredBody.exprs]), hev dy y (by simp [PredBody.exprs])]
   | mem d records set real =>

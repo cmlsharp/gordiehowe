@@ -34,7 +34,7 @@ namespace GordieHowe.Generated.Falcon512.Emulated.QROMParams.Structure
 
 open GordieHowe.RealizedProgram GordieHowe.Generated.Falcon512.Emulated.QROMParams.Program
 
-load_program_ghc "Structure.ghc" "46880468976ed1b8"
+load_program_ghc "Structure.ghc" "9bc51f71e3cac7cd"
 
 /-- The member-value pointers in the emitted structure metadata. -/
 theorem memberValues_eq : records.memberValues = [(0, 593)] := rfl

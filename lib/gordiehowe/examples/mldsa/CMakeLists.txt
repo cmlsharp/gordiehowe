@@ -63,9 +63,12 @@ gordiehowe_add_bench(mldsa_native_bench
                      EXAMPLES mldsa_native mldsa65_native mldsa87_native
                      SETS rom_ml_dsa qrom_ml_dsa)
 target_link_libraries(mldsa_native_bench ml_dsa sha3 OpenSSL::Crypto)
+# Its export compiles the native ML-DSA-44 program, whose domain `H` the
+# emulated one holds (mldsa_emulated_testing.h's export_plan).
 gordiehowe_add_bench(mldsa_emulated_bench
                      EXAMPLES mldsa_emulated mldsa65_emulated mldsa87_emulated
-                     SETS rom_emu qrom_emu)
+                              mldsa_native
+                     SETS rom_emu qrom_emu rom_ml_dsa qrom_ml_dsa)
 target_link_libraries(mldsa_emulated_bench ml_dsa sha3 OpenSSL::Crypto)
 gordiehowe_add_bench(expand_a_bench SETS rom_ml_dsa qrom_ml_dsa)
 target_link_libraries(expand_a_bench ml_dsa sha3)

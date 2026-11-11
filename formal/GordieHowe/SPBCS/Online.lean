@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.SPBCS.KnowledgeROM
+public import GordieHowe.Headline
 public import GordieHowe.SPBCS.Extractor
 public import GordieHowe.SPBCS.Extraction.KnowledgeError
 public import GordieHowe.Model.QROM.QueryBits
@@ -30,7 +31,7 @@ adversaries of `def:adversary` without proof queries (paper `thm:bcs-ks` and `th
   branch, the openings of the trees) under the format bounds `NQ`, `N` (`GordieHowe.SPBCS.FormatBounds`); this is
   the paper's `k_q` (`def:bcs-quantities`), with `n_B = |Site|`.
 - `toQVerifier`, `knowledgeBound`: the instance; its knowledge error is
-  `knowledgeError k e kq b c_in nJ (max_c ε c)` (`knowledgeError_toQVerifier`).
+  `knowledgeError k e kq b c nJ (maxError ε)` (`knowledgeError_toQVerifier`).
 -/
 
 namespace GordieHowe.SPBCS
@@ -143,6 +144,13 @@ theorem queries_length_le_of_formatBounds {Qs : ∀ x, M.IOPQueries V x} {NQ N :
   (M.queries_length_le_of_accepts h x π hb.nLeaves_le hv).trans
     (Nat.add_le_add_left (Nat.mul_le_mul_right _ (hb.pos_le _ _ _)) _)
 
+variable {M} in
+/-- **The format bounds bound the verifier's queries by `kqOf Mg n NQ N`**
+(`queries_length_le_of_formatBounds`). -/
+theorem FormatBounds.queriesAtMost {Qs : ∀ x, M.IOPQueries V x} {NQ N : ℕ}
+    (hb : M.FormatBounds Qs NQ N) : M.QueriesAtMost Qs (kqOf Mg n NQ N) :=
+  fun _ _ _ hv => queries_length_le_of_formatBounds hb hv
+
 /-! ### The instance -/
 
 /-- **The spBCS verifier as a `NARG.QROM.Verifier`**: its query expansion with `kq` queries encoded
@@ -223,7 +231,7 @@ theorem coe_comp_dbExtractBitsList [DecidableEq X] {Wit : Type} (E : CausalExtra
   funext fun x => funext fun D => M.coe_dbExtractBitsList E x D
 
 /-- **The database bound of the spBCS argument** at `b` queries:
-`6b² (max_c ε c + (max 2 c_in + nJ + 1) b / 2^(8k))`. -/
+`6b² (maxError ε + (max 2 c + nJ + 1) b / 2^(8k))`. -/
 noncomputable def dbBound (ε : ChIdx P t → ℝ≥0) (b : ℕ) : ℝ≥0∞ :=
   6 * (b : ℝ≥0∞) ^ 2 * (maxError ε +
     (((max 2 M.senc.digestsPerInput + Mg.nJ + 1) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k))
@@ -249,7 +257,7 @@ game, `mem_of_game`, and the database bound `dbProb_bad_union_le_of_queryCount`)
 round-by-round knowledge soundness of the composite. -/
 noncomputable def knowledgeBound [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     (Qs : ∀ x, M.IOPQueries V x) (kq : ℕ)
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) :
+    (hkq : M.QueriesAtMost Qs kq) :
     (M.toQVerifier Qs kq).KnowledgeBound rel (M.dbExtractBits E) (M.dbBound ε) where
   bad := DB.restrict Query.toBits ⁻¹' (M.bad rel E St ∪ digestCollision)
   mem_of_game o ho D hD := by
@@ -267,7 +275,7 @@ noncomputable def knowledgeBound [DecidableEq X] (hrbr : CausalRBRKnowledgeSound
   mono := M.dbBound_mono ε
 
 /-- **The knowledge error of the instance is the spBCS knowledge error**
-`knowledgeError k e kq b c_in nJ (max_c ε c)`. -/
+`knowledgeError k e kq b c nJ (maxError ε)`. -/
 theorem knowledgeError_toQVerifier (Qs : ∀ x, M.IOPQueries V x) (kq : ℕ) (b : ℕ) :
     (M.toQVerifier Qs kq).knowledgeError (M.dbBound ε) b =
       knowledgeError k e kq b M.senc.digestsPerInput Mg.nJ (maxError ε) :=
@@ -287,7 +295,7 @@ def toRVerifier (Qs : ∀ x, M.IOPQueries V x) (kq : ℕ) :
 that agrees with an accepting oracle `h'` at them is accepted, for a query budget `kq` of every
 accepting run (`hkq`). -/
 theorem accepts_of_agree (Qs : ∀ x, M.IOPQueries V x) {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq)
+    (hkq : M.QueriesAtMost Qs kq)
     {h h' : Query k kN kS L → Out k e} {c : Claim X M.NIProof}
     (hag : ∀ i : Fin kq, h' ((M.expansion Qs).queries h' c i) = h ((M.expansion Qs).queries h' c i))
     (hv : M.Accepts h' c.stmt c.proof (Qs c.stmt)) : M.Accepts h c.stmt c.proof (Qs c.stmt) := by
@@ -300,17 +308,18 @@ theorem accepts_of_agree (Qs : ∀ x, M.IOPQueries V x) {kq : ℕ}
 /-- **The decision of the classical instance is the spBCS verifier's acceptance**, for a query
 budget `kq` of every accepting run (`hkq`). -/
 theorem accepted_toRVerifier_iff (Qs : ∀ x, M.IOPQueries V x) {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq)
+    (hkq : M.QueriesAtMost Qs kq)
     {h : Query k kN kS L → Out k e} {c : Claim X M.NIProof} :
     (M.toRVerifier Qs kq).Accepted h c ↔ M.Accepts h c.stmt c.proof (Qs c.stmt) :=
   NARG.Verifier.ofOracle_accepted_iff fun _ _ _ hag hv => M.accepts_of_agree Qs hkq hag hv
 
 /-- **The joint knowledge bound of the spBCS argument in the ROM**
 (`knowledge_of_causalRBR_rom_joint`) at the database extractor `dbExtract`, with error
-`knowledgeErrorROM k b c_in nJ (max_c ε c)` at `b` queries. -/
+`knowledgeErrorROM k b c nJ (maxError ε)` at `b` queries. -/
+@[headline]
 theorem jointBound [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     (Qs : ∀ x, M.IOPQueries V x) {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) :
+    (hkq : M.QueriesAtMost Qs kq) :
     (M.toRVerifier Qs kq).JointBound rel (M.dbExtract E)
       fun b => knowledgeErrorROM k b M.senc.digestsPerInput Mg.nJ (maxError ε) := fun 𝒜 =>
   (QROM.probUniform_mono fun _ hh => ⟨(M.accepted_toRVerifier_iff Qs hkq).1 hh.1, hh.2⟩).trans
@@ -347,10 +356,10 @@ variable {M rel E St}
 
 /-- **Online extractability of the spBCS verifier** with a query budget `kq` of its accepting
 runs (`hkq`) against query-bounded adversaries without proof queries, at
-`knowledgeError k e kq (t + kq) c_in nJ (max_c ε c)`. -/
+`knowledgeError k e kq (t + kq) c nJ (maxError ε)`. -/
 theorem onlineExtracts_toQVerifier [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     {Qs : ∀ x, M.IOPQueries V x} {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) {Z : Type}
+    (hkq : M.QueriesAtMost Qs kq) {Z : Type}
     {t : ℕ} (𝒢 : NARG.QROM.Adversary (queryBits k kN kS L) k e (Claim X M.NIProof × Z) t) :
     𝒢.OnlineExtracts (M.toQVerifier Qs kq) NARG.QROM.compressedSim rel
       (NARG.QROM.compressedExt (M.dbExtractBits E)) 0
@@ -361,7 +370,7 @@ theorem onlineExtracts_toQVerifier [DecidableEq X] (hrbr : CausalRBRKnowledgeSou
 adversaries without proof queries, at the error of `onlineExtracts_toQVerifier`. -/
 theorem soundness_toQVerifier [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     {Qs : ∀ x, M.IOPQueries V x} {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) {t : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {t : ℕ}
     (𝒜 : NARG.QROM.Adversary (queryBits k kN kS L) k e (Claim X M.NIProof) t) :
     𝒜.acceptsFalse (M.toQVerifier Qs kq) rel ≤
       knowledgeError k e kq (t + kq) M.senc.digestsPerInput Mg.nJ (maxError ε) :=
@@ -369,10 +378,10 @@ theorem soundness_toQVerifier [DecidableEq X] (hrbr : CausalRBRKnowledgeSound re
 
 /-- **Online extractability of the spBCS verifier in the ROM** with a query budget `kq`
 (`hkq`) against classical query-bounded adversaries without proof queries, at
-`knowledgeErrorROM k (t + kq) c_in nJ (max_c ε c)`. -/
+`knowledgeErrorROM k (t + kq) c nJ (maxError ε)`. -/
 theorem onlineExtracts_toRVerifier [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     {Qs : ∀ x, M.IOPQueries V x} {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) {Z : Type}
+    (hkq : M.QueriesAtMost Qs kq) {Z : Type}
     {t : ℕ} (𝒢 : NARG.ROM.Adversary (Query k kN kS L) (Out k e) (Claim X M.NIProof × Z) t) :
     𝒢.OnlineExtracts (M.toRVerifier Qs kq) NARG.ROM.OracleSampler.lazy.law rel (M.dbExtract E) 0
       (knowledgeErrorROM k (t + kq) M.senc.digestsPerInput Mg.nJ (maxError ε)) :=
@@ -383,7 +392,7 @@ theorem onlineExtracts_toRVerifier [DecidableEq X] (hrbr : CausalRBRKnowledgeSou
 /-- **Soundness of the spBCS verifier in the ROM** with a query budget `kq` (`hkq`). -/
 theorem soundness_toRVerifier [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     {Qs : ∀ x, M.IOPQueries V x} {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) {t : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {t : ℕ}
     (𝒜 : NARG.ROM.Adversary (Query k kN kS L) (Out k e) (Claim X M.NIProof) t) :
     𝒜.acceptsFalse (M.toRVerifier Qs kq) rel ≤
       knowledgeErrorROM k (t + kq) M.senc.digestsPerInput Mg.nJ (maxError ε) :=
@@ -393,6 +402,7 @@ theorem soundness_toRVerifier [DecidableEq X] (hrbr : CausalRBRKnowledgeSound re
 
 /-- **Online extractability at the query budget of the format bounds**
 (`onlineExtracts_toQVerifier` at `kqOf Mg n NQ N`). -/
+@[headline]
 theorem onlineExtracts_qrom [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     {Qs : ∀ x, M.IOPQueries V x} {NQ N : ℕ} (hb : M.FormatBounds Qs NQ N) {Z : Type} {t : ℕ}
     (𝒢 : NARG.QROM.Adversary (queryBits k kN kS L) k e (Claim X M.NIProof × Z) t) :
@@ -403,6 +413,7 @@ theorem onlineExtracts_qrom [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel 
   onlineExtracts_toQVerifier hrbr (fun _ _ _ hv => queries_length_le_of_formatBounds hb hv) 𝒢
 
 /-- **Soundness at the query budget of the format bounds.** -/
+@[headline]
 theorem soundness_qrom [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     {Qs : ∀ x, M.IOPQueries V x} {NQ N : ℕ} (hb : M.FormatBounds Qs NQ N) {t : ℕ}
     (𝒜 : NARG.QROM.Adversary (queryBits k kN kS L) k e (Claim X M.NIProof) t) :
@@ -412,6 +423,7 @@ theorem soundness_qrom [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E S
   soundness_toQVerifier hrbr (fun _ _ _ hv => queries_length_le_of_formatBounds hb hv) 𝒜
 
 /-- **Online extractability in the ROM at the query budget of the format bounds.** -/
+@[headline]
 theorem onlineExtracts_rom [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     {Qs : ∀ x, M.IOPQueries V x} {NQ N : ℕ} (hb : M.FormatBounds Qs NQ N) {Z : Type} {t : ℕ}
     (𝒢 : NARG.ROM.Adversary (Query k kN kS L) (Out k e) (Claim X M.NIProof × Z) t) :
@@ -420,6 +432,7 @@ theorem onlineExtracts_rom [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V
   onlineExtracts_toRVerifier hrbr (fun _ _ _ hv => queries_length_le_of_formatBounds hb hv) 𝒢
 
 /-- **Soundness in the ROM at the query budget of the format bounds.** -/
+@[headline]
 theorem soundness_rom [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     {Qs : ∀ x, M.IOPQueries V x} {NQ N : ℕ} (hb : M.FormatBounds Qs NQ N) {t : ℕ}
     (𝒜 : NARG.ROM.Adversary (Query k kN kS L) (Out k e) (Claim X M.NIProof) t) :

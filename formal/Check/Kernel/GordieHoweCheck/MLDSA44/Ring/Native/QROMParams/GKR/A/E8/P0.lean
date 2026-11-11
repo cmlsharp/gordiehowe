@@ -9,10 +9,10 @@ import all GordieHoweCerts.Generated.MLDSA44.Ring.Native.QROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of leaves 0 to 9 of entry 8 of the GKR circuit of domain A (generated; do not edit). -/
+/-! The relational check of leaves 0 to 7 of entry 8 of the GKR circuit of domain A (generated; do not edit). -/
 
 namespace GordieHowe.Generated.MLDSA44.Ring.Native.QROMParams.GKR.A
 
-check_entry_leaves cert ar 8 [0, 0, 1, 0, 0, 1, 0, 0, 5, 0, 0, 4, 2, 256, 103] 0 10
+check_entry_leaves cert ar 8 [0, 0, 11, 2, 2439, 11] 0 8
 
 end GordieHowe.Generated.MLDSA44.Ring.Native.QROMParams.GKR.A

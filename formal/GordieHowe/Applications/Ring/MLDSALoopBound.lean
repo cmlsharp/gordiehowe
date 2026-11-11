@@ -79,7 +79,7 @@ through its mean over the challenge (the acceptance floors of `WeightLowerBound.
 
 namespace GordieHowe.Ring
 
-open GordieHowe.RingSignature GordieHowe.IOP _root_.MLDSA
+open GordieHowe.RingSignature GordieHowe.IOP _root_.MLDSA GordieHowe.MLDSA
 open scoped ENNReal
 
 section Generic

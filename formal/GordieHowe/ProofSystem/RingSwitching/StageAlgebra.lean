@@ -37,11 +37,10 @@ evaluated through `d` linear forms on the words, `a_{k,g} = φ^{-k}(Σ_j φ^k(β
 of words (no subfield hypothesis). Decoded coordinates of a word in `T` lie in `B`
 (`coord_mem_fixedField`); over `B = GF(2)` they are bits (`coord_bool`).
 
-Source: `lib/gordiehowe/compiler/stage.h` at `a9d05d59`'s C++ (header lines 1-31; `add_forms`, lines
-119-145: `a[k][g] = phi_inv(Σ_j twisted_dual[k][j] · c[g d + j], k)` with
-`twisted_dual[k][j] = phi(dual[j], k)`; `phi_inv(x, k) = frobenius_power(x, n - (b k) mod n)`,
-lines 106-109, our `phiInv e k` with `e = n / b`; `coordinates`, lines 251-263:
-`x_j = Σ_k twisted_dual[k][j] · phi^k(p)`, our `coord`; `pack`, lines 244-248).
+Source: `lib/gordiehowe/compiler/stage.h` (the header comment; `add_forms`:
+`a[k][g] = phi_inv(Σ_j twisted_dual[k][j] · c[g d + j], k)` with
+`twisted_dual[k][j] = phi(dual[j], k)`; `phi_inv(x, k) = frobenius_power(x, n - (b k) mod n)`, our
+`phiInv e k` with `e = n / b`).
 -/
 
 namespace GordieHowe.PackingStage
@@ -54,7 +53,7 @@ variable {K : Type*} [Field K] {p m d e : ℕ} [ExpChar K p]
 /-! ### The inverse Frobenius power on `K` -/
 
 /-- `φ^{-k}` on `K`: `φ^(e - k mod e)`, the inverse of `φ^k` when `φ^e` is the identity on `K`
-(`phi_phiInv`). The C++ `phi_inv` (`stage.h:106-109`) with `e = [K : B]`. -/
+(`phi_phiInv`). The C++ `phi_inv` (`stage.h`) with `e = [K : B]`. -/
 def phiInv (p m e k : ℕ) [ExpChar K p] (x : K) : K := phi p m (e - k % e) x
 
 variable [RelFrobeniusOrder K p m e]

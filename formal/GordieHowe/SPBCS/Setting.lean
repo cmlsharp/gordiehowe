@@ -36,6 +36,10 @@ of a composite IOP with oracles (`GordieHowe.IOP.SPIOP`, `GordieHowe/Model/IOP/S
 * The query phase `queries` (decided by `I.V` through query locality), the honest encoding
   `encoder`, the view laws `viewEncoder` (the composite verifier's view `GordieHowe.IOP.SPIOP.views`), and the
   format bounds `formatBounds` of the query phases.
+* The random oracle `GordieHowe.SPBCS.Setting.Oracle`, `Query → Out k e`, and the adversaries
+  against the argument of the setting that make no proof queries:
+  `GordieHowe.SPBCS.Setting.QROMAdversary` (quantum, at the oracle `{0,1}^m → Out k e`) and
+  `GordieHowe.SPBCS.Setting.ROMAdversary` (classical, at the oracle `Query → Out k e`).
 -/
 
 namespace GordieHowe.SPBCS
@@ -148,6 +152,11 @@ def model : SPBCS Mg P X F.k F.kN F.kS F.L F.e where
   comp := F.compModel
   opening := Multiproof.opening
   senc := F.mergeEnc
+
+/-- **The random oracle of the setting**: the functions from the queries (chain inputs of `L`
+bytes, with `kN`-byte Merkle salts and `kS`-byte Fiat–Shamir salts) to the `k + e`-byte answers,
+the paper's `RO`. -/
+abbrev Oracle : Type := Query F.k F.kN F.kS F.L → Out F.k F.e
 
 /-- **The quantum adversaries against the argument of the setting**: the `t`-query adversaries of
 `def:adversary` without proof queries with output in `O` (`GordieHowe.NARG.QROM.Adversary`) at the
@@ -340,7 +349,6 @@ def nonOracleOfEntry {p : t.Leaf} {i : (P p.label).MessageIdx} :
   | some (.nonOracle a) => some a
   | _ => none
 
-open Classical in
 /-- **The writes read off a view**, as functions of the roots: each message's non-oracle part from
 its view at the non-oracle index, with the given roots; `none` if some message's view has no
 non-oracle part.

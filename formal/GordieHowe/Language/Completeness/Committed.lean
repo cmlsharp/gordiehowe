@@ -32,7 +32,8 @@ section
 variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String} {S : Structure}
 
 /-- **The honest committed values off the source values are naturals**: committed generators'
-values, static histograms, or `0`. -/
+values (the convolutions' transformed values and committed readings among them), static
+histograms, or `0`. -/
 theorem genCommitted_natCast_of_not_source (G : Gens) (x s : ir.Valuation I) {v : ℕ}
     (hv : ¬ ir.IsSourceValue v) (i : ℕ) :
     ∃ n : ℕ, ir.genCommitted I G x s v i = (n : (I (ir.valueField v)).K) := by
@@ -47,6 +48,9 @@ theorem genCommitted_natCast_of_not_source (G : Gens) (x s : ir.Valuation I) {v 
     split
     · exact ⟨_, rfl⟩
     · exact ⟨_, rfl⟩
+    · split
+      · exact ⟨_, rfl⟩
+      · exact ⟨0, by simp⟩
     · split
       · exact ⟨_, rfl⟩
       · exact ⟨0, by simp⟩
@@ -485,7 +489,7 @@ theorem holds_oneDigitQuot_srcEnvC (hbd : ir.StmtBounded I x) {m rid : ℕ}
         obtain ⟨⟨h3, h4⟩, hc'⟩ := exprIvl_within_of hwf hI hL hIF hlok
           he'.1 h2 he'.2 hwe' (by rw [← hlen]; exact hi)
         simp only at h1 h2' h3 h4 hc hc'
-        obtain ⟨z, hz⟩ := hmod.1 i hi
+        obtain ⟨z, hz⟩ := hmod i hi
         have hq0 : (0 : ℤ) < q := by exact_mod_cast hq
         have hz0 : real.quotientLo ≤ z := by
           by_contra hneg

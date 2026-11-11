@@ -25,7 +25,7 @@ that takes it as an argument is noncomputable).
   errors and a claim-proving phase with the circuit's verdict, round-by-round sound relative to
   "the commit phase was bad or the circuit's relation holds on the extracted witness"; it gives
   round-by-round knowledge soundness for that relation (`relation`) at the extractor that reads
-  the commit phase (`Sound.rbrKnowledgeSoundness`).
+  the commit phase (`Sound.rbrKnowledgeSound`).
 * `GordieHowe.FieldProof.Shape.Honest`, `GordieHowe.FieldProof.Shape.Oracle` (how the verdict reads the oracle message, the
   commit rounds and the messages, `Reading`, with the verdict a function of the view),
   `GordieHowe.FieldProof.Shape.Simulator`, `Simulator.Perfect`.
@@ -87,6 +87,7 @@ structure Honest (In : Type) where
   Coins : Type
   [fintype : Fintype Coins]
   [nonempty : Nonempty Coins]
+  [decEq : DecidableEq Coins]
   /-- The oracle message for the input. -/
   commit : In → Coins → sh.Com
   /-- The commit rounds for the input. -/
@@ -94,7 +95,7 @@ structure Honest (In : Type) where
   /-- The proof phase on the public input and the commit rounds. -/
   prove : Pub → In → Coins → sh.Rounds → CausalTranscript sh.spec
 
-attribute [instance] Honest.fintype Honest.nonempty
+attribute [instance] Honest.fintype Honest.nonempty Honest.decEq
 
 variable {sh} in
 /-- The honest commit rounds at the commit-round challenges `chc`. -/
@@ -243,10 +244,10 @@ def Sound.stateFn [Nonempty sh.spec.ChallengeIdx] (S : sh.Sound holds) :
 /-- **Round-by-round knowledge soundness of a circuit's proof phase** for "the commit phase was
 bad or `holds`" at the statement, at the extractor that reads the commit phase and the state
 function `stateFn`, with the round errors `ε`. -/
-theorem Sound.rbrKnowledgeSoundness [Nonempty sh.spec.ChallengeIdx] (S : sh.Sound holds) :
-    IOP.rbrKnowledgeSoundness (sh.relation holds S.commit.bad) sh.verifier sh.extractor
+theorem Sound.rbrKnowledgeSound [Nonempty sh.spec.ChallengeIdx] (S : sh.Sound holds) :
+    IOP.RBRKnowledgeSound (sh.relation holds S.commit.bad) sh.verifier sh.extractor
       S.stateFn S.ε :=
-  ClaimProof.rbrKnowledgeSoundness _ _ fun _ s _ h => S.claim_imp s h
+  ClaimProof.rbrKnowledgeSound _ _ fun _ s _ h => S.claim_imp s h
 
 /-- The extractor of a circuit is stable: it reads no transcript. -/
 theorem extractor_stable {bad : sh.Com → sh.Rounds → Prop} :

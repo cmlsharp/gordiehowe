@@ -67,6 +67,46 @@ theorem badSet_union_card_le (a b : ChallengeEvent K) :
     (a.badSet ∪ b.badSet).card ≤ a.deg + b.deg :=
   (Finset.card_union_le _ _).trans (Nat.add_le_add a.badSet_card_le b.badSet_card_le)
 
+section ProdNonzero
+
+variable {ι : Type*} [Fintype ι]
+
+/-- **Several polynomials at one challenge**: the product of the nonzero ones,
+`∏ i, (if p i = 0 then 1 else p i)`, each of degree at most `d`, is one event of degree
+`card ι · d` (the union bound in one polynomial): outside it, a `p i` that vanishes at the
+challenge is `0` (`prodNonzero_eq_zero`). -/
+noncomputable def prodNonzero (p : ι → K[X]) (d : ℕ) (hp : ∀ i, (p i).natDegree ≤ d) :
+    ChallengeEvent K where
+  poly := ∏ i, if p i = 0 then 1 else p i
+  deg := Fintype.card ι * d
+  natDegree_le := (natDegree_prod_le _ _).trans <| calc
+    ∑ i, (if p i = 0 then 1 else p i).natDegree ≤ ∑ _i : ι, d :=
+      Finset.sum_le_sum fun i _ => by
+        split_ifs
+        · simp
+        · exact hp i
+    _ = Fintype.card ι * d := by rw [Finset.sum_const, Finset.card_univ, smul_eq_mul]
+
+/-- **A polynomial that vanishes at the challenge is `0`** outside the product event. -/
+theorem prodNonzero_eq_zero {p : ι → K[X]} {d : ℕ} {hp : ∀ i, (p i).natDegree ≤ d} (i : ι)
+    {δ : K} (h : (p i).eval δ = 0) (hev : ¬ (prodNonzero p d hp).BadAt δ) : p i = 0 := by
+  by_contra hne
+  refine hev ⟨Finset.prod_ne_zero_iff.2 fun j _ => ?_, ?_⟩
+  · split_ifs with hj
+    · exact one_ne_zero
+    · exact hj
+  · change (∏ j, if p j = 0 then 1 else p j).eval δ = 0
+    rw [eval_prod]
+    exact Finset.prod_eq_zero (Finset.mem_univ i) (by rw [if_neg hne]; exact h)
+
+/-- The product event depends only on the polynomials. -/
+theorem prodNonzero_congr {p p' : ι → K[X]} {d : ℕ} {hp : ∀ i, (p i).natDegree ≤ d}
+    {hp' : ∀ i, (p' i).natDegree ≤ d} (h : p = p') : prodNonzero p d hp = prodNonzero p' d hp' := by
+  subst h
+  rfl
+
+end ProdNonzero
+
 end ChallengeEvent
 
 /-- A polynomial in two challenges with a total-degree bound. The memory check of the ML-DSA

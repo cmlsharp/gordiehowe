@@ -34,7 +34,8 @@ namespace GordieHowe.Signature
 open GordieHowe.Quantum GordieHowe.RingSignature
 open scoped ENNReal
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB)
+variable {X Y : Type} {N : ℕ} {TB : BaseTypes}
+  (B : BaseSigner X Y N TB)
 
 /-- **The ring-aware signer signs as the ordinary signer on the base message**: at every oracle, for
 every secret key, ring, position, message and coins, the run of `bsign` is the run of `ssign` on
@@ -43,10 +44,15 @@ def _root_.GordieHowe.RingSignature.BaseSigner.RingSignsStd : Prop :=
   ∀ (H : X → Y) (sk : B.SK) (R : KeyRing B.PK N) (i : ℕ) (m : B.Msg) (c : B.Coins),
     (B.bsign sk R i m c).run H = (B.ssign sk (B.bmsg R m) c).run H
 
+/-- **A base signer built from a scheme signs as its ordinary signer on the base message.** -/
+theorem _root_.GordieHowe.RingSignature.BaseSigner.ofCore_ringSignsStd {S : SchemeTypes}
+    (C : BaseScheme X Y S) {RMsg : Type} (bmsg : KeyRing S.PK N → RMsg → S.BMsg) :
+    (BaseSigner.ofCore C bmsg).RingSignsStd := fun _ _ _ _ _ _ => rfl
+
 /-- **The rejection form with one attempt and no rejection**: the ordinary signer as the standard
 signer with the base signer's coins, no keep coins, a check and a keep decision that accept without
 a query. -/
-def stdRejection : Rejection B where
+@[reducible] def stdRejection : Rejection B where
   StdCoins := B.Coins
   KeepCoins := Unit
   qStd := B.q
@@ -59,8 +65,11 @@ def stdRejection : Rejection B where
   keep _ _ _ _ _ := .pure true
   keep_queries _ _ _ _ _ := OracleProg.QueriesLE.pure _ _
 
+variable [DecidableEq TB.Coins]
+
+omit [DecidableEq TB.Coins] in
 /-- **The standard oracle of `stdRejection` is the ordinary signing oracle.** -/
-theorem stdRejection_stdOracle : (stdRejection B).stdOracle = SignOracle.std B :=
+theorem stdRejection_stdOracle : (stdRejection B).stdOracle = SignOracle.std B.core :=
   rfl
 
 /-- **The coins of one attempt**: the base signer's coins as one pair of standard coins and the
@@ -73,8 +82,17 @@ def stdCoins : B.Coins ≃ (Fin 1 → (stdRejection B).StdCoins × (stdRejection
     fin_cases j
     exact Prod.ext rfl rfl
 
+variable [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Coins] [Nonempty TB.Coins]
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+
 variable {B}
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg]
+  [DecidableEq TB.Msg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [DecidableEq TB.Coins] [Fintype TB.Coins]
+  [Nonempty TB.Coins] in
 /-- **A ring-aware signer signing as the ordinary signer is the rejection form `stdRejection` with
 one attempt.** -/
 theorem isRejection_stdRejection (h : B.RingSignsStd) :
@@ -88,6 +106,10 @@ theorem isRejection_stdRejection (h : B.RingSignsStd) :
   rcases hσ : (B.ssign sk (B.bmsg R m) c).run H with _ | σ <;>
     simp [Rejection.att, stdRejection, hσ]
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg]
+  [DecidableEq TB.Msg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [DecidableEq TB.Coins] [Fintype TB.Coins]
+  [Nonempty TB.Coins] in
 /-- **The ordinary signer is the standard signer of `stdRejection`.** -/
 theorem isStdOn_stdRejection : IsStdOn B (stdRejection B) 1 (stdCoins B) Nat.one_pos :=
   fun _ _ _ _ => rfl
@@ -100,7 +122,7 @@ the combined oracle (`relayMUAdversaryStd` at `stdRejection`): it asks every req
 standard challenger, a ring-signing request `(R, m)` as the ordinary signing request on `bmsg R m`,
 padding with the public-key request of user `i₀`. -/
 noncomputable abbrev ringStdToStd (i₀ : Fin n) (A : MUAdversary (SignOracle.ringStd B) n V t)
-    (Q : ℕ) : MUAdversary (SignOracle.std B) n V (t + Q * (0 + 1 * 0)) :=
+    (Q : ℕ) : MUAdversary (SignOracle.std B.core) n V (t + Q * (0 + 1 * 0)) :=
   relayMUAdversaryStd (stdRejection B) 1 n Nat.one_pos i₀ A Q
 
 /-- **The multi-user game with the combined oracle is bounded by the standard multi-user game** for a
@@ -115,12 +137,13 @@ theorem muEufProbWithin_ringStd_le_std (h : B.RingSignsStd) (i₀ : Fin n)
     Nat.one_pos (isRejection_stdRejection h).isRejectionOn isStdOn_stdRejection i₀ A Q Qs
   rwa [Nat.one_mul Q, Nat.one_mul Qs] at h1
 
+omit [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The relayed adversary of the standard multi-user game** for an adversary `A` of the game with
 the ring-aware oracle (`relayMUAdversary` at `stdRejection`): it asks every request of `A` of the
 standard challenger, a ring-signing request `(R, m)` as the ordinary signing request on `bmsg R m`,
 padding with the public-key request of user `i₀`. -/
 noncomputable abbrev ringToStd (i₀ : Fin n) (A : MUAdversary (SignOracle.ring B) n V t)
-    (Q : ℕ) : MUAdversary (SignOracle.std B) n V (t + Q * (0 + 1 * 0)) :=
+    (Q : ℕ) : MUAdversary (SignOracle.std B.core) n V (t + Q * (0 + 1 * 0)) :=
   relayMUAdversary (stdRejection B) 1 n Nat.one_pos i₀ A Q
 
 /-- **The multi-user game with the ring-aware oracle is bounded by the standard multi-user game**

@@ -131,13 +131,13 @@ variable (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : NTTRingOps] {
 /-- **The base signer of the ring publishing `w₁` with the ring loop as a rejection form**: one
 attempt is one call of the standard signer (`stdProg` at one nonce), the check is the public ring
 check, the keep decision `w1Keep` with a keep coin on `Fin D`. -/
-noncomputable def w1Rejection :
+@[reducible] noncomputable def w1Rejection :
     Rejection (w1BaseSigner prims O βmin tol enc (ringLoop prims src O βmin k D) bmsg) where
   StdCoins := src.Rnd
   KeepCoins := Fin D
   qStd := 1 + T * src.qr + T
-  std sk bm r := stdProg prims src O 1 sk bm fun _ => r
-  std_queries sk bm _ := stdProg_queries prims src O 1 sk bm _
+  std sk bm r := stdProg prims src O.toMLDSAOracles 1 sk bm fun _ => r
+  std_queries sk bm _ := stdProg_queries prims src O.toMLDSAOracles 1 sk bm _
   qCheck := N * reps
   check R := ringCheckProg prims O βmin tol R
   check_queries R := ringCheckProg_queries prims O βmin tol R
@@ -154,7 +154,7 @@ omit [Fintype prims.Power2High] [DecidableEq prims.Power2High] [Fintype prims.Hi
 /-- **One call of the standard signer**: the first of the `T` masks of the nonce `r` whose
 attempt passes the checks at the commitment hash `H((tr, m), w₁)` of its commitment. -/
 theorem run_stdProg_one (sk : SecretKey p) (m : Msg) (r : src.Rnd) (H : X → Y) :
-    (stdProg prims src O 1 sk m fun _ => r).run H =
+    (stdProg prims src O.toMLDSAOracles 1 sk m fun _ => r).run H =
       match (List.finRange T).find? (fun t => attemptAccept prims sk (prims.expandA sk.rho)
           ((src.read r (t, (sk.key, (sk.tr, m)))).run H)
           (O.hOrc H ((sk.tr, m), realBuckets (prims.expandA sk.rho)
@@ -169,6 +169,8 @@ theorem run_stdProg_one (sk : SecretKey p) (m : Msg) (r : src.Rnd) (H : X → Y)
     List.mem_finRange, ite_true]
   rfl
 
+variable [Fintype src.Rnd] [DecidableEq src.Rnd] [Nonempty src.Rnd]
+
 omit [Inhabited prims.Hint] in
 /-- **The ordinary signer is the standard signer at the first nonce** (`Signature.IsStdOn`, the
 hypothesis of the key-reuse lifting lemma), for `0 < k`. -/
@@ -177,8 +179,8 @@ theorem isStdOn_w1Base (hk : 0 < k) :
       (w1Rejection prims src O βmin tol k D enc bmsg) k (w1CoinEquiv src k D) hk := by
   intro H kc bm c
   simp only [w1BaseSigner, ringLoop]
-  change (stdProg prims src O k _ bm c.1).run H =
-    (stdProg prims src O 1 _ bm fun _ => c.1 ⟨0, hk⟩).run H
+  change (stdProg prims src O.toMLDSAOracles k _ bm c.1).run H =
+    (stdProg prims src O.toMLDSAOracles 1 _ bm fun _ => c.1 ⟨0, hk⟩).run H
   unfold stdProg
   simp only [hk, Nat.zero_lt_one, ↓reduceDIte]
 
@@ -208,7 +210,7 @@ theorem callOut_eq_att (h_laws : SigningLaws prims) (hv : VerifyLaws prims)
     simp only [PMF.ringOf, ringPts, List.get_eq_getElem, hRi, pubTr, hsk, keyGen, keyGenFromSeed_tr]
   have hstd : ((w1Rejection prims src O βmin tol k D enc bmsg).std sk
       ((w1BaseSigner prims O βmin tol enc (ringLoop prims src O βmin k D) bmsg).bmsg R m) r).run H =
-      (stdProg prims src O 1 sk (bmsg R m) fun _ => r).run H := rfl
+      (stdProg prims src O.toMLDSAOracles 1 sk (bmsg R m) fun _ => r).run H := rfl
   have hkeep : ∀ σ, ((w1Rejection prims src O βmin tol k D enc bmsg).keep R i m σ u).run H =
       (w1Keep prims O βmin D enc bmsg R i m σ u).run H := fun _ => rfl
   unfold Rejection.att
@@ -286,14 +288,14 @@ theorem isRejectionOn_w1Base (h_laws : SigningLaws prims) (hv : VerifyLaws prims
     IsRejectionOn (w1BaseSigner prims O βmin tol enc (ringLoop prims src O βmin k D) bmsg)
       (w1Rejection prims src O βmin tol k D enc bmsg) k (w1CoinEquiv src k D) := by
   intro H kc R hmem m c
-  have hi := BaseTypes.idxOf_lt_length_of_mem hmem
-  have hRi := BaseTypes.getElem_idxOf hi
+  have hi := List.idxOf_lt_length_of_mem hmem
+  have hRi := List.getElem_idxOf hi
   rw [Rejection.run_rejectSign]
   have hmd : (muDistinctProg prims O R (bmsg R m)).run H =
       decide ((R.1.map fun x => O.muPt (pubTr prims x, bmsg R m)).map (O.muAns ∘ H)).Nodup := by
     simp only [muDistinctProg, OracleProg.run_mapOutput, OracleProg.run_queryAll, List.map_map]
     rfl
-  simp only [w1BaseSigner, ringLoop, RingSignature.BaseSigner.pk, RingSignature.BaseSigner.sk,
+  simp only [w1BaseSigner, ringLoop, Signature.BaseScheme.pk, Signature.BaseScheme.sk,
     OracleProg.run_bind, hmd]
   change _ = if (ringCheckProg prims O βmin tol R).run H then _ else _
   rcases (ringCheckProg prims O βmin tol R).run H with _ | _

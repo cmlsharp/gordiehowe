@@ -26,6 +26,8 @@ structure SourceValues (K : Type) where
   batchCarries : ℕ → ℕ
   finalDigits : ℕ → ℕ
   finalCarries : ℕ → ℕ
+  /-- The signature equation's quotient by `X^512 + 1` (`signature.Q`). -/
+  quot : ℕ → ℕ
 
 /-- **Interpret a declared native-ring role and slot.** Statement values are supplied separately
 by the execution's statement. Unused tags and slots contribute zero. -/
@@ -42,6 +44,7 @@ by the execution's statement. Unused tags and slots contribute zero. -/
   | .aWitness, 6, j => (s.batchCarries j : ℕ)
   | .aWitness, 7, j => (s.finalDigits j : ℕ)
   | .aWitness, 8, j => (s.finalCarries j : ℕ)
+  | .aWitness, 9, j => (s.quot j : ℕ)
   | _, _, _ => 0
 
 /-- **Assign source values through the shared, already constructed classifier.**

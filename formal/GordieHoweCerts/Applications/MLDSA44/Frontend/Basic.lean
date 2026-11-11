@@ -6,6 +6,7 @@ module
 public import GordieHoweCerts.Applications.MLDSA44.Frontend.Reads
 public import GordieHowe.Applications.Keccak.Frontend.Sponge
 public import GordieHowe.Applications.MLDSA44.Interp
+public import GordieHowe.Applications.MLDSA44.HPreds
 public import GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.Program
 public import GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.ShapeFacts
 public import GordieHowe.Applications.MLDSA44.Frontend.HField
@@ -32,7 +33,7 @@ read the Keccak trace's shape, the sampler's predicates or domain `A`'s layout:
   `ExpandA` finishes within `1008` SHAKE128 bytes per `RejNTTPoly` call
   (`GordieHowe.MLDSA44.ExpandAWithin`, the configurations' statement check), the
   ML-DSA-44 proof-of-possession relation for messages of at most `32` bytes holds for the witness
-  (`PoP.MLDSA44.relUpTo 32`). The maximal length `32` is the program's: its message buffer is one
+  (`MLDSA44.PoP.relUpTo 32`). The maximal length `32` is the program's: its message buffer is one
   `136`-byte SHAKE256 block holding the `66`-byte head `tr ‖ 0 ‖ 0` and at most `32` message
   bytes. The verifier reads a key only through `Â`, `t1`
   and `tr`, so every such key verifies alike.
@@ -61,7 +62,7 @@ values `hTyped` are source predicates and node-typed source values, and `tr` (va
 opaque statement value of no argument. Each program instantiates it by `decide`. -/
 class MldsaHBase (program : RealizedProgram) : Prop where
   /-- The predicates `18 … 270` are source predicates. -/
-  hPreds : ∀ k, 18 ≤ k → k ≤ 270 → k < program.predicates.length ∧
+  hPreds : ∀ k, hPredLo ≤ k → k ≤ hPredHi → k < program.predicates.length ∧
     program.inSource (program.predicate k) = true
   /-- The values `hTyped` are node-typed source values. -/
   hTyped : ∀ v ∈ [67, 68, 556, 560, 561, 562, 563, 564, 565], v < program.values.length ∧
@@ -75,7 +76,7 @@ SampleInBall stream, the selection and the memory check) are source predicates a
 holding domain `H` without `μ`'s call instantiates it. -/
 class MldsaHBaseCore (program : RealizedProgram) : Prop where
   /-- The predicates `48 … 270` are source predicates. -/
-  predsCore : ∀ k, 48 ≤ k → k ≤ 270 → k < program.predicates.length ∧
+  predsCore : ∀ k, corePredLo ≤ k → k ≤ hPredHi → k < program.predicates.length ∧
     program.inSource (program.predicate k) = true
   /-- The values `hTypedCore` are node-typed source values. -/
   typedCore : ∀ v ∈ [556, 560, 561, 562, 563, 564, 565], v < program.values.length ∧
@@ -98,14 +99,14 @@ variable {program : RealizedProgram} {F0 FH : RealizedProgram.FieldInterp}
 
 /-- A program with domain `H`'s base facts has those of its core. -/
 instance [h : MldsaHBase program] : MldsaHBaseCore program where
-  predsCore k h1 h2 := h.hPreds k (by omega) h2
+  predsCore k h1 h2 := h.hPreds k (by unfold hPredLo; unfold corePredLo at h1; omega) h2
   typedCore v hv := h.hTyped v (by
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hv ⊢
     omega)
 
 /-- A program with domain `H`'s base facts has those of `μ`'s call. -/
 instance [h : MldsaHBase program] : MldsaHBaseMu program where
-  predsMu k h1 h2 := h.hPreds k h1 (by omega)
+  predsMu k h1 h2 := h.hPreds k h1 (by unfold hPredHi; omega)
   typedMu v hv := h.hTyped v (by
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hv ⊢
     omega)
@@ -214,7 +215,7 @@ domain `H` read nothing else, so they hold for every program holding these predi
 (`SourceSatAt.toHSat`; an arm sharing domain `H` up to a renaming of its values, `GordieHowe/Language/RealizedProgram/Embed.lean`). -/
 structure HSat (e : program.Env interp) : Prop where
   /-- The predicates of domain `H` hold. -/
-  preds : ∀ k, 18 ≤ k → k ≤ 270 → program.HoldsAt e (program.predicate k).body
+  preds : ∀ k, hPredLo ≤ k → k ≤ hPredHi → program.HoldsAt e (program.predicate k).body
   /-- The values `hTyped` lie in their node types. -/
   types : ∀ v ∈ hTyped, ∀ i < (program.value v).size,
     (interp (program.valueField v)).InType (program.value v).type (program.reader e v i)
@@ -225,7 +226,7 @@ in their node types. The core's facts (`c̃'`'s and the stream's calls, SampleIn
 else: `μ` enters them only as the bits of value `120` (`muBits`). -/
 structure HSatCore (e : program.Env interp) : Prop where
   /-- The predicates of domain `H`'s core hold. -/
-  preds : ∀ k, 48 ≤ k → k ≤ 270 → program.HoldsAt e (program.predicate k).body
+  preds : ∀ k, corePredLo ≤ k → k ≤ hPredHi → program.HoldsAt e (program.predicate k).body
   /-- The values `hTypedCore` lie in their node types. -/
   types : ∀ v ∈ hTypedCore, ∀ i < (program.value v).size,
     (interp (program.valueField v)).InType (program.value v).type (program.reader e v i)
@@ -241,12 +242,12 @@ structure HSatMu (e : program.Env interp) : Prop where
 
 /-- **Domain `H`'s part gives its core.** -/
 theorem HSat.core {e : program.Env interp} (hs : HSat e) : HSatCore e where
-  preds k h1 h2 := hs.preds k (by omega) h2
+  preds k h1 h2 := hs.preds k (by unfold hPredLo; unfold corePredLo at h1; omega) h2
   types v hv := hs.types v (mem_hTyped_of_core hv)
 
 /-- **Domain `H`'s part gives `μ`'s part.** -/
 theorem HSat.mu {e : program.Env interp} (hs : HSat e) : HSatMu e where
-  preds k h1 h2 := hs.preds k h1 (by omega)
+  preds k h1 h2 := hs.preds k h1 (by unfold hPredHi; omega)
   types v hv := hs.types v (mem_hTyped_of_mu hv)
 
 /-- **Domain `H`'s part from its core and `μ`'s part.** -/
@@ -254,11 +255,11 @@ theorem HSat.ofParts {e : program.Env interp} (hc : HSatCore e) (hm : HSatMu e) 
   preds k h1 h2 := by
     by_cases h : k ≤ 47
     · exact hm.preds k h1 h
-    · exact hc.preds k (by omega) h2
+    · exact hc.preds k (by unfold corePredLo; omega) h2
   types v hv := (mem_hTyped_cases hv).elim (hm.types v) (hc.types v)
 
 /-- The predicates `18 … 270` are source predicates of the table. -/
-theorem hPreds_facts [MldsaHBase program] : ∀ k, 18 ≤ k → k ≤ 270 →
+theorem hPreds_facts [MldsaHBase program] : ∀ k, hPredLo ≤ k → k ≤ hPredHi →
     k < program.predicates.length ∧ program.inSource (program.predicate k) = true :=
   MldsaHBase.hPreds
 
@@ -572,20 +573,23 @@ structure KeyOf (pk : MLDSA44.PublicKey44) (x : program.Valuation interp) : Prop
 
 /-! ## The relation -/
 
-/-- **The witness of `MLDSA44.Native.ROMParams`**: a message of some length `L ≤ 32` (the
+/-- **The maximal message length of the ML-DSA-44 proofs of possession** (the paper's `n_m`):
+`32` bytes, the exported programs' message buffer (`statement.msgLen`). -/
+abbrev msgLenMax : ℕ := 32
+
+/-- **The witness of `MLDSA44.Native.ROMParams`**: a message of some length `L ≤ msgLenMax` (the
 program's maximum, its `statement.msgLen`) and the signature bytes
-(`PoP.MLDSA44.VarWitness 32`). -/
-abbrev VarWitness : Type := MLDSA44.PoP.VarWitness 32
+(`MLDSA44.PoP.VarWitness msgLenMax`). -/
+abbrev VarWitness : Type := MLDSA44.PoP.VarWitness msgLenMax
 
 /-- **The relation of the theorem at the realized program of `MLDSA44.Native.ROMParams`**: at every encoded key whose
 decoded key's `ExpandA` finishes within the byte budget (`MLDSA44.ExpandAWithin`) and whose
 preprocessing the statement
 holds (`KeyOf`), the ML-DSA-44 proof-of-possession relation for messages of at most `32` bytes holds
-for the witness (`PoP.MLDSA44.relUpTo 32`: `MLDSA44.VerifiesBytes` at the empty context). -/
+for the witness (`MLDSA44.PoP.relUpTo 32`: `MLDSA44.VerifiesBytes` at the empty context). -/
 def rel : Set (program.Valuation interp × VarWitness) :=
-  {p | ∀ s : MLDSA44.PoP.Statement 0,
-    MLDSA44.ExpandAWithin _root_.MLDSA.mldsa44 (MLDSA44.pkDecode44 s.key).rho →
-    KeyOf (MLDSA44.pkDecode44 s.key) p.1 → (s, p.2) ∈ MLDSA44.PoP.relUpTo 32}
+  Function.uncurry fun x w => ∀ s : MLDSA44.PoP.Statement 0, s.ExpandAWithin →
+    KeyOf (MLDSA44.pkDecode44 s.key) x → (s, w) ∈ MLDSA44.PoP.relUpTo msgLenMax
 
 /-! ## The readings of the committed values -/
 
@@ -914,7 +918,7 @@ program's predicates: the hash view (`HashView`, the Keccak trace's instance), S
 crossing (`CrossSound`, `mac.equal`) and the algebra at every key whose preprocessing the statement
 holds (`AlgebraSound`, domain `A`). The extractor is `extractor`. -/
 theorem rbr_of_views (hv : HashView program F0 FH) (sv : SampleView program F0 FH) (hx : CrossSound (program := program) (F0 := F0) (FH := FH)) (hA : AlgebraSound (program := program) (F0 := F0) (FH := FH)) :
-    rbrKnowledgeSoundness rel (program.sourceVerifier interp) extractor
+    RBRKnowledgeSound rel (program.sourceVerifier interp) extractor
       (program.eventState interp rel proj sv.event sv.use (sound_of_views hv sv hx hA))
       (program.roundError interp sv.eps) :=
   program.rbr_of_events interp rel proj sv.event sv.eps sv.use sv.bound (sound_of_views hv sv hx hA)

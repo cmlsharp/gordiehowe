@@ -84,11 +84,10 @@ theorem digit_cells {u : ℕ} (hu : u ∈ ROMParams.layout.digitValues) :
 theorem cell_classes : (List.range Pg.values.length).all (fun v =>
     !Pg.privCellB v || !decide (Pg.IsSourceValue v) ||
       (Pg.valueField v == 1 && (Pg.value v).node.map (·.name) == some "GF(2^16)" &&
-        decide (1 ≤ v) && decide (v - 1 ∈ Emulated.hV) &&
-        ((MLDSA44.wordsOwner? (v - 1)).isSome ||
-          [69, 119, 557, 560, 562, 563, 564, 565].contains (v - 1))) ||
+        (Emulated.eOf Pg v).any fun u => (MLDSA44.wordsOwner? u).isSome ||
+          [69, 119, 557, 560, 562, 563, 564, 565].contains u) ||
       (Pg.valueField v == 1 && (Pg.value v).node.map (·.name) == some "bit" &&
-        decide (1 ≤ v) && decide (v - 1 ∈ Emulated.hV) && [67, 68, 556, 561].contains (v - 1)) ||
+        (Emulated.eOf Pg v).any fun u => [67, 68, 556, 561].contains u) ||
       (Pg.valueField v == 0 && (Pg.value v).node.map (·.name) == some "GF(p^1)" &&
         (Emulated.aValues ROMParams.layout).contains v)) = true :=
   SourceCellCoverage.cell_classes
@@ -115,7 +114,10 @@ noncomputable instance honest :
   bound := conditions.derivable.elim fun _ hD => hD.bound
   keyOf := keyOf_stmtOfKey
   stmt68 := Honest.stmt68
-  hCells := SourceRoleCoverage.hCells Pg embedding conditions.wellFormed
+  hCells := SourceRoleCoverage.hCells
+    (by rw [Generated.MLDSA44.Native.ROMParams.SourceRoles.roles_eq]; decide +kernel)
+    Pg embedding conditions.wellFormed
+  eOf_val := by decide +kernel
   a_nodup := by decide +kernel
   a_cells := by
     intro v hv
@@ -149,15 +151,39 @@ noncomputable instance honest :
   macModel := conditions.model.macModel
   bounded i := stmtOf_eq (keyStmtOf i) ▸ stmtBounded_stmtOf (keyStmtOf i)
   checks := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.statement_checks
-  realPreds := by shape_decide
-  predicates_length := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicates_length
+  realPreds := by
+    unfold emulatedRealizationPreds
+    shape_decide
+  coverage := by
+    -- The held pairs land on the run `20 … 272`, decided once as a list; the 23 predicates
+    -- outside it are decided one by one against the short cases.
+    have hheld : ∀ p ∈ Emulated.MldsaEmbed.held Pg, hPredLo ≤ p.1 ∧ p.1 ≤ hPredHi := by
+      decide +kernel
+    have htgt : (Emulated.MldsaEmbed.held Pg).map Prod.snd = List.range' 20 253 := by
+      decide +kernel
+    intro q hq
+    rw [Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicates_length] at hq
+    by_cases h : 20 ≤ q ∧ q < 273
+    · left
+      obtain ⟨p, hp, rfl⟩ := List.mem_map.1 (htgt ▸ List.mem_range'_1.2 ⟨h.1, by omega⟩)
+      exact ⟨p, hp, rfl, hheld p hp⟩
+    · right
+      have hm : q ∈ List.range 20 ++ [273, 274, 275] := by
+        simp only [List.mem_append, List.mem_range, List.mem_cons, List.not_mem_nil]
+        omega
+      clear h hq
+      revert q
+      decide +kernel
   len6 := Reads.lenRef6
   macReal := macReal
   hb := by
+    rw [show (Emulated.MldsaEmbed.σ Pg).ref 525 = 527 from ref525]
+    change (Pg.predicate 275).body = _
     obtain ⟨c, h⟩ := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicate_mac_2eequal_body
     have hm : macReal = c := by simp only [macReal, Pg, h]
     rw [h, hm]
   crossOperands := by
+    rw [show (Emulated.MldsaEmbed.σ Pg).ref 525 = 527 from ref525]
     apply crossOperandsB_of_operands
     intro p hp dx x dy y k real hb
     obtain ⟨q, hq, hqp⟩ := exists_index_of_mem hp

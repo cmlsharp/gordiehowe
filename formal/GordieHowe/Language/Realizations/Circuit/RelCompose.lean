@@ -264,7 +264,7 @@ theorem circuitHolds_of_circuitCertB (hM : ir.DerivModel I primeNodes)
     rw [← relOk_eq_okB] at hrel
     have hz := (relOk_sound hC.hom hone hD hrel).2
     obtain ⟨hwl, hwv⟩ := hT rt hrs hfl
-    refine entryHolds_of_entryMeaningB hM hN hAr.neg1 hB hmean fun ex hex => ?_
+    refine entryHolds_of_entryMeaningB hN hAr.neg1 hmean fun ex hex => ?_
     cases hex
     intro i hi
     have hps := print_spec hM.wf.refsOrdered hF.table (ir.inputValuation I c x r v) rt

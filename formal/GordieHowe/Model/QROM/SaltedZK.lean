@@ -315,14 +315,15 @@ noncomputable def hybridLaw (Q : ℕ) (μP : PMF Coins) (μS : PMF SimCoins) :
   (PMF.uniformOfFintype (X → Y)).bind fun H =>
     (PMF.pi fun _ : Fin Q => μP).bind fun c => (PMF.pi fun _ : Fin Q => μS).map fun s => ⟨H, c, s⟩
 
-/-- **Hybrid `j`**: a valid proof query numbered `i < j` is answered by the simulator on the oracle in
+/-- **Hybrid `j`**, the prover's coins drawn from `μ`: a valid proof query numbered `i < j` is
+answered by the simulator on the oracle in
 force, which it reprograms; a valid proof query numbered `i ≥ j` by the honest prover on the oracle in
 force, which it leaves unchanged; an invalid proof query by `none`. Hybrid `0` is the real game and
 hybrid `Q` the simulated game (`acceptProb_hybridEnv_zero`, `acceptProb_hybridEnv_card`). -/
-noncomputable def hybridEnv (P : NARG.ProverFn X Y Stmt Wit Proof Coins)
+noncomputable def hybridEnv (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ : PMF Coins)
     (S : NARG.SimulatorFn X Y Stmt Proof SimCoins) (Q j : ℕ) :
     Quantum.Env (HybridTape X Y Coins SimCoins Q) (ProofQuery Stmt Wit) Proof X Y Q where
-  μ := hybridLaw Q P.coins S.coins
+  μ := hybridLaw Q μ S.coins
   oracle₀ ω := ω.oracle
   respond ω i req H :=
     if rel req.stmt req.wit then
@@ -339,9 +340,9 @@ variable [AddGroup Y] [Fintype Stmt] [DecidableEq Stmt] [Fintype Wit] [Decidable
     Quantum.QState (Quantum.DReg W n X Y (ProofQuery Stmt Wit) Proof))
 
 /-- Hybrid `0` is the real game. -/
-theorem acceptProb_hybridEnv_zero (P : NARG.ProverFn X Y Stmt Wit Proof Coins)
+theorem acceptProb_hybridEnv_zero (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ : PMF Coins)
     (S : NARG.SimulatorFn X Y Stmt Proof SimCoins) :
-    D.acceptProb (hybridEnv rel P S Q 0) post = D.acceptProb (realEnv rel P Q) post := by
+    D.acceptProb (hybridEnv rel P μ S Q 0) post = D.acceptProb (realEnv rel P μ Q) post := by
   refine D.acceptProb_comap post (fun ω => (ω.oracle, ω.proverCoins)) ?_ (fun _ => rfl) fun ω => ?_
   · simp only [realEnv, hybridEnv, tapeDist, hybridLaw, PMF.map_bind]
     congr 1
@@ -359,9 +360,9 @@ theorem acceptProb_hybridEnv_zero (P : NARG.ProverFn X Y Stmt Wit Proof Coins)
     split_ifs <;> rfl
 
 /-- Hybrid `Q` is the simulated game. -/
-theorem acceptProb_hybridEnv_card (P : NARG.ProverFn X Y Stmt Wit Proof Coins)
+theorem acceptProb_hybridEnv_card (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ : PMF Coins)
     (S : NARG.SimulatorFn X Y Stmt Proof SimCoins) :
-    D.acceptProb (hybridEnv rel P S Q Q) post = D.acceptProb (simEnv rel S Q) post := by
+    D.acceptProb (hybridEnv rel P μ S Q Q) post = D.acceptProb (simEnv rel S Q) post := by
   refine D.acceptProb_comap post (fun ω => (ω.oracle, ω.simCoins)) ?_ (fun _ => rfl) fun ω => ?_
   · simp only [simEnv, hybridEnv, tapeDist, hybridLaw, PMF.map_bind]
     congr 1
@@ -378,14 +379,15 @@ theorem acceptProb_hybridEnv_card (P : NARG.ProverFn X Y Stmt Wit Proof Coins)
 
 /-- **The hybrid argument over the proof queries**: the advantage is at most the sum over `j` of the
 distance between hybrids `j` and `j + 1`. -/
-theorem advantage_le_sum_hybrid (P : NARG.ProverFn X Y Stmt Wit Proof Coins)
+theorem advantage_le_sum_hybrid (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ : PMF Coins)
     (S : NARG.SimulatorFn X Y Stmt Proof SimCoins) :
-    QROM.advantage (Q := Q) rel P S D post ≤ ∑ j : Fin Q,
-      |D.acceptProb (hybridEnv rel P S Q j) post - D.acceptProb (hybridEnv rel P S Q (j + 1)) post| := by
-  rw [QROM.advantage, GordieHowe.advantage, ← acceptProb_hybridEnv_zero rel D post P S, ← acceptProb_hybridEnv_card rel D post P S,
-    ← Finset.sum_range_sub' (fun j => D.acceptProb (hybridEnv rel P S Q j) post) Q,
-    Fin.sum_univ_eq_sum_range (fun j => |D.acceptProb (hybridEnv rel P S Q j) post -
-      D.acceptProb (hybridEnv rel P S Q (j + 1)) post|)]
+    QROM.advantage (Q := Q) rel P μ S D post ≤ ∑ j : Fin Q,
+      |D.acceptProb (hybridEnv rel P μ S Q j) post - D.acceptProb
+        (hybridEnv rel P μ S Q (j + 1)) post| := by
+  rw [QROM.advantage, GordieHowe.advantage, ← acceptProb_hybridEnv_zero rel D post P μ S, ← acceptProb_hybridEnv_card rel D post P μ S,
+    ← Finset.sum_range_sub' (fun j => D.acceptProb (hybridEnv rel P μ S Q j) post) Q,
+    Fin.sum_univ_eq_sum_range (fun j => |D.acceptProb (hybridEnv rel P μ S Q j) post -
+      D.acceptProb (hybridEnv rel P μ S Q (j + 1)) post|)]
   exact Finset.abs_sum_le_sum_abs _ _
 
 end Hybrid
@@ -424,11 +426,12 @@ section Salted
 variable [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype Sd]
   [DecidableEq Sd] [Nonempty Sd] [Fintype C] [Nonempty C] [Fintype SC] [Nonempty SC]
   [Fintype Proof] [DecidableEq Proof] (saltOf : X → Option Sd) (rel : Stmt → Wit → Prop) [DecidableRel rel]
-  (P : NARG.ProverFn X Y Stmt Wit Proof (SaltedCoins Sd C)) (S : NARG.SimulatorFn X Y Stmt Proof (SaltedCoins Sd SC))
+  (P : NARG.ProverFn X Y Stmt Wit Proof (SaltedCoins Sd C)) (μ : PMF (SaltedCoins Sd C))
+  (S : NARG.SimulatorFn X Y Stmt Proof (SaltedCoins Sd SC))
 
 /-- **Locality of a salted argument.** The prover with salt `σ` and the simulator with salt `σ`
 read the oracle only on salt-free inputs and inputs with salt `σ`; the simulator's assignment list
-programs only inputs with its salt; the prover draws uniform coins (the simulator's coins are
+programs only inputs with its salt; the prover's coin law `μ` is uniform (the simulator's coins are
 uniform by definition, `Simulator.coins`). -/
 structure SaltedLocal : Prop where
   prove_congr : ∀ (H H' : X → Y) x w (c : SaltedCoins Sd C),
@@ -437,7 +440,7 @@ structure SaltedLocal : Prop where
     AgreeOnSlice saltOf s.salt H H' → S.run H x s = S.run H' x s
   run_salt : ∀ (H : X → Y) x (s : SaltedCoins Sd SC), ∀ a ∈ (S.run H x s).assignments,
     saltOf a.input = some s.salt
-  coins_eq : P.coins = PMF.uniformOfFintype (SaltedCoins Sd C)
+  coins_eq : μ = PMF.uniformOfFintype (SaltedCoins Sd C)
 
 /-- **The real slice law**: for uniform prover coins `c` and a uniform slice `F`, the honest
 proof of `(x, w)` on `H` with the slice of `c.salt` answered by `F`, and that oracle. -/
@@ -463,10 +466,10 @@ structure SliceClose (η : (X → Y) → ℝ) : Prop where
   nonneg : ∀ H, 0 ≤ η H
   congr : ∀ H H' : X → Y, AgreeOffSalted saltOf H H' → η H = η H'
 
-variable {saltOf rel P S} in
+variable {saltOf rel P μ S} in
 /-- Locality in the salt survives reading statements and witnesses through maps. -/
-theorem SaltedLocal.comap {Stmt' Wit' : Type*} (h : SaltedLocal saltOf P S) (fx : Stmt' → Stmt)
-    (fw : Wit' → Wit) : SaltedLocal saltOf (P.comap fx fw) (S.comap fx) where
+theorem SaltedLocal.comap {Stmt' Wit' : Type*} (h : SaltedLocal saltOf P μ S) (fx : Stmt' → Stmt)
+    (fw : Wit' → Wit) : SaltedLocal saltOf (P.comap fx fw) μ (S.comap fx) where
   prove_congr H H' x w c hH := h.prove_congr H H' (fx x) (fw w) c hH
   run_congr H H' x s hH := h.run_congr H H' (fx x) s hH
   run_salt H x s := h.run_salt H (fx x) s
@@ -605,8 +608,8 @@ theorem map_relabelS (j : Fin Q) :
   rw [h, ← PMF.map_comp, PMF.map_uniformOfFintype_equiv, PMF.map_fst_uniformOfFintype]
 
 /-- With uniform coins the hybrid tape is uniform. -/
-theorem hybridLaw_eq_uniform (hloc : SaltedLocal saltOf P S) :
-    hybridLaw (X := X) (Y := Y) Q P.coins S.coins = PMF.uniformOfFintype (HTape X Y Sd C SC Q) := by
+theorem hybridLaw_eq_uniform (hloc : SaltedLocal saltOf P μ S) :
+    hybridLaw (X := X) (Y := Y) Q μ S.coins = PMF.uniformOfFintype (HTape X Y Sd C SC Q) := by
   rw [hybridLaw, hloc.coins_eq, S.coins_eq_uniform, PMF.pi_uniformOfFintype,
     PMF.pi_uniformOfFintype, HybridTape.uniformOfFintype_eq_bind]
 
@@ -615,29 +618,29 @@ noncomputable def relabelEnvP (j : Fin Q) :
     Quantum.Env (HTape X Y Sd C SC Q × FreshSlice X Y (SaltedCoins Sd C)) (ProofQuery Stmt Wit) Proof X Y Q where
   μ := PMF.uniformOfFintype _
   oracle₀ ω := (relabelP saltOf j ω).oracle
-  respond ω := (hybridEnv rel P S Q j).respond (relabelP saltOf j ω)
+  respond ω := (hybridEnv rel P μ S Q j).respond (relabelP saltOf j ω)
 
 /-- Hybrid `j + 1` on the relabelled step tape with the simulator's coins at proof query `j`. -/
 noncomputable def relabelEnvS (j : Fin Q) :
     Quantum.Env (HTape X Y Sd C SC Q × FreshSlice X Y (SaltedCoins Sd SC)) (ProofQuery Stmt Wit) Proof X Y Q where
   μ := PMF.uniformOfFintype _
   oracle₀ ω := (relabelS saltOf j ω).oracle
-  respond ω := (hybridEnv rel P S Q (j + 1)).respond (relabelS saltOf j ω)
+  respond ω := (hybridEnv rel P μ S Q (j + 1)).respond (relabelS saltOf j ω)
 
-theorem acceptProbOn_hybridEnv_eq_relabelP (hloc : SaltedLocal saltOf P S) (j : Fin Q)
+theorem acceptProbOn_hybridEnv_eq_relabelP (hloc : SaltedLocal saltOf P μ S) (j : Fin Q)
     (L : Set (Quantum.LogReg (ProofQuery Stmt Wit) m)) :
-    D.acceptProbOn (hybridEnv rel P S Q j) post L =
-      D.acceptProbOn (relabelEnvP saltOf rel P S j) post L :=
+    D.acceptProbOn (hybridEnv rel P μ S Q j) post L =
+      D.acceptProbOn (relabelEnvP saltOf rel P μ S j) post L :=
   (D.acceptProbOn_comap post (relabelP saltOf j)
-    (by simp only [hybridEnv, relabelEnvP, hybridLaw_eq_uniform saltOf P S hloc, map_relabelP])
+    (by simp only [hybridEnv, relabelEnvP, hybridLaw_eq_uniform saltOf P μ S hloc, map_relabelP])
     (fun _ => rfl) (fun _ => rfl) L).symm
 
-theorem acceptProbOn_hybridEnv_eq_relabelS (hloc : SaltedLocal saltOf P S) (j : Fin Q)
+theorem acceptProbOn_hybridEnv_eq_relabelS (hloc : SaltedLocal saltOf P μ S) (j : Fin Q)
     (L : Set (Quantum.LogReg (ProofQuery Stmt Wit) m)) :
-    D.acceptProbOn (hybridEnv rel P S Q (j + 1)) post L =
-      D.acceptProbOn (relabelEnvS saltOf rel P S j) post L :=
+    D.acceptProbOn (hybridEnv rel P μ S Q (j + 1)) post L =
+      D.acceptProbOn (relabelEnvS saltOf rel P μ S j) post L :=
   (D.acceptProbOn_comap post (relabelS saltOf j)
-    (by simp only [hybridEnv, relabelEnvS, hybridLaw_eq_uniform saltOf P S hloc, map_relabelS])
+    (by simp only [hybridEnv, relabelEnvS, hybridLaw_eq_uniform saltOf P μ S hloc, map_relabelS])
     (fun _ => rfl) (fun _ => rfl) L).symm
 
 section StepEnv
@@ -789,7 +792,7 @@ section Pieces
 variable {R : Type*} [Fintype R] [Nonempty R]
 
 /-- A simulator with a salt other than `σ` does not see a shift on the slice of `σ`. -/
-theorem simShifted_eq_of_ne (hloc : SaltedLocal saltOf P S) {D' : X → Y} {σ : Sd}
+theorem simShifted_eq_of_ne (hloc : SaltedLocal saltOf P μ S) {D' : X → Y} {σ : Sd}
     (hD : ∀ y, saltOf y ≠ some σ → D' y = 0) {s : SaltedCoins Sd SC} (hne : s.salt ≠ σ)
     (H : X → Y) (x : Stmt) :
     simShifted S D' H x s = ⟨some (S.run H x s).proof, H.reprogram (S.run H x s).assignments⟩ := by
@@ -813,13 +816,13 @@ theorem sliceShift_eq_zero {σ : Sd} {H F : X → Y} {y : X} (hy : saltOf y ≠ 
 /-- **The salt-collision step for the prover.** Hybrid `j` relabelled with the prover's coins at
 proof query `j` agrees with the shifted environment unless an earlier simulator drew the prover's salt.
 -/
-theorem relabelEnvP_eq_off (hloc : SaltedLocal saltOf P S) (j : Fin Q)
+theorem relabelEnvP_eq_off (hloc : SaltedLocal saltOf P μ S) (j : Fin Q)
     (ω : HTape X Y Sd C SC Q × FreshSlice X Y (SaltedCoins Sd C))
     (hω : ω ∉ {ω : HTape X Y Sd C SC Q × FreshSlice X Y (SaltedCoins Sd C) |
       ∃ i : Fin Q, (i : ℕ) < j ∧ (ω.1.simCoins i).salt = ω.2.coins.salt}) :
-    (relabelEnvP saltOf rel P S j).oracle₀ ω = (stepEnv rel P S j (freshShift saltOf)
+    (relabelEnvP saltOf rel P μ S j).oracle₀ ω = (stepEnv rel P S j (freshShift saltOf)
         (respProver rel P)).oracle₀ ω ∧
-      (relabelEnvP saltOf rel P S j).respond ω = (stepEnv rel P S j (freshShift saltOf)
+      (relabelEnvP saltOf rel P μ S j).respond ω = (stepEnv rel P S j (freshShift saltOf)
         (respProver rel P)).respond ω := by
   refine ⟨replaceSlice_eq_add saltOf _ _ _, funext fun i => funext fun req => funext fun Hin => ?_⟩
   simp only [relabelEnvP, hybridEnv, relabelP]
@@ -828,7 +831,7 @@ theorem relabelEnvP_eq_off (hloc : SaltedLocal saltOf P S) (j : Fin Q)
     by_cases hrel : rel req.stmt req.wit
     · have hne : (ω.1.simCoins i).salt ≠ ω.2.coins.salt := fun h => hω ⟨i, hi, h⟩
       simp only [hrel, ite_true, hi]
-      exact (simShifted_eq_of_ne saltOf P S hloc (D' := freshShift saltOf ω) (σ := ω.2.coins.salt)
+      exact (simShifted_eq_of_ne saltOf P μ S hloc (D' := freshShift saltOf ω) (σ := ω.2.coins.salt)
         (fun y hy => sliceShift_eq_zero saltOf hy) hne Hin req.stmt).symm
     · simp [hrel]
   · have hij : i = j := Fin.ext hi
@@ -841,13 +844,13 @@ theorem relabelEnvP_eq_off (hloc : SaltedLocal saltOf P S) (j : Fin Q)
     by_cases hrel : rel req.stmt req.wit <;> simp [hrel, h1, Function.update_of_ne h2]
 
 /-- **The salt-collision step for the simulator.** -/
-theorem relabelEnvS_eq_off (hloc : SaltedLocal saltOf P S) (j : Fin Q)
+theorem relabelEnvS_eq_off (hloc : SaltedLocal saltOf P μ S) (j : Fin Q)
     (ω : HTape X Y Sd C SC Q × FreshSlice X Y (SaltedCoins Sd SC))
     (hω : ω ∉ {ω : HTape X Y Sd C SC Q × FreshSlice X Y (SaltedCoins Sd SC) |
       ∃ i : Fin Q, (i : ℕ) < j ∧ (ω.1.simCoins i).salt = ω.2.coins.salt}) :
-    (relabelEnvS saltOf rel P S j).oracle₀ ω = (stepEnv rel P S j (freshShift saltOf)
+    (relabelEnvS saltOf rel P μ S j).oracle₀ ω = (stepEnv rel P S j (freshShift saltOf)
         (respSim rel S)).oracle₀ ω ∧
-      (relabelEnvS saltOf rel P S j).respond ω = (stepEnv rel P S j (freshShift saltOf)
+      (relabelEnvS saltOf rel P μ S j).respond ω = (stepEnv rel P S j (freshShift saltOf)
         (respSim rel S)).respond ω := by
   refine ⟨replaceSlice_eq_add saltOf _ _ _, funext fun i => funext fun req => funext fun Hin => ?_⟩
   simp only [relabelEnvS, hybridEnv, relabelS]
@@ -858,7 +861,7 @@ theorem relabelEnvS_eq_off (hloc : SaltedLocal saltOf P S) (j : Fin Q)
     by_cases hrel : rel req.stmt req.wit
     · have hne : (ω.1.simCoins i).salt ≠ ω.2.coins.salt := fun h => hω ⟨i, hi, h⟩
       simp only [hrel, ite_true, h1, Function.update_of_ne h2]
-      exact (simShifted_eq_of_ne saltOf P S hloc (D' := freshShift saltOf ω) (σ := ω.2.coins.salt)
+      exact (simShifted_eq_of_ne saltOf P μ S hloc (D' := freshShift saltOf ω) (σ := ω.2.coins.salt)
         (fun y hy => sliceShift_eq_zero saltOf hy) hne Hin req.stmt).symm
     · simp [hrel]
   · have hij : i = j := Fin.ext hi
@@ -959,7 +962,7 @@ theorem map_shift_eq {Cx β : Type*} [Fintype Cx] [Nonempty Cx] (H O : X → Y)
 
 /-- Before proof query `j`, the unshifted environment's oracle agrees with the initial oracle on the
 salt-free inputs. -/
-theorem stepEnv_oracleIn_unsalted (hloc : SaltedLocal saltOf P S) (j : Fin Q)
+theorem stepEnv_oracleIn_unsalted (hloc : SaltedLocal saltOf P μ S) (j : Fin Q)
     (resp : HTape X Y Sd C SC Q × R → ProofQuery Stmt Wit → (X → Y) → Quantum.EnvReply Proof (X → Y))
     (ω : HTape X Y Sd C SC Q × R) :
     ∀ rs : List (ProofQuery Stmt Wit), rs.length ≤ j → ∀ y, saltOf y = none →
@@ -1022,7 +1025,7 @@ end Pieces
 
 theorem hybridEnv_respond_lt (j : ℕ) (ω : HTape X Y Sd C SC Q) {i : Fin Q} (hi : (i : ℕ) < j)
     (req : ProofQuery Stmt Wit) (H : X → Y) :
-    (hybridEnv rel P S Q j).respond ω i req H =
+    (hybridEnv rel P μ S Q j).respond ω i req H =
       if rel req.stmt req.wit then
         ⟨some (S.run H req.stmt (ω.simCoins i)).proof,
           H.reprogram (S.run H req.stmt (ω.simCoins i)).assignments⟩
@@ -1031,27 +1034,28 @@ theorem hybridEnv_respond_lt (j : ℕ) (ω : HTape X Y Sd C SC Q) {i : Fin Q} (h
 
 /-- **The two hybrids agree on the branches that never make proof query `j`.** -/
 theorem acceptProbOn_hybridEnv_notMade (j : Fin Q) :
-    D.acceptProbOn (hybridEnv rel P S Q j) post (Quantum.madeLogs (j : ℕ))ᶜ =
-      D.acceptProbOn (hybridEnv rel P S Q (j + 1)) post (Quantum.madeLogs (j : ℕ))ᶜ := by
+    D.acceptProbOn (hybridEnv rel P μ S Q j) post (Quantum.madeLogs (j : ℕ))ᶜ =
+      D.acceptProbOn (hybridEnv rel P μ S Q (j + 1)) post (Quantum.madeLogs (j : ℕ))ᶜ := by
   have horacle : ∀ ω (rs : List (ProofQuery Stmt Wit)), rs.length ≤ j →
-      (hybridEnv rel P S Q j).oracleIn ω rs = (hybridEnv rel P S Q (j + 1)).oracleIn ω rs :=
-    fun ω rs hrs => Quantum.Env.oracleIn_eq_of_update_eq (hybridEnv rel P S Q j)
-      (hybridEnv rel P S Q (j + 1)) rfl rs fun i hi => by
+      (hybridEnv rel P μ S Q j).oracleIn ω rs = (hybridEnv rel P μ S Q (j + 1)).oracleIn ω rs :=
+    fun ω rs hrs => Quantum.Env.oracleIn_eq_of_update_eq (hybridEnv rel P μ S Q j)
+      (hybridEnv rel P μ S Q (j + 1)) rfl rs fun i hi => by
         simp only [Quantum.Env.update]
         split_ifs with hQ
-        · rw [hybridEnv_respond_lt rel P S j ω (i := ⟨i, hQ⟩) (by simp; omega),
-            hybridEnv_respond_lt rel P S (j + 1) ω (i := ⟨i, hQ⟩) (by simp; omega)]
+        · rw [hybridEnv_respond_lt rel P μ S j ω (i := ⟨i, hQ⟩) (by simp; omega),
+            hybridEnv_respond_lt rel P μ S (j + 1) ω (i := ⟨i, hQ⟩) (by simp; omega)]
         · rfl
   have hans : ∀ ω (rs : List (ProofQuery Stmt Wit)) req, rs.length < j →
-      (hybridEnv rel P S Q j).answerAfter ω rs req =
-        (hybridEnv rel P S Q (j + 1)).answerAfter ω rs req := fun ω rs req hrs => by
+      (hybridEnv rel P μ S Q j).answerAfter ω rs req =
+        (hybridEnv rel P μ S Q (j + 1)).answerAfter ω rs req := fun ω rs req hrs => by
     simp only [Quantum.Env.answerAfter, ← horacle ω rs hrs.le]
     split_ifs with hQ
-    · rw [hybridEnv_respond_lt rel P S j ω (i := ⟨rs.length, hQ⟩) (by simp; omega),
-        hybridEnv_respond_lt rel P S (j + 1) ω (i := ⟨rs.length, hQ⟩) (by simp; omega)]
+    · rw [hybridEnv_respond_lt rel P μ S j ω (i := ⟨rs.length, hQ⟩) (by simp; omega),
+        hybridEnv_respond_lt rel P μ S (j + 1) ω (i := ⟨rs.length, hQ⟩) (by simp; omega)]
     · rfl
   refine Finset.sum_congr rfl fun ω _ => ?_
-  have h := D.acceptProbOnAt_notMade_eq (hybridEnv rel P S Q j) (hybridEnv rel P S Q (j + 1)) post
+  have h := D.acceptProbOnAt_notMade_eq (hybridEnv rel P μ S Q j)
+      (hybridEnv rel P μ S Q (j + 1)) post
     (ω := ω) (ω' := ω) (j := j) (fun rs req h => hans ω rs req h) (fun rs h => horacle ω rs h)
     Set.univ
   rw [Set.univ_inter] at h
@@ -1059,25 +1063,25 @@ theorem acceptProbOn_hybridEnv_notMade (j : Fin Q) :
   rfl
 
 /-- Step 2 for the prover: the salt-collision event. -/
-theorem abs_relabelEnvP_sub_le (hloc : SaltedLocal saltOf P S) (j : Fin Q) :
-    |D.acceptProbOn (relabelEnvP saltOf rel P S j) post (Quantum.madeLogs (j : ℕ)) -
+theorem abs_relabelEnvP_sub_le (hloc : SaltedLocal saltOf P μ S) (j : Fin Q) :
+    |D.acceptProbOn (relabelEnvP saltOf rel P μ S j) post (Quantum.madeLogs (j : ℕ)) -
       D.acceptProbOn (stepEnv rel P S j (freshShift saltOf) (respProver rel P)) post
         (Quantum.madeLogs (j : ℕ))| ≤ j / Fintype.card Sd :=
-  (D.abs_acceptProbOn_sub_le_of_eq_off post (relabelEnvP saltOf rel P S j)
+  (D.abs_acceptProbOn_sub_le_of_eq_off post (relabelEnvP saltOf rel P μ S j)
     (stepEnv rel P S j (freshShift saltOf) (respProver rel P)) rfl _
-    (fun ω hω => (relabelEnvP_eq_off saltOf rel P S hloc j ω hω).1)
-    (fun ω hω => (relabelEnvP_eq_off saltOf rel P S hloc j ω hω).2) _).trans
+    (fun ω hω => (relabelEnvP_eq_off saltOf rel P μ S hloc j ω hω).1)
+    (fun ω hω => (relabelEnvP_eq_off saltOf rel P μ S hloc j ω hω).2) _).trans
     (prob_saltCollision_le j)
 
 /-- Step 2 for the simulator: the salt-collision event. -/
-theorem abs_relabelEnvS_sub_le (hloc : SaltedLocal saltOf P S) (j : Fin Q) :
-    |D.acceptProbOn (relabelEnvS saltOf rel P S j) post (Quantum.madeLogs (j : ℕ)) -
+theorem abs_relabelEnvS_sub_le (hloc : SaltedLocal saltOf P μ S) (j : Fin Q) :
+    |D.acceptProbOn (relabelEnvS saltOf rel P μ S j) post (Quantum.madeLogs (j : ℕ)) -
       D.acceptProbOn (stepEnv rel P S j (freshShift saltOf) (respSim rel S)) post
         (Quantum.madeLogs (j : ℕ))| ≤ j / Fintype.card Sd :=
-  (D.abs_acceptProbOn_sub_le_of_eq_off post (relabelEnvS saltOf rel P S j)
+  (D.abs_acceptProbOn_sub_le_of_eq_off post (relabelEnvS saltOf rel P μ S j)
     (stepEnv rel P S j (freshShift saltOf) (respSim rel S)) rfl _
-    (fun ω hω => (relabelEnvS_eq_off saltOf rel P S hloc j ω hω).1)
-    (fun ω hω => (relabelEnvS_eq_off saltOf rel P S hloc j ω hω).2) _).trans
+    (fun ω hω => (relabelEnvS_eq_off saltOf rel P μ S hloc j ω hω).1)
+    (fun ω hω => (relabelEnvS_eq_off saltOf rel P μ S hloc j ω hω).2) _).trans
     (prob_saltCollision_le j)
 
 /-- Step 3 for the prover: O2H for the fresh slice of the prover's salt, charging the `q` query
@@ -1172,7 +1176,7 @@ theorem map_refusal_eq_salt {Cx : Type*} [Fintype Cx] [Nonempty Cx] (O : X → Y
 
 /-- Step 4: proof query `j`'s kernel, the honest proof on the fresh slice, replaced by the
 simulator's. -/
-theorem abs_stepEnv_kernel_le {η : (X → Y) → ℝ} (hloc : SaltedLocal saltOf P S)
+theorem abs_stepEnv_kernel_le {η : (X → Y) → ℝ} (hloc : SaltedLocal saltOf P μ S)
     (hclose : SliceClose saltOf rel P S η) (j : Fin Q) :
     |D.acceptProbOn (stepEnv rel P S j 0 (respProverFresh saltOf rel P)) post (Quantum.madeLogs (j : ℕ)) -
       D.acceptProbOn (stepEnv rel P S j 0 (respSimFresh saltOf rel S)) post (Quantum.madeLogs (j : ℕ))| ≤
@@ -1194,7 +1198,7 @@ theorem abs_stepEnv_kernel_le {η : (X → Y) → ℝ} (hloc : SaltedLocal saltO
     · rw [stepEnv_respond_gt rel P S j _ _ _ hgt, stepEnv_respond_gt rel P S j _ _ _ hgt]
   · set O := (stepEnv rel P S j 0 (respProverFresh saltOf rel P)).oracleIn (v, τ₀) rs
     have hO : η O = η v.oracle := hclose.congr _ _ fun y hy =>
-      stepEnv_oracleIn_unsalted saltOf rel P S hloc j _ (v, τ₀) rs hrs.le y hy
+      stepEnv_oracleIn_unsalted saltOf rel P μ S hloc j _ (v, τ₀) rs hrs.le y hy
     rw [map_respond_stepEnvP saltOf rel P S j v req O, map_respond_stepEnvS saltOf rel P S j v req O]
     by_cases hrel : rel req.stmt req.wit
     · simp only [honestReply, simReply, hrel, ite_true]
@@ -1209,9 +1213,10 @@ theorem abs_stepEnv_kernel_le {η : (X → Y) → ℝ} (hloc : SaltedLocal saltO
 most `4 q √(n / |Sd|)` (two O2H steps over the `q` query slots of a budget `bud`) plus
 `2 j / |Sd|` (an earlier simulator drew proof query `j`'s salt, twice) plus `𝔼 H, η H` (proof query
 `j`'s kernel). -/
-theorem abs_acceptProb_hybridEnv_sub_le {η : (X → Y) → ℝ} (hloc : SaltedLocal saltOf P S)
+theorem abs_acceptProb_hybridEnv_sub_le {η : (X → Y) → ℝ} (hloc : SaltedLocal saltOf P μ S)
     (hclose : SliceClose saltOf rel P S η) {q : ℕ} (bud : D.Budget q) (j : Fin Q) :
-    |D.acceptProb (hybridEnv rel P S Q j) post - D.acceptProb (hybridEnv rel P S Q (j + 1)) post| ≤
+    |D.acceptProb (hybridEnv rel P μ S Q j) post - D.acceptProb
+      (hybridEnv rel P μ S Q (j + 1)) post| ≤
       4 * q * √(n / Fintype.card Sd) + 2 * j / Fintype.card Sd +
         𝔼[H ← (X → Y) : η H] := by
   have hsplit : ∀ E : Quantum.Env (HTape X Y Sd C SC Q) (ProofQuery Stmt Wit) Proof X Y Q, D.acceptProb E post =
@@ -1219,15 +1224,15 @@ theorem abs_acceptProb_hybridEnv_sub_le {η : (X → Y) → ℝ} (hloc : SaltedL
     fun E => by
       rw [← Quantum.Distinguisher.acceptProbOn_univ, D.acceptProbOn_eq_add post E Set.univ (Quantum.madeLogs (j : ℕ)),
         Set.univ_inter, Set.univ_inter]
-  rw [hsplit, hsplit, acceptProbOn_hybridEnv_notMade rel P S D post j,
-    add_sub_add_right_eq_sub, acceptProbOn_hybridEnv_eq_relabelP saltOf rel P S D post hloc j,
-    acceptProbOn_hybridEnv_eq_relabelS saltOf rel P S D post hloc j]
+  rw [hsplit, hsplit, acceptProbOn_hybridEnv_notMade rel P μ S D post j,
+    add_sub_add_right_eq_sub, acceptProbOn_hybridEnv_eq_relabelP saltOf rel P μ S D post hloc j,
+    acceptProbOn_hybridEnv_eq_relabelS saltOf rel P μ S D post hloc j]
   have hsqrt : √(n * (Fintype.card Sd : ℝ)⁻¹) = √(n / Fintype.card Sd) := by rw [div_eq_mul_inv]
-  have h1 := abs_relabelEnvP_sub_le saltOf rel P S D post hloc j
+  have h1 := abs_relabelEnvP_sub_le saltOf rel P μ S D post hloc j
   have h2 := abs_stepEnvP_sub_le saltOf rel P S D post bud j
-  have h3 := abs_stepEnv_kernel_le saltOf rel P S D post hloc hclose j
+  have h3 := abs_stepEnv_kernel_le saltOf rel P μ S D post hloc hclose j
   have h4 := abs_stepEnvS_sub_le saltOf rel P S D post bud j
-  have h5 := abs_relabelEnvS_sub_le saltOf rel P S D post hloc j
+  have h5 := abs_relabelEnvS_sub_le saltOf rel P μ S D post hloc j
   rw [hsqrt] at h2 h4
   have e : ∀ a b c d e f : ℝ, |a - f| ≤ |a - b| + |c - b| + |c - d| + |d - e| + |f - e| := by
     intro a b c d e f
@@ -1261,11 +1266,11 @@ against the simulator `S`. Request slots are not charged
 proof query is `4 q √(n / |Sd|) ≤ 4 t / √|Sd|`.
 
 Hypotheses: `hloc`, the locality of the prover and the simulator in the salt; `hclose`, the
-classical one-proof statement, proved for the compiled Longfellow proof in
+classical one-proof statement, proved for the spBCS compiler's prover `niProverZKM` in
 `GordieHowe/SPBCS/ZeroKnowledge.lean`. -/
 theorem zeroKnowledgeAfterAdaptive_of_sliceClose {η : (X → Y) → ℝ}
-    (hloc : SaltedLocal saltOf P S) (hclose : SliceClose saltOf rel P S η) :
-    ZeroKnowledgeAfterAdaptive rel P S fun t Q =>
+    (hloc : SaltedLocal saltOf P μ S) (hclose : SliceClose saltOf rel P S η) :
+    ZeroKnowledgeAfterAdaptive rel P μ S fun t Q =>
       4 * Q * t / √(Fintype.card Sd) + Q * (Q - 1) / Fintype.card Sd + Q * 𝔼[H ← (X → Y) : η H] := by
   intro t W _ n m Q q D post bud hD
   have hc : (0 : ℝ) < Fintype.card Sd := Nat.cast_pos.2 Fintype.card_pos
@@ -1280,15 +1285,16 @@ theorem zeroKnowledgeAfterAdaptive_of_sliceClose {η : (X → Y) → ℝ}
             mul_le_mul_of_nonneg_left h1 (by positivity)
         _ = (n * q : ℕ) := by push_cast; ring
         _ ≤ t := by exact_mod_cast hD
-  have hstep : ∀ j : Fin Q, |D.acceptProb (hybridEnv rel P S Q j) post -
-      D.acceptProb (hybridEnv rel P S Q (j + 1)) post| ≤
+  have hstep : ∀ j : Fin Q, |D.acceptProb (hybridEnv rel P μ S Q j) post -
+      D.acceptProb (hybridEnv rel P μ S Q (j + 1)) post| ≤
         4 * t / √(Fintype.card Sd) + 2 * j / Fintype.card Sd + 𝔼[H ← (X → Y) : η H] := fun j => by
-    refine (abs_acceptProb_hybridEnv_sub_le saltOf rel P S D post hloc hclose bud j).trans ?_
+    refine (abs_acceptProb_hybridEnv_sub_le saltOf rel P μ S D post hloc hclose bud j).trans ?_
     have : 4 * (q : ℝ) * √(n / Fintype.card Sd) ≤ 4 * t / √(Fintype.card Sd) := by
       rw [Real.sqrt_div' _ hc.le, mul_div_assoc', mul_assoc]
       gcongr
     linarith
-  refine (advantage_le_sum_hybrid rel D post P S).trans ((Finset.sum_le_sum fun j _ => hstep j).trans ?_)
+  refine (advantage_le_sum_hybrid rel D post P μ S).trans
+      ((Finset.sum_le_sum fun j _ => hstep j).trans ?_)
   rw [Finset.sum_add_distrib, Finset.sum_add_distrib, Finset.sum_const, Finset.sum_const,
     Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, nsmul_eq_mul]
   have hsum : ∑ j : Fin Q, 2 * (j : ℝ) / Fintype.card Sd = Q * (Q - 1) / Fintype.card Sd := by

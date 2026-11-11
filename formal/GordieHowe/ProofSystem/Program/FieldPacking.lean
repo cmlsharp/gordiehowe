@@ -8,6 +8,7 @@ public import GordieHowe.Language.RealizedProgram.Views
 public import GordieHowe.ProofSystem.Zerocheck.AffineBatch
 public import GordieHoweNative.Language.PackingDesc
 public import GordieHoweNative.Language.TableauNums
+public import GordieHowe.Foundations.Algebra.FiniteFieldStages
 
 @[expose] public section
 
@@ -29,7 +30,8 @@ member (`GordieHowe/ProofSystem/Program/FieldPackingGeneric.lean`), realizing ev
 domain of at most `|K|` points.
 
 * **The packing facts** (`FieldInterp.Packing`): the characteristic `p`, the degree `n` of `K` over
-  `F_p` (`top_eq`: `F_{p^n} = K`), the masking subfield `S0 = F_{p^s0}`, the realized edges by
+  `F_p` (`card_eq`: `|K| = p^n`, so `F_{p^n} = K`, `top_eq`), the masking subfield
+  `S0 = F_{p^s0}` (`s0_dvd`: `s0 ∣ n`), the realized edges by
   child degree, relative degree and masking mode (`edge`, `EdgeKit`), the degree of every node
   name with its subgroup the subfield of that degree (`nodeDeg`, `node_eq`), the evaluation points
   in `S0`, and the bit coordinates of a node of any degree (`coord_eq`).
@@ -56,10 +58,12 @@ class FieldInterp.Packing (F : FieldInterp) where
   [expChar : ExpChar F.K p]
   /-- The degree of `K` over `F_p`. -/
   n : ℕ
-  /-- `F_{p^n}` is `K`. -/
-  top_eq : fixedField F.K p n = ⊤
+  /-- `K` has `p^n` elements. -/
+  card_eq : Fintype.card F.K = p ^ n
   /-- The degree of the masking subfield `S0` over `F_p`. -/
   s0 : ℕ
+  /-- The masking subfield is a subfield of `K`: `s0` divides `n`. -/
+  s0_dvd : s0 ∣ n
   /-- Membership in `S0` is decidable. -/
   [decS0 : DecidablePred (· ∈ fixedField F.K p s0)]
   /-- The realized edges by child degree, relative degree and masking mode. -/
@@ -91,6 +95,11 @@ class FieldInterp.Packing (F : FieldInterp) where
   nodes : Option (Sumcheck.Nodes F.K)
 
 attribute [instance] FieldInterp.Packing.expChar FieldInterp.Packing.decS0
+
+/-- **`F_{p^n}` is `K`** (`fixedField_eq_top` at `card_eq`). -/
+theorem FieldInterp.Packing.top_eq {F : FieldInterp} (Pk : F.Packing) :
+    fixedField F.K Pk.p Pk.n = ⊤ :=
+  RelativePacking.fixedField_eq_top Pk.card_eq
 
 /-- **The packing descriptor of `Pk` at the queries of `D`**: the part of a packing the field
 checks read (`fieldOkB`, through `fieldOkBD`), as naturals and Booleans: the degree `n`, the

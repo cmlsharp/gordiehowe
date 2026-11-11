@@ -23,6 +23,7 @@ structure SourceValues (K : Type) where
   mag1 : ℕ → ℕ
   mag2 : ℕ → ℕ
   squares : ℕ
+  high : ℕ → ℕ
 
 /-- **Interpret a declared carrier role and slot.** Statement values are supplied separately
 by the execution's statement. Unused tags and slots contribute zero. -/
@@ -35,6 +36,7 @@ by the execution's statement. Unused tags and slots contribute zero. -/
   | .aWitness, 2, j => (s.mag1 j : ℕ)
   | .aWitness, 3, j => (s.mag2 j : ℕ)
   | .aWitness, 4, j => (s.mag2 j % 128 : ℕ)
+  | .aWitness, 5, j => (s.high j : ℕ)
   | .carry, 0, j => (s.quotient j : ℕ)
   | .carry, 1, j => if j = 0 then (s.squares : ℕ) else 0
   | _, _, _ => 0
@@ -68,7 +70,7 @@ open RealizedProgram
 variable {program : RealizedProgram} [FalconRingPowers program] [FalconRingSelect program]
   [FalconRingMember program] [FalconCarrierBase program] [FalconCarrierHonest program]
   [FalconRingRoleFacts program] {I : Interp} [EField (I 0)]
-  {msgLen : Nat} {G : Native.Signer msgLen}
+  {msgLen : Nat} {G : Signer msgLen}
 attribute [local instance] ringField_carrier
 
 omit [FalconCarrierBase program] [FalconCarrierHonest program]
@@ -84,21 +86,21 @@ theorem carrier_execOf_bound (y : RingIn G) {v : Nat} {x : Expr}
 
 /-- **The bound quotient equals the direct witness quotient.** -/
 theorem carrier_execOf_quot (y : RingIn G) {j : Nat} (hj : j < 512) :
-    castElt (program.execOf I (honestVal program I y) 11 j) =
+    castElt (program.execOf I (honestVal program I y) 12 j) =
       ((Carrier.quot y.normIn j : Nat) : (I 0).K) := by
   rw [carrier_execOf_bound y FalconCarrierHonest.quotKind]
   exact rd_quot y hj
 
 /-- **The bound magnitude equals the direct witness magnitude.** -/
 theorem carrier_execOf_mag1 (y : RingIn G) {j : Nat} (hj : j < 512) :
-    castElt (program.execOf I (honestVal program I y) 12 j) =
+    castElt (program.execOf I (honestVal program I y) 15 j) =
       ((Carrier.mag1 y.normIn j : Nat) : (I 0).K) := by
   rw [carrier_execOf_bound y FalconCarrierHonest.mag1Kind]
   exact rd_mag1 y hj
 
 /-- **The bound squared norm equals the direct witness squared norm.** -/
 theorem carrier_execOf_squares (y : RingIn G) :
-    castElt (program.execOf I (honestVal program I y) 16 0) =
+    castElt (program.execOf I (honestVal program I y) 19 0) =
       ((Carrier.squares y.normIn : Nat) : (I 0).K) := by
   rw [carrier_execOf_bound y FalconCarrierHonest.sqKind]
   exact rd_sq y

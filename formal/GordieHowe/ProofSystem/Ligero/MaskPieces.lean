@@ -15,7 +15,8 @@ public import GordieHowe.Headline
 
 A mask polynomial of degree `< D` is committed as pieces `p_m` of degree `< d_m` with shifts `s_m`,
 and recombined as `Σ_m X ^ (s_m) · p_m` (`split`). This file proves the polynomial facts behind the
-zero-knowledge of that representation (the paper's Appendix D.4, Mask pieces and the subfield test).
+zero-knowledge of that representation (the paper's `app:ligero-pieces`, Mask pieces and the subfield
+test).
 
 * **The covering lemma** (`exists_splitting_vanishing`): when the intervals
   `[s_m, s_m + d_m − t − 1]` cover `[0, D − 1 − t]` (`Covers`), every polynomial of degree `< D`

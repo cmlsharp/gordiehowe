@@ -1202,7 +1202,7 @@ theorem holdsWith_mod_of_fieldEq (hwf : ir.WellFormed) (hI : I.Registered ir)
     ir.HoldsWith rd (.mod d 0 e e' real) := by
   have hd := (hpo.1 (d, e) (by simp [PredBody.exprs])).1
   have hchar := (modData hwf hI hL hd hok.char).2.1
-  refine (holdsWith_mod_iff (.inr (by omega))).2 fun i hi => ?_
+  refine holdsWith_mod_iff.2 fun i hi => ?_
   obtain ⟨ha, hb, hca, hcb⟩ := integerOk_sides hwf hI hL hF hK hLok hpo hok hi
   have hdvd : ((ir.charOf (ir.domainField d) : ℕ) : ℤ) ∣
       ir.evalIntWith rd d e i - ir.evalIntWith rd d e' i := by

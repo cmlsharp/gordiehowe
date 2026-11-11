@@ -66,7 +66,7 @@ def groupedFact (ctx : DerivCtx) (self pid : ℕ) (body : PredBody) (fs : List F
       | some (.leaf acc) =>
         match groupedNums fs d E' G u real (ivs.drop G.groups.length) with
         | some (Rb, Nd, N, lob, hib, lo', hi') =>
-          if real.form.isProduct = false ∧ 0 < q ∧ 2 < ir.charOf (ir.domainField d) ∧
+          if 0 < q ∧ 2 < ir.charOf (ir.domainField d) ∧
               ir.macUnitsOkB d u G = true ∧
               ir.residuesB d q u G acc = true ∧ ir.finalQuotB d q E' u G real = true ∧
               ir.groupRowsB ctx self d u G acc fs rows ivs = true ∧

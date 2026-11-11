@@ -24,7 +24,7 @@ reads is public (`pub`, a bit mask over the shared expressions), and its length 
 packed tables of fixed-width entries (`packedGet`), read with `Nat` shifts. Each is checked by one
 local rule per shared expression, from the expression and the annotations of the entries it
 references (`exprAnnOkB`), in one pass; the rules give the closures' facts at every entry
-(`refClosure_of_rule`) and the lengths (`len_eq_lenT`), so `wellFormedA` with the annotations
+(`refClosure_of_rule`) and the lengths (`lenT_eq_lenAt`), so `wellFormedA` with the annotations
 decides `wellFormedB` (`wellFormedB_of_ann`) without building the tables.
 
 Everything here is stated for any realized program.

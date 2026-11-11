@@ -31,7 +31,7 @@ with untested masks and one low-degree repetition, analysed in Longfellow's orde
 Every Ligero round error of a setup at these numbers is therefore at most `2^-113.4` for the hash
 tableau (`hash_error_le`) and `2^-123` for the signature tableau (`sig_error_le`).
 
-The numbers are those printed by `experiments/pq-migration/lf-per-round/lf_rbr.py` (`T4 hash1`:
+The numbers are those printed by `analysis/lf-per-round/lf_rbr.py` (`T4 hash1`:
 joint 113.46, column 113.55 bits, `A = 1810`; `T3 P256`: joint 222.65, column 123.13 bits,
 `A = 1213`), from exact rationals: joint `113.46005`, column `113.5486` (hash), joint `222.6461`,
 column `123.1285` (signature). The script's column figure `113.55` is `113.5486` rounded; the
@@ -115,17 +115,30 @@ theorem hashColumn_le : hashBounds.column ≤ (2 : ℝ≥0) ^ (-113.54 : ℝ) :=
   exact ratio_le_two_rpow (n := 50) (e := 5677) (by decide +kernel) (by decide) (by norm_num)
     (by decide +kernel)
 
+/-- The hash tableau's queried columns fit its block length: `t ≤ N`. -/
+theorem t_le_hashN : t ≤ hashN := by decide
+
+/-- **The hash tableau's setup** over `GF(2^128)`: the code `C` of message length `k = 461`
+(`hk`) at the hash tableau's parameters (`hashParameters`), `t = 132` queried columns and one
+low-degree repetition, with the placement and the row order. -/
+def hashSetup {ι Q Lin : Type} [Fintype ι] [Fintype Q] {R nL nQ : ℕ} {C : GordieHowe.RSCode GF2_128 hashN}
+    {P : Tableau.Parameters (R := R) (nQ := nQ) C} {products : Routing.ProductLayout ι Q}
+    (hk : C.k = hashK) (placement : Preparation.Placement C P ι Q)
+    (index : Fin nL ≃ Routing.PreparedRow Lin Q) : Setup C P products Lin nL :=
+  Setup.ofParameters (hashParameters C hk) placement index t t_le_hashN 1 Nat.one_pos
+
 /-- **Every Ligero round of the hash tableau in Longfellow's order of challenges is at most
-`2^-113.4`**: at a setup over `GF(2^128)` with the hash tableau's numbers, the joint round is at
-most `2^-113.46` (`hashJoint_le`) and the column round at most `2^-113.54` (`hashColumn_le`). -/
+`2^-113.4`**: at the hash tableau's setup over `GF(2^128)` (`hashSetup`: `k = 461`, the hash
+tableau's parameters, `t = 132`, one repetition), the joint round is at most `2^-113.46`
+(`hashJoint_le`) and the column round at most `2^-113.54` (`hashColumn_le`). -/
 @[headline]
 theorem hash_error_le {ι Q Lin : Type} [Fintype ι] [Fintype Q] {R nL nQ : ℕ}
     {C : GordieHowe.RSCode GF2_128 hashN} {P : Tableau.Parameters (R := R) (nQ := nQ) C}
-    {products : Routing.ProductLayout ι Q} (S : Setup C P products Lin nL)
-    (h : S.Numbers hashAgree hashExceptions 1 t hashMaskAgree hashMaskList hashList)
-    (i : (spec GF2_128 hashN R nL nQ C.k S.t S.nrep).ChallengeIdx) :
-    error S i ≤ (2 : ℝ≥0) ^ (-113.4 : ℝ) :=
-  error_le_of_numbers S h
+    {products : Routing.ProductLayout ι Q} (hk : C.k = hashK)
+    (placement : Preparation.Placement C P ι Q) (index : Fin nL ≃ Routing.PreparedRow Lin Q)
+    (i : (spec GF2_128 hashN R nL nQ C.k t 1).ChallengeIdx) :
+    error (hashSetup (products := products) hk placement index) i ≤ (2 : ℝ≥0) ^ (-113.4 : ℝ) :=
+  error_le_of_numbers _ (Setup.numbers_ofParameters _ _ _ _ _ _ _)
     (hashJoint_le.trans (two_rpow_le_two_rpow (by norm_num)))
     (hashColumn_le.trans (two_rpow_le_two_rpow (by norm_num))) i
 
@@ -204,19 +217,31 @@ theorem sigColumn_le (F : Type) [Fintype F] : (sigBounds F).column ≤ (2 : ℝ�
   exact ratio_le_two_rpow (n := 25) (e := 3078) (by decide +kernel) (by decide) (by norm_num)
     (by decide +kernel)
 
+/-- The signature tableau's queried columns fit its block length: `t ≤ N`. -/
+theorem t_le_sigN : t ≤ sigN := by decide
+
+/-- **The signature tableau's setup** over a field `F`: the code `C` of message length `k = 455`
+(`hk`) at the signature tableau's parameters (`sigParameters`), `t = 132` queried columns and one
+low-degree repetition, with the placement and the row order. -/
+def sigSetup {F ι Q Lin : Type} [Field F] [Fintype F] [Fintype ι] [Fintype Q] {R nL nQ : ℕ} {C : GordieHowe.RSCode F sigN}
+    {P : Tableau.Parameters (R := R) (nQ := nQ) C} {products : Routing.ProductLayout ι Q}
+    (hk : C.k = sigK) (placement : Preparation.Placement C P ι Q)
+    (index : Fin nL ≃ Routing.PreparedRow Lin Q) : Setup C P products Lin nL :=
+  Setup.ofParameters (sigParameters C hk) placement index t t_le_sigN 1 Nat.one_pos
+
 /-- **Every Ligero round of the signature tableau in Longfellow's order of challenges is at most
-`2^-123`**: at a setup over a field of `p256` elements with the signature tableau's numbers, the
-joint round is at most `2^-222.64` (`sigJoint_le`) and the column round at most `2^-123.12`
-(`sigColumn_le`). -/
+`2^-123`**: at the signature tableau's setup over a field of `p256` elements (`sigSetup`:
+`k = 455`, the signature tableau's parameters, `t = 132`, one repetition), the joint round is at
+most `2^-222.64` (`sigJoint_le`) and the column round at most `2^-123.12` (`sigColumn_le`). -/
 @[headline]
 theorem sig_error_le {F ι Q Lin : Type} [Field F] [Fintype F] [Fintype ι] [Fintype Q]
     (hF : Fintype.card F = p256) {R nL nQ : ℕ} {C : GordieHowe.RSCode F sigN}
     {P : Tableau.Parameters (R := R) (nQ := nQ) C} {products : Routing.ProductLayout ι Q}
-    (S : Setup C P products Lin nL)
-    (h : S.Numbers sigAgree sigExceptions 1 t sigMaskAgree sigMaskList sigList)
-    (i : (spec F sigN R nL nQ C.k S.t S.nrep).ChallengeIdx) :
-    error S i ≤ (2 : ℝ≥0) ^ (-123 : ℝ) :=
-  error_le_of_numbers S h
+    (hk : C.k = sigK) (placement : Preparation.Placement C P ι Q)
+    (index : Fin nL ≃ Routing.PreparedRow Lin Q)
+    (i : (spec F sigN R nL nQ C.k t 1).ChallengeIdx) :
+    error (sigSetup (products := products) hk placement index) i ≤ (2 : ℝ≥0) ^ (-123 : ℝ) :=
+  error_le_of_numbers _ (Setup.numbers_ofParameters _ _ _ _ _ _ _)
     ((sigJoint_le hF).trans (two_rpow_le_two_rpow (by norm_num)))
     ((sigColumn_le F).trans (two_rpow_le_two_rpow (by norm_num))) i
 

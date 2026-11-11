@@ -476,6 +476,22 @@ theorem Ops.negacyclic_eq_sum_negCoef {K : Type*} [Field K] (n : ℕ) (h x : ℕ
     (hj : j < n) : Ops.negacyclic n h x j = ∑ k ∈ Finset.range n, Ops.negCoef n h j k * x k :=
   Ops.negacyclic_eq_sum n h x hj
 
+/-- **A sum against a negacyclic coefficient row, cast into a field**, is the coefficient of the
+negacyclic product of the casts (`LatticeCrypto.negacyclicConvCoeff`; `Ops.negacyclic_eq_sum_negCoef`,
+`Ops.negCoef_map`). -/
+theorem Ops.intCast_sum_negCoef {K : Type*} [Field K] {n : ℕ} (h x : ℕ → ℤ) {k : ℕ} (hk : k < n) :
+    ((∑ t : Fin n, Ops.negCoef n h k t * x t : ℤ) : K) =
+      LatticeCrypto.negacyclicConvCoeff (fun m : Fin n => (h m : K)) (fun m => (x m : K)) ⟨k, hk⟩ := by
+  have hc : Ops.negacyclic n (fun s => (h s : K)) (fun s => (x s : K)) k =
+      ((∑ t : Fin n, Ops.negCoef n h k t * x t : ℤ) : K) := by
+    rw [Ops.negacyclic_eq_sum_negCoef _ _ _ hk, ← Fin.sum_univ_eq_sum_range, Int.cast_sum]
+    refine Finset.sum_congr rfl fun t _ => ?_
+    have hm := Ops.negCoef_map (Int.castAddHom K) n h k t
+    simp only [Int.coe_castAddHom] at hm
+    rw [Int.cast_mul, hm]
+  rw [← hc, Ops.negacyclic, Ops.ofFin_of_lt _ hk]
+  rfl
+
 /-- **The integer reading of a negacyclic coefficient** of entries that are small integers' casts is
 the coefficient of the integers (`FieldInterp.coefInt_intCast`). -/
 theorem FieldInterp.coefInt_negCoef {F : FieldInterp} {p : ℕ} (hp : F.spec.characteristic = p)

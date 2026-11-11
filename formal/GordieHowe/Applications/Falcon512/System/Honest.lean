@@ -3,7 +3,9 @@
 
 module
 
-public import GordieHowe.Applications.Falcon512.System.Source
+public import GordieHowe.Applications.Falcon512.System.Hash
+public import GordieHowe.Foundations.Algebra.IntLift
+public import GordieHowe.Applications.Falcon512.System.Params
 public import GordieHowe.Language.Realizations.MACEquality
 public import GordieHowe.Language.Realizations.Lowering
 public import GordieHowe.Language.Library.Select.CutoffBits

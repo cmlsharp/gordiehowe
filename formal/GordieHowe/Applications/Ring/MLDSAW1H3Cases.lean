@@ -48,8 +48,8 @@ variable {p : Params} {T : ℕ} {Msg : Type} {N reps : ℕ}
   {Mo : MaskOracle (Bits (queryBits kh kN kS L)) Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  [Nonempty RMsg] [Nonempty (BucketVec p)] [Nonempty (FIPSSignature p prims)]
-  {TPS : PSTypes}
+  [Nonempty RMsg] [Nonempty (FIPSSignature p prims)]
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
   {PS : ProofSystem (Bits (queryBits kh kN kS L)) Y
     (RingSignature.RingStmt (hedgedBase prims O Mo βmin tol enc k D bmsg))
     (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
@@ -68,7 +68,7 @@ local notation "Bf" => freshBase prims O Mo βmin tol enc k D bmsg
 local notation "PSf" => PS
 local notation "X₀f" => W1ExpStmt prims RMsg N
 local notation "Rq" => W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q
-local notation "MUR" => MURequest (SignOracle.none Bf) n
+local notation "MUR" => MURequest (SignOracle.none (RingSignature.BaseSigner.core Bf)) n
 local notation "Frg" => KeyRing (PubKey p prims) N × RMsg × (BucketVec p × Mc.Response b)
 
 attribute [local instance] admDecF
@@ -88,7 +88,7 @@ noncomputable abbrev w1AbsAdv {SC : Type} {t : ℕ}
       (Frg × X₀f) t)
     (G : (Fin n → (Bf).PK) → (Fin Q → SC) → (Xq → Y₁) →
       AssignRelay Xq Y (Req Bf PSf adm n) (Resp Bf PSf adm) (MUR ⊕ Rq)
-        (MUResponse Bf ⊕ Mc.Response b) Xq Y₁)
+        (MUResponse (Bf).core ⊕ Mc.Response b) Xq Y₁)
     (keys : Fin n → (Bf).KeyCoins) (sc : Fin Q → SC) (ω : Xq → Y₁)
     (a : (𝒜 fun i => (Bf).pk (keys i)).Aux × Unit) :=
   ((((𝒜 _).alg a.1).absorbAssign (G (fun i => (Bf).pk (keys i)) sc ω) Q).restrictAt sp
@@ -110,7 +110,7 @@ noncomputable abbrev w1ExtAdvF {SC : Type} {t : ℕ}
       (Frg × X₀f) t)
     (G : (Fin n → (Bf).PK) → (Fin Q → SC) → (Xq → Y₁) →
       AssignRelay Xq Y (Req Bf PSf adm n) (Resp Bf PSf adm) (MUR ⊕ Rq)
-        (MUResponse Bf ⊕ Mc.Response b) Xq Y₁)
+        (MUResponse (Bf).core ⊕ Mc.Response b) Xq Y₁)
     (keys : Fin n → (Bf).KeyCoins) (sc : Fin Q → SC) (ω : Xq → Y₁)
     (a : (𝒜 fun i => (Bf).pk (keys i)).Aux × Unit) :=
   seAlgKF (rel := w1Rel prims O Mo βmin tol enc k D bmsg PS adm n Q)
@@ -136,7 +136,7 @@ noncomputable def w1UForger {SC : Type} [Fintype SC] [Nonempty SC] {t : ℕ}
       (Frg × X₀f) t)
     (G : (Fin n → (Bf).PK) → (Fin Q → SC) → (Xq → Y₁) →
       AssignRelay Xq Y (Req Bf PSf adm n) (Resp Bf PSf adm) (MUR ⊕ Rq)
-        (MUResponse Bf ⊕ Mc.Response b) Xq Y₁)
+        (MUResponse (Bf).core ⊕ Mc.Response b) Xq Y₁)
     (Psim : NARG.Simulator Xq (XOut kh e)
       (W1Stmt prims O Mo βmin tol enc k D bmsg PS adm n Q × (MUR ⊕ Rq)) (Mc.Response b) SC')
     (kq : ℕ) (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p prims)))
@@ -162,6 +162,7 @@ noncomputable def w1UForger {SC : Type} [Fintype SC] [Nonempty SC] {t : ℕ}
         (hsl pks _) (hpo pks _) (hwd pks _) (hG1 pks (kfAbsAux.coins p))
 
 open Classical in
+omit [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] in
 /-- **Case U as MU-EUF-NMA^corr** (`kfAbsorbSide_le_muEufNmaProb` at the relation `w1Rel`, the
 encoding `w1Enc`, the dummy statement `w1DummyS`, the proofs `w1PrfOf`, the test `w1Ok`, the goal
 `w1CaseU` and the readout `w1Readout` at the default forgery `f₀`): for `t`-query adversaries `𝒜
@@ -179,7 +180,7 @@ theorem w1UAvg_le (hO : O.ReadsFst sp) {SC : Type} [Fintype SC] [Nonempty SC] {t
       (Frg × X₀f) t)
     (G : (Fin n → (Bf).PK) → (Fin Q → SC) → (Xq → Y₁) →
       AssignRelay Xq Y (Req Bf PSf adm n) (Resp Bf PSf adm) (MUR ⊕ Rq)
-        (MUResponse Bf ⊕ Mc.Response b) Xq Y₁)
+        (MUResponse (Bf).core ⊕ Mc.Response b) Xq Y₁)
     (hG : ∀ pks sc ω, (G pks sc ω).relayOf Q = ((G pks sc 0).relayOf Q).withSide ω)
     (Psim : NARG.Simulator Xq (XOut kh e)
       (W1Stmt prims O Mo βmin tol enc k D bmsg PS adm n Q × (MUR ⊕ Rq)) (Mc.Response b) SC')
@@ -225,7 +226,7 @@ variable {p : Params} {T : ℕ} {Msg : Type} {N reps : ℕ}
   {Mo : MaskOracle (Bits (queryBits kh kN kS L)) Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  [Nonempty RMsg] [Nonempty (BucketVec p)] [Nonempty (FIPSSignature p prims)]
+  [Nonempty RMsg] [Nonempty (FIPSSignature p prims)]
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -233,7 +234,8 @@ variable {p : Params} {T : ℕ} {Msg : Type} {N reps : ℕ}
   {Λ : SiteLayout Mg} {b : ℕ} [∀ j i, Fintype ((Mc.comp j).MessageWrite i)]
   {E : (j : ι) → (Mc.comp j).Encoder}
   {Vr : W1ExpStmt prims RMsg N → FullTr P τ → Bool}
-  (Qs : ∀ x, Mc.IOPQueries Vr x) {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  (Qs : ∀ x, Mc.IOPQueries Vr x) {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R]
+  [DecidableEq R] [Nonempty R]
   {honest : RingSignature.RingWit (freshBase prims O Mo βmin tol enc k D bmsg) → R →
     CausalProver P τ (W1ExpStmt prims RMsg N)}
   {adm : KeyRing (PubKey p prims) N → Prop}
@@ -252,6 +254,7 @@ local notation "Rq" => W1Rq prims O Mo βmin tol enc k D bmsg PSh adm n Q
 attribute [local instance] admDecF
 
 open Classical in
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The guess of case S, averaged over the side coins** (`slotLaws_kfExtractionLaw` at the
 relation `w1Rel`, the encoding `w1Enc` of the public keys of `ξ`, the dummy statement `w1DummyS`
 and the simulator `Psim₀` read through the program statement, `w1StmtX ∘ Prod.fst`): for a
@@ -262,7 +265,7 @@ signatures keeps the statements of `w1Enc` (`w1Enc_stmt_proofSwG`) and the relat
 (`w1Rel_proofSwG_iff`, the message-representative and challenge points disjoint, `hdisj`), and the
 simulator does not see it (`prog_comap_w1MainSwG`). -/
 theorem w1GuessAvg_le (hO : O.ReadsFst sp) (hdisj : ∀ a b, O.muPt a ≠ O.chPt b)
-    (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁) (i : MURequest (SignOracle.none Bf) n) {Frg : Type}
+    (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁) (i : MURequest (SignOracle.none (Bf).core) n) {Frg : Type}
     (prf : Frg → Option Mc.NIProof)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n)
       (RingSignature.Insider.Resp Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
@@ -274,19 +277,19 @@ theorem w1GuessAvg_le (hO : O.ReadsFst sp) (hdisj : ∀ a b, O.muPt a ≠ O.chPt
           (seAlgKF (rel := w1Rel prims O Mo βmin tol enc k D bmsg PSh adm n Q)
             (enc := w1Enc (PS := PSh) (adm := adm) (Q := Q) fun j => (Bf).pk (ξ j))
             (dummyS := w1DummyS PSh adm n Q) prf ξ Q
-            (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+            (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
               (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
                 (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
                 (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
                 (w1DummyR (PS := PSh) (Q := Q)) sc ω
-                (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq)) Q).restrictAt sp
+                (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)) Q).restrictAt sp
                   ω).mapOut Prod.fst))
           (Psim₀.comap (w1StmtX ∘ Prod.fst)) Q kq)).map
         (cast (natOutcome_eq_w1Outcome
           (rel := w1Rel prims O Mo βmin tol enc k D bmsg PSh adm n Q)
           (penc := w1Enc (PS := PSh) (adm := adm) (Q := Q) fun j => (Bf).pk (ξ j))
           (dummyS := w1DummyS PSh adm n Q) sp hO ξ ω
-          (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq) prf A₀
+          (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) prf A₀
           (Psim₀.comap (w1StmtX ∘ Prod.fst)) kq sc))).toOuterMeasure
             {o | w1SlotGuess sp hO ξ ω A₀ (Psim₀.comap (w1StmtX ∘ Prod.fst)) kq Ext sc o} ≤
       Q * (k * T * Fintype.card (BucketVec p) / Fintype.card (MaskBox p)) :=

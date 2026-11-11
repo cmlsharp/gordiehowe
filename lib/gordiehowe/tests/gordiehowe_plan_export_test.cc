@@ -1150,29 +1150,107 @@ TEST(GordieHowePlanExport, ShapeFacts) {
 
 }
 
-TEST(GordieHowePlanExport, EmbeddingFactsSelectTheProfileAndNameTheSource) {
+// A program of one domain over F_7 with VALUES (name, a constant's entry or
+// "" for a private value), nodes NODES, shared expressions EXPRS,
+// predicates PREDS (name, an equal's sides) and challenges CHALS.
+ir::Program embedding_program(
+    const std::vector<std::pair<std::string, std::string>> &values,
+    const std::vector<ir::Expr> &nodes, const std::vector<ir::Id> &exprs,
+    const std::vector<std::tuple<std::string, ir::Id, ir::Id>> &preds,
+    const std::vector<std::string> &chals) {
+  ir::Program p;
+  p.fields = {{"F", "7", 1}};
+  p.domains = {{"D", 0}};
+  for (const auto &[name, entry] : values) {
+    ir::Value v;
+    v.name = name;
+    v.shape = {1};
+    if (!entry.empty()) {
+      v.kind = ir::Value::kConstant;
+      v.entries = {entry};
+    }
+    p.values.push_back(v);
+  }
+  p.nodes = nodes;
+  p.exprs = exprs;
+  for (const auto &[name, lhs, rhs] : preds) {
+    ir::Predicate q;
+    q.name = name;
+    q.lhs = lhs;
+    q.rhs = rhs;
+    p.predicates.push_back(q);
+  }
+  for (const auto &c : chals) {
+    ir::Challenge ch;
+    ch.name = c;
+    p.challenges.push_back(ch);
+  }
+  return p;
+}
+
+ir::Expr embedding_node(ir::Expr::Op op, uint64_t x) {
+  ir::Expr e;
+  e.op = op;
+  e.x = x;
+  return e;
+}
+
+// The source's predicate p reads its shared expression 0 (the value x) and
+// its constant 1; the target holds x at 1, the constant at 2 (after a
+// constant of other entries) and the shared expression at 1, and its own
+// predicate p at 1.
+TEST(GordieHowePlanExport, EmbeddingDataComputedFromBothPrograms) {
+  using E = ir::Expr;
+  const ir::Program source = embedding_program(
+      {{"const0", "1"}, {"x", ""}},
+      {embedding_node(E::kLeaf, 0), embedding_node(E::kLeaf, 1), embedding_node(E::kRef, 0)},
+      {1}, {{"p", 2, 0}}, {"c"});
+  const ir::Program target = embedding_program(
+      {{"y", ""}, {"x", ""}, {"const1", "5"}, {"const2", "1"}},
+      {embedding_node(E::kLeaf, 0), embedding_node(E::kLeaf, 1), embedding_node(E::kRef, 1),
+       embedding_node(E::kLeaf, 3)},
+      {0, 1}, {{"q", 0, 0}, {"p", 2, 3}}, {"d", "c"});
+  const ProgramEmbeddingSpec spec{"part", "source", {{"p", "p"}}};
+  const compiler::EmbeddingData d = compiler::compute_embedding(spec, source, target);
+  EXPECT_EQ(d.vals, (std::vector<size_t>{3, 1}));
+  EXPECT_EQ(d.refs, (std::vector<size_t>{1}));
+  EXPECT_EQ(d.chals, (std::vector<size_t>{1}));
+  EXPECT_EQ(d.values, (std::vector<size_t>{0, 1}));
+  EXPECT_EQ(d.exprs, (std::vector<size_t>{0}));
+  EXPECT_EQ(d.equals, (std::vector<std::pair<size_t, size_t>>{{0, 1}}));
+
+  // An alias renames a value of the part; one of no value of the part, a
+  // value with no counterpart and a missing predicate are refused.
+  ir::Program renamed = target;
+  renamed.values[1].name = "x'";
+  EXPECT_THROW(compiler::compute_embedding(spec, source, renamed), std::runtime_error);
+  ProgramEmbeddingSpec aliased = spec;
+  aliased.aliases = {{"x", "x'"}};
+  EXPECT_EQ(compiler::compute_embedding(aliased, source, renamed).vals,
+            (std::vector<size_t>{3, 1}));
+  aliased.aliases.push_back({"z", "y"});
+  EXPECT_THROW(compiler::compute_embedding(aliased, source, renamed), std::runtime_error);
+  ProgramEmbeddingSpec missing = spec;
+  missing.equals = {{"p", "r"}};
+  EXPECT_THROW(compiler::compute_embedding(missing, source, target), std::runtime_error);
+
+  // The fact names the source program at the export's profile; a source the
+  // export was not given is refused.
   compiler::ExportMeta meta;
   meta.config = "mldsa-emulated";
   meta.profile = "narrow";
-  ProgramEmbeddingDecl d;
-  d.name = "native.H";
-  d.source_config = "mldsa-native";
-  d.vals = {1, 2};
-  d.refs = {2};
-  d.chals = {0};
-  d.values = {0, 1};
-  d.exprs = {0};
-  d.equals = {{3, 5}};
-  ProgramEmbeddingDecl other = d;
-  other.profile = "wide";
+  ProgramEmbeddingSpec native{"native.H", "mldsa-native", {{"p", "p"}}};
   std::vector<compiler::ProofModuleData::ShapeFact> facts;
-  compiler::append_embedding_facts(meta, {d, other}, facts);
+  compiler::append_embedding_facts(meta, {native}, target, {{"mldsa-native", &source}}, facts);
   ASSERT_EQ(facts.size(), 1u);
   EXPECT_EQ(facts[0].claim, ".embedding embedding_native_2eH_data");
   EXPECT_EQ(facts[0].import_module, "GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.Program");
   EXPECT_NE(facts[0].definition.find("source := GordieHowe.Generated.MLDSA44.Native.ROMParams.Program.program"),
             std::string::npos);
-  EXPECT_NE(facts[0].definition.find("equals := [(3, 5)]"), std::string::npos);
+  EXPECT_NE(facts[0].definition.find("vals := [3, 1]"), std::string::npos);
+  EXPECT_NE(facts[0].definition.find("equals := [(0, 1)]"), std::string::npos);
+  EXPECT_THROW(compiler::append_embedding_facts(meta, {native}, target, {}, facts),
+               std::runtime_error);
 }
 
 TEST(GordieHowePlanExport, RequestedPhaseCountAndExprTableAreClaimed) {
@@ -2583,10 +2661,30 @@ TEST(GordieHowePlanExport, ProgramDataModules) {
                                    "90314195533631308867097853951,"))
       << t["FieldTable"];
   EXPECT_FALSE(has(t["FieldTable"], "P256.p"));
-  // A field-form mod_q in a field without a linear reading.
+  // A field-form mod_q in Goldilocks^2, whose integer reading is linear; in GF(2^128), which
+  // names none (no mod_q reaches a field of characteristic 2), an internal compiler error.
   Data form = rsa;
   form.field_form_fields = {1};
-  EXPECT_FALSE(compiler::system_plan(form).ok);
+  EXPECT_TRUE(compiler::system_plan(form).ok) << compiler::system_plan(form).why;
+  form.field_form_fields = {0};
+  const compiler::SystemPlan bad = compiler::system_plan(form);
+  EXPECT_FALSE(bad.ok);
+  EXPECT_TRUE(has(bad.why, "internal compiler error (please report)"));
+  EXPECT_TRUE(has(bad.why, "GF(2^128)"));
+}
+
+// Every field of odd characteristic in the registry names its linear integer reading
+// (read_linear, the model of a field-form mod_q), so a field registered without one fails here
+// and not in a program's compile; the fields of characteristic 2 name none.
+TEST(GordieHowePlanExport, OddFieldsReadLinear) {
+  size_t odd = 0;
+  for (const compiler::FieldModelEntry &e : compiler::field_models()) {
+    const std::string name = e.name;
+    const bool two = name.rfind("GF(2^", 0) == 0;
+    EXPECT_EQ(std::string(e.read_linear).empty(), two) << name;
+    odd += two ? 0 : 1;
+  }
+  EXPECT_EQ(odd, 7u);
 }
 
 // Typed record diagnostics keep the established textual assertions readable.
@@ -3193,11 +3291,8 @@ void check_placement(const ir::Program &P, const compiler::StructureRecords &r) 
   size_t needs = 0;
   for (size_t pid = 0; pid < P.predicates.size(); ++pid) {
     const ir::Predicate &q = P.predicates[pid];
-    const bool product = q.body == ir::Predicate::kMod &&
-                         (q.mod.form == ir::ModForm::kProduct ||
-                          q.mod.form == ir::ModForm::kSpectralProduct);
     const bool need = q.body == ir::Predicate::kEqual ||
-                      (q.body == ir::Predicate::kMod && q.q == "0") || product;
+                      (q.body == ir::Predicate::kMod && q.q == "0");
     auto it = routes.find(pid);
     ASSERT_EQ(need, it != routes.end()) << q.name;
     if (!need) continue;

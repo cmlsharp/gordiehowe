@@ -17,7 +17,7 @@ The emulated ML-DSA frontend (`GordieHoweCerts/Applications/MLDSA44/Emulated/Fro
 emulated ML-DSA-44 program at the ROM parameters (`GordieHowe.Generated.MLDSA44.Emulated.ROMParams.Program.program`, export
 `c825eb05`): its program facts (`GordieHowe.MLDSA44.Emulated.MldsaEMain`, decided here), domain `A` over
 Goldilocks², domain `H` over `GF(2^128)`, and the frontend's statement, relation, extractor and
-composition at this program (`KeyOf`, `rel`, `proj`, `extractor`, `rbr_of_views`).
+composition at this program (`KeyOf`, `rel`, `proj`, `sourceExtractor`, `rbr_of_views`).
 -/
 
 namespace GordieHowe.MLDSA44.Emulated.ROMParams
@@ -33,10 +33,12 @@ instance : Emulated.MldsaEMain program where
   chal_phase := by
     intro j
     rcases lt_or_ge j 4 with hj | hj
-    · exact (holds).chalPhase j hj
+    · have h := (holds).chalPhase j (by rw [chals_eq, List.length_range']; exact hj)
+      rwa [chalId] at h
     · have h1 : program.challenges.length = 4 :=
         Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.challenges_length
-      have h2 : (Emulated.MldsaEmbed.nat program).challenges.length = 4 := (holds).chalCount
+      have h2 : (Emulated.MldsaEmbed.nat program).challenges.length = 4 := 
+        (holds).chalCount.trans (by rw [chals_eq]; rfl)
       simp only [RealizedProgram.challenge, List.getD_eq_getElem?_getD]
       rw [List.getElem?_eq_none (by rw [h1]; exact hj), List.getElem?_eq_none (by rw [h2]; exact hj)]
   isSourceChal_iff := fun {j} => by
@@ -48,6 +50,7 @@ instance : Emulated.MldsaEMain program where
     Reads.chalSampler1, Reads.chalField1, MLDSA44.Native.ROMParams.Reads.chalField0, MLDSA44.Native.ROMParams.Reads.chalField1⟩
   kinds59_60 := by shape_decide
   trFields := ⟨MLDSA44.Native.ROMParams.Reads.field66, Reads.field67⟩
+  trLink := shift 66 (by decide +kernel)
   projReadsN := by
     intro v hv
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
@@ -89,7 +92,7 @@ def proj (x : program.Valuation interp) (a : program.Assignment interp) :
 
 Running time: one read of the transcript's first round and one call of `proj` (polynomial,
 `proj`'s paragraph). This running time is argued here, not proved in Lean. -/
-def extractor :
+def sourceExtractor :
     Extractor (program.sourceSpec interp) (program.Valuation interp) MLDSA44.VarWitness :=
   program.sourceExtractor interp proj
 
@@ -119,7 +122,7 @@ theorem sound_of_views (hx : CrossSound) (hA : AlgebraSound) :
 crossing and the algebra (`Emulated.rbr_of_views`): SampleInBall's events with errors
 `264/2^128` and `295/2^128`. -/
 theorem rbr_of_views (hx : CrossSound) (hA : AlgebraSound) :
-    rbrKnowledgeSoundness rel (program.sourceVerifier interp) extractor
+    RBRKnowledgeSound rel (program.sourceVerifier interp) sourceExtractor
       (program.eventState interp rel proj sampleEvent sampleEvent_use (sound_of_views hx hA))
       (program.roundError interp MLDSA44.sampleEps) :=
   Emulated.rbr_of_views hx hA

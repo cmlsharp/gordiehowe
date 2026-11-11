@@ -34,9 +34,9 @@ namespace GordieHowe.Generated.Falcon512.Ring.Native.ROMParams.Structure
 
 open GordieHowe.RealizedProgram GordieHowe.Generated.Falcon512.Ring.Native.ROMParams.Program
 
-load_program_ghc "Structure.ghc" "5ea810442ebc7435"
+load_program_ghc "Structure.ghc" "543d36e565918693"
 
 /-- The member-value pointers in the emitted structure metadata. -/
-theorem memberValues_eq : records.memberValues = [(0, 4), (1, 5)] := rfl
+theorem memberValues_eq : records.memberValues = [(0, 3), (1, 4)] := rfl
 
 end GordieHowe.Generated.Falcon512.Ring.Native.ROMParams.Structure

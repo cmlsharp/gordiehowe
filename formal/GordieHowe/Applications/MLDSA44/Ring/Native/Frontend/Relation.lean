@@ -9,32 +9,45 @@ public import GordieHowe.Applications.MLDSA44.Frontend.Key
 public import GordieHowe.Applications.MLDSA44.Circuits.NativeAlgebra
 public import GordieHowe.Language.Library.Eval
 public import GordieHowe.Language.Library.Cross
+public import GordieHowe.Language.Library.EvalPoint
 public import GordieHowe.Applications.MLDSA44.Ring.Native.Frontend.NTTMul
+public import GordieHowe.Applications.MLDSA44.Ring.Frontend.RandomPoint
 
 @[expose] public section
 
 /-!
 # GordieHowe frontend: the signature relation of the native ML-DSA-44 ring programs
 
-The native ML-DSA-44 ring programs (`spectral_relation` in
+The native ML-DSA-44 ring programs (`evaluation_relation` in
 `lib/gordiehowe/examples/rings/mldsa_ring_native.h`) commit the selected member's key part:
 `member.a_hat` (`4 × 4 × 256` entries of the prime subfield `GF(p^1)` of domain `A`, the matrix
 `Â = ExpandA(ρ)` in FIPS 204's NTT order) and `member.t1` (`4 × 256`, the spectra
-`NTT(2^d · t1_i)`). The signature relation is four spectral rows, the source predicates
-`signature.relation.0 … 3` (predicates `1 … 4`): for each row `i` and frequency `k < 256`,
+`NTT(2^d · t1_i)`). The signature commits `w` (`4 × 256` coefficients) and the quotients `Q_i`
+by `X^256 + 1` (`signature.Q`, `4 × 255`), and the relation is four polynomial identities over
+the field, `w_i + (X^256 + 1) Q_i + T_i · c − Σ_j A_ij · z_j = 0` with `A_ij`, `T_i` the
+polynomials whose scheme-order transforms (`ntt 256 1753 scheme`, FIPS 204's NTT, Algorithm 41,
+`GordieHowe.MLDSA44.KeyNTT.ofFin_ntt`) are `â_ij`, `t̂_i`, and `c = support − 2 · sign` read off
+`challenge.c`. Each identity is checked at one challenge `r` (`signature.r`, drawn after `Q`),
+the source predicates `signature.relation.0 … 3` (predicates `1 … 4`, `rowLhs`):
 
-  `NTT(w_i)_k − (Σ_j â_ijk · NTT(z_j)_k − t̂_ik · NTT(support − 2 · sign)_k) = 0`
+  `w_i(r) + (r^256 + 1) Q_i(r) + ⟨t̂_i, λ(r)⟩ c(r) − Σ_j ⟨â_ij, λ(r)⟩ z_j(r) = 0`,
 
-over the program's scheme-order transform `ntt 256 1753 scheme` (FIPS 204's NTT, Algorithm 41,
-`GordieHowe.MLDSA44.KeyNTT.ofFin_ntt`), with `z` transformed once (shared expression `32`) and
-the challenge's support and sign bits read off `challenge.c` (shared expressions `34`, `35`).
+the rows the ML-DSA rings share (`GordieHowe/Applications/MLDSA44/Ring/Frontend/RandomPoint.lean`)
+at the native transform data and the first vector `E_i = w_i`. Outside the event `relEvent` (a
+root of some row's nonzero polynomial, degree `4 · 510`), each row's polynomial is `0`
+(`rowPoly_eq_zero`), and at the transform's roots it is the spectral row
+`NTT(w_i)_k − (Σ_j â_ijk · NTT(z_j)_k − t̂_ik · NTT(c)_k) = 0` (`row_field`, from
+`row_spectral`) the downstream algebra reads.
 
 Contents:
 
-* **The program facts** (`MldsaRingRelation`): the value numbering, the four rows' bodies and
-  shared expressions (`rowLhs`), the zero constant, the challenge's Boolean check, `norm.z`, the
-  prime-typed source values `member.a_hat`, `member.t1`, `signature.w`. Each program decides
-  them (`GordieHoweCerts/Applications/MLDSA44/Ring/Native/{ROMParams,QROMParams}/Frontend/RelationFacts.lean`).
+* **The program facts** (`MldsaRingRelation`): the random-point rows' (`MldsaRandomPoint`) at
+  the native transform data (`consts`) and `E_i = w_i` (`rowE_eq`); the challenge's Boolean
+  check, `norm.z`, the prime-typed source values `member.a_hat`, `member.t1`, `signature.w`. Each
+  program decides them
+  (`GordieHoweCerts/Applications/MLDSA44/Ring/Native/{ROMParams,QROMParams}/Frontend/RelationFacts.lean`).
+* **The rows in the field** (`instRandomPointField`, `row_field`): the native field's
+  `MldsaRandomPointField`, and the spectral rows at the roots.
 * **The readers** (`wVals`, `wOf`, `zVals`, `zOf`, `cBits`, `cPoly`, `aHatVals`, `t1HatVals`):
   the shapes of the proof-of-possession frontend's (`GordieHowe.MLDSA44.wOf`,
   `zOf`, `cPolyA`) at the ring program's values.
@@ -53,98 +66,27 @@ namespace GordieHowe.MLDSA44.Ring.Native
 
 open GordieHowe.RealizedProgram (Expr IndexMap)
 
-/-! ## The relation rows -/
+/-! ## The program facts -/
 
-/-- **Row `i`'s slice** of a `4 × 256` value: coordinates `256 i, …, 256 i + 255`. -/
-def rowSlice (i : ℕ) : IndexMap := [(i * 256, 1, 256)]
-
-/-- **Row `i`'s block** of the `4 × 4 × 256` matrix: coordinates `1024 i, …, 1024 i + 1023`. -/
-def blockSlice (i : ℕ) : IndexMap := [(i * 1024, 1, 1024)]
-
-/-- **The scheme-order transform of `256` coordinates at `ψ = 1753`** (FIPS 204's NTT). -/
-def nttS (E : Expr) : Expr := .apply (.ntt 256 1753 .scheme) E
-
-/-- **Column `j` of row `i`'s product** `â_ij ⊙ NTT(z_j)`, row `i`'s block at the shared
-expression `ra`, the transformed `z` at the shared expression `32`. -/
-def azTerm (ra j : ℕ) : Expr :=
-  .mul (.reindex (rowSlice j) (.reindex (blockSlice 0) (.ref ra)))
-    (.reindex (rowSlice j) (.reindex (blockSlice 0) (.ref 32)))
-
-/-- **Row `i`'s challenge term** `t̂_i ⊙ NTT(support − 2 · sign)`, row `i`'s `t̂` at the shared
-expression `rt`, the support and sign at the shared expressions `34`, `35` (`8380415 = −2`). -/
-def ctTerm (rt : ℕ) : Expr :=
-  .mul (.reindex (rowSlice 0) (.reindex (rowSlice 0) (.ref rt)))
-    (.reindex (rowSlice 0) (.reindex (rowSlice 0)
-      (nttS (.add (.ref 34) (.scale (.const 8380415) (.ref 35))))))
-
-/-- **The left side of row `i`** (`signature.relation.i`): `NTT(w_i) − (Σ_j â_ij ⊙ NTT(z_j) −
-t̂_i ⊙ NTT(c))`, `8380416 = −1`, row `i`'s `w`, `â`, `t̂` at the shared expressions `rw`, `ra`,
-`rt`. -/
-def rowLhs (rw ra rt : ℕ) : Expr :=
-  .add (nttS (.ref rw)) (.scale (.const 8380416)
-    (.add (.add (.add (.add (azTerm ra 0) (azTerm ra 1)) (azTerm ra 2)) (azTerm ra 3))
-      (.scale (.const 8380416) (ctTerm rt))))
-
-/-- The shared expression of row `i`'s `w` (`30, 36, 39, 42`). -/
-def refW (i : ℕ) : ℕ := if i = 0 then 30 else 33 + 3 * i
-
-/-- The shared expression of row `i`'s block of `â` (`31, 37, 40, 43`). -/
-def refA (i : ℕ) : ℕ := if i = 0 then 31 else 34 + 3 * i
-
-/-- The shared expression of row `i`'s `t̂` (`33, 38, 41, 44`). -/
-def refT (i : ℕ) : ℕ := if i = 0 then 33 else 35 + 3 * i
-
-/-- **The program facts of a native ML-DSA-44 ring program's signature relation**: the value
-numbering (`member.a_hat`, `member.t1`, `z`, `challenge.c`, `signature.w`, `norm.z.offset`) and
-predicate numbering (`challenge.c.boolean`, `norm.z`), the four rows `signature.relation.0 … 3`
-(predicates `1 … 4`, `rowLhs` against the zero constant `2`) and their shared expressions, the
-Boolean check of the challenge bits, `norm.z`, and the prime-typed source values. Each program
-decides them. -/
-class MldsaRingRelation (program : RealizedProgram) where
-  /-- `member.a_hat`. -/
-  aHat : ℕ
-  /-- `member.t1`. -/
-  t1 : ℕ
-  /-- `z`. -/
-  z : ℕ
-  /-- `challenge.c`. -/
-  c : ℕ
-  /-- `signature.w`. -/
-  w : ℕ
+/-- **The program facts of a native ML-DSA-44 ring program's signature relation**: the
+random-point rows' (`MldsaRandomPoint`) at the native transform data (`ψ = 1753`, `256⁻¹ = 8347681`,
+`ψ⁻¹ = 731434`, `−1 = 8380416`, `−2 = 8380415` in `F_q`) with each row's first vector the
+committed `signature.w` (`rowE i = w_i`'s shared expression); the challenge bits' Boolean check
+(`cPred`), `norm.z` (`normPred`, with the offset `zOff`) and the prime-typed source values
+`member.a_hat`, `member.t1`, `signature.w`. Each program decides them. -/
+class MldsaRingRelation (program : RealizedProgram) extends MldsaRandomPoint program where
   /-- `norm.z.offset`. -/
   zOff : ℕ
   /-- `challenge.c.boolean`. -/
   cPred : ℕ
   /-- `norm.z`. -/
   normPred : ℕ
-  /-- Domain `0` has field `0`. -/
-  domainField0 : program.domainField 0 = 0
-  /-- Shared expressions refer only to earlier ones. -/
-  refsOrdered : program.RefsOrdered
-  /-- The program has the shared expressions `0 … 44`. -/
-  refsLt : 44 < program.exprs.length
-  /-- `signature.relation.i` is row `i`. -/
-  rows : ∀ i : Fin 4, ∃ t, (program.predicate ((i : ℕ) + 1)).body =
-    .equal 0 (rowLhs (refW i) (refA i) (refT i)) (.leaf 2) t
-  /-- Each row has `256` coordinates. -/
-  rowLen : ∀ i : Fin 4, program.exprLen (rowLhs (refW i) (refA i) (refT i)) = 256
-  /-- Row `i`'s `w`. -/
-  exprW : ∀ i : Fin 4, program.expr (refW i) = .reindex (rowSlice i) (.leaf w)
-  /-- Row `i`'s block of `â`. -/
-  exprA : ∀ i : Fin 4, program.expr (refA i) = .reindex (blockSlice i) (.leaf aHat)
-  /-- Row `i`'s `t̂`. -/
-  exprT : ∀ i : Fin 4, program.expr (refT i) = .reindex (rowSlice i) (.leaf t1)
-  /-- The transformed `z`. -/
-  exprZ : program.expr 32 = .apply (.batched 4 (.ntt 256 1753 .scheme)) (.leaf z)
-  /-- The challenge's supports. -/
-  exprS : program.expr 34 = .reindex [(0, 2, 256)] (.leaf c)
-  /-- The challenge's signs. -/
-  exprG : program.expr 35 = .reindex [(1, 2, 256)] (.leaf c)
-  /-- The zero constant `2` of `256` coordinates, of field `0`. -/
-  const2 : program.isConstant 2 = true ∧ program.valueField 2 = 0 ∧
-    program.constEntries 2 = List.replicate 256 0
-  /-- The rows, the challenge's Boolean check and `norm.z` are source predicates. -/
-  inSource : ∀ p ∈ [1, 2, 3, 4, cPred, normPred],
+  /-- The transform data: `ψ = 1753` (FIPS 204's `ζ`), `256⁻¹`, `ψ⁻¹`, `−1` and `−2` in `F_q`. -/
+  consts : psi = 1753 ∧ nInv = 8347681 ∧ psiInv = 731434 ∧ mOne = 8380416 ∧ mTwo = 8380415
+  /-- Row `i`'s first vector is `w_i`. -/
+  rowE_eq : ∀ i, rowE i = .ref (refW i)
+  /-- The challenge's Boolean check and `norm.z` are source predicates. -/
+  inSource : ∀ p ∈ [cPred, normPred],
     p < program.predicates.length ∧ program.inSource (program.predicate p) = true
   /-- `challenge.c.boolean` checks the challenge bits. -/
   cBool : (program.predicate cPred).body.boolCheck? = some ⟨0, c⟩
@@ -161,7 +103,10 @@ class MldsaRingRelation (program : RealizedProgram) where
   /-- The sizes of the values read. -/
   sizes : (program.value aHat).size = 4096 ∧ (program.value t1).size = 1024 ∧
     (program.value w).size = 1024 ∧ (program.value z).size = 1024 ∧
-    (program.value c).size = 512
+    (program.value c).size = 512 ∧ (program.value q).size = 1020
+  /-- `signature.Q` is committed. -/
+  qPriv : (program.value q).kind = .priv
+
 
 /-! ## Polynomial algebra in `ZMod q` -/
 
@@ -242,19 +187,19 @@ set_option hygiene false in
 local notation "interp" => RealizedProgram.mldsaInterpOf F0 FH
 
 set_option hygiene false in
-local notation "vA" => MldsaRingRelation.aHat program
+local notation "vA" => MldsaRandomPoint.aHat program
 
 set_option hygiene false in
-local notation "vT" => MldsaRingRelation.t1 program
+local notation "vT" => MldsaRandomPoint.t1 program
 
 set_option hygiene false in
-local notation "vZ" => MldsaRingRelation.z program
+local notation "vZ" => MldsaRandomPoint.z program
 
 set_option hygiene false in
-local notation "vC" => MldsaRingRelation.c program
+local notation "vC" => MldsaRandomPoint.c program
 
 set_option hygiene false in
-local notation "vW" => MldsaRingRelation.w program
+local notation "vW" => MldsaRandomPoint.w program
 
 /-- **`w`** (`signature.w`, `4 × 256` of domain `A`), read in field `0`. -/
 def wVals (rd : program.Valuation interp) (i : Fin _root_.MLDSA.mldsa44.k)
@@ -323,6 +268,12 @@ section Field
 
 variable [QField F0]
 
+instance instFactPrime_ringRel : Fact (Nat.Prime 8380417) := instFactPrimeMlDsaQ
+
+instance charP_ringRel : CharP (interp 0).K _root_.MLDSA.modulus := QField.charP
+
+instance charP_ringRel' : CharP (interp 0).K 8380417 := QField.charP
+
 /-- `q − 1` decodes to `−1`. -/
 theorem decode_m1 : (interp 0).decode 8380416 = -1 := by
   rw [show (interp 0).decode 8380416 = ((8380416 : ℕ) : (interp 0).K) from
@@ -341,125 +292,69 @@ theorem decode_m2 : (interp 0).decode 8380415 = -2 := by
 theorem decode_psi : (interp 0).decode 1753 = ((1753 : ℕ) : (interp 0).K) :=
   QField.decode_lt (F0 := F0) _ (by norm_num)
 
-/-- **The scheme-order transform of `256` coordinates** at coordinate `k < 256`. -/
-theorem evalE_nttS (rd : program.Valuation interp) (E : Expr) {k : ℕ} (hk : k < 256) :
-    program.evalE rd 0 (nttS E) k =
-      RealizedProgram.Ops.nttScheme 256 ((interp 0).decode 1753) (program.evalE rd 0 E) k := by
-  rw [nttS, RealizedProgram.evalE_apply]
-  simp only [RealizedProgram.NamedOp.apply, RealizedProgram.NamedOp.block,
-    RealizedProgram.NamedOp.rows, RealizedProgram.NamedOp.cols, Nat.mod_eq_of_lt hk,
-    Nat.div_eq_of_lt hk, zero_mul, zero_add]
+/-- `1` decodes to `1`. -/
+theorem decode_one : (interp 0).decode 1 = 1 := by
+  rw [QField.decode_lt (F0 := F0) _ (by norm_num), Nat.cast_one]
 
-/-- **A shared expression of the relation** reads its definition. -/
-theorem evalE_ref' (rd : program.Valuation interp) {r : ℕ} (hr : r ≤ 44) :
-    program.evalE rd 0 (.ref r) = program.evalE rd 0 (program.expr r) :=
-  RealizedProgram.evalE_ref MldsaRingRelation.refsOrdered rd 0
-    (by have := MldsaRingRelation.refsLt (program := program); omega)
+/-- `256⁻¹ = 8347681` and `ψ⁻¹ = 731434` in a field of characteristic `q`
+(`Ops.natCast_eq_inv_of_mul_mod`, `RealizedProgram.decode_eq_inv_of_mul_mod`). -/
+theorem decode_nInv : (interp 0).decode 8347681 = ((256 : ℕ) : (interp 0).K)⁻¹ := by
+  rw [QField.decode_lt (F0 := F0) _ (by norm_num)]
+  exact RealizedProgram.Ops.natCast_eq_inv_of_mul_mod 8380417 (by norm_num)
 
-theorem refW_le (i : Fin 4) : refW i ≤ 44 := by
-  have := i.isLt; unfold refW; split_ifs <;> omega
+theorem decode_psiInv : (interp 0).decode 731434 = ((interp 0).decode 1753)⁻¹ :=
+  RealizedProgram.decode_eq_inv_of_mul_mod 8380417 (QField.decode_lt (F0 := F0) _ (by norm_num))
+    decode_psi (by norm_num)
 
-theorem refA_le (i : Fin 4) : refA i ≤ 44 := by
-  have := i.isLt; unfold refA; split_ifs <;> omega
+/-- **`ψ = 1753` is a primitive `512`-th root of unity** in domain `A`'s field (FIPS 204's `ζ`,
+`MLDSA.Concrete.zeta_isPrimitiveRoot`, along the cast `F_q → F`). -/
+theorem psi_isPrimitiveRoot : IsPrimitiveRoot ((interp 0).decode 1753) (2 * 256) := by
+  have h := _root_.MLDSA.Concrete.zeta_isPrimitiveRoot.map_of_injective
+    (ZMod.castHom_injective (n := _root_.MLDSA.modulus) (interp 0).K)
+  rw [show _root_.MLDSA.zeta = ((1753 : ℕ) : _root_.MLDSA.Coeff) from rfl, map_natCast] at h
+  rw [decode_psi]
+  exact h
 
-theorem refT_le (i : Fin 4) : refT i ≤ 44 := by
-  have := i.isLt; unfold refT; split_ifs <;> omega
+theorem psi_pow : ((interp 0).decode 1753) ^ 256 = -1 :=
+  DFT.IsPrimitiveRoot.pow_half_eq_neg_one psi_isPrimitiveRoot (by decide)
 
-/-- **Row `i`'s `w`** at coordinate `t < 256`. -/
-theorem evalE_refW (rd : program.Valuation interp) (i : Fin 4) {t : ℕ} (ht : t < 256) :
-    program.evalE rd 0 (.ref (refW i)) t = program.evalE rd 0 (.leaf vW) ((i : ℕ) * 256 + t) := by
-  rw [evalE_ref' rd (refW_le i), MldsaRingRelation.exprW i, RealizedProgram.evalE_reindex, rowSlice,
-    RealizedProgram.IndexMap.entry_step_one ht]
+theorem n256_ne_zero : ((256 : ℕ) : (interp 0).K) ≠ 0 := by
+  rw [Ne, CharP.cast_eq_zero_iff (interp 0).K 8380417]
+  decide
 
-/-- **Row `i`'s `t̂`** at coordinate `t < 256`. -/
-theorem evalE_refT (rd : program.Valuation interp) (i : Fin 4) {t : ℕ} (ht : t < 256) :
-    program.evalE rd 0 (.ref (refT i)) t = program.evalE rd 0 (.leaf vT) ((i : ℕ) * 256 + t) := by
-  rw [evalE_ref' rd (refT_le i), MldsaRingRelation.exprT i, RealizedProgram.evalE_reindex, rowSlice,
-    RealizedProgram.IndexMap.entry_step_one ht]
+/-- **The rows' field facts** in domain `A`'s field (`MldsaRandomPointField`): the native
+transform data (`MldsaRingRelation.consts`) decodes to `−1`, `−2`, `256⁻¹`, `ψ⁻¹` at the primitive
+`512`-th root `ψ = 1753`. -/
+instance instRandomPointField : MldsaRandomPointField program (interp 0) where
+  decode_one := decode_one
+  decode_zero := by rw [QField.decode_lt (F0 := F0) _ (by norm_num), Nat.cast_zero]
+  decode_mOne := by rw [(MldsaRingRelation.consts (program := program)).2.2.2.1]; exact decode_m1
+  decode_mTwo := by rw [(MldsaRingRelation.consts (program := program)).2.2.2.2]; exact decode_m2
+  decode_nInv := by rw [(MldsaRingRelation.consts (program := program)).2.1]; exact decode_nInv
+  decode_psiInv := by
+    rw [(MldsaRingRelation.consts (program := program)).2.2.1,
+      (MldsaRingRelation.consts (program := program)).1]
+    exact decode_psiInv
+  psi_isPrimitiveRoot := by
+    rw [(MldsaRingRelation.consts (program := program)).1]; exact psi_isPrimitiveRoot
+  n_ne_zero := n256_ne_zero
 
-/-- **Row `i`'s block of `â`** at coordinate `t < 1024`. -/
-theorem evalE_refA (rd : program.Valuation interp) (i : Fin 4) {t : ℕ} (ht : t < 1024) :
-    program.evalE rd 0 (.ref (refA i)) t = program.evalE rd 0 (.leaf vA) ((i : ℕ) * 1024 + t) := by
-  rw [evalE_ref' rd (refA_le i), MldsaRingRelation.exprA i, RealizedProgram.evalE_reindex,
-    blockSlice, RealizedProgram.IndexMap.entry_step_one ht]
+omit [QField F0] in
+/-- **Row `i`'s first vector is `w_i`** below `256`. -/
+theorem eRow_eq (e : program.Env interp) (i : Fin 4) {t : ℕ} (ht : t < 256) :
+    eRow e i t = wRow e i t := by
+  unfold eRow
+  rw [MldsaRingRelation.rowE_eq i, evalE_refW _ i ht]
+  rfl
 
-/-- **The transformed `z`** at coordinate `256 j + k`: the transform of `z_j` at `k`. -/
-theorem evalE_ref32 (rd : program.Valuation interp) {j k : ℕ} (hj : j < 4) (hk : k < 256) :
-    program.evalE rd 0 (.ref 32) (j * 256 + k) =
-      RealizedProgram.Ops.nttScheme 256 ((interp 0).decode 1753)
-        (fun t => program.evalE rd 0 (.leaf vZ) (j * 256 + t)) k := by
-  have hlt : j * 256 + k < 1024 := by omega
-  have hdiv : (j * 256 + k) / 256 = j := by omega
-  have hmod : (j * 256 + k) % 256 = k := by omega
-  rw [evalE_ref' rd (by norm_num), MldsaRingRelation.exprZ, RealizedProgram.evalE_apply]
-  simp only [RealizedProgram.NamedOp.apply, RealizedProgram.NamedOp.block,
-    RealizedProgram.NamedOp.rows, RealizedProgram.NamedOp.cols, Nat.mod_eq_of_lt (show
-      j * 256 + k < 4 * 256 by omega), Nat.div_eq_of_lt (show j * 256 + k < 4 * 256 by omega),
-    zero_mul, zero_add, if_pos (show j * 256 + k < 4 * 256 by omega), hdiv, hmod]
-
-/-- **The challenge term's operand** at coordinate `t < 256`: `support − 2 · sign`. -/
-theorem evalE_chal (rd : program.Valuation interp) {t : ℕ} (ht : t < 256) :
-    program.evalE rd 0 (.add (.ref 34) (.scale (.const 8380415) (.ref 35))) t =
-      program.evalE rd 0 (.leaf vC) (2 * t) - 2 * program.evalE rd 0 (.leaf vC) (2 * t + 1) := by
-  rw [RealizedProgram.evalE_add, RealizedProgram.evalE_scale_const, decode_m2,
-    evalE_ref' rd (by norm_num), evalE_ref' rd (by norm_num), MldsaRingRelation.exprS,
-    MldsaRingRelation.exprG, RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex,
-    RealizedProgram.IndexMap.entry_single ht, RealizedProgram.IndexMap.entry_single ht]
-  have h1 : (((0 : ℕ) : ℤ) + (2 : ℤ) * (t : ℤ)).toNat = 2 * t := by omega
-  have h2 : (((1 : ℕ) : ℤ) + (2 : ℤ) * (t : ℤ)).toNat = 2 * t + 1 := by omega
-  rw [h1, h2]
-  ring
-
-/-- **Row `i`'s left side** at frequency `k < 256`: `NTT(w_i)_k − (Σ_j â_ijk · NTT(z_j)_k −
-t̂_ik · NTT(support − 2 · sign)_k)`. -/
-theorem evalE_rowLhs (rd : program.Valuation interp) (i : Fin 4) {k : ℕ} (hk : k < 256) :
-    program.evalE rd 0 (rowLhs (refW i) (refA i) (refT i)) k =
-      RealizedProgram.Ops.nttScheme 256 ((interp 0).decode 1753)
-          (fun t => program.evalE rd 0 (.leaf vW) ((i : ℕ) * 256 + t)) k -
-        ((∑ j : Fin 4, program.evalE rd 0 (.leaf vA) ((i : ℕ) * 1024 + ((j : ℕ) * 256 + k)) *
-            RealizedProgram.Ops.nttScheme 256 ((interp 0).decode 1753)
-              (fun t => program.evalE rd 0 (.leaf vZ) ((j : ℕ) * 256 + t)) k) -
-          program.evalE rd 0 (.leaf vT) ((i : ℕ) * 256 + k) *
-            RealizedProgram.Ops.nttScheme 256 ((interp 0).decode 1753)
-              (fun t => program.evalE rd 0 (.leaf vC) (2 * t) -
-                2 * program.evalE rd 0 (.leaf vC) (2 * t + 1)) k) := by
-  have hcol : ∀ j : ℕ, j < 4 → program.evalE rd 0 (azTerm (refA i) j) k =
-      program.evalE rd 0 (.leaf vA) ((i : ℕ) * 1024 + (j * 256 + k)) *
-        RealizedProgram.Ops.nttScheme 256 ((interp 0).decode 1753)
-          (fun t => program.evalE rd 0 (.leaf vZ) (j * 256 + t)) k := fun j hj => by
-    have hjk : j * 256 + k < 1024 := by omega
-    rw [azTerm, RealizedProgram.evalE_mul, RealizedProgram.evalE_reindex,
-      RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex,
-      rowSlice, blockSlice, RealizedProgram.IndexMap.entry_step_one hk,
-      RealizedProgram.IndexMap.entry_step_one hjk, zero_mul, zero_add, evalE_refA rd i hjk,
-      evalE_ref32 rd hj hk]
-  rw [rowLhs, RealizedProgram.evalE_add, evalE_nttS rd _ hk, RealizedProgram.evalE_scale_const,
-    decode_m1, RealizedProgram.evalE_add, RealizedProgram.evalE_add, RealizedProgram.evalE_add,
-    RealizedProgram.evalE_add, RealizedProgram.evalE_scale_const, decode_m1,
-    hcol 0 (by norm_num), hcol 1 (by norm_num), hcol 2 (by norm_num), hcol 3 (by norm_num),
-    ctTerm, RealizedProgram.evalE_mul, RealizedProgram.evalE_reindex,
-    RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex, RealizedProgram.evalE_reindex,
-    rowSlice, RealizedProgram.IndexMap.entry_step_one hk, zero_mul, zero_add,
-    RealizedProgram.IndexMap.entry_step_one hk, zero_add, evalE_refT rd i hk, evalE_nttS rd _ hk,
-    RealizedProgram.nttScheme_congr (fun t ht => evalE_refW rd i ht),
-    RealizedProgram.nttScheme_congr (fun t ht => evalE_chal rd ht), Fin.sum_univ_four]
-  simp only [Fin.val_zero, Fin.val_one, Fin.val_two]
-  norm_num
-  ring
-
-/-- The zero constant `2` reads `0` in field `0`. -/
-theorem evalE_leaf2 (e : program.Env interp) {k : ℕ} (hk : k < 256) :
-    program.evalE (program.reader e) 0 (.leaf 2) k = 0 := by
-  obtain ⟨c2, f2, e2⟩ := MldsaRingRelation.const2 (program := program)
-  rw [RealizedProgram.evalE_leaf_of_isConstant e c2, RealizedProgram.constRead_of_valueField f2, e2,
-    List.getD_eq_getElem?_getD, List.getElem?_replicate, if_pos hk, Option.getD_some]
-  erw [QField.decode_lt (F0 := F0) _ (by norm_num)]
-  rw [Nat.cast_zero]
-
-/-- **Row `i` in the field** (`signature.relation.i`, wherever it holds): at frequency `k < 256`,
-`NTT(w_i)_k = Σ_j â_ijk · NTT(z_j)_k − t̂_ik · NTT(support − 2 · sign)_k`. -/
+/-- **Row `i` in the field** (`signature.relation.i`, wherever it holds and `r` is not in the
+relation's event): at frequency `k < 256`,
+`NTT(w_i)_k = Σ_j â_ijk · NTT(z_j)_k − t̂_ik · NTT(support − 2 · sign)_k`. The row's polynomial
+vanishes at `r` (`holdsAt_row_iff`), so it is `0` (`rowPoly_eq_zero`), and at the roots of
+`X^256 + 1` it reads the transforms (`row_spectral`). -/
 theorem row_field {e : program.Env interp} (i : Fin 4)
-    (h : program.HoldsAt e (program.predicate ((i : ℕ) + 1)).body) {k : ℕ} (hk : k < 256) :
+    (h : program.HoldsAt e (program.predicate (MldsaRandomPoint.rel0 program + i)).body)
+    (hev : ¬ (relEvent e).BadAt (rOf e)) {k : ℕ} (hk : k < 256) :
     RealizedProgram.Ops.nttScheme 256 ((interp 0).decode 1753)
         (fun t => program.evalE (program.reader e) 0 (.leaf vW) ((i : ℕ) * 256 + t)) k =
       (∑ j : Fin 4, program.evalE (program.reader e) 0 (.leaf vA) ((i : ℕ) * 1024 + ((j : ℕ) * 256 + k)) *
@@ -469,19 +364,12 @@ theorem row_field {e : program.Env interp} (i : Fin 4)
           RealizedProgram.Ops.nttScheme 256 ((interp 0).decode 1753)
             (fun t => program.evalE (program.reader e) 0 (.leaf vC) (2 * t) -
               2 * program.evalE (program.reader e) 0 (.leaf vC) (2 * t + 1)) k := by
-  obtain ⟨t, hb⟩ := MldsaRingRelation.rows (program := program) i
-  rw [hb] at h
-  have hx := h k (by rw [MldsaRingRelation.rowLen i]; exact hk)
-  unfold RealizedProgram.evalWith at hx
-  rw [MldsaRingRelation.domainField0 (program := program)] at hx
-  rw [evalE_leaf2 e hk, evalE_rowLhs _ i hk] at hx
-  exact sub_eq_zero.1 hx
+  have hr := row_spectral i (rowPoly_eq_zero i ((holdsAt_row_iff e i).1 h) hev) hk
+  rw [(MldsaRingRelation.consts (program := program)).1,
+    RealizedProgram.nttScheme_congr (fun t ht => eRow_eq e i ht)] at hr
+  exact hr
 
 /-! ## The constant coordinate -/
-
-instance instFactPrime_ringRel : Fact (Nat.Prime 8380417) := instFactPrimeMlDsaQ
-
-instance charP_ringRel : CharP (interp 0).K _root_.MLDSA.modulus := QField.charP
 
 set_option hygiene false in
 /-- **The constant coordinate of domain `A`'s field** as an additive map to `F_q`. -/
@@ -529,7 +417,8 @@ theorem natCast_eq_φq (n : ℕ) : ((n : ℕ) : (interp 0).K) = φq (n : _root_.
 /-- **Row `i` in `ZMod q`**: the constant coordinate of `row_field`, where the committed `â` and
 `t̂` of row `i` are the casts of `a i j k` and `tHat i k`. -/
 theorem row_coord0 {e : program.Env interp} (i : Fin 4)
-    (h : program.HoldsAt e (program.predicate ((i : ℕ) + 1)).body)
+    (h : program.HoldsAt e (program.predicate (MldsaRandomPoint.rel0 program + i)).body)
+    (hev : ¬ (relEvent e).BadAt (rOf e))
     {a : Fin 4 → Fin 4 → Fin 256 → ℕ} {tHat : Fin 4 → Fin 256 → ℕ}
     (hA : ∀ j k, aHatVals (program.reader e) i j k = ((a i j k : ℕ) : (interp 0).K))
     (hT : ∀ k, t1HatVals (program.reader e) i k = ((tHat i k : ℕ) : (interp 0).K))
@@ -543,7 +432,7 @@ theorem row_coord0 {e : program.Env interp} (i : Fin 4)
           RealizedProgram.Ops.nttScheme 256 _root_.MLDSA.zeta
             (fun t => coord0 (program.evalE (program.reader e) 0 (.leaf vC) (2 * t)) -
               2 * coord0 (program.evalE (program.reader e) 0 (.leaf vC) (2 * t + 1))) k := by
-  have hr := row_field i h k.isLt
+  have hr := row_field i h hev k.isLt
   rw [decode_psi] at hr
   have hA' : ∀ j : Fin 4, program.evalE (program.reader e) 0 (.leaf vA)
       ((i : ℕ) * 1024 + ((j : ℕ) * 256 + k)) = φq ((a i j k : ℕ) : _root_.MLDSA.Coeff) := fun j => by
@@ -572,19 +461,9 @@ theorem row_coord0 {e : program.Env interp} (i : Fin 4)
 
 /-! ## The source program's readings -/
 
-/-- **A row holds** where the source program holds (`signature.relation.i`). -/
-theorem holds_row {e : program.Env interp} (hs : program.SourceSatAt e) (i : Fin 4) :
-    program.HoldsAt e (program.predicate ((i : ℕ) + 1)).body := by
-  have hp : (i : ℕ) + 1 ∈ [1, 2, 3, 4, MldsaRingRelation.cPred program,
-      MldsaRingRelation.normPred program] := by
-    have := i.isLt
-    interval_cases (i : ℕ) <;> simp
-  obtain ⟨hlt, hsrc⟩ := MldsaRingRelation.inSource _ hp
-  exact hs.preds _ (RealizedProgram.predicate_mem hlt) hsrc
-
 /-- **A source predicate of the relation holds** where the source program holds. -/
 theorem holds_of_mem {e : program.Env interp} (hs : program.SourceSatAt e) {p : ℕ}
-    (hp : p ∈ [1, 2, 3, 4, MldsaRingRelation.cPred program, MldsaRingRelation.normPred program]) :
+    (hp : p ∈ [MldsaRingRelation.cPred program, MldsaRingRelation.normPred program]) :
     program.HoldsAt e (program.predicate p).body := by
   obtain ⟨hlt, hsrc⟩ := MldsaRingRelation.inSource _ hp
   exact hs.preds _ (RealizedProgram.predicate_mem hlt) hsrc
@@ -635,7 +514,7 @@ theorem z_int {e : program.Env interp} (hs : program.SourceSatAt e) {m : ℕ} (h
       (.add (.leaf vZ) (.leaf (MldsaRingRelation.zOff program))) m = k :=
     h m hlen _ (List.mem_singleton_self _)
   unfold RealizedProgram.evalWith at hk
-  rw [MldsaRingRelation.domainField0 (program := program), RealizedProgram.evalE_add] at hk
+  rw [MldsaRandomPoint.domainField0 (program := program), RealizedProgram.evalE_add] at hk
   obtain ⟨c0, f0, e0⟩ := MldsaRingRelation.offConst (program := program)
   rw [RealizedProgram.evalE_leaf_of_isConstant e c0, RealizedProgram.constRead_of_valueField f0, e0,
     List.getD_eq_getElem?_getD, List.getElem?_replicate, if_pos hm, Option.getD_some] at hk
@@ -651,8 +530,8 @@ theorem c_bool {e : program.Env interp} (hs : program.SourceSatAt e) {m : ℕ} (
       program.evalE (program.reader e) 0 (.leaf vC) m = 1 := by
   have h := RealizedProgram.bool_of_boolCheck MldsaRingRelation.cBool
     (holds_of_mem hs (p := MldsaRingRelation.cPred program) (by simp))
-    (i := m) (by rw [(MldsaRingRelation.sizes (program := program)).2.2.2.2]; exact hm)
-  rwa [MldsaRingRelation.domainField0 (program := program)] at h
+    (i := m) (by rw [(MldsaRingRelation.sizes (program := program)).2.2.2.2.1]; exact hm)
+  rwa [MldsaRandomPoint.domainField0 (program := program)] at h
 
 /-- **The constant coordinate of a bit** is its coefficient. -/
 theorem coord0_bool {x : (interp 0).K} (hx : x = 0 ∨ x = 1) :
@@ -676,6 +555,7 @@ theorem coord0_eq_coeffRep {x : (interp 0).K} (hx : ∃ n : ℤ, (n : (interp 0)
 below `q` of `Â`'s spectra, `member.t1` those of `NTT(2^d · t1_i)` (FIPS 204 Algorithm 8,
 line 9, with the program's challenge polynomial, `z` and `w`). -/
 theorem algebra_eq_of_cast {e : program.Env interp} (hs : program.SourceSatAt e)
+    (hev : ¬ (relEvent e).BadAt (rOf e))
     {aHat : _root_.MLDSA.TqMatrix _root_.MLDSA.mldsa44.k _root_.MLDSA.mldsa44.l}
     {t1 : Vector Native.Rows.prims.Power2High _root_.MLDSA.mldsa44.k}
     (hA : ∀ i j k, aHatVals (program.reader e) i j k =
@@ -696,7 +576,7 @@ theorem algebra_eq_of_cast {e : program.Env interp} (hs : program.SourceSatAt e)
     have hr := row_coord0 (a := fun i j k => (((aHat.get i).get j).coeffs.get k).val)
       (tHat := fun i k => ((_root_.MLDSA.Concrete.ntt
         (Native.Rows.prims.power2RoundShift (t1.get i))).coeffs.get k).val)
-      i (holds_row hs i) (hA i) (hT i) k
+      i (holds_row hs i) hev (hA i) (hT i) k
     simp only [ZMod.natCast_zmod_val] at hr
     have hW : RealizedProgram.Ops.nttScheme 256 _root_.MLDSA.zeta (fun t => coord0
         (program.evalE (program.reader e) 0 (.leaf vW) ((i : ℕ) * 256 + t))) k =
@@ -734,6 +614,7 @@ public key whose `Â = ExpandA(ρ)` (`Native.Rows.aHat`, FIPS 204's NTT order) a
 (`FieldInterp.toNat`, the integer reading; both values are prime-typed, so a reading is the cast
 of its integer reading). -/
 theorem algebra_eq {e : program.Env interp} (hs : program.SourceSatAt e)
+    (hev : ¬ (relEvent e).BadAt (rOf e))
     {pk : Native.Rows.PublicKey}
     (hA : ∀ i j k, (interp 0).toNat (aHatVals (program.reader e) i j k) =
       ((((Native.Rows.aHat pk).get i).get j).coeffs.get k).val)
@@ -742,7 +623,7 @@ theorem algebra_eq {e : program.Env interp} (hs : program.SourceSatAt e)
     wOf (program.reader e) = _root_.MLDSA.computeWApprox _root_.MLDSA.mldsa44 Native.Rows.prims
       (nttOps := _root_.MLDSA.Concrete.concreteNTTRingOps) (Native.Rows.aHat pk)
       (cPoly (program.reader e)) (zOf (program.reader e)) pk.t1 := by
-  refine algebra_eq_of_cast hs (fun i j k => ?_) (fun i k => ?_)
+  refine algebra_eq_of_cast hs hev (fun i j k => ?_) (fun i k => ?_)
   · rw [← hA i j k]
     exact (natCast_toNat_of_mem hs (v := vA) (by simp) (by
       rw [(MldsaRingRelation.sizes (program := program)).1]

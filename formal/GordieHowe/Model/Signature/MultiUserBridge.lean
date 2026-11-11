@@ -65,16 +65,22 @@ theorem countND_requestsBefore_le_card {Req : Type} [DecidableEq Req] {m : ℕ} 
 namespace Signature
 
 variable {N n : ℕ} {m : ℕ} {I J Bd : Type} [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J]
-  {TB : BaseTypes} {B : BaseSigner (Bits m) (BitStr I J) N TB} (O : SignOracle B) (e : BitStr I J ≃ Bd) {t : ℕ}
+  {TB : BaseTypes}
+  {B : BaseSigner (Bits m) (BitStr I J) N TB} (O : SignOracle B.core) (e : BitStr I J ≃ Bd) {t : ℕ}
   {Ot : Type}
+
+variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty O.Coins]
 
 /-- **Replies agreeing with the count-indexed multi-user replies** at every pattern of requests of
 the algorithm give the coin average of `simLaw` of the step-indexed instance
 (`sum_simLaw_countND_muReply`). -/
 theorem sum_simLaw_muReplyAfter_of_agree [Inhabited (MURequest O n)] (keys : Fin n → B.KeyCoins)
     {Q' : ℕ} (hQ : t + 1 ≤ Q') (d₂ : MURequest O n) (hd₂ : ∀ i sm, d₂ ≠ .sign i sm)
-    (G : ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B) t Ot)
-    (a : (Fin Q' → O.Coins) → ℕ → List (MURequest O n) → MURequest O n → Option (MUResponse B))
+    (G : ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B.core) t Ot)
+    (a : (Fin Q' → O.Coins) → ℕ → List (MURequest O n) → MURequest O n → Option (MUResponse B.core))
     (hag : ∀ L : Fin (t + 1) → MURequest O n, (∀ k, ∃ w, L k = G.req k w) → ∀ ω,
       ReqQueryAlg.repliesAt (a ω) L =
         ReqQueryAlg.repliesAt
@@ -90,7 +96,8 @@ theorem sum_simLaw_muReplyAfter_of_agree [Inhabited (MURequest O n)] (keys : Fin
 
 /-- **The table of outer replies of the multi-user challenger** at the users' key coins `keys` and
 its coins `ω`, for an adversary `A`: the reply after `j` requests (`muReplyAfter`, coin `j`). -/
-def muTab {X Y : Type} {N : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB} {O : SignOracle B} {n : ℕ} [AddGroup Y]
+def muTab {X Y : Type} {TB : SchemeTypes}
+    {B : BaseScheme X Y TB} {O : SignOracle B} {n : ℕ} [AddGroup Y]
     [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
     {Req Resp Ot : Type} [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
     {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA Ot) (keys : Fin n → B.KeyCoins) (Q' : ℕ)
@@ -226,24 +233,33 @@ end AnswerSteps
 namespace Signature
 
 variable {N n : ℕ} {m : ℕ} {I J Bd : Type} [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J]
-  {TB : BaseTypes} {B : BaseSigner (Bits m) (BitStr I J) N TB} {O : SignOracle B}
+  {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
+  [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  {B : BaseSigner (Bits m) (BitStr I J) N TB} {O : SignOracle B.core}
   {Req Resp Req₁ Resp₁ Ot : Type} [Fintype Req] [DecidableEq Req] [Fintype Resp]
   [DecidableEq Resp] [Fintype Req₁] [DecidableEq Req₁] [Fintype Resp₁] [DecidableEq Resp₁]
   [Inhabited Req₁] {shA : AlgShape (Bits m) (BitStr I J) Req Resp} (A : AdaptiveIAlg shA Ot)
 
-variable (C₁ : Challenger (Bits m) (BitStr I J) Req₁ Resp₁)
-  (F : TwoRelay Req Resp Req₁ Resp₁ (MURequest O n) (MUResponse B)) (e : BitStr I J ≃ Bd)
-  (d₂ : MURequest O n) (E : Expansion (Bits m) Bd (ExtReg A C₁ (MURequest O n) (MUResponse B)))
-  (kq : ℕ) (d₀ : ExtReg A C₁ (MURequest O n) (MUResponse B))
+variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins]
 
+variable (C₁ : Challenger (Bits m) (BitStr I J) Req₁ Resp₁)
+  (F : TwoRelay Req Resp Req₁ Resp₁ (MURequest O n) (MUResponse B.core)) (e : BitStr I J ≃ Bd)
+  (d₂ : MURequest O n) (E : Expansion (Bits m) Bd (ExtReg A C₁ (MURequest O n) (MUResponse B.core)))
+  (kq : ℕ) (d₀ : ExtReg A C₁ (MURequest O n) (MUResponse B.core))
+
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
 /-- **The replies used against the bridge algorithm**: on the answer steps, the table's at the
 count of the earlier non-dummy requests; elsewhere (where the bridge algorithm ignores the reply)
 the multi-user challenger's at that count. -/
 noncomputable def muBridgeReplies (keys : Fin n → B.KeyCoins) (Q' : ℕ) (ω : Fin Q' → O.Coins) :
-    ℕ → List (MURequest O n) → MURequest O n → Option (MUResponse B) := fun k prev q =>
+    ℕ → List (MURequest O n) → MURequest O n → Option (MUResponse B.core) := fun k prev q =>
   if answerSlot A C₁ k = none then muReplyAfter O keys Q' ω (ReqQueryAlg.countND d₂ prev) q
   else A.tabAt (muTab A keys Q' ω) (ReqQueryAlg.countND d₂ prev) q
 
+omit [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **The table's replies and `muBridgeReplies` give the same bridge instance.** -/
 theorem instLog_tabAt_eq (keys : Fin n → B.KeyCoins) (Q' : ℕ) (ω : Fin Q' → O.Coins) :
     (bridgeAlg e A C₁ F d₂ E kq d₀).instLog (fun _ prev q => A.tabAt (muTab A keys Q' ω)
@@ -256,6 +272,7 @@ theorem instLog_tabAt_eq (keys : Fin n → B.KeyCoins) (Q' : ℕ) (ω : Fin Q' �
   rw [bridgeAlg_write_of_none A C₁ F e d₂ E kq d₀ hk,
     bridgeAlg_write_of_none A C₁ F e d₂ E kq d₀ hk]
 
+omit [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **`muBridgeReplies` are the count-indexed multi-user replies** at every pattern of requests of
 the bridge algorithm. -/
 theorem repliesAt_muBridgeReplies (keys : Fin n → B.KeyCoins) (Q' : ℕ) (ω : Fin Q' → O.Coins)
@@ -287,7 +304,7 @@ theorem sum_simLaw_extRun_muTab [Inhabited (MURequest O n)]
     (hd₂ : ∀ i sm, d₂ ≠ .sign i sm) (keys : Fin n → B.KeyCoins) {Q' : ℕ}
     (hQ : ((((A.absorbTab F (tab₀ A)).toTPKindAlg.composeBothOut C₁ id).depth) +
       kq) + 1 ≤ Q')
-    (S : Set (BaseGame.Tuple (Bits m) Bd (ExtReg A C₁ (MURequest O n) (MUResponse B)) kq ×
+    (S : Set (BaseGame.Tuple (Bits m) Bd (ExtReg A C₁ (MURequest O n) (MUResponse B.core)) kq ×
       DB (Bits m) Bd)) :
     ∑ ω, PMF.uniformOfFintype (Fin Q' → O.Coins) ω *
         simLaw e (extRun e A C₁ F E kq d₀ (muTab A keys Q' ω)) S =
@@ -307,14 +324,15 @@ theorem sum_simLaw_extRun_muTab [Inhabited (MURequest O n)]
 /-- **The replies used against the bridge algorithm for a table `tab`**: as `muBridgeReplies`,
 with `tab` on the answer steps. -/
 noncomputable def bridgeRepliesTab (keys : Fin n → B.KeyCoins) (Q' : ℕ) (ω : Fin Q' → O.Coins)
-    (tab : A.OuterTab (MURequest O n) (MUResponse B)) :
-    ℕ → List (MURequest O n) → MURequest O n → Option (MUResponse B) := fun k prev q =>
+    (tab : A.OuterTab (MURequest O n) (MUResponse B.core)) :
+    ℕ → List (MURequest O n) → MURequest O n → Option (MUResponse B.core) := fun k prev q =>
   if answerSlot A C₁ k = none then muReplyAfter O keys Q' ω (ReqQueryAlg.countND d₂ prev) q
   else A.tabAt tab (ReqQueryAlg.countND d₂ prev) q
 
+omit [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **The table's replies and `bridgeRepliesTab` give the same bridge instance.** -/
 theorem instLog_tabAt_eq_tab (keys : Fin n → B.KeyCoins) (Q' : ℕ) (ω : Fin Q' → O.Coins)
-    (tab : A.OuterTab (MURequest O n) (MUResponse B)) :
+    (tab : A.OuterTab (MURequest O n) (MUResponse B.core)) :
     (bridgeAlg e A C₁ F d₂ E kq d₀).instLog (fun _ prev q => A.tabAt tab
       (ReqQueryAlg.countND d₂ prev) q) =
       (bridgeAlg e A C₁ F d₂ E kq d₀).instLog (bridgeRepliesTab A C₁ d₂ keys Q' ω tab) := by
@@ -325,11 +343,12 @@ theorem instLog_tabAt_eq_tab (keys : Fin n → B.KeyCoins) (Q' : ℕ) (ω : Fin 
   rw [bridgeAlg_write_of_none A C₁ F e d₂ E kq d₀ hk,
     bridgeAlg_write_of_none A C₁ F e d₂ E kq d₀ hk]
 
+omit [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **For a table agreeing with the multi-user challenger's replies** (`htab`: below the number
 of slots, on the dummy and the outer requests), `bridgeRepliesTab` are the count-indexed
 multi-user replies at every pattern of requests of the bridge algorithm. -/
 theorem repliesAt_bridgeRepliesTab (keys : Fin n → B.KeyCoins) (Q' : ℕ) (ω : Fin Q' → O.Coins)
-    (tab : A.OuterTab (MURequest O n) (MUResponse B))
+    (tab : A.OuterTab (MURequest O n) (MUResponse B.core))
     (htab : ∀ (j : Fin A.slots) q, (q = d₂ ∨ ∃ c r, F.outer c r = some q) →
       tab j q = muReplyAfter O keys Q' ω j q)
     (L : Fin (((((A.absorbTab F (tab₀ A)).toTPKindAlg.composeBothOut C₁ id).depth) +
@@ -364,10 +383,10 @@ theorem simLaw_extRun_tab_eq_sum [Inhabited (MURequest O n)]
     (hd₂ : ∀ i sm, d₂ ≠ .sign i sm) (keys : Fin n → B.KeyCoins) {Q' : ℕ}
     (hQ : ((((A.absorbTab F (tab₀ A)).toTPKindAlg.composeBothOut C₁ id).depth) +
       kq) + 1 ≤ Q')
-    (tab : A.OuterTab (MURequest O n) (MUResponse B))
+    (tab : A.OuterTab (MURequest O n) (MUResponse B.core))
     (htab : ∀ ω (j : Fin A.slots) q, (q = d₂ ∨ ∃ c r, F.outer c r = some q) →
       tab j q = muReplyAfter O keys Q' ω j q)
-    (S : Set (BaseGame.Tuple (Bits m) Bd (ExtReg A C₁ (MURequest O n) (MUResponse B)) kq ×
+    (S : Set (BaseGame.Tuple (Bits m) Bd (ExtReg A C₁ (MURequest O n) (MUResponse B.core)) kq ×
       DB (Bits m) Bd)) :
     simLaw e (extRun e A C₁ F E kq d₀ tab) S =
       ∑ c, PMF.uniformOfFintype (Fin Q' → O.Coins) c *

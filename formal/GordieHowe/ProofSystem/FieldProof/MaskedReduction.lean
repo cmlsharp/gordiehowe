@@ -173,6 +173,7 @@ structure Honest (M : MaskedReduction F ι Pub Wit cells Z nc) (view : (ι → F
   Pads : Type
   [fintype : Fintype Pads]
   [nonempty : Nonempty Pads]
+  [decEq : DecidableEq Pads]
   /-- The honest prover's transcript family. -/
   prover : Pub → In → Pads → CausalTranscript M.spec
   /-- The committed witness holds the honest input and the pads. -/
@@ -183,7 +184,7 @@ structure Honest (M : MaskedReduction F ι Pub Wit cells Z nc) (view : (ι → F
   /-- The honest transcript has the simulator's law, at every public input and honest input. -/
   identDistrib : ∀ p x ch, (fun π => (prover p x π).transcript ch) =ᵈ S.sim p ch
 
-attribute [instance] Honest.fintype Honest.nonempty
+attribute [instance] Honest.fintype Honest.nonempty Honest.decEq
 
 /-- **Soundness for an equivalent relation**: the same reduction and errors. -/
 def Sound.congr {M : MaskedReduction F ι Pub Wit cells Z nc} {view : (ι → F) → Z → F}
@@ -278,9 +279,9 @@ def Sim.append {A : MaskedReduction F ι Pub Wit cells Z n₁} {B : MaskedReduct
   SimCoins := SA.SimCoins × SB.SimCoins
   sim p ch s := Transcript.join (SA.sim p ch.left s.1) (SB.sim p ch.right s.2)
 
-/-- **The honest provers in sequence** (`MaskedRowReduction.Honest.append` with the claims): the second
-prover's honest input carries the first one's pads; simulated by the two simulators in sequence
-(`Sim.append`). -/
+/-- **The honest provers in sequence** (of `MaskedReduction.append`, the claims side by side): the
+second prover's honest input carries the first one's pads; simulated by the two simulators in
+sequence (`Sim.append`). -/
 def Honest.append {A : MaskedReduction F ι Pub Wit cells Z n₁} {B : MaskedReduction F ι Pub Wit cells Z n₂}
     {view : (ι → F) → Z → F} {In : Type} {dom : Pub → In → Prop} {SA : A.Sim} {SB : B.Sim}
     (HA : A.Honest view In dom SA)

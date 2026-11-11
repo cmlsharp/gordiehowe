@@ -17,19 +17,22 @@ The plan-level theorem's assembly: the source protocol `Π_P₀` of a program (i
 multi-circuit IOP (`MultiCircuitIOP`) on the realized program's layout, the lowered system of the
 GordieHowe core (`GordieHowe/ProofSystem/Program/System.lean`).
 
-**The proof system** (`RealizedProgram.ProofSystem P ir I`): the program's checks (`GordieHowe.RealizedProgram.Checks`, decided: the
-realized program `ir` valid, `GordieHowe.RealizedProgram.Valid`; the realization condition,
-`GordieHowe.RealizedProgram.Derivable`; the well-formed source part, `GordieHowe.RealizedProgram.SourceValid`; the cells checks,
-`GordieHowe.RealizedProgram.CellsValid`; the locality of the domains, `GordieHowe.RealizedProgram.Local`), the model of the interpretation
-(`Interp.Model`, `GordieHowe/ProofSystem/Program/FieldModel.lean`: the registry, lawful integer readings at the
-plan's prime-subfield nodes, the MAC fields, linear readings in the fields of the field-form
-`mod_q`s, additive bit coordinates, `Bit` nodes read as `{0, 1}`, the opaque ranges; from the models
-of the fields and decided checks of the program, `Interp.Model.of_models`), the GKR sources of the
-program's circuits (`src`), and every committing domain's circuit proof with its soundness. A
-domain's circuit proof is a `DomainProof` of the domain's predicate; one built under the compiler
-trust (`Domain.guard`: the predicate holds when `CircuitsEnforce` does) is unguarded with the
-proof system's `enforce` (`DomainProof.unguard`). The tree data of a domain is
-the domain proof's: the proof system reads the domain proofs through the `DomainProof` interface.
+**The proof system** (`RealizedProgram.ProofSystem P ir I`): the program's checks
+(`GordieHowe.RealizedProgram.Checks`, decided: the realized program `ir` valid,
+`GordieHowe.RealizedProgram.Valid`; the realization condition,
+`GordieHowe.RealizedProgram.Derivable`; the well-formed source part,
+`GordieHowe.RealizedProgram.SourceValid`; the cells checks, `GordieHowe.RealizedProgram.CellsValid`;
+the locality of the domains, `GordieHowe.RealizedProgram.Local`), the model of the interpretation
+(`Interp.Model`, `GordieHowe/ProofSystem/Program/FieldModel.lean`: the registry, lawful integer
+readings at the plan's prime-subfield nodes, the MAC fields, linear readings in the fields of the
+field-form `mod_q`s, additive bit coordinates, `Bit` nodes read as `{0, 1}`, the opaque ranges; from
+the models of the fields and decided checks of the program, `Interp.Model.of_models`), the GKR
+sources of the program's circuits (`src`), and every committing domain's circuit proof with its
+soundness. A domain's circuit proof is a `DomainProof` of the domain's predicate; one built under
+the circuits' correspondence (`Domain.guard`: the predicate holds when `CircuitsEnforce` does) is
+unguarded with the proof system's `enforce` (`DomainProof.unguard`), the field proved from the GKR
+certificates. The tree data of a domain is the domain proof's: the proof system reads the domain
+proofs through the `DomainProof` interface.
 
 **The multi-circuit IOP at a lowering** (`RealizedProgram.ProofSystem.iopOf Lw`): the system with the layout
 `ir.layout I`, the program's domains (`GordieHowe.RealizedProgram.domainOf`), the statement
@@ -41,12 +44,14 @@ domain proofs (`GordieHowe.RealizedProgram.ProofSystem.enforcement`) as the appl
 * **The protocol** (`GordieHowe.RealizedProgram.ProofSystem.protocol`, `GordieHowe.RealizedProgram.ProofSystem.verifier`, `GordieHowe.RealizedProgram.ProofSystem.iop`): `iopOf` at a lowering
   of `Set.univ` with no event (`GordieHowe.RealizedProgram.ProofSystem.baseLowering`), so it reads no soundness data.
 * **The soundness IOP** (`GordieHowe.RealizedProgram.ProofSystem.soundIOP`): for round-by-round
-  knowledge soundness `h` of `Π_P₀` for `rel` at `RealizedProgram.sourceExtractor proj`, `iopOf` at the
+  knowledge soundness of `Π_P₀` for `rel` at `RealizedProgram.sourceExtractor proj` with errors that
+  vanish at `γ_end` (`hS`, `GordieHowe.RealizedProgram.SourceSound`), `iopOf` at the
   lowering of `{(x, g) | (x, g x) ∈ rel}` (`GordieHowe.RealizedProgram.ProofSystem.relOf`, witnesses read from the statement, since
   a lowering's projection reads the committed assignment only) to the domains: the cells lowering
   after the realization step from the source program
   (`GordieHowe.RealizedProgram.ProofSystem.realizeSource`: its events are the realization events at the realization challenges)
-  after `Π_P₀`'s events (`GordieHowe.RealizedProgram.loweringOfRbr`) (`GordieHowe.RealizedProgram.ProofSystem.lowering`). Its verifier is the
+  after `Π_P₀`'s events (`GordieHowe.RealizedProgram.loweringOfRbr`) (`GordieHowe.RealizedProgram.ProofSystem.soundLowering`). It reads `hS` only in
+  its proofs. Its verifier is the
   protocol's (`verifier_eq`, by `rfl`).
 * **The extractor** (`GordieHowe.RealizedProgram.ProofSystem.extractor`): the extractor of `iopOf` at `baseLowering proj`, which is
   the soundness IOP's (`extractor_eq`, by `rfl`), followed by `g ↦ g x`: `proj` at the realized
@@ -110,7 +115,7 @@ abbrev DomainProofs : Type 1 :=
 variable (proof : DomainProofs ir I)
 
 /-- **The domain proofs enforce the statement check and the domains' predicates under the
-compiler trust** (as `ProofSystem.enforcement`). -/
+circuits' correspondence** (`CircuitsEnforce`; as `ProofSystem.enforcement`). -/
 def enforcementOf : Enforcement
     (Constraint.and (Constraint.check (ir.stmtOk I))
       (GordieHowe.Domain.lowered (ir.domainsOf I)))
@@ -184,9 +189,6 @@ structure ProofSystem (P : Export.Plan) (ir : RealizedProgram) (I : Interp) wher
   accept : ir.CircuitsAccept I src
   /-- Every domain's circuit proof, of the domain's predicate. -/
   proof : ∀ d : Fin ir.domains.length, DomainProof (ir.layout I) (ir.Valuation I) (ir.domainOf I d)
-  /-- The selections' error bound (`RealizedProgram.SelSound`): the probability of the selection
-  events a product form's kernels read. -/
-  selSound : ir.SelSound I
 
 namespace ProofSystem
 
@@ -356,7 +358,7 @@ def realizeSource :
 /-- **The realization step from the source program has the realization step's errors.** -/
 theorem eventBound_realizeSource :
     B.realizeSource.EventBound fun k => ∑ jj : ir.ChalAt k, ir.realError I jj.1 :=
-  Lowering.eventBound_weaken (eventBound_realizeLowering_of_derivable _ _ _ _ _ _ _ B.selSound)
+  Lowering.eventBound_weaken (eventBound_realizeLowering_of_derivable _ _ _ _ _ _ _)
 
 /-- **The cells lowering adds no error.** -/
 theorem eventBound_cellsLowering : B.cellsLowering.EventBound 0 :=
@@ -397,26 +399,33 @@ theorem lowering_eq (hS : ir.SourceRbr I rel proj S) :
   unfold lowering
   rfl
 
-/-- **The multi-circuit IOP of the soundness theorem**: `iopOf` at `lowering`. -/
-abbrev soundIOP
-    (h : rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
-    (hend : ∀ i, ir.rounds.get i.1 = .final → ε i = 0) :
+/-- **The lowering of the soundness theorem at `hS`** (`lowering`): `Π_P₀` round-by-round
+knowledge sound with errors `ε` that vanish at `γ_end` (`SourceSound`). It reads `rel`, `proj` and
+`S`; `hS` and `ε` enter only its proofs. -/
+abbrev soundLowering (hS : ir.SourceSound I rel proj S ε) :
+    Lowering (ir.layout I) (Constraint.guard (ir.stmtOk I) (Constraint.ofRel (relOf rel)))
+      (GordieHowe.Domain.lowered B.domains) :=
+  B.lowering hS.sourceRbr
+
+/-- **The multi-circuit IOP of the soundness theorem**: `iopOf` at `soundLowering`. -/
+abbrev soundIOP (hS : ir.SourceSound I rel proj S ε) :
     MultiCircuitIOP (ir.Valuation I) (ir.Valuation I → W) (relOf rel) :=
-  B.iopOf (B.lowering ⟨ε, h, hend⟩)
+  B.iopOf (B.soundLowering hS)
 
 /-- **The soundness IOP's verifier is the protocol's.** -/
-theorem verifier_eq
-    (h : rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
-    (hend : ∀ i, ir.rounds.get i.1 = .final → ε i = 0) :
-    (B.soundIOP h hend).verifier = B.verifier :=
+theorem verifier_eq (hS : ir.SourceSound I rel proj S ε) : (B.soundIOP hS).verifier = B.verifier :=
+  rfl
+
+/-- **The soundness lowering projects as the protocol's lowering at `proj`.** -/
+theorem lowering_proj (hS : ir.SourceRbr I rel proj S) :
+    (B.lowering hS).proj = (B.baseLowering proj).proj := by
+  unfold lowering baseLowering baseLoweringOf
   rfl
 
 /-- **The soundness IOP's extractor is the protocol's at `proj`.** -/
-theorem extractor_eq [Inhabited W]
-    (h : rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
-    (hend : ∀ i, ir.rounds.get i.1 = .final → ε i = 0) :
-    (B.soundIOP h hend).extractor = (B.iopAt proj).extractor := by
-  unfold soundIOP iopAt lowering baseLowering baseLoweringOf
+theorem extractor_eq [Inhabited W] (hS : ir.SourceSound I rel proj S ε) :
+    (B.soundIOP hS).extractor = (B.iopAt proj).extractor := by
+  unfold soundIOP soundLowering iopAt lowering baseLowering baseLoweringOf
   rfl
 
 end ProofSystem

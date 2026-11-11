@@ -47,7 +47,9 @@ variable {X Y : Type} {N : ℕ}
 /-- **The game's challenger reads its coins only at the request's number**, and its history only
 through its length: two coin functions agreeing at the number of the request, and two histories of
 the same length, give the same reply program. -/
-theorem respond_unforgeChallenger_congr {TS : RingTypes} {S : RingScheme X Y N TS} {n : ℕ} {O : SideOracle S}
+theorem respond_unforgeChallenger_congr {TS : RingTypes} [DecidableEq TS.PK] [Fintype TS.SignCoins]
+    [DecidableEq TS.SignCoins] [Nonempty TS.SignCoins] {S : RingScheme X Y N TS} {n : ℕ}
+    {O : SideOracle S}
     (keys : Fin n → S.KeyCoins) (Q : ℕ) {ω ω' : Fin Q → S.SignCoins}
     {hist hist' : UnforgeHist n O} (hl : hist.length = hist'.length)
     (hω : ∀ h : hist.length < Q, ω ⟨hist.length, h⟩ = ω' ⟨hist.length, h⟩)
@@ -64,8 +66,16 @@ theorem respond_unforgeChallenger_congr {TS : RingTypes} {S : RingScheme X Y N T
     rcases r with i | ⟨s, R, m⟩ | ⟨i, bm⟩ <;> simp only [hc]
   · rw [dif_neg h, dif_neg (hl ▸ h)]
 
-variable {TB : BaseTypes} {B : BaseSigner X Y N TB} {TPS : PSTypes} {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS}
+variable {TB : BaseTypes} [DecidableEq TB.PK]
+  {B : BaseSigner X Y N TB}
+  {TPS : PSTypes} {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {n : ℕ} {SO : SideOracle (ofBase B PS adm)}
+
+variable [Fintype SO.BMsg] [DecidableEq SO.BMsg] [Fintype SO.BSig] [DecidableEq SO.BSig]
+
+variable [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins]
 
 variable (B PS adm n SO) in
 /-- The requests of the unforgeability game of `ofBase B PS adm` with the side oracle `SO`. -/
@@ -78,6 +88,10 @@ abbrev RResp : Type := UnforgeResponse SO
 variable (B PS adm n SO) in
 /-- **A request with the prover's coins.** -/
 abbrev NumReq : Type := PS.Coins × RReq B PS adm n SO
+
+section Coins
+
+variable [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
 
 variable (B PS adm n SO) in
 /-- **The numbered challenger** at the users' key coins `keys`, answering `Q` requests: a request
@@ -95,6 +109,7 @@ noncomputable def numChallenger (keys : Fin n → B.KeyCoins) (Q : ℕ) :
   respond_queries _ _ r H :=
     (unforgeChallenger (ofBase B PS adm) n SO keys Q).respond_queries _ _ r.2 H
 
+omit [Fintype TPS.Coins] [DecidableEq TPS.Coins] in
 variable (B PS adm n SO) in
 /-- **The relay attaching the prover's coins**: request number `j` with request `r` is sent as
 `(ρ j, r)` (an arbitrary coin from the number `Q` on), and the numbered challenger's reply is passed
@@ -105,11 +120,18 @@ noncomputable def numRelay (Q : ℕ) (ρ : Fin Q → PS.Coins) :
   route c r := (if h : c < Q then ρ ⟨c, h⟩ else Classical.arbitrary _, r)
   answer _ _ a := a
 
+omit [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Fintype SO.BMsg]
+  [DecidableEq SO.BMsg] [Fintype SO.BSig] [DecidableEq SO.BSig] in
 /-- The relay of a request number is injective. -/
 theorem numRelay_route_injective (Q : ℕ) (ρ : Fin Q → PS.Coins) (c : ℕ) :
     Function.Injective ((numRelay B PS adm n SO Q ρ).route c) :=
   fun _ _ h => congrArg Prod.snd h
 
+omit [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Fintype SO.BMsg] [DecidableEq SO.BMsg]
+  [Fintype SO.BSig] [DecidableEq SO.BSig] in
 /-- **The game's challenger at the coins `(b j, ρ j)` relays the numbered challenger at `b`**
 through the relay attaching `ρ`: each request is answered as the numbered challenger answers it
 with the prover's coins of its number. -/
@@ -133,6 +155,8 @@ theorem relaysChallenger_numRelay (keys : Fin n → B.KeyCoins) (Q : ℕ) (b : F
     exact (congrArg (fun p => p.run G) h).trans rfl
   answer_none _ _ _ := rfl
 
+end Coins
+
 variable (B PS) in
 /-- **The game's coins as the prover's coins and the base signer's coins.** -/
 def coinZip (Q : ℕ) : (Fin Q → B.Coins × PS.Coins) ≃ (Fin Q → PS.Coins) × (Fin Q → B.Coins) where
@@ -141,10 +165,12 @@ def coinZip (Q : ℕ) : (Fin Q → B.Coins × PS.Coins) ≃ (Fin Q → PS.Coins)
   left_inv _ := rfl
   right_inv _ := rfl
 
-omit [DecidablePred adm] in
+omit [DecidablePred adm] [DecidableEq TB.PK] [DecidableEq TB.Coins] [Fintype TB.PK] [Fintype TB.Msg]
+  [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] in
 /-- **The uniform game's coins are the product of the uniform prover's coins and the uniform base
 signer's coins.** -/
-theorem uniform_coinZip (Q : ℕ) (ρ : Fin Q → PS.Coins) (b : Fin Q → B.Coins) :
+theorem uniform_coinZip [Fintype TPS.Coins] [Nonempty TPS.Coins] (Q : ℕ) (ρ : Fin Q → PS.Coins) (b : Fin Q → B.Coins) :
     PMF.uniformOfFintype (Fin Q → B.Coins × PS.Coins) ((coinZip B PS Q).symm (ρ, b)) =
       PMF.uniformOfFintype (Fin Q → PS.Coins) ρ * PMF.uniformOfFintype (Fin Q → B.Coins) b := by
   simp only [PMF.uniformOfFintype_apply, Fintype.card_fun, Fintype.card_prod, Fintype.card_fin,
@@ -155,8 +181,10 @@ theorem uniform_coinZip (Q : ℕ) (ρ : Fin Q → PS.Coins) (b : Fin Q → B.Coi
 /-! ### The game as an average over the prover's coins -/
 
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
-  [Nonempty Y] [NeZero n]
+  [Nonempty Y] [NeZero n] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] in
 /-- A request with the prover's coins, as the default request of the numbered challenger. -/
 noncomputable instance : Inhabited (NumReq B PS adm n SO) := ⟨(Classical.arbitrary _, .corrupt 0)⟩
 
@@ -187,7 +215,11 @@ theorem toOuterMeasure_outLaw_numRelay {O : Type}
 /-! ### The transcripts -/
 
 omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y]
-  [NeZero n] in
+  [NeZero n] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] [Fintype SO.BMsg] [DecidableEq SO.BMsg] [Fintype SO.BSig]
+  [DecidableEq SO.BSig] in
 /-- **The relayed requests read without the prover's coins** are the requests. -/
 theorem map_snd_relayList (Q : ℕ) (ρ : Fin Q → PS.Coins) (rs : List (RReq B PS adm n SO)) :
     ((numRelay B PS adm n SO Q ρ).relayList rs).map Prod.snd = rs := by

@@ -17,7 +17,7 @@ public import GordieHowe.ProofSystem.Program.Transcript.Format
 `Plan.Valid P` is the plan-level validity of a compiled plan (`GordieHowe.RealizedProgram.Export.Plan`):
 decidable conditions on the plan's data, each a predicate of its own. No proof step of the
 plan-level theorem (`thm:backend`) reads them, so the program checks
-(`GordieHowe.ProgramData.programOkB`) no longer certify them. The proofs consume the following
+(`GordieHowe.ProgramData.programOkB`) do not certify them. The proofs consume the following
 conditions:
 
 * the program's well-formedness, challenge order and pad order (`valid.wellFormed`, `valid.order`
@@ -49,8 +49,8 @@ degrees.
 **Data the plan does not carry**, so the conditions above cannot check it:
 * for `Plan.LigeroShapesValid`: the line certificate's agreement threshold `A`, exceptional count
   `B` and Johnson certificate `(m, B_j, H)`, and the profile's target error, which the column bound
-  reads (`GordieHowe/Applications/Shared/Tableaux.lean`, e.g. `gold4K512Line`, `gold4K512Column_le`); the
-  evaluation-point domain size `q` (the registry supplies it per field);
+  reads (`GordieHowe/Applications/Shared/Tableaux.lean`, e.g. `gold4K512Line`, `gold4K512Agree`);
+  the evaluation-point domain size `q` (the registry supplies it per field);
 * for `Plan.TranscriptFits`: the round count of the circuit proofs
   (`GordieHowe.SPBCS.ProofSystemTranscript.Bounds.n_le`, `≤ 20795`), which needs the GKR circuits' round structure; the
   skip phase's index bits;

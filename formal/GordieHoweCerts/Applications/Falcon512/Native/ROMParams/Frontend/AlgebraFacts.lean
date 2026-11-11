@@ -179,9 +179,9 @@ set_option maxRecDepth 4096 in
 theorem alg_sig :
     ∃ real, (program.predicate 308).body = .mod 1 12289
     (.add (.leaf 596) (.apply (.negacyclicConv 593 (.ntt 10302)) (.leaf 595)))
-    (.apply (.batched 512 (.fromDigits 16 2)) (.leaf 594)) real ∧ real.form.isProduct = false := by
-  obtain ⟨real, h, hf, -⟩ := predicate_signature_2eequation_2esource_body
-  exact ⟨real, h, by rw [hf]; rfl⟩
+    (.apply (.batched 512 (.fromDigits 16 2)) (.leaf 594)) real := by
+  obtain ⟨real, h, -⟩ := predicate_signature_2eequation_2esource_body
+  exact ⟨real, h⟩
 
 set_option maxRecDepth 4096 in
 /-- The norm's shared expressions. -/

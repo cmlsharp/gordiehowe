@@ -379,7 +379,8 @@ section Salted
 variable [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] {Sd C SC : Type} [Fintype Sd]
   [DecidableEq Sd] [Nonempty Sd] [Fintype C] [Nonempty C] [Fintype SC] [Nonempty SC]
   (saltOf : X → Option Sd) (rel : Stmt → Wit → Prop) [DecidableRel rel]
-  (P : NARG.ProverFn X Y Stmt Wit Proof (SaltedCoins Sd C)) (S : NARG.SimulatorFn X Y Stmt Proof (SaltedCoins Sd SC))
+  (P : NARG.ProverFn X Y Stmt Wit Proof (SaltedCoins Sd C)) (μ : PMF (SaltedCoins Sd C))
+    (S : NARG.SimulatorFn X Y Stmt Proof (SaltedCoins Sd SC))
 
 /-! #### The slice laws at a fixed salt -/
 
@@ -517,12 +518,12 @@ theorem replaceSlice_reprogram {σ : Sd} (O F : X → Y) {ass : List (Assignment
   · rw [show replaceSlice saltOf σ (O.reprogram ass) F y = O.reprogram ass y from if_neg hy]
     exact reprogram_apply_congr ass (if_neg hy)
 
-variable {saltOf rel P S}
+variable {saltOf rel P μ S}
 
 /-- **The proof queries below `j` do not read or change the slice of a fresh salt**: when no proof query
 below `j` has the salt `σ`, hybrid `j`'s replies to them on an oracle with the slice of `σ`
 replaced are its replies on the original oracle, with the slice replaced. -/
-theorem hybResp_replaceSlice (hloc : SaltedLocal saltOf P S) {Q : ℕ} {j : ℕ}
+theorem hybResp_replaceSlice (hloc : SaltedLocal saltOf P μ S) {Q : ℕ} {j : ℕ}
     (ω : Tape X Y Sd C SC Q) {σ : Sd} (hcol : ∀ i : Fin Q, (i : ℕ) < j → ω.salts i ≠ σ)
     (F : X → Y) {i : ℕ} (hi : i < j) (req : ProofQuery Stmt Wit) (O : X → Y) :
     (hybResp rel P S j ω i req (replaceSlice saltOf σ O F)).response =
@@ -549,7 +550,7 @@ theorem hybResp_replaceSlice (hloc : SaltedLocal saltOf P S) {Q : ℕ} {j : ℕ}
   · simp [dif_neg hQ]
 
 /-- **Hybrid `j`'s replies do not change the oracle on salt-free inputs.** -/
-theorem agreeOffSalted_hybResp (hloc : SaltedLocal saltOf P S) {Q : ℕ} (j : ℕ)
+theorem agreeOffSalted_hybResp (hloc : SaltedLocal saltOf P μ S) {Q : ℕ} (j : ℕ)
     (ω : Tape X Y Sd C SC Q) (i : ℕ) (req : ProofQuery Stmt Wit) (O : X → Y) :
     AgreeOffSalted saltOf (hybResp rel P S j ω i req O).state O := by
   intro y hy
@@ -643,7 +644,7 @@ theorem override_hybResp_updSim {Q : ℕ} {j : ℕ} (hj : j < Q) (j' : ℕ) (ω 
 the salt of proof query `j`, the difference of the outputs of hybrids `j` and `j + 1` from the oracle
 with that salt's slice answered by `F` is the difference of the outputs from the original oracle
 when proof query `j` is answered with that slice by the prover and by the simulator. -/
-theorem step_pointwise (hloc : SaltedLocal saltOf P S) {m : ℕ} (A : IAlg X Y Stmt Wit Proof m)
+theorem step_pointwise (hloc : SaltedLocal saltOf P μ S) {m : ℕ} (A : IAlg X Y Stmt Wit Proof m)
     {Q j : ℕ} (hj : j < Q) (ω : Tape X Y Sd C SC Q) (F : X → Y)
     (hH : ¬ StepHit saltOf rel P S A hj ω) (hC : ¬ StepColl hj ω) :
     ind (A.accepts (hybResp rel P S j ω) (replaceSlice saltOf (ω.salts ⟨j, hj⟩) ω.oracle F)) -
@@ -909,7 +910,7 @@ theorem abs_ind_sub_ind_le (b b' : Bool) : |ind b - ind b'| ≤ 1 :=
 
 /-- **One hybrid step**: hybrids `j` and `j + 1` differ by at most `(t + j) / |Sd| + 𝔼 H, η H`
 for an algorithm with a budget of `t` queries. -/
-theorem abs_hyb_sub_le [Fintype Proof] (hloc : SaltedLocal saltOf P S) {η : (X → Y) → ℝ}
+theorem abs_hyb_sub_le [Fintype Proof] (hloc : SaltedLocal saltOf P μ S) {η : (X → Y) → ℝ}
     (hcl : SliceCloseAt saltOf rel P S η) {m t : ℕ} (A : IAlg X Y Stmt Wit Proof m)
     (hA : A.Budget t) {Q j : ℕ} (hj : j < Q) :
     |hyb rel P S A Q j - hyb rel P S A Q (j + 1)| ≤ (t + j) / Fintype.card Sd + 𝔼 H, η H := by
@@ -1029,7 +1030,7 @@ theorem abs_hyb_sub_le [Fintype Proof] (hloc : SaltedLocal saltOf P S) {η : (X 
 
 /-- The real environment's responder is hybrid `0`'s. -/
 theorem envResponder_realEnv {Q : ℕ} (ω : Tape X Y Sd C SC Q) :
-    envResponder (realEnv rel P Q) (ω.oracle, fun i => ⟨ω.salts i, ω.proverCoins i⟩) =
+    envResponder (realEnv rel P μ Q) (ω.oracle, fun i => ⟨ω.salts i, ω.proverCoins i⟩) =
       hybResp rel P S 0 ω := by
   funext i req O
   simp only [envResponder, hybResp, proverReply, realEnv]
@@ -1049,26 +1050,27 @@ theorem tapeDist_uniformOfFintype {Q : ℕ} {Cx : Type} [Fintype Cx] [Nonempty C
       PMF.uniformOfFintype ((X → Y) × (Fin Q → Cx)) := by
   rw [tapeDist, PMF.pi_uniformOfFintype, PMF.uniformOfFintype_prod_eq_bind]
 
-/-- **The real game is hybrid `0`**, for a prover with uniform coins. -/
+/-- **The real game is hybrid `0`**, for uniform prover coins. -/
 theorem toReal_acceptProb_realEnv {m : ℕ} (A : IAlg X Y Stmt Wit Proof m) {Q : ℕ}
-    (hP : P.coins = PMF.uniformOfFintype (SaltedCoins Sd C)) :
-    (A.acceptProb (realEnv rel P Q)).toReal = hyb rel P S A Q 0 := by
+    (hP : μ = PMF.uniformOfFintype (SaltedCoins Sd C)) :
+    (A.acceptProb (realEnv rel P μ Q)).toReal = hyb rel P S A Q 0 := by
   classical
-  have hμ : (realEnv rel P Q).μ = PMF.uniformOfFintype ((X → Y) × (Fin Q → SaltedCoins Sd C)) := by
-    change tapeDist Q P.coins = _
+  have hμ : (realEnv rel P μ Q).μ = PMF.uniformOfFintype
+      ((X → Y) × (Fin Q → SaltedCoins Sd C)) := by
+    change tapeDist Q μ = _
     rw [hP, tapeDist_uniformOfFintype]
   rw [IAlg.acceptProb, hμ]
   change (GordieHowe.IOP.probUniform ((X → Y) × (Fin Q → SaltedCoins Sd C)) fun p =>
-    A.accepts (envResponder (realEnv rel P Q) p) p.1 = true).toReal = _
+    A.accepts (envResponder (realEnv rel P μ Q) p) p.1 = true).toReal = _
   rw [GordieHowe.IOP.toReal_probUniform]
   let e : Tape X Y Sd C SC Q ≃ ((X → Y) × (Fin Q → SaltedCoins Sd C)) × (Fin Q → SC) :=
     { toFun := fun ω => ((ω.oracle, fun i => ⟨ω.salts i, ω.proverCoins i⟩), ω.simCoins)
       invFun := fun q => ⟨q.1.1, fun i => (q.1.2 i).salt, fun i => (q.1.2 i).coins, q.2⟩
       left_inv := fun _ => rfl
       right_inv := fun _ => rfl }
-  rw [hyb, Fintype.expect_equiv e _ (fun q => if A.accepts (envResponder (realEnv rel P Q) q.1) q.1.1 = true
+  rw [hyb, Fintype.expect_equiv e _ (fun q => if A.accepts (envResponder (realEnv rel P μ Q) q.1) q.1.1 = true
     then (1 : ℝ) else 0) fun ω => by rw [Equiv.coe_fn_mk, envResponder_realEnv (S := S)]; rfl]
-  exact (expect_prod_fst (fun c => if A.accepts (envResponder (realEnv rel P Q) c) c.1 = true
+  exact (expect_prod_fst (fun c => if A.accepts (envResponder (realEnv rel P μ Q) c) c.1 = true
     then (1 : ℝ) else 0)).symm
 
 /-- **The simulated game is hybrid `Q`.** -/
@@ -1109,7 +1111,7 @@ theorem sum_range_stepError (t c e : ℝ) (Q : ℕ) :
 /-- **The hybrids from the real to the simulated game**: hybrids `0` and `Q` differ by at most
 `Q t / |Sd| + Q (Q - 1) / (2 |Sd|) + Q · 𝔼 H, η H` for an algorithm with a budget of `t`
 queries. -/
-theorem abs_hyb_zero_sub_le [Fintype Proof] (hloc : SaltedLocal saltOf P S) {η : (X → Y) → ℝ}
+theorem abs_hyb_zero_sub_le [Fintype Proof] (hloc : SaltedLocal saltOf P μ S) {η : (X → Y) → ℝ}
     (hcl : SliceCloseAt saltOf rel P S η) {m t : ℕ} (A : IAlg X Y Stmt Wit Proof m)
     (hA : A.Budget t) (Q : ℕ) :
     |hyb rel P S A Q 0 - hyb rel P S A Q Q| ≤
@@ -1128,9 +1130,9 @@ proof queries answered has advantage at most
     Q t / |Sd| + Q (Q - 1) / (2 |Sd|) + Q · 𝔼 H, η H
 
 between the honest prover `P` and the simulator `S`, unbounded after its steps. -/
-theorem zeroKnowledge_of_sliceCloseAt [Fintype Proof] (hloc : SaltedLocal saltOf P S)
+theorem zeroKnowledge_of_sliceCloseAt [Fintype Proof] (hloc : SaltedLocal saltOf P μ S)
     {η : (X → Y) → ℝ} (hcl : SliceCloseAt saltOf rel P S η) :
-    ZeroKnowledge rel P S fun t Q =>
+    ZeroKnowledge rel P μ S fun t Q =>
       Q * t / Fintype.card Sd + Q * (Q - 1) / (2 * Fintype.card Sd) + Q * 𝔼 H, η H := by
   intro m t Q 𝒜
   refine 𝒜.abs_acceptProb_sub_le _ _ fun r => ?_

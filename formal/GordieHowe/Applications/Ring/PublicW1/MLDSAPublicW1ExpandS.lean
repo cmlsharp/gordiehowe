@@ -18,7 +18,7 @@ public import GordieHowe.Applications.MLDSA.Regularity.T0Law
 * `withExpandS_bounded`: the secrets of `withExpandS` are `η`-bounded.
 * `expect_withExpandS`: averaged over a uniform `G`, the secret of every `ρ'` is a uniform box
   secret.
-* `ringRegGap_withExpandS`, `regGapAvg_withExpandS`: the regularity gap does not read `ExpandS`,
+* `signerRegGap_withExpandS`, `regGapAvg_withExpandS`: the regularity gap does not read `ExpandS`,
   so with both `ExpandA` and `ExpandS` random oracles the averaged gap is the gap averaged over a
   uniform seed, a uniform box secret and a uniform matrix.
 -/
@@ -51,9 +51,10 @@ theorem expect_withExpandS (rhoPrime : Bytes 64) (φ : SecretCoeffs p → ℝ) :
   PMF.expect_apply_eval rhoPrime φ
 
 /-- **The regularity gap does not read `ExpandS`.** -/
-theorem ringRegGap_withExpandS [NeZero (bucketCount p)] [NTTRingOps] [Nonempty (MaskBox p)]
+theorem signerRegGap_withExpandS [NeZero (bucketCount p)] [NTTRingOps] [Nonempty (MaskBox p)]
     (G : Bytes 64 → SecretCoeffs p) (sk : SecretKey p) (aHat : TqMatrix p.k p.l) (βmin : ℚ≥0) :
-    ringRegGap (withExpandS prims G) sk aHat βmin = ringRegGap prims sk aHat βmin :=
+    signerRegGap (withExpandS prims G) sk aHat (Cutoff.const βmin) = signerRegGap prims sk aHat
+        (Cutoff.const βmin) :=
   rfl
 
 /-- **The averaged regularity gap with `ExpandS` a random oracle**: averaged over `G`,
@@ -63,13 +64,13 @@ theorem expect_regGapAvg_withExpandS [NeZero (bucketCount p)] [NTTRingOps] [None
     (βmin : ℚ≥0) :
     𝔼 G : Bytes 64 → SecretCoeffs p, regGapAvg (withExpandS prims G) βmin =
       𝔼 seed : Bytes 32, 𝔼 e : SecretCoeffs p, 𝔼 aHat : TqMatrix p.k p.l,
-        ringRegGap prims (idealSecretKey prims (prims.expandSeed seed).1
-          (prims.expandSeed seed).2.2 aHat (secretOfCoeffs e)) aHat βmin := by
+        signerRegGap prims (idealSecretKey prims (prims.expandSeed seed).1
+          (prims.expandSeed seed).2.2 aHat (secretOfCoeffs e)) aHat (Cutoff.const βmin) := by
   unfold regGapAvg
   rw [Finset.expect_comm]
   refine Finset.expect_congr rfl fun seed _ => ?_
   exact expect_withExpandS (prims.expandSeed seed).2.1 fun e => 𝔼 aHat : TqMatrix p.k p.l,
-    ringRegGap prims (idealSecretKey prims (prims.expandSeed seed).1
-      (prims.expandSeed seed).2.2 aHat (secretOfCoeffs e)) aHat βmin
+    signerRegGap prims (idealSecretKey prims (prims.expandSeed seed).1
+      (prims.expandSeed seed).2.2 aHat (secretOfCoeffs e)) aHat (Cutoff.const βmin)
 
 end GordieHowe.Ring.MLDSAW1

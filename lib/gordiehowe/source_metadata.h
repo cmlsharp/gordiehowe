@@ -20,22 +20,6 @@ enum class SourceRole {
   kRingSigma, kCarry, kStmtMember, kInput
 };
 
-// A part of another application's program that this program holds under a
-// renaming: the images of the source's value, shared-expression and challenge
-// identifiers at their positions, the part's values and shared expressions, and
-// the corresponding predicates. The lists are the check's input, not trusted:
-// the embedding check reads both programs. An empty profile applies to every
-// profile.
-struct ProgramEmbeddingDecl {
-  std::string name;
-  std::string source_config;
-  std::string profile;
-  std::vector<size_t> vals, refs, chals, values, exprs;
-  std::vector<std::pair<size_t, size_t>> equals, bodies;
-  // Predicates of this program that must be source predicates.
-  std::vector<size_t> sources = {};
-};
-
 // One repetition of a repeated gadget: the predicates, shared expressions and
 // values whose shapes the family states, in the same order at every repetition.
 struct ShapeFamilyRow {
@@ -47,25 +31,6 @@ struct ShapeFamilyRow {
 struct ShapeFamilyInput {
   std::string name;
   std::vector<ShapeFamilyRow> rows;
-};
-
-// Shared by every profile of an application. Names resolve after compilation;
-// an absent or ambiguous name is an export error, never a positional fallback.
-// A configuration with no names takes the positional ShapeInputs instead.
-struct NamedShapeInputs {
-  std::vector<std::string> values, predicates, exprs, equal_headers;
-  // Semantic value names anchor fields whose private cells must be source-owned.
-  std::vector<std::string> private_field_sources;
-  // Inclusive runs of predicates, by their first and last names, that must all
-  // be valid source predicates.
-  std::vector<std::pair<std::string, std::string>> source_predicate_ranges = {};
-  std::vector<ProgramEmbeddingDecl> embeddings = {};
-  // When set, a checked table of the program's shared expressions up to and
-  // including this named expression.
-  std::string expr_table_end = {};
-  // Whether the frontends read the program's number of challenge phases.
-  bool phase_count = false;
-  std::vector<ShapeFamilyInput> families = {};
 };
 
 struct ValueShapeAlias {
@@ -100,6 +65,45 @@ struct ShapeExprSelector {
 struct SelectedShapeNode {
   std::string name;
   ShapeExprSelector selector;
+};
+
+// A part of another application's program that this program holds: the
+// source program's configuration (at this program's profile), its
+// predicates the part holds, by name, each the predicate of the same name
+// here (runs of field equalities, by their first and last names, each a
+// source predicate here; other bodies), the source's shared expressions the
+// frontends read besides (by their coordinates in the source program), and
+// the source's values this program holds under another name. The export
+// computes the renaming, the part's values and shared expressions and the
+// predicate pairs from the two programs (compiler/embedding.h); the
+// embedding check reads both programs.
+struct ProgramEmbeddingSpec {
+  std::string name;
+  std::string source_config;
+  std::vector<std::pair<std::string, std::string>> equals;
+  std::vector<std::string> bodies = {};
+  std::vector<ShapeExprSelector> exprs = {};
+  // (the source's name, the name here).
+  std::vector<std::pair<std::string, std::string>> aliases = {};
+};
+
+// Shared by every profile of an application. Names resolve after compilation;
+// an absent or ambiguous name is an export error, never a positional fallback.
+// A configuration with no names takes the positional ShapeInputs instead.
+struct NamedShapeInputs {
+  std::vector<std::string> values, predicates, exprs, equal_headers;
+  // Semantic value names anchor fields whose private cells must be source-owned.
+  std::vector<std::string> private_field_sources;
+  // Inclusive runs of predicates, by their first and last names, that must all
+  // be valid source predicates.
+  std::vector<std::pair<std::string, std::string>> source_predicate_ranges = {};
+  std::vector<ProgramEmbeddingSpec> embeddings = {};
+  // When set, a checked table of the program's shared expressions up to and
+  // including this named expression.
+  std::string expr_table_end = {};
+  // Whether the frontends read the program's number of challenge phases.
+  bool phase_count = false;
+  std::vector<ShapeFamilyInput> families = {};
 };
 
 // A predicate's stable source meaning disambiguates a source declaration

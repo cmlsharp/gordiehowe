@@ -21,7 +21,7 @@ SampleInBall's view are those of `MLDSA44.Native.ROMParams`, read through the re
 (`GordieHoweCerts/Applications/MLDSA44/Emulated/ROMParams/Frontend/Embed.lean`; SampleInBall's errors `264/2^128` at `h2c.sample.select.delta` and
 `295/2^128` at `h2c.sample.mem.delta`), the crossing (`crossSound`, `mac.equal`) and domain `A`'s
 algebra (`algebraSound`, over Goldilocks² with the signature relation a source `mod_q`); composed
-with the proof system (`GordieHowe.RealizedProgram.ProofSystem.FieldBranches.causal_rbr_knowledge_soundness` at the forked domains of `proofSystem`) in the headline
+with the proof system (`GordieHowe.RealizedProgram.ProofSystem.FieldBranches.causal_rbr_knowledge_soundness` at the forked domains of `proofSystem`) in
 `iop_rbr_knowledge_soundness`, at the proof system `proofSystem` of the certificates (no
 compiler-trust hypothesis). The
 program declares the statement bounds `key.a < q`, `key.t1 < 2^10`, which the verifier checks before
@@ -49,13 +49,18 @@ theorem sourceError_final (ε : ℕ → ℝ≥0) :
   intro i hi
   simp only [RealizedProgram.roundError, hi]
 
+/-- **The state function of `Π_P₀`'s round-by-round knowledge soundness** (`RealizedProgram.eventState`)
+at the relation, the extractor's projection and the source challenges' event, the frontend's soundness
+proofs as its argument. -/
+abbrev sourceState :=
+  program.eventState interp rel proj sampleEvent sampleEvent_use (sound_of_views crossSound algebraSound)
+
 /-- **Round-by-round knowledge soundness of `Π_P₀` for `MLDSA44.Emulated.ROMParams`** at the relation
-`rel`, the extractor `extractor` and SampleInBall's errors (`rbr_of_views` at `crossSound` and
+`rel`, the extractor `sourceExtractor` and SampleInBall's errors (`rbr_of_views` at `crossSound` and
 `algebraSound`). -/
 theorem source_rbr_knowledge_soundness :
-    rbrKnowledgeSoundness rel (program.sourceVerifier interp) extractor
-      (program.eventState interp rel proj sampleEvent sampleEvent_use
-        (sound_of_views crossSound algebraSound))
+    RBRKnowledgeSound rel (program.sourceVerifier interp) sourceExtractor
+      sourceState
       (program.roundError interp MLDSA44.sampleEps) :=
   rbr_of_views crossSound algebraSound
 
@@ -70,8 +75,7 @@ theorem sampleEps_le (j : ℕ) (_ : program.IsSourceChal j) :
 round-by-round knowledge soundness (`source_rbr_knowledge_soundness`) at the source challenges'
 errors, within their generated fractions (`sampleEps_le`), and the honest nodes' `1`. -/
 noncomputable def source : Configuration.SourceFront certified MLDSA44.VarWitness
-    (program.eventState interp rel proj sampleEvent sampleEvent_use (sound_of_views crossSound
-      algebraSound)) where
+    sourceState where
   rel := rel
   proj := proj
   eps := MLDSA44.sampleEps

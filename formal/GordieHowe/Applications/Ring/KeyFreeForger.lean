@@ -192,7 +192,11 @@ section Forger
 
 variable {k kN kS L e N n : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁] [Fintype Y]
   [DecidableEq Y] [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁]
-  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB} [NeZero n]
+  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
+  [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins]
+  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB} [NeZero n]
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -202,25 +206,25 @@ variable {k kN kS L e N n : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁] [F
   {Stmt Wit R Frg : Type} [Fintype Stmt] [DecidableEq Stmt] [Inhabited Stmt]
   [Fintype R] [DecidableEq R] [Inhabited R]
   (rel : Stmt → Wit → Prop) [DecidableRel rel]
-  (enc : (Fin n → B.PK) → MURequest (SignOracle.none B) n ⊕ R → ProofQuery Stmt Wit)
+  (enc : (Fin n → B.PK) → MURequest (SignOracle.none B.core) n ⊕ R → ProofQuery Stmt Wit)
   (dummyS : Stmt)
   [Inhabited M.NIProof] {SC' : Type} [Fintype SC'] [DecidableEq SC']
 
 local notation "Xq" => Bits (queryBits k kN kS L)
 
-local notation "MUR" => MURequest (SignOracle.none B) n
+local notation "MUR" => MURequest (SignOracle.none B.core) n
 
 
 /-- **The expansion of the key-free extraction runs** at the public keys `pks` and the auxiliary
 input `p` (`kfExpansion` at the shape of `(A pks p).restrictAt sp 0`). -/
 noncomputable def kfExpansionAt
     (Aux : (Fin n → B.PK) → Type)
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q : ℕ)
     (pks : Fin n → B.PK) (p : Aux pks) :
     Expansion Xq (Out k e)
-      (ExtReg ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q) MUR (MUResponse B)) :=
+      (ExtReg ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q) MUR (MUResponse B.core)) :=
   kfExpansion Qs (W := (A pks p).W × (Fin (A pks p).width → Y₁)) (A pks p).width (A pks p).slots
     (A pks p).budget (fun w => claimOfOutX prf ((A pks p).out w.1)) Psim Q
 
@@ -229,11 +233,11 @@ noncomputable def kfExpansionAt
 input `p` (`kfDefault` at the shape of `(A pks p).restrictAt sp 0`). -/
 noncomputable def kfDefaultAt
     (Aux : (Fin n → B.PK) → Type)
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q : ℕ)
     (pks : Fin n → B.PK) (p : Aux pks) :
-    ExtReg ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q) MUR (MUResponse B) :=
+    ExtReg ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q) MUR (MUResponse B.core) :=
   kfDefault (W := (A pks p).W × (Fin (A pks p).width → Y₁)) (A pks p).width (A pks p).slots
     (A pks p).budget Psim Q
     (((((A pks p).restrictAt sp 0).absorbTab (seTwoKF (Proof := M.Response b) B rel (enc pks) dummyS
@@ -249,17 +253,17 @@ the dummy request `publicKey 0`, the expansion and default of the key-free extra
 the readout `g`. -/
 noncomputable abbrev kfForger
     (Aux : (Fin n → B.PK) → Type) (aux : ∀ pks, PMF (Aux pks))
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q : ℕ)
     (kq : ℕ)
     (g : ∀ pks p, BaseGame.Tuple Xq (Out k e)
-      (ExtReg ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q) MUR (MUResponse B))
+      (ExtReg ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q) MUR (MUResponse B.core))
         (kq + Q * Psim.q) × DB Xq (Out k e) → B.PK × B.BMsg × B.BSig) (t' : ℕ)
     (ht : ∀ pks p, bT ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q)
       (seTwoKF (Proof := M.Response b) B rel (enc pks) dummyS pks Q) (kq + Q * Psim.q) + 1 ≤ t') :
-    MUAdversary (SignOracle.none B) n (OracleView.queriesOnly Xq Y) t' :=
-  tableForgerSplit sp (SignOracle.none B) (outEquiv k e) Aux aux A
+    MUAdversary (SignOracle.none B.core) n (OracleView.queriesOnly Xq Y) t' :=
+  tableForgerSplit sp (SignOracle.none B.core) (outEquiv k e) Aux aux A
     (fun _ _ => simExtChallenger Psim Q)
     (fun pks _ => seTwoKF (Proof := M.Response b) B rel (enc pks) dummyS pks Q) (.publicKey 0)
     (kfExpansionAt sp Qs Aux A prf Psim Q) (kq + Q * Psim.q)
@@ -269,13 +273,13 @@ noncomputable abbrev kfForger
 the auxiliary input `p` and the base component `ω` (`splitDrop`). -/
 noncomputable abbrev kfDrop
     (Aux : (Fin n → B.PK) → Type)
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q : ℕ)
     (kq : ℕ)
     (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i))
     (ω : Xq → Y₁) :=
-  splitDrop sp (SignOracle.none B) (outEquiv k e) Aux A (fun _ _ => simExtChallenger Psim Q)
+  splitDrop sp (SignOracle.none B.core) (outEquiv k e) Aux A (fun _ _ => simExtChallenger Psim Q)
     (fun pks _ => seTwoKF (Proof := M.Response b) B rel (enc pks) dummyS pks Q) (.publicKey 0)
     (kfExpansionAt sp Qs Aux A prf Psim Q) (kq + Q * Psim.q)
     (kfDefaultAt sp rel enc dummyS Aux A prf Psim Q) (fun i => B.pk (keys i)) p ω
@@ -286,7 +290,7 @@ omit [Nonempty Y] [Nonempty Y₁] [NeZero n] in
 `A₀.restrictAt sp ω` is the extraction run of the table form, with the expansion and the default
 named through `A₀`'s shape. -/
 theorem simProb_seAlgKF_eq_extRun
-    {shA₀ : AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀))
+    {shA₀ : AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q kq : ℕ)
     (keys : Fin n → B.KeyCoins) (ω : Xq → Y₁)
@@ -329,16 +333,16 @@ for the restricted adversary with other Kraus maps (`simProb_extAdv_absorbTab_eq
 the extraction run of `seAlgKF` for `A₀.restrictAt sp 0` with the Kraus maps `st` is the
 extraction run of the table form. -/
 theorem simProb_seAlgKF_eq_extRun_withStep
-    {shA₀ : AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀))
+    {shA₀ : AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q kq : ℕ)
     (keys : Fin n → B.KeyCoins)
     (st : StepIdx (A₀.restrictAt sp 0).slots (A₀.restrictAt sp 0).post →
       KrausMap (A₀.restrictAt sp 0).R
         (DReg (A₀.restrictAt sp 0).W (A₀.restrictAt sp 0).width Xq (XOut k e) (MUR ⊕ R)
-          (MUResponse B ⊕ M.Response b))
+          (MUResponse B.core ⊕ M.Response b))
         (DReg (A₀.restrictAt sp 0).W (A₀.restrictAt sp 0).width Xq (XOut k e) (MUR ⊕ R)
-          (MUResponse B ⊕ M.Response b)))
+          (MUResponse B.core ⊕ M.Response b)))
     (W : SPBCS.Reg (seAlgKF (rel := rel) (enc := enc (fun i => B.pk (keys i))) (dummyS := dummyS)
         prf keys Q
         ((A₀.restrictAt sp 0).withStep st)) Psim Q → DB Xq (Out k e) → Prop)
@@ -384,16 +388,16 @@ omit [Nonempty Y] [Nonempty Y₁] [NeZero n] [∀ j i, Nonempty ((P j).Challenge
 unrestricted adversary's shape**: `A₀.restrictAt sp ω` has `A₀`'s width, slots and budget, and its
 output reads `A₀`'s. -/
 theorem simLaw_extRun_kfShape
-    {shA₀ : AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀))
+    {shA₀ : AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q kq : ℕ)
     (keys : Fin n → B.KeyCoins) (ω : Xq → Y₁)
     (S : Set (BaseGame.Tuple Xq (Out k e)
-      (ExtReg (A₀.restrictAt sp ω) (simExtChallenger Psim Q) MUR (MUResponse B))
+      (ExtReg (A₀.restrictAt sp ω) (simExtChallenger Psim Q) MUR (MUResponse B.core))
         (kq + Q * Psim.q) × DB Xq (Out k e)))
     (h₂ : Nonempty (QueryReg (CWork ((AbsorbedWork (A₀.W × (Fin A₀.width → Y₁)) (MUR ⊕ R)
-      (MUResponse B ⊕ M.Response b) (M.Response b) A₀.slots ×
-      (Fin A₀.slots → MUR → Option (MUResponse B))) × Fin (A₀.budget + 2)) A₀.width Xq (XOut k e)
+      (MUResponse B.core ⊕ M.Response b) (M.Response b) A₀.slots ×
+      (Fin A₀.slots → MUR → Option (MUResponse B.core))) × Fin (A₀.budget + 2)) A₀.width Xq (XOut k e)
       (Stmt × (MUR ⊕ R)) (M.Response b) A₀.slots (simExtChallenger Psim Q).q
       (simExtChallenger Psim Q).Coins × (Xq × XOut k e × Bool)) 1 Xq (XOut k e))) :
     simLaw (outEquiv k e) (extRun (outEquiv k e) (A₀.restrictAt sp ω) (simExtChallenger Psim Q)
@@ -422,22 +426,22 @@ omit [Nonempty Y] [Nonempty Y₁] [NeZero n] [∀ j i, Nonempty ((P j).Challenge
 `A₀.restrictAt sp 0` with other Kraus maps has `A₀`'s width, slots and budget, and its output
 reads `A₀`'s. -/
 theorem simLaw_extRun_kfShape_withStep
-    {shA₀ : AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀))
+    {shA₀ : AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q kq : ℕ)
     (keys : Fin n → B.KeyCoins)
     (st : StepIdx (A₀.restrictAt sp 0).slots (A₀.restrictAt sp 0).post →
       KrausMap (A₀.restrictAt sp 0).R
         (DReg (A₀.restrictAt sp 0).W (A₀.restrictAt sp 0).width Xq (XOut k e) (MUR ⊕ R)
-          (MUResponse B ⊕ M.Response b))
+          (MUResponse B.core ⊕ M.Response b))
         (DReg (A₀.restrictAt sp 0).W (A₀.restrictAt sp 0).width Xq (XOut k e) (MUR ⊕ R)
-          (MUResponse B ⊕ M.Response b)))
+          (MUResponse B.core ⊕ M.Response b)))
     (S : Set (BaseGame.Tuple Xq (Out k e)
-      (ExtReg ((A₀.restrictAt sp 0).withStep st) (simExtChallenger Psim Q) MUR (MUResponse B))
+      (ExtReg ((A₀.restrictAt sp 0).withStep st) (simExtChallenger Psim Q) MUR (MUResponse B.core))
         (kq + Q * Psim.q) × DB Xq (Out k e)))
     (h₂ : Nonempty (QueryReg (CWork ((AbsorbedWork (A₀.W × (Fin A₀.width → Y₁)) (MUR ⊕ R)
-      (MUResponse B ⊕ M.Response b) (M.Response b) A₀.slots ×
-      (Fin A₀.slots → MUR → Option (MUResponse B))) × Fin (A₀.budget + 2)) A₀.width Xq (XOut k e)
+      (MUResponse B.core ⊕ M.Response b) (M.Response b) A₀.slots ×
+      (Fin A₀.slots → MUR → Option (MUResponse B.core))) × Fin (A₀.budget + 2)) A₀.width Xq (XOut k e)
       (Stmt × (MUR ⊕ R)) (M.Response b) A₀.slots (simExtChallenger Psim Q).q
       (simExtChallenger Psim Q).Coins × (Xq × XOut k e × Bool)) 1 Xq (XOut k e))) :
     simLaw (outEquiv k e) (extRun (outEquiv k e) ((A₀.restrictAt sp 0).withStep st)
@@ -471,7 +475,7 @@ omit [Nonempty Y] [Nonempty Y₁] [NeZero n] [∀ j i, Nonempty ((P j).Challenge
 /-- **The simulation-extraction adversary for `A₀.restrictAt sp ω`** is that for
 `A₀.restrictAt sp 0` with the Kraus maps of `A₀.restrictAt sp ω`. -/
 theorem simProb_seAlgKF_restrictAt_eq_withStep
-    {shA₀ : AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀))
+    {shA₀ : AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q kq : ℕ)
     (keys : Fin n → B.KeyCoins) (ω : Xq → Y₁)
@@ -491,7 +495,7 @@ run of `(A pks p).restrictAt sp ω` (`Quantum.AdaptiveIAlg.insertTabM`), at the 
 `keys`. -/
 noncomputable abbrev kfIns
     (Aux : (Fin n → B.PK) → Type)
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q : ℕ)
     (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Xq → Y₁) :=
@@ -505,7 +509,7 @@ noncomputable abbrev kfIns
 input `p`: the bridge algorithm of the extraction run of `(A pks p).restrictAt sp 0`. -/
 noncomputable abbrev kfBridge
     (Aux : (Fin n → B.PK) → Type)
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q kq : ℕ)
     (pks : Fin n → B.PK) (p : Aux pks) :=
@@ -521,14 +525,14 @@ Running time: that of `(A pks p).restrictAt sp 0` (its paragraph) with each Krau
 `st keys p ω`; polynomial when those are. This running time is argued here, not proved in Lean. -/
 abbrev kfStepAdv
     (Aux : (Fin n → B.PK) → Type)
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (st : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (_ : Xq → Y₁),
       StepIdx ((A _ p).restrictAt sp 0).slots ((A _ p).restrictAt sp 0).post →
         KrausMap ((A _ p).restrictAt sp 0).R
           (DReg ((A _ p).restrictAt sp 0).W ((A _ p).restrictAt sp 0).width Xq (XOut k e)
-            (MUR ⊕ R) (MUResponse B ⊕ M.Response b))
+            (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b))
           (DReg ((A _ p).restrictAt sp 0).W ((A _ p).restrictAt sp 0).width Xq (XOut k e)
-            (MUR ⊕ R) (MUResponse B ⊕ M.Response b)))
+            (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)))
     (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Xq → Y₁) :=
   ((A _ p).restrictAt sp 0).withStep (st keys p ω)
 
@@ -540,12 +544,12 @@ of `enc` at the public keys the forger receives. This running time is argued her
 Lean. -/
 noncomputable abbrev kfForgerAdds
     (Aux : (Fin n → B.PK) → Type) (aux : ∀ pks, PMF (Aux pks))
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q : ℕ)
     (kq : ℕ)
     (g : ∀ pks p, BaseGame.Tuple Xq (Out k e)
-      (ExtReg ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q) MUR (MUResponse B))
+      (ExtReg ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q) MUR (MUResponse B.core))
         (kq + Q * Psim.q) × DB Xq (Out k e) → B.PK × B.BMsg × B.BSig)
     (Pb : ∀ pks p, StepAdds (QueryReg (kfBridge sp Qs rel enc dummyS Aux A prf Psim Q kq pks p).W 1
       Xq (XOut k e)) (Fin (bT ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q)
@@ -555,8 +559,8 @@ noncomputable abbrev kfForgerAdds
     (ht : ∀ pks p, CoSimSchedule.slotQ (Pb pks p).nb (bT ((A pks p).restrictAt sp 0)
       (simExtChallenger Psim Q) (seTwoKF (Proof := M.Response b) B rel (enc pks) dummyS pks Q)
         (kq + Q * Psim.q) + 1) ≤ t') :
-    MUAdversary (SignOracle.none B) n (OracleView.queriesOnly Xq Y) t' :=
-  tableForgerAdds sp (SignOracle.none B) (outEquiv k e) Aux aux (fun pks p => (A pks p).restrictAt
+    MUAdversary (SignOracle.none B.core) n (OracleView.queriesOnly Xq Y) t' :=
+  tableForgerAdds sp (SignOracle.none B.core) (outEquiv k e) Aux aux (fun pks p => (A pks p).restrictAt
     sp 0)
     (fun _ _ => simExtChallenger Psim Q)
     (fun pks _ => seTwoKF (Proof := M.Response b) B rel (enc pks) dummyS pks Q) (.publicKey 0)
@@ -567,7 +571,7 @@ noncomputable abbrev kfForgerAdds
 (`bridgeAlgAdds`). -/
 noncomputable abbrev kfDropAdds
     (Aux : (Fin n → B.PK) → Type)
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q : ℕ)
     (kq : ℕ) (P : ∀ pks p, ((A pks p).restrictAt sp 0).AddsW Y₁)
@@ -582,16 +586,16 @@ noncomputable abbrev kfDropAdds
 adversary with other Kraus maps. -/
 noncomputable abbrev kfInsAdds
     (Aux : (Fin n → B.PK) → Type)
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q : ℕ)
     (st : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (_ : Xq → Y₁),
       StepIdx ((A _ p).restrictAt sp 0).slots ((A _ p).restrictAt sp 0).post →
         KrausMap ((A _ p).restrictAt sp 0).R
           (DReg ((A _ p).restrictAt sp 0).W ((A _ p).restrictAt sp 0).width Xq (XOut k e)
-            (MUR ⊕ R) (MUResponse B ⊕ M.Response b))
+            (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b))
           (DReg ((A _ p).restrictAt sp 0).W ((A _ p).restrictAt sp 0).width Xq (XOut k e)
-            (MUR ⊕ R) (MUResponse B ⊕ M.Response b)))
+            (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)))
     (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Xq → Y₁) :=
   Quantum.AdaptiveIAlg.insertTabM (kfStepAdv sp Aux A st keys p ω) (simExtChallenger Psim Q)
     (seTwoKF (Proof := M.Response b) B rel (enc (B.pk ∘ keys)) dummyS (B.pk ∘ keys) Q)
@@ -604,16 +608,16 @@ extraction run of `seAlgKF` for `kfStepAdv sp Aux A st keys p ω` is the extract
 form, with the expansion `kfExpansionAt` and the default `kfDefaultAt`. -/
 theorem simProb_seAlgKF_kfStepAdv_eq_extRun
     (Aux : (Fin n → B.PK) → Type)
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q kq : ℕ)
     (st : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (_ : Xq → Y₁),
       StepIdx ((A _ p).restrictAt sp 0).slots ((A _ p).restrictAt sp 0).post →
         KrausMap ((A _ p).restrictAt sp 0).R
           (DReg ((A _ p).restrictAt sp 0).W ((A _ p).restrictAt sp 0).width Xq (XOut k e)
-            (MUR ⊕ R) (MUResponse B ⊕ M.Response b))
+            (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b))
           (DReg ((A _ p).restrictAt sp 0).W ((A _ p).restrictAt sp 0).width Xq (XOut k e)
-            (MUR ⊕ R) (MUResponse B ⊕ M.Response b)))
+            (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)))
     (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Xq → Y₁)
     (W : SPBCS.Reg (seAlgKF (rel := rel) (enc := enc (fun i => B.pk (keys i))) (dummyS := dummyS) prf
           keys Q
@@ -649,6 +653,8 @@ theorem simProb_seAlgKF_kfStepAdv_eq_extRun
   · simp only [kfExpansionAt, kfDefaultAt]
   · rfl
 
+variable [Nonempty TB.KeyCoins]
+
 /-- **The key-free extraction runs with additions after the restricted Kraus maps as
 MU-EUF-NMA^corr** (`sum_simLaw_extRun_le_muEufProb_tableForgerAdds` at the signing oracle without
 messages): averaged over the users' key coins, the auxiliary input and a uniform base component
@@ -666,7 +672,7 @@ key of a user whose corruption the absorbed adversary did not log among its firs
 (`hhon`). -/
 theorem kfExtAdds_le_muEufNmaProb
     (Aux : (Fin n → B.PK) → Type) (aux : ∀ pks, PMF (Aux pks))
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q : ℕ)
     (kq : ℕ) (hTP : ∀ pks p, (A pks p).TracePreserving)
@@ -684,14 +690,14 @@ theorem kfExtAdds_le_muEufNmaProb
       StepIdx ((A _ p).restrictAt sp 0).slots ((A _ p).restrictAt sp 0).post →
         KrausMap ((A _ p).restrictAt sp 0).R
           (DReg ((A _ p).restrictAt sp 0).W ((A _ p).restrictAt sp 0).width Xq (XOut k e)
-            (MUR ⊕ R) (MUResponse B ⊕ M.Response b))
+            (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b))
           (DReg ((A _ p).restrictAt sp 0).W ((A _ p).restrictAt sp 0).width Xq (XOut k e)
-            (MUR ⊕ R) (MUResponse B ⊕ M.Response b)))
+            (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)))
     (hst : ∀ keys p ω j, KrausMap.LeftPerm ((P _ p).toStepAdds.perm ω j) (st keys p ω j)
       (((A _ p).restrictAt sp 0).step j))
     (hTP' : ∀ keys p ω, (kfStepAdv sp Aux A st keys p ω).TracePreserving)
     (g : ∀ pks p, BaseGame.Tuple Xq (Out k e)
-      (ExtReg ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q) MUR (MUResponse B))
+      (ExtReg ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q) MUR (MUResponse B.core))
         (kq + Q * Psim.q) × DB Xq (Out k e) → B.PK × B.BMsg × B.BSig) (t' : ℕ)
     (ht : ∀ pks p, CoSimSchedule.slotQ (Pb pks p).nb (bT ((A pks p).restrictAt sp 0)
       (simExtChallenger Psim Q) (seTwoKF (Proof := M.Response b) B rel (enc pks) dummyS pks Q)
@@ -706,9 +712,9 @@ theorem kfExtAdds_le_muEufNmaProb
       (dropTabCW (kfStepAdv sp Aux A st keys p ω) (simExtChallenger Psim Q)
         (seTwoKF (Proof := M.Response b) B rel (enc (B.pk ∘ keys)) dummyS (B.pk ∘ keys) Q)
         (fun _ => keyReplyNone B keys) c)) D ↔ W keys p ω c D)
-    (hver : ∀ keys p ω (h : Xq → XOut k e) (c : Fin Q' → (SignOracle.none B).Coins) v,
+    (hver : ∀ keys p ω (h : Xq → XOut k e) (c : Fin Q' → (SignOracle.none B.core).Coins) v,
       simState (outEquiv k e) ((kfDropAdds sp Qs rel enc dummyS Aux A prf Psim Q kq P keys p ω).inst
-        (muReplyAt sp (SignOracle.none B) ω keys Q' c)) v ≠ 0 →
+        (muReplyAt sp (SignOracle.none B.core) ω keys Q' c)) v ≠ 0 →
       W keys p ω (kfInsAdds sp rel enc dummyS Aux A prf Psim Q st keys p ω
           ((kfDropAdds sp Qs rel enc dummyS Aux A prf Psim Q kq P keys p ω).out v.1.1.1).out)
         (slotsDB (outEquiv k e) v.2) →
@@ -719,9 +725,9 @@ theorem kfExtAdds_le_muEufNmaProb
           slotsDB (outEquiv k e) v.2)).2.1
         (g _ p ((kfDropAdds sp Qs rel enc dummyS Aux A prf Psim Q kq P keys p ω).out v.1.1.1,
           slotsDB (outEquiv k e) v.2)).2.2 = true)
-    (hhon : ∀ keys p ω (c : Fin Q' → (SignOracle.none B).Coins) v,
+    (hhon : ∀ keys p ω (c : Fin Q' → (SignOracle.none B.core).Coins) v,
       simState (outEquiv k e) ((kfDropAdds sp Qs rel enc dummyS Aux A prf Psim Q kq P keys p ω).inst
-        (muReplyAt sp (SignOracle.none B) ω keys Q' c)) v ≠ 0 →
+        (muReplyAt sp (SignOracle.none B.core) ω keys Q' c)) v ≠ 0 →
       W keys p ω (kfInsAdds sp rel enc dummyS Aux A prf Psim Q st keys p ω
           ((kfDropAdds sp Qs rel enc dummyS Aux A prf Psim Q kq P keys p ω).out v.1.1.1).out)
         (slotsDB (outEquiv k e) v.2) →
@@ -738,7 +744,7 @@ theorem kfExtAdds_le_muEufNmaProb
             prf keys Q (kfStepAdv sp Aux A st keys p ω)) Psim Q kq) (W keys p ω) ≤
       muEufNmaProb (kfForgerAdds sp Qs rel enc dummyS Aux aux A prf Psim Q kq g Pb t' ht) Q' := by
   refine le_of_eq_of_le ?_ (sum_simLaw_extRun_le_muEufProb_tableForgerAdds sp
-    (SignOracle.none B) (outEquiv k e) Aux aux (fun pks p => (A pks p).restrictAt sp 0)
+    (SignOracle.none B.core) (outEquiv k e) Aux aux (fun pks p => (A pks p).restrictAt sp 0)
     (fun _ _ => simExtChallenger Psim Q)
     (fun pks _ => seTwoKF (Proof := M.Response b) B rel (enc pks) dummyS pks Q) (.publicKey 0)
     (kfExpansionAt sp Qs Aux A prf Psim Q) (kq + Q * Psim.q)
@@ -797,7 +803,7 @@ theorem kfExtAdds_le_muEufNmaProb
       cases hq
       exact mem_take_requests_of_logs _ j' hr hlt
 
-omit [Nonempty Y₁] in
+omit [Nonempty Y₁] [Nonempty TB.KeyCoins] in
 /-- **A corruption logged by the bridge read after drops is among the absorbed adversary's first
 `Q` requests**: on every basis state of nonzero amplitude of the instance of the bridge read after
 drops `β` that keep the absorbed logs, the halting flag and the ancilla (`hβ`), a logged
@@ -805,9 +811,9 @@ corruption request is the outer request of a logged corruption among the first `
 the output's absorbed logs. -/
 theorem kfDrops_corrupt_mem (keys : Fin n → B.KeyCoins) (Q kq' : ℕ)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
-    {shAr : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (Ar : AdaptiveIAlg shAr (Frg × X₀))
-    (E : Expansion Xq (Out k e) (ExtReg Ar (simExtChallenger Psim Q) MUR (MUResponse B)))
-    (d₀ : ExtReg Ar (simExtChallenger Psim Q) MUR (MUResponse B))
+    {shAr : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (Ar : AdaptiveIAlg shAr (Frg × X₀))
+    (E : Expansion Xq (Out k e) (ExtReg Ar (simExtChallenger Psim Q) MUR (MUResponse B.core)))
+    (d₀ : ExtReg Ar (simExtChallenger Psim Q) MUR (MUResponse B.core))
     (β : ℕ → Equiv.Perm (ReprogrammedQueryReg ((Ar.absorbTab
       (seTwoKF (Proof := M.Response b) B rel (enc (fun i => B.pk (keys i))) dummyS (fun i => B.pk
           (keys i)) Q)
@@ -825,7 +831,7 @@ theorem kfDrops_corrupt_mem (keys : Fin n → B.KeyCoins) (Q kq' : ℕ)
       (seTwoKF (Proof := M.Response b) B rel (enc (fun i => B.pk (keys i))) dummyS (fun i => B.pk
           (keys i)) Q) (.publicKey 0)
       E kq' d₀ β)
-    (hA : Ar.TracePreserving) (a : ℕ → MUR → Option (MUResponse B))
+    (hA : Ar.TracePreserving) (a : ℕ → MUR → Option (MUResponse B.core))
     {v : SimRegister (((bridgeAlg (outEquiv k e) Ar (simExtChallenger Psim Q)
       (seTwoKF (Proof := M.Response b) B rel (enc (fun i => B.pk (keys i))) dummyS (fun i => B.pk
           (keys i)) Q)
@@ -861,7 +867,7 @@ theorem kfDrops_corrupt_mem (keys : Fin n → B.KeyCoins) (Q kq' : ℕ)
 /-- **The bridge read after additions `Pb` at `ω`**, at the public keys of `keys`. -/
 noncomputable abbrev kfDropPb
     (Aux : (Fin n → B.PK) → Type)
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q kq : ℕ)
     (Pb : ∀ pks p, StepAdds (QueryReg (kfBridge sp Qs rel enc dummyS Aux A prf Psim Q kq pks p).W 1
@@ -881,7 +887,7 @@ additions `Pb` on the bridge acting as the drops of `P` and then the lifted `σ`
 the query intervals (`hPb`); the bridge of `hver` and `hhon` is read after `Pb` (`kfDropPb`). -/
 theorem kfExtPre_le_muEufNmaProb
     (Aux : (Fin n → B.PK) → Type) (aux : ∀ pks, PMF (Aux pks))
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q : ℕ)
     (kq : ℕ) (hTP : ∀ pks p, (A pks p).TracePreserving)
@@ -892,7 +898,7 @@ theorem kfExtPre_le_muEufNmaProb
             Y₁)
     (σ : ∀ pks p, (Xq → Y₁) → StepIdx ((A pks p).restrictAt sp 0).slots
       ((A pks p).restrictAt sp 0).post → Equiv.Perm (DReg ((A pks p).restrictAt sp 0).W
-        ((A pks p).restrictAt sp 0).width Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)))
+        ((A pks p).restrictAt sp 0).width Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)))
     (hσ : ∀ pks p ω j x, (σ pks p ω j x).2 = x.2)
     (hPb : ∀ pks p ω j, (Pb pks p).perm ω j =
       bridgeDropPerms (outEquiv k e) ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q)
@@ -907,9 +913,9 @@ theorem kfExtPre_le_muEufNmaProb
     (s₀ : ∀ pks p, (Xq → Y₁) → StepIdx ((A pks p).restrictAt sp 0).slots
       ((A pks p).restrictAt sp 0).post → KrausMap ((A pks p).restrictAt sp 0).R
         (DReg ((A pks p).restrictAt sp 0).W ((A pks p).restrictAt sp 0).width Xq (XOut k e)
-          (MUR ⊕ R) (MUResponse B ⊕ M.Response b))
+          (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b))
         (DReg ((A pks p).restrictAt sp 0).W ((A pks p).restrictAt sp 0).width Xq (XOut k e)
-          (MUR ⊕ R) (MUResponse B ⊕ M.Response b)))
+          (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)))
     (hst₀ : ∀ pks p ω j, KrausMap.RightPerm (σ pks p ω j) (s₀ pks p ω j)
       (((A pks p).restrictAt sp 0).step j))
     (hTP₀ : ∀ pks p ω, (((A pks p).restrictAt sp 0).withStep (s₀ pks p ω)).TracePreserving)
@@ -917,14 +923,14 @@ theorem kfExtPre_le_muEufNmaProb
       StepIdx ((A _ p).restrictAt sp 0).slots ((A _ p).restrictAt sp 0).post →
         KrausMap ((A _ p).restrictAt sp 0).R
           (DReg ((A _ p).restrictAt sp 0).W ((A _ p).restrictAt sp 0).width Xq (XOut k e)
-            (MUR ⊕ R) (MUResponse B ⊕ M.Response b))
+            (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b))
           (DReg ((A _ p).restrictAt sp 0).W ((A _ p).restrictAt sp 0).width Xq (XOut k e)
-            (MUR ⊕ R) (MUResponse B ⊕ M.Response b)))
+            (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)))
     (hst : ∀ keys p ω j, KrausMap.LeftPerm ((P _ p).toStepAdds.perm ω j) (st keys p ω j)
       (s₀ _ p ω j))
     (hTP' : ∀ keys p ω, (kfStepAdv sp Aux A st keys p ω).TracePreserving)
     (g : ∀ pks p, BaseGame.Tuple Xq (Out k e)
-      (ExtReg ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q) MUR (MUResponse B))
+      (ExtReg ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q) MUR (MUResponse B.core))
         (kq + Q * Psim.q) × DB Xq (Out k e) → B.PK × B.BMsg × B.BSig) (t' : ℕ)
     (ht : ∀ pks p, CoSimSchedule.slotQ (Pb pks p).nb (bT ((A pks p).restrictAt sp 0)
       (simExtChallenger Psim Q) (seTwoKF (Proof := M.Response b) B rel (enc pks) dummyS pks Q)
@@ -939,9 +945,9 @@ theorem kfExtPre_le_muEufNmaProb
       (dropTabCW (kfStepAdv sp Aux A st keys p ω) (simExtChallenger Psim Q)
         (seTwoKF (Proof := M.Response b) B rel (enc (B.pk ∘ keys)) dummyS (B.pk ∘ keys) Q)
         (fun _ => keyReplyNone B keys) c)) D ↔ W keys p ω c D)
-    (hver : ∀ keys p ω (h : Xq → XOut k e) (c : Fin Q' → (SignOracle.none B).Coins) v,
+    (hver : ∀ keys p ω (h : Xq → XOut k e) (c : Fin Q' → (SignOracle.none B.core).Coins) v,
       simState (outEquiv k e) ((kfDropPb sp Qs rel enc dummyS Aux A prf Psim Q kq Pb keys p ω).inst
-        (muReplyAt sp (SignOracle.none B) ω keys Q' c)) v ≠ 0 →
+        (muReplyAt sp (SignOracle.none B.core) ω keys Q' c)) v ≠ 0 →
       W keys p ω (kfInsAdds sp rel enc dummyS Aux A prf Psim Q st keys p ω
           ((kfDropPb sp Qs rel enc dummyS Aux A prf Psim Q kq Pb keys p ω).out v.1.1.1).out)
         (slotsDB (outEquiv k e) v.2) →
@@ -952,9 +958,9 @@ theorem kfExtPre_le_muEufNmaProb
           slotsDB (outEquiv k e) v.2)).2.1
         (g _ p ((kfDropPb sp Qs rel enc dummyS Aux A prf Psim Q kq Pb keys p ω).out v.1.1.1,
           slotsDB (outEquiv k e) v.2)).2.2 = true)
-    (hhon : ∀ keys p ω (c : Fin Q' → (SignOracle.none B).Coins) v,
+    (hhon : ∀ keys p ω (c : Fin Q' → (SignOracle.none B.core).Coins) v,
       simState (outEquiv k e) ((kfDropPb sp Qs rel enc dummyS Aux A prf Psim Q kq Pb keys p ω).inst
-        (muReplyAt sp (SignOracle.none B) ω keys Q' c)) v ≠ 0 →
+        (muReplyAt sp (SignOracle.none B.core) ω keys Q' c)) v ≠ 0 →
       W keys p ω (kfInsAdds sp rel enc dummyS Aux A prf Psim Q st keys p ω
           ((kfDropPb sp Qs rel enc dummyS Aux A prf Psim Q kq Pb keys p ω).out v.1.1.1).out)
         (slotsDB (outEquiv k e) v.2) →
@@ -973,7 +979,7 @@ theorem kfExtPre_le_muEufNmaProb
   have hβ : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Xq → Y₁),
       (Pb _ p).perm ω = _ := fun keys p ω => funext (hPb _ p ω)
   refine le_of_eq_of_le ?_ (sum_simLaw_le_muEufProb_tableForgerAdds sp
-    (SignOracle.none B) (outEquiv k e) Aux aux (fun pks p => (A pks p).restrictAt sp 0)
+    (SignOracle.none B.core) (outEquiv k e) Aux aux (fun pks p => (A pks p).restrictAt sp 0)
     (fun _ _ => simExtChallenger Psim Q)
     (fun pks _ => seTwoKF (Proof := M.Response b) B rel (enc pks) dummyS pks Q) (.publicKey 0)
     (kfExpansionAt sp Qs Aux A prf Psim Q) (kq + Q * Psim.q)
@@ -1084,12 +1090,12 @@ oracle joined from `ω` and any second component (`hver`) under the key of a use
 the absorbed adversary did not log among its first `Q` requests (`hhon`). -/
 theorem kfExt_le_muEufNmaProb
     (Aux : (Fin n → B.PK) → Type) (aux : ∀ pks, PMF (Aux pks))
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q : ℕ)
     (kq : ℕ) (hTP : ∀ pks p, (A pks p).TracePreserving)
     (g : ∀ pks p, BaseGame.Tuple Xq (Out k e)
-      (ExtReg ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q) MUR (MUResponse B))
+      (ExtReg ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q) MUR (MUResponse B.core))
         (kq + Q * Psim.q) × DB Xq (Out k e) → B.PK × B.BMsg × B.BSig) (t' : ℕ)
     (ht : ∀ pks p, bT ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q)
       (seTwoKF (Proof := M.Response b) B rel (enc pks) dummyS pks Q) (kq + Q * Psim.q) + 1 ≤ t')
@@ -1103,9 +1109,9 @@ theorem kfExt_le_muEufNmaProb
       (dropTabCW ((A _ p).restrictAt sp ω) (simExtChallenger Psim Q)
         (seTwoKF (Proof := M.Response b) B rel (enc (B.pk ∘ keys)) dummyS (B.pk ∘ keys) Q)
         (fun _ => keyReplyNone B keys) c)) D ↔ W keys p ω c D)
-    (hver : ∀ keys p ω (h : Xq → XOut k e) (c : Fin Q' → (SignOracle.none B).Coins) v,
+    (hver : ∀ keys p ω (h : Xq → XOut k e) (c : Fin Q' → (SignOracle.none B.core).Coins) v,
       simState (outEquiv k e) ((kfDrop sp Qs rel enc dummyS Aux A prf Psim Q kq keys p ω).inst
-        (muReplyAt sp (SignOracle.none B) ω keys Q' c)) v ≠ 0 →
+        (muReplyAt sp (SignOracle.none B.core) ω keys Q' c)) v ≠ 0 →
       W keys p ω (kfIns sp rel enc dummyS Aux A prf Psim Q keys p ω
           ((kfDrop sp Qs rel enc dummyS Aux A prf Psim Q kq keys p ω).out v.1.1.1).out)
         (slotsDB (outEquiv k e) v.2) →
@@ -1116,9 +1122,9 @@ theorem kfExt_le_muEufNmaProb
           slotsDB (outEquiv k e) v.2)).2.1
         (g _ p ((kfDrop sp Qs rel enc dummyS Aux A prf Psim Q kq keys p ω).out v.1.1.1,
           slotsDB (outEquiv k e) v.2)).2.2 = true)
-    (hhon : ∀ keys p ω (c : Fin Q' → (SignOracle.none B).Coins) v,
+    (hhon : ∀ keys p ω (c : Fin Q' → (SignOracle.none B.core).Coins) v,
       simState (outEquiv k e) ((kfDrop sp Qs rel enc dummyS Aux A prf Psim Q kq keys p ω).inst
-        (muReplyAt sp (SignOracle.none B) ω keys Q' c)) v ≠ 0 →
+        (muReplyAt sp (SignOracle.none B.core) ω keys Q' c)) v ≠ 0 →
       W keys p ω (kfIns sp rel enc dummyS Aux A prf Psim Q keys p ω
           ((kfDrop sp Qs rel enc dummyS Aux A prf Psim Q kq keys p ω).out v.1.1.1).out)
         (slotsDB (outEquiv k e) v.2) →
@@ -1161,18 +1167,18 @@ theorem kfExt_le_muEufNmaProb
 `((A pks p).withStep (stω pks p ω)).restrictAt sp ω`. -/
 noncomputable abbrev kfSideSt
     (Aux : (Fin n → B.PK) → Type)
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (stω : ∀ pks (p : Aux pks), (Xq → Y₁) → StepIdx (A pks p).slots (A pks p).post →
       KrausMap (A pks p).R (DReg (A pks p).W (A pks p).width Xq Y (MUR ⊕ R)
-        (MUResponse B ⊕ M.Response b)) (DReg (A pks p).W (A pks p).width Xq Y (MUR ⊕ R)
-        (MUResponse B ⊕ M.Response b)))
+        (MUResponse B.core ⊕ M.Response b)) (DReg (A pks p).W (A pks p).width Xq Y (MUR ⊕ R)
+        (MUResponse B.core ⊕ M.Response b)))
     (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Xq → Y₁) :
     StepIdx ((A _ p).restrictAt sp 0).slots ((A _ p).restrictAt sp 0).post →
       KrausMap ((A _ p).restrictAt sp 0).R
         (DReg ((A _ p).restrictAt sp 0).W ((A _ p).restrictAt sp 0).width Xq (XOut k e)
-          (MUR ⊕ R) (MUResponse B ⊕ M.Response b))
+          (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b))
         (DReg ((A _ p).restrictAt sp 0).W ((A _ p).restrictAt sp 0).width Xq (XOut k e)
-          (MUR ⊕ R) (MUResponse B ⊕ M.Response b)) :=
+          (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)) :=
   (((A _ p).withStep (stω _ p ω)).restrictAt sp ω).step
 
 /-- **The forger's additions for absorbed adversaries with side reads**: the local queries of the
@@ -1180,13 +1186,13 @@ restriction (`bridgeDropData`), then the side reads lifted to the starts of the 
 (`bridgePreData` of `SideSteps.splitAdds`). -/
 noncomputable abbrev kfSidePb
     (Aux : (Fin n → B.PK) → Type)
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q kq : ℕ)
     (stω : ∀ pks (p : Aux pks), (Xq → Y₁) → StepIdx (A pks p).slots (A pks p).post →
       KrausMap (A pks p).R (DReg (A pks p).W (A pks p).width Xq Y (MUR ⊕ R)
-        (MUResponse B ⊕ M.Response b)) (DReg (A pks p).W (A pks p).width Xq Y (MUR ⊕ R)
-        (MUResponse B ⊕ M.Response b)))
+        (MUResponse B.core ⊕ M.Response b)) (DReg (A pks p).W (A pks p).width Xq Y (MUR ⊕ R)
+        (MUResponse B.core ⊕ M.Response b)))
     (hside : ∀ pks p, (A pks p).SideSteps (stω pks p))
     (pks : Fin n → B.PK) (p : Aux pks) :=
   (bridgeDropData (outEquiv k e) ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q)
@@ -1198,17 +1204,18 @@ noncomputable abbrev kfSidePb
     (kfExpansionAt sp Qs Aux A prf Psim Q pks p) (kq + Q * Psim.q)
     (kfDefaultAt sp rel enc dummyS Aux A prf Psim Q pks p) ((hside pks p).splitAdds sp))
 
+omit [Nonempty TB.KeyCoins] in
 /-- **The forger's query count for absorbed adversaries with side reads**: one per bridge step
 for the restriction's local queries, and at most the number of side reads. -/
 theorem slotQ_kfSidePb_le
     (Aux : (Fin n → B.PK) → Type)
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q kq : ℕ)
     (stω : ∀ pks (p : Aux pks), (Xq → Y₁) → StepIdx (A pks p).slots (A pks p).post →
       KrausMap (A pks p).R (DReg (A pks p).W (A pks p).width Xq Y (MUR ⊕ R)
-        (MUResponse B ⊕ M.Response b)) (DReg (A pks p).W (A pks p).width Xq Y (MUR ⊕ R)
-        (MUResponse B ⊕ M.Response b)))
+        (MUResponse B.core ⊕ M.Response b)) (DReg (A pks p).W (A pks p).width Xq Y (MUR ⊕ R)
+        (MUResponse B.core ⊕ M.Response b)))
     (hside : ∀ pks p, (A pks p).SideSteps (stω pks p)) (pks : Fin n → B.PK) (p : Aux pks) :
     CoSimSchedule.slotQ (kfSidePb sp Qs rel enc dummyS Aux A prf Psim Q kq stω hside pks p).nb
         (bT ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q)
@@ -1232,13 +1239,13 @@ theorem slotQ_kfSidePb_le
 (`kfDropPb` at `kfSidePb`). -/
 noncomputable abbrev kfSideDrop
     (Aux : (Fin n → B.PK) → Type)
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q kq : ℕ)
     (stω : ∀ pks (p : Aux pks), (Xq → Y₁) → StepIdx (A pks p).slots (A pks p).post →
       KrausMap (A pks p).R (DReg (A pks p).W (A pks p).width Xq Y (MUR ⊕ R)
-        (MUResponse B ⊕ M.Response b)) (DReg (A pks p).W (A pks p).width Xq Y (MUR ⊕ R)
-        (MUResponse B ⊕ M.Response b)))
+        (MUResponse B.core ⊕ M.Response b)) (DReg (A pks p).W (A pks p).width Xq Y (MUR ⊕ R)
+        (MUResponse B.core ⊕ M.Response b)))
     (hside : ∀ pks p, (A pks p).SideSteps (stω pks p))
     (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Xq → Y₁) :=
   kfDropPb sp Qs rel enc dummyS Aux A prf Psim Q kq
@@ -1258,17 +1265,17 @@ queries for the restriction's local queries and at most one per side read (`ht`,
 after `kfSidePb` (`kfDropPb`). -/
 theorem kfExtSide_le_muEufNmaProb
     (Aux : (Fin n → B.PK) → Type) (aux : ∀ pks, PMF (Aux pks))
-    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
+    {shA : ∀ pks, Aux pks → AlgShape Xq Y (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) (Frg × X₀))
     (prf : Frg → Option M.NIProof)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q : ℕ)
     (kq : ℕ) (hTP : ∀ pks p, (A pks p).TracePreserving)
     (stω : ∀ pks (p : Aux pks), (Xq → Y₁) → StepIdx (A pks p).slots (A pks p).post →
       KrausMap (A pks p).R (DReg (A pks p).W (A pks p).width Xq Y (MUR ⊕ R)
-        (MUResponse B ⊕ M.Response b)) (DReg (A pks p).W (A pks p).width Xq Y (MUR ⊕ R)
-        (MUResponse B ⊕ M.Response b)))
+        (MUResponse B.core ⊕ M.Response b)) (DReg (A pks p).W (A pks p).width Xq Y (MUR ⊕ R)
+        (MUResponse B.core ⊕ M.Response b)))
     (hside : ∀ pks p, (A pks p).SideSteps (stω pks p))
     (g : ∀ pks p, BaseGame.Tuple Xq (Out k e)
-      (ExtReg ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q) MUR (MUResponse B))
+      (ExtReg ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q) MUR (MUResponse B.core))
         (kq + Q * Psim.q) × DB Xq (Out k e) → B.PK × B.BMsg × B.BSig) (t' : ℕ)
     (ht : ∀ pks p, bT ((A pks p).restrictAt sp 0) (simExtChallenger Psim Q)
       (seTwoKF (Proof := M.Response b) B rel (enc pks) dummyS pks Q) (kq + Q * Psim.q) + 1 +
@@ -1284,9 +1291,9 @@ theorem kfExtSide_le_muEufNmaProb
       (dropTabCW (kfStepAdv sp Aux A (kfSideSt sp Aux A stω) keys p ω) (simExtChallenger Psim Q)
         (seTwoKF (Proof := M.Response b) B rel (enc (B.pk ∘ keys)) dummyS (B.pk ∘ keys) Q)
         (fun _ => keyReplyNone B keys) c)) D ↔ W keys p ω c D)
-    (hver : ∀ keys p ω (h : Xq → XOut k e) (c : Fin Q' → (SignOracle.none B).Coins) v,
+    (hver : ∀ keys p ω (h : Xq → XOut k e) (c : Fin Q' → (SignOracle.none B.core).Coins) v,
       simState (outEquiv k e) ((kfSideDrop sp Qs rel enc dummyS Aux A prf Psim Q kq stω hside keys p
-        ω).inst (muReplyAt sp (SignOracle.none B) ω keys Q' c)) v ≠ 0 →
+        ω).inst (muReplyAt sp (SignOracle.none B.core) ω keys Q' c)) v ≠ 0 →
       W keys p ω (kfInsAdds sp rel enc dummyS Aux A prf Psim Q (kfSideSt sp Aux A stω) keys p ω
           ((kfSideDrop sp Qs rel enc dummyS Aux A prf Psim Q kq stω hside keys p ω).out
             v.1.1.1).out)
@@ -1298,9 +1305,9 @@ theorem kfExtSide_le_muEufNmaProb
           v.1.1.1, slotsDB (outEquiv k e) v.2)).2.1
         (g _ p ((kfSideDrop sp Qs rel enc dummyS Aux A prf Psim Q kq stω hside keys p ω).out
           v.1.1.1, slotsDB (outEquiv k e) v.2)).2.2 = true)
-    (hhon : ∀ keys p ω (c : Fin Q' → (SignOracle.none B).Coins) v,
+    (hhon : ∀ keys p ω (c : Fin Q' → (SignOracle.none B.core).Coins) v,
       simState (outEquiv k e) ((kfSideDrop sp Qs rel enc dummyS Aux A prf Psim Q kq stω hside keys p
-        ω).inst (muReplyAt sp (SignOracle.none B) ω keys Q' c)) v ≠ 0 →
+        ω).inst (muReplyAt sp (SignOracle.none B.core) ω keys Q' c)) v ≠ 0 →
       W keys p ω (kfInsAdds sp rel enc dummyS Aux A prf Psim Q (kfSideSt sp Aux A stω) keys p ω
           ((kfSideDrop sp Qs rel enc dummyS Aux A prf Psim Q kq stω hside keys p ω).out
             v.1.1.1).out)
@@ -1327,13 +1334,13 @@ theorem kfExtSide_le_muEufNmaProb
     (fun pks p _ w => AdaptiveIAlg.stepOn_lastStep (A pks p) w.1)
     (kfSidePb sp Qs rel enc dummyS Aux A prf Psim Q kq stω hside)
     (fun pks p ω j => (splitReg sp (A pks p).W (A pks p).width Xq (MUR ⊕ R)
-      (MUResponse B ⊕ M.Response b)).symm.permCongr ((hside pks p).S.perm ω j))
+      (MUResponse B.core ⊕ M.Response b)).symm.permCongr ((hside pks p).S.perm ω j))
     (fun pks p ω j x => by
       have h := (hside pks p).keeps_pairs ω j (splitReg sp (A pks p).W (A pks p).width Xq
-        (MUR ⊕ R) (MUResponse B ⊕ M.Response b) x)
+        (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) x)
       change (fun i => ((((hside pks p).S.perm ω j (splitReg sp (A pks p).W (A pks p).width Xq
-        (MUR ⊕ R) (MUResponse B ⊕ M.Response b) x)).2 i).1, (sp (((hside pks p).S.perm ω j
-          (splitReg sp (A pks p).W (A pks p).width Xq (MUR ⊕ R) (MUResponse B ⊕ M.Response b)
+        (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) x)).2 i).1, (sp (((hside pks p).S.perm ω j
+          (splitReg sp (A pks p).W (A pks p).width Xq (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)
             x)).2 i).2).2)) = x.2
       rw [h]
       funext i
@@ -1457,19 +1464,20 @@ noncomputable abbrev kfAbsAdv {Rq Rs : Type} [Fintype Rq] [DecidableEq Rq] [Fint
     [DecidableEq Rs] [Inhabited Rq] {t : ℕ} (𝒜 : QueryBoundedAdversary Xq Y Rq Rs (Frg × X₀) t)
     {SC : Type} {Q : ℕ}
     (G : (Fin n → B.PK) → (Fin Q → SC) →
-      AssignRelay Xq Y Rq Rs (MUR ⊕ R) (MUResponse B ⊕ M.Response b))
+      AssignRelay Xq Y Rq Rs (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b))
     (qG : ℕ) (hG : ∀ pks sc, (G pks sc).qG ≤ qG) (pks : Fin n → B.PK) (p : kfAbsAux 𝒜 SC Q) :=
   ((𝒜.absorbAssign (PMF.pure ()) (fun _ => G pks p.2) qG (fun _ => hG pks p.2)
     0 (AssignRelay.qP_le_zero _) Q).mapOut
     Prod.fst).alg p.1
 
-omit [NeZero n] [∀ j i, Nonempty ((P j).Challenge i)] [Inhabited M.NIProof] in
+omit [NeZero n] [∀ j i, Nonempty ((P j).Challenge i)] [Inhabited M.NIProof] [Nonempty TB.KeyCoins]
+  in
 /-- **The absorbed adversaries are trace preserving.** -/
 theorem tracePreserving_kfAbsAdv {Rq Rs : Type} [Fintype Rq] [DecidableEq Rq] [Fintype Rs]
     [DecidableEq Rs] [Inhabited Rq] {t : ℕ} (𝒜 : QueryBoundedAdversary Xq Y Rq Rs (Frg × X₀) t)
     {SC : Type} {Q : ℕ}
     (G : (Fin n → B.PK) → (Fin Q → SC) →
-      AssignRelay Xq Y Rq Rs (MUR ⊕ R) (MUResponse B ⊕ M.Response b))
+      AssignRelay Xq Y Rq Rs (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b))
     (qG : ℕ) (hG : ∀ pks sc, (G pks sc).qG ≤ qG) (pks : Fin n → B.PK) (p : kfAbsAux 𝒜 SC Q) :
     (kfAbsAdv 𝒜 G qG hG pks p).TracePreserving :=
   ((𝒜.absorbAssign (PMF.pure ()) (fun _ => G pks p.2) qG (fun _ => hG pks p.2)

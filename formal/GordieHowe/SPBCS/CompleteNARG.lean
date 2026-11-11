@@ -69,6 +69,8 @@ theorem uniform_saltedCoins_apply (c : SaltedCoins (FiatShamirSalt kS) (M.Prover
     Fintype.card_prod, Nat.cast_mul, mul_comm,
     ENNReal.mul_inv (Or.inr (ENNReal.natCast_ne_top _)) (Or.inl (ENNReal.natCast_ne_top _))]
 
+section Lemma
+
 variable {rel : X → Wit → Prop}
 
 open Classical in
@@ -103,22 +105,24 @@ theorem prob_not_accepts_prove_proverCoins_replaceSlice_le {ε : ℝ≥0∞}
   · rw [QROM.probUniform_eq_zero fun q hq => ho hq.1]
     exact zero_le
 
-variable (rel)
+end Lemma
+
+variable (rel : Set (X × Wit))
 
 open Classical in
 /-- **Completeness of the spBCS compiler in the classical random-oracle model**
 (`def:narg-complete`, `NARG.ROM.Complete`; paper `thm:bcs-complete` (2); Unruh 2017 Definition 5,
 p. 14): if for every pair `(x, w) ∈ rel` the composite verifier rejects the run of the causal
 prover `prv w r` with probability at most `ε` over uniform coins `r` and uniform challenges (the
-completeness error of `def:iop-complete`), the honest prover `niProver`, with uniform coins,
+completeness error of `def:iop-complete`, `CausalCompletenessError`), the honest prover `niProver`, with uniform coins,
 Merkle salts and Fiat–Shamir salt, is complete for the verifier `toRVerifier` with `kq` queries at
-error `ε + overrun + keyCollision (t.size n) k + T / 2^(8kS)` against classical `T`-query
-adversaries. -/
+error `completenessError ε + T / 2^(8kS)` against classical `T`-query adversaries. -/
+@[headline]
 theorem complete_rom (Λ : SiteLayout Mg) (VE : M.ViewEncoder E Q) {B : ℕ}
-    (hb : M.FormatBounds Q B B) {ε : ℝ≥0∞}
-    (hε : ∀ x w, rel x w → Pr[q ← R × Chs P t : V x ((prv w q.1).run x q.2) ≠ true] ≤ ε) (kq : ℕ) :
-    NARG.ROM.Complete (M.niProver Λ prv E hb) (M.toRVerifier Q kq) (fun x π => Claim.mk x π.val) rel
-      fun T => ε + M.overrun + SPBCS.keyCollision (t.size n) k + T / 2 ^ (8 * kS) := by
+    (hb : M.FormatBounds Q B B) {ε : ℝ≥0∞} (hε : CausalCompletenessError rel V prv ε) (kq : ℕ) :
+    NARG.ROM.Complete (M.niProver Λ prv E hb) (PMF.uniformOfFintype _) (M.toRVerifier Q kq)
+      (fun x π => Claim.mk x π.val) rel
+      fun T => M.completenessError ε + T / 2 ^ (8 * kS) := by
   intro T 𝒜
   have hcard : (Fintype.card (FiatShamirSalt kS) : ℝ≥0∞) = 2 ^ (8 * kS) := by
     rw [show Fintype.card (FiatShamirSalt kS) = 2 ^ (8 * kS) from Out.card_digest]
@@ -128,9 +132,9 @@ theorem complete_rom (Λ : SiteLayout Mg) (VE : M.ViewEncoder E Q) {B : ℕ}
   rw [← hcard]
   refine le_trans ?_ (𝒜.adaptiveCompleteness_coins M.querySalt (R := M.ProverCoins R)
     (Bad := fun (c : M.ProverCoins R) σ h (o : ProofQuery X Wit) =>
-      rel o.stmt o.wit ∧ ¬ M.Accepts h o.stmt
+      (o.stmt, o.wit) ∈ rel ∧ ¬ M.Accepts h o.stmt
       (prove (prv o.wit c.iop) o.stmt σ E c.merkleSalts h (Q o.stmt)) (Q o.stmt))
-    (prob_not_accepts_prove_proverCoins_replaceSlice_le M prv E Q hε))
+    (prob_not_accepts_prove_proverCoins_replaceSlice_le M prv E Q (rel := fun x w => (x, w) ∈ rel) hε))
   unfold NARG.ROM.Adversary.rejectsHonest
   refine ENNReal.tsum_le_tsum fun a => mul_le_mul_of_nonneg_left ?_ zero_le
   rw [tsum_fintype, ← Equiv.sum_comp (SaltedCoins.equivProd _ _).symm, Fintype.sum_prod_type,
@@ -138,12 +142,11 @@ theorem complete_rom (Λ : SiteLayout Mg) (VE : M.ViewEncoder E Q) {B : ℕ}
   refine Finset.sum_le_sum fun c _ => ?_
   rw [ROM.probUniform_prod_eq_sum, Finset.mul_sum]
   refine Finset.sum_le_sum fun σ _ => ?_
-  rw [show (M.niProver Λ prv E hb).coins = PMF.uniformOfFintype _ from rfl,
-    uniform_saltedCoins_apply, mul_assoc]
+  rw [uniform_saltedCoins_apply, mul_assoc]
   gcongr
   refine QROM.probUniform_mono fun h hh => ?_
   simp only [M.toFn_niProver Λ prv E VE hb] at hh
-  change rel (((𝒜.alg a).toAlg T).output h).stmt (((𝒜.alg a).toAlg T).output h).wit ∧
+  change ((((𝒜.alg a).toAlg T).output h).stmt, (((𝒜.alg a).toAlg T).output h).wit) ∈ rel ∧
     ¬ M.Accepts h (((𝒜.alg a).toAlg T).output h).stmt
       (prove (prv (((𝒜.alg a).toAlg T).output h).wit c.iop) (((𝒜.alg a).toAlg T).output h).stmt σ
         E c.merkleSalts h (Q (((𝒜.alg a).toAlg T).output h).stmt))
@@ -156,26 +159,27 @@ open Classical in
 (`def:narg-complete`, `NARG.QROM.Complete`; paper `thm:bcs-complete` (2); Unruh 2017 Definition 5,
 p. 14): under the hypothesis of `complete_rom`, the honest prover `niProver` run through `queryEncoding`, with uniform
 coins, Merkle salts and Fiat–Shamir salt, is complete for the verifier `toQVerifier` with `kq`
-queries at error `ε + overrun + keyCollision (t.size n) k + 2 T / 2^(4kS)` against `T`-query
-adversaries of `def:adversary`. -/
+queries at error `completenessError ε + 2 T / 2^(4kS)` against `T`-query adversaries of
+`def:adversary`. -/
+@[headline]
 theorem complete_qrom (Λ : SiteLayout Mg) (VE : M.ViewEncoder E Q) {B : ℕ}
-    (hb : M.FormatBounds Q B B) {ε : ℝ≥0∞}
-    (hε : ∀ x w, rel x w → Pr[q ← R × Chs P t : V x ((prv w q.1).run x q.2) ≠ true] ≤ ε) (kq : ℕ) :
-    NARG.QROM.Complete queryEncoding (M.niProver Λ prv E hb) (M.toQVerifier Q kq)
+    (hb : M.FormatBounds Q B B) {ε : ℝ≥0∞} (hε : CausalCompletenessError rel V prv ε) (kq : ℕ) :
+    NARG.QROM.Complete queryEncoding (M.niProver Λ prv E hb) (PMF.uniformOfFintype _)
+      (M.toQVerifier Q kq)
       (fun x π => Claim.mk x π.val) rel
-      fun T => ε + M.overrun + SPBCS.keyCollision (t.size n) k + 2 * T / 2 ^ (4 * kS) := by
+      fun T => M.completenessError ε + 2 * T / 2 ^ (4 * kS) := by
   intro T 𝒜
   have h := QROM.QueryBoundedAdversary.adaptiveCompleteness_coins M.saltOfBits 𝒜 (outEquiv k e)
     (R := M.ProverCoins R)
     (Bad := fun (c : M.ProverCoins R) σ hb (o : ProofQuery X Wit) =>
-      rel o.stmt o.wit ∧ ¬ M.Accepts (hb ∘ Query.toBits) o.stmt
+      (o.stmt, o.wit) ∈ rel ∧ ¬ M.Accepts (hb ∘ Query.toBits) o.stmt
       (prove (prv o.wit c.iop) o.stmt σ E c.merkleSalts (hb ∘ Query.toBits) (Q o.stmt))
       (Q o.stmt))
     (freshSlice_coins_comp_toBits M.saltOfBits_toBits
       (Bad := fun (c : M.ProverCoins R) σ h (o : ProofQuery X Wit) =>
-        rel o.stmt o.wit ∧ ¬ M.Accepts h o.stmt
+        (o.stmt, o.wit) ∈ rel ∧ ¬ M.Accepts h o.stmt
         (prove (prv o.wit c.iop) o.stmt σ E c.merkleSalts h (Q o.stmt)) (Q o.stmt))
-      (prob_not_accepts_prove_proverCoins_replaceSlice_le M prv E Q hε))
+      (prob_not_accepts_prove_proverCoins_replaceSlice_le M prv E Q (rel := fun x w => (x, w) ∈ rel) hε))
   rw [ofReal_two_mul_div_sqrt_card] at h
   refine le_trans ?_ h
   unfold NARG.QROM.Adversary.rejectsHonest
@@ -185,8 +189,7 @@ theorem complete_qrom (Λ : SiteLayout Mg) (VE : M.ViewEncoder E Q) {B : ℕ}
   refine Finset.sum_le_sum fun c _ => ?_
   rw [Finset.mul_sum]
   refine Finset.sum_le_sum fun σ _ => ?_
-  rw [show (M.niProver Λ prv E hb).coins = PMF.uniformOfFintype _ from rfl,
-    uniform_saltedCoins_apply, mul_assoc]
+  rw [uniform_saltedCoins_apply, mul_assoc]
   gcongr with p o
   intro hv
   refine NARG.Verifier.ofOracle_accepted_of ?_

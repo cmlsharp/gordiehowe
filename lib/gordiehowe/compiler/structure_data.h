@@ -22,14 +22,14 @@ namespace proofs::gordiehowe::compiler {
 // pairs is sorted by its key with no repeated key (print_structure checks).
 struct StructureRecords {
   enum class GadgetKind {
-    selectRow, spectralProduct, selectFirst, keccak, macSite, modField,
+    selectRow, selectFirst, keccak, macSite, modField,
     modCommitted, modGrouped, modDigits, modOneDigit, lookupTwoSided,
     lookupDigits, packedTable
   };
   // A part's arguments follow the corresponding Lean constructor. An
   // expression part holds its typed program-node index, never Lean text.
   struct GadgetPart {
-    enum class Kind { expr, kernel, stream, kernelOf };
+    enum class Kind { expr, stream };
     Kind kind;
     std::vector<size_t> args;
     std::optional<size_t> zero_slot;
@@ -101,7 +101,6 @@ inline std::string gadget_kind(StructureRecords::GadgetKind k) {
   using K = StructureRecords::GadgetKind;
   switch (k) {
     case K::selectRow: return "selectRow";
-    case K::spectralProduct: return "spectralProduct";
     case K::selectFirst: return "selectFirst";
     case K::keccak: return "keccak";
     case K::macSite: return "macSite";
@@ -161,22 +160,17 @@ inline std::string gadget_part(const StructureRecords::GadgetPart &p,
   using K = StructureRecords::GadgetPart::Kind;
   if (p.kind != K::stream && p.zero_slot)
     throw std::runtime_error("structure records: zero slot on non-stream part");
-  std::string text;
   switch (p.kind) {
     case K::expr:
       arity(p.args, 1);
       if (p.args[0] >= ir::kNone) throw std::runtime_error("structure records: invalid expression index");
       return ".expr (" + pr.expr(ir::Id(p.args[0])) + ")";
-    case K::kernel: arity(p.args, 6); text = ".kernel"; break;
     case K::stream:
       arity(p.args, 1);
       return ".stream " + std::to_string(p.args[0]) + " " +
              (p.zero_slot ? "(some " + std::to_string(*p.zero_slot) + ")" : "none");
-    case K::kernelOf: arity(p.args, 3); text = ".kernelOf"; break;
     default: throw std::runtime_error("structure records: unknown gadget part");
   }
-  for (size_t n : p.args) text += " " + std::to_string(n);
-  return text;
 }
 
 // The keyed list L as Lean text, its keys strictly increasing (KEY gives a

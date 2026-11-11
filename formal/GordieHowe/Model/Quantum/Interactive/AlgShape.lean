@@ -39,7 +39,7 @@ adversaries, deep down to where they differ.
 - `PMF.map_cast_congr`: the transport of a family of laws along an equality of indices, with
   casts to one outcome type.
 
-The shape functions of the later constructors sit next to them: `AdaptiveIAlg.absorbS`
+The shape functions of the later constructors sit next to them: `AlgShape.absorbS`
 (`Absorb.lean`), `patchTagS` (`AssignPatch.lean`), `relayAdvS` (`MultiRelay.lean`),
 `absorbAssignS` (`AbsorbAssign.lean`), `absorbTabS` (`ReqBridge.lean`), `seAlgKFS`
 (`GordieHowe/Applications/Ring/KeyFreeSE.lean`).

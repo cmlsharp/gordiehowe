@@ -89,6 +89,58 @@ def commLookupCB (G : Gens) (lk m j : ℕ) : Bool :=
     decide (d' = d) && decide (ir.CommLookupFactsC G lk d rec N r m j q e e' real)
   | _, _ => false
 
+variable (ir) in
+/-- **The facts of a direct lookup whose record is a committed-digits `mod_q`'s quotient digit**
+at the certificate's generators `G`, at the `in` predicate `lk` with body
+`mem d [.leaf v] (range N) (lookup r)` whose record, the value `v`, is digit `j` of the `mod_q` `m`
+with body `mod d q e e' real`: a direct lookup of a domain; `v` generated as the committed digit
+`⟨m, j, lk, 0⟩`, a committed cell of the sides' length in the domain's field that is no source
+value; the radix `R` with `R ≤ N` (the honest quotient digit lies in the range) and `R ≤ T`, the
+lookup's base (the committed digit is the quotient digit itself); the range within the
+characteristic. -/
+structure CommDirectFactsC (G : Gens) (lk d v N : ℕ) (r : LookupRealization) (m j : ℕ) (e : Expr)
+    (real : ModRealization) : Prop where
+  /-- A direct lookup. -/
+  kind : r.kind = .direct
+  /-- A domain of the program. -/
+  domain : d < ir.domains.length
+  /-- The record is generated as the committed digit at position `0`. -/
+  own : G.at v = .commDigit m j lk 0
+  /-- The record is a committed cell of the sides' length in the domain's field, no source
+  value. -/
+  cell : ir.privCellB v = true ∧ (ir.value v).size = ir.exprLen e ∧
+    ir.valueField v = ir.domainField d ∧ ¬ ir.IsSourceValue v
+  /-- The record is digit `j` of the `mod_q`. -/
+  isDigit : (real.digits[j]?.map fun D => D.beq (.leaf v)) = some true
+  /-- The honest quotient digit lies in the range. -/
+  radixLe : real.radix ≤ N
+  /-- The honest quotient digit lies below the lookup's base. -/
+  radixBase : real.radix ≤ r.base
+  /-- The range lies within the characteristic. -/
+  rangeLe : N ≤ ir.charOf (ir.domainField d)
+
+instance (G : Gens) (lk d v N : ℕ) (r : LookupRealization) (m j : ℕ) (e : Expr)
+    (real : ModRealization) : Decidable (ir.CommDirectFactsC G lk d v N r m j e real) :=
+  decidable_of_iff (_ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _ ∧ _)
+    ⟨fun ⟨h1, h2, h3, h4, h5, h6, h7, h8⟩ => ⟨h1, h2, h3, h4, h5, h6, h7, h8⟩,
+     fun h => ⟨h.kind, h.domain, h.own, h.cell, h.isDigit, h.radixLe, h.radixBase, h.rangeLe⟩⟩
+
+variable (ir) in
+/-- **The facts of the direct lookup `lk` of digit `j` of the `mod_q` `m`, as a check**
+(`CommDirectFactsC`): `lk` has one record, a value, and a range, `m` is a `mod_q` of the same
+domain. -/
+def commDirectCB (G : Gens) (lk m j : ℕ) : Bool :=
+  match (ir.predicate lk).body, (ir.predicate m).body with
+  | .mem d [.leaf v] (.range N) (.lookup r), .mod d' _ e _ real =>
+    decide (d' = d) && decide (ir.CommDirectFactsC G lk d v N r m j e real)
+  | _, _ => false
+
+variable (ir) in
+/-- **The lookup `lk` of digit `j` of the committed-digits `mod_q` `m` has its facts**: a digit
+lookup (`commLookupCB`) or a direct one (`commDirectCB`). -/
+def commRecCB (G : Gens) (lk m j : ℕ) : Bool :=
+  ir.commLookupCB G lk m j || ir.commDirectCB G lk m j
+
 variable (ir L) in
 /-- **The honest-quotient facts of a source committed-digits `mod_q`** `m` with body
 `mod d q e e' real`: `q > 0`, `p > 2`; the sides' intervals from the source values

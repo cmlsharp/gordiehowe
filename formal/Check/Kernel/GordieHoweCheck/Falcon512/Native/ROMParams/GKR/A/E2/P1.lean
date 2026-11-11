@@ -9,10 +9,10 @@ import all GordieHoweCerts.Generated.Falcon512.Native.ROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of leaves 10 to 19 of entry 2 of the GKR circuit of domain A (generated; do not edit). -/
+/-! The relational check of leaves 9 to 13 of entry 2 of the GKR circuit of domain A (generated; do not edit). -/
 
 namespace GordieHowe.Generated.Falcon512.Native.ROMParams.GKR.A
 
-check_entry_leaves cert ar 2 [1, 1024, 6, 0, 0, 4, 0, 0, 10, 2, 256, 130] 10 20
+check_entry_leaves cert ar 2 [0, 0, 15, 2, 1955, 17] 9 14
 
 end GordieHowe.Generated.Falcon512.Native.ROMParams.GKR.A

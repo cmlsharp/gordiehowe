@@ -51,8 +51,10 @@ theorem base_reprogT (H : X → Y) (T : X → Option Y) :
     base sp (reprogT T H) = ωT sp (base sp H) T :=
   funext fun x => by cases h : T x <;> simp [base, reprogT, ωT, h]
 
-variable {N n : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB) {Pf PC : Type} {iFP : Fintype Pf} {iDP : DecidableEq Pf} {iFC : Fintype PC}
-  {iDC : DecidableEq PC} {iNC : Nonempty PC}
+variable {N n : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
+  (B : BaseSigner X Y N TB) {Pf PC : Type} [Fintype Pf] [DecidableEq Pf]
+  [Fintype PC]
+  [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) ⟨Pf, PC⟩}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {SC X₀ R Pb : Type}
   (pks : Fin n → B.PK)
@@ -86,7 +88,7 @@ def xPω (ω : X → Y₁) (T : X → Option Y) :
   | .sign _ Rg m, some p => some (stmtPω (ωT sp ω (overT T (lastAssign p.2.2))) ⟨Rg, m, p.1⟩)
   | _, _ => none
 
-omit [DecidableEq X] in
+omit [DecidableEq X] [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The signature at the base component reads at most once.** -/
 theorem sigPω_queriesLE (ω : X → Y₁) (T : X → Option Y) (c : ℕ) (r : Req B PS adm n) :
     (sigPω sp B pks F sc ω T c r).QueriesLE 1 := by
@@ -100,10 +102,11 @@ theorem sigPω_queriesLE (ω : X → Y₁) (T : X → Option Y) (c : ℕ) (r : R
       simp [trace]
   · simp [sigPω, trace]
 
-variable (h : X → Y) (m : MURequest (SignOracle.none B) n ⊕ R → Option (MUResponse B ⊕ Pf))
+variable (h : X → Y) (m : MURequest (SignOracle.none B.core) n ⊕ R → Option (MUResponse B.core ⊕ Pf))
 
 variable {sp B pks F stmtPω toR dummyR sc}
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The signature at the base component runs as the key-free signature** at every oracle `H'`
 whose base component is `ωT ω T`. -/
 theorem run_sigPω (ω : X → Y₁) (T : X → Option Y) (c : ℕ) (r : Req B PS adm n) (H' : X → Y)
@@ -119,6 +122,7 @@ theorem run_sigPω (ω : X → Y₁) (T : X → Option Y) (c : ℕ) (r : Req B P
         dite_eq_right_of_eq_false (eq_false hc)]
   · rfl
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The statement at the base component is the statement program's output**, for a statement
 program reading only the base component (`hst`), at every oracle `reprogT T H` with
 `base sp H = ω`. -/

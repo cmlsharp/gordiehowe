@@ -56,7 +56,7 @@ set_option hygiene false in
 local notation "vW1H" => MldsaRingFront.w1H program
 
 set_option hygiene false in
-local notation "vC" => MldsaRingRelation.c program
+local notation "vC" => MldsaRandomPoint.c program
 
 /-! ## The two operands' coordinates -/
 
@@ -73,22 +73,22 @@ theorem x_part {i j k : ℕ} (hj : j < 4)
       (∀ k < 256, m.entry (6656 + (2 * k + 1)) = 6912 + k) →
       m.entry i = partBase program
         [.leaf vMuH, .leaf vW1H, .ref ((σ).ref 523), .ref ((σ).ref 524)] j + k) :
-    program.evalE rd 1 (.ref 513) i = program.evalE rd 1
+    program.evalE rd 1 (.ref (MldsaRingFront.crossH program)) i = program.evalE rd 1
       (([.leaf vMuH, .leaf vW1H, .ref ((σ).ref 523), .ref ((σ).ref 524)] : List Expr)[j]'
         (by simpa using hj)) k := by
   obtain ⟨m, hm, hlo, hev, hod⟩ := MldsaRingFront.exprH (program := program)
-  rw [RealizedProgram.evalE_ref MldsaRingRelation.refsOrdered _ _ MldsaRingFront.lt513, hm]
+  rw [RealizedProgram.evalE_ref MldsaRandomPoint.refsOrdered _ _ MldsaRingFront.ltCross.2, hm]
   exact RealizedProgram.evalE_wiring_part rd 1 m _ _ (by simpa using hj) hk (he m hlo hev hod)
 
 /-- **`x` below `512`** is H's `μ` bit. -/
 theorem x_mu {t : ℕ} (ht : t < 512) :
-    program.evalE rd 1 (.ref 513) t = program.evalE rd 1 (.leaf vMuH) t :=
+    program.evalE rd 1 (.ref (MldsaRingFront.crossH program)) t = program.evalE rd 1 (.leaf vMuH) t :=
   x_part rd (j := 0) (by norm_num) (by simp [exprLen_leaf, MldsaRingFront.lens.2.1, ht])
     fun m hlo _ _ => by rw [hlo t (by omega)]; simp [partBase]
 
 /-- **`x` at `512 + t`** is H's `w1` bit `t`. -/
 theorem x_w1 {t : ℕ} (ht : t < 6144) :
-    program.evalE rd 1 (.ref 513) (512 + t) = program.evalE rd 1 (.leaf vW1H) t :=
+    program.evalE rd 1 (.ref (MldsaRingFront.crossH program)) (512 + t) = program.evalE rd 1 (.leaf vW1H) t :=
   x_part rd (j := 1) (by norm_num) (by simp [exprLen_leaf, MldsaRingFront.lens.2.2.1, ht])
     fun m hlo _ _ => by
       rw [hlo _ (by omega)]
@@ -96,7 +96,7 @@ theorem x_w1 {t : ℕ} (ht : t < 6144) :
 
 /-- **`x` at `6656 + 2 k`** is H's decoded support of coefficient `k`. -/
 theorem x_sup {k : ℕ} (hk : k < 256) :
-    program.evalE rd 1 (.ref 513) (6656 + 2 * k) =
+    program.evalE rd 1 (.ref (MldsaRingFront.crossH program)) (6656 + 2 * k) =
       program.evalE rd 1 (.ref ((σ).ref 523)) k :=
   x_part rd (j := 2) (by norm_num) (by simp [MldsaRingFront.lens.2.2.2.1, hk])
     fun m _ hev _ => by
@@ -105,7 +105,7 @@ theorem x_sup {k : ℕ} (hk : k < 256) :
 
 /-- **`x` at `6656 + 2 k + 1`** is H's decoded sign of coefficient `k`. -/
 theorem x_sgn {k : ℕ} (hk : k < 256) :
-    program.evalE rd 1 (.ref 513) (6656 + (2 * k + 1)) =
+    program.evalE rd 1 (.ref (MldsaRingFront.crossH program)) (6656 + (2 * k + 1)) =
       program.evalE rd 1 (.ref ((σ).ref 524)) k :=
   x_part rd (j := 3) (by norm_num) (by simp [MldsaRingFront.lens.2.2.2.2.1, hk])
     fun m _ _ hod => by
@@ -118,29 +118,29 @@ theorem y_part {i j k : ℕ} (hj : j < 3)
     (hk : k < program.exprLen (([.leaf vMuA, .leaf vW1A, .leaf vC] : List Expr)[j]'
       (by simpa using hj)))
     (he : i = partBase program [.leaf vMuA, .leaf vW1A, .leaf vC] j + k) (hi : i < 7168) :
-    program.evalE rd 0 (.ref 50) i = program.evalE rd 0
+    program.evalE rd 0 (.ref (MldsaRingFront.crossA program)) i = program.evalE rd 0
       (([.leaf vMuA, .leaf vW1A, .leaf vC] : List Expr)[j]'(by simpa using hj)) k := by
   obtain ⟨m, hm, hid⟩ := MldsaRingFront.exprA (program := program)
-  rw [RealizedProgram.evalE_ref MldsaRingRelation.refsOrdered _ _
-    (by have := MldsaRingFront.lt513 (program := program); omega), hm]
+  rw [RealizedProgram.evalE_ref MldsaRandomPoint.refsOrdered _ _
+    (by have := MldsaRingFront.ltCross (program := program); omega), hm]
   exact RealizedProgram.evalE_wiring_part rd 0 m _ _ (by simpa using hj) hk
     (by rw [hid i hi]; exact he)
 
 /-- **`y` below `512`** is A's `μ` bit. -/
 theorem y_mu {t : ℕ} (ht : t < 512) :
-    program.evalE rd 0 (.ref 50) t = program.evalE rd 0 (.leaf vMuA) t :=
+    program.evalE rd 0 (.ref (MldsaRingFront.crossA program)) t = program.evalE rd 0 (.leaf vMuA) t :=
   y_part rd (j := 0) (by norm_num) (by simp [exprLen_leaf, MldsaRingFront.muSize, ht])
     (by simp [partBase]) (by omega)
 
 /-- **`y` at `512 + t`** is A's `w1` bit `t`. -/
 theorem y_w1 {t : ℕ} (ht : t < 6144) :
-    program.evalE rd 0 (.ref 50) (512 + t) = program.evalE rd 0 (.leaf vW1A) t :=
+    program.evalE rd 0 (.ref (MldsaRingFront.crossA program)) (512 + t) = program.evalE rd 0 (.leaf vW1A) t :=
   y_part rd (j := 1) (by norm_num) (by simp [exprLen_leaf, MldsaRingFront.lens.2.2.2.2.2, ht])
     (by simp [partBase, exprLen_leaf, MldsaRingFront.muSize]) (by omega)
 
 /-- **`y` at `6656 + i`** is A's challenge bit `i`. -/
 theorem y_c {i : ℕ} (hi : i < 512) :
-    program.evalE rd 0 (.ref 50) (6656 + i) = program.evalE rd 0 (.leaf vC) i :=
+    program.evalE rd 0 (.ref (MldsaRingFront.crossA program)) (6656 + i) = program.evalE rd 0 (.leaf vC) i :=
   y_part rd (j := 2) (by norm_num)
     (by simp [exprLen_leaf, (MldsaRingRelation.sizes (program := program)).2.2.2.2, hi])
     (by simp [partBase, exprLen_leaf, MldsaRingFront.muSize, MldsaRingFront.lens.2.2.2.2.2])
@@ -185,20 +185,20 @@ theorem ringCross {e : program.Env interp} (hs : program.SourceSatAt e)
       (interp 1).toNat (program.evalE (program.reader e) 1 (.ref ((σ).ref 524)) k) < 2) :
     RingCrossAt (program.reader e) := by
   obtain ⟨hl, hsrc, c, hc⟩ := MldsaRingFront.cross (program := program)
-  have hmac : program.HoldsAt e (program.predicate 248).body :=
+  have hmac : program.HoldsAt e (program.predicate (MldsaRingFront.crossPred program)).body :=
     hs.preds _ (RealizedProgram.predicate_mem hl) hsrc
   rw [hc] at hmac
   obtain ⟨-, hxy⟩ := hmac
-  change (∀ i < program.exprLen (.ref 513),
+  change (∀ i < program.exprLen (.ref (MldsaRingFront.crossH program)),
       (interp (program.domainField 1)).toNat (program.evalE (program.reader e)
-        (program.domainField 1) (.ref 513) i) < 2) → ∀ i < program.exprLen (.ref 513),
+        (program.domainField 1) (.ref (MldsaRingFront.crossH program)) i) < 2) → ∀ i < program.exprLen (.ref (MldsaRingFront.crossH program)),
       (interp (program.domainField 1)).toNat (program.evalE (program.reader e)
-        (program.domainField 1) (.ref 513) i) =
+        (program.domainField 1) (.ref (MldsaRingFront.crossH program)) i) =
       (interp (program.domainField 0)).toNat (program.evalE (program.reader e)
-        (program.domainField 0) (.ref 50) i) at hxy
+        (program.domainField 0) (.ref (MldsaRingFront.crossA program)) i) at hxy
   rw [MldsaRingFront.domains.2, MldsaRingFront.domains.1, MldsaRingFront.lens.1] at hxy
   set rd := program.reader e
-  have hpre : ∀ i < 7168, (interp 1).toNat (program.evalE rd 1 (.ref 513) i) < 2 := by
+  have hpre : ∀ i < 7168, (interp 1).toNat (program.evalE rd 1 (.ref (MldsaRingFront.crossH program)) i) < 2 := by
     intro i hi
     by_cases h1 : i < 512
     · rw [x_mu rd h1]

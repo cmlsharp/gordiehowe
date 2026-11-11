@@ -34,7 +34,7 @@ namespace GordieHowe.Generated.MLDSA44.Ring.Native.ROMParams.Structure
 
 open GordieHowe.RealizedProgram GordieHowe.Generated.MLDSA44.Ring.Native.ROMParams.Program
 
-load_program_ghc "Structure.ghc" "b31f47d88efc5a71"
+load_program_ghc "Structure.ghc" "e60cd088115d901c"
 
 /-- The member-value pointers in the emitted structure metadata. -/
 theorem memberValues_eq : records.memberValues = [] := rfl

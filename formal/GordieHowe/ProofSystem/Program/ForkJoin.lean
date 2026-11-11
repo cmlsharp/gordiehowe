@@ -112,20 +112,26 @@ def P (j : C.shape.Idx) : ProtocolSpec (C.rounds j) :=
     (C.app.committedSpec C.Com C.commitRounds) (fun d b => (C.circuit d).branch b)
     fun d => (C.circuit d).join
 
-instance instFintypeP : ∀ j i, Fintype ((C.P j).Challenge i)
-  | .pre, i => (inferInstance : ∀ i, Fintype ((C.app.committedSpec C.Com C.commitRounds).Challenge i)) i
-  | .br d b, i => (C.circuit d).branchFintype b i
-  | .jn d, i => (C.circuit d).joinFintype i
+/-- The components' challenge sets are finite. Defined by `Shape.Idx.casesOn`, as `rounds`, so
+that two composites with the same components have definitionally equal instances at a variable
+component. -/
+instance instFintypeP (j : C.shape.Idx) : ∀ i, Fintype ((C.P j).Challenge i) :=
+  Shape.Idx.casesOn (motive := fun j => ∀ i, Fintype ((C.P j).Challenge i)) j
+    (inferInstance : ∀ i, Fintype ((C.app.committedSpec C.Com C.commitRounds).Challenge i))
+    (fun d b => (C.circuit d).branchFintype b) fun d => (C.circuit d).joinFintype
 
-instance instDecEqP : ∀ j i, DecidableEq ((C.P j).Challenge i)
-  | .pre, i => (inferInstance : ∀ i, DecidableEq ((C.app.committedSpec C.Com C.commitRounds).Challenge i)) i
-  | .br d b, i => (C.circuit d).branchDecEq b i
-  | .jn d, i => (C.circuit d).joinDecEq i
+/-- The components' challenges have decidable equality (by `Shape.Idx.casesOn`, as
+`instFintypeP`). -/
+instance instDecEqP (j : C.shape.Idx) : ∀ i, DecidableEq ((C.P j).Challenge i) :=
+  Shape.Idx.casesOn (motive := fun j => ∀ i, DecidableEq ((C.P j).Challenge i)) j
+    (inferInstance : ∀ i, DecidableEq ((C.app.committedSpec C.Com C.commitRounds).Challenge i))
+    (fun d b => (C.circuit d).branchDecEq b) fun d => (C.circuit d).joinDecEq
 
-instance instNonemptyP : ∀ j i, Nonempty ((C.P j).Challenge i)
-  | .pre, i => (inferInstance : ∀ i, Nonempty ((C.app.committedSpec C.Com C.commitRounds).Challenge i)) i
-  | .br d b, i => (C.circuit d).branchNonempty b i
-  | .jn d, i => (C.circuit d).joinNonempty i
+/-- The components' challenge sets are nonempty (by `Shape.Idx.casesOn`, as `instFintypeP`). -/
+instance instNonemptyP (j : C.shape.Idx) : ∀ i, Nonempty ((C.P j).Challenge i) :=
+  Shape.Idx.casesOn (motive := fun j => ∀ i, Nonempty ((C.P j).Challenge i)) j
+    (inferInstance : ∀ i, Nonempty ((C.app.committedSpec C.Com C.commitRounds).Challenge i))
+    (fun d b => (C.circuit d).branchNonempty b) fun d => (C.circuit d).joinNonempty
 
 /-- The series–parallel term. -/
 abbrev term : SPTerm C.shape.Idx := C.shape.term
@@ -198,6 +204,20 @@ def Sound.commit : BadState C.commitRounds C.Com (ProtocolSpec.errN C.m fun d =>
 /-- **The prefix's errors**: the commit rounds' and the application phase's. -/
 def Sound.preError : (C.P .pre).ChallengeIdx → ℝ≥0 :=
   C.app.committedError C.commitRounds (ProtocolSpec.errN C.m fun d => (S.circuit d).εc) S.εapp
+
+variable (C) in
+/-- **The round errors of the composite** at the domains' soundness `circ` and the application
+phase's errors `εapp`: the commit rounds' and the application phase's at the prefix, each
+branch's and each join's at theirs (`Sound.error` at a soundness record). They read no event,
+so they need no event bound. -/
+def roundError (circ : ∀ d, (C.circuit d).Sound (C.holds d))
+    (εapp : C.app.spec.ChallengeIdx → ℝ≥0) : ChIdx C.P C.term → ℝ≥0 :=
+  errNode
+    (errLeaf (P := C.P) (j := .pre)
+      (C.app.committedError C.commitRounds (ProtocolSpec.errN C.m fun d => (circ d).εc) εapp))
+    (IOP.errN .par C.m fun d =>
+      errNode (IOP.errN .par (C.circuit d).nb fun b => errLeaf (P := C.P) (j := .br d b) ((circ d).εb b))
+        (errLeaf (P := C.P) (j := .jn d) (circ d).εj))
 
 section Extraction
 

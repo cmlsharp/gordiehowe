@@ -75,8 +75,7 @@ def certified : CertifiedProgram Plan.plan Program.program interp :=
     ready := ready }
 
 /-- **The proof system of the program** (`GordieHowe.RuntimeInputs.proofSystemOf`), with full GKR
-certificates confined to proofs and the selections' soundness from the check
-(`GordieHowe.RealizedProgram.selSound_of_selectionsB`). -/
+certificates confined to proofs. -/
 def proofSystem : ProofSystems :=
   runtimeInputs.proofSystemOf runtimeParts (conditions.toCoreConditions.certs runtimeParts_eq)
     conditions.toCoreConditions.coreFacts

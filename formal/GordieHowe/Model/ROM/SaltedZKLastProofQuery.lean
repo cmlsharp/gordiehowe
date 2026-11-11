@@ -11,7 +11,7 @@ public import GordieHowe.Model.ROM.SaltedZK
 # Everlasting zero knowledge of a salted argument in the classical random-oracle model
 
 `GordieHowe/Model/ROM/SaltedZK.lean` charges an adversary for every query of its steps (`IAlg.Budget t`). The
-paper's everlasting zero knowledge (Definition 6.2, `def:narg-zk-post`) charges only the queries
+paper's everlasting zero knowledge (`def:narg-zk-post`) charges only the queries
 before the adversary's last proof query, whose position is chosen at run time: `IAlg.RequestBudget t`,
 at most `t` queries before each proof query, on every run. This file proves the same bound under it.
 
@@ -131,24 +131,25 @@ variable [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] (rel : Stmt → Wi
   [DecidableRel rel] {Coins SimCoins : Type} [Fintype Coins] [Fintype SimCoins]
 
 /-- **Everlasting zero knowledge in the classical random-oracle model** (Unruh 2017
-Definition 6, p. 14, with classical adversaries and the query bound of the paper's Definition 6.2,
+Definition 6, p. 14, with classical adversaries and the query bound of the paper's
 `def:narg-zk-post`): for all `m`, `T`, `t` and `Q`, every classical adversary with `m` steps whose
 algorithms make at most `t` queries before each of their proof queries on every run
 (`IAlg.RequestBudget`), and any number after the last one, whose first `Q` proof queries are answered,
-has advantage at most `ε t Q` between the honest prover `P` and the simulator `S`. The total budget
+has advantage at most `ε t Q` between the honest prover `P`, its coins drawn from `μ`, and the
+simulator `S`. The total budget
 `T` of the adversary is not charged. -/
-def EverlastingZeroKnowledge (P : NARG.ProverFn X Y Stmt Wit Proof Coins)
+def EverlastingZeroKnowledge (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ : PMF Coins)
     (S : NARG.SimulatorFn X Y Stmt Proof SimCoins) (ε : ℕ → ℕ → ℝ) : Prop :=
   ∀ (m T t Q : ℕ) (𝒜 : Adversary X Y Stmt Wit Proof m T), (∀ r, (𝒜.alg r).RequestBudget t) →
-    𝒜.advantage rel P S Q ≤ ε t Q
+    𝒜.advantage rel P μ S Q ≤ ε t Q
 
 variable {rel}
 
 /-- A larger error bound. -/
-theorem EverlastingZeroKnowledge.mono {P : NARG.ProverFn X Y Stmt Wit Proof Coins}
+theorem EverlastingZeroKnowledge.mono {P : NARG.ProverFn X Y Stmt Wit Proof Coins} {μ : PMF Coins}
     {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} {ε ε' : ℕ → ℕ → ℝ}
-    (h : EverlastingZeroKnowledge rel P S ε) (hε : ∀ t Q, ε t Q ≤ ε' t Q) :
-    EverlastingZeroKnowledge rel P S ε' :=
+    (h : EverlastingZeroKnowledge rel P μ S ε) (hε : ∀ t Q, ε t Q ≤ ε' t Q) :
+    EverlastingZeroKnowledge rel P μ S ε' :=
   fun m T t Q 𝒜 h𝒜 => (h m T t Q 𝒜 h𝒜).trans (hε t Q)
 
 end Notion
@@ -158,7 +159,8 @@ section Salted
 variable [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] {Sd C SC : Type} [Fintype Sd]
   [DecidableEq Sd] [Nonempty Sd] [Fintype C] [Nonempty C] [Fintype SC] [Nonempty SC]
   (saltOf : X → Option Sd) (rel : Stmt → Wit → Prop) [DecidableRel rel]
-  (P : NARG.ProverFn X Y Stmt Wit Proof (SaltedCoins Sd C)) (S : NARG.SimulatorFn X Y Stmt Proof (SaltedCoins Sd SC))
+  (P : NARG.ProverFn X Y Stmt Wit Proof (SaltedCoins Sd C)) (μ : PMF (SaltedCoins Sd C))
+    (S : NARG.SimulatorFn X Y Stmt Proof (SaltedCoins Sd SC))
 
 /-- **One of the first `t` queries hits the salt of proof query `j`**: among the steps of the run of
 `baseResp j ω` that come after fewer than `t` queries, a query carries the salt of proof query `j`. -/
@@ -254,13 +256,14 @@ theorem expect_ite_bad_within_le {m : ℕ} (A : IAlg X Y Stmt Wit Proof m) (t : 
           (expect_ite_exists_salt_le ω.salts j)
     _ = (t + j) / Fintype.card Sd := by rw [Fintype.expect_const, add_div]
 
-variable {saltOf rel P S}
+variable {saltOf rel P μ S}
 
 /-- **One hybrid step, pointwise, without a query of the salt before proof query `j`**: unless a
 query of the run before proof query `j` or an earlier proof query has the salt of proof query `j`, the difference of the outputs of hybrids `j` and `j + 1` from the oracle
 with that salt's slice answered by `F` is the difference of the outputs from the original oracle
 when proof query `j` is answered with that slice by the prover and by the simulator. -/
-theorem step_pointwise_of_noHit (hloc : SaltedLocal saltOf P S) {m : ℕ} (A : IAlg X Y Stmt Wit Proof m)
+theorem step_pointwise_of_noHit (hloc : SaltedLocal saltOf P μ S) {m : ℕ}
+    (A : IAlg X Y Stmt Wit Proof m)
     {Q j : ℕ} (hj : j < Q) (ω : Tape X Y Sd C SC Q) (F : X → Y)
     (hH : ∀ k < m, ∀ x, (A.run (baseResp rel P S j ω) ω.oracle k).nreq ≤ j →
       A.next (A.run (baseResp rel P S j ω) ω.oracle k).hist = .query x →
@@ -359,7 +362,7 @@ proof query `j`, the pointwise identity of `step_pointwise` holds. If a query of
 proof query `j` has that salt, the first one comes after `t` queries; then neither the run of
 `baseResp j ω` nor the relabelled runs, which agree with it up to that query, make proof query `j`,
 and both sides are `0`. -/
-theorem step_pointwise_requestBudget (hloc : SaltedLocal saltOf P S) {m t : ℕ}
+theorem step_pointwise_requestBudget (hloc : SaltedLocal saltOf P μ S) {m t : ℕ}
     (A : IAlg X Y Stmt Wit Proof m) (hA : A.RequestBudget t) {Q j : ℕ} (hj : j < Q)
     (ω : Tape X Y Sd C SC Q) (F : X → Y)
     (hH : ¬ StepHitWithin saltOf rel P S A t hj ω) (hC : ¬ StepColl hj ω) :
@@ -451,7 +454,8 @@ theorem step_pointwise_requestBudget (hloc : SaltedLocal saltOf P S) {m t : ℕ}
 
 /-- **One hybrid step under a request budget**: hybrids `j` and `j + 1` differ by at most
 `(t + j) / |Sd| + 𝔼 H, η H` for an algorithm with a budget of `t` queries before each proof query. -/
-theorem abs_hyb_sub_le_requestBudget [Fintype Proof] (hloc : SaltedLocal saltOf P S) {η : (X → Y) → ℝ}
+theorem abs_hyb_sub_le_requestBudget [Fintype Proof] (hloc : SaltedLocal saltOf P μ S)
+    {η : (X → Y) → ℝ}
     (hcl : SliceCloseAt saltOf rel P S η) {m t : ℕ} (A : IAlg X Y Stmt Wit Proof m)
     (hA : A.RequestBudget t) {Q j : ℕ} (hj : j < Q) :
     |hyb rel P S A Q j - hyb rel P S A Q (j + 1)| ≤ (t + j) / Fintype.card Sd + 𝔼 H, η H := by
@@ -571,7 +575,8 @@ theorem abs_hyb_sub_le_requestBudget [Fintype Proof] (hloc : SaltedLocal saltOf 
 /-- **The hybrids from the real to the simulated game**: hybrids `0` and `Q` differ by at most
 `Q t / |Sd| + Q (Q - 1) / (2 |Sd|) + Q · 𝔼 H, η H` for an algorithm with a budget of `t`
 queries before each proof query. -/
-theorem abs_hyb_zero_sub_le_requestBudget [Fintype Proof] (hloc : SaltedLocal saltOf P S) {η : (X → Y) → ℝ}
+theorem abs_hyb_zero_sub_le_requestBudget [Fintype Proof] (hloc : SaltedLocal saltOf P μ S)
+    {η : (X → Y) → ℝ}
     (hcl : SliceCloseAt saltOf rel P S η) {m t : ℕ} (A : IAlg X Y Stmt Wit Proof m)
     (hA : A.RequestBudget t) (Q : ℕ) :
     |hyb rel P S A Q 0 - hyb rel P S A Q Q| ≤
@@ -588,9 +593,9 @@ before each proof query and `Q` proof queries answered has advantage at most
     Q t / |Sd| + Q (Q - 1) / (2 |Sd|) + Q · 𝔼 H, η H
 
 between the honest prover `P` and the simulator `S`, unbounded after its steps. -/
-theorem everlastingZeroKnowledge_of_sliceCloseAt [Fintype Proof] (hloc : SaltedLocal saltOf P S)
+theorem everlastingZeroKnowledge_of_sliceCloseAt [Fintype Proof] (hloc : SaltedLocal saltOf P μ S)
     {η : (X → Y) → ℝ} (hcl : SliceCloseAt saltOf rel P S η) :
-    EverlastingZeroKnowledge rel P S fun t Q =>
+    EverlastingZeroKnowledge rel P μ S fun t Q =>
       Q * t / Fintype.card Sd + Q * (Q - 1) / (2 * Fintype.card Sd) + Q * 𝔼 H, η H := by
   intro m T t Q 𝒜 h𝒜
   refine 𝒜.abs_acceptProb_sub_le _ _ fun r => ?_

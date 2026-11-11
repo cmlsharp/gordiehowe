@@ -261,7 +261,7 @@ structure W1Oracles.ReadsFst (O : W1Oracles X Y p prims Msg N reps) : Prop where
   gAns_eq : ∀ y y', (sp y).1 = (sp y').1 → O.gAns y = O.gAns y'
 
 /-- **The decodings of the mask oracle read only the first component.** -/
-def MaskOracle.ReadsFst (M : MaskOracle X Y p T Msg) : Prop :=
+def _root_.GordieHowe.MLDSA.MaskOracle.ReadsFst (M : MaskOracle X Y p T Msg) : Prop :=
   ∀ y y', (sp y).1 = (sp y').1 → M.ans y = M.ans y'
 
 /-- **Every decoding reads only the first component of the split `unit`.** -/
@@ -272,7 +272,7 @@ theorem W1Oracles.readsFst_unit (O : W1Oracles X Y p prims Msg N reps) :
   gAns_eq _ _ h := congrArg O.gAns h
 
 /-- **Every mask decoding reads only the first component of the split `unit`.** -/
-theorem MaskOracle.readsFst_unit (M : MaskOracle X Y p T Msg) :
+theorem _root_.GordieHowe.MLDSA.MaskOracle.readsFst_unit (M : MaskOracle X Y p T Msg) :
     M.ReadsFst (OracleSplit.unit Y) :=
   fun _ _ h => congrArg M.ans h
 
@@ -288,7 +288,8 @@ def W1Oracles.viaBase (O : W1Oracles X Y₁ p prims Msg N reps) :
   gAns y := O.gAns (sp y).1
 
 /-- **The mask oracle of the first component read through the split.** -/
-def MaskOracle.viaBase (M : MaskOracle X Y₁ p T Msg) : MaskOracle X Y p T Msg where
+def _root_.GordieHowe.MLDSA.MaskOracle.viaBase (M : MaskOracle X Y₁ p T Msg) :
+    MaskOracle X Y p T Msg where
   pt := M.pt
   ans y := M.ans (sp y).1
 
@@ -300,7 +301,8 @@ theorem W1Oracles.readsFst_viaBase (O : W1Oracles X Y₁ p prims Msg N reps) :
   gAns_eq _ _ h := congrArg O.gAns h
 
 /-- The mask oracle `viaBase` reads only the first component. -/
-theorem MaskOracle.readsFst_viaBase (M : MaskOracle X Y₁ p T Msg) : (M.viaBase sp).ReadsFst sp :=
+theorem _root_.GordieHowe.MLDSA.MaskOracle.readsFst_viaBase (M : MaskOracle X Y₁ p T Msg) :
+    (M.viaBase sp).ReadsFst sp :=
   fun _ _ h => congrArg M.ans h
 
 /-- The message-representative oracle of `viaBase` is that of the base component. -/

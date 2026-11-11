@@ -50,7 +50,8 @@ abbrev bindSelf {PK M : Type} : List PK → M → M := fun _ m => m
 into the scheme's (`pk`, `bm`, `pub`, the first and the last injective), its signatures the
 scheme's (`sig`), with the scheme's verification (`verify_eq`) and public value (`pub_eq`) at
 every oracle. -/
-structure SchemeView {TB : BaseTypes} (B : BaseSigner Xo Yo N TB) (Sch : SigScheme) where
+structure SchemeView {TB : BaseTypes}
+    (B : BaseSigner Xo Yo N TB) (Sch : SigScheme) where
   /-- The keys. -/
   pk : B.PK → Sch.PK
   /-- The key map is injective. -/
@@ -74,9 +75,8 @@ generation and signing are constant (secret keys, key-generation and signing coi
 compiled ring program proves the ring relation of this scheme (`GordieHowe.Ring.ringRel`), which
 reads only `verify` and `pub`; the ring signature's own key generation and signing are its base
 signer's. -/
-abbrev _root_.GordieHowe.Ring.SigScheme.ofVerifier (PK Msg Sig Pub : Type) [Fintype PK]
-    [DecidableEq PK] [Fintype Msg] [DecidableEq Msg] [Fintype Sig] [DecidableEq Sig] [Inhabited Sig]
-    [Fintype Pub] [DecidableEq Pub] [Nonempty Pub] [Inhabited PK] (verify : PK → Msg → Sig → Bool)
+abbrev _root_.GordieHowe.Ring.SigScheme.ofVerifier (PK Msg Sig Pub : Type) [Inhabited Sig]
+    [Inhabited PK] (verify : PK → Msg → Sig → Bool)
     (pub : Sig → Pub) : SigScheme where
   PK := PK
   SK := Unit
@@ -92,7 +92,9 @@ abbrev _root_.GordieHowe.Ring.SigScheme.ofVerifier (PK Msg Sig Pub : Type) [Fint
 
 namespace SchemeView
 
-variable {TB : BaseTypes} {B : BaseSigner Xo Yo N TB} {Sch : SigScheme} (V : SchemeView B Sch)
+variable {TB : BaseTypes}
+  {B : BaseSigner Xo Yo N TB}
+  {Sch : SigScheme} (V : SchemeView B Sch)
 
 /-- **The ring read as the scheme's**: the keys mapped by `pk`. -/
 def ringOf (R : KeyRing B.PK N) : RingOf Sch.PK N :=
@@ -174,7 +176,9 @@ structure SchemeVerifies (Sch : SigScheme) (N : ℕ) {W Inp : Type}
 
 namespace SchemeView
 
-variable {TB : BaseTypes} {B : BaseSigner Xo Yo N TB} {Sch : SigScheme} (V : SchemeView B Sch)
+variable {TB : BaseTypes}
+  {B : BaseSigner Xo Yo N TB}
+  {Sch : SigScheme} (V : SchemeView B Sch)
 
 open Classical in
 /-- **The base signer's statements verify its signatures** (`StmtVerifiesRing`) for the ring

@@ -15,66 +15,184 @@ public import GordieHowe.Applications.MLDSA44.Ring.Carrier.Frontend.Relation
 
 The program facts the ML-DSA ring carriers' signature relation reads
 (`GordieHowe.MLDSA44.Ring.Carrier.MldsaCarrierRelation`), decided on the tables of
-`GordieHowe.Generated.MLDSA44.Ring.Carrier.ROMParams.Program.program` (export `5d775ae1`).
+`GordieHowe.Generated.MLDSA44.Ring.Carrier.ROMParams.Program.program` from the generated shape facts
+(the values' kinds, headers and definitions, the predicates' bodies, the challenge `signature.r`)
+and the checked table of the program's first shared expressions (`expr_table_holds`, through the
+last row's last block of `â`).
 -/
 
 namespace GordieHowe.MLDSA44.Ring.Carrier.ROMParams
 
 open Generated.MLDSA44.Ring.Carrier.ROMParams.Program
-open Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts RealizedProgram
+open Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts Generated.MLDSA44.Ring.Carrier.ROMParams
+  RealizedProgram
 
-set_option maxRecDepth 4096 in
-/-- **`signature.relation`**: the spectral product form of `w′ ≡ Σ_j A_ij z_j − 2^d t1_i c (mod q)`. -/
-theorem carrier_relation : ∃ real, (program.predicate 3).body = .mod 0 8380417 sigP sigN real ∧
-    real.form = .spectralProduct :=
-  by
-    obtain ⟨r, h, hf, -⟩ := Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.predicate_signature_2erelation_body
-    exact ⟨r, h, hf⟩
+/-- A shared expression of the checked table. -/
+theorem exprOfTable {k : ℕ} (hk : k < Shapes.exprTable.length) :
+    program.expr k = Shapes.exprTable.getD k default :=
+  expr_table_holds.2 k hk
 
-set_option maxRecDepth 4096 in
 /-- The signature relation's program facts. -/
 instance : MldsaCarrierRelation program where
+  aHat := 56
+  t1 := 57
+  z := 61
+  c := 63
+  w := 64
+  q := 66
+  rel0 := 1
+  r := 67
+  rChal := 1
+  one := 1
+  zero1 := 0
+  pw := 533
+  lam := 535
+  rn := 534
+  pwRef := 46
+  r128Ref := 45
+  rowE := fun i => .add (.add (.ref (![30, 65, 73, 81] i))
+    (.scale (.const 18446744069406203904) (.ref (![31, 66, 74, 82] i))))
+    (.reindex [(0, 0, 256)] (.leaf 2))
+  refW := ![30, 65, 73, 81]
+  refQ := ![47, 67, 75, 83]
+  refT := ![49, 68, 76, 84]
+  refA := ![![53, 56, 59, 62], ![69, 70, 71, 72], ![77, 78, 79, 80], ![85, 86, 87, 88]]
+  refZrow := ![54, 57, 60, 63]
+  refZ := ![55, 58, 61, 64]
+  refPW1 := 48
+  refCR := 52
+  refSup := 50
+  refSign := 51
+  nRefs := 89
+  psi := psi512
+  nInv := 18374686475393433601
+  psiInv := 4459017075746761332
+  mOne := 18446744069414584320
+  mTwo := 18446744069414584319
+  refRQ := ![31, 66, 74, 82]
+  ids := ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  consts := ⟨rfl, rfl, rfl, rfl, rfl⟩
+  rowE_eq := fun _ => rfl
+  rowELen := fun _ => rfl
   refsOrdered := Generated.MLDSA44.Ring.Carrier.ROMParams.conditions.wellFormed.refsOrdered
-  exprsLen := expr_lt_of_ne_default (by
-    rw [expr_signature_2erelation_2eshape_2eleft_2esecond_2esecond_2esecond_eq]
-    decide)
-  expr36 := Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.expr_signature_2erelation_2eshape_2eleft_2efirst_eq
-  expr39 := Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.expr_signature_2erelation_2eshape_2eleft_2esecond_2efirst_eq
-  expr40 := Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.expr_signature_2erelation_2eshape_2eleft_2esecond_2esecond_2efirst_eq
-  expr41 := Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.expr_signature_2erelation_2eshape_2eleft_2esecond_2esecond_2esecond_eq
-  expr37 := Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.expr_signature_2erelation_2eshape_2eright_2efirst_2esecond_2efirst_2efirst_2efirst_2efirst_eq
-  expr38 := Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.expr_signature_2erelation_2eshape_2eright_2efirst_2esecond_2efirst_2efirst_2efirst_2esecond_2efirst_eq
-  sig := carrier_relation
-  cBool := by
-    obtain ⟨t, ht⟩ := predicate_challenge_2ec_2eboolean_body
-    rw [ht]
-    rfl
-  wRange := Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.predicate_signature_2ew_body
-  zRange := Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.predicate_norm_2ez_body
+  refsLt := ⟨by rw [exprs_length]; decide, by decide, by decide, by decide, by decide, by decide,
+    by decide, by decide⟩
+  refRQLt := by decide
+  rows := fun i => by
+    fin_cases i
+    exacts [predicate_signature_2erelation_2e0_body, predicate_signature_2erelation_2e1_body,
+      predicate_signature_2erelation_2e2_body, predicate_signature_2erelation_2e3_body]
+  rowSource := fun i => by
+    fin_cases i
+    · exact ⟨predicate_signature_2erelation_2e0_role.1,
+        program.inSource_of_source predicate_signature_2erelation_2e0_role.2⟩
+    · exact ⟨predicate_signature_2erelation_2e1_role.1,
+        program.inSource_of_source predicate_signature_2erelation_2e1_role.2⟩
+    · exact ⟨predicate_signature_2erelation_2e2_role.1,
+        program.inSource_of_source predicate_signature_2erelation_2e2_role.2⟩
+    · exact ⟨predicate_signature_2erelation_2e3_role.1,
+        program.inSource_of_source predicate_signature_2erelation_2e3_role.2⟩
+  exprW := fun i => by
+    rw [exprOfTable (by fin_cases i <;> decide +kernel)]
+    fin_cases i <;> decide +kernel
+  exprRQ := fun i => by
+    rw [exprOfTable (by fin_cases i <;> decide +kernel)]
+    fin_cases i <;> decide +kernel
+  exprQ := fun i => by
+    rw [exprOfTable (by fin_cases i <;> decide +kernel)]
+    fin_cases i <;> decide +kernel
+  exprT := fun i => by
+    rw [exprOfTable (by fin_cases i <;> decide +kernel)]
+    fin_cases i <;> decide +kernel
+  exprA := fun i j => by
+    rw [exprOfTable (by fin_cases i <;> fin_cases j <;> decide +kernel)]
+    fin_cases i <;> fin_cases j <;> decide +kernel
+  exprZrow := fun j => by
+    rw [exprOfTable (by fin_cases j <;> decide +kernel)]
+    fin_cases j <;> decide +kernel
+  exprZ := fun j => by
+    rw [exprOfTable (by fin_cases j <;> decide +kernel)]
+    fin_cases j <;> decide +kernel
+  exprPW1 := by rw [exprOfTable (by decide +kernel)]; decide +kernel
+  exprSup := by rw [exprOfTable (by decide +kernel)]; decide +kernel
+  exprSign := by rw [exprOfTable (by decide +kernel)]; decide +kernel
+  exprCR := by rw [exprOfTable (by decide +kernel)]; decide +kernel
+  zeroConst := ⟨isConstant_of_kind value_member_2eselect_2eshape_2eright_kind,
+    valueShape_field value_member_2eselect_2eshape_2eright_header.2,
+    constEntries_of_kind value_member_2eselect_2eshape_2eright_kind⟩
+  cqConst := ⟨isConstant_of_kind
+      value_signature_2erelation_2e0_2eshape_2eleft_2efirst_2efirst_2efirst_2efirst_2efirst_2efirst_2efirst_2efirst_2esecond_2efirst_kind,
+    valueShape_field
+      value_signature_2erelation_2e0_2eshape_2eleft_2efirst_2efirst_2efirst_2efirst_2efirst_2efirst_2efirst_2efirst_2esecond_2efirst_header.2,
+    (constEntries_of_kind
+      value_signature_2erelation_2e0_2eshape_2eleft_2efirst_2efirst_2efirst_2efirst_2efirst_2efirst_2efirst_2efirst_2esecond_2efirst_kind).trans
+      (by decide +kernel)⟩
   inSource := by
     intro p hp
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
     rcases hp with rfl | rfl | rfl | rfl
-    · exact ⟨predicate_signature_2erelation_role.1, program.inSource_of_source predicate_signature_2erelation_role.2⟩
     · exact ⟨predicate_challenge_2ec_2eboolean_role.1,
         program.inSource_of_type predicate_challenge_2ec_2eboolean_role.2
           (valueShape_role value_challenge_2ec_header.2)⟩
     · exact ⟨predicate_signature_2ew_role.1, program.inSource_of_source predicate_signature_2ew_role.2⟩
+    · exact ⟨predicate_signature_2erelation_2eq_role.1,
+        program.inSource_of_source predicate_signature_2erelation_2eq_role.2⟩
     · exact ⟨predicate_norm_2ez_role.1, program.inSource_of_source predicate_norm_2ez_role.2⟩
+  cBool := by
+    obtain ⟨t, ht⟩ := predicate_challenge_2ec_2eboolean_body
+    rw [ht]
+    rfl
+  wRange := predicate_signature_2ew_body
+  qRange := by
+    obtain ⟨r, h⟩ := predicate_signature_2erelation_2eq_body
+    exact ⟨r, _, h, by decide⟩
+  zRange := predicate_norm_2ez_body
   offset := ⟨isConstant_of_kind value_norm_2ez_2eoffset_kind,
     valueShape_field value_norm_2ez_2eoffset_header.2,
     (constEntries_of_kind value_norm_2ez_2eoffset_kind).trans (by decide +kernel)⟩
-  size55 := valueShape_size value_member_2ea_5fhat_header.2
-  size56 := valueShape_size value_member_2et1_header.2
-  size60 := valueShape_size value_z_header.2
-  size62 := valueShape_size value_challenge_2ec_header.2
-  size63 := valueShape_size value_signature_2ew_header.2
-  domainField0 := Generated.MLDSA44.Ring.Carrier.ROMParams.conditions.fieldTable.domainField_eq 0 (by decide)
-  field60 := valueShape_field value_z_header.2
-  field62 := valueShape_field value_challenge_2ec_header.2
-  field63 := valueShape_field value_signature_2ew_header.2
-  kind60 := by rw [value_z_kind]; rfl
-  kind63 := by rw [value_signature_2ew_kind]; rfl
-  kind62 := Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.value_challenge_2ec_kind
+  sizes := ⟨valueShape_size value_member_2ea_5fhat_header.2,
+    valueShape_size value_member_2et1_header.2, valueShape_size value_z_header.2,
+    valueShape_size value_challenge_2ec_header.2, valueShape_size value_signature_2ew_header.2,
+    valueShape_size value_signature_2erelation_2eq_header.2,
+    valueShape_size value_signature_2eQ_header.2⟩
+  domainField0 :=
+    Generated.MLDSA44.Ring.Carrier.ROMParams.conditions.fieldTable.domainField_eq 0 (by decide)
+  rowFields := by
+    intro v hv
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
+    rcases hv with rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    · exact valueShape_field value_signature_2ew_header.2
+    · exact valueShape_field value_z_header.2
+    · exact valueShape_field value_challenge_2ec_header.2
+    · exact valueShape_field value_signature_2eQ_header.2
+    · exact valueShape_field value_signature_2erelation_2e0_2epublic0_header.2
+    · exact valueShape_field value_signature_2elambda_header.2
+    · exact valueShape_field value_signature_2erelation_2e0_2epublic1_header.2
+  rqField := valueShape_field value_signature_2erelation_2eq_header.2
+  kinds := ⟨by rw [value_z_kind]; rfl, by rw [value_signature_2ew_kind]; rfl,
+    by rw [value_signature_2erelation_2eq_kind]; rfl, value_challenge_2ec_kind⟩
+  rPow :=
+    { consts := ⟨isConstant_of_kind value_hint_2edecompose_2eshape_2eone_kind,
+        by rw [constEntries_of_kind value_hint_2edecompose_2eshape_2eone_kind]; rfl⟩
+      kind := value_signature_2er_kind
+      chalField := challenge_signature_2er_full.2.2.1
+      fields := ⟨valueShape_field value_hint_2edecompose_2eshape_2eone_header.2,
+        valueShape_field value_signature_2er_header.2⟩
+      sizes := ⟨valueShape_size value_hint_2edecompose_2eshape_2eone_header.2,
+        valueShape_size value_signature_2er_header.2⟩
+      values_pos :=
+        Nat.lt_of_le_of_lt (Nat.zero_le _) value_hint_2edecompose_2eshape_2eone_header.1 }
+  chalR := ⟨challenge_signature_2er_full.2.2.2, challenge_signature_2er_full.2.1⟩
+  pwKind := value_signature_2erelation_2e0_2epublic0_definition
+  rnKind := value_signature_2erelation_2e0_2epublic1_definition
+  lamKind := value_signature_2elambda_definition
+  powPw := by
+    rw [powSym_congr (agreesBelow_replica expr_table_holds.2 (by decide +kernel)) _ _ _
+      (by decide +kernel)]
+    decide +kernel
+  pow128 := by
+    rw [powSym_congr (agreesBelow_replica expr_table_holds.2 (by decide +kernel)) _ _ _
+      (by decide +kernel)]
+    decide +kernel
 
 end GordieHowe.MLDSA44.Ring.Carrier.ROMParams

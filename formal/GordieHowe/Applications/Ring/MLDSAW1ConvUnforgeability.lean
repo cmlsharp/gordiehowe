@@ -53,7 +53,8 @@ variable {T : ℕ} {Msg : Type} {N reps : ℕ}
   {Λ : SiteLayout Mg} {b : ℕ} [∀ j i, Fintype ((Sc.comp j).MessageWrite i)]
   {E : (j : ι) → (Sc.comp j).Encoder}
   {Vr : W1ExpStmt (concretePrimitivesKeyGen Pm) Msg N → FullTr P τ → Bool}
-  {Qs : ∀ x, Sc.IOPQueries Vr x} {hb : Sc.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ x, Sc.IOPQueries Vr x} {hb : Sc.FormatBounds Qs b b} {R : Type} [Fintype R]
+  [DecidableEq R] [Nonempty R]
   {honest : RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm)) → R →
     CausalProver P τ (W1ExpStmt (concretePrimitivesKeyGen Pm) Msg N)}
   {adm : KeyRing (PubKey Pm (concretePrimitivesKeyGen Pm)) N → Prop}
@@ -149,7 +150,8 @@ variable {T : ℕ} {Msg : Type} {N reps : ℕ}
   {Λ : SiteLayout Mg} {b : ℕ} [∀ j i, Fintype ((Sc.comp j).MessageWrite i)]
   {E : (j : ι) → (Sc.comp j).Encoder}
   {Vr : W1ExpStmt (concretePrimitivesKeyGen Pm) Msg N → FullTr P τ → Bool}
-  {Qs : ∀ x, Sc.IOPQueries Vr x} {hb : Sc.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ x, Sc.IOPQueries Vr x} {hb : Sc.FormatBounds Qs b b} {R : Type} [Fintype R]
+  [DecidableEq R] [Nonempty R]
   {honest : RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm)) → R →
     CausalProver P τ (W1ExpStmt (concretePrimitivesKeyGen Pm) Msg N)}
   {adm : KeyRing (PubKey Pm (concretePrimitivesKeyGen Pm)) N → Prop}
@@ -245,7 +247,8 @@ variable {T : ℕ} {Msg : Type} {N reps : ℕ}
   {Λ : SiteLayout Mg} {b : ℕ} [∀ j i, Fintype ((Sc.comp j).MessageWrite i)]
   {E : (j : ι) → (Sc.comp j).Encoder}
   {Vr : W1ExpStmt (concretePrimitivesKeyGen Pm) Msg N → FullTr P τ → Bool}
-  {Qs : ∀ x, Sc.IOPQueries Vr x} {hb : Sc.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ x, Sc.IOPQueries Vr x} {hb : Sc.FormatBounds Qs b b} {R : Type} [Fintype R]
+  [DecidableEq R] [Nonempty R]
   {honest : RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm)) → R →
     CausalProver P τ (W1ExpStmt (concretePrimitivesKeyGen Pm) Msg N)}
   {adm : KeyRing (PubKey Pm (concretePrimitivesKeyGen Pm)) N → Prop}

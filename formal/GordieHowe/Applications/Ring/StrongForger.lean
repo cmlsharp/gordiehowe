@@ -53,11 +53,15 @@ has public value `y` is at most `γ` times the probability that its public value
 conditional min-entropy of an honest signature given its public value is at least `log₂ (1 / γ)`.
 For `Pub = Unit` it is the min-entropy of the signature; for ML-DSA publishing `w₁` it is the
 probability of guessing `(c̃, z, h)` from `w₁`. -/
-def SigScheme.SigGivenPubLe (Sch : SigScheme) (γ : ℝ≥0∞) : Prop :=
+def SigScheme.SigGivenPubLe (Sch : SigScheme) [Fintype Sch.SignCoins] [Nonempty Sch.SignCoins]
+    (γ : ℝ≥0∞) : Prop :=
   ∀ kc m y σ, (PMF.uniformOfFintype Sch.SignCoins).toOuterMeasure
       {c | Sch.signWith (Sch.sk kc) m c = σ ∧ Sch.pub (Sch.signWith (Sch.sk kc) m c) = y} ≤
     γ * (PMF.uniformOfFintype Sch.SignCoins).toOuterMeasure
       {c | Sch.pub (Sch.signWith (Sch.sk kc) m c) = y}
+
+variable [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Fintype Sch.KeyCoins] [Nonempty Sch.KeyCoins]
+  [Fintype Sch.SignCoins] [Nonempty Sch.SignCoins]
 
 variable (Sch n) in
 /-- **A signing table**: signing coins for every user and message. -/
@@ -72,6 +76,8 @@ def tableAnswer (keys : Fin n → Sch.KeyCoins) (tab : SignTable Sch n) :
   | .sign i m => .signature (Sch.signWith (Sch.sk (keys i)) m (tab (i, m)))
   | .corrupt i => .keyCoins (keys i)
 
+omit [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Fintype Sch.KeyCoins] [Nonempty Sch.KeyCoins]
+  [Fintype Sch.SignCoins] [Nonempty Sch.SignCoins] in
 /-- The base oracles at signing coins `c` are those at the constant table of `c`. -/
 theorem baseAnswer_eq_tableAnswer (keys : Fin n → Sch.KeyCoins) (c : Sch.SignCoins) :
     baseAnswer keys c = tableAnswer keys fun _ => c := by
@@ -110,12 +116,16 @@ noncomputable def oracleAt (keys : Fin n → Sch.KeyCoins) (tabs : Fin Q → Sig
     | .sign i _ => .publicKey (Sch.pk (keys i))
     | .corrupt i => .publicKey (Sch.pk (keys i))
 
+omit [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Fintype Sch.KeyCoins] [Nonempty Sch.KeyCoins]
+  [Fintype Sch.SignCoins] in
 /-- The base oracles of every request answer a public-key request with the user's key. -/
 theorem oracleAt_publicKey (keys : Fin n → Sch.KeyCoins) (tabs : Fin Q → SignTable Sch n)
     (c : ℕ) (i : Fin n) : oracleAt keys tabs c (.publicKey i) = .publicKey (Sch.pk (keys i)) := by
   unfold oracleAt
   split_ifs <;> rfl
 
+omit [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Fintype Sch.KeyCoins] [Nonempty Sch.KeyCoins]
+  [Fintype Sch.SignCoins] in
 /-- Below `Q`, the base oracles are those at the request's signing table. -/
 theorem oracleAt_of_lt (keys : Fin n → Sch.KeyCoins) (tabs : Fin Q → SignTable Sch n) {c : ℕ}
     (hc : c < Q) : oracleAt keys tabs c = tableAnswer keys (tabs ⟨c, hc⟩) := by
@@ -164,6 +174,8 @@ structure StrongForgery (keys : Fin n → Sch.KeyCoins) (corrupted : Fin n → P
   /-- The key is that of an uncorrupted user to which the signature was not returned. -/
   exists_user : ∃ i, Sch.pk (keys i) = f.1 ∧ ¬ corrupted i ∧ ¬ returned i f.2.2
 
+omit [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Fintype Sch.KeyCoins] [Nonempty Sch.KeyCoins]
+  [Fintype Sch.SignCoins] in
 /-- **A forgery of the game has a fresh message-signature pair**: for the signatures returned by a
 signing relay, the user of the forgery was not returned `σ` on the forgery's message `m`, the
 freshness of strong unforgeability. -/

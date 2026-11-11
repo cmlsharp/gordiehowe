@@ -52,7 +52,7 @@ variable {X Y : Type} [AddGroup Y] {p : Params} {Msg : Type} [NeZero (bucketCoun
   {O : W1Oracles X Y p (concretePrimitivesKeyGen p) Msg N reps} {βmin : ℚ≥0} {tol : ℕ}
   {CL : Type} [Fintype CL] [DecidableEq CL] [Nonempty CL] {L : W1Loop X Y p (concretePrimitivesKeyGen p) Msg N CL} {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → RMsg → Msg}
-  {SO : SignOracle (w1BaseSigner (concretePrimitivesKeyGen p) O βmin tol (concreteEnc p) L bmsg)}
+  {SO : SignOracle (w1BaseSigner (concretePrimitivesKeyGen p) O βmin tol (concreteEnc p) L bmsg).core}
   {n : ℕ}
 
 local notation "Bc" => w1BaseSigner (concretePrimitivesKeyGen p) O βmin tol (concreteEnc p) L bmsg
@@ -109,6 +109,9 @@ noncomputable def msisReadout (keys : Fin n → Bytes 32) (H : X → Y)
       h.choose.1.1) h.choose.1.2.2 h.choose_spec.2.2.choose_spec.choose)
   else none
 
+variable [Fintype SO.SMsg] [DecidableEq SO.SMsg] [Fintype SO.Coins] [DecidableEq SO.Coins]
+  [Nonempty SO.Coins]
+
 /-- **The reduction `B₂` of the key-generation-form Module-SIS game**: on the users' seeds `keys`,
 the oracle uniform, the adversary `A` on the users' public keys and the oracle's table against the
 multi-user challenger at the keys with `Q` requests, the outcome read by `msisReadout`. -/
@@ -118,16 +121,16 @@ noncomputable def msisReduction (A : MUAdversary SO n V t) (Q : ℕ) (keys : Fin
     ((A (fun i => (Bc).pk (keys i), V.view H)).transcriptLaw (muChallenger SO n keys Q) H).map
       (msisReadout keys H)
 
-omit [AddGroup Y] [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y]
-  [Nonempty Y] in
+omit [AddGroup Y] [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [Nonempty Y]
+  in
 /-- The FIPS 204 public key of the base signer's key of the seed `ξ` is that of `keyGenFromSeed`. -/
 theorem pubPk_pk_w1BaseSigner (ξ : Bytes 32) :
     pubPk (concretePrimitivesKeyGen p) ((Bc).pk ξ) =
       (keyGenFromSeed p (concretePrimitivesKeyGen p) ξ).1 :=
   rfl
 
-omit [AddGroup Y] [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y]
-  [Nonempty Y] in
+omit [AddGroup Y] [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [Nonempty Y]
+  in
 /-- **A forgery at a returned commitment gives a solution at the user's seed**: for `σ*` and a
 returned `σ ≠ σ*` both verifying on `bm` under the key of the seed `ξ` with the same commitment,
 `secondSigVec` is a solution for the key-generation matrix of `ξ`, at an approved parameter set. -/
@@ -153,16 +156,18 @@ theorem keyGenKernel_of_sameW1 (hp : p.isApproved) (ξ : Bytes 32) {H : X → Y}
   rw [pubPk_pk_w1BaseSigner]
   exact keyGenKernel_secondSigVec hp ξ hne hv₁ hv₂
 
-omit [AddGroup Y] [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y]
-  [Nonempty Y] in
+omit [AddGroup Y] [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [Nonempty Y]
+  [Fintype SO.SMsg] [DecidableEq SO.SMsg] [Fintype SO.Coins] [DecidableEq SO.Coins]
+  [Nonempty SO.Coins] in
 /-- A signature returned to user `i` is not one never returned to `i`. -/
 theorem ne_of_returned {hist : MUHist SO n} {i : Fin n} {bm : (Bc).BMsg} {σ σ' : (Bc).BSig}
     (h : Returned hist i bm σ) (hn : ¬ ReturnedSig hist i σ') : σ' ≠ σ := by
   rintro rfl
   exact hn ⟨bm, h⟩
 
-omit [AddGroup Y] [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y]
-  [Nonempty Y] in
+omit [AddGroup Y] [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [Nonempty Y]
+  [Fintype SO.SMsg] [DecidableEq SO.SMsg] [Fintype SO.Coins] [DecidableEq SO.Coins]
+  [Nonempty SO.Coins] in
 /-- **The readout of a forgery at a returned commitment wins the Module-SIS game** at the users'
 seeds, at an approved parameter set. -/
 theorem msisReadout_wins (hp : p.isApproved) {keys : Fin n → Bytes 32} {H : X → Y}

@@ -94,18 +94,6 @@ theorem map_comp_uniformOfFintype {A V W : Type*} [Fintype A] [DecidableEq A] [F
   rw [pi_map]
   simp only [hf]
 
-/-- **A uniform pair with its first component mapped** by a map pushing the uniform law to the
-uniform law is uniform. -/
-theorem map_prodMap_uniformOfFintype {A A' B : Type*} [Fintype A] [Nonempty A] [Fintype A']
-    [Nonempty A'] [Fintype B] [Nonempty B] (f : A → A')
-    (hf : (uniformOfFintype A).map f = uniformOfFintype A') :
-    (uniformOfFintype (A × B)).map (Prod.map f id) = uniformOfFintype (A' × B) := by
-  rw [uniformOfFintype_prod_eq_bind, uniformOfFintype_prod_eq_bind, ← hf, map_bind, bind_map]
-  congr 1
-  funext a
-  rw [map_comp]
-  rfl
-
 /-- **A uniform pair read through its first component** has the first component's uniform
 law. -/
 theorem toOuterMeasure_uniformOfFintype_fst {A B : Type*} [Fintype A] [Nonempty A] [Fintype B]
@@ -140,7 +128,7 @@ theorem tvDist_map_pullback_le {ι G W V X' Y' β : Type*} [Fintype ι] [Decidab
       (uniformOfFintype ((ι → V) × W)).bind k₁ := by
     rw [uniformOfFintype_prod_eq_bind, map_bind]
     simp only [← bind_pure_comp, bind_bind, Function.comp_apply, pure_bind]
-    rw [bind_comm, ← map_prodMap_uniformOfFintype ys hys, bind_map]
+    rw [bind_comm, ← map_prodMap_uniformOfFintype (h := id) hys (map_id _), bind_map]
     congr 1
   have h₂ : (uniformOfFintype ((ι → V × Y') × W)).map (fun x => F x.1 x.2) =
       (uniformOfFintype ((ι → V) × W)).bind k₂ := by
@@ -272,14 +260,15 @@ section Sign
 
 open GordieHowe.Signature
 
-variable [Zero Y] {N n : ℕ} {TB : BaseTypes} (B : RingSignature.BaseSigner X Y N TB)
-  {Pf PC : Type} {iFP : Fintype Pf} {iDP : DecidableEq Pf} {iFC : Fintype PC}
-  {iDC : DecidableEq PC} {iNC : Nonempty PC}
+variable [Zero Y] {N n : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
+  (B : RingSignature.BaseSigner X Y N TB)
+  {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
+  [DecidableEq PC] [Nonempty PC]
   {PS : RingSignature.ProofSystem X Y (RingSignature.RingStmt B) (RingSignature.RingWit B) ⟨Pf, PC⟩}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {Stmt Wit Coins SC X₀ R : Type}
   [Fintype Coins] [DecidableEq Coins] (rel : Stmt → Wit → Prop) [DecidableRel rel]
-  (P : NARG.Prover X Y Stmt Wit Pf Coins)
-  (penc : MURequest (SignOracle.none B) n ⊕ R → QROM.ProofQuery Stmt Wit)
+  (P : NARG.Prover X Y Stmt Wit Pf Coins) (μ : PMF Coins)
+  (penc : MURequest (SignOracle.none B.core) n ⊕ R → QROM.ProofQuery Stmt Wit)
   (keys : Fin n → B.KeyCoins) (pks : Fin n → B.PK)
   (ksign : B.PK → KeyRing B.PK N → ℕ → B.Msg → SC →
     OracleProg X Y (Option (B.Pub × B.BSig × List (Assignment X Y))))
@@ -287,14 +276,15 @@ variable [Zero Y] {N n : ℕ} {TB : BaseTypes} (B : RingSignature.BaseSigner X Y
   (toR : X₀ → RingSignature.Insider.Req B PS adm n × ℕ → B.BSig → R)
   (dummyR : RingSignature.Insider.Req B PS adm n × ℕ → R) {qk qs : ℕ}
   (hk : ∀ pk Rg c msg s, (ksign pk Rg c msg s).QueriesLE qk)
-  (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none B) n ⊕ R)
+  (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none B.core) n ⊕ R)
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **A signing request answered with a signature by the key-free outer challenger**: for a
 signer in a supported ring below the cap whose key-free signer outputs `(y, σ, asg)` at the
 oracle `H`, and an in-relation proof request, the reply is the signature `(y, π)` with the main
 prover's proof `π` on the request's proof coins, and the assignments `asg`. -/
 theorem run_kfGame_sign_some {Q : ℕ} (sc : Fin Q → SC)
-    (c' : (RingSignature.kfMain B rel P penc keys Q).Coins) (hist : List (HistoryEntry
+    (c' : (RingSignature.kfMain B rel P μ penc keys Q).Coins) (hist : List (HistoryEntry
       (RingSignature.Insider.Req B PS adm n)
       (RingSignature.Insider.Resp B PS adm)))
     (s : Fin n) (Rg : KeyRing B.PK N) (m : B.Msg) (hc : hist.length < Q ∧ pks s ∈ Rg.1 ∧ adm Rg)
@@ -303,7 +293,7 @@ theorem run_kfGame_sign_some {Q : ℕ} (sc : Fin Q → SC)
     (hrel : rel (penc (.inr (toR ((stmtP ⟨Rg, m, y⟩).run (H.reprogram asg))
       (.sign s Rg m, hist.length) σ))).stmt (penc (.inr (toR ((stmtP ⟨Rg, m, y⟩).run
         (H.reprogram asg)) (.sign s Rg m, hist.length) σ))).wit) :
-    ((kfGame (RingSignature.kfMain B rel P penc keys Q)
+    ((kfGame (RingSignature.kfMain B rel P μ penc keys Q)
         (kfRelay B pks ksign stmtP toR dummyR sc hk hs idle) Q).respond c' hist
         (.sign s Rg m)).run H =
       ⟨some (.signature (y, (P.prog (penc (.inr (toR ((stmtP ⟨Rg, m, y⟩).run (H.reprogram asg))
@@ -328,29 +318,31 @@ theorem run_kfGame_sign_some {Q : ℕ} (sc : Fin Q → SC)
     Challenger.sumDummy, QROM.realChallenger, hl, ↓reduceDIte, hrel, ↓reduceIte, run_bind,
     run_pure, Option.map, replyOf, Option.bind, Sum.getRight?, hidx]
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **A signing request the key-free signer refuses**: no response and no assignments. -/
-theorem run_kfGame_sign_none {Q : ℕ} (sc : Fin Q → SC) (c' : (RingSignature.kfMain B rel P penc
+theorem run_kfGame_sign_none {Q : ℕ} (sc : Fin Q → SC) (c' : (RingSignature.kfMain B rel P μ penc
       keys Q).Coins)
     (hist : List (HistoryEntry (RingSignature.Insider.Req B PS adm n)
       (RingSignature.Insider.Resp B PS adm)))
     (s : Fin n) (Rg : KeyRing B.PK N) (m : B.Msg) (H : X → Y)
     (ho : (sigP (PS := PS) (adm := adm) B pks ksign sc hist.length (.sign s Rg m)).run H =
       none) :
-    ((kfGame (RingSignature.kfMain B rel P penc keys Q)
+    ((kfGame (RingSignature.kfMain B rel P μ penc keys Q)
         (kfRelay B pks ksign stmtP toR dummyR sc hk hs idle) Q).respond c' hist
         (.sign s Rg m)).run H = ⟨none, []⟩ := by
   rw [run_kfGame_respond, elimProg_kfRelay]
   rw [run_kfProg, ho]
   rfl
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **A corruption answered by the key-free outer challenger**: the user's key coins, below the
 cap. -/
-theorem run_kfGame_corrupt {Q : ℕ} (sc : Fin Q → SC) (c' : (RingSignature.kfMain B rel P penc
+theorem run_kfGame_corrupt {Q : ℕ} (sc : Fin Q → SC) (c' : (RingSignature.kfMain B rel P μ penc
       keys Q).Coins)
     (hist : List (HistoryEntry (RingSignature.Insider.Req B PS adm n)
       (RingSignature.Insider.Resp B PS adm)))
     (i : Fin n) (h : hist.length < Q) (H : X → Y) :
-    ((kfGame (RingSignature.kfMain B rel P penc keys Q)
+    ((kfGame (RingSignature.kfMain B rel P μ penc keys Q)
         (kfRelay B pks ksign stmtP toR dummyR sc hk hs idle) Q).respond c' hist
         (.corrupt i)).run H = ⟨some (.keyCoins (keys i)), []⟩ := by
   rw [run_kfGame_respond]
@@ -530,7 +522,7 @@ theorem callOut_eq_keptCall (βmin : ℚ≥0) (D : ℕ) (sk : SecretKey p)
     (h : ∀ t, hc (i, realBuckets (prims.expandA sk.rho) (ys t)) = chOf O sp (vs t))
     (u : Fin D) :
     callOut prims βmin D sk R i hc ys u =
-      (keptCall (outWt (fun vc => flattenCoin prims sk βmin vc *
+      (keptCall (outWt (fun vc => flattenCoin prims sk (Cutoff.const βmin) vc *
           (ringWeights prims βmin (ringT0s prims R.1)).otherWeight i hc vc.1))
         (fun t => intAttV prims O sp sk (prims.expandA sk.rho) (ys t, vs t)) u).map
         fun s => s.2.1 := by
@@ -561,7 +553,7 @@ theorem loopOut_eq_attLoop (βmin : ℚ≥0) {k D : ℕ} (sk : SecretKey p)
     (h : ∀ c t, hc (i, realBuckets (prims.expandA sk.rho) (ys c t)) = chOf O sp (vs c t))
     (uv : Fin k → Fin D) :
     loopOut prims βmin sk R i hc ys uv =
-      (attLoop (outWt (fun vc => flattenCoin prims sk βmin vc *
+      (attLoop (outWt (fun vc => flattenCoin prims sk (Cutoff.const βmin) vc *
           (ringWeights prims βmin (ringT0s prims R.1)).otherWeight i hc vc.1))
         (fun c t => intAttV prims O sp sk (prims.expandA sk.rho) (ys c t, vs c t)) uv).map
         fun s => s.2.1 := by
@@ -826,8 +818,8 @@ variable {prims : Primitives p} [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   {O : W1Oracles X Y p prims Msg N reps} {M : MaskOracle X Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {Pf PC : Type} {iFP : Fintype Pf} {iDP : DecidableEq Pf} {iFC : Fintype PC}
-  {iDC : DecidableEq PC} {iNC : Nonempty PC}
+  {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
+  [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg))
     (RingSignature.RingWitOf (FIPSSignature p prims)) ⟨Pf, PC⟩}
   {adm : KeyRing (PubKey p prims) N → Prop}
@@ -847,7 +839,8 @@ noncomputable abbrev w1C1 (sp : Y ≃+ Y₁ × Y₂) (keys : Fin n → (Sf).KeyC
   (unforgeChallenger Sf n Of keys Q).preReprogKeep sp (w1Pts Of keys) 1 (k * T)
     (w1Pts_queries keys) (card_w1Pts_le keys) (w1KeptPts Of)
 
-omit [Fintype X] [AddGroup Y] in
+omit [Fintype X] [AddGroup Y] [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC]
+  [Nonempty PC] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- The points read only the coins of request `|hist|`. -/
 theorem w1Pts_eq_const (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q → (Sf).SignCoins)
     (hist : List (HistoryEntry (UnforgeRequest (S := Sf) n Of) (UnforgeResponse (S := Sf) Of)))
@@ -856,7 +849,7 @@ theorem w1Pts_eq_const (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q →
   unfold w1Pts
   simp only [h, ↓reduceDIte]
 
-omit [Fintype X] [DecidableEq X] [AddGroup Y] in
+omit [Fintype X] [DecidableEq X] [AddGroup Y] [Fintype Pf] [DecidableEq Pf] in
 /-- The unforgeability challenger reads only the coins of request `|hist|`. -/
 theorem unforgeChallenger_respond_eq_const (keys : Fin n → (Sf).KeyCoins) {Q : ℕ}
     (c : Fin Q → (Sf).SignCoins)
@@ -868,6 +861,7 @@ theorem unforgeChallenger_respond_eq_const (keys : Fin n → (Sf).KeyCoins) {Q :
   unfold unforgeChallenger
   simp only [h, ↓reduceDIte]
 
+omit [Fintype Pf] [DecidableEq Pf] in
 /-- **The kept-only reprogramming challenger reads only the coins of request `|hist|`**: its fresh
 base values and its signing coins. -/
 theorem run_w1C1_respond_eq_const (sp : Y ≃+ Y₁ × Y₂) (keys : Fin n → (Sf).KeyCoins) {Q : ℕ}
@@ -970,7 +964,7 @@ signer's flattening coin times the other members' weights at their commitment ha
 from `H`. -/
 noncomputable def ringWt (sk : SecretKey p) (R : KeyRing (PubKey p prims) N) (i : Fin R.1.length)
     (bm : Msg) (H : X → Y) : BucketVec p × CommitHashBytes p → ℝ≥0∞ :=
-  fun vc => flattenCoin prims sk βmin vc *
+  fun vc => flattenCoin prims sk (Cutoff.const βmin) vc *
     (ringWeights prims βmin (ringT0s prims R.1)).otherWeight i
       (PMF.ringOf (ringPts prims R.1 bm) (O.hOrc H)) vc.1
 
@@ -995,7 +989,8 @@ theorem ringOf_reprogBase_self (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
     refine ite_eq_right_of_eq_false _ _ (eq_false fun hx => ?_)
     obtain ⟨w', -, hw'⟩ := Finset.mem_image.1 hx
     exact hdisj _ _ hw'.symm
-  simp only [PMF.ringOf, ringPts, W1Oracles.hOrc, schemeOrc, W1Oracles.muOrc, W1Oracles.chOrc]
+  simp only [PMF.ringOf, ringPts, MLDSAOracles.hOrc, schemeOrc, MLDSAOracles.muOrc,
+    MLDSAOracles.chOrc]
   rw [hmu]
   have hin : O.chPt (O.muAns (H (O.muPt (pubTr prims (R.1.get i), bm))), w) ∈
       muChPts O (O.muAns (H (O.muPt (pubTr prims (R.1.get i), bm)))) :=
@@ -1021,7 +1016,8 @@ theorem ringOf_reprogBase_other (sp : Y ≃+ Y₁ × Y₂)
     refine ite_eq_right_of_eq_false _ _ (eq_false fun hx => ?_)
     obtain ⟨w', -, hw'⟩ := Finset.mem_image.1 hx
     exact hdisj _ _ hw'.symm
-  simp only [PMF.ringOf, ringPts, W1Oracles.hOrc, schemeOrc, W1Oracles.muOrc, W1Oracles.chOrc]
+  simp only [PMF.ringOf, ringPts, MLDSAOracles.hOrc, schemeOrc, MLDSAOracles.muOrc,
+    MLDSAOracles.chOrc]
   rw [hmu]
   have hout : O.chPt (O.muAns (H (O.muPt (pubTr prims (R.1.get j), bm))), w) ∉ muChPts O mu :=
     fun hx => by
@@ -1029,7 +1025,9 @@ theorem ringOf_reprogBase_other (sp : Y ≃+ Y₁ × Y₂)
       exact hj (Prod.mk.inj (hch hw')).1.symm
   simp only [reprogBase, hout, ↓reduceIte]
 
-omit [Fintype X] [Fintype Y₁] [DecidableEq Y₁] in
+omit [Fintype X] [Fintype Y₁] [DecidableEq Y₁] [Fintype Pf] [DecidableEq Pf] [Fintype PC]
+  [DecidableEq PC] [Nonempty PC] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y]
+  [Nonempty Y] in
 /-- **The prover at the oracle reprogrammed on a message representative's commitment-hash points
 runs as at the oracle with only the public value's point reprogrammed**, for a prover reading
 first components only at the public value's points (`ProverReadsPub`) and an injective
@@ -1075,6 +1073,7 @@ theorem prove_run_reprogBase_eq (sp : Y ≃+ Y₁ × Y₂)
         simp only [h1, h2, ↓reduceIte]
 
 open Classical in
+omit [Fintype Pf] [DecidableEq Pf] in
 /-- **The reply of the kept-only challenger to a signing request** at the constant coins `Z` and
 `c'`, for a signer in the ring with an honest key: on a supported ring passing the checks at the
 oracle `H`, `repOf` of the loop of ideal attempts carrying base values, the attempt at mask `y`
@@ -1141,10 +1140,10 @@ theorem run_w1C1_sign (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
     intro j hj he
     refine (Finset.mem_erase.1 hj).1 (Fin.ext ?_)
     refine (List.Nodup.getElem_inj_iff hc.2.2 (hi := by simp) (hj := by simpa using hi)).1 ?_
-    simp only [List.getElem_map, W1Oracles.muOrc]
+    simp only [List.getElem_map, MLDSAOracles.muOrc]
     exact he.trans (congrArg (fun x => O.muAns (H (O.muPt (pubTr prims x, bmsg R m)))) hget.symm)
   have hwt : outWt (prims := prims) (Y₁ := Y₁)
-      (fun vc => flattenCoin prims ((Sf).sk (keys s)) βmin vc *
+      (fun vc => flattenCoin prims ((Sf).sk (keys s)) (Cutoff.const βmin) vc *
       (ringWeights prims βmin (ringT0s prims R.1)).otherWeight ⟨_, hi⟩
         (PMF.ringOf (ringPts prims R.1 (bmsg R m)) (O.hOrc (reprogBase sp (muChPts O mu) Z H)))
         vc.1) = outWt (ringWt O βmin ((Sf).sk (keys s)) R ⟨_, hi⟩ (bmsg R m) H) := by
@@ -1272,6 +1271,7 @@ noncomputable def intRep (sp : Y ≃+ Y₁ × Y₂) (H : X → Y) (pk : PubKey p
       (fun c t => intAttV prims O sp sk (prims.expandA sk.rho) (x.1.1 c t)) x.1.2)
 
 open Classical in
+omit [Fintype Pf] [DecidableEq Pf] in
 /-- **The kept-only challenger against the intermediate, at a signing request** (identical until
 two attempts share a commitment-hash point): for a signer in a supported ring passing the checks
 at the oracle `H`, with honest keys, the law of the challenger's reply over the request's coins
@@ -1391,7 +1391,8 @@ noncomputable def kfRep (sp : Y ≃+ Y₁ × Y₂) (H : X → Y) (pk : PubKey p 
   repOf O enc PS Of sp H pk R m x.2
     (kfLoop prims O sp βmin pk R i (PMF.ringOf (ringPts prims R.1 (bmsg R m)) (O.hOrc H)) x.1)
 
-omit [Fintype X] [DecidableEq Y₁] in
+omit [Fintype X] [DecidableEq Y₁] [Fintype Pf] [DecidableEq Pf] [DecidableEq PC] [Fintype Msg]
+  [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The intermediate and the key-free reply have the same law** over uniform side and prover
 coins, for an honest key (`‖s₁‖∞, ‖s₂‖∞ ≤ η`, the signing and verification laws, a coherent
 encoding): at each commitment hash, a permutation of the masks carries the ideal attempt to the
@@ -1443,6 +1444,7 @@ theorem map_intRep_eq_map_kfRep [Nonempty Y₁] (sp : Y ≃+ Y₁ × Y₂)
 
 /-! ### The kept-only challenger's other replies -/
 
+omit [Fintype Pf] [DecidableEq Pf] in
 /-- **The kept-only challenger's reply to a corruption**: the user's key coins, no assignment. -/
 theorem run_w1C1_corrupt (sp : Y ≃+ Y₁ × Y₂) (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (Z : X → Y₁)
     (c' : (Sf).SignCoins)
@@ -1463,6 +1465,7 @@ theorem run_w1C1_corrupt (sp : Y ≃+ Y₁ × Y₂) (keys : Fin n → (Sf).KeyCo
   simp only [hp, hr, Finset.toList_empty, List.map_nil]
   rfl
 
+omit [Fintype Pf] [DecidableEq Pf] in
 /-- **The kept-only challenger's reply to a signing request by a user outside the ring**: no
 response, no assignment. -/
 theorem run_w1C1_sign_not_mem (sp : Y ≃+ Y₁ × Y₂) (keys : Fin n → (Sf).KeyCoins) {Q : ℕ}
@@ -1506,10 +1509,10 @@ variable {prims : Primitives p} [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   {O : W1Oracles X Y p prims Msg N reps} {M : MaskOracle X Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {Pf PC : Type} {iFP : Fintype Pf} {iDP : DecidableEq Pf} {iFC : Fintype PC}
-  {iDC : DecidableEq PC} {iNC : Nonempty PC}
+  {Pf PCs : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PCs]
+  [DecidableEq PCs] [Nonempty PCs]
   {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg))
-    (RingSignature.RingWitOf (FIPSSignature p prims)) ⟨Pf, PC⟩}
+    (RingSignature.RingWitOf (FIPSSignature p prims)) ⟨Pf, PCs⟩}
   {adm : KeyRing (PubKey p prims) N → Prop}
   [hadm : DecidablePred adm] {n : ℕ}
   {Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] [Fintype Y₁] [DecidableEq Y₁]
@@ -1535,46 +1538,47 @@ messages and the real proof challenger of `P` on the relation `rel`, proof queri
 relay (`KeyFree.kfGame`) at the side coins, with the key-free signer `w1KFSign`, the statement
 program `stmtP`, the proof requests `toR` and the dummy requests `dummyR`. -/
 noncomputable def w1C2 (sp : Y ≃+ Y₁ × Y₂) (rel : Stmt → Wit → Prop) [DecidableRel rel]
-    (P : NARG.Prover X Y Stmt Wit Pf PC)
-    (penc : MURequest (SignOracle.none Bf) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
+    (P : NARG.Prover X Y Stmt Wit Pf PC) (μ : PMF PC)
+    (penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
     (stmtP : RingSignature.RingStmt Bf → OracleProg X Y X₀)
     (toR : X₀ → RingSignature.Insider.Req Bf PSf adm n × ℕ → (Bf).BSig → Rq)
     (dummyR : RingSignature.Insider.Req Bf PSf adm n × ℕ → Rq) {qs : ℕ}
-    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     (keys : Fin n → (Bf).KeyCoins) (Q : ℕ) :
     Challenger X Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp Bf PSf adm)
     where
   Coins := (Fin Q → KFCoins (p := p) (T := T) k D Y₁) ×
-    (RingSignature.kfMain Bf rel P penc keys Q).Coins
+    (RingSignature.kfMain Bf rel P μ penc keys Q).Coins
   coins := prodLaw (PMF.uniformOfFintype (Fin Q → KFCoins (p := p) (T := T) k D Y₁))
-    (RingSignature.kfMain Bf rel P penc keys Q).coins
+    (RingSignature.kfMain Bf rel P μ penc keys Q).coins
   Q := Q
-  q := w1KFq N reps k T + qs + (RingSignature.kfMain Bf rel P penc keys Q).q
+  q := w1KFq N reps k T + qs + (RingSignature.kfMain Bf rel P μ penc keys Q).q
   respond ω hist r :=
-    (RingSignature.KeyFree.kfGame (RingSignature.kfMain Bf rel P penc keys Q)
+    (RingSignature.KeyFree.kfGame (RingSignature.kfMain Bf rel P μ penc keys Q)
       (RingSignature.KeyFree.kfRelay Bf (fun i => (Bf).pk (keys i))
         (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) stmtP toR dummyR ω.1
         (w1KFSign_queries (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) hs idle)
           Q).respond ω.2 hist r
   respond_queries ω hist r H :=
-    (RingSignature.KeyFree.kfGame (RingSignature.kfMain Bf rel P penc keys Q)
+    (RingSignature.KeyFree.kfGame (RingSignature.kfMain Bf rel P μ penc keys Q)
       (RingSignature.KeyFree.kfRelay Bf (fun i => (Bf).pk (keys i))
         (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) stmtP toR dummyR ω.1
         (w1KFSign_queries (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) hs idle)
           Q).respond_queries ω.2 hist r H
 
-omit [Fintype X] [DecidableEq X] [AddGroup Y] in
+omit [Fintype X] [DecidableEq X] [AddGroup Y] [Fintype Pf] [DecidableEq Pf] [Fintype Msg]
+  [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The main challenger reads only the proof coins of the request count**, below the cap (its
 multi-user coins are trivial). -/
 theorem kfMain_respond_eq_const (rel : Stmt → Wit → Prop) [DecidableRel rel]
-    (P : NARG.Prover X Y Stmt Wit Pf PC)
-    (penc : MURequest (SignOracle.none Bf) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
+    (P : NARG.Prover X Y Stmt Wit Pf PC) (μ : PMF PC)
+    (penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
     (keys : Fin n → (Bf).KeyCoins) {Q : ℕ} (u : Fin Q → Unit) (pc : Fin Q → PC)
-    (hM : List (HistoryEntry (MURequest (SignOracle.none Bf) n ⊕ Rq)
-      (MUResponse Bf ⊕ Pf))) (r' : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (hM : List (HistoryEntry (MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
+      (MUResponse (Bf).core ⊕ Pf))) (r' : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     (h : hM.length < Q) :
-    (RingSignature.kfMain Bf rel P penc keys Q).respond (u, pc) hM r' =
-      (RingSignature.kfMain Bf rel P penc keys Q).respond
+    (RingSignature.kfMain Bf rel P μ penc keys Q).respond (u, pc) hM r' =
+      (RingSignature.kfMain Bf rel P μ penc keys Q).respond
         (fun _ : Fin Q => (), fun _ : Fin Q => pc ⟨hM.length, h⟩) hM r' := by
   have hu : u = fun _ => () := funext fun _ => rfl
   subst hu
@@ -1584,7 +1588,9 @@ theorem kfMain_respond_eq_const (rel : Stmt → Wit → Prop) [DecidableRel rel]
     simp only [RingSignature.kfMain, Challenger.sumDummy, QROM.realChallenger, h', ↓reduceDIte]
     simp [dummyHist]
 
-omit [Fintype X] [DecidableEq X] [AddGroup Y] in
+omit [Fintype X] [DecidableEq X] [AddGroup Y] [Fintype Pf] [DecidableEq Pf] [Fintype PCs]
+  [DecidableEq PCs] [Nonempty PCs] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y]
+  [Nonempty Y] in
 /-- **The key-free signature of request number `c` reads only the side coins of that number.** -/
 theorem sigP_eq_const {SC : Type}
     (ksign : (Bf).PK → KeyRing (PubKey p prims) N → ℕ → (Bf).Msg → SC →
@@ -1599,32 +1605,33 @@ theorem sigP_eq_const {SC : Type}
   · simp only [RingSignature.KeyFree.sigP]
   · rfl
 
-omit [Fintype X] in
+omit [Fintype X] [Fintype Pf] [DecidableEq Pf] [Fintype PCs] [DecidableEq PCs] [Nonempty PCs]
+  [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The key-free relay challenger at constant coins reads the coins of request `|hist|`.** -/
 theorem run_w1C2_respond_eq_const (sp : Y ≃+ Y₁ × Y₂) (rel : Stmt → Wit → Prop) [DecidableRel rel]
-    (P : NARG.Prover X Y Stmt Wit Pf PC)
-    (penc : MURequest (SignOracle.none Bf) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
+    (P : NARG.Prover X Y Stmt Wit Pf PC) (μ : PMF PC)
+    (penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
     (stmtP : RingSignature.RingStmt Bf → OracleProg X Y X₀)
     (toR : X₀ → RingSignature.Insider.Req Bf PSf adm n × ℕ → (Bf).BSig → Rq)
     (dummyR : RingSignature.Insider.Req Bf PSf adm n × ℕ → Rq) {qs : ℕ}
-    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     (keys : Fin n → (Bf).KeyCoins) {Q : ℕ} (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁)
     (u : Fin Q → Unit) (pc : Fin Q → PC)
     (hist : List (HistoryEntry (RingSignature.Insider.Req Bf PSf adm n)
       (RingSignature.Insider.Resp Bf PSf adm)))
     (r : RingSignature.Insider.Req Bf PSf adm n) (h : hist.length < Q) (H : X → Y) :
-    ((w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P penc stmtP toR dummyR hs idle keys
+    ((w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P μ penc stmtP toR dummyR hs idle keys
         Q).respond (sc, (u, pc)) hist r).run H =
-      ((w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P penc stmtP toR dummyR hs idle keys
+      ((w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P μ penc stmtP toR dummyR hs idle keys
         Q).respond (fun _ : Fin Q => sc ⟨hist.length, h⟩,
           (fun _ : Fin Q => (), fun _ : Fin Q => pc ⟨hist.length, h⟩)) hist r).run H := by
-  refine (RingSignature.KeyFree.run_kfGame_respond (RingSignature.kfMain Bf rel P penc keys Q)
+  refine (RingSignature.KeyFree.run_kfGame_respond (RingSignature.kfMain Bf rel P μ penc keys Q)
     (RingSignature.KeyFree.kfRelay Bf (fun i => (Bf).pk (keys i))
       (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) stmtP toR dummyR sc
       (w1KFSign_queries (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) hs idle) Q (u, pc)
         hist r H).trans
     (Eq.trans ?_ (RingSignature.KeyFree.run_kfGame_respond
-      (RingSignature.kfMain Bf rel P penc keys Q)
+      (RingSignature.kfMain Bf rel P μ penc keys Q)
       (RingSignature.KeyFree.kfRelay Bf (fun i => (Bf).pk (keys i))
         (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) stmtP toR dummyR
         (fun _ : Fin Q => sc ⟨hist.length, h⟩)
@@ -1634,13 +1641,13 @@ theorem run_w1C2_respond_eq_const (sp : Y ≃+ Y₁ × Y₂) (rel : Stmt → Wit
     (RingSignature.KeyFree.kfRelay Bf (fun i => (Bf).pk (keys i))
       (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) stmtP toR dummyR sc
       (w1KFSign_queries (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) hs idle) hist
-  have hm : (fun r' => (((RingSignature.kfMain Bf rel P penc keys Q).respond (u, pc)
+  have hm : (fun r' => (((RingSignature.kfMain Bf rel P μ penc keys Q).respond (u, pc)
       (AssignRelay.mainHist (RingSignature.KeyFree.padHist (Q := Q)
         (RingSignature.KeyFree.kfRelay Bf (fun i => (Bf).pk (keys i))
           (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) stmtP toR dummyR sc
           (w1KFSign_queries (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) hs idle) hist))
             r').run H).response) =
-      fun r' => (((RingSignature.kfMain Bf rel P penc keys Q).respond
+      fun r' => (((RingSignature.kfMain Bf rel P μ penc keys Q).respond
         (fun _ : Fin Q => (), fun _ : Fin Q => pc ⟨hist.length, h⟩)
         (AssignRelay.mainHist (RingSignature.KeyFree.padHist (Q := Q)
           (RingSignature.KeyFree.kfRelay Bf (fun i => (Bf).pk (keys i))
@@ -1675,7 +1682,7 @@ theorem run_w1C2_respond_eq_const (sp : Y ≃+ Y₁ × Y₂) (rel : Stmt → Wit
             hist)).length < Q := by
       rw [hM']
       exact h
-    simp only [kfMain_respond_eq_const rel P penc keys u pc _ r' hl]
+    simp only [kfMain_respond_eq_const rel P μ penc keys u pc _ r' hl]
     have hfin : (⟨(AssignRelay.mainHist (RingSignature.KeyFree.padHist (Q := Q)
         (RingSignature.KeyFree.kfRelay Bf (fun i => (Bf).pk (keys i))
           (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) stmtP toR dummyR
@@ -1699,19 +1706,19 @@ theorem run_w1C2_respond_eq_const (sp : Y ≃+ Y₁ × Y₂) (rel : Stmt → Wit
 
 variable (prims O M βmin tol enc k D bmsg PS adm) in
 /-- **The key-free relay challenger reads a fresh coin per request** (`Challenger.FreshCoinsIn`):
-no key, the coin of request `j` its side coins (uniform) and its proof coins (law `P.coins`), the
+no key, the coin of request `j` its side coins (uniform) and its proof coins (law `μ`), the
 reply the challenger's at the constant coins. -/
 noncomputable def w1C2FreshCoins (sp : Y ≃+ Y₁ × Y₂) (rel : Stmt → Wit → Prop) [DecidableRel rel]
-    (P : NARG.Prover X Y Stmt Wit Pf PC)
-    (penc : MURequest (SignOracle.none Bf) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
+    (P : NARG.Prover X Y Stmt Wit Pf PC) (μ : PMF PC)
+    (penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
     (stmtP : RingSignature.RingStmt Bf → OracleProg X Y X₀)
     (toR : X₀ → RingSignature.Insider.Req Bf PSf adm n × ℕ → (Bf).BSig → Rq)
     (dummyR : RingSignature.Insider.Req Bf PSf adm n × ℕ → Rq) {qs : ℕ}
-    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     (keys : Fin n → (Bf).KeyCoins) (Q : ℕ) :
-    (w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P penc stmtP toR dummyR hs idle keys
+    (w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P μ penc stmtP toR dummyR hs idle keys
       Q).FreshCoinsIn (PMF.pure ())
-      (prodLaw (PMF.uniformOfFintype (KFCoins (p := p) (T := T) k D Y₁)) P.coins) where
+      (prodLaw (PMF.uniformOfFintype (KFCoins (p := p) (T := T) k D Y₁)) μ) where
   equiv :=
     { toFun := fun ω => ((), fun j => (ω.1 j, ω.2.2 j))
       invFun := fun x => (fun j => (x.2 j).1, (fun _ => (), fun j => (x.2 j).2))
@@ -1720,12 +1727,12 @@ noncomputable def w1C2FreshCoins (sp : Y ≃+ Y₁ × Y₂) (rel : Stmt → Wit 
   coins_eq c := by
     rcases c with ⟨sc, u, pc⟩
     refine (prodLaw_apply (PMF.uniformOfFintype (Fin Q → KFCoins (p := p) (T := T) k D Y₁))
-      (RingSignature.kfMain Bf rel P penc keys Q).coins sc (u, pc)).trans ?_
-    have hmain : (RingSignature.kfMain Bf rel P penc keys Q).coins (u, pc) =
-        ∏ j, P.coins (pc j) := by
-      refine (Challenger.coins_sumDummy (C₁ := muChallenger (X := X) (Y := Y) (SignOracle.none Bf)
-        n keys Q) (C₂ := QROM.realChallenger rel P Q) (enc := penc) u pc).trans ?_
-      have h1 : (muChallenger (X := X) (Y := Y) (SignOracle.none Bf) n keys Q).coins u = 1 := by
+      (RingSignature.kfMain Bf rel P μ penc keys Q).coins sc (u, pc)).trans ?_
+    have hmain : (RingSignature.kfMain Bf rel P μ penc keys Q).coins (u, pc) =
+        ∏ j, μ (pc j) := by
+      refine (Challenger.coins_sumDummy (C₁ := muChallenger (X := X) (Y := Y) (SignOracle.none (Bf).core)
+        n keys Q) (C₂ := QROM.realChallenger rel P μ Q) (enc := penc) u pc).trans ?_
+      have h1 : (muChallenger (X := X) (Y := Y) (SignOracle.none (Bf).core) n keys Q).coins u = 1 := by
         exact (PMF.uniformOfFintype_apply (α := Fin Q → Unit) _).trans (by simp)
       rw [h1, one_mul]
       rfl
@@ -1737,34 +1744,35 @@ noncomputable def w1C2FreshCoins (sp : Y ≃+ Y₁ × Y₂) (rel : Stmt → Wit 
     exact Finset.prod_mul_distrib.symm.trans
       (Finset.prod_congr rfl fun j _ => (prodLaw_apply _ _ _ _).symm)
   kernel _ H hist r u :=
-    ((w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P penc stmtP toR dummyR hs idle keys
+    ((w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P μ penc stmtP toR dummyR hs idle keys
       Q).respond (fun _ : Fin Q => u.1, (fun _ : Fin Q => (), fun _ : Fin Q => u.2)) hist r).run H
   respond_eq H c hist r hj := by
     rcases c with ⟨sc, u, pc⟩
-    exact run_w1C2_respond_eq_const sp rel P penc stmtP toR dummyR hs idle keys sc u pc hist r hj H
+    exact run_w1C2_respond_eq_const sp rel P μ penc stmtP toR dummyR hs idle keys sc u pc hist r hj H
 
-omit [Fintype X] in
+omit [Fintype X] [Fintype Pf] [DecidableEq Pf] [Fintype PCs] [DecidableEq PCs] [Nonempty PCs]
+  [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The reply of the key-free relay challenger at constant coins**: the relay's reply
 (`KeyFree.replyOf`) of the key-free signature of the request (`KeyFree.sigP`) and the main
 challenger's response to its main request. -/
 theorem run_w1C2_const (sp : Y ≃+ Y₁ × Y₂) (rel : Stmt → Wit → Prop) [DecidableRel rel]
-    (P : NARG.Prover X Y Stmt Wit Pf PC)
-    (penc : MURequest (SignOracle.none Bf) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
+    (P : NARG.Prover X Y Stmt Wit Pf PC) (μ : PMF PC)
+    (penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
     (stmtP : RingSignature.RingStmt Bf → OracleProg X Y X₀)
     (toR : X₀ → RingSignature.Insider.Req Bf PSf adm n × ℕ → (Bf).BSig → Rq)
     (dummyR : RingSignature.Insider.Req Bf PSf adm n × ℕ → Rq) {qs : ℕ}
-    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     (keys : Fin n → (Bf).KeyCoins) {Q : ℕ} (sc : KFCoins (p := p) (T := T) k D Y₁) (pc : PC)
     (hist : List (HistoryEntry (RingSignature.Insider.Req Bf PSf adm n)
       (RingSignature.Insider.Resp Bf PSf adm)))
     (r : RingSignature.Insider.Req Bf PSf adm n) (H : X → Y) :
-    ((w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P penc stmtP toR dummyR hs idle keys
+    ((w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P μ penc stmtP toR dummyR hs idle keys
         Q).respond (fun _ : Fin Q => sc, (fun _ : Fin Q => (), fun _ : Fin Q => pc)) hist r).run H =
       RingSignature.KeyFree.replyOf Bf r
         ((RingSignature.KeyFree.sigP Bf (fun i => (Bf).pk (keys i))
           (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) (fun _ : Fin Q => sc)
             hist.length r).run H)
-        (((RingSignature.kfMain Bf rel P penc keys Q).respond
+        (((RingSignature.kfMain Bf rel P μ penc keys Q).respond
           (fun _ : Fin Q => (), fun _ : Fin Q => pc)
           (AssignRelay.mainHist (RingSignature.KeyFree.padHist (Q := Q)
             (RingSignature.KeyFree.kfRelay Bf (fun i => (Bf).pk (keys i))
@@ -1786,7 +1794,7 @@ theorem run_w1C2_const (sp : Y ≃+ Y₁ × Y₂) (rel : Stmt → Wit → Prop) 
                   (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) (fun _ : Fin Q => sc)
                     hist.length
                     r).run H)))))).run H).response :=
-  (RingSignature.KeyFree.run_kfGame_respond (RingSignature.kfMain Bf rel P penc keys Q)
+  (RingSignature.KeyFree.run_kfGame_respond (RingSignature.kfMain Bf rel P μ penc keys Q)
     (RingSignature.KeyFree.kfRelay Bf (fun i => (Bf).pk (keys i))
       (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) stmtP toR dummyR
         (fun _ : Fin Q => sc)
@@ -1835,7 +1843,7 @@ theorem ringVerify_kfLoop (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
   unfold ringVerify
   simp only [Bool.and_eq_true, decide_eq_true_eq]
   refine ⟨⟨⟨hz, rfl⟩, ?_⟩, hh⟩
-  simp only [W1Oracles.hOrc, schemeOrc, W1Oracles.muOrc, W1Oracles.chOrc]
+  simp only [MLDSAOracles.hOrc, schemeOrc, MLDSAOracles.muOrc, MLDSAOracles.chOrc]
   change O.chAns ((H.reprogram [keptAsg O enc sp H pk bm σk (sc.1 c t).2])
     (O.chPt (O.muAns ((H.reprogram [keptAsg O enc sp H pk bm σk (sc.1 c t).2])
       (O.muPt (pubTr prims pk, bm))), w1Of prims enc pk σk))) = chOf O sp (sc.1 c t).2
@@ -1848,7 +1856,7 @@ variable (enc) in
 /-- **The proof query of a kept signature**: the encoded proof request of the statement program's
 output on `(R, m, w1Of pk σ)` at the oracle `H'`, for the signing request `(s, R, m)` and the
 signature `σ`. -/
-noncomputable def keptQuery (penc : MURequest (SignOracle.none Bf)
+noncomputable def keptQuery (penc : MURequest (SignOracle.none (Bf).core)
   n ⊕ Rq → QROM.ProofQuery Stmt Wit)
     (stmtP : RingSignature.RingStmt Bf → OracleProg X Y X₀)
     (toR : X₀ → RingSignature.Insider.Req Bf PSf adm n × ℕ → (Bf).BSig → Rq)
@@ -1863,7 +1871,7 @@ the oracle reprogrammed by one assignment changing only a base component: the ri
 `(R, m, w1Of pk σ)` with the witness `(idx pk, σ)` at `H.reprogram [a]` is the main prover's proof
 of the kept proof query (`keptQuery`, the statement read at `H.reprogram [a]`) at `H`. -/
 def ProverRelays (sp : Y ≃+ Y₁ × Y₂) (P : NARG.Prover X Y Stmt Wit Pf (PSf).Coins)
-    (penc : MURequest (SignOracle.none Bf) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
+    (penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
     (stmtP : RingSignature.RingStmt Bf → OracleProg X Y X₀)
     (toR : X₀ → RingSignature.Insider.Req Bf PSf adm n × ℕ → (Bf).BSig → Rq)
     (keys : Fin n → (Bf).KeyCoins) : Prop :=
@@ -1880,7 +1888,7 @@ supported ring `R`, verifying on `bmsg R m` at an oracle `H'` makes its kept pro
 (`keptQuery`, at `H'`) a member of the relation `rel` (the completeness of the explicit relation).
 -/
 def KeptInRel (rel : Stmt → Wit → Prop)
-    (penc : MURequest (SignOracle.none Bf) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
+    (penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
     (stmtP : RingSignature.RingStmt Bf → OracleProg X Y X₀)
     (toR : X₀ → RingSignature.Insider.Req Bf PSf adm n × ℕ → (Bf).BSig → Rq)
     (keys : Fin n → (Bf).KeyCoins) : Prop :=
@@ -1890,14 +1898,16 @@ def KeptInRel (rel : Stmt → Wit → Prop)
     rel (keptQuery enc penc stmtP toR keys s R m c σ H').stmt
       (keptQuery enc penc stmtP toR keys s R m c σ H').wit
 
-omit [Fintype X] [Fintype Y₁] [DecidableEq Y₁] in
+omit [Fintype X] [Fintype Y₁] [DecidableEq Y₁] [Fintype Pf] [DecidableEq Pf] [Fintype PCs]
+  [DecidableEq PCs] [Nonempty PCs] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y]
+  [Nonempty Y] in
 /-- **`ProverRelays` holds for a factored ring prover** (its satisfiability): when the ring prover
 runs the statement program and then the main prover on a statement and witness read from the
 program's output (`hfac`), the kept proof query encodes that statement and witness (`hq`), and
 the main prover reads only the second components of the oracle (`hP`). -/
 theorem proverRelays_of_factor (sp : Y ≃+ Y₁ × Y₂)
     (P : NARG.Prover X Y Stmt Wit Pf (PSf).Coins)
-    (penc : MURequest (SignOracle.none Bf) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
+    (penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
     (stmtP : RingSignature.RingStmt Bf → OracleProg X Y X₀)
     (toR : X₀ → RingSignature.Insider.Req Bf PSf adm n × ℕ → (Bf).BSig → Rq)
     (keys : Fin n → (Bf).KeyCoins) (st : X₀ → RingSignature.RingWitOf (FIPSSignature p prims) → Stmt)
@@ -1920,10 +1930,12 @@ theorem proverRelays_of_factor (sp : Y ≃+ Y₁ × Y₂)
   · rw [ha, hz]
   · rfl
 
-omit [Fintype X] [DecidableEq X] [AddGroup Y] in
+omit [Fintype X] [DecidableEq X] [AddGroup Y] [Fintype Pf] [DecidableEq Pf] [Fintype PCs]
+  [DecidableEq PCs] [Nonempty PCs] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y]
+  [Nonempty Y] in
 /-- **`KeptInRel` holds for a relation holding on every proof query** (its satisfiability). -/
 theorem keptInRel_of_forall (rel : Stmt → Wit → Prop)
-    (penc : MURequest (SignOracle.none Bf) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
+    (penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
     (stmtP : RingSignature.RingStmt Bf → OracleProg X Y X₀)
     (toR : X₀ → RingSignature.Insider.Req Bf PSf adm n × ℕ → (Bf).BSig → Rq)
     (keys : Fin n → (Bf).KeyCoins) (h : ∀ q : QROM.ProofQuery Stmt Wit, rel q.stmt q.wit) :
@@ -1932,7 +1944,8 @@ theorem keptInRel_of_forall (rel : Stmt → Wit → Prop)
 
 /-! ### The key-free relay challenger's reply to a signing request -/
 
-omit [Fintype X] in
+omit [Fintype X] [Fintype Pf] [DecidableEq Pf] [Nonempty PCs] [Fintype Msg] [DecidableEq Msg]
+  [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 open Classical in
 /-- **The reply of the key-free relay challenger to a signing request** at constant coins, for a
 signer in a supported ring: on a ring passing the checks at the oracle `H`, the key-free reply
@@ -1942,12 +1955,12 @@ kept proof query, which is the ring prover's at the oracle reprogrammed by the k
 (`ringVerify_kfLoop`, `KeptInRel`). -/
 theorem run_w1C2_sign (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
     (hdisj : ∀ a b, O.muPt a ≠ O.chPt b) (rel : Stmt → Wit → Prop) [DecidableRel rel]
-    (P : NARG.Prover X Y Stmt Wit Pf (PSf).Coins)
-    (penc : MURequest (SignOracle.none Bf) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
+    (P : NARG.Prover X Y Stmt Wit Pf (PSf).Coins) (μ : PMF (PSf).Coins)
+    (penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
     (stmtP : RingSignature.RingStmt Bf → OracleProg X Y X₀)
     (toR : X₀ → RingSignature.Insider.Req Bf PSf adm n × ℕ → (Bf).BSig → Rq)
     (dummyR : RingSignature.Insider.Req Bf PSf adm n × ℕ → Rq) {qs : ℕ}
-    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     (keys : Fin n → (Bf).KeyCoins) (hPR : ProverRelays O enc sp P penc stmtP toR keys)
     (hKR : KeptInRel enc rel penc stmtP toR keys) {Q : ℕ}
     (sc : KFCoins (p := p) (T := T) k D Y₁) (pc : (PSf).Coins)
@@ -1956,7 +1969,7 @@ theorem run_w1C2_sign (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
     (s : Fin n) (R : KeyRing (PubKey p prims) N) (m : RMsg)
     (hi : R.1.idxOf (α := PubKey p prims) ((Bf).pk (keys s)) < R.1.length) (ha : adm R)
     (h : hist.length < Q) (H : X → Y) :
-    ((w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P penc stmtP toR dummyR hs idle keys
+    ((w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P μ penc stmtP toR dummyR hs idle keys
         Q).respond (fun _ : Fin Q => sc, (fun _ : Fin Q => (), fun _ : Fin Q => pc)) hist
         (.sign s R m)).run H =
       if RingCheck prims βmin tol (O.gOrc H) R ∧ MuDistinct prims (O.muOrc H) R (bmsg R m) then
@@ -1975,7 +1988,7 @@ theorem run_w1C2_sign (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
       refine (congrArg (OracleProg.run H) (dite_eq_left_of_eq_true (eq_true hc0))).trans
         (hrun.trans ?_)
       exact ite_eq_right_of_eq_false _ _ (eq_false hc)
-    refine (RingSignature.KeyFree.run_kfGame_sign_none Bf rel P penc keys
+    refine (RingSignature.KeyFree.run_kfGame_sign_none Bf rel P μ penc keys
       (fun i => (Bf).pk (keys i)) (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) stmtP
       toR dummyR (w1KFSign_queries (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) hs idle
       (fun _ : Fin Q => sc) _ hist s R m H ho).trans ?_
@@ -1998,7 +2011,7 @@ theorem run_w1C2_sign (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
         (hloop.trans ?_)
       rw [hk]
       rfl
-    refine (RingSignature.KeyFree.run_kfGame_sign_none Bf rel P penc keys
+    refine (RingSignature.KeyFree.run_kfGame_sign_none Bf rel P μ penc keys
       (fun i => (Bf).pk (keys i)) (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) stmtP
       toR dummyR (w1KFSign_queries (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) hs idle
       (fun _ : Fin Q => sc) _ hist s R m H ho).trans ?_
@@ -2014,7 +2027,7 @@ theorem run_w1C2_sign (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
       (bmsg R m)
     sres.2.1 sres.2.2]) hR ha (ringVerify_kfLoop sp hO hdisj ((Bf).pk (keys s)) R ⟨_, hi⟩ _ sc hk H
       (bmsg R m))
-  refine (RingSignature.KeyFree.run_kfGame_sign_some Bf rel P penc keys
+  refine (RingSignature.KeyFree.run_kfGame_sign_some Bf rel P μ penc keys
     (fun i => (Bf).pk (keys i)) (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) stmtP
     toR dummyR (w1KFSign_queries (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) hs idle
     (fun _ : Fin Q => sc) (fun _ : Fin Q => (), fun _ : Fin Q => pc) hist s R m hc0 H _ _ _ ho
@@ -2044,6 +2057,7 @@ noncomputable def w1ReqBound (keys : Fin n → (Sf).KeyCoins)
   | _ => 0
 
 open Classical in
+omit [Fintype Pf] [DecidableEq Pf] in
 /-- **The kept-only challenger against the key-free relay challenger, request by request**: at
 every oracle `H`, history of fewer than `Q` entries and request `r`, the law of the kept-only
 challenger's reply over request `|hist|`'s coins (`w1C1FreshCoins`) is within total variation
@@ -2063,13 +2077,13 @@ theorem tvDist_w1C1_w1C2_le (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
     (h_laws : SigningLaws prims) (hv : VerifyLaws prims)
     (henc : ∀ w : RqVec p.k, enc (prims.highBitsVec w) = bucketsOf (rqVecCoeffs w))
     (rel : Stmt → Wit → Prop) [DecidableRel rel]
-    (P : NARG.Prover X Y Stmt Wit Pf (PSf).Coins)
-    (hPc : P.coins = PMF.uniformOfFintype (PSf).Coins)
-    (penc : MURequest (SignOracle.none Bf) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
+    (P : NARG.Prover X Y Stmt Wit Pf (PSf).Coins) (μ : PMF (PSf).Coins)
+    (hPc : μ = PMF.uniformOfFintype (PSf).Coins)
+    (penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
     (stmtP : RingSignature.RingStmt Bf → OracleProg X Y X₀)
     (toR : X₀ → RingSignature.Insider.Req Bf PSf adm n × ℕ → (Bf).BSig → Rq)
     (dummyR : RingSignature.Insider.Req Bf PSf adm n × ℕ → Rq) {qs : ℕ}
-    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     (keys : Fin n → (Bf).KeyCoins)
     (hs1 : ∀ s, polyVecBounded (keyGen prims (keys s)).2.s1 p.eta)
     (hs2 : ∀ s, polyVecBounded (keyGen prims (keys s)).2.s2 p.eta)
@@ -2080,8 +2094,8 @@ theorem tvDist_w1C1_w1C2_le (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
     (r : UnforgeRequest (S := Sf) n (SideOracle.none Sf)) (hl : hist.length < Q) :
     PMF.tvDist ((prodLaw (PMF.uniformOfFintype (X → Y₁)) (PMF.uniformOfFintype (Sf).SignCoins)).map
         ((w1C1FreshCoins (SideOracle.none Sf) sp keys Q).kernel () H hist r))
-      ((prodLaw (PMF.uniformOfFintype (KFCoins (p := p) (T := T) k D Y₁)) P.coins).map
-        ((w1C2FreshCoins prims O M βmin tol enc k D bmsg PS adm sp rel P penc stmtP toR dummyR hs
+      ((prodLaw (PMF.uniformOfFintype (KFCoins (p := p) (T := T) k D Y₁)) μ).map
+        ((w1C2FreshCoins prims O M βmin tol enc k D bmsg PS adm sp rel P μ penc stmtP toR dummyR hs
           idle keys Q).kernel () H hist r)) ≤
       w1ReqBound prims O M βmin tol enc k D bmsg PS adm keys r := by
   have hnn : ∀ s, 0 ≤ ((k * T).choose 2 : ℝ) *
@@ -2091,15 +2105,15 @@ theorem tvDist_w1C1_w1C2_le (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
   rcases r with i | ⟨s, R, m⟩ | ⟨i, bm⟩
   · refine le_of_eq (PMF.tvDist_map_const_eq_zero _ _ _ _ ⟨some (.keyCoins (keys i)), []⟩
       (fun u => run_w1C1_corrupt sp keys u.1 u.2 hist i hl H) fun u => ?_)
-    exact RingSignature.KeyFree.run_kfGame_corrupt Bf rel P penc keys (fun i => (Bf).pk (keys i))
+    exact RingSignature.KeyFree.run_kfGame_corrupt Bf rel P μ penc keys (fun i => (Bf).pk (keys i))
       (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) stmtP toR dummyR
       (w1KFSign_queries (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) hs idle
       (fun _ : Fin Q => u.1) _ hist i hl H
   · have hnone : ∀ (u : KFCoins (p := p) (T := T) k D Y₁ × (PSf).Coins),
         ¬ (hist.length < Q ∧ (Bf).pk (keys s) ∈ R.1 ∧ adm R) →
-        ((w1C2FreshCoins prims O M βmin tol enc k D bmsg PS adm sp rel P penc stmtP toR dummyR hs
+        ((w1C2FreshCoins prims O M βmin tol enc k D bmsg PS adm sp rel P μ penc stmtP toR dummyR hs
           idle keys Q).kernel () H hist (.sign s R m) u) = ⟨none, []⟩ := fun u hn =>
-      RingSignature.KeyFree.run_kfGame_sign_none Bf rel P penc keys (fun i => (Bf).pk (keys i))
+      RingSignature.KeyFree.run_kfGame_sign_none Bf rel P μ penc keys (fun i => (Bf).pk (keys i))
         (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) stmtP toR dummyR
         (w1KFSign_queries (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) hs idle
         (fun _ : Fin Q => u.1) _ hist s R m H (by
@@ -2124,11 +2138,11 @@ theorem tvDist_w1C1_w1C2_le (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
     · refine le_of_eq_of_le (PMF.tvDist_map_const_eq_zero _ _ _ _ ⟨none, []⟩
         (fun u => (run_w1C1_sign sp hO hch hdisj hdisjg hPS h_laws hv henc keys u.1 u.2 hist s R m
           hs2 hR hl H).trans (ite_eq_right_of_eq_false _ _ (eq_false fun h => hc h.2)))
-        fun u => (run_w1C2_sign sp hO hdisj rel P penc stmtP toR dummyR hs idle keys hPR hKR u.1
+        fun u => (run_w1C2_sign sp hO hdisj rel P μ penc stmtP toR dummyR hs idle keys hPR hKR u.1
           u.2 hist s R m hi2 ha hl H).trans (ite_eq_right_of_eq_false _ _ (eq_false hc))) (hnn s)
     have hi1 := idxOf_lt_of_mem keys hR
     have hi12 : (⟨_, hi1⟩ : Fin R.1.length) = ⟨_, hi2⟩ :=
-      Fin.ext (idxOf_decEq_eq _ _)
+      rfl
     have hB := tvDist_w1C1_intRep_le sp hO hMask hch hdisj hdisjg hPS h_laws hv henc keys hs2 hist s
       R m hR hl H ⟨ha, hc⟩
     have hC : (PMF.uniformOfFintype (KFCoins (p := p) (T := T) k D Y₁ × (PSf).Coins)).map
@@ -2138,14 +2152,14 @@ theorem tvDist_w1C1_w1C2_le (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
           (kfRep O βmin enc PS (SideOracle.none Sf) sp H ((Bf).pk (keys s)) R ⟨_, hi1⟩ m) :=
       map_intRep_eq_map_kfRep (PS := PS) (adm := adm) (Of := SideOracle.none Sf) sp h_laws hv
         henc (keys s) (hs1 s) (hs2 s) H R ⟨_, hi1⟩ m
-    have hζ : prodLaw (PMF.uniformOfFintype (KFCoins (p := p) (T := T) k D Y₁)) P.coins =
+    have hζ : prodLaw (PMF.uniformOfFintype (KFCoins (p := p) (T := T) k D Y₁)) μ =
         PMF.uniformOfFintype (KFCoins (p := p) (T := T) k D Y₁ × (PSf).Coins) := by
       rw [hPc, PMF.prodLaw_uniformOfFintype]
-    have hK : (w1C2FreshCoins prims O M βmin tol enc k D bmsg PS adm sp rel P penc stmtP toR
+    have hK : (w1C2FreshCoins prims O M βmin tol enc k D bmsg PS adm sp rel P μ penc stmtP toR
         dummyR hs idle keys Q).kernel () H hist (.sign s R m) =
         kfRep O βmin enc PS (SideOracle.none Sf) sp H ((Bf).pk (keys s)) R ⟨_, hi1⟩ m := by
       funext u
-      refine (run_w1C2_sign sp hO hdisj rel P penc stmtP toR dummyR hs idle keys hPR hKR u.1
+      refine (run_w1C2_sign sp hO hdisj rel P μ penc stmtP toR dummyR hs idle keys hPR hKR u.1
           u.2 hist s R m hi2 ha hl H).trans ((ite_eq_left_of_eq_true _ _ (eq_true hc)).trans ?_)
       exact congrArg (fun i => kfRep O βmin enc PS (SideOracle.none Sf) sp H ((Bf).pk (keys s)) R i
         m u) hi12.symm
@@ -2168,13 +2182,13 @@ theorem transcriptLawIn_w1C1_le_w1C2 [Nonempty X] (sp : Y ≃+ Y₁ × Y₂)
     (h_laws : SigningLaws prims) (hv : VerifyLaws prims)
     (henc : ∀ w : RqVec p.k, enc (prims.highBitsVec w) = bucketsOf (rqVecCoeffs w))
     (rel : Stmt → Wit → Prop) [DecidableRel rel]
-    (P : NARG.Prover X Y Stmt Wit Pf (PSf).Coins)
-    (hPc : P.coins = PMF.uniformOfFintype (PSf).Coins)
-    (penc : MURequest (SignOracle.none Bf) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
+    (P : NARG.Prover X Y Stmt Wit Pf (PSf).Coins) (μ : PMF (PSf).Coins)
+    (hPc : μ = PMF.uniformOfFintype (PSf).Coins)
+    (penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
     (stmtP : RingSignature.RingStmt Bf → OracleProg X Y X₀)
     (toR : X₀ → RingSignature.Insider.Req Bf PSf adm n × ℕ → (Bf).BSig → Rq)
     (dummyR : RingSignature.Insider.Req Bf PSf adm n × ℕ → Rq) {qs : ℕ}
-    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     (keys : Fin n → (Bf).KeyCoins)
     (hs1 : ∀ s, polyVecBounded (keyGen prims (keys s)).2.s1 p.eta)
     (hs2 : ∀ s, polyVecBounded (keyGen prims (keys s)).2.s2 p.eta)
@@ -2184,7 +2198,7 @@ theorem transcriptLawIn_w1C1_le_w1C2 [Nonempty X] (sp : Y ≃+ Y₁ × Y₂)
       (UnforgeResponse (S := Sf) (SideOracle.none Sf)) Out t) (H : X → Y)
     (S : Set (Option (Out × List (UnforgeRequest (S := Sf) n (SideOracle.none Sf)) × (X → Y)))) :
     (𝒜.transcriptLawIn (w1C1 (SideOracle.none Sf) sp keys Q) H).toOuterMeasure S ≤
-      (𝒜.transcriptLawIn (w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P penc stmtP toR
+      (𝒜.transcriptLawIn (w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P μ penc stmtP toR
         dummyR hs idle keys Q) H).toOuterMeasure S +
       Q * ENNReal.ofReal (((k * T).choose 2 : ℝ) *
         ∑ s, commitPointMax (prims.expandA ((Sf).sk (keys s)).rho)) := by
@@ -2192,12 +2206,12 @@ theorem transcriptLawIn_w1C1_le_w1C2 [Nonempty X] (sp : Y ≃+ Y₁ × Y₂)
     (ENNReal.toReal_nonneg).trans
       (toReal_map_realBuckets_le_commitPointMax _ (Classical.arbitrary _))
   have h := transcriptLawIn_le_add_of_freshCoinsIn (w1C1FreshCoins (SideOracle.none Sf) sp keys Q)
-    (w1C2FreshCoins prims O M βmin tol enc k D bmsg PS adm sp rel P penc stmtP toR dummyR hs idle
+    (w1C2FreshCoins prims O M βmin tol enc k D bmsg PS adm sp rel P μ penc stmtP toR dummyR hs idle
       keys Q) rfl (fun _ => ENNReal.ofReal (((k * T).choose 2 : ℝ) *
         ∑ s, commitPointMax (prims.expandA ((Sf).sk (keys s)).rho)))
     (fun κ O' hist r hl => by
       refine ENNReal.ofReal_le_ofReal ((tvDist_w1C1_w1C2_le sp hO hMask hch hdisj hdisjg hPS
-        h_laws hv henc rel P hPc penc stmtP toR dummyR hs idle keys hs1 hs2 hPR hKR Q O' hist r
+        h_laws hv henc rel P μ hPc penc stmtP toR dummyR hs idle keys hs1 hs2 hPR hKR Q O' hist r
           hl).trans ?_)
       rcases r with i | ⟨s, R, m⟩ | ⟨i, bm⟩
       · exact mul_nonneg (by positivity) (Finset.sum_nonneg fun s _ => hcp s)

@@ -20,9 +20,12 @@ charge the verifier's `kq` queries with the adversary's). This module bounds the
 
 * `GordieHowe.Configuration.knowledgeBudgetROM`, `GordieHowe.Configuration.knowledgeBudgetQROM`:
   the per-query budgets of the errors below a query count `U` at least `2^λ`;
-* `GordieHowe.Configuration.knowledgeErrorROM_le_bits`,
-  `GordieHowe.Configuration.knowledgeErrorQROM_le_bits`: if `2^λ ≤ U` and the budget at `U` is at
-  most `2^-λ`, then `min(1, err(t + kq)) ≤ t · 2^-λ` for every `t ≥ 1`. Above `2^λ` queries the
+* `GordieHowe.Configuration.SoundnessBits.knowledgeErrorROM_le_bits`,
+  `GordieHowe.Configuration.SoundnessBits.knowledgeErrorQROM_le_bits`: if `2^λ ≤ U` and the budget
+  at `U` is at most `2^-λ`, then the extraction errors `extractionErrorROM` and
+  `extractionErrorQROM` (the knowledge errors at `t + kq`) have bit security at least `λ`
+  (`GordieHowe.Configuration.BitSecurityAtLeast`: `min(1, err(t + kq)) ≤ t · 2^-λ` for every
+  `t ≥ 1`). Above `2^λ` queries the
   bound `t · 2^-λ` exceeds `1`; below, the error divided by `t` is at most the budget;
 * `GordieHowe.Configuration.knowledgeBudgetROM_le_two_rpow`,
   `GordieHowe.Configuration.knowledgeBudgetQROM_le_two_rpow`: the budget below `2^s` from its
@@ -33,6 +36,12 @@ namespace GordieHowe.Configuration
 
 open GordieHowe.SPBCS
 open scoped NNReal ENNReal
+
+/-- **Bit security at least `lam`** (paper `sec:eval-params`): for every `t ≥ 1` hash queries,
+`min(1, err t) ≤ t · 2^-lam`, that is, the paper's `λ(err) = min over t ≥ 1 of
+log₂ (t / min(1, err t))` is at least `lam`. -/
+def BitSecurityAtLeast (err : ℕ → ℝ≥0∞) (lam : ℝ) : Prop :=
+  ∀ t, 1 ≤ t → (min 1 (err t)).toReal ≤ t * 2 ^ (-lam)
 
 section
 
@@ -125,10 +134,12 @@ theorem le_of_mul_two_rpow_lt {lam : ℝ} {U t : ℕ} (hU : (2 : ℝ) ^ lam ≤ 
 /-- **The bit security of knowledge soundness in the ROM** (the errors of
 `knowledge_soundness_rom_at` and `soundness_rom_at`): if `λ · 100 = e`, `2^e ≤ U^100` and the
 classical budget at `U` is at most `2^-λ`, then for every `t ≥ 1` hash queries,
-`min(1, knowledgeErrorROM (t + kq)) ≤ t · 2^-λ`. The paper's `λ(errks^C)` is at least `λ`. -/
+`min(1, knowledgeErrorROM (t + kq)) ≤ t · 2^-λ`: the paper's `λ(errks^C)` is at least `λ`. -/
 theorem knowledgeErrorROM_le_bits {U e : ℕ} {lam : ℝ} (hs : lam * 100 = e)
-    (hU : 2 ^ e ≤ U ^ 100) (hB : R.knowledgeBudgetROM U ≤ 2 ^ (-lam)) {t : ℕ} (ht : 1 ≤ t) :
-    (min 1 (knowledgeErrorROM R F (t + R.kq))).toReal ≤ t * 2 ^ (-lam) := by
+    (hU : 2 ^ e ≤ U ^ 100) (hB : R.knowledgeBudgetROM U ≤ 2 ^ (-lam)) :
+    BitSecurityAtLeast (extractionErrorROM R F) lam := by
+  intro t ht
+  show (min 1 (knowledgeErrorROM R F (t + R.kq))).toReal ≤ t * 2 ^ (-lam)
   rw [ENNReal.toReal_min ENNReal.one_ne_top (knowledgeErrorROM_ne_top R F _), ENNReal.toReal_one, knowledgeErrorROM_toReal]
   rcases le_or_gt 1 ((t : ℝ) * 2 ^ (-lam)) with h1 | h1
   · exact (min_le_left _ _).trans h1
@@ -158,10 +169,12 @@ theorem knowledgeErrorROM_le_bits {U e : ℕ} {lam : ℝ} (hs : lam * 100 = e)
 /-- **The bit security of knowledge soundness in the QROM** (the errors of
 `knowledge_soundness_qrom_at` and `soundness_qrom_at`): if `λ · 100 = e`, `2^e ≤ U^100` and the
 quantum budget at `U` is at most `2^-λ`, then for every `t ≥ 1` hash queries,
-`min(1, knowledgeErrorQROM (t + kq)) ≤ t · 2^-λ`. The paper's `λ(errks)` is at least `λ`. -/
+`min(1, knowledgeErrorQROM (t + kq)) ≤ t · 2^-λ`: the paper's `λ(errks)` is at least `λ`. -/
 theorem knowledgeErrorQROM_le_bits {U e : ℕ} {lam : ℝ} (hs : lam * 100 = e)
-    (hU : 2 ^ e ≤ U ^ 100) (hB : R.knowledgeBudgetQROM U ≤ 2 ^ (-lam)) {t : ℕ} (ht : 1 ≤ t) :
-    (min 1 (knowledgeErrorQROM R F (t + R.kq))).toReal ≤ t * 2 ^ (-lam) := by
+    (hU : 2 ^ e ≤ U ^ 100) (hB : R.knowledgeBudgetQROM U ≤ 2 ^ (-lam)) :
+    BitSecurityAtLeast (extractionErrorQROM R F) lam := by
+  intro t ht
+  show (min 1 (knowledgeErrorQROM R F (t + R.kq))).toReal ≤ t * 2 ^ (-lam)
   rw [ENNReal.toReal_min ENNReal.one_ne_top (knowledgeErrorQROM_ne_top R F _), ENNReal.toReal_one, knowledgeErrorQROM_toReal]
   rcases le_or_gt 1 ((t : ℝ) * 2 ^ (-lam)) with h1 | h1
   · exact (min_le_left _ _).trans h1

@@ -22,7 +22,8 @@ The emulated ML-DSA-44 proof of possession at the QROM parameters as a configura
 `forkIop`, its transcript `forkTranscript`, `48`-byte Fiat–Shamir salts, the ML-DSA-44
 proof-of-possession relation at the key `keyWitRel` with the witness read at the key's statement
 values, the honest prover, the honest strategy `honestStrategy`, and the figures), its facts
-`configurationFacts`, and the instances of the templates of the families `Common`, `Query` and `GordieHowe.Configuration.AdaptiveCompleteness`.
+`configurationFacts`, and the instances of the templates of the families `Common`, `GordieHowe.Configuration.ZeroKnowledgeQROM`,
+`GordieHowe.Configuration.AdaptiveCompleteness` and `GordieHowe.Configuration.PaperRelation`.
 
 The configuration is `GordieHowe.Configuration.ofCertified` at the generated certified data
 (`GordieHowe.Generated.MLDSA44.Emulated.QROMParams.certified`), the source program's soundness (`source`) and the
@@ -32,8 +33,7 @@ of the generic templates (`GordieHowe.Configuration.CertifiedSource`,
 
 The figures: at most `2333` rounds, every round's load within `2^-940`, trees of at most `4069`
 leaves, `303` queried leaves, `8609` verifier queries (`2 · 2333 + 4 + 303 · 13`), round errors at
-most `13358901 / 2^260`, `4669` digests per input (`2 · 2333 + 2 + 1`), the query caps `2^100`
-(QROM) and `2^64` (ROM), `7141` positions (`3072 + 4069`) and `48`-byte digests.
+most `13358901 / 2^260`, `4669` digests per input (`2 · 2333 + 2 + 1`), the quantum query cap `2^100` and the classical query cap `2^64`, `7141` positions (`3072 + 4069`) and `48`-byte digests.
 
 The realization step's derivations (`RealizedProgram.Derivable`) are checked at the declared
 statement bounds (`RealizedProgram.declaredRanges`): `key.a`, value `56`, below `q = 8380417`, and
@@ -88,17 +88,17 @@ theorem label_le : label.length ≤ 2 ^ 10 :=
   Nat.le_of_ble_eq_true rfl
 
 /-- **The frontend of `MLDSA44.Emulated.QROMParams`** (`Configuration.Frontend`): the statements `KeyStmt` with the codec
-`keyStmtCodec`, read as their statement values (`stmtOf`), the headline relation `keyWitRel`, the honest
+`keyStmtCodec`, read as their statement values (`stmtOf`), the relation `keyWitRel`, the honest
 inputs `HonestInput` at `relH` with the execution `sourceExec`, and the label `label`. -/
 noncomputable def frontend :
     Configuration.Frontend certified source KeyStmt MLDSA44.VarWitness HonestInput where
   codec := keyStmtCodec
   stmtOf := stmtOf
-  rel' := keyWitRel
-  g s w := w (stmtOf s)
+  rel := keyWitRel
+  witnessMap s w := w (stmtOf s)
   relH := relH
   exec := sourceExec
-  keyStmtOf := keyStmtOf
+  stmtOfHonest := keyStmtOf
   label := label
 
 /-- **The facts of `frontend`**: the statement's writes (`stmtCodec_ser_le`), the label
@@ -114,14 +114,14 @@ instantiate_config GordieHowe.MLDSA44.Emulated.QROMParams
 /-! ## The configuration -/
 
 /-- **`MLDSA44.Emulated.QROMParams` as a configuration under spBCS** (module docstring,
-`Configuration.ofCertified`): `48`-byte salts and the query cap `2 ^ 100`. -/
+`Configuration.ofCertified`): the QROM parameter set `ParamSet.qrom` (`48`-byte salts and the quantum query cap `2 ^ 100`). -/
 noncomputable def configuration : Configuration :=
-  .ofCertified certified source frontend 48 (2 ^ 100)
+  .ofCertified certified source frontend .qrom
 
 /-- **The facts of `configuration`** (`Configuration.ofCertified_facts`): the frontend's
 (`frontendFacts`) and the generated loads' check (`GordieHowe.RuntimeInputs.FiguresFacts.loads`). -/
 theorem configurationFacts : configuration.Facts :=
-  Configuration.ofCertified_facts certified source frontendFacts (by norm_num) _
+  Configuration.ofCertified_facts certified source frontendFacts (Nat.le_of_ble_eq_true rfl)
     (conditions.fullFacts.figures.loads rfl)
 
 /-- **The honest inputs of the paper's relation** (`Configuration.HonestOf` at `keyWitRel`, the
@@ -130,13 +130,37 @@ paper's relation `MLDSA44.PoP.relUpTo 32` at the key): every pair has the honest
 def honestOfRel : configuration.HonestOf where
   rel := keyWitRel
   rel_subset _ h := h
-  honestOf p hp := MLDSA44.HonestInput.ofRel p.1.1 p.2 hp
-  keyStmtOf_honestOf _ _ := rfl
+  honestOf x w hp := MLDSA44.HonestInput.ofRel x.1 w hp
+  stmtOfHonest_honestOf _ _ _ := rfl
 
 instantiate_config GordieHowe.MLDSA44.Emulated.QROMParams
   from [GordieHowe.Configuration.Common, GordieHowe.Configuration.ZeroKnowledgeQROM,
     GordieHowe.Configuration.AdaptiveCompleteness,
     GordieHowe.Configuration.PaperRelation] folding [keyRel] configuration configurationFacts
     honestOfRel at proofSystem
+
+/-! ## The printed instances
+
+The instances the paper prints at the QROM parameters (`tab:eval-params`, `app:formal`) are headlines:
+the model-free statements, the QROM statements, the source program's round-by-round knowledge
+soundness and the largest round error. The other instances restate their templates at this
+configuration and are not tagged. -/
+
+attribute [headline]
+  completeness
+  completeness_honest
+  completeness_of_rel
+  honest_input_of_rel
+  unconditional_witness_indistinguishability
+  completeness_adaptive_qrom
+  knowledge_soundness_qrom_at
+  soundness_qrom_at
+  everlasting_zero_knowledge_qrom
+  everlasting_zero_knowledge_honest_qrom
+  weak_online_simulation_extractability_qrom
+  weak_online_simulation_extractability_qrom_at_figures
+  unruh_simulation_extractability_qrom
+  source_rbr_knowledge_soundness
+  maxRoundError_le
 
 end GordieHowe.MLDSA44.Emulated.QROMParams

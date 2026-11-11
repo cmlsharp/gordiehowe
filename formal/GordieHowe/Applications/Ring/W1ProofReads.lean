@@ -46,14 +46,15 @@ open scoped ENNReal
 section System
 
 variable {k kN kS L e N : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁]
-  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
+  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)] {X₀ Wit₀ : Type}
   (M : SPBCS Mg P X₀ k kN kS L e) (Λ : SiteLayout Mg) {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] (E : (j : ι) → (M.comp j).Encoder)
   {Vr : X₀ → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : Wit₀ → R → CausalProver P τ X₀)
   (stmtProg : RingSignature.RingStmt B → OracleProg (Bits (queryBits k kN kS L)) Y₁ X₀) (qS : ℕ)
   (hS : ∀ x, (stmtProg x).QueriesLE qS) (check : RingSignature.RingStmt B → Bool)
@@ -71,7 +72,7 @@ theorem accepted_qVerifier_congr {h h' : Bits (queryBits k kN kS L) → Out k e}
   have : h ∘ Query.toBits = h' ∘ Query.toBits := funext hh
   rw [this]
 
-omit [AddGroup Y] [AddGroup Y₁] [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
+omit [AddGroup Y] [AddGroup Y₁] [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **The compiled honest prover reads the oracle only at the encoded queries**: its result is the
 same at two oracles agreeing at every point `Query.toBits q`. -/
 theorem run_splitNIProver_congr (x₀ : X₀) (y : Wit₀)
@@ -90,7 +91,7 @@ theorem run_splitNIProver_congr (x₀ : X₀) (y : Wit₀)
   funext q
   exact congrArg (queryEncoding (k := k) (kN := kN) (kS := kS) (L := L) (e := e)).answer (hG q)
 
-omit [AddGroup Y] [AddGroup Y₁] [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
+omit [AddGroup Y] [AddGroup Y₁] [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **The compiled honest prover queries only encoded queries.** -/
 theorem mem_range_of_mem_trace_splitNIProver (x₀ : X₀) (y : Wit₀)
     (c : SaltedCoins (FiatShamirSalt kS) (M.ProverCoins R))
@@ -106,6 +107,7 @@ theorem mem_range_of_mem_trace_splitNIProver (x₀ : X₀) (y : Wit₀)
   obtain ⟨q, -, rfl⟩ := List.mem_map.1 hz
   exact ⟨q, rfl⟩
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **The prover of the split proof system is the same at two oracles** whose statement programs
 give the same value on the base components and whose second components agree at every point
 `Query.toBits q`. -/
@@ -135,6 +137,7 @@ theorem run_prove_spbcsSplit_congr (x : RingSignature.RingStmt B) (w : RingSigna
   · simp only [Option.elim_some, OracleProg.run_mapQuery]
     exact run_splitNIProver_congr M Λ E hb honest _ y c fun q => hprf q
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The verifier of the split proof system is the same at two oracles** whose statement programs
 give the same value on the base components and whose second components agree at every point
 `Query.toBits q`. -/
@@ -163,6 +166,7 @@ theorem run_base_eq_of_agreeOff {Bad : Set (Bits (queryBits k kN kS L))}
   OracleProg.run_congr (stmtProg x) fun z hz => by
     simp only [base, hH z (hq x _ z hz)]
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **The prover of the split proof system is the same at two oracles agreeing outside `Bad`**, a
 set of points off the encoded queries that the statement program never queries. -/
 theorem run_prove_spbcsSplit_eq_of_agreeOff (Bad : Set (Bits (queryBits k kN kS L)))
@@ -177,6 +181,7 @@ theorem run_prove_spbcsSplit_eq_of_agreeOff (Bad : Set (Bits (queryBits k kN kS 
   run_prove_spbcsSplit_congr sp M Λ E hb honest stmtProg qS hS check input x w c
     (run_base_eq_of_agreeOff hq x hH) fun q => by simp only [prf, hH _ (hBad q)]
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The verifier of the split proof system is the same at two oracles agreeing outside `Bad`**,
 a set of points off the encoded queries that the statement program never queries. -/
 theorem verify_spbcsSplit_eq_of_agreeOff (Bad : Set (Bits (queryBits k kN kS L)))
@@ -268,7 +273,7 @@ variable {k kN kS L e : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁]
   {M : SPBCS Mg P (W1ExpStmt prims RMsg N) k kN kS L e} {Λ : SiteLayout Mg}
   {b : ℕ} [∀ j i, Fintype ((M.comp j).MessageWrite i)] {E : (j : ι) → (M.comp j).Encoder}
   {Vr : W1ExpStmt prims RMsg N → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  {hb : M.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {hb : M.FormatBounds Qs b b} {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   {honest : RingSignature.RingWit (w1BaseSigner prims O βmin tol enc Lp bmsg) → R →
     CausalProver P τ (W1ExpStmt prims RMsg N)}
   {T : ℕ} {Mo : MaskOracle (Bits (queryBits k kN kS L)) Y p T Msg}
@@ -282,7 +287,7 @@ theorem w1StmtProg_avoids_mask (hdisjM : ∀ x, O.IsPt x → x ∉ Set.range Mo.
     ∀ z ∈ (w1StmtProg sp prims O bmsg x).trace ω, z ∉ Set.range Mo.pt :=
   fun _ hz => hdisjM _ (isPt_of_mem_trace_w1StmtProg sp prims O βmin tol enc Lp bmsg x ω hz)
 
-omit [NeZero (bucketCount p)] in
+omit [NeZero (bucketCount p)] [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **The prover of the ring reads no mask point** (`hPSm` of `insiderForgeProb_le_w1C2`): when the
 base signer's points and the encoded spBCS queries are not mask points. -/
 theorem w1PS_run_prove_eq_of_agreeOffRange (hdisjM : ∀ x, O.IsPt x → x ∉ Set.range Mo.pt)
@@ -293,7 +298,8 @@ theorem w1PS_run_prove_eq_of_agreeOffRange (hdisjM : ∀ x, O.IsPt x → x ∉ S
   fun x w c _ _ hH => run_prove_spbcsSplit_eq_of_agreeOff sp M Λ E hb honest _ _ _ _ _ _ hdisjQ
     (fun x ω => w1StmtProg_avoids_mask hdisjM x ω) x w c hH
 
-omit [NeZero (bucketCount p)] in
+omit [NeZero (bucketCount p)]
+  [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The verifier of the ring reads no mask point** (`hPSv` of `insiderForgeProb_le_w1C2`): when
 the base signer's points and the encoded spBCS queries are not mask points. -/
 theorem w1PS_verify_eq_of_agreeOffRange (hdisjM : ∀ x, O.IsPt x → x ∉ Set.range Mo.pt)
@@ -304,7 +310,7 @@ theorem w1PS_verify_eq_of_agreeOffRange (hdisjM : ∀ x, O.IsPt x → x ∉ Set.
   fun x π _ _ hH => verify_spbcsSplit_eq_of_agreeOff sp M Λ E hb honest _ _ _ _ _ _ hdisjQ
     (fun x ω => w1StmtProg_avoids_mask hdisjM x ω) x π hH
 
-omit [NeZero (bucketCount p)] in
+omit [NeZero (bucketCount p)] [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **The prover of the ring reads the base component only at the commitment hashes of the
 statement's public value and off the commitment-hash points**: two oracles with the same second
 components everywhere, agreeing off the commitment-hash points and at the points `chPt (u, x.pub)`,
@@ -351,11 +357,13 @@ variable {p : Params} {T : ℕ} {Msg : Type} {N reps : ℕ}
   {Λ : SiteLayout Mg} {b : ℕ} [∀ j i, Fintype ((Mc.comp j).MessageWrite i)]
   {E : (j : ι) → (Mc.comp j).Encoder}
   {Vr : W1ExpStmt prims RMsg N → FullTr P τ → Bool}
-  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R]
+  [DecidableEq R] [Nonempty R]
   {honest : RingSignature.RingWit (freshBase prims O Mo βmin tol enc k D bmsg) → R →
     CausalProver P τ (W1ExpStmt prims RMsg N)}
   {chk : RingSignature.RingStmt (freshBase prims O Mo βmin tol enc k D bmsg) → Bool}
 
+omit [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **The hedged prover reads no mask point** (`hPSm` of `insiderForgeProb_le_w1C2` for `w1HPS`),
 for any check. -/
 theorem w1HPS_run_prove_eq_of_agreeOffRange (hdisjM : ∀ x, O.IsPt x → x ∉ Set.range Mo.pt)
@@ -369,6 +377,7 @@ theorem w1HPS_run_prove_eq_of_agreeOffRange (hdisjM : ∀ x, O.IsPt x → x ∉ 
     (fun _ w => some w)
     _ hdisjQ (fun x ω => w1StmtProg_avoids_mask hdisjM x ω) x w c hH
 
+omit [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The hedged verifier reads no mask point** (`hPSv` of `insiderForgeProb_le_w1C2` for
 `w1HPS`), for any check. -/
 theorem w1HPS_verify_eq_of_agreeOffRange (hdisjM : ∀ x, O.IsPt x → x ∉ Set.range Mo.pt)
@@ -382,6 +391,8 @@ theorem w1HPS_verify_eq_of_agreeOffRange (hdisjM : ∀ x, O.IsPt x → x ∉ Set
     (fun _ w => some w)
     _ hdisjQ (fun x ω => w1StmtProg_avoids_mask hdisjM x ω) x π hH
 
+omit [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [DecidableEq R] [Fintype Y] [DecidableEq Y]
+  [Nonempty Y] in
 /-- **`ProverReadsPub` for the hedged proof system**, for any check, when message points are not
 commitment-hash points. -/
 theorem proverReadsPub_w1HPS (hdisj : ∀ a b, O.muPt a ≠ O.chPt b) :

@@ -345,7 +345,7 @@ theorem tail_holds_of_honest (hwf : ir.WellFormed) (hI : I.Registered ir)
         rfl
       have hpar := MACRows.unpack_maskedMAC B β W
       rw [hmac] at hpar
-      refine (holdsWith_mod_iff (.inr le_rfl)).2 ?_
+      refine holdsWith_mod_iff.2 ?_
       intro m hm
       have hm' : m < real.width := by
         change m < (ir.value b).size at hm

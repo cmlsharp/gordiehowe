@@ -206,14 +206,12 @@ theorem sum_nLeaves : ∑ τ : M.Tree, (M.comp τ.leaf.label).nLeaves τ.tree.ms
   rw [Fintype.card_sigma]
   simp [TreeIdx.equivSigma, Tree.equivSigma]
 
-open Classical in
 /-- The default-leaf program: if some tree has no leaves, the `leaf` query of the default leaf. -/
 def defaultProg : OracleProg (Query k kN kS L) (Out k e) (Digest k) :=
   if ∃ τ : M.Tree, (M.comp τ.leaf.label).nLeaves τ.tree.msg τ.tree.tree = 0 then
     MerkleTree.leafProg (⟨fun _ => 0, ⟨0, Fin.elim0⟩⟩ : MerkleLeaf kN L)
   else .pure fun _ => 0
 
-open Classical in
 theorem length_trace_defaultProg :
     ((M.defaultProg).trace h).length =
       if ∃ τ : M.Tree, (M.comp τ.leaf.label).nLeaves τ.tree.msg τ.tree.tree = 0 then 1 else 0 := by
@@ -659,7 +657,7 @@ the coins, the joint simulator's view at `pub x`, the streams drawn by preimage 
 and the program `jointProgOpt` at them, against the compiler's oracle `Query → Out`. It returns a
 proof in the format `B` (by the format bounds `hsim` of the views), or fails (`none`, with no
 assignment) where no writes can be read off the simulated view. Simulators that may fail are
-standard; real views always decode (`ViewEncoder.writesOf_obs`), so the failure is charged to the
+standard; real views always decode (`Reveal.writesOf_obs`), so the failure is charged to the
 HVZK error and moves no bound. In the quantum random-oracle model it runs through `queryEncoding`.
 
 Running time: polynomial in the proof size. One run of the joint simulator `Sim` and of each
@@ -762,14 +760,28 @@ theorem ViewEncoder.formatBounds (E : (j : ι) → (M.comp j).Encoder) {V : X �
 
 variable [∀ j i, Fintype ((M.comp j).MessageWrite i)] (Λ : SiteLayout Mg)
 
+variable {M} in
+/-- **The simulator of the spBCS compiler at view laws** `VE`: `niSimulator` at the read-off
+functions of `VE` and the site layout `Λ`, in the format `B` of the format bounds `hb` of the query
+phases (`ViewEncoder.formatBounds`).
+
+Running time: that of `niSimulator`, which it is. This running time is argued here, not proved in
+Lean. -/
+abbrev ViewEncoder.niSimulator {E : (j : ι) → (M.comp j).Encoder} {V : X → FullTr P t → Bool}
+    {Qs : ∀ x, M.IOPQueries V x} (VE : M.ViewEncoder E Qs) (Λ : SiteLayout Mg) {B : ℕ}
+    (hb : M.FormatBounds Qs B B) {Pub : Type} (pub : X → Pub) (Sim : CausalJointSimulator VE.MV Pub)
+    (T : M.Preimages) : NARG.Simulator (Query k kN kS L) (Out k e) X (Option (M.BProof B))
+      (SaltedCoins (FiatShamirSalt kS) (M.JointSimCoins VE.toViewRead Sim T)) :=
+  M.niSimulator Λ VE.toViewRead B (ViewEncoder.formatBounds M E VE hb) pub Sim T
+
 /-- **Bridge to the hybrid argument**: the simulator run through `queryEncoding` is the simulator
 of the zero-knowledge games `niJointSimulatorProg`, within the format bounds of the views. -/
 theorem encode_niSimulator (E : (j : ι) → (M.comp j).Encoder) {V : X → FullTr P t → Bool}
     {Qs : ∀ x, M.IOPQueries V x} (VE : M.ViewEncoder E Qs) {B : ℕ} (hb : M.FormatBounds Qs B B)
     {Pub : Type} (pub : X → Pub) (Sim : CausalJointSimulator VE.MV Pub) (T : M.Preimages) :
-    (M.niSimulator Λ VE.toViewRead B (ViewEncoder.formatBounds M E VE hb) pub Sim T).encode
-      queryEncoding = M.niJointSimulatorProg Λ VE.toViewRead B pub Sim T := by
-  rw [niSimulator_eq]
+    (VE.niSimulator Λ hb pub Sim T).encode queryEncoding =
+      M.niJointSimulatorProg Λ VE.toViewRead B pub Sim T := by
+  rw [ViewEncoder.niSimulator, niSimulator_eq]
   rfl
 
 end

@@ -167,7 +167,7 @@ of codes, per block of the operator's columns; a staged operator is not accepted
 def opTE : EOp → List TE → Except TReason (List TE)
   | .view idx zero, xs =>
     let L := xs.length
-    let T := Trie.ofList xs
+    let T := PTree.ofList xs
     match zero with
     | none =>
       cond (idx.inRange L) (.ok (pickL xs idx)) (.error .index)
@@ -182,12 +182,12 @@ def opTE : EOp → List TE → Except TReason (List TE)
       let C := NamedOp.cols ir op
       let rs := shiftRows C (L / C) rows
       cond (Nat.blt 0 C && Nat.beq (L % C) 0 && rowsInB L rs)
-        (.ok (rs.map (rowTE (Trie.ofList xs).get))) (.error .rows)
+        (.ok (rs.map (rowTE (PTree.ofList xs).get))) (.error .rows)
   | .sparse rows, xs =>
     match rows.mapM fun r => r.mapM fun t => (coefCode ir c t.2).map fun a => (t.1, a) with
     | none => .error .constant
     | some rs =>
-      cond (rowsInB xs.length rs) (.ok (rs.map (rowTE (Trie.ofList xs).get))) (.error .rows)
+      cond (rowsInB xs.length rs) (.ok (rs.map (rowTE (PTree.ofList xs).get))) (.error .rows)
   | .staged _ _, _ => .error .kind
 
 /-- **The operators of a term, first to last.** -/
@@ -535,7 +535,7 @@ def staged? : EOp → Option (ℕ × ℕ × NttOrder × ℕ)
 `tw q` at the upper position `q` of each pair: in each block of `2h`, positions `q` and `q + h`
 become `u + w·v` and `u − w·v`, `u, v` the positions `q, q + h`, `w = tw q` (`bflyF`). -/
 def bflyT (n h : ℕ) (tw : ℕ → ℕ) (arr : List TE) : List TE :=
-  let T := Trie.ofList arr
+  let T := PTree.ofList arr
   (List.range n).map fun p =>
     cond (Nat.blt (p % (2 * h)) h)
       (.add (T.get p) (.scale (tw p) (T.get (p + h))))
@@ -560,13 +560,13 @@ def stagesT (n : ℕ) (sched : ℕ → ℕ × (ℕ → ℕ)) :
 
 /-- **The schedule of a staged transform** of length `n = 2^L` in order `o` (`nttSchedF`), its
 twiddle codes read from the table `Tw` of `ψ^0, …, ψ^(n−1)`. -/
-def nttSchedT (n L : ℕ) (Tw : Trie ℕ) (o : NttOrder) (s : ℕ) : ℕ × (ℕ → ℕ) :=
+def nttSchedT (n L : ℕ) (Tw : PTree ℕ) (o : NttOrder) (s : ℕ) : ℕ × (ℕ → ℕ) :=
   (nttHalf L o s, fun q => Tw.get (nttTwIdx n L o s q))
 
-/-- **The input of a staged transform** (`nttInF`) from the operand's trie `Tx`: natural order
+/-- **The input of a staged transform** (`nttInF`) from the operand's positional tree `Tx`: natural order
 twists by `ψ^i` and reverses the bits (`ntt_gadget::transform`); scheme order reads the
 coefficients as they are. -/
-def nttInT (n L : ℕ) (Tw : Trie ℕ) (Tx : Trie TE) : NttOrder → List TE
+def nttInT (n L : ℕ) (Tw : PTree ℕ) (Tx : PTree TE) : NttOrder → List TE
   | .natural =>
     (List.range n).map fun p => .scale (Tw.get (bitRevNat L p)) (Tx.get (bitRevNat L p))
   | .scheme => (List.range n).map Tx.get
@@ -575,8 +575,8 @@ def nttInT (n L : ℕ) (Tw : Trie ℕ) (Tx : Trie TE) : NttOrder → List TE
 `L` stages. -/
 def nttBlockT (n L psi : ℕ) (o : NttOrder) (xs : List TE) (aux : List Wire) :
     Option (List TE × List Wire × Cuts) :=
-  let Tw := Trie.ofList (powList env.ar psi n 1)
-  stagesT env n (nttSchedT n L Tw o) L 0 (nttInT n L Tw (Trie.ofList xs) o) aux
+  let Tw := PTree.ofList (powList env.ar psi n 1)
+  stagesT env n (nttSchedT n L Tw o) L 0 (nttInT n L Tw (PTree.ofList xs) o) aux
 
 /-- **`k` blocks of a staged transform** (`expand_operator`), block-major aux. -/
 def nttBlocksT (n L psi : ℕ) (o : NttOrder) :
@@ -671,25 +671,25 @@ def nodeStep (kid : ℕ → ℕ → Except TReason (List TE × Cuts)) (k : ℕ) 
       .ok (ys, r.2)
   | .prod w a => do
     let r ← kid a (n * w)
-    let T := Trie.ofList r.1
+    let T := PTree.ofList r.1
     let q ← auxAll (fun j aux => prodTree (w + 1) ((List.range w).map fun t => T.get (j * w + t))
       aux) n nd.aux
     .ok (q.1, q.2 ++ r.2)
   | .tree any w a => do
     let r ← kid a (n * w)
-    let T := Trie.ofList r.1
+    let T := PTree.ofList r.1
     let q ← auxAll (fun j aux => balTree (cond any (lorT env) .mul) (.const (cond any 0 1))
       (fun t => T.get (j * w + t)) (w + 1) w 0 true aux) n nd.aux
     .ok (q.1, q.2 ++ r.2)
   | .cmp op w a b => do
     let r ← kid a (n * w)
-    let Ta := Trie.ofList r.1
+    let Ta := PTree.ofList r.1
     let rb ← (match b with
       | .node b' => kid b' (n * w)
       | .imm v idx => do
         let es ← constE ir c v
-        .ok ((List.range (n * w)).map fun i => .const (es.getD (idx.entry i) 0), []))
-    let Tb := Trie.ofList rb.1
+        .ok ((padTo (n * w) idx.toList).map fun e => .const (es.getD e 0), []))
+    let Tb := PTree.ofList rb.1
     let q ← auxAll (fun j aux => cmpTree env op w (fun t => Ta.get (j * w + t))
       (fun t => Tb.get (j * w + t)) aux) n nd.aux
     .ok (q.1, q.2 ++ r.2 ++ rb.2)

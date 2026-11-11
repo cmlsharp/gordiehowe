@@ -46,17 +46,19 @@ namespace GordieHowe.Ring
 open Quantum GordieHowe.QROM GordieHowe.SPBCS IOP SPTerm GordieHowe.RingSignature GordieHowe.IOP
 open scoped ENNReal
 
-variable {k kN kS L e N : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N : ℕ} {TB : BaseTypes}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
   (M : SPBCS Mg P (RingStmt B) k kN kS L e) (Λ : SiteLayout Mg) {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] (E : (j : ι) → (M.comp j).Encoder)
   {Vr : RingStmt B → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : RingWit B → R → CausalProver P τ (RingStmt B))
   (adm : KeyRing B.PK N → Prop)
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **The spBCS proof system is adaptively complete for the ring relation**: if every pair of the
 ring relation at every oracle is in `rel₀` (`hrel`) and the composite verifier rejects the run of
 the causal honest prover on a pair of `rel₀` with probability at most `εp` over uniform coins and
@@ -123,6 +125,10 @@ theorem spbcsProofSystem_completeWithin (VE : M.ViewEncoder E Qs)
 
 variable [DecidablePred adm]
 
+variable [DecidableEq TB.PK] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
+  [Nonempty TB.Coins]
+
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **Completeness of the ring signature compiled by spBCS** (BKM06 Definition 1 with errors,
 averaged over honest rings): for a base signer with refusal rate `ρ` on honest rings and
 correctness error `εc`, and an IOP with completeness error `εp` on a relation `rel₀` containing the
@@ -140,6 +146,8 @@ theorem completeWithin_ofBase_spbcs (VE : M.ViewEncoder E Qs) {ρ εc : ℝ≥0�
         ((B.q + B.qPub : ℕ) : ℝ≥0∞) / 2 ^ (8 * kS))) :=
   completeWithin_ofBase B _ adm hρ hc (spbcsProofSystem_completeWithin M Λ E hb honest adm VE hrel hε)
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] [Fintype TB.KeyCoins]
+  [Nonempty TB.KeyCoins] in
 /-- **Completeness of the ring signature compiled by spBCS, per key**: as
 `completeWithin_ofBase_spbcs`, with the per-key refusal rate `ρ` (`RefuseAtWithin`), at every key
 and every supported ring holding it. -/
@@ -155,6 +163,7 @@ theorem completeAtWithin_ofBase_spbcs (VE : M.ViewEncoder E Qs) {ρ εc : ℝ≥
   completeAtWithin_ofBase B _ adm hρ hc
     (spbcsProofSystem_completeWithin M Λ E hb honest adm VE hrel hε)
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **Completeness of the ring signature compiled by spBCS, base verification without the
 oracle**: for a base signer whose verification and public value read no oracle, the IOP's relation
 may be the ring relation at any one oracle `H₀` (`completeWithin_ofBase_spbcs` with
@@ -171,6 +180,8 @@ theorem completeWithin_ofBase_spbcs_of_verifiesWithoutOracle (VE : M.ViewEncoder
   completeWithin_ofBase_spbcs M Λ E hb honest adm VE hρ hc (rel₀ := fun x w => (x, w) ∈ ringRel B adm H₀)
     (fun H p hp => by rw [hB.ringRel_eq adm H₀ H]; exact hp) hε
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] [Fintype TB.KeyCoins]
+  [Nonempty TB.KeyCoins] in
 /-- **Completeness per key of the ring signature compiled by spBCS, base verification without
 the oracle** (`completeAtWithin_ofBase_spbcs` with `VerifiesWithoutOracle.ringRel_eq`). -/
 @[headline]

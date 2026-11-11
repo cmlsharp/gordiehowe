@@ -47,10 +47,19 @@ set_option hygiene false in
 local notation "σ" => MldsaRingEmbed.σ program
 
 set_option hygiene false in
-local notation "vA" => MldsaRingRelation.aHat program
+local notation "ringV" => MldsaRingEmbed.V program
 
 set_option hygiene false in
-local notation "vT" => MldsaRingRelation.t1 program
+local notation "ringR" => MldsaRingEmbed.R program
+
+set_option hygiene false in
+local notation "predMap" => MldsaRingEmbed.pred program
+
+set_option hygiene false in
+local notation "vA" => MldsaRandomPoint.aHat program
+
+set_option hygiene false in
+local notation "vT" => MldsaRandomPoint.t1 program
 
 set_option hygiene false in
 local notation "vI" => (TableSelect.shape program).idx
@@ -58,9 +67,16 @@ local notation "vI" => (TableSelect.shape program).idx
 set_option hygiene false in
 local notation "vMu" => MldsaRingFront.muA program
 
+set_option hygiene false in
+local notation "vQ" => MldsaRandomPoint.q program
+
 /-- **Value `u` of the native program is a word of domain `H`'s core** (`GF(2^16)`): a core round's
 words, `w1`'s or `μ`'s words, the threshold words or a memory cell. -/
 def natGF16B (u : ℕ) : Bool := coreHashB u || [557, 560, 562, 563, 564, 565].contains u
+
+/-- **The realization's predicates of a native ring program**: `mac.A`, the norm range's top row,
+the MAC blind's Booleanity, the MAC's low, high and no-wrap rows and its tail `mac`. -/
+def realizationPreds : List ℕ := [8, 9, 16, 21, 22, 23, 247]
 
 /-- **The program facts of a native ML-DSA-44 ring program's execution** (decided per program):
 `249` predicates, the source predicates (the realization's `8`, `9`, `16`, `21 … 23`, `247` are
@@ -71,12 +87,20 @@ class MldsaRingExec (program : RealizedProgram) [MldsaRingEmbed program] [MldsaR
     [MldsaRingHonest program] : Prop where
   /-- The program is well formed. -/
   wf : program.WellFormed
-  /-- The program has `249` predicates. -/
-  predicates_length : program.predicates.length = 249
   /-- The realization's predicates are no source predicates. -/
-  nonSource : ∀ q ∈ [8, 9, 16, 21, 22, 23, 247], program.inSource (program.predicate q) = false
-  /-- The table's selection is predicate `0`, its index bits' check `11`. -/
-  predIds : (TableSelect.shape program).pred = 0 ∧ (TableSelect.shape program).idxPred = 11
+  nonSource : ∀ q ∈ realizationPreds, program.inSource (program.predicate q) = false
+  /-- **Every predicate is a held one, one of the ring program's own or a realization's**: the
+  ring predicate of a held native predicate of domain `H`'s core (`corePredLo … hPredHi`) or of
+  `aSource`; the
+  table's selection, the signature relation's four rows, `member.mu`'s Booleanity, the index
+  bits' check or the crossing; or one of `realizationPreds`. -/
+  coverage : ∀ q < program.predicates.length,
+    (∃ p ∈ MldsaRingEmbed.held program, p.2 = q ∧ ((corePredLo ≤ p.1 ∧ p.1 ≤ hPredHi) ∨ p.1 ∈ aSource)) ∨
+      q ∈ [(TableSelect.shape program).pred, MldsaRandomPoint.rel0 program,
+        MldsaRandomPoint.rel0 program + 1, MldsaRandomPoint.rel0 program + 2,
+        MldsaRandomPoint.rel0 program + 3, MldsaRingFront.muBoolPred program,
+        (TableSelect.shape program).idxPred, MldsaRingFront.crossPred program] ∨
+      q ∈ realizationPreds
   /-- The statement has no member checks. -/
   checks : program.statement.checks = []
   /-- The program declares no statement bound. -/
@@ -84,7 +108,7 @@ class MldsaRingExec (program : RealizedProgram) [MldsaRingEmbed program] [MldsaR
   /-- The committed source cells' classes. -/
   cell_classes : (List.range program.values.length).all (fun v =>
     !program.privCellB v || !decide (program.IsSourceValue v) ||
-      ([vA, vT, vMu, vI].contains v && program.valueField v == 0 &&
+      ([vA, vT, vMu, vI, vQ].contains v && program.valueField v == 0 &&
         (program.value v).node.map (·.name) == some "GF(p^1)") ||
       (decide (MldsaRingHonest.inv program v ∈ ringV) &&
         (σ).val (MldsaRingHonest.inv program v) == v &&
@@ -284,6 +308,13 @@ variable {program : RealizedProgram} [MldsaRingEmbed program] [MldsaRingRelation
 set_option hygiene false in
 local notation "interp" => mldsaInterpOf F0 FH
 
+/-- **The honest quotients lie in `F_q`.** -/
+theorem qHon_mem_prime (y : RingIn msgLen) (i t : ℕ) :
+    qHon y ((interp 0).decode 1753) i t ∈ (interp 0).node "GF(p^1)" :=
+  (QField.node_prime (F0 := F0) _).2 (qHon_mem y _ (by
+    rw [decode_psi (F0 := F0) (FH := FH)]
+    exact natCast_mem _ _) _ _)
+
 /-- **An honest committed source value lies in its value's node.** -/
 theorem honest_cell_mem (y : RingIn msgLen) {v : ℕ} (hv : v < program.values.length)
     (hp : program.privCellB v = true) (hsrc : program.IsSourceValue v)
@@ -300,6 +331,7 @@ theorem honest_cell_mem (y : RingIn msgLen) {v : ℕ} (hv : v < program.values.l
       | exact Native.mem_castElt_of_eq hf.symm (Native.natCast_mem_prime (F0 := F0) (FH := FH) _)
       | exact Native.mem_castElt_of_eq hf.symm
           (Nat.cast_zero (R := (interp 0).K) ▸ Native.natCast_mem_prime (F0 := F0) (FH := FH) 0)
+      | exact Native.mem_castElt_of_eq hf.symm (qHon_mem_prime y _ _)
       | (exfalso; simp_all)
   · obtain ⟨u, hu, rfl⟩ : ∃ u ∈ ringV, (σ).val u = v := ⟨_, hinv, heq⟩
     rw [MldsaRingHonest.inv_val u hu] at hcls
@@ -326,60 +358,33 @@ theorem honest_cell_mem (y : RingIn msgLen) {v : ℕ} (hv : v < program.values.l
       exact hValCore_mem_bit y (hfu.symm.trans hf) hB j
 
 /-- **Every source predicate holds** at the source environment of the honest values, at a
-statement holding the ring's rows: the member's checks, the signature relation, domain `A`'s
-gadgets and domain `H`'s core through the renaming, and the crossing (the realization's predicates
-are no source predicates, `MldsaRingExec.nonSource`). -/
+statement holding the ring's rows: domain `A`'s gadgets and domain `H`'s core through the
+renaming, the member's checks, the signature relation and the crossing; the realization's
+predicates are no source predicates (`MldsaRingExec.coverage`, `MldsaRingExec.nonSource`). -/
 theorem source_holds (y : RingIn msgLen) (x : program.Valuation interp)
     (c : ∀ k, (program.layout interp).Ch k) (π : (program.layout interp).Pads)
     (hx : RowsOf y.x x) {q : ℕ} (hq : q < program.predicates.length)
     (hs : program.inSource (program.predicate q) = true) :
     program.HoldsAt (program.srcEnv interp x (honestVal program F0 FH y) c π)
       (program.predicate q).body := by
-  have hns : ∀ q ∈ [8, 9, 16, 21, 22, 23, 247], program.inSource (program.predicate q) = true →
-      False := fun q hq h => by
-    rw [MldsaRingExec.nonSource (program := program) q hq] at h
-    cases h
-  obtain ⟨hp0, hp11⟩ := MldsaRingExec.predIds (program := program)
-  rw [MldsaRingExec.predicates_length (program := program)] at hq
-  by_cases hcore : 24 ≤ q ∧ q ≤ 246
-  · have h := core_holds y x c π (k := q + 24) (by omega) (by omega)
-    rwa [Nat.add_sub_cancel] at h
-  by_cases h248 : q = 248
-  · subst h248
-    exact cross_holds y x c π
-  by_cases h247 : q = 247
-  · subst h247
-    exact (hns 247 (by simp) hs).elim
-  have hq24 : q < 24 := by omega
-  have hA : ∀ k ∈ aSource, program.HoldsAt (program.srcEnv interp x (honestVal program F0 FH y) c π)
-      (program.predicate (predMap k)).body := fun k hk => aSource_holds y x c π hk
-  interval_cases q
-  · have := select_honest y x c π hx
-    rwa [hp0] at this
+  rcases MldsaRingExec.coverage (program := program) q hq with ⟨p, hp, rfl, hk | hk⟩ | ho | hr
+  · rw [← MldsaRingEmbed.pred_held p hp]
+    exact core_holds y x c π hk.1 hk.2
+  · rw [← MldsaRingEmbed.pred_held p hp]
+    exact aSource_holds y x c π hk
+  rotate_left
+  · rw [MldsaRingExec.nonSource q hr] at hs
+    cases hs
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at ho
+  rcases ho with h | h | h | h | h | h | h | h <;> subst h
+  · exact select_honest y x c π hx
   · exact sig_holds y x c π (by simp)
   · exact sig_holds y x c π (by simp)
   · exact sig_holds y x c π (by simp)
   · exact sig_holds y x c π (by simp)
-  · exact hA 1 (by decide)
-  · exact hA 2 (by decide)
-  · exact hA 3 (by decide)
-  · exact (hns 8 (by simp) hs).elim
-  · exact (hns 9 (by simp) hs).elim
   · exact muBool_honest y x c π
-  · have := idxBool_honest y x c π
-    rwa [hp11] at this
-  · exact hA 6 (by decide)
-  · exact hA 7 (by decide)
-  · exact hA 8 (by decide)
-  · exact hA 9 (by decide)
-  · exact (hns 16 (by simp) hs).elim
-  · exact hA 11 (by decide)
-  · exact hA 12 (by decide)
-  · exact hA 13 (by decide)
-  · exact hA 14 (by decide)
-  · exact (hns 21 (by simp) hs).elim
-  · exact (hns 22 (by simp) hs).elim
-  · exact (hns 23 (by simp) hs).elim
+  · exact idxBool_honest y x c π
+  · exact cross_holds y x c π
 
 /-- **The source cross-field `equal`s read bits** at the source environment of the honest
 values: every one crosses `ref 513` and `ref 50` (`MldsaRingHonest.crossOperands`), which read bits

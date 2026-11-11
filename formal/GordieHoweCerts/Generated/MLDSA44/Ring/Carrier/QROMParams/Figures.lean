@@ -20,11 +20,11 @@ leaves, `9338` verifier queries, `4549` digests per chain input, `10213` positio
 digests, every round error at most `16329473 / 2^260`, every load passing the Chernoff test `2^-940`
 at `z = 65 / 64`; the domains' largest arrays (`1024` and `1024`), largest challenge reads and other
 reads (`2400` and `1250`; `2400` and `1250`), no grants, and the source challenges' errors
-`5143 / 18446744069414584321 ^ 4` at challenge `0`, `264 / 2 ^ 256` at challenge `1` and
-`295 / 2 ^ 256` at challenge `2`. The rounds, leaves, queries, verifier queries, digests, positions
-and the digest length are the compiler's; the Chernoff exponent and point, the largest arrays and
-reads, the grants and the largest round error's bound are the configuration's inputs. The check of
-the figures is `GordieHowe.ProgramData.FiguresOk`.
+`5143 / 18446744069414584321 ^ 4` at challenge `0`, `2040 / 18446744069414584321 ^ 4` at challenge
+`1`, `264 / 2 ^ 256` at challenge `2` and `295 / 2 ^ 256` at challenge `3`. The rounds, leaves,
+queries, verifier queries, digests, positions and the digest length are the compiler's; the Chernoff
+exponent and point, the largest arrays and reads, the grants and the largest round error's bound are
+the configuration's inputs. The check of the figures is `GordieHowe.ProgramData.FiguresOk`.
 -/
 
 namespace GordieHowe.Generated.MLDSA44.Ring.Carrier.QROMParams
@@ -51,10 +51,11 @@ theorem figures_eq : figures = ⟨2273, 6144, 342, 9338, 4549, 10213, 48, 163294
   rfl
 
 /-- **The error fractions of the source challenges** (the plan's degree bounds of their events over
-their fields' sizes): `5143 / 18446744069414584321 ^ 4` at challenge `0`, `264 / 2 ^ 256` at
-challenge `1` and `295 / 2 ^ 256` at challenge `2`. -/
+their fields' sizes): `5143 / 18446744069414584321 ^ 4` at challenge `0`,
+`2040 / 18446744069414584321 ^ 4` at challenge `1`, `264 / 2 ^ 256` at challenge `2` and
+`295 / 2 ^ 256` at challenge `3`. -/
 def sourceErrors (j : Nat) : Nat × Nat :=
-  if j = 0 then (5143, 18446744069414584321 ^ 4) else if j = 1 then (264, 2 ^ 256) else (295, 2 ^ 256)
+  if j = 0 then (5143, 18446744069414584321 ^ 4) else if j = 1 then (2040, 18446744069414584321 ^ 4) else if j = 2 then (264, 2 ^ 256) else (295, 2 ^ 256)
 
 /-- **The figures' data.** -/
 abbrev figuresData : GordieHowe.FiguresData :=

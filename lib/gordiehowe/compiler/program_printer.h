@@ -442,8 +442,7 @@ class Printer {
   static std::string mod_form(ir::ModForm f) {
     static const char *forms[] = {".field",    ".constant",        ".bit",
                                   ".oneDigit", ".digits", ".committedDigits",
-                                  ".grouped",  ".integer",         ".product",
-                                  ".spectralProduct"};
+                                  ".grouped",  ".integer"};
     return forms[int(f)];
   }
 
@@ -1058,15 +1057,10 @@ inline std::string print_derivations(
       case D::kSrc: {
         static const char *src[] = {".const",      "(.declared ", "(.nat ",
                                     ".prime",      ".opaqueBit",  "(.quadRoot ",
-                                    "(.rootSet ",  "(.shift ",    "(.tableHull ",
-                                    "(.tableKernel "};
+                                    "(.rootSet ",  "(.shift ",    "(.tableHull "};
         std::string a = src[s.src];
         if (s.src == D::kTableHull)
           a += nums(std::vector<size_t>(s.tails.begin(), s.tails.end())) + " " +
-               ii(0) + " " + ii(1) + ")";
-        if (s.src == D::kTableKernel)
-          a += num(s.src_arg) + " " + ii(2) + " " +
-               nums(std::vector<size_t>(s.tails.begin(), s.tails.end())) + " " +
                ii(0) + " " + ii(1) + ")";
         if (s.src == D::kDeclared) a += num(s.src_arg) + ")";
         if (s.src == D::kNat || s.src == D::kShift) a += pr0() + ")";
@@ -1138,8 +1132,6 @@ inline std::string print_derivations(
         return ".fact " + num(s.id);
       case D::kIvlDisjoint:
         return ".ivlDisjoint " + pr0() + " " + num(s.premises.at(1));
-      case D::kProductMod:
-        return ".productMod " + nums(s.premises);
       case D::kCircuitAssert:
         return ".circuitAssert " + num(s.id);
       case D::kInputPremise:
@@ -1326,7 +1318,16 @@ inline std::string print_program(const ir::Program &p, const ExportMeta &meta,
              ", read := " + num(c.read) + ", products := " + num(c.products) +
              ", blocks := " + num(c.blocks) + ", left := " + num(c.left) +
              ", right := " + num(c.right) + ", length := " + num(c.length) +
-             ", root := " + c.root + " }";
+             ", root := " + c.root +
+             (c.committed == kNone
+                  ? std::string()
+                  : ", committed := some (" + num(c.committed) + ", " + num(c.row) + ")") +
+             (c.direct ? ", direct := true, squares := " +
+                             list_of(c.squares, [](bool sq) {
+                               return std::string(sq ? "true" : "false");
+                             })
+                       : std::string()) +
+             " }";
   }
   if (!convs.empty()) convs = ",\n    convs := [" + convs + "]";
   std::string doms;

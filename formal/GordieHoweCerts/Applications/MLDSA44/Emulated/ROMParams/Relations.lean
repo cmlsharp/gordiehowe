@@ -27,12 +27,12 @@ variable (C : ProofSystems)
 /-! ## The knowledge statements at the key -/
 
 /-- **The ML-DSA-44 proof-of-possession relation at the key**: the paper's relation for messages
-of at most `32` bytes (`PoP.MLDSA44.relUpTo 32`): the witness is a message of some length `L ≤ 32`
+of at most `32` bytes (`MLDSA44.PoP.relUpTo 32`): the witness is a message of some length `L ≤ 32`
 and a signature on it that verifies under the key at the empty context (FIPS 204 Algorithm 3, with
 `ExpandA` within `1008` SHAKE128 bytes per `RejNTTPoly` call (`ExpandAWithin`) and `SampleInBall`
 within `272` SHAKE256 bytes). The maximal length `32` is the exported program's. -/
 abbrev keyWitRel : Set (KeyStmt × MLDSA44.VarWitness) :=
-  {p | (p.1.1, p.2) ∈ MLDSA44.PoP.relUpTo 32}
+  MLDSA44.PoP.relOnKeys MLDSA44.msgLenMax
 
 /-- **The relation at the realized program, at the key's statement values, gives the relation at the key**: at
 the key's preprocessing (`keyOf_stmtOf`), and the key's `ExpandA`

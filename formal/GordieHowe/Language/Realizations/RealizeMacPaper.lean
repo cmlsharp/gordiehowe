@@ -12,9 +12,9 @@ public import GordieHowe.Headline
 /-!
 # The MAC's soundness, in the form of the paper's lemma
 
-The paper's lemma on the MAC of a cross-field `equal` (Lemma 4.6, `lem:core-mac`): (1) the checks over two fields
-whose masked MACs give the same target agree, or the key is a root of the nonzero binding polynomial
-`G`; (2) a nonzero `G` has the key as a root with probability at most `nch/2^w`.
+The paper's lemma on the MAC of a cross-field `equal` (`lem:core-mac`): (1) the checks over two
+fields whose masked MACs give the same target agree, or the key is a root of the nonzero binding
+polynomial `G`; (2) a nonzero `G` has the key as a root with probability at most `nch/2^w`.
 
 * Part (1) in the field `GF(2^w)` is `MAC.binding`; at a realized program it is
   `GordieHowe.RealizedProgram.crossHolds_or_macBad` (the `x` domain hosts the MAC) and

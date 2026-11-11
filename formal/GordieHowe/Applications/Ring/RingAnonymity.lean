@@ -88,6 +88,7 @@ variable {X Y : Type} [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [Deci
 section Challenger
 
 variable {TS : RingTypes} (S : RingScheme X Y N TS) (keys : Fin n → S.KeyCoins) (b : Bool) (Q : ℕ)
+  [DecidableEq TS.PK] [Fintype TS.SignCoins] [DecidableEq TS.SignCoins] [Nonempty TS.SignCoins]
 
 omit [Nonempty X] [DecidableEq Y] [AddGroup Y] in
 /-- **The state of the anonymity challenger after the requests `rs`**: the base oracle `H`, no
@@ -181,14 +182,19 @@ end Challenger
 
 section OfBase
 
-variable {TB : BaseTypes} (B : BaseSigner X Y N TB) {TPS : PSTypes} (PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS)
+variable {TB : BaseTypes}
+  (B : BaseSigner X Y N TB)
+  {TPS : PSTypes} (PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS)
   (adm : KeyRing B.PK N → Prop) [DecidablePred adm]
 
 /-- **The law of an honest proof** of `x` with the witness `w` at the oracle `H`: the prover's coins
 uniform. -/
-noncomputable def ProofSystem.proofLaw {Stmt Wit : Type} {TP : PSTypes} (P : ProofSystem X Y Stmt Wit TP) (H : X → Y)
+noncomputable def ProofSystem.proofLaw {Stmt Wit : Type} {TP : PSTypes} [Fintype TP.Coins]
+    [Nonempty TP.Coins] (P : ProofSystem X Y Stmt Wit TP) (H : X → Y)
     (x : Stmt) (w : Wit) : PMF P.Proof :=
   (PMF.uniformOfFintype P.Coins).map fun c => (P.prove x w c).run H
+
+variable [DecidableEq TB.PK] [Fintype TB.Coins] [Nonempty TB.Coins]
 
 /-- **The law of the refusal-or-public value** of the base signer with key coins `kc` on the ring
 `R` and the message `m`, at the first position of its key and the oracle `H`: `none` for a refusal,
@@ -210,20 +216,22 @@ structure BaseSigner.ReadsOnly {Ω₂ : Type} (f : (X → Y) → Ω₂) : Prop w
   /-- Verification. -/
   bverify_eq : ∀ H H', f H = f H' → B.bverify H = B.bverify H'
 
-omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
-  [Nonempty Y] in
+omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y]
+  in
 /-- **An oracle-free base signer reads the oracle through any function.** -/
-theorem BaseSigner.OracleFree.readsOnly {TB : BaseTypes} {B : BaseSigner X Y N TB} (hB : B.OracleFree) {Ω₂ : Type}
+theorem BaseSigner.OracleFree.readsOnly {TB : BaseTypes}
+    {B : BaseSigner X Y N TB} (hB : B.OracleFree) {Ω₂ : Type}
     (f : (X → Y) → Ω₂) : B.ReadsOnly f where
   run_bsign H H' _ sk R i m c := hB.run_bsign_eq sk R i m c H H'
   run_pub H H' _ pk σ := hB.run_pub_eq pk σ H H'
   bverify_eq H H' _ := hB.bverify_eq H H'
 
-omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
-  [Nonempty Y] in
+omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y]
+  in
 /-- **The ring relation of a base signer reading the oracle through `f`** is the same at two
 oracles with the same `f`. -/
-theorem BaseSigner.ReadsOnly.ringRel_eq {TB : BaseTypes} {B : BaseSigner X Y N TB} {Ω₂ : Type} {f : (X → Y) → Ω₂}
+theorem BaseSigner.ReadsOnly.ringRel_eq {TB : BaseTypes}
+    {B : BaseSigner X Y N TB} {Ω₂ : Type} {f : (X → Y) → Ω₂}
     (hB : B.ReadsOnly f) (adm : KeyRing B.PK N → Prop) {H H' : X → Y} (h : f H = f H') :
     ringRel B adm H = ringRel B adm H' := by
   ext ⟨x, w⟩
@@ -233,8 +241,8 @@ theorem BaseSigner.ReadsOnly.ringRel_eq {TB : BaseTypes} {B : BaseSigner X Y N T
   · rintro ⟨ha, hi, hv, hp⟩
     exact ⟨ha, hi, by rw [hB.bverify_eq H H' h]; exact hv, by rw [hB.run_pub H H' h]; exact hp⟩
 
-omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
-  [Nonempty Y] in
+omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y]
+  [DecidableEq TB.PK] [Fintype TB.Coins] [Nonempty TB.Coins] in
 /-- **Signing at a position** is the base signature (or its refusal) with its public value and the
 proof. -/
 theorem run_signAt_eq (H : X → Y) (pk : B.PK) (sk : B.SK) (R : KeyRing B.PK N) (i : ℕ) (m : B.Msg)
@@ -246,8 +254,8 @@ theorem run_signAt_eq (H : X → Y) (pk : B.PK) (sk : B.SK) (R : KeyRing B.PK N)
   · rfl
   · simp only [OracleProg.run_bind, OracleProg.run_mapOutput, Option.map_some]
 
-omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
-  [Nonempty Y] in
+omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y]
+  [Fintype TB.Coins] [Nonempty TB.Coins] in
 /-- **Signing by `ofBase` on a ring holding the signer's key**: on a supported ring, the base
 signature at the key's first position (or its refusal) with its public value and the proof; on an
 unsupported ring, a refusal. -/
@@ -265,7 +273,11 @@ theorem run_sign_ofBase (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N) (m 
     rw [ite_eq_right_of_eq_false _ _ (eq_false fun h => ha h.2)]
     rfl
 
-variable {B PS adm}
+variable [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [Nonempty TB.KeyCoins] [DecidableEq TB.Coins]
+
+variable {B PS adm} [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
 
 open Classical in
 /-- **The entry law of a challenge** in experiment `b` at the key coins `keys` and the oracle `H₀`:
@@ -301,8 +313,11 @@ noncomputable def anonAns₁ (keys : Fin n → (ofBase B PS adm).KeyCoins) (b : 
     ((ofBase B PS adm).sign ((ofBase B PS adm).keyGen (keys (c.user b))) c.ring c.msg r).run H
   else none
 
-omit [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y] [Fintype X]
-  [DecidableEq X] in
+omit [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y] [Fintype X] [DecidableEq X]
+  [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype TB.Coins]
+  [Nonempty TB.Coins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [Nonempty TB.KeyCoins] [DecidableEq TB.Coins] in
 /-- **The answer to request number `j < Q`** is the answer of the challenge to the coins `ω j`. -/
 theorem anonAns_eq_anonAns₁ (keys : Fin n → (ofBase B PS adm).KeyCoins) (b : Bool) (Q : ℕ) (H : X → Y)
     (ω : Fin Q → (ofBase B PS adm).SignCoins) (j : Fin Q) (c : AnonRequest (ofBase B PS adm) n) :
@@ -310,8 +325,10 @@ theorem anonAns_eq_anonAns₁ (keys : Fin n → (ofBase B PS adm).KeyCoins) (b :
   unfold anonAns anonAns₁
   rw [dite_eq_left j.2]
 
-omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
-  [Nonempty Y] in
+omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y]
+  [DecidableEq TPS.Coins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [Nonempty TB.KeyCoins] [DecidableEq TB.Coins] in
 /-- **One round of the anonymity game is a round with entries** (a base signer reading the oracle
 through `f`, at an oracle `H` with the same `f` as `H₀`): drawing the signing coins and answering the
 challenge `ch` is drawing user `b`'s entry of `ch` at `H₀` and, for an entry, the proof of its
@@ -406,8 +423,11 @@ noncomputable def detAnonWinVia : ℝ :=
     ((anonChallenger (ofBase B PS adm) n keys b Q).classicalAt (ψ h₁)) (m (ψ h₁))
       {p | p.2 = some true}
 
-omit [Nonempty X] [DecidableEq Y] [AddGroup Y] [Fintype X] [DecidableEq X] [Fintype Y]
-  [Nonempty Y] in
+omit [Nonempty X] [DecidableEq Y] [AddGroup Y] [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y]
+  [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype TB.Coins]
+  [Nonempty TB.Coins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [Nonempty TB.KeyCoins] [DecidableEq TB.Coins] in
 /-- **The answer vector as rounds**: rounds answering round `j`'s challenge with the coins `ω j`
 at the oracle `ψ h₁` are `h₁` drawn and the answer vector of `anonAns` at `ψ h₁`. -/
 theorem histRun_pure_anonAns (ω : Fin Q → (ofBase B PS adm).SignCoins) :
@@ -434,7 +454,7 @@ theorem histRun_pure_anonAns (ω : Fin Q → (ofBase B PS adm).SignCoins) :
     · rfl
     · exact (anonAns_eq_anonAns₁ keys b Q (ψ h₁) ω ⟨j, by omega⟩ c).symm
 
-omit [Nonempty X] [AddGroup Y] in
+omit [Nonempty X] [AddGroup Y] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins] in
 /-- **The deterministic classical game of the ring signature is a game of rounds with entries**
 (a base signer reading the oracle through `f`, constant on the oracles `ψ h₁`): the probability
 that a family of deterministic strategies outputs `1` in experiment `b`, the oracle drawn through
@@ -515,8 +535,10 @@ theorem detAnonWinVia_eq {Ω₂ : Type} {f : (X → Y) → Ω₂} (hB : B.ReadsO
 
 /-! ### The bound at a key vector -/
 
-omit [Nonempty X] [DecidableEq Y] [AddGroup Y] [Nonempty Y] [Fintype X] [DecidableEq X]
-  [Fintype Y] in
+omit [Nonempty X] [DecidableEq Y] [AddGroup Y] [Nonempty Y] [Fintype X] [DecidableEq X] [Fintype Y]
+  [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype TB.PK] [Fintype TB.Msg]
+  [DecidableEq TB.Msg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [DecidableEq TB.Coins] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins] in
 /-- The refusal-or-public value law of an entry is the base signer's. -/
 theorem map_anonEntry_some (H₀ : X → Y) (b : Bool) (c : AnonRequest (ofBase B PS adm) n)
     (hc : c.Valid keys ∧ adm c.ring) :
@@ -528,7 +550,7 @@ theorem map_anonEntry_some (H₀ : X → Y) (b : Bool) (c : AnonRequest (ofBase 
   simp only [Function.comp_apply, Option.map_map]
   rfl
 
-omit [Nonempty X] [AddGroup Y] in
+omit [Nonempty X] [AddGroup Y] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins] in
 /-- **The deterministic classical game at a key vector, the oracle drawn through `ψ`** (a base
 signer reading the oracle through `f`, constant on the oracles `ψ h₁`, with the value of `f H₀`):
 with witness indistinguishability at error `wi` of the proof law at `ψ h₁` for the ring relation at
@@ -616,7 +638,7 @@ theorem abs_detAnonWinVia_sub_le {Ω₂ : Type} {f : (X → Y) → Ω₂} (hB : 
       exact List.getElem_idxOf hi
 
 
-omit [Nonempty X] [AddGroup Y] in
+omit [Nonempty X] [AddGroup Y] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins] in
 /-- **The deterministic classical game at a key vector** (oracle-free base signer;
 `abs_detAnonWinVia_sub_le` at `ψ = id`): with witness indistinguishability at error `wi` of the
 proof system for the ring relation at every oracle, at most `C` valid challenges for the keys, an
@@ -646,7 +668,7 @@ theorem expect_eq_expect_split {Ω₂ : Type} [Fintype Ω₂] [Nonempty Ω₂] (
     Fintype.card_congr e, Fintype.card_prod, ← Finset.sum_div, Nat.cast_mul, div_div]
   rw [mul_comm]
 
-omit [Nonempty X] [AddGroup Y] in
+omit [Nonempty X] [AddGroup Y] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins] in
 /-- **The deterministic classical game at a key vector for a base signer reading the oracle through
 the first part of a split** `e : (X → Y) ≃ Ω₂ × Ω₁` (`abs_detAnonWinVia_sub_le` at each value of
 the first part, averaged): with witness indistinguishability at error `wi` of the proof law at the
@@ -687,13 +709,17 @@ theorem abs_detAnonWin_split_sub_le {Ω₂ : Type} [Fintype Ω₂] [Nonempty Ω�
 
 omit [Nonempty X] [DecidableEq Y] [AddGroup Y] in
 /-- The probability that a family of deterministic strategies outputs `1` is in `[0, 1]`. -/
-theorem detAnonWin_mem_Icc {TS : RingTypes} {S : RingScheme X Y N TS} (keys : Fin n → S.KeyCoins) (b : Bool) (Q : ℕ)
-    (m : (X → Y) → ℕ) (s : (X → Y) → AnonDetStrategy S n) :
+theorem detAnonWin_mem_Icc {TS : RingTypes} {S : RingScheme X Y N TS} [DecidableEq TS.PK]
+    [Fintype TS.SignCoins] [DecidableEq TS.SignCoins] [Nonempty TS.SignCoins]
+    (keys : Fin n → S.KeyCoins) (b : Bool) (Q : ℕ) (m : (X → Y) → ℕ)
+    (s : (X → Y) → AnonDetStrategy S n) :
     0 ≤ detAnonWin keys b Q m s ∧ detAnonWin keys b Q m s ≤ 1 := by
   refine ⟨Finset.expect_nonneg fun H _ => ENNReal.toReal_nonneg, ?_⟩
   calc detAnonWin keys b Q m s ≤ 𝔼 _H : X → Y, (1 : ℝ) :=
         Finset.expect_le_expect fun H _ => toReal_toOuterMeasure_le_one _ _
     _ = 1 := Fintype.expect_const _
+
+variable [Fintype TPS.Proof] [DecidableEq TPS.Proof]
 
 /-- **Anonymity of the ring signature of an oracle-free base signer** (the coupling bound
 `abs_detAnonWin_ofBase_sub_le` through `anonAdvantage_le_of_det`, for the scheme `ofBase B PS adm`
@@ -779,8 +805,9 @@ theorem anonAdvantage_ofBase_split_le {Ω₂ : Type} [Fintype Ω₂] [Nonempty �
 
 /-! ### Public values from the coins -/
 
-omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
-  [Nonempty Y] in
+omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y]
+  [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins] [DecidableEq TB.Coins] in
 /-- **The refusal-or-public value laws of two signers whose public value is a function of the
 coins** differ by at most the sum of their refusal probabilities. -/
 theorem tvDist_refusalPubLaw_le {pubOf : B.Coins → B.Pub} (hpub : B.PubOfCoins pubOf) (H : X → Y)

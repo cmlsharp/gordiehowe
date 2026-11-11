@@ -54,7 +54,7 @@ selection's labels in `FH`, read by the hash's padding) and `FalconSelField` (th
 namespace GordieHowe.Falcon512
 
 open GordieHowe.Bits IOP
-open Emulated (PublicKey bytesOf)
+open Emulated (bytesOf)
 open scoped NNReal ENNReal
 
 /-! ## The program facts -/
@@ -593,19 +593,23 @@ theorem exists_keyOf_of_statementOk {x : program.Valuation interp}
   rw [KeyNTT.falconDecode, if_pos hlt]
   exact ⟨_, rfl⟩
 
-/-- **The witness of the native Falcon proofs of possession**: a message of some length `L ≤ 32` (the relation's
-maximum, `private_message.h`) and a Falcon-512 signature (`PoP.Falcon512.Witness L`). -/
-abbrev VarWitness : Type := Σ L : Fin 33, Falcon512.PoP.Witness L
+/-- **The maximal message length of the Falcon-512 proofs of possession** (the paper's `n_m`):
+`32` bytes, the relation's maximum (`private_message.h`). -/
+abbrev msgLenMax : ℕ := 32
+
+/-- **The witness of the native Falcon proofs of possession**: a message of some length
+`L ≤ msgLenMax` and a Falcon-512 signature (`Configuration.VarWitness`). -/
+abbrev VarWitness : Type := Configuration.VarWitness msgLenMax _root_.Falcon.Signature
 
 instance : Inhabited VarWitness := ⟨⟨0, default⟩⟩
 
 /-- **The relation of the native Falcon theorem at the realized program**: the statement decodes to a key
 (`keyOf`), and at that key the Falcon-512 proof-of-possession relation holds for the witness's
-message, of its length `L ≤ 32` (`PoP.Falcon512.rel L`). A statement that passes the program's
+message, of its length `L ≤ 32` (`Falcon512.PoP.rel L`). A statement that passes the program's
 member checks decodes to a key (`exists_keyOf_of_statementOk`); the source protocol's verifier
 rejects every other statement (`RealizedProgram.sourceVerifier`, `RealizedProgram.StatementOk`). -/
 def rel : Set (program.Valuation interp × VarWitness) :=
-  {p | ∃ pk, keyOf p.1 = some pk ∧ (pk, p.2.2) ∈ Falcon512.PoP.rel p.2.1}
+  Function.uncurry fun x w => ∃ pk, keyOf x = some pk ∧ (pk, w) ∈ Falcon512.PoP.relUpTo msgLenMax
 
 /-! ## The extractor -/
 
@@ -774,7 +778,7 @@ wherever the source program holds (`AlgebraSound`, domain `A`). The errors are `
 theorem rbr_of_views [FalconSelField program FH FA]
     (hv : FalconHashView (program := program) (FH := FH) (FA := FA))
     (hA : AlgebraSound (program := program) (FH := FH) (FA := FA)) :
-    rbrKnowledgeSoundness rel (program.sourceVerifier interp) extractor
+    RBRKnowledgeSound rel (program.sourceVerifier interp) extractor
       (program.eventState interp rel proj selectEvent selectEvent_use (sound_of_views hv hA))
       (program.roundError interp (selectEps (FH := FH))) :=
   program.rbr_of_events interp rel proj selectEvent (selectEps (FH := FH)) selectEvent_use

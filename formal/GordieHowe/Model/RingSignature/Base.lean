@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Model.RingSignature.Scheme
+public import GordieHowe.Model.Signature.Scheme
 public import GordieHowe.Model.NARG.Prover
 
 public section
@@ -15,13 +16,12 @@ The construction of the library's ring signatures as one `RingScheme` (`ofBase`)
 on `(R, m)` is a public value `y` with a proof `π` of the ring relation for the statement `(R, m, y)`,
 the witness being the signer's position and a base signature.
 
-- `BaseSigner X Y N`: what a ring signature proves knowledge of: the base scheme's keys (FIPS 204,
-  FIPS 206), the base message of a ring and a message (`bmsg`: `m`, or `m ‖ encode R`), the
-  ring-aware base signer `bsign` (from the secret key, the ring, the signer's position, the message
-  and coins; it may refuse), the base scheme's ordinary signer `ssign` on base messages (for the
-  key-reuse game), base verification `bverify` at the oracle, and the public value of a base
-  signature (`pub`: Falcon's salt, `Unit`, or ML-DSA's `w₁` recomputed from the key and the
-  signature), a classical oracle program.
+- `BaseTypes`, `BaseSigner X Y N`: what a ring signature proves knowledge of: a base scheme
+  (`Signature.BaseScheme`, `GordieHowe/Model/Signature/Scheme.lean`: the scheme's keys, its
+  ordinary signer `ssign` on base messages, base verification `bverify` at the oracle and the public
+  value `pub`) extended with the base message of a ring and a message (`bmsg`: `m`, or
+  `m ‖ encode R`) and the ring-aware base signer `bsign` (from the secret key, the ring, the
+  signer's position, the message and coins; it may refuse). `ssign` serves the key-reuse game.
 - `RingStmtOf`, `RingWitOf`: statements and witnesses, depending only on the base signer's key,
   message, public-value and signature types.
 - `RingStmt B`, `RingWit B`, `RingRel B adm H`, `ringRel B adm H`: statements `(R, m, y)`, witnesses
@@ -65,100 +65,30 @@ namespace GordieHowe.RingSignature
 
 open scoped ENNReal
 
-/-- **The types of a base signer**: public keys, secret keys, the coins of key generation, ring
-messages, base messages, base signatures, public values and the coins of signing, with the finiteness
-and decidable equality the games read. A `BaseSigner` takes its types as this parameter. -/
-structure BaseTypes where
-  /-- Public keys. -/
-  PK : Type
-  /-- Secret keys. -/
-  SK : Type
-  /-- The coins of key generation. -/
-  KeyCoins : Type
+/-- **The types of a base signer**: the types of its base scheme (`SchemeTypes`: public keys,
+secret keys, the coins of key generation, base messages, base signatures, public values and the
+coins of signing) and ring messages. A `BaseSigner` takes its types as this parameter. The record
+holds types only: the finiteness and decidable equality the games read are instance-implicit
+binders on its projections (`[Fintype TB.Coins]`), found by instance search on the named types of a
+concrete record. -/
+structure BaseTypes extends core : Signature.SchemeTypes where
   /-- Ring messages. -/
   Msg : Type
-  /-- Base messages. -/
-  BMsg : Type
-  /-- Base signatures. -/
-  BSig : Type
-  /-- Public values. -/
-  Pub : Type
-  /-- The coins of signing. -/
-  Coins : Type
-  [instFintypePK : Fintype PK]
-  [instDecEqPK : DecidableEq PK]
-  [instFintypeKeyCoins : Fintype KeyCoins]
-  [instDecEqKeyCoins : DecidableEq KeyCoins]
-  [instNonemptyKeyCoins : Nonempty KeyCoins]
-  [instFintypeMsg : Fintype Msg]
-  [instDecEqMsg : DecidableEq Msg]
-  [instFintypeBMsg : Fintype BMsg]
-  [instDecEqBMsg : DecidableEq BMsg]
-  [instFintypeBSig : Fintype BSig]
-  [instDecEqBSig : DecidableEq BSig]
-  [instFintypePub : Fintype Pub]
-  [instDecEqPub : DecidableEq Pub]
-  [instFintypeCoins : Fintype Coins]
-  [instDecEqCoins : DecidableEq Coins]
-  [instNonemptyCoins : Nonempty Coins]
-
-attribute [instance] BaseTypes.instFintypePK BaseTypes.instDecEqPK
-  BaseTypes.instFintypeKeyCoins BaseTypes.instDecEqKeyCoins BaseTypes.instNonemptyKeyCoins
-  BaseTypes.instFintypeMsg BaseTypes.instDecEqMsg BaseTypes.instFintypeBMsg
-  BaseTypes.instDecEqBMsg BaseTypes.instFintypeBSig BaseTypes.instDecEqBSig
-  BaseTypes.instFintypePub BaseTypes.instDecEqPub BaseTypes.instFintypeCoins
-  BaseTypes.instDecEqCoins BaseTypes.instNonemptyCoins
 
 /-- **A base signer** with the random oracle `X → Y` for rings of at most `N` keys and the types `T`:
-the base scheme's keys from uniform coins; the base message of a ring and a ring message; the
-ring-aware base signer from the secret key, the ring, the signer's position, the message and uniform
-coins (at most `q` queries; it may refuse); the ordinary base signer on base messages (at most `q`
-queries); base verification at the oracle; and the public value of a base signature under a key (a
-program with at most `qPub` queries). -/
-structure BaseSigner (X Y : Type) (N : ℕ) (T : BaseTypes) where
-  /-- Key generation from its coins. -/
-  keyGen : T.KeyCoins → T.PK × T.SK
+a base scheme (`Signature.BaseScheme`: keys from uniform coins, the ordinary base signer on base
+messages with at most `q` queries, base verification at the oracle, and the public value of a base
+signature under a key with at most `qPub` queries) with the base message of a ring and a ring
+message, and the ring-aware base signer from the secret key, the ring, the signer's position, the
+message and uniform coins (at most `q` queries; it may refuse). -/
+structure BaseSigner (X Y : Type) (N : ℕ) (T : BaseTypes) extends
+    core : Signature.BaseScheme X Y T.core where
   /-- The base message of a ring and a ring message. -/
   bmsg : KeyRing T.PK N → T.Msg → T.BMsg
-  /-- The bound on the signers' queries. -/
-  q : ℕ
   /-- The ring-aware base signer at a position of the ring; `none` is a refusal. -/
   bsign : T.SK → KeyRing T.PK N → ℕ → T.Msg → T.Coins → OracleProg X Y (Option T.BSig)
   /-- It makes at most `q` queries. -/
   bsign_queries : ∀ sk R i m c, (bsign sk R i m c).QueriesLE q
-  /-- The ordinary base signer on base messages. -/
-  ssign : T.SK → T.BMsg → T.Coins → OracleProg X Y (Option T.BSig)
-  /-- It makes at most `q` queries. -/
-  ssign_queries : ∀ sk bm c, (ssign sk bm c).QueriesLE q
-  /-- Base verification at an oracle. -/
-  bverify : (X → Y) → T.PK → T.BMsg → T.BSig → Bool
-  /-- The bound on the queries of the public value. -/
-  qPub : ℕ
-  /-- The public value of a base signature under a key. -/
-  pub : T.PK → T.BSig → OracleProg X Y T.Pub
-  /-- It makes at most `qPub` queries. -/
-  pub_queries : ∀ pk σ, (pub pk σ).QueriesLE qPub
-
-/-- **`List.idxOf` is the same at every lawful `BEq` instance**: the one from a decidable equality
-(the one generic code over a types record uses) and the one a concrete key type has (a product's
-componentwise `BEq`). -/
-theorem idxOf_decEq_eq {α : Type*} {d : DecidableEq α} [i : BEq α] [LawfulBEq α] (a : α)
-    (l : List α) : @List.idxOf α (@instBEqOfDecidableEq α d) a l = l.idxOf a := by
-  obtain rfl := lawful_beq_subsingleton (@instBEqOfDecidableEq α d) i
-  rfl
-
-/-- **A key of a ring has a first position in it**, at the decidable equality of the types `T`.
-`ofBase` locates the signer's key with this equality; stated over `T`, the lemma gives positions at
-that equality also for a concrete `T` whose key type has another `BEq` instance (a product). -/
-theorem BaseTypes.idxOf_lt_length_of_mem {T : BaseTypes} {N : ℕ} {R : KeyRing T.PK N} {x : T.PK}
-    (h : x ∈ R.1) : R.1.idxOf x < R.1.length :=
-  List.idxOf_lt_length_iff.2 h
-
-/-- **The key at its first position**, at the decidable equality of the types `T`
-(`BaseTypes.idxOf_lt_length_of_mem`). -/
-theorem BaseTypes.getElem_idxOf {T : BaseTypes} {N : ℕ} {R : KeyRing T.PK N} {x : T.PK}
-    (h : R.1.idxOf x < R.1.length) : R.1[R.1.idxOf x] = x :=
-  List.getElem_idxOf h
 
 namespace BaseSigner
 
@@ -187,6 +117,43 @@ abbrev Pub (_ : BaseSigner X Y N T) : Type := T.Pub
 
 /-- The coins of signing: those of the types `T`. -/
 abbrev Coins (_ : BaseSigner X Y N T) : Type := T.Coins
+
+end BaseSigner
+
+/-- **The types of a base signer with the scheme types `T` and the ring messages `RMsg`.** -/
+abbrev BaseTypes.ofCore (T : Signature.SchemeTypes) (RMsg : Type) : BaseTypes :=
+  ⟨T, RMsg⟩
+
+namespace BaseSigner
+
+variable {X Y : Type} {N : ℕ}
+
+/-- **The base signer that signs a ring as the scheme `C` signs the base message**: the scheme `C`,
+the base message `bmsg R m` of a ring and a ring message, and `bsign` running `C.ssign` on it. The
+ring and the position are read only through `bmsg`. -/
+@[expose] def ofCore {S : Signature.SchemeTypes} (C : Signature.BaseScheme X Y S) {RMsg : Type}
+    (bmsg : KeyRing S.PK N → RMsg → S.BMsg) : BaseSigner X Y N (BaseTypes.ofCore S RMsg) where
+  core := C
+  bmsg := bmsg
+  bsign sk R _ m c := C.ssign sk (bmsg R m) c
+  bsign_queries sk R _ m c := C.ssign_queries sk (bmsg R m) c
+
+section ofCore
+
+variable {S : Signature.SchemeTypes} (C : Signature.BaseScheme X Y S) {RMsg : Type}
+  (bmsg : KeyRing S.PK N → RMsg → S.BMsg)
+
+/-- The scheme of `ofCore C bmsg` is `C`. -/
+@[simp] theorem ofCore_core : (ofCore C bmsg).core = C := rfl
+
+/-- The base message of `ofCore C bmsg` is `bmsg`. -/
+@[simp] theorem ofCore_bmsg : (ofCore C bmsg).bmsg = bmsg := rfl
+
+/-- The ring-aware signer of `ofCore C bmsg` runs `C.ssign` on the base message. -/
+@[simp] theorem ofCore_bsign (sk : S.SK) (R : KeyRing S.PK N) (i : ℕ) (m : RMsg) (c : S.Coins) :
+    (ofCore C bmsg).bsign sk R i m c = C.ssign sk (bmsg R m) c := rfl
+
+end ofCore
 
 end BaseSigner
 
@@ -263,7 +230,7 @@ instance EmptyRingTest.instId {TB : BaseTypes} {B : BaseSigner X Y N TB} : Empty
 /-- **The ring relation is decided** on decided supported rings: the support, the position, the
 base verification and the public value are each decided. -/
 instance RingRel.instDecidable {TB : BaseTypes} (B : BaseSigner X Y N TB) (adm : KeyRing B.PK N → Prop)
-    [DecidablePred adm] (H : X → Y) (x : RingStmt B) (w : RingWit B) :
+    [DecidablePred adm] [DecidableEq TB.Pub] (H : X → Y) (x : RingStmt B) (w : RingWit B) :
     Decidable (RingRel B adm H x w) :=
   decidable_of_iff (adm x.ring ∧ ∃ h : w.idx < x.ring.1.length,
       B.bverify H (x.ring.1[w.idx]'h) (B.bmsg x.ring x.msg) w.sig = true ∧
@@ -281,21 +248,15 @@ theorem ringRel_mono {TB : BaseTypes} (B : BaseSigner X Y N TB) {adm adm' : KeyR
     (h : ∀ R, adm' R → adm R) (H : X → Y) : ringRel B adm' H ⊆ ringRel B adm H :=
   fun _ hp => ⟨h _ hp.supported, hp.idx_lt, hp.verify_eq, hp.pub_eq⟩
 
-/-- **The types of a proof system**: proofs and the prover's coins, with the finiteness and
-decidable equality the games read. A `ProofSystem` takes its types as this parameter. -/
+/-- **The types of a proof system**: proofs and the prover's coins. A `ProofSystem` takes its
+types as this parameter. The record holds types only: the finiteness and decidable equality the
+games read are instance-implicit binders on its projections (`[Fintype TP.Coins]`), found by
+instance search on the named types of a concrete record. -/
 structure PSTypes where
   /-- Proofs. -/
   Proof : Type
   /-- The prover's coins. -/
   Coins : Type
-  [instFintypeProof : Fintype Proof]
-  [instDecEqProof : DecidableEq Proof]
-  [instFintypeCoins : Fintype Coins]
-  [instDecEqCoins : DecidableEq Coins]
-  [instNonemptyCoins : Nonempty Coins]
-
-attribute [instance] PSTypes.instFintypeProof PSTypes.instDecEqProof PSTypes.instFintypeCoins
-  PSTypes.instDecEqCoins PSTypes.instNonemptyCoins
 
 /-- **A non-interactive proof system** with the random oracle `X → Y` and the types `T`: proofs,
 uniform prover coins, the honest prover (a classical oracle program with at most `q` queries) and
@@ -320,11 +281,11 @@ abbrev Proof (_ : ProofSystem X Y Stmt Wit T) : Type := T.Proof
 /-- The prover's coins: those of the types `T`. -/
 abbrev Coins (_ : ProofSystem X Y Stmt Wit T) : Type := T.Coins
 
-/-- **The honest prover as a `NARG.Prover`**, its coins uniform. -/
-@[expose] noncomputable def prover (PS : ProofSystem X Y Stmt Wit T) :
+/-- **The honest prover as a `NARG.Prover`**. Its coins are uniform: the probability semantics
+that read them take `PMF.uniformOfFintype PS.Coins`. -/
+@[expose] def prover (PS : ProofSystem X Y Stmt Wit T) :
     NARG.Prover X Y Stmt Wit PS.Proof PS.Coins where
   prog := PS.prove
-  coins := PMF.uniformOfFintype _
   q := PS.q
   prog_queries := PS.prove_queries
 
@@ -332,19 +293,13 @@ abbrev Coins (_ : ProofSystem X Y Stmt Wit T) : Type := T.Coins
 theorem prover_prog (PS : ProofSystem X Y Stmt Wit T) : PS.prover.prog = PS.prove :=
   rfl
 
-/-- The coins of `prover` are uniform. -/
-theorem prover_coins (PS : ProofSystem X Y Stmt Wit T) :
-    PS.prover.coins = PMF.uniformOfFintype PS.Coins :=
-  rfl
-
 /-- The query bound of `prover` is `q`. -/
 theorem prover_q (PS : ProofSystem X Y Stmt Wit T) : PS.prover.q = PS.q :=
   rfl
 
-/-- **The proof system of a `NARG.Prover`** and a verifier. Its coins are uniform, so it is the
-prover's when the prover's coins are uniform (`prover_ofProver`). -/
-@[expose] def ofProver {Proof Coins : Type} [Fintype Proof] [DecidableEq Proof] [Fintype Coins]
-    [DecidableEq Coins] [Nonempty Coins] (P : NARG.Prover X Y Stmt Wit Proof Coins)
+/-- **The proof system of a `NARG.Prover`** and a verifier. Its coins are uniform; its prover is
+`P` (`prover_ofProver`). -/
+@[expose] def ofProver {Proof Coins : Type} (P : NARG.Prover X Y Stmt Wit Proof Coins)
     (verify : (X → Y) → Stmt → Proof → Bool) : ProofSystem X Y Stmt Wit ⟨Proof, Coins⟩ where
   q := P.q
   prove := P.prog
@@ -353,8 +308,7 @@ prover's when the prover's coins are uniform (`prover_ofProver`). -/
 
 section ofProver
 
-variable {Proof Coins : Type} [Fintype Proof] [DecidableEq Proof] [Fintype Coins]
-  [DecidableEq Coins] [Nonempty Coins] (P : NARG.Prover X Y Stmt Wit Proof Coins)
+variable {Proof Coins : Type} (P : NARG.Prover X Y Stmt Wit Proof Coins)
   (verify : (X → Y) → Stmt → Proof → Bool)
 
 /-- The query bound of `ofProver` is the prover's. -/
@@ -371,14 +325,10 @@ theorem ofProver_verify : (ofProver P verify).verify = verify :=
 
 end ofProver
 
-/-- **A prover with uniform coins is the prover of its proof system.** -/
-theorem prover_ofProver {Proof Coins : Type} [Fintype Proof] [DecidableEq Proof] [Fintype Coins]
-    [DecidableEq Coins] [Nonempty Coins] (P : NARG.Prover X Y Stmt Wit Proof Coins)
-    (verify : (X → Y) → Stmt → Proof → Bool) (hP : P.coins = PMF.uniformOfFintype Coins) :
-    (ofProver P verify).prover = P := by
-  cases P
-  simp only [ofProver, prover] at hP ⊢
-  rw [hP]
+/-- **A prover is the prover of its proof system.** -/
+theorem prover_ofProver {Proof Coins : Type} (P : NARG.Prover X Y Stmt Wit Proof Coins)
+    (verify : (X → Y) → Stmt → Proof → Bool) : (ofProver P verify).prover = P :=
+  rfl
 
 end ProofSystem
 
@@ -394,8 +344,6 @@ abbrev ofBaseT (TB : BaseTypes) (TP : PSTypes) : RingTypes where
   Sig := TB.Pub × TP.Proof
   KeyCoins := TB.KeyCoins
   SignCoins := TB.Coins × TP.Coins
-  instDecEqSig := instDecidableEqProd
-  instDecEqSignCoins := instDecidableEqProd
 
 variable {TB : BaseTypes} {TP : PSTypes} (B : BaseSigner X Y N TB)
   (PS : ProofSystem X Y (RingStmt B) (RingWit B) TP)
@@ -426,6 +374,8 @@ theorem signAt_eq (pk : B.PK) (sk : B.SK) (R : KeyRing B.PK N) (i : ℕ) (m : B.
       | some σ => (B.pub pk σ).bind fun y =>
           (PS.prove ⟨R, m, y⟩ ⟨i, σ⟩ c.2).mapOutput fun π => some (y, π) :=
   rfl
+
+variable [DecidableEq TB.PK]
 
 /-- **The ring signature from a base signer and a proof system** on the supported rings `adm`:
 public keys, secret keys, key generation and ring messages of the base signer; signatures
@@ -494,6 +444,7 @@ theorem sign_ofBase_of_mem {kp : B.PK × B.SK} {R : KeyRing B.PK N} (hR : kp.1 �
   · rfl
   · exact absurd ⟨List.idxOf_lt_length_iff.2 hR, ha⟩ hc
 
+omit [DecidableEq TB.PK] in
 /-- **An honest ring signature is the public value and the proof of the base signature**: when
 `bsign` outputs `σ` at the oracle `H`, signing at the position outputs `(y, π)` with `y` the public
 value of `σ` under `pk` and `π` the prover's proof of `(R, m, y)` with the witness `(i, σ)`. -/
@@ -504,7 +455,7 @@ theorem run_signAt_of_bsign {H : X → Y} {pk : B.PK} {sk : B.SK} {R : KeyRing B
         (PS.prove ⟨R, m, (B.pub pk σ).run H⟩ ⟨i, σ⟩ c.2).run H) := by
   simp only [signAt, OracleProg.run_bind, hσ, OracleProg.run_mapOutput]
 
-omit [DecidablePred adm] in
+omit [DecidablePred adm] [DecidableEq TB.PK] in
 /-- **The relation holds on honest signatures**: a base signature `σ` of the key at position `i` of
 a supported ring that verifies on `bmsg R m` is a witness, with `i`, of the statement `(R, m, y)`
 whose public value `y` is that of `σ`. The relation is satisfiable whenever the base signer outputs a

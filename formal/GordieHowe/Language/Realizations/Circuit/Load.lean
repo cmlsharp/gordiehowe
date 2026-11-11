@@ -67,8 +67,13 @@ every gate:
 
 * the scheduling certificate (part 1, `check_of_parts`): the layers one by one (`layersOk_cons`), a
   layer of more than `layerSliceGates` gates in slices of that many gates (`layerSliceOk_cons`,
-  `layerOk_of_slices`); the asserted nodes by `assertsOk_of_cover`, with no sort: per layer its
-  gate count and asserting-gate count (`infoSliceB`, in the same slices, `infoSliceB_cons`, then
+  `layerOk_of_slices`), each slice stated at the loaded list's tail where it starts
+  (`layerSliceOk_of_tail`, with each next tail's equation `drop_tail_step`), and at the previous
+  layer's width as a numeral, its length checked once (`layerOk_of_width`), so no slice drops
+  past the gates before it or counts the previous layer; the asserted nodes by
+  `assertsOk_of_cover`, with no sort: per layer its
+  gate count and asserting-gate count (`infoSliceB`, in the same slices, `infoSliceB_of_tail`,
+  `infoSliceB_cons`, then
   `layersInfoB_cons`), the asserted nodes in slices of `assertSliceNodes`, each node with a
   witness the elaborator finds, an asserting gate's layer and wire or a last-layer assertion's
   index (`assertSliceOk`, `assertsFrom_cons`), and their number against the counts;
@@ -83,6 +88,13 @@ every gate:
 Part 2 and `assertsOk`'s theorem are composed with every argument named and checked by the kernel
 alone: the elaborator, comparing the data's two spellings of the width, would evaluate the checks. Every circuit takes
 this path; a small layer, or a small set of asserted nodes, is one slice.
+
+The header reads only the circuit's data, so it is checked in modules that import no entry and
+build beside them: `check_header_leaves name ar i j` adds the header's leaf theorems `i` to
+`j - 1` (`runCheckCircuit` lists them), `compose_header name ar`, in a module importing those,
+adds `name.header_ok` from them, checking none, and `compose_circuit name ar`, in a module
+importing the header's and the entries' modules, adds `name.circuit_ok`. The C++ exporter
+(`emit_export.h`'s `plan_header`) splits the leaves into part modules by their predicted cost.
 -/
 
 namespace GordieHowe
@@ -206,6 +218,18 @@ partial def listsOfExpr (e : Expr) : CommandElabM (List Expr) := do
 /-- The naturals of a list expression of `OfNat` literals. -/
 def natsOfExpr (e : Expr) : CommandElabM (List Nat) := do
   pure ((← listsOfExpr e).map natOfExpr)
+
+/-- **The tails of a loaded list at its runs' starts**: position `p` to the definition
+`Ghc.chainLists` added for the list from position `p` on. -/
+partial def tailConsts (e : Expr) (pos : Nat := 0) (acc : Std.HashMap Nat Name := {}) :
+    CommandElabM (Std.HashMap Nat Name) := do
+  let (xs, tl) := Ghc.consChain e
+  match tl with
+  | .const n _ =>
+    match (← getEnv).find? n with
+    | some (.defnInfo v) => tailConsts v.value (pos + xs.size) (acc.insert (pos + xs.size) n)
+    | _ => pure acc
+  | _ => pure acc
 
 /-- The value of a loaded definition. -/
 def defValue (n : Name) : CommandElabM Expr := do
@@ -467,10 +491,28 @@ def mergeCovers : List Nat → List Nat → Bool
     | y :: ys' => x == y && mergeCovers xs (y :: ys')
     | [] => false
 
-/-- The elaborator of `check_circuit`. -/
-@[command_elab checkCircuit]
-def elabCheckCircuit : CommandElab := fun stx => do
-  let tac ← if stx[3].getArgs.isEmpty then `(tacticSeq| decide +kernel)
+/-- `check_header_leaves name ar i j`: the header's leaf theorems `i` to `j - 1` (see
+`runCheckCircuit`). -/
+syntax (name := checkHeaderLeaves) "check_header_leaves " ident ident num num (" native")? : command
+
+/-- `compose_header name ar`: the header's theorem from its imported leaf theorems. -/
+syntax (name := composeHeader) "compose_header " ident ident : command
+
+/-- `compose_circuit name ar`: the circuit's theorem from its imported header and entries. -/
+syntax (name := composeCircuit) "compose_circuit " ident ident : command
+
+/-- **The check of a circuit's certificate**, in the parts `check_circuit`, `check_header_leaves`,
+`compose_header` and `compose_circuit` share. The header's **leaf theorems** are the ones its
+kernel or native check proves, numbered in order: parts 0, 3, 4, 5, 7, 8; per layer its unsliced
+check and count, or its slices' (`chk_layer<i>_s<j>`, `chk_info<i>_s<j>`); the last suffix; the
+shape; the asserted nodes' slices; the assertion terms' slices; the merge-join cover (or part 6);
+and `chk_one`, `chk_inputs`, `chk_count`, `chk_cover`. They read only the circuit's data, so they
+build before and beside the entries. The leaves numbered in `leaves` are added (every one when
+`none`); with `header`, the compositions to `header_ok`, which check nothing; with `circuit`,
+`circuit_ok` from `header_ok` and the entries' theorems. -/
+def runCheckCircuit (stx : Syntax) (leaves : Option (Nat × Nat)) (header circuit : Bool) :
+    CommandElabM Unit := do
+  let tac ← if stx.getArgs.back!.getArgs.isEmpty then `(tacticSeq| decide +kernel)
     else `(tacticSeq| gh_native_check)
   let cert := (← getCurrNamespace) ++ stx[1].getId
   let ir ← programIdent
@@ -482,236 +524,364 @@ def elabCheckCircuit : CommandElab := fun stx => do
     (mkConst cert), mkConst arN, mkConst cert]
   let rp (s : String) := mkConst (Name.mkStr `GordieHowe.RealizedProgram s)
   let hN := base ++ `header_ok
-  let arI := mkIdent arN
-  let cc (s : String) := mkIdent (`GordieHowe.GKR.Certificate ++ s.toName)
-  let cb (s : String) := mkIdent (`GordieHowe.GKR.CertificateBridge ++ s.toName)
-  -- the header's parts, each its own theorem; the scheduling certificate (part 1) and the bridge's
-  -- checks (part 2) from per-layer and per-slice theorems
-  let partN (i : Nat) := base ++ Name.mkSimple s!"header_p{i}"
-  for i in [0, 3, 4, 5, 7, 8] do
-    elabCommand (← `(command| theorem $(mkIdent (`_root_ ++ partN i)) :
-        $(mkIdent `GordieHowe.RealizedProgram.headerPartB) $ir ($certI).c $arI $certI
-          $(Syntax.mkNumLit (toString i)) = true := by
-      $tac))
-  -- the layers: `cert.layer<i>` against the tables `cert.wtab<i>`
-  let env ← getEnv
-  let mut nl := 0
-  while env.contains (base.appendAfter s!"layer{nl}") do nl := nl + 1
-  let layerI (i : Nat) := mkIdent (`_root_ ++ base.appendAfter s!"layer{i}")
-  let tabI (i : Nat) := mkIdent (`_root_ ++ base.appendAfter s!"wtab{i}")
-  let tp (i : Nat) : CommandElabM Term :=
-    if i == 0 then `($(cc "Table.ident")) else pure (tabI (i - 1))
-  let wp (i : Nat) : CommandElabM Term :=
-    if i == 0 then `(($certI).layered.inputs) else `(List.length $(layerI (i - 1)))
-  let lo := cc "layersOk"
-  let chk (n : String) := mkIdent (`_root_ ++ base ++ Name.mkSimple n)
-  let num (n : Nat) := Syntax.mkNumLit (toString n)
-  let w := natOfExpr (← resolveExpr (← defValue (base ++ `width)))
-  let wT ← `(($certI).sched.width)
-  let S := layerSliceGates
-  -- per layer: its gate count, its asserting gates' count, and its asserting gates' nodes
-  let mut ms : Array Nat := #[]
-  let mut cs : Array Nat := #[]
-  let mut wit : Std.HashMap Nat (Nat × Nat) := {}
-  for i in [0:nl] do
-    let gates := (← natsOfExpr (← defValue (base.appendAfter s!"layer{i}"))).toArray
-    let g := gates.size
-    let args : Array Term := #[wT, ← `(($certI).dag), ← tp i, ← wp i, tabI i, layerI i]
-    -- the slices `[j * S, (j + 1) * S)`, the last one every gate left; one slice for a small layer
-    let m := max 1 ((g + S - 1) / S)
-    let mut sc : Array Nat := #[]
-    for j in [0:m] do
-      let mut c := 0
-      for k in [j * S:min g ((j + 1) * S)] do
-        let (node, copy, has) := gateFields w gates[k]!
-        if !copy && has then
-          c := c + 1
-          unless wit.contains node do wit := wit.insert node (i + 1, k)
-      sc := sc.push c
-    ms := ms.push g
-    cs := cs.push (sc.foldl (· + ·) 0)
-    let infoArgs : Array Term := #[wT, layerI i]
-    if m == 1 then
-      elabCommand (← `(command| theorem $(chk s!"chk_layer{i}") :
-          $(cc "layerOk") $args* = true := by
-        $tac))
-      elabCommand (← `(command| theorem $(chk s!"chk_info{i}") :
-          $(cb "infoSliceB") $infoArgs* 0 0 $(num g) $(num sc[0]!) = true := by
-        $tac))
-      continue
-    for j in [0:m] do
-      let len := if j + 1 == m then 0 else S
-      elabCommand (← `(command| theorem $(chk s!"chk_layer{i}_s{j}") :
-          $(cc "layerSliceOk") $args* $(num (j * S)) $(num len) = true := by
-        $tac))
-      elabCommand (← `(command| theorem $(chk s!"chk_info{i}_s{j}") :
-          $(cb "infoSliceB") $infoArgs* $(num (j * S)) $(num len)
-            $(num (if j + 1 == m then g - j * S else S)) $(num sc[j]!) = true := by
-        $tac))
-    let mut rest : Term := chk s!"chk_layer{i}_s{m - 1}"
-    let mut restI : Term := chk s!"chk_info{i}_s{m - 1}"
-    let mut cRest := sc[m - 1]!
-    for j' in [1:m] do
-      let j := m - 1 - j'
-      rest ← `(@$(cc "layerSliceOk_cons") $args* $(num (j * S))
-        $(num S) (Nat.zero_lt_succ $(num (S - 1))) $(chk s!"chk_layer{i}_s{j}") $rest)
-      restI ← `(@$(cb "infoSliceB_cons") $infoArgs* $(num (j * S)) $(num S) $(num S)
-        $(num sc[j]!) $(num (g - (j + 1) * S)) $(num cRest) (Nat.zero_lt_succ $(num (S - 1)))
-        $(chk s!"chk_info{i}_s{j}") $restI)
-      cRest := cRest + sc[j]!
-    elabCommand (← `(command| theorem $(chk s!"chk_layer{i}") :
-        $(cc "layerOk") $args* = true :=
-      @$(cc "layerOk_of_slices") $args* $rest))
-    elabCommand (← `(command| theorem $(chk s!"chk_info{i}") :
-        $(cb "infoSliceB") $infoArgs* 0 0 $(num g) $(num cRest) = true := $restI))
-  -- the suffixes, from the last-layer assertions back to the first layer
-  elabCommand (← `(command| theorem $(chk s!"chk_suffix{nl}") :
-      $lo ($certI).sched.width ($certI).dag ($certI).sched.outputs ($certI).sched.outWires
-        $(← tp nl) $(← wp nl) [] [] = true := by
-    $tac))
-  for i' in [0:nl] do
-    let i := nl - 1 - i'
-    let ts : Array Term := (Array.range (nl - i)).map fun j => tabI (i + j)
-    let ls : Array Term := (Array.range (nl - i)).map fun j => layerI (i + j)
-    elabCommand (← `(command| theorem $(chk s!"chk_suffix{i}") :
+  let anyLeaf := match leaves with
+    | some (i, j) => decide (i < j)
+    | none => true
+  if anyLeaf || header then
+    let arI := mkIdent arN
+    let cc (s : String) := mkIdent (`GordieHowe.GKR.Certificate ++ s.toName)
+    let cb (s : String) := mkIdent (`GordieHowe.GKR.CertificateBridge ++ s.toName)
+    -- the leaf theorems, in order, and the compositions, in order
+    let mut leafCmds : Array (CommandElabM Unit) := #[]
+    let mut comps : Array (CommandElabM Unit) := #[]
+    -- the header's parts, each its own theorem; the scheduling certificate (part 1) and the
+    -- bridge's checks (part 2) from per-layer and per-slice theorems
+    let partN (i : Nat) := base ++ Name.mkSimple s!"header_p{i}"
+    for i in [0, 3, 4, 5, 7, 8] do
+      leafCmds := leafCmds.push (elabCommand (← `(command| theorem $(mkIdent (`_root_ ++ partN i)) :
+          $(mkIdent `GordieHowe.RealizedProgram.headerPartB) $ir ($certI).c $arI $certI
+            $(Syntax.mkNumLit (toString i)) = true := by
+        $tac)))
+    -- the layers: `cert.layer<i>` against the tables `cert.wtab<i>`
+    let env ← getEnv
+    let mut nl := 0
+    while env.contains (base.appendAfter s!"layer{nl}") do nl := nl + 1
+    let layerI (i : Nat) := mkIdent (`_root_ ++ base.appendAfter s!"layer{i}")
+    let tabI (i : Nat) := mkIdent (`_root_ ++ base.appendAfter s!"wtab{i}")
+    let tp (i : Nat) : CommandElabM Term :=
+      if i == 0 then `($(cc "Table.ident")) else pure (tabI (i - 1))
+    let wp (i : Nat) : CommandElabM Term :=
+      if i == 0 then `(($certI).layered.inputs) else `(List.length $(layerI (i - 1)))
+    let lo := cc "layersOk"
+    let chk (n : String) := mkIdent (`_root_ ++ base ++ Name.mkSimple n)
+    let num (n : Nat) := Syntax.mkNumLit (toString n)
+    let w := natOfExpr (← resolveExpr (← defValue (base ++ `width)))
+    let wT ← `(($certI).sched.width)
+    let S := layerSliceGates
+    -- per layer: its gate count, its asserting gates' count, and its asserting gates' nodes
+    let mut ms : Array Nat := #[]
+    let mut cs : Array Nat := #[]
+    let mut wit : Std.HashMap Nat (Nat × Nat) := {}
+    for i in [0:nl] do
+      let gates := (← natsOfExpr (← defValue (base.appendAfter s!"layer{i}"))).toArray
+      let g := gates.size
+      let args : Array Term := #[wT, ← `(($certI).dag), ← tp i, ← wp i, tabI i, layerI i]
+      -- the slices `[j * S, (j + 1) * S)`, the last one every gate left; one slice for a small
+      -- layer
+      let m := max 1 ((g + S - 1) / S)
+      let mut sc : Array Nat := #[]
+      for j in [0:m] do
+        let mut c := 0
+        for k in [j * S:min g ((j + 1) * S)] do
+          let (node, copy, has) := gateFields w gates[k]!
+          if !copy && has then
+            c := c + 1
+            unless wit.contains node do wit := wit.insert node (i + 1, k)
+        sc := sc.push c
+      ms := ms.push g
+      cs := cs.push (sc.foldl (· + ·) 0)
+      let infoArgs : Array Term := #[wT, layerI i]
+      if m == 1 then
+        leafCmds := leafCmds.push (elabCommand (← `(command| theorem $(chk s!"chk_layer{i}") :
+            $(cc "layerOk") $args* = true := by
+          $tac)))
+        leafCmds := leafCmds.push (elabCommand (← `(command| theorem $(chk s!"chk_info{i}") :
+            $(cb "infoSliceB") $infoArgs* 0 0 $(num g) $(num sc[0]!) = true := by
+          $tac)))
+        continue
+      -- the previous layer's width as a numeral, its length checked once (`chk_len<i>`,
+      -- `layerOk_of_width`), so the slices do not each count the previous layer
+      let wN : Option Nat := if i == 0 then none else some ms[i - 1]!
+      let wpS : Term ← match wN with
+        | some N => pure (num N)
+        | none => wp i
+      let L := layerI i
+      let sargs : Array Term := #[wT, ← `(($certI).dag), ← tp i, wpS, tabI i]
+      let argsN := sargs.push L
+      if let some N := wN then
+        leafCmds := leafCmds.push (elabCommand (← `(command| theorem $(chk s!"chk_len{i}") :
+            Nat.beq (List.length $(layerI (i - 1))) $(num N) = true := by
+          $tac)))
+      -- the slices at the loaded list's tails `T j` (`layerSliceOk_of_tail`,
+      -- `infoSliceB_of_tail`), each next tail `S` past the last (`chk_tail<i>_s<j>`), when the
+      -- list has a tail at every slice's start
+      let tails ← tailConsts (← defValue (base.appendAfter s!"layer{i}"))
+      let tailN (j : Nat) : Option Name :=
+        if j == 0 then some (base.appendAfter s!"layer{i}") else tails.get? (j * S)
+      let useTails := (List.range m).all fun j => (tailN j).isSome
+      let T (j : Nat) : Term := mkIdent (`_root_ ++ (tailN j).getD .anonymous)
+      let tailE (j : Nat) : Expr := mkConst ((tailN j).getD .anonymous)
+      for j in [0:m] do
+        let len := if j + 1 == m then 0 else S
+        let cnt := if j + 1 == m then g - j * S else S
+        if useTails then
+          leafCmds := leafCmds.push (elabCommand (← `(command|
+            theorem $(chk s!"chk_layer{i}_s{j}") :
+              $(cc "gatesOk") $sargs* $(num (j * S)) ($(cc "sliceL") $(T j) 0 $(num len))
+                = true := by
+            $tac)))
+          leafCmds := leafCmds.push (elabCommand (← `(command| theorem $(chk s!"chk_info{i}_s{j}") :
+              $(cb "infoSliceB") $wT $(T j) 0 $(num len) $(num cnt) $(num sc[j]!) = true := by
+            $tac)))
+          if j + 1 < m then
+            let listN := mkApp (mkConst ``List [Level.zero]) (mkConst ``Nat)
+            let ty := mkApp3 (mkConst ``Eq [Level.one]) listN
+              (mkAppN (mkConst ``List.drop [Level.zero]) #[mkConst ``Nat, lit S, tailE j])
+              (tailE (j + 1))
+            let val := mkApp2 (mkConst ``Eq.refl [Level.one]) listN (tailE (j + 1))
+            leafCmds := leafCmds.push (addThm (base ++ Name.mkSimple s!"chk_tail{i}_s{j}") ty val)
+        else
+          leafCmds := leafCmds.push (elabCommand (← `(command|
+            theorem $(chk s!"chk_layer{i}_s{j}") :
+              $(cc "layerSliceOk") $argsN* $(num (j * S)) $(num len) = true := by
+            $tac)))
+          leafCmds := leafCmds.push (elabCommand (← `(command| theorem $(chk s!"chk_info{i}_s{j}") :
+              $(cb "infoSliceB") $infoArgs* $(num (j * S)) $(num len) $(num cnt) $(num sc[j]!)
+                = true := by
+            $tac)))
+      -- per slice its proof in the `drop` form: from the tail (`hT j`, `l.drop (j * S) = T j`)
+      -- or the leaf itself
+      let hT (j : Nat) : Ident := chk s!"chk_drop{i}_s{j}"
+      if useTails then
+        comps := comps.push (elabCommand (← `(command|
+          theorem $(hT 0) : List.drop 0 $L = $L := rfl)))
+        for j in [0:m - 1] do
+          comps := comps.push (elabCommand (← `(command| theorem $(hT (j + 1)) :
+              List.drop $(num ((j + 1) * S)) $L = $(T (j + 1)) :=
+            @$(cc "drop_tail_step") $L $(T j) $(T (j + 1)) $(num (j * S)) $(num S)
+              $(hT j) $(chk s!"chk_tail{i}_s{j}"))))
+      let mut lp : Array Term := #[]
+      let mut ip : Array Term := #[]
+      for j in [0:m] do
+        let len := if j + 1 == m then 0 else S
+        let cnt := if j + 1 == m then g - j * S else S
+        if useTails then
+          lp := lp.push (← `(@$(cc "layerSliceOk_of_tail") $sargs* $L $(T j) $(num (j * S))
+            $(num len) $(hT j) $(chk s!"chk_layer{i}_s{j}")))
+          ip := ip.push (← `(@$(cb "infoSliceB_of_tail") $wT $L $(T j) $(num (j * S)) $(num len)
+            $(num cnt) $(num sc[j]!) $(hT j) $(chk s!"chk_info{i}_s{j}")))
+        else
+          lp := lp.push (chk s!"chk_layer{i}_s{j}")
+          ip := ip.push (chk s!"chk_info{i}_s{j}")
+      -- the slices from `j` on, one theorem per `j` (`chk_layer<i>_r<j>`, `chk_info<i>_r<j>`),
+      -- so no composition term nests deeper than one slice
+      let rL (j : Nat) : Ident := chk s!"chk_layer{i}_r{j}"
+      let rI (j : Nat) : Ident := chk s!"chk_info{i}_r{j}"
+      let mut cRest := sc[m - 1]!
+      comps := comps.push (elabCommand (← `(command| theorem $(rL (m - 1)) :
+          $(cc "layerSliceOk") $argsN* $(num ((m - 1) * S)) 0 = true := $(lp[m - 1]!))))
+      comps := comps.push (elabCommand (← `(command| theorem $(rI (m - 1)) :
+          $(cb "infoSliceB") $infoArgs* $(num ((m - 1) * S)) 0 $(num (g - (m - 1) * S))
+            $(num cRest) = true := $(ip[m - 1]!))))
+      for j' in [1:m] do
+        let j := m - 1 - j'
+        let c' := cRest + sc[j]!
+        comps := comps.push (elabCommand (← `(command| theorem $(rL j) :
+            $(cc "layerSliceOk") $argsN* $(num (j * S)) 0 = true :=
+          @$(cc "layerSliceOk_cons") $argsN* $(num (j * S))
+            $(num S) (Nat.zero_lt_succ $(num (S - 1))) $(lp[j]!) $(rL (j + 1)))))
+        comps := comps.push (elabCommand (← `(command| theorem $(rI j) :
+            $(cb "infoSliceB") $infoArgs* $(num (j * S)) 0 $(num (g - j * S)) $(num c') = true :=
+          @$(cb "infoSliceB_cons") $infoArgs* $(num (j * S)) $(num S) $(num S)
+            $(num sc[j]!) $(num (g - (j + 1) * S)) $(num cRest) (Nat.zero_lt_succ $(num (S - 1)))
+            $(ip[j]!) $(rI (j + 1)))))
+        cRest := c'
+      let rest : Term := rL 0
+      let restI : Term := rI 0
+      let whole ← `(@$(cc "layerOk_of_slices") $argsN* $rest)
+      match wN with
+      | some _ =>
+        -- the layer at the numeral width, then at the previous layer's length, composed with
+        -- every argument named and checked by the kernel alone (the elaborator would evaluate
+        -- the length against the numeral)
+        let cW ← `(command| theorem $(chk s!"chk_layer{i}_w") :
+            $(cc "layerOk") $argsN* = true := $whole)
+        let wName := base ++ Name.mkSimple s!"chk_layer{i}_w"
+        let lName := base ++ Name.mkSimple s!"chk_len{i}"
+        let iName := base ++ Name.mkSimple s!"chk_layer{i}"
+        comps := comps.push (elabCommand cW) |>.push do
+          let a ← lhsArgs wName
+          let lenE := (← lhsArgs lName)[0]!
+          let gc (n : String) := mkConst (`GordieHowe.GKR.Certificate ++ n.toName)
+          addThm iName (isTrue (mkAppN (gc "layerOk") #[a[0]!, a[1]!, a[2]!, lenE, a[4]!, a[5]!]))
+            (mkAppN (gc "layerOk_of_width") #[a[0]!, a[1]!, a[2]!, a[4]!, lenE.appArg!, a[5]!,
+              a[3]!, mkConst lName, mkConst wName])
+      | none =>
+        let c1 ← `(command| theorem $(chk s!"chk_layer{i}") :
+            $(cc "layerOk") $args* = true := $whole)
+        comps := comps.push (elabCommand c1)
+      let c2 ← `(command| theorem $(chk s!"chk_info{i}") :
+          $(cb "infoSliceB") $infoArgs* 0 0 $(num g) $(num cRest) = true := $restI)
+      comps := comps.push (elabCommand c2)
+    -- the suffixes, from the last-layer assertions back to the first layer
+    leafCmds := leafCmds.push (elabCommand (← `(command| theorem $(chk s!"chk_suffix{nl}") :
         $lo ($certI).sched.width ($certI).dag ($certI).sched.outputs ($certI).sched.outWires
-          $(← tp i) $(← wp i) [$ts,*] [$ls,*] = true :=
-      $(cc "layersOk_cons") $(chk s!"chk_layer{i}") $(chk s!"chk_suffix{i + 1}")))
-  -- every layer's counts (`layersInfoB`), then the bridge's checks (part 2)
-  let msT ← numList ms.toList
-  let csT ← numList cs.toList
-  let lsAll : Array Term := (Array.range nl).map fun i => layerI i
-  let mut infos : Term ← `($(cb "layersInfoB_nil"))
-  for i' in [0:nl] do
-    let i := nl - 1 - i'
-    infos ← `($(cb "layersInfoB_cons") $(chk s!"chk_info{i}") $infos)
-  elabCommand (← `(command| theorem $(chk "chk_infos") :
-      $(cb "layersInfoB") $wT [$lsAll,*] $msT $csT = true := $infos))
-  elabCommand (← `(command| theorem $(chk "chk_shape") :
-      $(cb "shapeLensB") $msT (($ir).circuitWidth ($certI).c) (($ir).circuit ($certI).c).layers
-        = true := by
-    $tac))
-  -- the compositions name every argument and are checked by the kernel alone
-  let cdE (f : String) := mkApp (mkConst (`GordieHowe.RealizedProgram.CircuitData ++ f.toName))
-    (mkConst cert)
-  let chkN (n : String) := base ++ Name.mkSimple n
-  let infoA ← lhsArgs (chkN "chk_infos")
-  let shapeA ← lhsArgs (chkN "chk_shape")
-  addThm (partN 2) (isTrue (mkAppN (rp "headerPartB") (pre.push (lit 2))))
-    (mkAppN (mkConst `GordieHowe.GKR.CertificateBridge.uniqueAssertsB_shapeB_of_info)
-      #[infoA[0]!, shapeA[1]!, shapeA[2]!, cdE "layered", infoA[2]!, infoA[3]!,
-        mkConst (chkN "chk_infos"), mkConst (chkN "chk_shape")])
-  -- the asserted nodes in slices, each with its witness: an asserting gate's layer and wire, or a
-  -- last-layer assertion's index
-  let dagArgs ← ctorArgs (← defValue (base ++ `dag))
-  let asserts := (← natsOfExpr (← resolveExpr (dagArgs[3]?.getD (mkConst ``List.nil)))).toArray
-  let schedArgs ← ctorArgs (← defValue (base ++ `sched))
-  let outs ← listsOfExpr (← resolveExpr (schedArgs[2]?.getD (mkConst ``List.nil)))
-  let mut outIdx : Std.HashMap Nat Nat := {}
-  for j in [0:outs.length] do
-    let o := natOfExpr (← resolveExpr ((← ctorArgs outs[j]!)[3]?.getD (lit 0)))
-    unless outIdx.contains o do outIdx := outIdx.insert o j
-  let A := assertSliceNodes
-  let na := asserts.size
-  let ma := max 1 ((na + A - 1) / A)
-  let aArgs : Array Term := #[wT, ← `(($certI).dag), ← `(($certI).sched.outputs),
-    ← `(($certI).sched.tables), msT]
-  let at? (k : Nat) : Nat := if k < na then asserts[k]! else 0
-  for j in [0:ma] do
-    let s := j * A
-    let len := if j + 1 == ma then 0 else A
-    let e := if j + 1 == ma then na else s + A
-    let mut ps : Array Term := #[]
-    for k in [s:e] do
-      let x := asserts[k]!
-      let (d, g) ← match wit.get? x, outIdx.get? x with
-        | some p, _ => pure p
-        | none, some o => pure (0, o)
-        | none, none => throwError "check_circuit: asserted node {x} is neither carried nor a \
-            last-layer assertion"
-      ps := ps.push (← `(($(num d), $(num g))))
-    let loV := if s == 0 then 0 else at? (s - 1)
-    let hiV := if e == 0 then 0 else at? (e - 1)
-    elabCommand (← `(command| theorem $(chk s!"chk_asserts_s{j}") :
-        $(cc "assertSliceOk") $aArgs* $(num s) $(num len) $(num loV) $(num hiV) [$ps,*] = true := by
-      $tac))
-  let hiAll := if na == 0 then 0 else at? (na - 1)
-  let mut cover : Term ← `($(cc "assertsFrom_of_slice") $(chk s!"chk_asserts_s{ma - 1}"))
-  for j' in [1:ma] do
-    let j := ma - 1 - j'
-    let s := j * A
-    cover ← `(@$(cc "assertsFrom_cons") $aArgs* $(num s) $(num A)
-      $(num (if s == 0 then 0 else at? (s - 1))) $(num (at? (s + A - 1))) $(num hiAll) _
-      (Nat.zero_lt_succ $(num (A - 1))) $(chk s!"chk_asserts_s{j}") $cover)
-  elabCommand (← `(command| theorem $(chk "chk_assertsFrom") :
-      $(cc "AssertsFrom") $aArgs* 0 0 $(num hiAll) := $cover))
-  -- part 9 in the slices of the asserted nodes (`assertTermsSliceB`, joined by
-  -- `assertTermsSliceB_cons`); part 6 by the merge without the sort (`assertsCoveredMergeB`) when
-  -- the entries' nonzero asserted nodes cover the asserted nodes in entry order, otherwise as is
-  let rq (s : String) := mkIdent (`GordieHowe.RealizedProgram ++ s.toName)
-  for j in [0:ma] do
-    let s := j * A
-    let len := if j + 1 == ma then 0 else A
-    elabCommand (← `(command| theorem $(chk s!"chk_terms_s{j}") :
-        $(rq "assertTermsSliceB") $certI $(num s) $(num len) = true := by
-      $tac))
-  let mut terms : Term := chk s!"chk_terms_s{ma - 1}"
-  for j' in [1:ma] do
-    let j := ma - 1 - j'
-    terms ← `($(rq "assertTermsSliceB_cons") $certI (Nat.zero_lt_succ $(num (A - 1)))
-      $(chk s!"chk_terms_s{j}") $terms)
-  elabCommand (← `(command| theorem $(mkIdent (`_root_ ++ partN 9)) :
-      $(mkIdent `GordieHowe.RealizedProgram.headerPartB) $ir ($certI).c $arI $certI 9 = true :=
-    $(rq "headerPartB_nine") $ir ($certI).c $arI $certI $terms))
-  let mut zs : Array Nat := #[]
-  for e in ← listsOfExpr (← resolveExpr (← defValue (cert ++ `entries))) do
-    let eArgs ← ctorArgs (← resolveExpr e)
-    for x in ← listsOfExpr (← resolveExpr (eArgs[4]?.getD (mkConst ``List.nil))) do
-      let z := natOfExpr (← resolveExpr ((← ctorArgs (← resolveExpr x))[0]?.getD (lit 0)))
-      unless z == 0 do zs := zs.push z
-  if mergeCovers asserts.toList zs.toList then
-    elabCommand (← `(command| theorem $(chk "chk_covered") :
-        $(rq "assertsCoveredMergeB") $certI = true := by
-      $tac))
-    elabCommand (← `(command| theorem $(mkIdent (`_root_ ++ partN 6)) :
-        $(mkIdent `GordieHowe.RealizedProgram.headerPartB) $ir ($certI).c $arI $certI 6 = true :=
-      $(rq "headerPartB_six") $ir ($certI).c $arI $certI ($(chk "chk_assertsFrom")).1
-        $(chk "chk_covered")))
-  else
-    elabCommand (← `(command| theorem $(mkIdent (`_root_ ++ partN 6)) :
-        $(mkIdent `GordieHowe.RealizedProgram.headerPartB) $ir ($certI).c $arI $certI 6 = true := by
-      $tac))
-  for (n, t) in [("chk_one", ← `($(cc "oneOk") ($certI).dag)),
-      ("chk_inputs", ← `(Nat.beq ($certI).layered.inputs ($certI).dag.inputs)),
-      ("chk_count", ← `(Nat.ble (List.length ($certI).sched.outputs + List.sum $csT)
-        (List.length ($certI).dag.asserts))),
-      ("chk_cover", ← `($(cc "lastCoverB") ($certI).sched.width
-        ($certI).sched.outputs ($certI).sched.outWires ($certI).layered.layers))] do
-    elabCommand (← `(command| theorem $(chk n) : $t = true := by $tac))
-  let hiE := ((← getConstInfo (chkN "chk_assertsFrom")).type.getAppArgs.back?).getD (lit 0)
-  let gc (n : String) := mkConst (`GordieHowe.GKR.Certificate ++ n.toName)
-  addThm (chkN "chk_asserts")
-    (isTrue (mkAppN (gc "assertsOk") #[cdE "dag", cdE "layered", cdE "sched"]))
-    (mkAppN (gc "assertsOk_of_cover") #[cdE "dag", cdE "layered", cdE "sched", infoA[2]!,
-      infoA[3]!, hiE, mkConst (chkN "chk_one"), mkConst (chkN "chk_inputs"),
-      mkConst (chkN "chk_suffix0"),
-      mkAppN (mkConst `GordieHowe.GKR.CertificateBridge.layersCountB_of_info) (infoA.push
-        (mkConst (chkN "chk_infos"))),
-      mkConst (chkN "chk_assertsFrom"), mkConst (chkN "chk_count")])
-  elabCommand (← `(command| theorem $(mkIdent (`_root_ ++ partN 1)) :
-      $(mkIdent `GordieHowe.RealizedProgram.headerPartB) $ir ($certI).c $arI $certI 1 = true :=
-    $(cc "check_of_parts") $(chk "chk_one") $(chk "chk_inputs")
-      $(chk "chk_suffix0") $(chk "chk_asserts") $(chk "chk_cover")))
-  elabCommand (← `(command| theorem $(mkIdent (`_root_ ++ hN)) :
-      $(mkIdent `GordieHowe.RealizedProgram.headerB) $ir ($certI).c $arI $certI = true :=
-    $(mkIdent `GordieHowe.RealizedProgram.headerB_of_parts) $ir ($certI).c $arI $certI
-      $(mkIdent (`_root_ ++ partN 0)) $(mkIdent (`_root_ ++ partN 1))
-      $(mkIdent (`_root_ ++ partN 2))
-      $(mkIdent (`_root_ ++ partN 3)) $(mkIdent (`_root_ ++ partN 4))
-      $(mkIdent (`_root_ ++ partN 5))
-      $(mkIdent (`_root_ ++ partN 6)) $(mkIdent (`_root_ ++ partN 7))
-      $(mkIdent (`_root_ ++ partN 8))
-      $(mkIdent (`_root_ ++ partN 9))))
+          $(← tp nl) $(← wp nl) [] [] = true := by
+      $tac)))
+    for i' in [0:nl] do
+      let i := nl - 1 - i'
+      let ts : Array Term := (Array.range (nl - i)).map fun j => tabI (i + j)
+      let ls : Array Term := (Array.range (nl - i)).map fun j => layerI (i + j)
+      let c ← `(command| theorem $(chk s!"chk_suffix{i}") :
+          $lo ($certI).sched.width ($certI).dag ($certI).sched.outputs ($certI).sched.outWires
+            $(← tp i) $(← wp i) [$ts,*] [$ls,*] = true :=
+        $(cc "layersOk_cons") $(chk s!"chk_layer{i}") $(chk s!"chk_suffix{i + 1}"))
+      comps := comps.push (elabCommand c)
+    -- every layer's counts (`layersInfoB`), then the bridge's checks (part 2)
+    let msT ← numList ms.toList
+    let csT ← numList cs.toList
+    let lsAll : Array Term := (Array.range nl).map fun i => layerI i
+    let mut infos : Term ← `($(cb "layersInfoB_nil"))
+    for i' in [0:nl] do
+      let i := nl - 1 - i'
+      infos ← `($(cb "layersInfoB_cons") $(chk s!"chk_info{i}") $infos)
+    let cInfos ← `(command| theorem $(chk "chk_infos") :
+        $(cb "layersInfoB") $wT [$lsAll,*] $msT $csT = true := $infos)
+    comps := comps.push (elabCommand cInfos)
+    leafCmds := leafCmds.push (elabCommand (← `(command| theorem $(chk "chk_shape") :
+        $(cb "shapeLensB") $msT (($ir).circuitWidth ($certI).c) (($ir).circuit ($certI).c).layers
+          = true := by
+      $tac)))
+    -- the compositions name every argument and are checked by the kernel alone
+    let cdE (f : String) := mkApp (mkConst (`GordieHowe.RealizedProgram.CircuitData ++ f.toName))
+      (mkConst cert)
+    let chkN (n : String) := base ++ Name.mkSimple n
+    comps := comps.push do
+      let infoA ← lhsArgs (chkN "chk_infos")
+      let shapeA ← lhsArgs (chkN "chk_shape")
+      addThm (partN 2) (isTrue (mkAppN (rp "headerPartB") (pre.push (lit 2))))
+        (mkAppN (mkConst `GordieHowe.GKR.CertificateBridge.uniqueAssertsB_shapeB_of_info)
+          #[infoA[0]!, shapeA[1]!, shapeA[2]!, cdE "layered", infoA[2]!, infoA[3]!,
+            mkConst (chkN "chk_infos"), mkConst (chkN "chk_shape")])
+    -- the asserted nodes in slices, each with its witness: an asserting gate's layer and wire, or
+    -- a last-layer assertion's index
+    let dagArgs ← ctorArgs (← defValue (base ++ `dag))
+    let asserts := (← natsOfExpr (← resolveExpr (dagArgs[3]?.getD (mkConst ``List.nil)))).toArray
+    let schedArgs ← ctorArgs (← defValue (base ++ `sched))
+    let outs ← listsOfExpr (← resolveExpr (schedArgs[2]?.getD (mkConst ``List.nil)))
+    let mut outIdx : Std.HashMap Nat Nat := {}
+    for j in [0:outs.length] do
+      let o := natOfExpr (← resolveExpr ((← ctorArgs outs[j]!)[3]?.getD (lit 0)))
+      unless outIdx.contains o do outIdx := outIdx.insert o j
+    let A := assertSliceNodes
+    let na := asserts.size
+    let ma := max 1 ((na + A - 1) / A)
+    let aArgs : Array Term := #[wT, ← `(($certI).dag), ← `(($certI).sched.outputs),
+      ← `(($certI).sched.tables), msT]
+    let at? (k : Nat) : Nat := if k < na then asserts[k]! else 0
+    for j in [0:ma] do
+      let s := j * A
+      let len := if j + 1 == ma then 0 else A
+      let e := if j + 1 == ma then na else s + A
+      let mut ps : Array Term := #[]
+      for k in [s:e] do
+        let x := asserts[k]!
+        let (d, g) ← match wit.get? x, outIdx.get? x with
+          | some p, _ => pure p
+          | none, some o => pure (0, o)
+          | none, none => throwError "check_circuit: asserted node {x} is neither carried nor a \
+              last-layer assertion"
+        ps := ps.push (← `(($(num d), $(num g))))
+      let loV := if s == 0 then 0 else at? (s - 1)
+      let hiV := if e == 0 then 0 else at? (e - 1)
+      leafCmds := leafCmds.push (elabCommand (← `(command| theorem $(chk s!"chk_asserts_s{j}") :
+          $(cc "assertSliceOk") $aArgs* $(num s) $(num len) $(num loV) $(num hiV) [$ps,*]
+            = true := by
+        $tac)))
+    let hiAll := if na == 0 then 0 else at? (na - 1)
+    let mut cover : Term ← `($(cc "assertsFrom_of_slice") $(chk s!"chk_asserts_s{ma - 1}"))
+    for j' in [1:ma] do
+      let j := ma - 1 - j'
+      let s := j * A
+      cover ← `(@$(cc "assertsFrom_cons") $aArgs* $(num s) $(num A)
+        $(num (if s == 0 then 0 else at? (s - 1))) $(num (at? (s + A - 1))) $(num hiAll) _
+        (Nat.zero_lt_succ $(num (A - 1))) $(chk s!"chk_asserts_s{j}") $cover)
+    let cFrom ← `(command| theorem $(chk "chk_assertsFrom") :
+        $(cc "AssertsFrom") $aArgs* 0 0 $(num hiAll) := $cover)
+    comps := comps.push (elabCommand cFrom)
+    -- part 9 in the slices of the asserted nodes (`assertTermsSliceB`, joined by
+    -- `assertTermsSliceB_cons`); part 6 by the merge without the sort (`assertsCoveredMergeB`)
+    -- when the entries' nonzero asserted nodes cover the asserted nodes in entry order, otherwise
+    -- as is
+    let rq (s : String) := mkIdent (`GordieHowe.RealizedProgram ++ s.toName)
+    for j in [0:ma] do
+      let s := j * A
+      let len := if j + 1 == ma then 0 else A
+      leafCmds := leafCmds.push (elabCommand (← `(command| theorem $(chk s!"chk_terms_s{j}") :
+          $(rq "assertTermsSliceB") $certI $(num s) $(num len) = true := by
+        $tac)))
+    let mut terms : Term := chk s!"chk_terms_s{ma - 1}"
+    for j' in [1:ma] do
+      let j := ma - 1 - j'
+      terms ← `($(rq "assertTermsSliceB_cons") $certI (Nat.zero_lt_succ $(num (A - 1)))
+        $(chk s!"chk_terms_s{j}") $terms)
+    let c9 ← `(command| theorem $(mkIdent (`_root_ ++ partN 9)) :
+        $(mkIdent `GordieHowe.RealizedProgram.headerPartB) $ir ($certI).c $arI $certI 9 = true :=
+      $(rq "headerPartB_nine") $ir ($certI).c $arI $certI $terms)
+    comps := comps.push (elabCommand c9)
+    let mut zs : Array Nat := #[]
+    for e in ← listsOfExpr (← resolveExpr (← defValue (cert ++ `entries))) do
+      let eArgs ← ctorArgs (← resolveExpr e)
+      for x in ← listsOfExpr (← resolveExpr (eArgs[4]?.getD (mkConst ``List.nil))) do
+        let z := natOfExpr (← resolveExpr ((← ctorArgs (← resolveExpr x))[0]?.getD (lit 0)))
+        unless z == 0 do zs := zs.push z
+    if mergeCovers asserts.toList zs.toList then
+      leafCmds := leafCmds.push (elabCommand (← `(command| theorem $(chk "chk_covered") :
+          $(rq "assertsCoveredMergeB") $certI = true := by
+        $tac)))
+      let c6 ← `(command| theorem $(mkIdent (`_root_ ++ partN 6)) :
+          $(mkIdent `GordieHowe.RealizedProgram.headerPartB) $ir ($certI).c $arI $certI 6 = true :=
+        $(rq "headerPartB_six") $ir ($certI).c $arI $certI ($(chk "chk_assertsFrom")).1
+          $(chk "chk_covered"))
+      comps := comps.push (elabCommand c6)
+    else
+      leafCmds := leafCmds.push (elabCommand (← `(command| theorem $(mkIdent (`_root_ ++ partN 6)) :
+          $(mkIdent `GordieHowe.RealizedProgram.headerPartB) $ir ($certI).c $arI $certI 6
+            = true := by
+        $tac)))
+    for (n, t) in [("chk_one", ← `($(cc "oneOk") ($certI).dag)),
+        ("chk_inputs", ← `(Nat.beq ($certI).layered.inputs ($certI).dag.inputs)),
+        ("chk_count", ← `(Nat.ble (List.length ($certI).sched.outputs + List.sum $csT)
+          (List.length ($certI).dag.asserts))),
+        ("chk_cover", ← `($(cc "lastCoverB") ($certI).sched.width
+          ($certI).sched.outputs ($certI).sched.outWires ($certI).layered.layers))] do
+      leafCmds := leafCmds.push (elabCommand (← `(command|
+        theorem $(chk n) : $t = true := by $tac)))
+    let gc (n : String) := mkConst (`GordieHowe.GKR.Certificate ++ n.toName)
+    comps := comps.push do
+      let infoA ← lhsArgs (chkN "chk_infos")
+      let hiE := ((← getConstInfo (chkN "chk_assertsFrom")).type.getAppArgs.back?).getD (lit 0)
+      addThm (chkN "chk_asserts")
+        (isTrue (mkAppN (gc "assertsOk") #[cdE "dag", cdE "layered", cdE "sched"]))
+        (mkAppN (gc "assertsOk_of_cover") #[cdE "dag", cdE "layered", cdE "sched", infoA[2]!,
+          infoA[3]!, hiE, mkConst (chkN "chk_one"), mkConst (chkN "chk_inputs"),
+          mkConst (chkN "chk_suffix0"),
+          mkAppN (mkConst `GordieHowe.GKR.CertificateBridge.layersCountB_of_info) (infoA.push
+            (mkConst (chkN "chk_infos"))),
+          mkConst (chkN "chk_assertsFrom"), mkConst (chkN "chk_count")])
+    let c1 ← `(command| theorem $(mkIdent (`_root_ ++ partN 1)) :
+        $(mkIdent `GordieHowe.RealizedProgram.headerPartB) $ir ($certI).c $arI $certI 1 = true :=
+      $(cc "check_of_parts") $(chk "chk_one") $(chk "chk_inputs")
+        $(chk "chk_suffix0") $(chk "chk_asserts") $(chk "chk_cover"))
+    let cH ← `(command| theorem $(mkIdent (`_root_ ++ hN)) :
+        $(mkIdent `GordieHowe.RealizedProgram.headerB) $ir ($certI).c $arI $certI = true :=
+      $(mkIdent `GordieHowe.RealizedProgram.headerB_of_parts) $ir ($certI).c $arI $certI
+        $(mkIdent (`_root_ ++ partN 0)) $(mkIdent (`_root_ ++ partN 1))
+        $(mkIdent (`_root_ ++ partN 2))
+        $(mkIdent (`_root_ ++ partN 3)) $(mkIdent (`_root_ ++ partN 4))
+        $(mkIdent (`_root_ ++ partN 5))
+        $(mkIdent (`_root_ ++ partN 6)) $(mkIdent (`_root_ ++ partN 7))
+        $(mkIdent (`_root_ ++ partN 8))
+        $(mkIdent (`_root_ ++ partN 9)))
+    comps := comps.push (elabCommand c1) |>.push (elabCommand cH)
+    let (i, j) := leaves.getD (0, leafCmds.size)
+    unless j ≤ leafCmds.size do
+      throwError "check_header_leaves: leaves {i} to {j - 1} asked, the header has {leafCmds.size}"
+    for k in [i:j] do
+      leafCmds[k]!
+    if header then
+      for c in comps do c
+  unless circuit do return
   -- the property of an entry, `fun k => entryCertB … k = true`
   let P := Expr.lam `k (mkConst ``Nat) (isTrue (mkAppN (rp "entryCertB") (pre.push (.bvar 0)))) .default
   let mut pf := mkApp (rp "forall_lt_zero") P
@@ -719,5 +889,24 @@ def elabCheckCircuit : CommandElab := fun stx => do
     pf := mkAppN (rp "forall_lt_succ_of") #[P, lit k, pf, mkConst (base ++ Name.mkSimple s!"entry{k}_ok")]
   let ty := isTrue (mkAppN (rp "circuitCertB") pre)
   addThm (base ++ `circuit_ok) ty (mkAppN (rp "circuitCertB_of_entries") (pre ++ #[mkConst hN, pf]))
+
+/-- The elaborator of `check_circuit`: every header leaf, the header's theorem and the
+circuit's. -/
+@[command_elab checkCircuit]
+def elabCheckCircuit : CommandElab := fun stx => runCheckCircuit stx none true true
+
+/-- The elaborator of `check_header_leaves`: the header's leaf theorems `i` to `j - 1`. -/
+@[command_elab checkHeaderLeaves]
+def elabCheckHeaderLeaves : CommandElab := fun stx =>
+  runCheckCircuit stx (some (stx[3].isNatLit?.getD 0, stx[4].isNatLit?.getD 0)) false false
+
+/-- The elaborator of `compose_header`: the header's theorem from its imported leaf theorems. -/
+@[command_elab composeHeader]
+def elabComposeHeader : CommandElab := fun stx => runCheckCircuit stx (some (0, 0)) true false
+
+/-- The elaborator of `compose_circuit`: the circuit's theorem from the imported `header_ok` and
+entries' theorems. -/
+@[command_elab composeCircuit]
+def elabComposeCircuit : CommandElab := fun stx => runCheckCircuit stx (some (0, 0)) false true
 
 end GordieHowe.Load

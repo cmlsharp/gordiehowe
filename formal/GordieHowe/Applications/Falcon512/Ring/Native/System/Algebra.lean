@@ -22,8 +22,9 @@ native's algebra advice (`GordieHowe.Falcon512.Native.Committed`: `signature.s1`
 
 * **The transform root** (`psiF`, `isPrimitiveRoot_psiF`, `psiF_pow`): `ψ = 10302`, a primitive
   `2n`-th root of unity in `F`.
-* **The spectral signature relation** (`SpectralRows`, `falcon_ring.h:194-225`,
-  `native_signature_relation`): `Ntt(c − s1) = spectrum ⊙ Ntt(s2)` coefficientwise, the transform
+* **The spectral signature relation** (`SpectralRows`): `Ntt(c − s1) = spectrum ⊙ Ntt(s2)`
+  coefficientwise, which the frontend derives from the program's check at one random point
+  (`falcon_ring.h`'s `native_signature_relation`, `GordieHowe.Falcon512.Ring.sig_eq`), the transform
   in natural order at `ψ` (`DFT.negSpectrum`), `c` the statement's challenge.
 * **The algebra constraints** (`RingAlgebra`): the spectral relation, the native norm on
   `s1 ‖ s2` and the encoding's Boolean checks (Falcon native's, `examples/rings/falcon_ring.h`).
@@ -90,8 +91,9 @@ def keyRecord (pk : PublicKey) : Fin falcon512.n → F :=
 
 variable [DecidableEq F]
 
-/-- **The spectral signature relation** (`signature.equation`, `assert_spectral(c − s1,
-SpectralProduct(spectrum, s2))`): for every frequency `k`, `Ntt(c − s1)_k = spectrum_k ·
+/-- **The spectral signature relation** (what `signature.equation`'s check at a random point gives
+without its event, `GordieHowe.Falcon512.Ring.sig_eq`): for every frequency `k`,
+`Ntt(c − s1)_k = spectrum_k ·
 Ntt(s2)_k`. -/
 def SpectralRows (c spectrum s2 : Fin falcon512.n → F) (alg : Committed F) : Prop :=
   ∀ k, negSpectrum (psiF F) (c - alg.s1) k = spectrum k * negSpectrum (psiF F) s2 k

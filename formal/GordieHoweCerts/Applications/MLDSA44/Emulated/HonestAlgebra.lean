@@ -406,7 +406,7 @@ theorem interval2_of (hb : ∀ m < 1024, ∀ t < 6, rdA e 63 (6 * m + t) = 0 ∨
     program.HoldsWith (program.reader e) (program.predicate 2).body := by
   obtain ⟨_, hp2, -⟩ := pred2 (program := program)
   rw [hp2]
-  refine (RealizedProgram.holdsWith_mod_iff (q := 0) (.inr (by norm_num))).2 ?_
+  refine (RealizedProgram.holdsWith_mod_iff (q := 0)).2 ?_
   intro m hm
   rw [(lensU (program := program)).2.2] at hm
   obtain ⟨ko, hko, hov⟩ := hoff m hm
@@ -464,8 +464,8 @@ theorem sig274_of {pk : MLDSA44.PublicKey44} (hk : KeyOf pk e.stmt)
       zv wv (fun m => program.evalIntWith (program.reader e) 0 (.ref 7) m -
         2 * program.evalIntWith (program.reader e) 0 (.ref 8) m)) :
     program.HoldsWith (program.reader e) (program.predicate 274).body := by
-  obtain ⟨_, hb, hnp⟩ := pred274 (program := program)
-  rw [hb, RealizedProgram.holdsWith_mod_iff (.inl hnp)]
+  obtain ⟨_, hb⟩ := pred274 (program := program)
+  rw [hb, RealizedProgram.holdsWith_mod_iff]
   intro m hm
   have hlen : program.exprLen sigL = 1024 := MldsaEAlgebra.lenSigL
   change m < program.exprLen sigL at hm

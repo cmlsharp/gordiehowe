@@ -147,7 +147,7 @@ noncomputable abbrev ringStmtVerifies (maxAttempts : ℕ)
 /-- **The ML-DSA-44 ring signature of `MLDSA44.Ring.Native.ROMParams`** at the base message `bmsg`:
 `mldsaScheme` (`ofBase (baseSigner msgLen C maxAttempts bmsg) PS adm`) with `PS` the compiled
 program read at the base signer's ring statements (`ringStmtVerifies`, the honest prover
-`ringHonest msgLen C`, proofs in the format `max 3193 137`), on the supported rings `adm`. -/
+`ringHonest msgLen C`, proofs in the format `max 3499 137`), on the supported rings `adm`. -/
 noncomputable abbrev scheme (hmsg : msgLen ≤ 2 ^ 19)
     (maxAttempts : ℕ) (bmsg : KeyRing FipsKey 64 → RMsg → _root_.MLDSA.Bytes msgLen) :=
   mldsaScheme _root_.MLDSA.mldsa44 fipsPrims maxAttempts (ringHonest msgLen C)

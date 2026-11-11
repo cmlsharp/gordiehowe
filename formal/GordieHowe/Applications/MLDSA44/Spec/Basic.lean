@@ -93,13 +93,30 @@ theorem fipsVerify_eq_verifyChecks (pk : _root_.MLDSA.PublicKey _root_.MLDSA.mld
         pk msg sig :=
   rfl
 
+/-- **The SHAKE256 byte budget of `SampleInBall`**: the `8` sign bytes and the
+`sampleInBallCandidateBudget = 264` candidate bytes that the vendored `sampleInBallPoly?` squeezes. -/
+def sampleInBallByteBudget : ℕ := 8 + _root_.MLDSA.Concrete.sampleInBallCandidateBudget
+
+/-- The `SampleInBall` byte budget is `272`. -/
+theorem sampleInBallByteBudget_eq : sampleInBallByteBudget = 272 := rfl
+
+/-- **The budget covers FIPS 204's minimum**: FIPS 204 Appendix C, Table 3 requires a bounded
+`SampleInBall` to read at least `221` SHAKE256 bytes; `sampleInBallByteBudget` is at least that. -/
+theorem fips204_le_sampleInBallByteBudget : 221 ≤ sampleInBallByteBudget := by decide
+
+/-- **`SampleInBall(c̃)` finishes within `sampleInBallByteBudget` SHAKE256 bytes**: the vendored
+`sampleInBallPoly?`, which squeezes `sampleInBallByteBudget` bytes, places all `τ` nonzero
+coefficients (it returns `none` when its candidates run out). -/
+def SampleInBallWithin (p : _root_.MLDSA.Params) (cTilde : _root_.MLDSA.CommitHashBytes p) : Prop :=
+  (_root_.MLDSA.Concrete.sampleInBallPoly? p cTilde).isSome
+
 /-- **ML-DSA-44 verification** (FIPS 204 Algorithm 8, `ML-DSA.Verify_internal`, after
 `sigDecode`) of the semantic signature `sig` on the message representative `msg`: `ExpandA(ρ)`
 finishes within `1008` SHAKE128 bytes per `RejNTTPoly` call (`ExpandAWithin`, at least the `894`
 bytes FIPS 204 Appendix C, Table 3 requires of a bounded `RejNTTPoly`), `SampleInBall(c̃)`
-finishes within the `272` SHAKE256 bytes of the vendored `sampleInBallPoly?` (`8` sign bytes and
-`264` candidates, at least the `221` bytes FIPS 204 Appendix C, Table 3 requires of a bounded
-`SampleInBall`), and the checks of Algorithm 8 accept at `Â = ExpandA(ρ)` (`verifyChecks` at
+finishes within `sampleInBallByteBudget = 272` SHAKE256 bytes (`SampleInBallWithin`: `8` sign bytes
+and `264` candidates, at least the `221` bytes FIPS 204 Appendix C, Table 3 requires of a bounded
+`SampleInBall`, `fips204_le_sampleInBallByteBudget`), and the checks of Algorithm 8 accept at `Â = ExpandA(ρ)` (`verifyChecks` at
 `expandAFull`). -/
 structure Verifies (pk : _root_.MLDSA.PublicKey _root_.MLDSA.mldsa44
       (_root_.MLDSA.Concrete.concretePrimitives _root_.MLDSA.mldsa44))
@@ -107,8 +124,8 @@ structure Verifies (pk : _root_.MLDSA.PublicKey _root_.MLDSA.mldsa44
       (_root_.MLDSA.Concrete.concretePrimitives _root_.MLDSA.mldsa44)) : Prop where
   /-- `ExpandA(ρ)` finishes within `1008` SHAKE128 bytes per `RejNTTPoly` call. -/
   expandA : ExpandAWithin _root_.MLDSA.mldsa44 pk.rho
-  /-- `SampleInBall(c̃)` finishes within `272` SHAKE256 bytes. -/
-  sampleInBall : (_root_.MLDSA.Concrete.sampleInBallPoly? _root_.MLDSA.mldsa44 sig.cTilde).isSome
+  /-- `SampleInBall(c̃)` finishes within `sampleInBallByteBudget` SHAKE256 bytes. -/
+  sampleInBall : SampleInBallWithin _root_.MLDSA.mldsa44 sig.cTilde
   /-- Algorithm 8's checks accept at `Â = ExpandA(ρ)`. -/
   checks : verifyChecks (expandAFull _root_.MLDSA.mldsa44 pk.rho) pk msg sig = true
 

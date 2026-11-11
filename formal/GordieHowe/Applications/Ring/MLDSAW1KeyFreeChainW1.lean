@@ -60,7 +60,8 @@ variable {p : Params} {T : ℕ} {Msg : Type} {N reps : ℕ}
   {Λ : SiteLayout Mg} {b : ℕ} [∀ j i, Fintype ((Mc.comp j).MessageWrite i)]
   {E : (j : ι) → (Mc.comp j).Encoder}
   {Vr : W1ExpStmt prims RMsg N → FullTr P τ → Bool}
-  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R]
+  [DecidableEq R] [Nonempty R]
   {honest : RingSignature.RingWit (freshBase prims O Mo βmin tol enc k D bmsg) → R →
     CausalProver P τ (W1ExpStmt prims RMsg N)}
   {adm : KeyRing (PubKey p prims) N → Prop}
@@ -124,7 +125,8 @@ theorem allOut_w1StmtProg (x : RingSignature.RingStmtOf (PubKey p prims) RMsg (B
   OracleProg.AllOut.mapOutput _ ((allOut_hashesProg_length sp O _ _ _).mono fun _ h => ⟨rfl, h⟩)
 
 omit [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁] [Nonempty RMsg]
-  [Nonempty (FIPSSignature p prims)] [NeZero n] in
+  [Nonempty (FIPSSignature p prims)] [NeZero n]
+  [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The forgery event gives the event hypotheses of the key-free chain**: for a check `chk`
 accepting only nonempty rings, a forgery `o` with no collision (`w1ForgeEv`) whose program
 statement `x₀` is the statement program's output at the final oracle `G` has a proof accepted
@@ -206,7 +208,7 @@ theorem kfGame_le_w1Chain [Inhabited Mc.NIProof]
     ∑' H, PMF.uniformOfFintype (Xq → Y) H *
         (𝒜.assignLaw (kfGame (kfMainFull sp Bf (w1Rel prims O Mo βmin tol enc k D bmsg PSh adm n Q)
           ((RingSignature.Insider.encProver Mc Λ E hb honest).comap w1StmtX
-            (RingSignature.Insider.RelayWit.toWit (B := Bf)))
+            (RingSignature.Insider.RelayWit.toWit (B := Bf))) (PMF.uniformOfFintype _)
           (w1Enc fun i => (Bf).pk (keys i)) keys Q)
           (kfRelay (PS := PSf) Bf (fun i => (Bf).pk (keys i))
             (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) (w1StmtP sp)
@@ -262,7 +264,7 @@ theorem kfGame_le_w1Chain [Inhabited Mc.NIProof]
         (base sp H)) := fun H =>
     agreeAt_kfRelaySide _ _ (fun x G => run_w1StmtP_eq_w1StmtPω sp x G) _ H
   have hA : ∀ ω (q : AssignRelay.TaggedReq Xq Y (RingSignature.Insider.Req Bf PSf adm n) Q),
-      MultiRelay.AsksIn (MUResponse Bf ⊕ Mc.Response b)
+      MultiRelay.AsksIn (MUResponse (Bf).core ⊕ Mc.Response b)
         (((w1SideRelay sp prims O Mo βmin tol enc k D bmsg Mc Λ E hb honest adm chk h keys sc
           ω).relayOf Q).prog q)
         (FromSigned Bf (w1Enc (fun i => (Bf).pk (keys i))) w1StmtX Prod.fst w1IsDummy q.req) := fun ω q =>
@@ -274,12 +276,12 @@ theorem kfGame_le_w1Chain [Inhabited Mc.NIProof]
         (fun x => ((hSt x).mono fun x₀ hx r σ =>
           w1StmtX_enc_toR (fun i => (Bf).pk (keys i)) (hx.2.trans_le x.ring.2) r σ).translate _ _) T c r) q
   have hAc : ∀ ω (q : AssignRelay.TaggedReq Xq Y (RingSignature.Insider.Req Bf PSf adm n) Q),
-      MultiRelay.AsksIn (MUResponse Bf ⊕ Mc.Response b)
+      MultiRelay.AsksIn (MUResponse (Bf).core ⊕ Mc.Response b)
         (((w1SideRelay sp prims O Mo βmin tol enc k D bmsg Mc Λ E hb honest adm chk h keys sc
           ω).relayOf Q).prog q)
         fun r' => ∀ i, r' = .inl (.corrupt i) → q.req = .corrupt i := fun ω q =>
     AssignRelay.asksIn_relayOf _ Q (P := fun _ (r : RingSignature.Insider.Req Bf PSf adm n)
-        (r' : MURequest (SignOracle.none Bf) n ⊕
+        (r' : MURequest (SignOracle.none (Bf).core) n ⊕
           W1Rq prims O Mo βmin tol enc k D bmsg PSh adm n Q) =>
         ∀ i, r' = .inl (.corrupt i) → r = .corrupt i)
       (fun T c r => asksIn_kfProgK_corrupt Bf (fun i => (Bf).pk (keys i)) _ _ sc _ _ _ T c r) q
@@ -305,7 +307,7 @@ theorem kfGame_le_w1Chain [Inhabited Mc.NIProof]
     (w1KFSign_queries (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) (w1StmtP_queries sp)
     w1Idle (w1Enc (fun i => (Bf).pk (keys i))) (w1Rel prims O Mo βmin tol enc k D bmsg PSh adm n Q) w1StmtX Prod.fst
     ((RingSignature.Insider.encProver Mc Λ E hb honest).comap w1StmtX
-      (RingSignature.Insider.RelayWit.toWit (B := Bf))) keys
+      (RingSignature.Insider.RelayWit.toWit (B := Bf))) (PMF.uniformOfFintype _) keys
     (𝒜.thenProgOut (w1ForgeStmtProg sp prims O bmsg Mc) (2 * N) (w1ForgeStmtProg_queries sp prims O bmsg Mc) (w * (2 * N))
       (forall_mul_le_mul_right _ hw))
     (fun pk Rg c msg s H o ho => prf_reprogram_w1KFSign sp pk Rg c msg s H o ho)
@@ -344,8 +346,9 @@ theorem kfGame_le_w1Chain [Inhabited Mc.NIProof]
   exact Quantum.QueryBoundedAdversary.transcriptLaw_eq_tsum_test A₀
     (C := kfMain Bf (w1Rel prims O Mo βmin tol enc k D bmsg PSh adm n Q)
       ((RingSignature.Insider.encProver Mc Λ E hb honest).comap w1StmtX
-        (RingSignature.Insider.RelayWit.toWit (B := Bf))) (w1Enc (fun i => (Bf).pk (keys i))) keys Q)
-    (kfMain_noAssign Bf _ _ (w1Enc (fun i => (Bf).pk (keys i))) keys Q) g
+        (RingSignature.Insider.RelayWit.toWit (B := Bf))) (PMF.uniformOfFintype _) (w1Enc
+          (fun i => (Bf).pk (keys i))) keys Q)
+    (kfMain_noAssign Bf _ _ _ (w1Enc (fun i => (Bf).pk (keys i))) keys Q) g
     (fun o rs => (∃ π ∈ w1PrfOf o.1, (Mc.qVerifier Qs b b).Accepted (outEquiv kh e ∘ g)
         ⟨o.2, π⟩) ∧ w1CheckX o.2 o.1 = true ∧
       kfFresh (w1Enc (fun i => (Bf).pk (keys i))) w1StmtX w1IsDummy (fun i => (Bf).pk (keys i)) Prod.fst

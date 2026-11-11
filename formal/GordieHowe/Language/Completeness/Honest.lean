@@ -226,6 +226,14 @@ theorem holds_honestEnvC_of_src {b : PredBody} (hb : ir.NoGenPred b)
     (h : ir.HoldsWith (ir.reader SE) b) : ir.HoldsWith (ir.reader HE) b :=
   holds_honestC_of_src R.gen E.stmtOf (E.committedC G) E.srcLate y c π hb h
 
+/-- **A predicate reading no generated late value holds at the source environment** where it holds
+at the honest environment (`holdsWith_congr`, `reader_honestEnvC_srcEnvL_of_noGen`). -/
+theorem holds_srcEnvC_of_honest {b : PredBody} (hb : ir.NoGenPred b)
+    (h : ir.HoldsWith (ir.reader HE) b) : ir.HoldsWith (ir.reader SE) b :=
+  (holdsWith_congr fun w hw =>
+    reader_honestEnvC_srcEnvL_of_noGen R.gen E.stmtOf (E.committedC G) E.srcLate y c π
+      (hb w hw)).1 h
+
 include hM hreal in
 /-- **The completeness rules' facts hold at the honest environment** off the execution's events:
 the model facts (`hM`), the constants (`reader_of_constant`), the values bound to their digits
@@ -251,8 +259,8 @@ theorem cEnvFacts_honestEnvC {x : ir.Valuation I} (hy : (x, y) ∈ relH) (hc : �
   refine ⟨hM, fun v es hk i => reader_of_constant _ hk i, fun v hv x hk => ?_,
     fun q hq hs => ?_, fun m rid hrid h hn => ?_, fun p pid hpid h hn => ?_,
     fun st _ pid hpid h hd hi hr => ?_, fun pid hpid h hn => ?_, fun m j pid hpid h hm hn => ?_,
-    fun m lks pid hpid h hn => ?_, fun k cv hk h hn => ?_, fun m pid hpid h hn => ?_,
-    fun pid hpid h hn => ?_, fun st h => ?_⟩
+    fun m lks pid hpid h hn => ?_, fun k cv hk h hn => ?_, fun m pid hpid h hmh hn => ?_,
+    fun pid hpid h hn => ?_, fun st h => ?_, fun k cv hk h kc r hcm hn => ?_⟩
   · exact boundReads_of_boundRecs hwf hM.lawful R.committed.boundRecs R.committed.digitLookups
       (e := HE) rfl v hv x hk
   · exact holds_honestEnvC_of_src R E y c π
@@ -289,7 +297,8 @@ theorem cEnvFacts_honestEnvC {x : ir.Valuation I} (hy : (x, y) ∈ relH) (hc : �
   · exact holds_honestEnvC_of_src R E y c π (hng _ (products_lt_of_specHonestCB hk h) hn)
       (holds_specProductsC_srcEnv hwf hM.registered hM.lawful R.committed hA π hbd hk h)
   · exact holds_honestEnvC_of_src R E y c π (hng pid hpid hn)
-      (holds_specRowC_srcEnv hwf hM.registered hM.lawful R.committed hA π hbd h)
+      (holds_specRowC_srcEnv hwf hM.registered hM.lawful R.committed hA π hbd h
+        (hmh.imp id fun ⟨hl, hg, hh⟩ => holds_srcEnvC_of_honest R E y c π (hng m hl hg) hh))
   · exact holds_honestEnvC_of_src R E y c π (hng pid hpid hn)
       (holds_fieldRowC_srcEnv hwf hM.registered hM.lawful R.committed hA π hFE h)
   · exact (TwoMacC.ofB primeNodes hwf hreal st h).tail_honest R.gen E.stmtOf (E.committedC G)
@@ -297,6 +306,8 @@ theorem cEnvFacts_honestEnvC {x : ir.Valuation I} (hy : (x, y) ∈ relH) (hc : �
       ((TwoMacC.ofB primeNodes hwf hreal st h).source_honestC R.gen E.stmtOf (E.committedC G)
         E.srcLate y c π hwf hM.registered hM.lawful R.committed hA rfl rfl
         (twoMacFactsC_of_B h).source)
+  · exact holds_honestEnvC_of_src R E y c π (hng r (row_lt_of_specHonestCB hk h hcm) hn)
+      (holds_specCRowC_srcEnv hwf hM.registered hM.lawful R.committed hA π hbd hk h hcm)
 
 include hM in
 /-- **The node-typed values lie in their types at the honest environment** off the execution's

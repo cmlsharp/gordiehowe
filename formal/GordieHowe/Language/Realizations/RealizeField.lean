@@ -407,7 +407,7 @@ theorem holdsWith_mod_of_field (hwf : ir.WellFormed) (hI : I.Registered ir)
   have hd : d < ir.domains.length := he.1
   have h2 : 2 < ir.charOf (ir.domainField d) := hok.char ▸ hok.two
   obtain ⟨-, hcharF, -, -⟩ := modData hwf hI hL hd h2
-  refine (holdsWith_mod_iff (.inl (by rw [hok.form]; rfl))).2 ?_
+  refine holdsWith_mod_iff.2 ?_
   intro i hi
   have hpe := evalIntWith_proj hwf hI hL hF hK hLok hd h2 hRL e hok.lhs he.2.shape he.2.refs i hi
   have hpe' := evalIntWith_proj hwf hI hL hF hK hLok hd h2 hRL e' hok.rhs he'.2.shape he'.2.refs i

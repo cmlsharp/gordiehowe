@@ -91,7 +91,7 @@ theorem encodeRingMsg_injective (R : RingSignature.KeyRing PublicKey 64) :
   fun _ _ h => (encodeRingMsg_inj h).2
 
 /-- **The Falcon-512 base signer at `encodeRingMsg` binds the ring.** -/
-theorem bindsRing_encodeRingMsg {X Y : Type} (G : Native.Signer ringMsgLen) :
+theorem bindsRing_encodeRingMsg {X Y : Type} (G : Signer ringMsgLen) :
     (GordieHowe.Ring.falconBaseSigner (X := X) (Y := Y) (N := 64) G encodeRingMsg).BindsRing :=
   fun _ _ _ _ h => encodeRingMsg_inj h
 

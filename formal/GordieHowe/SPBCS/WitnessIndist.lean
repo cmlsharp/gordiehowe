@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.SPBCS.ZeroKnowledge
+public import GordieHowe.Headline
 public import GordieHowe.Model.IOP.FiatShamirLaw
 public import GordieHowe.SPBCS.Merkle.LeafHidingAdaptive
 public import GordieHowe.Foundations.ToMathlib.PMFTVJoint
@@ -1432,6 +1433,7 @@ Hypotheses: `Rv` (what the compiled proof writes and opens is determined by the 
 two witnesses of a statement are at average distance at most `2δ`, `SPBCS.ObsClose`;
 honest-verifier zero knowledge of the composite at error `δ` gives it,
 `SPBCS.obsClose_of_causalHVZK`). -/
+@[headline]
 theorem wiAdvantage_le {E : (j : ι) → (M.comp j).Encoder} {V : X → FullTr P t → Bool}
     {Qs : ∀ x, M.IOPQueries V x} (Rv : M.Reveal E Qs) {rel : Set (X × W)}
     {R : Type} [Fintype R] [Nonempty R] {prv : W → R → CausalProver P t X} {δ : ℝ≥0}

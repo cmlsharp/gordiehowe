@@ -10,12 +10,12 @@ public import GordieHowe.ProofSystem.Ligero.AgreementThreshold
 /-!
 # Ligero at agreement threshold `A` with the mask test
 
-Ligero at agreement threshold `A` (`GordieHowe.Ligero.AgreementThreshold`) whose two response masks are committed as
-tested tableau rows (the paper's Appendix D.4, Mask pieces and the subfield test): for each mask
-(IDOT, IQUAD) three rows `A`, `C`, `B` of the tableau, each a row of the code, and the verifier
-evaluates the mask at column `j` as `A_j + x_j ^ (k − t) · C_j + x_j ^ k · B_j` (`recombine`,
-`Pieces.value`). The piece rows are ordinary tableau rows: they enter the commit-phase low-degree
-combination and are pinned with the witness rows.
+Ligero at agreement threshold `A` (`GordieHowe.Ligero.AgreementThreshold`) whose two response masks
+are committed as tested tableau rows (the paper's `app:ligero-pieces`, Mask pieces and the subfield
+test): for each mask (IDOT, IQUAD) three rows `A`, `C`, `B` of the tableau, each a row of the code,
+and the verifier evaluates the mask at column `j` as `A_j + x_j ^ (k − t) · C_j + x_j ^ k · B_j`
+(`recombine`, `Pieces.value`). The piece rows are ordinary tableau rows: they enter the commit-phase
+low-degree combination and are pinned with the witness rows.
 
 * **the oracle message** is the encoded rows alone (`Tableau.Rows`: the `nrep` ILDT rows and the
   data rows), with their columns as leaves (`Tableau.Rows.column`);
@@ -253,7 +253,8 @@ query tuples. -/
 theorem selected_query_count_pinned (hrate : 2 * C.k - 1 ≤ N) (fs : Fin (R + 1) → F[X])
     (hfs : ∀ row, (fs row).natDegree < C.k) {mDot mQuad : F[X]} (hmDot : mDot.natDegree < 2 * C.k)
     (hmQuad : mQuad.natDegree < 2 * C.k) (hfalse : ¬ Tableau.Holds C P L fs)
-    {nrep : ℕ} (r : Tableau.Challenge F R nL nQ nrep) (hbad : ¬ pinnedBad C P L fs mDot mQuad r.2)
+    {nrep : ℕ} (r : Tableau.Challenge F R nL nQ nrep)
+    (hbad : ¬ pinnedBad C P L fs mDot mQuad r.constraint)
     (p : Tableau.Response F C.k nrep) (hp : Tableau.Valid C P L r p) (t : ℕ) :
     (Finset.univ.filter
       (Tableau.selectedAccept C P L fs (evalMasks C mDot mQuad) r p (t := t))).card ≤
@@ -261,8 +262,8 @@ theorem selected_query_count_pinned (hrate : 2 * C.k - 1 ≤ N) (fs : Fin (R + 1
   have hk := C.k_pos
   by_cases hd : ¬ ∀ l, Tableau.dotCheck C P (Tableau.dotPolynomials C P L fs l) = L.target l
   · have hb : ¬ MaskedConstraintList.FiniteList.BadChallenge {mDot} (Tableau.dotCheck C P)
-        (Tableau.dotPolynomials C P L fs) L.target r.2.1 := by
-      simpa only [pinnedBad, ite_eq_left hd] using hbad
+        (Tableau.dotPolynomials C P L fs) L.target r.lin := by
+      simpa only [pinnedBad, ite_eq_left hd, Tableau.Challenge.fst_constraint] using hbad
     have h := MaskedConstraintList.FiniteList.pinned_query_count C.D_injective hmDot (Tableau.dotCheck C P)
       (fun i => (Tableau.dot_degree C P L fs hfs i).trans (by omega)) L.target hb
       ((Tableau.Response.natDegree_dot_lt C hrate p).trans (by omega)) hp.1 t
@@ -272,8 +273,8 @@ theorem selected_query_count_pinned (hrate : 2 * C.k - 1 ≤ N) (fs : Fin (R + 1
   · have hqfalse : ¬ MaskedConstraintFamily.Claim (Tableau.quadCheck C P)
         (Tableau.quadPolynomials C P fs) (fun _ _ => 0) := fun hq => hfalse ⟨not_not.mp hd, hq⟩
     have hb : ¬ MaskedConstraintList.FiniteList.FamilyBadChallenge {mQuad} (Tableau.quadCheck C P)
-        (Tableau.quadPolynomials C P fs) (fun _ _ => 0) r.2.2 := by
-      simpa only [pinnedBad, ite_eq_right hd] using hbad
+        (Tableau.quadPolynomials C P fs) (fun _ _ => 0) r.quad := by
+      simpa only [pinnedBad, ite_eq_right hd, Tableau.Challenge.snd_constraint] using hbad
     have h := MaskedConstraintList.FiniteList.pinned_family_query_count C.D_injective hmQuad (Tableau.quadCheck C P)
       (fun i => (Tableau.quad_degree C P fs hfs i).trans (by omega)) _ hqfalse hb
       ((Tableau.Response.natDegree_quad_lt C hrate p).trans (by omega)) (by simpa using hp.2) t
@@ -330,7 +331,8 @@ responses and query of the proof phase. -/
 def verdict (c : Input Ctx F N R C.k S.nrep)
     (tr : (proofSpec F N nL nQ C.k S.t).Transcript (Fin.last 3)) : Bool :=
   Tableau.accept C P (S.linearSystem (rows c.ctx)) c.com (S.pieces.masks C S.t c.com.tableau)
-    (ldtChallenge c.rounds, constraintOf tr) (ldtResponse c.rounds, maskedOf tr) (queryOf tr)
+    (.ofConstraint (ldtChallenge c.rounds) (constraintOf tr))
+    (.ofMasked (ldtResponse c.rounds) (maskedOf tr)) (queryOf tr)
 
 /-- **Ligero at agreement threshold `A` with the mask test as a commit-and-prove system** for the
 rows `rows` and the products `products` on the setup `S`: the encoded rows (`Tableau.Rows`) as the
@@ -380,7 +382,8 @@ noncomputable def testError : ℝ≥0 := 1 / Fintype.card F
 
 /-- **The column error**: `(A − 1).descFactorial t` accepted queries when the agreement set is
 small, `(2k − 1).descFactorial t` from the pinned masks otherwise, over the `N.descFactorial t`
-queries. -/
+queries. The second count is not that of the honest masks' degree `< 2k − 1`: pinned pieces of
+degree `< k` can recombine to a mask of degree `2k − 1` (`Pieces.natDegree_poly_lt`). -/
 noncomputable def columnError : ℝ≥0 :=
   ((S.A - 1).descFactorial S.t + (2 * C.k - 1).descFactorial S.t : ℝ≥0) / N.descFactorial S.t
 
@@ -438,7 +441,7 @@ def testAccept (c : Input Ctx F N R C.k S.nrep) (_u : Tableau.Aux F N)
     (rc : ConstraintChallenge F nL nQ) (p : MaskedResponse F C.k) (q : Tableau.Query N S.t) :
     Bool :=
   Tableau.accept C P (S.linearSystem (rows c.ctx)) c.com (S.pieces.masks C S.t c.com.tableau)
-    (ldtChallenge c.rounds, rc) (ldtResponse c.rounds, p) q
+    (.ofConstraint (ldtChallenge c.rounds) rc) (.ofMasked (ldtResponse c.rounds) p) q
 
 omit [Fintype Lin] in
 open Classical in
@@ -461,7 +464,8 @@ theorem query_count_nat (c : Input Ctx F N R C.k S.nrep) (hc : ¬ Claim S rows c
     (rc : ConstraintChallenge F nL nQ) (hbad : ¬ Bad S rows c u rc) (p : MaskedResponse F C.k) :
     (Finset.univ.filter fun q : Tableau.Query N S.t =>
       Tableau.AcceptProp C P (S.linearSystem (rows c.ctx)) c.com
-        (S.pieces.masks C S.t c.com.tableau) (ldtChallenge c.rounds, rc) (ldtResponse c.rounds, p) q).card ≤
+        (S.pieces.masks C S.t c.com.tableau) (.ofConstraint (ldtChallenge c.rounds) rc)
+        (.ofMasked (ldtResponse c.rounds) p) q).card ≤
       (S.A - 1).descFactorial S.t + (2 * C.k - 1).descFactorial S.t := by
   set D := commonAgreement C c.com (ldtChallenge c.rounds) (ldtResponse c.rounds)
   set L := S.linearSystem (rows c.ctx)
@@ -469,7 +473,8 @@ theorem query_count_nat (c : Input Ctx F N R C.k S.nrep) (hc : ¬ Claim S rows c
   have hnot : ¬ S.Exceptional c.com c.rounds := fun h => hc (.inl h)
   by_cases hD : S.A ≤ D.card
   · refine le_trans ?_ (Nat.le_add_left _ _)
-    by_cases hp : Tableau.Valid C P L (ldtChallenge c.rounds, rc) (ldtResponse c.rounds, p)
+    by_cases hp : Tableau.Valid C P L (.ofConstraint (ldtChallenge c.rounds) rc)
+        (.ofMasked (ldtResponse c.rounds) p)
     · have hfalse : ¬ Tableau.Holds C P L fs := by
         intro hh
         apply hc
@@ -480,7 +485,7 @@ theorem query_count_nat (c : Input Ctx F N R C.k S.nrep) (hc : ¬ Claim S rows c
       refine le_trans (Finset.card_le_card fun q hq => ?_)
         (selected_query_count_pinned C P L S.rate_le fs hfs
           (S.pieces.dot.natDegree_poly_lt S.t hfs) (S.pieces.quad.natDegree_poly_lt S.t hfs)
-          hfalse (ldtChallenge c.rounds, rc) hbad _ hp S.t)
+          hfalse (.ofConstraint (ldtChallenge c.rounds) rc) hbad _ hp S.t)
       have ha := (Finset.mem_filter.mp hq).2
       have hagree : ∀ s row, c.com.tableau row (q s) = (fs row).eval (C.D (q s)) := fun s row =>
         S.pinnedRows_agree hnot hD (mem_commonAgreement_of_accept ha s) row
@@ -488,21 +493,20 @@ theorem query_count_nat (c : Input Ctx F N R C.k S.nrep) (hc : ¬ Claim S rows c
         Tableau.selectedAccept_of_agree C P L c.com.tableau fs (S.pieces.polyMasks C S.t fs) _ _ q
           hagree (fun s => ?_) fun s => ?_⟩
       · have h := S.pieces.masks_dot_eq_of_agree (t := S.t) (hagree s)
-        rw [Tableau.Aux.dot, Tableau.Aux.dot] at h
         rw [← h]
         exact ha.2.2.1 s
       · have h := S.pieces.masks_quad_eq_of_agree (t := S.t) (hagree s)
-        rw [Tableau.Aux.quad, Tableau.Aux.quad] at h
         rw [← h]
         exact ha.2.2.2 s
     · have he : (Finset.univ.filter fun q : Tableau.Query N S.t =>
           Tableau.AcceptProp C P L c.com (S.pieces.masks C S.t c.com.tableau)
-            (ldtChallenge c.rounds, rc) (ldtResponse c.rounds, p) q) = ∅ :=
+            (.ofConstraint (ldtChallenge c.rounds) rc)
+            (.ofMasked (ldtResponse c.rounds) p) q) = ∅ :=
         Finset.filter_eq_empty_iff.mpr fun q _ hq => hp hq.1
       rw [he]
       exact Nat.zero_le _
-  · exact le_trans (card_filter_le_of_lt (not_le.mp hD) fun q hq => mem_commonAgreement_of_accept hq)
-      (Nat.le_add_right _ _)
+  · exact le_trans (card_filter_le_of_lt (not_le.mp hD) fun q hq =>
+      (mem_commonAgreement_of_accept hq :)) (Nat.le_add_right _ _)
 
 open Classical in
 /-- The column count as a fraction: at most `columnError` of the queries are accepted. -/
@@ -526,9 +530,10 @@ noncomputable def testProof :
     (fun c u _ => test_count S rows c u)
     (fun c u rc p hc hb => query_count S rows c hc u rc hb p)
 
-/-- **Soundness of Ligero at agreement threshold `A` with the mask test** (the paper's Appendix D.5,
-Security of Ligero with the mask test): the commit event is that every one of the `nrep` low-degree
-challenges is exceptional (`Ligero.AgreementThreshold.Threshold.commitEvent`), of probability at most
+/-- **Soundness of Ligero at agreement threshold `A` with the mask test** (the paper's `lem:ligero`,
+proved in `app:ligero-proof`, Security of Ligero with the mask test): the commit event is that every
+one of the `nrep` low-degree challenges is exceptional
+(`Ligero.AgreementThreshold.Threshold.commitEvent`), of probability at most
 `(B / (|F| − 1)) ^ nrep`; the proof phase is the two-stage test (`testProof`) with the masks
 recombined from the tableau's piece rows (`ClaimProof.dropMsg`), round-by-round sound relative to
 "the commit phase was bad or the rows hold on the extracted cells", with the errors `error`:

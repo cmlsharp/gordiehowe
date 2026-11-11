@@ -69,7 +69,7 @@ open Generated.Falcon512.Ring.Carrier.QROMParams.Program (program)
 open Generated.Falcon512.Ring.Carrier.QROMParams (interp ready ProofSystems figures figures_eq
   certified)
 open Generated.Falcon512.Ring.Carrier.QROMParams (conditions)
-open _root_.GordieHowe.Falcon512.Ring.Native (Signer CoreWit)
+open _root_.GordieHowe.Falcon512.Ring.Native (CoreWit)
 open scoped NNReal ENNReal
 
 variable {msgLen : ℕ} (G : Signer msgLen) (C : ProofSystems)
@@ -110,7 +110,12 @@ theorem ringIop_eq (G : Signer 32) : ringIop G C = forkIop G C :=
 theorem ringTranscript_eq (G : Signer 32) : ringTranscript G C = forkTranscript G C :=
   rfl
 
+variable [Fintype G.KeyCoins] [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins]
+  [DecidableEq G.SignCoins] [Nonempty G.SignCoins]
+
 variable {G} in
+omit [Fintype G.KeyCoins] [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins]
+  [DecidableEq G.SignCoins] [Nonempty G.SignCoins] in
 /-- **The facts the setting is built from** at messages of at most `2^19` bytes (`hmsg`): the
 statement writes within `2^20` bytes, the label and the branch name, the rest from the generated
 check (`RealizedProgram.ProgramFigures.Check.transcriptWith_bounds`). -/
@@ -125,6 +130,8 @@ variable {G} in
 theorem ringMergeBounds (hmsg : msgLen ≤ 2 ^ 19) : (ringTranscript G C).MergeBounds 48 :=
   ⟨ringTranscript_bounds C hmsg, by norm_num⟩
 
+omit [Fintype G.KeyCoins] [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins]
+  [DecidableEq G.SignCoins] [Nonempty G.SignCoins] in
 /-- **The figures of `ringIop`** (`RealizedProgram.ProgramFigures.Check.figuresWith`, the generated
 figures),
 the configuration's: at most `955` rounds, trees of at most `3072` leaves, `201` queried leaves,
@@ -157,7 +164,7 @@ noncomputable def ringHonestStrategy :
   let val := fun y : Ring.RingIn G =>
     (⟨Ring.specK program y, y.w.idx, y.normIn.nS2, y.normIn.nS1,
       Carrier.quot y.normIn, Carrier.mag1 y.normIn, Carrier.mag2 y.normIn,
-      Carrier.squares y.normIn⟩ : Carrier.SourceValues (interp 0).K).valuation
+      Carrier.squares y.normIn, Carrier.high y.normIn⟩ : Carrier.SourceValues (interp 0).K).valuation
         (program := program) Generated.Falcon512.Ring.Carrier.QROMParams.SourceRoles.classifier
   RealizedProgram.HonestStrategy.ofCompletionReady completionReady
     (E.withValues val
@@ -170,6 +177,8 @@ noncomputable def ringHonestStrategy :
 theorem ringHonestStrategy_eq (G : Signer 32) : ringHonestStrategy G = honestStrategy G :=
   rfl
 
+omit [Fintype G.KeyCoins] [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins]
+  [DecidableEq G.SignCoins] [Nonempty G.SignCoins] in
 /-- **The honest strategy's completeness errors are `0`.** -/
 theorem ringHonestStrategy_delta : ∑ k, (ringHonestStrategy G).δ k = 0 := by
   rw [ringHonestStrategy, RealizedProgram.HonestStrategy.ofCompletionReady_δ, RealizedProgram.SourceExecution.withValues_δ, Ring.carrierSourceExecution_δ (I := interp)]
@@ -200,7 +209,7 @@ variable {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
 
 /-- The Falcon-512 base signer of the scheme: `falconBaseSigner G bmsg` on the compiled oracle of
 `ringTranscript G C` at `48`-byte salts. -/
-abbrev baseSigner (bmsg : KeyRing _root_.GordieHowe.Falcon512.Ring.Native.PublicKey 64 → RMsg →
+abbrev baseSigner (bmsg : KeyRing _root_.GordieHowe.Falcon512.PublicKey 64 → RMsg →
     (Fin msgLen → UInt8)) :=
   falconBaseSigner («X» := Bits (queryBits (ringTranscript G C).k (2 * (ringTranscript G C).k) 48
       (2 ^ 40)))
@@ -213,7 +222,7 @@ program read at the base signer's ring statements (`StmtVerifiesRing.proofSystem
 `Falcon512.Ring.ringVerifies`, the honest prover `ringHonest G C`, proofs in the format `max 3072 201`),
 on rings of exactly `64` keys. -/
 noncomputable abbrev scheme (hmsg : msgLen ≤ 2 ^ 19)
-    (bmsg : KeyRing _root_.GordieHowe.Falcon512.Ring.Native.PublicKey 64 → RMsg →
+    (bmsg : KeyRing _root_.GordieHowe.Falcon512.PublicKey 64 → RMsg →
       (Fin msgLen → UInt8)) :=
   ofBase (baseSigner G C bmsg)
     ((Falcon512.Ring.ringVerifies G bmsg _ _ program interp).proofSystem (ringHonest G C)
@@ -227,7 +236,9 @@ noncomputable abbrev convertedScheme
 
 /-- **The ring-binding Falcon-512 ring signature** (`bmsg = encodeRingMsg`: the `32`-byte message
 followed by the ring, `ringMsgLen` bytes): `scheme` at a signer of `ringMsgLen`-byte messages. -/
-noncomputable abbrev bindingScheme (G : Signer ringMsgLen) :=
+noncomputable abbrev bindingScheme (G : Signer ringMsgLen) [Fintype G.KeyCoins]
+    [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins] [DecidableEq G.SignCoins]
+    [Nonempty G.SignCoins] :=
   scheme G C ringMsgLen_le encodeRingMsg
 
 /-! ## The headlines -/
@@ -253,7 +264,9 @@ theorem convertedScheme.completeAtWithin
 /-- **Completeness per key of the ring-binding Falcon-512 ring signature**
 (`StmtVerifiesRing.completeAtWithin`): as `convertedScheme.completeAtWithin`, for `bindingScheme`. -/
 @[headline]
-theorem bindingScheme.completeAtWithin (G : Signer ringMsgLen) {εc : ℝ≥0∞}
+theorem bindingScheme.completeAtWithin (G : Signer ringMsgLen) [Fintype G.KeyCoins]
+    [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins] [DecidableEq G.SignCoins]
+    [Nonempty G.SignCoins] {εc : ℝ≥0∞}
     (hc : (baseSigner G proofSystem encodeRingMsg).CorrectWithin εc) :
     (bindingScheme proofSystem G).CompleteAtWithin 0
       (εc + (((0 : ℝ≥0) : ℝ≥0∞) +
@@ -271,7 +284,9 @@ Falcon-512 ring signature** (`StmtVerifiesRing.insiderForgeProb_le` at
 requests) is at most the success probability of the extraction forger in MU-EUF-CMA^corr with the
 ring-aware signing oracle plus spBCS's knowledge error at the configuration's largest round error
 and `t + Q · q + kq` queries. -/
-theorem bindingScheme.insiderForgeProb_le_extractionSuccess (G : Signer ringMsgLen) {n t : ℕ}
+theorem bindingScheme.insiderForgeProb_le_extractionSuccess (G : Signer ringMsgLen)
+    [Fintype G.KeyCoins] [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins]
+    [DecidableEq G.SignCoins] [Nonempty G.SignCoins] {n t : ℕ}
     (A : InsiderAdversary (bindingScheme C G) n (OracleView.queriesOnly _ _) t) (Q : ℕ) :
     insiderForgeProb A Q ≤
       extractionSuccess (insiderRelay (baseSigner G C encodeRingMsg) _ _) A Q
@@ -291,7 +306,9 @@ theorem bindingScheme.insiderForgeProb_le_extractionSuccess (G : Signer ringMsgL
 (`StmtVerifiesRing.keyReuseForgeProb_le` at `bindsRing_encodeRingMsg`): the bound of
 `bindingScheme.insiderForgeProb_le_extractionSuccess` for the key-reuse game, the extraction forger in
 MU-EUF-CMA^corr with the ring-aware and the ordinary signing oracle. -/
-theorem bindingScheme.keyReuseForgeProb_le_extractionSuccess (G : Signer ringMsgLen) {n t : ℕ}
+theorem bindingScheme.keyReuseForgeProb_le_extractionSuccess (G : Signer ringMsgLen)
+    [Fintype G.KeyCoins] [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins]
+    [DecidableEq G.SignCoins] [Nonempty G.SignCoins] {n t : ℕ}
     (A : KeyReuseAdversary (baseSigner G C encodeRingMsg)
       ((Falcon512.Ring.ringVerifies G encodeRingMsg _ _ program interp).proofSystem
         (ringHonest G C) (ringMergeBounds C ringMsgLen_le) (ringProofFormat C ringMsgLen_le))
@@ -329,7 +346,9 @@ theorem convertedScheme.completeWithin
 /-- **Completeness of the ring-binding Falcon-512 ring signature, averaged over honest rings**
 (`StmtVerifiesRing.completeWithin` at `RefuseAtWithin.refuseWithin`). -/
 @[headline]
-theorem bindingScheme.completeWithin (G : Signer ringMsgLen) {εc : ℝ≥0∞}
+theorem bindingScheme.completeWithin (G : Signer ringMsgLen) [Fintype G.KeyCoins]
+    [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins] [DecidableEq G.SignCoins]
+    [Nonempty G.SignCoins] {εc : ℝ≥0∞}
     (hc : (baseSigner G proofSystem encodeRingMsg).CorrectWithin εc) :
     (bindingScheme proofSystem G).CompleteWithin 0
       (εc + (((0 : ℝ≥0) : ℝ≥0∞) +
@@ -367,7 +386,9 @@ theorem convertedScheme.anonAdvantage_le
 ring-binding Falcon-512 ring signature** (`StmtVerifiesRing.anonAdvantage_le_of_pubOfCoins`): the
 bound of `convertedScheme.anonAdvantage_le` for `bindingScheme`. -/
 @[headline]
-theorem bindingScheme.anonAdvantage_le (G : Signer ringMsgLen) (hG : G.CarriesSalt) {εc : ℝ≥0}
+theorem bindingScheme.anonAdvantage_le (G : Signer ringMsgLen) [Fintype G.KeyCoins]
+    [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins] [DecidableEq G.SignCoins]
+    [Nonempty G.SignCoins] (hG : G.CarriesSalt) {εc : ℝ≥0}
     (hcorr : (baseSigner G proofSystem encodeRingMsg).CorrectWithin εc) {n : ℕ}
     {Vw : OracleView (Bits (queryBits (ringTranscript G proofSystem).k (2 * (ringTranscript G proofSystem).k) 48
       (2 ^ 40))) (XOut (ringTranscript G proofSystem).k
@@ -387,20 +408,6 @@ theorem bindingScheme.anonAdvantage_le (G : Signer ringMsgLen) (hG : G.CarriesSa
 instance baseSigner_nonempty_msg :
     Nonempty (baseSigner G C (RMsg := Fin msgLen → UInt8) fun _ m => m).Msg :=
   Falcon512.Ring.nonempty_msg G _
-
-/-- The base signer's public values are inhabited (`Falcon512.Ring.nonempty_pub`). -/
-instance baseSigner_nonempty_pub
-    (bmsg : KeyRing _root_.GordieHowe.Falcon512.Ring.Native.PublicKey 64 → RMsg →
-      (Fin msgLen → UInt8)) :
-    Nonempty (baseSigner G C bmsg).Pub :=
-  Falcon512.Ring.nonempty_pub G bmsg
-
-/-- The base signer's signatures are inhabited (`Falcon512.Ring.nonempty_bsig`). -/
-instance baseSigner_nonempty_bsig
-    (bmsg : KeyRing _root_.GordieHowe.Falcon512.Ring.Native.PublicKey 64 → RMsg →
-      (Fin msgLen → UInt8)) :
-    Nonempty (baseSigner G C bmsg).BSig :=
-  Falcon512.Ring.nonempty_bsig G bmsg
 
 /-- **Unforgeability with respect to insider corruption (BKM06 Definition 7) of the converted
 Falcon-512 ring signature, by zero knowledge and simulation extraction**

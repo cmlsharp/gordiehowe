@@ -64,11 +64,11 @@ instance : FalconEHonest program where
   digitSizes := ⟨valueShape_size value_range_2emagnitudes_2emag1_2ed0_header.2, valueShape_size value_range_2emagnitudes_2emag1_2ed1_header.2, valueShape_size value_range_2enorm_2ebound_2ed0_header.2, valueShape_size value_range_2enorm_2ebound_2ed1_header.2, valueShape_size value_range_2enorm_2ebound_2ed2_header.2⟩
   lens := value_norm_2esquares_header.1
   sigForm := by
-    obtain ⟨real, h, hf, -⟩ := predicate_signature_2eequation_2esource_body
-    exact ⟨real, h, by rw [hf]; rfl⟩
+    obtain ⟨real, h, -⟩ := predicate_signature_2eequation_2esource_body
+    exact ⟨real, h⟩
   high2Form := by
-    obtain ⟨real, h, hf, -⟩ := predicate_encoding_2ehigh2_body
-    exact ⟨real, h, by rw [hf]; rfl⟩
+    obtain ⟨real, h, -⟩ := predicate_encoding_2ehigh2_body
+    exact ⟨real, h⟩
   caBody := predicate_crossing_2ec_5fA_2eboolean_body
   macBody := by
     obtain ⟨real, h⟩ := predicate_mac_2eequal_body

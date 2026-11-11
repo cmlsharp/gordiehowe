@@ -10,23 +10,24 @@ public import GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.HonestMember
 /-!
 # GordieHowe: the signature relation of the ML-DSA-44 ring carriers at the honest values
 
-The signature relation of an ML-DSA-44 ring carrier (`signature.relation`, predicate `3`;
-`carrier_relation` in `lib/gordiehowe/examples/rings/mldsa_ring_carrier.h`) is one `mod_q` of the
-spectral product form, `w′ ≡ Σ_j A_ij ⊛ z_j − 2^d t1_i ⊛ c (mod q)` with its quotient `Q`
-(`signature.relation.q`, value `64`, bound to its digits): `w′ − (Σ_j A_ij ⊛ z_j − 2^d t1_i ⊛ c) =
-q (qlo + Q)` on the integers, `0 ≤ Q ≤ qmax`. At the source environment of the honest values:
+The signature relation of an ML-DSA-44 ring carrier (`carrier_relation` in
+`lib/gordiehowe/examples/rings/mldsa_ring_carrier.h`) commits the quotient `q′`
+(`signature.relation.q`, value `65`, bound to its digits) of `w′ − (Σ_j A_ij ⊛ z_j − 2^d t1_i ⊛ c)`
+by `q` at the offset `qlo = −134137327`, and the high halves `Q` (`signature.Q`, value `66`) of the
+rows' products by `X^256 + 1`; its rows `signature.relation.0 … 3` (predicates `1 … 4`) are the row
+polynomials `E_i + (X^256 + 1) Q_i + T_i c − Σ_j A_ij z_j` read at `r`. At the source environment of
+the honest values:
 
-* **The casts** (`castAt_sigP`, `castAt_sigN`): at any reading whose committed spectra hold a key's
-  transforms (`SpectraOf`) and whose `w′`, `z` and challenge bits are small integers, every integer
-  reading of the relation's sides casts to its field value (the inverse transform of a spectrum is
-  the key, whose negacyclic coefficients are small integers).
-* **The honest readings** (`spectraOf_honest`, `rd_w`, `rd_z`, `rd_c`): the spectra are the
-  signer's key's transforms; `w′` reads `wNR`, `z` the centered response, the challenge bits the
-  challenge's support and sign.
 * **The honest integer** (`sigZ_dvd`, `sigZ_bounds`): `sigZ` is a multiple of `q` (the honest `w′`
   is `computeWApprox(Â, c, z, t1)`, `Emulated.Rows.congruent_of_computeWApprox`) within
   `±(1024 (q − 1) · 130993 + 256 (q − 1) + q)`, so the honest quotient `quotN` lies in `[0, qmax]`.
-* **The predicates** (`sig_holds`, `qRange_holds`): `signature.relation` and the quotient's range.
+* **The honest readings** (`spectraOf_honest`, `rd_w`, `rd_z`, `rd_c`, `rd_q`, `rd_Q`): the spectra
+  are the signer's key's transforms; `w′` reads `wNR`, `z` the centered response, the challenge
+  bits the challenge's support and sign, the quotient `quotN`, the high halves `qHonC`.
+* **The predicates** (`sig_row`, `qRange_holds`): row `rel0 + i`'s polynomial is `0`: the
+  products split into negacyclic and high halves (`Ops.polyOf_mul_polyOf`), the honest high halves
+  cancel theirs, and the negacyclic part, the casts of integers (`Ops.intCast_sum_negCoef`), cancels
+  `E_i = w′_i − q (q′_i + qlo)`, the cast of `w′ − sigZ`; the quotient lies in its range.
 -/
 
 namespace GordieHowe.MLDSA44.Ring.Carrier
@@ -45,269 +46,20 @@ variable {msgLen : ℕ}
 
 /-! ## The program facts -/
 
-/-- **The program facts of a carrier's quotient** (decided per carrier): `signature.relation` has
-the quotient `64` at `qlo = −134137327`, `qmax = 268274655`; `signature.relation.q` (predicate
-`22`) bounds the quotient below some `B > qmax`; the quotient lies in field `0` with `1024`
-coordinates. -/
-class MldsaCarrierQuot (program : RealizedProgram) : Prop where
-  /-- `signature.relation`'s realization. -/
-  sigReal : ∃ real, (program.predicate 3).body = .mod 0 8380417 sigP sigN real ∧
-    real.form = .spectralProduct ∧ real.quotient = some (.leaf 64) ∧
-    real.quotientLo = -134137327 ∧ real.qmax = 268274655
+/-- **The program facts of a carrier's quotient** (decided per carrier): `signature.relation.q`
+(predicate `18`) bounds the quotient (value `65`) below some `B > qmax = 268274655`; the quotient
+lies in field `0` with `1024` coordinates. -/
+class MldsaCarrierQuot (program : RealizedProgram) where
+  /-- `signature.relation.q`, the quotient's range. -/
+  qPred : ℕ
   /-- `signature.relation.q` bounds the quotient. -/
-  qRange : ∃ r B, (program.predicate 22).body = .mem 0 [.leaf 64] (.range B) r ∧ 268274655 < B
+  qRange : ∃ r B, (program.predicate qPred).body = .mem 0 [.leaf 65] (.range B) r ∧ 268274655 < B
   /-- The quotient lies in field `0`. -/
-  field64 : program.valueField 64 = 0
+  field65 : program.valueField 65 = 0
   /-- The quotient has `1024` coordinates. -/
-  size64 : (program.value 64).size = 1024
+  size65 : (program.value 65).size = 1024
   /-- The quotient is a value of the program. -/
-  lt64 : 64 < program.values.length
-
-/-! ## The casts of the relation's integer readings -/
-
-section Cast
-
-variable {program : RealizedProgram} [MldsaCarrierRelation program] {I : RealizedProgram.Interp}
-  [RealizedProgram.PrimeCastField (I 0) pGold] (rd : program.Valuation I)
-
-/-- **An integer reading casting to its field value** at coordinate `i`, in domain `0`. -/
-def CastAt (e : Expr) (i : ℕ) : Prop :=
-  ((program.evalIntWith rd 0 e i : ℤ) : (I 0).K) = program.evalE rd 0 e i
-
-variable {rd}
-
-theorem natCast_gold_sub {k : ℕ} (hk : k ≤ pGold) :
-    (((pGold - k : ℕ) : ℕ) : (I 0).K) = -((k : ℕ) : (I 0).K) := by
-  rw [Nat.cast_sub hk, CharP.cast_eq_zero, zero_sub]
-
-theorem decode_mOne0 : (I 0).decode 18446744069414584320 = -1 := by
-  rw [decode_lt0 (by norm_num [pGold]), show (18446744069414584320 : ℕ) = pGold - 1 by
-    norm_num [pGold], natCast_gold_sub (by norm_num [pGold]), Nat.cast_one]
-
-theorem decode_mTwo0 : (I 0).decode 18446744069414584319 = -2 := by
-  rw [decode_lt0 (by norm_num [pGold]), show (18446744069414584319 : ℕ) = pGold - 2 by
-    norm_num [pGold], natCast_gold_sub (by norm_num [pGold])]
-  norm_num
-
-theorem castAt_add {a b : Expr} {i : ℕ} (ha : CastAt rd a i) (hb : CastAt rd b i) :
-    CastAt rd (.add a b) i := by
-  unfold CastAt at *
-  rw [evalIntWith_add, evalE_add, Int.cast_add, ha, hb]
-
-theorem castAt_scale_mOne {a : Expr} {i : ℕ} (ha : CastAt rd a i) :
-    CastAt rd (.scale (.const 18446744069414584320) a) i := by
-  unfold CastAt at *
-  rw [evalIntWith_scale_const, evalE_scale_const, MldsaCarrierRelation.domainField0,
-    centered_mOne, decode_mOne0, Int.cast_mul, ha]
-  norm_num
-
-theorem castAt_scale_mTwo {a : Expr} {i : ℕ} (ha : CastAt rd a i) :
-    CastAt rd (.scale (.const 18446744069414584319) a) i := by
-  unfold CastAt at *
-  rw [evalIntWith_scale_const, evalE_scale_const, MldsaCarrierRelation.domainField0,
-    centered_mTwo, decode_mTwo0, Int.cast_mul, ha]
-  norm_num
-
-theorem castAt_reindex {a : Expr} {m : IndexMap} {i : ℕ} (ha : CastAt rd a (m.entry i)) :
-    CastAt rd (.reindex m a) i := by
-  unfold CastAt at *
-  rw [evalIntWith_reindex, evalE_reindex, ha]
-
-theorem castAt_concat {a b : Expr} {i : ℕ} (ha : i < program.exprLen a → CastAt rd a i)
-    (hb : program.exprLen a ≤ i → CastAt rd b (i - program.exprLen a)) :
-    CastAt rd (.concat a b) i := by
-  unfold CastAt at *
-  rw [evalIntWith_concat, evalE_concat]
-  split_ifs with h
-  · exact ha h
-  · exact hb (by omega)
-
-theorem castAt_ref {k i : ℕ} (hk : k < program.exprs.length) (ha : CastAt rd (program.expr k) i) :
-    CastAt rd (.ref k) i := by
-  unfold CastAt at *
-  rw [evalIntWith_ref MldsaCarrierRelation.refsOrdered rd 0 hk,
-    evalE_ref MldsaCarrierRelation.refsOrdered rd 0 hk, ha]
-
-/-- **A small integer's cast reads back** through `coefInt` and casts to itself. -/
-theorem cast_coefInt_small {e : (I 0).K} {z : ℤ} (hz : 2 * |z| < pGold) (he : e = (z : (I 0).K)) :
-    (((I 0).coefInt e : ℤ) : (I 0).K) = e := by
-  rw [he, coefInt_small hz]
-
-/-- **A `polyBroadcast` operator's integer reading casts to its field value** at output `j`, where
-its matrix entries at row `j` read back through `coefInt` and the operand's integer readings cast
-to its field values. -/
-theorem cast_applyInt_pb (t K : ℕ) (form : ConvForm) (xi : ℕ → ℤ) (xf : ℕ → (I 0).K) (j : ℕ)
-    (hent : ∀ k : Fin ((program.value t).size / K),
-      (((I 0).coefInt (NamedOp.pbEntryForm program rd t K form
-        (j % NamedOp.rows program (.polyBroadcast t K form)) k) : ℤ) : (I 0).K) =
-        NamedOp.pbEntryForm program rd t K form (j % NamedOp.rows program (.polyBroadcast t K form)) k)
-    (hx : ∀ k : Fin ((program.value t).size / K),
-      (xi (j / NamedOp.rows program (.polyBroadcast t K form) *
-        NamedOp.cols program (.polyBroadcast t K form) + k) : (I 0).K) =
-      xf (j / NamedOp.rows program (.polyBroadcast t K form) *
-        NamedOp.cols program (.polyBroadcast t K form) + k)) :
-    ((NamedOp.applyInt program 0 rd (.polyBroadcast t K form) xi j : ℤ) : (I 0).K) =
-      NamedOp.apply program 0 rd (.polyBroadcast t K form) xf j := by
-  rw [NamedOp.applyInt_polyBroadcast_form, NamedOp.apply_polyBroadcast_form, Int.cast_sum]
-  refine Finset.sum_congr rfl fun k _ => ?_
-  rw [Int.cast_mul, hent k, hx k]
-
-/-- **An integer negacyclic coefficient cast into the field** is the coefficient of the casts,
-where the entries agree below `n`. -/
-theorem cast_negCoef_of {n : ℕ} {h : ℕ → (I 0).K} {z : ℕ → ℤ}
-    (hz : ∀ s < n, h s = (z s : (I 0).K)) (j k : ℕ) :
-    ((Ops.negCoef n z j k : ℤ) : (I 0).K) = Ops.negCoef n h j k := by
-  have hm := Ops.negCoef_map (Int.castAddHom (I 0).K) n z j k
-  simp only [Int.coe_castAddHom] at hm
-  rw [hm, Ops.negCoef_eq, Ops.negCoef_eq]
-  split_ifs with h1 h2 h2
-  · rw [hz _ h1.2, hz _ h2.2]
-  · rw [hz _ h1.2]
-  · rw [hz _ h2.2]
-  · rfl
-
-/-- **A key's negacyclic coefficients are small**: below `q` in absolute value. -/
-theorem abs_negCoef_keyZ_le {key : Fin 256 → ℕ} (hkey : ∀ s, key s < Emulated.Rows.q) (j k : ℕ) :
-    |Ops.negCoef 256 (keyZ key) j k| ≤ 8380416 := by
-  rcases Ops.negCoef_signed 256 (keyZ key) j k with h | ⟨s, hs, h | h⟩
-  · rw [h]; norm_num
-  all_goals
-    rw [h]
-    have hk := hkey ⟨s, hs⟩
-    change key ⟨s, hs⟩ < 8380417 at hk
-    simp only [keyZ, dif_pos hs, abs_neg, Nat.abs_cast]
-    exact_mod_cast Nat.le_of_lt_succ hk
-
-/-- **The polynomial of a key's spectrum is the key**, coefficient by coefficient. -/
-theorem formPoly_spectrum {a : ℕ} {x : ℕ → (I a).K} {key : Fin 256 → ℕ}
-    (hx : ∀ m < 256, (castElt (x m) : (I 0).K) =
-      Ops.nttScheme 256 (psi512 : (I 0).K) (keyPoly (I 0).K key) m) {s : ℕ} (hs : s < 256) :
-    NamedOp.formPoly (I := I) 0 256 (fun s => castElt (x s)) (.ntt psi512) s =
-      ((keyZ key s : ℤ) : (I 0).K) := by
-  show Ops.inverseNtt 256 ((I 0).decode psi512) (fun s => castElt (x s)) s = _
-  rw [decode_lt0 (by norm_num [pGold]), Ops.inverseNtt_congr hx,
-    Ops.inverseNtt_nttScheme (k := 8) (by norm_num) psi512_isPrimitiveRoot natCast_256_ne_zero _ hs]
-  simp only [keyPoly, keyZ, Ops.ofFin_of_lt _ hs, dif_pos hs, Int.cast_natCast]
-
-/-- **The entries of a `polyBroadcast` of committed spectra read back**: where every block of the
-broadcast value holds a key's transform, every matrix entry is a small integer's cast. -/
-theorem pbEntry_castBack {t K : ℕ} (hsz : (program.value t).size = K * 256) (hK : 0 < K)
-    (keys : ℕ → Fin 256 → ℕ) (hkey : ∀ r s, keys r s < Emulated.Rows.q)
-    (hS : ∀ r < K, ∀ m < 256, (castElt (rd t (r * 256 + m)) : (I 0).K) =
-      Ops.nttScheme 256 (psi512 : (I 0).K) (keyPoly (I 0).K (keys r)) m) (j k : ℕ) :
-    (((I 0).coefInt (NamedOp.pbEntryForm program rd t K (.ntt psi512) j k) : ℤ) : (I 0).K) =
-      NamedOp.pbEntryForm program rd t K (.ntt psi512) j k := by
-  have hn : (program.value t).size / K = 256 := by rw [hsz, Nat.mul_div_cancel_left _ hK]
-  unfold NamedOp.pbEntryForm NamedOp.pbPolyForm
-  rw [hn]
-  split_ifs with hj
-  · have hr : j / 256 < K := by omega
-    have hcast := cast_negCoef_of (n := 256)
-      (h := NamedOp.formPoly (I := I) 0 256 (fun s => castElt (rd t (j / 256 * 256 + s))) (.ntt psi512))
-      (z := keyZ (keys (j / 256))) (fun s hs => formPoly_spectrum (hS _ hr) hs) (j % 256) k
-    refine cast_coefInt_small ?_ hcast.symm
-    have := abs_negCoef_keyZ_le (hkey (j / 256)) (j % 256) k
-    norm_num [pGold]
-    omega
-  · exact cast_coefInt_small (z := 0) (by norm_num [pGold]) (by simp)
-
-/-- **Four blocks of `256` cast** where each block does. -/
-theorem castAt_concat4 (f : ℕ → Expr) (hf : ∀ r < 4, program.exprLen (f r) = 256)
-    (h : ∀ r < 4, ∀ k < 256, CastAt rd (f r) k) {i : ℕ} (hi : i < 1024) :
-    CastAt rd (.concat (f 0) (.concat (f 1) (.concat (f 2) (f 3)))) i := by
-  have h0 := hf 0 (by norm_num)
-  have h1 := hf 1 (by norm_num)
-  have h2 := hf 2 (by norm_num)
-  refine castAt_concat (fun hi' => h 0 (by norm_num) i (by omega)) fun hi' => ?_
-  rw [h0] at hi' ⊢
-  refine castAt_concat (fun hi'' => h 1 (by norm_num) _ (by omega)) fun hi'' => ?_
-  rw [h1] at hi'' ⊢
-  refine castAt_concat (fun h3 => h 2 (by norm_num) _ (by omega)) fun h3 => ?_
-  rw [h2] at h3 ⊢
-  exact h 3 (by norm_num) _ (by omega)
-
-/-- **The relation's left side casts** where `w′`'s readings do. -/
-theorem castAt_sigP (hw : ∀ m < 1024, CastAt rd (.leaf 63) m) {i : ℕ} (hi : i < 1024) :
-    CastAt rd sigP i :=
-  castAt_concat4 rowP (fun _ hr => exprLen_rowP hr) (fun r hr k hk =>
-    castAt_ref wRef_lt (by
-      rw [expr_wRef hr]
-      exact castAt_reindex (by rw [rowSeg_entry _ hk]; exact hw _ (by omega)))) hi
-
-variable {pk : Native.Rows.PublicKey} (hS : SpectraOf pk rd)
-  (hz : ∀ m < 1024, CastAt rd (.leaf 60) m) (hc : ∀ m < 512, CastAt rd (.leaf 62) m)
-include hS hz hc
-
-/-- **The product `A_ij ⊛ z_j` casts.** -/
-theorem castAt_aTerm (i j : Fin 4) {k : ℕ} (hk : k < 256) : CastAt rd (aTerm i j) k := by
-  have h55 := MldsaCarrierRelation.size55 (program := program)
-  have hJ : 256 * (4 * (i : ℕ) + j) + k < 4096 := by omega
-  refine castAt_reindex ?_
-  rw [rowSeg_entry _ hk]
-  unfold CastAt
-  rw [evalIntWith_apply, evalE_apply, MldsaCarrierRelation.domainField0]
-  refine cast_applyInt_pb 55 16 (.ntt psi512) _ _ _ (fun k' => pbEntry_castBack
-    (by rw [h55]) (by norm_num) (fun r => Emulated.Rows.aKeyOf pk ⟨r / 4 % 4, by change _ < 4; omega⟩ ⟨r % 4, by change _ < 4; omega⟩)
-    (fun r => Emulated.Rows.aKeyOf_lt pk _ _) (fun r hr m hm => ?_) _ _) (fun k' => ?_)
-  · have h := hS.a ⟨r / 4 % 4, by change _ < 4; omega⟩ ⟨r % 4, by change _ < 4; omega⟩ m hm
-    rw [evalE_leaf] at h
-    have hr' : ((r / 4 % 4 : ℕ) * 4 + r % 4) * 256 + m = r * 256 + m := by omega
-    simp only at h
-    rw [hr'] at h
-    exact h
-  · have hrows : NamedOp.rows program (.polyBroadcast 55 16 (.ntt psi512)) = 4096 := by
-      simp only [NamedOp.rows, h55]
-    have hk' : (k' : ℕ) < 256 := by
-      have := k'.isLt
-      have h' : (program.value 55).size / 16 = 256 := by rw [h55]
-      omega
-    rw [hrows, Nat.div_eq_of_lt hJ, Nat.zero_mul, Nat.zero_add]
-    exact castAt_reindex (by rw [rowSeg_entry _ hk']; exact hz _ (by omega))
-
-/-- **The challenge polynomial casts.** -/
-theorem castAt_cExpr {t : ℕ} (ht : t < 256) : CastAt rd cExpr t := by
-  have hl := MldsaCarrierRelation.exprsLen (program := program)
-  refine castAt_add (castAt_ref (by omega) ?_) (castAt_scale_mTwo (castAt_ref (by omega) ?_))
-  · rw [MldsaCarrierRelation.expr37]
-    exact castAt_reindex (by rw [evenSeg_entry ht]; exact hc _ (by omega))
-  · rw [MldsaCarrierRelation.expr38]
-    exact castAt_reindex (by rw [oddSeg_entry ht]; exact hc _ (by omega))
-
-/-- **The product `2^d t1_i ⊛ c` casts.** -/
-theorem castAt_tTerm (i : Fin 4) {k : ℕ} (hk : k < 256) : CastAt rd (tTerm i) k := by
-  have h56 := MldsaCarrierRelation.size56 (program := program)
-  have hJ : 256 * (i : ℕ) + k < 1024 := by omega
-  refine castAt_reindex ?_
-  rw [rowSeg_entry _ hk]
-  unfold CastAt
-  rw [evalIntWith_apply, evalE_apply, MldsaCarrierRelation.domainField0]
-  refine cast_applyInt_pb 56 4 (.ntt psi512) _ _ _ (fun k' => pbEntry_castBack
-    (by rw [h56]) (by norm_num) (fun r => Emulated.Rows.tKeyOf pk ⟨r % 4, by change _ < 4; omega⟩)
-    (fun r s => KeyNTT.vals_lt _ s) (fun r hr m hm => ?_) _ _) (fun k' => ?_)
-  · have h := hS.t ⟨r % 4, by change _ < 4; omega⟩ m hm
-    rw [evalE_leaf] at h
-    have hr' : (r % 4 : ℕ) * 256 + m = r * 256 + m := by rw [Nat.mod_eq_of_lt hr]
-    simp only at h
-    rw [hr'] at h
-    exact h
-  · have hrows : NamedOp.rows program (.polyBroadcast 56 4 (.ntt psi512)) = 1024 := by
-      simp only [NamedOp.rows, h56]
-    have hk' : (k' : ℕ) < 256 := by
-      have := k'.isLt
-      have h' : (program.value 56).size / 4 = 256 := by rw [h56]
-      omega
-    rw [hrows, Nat.div_eq_of_lt hJ, Nat.zero_mul, Nat.zero_add]
-    exact castAt_cExpr hS hz hc hk'
-
-/-- **The relation's right side casts** where the committed spectra hold a key's transforms and
-`z`'s and the challenge bits' readings cast. -/
-theorem castAt_sigN {i : ℕ} (hi : i < 1024) : CastAt rd sigN i :=
-  castAt_concat4 rowN (fun r _ => exprLen_rowN r) (fun r hr k hk => by
-    have e := fun j : Fin 4 => castAt_aTerm hS hz hc ⟨r, hr⟩ j hk
-    exact castAt_add (castAt_add (castAt_add (castAt_add (e 0) (e 1)) (e 2)) (e 3))
-      (castAt_scale_mOne (castAt_tTerm hS hz hc ⟨r, hr⟩ hk))) hi
-
-end Cast
+  lt65 : 65 < program.values.length
 
 /-! ## Digits -/
 
@@ -424,7 +176,7 @@ theorem sigZ_dvd (i : Fin 4) (k : Fin 256) : (8380417 : ℤ) ∣ sigZ y i k := b
         (fun m : Fin 256 => ((Emulated.Rows.aKeyOf y.key i j m : ℕ) : _root_.MLDSA.Coeff))
         (fun m => ((Emulated.Rows.signedZ (zvR y) j m : ℤ) : _root_.MLDSA.Coeff)) k := by
     intro j
-    refine (cast_sum_negCoef (keyZ (Emulated.Rows.aKeyOf y.key i j)) (zZ y j) k.isLt).trans ?_
+    refine (Ops.intCast_sum_negCoef (keyZ (Emulated.Rows.aKeyOf y.key i j)) (zZ y j) k.isLt).trans ?_
     congr 1
     · funext m
       simp only [keyZ, dif_pos (show (m : ℕ) < 256 from m.isLt), Int.cast_natCast]
@@ -436,7 +188,7 @@ theorem sigZ_dvd (i : Fin 4) (k : Fin 256) : (8380417 : ℤ) ∣ sigZ y i k := b
         _root_.MLDSA.Coeff) =
       LatticeCrypto.negacyclicConvCoeff (fun m : Fin 256 => ((y.c m : ℤ) : _root_.MLDSA.Coeff))
         (fun m => ((Emulated.Rows.tKeyOf y.key i m : ℕ) : _root_.MLDSA.Coeff)) k := by
-    refine (cast_sum_negCoef (keyZ (Emulated.Rows.tKeyOf y.key i)) (cZ y) k.isLt).trans ?_
+    refine (Ops.intCast_sum_negCoef (keyZ (Emulated.Rows.tKeyOf y.key i)) (cZ y) k.isLt).trans ?_
     rw [Falcon512.negacyclicConvCoeff_comm]
     congr 1
     · funext m
@@ -450,19 +202,6 @@ theorem sigZ_dvd (i : Fin 4) (k : Fin 256) : (8380417 : ℤ) ∣ sigZ y i k := b
     simp only [hA]
     exact sub_eq_zero.mpr h1
   exact (ZMod.intCast_zmod_eq_zero_iff_dvd _ _).mp h0
-
-/-- **A sum against a key's negacyclic row** is bounded by `256` times the key's and the operand's
-bounds. -/
-theorem abs_sum_negCoef_le {key : Fin 256 → ℕ} (hkey : ∀ s, key s < Emulated.Rows.q) {x : ℕ → ℤ}
-    {B : ℤ} (hx : ∀ t < 256, |x t| ≤ B) (k : ℕ) :
-    |∑ t : Fin 256, Ops.negCoef 256 (keyZ key) k t * x t| ≤ 256 * (8380416 * B) := by
-  refine (Finset.abs_sum_le_sum_abs _ _).trans ?_
-  have hB : 0 ≤ B := (abs_nonneg _).trans (hx 0 (by norm_num))
-  calc ∑ t : Fin 256, |Ops.negCoef 256 (keyZ key) k t * x t|
-      ≤ ∑ _t : Fin 256, 8380416 * B := Finset.sum_le_sum fun t _ => by
-        rw [abs_mul]
-        exact mul_le_mul (abs_negCoef_keyZ_le hkey k t) (hx t t.isLt) (abs_nonneg _) (by norm_num)
-    _ = 256 * (8380416 * B) := by simp
 
 /-- **The honest integer's bounds**: `sigZ = q t` with `|t| ≤ 134137072`. -/
 theorem sigZ_bounds (i : Fin 4) (k : Fin 256) :
@@ -562,7 +301,7 @@ theorem spectraOf_honest : SpectraOf y.key RD where
     have hi := i.isLt; have hj := j.isLt
     change (i : ℕ) < 4 at hi; change (j : ℕ) < 4 at hj
     have hlt : ((i : ℕ) * 4 + j) * 256 + m < 4096 := by omega
-    rw [evalE_member y x c π (by simp) (by rw [MldsaCarrierRelation.size55]; exact hlt),
+    rw [evalE_member y x c π (by simp) (by rw [(MldsaCarrierRelation.sizes (program := program)).1]; exact hlt),
       (honestVal_member y _).1, if_pos hlt, specE_lt y _ (by omega)]
     have e1 : (((i : ℕ) * 4 + j) * 256 + m) / 256 = (i : ℕ) * 4 + j := by omega
     have e2 : (((i : ℕ) * 4 + j) * 256 + m) % 256 = m := by omega
@@ -578,7 +317,7 @@ theorem spectraOf_honest : SpectraOf y.key RD where
     have hi := i.isLt
     change (i : ℕ) < 4 at hi
     have hlt : (i : ℕ) * 256 + m < 1024 := by omega
-    rw [evalE_member y x c π (by simp) (by rw [MldsaCarrierRelation.size56]; exact hlt),
+    rw [evalE_member y x c π (by simp) (by rw [(MldsaCarrierRelation.sizes (program := program)).2.1]; exact hlt),
       (honestVal_member y _).2.1, if_pos hlt, specE_lt y _ (by omega)]
     have e1 : (4096 + ((i : ℕ) * 256 + m)) / 256 = 16 + i := by omega
     have e2 : (4096 + ((i : ℕ) * 256 + m)) % 256 = m := by omega
@@ -591,26 +330,26 @@ theorem spectraOf_honest : SpectraOf y.key RD where
 
 /-- **`w′` reads the honest `w′`** (through domain `A`'s renaming). -/
 theorem rd_w {m : ℕ} (hm : m < 1024) :
-    program.evalE RD 0 (.leaf 63) m = ((wNR y (fm m hm) : ℕ) : (interp 0).K) := by
-  have h := evalE_pullA E (f := 0) (v := 61) (by decide) m
-  rw [σA_vals.2.2.2.1] at h
+    program.evalE RD 0 (.leaf 64) m = ((wNR y (fm m hm) : ℕ) : (interp 0).K) := by
+  have h := evalE_pullA E (f := 0) (v := 61) (CarrierAEmbed.readV 61 (by decide)) m
+  rw [MldsaCarrierFront.valsA.2.2.2.1, w_eq] at h
   rw [← h]
   exact rdAE_61 (readsAE_pullA y x c π) hm
 
 /-- **`z` reads the centered response.** -/
 theorem rd_z {m : ℕ} (hm : m < 1024) :
-    program.evalE RD 0 (.leaf 60) m = ((flat (zCentered y.z) (fmz m hm) : ℤ) : (interp 0).K) := by
-  have h := evalE_pullA E (f := 0) (v := 58) (by decide) m
-  rw [σA_vals.1] at h
+    program.evalE RD 0 (.leaf 61) m = ((flat (zCentered y.z) (fmz m hm) : ℤ) : (interp 0).K) := by
+  have h := evalE_pullA E (f := 0) (v := 58) (CarrierAEmbed.readV 58 (by decide)) m
+  rw [MldsaCarrierFront.valsA.1, z_eq] at h
   rw [← h]
   exact rdAE_58 (readsAE_pullA y x c π) hm
 
 /-- **The challenge bits read the challenge's support and sign.** -/
 theorem rd_c {s : ℕ} (hs : s < 512) :
-    program.evalE RD 0 (.leaf 62) s = cA y (interp 0).K ⟨s / 2, by change s / 2 < 256; omega⟩
+    program.evalE RD 0 (.leaf 63) s = cA y (interp 0).K ⟨s / 2, by change s / 2 < 256; omega⟩
       ⟨s % 2, by omega⟩ := by
-  have h := evalE_pullA E (f := 0) (v := 60) (by decide) s
-  rw [σA_vals.2.2.1] at h
+  have h := evalE_pullA E (f := 0) (v := 60) (CarrierAEmbed.readV 60 (by decide)) s
+  rw [MldsaCarrierFront.valsA.2.2.1, c_eq] at h
   rw [← h]
   exact (rdAE_fixed (readsAE_pullA y x c π) (v := 60) (by simp)
     (by rw [MldsaEmulatedHonest.size61 (program := emu)]; exact hs)).trans (aValE_60 y _ _ hs)
@@ -622,7 +361,7 @@ theorem toNat0_ite (p : Prop) [Decidable p] :
   · exact_mod_cast toNat_lt0 (I := interp) (k := 0) (by norm_num [pGold])
 
 theorem rd_c_bool {s : ℕ} (hs : s < 512) :
-    program.evalE RD 0 (.leaf 62) s = 0 ∨ program.evalE RD 0 (.leaf 62) s = 1 := by
+    program.evalE RD 0 (.leaf 63) s = 0 ∨ program.evalE RD 0 (.leaf 63) s = 1 := by
   rw [rd_c y x c π hs]
   unfold cA
   rcases Nat.mod_two_eq_zero_or_one s with h | h
@@ -633,8 +372,9 @@ theorem rd_c_bool {s : ℕ} (hs : s < 512) :
 
 /-- **`w′`'s integer reading** is the honest `w′`. -/
 theorem intOf_wH {m : ℕ} (hm : m < 1024) :
-    program.intOf RD 63 m = (wNR y (fm m hm) : ℤ) := by
-  refine intOf_of_boundInt MldsaCarrierRelation.kind63 MldsaCarrierRelation.field63 ?_
+    program.intOf RD 64 m = (wNR y (fm m hm) : ℤ) := by
+  refine intOf_of_boundInt (MldsaCarrierRelation.kinds (program := program)).2.1
+    ((MldsaCarrierRelation.fields (program := program)) 64 (by simp)) ?_
     (by rw [rd_w y x c π hm, Int.cast_natCast])
   have := wNR_lt y (fm m hm)
   rw [abs_of_nonneg (by positivity)]
@@ -643,8 +383,9 @@ theorem intOf_wH {m : ℕ} (hm : m < 1024) :
 
 /-- **`z`'s integer reading** is the centered response. -/
 theorem intOf_zH {m : ℕ} (hm : m < 1024) :
-    program.intOf RD 60 m = flat (zCentered y.z) (fmz m hm) := by
-  refine intOf_of_boundInt MldsaCarrierRelation.kind60 MldsaCarrierRelation.field60 ?_
+    program.intOf RD 61 m = flat (zCentered y.z) (fmz m hm) := by
+  refine intOf_of_boundInt (MldsaCarrierRelation.kinds (program := program)).1
+    ((MldsaCarrierRelation.fields (program := program)) 61 (by simp)) ?_
     (rd_z y x c π hm)
   have h := zCentered_abs_le y (finProdFinEquiv.symm (fmz m hm)).1 (finProdFinEquiv.symm (fmz m hm)).2
   unfold flat
@@ -664,15 +405,16 @@ theorem cInt_honest {t : ℕ} (ht : t < 256) : cInt RD t = cZ y t := by
   have e4 : (⟨(2 * t + 1) % 2, by omega⟩ : Fin 2) = 1 := Fin.ext (by simp only; omega)
   have hv : ∀ s (hs : s < 512) (n : ℕ), cA y (interp 0).K ⟨s / 2, by change s / 2 < 256; omega⟩
       ⟨s % 2, by omega⟩ = ((n : ℕ) : (interp 0).K) →
-      program.evalE RD 0 (.leaf 62) s = ((n : ℕ) : (interp 0).K) :=
+      program.evalE RD 0 (.leaf 63) s = ((n : ℕ) : (interp 0).K) :=
     fun s hs n h => (rd_c y x c π hs).trans h
   have h3 : y.c (⟨t, ht⟩ : Fin MLDSA44.Native.Params.N) = 0 ∨
       y.c (⟨t, ht⟩ : Fin MLDSA44.Native.Params.N) = 1 ∨
       y.c (⟨t, ht⟩ : Fin MLDSA44.Native.Params.N) = -1 :=
     MLDSA44.PoP.challenge_ternary _ _ _
   unfold cInt
-  rw [intOf_of_priv _ MldsaCarrierRelation.kind62 MldsaCarrierRelation.field62,
-    intOf_of_priv _ MldsaCarrierRelation.kind62 MldsaCarrierRelation.field62, cZ, dif_pos ht]
+  have hp := (MldsaCarrierRelation.kinds (program := program)).2.2.2
+  have hf := (MldsaCarrierRelation.fields (program := program)) 63 (by simp)
+  rw [intOf_of_priv _ hp hf, intOf_of_priv _ hp hf, cZ, dif_pos ht]
   rcases h3 with h | h | h
   · have h' : y.c ⟨t, ht⟩ = 0 := h
     rw [hv (2 * t) (by omega) 0 (by rw [e1, e3]; simp [cA, HashCircuit.ternaryBits, h]),
@@ -692,137 +434,180 @@ theorem cInt_honest {t : ℕ} (ht : t < 256) : cInt RD t = cZ y t := by
 
 /-- **The quotient's integer reading and value**: the honest quotient. -/
 theorem rd_q {j : ℕ} (hj : j < 1024) :
-    program.evalE RD 0 (.leaf 64) j = ((quotN y j : ℕ) : (interp 0).K) := by
-  have hf := MldsaCarrierQuot.field64 (program := program)
-  rw [evalE_leaf, reader_bindAsg_of_boundOk MldsaCarrierHonest.bound rfl MldsaCarrierQuot.lt64
-    MldsaCarrierHonest.kind64]
+    program.evalE RD 0 (.leaf 65) j = ((quotN y j : ℕ) : (interp 0).K) := by
+  have hf := MldsaCarrierQuot.field65 (program := program)
+  rw [evalE_leaf, reader_bindAsg_of_boundOk MldsaCarrierHonest.bound rfl MldsaCarrierQuot.lt65
+    MldsaCarrierHonest.kind65]
   have key : program.evalE RD 0 (qD).expr j = ((quotN y j : ℕ) : (interp 0).K) := by
     refine evalE_digits0 MldsaCarrierHonest.qFits (Nat.lt_succ_of_le (quotN_le y j)) _ j
       fun s hs => ?_
-    have hv : (qD).ids[s] ∈ [55, 56, 57, 58] ++ (qD).ids :=
+    have hv : (qD).ids[s] ∈ [56, 57, 58, 59, 66] ++ (qD).ids :=
       List.mem_append_right _ (List.getElem_mem hs)
     rw [evalE_member y x c π hv (by rw [MldsaCarrierHonest.qSizes _ (List.getElem_mem hs)]; exact hj),
-      (honestVal_member y j).2.2.2.2 _ (List.getElem_mem hs),
+      (honestVal_member y j).2.2.2.2.2 _ (List.getElem_mem hs),
       DigitLayout.digit_getElem (List.nodup_append.1 MldsaCarrierHonest.member_nodup).2.1]
   rw [← key]
   revert hf
-  generalize program.valueField 64 = a
+  generalize program.valueField 65 = a
   rintro rfl
   rfl
 
-theorem intOf_q {j : ℕ} (hj : j < 1024) : program.intOf RD 64 j = (quotN y j : ℤ) := by
-  have hb : (program.value 64).kind.isBound = true := by
-    rw [MldsaCarrierHonest.kind64]
+theorem intOf_q {j : ℕ} (hj : j < 1024) : program.intOf RD 65 j = (quotN y j : ℤ) := by
+  have hb : (program.value 65).kind.isBound = true := by
+    rw [MldsaCarrierHonest.kind65]
     rfl
-  refine intOf_of_boundInt hb MldsaCarrierQuot.field64 ?_ (by rw [rd_q y x c π hj, Int.cast_natCast])
+  refine intOf_of_boundInt hb MldsaCarrierQuot.field65 ?_ (by rw [rd_q y x c π hj, Int.cast_natCast])
   have := quotN_le y j
   rw [abs_of_nonneg (by positivity)]
   norm_num [pGold]
   omega
 
-/-- **The relation's left side on the honest integers**: `w′`. -/
-theorem sigP_honest {i k : ℕ} (hi : i < 4) (hk : k < 256) :
-    program.evalIntWith RD 0 sigP (i * 256 + k) = (wNR y (finProdFinEquiv (⟨i, hi⟩, ⟨k, hk⟩)) : ℤ) := by
-  rw [evalIntWith_sigP _ hi hk, intOf_wH y x c π (by omega),
-    Emulated.fm_eq ⟨i, hi⟩ ⟨k, hk⟩ (by simp only; omega)]
+omit [MldsaCarrierQuot program] [MLDSA44.MldsaHNativeData FH]
+  [MLDSA44.MldsaHSample (MLDSA44.Emulated.MldsaEmbed.nat emu)]
+  [MLDSA44.MldsaHConsts (MLDSA44.Emulated.MldsaEmbed.nat emu) FH]
+  [MldsaHHonest (MLDSA44.Emulated.MldsaEmbed.nat emu)]
+  [MldsaHSelHonest (MLDSA44.Emulated.MldsaEmbed.nat emu)] [MLDSA44.MldsaHNodes FH]
+  [MldsaEmulatedHonest emu F0 FH] in
+/-- **The high halves read `qHonC`**: row `t / 255` at `t % 255`. -/
+theorem rd_Q {i : Fin 4} {s : ℕ} (hs : s < 255) :
+    program.evalE RD 0 (.leaf 66) ((i : ℕ) * 255 + s) = qHonC y (interp 0).K i s := by
+  have hi := i.isLt
+  have hlt : (i : ℕ) * 255 + s < 1020 := by omega
+  rw [evalE_member y x c π (by simp)
+      (by rw [(MldsaCarrierRelation.sizes (program := program)).2.2.2.2.2.2]; exact hlt),
+    (honestVal_member y _).2.2.2.2.1, dif_pos hlt]
+  have e : (⟨((i : ℕ) * 255 + s) / 255, by omega⟩ : Fin 4) = i := Fin.ext (by simp only; omega)
+  rw [e, show ((i : ℕ) * 255 + s) % 255 = s by omega]
 
-set_option maxRecDepth 8192 in
-/-- **The relation's right side on the honest integers**:
-`Σ_j A_ij ⊛ z_j − 2^d t1_i ⊛ c`. -/
-theorem sigN_honest (i : Fin 4) {k : ℕ} (hk : k < 256) :
-    program.evalIntWith RD 0 sigN ((i : ℕ) * 256 + k) =
-      ∑ j : Fin 4, ∑ t : Fin 256,
-          Ops.negCoef 256 (keyZ (Emulated.Rows.aKeyOf y.key i j)) k t * zZ y j t -
-        ∑ t : Fin 256, Ops.negCoef 256 (keyZ (Emulated.Rows.tKeyOf y.key i)) k t * cZ y t := by
-  rw [evalIntWith_sigN (spectraOf_honest y x c π) i hk]
-  congr 1
-  · refine Finset.sum_congr rfl fun j _ => Finset.sum_congr rfl fun t _ => ?_
-    have hj := j.isLt
-    have hdeg : MLDSA44.Native.Rows.deg = 256 := rfl
-    have ht := t.isLt
-    rw [intOf_zH y x c π (by omega), Emulated.fmz_eq j t (by omega),
-      MLDSA44.NativeAlgebraCircuit.flat_apply, zZ, dif_pos t.isLt]
-    rfl
-  · exact Finset.sum_congr rfl fun t _ => by rw [cInt_honest y x c π t.isLt]
+/-- **A challenge bit is its integer reading's cast** at the honest values. -/
+theorem rd_c_cast {s : ℕ} (hs : s < 512) :
+    program.evalE RD 0 (.leaf 63) s = ((program.intOf RD 63 s : ℤ) : (interp 0).K) := by
+  rw [intOf_of_priv _ (MldsaCarrierRelation.kinds (program := program)).2.2.2
+    ((MldsaCarrierRelation.fields (program := program)) 63 (by simp))]
+  rcases rd_c_bool y x c π hs with h | h <;> rw [h]
+  · rw [show (0 : (interp 0).K) = ((0 : ℕ) : (interp 0).K) from Nat.cast_zero.symm,
+      toNat_lt0 (by norm_num [pGold])]
+    simp
+  · rw [show (1 : (interp 0).K) = ((1 : ℕ) : (interp 0).K) from Nat.cast_one.symm,
+      toNat_lt0 (by norm_num [pGold])]
+    simp
 
-/-- **The relation's sides differ by the honest integer.** -/
-theorem sigPN_honest {i k : ℕ} (hi : i < 4) (hk : k < 256) :
-    program.evalIntWith RD 0 sigP (i * 256 + k) - program.evalIntWith RD 0 sigN (i * 256 + k) =
-      sigZ y ⟨i, hi⟩ ⟨k, hk⟩ := by
-  rw [sigP_honest y x c π hi hk, sigN_honest y x c π ⟨i, hi⟩ hk, sigZ]
-  rfl
-
-/-- **`signature.relation` holds** at the honest values: the sides differ by the honest integer
-`sigZ = q (qlo + Q)` (`sigZ_dvd`, `quotN_eq`), `0 ≤ Q ≤ qmax`, and every integer reading casts to
-its value (`castAt_sigP`, `castAt_sigN`). -/
-theorem sig_holds : program.HoldsAt E (program.predicate 3).body := by
-  obtain ⟨real, hb, hform, hq, hlo, hqmax⟩ := MldsaCarrierQuot.sigReal (program := program)
+open Polynomial in
+/-- **Row `i` of the signature relation holds** at the honest values: row `i`'s polynomial is `0`.
+The committed spectra invert to the signer's keys (`inverseNtt_spectrum`), the products split as
+`Ops.polyOf_mul_polyOf`, the honest high halves `qHonC` cancel theirs, and the negacyclic part,
+`Σ_j A_ij ⊛ z_j − t_i ⊛ c` over the integers' casts (`Ops.intCast_sum_negCoef`), cancels
+`E_i = w′_i − q (q′_i + qlo)`, which is the cast of `w′ − sigZ` (`quotN_eq`, `sigZ_dvd`). -/
+theorem sig_row (i : Fin 4) :
+    program.HoldsAt E (program.predicate (MldsaRandomPoint.rel0 program + i)).body := by
+  haveI : RealizedProgram.PrimeCastField (interp 0) pGold :=
+    inferInstanceAs (RealizedProgram.PrimeCastField F0 pGold)
+  haveI : MldsaRandomPointField program (interp 0) := instRandomPointField
+  rw [holdsAt_row_iff]
+  suffices h0 : rowPoly E i = 0 by rw [h0, Polynomial.eval_zero]
+  have hi := i.isLt
   have hS := spectraOf_honest y x c π
-  have hw : ∀ m < 1024, CastAt RD (.leaf 63) m := fun m hm => by
-    unfold CastAt
-    rw [evalIntWith_leaf, intOf_wH y x c π hm, rd_w y x c π hm, Int.cast_natCast]
-  have hz : ∀ m < 1024, CastAt RD (.leaf 60) m := fun m hm => by
-    unfold CastAt
-    rw [evalIntWith_leaf, intOf_zH y x c π hm, rd_z y x c π hm]
-  have hc : ∀ m < 512, CastAt RD (.leaf 62) m := fun m hm => by
-    unfold CastAt
-    rw [evalIntWith_leaf, intOf_of_priv _ MldsaCarrierRelation.kind62 MldsaCarrierRelation.field62]
-    rcases rd_c_bool y x c π hm with h | h <;> rw [h]
-    · rw [show (0 : (interp 0).K) = ((0 : ℕ) : (interp 0).K) from Nat.cast_zero.symm,
-        toNat_lt0 (by norm_num [pGold])]
-      simp
-    · rw [show (1 : (interp 0).K) = ((1 : ℕ) : (interp 0).K) from Nat.cast_one.symm,
-        toNat_lt0 (by norm_num [pGold])]
-      simp
-  have hd := MldsaCarrierRelation.domainField0 (program := program)
-  rw [HoldsAt, hb]
-  refine ⟨fun i hi => ?_, ?_⟩
-  · rw [exprLen_sigP] at hi
-    obtain ⟨a, b, ha, hb', rfl⟩ : ∃ a b, a < 4 ∧ b < 256 ∧ i = a * 256 + b :=
-      ⟨i / 256, i % 256, by omega, by omega, by omega⟩
-    rw [sigPN_honest y x c π ha hb']
-    exact_mod_cast sigZ_dvd y ⟨a, ha⟩ ⟨b, hb'⟩
-  · unfold ProductQuotWith
-    rw [hq]
-    intro _ _ i hi
-    rw [exprLen_sigP] at hi
-    obtain ⟨a, b, ha, hb', rfl⟩ : ∃ a b, a < 4 ∧ b < 256 ∧ i = a * 256 + b :=
-      ⟨i / 256, i % 256, by omega, by omega, by omega⟩
-    have hQ := quotN_eq y ha hb'
-    have hQle := quotN_le y (a * 256 + b)
-    have hdv := sigZ_dvd y ⟨a, ha⟩ ⟨b, hb'⟩
-    refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
-    · rw [sigPN_honest y x c π ha hb', evalIntWith_leaf, intOf_q y x c π (by omega), hQ, hlo]
-      rw [show (-134137327 : ℤ) + (sigZ y ⟨a, ha⟩ ⟨b, hb'⟩ / 8380417 + 134137327) =
-        sigZ y ⟨a, ha⟩ ⟨b, hb'⟩ / 8380417 by ring]
+  set TZ : ℕ → ℤ := keyZ (Emulated.Rows.tKeyOf y.key i)
+  set AZ : Fin 4 → ℕ → ℤ := fun j => keyZ (Emulated.Rows.aKeyOf y.key i j)
+  set ZZ : Fin 4 → ℕ → ℤ := fun j => zZ y j
+  set CZ : ℕ → ℤ := cZ y
+  set Tf : ℕ → (interp 0).K := fun s => ((TZ s : ℤ) : (interp 0).K)
+  set Cf : ℕ → (interp 0).K := fun s => ((CZ s : ℤ) : (interp 0).K)
+  set Af : Fin 4 → ℕ → (interp 0).K := fun j s => ((AZ j s : ℤ) : (interp 0).K)
+  set Zf : Fin 4 → ℕ → (interp 0).K := fun j s => ((ZZ j s : ℤ) : (interp 0).K)
+  -- the honest readings
+  have hT : ∀ s < 256, Ops.inverseNtt 256 ((interp 0).decode psi512) (tRow E i) s = Tf s :=
+    fun s hs' => inverseNtt_spectrum (fun m hm => by unfold tRow; rw [t1_eq]; exact hS.t i m hm) hs'
+  have hA : ∀ (j : Fin 4), ∀ s < 256,
+      Ops.inverseNtt 256 ((interp 0).decode psi512) (aRow E i j) s = Af j s := fun j s hs' =>
+    inverseNtt_spectrum (fun m hm => by
+      unfold aRow
+      rw [aHat_eq, ← hS.a i j m hm, show (i : ℕ) * 1024 + ((j : ℕ) * 256 + m) = ((i : ℕ) * 4 + j) * 256 + m by
+        ring]) hs'
+  have hZ : ∀ (j : Fin 4), ∀ s < 256, zRow E j s = Zf j s := fun j s hs' => by
+    have hj := j.isLt
+    have hm : (j : ℕ) * 256 + s < 1024 := by omega
+    unfold zRow
+    rw [z_eq, rd_z y x c π hm, Emulated.fmz_eq j ⟨s, hs'⟩ (by simp only; omega),
+      MLDSA44.NativeAlgebraCircuit.flat_apply]
+    simp only [Zf, ZZ, zZ, dif_pos hs']
+  have hC : ∀ s < 256, cRow E s = Cf s := fun s hs' => by
+    unfold cRow
+    rw [c_eq, rd_c_cast y x c π (by omega), rd_c_cast y x c π (by omega)]
+    simp only [Cf, CZ, ← cInt_honest y x c π hs', cInt]
+    push_cast
+    ring
+  have hQ : ∀ s < 255, qRow E i s =
+      (∑ j : Fin 4, Ops.high 256 (Af j) (Zf j) s) - Ops.high 256 Tf Cf s := fun s hs' => by
+    unfold qRow
+    rw [q_eq, rd_Q y x c π hs']
+    rfl
+  have hE : ∀ s < 256, eRow E i s =
+      ((∑ j : Fin 4, ∑ t : Fin 256, Ops.negCoef 256 (AZ j) s t * ZZ j t -
+        ∑ t : Fin 256, Ops.negCoef 256 TZ s t * CZ t : ℤ) : (interp 0).K) := fun s hs' => by
+    have hm : (i : ℕ) * 256 + s < 1024 := by omega
+    have hQn := quotN_eq y hi hs'
+    have hdv := sigZ_dvd y i ⟨s, hs'⟩
+    have hsz : sigZ y i ⟨s, hs'⟩ = (wNR y (finProdFinEquiv (i, ⟨s, hs'⟩)) : ℤ) -
+        (∑ j : Fin 4, ∑ t : Fin 256, Ops.negCoef 256 (AZ j) s t * ZZ j t -
+          ∑ t : Fin 256, Ops.negCoef 256 TZ s t * CZ t) := rfl
+    rw [eRow_eq E i hs']
+    unfold wRow rqRow
+    rw [w_eq, rd_w y x c π hm, rd_q y x c π hm, Emulated.fm_eq i ⟨s, hs'⟩ (by simp only; omega)]
+    have hq : (8380417 : ℤ) * (quotN y ((i : ℕ) * 256 + s) : ℤ) =
+        sigZ y i ⟨s, hs'⟩ + 1124126735525359 := by
+      rw [hQn, mul_add, Int.mul_ediv_cancel' hdv]; norm_num
+    have hint : ((wNR y (finProdFinEquiv (i, ⟨s, hs'⟩)) : ℕ) : ℤ) -
+        8380417 * (quotN y ((i : ℕ) * 256 + s) : ℤ) + 1124126735525359 =
+        ∑ j : Fin 4, ∑ t : Fin 256, Ops.negCoef 256 (AZ j) s t * ZZ j t -
+          ∑ t : Fin 256, Ops.negCoef 256 TZ s t * CZ t := by
+      rw [hq, hsz]
+      ring
+    rw [← hint]
+    push_cast
+    ring
+  have hmul : ∀ a b : ℕ → (interp 0).K, Ops.polyOf 256 a * Ops.polyOf 256 b =
+      Ops.polyOf 256 (Ops.negacyclic 256 a b) +
+        (Polynomial.X ^ 256 + 1 : Polynomial (interp 0).K) * Ops.polyOf 255 (Ops.high 256 a b) :=
+    fun a b => Ops.polyOf_mul_polyOf (n := 256) (by norm_num) a b
+  have hEN : ∀ s < 256, eRow E i s =
+      (∑ j : Fin 4, Ops.negacyclic 256 (Af j) (Zf j) s) - Ops.negacyclic 256 Tf Cf s :=
+    fun s hs' => by
+      have hN : ∀ h x : ℕ → ℤ, Ops.negacyclic 256 (fun t => (h t : (interp 0).K))
+          (fun t => (x t : (interp 0).K)) s =
+          ((∑ t : Fin 256, Ops.negCoef 256 h s t * x t : ℤ) : (interp 0).K) := fun h x => by
+        rw [Ops.negacyclic, Ops.ofFin_of_lt _ hs', Ops.intCast_sum_negCoef h x hs']
+        rfl
+      rw [hE s hs']
+      simp only [Af, Zf, Tf, Cf, hN]
       push_cast
-      exact (Int.mul_ediv_cancel' hdv).symm
-    · rw [evalIntWith_leaf, intOf_q y x c π (by omega)]
-      positivity
-    · rw [evalIntWith_leaf, intOf_q y x c π (by omega), hqmax]
-      exact_mod_cast hQle
-    · unfold evalWith
-      rw [hd]
-      exact castAt_sigP hw (by omega)
-    · unfold evalWith
-      rw [hd]
-      exact castAt_sigN hS hz hc (by omega)
-    · unfold evalWith
-      rw [hd, evalIntWith_leaf, intOf_q y x c π (by omega), rd_q y x c π (by omega)]
-      push_cast
-      rfl
+      ring
+  unfold rowPoly
+  rw [(MldsaCarrierRelation.consts (program := program)).1, Ops.polyOf_congr hEN, Ops.polyOf_congr hQ, Ops.polyOf_congr hT, Ops.polyOf_congr hC,
+    Finset.sum_congr rfl fun j _ => by
+      rw [Ops.polyOf_congr (hA j), Ops.polyOf_congr (hZ j)], hmul]
+  simp only [hmul]
+  rw [show (fun s => (∑ j : Fin 4, Ops.negacyclic 256 (Af j) (Zf j) s) -
+      Ops.negacyclic 256 Tf Cf s) = (fun s => ∑ j : Fin 4, Ops.negacyclic 256 (Af j) (Zf j) s) -
+        Ops.negacyclic 256 Tf Cf from rfl,
+    show (fun s => (∑ j : Fin 4, Ops.high 256 (Af j) (Zf j) s) - Ops.high 256 Tf Cf s) =
+      (fun s => ∑ j : Fin 4, Ops.high 256 (Af j) (Zf j) s) - Ops.high 256 Tf Cf from rfl,
+    Ops.polyOf_sub, Ops.polyOf_sub, Ops.polyOf_sum, Ops.polyOf_sum, Finset.sum_add_distrib,
+    ← Finset.mul_sum]
+  ring
 
 /-- **`signature.relation.q` holds**: the honest quotient lies below the range's bound. -/
-theorem qRange_holds : program.HoldsAt E (program.predicate 22).body := by
+theorem qRange_holds :
+    program.HoldsAt E (program.predicate (MldsaCarrierQuot.qPred program)).body := by
   obtain ⟨r, B, hb, hB⟩ := MldsaCarrierQuot.qRange (program := program)
   rw [HoldsAt, hb]
   intro i hi e he
   rw [List.mem_singleton] at he
   subst he
-  simp only [List.headD_cons, exprLen_leaf, MldsaCarrierQuot.size64] at hi
+  simp only [List.headD_cons, exprLen_leaf, MldsaCarrierQuot.size65] at hi
   refine ⟨quotN y i, lt_of_le_of_lt (quotN_le y i) hB, ?_⟩
   unfold evalWith
-  rw [MldsaCarrierRelation.domainField0]
+  rw [MldsaRandomPoint.domainField0]
   exact rd_q y x c π hi
 
 end HonestSig

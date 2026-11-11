@@ -121,8 +121,8 @@ its Lean declaration, and `appendixTable` gives the rows of the formalization ta
 
 Each declaration is written as a name literal ``` ``GordieHowe.X ```, which elaborates only if `GordieHowe.X`
 is a declaration of the environment, so renaming or deleting a declaration fails the build of
-this file. The configuration instances of the generic per-configuration theorems are listed and
-checked the same way.
+this file. The instances of the configuration templates that the paper's statements rest on are
+listed and checked the same way.
 
 `scripts/paper_manifest.py --paper-dir DIR` reads this file and writes the paper's names from it
 into the paper's LaTeX source `DIR`: the table rows between the markers in
@@ -149,8 +149,9 @@ structure Entry where
   label : String
   /-- The Lean declaration. -/
   decl : Name
-  /-- The instances of `decl` in the configurations, when the paper states the result "in each
-  configuration"; checked, not printed. -/
+  /-- The instances of a configuration template `decl` behind the paper's statement: those at the
+  ML-DSA-44 parameter sets (`MLDSA44.Emulated.ROMParams`, `.QROMParams`) of the template's model,
+  both for a model-free template; checked, not printed. -/
   instances : List Name := []
 
 /-- **One row of the formalization table** (`app:formal`): the paper's statement column and the
@@ -173,13 +174,13 @@ def entries : List Entry := [
   { key := "causal-rbr-def", label := "def:rbr",
     decl := ``GordieHowe.IOP.CausalRBRKnowledgeSoundStmt },
   { key := "rbr-total", label := "lem:rbr-total",
-    decl := ``GordieHowe.IOP.rbrKnowledgeSoundness_total_iff },
+    decl := ``GordieHowe.IOP.rbrKnowledgeSound_total_iff },
   { key := "red-prefix", label := "lem:red-prefix",
     decl := ``GordieHowe.IOP.Reduction.rbr_iff_prefixRBR },
   { key := "causal-hvzk-def", label := "def:hvzk",
     decl := ``GordieHowe.IOP.CausalHVZKStmt },
   { key := "causal-completeness-coins-def", label := "def:iop-complete",
-    decl := ``GordieHowe.IOP.causalCompletenessCoins },
+    decl := ``GordieHowe.IOP.CausalCompleteCoins },
   { key := "source-prover", label := "def:o-honest",
     decl := ``GordieHowe.RealizedProgram.SourceProver },
   { key := "source-complete-def", label := "def:o-guarantees",
@@ -571,9 +572,8 @@ def entries : List Entry := [
     decl := ``GordieHowe.SPBCS.knowledgeError_eq },
   -- `thm:e2e` for the proofs of possession of ML-DSA-44 at the ROM parameters
   -- (`MLDSA44.Emulated.ROMParams`) and the QROM parameters (`MLDSA44.Emulated.QROMParams`),
-  -- instances of `e2e`; the templates are also checked for Falcon-512's
-  -- (`Falcon512.Native.ROMParams`, `Falcon512.Native.QROMParams`, `Falcon512.Emulated.ROMParams`,
-  -- `Falcon512.Emulated.QROMParams`, the companion paper).
+  -- instances of `e2e`. A template's `instances` are its instances at the parameter set whose model
+  -- it states (both for the model-free statements), the ones the paper prints.
   { key := "mldsa-source-rbr-rom", label := "thm:e2e",
     decl := ``GordieHowe.MLDSA44.Emulated.ROMParams.source_rbr_knowledge_soundness },
   { key := "mldsa-source-rbr-qrom", label := "thm:e2e",
@@ -589,202 +589,90 @@ def entries : List Entry := [
   { key := "cfg-completeness-adaptive-qrom", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.AdaptiveCompleteness.completeness_adaptive_qrom,
     instances := [
-      ``GordieHowe.MLDSA44.Emulated.ROMParams.completeness_adaptive_qrom,
-      ``GordieHowe.MLDSA44.Emulated.QROMParams.completeness_adaptive_qrom,
-      ``GordieHowe.Falcon512.Native.ROMParams.completeness_adaptive_qrom,
-      ``GordieHowe.Falcon512.Native.QROMParams.completeness_adaptive_qrom,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.completeness_adaptive_qrom,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.completeness_adaptive_qrom] },
+      ``GordieHowe.MLDSA44.Emulated.QROMParams.completeness_adaptive_qrom] },
   { key := "cfg-completeness-adaptive-rom", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.AdaptiveCompleteness.completeness_adaptive_rom,
     instances := [
-      ``GordieHowe.MLDSA44.Emulated.ROMParams.completeness_adaptive_rom,
-      ``GordieHowe.MLDSA44.Emulated.QROMParams.completeness_adaptive_rom,
-      ``GordieHowe.Falcon512.Native.ROMParams.completeness_adaptive_rom,
-      ``GordieHowe.Falcon512.Native.QROMParams.completeness_adaptive_rom,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.completeness_adaptive_rom,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.completeness_adaptive_rom] },
+      ``GordieHowe.MLDSA44.Emulated.ROMParams.completeness_adaptive_rom] },
   { key := "cfg-completeness", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.Common.completeness,
     instances := [
       ``GordieHowe.MLDSA44.Emulated.ROMParams.completeness,
-      ``GordieHowe.MLDSA44.Emulated.QROMParams.completeness,
-      ``GordieHowe.Falcon512.Native.ROMParams.completeness,
-      ``GordieHowe.Falcon512.Native.QROMParams.completeness,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.completeness,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.completeness] },
+      ``GordieHowe.MLDSA44.Emulated.QROMParams.completeness] },
   { key := "cfg-completeness-of-rel", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.PaperRelation.completeness_of_rel,
     instances := [
       ``GordieHowe.MLDSA44.Emulated.ROMParams.completeness_of_rel,
-      ``GordieHowe.MLDSA44.Emulated.QROMParams.completeness_of_rel,
-      ``GordieHowe.Falcon512.Native.ROMParams.completeness_of_rel,
-      ``GordieHowe.Falcon512.Native.QROMParams.completeness_of_rel,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.completeness_of_rel,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.completeness_of_rel] },
+      ``GordieHowe.MLDSA44.Emulated.QROMParams.completeness_of_rel] },
   { key := "cfg-honest-input-of-rel", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.PaperRelation.honest_input_of_rel,
     instances := [
       ``GordieHowe.MLDSA44.Emulated.ROMParams.honest_input_of_rel,
-      ``GordieHowe.MLDSA44.Emulated.QROMParams.honest_input_of_rel,
-      ``GordieHowe.Falcon512.Native.ROMParams.honest_input_of_rel,
-      ``GordieHowe.Falcon512.Native.QROMParams.honest_input_of_rel,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.honest_input_of_rel,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.honest_input_of_rel] },
+      ``GordieHowe.MLDSA44.Emulated.QROMParams.honest_input_of_rel] },
   { key := "mldsa-valid-of-witness", label := "thm:e2e",
     decl := ``GordieHowe.MLDSA44.PoP.HonestInput.valid_ofWitness },
   { key := "cfg-completeness-honest", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.Common.completeness_honest,
     instances := [
       ``GordieHowe.MLDSA44.Emulated.ROMParams.completeness_honest,
-      ``GordieHowe.MLDSA44.Emulated.QROMParams.completeness_honest,
-      ``GordieHowe.Falcon512.Native.ROMParams.completeness_honest,
-      ``GordieHowe.Falcon512.Native.QROMParams.completeness_honest,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.completeness_honest,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.completeness_honest] },
+      ``GordieHowe.MLDSA44.Emulated.QROMParams.completeness_honest] },
   { key := "cfg-knowledge-soundness", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.Common.knowledge_soundness_qrom_at,
     instances := [
-      ``GordieHowe.MLDSA44.Emulated.ROMParams.knowledge_soundness_qrom_at,
-      ``GordieHowe.MLDSA44.Emulated.QROMParams.knowledge_soundness_qrom_at,
-      ``GordieHowe.Falcon512.Native.ROMParams.knowledge_soundness_qrom_at,
-      ``GordieHowe.Falcon512.Native.QROMParams.knowledge_soundness_qrom_at,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.knowledge_soundness_qrom_at,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.knowledge_soundness_qrom_at] },
+      ``GordieHowe.MLDSA44.Emulated.QROMParams.knowledge_soundness_qrom_at] },
   { key := "cfg-soundness", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.Common.soundness_qrom_at,
     instances := [
-      ``GordieHowe.MLDSA44.Emulated.ROMParams.soundness_qrom_at,
-      ``GordieHowe.MLDSA44.Emulated.QROMParams.soundness_qrom_at,
-      ``GordieHowe.Falcon512.Native.ROMParams.soundness_qrom_at,
-      ``GordieHowe.Falcon512.Native.QROMParams.soundness_qrom_at,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.soundness_qrom_at,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.soundness_qrom_at] },
+      ``GordieHowe.MLDSA44.Emulated.QROMParams.soundness_qrom_at] },
   { key := "cfg-knowledge-soundness-rom", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.Common.knowledge_soundness_rom_at,
     instances := [
-      ``GordieHowe.MLDSA44.Emulated.ROMParams.knowledge_soundness_rom_at,
-      ``GordieHowe.MLDSA44.Emulated.QROMParams.knowledge_soundness_rom_at,
-      ``GordieHowe.Falcon512.Native.ROMParams.knowledge_soundness_rom_at,
-      ``GordieHowe.Falcon512.Native.QROMParams.knowledge_soundness_rom_at,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.knowledge_soundness_rom_at,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.knowledge_soundness_rom_at] },
+      ``GordieHowe.MLDSA44.Emulated.ROMParams.knowledge_soundness_rom_at] },
   { key := "cfg-soundness-rom", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.Common.soundness_rom_at,
     instances := [
-      ``GordieHowe.MLDSA44.Emulated.ROMParams.soundness_rom_at,
-      ``GordieHowe.MLDSA44.Emulated.QROMParams.soundness_rom_at,
-      ``GordieHowe.Falcon512.Native.ROMParams.soundness_rom_at,
-      ``GordieHowe.Falcon512.Native.QROMParams.soundness_rom_at,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.soundness_rom_at,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.soundness_rom_at] },
+      ``GordieHowe.MLDSA44.Emulated.ROMParams.soundness_rom_at] },
   { key := "cfg-zero-knowledge", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.Common.everlasting_zero_knowledge_qrom,
     instances := [
-      ``GordieHowe.MLDSA44.Emulated.ROMParams.everlasting_zero_knowledge_qrom,
-      ``GordieHowe.MLDSA44.Emulated.QROMParams.everlasting_zero_knowledge_qrom,
-      ``GordieHowe.Falcon512.Native.ROMParams.everlasting_zero_knowledge_qrom,
-      ``GordieHowe.Falcon512.Native.QROMParams.everlasting_zero_knowledge_qrom,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.everlasting_zero_knowledge_qrom,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.everlasting_zero_knowledge_qrom] },
+      ``GordieHowe.MLDSA44.Emulated.QROMParams.everlasting_zero_knowledge_qrom] },
   { key := "cfg-zero-knowledge-rom", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.Common.everlasting_zero_knowledge_rom,
     instances := [
-      ``GordieHowe.MLDSA44.Emulated.ROMParams.everlasting_zero_knowledge_rom,
-      ``GordieHowe.MLDSA44.Emulated.QROMParams.everlasting_zero_knowledge_rom,
-      ``GordieHowe.Falcon512.Native.ROMParams.everlasting_zero_knowledge_rom,
-      ``GordieHowe.Falcon512.Native.QROMParams.everlasting_zero_knowledge_rom,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.everlasting_zero_knowledge_rom,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.everlasting_zero_knowledge_rom] },
+      ``GordieHowe.MLDSA44.Emulated.ROMParams.everlasting_zero_knowledge_rom] },
   { key := "cfg-zero-knowledge-honest", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.Common.everlasting_zero_knowledge_honest_qrom,
     instances := [
-      ``GordieHowe.MLDSA44.Emulated.ROMParams.everlasting_zero_knowledge_honest_qrom,
-      ``GordieHowe.MLDSA44.Emulated.QROMParams.everlasting_zero_knowledge_honest_qrom,
-      ``GordieHowe.Falcon512.Native.ROMParams.everlasting_zero_knowledge_honest_qrom,
-      ``GordieHowe.Falcon512.Native.QROMParams.everlasting_zero_knowledge_honest_qrom,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.everlasting_zero_knowledge_honest_qrom,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.everlasting_zero_knowledge_honest_qrom] },
+      ``GordieHowe.MLDSA44.Emulated.QROMParams.everlasting_zero_knowledge_honest_qrom] },
   { key := "cfg-wi", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.Common.unconditional_witness_indistinguishability,
     instances := [
       ``GordieHowe.MLDSA44.Emulated.ROMParams.unconditional_witness_indistinguishability,
-      ``GordieHowe.MLDSA44.Emulated.QROMParams.unconditional_witness_indistinguishability,
-      ``GordieHowe.Falcon512.Native.ROMParams.unconditional_witness_indistinguishability,
-      ``GordieHowe.Falcon512.Native.QROMParams.unconditional_witness_indistinguishability,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.unconditional_witness_indistinguishability,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.unconditional_witness_indistinguishability] },
+      ``GordieHowe.MLDSA44.Emulated.QROMParams.unconditional_witness_indistinguishability] },
   { key := "cfg-sse-online", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.Common.weak_online_simulation_extractability_qrom,
     instances := [
-      ``GordieHowe.MLDSA44.Emulated.ROMParams.weak_online_simulation_extractability_qrom,
-      ``GordieHowe.MLDSA44.Emulated.QROMParams.weak_online_simulation_extractability_qrom,
-      ``GordieHowe.Falcon512.Native.ROMParams.weak_online_simulation_extractability_qrom,
-      ``GordieHowe.Falcon512.Native.QROMParams.weak_online_simulation_extractability_qrom,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.weak_online_simulation_extractability_qrom,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.weak_online_simulation_extractability_qrom] },
+      ``GordieHowe.MLDSA44.Emulated.QROMParams.weak_online_simulation_extractability_qrom] },
   { key := "cfg-sse", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.Common.unruh_simulation_extractability_qrom,
     instances := [
-      ``GordieHowe.MLDSA44.Emulated.ROMParams.unruh_simulation_extractability_qrom,
-      ``GordieHowe.MLDSA44.Emulated.QROMParams.unruh_simulation_extractability_qrom,
-      ``GordieHowe.Falcon512.Native.ROMParams.unruh_simulation_extractability_qrom,
-      ``GordieHowe.Falcon512.Native.QROMParams.unruh_simulation_extractability_qrom,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.unruh_simulation_extractability_qrom,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.unruh_simulation_extractability_qrom] },
+      ``GordieHowe.MLDSA44.Emulated.QROMParams.unruh_simulation_extractability_qrom] },
   -- `tab:eval-params`, the zero-knowledge column: the bit security of everlasting zero knowledge
-  -- for the proofs of possession of ML-DSA-44 (and of Falcon-512, the companion paper's).
+  -- for the proofs of possession of ML-DSA-44.
   { key := "mldsa-zk-bits-rom", label := "tab:eval-params",
-    decl := ``GordieHowe.MLDSA44.Emulated.ROMParams.zero_knowledge_bits_rom,
-    instances := [
-      ``GordieHowe.MLDSA44.Native.ROMParams.zero_knowledge_bits_rom,
-      ``GordieHowe.Falcon512.Native.ROMParams.zero_knowledge_bits_rom,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.zero_knowledge_bits_rom,
-      ``GordieHowe.MLDSA44.Ring.Native.ROMParams.zero_knowledge_bits_rom,
-      ``GordieHowe.MLDSA44.Ring.Carrier.ROMParams.zero_knowledge_bits_rom,
-      ``GordieHowe.Falcon512.Ring.Native.ROMParams.zero_knowledge_bits_rom,
-      ``GordieHowe.Falcon512.Ring.Carrier.ROMParams.zero_knowledge_bits_rom] },
+    decl := ``GordieHowe.MLDSA44.Emulated.ROMParams.zero_knowledge_bits_rom },
   { key := "mldsa-zk-bits-qrom", label := "tab:eval-params",
-    decl := ``GordieHowe.MLDSA44.Emulated.QROMParams.zero_knowledge_bits_qrom,
-    instances := [
-      ``GordieHowe.MLDSA44.Native.QROMParams.zero_knowledge_bits_qrom,
-      ``GordieHowe.Falcon512.Native.QROMParams.zero_knowledge_bits_qrom,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.zero_knowledge_bits_qrom,
-      ``GordieHowe.MLDSA44.Ring.Native.QROMParams.zero_knowledge_bits_qrom,
-      ``GordieHowe.MLDSA44.Ring.Carrier.QROMParams.zero_knowledge_bits_qrom,
-      ``GordieHowe.Falcon512.Ring.Native.QROMParams.zero_knowledge_bits_qrom,
-      ``GordieHowe.Falcon512.Ring.Carrier.QROMParams.zero_knowledge_bits_qrom] },
+    decl := ``GordieHowe.MLDSA44.Emulated.QROMParams.zero_knowledge_bits_qrom },
   -- `tab:eval-params`, the extraction column: the bit security of knowledge soundness and
-  -- soundness for the proof of possession of ML-DSA-44, and at every other configuration.
+  -- soundness for the proof of possession of ML-DSA-44.
   { key := "mldsa-soundness-bits-rom", label := "tab:eval-params",
-    decl := ``GordieHowe.MLDSA44.Emulated.ROMParams.soundness_bits_rom,
-    instances := [
-      ``GordieHowe.MLDSA44.Native.ROMParams.soundness_bits_rom,
-      ``GordieHowe.Falcon512.Native.ROMParams.soundness_bits_rom,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.soundness_bits_rom,
-      ``GordieHowe.MLDSA44.Ring.Native.ROMParams.soundness_bits_rom,
-      ``GordieHowe.MLDSA44.Ring.Carrier.ROMParams.soundness_bits_rom,
-      ``GordieHowe.Falcon512.Ring.Native.ROMParams.soundness_bits_rom,
-      ``GordieHowe.Falcon512.Ring.Carrier.ROMParams.soundness_bits_rom] },
+    decl := ``GordieHowe.MLDSA44.Emulated.ROMParams.soundness_bits_rom },
   { key := "mldsa-soundness-bits-qrom", label := "tab:eval-params",
-    decl := ``GordieHowe.MLDSA44.Emulated.QROMParams.soundness_bits_qrom,
-    instances := [
-      ``GordieHowe.MLDSA44.Native.QROMParams.soundness_bits_qrom,
-      ``GordieHowe.Falcon512.Native.QROMParams.soundness_bits_qrom,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.soundness_bits_qrom,
-      ``GordieHowe.MLDSA44.Ring.Native.QROMParams.soundness_bits_qrom,
-      ``GordieHowe.MLDSA44.Ring.Carrier.QROMParams.soundness_bits_qrom,
-      ``GordieHowe.Falcon512.Ring.Native.QROMParams.soundness_bits_qrom,
-      ``GordieHowe.Falcon512.Ring.Carrier.QROMParams.soundness_bits_qrom] },
+    decl := ``GordieHowe.MLDSA44.Emulated.QROMParams.soundness_bits_qrom },
   { key := "cfg-sse-rom", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.Common.weak_online_simulation_extractability_rom,
     instances := [
-      ``GordieHowe.MLDSA44.Emulated.ROMParams.weak_online_simulation_extractability_rom,
-      ``GordieHowe.MLDSA44.Emulated.QROMParams.weak_online_simulation_extractability_rom,
-      ``GordieHowe.Falcon512.Native.ROMParams.weak_online_simulation_extractability_rom,
-      ``GordieHowe.Falcon512.Native.QROMParams.weak_online_simulation_extractability_rom,
-      ``GordieHowe.Falcon512.Emulated.ROMParams.weak_online_simulation_extractability_rom,
-      ``GordieHowe.Falcon512.Emulated.QROMParams.weak_online_simulation_extractability_rom] },
+      ``GordieHowe.MLDSA44.Emulated.ROMParams.weak_online_simulation_extractability_rom] },
   -- Definitions and lemmas of the background, the relation language, the compiler, the proof
   -- system and the appendices, in the paper's order.
   { key := "rel-trace", label := "def:frob-trace",
@@ -904,7 +792,7 @@ def entries : List Entry := [
   { key := "expr-deg", label := "def:o-degree",
     decl := ``GordieHowe.RealizedProgram.exprDeg },
   { key := "rbr-knowledge-soundness", label := "def:o-guarantees",
-    decl := ``GordieHowe.IOP.rbrKnowledgeSoundness },
+    decl := ``GordieHowe.IOP.RBRKnowledgeSound },
   { key := "source-extractor", label := "def:o-guarantees",
     decl := ``GordieHowe.RealizedProgram.sourceExtractor },
   { key := "rbr-paper-of-source", label := "def:o-guarantees",

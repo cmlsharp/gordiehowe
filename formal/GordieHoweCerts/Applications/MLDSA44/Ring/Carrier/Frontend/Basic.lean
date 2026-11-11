@@ -28,15 +28,17 @@ carrier). It has the native rings' shape
   (`TableSelect.idxOf`) and the signature `(c̃', z, h)` (`sigAt`: H's `h2c.c_tilde.out` read as the
   native program's, A's `z` and hint read as the emulated program's).
 * **The events** (`ringEvent`, `ringEps`, `ringEvent_use`, `ringEvent_bound`): the selection's at
-  `member.table.gamma` (challenge `0`, `TableSelect.SelBad`, error `5143/|F|`) and the native
-  frontend's SampleInBall events (`MLDSA44.SampleView`) at the carrier's challenges `1`,
-  `2` (the native challenges `0`, `1` renamed), their probability bounds transported through the
-  renaming (`RealizedProgram.probUniform_pullEnv_setChal`).
+  `member.table.gamma` (challenge `0`, `TableSelect.SelBad`, error `5143/|F|`), the signature
+  relation's at `signature.r` (challenge `1`, `relEvent`: a root of some row's nonzero polynomial,
+  error `2040/|F|`) and the native frontend's SampleInBall events (`MLDSA44.SampleView`) at the
+  carrier's challenges `2`, `3` (the native challenges `0`, `1` renamed), their probability bounds
+  transported through the renaming (`RealizedProgram.probUniform_pullEnv_setChal`).
 * **The composition** (`mem_rel_of_source`, `sound_of_views`, `rbr_of_views`), given the native
   frontend's hash view of domain `H`'s core (`MLDSA44.HashViewCore`) and SampleInBall's
   view (`MLDSA44.SampleView`) of the native program: without an event the committed
   spectra are the selected key's transforms and the committed `μ` its `μ` (`spectraOf_row`,
-  `muA_eq`), the relation gives `w′ = computeWApprox(Â, c, z, t1)` (`algebra_carrier`), the
+  `muA_eq`), the relation's rows are `0` at `r` outside `relEvent`, so the relation gives
+  `w′ = computeWApprox(Â, c, z, t1)` (`algebra_carrier`), the
   crossing makes H's `μ` the selected key's (`ringCross`) and A's challenge SampleInBall's
   (`cPoly_eq`), domain `H`'s core makes `c̃'` the commitment hash
   (`MLDSA44.cTildeOf_eq_hashCommitment`), domain `A`'s gadgets UseHint, the norm and the
@@ -45,6 +47,21 @@ carrier). It has the native rings' shape
 -/
 
 namespace GordieHowe.MLDSA44.Ring.Carrier
+
+set_option hygiene false in
+local notation "σH" => CarrierHEmbed.σ program
+
+set_option hygiene false in
+local notation "hV" => CarrierHEmbed.V program
+
+set_option hygiene false in
+local notation "σA" => CarrierAEmbed.σ program
+
+set_option hygiene false in
+local notation "aV" => CarrierAEmbed.V program
+
+set_option hygiene false in
+local notation "predMapA" => CarrierAEmbed.pred program
 
 open GordieHowe.Bits GordieHowe.Ring RealizedProgram IOP
 open GordieHowe.MLDSA44.Ring.Native (MldsaRingStmt RingW muOf muBitNat)
@@ -136,7 +153,9 @@ theorem proj_idx (e : program.Env interp) :
 
 /-- The carrier values the extractor reads read alike in an environment and in the environment of
 its statement and committed assignment. -/
-theorem reader_commitEnv (e : program.Env interp) {v : ℕ} (hv : v ∈ [410, 60, 61]) :
+theorem reader_commitEnv (e : program.Env interp) {v : ℕ}
+    (hv : v ∈ [(CarrierHEmbed.σ program).val 457, MldsaRandomPoint.z program,
+      MldsaCarrierFront.hA program]) :
     program.reader (commitEnv e.stmt e.asg) v = program.reader e v :=
   RealizedProgram.reader_eq_of_nodeReads_nil (MldsaCarrierFront.projReads v hv) rfl rfl
 
@@ -144,11 +163,14 @@ theorem reader_commitEnv (e : program.Env interp) {v : ℕ} (hv : v ∈ [410, 60
 theorem proj_sig (e : program.Env interp) :
     (proj e.stmt e.asg).sig = sigAt ((nat).reader (pullH e)) ((emu).reader (pullA e)) := by
   refine sigAt_congr ?_ ?_ ?_ <;> funext i
-  · rw [readerH_pull _ (by decide), readerH_pull _ (by decide), σH_val457,
+  · rw [readerH_pull _ (CarrierHEmbed.readV _ (by decide)),
+      readerH_pull _ (CarrierHEmbed.readV _ (by decide)),
       reader_commitEnv e (by simp)]
-  · rw [readerA_pull _ (by decide), readerA_pull _ (by decide), σA_vals.1,
+  · rw [readerA_pull _ (CarrierAEmbed.readV _ (by decide)),
+      readerA_pull _ (CarrierAEmbed.readV _ (by decide)), MldsaCarrierFront.valsA.1,
       reader_commitEnv e (by simp)]
-  · rw [readerA_pull _ (by decide), readerA_pull _ (by decide), σA_vals.2.1,
+  · rw [readerA_pull _ (CarrierAEmbed.readV _ (by decide)),
+      readerA_pull _ (CarrierAEmbed.readV _ (by decide)), MldsaCarrierFront.valsA.2.1,
       reader_commitEnv e (by simp)]
 
 /-! ## The events -/
@@ -156,47 +178,83 @@ theorem proj_sig (e : program.Env interp) :
 variable [RealizedProgram.PrimeCastField F0 pGold] [MLDSA44.HField FH]
 variable (sv : MLDSA44.SampleView nat F0 FH)
 
-/-- **The source program's events**: the selection's at `member.table.gamma` (challenge `0`) and
-the native SampleInBall events at the carrier's challenge `j + 1`, read in the environment read as
-the native program's. -/
+/-- **The source program's events**: the selection's at `member.table.gamma` (challenge `0`), the
+signature relation's at `signature.r` (challenge `1`, `relEvent`: some row's nonzero polynomial
+vanishes at `r`) and the native SampleInBall events at the carrier's challenge `j + 2`, read in
+the environment read as the native program's. -/
 def ringEvent (j : ℕ) (e : program.Env interp) : Prop :=
-  TableSelect.SelBad 0 j e ∨ ∃ j', j = j' + 1 ∧ sv.event j' (pullH e)
+  TableSelect.SelBad 0 j e ∨ (j = 1 ∧ (relEvent e).BadAt (rOf e)) ∨
+    ∃ j', j = j' + 2 ∧ sv.event j' (pullH e)
 
-/-- **The events' errors**: `5143/|F|` at `member.table.gamma`, the native error of challenge
-`j` at the carrier's challenge `j + 1`. -/
+/-- **The events' errors**: `5143/|F|` at `member.table.gamma`, `2040/|F|` at `signature.r`, the
+native error of challenge `j` at the carrier's challenge `j + 2`. -/
 noncomputable def ringEps (j : ℕ) : ℝ≥0 :=
-  if j = 0 then ((5143 : ℕ) : ℝ≥0) / Fintype.card (interp 0).K else sv.eps (j - 1)
+  if j = 0 then ((5143 : ℕ) : ℝ≥0) / Fintype.card (interp 0).K
+  else if j = 1 then ((2040 : ℕ) : ℝ≥0) / Fintype.card (interp 0).K
+  else sv.eps (j - 2)
+
+omit [MLDSA44.HField FH] in
+/-- **The relation's event reads only the statement and the committed values** (`relReads`). -/
+theorem relEvent_congr {e e' : program.Env interp} (hs : e.stmt = e'.stmt) (ha : e.asg = e'.asg) :
+    relEvent e = relEvent e' := by
+  have hrd : ∀ v ∈ [64, 65, 66, 57, 56, 61, 63], ∀ t,
+      program.evalE (program.reader e) 0 (.leaf v) t =
+        program.evalE (program.reader e') 0 (.leaf v) t := fun v hv t => by
+    rw [RealizedProgram.evalE_leaf, RealizedProgram.evalE_leaf,
+      RealizedProgram.reader_eq_of_nodeReads_nil (MldsaCarrierFront.relReads v hv) hs ha]
+  haveI : RealizedProgram.PrimeCastField (interp 0) pGold :=
+    inferInstanceAs (RealizedProgram.PrimeCastField F0 pGold)
+  refine relEvent_congr_of (fun i t ht => ?_) (fun v hv => ?_)
+  · rw [eRow_eq e i ht, eRow_eq e' i ht]
+    unfold wRow rqRow
+    rw [w_eq, hrd 64 (by simp), hrd 65 (by simp)]
+  · simp only [aHat_eq, t1_eq, z_eq, c_eq, q_eq, List.mem_cons, List.not_mem_nil, or_false] at hv
+    exact hrd v (by rcases hv with rfl | rfl | rfl | rfl | rfl <;> simp)
 
 /-- **The challenge-use rule** (`RealizedProgram.ChallengeUseAt`): the selection's
-(`TableSelect.selBad_use`), and the native one's through the renaming (`eqUpToH_pull`). -/
+(`TableSelect.selBad_use`), the relation's (its polynomial reads the committed values, its
+challenge `r`), and the native one's through the renaming (`eqUpToH_pull`). -/
 theorem ringEvent_use : RealizedProgram.ChallengeUseAt program interp (ringEvent sv) := by
   intro j e e' h
   unfold ringEvent
-  refine or_congr (TableSelect.selBad_use (f := 0) j h) ⟨?_, ?_⟩ <;> rintro ⟨j', rfl, hj'⟩ <;>
-    refine ⟨j', rfl, ?_⟩
-  · exact (sv.use j' (eqUpToH_pull (j := j') h)).1 hj'
-  · exact (sv.use j' (eqUpToH_pull (j := j') h)).2 hj'
+  refine or_congr (TableSelect.selBad_use (f := 0) j h) (or_congr ?_ ⟨?_, ?_⟩)
+  · constructor <;> rintro ⟨rfl, hb⟩ <;> refine ⟨rfl, ?_⟩
+    · have hr : rOf e = rOf e' := by rw [rOf_eq, rOf_eq, h.chal _ (Or.inr ⟨rfl, le_refl _⟩)]
+      rwa [← relEvent_congr h.stmt h.asg, ← hr]
+    · have hr : rOf e = rOf e' := by rw [rOf_eq, rOf_eq, h.chal _ (Or.inr ⟨rfl, le_refl _⟩)]
+      rwa [relEvent_congr h.stmt h.asg, hr]
+  all_goals rintro ⟨j', rfl, hj'⟩; refine ⟨j', rfl, ?_⟩
+  · exact (sv.use j' (eqUpToH_pull (j := j') (CarrierHEmbed.chal2 (program := program) j' ▸ h))).1 hj'
+  · exact (sv.use j' (eqUpToH_pull (j := j') (CarrierHEmbed.chal2 (program := program) j' ▸ h))).2 hj'
 
 /-- The table's width is `5144`. -/
 theorem W_eq : TableSelect.W program = 5144 := by
   unfold TableSelect.W
   rw [MldsaCarrierFront.shape.2.2.2.2.2.2.1, carrierMap_width]
 
+omit [MLDSA44.HField FH] in
 /-- **The events' probabilities** (`RealizedProgram.rbr_of_events`' `hbound`): at most
-`5143/|F|` at `member.table.gamma` (`TableSelect.selBad_bound`, Schwartz–Zippel) and the native
-error at the carrier's challenge `j + 1` (`SampleView.bound`, through
+`5143/|F|` at `member.table.gamma` (`TableSelect.selBad_bound`, Schwartz–Zippel), `2040/|F|` at
+`signature.r` (`RealizedProgram.probUniform_badAt_setChal_le`) and the native error at the
+carrier's challenge `j + 2` (`SampleView.bound`, through
 `RealizedProgram.probUniform_pullEnv_setChal`). -/
 theorem ringEvent_bound : ∀ j, program.IsSourceChal j → ∀ e : program.Env interp,
     Pr[c ← program.ChalVal interp j : ringEvent sv j (e.setChal j c)] ≤ (ringEps sv j : ℝ≥0∞) := by
   intro j hj e
   have hchal := (MldsaCarrierFront.shape (program := program)).2.1
-  rcases j with _ | j
+  obtain rfl | rfl | ⟨j, rfl⟩ : j = 0 ∨ j = 1 ∨ ∃ j', j = j' + 2 := by
+    rcases j with _ | _ | j
+    · exact .inl rfl
+    · exact .inr (.inl rfl)
+    · exact .inr (.inr ⟨j, rfl⟩)
   · have hset : ∀ c, ringEvent sv 0 (e.setChal 0 c) ↔ TableSelect.SelBad 0 0 (e.setChal 0 c) :=
       fun c => by
         unfold ringEvent
-        refine ⟨fun h => h.resolve_right ?_, .inl⟩
-        rintro ⟨j', hj', -⟩
-        omega
+        refine ⟨fun h => ?_, .inl⟩
+        rcases h with h | ⟨h, -⟩ | ⟨j', hj', -⟩
+        · exact h
+        · omega
+        · omega
     simp only [hset]
     have h := TableSelect.selBad_bound (f := 0) domainField_shape e
     rw [hchal] at h
@@ -204,24 +262,46 @@ theorem ringEvent_bound : ∀ j, program.IsSourceChal j → ∀ e : program.Env 
     rw [if_pos rfl]
     rw [W_eq] at h
     exact h
+  · have hset : ∀ c, ringEvent sv 1 (e.setChal 1 c) ↔
+        (relEvent e).BadAt (RealizedProgram.castElt ((e.setChal 1 c).chal 1 0)) :=
+      fun c => by
+        unfold ringEvent TableSelect.SelBad
+        rw [hchal, relEvent_congr (e := e.setChal _ c) (e' := e) rfl rfl, rOf_eq]
+        constructor
+        · rintro (⟨h, -⟩ | ⟨-, h⟩ | ⟨j', hj', -⟩)
+          · omega
+          · exact h
+          · omega
+        · exact fun h => .inr (.inl ⟨rfl, h⟩)
+    simp only [hset]
+    unfold ringEps
+    rw [if_neg (by omega), if_pos rfl]
+    obtain ⟨hsz, hsm⟩ := MldsaRandomPoint.chalR (program := program)
+    have hcf := (MldsaRandomPoint.rPow (program := program)).chalField
+    rw [rChal_eq] at hsz hsm hcf
+    refine (RealizedProgram.probUniform_badAt_setChal_le hsz hsm hcf (relEvent e) e).trans ?_
+    simp [relEvent, ChallengeEvent.prodNonzero]
   · have hnat := (MldsaCarrierFront.chalIff j).1 hj
-    have hset : ∀ c, ringEvent sv (j + 1) (e.setChal (j + 1) c) ↔
-        sv.event j (pullH (e.setChal (j + 1) c)) := fun c => by
+    have hset : ∀ c, ringEvent sv (j + 2) (e.setChal (j + 2) c) ↔
+        sv.event j (pullH (e.setChal (j + 2) c)) := fun c => by
       unfold ringEvent TableSelect.SelBad
       rw [hchal]
       constructor
-      · rintro (⟨h, -⟩ | ⟨j', hj', h⟩)
+      · rintro (⟨h, -⟩ | ⟨h, -⟩ | ⟨j', hj', h⟩)
+        · omega
         · omega
         · obtain rfl : j' = j := by omega
           exact h
-      · exact fun h => .inr ⟨j, rfl, h⟩
+      · exact fun h => .inr (.inr ⟨j, rfl, h⟩)
     simp only [hset]
     unfold ringEps
-    rw [if_neg (Nat.succ_ne_zero j), Nat.add_sub_cancel]
+    rw [if_neg (by omega), if_neg (by omega), Nat.add_sub_cancel]
     obtain ⟨hsz', hsm', hsz, hsm, hf⟩ := MldsaCarrierFront.chalShape j hnat
     refine le_of_eq_of_le ?_ (sv.bound j hnat (pullH e))
+    have h2 := CarrierHEmbed.chal2 (program := program) j
+    rw [← h2] at hsz' hsm' hf ⊢
     exact RealizedProgram.probUniform_pullEnv_setChal (σ := σH) (V := hV) hsz' hsm' hsz hsm hf
-      (fun j' h => Nat.succ_injective h) (sv.event j) e
+      (fun j' h => by rw [CarrierHEmbed.chal2, h2] at h; omega) (sv.event j) e
 
 /-! ## The composition -/
 
@@ -231,7 +311,7 @@ crossing). -/
 theorem muH_eq {e : program.Env interp} (hs : program.SourceSatAt e)
     (hno : ¬ TableSelect.SelBad 0 0 e) {len : ℕ} {x : RStmt len} (hrows : RowsOf x e.stmt)
     (hcr : RingCrossAt (program.reader e)) {t : ℕ} (ht : t < 512) :
-    program.evalE (program.reader e) 1 (.leaf 71) t =
+    program.evalE (program.reader e) 1 (.leaf ((CarrierHEmbed.σ program).val 120)) t =
       if muBitNat (muOf (x.keyAt (TableSelect.idxOf 0 e)) x.msg) t = 1 then 1 else 0 := by
   have h := hcr.mu t ht
   rw [muA_eq hs hno hrows ht] at h
@@ -291,7 +371,9 @@ theorem mem_rel_of_source (hv : MLDSA44.HashViewCore nat F0 FH)
   have hAF : RealizedProgram.PrimeCastField (interp 0) pGold := inferInstanceAs (RealizedProgram.PrimeCastField F0 pGold)
   have hsel : ¬ TableSelect.SelBad 0 0 e := fun h => hno 0 MldsaCarrierFront.chal0 (.inl h)
   have hnoN : ∀ j, (nat).IsSourceChal j → ¬ sv.event j (pullH e) := fun j hj h =>
-    hno (j + 1) ((MldsaCarrierFront.chalIff j).2 hj) (.inr ⟨j, rfl, h⟩)
+    hno (j + 2) ((MldsaCarrierFront.chalIff j).2 hj) (.inr (.inr ⟨j, rfl, h⟩))
+  have hev : ¬ (relEvent e).BadAt (rOf e) := fun h =>
+    hno 1 MldsaCarrierFront.chal1 (.inr (.inl ⟨rfl, h⟩))
   have hcore := hSatCore hs
   have hA := eaSat hs
   have hsam := sv.sound (pullH e) hcore hnoN
@@ -316,7 +398,7 @@ theorem mem_rel_of_source (hv : MLDSA44.HashViewCore nat F0 FH)
   have hW : wOf rd = _root_.MLDSA.computeWApprox _root_.MLDSA.mldsa44 MLDSA44.Native.Rows.prims
       (nttOps := _root_.MLDSA.Concrete.concreteNTTRingOps) (MLDSA44.Native.Rows.aHat pk)
       (cPoly rd) (zOf rd) pk.t1 :=
-    algebra_carrier hs hS
+    algebra_carrier hs hev hS
   have hb : AllBool (Emulated.w1ABits ard) := fun t => Emulated.w1Bool hA t.isLt
   have hw1 : Shake256.inputBytes (Falcon512.HashCircuit.byteWires
       (MLDSA44.w1HBits nrd)) =
@@ -363,9 +445,10 @@ theorem sound_of_views (hv : MLDSA44.HashViewCore nat F0 FH) :
 (`RealizedProgram.rbr_of_events`), given the native frontend's hash view of domain `H`'s core
 (`HashViewCore`, the Keccak trace's instance) and SampleInBall's view (`SampleView`) of the
 native program: the relation `rel`, the extractor `extractor`, the errors `5143/|F|` at
-`member.table.gamma` and SampleInBall's at the carrier's challenges `1`, `2` (`ringEps`). -/
+`member.table.gamma`, `2040/|F|` at `signature.r` and SampleInBall's at the carrier's challenges
+`2`, `3` (`ringEps`). -/
 theorem rbr_of_views (hv : MLDSA44.HashViewCore nat F0 FH) :
-    rbrKnowledgeSoundness rel (program.sourceVerifier interp) extractor
+    RBRKnowledgeSound rel (program.sourceVerifier interp) extractor
       (program.eventState interp rel proj (ringEvent sv) (ringEvent_use sv) (sound_of_views sv hv))
       (program.roundError interp (ringEps sv)) :=
   program.rbr_of_events interp rel proj (ringEvent sv) (ringEps sv) (ringEvent_use sv)

@@ -17,8 +17,8 @@ circuit holds at the honest reader, every asserted node is zero at the honest in
 
 * **A root's print is zero** where its entry holds
   (`GordieHowe.RealizedProgram.rootZero_of_entryMeaningB`): `X = ±(l − r)` coordinatewise for a
-  placed equation or Boolean check, `X` the product form's asserted equation, its length the
-  meaning's (the meaning check reads it exactly).
+  placed equation or Boolean check, its length the meaning's (the meaning check reads it
+  exactly).
 * **A family's item is zero** where its realization holds
   (`GordieHowe.RealizedProgram.logupItem_zero`, `GordieHowe.RealizedProgram.macHItem_zero`): the
   cuts give the fraction tree's root, the sum and the chunks, and the meaning closes the item.
@@ -54,126 +54,7 @@ theorem rootZero_of_sides {d chr neg1 : ℕ} [CharP (I (ir.domainField d)).K chr
   · rw [h' i hi, hz]
   · rw [h' i hi, hz, neg_zero]
 
-/-- **A product form's placed equation zeroes its asserted equation `X`** below `X`'s length, `X`
-no longer than the shape's rows. -/
-theorem rootZero_of_productPlaced {primeNodes : ℕ → List String}
-    (hM : ir.DerivModel I primeNodes)
-    (hK : ∀ v es, (ir.value v).kind = .constant es → ∀ i,
-      rd v i = (I (ir.valueField v)).decode (es.getD i 0))
-    {d q : ℕ} {«X» P N : Expr} {real : ModRealization}
-    (h : ir.productEquationB d q «X» P N real = true)
-    (hfit : ∀ sh, ir.productShape? P N = some sh → ir.exprLen «X» ≤ sh.rowsP.length * sh.n)
-    (hP : ir.ProductPlaced rd d q P N real) :
-    ∀ i < ir.exprLen «X», ir.evalWith rd d «X» i = 0 := by
-  intro i hi
-  unfold productEquationB at h
-  split at h
-  · rename_i sh hform hsh
-    simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq, List.all_eq_true,
-      List.mem_range] at h
-    obtain ⟨⟨⟨⟨⟨hd, hp⟩, hn⟩, hlen⟩, hXlen⟩, hrows⟩ := h
-    have hf := domainField_lt hM.wf hd
-    have := charP_field hM.registered hf
-    have hN : NormModel rd (ir.domainField d) (ir.charOf (ir.domainField d)) :=
-      ⟨hM.wf.refsOrdered, hp, hM.lawful.decode_natCast _ hf, hK⟩
-    unfold ProductPlaced at hP
-    rw [hform] at hP
-    simp only [hsh] at hP
-    have hiR := lt_of_lt_of_le hi (hfit sh hsh)
-    set r := i / sh.n with hr_def
-    set k := i % sh.n with hk_def
-    have hk : k < sh.n := Nat.mod_lt _ hn
-    have hr : r < sh.rowsP.length := by
-      rw [hr_def, Nat.div_lt_iff_lt_mul hn]; exact hiR
-    have hi' : i = r * sh.n + k := by
-      rw [hr_def, hk_def, mul_comm]; exact (Nat.div_add_mod i sh.n).symm
-    have hrh := hP.2 r hr k hk
-    have hrow := hrows r hr
-    unfold spectralRowB at hrow
-    split at hrow
-    · rename_i ms hms
-      split at hrow
-      · rename_i L rest htake
-        split at hrow
-        · rename_i ls el er hls hel her
-          simp only [Bool.and_eq_true] at hrow
-          obtain ⟨hmL, hmR⟩ := hrow
-          have hpl : k < ((List.range sh.n).map (r * sh.n + ·)).length := by simpa using hk
-          have e0 := nf_sound hN _ _ _ ms hms k hpl
-          rw [getD_map_of_lt _ _ 0 _ (by simpa using hk)] at e0
-          simp only [List.getD_eq_getElem?_getD, List.getElem?_range hk, Option.getD_some] at e0
-          obtain ⟨s, hs, hsplit⟩ := takeSome_sum (Mono.val rd (ir.domainField d) k) htake
-          unfold transformArg? at hs
-          split at hs
-          · rename_i ps op L' hfacs
-            split at hs
-            · rename_i hc
-              obtain ⟨hc1, hop, hps⟩ := hc
-              simp only [Option.some.injEq] at hs
-              subst hs
-              have hT : Mono.val rd (ir.domainField d) k s =
-                  Ops.nttOf sh.natural sh.n ((I (ir.domainField d)).decode sh.psi)
-                    (ir.evalE rd (ir.domainField d) L') k := by
-                simp only [Mono.val, hfacs, hc1, hop, hps, List.map_cons, List.map_nil,
-                  List.prod_cons, List.prod_nil, mul_one, Nat.cast_one, one_mul, facVal]
-                simp only [List.getD_eq_getElem?_getD, List.getElem?_range hk, Option.getD_some]
-                exact evalE_apply_ntt rd _ sh.natural L' hk
-              have hLt : ∀ t < sh.n, ir.evalE rd (ir.domainField d) L' t =
-                  ((ir.rowExprs (sh.rowsP.getD r default)).map fun e => ir.evalWith rd d e t).sum -
-                    ((ir.rowExprs (sh.rowsN.getD r default)).map fun e =>
-                      ir.evalWith rd d e t).sum -
-                    ir.quotTerm rd d q real (r * sh.n + t) := by
-                intro t ht
-                have eL := nf_sound hN _ _ L' ls hls t (by simpa using ht)
-                simp only [List.getD_eq_getElem?_getD, List.getElem?_range ht,
-                  Option.getD_some] at eL
-                rw [eL, monosVal_of_matchAll hN hmL t]
-                exact lhsMonos_sound hN hel ht
-              have hR : monosVal rd (ir.domainField d) k rest =
-                  -(((ir.rowKernels (sh.rowsN.getD r default)).map fun κ =>
-                      ir.kernelTerm rd d sh.natural sh.n
-                        ((I (ir.domainField d)).decode sh.psi) κ k).sum -
-                    ((ir.rowKernels (sh.rowsP.getD r default)).map fun κ =>
-                      ir.kernelTerm rd d sh.natural sh.n
-                        ((I (ir.domainField d)).decode sh.psi) κ k).sum) := by
-                rw [monosVal_of_matchAll hN hmR k]
-                simp only [rhsMonos, Option.bind_eq_bind, Option.bind_eq_some_iff,
-                  Option.pure_def, Option.some.injEq] at her
-                obtain ⟨a, ha, b, hb, rfl⟩ := her
-                rw [monosVal_append, kernelMonos_sound hN sh true _ a ha k hk,
-                  kernelMonos_sound hN sh false _ b hb k hk]
-                simp only [Bool.false_eq_true, ↓reduceIte, List.sum_map_neg_fun]
-                ring
-              unfold SpectralRowHolds at hrh
-              rw [← nttOf_congr sh.natural _ hLt, ← hT] at hrh
-              have hsum : ir.evalWith rd d «X» (r * sh.n + k) = Mono.val rd (ir.domainField d) k s +
-                  monosVal rd (ir.domainField d) k rest := by
-                simp only [evalWith, e0, monosVal, hsplit]
-              rw [hi', hsum, hR, hrh]
-              ring
-            · cases hs
-          · cases hs
-        · cases hrow
-      · cases hrow
-    · cases hrow
-  · cases h
-
 end
-
-/-- **A product form's asserted equation has its rows' length**: `productEquationB` reads `X` as
-`rows · n` coordinates. -/
-theorem productEquationB_len {ir : RealizedProgram} {d q : ℕ} {«X» P N : Expr}
-    {real : ModRealization} (h : ir.productEquationB d q «X» P N real = true) {sh : ProductShape}
-    (hsh : ir.productShape? P N = some sh) : ir.exprLen «X» ≤ sh.rowsP.length * sh.n := by
-  unfold productEquationB at h
-  rw [hsh] at h
-  split at h
-  · rename_i sh' hform hsh'
-    simp only [Bool.and_eq_true, decide_eq_true_eq] at h
-    obtain ⟨⟨⟨⟨⟨-, -⟩, -⟩, -⟩, hX⟩, -⟩ := h
-    cases hsh'
-    exact hX.ge
-  · cases h
 
 variable {ir : RealizedProgram} {I : Interp} {primeNodes : ℕ → List String} {rd : ir.Valuation I}
   {c chr neg1 : ℕ}
@@ -200,8 +81,7 @@ theorem sides_of_placedHolds {b : PredBody} {d : ℕ} {l r : Expr}
 
 /-- **The meaning of an entry zeroes its root's print**: the meaning check reads the print at the
 meaning's exact length. -/
-theorem rootZero_of_entryMeaningB (hM : ir.DerivModel I primeNodes)
-    [CharP (I (ir.circField c)).K chr] (hN : ir.NormModel rd (ir.circField c) chr)
+theorem rootZero_of_entryMeaningB [CharP (I (ir.circField c)).K chr] (hN : ir.NormModel rd (ir.circField c) chr)
     (hneg : (I (ir.circField c)).decode neg1 = -1) (hB : ir.BoundReads rd)
     {en : CircuitEntry} {«X» : Expr} (h : ir.entryMeaningB c chr neg1 en (some «X») = true)
     (hH : ir.EntryHolds rd en) :
@@ -213,12 +93,7 @@ theorem rootZero_of_entryMeaningB (hM : ir.DerivModel I primeNodes)
         | some (d, l, r) =>
           Nat.beq d (ir.circuit c).domain && Nat.beq (ir.exprLen l) (ir.exprLen «X») &&
             ir.nfUnitEqB d chr neg1 «X» (.sub l r)
-        | none =>
-          match (ir.predicate p).body with
-          | .mod d q P N real =>
-            real.form.isProduct && Nat.blt 2 q && Nat.beq d (ir.circuit c).domain &&
-              ir.productEquationB d q «X» P N real
-          | _ => false) = true →
+        | none => false) = true →
       ∀ i < ir.exprLen «X», ir.evalWith rd (ir.circuit c).domain «X» i = 0 := by
     intro p hH hm
     split at hm
@@ -227,23 +102,7 @@ theorem rootZero_of_entryMeaningB (hM : ir.DerivModel I primeNodes)
       obtain ⟨⟨rfl, hl⟩, hu⟩ := hm
       replace hl : ir.exprLen «X» ≤ ir.exprLen l := hl.ge
       exact rootZero_of_sides hN hneg hl hu (sides_of_placedHolds hs hH)
-    · rename_i hs
-      split at hm
-      · rename_i d q P N real hb
-        simp only [Bool.and_eq_true, Nat.blt_eq, Nat.beq_eq] at hm
-        obtain ⟨⟨⟨hprod, hq⟩, rfl⟩, he⟩ := hm
-        have hnot : ¬(q = 0 ∨ real.form = .field) := by
-          intro hc
-          rw [hb] at hs
-          simp only [placedSides?] at hs
-          have : (Nat.beq q 0 || decide (real.form = .field)) = true := by
-            simpa [Nat.beq_eq] using hc
-          simp [this] at hs
-        rw [hb] at hH
-        simp only [PlacedHolds, hnot, hprod, hq, and_self, ↓reduceIte] at hH
-        exact rootZero_of_productPlaced hM hN.consts he
-          (fun sh hsh => productEquationB_len he hsh) hH
-      · cases hm
+    · cases hm
   cases en with
   | typeCheck p => exact hpred p hH h
   | pred p => exact hpred p hH h
@@ -494,13 +353,13 @@ theorem macHItem_zero (hM : ir.DerivModel I primeNodes)
         show ir.evalE _ _ (cd.table.treeErase (cd.env ar) mc.bits) j = ir.evalE _ _ _ j
         rw [(print_spec ho hE (ir.reader e) mc.bits).2]
       have hG : ∀ i < real.width,
-          (I (ir.circField c)).decode ((Trie.ofList (powList ar 2 real.width 1)).get i) =
+          (I (ir.circField c)).decode ((PTree.ofList (powList ar 2 real.width 1)).get i) =
             (I (ir.circField c)).decode 2 ^ i := by
         intro i hi
         have hm := map_powList hC.hom 2 real.width 1
         have hl : (powList ar 2 real.width 1).length = real.width := by
           simpa using congrArg List.length hm
-        rw [Trie.get_ofList _ (by omega), List.getD_eq_getElem _ _ (by omega)]
+        rw [PTree.get_ofList _ (by omega), List.getD_eq_getElem _ _ (by omega)]
         have h1 := congrArg (fun l => l[i]?) hm
         simp only [List.getElem?_map, List.getElem?_range hi, Option.map_some,
           List.getElem?_eq_getElem (by omega : i < (powList ar 2 real.width 1).length),
@@ -803,7 +662,7 @@ theorem circuitAccepts_of_circuitCertB (hM : ir.DerivModel I primeNodes)
       rw [hwv i hi']
       have hps := print_spec hM.wf.refsOrdered hF.table
         (ir.reader (ir.layoutEnv I x (ir.bindAsg a) r)) rt
-      have hz := rootZero_of_entryMeaningB hM hN hAr.neg1 hB hmean hHe i (by rw [hps.1]; exact hi')
+      have hz := rootZero_of_entryMeaningB hN hAr.neg1 hB hmean hHe i (by rw [hps.1]; exact hi')
       change ir.evalE _ _ _ i = 0 at hz
       rw [congrFun (hps.2 _) i] at hz
       exact hz

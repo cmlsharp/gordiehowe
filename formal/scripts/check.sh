@@ -36,8 +36,17 @@
 #                    (scripts/paper_manifest.py --check); without it that step is skipped.
 #   --perf REF       at the end, profile the modules changed since REF's merge base and run the
 #                    performance gate on them (scripts/perf_profile.sh, scripts/perf_gate.py,
-#                    audit/PERF.md); a gate failure fails the check.
+#                    audit/PERF.md); a gate failure fails the check. GordieHoweCerts'
+#                    hand-written modules are profiled only with --certs.
 #   --perf-report    with --perf, report only: the gate's result does not change the exit status.
+#
+# Every build step's per-module result lines from Lake (`✔ [i/n] Built <module> (<time>)`, and the
+# failures') go to .lake/check/build_times.txt, with or without --quiet, so later checks can rank
+# the modules by time (scripts/stage0.py --timings).
+#
+# In kernel mode with --certs, stage 0 comes first: the library GordieHoweStage0
+# (Check/Stage0/GordieHoweStage0.lean, written by scripts/stage0.py) imports the check modules most
+# likely to fail and the slowest; when it fails to build, the check stops before the full build.
 set -euo pipefail
 
 quiet=
@@ -103,6 +112,17 @@ run_script() {
 status=0
 cert_mode=$(scripts/cert_mode.sh status) || exit 2
 
+mkdir -p .lake/check
+build_times=.lake/check/build_times.txt
+: > "$build_times"
+# Filter a build's output: Lake's per-module result lines are appended to $build_times; with
+# --quiet only errors are printed.
+build_filter() {
+  awk -v quiet="$quiet" -v times="$build_times" '
+    /^[^ ]+ \[[0-9]+\/[0-9]+\] / { print >> times; fflush(times) }
+    quiet == "" || /^(error|✖)/ { print }'
+}
+
 echo "== certificate library boundary =="
 echo "(GordieHowe imports no generated module and no module of GordieHoweCerts; every module of"
 echo " GordieHoweCerts imports a generated one; scripts/cert_boundary.py)"
@@ -124,7 +144,41 @@ native_imports=$(grep -rhoE '^(public )?(meta )?import (all )?[A-Za-z0-9_.]+' Go
 if [ -n "$native_imports" ]; then echo "FAIL: GordieHoweNative imports $native_imports"; status=1; else echo "none outside them"; fi
 echo
 
-scripts/lake.sh build GordieHowe 2>&1 | awk -v quiet="$quiet" 'quiet == "" || /^(error|✖)/ { print }' || status=$?
+if [ -n "$certs" ] && [ "$cert_mode" = kernel ]; then
+  echo "== stage 0: the check modules most likely to fail and the slowest =="
+  echo "(GordieHoweStage0, Check/Stage0/GordieHoweStage0.lean; scripts/stage0.py)"
+  if [ ! -f Check/Stage0/GordieHoweStage0.lean ]; then
+    echo "FAIL: no Check/Stage0/GordieHoweStage0.lean (scripts/stage0.py writes it)"
+    exit 1
+  fi
+  # Stage 0 builds the heaviest check modules together, each up to about 45 GB in kernel mode,
+  # so it runs at most one Lean process per 48 GB of PQ_MEM_MAX (scripts/lake.sh's default 96G).
+  mem=${PQ_MEM_MAX:-96G}
+  case "$mem" in
+    *T) mem_gb=$(( ${mem%T} * 1024 )) ;;
+    *G) mem_gb=${mem%G} ;;
+    *M) mem_gb=$(( ${mem%M} / 1024 )) ;;
+    *) mem_gb=$(( mem / 1073741824 )) ;;
+  esac
+  stage0_jobs=$(( mem_gb / 48 ))
+  [ "$stage0_jobs" -ge 1 ] || stage0_jobs=1
+  if [ -n "${PQ_LAKE_JOBS:-}" ] && [ "$PQ_LAKE_JOBS" -lt "$stage0_jobs" ]; then
+    stage0_jobs=$PQ_LAKE_JOBS
+  fi
+  echo "($stage0_jobs Lean processes at once, for PQ_MEM_MAX=$mem)"
+  t0=$(date +%s)
+  stage0_rc=0
+  PQ_LAKE_JOBS=$stage0_jobs scripts/lake.sh build GordieHoweStage0 2>&1 | build_filter ||
+    stage0_rc=$?
+  echo "stage 0: $(( $(date +%s) - t0 )) s, exit $stage0_rc"
+  if [ "$stage0_rc" -ne 0 ]; then
+    echo "check.sh: FAILED in stage 0; the full build was not started" >&2
+    exit 1
+  fi
+  echo
+fi
+
+scripts/lake.sh build GordieHowe 2>&1 | build_filter || status=$?
 
 echo
 echo "== certificate library =="
@@ -133,8 +187,7 @@ if [ -n "$certs" ]; then
   echo " system from its certificates (GordieHoweCerts/Generated/<program>/Certified.lean) and the"
   echo " applications' instantiations and headline theorems, all imported by GordieHoweCerts.lean;"
   echo " in the build's check mode)"
-  scripts/lake.sh build GordieHoweCerts 2>&1 |
-    awk -v quiet="$quiet" 'quiet == "" || /^(error|✖)/ { print }' || status=$?
+  scripts/lake.sh build GordieHoweCerts 2>&1 | build_filter || status=$?
 else
   echo "skipped: certificate library not built (--certs builds GordieHoweCerts; the audits below"
   echo " read GordieHowe only)"
@@ -144,7 +197,7 @@ fi
 build_tests() {
   local t0 t1 rc=0
   t0=$(date +%s)
-  scripts/lake.sh build "$1" 2>&1 | awk -v quiet="$quiet" 'quiet == "" || /^(error|✖)/ { print }' || rc=$?
+  scripts/lake.sh build "$1" 2>&1 | build_filter || rc=$?
   t1=$(date +%s)
   echo "$1: $((t1 - t0)) s, exit $rc"
   return "$rc"
@@ -353,7 +406,11 @@ if [ -n "$perf_ref" ]; then
   if [ -n "$perf_strict" ]; then echo "(strict: a failure fails the check)"; else echo "(report only)"; fi
   mkdir -p .lake/perf
   perf_status=0
-  if scripts/perf_profile.sh "$perf_ref" -o .lake/perf/profile.tsv; then
+  # Without --certs the certificate library is not built in this run: its hand-written modules
+  # are skipped, with a note (an earlier build's oleans may be stale).
+  perf_certs=()
+  [ -n "$certs" ] || { perf_certs=(--no-certs); echo "(GordieHoweCerts' modules skipped: --certs builds them)"; }
+  if scripts/perf_profile.sh "${perf_certs[@]}" "$perf_ref" -o .lake/perf/profile.tsv; then
     perf_base=()
     [ -f audit/perf_baseline.tsv ] && perf_base=(--base audit/perf_baseline.tsv)
     python3 -I scripts/perf_gate.py .lake/perf/profile.tsv "${perf_base[@]}" || perf_status=1

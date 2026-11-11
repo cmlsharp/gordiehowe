@@ -103,6 +103,11 @@ theorem relayList_userRelay (h : n ≤ n') (rs : List (UnforgeRequest n O)) :
 
 variable [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [Nonempty Y]
 
+section Challenger
+
+variable [DecidableEq TS.PK] [Fintype TS.SignCoins] [DecidableEq TS.SignCoins]
+  [Nonempty TS.SignCoins]
+
 omit [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The challenger with `n` users at the first `n` users' key coins relays the challenger with
 `n'` users** through `userRelay`, at the same coins. -/
@@ -124,6 +129,8 @@ theorem relaysChallenger_userRelay (h : n ≤ n') (keys : Fin n' → S.KeyCoins)
     · simp only [embReq, Function.comp_apply, hc]
     · simp only [embReq, Function.comp_apply, hc]
   answer_none _ _ _ := rfl
+
+end Challenger
 
 /-! ### The embedded adversary -/
 
@@ -147,7 +154,11 @@ theorem sum_mul_map_apply {κ U : Type} [Fintype κ] [Fintype U] [DecidableEq U]
     (fun h => absurd (Finset.mem_univ _) h)]
   simp
 
-variable [Nonempty X] [AddGroup Y] {V : OracleView X Y} {t : ℕ}
+variable [Nonempty X] [AddGroup Y] {V : OracleView X Y} {t : ℕ} [Fintype TS.PK] [DecidableEq TS.PK]
+  [Fintype TS.Msg] [DecidableEq TS.Msg] [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins]
+  [Fintype TS.Sig] [DecidableEq TS.Sig]
+
+variable [Fintype O.BMsg] [DecidableEq O.BMsg] [Fintype O.BSig] [DecidableEq O.BSig]
 
 /-- **The adversary in the game with `n' ≥ n` users**: on the `n'` public keys, the adversary on the
 first `n`, its requests naming users through `Fin.castLE`. -/
@@ -155,8 +166,10 @@ noncomputable def embedAdversary [NeZero n'] (h : n ≤ n') (A : UnforgeAdversar
     UnforgeAdversary S n' O V t := fun inp =>
   (A (inp.1 ∘ Fin.castLE h, inp.2)).absorbQB (userRelay h) fun _ => embReq_injective h
 
-omit [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [Nonempty Y] [Nonempty X]
-  [AddGroup Y] in
+omit [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [Nonempty Y] [Nonempty X] [AddGroup Y]
+  [Fintype TS.PK] [DecidableEq TS.PK] [Fintype TS.Msg] [DecidableEq TS.Msg] [Fintype TS.KeyCoins]
+  [DecidableEq TS.KeyCoins] [Fintype TS.Sig] [DecidableEq TS.Sig] [Fintype O.BMsg]
+  [DecidableEq O.BMsg] [Fintype O.BSig] [DecidableEq O.BSig] in
 /-- **A forgery fresh for `n` users is fresh for `n'` users** at the embedded requests. -/
 theorem FreshReq.embed (h : n ≤ n') {keys : Fin n' → S.KeyCoins} {rs : List (UnforgeRequest n O)}
     {R : KeyRing S.PK N} {m : S.Msg} (hf : FreshReq (keys ∘ Fin.castLE h) rs R m) :
@@ -180,6 +193,11 @@ theorem FreshReq.embed (h : n ≤ n') {keys : Fin n' → S.KeyCoins} {rs : List 
       simp only [embReq, UnforgeRequest.sideSign.injEq, reduceCtorEq] at he
     obtain ⟨rfl, rfl⟩ := he
     exact h3 j bm' hr hR
+
+section Laws
+
+variable [Nonempty TS.KeyCoins] [Fintype TS.SignCoins] [DecidableEq TS.SignCoins]
+  [Nonempty TS.SignCoins]
 
 /-- **Embedding into a game with more users does not decrease the forgery probability**: the
 adversary's forgery probability with `n` users is at most that of `embedAdversary h A` with
@@ -222,6 +240,8 @@ theorem forgeProb_le_embedAdversary [NeZero n'] (h : n ≤ n') (A : UnforgeAdver
     fun o rs ⟨hv, hf⟩ => ⟨hv, by
       rw [relayList_userRelay, ← List.map_take]
       exact hf.embed h⟩
+
+end Laws
 
 /-! ### The embedding into at least two users -/
 

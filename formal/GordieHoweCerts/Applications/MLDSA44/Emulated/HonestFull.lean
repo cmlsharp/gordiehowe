@@ -36,6 +36,12 @@ set_option hygiene false in
 local notation "nat" => MldsaEmbed.nat program
 
 set_option hygiene false in
+local notation "σ" => MldsaEmbed.σ program
+
+set_option hygiene false in
+local notation "hV" => MldsaEmbed.V program
+
+set_option hygiene false in
 local notation "L" => MldsaEAlgebra.layout program
 
 /-- **The prime subfield of an emulated program's domain `A`**: the naturals lie in the node
@@ -160,39 +166,33 @@ theorem honest_cell_mem (i : HonestInput) {v : ℕ} (hv : v < program.values.len
   simp only [hp, hsrc, decide_true, Bool.not_true, Bool.false_or, Bool.or_eq_true,
     Bool.and_eq_true, beq_iff_eq, hS, Option.some.injEq, List.contains_iff_mem,
     decide_eq_true_eq] at hcl
-  have hH : ∀ {S'}, program.valueField v = 1 → 1 ≤ v → v - 1 ∈ hV →
-      hVal nat F0 FH i (v - 1) j ∈ (interp ((nat).valueField (v - 1))).node S' →
+  have hH : ∀ {S' u}, eOf program v = some u →
+      ((nat).valueField u = 1 → hVal nat F0 FH i u j ∈ (interp ((nat).valueField u)).node S') →
+      program.valueField v = 1 →
       honestVal program F0 FH i v j ∈ (interp (program.valueField v)).node S' := by
-    intro S' hf h1 hvV hm
+    intro S' u he hm hf
     have hnA : v ∉ aValues L := fun h => by
       have := (a_cells (program := program) v h).2
       omega
-    obtain ⟨-, -, hfE, -⟩ := (MldsaEmbed.embedding (program := program)).vals (v - 1) hvV
-    have hfE' : program.valueField v = (nat).valueField (v - 1) := by
-      rw [← hfE]
-      congr 1
-      change v = v - 1 + 1
-      omega
+    obtain ⟨huV, hvu⟩ := eOf_spec he
+    obtain ⟨-, -, hfE, -⟩ := (MldsaEmbed.embedding (program := program)).vals u huV
+    have hfE' : program.valueField v = (nat).valueField u := hvu ▸ hfE
     unfold honestVal
-    rw [if_neg hnA, if_pos ⟨h1, hvV⟩]
-    exact mem_castElt_of_eq hfE'.symm hm
-  rcases hcl with ((⟨⟨⟨⟨hf, rfl⟩, h1⟩, hvV⟩, hw⟩ | ⟨⟨⟨⟨hf, rfl⟩, h1⟩, hvV⟩, hb⟩) | ⟨⟨hf, rfl⟩, ha⟩)
-  · obtain ⟨-, -, hfE, -⟩ := (MldsaEmbed.embedding (program := program)).vals (v - 1) hvV
-    have hf' : (nat).valueField (v - 1) = 1 := by
-      rw [← hfE]
-      have : v - 1 + 1 = v := by omega
-      change program.valueField (v - 1 + 1) = 1
-      rw [this]
-      exact hf
-    exact hH hf h1 hvV (MLDSA44.hVal_mem_gf16 i hf' hw j)
-  · obtain ⟨-, -, hfE, -⟩ := (MldsaEmbed.embedding (program := program)).vals (v - 1) hvV
-    have hf' : (nat).valueField (v - 1) = 1 := by
-      rw [← hfE]
-      have : v - 1 + 1 = v := by omega
-      change program.valueField (v - 1 + 1) = 1
-      rw [this]
-      exact hf
-    exact hH hf h1 hvV (MLDSA44.hVal_mem_bit i hf' hb j)
+    rw [if_neg hnA, he]
+    exact mem_castElt_of_eq hfE'.symm (hm (hfE'.symm.trans hf))
+  rcases hcl with ((⟨⟨hf, rfl⟩, hany⟩ | ⟨⟨hf, rfl⟩, hany⟩) | ⟨⟨hf, rfl⟩, ha⟩)
+  · rcases he : eOf program v with _ | u
+    · rw [he] at hany
+      cases hany
+    · rw [he, Option.any_some] at hany
+      simp only [Bool.or_eq_true, List.contains_iff_mem, decide_eq_true_eq] at hany
+      exact hH he (fun hf' => MLDSA44.hVal_mem_gf16 i hf' hany j) hf
+  · rcases he : eOf program v with _ | u
+    · rw [he] at hany
+      cases hany
+    · rw [he, Option.any_some] at hany
+      simp only [List.contains_iff_mem, decide_eq_true_eq] at hany
+      exact hH he (fun hf' => MLDSA44.hVal_mem_bit i hf' hany j) hf
   · unfold honestVal
     rw [if_pos ha]
     exact mem_castElt_of_eq (a := 0) hf.symm (aVal_mem (FH := FH) i a_nodup ha j)

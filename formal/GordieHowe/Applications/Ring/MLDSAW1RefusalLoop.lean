@@ -76,7 +76,10 @@ theorem _root_.GordieHowe.expect_comp_embedding_eq {X' A Y' : Type*} [Fintype X'
 /-- **The refusal probability as an average**: the probability that the base signer refuses is the
 average over its uniform coins of the indicator that its ring-aware signer returns `none`. -/
 theorem _root_.GordieHowe.RingSignature.BaseSigner.toReal_refusalPubLaw_none
-    {N : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB) (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N)
+    {N : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
+    [DecidableEq TB.Pub]
+    [Fintype TB.Coins]
+    [Nonempty TB.Coins] (B : BaseSigner X Y N TB) (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N)
     (m : B.Msg) :
     (B.refusalPubLaw H kc R m none).toReal =
       𝔼 cb : B.Coins,
@@ -111,7 +114,7 @@ variable (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   (O : W1Oracles X Y p prims Msg N reps) (M : MaskOracle X Y p T Msg) (βmin : ℚ≥0) (tol : ℕ)
   (enc : Vector prims.High p.k → BucketVec p) (k D : ℕ) [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg)
-  {TPS : PSTypes} (PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS)
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] (PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS)
   (adm : KeyRing (PubKey p prims) N → Prop) [DecidablePred adm]
   (n : ℕ) (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβt : (βmin : ℝ≥0∞) ≠ ⊤)
 
@@ -119,6 +122,8 @@ local notation "Bh" => hedgedBase prims O M βmin tol enc k D bmsg
 local notation "Bf" => freshBase prims O M βmin tol enc k D bmsg
 local notation "Sh" => hedgedScheme prims O M βmin tol enc k D bmsg PS adm
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **The fresh-mask signer refuses an admitted ring rarely**: at an oracle `H` at which the ring
 of the valid challenge `c` passes the check and has distinct message representatives, the signer
 of user `0` refuses with probability at most `2 · lowError + k / D + (1 - Lk)^k`, plus `1` when the
@@ -169,7 +174,7 @@ theorem refusalPubLaw_freshBase_none_le (hT : 0 < T)
       unfold keepLevel
       change (standinScale p * βmin).toReal * (θ * ((1 - s) * Fintype.card (BucketVec p))) / 2 ≤
         (standinScale p * βmin).toReal * (θ * P.wts.mass) / 2
-      have hβ := ringLevel_pos hp hβ0 hβt
+      have hβ := flatLevel_pos (cut := Cutoff.const βmin) hp hβ0 hβt
       gcongr
     have ha1 : P.attempt false (O.chOrc H) none ≤ 1 := PMF.coe_le_one _ _
     rw [ENNReal.toReal_sub_of_le ha1 ENNReal.one_ne_top, ENNReal.toReal_one] at hlev

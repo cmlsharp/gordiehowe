@@ -21,7 +21,7 @@ Algorithm 33) is a random oracle onto the `η`-box, so the secret is a uniform b
 * **A weight in the denominator** (`tvDist_le_indicator_add_mul_inv`): for one key, one matrix and
   one oracle, and any `w ≥ 0` at most the mean member weight at `β_min = 1` of every bucket vector,
   `tvDist ≤ 1[w = 0] + n w⁻¹`, with `n` the numerator of `tvDist_le_numerator_div`. At `β_min = 1`
-  the member weight is at most the acceptance weight (`toReal_memberWeight_one_le`), so `w` is at
+  the member weight is at most the acceptance weight (`toReal_flatWeight_one_le`), so `w` is at
   most the mean acceptance weight.
 * **Cauchy–Schwarz and Jensen** (`expect_tvDist_standin_le_of_weight`): for a weight `W G t₀` with
   `𝔼_Â n² ≤ ε²` for every key and oracle, `𝔼_{e, Â, G} W⁻² ≤ B` and `Pr_{e, Â, G}[W = 0] ≤ z`, the
@@ -80,11 +80,12 @@ variable {p : Params} [NeZero (bucketCount p)] [nttOps : NTTRingOps] [Nonempty (
 
 omit [NeZero (bucketCount p)] [Nonempty (MaskBox p)] in
 /-- **At `β_min = 1` the member weight is at most the acceptance weight**: `min(1, aw/1) ≤ aw`. -/
-theorem toReal_memberWeight_one_le (prims : Primitives p) (t0 : RqVec p.k)
+theorem toReal_flatWeight_one_le (prims : Primitives p) (t0 : RqVec p.k)
     (vc : BucketVec p × CommitHashBytes p) :
-    (memberWeight prims 1 t0 vc : ℝ≥0∞).toReal ≤ (t0Weight prims t0 vc : ℝ≥0∞).toReal :=
+    (flatWeight prims (Cutoff.const 1) t0 vc : ℝ≥0∞).toReal ≤ (t0Weight prims t0 vc :
+        ℝ≥0∞).toReal :=
   ENNReal.toReal_mono (ENNReal.nnratCast_ne_top _) (by
-    rw [coe_memberWeight, ENNReal.nnratCast_one, div_one]
+    rw [coe_flatWeight, ENNReal.nnratCast_one, div_one]
     exact min_le_right _ _)
 
 /-- **The plain-law distance from a weight that may vanish.** With `P` the normalized real
@@ -101,7 +102,8 @@ theorem tvDist_le_indicator_add_mul_inv (hp : SigningParams p) (prims : Primitiv
     (hQ : 0 < ∑ vc', (t0Weight prims sk.t0 vc' : ℝ≥0∞).toReal →
       ∀ vc, (Q vc).toReal = (t0Weight prims sk.t0 vc : ℝ≥0∞).toReal /
         ∑ vc', (t0Weight prims sk.t0 vc' : ℝ≥0∞).toReal)
-    {w : ℝ} (hw0 : 0 ≤ w) (hw : ∀ v, w ≤ 𝔼 c, (memberWeight prims 1 sk.t0 (v, c) : ℝ≥0∞).toReal) :
+    {w : ℝ} (hw0 : 0 ≤ w) (hw : ∀ v, w ≤ 𝔼 c, (flatWeight prims (Cutoff.const 1) sk.t0 (v, c) :
+        ℝ≥0∞).toReal) :
     tvDist P Q ≤ (if w = 0 then 1 else 0) +
       (∑ v, 𝔼 c, |(realMass prims sk aHat v c).toReal -
           (zAcceptFraction p * standinMass prims sk v c).toReal|) /
@@ -120,7 +122,7 @@ theorem tvDist_le_indicator_add_mul_inv (hp : SigningParams p) (prims : Primitiv
     rw [← Finset.univ_product_univ, Finset.expect_product]
     refine (Finset.expect_const Finset.univ_nonempty w).symm.le.trans
       (Finset.expect_le_expect fun v _ => (hw v).trans
-        (Finset.expect_le_expect fun c _ => toReal_memberWeight_one_le prims _ _))
+        (Finset.expect_le_expect fun c _ => toReal_flatWeight_one_le prims _ _))
   have hApos : 0 < 𝔼 vc, (t0Weight prims sk.t0 vc : ℝ≥0∞).toReal := h.trans_le hA
   have hsum : 0 < ∑ vc', (t0Weight prims sk.t0 vc' : ℝ≥0∞).toReal := by
     rw [Fintype.expect_eq_sum_div_card] at hApos
@@ -151,7 +153,7 @@ Then for keys `key s` with secret `s`, real laws `R s` and stand-in laws `Q`,
 theorem expect_tvDist_standin_le_of_weight (hp : p.isApproved)
     (W : (CommitHashBytes p → ChallengeBall p.tau) → RqVec p.k → ℝ) (hW0 : ∀ G t0, 0 ≤ W G t0)
     (hW : ∀ G t0, polyVecNorm t0 ≤ 4096 → ∀ v,
-      W G t0 ≤ 𝔼 c, (memberWeight (oraclePrims G) 1 t0 (v, c) : ℝ≥0∞).toReal)
+      W G t0 ≤ 𝔼 c, (flatWeight (oraclePrims G) (Cutoff.const 1) t0 (v, c) : ℝ≥0∞).toReal)
     {ε B z : ℝ} (hε : 0 ≤ ε)
     (hnum : ∀ sk₀ : SecretKey p, polyVecBounded sk₀.s1 p.eta → polyVecBounded sk₀.s2 p.eta →
       ∀ G : CommitHashBytes p → ChallengeBall p.tau,
@@ -185,9 +187,7 @@ theorem expect_tvDist_standin_le_of_weight (hp : p.isApproved)
   have hK : 0 < K := standinScale_pos hsp
   have hV : (0 : ℝ) < Fintype.card (BucketVec p) := by exact_mod_cast Fintype.card_pos
   have ht0 : ∀ (sk₀ : SecretKey p) aHat, polyVecNorm (matrixKey sk₀ aHat).t0 ≤ 4096 :=
-    fun sk₀ aHat => by
-      rw [matrixKey_t0]
-      exact polyVecNorm_edgeT0Of_le _
+    polyVecNorm_matrixKey_t0_le
   have ht0eq : ∀ (e : SecretCoeffs p) aHat, (matrixKey (key (secretOfCoeffs e)) aHat).t0 =
       (matrixKey (keyOfCoeffs sk' e) aHat).t0 := fun e aHat => by
     rw [matrixKey_t0, matrixKey_t0, h1, h2]
@@ -208,7 +208,7 @@ theorem expect_tvDist_standin_le_of_weight (hp : p.isApproved)
   have hpt : ∀ e aHat G, tvDist (R (secretOfCoeffs e) G aHat)
       (Q G (matrixKey (key (secretOfCoeffs e)) aHat).t0) ≤
         (if w e G aHat = 0 then 1 else 0) + N e G aHat * (w e G aHat)⁻¹ := fun e aHat G => by
-    have hw : ∀ v, w e G aHat ≤ 𝔼 c, (memberWeight (oraclePrims G) 1
+    have hw : ∀ v, w e G aHat ≤ 𝔼 c, (flatWeight (oraclePrims G) (Cutoff.const 1)
         (matrixKey (key (secretOfCoeffs e)) aHat).t0 (v, c) : ℝ≥0∞).toReal := fun v => by
       rw [ht0eq]
       exact hW G _ (ht0 _ aHat) v
@@ -368,12 +368,11 @@ theorem expect_tvDist_standin_le_mldsa44
     refine (Finset.expect_le_expect fun e _ => Finset.expect_le_expect fun aHat _ =>
       (expect_indicator_mldsa44OracleWeight_eq_zero_le _ ?_).trans
         pow_card_commitHashBytes_le_mldsa44).trans_eq ?_
-    · rw [matrixKey_t0]
-      exact polyVecNorm_edgeT0Of_le _
+    · exact polyVecNorm_matrixKey_t0_le _ _
     · rw [Finset.expect_const Finset.univ_nonempty, Finset.expect_const Finset.univ_nonempty]
   have h := expect_tvDist_standin_le_of_weight isApproved_mldsa44 mldsa44OracleWeight
     mldsa44OracleWeight_nonneg
-    (fun G t0 ht0 v => mldsa44OracleWeight_le_expect_memberWeight (oraclePrims G) G
+    (fun G t0 ht0 v => mldsa44OracleWeight_le_expect_flatWeight (oraclePrims G) G
       (fun _ => rfl) ENNReal.nnratCast_one.le t0 ht0 v)
     (ε := 11 / 2 ^ 101) (B := (24 / 5) ^ 2) (by positivity)
     (fun sk₀ hs1 hs2 G => expect_sq_sum_expect_abs_realMass_sub_le_mldsa44_box_seven sk₀ hs1 hs2

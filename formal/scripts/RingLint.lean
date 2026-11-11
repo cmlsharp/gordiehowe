@@ -200,9 +200,9 @@ def registry : List (Name × Witness) :=
    (`GordieHowe.Ring.MLDSAW1.W1Oracles.ReadsFst, .witness
       [`GordieHowe.Ring.MLDSAW1.W1Oracles.readsFst_unit,
        `GordieHowe.Ring.MLDSAW1.W1Oracles.readsFst_viaBase]),
-   (`GordieHowe.Ring.MLDSAW1.MaskOracle.ReadsFst, .witness
-      [`GordieHowe.Ring.MLDSAW1.MaskOracle.readsFst_unit,
-       `GordieHowe.Ring.MLDSAW1.MaskOracle.readsFst_viaBase]),
+   (`GordieHowe.MLDSA.MaskOracle.ReadsFst, .witness
+      [`GordieHowe.MLDSA.MaskOracle.readsFst_unit,
+       `GordieHowe.MLDSA.MaskOracle.readsFst_viaBase]),
    (`GordieHowe.RingSignature.ProofSystem.ReadsOff, .witness
       [`GordieHowe.RingSignature.ProofSystem.ReadsSnd.readsOff,
        `GordieHowe.RingSignature.ProofSystem.readsOff_acceptAll]),
@@ -213,8 +213,8 @@ def registry : List (Name × Witness) :=
        `GordieHowe.RingSignature.OracleView.readsOff_queriesOnly]),
    (`GordieHowe.Ring.MLDSAW1.CheckParams, .witness
       [`GordieHowe.Ring.MLDSAW1.checkParams_tol2, `GordieHowe.Ring.MLDSAW1.checkParams_tol8]),
-   (`GordieHowe.Falcon512.Ring.Native.Signer.CarriesSalt, .witness
-      [`GordieHowe.Ring.exists_carriesSalt]),
+   (`GordieHowe.Falcon512.Signer.CarriesSalt, .witness
+      [`GordieHowe.Falcon512.exists_carriesSalt]),
    (`MLDSA.Params.isApproved, .witness
       [`GordieHowe.MLDSA.Regularity.isApproved_mldsa44, `GordieHowe.Ring.MLDSAW1.isApproved_mldsa65,
        `GordieHowe.Ring.MLDSAW1.isApproved_mldsa87]),
@@ -253,23 +253,23 @@ def registry : List (Name × Witness) :=
    (`GordieHowe.RingSignature.Insider.ZKRingHyps, .witness
       [`GordieHowe.Ring.StmtVerifiesRing.zkRingHyps,
        `GordieHowe.RingSignature.Insider.zkRingHyps_id]),
-   (`GordieHowe.Ring.MLDSASufCma, .assumption
+   (`GordieHowe.MLDSA.MLDSASufCma, .assumption
       "ML-DSA SUF-CMA (FIPS 204 §3.1; KLS18 Definition 2.9), for a named class"),
-   (`GordieHowe.Ring.MLDSAMUSufCma, .assumption
+   (`GordieHowe.MLDSA.MLDSAMUSufCma, .assumption
       "ML-DSA MU-SUF-CMA^corr (FIPS 204 §3.1; DGJL21 Definition 2), for a named class"),
-   (`GordieHowe.Ring.MLDSA44MUSufCma, .assumption "MLDSAMUSufCma at ML-DSA-44"),
-   (`GordieHowe.Ring.MLDSA65MUSufCma, .assumption "MLDSAMUSufCma at ML-DSA-65"),
-   (`GordieHowe.Ring.MLDSA87MUSufCma, .assumption "MLDSAMUSufCma at ML-DSA-87"),
-   (`GordieHowe.Ring.Falcon512EufCma, .assumption
+   (`GordieHowe.MLDSA.MLDSA44MUSufCma, .assumption "MLDSAMUSufCma at ML-DSA-44"),
+   (`GordieHowe.MLDSA.MLDSA65MUSufCma, .assumption "MLDSAMUSufCma at ML-DSA-65"),
+   (`GordieHowe.MLDSA.MLDSA87MUSufCma, .assumption "MLDSAMUSufCma at ML-DSA-87"),
+   (`GordieHowe.Falcon512.Falcon512EufCma, .assumption
       "Falcon-512 EUF-CMA (Falcon specification v1.2), for a named class"),
-   (`GordieHowe.Ring.Falcon512MUEufCma, .assumption
+   (`GordieHowe.Falcon512.Falcon512MUEufCma, .assumption
       "Falcon-512 MU-EUF-CMA^corr (BHJKL15 Definition 2), for a named class"),
-   (`GordieHowe.Ring.MLDSAMUSufCmaWithin, .assumption
+   (`GordieHowe.MLDSA.MLDSAMUSufCmaWithin, .assumption
       "MLDSAMUSufCma with at most Qs signing and corruption requests counted"),
-   (`GordieHowe.Ring.MLDSA44MUSufCmaWithin, .assumption "MLDSAMUSufCmaWithin at ML-DSA-44"),
-   (`GordieHowe.Ring.MLDSA65MUSufCmaWithin, .assumption "MLDSAMUSufCmaWithin at ML-DSA-65"),
-   (`GordieHowe.Ring.MLDSA87MUSufCmaWithin, .assumption "MLDSAMUSufCmaWithin at ML-DSA-87"),
-   (`GordieHowe.Ring.Falcon512MUEufCmaWithin, .assumption
+   (`GordieHowe.MLDSA.MLDSA44MUSufCmaWithin, .assumption "MLDSAMUSufCmaWithin at ML-DSA-44"),
+   (`GordieHowe.MLDSA.MLDSA65MUSufCmaWithin, .assumption "MLDSAMUSufCmaWithin at ML-DSA-65"),
+   (`GordieHowe.MLDSA.MLDSA87MUSufCmaWithin, .assumption "MLDSAMUSufCmaWithin at ML-DSA-87"),
+   (`GordieHowe.Falcon512.Falcon512MUEufCmaWithin, .assumption
       "Falcon512MUEufCma with at most Qs signing and corruption requests counted")]
 
 /-- **Idealized objects**: constants no headline statement mentions, with
@@ -279,7 +279,7 @@ def idealized : List (Name × String) :=
    (`GordieHowe.Ring.MLDSAW1.freshScheme, "the fresh-mask ring signature of the w₁ ring"),
    (`GordieHowe.Ring.MLDSAW1.freshLoop, "the fresh-mask signing loop of the w₁ ring"),
    (`GordieHowe.Ring.MLDSAW1.freshChallenger, "the anonymity challenger of the fresh-mask signer"),
-   (`GordieHowe.Ring.MLDSAW1.MaskSource.fresh, "fresh uniform masks in place of the mask oracle"),
+   (`GordieHowe.MLDSA.MaskSource.fresh, "fresh uniform masks in place of the mask oracle"),
    (`GordieHowe.Ring.MLDSAW1.idealDist, "the public-value distance of the fresh-mask signer"),
    (`GordieHowe.RingSignature.BaseSigner.uniformSig, "the uniform-signature base signer"),
    (`GordieHowe.RingSignature.ProofSystem.acceptAll, "the proof system accepting every proof"),

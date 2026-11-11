@@ -62,14 +62,17 @@ std::string write_program(const C &cs, const std::string &dir,
 // (compiler::proof_modules) and the GKR export of each
 // domain whose circuit was emitted here (compiler::emit_tables), beside the
 // plan. Every text is built before any file is written, so an export that
-// throws leaves no file behind. Returns the plan's path.
+// throws leaves no file behind. SOURCES are the programs at META's profile
+// whose parts CS holds (compiler::append_embedding_facts). Returns the
+// plan's path.
 template <class C>
 std::string write_plan(const C &cs, const std::string &dir,
-                       const compiler::ExportMeta &meta) {
+                       const compiler::ExportMeta &meta,
+                       const compiler::EmbeddingSources &sources = {}) {
   const std::string plan = compiler::export_lean_plan(cs, meta);
   const compiler::ProgramData program = compiler::build_program(cs, meta);
   const compiler::ProofModuleData data =
-      compiler::proof_module_data(cs, meta, program);
+      compiler::proof_module_data(cs, meta, program, sources);
   std::vector<std::pair<std::string, std::string>> modules;
   modules.emplace_back(compiler::lean_plan_file(dir, meta), plan);
   modules.emplace_back(compiler::lean_program_file(dir, meta), program.text);

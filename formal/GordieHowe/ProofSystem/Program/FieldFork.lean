@@ -25,7 +25,9 @@ domain `d` of a valid realized program (`GordieHowe.RealizedProgram.fieldProof`)
 * **soundness** (`GordieHowe.RealizedProgram.fieldForkSound`): each branch's (`GordieHowe.RealizedProgram.branchSound`), the rows and the
   quadratic triples as the fixed claims (`GordieHowe.RealizedProgram.FixedAt`), the join's masked reduction sound at the fixed
   transcript (`MaskedReduction.Sound.fixAt`, `GordieHowe.RealizedProgram.outHolds_fieldForkTranscript_iff`), the readout the
-  committed cells and the domain's predicate under the compiler trust (`GordieHowe.RealizedProgram.holds_of_fieldSat`).
+  committed cells and the domain's predicate under the circuits' correspondence (`CircuitsEnforce`,
+  a field of the proof system proved from the GKR certificates;
+  `GordieHowe.RealizedProgram.holds_of_fieldSat`).
 -/
 
 namespace GordieHowe.RealizedProgram

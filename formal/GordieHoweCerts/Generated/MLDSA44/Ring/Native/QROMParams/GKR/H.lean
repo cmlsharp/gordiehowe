@@ -27,6 +27,6 @@ open GordieHowe.Generated.MLDSA44.Ring.Native.QROMParams.Program
 /-- The code arithmetic of the circuit's field. -/
 def ar : CodeArith := (RealizedProgram.gf2_256Code.arith)
 
-load_ghc "H.ghc" "2ed1bfd3c7158a54"
+load_ghc "H.ghc" "e0a1f97e2e22b77e"
 
 end GordieHowe.Generated.MLDSA44.Ring.Native.QROMParams.GKR.H

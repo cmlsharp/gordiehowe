@@ -50,7 +50,7 @@ abbrev LoadN := Nat × Nat
 /-- The bits of `n` (`Nat.size`). -/
 @[expose] def sizeN (n : Nat) : Nat := if n = 0 then 0 else Nat.log2 n + 1
 
-/-- The bytes of `n` (`Sampler.byteLen`). -/
+/-- The bytes of `n` (`Rejection.byteLen`). -/
 @[expose] def byteLenN (n : Nat) : Nat := (sizeN n + 7) / 8
 
 /-- The stream bytes the extended stream adds (`fsExtraBytes`). -/
@@ -120,9 +120,7 @@ variable (ir : RealizedProgram)
 /-- `realErrorTerms`. -/
 @[expose] def realErrorTermsN (j : Nat) : List (Nat × Nat) :=
   ((realGroupsN ir j).map fun tg => (ir.groupCount tg.1 tg.2 + ir.tableSize tg.1 - 1, ir.tmaxOf j)) ++
-    ((List.range ir.predicates.length).filterMap (macChunksOfN ir j)).map (fun n => (n, ir.tmaxOf j)) ++
-    (List.range ir.predicates.length).filterMap fun q =>
-      (ir.kernelSel? q).bind fun sh => if sh.chal = j then some (sh.deg, ir.tmaxOf j) else none
+    ((List.range ir.predicates.length).filterMap (macChunksOfN ir j)).map (fun n => (n, ir.tmaxOf j))
 
 /-- **The terms of phase `k + 1`'s error** (`phaseTerms`) on fields of `cf f` elements. -/
 @[expose] def phaseTermsN (cf : Nat → Nat) (src : Nat → Nat × Nat) (k : Nat) : List (Nat × Nat) :=

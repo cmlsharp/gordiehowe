@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1
+public import GordieHowe.Applications.MLDSA.Signing.PublishedKey
 public import GordieHowe.Model.Lattice.MLDSA
 import all LatticeCrypto.MLDSA.Concrete.Rounding
 
@@ -59,7 +59,7 @@ strong-unforgeability step of the Dilithium specification (Version 3.1, §6.2.2;
 
 namespace GordieHowe.MLDSA
 
-open _root_.MLDSA _root_.MLDSA.Concrete GordieHowe.MLDSA.Spec GordieHowe.Ring.MLDSAW1
+open _root_.MLDSA _root_.MLDSA.Concrete GordieHowe.MLDSA.Spec
   GordieHowe.Lattice
 open LatticeCrypto TransformOps
 

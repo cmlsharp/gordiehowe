@@ -107,8 +107,8 @@ theorem eval_split (c : AffineForm F (Y ⊕ PackedCoord ng d)) (z : Y ⊕ Packed
 
 /-! ### Masks -/
 
-/-- **How a stage's masks enter the rows** (`tree_zk.h:986-1016`, `mask_value`, `add_mask`,
-`add_mask_power`): affine forms on the cells for each mask `σ_k` and for its twist `φ^k(σ_k)`, the
+/-- **How a stage's masks enter the rows** (`tree_zk.h`, `mask_value`, `add_mask`): affine
+forms on the cells for each mask `σ_k` and for its twist `φ^k(σ_k)`, the
 product triples that relate them, and the condition `Valid` outside the rows under which the twist
 form is `φ^k` of the mask form (`twist_eval`). -/
 structure MaskScheme (F ι : Type) [Field F] (p m d : ℕ) [ExpChar F p] where
@@ -139,6 +139,7 @@ structure MaskScheme.Honest [Fintype F] (Ms : MaskScheme F ι p m d) where
   Pads : Type
   [fintype : Fintype Pads]
   [nonempty : Nonempty Pads]
+  [decEq : DecidableEq Pads]
   /-- The masks the pads give. -/
   sigmaOf : Pads → Fin d → F
   /-- The masks are uniform. -/
@@ -152,7 +153,7 @@ structure MaskScheme.Honest [Fintype F] (Ms : MaskScheme F ι p m d) where
   /-- `Valid` holds. -/
   valid : ∀ π x, Commits π x → Ms.Valid x
 
-attribute [instance] MaskScheme.Honest.fintype MaskScheme.Honest.nonempty
+attribute [instance] MaskScheme.Honest.fintype MaskScheme.Honest.nonempty MaskScheme.Honest.decEq
 
 /-! ### Squaring-chain masks -/
 
@@ -253,7 +254,8 @@ def MaskScheme.squaringChain [ExpChar F 2] (C : SquaringChainCells ι d) : MaskS
 
 Running time of the generated cells: `d(d−1)/2` squarings. This running time is argued here, not
 proved in Lean. -/
-def MaskScheme.squaringChainHonest [Fintype F] [ExpChar F 2] (C : SquaringChainCells ι d) :
+def MaskScheme.squaringChainHonest [Fintype F] [DecidableEq F] [ExpChar F 2]
+    (C : SquaringChainCells ι d) :
     (MaskScheme.squaringChain (F := F) C).Honest where
   Pads := Fin d → F
   sigmaOf σ := σ
@@ -380,7 +382,8 @@ the case `b = 1` with its own cell type.
 
 Running time of the generated cells: `b d(d−1)/2` squarings. This running time is argued here, not
 proved in Lean. -/
-def MaskScheme.squaringChainOverHonest [Fintype F] [ExpChar F 2] {b : ℕ} (C : ChainCells ι b d) :
+def MaskScheme.squaringChainOverHonest [Fintype F] [DecidableEq F] [ExpChar F 2] {b : ℕ}
+    (C : ChainCells ι b d) :
     (MaskScheme.squaringChainOver (F := F) C).Honest where
   Pads := Fin d → F
   sigmaOf σ := σ
@@ -407,7 +410,7 @@ omit [Fintype ι] in
 /-- **Every committed data at which the squaring triples hold commits the honest squaring chain
 over `GF(2^b)`** (`lem:bits-sound`(2)), at the masks the data holds: the honest prover's
 completeness (`MaskedReduction.Honest.measure`) holds on all such data. -/
-theorem MaskScheme.squaringChainOverHonest_commits [Fintype F] [ExpChar F 2] {b : ℕ}
+theorem MaskScheme.squaringChainOverHonest_commits [Fintype F] [DecidableEq F] [ExpChar F 2] {b : ℕ}
     (C : ChainCells ι b d) {x : ι → F} (h : Ligero.Routing.SourceProducts C.products x) :
     (MaskScheme.squaringChainOverHonest (F := F) C).Commits (fun k => x (C.sigma k)) x :=
   ⟨fun _ => rfl, C.chain_eq_pow h⟩

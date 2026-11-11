@@ -29,7 +29,7 @@ variable {ir : RealizedProgram} {primeNodes : ℕ → List String} {S : Structur
 
 variable (ir primeNodes) in
 /-- **A late member `m` of a mixed group at the late histogram `v` of table `t` reads a digit of the
-tail of the MAC of site `st`** (`HonestFacts.mixedLate` at a site, with the generators read off
+tail of the MAC of site `st`** (`MixedGroupFactsC.members` at a site, with the generators read off
 `G`), as a check: the site's MAC and interval facts check, and the needle is the lower or the top
 digit of an ungrouped digit tail (`lateMemberAtB`, the top digit's bound `macTopMax` below the late
 histogram's size) or the quotient of a one-digit tail (`lateMemberOneAtB`, its bound `macQuotMax`

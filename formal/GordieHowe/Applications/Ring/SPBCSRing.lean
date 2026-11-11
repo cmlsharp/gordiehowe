@@ -49,12 +49,9 @@ variable {k kN kS L e : ℕ} {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr :
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)] {X₀ : Type}
 
-open Classical in
 /-- **The types of the spBCS proof systems** of `M` in the format `b` with causal-prover coins `R`:
-proofs in the format `b` (or none), and coins the Fiat–Shamir salt with the prover's coins (their
-equality decided classically, as the provers' coins need not have decidable equality). -/
-noncomputable abbrev spbcsPST (M : SPBCS Mg P X₀ k kN kS L e) (b : ℕ) (R : Type) [Fintype R]
-    [Nonempty R] [∀ j i, Fintype ((M.comp j).MessageWrite i)] : PSTypes :=
+proofs in the format `b` (or none), and coins the Fiat–Shamir salt with the prover's coins. -/
+noncomputable abbrev spbcsPST (M : SPBCS Mg P X₀ k kN kS L e) (b : ℕ) (R : Type) : PSTypes :=
   ⟨M.Response b, SaltedCoins (FiatShamirSalt kS) (M.ProverCoins R)⟩
 
 end Types
@@ -71,10 +68,11 @@ variable {k kN kS L e N : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits (queryBits
 
 /-- **The compiled honest prover of the ring relation**: the spBCS prover `niProver` at the site
 layout `Λ`, its proofs in the format `b` of `hb` (`some`), run through `queryEncoding` against the
-quantum oracle. Its coins (the Fiat–Shamir salt, the causal prover's coins and the Merkle salts) are
-uniform. This is the prover of the ring layers of `GordieHowe/Applications/Ring/Insider.lean` and
+quantum oracle. Its coins are the Fiat–Shamir salt, the causal prover's coins and the Merkle salts;
+their law is an argument of each statement (`NARG.Prover.uniformLaw` is the uniform one). This is
+the prover of the ring layers of `GordieHowe/Applications/Ring/Insider.lean` and
 `InsiderStrong.lean`. -/
-noncomputable def spbcsProver :
+def spbcsProver :
     NARG.Prover (Bits (queryBits k kN kS L)) (XOut k e) (RingStmt B) (RingWit B) (M.Response b)
       (SaltedCoins (FiatShamirSalt kS) (M.ProverCoins R)) :=
   ((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding
@@ -83,6 +81,8 @@ noncomputable def spbcsProver :
 missing proof. -/
 def spbcsClaim (x : RingStmt B) (π : M.Response b) : Option (Claim (RingStmt B) M.NIProof) :=
   π.map fun p => ⟨x, p.1⟩
+
+variable [DecidableEq R]
 
 open Classical in
 /-- **The spBCS proof system of the ring relation**: proofs in the format `b` (or none), uniform
@@ -95,13 +95,15 @@ noncomputable def spbcsProofSystem :
   ProofSystem.ofProver (spbcsProver M Λ E hb honest)
     fun H x π => decide (∃ c ∈ spbcsClaim M x π, (M.qVerifier Qs b b).Accepted (outEquiv k e ∘ H) c)
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [Nonempty R] [DecidableEq R] in
 /-- **The prover of the spBCS proof system is the compiled honest prover** (its coins are
 uniform). -/
 theorem prover_spbcsProofSystem :
     (spbcsProofSystem M Λ E hb honest).prover = spbcsProver M Λ E hb honest := by
   classical
-  exact ProofSystem.prover_ofProver _ _ rfl
+  exact ProofSystem.prover_ofProver _ _
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [Nonempty R] [DecidableEq R] in
 /-- **The spBCS proof system accepts exactly the claims the compiled verifier accepts.** -/
 theorem verify_spbcsProofSystem_eq_true_iff (H : Bits (queryBits k kN kS L) → XOut k e)
     (x : RingStmt B) (π : M.Response b) :
@@ -110,6 +112,7 @@ theorem verify_spbcsProofSystem_eq_true_iff (H : Bits (queryBits k kN kS L) → 
   classical
   exact decide_eq_true_iff
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [Nonempty R] [DecidableEq R] in
 /-- **The spBCS proof system rejects the missing proof.** -/
 theorem verify_spbcsProofSystem_none (H : Bits (queryBits k kN kS L) → XOut k e)
     (x : RingStmt B) :
@@ -129,6 +132,7 @@ theorem stmt_of_mem_spbcsClaim {x : RingStmt B} {π : M.Response b}
     subst hc
     rfl
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **An honest proof is the compiled proof of the causal honest prover**: against the quantum
 oracle `H`, the prover of the spBCS proof system outputs a proof in the format whose underlying
 proof is `prove` of the causal prover `honest w` at the coins, with the Fiat–Shamir salt and
@@ -150,6 +154,7 @@ theorem run_prove_spbcsProofSystem (VE : M.ViewEncoder E Qs)
     simp only [NARG.Prover.toFn_prove] at h
     exact h
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **The honest proof is accepted when the composite verifier accepts it**: if `M.Accepts`
 holds against `chainOracle H` for the compiled proof of the causal honest prover at the coins, the
 spBCS proof system accepts the prover's proof at `H`. -/
@@ -170,6 +175,9 @@ theorem verify_spbcsProofSystem_of_accepts (VE : M.ViewEncoder E Qs)
 
 variable (adm : KeyRing B.PK N → Prop) [DecidablePred adm]
 
+variable [DecidableEq TB.PK]
+
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [Nonempty R] [DecidableEq R] in
 /-- **Verification of the ring signature compiled by spBCS**: a signature `(y, π)` on `(R, m)`
 verifies exactly when the compiled verifier accepts the claim of `(R, m, y)` and `π`. -/
 theorem verify_ofBase_spbcs (H : Bits (queryBits k kN kS L) → XOut k e) (Rg : KeyRing B.PK N)
@@ -178,6 +186,7 @@ theorem verify_ofBase_spbcs (H : Bits (queryBits k kN kS L) → XOut k e) (Rg : 
       ∃ c ∈ spbcsClaim M ⟨Rg, m, s.1⟩ s.2, (M.qVerifier Qs b b).Accepted (outEquiv k e ∘ H) c :=
   verify_spbcsProofSystem_eq_true_iff M Λ E hb honest H _ s.2
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [Nonempty R] [DecidableEq R] in
 /-- **Signing of the ring signature compiled by spBCS**: on a supported ring holding the signer's
 key, when the base signer outputs `σ` at its first position `i`, the signature is the public value
 `y` of `σ` with the compiled honest prover's proof of `(R, m, y)` with the witness `(i, σ)`. -/

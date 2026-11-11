@@ -13,6 +13,6 @@ import all GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.Program
 
 namespace GordieHowe.Generated.MLDSA44.Native.ROMParams.GKR.H
 
-check_entry cert ar 3 [0, 0, 5, 0, 0, 4, 0, 0, 1, 0, 0, 8, 1, 93, 2, 0, 0, 3, 2, 1024, 1]
+check_entry cert ar 3 [0, 0, 22, 2, 1, 1]
 
 end GordieHowe.Generated.MLDSA44.Native.ROMParams.GKR.H

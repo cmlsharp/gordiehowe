@@ -144,8 +144,8 @@ def padNatB (L : List (ℕ × String)) (v : ℕ) : Bool :=
   | .full => true
   | .node S => L.contains (ir.valueField v, S)
 
-/-- **A node-typed value that is not late reads no late value** (`RealizeFacts.typedNoLate`), as a
-check at value `v`. -/
+/-- **A node-typed value that is not late reads no late value** (`CompletionFacts.typedNoLate`), as
+a check at value `v`. -/
 def typedNoLateB (v : ℕ) : Bool :=
   !((ir.value v).typeSource == .node) || decide (ir.IsLate v) || ir.noLateReadB v
 
@@ -199,19 +199,19 @@ section Honest
 
 variable (ir)
 
-/-- **No source value is a pad copy** (`HonestFacts.srcNoPadCopy`), as a check at value `u`. -/
+/-- **No source value is a pad copy** (`CommittedFacts.srcNoPadCopy`), as a check at value `u`. -/
 def srcNoPadCopyB (u : ℕ) : Bool := !decide (ir.IsSourceValue u) || !(ir.value u).kind.isPadCopy
 
 /-- **No source value is a message** (`SrcNoMessage`), as a check at value `v`. -/
 def srcNoMessageB (v : ℕ) : Bool := !decide (ir.IsSourceValue v) || !(ir.value v).kind.isMessage
 
-/-- **A source late value's pad space contains its type** (`HonestFacts.srcLatePads`), as a check
+/-- **A source late value's pad space contains its type** (`CommittedFacts.srcLatePads`), as a check
 at value `v`. -/
 def srcLatePadB (v : ℕ) : Bool :=
   !decide (ir.IsSourceValue v) || !decide (ir.IsLate v) || ir.latePadTypeB v
 
 /-- **A committed cell is at a node of its source value's type, a node of `L`**
-(`HonestFacts.cellNodes`, `HonestFacts.oneMem`), as a check at value `v`. -/
+(`CommittedFacts.cellNodes`, `CommittedFacts.oneMem`), as a check at value `v`. -/
 def cellB (L : List (ℕ × String)) (v : ℕ) : Bool :=
   !ir.isCellValue (ir.value v).domain v || (ir.cellNodeB v && ir.cellNodeInB L v)
 
@@ -223,7 +223,7 @@ theorem cellNodeInB_of_cellB {L : List (ℕ × String)} {v : ℕ}
   exact h.2
 
 /-- **A node-typed value that is no source value and no late value is a committed cell whose type
-contains the naturals by a node of `L`** (`HonestFacts.realTypes`), as a check at value `v`. -/
+contains the naturals by a node of `L`** (`CommittedFacts.realTypes`), as a check at value `v`. -/
 def realTypeB (L : List (ℕ × String)) (v : ℕ) : Bool :=
   !((ir.value v).typeSource == .node) || decide (ir.IsLate v) || decide (ir.IsSourceValue v) ||
     (ir.privCellB v && ir.natTypedInB L v)

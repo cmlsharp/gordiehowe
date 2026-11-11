@@ -32,15 +32,16 @@ public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E25
 public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E26
 public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E27
 public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E28
+public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.Header
 meta import GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.GKR.H
 import all GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of the GKR circuit of domain H, from its entries' (generated; do not edit). -/
+/-! The relational check of the GKR circuit of domain H, from its header's and entries' (generated; do not edit). -/
 
 namespace GordieHowe.Generated.MDL.ECDSA.ROMParams.GKR.H
 
-check_circuit cert ar
+compose_circuit cert ar
 
 end GordieHowe.Generated.MDL.ECDSA.ROMParams.GKR.H

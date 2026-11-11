@@ -43,7 +43,8 @@ variable {p : Params} {T : ℕ} {Msg : Type} {N reps : ℕ}
   {Λ : SiteLayout Mg} {b : ℕ} [∀ j i, Fintype ((Mc.comp j).MessageWrite i)]
   {E : (j : ι) → (Mc.comp j).Encoder}
   {Vr : W1ExpStmt prims RMsg N → FullTr P τ → Bool}
-  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R] [DecidableEq R]
+  [Nonempty R]
   {honest : RingSignature.RingWit (freshBase prims O Mo βmin tol enc k D bmsg) → R →
     CausalProver P τ (W1ExpStmt prims RMsg N)}
   {adm : KeyRing (PubKey p prims) N → Prop}
@@ -87,14 +88,14 @@ set_option maxHeartbeats 20000 in
 example : (PSf).Proof = Mc.Response b := by with_reducible rfl
 
 set_option maxHeartbeats 20000 in
-/-- The key equality `ofBase` reads (the types record's instance) is the one at `PubKey p prims`,
-so `List.idxOf` at the scheme's keys is `List.idxOf` at `PubKey p prims`. -/
-example : @List.idxOf (Sf).PK (@instBEqOfDecidableEq _ (RingTypes.instDecEqPK _)) =
+/-- The key equality instance search finds at the scheme's keys is the one at `PubKey p prims`, so
+`List.idxOf` at the scheme's keys is `List.idxOf` at `PubKey p prims`. -/
+example : @List.idxOf (Sf).PK instBEqOfDecidableEq =
     @List.idxOf (PubKey p prims) instBEqOfDecidableEq := rfl
 
 set_option maxHeartbeats 20000 in
 /-- The same, at reducible transparency. -/
-example : @List.idxOf (Sf).PK (@instBEqOfDecidableEq _ (RingTypes.instDecEqPK _)) =
+example : @List.idxOf (Sf).PK instBEqOfDecidableEq =
     @List.idxOf (PubKey p prims) instBEqOfDecidableEq := by with_reducible rfl
 
 end GordieHoweTest.UnbundleSchemes

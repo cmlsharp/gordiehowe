@@ -6,13 +6,6 @@ module
 public import GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.GKR.H
 public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E3.P0
 public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E3.P1
-public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E3.P2
-public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E3.P3
-public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E3.P4
-public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E3.P5
-public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E3.P6
-public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E3.P7
-public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E3.P8
 
 @[expose] public section
 
@@ -20,6 +13,6 @@ public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.H.E3.P8
 
 namespace GordieHowe.Generated.MDL.ECDSA.ROMParams.GKR.H
 
-compose_entry cert ar 3 [0, 0, 2, 1, 512, 5, 1, 1024, 3, 0, 0, 1, 1, 1024, 20, 1, 1024, 20, 0, 0, 7, 1, 113, 23, 0, 0, 2, 1, 341, 8, 1, 1024, 3, 2, 1024, 1]
+compose_entry cert ar 3 [0, 0, 3, 1, 854, 3, 0, 0, 10, 1, 854, 3, 0, 0, 2, 1, 854, 3, 1, 854, 3, 2, 1, 1]
 
 end GordieHowe.Generated.MDL.ECDSA.ROMParams.GKR.H

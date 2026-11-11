@@ -6,10 +6,6 @@ module
 public import GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.QROMParams.GKR.H
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.H.E74.P0
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.H.E74.P1
-public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.H.E74.P2
-public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.H.E74.P3
-public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.H.E74.P4
-public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.H.E74.P5
 
 @[expose] public section
 
@@ -17,6 +13,6 @@ public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.H.E74.P5
 
 namespace GordieHowe.Generated.MDL.MLDSA44.Attrs1.QROMParams.GKR.H
 
-compose_entry cert ar 74 [0, 0, 4, 1, 1024, 2, 1, 1024, 2, 1, 1024, 2, 1, 1024, 2, 1, 1024, 2, 1, 1024, 2, 0, 0, 1, 1, 512, 16, 1, 1024, 22, 0, 0, 6, 0, 0, 6, 1, 170, 4, 0, 0, 2, 1, 204, 2, 2, 1024, 1]
+compose_entry cert ar 74 [0, 0, 12, 1, 1024, 22, 0, 0, 16, 2, 1, 1]
 
 end GordieHowe.Generated.MDL.MLDSA44.Attrs1.QROMParams.GKR.H

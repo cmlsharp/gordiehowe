@@ -40,11 +40,15 @@ namespace RingSignature.Insider
 
 open GordieHowe.QROM
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB) {TPS : PSTypes} {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS}
+variable {X Y : Type} {N : ℕ} {TB : BaseTypes}
+  (B : BaseSigner X Y N TB) {TPS : PSTypes}
+  {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {n : ℕ}
   [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig] [AddGroup Y]
 
 /-! ### Requests, statements and replies read from the keys -/
+
+variable [DecidableEq TB.PK]
 
 /-- **The request is a ring-signing request by a member whose base signature is output**: a
 request `(s, R, m)` with the signer's key in the supported ring `R` and `bsigOf` at the signing
@@ -119,18 +123,20 @@ theorem zkRelayK_route_injective {W' : Type} (enc : RingStmt B → RelayWit B �
 
 /-! ### The relation on the relayed proof queries -/
 
+variable [Nonempty TB.KeyCoins]
+
 section Relation
 
 variable {B}
 
-omit [Nonempty B.Msg] [Nonempty B.BSig] in
+omit [Nonempty B.Msg] [Nonempty B.BSig] [Nonempty TB.KeyCoins] in
 /-- **The public value of an output base signature** is its public value at the zero oracle. -/
 theorem pubAtK_of_eq_some {keys : Fin n → B.KeyCoins} {sc : B.Coins} {s : Fin n}
     {R : KeyRing B.PK N} {m : B.Msg} {σ : B.BSig} (hσ : bsigOf B keys sc s R m = some σ) :
     pubAtK B keys sc s R m = (B.pub (B.pk (keys s)) σ).run 0 := by
   simp only [pubAtK, hσ, Option.map_some, Option.getD_some]
 
-omit [Nonempty B.BSig] in
+omit [Nonempty B.BSig] [Nonempty TB.KeyCoins] in
 /-- A request that is not a ring-signing request by a member that signs has the statement
 `dummyStmt`. -/
 theorem stmtAtK_of_not {keys : Fin n → B.KeyCoins} {Q : ℕ} {ds : Fin Q → B.Coins} {c : ℕ}
@@ -142,7 +148,7 @@ theorem stmtAtK_of_not {keys : Fin n → B.KeyCoins} {Q : ℕ} {ds : Fin Q → B
   · rfl
   · rfl
 
-omit [Nonempty B.BSig] in
+omit [Nonempty B.BSig] [Nonempty TB.KeyCoins] in
 /-- The statement of a ring-signing request by a member whose base signature `σ` is output. -/
 theorem stmtAtK_sign {keys : Fin n → B.KeyCoins} {Q : ℕ} {ds : Fin Q → B.Coins} {c : ℕ}
     (hc : c < Q) {s : Fin n} {R : KeyRing (ofBase B PS adm).PK N} {m : (ofBase B PS adm).Msg}
@@ -153,6 +159,7 @@ theorem stmtAtK_sign {keys : Fin n → B.KeyCoins} {Q : ℕ} {ds : Fin Q → B.C
   unfold stmtAtK
   rw [dif_pos hc, if_pos h, ← pubAtK_of_eq_some hσ]
 
+omit [Nonempty TB.KeyCoins] in
 /-- **The relayed proof query is in the ring relation exactly for a ring-signing request by a
 member that signs, numbered below `Q`, whose base signature verifies** (`drawOk`), for an
 oracle-free base signer (`hB`). -/
@@ -192,7 +199,7 @@ theorem mem_ringRel_iffK (hB : B.OracleFree) (H : X → Y) (keys : Fin n → B.K
   · rw [stmtAtK_of_not hex]
     exact iff_of_false (dummyStmt_not_mem_ringRel (adm := adm) H _) (fun ⟨h, h', _⟩ => hex ⟨h, h'⟩)
 
-omit [Nonempty B.BSig] in
+omit [Nonempty B.BSig] [Nonempty TB.KeyCoins] in
 open Classical in
 /-- The proof query's statement of a request whose base signature verifies is its statement. -/
 theorem zkStmtK_of_drawOk (keys : Fin n → B.KeyCoins) {Q : ℕ} {ds : Fin Q → B.Coins} {c : ℕ}
@@ -203,6 +210,7 @@ theorem zkStmtK_of_drawOk (keys : Fin n → B.KeyCoins) {Q : ℕ} {ds : Fin Q �
 
 omit [Nonempty B.BSig] in
 open Classical in
+omit [Nonempty TB.KeyCoins] in
 /-- **The proof query's statement has the empty ring** unless the request is a ring-signing request
 by a member that signs whose base signature verifies. -/
 theorem zkStmtK_ring_nil (keys : Fin n → B.KeyCoins) {Q : ℕ} {ds : Fin Q → B.Coins} {c : ℕ}
@@ -216,6 +224,7 @@ theorem zkStmtK_ring_nil (keys : Fin n → B.KeyCoins) {Q : ℕ} {ds : Fin Q →
   · rfl
   · rfl
 
+omit [Nonempty TB.KeyCoins] in
 /-- **The relayed proof query is in a relation `relH` of statements `stmt x` and encoded witnesses
 exactly for a ring-signing request by a member that signs, numbered below `Q`, whose base signature
 verifies**, when every ring witness's encoding is a witness of `relH` (`hsign`) and no statement of
@@ -235,7 +244,7 @@ theorem mem_relZ_iffK (hB : B.OracleFree) {X₀ Wit₀ W' : Type} (stmt : RingSt
     exact hsign _ _ ((mem_ringRel_iffK hB 0 keys ds c r).2 ⟨hc, hs, hd⟩)
   · exact iff_of_false (hnil _ (zkStmtK_ring_nil keys hex) _) hex
 
-omit [Nonempty B.BSig] in
+omit [Nonempty B.BSig] [Nonempty TB.KeyCoins] in
 /-- The statement of a request depends on the signing coins only at its own number. -/
 theorem stmtAtK_congr {keys : Fin n → B.KeyCoins} {Q : ℕ} {ds ds' : Fin Q → B.Coins} {c : ℕ}
     (hc : ∀ h : c < Q, ds ⟨c, h⟩ = ds' ⟨c, h⟩) (r : Req B PS adm n) :
@@ -244,7 +253,7 @@ theorem stmtAtK_congr {keys : Fin n → B.KeyCoins} {Q : ℕ} {ds ds' : Fin Q �
   split_ifs with h1 h2 h3 h3 <;> first | rfl | (rw [hc h1] at h2; exact absurd h2 h3) |
     (rw [hc h1] at h2; exact absurd h3 h2) | (cases r <;> simp [hc h1])
 
-omit [Nonempty B.Msg] [Nonempty B.BSig] in
+omit [Nonempty B.Msg] [Nonempty B.BSig] [Nonempty TB.KeyCoins] in
 /-- The reply to a request depends on the signing coins only at its own number. -/
 theorem sideAnswerK_congr {keys : Fin n → B.KeyCoins} {Q : ℕ} {ds ds' : Fin Q → B.Coins} {c : ℕ}
     (hc : ∀ h : c < Q, ds ⟨c, h⟩ = ds' ⟨c, h⟩) (r : Req B PS adm n) (a : Option PS.Proof) :
@@ -258,9 +267,15 @@ end Relation
 
 /-! ### The challengers at fixed keys -/
 
+variable [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+
+variable [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+
 section Challengers
 
-variable [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y]
+variable [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
 
 variable {B}
 
@@ -304,7 +319,10 @@ noncomputable def simSplitK (keys : Fin n → B.KeyCoins)
     · simp
     · simp
 
-omit [Nonempty B.BSig] [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] in
+omit [Nonempty B.BSig] [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  [Nonempty TB.KeyCoins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] in
 /-- **The coins of the simulated challengers are uniform signing coins and independent simulator
 coins.** -/
 theorem coins_simSplitK (keys : Fin n → B.KeyCoins)
@@ -324,6 +342,8 @@ theorem coins_simSplitK (keys : Fin n → B.KeyCoins)
 
 omit [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] [Fintype SC] [DecidableEq SC] in
 open Classical in
+omit [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] in
 /-- **The checked game at fixed keys relays the real zero-knowledge challenger** of a prover `Pz`
 of statements `stmt x` on the relayed proof queries read from the keys (`zkRelayK` with the witness
 encoding `enc`), for the relation `relH` read at the decoding `fw`, at the signing coins `ds` and
@@ -340,7 +360,7 @@ theorem relays_realK (hB : B.OracleFree) {X₀ Wit₀ W' : Type} (stmt : RingStm
     (keys : Fin n → B.KeyCoins) {Q : ℕ} (ds : Fin Q → B.Coins) (pcs : Fin Q → PS.Coins) :
     (zkRelayK B enc keys ds (PS := PS) (adm := adm)).RelaysChallenger
       (checkedSplit PS adm keys Q).toChallenger ((), fun i => (ds i, pcs i))
-      (realChallenger (fun x w => (stmt x.1, fw w) ∈ relH) (Pz.comap (stmt ∘ Prod.fst) fw) Q)
+      (realChallenger (fun x w => (stmt x.1, fw w) ∈ relH) (Pz.comap (stmt ∘ Prod.fst) fw) (PMF.uniformOfFintype _) Q)
         pcs := by
   refine ⟨rfl, ?_, ?_⟩
   · intro hist hist' r G hrel hQ
@@ -405,8 +425,11 @@ theorem relays_realK (hB : B.OracleFree) {X₀ Wit₀ W' : Type} (stmt : RingStm
     change Q ≤ i at h
     simp only [zkRelayK, sideAnswerK, show ¬ i < Q from not_lt.2 h, dite_false]
 
-omit [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] in
+omit [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] in
 open Classical in
+omit [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] in
 /-- **The checked simulated challenger read from the keys relays the simulated zero-knowledge
 challenger** of a simulator `Simz` of statements `stmt x` on the relayed proof queries (`zkRelayK`
 with the witness encoding `enc`), the simulated ring signatures being `Simz` read at `stmt`, under
@@ -459,9 +482,10 @@ theorem relays_sim_zkK (hB : B.OracleFree) {X₀ Wit₀ W' : Type} (stmt : RingS
 
 /-! ### The hybrid of the correctness error -/
 
-variable [Nonempty X] [DecidableEq Y]
+variable [Nonempty X] [DecidableEq Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof]
 
-omit [Nonempty B.BSig] in
+omit [Nonempty B.BSig] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
+  [Nonempty TB.KeyCoins] in
 /-- **Replacing the checked simulated replies read from the keys by the unchecked ones costs at
 most `Q · ε`** at fixed keys, for a base signer with correctness error `ε`. -/
 theorem simChecked_leK {ε : ℝ≥0∞} (hcorr : B.CorrectWithin ε) {O' : Type}

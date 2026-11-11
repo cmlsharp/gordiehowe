@@ -82,15 +82,14 @@ open scoped ENNReal
 abbrev FalconPublicKey := _root_.Falcon.PublicKey _root_.Falcon.Concrete.params512
 
 /-- **The C++ statement writes of the ML-DSA-44 proof of possession**, the shape of the statement
-writes `BCS.Format.stmt` at an ML-DSA setting (`absorb_statement`, `lib/zk/zk_common.h`, as the
-ML-DSA-44 proofs of possession called it at `938eb888`): the two circuit-id writes `ids`, fixed by
-the compiled circuits; the encoded key as one byte string (`Codec.bstr 1312`: tag `0x00`,
-`u64le(1312)`, the bytes of `pkEncode(ρ, t₁)`); then the remaining writes `rest`, the H and A
-public-input slots and the two constraint digests. `rest_length`: the remaining writes have one
-length, since they are fixed-width field elements and digests (a property of the C++ writes).
-`rest_ctx`: at a fixed key they determine the context, since the H slots carry the context bits as
-the field elements `0` and `1`, whose byte encodings differ; at `ctxLen = 0`, the headlines'
-fixture, it holds trivially. -/
+writes `SPBCS.Setting.stmt` at an ML-DSA setting (`absorb_statement`, `lib/zk/zk_common.h`): the two
+circuit-id writes `ids`, fixed by the compiled circuits; the encoded key as one byte string
+(`Codec.bstr 1312`: tag `0x00`, `u64le(1312)`, the bytes of `pkEncode(ρ, t₁)`); then the remaining
+writes `rest`, the H and A public-input slots and the two constraint digests. `rest_length`: the
+remaining writes have one length, since they are fixed-width field elements and digests (a property
+of the C++ writes). `rest_ctx`: at a fixed key they determine the context, since the H slots carry
+the context bits as the field elements `0` and `1`, whose byte encodings differ; at `ctxLen = 0`,
+the headlines' fixture, it holds trivially. -/
 structure MLDSA44.PoP.StatementWrites (ctxLen : ℕ) where
   /-- The two circuit-id writes. -/
   ids : List QROM.Byte
@@ -235,7 +234,7 @@ def excludedListing (F : Type) [Field F] [Fintype F] [DecidableEq F] (T : ℕ) :
       exact ⟨fun ⟨j, hj, hx⟩ => ⟨⟨j, hj⟩, hx⟩, fun ⟨j, hx⟩ => ⟨j, j.2, hx⟩⟩
 
 /-- **The C++ stream budget beyond the digest**: `kFSStreamExtraBytes = 206848`
-(`lib/random/transcript.h` line 60). -/
+(`lib/random/transcript.h`). -/
 def fsExtraBytes : ℕ := 206848
 
 /-- **A load passes the Chernoff test** `ε` at `z` on streams of `N` bytes: the point is at least

@@ -162,7 +162,7 @@ variable (ir ir') in
 /-- **A predicate of `ir'` is a renamed one of `ir`**, a body of the part: an `equal`
 (`equalCorrB`); a range `in` of one range, one domain of one field in both, the renamed
 nonempty records of the part; a `mod_q` of one modulus, one domain of one field in both, the
-renamed sides of the part, with one product flag, quotient bounds and renamed quotient. -/
+renamed sides of the part, with its quotient bounds and renamed quotient. -/
 def bodyCorrB (σ : Renaming) (V R : List ℕ) : PredBody → PredBody → Bool
   | .equal d x y t, .equal d' x' y' t' =>
     ir.equalCorrB ir' σ V R (.equal d x y t) (.equal d' x' y' t')
@@ -171,8 +171,7 @@ def bodyCorrB (σ : Renaming) (V R : List ℕ) : PredBody → PredBody → Bool
       Expr.beqList (σ.exprs rs) rs' && rs.all (partExprB V R)
   | .mod d q x y real, .mod d' q' x' y' real' =>
     d == d' && ir'.domainField d == ir.domainField d && q == q' && exprCorrB σ V R x x' &&
-      exprCorrB σ V R y y' && real.form.isProduct == real'.form.isProduct &&
-      real.quotientLo == real'.quotientLo && real.qmax == real'.qmax &&
+      exprCorrB σ V R y y' && real.quotientLo == real'.quotientLo && real.qmax == real'.qmax &&
       quotCorrB σ V R real.quotient real'.quotient
   | _, _ => false
 

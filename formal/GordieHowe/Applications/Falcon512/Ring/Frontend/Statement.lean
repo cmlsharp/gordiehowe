@@ -49,10 +49,10 @@ abbrev ringRel64 : Set (RStmt G × RingWit (scheme G)) := GordieHowe.Ring.ringRe
 variable {G}
 
 /-- **The statement check**: the ring has `64` keys and the hash-to-point succeeds. -/
-def ringOk (x : RStmt G) : Bool := x.ring.1.length == 64 && (ringChallenge x.pub x.msg).isSome
+def ringOk (x : RStmt G) : Bool := x.ring.1.length == 64 && (challenge x.pub x.msg).isSome
 
 theorem ringOk_iff {x : RStmt G} :
-    ringOk x = true ↔ x.ring.1.length = 64 ∧ (ringChallenge x.pub x.msg).isSome = true := by
+    ringOk x = true ↔ x.ring.1.length = 64 ∧ (challenge x.pub x.msg).isSome = true := by
   simp [ringOk]
 
 variable {program : RealizedProgram} [FalconRingPowers program] [FalconRingSelect program]
@@ -158,7 +158,7 @@ theorem ringRel_of_rel {x : RStmt G} (hok : ringOk x = true) {w : CoreWit}
       fun i => (stmtChallenge x i : _root_.Falcon.Coeff) := funext fun i => by rw [chalNat_stmtOf]
   rw [hch, ofCoeff_stmtChallenge hc] at halg
   have hdec : GordieHowe.Falcon512.verifyDecoded (x.ring.1[w.idx]'hjlt) (List.ofFn x.msg) x.pub w.s2.toRq :=
-    ⟨c, by rw [hashToPoint_eq_ringChallenge]; exact hc, halg⟩
+    ⟨c, by rw [hashToPoint_eq_challenge]; exact hc, halg⟩
   obtain ⟨hver, hsalt⟩ := extractSig_spec henc hdec
   exact ⟨hlen, hjlt, hsalt, verifySig_eq_true_iff.mpr hver⟩
 

@@ -54,13 +54,18 @@ theorem sourceError_final :
   intro i hi
   simp only [RealizedProgram.roundError, hi]
 
+/-- **The state function of `Π_P₀`'s round-by-round knowledge soundness** (`RealizedProgram.eventState`)
+at the relation, the extractor's projection and the source challenges' event, the frontend's soundness
+proofs as its argument. -/
+abbrev sourceState :=
+  program.eventState interp rel proj selectEvent selectEvent_use (sound_of_views falconHashView algebraSound)
+
 /-- **Round-by-round knowledge soundness of `Π_P₀` for `Falcon512.Emulated.QROMParams`** at the relation
 `rel`, the extractor `extractor` and the errors `717/2^256` at `h2p.select.delta`, `0` elsewhere
 (`rbr_of_views` at the hash view `falconHashView` and domain A's `algebraSound`). -/
 theorem source_rbr_knowledge_soundness :
-    rbrKnowledgeSoundness rel (program.sourceVerifier interp) extractor
-      (program.eventState interp rel proj selectEvent selectEvent_use
-        (sound_of_views falconHashView algebraSound))
+    RBRKnowledgeSound rel (program.sourceVerifier interp) extractor
+      sourceState
       (program.roundError interp (selectEps (FH := RealizedProgram.gf256))) :=
   rbr_of_views falconHashView algebraSound
 
@@ -78,8 +83,7 @@ theorem sampleEps_le (j : ℕ) (_ : program.IsSourceChal j) :
 round-by-round knowledge soundness (`source_rbr_knowledge_soundness`) at the source challenges'
 errors, within their generated fractions (`sampleEps_le`), and the honest nodes' `1`. -/
 noncomputable def source : Configuration.SourceFront certified VarWitness
-    (program.eventState interp rel proj selectEvent selectEvent_use (sound_of_views falconHashView
-      algebraSound)) where
+    sourceState where
   rel := rel
   proj := proj
   eps := (selectEps (FH := RealizedProgram.gf256))

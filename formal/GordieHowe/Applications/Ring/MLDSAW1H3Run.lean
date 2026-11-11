@@ -60,7 +60,8 @@ variable {p : Params} {T : ℕ} {Msg : Type} {N reps : ℕ} {kh kN kS L e : ℕ}
   {Λ : SiteLayout Mg} {b : ℕ} [∀ j i, Fintype ((Mc.comp j).MessageWrite i)]
   {E : (j : ι) → (Mc.comp j).Encoder}
   {Vr : W1ExpStmt (concretePrimitivesKeyGen p) RMsg N → FullTr P τ → Bool}
-  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R]
+  [DecidableEq R] [Nonempty R]
   {honest : RingSignature.RingWit (freshBase (concretePrimitivesKeyGen p) O Mo βmin tol
       (concreteEnc p) k D bmsg) → R →
     CausalProver P τ (W1ExpStmt (concretePrimitivesKeyGen p) RMsg N)}
@@ -81,7 +82,7 @@ local notation "PSh" => w1HPS sp Pc O Mo βmin tol (concreteEnc p) k D bmsg Mc �
 local notation "PSf" => (w1HPS sp Pc O Mo βmin tol (concreteEnc p) k D bmsg Mc Λ
   E hb honest chk)
 local notation "Rq" => W1Rq Pc O Mo βmin tol (concreteEnc p) k D bmsg PSh adm n Q
-local notation "MUR" => MURequest (SignOracle.none Bf) n
+local notation "MUR" => MURequest (SignOracle.none (RingSignature.BaseSigner.core Bf)) n
 
 attribute [local instance] admDecF
 
@@ -91,7 +92,7 @@ set_option quotPrecheck false
 /-- The adversary of a run: `A₀ ξ sc ω a` with the side-mode key-free relay at the side coins
 `sc` absorbed at the base component `ω`, its output's first part kept. -/
 local notation "AdvR" ξ:max sc:max ω:max a:max =>
-  ((((A₀ ξ sc ω a).absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+  ((((A₀ ξ sc ω a).absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
     (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
       (w1KFFactors (T := T) Pc O sp βmin tol (concreteEnc p) k D bmsg hO)
       (w1KFStmt Pc O Mo βmin tol (concreteEnc p) k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -122,6 +123,7 @@ local notation "CanR" ξ:max sc:max ω:max a:max Gl:max =>
 set_option quotPrecheck true
 set_option hygiene true
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The key-free goal at one seed tuple splits into its three cases**: without a key-hash
 collision, the average of the forger's win is at most the averages of case U and of the guess,
 plus the average of the second signature on the seeds with injective key hashes. -/
@@ -176,15 +178,18 @@ theorem indicator_w1Goal_le (hO : O.ReadsFst sp)
       fun i j h => eq_of_pubTr_eq Pc hξ h
     -- TODO(unbundle-M4): `rw` times out here (presumably its closing `rfl` attempt comparing the
     -- two different `simProb` sums); `simp only` closes only reducible `rfl`s.
-    simp only [Set.indicator_of_mem hξ, Set.indicator_of_mem hξ']
+    -- `-proj`: keep `(w1BaseT …).core` folded, as `key` states it; reducing it to its structure
+    -- literal makes `key`'s use below unfold `simProb` to match the two spellings.
+    simp -proj only [Set.indicator_of_mem hξ, Set.indicator_of_mem hξ']
     refine le_trans (ENNReal.tsum_le_tsum fun sc => mul_le_mul_of_nonneg_left
       (ENNReal.tsum_le_tsum fun ω => mul_le_mul_of_nonneg_left
         (ENNReal.tsum_le_tsum fun a => mul_le_mul_of_nonneg_left
           (key ξ sc ω a) zero_le) zero_le) zero_le) (le_of_eq ?_)
-    simp only [mul_add, ENNReal.tsum_add]
+    simp -proj only [mul_add, ENNReal.tsum_add]
   · -- TODO(unbundle-M4): as above, `rw` times out here.
     exact le_of_eq_of_le (Set.indicator_of_notMem hξ _) zero_le
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The key-free goal averaged over the runs splits into its three cases**: for adversaries
 `A₀ ξ sc ω a` with the side-mode key-free relay at the side coins `sc` absorbed at the base
 component `ω` (an idle request that is not a signing entry, `hidle`), the average over uniform
@@ -240,12 +245,12 @@ theorem tsum_simProb_w1Goal_le (hp : p.isApproved) (hO : O.ReadsFst sp)
       (ENNReal.tsum_le_tsum fun ω => mul_le_mul_of_nonneg_left
         (ENNReal.tsum_le_tsum fun a => mul_le_mul_of_nonneg_left
           (simProb_le_one _ _ _) zero_le) zero_le) zero_le) (le_of_eq ?_)
-    simp only [mul_one, PMF.tsum_coe]
+    simp -proj only [mul_one, PMF.tsum_coe]
   refine (tsum_le_add_trCollAt Pc n _ hf1).trans (add_le_add ?_ le_rfl)
   have hS := tsum_simProb_w1SecondSig_le (rel := rel) (dummyS := dummyS) sp hO hp hdisj hmu Qs
     kq penc prf aux (fun ξ sc ω a => AdvR ξ sc ω a) Psim Ext
     (fun ξ => w1Ok Pc O Mo βmin tol (concreteEnc p) k D bmsg adm (fun j => (Bf).pk (ξ j)))
   refine (ENNReal.tsum_le_tsum fun ξ => mul_le_mul_of_nonneg_left (hsplit ξ) zero_le).trans ?_
-  simp only [mul_add, ENNReal.tsum_add]
+  simp -proj only [mul_add, ENNReal.tsum_add]
   exact add_le_add le_rfl hS
 end GordieHowe.Ring.MLDSAW1

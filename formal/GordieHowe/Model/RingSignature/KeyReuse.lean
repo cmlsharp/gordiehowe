@@ -18,7 +18,7 @@ answered by `B.ssign` of user `i` on the base message `bm`; a forgery on `(R*, m
 a member of `R*` signed `bmsg R* m*` ordinarily.
 
 - `baseSide B PS adm`: the side oracle: base messages, base signatures, `ssign` with the base part
-  of the signing coins, and `Covers bm R m := bm = bmsg R m`.
+  of the signing coins, and `Covers bm R m := bm = bmsg R m`; `baseSide_sign`: its signer.
 - `KeyReuseAdversary`, `keyReuseForgeProb`: the adversaries and the forgery probability.
 - Sanity: `sideCovered_baseSide_iff` (freshness excludes exactly the members' ordinary signatures on
   the forgery's base message), `covers_unique` (for a base message that binds the ring, an ordinary
@@ -43,16 +43,25 @@ open scoped ENNReal
 variable {X Y : Type} {N : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB) {TPS : PSTypes} (PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS)
   (adm : KeyRing B.PK N → Prop) [DecidablePred adm]
 
+variable [DecidableEq TB.PK]
+
 /-- **The base scheme's ordinary signer as the side oracle of `ofBase`**: user `i`'s base signature
 `ssign` on a base message, with the base part of the request's signing coins; a member's ordinary
 signature on `bm` covers the rings and messages whose base message is `bm`. -/
-def baseSide : SideOracle (ofBase B PS adm) where
+@[reducible] def baseSide : SideOracle (ofBase B PS adm) where
   BMsg := B.BMsg
   BSig := B.BSig
   q := B.q
   sign kp bm c := B.ssign kp.2 bm c.1
   sign_queries kp bm c := B.ssign_queries kp.2 bm c.1
   Covers bm R m := bm = B.bmsg R m
+
+/-- The side signer of `baseSide` is the base signer's ordinary signer at the base part of the
+coins. -/
+theorem baseSide_sign (kp : (ofBase B PS adm).PK × (ofBase B PS adm).SK)
+    (bm : (baseSide B PS adm).BMsg) (c : (ofBase B PS adm).SignCoins) :
+    (baseSide B PS adm).sign kp bm c = B.ssign kp.2 bm c.1 :=
+  rfl
 
 /-- **A member's ordinary signature covers exactly the forgery's base message**: in the key-reuse
 game, a side request covers `(R, m)` when a member of `R` was asked to sign `bmsg R m`. -/
@@ -75,14 +84,21 @@ theorem covers_unique (hbind : ∀ (R R' : KeyRing B.PK N) (m m' : B.Msg),
   hbind R R' m m' (h.symm.trans h')
 
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
-  [Nonempty Y]
+  [Nonempty Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof]
+
+variable [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
+  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
 
 /-- **An adversary of the key-reuse game** with `n` honest users: an adversary of the
 unforgeability game of `ofBase B PS adm` with the base scheme's ordinary signer as side oracle. -/
 abbrev KeyReuseAdversary (n : ℕ) (V : OracleView X Y) (t : ℕ) : Type 1 :=
   UnforgeAdversary (ofBase B PS adm) n (baseSide B PS adm) V t
 
-variable {B PS adm} {n : ℕ} {V : OracleView X Y} {t : ℕ}
+variable {B PS adm} {n : ℕ} {V : OracleView X Y} {t : ℕ} [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins]
+
+variable [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
 
 /-- **The probability of a forgery in the key-reuse game** with `Q` requests. -/
 noncomputable def keyReuseForgeProb (A : KeyReuseAdversary B PS adm n V t) (Q : ℕ) : ℝ≥0∞ :=

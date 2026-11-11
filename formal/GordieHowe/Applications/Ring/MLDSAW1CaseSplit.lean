@@ -44,7 +44,7 @@ variable {prims : Primitives p} [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   {O : W1Oracles X Y p prims Msg N reps} {Mo : MaskOracle X Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O Mo βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O Mo βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
   {adm : KeyRing (PubKey p prims) N → Prop}
   [hadm : DecidablePred adm] {n Q : ℕ}
   {Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂]
@@ -70,7 +70,7 @@ def w1HashAt (sp : Y ≃+ Y₁ × Y₂) (ω : X → Y₁) (pk : PubKey p prims) 
 /-- **The signing request of a main request**: the user, the ring, the message and the bounded
 program statement of a relayed signing request; none for other main requests. -/
 def w1SignEntry :
-    MURequest (SignOracle.none Bf) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q →
+    MURequest (SignOracle.none (Bf).core) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q →
     Option (Fin n × KeyRing (PubKey p prims) N × RMsg × W1BStmt prims RMsg N)
   | .inr (.inl (xb, (.sign s R m, _), _)) => some (s, R, m, xb)
   | _ => none
@@ -81,7 +81,7 @@ variable (O) in
 equal message representatives at `ω`. -/
 def w1Coll (sp : Y ≃+ Y₁ × Y₂) (pks : Fin n → PubKey p prims) (ω : X → Y₁)
     (R : KeyRing (PubKey p prims) N) (m : RMsg)
-    (rs : List (MURequest (SignOracle.none Bf) n ⊕
+    (rs : List (MURequest (SignOracle.none (Bf).core) n ⊕
       W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q)) :
     Prop :=
   ∃ pk ∈ R.1, ∃ e ∈ rs, ∃ s R' m' xb, w1SignEntry e = some (s, R', m', xb) ∧

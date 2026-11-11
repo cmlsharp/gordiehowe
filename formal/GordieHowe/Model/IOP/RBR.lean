@@ -24,26 +24,26 @@ definitions is direct:
   sees in full;
 * `KnowledgeStateFunction` is ArkLib's `KnowledgeStateFunctionOneShot` with a
   deterministic verifier decision;
-* `rbrKnowledgeSoundness` is the worst-case-per-prefix condition of ArkLib's
+* `RBRKnowledgeSound` is the worst-case-per-prefix condition of ArkLib's
   `rbrKnowledgeSoundnessWorstCase`, for the one-shot extractor, stated as a
   probability over the uniform fresh challenge (`GordieHowe/Foundations/Probability/Probability.lean`): at
   every prefix, the challenge moves the state from false to true while the
   extractor fails with probability at most `ε i`. The extractor and the state
   function are arguments, not existentially quantified: without a cost bound on
   the extractor the notion is vacuous for relations whose statements have
-  witnesses (the docstring of `rbrKnowledgeSoundness`). The proofs use the
-  equivalent counting forms `rbrKnowledgeSoundness_iff_count` and
-  `knowledgeSoundness_iff_count`.
+  witnesses (the docstring of `RBRKnowledgeSound`). The proofs use the
+  equivalent counting forms `rbrKnowledgeSound_iff_count` and
+  `knowledgeSound_iff_count`.
 
 The verifier's decision is a function of the statement and the full transcript.
 How it reads oracle messages (queries, Merkle openings) does not matter for
 interactive soundness and is left out.
 
-`knowledgeSoundness_of_rbr`: round-by-round error `ε` gives knowledge soundness with error
+`knowledgeSound_of_rbr`: round-by-round error `ε` gives knowledge soundness with error
 `∑ i, ε i` against every prover, at the straight-line extractor `Extractor.straightLine`. ArkLib
 states this step (`rbrKnowledgeSoundness_implies_knowledgeSoundness`); this development does not use
 ArkLib's statement and proves it here. Deterministic provers suffice: a randomized prover is a
-mixture of them (`knowledgeSoundness.randomized`).
+mixture of them (`KnowledgeSound.randomized`).
 -/
 
 namespace GordieHowe
@@ -65,13 +65,17 @@ open scoped NNReal
 
 /-- Who sends a round's message. -/
 inductive Direction
+  /-- The prover sends the round's message. -/
   | P_to_V
+  /-- The verifier sends the round's message, a uniform challenge. -/
   | V_to_P
   deriving DecidableEq
 
 /-- A protocol with `n` rounds: each round's direction and message type. -/
 structure ProtocolSpec (n : ℕ) where
+  /-- Who sends each round's message. -/
   dir : Fin n → Direction
+  /-- The type of each round's message. -/
   «Type» : Fin n → Type
 
 variable {n : ℕ}
@@ -115,6 +119,28 @@ def concat {m : Fin n} (tr : P.Transcript m.castSucc) (msg : P.Type m) :
 
 /-- One challenge for every verifier round. -/
 abbrev Challenges : Type := (i : P.ChallengeIdx) → P.Challenge i
+
+namespace ChallengeIdx
+
+variable {P}
+
+/-- The round of the verifier move `i`. -/
+@[reducible] def round (i : P.ChallengeIdx) : Fin n := i.1
+
+/-- The transcript length before the verifier move `i`: the messages of the rounds before it. -/
+@[reducible] def before (i : P.ChallengeIdx) : Fin (n + 1) := i.1.castSucc
+
+/-- The transcript length after the verifier move `i`: the messages up to and including its
+challenge. -/
+@[reducible] def after (i : P.ChallengeIdx) : Fin (n + 1) := i.1.succ
+
+@[simp] theorem round_eq (i : P.ChallengeIdx) : i.round = i.1 := rfl
+
+@[simp] theorem before_eq (i : P.ChallengeIdx) : i.before = i.1.castSucc := rfl
+
+@[simp] theorem after_eq (i : P.ChallengeIdx) : i.after = i.1.succ := rfl
+
+end ChallengeIdx
 
 end ProtocolSpec
 
@@ -252,7 +278,7 @@ partial transcript (`extract`, applied through the coercion to a function).
 
 CMS19 Definition 8.5 (p. 40) asks for "a polynomial-time extractor E". Nothing in this
 structure bounds the cost of `extract`, and without such a bound knowledge soundness is vacuous
-for a relation whose statements have witnesses (`rbrKnowledgeSoundness`). The invariant kept
+for a relation whose statements have witnesses (`RBRKnowledgeSound`). The invariant kept
 instead: every extractor is constructed by a named definition (or `abbrev`) whose docstring has a
 "Running time" paragraph arguing that it runs in polynomial time, and every theorem names the
 extractor it is about. The Lean lint `scripts/CostLint.lean`, run by `scripts/check.sh`,
@@ -272,11 +298,15 @@ Definition 31.1.1, pp. 382–383): false on the empty transcript, never made tru
 message, and true whenever the verifier accepts. The polarity is CMS19's: `true` is their state
 `1`, the transcripts that escaped rejection. ArkLib calls this `KnowledgeStateFunctionOneShot`. -/
 structure KnowledgeStateFunction (V : Verifier P StmtIn) where
+  /-- The state at a statement and a transcript of the first `m` rounds. -/
   toFun : (m : Fin (n + 1)) → StmtIn → P.Transcript m → Prop
+  /-- The state is false on the empty transcript. -/
   toFun_empty : ∀ x tr, ¬ toFun 0 x tr
+  /-- A prover message never makes a false state true. -/
   toFun_next : ∀ (m : Fin n), P.dir m = .P_to_V →
     ∀ x (tr : P.Transcript m.castSucc) msg, ¬ toFun m.castSucc x tr →
       ¬ toFun m.succ x (P.concat tr msg)
+  /-- The state is true on every full transcript the verifier accepts. -/
   toFun_full : ∀ x tr, V x tr = true → toFun (Fin.last n) x tr
 
 /-- If the state function is true on the full run, some challenge round moves it
@@ -285,8 +315,8 @@ transcript. -/
 theorem KnowledgeStateFunction.exists_flip {V : Verifier P StmtIn} (S : KnowledgeStateFunction V)
     {prv : Prover P StmtIn} {x : StmtIn} {ch : P.Challenges}
     (hS : S.toFun (Fin.last n) x (prv.run x ch)) :
-    ∃ i : P.ChallengeIdx, ¬ S.toFun i.1.castSucc x (prv.runTo x ch i.1 i.1.2.le) ∧
-      S.toFun i.1.succ x (P.concat (prv.runTo x ch i.1 i.1.2.le) (ch i)) := by
+    ∃ i : P.ChallengeIdx, ¬ S.toFun i.before x (prv.runTo x ch i.1 i.1.2.le) ∧
+      S.toFun i.after x (P.concat (prv.runTo x ch i.1 i.1.2.le) (ch i)) := by
   by_contra hne
   push Not at hne
   have hall : ∀ k (hk : k ≤ n), ¬ S.toFun ⟨k, by omega⟩ x (prv.runTo x ch k hk) := by
@@ -311,7 +341,7 @@ theorem KnowledgeStateFunction.exists_flip {V : Verifier P StmtIn} (S : Knowledg
 `E` and the state function `S`: at every prefix before a challenge round, the probability over
 a uniform fresh challenge that the state becomes true from false while `E` fails on the prefix
 is at most `ε i`. The challenge types are nonempty, so the uniform distribution exists;
-`rbrKnowledgeSoundness_iff_count` is the equivalent counting form.
+`rbrKnowledgeSound_iff_count` is the equivalent counting form.
 
 The extractor is an argument, never existentially quantified. CMS19 Definition 8.5 (p. 40)
 asks for "a polynomial-time extractor E and state function state"; without a cost bound on
@@ -322,46 +352,49 @@ relations are of that kind, since every public key has valid signatures. Every t
 therefore names its extractor, and the extractor's docstring argues that it runs in polynomial
 time (`Extractor`); that argument is not stated in Lean, a deviation from Definition 8.5. The
 state function need not be efficient: CMS19 requires only `E` to be. -/
-def rbrKnowledgeSoundness [∀ i, Fintype (P.Challenge i)]
+def RBRKnowledgeSound [∀ i, Fintype (P.Challenge i)]
     [∀ i, Nonempty (P.Challenge i)] (rel : Set (StmtIn × WitIn))
     (V : Verifier P StmtIn) (E : Extractor P StmtIn WitIn) (S : KnowledgeStateFunction V)
     (ε : P.ChallengeIdx → ℝ≥0) : Prop :=
-  ∀ (x : StmtIn) (i : P.ChallengeIdx) (tr : P.Transcript i.1.castSucc),
-    Pr[c ← P.Challenge i : (x, E i.1.castSucc x tr) ∉ rel ∧ ¬ S.toFun i.1.castSucc x tr ∧
-          S.toFun i.1.succ x (P.concat tr c)] ≤ ε i
+  ∀ (x : StmtIn) (i : P.ChallengeIdx) (tr : P.Transcript i.before),
+    Pr[c ← P.Challenge i : (x, E i.before x tr) ∉ rel ∧ ¬ S.toFun i.before x tr ∧
+          S.toFun i.after x (P.concat tr c)] ≤ ε i
 
-/-- **Round-by-round knowledge soundness with errors that depend on the statement** (the paper's
-`def:rbr`): `rbrKnowledgeSoundness` with the error `ε x i` at the statement `x` and the challenge
-round `i`. At errors that do not depend on the statement it is `rbrKnowledgeSoundness`
-(`rbrKnowledgeSoundnessStmt_const`). -/
-def rbrKnowledgeSoundnessStmt [∀ i, Fintype (P.Challenge i)]
+/-- **Round-by-round knowledge soundness with errors that depend on the statement**, for one
+protocol with its rounds in a total order: CMS19 Definition 8.5 (p. 40) with per-round errors as
+in Chiesa–Yogev 2024 Definition 31.1.6 (p. 386), the error `ε x i` at the statement `x` and the
+challenge round `i`. The paper's `def:rbr` is the causal notion (`CausalRBRKnowledgeSoundStmt`);
+for one protocol the two agree (`rbrKnowledgeSound_total_iff`, the paper's `lem:rbr-total`). At
+errors that do not depend on the statement it is `RBRKnowledgeSound`
+(`rbrKnowledgeSoundStmt_const`). -/
+def RBRKnowledgeSoundStmt [∀ i, Fintype (P.Challenge i)]
     [∀ i, Nonempty (P.Challenge i)] (rel : Set (StmtIn × WitIn))
     (V : Verifier P StmtIn) (E : Extractor P StmtIn WitIn) (S : KnowledgeStateFunction V)
     (ε : StmtIn → P.ChallengeIdx → ℝ≥0) : Prop :=
-  ∀ (x : StmtIn) (i : P.ChallengeIdx) (tr : P.Transcript i.1.castSucc),
-    Pr[c ← P.Challenge i : (x, E i.1.castSucc x tr) ∉ rel ∧ ¬ S.toFun i.1.castSucc x tr ∧
-          S.toFun i.1.succ x (P.concat tr c)] ≤ ε x i
+  ∀ (x : StmtIn) (i : P.ChallengeIdx) (tr : P.Transcript i.before),
+    Pr[c ← P.Challenge i : (x, E i.before x tr) ∉ rel ∧ ¬ S.toFun i.before x tr ∧
+          S.toFun i.after x (P.concat tr c)] ≤ ε x i
 
-/-- At errors that do not depend on the statement, `rbrKnowledgeSoundnessStmt` is
-`rbrKnowledgeSoundness`. -/
-theorem rbrKnowledgeSoundnessStmt_const [∀ i, Fintype (P.Challenge i)]
+/-- At errors that do not depend on the statement, `RBRKnowledgeSoundStmt` is
+`RBRKnowledgeSound`. -/
+theorem rbrKnowledgeSoundStmt_const [∀ i, Fintype (P.Challenge i)]
     [∀ i, Nonempty (P.Challenge i)] {rel : Set (StmtIn × WitIn)} {V : Verifier P StmtIn}
     {E : Extractor P StmtIn WitIn} {S : KnowledgeStateFunction V} {ε : P.ChallengeIdx → ℝ≥0} :
-    rbrKnowledgeSoundnessStmt rel V E S (fun _ => ε) ↔ rbrKnowledgeSoundness rel V E S ε :=
+    RBRKnowledgeSoundStmt rel V E S (fun _ => ε) ↔ RBRKnowledgeSound rel V E S ε :=
   Iff.rfl
 
 open Classical in
-/-- `rbrKnowledgeSoundness` as a count: at most `ε i · |C_i|` fresh
+/-- `RBRKnowledgeSound` as a count: at most `ε i · |C_i|` fresh
 challenges make the state true from false while `E` fails on the prefix. -/
-theorem rbrKnowledgeSoundness_iff_count [∀ i, Fintype (P.Challenge i)]
+theorem rbrKnowledgeSound_iff_count [∀ i, Fintype (P.Challenge i)]
     [∀ i, Nonempty (P.Challenge i)]
     {rel : Set (StmtIn × WitIn)} {V : Verifier P StmtIn} {E : Extractor P StmtIn WitIn}
     {S : KnowledgeStateFunction V} {ε : P.ChallengeIdx → ℝ≥0} :
-    rbrKnowledgeSoundness rel V E S ε ↔
-      ∀ (x : StmtIn) (i : P.ChallengeIdx) (tr : P.Transcript i.1.castSucc),
+    RBRKnowledgeSound rel V E S ε ↔
+      ∀ (x : StmtIn) (i : P.ChallengeIdx) (tr : P.Transcript i.before),
         ((Finset.univ.filter fun c : P.Challenge i =>
-            (x, E i.1.castSucc x tr) ∉ rel ∧ ¬ S.toFun i.1.castSucc x tr ∧
-              S.toFun i.1.succ x (P.concat tr c)).card : ℝ≥0) ≤
+            (x, E i.before x tr) ∉ rel ∧ ¬ S.toFun i.before x tr ∧
+              S.toFun i.after x (P.concat tr c)).card : ℝ≥0) ≤
           ε i * Fintype.card (P.Challenge i) := by
   exact forall_congr' fun x => forall_congr' fun i => forall_congr' fun tr =>
     (card_le_iff_probUniform_le (P.Challenge i) _ _).symm
@@ -410,13 +443,16 @@ theorem card_le_of_card_update_le {ι : Type*} [DecidableEq ι] [Fintype ι] {β
       ring
 
 /-- **Knowledge soundness** with straight-line extractor `E` (read on the full transcript) and
-error `δ`: for every statement and deterministic prover, the probability over uniform challenge
-tuples that the verifier accepts while `E` fails on the full transcript is at most `δ`. The
-challenge types are nonempty, so the uniform distribution exists; `knowledgeSoundness_iff_count`
-is the equivalent counting form. As for `rbrKnowledgeSoundness`, the extractor is an argument,
+error `δ` (straightline knowledge soundness, Chiesa–Yogev 2024 Definition 23.1.6, p. 260, at a
+constant error; ArkLib's `knowledgeSoundness`): for every statement and deterministic prover, the
+probability over uniform challenge tuples that the verifier accepts while `E` fails on the full
+transcript is at most `δ`. Chiesa–Yogev also bound the extractor's running time; here, as for
+`RBRKnowledgeSound`, the running time is argued in the extractor's docstring (`Extractor`). The
+challenge types are nonempty, so the uniform distribution exists; `knowledgeSound_iff_count`
+is the equivalent counting form. As for `RBRKnowledgeSound`, the extractor is an argument,
 since without a cost bound on it the notion is vacuous for relations whose statements have
 witnesses. -/
-def knowledgeSoundness [∀ i, Fintype (P.Challenge i)]
+def KnowledgeSound [∀ i, Fintype (P.Challenge i)]
     [∀ i, Nonempty (P.Challenge i)] [Fintype P.ChallengeIdx]
     (rel : Set (StmtIn × WitIn)) (V : Verifier P StmtIn) (E : Extractor P StmtIn WitIn)
     (δ : ℝ≥0) : Prop :=
@@ -426,13 +462,13 @@ def knowledgeSoundness [∀ i, Fintype (P.Challenge i)]
       (x, E (Fin.last n) x (prv.run x ch)) ∉ rel] ≤ δ
 
 open Classical in
-/-- `knowledgeSoundness` as a count: at most `δ · |C|` challenge tuples make the
+/-- `KnowledgeSound` as a count: at most `δ · |C|` challenge tuples make the
 verifier accept while `E` fails. -/
-theorem knowledgeSoundness_iff_count [∀ i, Fintype (P.Challenge i)]
+theorem knowledgeSound_iff_count [∀ i, Fintype (P.Challenge i)]
     [∀ i, Nonempty (P.Challenge i)] [Fintype P.ChallengeIdx]
     {rel : Set (StmtIn × WitIn)} {V : Verifier P StmtIn} {E : Extractor P StmtIn WitIn}
     {δ : ℝ≥0} :
-    knowledgeSoundness rel V E δ ↔
+    KnowledgeSound rel V E δ ↔
       ∀ (x : StmtIn) (prv : Prover P StmtIn),
         ((Finset.univ.filter fun ch : P.Challenges =>
             V x (prv.run x ch) = true ∧ (x, E (Fin.last n) x (prv.run x ch)) ∉ rel).card : ℝ≥0) ≤
@@ -441,12 +477,12 @@ theorem knowledgeSoundness_iff_count [∀ i, Fintype (P.Challenge i)]
     (card_le_iff_probUniform_le P.Challenges _ _).symm
 
 /-- A larger stated error preserves the same extractor and verifier. -/
-theorem knowledgeSoundness.monoError [∀ i, Fintype (P.Challenge i)]
+theorem KnowledgeSound.monoError [∀ i, Fintype (P.Challenge i)]
     [∀ i, Nonempty (P.Challenge i)] [Fintype P.ChallengeIdx]
     {rel : Set (StmtIn × WitIn)} {V : Verifier P StmtIn} {E : Extractor P StmtIn WitIn}
-    {δ δ' : ℝ≥0} (h : knowledgeSoundness rel V E δ) (hδ : δ ≤ δ') :
-    knowledgeSoundness rel V E δ' := by
-  rw [knowledgeSoundness_iff_count] at h ⊢
+    {δ δ' : ℝ≥0} (h : KnowledgeSound rel V E δ) (hδ : δ ≤ δ') :
+    KnowledgeSound rel V E δ' := by
+  rw [knowledgeSound_iff_count] at h ⊢
   exact fun x prv => (h x prv).trans (mul_le_mul_of_nonneg_right hδ (by positivity))
 
 open Classical in
@@ -455,16 +491,16 @@ open Classical in
 `prv ρ` for each tape. The same extractor then fails on accepting runs for at
 most a `δ` fraction of the pairs of tape and challenges: the fraction for the
 randomized prover is the average over `ρ` of the deterministic fractions. -/
-theorem knowledgeSoundness.randomized [∀ i, Fintype (P.Challenge i)]
+theorem KnowledgeSound.randomized [∀ i, Fintype (P.Challenge i)]
     [∀ i, Nonempty (P.Challenge i)] [Fintype P.ChallengeIdx]
     {rel : Set (StmtIn × WitIn)} {V : Verifier P StmtIn} {E : Extractor P StmtIn WitIn}
-    {δ : ℝ≥0} (h : knowledgeSoundness rel V E δ) (x : StmtIn) (R : Type) [Fintype R]
+    {δ : ℝ≥0} (h : KnowledgeSound rel V E δ) (x : StmtIn) (R : Type) [Fintype R]
     (prv : R → Prover P StmtIn) :
     ((Finset.univ.filter fun rc : R × P.Challenges =>
         V x ((prv rc.1).run x rc.2) = true ∧
           (x, E (Fin.last n) x ((prv rc.1).run x rc.2)) ∉ rel).card : ℝ≥0) ≤
       δ * (Fintype.card R * Fintype.card P.Challenges) := by
-  rw [knowledgeSoundness_iff_count] at h
+  rw [knowledgeSound_iff_count] at h
   have hsum : ((Finset.univ.filter fun rc : R × P.Challenges =>
         V x ((prv rc.1).run x rc.2) = true ∧
           (x, E (Fin.last n) x ((prv rc.1).run x rc.2)) ∉ rel).card : ℝ≥0) =
@@ -483,7 +519,7 @@ theorem knowledgeSoundness.randomized [∀ i, Fintype (P.Challenge i)]
 
 /-- **The straight-line extractor of a one-shot extractor** `E` for `rel`: on a transcript
 prefix `tr` of length `m`, `E` at the shortest prefix of `tr` at which it returns a witness for
-`rel`, if there is one, and `E` at `tr` otherwise. `knowledgeSoundness_of_rbr` reads it on the
+`rel`, if there is one, and `E` at `tr` otherwise. `knowledgeSound_of_rbr` reads it on the
 full transcript.
 
 Running time: at most `m + 1` calls of `E`, one per prefix of `tr` in increasing length
@@ -511,17 +547,17 @@ theorem Extractor.straightLine_mem {rel : Set (StmtIn × WitIn)} [DecidablePred 
   exact (Fin.find_spec hex).snd
 
 open Classical Finset in
-/-- `knowledgeSoundness_of_rbr` in counting form, over challenge types that may be
-empty: the per-prefix counts of `rbrKnowledgeSoundness_iff_count` give the
-count of `knowledgeSoundness_iff_count` with the summed error, at the straight-line
+/-- `knowledgeSound_of_rbr` in counting form, over challenge types that may be
+empty: the per-prefix counts of `rbrKnowledgeSound_iff_count` give the
+count of `knowledgeSound_iff_count` with the summed error, at the straight-line
 extractor `E.straightLine rel`. -/
-theorem knowledgeSoundness_count_of_rbr_count [∀ i, Fintype (P.Challenge i)]
+theorem knowledgeSound_count_of_rbr_count [∀ i, Fintype (P.Challenge i)]
     [Fintype P.ChallengeIdx] {rel : Set (StmtIn × WitIn)} {V : Verifier P StmtIn}
     {ε : P.ChallengeIdx → ℝ≥0} (E : Extractor P StmtIn WitIn) (S : KnowledgeStateFunction V)
-    (hE : ∀ (x : StmtIn) (i : P.ChallengeIdx) (tr : P.Transcript i.1.castSucc),
+    (hE : ∀ (x : StmtIn) (i : P.ChallengeIdx) (tr : P.Transcript i.before),
         ((Finset.univ.filter fun c : P.Challenge i =>
-            (x, E i.1.castSucc x tr) ∉ rel ∧ ¬ S.toFun i.1.castSucc x tr ∧
-              S.toFun i.1.succ x (P.concat tr c)).card : ℝ≥0) ≤
+            (x, E i.before x tr) ∉ rel ∧ ¬ S.toFun i.before x tr ∧
+              S.toFun i.after x (P.concat tr c)).card : ℝ≥0) ≤
           ε i * Fintype.card (P.Challenge i))
     (x : StmtIn) (prv : Prover P StmtIn) :
     ((Finset.univ.filter fun ch : P.Challenges =>
@@ -566,32 +602,32 @@ theorem knowledgeSoundness_count_of_rbr_count [∀ i, Fintype (P.Challenge i)]
 open Classical in
 /-- **Round-by-round knowledge soundness implies knowledge soundness** with the
 summed error, at the straight-line extractor `E.straightLine rel`
-(`knowledgeSoundness_count_of_rbr_count`). -/
-theorem knowledgeSoundness_of_rbr [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty (P.Challenge i)]
+(`knowledgeSound_count_of_rbr_count`). -/
+theorem knowledgeSound_of_rbr [∀ i, Fintype (P.Challenge i)] [∀ i, Nonempty (P.Challenge i)]
     [Fintype P.ChallengeIdx] {rel : Set (StmtIn × WitIn)} {V : Verifier P StmtIn}
     {E : Extractor P StmtIn WitIn} {S : KnowledgeStateFunction V} {ε : P.ChallengeIdx → ℝ≥0}
-    (h : rbrKnowledgeSoundness rel V E S ε) :
-    knowledgeSoundness rel V (E.straightLine rel) (∑ i, ε i) :=
-  knowledgeSoundness_iff_count.mpr
-    (knowledgeSoundness_count_of_rbr_count E S (rbrKnowledgeSoundness_iff_count.mp h))
+    (h : RBRKnowledgeSound rel V E S ε) :
+    KnowledgeSound rel V (E.straightLine rel) (∑ i, ε i) :=
+  knowledgeSound_iff_count.mpr
+    (knowledgeSound_count_of_rbr_count E S (rbrKnowledgeSound_iff_count.mp h))
 
 /-- A pointwise larger round error, at the same extractor and state function. -/
-theorem rbrKnowledgeSoundness.monoError [∀ i, Fintype (P.Challenge i)]
+theorem RBRKnowledgeSound.monoError [∀ i, Fintype (P.Challenge i)]
     [∀ i, Nonempty (P.Challenge i)]
     {rel : Set (StmtIn × WitIn)} {V : Verifier P StmtIn} {E : Extractor P StmtIn WitIn}
     {S : KnowledgeStateFunction V} {ε δ : P.ChallengeIdx → ℝ≥0}
-    (h : rbrKnowledgeSoundness rel V E S ε) (hεδ : ∀ i, ε i ≤ δ i) :
-    rbrKnowledgeSoundness rel V E S δ := by
-  rw [rbrKnowledgeSoundness_iff_count] at h ⊢
+    (h : RBRKnowledgeSound rel V E S ε) (hεδ : ∀ i, ε i ≤ δ i) :
+    RBRKnowledgeSound rel V E S δ := by
+  rw [rbrKnowledgeSound_iff_count] at h ⊢
   exact fun x i tr => (h x i tr).trans (mul_le_mul_of_nonneg_right (hεδ i) (by positivity))
 
 /-- A uniform per-round bound: every round's error is at most `δ`. -/
-theorem rbrKnowledgeSoundness.monoError_const [∀ i, Fintype (P.Challenge i)]
+theorem RBRKnowledgeSound.monoError_const [∀ i, Fintype (P.Challenge i)]
     [∀ i, Nonempty (P.Challenge i)]
     {rel : Set (StmtIn × WitIn)} {V : Verifier P StmtIn} {E : Extractor P StmtIn WitIn}
     {S : KnowledgeStateFunction V} {ε : P.ChallengeIdx → ℝ≥0} {δ : ℝ≥0}
-    (h : rbrKnowledgeSoundness rel V E S ε) (hεδ : ∀ i, ε i ≤ δ) :
-    rbrKnowledgeSoundness rel V E S fun _ => δ :=
+    (h : RBRKnowledgeSound rel V E S ε) (hεδ : ∀ i, ε i ≤ δ) :
+    RBRKnowledgeSound rel V E S fun _ => δ :=
   h.monoError hεδ
 
 /-! ### Full runs -/
@@ -661,11 +697,11 @@ end MaxError
 
 /-- Round-by-round knowledge soundness at error `ε` gives it at the constant
 error `maxError ε`, at the same extractor and state function. -/
-theorem rbrKnowledgeSoundness.toMaxError [∀ i, Fintype (P.Challenge i)]
+theorem RBRKnowledgeSound.toMaxError [∀ i, Fintype (P.Challenge i)]
     [∀ i, Nonempty (P.Challenge i)]
     {rel : Set (StmtIn × WitIn)} {V : Verifier P StmtIn} {E : Extractor P StmtIn WitIn}
     {S : KnowledgeStateFunction V} {ε : P.ChallengeIdx → ℝ≥0}
-    (h : rbrKnowledgeSoundness rel V E S ε) : rbrKnowledgeSoundness rel V E S fun _ => maxError ε :=
+    (h : RBRKnowledgeSound rel V E S ε) : RBRKnowledgeSound rel V E S fun _ => maxError ε :=
   h.monoError (le_maxError ε)
 
 end GordieHowe.IOP

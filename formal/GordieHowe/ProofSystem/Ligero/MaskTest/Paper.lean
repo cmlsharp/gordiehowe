@@ -19,8 +19,8 @@ then a round-by-round sound proof phase for "the claims hold at the extracted va
 query; (2) completeness; (3) honest-verifier zero knowledge with error `0`.
 
 The Lean proves it as Ligero at agreement threshold `A` with the mask test and the prefix-row
-subfield test (`GordieHowe.Ligero.MaskTest`, a `CommitProve` system): soundness `sound` (a
-`CommitProve.SoundOn` record), the errors `error` (`error_sum`), the honest prover `honest`. This file
+subfield test (`GordieHowe.Ligero.MaskTest`, a `CommitProve` system): soundness `soundIP` (a
+`CommitProve.SoundOn` record), the errors `error` (`error_constraintIdx`, `error_queryIdx`), the honest prover `honest`. This file
 restates the three parts as theorems: `GordieHowe.Ligero.MaskTest.sound`, `GordieHowe.Ligero.MaskTest.complete`,
 `GordieHowe.Ligero.MaskTest.hvzk`.
 
@@ -46,9 +46,10 @@ variable {K ι Q Lin : Type} [Field K] [Fintype K] [DecidableEq K] [Fintype ι] 
 `(B/(|K| − 1))^nrep` (`commitError_eq`), the commit events of the low-degree challenges have at
 most that probability at every oracle message (`commit_bound`), the proof phase is round-by-round
 sound with the system's verifier (`V_eq`) for "the commit phase was bad, or the rows hold on the
-extracted cells and every prefix cell lies in `E`" (`claim_iff`), and its errors sum to `1/|K|`
-plus `((A − 1)_t + (2k − 1)_t)/(N)_t`, plus `(k − 1)_t/(N)_t` when there is a prefix cell
-(`sum_error`). -/
+extracted cells and every prefix cell lies in `E`" (`claim_iff`), and its errors are `1/|K|` at
+the constraint challenge (`constraint_error`) and `((A − 1)_t + (2k − 1)_t)/(N)_t`, plus
+`(k − 1)_t/(N)_t` when there is a prefix cell, at the column query (`column_error`)
+(`def:ligero-errors`). Their sum is `LigeroSound.sum_error`. -/
 structure LigeroSound : Prop where
   /-- The commit error. -/
   commitError_eq : S.commitError = (S.B / (Fintype.card K - 1)) ^ S.nrep
@@ -62,23 +63,36 @@ structure LigeroSound : Prop where
     (commitProve S rows).CommitBad (soundIP S rows).commitEvent c.com c.rounds ∨
       (RowsHold (rows c.ctx) products ((commitProve S rows).extract c.com c.rounds) ∧
         S.pre.In ((commitProve S rows).extract c.com c.rounds))
-  /-- The proof-phase errors sum to the constraint and column errors. -/
-  sum_error : ∑ i, error S i = 1 / Fintype.card K +
+  /-- The error at the constraint challenge. -/
+  constraint_error : error S (Ligero.AgreementThreshold.constraintIdx C.k S.t) = 1 / Fintype.card K
+  /-- The error at the column query. -/
+  column_error : error S (Ligero.AgreementThreshold.queryIdx K N nL nQ C.k S.t) =
     ((S.A - 1).descFactorial S.t + (2 * C.k - 1).descFactorial S.t : ℝ≥0) / N.descFactorial S.t +
       if np = 0 then 0 else ((C.k - 1).descFactorial S.t : ℝ≥0) / N.descFactorial S.t
 
 /-- **Paper `lem:ligero`, part (1)**: soundness of Ligero with the mask test and the prefix-row
 subfield test. The low-degree challenges are exceptional with probability at most
 `(B/(|K| − 1))^nrep`; otherwise the proof phase, with the system's verifier, is round-by-round sound
-for "the rows hold on the extracted cells and every prefix cell lies in `E`", with errors summing to
-`1/|K| + ((A − 1)_t + (2k − 1)_t)/(N)_t`, plus `(k − 1)_t/(N)_t` with a prefix cell. -/
+for "the rows hold on the extracted cells and every prefix cell lies in `E`", with error `1/|K|` at
+the constraint challenge and `((A − 1)_t + (2k − 1)_t)/(N)_t`, plus `(k − 1)_t/(N)_t` with a prefix
+cell, at the column query. -/
 @[headline]
 theorem sound : LigeroSound S rows where
   commitError_eq := rfl
   commit_bound := (soundIP S rows).commitEvent_bound
   V_eq := (soundIP S rows).V_eq
   claim_iff := (soundIP S rows).claim_iff
-  sum_error := error_sum S
+  constraint_error := error_constraintIdx S
+  column_error := error_queryIdx S
+
+variable {S rows} in
+/-- **The proof-phase errors sum** to `1/|K| + ((A − 1)_t + (2k − 1)_t)/(N)_t`, plus
+`(k − 1)_t/(N)_t` with a prefix cell: the constraint challenge's and the column query's errors. -/
+theorem LigeroSound.sum_error (h : LigeroSound S rows) : ∑ i, error S i = 1 / Fintype.card K +
+    ((S.A - 1).descFactorial S.t + (2 * C.k - 1).descFactorial S.t : ℝ≥0) / N.descFactorial S.t +
+      if np = 0 then 0 else ((C.k - 1).descFactorial S.t : ℝ≥0) / N.descFactorial S.t := by
+  rw [Ligero.AgreementThreshold.sum_challengeIdx, h.constraint_error, h.column_error]
+  ring
 
 variable {S} in
 /-- **Paper `lem:ligero`, part (2)**: completeness of Ligero with the mask test and the prefix-row
@@ -127,12 +141,13 @@ variable {K ι Q Lin : Type} [Field K] [Fintype K] [DecidableEq K] [Fintype ι] 
   (S : Setup C P products Lin nL np) {Ctx : Type} (rows : Ctx → Lin → AffineForm K ι)
 
 /-- **The guarantees of the paper's corollary `cor:untested-ligero`, part (1)** for the soundness
-record `sound` of Ligero without the mask test and with the prefix-row test: the commit error is
+record `soundIP` of Ligero without the mask test and with the prefix-row test: the commit error is
 `(B/(|K| − 1))^nrep` (`commitError_eq`), the commit events have at most that probability
 (`commit_bound`), the proof phase is round-by-round sound with the system's verifier (`V_eq`) for
 "the commit phase was bad, or the rows hold on the extracted cells and every prefix cell lies in
-`E`" (`claim_iff`), and its errors sum to `l/|K|` plus `((A − 1)_t + a_t)/(N)_t`, plus
-`(k − 1)_t/(N)_t` when there is a prefix cell (`sum_error`). -/
+`E`" (`claim_iff`), and its errors are `l/|K|` at the constraint challenge (`constraint_error`) and
+`((A − 1)_t + a_t)/(N)_t`, plus `(k − 1)_t/(N)_t` when there is a prefix cell, at the column query
+(`column_error`). Their sum is `UntestedSound.sum_error`. -/
 structure UntestedSound : Prop where
   /-- The commit error. -/
   commitError_eq : S.commitError = (S.B / (Fintype.card K - 1)) ^ S.nrep
@@ -146,23 +161,37 @@ structure UntestedSound : Prop where
     (commitProve S rows).CommitBad (soundIP S rows).commitEvent c.com c.rounds ∨
       (RowsHold (rows c.ctx) products ((commitProve S rows).extract c.com c.rounds) ∧
         S.pre.In ((commitProve S rows).extract c.com c.rounds))
-  /-- The proof-phase errors sum to the constraint and column errors. -/
-  sum_error : ∑ i, error S i = S.l / Fintype.card K +
+  /-- The error at the constraint challenge. -/
+  constraint_error : error S (Ligero.AgreementThreshold.constraintIdx C.k S.t) = S.l / Fintype.card K
+  /-- The error at the column query. -/
+  column_error : error S (Ligero.AgreementThreshold.queryIdx K N nL nQ C.k S.t) =
     ((S.A - 1).descFactorial S.t + S.a.descFactorial S.t : ℝ≥0) / N.descFactorial S.t +
       if np = 0 then 0 else ((C.k - 1).descFactorial S.t : ℝ≥0) / N.descFactorial S.t
 
 /-- **Paper `cor:untested-ligero`, part (1)**: soundness of Ligero without the mask test, with the
 prefix-row subfield test. The low-degree challenges are exceptional with probability at most
 `(B/(|K| − 1))^nrep`; otherwise the proof phase, with the system's verifier, is round-by-round sound
-for "the rows hold on the extracted cells and every prefix cell lies in `E`", with errors summing to
-`l/|K| + ((A − 1)_t + a_t)/(N)_t`, plus `(k − 1)_t/(N)_t` with a prefix cell. -/
+for "the rows hold on the extracted cells and every prefix cell lies in `E`", with error `l/|K|` at
+the constraint challenge and `((A − 1)_t + a_t)/(N)_t`, plus `(k − 1)_t/(N)_t` with a prefix cell,
+at the column query. -/
 @[headline]
 theorem sound : UntestedSound S rows where
   commitError_eq := rfl
   commit_bound := (soundIP S rows).commitEvent_bound
   V_eq := (soundIP S rows).V_eq
   claim_iff := (soundIP S rows).claim_iff
-  sum_error := error_sum S
+  constraint_error := error_constraintIdx S
+  column_error := error_queryIdx S
+
+variable {S rows} in
+/-- **The proof-phase errors sum** to `l/|K| + ((A − 1)_t + a_t)/(N)_t`, plus `(k − 1)_t/(N)_t`
+with a prefix cell: the constraint challenge's and the column query's errors. -/
+theorem UntestedSound.sum_error (h : UntestedSound S rows) : ∑ i, error S i =
+    S.l / Fintype.card K +
+    ((S.A - 1).descFactorial S.t + S.a.descFactorial S.t : ℝ≥0) / N.descFactorial S.t +
+      if np = 0 then 0 else ((C.k - 1).descFactorial S.t : ℝ≥0) / N.descFactorial S.t := by
+  rw [Ligero.AgreementThreshold.sum_challengeIdx, h.constraint_error, h.column_error]
+  ring
 
 variable {S} in
 /-- **Paper `cor:untested-ligero`, part (2)**: completeness of Ligero without the mask test, with no

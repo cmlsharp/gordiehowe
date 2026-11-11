@@ -19,9 +19,10 @@ open _root_.GordieHowe.Generated.MLDSA44.Emulated.ROMParams
 @[expose] def rowClass (r : SourceRoleEntry) : Prop :=
   r.value ∈ [56, 57, 67, 58, 61, 65, 66] ∨
   (((r.field = 1 ∧ r.node.map (·.name) = some "GF(2^16)") ∧
-    (1 ≤ r.value ∧ r.value - 1 ∈ Emulated.hV ∧
-      ((wordsOwner? (r.value - 1)).isSome = true ∨ r.value - 1 ∈ [69, 119, 557, 560, 562, 563, 564, 565]))) ∨
-   ((r.field = 1 ∧ r.node.map (·.name) = some "bit") ∧ (1 ≤ r.value ∧ r.value - 1 ∈ Emulated.hV ∧ r.value - 1 ∈ [67, 68, 556, 561]))) ∨
+    (Emulated.eOf program r.value).any (fun u => (wordsOwner? u).isSome ||
+      [69, 119, 557, 560, 562, 563, 564, 565].contains u) = true) ∨
+   ((r.field = 1 ∧ r.node.map (·.name) = some "bit") ∧
+    (Emulated.eOf program r.value).any (fun u => [67, 68, 556, 561].contains u) = true)) ∨
   ((r.field = 0 ∧ r.node.map (·.name) = some "GF(p^1)") ∧ r.value ∈ Emulated.aValues layout)
 
 instance (r : SourceRoleEntry) : Decidable (rowClass r) := by
@@ -37,10 +38,10 @@ theorem row_class {r : SourceRoleEntry} (hm : r ∈ SourceRoles.roles) : rowClas
 theorem cell_classes : (List.range program.values.length).all (fun v =>
     !program.privCellB v || !decide (program.IsSourceValue v) ||
       (program.valueField v == 1 && (program.value v).node.map (·.name) == some "GF(2^16)" &&
-        decide (1 ≤ v) && decide (v - 1 ∈ Emulated.hV) &&
-        ((wordsOwner? (v - 1)).isSome || [69, 119, 557, 560, 562, 563, 564, 565].contains (v - 1))) ||
+        (Emulated.eOf program v).any fun u => (wordsOwner? u).isSome ||
+          [69, 119, 557, 560, 562, 563, 564, 565].contains u) ||
       (program.valueField v == 1 && (program.value v).node.map (·.name) == some "bit" &&
-        decide (1 ≤ v) && decide (v - 1 ∈ Emulated.hV) && [67, 68, 556, 561].contains (v - 1)) ||
+        (Emulated.eOf program v).any fun u => [67, 68, 556, 561].contains u) ||
       (program.valueField v == 0 && (program.value v).node.map (·.name) == some "GF(p^1)" &&
         (Emulated.aValues layout).contains v)) = true := by
   apply List.all_eq_true.mpr
@@ -70,9 +71,9 @@ theorem cell_classes : (List.range program.values.length).all (fun v =>
         · rw [hx, ShapeFacts.value_hint_2eslack_kind] at hk; cases hk
       · simp only [hp, hs, decide_true, Bool.not_true, Bool.false_or, Bool.or_eq_true,
           Bool.and_eq_true, beq_iff_eq, List.contains_iff_mem, decide_eq_true_eq, hf, hnode]
-        rcases hx with ⟨⟨a, b⟩, c, d, e⟩ | ⟨⟨a, b⟩, c, d, e⟩
-        · exact Or.inl (Or.inl ⟨⟨⟨⟨a, b⟩, c⟩, d⟩, e⟩)
-        · exact Or.inl (Or.inr ⟨⟨⟨⟨a, b⟩, c⟩, d⟩, e⟩)
+        rcases hx with ⟨⟨a, b⟩, c⟩ | ⟨⟨a, b⟩, c⟩
+        · exact Or.inl (Or.inl ⟨⟨a, b⟩, c⟩)
+        · exact Or.inl (Or.inr ⟨⟨a, b⟩, c⟩)
       · simp only [hp, hs, decide_true, Bool.not_true, Bool.false_or, Bool.or_eq_true,
           Bool.and_eq_true, beq_iff_eq, List.contains_iff_mem, decide_eq_true_eq, hf, hnode]
         exact Or.inr hx

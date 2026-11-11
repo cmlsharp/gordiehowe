@@ -18,9 +18,9 @@ public section
 
 * **An entry's meaning** (`GordieHowe.RealizedProgram.entryMeaningB`): the print `X` of the
   entry's asserted root is the printed predicate's `l − r` (or its negation) as normal forms
-  (`nfUnitEqB`, coordinate by coordinate, over shared-expression atoms: `SharedNorm.lean`), a
-  product form's asserted equation (`productEquationB`). An alignment or realization entry has no
-  root; its family record (`RelFamily.lean`) states its meaning.
+  (`nfUnitEqB`, coordinate by coordinate, over shared-expression atoms: `SharedNorm.lean`). An
+  alignment or realization entry has no root; its family record (`RelFamily.lean`) states its
+  meaning.
 * **An entry** (`GordieHowe.RealizedProgram.entryCertB`): its block continues the previous one,
   its root's coordinates are asserted by its assertion pairs (`GKR.Rel.zeroOk`), its meaning holds,
   and every node of its block gives its cuts (`nodeCutsE`), which the relational check accepts; an

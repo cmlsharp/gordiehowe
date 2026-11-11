@@ -20,7 +20,6 @@ namespace GordieHowe.Falcon512.Native.ROMParams
 open RealizedProgram.Export RealizedProgram.ProofSystem.PhaseLayout IOP RelativePacking GordieHowe.SPBCS GordieHowe.QROM SPBCS.Configurations
 open Generated.Falcon512.Native.ROMParams.Program (program)
 open Generated.Falcon512.Native.ROMParams (interp ProofSystems)
-open GordieHowe.Falcon512.Emulated (PublicKey)
 open scoped NNReal ENNReal
 
 variable (C : ProofSystems)
@@ -28,9 +27,9 @@ variable (C : ProofSystems)
 /-! ## The knowledge statements at the key -/
 
 /-- **The Falcon-512 proof-of-possession relation at the key**: the witness is a message of some
-length `L ≤ 32` and a signature on it under the key (`PoP.Falcon512.rel L`). -/
+length `L ≤ 32` and a signature on it under the key (`Falcon512.PoP.rel L`). -/
 abbrev keyWitRel : Set (PublicKey × VarWitness) :=
-  {p | (p.1, p.2.2) ∈ Falcon512.PoP.rel p.2.1}
+  Falcon512.PoP.relUpTo Falcon512.msgLenMax
 
 /-- **The relation of the realized program at the key's statement gives the relation at the key**: the key's
 statement decodes to the key (`keyOf_stmtOf`). -/

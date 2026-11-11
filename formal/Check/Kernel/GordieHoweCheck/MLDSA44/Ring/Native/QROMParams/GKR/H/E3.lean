@@ -13,6 +13,6 @@ import all GordieHoweCerts.Generated.MLDSA44.Ring.Native.QROMParams.Program
 
 namespace GordieHowe.Generated.MLDSA44.Ring.Native.QROMParams.GKR.H
 
-check_entry cert ar 3 [0, 0, 16, 1, 64, 5, 0, 0, 2, 1, 341, 2, 0, 0, 14, 0, 0, 3, 1, 256, 2, 2, 1024, 1]
+check_entry cert ar 3 [0, 0, 38, 2, 1, 1]
 
 end GordieHowe.Generated.MLDSA44.Ring.Native.QROMParams.GKR.H

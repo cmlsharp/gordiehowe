@@ -22,8 +22,9 @@ configuration, so its figures are checked by `decide`.
 
 * **The domain's numbers**: the tableau's leaves `N`, code dimension, repetitions and opened columns
   are the certificate's (`fieldFork_N`, `fieldFork_k`, `fieldFork_nrep`, `fieldFork_t`); the
-  circuits' shapes are the program's (`circW`, `circL`) under the compiler trust
-  (`shape_circAt`).
+  circuits' shapes are the program's (`circW`, `circL`) under the circuits'
+  correspondence (`CircuitsEnforce`, a field of the proof system proved from the GKR certificates;
+  `shape_circAt`).
 * **The size bounds** (`FitsOk`, decidable; `ForkFits.ofOk`): the arrays at most `Mx` elements, a
   GKR message and the tableau's writes within `2^20` bytes, the challenge reads at most `Lmax`
   (`ForkLoadNumbers` at the circuits' shapes); every domain's (`ForkNumbers`).
@@ -95,8 +96,8 @@ variable (ir) in
 abbrev circL (d : ℕ) (i : Fin (ir.circs d).length) : ℕ := (ir.circuit (ir.circAt d i)).layers
 
 variable {src} in
-/-- **Circuit `i` of domain `d` has the program's shape** under the compiler trust
-(`CircuitsEnforce.shape`). -/
+/-- **Circuit `i` of domain `d` has the program's shape** given the circuits'
+correspondence `T` (`CircuitsEnforce.shape`). -/
 theorem shape_circAt (T : ir.CircuitsEnforce I src) (i : Fin (ir.circs d).length) :
     (ir.circSource d src i).ShapeAtMost (ir.circW d i) (ir.circL d i) :=
   (shapeAtMost_circSource src i).2 (T.shape _)
@@ -124,7 +125,7 @@ instance (fb Mx Lmax : ℕ) : Decidable (FitsOk R fb Mx Lmax) := by
 
 variable {src R} in
 /-- **The size bounds of domain `d`'s forked proof from its numbers** (`FitsOk`), the circuits'
-shapes under the compiler trust `T`. -/
+shapes given the circuits' correspondence `T` (`CircuitsEnforce`). -/
 def ForkFits.ofOk (T : ir.CircuitsEnforce I src)
     (cod : FieldCodec (I (ir.domainField d))) (Mx Lmax : ℕ) (h : FitsOk R cod.fb Mx Lmax)
     (grants : ForkGrants := {}) : ForkFits src R cod where
@@ -141,7 +142,7 @@ def ForkFits.ofOk (T : ir.CircuitsEnforce I src)
 
 variable {src R} in
 /-- **The reads other than the first combination's from their numbers** (`ForkRestNumbers` at the
-circuits' shapes), under the compiler trust `T`. -/
+circuits' shapes), given the circuits' correspondence `T` (`CircuitsEnforce`). -/
 theorem forkRestSizesLe_ofOk (T : ir.CircuitsEnforce I src) {Lmax : ℕ}
     (h : ForkRestNumbers R (ir.padBound d) (ir.circL d) Lmax) : ForkRestSizesLe src R Lmax :=
   forkRestSizesLe_of src R (fun i => (shape_circAt T i).card_padIdx_le)
@@ -153,8 +154,8 @@ noncomputable def forkRoundsAt : ℕ :=
   forkRoundsConst R + ∑ i, ((2 + 4 * ir.circW d i) * ir.circL d i + 1)
 
 variable {src} in
-/-- **The rounds of domain `d`'s branches and join** are at most `forkRoundsAt` under the compiler
-trust (`fieldFork_rounds`). -/
+/-- **The rounds of domain `d`'s branches and join** are at most `forkRoundsAt` given the
+circuits' correspondence `T` (`CircuitsEnforce`; `fieldFork_rounds`). -/
 theorem fieldFork_rounds_le_at (T : ir.CircuitsEnforce I src) :
     ∑ b, (ir.fieldForkShape src R).bn b + (ir.fieldForkShape src R).jn ≤ forkRoundsAt R := by
   exact (fieldFork_rounds src R).trans
@@ -467,7 +468,8 @@ structure ForkNumbers where
 
 variable {R} (Nm : ForkNumbers R)
 
-/-- **The size bounds of every domain** (`ForkFits.ofOk`) under the compiler trust `T`. -/
+/-- **The size bounds of every domain** (`ForkFits.ofOk`) given the circuits' correspondence `T`
+(`CircuitsEnforce`). -/
 def ForkNumbers.fits {src : ∀ c : Fin ir.circuits.length, ir.CircuitSource I c}
     (T : ir.CircuitsEnforce I src) (d : Fin ir.domains.length) : ForkFits src (R d) (Nm.cod d) :=
   ForkFits.ofOk T (Nm.cod d) (Nm.Mx d) (Nm.Lmax d) (Nm.ok d) (Nm.grants d)
@@ -528,8 +530,8 @@ variable {P : Export.Plan} {ir : RealizedProgram} {I : Interp} (B : ir.ProofSyst
 abbrev fieldIopBase := (B.fieldBranches R).iopOf Lw
 
 variable (R) in
-/-- **The rounds of the composite** are at most `forkRoundsTotal` under the compiler trust
-(`IOP.sum_rounds`, `fieldFork_rounds_le_at`). -/
+/-- **The rounds of the composite** are at most `forkRoundsTotal` under the circuits'
+correspondence (`CircuitsEnforce`; `IOP.sum_rounds`, `fieldFork_rounds_le_at`). -/
 theorem fieldIopBase_rounds_le :
     ∑ q : (B.fieldIopBase (R := R) Lw).shape.term.Leaf, (B.fieldIopBase Lw).rounds q.label ≤
       forkRoundsTotal R := by
@@ -724,7 +726,7 @@ theorem fieldForkTranscriptWith_bounds (Nm : ForkNumbers R)
     hok.2.2.2.2).trans hmg.symm
 
 /-- **The figures of the composite read through `f`** from their numbers (`FiguresOk`) under the
-compiler trust. -/
+circuits' correspondence (`CircuitsEnforce`). -/
 theorem fieldIop_figures {rounds N nq kq D pos : ℕ}
     (h : FiguresOk R rounds N nq kq D pos) : (B.fieldIop R Lw f).Figures rounds N nq kq D pos where
   rounds_le := (B.fieldIop_rounds_le Lw f).trans h.1
@@ -773,7 +775,7 @@ noncomputable def fieldIopHonest
 noncomputable def fieldIopWithHonest (chk : Stmt → Bool)
     (H : ir.HonestCore I relH) :
     (B.fieldIopWith R Lw f chk).Honest (B.fieldIopWithSimData Lw f chk) Inp
-      {p | chk p.1 = true ∧ (f p.1, p.2) ∈ relH} :=
+      (checkedRel f chk relH) :=
   ((B.fieldBranches R).honestAt Lw (B.fieldHonestDomains R) (B.fieldForkHonestDomains R)
     H).comapWith f chk
 

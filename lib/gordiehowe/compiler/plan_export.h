@@ -1260,11 +1260,12 @@ class Exporter : Lowering {
   // The assert_mod equalities: the expression, its interval and the
   // quotient's form (the grouped form's final quotient).
   // The integer equalities (assert_int_equal) are the program's mod_0
-  // (plan_program.h), not entries here.
+  // (plan_program.h), and an assert_mod over expression sides the
+  // program's committed-digits mod_q, not entries here.
   Term mod_equalities() const {
     std::vector<PlanRecords::ModEq> eqs;
     for (const auto &e : cs_.records().mod_equalities)
-      if (!e.integer) eqs.push_back(e);
+      if (!e.integer && !e.expr_sides) eqs.push_back(e);
     return list_of(eqs, [&](const PlanRecords::ModEq &e) {
       if (!e.expr.error.empty())
         export_fail("assert_mod '" + e.name + "': " + e.expr.error);

@@ -13,6 +13,6 @@ import all GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Progr
 
 namespace GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.A
 
-check_entry_leaves cert ar 2 [1, 1024, 4, 1, 1024, 4, 1, 1024, 2, 1, 1024, 2, 1, 1024, 2, 0, 0, 5, 2, 256, 161] 0 10
+check_entry_leaves cert ar 2 [0, 0, 10, 2, 1739, 24] 0 10
 
 end GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.A

@@ -21,6 +21,7 @@
 #include "bench/bench_hook.h"
 #include "bench/cli.h"
 #include "gordiehowe/examples/mldsa/mldsa_bench_flags.h"
+#include "gordiehowe/examples/mldsa/mldsa_emulated_testing.h"
 #include "gordiehowe/examples/rings/mldsa_ring_fixture.h"
 
 namespace proofs::gordiehowe::examples::mldsa {
@@ -86,7 +87,11 @@ int export_plans(const bench::Flags &f) {
   const size_t R = f.num("ring-size");
   param_sets::with_profile(profile, [&](auto p) {
     using P = decltype(p);
-    auto one = [&](auto arm) {
+    // The programs whose parts the arms hold, as their own exports write
+    // them (mldsa_shape_inputs.h's embeddings).
+    const ir::Program native = support::export_program<P>();
+    const ir::Program emulated = emulated::support::export_program<P>();
+    auto one = [&](auto arm, const compiler::EmbeddingSources &sources) {
       using Arm = decltype(arm);
       const typename Arm::E e;
       typename Arm::T t(e, R, ex.msg.size(), ex.ctx.size());
@@ -94,12 +99,12 @@ int export_plans(const bench::Flags &f) {
       const compiler::ExportMeta meta{Arm::kConfig,     P::kId,
                                       f.str("commit"),  f.str("run-id"),
                                       ex.msg.size(),    ex.ctx.size()};
-      const std::string path = write_plan(*c, dir, meta);
+      const std::string path = write_plan(*c, dir, meta, sources);
       std::printf("GH_EXPORT_PLAN arm=%s profile=%s path=%s\n", Arm::kName,
                   P::kId, path.c_str());
     };
-    one(NativeArm<P>{});
-    one(CarrierArm<P>{});
+    one(NativeArm<P>{}, {{"mldsa-native", &native}});
+    one(CarrierArm<P>{}, {{"mldsa-native", &native}, {"mldsa-emulated", &emulated}});
   });
   return 0;
 }

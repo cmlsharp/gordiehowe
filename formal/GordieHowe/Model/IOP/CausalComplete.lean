@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Model.IOP.Causal
 public import GordieHowe.Model.IOP.Completeness
+public import GordieHowe.Headline
 
 @[expose] public section
 
@@ -26,7 +27,7 @@ other's transcripts, side by side or one after the other; errors add.
 
 namespace GordieHowe.IOP
 
-open scoped NNReal
+open scoped NNReal ENNReal
 open SPTerm
 
 variable {ι : Type} {n : ι → ℕ} {P : (j : ι) → ProtocolSpec (n j)}
@@ -271,10 +272,27 @@ abbrev CausalComplete {t : SPTerm ι} (rel : Set (Stmt × Wit)) (V : Stmt → Fu
 the composite verifier rejects the run of `honest w ω` with probability at most `δ x` over uniform
 coins `ω` and uniform challenges (the paper's `def:iop-complete`, after DFMS22 p. 10: an error of
 the statement, over the challenges and the prover's coins); a constant error is `fun _ => δ`. -/
-def causalCompletenessCoins {t : SPTerm ι} (rel : Set (Stmt × Wit)) (V : Stmt → FullTr P t → Bool)
+def CausalCompleteCoins {t : SPTerm ι} (rel : Set (Stmt × Wit)) (V : Stmt → FullTr P t → Bool)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (honest : Wit → Ω → CausalProver P t Stmt)
     (δ : Stmt → ℝ≥0) : Prop :=
   ∀ x w, (x, w) ∈ rel → Pr[u ← (Ω × Chs P t) : V x ((honest w u.1).run x u.2) ≠ true] ≤ δ x
+
+/-- **The completeness error of a causal honest prover family with coins is at most `ε`**: on
+every pair `(x, w)` of `rel`, the composite verifier rejects the run of `honest w ω` with
+probability at most `ε` over uniform coins `ω` and uniform challenges (the paper's
+`def:iop-complete` at a constant error; `CausalCompleteCoins` at the constant error `δ` is
+this at `ε = δ`, `causalCompleteCoins_const_iff`). -/
+def CausalCompletenessError {t : SPTerm ι} (rel : Set (Stmt × Wit)) (V : Stmt → FullTr P t → Bool)
+    {Ω : Type} [Fintype Ω] [Nonempty Ω] (honest : Wit → Ω → CausalProver P t Stmt) (ε : ℝ≥0∞) :
+    Prop :=
+  ∀ x w, (x, w) ∈ rel → Pr[u ← (Ω × Chs P t) : V x ((honest w u.1).run x u.2) ≠ true] ≤ ε
+
+/-- **Completeness with coins at a constant error is a completeness-error bound.** -/
+theorem causalCompleteCoins_const_iff {t : SPTerm ι} {rel : Set (Stmt × Wit)}
+    {V : Stmt → FullTr P t → Bool} {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    {honest : Wit → Ω → CausalProver P t Stmt} {δ : ℝ≥0} :
+    CausalCompleteCoins rel V honest (fun _ => δ) ↔ CausalCompletenessError rel V honest δ :=
+  Iff.rfl
 
 variable {a b : SPTerm ι}
 
@@ -292,6 +310,7 @@ first-part transcript in `good`, `wit` gives a witness of `rel₂` (`split_witne
 of the honest provers, the second reading its witness off its statement, is complete for `rel` at
 `V₂` read on the parts, with error `δ₁ + δ₂`. With `good` the acceptance of a first-part verifier
 this adds the completeness errors of the two parts. -/
+@[headline]
 theorem CausalComplete.seq {Wit₂ : Type} {rel : Set (Stmt × Wit)}
     {rel₂ : Set ((Stmt × FullTr P a) × Wit₂)} {V₂ : Stmt × FullTr P a → FullTr P b → Bool}
     {honest₁ : Wit → CausalProver P a Stmt}
@@ -320,6 +339,7 @@ theorem CausalComplete.seq {Wit₂ : Type} {rel : Set (Stmt × Wit)}
 at `V₁` and for `rel₂` at `V₂`, on the same statements and witnesses, run side by side or one
 after the other without reading each other's transcripts, are complete for both relations at the
 conjunction of the verifiers with error `δ₁ + δ₂`. -/
+@[headline]
 theorem CausalComplete.par {k : Comp} {rel₁ rel₂ : Set (Stmt × Wit)}
     {V₁ : Stmt → FullTr P a → Bool}
     {V₂ : Stmt → FullTr P b → Bool} {honest₁ : Wit → CausalProver P a Stmt}
@@ -360,7 +380,7 @@ theorem CausalComplete.nodeN (k : Comp) : (m : ℕ) → {c : Fin m → SPTerm ι
 `σ` and witnesses through `ω`: the component's honest prover on `σ y` with the witness `ω y w`. -/
 theorem CausalComplete.ofLeaf {j : ι} {Y W StmtC WitC : Type} {relC : Set (StmtC × WitC)}
     {V : Verifier (P j) StmtC} {honest : WitC → Prover (P j) StmtC} {δ : ℝ≥0}
-    (h : completenessAt relC V honest δ) (σ : Y → StmtC) (ω : Y → W → WitC) :
+    (h : CompleteAt relC V honest δ) (σ : Y → StmtC) (ω : Y → W → WitC) :
     CausalComplete {p | (σ p.1, ω p.1 p.2) ∈ relC} (fun y f => V (σ y) (f (.here j)))
       (fun w => CausalProver.ofLeaf
         (Prover.ofStatement fun y => (honest (ω y w)).comap σ)) δ := by

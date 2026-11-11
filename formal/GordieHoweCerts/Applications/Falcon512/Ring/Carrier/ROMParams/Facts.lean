@@ -56,26 +56,26 @@ instance : FalconRingSelect program := ⟨⟨rfl, rfl, rfl, rfl, rfl⟩⟩
 
 /-- **`member.signer`**: `Σ_k spectrum_k γ^k` less the digest the index bits select is `0`. -/
 theorem carrier_member : ∃ t, (program.predicate 0).body =
-    .equal 0 (memberLhs 6 17 7 mOneG) (.leaf 1) t := predicate_member_2esigner_body
+    .equal 0 (memberLhs 7 20 8 mOneG) (.leaf 1) t := predicate_member_2esigner_body
 
 /-- **`member.signer.index.boolean`**: the index bits are bits. -/
 theorem carrier_idxBool :
-    ∃ t, (program.predicate 9).body = .equal 0 (.mul (.leaf 7) (.leaf 7)) (.leaf 7) t :=
+    ∃ t, (program.predicate 9).body = .equal 0 (.mul (.leaf 8) (.leaf 8)) (.leaf 8) t :=
   predicate_member_2esigner_2eindex_2eboolean_body
 
 set_option maxRecDepth 4096 in
-/-- The membership's facts: the ring `4`, the challenge `5`, the spectrum `6`, `s2` `9`, the powers
-`17`, the zero constant `1`, `ψ = psiG`, `−1 = p − 1`, the index bits' check `9`. -/
+/-- The membership's facts: the ring `5`, the challenge `6`, the spectrum `7`, `s2` `10`, the powers
+`20`, the zero constant `1`, `ψ = psiG`, `−1 = p − 1`, the index bits' check `9`. -/
 @[expose] instance : FalconRingMember program where
-  ring := 4
-  spec := 6
-  pow := 17
+  ring := 5
+  spec := 7
+  pow := 20
   zero := 1
   psi := psiG
   mOne := mOneG
   idxPred := 9
-  chal := 5
-  s2 := 9
+  chal := 6
+  s2 := 10
   domainField0 := domainField0_checked
   member := carrier_member
   idxBool := carrier_idxBool
@@ -95,7 +95,7 @@ set_option maxRecDepth 4096 in
   chal_ne_ring := by decide
   fields := by
     intro v hv
-    change v ∈ [0, 1, 4, 6, 7, 8, 17, 18, 5, 9] at hv
+    change v ∈ [0, 1, 5, 7, 8, 9, 20, 21, 6, 10] at hv
     change program.valueField v = 0
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
     rcases hv with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
@@ -112,50 +112,85 @@ set_option maxRecDepth 4096 in
   sizes := ⟨RealizedProgram.valueShape_size value_member_2esigner_2eindex_header.2, RealizedProgram.valueShape_size value_key_2espectrum_header.2, RealizedProgram.valueShape_size value_statement_2ering_header.2, RealizedProgram.valueShape_size value_statement_2ec_header.2, RealizedProgram.valueShape_size value_s2_header.2⟩
   chal0 := ⟨challenge_member_2ering_2egamma_full.2.2.2,
     challenge_member_2ering_2egamma_full.2.1, challenge_member_2ering_2egamma_full.2.2.1⟩
-  isSourceChal_iff := fun j => by
+  isSourceChal_zero := by
     rw [program.isSourceChal_iff_mem_sourceChallengeIds Generated.Falcon512.Ring.Carrier.ROMParams.conditions.wellFormed,
-      source_challenges, List.mem_singleton]
+      source_challenges]
+    simp
   values_length := value_member_2eone_header.1
   privKinds := ⟨value_key_2espectrum_kind, value_member_2esigner_2eindex_kind, value_s2_kind⟩
 
-/-- **`signature.equation`**: the spectral product form of `c − s1 ≡ h · s2 (mod q)`. -/
-theorem carrier_sig : ∃ real, (program.predicate 4).body = .mod 0 12289 carrierSigP carrierSigN real ∧
-    real.form = .spectralProduct ∧ real.quotient = some (.leaf 11) ∧
-    real.quotientLo = -6291457 ∧ real.qmax = 12570625 :=
+/-- **`signature.equation`**: the signature equation at `r`. -/
+theorem carrier_sig : ∃ t, (program.predicate 1).body = .equal 0
+    (sigLhs (.add (.add (.add (.leaf 6) (.scale (.const mOneG) (.leaf 11)))
+      (.scale (.const mQG) (.leaf 12))) (.reindex [(0, 0, 512)] (.leaf 2))) 7 10 13 22 23 24 mOneG)
+    (.leaf 1) t :=
   predicate_signature_2eequation_body
 
 set_option maxRecDepth 4096 in
 /-- The carrier's facts outside the membership. -/
 instance : FalconCarrierBase program where
+  sigE := .add (.add (.add (.leaf 6) (.scale (.const mOneG) (.leaf 11)))
+    (.scale (.const mQG) (.leaf 12))) (.reindex [(0, 0, 512)] (.leaf 2))
+  q := 13
+  r := 14
+  rChal := 1
+  one := 0
+  zero1 := 1
+  pw := 22
+  lam := 23
+  rn := 24
+  pwRef := 37
+  r256Ref := 36
+  sigPred := 1
+  nInv := 18410715272404008961
+  psiInv := 4295002282146690441
   ids := ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  sigIds := ⟨rfl, rfl, rfl⟩
+  invConsts := ⟨rfl, rfl⟩
+  sigE_eq := rfl
+  sigELen := rfl
   sig := carrier_sig
+  inSourceSig := ⟨predicate_signature_2eequation_role.1,
+    program.inSource_of_source predicate_signature_2eequation_role.2⟩
+  const0 := ⟨RealizedProgram.isConstant_of_kind value_member_2ezero_kind,
+    by rw [RealizedProgram.constEntries_of_kind value_member_2ezero_kind]⟩
+  sigFields := by
+    intro v hv
+    change v ∈ [1, 13, 22, 23, 24] at hv
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
+    rcases hv with rfl | rfl | rfl | rfl | rfl
+    · exact RealizedProgram.valueShape_field value_member_2ezero_header.2
+    · exact RealizedProgram.valueShape_field value_signature_2eQ_header.2
+    · exact RealizedProgram.valueShape_field value_signature_2eequation_2epublic0_header.2
+    · exact RealizedProgram.valueShape_field value_signature_2elambda_header.2
+    · exact RealizedProgram.valueShape_field value_signature_2eequation_2epublic1_header.2
+  rChal_ne := by decide
   magS1 := predicate_magnitudes_2es1_body
   magS2 := predicate_magnitudes_2es2_body
   normSum := predicate_norm_2esum_body
+  rQuot := predicate_signature_2eequation_2eq_body
   rMag1 := predicate_magnitudes_2emag1_body
   rMag2 := predicate_magnitudes_2emag2_body
   rLow2 := predicate_encoding_2elow2_body
   rBudget := predicate_encoding_2ebudget_body
   rNorm := predicate_norm_2ebound_body
-  rQuot := predicate_signature_2eequation_2eq_body
   high2 := by
-    obtain ⟨r, h, hf, -⟩ := predicate_encoding_2ehigh2_body
-    exact ⟨r, h, by rw [hf]; rfl⟩
+    obtain ⟨r, h, -⟩ := predicate_encoding_2ehigh2_body
+    exact ⟨r, h⟩
   inSource := by
     intro q hq
-    change q ∈ [1, 2, 3, 4, 10, 11, 12, 13, 14, 15, 17] at hq
+    change q ∈ [2, 3, 4, 10, 11, 12, 13, 14, 15, 17] at hq
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hq
-    rcases hq with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    rcases hq with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
     · exact ⟨predicate_magnitudes_2es1_role.1, program.inSource_of_source predicate_magnitudes_2es1_role.2⟩
     · exact ⟨predicate_magnitudes_2es2_role.1, program.inSource_of_source predicate_magnitudes_2es2_role.2⟩
     · exact ⟨predicate_norm_2esum_role.1, program.inSource_of_source predicate_norm_2esum_role.2⟩
-    · exact ⟨predicate_signature_2eequation_role.1, program.inSource_of_source predicate_signature_2eequation_role.2⟩
+    · exact ⟨predicate_signature_2eequation_2eq_role.1, program.inSource_of_source predicate_signature_2eequation_2eq_role.2⟩
     · exact ⟨predicate_magnitudes_2emag1_role.1, program.inSource_of_source predicate_magnitudes_2emag1_role.2⟩
     · exact ⟨predicate_magnitudes_2emag2_role.1, program.inSource_of_source predicate_magnitudes_2emag2_role.2⟩
     · exact ⟨predicate_encoding_2elow2_role.1, program.inSource_of_source predicate_encoding_2elow2_role.2⟩
     · exact ⟨predicate_encoding_2ebudget_role.1, program.inSource_of_source predicate_encoding_2ebudget_role.2⟩
     · exact ⟨predicate_norm_2ebound_role.1, program.inSource_of_source predicate_norm_2ebound_role.2⟩
-    · exact ⟨predicate_signature_2eequation_2eq_role.1, program.inSource_of_source predicate_signature_2eequation_2eq_role.2⟩
     · exact ⟨predicate_encoding_2ehigh2_role.1, program.inSource_of_source predicate_encoding_2ehigh2_role.2⟩
   consts := by
     exact ⟨RealizedProgram.isConstant_of_kind value_magnitudes_2emodulus_kind,
@@ -164,12 +199,15 @@ instance : FalconCarrierBase program where
       by rw [RealizedProgram.constEntries_of_kind value_magnitudes_2ezero_kind]; rfl,
       RealizedProgram.isConstant_of_kind value_encoding_2ebudget_2eoffset_kind,
       by rw [RealizedProgram.constEntries_of_kind value_encoding_2ebudget_2eoffset_kind]; rfl⟩
+  qloConst := ⟨RealizedProgram.isConstant_of_kind value_signature_2eequation_2eoffset_kind,
+    by rw [RealizedProgram.constEntries_of_kind value_signature_2eequation_2eoffset_kind]; rfl⟩
   fields := by
     intro v hv
-    change v ∈ [2, 3, 10, 11, 12, 13, 14, 15, 16] at hv
+    change v ∈ [2, 3, 4, 11, 12, 15, 16, 17, 18, 19] at hv
     change program.valueField v = 0
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
-    rcases hv with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    rcases hv with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    · exact RealizedProgram.valueShape_field value_signature_2eequation_2eoffset_header.2
     · exact RealizedProgram.valueShape_field value_magnitudes_2emodulus_header.2
     · exact RealizedProgram.valueShape_field value_magnitudes_2ezero_header.2
     · exact RealizedProgram.valueShape_field value_signature_2es1_header.2
@@ -180,7 +218,13 @@ instance : FalconCarrierBase program where
     · exact RealizedProgram.valueShape_field value_encoding_2ebudget_2eoffset_header.2
     · exact RealizedProgram.valueShape_field value_norm_2esquares_header.2
   sizes := ⟨RealizedProgram.valueShape_size value_signature_2es1_header.2, RealizedProgram.valueShape_size value_signature_2eequation_2eq_header.2, RealizedProgram.valueShape_size value_magnitudes_2emag1_header.2, RealizedProgram.valueShape_size value_magnitudes_2emag2_header.2, RealizedProgram.valueShape_size value_encoding_2elow2_header.2, RealizedProgram.valueShape_size value_norm_2esquares_header.2⟩
+  sigSizes := ⟨RealizedProgram.valueShape_size value_signature_2eQ_header.2,
+    RealizedProgram.valueShape_size value_signature_2eequation_2epublic0_header.2,
+    RealizedProgram.valueShape_size value_signature_2elambda_header.2,
+    RealizedProgram.valueShape_size value_signature_2eequation_2epublic1_header.2⟩
   privKinds := ⟨value_signature_2es1_kind, value_magnitudes_2emag2_kind, value_encoding_2elow2_kind⟩
+  qPriv := value_signature_2eQ_kind
+  quotBound := ⟨_, value_signature_2eequation_2eq_kind⟩
   ringCheck := by
     refine ⟨⟨"ring", 0, 65536, "falcon_ring_key_u16le", [512, 12289]⟩, ?_, ?_, rfl⟩
     · rw [statement_checks]
@@ -197,6 +241,32 @@ instance : FalconCarrierBase program where
         (ProgramData.memberValuesB_of_programOk GordieHoweCheck.Falcon512.Ring.Carrier.ROMParams.programOk) (k := 1)
       · rw [statement_checks]; rfl
       · rw [RealizedProgram.Structure.memberValueTab_eq, Generated.Falcon512.Ring.Carrier.ROMParams.Structure.memberValues_eq]; rfl
+  rPow :=
+    { consts := ⟨isConstant_of_kind value_member_2eone_kind,
+        by rw [constEntries_of_kind value_member_2eone_kind]; rfl⟩
+      kind := value_signature_2er_kind
+      chalField := challenge_signature_2er_full.2.2.1
+      fields := ⟨valueShape_field value_member_2eone_header.2, valueShape_field value_signature_2er_header.2⟩
+      sizes := ⟨valueShape_size value_member_2eone_header.2, valueShape_size value_signature_2er_header.2⟩
+      values_pos := value_member_2eone_header.1 }
+  chalR := ⟨challenge_signature_2er_full.2.2.2, challenge_signature_2er_full.2.1⟩
+  isSourceChal_iff := fun j => by
+    rw [program.isSourceChal_iff_mem_sourceChallengeIds Generated.Falcon512.Ring.Carrier.ROMParams.conditions.wellFormed,
+      source_challenges]
+    simp
+  pwKind := value_signature_2eequation_2epublic0_definition
+  lamKind := value_signature_2elambda_definition
+  rnKind := value_signature_2eequation_2epublic1_definition
+  refsOrdered := Generated.Falcon512.Ring.Carrier.ROMParams.conditions.wellFormed.refsOrdered
+  exprs_pos := by rw [exprs_length]; decide
+  powPw := by
+    rw [powSym_congr (agreesBelow_replica expr_table_holds.2 (by decide +kernel)) _ _ _
+      (by decide +kernel)]
+    decide +kernel
+  pow256 := by
+    rw [powSym_congr (agreesBelow_replica expr_table_holds.2 (by decide +kernel)) _ _ _
+      (by decide +kernel)]
+    decide +kernel
 
 /-! ## Honest source and completion facts -/
 
@@ -215,13 +285,14 @@ instance : FalconRingRoleFacts program where
   roles := by decide +kernel
   privCell := by
     intro p hp
-    change p ∈ [(6, .spec), (7, .bit), (9, .nat .s2), (10, .nat .s1), (13, .nat .mag2), (14, .nat .low2), (36, .nat (.quotD 0)), (37, .nat (.quotD 1)), (38, .nat (.quotD 2)), (19, .nat (.mag1D 0)), (20, .nat (.mag1D 1)), (29, .nat (.normD 0)), (30, .nat (.normD 1)), (31, .nat (.normD 2))] at hp
+    change p ∈ [(7, .spec), (8, .bit), (10, .nat .s2), (11, .nat .s1), (13, .nat .high), (16, .nat .mag2), (17, .nat .low2), (25, .nat (.quotD 0)), (26, .nat (.quotD 1)), (27, .nat (.quotD 2)), (28, .nat (.mag1D 0)), (29, .nat (.mag1D 1)), (38, .nat (.normD 0)), (39, .nat (.normD 1)), (40, .nat (.normD 2))] at hp
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
-    rcases hp with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    rcases hp with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
     · exact Generated.Falcon512.Ring.Carrier.ROMParams.conditions.wellFormed.privCellB_of_kind_priv value_key_2espectrum_header.1 value_key_2espectrum_kind
     · exact Generated.Falcon512.Ring.Carrier.ROMParams.conditions.wellFormed.privCellB_of_kind_priv value_member_2esigner_2eindex_header.1 value_member_2esigner_2eindex_kind
     · exact Generated.Falcon512.Ring.Carrier.ROMParams.conditions.wellFormed.privCellB_of_kind_priv value_s2_header.1 value_s2_kind
     · exact Generated.Falcon512.Ring.Carrier.ROMParams.conditions.wellFormed.privCellB_of_kind_priv value_signature_2es1_header.1 value_signature_2es1_kind
+    · exact Generated.Falcon512.Ring.Carrier.ROMParams.conditions.wellFormed.privCellB_of_kind_priv value_signature_2eQ_header.1 value_signature_2eQ_kind
     · exact Generated.Falcon512.Ring.Carrier.ROMParams.conditions.wellFormed.privCellB_of_kind_priv value_magnitudes_2emag2_header.1 value_magnitudes_2emag2_kind
     · exact Generated.Falcon512.Ring.Carrier.ROMParams.conditions.wellFormed.privCellB_of_kind_priv value_encoding_2elow2_header.1 value_encoding_2elow2_kind
     · exact generatedCell value_range_2esignature_2eequation_2eq_2ed0_header rfl rfl rfl
@@ -303,11 +374,12 @@ instance : FalconCarrierHonest program where
     · exact valueShape_field value_norm_2esquares_header.2
   roleFields := by
     intro p hp
-    change p ∈ [(9, .s2), (10, .s1), (13, .mag2), (14, .low2), (36, (.quotD 0)), (37, (.quotD 1)), (38, (.quotD 2)), (19, (.mag1D 0)), (20, (.mag1D 1)), (29, (.normD 0)), (30, (.normD 1)), (31, (.normD 2))] at hp
+    change p ∈ [(10, .s2), (11, .s1), (13, .high), (16, .mag2), (17, .low2), (25, (.quotD 0)), (26, (.quotD 1)), (27, (.quotD 2)), (28, (.mag1D 0)), (29, (.mag1D 1)), (38, (.normD 0)), (39, (.normD 1)), (40, (.normD 2))] at hp
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
-    rcases hp with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    rcases hp with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
     · exact valueShape_field value_s2_header.2
     · exact valueShape_field value_signature_2es1_header.2
+    · exact valueShape_field value_signature_2eQ_header.2
     · exact valueShape_field value_magnitudes_2emag2_header.2
     · exact valueShape_field value_encoding_2elow2_header.2
     · exact valueShape_field value_range_2esignature_2eequation_2eq_2ed0_header.2

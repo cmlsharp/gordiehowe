@@ -13,7 +13,8 @@ public import GordieHowe.Model.Signature.SingleUser
 public import GordieHowe.Model.Signature.NMA
 public import GordieHowe.Model.Signature.Relations
 public import GordieHowe.Model.Signature.Assumptions
-public import GordieHowe.Applications.Ring.BaseSignerAssumptions
+public import GordieHowe.Applications.MLDSA.Assumptions
+public import GordieHowe.Applications.Falcon512.Assumptions
 
 @[expose] public section
 
@@ -99,7 +100,8 @@ query-bounded quantum adversaries in the QROM with classical requests to a chall
   (`not_muEufCmaHard_univ_whole`), and at every view of the oracle when verification does not read
   it (`not_muEufCmaHard_univ_of_bverify_eq`, by a draw that reads the public keys:
   `not_muEufCmaHard_drawAdversaries`).
-- **Named base-scheme assumptions** (`Applications/Ring/BaseSignerAssumptions.lean`):
+- **Named base-scheme assumptions** (`Applications/MLDSA/Assumptions.lean`,
+  `Applications/Falcon512/Assumptions.lean`):
   `MLDSA44SufCma`, `MLDSA65SufCma`, `MLDSA87SufCma` and their multi-user forms
   `MLDSA44MUSufCma` … (FIPS 204 §3.1); `Falcon512EufCma`, `Falcon512MUEufCma` (Falcon
   specification v1.2, §2.2.1). The base signers never read the game's oracle, so these are
@@ -111,7 +113,17 @@ query-bounded quantum adversaries in the QROM with classical requests to a chall
   `Applications/Falcon512/Ring/*/*/RingForger.lean`, to which `MUEufCmaHard.le` applies; the
   relay and extraction forgers of `Applications/Ring/Unforgeability.lean`,
   `RingUnforgeability.lean` and `StrongForger.lean`, which are not `MUAdversary`s); no result
-  takes a named predicate as a hypothesis yet.
+  takes these predicates as hypotheses.
+- **Named assumptions with `t₀` published** (`Applications/MLDSA/Assumptions.lean`, section "`t₀`
+  published"): `MLDSAT0EufCma`, `MLDSAT0MUEufCma`, `MLDSAT0MUEufCmaWithin` (EUF-CMA) and
+  `MLDSAT0EufNma`, `MLDSAT0MUEufNma` (EUF-NMA), with `MLDSA44T0EufCma` … `MLDSA87T0MUEufNma` at the
+  three parameter sets: the games at the ML-DSA signer whose public key is `(ρ, t₁, t₀)`
+  (`MLDSA.mldsaT0BaseScheme`, the core of `MLDSAW1.w1BaseSigner`). This signer reads the game's
+  random oracle, so they are random-oracle assumptions. The justification (uncited, and FIPS 204
+  §6.1, p. 22): analyses take `t₀` to be public, and its bits "can be reconstructed from a small
+  number of signatures"; neither is proved. Uses: the flattened signer's unforgeability
+  (`Applications/MLDSA/Flattened/Unforgeability.lean`) and the corollaries of the ring-binding and
+  converted unforgeability theorems under them (`Applications/Ring/MLDSAW1NamedAssumptions.lean`).
 
 ## Idealizations used inside proofs
 
@@ -128,13 +140,12 @@ about the concrete function it replaces.
   and their `_of`, `_query`, `_checkParams` forms (`PublicW1/MLDSAPublicW1Regularity.lean`) and the
   hedged forms (`PublicW1/MLDSAPublicW1Hedged*.lean`); the regularity and collision lemmas at a
   uniform matrix (`Applications/MLDSA/Regularity/`: `T0Law`, `CommitCollision`
-  (`expect_commitCollision_le`), `SignerRegularity`, `Instances*`); the edge-test results above
-  (`realKeyMean`: `Â` uniform in both worlds).
+  (`expect_commitCollision_le`), `SignerRegularity`, `Instances*`).
 - **`ExpandS` as a random oracle (a uniform `η`-box secret).** `withExpandS`
   (`PublicW1/MLDSAPublicW1ExpandS.lean`), `oracleSecretLaw`
-  (`Applications/MLDSA/Regularity/StandinError44.lean`), the ML-DSA-44 edge-test results.
-- **`SampleInBall` as a random oracle onto `B_τ`.** `withSampleInBall`, `ChallengeOracle`,
-  `oraclePrims`; `Applications/MLDSA/Signing/Floor.lean` states it as the standard idealization of
+  (`Applications/MLDSA/Regularity/StandinError44.lean`).
+- **`SampleInBall` as a random oracle onto `B_τ`.** `withSampleInBall`, `oraclePrims`;
+  `Applications/MLDSA/Signing/Floor.lean` states it as the standard idealization of
   its XOF stream, not proved.
 - **`ExpandMask` and `H` uniform.** `Applications/MLDSA/Signing/Ideal.lean` (`maskUniform`).
 - **The uniform-`t` key model.** `floorProb_mldsa44_uniformT_le`

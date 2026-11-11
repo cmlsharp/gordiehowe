@@ -32,14 +32,15 @@ open GordieHowe.RingSignature.OracleSplit
 open scoped ENNReal
 
 variable {k kN kS L e N : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁]
-  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
+  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)] {X₀ Wit₀ : Type}
   (M : SPBCS Mg P X₀ k kN kS L e) (Λ : SiteLayout Mg) {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] (E : (j : ι) → (M.comp j).Encoder)
   {Vr : X₀ → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : Wit₀ → R → CausalProver P τ X₀)
   (stmtProg : RingSignature.RingStmt B → OracleProg (Bits (queryBits k kN kS L)) Y₁ X₀) (qS : ℕ)
   (hS : ∀ x, (stmtProg x).QueriesLE qS) {check : RingSignature.RingStmt B → Bool}
@@ -47,6 +48,9 @@ variable {k kN kS L e N : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁]
   (input : RingSignature.RingStmt B → RingSignature.RingWit B → Option Wit₀)
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm]
 
+variable [DecidableEq TB.PK]
+
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The scheme with the check `check'` accepts what the scheme with `check` accepts on a
 nonempty ring**, when `check'` accepts the statements with a nonempty ring that `check` accepts
 (`hc`). -/
@@ -65,6 +69,10 @@ theorem verify_spbcsSplit_check
 
 variable [Fintype Y] [DecidableEq Y] [Nonempty Y] {n : ℕ} [NeZero n]
   {V : RingSignature.OracleView (Bits (queryBits k kN kS L)) Y} {t : ℕ}
+
+variable [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
+  [DecidableEq TB.Coins] [Nonempty TB.Coins]
 
 /-- **BKM06 Definition 7 with the empty ring rejected** (`insiderForgeProb_le_withVerify`): for a
 check `check'` accepting the statements with a nonempty ring that `check` accepts (`hc`), the
@@ -87,6 +95,8 @@ theorem insiderForgeProb_le_spbcsSplit_check
         forgeProbOn A Q (fun o => o.1.1 = []) :=
   insiderForgeProb_le_withVerify _ (verify_spbcsSplit_check sp M Λ E hb honest stmtProg qS hS
     check' input hc) A Q
+
+variable [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig]
 
 /-- **The key-reuse game with the empty ring rejected** (`forgeProb_le_withVerify`): for a check
 `check'` accepting the statements with a nonempty ring that `check` accepts (`hc`), the forgery

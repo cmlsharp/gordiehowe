@@ -12,7 +12,7 @@ public import GordieHowe.Model.ROM.LeafZK
 /-!
 # Everlasting zero knowledge against query-bounded classical adversaries
 
-The query bound of the paper's everlasting zero knowledge (Definition 6.2, `def:narg-zk-post`) for
+The query bound of the paper's everlasting zero knowledge (`def:narg-zk-post`) for
 the query-bounded classical adversaries of `GordieHowe/Model/ROM/Interactive.lean`: every proof query comes after at
 most `t` queries of the run (`IAlg.RequestBudget`), and the queries after the last proof query are not
 charged. The adversary's own budget of queries over all its steps is not charged.
@@ -92,14 +92,14 @@ namespace QueryBoundedAdversary
 variable {T : ℕ} (𝒜 : QueryBoundedAdversary X Y (ProofQuery Stmt Wit) (Option Proof)
   ((X → Y) → Bool) T)
 
-/-- **At most `t` queries before the last proof query** (the query bound of the paper's Definition 6.2,
+/-- **At most `t` queries before the last proof query** (the query bound of the paper's
 `def:narg-zk-post`): every algorithm of `𝒜` makes at most `t` queries before each of its proof queries
 on every run (`IAlg.RequestBudget`). -/
 def QueriesBeforeLastProofQuery (t : ℕ) : Prop :=
   ∀ r, (𝒜.alg r).RequestBudget t
 
 /-- The budget of `𝒜` bounds its queries before the last proof query. -/
-theorem queriesBeforeLastRequestLE_self : 𝒜.QueriesBeforeLastProofQuery T :=
+theorem queriesBeforeLastProofQuery_self : 𝒜.QueriesBeforeLastProofQuery T :=
   fun r => (𝒜.budget r).requestBudget
 
 variable [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] (rel : Stmt → Wit → Prop)
@@ -107,14 +107,15 @@ variable [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] (rel : Stmt → Wi
 
 /-- **Everlasting zero knowledge in the classical random-oracle model, over query-bounded
 adversaries** (Unruh 2017 Definition 6, p. 14, with classical adversaries and the query bound of the
-paper's Definition 6.2, `def:narg-zk-post`): for all `t` and `Q`, every query-bounded classical
+paper's `def:narg-zk-post`): for all `t` and `Q`, every query-bounded classical
 adversary with at most `t` queries before each of its proof queries on every run
 (`QueriesBeforeLastProofQuery`), and any number after the last one, whose first `Q` proof queries are
-answered, has advantage at most `ε t Q` between the prover `P` and the simulator `S`. -/
+answered, has advantage at most `ε t Q` between the prover `P`, its coins drawn from `μ`, and the
+simulator `S`. -/
 def _root_.GordieHowe.ROM.EverlastingZeroKnowledge (P : NARG.ProverFn X Y Stmt Wit Proof Coins)
-    (S : NARG.SimulatorFn X Y Stmt Proof SimCoins) (ε : ℕ → ℕ → ℝ) : Prop :=
+    (μ : PMF Coins) (S : NARG.SimulatorFn X Y Stmt Proof SimCoins) (ε : ℕ → ℕ → ℝ) : Prop :=
   ∀ (T t Q : ℕ) (𝒜 : QueryBoundedAdversary X Y (ProofQuery Stmt Wit) (Option Proof)
-    ((X → Y) → Bool) T), 𝒜.QueriesBeforeLastProofQuery t → 𝒜.advantage rel P S Q ≤ ε t Q
+    ((X → Y) → Bool) T), 𝒜.QueriesBeforeLastProofQuery t → 𝒜.advantage rel P μ S Q ≤ ε t Q
 
 /-- **The output does not read the final oracle**: every algorithm's output is a function of its
 replies alone, so its budget of queries covers all its queries. -/
@@ -125,11 +126,12 @@ def OutputOracleFree : Prop :=
 (Unruh 2017 Definition 6, p. 14, with classical adversaries, all of whose queries are counted):
 for all `t` and `Q`, every query-bounded classical adversary with a budget of `t` queries over all
 its steps whose output does not read the final oracle (`OutputOracleFree`), with its first `Q`
-proof queries answered, has advantage at most `ε t Q` between the prover `P` and the simulator `S`. -/
-def _root_.GordieHowe.ROM.ZeroKnowledge (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (S : NARG.SimulatorFn X Y Stmt Proof SimCoins)
-    (ε : ℕ → ℕ → ℝ) : Prop :=
+proof queries answered, has advantage at most `ε t Q` between the prover `P`, its coins drawn from
+`μ`, and the simulator `S`. -/
+def _root_.GordieHowe.ROM.ZeroKnowledge (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ : PMF Coins)
+    (S : NARG.SimulatorFn X Y Stmt Proof SimCoins) (ε : ℕ → ℕ → ℝ) : Prop :=
   ∀ (t Q : ℕ) (𝒜 : QueryBoundedAdversary X Y (ProofQuery Stmt Wit) (Option Proof)
-    ((X → Y) → Bool) t), 𝒜.OutputOracleFree → 𝒜.advantage rel P S Q ≤ ε t Q
+    ((X → Y) → Bool) t), 𝒜.OutputOracleFree → 𝒜.advantage rel P μ S Q ≤ ε t Q
 
 variable {rel}
 
@@ -137,10 +139,11 @@ variable {rel}
 adversaries**, by the map `toNIZK`, which preserves the advantage and the budget before each
 proof query. -/
 theorem everlastingZeroKnowledge_of_nizk {P : NARG.ProverFn X Y Stmt Wit Proof Coins}
+    {μ : PMF Coins}
     {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} {ε : ℕ → ℕ → ℝ}
-    (h : NIZK.EverlastingZeroKnowledge rel P S ε) :
-    GordieHowe.ROM.EverlastingZeroKnowledge rel P S ε := fun T t Q 𝒜 h𝒜 =>
-  (𝒜.advantage_toNIZK rel P S Q).symm.trans_le
+    (h : NIZK.EverlastingZeroKnowledge rel P μ S ε) :
+    GordieHowe.ROM.EverlastingZeroKnowledge rel P μ S ε := fun T t Q 𝒜 h𝒜 =>
+  (𝒜.advantage_toNIZK rel P μ S Q).symm.trans_le
     (h 𝒜.steps T t Q 𝒜.toNIZK fun r => (𝒜.alg r).requestBudget_toNIZK (h𝒜 r))
 
 /-- With an oracle-free output, the algorithms of `toNIZK` have oracle-free outputs. -/
@@ -150,23 +153,26 @@ theorem postOracleFree_toNIZK {t : ℕ} {𝒜 : QueryBoundedAdversary X Y (Proof
 
 /-- **Query-counted zero knowledge over the adversaries of `ROM.NIZK` gives zero knowledge over
 query-bounded adversaries**, by the map `toNIZK`. -/
-theorem zeroKnowledge_of_queryBounded {P : NARG.ProverFn X Y Stmt Wit Proof Coins}
+theorem zeroKnowledge_of_queryBounded {P : NARG.ProverFn X Y Stmt Wit Proof Coins} {μ : PMF Coins}
     {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} {ε : ℕ → ℕ → ℝ}
-    (h : NIZK.ZeroKnowledgeQueryBounded rel P S ε) : GordieHowe.ROM.ZeroKnowledge rel P S ε := fun t Q 𝒜 h𝒜 =>
-  (𝒜.advantage_toNIZK rel P S Q).symm.trans_le
+    (h : NIZK.ZeroKnowledgeQueryBounded rel P μ S ε) : GordieHowe.ROM.ZeroKnowledge rel P μ S ε := fun t Q 𝒜 h𝒜 =>
+  (𝒜.advantage_toNIZK rel P μ S Q).symm.trans_le
     (h 𝒜.steps t Q 𝒜.toNIZK (postOracleFree_toNIZK h𝒜))
 
 /-- **Everlasting zero knowledge gives zero knowledge**, at the same error: an
 adversary with a budget of `t` queries makes at most `t` queries before each proof query. -/
-theorem _root_.GordieHowe.ROM.EverlastingZeroKnowledge.zeroKnowledge {P : NARG.ProverFn X Y Stmt Wit Proof Coins}
+theorem _root_.GordieHowe.ROM.EverlastingZeroKnowledge.zeroKnowledge
+    {P : NARG.ProverFn X Y Stmt Wit Proof Coins} {μ : PMF Coins}
     {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} {ε : ℕ → ℕ → ℝ}
-    (h : GordieHowe.ROM.EverlastingZeroKnowledge rel P S ε) : GordieHowe.ROM.ZeroKnowledge rel P S ε := fun t Q 𝒜 _ =>
-  h t t Q 𝒜 𝒜.queriesBeforeLastRequestLE_self
+    (h : GordieHowe.ROM.EverlastingZeroKnowledge rel P μ S ε) : GordieHowe.ROM.ZeroKnowledge rel P μ S ε := fun t Q 𝒜 _ =>
+  h t t Q 𝒜 𝒜.queriesBeforeLastProofQuery_self
 
 /-- A larger error bound. -/
 theorem _root_.GordieHowe.ROM.ZeroKnowledge.mono {P : NARG.ProverFn X Y Stmt Wit Proof Coins}
-    {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} {ε ε' : ℕ → ℕ → ℝ} (h : GordieHowe.ROM.ZeroKnowledge rel P S ε)
-    (hε : ∀ t Q, ε t Q ≤ ε' t Q) : GordieHowe.ROM.ZeroKnowledge rel P S ε' :=
+    {μ : PMF Coins}
+    {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} {ε ε' : ℕ → ℕ → ℝ}
+        (h : GordieHowe.ROM.ZeroKnowledge rel P μ S ε)
+    (hε : ∀ t Q, ε t Q ≤ ε' t Q) : GordieHowe.ROM.ZeroKnowledge rel P μ S ε' :=
   fun t Q 𝒜 h𝒜 => (h t Q 𝒜 h𝒜).trans (hε t Q)
 
 end QueryBoundedAdversary

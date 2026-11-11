@@ -396,27 +396,6 @@ theorem realizedAt_of_holds (hv : ir.CellsValid) (hl : ir.Local treeNodes)
       exact fieldEq_of_holds_realized hv hl hadd hz hwf hI hL h hpid hpo
         (by rw [hb]; simp [PredBody.exprs]) (by rw [hb]; simp [PredBody.exprs])
         (by have := hpo.2; rw [hb] at this; exact this.symm) hd hR
-  product p hp dd m lhs rhs real hb hf h2 := by
-    obtain ⟨pid, hpid, rfl⟩ := exists_index_of_mem hp
-    have hown := hv.equal pid hpid
-      (by rw [hb]; simp [PredBody.needsRoute, PredBody.isProductMod, hf])
-    have hre : ¬ ir.RealizedOwn pid := by
-      unfold RealizedOwn
-      rw [hb]
-      cases m with
-      | zero => omega
-      | succ k => exact id
-    obtain ⟨d, hd, hlow⟩ := hown.resolve_right hre
-    have hl' := (placedHolds_cellValuation_iff hl a d hpid hd).1
-      (placedHolds_of_holds hadd hz (h d) hlow)
-    have hnf : ¬ (m = 0 ∨ real.form = .field) := by
-      rintro (h0 | h0)
-      · omega
-      · rw [h0] at hf
-        cases hf
-    rw [hb] at hl'
-    simp only [PlacedHolds, if_neg hnf, if_pos (And.intro hf h2)] at hl'
-    exact hl'
   logup t ht g hg := by
     obtain ⟨c, hcd, hc⟩ := hv.logup t ht g hg
     obtain ⟨v, hnode, hf⟩ := hv.alpha t ht

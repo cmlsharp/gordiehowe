@@ -184,7 +184,7 @@ theorem sibBytes_honest (hy : y.Valid) (o : Fin sibLen) :
   rw [inputBytes_cTildeOut, cTildeOf_honest D hy]
 
 omit [Fintype KH] [Fintype F] in
-/-- **The honest stream is the input's stream** `PoP.MLDSA44.stream c̃`. -/
+/-- **The honest stream is the input's stream** `MLDSA44.PoP.stream c̃`. -/
 theorem sibStream_honest (hy : y.Valid) :
     (fun o => natOfBits (sibBytes D (honestAssignment (F := F) D.packing y) o)) =
       MLDSA44.PoP.stream y.ctilde :=

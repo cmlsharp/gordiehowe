@@ -39,24 +39,10 @@ written `8380417`. -/
 abbrev _root_.GordieHowe.MLDSA44.QField (F0 : FieldInterp) : Type :=
   PrimeCoordField F0 _root_.MLDSA.modulus
 
-/-- **The coordinates of a sum** in `MLDSANativeField6` are the sums of the coordinates. -/
-theorem mldsaNative6Coords_add (x y : MLDSANativeField6) (i : Fin 6) :
-    mldsaNative6Coords (x + y) i = mldsaNative6Coords x i + mldsaNative6Coords y i := by
-  show PolyRep.coordsEquiv (PolyRep.add (n := 6) x y) i = _
-  simp [PolyRep.add, mldsaNative6Coords]
-  rfl
-
 /-- **The coordinates of `0`** in `MLDSANativeField6` are `0`. -/
 theorem mldsaNative6Coords_zero (i : Fin 6) : mldsaNative6Coords (0 : MLDSANativeField6) i = 0 := by
   show PolyRep.coordsEquiv (PolyRep.zero : Vector (ZMod 8380417) 6) i = 0
   simp [PolyRep.zero]
-
-/-- **The coordinates of a sum** in `MLDSANativeField11` are the sums of the coordinates. -/
-theorem mldsaNative11Coords_add (x y : MLDSANativeField11) (i : Fin 11) :
-    mldsaNative11Coords (x + y) i = mldsaNative11Coords x i + mldsaNative11Coords y i := by
-  show PolyRep.coordsEquiv (PolyRep.add (n := 11) x y) i = _
-  simp [PolyRep.add, mldsaNative11Coords]
-  rfl
 
 /-- **The coordinates of `0`** in `MLDSANativeField11` are `0`. -/
 theorem mldsaNative11Coords_zero (i : Fin 11) :

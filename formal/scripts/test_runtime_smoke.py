@@ -93,7 +93,7 @@ def family_case(family: Family, role: str) -> Case:
         signer_arg = ""
         strategy = f"{app}.honestStrategy"
         if family.program.startswith("Falcon512.Ring."):
-            binder = " (signer : GordieHowe.Falcon512.Ring.Native.Signer 32)"
+            binder = " (signer : GordieHowe.Falcon512.Signer 32)"
             signer_arg = " signer"
             strategy += " signer"
         elif family.program.startswith("MLDSA44.Ring.Native."):
@@ -105,7 +105,7 @@ def family_case(family: Family, role: str) -> Case:
             "prover": f"{app}.prover{signer_arg} {system} ({strategy})",
             "verifier": f"{app}.verifierROM{signer_arg} {system}",
             "simulator": f"{app}.simulator{signer_arg} {system}",
-            "extractor": f"{app}.{'ringKeyExtractor' if '.Ring.' in family.program else 'keyExtractor'}{signer_arg} {system}",
+            "extractor": f"{app}.extractor{signer_arg} {system}",
         }[role]
         # The signer is a genuine input of the Falcon ring application, not a
         # supplied proof system, prover, simulator, or generated runtime record.

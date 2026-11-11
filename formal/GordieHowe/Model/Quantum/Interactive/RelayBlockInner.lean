@@ -21,7 +21,7 @@ relayed request (`afterAt`). Its pure distinguisher with these leading unitaries
 (`AdaptiveIAlg.leadPureD`) is the inner distinguisher of the relay.
 
 - `AdaptiveIAlg.absLead`, `AdaptiveIAlg.leadsBy_absorb_step`: the absorbed step after `afterAt`.
-- `AdaptiveIAlg.patchLead`, `AdaptiveIAlg.patchLeadPerm`, `AdaptiveIAlg.leadsBy_absorbAssignP_step`:
+- `AdaptiveIAlg.patchLead`, `AdaptiveIAlg.patchLeadPerm`, `AdaptiveIAlg.leadsBy_absorbAssignP`:
   the patched step after `patchAfter` and `afterAt`.
 - `AdaptiveIAlg.innerK`, `AdaptiveIAlg.innerP`, `AdaptiveIAlg.leadsBy_absorbAssignP`: with the
   query counter.

@@ -476,25 +476,22 @@ def read_lean(path):
 
 
 def plan_files(plans_dir):
-    """[(plan, program)] paths of every plan export (.lean or .lean.gz) in the directory or below
+    """[(plan, program) paths] of every plan export (.lean or .lean.gz) in the directory or below
     it, sorted: GordieHoweCerts/Generated/<Lean name>/Plan.lean with Program.lean beside it, or
-    the flat layout <Name>.lean with <Name>Program.lean. The program need not exist."""
+    the flat layout <Name>.lean with <Name>Program.lean beside it. A configuration's other
+    generated modules (Data, Figures, Tableau, its certificates and proofs) are not plans: in the
+    directory layout only Plan.lean is, and in the flat layout only a file whose
+    <Name>Program.lean companion is beside it. The program need not exist in the directory
+    layout."""
     from pathlib import Path
     plans_dir = Path(plans_dir)
     out = []
     for p in sorted([*plans_dir.rglob("*.lean"), *plans_dir.rglob("*.lean.gz")]):
-        stem = p.name.split(".")[0]
-        # Program.lean is the plan's companion; Valid, Realize and Honest are
-        # the Lean library's proof modules beside a configuration's plan, with
-        # their per-condition modules in directories of the same names, and
-        # Cert, Completion, Derivs and Annotations (with Annotations/) its
-        # certificate modules.
-        proof = ("Valid", "Realize", "Honest", "Cert", "Completion", "Derivs",
-                 "Annotations")
-        if stem.endswith("Program") or stem in proof or p.parent.name in proof:
-            continue
-        prog = "Program" if stem == "Plan" else stem + "Program"
-        out.append((p, p.with_name(prog + p.name[len(stem):])))
+        stem, ext = p.name.split(".", 1)
+        if stem == "Plan":
+            out.append((p, p.with_name("Program." + ext)))
+        elif not stem.endswith("Program") and p.with_name(stem + "Program." + ext).exists():
+            out.append((p, p.with_name(stem + "Program." + ext)))
     return out
 
 

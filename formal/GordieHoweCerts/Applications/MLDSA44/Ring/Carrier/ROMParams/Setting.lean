@@ -49,9 +49,8 @@ variable (msgLen : ℕ) in
 statement passes the check (`ringOk`) and the realized program's relation `Carrier.rel` holds at its
 program statement (`Carrier.stmtOf`), on the witness read from that statement. -/
 abbrev ringStmtRel : Set (RStmt msgLen × (program.Valuation interp → Native.RingW)) :=
-  {p | ringOk p.1 = true ∧
-    (Carrier.stmtOf (program := program) (I := interp) p.1, p.2) ∈
-      RealizedProgram.ProofSystem.relOf
-        (Carrier.rel (program := program) (F0 := RealizedProgram.gold2) (FH := RealizedProgram.gf128))}
+  RealizedProgram.ProofSystem.checkedRel (Carrier.stmtOf (program := program) (I := interp)) ringOk
+    (RealizedProgram.ProofSystem.relOf (Carrier.rel (program := program)
+      (F0 := RealizedProgram.gold2) (FH := RealizedProgram.gf128)))
 
 end GordieHowe.MLDSA44.Ring.Carrier.ROMParams

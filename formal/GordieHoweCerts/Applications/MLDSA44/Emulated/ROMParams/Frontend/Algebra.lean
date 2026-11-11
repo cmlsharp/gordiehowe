@@ -46,8 +46,8 @@ instance : Emulated.MldsaEAlgebra program where
   pred14 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicate_hint_2eslack_body
   pred15 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicate_hint_5fweight_2eweight_body
   pred274 := by
-    obtain ⟨r, h, hf, -⟩ := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicate_signature_2erelation_2esource_body
-    exact ⟨r, h, by rw [hf]; rfl⟩
+    obtain ⟨r, h, -⟩ := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicate_signature_2erelation_2esource_body
+    exact ⟨r, h⟩
   expr7 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.expr_signature_2erelation_2eshape_2eleft_2efirst_2esecond_2efirst_2efirst_eq
   expr8 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.expr_signature_2erelation_2eshape_2eleft_2esecond_2efirst_2efirst_eq
   expr0 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.expr_hint_2einterval_2eshape_2eright_2efirst_2eshared_2esecond_2eshared_2efirst_eq

@@ -99,7 +99,9 @@ def mask {d : ℕ} (C : Circuit F d) (pads : Pads C) (tr : Trace C) : Trace C :=
 
 /-- The pads the honest prover draws: both round-coefficient pads of every
 sumcheck round and the two revealed wire-claim pads of every layer. The product
-pad `claim 2` is not drawn; `FreePads.pads` sets it to `claim 0 * claim 1`. -/
+pad `claim 2` is not drawn; `FreePads.pads` sets it to `claim 0 * claim 1`. Drawn independently,
+it would break `ProductsHold` (`claim 0 * claim 1 = claim 2`), which `FreePads.productsHold`
+gives. -/
 def FreePads {d : ℕ} (C : Circuit F d) : Type :=
   match C with
   | .input _ => Unit
@@ -116,6 +118,14 @@ instance FreePads.instFintype [Fintype F] {d : ℕ} : (C : Circuit F d) → Fint
   | .layer (inDim := i) _ tail =>
     letI := FreePads.instFintype tail
     inferInstanceAs (Fintype ((Fin (schedule i).length → Fin 2 → F) × (Fin 2 → F) × FreePads tail))
+
+instance FreePads.instDecidableEq [DecidableEq F] {d : ℕ} :
+    (C : Circuit F d) → DecidableEq (FreePads C)
+  | .input _ => inferInstanceAs (DecidableEq Unit)
+  | .layer (inDim := i) _ tail =>
+    letI := FreePads.instDecidableEq tail
+    inferInstanceAs
+      (DecidableEq ((Fin (schedule i).length → Fin 2 → F) × (Fin 2 → F) × FreePads tail))
 
 /-- The committed pads: the free pads, and the product pad `claim 2 := claim 0 * claim 1`. -/
 def FreePads.pads {d : ℕ} {C : Circuit F d} (π : FreePads C) : Pads C :=

@@ -46,10 +46,13 @@ variable {p : Params} {T : ℕ} {Msg : Type} {N reps : ℕ}
   (E : (j : ι) → (Sc.comp j).Encoder)
   {Vr : W1ExpStmt prims RMsg N → FullTr P τ → Bool}
   {Qs : ∀ x, Sc.IOPQueries Vr x} (hb : Sc.FormatBounds Qs b b) {R : Type} [Fintype R]
+  [DecidableEq R]
   [Nonempty R]
   (honest : RingSignature.RingWit (hedgedBase prims O Mo βmin tol enc k D bmsg) → R →
     CausalProver P τ (W1ExpStmt prims RMsg N))
 
+omit [∀ j i, Fintype ((Sc.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R]
+  [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **At every ring statement checked, the hedged proof system of the key-free chain is the
 spBCS proof system of the ring**: `w1HPS` at `Sc` and the check `fun _ => true` is `w1PS`. -/
 theorem w1HPS_eq_w1PS :
@@ -57,6 +60,8 @@ theorem w1HPS_eq_w1PS :
       w1PS sp prims O βmin tol enc (hedgedLoop prims O Mo βmin k D) bmsg Sc Λ E hb honest :=
   rfl
 
+omit [∀ j i, Fintype ((Sc.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R]
+  [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **At the nonempty rings checked, the hedged proof system of the key-free chain is the spBCS
 proof system of the ring rejecting the empty ring**: `w1HPS` at `Sc` and the check of a
 nonempty ring is `w1PSNonempty`. -/

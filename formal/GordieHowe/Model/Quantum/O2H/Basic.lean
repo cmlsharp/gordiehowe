@@ -6,6 +6,7 @@ module
 public import GordieHowe.Model.Quantum.Pure.Algorithm
 public import GordieHowe.Foundations.ToMathlib.SqrtAverage
 public import GordieHowe.Foundations.Probability.Advantage
+public import GordieHowe.Headline
 
 @[expose] public section
 
@@ -124,6 +125,7 @@ P_guess := Pr[S ∩ T ≠ ∅ : T ← B^H(z)]. Then |P_left − P_right| ≤ 2d 
 
 `A` is unitary. The theorem for algorithms that are not necessarily unitary is
 `O2HSetting.o2h_mixed` (`GordieHowe/Model/Quantum/O2H/Mixed.lean`), derived from this one by dilation. -/
+@[headline]
 theorem o2h : GordieHowe.advantage (s.pLeft A) (s.pRight A) ≤ 2 * d * √(s.pGuess A s.H) := by
   have hw : ∀ ω, 0 ≤ (s.μ ω).toReal := fun _ => ENNReal.toReal_nonneg
   rw [GordieHowe.advantage, pLeft, pRight, ← sum_sub_distrib]

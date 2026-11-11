@@ -9,7 +9,6 @@ public import GordieHowe.Foundations.ToMathlib.PMFOracleQuenched
 public import GordieHowe.Foundations.ToMathlib.PMFTV
 public import GordieHowe.Foundations.ToMathlib.FintypeBytes
 public import GordieHowe.Applications.MLDSA.Signing.HybridKeyLaw
-public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1Keys
 import all LatticeCrypto.MLDSA.ConcretePrimitives
 
 @[expose] public section
@@ -627,7 +626,7 @@ theorem matrixKey_t0 [NeZero (bucketCount p)] (sk₀ : SecretKey p) (aHat : TqMa
       GordieHowe.MLDSA.t0Of p (aHat * sk₀.s1 + sk₀.s2) := by
   change ((concretePrimitives p).power2RoundVec (Vector.ofFn _ + sk₀.s2)).2 =
     ((concretePrimitives p).power2RoundVec (aHat * sk₀.s1 + sk₀.s2)).2
-  rw [GordieHowe.Ring.MLDSAW1.mul_eq_ofFn_keyMap]
+  rw [mul_eq_ofFn_keyMap]
 
 /-- **The atypical-key event** at the threshold `Sₜ`: `‖t₀‖₂² > Sₜ`. -/
 def Atypical (Sₜ : ℝ) {k : ℕ} (t0 : RqVec k) : Prop := Sₜ < t0SqNorm t0
@@ -685,6 +684,13 @@ theorem sampleInBallShape_oraclePrims (G : CommitHashBytes p → ChallengeBall p
 `Â s₁ + s₂` (`keyOf`, `A = NTT⁻¹(Â)`). -/
 noncomputable abbrev matrixKey (sk₀ : SecretKey p) (aHat : TqMatrix p.k p.l) : SecretKey p :=
   keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))
+
+omit [Nonempty (MaskBox p)] in
+/-- The `t₀` of the regularity key has `‖t₀‖∞ ≤ 2^12` at every matrix. -/
+theorem polyVecNorm_matrixKey_t0_le (sk₀ : SecretKey p)
+    (aHat : TqMatrix p.k p.l) : polyVecNorm (matrixKey sk₀ aHat).t0 ≤ 4096 := by
+  rw [matrixKey_t0]
+  exact polyVecNorm_edgeT0Of_le _
 
 /-- **A real commitment law**: for every oracle `G` and matrix `Â`, `R G Â` is the real signer's
 law of `(w₁, c̃)` under the key `matrixKey sk₀ Â`, the normalized `realMass`, whenever the real
@@ -787,8 +793,8 @@ theorem expect_tvDist_standin_le (hp : p.isApproved) (sk₀ : SecretKey p)
   have hA : ∀ G aHat, 𝔼 vc, (t0Weight (oraclePrims G) (matrixKey sk₀ aHat).t0 vc : ℝ≥0∞).toReal =
       𝔼 c, f aHat (G c) := fun G aHat =>
     expect_t0Weight_oraclePrims hsp G _
-  have ht0 : ∀ aHat, polyVecNorm (matrixKey sk₀ aHat).t0 ≤ 4096 := fun aHat => by
-    rw [matrixKey_t0]; exact polyVecNorm_edgeT0Of_le _
+  have ht0 : ∀ aHat, polyVecNorm (matrixKey sk₀ aHat).t0 ≤ 4096 :=
+    polyVecNorm_matrixKey_t0_le sk₀
   -- The pointwise bound on the distance.
   have hpt : ∀ G aHat, tvDist (R G aHat) (Q G (matrixKey sk₀ aHat).t0) ≤
       (if Atypical Sₜ (matrixKey sk₀ aHat).t0 then 1 else

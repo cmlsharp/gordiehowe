@@ -273,7 +273,7 @@ theorem simulation_sound_extractability_rom_joint [DecidableEq X]
     (hA : ∀ r a, M.AssignsAtKeys (sp r a) ⟨a.salt, fx r⟩) {q : ℕ}
     (hqs : ∀ r a G, ((sp r a).trace G).length ≤ q)
     (hrbr : CausalRBRKnowledgeSound rel V E St ε) {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) {Q tq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {Q tq : ℕ}
     (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C) (𝒜 : M.ROMAdversary B X') (h𝒜 : 𝒜.QueryBound tq) :
     Pr[h ← (Query k kN kS L → Out k e) : M.WinsROM B Qs fx sp c 𝒜 h ∧
         M.gameLog B Qs sp c 𝒜
@@ -351,7 +351,7 @@ theorem _root_.GordieHowe.SPBCS.weak_online_simulation_extractability_rom_basic 
     (hA : ∀ r a, M.AssignsAtKeys (sp r a) ⟨a.salt, fx r⟩) {q : ℕ}
     (hqs : ∀ r a G, ((sp r a).trace G).length ≤ q)
     (hrbr : CausalRBRKnowledgeSound rel V E St ε) {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) {Q tq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {Q tq : ℕ}
     (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C) (𝒜 : M.SimExtractionAdversaryROM B X' (Claim X M.NIProof) tq) :
     SimExtractionAdversaryROM.winsNotExtracts (Qs := Qs) (fx := fx) (sp := sp) 𝒜 c rel E kq q ≤
       M.simExtractionErrorROM kq (maxError ε) q tq Q :=

@@ -13,6 +13,7 @@ public import GordieHowe.Model.Quantum.Interactive.QueryBoundedZK
 public import GordieHowe.Model.NARG.Encoding
 public import GordieHowe.Model.QROM.OracleSim
 public import GordieHowe.Model.Quantum.Core.TraceDistance
+public import GordieHowe.Headline
 
 @[expose] public section
 
@@ -21,8 +22,12 @@ public import GordieHowe.Model.Quantum.Core.TraceDistance
 
 The notions of the paper's `def:narg-ks` and `def:narg-sound` for a verifier
 (`GordieHowe.NARG.Verifier`) with oracle `{0,1}^m → Out k e`, against the query-bounded adversaries of
-`def:adversary` without proof queries. The zero-knowledge notion of `def:narg-zk` is
-`ZeroKnowledge`, in `GordieHowe/Model/Quantum/Interactive/QueryBoundedZK.lean`.
+`def:adversary` without proof queries; and `Complete` (`def:narg-complete`), `ZeroKnowledge`
+(`def:narg-zk`, over `GordieHowe.QROM.ZeroKnowledge` in
+`GordieHowe/Model/Quantum/Interactive/QueryBoundedZK.lean`) and `EverlastingZeroKnowledge`
+(`def:narg-zk-post`), each with the prover's coins drawn from a coin law `μ`. Completeness and
+knowledge soundness take the relation as a set of statement–witness pairs; the zero-knowledge
+notions take it as a predicate, the form of the challenger of `GordieHowe.QROM.ZeroKnowledge`.
 
 - `Verifier m k e Cl Stmt`: a verifier with oracle `Bits m → Out k e`.
 - `NARG.Verifier.game V`: the base game of `V` (CMS19 Definition 8.1, p. 39), the tuples on whose
@@ -35,8 +40,8 @@ The notions of the paper's `def:narg-ks` and `def:narg-sound` for a verifier
   compressed oracle.
 - `Adversary.OnlineExtracts V S rel ext εsim εks`: online extractability with a quantum auxiliary
   register, the oracle simulator `S` and the extractor `ext` reading its register (DFMS22
-  Definition 3.1, p. 10), through the family-level `Verifier.CohOnlineExtracts`: trace distance
-  `εsim` of the joint states (`Quantum.TraceDistLE`) and extraction error `εks`.
+  Definition 3.1, p. 10), through the family-level `Verifier.CohOnlineExtracts`: average trace
+  distance `εsim` of the joint states (`Quantum.AvgTraceDistLE`) and extraction error `εks`.
 - `Adversary.acceptsFalse V rel`: the probability that the adversary outputs an accepted claim for a
   statement without a witness.
 - `Verifier.KnowledgeBound`, `Verifier.knowledgeError`: CMS19 Proposition 8.12 for a database
@@ -71,7 +76,7 @@ noncomputable abbrev compressedSim {m k e : ℕ} : OracleSim m k e :=
   GordieHowe.QROM.compressed (m := m) (outEquiv k e)
 
 /-- **A database extractor reading the compressed oracle's register**: `ext` on the database of
-the register's slots (`slotsDB`). -/
+the register's slots (`slotsDB`). The same extractor at every query count `t`. -/
 def compressedExt {m k e : ℕ} {Stmt Wit : Type} (ext : Stmt → DB (Bits m) (Out k e) → Multiset Wit) :
     ∀ t, Stmt → (compressedSim (m := m) (k := k) (e := e)).Reg t → Multiset Wit :=
   fun _ x s => ext x (slotsDB (outEquiv k e) s)
@@ -80,7 +85,10 @@ namespace Verifier
 
 variable {m k e : ℕ} {Cl Stmt : Type} (V : Verifier m k e Cl Stmt)
 
-/-- **The knowledge error** at the database bound `β` and `b` queries: `2√(kq/|Out|) + β b`. -/
+/-- **The knowledge error** at the database bound `β` and `b` queries: `2√(kq/|Out|) + β b`, the
+error of CMS19 Proposition 8.12 (p. 42, knowledge form p. 44): `2√(kq/|Out|)` from the oracle
+simulation (CMS19 Lemma 4.9, first inequality, p. 20) and `β b` from the lifted database bound
+(CMS19 Lemmas 5.9–5.10). -/
 noncomputable def knowledgeError (β : ℕ → ℝ≥0∞) (b : ℕ) : ℝ≥0∞ :=
   2 * esqrt (V.kq / Fintype.card (Out k e)) + β b
 
@@ -188,9 +196,10 @@ noncomputable def cohAcceptsNotExtracts (rel : Set (Stmt × Wit))
 /-- **Online extractability with a quantum auxiliary register** (the paper's `def:narg-ks`; DFMS22
 Definition 3.1, p. 10), for a family of core algorithms over auxiliary inputs, with the oracle
 simulator `S` and the extractor `ext` reading its register: the joint states of `(output, Z,
-verdict)` in the coherent extraction run and in the real run are within trace distance `δ a` at
-every auxiliary input, with `Σ_a aux a · δ a ≤ εsim` (`traceDist_le`); and the verifier accepts
-while extraction fails with probability at most `εks` (`acceptsNotExtracts_le`).
+verdict)` in the coherent extraction run and in the real run are within average trace distance
+`εsim` over the auxiliary input (`traceDist_le`, `Quantum.AvgTraceDistLE`); and the verifier accepts
+while extraction fails with probability at most `εks` (`acceptsNotExtracts_le`). Both errors are in
+`ℝ≥0∞`, as is the soundness error `εsim + εks` they give (`acceptsFalse_le`).
 
 The work register of an algorithm, which holds `Z`, has a type that depends on its auxiliary
 input, so the joint state over the auxiliary input is block diagonal in it, and `traceDist_le`
@@ -200,23 +209,21 @@ stronger than the paper's, whose trace distance hides the auxiliary input. Sound
 of the output and the verdict that does not depend on the auxiliary input, which the paper's
 trace distance also implies. -/
 structure CohOnlineExtracts (rel : Set (Stmt × Wit)) (ext : ∀ t, Stmt → S.Reg t → Multiset Wit)
-    (εsim : ℝ≥0) (εks : ℝ≥0∞) : Prop where
+    (εsim εks : ℝ≥0∞) : Prop where
   /-- The joint states of `(output, Z, verdict)` are within trace distance `εsim`, on average over
   the auxiliary input. -/
-  traceDist_le : ∃ δ : α → ℝ≥0, (∀ a, Quantum.TraceDistLE
-      (V.extractionOutputState claimOf S (A a) (o₀ a)) (V.realOutputState claimOf (A a)) (δ a)) ∧
-    ∑' a, aux a * (δ a : ℝ≥0∞) ≤ εsim
+  traceDist_le : Quantum.AvgTraceDistLE aux (fun a => V.extractionOutputState claimOf S (A a) (o₀ a))
+    (fun a => V.realOutputState claimOf (A a)) εsim
   /-- Acceptance with failed extraction has probability at most `εks`. -/
   acceptsNotExtracts_le : V.cohAcceptsNotExtracts claimOf aux A o₀ S rel ext ≤ εks
 
 variable {V claimOf aux A o₀ S} in
 /-- Online extractability at an error holds at every larger error. -/
 theorem CohOnlineExtracts.mono {rel : Set (Stmt × Wit)} {ext : ∀ t, Stmt → S.Reg t → Multiset Wit}
-    {εsim εsim' : ℝ≥0} {εks εks' : ℝ≥0∞}
+    {εsim εsim' εks εks' : ℝ≥0∞}
     (h : V.CohOnlineExtracts claimOf aux A o₀ S rel ext εsim εks) (hsim : εsim ≤ εsim')
-    (hks : εks ≤ εks') : V.CohOnlineExtracts claimOf aux A o₀ S rel ext εsim' εks' := by
-  obtain ⟨δ, hδ, hsum⟩ := h.traceDist_le
-  exact ⟨⟨δ, hδ, hsum.trans (by exact_mod_cast hsim)⟩, h.acceptsNotExtracts_le.trans hks⟩
+    (hks : εks ≤ εks') : V.CohOnlineExtracts claimOf aux A o₀ S rel ext εsim' εks' :=
+  ⟨h.traceDist_le.mono hsim, h.acceptsNotExtracts_le.trans hks⟩
 
 variable {V claimOf aux A o₀ S} in
 /-- **Equal joint states are at simulation error `0`.** -/
@@ -225,7 +232,7 @@ theorem CohOnlineExtracts.of_eq {rel : Set (Stmt × Wit)} {ext : ∀ t, Stmt →
     (heq : ∀ a vo, V.extractionOutputState claimOf S (A a) (o₀ a) vo = V.realOutputState claimOf (A a) vo)
     (hks : V.cohAcceptsNotExtracts claimOf aux A o₀ S rel ext ≤ εks) :
     V.CohOnlineExtracts claimOf aux A o₀ S rel ext 0 εks :=
-  ⟨⟨0, fun a => Quantum.TraceDistLE.of_eq (funext (heq a)), by simp⟩, hks⟩
+  ⟨Quantum.AvgTraceDistLE.of_eq fun a => funext (heq a), hks⟩
 
 end Family
 
@@ -379,7 +386,7 @@ the extraction run**, with the auxiliary input hidden: the measurement of the ou
 acts on the registers the paper's `def:narg-ks` exposes and does not depend on the auxiliary
 input. A trace distance at most `ε` of the joint states with the auxiliary input hidden implies
 it. -/
-def OutcomeDistLE (ε : ℝ≥0) : Prop :=
+def OutcomeDistLE (ε : ℝ≥0∞) : Prop :=
   ∀ T : Set (VerifiedOutput O), ∑' a, aux a * V.realWeight claimOf (A a) T ≤
     ∑' a, aux a * V.extractionWeight claimOf S (A a) (o₀ a) T + ε
 
@@ -387,7 +394,7 @@ variable {V claimOf aux A o₀ S}
 
 /-- **The trace-distance clause implies the bound on outcomes.** -/
 theorem CohOnlineExtracts.outcomeDistLE {rel : Set (Stmt × Wit)}
-    {ext : ∀ t, Stmt → S.Reg t → Multiset Wit} {εsim : ℝ≥0} {εks : ℝ≥0∞}
+    {ext : ∀ t, Stmt → S.Reg t → Multiset Wit} {εsim εks : ℝ≥0∞}
     (h : V.CohOnlineExtracts claimOf aux A o₀ S rel ext εsim εks) :
     V.OutcomeDistLE claimOf aux A o₀ S εsim := by
   classical
@@ -431,8 +438,9 @@ hidden) and acceptance without extraction: a family of core algorithms outputs a
 statement without a witness that the verifier accepts with probability at most `εsim + εks`. In
 the extraction run such an outcome is acceptance without extraction, since no witness of the
 statement exists. -/
+@[headline]
 theorem acceptsFalse_le_of_outcomeDistLE {rel : Set (Stmt × Wit)}
-    {ext : ∀ t, Stmt → S.Reg t → Multiset Wit} {εsim : ℝ≥0} {εks : ℝ≥0∞}
+    {ext : ∀ t, Stmt → S.Reg t → Multiset Wit} {εsim εks : ℝ≥0∞}
     (hsim : V.OutcomeDistLE claimOf aux A o₀ S εsim)
     (hks : V.cohAcceptsNotExtracts claimOf aux A o₀ S rel ext ≤ εks) :
     ∑' a, aux a * ((A a).realLaw (outEquiv k e)).toOuterMeasure
@@ -494,7 +502,7 @@ theorem acceptsFalse_le_of_outcomeDistLE {rel : Set (Stmt × Wit)}
 /-- **Knowledge soundness implies soundness** (the paper's `lem:ks-sound`, in the QROM) for online
 extractability (`acceptsFalse_le_of_outcomeDistLE` through `CohOnlineExtracts.outcomeDistLE`). -/
 theorem CohOnlineExtracts.acceptsFalse_le {rel : Set (Stmt × Wit)}
-    {ext : ∀ t, Stmt → S.Reg t → Multiset Wit} {εsim : ℝ≥0} {εks : ℝ≥0∞}
+    {ext : ∀ t, Stmt → S.Reg t → Multiset Wit} {εsim εks : ℝ≥0∞}
     (h : V.CohOnlineExtracts claimOf aux A o₀ S rel ext εsim εks) :
     ∑' a, aux a * ((A a).realLaw (outEquiv k e)).toOuterMeasure
       {p | ∃ c ∈ p.out, (∀ w, (V.stmt (claimOf c), w) ∉ rel) ∧ V.Accepted p.oracle (claimOf c)} ≤
@@ -526,13 +534,13 @@ component of its output, with non-termination read as their default output for t
 queries. -/
 abbrev OnlineExtracts {Z : Type} (𝒢 : Adversary m k e (Cl × Z) t) (V : Verifier m k e Cl Stmt)
     (S : OracleSim m k e) {Wit : Type} (rel : Set (Stmt × Wit))
-    (ext : ∀ t, Stmt → S.Reg t → Multiset Wit) (εsim : ℝ≥0) (εks : ℝ≥0∞) : Prop :=
+    (ext : ∀ t, Stmt → S.Reg t → Multiset Wit) (εsim εks : ℝ≥0∞) : Prop :=
   V.CohOnlineExtracts Prod.fst 𝒢.aux 𝒢.run (fun a => (𝒢.run a).defaultOut) S rel ext εsim εks
 
 /-- Online extractability at an error holds at every larger error. -/
 theorem OnlineExtracts.mono {Z : Type} {𝒢 : Adversary m k e (Cl × Z) t}
     {V : Verifier m k e Cl Stmt} {S : OracleSim m k e} {Wit : Type} {rel : Set (Stmt × Wit)}
-    {ext : ∀ t, Stmt → S.Reg t → Multiset Wit} {εsim εsim' : ℝ≥0} {εks εks' : ℝ≥0∞}
+    {ext : ∀ t, Stmt → S.Reg t → Multiset Wit} {εsim εsim' εks εks' : ℝ≥0∞}
     (h : 𝒢.OnlineExtracts V S rel ext εsim εks) (hsim : εsim ≤ εsim') (hks : εks ≤ εks') :
     𝒢.OnlineExtracts V S rel ext εsim' εks' :=
   Verifier.CohOnlineExtracts.mono h hsim hks
@@ -552,7 +560,7 @@ then `𝒜` outputs an accepted claim for a statement without a witness with pro
 `εsim + εks` (`Verifier.CohOnlineExtracts.acceptsFalse_le`). -/
 theorem acceptsFalse_le {𝒜 : Adversary m k e Cl t} {V : Verifier m k e Cl Stmt}
     {S : OracleSim m k e} {Wit : Type} {rel : Set (Stmt × Wit)}
-    {ext : ∀ t, Stmt → S.Reg t → Multiset Wit} {εsim : ℝ≥0} {εks : ℝ≥0∞}
+    {ext : ∀ t, Stmt → S.Reg t → Multiset Wit} {εsim εks : ℝ≥0∞}
     (h : V.CohOnlineExtracts id 𝒜.aux 𝒜.run (fun a => (𝒜.run a).defaultOut) S rel ext εsim εks) :
     𝒜.acceptsFalse V rel ≤ εsim + εks :=
   h.acceptsFalse_le
@@ -576,30 +584,31 @@ end Adversary
 
 /-- **The probability that the honest proof of the adversary's pair is rejected** (Unruh 2017
 Definition 5, p. 14, in the quantum random-oracle model): over the auxiliary input of `𝒜`, the
-honest prover's coins and the real run of `𝒜` against a uniformly random oracle `h`, the adversary
+honest prover's coins drawn from `μ` and the real run of `𝒜` against a uniformly random oracle `h`, the adversary
 outputs a pair `(x, w)` in `rel`, and the verifier rejects the claim `claim x π` of the proof `π`
 that the program `P` computes on `(x, w)` against `h` with its queries encoded by `enc`
 (`Prover.encode`, run classically on the measured oracle). -/
 noncomputable def Adversary.rejectsHonest {m k e : ℕ} {A Cl Stmt Wit Proof Coins : Type} {t : ℕ}
     (𝒜 : Adversary m k e (ProofQuery Stmt Wit) t)
     (enc : OracleEncoding A (Out k e) (Bits m) (XOut k e))
-    (P : NARG.Prover A (Out k e) Stmt Wit Proof Coins) (V : Verifier m k e Cl Stmt)
-    (claim : Stmt → Proof → Cl) (rel : Stmt → Wit → Prop) : ℝ≥0∞ :=
-  ∑' a, 𝒜.aux a * ∑' c, P.coins c * ((𝒜.run a).realLaw (outEquiv k e)).toOuterMeasure
-    {p | ∃ o ∈ p.out, rel o.stmt o.wit ∧
+    (P : NARG.Prover A (Out k e) Stmt Wit Proof Coins) (μ : PMF Coins) (V : Verifier m k e Cl Stmt)
+    (claim : Stmt → Proof → Cl) (rel : Set (Stmt × Wit)) : ℝ≥0∞ :=
+  ∑' a, 𝒜.aux a * ∑' c, μ c * ((𝒜.run a).realLaw (outEquiv k e)).toOuterMeasure
+    {p | ∃ o ∈ p.out, (o.stmt, o.wit) ∈ rel ∧
       ¬ V.Accepted p.oracle (claim o.stmt
         ((P.encode enc).toFn.prove ((outEquiv k e).symm ∘ p.oracle) o.stmt o.wit c))}
 
 /-- **Completeness in the quantum random-oracle model** (the paper's `def:narg-complete`, Unruh
 2017 Definition 5, p. 14, with the pair chosen by the adversary after its queries): every
 `t`-query adversary of `def:adversary` without proof queries that outputs a statement and a witness
-makes the honest proof of a pair in `rel` rejected with probability at most `ε t`
-(`Adversary.rejectsHonest`). -/
+makes the honest proof of a pair in `rel`, on coins drawn from `μ`, rejected with probability at
+most `ε t` (`Adversary.rejectsHonest`). -/
 def Complete {m k e : ℕ} {A Cl Stmt Wit Proof Coins : Type}
     (enc : OracleEncoding A (Out k e) (Bits m) (XOut k e))
-    (P : NARG.Prover A (Out k e) Stmt Wit Proof Coins) (V : Verifier m k e Cl Stmt)
-    (claim : Stmt → Proof → Cl) (rel : Stmt → Wit → Prop) (ε : ℕ → ℝ≥0∞) : Prop :=
-  ∀ (t : ℕ) (𝒜 : Adversary m k e (ProofQuery Stmt Wit) t), 𝒜.rejectsHonest enc P V claim rel ≤ ε t
+    (P : NARG.Prover A (Out k e) Stmt Wit Proof Coins) (μ : PMF Coins) (V : Verifier m k e Cl Stmt)
+    (claim : Stmt → Proof → Cl) (rel : Set (Stmt × Wit)) (ε : ℕ → ℝ≥0∞) : Prop :=
+  ∀ (t : ℕ) (𝒜 : Adversary m k e (ProofQuery Stmt Wit) t),
+    𝒜.rejectsHonest enc P μ V claim rel ≤ ε t
 
 /-! ### Zero knowledge -/
 
@@ -612,41 +621,91 @@ variable {m k e : ℕ} {A Stmt Wit Proof Coins SimCoins : Type} (rel : Stmt → 
 
 /-- **Zero knowledge in the quantum random-oracle model** (the paper's `def:narg-zk`, Unruh 2017
 Definition 6, p. 14, over the paper's `(t, Q)`-adversaries, `def:adversary`, all of whose queries
-are counted): the programs `P` and `S` run query by query in the experiment with their queries
-encoded by `enc` (`Prover.encode`, `Simulator.encode`); a valid proof query is answered in the
+are counted): the programs `P`, its coins drawn from `μ`, and `S` run query by query in the
+experiment with their queries encoded by `enc` (`Prover.encode`, `Simulator.encode`); a valid proof query is answered in the
 finite proof-query register by the prover's proof, or by the simulator's optional proof (`none`
 where the simulator fails) (`GordieHowe.QROM.ZeroKnowledge`). -/
 def ZeroKnowledge (enc : OracleEncoding A (Out k e) (Bits m) (XOut k e))
-    (P : NARG.Prover A (Out k e) Stmt Wit Proof Coins)
+    (P : NARG.Prover A (Out k e) Stmt Wit Proof Coins) (μ : PMF Coins)
     (S : NARG.Simulator A (Out k e) Stmt (Option Proof) SimCoins) (ε : ℕ → ℕ → ℝ) : Prop :=
-  GordieHowe.QROM.ZeroKnowledge rel ((P.mapOutput some).encode enc) (S.encode enc) ε
+  GordieHowe.QROM.ZeroKnowledge rel ((P.mapOutput some).encode enc) μ (S.encode enc) ε
 
 /-- **Everlasting zero knowledge in the quantum random-oracle model** (the paper's
-`def:narg-zk-post`): as `ZeroKnowledge`, against adversaries with at most `t` queries before their
-last proof query and any number after it (`GordieHowe.QROM.EverlastingZeroKnowledge`). -/
+`def:narg-zk-post`): as `ZeroKnowledge`, the prover's coins drawn from `μ`, against adversaries
+with at most `t` queries before their last proof query and any number after it (`GordieHowe.QROM.EverlastingZeroKnowledge`). -/
 def EverlastingZeroKnowledge (enc : OracleEncoding A (Out k e) (Bits m) (XOut k e))
-    (P : NARG.Prover A (Out k e) Stmt Wit Proof Coins)
+    (P : NARG.Prover A (Out k e) Stmt Wit Proof Coins) (μ : PMF Coins)
     (S : NARG.Simulator A (Out k e) Stmt (Option Proof) SimCoins) (ε : ℕ → ℕ → ℝ) : Prop :=
-  GordieHowe.QROM.EverlastingZeroKnowledge rel ((P.mapOutput some).encode enc) (S.encode enc) ε
+  GordieHowe.QROM.EverlastingZeroKnowledge rel ((P.mapOutput some).encode enc) μ (S.encode enc) ε
 
 variable {rel}
 
 /-- Everlasting zero knowledge gives zero knowledge at the same error. -/
 theorem EverlastingZeroKnowledge.zeroKnowledge
     {enc : OracleEncoding A (Out k e) (Bits m) (XOut k e)}
-    {P : NARG.Prover A (Out k e) Stmt Wit Proof Coins}
+    {P : NARG.Prover A (Out k e) Stmt Wit Proof Coins} {μ : PMF Coins}
     {S : NARG.Simulator A (Out k e) Stmt (Option Proof) SimCoins} {ε : ℕ → ℕ → ℝ}
-    (h : EverlastingZeroKnowledge rel enc P S ε) : ZeroKnowledge rel enc P S ε :=
+    (h : EverlastingZeroKnowledge rel enc P μ S ε) : ZeroKnowledge rel enc P μ S ε :=
   GordieHowe.QROM.EverlastingZeroKnowledge.zeroKnowledge h
 
 /-- A larger error bound. -/
 theorem ZeroKnowledge.mono {enc : OracleEncoding A (Out k e) (Bits m) (XOut k e)}
-    {P : NARG.Prover A (Out k e) Stmt Wit Proof Coins}
+    {P : NARG.Prover A (Out k e) Stmt Wit Proof Coins} {μ : PMF Coins}
     {S : NARG.Simulator A (Out k e) Stmt (Option Proof) SimCoins} {ε ε' : ℕ → ℕ → ℝ}
-    (h : ZeroKnowledge rel enc P S ε) (hε : ∀ t Q, ε t Q ≤ ε' t Q) :
-    ZeroKnowledge rel enc P S ε' :=
+    (h : ZeroKnowledge rel enc P μ S ε) (hε : ∀ t Q, ε t Q ≤ ε' t Q) :
+    ZeroKnowledge rel enc P μ S ε' :=
   GordieHowe.QROM.ZeroKnowledge.mono h hε
 
 end ZeroKnowledge
+
+section ZeroKnowledgeOn
+
+variable {m k e : ℕ} {A Stmt Wit Proof Coins SimCoins : Type}
+  [Fintype Stmt] [Fintype Wit] [DecidableEq Stmt] [DecidableEq Wit]
+  [Fintype Proof] [DecidableEq Proof] [Fintype Coins] [DecidableEq Coins] [Fintype SimCoins]
+
+/-- **Zero knowledge in the quantum random-oracle model at a relation given as a set**:
+`ZeroKnowledge` at the relation `fun x w => (x, w) ∈ rel`, with the classical decisions of
+membership in `rel` and of equality of the simulator's coins made here. `ZeroKnowledge` itself takes
+the `Set` form when the ring work unparks; this wrapper is then deleted. -/
+def ZeroKnowledgeOn (rel : Set (Stmt × Wit)) (enc : OracleEncoding A (Out k e) (Bits m) (XOut k e))
+    (P : NARG.Prover A (Out k e) Stmt Wit Proof Coins) (μ : PMF Coins)
+    (S : NARG.Simulator A (Out k e) Stmt (Option Proof) SimCoins) (ε : ℕ → ℕ → ℝ) : Prop :=
+  open Classical in ZeroKnowledge (fun x w => (x, w) ∈ rel) enc P μ S ε
+
+/-- **Everlasting zero knowledge in the quantum random-oracle model at a relation given as a set**:
+`EverlastingZeroKnowledge` at the relation `fun x w => (x, w) ∈ rel`, with the classical decisions
+of membership in `rel` and of equality of the simulator's coins made here.
+`EverlastingZeroKnowledge` itself takes the `Set` form when the ring work unparks; this wrapper is
+then deleted. -/
+def EverlastingZeroKnowledgeOn (rel : Set (Stmt × Wit))
+    (enc : OracleEncoding A (Out k e) (Bits m) (XOut k e))
+    (P : NARG.Prover A (Out k e) Stmt Wit Proof Coins) (μ : PMF Coins)
+    (S : NARG.Simulator A (Out k e) Stmt (Option Proof) SimCoins) (ε : ℕ → ℕ → ℝ) : Prop :=
+  open Classical in EverlastingZeroKnowledge (fun x w => (x, w) ∈ rel) enc P μ S ε
+
+/-- **Zero knowledge at a set relation from zero knowledge at its membership**, at any decisions of
+membership and of the simulator's coin equality (they are subsingletons). -/
+theorem ZeroKnowledgeOn.of_zeroKnowledge [DecidableEq SimCoins] {rel : Set (Stmt × Wit)}
+    [DecidableRel fun x w => (x, w) ∈ rel] {enc : OracleEncoding A (Out k e) (Bits m) (XOut k e)}
+    {P : NARG.Prover A (Out k e) Stmt Wit Proof Coins} {μ : PMF Coins}
+    {S : NARG.Simulator A (Out k e) Stmt (Option Proof) SimCoins} {ε : ℕ → ℕ → ℝ}
+    (h : ZeroKnowledge (fun x w => (x, w) ∈ rel) enc P μ S ε) : ZeroKnowledgeOn rel enc P μ S ε := by
+  unfold ZeroKnowledgeOn
+  convert h
+
+/-- **Everlasting zero knowledge at a set relation from everlasting zero knowledge at its
+membership**, at any decisions of membership and of the simulator's coin equality. -/
+theorem EverlastingZeroKnowledgeOn.of_everlastingZeroKnowledge [DecidableEq SimCoins]
+    {rel : Set (Stmt × Wit)} [DecidableRel fun x w => (x, w) ∈ rel]
+    {enc : OracleEncoding A (Out k e) (Bits m) (XOut k e)}
+    {P : NARG.Prover A (Out k e) Stmt Wit Proof Coins} {μ : PMF Coins}
+    {S : NARG.Simulator A (Out k e) Stmt (Option Proof) SimCoins} {ε : ℕ → ℕ → ℝ}
+    (h : EverlastingZeroKnowledge (fun x w => (x, w) ∈ rel) enc P μ S ε) :
+    EverlastingZeroKnowledgeOn rel enc P μ S ε := by
+  unfold EverlastingZeroKnowledgeOn
+  convert h
+
+end ZeroKnowledgeOn
 
 end GordieHowe.NARG.QROM

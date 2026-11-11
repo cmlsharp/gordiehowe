@@ -22,3 +22,4 @@ import GordieHoweTest.GKRBridge
 import GordieHoweTest.Unbundle
 import GordieHoweTest.UnbundleSchemes
 import GordieHoweTest.RSDecoderExec
+import GordieHoweTest.ProductModExports

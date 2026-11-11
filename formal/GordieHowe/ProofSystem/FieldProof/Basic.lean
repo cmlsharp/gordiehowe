@@ -35,7 +35,7 @@ verdict (`verdict`, with `toShape` the computational part as a `GordieHowe.Field
   (`GordieHowe.FieldProof.Shape.extractor`), with round errors `error`: the masked row reduction's reduction on the
   extracted cells, disjoined with the bad commit phase (`ClaimReduction.orConst`), followed by
   the commit-and-prove proof of its rows (`ClaimReduction.append`,
-  `ClaimProof.rbrKnowledgeSoundness`). The commit phase's own events are charged by the protocol
+  `ClaimProof.rbrKnowledgeSound`). The commit phase's own events are charged by the protocol
   that runs it (`MultiCircuitIOP`).
 * **Completeness** (`GordieHowe.FieldProof.completeness`): the honest masked-row-reduction transcript satisfies the
   rows on the committed cells (`MaskedRowReduction.Honest.complete`), and the commit-and-prove system
@@ -205,17 +205,17 @@ statement (the public input and the commit phase), at the named extractor `Shape
 function `Sound.stateFn`, with round errors `S.error`: the masked row reduction's reduction errors, then the
 commit-and-prove system's errors. -/
 theorem rbr_knowledge_soundness :
-    rbrKnowledgeSoundness (C.toShape.relation holds S.commitBad) C.toShape.verifier
+    RBRKnowledgeSound (C.toShape.relation holds S.commitBad) C.toShape.verifier
       C.toShape.extractor S.toShape.stateFn S.error :=
-  S.toShape.rbrKnowledgeSoundness
+  S.toShape.rbrKnowledgeSound
 
 /-- **Knowledge soundness of a circuit proof** at the named extractor `Shape.extractor`, for
 "the commit phase was bad or `holds`", with error the masked row reduction's summed errors plus the
 commit-and-prove system's. -/
 theorem knowledge_soundness :
-    knowledgeSoundness (C.toShape.relation holds S.commitBad) C.toShape.verifier
+    KnowledgeSound (C.toShape.relation holds S.commitBad) C.toShape.verifier
       C.toShape.extractor (∑ j, S.ipε j + ∑ j, S.cpε j) := by
-  have h := knowledgeSoundness_of_rbr_of_stable (rbr_knowledge_soundness S)
+  have h := knowledgeSound_of_rbr_of_stable (rbr_knowledge_soundness S)
     Shape.extractor_stable
   rw [← S.sum_error]
   exact h
@@ -298,6 +298,7 @@ def Honest.coinsEquiv (Hc : C.Honest S In dom) : Hc.Coins ≃ Hc.ip.Pads × Hc.c
 
 instance (Hc : C.Honest S In dom) : Fintype Hc.Coins := Fintype.ofEquiv _ Hc.coinsEquiv.symm
 instance (Hc : C.Honest S In dom) : Nonempty Hc.Coins := Hc.coinsEquiv.nonempty
+instance (Hc : C.Honest S In dom) : DecidableEq Hc.Coins := Hc.coinsEquiv.decidableEq
 
 /-- **The honest oracle message**: the commit-and-prove oracle message for the cells. -/
 def Honest.commit (Hc : C.Honest S In dom) (x : In) (ρ : Hc.Coins) : C.cp.Com :=

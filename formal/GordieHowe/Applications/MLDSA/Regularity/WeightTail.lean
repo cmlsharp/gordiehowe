@@ -14,7 +14,7 @@ public import GordieHowe.Foundations.ToMathlib.ExpTaylorBounds
 # The inverse square of the acceptance floor, averaged over keys and matrices
 
 The regularity gap divides by the mean member weight, and Cauchy–Schwarz over the matrix leaves
-`√(𝔼 w⁻²)` for a lower bound `w` on it (`expect_ringRegGap_le_sqrt`). This file bounds that
+`√(𝔼 w⁻²)` for a lower bound `w` on it (`expect_signerRegGap_le_sqrt`). This file bounds that
 average at ML-DSA-65 and ML-DSA-87 with `w` the acceptance floor under a random-oracle
 `SampleInBall` (`oracleAcceptFloor`), averaged over the oracle, uniform box secrets and a uniform
 matrix.

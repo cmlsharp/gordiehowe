@@ -42,6 +42,7 @@
 #define PRIVACY_PROOFS_ZK_LIB_GORDIEHOWE_COMPILER_EMIT_EXPORT_H_
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -1110,7 +1111,10 @@ class TableBuilder : Lowering {
       }
       return push(std::move(ni), en.W);
     }
-    const bool derived = N_.at(v).kind == Kind::kDerived;
+    // A derived value, or a realization's value bound to its digits (no
+    // value of the program: it prints as a derived value, its binding).
+    const bool derived = N_.at(v).kind == Kind::kDerived ||
+                         (kind.empty() && bindings(d_).count(v) != 0);
     if (derived || kind == "bound") {
       auto b = bindings(d_).find(v);
       const Lin<F> *L = nullptr;
@@ -1370,6 +1374,18 @@ void family_records(EmitTable<F> &t, const ir::Program &p, const ir::Circuit &pc
 // the lazy difference check (A14), and every assertion pair asserts its
 // root's wire. The DAG
 // is the certificate's (kept nodes; any other node is zero).
+//
+// The mirror also records what the check plan prices (plan_entries): per
+// cut node and per entry's family, its cuts in the order the Lean check
+// lists them (nodeCutsE: the coordinates, then the aux cuts; famCuts), in
+// blocks of kCutBlock cuts.
+inline constexpr size_t kCutBlock = 64;
+// A block of consecutive cuts: how many, how many are one wire, and over
+// the others the wires and constants their tree expressions read and their
+// scales by a constant other than 1 and -1.
+struct CutBlock {
+  size_t cuts = 0, free = 0, leaves = 0, scales = 0;
+};
 template <class F>
 class RelMirror {
  public:
@@ -1452,7 +1468,15 @@ class RelMirror {
       ncuts_ += cuts_.size();
       st.nodes += 1;
       st.items += cuts_.size();
+      // node_cuts appends the coordinates' cuts after the aux cuts the
+      // expansion recorded; the Lean check lists the coordinates first.
+      if (node_census_.size() <= n) node_census_.resize(n + 1);
+      std::vector<CutBlock> &cen = node_census_[n];
+      const size_t first = cuts_.size() - t_.nodes[n].len;
+      for (size_t i = first; i < cuts_.size(); ++i) census_add(cen, cuts_[i].e);
+      for (size_t i = 0; i < first; ++i) census_add(cen, cuts_[i].e);
     }
+    cur_entry_ = k;
     // A realization's assertion is its family's item.
     if (blk.fam.kind == EmitTable<F>::Fam::kLogup || blk.fam.kind == EmitTable<F>::Fam::kMacH)
       return family_errors(k, blk, zu, &st);
@@ -1467,6 +1491,10 @@ class RelMirror {
     return family_errors(k, blk, zu, &st);
   }
   size_t cuts_checked() const { return ncuts_; }
+  // Per table node, its cuts' blocks (empty for an uncut node); per entry,
+  // its family cuts' blocks.
+  const std::vector<std::vector<CutBlock>> &node_census() const { return node_census_; }
+  const std::vector<std::vector<CutBlock>> &family_census() const { return family_census_; }
 
   // Per entry: its cut nodes and checked cuts, the DAG terms the checks
   // read, and the largest difference polynomial.
@@ -1776,6 +1804,8 @@ class RelMirror {
     }
     ncuts_ += cs.size();
     if (st != nullptr) st->items += cs.size();
+    if (family_census_.size() <= cur_entry_) family_census_.resize(cur_entry_ + 1);
+    for (const auto &c : cs) census_add(family_census_[cur_entry_], c.second);
     if (zu.size() != 1) return "asserts: " + std::to_string(zu.size()) + " pairs, not one";
     const std::string w = zero_error(zu[0].first, zu[0].second, item, st);
     return w.empty() ? "" : "the item: " + w;
@@ -2006,6 +2036,28 @@ class RelMirror {
     return e;
   }
   Elt mone() const { return f_.mone(); }
+
+  // Adds the wires and constants E reads, and its scales by a constant
+  // other than 1 and -1, to B.
+  void te_census(const TE &e, CutBlock *b) const {
+    if (e.k == TE::kWire || e.k == TE::kConst) {
+      ++b->leaves;
+      return;
+    }
+    if (e.k == TE::kScale && !(e.c == f_.one() || e.c == f_.mone())) ++b->scales;
+    for (const TE &x : e.kids) te_census(x, b);
+  }
+  // Appends a cut of tree expression E to the blocks V.
+  void census_add(std::vector<CutBlock> &v, const TE &e) const {
+    if (v.empty() || v.back().cuts == kCutBlock) v.emplace_back();
+    CutBlock &b = v.back();
+    ++b.cuts;
+    if (e.k == TE::kWire) {
+      ++b.free;
+      return;
+    }
+    te_census(e, &b);
+  }
 
   const Wire &W(size_t k, size_t i) const { return t_.W.at(k).at(i); }
 
@@ -2524,6 +2576,8 @@ class RelMirror {
   std::unordered_map<size_t, std::vector<TE>> uncut_;
   std::vector<EntryStats> entry_stats_;
   std::string expand_error_;
+  std::vector<std::vector<CutBlock>> node_census_, family_census_;
+  size_t cur_entry_ = 0;
 };
 
 // ------------------------------------------------- the binary certificate --
@@ -2889,72 +2943,335 @@ inline FieldArith field_arith(const ir::FieldDecl &fd) {
 // check_entry proves per entry (its leaves) and the Lean modules they go in.
 // It is the one planner; Lean reads an entry's parts from its module text.
 //
-// Costs are in coordinate units: a cut node checks its own cuts and aux and
-// every aux of its uncut cone (an uncut kid's cuts are checked in its
-// parent's theorem, its expansion rebuilt per cut and per slice), so it has
-// n = len + aux + the cone's aux cuts, each weighted by the cone's size plus
-// one, and its slices shrink by the same factor; an uncut node checks
-// nothing.
+// The parts of an entry, as triples: (0, 0, m) a run of m consecutive nodes;
+// (1, S, m) one node's cuts in m slices of S (the last one every cut left);
+// then (2, S, m) the family cuts in m slices of S. The leaves, in order: the
+// entry's head, then per part its one theorem (tag 0) or its m slices. An
+// entry whose leaves cost at most kModuleMs in all is one module; a larger
+// one is split into at most ceil(cost / kModuleMs) part modules of
+// contiguous leaves, balanced by cost, and its entry module only composes
+// their theorems.
 //
-// The parts of an entry, as triples: (0, 0, m) a run of m consecutive nodes
-// of at most kPartBudget cost in all; (1, S, m) one node of cost over
-// kPartBudget, its cuts checked in m slices of S (the last one every cut
-// left); then (2, S, m) the family cuts in m slices of S.
+// Costs are predicted kernel milliseconds. The kernel shares nothing between
+// declarations, so a leaf checking cuts [s, s + S) of an object (a cut
+// node's cuts, nodeCutsE, or an entry's family cuts, famCuts) builds the
+// object's whole cut list, drops s cuts and checks S:
+//   kLeafMs + F + beta s + the cost of its S cuts.
+// F, a node's expansion: for the node and each uncut node it expands (its
+// uncut cone, once per reference), kOwnMs per coordinate, plus per
+// coordinate of their kids kOwnMs, or kIndexMs when read through an index
+// map (gather, broadcast, a lin term's view), or kOperatorMs when read
+// through an operator (a lin term's named, sparse or staged operator, apply,
+// prod, tree, cmp); plus kRampMs per coordinate read through an index map or
+// an operator, times the share of the node's cuts that are not one wire
+// (those cuts force the lookup tries of the coordinates they read). A
+// family's F: kLogupBuildMs per cut of a LogUp family, kMacBuildMs per
+// coordinate of a MAC H family's bits.
+// beta: kDropPlaceMs for a value leaf, kDropMs for any other node, kFamDropMs
+// for a family.
+// A cut: kCutPlaceMs for a value leaf's, kCutMs for any other node's,
+// kLogupCutMs for a LogUp family's, none for a MAC H family's; and when its
+// tree expression is not one wire, kTermMs per wire or constant it reads and
+// kScaleMs per scale by a constant other than 1 and -1. A cut whose tree
+// expression is one wire (a placement, a coordinate taken from a cut kid) costs
+// only its base, so a node's coordinates pay for its uncut cone only when their
+// expressions pass through it.
 //
-// The leaves, in order: the entry's head, then per part its one theorem
-// (tag 0) or its m slices. An entry whose leaves cost at most kModuleBudget
-// in all is one module; a larger one is split into at most
-// ceil(cost / kModuleBudget) part modules of contiguous leaves, balanced by
-// cost, and its entry module only composes their theorems.
+// The constants, from the kernel-mode profile of 2026-11-07 (one
+// declaration per Lean process, kernel type-checking time from
+// `set_option profiler true`; the GKR circuits A and H of
+// MDL/MLDSA44/Attrs1/ROMParams):
+//   A node 57, a value leaf of 94,208 coordinates: cuts [0, 1) 6.5 s,
+//     [93184, 93185) 20.1 s, whole 30.8 s (kOwnMs, kDropPlaceMs, kCutPlaceMs);
+//   A node 58, a lin node of 4,096 cuts over node 57 through a named
+//     operator, each cut a sum of 23 wires scaled by powers of 2: cuts
+//     [0, 1) 59.2 s, [0, 64) 112 s, [0, 1024) 283 s (kOperatorMs; kRampMs, the
+//     excess of the first 64 cuts over the steady 0.18 s per cut);
+//   H node 2740, a gather of 117,760 coordinates over value leaves of
+//     118,528: the slice of 113 cuts at s = 565 36.4 s, at s = 105,655 121 s,
+//     whole 232 s (kIndexMs, kDropMs, kCutMs);
+//   H entry 88's MAC H family, 920 cuts of 128 scaled bits each over 117,760
+//     bits: 4 cuts 90 s, whole 1,180 s (kMacBuildMs; kScaleMs from its 1.2 s
+//     and node 58's 0.18 s per cut, after kTermMs);
+//   A entry 10's LogUp family of 107,000 cuts: slice 0 of 256 cuts 3.6 s, the
+//     slice at s = 106,496 80.6 s (kLogupBuildMs, kFamDropMs, kTermMs from its
+//     two-wire cuts);
+//   leaves of one or two small nodes 0.4 s (kLeafMs);
+//   A entry 10's LogUp family again, slices at s = 0 of 256, 1,024, 4,096
+//     and 13,344 cuts: 3.4, 12.8, 55 and 215 s; the last 248 cuts, at
+//     s = 106,752, 81 s (kLogupCutMs, from the largest slice);
+//   MLDSA44/Ring/Carrier/ROMParams A node 280, an apply node of 1,024
+//     coordinates and 8,192 cuts: cuts [0, 256), [0, 1024), [0, 4096) 16.7,
+//     64.7 and 231 s; the same circuit's node 482, a gather of 8,192
+//     cuts: cuts [0, 1) 6.8 s, [0, 1024) 108 s, [0, 4096) 278 s (both
+//     priced 12 to 14 ms per cut, so kMaxSliceHard).
+//
+// The slices: an object whose whole check costs at most kLeafBudgetMs is
+// not sliced (a node joins a run of consecutive nodes of at most that cost
+// in all). A larger one is checked in m slices, m the least count whose
+// leaves each cost at most the cap: kLeafBudgetMs, or, when the rebuild and
+// the drop to the object's last cut alone cost more than three quarters of
+// it, the larger of twice kLeafBudgetMs and that cost plus a quarter of
+// kLeafBudgetMs. Every slice pays F and the drops add up, so the least such
+// m also minimizes the total. The budget: node 58's slice of 1,024 cuts ran
+// into the kernel's limit of 200,000 heartbeats at 275 s, so a quarter of
+// the limit is about 69 s of such checking, and kLeafBudgetMs stays below
+// it (layerSliceGates' rule in check_circuit). A node's slice also holds at
+// most about kMaxSliceHard cuts whose tree expressions are not one wire: such
+// cuts of the ring carrier's nodes 280 and 482 cost five to seven times their
+// price, and 1,024 of them stay under the limit.
+inline constexpr double kLeafMs = 300;
+inline constexpr double kHeadMs = 2000;
+inline constexpr double kLogupCutMs = 14;
+inline constexpr size_t kMaxSliceHard = 1024;
+inline constexpr double kOwnMs = 0.069;
+inline constexpr double kIndexMs = 0.235;
+inline constexpr double kOperatorMs = 0.625;
+inline constexpr double kRampMs = 0.44;
+inline constexpr double kDropPlaceMs = 0.145;
+inline constexpr double kDropMs = 0.81;
+inline constexpr double kCutPlaceMs = 0.26;
+inline constexpr double kCutMs = 1.66;
+inline constexpr double kTermMs = 1.2;
+inline constexpr double kScaleMs = 8;
+inline constexpr double kLogupBuildMs = 0.028;
+inline constexpr double kMacBuildMs = 0.72;
+inline constexpr double kFamDropMs = 0.73;
+inline constexpr double kLeafBudgetMs = 60000;
+inline constexpr double kModuleMs = 300000;
+
+// A node of the table as the planner reads it: its length, whether it is
+// cut, its aux wires, how it reads its kids (a value leaf reads none), its
+// kids, and a cut node's cuts in check order (RelMirror::node_census; when
+// empty, its coordinates and aux wires as one-wire cuts).
 struct PlanNode {
+  enum Read : uint8_t { kPlace, kOwn, kIndex, kOperator };
   size_t len = 0;
   bool cut = false;
   size_t aux = 0;
+  Read read = kOwn;
   std::vector<size_t> kids;
+  std::vector<CutBlock> cuts;
 };
-inline constexpr size_t kPartBudget = 1024;
-inline constexpr size_t kSliceBudget = 1024;
-inline constexpr size_t kMacSlice = 4;
-inline constexpr size_t kLogupSlice = 256;
-// The module costs: a head, one LogUp family cut, one MAC H chunk cut (a
-// slice of either costs about one part), and the module budget. Whole
-// entries checked in the kernel took 0.024 to 0.034 s per unit, but part
-// modules range from 0.02 s per unit (a LogUp's leaf cuts) to 0.081 s per
-// unit (the late slices of a large node), so a module of 10240 units takes
-// at most about 14 minutes.
-inline constexpr size_t kHeadCost = 1024;
-inline constexpr size_t kLogupCutCost = 4;
-inline constexpr size_t kMacCutCost = 256;
-inline constexpr size_t kModuleBudget = 10 * 1024;
 
-// Per node its cuts n, its cost l and the cuts S one of its slices holds.
-struct PlanCost {
-  size_t n = 0, l = 0, S = kSliceBudget;
+// An object of cut checks as the planner prices it: its rebuild F, its drop
+// per cut beta, and per block of its cuts the count and cost (an uncut node
+// has no cuts and costs nothing).
+struct PlanObject {
+  double F = 0, beta = 0;
+  size_t hard = 0;
+  std::vector<size_t> n;
+  std::vector<double> cost;
+  size_t cuts() const {
+    size_t s = 0;
+    for (size_t x : n) s += x;
+    return s;
+  }
+  double total() const {
+    double s = 0;
+    for (double x : cost) s += x;
+    return s;
+  }
 };
-inline std::vector<PlanCost> plan_node_costs(const std::vector<PlanNode> &info) {
-  // per node: the aux of its uncut cone, the cone's size (itself included
-  // when uncut)
-  std::vector<std::pair<size_t, size_t>> cone;
-  std::vector<PlanCost> out;
+
+// The cost of each leaf checking OBJ in slices of S cuts (the last one every
+// cut left), each block's cost spread evenly over its cuts.
+inline std::vector<double> slice_costs(const PlanObject &o, size_t S) {
+  const size_t N = o.cuts();
+  const size_t m = std::max<size_t>(1, (N + S - 1) / S);
+  std::vector<double> out;
+  out.reserve(m);
+  // the cost of cuts [0, i), for nondecreasing i
+  size_t b = 0, start = 0;
+  double done = 0;
+  auto prefix = [&](size_t i) {
+    while (b < o.n.size() && start + o.n[b] <= i) {
+      done += o.cost[b];
+      start += o.n[b];
+      ++b;
+    }
+    if (b == o.n.size() || i == start) return done;
+    return done + o.cost[b] * double(i - start) / double(o.n[b]);
+  };
+  double before = 0;
+  for (size_t i = 0; i < m; ++i) {
+    const size_t s = i * S, e = i + 1 == m ? N : std::min(N, s + S);
+    const double after = prefix(e);
+    out.push_back(kLeafMs + o.F + o.beta * double(s) + after - before);
+    before = after;
+  }
+  return out;
+}
+
+// The slices of OBJ: their size S and count m (m = 1: one leaf of every cut)
+// and their leaves' costs.
+struct SlicePlan {
+  size_t S = 1, m = 1;
+  std::vector<double> leaves;
+};
+inline SlicePlan plan_slices(const PlanObject &o) {
+  const size_t N = o.cuts();
+  const double whole = kLeafMs + o.F + o.total();
+  // a node's slice holds at most about kMaxSliceHard cuts that are not one
+  // wire
+  const size_t Smax =
+      o.hard <= kMaxSliceHard ? N : std::max<size_t>(1, kMaxSliceHard * N / o.hard);
+  if (N <= 1 || (whole <= kLeafBudgetMs && N <= Smax))
+    return {std::max<size_t>(1, N), 1, {whole}};
+  // The least possible leaf at the end: the rebuild, the drop to a block's
+  // last cut and that cut.
+  double last = 0;
+  size_t at = 0;
+  for (size_t b = 0; b < o.n.size(); ++b) {
+    if (o.n[b] == 0) continue;
+    at += o.n[b];
+    last = std::max(last, kLeafMs + o.F + o.beta * double(at - 1) + o.cost[b] / double(o.n[b]));
+  }
+  const double cap = last <= 0.75 * kLeafBudgetMs
+                         ? kLeafBudgetMs
+                         : std::max(2 * kLeafBudgetMs, last + 0.25 * kLeafBudgetMs);
+  auto fits = [&](size_t S) {
+    for (double x : slice_costs(o, S))
+      if (x > cap) return false;
+    return true;
+  };
+  // The largest slice size that fits (a leaf grows with its slice, so by
+  // bisection), then the least count of slices of at most that size,
+  // balanced.
+  size_t lo = 1, hi = Smax;
+  while (lo < hi) {
+    const size_t mid = lo + (hi - lo + 1) / 2;
+    if (fits(mid)) lo = mid;
+    else hi = mid - 1;
+  }
+  const size_t m = (N + lo - 1) / lo;
+  size_t S = (N + m - 1) / m;
+  if (!fits(S)) S = lo;
+  SlicePlan p;
+  p.S = S;
+  p.leaves = slice_costs(o, S);
+  p.m = p.leaves.size();
+  return p;
+}
+
+// Per node of INFO (the table in order) its object: a cut node's expansion
+// and cuts; an uncut node's none.
+inline std::vector<PlanObject> plan_node_objects(const std::vector<PlanNode> &info) {
+  // per node: the expansion of its uncut cone (itself included when uncut),
+  // and the coordinates it reads through an index map or an operator
+  constexpr double kMax = 1e18;
+  std::vector<std::pair<double, double>> cone;
+  std::vector<PlanObject> out;
   cone.reserve(info.size());
   out.reserve(info.size());
   for (const PlanNode &x : info) {
-    size_t ca = 0, cn = 0;
+    double kid_len = 0, E = kOwnMs * double(x.len), R = 0;
     for (size_t k : x.kids) {
-      if (k < cone.size()) {
-        ca += cone[k].first;
-        cn += cone[k].second;
+      if (k >= cone.size()) continue;
+      kid_len += double(info[k].len);
+      if (!info[k].cut) {
+        E += cone[k].first;
+        R += cone[k].second;
       }
     }
-    if (x.cut) {
-      cone.emplace_back(0, 0);
-      const size_t n = x.len + x.aux + ca;
-      out.push_back({n, n * (1 + cn), std::max<size_t>(64, kSliceBudget / (1 + cn))});
+    switch (x.read) {
+      case PlanNode::kPlace:
+        break;
+      case PlanNode::kOwn:
+        E += kOwnMs * kid_len;
+        break;
+      case PlanNode::kIndex:
+        E += kIndexMs * kid_len;
+        R += kid_len;
+        break;
+      case PlanNode::kOperator:
+        E += kOperatorMs * kid_len;
+        R += kid_len;
+        break;
+    }
+    E = std::min(E, kMax);
+    R = std::min(R, kMax);
+    PlanObject o;
+    if (!x.cut) {
+      cone.emplace_back(E, R);
+      out.push_back(std::move(o));
+      continue;
+    }
+    cone.emplace_back(0, 0);
+    const bool place = x.read == PlanNode::kPlace;
+    const double base = place ? kCutPlaceMs : kCutMs;
+    o.beta = place ? kDropPlaceMs : kDropMs;
+    size_t cuts = 0, free = 0;
+    if (x.cuts.empty()) {
+      for (size_t left = x.len + x.aux; left > 0;) {
+        const size_t b = std::min(left, kCutBlock);
+        o.n.push_back(b);
+        o.cost.push_back(base * double(b));
+        left -= b;
+      }
+      cuts = free = x.len + x.aux;
     } else {
-      cone.emplace_back(x.aux + ca, 1 + cn);
-      out.push_back({0, 0, kSliceBudget});
+      for (const CutBlock &b : x.cuts) {
+        o.n.push_back(b.cuts);
+        o.cost.push_back(base * double(b.cuts) + kTermMs * double(b.leaves) +
+                         kScaleMs * double(b.scales));
+        cuts += b.cuts;
+        free += b.free;
+      }
+    }
+    o.F = E + (cuts == 0 ? 0 : kRampMs * R * double(cuts - free) / double(cuts));
+    o.hard = cuts - free;
+    out.push_back(std::move(o));
+  }
+  return out;
+}
+
+// A family's object: rebuild F, its cuts' blocks CUTS (empty: COUNT cuts of
+// DEFAULT_COST each), each cut BASE more.
+inline PlanObject plan_family_object(double F, const std::vector<CutBlock> &cuts, size_t count,
+                                     double default_cost, double base = 0) {
+  PlanObject o;
+  o.F = F;
+  o.beta = kFamDropMs;
+  if (cuts.empty()) {
+    for (size_t left = count; left > 0;) {
+      const size_t b = std::min(left, kCutBlock);
+      o.n.push_back(b);
+      o.cost.push_back((base + default_cost) * double(b));
+      left -= b;
+    }
+  } else {
+    for (const CutBlock &b : cuts) {
+      o.n.push_back(b.cuts);
+      o.cost.push_back(base * double(b.cuts) + kTermMs * double(b.leaves) +
+                       kScaleMs * double(b.scales));
     }
   }
+  return o;
+}
+
+// The part modules of leaves of costs LEAVES (total COST, in milliseconds)
+// under the module budget: the leaf ranges [lo, hi) of
+// ceil(COST / BUDGET) modules, a leaf in the module its cost's midpoint
+// falls in; none when they fit one module.
+inline std::vector<std::pair<size_t, size_t>> split_leaves(const std::vector<size_t> &leaves,
+                                                           size_t cost, double budget) {
+  std::vector<std::pair<size_t, size_t>> out;
+  const size_t B = size_t(std::max(1.0, std::ceil(budget)));
+  if (cost <= B) return out;
+  const size_t G = (cost + B - 1) / B;
+  size_t before = 0, g = SIZE_MAX;
+  for (size_t i = 0; i < leaves.size(); ++i) {
+    const size_t gi = std::min(G - 1, (2 * before + leaves[i]) * G / (2 * cost));
+    if (gi != g) {
+      out.emplace_back(i, i + 1);
+      g = gi;
+    } else {
+      out.back().second = i + 1;
+    }
+    before += leaves[i];
+  }
+  if (out.size() == 1) out.clear();
   return out;
 }
 
@@ -2967,108 +3284,207 @@ struct EntryPlan {
   std::vector<std::pair<size_t, size_t>> modules;
 };
 
-// The plan of an entry from its nodes' costs COSTS (plan_node_costs over the
-// table, the entry's block), its family's cut count FAM_CUTS, the cuts one
-// family slice holds FAM_SLICE and the cost of one family cut FAM_COST.
-inline EntryPlan plan_entry(const std::vector<PlanCost> &costs, size_t fam_cuts,
-                            size_t fam_slice, size_t fam_cost,
-                            size_t budget = kModuleBudget) {
+// The plan of an entry from its nodes' objects NODES (plan_node_objects
+// over the table, the entry's block) and its family's object FAM.
+inline EntryPlan plan_entry(const std::vector<PlanObject> &nodes, const PlanObject &fam,
+                            double budget = kModuleMs) {
   EntryPlan e;
-  e.leaves.push_back(kHeadCost);
-  size_t cur = 0, cost = 0;
+  auto ms = [](double x) { return size_t(std::max(1.0, std::ceil(x))); };
+  e.leaves.push_back(ms(kHeadMs));
+  size_t cur = 0;
+  double cost = 0;
   auto flush = [&]() {
     if (cur == 0) return;
     e.parts.insert(e.parts.end(), {0, 0, cur});
-    e.leaves.push_back(cost);
+    e.leaves.push_back(ms(kLeafMs + cost));
     cur = 0;
     cost = 0;
   };
-  for (const PlanCost &c : costs) {
-    if (c.l > kPartBudget) {
+  for (const PlanObject &o : nodes) {
+    const SlicePlan sp = plan_slices(o);
+    if (sp.m > 1) {
       flush();
-      const size_t m = std::max<size_t>(1, (c.n + c.S - 1) / c.S);
-      e.parts.insert(e.parts.end(), {1, c.S, m});
-      for (size_t i = 0; i < m; ++i) {
-        const size_t cuts = i + 1 == m ? c.n - std::min(c.n, i * c.S) : c.S;
-        e.leaves.push_back(std::max<size_t>(1, cuts * c.l / std::max<size_t>(1, c.n)));
-      }
-    } else {
-      const size_t x = std::max<size_t>(c.l, 1);
-      if (cur > 0 && cost + x > kPartBudget) flush();
-      ++cur;
-      cost += x;
+      e.parts.insert(e.parts.end(), {1, sp.S, sp.m});
+      for (double x : sp.leaves) e.leaves.push_back(ms(x));
+      continue;
     }
+    const double x = o.F + o.total();
+    if (cur > 0 && kLeafMs + cost + x > kLeafBudgetMs) flush();
+    ++cur;
+    cost += x;
   }
   flush();
-  const size_t m = std::max<size_t>(1, (fam_cuts + fam_slice - 1) / fam_slice);
-  e.parts.insert(e.parts.end(), {2, fam_slice, m});
-  for (size_t i = 0; i < m; ++i) {
-    const size_t cuts =
-        i + 1 == m ? fam_cuts - std::min(fam_cuts, i * fam_slice) : fam_slice;
-    e.leaves.push_back(std::max<size_t>(1, cuts * fam_cost));
-  }
+  const SlicePlan fp = plan_slices(fam);
+  e.parts.insert(e.parts.end(), {2, fp.S, fp.m});
+  for (double x : fp.leaves) e.leaves.push_back(ms(x));
   for (size_t x : e.leaves) e.cost += x;
-  if (e.cost > budget) {
-    // G modules; a leaf goes to the module its cost's midpoint falls in
-    const size_t G = (e.cost + budget - 1) / budget;
-    size_t before = 0, g = SIZE_MAX;
-    for (size_t i = 0; i < e.leaves.size(); ++i) {
-      const size_t gi =
-          std::min(G - 1, (2 * before + e.leaves[i]) * G / (2 * e.cost));
-      if (gi != g) {
-        e.modules.emplace_back(i, i + 1);
-        g = gi;
-      } else {
-        e.modules.back().second = i + 1;
-      }
-      before += e.leaves[i];
-    }
-    if (e.modules.size() == 1) e.modules.clear();
-  }
+  e.modules = split_leaves(e.leaves, e.cost, budget);
   return e;
+}
+
+// How node ND reads its kids (PlanNode::Read).
+inline PlanNode::Read plan_read(const ENode &nd) {
+  switch (nd.kind) {
+    case ENode::kValue:
+    case ENode::kConst:
+      return PlanNode::kPlace;
+    case ENode::kGather:
+    case ENode::kBroadcast:
+      return PlanNode::kIndex;
+    case ENode::kApply:
+    case ENode::kProd:
+    case ENode::kTree:
+    case ENode::kCmp:
+      return PlanNode::kOperator;
+    case ENode::kLin: {
+      PlanNode::Read r = PlanNode::kOwn;
+      for (const ETerm &tm : nd.terms)
+        for (const EOp &o : tm.ops) {
+          if (o.kind != EOp::kView) return PlanNode::kOperator;
+          r = PlanNode::kIndex;
+        }
+      return r;
+    }
+    default:
+      return PlanNode::kOwn;
+  }
 }
 
 // The plan of every entry of table T: its nodes in block order (Lean's kids
 // of a node: a lin node's term views, any other node's kids), each block's
-// nodes' costs and its family's cuts (a LogUp's leaves, two per inner node
-// and its sum; a MAC H's chunks; none otherwise).
+// nodes' objects and its family's (a LogUp's cuts, its leaves, two per
+// inner node and its sum; a MAC H's chunks; none otherwise). NODE_CUTS and
+// FAM_CUTS are the relational mirror's census of the cuts (RelMirror::
+// node_census, family_census); without them every cut is priced as one
+// wire.
 template <class F>
-std::vector<EntryPlan> plan_entries(const EmitTable<F> &t, size_t budget = kModuleBudget) {
+std::vector<EntryPlan> plan_entries(const EmitTable<F> &t,
+                                    const std::vector<std::vector<CutBlock>> &node_cuts = {},
+                                    const std::vector<std::vector<CutBlock>> &fam_cuts = {},
+                                    double budget = kModuleMs) {
   using Fam = typename EmitTable<F>::Fam;
   std::vector<PlanNode> info;
   for (const auto &b : t.blocks) {
     for (size_t n = b.lo; n < b.hi; ++n) {
       const ENode &nd = t.nodes[n].node;
-      PlanNode x{t.nodes[n].len, t.cut[n] != 0, t.aux[n].size(), {}};
+      PlanNode x;
+      x.len = t.nodes[n].len;
+      x.cut = t.cut[n] != 0;
+      x.aux = t.aux[n].size();
+      x.read = plan_read(nd);
       if (nd.kind == ENode::kLin) {
         for (const ETerm &tm : nd.terms) x.kids.push_back(tm.view);
       } else if (nd.kind != ENode::kConst && nd.kind != ENode::kValue) {
         x.kids = nd.kids;
       }
+      if (x.cut && n < node_cuts.size()) x.cuts = node_cuts[n];
       info.push_back(std::move(x));
     }
   }
-  const std::vector<PlanCost> costs = plan_node_costs(info);
+  const std::vector<PlanObject> objs = plan_node_objects(info);
   std::vector<EntryPlan> out;
   size_t pos = 0;
-  for (const auto &b : t.blocks) {
+  for (size_t k = 0; k < t.blocks.size(); ++k) {
+    const auto &b = t.blocks[k];
     const size_t len = b.hi - b.lo;
-    const std::vector<PlanCost> c(costs.begin() + pos, costs.begin() + pos + len);
+    const std::vector<PlanObject> c(objs.begin() + pos, objs.begin() + pos + len);
     pos += len;
+    static const std::vector<CutBlock> none;
+    const std::vector<CutBlock> &fc = k < fam_cuts.size() ? fam_cuts[k] : none;
     switch (b.fam.kind) {
-      case Fam::kLogup:
-        out.push_back(plan_entry(c, b.log.dens.size() + 2 * b.log.inner.size() + 1,
-                                 kLogupSlice, kLogupCutCost, budget));
+      case Fam::kLogup: {
+        const size_t n = b.log.dens.size() + 2 * b.log.inner.size() + 1;
+        out.push_back(plan_entry(
+            c, plan_family_object(kLogupBuildMs * double(n), fc, n, 2 * kTermMs, kLogupCutMs),
+            budget));
         break;
-      case Fam::kMacH:
-        out.push_back(plan_entry(c, b.log.chunks.size(), kMacSlice, kMacCutCost, budget));
+      }
+      case Fam::kMacH: {
+        const size_t n = b.log.chunks.size();
+        const size_t bits = b.fam.bits < t.nodes.size() ? t.nodes[b.fam.bits].len : 0;
+        const double w = n == 0 ? 0 : double(bits) / double(n);
+        out.push_back(plan_entry(c,
+                                 plan_family_object(kMacBuildMs * double(bits), fc, n,
+                                                    kTermMs * w + kScaleMs * w),
+                                 budget));
         break;
+      }
       default:
-        out.push_back(plan_entry(c, 0, kSliceBudget, 1, budget));
+        out.push_back(plan_entry(c, plan_family_object(0, {}, 0, 0), budget));
         break;
     }
   }
   return out;
+}
+
+// The header's leaf theorems (Load.lean's runCheckCircuit, in its order) and
+// their predicted costs, measured in kernel mode on the MDL circuits: per
+// header part 0, 3, 4, 5, 7, 8 one leaf (part 3, the node table's check,
+// kTableNodeMs per node); per layer of at most kLayerSliceGates gates its
+// check and its counts; per larger layer the previous layer's length
+// (kLenGateMs per gate of it), then per slice of kLayerSliceGates its check
+// (kGateMs per gate), its counts (kInfoGateMs per gate) and, but for the last
+// slice, the equation of the next slice's tail; the last suffix and the shape;
+// the asserted nodes in slices of kAssertSliceNodes (their witnesses), then
+// the same slices' assertion terms (kAssertMs per node); part 6's merge-join
+// (kCoverMs per asserted node); and four small checks.
+inline constexpr size_t kLayerSliceGates = 2048;
+inline constexpr size_t kAssertSliceNodes = 512;
+inline constexpr double kTableNodeMs = 6.0;
+inline constexpr double kGateMs = 4.0;
+inline constexpr double kInfoGateMs = 0.6;
+inline constexpr double kLenGateMs = 0.042;
+inline constexpr double kAssertMs = 2.5;
+inline constexpr double kCoverMs = 0.4;
+
+// A circuit's header plan: its leaves' costs, their total, and its part
+// modules (the leaf ranges [lo, hi); none when it is one module).
+struct HeaderPlan {
+  std::vector<size_t> leaves;
+  size_t cost = 0;
+  std::vector<std::pair<size_t, size_t>> modules;
+};
+
+// The header plan of a circuit of layers of LAYER_GATES gates, ASSERTS
+// asserted nodes and TABLE_NODES table nodes.
+inline HeaderPlan plan_header(const std::vector<size_t> &layer_gates, size_t asserts,
+                              size_t table_nodes, double budget = kModuleMs) {
+  HeaderPlan h;
+  auto add = [&](double x) { h.leaves.push_back(size_t(std::max(1.0, std::ceil(kLeafMs + x)))); };
+  // parts 0, 3, 4, 5, 7, 8
+  add(0);
+  add(kTableNodeMs * double(table_nodes));
+  for (int i = 0; i < 4; ++i) add(0);
+  for (size_t i = 0; i < layer_gates.size(); ++i) {
+    const size_t g = layer_gates[i];
+    const size_t S = kLayerSliceGates;
+    const size_t m = std::max<size_t>(1, (g + S - 1) / S);
+    if (m == 1) {
+      add(kGateMs * double(g) + kLenGateMs * double(i == 0 ? 0 : layer_gates[i - 1]));
+      add(kInfoGateMs * double(g));
+      continue;
+    }
+    if (i > 0) add(kLenGateMs * double(layer_gates[i - 1]));
+    for (size_t j = 0; j < m; ++j) {
+      const size_t n = j + 1 == m ? g - j * S : S;
+      add(kGateMs * double(n));
+      add(kInfoGateMs * double(n));
+      if (j + 1 < m) add(0);
+    }
+  }
+  // the last suffix, the shape
+  add(0);
+  add(0);
+  const size_t A = kAssertSliceNodes;
+  const size_t ma = std::max<size_t>(1, (asserts + A - 1) / A);
+  for (int pass = 0; pass < 2; ++pass)
+    for (size_t j = 0; j < ma; ++j) add(kAssertMs * double(j + 1 == ma ? asserts - j * A : A));
+  // part 6's merge-join (or part 6), chk_one, chk_inputs, chk_count, chk_cover
+  add(kCoverMs * double(asserts));
+  for (int i = 0; i < 4; ++i) add(0);
+  for (size_t x : h.leaves) h.cost += x;
+  h.modules = split_leaves(h.leaves, h.cost, budget);
+  return h;
 }
 
 // An entry's parts as Lean list text, "[a, b, …]".
@@ -3079,32 +3495,6 @@ inline std::string plan_text(const std::vector<size_t> &parts) {
 }
 
 }  // namespace emit_export_internal
-
-// The shape of expression X to depth DEPTH, one line per node, for
-// GH_EMIT_DUMP: the asserted roots of product-form instances.
-template <class F>
-void dump_shape(std::string &o, const ExprNode<F> &x, const F &f, size_t depth,
-                size_t indent) {
-  static const char *names[] = {"lin", "const", "add", "scale", "mul", "sum",
-                                "broadcast", "not", "and", "or", "xor", "mux",
-                                "lt", "leq", "eq", "?", "any", "all",
-                                "materialize", "prod", "gather", "apply", "conv"};
-  o += std::string(indent, ' ') + names[int(x.op)] + " n=" + std::to_string(x.n);
-  if (x.w) o += " w=" + std::to_string(x.w);
-  if (x.op == ExprOp::kScale)
-    o += " c=" + emit_export_internal::elt_code(f, x.c.at(0));
-  if (x.op == ExprOp::kConst) {
-    o += " values=" + std::to_string(x.c.size());
-    if (!x.c.empty()) o += " c0=" + emit_export_internal::elt_code(f, x.c[0]);
-  }
-  if (x.op == ExprOp::kApply && x.apply) o += " op=" + x.apply->name;
-  o += "\n";
-  if (depth == 0) {
-    if (!x.kids.empty()) o += std::string(indent + 2, ' ') + "...\n";
-    return;
-  }
-  for (const auto &k : x.kids) dump_shape(o, *k, f, depth - 1, indent + 2);
-}
 
 // The export of one emitted circuit: its certificate file, its Lean
 // modules (path relative to the plan's directory, text), and counts for the
@@ -3158,19 +3548,6 @@ std::vector<EmitExport> emit_tables(const BasicCompiledSystem<S> &cs,
       const auto &Wk = *static_cast<const EmitWalk<F> *>(walk);
       const auto &C = *static_cast<const GkrCertificate<F> *>(cert);
       const F &f = d.field();
-      if (std::getenv("GH_EMIT_DUMP") != nullptr) {
-        for (const auto &pd : d.predicates()) {
-          bool product = false;
-          for (const auto &eq : cs.records().product_mod_equalities)
-            product = product || (eq.domain == d.name && eq.name == pd.name);
-          if (!product || !Wk.expr_id.count(pd.e.get())) continue;
-          std::string o;
-          dump_shape(o, *pd.e, f, 8, 2);
-          std::fprintf(stderr, "GH_EMIT_DUMP config=%s-%s domain=%s pred=%s\n%s",
-                       meta.config.c_str(), meta.profile.c_str(), d.name.c_str(),
-                       pd.name.c_str(), o.c_str());
-        }
-      }
       const size_t circ = emitted_circuit(p, di);
       const ir::Circuit &pc = p.circuits.at(circ);
       EmitTable<F> t;
@@ -3230,18 +3607,19 @@ std::vector<EmitExport> emit_tables(const BasicCompiledSystem<S> &cs,
         Mirror mir(p, t.nodes, F::kCharacteristicTwo, two);
         why = mir.table_errors();
         // A placed predicate's root prints as its side (an asserted truth's
-        // step reads it); integer equalities and product forms keep their
-        // own shapes.
+        // step reads it); integer equalities keep their own shapes, as
+        // does an integer equality's realized predicate (its
+        // sides those of the root lhs + (-1) rhs, the conv read as its
+        // committed C; Lean's entryMeaningB takes X = l - r).
         for (size_t k = 0; k < t.blocks.size() && why.empty(); ++k) {
           const ir::CircuitEntry &ce = pc.entries[k];
           if (ce.kind != ir::CircuitEntry::kPred) continue;
           const auto &b = t.blocks[k];
           const ir::Predicate &pd = p.predicates.at(ce.id);
           bool skip = false;
-          for (const auto &eq : cs.records().product_mod_equalities)
-            skip = skip || (eq.domain == d.name && eq.name == pd.name);
           for (const auto &eq : cs.records().mod_equalities)
-            skip = skip || (eq.integer && eq.domain == d.name && eq.name == pd.name);
+            skip = skip || (eq.integer && eq.domain == d.name &&
+                            (eq.name == pd.name || eq.name + ".realized" == pd.name));
           if (skip || !b.has_root) continue;
           const ENodeInfo &r = t.nodes[b.root];
           const size_t x = r.step ? r.node.kids[0] : b.root;
@@ -3374,9 +3752,25 @@ std::vector<EmitExport> emit_tables(const BasicCompiledSystem<S> &cs,
       // The entries' modules, by the check plan: an entry over the module
       // budget has part modules E<k>/P<j>, each proving a range of its leaf
       // theorems, and its module E<k> composes them.
-      const std::vector<EntryPlan> plans = plan_entries(t);
+      const std::vector<EntryPlan> plans =
+          plan_entries(t, rel.node_census(), rel.family_census());
+      const std::string check_mod = "GordieHoweCheck." + lean_name(meta) + ".GKR." + d.name;
       std::string circuit = head;
-      std::string planlog;
+      std::string planlog, modlog;
+      const bool log_modules = std::getenv("GH_EMIT_PLAN_MODULES") != nullptr;
+      const bool log_leaves = std::getenv("GH_EMIT_PLAN_LEAVES") != nullptr;
+      // Per module: its name below the circuit's check module, its leaves'
+      // predicted cost and its largest leaf's, in milliseconds.
+      auto log_module = [&](const std::string &path, const EntryPlan &pl, size_t lo, size_t hi) {
+        if (!log_modules) return;
+        size_t sum = 0, top = 0;
+        for (size_t i = lo; i < hi; ++i) {
+          sum += pl.leaves[i];
+          top = std::max(top, pl.leaves[i]);
+        }
+        modlog += (modlog.empty() ? "" : " ") + path + ":" + std::to_string(sum) + ":" +
+                  std::to_string(top);
+      };
       for (size_t k = 0; k < t.blocks.size(); ++k) {
         const EntryPlan &pl = plans[k];
         const std::string ks = std::to_string(k);
@@ -3405,6 +3799,7 @@ std::vector<EmitExport> emit_tables(const BasicCompiledSystem<S> &cs,
           return o;
         };
         if (pl.modules.empty()) {
+          log_module("E" + ks, pl, 0, pl.leaves.size());
           ex.modules.emplace_back(
               "GKR/" + d.name + "/E" + ks + ".lean",
               module("entry " + ks, "", "", "check_entry cert ar " + ks + " " + ps));
@@ -3413,6 +3808,7 @@ std::vector<EmitExport> emit_tables(const BasicCompiledSystem<S> &cs,
           for (size_t j = 0; j < pl.modules.size(); ++j) {
             const std::string js = std::to_string(j);
             const auto [lo, hi] = pl.modules[j];
+            log_module("E" + ks + ".P" + js, pl, lo, hi);
             ex.modules.emplace_back(
                 "GKR/" + d.name + "/E" + ks + "/P" + js + ".lean",
                 module("leaves " + std::to_string(lo) + " to " + std::to_string(hi - 1) +
@@ -3427,6 +3823,15 @@ std::vector<EmitExport> emit_tables(const BasicCompiledSystem<S> &cs,
                      "compose_entry cert ar " + ks + " " + ps));
         }
         circuit += "public import " + mod + ".E" + ks + "\n";
+        // With GH_EMIT_PLAN_LEAVES set: per entry its leaves' predicted costs
+        // in milliseconds, in order.
+        if (log_leaves) {
+          std::string ls;
+          for (size_t i = 0; i < pl.leaves.size(); ++i)
+            ls += (i ? "," : "") + std::to_string(pl.leaves[i]);
+          std::fprintf(stderr, "GH_EMIT_PLAN_LEAVES %s E%s %s\n", check_mod.c_str(), ks.c_str(),
+                       ls.c_str());
+        }
         planlog += (k ? " " : "") + ks + ":" + std::to_string(pl.cost) + ":" +
                    std::to_string(pl.leaves.size()) + ":" +
                    std::to_string(std::max<size_t>(1, pl.modules.size()));
@@ -3434,18 +3839,80 @@ std::vector<EmitExport> emit_tables(const BasicCompiledSystem<S> &cs,
       // Per entry: index, plan cost, leaf theorems, modules.
       std::fprintf(stderr, "GH_EMIT_PLAN config=%s-%s domain=%s %s\n", meta.config.c_str(),
                    meta.profile.c_str(), d.name.c_str(), planlog.c_str());
-      // check_circuit checks the header's parts: the data module as `meta` too,
-      // and the sealed program with `import all`, which the parts evaluate.
+      // With GH_EMIT_PLAN_MODULES set: the circuit's check module, then per
+      // entry module its name, predicted cost and largest leaf
+      // (formal/scripts/stage0.py reads them).
+      if (log_modules)
+        std::fprintf(stderr, "GH_EMIT_PLAN_MODULES %s %s\n", check_mod.c_str(),
+                     modlog.c_str());
+      // The header's check reads only the circuit's data, so its modules
+      // import no entry and build beside them: its leaf theorems in part
+      // modules Header/P<j> by the header plan (one module Header when they
+      // fit), composed in Header. Each module checking leaves imports the
+      // data module as `meta` too, and the sealed program with `import all`,
+      // which the leaves evaluate.
+      std::vector<size_t> layer_gates;
+      for (const auto &l : core.layers) layer_gates.push_back(l.size());
+      const HeaderPlan hp = plan_header(layer_gates, core.asserts.size(), t.nodes.size());
+      auto hmodule = [&](const std::string &what, const std::string &imports,
+                         const std::string &cmd) {
+        std::string o = head;
+        o += "public import " + mod + "\n";
+        o += imports;
+        o += "meta import " + mod + "\n";
+        o += "import all " + prog + "\n\n";
+        o += "@[expose] public section\n\n";
+        o += "/-! The relational check of " + what + " of the GKR circuit of domain " + d.name +
+             " (generated; do not edit). -/\n\n";
+        o += "namespace " + ns + "\n\n" + cmd + "\n\nend " + ns + "\n";
+        return o;
+      };
+      const std::string nleaves = std::to_string(hp.leaves.size());
+      std::string hlog;
+      if (hp.modules.empty()) {
+        ex.modules.emplace_back(
+            "GKR/" + d.name + "/Header.lean",
+            hmodule("the header", "",
+                    "check_header_leaves cert ar 0 " + nleaves + "\n\ncompose_header cert ar"));
+        hlog = "Header:" + std::to_string(hp.cost) + ":" +
+               std::to_string(*std::max_element(hp.leaves.begin(), hp.leaves.end()));
+      } else {
+        std::string imports;
+        for (size_t j = 0; j < hp.modules.size(); ++j) {
+          const std::string js = std::to_string(j);
+          const auto [lo, hi] = hp.modules[j];
+          ex.modules.emplace_back(
+              "GKR/" + d.name + "/Header/P" + js + ".lean",
+              hmodule("the header's leaves " + std::to_string(lo) + " to " +
+                          std::to_string(hi - 1),
+                      "", "check_header_leaves cert ar " + std::to_string(lo) + " " +
+                              std::to_string(hi)));
+          imports += "public import " + mod + ".Header.P" + js + "\n";
+          size_t sum = 0, top = 0;
+          for (size_t i = lo; i < hi; ++i) {
+            sum += hp.leaves[i];
+            top = std::max(top, hp.leaves[i]);
+          }
+          hlog += (hlog.empty() ? "" : " ") + std::string("Header.P") + js + ":" +
+                  std::to_string(sum) + ":" + std::to_string(top);
+        }
+        ex.modules.emplace_back("GKR/" + d.name + "/Header.lean",
+                                hmodule("the header", imports, "compose_header cert ar"));
+      }
+      if (log_modules)
+        std::fprintf(stderr, "GH_EMIT_PLAN_MODULES %s %s\n", check_mod.c_str(), hlog.c_str());
+      // The circuit's theorem from the header's and the entries', checking
+      // nothing.
+      circuit += "public import " + mod + ".Header\n";
       circuit += "meta import " + mod + "\n";
       circuit += "import all " + prog + "\n\n";
       circuit += "@[expose] public section\n\n";
       circuit += "/-! The relational check of the GKR circuit of domain " + d.name +
-                 ", from its entries' (generated; do not edit). -/\n\n";
-      circuit += "namespace " + ns + "\n\ncheck_circuit cert ar\n\nend " + ns + "\n";
+                 ", from its header's and entries' (generated; do not edit). -/\n\n";
+      circuit += "namespace " + ns + "\n\ncompose_circuit cert ar\n\nend " + ns + "\n";
       ex.modules.emplace_back("GKR/" + d.name + "/Circuit.lean", std::move(circuit));
       // Data is mode independent. The kernel retains its bounded proof modules;
       // Native checks the complete GKR part once inside programOkB.
-      const std::string check_mod = "GordieHoweCheck." + lean_name(meta) + ".GKR." + d.name;
       std::string check_path = check_mod;
       std::replace(check_path.begin(), check_path.end(), '.', '/');
       for (size_t i = 1; i < ex.modules.size(); ++i) {

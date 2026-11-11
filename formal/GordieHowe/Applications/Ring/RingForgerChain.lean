@@ -38,10 +38,11 @@ namespace GordieHowe
 open Quantum Signature RingSignature QROM IOP
 open scoped ENNReal
 
-variable {m k e N : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits m) (XOut k e) N TB}
-  {TPS : PSTypes} {PS : ProofSystem (Bits m) (XOut k e) (RingStmt B) (RingWit B) TPS}
+variable {m k e N : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
+  {B : BaseSigner (Bits m) (XOut k e) N TB}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem (Bits m) (XOut k e) (RingStmt B) (RingWit B) TPS}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {n t : ℕ} [NeZero n]
-  {SO : SideOracle (ofBase B PS adm)} {O : SignOracle B}
+  {SO : SideOracle (ofBase B PS adm)} {O : SignOracle B.core}
 
 /-! ### The registers of the extraction run -/
 
@@ -61,6 +62,14 @@ def extLogs (v : ExtReg A C₁ Req₂ Resp₂) : LogReg Req A.slots := v.adv.1.1
 
 end Regs
 
+variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins] [Fintype SO.BMsg] [DecidableEq SO.BMsg] [Fintype SO.BSig] [DecidableEq SO.BSig]
+
+variable [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins]
+
 variable (B PS) in
 /-- **The compiled verifier's claim of a ring signature** `(R, m, (y, π))`, the default `c₀` for a
 proof without one. -/
@@ -68,6 +77,11 @@ def ringClaim {Cl : Type} {V : NARG.QROM.Verifier m k e Cl (RingStmt B)} (hC : P
     (c₀ : Cl) (o : KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof)) : Cl :=
   (hC.claim ⟨o.1, o.2.1, o.2.2.1⟩ o.2.2.2).getD c₀
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 /-- **A verifying ring signature has an accepted claim** (`ProofSystem.CompiledBy`). -/
 theorem accepted_ringClaim {Cl : Type} {V : NARG.QROM.Verifier m k e Cl (RingStmt B)}
     (hC : PS.CompiledBy V) (c₀ : Cl) (H : Bits m → XOut k e)
@@ -100,13 +114,15 @@ noncomputable abbrev relAlg (A : UnforgeAdversary (ofBase B PS adm) n SO
     (Q : ℕ) (ρ : Fin Q → PS.Coins) (a : (A (fun i => B.pk (keys i), ())).Aux) :=
   ringRelAlg B PS adm A F (fun i => B.pk (keys i)) Q (a, ρ)
 
+omit [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The multi-user challenger's runs as runs of the table form, in the extraction run's
 registers** (`toOuterMeasure_outLaw_muChallenger_eq_absorbTab` at a free adversary, for an event
 of the output and the first `Q'` logged requests). -/
 -- TODO(unbundle-M4): stated at a free adversary so the defeq check against `dropTabCW` does not
 -- unfold the relayed forger's shape.
 theorem toOuterMeasure_outLaw_muChallenger_eq_absorbTab_ext (hO : O.NoQuery)
-    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B)} {Ot : Type}
+    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B.core)} {Ot : Type}
     (A : AdaptiveIAlg shA Ot) (keys : Fin n → B.KeyCoins) (i₂ : Fin n) (Q' : ℕ)
     (H : Bits m → XOut k e) (E : Ot → List (MURequest O n) → Prop) :
     ((A.toKindAlg.composeBothOut (muChallenger O n keys Q') id).outLaw H).toOuterMeasure
@@ -120,6 +136,7 @@ theorem toOuterMeasure_outLaw_muChallenger_eq_absorbTab_ext (hO : O.NoQuery)
   toOuterMeasure_outLaw_muChallenger_eq_absorbTab hO A keys i₂ Q' H
     (fun d lg => E (A.out d.1.1.1) ((requests lg).take Q'))
 
+omit [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The relayed forger's transcripts against the multi-user challenger as runs of the table form**
 (`toOuterMeasure_outLaw_muChallenger_eq_absorbTab`): for a signing oracle without queries, at the
 users' key coins, the oracle and the prover's coins, the probability that the relayed forger outputs
@@ -150,7 +167,7 @@ theorem transcriptLaw_relayedForger_eq (hO : O.NoQuery)
   simp only [QueryBoundedAdversary.transcriptLaw, PMF.toOuterMeasure_bind_apply]
   refine tsum_congr fun a => congrArg _ ?_
   rw [KindAlg.toOuterMeasure_outLaw_composeBothOut]
-  have hR : ∀ {shB' : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B)} (B' : AdaptiveIAlg shB' (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof)))
+  have hR : ∀ {shB' : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B.core)} (B' : AdaptiveIAlg shB' (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof)))
       (E : KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof) → List (MURequest O n) → Prop),
       ((B'.toKindAlg.composeBothOut (muChallenger O n keys Q') id).outLaw H).toOuterMeasure
           {o | ∃ v ∈ o, E (B'.output (muChallenger O n keys Q') v)
@@ -180,16 +197,21 @@ variable {Cl : Type} {V : NARG.QROM.Verifier m k e Cl (RingStmt B)}
   {ext : RingStmt B → DB (Bits m) (Out k e) → Multiset (RingWit B)}
   {β : ℕ → ℝ≥0∞}
 
+omit [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 variable (B PS) in
 /-- **The test of the extraction**: the claim's statement is the forgery's, and the forgery is fresh
 for the first `Q'` logged multi-user requests. -/
 def extTest (hC : PS.CompiledBy V) (c₀ : Cl) (keys : Fin n → B.KeyCoins) (Q' : ℕ)
-    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B)} {A : AdaptiveIAlg shA (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof))}
+    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B.core)} {A : AdaptiveIAlg shA (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof))}
     {C₁ : Challenger (Bits m) (XOut k e) (MURequest O n) Unit}
-    (v : ExtReg A C₁ (MURequest O n) (MUResponse B)) : Prop :=
+    (v : ExtReg A C₁ (MURequest O n) (MUResponse B.core)) : Prop :=
   V.stmt (ringClaim B PS hC c₀ (extForgery v)) = ⟨(extForgery v).1, (extForgery v).2.1, (extForgery v).2.2.1⟩ ∧
     MUFreshReq B (PS := PS) keys (extForgery v) ((requests (extLogs v)).take Q')
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+  [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **The knowledge step at one table** (`acceptsTest_le_of_knowledgeBound_default`): averaged over
 the oracle, the probability that the forger holding a table, against the inert challenger, outputs
 a verifying ring signature fresh for its logged multi-user requests is at most the probability that
@@ -198,10 +220,10 @@ witness for the forgery's claim with the test passing, plus the knowledge error 
 `t' + kq` queries. -/
 theorem tsum_le_extRun (hC : PS.CompiledBy V) (K : V.KnowledgeBound rel ext β) (c₀ : Cl)
     (keys : Fin n → B.KeyCoins) (i₂ : Fin n) (Q' : ℕ)
-    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B)} (A : AdaptiveIAlg shA (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof)))
-    (tab : A.OuterTab (MURequest O n) (MUResponse B))
+    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B.core)} (A : AdaptiveIAlg shA (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof)))
+    (tab : A.OuterTab (MURequest O n) (MUResponse B.core))
     (d₀ : ExtReg A (inertChallenger (Bits m) (XOut k e) (MURequest O n) Q')
-      (MURequest O n) (MUResponse B))
+      (MURequest O n) (MUResponse B.core))
     {t' : ℕ} (ht : A.width * (A.budget + A.post) ≤ t') :
     ∑' H, PMF.uniformOfFintype (Bits m → XOut k e) H *
       (((A.absorbTab (muRelayAt O keys i₂) tab).toKindAlg.composeBothOut
@@ -261,6 +283,7 @@ variable {Cl : Type} {V : NARG.QROM.Verifier m k e Cl (RingStmt B)}
   {ext : RingStmt B → DB (Bits m) (Out k e) → Multiset (RingWit B)}
   {β : ℕ → ℝ≥0∞}
 
+omit [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 variable (B PS adm) in
 /-- The default output of the extraction run of the relayed forger on the public keys (that of its
 run with the empty table). -/
@@ -271,7 +294,7 @@ noncomputable abbrev ringDefault (A : UnforgeAdversary (ofBase B PS adm) n SO
     (Q Q' : ℕ) (p : (A (pks, ())).Aux × (Fin Q → PS.Coins)) :
     ExtReg (ringRelAlg B PS adm A F pks Q p)
       (inertChallenger (Bits m) (XOut k e) (MURequest O n) Q')
-      (MURequest O n) (MUResponse B) :=
+      (MURequest O n) (MUResponse B.core) :=
   dropTabCW (ringRelAlg B PS adm A F pks Q p)
     (inertChallenger (Bits m) (XOut k e) (MURequest O n) Q') (muTwoRelay O n (pks 0) i₂)
     (tab₀ (ringRelAlg B PS adm A F pks Q p))
@@ -279,6 +302,7 @@ noncomputable abbrev ringDefault (A : UnforgeAdversary (ofBase B PS adm) n SO
       (tab₀ (ringRelAlg B PS adm A F pks Q p))).toTPKindAlg.composeBothOut
       (inertChallenger (Bits m) (XOut k e) (MURequest O n) Q') id)).defaultOut
 
+omit [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 variable (B PS adm) in
 /-- The default output of the extraction run of the relayed forger at the users' key coins. -/
 noncomputable abbrev relDefault (A : UnforgeAdversary (ofBase B PS adm) n SO
@@ -288,7 +312,7 @@ noncomputable abbrev relDefault (A : UnforgeAdversary (ofBase B PS adm) n SO
     (Q Q' : ℕ) (ρ : Fin Q → PS.Coins) (a : (A (fun i => B.pk (keys i), ())).Aux) :
     ExtReg (relAlg B PS adm A F keys Q ρ a)
       (inertChallenger (Bits m) (XOut k e) (MURequest O n) Q')
-      (MURequest O n) (MUResponse B) :=
+      (MURequest O n) (MUResponse B.core) :=
   ringDefault B PS adm A F (fun i => B.pk (keys i)) i₂ Q Q' (a, ρ)
 
 variable (B PS adm) in
@@ -370,6 +394,7 @@ variable {Cl : Type} {V : NARG.QROM.Verifier m k e Cl (RingStmt B)}
   {rel : Set (RingStmt B × RingWit B)}
   {ext : RingStmt B → DB (Bits m) (Out k e) → Multiset (RingWit B)}
 
+omit [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The extraction runs at the multi-user challenger's tables are the bridge against the
 multi-user challenger** (`Signature.sum_simLaw_extRun_muTab`): for `i₂ ≠ 0` and at least as many
 requests as request points of the bridge (`hQ`), the average over the challenger's coins of any
@@ -386,7 +411,7 @@ theorem sum_simProb_extRun_eq_bridge (hC : PS.CompiledBy V) (c₀ : Cl)
       V.kq) + 1 ≤ Q')
     (R : ExtReg (relAlg B PS adm A F keys Q ρ a)
       (inertChallenger (Bits m) (XOut k e) (MURequest O n) Q')
-      (MURequest O n) (MUResponse B) → DB (Bits m) (Out k e) → Prop) :
+      (MURequest O n) (MUResponse B.core) → DB (Bits m) (Out k e) → Prop) :
     ∑ ω, PMF.uniformOfFintype (Fin Q' → O.Coins) ω *
         simProb (outEquiv k e) (extRun (outEquiv k e) (relAlg B PS adm A F keys Q ρ a)
           (inertChallenger (Bits m) (XOut k e) (MURequest O n) Q')

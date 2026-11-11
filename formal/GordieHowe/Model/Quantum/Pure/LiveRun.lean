@@ -19,7 +19,7 @@ images of live vectors. Both conditions need only hold on the vectors supported 
 - `mask_mask_of_subset`, `Supported.mask`, `mask_eq_zero_of_supported`: masks and supports.
 - `mask_map_eq_of_live`: one step of the comparison on an arbitrary basis.
 - `Distinguisher.wsSet`: the game basis states whose workspace lies in a set.
-- **`Distinguisher.acceptProbOnAt_eq_of_live`**: the two distinguishers accept with the same
+- **`LiveRel.acceptProbOnAt_eq`**: the two distinguishers accept with the same
   probability on every set of logs.
 -/
 

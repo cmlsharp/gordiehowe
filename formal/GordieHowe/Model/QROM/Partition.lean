@@ -33,8 +33,8 @@ the family `(P_λ O ψ − O P_λ ψ)_λ`, and
     ∑_λ ‖P_λ O ψ − O P_λ ψ‖² ≤ 24 · I(L, t) · ‖ψ‖²    (`sum_norm_labelComm_le`).
 
 The constant differs from CDHZ26's `80` because the oracle differs (their truncated standard
-oracle, §4.3, pp. 29–30; ours is CMS19's phase-form `t`-slot oracle `Dec ∘ O0 ∘ Dec` with App. A's
-`Dec_x`, p. 47) and the proof is ours. It follows CMS19 Lemma 5.10's block
+oracle, §4.3, pp. 29–30; here CMS19's phase-form `t`-slot oracle `Dec ∘ O0 ∘ Dec` with App. A's
+`Dec_x`, p. 47), and so does the proof. It follows CMS19 Lemma 5.10's block
 decomposition (`GordieHowe/Model/QROM/QueryStep.lean`): on each `|x, u, z⟩` the oracle acts by `qMatrix`, whose
 off-diagonal entries join only members of one block `{|D₀⟩} ∪ {|D₀ + [x ↦ y]⟩ : y}` of `Dec_x`.
 

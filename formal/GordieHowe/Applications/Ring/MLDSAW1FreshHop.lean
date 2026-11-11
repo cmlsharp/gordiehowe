@@ -77,29 +77,31 @@ variable (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   [Nonempty (MaskBox p)] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y]
   (O : W1Oracles X Y p prims Msg N reps) (M : MaskOracle X Y p T Msg) (k : ℕ)
 
+omit [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The ordinary signer with hedged masks is the one with fresh masks read off the oracle**: at
 the oracle `H` and the nonces `r`, the masks of call `c` are `u ↦ H (M.pt (r c, u))`. -/
 theorem run_stdProg_hedged (sk : SecretKey p) (m : Msg) (r : Fin k → (MaskSource.hedged M).Rnd)
     (H : X → Y) :
-    (stdProg prims (MaskSource.hedged M) O k sk m r).run H =
-      (stdProg prims (MaskSource.fresh M) O k sk m
+    (stdProg prims (MaskSource.hedged M) O.toMLDSAOracles k sk m r).run H =
+      (stdProg prims (MaskSource.fresh M) O.toMLDSAOracles k sk m
         (fun c u => H (M.pt (r c, u)) : Fin k → (MaskSource.fresh M).Rnd)).run H := by
   unfold stdProg
   split_ifs with hk
   · simp only [OracleProg.run_query, OracleProg.run_bind, OracleProg.run_mapOutput,
       OracleProg.run_tabulate, OracleProg.run_pure]
-    rfl
   · rfl
 
+omit [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The ordinary signer with fresh masks reads the oracle only at the base signer's points**: its
 runs agree at two oracles with the same first part of the split. -/
 theorem run_stdProg_fresh_congr {H H' : X → Y} (hs : (O.split H).1 = (O.split H').1)
     (sk : SecretKey p) (m : Msg) (g : Fin k → (MaskSource.fresh M).Rnd) :
-    (stdProg prims (MaskSource.fresh M) O k sk m g).run H =
-      (stdProg prims (MaskSource.fresh M) O k sk m g).run H' := by
+    (stdProg prims (MaskSource.fresh M) O.toMLDSAOracles k sk m g).run H =
+      (stdProg prims (MaskSource.fresh M) O.toMLDSAOracles k sk m g).run H' := by
   by_cases hk : 0 < k
-  · have h1 : ∀ G : X → Y, (stdProg prims (MaskSource.fresh M) O k sk m g).run G =
-        (stdProg prims (MaskSource.fresh M) O 1 sk m fun _ => g ⟨0, hk⟩).run G := fun G => by
+  · have h1 : ∀ G : X → Y, (stdProg prims (MaskSource.fresh M) O.toMLDSAOracles k sk m g).run G =
+        (stdProg prims (MaskSource.fresh M) O.toMLDSAOracles 1 sk m
+          fun _ => g ⟨0, hk⟩).run G := fun G => by
       unfold stdProg
       simp only [hk, Nat.zero_lt_one, ↓reduceDIte]
     rw [h1, h1, run_stdProg_one, run_stdProg_one, O.hOrc_eq_of_split hs]
@@ -120,7 +122,7 @@ variable (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   (O : W1Oracles X Y p prims Msg N reps) (M : MaskOracle X Y p T Msg) (βmin : ℚ≥0) (tol : ℕ)
   (enc : Vector prims.High p.k → BucketVec p) (k D : ℕ) [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg)
-  {TPS : PSTypes} (PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS)
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] (PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS)
   (adm : KeyRing (PubKey p prims) N → Prop) [DecidablePred adm]
 
 local notation "Bh" => hedgedBase prims O M βmin tol enc k D bmsg
@@ -162,20 +164,29 @@ ordinary signer reading the mask oracle at the first nonce, and the fresh one re
 only at the base signer's points, which are not mask points (`hdisj`). -/
 def sideHopBase (hdisj : ∀ x, O.IsPt x → x ∉ Set.range M.pt) :
     SideHop prims O M βmin tol enc k D bmsg PS adm (baseSide (Bh) PS adm)
-      (@baseSide X Y N _ (Bf) _ (PS) adm ‹DecidablePred adm›) where
+      (baseSide (Bf) PS adm) where
   eB := Equiv.refl _
   eS := Equiv.refl _
   run_sign kp bm rv uv cp H := by
-    with_unfolding_all
-      change (stdProg prims (MaskSource.hedged M) O k kp.2 bm rv).run H =
-        ((stdProg prims (MaskSource.fresh M) O k kp.2 bm fun c u => H (M.pt (rv c, u))).run H).map
-          (Equiv.refl _).symm
+    refine (congrArg (OracleProg.run H) ((baseSide_sign (Bh) PS adm kp bm ((rv, uv), cp)).trans
+      ((w1BaseSigner_ssign prims O βmin tol enc _ bmsg kp.2 bm (rv, uv)).trans
+        (hedgedLoop_std prims O M βmin k D kp.2 bm (rv, uv))))).trans ?_
     refine (run_stdProg_hedged prims O M k kp.2 bm rv H).trans ?_
-    erw [Equiv.refl_symm, Equiv.coe_refl, Option.map_id]
+    refine Eq.trans ?_ (congrArg (fun x => Option.map (Equiv.refl _).symm (OracleProg.run H x))
+      ((baseSide_sign (Bf) PS adm kp bm ((fun c u => H (M.pt (rv c, u)), uv), cp)).trans
+        ((w1BaseSigner_ssign prims O βmin tol enc _ bmsg kp.2 bm _).trans
+          (freshLoop_std prims O M βmin k D kp.2 bm _)))).symm
+    rw [Equiv.refl_symm, Equiv.coe_refl, Option.map_id]
     rfl
   run_sign_congr H H' h kp bm c := by
-    with_unfolding_all exact
-      run_stdProg_fresh_congr prims O M k (funext fun x => h x.1 (hdisj x.1 x.2)) kp.2 bm c.1.1
+    have e : ∀ G : X → Y, ((baseSide (Bf) PS adm).sign kp bm c).run G =
+        (stdProg prims (MaskSource.fresh M) O.toMLDSAOracles k kp.2 bm c.1.nonces).run G := fun G =>
+      congrArg (OracleProg.run G) ((baseSide_sign (Bf) PS adm kp bm c).trans
+        ((w1BaseSigner_ssign prims O βmin tol enc _ bmsg kp.2 bm c.1).trans
+          (freshLoop_std prims O M βmin k D kp.2 bm c.1)))
+    rw [e, e]
+    exact run_stdProg_fresh_congr prims O M k (funext fun x => h x.1 (hdisj x.1 x.2)) kp.2 bm
+      c.1.nonces
   covers_iff _ _ _ := Iff.rfl
 
 end Hop
@@ -189,7 +200,7 @@ variable {prims : Primitives p} [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   {O : W1Oracles X Y p prims Msg N reps} {M : MaskOracle X Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
   {adm : KeyRing (PubKey p prims) N → Prop} [DecidablePred adm]
 
 local notation "Bh" => hedgedBase prims O M βmin tol enc k D bmsg
@@ -214,26 +225,36 @@ def unfReqEquiv : UnforgeRequest (S := Sh) n Oh ≃ UnforgeRequest (S := Sf) n O
   left_inv := fun (r : UnforgeRequest (S := Sh) n Oh) => by cases r <;> simp
   right_inv := fun (r : UnforgeRequest (S := Sf) n Of) => by cases r <;> simp
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- A ring-signing request is relabelled to itself. -/
 @[simp] theorem unfReqEquiv_sign (s : Fin n) (R : KeyRing (Sh).PK N) (m : (Sh).Msg) :
     unfReqEquiv P n (.sign s R m) = .sign s R m :=
   rfl
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- A side request is relabelled at its message. -/
 @[simp] theorem unfReqEquiv_sideSign (i : Fin n) (bm : Oh.BMsg) :
     unfReqEquiv P n (.sideSign i bm) = .sideSign i (P.eB bm) :=
   rfl
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- A corruption is relabelled back to itself. -/
 @[simp] theorem unfReqEquiv_symm_corrupt (i : Fin n) :
     (unfReqEquiv P n).symm (.corrupt i) = .corrupt i :=
   rfl
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- A ring-signing request is relabelled back to itself. -/
 @[simp] theorem unfReqEquiv_symm_sign (s : Fin n) (R : KeyRing (Sf).PK N) (m : (Sf).Msg) :
     (unfReqEquiv P n).symm (.sign s R m) = .sign s R m :=
   rfl
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- A side request is relabelled back at its message. -/
 @[simp] theorem unfReqEquiv_symm_sideSign (i : Fin n) (bm : Of.BMsg) :
     (unfReqEquiv P n).symm (.sideSign i bm) = .sideSign i (P.eB.symm bm) :=
@@ -408,8 +429,9 @@ noncomputable def unfSaltFreshPair (hdisj : ∀ x, O.IsPt x → x ∉ Set.range 
 
 variable [Fintype X] [DecidableEq X] [Nonempty X] [AddGroup Y]
 
-omit [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype X] [DecidableEq X] [Nonempty X]
-  [AddGroup Y] in
+omit [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype X] [DecidableEq X] [Nonempty X] [AddGroup Y]
+  [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **The forgeries read the oracle only off the mask points** when the proof system's verifier
 does (`hPSv`): the verification of `ofBase` is the verifier, and freshness reads only the
 history. -/
@@ -426,6 +448,8 @@ theorem forges_congr (hPSv : ∀ x π H H', Quantum.AgreeOffRange M.pt H H' →
     exact ⟨by rw [← hv]; exact hf.verify_eq, hf.fresh⟩
   · intro hf
     exact ⟨by rw [hv]; exact hf.verify_eq, hf.fresh⟩
+
+variable [Fintype Oh.BMsg] [DecidableEq Oh.BMsg] [Fintype Oh.BSig] [DecidableEq Oh.BSig]
 
 /-- **The probability of a forgery against the fresh counterpart**: the run of the adversary
 against `freshUnfChallenger` (fresh masks), with a forgery (`Forges`) for the users' key coins,
@@ -464,7 +488,10 @@ theorem hedgedScheme.forgeProb_le (hM : Function.Injective M.pt)
     linarith [(abs_sub_le_iff.1 hab).1]
   exact key _ _ _ h
 
-omit [Fintype X] [DecidableEq X] [Nonempty X] [AddGroup Y] in
+omit [Fintype X] [DecidableEq X] [Nonempty X] [AddGroup Y] [Fintype TPS.Proof]
+  [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
+  [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype Oh.BMsg]
+  [DecidableEq Oh.BMsg] [Fintype Oh.BSig] [DecidableEq Oh.BSig] in
 /-- **A relabelled request is `r'` exactly when the request is `r'` relabelled back.** -/
 theorem relabel_request_eq_iff
     (e : Quantum.HistoryEntry (UnforgeRequest (S := Sh) n Oh) (UnforgeResponse (S := Sh) Oh))
@@ -473,7 +500,10 @@ theorem relabel_request_eq_iff
       e.request = (unfReqEquiv P n).symm r' :=
   (Equiv.eq_symm_apply _).symm
 
-omit [Fintype X] [DecidableEq X] [Nonempty X] [AddGroup Y] in
+omit [Fintype X] [DecidableEq X] [Nonempty X] [AddGroup Y] [Fintype TPS.Proof]
+  [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
+  [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype Oh.BMsg]
+  [DecidableEq Oh.BMsg] [Fintype Oh.BSig] [DecidableEq Oh.BSig] in
 /-- **A forgery is a forgery of the fresh scheme for the relabelled history**: the two schemes
 verify alike, and the relabelling keeps the corruptions, the ring-signing requests and the side
 requests with what they cover (`SideHop.covers_iff`). -/
@@ -525,6 +555,8 @@ theorem forges_relabel_iff (keys : Fin n → Bytes 32) (H : X → Y)
     obtain ⟨i, hi, hn⟩ := hf.honest_ring pk hpk
     exact ⟨i, hi, fun h => hn ((hc i).1 h)⟩
 
+variable [Fintype Of.BMsg] [DecidableEq Of.BMsg] [Fintype Of.BSig] [DecidableEq Of.BSig]
+
 /-- **The fresh counterpart's forgery probability is the fresh scheme's**: against
 `freshUnfChallenger`, the probability of a forgery is the forgery probability, in the fresh
 scheme's game with the side oracle `Of`, of the adversary relabelled to that game's requests and
@@ -564,7 +596,7 @@ variable {prims : Primitives p} [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   {O : W1Oracles X Y p prims Msg N reps} {M : MaskOracle X Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
   {adm : KeyRing (PubKey p prims) N → Prop} [DecidablePred adm]
   {n : ℕ} [NeZero n]
 
@@ -609,7 +641,7 @@ theorem hedgedScheme.keyReuseForgeProb_le (hM : Function.Injective M.pt)
     {V : OracleView X Y} (hV : ∀ H H', Quantum.AgreeOffRange M.pt H H' → V.view H = V.view H')
     {t : ℕ} (A : KeyReuseAdversary (Bh) PS adm n V t) (Q : ℕ) :
     (keyReuseForgeProb A Q).toReal ≤
-      (@keyReuseForgeProb X Y N _ (Bf) _ (PS) adm ‹DecidablePred adm› _ _ _ _ _ _ _ n V t
+      (keyReuseForgeProb (B := Bf) (PS := PS) (adm := adm) (n := n) (V := V) (t := t)
         (GameAdversary.relabel (Req := UnforgeRequest (S := Sh) n (baseSide (Bh) PS adm))
           (Resp := UnforgeResponse (S := Sh) (baseSide (Bh) PS adm))
           (unfReqEquiv (sideHopBase prims O M βmin tol enc k D bmsg PS adm hdisj) n)

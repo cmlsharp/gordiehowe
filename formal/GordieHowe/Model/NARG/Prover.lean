@@ -3,7 +3,7 @@
 
 module
 
-public import Mathlib.Probability.ProbabilityMassFunction.Basic
+public import Mathlib.Probability.Distributions.Uniform
 public import GordieHowe.Model.NARG.OracleProg
 
 @[expose] public section
@@ -17,6 +17,9 @@ a proof, in the style of VCVio's `OracleComp`) on a statement, a witness and coi
 count that is a property of the program (`OracleProg.QueriesLE`).
 
 - `Prover`: the program form, the one object the notions of both oracle models quantify over.
+  It is the algorithm only: the distribution of its coins is an argument of the probability
+  semantics (`GordieHowe.NARG.ROM.Complete`, `GordieHowe.QROM.realEnv`, …), not a field;
+  `Prover.uniformLaw` is the uniform law on its coins.
 - `ProverFn`: a prover as a function of the oracle. `Prover.toFn` is the semantics of the
   classical random-oracle model: the program run against a function (`OracleProg.run`). In the
   quantum random-oracle model the same program is run query by query in the experiment
@@ -31,29 +34,24 @@ namespace GordieHowe.NARG
 variable {X Y Stmt Wit Proof Coins : Type*}
 
 /-- **A prover as a function of the oracle**: a proof from the oracle, a statement, a witness and
-coins drawn from `coins`. The classical random-oracle semantics of a program prover
+coins. The classical random-oracle semantics of a program prover
 (`Prover.toFn`); the generic game lemmas of the classical model are stated for it. -/
 structure ProverFn (X Y Stmt Wit Proof Coins : Type*) where
   /-- The proof computed with oracle `H` on statement `x`, witness `w` and coins `c`. -/
   prove : (X → Y) → Stmt → Wit → Coins → Proof
-  /-- The distribution of the prover's coins. -/
-  coins : PMF Coins
 
 /-- The prover on statements and witnesses read through the maps `fx` and `fw`: on `(x, w)` it
 proves `fx x` with the witness `fw w`. -/
 def ProverFn.comap {Stmt' Wit' : Type*} (P : ProverFn X Y Stmt Wit Proof Coins) (fx : Stmt' → Stmt)
     (fw : Wit' → Wit) : ProverFn X Y Stmt' Wit' Proof Coins where
   prove H x w c := P.prove H (fx x) (fw w) c
-  coins := P.coins
 
-/-- **The honest prover of a non-interactive argument**: on a statement, a witness and coins drawn
-from `coins`, a classical oracle program with queries in `X` and answers in `Y` that returns the
+/-- **The honest prover of a non-interactive argument**: on a statement, a witness and coins, a
+classical oracle program with queries in `X` and answers in `Y` that returns the
 proof and makes at most `q` queries (`OracleProg.QueriesLE`). -/
 structure Prover (X Y Stmt Wit Proof Coins : Type*) where
   /-- The program. -/
   prog : Stmt → Wit → Coins → OracleProg X Y Proof
-  /-- The distribution of the coins. -/
-  coins : PMF Coins
   /-- The number of queries. -/
   q : ℕ
   /-- Every run makes at most `q` queries. -/
@@ -65,19 +63,15 @@ namespace Prover
 `H` (`OracleProg.run`). -/
 def toFn (P : Prover X Y Stmt Wit Proof Coins) : ProverFn X Y Stmt Wit Proof Coins where
   prove H x w c := (P.prog x w c).run H
-  coins := P.coins
 
 @[simp] theorem toFn_prove (P : Prover X Y Stmt Wit Proof Coins) (H : X → Y) (x : Stmt) (w : Wit)
     (c : Coins) : P.toFn.prove H x w c = (P.prog x w c).run H := rfl
-
-@[simp] theorem toFn_coins (P : Prover X Y Stmt Wit Proof Coins) : P.toFn.coins = P.coins := rfl
 
 /-- The prover program on statements and witnesses read through the maps `fx` and `fw`: on
 `(x, w)` it runs the program on `fx x` with the witness `fw w`. -/
 def comap {Stmt' Wit' : Type*} (P : Prover X Y Stmt Wit Proof Coins) (fx : Stmt' → Stmt)
     (fw : Wit' → Wit) : Prover X Y Stmt' Wit' Proof Coins where
   prog x w c := P.prog (fx x) (fw w) c
-  coins := P.coins
   q := P.q
   prog_queries x w c := P.prog_queries (fx x) (fw w) c
 
@@ -92,7 +86,6 @@ def comap {Stmt' Wit' : Type*} (P : Prover X Y Stmt Wit Proof Coins) (fx : Stmt'
 def mapQuery {X' Y' : Type*} (P : Prover X Y Stmt Wit Proof Coins) (f : X → X') (g : Y' → Y) :
     Prover X' Y' Stmt Wit Proof Coins where
   prog x w c := (P.prog x w c).mapQuery f g
-  coins := P.coins
   q := P.q
   prog_queries x w c h := (OracleProg.length_trace_mapQuery f g h _).trans_le
     (P.prog_queries x w c _)
@@ -102,7 +95,6 @@ serialization of a proof into the proof-query register of a zero-knowledge game)
 def mapOutput {Proof' : Type*} (P : Prover X Y Stmt Wit Proof Coins) (f : Proof → Proof') :
     Prover X Y Stmt Wit Proof' Coins where
   prog x w c := (P.prog x w c).mapOutput f
-  coins := P.coins
   q := P.q
   prog_queries x w c := (P.prog_queries x w c).mapOutput f
 
@@ -111,12 +103,15 @@ def mapOutput {Proof' : Type*} (P : Prover X Y Stmt Wit Proof Coins) (f : Proof 
     (P.mapOutput f).toFn.prove H x w c = f (P.toFn.prove H x w c) :=
   OracleProg.run_mapOutput _ _ _
 
-@[simp] theorem coins_mapOutput {Proof' : Type*} (P : Prover X Y Stmt Wit Proof Coins)
-    (f : Proof → Proof') : (P.mapOutput f).coins = P.coins := rfl
-
 @[simp] theorem mapOutput_comap {Proof' Stmt' Wit' : Type*} (P : Prover X Y Stmt Wit Proof Coins)
     (f : Proof → Proof') (fx : Stmt' → Stmt) (fw : Wit' → Wit) :
     (P.comap fx fw).mapOutput f = (P.mapOutput f).comap fx fw := rfl
+
+/-- **The uniform law on a prover's coins**, for a finite nonempty coin type: the law of the
+coins of every concrete prover of the library. -/
+noncomputable abbrev uniformLaw (_ : Prover X Y Stmt Wit Proof Coins) [Fintype Coins]
+    [Nonempty Coins] : PMF Coins :=
+  PMF.uniformOfFintype Coins
 
 end Prover
 

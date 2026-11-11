@@ -31,8 +31,6 @@ namespace GordieHowe.Falcon512.Native
 
 open Generated.Falcon512.Native.ROMParams.Program hiding program
 open GordieHowe.Bits
-open Emulated (PublicKey)
-
 /-! ## The program facts of domain `A` -/
 
 /-- **The program facts domain `A` reads beyond the norm** (each program instantiates them by
@@ -48,10 +46,10 @@ class FalconAAlg (program : RealizedProgram) [FalconACore program] where
   pSig : ℕ
   /-- The signature equation is a source predicate. -/
   inSource_sig : pSig < program.predicates.length ∧ program.inSource (program.predicate pSig) = true
-  /-- The field-form `signature.equation`, not in a product form. -/
+  /-- The field-form `signature.equation`. -/
   sig : ∃ real, (program.predicate pSig).body = .mod 1 12289
     (.add (.leaf 596) (.apply (.negacyclicConv 593 (.ntt 10302)) (.leaf 595)))
-    (.apply (.batched 512 (.fromDigits 16 2)) (.leaf 594)) real ∧ real.form.isProduct = false
+    (.apply (.batched 512 (.fromDigits 16 2)) (.leaf 594)) real
   /-- `s2` and `signature.s1` have `512` coordinates. -/
   sizes_sig : (program.value 595).size = 512 ∧ (program.value 596).size = 512
   /-- `s2` and `signature.s1` are prime-typed private source values. -/
@@ -365,11 +363,11 @@ theorem signatureRows {e : program.Env interp} (hs : program.SourceSatAt e) {pk 
   intro i
   have hi := i.isLt
   change (i : ℕ) < 512 at hi
-  obtain ⟨_, hbd, -⟩ := FalconAAlg.sig (program := program)
+  obtain ⟨_, hbd⟩ := FalconAAlg.sig (program := program)
   have h := holdsAt hs (FalconAAlg.inSource_sig (program := program)).1
     (FalconAAlg.inSource_sig (program := program)).2
   rw [hbd] at h
-  have hdvd := h.1 i (by rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_leaf, (FalconAAlg.sizes_sig (program := program)).2]; exact hi)
+  have hdvd := h i (by rw [RealizedProgram.exprLen_add, RealizedProgram.exprLen_leaf, (FalconAAlg.sizes_sig (program := program)).2]; exact hi)
   have hZ := (ZMod.intCast_zmod_eq_zero_iff_dvd _ 12289).2 hdvd
   rw [Int.cast_sub, sub_eq_zero, RealizedProgram.evalIntWith_add, RealizedProgram.evalIntWith_apply,
     RealizedProgram.evalIntWith_apply, Int.cast_add, RealizedProgram.evalIntWith_leaf] at hZ

@@ -35,6 +35,15 @@ local notation "nat" => MldsaRingEmbed.nat program
 set_option hygiene false in
 local notation "σ" => MldsaRingEmbed.σ program
 
+set_option hygiene false in
+local notation "ringV" => MldsaRingEmbed.V program
+
+set_option hygiene false in
+local notation "ringR" => MldsaRingEmbed.R program
+
+set_option hygiene false in
+local notation "predMap" => MldsaRingEmbed.pred program
+
 variable {program : RealizedProgram} [MldsaRingEmbed program] [MldsaRingRelation program]
   [MldsaRingStmt program] [TableSelect program] [MldsaRingFront program] [MldsaRingHonest program]
   {F0 FH : FieldInterp} [QField F0] [HField FH] [Native.MldsaAAlgebra nat] [hN : Native.MldsaNativeHonest nat F0 FH]
@@ -58,13 +67,13 @@ local notation "RD" => program.reader E
 theorem xH_mu {t : ℕ} (ht : t < 512) :
     program.evalE RD 1 (.leaf (MldsaRingFront.muH program)) t = muBitsR (K := (interp 1).K) y t := by
   rw [← (MldsaRingFront.vals (program := program)).2.2.2.2.2.2,
-    ← evalE_pull E (by decide : (120 : ℕ) ∈ ringV) t]
+    ← evalE_pull E (MldsaRingEmbed.readV (program := program) 120 (by decide)) t]
   exact evalE_mu_honest y (readsCells_pull y x c π) (valN_hash y) ht
 
 theorem xH_w1 {t : ℕ} (ht : t < 6144) :
     program.evalE RD 1 (.leaf (MldsaRingFront.w1H program)) t = w1BitsR (K := (interp 1).K) y t := by
   rw [← (MldsaRingFront.vals (program := program)).2.2.2.2.2.1,
-    ← evalE_pull E (by decide : (70 : ℕ) ∈ ringV) t]
+    ← evalE_pull E (MldsaRingEmbed.readV (program := program) 70 (by decide)) t]
   exact evalE_w1_honest y (readsCells_pull y x c π) (valN_hash y) ht
 
 theorem chalPair_pull (k : Fin 256) :
@@ -75,13 +84,13 @@ theorem chalPair_pull (k : Fin 256) :
 theorem xH_sup {k : ℕ} (hk : k < 256) :
     program.evalE RD 1 (.ref ((σ).ref 523)) k =
       (HashCircuit.ternaryBits (K := (interp 1).K) (y.c ⟨k, hk⟩)).1 := by
-  rw [← evalE_ref_pull E (by decide : (523 : ℕ) ∈ ringR) k]
+  rw [← evalE_ref_pull E (MldsaRingEmbed.readR (program := program) 523 (by decide)) k]
   exact congrArg Prod.fst (chalPair_pull y x c π ⟨k, hk⟩)
 
 theorem xH_sgn {k : ℕ} (hk : k < 256) :
     program.evalE RD 1 (.ref ((σ).ref 524)) k =
       (HashCircuit.ternaryBits (K := (interp 1).K) (y.c ⟨k, hk⟩)).2 := by
-  rw [← evalE_ref_pull E (by decide : (524 : ℕ) ∈ ringR) k,
+  rw [← evalE_ref_pull E (MldsaRingEmbed.readR (program := program) 524 (by decide)) k,
     evalE_ref MldsaHCross.refsOrdered _ _ MldsaHCross.lt524, MldsaHCross.expr524]
   exact congrArg Prod.snd (chalPair_pull y x c π ⟨k, hk⟩)
 
@@ -101,7 +110,7 @@ theorem yA_w1 {t : ℕ} (ht : t < 6144) :
   simp only [show mldsa44.r1_bits * (t / 6) + t % 6 = t by change 6 * (t / 6) + t % 6 = t; omega]
 
 theorem yA_c {k : ℕ} (hk : k < 256) (s : Fin 2) :
-    program.evalE RD 0 (.leaf (MldsaRingRelation.c program)) (2 * k + s) =
+    program.evalE RD 0 (.leaf (MldsaRandomPoint.c program)) (2 * k + s) =
       cA y (interp 0).K ⟨k, hk⟩ s := by
   obtain ⟨-, -, -, -, -, -, -, -, hs59, -⟩ := Native.MldsaNativeHonest.a_bound (program := nat)
   have hs2 := s.isLt
@@ -127,21 +136,22 @@ theorem toNatA_bit (n b : ℕ) : (interp 0).toNat (((n / 2 ^ b % 2 : ℕ) : ℕ)
   QField.toNat_natCast ((Nat.mod_lt _ (by norm_num)).trans (by norm_num))
 
 /-- **`mac.equal` holds** at the honest values. -/
-theorem cross_holds : program.HoldsAt E (program.predicate 248).body := by
+theorem cross_holds :
+    program.HoldsAt E (program.predicate (MldsaRingFront.crossPred program)).body := by
   obtain ⟨-, -, cc, hc⟩ := MldsaRingFront.cross (program := program)
   rw [HoldsAt, hc]
-  change (∀ i < program.exprLen (.ref 513),
-      (interp (program.domainField 0)).toNat (program.evalE RD (program.domainField 0) (.ref 50) i) < 2 ^ 1) ∧
-    ((∀ i < program.exprLen (.ref 513),
-      (interp (program.domainField 1)).toNat (program.evalE RD (program.domainField 1) (.ref 513) i) < 2 ^ 1) →
-      ∀ i < program.exprLen (.ref 513),
-        (interp (program.domainField 1)).toNat (program.evalE RD (program.domainField 1) (.ref 513) i) =
-        (interp (program.domainField 0)).toNat (program.evalE RD (program.domainField 0) (.ref 50) i))
+  change (∀ i < program.exprLen (.ref (MldsaRingFront.crossH program)),
+      (interp (program.domainField 0)).toNat (program.evalE RD (program.domainField 0) (.ref (MldsaRingFront.crossA program)) i) < 2 ^ 1) ∧
+    ((∀ i < program.exprLen (.ref (MldsaRingFront.crossH program)),
+      (interp (program.domainField 1)).toNat (program.evalE RD (program.domainField 1) (.ref (MldsaRingFront.crossH program)) i) < 2 ^ 1) →
+      ∀ i < program.exprLen (.ref (MldsaRingFront.crossH program)),
+        (interp (program.domainField 1)).toNat (program.evalE RD (program.domainField 1) (.ref (MldsaRingFront.crossH program)) i) =
+        (interp (program.domainField 0)).toNat (program.evalE RD (program.domainField 0) (.ref (MldsaRingFront.crossA program)) i))
   rw [MldsaRingFront.domains.2, MldsaRingFront.domains.1, MldsaRingFront.lens.1]
   -- the coordinates as naturals
-  have key : ∀ i < 7168, (interp 1).toNat (program.evalE RD 1 (.ref 513) i) =
-      (interp 0).toNat (program.evalE RD 0 (.ref 50) i) ∧
-      (interp 0).toNat (program.evalE RD 0 (.ref 50) i) < 2 := by
+  have key : ∀ i < 7168, (interp 1).toNat (program.evalE RD 1 (.ref (MldsaRingFront.crossH program)) i) =
+      (interp 0).toNat (program.evalE RD 0 (.ref (MldsaRingFront.crossA program)) i) ∧
+      (interp 0).toNat (program.evalE RD 0 (.ref (MldsaRingFront.crossA program)) i) < 2 := by
     intro i hi
     by_cases h1 : i < 512
     · rw [x_mu RD h1, y_mu RD h1, xH_mu y x c π h1, yA_mu y x c π h1]
@@ -174,8 +184,8 @@ theorem cross_holds : program.HoldsAt E (program.predicate 248).body := by
 
 /-- **The crossing's operands read bits** at the honest values. -/
 theorem crossBits_honest :
-    (∀ i < 7168, program.evalE RD 1 (.ref 513) i = 0 ∨ program.evalE RD 1 (.ref 513) i = 1) ∧
-      ∀ i < 7168, program.evalE RD 0 (.ref 50) i = 0 ∨ program.evalE RD 0 (.ref 50) i = 1 := by
+    (∀ i < 7168, program.evalE RD 1 (.ref (MldsaRingFront.crossH program)) i = 0 ∨ program.evalE RD 1 (.ref (MldsaRingFront.crossH program)) i = 1) ∧
+      ∀ i < 7168, program.evalE RD 0 (.ref (MldsaRingFront.crossA program)) i = 0 ∨ program.evalE RD 0 (.ref (MldsaRingFront.crossA program)) i = 1 := by
   refine ⟨fun i hi => ?_, fun i hi => ?_⟩
   · by_cases h1 : i < 512
     · rw [x_mu RD h1, xH_mu y x c π h1]

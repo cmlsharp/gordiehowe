@@ -301,7 +301,9 @@ compiled argument (`stmt R m v` for the ring `R`, the message `m` and the public
 the oracle `H` the signer signs on the rings `R` and ring messages `m` with `Admit H R m` and
 outputs `⊥` on the others. The rule reads only the oracle, the ring and the message, not the
 signer's key or position, so every signer refuses the same rings; `signLaw` is the signer's law on
-the rings it admits. -/
+the rings it admits. The signer holds types and the refusal rule only: the finiteness, decidable
+equality and nonemptiness of its types and the decidability of `Admit` are instance-implicit binders
+on its projections (`[Fintype S.PK]`, `[∀ H R m, Decidable (S.Admit H R m)]`). -/
 structure PubSigner (N : ℕ) (RMsg : Type) where
   /-- Public keys. -/
   PK : Type
@@ -319,16 +321,6 @@ structure PubSigner (N : ℕ) (RMsg : Type) where
   Stmt : Type
   /-- The witnesses of the compiled argument. -/
   Wit : Type
-  [instFintypePK : Fintype PK]
-  [instDecEqPK : DecidableEq PK]
-  [instFintypeKeyCoins : Fintype KeyCoins]
-  [instNonemptyKeyCoins : Nonempty KeyCoins]
-  [instFintypePub : Fintype Pub]
-  [instDecEqPub : DecidableEq Pub]
-  [instFintypeSig : Fintype Sig]
-  [instDecEqSig : DecidableEq Sig]
-  [instFintypeOrc : Fintype Orc]
-  [instNonemptyOrc : Nonempty Orc]
   /-- Key generation from its coins. -/
   keyGen : KeyCoins → PK × SK
   /-- The signing law: the public value and the base signature. -/
@@ -345,12 +337,6 @@ structure PubSigner (N : ℕ) (RMsg : Type) where
   rel : Orc → Set (Stmt × Wit)
   /-- The refusal rule: the rings and ring messages the signer signs on at an oracle. -/
   Admit : Orc → RingOf PK N → RMsg → Prop
-  [instDecAdmit : ∀ H R m, Decidable (Admit H R m)]
-
-attribute [instance] PubSigner.instFintypePK PubSigner.instDecEqPK PubSigner.instFintypeKeyCoins
-  PubSigner.instNonemptyKeyCoins PubSigner.instFintypePub PubSigner.instDecEqPub
-  PubSigner.instFintypeSig PubSigner.instDecEqSig PubSigner.instFintypeOrc
-  PubSigner.instNonemptyOrc PubSigner.instDecAdmit
 
 /-- **A challenge** of the anonymity game with `n` honest users and public keys `PK`: a ring, a
 ring message, two honest users and the positions of their keys. With `user₀ = user₁` and
@@ -395,7 +381,9 @@ structure RingChoice.Valid {PK RMsg KC : Type} {N n : ℕ} (pk : KC → PK) (key
 
 namespace PubSigner
 
-variable {N : ℕ} {RMsg : Type} (S : PubSigner N RMsg)
+variable {N : ℕ} {RMsg : Type} (S : PubSigner N RMsg) [Fintype S.PK] [DecidableEq S.PK]
+  [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Pub] [DecidableEq S.Pub] [Fintype S.Sig]
+  [DecidableEq S.Sig] [Fintype S.Orc] [Nonempty S.Orc] [∀ H R m, Decidable (S.Admit H R m)]
 
 /-- The public key generated from the coins `kc`. -/
 def pk (kc : S.KeyCoins) : S.PK := (S.keyGen kc).1
@@ -449,7 +437,10 @@ end PubSigner
 
 section Game
 
-variable {N : ℕ} {RMsg : Type} [DecidableEq RMsg] {S : PubSigner N RMsg}
+variable {N : ℕ} {RMsg : Type} [DecidableEq RMsg] {S : PubSigner N RMsg} [Fintype S.PK]
+  [DecidableEq S.PK] [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Pub] [DecidableEq S.Pub]
+  [Fintype S.Sig] [DecidableEq S.Sig] [Fintype S.Orc] [Nonempty S.Orc]
+  [∀ H R m, Decidable (S.Admit H R m)]
   {k kN kS L e : ℕ} {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)}
   [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)]
@@ -488,6 +479,8 @@ the two users' public keys. -/
 noncomputable def validChoices (keys : Fin n → S.KeyCoins) : Finset (S.Choice n) :=
   A.choices.filter fun c => c.Valid S keys
 
+omit [Fintype S.PK] [DecidableEq S.PK] [Fintype S.Sig] [DecidableEq S.Sig] [Fintype S.Pub]
+  [DecidableEq S.Pub] [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc] [Nonempty S.Orc] in
 theorem mem_validChoices {keys : Fin n → S.KeyCoins} {c : S.Choice n} :
     c ∈ A.validChoices keys ↔ c ∈ A.choices ∧ c.Valid S keys := by
   classical
@@ -523,7 +516,7 @@ def selector (keys : Fin n → S.KeyCoins) (H : S.Orc) (b : Bool) (T : A.Table) 
     else none
 
 variable (E : (j : ι) → (M.comp j).Encoder) {V : S.Orc → S.Stmt → FullTr P τ → Bool}
-  (Qs : ∀ H x, M.IOPQueries (V H) x) {R : Type} [Fintype R] [Nonempty R]
+  (Qs : ∀ H x, M.IOPQueries (V H) x) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : S.Orc → S.Wit → R → CausalProver P τ S.Stmt)
 
 /-- The law of a ring signature at the oracle `H` of the base scheme: the compiled honest proof at
@@ -567,22 +560,30 @@ noncomputable def coupling (c : A.choices) : PMF ((S.Pub × S.Sig) × (S.Pub × 
   Classical.choose (PMF.exists_coupling_map_le_tvDist (c.1.signLaw H keys false)
     (c.1.signLaw H keys true) Prod.fst)
 
+omit [Fintype S.PK] [DecidableEq S.PK] [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc]
+  [Nonempty S.Orc] in
 theorem map_fst_coupling (c : A.choices) :
     (A.coupling H keys c).map Prod.fst = c.1.signLaw H keys false :=
   (Classical.choose_spec (PMF.exists_coupling_map_le_tvDist (c.1.signLaw H keys false)
     (c.1.signLaw H keys true) Prod.fst)).1
 
+omit [Fintype S.PK] [DecidableEq S.PK] [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc]
+  [Nonempty S.Orc] in
 theorem map_snd_coupling (c : A.choices) :
     (A.coupling H keys c).map Prod.snd = c.1.signLaw H keys true :=
   (Classical.choose_spec (PMF.exists_coupling_map_le_tvDist (c.1.signLaw H keys false)
     (c.1.signLaw H keys true) Prod.fst)).2.1
 
+omit [Fintype S.PK] [DecidableEq S.PK] [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc]
+  [Nonempty S.Orc] in
 theorem toReal_coupling_ne_le (c : A.choices) :
     ((A.coupling H keys c).toOuterMeasure {x | x.1.1 ≠ x.2.1}).toReal ≤
       PMF.tvDist ((c.1.signLaw H keys false).map Prod.fst) ((c.1.signLaw H keys true).map Prod.fst) :=
   (Classical.choose_spec (PMF.exists_coupling_map_le_tvDist (c.1.signLaw H keys false)
     (c.1.signLaw H keys true) Prod.fst)).2.2
 
+omit [Fintype S.PK] [DecidableEq S.PK] [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc]
+  [Nonempty S.Orc] in
 /-- An event of the first entry of the coupling has its probability under user `0`'s law. -/
 theorem coupling_fst_eq (c : A.choices) (U : Set (S.Pub × S.Sig)) :
     (A.coupling H keys c).toOuterMeasure {x | x.1 ∈ U} =
@@ -590,6 +591,8 @@ theorem coupling_fst_eq (c : A.choices) (U : Set (S.Pub × S.Sig)) :
   rw [← A.map_fst_coupling H keys c, PMF.toOuterMeasure_map_apply]
   rfl
 
+omit [Fintype S.PK] [DecidableEq S.PK] [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc]
+  [Nonempty S.Orc] in
 /-- An event of the second entry of the coupling has its probability under user `1`'s law. -/
 theorem coupling_snd_eq (c : A.choices) (U : Set (S.Pub × S.Sig)) :
     (A.coupling H keys c).toOuterMeasure {x | x.2 ∈ U} =
@@ -607,6 +610,7 @@ noncomputable def coupledLaw : PMF A.CTable :=
 /-- The entries of user `b` of a coupled table. -/
 def side (b : Bool) (T : A.CTable) : A.Table := fun j c => if b then (T j c).2 else (T j c).1
 
+omit [Fintype S.PK] [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc] [Nonempty S.Orc] in
 /-- **The signature table is a side of the coupled table.** -/
 theorem tableLaw_eq_map_side (b : Bool) :
     A.tableLaw H keys b = (A.coupledLaw H keys).map (A.side b) := by
@@ -649,6 +653,8 @@ noncomputable def hybChoice (c : S.Choice n) (x : (S.Pub × S.Sig) × (S.Pub × 
     some ⟨S.stmt c.ring c.msg x.2.1, S.wit c.idx₁ x.2.2, S.wit c.idx₁ x.2.2⟩
   else none
 
+omit [Fintype S.PK] [DecidableEq S.PK] [Fintype S.Sig] [DecidableEq S.Sig] [Fintype S.Pub]
+  [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc] [Nonempty S.Orc] in
 /-- **Every hybrid choice is admissible**: both witnesses are in the ring relation at `H` for the
 statement. -/
 theorem hybChoice_admissible {c : S.Choice n} {x : (S.Pub × S.Sig) × (S.Pub × S.Sig)}
@@ -675,6 +681,8 @@ noncomputable def hybrid (T : A.CTable) : HistChoices M S.Wit S.Pub Q :=
       hybChoice S H (A.choose j keys H h hist) (T j ⟨_, A.choose_mem j keys H h hist⟩)
     else none
 
+omit [Fintype S.PK] [DecidableEq S.PK] [Fintype S.Sig] [DecidableEq S.Sig] [Fintype S.Pub]
+  [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc] [Nonempty S.Orc] in
 open Classical in
 /-- **The hybrid choice set** at the coupled table `T`: the hybrid choices of the challenges of the
 set valid for `keys`, at every round. -/
@@ -682,6 +690,8 @@ noncomputable def hybridSet (T : A.CTable) : Finset (SPBCS.WIChoice S.Stmt S.Wit
   ((Finset.univ : Finset (Fin Q)) ×ˢ (A.validChoices keys).attach).biUnion fun p =>
     (hybChoice S H p.2.1 (T p.1 ⟨p.2.1, ((A.mem_validChoices).1 p.2.2).1⟩)).toFinset
 
+omit [Fintype S.PK] [DecidableEq S.PK] [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Pub]
+  [Fintype S.Sig] [DecidableEq S.Sig] [Fintype S.Orc] [Nonempty S.Orc] in
 theorem card_hybridSet_le (T : A.CTable) :
     (A.hybridSet H keys T).card ≤ Q * (A.validChoices keys).card := by
   classical
@@ -693,6 +703,8 @@ theorem card_hybridSet_le (T : A.CTable) :
   rw [Finset.sum_const, Finset.card_product, Finset.card_univ, Fintype.card_fin,
     Finset.card_attach, smul_eq_mul, mul_one]
 
+omit [Fintype S.PK] [DecidableEq S.PK] [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Pub]
+  [Fintype S.Sig] [DecidableEq S.Sig] [Fintype S.Orc] [Nonempty S.Orc] in
 theorem hybrid_mem (T : A.CTable) (j : Fin Q) (h : Query k kN kS L → Out k e)
     (hist : PubHist S.Pub M.NIProof j) (x : SPBCS.WIChoice S.Stmt S.Wit)
     (hx : A.hybrid H keys T j h hist = some x) : x ∈ A.hybridSet H keys T := by
@@ -707,6 +719,8 @@ theorem hybrid_mem (T : A.CTable) (j : Fin Q) (h : Query k kN kS L → Out k e)
   rw [Option.mem_toFinset]
   exact hx
 
+omit [Fintype S.PK] [DecidableEq S.PK] [Fintype S.Sig] [DecidableEq S.Sig] [Fintype S.Pub]
+  [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc] [Nonempty S.Orc] in
 /-- **The hybrid choices are admissible.** -/
 theorem hybridSet_admissible (T : A.CTable) :
     ∀ c ∈ A.hybridSet H keys T, (c.stmt, c.wit₀) ∈ S.rel H ∧ (c.stmt, c.wit₁) ∈ S.rel H := by
@@ -716,6 +730,8 @@ theorem hybridSet_admissible (T : A.CTable) :
   rw [Option.mem_toFinset] at hp
   exact hybChoice_admissible H hp
 
+omit [Fintype S.PK] [DecidableEq S.PK] [Fintype S.Sig] [DecidableEq S.Sig] [Fintype S.Pub]
+  [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc] [Nonempty S.Orc] in
 /-- **In the experiment `0` the game selects as the hybrid answering with the first witnesses**
 unless the signer admits the chosen ring and user `0`'s output of the chosen entry is invalid. -/
 theorem selector_false_ne (T : A.CTable) (j : Fin Q) (h : Query k kN kS L → Out k e)
@@ -731,6 +747,8 @@ theorem selector_false_ne (T : A.CTable) (j : Fin Q) (h : Query k kN kS L → Ou
       ite_true, h0, Option.map_some, Bool.false_eq_true, ite_false]
   · exact absurd (by simp [selector, HistChoices.selector, hybrid, hA]) hne
 
+omit [Fintype S.PK] [DecidableEq S.PK] [Fintype S.Sig] [DecidableEq S.Sig] [Fintype S.Pub]
+  [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc] [Nonempty S.Orc] in
 /-- **In the experiment `1` the game selects as the hybrid answering with the second witnesses**
 unless the signer admits the chosen ring and, at the chosen entry, user `1`'s output is invalid or
 the two public values differ. -/
@@ -763,7 +781,7 @@ end Hybrid
 section Bad
 
 variable (E : (j : ι) → (M.comp j).Encoder) {V : S.Orc → S.Stmt → FullTr P τ → Bool}
-  (Qs : ∀ H x, M.IOPQueries (V H) x) {R : Type} [Fintype R] [Nonempty R]
+  (Qs : ∀ H x, M.IOPQueries (V H) x) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : S.Orc → S.Wit → R → CausalProver P τ S.Stmt) (H : S.Orc) (keys : Fin n → S.KeyCoins)
 
 /-- The experiment `b` at the table `T`. -/
@@ -780,6 +798,9 @@ noncomputable def badProb (b : Bool)
     {s | S.Admit H (A.choose i keys H s.1 s.2).ring (A.choose i keys H s.1 s.2).msg ∧
       bad (A.choose i keys H s.1 s.2) (T i ⟨_, A.choose_mem i keys H s.1 s.2⟩)}
 
+omit [DecidableEq R] [Fintype S.PK] [DecidableEq S.PK] [Fintype S.Sig] [DecidableEq S.Sig]
+  [Fintype S.Pub] [DecidableEq S.Pub] [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc]
+  [Nonempty S.Orc] in
 /-- The experiment before round `i` does not read row `i` of the table. -/
 theorem run_side_update (b : Bool) (T : A.CTable) (i : Fin Q)
     (r : A.choices → (S.Pub × S.Sig) × (S.Pub × S.Sig)) :
@@ -790,7 +811,9 @@ theorem run_side_update (b : Bool) (T : A.CTable) (i : Fin Q)
   funext h hist
   simp only [selector, side, Function.update_of_ne hne]
 
+omit [Fintype S.PK] [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc] [Nonempty S.Orc] in
 open Classical in
+omit [DecidableEq R] in
 /-- **The bad event of each round has probability at most `ε`** over the coupled table, when the
 coupling of every valid admitted challenge gives the bad event probability at most `ε`. -/
 theorem sum_coupledLaw_mul_badProb_le (b : Bool)
@@ -854,9 +877,11 @@ end Bad
 section Fixed
 
 variable {E : (j : ι) → (M.comp j).Encoder} {V : S.Orc → S.Stmt → FullTr P τ → Bool}
-  {Qs : ∀ H x, M.IOPQueries (V H) x} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ H x, M.IOPQueries (V H) x} {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   {honest : S.Orc → S.Wit → R → CausalProver P τ S.Stmt}
 
+omit [DecidableEq R] [Fintype S.PK] [DecidableEq S.PK] [Fintype S.Sig] [DecidableEq S.Sig]
+  [Fintype S.Pub] [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc] [Nonempty S.Orc] in
 /-- **A game and its hybrid at a coupled table are within the bad events of the rounds**: if the
 selectors of the experiment `b` and of the hybrid answering with the witnesses of user `b` differ
 only where the round's bad event `bad` holds (`hsel`), every event has probabilities within the
@@ -879,6 +904,7 @@ theorem abs_run_sub_hybrid_le (H : S.Orc) (keys : Fin n → S.KeyCoins) (b : Boo
   rintro s ⟨hs, -⟩
   exact hsel _ s.1 s.2 hs
 
+omit [DecidableEq R] in
 /-- **The experiments at a fixed oracle `H` and fixed users' coins are close**: for a compiled
 argument whose honest prover has honest-verifier zero knowledge at error `δ` for the ring relation
 at `H` (`hz`), at most `C` challenges of the set valid for `keys` (`hC`), an `ε` bounding the
@@ -1013,9 +1039,10 @@ end Fixed
 section Main
 
 variable {E : (j : ι) → (M.comp j).Encoder} {V : S.Orc → S.Stmt → FullTr P τ → Bool}
-  {Qs : ∀ H x, M.IOPQueries (V H) x} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ H x, M.IOPQueries (V H) x} {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   {honest : S.Orc → S.Wit → R → CausalProver P τ S.Stmt}
 
+omit [DecidableEq R] [Fintype S.PK] [DecidableEq S.Sig] [DecidableEq S.Pub] in
 /-- The probability of the event `D` in the experiment `b`, at the users' coins `keys` and the
 oracle `H`. -/
 theorem toOuterMeasure_game_eq (b : Bool)
@@ -1032,6 +1059,8 @@ theorem toOuterMeasure_game_eq (b : Bool)
   rw [← PMF.map_bind, PMF.toOuterMeasure_map_apply]
   rfl
 
+omit [DecidableEq R] [Fintype S.PK] [DecidableEq S.Sig] [DecidableEq S.Pub] [Fintype S.KeyCoins]
+  [Nonempty S.KeyCoins] [Fintype S.Orc] [Nonempty S.Orc] in
 /-- The probabilities of an event in the two experiments at fixed users' coins and oracle differ by
 at most one. -/
 theorem abs_condProb_sub_le_one (H : S.Orc) (keys : Fin n → S.KeyCoins)
@@ -1075,6 +1104,7 @@ structure SignerBounds (Good : (Fin n → S.KeyCoins) → S.Orc → Prop)
   invalid_le : ∀ keys H, Good keys H → ∀ c ∈ A.choices, c.Valid S keys → S.Admit H c.ring c.msg →
     ∀ b : Bool, (c.signLaw H keys b).toOuterMeasure {y | ¬ c.ValidAt H b y} ≤ ENNReal.ofReal η
 
+omit [DecidableEq R] in
 /-- **Anonymity against full key exposure** (BKM06 Definition 4, ePrint 2005/304, p. 6, with the
 keys given at the start as in CCLM22 Experiment 2, p. 21, `Q` adaptive challenges, signing
 queries included, both oracles visible, deterministic adversaries; the adversary chooses any ring
@@ -1160,13 +1190,18 @@ section Scheme
 
 variable {Sch : SigScheme} {RMsg : Type} [DecidableEq RMsg] {N : ℕ}
 
+variable [Fintype Sch.PK] [DecidableEq Sch.PK] [Fintype Sch.Msg] [DecidableEq Sch.Msg]
+  [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub] [DecidableEq Sch.Pub] [Nonempty Sch.Pub]
+  [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins] [Nonempty Sch.KeyCoins] [Fintype Sch.SignCoins]
+  [DecidableEq Sch.SignCoins] [Nonempty Sch.SignCoins]
+
 variable (Sch N) in
 /-- **The signer of the generic ring signature** of the scheme `Sch` (`Scheme.lean`), as a
 `PubSigner` with no oracle of the base scheme (`Orc = Unit`): user `i` signs the base message
 `bind R m` with uniform signing coins, and the public value is the signature's (`Sch.pub σ`, read
 off the signature: Falcon's salt, `Unit` for ML-DSA); statements `(R, m, v)` and witnesses
 `(i, σ)` of the ring relation `ringRel adm bind`; the signer refuses the rings outside `adm`. -/
-noncomputable abbrev schemeSigner (adm : List Sch.PK → Prop) [DecidablePred adm]
+noncomputable abbrev schemeSigner (adm : List Sch.PK → Prop)
     (bind : List Sch.PK → RMsg → Sch.Msg) : PubSigner N RMsg where
   PK := Sch.PK
   SK := Sch.SK
@@ -1185,7 +1220,6 @@ noncomputable abbrev schemeSigner (adm : List Sch.PK → Prop) [DecidablePred ad
   stmtPub_stmt _ _ _ := rfl
   rel _ := ringRel adm bind
   Admit _ R _ := adm R.1
-  instDecAdmit _ R _ := inferInstanceAs (Decidable (adm R.1))
 
 variable {k kN kS L e : ℕ} {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)}
@@ -1195,7 +1229,7 @@ variable {k kN kS L e : ℕ} {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr :
 /-- **An anonymity adversary against full key exposure for the generic ring signature** of `Sch`
 (`PubAnonAdversary` at `schemeSigner`): `n` honest users, `Q` adaptive challenges, any ring of at
 most `N` keys holding the two users' keys, `⊥` for the rings outside `adm`. -/
-abbrev KeyedAnonAdversary (adm : List Sch.PK → Prop) [DecidablePred adm]
+abbrev KeyedAnonAdversary (adm : List Sch.PK → Prop)
     (bind : List Sch.PK → RMsg → Sch.Msg) (n Q : ℕ) : Type :=
   PubAnonAdversary (schemeSigner Sch N adm bind) M n Q
 
@@ -1215,9 +1249,13 @@ noncomputable def keyedAnonAdvantage (E : (j : ι) → (M.comp j).Encoder)
 
 namespace KeyedAnonAdversary
 
-variable {M} {adm : List Sch.PK → Prop} [DecidablePred adm] {bind : List Sch.PK → RMsg → Sch.Msg}
+variable {M} {adm : List Sch.PK → Prop} {bind : List Sch.PK → RMsg → Sch.Msg}
   {n Q : ℕ}
 
+omit [DecidableEq Sch.PK] [Fintype Sch.Sig] [Fintype Sch.Pub] [Fintype Sch.KeyCoins]
+  [Nonempty Sch.KeyCoins] [Fintype Sch.PK] [Fintype Sch.Msg] [DecidableEq Sch.Msg]
+  [DecidableEq Sch.Sig] [DecidableEq Sch.Pub] [Nonempty Sch.Pub] [DecidableEq Sch.KeyCoins]
+  [DecidableEq Sch.SignCoins] in
 /-- **The two users' public-value laws agree** when the public value of an honest signature is a
 function of the signing coins (`hpub`): both are the law of `pubOf` at uniform coins. -/
 theorem map_fst_signLaw {pubOf : Sch.SignCoins → Sch.Pub} (hpub : Sch.PubOfCoins pubOf)
@@ -1229,6 +1267,10 @@ theorem map_fst_signLaw {pubOf : Sch.SignCoins → Sch.Pub} (hpub : Sch.PubOfCoi
   funext sc
   exact hpub _ _ sc
 
+omit [DecidableEq Sch.PK] [Fintype Sch.Sig] [Fintype Sch.Pub] [Fintype Sch.KeyCoins]
+  [Nonempty Sch.KeyCoins] [Fintype Sch.PK] [Fintype Sch.Msg] [DecidableEq Sch.Msg]
+  [DecidableEq Sch.Sig] [DecidableEq Sch.Pub] [Nonempty Sch.Pub] [DecidableEq Sch.KeyCoins]
+  [DecidableEq Sch.SignCoins] in
 /-- **An honest signature is invalid only if it fails to verify**: at a valid challenge on an
 admissible ring, the probability that user `b`'s output is invalid is at most the correctness
 error. -/

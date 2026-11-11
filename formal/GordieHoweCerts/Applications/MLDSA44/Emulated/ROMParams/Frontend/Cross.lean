@@ -25,9 +25,13 @@ set_option maxRecDepth 4096 in
 instance : Emulated.MldsaECross program where
   expr6 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eright_eq
   refsOrdered := Generated.MLDSA44.Emulated.ROMParams.conditions.wellFormed.refsOrdered
+  crossPred := 275
   crossData := by
+    rw [show (Emulated.MldsaEmbed.σ program).ref 525 = 527 from ref525]
     shape_decide
-  crossPred := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicate_mac_2eequal_body
+  cross := by
+    rw [show (Emulated.MldsaEmbed.σ program).ref 525 = 527 from ref525]
+    exact Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.predicate_mac_2eequal_body
 
 /-- **`mac.equal` gives the crossing** (`Emulated.crossSound`). -/
 theorem crossSound : CrossSound := Emulated.crossSound

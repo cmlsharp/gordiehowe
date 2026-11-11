@@ -121,23 +121,19 @@ def readyNodes (R : ∀ d : Fin ir.domains.length, ir.FieldReady I d P)
 the sources of the certificates' source parts `parts` (`SourceParts.src`) with the sumcheck nodes
 of the ready domains' packings (`readyNodes`, every one present: `hnodes`); its sources enforce the
 circuits' entries and accept the honest inputs by the certificates `hc`
-(`ProgramCerts.circuitsEnforce`, `ProgramCerts.circuitsAccept`). Its code reads only `parts`.
-`hsel`: the selections' bound, by default from a program without a product form. -/
+(`ProgramCerts.circuitsEnforce`, `ProgramCerts.circuitsAccept`). Its code reads only `parts`. -/
 def proofSystem (parts : SourceParts) (hc : Nonempty (ir.ProgramCerts I parts))
     {orng : List (ℕ × ℕ)} (checks : ir.Checks P orng) (model : I.Model P ir orng)
     (R : ∀ d : Fin ir.domains.length, ir.FieldReady I d P)
     (hdom : ∀ c < ir.circuits.length, (ir.circuit c).domain < ir.domains.length)
-    (hnodes : ∀ c : Fin ir.circuits.length, (R ⟨_, hdom c c.2⟩).Pk.nodes.isSome = true)
-    -- TODO(sealed-data): this default runs `decide +kernel` on the program at each use, where
-    -- `ir` is generated data. Callers should pass a compiler-emitted fact (no product form).
-    (hsel : ir.SelSound I := by exact RealizedProgram.selSound_of_noProduct _ (by decide +kernel)) :
+    (hnodes : ∀ c : Fin ir.circuits.length, (R ⟨_, hdom c c.2⟩).Pk.nodes.isSome = true) :
     ir.ProofSystem P I :=
   ProofSystem.ofFieldProofs checks model (parts.src ir I (readyNodes R hdom hnodes))
     (hc.elim fun cs => cs.circuitsEnforce (checks.derivModel model) checks.boundOk
       (inputLayoutOk_of_ready R hdom) _)
     (hc.elim fun cs => cs.circuitsAccept (checks.derivModel model) checks.boundOk
       (inputLayoutOk_of_ready R hdom) (privAfterPub_of_ready R hdom) _)
-    R hsel
+    R
 
 /-- **A program with no GKR circuit has no circuit index.** -/
 theorem not_circuit (h : ir.circuits.length = 0) (c : Fin ir.circuits.length) : False := by
@@ -149,14 +145,11 @@ theorem not_circuit (h : ir.circuits.length = 0) (c : Fin ir.circuits.length) : 
 with no source, which enforces and accepts vacuously (`h`: the program has no circuit). -/
 def proofSystemOfNoCircuits {orng : List (ℕ × ℕ)} (checks : ir.Checks P orng)
     (model : I.Model P ir orng) (R : ∀ d : Fin ir.domains.length, ir.FieldReady I d P)
-    (h : ir.circuits.length = 0)
-    -- TODO(sealed-data): this default runs `decide +kernel` on the program at each use, where
-    -- `ir` is generated data. Callers should pass a compiler-emitted fact (no product form).
-    (hsel : ir.SelSound I := by exact RealizedProgram.selSound_of_noProduct _ (by decide +kernel)) :
+    (h : ir.circuits.length = 0) :
     ir.ProofSystem P I :=
   ProofSystem.ofFieldProofs checks model (fun c => (not_circuit h c).elim)
     ⟨fun c => (not_circuit h c).elim, fun c => (not_circuit h c).elim⟩
-    ⟨fun c => (not_circuit h c).elim⟩ R hsel
+    ⟨fun c => (not_circuit h c).elim⟩ R
 
 end ProgramCerts
 

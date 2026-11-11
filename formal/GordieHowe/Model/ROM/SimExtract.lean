@@ -109,8 +109,8 @@ variable [DecidableEq A] {SC : Type} (Sim : Req → SC → OracleProg A B (NARG.
 proof queries are answered by `none` and leave the oracle unchanged. -/
 def simResponder : Responder A B Req (Option Resp) := fun i r O =>
   if hi : i < Q then
-    (some ((Sim r (c ⟨i, hi⟩)).run O).proof, O.reprogram ((Sim r (c ⟨i, hi⟩)).run O).assignments)
-  else (none, O)
+    ⟨some ((Sim r (c ⟨i, hi⟩)).run O).proof, O.reprogram ((Sim r (c ⟨i, hi⟩)).run O).assignments⟩
+  else ⟨none, O⟩
 
 /-- **The composed run of the tree from step `k`**: with the assignments `ass` giving the oracle in
 force at step `k` and a proof query counter `i` that agrees with the run's below `Q`, the composed run

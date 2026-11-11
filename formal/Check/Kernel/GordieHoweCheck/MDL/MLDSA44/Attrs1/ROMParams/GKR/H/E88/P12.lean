@@ -9,10 +9,10 @@ import all GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.ROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of leaves 120 to 129 of entry 88 of the GKR circuit of domain H (generated; do not edit). -/
+/-! The relational check of leaves 34 to 35 of entry 88 of the GKR circuit of domain H (generated; do not edit). -/
 
 namespace GordieHowe.Generated.MDL.MLDSA44.Attrs1.ROMParams.GKR.H
 
-check_entry_leaves cert ar 88 [1, 1024, 6, 0, 0, 7, 1, 1024, 6, 0, 0, 7, 1, 113, 1043, 0, 0, 2, 2, 4, 230] 120 130
+check_entry_leaves cert ar 88 [0, 0, 16, 1, 13085, 9, 0, 0, 2, 2, 29, 32] 34 36
 
 end GordieHowe.Generated.MDL.MLDSA44.Attrs1.ROMParams.GKR.H

@@ -11,12 +11,11 @@ public import GordieHowe.Language.Library.Select.Cutoff
 # Selection below a fixed bound on bit wires
 
 Samples and outputs are `w` little-endian field bits (the default width of `SelectionField` is
-sixteen). Comparisons use `Bits.ltConst`; encoding is a linear combination
-of the chosen subfield basis. `Model` contains the proved natural-number selection argument.
-`run_iff` connects this circuit to it under Booleanity, without decoding inside `run`. The caller
-asserts Booleanity of committed outputs and of the stream. The circuit also
-pins each comparator result to a bit, as in `gp_select.h`. Bounds and indices are compile-time
-constants.
+sixteen). Comparisons use `Bits.ltConst`; encoding is a linear combination of the chosen subfield
+basis. `Model` contains the proved natural-number selection argument. `run_iff` connects this
+circuit to it under Booleanity, without decoding inside `run`. The caller asserts Booleanity of
+committed outputs and of the stream. The circuit also pins each comparator result to a bit, as in
+`cutoff_select.h` (`CutoffScan::accept`). Bounds and indices are compile-time constants.
 -/
 
 namespace GordieHowe.SelectFirstCutoff

@@ -15,8 +15,8 @@ public import GordieHoweNative.ProofSystem.Program.FieldInput
 # GordieHowe: a domain's GKR circuits on its tree's coordinates
 
 Every GKR circuit `c` of domain `d` read on the logical coordinates of `d`'s packing tree
-(`GordieHowe.RealizedProgram.TLog`), and the compiler correspondence's soundness direction, for any number of circuits
-in the domain:
+(`GordieHowe.RealizedProgram.TLog`), and the circuits' correspondence's soundness direction, for any
+number of circuits in the domain:
 
 * **The input layout** (`GordieHowe.RealizedProgram.InputsT`, decided by `inputsTB` in a well-formed
   program): contiguous blocks; committed blocks holding
@@ -34,11 +34,11 @@ in the domain:
 * **The proof system's premises** (`GordieHowe.RealizedProgram.inputPremises_treeInput`): on the input of the
   logical assignment of any committed cells, every view input is the bit of the committed word it
   aliases, so the decoded valuation reads the bit views as the semantics does (`InputPremises`).
-* **Soundness** (`GordieHowe.RealizedProgram.circuitHolds_of_treeInput`): the trust bundle `CircuitsEnforce` turns the
-  source's satisfaction on the input of the logical assignment of any committed cells into the
-  circuit's meaning at the decoded cells' valuation: the valuation the bundle decodes is the
-  decoded cells' valuation (`inputValuation_treeInput`), the view inputs being the decoded words'
-  bits (`treeBits_eq`).
+* **Soundness** (`GordieHowe.RealizedProgram.circuitHolds_of_treeInput`): the circuits'
+  correspondence `CircuitsEnforce` turns the source's satisfaction on the input of the logical
+  assignment of any committed cells into the circuit's meaning at the decoded cells' valuation: the
+  valuation it decodes is the decoded cells' valuation (`inputValuation_treeInput`), the view inputs
+  being the decoded words' bits (`treeBits_eq`).
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -849,7 +849,7 @@ theorem inputPremises_treeInput (hc : ir.InputsT (ir.circuit c).domain c)
     rw [h1]
     exact h2.symm
 
-/-- **Soundness of the compiler correspondence on the tree's coordinates**: the trust bundle turns
+/-- **Soundness of the circuits' correspondence on the tree's coordinates**: `CircuitsEnforce` turns
 the source's satisfaction on the input of the logical assignment of any committed cells into the
 circuit's meaning at the decoded cells' valuation (`inputValuation_treeInput`), the proof system's
 premises holding there (`inputPremises_treeInput`). -/

@@ -38,6 +38,9 @@ a larger budget (`n + n / 2 + 256`) and returns `none` if it runs out, so `verif
 circuit stream succeeds. This adapter is not an unbounded sampler and has not been validated against
 Falcon known-answer vectors.
 
+`PublicKey` is the vendored `Falcon.PublicKey` at `params512`; its equivalence with its polynomial
+and its finiteness are in `GordieHowe/Applications/Falcon512/Spec/PublicKey.lean`.
+
 `verify` takes the message as the vendored byte type `List UInt8`. The circuit definitions
 (`GordieHowe.Falcon512.streamCandidates`, `GordieHowe.Falcon512.acceptedCandidates`) read bytes as
 naturals below `256`, the representation of the H circuit and the SHAKE256 gadget;
@@ -79,6 +82,18 @@ def prims512 : _root_.Falcon.VerifyPrimitives _root_.Falcon.Concrete.params512 w
   publicKeyBytes h := _root_.Falcon.Concrete.publicKeyBytes _root_.Falcon.Concrete.params512.logn h
   hashToPoint salt _vrfyKey msg := _root_.Falcon.Concrete.hashToPoint 512 salt ByteArray.empty msg
   decompress bytes dlen := _root_.Falcon.Concrete.decompress 512 bytes dlen
+
+/-- **Equality of Falcon-512 public keys is decidable**: two public keys are equal when their
+polynomials `h` are, compared coefficient by coefficient. The statements of every Falcon
+configuration read this one instance. -/
+instance instDecidableEqPublicKey :
+    DecidableEq (_root_.Falcon.PublicKey _root_.Falcon.Concrete.params512) := fun a b =>
+  decidable_of_iff (a.h = b.h) ⟨fun h => by cases a; cases b; cases h; rfl, fun h => h ▸ rfl⟩
+
+/-- **A Falcon-512 public key** (`Falcon.PublicKey` at `params512`): the statement of every Falcon
+configuration and the key of the Falcon-512 signature scheme. Its decidable equality is
+`instDecidableEqPublicKey`. -/
+abbrev PublicKey : Type := _root_.Falcon.PublicKey _root_.Falcon.Concrete.params512
 
 /-- Falcon-512 verification (Algorithm 16) of the message bytes `msg`, closed over the
 keyless `prims512`. Wraps the vendored `_root_.Falcon.verify`. -/

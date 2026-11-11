@@ -17,10 +17,10 @@ public import GordieHowe.ProofSystem.Ligero.SubfieldTest
 
 Longfellow's prepared Ligero tableau as a commit-and-prove system whose low-degree test runs in the
 commit phase, analysed at an agreement threshold `A` between the dimension `k` and the block length
-`N`, up to the Johnson radius (the paper's Appendix D, Security of Ligero at an agreement
-threshold). This file states what both maskings of the response masks share, and the system with
-untested masks (`GordieHowe.Ligero.AgreementThreshold.commitProve`); `GordieHowe.Ligero.MaskTest.Pieces` is the system with masks as
-tested piece rows.
+`N`, up to the Johnson radius (the paper's `app:ligero-general`, Security of Ligero). This file
+states what both maskings of the response masks share, and the system with untested masks
+(`GordieHowe.Ligero.AgreementThreshold.commitProve`); `GordieHowe.Ligero.MaskTest.Pieces` is the
+system with masks as tested piece rows.
 
 **Shared by both maskings.**
 
@@ -192,7 +192,7 @@ variable (F N nL nQ) (k t : ℕ)
 abbrev ConstraintChallenge : Type := (Fin nL → F) × (Fin nQ → F)
 
 /-- The masked responses: the values of the linear and of the quadratic response at the first
-`2k − 1` response nodes (the last two components of `Tableau.Response`). -/
+`2k − 1` response nodes (`Tableau.Response.masked`). -/
 abbrev MaskedResponse : Type := (Fin (2 * k - 1) → F) × (Fin (2 * k - 1) → F)
 
 /-- **The proof phase**: the constraint challenge, the masked responses and the column query; the
@@ -301,6 +301,31 @@ theorem proofError_le_of {test column δ : ℝ≥0} (htest : test ≤ δ) (hcol 
   exacts [htest, hcol]
 
 omit [Field F] [Fintype F] in
+/-- The constraint challenge and the column query are different rounds. -/
+theorem constraintIdx_ne_queryIdx : constraintIdx k t ≠ queryIdx F N nL nQ k t := fun h => by
+  have := congrArg (fun i => (i.1 : ℕ)) h
+  simp [constraintIdx, queryIdx] at this
+
+omit [Field F] [Fintype F] in
+/-- **A sum over the proof phase's challenge rounds** is the constraint challenge's term plus the
+column query's. -/
+theorem sum_challengeIdx {M : Type} [AddCommMonoid M] (f : (proofSpec F N nL nQ k t).ChallengeIdx → M) :
+    ∑ i, f i = f (constraintIdx k t) + f (queryIdx F N nL nQ k t) := by
+  classical
+  rw [← Finset.sum_pair constraintIdx_ne_queryIdx]
+  refine Finset.sum_congr ?_ fun _ _ => rfl
+  ext i
+  simp only [Finset.mem_univ, Finset.mem_insert, Finset.mem_singleton, true_iff]
+  exact proof_challengeIdx_cases i
+
+omit [Field F] [Fintype F] in
+/-- The constraint challenge's round error is the test error. -/
+theorem proofError_constraintIdx (test column : ℝ≥0) :
+    proofError (F := F) (N := N) (nL := nL) (nQ := nQ) (k := k) (t := t) test column
+      (constraintIdx k t) = test :=
+  rfl
+
+omit [Field F] [Fintype F] in
 /-- The column query's round error is the column error. -/
 theorem proofError_queryIdx (test column : ℝ≥0) :
     proofError (F := F) (N := N) (nL := nL) (nQ := nQ) (k := k) (t := t) test column
@@ -331,7 +356,7 @@ theorem natDegree_responsePoly_lt (w : Fin C.k → F) : (responsePoly C w).natDe
 omit [Fintype F] in
 theorem code_eq_responsePoly {nrep : ℕ} (w : Tableau.LdtResponse F C.k nrep)
     (p : MaskedResponse F C.k) (j : Fin nrep) :
-    Tableau.Response.code C (w, p) j = responsePoly C (w j) :=
+    Tableau.Response.code C (.ofMasked w p) j = responsePoly C (w j) :=
   rfl
 
 /-- **The agreement set of one low-degree check**: the columns `j` at which the low-degree
@@ -393,10 +418,9 @@ omit [Fintype F] in
 repetition fails outside it. -/
 theorem mem_commonAgreement_of_accept {nrep : ℕ} [NeZero nrep] {O : Tableau.Rows F N R nrep}
     {u : Tableau.Aux F N} {L : Tableau.LinearSystem (nL := nL) C P}
-    {r : Tableau.LdtChallenge F R nrep} {rc : ConstraintChallenge F nL nQ}
-    {w : Tableau.LdtResponse F C.k nrep} {p : MaskedResponse F C.k} {t : ℕ}
-    {q : Tableau.Query N t} [DecidableEq F] (h : Tableau.AcceptProp C P L O u (r, rc) (w, p) q)
-    (s : Fin t) : q s ∈ commonAgreement C O r w :=
+    {r : Tableau.Challenge F R nL nQ nrep} {p : Tableau.Response F C.k nrep} {t : ℕ}
+    {q : Tableau.Query N t} [DecidableEq F] (h : Tableau.AcceptProp C P L O u r p q)
+    (s : Fin t) : q s ∈ commonAgreement C O r.ldt p.ldt :=
   mem_commonAgreement.mpr fun j => mem_agreementSet.mpr (h.2.1 j s)
 
 open Classical in
@@ -842,9 +866,9 @@ end TableauSetup
 
 /-- **The honest low-degree responses** for the cells `ω`, the blinding `ρ` and the low-degree
 challenges `r`: for each repetition `j`, the values at the first `k` response nodes of the
-interpolant of `ILDT_j`'s values plus the combination by `r j` of the data rows' values. It is the first component of
-`Ligero.HVZK.responseOf` (`fst_responseOf`), which reads neither the linear system nor the
-constraint challenge, so the honest prover sends it in the commit phase. -/
+interpolant of `ILDT_j`'s values plus the combination by `r j` of the data rows' values. It is the
+low-degree part of `Ligero.HVZK.responseOf` (`ldt_responseOf`), which reads neither the linear
+system nor the constraint challenge, so the honest prover sends it in the commit phase. -/
 def honestLdtResponse {Bf : HVZK.BlindingFields C P} {hrate : 2 * C.k - 1 ≤ N} {nrep : ℕ}
     (ω : HVZK.Cells Bf) (ρ : HVZK.Coins hrate Bf nrep) (r : Tableau.LdtChallenge F R nrep) :
     Tableau.LdtResponse F C.k nrep :=
@@ -852,11 +876,11 @@ def honestLdtResponse {Bf : HVZK.BlindingFields C P} {hrate : 2 * C.k - 1 ≤ N}
     (ρ.response.ildt j + ∑ l, r j l • HVZK.rowValues ω ρ.privacy l) (Tableau.responseNode C C.k i)
 
 omit [Fintype F] in
-theorem fst_responseOf {Bf : HVZK.BlindingFields C P} {hrate : 2 * C.k - 1 ≤ N} {nrep : ℕ}
+theorem ldt_responseOf {Bf : HVZK.BlindingFields C P} {hrate : 2 * C.k - 1 ≤ N} {nrep : ℕ}
     [NeZero nrep] (L : Tableau.LinearSystem (nL := nL) C P) (ω : HVZK.Cells Bf)
     (ρ : HVZK.Coins hrate Bf nrep) (r : Tableau.LdtChallenge F R nrep)
     (rc : ConstraintChallenge F nL nQ) :
-    (HVZK.responseOf L ω ρ (r, rc)).1 = honestLdtResponse ω ρ r :=
+    (HVZK.responseOf L ω ρ (.ofConstraint r rc)).ldt = honestLdtResponse ω ρ r :=
   rfl
 
 /-- **The leaves the verdict sees**, rebuilt from a view of the tableau (`Ligero.HVZK.View`) and
@@ -941,7 +965,8 @@ constraint challenge, masked responses and query of the proof phase. -/
 def verdict (c : Input Ctx F N R C.k S.nrep)
     (tr : (proofSpec F N nL nQ C.k S.t).Transcript (Fin.last 3)) : Bool :=
   Tableau.accept C P (S.linearSystem (rows c.ctx)) c.com.rows c.com.masks
-    (ldtChallenge c.rounds, constraintOf tr) (ldtResponse c.rounds, maskedOf tr) (queryOf tr)
+    (.ofConstraint (ldtChallenge c.rounds) (constraintOf tr))
+    (.ofMasked (ldtResponse c.rounds) (maskedOf tr)) (queryOf tr)
 
 /-- **Ligero at agreement threshold `A` with untested masks as a commit-and-prove system** for the
 rows `rows` and the products `products` on the setup `S`: the tableau and the masks as the oracle
@@ -1042,15 +1067,16 @@ def Claim (c : Input Ctx F N R C.k S.nrep) : Prop :=
 the pinned rows and the masks. -/
 def Bad (c : Input Ctx F N R C.k S.nrep) (u : Tableau.Aux F N) (rc : ConstraintChallenge F nL nQ) :
     Prop :=
-  UntestedMaskRow.constraintBad C P (S.linearSystem (rows c.ctx)) S.rate_le S.a
+  UntestedMaskRow.constraintBad C P (S.linearSystem (rows c.ctx)) S.list
     (S.pinnedRows c.com.rows c.rounds) u rc
 
 /-- The verdict of the two-stage test on the input, the masks, the constraint challenge, the
 masked responses and the query. -/
 def testAccept (c : Input Ctx F N R C.k S.nrep) (u : Tableau.Aux F N) (rc : ConstraintChallenge F nL nQ)
     (p : MaskedResponse F C.k) (q : Tableau.Query N S.t) : Bool :=
-  Tableau.accept C P (S.linearSystem (rows c.ctx)) c.com.rows u (ldtChallenge c.rounds, rc)
-    (ldtResponse c.rounds, p) q
+  Tableau.accept C P (S.linearSystem (rows c.ctx)) c.com.rows u
+    (.ofConstraint (ldtChallenge c.rounds) rc)
+    (.ofMasked (ldtResponse c.rounds) p) q
 
 omit [Fintype Lin] in
 open Classical in
@@ -1072,14 +1098,15 @@ theorem query_count_nat (c : Input Ctx F N R C.k S.nrep) (hc : ¬ Claim S rows c
     (rc : ConstraintChallenge F nL nQ) (hbad : ¬ Bad S rows c u rc) (p : MaskedResponse F C.k) :
     (Finset.univ.filter fun q : Tableau.Query N S.t =>
       Tableau.AcceptProp C P (S.linearSystem (rows c.ctx)) c.com.rows u
-        (ldtChallenge c.rounds, rc) (ldtResponse c.rounds, p) q).card ≤
+        (.ofConstraint (ldtChallenge c.rounds) rc) (.ofMasked (ldtResponse c.rounds) p) q).card ≤
       (S.A - 1).descFactorial S.t + S.a.descFactorial S.t := by
   set D := commonAgreement C c.com.rows (ldtChallenge c.rounds) (ldtResponse c.rounds)
   set L := S.linearSystem (rows c.ctx)
   have hnot : ¬ S.Exceptional c.com.rows c.rounds := fun h => hc (.inl h)
   by_cases hD : S.A ≤ D.card
   · refine le_trans ?_ (Nat.le_add_left _ _)
-    by_cases hp : Tableau.Valid C P L (ldtChallenge c.rounds, rc) (ldtResponse c.rounds, p)
+    by_cases hp : Tableau.Valid C P L (.ofConstraint (ldtChallenge c.rounds) rc)
+        (.ofMasked (ldtResponse c.rounds) p)
     · have hfalse : ¬ Tableau.Holds C P L (S.pinnedRows c.com.rows c.rounds) := by
         intro hh
         apply hc
@@ -1089,20 +1116,20 @@ theorem query_count_nat (c : Input Ctx F N R C.k S.nrep) (hc : ¬ Claim S rows c
       refine le_trans (Finset.card_le_card fun q hq => ?_)
         (UntestedMaskRow.selected_query_count C P L S.a S.list
           (S.pinnedRows c.com.rows c.rounds) (S.natDegree_pinnedRows_lt _ _) u hfalse
-          (ldtChallenge c.rounds, rc) hbad _ hp S.t)
+          (.ofConstraint (ldtChallenge c.rounds) rc) hbad _ hp S.t)
       have ha := (Finset.mem_filter.mp hq).2
       exact Finset.mem_filter.mpr ⟨Finset.mem_univ _,
         Tableau.selectedAccept_of_agree C P L _ _ u _ _ q
           (fun s i => S.pinnedRows_agree hnot hD (mem_commonAgreement_of_accept ha s) i)
           ha.2.2.1 ha.2.2.2⟩
     · have he : (Finset.univ.filter fun q : Tableau.Query N S.t =>
-          Tableau.AcceptProp C P L c.com.rows u (ldtChallenge c.rounds, rc)
-            (ldtResponse c.rounds, p) q) = ∅ :=
+          Tableau.AcceptProp C P L c.com.rows u (.ofConstraint (ldtChallenge c.rounds) rc)
+            (.ofMasked (ldtResponse c.rounds) p) q) = ∅ :=
         Finset.filter_eq_empty_iff.mpr fun q _ hq => hp hq.1
       rw [he]
       exact Nat.zero_le _
-  · exact le_trans (card_filter_le_of_lt (not_le.mp hD) fun q hq => mem_commonAgreement_of_accept hq)
-      (Nat.le_add_right _ _)
+  · exact le_trans (card_filter_le_of_lt (not_le.mp hD) fun q hq =>
+      (mem_commonAgreement_of_accept hq :)) (Nat.le_add_right _ _)
 
 open Classical in
 /-- The column count as a fraction: at most `columnError` of the queries are accepted. -/
@@ -1155,8 +1182,8 @@ low-degree challenge and the low-degree response as the commit rounds, the const
 the masked responses and the query as the proof-phase transcript. -/
 def viewOf (r : Tableau.LdtChallenge F R S.nrep) (rc : ConstraintChallenge F nL nQ)
     (q : Tableau.Query N S.t) (v : HVZK.View F R C.k S.t S.nrep) : (commitProve S rows).View :=
-  ⟨viewLeaves (fun x => ⟨x.1, x.2.1, x.2.2⟩) q v, commitTranscript r v.1.1,
-    proofTranscript rc v.1.2 q⟩
+  ⟨viewLeaves (fun x => ⟨x.1, x.2.1, x.2.2⟩) q v, commitTranscript r v.1.ldt,
+    proofTranscript rc v.1.masked q⟩
 
 /-- **The simulator** of Ligero at agreement threshold `A` with untested masks: on the context
 `c`, the low-degree challenge (in `chc`) and the proof-phase challenges, the tableau simulator
@@ -1175,7 +1202,7 @@ def simulate (c : Ctx) (chc : (commitSpec F R C.k S.nrep).Challenges)
     (commitProve S rows).View :=
   viewOf S rows (chc (ldtIdx F R C.k S.nrep)) (chConstraint ch) (chQuery ch)
     (HVZK.simulate (S.linearSystem (rows c)) S.rate_le Hd.layout
-      (chc (ldtIdx F R C.k S.nrep), chConstraint ch) (chQuery ch) s)
+      (.ofConstraint (chc (ldtIdx F R C.k S.nrep)) (chConstraint ch)) (chQuery ch) s)
 
 namespace TableauSetup.Placement
 
@@ -1200,7 +1227,8 @@ challenge of the commit rounds and the constraint challenge. -/
 noncomputable def prove (c : Ctx) (x : ι → F) (ρ : Pl.Coins)
     (r : (commitProve S rows).Rounds) : CausalTranscript (commitProve S rows).spec :=
   honestProof fun rc =>
-    (HVZK.responseOf (S.linearSystem (rows c)) (Pl.cells x) ρ (ldtChallenge r, rc)).2
+    (HVZK.responseOf (S.linearSystem (rows c)) (Pl.cells x) ρ
+      (.ofConstraint (ldtChallenge r) rc)).masked
 
 /-- **Completeness of the honest prover** (`Ligero.Completeness.accept` at the zero-privacy rows
 the placement fills): on admissible cells satisfying the rows, the verifier accepts at every coins
@@ -1213,7 +1241,8 @@ theorem complete (c : Ctx) (x : ι → F)
       ((Pl.prove rows c x ρ ((Pl.commitRounds rows x ρ).transcript chc)).transcript ch) =
         true := by
   have hacc := Completeness.accept (HVZK.honest Pl.layout.products_ne_zero
-    (Pl.witness rows hx.admissible c hx.rowsHold) ρ) (chc (ldtIdx F R C.k S.nrep), chConstraint ch)
+    (Pl.witness rows hx.admissible c hx.rowsHold) ρ)
+    (.ofConstraint (chc (ldtIdx F R C.k S.nrep)) (chConstraint ch))
     (chQuery ch)
   have ht : (HVZK.commitOf (Pl.witness rows hx.admissible c hx.rowsHold).toCells ρ).rows =
       Completeness.encode (HVZK.honest Pl.layout.products_ne_zero
@@ -1247,7 +1276,8 @@ noncomputable def honest : (commitProve S rows).Honest (honestSim rows Hd) where
   complete := Hd.complete rows
   hides c x hx chc ch := by
     have key := (HVZK.identDistrib (hrate := S.rate_le)
-      (Hd.witness rows hx.admissible c hx.rowsHold) (chc (ldtIdx F R C.k S.nrep), chConstraint ch)
+      (Hd.witness rows hx.admissible c hx.rowsHold)
+      (.ofConstraint (chc (ldtIdx F R C.k S.nrep)) (chConstraint ch))
       (chQuery ch) Hd.t_le_privacy).comp
         (viewOf S rows (chc (ldtIdx F R C.k S.nrep)) (chConstraint ch) (chQuery ch))
     refine IdentDistrib.trans (IdentDistrib.of_equiv (Equiv.refl _) fun ρ => ?_) key

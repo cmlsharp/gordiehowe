@@ -21,14 +21,19 @@ kernel check exceeds --kernel-budget (default 5 s). The gate fails (exit 1) on
    budget_s (seeded as 1.25 times the recorded cost, rounded up to a tenth of a second);
 3. an allowlisted declaration over a component's budget in which its entry was not (an entry
    recorded for elaboration only does not cover a new slow kernel check);
-4. a module whose profile timed out (`<timeout>`).
+4. a module whose profile timed out (`<timeout>`);
+5. a module whose `<unattributed>` residual is over budget: the profile records every step
+   (profiler.threshold 0), so a residual that large is time the profiler did not attribute to a
+   declaration, which the budget would otherwise miss.
 
 It reports, without failing, allowlisted declarations of the profiled modules that are now under
 budget (remove them, so the list shrinks), entries the allowlist records but the profile does not
-show, a module's `<unattributed>` residual over budget (steps under the profiler threshold),
-modules whose profile failed to elaborate (`<error>`: the build reports the error; under the
+show, modules whose profile failed to elaborate (`<error>`: the build reports the error; under the
 profiler, heartbeat-limited declarations can time out where the build passes), and an unsorted
-allowlist. Certificate modules (GordieHoweCerts*, GordieHoweCheck.*) are outside the budget.
+allowlist. The generated modules and the certificate-check modules
+(`cert_boundary.perf_exempt`: `GordieHoweCerts.Generated.*`, `GordieHoweCheck.*`, the modules
+defining the checks) are outside the budget; the hand-written modules of GordieHoweCerts are
+under it.
 
 With --base, it prints a delta report: per declaration of the profiled modules, the change of
 max(elab_s, kernel_s) against the base profile, the largest regressions and improvements first.
@@ -38,15 +43,17 @@ import math
 import os
 import sys
 
+# The launcher uses Python's isolated mode, which omits the script directory from sys.path. Trust
+# only this script's own directory for the shared boundary helper.
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+from cert_boundary import perf_exempt  # noqa: E402
+
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 ALLOW = os.path.join(ROOT, 'audit', 'perf_allowlist.tsv')
 BASELINE = os.path.join(ROOT, 'audit', 'perf_baseline.tsv')
 ALLOW_COLS = ['declaration', 'module', 'elab_s', 'kernel_s', 'budget_s', 'reason', 'fix_note']
 
 
-def is_cert_module(m):
-    return m == 'GordieHoweCerts' or m.startswith('GordieHoweCerts.') or \
-        m.startswith('GordieHoweCheck.')
 
 
 def read_profile(path):
@@ -179,7 +186,7 @@ def main():
     fails, warns, notes = [], [], []
     shrink, seeded = [], []
     for (d, m), (e, k, i) in sorted(prof.items(), key=lambda x: -max(x[1][0], x[1][1])):
-        if is_cert_module(m):
+        if perf_exempt(m):
             continue
         if d == '<timeout>':
             fails.append('%s: profile timed out after %.0f s' % (m, e))
@@ -191,14 +198,19 @@ def main():
         oe, ok = over(e, k)
         if d == '<unattributed>':
             if oe or ok:
-                warns.append('%s: %.1f s elaboration, %.1f s kernel in steps under the profiler '
-                             'threshold, attributed to no declaration' % (m, e, k))
+                fails.append('%s: %.1f s elaboration, %.1f s kernel attributed to no declaration, '
+                             'over budget (elab %g s, kernel %g s); profile it with --keep-raw '
+                             'and find the command the time belongs to' %
+                             (m, e, k, args.elab_budget, args.kernel_budget))
             continue
         a = allow.get((d, m))
         if a is None:
             if oe or ok:
                 if args.seed:
-                    seeded.append({'declaration': d, 'module': m, 'elab_s': e, 'kernel_s': k,
+                    # Recorded rounded up, so that a component over budget stays over it
+                    # once written to a tenth of a second.
+                    seeded.append({'declaration': d, 'module': m, 'elab_s': round_up(e),
+                                   'kernel_s': round_up(k),
                                    'budget_s': round_up(args.slowdown * max(e, k)),
                                    'reason': 'pre-existing', 'fix_note': ''})
                 else:

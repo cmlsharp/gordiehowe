@@ -13,8 +13,8 @@ public import GordieHowe.Model.QROM.Expansion
 The verifier of a non-interactive argument with an oracle `A → B` (the paper's `def:narg`, DFMS22
 section 3.1), as a classical query algorithm on claims `Cl` with statements in `Stmt`: its number
 `kq` of queries, its query expansion (`BCSExpand`, CMS19 p. 39), its acceptance at an oracle and
-the statement of a claim. The honest prover is `GordieHowe.NARG.ProverFn`
-(`GordieHowe/Model/NARG/Prover.lean`). The notions of the argument are stated over this verifier in
+the statement of a claim. The honest prover is `GordieHowe.NARG.Prover` (its classical semantics
+`ProverFn`, `GordieHowe/Model/NARG/Prover.lean`). The notions of the argument are stated over this verifier in
 the quantum random-oracle model (`GordieHowe/Model/NARG/QROM.lean`) and in the classical
 random-oracle model (`GordieHowe/Model/NARG/ROM.lean`).
 -/

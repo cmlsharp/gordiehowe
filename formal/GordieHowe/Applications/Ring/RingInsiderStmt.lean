@@ -33,7 +33,8 @@ namespace GordieHowe.Ring
 
 open GordieHowe.RingSignature GordieHowe.RingSignature.Insider
 
-variable {Xo Yo : Type} [AddGroup Yo] {N : ℕ} {TB : BaseTypes} {B : BaseSigner Xo Yo N TB}
+variable {Xo Yo : Type} [AddGroup Yo] {N : ℕ} {TB : BaseTypes}
+  {B : BaseSigner Xo Yo N TB}
   {adm : KeyRing B.PK N → Prop} {X₀ : Type}
 
 /-- **A program's proof system of `StmtVerifiesRing` meets the hypotheses of the zero-knowledge
@@ -67,9 +68,15 @@ variable {X₁ W : Type} [Inhabited W] [DecidableEq X₁] {rel₀ : Set (X₁ ×
   (Hc : C.Honest SD Inp relI)
   {TD : SPBCS.ProofSystemTranscript C} {kS : ℕ} (hb : TD.MergeBounds kS) {pB : ℕ}
   (hf : TD.ProofFormat kS hb pB) {N : ℕ}
-  {TB₁ : BaseTypes} {B₁ : BaseSigner (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40))) (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant)) N TB₁}
+  {TB₁ : BaseTypes}
+  {B₁ : BaseSigner (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40))) (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant)) N TB₁}
   {adm₁ : KeyRing B₁.PK N → Prop} [DecidablePred adm₁]
   (V : StmtVerifiesRing rel₀ relI B₁ adm₁) [RingSignature.EmptyRingTest V.stmt]
+
+variable [Fintype TB₁.PK] [DecidableEq TB₁.PK] [Fintype TB₁.Msg] [DecidableEq TB₁.Msg]
+  [Fintype TB₁.BSig] [DecidableEq TB₁.BSig] [Fintype TB₁.Pub] [DecidableEq TB₁.Pub]
+  [Fintype TB₁.KeyCoins] [DecidableEq TB₁.KeyCoins] [Nonempty TB₁.KeyCoins] [Fintype TB₁.Coins]
+  [DecidableEq TB₁.Coins] [Nonempty TB₁.Coins]
 
 /-- **Unforgeability with respect to insider corruption (BKM06 Definition 7) of the ring signature
 of a compiled IOP over its own statements, for every base message, by zero knowledge and

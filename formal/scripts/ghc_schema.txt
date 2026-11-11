@@ -88,6 +88,7 @@ inductive GordieHowe.RealizedProgram.CStep (params 0)
   | specRow Nat
   | fieldRow
   | twoTail Nat Nat
+  | specC Nat
 structure GordieHowe.RealizedProgram.CircuitData (params 0)
   c : Nat
   w : Nat
@@ -184,7 +185,6 @@ inductive GordieHowe.RealizedProgram.Fact (params 0)
   | dvd Nat GordieHowe.RealizedProgram.Expr Nat
   | inRows Nat GordieHowe.RealizedProgram.Expr
   | holds Nat
-  | kernel Nat Nat Nat Nat Nat Bool Int Int
   | real GordieHowe.RealizedProgram.RealCircuit
 structure GordieHowe.RealizedProgram.Gadget (params 0)
   kind : GordieHowe.RealizedProgram.GadgetKind
@@ -194,7 +194,6 @@ structure GordieHowe.RealizedProgram.Gadget (params 0)
   parts : List GordieHowe.RealizedProgram.GadgetPart
 inductive GordieHowe.RealizedProgram.GadgetKind (params 0)
   | selectRow
-  | spectralProduct
   | selectFirst
   | keccak
   | macSite
@@ -208,9 +207,7 @@ inductive GordieHowe.RealizedProgram.GadgetKind (params 0)
   | packedTable
 inductive GordieHowe.RealizedProgram.GadgetPart (params 0)
   | expr GordieHowe.RealizedProgram.Expr
-  | kernel Nat Nat Nat Nat Nat Nat
   | stream Nat (Option Nat)
-  | kernelOf Nat Nat Nat
 inductive GordieHowe.RealizedProgram.Gen (params 0)
   | none
   | source
@@ -224,6 +221,7 @@ inductive GordieHowe.RealizedProgram.Gen (params 0)
   | digitsAcc Nat
   | lowDigit Nat Nat
   | lateHist Nat Nat
+  | specC Nat
 inductive GordieHowe.RealizedProgram.IvlSource (params 0)
   | const
   | opaqueBit
@@ -243,7 +241,6 @@ inductive GordieHowe.RealizedProgram.IvlSrc (params 0)
   | quadRoot Nat Nat
   | rootSet (List Nat)
   | tableHull (List Nat) Int Int
-  | tableKernel Nat Nat (List Nat) Int Int
 inductive GordieHowe.RealizedProgram.LinOpStep (params 0)
   | congr Nat GordieHowe.RealizedProgram.Expr
   | rows GordieHowe.RealizedProgram.NamedOp GordieHowe.RealizedProgram.Expr (List (List (Prod Nat GordieHowe.RealizedProgram.Coef))) (List (List (Prod Nat GordieHowe.RealizedProgram.Coef)))
@@ -342,7 +339,6 @@ inductive GordieHowe.RealizedProgram.Step (params 0)
   | fact Nat
   | inDom Nat GordieHowe.RealizedProgram.Step
   | groupedMod (List Nat) (List Nat)
-  | productMod (List Nat)
   | circuitAssert Nat
   | inputPremise Nat
 structure GordieHowe.RealizedProgram.Structure (params 0)

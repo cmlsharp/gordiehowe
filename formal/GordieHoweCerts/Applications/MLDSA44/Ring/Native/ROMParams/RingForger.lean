@@ -78,7 +78,7 @@ read verifier and relays of length `1 + qPub + PS.q`), for `Q` requests and the 
 `S`, `w`, `P`. -/
 noncomputable abbrev bindingQ' (maxAttempts Q S w P : ℕ) :
     ℕ :=
-  ringQ' (StmtVerifiesRing.verifier (ringMergeBounds C bindingLen_le) (pB := max 3193 137)
+  ringQ' (StmtVerifiesRing.verifier (ringMergeBounds C bindingLen_le) (pB := max 3499 137)
       (bindingV C maxAttempts)) Q S w P
     (1 + ((bindingBase C maxAttempts).qPub + (bindingPS C maxAttempts).q))
 
@@ -114,10 +114,10 @@ theorem bindingScheme.insiderForgeProb_le_muEufProbWithin (maxAttempts : ℕ) {n
         SPBCS.knowledgeError (ringTranscript (2 + ringMsgLen) C).k
           (Configurations.fsExtraBytes + (ringTranscript (2 + ringMsgLen) C).maxGrant)
           (kqOf (ringIop (2 + ringMsgLen) C).merges (ringIop (2 + ringMsgLen) C).rounds
-            (max 3193 137) (max 3193 137))
+            (max 3499 137) (max 3499 137))
           (t + Q * ((bindingBase C maxAttempts).qPub + (bindingPS C maxAttempts).q) +
             kqOf (ringIop (2 + ringMsgLen) C).merges (ringIop (2 + ringMsgLen) C).rounds
-              (max 3193 137) (max 3193 137))
+              (max 3499 137) (max 3499 137))
           ((ringTranscript (2 + ringMsgLen) C).setting 32
             (ringMergeBounds C bindingLen_le)).model.senc.digestsPerInput
           (ringIop (2 + ringMsgLen) C).merges.nJ (maxError (ringIopSound (2 + ringMsgLen) C).error) :=
@@ -159,10 +159,10 @@ theorem bindingScheme.insiderForgeProb_le (maxAttempts : ℕ) {n t : ℕ}
         SPBCS.knowledgeError (ringTranscript (2 + ringMsgLen) proofSystem).k
           (Configurations.fsExtraBytes + (ringTranscript (2 + ringMsgLen) proofSystem).maxGrant)
           (kqOf (ringIop (2 + ringMsgLen) proofSystem).merges (ringIop (2 + ringMsgLen) proofSystem).rounds
-            (max 3193 137) (max 3193 137))
+            (max 3499 137) (max 3499 137))
           (t + Q * ((bindingBase proofSystem maxAttempts).qPub + (bindingPS proofSystem maxAttempts).q) +
             kqOf (ringIop (2 + ringMsgLen) proofSystem).merges (ringIop (2 + ringMsgLen) proofSystem).rounds
-              (max 3193 137) (max 3193 137))
+              (max 3499 137) (max 3499 137))
           ((ringTranscript (2 + ringMsgLen) proofSystem).setting 32
             (ringMergeBounds proofSystem bindingLen_le)).model.senc.digestsPerInput
           (ringIop (2 + ringMsgLen) proofSystem).merges.nJ (maxError (ringIopSound (2 + ringMsgLen) proofSystem).error) :=
@@ -199,10 +199,10 @@ theorem bindingScheme.keyReuseForgeProb_le_muEufProbWithin (maxAttempts : ℕ) {
         SPBCS.knowledgeError (ringTranscript (2 + ringMsgLen) C).k
           (Configurations.fsExtraBytes + (ringTranscript (2 + ringMsgLen) C).maxGrant)
           (kqOf (ringIop (2 + ringMsgLen) C).merges (ringIop (2 + ringMsgLen) C).rounds
-            (max 3193 137) (max 3193 137))
+            (max 3499 137) (max 3499 137))
           (t + Q * ((bindingBase C maxAttempts).qPub + (bindingPS C maxAttempts).q) +
             kqOf (ringIop (2 + ringMsgLen) C).merges (ringIop (2 + ringMsgLen) C).rounds
-              (max 3193 137) (max 3193 137))
+              (max 3499 137) (max 3499 137))
           ((ringTranscript (2 + ringMsgLen) C).setting 32
             (ringMergeBounds C bindingLen_le)).model.senc.digestsPerInput
           (ringIop (2 + ringMsgLen) C).merges.nJ (maxError (ringIopSound (2 + ringMsgLen) C).error) :=
@@ -246,10 +246,10 @@ theorem bindingScheme.keyReuseForgeProb_le (maxAttempts : ℕ) {n t : ℕ}
         SPBCS.knowledgeError (ringTranscript (2 + ringMsgLen) proofSystem).k
           (Configurations.fsExtraBytes + (ringTranscript (2 + ringMsgLen) proofSystem).maxGrant)
           (kqOf (ringIop (2 + ringMsgLen) proofSystem).merges (ringIop (2 + ringMsgLen) proofSystem).rounds
-            (max 3193 137) (max 3193 137))
+            (max 3499 137) (max 3499 137))
           (t + Q * ((bindingBase proofSystem maxAttempts).qPub + (bindingPS proofSystem maxAttempts).q) +
             kqOf (ringIop (2 + ringMsgLen) proofSystem).merges (ringIop (2 + ringMsgLen) proofSystem).rounds
-              (max 3193 137) (max 3193 137))
+              (max 3499 137) (max 3499 137))
           ((ringTranscript (2 + ringMsgLen) proofSystem).setting 32
             (ringMergeBounds proofSystem bindingLen_le)).model.senc.digestsPerInput
           (ringIop (2 + ringMsgLen) proofSystem).merges.nJ (maxError (ringIopSound (2 + ringMsgLen) proofSystem).error) :=
@@ -329,8 +329,8 @@ theorem convertedScheme.insiderForgeProb_le (maxAttempts : ℕ)
             ((ringTranscript (2 + 32) proofSystem).setting 32 (ringMergeBounds proofSystem msgLen_le)).viewEncoder id
             (RealizedProgram.ProofSystem.IOP.simulator (convertedSim proofSystem)) T)
           (ringIop (2 + 32) proofSystem).extractor
-          (kqOf (ringIop (2 + 32) proofSystem).merges (ringIop (2 + 32) proofSystem).rounds (max 3193 137)
-            (max 3193 137)) f₀)
+          (kqOf (ringIop (2 + 32) proofSystem).merges (ringIop (2 + 32) proofSystem).rounds (max 3499 137)
+            (max 3499 137)) f₀)
         (RingSignature.Insider.zkQ' (ert := convertedV_emptyRingTest proofSystem maxAttempts) n
           ((ringTranscript (2 + 32) proofSystem).setting 32 (ringMergeBounds proofSystem msgLen_le)).layout
           (ringProofFormat proofSystem msgLen_le)
@@ -344,20 +344,20 @@ theorem convertedScheme.insiderForgeProb_le (maxAttempts : ℕ)
           (((ringTranscript (2 + 32) proofSystem).setting 32 (ringMergeBounds proofSystem msgLen_le)).model.zkError 0
             t Q) +
         ((ringTranscript (2 + 32) proofSystem).setting 32 (ringMergeBounds proofSystem msgLen_le)).model.simExtractionError
-          (kqOf (ringIop (2 + 32) proofSystem).merges (ringIop (2 + 32) proofSystem).rounds (max 3193 137)
-            (max 3193 137))
+          (kqOf (ringIop (2 + 32) proofSystem).merges (ringIop (2 + 32) proofSystem).rounds (max 3499 137)
+            (max 3499 137))
           (maxError (ringIopSound (2 + 32) proofSystem).error)
           (((ringTranscript (2 + 32) proofSystem).setting 32 (ringMergeBounds proofSystem msgLen_le)).model.niJointSimulatorProg
             ((ringTranscript (2 + 32) proofSystem).setting 32 (ringMergeBounds proofSystem msgLen_le)).layout
             ((ringTranscript (2 + 32) proofSystem).setting 32 (ringMergeBounds proofSystem msgLen_le)).viewEncoder.toViewRead
-            (max 3193 137) id (RealizedProgram.ProofSystem.IOP.simulator (convertedSim proofSystem)) T).q t Q +
+            (max 3499 137) id (RealizedProgram.ProofSystem.IOP.simulator (convertedSim proofSystem)) T).q t Q +
         SPBCS.knowledgeError (ringTranscript (2 + 32) proofSystem).k
           (Configurations.fsExtraBytes + (ringTranscript (2 + 32) proofSystem).maxGrant)
-          (kqOf (ringIop (2 + 32) proofSystem).merges (ringIop (2 + 32) proofSystem).rounds (max 3193 137)
-            (max 3193 137))
+          (kqOf (ringIop (2 + 32) proofSystem).merges (ringIop (2 + 32) proofSystem).rounds (max 3499 137)
+            (max 3499 137))
           (t + Q * (convertedScheme proofSystem maxAttempts).q +
-            kqOf (ringIop (2 + 32) proofSystem).merges (ringIop (2 + 32) proofSystem).rounds (max 3193 137)
-              (max 3193 137))
+            kqOf (ringIop (2 + 32) proofSystem).merges (ringIop (2 + 32) proofSystem).rounds (max 3499 137)
+              (max 3499 137))
           ((ringTranscript (2 + 32) proofSystem).setting 32 (ringMergeBounds proofSystem msgLen_le)).model.senc.digestsPerInput
           (ringIop (2 + 32) proofSystem).merges.nJ (maxError (ringIopSound (2 + 32) proofSystem).error) +
         2 * Q * 0 + Q * (n * mldsaRefuseAvg _root_.MLDSA.mldsa44 fipsPrims maxAttempts) :=

@@ -807,7 +807,10 @@ section ExtractBlock
 open GordieHowe.SPBCS IOP SPTerm
 
 variable {k kN kS L e N n : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq Yb]
-  {TB : BaseTypes} {B : BaseSigner Xb Yb N TB}
+  {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
+  [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  {B : BaseSigner Xb Yb N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -817,12 +820,12 @@ variable {k kN kS L e N n : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq Yb
   {Stmt Wit R Frg : Type} [Fintype Stmt] [DecidableEq Stmt] [Inhabited Stmt]
   [Fintype R] [DecidableEq R] [Inhabited R]
   {rel : Stmt → Wit → Prop} [DecidableRel rel]
-  {enc : MURequest (SignOracle.none B) n ⊕ R → ProofQuery Stmt Wit} {dummyS : Stmt}
+  {enc : MURequest (SignOracle.none B.core) n ⊕ R → ProofQuery Stmt Wit} {dummyS : Stmt}
   [Inhabited M.NIProof] {SC' : Type} [Fintype SC'] [DecidableEq SC']
 
 local notation "Xq" => Bits (queryBits k kN kS L)
 
-local notation "MUR" => MURequest (SignOracle.none B) n
+local notation "MUR" => MURequest (SignOracle.none B.core) n
 
 
 
@@ -830,7 +833,7 @@ local notation "MUR" => MURequest (SignOracle.none B) n
 relay `seTwoKF`, the table `keyReplyNone keys`, the output `claimOfOutX prf` and the simulation
 challenger, with the swap `σR` of the proof queries on the requests. -/
 noncomputable def kfFinalSwap (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins) (Q : ℕ)
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (σW : Equiv.Perm A.W) (σR : Equiv.Perm R)
     (J : A.W → Option ℕ) :
@@ -846,7 +849,7 @@ noncomputable def kfFinalSwap (prf : Frg → Option M.NIProof) (keys : Fin n →
 
 /-- **The final witness swap keeps the claim** when `σW` keeps the claim of `A`'s output. -/
 theorem advOut_kfFinalSwap {prf : Frg → Option M.NIProof} {keys : Fin n → B.KeyCoins} {Q : ℕ}
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
     {Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC'}
     {σW : Equiv.Perm A.W} {σR : Equiv.Perm R} {J : A.W → Option ℕ}
     (hout : ∀ w, claimOfOutX prf (A.out (σW w)) = claimOfOutX prf (A.out w))
@@ -863,7 +866,7 @@ theorem advOut_kfFinalSwap {prf : Frg → Option M.NIProof} {keys : Fin n → B.
 /-- **The final witness swap keeps the simulator's query inputs.** -/
 theorem simQueryInputs_kfFinalSwap {prf : Frg → Option M.NIProof} {keys : Fin n → B.KeyCoins} {Q :
     ℕ}
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
     {Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC'}
     {σW : Equiv.Perm A.W} {σR : Equiv.Perm R}
     {J : A.W → Option ℕ}
@@ -886,7 +889,7 @@ theorem simQueryInputs_kfFinalSwap {prf : Frg → Option M.NIProof} {keys : Fin 
 /-- **The final witness swap keeps the final assignments**, for a simulator that does not see the
 swap of the tagged statements. -/
 theorem finalAss_kfFinalSwap {prf : Frg → Option M.NIProof} {keys : Fin n → B.KeyCoins} {Q : ℕ}
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
     {Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC'}
     {σW : Equiv.Perm A.W} {σR : Equiv.Perm R} {J : A.W → Option ℕ}
     (hPsim : ∀ x c, Psim.prog (((Equiv.refl Stmt).prodCongr (Equiv.sumCongr (Equiv.refl _) σR)) x)
@@ -903,7 +906,7 @@ theorem finalAss_kfFinalSwap {prf : Frg → Option M.NIProof} {keys : Fin n → 
 the final assignments and the simulator's query inputs are kept. -/
 theorem simExtractionExpansion_next_kfFinalSwap {prf : Frg → Option M.NIProof} {keys : Fin n →
     B.KeyCoins} {Q : ℕ}
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
     {Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC'}
     {σW : Equiv.Perm A.W} {σR : Equiv.Perm R}
     {J : A.W → Option ℕ}
@@ -937,6 +940,8 @@ abbrev KFOutcome {shAg : AlgShape Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Respons
       Ag.slots (simExtChallenger Psim Q).q (simExtChallenger Psim Q).Coins) (kq + Q * Psim.q) ×
     DB Xq (Out k e)
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
 /-- **The extraction laws of equal adversaries, cast to one outcome type**: at `Ag₁ = Ag₂`, the
 laws of the extraction runs (`simPMF` of `extAdv`) cast along `KFOutcome Agᵢ = Ω` are equal
 (`PMF.map_cast_congr`). With `Ω` the outcomes of a shape term, the two outcome types are compared
@@ -954,7 +959,7 @@ theorem simPMF_congr_shape
 
 /-- **The label of an outcome of `seAlgKF`**: `ℓ` at `A`'s workspace in the final registers. -/
 noncomputable def kfLabel {prf : Frg → Option M.NIProof} {keys : Fin n → B.KeyCoins} {Q : ℕ}
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
     {Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC'}
     {Lb : Type} (ℓ : A.W → Option Lb) {kq : ℕ}
     (ω : KFOutcome (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf keys Q
@@ -965,7 +970,7 @@ noncomputable def kfLabel {prf : Frg → Option M.NIProof} {keys : Fin n → B.K
 /-- **The final witness swap of an outcome of `seAlgKF`**: `kfFinalSwap` on the final registers,
 the queries, the answers and the database kept. -/
 noncomputable def kfSwapOut {prf : Frg → Option M.NIProof} {keys : Fin n → B.KeyCoins} {Q : ℕ}
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
     {Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC'}
     (σW : Equiv.Perm A.W) (σR : Equiv.Perm R) (J : A.W → Option ℕ)
     {kq : ℕ} (ω : KFOutcome (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt)
@@ -976,6 +981,8 @@ noncomputable def kfSwapOut {prf : Frg → Option M.NIProof} {keys : Fin n → B
   (⟨ω.1.queries, ω.1.answers, kfFinalSwap (rel := rel) (enc := enc) (dummyS := dummyS) prf keys Q
     A Psim σW σR J ω.1.out⟩, ω.2)
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
 /-- **The extraction queries of an adversary with other Kraus maps** are those of the
 adversary: the expansion reads the output, the final assignments and the logs, not the steps. -/
 theorem simExtractionExpansion_withStep_next
@@ -997,15 +1004,15 @@ statements of the proof queries and whether their witnesses are in the relation,
 tagged statement; a simulator that does not see the swap of the tagged statements; and `σW`
 keeping the claim of `A`'s output. -/
 structure KFSwapBlock (prf : Frg → Option M.NIProof)
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     {Lb : Type} [DecidableEq Lb]
     (st' : StepIdx A.slots A.post → KrausMap A.R (DReg A.W A.width Xq (XOut k e) (MUR ⊕ R)
-      (MUResponse B ⊕ M.Response b)) (DReg A.W A.width Xq (XOut k e) (MUR ⊕ R)
-      (MUResponse B ⊕ M.Response b)))
+      (MUResponse B.core ⊕ M.Response b)) (DReg A.W A.width Xq (XOut k e) (MUR ⊕ R)
+      (MUResponse B.core ⊕ M.Response b)))
     (ℓ : A.W → Option Lb) (r : Lb)
-    (G G' : ℕ → Set (A.W × (MUR ⊕ R) × Option (MUResponse B ⊕ M.Response b)))
-    (G₀ G₀' : Set (A.W × (MUR ⊕ R) × Option (MUResponse B ⊕ M.Response b)))
+    (G G' : ℕ → Set (A.W × (MUR ⊕ R) × Option (MUResponse B.core ⊕ M.Response b)))
+    (G₀ G₀' : Set (A.W × (MUR ⊕ R) × Option (MUResponse B.core ⊕ M.Response b)))
     (σW : Equiv.Perm A.W) (σR : Equiv.Perm R) (J : A.W → Option ℕ) : Prop where
   /-- The block hypotheses along the witness swap. -/
   blockRel : A.BlockRel st' ℓ G G' G₀ G₀'
@@ -1049,15 +1056,15 @@ h2-form): under `KFSwapBlock`, every event of the extraction run whose outcomes 
 for `A`. -/
 theorem toOuterMeasure_extLaw_withStep_eq {prf : Frg → Option M.NIProof} {keys : Fin n →
     B.KeyCoins} {Q : ℕ}
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
     {Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC'}
     {Lb : Type} [DecidableEq Lb]
     {st' : StepIdx A.slots A.post → KrausMap A.R (DReg A.W A.width Xq (XOut k e) (MUR ⊕ R)
-      (MUResponse B ⊕ M.Response b)) (DReg A.W A.width Xq (XOut k e) (MUR ⊕ R)
-      (MUResponse B ⊕ M.Response b))}
+      (MUResponse B.core ⊕ M.Response b)) (DReg A.W A.width Xq (XOut k e) (MUR ⊕ R)
+      (MUResponse B.core ⊕ M.Response b))}
     {ℓ : A.W → Option Lb} {r : Lb}
-    {G G' : ℕ → Set (A.W × (MUR ⊕ R) × Option (MUResponse B ⊕ M.Response b))}
-    {G₀ G₀' : Set (A.W × (MUR ⊕ R) × Option (MUResponse B ⊕ M.Response b))}
+    {G G' : ℕ → Set (A.W × (MUR ⊕ R) × Option (MUResponse B.core ⊕ M.Response b))}
+    {G₀ G₀' : Set (A.W × (MUR ⊕ R) × Option (MUResponse B.core ⊕ M.Response b))}
     {σW : Equiv.Perm A.W} {σR : Equiv.Perm R} {J : A.W → Option ℕ}
     (h : KFSwapBlock (rel := rel) (enc := enc) prf A Psim st' ℓ r G G' G₀ G₀' σW σR J) (kq : ℕ)
     (S : Set (KFOutcome (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf
@@ -1112,15 +1119,15 @@ same probability
 for `A.withStep st'` and for `A`. -/
 theorem toOuterMeasure_extLaw_withStep_label {prf : Frg → Option M.NIProof} {keys : Fin n →
     B.KeyCoins} {Q : ℕ}
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
     {Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC'}
     {Lb : Type} [DecidableEq Lb]
     {st' : StepIdx A.slots A.post → KrausMap A.R (DReg A.W A.width Xq (XOut k e) (MUR ⊕ R)
-      (MUResponse B ⊕ M.Response b)) (DReg A.W A.width Xq (XOut k e) (MUR ⊕ R)
-      (MUResponse B ⊕ M.Response b))}
+      (MUResponse B.core ⊕ M.Response b)) (DReg A.W A.width Xq (XOut k e) (MUR ⊕ R)
+      (MUResponse B.core ⊕ M.Response b))}
     {ℓ : A.W → Option Lb} {r : Lb}
-    {G G' : ℕ → Set (A.W × (MUR ⊕ R) × Option (MUResponse B ⊕ M.Response b))}
-    {G₀ G₀' : Set (A.W × (MUR ⊕ R) × Option (MUResponse B ⊕ M.Response b))}
+    {G G' : ℕ → Set (A.W × (MUR ⊕ R) × Option (MUResponse B.core ⊕ M.Response b))}
+    {G₀ G₀' : Set (A.W × (MUR ⊕ R) × Option (MUResponse B.core ⊕ M.Response b))}
     {σW : Equiv.Perm A.W} {σR : Equiv.Perm R} {J : A.W → Option ℕ}
     (h : KFSwapBlock (rel := rel) (enc := enc) prf A Psim st' ℓ r G G' G₀ G₀' σW σR J) (kq : ℕ)
     (S : Set (KFOutcome (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf
@@ -1170,7 +1177,7 @@ theorem toOuterMeasure_extLaw_withStep_label {prf : Frg → Option M.NIProof} {k
 
 /-- **The claim of an outcome of `seAlgKF`**, read from its final registers. -/
 noncomputable def kfClaim {prf : Frg → Option M.NIProof} {keys : Fin n → B.KeyCoins} {Q : ℕ}
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
     {Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC'} {kq : ℕ}
     (ω : KFOutcome (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf keys Q
         A) Psim Q kq) : Claim X₀ M.NIProof :=
@@ -1179,7 +1186,7 @@ noncomputable def kfClaim {prf : Frg → Option M.NIProof} {keys : Fin n → B.K
 
 /-- **The main logs of an outcome of `seAlgKF`**: `A`'s logged requests in its final registers. -/
 noncomputable def kfMainLogs {prf : Frg → Option M.NIProof} {keys : Fin n → B.KeyCoins} {Q : ℕ}
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
     {Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC'} {kq : ℕ}
     (ω : KFOutcome (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf keys Q
         A) Psim Q kq) : LogReg (MUR ⊕ R) A.slots :=
@@ -1189,7 +1196,7 @@ noncomputable def kfMainLogs {prf : Frg → Option M.NIProof} {keys : Fin n → 
 /-- **An event reading only the claim, the database and the corruptions among the first `Q` main
 requests** of an outcome of `seAlgKF`. -/
 def ReadsClaimDB {prf : Frg → Option M.NIProof} {keys : Fin n → B.KeyCoins} {Q : ℕ}
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
     {Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC'} {kq : ℕ}
     (Fr : KFOutcome (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf keys Q
         A) Psim Q kq → Prop) : Prop :=
@@ -1200,7 +1207,7 @@ def ReadsClaimDB {prf : Frg → Option M.NIProof} {keys : Fin n → B.KeyCoins} 
 
 /-- **The final witness swap keeps the label** when `σW` does. -/
 theorem kfLabel_kfSwapOut {prf : Frg → Option M.NIProof} {keys : Fin n → B.KeyCoins} {Q : ℕ}
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
     {Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC'} {kq : ℕ} {Lb :
         Type} {ℓ : A.W → Option Lb}
     {σW : Equiv.Perm A.W} {σR : Equiv.Perm R} {J : A.W → Option ℕ} (hℓ : ∀ w, ℓ (σW w) = ℓ w)
@@ -1210,7 +1217,7 @@ theorem kfLabel_kfSwapOut {prf : Frg → Option M.NIProof} {keys : Fin n → B.K
 
 /-- **The final witness swap keeps the claim** when `σW` keeps the claim of `A`'s output. -/
 theorem kfClaim_kfSwapOut {prf : Frg → Option M.NIProof} {keys : Fin n → B.KeyCoins} {Q : ℕ}
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
     {Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC'} {kq : ℕ} {σW :
         Equiv.Perm A.W} {σR : Equiv.Perm R}
     {J : A.W → Option ℕ}
@@ -1222,7 +1229,7 @@ theorem kfClaim_kfSwapOut {prf : Frg → Option M.NIProof} {keys : Fin n → B.K
 /-- **The final witness swap keeps the multi-user requests among the first `Q` main requests**:
 the swap of the proof queries fixes every multi-user request. -/
 theorem mem_kfMainLogs_kfSwapOut {prf : Frg → Option M.NIProof} {keys : Fin n → B.KeyCoins} {Q : ℕ}
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
     {Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC'} {kq : ℕ} {σW :
         Equiv.Perm A.W} {σR : Equiv.Perm R}
     {J : A.W → Option ℕ} (ω : KFOutcome (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt
@@ -1244,15 +1251,15 @@ among the first `Q` main requests (`ReadsClaimDB`) has the same probability for 
 and for `A`. -/
 theorem toOuterMeasure_extLaw_withStep_label_and {prf : Frg → Option M.NIProof} {keys : Fin n →
     B.KeyCoins} {Q : ℕ}
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
     {Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC'}
     {Lb : Type} [DecidableEq Lb]
     {st' : StepIdx A.slots A.post → KrausMap A.R (DReg A.W A.width Xq (XOut k e) (MUR ⊕ R)
-      (MUResponse B ⊕ M.Response b)) (DReg A.W A.width Xq (XOut k e) (MUR ⊕ R)
-      (MUResponse B ⊕ M.Response b))}
+      (MUResponse B.core ⊕ M.Response b)) (DReg A.W A.width Xq (XOut k e) (MUR ⊕ R)
+      (MUResponse B.core ⊕ M.Response b))}
     {ℓ : A.W → Option Lb} {r : Lb}
-    {G G' : ℕ → Set (A.W × (MUR ⊕ R) × Option (MUResponse B ⊕ M.Response b))}
-    {G₀ G₀' : Set (A.W × (MUR ⊕ R) × Option (MUResponse B ⊕ M.Response b))}
+    {G G' : ℕ → Set (A.W × (MUR ⊕ R) × Option (MUResponse B.core ⊕ M.Response b))}
+    {G₀ G₀' : Set (A.W × (MUR ⊕ R) × Option (MUResponse B.core ⊕ M.Response b))}
     {σW : Equiv.Perm A.W} {σR : Equiv.Perm R} {J : A.W → Option ℕ}
     (h : KFSwapBlock (rel := rel) (enc := enc) prf A Psim st' ℓ r G G' G₀ G₀' σW σR J) (kq : ℕ)
     (Fr : KFOutcome (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf
@@ -1281,15 +1288,15 @@ identity swap, on the block `none` of the label read through `some`). -/
 theorem toOuterMeasure_extLaw_withStep_label_of_blockNone {prf : Frg → Option M.NIProof} {keys :
     Fin n →
     B.KeyCoins} {Q : ℕ}
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} {A : AdaptiveIAlg shA (Frg × X₀)}
     {Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC'}
     {Lb : Type} [DecidableEq Lb]
     {st' : StepIdx A.slots A.post → KrausMap A.R (DReg A.W A.width Xq (XOut k e) (MUR ⊕ R)
-      (MUResponse B ⊕ M.Response b)) (DReg A.W A.width Xq (XOut k e) (MUR ⊕ R)
-      (MUResponse B ⊕ M.Response b))}
+      (MUResponse B.core ⊕ M.Response b)) (DReg A.W A.width Xq (XOut k e) (MUR ⊕ R)
+      (MUResponse B.core ⊕ M.Response b))}
     {ℓ : A.W → Option Lb}
-    {G G' : ℕ → Set (A.W × (MUR ⊕ R) × Option (MUResponse B ⊕ M.Response b))}
-    {G₀ G₀' : Set (A.W × (MUR ⊕ R) × Option (MUResponse B ⊕ M.Response b))}
+    {G G' : ℕ → Set (A.W × (MUR ⊕ R) × Option (MUResponse B.core ⊕ M.Response b))}
+    {G₀ G₀' : Set (A.W × (MUR ⊕ R) × Option (MUResponse B.core ⊕ M.Response b))}
     (hN : A.BlockNone st' ℓ G G' G₀ G₀')
     (closed : ∀ idx w q a a', (w, q, a) ∈ AdaptiveIAlg.idxSet G G₀ idx →
       (w, q, a') ∈ AdaptiveIAlg.idxSet G G₀ idx)

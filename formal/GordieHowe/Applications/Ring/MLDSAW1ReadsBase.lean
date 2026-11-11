@@ -34,7 +34,8 @@ variable {X Y : Type} {N : ℕ}
 
 /-- **The ordinary signer reads the oracle only through `f`**: its runs agree at two oracles with
 the same value of `f`. -/
-def BaseSigner.ReadsStdOnly {TB : BaseTypes} (B : BaseSigner X Y N TB) {Ω₂ : Type} (f : (X → Y) → Ω₂) : Prop :=
+def BaseSigner.ReadsStdOnly {TB : BaseTypes}
+    (B : BaseSigner X Y N TB) {Ω₂ : Type} (f : (X → Y) → Ω₂) : Prop :=
   ∀ H H', f H = f H' → ∀ sk bm c, (B.ssign sk bm c).run H = (B.ssign sk bm c).run H'
 
 end GordieHowe.RingSignature
@@ -74,13 +75,14 @@ theorem W1Oracles.gOrc_eq_of_base : O.gOrc H = O.gOrc H' :=
 
 /-- The commitment hashes agree. -/
 theorem W1Oracles.hOrc_eq_of_base : O.hOrc H = O.hOrc H' := by
-  simp only [W1Oracles.hOrc, W1Oracles.muOrc_eq_of_base hO h, W1Oracles.chOrc_eq_of_base hO h]
+  simp only [MLDSAOracles.hOrc, W1Oracles.muOrc_eq_of_base hO h, W1Oracles.chOrc_eq_of_base hO h]
 
 end Decode
 
 /-- The masks of two oracles with the same base component agree, for a mask decoding reading only
 the first component. -/
-theorem MaskOracle.ans_eq_of_base {M : MaskOracle X Y p T Msg} (hM : M.ReadsFst sp) {H H' : X → Y}
+theorem _root_.GordieHowe.MLDSA.MaskOracle.ans_eq_of_base {M : MaskOracle X Y p T Msg}
+    (hM : M.ReadsFst sp) {H H' : X → Y}
     (h : base sp H = base sp H') (x : X) : M.ans (H x) = M.ans (H' x) :=
   hM _ _ (congrFun h x)
 
@@ -129,12 +131,14 @@ theorem readsStdOnly_w1Base (hO : O.ReadsFst sp) (hM : M.ReadsFst sp) :
     (w1Base p prims enc O M βmin tol k D bmsg).ReadsStdOnly (base sp) := by
   intro H H' h
   have key : ∀ (sk : SecretKey p) (bm : Msg) (r : Fin k → (MaskSource.hedged M).Rnd),
-      (stdProg prims (MaskSource.hedged M) O k sk bm r).run H =
-        (stdProg prims (MaskSource.hedged M) O k sk bm r).run H' := by
+      (stdProg prims (MaskSource.hedged M) O.toMLDSAOracles k sk bm r).run H =
+        (stdProg prims (MaskSource.hedged M) O.toMLDSAOracles k sk bm r).run H' := by
     intro sk bm r
     by_cases hk : 0 < k
-    · have h1 : ∀ G : X → Y, (stdProg prims (MaskSource.hedged M) O k sk bm r).run G =
-          (stdProg prims (MaskSource.hedged M) O 1 sk bm fun _ => r ⟨0, hk⟩).run G := fun G => by
+    · have h1 : ∀ G : X → Y,
+          (stdProg prims (MaskSource.hedged M) O.toMLDSAOracles k sk bm r).run G =
+          (stdProg prims (MaskSource.hedged M) O.toMLDSAOracles 1 sk bm
+            fun _ => r ⟨0, hk⟩).run G := fun G => by
         unfold stdProg
         simp only [hk, Nat.zero_lt_one, ↓reduceDIte]
       rw [h1, h1, run_stdProg_one, run_stdProg_one, W1Oracles.hOrc_eq_of_base hO h]
@@ -146,7 +150,7 @@ theorem readsStdOnly_w1Base (hO : O.ReadsFst sp) (hM : M.ReadsFst sp) :
     · unfold stdProg
       simp only [hk, ↓reduceDIte, OracleProg.run_pure]
   intro sk bm c
-  simpa only [w1BaseSigner, ringLoop] using key sk bm c.1
+  simpa only [w1BaseSigner, mldsaT0BaseScheme, W1Loop.stdSigner, ringLoop] using key sk bm c.1
 
 end Signer
 

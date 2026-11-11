@@ -51,7 +51,7 @@ variable {k kN kS L e : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁]
   (M : SPBCS Mg P (W1ExpStmt prims RMsg N) k kN kS L e) (Λ : SiteLayout Mg)
   {b : ℕ} [∀ j i, Fintype ((M.comp j).MessageWrite i)] (E : (j : ι) → (M.comp j).Encoder)
   {Vr : W1ExpStmt prims RMsg N → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : RingSignature.RingWit (w1BaseSigner prims O βmin tol enc Lp bmsg) → R →
     CausalProver P τ (W1ExpStmt prims RMsg N))
 
@@ -71,7 +71,8 @@ theorem w1ForgeStmtProg_queries
   rw [w1ForgeStmtProg, OracleProg.length_trace_mapQuery]
   exact w1StmtProg_queries sp prims O bmsg _ _
 
-omit [NeZero (bucketCount p)] in
+omit [NeZero (bucketCount p)]
+  [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **At the oracle with base component `ω` the program statement of a forgery is the compiled
 program statement at `ω`.** -/
 theorem run_w1ForgeStmtProg_join
@@ -95,7 +96,8 @@ def w1Claim (x₀ : W1ExpStmt prims RMsg N) (π : M.Response b) :
     Option (Claim (W1ExpStmt prims RMsg N) M.NIProof) :=
   π.map fun q => ⟨x₀, q.1⟩
 
-omit [NeZero (bucketCount p)] in
+omit [NeZero (bucketCount p)]
+  [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The claims of `w1PS` factor through the program statement.** -/
 theorem claim_w1PS (ω : Bits (queryBits k kN kS L) → Y₁)
     (x : RingSignature.RingStmt (w1BaseSigner prims O βmin tol enc Lp bmsg)) (π : M.Response b) :

@@ -43,6 +43,11 @@ variable {Sch : SigScheme} {n N : ℕ} {RMsg : Type} [Fintype RMsg] [DecidableEq
 
 /-! ### Coin readers and the signatures of requests -/
 
+variable [Fintype Sch.PK] [DecidableEq Sch.PK] [Fintype Sch.Msg] [DecidableEq Sch.Msg]
+  [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub] [DecidableEq Sch.Pub] [Nonempty Sch.Pub]
+  [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins] [Nonempty Sch.KeyCoins] [Fintype Sch.SignCoins]
+  [DecidableEq Sch.SignCoins] [Nonempty Sch.SignCoins]
+
 variable (Sch n) in
 /-- **The reader of per-request signing coins**: every signing call of the request uses them. -/
 def rdCoins : Sch.SignCoins → Fin n → Sch.Msg → Sch.SignCoins := fun c _ _ => c
@@ -84,6 +89,7 @@ def drawOkSig (bind : List Sch.PK → RMsg → Sch.Msg) {C : Type}
 
 /-! ### The relays -/
 
+omit [Nonempty Sch.KeyCoins] [Nonempty Sch.SignCoins] in
 /-- **The relay of statements with request-dependent public values** (to the simulator of the
 simulation-extraction game): request number `c` with request `r` is sent as its statement `stmtAt`
 at the public values `pubsOf r` with the request, and answered by `sideAnswer` at the same public
@@ -96,7 +102,10 @@ noncomputable def seRelayPub {Resp : Type} (pkOf : Fin n → Sch.PK) (kcOf : Fin
   route c r := (stmtAt pkOf adm (pubsOf r) c r, r)
   answer c r := sideAnswer pkOf kcOf adm (pubsOf r) c r
 
-omit [Fintype RMsg] [DecidableEq RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Nonempty Sch.KeyCoins] [Nonempty Sch.SignCoins]
+  [Fintype Sch.PK] [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Fintype Sch.Sig] [DecidableEq Sch.Sig]
+  [Fintype Sch.Pub] [DecidableEq Sch.Pub] [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins]
+  [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins] in
 theorem seRelayPub_route_injective {Resp : Type} (pkOf : Fin n → Sch.PK)
     (kcOf : Fin n → Sch.KeyCoins) (adm : List Sch.PK → Prop) {Q : ℕ}
     (pubsOf : BKMRequest Sch n N RMsg → Fin Q → Sch.Pub) (c : ℕ) :
@@ -120,13 +129,19 @@ noncomputable def zkRelaySig {Resp : Type} (adm : List Sch.PK → Prop)
   answer c r := sideAnswer (fun i => Sch.pk (s.1 i)) s.1 adm
     (sigPubs s.1 bind (rdCoins Sch n) s.2 r) c r
 
-omit [Fintype RMsg] [DecidableEq RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype Sch.PK] [Fintype Sch.Msg] [DecidableEq Sch.Msg]
+  [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub] [DecidableEq Sch.Pub]
+  [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins] [Fintype Sch.SignCoins]
+  [DecidableEq Sch.SignCoins] in
 theorem zkRelaySig_route_injective {Resp : Type} (adm : List Sch.PK → Prop)
     (bind : List Sch.PK → RMsg → Sch.Msg) {Q : ℕ} (s : SideCoins Sch n Q) (c : ℕ) :
     Function.Injective ((zkRelaySig (Resp := Resp) (N := N) adm bind s).route c) :=
   fun _ _ h => congrArg (fun q => q.stmt.2) h
 
-omit [Fintype RMsg] [DecidableEq RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype Sch.PK] [Fintype Sch.Msg] [DecidableEq Sch.Msg]
+  [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub] [DecidableEq Sch.Pub]
+  [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins] [Fintype Sch.SignCoins]
+  [DecidableEq Sch.SignCoins] in
 /-- **The relayed proof query is in the ring relation exactly for a member's ring-signing
 request** numbered below `Q` whose drawn signature verifies: the statement's public value is that
 of the witness's signature. -/
@@ -220,7 +235,10 @@ def splitEquivOf (Q : ℕ) (C D : Type) :
   left_inv _ := rfl
   right_inv _ := rfl
 
-omit [Fintype RMsg] [DecidableEq RMsg] [Nonempty RMsg] [Fintype SC] [DecidableEq SC] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Nonempty RMsg] [Fintype SC] [DecidableEq SC]
+  [DecidableEq Sch.PK] [Nonempty Sch.Pub] [DecidableEq Sch.KeyCoins] [Nonempty Sch.SignCoins]
+  [Fintype Sch.PK] [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Fintype Sch.Sig] [DecidableEq Sch.Sig]
+  [Fintype Sch.Pub] [DecidableEq Sch.Pub] [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins] in
 /-- **Uniform keys and per-request draws are uniform keys and independent uniform draws.** -/
 theorem uniformOfFintype_keysDraws_apply {C : Type} [Fintype C] [Nonempty C] (Q : ℕ)
     (s : (Fin n → Sch.KeyCoins) × (Fin Q → C)) :
@@ -256,8 +274,9 @@ theorem coinLaw_simSplitSig_splitEquivOf_symm
 
 /-! ### The relays of the challengers -/
 
-variable {Coins : Type} [Fintype Coins]
+variable {Coins : Type} [Fintype Coins] [DecidableEq Coins]
   (Pv : NARG.Prover (Bits m) (XOut k e) (RingStmt Sch RMsg N) (RingWit Sch) Resp Coins)
+    (μ : PMF Coins)
   (bind : List Sch.PK → RMsg → Sch.Msg) (adm : List Sch.PK → Prop)
 
 omit [Fintype RMsg] [DecidableEq RMsg] [Fintype SC] [DecidableEq SC] in
@@ -267,10 +286,10 @@ relayed proof queries with the public values of the witnesses' signatures (`zkRe
 side coins of its draws. -/
 theorem relays_bkm_real_sig (Q : ℕ) (s : SideCoins Sch n Q) (c : Fin Q → Coins) :
     (zkRelaySig (N := N) (Resp := Resp) adm bind s).RelaysChallenger
-      ((checkedBkmLayer Pv bind adm).challenger Q)
-      ((drawEquiv (checkedBkmLayer Pv bind adm) Q).symm (s, c))
+      ((checkedBkmLayer Pv μ bind adm).challenger Q)
+      ((drawEquiv (checkedBkmLayer Pv μ bind adm) Q).symm (s, c))
       (realChallenger (fun x w => (x.1, RelayWit.toWit w) ∈ ringRel adm bind)
-        (Pv.comap Prod.fst RelayWit.toWit) Q) c := by
+        (Pv.comap Prod.fst RelayWit.toWit) μ Q) c := by
   refine ⟨rfl, ?_, ?_⟩
   · intro hist hist' r G hrel hQ
     have hlen : hist.length = hist'.length := by
@@ -321,7 +340,10 @@ theorem relays_bkm_real_sig (Q : ℕ) (s : SideCoins Sch n Q) (c : Fin Q → Coi
     change Q ≤ i at h
     simp only [zkRelaySig, sideAnswer, show ¬ i < Q from not_lt.2 h, dite_false]
 
-omit [Fintype RMsg] [DecidableEq RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [DecidableEq Sch.PK] [Nonempty Sch.Pub]
+  [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins] [Fintype Sch.SignCoins]
+  [DecidableEq Sch.SignCoins] [Fintype Sch.PK] [Fintype Sch.Msg] [DecidableEq Sch.Msg]
+  [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub] [DecidableEq Sch.Pub] in
 /-- At the reader `rdCoins`, `drawOkSig` is `drawOk`. -/
 theorem drawOkSig_rdCoins (keys : Fin n → Sch.KeyCoins) (c : Sch.SignCoins)
     (r : BKMRequest Sch n N RMsg) :
@@ -380,7 +402,8 @@ theorem relays_sim_zk_sig (S : NARG.Simulator (Bits m) (XOut k e) (RingStmt Sch 
     change Q ≤ i at h
     simp only [zkRelaySig, sideAnswer, show ¬ i < Q from not_lt.2 h, dite_false]
 
-omit [Fintype RMsg] [DecidableEq RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype Sch.PK] [Fintype Sch.Msg] [DecidableEq Sch.Msg]
+  [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub] [DecidableEq Sch.Pub] in
 /-- **The simulated challenger with real public values relays the simulation-extraction
 challenger** of the simulator inert on the empty ring (`inertOnEmpty`) on the relayed statements
 with the public values of the signers' signatures at the drawn coins (`seRelayPub`), at every
@@ -430,7 +453,8 @@ theorem relays_sim_se_sig (S : NARG.Simulator (Bits m) (XOut k e) (RingStmt Sch 
 
 /-! ### The hybrid of the correctness error -/
 
-omit [Fintype RMsg] [DecidableEq RMsg] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype Sch.PK] [Fintype Sch.Msg] [DecidableEq Sch.Msg]
+  [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub] [DecidableEq Sch.Pub] in
 /-- **The simulated challenger is the checked one with other replies**, as split challengers. -/
 theorem simSplitSig_withReply (S : NARG.Simulator (Bits m) (XOut k e) (RingStmt Sch RMsg N) Resp SC)
     (Q : ℕ) :

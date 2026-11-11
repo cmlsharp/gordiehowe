@@ -54,6 +54,7 @@
 #include <utility>
 #include <vector>
 
+#include "gordiehowe/compiler/embedding.h"
 #include "gordiehowe/compiler/field_registry.h"
 #include "gordiehowe/compiler/ghc_program.h"
 #include "gordiehowe/compiler/ligero_choice.h"
@@ -470,9 +471,15 @@ inline SystemPlan system_plan(const ProofModuleData &d) {
       return fail("the MAC's field has no MAC field facts");
     if (sp.target_bits.empty()) return fail("a MAC with no opaque function");
   }
+  // Every odd field's entry names its linear reading
+  // (FieldRegistry.OddFieldsReadLinear); a field-form mod_q (odd
+  // characteristic, mod.h) in a field without one is the registry's bug.
   for (size_t f : d.field_form_fields)
     if (f >= nf || !*sp.fields[f]->read_linear)
-      return fail("a field-form mod_q in a field without a linear reading");
+      return fail("internal compiler error (please report): the field-form mod_q's field " +
+                  std::string(f < nf ? sp.fields[f]->name : "(none)") +
+                  " has no linear reading in compiler/field_registry.h (read_linear); the "
+                  "program itself is not rejected by this");
   for (size_t dom : d.circuit_domains)
     if (dom >= d.domain_data.size()) return fail("a circuit outside the domains");
   std::sort(sp.modules.begin(), sp.modules.end());
@@ -649,7 +656,7 @@ inline const FigureInputs *figure_inputs(const std::string &config) {
        {{"H", 1024, 1250, 1250}, {"A", 1024, 2950, 200, true}}},
       {"falcon-ring-carrier-narrow", 4160, 43660620, 140, {{"A", 1024, 600, 600}}},
       {"falcon-ring-carrier-wide", 3700, 16484193, 260, {{"A", 1024, 600, 600}}},
-      {"falcon-ring-native-narrow", 3600, 3515138756, 140, {{"A", 1024, 1250, 1250}}},
+      {"falcon-ring-native-narrow", 3600, 3737982985, 140, {{"A", 1024, 1250, 1250}}},
       {"falcon-ring-native-wide", 4260, 12734825, 260,
        {{"A", 1024, 1250, 200, true, true}}},
       {"mldsa-emulated-narrow", 2780, 63455233, 140,
@@ -660,11 +667,11 @@ inline const FigureInputs *figure_inputs(const std::string &config) {
        {{"A", 1024, 2200, 2200}, {"H", 1024, 1250, 1250}}},
       {"mldsa-native-wide", 990, 13358901, 260,
        {{"A", 1024, 2400, 2400}, {"H", 1024, 1250, 1250}}},
-      {"mldsa-ring-carrier-narrow", 2780, 65527809, 140,
+      {"mldsa-ring-carrier-narrow", 2780, 63455233, 140,
        {{"A", 1024, 2400, 2400}, {"H", 1024, 1250, 1250}}},
       {"mldsa-ring-carrier-wide", 940, 16329473, 260,
        {{"A", 1024, 2400, 2400}, {"H", 1024, 1250, 1250}}},
-      {"mldsa-ring-native-narrow", 2800, 81059020, 140,
+      {"mldsa-ring-native-narrow", 2800, 91940078, 140,
        {{"A", 1024, 2200, 2200}, {"H", 1024, 1250, 1250}}},
       {"mldsa-ring-native-wide", 990, 13358901, 260,
        {{"A", 1024, 2400, 2400}, {"H", 1024, 1250, 1250}}},
@@ -1396,8 +1403,7 @@ inline std::vector<ProofModule> program_data_modules(const ProofModuleData &d,
     }
     body += theorem(
         "**The proof system of the program** (`GordieHowe.RuntimeInputs.proofSystemOf`), with "
-        "full GKR certificates confined to proofs and the selections' soundness from the "
-        "check (`GordieHowe.RealizedProgram.selSound_of_selectionsB`).",
+        "full GKR certificates confined to proofs.",
         "def proofSystem : ProofSystems :=\n  " + runtime_system);
     const std::string title = "# The certified program `" + cfg + "`";
     out.push_back(
@@ -1784,10 +1790,13 @@ inline void append_named_shape_metadata(const ir::Program &p, const ResolvedShap
       "Program.program.challenges.length = " + num(p.challenges.size()), "challengeCount");
 }
 
-// The program embeddings declared for META's profile. Each becomes one definition
-// of the Shapes module and one claim; the claim's check reads both programs.
+// The program embeddings PROGRAM declares, each computed from PROGRAM and its
+// source program at META's profile (SOURCES, by configuration;
+// compute_embedding). Each becomes one definition of the Shapes module and
+// one claim; the claim's check reads both programs.
 inline void append_embedding_facts(const ExportMeta &meta,
-                                   const std::vector<ProgramEmbeddingDecl> &decls,
+                                   const std::vector<ProgramEmbeddingSpec> &specs,
+                                   const ir::Program &program, const EmbeddingSources &sources,
                                    std::vector<ProofModuleData::ShapeFact> &out) {
   auto nums = [](const std::vector<size_t> &xs) {
     std::string s = "[";
@@ -1800,21 +1809,25 @@ inline void append_embedding_facts(const ExportMeta &meta,
       s += (i ? ", (" : "(") + std::to_string(xs[i].first) + ", " + std::to_string(xs[i].second) + ")";
     return s + "]";
   };
-  for (const auto &d : decls) {
-    if (!d.profile.empty() && d.profile != meta.profile) continue;
+  for (const auto &spec : specs) {
+    auto it = sources.find(spec.source_config);
+    if (it == sources.end() || it->second == nullptr)
+      plan_export_internal::export_fail("the embedding '" + spec.name + "' reads the program of '" +
+                                        spec.source_config + "', which the export was not given");
+    const EmbeddingData d = compute_embedding(spec, *it->second, program);
     ExportMeta source = meta;
-    source.config = d.source_config;
+    source.config = spec.source_config;
     source.lean_name.clear();
-    const std::string def = shape_fact_name("embedding", d.name, "data");
+    const std::string def = shape_fact_name("embedding", spec.name, "data");
     ProofModuleData::ShapeFact f;
-    f.name = shape_fact_name("embedding", d.name, "holds");
-    f.doc = "**This program holds the part `" + d.name + "` of `" + d.source_config +
+    f.name = shape_fact_name("embedding", spec.name, "holds");
+    f.doc = "**This program holds the part `" + spec.name + "` of `" + spec.source_config +
             "`**, at every renaming that agrees with the data.";
     f.claim = ".embedding " + def;
     f.statement = "∀ σ, Shapes." + def + ".Agrees σ → Shapes." + def + ".Holds Program.program σ";
     f.sound = "embedding";
     f.import_module = lean_module_name(source, "Program");
-    f.definition = "/-- The part `" + d.name + "` of `" + d.source_config +
+    f.definition = "/-- The part `" + spec.name + "` of `" + spec.source_config +
         "` this program holds. -/\ndef " + def + " : EmbedData where\n  source := " +
         lean_namespace(source, "Program") + ".program\n  vals := " + nums(d.vals) +
         "\n  refs := " + nums(d.refs) + "\n  chals := " + nums(d.chals) + "\n  V := " +
@@ -2251,11 +2264,14 @@ void packing_queries_of(const BasicCompiledSystem<S> &cs, ProofModuleData &d) {
 }
 
 // The proof modules' data for the compiled system CS and its realized
-// program P (build_program(cs, meta)).
+// program P (build_program(cs, meta)); SOURCES, the programs at META's
+// profile of the configurations whose parts CS declares it holds
+// (append_embedding_facts).
 template <class S>
 ProofModuleData proof_module_data(const BasicCompiledSystem<S> &cs,
                                   const ExportMeta &meta,
-                                  const ProgramData &p) {
+                                  const ProgramData &p,
+                                  const EmbeddingSources &sources = {}) {
   ProofModuleData d;
   d.meta = meta;
   const ir::Certificates certs = export_certificates(cs);
@@ -2342,7 +2358,7 @@ ProofModuleData proof_module_data(const BasicCompiledSystem<S> &cs,
       !named.equal_headers.empty() || !named.private_field_sources.empty() ||
       !named.families.empty()) {
     d.shape_facts = named_shape_facts_of(cs.program(), named);
-    append_embedding_facts(meta, named.names.embeddings, d.shape_facts);
+    append_embedding_facts(meta, named.names.embeddings, cs.program(), sources, d.shape_facts);
   }
   for (const auto &v : p.values)
     if (v.kind == "opaque" && !v.args.empty()) d.opaque_args = true;

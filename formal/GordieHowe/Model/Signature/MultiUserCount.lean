@@ -135,7 +135,10 @@ end Bridge
 
 namespace Signature
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB} {O : SignOracle B} {n : ℕ}
+section Core
+
+variable {X Y : Type} {TB : SchemeTypes}
+  {B : BaseScheme X Y TB} {O : SignOracle B} {n : ℕ}
 
 /-! ### Signing and corruption requests -/
 
@@ -157,6 +160,12 @@ theorem signCorruptCount_eq (hist : MUHist O n) :
 
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
   [Nonempty Y] {V : OracleView X Y} {t : ℕ}
+
+variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins]
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
 
 /-- **The success probability of the adversary in MU-EUF-CMA^corr with at most `Qs` signing and
 corruption requests**, against the challenger answering `Q'` requests: it terminates with a forgery
@@ -208,11 +217,20 @@ theorem muSufProbWithin_le_one (A : MUAdversary O n V t) (Q' Qs : ℕ) :
     muSufProbWithin A Q' Qs ≤ 1 :=
   (muSufProbWithin_le_muSufProb A Q' Qs).trans (muSufProb_le_one A Q')
 
+end Core
+
 section Forger
 
-variable {m : ℕ} {I J Bd : Type} [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J]
-  {TB : BaseTypes} {B : BaseSigner (Bits m) (BitStr I J) N TB} (O : SignOracle B) [NeZero n]
+variable {N n : ℕ} {m : ℕ} {I J Bd : Type} [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J]
+  {TB : BaseTypes}
+  {B : BaseSigner (Bits m) (BitStr I J) N TB} (O : SignOracle B.core) [NeZero n]
   (e : BitStr I J ≃ Bd)
+
+variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins]
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
 
 /-- **The success probability with few signing and corruption requests of the forger holding a
 compressed-oracle simulation** (`muEufProb_coSimMU` with the count): averaged over the users' key
@@ -221,7 +239,7 @@ the outcomes whose readout is a forgery for the logged requests, at most `Qs` of
 corruption requests. -/
 theorem muEufProbWithin_coSimMU (hO : O.NoQuery) (Aux : (Fin n → B.PK) → Type)
     (aux : ∀ pks, PMF (Aux pks)) (t : ∀ pks, Aux pks → ℕ) (Ot : ∀ pks, Aux pks → Type)
-    (G : ∀ pks a, ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B) (t pks a)
+    (G : ∀ pks a, ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B.core) (t pks a)
       (Ot pks a))
     (g : ∀ pks a, Ot pks a × DB (Bits m) Bd → B.PK × B.BMsg × B.BSig) (Q' Qs : ℕ)
     (hQ : ∀ pks a, t pks a + 1 ≤ Q') :
@@ -276,7 +294,7 @@ input and the challenger's coins, the Born weight of `|Sim*⟩` on the outcomes 
 logged requests satisfy `P`. -/
 theorem toOuterMeasure_muLaw_coSimMU (hO : O.NoQuery) (Aux : (Fin n → B.PK) → Type)
     (aux : ∀ pks, PMF (Aux pks)) (t : ∀ pks, Aux pks → ℕ) (Ot : ∀ pks, Aux pks → Type)
-    (G : ∀ pks a, ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B) (t pks a)
+    (G : ∀ pks a, ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B.core) (t pks a)
       (Ot pks a))
     (g : ∀ pks a, Ot pks a × DB (Bits m) Bd → B.PK × B.BMsg × B.BSig) (Q' : ℕ)
     (hQ : ∀ pks a, t pks a + 1 ≤ Q')
@@ -329,7 +347,7 @@ corruptions** with the coin average of the Born weights of the outcomes with mor
 signing and corruption requests (`toOuterMeasure_muLaw_coSimMU` at that event). -/
 theorem toOuterMeasure_muLaw_coSimMU_count (hO : O.NoQuery) (Aux : (Fin n → B.PK) → Type)
     (aux : ∀ pks, PMF (Aux pks)) (t : ∀ pks, Aux pks → ℕ) (Ot : ∀ pks, Aux pks → Type)
-    (G : ∀ pks a, ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B) (t pks a)
+    (G : ∀ pks a, ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B.core) (t pks a)
       (Ot pks a))
     (g : ∀ pks a, Ot pks a × DB (Bits m) Bd → B.PK × B.BMsg × B.BSig) (Q' Qs : ℕ)
     (hQ : ∀ pks a, t pks a + 1 ≤ Q') :

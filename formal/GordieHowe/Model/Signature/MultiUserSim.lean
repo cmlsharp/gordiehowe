@@ -37,14 +37,25 @@ namespace GordieHowe.Signature
 open GordieHowe.Quantum GordieHowe.RingSignature GordieHowe.QROM
 open scoped ENNReal
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB}
+variable {X Y : Type}
+
+section NoQuery
+
+variable {TB : SchemeTypes} {B : BaseScheme X Y TB}
 
 /-- **A signing oracle without queries**: its signer makes no oracle query. -/
 def SignOracle.NoQuery (O : SignOracle B) : Prop :=
   ∀ kp sm c, (O.sign kp sm c).QueriesLE 0
 
+end NoQuery
+
+section Ring
+
+variable {N : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB}
+
 /-- The ring-aware signing oracle of an oracle-free base signer makes no query. -/
-theorem SignOracle.noQuery_ring (hB : B.OracleFree) : (SignOracle.ring B).NoQuery := by
+theorem SignOracle.noQuery_ring [DecidableEq TB.PK]
+    (hB : B.OracleFree) : (SignOracle.ring B).NoQuery := by
   intro kp p c
   change (if kp.1 ∈ p.1.1 then B.bsign kp.2 p.1 (p.1.1.idxOf kp.1) p.2 c else .pure none).QueriesLE
     0
@@ -53,11 +64,18 @@ theorem SignOracle.noQuery_ring (hB : B.OracleFree) : (SignOracle.ring B).NoQuer
   · exact OracleProg.QueriesLE.pure _ _
 
 /-- The ring-aware and ordinary signing oracles of an oracle-free base signer make no query. -/
-theorem SignOracle.noQuery_ringStd (hB : B.OracleFree) : (SignOracle.ringStd B).NoQuery := by
+theorem SignOracle.noQuery_ringStd [DecidableEq TB.PK]
+    (hB : B.OracleFree) : (SignOracle.ringStd B).NoQuery := by
   intro kp sm c
   rcases sm with p | bm
   · exact SignOracle.noQuery_ring hB kp p c
   · exact hB.ssign_noQuery _ _ _
+
+end Ring
+
+section Core
+
+variable {TB : SchemeTypes} {B : BaseScheme X Y TB}
 
 variable {O : SignOracle B} {n : ℕ}
 
@@ -90,6 +108,8 @@ theorem forges_iff_forgesReq (keys : Fin n → B.KeyCoins) (H : X → Y) (f : B.
 
 variable [AddGroup Y]
 
+variable [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins]
+
 variable (O) in
 /-- **The reply of the multi-user challenger after `k` requests** at the key coins `keys` and the
 coins `c` (`muChallenger`), for a signing oracle without queries (its signer read at the zero
@@ -118,6 +138,8 @@ theorem run_respond_muChallenger (hO : O.NoQuery) (keys : Fin n → B.KeyCoins) 
     · rfl
   · rfl
 
+end Core
+
 /-! ### The forger -/
 
 /-- **The composition of an adversary with its output read through `g`**, read as its output and
@@ -133,9 +155,15 @@ theorem _root_.GordieHowe.Quantum.AdaptiveIAlg.composeBothOut_mapOut {X Y Req Re
 
 section Forger
 
-variable {m : ℕ} {I J Bd : Type} [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J]
-  {TB : BaseTypes} {B : BaseSigner (Bits m) (BitStr I J) N TB} (O : SignOracle B) [NeZero n]
+variable {N n : ℕ} {m : ℕ} {I J Bd : Type} [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J]
+  {TB : BaseTypes}
+  {B : BaseSigner (Bits m) (BitStr I J) N TB} (O : SignOracle B.core) [NeZero n]
   (e : BitStr I J ≃ Bd)
+
+variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
 
 /-- **The forger holding a compressed-oracle simulation**: on the public keys `pks`, it draws the
 auxiliary input `a` from `aux pks`, runs the compressed-oracle simulation of the query algorithm
@@ -144,7 +172,7 @@ with request points `G pks a` with its request points sent to the multi-user cha
 database. It makes no oracle query and does not read the table. -/
 noncomputable def coSimMU (Aux : (Fin n → B.PK) → Type) (aux : ∀ pks, PMF (Aux pks))
     (t : ∀ pks, Aux pks → ℕ) (Ot : ∀ pks, Aux pks → Type)
-    (G : ∀ pks a, ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B) (t pks a)
+    (G : ∀ pks a, ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B.core) (t pks a)
       (Ot pks a))
     (g : ∀ pks a, Ot pks a × DB (Bits m) Bd → B.PK × B.BMsg × B.BSig) :
     MUAdversary O n (OracleView.queriesOnly _ _) 0 := fun p =>
@@ -157,6 +185,10 @@ noncomputable def coSimMU (Aux : (Fin n → B.PK) → Type) (aux : ∀ pks, PMF 
       (ReqQueryAlg.coSimAdv_withinBudget (G := G p.1 a) (Y := BitStr I J) e) (g p.1 a)
     queries_le a := (ReqQueryAlg.coSimAdv_queries (G := G p.1 a) (Y := BitStr I J) e).le }
 
+variable [Nonempty O.Coins]
+
+variable [Nonempty TB.KeyCoins]
+
 /-- **The success probability of the forger holding a compressed-oracle simulation** in
 MU-EUF-CMA^corr with `Q'` requests, at least the number `t + 1` of request points (`hQ`), for a
 signing oracle without queries (`hO`): averaged over the users' key coins, the oracle, the
@@ -166,7 +198,7 @@ the logged requests. The number `t pks a + 1` of request points may depend on th
 the auxiliary value. -/
 theorem muEufProb_coSimMU (hO : O.NoQuery) (Aux : (Fin n → B.PK) → Type)
     (aux : ∀ pks, PMF (Aux pks)) (t : ∀ pks, Aux pks → ℕ) (Ot : ∀ pks, Aux pks → Type)
-    (G : ∀ pks a, ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B) (t pks a)
+    (G : ∀ pks a, ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B.core) (t pks a)
       (Ot pks a))
     (g : ∀ pks a, Ot pks a × DB (Bits m) Bd → B.PK × B.BMsg × B.BSig) (Q' : ℕ)
     (hQ : ∀ pks a, t pks a + 1 ≤ Q') :

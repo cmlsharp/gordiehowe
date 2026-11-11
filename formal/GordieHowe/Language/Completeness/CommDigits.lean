@@ -20,9 +20,14 @@ lookup's base `T` of digit `j` of the honest quotient read in the environment of
 `commLookupCB`) and of the `mod_q` (`CommModFactsC`, decided by `commModCB`);
 the lookups of the quotient digits are named by the field equation's derivation (`commRowCB`).
 
+A quotient digit the planner looks up directly is itself the committed record of a direct lookup,
+generated as `Gen.commDigit m j lk 0` (`genCommitted_commDirect`); its facts are `CommDirectFactsC`,
+decided by `commDirectCB` (`commRecCB`: either kind).
+
 At the source environment of the honest committed values, the honest quotient lies below `R^K`
 and the sides satisfy `e − e' = q·qlo + q·Q` (`commQuot_specC`), each record reads its honest
-quotient digit (`commRec_srcEnvC`), so the lookup holds (`holds_commInC`), the field equation holds
+quotient digit (`commRec_srcEnvC`, `commDirect_srcEnvC`), so the lookup holds (`holds_commInC`),
+the field equation holds
 (`holds_commRowC`) and the digits of every two-sided and digit lookup are below their bases
 (`digitsBelow_srcEnvCC`).
 
@@ -51,6 +56,19 @@ theorem commLookupFactsC_of_B {G : Gens} {lk m j : ℕ} (h : ir.commLookupCB G l
     simp only [Bool.and_eq_true, decide_eq_true_eq] at h
     obtain ⟨rfl, hF⟩ := h
     exact ⟨d', rec, N, r, q, e, e', real, hb, hbm, hF⟩
+  · cases h
+
+/-- **A direct lookup passing its check** has one record, a value, and a range, its `mod_q` of the
+same domain, and its facts. -/
+theorem commDirectFactsC_of_B {G : Gens} {lk m j : ℕ} (h : ir.commDirectCB G lk m j = true) :
+    ∃ d v N r q e e' real, (ir.predicate lk).body = .mem d [.leaf v] (.range N) (.lookup r) ∧
+      (ir.predicate m).body = .mod d q e e' real ∧ ir.CommDirectFactsC G lk d v N r m j e real := by
+  unfold commDirectCB at h
+  split at h
+  · rename_i d v N r d' q e e' real hb hbm
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+    obtain ⟨rfl, hF⟩ := h
+    exact ⟨d', v, N, r, q, e, e', real, hb, hbm, hF⟩
   · cases h
 
 variable (ir primeNodes S) in
@@ -116,9 +134,25 @@ theorem commRowCB_eq (S : Structure) (G : Gens) (m : ℕ) (lks : List ℕ) (pr :
       | .mod d q e e' real =>
         ir.commModCB primeNodes S m && ir.commRowB d q e e' real pr.body &&
           lks.length == real.digits.length &&
-          (List.range lks.length).all fun j => ir.commLookupCB G (lks.getD j 0) m j
+          (List.range lks.length).all fun j => ir.commRecCB G (lks.getD j 0) m j
       | _ => false :=
   rfl
+
+/-- **The honest committed value at a directly looked-up quotient digit**: digit `j` in the radix
+`R` of the honest quotient read in the environment of the execution (below `R ≤ T`, so its digit
+`0` in the lookup's base `T` is itself). -/
+theorem genCommitted_commDirect {G : Gens} {lk d v N m j q : ℕ} {e e' : Expr}
+    {r : LookupRealization} {real : ModRealization} (x s : ir.Valuation I)
+    (hb : (ir.predicate lk).body = .mem d [.leaf v] (.range N) (.lookup r))
+    (hbm : (ir.predicate m).body = .mod d q e e' real)
+    (hF : ir.CommDirectFactsC G lk d v N r m j e real) (hR : 0 < real.radix) (i : ℕ) :
+    ir.genCommitted I G x s v i =
+      ((ir.commQuot (ir.reader (ir.execEnv I x s 0 (ir.chal0 I))) m i / real.radix ^ j %
+        real.radix : ℕ) : (I (ir.valueField v)).K) := by
+  obtain ⟨-, -, -, hns⟩ := hF.cell
+  simp only [genCommitted, withGens, if_neg hns, hF.own, commDigitNat, hbm, hb, lookupOf?,
+    pow_zero, Nat.div_one]
+  rw [Nat.mod_eq_of_lt (lt_of_lt_of_le (Nat.mod_lt _ hR) hF.radixBase)]
 
 variable (hwf : ir.WellFormed) (hI : I.Registered ir) (hL : I.Lawful ir primeNodes)
   {G : Gens} (R : ir.CommittedFacts I G) {x s l : ir.Valuation I} {c : ∀ k, (ir.layout I).Ch k}
@@ -176,7 +210,7 @@ theorem commQuot_specC (hbd : ir.StmtBounded I x) {m d q : ℕ} {e e' : Expr}
   obtain ⟨⟨h3, h4⟩, hc'⟩ := exprIvl_within_of hwf hI hL hIF hlok he'.1 hM.char he'.2 hM.rhs
     (by rw [← hlen]; exact hi)
   simp only at h1 h2 h3 h4 hc hc'
-  obtain ⟨z, hz⟩ := hmod.1 i hi
+  obtain ⟨z, hz⟩ := hmod i hi
   have hq0 : (0 : ℤ) < q := by exact_mod_cast hM.qpos
   have hlo := hM.lo
   have hhi := hM.hi
@@ -235,22 +269,54 @@ theorem commRec_srcEnvC {lk d N m j q : ℕ} {rec e e' : Expr}
     commQuot_exec0C hwf hI hL R hA π hbm hM]
 
 include hwf hI hL R hA in
-/-- **A digit lookup whose record is a quotient digit holds** at the source environment of the
-honest committed values: the record reads its honest quotient digit
-(`commRec_srcEnvC`), below `R ≤ N`. -/
-theorem holds_commInC {lk m j : ℕ} (h : ir.commLookupCB G lk m j = true)
+/-- **A directly looked-up quotient digit reads its honest value** at the source environment of the
+honest committed values: the record is a committed cell generated as digit `j` of the honest
+quotient (`genCommitted_commDirect`). -/
+theorem commDirect_srcEnvC {lk d v N m j q : ℕ} {e e' : Expr}
+    {r : LookupRealization} {real : ModRealization}
+    (hb : (ir.predicate lk).body = .mem d [.leaf v] (.range N) (.lookup r))
+    (hbm : (ir.predicate m).body = .mod d q e e' real)
+    (hF : ir.CommDirectFactsC G lk d v N r m j e real)
+    (hM : ir.CommModFactsC L m d q e e' real) {i : ℕ} (hi : i < ir.exprLen e) :
+    ir.evalWith (ir.reader SE) d (.leaf v) i =
+      ((ir.commQuot (ir.reader SE) m i / real.radix ^ j % real.radix : ℕ) :
+        (I (ir.domainField d)).K) := by
+  obtain ⟨hc, hsz, hfu, -⟩ := hF.cell
+  unfold evalWith
+  rw [evalE_leaf, reader_srcEnvL_of_privCellB x _ _ c π hc (by rw [hsz]; exact hi),
+    genCommitted_commDirect x s hb hbm hF hM.radixPos, castElt_natCast hfu,
+    commQuot_exec0C hwf hI hL R hA π hbm hM]
+
+include hwf hI hL R hA in
+/-- **A digit or direct lookup whose record is a quotient digit holds** at the source environment
+of the honest committed values: the record reads its honest quotient digit (`commRec_srcEnvC`,
+`commDirect_srcEnvC`), below `R ≤ N`. -/
+theorem holds_commInC {lk m j : ℕ} (h : ir.commRecCB G lk m j = true)
     (hm : ir.commModCB primeNodes S m = true) :
     ir.HoldsWith (ir.reader SE) (ir.predicate lk).body := by
-  obtain ⟨d, rec, N, r, q, e, e', real, hb, hbm, hF⟩ := commLookupFactsC_of_B h
   obtain ⟨d₁, q₁, e₁, e₁', real₁, hbm₁, hM⟩ := commModFactsC_of_B hm
-  rw [hbm] at hbm₁
-  simp only [PredBody.mod.injEq] at hbm₁
-  obtain ⟨rfl, rfl, rfl, rfl, rfl⟩ := hbm₁
-  rw [hb]
-  intro i hi
-  simp only [List.headD_cons] at hi
-  exact (inRows_range_iff _ d rec i N).2 ⟨_, lt_of_lt_of_le (Nat.mod_lt _ hM.radixPos) hF.radixLe,
-    (commRec_srcEnvC hwf hI hL R hA π hb hbm hF hM hi).symm⟩
+  rcases Bool.or_eq_true_iff.1 h with h | h
+  · obtain ⟨d, rec, N, r, q, e, e', real, hb, hbm, hF⟩ := commLookupFactsC_of_B h
+    rw [hbm] at hbm₁
+    simp only [PredBody.mod.injEq] at hbm₁
+    obtain ⟨rfl, rfl, rfl, rfl, rfl⟩ := hbm₁
+    rw [hb]
+    intro i hi
+    simp only [List.headD_cons] at hi
+    exact (inRows_range_iff _ d rec i N).2
+      ⟨_, lt_of_lt_of_le (Nat.mod_lt _ hM.radixPos) hF.radixLe,
+        (commRec_srcEnvC hwf hI hL R hA π hb hbm hF hM hi).symm⟩
+  · obtain ⟨d, v, N, r, q, e, e', real, hb, hbm, hF⟩ := commDirectFactsC_of_B h
+    rw [hbm] at hbm₁
+    simp only [PredBody.mod.injEq] at hbm₁
+    obtain ⟨rfl, rfl, rfl, rfl, rfl⟩ := hbm₁
+    rw [hb]
+    intro i hi
+    simp only [List.headD_cons, exprLen_leaf] at hi
+    exact (inRows_range_iff _ d (.leaf v) i N).2
+      ⟨_, lt_of_lt_of_le (Nat.mod_lt _ hM.radixPos) hF.radixLe,
+        (commDirect_srcEnvC hwf hI hL R hA π hb hbm hF hM
+          (by rw [← hF.cell.2.1]; exact hi)).symm⟩
 
 include hwf hI hL R hA in
 /-- **The field equation of a committed-digits `mod_q` holds** at the source environment of the
@@ -280,11 +346,6 @@ theorem holds_commRowC (hbd : ir.StmtBounded I x) {m : ℕ} {lks : List ℕ} {pr
     have hdec : ∀ c' < ir.charOf (ir.domainField d),
         (I (ir.domainField d)).decode c' = (c' : (I (ir.domainField d)).K) := hdec0
     have hp0 : 0 < ir.charOf (ir.domainField d) := by have := hM.char; omega
-    have hneg : ∀ c', c' + 1 = ir.charOf (ir.domainField d) →
-        (I (ir.domainField d)).decode c' = -1 := by
-      intro c' hc'
-      rw [hdec c' (by omega), eq_neg_iff_add_eq_zero, ← Nat.cast_one, ← Nat.cast_add, hc',
-        CharP.cast_eq_zero]
     obtain ⟨hshl, hshc⟩ := commShift_spec (K := (I (ir.domainField d)).K) hp0 q real
     unfold commRowB at hrow
     split at hrow
@@ -295,23 +356,19 @@ theorem holds_commRowC (hbd : ir.StmtBounded I x) {m : ℕ} {lks : List ℕ} {pr
       split at hmt
       · rename_i hh hpeel
         obtain ⟨hev, hlenL⟩ := evalE_of_commPeel rd hdec _ L hpeel
-        unfold commHeadB at hmt
-        split at hmt
-        · rename_i Xh b sh
-          simp only [Bool.and_eq_true, beq_iff_eq] at hmt
-          obtain ⟨⟨hX, hb⟩, hsh⟩ := hmt
-          obtain ⟨hXe, hXl⟩ := evalE_of_subB rd hdec e e' Xh hX
-          rw [hbody]
-          intro i hi
-          rw [hlenL, exprLen_add, hXl] at hi
-          have hQ := commQuot_specC hwf hI hL R hA π hbd hbm hM hi
-          have hdig : ∀ j (hj : j < real.digits.length),
-              ir.evalE rd (ir.domainField d) real.digits[j] i =
-                ((ir.commQuot rd m i / real.radix ^ j % real.radix : ℕ) :
-                  (I (ir.domainField d)).K) := by
-            intro j hj
-            obtain ⟨d₂, rec, N, r, q₂, e₂, e₂', real₂, hb₂, hbm₂, hF⟩ :=
-              commLookupFactsC_of_B (hlk j (by rw [hlks]; exact hj))
+        obtain ⟨hhe, hhl⟩ := evalE_of_commHeadB rd (d := d) hdec
+          (fun _ hc _ hi' => evalE_leaf_constAll_reader hL SE hc hf hshl hi') hmt
+        rw [hbody]
+        intro i hi
+        rw [hlenL, hhl] at hi
+        have hQ := commQuot_specC hwf hI hL R hA π hbd hbm hM hi
+        have hdig : ∀ j (hj : j < real.digits.length),
+            ir.evalE rd (ir.domainField d) real.digits[j] i =
+              ((ir.commQuot rd m i / real.radix ^ j % real.radix : ℕ) :
+                (I (ir.domainField d)).K) := by
+          intro j hj
+          rcases Bool.or_eq_true_iff.1 (hlk j (by rw [hlks]; exact hj)) with hj' | hj'
+          · obtain ⟨d₂, rec, N, r, q₂, e₂, e₂', real₂, hb₂, hbm₂, hF⟩ := commLookupFactsC_of_B hj'
             rw [hbm] at hbm₂
             simp only [PredBody.mod.injEq] at hbm₂
             obtain ⟨rfl, rfl, rfl, rfl, rfl⟩ := hbm₂
@@ -321,22 +378,30 @@ theorem holds_commRowC (hbd : ir.StmtBounded I x) {m : ℕ} {lks : List ℕ} {pr
               exact Expr.eq_of_beq h0
             rw [hD]
             exact commRec_srcEnvC hwf hI hL R hA π hb₂ hbm hF hM (by rw [hF.recLen]; exact hi)
-          have hsum : digitsVal (real.radix : (I (ir.domainField d)).K)
-              (real.digits.map fun D => ir.evalE rd (ir.domainField d) D i) =
-                ((ir.commQuot rd m i : ℕ) : (I (ir.domainField d)).K) := by
-            rw [map_eq_map_range real.digits _ _ hdig, digitsVal_range_digits,
-              Nat.mod_eq_of_lt hQ.lt]
-          have hsides := hQ.sides
-          simp only [evalWith] at hsides ⊢
-          rw [hev i, evalE_add, evalE_scale_const, hXe i, hneg b hb,
-            evalE_leaf_constAll_reader hL _ hsh hf hshl hi,
-            evalE_leaf_constAll_reader hL _ hz hf hp0 hi,
-            hshc, List.map_reverse, List.sum_reverse,
-            sum_zipIdx_mul q real.radix (fun D => ir.evalE rd (ir.domainField d) D i) real.digits 0,
-            hsum]
-          push_cast at hsides ⊢
-          linear_combination hsides
-        · cases hmt
+          · obtain ⟨d₂, v, N, r, q₂, e₂, e₂', real₂, hb₂, hbm₂, hF⟩ := commDirectFactsC_of_B hj'
+            rw [hbm] at hbm₂
+            simp only [PredBody.mod.injEq] at hbm₂
+            obtain ⟨rfl, rfl, rfl, rfl, rfl⟩ := hbm₂
+            have hD : real.digits[j] = .leaf v := by
+              have h0 := hF.isDigit
+              rw [List.getElem?_eq_getElem hj, Option.map_some, Option.some.injEq] at h0
+              exact Expr.eq_of_beq h0
+            rw [hD]
+            exact commDirect_srcEnvC hwf hI hL R hA π hb₂ hbm hF hM hi
+        have hsum : digitsVal (real.radix : (I (ir.domainField d)).K)
+            (real.digits.map fun D => ir.evalE rd (ir.domainField d) D i) =
+              ((ir.commQuot rd m i : ℕ) : (I (ir.domainField d)).K) := by
+          rw [map_eq_map_range real.digits _ _ hdig, digitsVal_range_digits,
+            Nat.mod_eq_of_lt hQ.lt]
+        have hsides := hQ.sides
+        simp only [evalWith] at hsides ⊢
+        rw [hev i, hhe i hi,
+          evalE_leaf_constAll_reader hL _ hz hf hp0 hi,
+          hshc, List.map_reverse, List.sum_reverse,
+          sum_zipIdx_mul q real.radix (fun D => ir.evalE rd (ir.domainField d) D i) real.digits 0,
+          hsum]
+        push_cast at hsides ⊢
+        linear_combination hsides
       · cases hmt
     · cases hrow
   · cases h

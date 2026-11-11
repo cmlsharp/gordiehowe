@@ -18,8 +18,8 @@ public import GordieHowe.Language.Realizations.CircuitInput
 
 The native ML-DSA-44 ring program at the ROM parameters
 (`GordieHowe.Generated.MLDSA44.Ring.Native.ROMParams.Program.program`) holds the native ML-DSA-44
-program's domain `H` core and domain `A` gadgets at the same parameters under the renaming
-`Ring.Native.σR` (`Ring.Native.MldsaRingEmbed`, from the checked embedding).
+program's domain `H` core and domain `A` gadgets at the same parameters under the renaming of
+its checked embedding data (`Ring.Native.MldsaRingEmbed`).
 -/
 
 namespace GordieHowe.MLDSA44.Ring.Native.ROMParams
@@ -29,70 +29,82 @@ open Generated.MLDSA44.Ring.Native.ROMParams.Program (program)
 /-- The native ML-DSA program at the ROM parameters, whose parts the ring program holds. -/
 abbrev nat : RealizedProgram := Generated.MLDSA44.Native.ROMParams.Program.program
 
-/-- The renaming agrees with the checked embedding's lists. -/
-theorem agrees : Generated.MLDSA44.Ring.Native.ROMParams.Shapes.embedding_native_2eparts_data.Agrees σR :=
-  RealizedProgram.EmbedData.agrees_of_checks (by decide +kernel) (by decide +kernel) (by decide +kernel)
+/-- **The checked embedding data** of the native program's parts. -/
+abbrev embedData : RealizedProgram.EmbedData := Generated.MLDSA44.Ring.Native.ROMParams.Shapes.embedding_native_2eparts_data
+
+/-- **The renaming**, the embedData's (`EmbedData.renamingAfter`). -/
+abbrev σ : RealizedProgram.Renaming := embedData.renamingAfter
+
+/-- **The ring predicate of each held native predicate**, from the embedData's pairs. -/
+def heldPred (k : ℕ) : ℕ := ((embedData.equals ++ embedData.bodies).lookup k).getD k
 
 /-- The checked embedding at the renaming. -/
-theorem holds : Generated.MLDSA44.Ring.Native.ROMParams.Shapes.embedding_native_2eparts_data.Holds program σR :=
-  Generated.MLDSA44.Ring.Native.ROMParams.ShapeFacts.embedding_native_2eparts_holds σR agrees
-
-theorem data_V : Generated.MLDSA44.Ring.Native.ROMParams.Shapes.embedding_native_2eparts_data.V = ringV :=
-  eq_of_beq (by decide +kernel)
-theorem data_R : Generated.MLDSA44.Ring.Native.ROMParams.Shapes.embedding_native_2eparts_data.R = ringR :=
-  eq_of_beq (by decide +kernel)
+theorem holds : embedData.Holds program σ :=
+  Generated.MLDSA44.Ring.Native.ROMParams.ShapeFacts.embedding_native_2eparts_holds σ
+    embedData.agrees_renamingAfter
 
 /-- **The ring program holds the native program's parts** (`RealizedProgram.Embedding`). -/
-theorem embedding : nat.Embedding program σR ringV ringR :=
-  holds.embedding_at rfl data_V data_R
+theorem embedding : nat.Embedding program σ embedData.V embedData.R :=
+  holds.embedding_at rfl rfl rfl
 
-/-- **Native predicate `k` of domain `H`'s core is ring predicate `k − 24`**, renamed, a source
+/-- **Native predicate `k` of domain `H`'s core is ring predicate `heldPred k`**, renamed, a source
 predicate. -/
-theorem hPredCorr : ∀ k, 48 ≤ k → k ≤ 270 →
-    nat.equalCorrB program σR ringV ringR (nat.predicate k).body
-      (program.predicate (k - 24)).body = true ∧
-      k - 24 < program.predicates.length ∧
-      program.inSource (program.predicate (k - 24)) = true := by
-  have he : Generated.MLDSA44.Ring.Native.ROMParams.Shapes.embedding_native_2eparts_data.equals = (List.range' 48 223).map (fun k => (k, k - 24)) := rfl
-  have hl : ∀ k ∈ List.range' 48 223, (k, k - 24) ∈ Generated.MLDSA44.Ring.Native.ROMParams.Shapes.embedding_native_2eparts_data.equals :=
-    fun k hk => he ▸ List.mem_map_of_mem hk
+theorem hPredCorr : ∀ k, corePredLo ≤ k → k ≤ hPredHi →
+    nat.equalCorrB program σ embedData.V embedData.R (nat.predicate k).body
+      (program.predicate (heldPred k)).body = true ∧
+      heldPred k < program.predicates.length ∧
+      program.inSource (program.predicate (heldPred k)) = true := by
+  have hl : ∀ k ∈ List.range' 48 223, (k, heldPred k) ∈ embedData.equals := by decide +kernel
   intro k h48 h270
-  exact holds.equals_at rfl data_V data_R (hl k (by simp only [List.mem_range'_1]; omega))
+  exact holds.equals_at rfl rfl rfl (hl k (by simp only [corePredLo, hPredLo, hPredHi, List.mem_range'_1] at *; omega))
 
-/-- **Native predicate `k` of domain `A`'s gadgets is ring predicate `predMap k`**, renamed. -/
+/-- **Native predicate `k` of domain `A`'s gadgets is ring predicate `heldPred k`**, renamed. -/
 theorem aPredCorr : ∀ k ∈ aPreds,
-    nat.bodyCorrB program σR ringV ringR (nat.predicate k).body
-      (program.predicate (predMap k)).body = true ∧ predMap k < program.predicates.length := by
-  have hl : ∀ k ∈ aPreds,
-      (k, predMap k) ∈ Generated.MLDSA44.Ring.Native.ROMParams.Shapes.embedding_native_2eparts_data.bodies := by decide +kernel
-  exact fun k hk => holds.bodies_at rfl data_V data_R (hl k hk)
+    nat.bodyCorrB program σ embedData.V embedData.R (nat.predicate k).body
+      (program.predicate (heldPred k)).body = true ∧ heldPred k < program.predicates.length := by
+  have hl : ∀ k ∈ aPreds, (k, heldPred k) ∈ embedData.bodies := by decide +kernel
+  exact fun k hk => holds.bodies_at rfl rfl rfl (hl k hk)
 
 /-- **The ring predicates of `aSource` are source predicates.** -/
-theorem aSourceCorr : ∀ k ∈ aSource, program.inSource (program.predicate (predMap k)) = true := by
-  have hl : ∀ k ∈ aSource,
-      predMap k ∈ Generated.MLDSA44.Ring.Native.ROMParams.Shapes.embedding_native_2eparts_data.sources := by decide +kernel
+theorem aSourceCorr : ∀ k ∈ aSource, program.inSource (program.predicate (heldPred k)) = true := by
+  have hl : ∀ k ∈ aSource, heldPred k ∈ embedData.sources := by decide +kernel
   exact fun k hk => holds.sources _ (hl k hk)
 
-/-- **The ring program's challenge `j + 1` has the native challenge `j`'s phase.** -/
-theorem chalPhase : ∀ j, (program.challenge (σR.chal j)).phase = (nat.challenge j).phase := by
+/-- The embedData's challenge images increase: `2 … 5`. -/
+theorem chals_eq : embedData.chals = List.range' 2 (3 + 1) := by decide +kernel
+
+/-- **The native challenge `j` is the ring program's `j + 2`** (the ring draws the member table's
+`γ` and the relation's `r` first). -/
+theorem chal2 : ∀ j, σ.chal j = j + 2 := MLDSA44.renamingAfter_chal_of_range chals_eq
+
+/-- **The ring program's challenge `j + 2` has the native challenge `j`'s phase.** -/
+theorem chalPhase : ∀ j, (program.challenge (σ.chal j)).phase = (nat.challenge j).phase := by
   intro j
   rcases lt_or_ge j 4 with hj | hj
-  · exact holds.chalPhase j hj
-  · change (program.challenge (j + 1)).phase = (nat.challenge j).phase
-    have h2 : nat.challenges.length = 4 := holds.chalCount
-    have h1 : program.challenges.length = 5 := Generated.MLDSA44.Ring.Native.ROMParams.ShapeFacts.challenges_length
+  · exact holds.chalPhase j (by rw [chals_eq, List.length_range']; exact hj)
+  · rw [chal2]
+    have h2 : nat.challenges.length = 4 := holds.chalCount.trans (by rw [chals_eq]; rfl)
+    have h1 : program.challenges.length = 6 :=
+      Generated.MLDSA44.Ring.Native.ROMParams.ShapeFacts.challenges_length
     simp only [RealizedProgram.challenge, List.getD_eq_getElem?_getD]
     rw [List.getElem?_eq_none (by rw [h1]; omega), List.getElem?_eq_none (by rw [h2]; exact hj)]
 
 /-- **The ring program at the ROM parameters holds the native program's parts.** -/
 instance : MldsaRingEmbed program where
   nat := nat
-  σ := σR
+  σ := σ
+  V := embedData.V
+  R := embedData.R
+  pred := heldPred
   embedding := embedding
   hPredCorr := hPredCorr
   aPredCorr := aPredCorr
   aSourceCorr := aSourceCorr
   chalPhase := chalPhase
-  chalMono := fun _ _ h => Nat.add_le_add_right h 1
+  chalMono := (embedData.renamingAfter_chal_strictMono (by rw [chals_eq]; decide)).monotone
+  readV := by decide +kernel
+  readR := by decide +kernel
+  held := embedData.equals ++ embedData.bodies
+  pred_held := by decide +kernel
 
 end GordieHowe.MLDSA44.Ring.Native.ROMParams

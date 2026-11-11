@@ -15,7 +15,7 @@ namespace GordieHoweTest.StructureLoad
 theorem reader_eq : records.ghNative () = Literal.records := rfl
 
 /-- The kernel reads long lists and every record category without native-check proof dependencies. -/
-theorem kernelCheck : records.gadgets.length = 13 ∧ records.messages.length = 140 ∧
+theorem kernelCheck : records.gadgets.length = 12 ∧ records.messages.length = 140 ∧
     records.routes.length = 7 ∧ records.ivlSources.length = 9 := by decide +kernel
 
 /-- Explicit compiled checking reads and compares every structure field. -/

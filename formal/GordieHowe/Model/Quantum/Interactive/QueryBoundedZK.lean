@@ -87,59 +87,63 @@ variable {X Y Stmt Wit Proof Coins SimCoins : Type} (rel : Stmt → Wit → Prop
 /-- **Query-counted zero knowledge against query-bounded adversaries** (Unruh 2017 Definition 6,
 p. 14, over the paper's `(t, Q)`-adversaries, `def:adversary`, all of whose queries are counted):
 for all `t` and `Q`, every `t`-query adversary that outputs a bit (at most `t` queries on every
-branch, over its query slots and its post phase, `QueryBoundedAdversary.queries_le`) outputs
-`true` against the real challenger of `P` and against the simulated challenger of `S`, each
-answering the first `Q` proof queries, with probabilities at most `ε t Q` apart. -/
-def _root_.GordieHowe.QROM.ZeroKnowledge (P : NARG.Prover X Y Stmt Wit Proof Coins)
+branch, over its query slots and its post phase, `QueryBoundedAdversary.queries_le`) has
+zero-knowledge advantage at most `ε t Q` (`QueryBoundedAdversary.zkAdvantage`) between the real
+challenger of `P`, its coins drawn from `μ`, and the simulated challenger of `S`, each answering the
+first `Q` proof queries. -/
+def _root_.GordieHowe.QROM.ZeroKnowledge (P : NARG.Prover X Y Stmt Wit Proof Coins) (μ : PMF Coins)
     (S : NARG.Simulator X Y Stmt Proof SimCoins) (ε : ℕ → ℕ → ℝ) : Prop :=
   ∀ (t Q : ℕ) (𝒟 : Quantum.QueryBoundedAdversary X Y (ProofQuery Stmt Wit) Proof Bool t),
-    GordieHowe.advantage (𝒟.acceptProb (realChallenger rel P Q)).toReal
-      (𝒟.acceptProb (simChallenger rel S Q)).toReal ≤ ε t Q
+    𝒟.zkAdvantage rel P μ S Q ≤ ε t Q
 
 /-- **Query-counted zero knowledge against distinguishers with a query budget and no final
 unitary**: for every query bound `t`, every distinguisher with `m` slots of `n` parallel queries or
 one proof query and a budget of `q` query slots (`Distinguisher.Budget`) with `n * q ≤ t`, against
 environments answering `Q` proof queries, without a final unitary (`noPost`), has advantage at most
-`ε t Q` against the simulator `S`. -/
-def ZeroKnowledgeQueryBoundedPure (P : NARG.ProverFn X Y Stmt Wit Proof Coins)
+`ε t Q` between the prover `P`, its coins drawn from `μ`, and the simulator `S`. -/
+def ZeroKnowledgeQueryBoundedPure (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ : PMF Coins)
     (S : NARG.SimulatorFn X Y Stmt Proof SimCoins) (ε : ℕ → ℕ → ℝ) : Prop :=
   ∀ (t : ℕ) (W : Type) [Fintype W] (n m Q q : ℕ)
     (D : Quantum.Distinguisher W X Y (ProofQuery Stmt Wit) Proof n m) (_ : D.Budget q),
-    n * q ≤ t → QROM.advantage (Q := Q) rel P S D Quantum.noPost ≤ ε t Q
+    n * q ≤ t → QROM.advantage (Q := Q) rel P μ S D Quantum.noPost ≤ ε t Q
 
 variable {rel}
 
 omit [Nonempty X] [DecidableEq Y] [DecidableEq Coins] [DecidableEq SimCoins] in
 /-- A larger error bound. -/
 theorem ZeroKnowledgeQueryBoundedPure.mono {P : NARG.ProverFn X Y Stmt Wit Proof Coins}
+    {μ : PMF Coins}
     {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} {ε ε' : ℕ → ℕ → ℝ}
-    (h : ZeroKnowledgeQueryBoundedPure rel P S ε) (hε : ∀ t Q, ε t Q ≤ ε' t Q) :
-    ZeroKnowledgeQueryBoundedPure rel P S ε' :=
+    (h : ZeroKnowledgeQueryBoundedPure rel P μ S ε) (hε : ∀ t Q, ε t Q ≤ ε' t Q) :
+    ZeroKnowledgeQueryBoundedPure rel P μ S ε' :=
   fun t W _ n m Q q D bud hD => (h t W n m Q q D bud hD).trans (hε t Q)
 
 /-- A larger error bound. -/
 theorem _root_.GordieHowe.QROM.ZeroKnowledge.mono {P : NARG.Prover X Y Stmt Wit Proof Coins}
+    {μ : PMF Coins}
     {S : NARG.Simulator X Y Stmt Proof SimCoins} {ε ε' : ℕ → ℕ → ℝ}
-    (h : GordieHowe.QROM.ZeroKnowledge rel P S ε) (hε : ∀ t Q, ε t Q ≤ ε' t Q) :
-    GordieHowe.QROM.ZeroKnowledge rel P S ε' :=
+    (h : GordieHowe.QROM.ZeroKnowledge rel P μ S ε) (hε : ∀ t Q, ε t Q ≤ ε' t Q) :
+    GordieHowe.QROM.ZeroKnowledge rel P μ S ε' :=
   fun t Q 𝒟 => (h t Q 𝒟).trans (hε t Q)
 
 /-- **Everlasting zero knowledge gives query-counted zero knowledge**: a `t`-query
 adversary makes at most `t` queries before its last proof query (`requestsAfterAtMost_budget`). -/
 theorem _root_.GordieHowe.QROM.EverlastingZeroKnowledge.zeroKnowledge
-    {P : NARG.Prover X Y Stmt Wit Proof Coins} {S : NARG.Simulator X Y Stmt Proof SimCoins}
-    {ε : ℕ → ℕ → ℝ} (h : GordieHowe.QROM.EverlastingZeroKnowledge rel P S ε) :
-    GordieHowe.QROM.ZeroKnowledge rel P S ε := fun t Q 𝒟 =>
+    {P : NARG.Prover X Y Stmt Wit Proof Coins} {μ : PMF Coins}
+        {S : NARG.Simulator X Y Stmt Proof SimCoins}
+    {ε : ℕ → ℕ → ℝ} (h : GordieHowe.QROM.EverlastingZeroKnowledge rel P μ S ε) :
+    GordieHowe.QROM.ZeroKnowledge rel P μ S ε := fun t Q 𝒟 =>
   h t Q t 𝒟 fun a => ⟨(𝒟.alg a).budget,
     (Nat.mul_le_mul_left _ (Nat.le_add_right _ _)).trans (𝒟.queries_le a),
     (𝒟.alg a).requestsAfterAtMost_budget⟩
 
 /-- **The pure notion gives the notion over query-bounded adversaries** (module docstring). -/
 theorem ZeroKnowledgeQueryBoundedPure.zeroKnowledgeQueryBounded
-    {P : NARG.Prover X Y Stmt Wit Proof Coins} {S : NARG.Simulator X Y Stmt Proof SimCoins}
+    {P : NARG.Prover X Y Stmt Wit Proof Coins} {μ : PMF Coins}
+        {S : NARG.Simulator X Y Stmt Proof SimCoins}
     {ε : ℕ → ℕ → ℝ}
-    (h : ZeroKnowledgeQueryBoundedPure rel P.toFn S.toFn ε) :
-    GordieHowe.QROM.ZeroKnowledge rel P S ε := by
+    (h : ZeroKnowledgeQueryBoundedPure rel P.toFn μ S.toFn ε) :
+    GordieHowe.QROM.ZeroKnowledge rel P μ S ε := by
   intro t Q 𝒟
   refine PMF.abs_toReal_tsum_mul_sub_le 𝒟.aux (fun _ => PMF.toOuterMeasure_apply_le_one _ _)
     (fun _ => PMF.toOuterMeasure_apply_le_one _ _) fun a => ?_

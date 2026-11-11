@@ -238,6 +238,12 @@ def encodingHighBudget (P : Params) : ℕ := 8 * P.sigPayloadBytes - Codec.baseC
 
 end Falcon512.Params
 
+/-- **The Falcon-512 constants.** `S = 512 + 205 = 717` hash samples: at most a `2^-256` fraction
+of uniform `2S`-byte strings has fewer than `512` samples below `5q = 61445`
+(`Falcon512.unsupportedFraction_le`); `717` was chosen as the least such count, which is not proved
+here. `sigPayloadBytes = 625`: the compressed `s₂` payload, excluding header and nonce; the fixed
+`9` bits of each of the `512` coefficients fit in it (`encodingFits`), leaving `392` bits for the
+unary parts (`encodingHighBudget`). -/
 def falcon512 : Falcon512.Params where
   q := 12289
   n := 512

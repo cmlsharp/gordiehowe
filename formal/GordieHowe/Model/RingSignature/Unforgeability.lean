@@ -78,10 +78,6 @@ structure SideOracle where
   BMsg : Type
   /-- Its signatures. -/
   BSig : Type
-  [instFintypeBMsg : Fintype BMsg]
-  [instDecEqBMsg : DecidableEq BMsg]
-  [instFintypeBSig : Fintype BSig]
-  [instDecEqBSig : DecidableEq BSig]
   /-- The bound on its queries. -/
   q : ℕ
   /-- The side signer. -/
@@ -91,11 +87,8 @@ structure SideOracle where
   /-- A member's signature on `bm` makes a forgery on `(R, m)` not fresh. -/
   Covers : BMsg → KeyRing S.PK N → S.Msg → Prop
 
-attribute [instance] SideOracle.instFintypeBMsg SideOracle.instDecEqBMsg
-  SideOracle.instFintypeBSig SideOracle.instDecEqBSig
-
 /-- **No side oracle** (BKM06 Definition 7): no messages, so no side requests. -/
-def SideOracle.none : SideOracle S where
+@[reducible] def SideOracle.none : SideOracle S where
   BMsg := PEmpty
   BSig := PEmpty
   q := 0
@@ -114,7 +107,6 @@ inductive UnforgeRequest where
   | sign (s : Fin n) (R : KeyRing S.PK N) (m : S.Msg)
   /-- A side signature by user `i` on `bm`. -/
   | sideSign (i : Fin n) (bm : O.BMsg)
-deriving DecidableEq
 
 /-- **A reply of the unforgeability game**: key coins, a ring signature or a side signature. -/
 inductive UnforgeResponse where
@@ -124,7 +116,85 @@ inductive UnforgeResponse where
   | signature (σ : S.Sig)
   /-- A side signature. -/
   | sideSignature (τ : O.BSig)
-deriving DecidableEq
+
+/-! The decidable equalities of requests and replies are the definitions `deriving DecidableEq`
+generates, written out: they read the instances of the field types `TS.PK`, `TS.Msg`, `TS.KeyCoins`
+and `TS.Sig` from section binders, which a deriving handler does not see, and no others (no field
+has type `X` or `Y`). -/
+
+section DecEq
+
+variable {n O} [DecidableEq TS.PK] [DecidableEq TS.Msg]
+
+variable [DecidableEq O.BMsg]
+
+/-- Decidable equality of requests, constructor by constructor and field by field. -/
+def instDecidableEqUnforgeRequest.decEq (x y : UnforgeRequest n O) :
+    Decidable (x = y) :=
+  match x, y with
+  | @UnforgeRequest.corrupt _ _ _ _ _ _ _ a0, @UnforgeRequest.corrupt _ _ _ _ _ _ _ b0 =>
+    if h : @a0 = @b0 then by subst h; exact isTrue rfl
+    else isFalse (by intro n; injection n; apply h _; assumption)
+  | UnforgeRequest.corrupt .., UnforgeRequest.sign .. => isFalse (by intro h; injection h)
+  | UnforgeRequest.corrupt .., UnforgeRequest.sideSign .. => isFalse (by intro h; injection h)
+  | UnforgeRequest.sign .., UnforgeRequest.corrupt .. => isFalse (by intro h; injection h)
+  | @UnforgeRequest.sign _ _ _ _ _ _ _ a0 a1 a2, @UnforgeRequest.sign _ _ _ _ _ _ _ b0 b1 b2 =>
+    if h : @a0 = @b0 then
+      by subst h; exact (if h : @a1 = @b1 then
+        by subst h; exact (if h : @a2 = @b2 then by subst h; exact isTrue rfl
+        else isFalse (by intro n; injection n; apply h _; assumption))
+      else isFalse (by intro n; injection n; apply h _; assumption))
+    else isFalse (by intro n; injection n; apply h _; assumption)
+  | UnforgeRequest.sign .., UnforgeRequest.sideSign .. => isFalse (by intro h; injection h)
+  | UnforgeRequest.sideSign .., UnforgeRequest.corrupt .. => isFalse (by intro h; injection h)
+  | UnforgeRequest.sideSign .., UnforgeRequest.sign .. => isFalse (by intro h; injection h)
+  | @UnforgeRequest.sideSign _ _ _ _ _ _ _ a0 a1, @UnforgeRequest.sideSign _ _ _ _ _ _ _ b0 b1 =>
+    if h : @a0 = @b0 then
+      by subst h; exact (if h : @a1 = @b1 then by subst h; exact isTrue rfl
+      else isFalse (by intro n; injection n; apply h _; assumption))
+    else isFalse (by intro n; injection n; apply h _; assumption)
+
+instance instDecidableEqUnforgeRequest :
+    DecidableEq (UnforgeRequest n O) :=
+  instDecidableEqUnforgeRequest.decEq
+
+end DecEq
+
+section DecEq
+
+variable {O} [DecidableEq TS.KeyCoins] [DecidableEq TS.Sig]
+
+variable [DecidableEq O.BSig]
+
+/-- Decidable equality of replies, constructor by constructor and field by field. -/
+def instDecidableEqUnforgeResponse.decEq (x y : UnforgeResponse O) :
+    Decidable (x = y) :=
+  match x, y with
+  | @UnforgeResponse.keyCoins _ _ _ _ _ _ a0, @UnforgeResponse.keyCoins _ _ _ _ _ _ b0 =>
+    if h : @a0 = @b0 then by subst h; exact isTrue rfl
+    else isFalse (by intro n; injection n; apply h _; assumption)
+  | UnforgeResponse.keyCoins .., UnforgeResponse.signature .. => isFalse (by intro h; injection h)
+  | UnforgeResponse.keyCoins .., UnforgeResponse.sideSignature .. =>
+    isFalse (by intro h; injection h)
+  | UnforgeResponse.signature .., UnforgeResponse.keyCoins .. => isFalse (by intro h; injection h)
+  | @UnforgeResponse.signature _ _ _ _ _ _ a0, @UnforgeResponse.signature _ _ _ _ _ _ b0 =>
+    if h : @a0 = @b0 then by subst h; exact isTrue rfl
+    else isFalse (by intro n; injection n; apply h _; assumption)
+  | UnforgeResponse.signature .., UnforgeResponse.sideSignature .. =>
+    isFalse (by intro h; injection h)
+  | UnforgeResponse.sideSignature .., UnforgeResponse.keyCoins .. =>
+    isFalse (by intro h; injection h)
+  | UnforgeResponse.sideSignature .., UnforgeResponse.signature .. =>
+    isFalse (by intro h; injection h)
+  | @UnforgeResponse.sideSignature _ _ _ _ _ _ a0, @UnforgeResponse.sideSignature _ _ _ _ _ _ b0 =>
+    if h : @a0 = @b0 then by subst h; exact isTrue rfl
+    else isFalse (by intro n; injection n; apply h _; assumption)
+
+instance instDecidableEqUnforgeResponse :
+    DecidableEq (UnforgeResponse O) :=
+  instDecidableEqUnforgeResponse.decEq
+
+end DecEq
 
 /-- Requests as a sum type. -/
 def UnforgeRequest.equivSum :
@@ -140,7 +210,9 @@ def UnforgeRequest.equivSum :
   left_inv r := by cases r <;> rfl
   right_inv p := by rcases p with _ | ⟨_, _, _⟩ | ⟨_, _⟩ <;> rfl
 
-instance : Fintype (UnforgeRequest n O) :=
+instance instFintypeUnforgeRequest [Fintype TS.PK] [DecidableEq TS.PK] [Fintype TS.Msg]
+    [Fintype O.BMsg] :
+    Fintype (UnforgeRequest n O) :=
   Fintype.ofEquiv _ (UnforgeRequest.equivSum n O).symm
 
 /-- **With a user, the requests of the unforgeability game are inhabited** (by a corruption); the
@@ -161,7 +233,8 @@ def UnforgeResponse.equivSum : UnforgeResponse O ≃ S.KeyCoins ⊕ S.Sig ⊕ O.
   left_inv r := by cases r <;> rfl
   right_inv p := by rcases p with _ | _ | _ <;> rfl
 
-instance : Fintype (UnforgeResponse O) :=
+instance instFintypeUnforgeResponse [Fintype TS.KeyCoins] [Fintype TS.Sig] [Fintype O.BSig] :
+    Fintype (UnforgeResponse O) :=
   Fintype.ofEquiv _ (UnforgeResponse.equivSum O).symm
 
 variable (S) in
@@ -170,7 +243,8 @@ variable (S) in
 user's key coins; `OSign(s, R, m)` is answered by the scheme's signer of user `s` when its public key
 is in `R` (its refusal `none` passed on), and by `none` otherwise; a side request by the side signer.
 Requests after the `Q`-th get `none`. It reprograms nothing. -/
-noncomputable def unforgeChallenger (keys : Fin n → S.KeyCoins) (Q : ℕ) :
+noncomputable def unforgeChallenger [DecidableEq TS.PK] [Fintype TS.SignCoins]
+    [DecidableEq TS.SignCoins] [Nonempty TS.SignCoins] (keys : Fin n → S.KeyCoins) (Q : ℕ) :
     Challenger X Y (UnforgeRequest n O) (UnforgeResponse O) where
   Coins := Fin Q → S.SignCoins
   coins := PMF.uniformOfFintype _
@@ -302,7 +376,10 @@ theorem trivial_forges {O : SideOracle (RingScheme.trivial X Y N)} {keys : Fin n
 /-! ### The game -/
 
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
-  [Nonempty Y]
+  [Nonempty Y] [Fintype TS.PK] [DecidableEq TS.PK] [Fintype TS.Msg] [DecidableEq TS.Msg]
+  [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins] [Fintype TS.Sig] [DecidableEq TS.Sig]
+
+variable [Fintype O.BMsg] [DecidableEq O.BMsg] [Fintype O.BSig] [DecidableEq O.BSig]
 
 variable (S n O) in
 /-- **An adversary of the unforgeability game** with `n` honest users and at most `t` queries: on
@@ -312,7 +389,13 @@ abbrev UnforgeAdversary (V : OracleView X Y) (t : ℕ) : Type 1 :=
   GameAdversary X Y (UnforgeRequest n O) (UnforgeResponse O) ((Fin n → S.PK) × V.Tab)
     (KeyRing S.PK N × S.Msg × S.Sig) t
 
-variable {V : OracleView X Y} {t : ℕ}
+variable (S n) in
+/-- **An adversary of BKM06 Definition 7**: no side oracle. -/
+abbrev InsiderAdversary (V : OracleView X Y) (t : ℕ) : Type 1 :=
+  UnforgeAdversary S n (SideOracle.none S) V t
+
+variable {V : OracleView X Y} {t : ℕ} [Nonempty TS.KeyCoins] [Fintype TS.SignCoins]
+  [DecidableEq TS.SignCoins] [Nonempty TS.SignCoins]
 
 /-- **The run of the unforgeability game** with `Q` requests: the users' key coins and the oracle
 uniform, the adversary on the public keys and the oracle's table against the challenger. -/
@@ -331,11 +414,6 @@ noncomputable def forgeProb (A : UnforgeAdversary S n O V t) (Q : ℕ) : ℝ≥0
 /-- **The forgery probability is at most `1`.** -/
 theorem forgeProb_le_one (A : UnforgeAdversary S n O V t) (Q : ℕ) : forgeProb A Q ≤ 1 :=
   prob_runLaw_le_one _ _ _
-
-variable (S n) in
-/-- **An adversary of BKM06 Definition 7**: no side oracle. -/
-abbrev InsiderAdversary (V : OracleView X Y) (t : ℕ) : Type 1 :=
-  UnforgeAdversary S n (SideOracle.none S) V t
 
 /-- **The probability of a forgery in BKM06 Definition 7** (unforgeability w.r.t. insider
 corruption) with `Q` requests: the game without a side oracle. -/

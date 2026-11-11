@@ -46,8 +46,7 @@ theorem runtimeParts_eq : runtimeParts = data.parts :=
   data.sourceParts_eq
 
 /-- **The proof system of the program** (`GordieHowe.RuntimeInputs.proofSystemOf`), with full GKR
-certificates confined to proofs and the selections' soundness from the check
-(`GordieHowe.RealizedProgram.selSound_of_selectionsB`). -/
+certificates confined to proofs. -/
 def proofSystem : ProofSystems :=
   runtimeInputs.proofSystemOf runtimeParts (core.certs runtimeParts_eq)
     core.coreFacts

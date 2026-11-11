@@ -137,9 +137,9 @@ variable {X Y Stmt Wit Proof Coins : Type} [Fintype Coins] [DecidableEq Coins]
 
 /-- **The real challenger assigns nothing.** -/
 theorem outWith_realChallenger_assignments (rel : Stmt → Wit → Prop) [DecidableRel rel]
-    (Pv : NARG.Prover X Y Stmt Wit Proof Coins) (Q : ℕ) (ω : Fin Q → Coins)
+    (Pv : NARG.Prover X Y Stmt Wit Proof Coins) (μ : PMF Coins) (Q : ℕ) (ω : Fin Q → Coins)
     (hist : List (Quantum.HistoryEntry (ProofQuery Stmt Wit) Proof)) (req : ProofQuery Stmt Wit)
-    (ans : List Y) : ((realChallenger rel Pv Q).outWith ω hist req ans).assignments = [] := by
+    (ans : List Y) : ((realChallenger rel Pv μ Q).outWith ω hist req ans).assignments = [] := by
   unfold Quantum.Challenger.outWith Quantum.Challenger.outWithOf
   simp only [realChallenger]
   split_ifs
@@ -151,8 +151,8 @@ theorem outWith_realChallenger_assignments (rel : Stmt → Wit → Prop) [Decida
 /-- **The real challenger depends on the relation only through its pairs**, not on the decision
 procedure. -/
 theorem realChallenger_congr (rel rel' : Stmt → Wit → Prop) [DecidableRel rel] [DecidableRel rel']
-    (h : ∀ x w, rel x w ↔ rel' x w) (Pv : NARG.Prover X Y Stmt Wit Proof Coins) (Q : ℕ) :
-    realChallenger rel Pv Q = realChallenger rel' Pv Q := by
+    (h : ∀ x w, rel x w ↔ rel' x w) (Pv : NARG.Prover X Y Stmt Wit Proof Coins) (μ : PMF Coins)
+    (Q : ℕ) : realChallenger rel Pv μ Q = realChallenger rel' Pv μ Q := by
   obtain rfl : rel = rel' := funext fun x => funext fun w => propext (h x w)
   congr
 
@@ -175,8 +175,11 @@ end QROM
 
 namespace RingSignature.Insider
 
-variable {X Y : Type} {N n : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop} [DecidablePred adm]
+variable {X Y : Type} {N n : ℕ} {TB : BaseTypes}
+  {B : BaseSigner X Y N TB}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop} [DecidablePred adm]
+
+variable [DecidableEq TB.PK]
 
 /-- **The freshness of BKM06 Definition 7 at the users' key coins `keys` and the requests `rs`**:
 every key of the ring is the key of a user without a corruption request, and no ring-signing request
@@ -188,6 +191,8 @@ structure FreshAt (keys : Fin n → B.KeyCoins) (rs : List (Req B PS adm n))
   /-- No ring signature on the ring and the message was requested. -/
   not_sign : ∀ s, UnforgeRequest.sign s R m ∉ rs
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **Freshness for a history is freshness at its requests.** -/
 theorem Fresh.freshAt {keys : Fin n → B.KeyCoins}
     {hist : UnforgeHist (S := ofBase B PS adm) n (SideOracle.none _)}
@@ -202,6 +207,8 @@ theorem Fresh.freshAt {keys : Fin n → B.KeyCoins}
     obtain ⟨x, hx, hr⟩ := List.mem_map.1 hm
     exact h.not_signQueried ⟨x, hx, s, hr⟩
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- Freshness at a list of requests holds at every sub-list. -/
 theorem FreshAt.anti {keys : Fin n → B.KeyCoins} {rs rs' : List (Req B PS adm n)}
     {R : KeyRing (ofBase B PS adm).PK N} {m : (ofBase B PS adm).Msg} (h : FreshAt keys rs R m)
@@ -271,6 +278,7 @@ def encWith {W' : Type} (enc : RingStmt B → RelayWit B → Option W') (d : W')
     RingStmt B → RelayWit B → W' :=
   fun x w => (enc x w).getD d
 
+omit [DecidableEq TB.PK] in
 /-- **The hypotheses with a partial encoding give those with the encoding read with any default**
 (`encWith`). -/
 theorem ZKRingHyps.at [AddGroup Y] {X₀ Wit₀ W' WitK : Type} {stmt : RingStmt B → X₀}
@@ -287,6 +295,7 @@ theorem ZKRingHyps.at [AddGroup Y] {X₀ Wit₀ W' WitK : Type} {stmt : RingStmt
     simpa only [encWith, hy, Option.getD_some] using hr
   not_mem_relH_nil := hz.not_mem_relH_nil
 
+omit [DecidableEq TB.PK] in
 /-- **Without an encoding type, the ring relation is empty** (`ZKRingHyps.enc_some`). -/
 theorem ZKRingHyps.not_mem_ringRel [AddGroup Y] {X₀ Wit₀ W' WitK : Type} {stmt : RingStmt B → X₀}
     {check : RingStmt B → Bool} {input : RingStmt B → RingWit B → Option Wit₀} {fw : W' → Wit₀}
@@ -295,6 +304,7 @@ theorem ZKRingHyps.not_mem_ringRel [AddGroup Y] {X₀ Wit₀ W' WitK : Type} {st
     (hW : IsEmpty W') (x : RingStmt B) (w : RelayWit B) : (x, w.toWit) ∉ ringRel B adm 0 := fun h =>
   hW.false (hz.enc_some x w h).choose
 
+omit [DecidableEq TB.PK] in
 variable (B adm) in
 /-- **The hypotheses of the zero-knowledge route hold for the identity reading of ring
 statements** (`spbcsProofSystem`, `Ring.spbcsComapProofSystem` at `stmt = id`, no check and the
@@ -321,14 +331,15 @@ open GordieHowe.QROM GordieHowe.SPBCS IOP SPTerm
 
 section SPBCS
 
-variable {k kN kS L e N n t : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N n t : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
   {X₀ Wit₀ : Type} (M : SPBCS Mg P X₀ k kN kS L e) (Λ : SiteLayout Mg) {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] (E : (j : ι) → (M.comp j).Encoder)
   {Vr : X₀ → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : Wit₀ → R → CausalProver P τ X₀) (stmt : RingStmt B → X₀) (check : RingStmt B → Bool)
   (input : RingStmt B → RingWit B → Option Wit₀)
   (adm : KeyRing B.PK N → Prop) [DecidablePred adm] {W' : Type} [Fintype W'] [DecidableEq W']
@@ -339,7 +350,7 @@ local notation "𝒫" => Ring.spbcsComapProofSystem M Λ E hb honest stmt check 
 
 /-- **The compiled honest prover at the program's statements**: the spBCS prover `niProver` with
 proofs in the format `b`, run through `queryEncoding`. -/
-noncomputable abbrev encProver :
+abbrev encProver :
     NARG.Prover (Bits (queryBits k kN kS L)) (XOut k e) X₀ Wit₀ (M.Response b)
       (SaltedCoins (FiatShamirSalt kS) (M.ProverCoins R)) :=
   ((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding
@@ -374,6 +385,7 @@ noncomputable def forgeryTest (keys : Fin n → B.KeyCoins) (Q : ℕ) (o : Outpu
       .pure (r && decide (check ⟨o.1, o.2.1, o.2.2.1⟩ = true ∧ FreshAt keys (rs.take Q) o.1 o.2.1 ∧
         o.1.1 ≠ []))
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- The test makes at most the verifier's `kq` queries. -/
 theorem forgeryTest_queriesLE (keys : Fin n → B.KeyCoins) (Q : ℕ) (o : Output 𝒫 adm)
     (rs : List (Req B 𝒫 adm n)) :
@@ -386,6 +398,7 @@ theorem forgeryTest_queriesLE (keys : Fin n → B.KeyCoins) (Q : ℕ) (o : Outpu
       OracleProg.length_trace_mapQuery]
     exact NARG.Verifier.prog_queriesLE _ _ _
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The test accepts exactly on a win.** -/
 theorem run_forgeryTest (keys : Fin n → B.KeyCoins) (Q : ℕ) (o : Output 𝒫 adm)
     (rs : List (Req B 𝒫 adm n)) (G : Bits (queryBits k kN kS L) → XOut k e) :
@@ -399,6 +412,12 @@ theorem run_forgeryTest (keys : Fin n → B.KeyCoins) (Q : ℕ) (o : Output 𝒫
     simp only [OracleProg.run_pure, Bool.and_eq_true, decide_eq_true_eq, NARG.Verifier.run_prog, h,
       Option.mem_def, Option.some.injEq, exists_eq_left']
     tauto
+
+variable [Nonempty TB.KeyCoins]
+
+variable [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
 
 variable (A : InsiderAdversary (ofBase B (Ring.spbcsComapProofSystem M Λ E hb honest stmt check input) adm) n
     (OracleView.queriesOnly (Bits (queryBits k kN kS L)) (XOut k e)) t)
@@ -472,7 +491,11 @@ noncomputable def distinguisher [NeZero n] (enc : RingStmt B → RelayWit B → 
 
 variable {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop} {pubOf : B.Coins → B.Pub}
 
-omit [Nonempty W'] in
+omit [Nonempty W'] [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R]
+  [Nonempty R] [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg]
+  [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  [Nonempty TB.KeyCoins] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Coins]
+  [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **On a ring witness the ring prover is the compiled prover at the encoded honest input.** -/
 theorem prove_eq_of_hyps (hz : ZKRingHypsAt B adm stmt input fw enc relH)
     (x : RingStmt B) (w : RelayWit B) (c : (𝒫).Coins) (h : (x, w.toWit) ∈ ringRel B adm 0) :
@@ -482,6 +505,7 @@ theorem prove_eq_of_hyps (hz : ZKRingHypsAt B adm stmt input fw enc relH)
   rfl
 
 open Classical in
+omit [Fintype TB.BSig] [DecidableEq TB.BSig] [Nonempty TB.KeyCoins] in
 /-- **The insider game at fixed keys is at most the average, over the signing coins, of the
 distinguisher against the real challenger of the compiled prover at the program's statements, plus
 `Q · εc`**, at each auxiliary value and each oracle, for an oracle-free base signer (`hB`) with
@@ -501,7 +525,7 @@ theorem game_le_sum_real [NeZero n] (hB : B.OracleFree) (hpub : B.PubOfCoins pub
           (Quantum.requests v.chal.logs) (outEquiv k e ∘ H)} ≤
       ∑ ds, PMF.uniformOfFintype (Fin Q → B.Coins) ds *
         (((distinguisher A enc refuses pubOf keys Q a ds).alg ()).compose
-          (realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw) Q)).outLaw H
+          (realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw) (PMF.uniformOfFintype _) Q)).outLaw H
           (some true) + Q * εc := by
   rw [toOuterMeasure_outLaw_unforge_eq_split (ofBase B 𝒫 adm) n (SideOracle.none _)
     ((A.at keys).alg a).toKindAlg keys Q H fun adv lg =>
@@ -511,7 +535,7 @@ theorem game_le_sum_real [NeZero n] (hB : B.OracleFree) (hpub : B.PubOfCoins pub
         (outEquiv k e ∘ H)).trans (add_le_add (le_of_eq ?_) le_rfl)
   have h := ((A.at keys).alg a).outLaw_absorb (σ := PMF.uniformOfFintype (Fin Q → B.Coins))
     (F' := fun ds => zkRelay B enc keys refuses pubOf ds) (C := (checkedSplit 𝒫 adm keys Q).toChallenger)
-    (C' := realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw) Q)
+    (C' := realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw) (PMF.uniformOfFintype _) Q)
     (e := coinSplit Q B.Coins (𝒫).Coins) (fun s c' => coins_checkedSplit (PS := 𝒫) (adm := adm) keys Q s c')
     (fun H s c' => (relays_real (PS := 𝒫) (adm := adm) hB hpub hsound stmt fw enc hz.mem_relH hz.not_mem_relH_nil (𝒫z)
       (fun x w c h => prove_eq_of_hyps hz x w c h) keys s c').relays H _)
@@ -524,8 +548,8 @@ theorem game_le_sum_real [NeZero n] (hB : B.OracleFree) (hpub : B.PubOfCoins pub
     (M.qVerifier Qs b b).kq fun _ => forgeryTest_queriesLE keys Q _ _).compose _).outLaw H (some true)
   rw [AdaptiveIAlg.outLaw_thenProg]
   have hnil := KindAlg.postAss_eq_nil (zkAbsorbed A enc refuses pubOf keys Q a ds).toKindAlg
-    (realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw) Q)
-    (QROM.outWith_realChallenger_assignments _ _ Q)
+    (realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw) (PMF.uniformOfFintype _) Q)
+    (QROM.outWith_realChallenger_assignments _ _ _ Q)
   congr 2
   ext o
   simp only [hnil, run_forgeryTest]
@@ -535,6 +559,8 @@ theorem game_le_sum_real [NeZero n] (hB : B.OracleFree) (hpub : B.PubOfCoins pub
   · rintro ⟨v, rfl, hv⟩
     exact ⟨v, rfl, hv⟩
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] [Nonempty TB.KeyCoins] in
 /-- **The acceptance probability of a distinguisher** is the oracle average of its output law at
 `true`. -/
 theorem acceptProb_distinguisher [NeZero n] (keys : Fin n → B.KeyCoins) (Q : ℕ) (a : (A.at keys).Aux)
@@ -558,6 +584,8 @@ theorem acceptProb_distinguisher [NeZero n] (keys : Fin n → B.KeyCoins) (Q : �
     simp
   rw [this, PMF.toOuterMeasure_apply_singleton]
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] [Nonempty TB.KeyCoins] in
 /-- The acceptance probability of a distinguisher is at most `1`. -/
 theorem acceptProb_distinguisher_le_one [NeZero n] (keys : Fin n → B.KeyCoins) (Q : ℕ)
     (a : (A.at keys).Aux) (ds : Fin Q → B.Coins)
@@ -570,6 +598,8 @@ theorem acceptProb_distinguisher_le_one [NeZero n] (keys : Fin n → B.KeyCoins)
     _ = 1 := by rw [ENNReal.tsum_mul_right, PMF.tsum_coe, one_mul]
 
 open Classical in
+omit [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] [Nonempty TB.KeyCoins] in
 /-- **Zero knowledge at one key, one auxiliary value and one draw of signing coins**: the
 distinguisher accepts against the real challenger with probability at most its acceptance against
 the simulated challenger of the spBCS joint simulator plus `zkError δ t Q`
@@ -581,7 +611,7 @@ theorem acceptProb_real_le [NeZero n] (VE : M.ViewEncoder E Qs) {Pub : Type}
     (hvzk : CausalHVZK VE.MV relH honest pub Sim δ) (keys : Fin n → B.KeyCoins) (Q : ℕ)
     (a : (A.at keys).Aux) (ds : Fin Q → B.Coins) :
     (distinguisher A enc refuses pubOf keys Q a ds).acceptProb
-        (realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw) Q) ≤
+        (realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw) (PMF.uniformOfFintype _) Q) ≤
       (distinguisher A enc refuses pubOf keys Q a ds).acceptProb
           (simChallenger (relZ B 𝒫 adm stmt fw relH)
             ((M.niJointSimulatorProg Λ VE.toViewRead b pub Sim T).comap (stmt ∘ Prod.fst)) Q) +
@@ -614,6 +644,8 @@ theorem acceptProb_real_le [NeZero n] (VE : M.ViewEncoder E Qs) {Pub : Type}
   · exact QROM.simChallenger_congr _ _ _ _ _ _ _ _ (fun _ _ => Iff.rfl) _ Q
 
 open Classical in
+omit [Fintype R] [DecidableEq R] [Nonempty R] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Nonempty TB.KeyCoins] in
 /-- **The side-coin average of the distinguisher against the simulated challenger is the checked
 simulated game** (`simSplit` with the test `drawOkR`) at each key, auxiliary value and oracle, the
 forgery read under the final oracle, for an oracle-free base signer (`hB`) whose public values are
@@ -670,7 +702,11 @@ noncomputable def claimOfOut (o : Output 𝒫 adm) : Claim X₀ M.NIProof :=
   (Ring.spbcsComapClaim M stmt (⟨o.1, o.2.1, o.2.2.1⟩ : RingStmt B) o.2.2.2).getD
     ⟨stmt ⟨o.1, o.2.1, o.2.2.1⟩, Classical.arbitrary _⟩
 
-omit [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig] in
+omit [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig]
+  [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R]
+  [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
+  [DecidableEq TB.Coins] [Nonempty TB.Coins] [Fintype TB.BSig] [DecidableEq TB.BSig] in
 /-- The statement of the claim of an output is the output's statement. -/
 theorem claimOfOut_stmt (o : Output 𝒫 adm) :
     (claimOfOut o).stmt = stmt (⟨o.1, o.2.1, o.2.2.1⟩ : RingStmt B) := by
@@ -702,7 +738,7 @@ noncomputable def seAdversary [NeZero n] (refuses : KeyRing B.PK N → ℕ → B
   Aux := (A.at keys).Aux
   aux := (A.at keys).aux
   sh a := ((A.at keys).sh a).absorbTabS (Signature.MURequest (Signature.SignOracle.ring B) n)
-    (Signature.MUResponse B)
+    (Signature.MUResponse B.core)
   alg a := seAlg A refuses pubOf keys Q a ds
   tracePreserving a := AdaptiveIAlg.mapOut_tracePreserving
     (AdaptiveIAlg.absorbTab_tracePreserving _ _ ((A.at keys).tracePreserving a) _) _
@@ -713,6 +749,8 @@ noncomputable def seAdversary [NeZero n] (refuses : KeyRing B.PK N → ℕ → B
       (fun _ _ _ h => congrArg Prod.snd h) ((A.at keys).withinBudget a)) _
   queries_le a := (A.at keys).queries_le a
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
+  [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- The shape of `seAdversary` at `a` is the shape of `A` at `keys` absorbed with the table of the
 multi-user replies (`AlgShape.absorbTabS`). -/
 @[simp] theorem seAdversary_sh [NeZero n] (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop)
@@ -720,7 +758,7 @@ multi-user replies (`AlgShape.absorbTabS`). -/
     (a : (A.at keys).Aux) :
     (seAdversary A refuses pubOf keys Q ds).sh a =
       ((A.at keys).sh a).absorbTabS (Signature.MURequest (Signature.SignOracle.ring B) n)
-        (Signature.MUResponse B) :=
+        (Signature.MUResponse B.core) :=
   rfl
 
 /-- **The test of the simulation-extraction game** at the key coins `keys`: the forgery carries a
@@ -737,7 +775,11 @@ def okAt [NeZero n] (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → 
     ∀ pk ∈ (((A.at keys).alg a).out w.1.work).1.1, ∃ i, B.pk (keys i) = pk ∧
       UnforgeRequest.corrupt i ∉ (Quantum.requests w.1.logs).take Q
 
-omit [Nonempty M.NIProof] [Nonempty B.BSig] in
+omit [Nonempty M.NIProof] [Nonempty B.BSig] [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R]
+  [DecidableEq R] [Nonempty R] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg]
+  [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.Coins]
+  [DecidableEq TB.Coins] [Nonempty TB.Coins] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  [Nonempty TB.KeyCoins] in
 /-- **The relayed statements of the first `Q` requests differ from a fresh statement with a
 nonempty ring**: each is `dummyStmt`, with the empty ring, or the statement of a ring-signing
 request among the first `Q`, which freshness separates from it. -/
@@ -770,7 +812,11 @@ theorem relayed_ne_of_fresh (pkOf : Fin n → B.PK) (kcOf : Fin n → B.KeyCoins
   · rw [stmtAt_of_not hs] at heq
     exact hR (congrArg (fun x : RingStmt B => x.ring.1) heq).symm
 
-omit [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig] in
+omit [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig]
+  [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R]
+  [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- The claim of an output with a proof is its claim. -/
 theorem claimOfOut_eq {o : Output 𝒫 adm} {c : Claim X₀ M.NIProof}
     (hc : c ∈ Ring.spbcsComapClaim M stmt (⟨o.1, o.2.1, o.2.2.1⟩ : RingStmt B) o.2.2.2) :
@@ -811,8 +857,13 @@ def inertOnNil [EmptyRingTest stmt] {SC : Type}
     · simp
     · exact Sim.prog_queries x c H
 
-omit [Nonempty M.NIProof] [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig] [Nonempty W'] in
+omit [Nonempty M.NIProof] [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig] [Nonempty W']
+  [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 open Classical in
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- The simulator answering `p₀` on the statements of the empty ring, read at ring statements,
 answers `p₀` on the empty ring. -/
 theorem prog_inertOnNil_nil [EmptyRingTest stmt] {SC : Type}
@@ -823,8 +874,13 @@ theorem prog_inertOnNil_nil [EmptyRingTest stmt] {SC : Type}
   simp only [NARG.Simulator.comap, inertOnNil]
   rw [if_pos ((EmptyRingTest.isNil_stmt_iff x).2 hx)]
 
-omit [Nonempty M.NIProof] [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig] [Nonempty W'] in
+omit [Nonempty M.NIProof] [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig] [Nonempty W']
+  [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 open Classical in
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- The simulator answering `p₀` on the statements of the empty ring, read at ring statements, runs
 as the simulator on the other ring statements. -/
 theorem prog_inertOnNil_ne [EmptyRingTest stmt] {SC : Type}
@@ -836,7 +892,9 @@ theorem prog_inertOnNil_ne [EmptyRingTest stmt] {SC : Type}
   simp only [NARG.Simulator.comap, inertOnNil]
   rw [if_neg fun h => hx ((EmptyRingTest.isNil_stmt_iff x).1 h)]
 
-omit [Nonempty B.BSig] in
+omit [Nonempty B.BSig] [Fintype R] [DecidableEq R] [Nonempty R] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 open Classical in
 /-- **The simulation-extraction game of an adversary with its output read as a claim**, through
 the composition of the adversary before the readout (which does not read the output). -/
@@ -852,6 +910,8 @@ theorem winTestProb_mapOut [NeZero n]
           ok (SPBCS.advWorkspace (X.mapOut claimOfOut).toTPKindAlg Psim Q v).1} :=
   rfl
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
+  [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The adversary absorbed through `seRelay` at the key coins has the law of the adversary
 absorbed with the key coins as a table of outer replies** (`seAlg`'s absorption), against every
 challenger and on every event of the composed registers named without the relay. -/
@@ -874,6 +934,7 @@ theorem outLaw_seRelay_absorbTab [NeZero n] (refuses : KeyRing B.PK N → ℕ �
   exact (AdaptiveIAlg.toOuterMeasure_outLaw_absorbTab' _ _
     (fun lg j _ q _ _ => AdaptiveIAlg.tabAt_outerCount_const _ _ _ lg j q) C' H P).symm
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] [Nonempty TB.KeyCoins] in
 /-- **The simulated game is at most the side-coin average of the simulation-extraction game with
 the test `okAt`**: absorbed through the statements' relay (`seRelay`, `relays_sim_se`), a forgery
 on a nonempty ring that is fresh at the first `Q` requests is a fresh statement of the
@@ -963,7 +1024,11 @@ theorem sim_le_sum_winTestProb [NeZero n] [EmptyRingTest stmt] (hinj : Function.
     exact h
   · exact Option.isSome_iff_exists.2 ⟨c, Option.mem_def.1 hc⟩
 
-omit [Nonempty M.NIProof] [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig] [Nonempty W'] in
+omit [Nonempty M.NIProof] [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig] [Nonempty W']
+  [Fintype R] [DecidableEq R] [Nonempty R] [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg]
+  [DecidableEq TB.Msg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
+  [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The simulator answering `none` on the statements of the empty ring assigns only at the keys
 of its chain inputs** when the spBCS simulator does (`simAssignsAtKeys_niJointSimulatorProg`, digests
 of at least one byte). -/
@@ -986,8 +1051,11 @@ end SPBCS
 
 section History
 
-variable {X Y : Type} {N n : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop} [DecidablePred adm]
+variable {X Y : Type} {N n : ℕ} {TB : BaseTypes}
+  {B : BaseSigner X Y N TB}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop} [DecidablePred adm]
+
+variable [DecidableEq TB.PK]
 
 /-- **The relayed history of a forger without signing requests**: the corruptions among the
 requests `rs`, as corruptions of the multi-user game (MU-EUF-CMA^corr with the ring-aware signing
@@ -998,6 +1066,8 @@ def corruptHist (rs : List (Req B PS adm n)) :
     | .corrupt i => some ⟨.corrupt i, none⟩
     | _ => none
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- A user is corrupted in the relayed history exactly when the requests corrupt it. -/
 theorem corrupted_corruptHist {rs : List (Req B PS adm n)} {i : Fin n} :
     Signature.Corrupted (corruptHist rs) i ↔ UnforgeRequest.corrupt i ∈ rs := by
@@ -1015,6 +1085,8 @@ theorem corrupted_corruptHist {rs : List (Req B PS adm n)} {i : Fin n} :
   · intro h
     exact ⟨⟨.corrupt i, none⟩, List.mem_filterMap.2 ⟨_, h, rfl⟩, rfl⟩
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- No user is asked to sign in the relayed history. -/
 theorem not_signed_corruptHist (rs : List (Req B PS adm n)) (i : Fin n) (bm : B.BMsg) :
     ¬ Signature.Signed (corruptHist rs) i bm := by
@@ -1032,14 +1104,15 @@ end History
 
 section SPBCS'
 
-variable {k kN kS L e N n t : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N n t : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
   {X₀ Wit₀ : Type} {M : SPBCS Mg P X₀ k kN kS L e} {Λ : SiteLayout Mg} {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] {E : (j : ι) → (M.comp j).Encoder}
   {Vr : X₀ → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  {hb : M.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {hb : M.FormatBounds Qs b b} {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   {honest : Wit₀ → R → CausalProver P τ X₀} {stmt : RingStmt B → X₀} {check : RingStmt B → Bool}
   {input : RingStmt B → RingWit B → Option Wit₀}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {W' : Type} [Fintype W'] [DecidableEq W']
@@ -1049,6 +1122,11 @@ variable {k kN kS L e N n t : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits (query
 local notation "𝒫" => Ring.spbcsComapProofSystem M Λ E hb honest stmt check input
 
 local notation "𝒫z" => encProver M Λ E hb honest
+
+variable [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins]
 
 variable (A : InsiderAdversary (ofBase B (Ring.spbcsComapProofSystem M Λ E hb honest stmt check input) adm) n
     (OracleView.queriesOnly (Bits (queryBits k kN kS L)) (XOut k e)) t)
@@ -1084,8 +1162,9 @@ def forgerWins [NeZero n] (wit : RingStmt B → WitK → RingWit B)
       ∀ H, Signature.Forges keys H f (corruptHist ((Quantum.requests
         (SPBCS.advWorkspace (seAlg A refuses pubOf keys Q a ds).toTPKindAlg Psim Q c).1.1.logs).take Q))
 
-omit [Nonempty B.BSig] [EmptyRingTest stmt] in
+omit [Nonempty B.BSig] [EmptyRingTest stmt] [Fintype R] [DecidableEq R] [Nonempty R] in
 open Classical in
+omit [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **A fresh extracted witness passing the test decodes to a forgery of the multi-user game**, for
 an oracle-free base signer (`hB`): the extracted witness of `rel` at the checked statement gives a
 witness of the ring relation at the zero oracle (`hz.sound`), hence at every oracle, and the test
@@ -1137,6 +1216,7 @@ abbrev seSim (VE : M.ViewEncoder E Qs) {Pub : Type} (pub : X₀ → Pub)
 
 omit [Nonempty M.NIProof] [DecidableEq X₀] in
 open Classical in
+omit [Nonempty TB.KeyCoins] in
 /-- **The chain at one key and one auxiliary value, with a total encoding**: the insider game with a nonempty ring,
 averaged over the oracle, is at most the average over the signing coins of the simulation-extraction
 game with the test `okAt`, plus `zkError δ t Q`, `2 Q εc` and `Q` times the unpredicted refusal rate
@@ -1173,7 +1253,7 @@ theorem game_le_sum_winTestProb_at [NeZero n] [Nonempty M.NIProof] [Nonempty W']
   have hzk : ∑' H, PMF.uniformOfFintype (Bits (queryBits k kN kS L) → XOut k e) H *
       ∑ ds, PMF.uniformOfFintype (Fin Q → B.Coins) ds *
         (((distinguisher A enc refuses pubOf keys Q a ds).alg ()).compose
-          (realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw) Q)).outLaw H
+          (realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw) (PMF.uniformOfFintype _) Q)).outLaw H
           (some true) ≤
       ∑' H, PMF.uniformOfFintype (Bits (queryBits k kN kS L) → XOut k e) H *
         ∑ ds, PMF.uniformOfFintype (Fin Q → B.Coins) ds *
@@ -1213,6 +1293,7 @@ theorem game_le_sum_winTestProb_at [NeZero n] [Nonempty M.NIProof] [Nonempty W']
 
 omit [Nonempty M.NIProof] [DecidableEq X₀] in
 open Classical in
+omit [Nonempty TB.KeyCoins] in
 /-- **The chain at one key and one auxiliary value**: the insider game with a nonempty ring,
 averaged over the oracle, is at most the average over the signing coins of the simulation-extraction
 game with the test `okAt`, plus `zkError δ t Q`, `2 Q εc` and `Q · refusalGap`. Without an encoding
@@ -1344,7 +1425,7 @@ theorem keys_le [NeZero n] [Nonempty M.NIProof] (hk : 0 < k) (hB : B.OracleFree)
   have hse := (weak_online_simulation_extractability_qrom (B := b) Qs hkq hrbr
     (seSim (Λ := Λ) (hb := hb) (honest := honest) (stmt := stmt) (check := check)
       (input := input) VE pub Sim T)
-    (simAssignsAtKeys_inertOnNil (stmt := stmt) (check := check) (input := input) hk VE pub Sim T)).unruhSimExtraction_of_queryFreeTest
+    (simAssignsAtKeys_inertOnNil (stmt := stmt) (check := check) (input := input) hk VE pub Sim T)).unruhSimExtraction_of_queryFreeTest hkq
   have hσ : ∑ ds : Fin Q → B.Coins, PMF.uniformOfFintype (Fin Q → B.Coins) ds = 1 := by
     have h1 := (PMF.uniformOfFintype (Fin Q → B.Coins)).tsum_coe
     rwa [tsum_fintype] at h1
@@ -1390,7 +1471,7 @@ theorem keys_le [NeZero n] [Nonempty M.NIProof] (hk : 0 < k) (hB : B.OracleFree)
 /-! ### The headline -/
 
 omit [Nonempty M.NIProof] [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig] [DecidableEq X₀]
-  [EmptyRingTest stmt] in
+  [EmptyRingTest stmt] [Fintype TB.BSig] [DecidableEq TB.BSig] [Nonempty TB.KeyCoins] in
 /-- The requests of the history of a run are the first `Q` logged requests. -/
 theorem map_request_history (keys : Fin n → B.KeyCoins) (Q : ℕ) (a : (A.at keys).Aux)
     (v : ((A.at keys).alg a).toKindAlg.CW
@@ -1401,6 +1482,7 @@ theorem map_request_history (keys : Fin n → B.KeyCoins) (Q : ℕ) (a : (A.at k
 
 omit [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig] in
 open Classical in
+omit [Fintype TB.BSig] [DecidableEq TB.BSig] in
 /-- **The insider game splits by the ring of the forgery**: the forgery probability is at most the
 average, over the users' key coins, the auxiliary input and the oracle, of a win with a nonempty
 ring (`Wins`), plus the knowledge error at `t + Q · q + kq` queries for the forgeries on the empty
@@ -1739,17 +1821,23 @@ end SPBCS'
 
 section Identity
 
-variable {k kN kS L e N n t : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N n t : ℕ} {TB : BaseTypes}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
   {M : SPBCS Mg P (RingStmt B) k kN kS L e} {Λ : SiteLayout Mg} {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] {E : (j : ι) → (M.comp j).Encoder}
   {Vr : RingStmt B → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  {hb : M.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {hb : M.FormatBounds Qs b b} {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   {honest : RingWit B → R → CausalProver P τ (RingStmt B)}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm]
   [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig]
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins]
 
 /-- **Unforgeability with respect to insider corruption (BKM06 Definition 7) of the ring signature
 compiled by spBCS (`spbcsProofSystem`), at every base message, from zero knowledge and simulation

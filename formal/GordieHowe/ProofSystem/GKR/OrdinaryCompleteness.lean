@@ -17,8 +17,8 @@ The honest prover draws free pads `π : FreePads S.circuit`; the committed pads
 are `π.pads`, whose product pad is `claim 0 * claim 1`, so `ProductsHold`
 holds by construction. The prover sends the masked honest trace
 (`GKR.HonestTranscript.maskedFamily`). The witness carries the pads at the pad
-coordinates: `withPads pad w π` writes the flat pad vector `padValues π` there
-and keeps the source values `w` elsewhere. Completeness holds for every pad
+coordinates: `w ∘ pad = padValues S π`, the flat pad vector (the premise `hpad` of
+`claimOut`). Completeness holds for every pad
 value and every verifier challenge. -/
 namespace GordieHowe.GKR.LayeredCircuit
 open IOP

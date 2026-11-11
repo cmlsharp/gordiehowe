@@ -58,9 +58,8 @@ characteristic `chr`, at every coordinate of `X`: with `A`, `B` the normal forms
 
 /-- **The meaning of an entry's asserted root** with print `X` in circuit `c` (field
 characteristic `chr`, `neg1` the code of `−1`): a Boolean check or a placed field equation `l = r`
-in the circuit's domain, `X` as long as `l` and `X = ±(l − r)` as normal forms; a placed
-product form, `X` its asserted equation; an alignment entry, no root. A realization entry is
-rejected. -/
+in the circuit's domain, `X` as long as `l` and `X = ±(l − r)` as normal forms; an alignment
+entry, no root. A realization entry is rejected. -/
 @[expose] def entryMeaningB (c chr neg1 : ℕ) (en : CircuitEntry) («X» : Option Expr) : Bool :=
   match en, «X» with
   | .alignment _, none => true
@@ -69,12 +68,7 @@ rejected. -/
     | some (d, l, r) =>
       Nat.beq d (ir.circuit c).domain && Nat.beq (ir.exprLen l) (ir.exprLen «X») &&
         ir.nfUnitEqB d chr neg1 «X» (.sub l r)
-    | none =>
-      match (ir.predicate p).body with
-      | .mod d q P N real =>
-        real.form.isProduct && Nat.blt 2 q && Nat.beq d (ir.circuit c).domain &&
-          ir.productEquationB d q «X» P N real
-      | _ => false
+    | none => false
   | _, _ => false
 
 end Meaning

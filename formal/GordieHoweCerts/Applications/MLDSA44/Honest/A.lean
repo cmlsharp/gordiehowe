@@ -414,9 +414,8 @@ theorem interval3_of (hb : ∀ m < 1024, ∀ t < 6, Native.rdA e 62 (6 * m + t) 
     (h : ∀ m < 1024, UseHint.IntervalEq mldsa44.γ₂ (Native.rdA e 58 m) (Native.rdA e 63 m) (Native.rdA e 64 m)
       (Native.rdA e 65 m) (UseHint.outputFromBits (UseHint.hiCount mldsa44.γ₂) (Native.bitsA e m))) :
     program.HoldsWith (program.reader e) (program.predicate 3).body := by
-  obtain ⟨_, h3, hf3, -⟩ := Native.pred3 (program := program)
+  obtain ⟨_, h3, -⟩ := Native.pred3 (program := program)
   rw [h3]
-  refine ⟨?_, RealizedProgram.productQuotWith_of_not (.inl (by rw [hf3]; rfl))⟩
   intro m hm
   rw [RealizedProgram.exprLen_add, (Native.lensU (program := program)).2.2] at hm
   obtain ⟨ko, hko, hov⟩ := hoff m hm

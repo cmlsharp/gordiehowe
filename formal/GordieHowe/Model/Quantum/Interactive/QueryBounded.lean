@@ -11,7 +11,7 @@ public import GordieHowe.Model.Quantum.Interactive.AdaptiveTP
 # Query-bounded adversaries
 
 The one adversary class of the headline theorems: the `(t, Q)`-adversaries of the paper's
-`def:adversary` (Definition 6.1), after Unruh 2017 (ePrint 2017/398, section 3, p. 10) and CMS19
+`def:adversary`, after Unruh 2017 (ePrint 2017/398, section 3, p. 10) and CMS19
 (section 3.2, p. 14). A member
 
 - chooses at run time, from a measured kind register, whether each call is a query to the random

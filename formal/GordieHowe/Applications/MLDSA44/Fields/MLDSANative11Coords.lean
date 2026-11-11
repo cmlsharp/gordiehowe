@@ -34,4 +34,11 @@ theorem mldsaNative11Coords_algebraMap (z : ZMod 8380417) :
     exact map_natCast _ _
   rw [h, mldsaNative11Coords_natCast, ZMod.natCast_zmod_val]
 
+/-- **The coordinates of a sum** in `MLDSANativeField11` are the sums of the coordinates. -/
+theorem RealizedProgram.mldsaNative11Coords_add (x y : MLDSANativeField11) (i : Fin 11) :
+    mldsaNative11Coords (x + y) i = mldsaNative11Coords x i + mldsaNative11Coords y i := by
+  show PolyRep.coordsEquiv (PolyRep.add (n := 11) x y) i = _
+  simp [PolyRep.add, mldsaNative11Coords]
+  rfl
+
 end GordieHowe

@@ -11,7 +11,7 @@ public import GordieHowe.Model.Quantum.Pure.Budget
 # Query budgets before the last request
 
 A query budget (`Distinguisher.Budget`) charges every query slot of a branch. Zero knowledge after
-the last request (the paper's everlasting zero knowledge, Definition 6.2, `def:narg-zk-post`)
+the last request (the paper's everlasting zero knowledge, `def:narg-zk-post`)
 charges only the queries a branch makes before its last request, wherever that request falls at run
 time, and leaves the queries after it unbounded. A **request budget** of `q` slots
 (`Distinguisher.RequestBudget`) states this as an invariant of the run: a branch that requests at a

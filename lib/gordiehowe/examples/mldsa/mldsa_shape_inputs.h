@@ -11,23 +11,13 @@
 namespace proofs::gordiehowe::examples::mldsa {
 
 // The part of the native program at the same parameters that an emulated
-// program holds: every native value one identifier larger and every native shared
-// expression two larger, domain `H`'s values and expressions, and native predicate
-// `k` of domain `H` at `k + 2`. The compiled programs check these lists against
-// both tables (ShapeClaim.embedding).
-inline ProgramEmbeddingDecl mldsa_emulated_native_embedding() {
-  constexpr size_t kValueIds = 600, kExprIds = 530, kChallenges = 4;
-  ProgramEmbeddingDecl d;
-  d.name = "native.H";
-  d.source_config = "mldsa-native";
-  for (size_t v = 0; v < kValueIds; ++v) d.vals.push_back(v + 1);
-  for (size_t k = 0; k < kExprIds; ++k) d.refs.push_back(k + 2);
-  for (size_t j = 0; j < kChallenges; ++j) d.chals.push_back(j);
-  d.values.push_back(6);
-  for (size_t v = 8; v < 55; ++v) d.values.push_back(v);
-  for (size_t v = 66; v < 567; ++v) d.values.push_back(v);
-  for (size_t k = 11; k < 526; ++k) d.exprs.push_back(k);
-  for (size_t k = 18; k <= 270; ++k) d.equals.emplace_back(k, k + 2);
+// program holds: domain `H` (the hash of mu, c-tilde's absorbs,
+// SampleInBall and its memory check), with the native crossing's operand
+// of domain `H` (`mac.equal`'s left side), which the emulated crossing reads
+// as its own. Its values keep their names.
+inline ProgramEmbeddingSpec mldsa_emulated_native_embedding() {
+  ProgramEmbeddingSpec d{"native.H", "mldsa-native", {{"h2c.mu.blocks.r0", "h2c.sample.mem.fresh"}}};
+  d.exprs = {{ShapeExprSelector::Root::kPredicateLeft, "mac.equal", {}}};
   return d;
 }
 
@@ -671,135 +661,56 @@ inline NamedShapeInputs mldsa_emulated_shape_inputs(const Scope &s) {
       {}};
 }
 
-// The ring programs' parts of the native and emulated programs. The lists
-// mirror the frontends' renamings (`Ring.Native.σR`, `σQ`, `Ring.Carrier.σH`,
-// `σA`) over every identifier the programs have; the embedding check reads both
-// programs, so a wrong list fails the export's certificate.
-namespace mldsa_embedding_internal {
-constexpr size_t kValueIds = 600, kExprIds = 530;
-inline std::vector<size_t> append_range(std::vector<size_t> xs, size_t lo, size_t count) {
-  for (size_t i = 0; i < count; ++i) xs.push_back(lo + i);
-  return xs;
+// Domain `A`'s gadgets that the ring programs hold, by their predicates:
+// the hint's w1 bound, decomposition and interval, the norm range's top
+// row, the Booleanities of h, c and the hint's flags, then MIDDLE, then the
+// norm of z, the hint's offset and slack and the hint weight. The relation
+// is not held: the ring programs read the public key from the committed
+// member.
+inline std::vector<std::string> mldsa_held_gadgets(const std::string &middle) {
+  return {"hint.w1_bound", "hint.decompose", "hint.interval", "range.norm.z.top",
+          "h.boolean", "challenge.c.boolean", "hint.w1.boolean", "hint.nonpositive.boolean",
+          middle, "norm.z", "hint.offset", "hint.slack", "hint_weight.weight"};
 }
-inline size_t ring_val_rom(size_t v) {
-  static const size_t low[] = {6, 3, 4, 5, 1, 7, 8, 9, 8, 11};
-  static const size_t mid[] = {34, 43, 41, 37, 38, 39, 10, 36, 37, 38, 39, 40, 42};
-  if (v < 10) return low[v];
-  if (v < 34) return v + 2;
-  if (v < 47) return mid[v - 34];
-  if (v < 55) return v - 3;
-  if (v < 57) return v;
-  if (v < 66) return v + 3;
-  if (v < 69) return v;
-  if (v < 71) return v + 2;
-  if (v < 119) return v;
-  if (v < 121) return v - 50;
-  if (v < 575) return v - 48;
-  return v - 46;
-}
-inline size_t ring_val_qrom(size_t v) {
-  const size_t r = ring_val_rom(v);
-  return r >= 10 ? r - 1 : r;
-}
-inline size_t ring_pred_map(size_t k) {
-  if (k <= 5) return k + 4;
-  if (k <= 14) return k + 6;
-  return k - 24;
-}
-inline size_t carrier_val_h(size_t v) {
-  if (v == 6) return 8;
-  if (v < 9) return v;
-  if (v < 34) return v + 2;
-  if (v == 35) return 43;
-  if (v == 36) return 41;
-  if (v < 40) return v;
-  if (v == 40) return 10;
-  if (v < 46) return v - 5;
-  if (v == 46) return 42;
-  if (v < 55) return v - 3;
-  if (v < 69) return v;
-  if (v < 71) return v + 3;
-  if (v < 119) return v;
-  if (v < 121) return v - 49;
-  return v - 47;
-}
-inline size_t carrier_val_a(size_t v) {
-  static const size_t low[] = {2, 3, 4, 1, 5, 6, 7};
-  if (v < 7) return low[v];
-  if (v < 58) return v;
-  if (v < 62) return v + 2;
-  if (v == 62) return 65;
-  if (v < 67) return v + 3;
-  if (v < 577) return v;
-  return v - 47;
-}
-inline size_t carrier_pred_a(size_t k) {
-  if (k < 2) return k + 1;
-  if (k < 5) return k + 2;
-  if (k < 6) return k + 1;
-  return k + 3;
-}
-}  // namespace mldsa_embedding_internal
 
-inline ProgramEmbeddingDecl mldsa_ring_native_embedding(const std::string &profile) {
-  using namespace mldsa_embedding_internal;
-  ProgramEmbeddingDecl d;
-  d.name = "native.parts";
-  d.source_config = "mldsa-native";
-  d.profile = profile;
-  const bool rom = profile == "narrow";
-  for (size_t v = 0; v < kValueIds; ++v) d.vals.push_back(rom ? ring_val_rom(v) : ring_val_qrom(v));
-  for (size_t k = 0; k < kExprIds; ++k) d.refs.push_back(k < 66 ? k + 43 : k - 12);
-  d.chals = {1, 2, 3, 4};
-  d.values = append_range(append_range({}, 0, 7), 9, 25);
-  d.values.push_back(35);
-  d.values.push_back(36);
-  d.values = append_range(append_range(d.values, 40, 15), 57, 9);
-  d.values.push_back(69);
-  d.values.push_back(70);
-  d.values = append_range(append_range(d.values, 119, 449), 575, 9);
-  d.exprs = append_range({}, 2, 5);
-  d.exprs.push_back(8);
-  d.exprs = append_range(d.exprs, 66, 459);
-  for (size_t k = 48; k <= 270; ++k) d.equals.emplace_back(k, k - 24);
-  for (size_t k : {1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}) d.bodies.emplace_back(k, ring_pred_map(k));
-  for (size_t k : {1, 2, 3, 6, 7, 8, 9, 11, 12, 13, 14}) d.sources.push_back(ring_pred_map(k));
+// The native program's domain `H` core (c-tilde's absorbs, SampleInBall and
+// its memory check) that a ring program holds, with the support and sign of
+// H's decoded challenge in the native crossing's operand (`mac.equal`'s
+// left side: w1, then support, then sign), which the ring's crossing reads
+// in its own operand.
+//
+// The ring programs commit mu in domain `H` (`mu.words`, `mu`) in place of
+// hashing it from tr and the message, so the core's mu (`h2c.mu.out.words`,
+// `h2c.mu.out`, the hash's output) is the ring's committed mu. The alias is
+// declared here, not inferred: the two values have different names and
+// different definitions in their programs, and nothing but this declaration
+// says that the ring's committed mu stands for the native hash's output.
+inline ProgramEmbeddingSpec mldsa_native_core_embedding(const std::string &name,
+                                                        bool gadgets) {
+  using Root = ShapeExprSelector::Root;
+  using Edge = ShapeExprSelector::Edge;
+  ProgramEmbeddingSpec d{name, "mldsa-native", {{"h2c.c_tilde.r0", "h2c.sample.mem.fresh"}}};
+  if (gadgets) d.bodies = mldsa_held_gadgets("mac.blind.boolean");
+  for (Edge last : {Edge::kFirst, Edge::kSecond})
+    d.exprs.push_back({Root::kPredicateLeft, "mac.equal",
+                       {{Edge::kShared}, {Edge::kFirst}, {Edge::kSecond}, {last}}});
+  d.aliases = {{"h2c.mu.out.words", "mu.words"}, {"h2c.mu.out", "mu"}};
   return d;
 }
 
-inline ProgramEmbeddingDecl mldsa_ring_carrier_native_embedding() {
-  using namespace mldsa_embedding_internal;
-  ProgramEmbeddingDecl d;
-  d.name = "native.core";
-  d.source_config = "mldsa-native";
-  for (size_t v = 0; v < kValueIds; ++v) d.vals.push_back(carrier_val_h(v));
-  for (size_t k = 0; k < kExprIds; ++k) d.refs.push_back(k < 20 ? 0 : k - 20);
-  d.chals = {1, 2, 3, 4};
-  d.values = {6};
-  d.values = append_range(d.values, 9, 25);
-  d.values.push_back(35);
-  d.values.push_back(36);
-  d.values = append_range(d.values, 40, 15);
-  d.values.push_back(69);
-  d.values.push_back(70);
-  d.values = append_range(d.values, 119, 448);
-  d.exprs = append_range({}, 66, 459);
-  for (size_t k = 48; k <= 270; ++k) d.equals.emplace_back(k, k - 25);
-  return d;
+inline ProgramEmbeddingSpec mldsa_ring_native_embedding() {
+  return mldsa_native_core_embedding("native.parts", true);
 }
 
-inline ProgramEmbeddingDecl mldsa_ring_carrier_emulated_embedding() {
-  using namespace mldsa_embedding_internal;
-  ProgramEmbeddingDecl d;
-  d.name = "emulated.A";
-  d.source_config = "mldsa-emulated";
-  for (size_t v = 0; v < kValueIds; ++v) d.vals.push_back(carrier_val_a(v));
-  for (size_t k = 0; k < kExprIds; ++k) d.refs.push_back(k < 6 ? k + 30 : k + 33);
-  d.chals = {1, 2, 3, 4};
-  d.values = append_range(append_range(append_range({}, 0, 7), 58, 9), 577, 13);
-  d.exprs = {0, 1, 2, 3, 4, 5, 10, 11};
-  for (size_t k : {0, 1, 2, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15}) d.bodies.emplace_back(k, carrier_pred_a(k));
-  for (size_t k : {0, 1, 2, 6, 7, 8, 9, 11, 12, 13, 14, 15}) d.sources.push_back(carrier_pred_a(k));
+inline ProgramEmbeddingSpec mldsa_ring_carrier_native_embedding() {
+  return mldsa_native_core_embedding("native.core", false);
+}
+
+// The emulated program's domain `A` gadgets that the carrier holds, with
+// the range of w'.
+inline ProgramEmbeddingSpec mldsa_ring_carrier_emulated_embedding() {
+  ProgramEmbeddingSpec d{"emulated.A", "mldsa-emulated", {}};
+  d.bodies = mldsa_held_gadgets("signature.w");
   return d;
 }
 
@@ -838,51 +749,6 @@ inline NamedShapeInputs mldsa_ring_native_shape_inputs(const Scope &s) {
   s.shape_expr("member.select.shape.left.first.second.second.first.first.first",
       {Root::kPredicateLeft, "member.select",
        {{Edge::kFirst}, {Edge::kSecond}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.0.shape.left.first.first",
-      {Root::kPredicateLeft, "signature.relation.0",
-       {{Edge::kFirst}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.0.shape.left.second.first.first.second.first.first.first",
-      {Root::kPredicateLeft, "signature.relation.0",
-       {{Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.0.shape.left.second.first.first.second.second.first.first",
-      {Root::kPredicateLeft, "signature.relation.0",
-       {{Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.0.shape.left.second.first.second.first.first.first.first",
-      {Root::kPredicateLeft, "signature.relation.0",
-       {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.0.shape.left.second.first.second.first.second.first.first.first.first",
-      {Root::kPredicateLeft, "signature.relation.0",
-       {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.0.shape.left.second.first.second.first.second.first.first.first.second.first",
-      {Root::kPredicateLeft, "signature.relation.0",
-       {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.1.shape.left.first.first",
-      {Root::kPredicateLeft, "signature.relation.1",
-       {{Edge::kFirst}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.1.shape.left.second.first.first.second.first.first.first",
-      {Root::kPredicateLeft, "signature.relation.1",
-       {{Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.1.shape.left.second.first.second.first.first.first.first",
-      {Root::kPredicateLeft, "signature.relation.1",
-       {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.2.shape.left.first.first",
-      {Root::kPredicateLeft, "signature.relation.2",
-       {{Edge::kFirst}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.2.shape.left.second.first.first.second.first.first.first",
-      {Root::kPredicateLeft, "signature.relation.2",
-       {{Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.2.shape.left.second.first.second.first.first.first.first",
-      {Root::kPredicateLeft, "signature.relation.2",
-       {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.3.shape.left.first.first",
-      {Root::kPredicateLeft, "signature.relation.3",
-       {{Edge::kFirst}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.3.shape.left.second.first.first.second.first.first.first",
-      {Root::kPredicateLeft, "signature.relation.3",
-       {{Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.3.shape.left.second.first.second.first.first.first.first",
-      {Root::kPredicateLeft, "signature.relation.3",
-       {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
   s.shape_expr("mac.equal.shape.right",
       {Root::kPredicateRight, "mac.equal",
        {}});
@@ -1032,21 +898,6 @@ inline NamedShapeInputs mldsa_ring_native_shape_inputs(const Scope &s) {
        "challenge.c.boolean"},
       {"member.select.shape.left.first.second.second.first.first.first.shared.first.second.first.first",
        "member.select.shape.left.first.second.second.first.first.first",
-       "signature.relation.0.shape.left.first.first",
-       "signature.relation.0.shape.left.second.first.first.second.first.first.first",
-       "signature.relation.0.shape.left.second.first.first.second.second.first.first",
-       "signature.relation.0.shape.left.second.first.second.first.first.first.first",
-       "signature.relation.0.shape.left.second.first.second.first.second.first.first.first.first",
-       "signature.relation.0.shape.left.second.first.second.first.second.first.first.first.second.first",
-       "signature.relation.1.shape.left.first.first",
-       "signature.relation.1.shape.left.second.first.first.second.first.first.first",
-       "signature.relation.1.shape.left.second.first.second.first.first.first.first",
-       "signature.relation.2.shape.left.first.first",
-       "signature.relation.2.shape.left.second.first.first.second.first.first.first",
-       "signature.relation.2.shape.left.second.first.second.first.first.first.first",
-       "signature.relation.3.shape.left.first.first",
-       "signature.relation.3.shape.left.second.first.first.second.first.first.first",
-       "signature.relation.3.shape.left.second.first.second.first.first.first.first",
        "mac.equal.shape.right",
        "mac.equal.shape.left",
        "member.table.powers.shape.definition.first.first.shared.first.first.first.first.first.first.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first",
@@ -1118,24 +969,6 @@ inline NamedShapeInputs mldsa_ring_carrier_shape_inputs(const Scope &s) {
   s.shape_expr("member.select.shape.left.first.second.second.first.first.first",
       {Root::kPredicateLeft, "member.select",
        {{Edge::kFirst}, {Edge::kSecond}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.shape.left.first",
-      {Root::kPredicateLeft, "signature.relation",
-       {{Edge::kFirst}}});
-  s.shape_expr("signature.relation.shape.right.first.second.first.first.first.first",
-      {Root::kPredicateRight, "signature.relation",
-       {{Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.shape.right.first.second.first.first.first.second.first",
-      {Root::kPredicateRight, "signature.relation",
-       {{Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.shape.left.second.first",
-      {Root::kPredicateLeft, "signature.relation",
-       {{Edge::kSecond}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.shape.left.second.second.first",
-      {Root::kPredicateLeft, "signature.relation",
-       {{Edge::kSecond}, {Edge::kSecond}, {Edge::kFirst}}});
-  s.shape_expr("signature.relation.shape.left.second.second.second",
-      {Root::kPredicateLeft, "signature.relation",
-       {{Edge::kSecond}, {Edge::kSecond}, {Edge::kSecond}}});
   s.shape_expr("mac.equal.shape.right",
       {Root::kPredicateRight, "mac.equal",
        {}});
@@ -1253,6 +1086,16 @@ inline NamedShapeInputs mldsa_ring_carrier_shape_inputs(const Scope &s) {
   s.shape_expr("member.select.shape.left.second.first.second.first",
       {Root::kPredicateLeft, "member.select",
        {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
+  // The last row's last block of a_hat: the end of the checked expression
+  // table, which holds the relation's shared expressions (mldsa_ring_carrier.h).
+  s.shape_expr("signature.relation.3.shape.left.second.first.first.first.first",
+      {Root::kPredicateLeft, "signature.relation.3",
+       {{Edge::kSecond}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}}});
+  // The relation's constant -q qlo (the rows' E_i = w' - q q' - q qlo).
+  s.shape_value("signature.relation.0.shape.left.first.first.first.first.first.first.first.first.second.first",
+      {Root::kPredicateLeft, "signature.relation.0",
+       {{Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst},
+        {Edge::kFirst}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
   return {
       {"z.digit.low",
        "z.digit.high",
@@ -1268,6 +1111,11 @@ inline NamedShapeInputs mldsa_ring_carrier_shape_inputs(const Scope &s) {
        "member.table.gamma",
        "challenge.c",
        "signature.relation.q",
+       "signature.Q",
+       "signature.r",
+       "signature.relation.0.public0",
+       "signature.relation.0.public1",
+       "signature.lambda",
        "member.table.powers",
        "member.table.digests",
        "member.select.shape.right",
@@ -1278,8 +1126,12 @@ inline NamedShapeInputs mldsa_ring_carrier_shape_inputs(const Scope &s) {
        "signature.relation.q.digit.low",
        "signature.relation.q.digit.middle",
        "signature.relation.q.digit.high",
-       "norm.z.offset"},
-      {"signature.relation",
+       "norm.z.offset",
+       "signature.relation.0.shape.left.first.first.first.first.first.first.first.first.second.first"},
+      {"signature.relation.0",
+       "signature.relation.1",
+       "signature.relation.2",
+       "signature.relation.3",
        "member.select.index.boolean",
        "signature.w",
        "norm.z",
@@ -1297,12 +1149,6 @@ inline NamedShapeInputs mldsa_ring_carrier_shape_inputs(const Scope &s) {
        "challenge.c.boolean"},
       {"member.select.shape.left.first.second.second.first.first.first.shared.first.second.first.first",
        "member.select.shape.left.first.second.second.first.first.first",
-       "signature.relation.shape.left.first",
-       "signature.relation.shape.right.first.second.first.first.first.first",
-       "signature.relation.shape.right.first.second.first.first.first.second.first",
-       "signature.relation.shape.left.second.first",
-       "signature.relation.shape.left.second.second.first",
-       "signature.relation.shape.left.second.second.second",
        "mac.equal.shape.right",
        "mac.equal.shape.left.shared.first.second.second.second",
        "mac.equal.shape.left",
@@ -1335,7 +1181,8 @@ inline NamedShapeInputs mldsa_ring_carrier_shape_inputs(const Scope &s) {
        "member.select.shape.left.second.first.second.first.shared.second.first.shared.second.first.shared.second.first",
        "member.select.shape.left.second.first.second.first.shared.second.first.shared.second.first",
        "member.select.shape.left.second.first.second.first.shared.second.first",
-       "member.select.shape.left.second.first.second.first"},
+       "member.select.shape.left.second.first.second.first",
+       "signature.relation.3.shape.left.second.first.first.first.first"},
       {}};
 }
 

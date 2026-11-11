@@ -10,7 +10,7 @@ public import GordieHowe.Model.ROM.Model
 /-!
 # Query-bounded classical adversaries
 
-The one adversary class of the classical random-oracle model (the paper's Definition 6.1,
+The one adversary class of the classical random-oracle model (the paper's
 `def:adversary`: in the ROM, a classical probabilistic oracle algorithm with coins sampled
 independently of the oracle and the same bounds for every choice of its coins; CY24 Remark 5.1.4, p.
 49, for the coins): a law on coins independent of the oracle, and for each value of the coins a
@@ -18,7 +18,7 @@ deterministic interactive algorithm that, at each of its `steps` steps, chooses 
 far whether to query the oracle in force at a point or to send a request, and after its steps
 outputs a value computed from the replies. Its query budget is per run: against every responder and
 every oracle at most `t` of its steps are queries; requests are not counted. The name follows the
-paper's "query-bounded adversaries" (Definition 6.1).
+paper's "query-bounded adversaries" (`def:adversary`).
 
 - `Action A Req`, `Reply B Resp`: a query or a request, and the oracle's answer or the response.
 - `IAlg A B Req Resp Out m`: the deterministic algorithm with `m` steps (`next`, `out`).
@@ -76,10 +76,19 @@ structure IAlg (A B Req Resp Out : Type) (m : ℕ) where
   /-- The output, from the replies. -/
   out : List (Reply B Resp) → Out
 
-/-- **A responder**: the response to request number `i` with request `r` on the oracle in force
-`O`, and the oracle after the request. -/
+/-- **A responder's answer to a request**: the response and the oracle in force after the request
+(a simulator may reprogram it). -/
+structure Response (A B Resp : Type) where
+  /-- The response. -/
+  response : Resp
+  /-- The oracle in force after the request. -/
+  oracle : A → B
+
+/-- **A responder** (the challenger of Unruh 2017 §2, p. 5, which answers requests and may
+reprogram the oracle): the answer to request number `i` with request `r` on the oracle in force
+`O`, the response and the oracle after the request. -/
 abbrev Responder (A B Req Resp : Type) : Type :=
-  ℕ → Req → (A → B) → Resp × (A → B)
+  ℕ → Req → (A → B) → Response A B Resp
 
 /-- **The state of a run**: the replies so far, the oracle in force and the number of requests
 made. -/
@@ -101,7 +110,8 @@ variable {A B Req Resp Out : Type} {m : ℕ} (𝒜 : IAlg A B Req Resp Out m)
 def step (R : Responder A B Req Resp) (s : GameState A B Resp) : GameState A B Resp :=
   match 𝒜.next s.hist with
   | .query a => ⟨s.hist ++ [.answer (s.oracle a)], s.oracle, s.nreq⟩
-  | .request r => ⟨s.hist ++ [.response (R s.nreq r s.oracle).1], (R s.nreq r s.oracle).2, s.nreq + 1⟩
+  | .request r =>
+    ⟨s.hist ++ [.response (R s.nreq r s.oracle).response], (R s.nreq r s.oracle).oracle, s.nreq + 1⟩
 
 /-- **The run of `𝒜` against `R` from the oracle `O`**: the state after `k` steps. -/
 def run (R : Responder A B Req Resp) (O : A → B) : ℕ → GameState A B Resp

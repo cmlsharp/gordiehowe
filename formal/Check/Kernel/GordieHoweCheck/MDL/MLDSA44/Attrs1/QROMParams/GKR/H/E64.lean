@@ -4,16 +4,15 @@
 module
 
 public import GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.QROMParams.GKR.H
-public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.H.E64.P0
-public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.H.E64.P1
-public import GordieHoweCheck.MDL.MLDSA44.Attrs1.QROMParams.GKR.H.E64.P2
+meta import GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.QROMParams.GKR.H
+import all GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.QROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of entry 64 of the GKR circuit of domain H, composed from its part modules (generated; do not edit). -/
+/-! The relational check of entry 64 of the GKR circuit of domain H (generated; do not edit). -/
 
 namespace GordieHowe.Generated.MDL.MLDSA44.Attrs1.QROMParams.GKR.H
 
-compose_entry cert ar 64 [0, 0, 18, 1, 64, 6, 0, 0, 2, 1, 341, 2, 0, 0, 3, 1, 1024, 6, 1, 1024, 6, 0, 0, 15, 1, 64, 4, 0, 0, 2, 1, 256, 3, 2, 1024, 1]
+check_entry cert ar 64 [0, 0, 42, 0, 0, 4, 2, 1, 1]
 
 end GordieHowe.Generated.MDL.MLDSA44.Attrs1.QROMParams.GKR.H

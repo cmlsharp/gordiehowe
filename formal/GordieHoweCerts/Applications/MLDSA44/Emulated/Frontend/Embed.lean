@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.RealizedProgram.Embed
+public import GordieHowe.Applications.MLDSA44.EmbedFacts
 public import GordieHoweCerts.Applications.MLDSA44.Frontend.Basic
 public import GordieHowe.Language.RealizedProgram.PrimeField
 public import GordieHowe.Foundations.Fields.Goldilocks
@@ -13,48 +14,59 @@ public import GordieHowe.Foundations.Fields.Goldilocks
 /-!
 # GordieHowe frontend: an emulated ML-DSA program holds a native one's domain `H`
 
-An emulated ML-DSA program (`MLDSA44.Emulated.ROMParams`, `MLDSA44.Emulated.QROMParams`, export `c825eb05`)
-holds domain `H` of the native program at the same parameters with every value identifier one larger and
-every shared-expression identifier two larger (`σ`): the values `hV` (`6`, `8 … 54`, `66 … 566`) and
-shared expressions `hR` (`11 … 525`, the crossing's `H` operand included) of the native program's
-predicates `18 … 270` (the Keccak trace, `μ`'s padding, the selection, the memory check) are renamed
-to the emulated program's, with their kinds, sizes, fields, types and phases, and native predicate
-`k` is emulated predicate `k + 2` (`MldsaEmbed`, decided per pair of programs). So the native
-frontend's facts about domain `H` (`GordieHowe.MLDSA44.HSat`, `HashView`, `SampleView`) hold for the
-emulated program through `GordieHowe.RealizedProgram.pullEnv` (`hSat`).
+An emulated ML-DSA program (`MLDSA44.Emulated.ROMParams`, `MLDSA44.Emulated.QROMParams`) holds
+domain `H` of the native program at the same parameters: the values and shared expressions of the
+native program's predicates `18 … 270` (the Keccak trace, `μ`'s padding, the selection, the memory
+check) and of its crossing's operand of domain `H` are renamed to the emulated program's, with
+their kinds, sizes, fields, types and phases, and native predicate `k` is an emulated predicate
+(`MldsaEmbed`). The compiler computes the renaming, the part and the predicate pairs from the two
+programs and exports them as the emulated program's checked embedding data (C++
+`lib/gordiehowe/compiler/embedding.h`); each emulated program reads them from its data and decides
+the layout facts the frontends read: the challenges keep their identifiers, and the held pairs
+(native predicate, emulated predicate) are the data's. Where a native value lands is read through
+the renaming and its inverse on the part (`eOf`), never by an identifier of the emulated program.
+So the native frontend's facts about domain `H`
+(`GordieHowe.MLDSA44.HSat`, `HashView`, `SampleView`) hold for the emulated program through
+`GordieHowe.RealizedProgram.pullEnv` (`hSat`).
 -/
 
 namespace GordieHowe.MLDSA44.Emulated
 
-/-- **The renaming**: value `v` of the native program is value `v + 1` of the emulated one, shared
-expression `k` is `k + 2`, challenge `j` is `j`. -/
-def σ : RealizedProgram.Renaming := ⟨(· + 1), (· + 2), id⟩
-
-/-- **The native values of domain `H`'s part**: the constant `6`, the constants `8 … 54` and
-`H`'s values `66 … 566`. -/
-def hV : List ℕ := 6 :: List.range' 8 47 ++ List.range' 66 501
-
-/-- **The native shared expressions of domain `H`'s part**: `11 … 525` (`522 … 525` the crossing's
-operand). -/
-def hR : List ℕ := List.range' 11 515
-
-/-- **An emulated program holds a native program's domain `H`**: the embedding under `σ`
-(`RealizedProgram.Embedding`), native predicate `k` of domain `H` is emulated predicate `k + 2`, renamed,
-a source predicate, and the values the frontend reads by their node types are renamed to
-node-typed source values. Each emulated program instantiates it by `decide`, naming its native
-program (`nat`). -/
+/-- **An emulated program holds a native program's domain `H`**: the embedding under its renaming
+`σ` of the part's values `V` and shared expressions `R` (`RealizedProgram.Embedding`), each read
+from the program's checked embedding data; native predicate `k` of domain `H` is emulated predicate
+`pred k`, renamed, a source predicate; the values the frontend reads by their node types are
+renamed to node-typed source values; and the layout facts the frontends read, decided from the
+data (`chalId`, `readV`, `held`). Each emulated program instantiates it, naming
+its native program (`nat`). -/
 class MldsaEmbed (program : RealizedProgram) where
   /-- The native program. -/
   nat : RealizedProgram
+  /-- The renaming. -/
+  σ : RealizedProgram.Renaming
+  /-- The part's values. -/
+  V : List ℕ
+  /-- The part's shared expressions. -/
+  R : List ℕ
+  /-- The emulated predicate of each held native predicate. -/
+  pred : ℕ → ℕ
   /-- The embedding. -/
-  embedding : nat.Embedding program σ hV hR
-  /-- Native predicate `k` of domain `H` is emulated predicate `k + 2`. -/
-  predCorr : ∀ k, 18 ≤ k → k ≤ 270 →
-    nat.equalCorrB program σ hV hR (nat.predicate k).body (program.predicate (k + 2)).body = true ∧
-      k + 2 < program.predicates.length ∧ program.inSource (program.predicate (k + 2)) = true
+  embedding : nat.Embedding program σ V R
+  /-- Native predicate `k` of domain `H` is emulated predicate `pred k`. -/
+  predCorr : ∀ k, hPredLo ≤ k → k ≤ hPredHi →
+    nat.equalCorrB program σ V R (nat.predicate k).body (program.predicate (pred k)).body = true ∧
+      pred k < program.predicates.length ∧ program.inSource (program.predicate (pred k)) = true
   /-- The typed values. -/
-  typedCorr : ∀ v ∈ MLDSA44.hTyped, v ∈ hV ∧ σ.val v < program.values.length ∧
-    program.IsSourceValue (σ.val v) ∧ (program.value (σ.val v)).typeSource = .node
+  typedCorr : ∀ v ∈ MLDSA44.hTyped, v ∈ V ∧ (σ).val v < program.values.length ∧
+    program.IsSourceValue ((σ).val v) ∧ (program.value ((σ).val v)).typeSource = .node
+  /-- The challenges keep their identifiers. -/
+  chalId : ∀ j, (σ).chal j = j
+  /-- `tr` (`66`) is held. -/
+  readV : 66 ∈ V
+  /-- The held pairs (native predicate, emulated predicate) of the data. -/
+  held : List (ℕ × ℕ)
+  /-- `pred` pairs each held native predicate with its emulated predicate. -/
+  pred_held : ∀ p ∈ held, pred p.1 = p.2
 
 set_option linter.unusedSectionVars false
 
@@ -65,6 +77,12 @@ local notation "interp" => RealizedProgram.mldsaInterpOf F0 FH
 
 set_option hygiene false in
 local notation "nat" => MldsaEmbed.nat program
+
+set_option hygiene false in
+local notation "σ" => MldsaEmbed.σ program
+
+set_option hygiene false in
+local notation "hV" => MldsaEmbed.V program
 
 /-- **An environment of the emulated program read as one of the native program** (through `σ`,
 `RealizedProgram.pullEnv`). -/
@@ -85,9 +103,21 @@ theorem hSat {e : program.Env interp} (hs : program.SourceSatAt e) :
     exact hi
 
 /-- **The readers agree on `hV`**: a native value of domain `H`'s part, read in the environment
-read as the native program's, is the emulated value one larger. -/
+read as the native program's, is its renamed emulated value. -/
 theorem reader_pull (e : program.Env interp) {v : ℕ} (hv : v ∈ hV) (i : ℕ) :
-    (nat).reader (pull e) v i = RealizedProgram.castElt (program.reader e (v + 1) i) :=
+    (nat).reader (pull e) v i = RealizedProgram.castElt (program.reader e ((σ).val v) i) :=
   RealizedProgram.reader_pullEnv MldsaEmbed.embedding e hv i
+
+variable (program) in
+/-- **The renaming's inverse on the part**: the native value of `hV` an emulated value renames, from
+the table of the renaming on the held values (`RealizedProgram.Renaming.invOn`). Irreducible: the
+statements that read it compare its lookups, never its table. -/
+@[irreducible] def eOf (v : ℕ) : Option ℕ :=
+  ((σ).invOn hV).get? v
+
+/-- An emulated value the inverse maps to `u` is `u`'s renamed value, with `u` held. -/
+theorem eOf_spec {v u : ℕ} (h : eOf program v = some u) : u ∈ hV ∧ (σ).val u = v := by
+  unfold eOf at h
+  exact RealizedProgram.Renaming.invOn_spec h
 
 end GordieHowe.MLDSA44.Emulated

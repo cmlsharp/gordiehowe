@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Model.Quantum.Core.State
 public import Mathlib.LinearAlgebra.Matrix.PosDef
+public import Mathlib.Probability.ProbabilityMassFunction.Basic
 
 @[expose] public section
 
@@ -21,6 +22,8 @@ effects `0 ≤ M i ≤ 1` and every finite set of labels give bias at most `ε`.
 - `TraceDistLE.of_eq`: equal states are at distance `0`.
 - `TraceDistLE.sum_re_trace_le`: the measurement of the label alone (`M i = 1`): on every finite
   set of labels the total weight of `σ` exceeds that of `ρ` by at most `ε`.
+- `AvgTraceDistLE aux ρ σ ε`: the trace distance averaged over an auxiliary input `a ← aux`, with a
+  register type that may depend on `a`, is at most `ε`.
 -/
 
 open Matrix
@@ -59,5 +62,31 @@ theorem sum_re_trace_le {ρ σ : κ → Matrix ι ι ℂ} {ε : ℝ} (h : TraceD
   linarith [neg_abs_le (∑ i ∈ s, (ρ i).trace.re - ∑ i ∈ s, (σ i).trace.re)]
 
 end TraceDistLE
+
+open scoped NNReal ENNReal
+
+/-- **The trace distance averaged over an auxiliary input `a ← aux` is at most `ε`**: some bounds
+`δ a` on the trace distance of `ρ a` and `σ a` (`TraceDistLE`) at every auxiliary input have
+average `Σ_a aux a · δ a` at most `ε`. The register type `R a` of the states may depend on `a`. -/
+def AvgTraceDistLE {α : Type*} (aux : PMF α) {R : α → Type*} [∀ a, Fintype (R a)]
+    [∀ a, DecidableEq (R a)] (ρ σ : (a : α) → κ → Matrix (R a) (R a) ℂ) (ε : ℝ≥0∞) : Prop :=
+  ∃ δ : α → ℝ≥0, (∀ a, TraceDistLE (ρ a) (σ a) (δ a)) ∧ ∑' a, aux a * (δ a : ℝ≥0∞) ≤ ε
+
+namespace AvgTraceDistLE
+
+variable {α : Type*} {aux : PMF α} {R : α → Type*} [∀ a, Fintype (R a)] [∀ a, DecidableEq (R a)]
+  {ρ σ : (a : α) → κ → Matrix (R a) (R a) ℂ}
+
+/-- A bound at a smaller error is a bound at a larger one. -/
+theorem mono {ε ε' : ℝ≥0∞} (h : AvgTraceDistLE aux ρ σ ε) (hε : ε ≤ ε') :
+    AvgTraceDistLE aux ρ σ ε' :=
+  let ⟨δ, hδ, hsum⟩ := h
+  ⟨δ, hδ, hsum.trans hε⟩
+
+/-- Equal states are at average trace distance `0`. -/
+theorem of_eq (h : ∀ a, ρ a = σ a) : AvgTraceDistLE aux ρ σ 0 :=
+  ⟨0, fun a => TraceDistLE.of_eq (h a), by simp⟩
+
+end AvgTraceDistLE
 
 end GordieHowe.Quantum

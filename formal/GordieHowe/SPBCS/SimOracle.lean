@@ -663,7 +663,7 @@ state (`simLaw_le_ofReal_foldedProb`, `simState_expandAt_eq_zero`), and the swap
 the verifier's query bound; `hrbr`, causal round-by-round knowledge soundness of the composite;
 `hA`, the simulator program assigns only at the keys of its chain inputs. -/
 theorem winTestProb_withTest_le
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq)
+    (hkq : M.QueriesAtMost Qs kq)
     {rel : Set (X × Wit)} {St : CausalStateFn P t X} {ε : ChIdx P t → ℝ≥0}
     (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     {Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
@@ -866,7 +866,7 @@ variable {C : Type} [Fintype C] [DecidableEq (SaltedCoins (FiatShamirSalt kS) C)
 spBCS compiler over the game's adversaries** (proof-internal): the
 bound of `simulation_sound_extractability_sim_oracle` for every adversary of the game. -/
 theorem simulation_sound_extractability_sim_oracle_game [DecidableEq X] {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) {Wit : Type}
+    (hkq : M.QueriesAtMost Qs kq) {Wit : Type}
     {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
     {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     (Sim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X (M.Response B)
@@ -909,7 +909,7 @@ with `q` the queries of one run of `Sim`: the spBCS knowledge error with the tes
 counted as adversary queries, and `tTest √(24 V / 2^(8k))` for measuring `E_T`'s output before
 the test (`V = visitBound`). -/
 theorem simulation_sound_extractability_sim_oracle [DecidableEq X] {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) {Wit : Type}
+    (hkq : M.QueriesAtMost Qs kq) {Wit : Type}
     {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
     {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     (Sim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X (M.Response B)

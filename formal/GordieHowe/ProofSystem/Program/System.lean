@@ -60,9 +60,9 @@ def AffineRow.Holds {F ι : Type} [Field F] (ρ : AffineRow L Stmt F ι) (x : St
     (r : L.Run) : Prop :=
   ρ.form x r a + ρ.const x r = 0
 
-/-- **A quadratic triple** of a domain (`domain.h:2797-2801`: the batch's pad products and squaring
-chains): `left a * right a = out a`, for linear forms on the cells (the C++ triples are
-coordinates). -/
+/-- **A quadratic triple** of a domain (`domain.h`'s quadratic triples, among them the batch's pad
+products, `batch.h`, `pad_quadratic`, and the squaring chains): `left a * right a = out a`, for
+linear forms on the cells (the C++ triples are coordinates). -/
 structure QuadRow (F ι : Type) [Field F] where
   /-- The left factor. -/
   left : (ι → F) →ₗ[F] F
@@ -81,11 +81,11 @@ tables W"): the relation `Q` on `arity` operands, the same at every instance (`F
 coefficients are fixed), and for every instance the operands as affine views of the cells: an
 additive part (`operand`) and a constant part read from the statement (`offset`); the zerocheck
 proves `Q` at every instance. A per-instance public coefficient is an operand with no additive
-part, its value the offset: the C++ reads a constant monomial this way (`domain.h`,
-`batch_parts`: the constant operand `{f.one(), {}}`), so `Q` itself has no constant term. The
-additive part is not necessarily linear over `F`: a batch over a table of subfield words reads its
-operands from the words' bits (`batch.h`, `BitOperandMap`), and bit `i` of a word is a trace form,
-linear over the prime field only. -/
+part, its value the offset: the C++ reads a constant monomial this way (`compiler/batch_form.h`:
+the part of degree at most one, constants included, is one operand), so `Q` itself has no constant
+term. The additive part is not necessarily linear over `F`: a batch over a table of subfield words
+reads its operands from the words' bits (`batch.h`, `BitOperandMap`), and bit `i` of a word is a
+trace form, linear over the prime field only. -/
 structure BatchRelation (Stmt F ι : Type) [Field F] where
   /-- The number of operands. -/
   arity : ℕ
@@ -190,7 +190,8 @@ end Domain
 /-- **The circuit proof of a domain** `D`: a circuit proof (`FieldProof`) for a relation `holds`
 on public inputs `Pub` and witnesses `Wit`, the public input read from the statement and the run
 (the verifier's public computations: challenge powers, weights, message coordinates), the domain's
-cells decoded from the witness (computable, polynomial time: it is part of the extraction), and
+cells decoded from the witness (part of the extraction, required to be polynomial time; argued,
+not proved in Lean), and
 the bridge: the relation at the public input gives the domain's predicate on the decoded cells. -/
 structure DomainProof (L : RealizedProgram.ProofSystem.PhaseLayout K) (Stmt : Type) (D : Domain L Stmt) where
   /-- The circuit's public input. -/

@@ -4,15 +4,15 @@
 module
 
 public import GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.GKR.A
-public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.A.E14.P0
-public import GordieHoweCheck.MDL.ECDSA.ROMParams.GKR.A.E14.P1
+meta import GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.GKR.A
+import all GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of entry 14 of the GKR circuit of domain A, composed from its part modules (generated; do not edit). -/
+/-! The relational check of entry 14 of the GKR circuit of domain A (generated; do not edit). -/
 
 namespace GordieHowe.Generated.MDL.ECDSA.ROMParams.GKR.A
 
-compose_entry cert ar 14 [0, 0, 15, 0, 0, 12, 0, 0, 10, 0, 0, 12, 0, 0, 12, 0, 0, 12, 0, 0, 11, 0, 0, 12, 0, 0, 22, 1, 64, 1, 0, 0, 24, 0, 0, 24, 0, 0, 24, 1, 64, 1, 0, 0, 3, 2, 1024, 1]
+check_entry cert ar 14 [0, 0, 195, 2, 1, 1]
 
 end GordieHowe.Generated.MDL.ECDSA.ROMParams.GKR.A

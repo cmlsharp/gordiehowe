@@ -16,13 +16,11 @@ The ring loop of the ML-DSA ring publishing `w₁` (`GordieHowe/Applications/Rin
 steps 2–3 of the construction) as a bounded classical oracle program (`W1Loop`), and the ring
 signature `ofBase (w1BaseSigner …) PS adm` at ML-DSA-44, ML-DSA-65 and ML-DSA-87.
 
-- `MaskOracle X Y p T Msg`: FIPS 204 hedged mask derivation `y = ExpandMask(H(K ‖ rnd ‖ µ), κ)` as a
-  part of the one random oracle `X → Y`: its points `(rnd, (κ, (K, (tr, m))))` (`MaskPt`,
-  `MLDSAPublicW1Hedged.lean`) embedded in `X`, its values decoded from `Y` onto the mask box.
-- `MaskSource`: where the masks of a call come from. `MaskSource.hedged M`: from the mask oracle at
-  a 32-byte nonce `rnd` (one query per mask); `MaskSource.fresh M`: from a function
-  `MaskPt T Msg → Y` drawn with the signing coins (no query), the fresh counterpart of the hedged
-  source for reprogramming at hidden salts.
+The masks come from a `MaskSource` (`Applications/MLDSA/Signing/Hedged.lean`): the hedged source
+`MaskSource.hedged M` reads the mask oracle `M`, and the fresh source `MaskSource.fresh M`, the
+counterpart of the hedged source for reprogramming at hidden salts, reads a mask function drawn
+with the signing coins. The ordinary signer is `stdProg` of the same file.
+
 - `callOut`: **one call of the base signer, then the flattening coin**, as a function: the first
   of the `T` masks whose attempt passes the checks of FIPS 204 Algorithm 7 against the members'
   commitment hashes `hc`, kept when the coin `u ∈ Fin D` is below `D` times the flattening weight
@@ -36,17 +34,15 @@ signature `ofBase (w1BaseSigner …) PS adm` at ML-DSA-44, ML-DSA-65 and ML-DSA-
   member), then per call the `T` masks and the members' commitment hashes at their commitments
   (one query per mask and member). `callProg_queries`, `ringLoopProg_queries`: at most
   `T · qr + T · N` queries per call and `N + k · (T · qr + T · N)` in all.
-- `run_read_hedged`, `run_read_fresh`: the masks the two sources read.
 - `exists_of_callOut_eq_some`, `ringVerify_of_run_ringLoopProg`, `correctWithin_w1BaseSigner`,
   `correctWithin_w1ConcreteBase`: **correctness**: every signature of the loop is an accepted
   attempt and verifies at its recomputed commitment, so the base signer has correctness error `0`
   for every mask source (`BaseSigner.CorrectWithin`), and at the concrete primitives with no
   hypothesis beyond an approved parameter set.
-- `stdProg`, `stdProg_queries`: the ordinary hedged FIPS 204 signer at the first nonce (`µ`, then
-  `T` attempts, without the flattening coin).
-- `exists_index_of_callOut_eq_some`, `exists_index_of_loopOut_eq_some`,
-  `exists_index_of_run_stdProg_eq_some`: every signature of one call, of the loop and of the
-  ordinary signer is the attempt output of one of the masks read.
+- `exists_index_of_callOut_eq_some`, `exists_index_of_loopOut_eq_some`: every signature of one
+  call and of the loop is the attempt output of one of the masks read.
+- `ringCoins Rnd k D`: the ring loop's coins; `ringCoins.mk`, `ringCoins.nonces`, `ringCoins.idx`:
+  built from and read as the per-call randomness and keep coins.
 - `ringLoop src O βmin k D`: the ring loop as a `W1Loop` (`T` attempts per call); `hedgedLoop`,
   `freshLoop`: at the hedged and the fresh source.
 - `w1Base p prims enc O M βmin tol k D bmsg`: the base signer `w1BaseSigner` with the hedged loop;
@@ -79,63 +75,7 @@ open scoped ENNReal
 
 variable {X Y : Type}
 
-/-! ### The mask oracle and the sources of masks -/
-
-/-- **The mask oracle of FIPS 204 hedged signing inside the one random oracle `X → Y`**: the points
-`(rnd, (κ, (K, (tr, m))))` of `ExpandMask(H(K ‖ rnd ‖ µ), κ)` (Algorithm 7, lines 7 and 11)
-embedded in `X`, the masks decoded from `Y`. -/
-structure MaskOracle (X Y : Type) (p : Params) (T : ℕ) (Msg : Type) where
-  /-- The points of the mask oracle. -/
-  pt : Bytes 32 × MaskPt T Msg → X
-  /-- The masks decoded from the oracle's values. -/
-  ans : Y → MaskBox p
-
-/-- **A source of masks**: a type `Rnd` of per-call randomness, and the mask at a point of
-`MaskPt T Msg` read from it by a program with at most `qr` queries. -/
-structure MaskSource (X Y : Type) (p : Params) (T : ℕ) (Msg : Type) where
-  /-- The per-call randomness. -/
-  Rnd : Type
-  [instFintypeRnd : Fintype Rnd]
-  [instDecEqRnd : DecidableEq Rnd]
-  [instNonemptyRnd : Nonempty Rnd]
-  /-- The bound on the queries of one mask. -/
-  qr : ℕ
-  /-- The mask at a point, read from the randomness. -/
-  read : Rnd → MaskPt T Msg → OracleProg X Y (MaskBox p)
-  /-- It makes at most `qr` queries. -/
-  read_queries : ∀ r u, (read r u).QueriesLE qr
-
-attribute [instance] MaskSource.instFintypeRnd MaskSource.instDecEqRnd MaskSource.instNonemptyRnd
-
 variable {p : Params} {T : ℕ} {Msg : Type}
-
-/-- **The hedged source**: the mask at the point `u` of the nonce `rnd` is the mask oracle's value
-at `(rnd, u)`, one query. -/
-def MaskSource.hedged (M : MaskOracle X Y p T Msg) : MaskSource X Y p T Msg where
-  Rnd := Bytes 32
-  qr := 1
-  read r u := .query (M.pt (r, u)) fun y => .pure (M.ans y)
-  read_queries _ _ _ := by simp [OracleProg.trace_query, OracleProg.trace_pure]
-
-/-- **The fresh source**: the mask at the point `u` is the decoding of `g u` for a function
-`g : MaskPt T Msg → Y` drawn with the signing coins, no query. -/
-def MaskSource.fresh [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y]
-    (M : MaskOracle X Y p T Msg) : MaskSource X Y p T Msg where
-  Rnd := MaskPt T Msg → Y
-  qr := 0
-  read g u := .pure (M.ans (g u))
-  read_queries _ _ := OracleProg.QueriesLE.pure _ _
-
-/-- The hedged source reads the mask oracle. -/
-theorem run_read_hedged (M : MaskOracle X Y p T Msg) (r : Bytes 32) (u : MaskPt T Msg)
-    (H : X → Y) : ((MaskSource.hedged M).read r u).run H = M.ans (H (M.pt (r, u))) :=
-  rfl
-
-/-- The fresh source decodes its function. -/
-theorem run_read_fresh [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y]
-    (M : MaskOracle X Y p T Msg) (g : MaskPt T Msg → Y) (u : MaskPt T Msg) (H : X → Y) :
-    ((MaskSource.fresh M).read g u).run H = M.ans (g u) :=
-  rfl
 
 /-! ### One call and the loop, as functions -/
 
@@ -156,7 +96,8 @@ def callOut (βmin : ℚ≥0) (D : ℕ) (sk : SecretKey p)
       (hc (i, realBuckets (prims.expandA sk.rho) (ys t)))) with
   | none => none
   | some t =>
-    if ((u : ℕ) : ℚ≥0) < D * (flattenCoin prims sk βmin (realBuckets (prims.expandA sk.rho) (ys t),
+    if ((u : ℕ) : ℚ≥0) < D * (flattenCoin prims sk (Cutoff.const βmin) (realBuckets (prims.expandA
+        sk.rho) (ys t),
         hc (i, realBuckets (prims.expandA sk.rho) (ys t))) *
         (ringWeights prims βmin (ringT0s prims R.1)).otherWeight i hc
           (realBuckets (prims.expandA sk.rho) (ys t))) then
@@ -326,7 +267,7 @@ theorem chOrc_getD_eq (O : W1Oracles X Y p prims Msg N reps) (R : KeyRing (PubKe
       x.2) = PMF.ringOf (ringPts prims R.1 m) (O.hOrc H) x := by
   simp only [List.map_map, List.getD_eq_getElem?_getD, List.getElem?_map,
     List.getElem?_eq_getElem x.1.2, Option.map_some, Option.getD_some, PMF.ringOf, ringPts,
-    W1Oracles.hOrc, schemeOrc, W1Oracles.muOrc, Function.comp_apply, List.get_eq_getElem]
+    MLDSAOracles.hOrc, schemeOrc, MLDSAOracles.muOrc, Function.comp_apply, List.get_eq_getElem]
 
 omit [Fintype prims.Power2High] [DecidableEq prims.Power2High] [Fintype prims.Hint]
   [DecidableEq prims.Hint] [Inhabited prims.Hint] in
@@ -381,77 +322,42 @@ theorem run_ringLoopProg (src : MaskSource X Y p T Msg) (O : W1Oracles X Y p pri
 
 /-! ### The ordinary signer, the loop and the scheme -/
 
-/-- **The ordinary hedged FIPS 204 signer** (Algorithm 7) at the randomness of the first call:
-`µ = H_µ(tr, m)` (one query), the `T` masks, the commitment hash `H(µ, w₁)` at each mask's
-commitment, and the signature of the first mask whose attempt passes the checks (`none` when none
-does, or when `k = 0`). -/
-def stdProg (src : MaskSource X Y p T Msg) (O : W1Oracles X Y p prims Msg N reps)
-    (k : ℕ) (sk : SecretKey p) (m : Msg) (r : Fin k → src.Rnd) :
-    OracleProg X Y (Option (FIPSSignature p prims)) :=
-  if hk : 0 < k then
-    .query (O.muPt (sk.tr, m)) fun yMu =>
-      (OracleProg.tabulate (fun _ => maskBoxPoint p) (List.finRange T) fun t =>
-          src.read (r ⟨0, hk⟩) (t, (sk.key, (sk.tr, m)))).bind fun ys =>
-        (OracleProg.tabulate (fun _ => default) (List.finRange T) fun t =>
-            .query (O.chPt (O.muAns yMu, realBuckets (prims.expandA sk.rho) (ys t))) fun y =>
-              .pure (O.chAns y)).mapOutput fun cs =>
-          match (List.finRange T).find? (fun t =>
-              attemptAccept prims sk (prims.expandA sk.rho) (ys t) (cs t)) with
-          | some t => some (attemptOutput prims sk (prims.expandA sk.rho) (ys t, cs t))
-          | none => none
-  else .pure none
-
-omit [Fintype prims.Power2High] [DecidableEq prims.Power2High] [Fintype prims.Hint]
-  [DecidableEq prims.Hint] [Inhabited prims.Hint] in
-/-- The ordinary signer makes at most `1 + T · qr + T` queries. -/
-theorem stdProg_queries (src : MaskSource X Y p T Msg) (O : W1Oracles X Y p prims Msg N reps)
-    (k : ℕ) (sk : SecretKey p) (m : Msg) (r : Fin k → src.Rnd) :
-    (stdProg prims src O k sk m r).QueriesLE (1 + T * src.qr + T) := by
-  unfold stdProg
-  split_ifs with hk
-  · refine OracleProg.QueriesLE.mono (q := T * src.qr + T + 1)
-      (OracleProg.QueriesLE.query _ fun yMu => ?_) (by omega)
-    have h₁ : (OracleProg.tabulate (fun _ => maskBoxPoint p) (List.finRange T)
-        fun t => src.read (r ⟨0, hk⟩) (t, (sk.key, (sk.tr, m)))).QueriesLE (T * src.qr) := by
-      simpa using OracleProg.QueriesLE.tabulate (fun _ => maskBoxPoint p)
-        (List.finRange T) fun t => src.read_queries (r ⟨0, hk⟩) (t, (sk.key, (sk.tr, m)))
-    refine h₁.bind fun ys => ?_
-    have h₂ := OracleProg.QueriesLE.tabulate (fun _ => (default : CommitHashBytes p))
-      (List.finRange T) (q := 1)
-      (P := fun t => .query (O.chPt (O.muAns yMu, realBuckets (prims.expandA sk.rho) (ys t)))
-        fun y => .pure (O.chAns y))
-      fun t h => by simp [OracleProg.trace_query, OracleProg.trace_pure]
-    simpa using h₂.mapOutput _
-  · exact OracleProg.QueriesLE.pure _ _
-
-omit [Fintype prims.Power2High] [DecidableEq prims.Power2High] [Fintype prims.Hint]
-  [DecidableEq prims.Hint] [Inhabited prims.Hint] in
-/-- **Every signature of the ordinary signer is the output of one of its masks**: at the oracle
-`H`, `stdProg` outputs `σ` only for `k > 0` and as `attemptOutput (y, c̃)` with `y` the mask read
-from the first call's randomness at a point `(t, (K, (tr, m)))`. -/
-theorem exists_index_of_run_stdProg_eq_some (src : MaskSource X Y p T Msg)
-    (O : W1Oracles X Y p prims Msg N reps) (k : ℕ) (sk : SecretKey p) (m : Msg)
-    (r : Fin k → src.Rnd) (H : X → Y) {σ : FIPSSignature p prims}
-    (h : (stdProg prims src O k sk m r).run H = some σ) :
-    ∃ (hk : 0 < k) (t : Fin T) (cTilde : CommitHashBytes p),
-      σ = attemptOutput prims sk (prims.expandA sk.rho)
-        ((src.read (r ⟨0, hk⟩) (t, (sk.key, (sk.tr, m)))).run H, cTilde) := by
-  unfold stdProg at h
-  split_ifs at h with hk
-  · simp only [OracleProg.run_query, OracleProg.run_bind, OracleProg.run_mapOutput,
-      OracleProg.run_tabulate, OracleProg.run_pure, List.mem_finRange, ite_true] at h
-    split at h
-    · rename_i t _
-      exact ⟨hk, t, _, (Option.some.inj h).symm⟩
-    · exact absurd h (by simp)
-  · exact absurd h (by simp [OracleProg.run_pure])
-
 variable [Fintype Msg] [DecidableEq Msg]
 
 /-- **The coins of the ring loop** with per-call randomness `Rnd`, at most `k` calls and keep
 coins on `Fin D`: the randomness and the keep coin of each call. The hedged and the fresh signer
 differ only in `Rnd`. A named type, so its instances are found at the name. -/
 def ringCoins (Rnd : Type) (k D : ℕ) : Type := (Fin k → Rnd) × (Fin k → Fin D)
+
+/-- The ring loop's coins with the per-call randomness `r` and the keep coins `u`. -/
+def ringCoins.mk {Rnd : Type} {k D : ℕ} (r : Fin k → Rnd) (u : Fin k → Fin D) : ringCoins Rnd k D :=
+  (r, u)
+
+/-- The per-call randomness of the ring loop's coins. -/
+def ringCoins.nonces {Rnd : Type} {k D : ℕ} (c : ringCoins Rnd k D) : Fin k → Rnd :=
+  Prod.fst (α := Fin k → Rnd) (β := Fin k → Fin D) c
+
+/-- The keep coin of each call of the ring loop's coins. -/
+def ringCoins.idx {Rnd : Type} {k D : ℕ} (c : ringCoins Rnd k D) : Fin k → Fin D :=
+  Prod.snd (α := Fin k → Rnd) (β := Fin k → Fin D) c
+
+omit nttOps in
+@[simp]
+theorem ringCoins.nonces_mk {Rnd : Type} {k D : ℕ} (r : Fin k → Rnd) (u : Fin k → Fin D) :
+    (ringCoins.mk r u).nonces = r :=
+  rfl
+
+omit nttOps in
+@[simp]
+theorem ringCoins.idx_mk {Rnd : Type} {k D : ℕ} (r : Fin k → Rnd) (u : Fin k → Fin D) :
+    (ringCoins.mk r u).idx = u :=
+  rfl
+
+omit nttOps in
+@[simp]
+theorem ringCoins.mk_nonces_idx {Rnd : Type} {k D : ℕ} (c : ringCoins Rnd k D) :
+    ringCoins.mk c.nonces c.idx = c :=
+  rfl
 
 instance {Rnd : Type} [Fintype Rnd] [DecidableEq Rnd] {k D : ℕ} : Fintype (ringCoins Rnd k D) :=
   inferInstanceAs (Fintype ((Fin k → Rnd) × (Fin k → Fin D)))
@@ -472,8 +378,9 @@ def ringLoop (src : MaskSource X Y p T Msg) (O : W1Oracles X Y p prims Msg N rep
   sign sk R i m c := ringLoopProg prims src O βmin k D sk R i m c
   sign_queries sk R i m c :=
     (ringLoopProg_queries prims src O βmin k D sk R i m c).mono (Nat.le_add_right _ _)
-  std sk m c := stdProg prims src O k sk m c.1
-  std_queries sk m c := (stdProg_queries prims src O k sk m c.1).mono (Nat.le_add_left _ _)
+  std sk m c := stdProg prims src O.toMLDSAOracles k sk m c.1
+  std_queries sk m c :=
+    (stdProg_queries prims src O.toMLDSAOracles k sk m c.1).mono (Nat.le_add_left _ _)
 
 /-- The ring loop signs with `ringLoopProg`. -/
 theorem ringLoop_sign (src : MaskSource X Y p T Msg) (O : W1Oracles X Y p prims Msg N reps)
@@ -482,10 +389,13 @@ theorem ringLoop_sign (src : MaskSource X Y p T Msg) (O : W1Oracles X Y p prims 
     (ringLoop prims src O βmin k D).sign sk R i m c = ringLoopProg prims src O βmin k D sk R i m c := by
   unfold ringLoop; rfl
 
+omit [Fintype prims.Power2High] [DecidableEq prims.Power2High] [Fintype prims.Hint]
+  [DecidableEq prims.Hint] [Inhabited prims.Hint] [Fintype Msg] [DecidableEq Msg] in
 /-- The ordinary signer of the ring loop is `stdProg` at the nonces of the coins. -/
 theorem ringLoop_std (src : MaskSource X Y p T Msg) (O : W1Oracles X Y p prims Msg N reps)
     (βmin : ℚ≥0) (k D : ℕ) [NeZero D] (sk : SecretKey p) (m : Msg) (c : ringCoins src.Rnd k D) :
-    (ringLoop prims src O βmin k D).std sk m c = stdProg prims src O k sk m c.1 := by
+    (ringLoop prims src O βmin k D).std sk m c =
+      stdProg prims src O.toMLDSAOracles k sk m c.nonces := by
   unfold ringLoop; rfl
 
 /-- The query bound of the ring loop. -/
@@ -506,28 +416,16 @@ in definitions and statements. -/
 instance instNonemptyHedgedCoins {k D : ℕ} [NeZero D] : Nonempty (ringCoins (Bytes 32) k D) :=
   inferInstance
 
-/-- The coins of the fresh ring loop are finite, registered at their type so that instance search
-stops there instead of rebuilding the instance from the mask points. -/
-instance instFintypeFreshCoins [Fintype Y] [DecidableEq Y] {k D : ℕ} :
-    Fintype (ringCoins (MaskPt T Msg → Y) k D) :=
-  inferInstance
-
-/-- The coins of the fresh ring loop have decidable equality (`instFintypeFreshCoins`). -/
-instance instDecEqFreshCoins [Fintype Y] [DecidableEq Y] {k D : ℕ} :
-    DecidableEq (ringCoins (MaskPt T Msg → Y) k D) :=
-  inferInstance
-
-/-- The coins of the fresh ring loop are nonempty (`instFintypeFreshCoins`; named, as
+/-- The coins of the fresh ring loop are nonempty, as a named instance (as
 `instNonemptyHedgedCoins`). -/
 instance instNonemptyFreshCoins [Nonempty Y] {k D : ℕ} [NeZero D] :
-    Nonempty (ringCoins (MaskPt T Msg → Y) k D) :=
+    Nonempty (ringCoins (MaskFn T Msg Y) k D) :=
   inferInstance
 
 /-- **The ring loop with fresh masks**: the masks from a function drawn with the coins per call
 (`MaskSource.fresh`), the fresh counterpart of `hedgedLoop`. -/
-abbrev freshLoop [Fintype Y] [DecidableEq Y] [Nonempty Y]
-    (O : W1Oracles X Y p prims Msg N reps) (M : MaskOracle X Y p T Msg) (βmin : ℚ≥0) (k D : ℕ)
-    [NeZero D] : W1Loop X Y p prims Msg N (ringCoins (MaskPt T Msg → Y) k D) :=
+abbrev freshLoop (O : W1Oracles X Y p prims Msg N reps) (M : MaskOracle X Y p T Msg)
+    (βmin : ℚ≥0) (k D : ℕ) [NeZero D] : W1Loop X Y p prims Msg N (ringCoins (MaskFn T Msg Y) k D) :=
   ringLoop prims (MaskSource.fresh M) O βmin k D
 
 /-- The hedged loop signs with `ringLoopProg` at the hedged source (`ringLoop_sign`). -/
@@ -538,27 +436,33 @@ theorem hedgedLoop_sign (O : W1Oracles X Y p prims Msg N reps) (M : MaskOracle X
       ringLoopProg prims (MaskSource.hedged M) O βmin k D sk R i m c :=
   by delta hedgedLoop ringLoop; rfl
 
+omit [Fintype prims.Power2High] [DecidableEq prims.Power2High] [Fintype prims.Hint]
+  [DecidableEq prims.Hint] [Inhabited prims.Hint] [Fintype Msg] [DecidableEq Msg] in
 /-- The hedged loop's ordinary signer is `stdProg` at the hedged source (`ringLoop_std`). -/
 theorem hedgedLoop_std (O : W1Oracles X Y p prims Msg N reps) (M : MaskOracle X Y p T Msg)
     (βmin : ℚ≥0) (k D : ℕ) [NeZero D] (sk : SecretKey p) (m : Msg) (c : ringCoins (Bytes 32) k D) :
-    (hedgedLoop prims O M βmin k D).std sk m c = stdProg prims (MaskSource.hedged M) O k sk m c.1 :=
-  by delta hedgedLoop ringLoop; rfl
+    (hedgedLoop prims O M βmin k D).std sk m c =
+      stdProg prims (MaskSource.hedged M) O.toMLDSAOracles k sk m c.nonces :=
+  ringLoop_std prims (MaskSource.hedged M) O βmin k D sk m c
 
+omit [Fintype Msg] [DecidableEq Msg] in
 /-- The fresh loop signs with `ringLoopProg` at the fresh source (`ringLoop_sign`). -/
-theorem freshLoop_sign [Fintype Y] [DecidableEq Y] [Nonempty Y]
-    (O : W1Oracles X Y p prims Msg N reps) (M : MaskOracle X Y p T Msg) (βmin : ℚ≥0) (k D : ℕ)
-    [NeZero D] (sk : SecretKey p) (R : KeyRing (PubKey p prims) N) (i : ℕ) (m : Msg)
-    (c : ringCoins (MaskPt T Msg → Y) k D) :
+theorem freshLoop_sign (O : W1Oracles X Y p prims Msg N reps) (M : MaskOracle X Y p T Msg)
+    (βmin : ℚ≥0) (k D : ℕ) [NeZero D] (sk : SecretKey p) (R : KeyRing (PubKey p prims) N) (i : ℕ)
+    (m : Msg) (c : ringCoins (MaskFn T Msg Y) k D) :
     (freshLoop prims O M βmin k D).sign sk R i m c =
       ringLoopProg prims (MaskSource.fresh M) O βmin k D sk R i m c :=
   by delta freshLoop ringLoop; rfl
 
+omit [Fintype prims.Power2High] [DecidableEq prims.Power2High] [Fintype prims.Hint]
+  [DecidableEq prims.Hint] [Inhabited prims.Hint] [Fintype Msg] [DecidableEq Msg] in
 /-- The fresh loop's ordinary signer is `stdProg` at the fresh source (`ringLoop_std`). -/
-theorem freshLoop_std [Fintype Y] [DecidableEq Y] [Nonempty Y]
-    (O : W1Oracles X Y p prims Msg N reps) (M : MaskOracle X Y p T Msg) (βmin : ℚ≥0) (k D : ℕ)
-    [NeZero D] (sk : SecretKey p) (m : Msg) (c : ringCoins (MaskPt T Msg → Y) k D) :
-    (freshLoop prims O M βmin k D).std sk m c = stdProg prims (MaskSource.fresh M) O k sk m c.1 :=
-  by delta freshLoop ringLoop; rfl
+theorem freshLoop_std (O : W1Oracles X Y p prims Msg N reps) (M : MaskOracle X Y p T Msg)
+    (βmin : ℚ≥0) (k D : ℕ) [NeZero D] (sk : SecretKey p) (m : Msg)
+    (c : ringCoins (MaskFn T Msg Y) k D) :
+    (freshLoop prims O M βmin k D).std sk m c =
+      stdProg prims (MaskSource.fresh M) O.toMLDSAOracles k sk m c.nonces :=
+  ringLoop_std prims (MaskSource.fresh M) O βmin k D sk m c
 
 variable (p) in
 /-- **The base signer of the ML-DSA ring publishing `w₁` with hedged signing** at the parameter set
@@ -692,6 +596,7 @@ theorem correctWithin_w1BaseSigner (h_laws : SigningLaws prims) (hv : VerifyLaws
     {enc : Vector prims.High p.k → BucketVec p}
     (henc : ∀ w : RqVec p.k, enc (prims.highBitsVec w) = bucketsOf (rqVecCoeffs w))
     (hs2 : ∀ seed, polyVecBounded (keyGen prims seed).2.s2 p.eta) (src : MaskSource X Y p T Msg)
+    [Fintype src.Rnd] [DecidableEq src.Rnd] [Nonempty src.Rnd]
     (O : W1Oracles X Y p prims Msg N reps) (βmin : ℚ≥0) (tol k D : ℕ) [NeZero D]
     {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
     (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg) :
@@ -700,11 +605,11 @@ theorem correctWithin_w1BaseSigner (h_laws : SigningLaws prims) (hv : VerifyLaws
   refine le_of_eq ((PMF.toOuterMeasure_apply_eq_zero_iff _ _).2 ?_)
   refine Set.disjoint_left.2 fun c _ hc => ?_
   obtain ⟨σ, hσ, hver⟩ := hc
-  simp only [w1BaseSigner, ringLoop, OracleProg.run_bind] at hσ hver
+  simp only [w1BaseSigner, mldsaT0BaseScheme, ringLoop, OracleProg.run_bind] at hσ hver
   split_ifs at hσ with hok
   · have := ringVerify_of_run_ringLoopProg prims h_laws hv henc (hs2 kc) src O βmin k D hR
       (bmsg R m) c H hσ
-    simp only [RingSignature.BaseSigner.pk] at this hver
+    simp only [Signature.BaseScheme.pk] at this hver
     rw [this] at hver
     exact Bool.noConfusion hver
   · exact absurd hσ (by simp [OracleProg.run_pure])

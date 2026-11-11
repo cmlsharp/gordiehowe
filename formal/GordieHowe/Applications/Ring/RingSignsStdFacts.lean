@@ -26,11 +26,11 @@ open GordieHowe.RingSignature
 variable {X Y : Type} {N : ℕ}
 
 /-- **The Falcon-512 base signer signs a ring as the ordinary signer on the base message.** -/
-theorem falconBaseSigner_ringSignsStd {msgLen : ℕ} (G : Falcon512.Ring.Native.Signer msgLen)
+theorem falconBaseSigner_ringSignsStd {msgLen : ℕ} (G : Falcon512.Signer msgLen)
     {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
-    (bmsg : KeyRing Falcon512.Ring.Native.PublicKey N → RMsg → (Fin msgLen → UInt8)) :
+    (bmsg : KeyRing Falcon512.PublicKey N → RMsg → (Fin msgLen → UInt8)) :
     (falconBaseSigner (X := X) (Y := Y) G bmsg).RingSignsStd :=
-  fun _ _ _ _ _ _ => rfl
+  BaseSigner.ofCore_ringSignsStd _ _
 
 open _root_.MLDSA in
 /-- **The ML-DSA base signer signs a ring as the ordinary signer on the base message.** -/
@@ -39,6 +39,6 @@ theorem mldsaBaseSigner_ringSignsStd (p : Params) (prims : Primitives p) [NTTRin
     [DecidableEq prims.Hint] (maxAttempts : ℕ) {len : ℕ} {RMsg : Type} [Fintype RMsg]
     [DecidableEq RMsg] (bmsg : KeyRing (PublicKey p prims) N → RMsg → Bytes len) :
     (mldsaBaseSigner (X := X) (Y := Y) p prims maxAttempts bmsg).RingSignsStd :=
-  fun _ _ _ _ _ _ => rfl
+  BaseSigner.ofCore_ringSignsStd _ _
 
 end GordieHowe.Ring

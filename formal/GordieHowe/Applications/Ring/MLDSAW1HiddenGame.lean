@@ -51,7 +51,7 @@ variable {prims : Primitives p} [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   {O : W1Oracles X Y p prims Msg N reps} {M : MaskOracle X Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
   {adm : KeyRing (PubKey p prims) N → Prop}
   [hadm : DecidablePred adm] {n : ℕ}
   {Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] [Fintype Y₁] [DecidableEq Y₁]
@@ -66,7 +66,9 @@ def forgeVerifyProg (Vp : RingSignature.RingStmt (hedgedBase prims O M βmin tol
     (o : KeyRing (Sf).PK N × (Sf).Msg × (Sf).Sig) : OracleProg X Y Bool :=
   Vp ⟨o.1, o.2.1, o.2.2.1⟩ o.2.2.2
 
-omit [Fintype X] [DecidableEq X] [AddGroup Y] in
+omit [Fintype X] [DecidableEq X] [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof]
+  [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg]
+  [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **A forgery is a verifying program result and a fresh ring and message**, when the proof
 system verifies by `Vp`. -/
 theorem forges_iff_verify_fresh {Of : SideOracle (Sf)}

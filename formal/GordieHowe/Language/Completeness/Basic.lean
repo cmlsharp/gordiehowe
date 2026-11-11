@@ -28,9 +28,9 @@ the certificate and nothing is searched:
   the source late values; the late generators read the source environment (`genSrcOf`), a late
   histogram reads it with the other generated values as late values (`histEnvOf`).
 
-The generator formulas are `lookupDigitNat`, `commDigitNat`, `specNat`, `staticHistNat`,
-`tagGen`, `accNat`, `digitNat`, `digitsAccNat`, `lowDigitNat` and `histNat`. The certificate is
-untrusted: what the honest values satisfy follows from its checks
+The generator formulas are `lookupDigitNat`, `commDigitNat`, `specNat`, `specCNat`,
+`staticHistNat`, `tagGen`, `accNat`, `digitNat`, `digitsAccNat`, `lowDigitNat` and `histNat`. The
+certificate is untrusted: what the honest values satisfy follows from its checks
 (`GordieHowe/Language/Completeness/Check.lean`).
 
 The definitions are in `GordieHoweNative/Language/Completeness/Basic.lean`
@@ -63,6 +63,11 @@ def withGens (G : Gens) (x s : ir.Valuation I) : ir.Valuation I := fun v i =>
     | .spec c =>
       match ir.convs[c]? with
       | some cv => (ir.specNat (ir.reader (ir.execEnv I x s 0 (ir.chal0 I))) cv i :
+          (I (ir.valueField v)).K)
+      | none => 0
+    | .specC c =>
+      match ir.convs[c]? with
+      | some cv => (ir.specCNat (ir.reader (ir.execEnv I x s 0 (ir.chal0 I))) cv i :
           (I (ir.valueField v)).K)
       | none => 0
     | _ => 0

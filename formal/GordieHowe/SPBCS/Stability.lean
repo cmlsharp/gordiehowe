@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.SPBCS.Extractor
+public import GordieHowe.Headline
 public import GordieHowe.Model.IOP.CausalSound
 public import GordieHowe.Model.QROM.Lifting
 
@@ -29,8 +30,8 @@ the recorded final inputs, the chains before the leaf (`eq_of_keyD_digest_eq`; `
 so the union costs nothing, and the challenge's own error `ε c` bounds the event (`CausalRBR.rbr`);
 the bound is at the largest `ε c`. Every other change of the extraction puts the new digest among
 the digests of a recorded input, of the query, or among the final digests the recorded inputs hold
-(`digest_mem_of_extPast_extend`): at most `(max 2 c_in + nJ) · t` digests for a database of fewer
-than `t` entries. This gives `I(bad | P̄_col, t) ≤ max_c ε c + (max 2 c_in + nJ) · t / 2^(8k)`
+(`digest_mem_of_extPast_extend`): at most `(max 2 c + nJ) · t` digests for a database of fewer
+than `t` entries. This gives `I(bad | P̄_col, t) ≤ maxError ε + (max 2 c + nJ) · t / 2^(8k)`
 (`condInstab_bad_le`).
 -/
 
@@ -177,7 +178,7 @@ variable [∀ j i, Nonempty ((P j).Challenge i)] {ε : ChIdx P t → ℝ≥0}
   {claim : X → Prop} {claimOut : X → FullTr P t → Prop}
 
 /-- **The `xof` case of the flip bound**: by the round-by-round bound of the unique challenge
-and past, `Pr[nextBad] ≤ ε c ≤ max_c ε c`. -/
+and past, `Pr[nextBad] ≤ ε c ≤ maxError ε`. -/
 theorem prob_nextBad_le (hcol : D ∉ digestCollision) (hrbr : CausalRBR rel E S ε claim claimOut) :
     Pr[y ← Out k e : M.nextBad rel E S D q y] ≤ maxError ε := by
   by_cases hex : ∃ (ss : SaltedStatement kS X) (c : ChIdx P t) (chs : M.Chains)
@@ -205,7 +206,7 @@ theorem prob_nextBad_le (hcol : D ∉ digestCollision) (hrbr : CausalRBR rel E S
 
 variable (M rel E S)
 
-/-- `flip(bad | P̄_col, t) ≤ max_c ε c + (max 2 c_in + nJ) · t / 2^(8k)`. -/
+/-- `flip(bad | P̄_col, t) ≤ maxError ε + (max 2 c + nJ) · t / 2^(8k)`. -/
 theorem condFlip_bad_le (hrbr : CausalRBR rel E S ε claim claimOut) {tq : ℕ} :
     condFlip (M.bad rel E S) digestCollisionᶜ tq ≤
       maxError ε + (((max 2 M.senc.digestsPerInput + Mg.nJ) * tq : ℕ) : ENNReal) /
@@ -241,7 +242,7 @@ theorem condFlip_bad_le (hrbr : CausalRBR rel E S ε claim claimOut) {tq : ℕ} 
     _ = _ := add_comm _ _
 
 omit [∀ j i, Nonempty ((P j).Challenge i)] in
-/-- `flip(complement of bad | P̄_col, t) ≤ (max 2 c_in + nJ) · t / 2^(8k)`. -/
+/-- `flip(complement of bad | P̄_col, t) ≤ (max 2 c + nJ) · t / 2^(8k)`. -/
 theorem condFlip_compl_bad_le {tq : ℕ} :
     condFlip (M.bad rel E S)ᶜ digestCollisionᶜ tq ≤
       (((max 2 M.senc.digestsPerInput + Mg.nJ) * tq : ℕ) : ENNReal) / 2 ^ (8 * k) := by
@@ -265,7 +266,8 @@ theorem condFlip_compl_bad_le {tq : ℕ} :
         exact_mod_cast h2.trans h4
 
 /-- **The instability bound** (paper `lem:sse-instability`, CMS19 Proposition 8.14, conditional
-part): `I(bad | P̄_col, t) ≤ max_c ε c + (max 2 c_in + nJ) · t / 2^(8k)`. -/
+part): `I(bad | P̄_col, t) ≤ maxError ε + (max 2 c + nJ) · t / 2^(8k)`. -/
+@[headline]
 theorem condInstab_bad_le (hrbr : CausalRBR rel E S ε claim claimOut) {tq : ℕ} :
     condInstab (M.bad rel E S) digestCollisionᶜ tq ≤
       maxError ε + (((max 2 M.senc.digestsPerInput + Mg.nJ) * tq : ℕ) : ENNReal) /
@@ -274,9 +276,10 @@ theorem condInstab_bad_le (hrbr : CausalRBR rel E S ε claim claimOut) {tq : ℕ
 
 /-- **The instability of the bad set** (paper `lem:sse-instability`): the databases with a digest
 collision or a knowledge failure, `bad ∪ digestCollision`, have instability
-`I(bad ∪ digestCollision, t) ≤ max_c ε c + (max 2 c_in + nJ + 1) · t / 2^(8k)`. CMS19
+`I(bad ∪ digestCollision, t) ≤ maxError ε + (max 2 c + nJ + 1) · t / 2^(8k)`. CMS19
 Proposition 5.12 (3), p. 24 (`instab_union_le`), splits it into the conditional bound
 `condInstab_bad_le` and the collision bound `instab_digestCollision_le`. -/
+@[headline]
 theorem instab_bad_union_le (hrbr : CausalRBR rel E S ε claim claimOut) {tq : ℕ} :
     instab (M.bad rel E S ∪ digestCollision) tq ≤
       maxError ε + (((max 2 M.senc.digestsPerInput + Mg.nJ + 1) * tq : ℕ) : ENNReal) /

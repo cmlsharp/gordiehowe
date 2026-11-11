@@ -18,7 +18,7 @@ namespace GordieHoweTest.GensLoad
 
 -- These exposed loaded bodies are the literal interface whose exact expressions are tested.
 @[expose] public section
-load_ghc "ProgramCertData/Gens.ghc" "2c6d063f3dbdd77c"
+load_ghc "ProgramCertData/Gens.ghc" "be827e51a18ffa53"
 end
 
 /-- The original literal, including the named type alias and a list longer than 128 entries. -/

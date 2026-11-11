@@ -25,7 +25,8 @@ reprograms the oracle (`reprogram`).
 The zero-knowledge experiment is the game of `GordieHowe/Model/Quantum/Pure/Game.lean` with proof queries
 `⟨x, w⟩ : ProofQuery Stmt Wit` and responses in `Option Proof`:
 
-- **Real** (`realEnv`): the tape is a uniform oracle `H` and independent prover coins for each
+- **Real** (`realEnv`): the tape is a uniform oracle `H` and independent prover coins, drawn from
+  the coin law `μ` (an argument of the semantics, not part of the prover), for each
   of the first `Q` proof queries. Proof query `(x, w)` is answered by `P.prove H x w` with that proof query's coins if
   `rel x w`, and by `none` (`⊥`) otherwise. The oracle never changes.
 - **Simulated** (`simEnv`): the tape is a uniform initial oracle and independent simulator
@@ -49,7 +50,7 @@ algorithm A there is a negligible µ such that for all η, |Pr[b = 1 : H ←$ Fu
 b ← A^{H,P′}(1^η)] − Pr[b = 1 : H ←$ Fun(ℓ^in_η, ℓ^out_η), b ← A^{H,S′}(1^η)]| ≤ µ(η). (1) Here
 we quantify only over A that never query (x, w) ∉ R from the P′ or S′-oracle."
 
-`ZeroKnowledgeAfterAdaptive rel P S ε` makes it concrete: for every query bound `t`, every
+`ZeroKnowledgeAfterAdaptive rel P μ S ε`, the prover's coins drawn from `μ`, makes it concrete: for every query bound `t`, every
 distinguisher with `m` slots of `n` parallel queries or one proof query each and a budget
 (`Distinguisher.Budget`) of `q` query slots with `n * q ≤ t`, against an environment answering `Q`
 proof queries, and every final unitary that depends on the whole oracle in force, has advantage at
@@ -279,12 +280,13 @@ noncomputable def tapeDist (Q : ℕ) [Fintype Coins] (μ : PMF Coins) :
 
 variable (rel : Stmt → Wit → Prop) [DecidableRel rel]
 
-/-- The real environment for `Q` proof queries: proof query number `i` with `(x, w)` is answered by
-`P.prove H x w` with the coins of proof query `i` if `rel x w`, and by `none` otherwise. The oracle
-is the uniform `H` of the tape throughout. -/
-noncomputable def realEnv [Fintype Coins] (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (Q : ℕ) :
+/-- The real environment for `Q` proof queries, the prover's coins drawn from `μ`: proof query
+number `i` with `(x, w)` is answered by `P.prove H x w` with the coins of proof query `i` if
+`rel x w`, and by `none` otherwise. The oracle is the uniform `H` of the tape throughout. -/
+noncomputable def realEnv [Fintype Coins] (P : NARG.ProverFn X Y Stmt Wit Proof Coins)
+    (μ : PMF Coins) (Q : ℕ) :
     Quantum.Env ((X → Y) × (Fin Q → Coins)) (ProofQuery Stmt Wit) Proof X Y Q where
-  μ := tapeDist Q P.coins
+  μ := tapeDist Q μ
   oracle₀ ω := ω.1
   respond ω i req H :=
     ⟨if rel req.stmt req.wit then some (P.prove H req.stmt req.wit (ω.2 i)) else none, H⟩
@@ -308,12 +310,13 @@ variable [AddGroup Y] [Fintype Stmt] [DecidableEq Stmt] [Fintype Wit] [Decidable
   {W : Type} [Fintype W] {n m Q : ℕ}
 
 /-- The advantage of a distinguisher `D` with final unitary `post`: the difference of its
-acceptance probabilities in the real and the simulated game, as a `GordieHowe.advantage`. -/
-noncomputable def advantage (P : NARG.ProverFn X Y Stmt Wit Proof Coins)
+acceptance probabilities in the real game, the prover's coins drawn from `μ`, and the simulated
+game, as a `GordieHowe.advantage`. -/
+noncomputable def advantage (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ : PMF Coins)
     (S : NARG.SimulatorFn X Y Stmt Proof SimCoins) (D : Quantum.Distinguisher W X Y (ProofQuery Stmt Wit) Proof n m)
     (post : (X → Y) → Quantum.QState (Quantum.DReg W n X Y (ProofQuery Stmt Wit) Proof) ≃ₗᵢ[ℂ]
       Quantum.QState (Quantum.DReg W n X Y (ProofQuery Stmt Wit) Proof)) : ℝ :=
-  GordieHowe.advantage (D.acceptProb (realEnv rel P Q) post) (D.acceptProb (simEnv rel S Q) post)
+  GordieHowe.advantage (D.acceptProb (realEnv rel P μ Q) post) (D.acceptProb (simEnv rel S Q) post)
 
 /-- **Zero knowledge, unbounded after the last slot, against distinguishers with a query budget**
 (Unruh 2017 Definition 6, p. 14, whose adversaries are oracle
@@ -322,21 +325,21 @@ distinguisher with `m` slots of `n` parallel queries or one proof query and a bu
 slots (`Distinguisher.Budget`: on every branch at most `q` slots are queries, at slots the branch
 chooses at run time) with `n * q ≤ t`, against environments answering `Q` proof queries, and every
 final unitary `post` that depends on the whole oracle in force at the end, has advantage at most
-`ε t Q` against the simulator `S`. Request slots are not counted; after the last slot the
-distinguisher is unbounded. -/
-def ZeroKnowledgeAfterAdaptive (P : NARG.ProverFn X Y Stmt Wit Proof Coins)
+`ε t Q` between the prover `P`, its coins drawn from `μ`, and the simulator `S`. Request slots are
+not counted; after the last slot the distinguisher is unbounded. -/
+def ZeroKnowledgeAfterAdaptive (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ : PMF Coins)
     (S : NARG.SimulatorFn X Y Stmt Proof SimCoins) (ε : ℕ → ℕ → ℝ) : Prop :=
   ∀ (t : ℕ) (W : Type) [Fintype W] (n m Q q : ℕ)
     (D : Quantum.Distinguisher W X Y (ProofQuery Stmt Wit) Proof n m)
     (post : (X → Y) → Quantum.QState (Quantum.DReg W n X Y (ProofQuery Stmt Wit) Proof) ≃ₗᵢ[ℂ]
       Quantum.QState (Quantum.DReg W n X Y (ProofQuery Stmt Wit) Proof)) (_ : D.Budget q),
-    n * q ≤ t → QROM.advantage (Q := Q) rel P S D post ≤ ε t Q
+    n * q ≤ t → QROM.advantage (Q := Q) rel P μ S D post ≤ ε t Q
 
 /-- A larger error bound. -/
 theorem ZeroKnowledgeAfterAdaptive.mono {P : NARG.ProverFn X Y Stmt Wit Proof Coins}
-    {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} {ε ε' : ℕ → ℕ → ℝ}
-    (h : ZeroKnowledgeAfterAdaptive rel P S ε) (hε : ∀ t Q, ε t Q ≤ ε' t Q) :
-    ZeroKnowledgeAfterAdaptive rel P S ε' :=
+    {μ : PMF Coins} {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} {ε ε' : ℕ → ℕ → ℝ}
+    (h : ZeroKnowledgeAfterAdaptive rel P μ S ε) (hε : ∀ t Q, ε t Q ≤ ε' t Q) :
+    ZeroKnowledgeAfterAdaptive rel P μ S ε' :=
   fun t W _ n m Q q D post bud hD => (h t W n m Q q D post bud hD).trans (hε t Q)
 
 end QROM

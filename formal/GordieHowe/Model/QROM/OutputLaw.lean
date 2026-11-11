@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Model.QROM.OracleSimulation
+public import GordieHowe.Headline
 
 @[expose] public section
 
@@ -89,6 +90,7 @@ def noQueryTuple (w : A.W) : BaseGame.Tuple (Bits m) B O 0 :=
 p. 17, after measuring the output register): for every set `S` of outputs, the probability that
 the measured output of `Sim*(A)` lies in `S` is the probability that `A^h` outputs into `S` for a
 uniformly random oracle `h`. -/
+@[headline]
 theorem simLaw_out [DecidableEq B] (S : Set O) :
     simLaw e A {p | p.1 ∈ S} = (A.realLaw e).toOuterMeasure {p | p.out ∈ S} := by
   have hsim : simLaw e A {p | p.1 ∈ S} =

@@ -12,7 +12,8 @@ public import GordieHowe.ProofSystem.Program.FieldFork
 # GordieHowe: the honest prover of any domain's circuit proof, forked
 
 The honest data of the forked domain `d` (`GordieHowe.RealizedProgram.fieldForkSound`, `TreeFork.Sound.HonestData`)
-under the compiler's completeness (`CircuitsAccept`):
+given that the circuits accept honest inputs (`CircuitsAccept`, a field of the proof system proved
+from the GKR certificates):
 
 * **the branches** (`GordieHowe.RealizedProgram.forkBranchHonest`): each branch's honest masked reduction
   (`GordieHowe.RealizedProgram.branchHonest`) at the join's logical assignment;
@@ -178,7 +179,8 @@ def fieldForkSim : (ir.fieldForkShape src R).Simulator (ir.fieldForkOracle src R
 
 /-- **The honest data of the forked domain `d`** (`TreeFork.Sound.HonestData`) on the honest domain
 (`HonestDom`), simulated by `forkSimData`: the branches' honest masked reductions (`forkBranchHonest`)
-and the join's honest data (`forkJoinHonestData`). `TA`: the compiler's completeness (trust base). -/
+and the join's honest data (`forkJoinHonestData`). `TA`: the circuits accept honest inputs
+(`CircuitsAccept`, a field of the proof system proved from the GKR certificates). -/
 noncomputable def fieldForkHonest :
     (ir.fieldForkSound src R).HonestData (forkSimData src R) (ir.Cell d → (I (ir.domainField d)).K)
       (ir.HonestDom d) where

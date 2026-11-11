@@ -35,10 +35,16 @@ section Split
 variable {X Y Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] (sp : OracleSplit Y Y₁ Y₂)
   [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
   [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁] [Fintype Y₂] [DecidableEq Y₂]
-  [Nonempty Y₂] {N n t : ℕ} [NeZero n] {TB : BaseTypes} {B : BaseSigner X Y N TB}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop} [DecidablePred adm]
+  [Nonempty Y₂] {N n t : ℕ} [NeZero n] {TB : BaseTypes}
+  {B : BaseSigner X Y N TB}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop} [DecidablePred adm]
   {R : Type} (P : KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof) → OracleProg X Y R) (q : ℕ)
   (hP : ∀ o, (P o).QueriesLE q)
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
+  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
 
 variable (B PS adm) in
 /-- **The relayed forger of the key-reuse game followed by the program `P` on its output**: at most
@@ -46,7 +52,7 @@ variable (B PS adm) in
 noncomputable abbrev relayedForgerStdThen
     (A : KeyReuseAdversary B PS adm n (OracleView.queriesOnly X Y) t) (pks : Fin n → B.PK)
     (i₁ : Fin n) (Q : ℕ) (ρ : Fin Q → PS.Coins) :
-    QueryBoundedAdversary X Y (MURequest (SignOracle.ringStd B) n) (MUResponse B)
+    QueryBoundedAdversary X Y (MURequest (SignOracle.ringStd B) n) (MUResponse B.core)
       ((KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof)) × R) (t + Q * (B.qPub + PS.q) + q) :=
   (relayedForgerStd B PS adm A pks i₁ Q ρ).thenProgOut P q hP q fun _ => (one_mul q).le
 
@@ -108,11 +114,17 @@ section Chain
 
 variable {m k e N n : ℕ} {Y₁ : Type} [AddGroup Y₁] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁]
   {Y : Type} [AddGroup Y] [Fintype Y] [DecidableEq Y] [Nonempty Y]
-  {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes} {B : BaseSigner (Bits m) Y N TB}
-  {TPS : PSTypes} {PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop}
+  {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes}
+  {B : BaseSigner (Bits m) Y N TB}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop}
   [DecidablePred adm] [NeZero n] {X₀ Cl : Type} {V : NARG.QROM.Verifier m k e Cl X₀}
   {rel : Set (X₀ × RingWit B)} {ext : X₀ → DB (Bits m) (Out k e) → Multiset (RingWit B)}
   {β : ℕ → ℝ≥0∞} {t : ℕ}
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
+  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
 
 /-- **The key-reuse game up to the extraction runs at a fixed base component**: the bound of
 `insiderForgeProb_le_extRun_split` for the key-reuse game, for a base signer whose signer and
@@ -143,7 +155,7 @@ theorem keyReuseForgeProb_le_extRun_split (hbind : B.BindsRing) (hB : B.ReadsOnl
                     (((relayedForgerStdThen B PS adm P q hP A (fun i => B.pk (keys i)) i₁ Q
                       ρ).alg a).restrictAt sp 0)
                     (inertChallenger (Bits m) (XOut k e) (MURequest (SignOracle.ringStd B) n) Q')
-                    (MURequest (SignOracle.ringStd B) n) (MUResponse B)) =>
+                    (MURequest (SignOracle.ringStd B) n) (MUResponse B.core)) =>
                       splitClaim cl c₀ (extForgery v)) V.kq
                   (splitDefault Q' (B.pk (keys 0)) i₂
                     (((relayedForgerStdThen B PS adm P q hP A (fun i => B.pk (keys i)) i₁ Q
@@ -154,7 +166,7 @@ theorem keyReuseForgeProb_le_extRun_split (hbind : B.BindsRing) (hB : B.ReadsOnl
                     (((relayedForgerStdThen B PS adm P q hP A (fun i => B.pk (keys i)) i₁ Q
                       ρ).alg a).restrictAt sp 0)
                     (inertChallenger (Bits m) (XOut k e) (MURequest (SignOracle.ringStd B) n) Q')
-                    (MURequest (SignOracle.ringStd B) n) (MUResponse B)) D =>
+                    (MURequest (SignOracle.ringStd B) n) (MUResponse B.core)) D =>
                   splitTest sp hC cl c₀ ω keys Q' v ∧
                   NARG.ExtractsAt rel ext (V.stmt (splitClaim cl c₀ (extForgery v))) D) +
       V.knowledgeError β (t + Q * (B.qPub + PS.q) + q + V.kq) := by

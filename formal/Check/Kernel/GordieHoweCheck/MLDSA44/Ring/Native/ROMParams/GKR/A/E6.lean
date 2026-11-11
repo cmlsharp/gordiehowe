@@ -7,11 +7,6 @@ public import GordieHoweCerts.Generated.MLDSA44.Ring.Native.ROMParams.GKR.A
 public import GordieHoweCheck.MLDSA44.Ring.Native.ROMParams.GKR.A.E6.P0
 public import GordieHoweCheck.MLDSA44.Ring.Native.ROMParams.GKR.A.E6.P1
 public import GordieHoweCheck.MLDSA44.Ring.Native.ROMParams.GKR.A.E6.P2
-public import GordieHoweCheck.MLDSA44.Ring.Native.ROMParams.GKR.A.E6.P3
-public import GordieHoweCheck.MLDSA44.Ring.Native.ROMParams.GKR.A.E6.P4
-public import GordieHoweCheck.MLDSA44.Ring.Native.ROMParams.GKR.A.E6.P5
-public import GordieHoweCheck.MLDSA44.Ring.Native.ROMParams.GKR.A.E6.P6
-public import GordieHoweCheck.MLDSA44.Ring.Native.ROMParams.GKR.A.E6.P7
 
 @[expose] public section
 
@@ -19,6 +14,6 @@ public import GordieHoweCheck.MLDSA44.Ring.Native.ROMParams.GKR.A.E6.P7
 
 namespace GordieHowe.Generated.MLDSA44.Ring.Native.ROMParams.GKR.A
 
-compose_entry cert ar 6 [0, 0, 2, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 512, 2, 0, 0, 1, 1, 1024, 6, 1, 1024, 11, 0, 0, 1, 1, 1024, 6, 1, 1024, 11, 0, 0, 1, 0, 0, 13, 1, 512, 2, 0, 0, 1, 1, 512, 2, 0, 0, 4, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 4, 1, 64, 16, 2, 1024, 1]
+compose_entry cert ar 6 [0, 0, 11, 1, 1024, 11, 0, 0, 2, 1, 1024, 11, 0, 0, 29, 1, 512, 2, 2, 1, 1]
 
 end GordieHowe.Generated.MLDSA44.Ring.Native.ROMParams.GKR.A

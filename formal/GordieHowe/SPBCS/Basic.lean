@@ -170,8 +170,7 @@ def ChallengesAre (tr : FullTr P t) (ch : Chs P t) : Prop := tr.challenges = ch
 
 /-- **The query phase of the composite verifier `V` on the statement `x`**: the queried positions
 `pos` (distinct) and the decision `verdict` read from the chains and the challenges, with the laws
-that `V` reads the prover messages only at those positions. Correspondence obligations of each IOP
-stage. -/
+that `V` reads the prover messages only at those positions. -/
 structure IOPQueries {StmtIn : Type} (V : StmtIn → FullTr P t → Bool) (x : StmtIn) where
   /-- The queried positions. -/
   pos : ((p : t.Leaf) → M.Items p) → Chs P t → List M.Pos
@@ -261,17 +260,17 @@ theorem Pos.eq_of_treeOf_eq {τ : M.Tree} {q q' : M.Pos} (hq : q.treeOf = τ) (h
 
 variable {M}
 
-/-- The check of tree `τ`'s opening in `π` (`MerkleFormat.check`) against its root in its round's
+/-- The check of tree `τ`'s opening in `π` (`MerkleFormat.Check`) against its root in its round's
 write, at the opened leaves of `τ` among the positions `ps`. -/
 def checkTree (π : M.NIProof) (ps : List M.Pos) (τ : M.Tree) : Prop :=
-  M.opening.check h ((M.comp τ.leaf.label).nLeaves τ.tree.msg τ.tree.tree)
+  M.opening.Check h ((M.comp τ.leaf.label).nLeaves τ.tree.msg τ.tree.tree)
     ((M.comp τ.leaf.label).rootOf τ.tree.msg (π.writes τ.leaf τ.tree.msg) τ.tree.tree)
     ((M.openedIn τ ps π.leaves).map Prod.fst) ((M.openedIn τ ps π.leaves).map Prod.snd)
     (π.paths τ)
 
-/-- **The check of a tree's opening is decided** (`MerkleFormat.check`). -/
+/-- **The check of a tree's opening is decided** (`MerkleFormat.Check`). -/
 instance (π : M.NIProof) (ps : List M.Pos) (τ : M.Tree) : Decidable (M.checkTree h π ps τ) :=
-  inferInstanceAs (Decidable (M.opening.check h _ _ _ _ _))
+  inferInstanceAs (Decidable (M.opening.Check h _ _ _ _ _))
 
 /-- **The challenges in global round order**, as a list: the challenge rounds among the slots. -/
 def chList (P : (j : ι) → ProtocolSpec (n j)) (t : SPTerm ι) : List (ChIdx P t) :=

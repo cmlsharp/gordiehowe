@@ -12,7 +12,7 @@ public import GordieHoweNative.Language.RealizedProgram.Protocol
 /-!
 # GordieHowe: the source protocol `Π_P₀` of a program
 
-The public-coin protocol the source program denotes (paper, `def:o-semantics`, at the source
+The public-coin protocol the source program denotes (paper, `def:o-ip`, at the source
 program `P₀` of `thm:backend`: the part of role `source` of the realized program, read in place,
 `GordieHowe/Language/RealizedProgram/Source.lean`), as a `GordieHowe.IOP.ProtocolSpec` with a deterministic
 `GordieHowe.IOP.Verifier` (`GordieHowe/Model/IOP/RBR.lean`):
@@ -38,7 +38,7 @@ The bridge to the proof system's event form on the phase layout of the realized 
 (`GordieHowe.RealizedProgram.layout`, whose phases carry every challenge and late value; `GordieHowe.RealizedProgram.SourcePred`):
 
 * `GordieHowe.RealizedProgram.loweringOfRbr`: round-by-round knowledge soundness of `Π_P₀` (CMS19 Def. 8.5, worst case
-  per prefix, `rbrKnowledgeSoundness`), at the extractor that reads the statement and the phase-`0`
+  per prefix, `RBRKnowledgeSound`), at the extractor that reads the statement and the phase-`0`
   values (`GordieHowe.RealizedProgram.sourceExtractor`), gives a lowering from the relation to `SourcePred` whose event
   at a phase is the union over its source challenges of "the state flips at this challenge while
   the extractor fails"; `GordieHowe.RealizedProgram.eventBound_loweringOfRbr` bounds it by the sum of that phase's
@@ -379,7 +379,7 @@ def RoundTy : Round → Type
   | .late k => ir.LateMsg I k
   | .final => Unit
 
-/-- **The source protocol `Π_P₀`** (paper, `def:o-semantics` at the source program): round `i`
+/-- **The source protocol `Π_P₀`** (paper, `def:o-ip` at the source program): round `i`
 is `rounds[i]`. -/
 def sourceSpec : ProtocolSpec ir.rounds.length where
   dir i := (ir.rounds.get i).dir
@@ -705,8 +705,33 @@ soundness for `rel` at the extractor reading the statement and the phase-`0` val
 def SourceRbr {W : Type} (rel : Set (ir.Valuation I × W)) (proj : ir.Valuation I → ir.Assignment I → W)
     (S : KnowledgeStateFunction (ir.sourceVerifier I)) : Prop :=
   ∃ ε : (ir.sourceSpec I).ChallengeIdx → ℝ≥0,
-    rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε ∧
+    RBRKnowledgeSound rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε ∧
       ∀ i : (ir.sourceSpec I).ChallengeIdx, ir.rounds.get i.1 = .final → ε i = 0
+
+variable (I) in
+/-- **`γ_end`**: the challenge round `i` of `Π_P₀` is its final round (paper `def:o-ip`). -/
+abbrev IsFinalRound (i : (ir.sourceSpec I).ChallengeIdx) : Prop :=
+  ir.rounds.get i.1 = .final
+
+variable (I) in
+/-- **`Π_P₀` is round-by-round knowledge sound with errors `ε` that vanish at `γ_end`** (paper
+`def:o-guarantees` (2), `def:rbr`): round-by-round knowledge soundness for `rel` at the extractor
+reading the statement and the phase-`0` values (`RealizedProgram.sourceExtractor proj`) and the
+state function `S`, with errors `ε`, and `ε` is `0` at the final round. -/
+structure SourceSound {W : Type} (rel : Set (ir.Valuation I × W))
+    (proj : ir.Valuation I → ir.Assignment I → W) (S : KnowledgeStateFunction (ir.sourceVerifier I))
+    (ε : (ir.sourceSpec I).ChallengeIdx → ℝ≥0) : Prop where
+  /-- Round-by-round knowledge soundness of `Π_P₀` with errors `ε`. -/
+  rbr : RBRKnowledgeSound rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε
+  /-- The error at `γ_end` is `0`. -/
+  final_zero : ∀ i, ir.IsFinalRound I i → ε i = 0
+
+/-- **A source program sound with errors `ε` is sound with some errors** (`SourceRbr`). -/
+theorem SourceSound.sourceRbr {W : Type} {rel : Set (ir.Valuation I × W)}
+    {proj : ir.Valuation I → ir.Assignment I → W} {S : KnowledgeStateFunction (ir.sourceVerifier I)}
+    {ε : (ir.sourceSpec I).ChallengeIdx → ℝ≥0} (hS : ir.SourceSound I rel proj S ε) :
+    ir.SourceRbr I rel proj S :=
+  ⟨ε, hS.rbr, hS.final_zero⟩
 
 variable (I) in
 /-- **The events of `Π_P₀`'s round-by-round knowledge soundness on the layout** (the forward bridge
@@ -750,7 +775,7 @@ def loweringOfRbr {W : Type} {rel : Set (ir.Valuation I × W)} (hs : ir.SourceVa
       omega
     · exfalso
       obtain ⟨ε, h, hend⟩ := hS
-      have hc := rbrKnowledgeSoundness_iff_count.1 h x i
+      have hc := rbrKnowledgeSound_iff_count.1 h x i
         ((ir.transcriptOf I a r).take i.1.castSucc (Fin.le_last _))
       rw [hend i hget, zero_mul] at hc
       have hE := extractor_take proj x a r (m := i.1.castSucc) (pos_lt_of_challenge i)
@@ -817,7 +842,7 @@ challenge of phase `k + 1`, the state flips at a challenge round of that phase f
 theorem card_flips_le {W : Type} {rel : Set (ir.Valuation I × W)}
     {proj : ir.Valuation I → ir.Assignment I → W} {S : KnowledgeStateFunction (ir.sourceVerifier I)}
     {ε : (ir.sourceSpec I).ChallengeIdx → ℝ≥0}
-    (h : rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
+    (h : RBRKnowledgeSound rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
     {k : Fin ir.phases} {x : ir.Valuation I} {a : ir.Assignment I} (r : (ir.layout I).Run)
     (hrel : (x, proj x a) ∉ rel) {i : (ir.sourceSpec I).ChallengeIdx}
     (hi : ir.chalPhase I i = k + 1) :
@@ -867,7 +892,7 @@ theorem card_flips_le {W : Type} {rel : Set (ir.Valuation I × W)}
     exact Iff.rfl
   have hE : ir.sourceExtractor I proj i.1.castSucc x pre = proj x a :=
     extractor_take proj x a _ (pos_lt_of_challenge i)
-  have hcount := rbrKnowledgeSoundness_iff_count.1 h x i pre
+  have hcount := rbrKnowledgeSound_iff_count.1 h x i pre
   rw [hE] at hcount
   calc ((Finset.univ.filter fun v : ir.ChalVal I jj.1 =>
           Function.update f jj v ∈ Finset.univ.filter fun c : (ir.layout I).Ch k =>
@@ -894,7 +919,7 @@ its challenges, each bounded by `Π_P₀`'s round-by-round error at its round, `
 theorem eventBound_loweringOfRbr {W : Type} {rel : Set (ir.Valuation I × W)} (hs : ir.SourceValid)
     (proj : ir.Valuation I → ir.Assignment I → W) (S : KnowledgeStateFunction (ir.sourceVerifier I))
     {ε : (ir.sourceSpec I).ChallengeIdx → ℝ≥0}
-    (h : rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
+    (h : RBRKnowledgeSound rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
     (hS : ir.SourceRbr I rel proj S) :
     (ir.loweringOfRbr I hs proj S hS).EventBound fun k =>
       ∑ i ∈ Finset.univ.filter (fun i : (ir.sourceSpec I).ChallengeIdx => ir.chalPhase I i = k + 1),
@@ -1067,7 +1092,7 @@ theorem envOf_eqUpTo {m m' : Fin (ir.rounds.length + 1)} (x : ir.Valuation I)
       rw [roundAt_of_not_mem tr hn, roundAt_of_not_mem tr' hn]
 
 variable (I) in
-/-- **The state function of per-challenge events** (paper, `def:o-semantics`, the state after the
+/-- **The state function of per-challenge events** (paper, `def:o-ip`, the state after the
 library functions' events): true on a prefix past the first challenge round on which the extractor
 succeeds or the event of a challenge drawn so far occurs. It is a state function
 (`KnowledgeStateFunction`, CMS19 Def. 8.3) when the events obey the challenge-use rule (`huse`) and,
@@ -1125,7 +1150,7 @@ def eventState {W : Type} (rel : Set (ir.Valuation I × W))
 open Classical in
 variable (I) in
 /-- **Per-challenge events give round-by-round knowledge soundness of `Π_P₀`** (the converse bridge,
-used by the library lemmas; paper, `def:o-semantics`): events `ev j` on environments, one per
+used by the library lemmas; paper, `def:o-ip`): events `ev j` on environments, one per
 challenge, each reading only what is fixed when its challenge is drawn and that challenge
 (`ChallengeUseAt`), of probability at most `ε j` over the challenge (`hbound`), such that, at a
 statement that passes the member checks (`StatementOk`), every source predicate holding with no
@@ -1140,9 +1165,9 @@ theorem rbr_of_events {W : Type} (rel : Set (ir.Valuation I × W))
       Pr[c ← ir.ChalVal I j : ev j (e.setChal j c)] ≤ ε j)
     (hsound : ∀ e : ir.Env I, ir.StatementOk I e.stmt → ir.SourceSatAt e →
       (∀ j, ir.IsSourceChal j → ¬ ev j e) → (e.stmt, proj e.stmt e.asg) ∈ rel) :
-    rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj)
+    RBRKnowledgeSound rel (ir.sourceVerifier I) (ir.sourceExtractor I proj)
       (ir.eventState I rel proj ev huse hsound) (ir.roundError I ε) := by
-  rw [rbrKnowledgeSoundness_iff_count]
+  rw [rbrKnowledgeSound_iff_count]
   intro x i tr
   have hi0 := pos_lt_of_challenge i
   have hE : ∀ c, ir.sourceExtractor I proj i.1.succ x ((ir.sourceSpec I).concat tr c) =

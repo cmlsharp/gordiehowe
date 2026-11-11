@@ -30,13 +30,13 @@
 #include "gordiehowe/ct.h"
 #include "gordiehowe/examples/falcon/falcon_emulated.h"
 #include "gordiehowe/examples/falcon/falcon_emulated_witness.h"
+#include "gordiehowe/examples/rings/random_point.h"
 #include "gordiehowe/examples/rings/falcon_ring_witness.h"
 #include "gordiehowe/examples/shared/setup.h"
 #include "gordiehowe/lib/norm.h"
 #include "gordiehowe/lib/table.h"
 #include "gordiehowe/ops/ntt.h"
 #include "gordiehowe/ops/operators.h"
-#include "gordiehowe/ops/spectral.h"
 #include "gordiehowe/relation.h"
 #include "gordiehowe/system.h"
 #include "circuits/ntt/falcon_ntt.h"
@@ -162,8 +162,15 @@ Ref<F, Bit, Committed> membership(const Scope &s, D &A,
 }
 
 // The native signature relation: s1 = c - s2 h mod q, exact in
-// characteristic q, as Ntt(c - s1) == spectrum * Ntt(s2) (one circuit, no
-// quotient). Returns s1.
+// characteristic q, at one random point. With h the key's coefficients and
+// h s2 = low + X^n Q over F_q[X], c - s1 = low - Q, so at a challenge r of
+// the extension
+//   c(r) - s1(r) = h(r) s2(r) - (r^n + 1) Q(r),
+// h(r) = <spectrum, lambda(r)>, lambda(r) = n^-1 Ntt_{psi^-1}(1, r, ...,
+// r^{n-1}) in natural order (the Lagrange basis of X^n + 1's roots). Q
+// ([n - 1], canonical) is committed before r; the difference of the two
+// sides is a polynomial of degree at most 2n - 2 fixed before r, so a false
+// relation passes with probability at most (2n - 2)/|F|. Returns s1.
 template <class D, class F>
 Ref<F, Subfield<>, Committed> native_signature_relation(
     const Scope &s, D &A, const CommittedKey<F> &key,
@@ -171,32 +178,156 @@ Ref<F, Subfield<>, Committed> native_signature_relation(
     const Ref<F, Subfield<>, Committed> &s2) {
   using U64s = std::vector<uint64_t>;
   using Elt = typename F::Elt;
-  const F *pf = &A.field();
+  const F &f = A.field();
+  const F *pf = &f;
   const auto t = key.ntt.spec->staged;
   const size_t n = t->n;
   const U64s z = falcon_ntt_zetas(n, kQ);
+  auto ints = [pf](const std::vector<Elt> &v) {
+    uint64_t ok = 1;
+    U64s out(v.size());
+    for (size_t i = 0; i < v.size(); ++i)
+      out[i] = uint64_t(nat_of_ct(*pf, v[i], ok));
+    return out;
+  };
   const auto s1 = s[A].priv(
       Subfield{}, "s1", n, depends_on(key.spectrum, c, s2),
-      [pf, t, z, n](const std::vector<Elt> &spec, const std::vector<Elt> &cv,
-                 const std::vector<Elt> &s2v) {
-        auto ints = [pf](const std::vector<Elt> &v) {
-          uint64_t ok = 1;
-          U64s out(v.size());
-          for (size_t i = 0; i < v.size(); ++i)
-            out[i] = uint64_t(nat_of_ct(*pf, v[i], ok));
-          return out;
-        };
+      [pf, t, z, ints](const std::vector<Elt> &spec, const std::vector<Elt> &cv,
+                       const std::vector<Elt> &s2v) {
         U64s hhat =
             examples::falcon::emulated::host::key_coefficients(*pf, *t, spec);
         falcon_ntt_ref<kQ>(hhat, z);
         const U64s s1 = examples::falcon::emulated::host::s1_of(hhat, ints(cv),
                                                                 ints(s2v), z);
-        std::vector<Elt> out(n);
-        for (size_t i = 0; i < n; ++i) out[i] = pf->of_scalar(s1[i]);
+        std::vector<Elt> out(s1.size());
+        for (size_t i = 0; i < s1.size(); ++i) out[i] = pf->of_scalar(s1[i]);
         return out;
       });
-  ops::assert_spectral(s, "equation", c - s1,
-                  ops::SpectralProduct(key.spectrum, s2, key.ntt));
+  const auto Q = s[A].priv(
+      Subfield{}, "Q", n - 1, depends_on(key.spectrum, s2),
+      [pf, t, n, ints](const std::vector<Elt> &spec,
+                       const std::vector<Elt> &s2v) {
+        const U64s h =
+            examples::falcon::emulated::host::key_coefficients(*pf, *t, spec);
+        const U64s x = ints(s2v);
+        std::vector<uint64_t> acc(2 * n - 1, 0);
+        for (size_t u = 0; u < n; ++u) {
+          if (x[u] == 0) continue;
+          for (size_t v = 0; v < n; ++v)
+            acc[u + v] = (acc[u + v] + x[u] * h[v]) % kQ;
+        }
+        std::vector<Elt> out(n - 1);
+        for (size_t k = 0; k + 1 < n; ++k) out[k] = pf->of_scalar(acc[n + k]);
+        return out;
+      });
+  const auto pt =
+      examples::random_point::point(s, A, *t, ops::Stages::every(2));
+  const Expr<F> lhs = ((c - s1) * pt.pw).sum();
+  const Expr<F> hr = (key.spectrum * pt.lam).sum();
+  const Expr<F> s2r = (s2 * pt.pw).sum();
+  assert_zero(lhs - hr * s2r + pt.rn1 * (Q * pt.pw1).sum(),
+              s.name("equation"));
+  return s1;
+}
+
+// The carrier signature relation, at one random point (random_point.h):
+// the congruence the emulated arm's spectral form states,
+// c - s1 = h s2 (mod q) over the integers, with the same intervals its
+// lowering reads: c in [0, q - 1] (the statement bound), s1 and s2 in
+// [0, q] (the magnitudes' roots), h's coefficients in [0, q - 1] (the
+// ring's bounded keys, selected by membership), so P = c - s1 in
+// [-q, q - 1] and N = h s2 in int_interval::negacyclic's interval. The
+// quotient equation.q, its request and certificates are the lowering's; the
+// field identity c - s1 - q qlo - q q' = h s2 in F_p[X]/(X^n + 1) is checked
+// at r with the committed high half Q of h s2. Returns s1.
+template <class S, class D, class AF>
+Ref<AF, Subfield<>, Committed> carrier_signature_relation(
+    const Scope &s, D &A, const CommittedKey<AF> &key,
+    const Ref<AF, Subfield<>, Public> &c,
+    const Ref<AF, Subfield<>, Committed> &s2) {
+  namespace rp = examples::random_point;
+  namespace eh = examples::falcon::emulated::host;
+  using U64s = std::vector<uint64_t>;
+  using I128s = std::vector<__int128>;
+  using Elt = typename AF::Elt;
+  constexpr size_t n = S::kN;
+  const AF *pa = &A.field();
+  const auto t = key.ntt.spec->staged;
+  const U64s z = falcon_ntt_zetas(n, kQ);
+  auto ints = [pa](const std::vector<Elt> &v) {
+    uint64_t ok = 1;
+    U64s out(v.size());
+    for (size_t i = 0; i < v.size(); ++i)
+      out[i] = uint64_t(nat_of_ct(*pa, v[i], ok));
+    return out;
+  };
+  const auto s1 =
+      s[A].priv(Subfield{}, "s1", n, depends_on(key.spectrum, c, s2),
+                [=](const std::vector<Elt> &spec, const std::vector<Elt> &cv,
+                    const std::vector<Elt> &s2v) {
+                  U64s hhat = eh::key_coefficients(*pa, *t, spec);
+                  falcon_ntt_ref<kQ>(hhat, z);
+                  const U64s s1v = eh::s1_of(hhat, ints(cv), ints(s2v), z);
+                  std::vector<Elt> out(n);
+                  for (size_t i = 0; i < n; ++i) out[i] = pa->of_scalar(s1v[i]);
+                  return out;
+                });
+  const SignedInt q = SignedInt(kQ);
+  const IntInterval L{-q, q - 1};
+  const IntInterval R = rp::negacyclic_interval(n, {0, q - 1}, {0, q});
+  const rp::RelationQuotient ps =
+      rp::relation_quotient(s, A, "equation", L, R, kQ);
+  const __int128 qlo = ps.qlo;
+  // h s2 over Z[X] (full), from the key's coefficients and s2.
+  auto full = [pa, t](const std::vector<Elt> &spec,
+                      const std::vector<Elt> &s2v) {
+    const U64s h = eh::key_coefficients(*pa, *t, spec);
+    std::vector<Elt> he(n);
+    for (size_t k = 0; k < n; ++k) he[k] = pa->of_scalar(h[k]);
+    const rp::FullProduct<AF> fp(*pa, n);
+    std::vector<Elt> acc = fp.zero();
+    fp.mul_acc(acc, fp.spectrum(he), fp.spectrum(s2v), 1);
+    return fp.coefficients(std::move(acc));
+  };
+  // equation.q and Q read the same product: computed once per witness.
+  const auto cache = std::make_shared<rp::ProductCache<Elt, I128s>>();
+  auto product = [cache, full](const std::vector<Elt> &spec,
+                               const std::vector<Elt> &s2v) {
+    return cache->get(full, spec, s2v);
+  };
+  const auto qq = s[A].priv(
+      Subfield{}, "equation.q", n, depends_on(key.spectrum, c, s1, s2),
+      [=](const std::vector<Elt> &spec, const std::vector<Elt> &cv,
+          const std::vector<Elt> &s1v, const std::vector<Elt> &s2v) {
+        const I128s acc = product(spec, s2v);
+        std::vector<Elt> out(n);
+        for (size_t k = 0; k < n; ++k) {
+          const __int128 w = acc[k] - (k + 1 < n ? acc[n + k] : 0);
+          const __int128 d =
+              rp::signed_of(*pa, cv[k]) - rp::signed_of(*pa, s1v[k]) - w;
+          if (d % __int128(kQ) != 0)
+            fail("carrier_signature_relation: the falcon congruence fails");
+          out[k] = rp::elt_of(*pa, d / __int128(kQ) - qlo);
+        }
+        return out;
+      });
+  assert_range(qq, ps.nq, MaxBound{ps.dmax}, s.name("equation.q"));
+  const auto Q =
+      s[A].priv(Subfield{}, "Q", n - 1, depends_on(key.spectrum, s2),
+                [=](const std::vector<Elt> &spec, const std::vector<Elt> &s2v) {
+                  const I128s acc = product(spec, s2v);
+                  std::vector<Elt> out(n - 1);
+                  for (size_t k = 0; k + 1 < n; ++k)
+                    out[k] = rp::elt_of(*pa, acc[n + k]);
+                  return out;
+                });
+  const auto pt = rp::point(s, A, *t, ops::Stages::every(2));
+  const Elt mqlo = rp::elt_of(*pa, __int128(kQ) * qlo);
+  const Expr<AF> E = Expr<AF>(c - s1 - kQ * qq) - mqlo;
+  const Expr<AF> hr = (key.spectrum * pt.lam).sum();
+  assert_zero(
+      (E * pt.pw).sum() - hr * (s2 * pt.pw).sum() + pt.rn1 * (Q * pt.pw1).sum(),
+      s.name("equation"));
   return s1;
 }
 
@@ -206,9 +337,10 @@ Ref<F, Subfield<>, Committed> native_signature_relation(
 
 // The carrier arm's relation of set S over the statement ST and the
 // witness W. The ring's keys and c carry the statement bound q, which the
-// committed-key relation's intervals read (the selected key's coefficients
-// from the ring's hull, and c's); its assert_mod lowering certifies that
-// the relation's sides stay below the characteristic.
+// signature relation's intervals read (the selected key's coefficients
+// from the ring's hull, and c's); its committed quotient's certificates
+// (random_point.h, relation_quotient) keep the relation's sides below the
+// characteristic.
 template <class P, class S>
 void ring_carrier_relation(typename CarrierEnv<P>::Sys &cs,
                            const CarrierEnv<P> &env, RingStatement<S, In> st,
@@ -217,7 +349,6 @@ void ring_carrier_relation(typename CarrierEnv<P>::Sys &cs,
   using examples::falcon::emulated::assert_encoding_budget;
   using examples::falcon::emulated::assert_norm;
   using examples::falcon::emulated::magnitudes;
-  using examples::falcon::emulated::signature_relation;
   const AF &f = env.af;
   auto &A = cs.domain(domain_profile<P>(env.af, env.rsa.factory()), "A");
   const auto psi = ops::FieldNtt<AF>::root(f, 2 * S::kN).value();
@@ -229,9 +360,8 @@ void ring_carrier_relation(typename CarrierEnv<P>::Sys &cs,
   const auto spectrum = key_spectrum(A, w.key, ntt.spec->staged);
   membership(cs.scope("member"), A, ring.keys, spectrum, w.signer, psi);
   const auto s2 = A.priv(Subfield{}, w.s2);
-  const auto s1 = signature_relation<S>(cs.scope("signature"), A,
-                                        CommittedKey<AF>{spectrum, ntt},
-                                        ring.c, s2);
+  const auto s1 = carrier_signature_relation<S>(
+      cs.scope("signature"), A, CommittedKey<AF>{spectrum, ntt}, ring.c, s2);
   const auto mag = magnitudes(cs.scope("magnitudes"), A, s1, s2);
   assert_encoding_budget<S>(cs.scope("encoding"), A, mag.mag2);
   assert_norm<S>(cs.scope("norm"), A, mag.mag1, mag.mag2);
@@ -243,6 +373,18 @@ void ring_carrier_relation(typename CarrierEnv<P>::Sys &cs,
     cs.shape_value("member.zero", {Root::kPredicateRight, "member.signer", {}});
     cs.shape_value("magnitudes.modulus", {Root::kPredicateLeft, "magnitudes.s1", {{Edge::kSecond}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
     cs.shape_value("magnitudes.zero", {Root::kPredicateRight, "magnitudes.s1", {}});
+    // The signature equation's offset q qlo (the constant vector the left
+    // side adds), a checked value fact.
+    cs.shape_value("signature.equation.offset",
+                   {Root::kPredicateLeft, "signature.equation",
+                    {{Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst},
+                     {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
+    // The powers of signature.r, the shared expression
+    // signature.equation.public0 reads: the checked table of the shared
+    // expressions through it lets the frontend evaluate the symbolic-power
+    // matcher on a replica.
+    cs.shape_expr("signature.equation.public0.shape.definition",
+                  {Root::kValueDefinition, "signature.equation.public0", {}});
     cs.shape_expr("member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
     cs.shape_expr("member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first.shared.first.shared.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kSecond}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}}});
     cs.shape_expr("member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", {Root::kValueDefinition, "member.ring.powers", {{Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}, {Edge::kShared}, {Edge::kFirst}, {Edge::kFirst}}});
@@ -265,10 +407,12 @@ void ring_carrier_relation(typename CarrierEnv<P>::Sys &cs,
     cs.shape_expr("member.signer.shape.left.second.first.second.first.shared.second.first", {Root::kPredicateLeft, "member.signer", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}, {Edge::kShared}, {Edge::kSecond}, {Edge::kFirst}}});
     cs.shape_expr("member.signer.shape.left.second.first.second.first", {Root::kPredicateLeft, "member.signer", {{Edge::kSecond}, {Edge::kFirst}, {Edge::kSecond}, {Edge::kFirst}}});
     cs.shape_expr("range.encoding.budget.reconstruct.shape.left.first.first", {Root::kPredicateLeft, "range.encoding.budget.reconstruct", {{Edge::kFirst}, {Edge::kFirst}}});
-    cs.shape_inputs({
+    NamedShapeInputs shapes = {
         {"statement.ring", "statement.c", "key.spectrum",
          "member.signer.index", "member.ring.gamma", "s2",
-         "signature.s1", "signature.equation.q", "magnitudes.mag1",
+         "signature.s1", "signature.equation.q", "signature.Q", "signature.r",
+         "signature.equation.public0", "signature.lambda",
+         "signature.equation.public1", "magnitudes.mag1",
          "magnitudes.mag2", "encoding.low2", "norm.squares",
          "member.ring.powers", "member.ring.digests", "member.one",
          "member.zero", "magnitudes.modulus", "magnitudes.zero",
@@ -288,12 +432,17 @@ void ring_carrier_relation(typename CarrierEnv<P>::Sys &cs,
          "member.ring.powers.shape.definition.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first", "member.ring.powers.shape.definition.first.first",
          "member.ring.powers.shape.definition.first.second", "member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first.shared.second.first.shared.second.first", "member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first.shared.second.first",
          "member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first", "member.signer.shape.left.second.first.second.first.shared.second.first", "member.signer.shape.left.second.first.second.first",
-         "range.encoding.budget.reconstruct.shape.left.first.first"}, {}});
+         "range.encoding.budget.reconstruct.shape.left.first.first"}, {}};
+    shapes.values.push_back("signature.equation.offset");
+    shapes.exprs.push_back("signature.equation.public0.shape.definition");
+    shapes.expr_table_end = "signature.equation.public0.shape.definition";
+    cs.shape_inputs(shapes);
   } else {
     cs.shape_inputs({
         {"statement.ring", "statement.c", "key.spectrum", "member.signer.index",
          "member.ring.gamma", "s2", "signature.s1", "signature.equation.q",
-         "magnitudes.mag1", "magnitudes.mag2", "encoding.low2", "norm.squares",
+         "signature.Q", "signature.r", "signature.equation.public0",
+         "signature.lambda", "signature.equation.public1", "magnitudes.mag1", "magnitudes.mag2", "encoding.low2", "norm.squares",
          "member.ring.powers", "member.ring.digests"},
         {"member.signer", "magnitudes.s1", "magnitudes.s2", "norm.sum",
          "signature.equation", "member.signer.index.boolean", "magnitudes.mag1",
@@ -307,6 +456,7 @@ void ring_carrier_relation(typename CarrierEnv<P>::Sys &cs,
   cs.source_role("magnitudes.mag1", SourceRole::kAWitness, 2);
   cs.source_role("magnitudes.mag2", SourceRole::kAWitness, 3);
   cs.source_role("encoding.low2", SourceRole::kAWitness, 4);
+  cs.source_role("signature.Q", SourceRole::kAWitness, 5);
   cs.source_role("signature.equation.q", SourceRole::kCarry, 0);
   cs.source_role("norm.squares", SourceRole::kCarry, 1);
   cs.source_role("statement.ring", SourceRole::kStmtMember, 0);
@@ -376,10 +526,18 @@ inline void ring_native_shape_inputs(const Scope &cs) {
   cs.shape_expr("range.enc.slack.reconstruct.shape.left.first.first", {Root::kPredicateLeft, "range.enc.slack.reconstruct", {{Edge::kFirst}, {Edge::kFirst}}});
   cs.shape_expr("enc.b.boolean.shape.right.shared.first", {Root::kPredicateRight, "enc.b.boolean", {{Edge::kShared}, {Edge::kFirst}}});
   cs.shape_expr("enc.b.boolean.shape.right", {Root::kPredicateRight, "enc.b.boolean", {}});
-  cs.shape_inputs({
-      {"statement.ring", "statement.c", "key.spectrum", "member.signer.index", "member.ring.gamma", "s2", "signature.s1", "norm.a", "norm.sq", "norm.cc", "norm.nd", "norm.nc", "norm.D", "norm.Dc", "norm.target", "enc.slack.offset", "member.ring.powers", "member.ring.digests", "range.enc.high.top", "range.enc.slack.d0", "range.enc.slack.d1", "range.enc.slack.h0", "range.enc.slack.h1", "range.enc.slack.top", "range.static:A.64.g0", "range.static:A.64.g1", "range.static:A.64.g2", "range.static:A.189.g0", "range.static:A.189.g1", "alpha:A", "member.one", "member.zero", "signature.zero", "norm.center.zero"},
+  // The powers of signature.r, the shared expression signature.equation.public0
+  // reads: the checked table of the shared expressions through it lets the
+  // frontend evaluate the symbolic-power matcher on a replica.
+  cs.shape_expr("signature.equation.public0.shape.definition",
+                {Root::kValueDefinition, "signature.equation.public0", {}});
+  NamedShapeInputs shapes = {
+      {"statement.ring", "statement.c", "key.spectrum", "member.signer.index", "member.ring.gamma", "s2", "signature.s1", "signature.Q", "signature.r", "norm.a", "norm.sq", "norm.cc", "norm.nd", "norm.nc", "norm.D", "norm.Dc", "norm.target", "enc.slack.offset", "member.ring.powers", "member.ring.digests", "signature.equation.public0", "signature.lambda", "signature.equation.public1", "range.enc.high.top", "range.enc.slack.d0", "range.enc.slack.d1", "range.enc.slack.h0", "range.enc.slack.h1", "range.enc.slack.top", "range.static:A.64.g0", "range.static:A.64.g1", "range.static:A.64.g2", "range.static:A.189.g0", "range.static:A.189.g1", "alpha:A", "member.one", "member.zero", "signature.zero", "norm.center.zero"},
       {"member.signer", "signature.equation", "norm.center", "norm.top", "norm.column0", "norm.column1", "norm.column2", "norm.column3", "norm.column4", "norm.column5", "norm.normalize", "norm.complement", "range.enc.slack.reconstruct", "range.enc.slack.top", "member.signer.index.boolean", "norm.Dc.boolean", "enc.b.boolean", "norm.a", "norm.sq", "norm.cc", "norm.nd", "norm.nc", "norm.D", "enc.high", "enc.slack"},
-      {"member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first", "member.ring.powers.shape.definition.first.first", "member.ring.powers.shape.definition.first.second", "member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first.shared.second.first.shared.second.first", "member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first.shared.second.first", "member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first", "member.signer.shape.left.second.first.second.first.shared.second.first", "member.signer.shape.left.second.first.second.first", "norm.center.shape.left.first.first", "norm.center.shape.left.second.first.first.first.first", "norm.center.shape.left.second.first.first.first.second.first", "norm.center.shape.left.second.first.first.second.first", "norm.top.shape.left", "norm.column0.shape.left.first", "norm.column0.shape.right.first", "norm.column0.shape.right.second.first", "norm.column1.shape.left.first.first.second", "norm.column1.shape.left.second", "norm.column1.shape.right.first", "norm.column1.shape.right.second.first", "norm.column4.shape.left.first.first", "norm.column2.shape.left.second", "norm.column2.shape.right.first", "norm.column2.shape.right.second.first", "norm.column3.shape.left.second", "norm.column3.shape.right.first", "norm.column3.shape.right.second.first", "norm.column4.shape.left.second", "norm.column4.shape.right.first", "norm.column4.shape.right.second.first", "norm.column5.shape.left", "norm.column5.shape.right", "norm.normalize.shape.left.first.first", "norm.normalize.shape.left.first.second.first", "norm.normalize.shape.left.second", "norm.normalize.shape.right.second.first", "norm.complement.shape.left.first.first", "norm.complement.shape.left.second", "enc.b.boolean.shape.right.shared.second.first", "range.enc.slack.reconstruct.shape.left.first.first", "enc.b.boolean.shape.right.shared.first", "enc.b.boolean.shape.right"}, {}});
+      {"member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first.shared.first", "member.ring.powers.shape.definition.first.first.shared.first.first", "member.ring.powers.shape.definition.first.second.shared.first.first.first", "member.ring.powers.shape.definition.first.first", "member.ring.powers.shape.definition.first.second", "member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first.shared.second.first.shared.second.first", "member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first.shared.second.first", "member.signer.shape.left.second.first.second.first.shared.second.first.shared.second.first", "member.signer.shape.left.second.first.second.first.shared.second.first", "member.signer.shape.left.second.first.second.first", "norm.center.shape.left.first.first", "norm.center.shape.left.second.first.first.first.first", "norm.center.shape.left.second.first.first.first.second.first", "norm.center.shape.left.second.first.first.second.first", "norm.top.shape.left", "norm.column0.shape.left.first", "norm.column0.shape.right.first", "norm.column0.shape.right.second.first", "norm.column1.shape.left.first.first.second", "norm.column1.shape.left.second", "norm.column1.shape.right.first", "norm.column1.shape.right.second.first", "norm.column4.shape.left.first.first", "norm.column2.shape.left.second", "norm.column2.shape.right.first", "norm.column2.shape.right.second.first", "norm.column3.shape.left.second", "norm.column3.shape.right.first", "norm.column3.shape.right.second.first", "norm.column4.shape.left.second", "norm.column4.shape.right.first", "norm.column4.shape.right.second.first", "norm.column5.shape.left", "norm.column5.shape.right", "norm.normalize.shape.left.first.first", "norm.normalize.shape.left.first.second.first", "norm.normalize.shape.left.second", "norm.normalize.shape.right.second.first", "norm.complement.shape.left.first.first", "norm.complement.shape.left.second", "enc.b.boolean.shape.right.shared.second.first", "range.enc.slack.reconstruct.shape.left.first.first", "enc.b.boolean.shape.right.shared.first", "enc.b.boolean.shape.right"}, {}};
+  shapes.exprs.push_back("signature.equation.public0.shape.definition");
+  shapes.expr_table_end = "signature.equation.public0.shape.definition";
+  cs.shape_inputs(shapes);
   cs.source_role("key.spectrum", SourceRole::kRingSigma, 0);
   cs.source_role("member.signer.index", SourceRole::kSelection, 0);
   cs.source_role("s2", SourceRole::kAWitness, 0);
@@ -391,6 +549,7 @@ inline void ring_native_shape_inputs(const Scope &cs) {
   cs.source_role("norm.nc", SourceRole::kAWitness, 6);
   cs.source_role("norm.D", SourceRole::kAWitness, 7);
   cs.source_role("norm.Dc", SourceRole::kAWitness, 8);
+  cs.source_role("signature.Q", SourceRole::kAWitness, 9);
   cs.source_role("statement.ring", SourceRole::kStmtMember, 0);
   cs.source_role("statement.c", SourceRole::kStmtMember, 1);
 }

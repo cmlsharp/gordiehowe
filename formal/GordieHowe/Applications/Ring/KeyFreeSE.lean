@@ -60,15 +60,19 @@ namespace RingSignature.KeyFree
 
 section Relay
 
-variable {X Y Xb Yb : Type} {N n : ℕ} {TB : BaseTypes} (B : BaseSigner Xb Yb N TB) {Stmt Wit Proof SC R : Type}
+variable {X Y Xb Yb : Type} {N n : ℕ} {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
+  [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins]
+  (B : BaseSigner Xb Yb N TB) {Stmt Wit Proof SC R : Type}
   (rel : Stmt → Wit → Prop) [DecidableRel rel]
-  (enc : MURequest (SignOracle.none B) n ⊕ R → ProofQuery Stmt Wit) (dummyS : Stmt)
+  (enc : MURequest (SignOracle.none B.core) n ⊕ R → ProofQuery Stmt Wit) (dummyS : Stmt)
   {X₀ : Type} (stmtX : Stmt → X₀)
 
 /-- **The statement sent to the simulator for a request**: the dummy proof query's statement for
 a multi-user request; for a proof query, its statement when its witness is in the relation and
 the dummy statement `dummyS` otherwise. -/
-def stmtOf : MURequest (SignOracle.none B) n ⊕ R → Stmt
+def stmtOf : MURequest (SignOracle.none B.core) n ⊕ R → Stmt
   | .inl m => (enc (.inl m)).stmt
   | .inr q => if rel (enc (.inr q)).stmt (enc (.inr q)).wit then (enc (.inr q)).stmt else dummyS
 
@@ -79,9 +83,9 @@ outer reply; a proof query is answered by the simulator's reply when its witness
 relation and by `none` otherwise (the relay reads the witness and decides the relation itself, as
 the proof challenger does). The corruptions are the only outer requests. -/
 def seTwoKF (pks : Fin n → B.PK) (Q : ℕ) :
-    TwoRelay (MURequest (SignOracle.none B) n ⊕ R) (MUResponse B ⊕ Proof)
-      (Stmt × (MURequest (SignOracle.none B) n ⊕ R)) Proof (MURequest (SignOracle.none B) n)
-      (MUResponse B) where
+    TwoRelay (MURequest (SignOracle.none B.core) n ⊕ R) (MUResponse B.core ⊕ Proof)
+      (Stmt × (MURequest (SignOracle.none B.core) n ⊕ R)) Proof (MURequest (SignOracle.none B.core) n)
+      (MUResponse B.core) where
   route₁ _ r := (stmtOf B rel enc dummyS r, r)
   answer₁ c r a := match r with
     | .inl (.publicKey i) => if c < Q then some (.inl (.publicKey (pks i))) else none
@@ -92,13 +96,17 @@ def seTwoKF (pks : Fin n → B.PK) (Q : ℕ) :
     | _ => none
   answer₂ _ _ b := b.map Sum.inl
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
 /-- The relay of the simulation-extraction step sends distinct requests to distinct statements. -/
 theorem seTwoKF_route_injective (pks : Fin n → B.PK) (Q c : ℕ) :
     Function.Injective ((seTwoKF (Proof := Proof) B rel enc dummyS pks Q).route₁ c) :=
   fun _ _ h => congrArg Prod.snd h
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
 /-- **The outer requests of the simulation-extraction relay are corruptions.** -/
-theorem seTwoKF_outer_eq (pks : Fin n → B.PK) {Q c : ℕ} {r} {q : MURequest (SignOracle.none B) n}
+theorem seTwoKF_outer_eq (pks : Fin n → B.PK) {Q c : ℕ} {r} {q : MURequest (SignOracle.none B.core) n}
     (h : (seTwoKF (Proof := Proof) B rel enc dummyS pks Q).outer c r = some q) :
     ∃ i, r = .inl (.corrupt i) ∧ q = .corrupt i := by
   rcases r with (i | ⟨i, sm⟩ | i) | r
@@ -137,6 +145,8 @@ structure DummyStmts (isDummy : X₀ → Bool) : Prop where
 
 variable [Fintype SC] [DecidableEq SC] {isDummy : X₀ → Bool}
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
 /-- **The simulated main challenger relays the simulation-extraction challenger** of the simulator
 inert on dummy statements, by the relay `seTwoKF` at the public keys of `keys` and the outer
 replies `keyReplyNone keys`: a public-key request is answered by the relay and a corruption by
@@ -195,21 +205,25 @@ theorem relays_kfMainSim_se (hd : DummyStmts B rel enc dummyS stmtX isDummy)
       · simp [TwoRelay.atC, seTwoKF, not_lt.2 hi]
     · simp [TwoRelay.atC, seTwoKF]
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
 /-- The relayed requests of the simulation-extraction relay are the tagged statements. -/
 theorem relayList_seTwoKF (pks : Fin n → B.PK) (Q : ℕ)
-    (b : ℕ → MURequest (SignOracle.none B) n → Option (MUResponse B))
-    (rs : List (MURequest (SignOracle.none B) n ⊕ R)) :
+    (b : ℕ → MURequest (SignOracle.none B.core) n → Option (MUResponse B.core))
+    (rs : List (MURequest (SignOracle.none B.core) n ⊕ R)) :
     ((seTwoKF (Proof := Proof) B rel enc dummyS pks Q).atC b).relayList rs =
       rs.map fun r => (stmtOf B rel enc dummyS r, r) := by
   exact List.ext_getElem (by simp) fun i _ _ => by
     simp [SideRelay.relayList, TwoRelay.atC, seTwoKF]
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
 /-- **The statements sent for the first `Q` requests differ from a statement `x₀`** when every
 dummy statement does (`hdisj`) and every proof query in the relation among them does (`hq`). -/
 theorem stmtOf_ne {isDummy : X₀ → Bool}
     (hd : DummyStmts B rel enc dummyS stmtX isDummy) {x₀ : X₀}
     (hdisj : ∀ x, isDummy x = true → x ≠ x₀)
-    {rs : List (MURequest (SignOracle.none B) n ⊕ R)}
+    {rs : List (MURequest (SignOracle.none B.core) n ⊕ R)}
     (hq : ∀ q, .inr q ∈ rs → rel (enc (.inr q)).stmt (enc (.inr q)).wit →
       stmtX (enc (.inr q)).stmt ≠ x₀) :
     ∀ r ∈ rs, stmtX (stmtOf B rel enc dummyS r) ≠ x₀ := by
@@ -231,11 +245,11 @@ on dummy statements (`relays_kfMainSim_se`, `AdaptiveIAlg.outLaw_absorb`), on ev
 adversary's registers, its logs, the relayed logs, the proof part's coins and the final oracle. -/
 theorem outLaw_kfMainSim_se (hd : DummyStmts B rel enc dummyS stmtX isDummy)
     (S : NARG.Simulator X Y X₀ Proof SC) (p₀ : Proof) (keys : Fin n → B.KeyCoins) (Q : ℕ)
-    {shA : AlgShape X Y (MURequest (SignOracle.none B) n ⊕ R) (MUResponse B ⊕ Proof)} (A : AdaptiveIAlg shA O)
+    {shA : AlgShape X Y (MURequest (SignOracle.none B.core) n ⊕ R) (MUResponse B.core ⊕ Proof)} (A : AdaptiveIAlg shA O)
     (H : X → Y)
-    (P : DReg A.toKindAlg.W A.width X Y (MURequest (SignOracle.none B) n ⊕ R)
-        (MUResponse B ⊕ Proof) → LogReg (MURequest (SignOracle.none B) n ⊕ R) A.slots →
-      LogReg (Stmt × (MURequest (SignOracle.none B) n ⊕ R)) A.slots → (Fin Q → SC) →
+    (P : DReg A.toKindAlg.W A.width X Y (MURequest (SignOracle.none B.core) n ⊕ R)
+        (MUResponse B.core ⊕ Proof) → LogReg (MURequest (SignOracle.none B.core) n ⊕ R) A.slots →
+      LogReg (Stmt × (MURequest (SignOracle.none B.core) n ⊕ R)) A.slots → (Fin Q → SC) →
         (X → Y) → Prop) :
     ((A.toKindAlg.composeBothOut (kfMainSim B rel (S.comap stmtX) enc keys Q) id).outLaw
         H).toOuterMeasure
@@ -276,8 +290,8 @@ theorem outLaw_kfMainSim_se (hd : DummyStmts B rel enc dummyS stmtX isDummy)
 absorbed with them as a table of outer replies** (`AdaptiveIAlg.absorbTab`), against every
 challenger and on every event of the composed registers named without the relay. -/
 theorem outLaw_seTwoKF_absorbTab (keys : Fin n → B.KeyCoins) (Q : ℕ)
-    {shA : AlgShape X Y (MURequest (SignOracle.none B) n ⊕ R) (MUResponse B ⊕ Proof)} (A : AdaptiveIAlg shA O)
-    (C' : Challenger X Y (Stmt × (MURequest (SignOracle.none B) n ⊕ R)) Proof) (H : X → Y)
+    {shA : AlgShape X Y (MURequest (SignOracle.none B.core) n ⊕ R) (MUResponse B.core ⊕ Proof)} (A : AdaptiveIAlg shA O)
+    (C' : Challenger X Y (Stmt × (MURequest (SignOracle.none B.core) n ⊕ R)) Proof) (H : X → Y)
     (P : A.AbsCW C' → Prop) :
     (((A.absorb ((seTwoKF (Proof := Proof) B rel enc dummyS (B.pk ∘ keys) Q).atC
         fun _ => keyReplyNone B keys)).toKindAlg.composeBothOut
@@ -307,7 +321,10 @@ section SPBCS
 open GordieHowe.SPBCS IOP SPTerm RingSignature.Insider
 
 variable {k kN kS L e N n t : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq Yb]
-  {TB : BaseTypes} {B : BaseSigner Xb Yb N TB}
+  {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
+  [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  {B : BaseSigner Xb Yb N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -317,12 +334,12 @@ variable {k kN kS L e N n t : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq 
   {Stmt Wit SC R Frg : Type} [Fintype Stmt] [DecidableEq Stmt] [Inhabited Stmt]
   [Fintype R] [DecidableEq R] [Inhabited R] [Fintype SC] [DecidableEq SC]
   {rel : Stmt → Wit → Prop} [DecidableRel rel]
-  {enc : MURequest (SignOracle.none B) n ⊕ R → ProofQuery Stmt Wit} {dummyS : Stmt}
+  {enc : MURequest (SignOracle.none B.core) n ⊕ R → ProofQuery Stmt Wit} {dummyS : Stmt}
   {isDummy : X₀ → Bool} [Inhabited M.NIProof]
 
 local notation "Xq" => Bits (queryBits k kN kS L)
 
-local notation "MUR" => MURequest (SignOracle.none B) n
+local notation "MUR" => MURequest (SignOracle.none B.core) n
 
 /-- **The claim of an output** `(o, x₀)`: the adversary's explicit statement `x₀` with the proof
 `prf o`, the default proof when `o` has none. -/
@@ -339,19 +356,19 @@ Running time: that of `AdaptiveIAlg.absorbTab` (its paragraph) at the relay `seT
 `keyReplyNone keys`, plus one evaluation of `prf` on the output. This running time is argued here,
 not proved in Lean. -/
 abbrev seAlgKF (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins) (Q : ℕ)
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀)) :=
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀)) :=
   (A.absorbTab (seTwoKF (Proof := M.Response b) B rel enc dummyS (B.pk ∘ keys) Q)
     (fun _ => keyReplyNone B keys)).mapOut (claimOfOutX prf)
 
 /-- **The shape of the simulation-extraction adversary** (`seAlgKF`) of an adversary of shape
 `s`: the shape of the adversary absorbed with the table of the multi-user replies
 (`AlgShape.absorbTabS`). -/
-@[reducible] def seAlgKFS (s : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)) :
+@[reducible] def seAlgKFS (s : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)) :
     AlgShape Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) :=
-  s.absorbTabS MUR (MUResponse B)
+  s.absorbTabS MUR (MUResponse B.core)
 
 theorem seAlgKF_toShape (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins) (Q : ℕ)
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀)) :
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀)) :
     (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf keys Q A).toShape =
       seAlgKFS (Stmt := Stmt) A.toShape :=
   rfl
@@ -369,7 +386,7 @@ def WinsKF (prf : Frg → Option M.NIProof) (checkX : X₀ → Frg → Bool)
 passes the check, and it is fresh at the first `Q` logged requests. -/
 def okAtKF (prf : Frg → Option M.NIProof) (checkX : X₀ → Frg → Bool)
     (freshX : Frg × X₀ → List (MUR ⊕ R) → Prop) (keys : Fin n → B.KeyCoins) (Q : ℕ)
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
     (w : (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) (Stmt := Stmt) prf keys Q A).W) :
     Prop :=
   (prf (A.out w.1.work).1).isSome ∧ checkX (A.out w.1.work).2 (A.out w.1.work).1 = true ∧
@@ -423,7 +440,7 @@ theorem sim_le_winTestProbKF (prf : Frg → Option M.NIProof) (checkX : X₀ →
       stmtX (enc (.inr q)).stmt ≠ p.2)
     (S : NARG.Simulator Xq (XOut k e) X₀ (M.Response b) SC) (p₀ : M.Response b)
     (keys : Fin n → B.KeyCoins) (Q : ℕ)
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀)) :
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀)) :
     ∑' H, PMF.uniformOfFintype (Xq → XOut k e) H *
         ((A.toKindAlg.composeBothOut (kfMainSim B rel (S.comap stmtX) enc keys Q) id).outLaw
           H).toOuterMeasure
@@ -503,7 +520,7 @@ theorem simAssignsAtKeys_inertOnDummy {C : Type} (isDummy : X₀ → Bool)
 `seAlgKF` on each auxiliary value of the `t`-query adversary `A'`. -/
 noncomputable def seAdversaryKF (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins)
     (Q : ℕ)
-    (A' : QueryBoundedAdversary Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b) (Frg × X₀)
+    (A' : QueryBoundedAdversary Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) (Frg × X₀)
       t) :
     M.QBSimExtractionAdversary b (Stmt × (MUR ⊕ R)) t where
   Aux := A'.Aux
@@ -522,7 +539,7 @@ noncomputable def seAdversaryKF (prf : Frg → Option M.NIProof) (keys : Fin n �
 
 /-- The shape of `seAdversaryKF` at `a` is `seAlgKFS` of `A'`'s shape. -/
 @[simp] theorem seAdversaryKF_sh (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins) (Q : ℕ)
-    (A' : QueryBoundedAdversary Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b) (Frg × X₀)
+    (A' : QueryBoundedAdversary Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) (Frg × X₀)
       t) (a : A'.Aux) :
     (seAdversaryKF (rel := rel) (enc := enc) (dummyS := dummyS) prf keys Q A').sh a =
       seAlgKFS (Stmt := Stmt) (A'.sh a) :=
@@ -534,7 +551,7 @@ adversary's explicit statement `x₀`, read through `wit`, satisfies the goal `G
 and the first `Q` logged requests. -/
 def forgerWinsKF [DecidableEq X₀] {SC' WitK W : Type} [Fintype SC'] [DecidableEq SC']
     (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins) (Q : ℕ)
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → W)
     (Goal : Frg × X₀ → List (MUR ⊕ R) → W → Prop)
@@ -554,7 +571,7 @@ omit [∀ j i, Nonempty ((P j).Challenge i)] in
 /-- **The forger wins at a disjunction of goals exactly when it wins at one of them.** -/
 theorem forgerWinsKF_or [DecidableEq X₀] {SC' WitK W : Type} [Fintype SC'] [DecidableEq SC']
     (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins) (Q : ℕ)
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → W)
     (G₁ G₂ : Frg × X₀ → List (MUR ⊕ R) → W → Prop)
@@ -581,7 +598,7 @@ theorem extractFreshTestProb_le_KF [DecidableEq X₀] {SC' WitK W : Type} [Finty
     [DecidableEq SC'] [Inhabited M.NIProof] (prf : Frg → Option M.NIProof)
     (checkX : X₀ → Frg → Bool) (freshX : Frg × X₀ → List (MUR ⊕ R) → Prop)
     (keys : Fin n → B.KeyCoins) (Q kq : ℕ)
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (fx : Stmt × (MUR ⊕ R) → X₀) {relK : Set (X₀ × WitK)} (Ext : CausalExtractor P τ X₀ WitK)
     (wit : X₀ → WitK → W) (Goal : Frg × X₀ → List (MUR ⊕ R) → W → Prop)
@@ -609,7 +626,7 @@ theorem winTestProb_le_forgerWinsKF [DecidableEq X₀] {C WitK W : Type} [Fintyp
     [DecidableEq (SaltedCoins (FiatShamirSalt kS) C)] (prf : Frg → Option M.NIProof)
     (checkX : X₀ → Frg → Bool) (freshX : Frg × X₀ → List (MUR ⊕ R) → Prop)
     (stmtX : Stmt → X₀) (keys : Fin n → B.KeyCoins) (Q : ℕ)
-    (A' : QueryBoundedAdversary Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b) (Frg × X₀)
+    (A' : QueryBoundedAdversary Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) (Frg × X₀)
       t)
     (Sim : NARG.Simulator Xq (XOut k e) X₀ (M.Response b) (SaltedCoins (FiatShamirSalt kS) C))
     (p₀ : M.Response b) (hA : M.SimAssignsAtKeys b Sim id)
@@ -633,7 +650,7 @@ theorem winTestProb_le_forgerWinsKF [DecidableEq X₀] {C WitK W : Type} [Fintyp
     fun _ _ _ hv => queries_length_le_of_formatBounds hb hv
   have hse := (weak_online_simulation_extractability_qrom (B := b) Qs hkq hrbr
     (inertOnDummy isDummy Sim p₀)
-    (simAssignsAtKeys_inertOnDummy isDummy Sim p₀ hA)).unruhSimExtraction_of_queryFreeTest
+    (simAssignsAtKeys_inertOnDummy isDummy Sim p₀ hA)).unruhSimExtraction_of_queryFreeTest hkq
   exact (hse (Stmt × (MUR ⊕ R)) (stmtX ∘ Prod.fst) t Q
     (seAdversaryKF (rel := rel) (enc := enc) (dummyS := dummyS) prf keys Q A')
     fun a => okAtKF (rel := rel) (enc := enc) (dummyS := dummyS) prf checkX freshX keys Q
@@ -650,7 +667,7 @@ through the reinsertion of the table (`insertTabM`) and the default with the tab
 that only the table holds key coins. -/
 theorem simProb_extAdv_seAlgKF_eq [DecidableEq X₀] {SC' WitK W : Type} [Fintype SC']
     [DecidableEq SC'] (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins) (Q : ℕ)
-    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
+    {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → W)
     (Goal : Frg × X₀ → List (MUR ⊕ R) → W → Prop) (kq : ℕ) :

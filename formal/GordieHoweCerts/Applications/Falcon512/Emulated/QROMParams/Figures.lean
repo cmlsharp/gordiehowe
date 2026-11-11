@@ -15,8 +15,8 @@ The bit security of the emulated Falcon-512 proof of possession at the QROM para
 paper's measure `λ(err) = min over t ≥ 1 of log₂ (t / min(1, err(t)))` (`sec:eval-params`),
 certified from the generated figures (`GordieHowe.Generated.Falcon512.Emulated.QROMParams.figures`).
 
-Zero knowledge: for every `t ≥ 1` hash queries and `Q ≤ 2^64` proof queries, the error of
-`everlasting_zero_knowledge_qrom` is at most `Q · t · 2^-λ`.
+Zero knowledge: for every `t ≥ 1` hash queries and `Q ≤ proofQueryCap = 2^64` proof queries, the error `zkError 0` of
+`everlasting_zero_knowledge_honest_qrom` is at most `Q · t · 2^-λ`.
 
 Knowledge soundness: for every `t ≥ 1` hash queries, the quantum knowledge error of
 `knowledge_soundness_qrom_at` and `soundness_qrom_at` against `t`-query adversaries,
@@ -46,18 +46,16 @@ most `7/2^183` (`zkBudget_le_two_rpow` at the generated figures). -/
 theorem zkBudget_le : configuration.zkBudget ≤ (2 : ℝ) ^ (-180.19 : ℝ) :=
   zkBudget_le_two_rpow
     (ofCertified_readsFigures Generated.Falcon512.Emulated.QROMParams.figures_eq)
-    (M := 7) (E := 183) (e := 18019) (by norm_num) (by norm_num [Nat.choose_two_right])
+    (M := 7) (E := 183) (e := 18019) (by norm_num) (by norm_num [Nat.choose_two_right, ParamSet.rom, ParamSet.qrom])
     (by decide +kernel)
 
 /-- **The bit security of everlasting zero knowledge of the emulated Falcon-512 proof of possession
-at the QROM parameters**: for every `t ≥ 1` hash queries and `Q ≤ 2^64` proof queries, the error of
-`everlasting_zero_knowledge_qrom` is at most `Q · t · 2^-180.19`. -/
-@[headline]
-theorem zero_knowledge_bits_qrom {t Q : ℕ} (ht : 1 ≤ t) (hQ : Q ≤ 2 ^ 64) :
-    (Configuration.Common.setting configuration configurationFacts proofSystem).model.zkError 0 t Q ≤
-      Q * t * (2 : ℝ) ^ (-180.19 : ℝ) :=
+at the QROM parameters**: for every `t ≥ 1` hash queries and `Q ≤ proofQueryCap = 2^64` proof queries, the error `zkError 0` of
+`everlasting_zero_knowledge_honest_qrom` is at most `Q · t · 2^-180.19`. -/
+theorem zero_knowledge_bits_qrom :
+    ZKBitSecurityAtLeast ((argument proofSystem).zkError 0) 180.19 :=
   Configuration.ZKBits.zkError_le_bits configuration configurationFacts proofSystem
-    zkBudget_le ht hQ
+    zkBudget_le
 
 -- The budget's exponents (up to `2^384`) exceed `norm_num`'s default evaluation threshold.
 set_option exponentiation.threshold 400 in
@@ -75,11 +73,9 @@ QROM parameters**: for every `t ≥ 1` hash queries, the quantum knowledge error
 `knowledge_soundness_qrom_at` and `soundness_qrom_at` against `t`-query adversaries, evaluated at `t
 + kq` as in the paper's `errks(t)` and `analysis/eval_params.py`, satisfies `min(1, err) ≤ t ·
 2^-116.72`, so `λ(errks) ≥ 116.72`. -/
-@[headline]
-theorem soundness_bits_qrom {t : ℕ} (ht : 1 ≤ t) :
-    (min 1 (Configuration.Common.knowledgeErrorQROM configuration configurationFacts
-      (t + configuration.kq))).toReal ≤ t * (2 : ℝ) ^ (-116.72 : ℝ) :=
+theorem soundness_bits_qrom :
+    BitSecurityAtLeast extractionErrorQROM 116.72 :=
   SoundnessBits.knowledgeErrorQROM_le_bits configuration configurationFacts (e := 11672)
-    (by norm_num) (by decide +kernel) (knowledgeBudgetQROM_le) ht
+    (by norm_num) (by decide +kernel) (knowledgeBudgetQROM_le)
 
 end GordieHowe.Falcon512.Emulated.QROMParams

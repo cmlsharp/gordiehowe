@@ -189,12 +189,12 @@ theorem WIAdversaryOfLength.card_choices_le (A : M.WIAdversaryOfLength eX eW rel
 
 variable (M) in
 /-- **The law of the proof of a prover program** at the oracle `h`, the statement `x` and the
-witness `w`: the program run against `h` (`NARG.Prover.toFn`) at coins drawn from its coin law, its
-proof read as a proof of the compiler. -/
+witness `w`: the program run against `h` (`NARG.Prover.toFn`) at coins drawn from `μ`, its proof
+read as a proof of the compiler. -/
 noncomputable def proverProofLaw {B : ℕ} {C : Type}
-    (Pv : NARG.Prover (Query k kN kS L) (Out k e) X W (M.BProof B) C)
+    (Pv : NARG.Prover (Query k kN kS L) (Out k e) X W (M.BProof B) C) (μ : PMF C)
     (h : Query k kN kS L → Out k e) (x : X) (w : W) : PMF M.NIProof :=
-  Pv.coins.map fun c => (Pv.toFn.prove h x w c).val
+  μ.map fun c => (Pv.toFn.prove h x w c).val
 
 variable (M) in
 /-- **Witness indistinguishability against adaptively chosen statements of encoding length at
@@ -202,13 +202,15 @@ most `ℓ`** (CY24 Definition 33.1.1, pp. 426-427, at unbounded queries, p. 430)
 at advantage `ε`, of the prover program `Pv`: against every adversary making `Q` proof queries, each
 a statement and two witnesses of `rel` of total encoding length at most `ℓ` chosen as a function of
 the whole oracle and the earlier proofs, every distinguisher of the oracle and the proofs has
-advantage at most `ε` (`SPBCS.wiAdvantageWith` at the proof laws of `Pv`). -/
+advantage at most `ε` (`SPBCS.wiAdvantageWith` at the proof laws of `Pv` on coins drawn from
+`μ`). -/
 def WitnessIndistinguishableOfLength {B : ℕ} {C : Type}
-    (Pv : NARG.Prover (Query k kN kS L) (Out k e) X W (M.BProof B) C) (eX : SPBCS.BitEncoding X)
+    (Pv : NARG.Prover (Query k kN kS L) (Out k e) X W (M.BProof B) C) (μ : PMF C)
+    (eX : SPBCS.BitEncoding X)
     (eW : SPBCS.BitEncoding W) (rel : Set (X × W)) (Q ℓ : ℕ) (ε : ℝ) : Prop :=
   ∀ A : M.WIAdversaryOfLength eX eW rel ℓ Q,
     ∀ D : (Query k kN kS L → Out k e) → (Fin Q → M.NIProof) → Prop,
-      SPBCS.wiAdvantageWith (M.proverProofLaw Pv) A.toWIAdversary D ≤ ε
+      SPBCS.wiAdvantageWith (M.proverProofLaw Pv μ) A.toWIAdversary D ≤ ε
 
 /-- **The proof law of the prover `niProver` is the law of the compiled proof** over uniform coins
 (`proofLaw`). -/
@@ -216,14 +218,14 @@ theorem proverProofLaw_niProver (Λ : SiteLayout Mg) {E : (j : ι) → (M.comp j
     {V : X → FullTr P t → Bool} {Qs : ∀ x, M.IOPQueries V x} (VE : M.ViewEncoder E Qs) {B : ℕ}
     (hb : M.FormatBounds Qs B B) {R : Type} [Fintype R] [Nonempty R]
     (honest : W → R → CausalProver P t X) (h : Query k kN kS L → Out k e) (x : X) (w : W) :
-    M.proverProofLaw (M.niProver Λ honest E hb) h x w = proofLaw E Qs h x (honest w) := by
+    M.proverProofLaw (M.niProver Λ honest E hb) (PMF.uniformOfFintype _) h x w =
+      proofLaw E Qs h x (honest w) := by
   let eq : SaltedCoins (FiatShamirSalt kS) (M.ProverCoins R) ≃
       FiatShamirSalt kS × R × (M.Pos → MerkleSalt kN) :=
     (SaltedCoins.equivProd _ _).trans
       ((Equiv.refl _).prodCongr (SPBCS.ProverCoins.equivProd M R))
   unfold proverProofLaw proofLaw
-  rw [show (M.niProver Λ honest E hb).coins = PMF.uniformOfFintype _ from rfl,
-    ← PMF.uniformOfFintype_map_equiv eq.symm, PMF.map_comp]
+  rw [← PMF.uniformOfFintype_map_equiv eq.symm, PMF.map_comp]
   congr 1
   funext c
   exact M.toFn_niProver Λ honest E VE hb h x w (eq.symm c)
@@ -245,9 +247,10 @@ theorem unconditionallyWitnessIndistinguishable [∀ j i, Fintype ((M.comp j).Me
     {pub : X → Pub} {Sim : CausalJointSimulator VE.MV Pub} {δ : ℝ≥0}
     (hvzk : CausalHVZK VE.MV rel honest pub Sim δ) (eX : SPBCS.BitEncoding X)
     (eW : SPBCS.BitEncoding W) (Q ℓ : ℕ) :
-    M.WitnessIndistinguishableOfLength (M.niProver Λ honest E hb) eX eW rel Q ℓ
+    M.WitnessIndistinguishableOfLength (M.niProver Λ honest E hb) (PMF.uniformOfFintype _) eX eW rel
+      Q ℓ
       (Q * M.wiError δ (SPBCS.choiceCount ℓ)) := fun A D => by
-  rw [show M.proverProofLaw (M.niProver Λ honest E hb) = fun h x w => proofLaw E Qs h x (honest w)
+  rw [show M.proverProofLaw (M.niProver Λ honest E hb) (PMF.uniformOfFintype _) = fun h x w => proofLaw E Qs h x (honest w)
     from funext fun h => funext fun x => funext fun w => proverProofLaw_niProver Λ VE hb honest h x w]
   exact witnessIndistinguishable VE.toReveal (SPBCS.obsClose_of_causalHVZK VE.toReveal hvzk) Q
     _ A.toWIAdversary A.card_choices_le D

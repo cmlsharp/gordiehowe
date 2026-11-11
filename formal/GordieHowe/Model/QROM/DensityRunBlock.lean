@@ -28,7 +28,7 @@ by a trace-preserving map.
   `mem_inBlock_of_ne_zero_on`, `densityRun_supported`.
 - `mem_inBlock_of_ne_zero`: a nonzero entry in a row with label `none` or `some r` has its column
   there.
-- `mul_mul_conjTranspose_relabel_block`, `KrausMapBlock.apply_relabel_block`: one conjugation and
+- `mul_mul_conjTranspose_relabel_block`, `KrausMap.apply_relabel_block`: one conjugation and
   one Kraus map, on the block.
 - `densityRun_relabel_block`: the runs.
 - `labelInd`, `sum_four_comm`, `sum_filter_conj_eq`, `sum_filter_kron_one`, `sum_conj_block_mass`:

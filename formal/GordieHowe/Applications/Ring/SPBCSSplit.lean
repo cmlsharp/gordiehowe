@@ -69,21 +69,22 @@ structure _root_.GordieHowe.RingSignature.ProofSystem.CompiledBySplit {m k e : �
 section System
 
 variable {k kN kS L e N : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁]
-  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
+  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)] {X₀ Wit₀ : Type}
   (M : SPBCS Mg P X₀ k kN kS L e) (Λ : SiteLayout Mg) {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] (E : (j : ι) → (M.comp j).Encoder)
   {Vr : X₀ → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : Wit₀ → R → CausalProver P τ X₀)
   (stmtProg : RingSignature.RingStmt B → OracleProg (Bits (queryBits k kN kS L)) Y₁ X₀) (qS : ℕ)
   (hS : ∀ x, (stmtProg x).QueriesLE qS) (check : RingSignature.RingStmt B → Bool)
   (input : RingSignature.RingStmt B → RingSignature.RingWit B → Option Wit₀)
 
 /-- The compiled honest prover with its proofs in the format `b`, run through `queryEncoding`. -/
-noncomputable abbrev splitNIProver :=
+abbrev splitNIProver :=
   ((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding
 
 /-- **The claim of a ring statement and a proof at a base component** `ω`: `(stmtProg x (ω), π)`
@@ -119,6 +120,7 @@ noncomputable def spbcsSplitProofSystem :
   verify H x π := check x && decide (∃ c ∈ spbcsSplitClaim M stmtProg (base sp H) x π,
     (M.qVerifier Qs b b).Accepted (outEquiv k e ∘ prf sp H) c)
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The proof system accepts exactly the checked statements whose claims the compiled verifier
 accepts against the second component.** -/
 theorem verify_spbcsSplitProofSystem_eq_true_iff (H : Bits (queryBits k kN kS L) → Y)
@@ -130,6 +132,7 @@ theorem verify_spbcsSplitProofSystem_eq_true_iff (H : Bits (queryBits k kN kS L)
   change (check x && decide _) = true ↔ _
   rw [Bool.and_eq_true, decide_eq_true_iff]
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The proof system rejects the missing proof.** -/
 theorem verify_spbcsSplitProofSystem_none (H : Bits (queryBits k kN kS L) → Y)
     (x : RingSignature.RingStmt B) :
@@ -151,6 +154,7 @@ theorem stmt_of_mem_spbcsSplitClaim {ω : Bits (queryBits k kN kS L) → Y₁}
     subst hc
     rfl
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **An honest proof is the compiled proof of the program statement on the second component**:
 at the honest input `y = input x w`, the prover's proof at `H` is the compiled prover's proof of
 `(stmtProg x).run (base sp H)` with `y`, against `prf sp H`. -/
@@ -179,6 +183,7 @@ def compiledBySplit_spbcsSplitProofSystem :
     ((verify_spbcsSplitProofSystem_eq_true_iff sp M Λ E hb honest stmtProg qS hS check input H x
       π).1 h).2
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The prover reads the base component only at the queries of the statement program**: for a
 set `S` of points that `stmtProg` never queries, at any oracle, the prover meets
 `ProofSystem.ReadsOff sp S`. -/

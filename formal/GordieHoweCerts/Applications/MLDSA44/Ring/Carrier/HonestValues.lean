@@ -21,13 +21,14 @@ predicates give through the two renamings (`CarrierHEmbed`, `CarrierAEmbed`).
 * **The renamings' inverses** (`hOf`, `aOf`): the native value of domain `H`'s core (of `hV`) and
   the emulated value of domain `A`'s gadgets (of `aV`) a carrier value renames, if any.
 * **The program facts** (`MldsaCarrierHonest`, decided per carrier): the signature relation's
-  quotient digits (`qD`), the member's and the quotient's values outside the renamings' images, the
-  held committed values committed in the carrier, domain `H`'s core and domain `A`'s values held,
-  and the carrier's bound values reading committed values and constants.
+  quotient digits (`qD`), the member's values, the high halves and the quotient's digits outside
+  the renamings' images, the held committed values committed in the carrier, domain `H`'s core and
+  domain `A`'s values held, and the carrier's bound values reading committed values and constants.
 * **The honest values** (`honestVal`): `member.a_hat` and `member.t1` the scheme-order transforms
   at `ψ = psi512` of the signer's carrier row (`specE`), `member.mu` the bits of the signer's `μ`,
-  the index bits the signer's position's, the quotient digits the digits of the signature
-  relation's honest quotient (`quotN`, of the relation's honest integer `sigZ`); at the renamed
+  the index bits the signer's position's, `signature.Q` the high halves of the rows' products by
+  `X^256 + 1` (`qHonC`), the quotient digits the digits of the signature relation's honest
+  quotient (`quotN`, of the relation's honest integer `sigZ`); at the renamed
   value of a held native value domain `H`'s core (`GordieHowe.MLDSA44.Ring.Native.hValCore`), at the
   renamed value of a held emulated value domain `A`'s (`aValE`).
 * **The proofs of possession's view** (`readsCells_pullH`, `readsAE_pullA`): at the source
@@ -39,6 +40,21 @@ predicates give through the two renamings (`CarrierHEmbed`, `CarrierAEmbed`).
 -/
 
 namespace GordieHowe.MLDSA44.Ring.Carrier
+
+set_option hygiene false in
+local notation "σH" => CarrierHEmbed.σ program
+
+set_option hygiene false in
+local notation "hV" => CarrierHEmbed.V program
+
+set_option hygiene false in
+local notation "σA" => CarrierAEmbed.σ program
+
+set_option hygiene false in
+local notation "aV" => CarrierAEmbed.V program
+
+set_option hygiene false in
+local notation "predMapA" => CarrierAEmbed.pred program
 
 open GordieHowe.Bits RealizedProgram
 open MLDSA44.NativeAlgebraCircuit (flat)
@@ -53,30 +69,24 @@ variable {msgLen : ℕ}
 
 /-! ## The renamings' inverses -/
 
-/-- **The native value a carrier value renames** under `σH`, if any (`hV`'s first). -/
-def hOf (v : ℕ) : Option ℕ := hV.find? fun u => σH.val u == v
+/-- **The native value a carrier value renames**, if any: the inverse table of the renaming on
+the held values (`RealizedProgram.Renaming.invOn`). Irreducible: the statements that read it compare
+it by name, never by evaluating the table. -/
+@[irreducible] def hOf (program : RealizedProgram) [CarrierHEmbed program] (v : ℕ) : Option ℕ :=
+  ((σH).invOn hV).get? v
 
-/-- **The emulated value a carrier value renames** under `σA`, if any (`aV`'s first). -/
-def aOf (v : ℕ) : Option ℕ := aV.find? fun u => σA.val u == v
-
-/-- `hOf` inverts `σH` on `hV`. -/
-theorem hOf_val : ∀ u ∈ hV, hOf (σH.val u) = some u := by
-  decide +kernel
-
-/-- `aOf` inverts `σA` on `aV`. -/
-theorem aOf_val : ∀ u ∈ aV, aOf (σA.val u) = some u := by
-  decide +kernel
-
-/-- The images of the two renamings are disjoint. -/
-theorem hOf_valA : ∀ u ∈ aV, hOf (σA.val u) = none := by
-  decide +kernel
+/-- **The emulated value a carrier value renames**, if any: the inverse table of the renaming on
+the held values. Irreducible, as `hOf`. -/
+@[irreducible] def aOf (program : RealizedProgram) [CarrierAEmbed program] (v : ℕ) : Option ℕ :=
+  ((σA).invOn aV).get? v
 
 /-! ## The program facts -/
 
 /-- **The program facts of an ML-DSA-44 ring carrier's honest values** (decided per carrier): the
-signature relation's quotient (value `64`) bound to its digits `qD`, which hold every natural up to
-the quotient's bound `qmax = 268274655`; the member's values (`55 … 58`) and the quotient's digits
-distinct, outside the renamings' images, committed cells of field `0`, with their sizes; the held
+signature relation's quotient (value `65`) bound to its digits `qD`, which hold every natural up to
+the quotient's bound `qmax = 268274655`; the member's values (`56 … 59`), the high halves
+`signature.Q` (`66`) and the quotient's digits distinct, outside the renamings' images, committed
+cells of field `0`, with their sizes; the held
 committed values committed in the carrier; domain `H`'s core hash values and SampleInBall's cells
 held (`hV`); domain `A`'s committed values and bound values held (`aV`), the bound values reading
 held values through no shared expression; and the carrier's bound values reading committed values
@@ -86,27 +96,29 @@ class MldsaCarrierHonest (program : RealizedProgram) [CarrierHEmbed program] [Ca
   /-- The signature relation's quotient digits. -/
   qD : DigitLayout
   /-- The quotient is bound to its digits. -/
-  kind64 : (program.value 64).kind = .bound qD.expr
+  kind65 : (program.value 65).kind = .bound qD.expr
   /-- The digits hold every natural up to `qmax`. -/
   qFits : qD.Fits 268274656
-  /-- The member's values and the quotient's digits are distinct. -/
-  member_nodup : ([55, 56, 57, 58] ++ qD.ids).Nodup
-  /-- The member's values and the quotient's digits are no renamed values. -/
-  member_none : ∀ v ∈ [55, 56, 57, 58] ++ qD.ids, hOf v = none
-  /-- The member's values and the quotient's digits rename no committed value of domain `A`. -/
-  member_noneA : ∀ v ∈ [55, 56, 57, 58] ++ qD.ids,
-    ∀ u ∈ aValues (MldsaEAlgebra.layout (CarrierAEmbed.emu program)), σA.val u ≠ v
-  /-- The member's values and the quotient's digits are committed cells of field `0`. -/
-  member_cells : ∀ v ∈ [55, 56, 57, 58] ++ qD.ids, program.privCellB v = true ∧
+  /-- The member's values, the high halves and the quotient's digits are distinct. -/
+  member_nodup : ([56, 57, 58, 59, 66] ++ qD.ids).Nodup
+  /-- The member's values, the high halves and the quotient's digits are no renamed values. -/
+  member_none : ∀ v ∈ [56, 57, 58, 59, 66] ++ qD.ids, hOf program v = none
+  /-- The member's values, the high halves and the quotient's digits rename no committed value of
+  domain `A`. -/
+  member_noneA : ∀ v ∈ [56, 57, 58, 59, 66] ++ qD.ids,
+    ∀ u ∈ aValues (MldsaEAlgebra.layout (CarrierAEmbed.emu program)), (σA).val u ≠ v
+  /-- The member's values, the high halves and the quotient's digits are committed cells of field
+  `0`. -/
+  member_cells : ∀ v ∈ [56, 57, 58, 59, 66] ++ qD.ids, program.privCellB v = true ∧
     program.valueField v = 0
   /-- The quotient's digits have one coordinate per coefficient. -/
   qSizes : ∀ v ∈ qD.ids, (program.value v).size = 1024
   /-- The held native committed values are committed values of the carrier. -/
   privCellH : ∀ u ∈ hV, (CarrierHEmbed.nat program).privCellB u = true →
-    program.privCellB (σH.val u) = true
+    program.privCellB ((σH).val u) = true
   /-- The held emulated committed values are committed values of the carrier. -/
   privCellA : ∀ u ∈ aV, (CarrierAEmbed.emu program).privCellB u = true →
-    program.privCellB (σA.val u) = true
+    program.privCellB ((σA).val u) = true
   /-- Domain `H`'s core hash values are held. -/
   coreV : (69 ∈ hV ∧ 119 ∈ hV) ∧ ∀ p : Fin 10, (p : ℕ) ≠ 0 → ∀ t : Fin 24, wordsVal p t ∈ hV
   /-- SampleInBall's cells are held. -/
@@ -120,6 +132,12 @@ class MldsaCarrierHonest (program : RealizedProgram) [CarrierHEmbed program] [Ca
     | _ => false) = true
   /-- Every value bound to its digits reads committed values and constants. -/
   bound : ∀ v < program.values.length, program.BoundOk v
+  /-- `hOf` inverts the renaming of domain `H` on its held values. -/
+  hOf_val : ∀ u ∈ hV, hOf program ((σH).val u) = some u
+  /-- `aOf` inverts the renaming of domain `A` on its held values. -/
+  aOf_val : ∀ u ∈ aV, aOf program ((σA).val u) = some u
+  /-- The images of the two renamings are disjoint. -/
+  hOf_valA : ∀ u ∈ aV, hOf program ((σA).val u) = none
 
 /-! ## The honest naturals of the member and the quotient -/
 
@@ -156,8 +174,27 @@ noncomputable def sigZ (i : Fin 4) (k : Fin 256) : ℤ :=
         Ops.negCoef 256 (keyZ (Emulated.Rows.aKeyOf y.key i j)) k t * zZ y j t -
       ∑ t : Fin 256, Ops.negCoef 256 (keyZ (Emulated.Rows.tKeyOf y.key i)) k t * cZ y t)
 
+/-- **The honest high half of row `i`** at `t` (`signature.Q`), in a field: the high half
+(`Ops.high`) of `Σ_j A_ij z_j − t_i c` over the integers' casts, `A` and `2^d t1` the signer's keys
+(`keyZ`), `z` the centered response and `c` the challenge, so that row `i`'s polynomial is free of
+`X^256 + 1`. -/
+-- spec-side
+noncomputable def qHonC (K : Type*) [Field K] (i : Fin 4) (t : ℕ) : K :=
+  ∑ j : Fin 4, Ops.high 256 (fun s => ((keyZ (Emulated.Rows.aKeyOf y.key i j) s : ℤ) : K))
+      (fun s => ((zZ y j s : ℤ) : K)) t -
+    Ops.high 256 (fun s => ((keyZ (Emulated.Rows.tKeyOf y.key i) s : ℤ) : K))
+      (fun s => ((cZ y s : ℤ) : K)) t
+
+/-- **The honest high halves lie in every subfield.** -/
+theorem qHonC_mem {K : Type*} [Field K] (S : Subfield K) (i : Fin 4) (t : ℕ) :
+    qHonC y K i t ∈ S :=
+  sub_mem (sum_mem fun _ _ =>
+      Native.high_mem S (fun _ => intCast_mem S _) (fun _ => intCast_mem S _) t)
+    (Native.high_mem S (fun _ => intCast_mem S _) (fun _ => intCast_mem S _) t)
+
 /-- **The honest quotient of the signature relation** at coordinate `j = 256 i + k`: `Q` of
-`sigZ = q (qlo + Q)` at `qlo = −134137327` (`mldsa_ring_carrier.h`, the quotient of `assert_mod`);
+`sigZ = q (qlo + Q)` at `qlo = −134137327` (`mldsa_ring_carrier.h`, the committed quotient
+`signature.relation.q` at `carrier_relation_qlo`);
 `0` past `1024`. -/
 -- spec-side
 noncomputable def quotN (j : ℕ) : ℕ :=
@@ -194,9 +231,10 @@ variable [MldsaHHonest nat] [MldsaHShuffle nat] [MldsaHSelHonest nat] [MldsaHCon
 
 variable (program F0 FH) in
 /-- **The honest committed values of an ML-DSA-44 ring carrier** on an honest input:
-`member.a_hat` (`55`) and `member.t1` (`56`) the spectra of the signer's carrier row (`specE`),
-`member.mu` (`57`) the bits of the signer's `μ`, the index bits (`58`) the bits of the signer's
-position, the quotient's digits the digits of the honest quotient (`quotN`); at the renamed value
+`member.a_hat` (`56`) and `member.t1` (`57`) the spectra of the signer's carrier row (`specE`),
+`member.mu` (`58`) the bits of the signer's `μ`, the index bits (`59`) the bits of the signer's
+position, `signature.Q` (`66`) the rows' high halves (`qHonC`, row `t / 255` at `t % 255`), the
+quotient's digits the digits of the honest quotient (`quotN`); at the renamed value
 of a held native value domain `H`'s core (`hValCore`), at the renamed value of a held emulated
 value domain `A`'s (`aValE`); `0` elsewhere (the realization's values are generated,
 `RealizedProgram.genCommitted`).
@@ -206,77 +244,86 @@ Running time: one `ExpandA` and four inverse NTTs of the signer's key, `20` tran
 `hValCore` and `aValE`. This running time is argued here, not proved in Lean. -/
 -- spec-side
 noncomputable def honestVal (y : RingIn msgLen) (v j : ℕ) : (interp (program.valueField v)).K :=
-  if v = 55 then castElt (a := 0) (if j < 4096 then specE y (interp 0).K j else 0)
-  else if v = 56 then castElt (a := 0) (if j < 1024 then specE y (interp 0).K (4096 + j) else 0)
-  else if v = 57 then castElt (a := 0) ((muBitNat y.mu j : ℕ) : (interp 0).K)
-  else if v = 58 then castElt (a := 0) ((y.w.idx / 2 ^ j % 2 : ℕ) : (interp 0).K)
+  if v = 56 then castElt (a := 0) (if j < 4096 then specE y (interp 0).K j else 0)
+  else if v = 57 then castElt (a := 0) (if j < 1024 then specE y (interp 0).K (4096 + j) else 0)
+  else if v = 58 then castElt (a := 0) ((muBitNat y.mu j : ℕ) : (interp 0).K)
+  else if v = 59 then castElt (a := 0) ((y.w.idx / 2 ^ j % 2 : ℕ) : (interp 0).K)
+  else if v = 66 then castElt (a := 0)
+    (if h : j < 1020 then qHonC y (interp 0).K ⟨j / 255, by omega⟩ (j % 255) else 0)
   else if v ∈ (qD).ids then castElt (a := 0) (((qD).digit (quotN y j) v : ℕ) : (interp 0).K)
-  else match hOf v with
+  else match hOf program v with
     | some u => castElt (hValCore nat F0 FH y u j)
-    | none => match aOf v with
+    | none => match aOf program v with
       | some u => castElt (a := 0) (aValE y F0.K L u j)
       | none => 0
 
-theorem member_ne {v : ℕ} (hv : v ∈ [55, 56, 57, 58] ++ (qD).ids) {u : ℕ} (hu : u ∈ hV) :
-    σH.val u ≠ v := fun h => by
+theorem member_ne {v : ℕ} (hv : v ∈ [56, 57, 58, 59, 66] ++ (qD).ids) {u : ℕ} (hu : u ∈ hV) :
+    (σH).val u ≠ v := fun h => by
   have := MldsaCarrierHonest.member_none (program := program) v hv
-  rw [← h, hOf_val u hu] at this
+  rw [← h, MldsaCarrierHonest.hOf_val u hu] at this
   cases this
 
-theorem member_neA {v : ℕ} (hv : v ∈ [55, 56, 57, 58] ++ (qD).ids) {u : ℕ} (hu : u ∈ aValues L) :
-    σA.val u ≠ v :=
+theorem member_neA {v : ℕ} (hv : v ∈ [56, 57, 58, 59, 66] ++ (qD).ids) {u : ℕ} (hu : u ∈ aValues L) :
+    (σA).val u ≠ v :=
   MldsaCarrierHonest.member_noneA (program := program) v hv u hu
 
 /-- **A held native value's renamed value reads its core honest value.** -/
 theorem honestVal_heldH (y : RingIn msgLen) {u : ℕ} (hu : u ∈ hV) (j : ℕ) :
-    honestVal program F0 FH y (σH.val u) j = castElt (hValCore nat F0 FH y u j) := by
+    honestVal program F0 FH y ((σH).val u) j = castElt (hValCore nat F0 FH y u j) := by
   have hm := fun v hv => member_ne (program := program) (v := v) hv hu
   unfold honestVal
-  rw [if_neg (hm 55 (by simp)), if_neg (hm 56 (by simp)), if_neg (hm 57 (by simp)),
-    if_neg (hm 58 (by simp)), if_neg (fun h => hm _ (List.mem_append_right _ h) rfl), hOf_val u hu]
+  rw [if_neg (hm 56 (by simp)), if_neg (hm 57 (by simp)), if_neg (hm 58 (by simp)),
+    if_neg (hm 59 (by simp)), if_neg (hm 66 (by simp)),
+    if_neg (fun h => hm _ (List.mem_append_right _ h) rfl), MldsaCarrierHonest.hOf_val u hu]
 
 /-- **A held emulated value's renamed value reads its domain `A` honest value.** -/
 theorem honestVal_heldA (y : RingIn msgLen) {u : ℕ} (hu : u ∈ aValues L) (j : ℕ) :
-    honestVal program F0 FH y (σA.val u) j = castElt (a := 0) (aValE y F0.K L u j) := by
+    honestVal program F0 FH y ((σA).val u) j = castElt (a := 0) (aValE y F0.K L u j) := by
   have hm := fun v hv => member_neA (program := program) (v := v) hv hu
   have huV := MldsaCarrierHonest.aVals (program := program) u (List.mem_append_left _ hu)
   unfold honestVal
-  rw [if_neg (hm 55 (by simp)), if_neg (hm 56 (by simp)), if_neg (hm 57 (by simp)),
-    if_neg (hm 58 (by simp)), if_neg (fun h => hm _ (List.mem_append_right _ h) rfl),
-    hOf_valA u huV, aOf_val u huV]
+  rw [if_neg (hm 56 (by simp)), if_neg (hm 57 (by simp)), if_neg (hm 58 (by simp)),
+    if_neg (hm 59 (by simp)), if_neg (hm 66 (by simp)),
+    if_neg (fun h => hm _ (List.mem_append_right _ h) rfl), MldsaCarrierHonest.hOf_valA u huV, MldsaCarrierHonest.aOf_val u huV]
 
-/-- **The honest value of a member value or a quotient digit**, read in field `0`. -/
+/-- **The honest value of a member value, the high halves or a quotient digit**, read in field
+`0`. -/
 theorem honestVal_member (y : RingIn msgLen) (j : ℕ) :
-    castElt (b := 0) (honestVal program F0 FH y 55 j) =
+    castElt (b := 0) (honestVal program F0 FH y 56 j) =
         (if j < 4096 then specE y (interp 0).K j else 0) ∧
-      castElt (b := 0) (honestVal program F0 FH y 56 j) =
+      castElt (b := 0) (honestVal program F0 FH y 57 j) =
         (if j < 1024 then specE y (interp 0).K (4096 + j) else 0) ∧
-      castElt (b := 0) (honestVal program F0 FH y 57 j) = ((muBitNat y.mu j : ℕ) : (interp 0).K) ∧
-      castElt (b := 0) (honestVal program F0 FH y 58 j) =
+      castElt (b := 0) (honestVal program F0 FH y 58 j) = ((muBitNat y.mu j : ℕ) : (interp 0).K) ∧
+      castElt (b := 0) (honestVal program F0 FH y 59 j) =
         ((y.w.idx / 2 ^ j % 2 : ℕ) : (interp 0).K) ∧
+      castElt (b := 0) (honestVal program F0 FH y 66 j) =
+        (if h : j < 1020 then qHonC y (interp 0).K ⟨j / 255, by omega⟩ (j % 255) else 0) ∧
       ∀ v ∈ (qD).ids, castElt (b := 0) (honestVal program F0 FH y v j) =
         (((qD).digit (quotN y j) v : ℕ) : (interp 0).K) := by
   have hc := MldsaCarrierHonest.member_cells (program := program)
-  have hne : ∀ u ∈ [55, 56, 57, 58], ∀ v ∈ (qD).ids, u ≠ v := fun u hu v hv =>
+  have hne : ∀ u ∈ [56, 57, 58, 59, 66], ∀ v ∈ (qD).ids, u ≠ v := fun u hu v hv =>
     (List.nodup_append.1 (MldsaCarrierHonest.member_nodup (program := program))).2.2 u hu v hv
-  refine ⟨?_, ?_, ?_, ?_, fun v hv => ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, fun v hv => ?_⟩
   · unfold honestVal
     rw [if_pos rfl]
-    exact castElt_castElt_of_eq (hc 55 (by simp)).2.symm _
-  · unfold honestVal
-    rw [if_neg (by decide), if_pos rfl]
     exact castElt_castElt_of_eq (hc 56 (by simp)).2.symm _
   · unfold honestVal
-    rw [if_neg (by decide), if_neg (by decide), if_pos rfl]
+    rw [if_neg (by decide), if_pos rfl]
     exact castElt_castElt_of_eq (hc 57 (by simp)).2.symm _
   · unfold honestVal
-    rw [if_neg (by decide), if_neg (by decide), if_neg (by decide), if_pos rfl]
+    rw [if_neg (by decide), if_neg (by decide), if_pos rfl]
     exact castElt_castElt_of_eq (hc 58 (by simp)).2.symm _
-  · have hv' : v ∈ [55, 56, 57, 58] ++ (qD).ids := List.mem_append_right _ hv
+  · unfold honestVal
+    rw [if_neg (by decide), if_neg (by decide), if_neg (by decide), if_pos rfl]
+    exact castElt_castElt_of_eq (hc 59 (by simp)).2.symm _
+  · unfold honestVal
+    rw [if_neg (by decide), if_neg (by decide), if_neg (by decide), if_neg (by decide), if_pos rfl]
+    exact castElt_castElt_of_eq (hc 66 (by simp)).2.symm _
+  · have hv' : v ∈ [56, 57, 58, 59, 66] ++ (qD).ids := List.mem_append_right _ hv
     unfold honestVal
-    rw [if_neg (fun h => hne 55 (by simp) v hv h.symm), if_neg (fun h => hne 56 (by simp) v hv h.symm),
-      if_neg (fun h => hne 57 (by simp) v hv h.symm), if_neg (fun h => hne 58 (by simp) v hv h.symm),
-      if_pos hv]
+    rw [if_neg (fun h => hne 56 (by simp) v hv h.symm), if_neg (fun h => hne 57 (by simp) v hv h.symm),
+      if_neg (fun h => hne 58 (by simp) v hv h.symm), if_neg (fun h => hne 59 (by simp) v hv h.symm),
+      if_neg (fun h => hne 66 (by simp) v hv h.symm), if_pos hv]
     exact castElt_castElt_of_eq (hc v hv').2.symm _
 
 end Values
@@ -401,11 +448,11 @@ theorem valH_mem : ∀ v, v ∈ [560, 561, 562, 563, 564, 565] → ∀ n < ((nat
   rw [if_neg (nm v hv), if_neg h7, if_neg h8, if_pos hv]
   exact castElt_castElt_of_eq hf.2.symm _
 
-/-- **Domain `H`'s core holds at the honest values**: carrier predicate `k − 25` for every native
+/-- **Domain `H`'s core holds at the honest values**: carrier predicate `pred k` for every native
 core predicate `k` (`48 … 270`), by the renaming (`CarrierHEmbed.hPredCorr`, `holdsAt_pullEnv`) at
 the native core's honest values (`GordieHowe.MLDSA44.Ring.Native.hPreds_core`). -/
-theorem core_holds {k : ℕ} (h48 : 48 ≤ k) (h270 : k ≤ 270) :
-    program.HoldsAt E (program.predicate (k - 25)).body :=
+theorem core_holds {k : ℕ} (h48 : corePredLo ≤ k) (h270 : k ≤ hPredHi) :
+    program.HoldsAt E (program.predicate (CarrierHEmbed.pred program k)).body :=
   (holdsAt_pullEnv (CarrierHEmbed.embedding (program := program)) E
     (CarrierHEmbed.hPredCorr k h48 h270).1).2
     (hPreds_core y (readsCells_pullH y x c π) (valH_hash y) (valH_556 y) (valH_557 y)

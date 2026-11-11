@@ -52,7 +52,7 @@ lowerings read.
 
 Of these, the proof system reads `WellFormed`, `ChallengeOrder` and `PadOrderValid`
 (`RealizedProgram.Valid ir`, `GordieHowe/Language/RealizedProgram/WithPlan.lean`). No theorem reads
-the others, and the program checks (`GordieHowe.ProgramData.programOkB`) no longer certify them.
+the others, and the program checks (`GordieHowe.ProgramData.programOkB`) do not certify them.
 
 **Shared expressions.** A property of an expression through its shared expressions is computed by
 `GordieHowe.RealizedProgram.closure` (lists, such as the values read) or by a table of the entries'
@@ -608,10 +608,11 @@ instance (c : SpectralConv) (s : ConvSource) (r : ConvRead) (d z : ℕ) (lhs : E
   decidable_of_iff _ (ir.convProductsOkB_iff c s r d z lhs)
 
 /-- **Shared expressions `k` and `k'` are a convolution and its reading** in domain `d`: some
-spectrally realized convolution of the program (`ConvOkAt`) has the source `k` and the reading
-`k'`. -/
+realized convolution of the program (`ConvRealizedAt`: directly, or through a transform) has the
+source `k` and the reading or the committed reading `k'`. -/
 def ConvPair (d k k' : ℕ) : Prop :=
-  ∃ c ∈ ir.convs, c.source = k ∧ c.read = k' ∧ ir.ConvOkAt d c
+  ∃ c ∈ ir.convs, c.source = k ∧ (c.read = k' ∨ c.committed.map Prod.fst = some k') ∧
+    ir.ConvRealizedAt d c
 
 instance (d k k' : ℕ) : Decidable (ir.ConvPair d k k') :=
   inferInstanceAs (Decidable (∃ c ∈ ir.convs, _))
@@ -633,7 +634,7 @@ def _root_.GordieHowe.RealizedProgram.Expr.matchB (P : ℕ → ℕ → Bool) : E
 
 /-- **Predicate `q` realizes the field equation `e = e'` of domain `d`** (`Target.realized`):
 `q` is a field `equal` of `d` whose target is no realization's, and its sides are `e` and `e'` with
-convolutions read through their spectral realizations (`Expr.matchB` at `ConvPair d`). Then the
+convolutions read through their realizations (`Expr.matchB` at `ConvPair d`). Then the
 field equation holds wherever `q` and the realizations' products predicates do
 (`RealizedProgram.fieldEq_of_realized`). -/
 def RealizedAdmits (d : ℕ) (e e' : Expr) (q : ℕ) : Prop :=
@@ -708,9 +709,9 @@ theorem convPair_of_convAtB {d j k k' : ℕ} (h : ir.convAtB d j k k' = true) :
   unfold convAtB at h
   split at h
   · rename_i c hc
-    simp only [Bool.and_eq_true, beq_iff_eq] at h
+    simp only [Bool.and_eq_true, Bool.or_eq_true, beq_iff_eq] at h
     obtain ⟨⟨hs, hr⟩, hok⟩ := h
-    exact decide_eq_true ⟨c, List.mem_of_getElem? hc, hs, hr, (ir.convOkAtB_iff d c).1 hok⟩
+    exact decide_eq_true ⟨c, List.mem_of_getElem? hc, hs, hr, (ir.convRealizedAtB_iff d c).1 hok⟩
   · cases h
 
 /-- **The realized route at its conversions admits the field equation** (`RealizedAdmits`). -/

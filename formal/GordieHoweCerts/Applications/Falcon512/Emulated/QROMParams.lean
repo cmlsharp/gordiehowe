@@ -35,8 +35,7 @@ of the generic templates (`GordieHowe.Configuration.CertifiedSource`,
 
 The figures: at most `2092` rounds, every round's load within `2^-2650`, trees of at most `4069`
 leaves, `329` queried leaves, `8466` verifier queries (`2 · 2092 + 5 + 329 · 13`), round errors at
-most `16484193 / 2^260`, `4188` digests per input (`2 · 2092 + 3 + 1`), the query caps `2^100`
-(QROM) and `2^64` (ROM), `7141` positions (`4069 + 3072`) and `48`-byte digests.
+most `16484193 / 2^260`, `4188` digests per input (`2 · 2092 + 3 + 1`), the quantum query cap `2^100` and the classical query cap `2^64`, `7141` positions (`4069 + 3072`) and `48`-byte digests.
 
 The honest strategy (`honestStrategy`):
 `GordieHowe.RealizedProgram.HonestStrategy.ofCompletionReady` at the execution of the source
@@ -124,17 +123,17 @@ theorem label_le : label.length ≤ 2 ^ 10 :=
   Nat.le_of_ble_eq_true rfl
 
 /-- **The frontend of `Falcon512.Emulated.QROMParams`** (`Configuration.Frontend`): the statements `PublicKey` with the codec
-`falconKeyCodec`, read as their statement values (`stmtOf`), the headline relation `keyWitRel`, the honest
+`falconKeyCodec`, read as their statement values (`stmtOf`), the relation `keyWitRel`, the honest
 inputs `Native.HonestIn` at `relH program RealizedProgram.gf256 RealizedProgram.gold4` with the execution `sourceExec`, and the label `label`. -/
 noncomputable def frontend :
     Configuration.Frontend certified source PublicKey VarWitness Native.HonestIn where
   codec := falconKeyCodec
   stmtOf := stmtOf
-  rel' := keyWitRel
-  g s w := w (stmtOf s)
+  rel := keyWitRel
+  witnessMap s w := w (stmtOf s)
   relH := relH program RealizedProgram.gf256 RealizedProgram.gold4
   exec := sourceExec
-  keyStmtOf y := y.y.pk
+  stmtOfHonest y := y.y.pk
   label := label
 
 /-- **The facts of `frontend`**: the statement's writes (`stmtCodec_ser_le`), the label
@@ -150,14 +149,14 @@ instantiate_config GordieHowe.Falcon512.Emulated.QROMParams
 /-! ## The configuration -/
 
 /-- **`Falcon512.Emulated.QROMParams` as a configuration under spBCS** (module docstring,
-`Configuration.ofCertified`): `48`-byte salts and the query cap `2 ^ 100`. -/
+`Configuration.ofCertified`): the QROM parameter set `ParamSet.qrom` (`48`-byte salts and the quantum query cap `2 ^ 100`). -/
 noncomputable def configuration : Configuration :=
-  .ofCertified certified source frontend 48 (2 ^ 100)
+  .ofCertified certified source frontend .qrom
 
 /-- **The facts of `configuration`** (`Configuration.ofCertified_facts`): the frontend's
 (`frontendFacts`) and the generated loads' check (`GordieHowe.RuntimeInputs.FiguresFacts.loads`). -/
 theorem configurationFacts : configuration.Facts :=
-  Configuration.ofCertified_facts certified source frontendFacts (by norm_num) _
+  Configuration.ofCertified_facts certified source frontendFacts (Nat.le_of_ble_eq_true rfl)
     (conditions.fullFacts.figures.loads rfl)
 
 /-- **The honest inputs of the supported pairs of the paper's relation**
@@ -167,8 +166,8 @@ such pair has the honest input `Native.HonestIn.ofRel` at its key. -/
 def honestOfRel : configuration.HonestOf where
   rel := Native.keySupportedRel
   rel_subset _ h := h.1
-  honestOf p hp := Native.HonestIn.ofRel p.1 p.2 hp
-  keyStmtOf_honestOf _ _ := rfl
+  honestOf x w hp := Native.HonestIn.ofRel x w hp
+  stmtOfHonest_honestOf _ _ _ := rfl
 
 instantiate_config GordieHowe.Falcon512.Emulated.QROMParams
   from [GordieHowe.Configuration.Common, GordieHowe.Configuration.ZeroKnowledgeQROM,

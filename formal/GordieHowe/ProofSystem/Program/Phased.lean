@@ -12,7 +12,7 @@ public import GordieHowe.Headline
 /-!
 # Phased application phases
 
-A **phased application phase** (the GordieHowe core's phases, the paper's Section 5.3, Phases and
+A **phased application phase** (the GordieHowe core's phases, the paper's `sec:late`, Phases and
 late values) has `K` phases. Phase `k` is a challenge round, drawing one challenge of type `Ch k`
 (the product of the phase's named challenges), followed by one message round, in which the prover
 sends `t = x + P` for every late value `x` of phase `k`, with `P` its pad, uniform over the value's
@@ -45,7 +45,7 @@ on the data:
   and then declaration (`PhaseLayout.MsgBefore`; the core's pad-dependency check).
 
 The honest prover (`Phased.Honest`) gives the honest late values as functions of the honest input,
-the challenges and the pads. Its simulator (`Phased.Honest.toAppHonest`) sends uniform messages at
+the challenges and the pads. Its simulator (`Phased.appSim`) sends uniform messages at
 the given challenges; it has the honest law by `PadMasked.uniform`, generically.
 -/
 
@@ -77,9 +77,11 @@ structure RealizedProgram.ProofSystem.PhaseLayout (K : ℕ) where
   Mask : Late → Type
   [maskGroup : ∀ l, AddGroup (Mask l)]
   [maskFintype : ∀ l, Fintype (Mask l)]
+  [maskDecEq : ∀ l, DecidableEq (Mask l)]
 
 attribute [instance] RealizedProgram.ProofSystem.PhaseLayout.chFintype RealizedProgram.ProofSystem.PhaseLayout.chDecEq RealizedProgram.ProofSystem.PhaseLayout.chNonempty
   RealizedProgram.ProofSystem.PhaseLayout.lateFintype RealizedProgram.ProofSystem.PhaseLayout.lateOrder RealizedProgram.ProofSystem.PhaseLayout.maskGroup RealizedProgram.ProofSystem.PhaseLayout.maskFintype
+  RealizedProgram.ProofSystem.PhaseLayout.maskDecEq
 
 namespace RealizedProgram.ProofSystem.PhaseLayout
 
@@ -439,11 +441,11 @@ end RealizedProgram.ProofSystem.PhaseLayout
 /-! ### The phased application phase -/
 
 /-- **A phased application phase** for the relation `rel`, linking `m` circuits, on the layout
-`L`: the verifier's check, the circuits' public inputs, the extraction (computable, polynomial
-time), the event of each phase, all read from the run; the challenge-use rule for the events;
-and soundness: on a run the verifier's check passes, if every circuit's relation holds at its
-public input then `extract` gives a witness in the relation or the event of some phase occurred.
-The events' probabilities are `Phased.EventBound`. -/
+`L`: the verifier's check, the circuits' public inputs, the extraction (required to be
+polynomial time; argued, not proved in Lean), the event of each phase, all read from the run;
+the challenge-use rule for the events; and soundness: on a run the verifier's check passes, if
+every circuit's relation holds at its public input then `extract` gives a witness in the relation
+or the event of some phase occurred. The events' probabilities are `Phased.EventBound`. -/
 structure RealizedProgram.ProofSystem.Phased (Stmt W : Type) (rel : Set (Stmt × W)) {m : ℕ} (Pub Wit : Fin m → Type)
     (holds : ∀ i, Pub i → Wit i → Prop) {K : ℕ} (L : PhaseLayout K) where
   /-- The verifier's check on the statement and the run. -/

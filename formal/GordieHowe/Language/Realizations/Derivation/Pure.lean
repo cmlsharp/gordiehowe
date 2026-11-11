@@ -108,7 +108,6 @@ theorem pureSrcFact_sound (hwf : ir.WellFormed) (hI : I.Registered ir) (hL : I.L
   | quadRoot q r => simp [pureSrcFact] at hf
   | rootSet qs => simp [pureSrcFact] at hf
   | tableHull _ _ _ => simp [pureSrcFact] at hf
-  | tableKernel _ _ _ _ _ => simp [pureSrcFact] at hf
 
 /-- **`pureStepFact_sound`**: every reader-generic rule is sound at any reader `rd` whose constants
 read their entries (`hK`), whose ranged values lie in their ranges (`hS`) and whose bound values

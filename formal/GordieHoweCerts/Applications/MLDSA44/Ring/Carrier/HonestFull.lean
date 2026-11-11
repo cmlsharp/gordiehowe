@@ -27,13 +27,29 @@ The execution of the source program of an ML-DSA-44 ring carrier
 * **Every source predicate holds** (`source_holds`): domain `H`'s core and domain `A`'s gadgets
   through the renamings (`core_holds`, `aSource_holds`), the member's checks (`select_honest`,
   `idxBool_honest`, `muBool_honest`), the signature relation and its quotient's range
-  (`sig_holds`, `qRange_holds`) and the crossing (`cross_holds`), whose operands read bits
+  (`sig_row`, the four rows at `r`, and `qRange_holds`) and the crossing (`cross_holds`), whose
+  operands read bits
   (`crossBits_honest`).
 * **The execution** (`sourceExecution`): the honest values read off by `execOf`, no late value,
   no completeness event (`δ = 0`).
 -/
 
 namespace GordieHowe.MLDSA44.Ring.Carrier
+
+set_option hygiene false in
+local notation "σH" => CarrierHEmbed.σ program
+
+set_option hygiene false in
+local notation "hV" => CarrierHEmbed.V program
+
+set_option hygiene false in
+local notation "σA" => CarrierAEmbed.σ program
+
+set_option hygiene false in
+local notation "aV" => CarrierAEmbed.V program
+
+set_option hygiene false in
+local notation "predMapA" => CarrierAEmbed.pred program
 
 open GordieHowe.Bits GordieHowe.Ring RealizedProgram
 open MLDSA44.NativeAlgebraCircuit (outputBits flat)
@@ -48,40 +64,57 @@ variable {msgLen : ℕ}
 
 /-! ## The program facts -/
 
-/-- **The program facts of an ML-DSA-44 ring carrier's execution** (decided per carrier): `248`
-predicates, the source predicates (the realization's `5`, `6`, `13`, `19 … 21`, `246` are none),
+/-- **The realization's predicates of an ML-DSA-44 ring carrier**: `mac.A`, the norm range's top
+row, the MAC blind's Booleanity, the MAC's low, high and no-wrap rows and its tail `mac`. -/
+def carrierRealizationPreds : List ℕ := [8, 9, 16, 23, 24, 25, 249]
+
+/-- **The program facts of an ML-DSA-44 ring carrier's execution** (decided per carrier): `251`
+predicates, the source predicates (the realization's `8`, `9`, `16`, `23 … 25`, `249` are none),
 no statement check, the keys' declared bound `q`, the operands of every cross-field `equal`, the
 crossing's `A` operand's length and the committed source cells' classes. -/
 class MldsaCarrierExec (program : RealizedProgram) [CarrierHEmbed program] [CarrierAEmbed program]
     [MldsaEAlgebra (CarrierAEmbed.emu program)] [MldsaCarrierHonest program]
-    [MldsaRingStmt program] : Prop where
+    [MldsaCarrierRelation program] [MldsaRingStmt program] [TableSelect program]
+    [MldsaCarrierFront program] [MldsaCarrierQuot program] : Prop where
   /-- The program is well formed. -/
   wf : program.WellFormed
-  /-- The program has `248` predicates. -/
-  predicates_length : program.predicates.length = 248
   /-- The realization's predicates are no source predicates. -/
-  nonSource : ∀ q ∈ [5, 6, 13, 19, 20, 21, 246], program.inSource (program.predicate q) = false
+  nonSource : ∀ q ∈ carrierRealizationPreds, program.inSource (program.predicate q) = false
+  /-- **Every predicate is a held one, one of the carrier's own or a realization's**: the carrier
+  predicate of a held native predicate of domain `H`'s core (`corePredLo … hPredHi`) or of a held
+  emulated gadget of `aSource`; the table's selection, the signature relation's four rows, the
+  `μ` bits' Booleanity, the index bits' check, the quotient's range or the crossing; or one of
+  `carrierRealizationPreds`. -/
+  coverage : ∀ q < program.predicates.length,
+    (∃ p ∈ CarrierHEmbed.held program, p.2 = q ∧ corePredLo ≤ p.1 ∧ p.1 ≤ hPredHi) ∨
+      (∃ p ∈ CarrierAEmbed.held program, p.2 = q ∧ p.1 ∈ aSource) ∨
+      q ∈ [(TableSelect.shape program).pred, MldsaRandomPoint.rel0 program,
+        MldsaRandomPoint.rel0 program + 1, MldsaRandomPoint.rel0 program + 2,
+        MldsaRandomPoint.rel0 program + 3, MldsaCarrierFront.muBoolPred program,
+        (TableSelect.shape program).idxPred, MldsaCarrierQuot.qPred program,
+        MldsaCarrierFront.crossPred program] ∨
+      q ∈ carrierRealizationPreds
   /-- The statement has no member checks. -/
   checks : program.statement.checks = []
   /-- The keys are declared below `q`. -/
   ranges : program.declaredRanges = [(MldsaRingStmt.keys program, 8380417)]
   /-- The keys have `64 · 5120` coordinates. -/
   keysSize : (program.value (MldsaRingStmt.keys program)).size = 327680
-  /-- Every cross-field `equal` crosses `ref 505` of domain `H` and `ref 42` of domain `A`. -/
-  crossOperands : program.crossOperandsB 1 (.ref 505) 0 (.ref 42) = true
+  /-- Every cross-field `equal` crosses `ref 558` of domain `H` and `ref 95` of domain `A`. -/
+  crossOperands : program.crossOperandsB 1 (.ref 558) 0 (.ref 95) = true
   /-- The crossing's `A` operand has `7168` coordinates. -/
-  len42 : program.exprLen (.ref 42) = 7168
+  len95 : program.exprLen (.ref 95) = 7168
   /-- The committed source cells' classes. -/
   cell_classes : (List.range program.values.length).all (fun v =>
     !program.privCellB v || !decide (program.IsSourceValue v) ||
-      (([55, 56, 57, 58] ++ (MldsaCarrierHonest.qD program).ids).contains v &&
+      (([56, 57, 58, 59, 66] ++ (MldsaCarrierHonest.qD program).ids).contains v &&
         program.valueField v == 0 && (program.value v).node.map (·.name) == some "GF(p^1)") ||
-      (match hOf v with
+      (match hOf program v with
         | some u => (natGF16B u && program.valueField v == 1 &&
             (program.value v).node.map (·.name) == some "GF(2^16)") ||
           ([556, 561].contains u && program.valueField v == 1 &&
             (program.value v).node.map (·.name) == some "bit")
-        | none => match aOf v with
+        | none => match aOf program v with
           | some u => (aValues (MldsaEAlgebra.layout (CarrierAEmbed.emu program))).contains u &&
             program.valueField v == 0 && (program.value v).node.map (·.name) == some "GF(p^1)"
           | none => false)) = true
@@ -116,13 +149,15 @@ instance : CarrierANode RealizedProgram.gold4 :=
 
 /-! ## The renamings' inverses -/
 
-theorem hOf_spec {v u : ℕ} (h : hOf v = some u) : u ∈ hV ∧ σH.val u = v := by
+theorem hOf_spec {program : RealizedProgram} [CarrierHEmbed program] {v u : ℕ}
+    (h : hOf program v = some u) : u ∈ hV ∧ (σH).val u = v := by
   unfold hOf at h
-  exact ⟨List.mem_of_find?_eq_some h, by simpa using List.find?_some h⟩
+  exact Renaming.invOn_spec h
 
-theorem aOf_spec {v u : ℕ} (h : aOf v = some u) : u ∈ aV ∧ σA.val u = v := by
+theorem aOf_spec {program : RealizedProgram} [CarrierAEmbed program] {v u : ℕ}
+    (h : aOf program v = some u) : u ∈ aV ∧ (σA).val u = v := by
   unfold aOf at h
-  exact ⟨List.mem_of_find?_eq_some h, by simpa using List.find?_some h⟩
+  exact Renaming.invOn_spec h
 
 /-! ## The honest values in their nodes -/
 
@@ -169,6 +204,13 @@ theorem dite_mem_zero' {K : Type*} [Field K] {S : AddSubgroup K} {p : Prop} [Dec
     {f : p → K} (h : ¬ p) : (if hp : p then f hp else 0) ∈ S := by
   rw [dif_neg h]
   exact zero_mem _
+
+/-- **The honest high halves lie in `GF(p^1)`**: sums of products of integers' casts. -/
+theorem qHonC_memA (i : Fin 4) (t : ℕ) : qHonC y (interp 0).K i t ∈ (interp 0).node "GF(p^1)" := by
+  obtain ⟨S, hS⟩ := CarrierANode.subfield (F0 := F0)
+  change qHonC y F0.K i t ∈ F0.node "GF(p^1)"
+  rw [hS]
+  exact qHonC_mem y S i t
 
 /-- **Domain `A`'s honest values lie in `GF(p^1)`.** -/
 theorem aValE_mem {L : MldsaELayout} (hnd : (aValues L).Nodup) {u : ℕ} (hu : u ∈ aValues L)
@@ -263,7 +305,7 @@ theorem honest_cell_mem (y : RingIn msgLen) {v : ℕ} (hv : v < program.values.l
   · have hmem := honestVal_member (program := program) (F0 := F0) (FH := FH) y j
     have key : castElt (b := 0) (honestVal program F0 FH y v j) ∈ (interp 0).node "GF(p^1)" := by
       simp only [List.cons_append, List.mem_cons] at hm
-      rcases hm with rfl | rfl | rfl | rfl | hq
+      rcases hm with rfl | rfl | rfl | rfl | rfl | hq
       · rw [hmem.1]
         split_ifs
         · exact specE_mem y j
@@ -274,12 +316,16 @@ theorem honest_cell_mem (y : RingIn msgLen) {v : ℕ} (hv : v < program.values.l
         · exact zero_mem _
       · rw [hmem.2.2.1]; exact natCast_memA _
       · rw [hmem.2.2.2.1]; exact natCast_memA _
-      · rw [hmem.2.2.2.2 v hq]; exact natCast_memA _
+      · rw [hmem.2.2.2.2.1]
+        split_ifs
+        · exact qHonC_memA y _ _
+        · exact zero_mem _
+      · rw [hmem.2.2.2.2.2 v hq]; exact natCast_memA _
     have := mem_castElt_of_eqA (F0 := F0) (FH := FH) hf.symm key
     rwa [castElt_castElt_of_eq hf] at this
   · revert hcl
-    rcases hh : hOf v with _ | u
-    · rcases ha : aOf v with _ | u
+    rcases hh : hOf program v with _ | u
+    · rcases ha : aOf program v with _ | u
       · simp
       · simp only [Bool.and_eq_true, beq_iff_eq, Option.some.injEq, List.contains_iff_mem]
         rintro ⟨⟨hu, hf⟩, rfl⟩
@@ -305,52 +351,29 @@ theorem source_holds (y : RingIn msgLen) (x : program.Valuation interp)
     (hs : program.inSource (program.predicate q) = true) :
     program.HoldsAt (program.srcEnv interp x (honestVal program F0 FH y) c π)
       (program.predicate q).body := by
-  have hns : ∀ q ∈ [5, 6, 13, 19, 20, 21, 246], program.inSource (program.predicate q) = true →
-      False := fun q hq h => by
-    rw [MldsaCarrierExec.nonSource (program := program) q hq] at h
-    cases h
-  rw [MldsaCarrierExec.predicates_length (program := program)] at hq
-  by_cases hcore : 23 ≤ q ∧ q ≤ 245
-  · have h := core_holds y x c π (k := q + 25) (by omega) (by omega)
-    rwa [Nat.add_sub_cancel] at h
-  by_cases h247 : q = 247
-  · subst h247
-    exact cross_holds y x c π
-  by_cases h246 : q = 246
-  · subst h246
-    exact (hns 246 (by simp) hs).elim
-  have hq23 : q < 23 := by omega
-  have hA : ∀ k ∈ aSource, program.HoldsAt (program.srcEnv interp x (honestVal program F0 FH y) c π)
-      (program.predicate (predMapA k)).body := fun k hk => aSource_holds y x c π hk
-  interval_cases q
-  · have := select_honest y x c π hx
-    rwa [MldsaCarrierSelect.pred0] at this
-  · exact hA 0 (by decide)
-  · exact hA 1 (by decide)
-  · exact sig_holds y x c π
-  · exact hA 2 (by decide)
-  · exact (hns 5 (by simp) hs).elim
-  · exact (hns 6 (by simp) hs).elim
+  rcases MldsaCarrierExec.coverage (program := program) q hq with
+    ⟨p, hp, rfl, hk⟩ | ⟨p, hp, rfl, hk⟩ | ho | hr
+  · rw [← CarrierHEmbed.pred_held p hp]
+    exact core_holds y x c π hk.1 hk.2
+  · rw [← CarrierAEmbed.pred_held p hp]
+    exact aSource_holds y x c π hk
+  rotate_left
+  · rw [MldsaCarrierExec.nonSource q hr] at hs
+    cases hs
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at ho
+  rcases ho with h | h | h | h | h | h | h | h | h <;> subst h
+  · exact select_honest y x c π hx
+  · exact sig_row y x c π 0
+  · exact sig_row y x c π 1
+  · exact sig_row y x c π 2
+  · exact sig_row y x c π 3
   · exact muBool_honest y x c π
-  · have := idxBool_honest y x c π
-    rwa [MldsaCarrierSelect.idxPred8] at this
-  · exact hA 6 (by decide)
-  · exact hA 7 (by decide)
-  · exact hA 8 (by decide)
-  · exact hA 9 (by decide)
-  · exact (hns 13 (by simp) hs).elim
-  · exact hA 11 (by decide)
-  · exact hA 12 (by decide)
-  · exact hA 13 (by decide)
-  · exact hA 14 (by decide)
-  · exact hA 15 (by decide)
-  · exact (hns 19 (by simp) hs).elim
-  · exact (hns 20 (by simp) hs).elim
-  · exact (hns 21 (by simp) hs).elim
+  · exact idxBool_honest y x c π
   · exact qRange_holds y x c π
+  · exact cross_holds y x c π
 
 /-- **The source cross-field `equal`s read bits** at the source environment of the honest
-values: every one crosses `ref 505` and `ref 42` (`MldsaCarrierExec.crossOperands`), which read bits
+values: every one crosses `ref 558` and `ref 95` (`MldsaCarrierExec.crossOperands`), which read bits
 (`crossBits_honest`). -/
 theorem source_crossBits (y : RingIn msgLen) (x : program.Valuation interp)
     (c : ∀ k, (program.layout interp).Ch k) (π : (program.layout interp).Pads) :
@@ -362,7 +385,7 @@ theorem source_crossBits (y : RingIn msgLen) (x : program.Valuation interp)
     unfold evalWith
     rw [MldsaCarrierFront.domains.2]
     exact hxb i hi
-  · rw [MldsaCarrierExec.len42] at hi
+  · rw [MldsaCarrierExec.len95] at hi
     unfold evalWith
     rw [MldsaCarrierFront.domains.1]
     exact hyb i hi

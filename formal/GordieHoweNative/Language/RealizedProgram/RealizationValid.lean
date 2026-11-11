@@ -1159,19 +1159,24 @@ def _root_.GordieHowe.RealizedProgram.subB (p : ℕ) (e : Expr) : Expr → Expr 
 
 /-- **The head of a committed-digits row** in domain `d` for sides `e`, `e'`:
 `(e − e') + (p − 1) · s` (`subB`) with `s` a constant holding `q · qlo` modulo `p`
-(`commShift`) at `e`'s coordinates. -/
-def commHeadB (d q : ℕ) (e e' : Expr) (real : ModRealization) : Expr → Bool
-  | .add X (.scale (.const b) (.leaf sh)) =>
-    subB (ir.charOf (ir.domainField d)) e e' X &&
-      b + 1 == ir.charOf (ir.domainField d) &&
-      ir.constAll sh (commShift (ir.charOf (ir.domainField d)) q real) (ir.exprLen e)
-        (ir.domainField d)
-  | _ => false
+(`commShift`) at `e`'s coordinates; or, when that shift is `0` (the compiler states none for
+`qlo = 0`), `e − e'` itself (`subB`). -/
+def commHeadB (d q : ℕ) (e e' : Expr) (real : ModRealization) (h : Expr) : Bool :=
+  (match h with
+    | .add X (.scale (.const b) (.leaf sh)) =>
+      subB (ir.charOf (ir.domainField d)) e e' X &&
+        b + 1 == ir.charOf (ir.domainField d) &&
+        ir.constAll sh (commShift (ir.charOf (ir.domainField d)) q real) (ir.exprLen e)
+          (ir.domainField d)
+    | _ => false) ||
+    (commShift (ir.charOf (ir.domainField d)) q real == 0 &&
+      subB (ir.charOf (ir.domainField d)) e e' h)
 
 /-- **Predicate body `b` is the field equation of a committed-digits `mod_q`** in domain `d`
 (compiler/mod.h, `kCommittedDigits`: `assert_zero(lhs − rhs − q·qlo − q·Σ_j R^j d_j)`):
-`e + (p − 1) · e' + (p − 1) · s + Σ_j c_j · D_j = z` with the digit terms of the realization's
-digits (`commPeel`), the head `commHeadB`, `z` a constant holding `0` at `e`'s coordinates. -/
+`e + (p − 1) · e' + (p − 1) · s + Σ_j c_j · D_j = z` (no shift term `s` when the shift is `0`)
+with the digit terms of the realization's digits (`commPeel`), the head `commHeadB`, `z` a constant
+holding `0` at `e`'s coordinates. -/
 def commRowB (d q : ℕ) (e e' : Expr) (real : ModRealization) (b : PredBody) : Bool :=
   match b with
   | .equal d' L (.leaf z) _ =>
@@ -1363,9 +1368,9 @@ def macTailAtB (pid d : ℕ) (z : Expr) (b : ℕ) (real : MacRealization) (t : �
         | none => false
     | _ => false
 
-/-- **The tail of a MAC check over a field of characteristic `2`** (the paper's Section 4.1.4, Cross-field links:
-a field of characteristic `2` that need not contain the MAC field checks `acc = bits(T)` entrywise):
-predicate `t`, of role `realization pid`, is the field `equal`
+/-- **The tail of a MAC check over a field of characteristic `2`** (the paper's `sec:mac`,
+Cross-field links: a field of characteristic `2` that need not contain the MAC field checks
+`acc = bits(T)` entrywise): predicate `t`, of role `realization pid`, is the field `equal`
 `b + macConv(r, w, nch, taps)(z) = tb` in domain `d` of characteristic `2`, with `b` the check's
 blind, `r` the key's powers (`powersB`) and `tb` the target's bits in `d` (`targetBitsB`). In
 characteristic `2` the field computes each accumulator entry modulo `2`. The C++ compiler does not

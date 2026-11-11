@@ -87,7 +87,7 @@ theorem hOrc_eq_chAt {O : W1Oracles X Y p prims Msg N reps} (hO : O.ReadsFst sp)
     (tr : Bytes 64) (m : Msg) (w1 : BucketVec p) :
     O.hOrc H ((tr, m), w1) =
       O.chAt sp (base sp H (O.chPt (O.muAt sp (base sp H (O.muPt (tr, m))), w1))) := by
-  simp only [W1Oracles.hOrc, schemeOrc, W1Oracles.muOrc, W1Oracles.chOrc, hO.muAns_eq_muAt,
+  simp only [MLDSAOracles.hOrc, schemeOrc, MLDSAOracles.muOrc, MLDSAOracles.chOrc, hO.muAns_eq_muAt,
     hO.chAns_eq_chAt, base]
 
 variable (sp)
@@ -294,7 +294,7 @@ variable {k kN kS L e : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁]
   (M : SPBCS Mg P (W1ExpStmt prims RMsg N) k kN kS L e) (Λ : SiteLayout Mg)
   {b : ℕ} [∀ j i, Fintype ((M.comp j).MessageWrite i)] (E : (j : ι) → (M.comp j).Encoder)
   {Vr : W1ExpStmt prims RMsg N → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : RingSignature.RingWit (w1BaseSigner prims O βmin tol enc Lp bmsg) → R →
     CausalProver P τ (W1ExpStmt prims RMsg N))
 
@@ -310,7 +310,8 @@ noncomputable abbrev w1PS :
 
 variable {sp prims O βmin tol enc Lp bmsg M Λ E hb honest}
 
-omit [NeZero (bucketCount p)] in
+omit [NeZero (bucketCount p)]
+  [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **A witness of the fixed relation for the compiled program statement is one of the ring
 relation at every oracle with that base component**, for decodings reading only the first
 component: the relation hypothesis of the split knowledge-soundness bound for `w1PS`. -/

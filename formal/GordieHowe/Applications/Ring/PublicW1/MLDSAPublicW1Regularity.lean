@@ -9,6 +9,7 @@ public import GordieHowe.Applications.MLDSA.Regularity.WeightTail44
 public import GordieHowe.Applications.MLDSA.Regularity.InstancesSeven
 public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1Concentration
 public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1Query
+public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1Keys
 
 @[expose] public section
 
@@ -26,17 +27,17 @@ and `ExpandA` (Algorithm 32) is a random oracle `G_A` (`withExpandA`).
   At the FIPS 204 `SampleInBall` and `ExpandS` the primitives are `concretePrimitivesKeyGen`
   (`concreteWithSampleInBallExpandS_concrete`).
 * `expect_regGapAvg_le_of`: `𝔼_{G_B, G_S} regGapAvg ≤ R / β_min · √B` from a per-key bound
-  `𝔼_Â ringRegGap ≤ R / β_min · √(𝔼_Â w⁻²)` for every positive lower bound `w` on the mean member
-  weights (`expect_ringRegGap_le_sqrt`), a bound `F(‖t₀‖₂²)` on the oracle average of the inverse
+  `𝔼_Â signerRegGap ≤ R / β_min · √(𝔼_Â w⁻²)` for every positive lower bound `w` on the mean member
+  weights (`expect_signerRegGap_le_sqrt`), a bound `F(‖t₀‖₂²)` on the oracle average of the inverse
   square acceptance floor (`oracleAcceptFloor`, which bounds the mean member weights for
-  `β_min ≤ 1`: `oracleAcceptFloor_le_expect_memberWeight`), and a bound `B` on
+  `β_min ≤ 1`: `oracleAcceptFloor_le_expect_flatWeight`), and a bound `B` on
   `𝔼_{s, Â} F(‖t₀‖₂²)`. `ExpandS` as a random oracle gives a uniform box secret
   (`expect_regGapAvg_withExpandS`); the key of key generation is the key of the regularity
-  argument (`ringRegGap_idealSecretKey_eq`); Jensen's inequality for `√` over `G_B` and over the
+  argument (`signerRegGap_idealSecretKey_eq`); Jensen's inequality for `√` over `G_B` and over the
   secret (`Real.expect_sqrt_le_sqrt_expect`) leaves `√(𝔼_{s, G_B, Â} w⁻²)`.
 * `expect_regGapAvg_le_mldsa65`, `_mldsa87`: for `β_min ≤ 1`,
   `𝔼_{G_B, G_S} regGapAvg ≤ R · C / β_min` with the seven-slot regularity bound `R = 11 · 2^-199`
-  at ML-DSA-65 and `R = 12 · 2^-294` at ML-DSA-87 (`expect_ringRegGap_le_sqrt_mldsa65_seven`,
+  at ML-DSA-65 and `R = 12 · 2^-294` at ML-DSA-87 (`expect_signerRegGap_le_sqrt_mldsa65_seven`,
   `_mldsa87_seven`), and the weight factor `C = 9/2` at ML-DSA-65 and `C = 33/5` at ML-DSA-87
   (`expect_expect_floorInvSqBound_le_mldsa65`, `_mldsa87`): `log₂ C = 2.17` and `2.72` bits, so
   `log₂ (R · C) = -193.37` at ML-DSA-65 and `-287.69` at ML-DSA-87.
@@ -65,10 +66,10 @@ does not apply. In its place:
 
 * `expect_regGapAvg_le_of_weight`: `expect_regGapAvg_le_of` for any weight `W G t₀ ≥ 0` that
   bounds the mean member weights and is `0` only where they all are, with the Cauchy–Schwarz bound
-  for a weight that may vanish (`expect_ringRegGap_le_sqrt_of_nonneg`) and a bound `B` on
+  for a weight that may vanish (`expect_signerRegGap_le_sqrt_of_nonneg`) and a bound `B` on
   `𝔼_{s, Â, G} (W G t₀)⁻²`.
 * `expect_regGapAvg_le_mldsa44`: for `β_min ≤ 1`, `𝔼_{G_B, G_S} regGapAvg ≤ R · C / β_min` with
-  `R = 11 · 2^-101` (`expect_ringRegGap_le_sqrt_mldsa44_box_seven_of_nonneg`) and `C = 24/5`
+  `R = 11 · 2^-101` (`expect_signerRegGap_le_sqrt_mldsa44_box_seven_of_nonneg`) and `C = 24/5`
   (`mldsa44OracleWeight`, `expect_expect_expect_inv_sq_mldsa44OracleWeight_le`): `log₂ C = 2.26`
   bits, so `log₂ (R · C) = -95.27`.
 * `advantage_le_bkm06_mldsa44`, `advantage_le_bkm06_mldsa44_checkParams`: as at ML-DSA-65 and
@@ -254,7 +255,7 @@ variable {p : Params} [NeZero (bucketCount p)] [Nonempty (MaskBox p)]
 `β_min ≤ 1` and the acceptance floor parameters of `p` (`FloorParams`), if
 * for every key `sk₀` with `s₁, s₂` in the `η`-box, every `SampleInBall` oracle `G` onto `B_τ` and
   every positive lower bound `w Â` on the mean member weights,
-  `𝔼_Â ringRegGap ≤ R / β_min · √(𝔼_Â (w Â)⁻²)` (`expect_ringRegGap_le_sqrt_mldsa65`),
+  `𝔼_Â signerRegGap ≤ R / β_min · √(𝔼_Â (w Â)⁻²)` (`expect_signerRegGap_le_sqrt_mldsa65`),
 * `𝔼_G (oracleAcceptFloor p κ G t₀)⁻² ≤ F(‖t₀‖₂²)` for `‖t₀‖∞ ≤ 2^12`, and
 * `𝔼_{e, Â} F(‖t₀‖₂²) ≤ B` over uniform box secrets `e` and a uniform matrix, for every key,
 
@@ -264,9 +265,9 @@ theorem expect_regGapAvg_le_of {x₀ κ : ℝ} (hf : FloorParams p x₀ κ) {βm
     (hgap : ∀ sk₀ : SecretKey p, polyVecBounded sk₀.s1 p.eta → polyVecBounded sk₀.s2 p.eta →
       ∀ (G : CommitHashBytes p → ChallengeBall p.tau) (w : TqMatrix p.k p.l → ℝ),
         (∀ aHat, 0 < w aHat) →
-        (∀ aHat v, w aHat ≤ 𝔼 c, (memberWeight (oraclePrims G) βmin
+        (∀ aHat v, w aHat ≤ 𝔼 c, (flatWeight (oraclePrims G) (Cutoff.const βmin)
           (matrixKey sk₀ aHat).t0 (v, c) : ℝ≥0∞).toReal) →
-        𝔼 aHat, ringRegGap (oraclePrims G) (matrixKey sk₀ aHat) aHat βmin ≤
+        𝔼 aHat, signerRegGap (oraclePrims G) (matrixKey sk₀ aHat) aHat (Cutoff.const βmin) ≤
           R / (βmin : ℝ≥0∞).toReal * √(𝔼 aHat, (w aHat ^ 2)⁻¹))
     {F : ℝ → ℝ} (hF : ∀ t0 : RqVec p.k, polyVecNorm t0 ≤ 4096 →
       𝔼 G : CommitHashBytes p → ChallengeBall p.tau, (oracleAcceptFloor p κ G t0)⁻¹ ^ 2 ≤
@@ -295,21 +296,23 @@ theorem expect_regGapAvg_le_of {x₀ κ : ℝ} (hf : FloorParams p x₀ κ) {βm
   have hkey : ∀ GB, 𝔼 GS : _root_.MLDSA.Bytes 64 → SecretCoeffs p,
       regGapAvg (oraclePrimitives GB GS) βmin =
         𝔼 seed : _root_.MLDSA.Bytes 32, 𝔼 e : SecretCoeffs p, 𝔼 aHat : TqMatrix p.k p.l,
-          ringRegGap (oraclePrims GB) (matrixKey (keyOfCoeffs (sk seed) e) aHat) aHat βmin :=
+          signerRegGap (oraclePrims GB) (matrixKey (keyOfCoeffs (sk seed) e) aHat) aHat
+              (Cutoff.const βmin) :=
     fun GB => by
       refine (expect_regGapAvg_withExpandS
         (withSampleInBall (concretePrimitivesKeyGen p) fun c => (GB c).1) βmin).trans ?_
       refine Finset.expect_congr rfl fun seed _ => Finset.expect_congr rfl fun e _ =>
         Finset.expect_congr rfl fun aHat _ => ?_
-      exact ringRegGap_idealSecretKey_eq (fun c => (GB c).1) _ _ aHat _
+      exact signerRegGap_idealSecretKey_eq (fun c => (GB c).1) _ _ aHat _
         (keyOfCoeffs (sk seed) e) rfl rfl βmin
   -- The Cauchy–Schwarz bound for each key and oracle.
   have hstep : ∀ GB seed e, 𝔼 aHat : TqMatrix p.k p.l,
-      ringRegGap (oraclePrims GB) (matrixKey (keyOfCoeffs (sk seed) e) aHat) aHat βmin ≤
+      signerRegGap (oraclePrims GB) (matrixKey (keyOfCoeffs (sk seed) e) aHat) aHat
+          (Cutoff.const βmin) ≤
         c * √(Y GB seed e) := fun GB seed e =>
     hgap (keyOfCoeffs (sk seed) e) (secretOfCoeffs_bounded e).1 (secretOfCoeffs_bounded e).2 GB
       (w GB seed e) (fun aHat => acceptFloor_pos _ _ _ _) fun aHat v =>
-        oracleAcceptFloor_le_expect_memberWeight hf (oraclePrims GB) GB (fun _ => rfl) hβ1 _
+        oracleAcceptFloor_le_expect_flatWeight hf (oraclePrims GB) GB (fun _ => rfl) hβ1 _
           (ht0 _ aHat) v
   have hY0 : ∀ GB seed e, 0 ≤ Y GB seed e := fun GB seed e =>
     Finset.expect_nonneg fun aHat _ => inv_nonneg.2 (sq_nonneg _)
@@ -325,11 +328,13 @@ theorem expect_regGapAvg_le_of {x₀ κ : ℝ} (hf : FloorParams p x₀ κ) {βm
         𝔼 GS : _root_.MLDSA.Bytes 64 → SecretCoeffs p, regGapAvg (oraclePrimitives GB GS) βmin
       = 𝔼 GB : CommitHashBytes p → ChallengeBall p.tau, 𝔼 seed : _root_.MLDSA.Bytes 32,
           𝔼 e : SecretCoeffs p, 𝔼 aHat : TqMatrix p.k p.l,
-            ringRegGap (oraclePrims GB) (matrixKey (keyOfCoeffs (sk seed) e) aHat) aHat βmin :=
+            signerRegGap (oraclePrims GB) (matrixKey (keyOfCoeffs (sk seed) e) aHat) aHat
+                (Cutoff.const βmin) :=
         Finset.expect_congr rfl fun GB _ => hkey GB
     _ = 𝔼 seed : _root_.MLDSA.Bytes 32, 𝔼 e : SecretCoeffs p,
           𝔼 GB : CommitHashBytes p → ChallengeBall p.tau, 𝔼 aHat : TqMatrix p.k p.l,
-            ringRegGap (oraclePrims GB) (matrixKey (keyOfCoeffs (sk seed) e) aHat) aHat βmin := by
+            signerRegGap (oraclePrims GB) (matrixKey (keyOfCoeffs (sk seed) e) aHat) aHat
+                (Cutoff.const βmin) := by
         rw [Finset.expect_comm]
         exact Finset.expect_congr rfl fun seed _ => Finset.expect_comm _ _ _
     _ ≤ 𝔼 seed : _root_.MLDSA.Bytes 32, 𝔼 e : SecretCoeffs p,
@@ -355,7 +360,7 @@ theorem expect_regGapAvg_le_of {x₀ κ : ℝ} (hf : FloorParams p x₀ κ) {βm
 
 /-- **The averaged regularity gap at ML-DSA-65** with `ExpandS` and `SampleInBall`
 random oracles: `𝔼_{G_B, G_S} regGapAvg ≤ 11 · 2^-199 · (9/2) / β_min` for
-`β_min ≤ 1` (`expect_ringRegGap_le_sqrt_mldsa65_seven`,
+`β_min ≤ 1` (`expect_signerRegGap_le_sqrt_mldsa65_seven`,
 `expect_expect_floorInvSqBound_le_mldsa65`). -/
 theorem expect_regGapAvg_le_mldsa65 {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0∞) ≠ 0)
     (hβ1 : (βmin : ℝ≥0∞) ≤ 1) :
@@ -365,7 +370,7 @@ theorem expect_regGapAvg_le_mldsa65 {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0�
           by
   have hβt : (βmin : ℝ≥0∞) ≠ ⊤ := ne_top_of_le_ne_top ENNReal.one_ne_top hβ1
   refine (expect_regGapAvg_le_of floorParams_mldsa65 hβ1 (by positivity)
-    (fun sk₀ h1 h2 G w hw0 hw => expect_ringRegGap_le_sqrt_mldsa65_seven sk₀ h1 h2
+    (fun sk₀ h1 h2 G w hw0 hw => expect_signerRegGap_le_sqrt_mldsa65_seven sk₀ h1 h2
       (sampleInBallShape_oraclePrims G) hβ0 hβt hw0 hw)
     expect_inv_sq_oracleAcceptFloor_le_floorInvSqBound_mldsa65
     expect_expect_floorInvSqBound_le_mldsa65).trans_eq ?_
@@ -374,7 +379,7 @@ theorem expect_regGapAvg_le_mldsa65 {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0�
 
 /-- **The averaged regularity gap at ML-DSA-87** with `ExpandS` and `SampleInBall`
 random oracles: `𝔼_{G_B, G_S} regGapAvg ≤ 12 · 2^-294 · (33/5) / β_min` for
-`β_min ≤ 1` (`expect_ringRegGap_le_sqrt_mldsa87_seven`,
+`β_min ≤ 1` (`expect_signerRegGap_le_sqrt_mldsa87_seven`,
 `expect_expect_floorInvSqBound_le_mldsa87`). -/
 theorem expect_regGapAvg_le_mldsa87 {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0∞) ≠ 0)
     (hβ1 : (βmin : ℝ≥0∞) ≤ 1) :
@@ -384,7 +389,7 @@ theorem expect_regGapAvg_le_mldsa87 {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0�
           by
   have hβt : (βmin : ℝ≥0∞) ≠ ⊤ := ne_top_of_le_ne_top ENNReal.one_ne_top hβ1
   refine (expect_regGapAvg_le_of floorParams_mldsa87 hβ1 (by positivity)
-    (fun sk₀ h1 h2 G w hw0 hw => expect_ringRegGap_le_sqrt_mldsa87_seven sk₀ h1 h2
+    (fun sk₀ h1 h2 G w hw0 hw => expect_signerRegGap_le_sqrt_mldsa87_seven sk₀ h1 h2
       (sampleInBallShape_oraclePrims G) hβ0 hβt hw0 hw)
     expect_inv_sq_oracleAcceptFloor_le_floorInvSqBound_mldsa87
     expect_expect_floorInvSqBound_le_mldsa87).trans_eq ?_
@@ -396,7 +401,7 @@ theorem expect_regGapAvg_le_mldsa87 {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0�
 `0` only where they are all `0`, if
 * for every key `sk₀` with `s₁, s₂` in the `η`-box, every `SampleInBall` oracle `G` onto `B_τ` and
   every lower bound `w Â ≥ 0` on the mean member weights that is `0` only where they are all `0`,
-  `𝔼_Â ringRegGap ≤ R / β_min · √(𝔼_Â (w Â)⁻²)` (`expect_ringRegGap_le_sqrt_of_nonneg`), and
+  `𝔼_Â signerRegGap ≤ R / β_min · √(𝔼_Â (w Â)⁻²)` (`expect_signerRegGap_le_sqrt_of_nonneg`), and
 * `𝔼_{e, Â, G} (W G t₀)⁻² ≤ B` over uniform box secrets `e`, a uniform matrix and a uniform oracle,
   for every key,
 
@@ -406,17 +411,17 @@ theorem expect_regGapAvg_le_of_weight (hτ : p.tau ≤ ringDegree) {βmin : ℚ�
     (hR : 0 ≤ R) (W : (CommitHashBytes p → ChallengeBall p.tau) → RqVec p.k → ℝ)
     (hW0 : ∀ G t0, 0 ≤ W G t0)
     (hW : ∀ G t0, polyVecNorm t0 ≤ 4096 → ∀ v,
-      W G t0 ≤ 𝔼 c, (memberWeight (oraclePrims G) βmin t0 (v, c) : ℝ≥0∞).toReal)
+      W G t0 ≤ 𝔼 c, (flatWeight (oraclePrims G) (Cutoff.const βmin) t0 (v, c) : ℝ≥0∞).toReal)
     (hWz : ∀ G t0, W G t0 = 0 → ∀ v,
-      𝔼 c, (memberWeight (oraclePrims G) βmin t0 (v, c) : ℝ≥0∞).toReal = 0)
+      𝔼 c, (flatWeight (oraclePrims G) (Cutoff.const βmin) t0 (v, c) : ℝ≥0∞).toReal = 0)
     (hgap : ∀ sk₀ : SecretKey p, polyVecBounded sk₀.s1 p.eta → polyVecBounded sk₀.s2 p.eta →
       ∀ (G : CommitHashBytes p → ChallengeBall p.tau) (w : TqMatrix p.k p.l → ℝ),
         (∀ aHat, 0 ≤ w aHat) →
-        (∀ aHat v, w aHat ≤ 𝔼 c, (memberWeight (oraclePrims G) βmin
+        (∀ aHat v, w aHat ≤ 𝔼 c, (flatWeight (oraclePrims G) (Cutoff.const βmin)
           (matrixKey sk₀ aHat).t0 (v, c) : ℝ≥0∞).toReal) →
-        (∀ aHat, w aHat = 0 → ∀ v, 𝔼 c, (memberWeight (oraclePrims G) βmin
+        (∀ aHat, w aHat = 0 → ∀ v, 𝔼 c, (flatWeight (oraclePrims G) (Cutoff.const βmin)
           (matrixKey sk₀ aHat).t0 (v, c) : ℝ≥0∞).toReal = 0) →
-        𝔼 aHat, ringRegGap (oraclePrims G) (matrixKey sk₀ aHat) aHat βmin ≤
+        𝔼 aHat, signerRegGap (oraclePrims G) (matrixKey sk₀ aHat) aHat (Cutoff.const βmin) ≤
           R / (βmin : ℝ≥0∞).toReal * √(𝔼 aHat, (w aHat ^ 2)⁻¹))
     {B : ℝ} (hB : ∀ sk : SecretKey p, 𝔼 e : SecretCoeffs p, 𝔼 aHat : TqMatrix p.k p.l,
       𝔼 G : CommitHashBytes p → ChallengeBall p.tau, (W G (keyOf (keyOfCoeffs sk e)
@@ -442,17 +447,19 @@ theorem expect_regGapAvg_le_of_weight (hτ : p.tau ≤ ringDegree) {βmin : ℚ�
   have hkey : ∀ GB, 𝔼 GS : _root_.MLDSA.Bytes 64 → SecretCoeffs p,
       regGapAvg (oraclePrimitives GB GS) βmin =
         𝔼 seed : _root_.MLDSA.Bytes 32, 𝔼 e : SecretCoeffs p, 𝔼 aHat : TqMatrix p.k p.l,
-          ringRegGap (oraclePrims GB) (matrixKey (keyOfCoeffs (sk seed) e) aHat) aHat βmin :=
+          signerRegGap (oraclePrims GB) (matrixKey (keyOfCoeffs (sk seed) e) aHat) aHat
+              (Cutoff.const βmin) :=
     fun GB => by
       refine (expect_regGapAvg_withExpandS
         (withSampleInBall (concretePrimitivesKeyGen p) fun c => (GB c).1) βmin).trans ?_
       refine Finset.expect_congr rfl fun seed _ => Finset.expect_congr rfl fun e _ =>
         Finset.expect_congr rfl fun aHat _ => ?_
-      exact ringRegGap_idealSecretKey_eq (fun c => (GB c).1) _ _ aHat _
+      exact signerRegGap_idealSecretKey_eq (fun c => (GB c).1) _ _ aHat _
         (keyOfCoeffs (sk seed) e) rfl rfl βmin
   -- The Cauchy–Schwarz bound for each key and oracle.
   have hstep : ∀ GB seed e, 𝔼 aHat : TqMatrix p.k p.l,
-      ringRegGap (oraclePrims GB) (matrixKey (keyOfCoeffs (sk seed) e) aHat) aHat βmin ≤
+      signerRegGap (oraclePrims GB) (matrixKey (keyOfCoeffs (sk seed) e) aHat) aHat
+          (Cutoff.const βmin) ≤
         c * √(Y GB seed e) := fun GB seed e =>
     hgap (keyOfCoeffs (sk seed) e) (secretOfCoeffs_bounded e).1 (secretOfCoeffs_bounded e).2 GB
       (w GB seed e) (fun aHat => hW0 _ _) (fun aHat v => hW GB _ (ht0 _ aHat) v)
@@ -470,11 +477,13 @@ theorem expect_regGapAvg_le_of_weight (hτ : p.tau ≤ ringDegree) {βmin : ℚ�
         𝔼 GS : _root_.MLDSA.Bytes 64 → SecretCoeffs p, regGapAvg (oraclePrimitives GB GS) βmin
       = 𝔼 GB : CommitHashBytes p → ChallengeBall p.tau, 𝔼 seed : _root_.MLDSA.Bytes 32,
           𝔼 e : SecretCoeffs p, 𝔼 aHat : TqMatrix p.k p.l,
-            ringRegGap (oraclePrims GB) (matrixKey (keyOfCoeffs (sk seed) e) aHat) aHat βmin :=
+            signerRegGap (oraclePrims GB) (matrixKey (keyOfCoeffs (sk seed) e) aHat) aHat
+                (Cutoff.const βmin) :=
         Finset.expect_congr rfl fun GB _ => hkey GB
     _ = 𝔼 seed : _root_.MLDSA.Bytes 32, 𝔼 e : SecretCoeffs p,
           𝔼 GB : CommitHashBytes p → ChallengeBall p.tau, 𝔼 aHat : TqMatrix p.k p.l,
-            ringRegGap (oraclePrims GB) (matrixKey (keyOfCoeffs (sk seed) e) aHat) aHat βmin := by
+            signerRegGap (oraclePrims GB) (matrixKey (keyOfCoeffs (sk seed) e) aHat) aHat
+                (Cutoff.const βmin) := by
         rw [Finset.expect_comm]
         exact Finset.expect_congr rfl fun seed _ => Finset.expect_comm _ _ _
     _ ≤ 𝔼 seed : _root_.MLDSA.Bytes 32, 𝔼 e : SecretCoeffs p,
@@ -501,7 +510,7 @@ theorem expect_regGapAvg_le_of_weight (hτ : p.tau ≤ ringDegree) {βmin : ℚ�
 /-- **The averaged regularity gap at ML-DSA-44** with `ExpandS` and `SampleInBall`
 random oracles: `𝔼_{G_B, G_S} regGapAvg ≤ 11 · 2^-101 · (24/5) / β_min` for `β_min ≤ 1`
 (`expect_regGapAvg_le_of_weight` with the weight `mldsa44OracleWeight`,
-`expect_ringRegGap_le_sqrt_mldsa44_box_seven_of_nonneg`,
+`expect_signerRegGap_le_sqrt_mldsa44_box_seven_of_nonneg`,
 `expect_expect_expect_inv_sq_mldsa44OracleWeight_le`). -/
 theorem expect_regGapAvg_le_mldsa44 {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0∞) ≠ 0)
     (hβ1 : (βmin : ℝ≥0∞) ≤ 1) :
@@ -514,11 +523,11 @@ theorem expect_regGapAvg_le_mldsa44 {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0�
   refine (expect_regGapAvg_le_of_weight (p := _root_.MLDSA.mldsa44)
     (by rw [show _root_.MLDSA.mldsa44.tau = 39 from rfl]; norm_num [ringDegree]) (by positivity)
     mldsa44OracleWeight mldsa44OracleWeight_nonneg
-    (fun G t0 ht0 v => mldsa44OracleWeight_le_expect_memberWeight (oraclePrims G) G
+    (fun G t0 ht0 v => mldsa44OracleWeight_le_expect_flatWeight (oraclePrims G) G
       (fun _ => rfl) hβ1 t0 ht0 v)
-    (fun G t0 h v => expect_memberWeight_eq_zero_of_mldsa44OracleWeight (oraclePrims G) G
+    (fun G t0 h v => expect_flatWeight_eq_zero_of_mldsa44OracleWeight (oraclePrims G) G
       (fun _ => rfl) βmin t0 h v)
-    (fun sk₀ h1 h2 G w hw0 hw hz => expect_ringRegGap_le_sqrt_mldsa44_box_seven_of_nonneg sk₀ h1 h2
+    (fun sk₀ h1 h2 G w hw0 hw hz => expect_signerRegGap_le_sqrt_mldsa44_box_seven_of_nonneg sk₀ h1 h2
       (sampleInBallShape_oraclePrims G) hβ0 hβt hw0 hw hz)
     expect_expect_expect_inv_sq_mldsa44OracleWeight_le).trans_eq ?_
   rw [Real.sqrt_sq (by norm_num)]
@@ -546,6 +555,7 @@ variable {p : Params} [NeZero (bucketCount p)] [Nonempty (MaskBox p)]
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
       (Msg := Msg) N βmin reps tol (concreteEnc p)).Stmt → FullTr P τ → Bool}
   {Qs : ∀ GB GS GA H x, (M GB GS GA).IOPQueries (V GB GS GA H) x} {R : Type} [Fintype R]
+  [DecidableEq R]
   [Nonempty R]
   {honest : ∀ GB GS GA, GameOrc (concretePrimitivesKeyGen p) Msg N reps →
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
@@ -570,6 +580,7 @@ def CoreBound (hp : p.isApproved) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβt : (�
     2 * anonError (A := A GB GS GA) (SigningParams.of_isApproved hp) hβ0 hβt s θ C +
       (M GB GS GA).wiError δ C + chk
 
+omit [DecidableEq R] in
 open Classical in
 /-- **The one-challenge bound with the check term `C · checkError`** at the oracle primitives
 (`advantage_le`, with the signing and verification laws, the encoding and `‖s₂‖∞ ≤ η`
@@ -596,6 +607,7 @@ theorem coreBound_check (hp : p.isApproved) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) 
     (hz GB GS GA) (hC GB GS GA) (D GB GS GA)
   simpa only [Nat.cast_one, one_mul, one_add_one_eq_two] using h
 
+omit [DecidableEq R] in
 open Classical in
 /-- **The one-challenge bound with the check term `2 (q + 1) · checkError`** at the oracle
 primitives, for adversaries whose choice reads the check oracle through `q` queries
@@ -687,6 +699,7 @@ theorem expect_le_bkm06_of (hp : p.isApproved) (hβ0 : (βmin : ℝ≥0∞) ≠ 
   · rw [Finset.expect_const h]
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity with three random oracles, for any check term** (BKM06 Definition 4, `Q = 1`):
 from the one-challenge bound at every value of the oracles with check term `chk` (`CoreBound`),
 the advantage averaged over `SampleInBall = G_B`, `ExpandS = G_S` and `ExpandA = G_A` is at most
@@ -719,6 +732,7 @@ theorem advantage_le_bkm06_of (hp : p.isApproved) (hβ0 : (βmin : ℝ≥0∞) �
           chk :=
   expect_le_bkm06_of A hp hβ0 hβt hθ0 hs1 _ hcore hchk0 hR
 
+omit [DecidableEq R] in
 open Classical in
 /-- **Anonymity in the sense of BKM06 Definition 4 with three random oracles** (Bender, Katz and
 Morselli, "Ring Signatures: Stronger Definitions, and Constructions without Random Oracles",
@@ -951,6 +965,7 @@ variable {Msg : Type} [Fintype Msg] [DecidableEq Msg] {N : ℕ} {βmin : ℚ≥0
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
       (Msg := Msg) N βmin reps tol (concreteEnc mldsa65)).Stmt → FullTr P τ → Bool}
   {Qs : ∀ GB GS GA H x, (M GB GS GA).IOPQueries (V GB GS GA H) x} {R : Type} [Fintype R]
+  [DecidableEq R]
   [Nonempty R]
   {honest : ∀ GB GS GA, GameOrc (concretePrimitivesKeyGen mldsa65) Msg N reps →
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
@@ -1015,6 +1030,7 @@ theorem expect_le_bkm06_mldsa65_of (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (
   gcongr
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-65 for any check term** (BKM06 Definition 4, `Q = 1`), from the
 one-challenge bound `CoreBound` with check term `chk`, in the game with
 `SampleInBall`, `ExpandS` and `ExpandA` random oracles: `advantage_le_bkm06_of` with the regularity
@@ -1039,6 +1055,7 @@ theorem advantage_le_bkm06_mldsa65_of (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 
           chk :=
   expect_le_bkm06_mldsa65_of A hβ0 hβ1 hβt hθ0 hθ1 hs1 _ hcore hchk0
 
+omit [DecidableEq R] in
 open Classical in
 /-- **Anonymity at ML-DSA-65** (BKM06 Definition 4, `Q = 1`) in the game with
 `SampleInBall`, `ExpandS` and `ExpandA` random oracles: `advantage_le_bkm06` with the regularity
@@ -1073,6 +1090,7 @@ theorem advantage_le_bkm06_mldsa65 (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (
     (mul_nonneg (Nat.cast_nonneg _) (checkError_nonneg reps tol s (zero_le_one.trans hx)))
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-65 against adversaries with `q` check-oracle queries** (BKM06
 Definition 4, `Q = 1`; the choice reads the check oracle through `q` classical queries,
 `CheckQueryBounded`, with full key exposure): `advantage_le_bkm06_mldsa65` with the check term
@@ -1107,6 +1125,7 @@ theorem advantage_le_bkm06_mldsa65_query {q : ℕ}
       (checkError_nonneg reps tol s (zero_le_one.trans hx))))
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-65 at the check parameters**: `advantage_le_bkm06_mldsa65` with
 `reps = 355` samples per member, at most `tol = 2` failed samples per ring and the defect
 budget `s = 1/2`, so the mass ratio factor is `1 / (1 - s) = 2`, the McDiarmid terms at most
@@ -1156,6 +1175,7 @@ theorem advantage_le_bkm06_mldsa65_checkParams (hβ0 : (βmin : ℝ≥0∞) ≠ 
   linarith
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-65 at check parameters, against adversaries with `q` check-oracle
 queries** (BKM06 Definition 4, `Q = 1`, full key exposure, the choice reading the check oracle
 through `q` queries): `advantage_le_bkm06_mldsa65_query` at check parameters `(reps, tol, s, x)`
@@ -1216,6 +1236,7 @@ variable {Msg : Type} [Fintype Msg] [DecidableEq Msg] {N : ℕ} {βmin : ℚ≥0
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
       (Msg := Msg) N βmin reps tol (concreteEnc _root_.MLDSA.mldsa44)).Stmt → FullTr P τ → Bool}
   {Qs : ∀ GB GS GA H x, (M GB GS GA).IOPQueries (V GB GS GA H) x} {R : Type} [Fintype R]
+  [DecidableEq R]
   [Nonempty R]
   {honest : ∀ GB GS GA, GameOrc (concretePrimitivesKeyGen _root_.MLDSA.mldsa44) Msg N reps →
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
@@ -1284,6 +1305,7 @@ theorem expect_le_bkm06_mldsa44_of (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (
   gcongr
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-44 for any check term** (BKM06 Definition 4, `Q = 1`), from the
 one-challenge bound `CoreBound` with check term `chk`, in the game with
 `SampleInBall`, `ExpandS` and `ExpandA` random oracles: `advantage_le_bkm06_of` with the regularity
@@ -1309,6 +1331,7 @@ theorem advantage_le_bkm06_mldsa44_of (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 
           chk :=
   expect_le_bkm06_mldsa44_of A hβ0 hβ1 hβt hθ0 hθ1 hs1 _ hcore hchk0
 
+omit [DecidableEq R] in
 open Classical in
 /-- **Anonymity at ML-DSA-44** (BKM06 Definition 4, `Q = 1`) in the game with
 `SampleInBall`, `ExpandS` and `ExpandA` random oracles: `advantage_le_bkm06` with the regularity
@@ -1344,6 +1367,7 @@ theorem advantage_le_bkm06_mldsa44 (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (
     (mul_nonneg (Nat.cast_nonneg _) (checkError_nonneg reps tol s (zero_le_one.trans hx)))
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-44 against adversaries with `q` check-oracle queries** (BKM06
 Definition 4, `Q = 1`; the choice reads the check oracle through `q` classical queries,
 `CheckQueryBounded`, with full key exposure): `advantage_le_bkm06_mldsa44` with the check term
@@ -1379,6 +1403,7 @@ theorem advantage_le_bkm06_mldsa44_query {q : ℕ}
       (checkError_nonneg reps tol s (zero_le_one.trans hx))))
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-44 at the check parameters**: `advantage_le_bkm06_mldsa44` with
 `reps = 355` samples per member, at most `tol = 2` failed samples per ring and the defect
 budget `s = 1/2`, so the mass ratio factor is `1 / (1 - s) = 2`, the McDiarmid terms at most
@@ -1429,6 +1454,7 @@ theorem advantage_le_bkm06_mldsa44_checkParams (hβ0 : (βmin : ℝ≥0∞) ≠ 
   linarith
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-44 at check parameters, against adversaries with `q` check-oracle
 queries** (BKM06 Definition 4, `Q = 1`, full key exposure, the choice reading the check oracle
 through `q` queries): `advantage_le_bkm06_mldsa44_query` at check parameters `(reps, tol, s, x)`
@@ -1490,6 +1516,7 @@ variable {Msg : Type} [Fintype Msg] [DecidableEq Msg] {N : ℕ} {βmin : ℚ≥0
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
       (Msg := Msg) N βmin reps tol (concreteEnc mldsa87)).Stmt → FullTr P τ → Bool}
   {Qs : ∀ GB GS GA H x, (M GB GS GA).IOPQueries (V GB GS GA H) x} {R : Type} [Fintype R]
+  [DecidableEq R]
   [Nonempty R]
   {honest : ∀ GB GS GA, GameOrc (concretePrimitivesKeyGen mldsa87) Msg N reps →
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
@@ -1554,6 +1581,7 @@ theorem expect_le_bkm06_mldsa87_of (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (
   gcongr
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-87 for any check term** (BKM06 Definition 4, `Q = 1`), from the
 one-challenge bound `CoreBound` with check term `chk`, in the game with
 `SampleInBall`, `ExpandS` and `ExpandA` random oracles: `advantage_le_bkm06_of` with the regularity
@@ -1578,6 +1606,7 @@ theorem advantage_le_bkm06_mldsa87_of (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 
           chk :=
   expect_le_bkm06_mldsa87_of A hβ0 hβ1 hβt hθ0 hθ1 hs1 _ hcore hchk0
 
+omit [DecidableEq R] in
 open Classical in
 /-- **Anonymity at ML-DSA-87** (BKM06 Definition 4, `Q = 1`) in the game with
 `SampleInBall`, `ExpandS` and `ExpandA` random oracles: `advantage_le_bkm06` with the regularity
@@ -1612,6 +1641,7 @@ theorem advantage_le_bkm06_mldsa87 (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (
     (mul_nonneg (Nat.cast_nonneg _) (checkError_nonneg reps tol s (zero_le_one.trans hx)))
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-87 against adversaries with `q` check-oracle queries** (BKM06
 Definition 4, `Q = 1`; the choice reads the check oracle through `q` classical queries,
 `CheckQueryBounded`, with full key exposure): `advantage_le_bkm06_mldsa87` with the check term
@@ -1646,6 +1676,7 @@ theorem advantage_le_bkm06_mldsa87_query {q : ℕ}
       (checkError_nonneg reps tol s (zero_le_one.trans hx))))
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-87 at the check parameters**: `advantage_le_bkm06_mldsa87` with
 `reps = 355` samples per member, at most `tol = 2` failed samples per ring and the defect
 budget `s = 1/2`, so the mass ratio factor is `1 / (1 - s) = 2`, the McDiarmid terms at most
@@ -1695,6 +1726,7 @@ theorem advantage_le_bkm06_mldsa87_checkParams (hβ0 : (βmin : ℝ≥0∞) ≠ 
   linarith
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-87 at check parameters, against adversaries with `q` check-oracle
 queries** (BKM06 Definition 4, `Q = 1`, full key exposure, the choice reading the check oracle
 through `q` queries): `advantage_le_bkm06_mldsa87_query` at check parameters `(reps, tol, s, x)`

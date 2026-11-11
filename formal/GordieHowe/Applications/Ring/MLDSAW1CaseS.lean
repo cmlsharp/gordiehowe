@@ -96,6 +96,7 @@ theorem ringVerify_of_w1KFOut [DecidableEq X] (sp : Y ≃+ Y₁ × Y₂) (hO : O
   refine ⟨ringVerify_const_cTilde (ringVerify_kfLoop sp hO hdisj pk R ⟨_, hi⟩ _ s hs'
     (fun _ => 0) (bmsg R m)), rfl⟩
 
+omit [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The key-free signer's statement lists its commitment hash for the signer**: the program
 statement `w1StmtPω` of `(R, m, w₁)` at the base component `ω` read through `Tb` overridden at
 the kept point by the published value `v`, truncated by `w1Bnd`, lists at the signer's position
@@ -156,7 +157,7 @@ variable {prims : Primitives p} [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   {O : W1Oracles X Y p prims Msg N reps} {Mo : MaskOracle X Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O Mo βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O Mo βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
   {adm : KeyRing (PubKey p prims) N → Prop}
   [hadm : DecidablePred adm] {n Q : ℕ}
   {Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] {Frg : Type}
@@ -171,7 +172,7 @@ attribute [local instance] admDecF
 /-- **The signature of a signing entry**: the base signature of a relayed signing request; none
 for other main requests. -/
 def w1EntrySig :
-    MURequest (SignOracle.none Bf) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q →
+    MURequest (SignOracle.none (Bf).core) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q →
     Option (FIPSSignature p prims)
   | .inr (.inl (_, (.sign _ _ _, _), σ)) => some σ
   | _ => none
@@ -186,7 +187,7 @@ member's message-representative point, the ring statement and the listed hash of
 position (`w1CaseS`); and its signature `σe` differs from the witness's. -/
 def W1SecondSig (ξ : Fin n → Bytes 32) (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁)
     (ω : X → Y₁) (f : Frg × X₀f)
-    (rs : List (MURequest (SignOracle.none Bf) n ⊕
+    (rs : List (MURequest (SignOracle.none (Bf).core) n ⊕
       W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q))
     (w : RingSignature.RingWitOf (FIPSSignature p prims)) (i : Fin n) (σe : FIPSSignature p prims) : Prop :=
   letI : DecidablePred (α := KeyRing (PubKey p prims) N) adm := hadm
@@ -203,8 +204,10 @@ def W1SecondSig (ξ : Fin n → Bytes 32) (sc : Fin Q → KFCoins (p := p) (T :=
         xb.2.val[List.idxOf (α := PubKey p prims) ((Bf).pk (ξ s)) R'.1]? = some c ∧
         w1EntrySig e = some σe ∧ w.sig ≠ σe
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 theorem w1EntrySig_of_w1SignEntry
-    {e : MURequest (SignOracle.none Bf) n ⊕
+    {e : MURequest (SignOracle.none (Bf).core) n ⊕
       W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q}
     {s : Fin n} {R : KeyRing (PubKey p prims) N} {m : RMsg}
     {xb : W1BStmt prims RMsg N}
@@ -212,6 +215,8 @@ theorem w1EntrySig_of_w1SignEntry
   rcases e with _ | (⟨_, ⟨_ | _ | _, _⟩, σ⟩ | _) <;> simp [w1SignEntry] at h
   exact ⟨σ, rfl⟩
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **Case S at a canonical witness splits** into a guess and a second signature: for a witness
 in the relation at an uncorrupted member (`w1Ok`) in case S (`w1CaseS`), with every signing entry
 of the main requests a signed request of the side-mode key-free relay (`hsigned`), either a signing
@@ -219,7 +224,7 @@ entry's signature is the witness's (the guess), or the witness is in case S with
 signature (`W1SecondSig`). -/
 theorem w1CaseS_guess_or_second {ξ : Fin n → Bytes 32}
     {sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁} {ω : X → Y₁} {f : Frg × X₀f}
-    {rs : List (MURequest (SignOracle.none Bf) n ⊕
+    {rs : List (MURequest (SignOracle.none (Bf).core) n ⊕
       W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q)}
     {w : RingSignature.RingWitOf (FIPSSignature p prims)}
     (hok : w1Ok prims O Mo βmin tol enc k D bmsg adm (fun j => (Bf).pk (ξ j)) f rs w)
@@ -326,7 +331,7 @@ variable [NeZero (bucketCount p)] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [D
   {O : W1Oracles X Y p (concretePrimitivesKeyGen p) Msg N reps} {Mo : MaskOracle X Y p T Msg}
   {βmin : ℚ≥0} {tol : ℕ} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
   {bmsg : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase (concretePrimitivesKeyGen p) O Mo βmin
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase (concretePrimitivesKeyGen p) O Mo βmin
       tol (concreteEnc p) k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS}
   {adm : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → Prop} [hadm : DecidablePred adm] {n Q : ℕ}
   {Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] {Frg : Type}
@@ -341,6 +346,8 @@ attribute [local instance] admDecF
 
 variable [DecidableEq X] (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **Case S with a second signature gives a Module-SIS solution at the member's seed**
 (`keyGenKernel_of_signEntry`), when the users' keys with equal message-representative key hashes
 are equal (`hcoll`, off `trCollAt`) and the message-representative points are injective. -/
@@ -349,7 +356,7 @@ theorem keyGenKernel_of_w1SecondSig (hp : p.isApproved) (hdisj : ∀ a b, O.muPt
     (hcoll : ∀ i j, pubTr Pc ((Bf).pk (ξ i)) = pubTr Pc ((Bf).pk (ξ j)) →
       (Bf).pk (ξ i) = (Bf).pk (ξ j))
     {sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁} {ω : X → Y₁} {f : Frg × X₀f}
-    {rs : List (MURequest (SignOracle.none Bf) n ⊕
+    {rs : List (MURequest (SignOracle.none (Bf).core) n ⊕
       W1Rq Pc O Mo βmin tol (concreteEnc p) k D bmsg PS adm n Q)}
     {w : RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))} {i : Fin n} {σe : FIPSSignature p Pc}
     (h : W1SecondSig sp hO ξ sc ω f rs w i σe) :
@@ -393,7 +400,7 @@ otherwise. -/
 noncomputable def w1MsisReadout (ξ : Fin n → Bytes 32)
     (d : Option (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) × (Fin Q → KFCoins (p := p) (T := T) k D Y₁) ×
       (X → Y₁) × (Frg × X₀f) ×
-      List (MURequest (SignOracle.none Bf) n ⊕
+      List (MURequest (SignOracle.none (Bf).core) n ⊕
         W1Rq Pc O Mo βmin tol (concreteEnc p) k D bmsg PS adm n Q)) :
     Option (Fin n × (RqVec p.l × RqVec p.k)) :=
   if h : ∃ a : Fin n × (RqVec p.l × RqVec p.k),
@@ -403,6 +410,8 @@ noncomputable def w1MsisReadout (ξ : Fin n → Bytes 32)
     some h.choose
   else none
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **Case S with a second signature is at most the Module-SIS win probability of `B₂`**
 (`sum_le_winProb_map`): for laws `L ξ` of outcomes at the users' seeds `ξ` read by `dat`, the
 average over uniform seeds of the probability that the seeds' keys with equal key hashes are equal
@@ -414,7 +423,7 @@ theorem sum_w1SecondSig_le_keyGenMsisMultiWinProb (hp : p.isApproved)
     (L : (Fin n → Bytes 32) → PMF Ω)
     (dat : Ω → Option (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) × (Fin Q → KFCoins (p := p) (T := T) k D Y₁) ×
       (X → Y₁) × (Frg × X₀f) ×
-      List (MURequest (SignOracle.none Bf) n ⊕
+      List (MURequest (SignOracle.none (Bf).core) n ⊕
         W1Rq Pc O Mo βmin tol (concreteEnc p) k D bmsg PS adm n Q)) :
     ∑ ξ, (Fintype.card (Fin n → Bytes 32) : ℝ≥0∞)⁻¹ * (L ξ).toOuterMeasure
         {o | (∀ i j, pubTr Pc ((Bf).pk (ξ i)) = pubTr Pc ((Bf).pk (ξ j)) →
@@ -437,6 +446,8 @@ theorem sum_w1SecondSig_le_keyGenMsisMultiWinProb (hp : p.isApproved)
   simp only [w1MsisReadout, dif_pos hex]
 
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **Case S with a second signature, averaged over the users' seeds, the side coins, the base
 component and an auxiliary input, is at most the Module-SIS win probability of `B₂`**: for laws
 `Lr ξ sc ω a` of outcomes read by `dat`, the average over uniform seeds `ξ` with the keys of equal
@@ -450,7 +461,7 @@ theorem tsum_w1SecondSig_le_keyGenMsisMultiWinProb [Fintype Y₁] [Fintype X] (h
     (Lr : (Fin n → Bytes 32) → (Fin Q → KFCoins (p := p) (T := T) k D Y₁) → (X → Y₁) → Aux →
       PMF Ω)
     (dat : Ω → Option (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) × (Frg × X₀f) ×
-      List (MURequest (SignOracle.none Bf) n ⊕
+      List (MURequest (SignOracle.none (Bf).core) n ⊕
         W1Rq Pc O Mo βmin tol (concreteEnc p) k D bmsg PS adm n Q)) :
     ∑' ξ, PMF.uniformOfFintype (Fin n → Bytes 32) ξ *
         {ξ : Fin n → Bytes 32 | ∀ i j, pubTr Pc ((Bf).pk (ξ i)) = pubTr Pc ((Bf).pk (ξ j)) →

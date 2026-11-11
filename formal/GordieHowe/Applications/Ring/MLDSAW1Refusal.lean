@@ -73,14 +73,15 @@ variable (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : NTTRingOps]
 /-- **The check-defect moment of an honest key**: `𝔼_seed (1 + (x - 1) δ(seed))^reps`, with
 `δ(seed)` the check defect of the published `t₀` of the key of `seed`. -/
 noncomputable def checkDefectMgf (βmin : ℚ≥0) (x : ℝ) (reps : ℕ) : ℝ :=
-  𝔼 seed : Bytes 32, (1 + (x - 1) * checkDefect prims βmin (keyGen prims seed).1.2.2) ^ reps
+  𝔼 seed : Bytes 32, (1 + (x - 1) * checkDefect prims (Cutoff.const βmin) (keyGen prims
+      seed).1.2.2) ^ reps
 
 omit [NeZero (bucketCount p)] [Fintype prims.Hint] [DecidableEq prims.Hint] in
 /-- The check-defect moment is nonnegative for `x ≥ 1`. -/
 theorem checkDefectMgf_nonneg (βmin : ℚ≥0) {x : ℝ} (hx : 1 ≤ x) (reps : ℕ) :
     0 ≤ checkDefectMgf prims βmin x reps :=
   Finset.expect_nonneg fun seed _ => pow_nonneg (by
-    have := checkDefect_nonneg prims βmin (keyGen prims seed).1.2.2
+    have := checkDefect_nonneg prims (Cutoff.const βmin) (keyGen prims seed).1.2.2
     nlinarith) _
 
 /-- **The check-defect conjecture** (see the module docstring): the check-defect moment of an
@@ -95,8 +96,8 @@ theorem w1CheckDefectMgf_pow (βmin : ℚ≥0) {x : ℝ} (hx : 1 ≤ x) (reps : 
     W1CheckDefectMgf prims βmin x reps (x ^ reps) := by
   refine (Finset.expect_le_expect fun seed _ => ?_).trans_eq
     (Finset.expect_const Finset.univ_nonempty _)
-  have h0 := checkDefect_nonneg prims βmin (keyGen prims seed).1.2.2
-  have h1 := checkDefect_le_one prims βmin (keyGen prims seed).1.2.2
+  have h0 := checkDefect_nonneg prims (Cutoff.const βmin) (keyGen prims seed).1.2.2
+  have h1 := checkDefect_le_one prims (Cutoff.const βmin) (keyGen prims seed).1.2.2
   refine pow_le_pow_left₀ (by nlinarith) ?_ reps
   nlinarith
 
@@ -136,7 +137,10 @@ variable {X' Y' : Type} [Fintype X'] [DecidableEq X'] [Fintype Y'] [Nonempty Y']
 key coins of the `r` members, the refusal mass of the signer `s` on the honest ring when the ring
 is supported, and `0` otherwise. -/
 theorem _root_.GordieHowe.RingSignature.BaseSigner.toReal_refuseProb_eq
-    {TB : BaseTypes} (B : BaseSigner X' Y' N' TB) (adm : KeyRing B.PK N' → Prop) [DecidablePred adm] {r : ℕ}
+    {TB : BaseTypes} [DecidableEq TB.PK]
+    [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins]
+    [Fintype TB.Coins] [Nonempty TB.Coins] (B : BaseSigner X' Y' N' TB)
+    (adm : KeyRing B.PK N' → Prop) [DecidablePred adm] {r : ℕ}
     (hr : r ≤ N') (s : Fin r) (m : B.Msg) :
     (B.refuseProb adm hr s m).toReal =
       𝔼 H : X' → Y', 𝔼 keys : Fin r → B.KeyCoins, if adm (B.honestRing hr keys) then
@@ -281,21 +285,23 @@ theorem expect_ringDefect_gt_le {r : ℕ} (hr : r ≤ N) {s x B : ℝ} (hs0 : 0 
       (if s < ringDefect prims βmin (honestRing prims keys hr).1 then 1 else 0 : ℝ) ≤
         r * ((B - 1) / (reps * (x - 1))) / s := by
   have hpos : (0 : ℝ) < reps * (x - 1) := mul_pos (by exact_mod_cast hreps) (by linarith)
-  have hδ : 𝔼 seed : Bytes 32, checkDefect prims βmin (keyGen prims seed).1.2.2 ≤
+  have hδ : 𝔼 seed : Bytes 32, checkDefect prims (Cutoff.const βmin) (keyGen prims seed).1.2.2 ≤
       (B - 1) / (reps * (x - 1)) := by
     rw [le_div_iff₀ hpos]
     have hb : ∀ seed : Bytes 32, 1 + reps * ((x - 1) *
-        checkDefect prims βmin (keyGen prims seed).1.2.2) ≤
-        (1 + (x - 1) * checkDefect prims βmin (keyGen prims seed).1.2.2) ^ reps := fun seed =>
+        checkDefect prims (Cutoff.const βmin) (keyGen prims seed).1.2.2) ≤
+        (1 + (x - 1) * checkDefect prims (Cutoff.const βmin) (keyGen prims seed).1.2.2) ^ reps :=
+            fun seed =>
       one_add_mul_le_pow (by
-        have := checkDefect_nonneg prims βmin (keyGen prims seed).1.2.2
+        have := checkDefect_nonneg prims (Cutoff.const βmin) (keyGen prims seed).1.2.2
         nlinarith) reps
     have h2 := (Finset.expect_le_expect fun seed _ => hb seed).trans hB
     rw [Finset.expect_add_distrib, Finset.expect_const Finset.univ_nonempty, ← Finset.mul_expect,
       ← Finset.mul_expect] at h2
     linarith
   have hsum : ∀ keys : Fin r → Bytes 32, ringDefect prims βmin (honestRing prims keys hr).1 =
-      ∑ j : Fin r, checkDefect prims βmin (keyGen prims (keys j)).1.2.2 := fun keys => by
+      ∑ j : Fin r, checkDefect prims (Cutoff.const βmin) (keyGen prims (keys j)).1.2.2 := fun keys
+          => by
     refine Fintype.sum_equiv (finCongr (List.length_ofFn)) _ _ fun j => ?_
     simp only [ringT0s, honestRing, List.get_eq_getElem, List.getElem_ofFn]
     rfl
@@ -303,7 +309,7 @@ theorem expect_ringDefect_gt_le {r : ℕ} (hr : r ≤ N) {s x B : ℝ} (hs0 : 0 
       (if s < ringDefect prims βmin (honestRing prims keys hr).1 then 1 else 0 : ℝ) ≤
         ringDefect prims βmin (honestRing prims keys hr).1 / s := fun keys => by
     have h0 : 0 ≤ ringDefect prims βmin (honestRing prims keys hr).1 :=
-      Finset.sum_nonneg fun j _ => checkDefect_nonneg prims βmin _
+      Finset.sum_nonneg fun j _ => checkDefect_nonneg prims (Cutoff.const βmin) _
     split_ifs with h
     · rw [le_div_iff₀ hs0]
       linarith
@@ -313,7 +319,7 @@ theorem expect_ringDefect_gt_le {r : ℕ} (hr : r ≤ N) {s x B : ℝ} (hs0 : 0 
   refine div_le_div_of_nonneg_right ?_ hs0.le
   simp only [hsum]
   rw [Finset.expect_sum_comm, Finset.sum_congr rfl fun j _ => PMF.expect_apply_eval j
-    (fun x => checkDefect prims βmin (keyGen prims x).1.2.2)]
+    (fun x => checkDefect prims (Cutoff.const βmin) (keyGen prims x).1.2.2)]
   simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
   exact mul_le_mul_of_nonneg_left hδ (Nat.cast_nonneg _)
 
@@ -324,7 +330,7 @@ end Terms
 variable (O : W1Oracles X Y p prims Msg N reps) (M : MaskOracle X Y p T Msg) (βmin : ℚ≥0)
   (tol : ℕ) (enc : Vector prims.High p.k → BucketVec p) (k D : ℕ) [NeZero D] {RMsg : Type}
   [Fintype RMsg] [DecidableEq RMsg] (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg)
-  {TPS : PSTypes} (PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS)
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] (PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS)
   (adm : KeyRing (PubKey p prims) N → Prop) [DecidablePred adm]
   (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβt : (βmin : ℝ≥0∞) ≠ ⊤)
 
@@ -334,6 +340,8 @@ local notation "Sh" => hedgedScheme prims O M βmin tol enc k D bmsg PS adm
 
 include hp hβ0 hβt in
 open Classical in
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **The loop term**: averaged over a uniform oracle and the members' key coins, the probability
 that the ring passes the check, has distinct message representatives, and the hedged loop of the
 signer `sI` rejects all `k` calls is at most the nonce-collision term `C(k, 2) / 2^256`, twice the
@@ -371,8 +379,8 @@ theorem expect_loopRefusal_le [Fintype X] [DecidableEq X] (hT : 0 < T) (hO : O.U
   set A : ℝ := 4 * N / (θ * (1 - s)) ^ 2
   set L : ℝ := Real.log C
   set sc : ℝ := N / ((1 - θ) ^ 2 * (1 - s) ^ 2 * W)
-  set gap : (Fin r → Bytes 32) → ℝ := fun keys => ∑ u, ringRegGap prims (keyGen prims (keys u)).2
-    (prims.expandA (keyGen prims (keys u)).2.rho) βmin
+  set gap : (Fin r → Bytes 32) → ℝ := fun keys => ∑ u, signerRegGap prims (keyGen prims (keys u)).2
+    (prims.expandA (keyGen prims (keys u)).2.rho) (Cutoff.const βmin)
   set cp : (Fin r → Bytes 32) → ℝ := fun keys =>
     ∑ u, commitCollision (prims.expandA (keyGen prims (keys u)).2.rho)
   have hcp0 : ∀ keys, 0 ≤ cp keys := fun keys =>
@@ -445,7 +453,8 @@ theorem expect_loopRefusal_le [Fintype X] [DecidableEq X] (hT : 0 < T) (hO : O.U
   have hgap : 𝔼 keys : Fin r → Bytes 32, gap keys = r * regGapAt prims βmin := by
     simp only [gap]
     rw [Finset.expect_sum_comm, Finset.sum_congr rfl fun u _ => PMF.expect_apply_eval u
-      (fun x => ringRegGap prims (keyGen prims x).2 (prims.expandA (keyGen prims x).2.rho) βmin)]
+      (fun x => signerRegGap prims (keyGen prims x).2 (prims.expandA (keyGen prims x).2.rho)
+          (Cutoff.const βmin))]
     simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, regGapAt]
   have hcp : 𝔼 keys : Fin r → Bytes 32, cp keys = r * collAt prims := by
     simp only [cp]
@@ -477,6 +486,8 @@ theorem expect_loopRefusal_le [Fintype X] [DecidableEq X] (hT : 0 < T) (hO : O.U
 
 include hp hβ0 hβt in
 open Classical in
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **The refusal probability of the ring publishing `w₁`**: for `r ≤ N` honest members, every
 signer position and message, the hedged base signer refuses an honest supported ring with
 probability at most `w1RefusalError`, under the check-defect conjecture at `B` (`hB`) and the
@@ -569,7 +580,7 @@ variable [NeZero (bucketCount p)] [Nonempty (MaskBox p)] [Fintype Msg] [Decidabl
   {O : W1Oracles X Y p (concretePrimitivesKeyGen p) Msg N reps} {M : MaskOracle X Y p T Msg}
   {βmin : ℚ≥0} {tol k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
   {bmsg : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase p O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase p O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS}
   {adm : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → Prop} [DecidablePred adm]
 
 omit [NeZero D] in
@@ -582,7 +593,7 @@ theorem w1RefusalError_le_of_le (prims : Primitives p) [Fintype prims.Power2High
     w1RefusalError prims βmin N r s θ C k D Lk reps tol x B ε ≤
       w1RefusalError prims βmin N N s θ C k D Lk reps tol x B ε := by
   have hreg : 0 ≤ regGapAt prims βmin :=
-    Finset.expect_nonneg fun _ _ => ringRegGap_nonneg _ _ _ _
+    Finset.expect_nonneg fun _ _ => signerRegGap_nonneg _ _ _ (Cutoff.const _)
   have hcoll : 0 ≤ collAt prims := Finset.expect_nonneg fun _ _ => commitCollision_nonneg _
   have hrN : (r : ℝ) ≤ N := by exact_mod_cast hr
   have hpos : (0 : ℝ) < reps * (x - 1) := mul_pos (by exact_mod_cast hreps) (by linarith)
@@ -614,6 +625,8 @@ theorem w1RefusalError_le_of_le (prims : Primitives p) [Fintype prims.Power2High
 
 
 open Classical in
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **The refusal rate of the ML-DSA ring publishing `w₁` at the concrete primitives**
 (`BaseSigner.RefuseWithin`) of an approved parameter set: at most `w1RefusalError` at `N` members,
 under the check-defect conjecture at `B` (`hB`), the `tr`-collision assumption at `ε` for every
@@ -637,7 +650,7 @@ theorem w1ConcreteBase_refuseWithin (hp : p.isApproved) (hT : 0 < T) (hβ0 : (β
     refine le_trans ?_ hB
     refine le_trans (Finset.expect_const Finset.univ_nonempty (1 : ℝ)).ge
       (Finset.expect_le_expect fun seed _ => one_le_pow₀ ?_)
-    have := checkDefect_nonneg (concretePrimitivesKeyGen p) βmin
+    have := checkDefect_nonneg (concretePrimitivesKeyGen p) (Cutoff.const βmin)
       (keyGen (concretePrimitivesKeyGen p) seed).1.2.2
     nlinarith
   have h := refuseProb_hedgedBase_le (concretePrimitivesKeyGen p) O M βmin tol (concreteEnc p) k D
@@ -654,6 +667,7 @@ theorem w1ConcreteBase_refuseWithin (hp : p.isApproved) (hT : 0 < T) (hβ0 : (β
         hB1 hr))
 
 open Classical in
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- **Completeness of the ML-DSA ring publishing `w₁` at the concrete primitives with its refusal
 rate bounded** (`w1Concrete.completeWithin` at `w1ConcreteBase_refuseWithin`): the ring signature
 refuses with probability at most `w1RefusalError` at `N` members and is rejected with probability
@@ -707,10 +721,11 @@ abbrev HonestTrDistinct44 (N : ℕ) : Prop :=
 
 variable {O : W1Oracles X Y Pm Kg Msg N reps} {M : MaskOracle X Y Pm T Msg}
   {bmsg : KeyRing (PubKey Pm Kg) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing (PubKey Pm (concretePrimitivesKeyGen Pm)) N → Prop} [DecidablePred adm]
 
 open Classical in
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- **Completeness of the ML-DSA-44 ring signature publishing `w₁` with its refusal rate
 bounded** (`w1Scheme44`; `w1Concrete.completeWithin_refusal` at ML-DSA-44, with
 `ε = C(N, 2) · 2^-255` from `HonestTrDistinct44`), under the check-defect conjecture
@@ -751,10 +766,11 @@ abbrev HonestTrDistinct65 (N : ℕ) : Prop :=
 
 variable {O : W1Oracles X Y Pm Kg Msg N reps} {M : MaskOracle X Y Pm T Msg}
   {bmsg : KeyRing (PubKey Pm Kg) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing (PubKey Pm (concretePrimitivesKeyGen Pm)) N → Prop} [DecidablePred adm]
 
 open Classical in
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- **Completeness of the ML-DSA-65 ring signature publishing `w₁` with its refusal rate
 bounded** (`w1Scheme65`; `w1Concrete.completeWithin_refusal` at ML-DSA-65, with
 `ε = C(N, 2) · 2^-255` from `HonestTrDistinct65`), under the check-defect conjecture
@@ -795,10 +811,11 @@ abbrev HonestTrDistinct87 (N : ℕ) : Prop :=
 
 variable {O : W1Oracles X Y Pm Kg Msg N reps} {M : MaskOracle X Y Pm T Msg}
   {bmsg : KeyRing (PubKey Pm Kg) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing (PubKey Pm (concretePrimitivesKeyGen Pm)) N → Prop} [DecidablePred adm]
 
 open Classical in
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- **Completeness of the ML-DSA-87 ring signature publishing `w₁` with its refusal rate
 bounded** (`w1Scheme87`; `w1Concrete.completeWithin_refusal` at ML-DSA-87, with
 `ε = C(N, 2) · 2^-255` from `HonestTrDistinct87`), under the check-defect conjecture

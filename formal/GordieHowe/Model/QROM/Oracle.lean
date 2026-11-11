@@ -7,6 +7,7 @@ public import GordieHowe.Model.QROM.Instability
 public import Mathlib.Data.Fintype.Sigma
 public import Mathlib.Data.Fintype.Pi
 public import Mathlib.Tactic.DeriveFintype
+public import GordieHowe.Headline
 
 @[expose] public section
 
@@ -308,6 +309,7 @@ theorem instab_digestCollision_le' {t : ℕ} :
   instab_collisionOn_le fun S => (Out.probUniform_digest_mem S).le
 
 /-- CMS19 Lemma 6.11 (p. 33) for digest collisions: `I(P_col, t) ≤ t / 2^(8k)`. -/
+@[headline]
 theorem instab_digestCollision_le {t : ℕ} :
     instab (digestCollision : Set (ODB k kN kS L e)) t ≤ (t : ℝ≥0∞) / 2 ^ (8 * k) :=
   instab_digestCollision_le'.trans (ENNReal.div_le_div_right (Nat.cast_le.2 (Nat.sub_le t 1)) _)

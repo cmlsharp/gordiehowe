@@ -19,7 +19,7 @@ with the prover `niProverZKM` and the simulator `niJointSimulator` of the quantu
 generic classical argument (`GordieHowe.ROM.NIZK.everlastingZeroKnowledge_of_sliceCloseAt`) at the
 locality in the salt (`saltedLocal`) and the one-proof bound at every fixed salt
 (`sliceCloseAt`). The error is the compiler's `zkErrorROM δ`:
-`Q t / 2^(8k) + Q (Q - 1) / (2 · 2^(8k)) + Q · (keyCollision (t.size n) k + overrun + δ +
+`Q t / 2^(8 kS) + Q (Q - 1) / (2 · 2^(8 kS)) + Q · (keyCollision (t.size n) k + overrun + δ +
 |Pos| · leafBound k kN L)`.
 -/
 
@@ -97,6 +97,7 @@ against adversaries with a budget of `tq` queries before each proof query, the p
 view (`CausalHVZK`, CY24 Definition 23.1.8) are indistinguishable with error `zkErrorROM δ`. -/
 theorem zeroKnowledgeROM (hvzk : CausalHVZK VE.MV rel honest pub Sim δ) :
     ROM.NIZK.EverlastingZeroKnowledge (fun x w => (x, w) ∈ rel) (M.niProverZKM B honest E Qs)
+        (PMF.uniformOfFintype _)
       (M.niJointSimulator VE.toViewRead B pub Sim T) (M.zkErrorROM δ) := by
   refine (ROM.NIZK.everlastingZeroKnowledge_of_sliceCloseAt (saltedLocal B VE honest pub Sim T)
     (sliceCloseAt VE B honest pub T hvzk)).mono fun tq Q => ?_
@@ -114,7 +115,8 @@ query-bounded adversaries** (`ROM.QueryBoundedAdversary`, Unruh 2017 Definition 
 classical adversaries and the query bound of `def:narg-zk-post`), from `zeroKnowledgeROM`. -/
 theorem everlastingZeroKnowledge_rom_games (hvzk : CausalHVZK VE.MV rel honest pub Sim δ) :
     GordieHowe.ROM.EverlastingZeroKnowledge (fun x w => (x, w) ∈ rel)
-      (M.niProverZKM B honest E Qs) (M.niJointSimulator VE.toViewRead B pub Sim T)
+      (M.niProverZKM B honest E Qs) (PMF.uniformOfFintype _)
+        (M.niJointSimulator VE.toViewRead B pub Sim T)
       (M.zkErrorROM δ) :=
   ROM.QueryBoundedAdversary.everlastingZeroKnowledge_of_nizk
     (zeroKnowledgeROM VE B honest pub T hvzk)

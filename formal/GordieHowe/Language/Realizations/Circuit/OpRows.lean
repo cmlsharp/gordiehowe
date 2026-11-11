@@ -25,8 +25,8 @@ coordinates. This file holds those rows and their lemmas, by the operator's prin
   per kind; per block of the operand the rows shifted by the block (`shiftRows`).
 * **Sparse rows** (`GordieHowe.RealizedProgram.coefCode`): each printed coefficient a constant's
   code or the code of an entry of a constant of the circuit's field.
-* **Lists** (`GordieHowe.RealizedProgram.OpList`): a list as a trie (`Trie.ofList`), split by
-  parity, by blocks and transposed, with Horner evaluation and code powers, which the staged
+* **Lists** (`GordieHowe.RealizedProgram.OpList`): a list as a positional tree (`PTree.ofList`), split
+  by parity, by blocks and transposed, with Horner evaluation and code powers, which the staged
   transforms read.
 
 The definitions are in `GordieHoweNative/Language/Realizations/Circuit/OpRows.lean`
@@ -465,34 +465,121 @@ end OpList
 
 /-! ## A list as a trie -/
 
-section TrieOfList
+section ListTree
 
 variable {α : Type}
 
-theorem Trie.get_ofListF [Inhabited α] :
-    ∀ (fuel : ℕ) (l : List α), l.length ≤ fuel → ∀ k < l.length,
-      (Trie.ofListF fuel l).get k = l.getD k default
-  | _, [], _, k, hk => by simp at hk
-  | fuel, [x], _, k, hk => by
-    obtain rfl : k = 0 := by simpa using hk
-    cases fuel <;> rfl
-  | 0, _ :: _ :: _, h, _, _ => by simp at h
-  | fuel + 1, x :: y :: l, h, k, hk => by
-    have hl : (x :: y :: l).length = l.length + 2 := rfl
-    simp only [Trie.ofListF, Trie.get, Bool.cond_eq_ite, Nat.beq_eq]
-    split_ifs with hk2
-    · rw [Trie.get_ofListF fuel _ (by rw [length_evenPart, hl]; omega) _
-        (by rw [length_evenPart, hl]; omega), getD_evenPart]
-      congr 1
-      omega
-    · rw [Trie.get_ofListF fuel _ (by rw [length_oddPart, hl]; omega) _
-        (by rw [length_oddPart, hl]; omega), getD_oddPart]
-      congr 1
-      omega
+namespace PNode
 
-theorem Trie.get_ofList [Inhabited α] (l : List α) {k : ℕ} (hk : k < l.length) :
-    (Trie.ofList l).get k = l.getD k default :=
-  Trie.get_ofListF _ l le_rfl k hk
+theorem getH_nil [Inhabited α] (h i : ℕ) : (nil : PNode α).getH h i = default := by
+  cases h <;> rfl
+
+/-- **Position `i` of a row of subtrees of height `h`.** -/
+def getL [Inhabited α] (h : ℕ) (ts : List (PNode α)) (i : ℕ) : α :=
+  (ts.getD (i / 2 ^ h) nil).getH h (i % 2 ^ h)
+
+theorem getH_node [Inhabited α] (l r : PNode α) (h i : ℕ) :
+    (node l r).getH (h + 1) i = if i < 2 ^ h then l.getH h i else r.getH h (i - 2 ^ h) := by
+  simp only [getH]
+  cases hb : Nat.blt i (2 ^ h)
+  · have hh : ¬i < 2 ^ h := fun h' => by simp [Nat.blt_eq.mpr h'] at hb
+    simp [hh]
+  · have hh : i < 2 ^ h := Nat.blt_eq.mp hb
+    simp [hh]
+
+theorem length_pairUp : ∀ ts : List (PNode α), (pairUp ts).length = (ts.length + 1) / 2
+  | [] => by simp [pairUp]
+  | [_] => by simp [pairUp]
+  | _ :: _ :: ts => by
+    simp only [pairUp, List.length_cons, length_pairUp ts]
+    omega
+
+theorem getL_pairUp [Inhabited α] (h : ℕ) :
+    ∀ (ts : List (PNode α)) (i : ℕ), getL (h + 1) (pairUp ts) i = getL h ts i
+  | [], i => by simp [pairUp, getL, getH_nil]
+  | [a], i => by
+    have hP : 0 < 2 ^ h := Nat.two_pow_pos h
+    unfold getL
+    rw [Nat.pow_succ]
+    by_cases hi : i < 2 ^ h * 2
+    · rw [Nat.div_eq_of_lt hi, Nat.mod_eq_of_lt hi]
+      simp only [pairUp, List.getD_cons_zero, getH_node]
+      by_cases hl : i < 2 ^ h
+      · simp only [hl, ↓reduceIte]
+        rw [Nat.div_eq_of_lt hl, Nat.mod_eq_of_lt hl]
+        rfl
+      · simp only [hl, ↓reduceIte]
+        rw [getH_nil]
+        have h1 : i / 2 ^ h = 1 := by
+          exact Nat.div_eq_of_lt_le (by omega) (by omega)
+        rw [h1]
+        simp [getH_nil]
+    · have h1 : 1 ≤ i / (2 ^ h * 2) := (Nat.le_div_iff_mul_le (by positivity)).2 (by omega)
+      have h2 : 1 ≤ i / 2 ^ h := (Nat.le_div_iff_mul_le hP).2 (by omega)
+      simp only [pairUp]
+      rw [List.getD_eq_getElem?_getD, List.getElem?_eq_none (by simp; omega),
+        List.getD_eq_getElem?_getD, List.getElem?_eq_none (by simp; omega)]
+      simp [getH_nil]
+  | a :: b :: rest, i => by
+    have hP : 0 < 2 ^ h := Nat.two_pow_pos h
+    have ih := getL_pairUp h rest
+    unfold getL at ih ⊢
+    rw [Nat.pow_succ] at ih ⊢
+    by_cases hi : i < 2 ^ h * 2
+    · rw [Nat.div_eq_of_lt hi, Nat.mod_eq_of_lt hi]
+      simp only [pairUp, List.getD_cons_zero, getH_node]
+      by_cases hl : i < 2 ^ h
+      · simp only [hl, ↓reduceIte]
+        rw [Nat.div_eq_of_lt hl, Nat.mod_eq_of_lt hl]
+        rfl
+      · simp only [hl, ↓reduceIte]
+        have h1 : i / 2 ^ h = 1 := by
+          exact Nat.div_eq_of_lt_le (by omega) (by omega)
+        have h2 : i % 2 ^ h = i - 2 ^ h := by
+          rw [Nat.mod_eq_sub_mul_div, h1, Nat.mul_one]
+        rw [h1, h2]
+        rfl
+    · obtain ⟨j, rfl⟩ : ∃ j, i = j + 2 ^ h * 2 := ⟨i - 2 ^ h * 2, by omega⟩
+      have e1 : (j + 2 ^ h * 2) / (2 ^ h * 2) = j / (2 ^ h * 2) + 1 := by
+        rw [Nat.add_div_right _ (by positivity)]
+      have e2 : (j + 2 ^ h * 2) % (2 ^ h * 2) = j % (2 ^ h * 2) := Nat.add_mod_right _ _
+      have e3 : (j + 2 ^ h * 2) / 2 ^ h = j / 2 ^ h + 2 := by
+        rw [show j + 2 ^ h * 2 = j + 2 * 2 ^ h by ring, Nat.add_mul_div_right _ _ hP]
+      have e4 : (j + 2 ^ h * 2) % 2 ^ h = j % 2 ^ h := by
+        rw [show j + 2 ^ h * 2 = j + 2 * 2 ^ h by ring, Nat.add_mul_mod_self_right]
+      rw [e1, e2, e3, e4]
+      simp only [pairUp, List.getD_cons_succ]
+      exact ih j
+
+theorem getH_build [Inhabited α] :
+    ∀ (f h : ℕ) (ts : List (PNode α)) (n : ℕ), ts.length ≤ f + 1 → n ≤ ts.length * 2 ^ h →
+      ∀ i < n, (build f h ts).1.getH (build f h ts).2 i = getL h ts i
+  | _, h, [], n, _, hn, i, hi => by simp at hn; omega
+  | _, h, [t], n, _, hn, i, hi => by
+    have hi' : i < 2 ^ h := by simp at hn; omega
+    simp only [build, getL, Nat.div_eq_of_lt hi', Nat.mod_eq_of_lt hi', List.getD_cons_zero]
+  | 0, h, _ :: _ :: _, n, hf, _, i, hi => by simp at hf
+  | f + 1, h, a :: b :: ts, n, hf, hn, i, hi => by
+    simp only [build]
+    have hq : ts.length + 1 + 1 ≤ (ts.length + 1 + 1 + 1) / 2 * 2 := by omega
+    rw [getH_build f (h + 1) _ n (by rw [length_pairUp]; simp only [List.length_cons] at hf ⊢; omega)
+      (by
+        rw [length_pairUp, Nat.pow_succ]
+        simp only [List.length_cons] at hn ⊢
+        calc n ≤ (ts.length + 1 + 1) * 2 ^ h := hn
+          _ ≤ ((ts.length + 1 + 1 + 1) / 2 * 2) * 2 ^ h := Nat.mul_le_mul_right _ hq
+          _ = _ := by ring) i hi,
+      getL_pairUp]
+
+end PNode
+
+theorem PTree.get_ofList [Inhabited α] (l : List α) {k : ℕ} (hk : k < l.length) :
+    (PTree.ofList l).get k = l.getD k default := by
+  unfold PTree.ofList PTree.get
+  simp only
+  rw [PNode.getH_build l.length 0 (l.map .leaf) l.length (by simp) (by simp) k hk]
+  simp only [PNode.getL, pow_zero, Nat.div_one, Nat.mod_one]
+  simp [List.getD_eq_getElem?_getD, hk, PNode.getH]
 
 /-! ## Reading a list by an index map -/
 
@@ -508,7 +595,7 @@ theorem flattenL_eq : ∀ ls : List (List α), flattenL ls = ls.flatten
   | [_] => by simp [flattenL]
   | _ :: _ :: _ => rfl
 
-theorem pickRun_eq [Inhabited α] {xs : List α} {T : Trie α} {s : ℕ} {d : ℤ} {c : ℕ}
+theorem pickRun_eq [Inhabited α] {xs : List α} {T : PTree α} {s : ℕ} {d : ℤ} {c : ℕ}
     (hT : ∀ k < xs.length, T.get k = xs.getD k default)
     (hr : IndexMap.inRange [(s, d, c)] xs.length = true) :
     pickRun xs xs.length T s d c =
@@ -567,7 +654,7 @@ theorem pickRun_eq [Inhabited α] {xs : List α} {T : Trie α} {s : ℕ} {d : �
       rw [h0', Bool.cond_false]
       exact hgen
 
-theorem pickRuns_eq [Inhabited α] {xs : List α} {T : Trie α}
+theorem pickRuns_eq [Inhabited α] {xs : List α} {T : PTree α}
     (hT : ∀ k < xs.length, T.get k = xs.getD k default) :
     ∀ {idx : IndexMap}, IndexMap.inRange idx xs.length = true →
       pickRuns xs xs.length T idx = idx.toList.map fun i => xs.getD i default
@@ -580,18 +667,18 @@ theorem pickRuns_eq [Inhabited α] {xs : List α} {T : Trie α}
     rw [pickRuns, pickRun_eq hT hr, pickRuns_eq hT (by simpa [IndexMap.inRange] using h'.2)]
     simp [IndexMap.toList, List.map_append, List.map_map, Function.comp_def]
 
-/-- **Reading by runs is reading by the trie**, for an index map in range. -/
+/-- **Reading by runs is reading by the positional tree**, for an index map in range. -/
 theorem pickL_eq [Inhabited α] {xs : List α} {idx : IndexMap}
     (h : IndexMap.inRange idx xs.length = true) :
-    pickL xs idx = idx.toList.map (Trie.ofList xs).get := by
-  rw [pickL, pickRuns_eq (fun k hk => Trie.get_ofList xs hk) h]
+    pickL xs idx = idx.toList.map (PTree.ofList xs).get := by
+  rw [pickL, pickRuns_eq (fun k hk => PTree.get_ofList xs hk) h]
   have hm : ∀ i ∈ idx.toList, i < xs.length := fun i hi => by
     obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem hi
     rw [← List.getD_eq_getElem _ 0, ← IndexMap.entry_eq_getD_toList]
     exact IndexMap.entry_lt_of_inRange h (by rwa [IndexMap.length_toList] at hj)
-  exact List.map_congr_left fun i hi => (Trie.get_ofList xs (hm i hi)).symm
+  exact List.map_congr_left fun i hi => (PTree.get_ofList xs (hm i hi)).symm
 
-end TrieOfList
+end ListTree
 
 /-! ## Rows -/
 
@@ -632,14 +719,6 @@ variable (ir : RealizedProgram)
 variable {ir}
 
 variable {F : Type*} [CommRing F]
-
-theorem sum_map_range {M : Type*} [AddCommMonoid M] (g : ℕ → M) :
-    ∀ w : ℕ, ((List.range w).map g).sum = ∑ i ∈ Finset.range w, g i
-  | 0 => rfl
-  | w + 1 => by
-    rw [List.range_succ, List.map_append, List.sum_append, sum_map_range g w,
-      Finset.sum_range_succ]
-    simp
 
 theorem length_shiftRows (C m : ℕ) (rows : List (List (ℕ × ℕ))) :
     (shiftRows C m rows).length = m * rows.length := by

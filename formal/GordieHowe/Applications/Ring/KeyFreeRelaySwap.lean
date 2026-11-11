@@ -579,9 +579,11 @@ namespace RingSignature.KeyFree
 
 open Quantum Signature QROM OracleProg RingSignature.Insider
 
-variable {X Y : Type} [DecidableEq X] [Zero Y] {N n : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB)
-  {Pf PC : Type} {iFP : Fintype Pf} {iDP : DecidableEq Pf} {iFC : Fintype PC}
-  {iDC : DecidableEq PC} {iNC : Nonempty PC}
+variable {X Y : Type} [DecidableEq X] [Zero Y] {N n : ℕ} {TB : BaseTypes}
+  [DecidableEq TB.PK]
+  (B : BaseSigner X Y N TB)
+  {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
+  [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) ⟨Pf, PC⟩} {adm : KeyRing B.PK N → Prop}
   [DecidablePred adm] {SC X₀ R : Type} (pks : Fin n → B.PK)
   (toR : X₀ → Req B PS adm n × ℕ → B.BSig → R) (dummyR : Req B PS adm n × ℕ → R) {Q : ℕ}
@@ -592,12 +594,14 @@ def mapSig (swσ : B.BSig → B.BSig) :
       Option (B.Pub × B.BSig × List (Assignment X Y)) :=
   Option.map (Prod.map id (Prod.map swσ id))
 
+omit [DecidableEq TB.PK] in
 variable {B} in
 theorem asgOf_mapSig (swσ : B.BSig → B.BSig) (o : Option (B.Pub × B.BSig × List (Assignment X Y))) :
     asgOf B (mapSig B swσ o) = asgOf B o := by
   rcases o with _ | _ <;> rfl
 
 variable {B} in
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 theorem xK_mapSig {Yb : Type} (stp : RingStmt B → OracleProg (X ⊕ X) (Y ⊕ Yb) X₀)
     (swσ : B.BSig → B.BSig) (r : Req B PS adm n)
     (o : Option (B.Pub × B.BSig × List (Assignment X Y))) :
@@ -605,8 +609,9 @@ theorem xK_mapSig {Yb : Type} (stp : RingStmt B → OracleProg (X ⊕ X) (Y ⊕ 
   rcases r with _ | _ | _ <;> rcases o with _ | _ <;> rfl
 
 variable {B} in
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 theorem replyOf_mapSig (swσ : B.BSig → B.BSig) (r : Req B PS adm n)
-    (o : Option (B.Pub × B.BSig × List (Assignment X Y))) (a : Option (MUResponse B ⊕ Pf)) :
+    (o : Option (B.Pub × B.BSig × List (Assignment X Y))) (a : Option (MUResponse B.core ⊕ Pf)) :
     replyOf B r (mapSig B swσ o) a = replyOf B r o a := by
   rcases r with _ | _ | _ <;> rcases o with _ | _ <;> rcases a with _ | (_ | _) <;> try rfl
   all_goals (rename_i x; rcases x with _ | _ <;> rfl)
@@ -622,6 +627,7 @@ theorem translate_main_lift (Rd : KFReads X Y Yb Xs Ys) (Tf Tb : X → Option Y)
   rw [KFReads.lift, translate_translate]
   rfl
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The resolved key-free relay program with one request's signature moved**: when the resolved
 signatures at the side coins `sc'` are those at `sc` with the signature moved by `swσ`
 (`hsig`), and `sw` moves the main requests alike (`hsw`), the resolved program at `sc'` is the
@@ -631,9 +637,9 @@ theorem resolve_kfProgK_swap (sc sc' : Fin Q → SC)
       OracleProg (X ⊕ X) (Y ⊕ Yb) (Option (B.Pub × B.BSig × List (Assignment X Y))))
     (stp : RingStmt B → OracleProg (X ⊕ X) (Y ⊕ Yb) X₀) (Rd : KFReads X Y Yb Xs Ys)
     (T : X → Option Y) (c : ℕ) (r : Req B PS adm n) (swσ : B.BSig → B.BSig)
-    (sw : MURequest (SignOracle.none B) n ⊕ R → MURequest (SignOracle.none B) n ⊕ R)
-    (hsig : resolve Rd.side (Rd.lift (Req' := MURequest (SignOracle.none B) n ⊕ R)
-        (Resp' := MUResponse B ⊕ Pf) (fun _ => none) (Rd.tabB T fun _ => none)
+    (sw : MURequest (SignOracle.none B.core) n ⊕ R → MURequest (SignOracle.none B.core) n ⊕ R)
+    (hsig : resolve Rd.side (Rd.lift (Req' := MURequest (SignOracle.none B.core) n ⊕ R)
+        (Resp' := MUResponse B.core ⊕ Pf) (fun _ => none) (Rd.tabB T fun _ => none)
         (sigK B pks sc' sgn c r)) =
       (resolve Rd.side (Rd.lift (fun _ => none) (Rd.tabB T fun _ => none)
         (sigK B pks sc sgn c r))).mapOutput (mapSig B swσ))
@@ -650,6 +656,7 @@ theorem resolve_kfProgK_swap (sc sc' : Fin Q → SC)
   refine congrArg _ (congrArg _ (funext fun x₀ => ?_))
   simp only [translate, translate_bind, Sum.map_inr, hsw, replyOf_mapSig]
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The signature reads only its own request's side coins.** -/
 theorem sigK_congr {sc sc' : Fin Q → SC}
     (sgn : B.PK → KeyRing B.PK N → ℕ → B.Msg → SC →
@@ -665,6 +672,7 @@ theorem sigK_congr {sc sc' : Fin Q → SC}
     · rfl
   · rfl
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The key-free relay program reads only its own request's side coins.** -/
 theorem kfProgK_congr {sc sc' : Fin Q → SC}
     (sgn : B.PK → KeyRing B.PK N → ℕ → B.Msg → SC →
@@ -710,9 +718,10 @@ theorem KFReads.lift_mapOutput {Yb Xs Ys α β Req' Resp' : Type} (Rd : KFReads 
       (Rd.lift Tf Tb p).mapOutput f :=
   translate_mapOutput _ _ f p
 
-variable [DecidableEq X] {N n : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB)
-  {Pf PC : Type} {iFP : Fintype Pf} {iDP : DecidableEq Pf} {iFC : Fintype PC}
-  {iDC : DecidableEq PC} {iNC : Nonempty PC}
+variable [DecidableEq X] {N n : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
+  (B : BaseSigner X Y N TB)
+  {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
+  [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) ⟨Pf, PC⟩}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {SC X₀ R Pb : Type}
   (pks : Fin n → B.PK)
@@ -733,13 +742,14 @@ def CoinSwapAt (sc sc' : Fin Q → SC) (ω : X → Y₁) (T : X → Option Y) (c
     (F.outB (pks s) Rg c m (sc' ⟨c, h.1⟩)).run (ωT sp ω T) =
       ((F.outB (pks s) Rg c m (sc ⟨c, h.1⟩)).run (ωT sp ω T)).map (Prod.map (Prod.map id swσ) id)
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The resolved signature in side-read mode under a swap of side coins** is the signature at the
 original coins, moved by `swσ`. -/
 theorem resolve_sigK_sgnB_swap (sc sc' : Fin Q → SC) (ω : X → Y₁) (T : X → Option Y) (c : ℕ)
     (r : Req B PS adm n) (swσ : B.BSig → B.BSig)
     (hφ : CoinSwapAt sp B pks F sc sc' ω T c r swσ) :
     resolve ω ((KFReads.viaSide (fun y => (sp y).1) ω).lift
-        (Req' := MURequest (SignOracle.none B) n ⊕ R) (Resp' := MUResponse B ⊕ Pf)
+        (Req' := MURequest (SignOracle.none B.core) n ⊕ R) (Resp' := MUResponse B.core ⊕ Pf)
         (fun _ => none) ((KFReads.viaSide (fun y => (sp y).1) ω).tabB T fun _ => none)
         (sigK B pks sc' (sgnB sp B F S) c r)) =
       (resolve ω ((KFReads.viaSide (fun y => (sp y).1) ω).lift (fun _ => none)
@@ -816,6 +826,7 @@ theorem Lockstep.lift_baseL_viaSide_any {α α' Req' Resp' : Type} {RO : α → 
   rw [baseL, baseL, translate_translate, translate_translate]
   exact h.translate (fun _ _ _ => .inl (.inr trivial)) fun _ _ _ _ _ _ => trivial
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The side-mode key-free relay programs at any two side coins are in lockstep**, when the
 base-component signer program is in lockstep at any two side coins (`houtB`) and the statement
 program at any two published values (`hstmt`). -/
@@ -834,12 +845,12 @@ theorem lockstep_kfProgK_sgnB
       Lockstep SameKind EqAt (fun _ _ => True)
         ((OracleProg.query (.inr (reqOf B toR dummyR c r o x₀)) fun b =>
           (OracleProg.pure (b.elim (fun _ => none) id) : OracleProg ((X ⊕ X) ⊕
-            (MURequest (SignOracle.none B) n ⊕ R)) ((Y ⊕ Y₁) ⊕ Option (MUResponse B ⊕ Pf))
-              (Option (MUResponse B ⊕ Pf)))).bind fun a => .pure (replyOf B r o a))
+            (MURequest (SignOracle.none B.core) n ⊕ R)) ((Y ⊕ Y₁) ⊕ Option (MUResponse B.core ⊕ Pf))
+              (Option (MUResponse B.core ⊕ Pf)))).bind fun a => .pure (replyOf B r o a))
         ((OracleProg.query (.inr (reqOf B toR dummyR c r o' x₀')) fun b =>
           (OracleProg.pure (b.elim (fun _ => none) id) : OracleProg ((X ⊕ X) ⊕
-            (MURequest (SignOracle.none B) n ⊕ R)) ((Y ⊕ Y₁) ⊕ Option (MUResponse B ⊕ Pf))
-              (Option (MUResponse B ⊕ Pf)))).bind fun a => .pure (replyOf B r o' a)) :=
+            (MURequest (SignOracle.none B.core) n ⊕ R)) ((Y ⊕ Y₁) ⊕ Option (MUResponse B.core ⊕ Pf))
+              (Option (MUResponse B.core ⊕ Pf)))).bind fun a => .pure (replyOf B r o' a)) :=
     fun _ _ => ⟨.inr trivial, fun _ _ _ => by exact trivial⟩
   rcases r with i | ⟨s, Rg, m⟩ | i
   · rw [kfProgK_congr B pks toR dummyR (sc := sc) (sc' := sc') _ _ _ T c _
@@ -877,6 +888,7 @@ theorem countsLE_translate_baseL_viaSide {α Req' Resp' : Type} (ω : X → Y₁
   rw [baseL, translate_translate]
   exact h.translate fun _ => rfl
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The side-mode key-free relay program makes at most `qOut + qSt` side reads on every path**,
 when the base-component signer program makes at most `qOut` reads (`hcO`) and the statement
 program at most `qSt` (`hcS`) on every path. -/
@@ -891,8 +903,8 @@ theorem countsLE_kfProgK_sgnB
       CountsLE isSideRead q
         ((OracleProg.query (.inr (reqOf B toR dummyR c r o x₀)) fun b =>
           (OracleProg.pure (b.elim (fun _ => none) id) : OracleProg ((X ⊕ X) ⊕
-            (MURequest (SignOracle.none B) n ⊕ R)) ((Y ⊕ Y₁) ⊕ Option (MUResponse B ⊕ Pf))
-              (Option (MUResponse B ⊕ Pf)))).bind fun a => .pure (replyOf B r o a)) :=
+            (MURequest (SignOracle.none B.core) n ⊕ R)) ((Y ⊕ Y₁) ⊕ Option (MUResponse B.core ⊕ Pf))
+              (Option (MUResponse B.core ⊕ Pf)))).bind fun a => .pure (replyOf B r o a)) :=
     fun _ _ _ => countsLE_query_of_false rfl fun _ => trivial
   rcases r with i | ⟨s, Rg, m⟩ | i
   · exact hask _ _ _
@@ -919,6 +931,7 @@ end Shape
 
 variable {Q : ℕ}
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The side-mode key-free relays at two side coins are in lockstep** at every request, when the
 base-component signer program is in lockstep at any two side coins and the statement program at any
 two published values. -/
@@ -927,7 +940,7 @@ theorem lockstep_relayOfProg_kfRelaySide
       (F.outB pk Rg c m s) (F.outB pk Rg c m s'))
     (hstmt : ∀ (Rg : KeyRing B.PK N) (m : B.Msg) (y y' : B.Pub), Lockstep (fun _ _ => True)
       (fun _ _ _ _ => True) (fun _ _ => True) (S.stmtPB ⟨Rg, m, y⟩) (S.stmtPB ⟨Rg, m, y'⟩))
-    (sc sc' : Fin Q → SC) (ω : X → Y₁) (idle : MURequest (SignOracle.none B) n ⊕ R)
+    (sc sc' : Fin Q → SC) (ω : X → Y₁) (idle : MURequest (SignOracle.none B.core) n ⊕ R)
     (r : (Req B PS adm n × Fin (Q + 1)) × (X → Option Y)) :
     Lockstep SameKind EqAt (fun _ _ => True)
       (AssignRelay.relayOfProg (kfRelaySide sp B pks F S toR dummyR sc ω idle) Q r)
@@ -936,6 +949,7 @@ theorem lockstep_relayOfProg_kfRelaySide
     (lockstep_kfProgK_sgnB sp B pks F S toR dummyR houtB hstmt sc sc' ω r.2 r.1.2 r.1.1)).mapOutput
       fun _ _ _ => trivial
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **(ii-b) The side-mode key-free relay at other side coins has its shape**, when the
 base-component signer program is in lockstep at any two side coins and the statement program at any
 two published values. -/
@@ -944,20 +958,22 @@ theorem sameShape_kfRelaySide
       (F.outB pk Rg c m s) (F.outB pk Rg c m s'))
     (hstmt : ∀ (Rg : KeyRing B.PK N) (m : B.Msg) (y y' : B.Pub), Lockstep (fun _ _ => True)
       (fun _ _ _ _ => True) (fun _ _ => True) (S.stmtPB ⟨Rg, m, y⟩) (S.stmtPB ⟨Rg, m, y'⟩))
-    (sc sc' : Fin Q → SC) (ω : X → Y₁) (idle : MURequest (SignOracle.none B) n ⊕ R) :
+    (sc sc' : Fin Q → SC) (ω : X → Y₁) (idle : MURequest (SignOracle.none B.core) n ⊕ R) :
     (AssignRelay.relayOf (kfRelaySide sp B pks F S toR dummyR sc ω idle) Q).SameShape
       (AssignRelay.relayOf (kfRelaySide sp B pks F S toR dummyR sc' ω idle) Q).prog :=
   fun r ans => (lockstep_relayOfProg_kfRelaySide sp B pks F S toR dummyR houtB hstmt sc sc' ω idle
     r).shapeOf_after (fun _ _ _ _ _ => rfl) ans
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **(ii-a) The side-mode key-free relay at other side coins is the relay with its programs.** -/
 theorem relayOf_kfRelaySide_eq_withProg (sc sc' : Fin Q → SC) (ω : X → Y₁)
-    (idle : MURequest (SignOracle.none B) n ⊕ R) :
+    (idle : MURequest (SignOracle.none B.core) n ⊕ R) :
     AssignRelay.relayOf (kfRelaySide sp B pks F S toR dummyR sc' ω idle) Q =
       (AssignRelay.relayOf (kfRelaySide sp B pks F S toR dummyR sc ω idle) Q).withProg
         (AssignRelay.relayOf (kfRelaySide sp B pks F S toR dummyR sc' ω idle) Q).prog :=
   rfl
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **(ii-c) The side-mode key-free relay at side coins swapped at one request**: off `J` the side
 coins agree (`hoff`); at `r₀` the base-component signer program at `sc'` runs, at the side
 function read through `r₀`'s table, as at `sc` with the signature moved by `swσ`
@@ -971,10 +987,10 @@ theorem progSwap_kfRelaySide
       (fun _ _ _ _ => True) (fun _ _ => True) (S.stmtPB ⟨Rg, m, y⟩) (S.stmtPB ⟨Rg, m, y'⟩))
     (hcO : ∀ pk Rg c m s, CountsLE (fun _ => true) F.qOut (F.outB pk Rg c m s))
     (hcS : ∀ x, CountsLE (fun _ => true) S.qSt (S.stmtPB x))
-    (sc sc' : Fin Q → SC) (ω : X → Y₁) (idle : MURequest (SignOracle.none B) n ⊕ R)
+    (sc sc' : Fin Q → SC) (ω : X → Y₁) (idle : MURequest (SignOracle.none B.core) n ⊕ R)
     (J : (Req B PS adm n × Fin (Q + 1)) × (X → Option Y) → Bool)
     (r₀ : (Req B PS adm n × Fin (Q + 1)) × (X → Option Y)) (swσ : B.BSig → B.BSig)
-    (sw : Equiv.Perm (MURequest (SignOracle.none B) n ⊕ R))
+    (sw : Equiv.Perm (MURequest (SignOracle.none B.core) n ⊕ R))
     (hoff : ∀ r, J r = false → ∀ s Rg m (hc : (r.1.2 : ℕ) < Q), r.1.1 = .sign s Rg m →
       sc' ⟨r.1.2, hc⟩ = sc ⟨r.1.2, hc⟩)
     (hφ : CoinSwapAt sp B pks F sc sc' ω r₀.2 r₀.1.2 r₀.1.1 swσ)
@@ -1007,13 +1023,14 @@ theorem sum_map_id_of_eq_map {α β : Type} (f : α → α) (g : β → β) (a :
   · simp only [Sum.map_inr, Sum.inr.injEq] at h ⊢
     exact h.symm
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The side-mode key-free relay asks fixed main requests off `J`**: when `sw` fixes the main
 requests of every request failing `J` (`hsw`) and the padding request (`hidle`), the resolved
 programs off `J` ask main requests fixed by `sw`. -/
 theorem offTagFixed_kfRelaySide (sc : Fin Q → SC) (ω : X → Y₁)
-    (idle : MURequest (SignOracle.none B) n ⊕ R)
+    (idle : MURequest (SignOracle.none B.core) n ⊕ R)
     (J : (Req B PS adm n × Fin (Q + 1)) × (X → Option Y) → Bool)
-    (sw : Equiv.Perm (MURequest (SignOracle.none B) n ⊕ R))
+    (sw : Equiv.Perm (MURequest (SignOracle.none B.core) n ⊕ R))
     (hsw : ∀ r, J r = false → ∀ o x₀, sw (reqOf B toR dummyR r.1.2 r.1.1 o x₀) =
       reqOf B toR dummyR r.1.2 r.1.1 o x₀)
     (hidle : sw idle = idle) :

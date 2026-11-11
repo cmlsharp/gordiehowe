@@ -39,12 +39,18 @@ namespace GordieHowe
 open Quantum Signature RingSignature QROM IOP
 open scoped ENNReal
 
-variable {m k e N : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits m) (XOut k e) N TB}
-  {TPS : PSTypes} {PS : ProofSystem (Bits m) (XOut k e) (RingStmt B) (RingWit B) TPS}
+variable {m k e N : ℕ} {TB : BaseTypes}
+  {B : BaseSigner (Bits m) (XOut k e) N TB}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem (Bits m) (XOut k e) (RingStmt B) (RingWit B) TPS}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {n t : ℕ}
   {Cl : Type} {V : NARG.QROM.Verifier m k e Cl (RingStmt B)}
   {rel : Set (RingStmt B × RingWit B)}
   {ext : RingStmt B → DB (Bits m) (Out k e) → List (RingWit B)} {β : ℕ → ℝ≥0∞}
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
+  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
 
 variable (B PS adm n) in
 /-- **The relay family of BKM06 Definition 7** for `n` users: `forgerRelay` with the idle request
@@ -53,6 +59,7 @@ noncomputable abbrev insiderFam [NeZero n] :
     RelayFam (Bits m) (XOut k e) B PS adm n (SideOracle.none _) (SignOracle.ring B) :=
   fun pks => forgerRelay B PS adm pks 0
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] in
 /-- **BKM06 Definition 7 for `ofBase B PS adm` from MU-EUF-CMA^corr**: for a ring-binding base
 message (`hbind`), an oracle-free base signer (`hB`), a proof system given by a compiled verifier
 `V` (`hC`) with a knowledge bound for `rel` at `ext` and `β` (`K`), every witness of `rel` one of
@@ -93,6 +100,7 @@ theorem insiderForgeProb_le_muEufProb (hbind : B.BindsRing) (hB : B.OracleFree)
     Q hgame
   exact (forgeProb_le_embedAdversary (le_max_left n 2) A Q).trans h
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] in
 /-- **The bound of `insiderForgeProb_le_muEufProb` with at most `Q` signing and
 corruption requests**:
 the multi-user forger wins with at most `Q` signing and corruption requests
@@ -131,6 +139,7 @@ theorem insiderForgeProb_le_muEufProbWithin (hbind : B.BindsRing) (hB : B.Oracle
     Q hgame
   exact (forgeProb_le_embedAdversary (le_max_left n 2) A Q).trans h
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] in
 /-- **BKM06 Definition 7 for one user, from MU-EUF-CMA^corr with two users**
 (`insiderForgeProb_le_muEufProbWithin` at `n = 1`): the adversary of the one-user game is
 embedded into two users (`embedAdversary`), user `1` carrying the dummy request's key, and the
@@ -151,6 +160,8 @@ theorem insiderForgeProb_le_muEufProbWithin_one (hbind : B.BindsRing) (hB : B.Or
       V.knowledgeError β (t + Q * (B.qPub + PS.q) + V.kq) :=
   insiderForgeProb_le_muEufProbWithin hbind hB hC K hrel c₀ f₀ A hS Q
 
+omit [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 variable (B PS adm n) in
 /-- **The relay family of the key-reuse game** for `n` users: `forgerRelayStd` with the idle request
 the public key of user `0`. -/

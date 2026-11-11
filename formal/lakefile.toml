@@ -53,6 +53,13 @@ srcDir = "Check/Kernel"
 roots = []
 globs = ["GordieHoweCheck.+"]
 
+# Stage 0 of the kernel-mode certificate check: one module importing the check modules most likely
+# to fail and the slowest (Check/Stage0/GordieHoweStage0.lean, written by scripts/stage0.py), which
+# scripts/check.sh builds before the rest in kernel mode.
+[[lean_lib]]
+name = "GordieHoweStage0"
+srcDir = "Check/Stage0"
+
 [[lean_lib]]
 name = "LatticeCrypto"
 srcDir = "Vendor"

@@ -45,7 +45,7 @@ variable (X Y : Type) (N : ℕ) (Sch : SigScheme) {RMsg : Type} [Fintype RMsg] [
 
 /-- The types of `Sch.toBaseSigner`: the keys, messages, signatures, public values and signing coins
 of `Sch`, with the ring messages `RMsg`. -/
-abbrev SigScheme.baseT (RMsg : Type) [Fintype RMsg] [DecidableEq RMsg] : BaseTypes where
+abbrev SigScheme.baseT (RMsg : Type) : BaseTypes where
   PK := Sch.PK
   SK := Sch.SK
   KeyCoins := Sch.KeyCoins
@@ -72,8 +72,12 @@ def SigScheme.toBaseSigner (bind : List Sch.PK → RMsg → Sch.Msg) : BaseSigne
   pub _ σ := .pure (Sch.pub σ)
   pub_queries _ _ := OracleProg.QueriesLE.pure _ _
 
+variable [DecidableEq Sch.PK] [Fintype Sch.KeyCoins] [Nonempty Sch.KeyCoins] [Fintype Sch.SignCoins]
+  [Nonempty Sch.SignCoins]
+
 variable {X Y N Sch} {bind : List Sch.PK → RMsg → Sch.Msg}
 
+omit [DecidableEq Sch.PK] [Fintype Sch.KeyCoins] [Nonempty Sch.KeyCoins] in
 /-- **The earlier correctness error is the new one** of the ring-aware signer. -/
 theorem correctWithin_toBaseSigner {ε : ℝ≥0∞} (h : Sch.CorrectWithin ε) :
     (Sch.toBaseSigner X Y N bind).CorrectWithin ε := by
@@ -86,6 +90,7 @@ theorem correctWithin_toBaseSigner {ε : ℝ≥0∞} (h : Sch.CorrectWithin ε) 
   rw [hσ', hv]
   exact Bool.false_ne_true
 
+omit [DecidableEq Sch.PK] [Fintype Sch.KeyCoins] [Nonempty Sch.KeyCoins] in
 /-- **The earlier correctness error is the new one** of the ordinary signer. -/
 theorem stdCorrectWithin_toBaseSigner {ε : ℝ≥0∞} (h : Sch.CorrectWithin ε) :
     (Sch.toBaseSigner X Y N bind).StdCorrectWithin ε := by
@@ -98,6 +103,7 @@ theorem stdCorrectWithin_toBaseSigner {ε : ℝ≥0∞} (h : Sch.CorrectWithin �
   rw [hσ', hv]
   exact Bool.false_ne_true
 
+omit [DecidableEq Sch.PK] [Fintype Sch.KeyCoins] [Nonempty Sch.KeyCoins] in
 /-- The ordinary signer of an earlier scheme never refuses. -/
 theorem stdRefuseWithin_toBaseSigner : (Sch.toBaseSigner X Y N bind).StdRefuseWithin 0 := by
   intro H kc bm
@@ -114,6 +120,8 @@ theorem refuseWithin_toBaseSigner [Fintype X] [DecidableEq X] [Fintype Y] [Nonem
   refine Set.disjoint_left.2 fun d _ hd => ?_
   exact Option.some_ne_none _ hd.2
 
+omit [DecidableEq Sch.PK] [Fintype Sch.KeyCoins] [Nonempty Sch.KeyCoins] [Fintype Sch.SignCoins]
+  [Nonempty Sch.SignCoins] in
 /-- **Public values from coins in the earlier sense give them in the new one.** -/
 theorem pubOfCoins_toBaseSigner {pubOf : Sch.SignCoins → Sch.Pub} (h : Sch.PubOfCoins pubOf) :
     (Sch.toBaseSigner X Y N bind).PubOfCoins pubOf := by
@@ -123,6 +131,7 @@ theorem pubOfCoins_toBaseSigner {pubOf : Sch.SignCoins → Sch.Pub} (h : Sch.Pub
   rw [← hσ']
   exact h kc (bind R.1 m) c
 
+omit [DecidableEq Sch.PK] [Fintype Sch.KeyCoins] [Nonempty Sch.KeyCoins] in
 /-- **The earlier min-entropy bound is the new one**: the events of the two definitions are
 equal. -/
 theorem sigGivenPubLe_toBaseSigner {γ : ℝ≥0∞} (h : Sch.SigGivenPubLe γ) :
@@ -158,21 +167,25 @@ theorem sigGivenPubLe_toBaseSigner {γ : ℝ≥0∞} (h : Sch.SigGivenPubLe γ) 
 
 /-! ### The winning conditions -/
 
-variable {n : ℕ} {O : SignOracle (Sch.toBaseSigner X Y N bind)}
+variable {n : ℕ} {O : SignOracle (Sch.toBaseSigner X Y N bind).core}
 
+omit [DecidableEq Sch.PK] [Fintype Sch.KeyCoins] [Nonempty Sch.KeyCoins] [Fintype Sch.SignCoins]
+  [Nonempty Sch.SignCoins] in
 /-- **`Signature.Forges` is `Ring.BaseForgery`** at the history's corruptions and signing
 requests. -/
 theorem forges_iff_baseForgery {keys : Fin n → Sch.KeyCoins} {H : X → Y}
     {f : Sch.PK × Sch.Msg × Sch.Sig} {hist : MUHist O n} :
-    Forges (B := Sch.toBaseSigner X Y N bind) keys H f hist ↔
+    Forges (B := (Sch.toBaseSigner X Y N bind).core) keys H f hist ↔
       BaseForgery keys (Corrupted hist) (Signed hist) f :=
   ⟨fun h => ⟨h.verify_eq, h.exists_user⟩, fun h => ⟨h.verify_eq, h.exists_user⟩⟩
 
+omit [DecidableEq Sch.PK] [Fintype Sch.KeyCoins] [Nonempty Sch.KeyCoins] [Fintype Sch.SignCoins]
+  [Nonempty Sch.SignCoins] in
 /-- **`Signature.SigStrongForges` is `Ring.StrongForgery`** at the history's corruptions and
 returned signatures. -/
 theorem sigStrongForges_iff_strongForgery {keys : Fin n → Sch.KeyCoins} {H : X → Y}
     {f : Sch.PK × Sch.Msg × Sch.Sig} {hist : MUHist O n} :
-    SigStrongForges (B := Sch.toBaseSigner X Y N bind) keys H f hist ↔
+    SigStrongForges (B := (Sch.toBaseSigner X Y N bind).core) keys H f hist ↔
       StrongForgery keys (Corrupted hist) (ReturnedSig hist) f :=
   ⟨fun h => ⟨h.verify_eq, h.exists_user⟩, fun h => ⟨h.verify_eq, h.exists_user⟩⟩
 
@@ -180,7 +193,7 @@ variable (X Y N bind n) in
 /-- **The requests of the ordinary signing oracle's game are the earlier base requests**
 (`BaseRequest`: public key, signature on a message, corruption). -/
 def muRequestEquiv :
-    MURequest (SignOracle.std (Sch.toBaseSigner X Y N bind)) n ≃ BaseRequest Sch n where
+    MURequest (SignOracle.std (Sch.toBaseSigner X Y N bind).core) n ≃ BaseRequest Sch n where
   toFun
     | .publicKey i => .publicKey i
     | .sign i bm => .sign i bm
@@ -194,7 +207,7 @@ def muRequestEquiv :
 
 variable (X Y N bind) in
 /-- **The replies of the multi-user game are the earlier base replies.** -/
-def muResponseEquiv : MUResponse (Sch.toBaseSigner X Y N bind) ≃ BaseResponse Sch where
+def muResponseEquiv : MUResponse (Sch.toBaseSigner X Y N bind).core ≃ BaseResponse Sch where
   toFun
     | .publicKey pk => .publicKey pk
     | .signature σ => .signature σ

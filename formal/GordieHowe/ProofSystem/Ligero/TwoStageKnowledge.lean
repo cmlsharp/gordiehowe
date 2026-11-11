@@ -15,7 +15,7 @@ query) as a protocol with its own statement, verdict and extractor, without a cl
 the protocol. The state function (`knowledgeState`) is `TwoStageTest.state` with the claim false:
 false before the algebraic challenge, the bad event `bad` of the prover message and the challenge
 after it, and the bad event or acceptance on the full transcript. Round-by-round knowledge
-soundness (`rbrKnowledgeSoundness_of_counts`) then follows from two counts:
+soundness (`rbrKnowledgeSound_of_counts`) then follows from two counts:
 
 * at the algebraic challenge, at most `εtest · |Challenge|` challenges are bad for every prover
   message (`htest`);
@@ -117,7 +117,7 @@ function `knowledgeState` and the errors `εtest` at the algebraic challenge and
 query: from the count of bad challenges at every prover message (`htest`) and the count of
 accepted queries at every prefix where the extractor fails and the challenge was not bad
 (`hquery`). -/
-theorem rbrKnowledgeSoundness_of_counts [Fintype Challenge] [Fintype Query] [Nonempty Challenge]
+theorem rbrKnowledgeSound_of_counts [Fintype Challenge] [Fintype Query] [Nonempty Challenge]
     [Nonempty Query] {W : Type} (rel : Set (Ctx × W))
     (E : Extractor (spec Aux Challenge Response Query) Ctx W) (εtest εquery : ℝ≥0)
     (htest : ∀ c a,
@@ -127,9 +127,9 @@ theorem rbrKnowledgeSoundness_of_counts [Fintype Challenge] [Fintype Query] [Non
       ((Finset.univ.filter fun q =>
           accept c (tr ⟨0, by decide⟩) (tr ⟨1, by decide⟩) (tr ⟨2, by decide⟩) q = true).card :
             ℝ≥0) ≤ εquery * Fintype.card Query) :
-    rbrKnowledgeSoundness rel (verifier accept) E (knowledgeState bad accept)
+    RBRKnowledgeSound rel (verifier accept) E (knowledgeState bad accept)
       (error εtest εquery) := by
-  refine rbrKnowledgeSoundness_iff_count.mpr fun c i tr => ?_
+  refine rbrKnowledgeSound_iff_count.mpr fun c i tr => ?_
   rcases i with ⟨⟨k, hk⟩, hd⟩
   match k with
   | 0 => cases hd

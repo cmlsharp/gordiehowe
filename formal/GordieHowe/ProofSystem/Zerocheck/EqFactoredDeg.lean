@@ -21,7 +21,7 @@ most `D` (`quad_natDegree_le_degreeOf`). The prover sends the coefficients `q_1,
 (`step`, `claims`). No round has a check of its own; the last claim is compared with the summand
 at `s`.
 
-Source: `lib/gordiehowe/compiler/field_skip.h` at the C++ of `a9d05d59`, `MaskedFieldSkip::rows_of`
+Source: `lib/gordiehowe/compiler/field_skip.h`, `MaskedFieldSkip::rows_of`
 (the comment "claim = prefix (q0 + rho_i sum_d q_d) fixes q0; the next claim is eq_i(s) claim +
 prefix eq_i(s) sum_d (s^d - rho_i) q_d", and the loop over `d < D` with `sd = s^(d+1)`), with
 `eq(ρ, x) = 1 − ρ − x + 2ρx` (`MaskedFieldSkip::eq`, `EqFactored.eqLin` up to `ring`); the honest

@@ -114,7 +114,6 @@ theorem advantage_restrictLow_le
       anonError (A := A) hp hβ0 hβt s θ C :=
     Finset.expect_le_expect fun keys _ =>
       (Finset.expect_comp_fst
-        (hαβ := (pubSigner prims (Msg := Msg) N βmin reps tol enc).instFintypeOrc)
         (fun H => oracleError prims A hp hβ0 hβt s θ keys H)).trans_le
         (expect_schOrc_oracleError_le hp hβ0 hβt h_laws hs2 hθ0 hθ1 hs1 hC keys)
   have hQ : (0 : ℝ) ≤ Q := Nat.cast_nonneg _
@@ -224,8 +223,8 @@ theorem advantage_le_query
   simp only [Nat.cast_one, one_mul, one_add_one_eq_two] at h2
   refine h1.trans (add_le_add h2 (mul_le_mul_of_nonneg_left ?_ zero_le_two))
   refine (Finset.expect_le_expect fun keys _ => ?_).trans_eq (Fintype.expect_const _)
-  refine (Finset.expect_prod_eq_expect_expect (α := SchOrc p Msg) (β := CheckOrc p prims N reps)
-    (hαβ := (pubSigner prims (Msg := Msg) N βmin reps tol enc).instFintypeOrc) _).trans_le ?_
+  refine (Finset.expect_prod_eq_expect_expect (α := SchOrc p Msg)
+    (β := CheckOrc p prims N reps) _).trans_le ?_
   refine (Finset.expect_le_expect fun H _ => ?_).trans_eq (Fintype.expect_const _)
   rw [Finset.expect_comm]
   refine (Finset.expect_le_expect fun h _ => ?_).trans_eq (Fintype.expect_const _)

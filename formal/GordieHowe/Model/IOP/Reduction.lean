@@ -98,9 +98,9 @@ structure RBR (A : Reduction P t D X₁ X₂) (R₁ : Set (X₁ × D)) (R₂ : S
     ∃ c, FlipAt S c (x, d) (f.past c) (f.challenges c)
   /-- From a false state, a uniform challenge makes it true with probability at most `ε c`. -/
   rbr : ∀ (c : ChIdx P t) x d (past : CausalPast P c),
-    ¬ S c.leaf c.idx.1.castSucc (x, d) past.ctx past.own →
+    ¬ S c.leaf c.idx.before (x, d) past.ctx past.own →
       Pr[ch ← c.Challenge :
-        S c.leaf c.idx.1.succ (x, d) past.ctx ((P c.leaf.label).concat past.own ch)] ≤ ε c
+        S c.leaf c.idx.after (x, d) past.ctx ((P c.leaf.label).concat past.own ch)] ≤ ε c
 
 /-- **Completeness on `Hon` with error `δ`** of the reduction `A` from `R₁` to `R₂` (paper
 `def:red-sec` (b)): on every statement and committed data in `Hon` with the pair in `R₁`, the

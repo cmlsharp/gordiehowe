@@ -124,8 +124,9 @@ end RowMap
 
 set_option linter.unusedSectionVars false
 
-variable {program : RealizedProgram} [CarrierHEmbed program] [MldsaCarrierRelation program]
-  [MldsaRingStmt program] [TableSelect program] [MldsaCarrierFront program]
+variable {program : RealizedProgram} [CarrierHEmbed program] [CarrierAEmbed program]
+  [MldsaCarrierRelation program] [MldsaRingStmt program] [TableSelect program]
+  [MldsaCarrierFront program]
   {F0 FH : RealizedProgram.FieldInterp} [RealizedProgram.PrimeCastField F0 pGold]
 
 set_option hygiene false in
@@ -171,13 +172,13 @@ theorem decode_gold {c : ℕ} (hc : c < pGold) : (interp 0).decode c = (c : (int
 /-- **Shared expression `0`**: the `μ` bits below `512`, zeros up to `528`. -/
 theorem ref0_eq (e : program.Env interp) {t : ℕ} (ht : t < 528) :
     program.evalE (program.reader e) 0 (.ref 0) t =
-      if t < 512 then program.evalE (program.reader e) 0 (.leaf 57) t else 0 := by
+      if t < 512 then program.evalE (program.reader e) 0 (.leaf 58) t else 0 := by
   have := selectField_shape (program := program) (F0 := F0) (FH := FH)
   have hz : program.evalE (program.reader e) 0 (.leaf 0) 0 = 0 := by
     have := TableSelect.evalE_zero (f := 0) domainField_shape e
     rwa [MldsaCarrierFront.shape.2.2.2.1] at this
-  rw [RealizedProgram.evalE_ref MldsaCarrierRelation.refsOrdered _ _
-      (by have := MldsaCarrierFront.lt505 (program := program); omega),
+  rw [RealizedProgram.evalE_ref MldsaRandomPoint.refsOrdered _ _
+      (by have := MldsaCarrierFront.lt558 (program := program); omega),
     MldsaCarrierFront.expr0, evalE_reindex, evalE_concat, exprLen_leaf, MldsaCarrierFront.muSize]
   by_cases h : t < 512
   · have he : IndexMap.entry [(0, 1, 513), (512, 0, 15)] t = t := by
@@ -193,11 +194,11 @@ theorem ref0_eq (e : program.Env interp) {t : ℕ} (ht : t < 528) :
 theorem ref1_eq (rd : program.Valuation interp) {c : ℕ} (hc : c < 5144) :
     program.evalE rd 0 (.ref 1) c =
       if c < 5120 then
-        (if c < 4096 then program.evalE rd 0 (.leaf 55) c
-          else program.evalE rd 0 (.leaf 56) (c - 4096))
+        (if c < 4096 then program.evalE rd 0 (.leaf 56) c
+          else program.evalE rd 0 (.leaf 57) (c - 4096))
       else program.evalE rd 0 (.apply (.batched 24 (.fromDigits 22 2)) (.ref 0)) (c - 5120) := by
-  rw [RealizedProgram.evalE_ref MldsaCarrierRelation.refsOrdered _ _
-      (by have := MldsaCarrierFront.lt505 (program := program); omega),
+  rw [RealizedProgram.evalE_ref MldsaRandomPoint.refsOrdered _ _
+      (by have := MldsaCarrierFront.lt558 (program := program); omega),
     MldsaCarrierFront.expr1, evalE_reindex, IndexMap.entry_step_one hc, Nat.zero_add, evalE_concat,
     exprLen_reindex, IndexMap.size_single]
   by_cases h : c < 5120
@@ -210,12 +211,12 @@ theorem ref1_eq (rd : program.Valuation interp) {c : ℕ} (hc : c < 5144) :
 
 /-- **The record's `â`**: coordinate `c < 4096` is `member.a_hat`'s. -/
 theorem rec_aHat (rd : program.Valuation interp) {c : ℕ} (hc : c < 4096) :
-    program.evalE rd 0 (.ref 1) c = program.evalE rd 0 (.leaf 55) c := by
+    program.evalE rd 0 (.ref 1) c = program.evalE rd 0 (.leaf 56) c := by
   rw [ref1_eq rd (by omega), if_pos (by omega), if_pos hc]
 
 /-- **The record's `t̂`**: coordinate `4096 + c` is `member.t1`'s coordinate `c`. -/
 theorem rec_t1 (rd : program.Valuation interp) {c : ℕ} (hc : c < 1024) :
-    program.evalE rd 0 (.ref 1) (4096 + c) = program.evalE rd 0 (.leaf 56) c := by
+    program.evalE rd 0 (.ref 1) (4096 + c) = program.evalE rd 0 (.leaf 57) c := by
   rw [ref1_eq rd (by omega), if_pos (by omega), if_neg (by omega), Nat.add_sub_cancel_left]
 
 /-- **The record's limb `l`**: coordinate `5120 + l` is `Σ_b 2^b μ_{22 l + b}` of the
@@ -223,7 +224,7 @@ zero-extended `μ` bits. -/
 theorem rec_mu (e : program.Env interp) {l : ℕ} (hl : l < 24) :
     program.evalE (program.reader e) 0 (.ref 1) (5120 + l) =
       ∑ b : Fin 22, (2 : (interp 0).K) ^ (b : ℕ) *
-        (if l * 22 + (b : ℕ) < 512 then program.evalE (program.reader e) 0 (.leaf 57) (l * 22 + b)
+        (if l * 22 + (b : ℕ) < 512 then program.evalE (program.reader e) 0 (.leaf 58) (l * 22 + b)
           else 0) := by
   have h2 : (interp 0).decode 2 = 2 := (decode_gold (by norm_num [pGold])).trans (by norm_num)
   rw [ref1_eq _ (by omega), if_neg (by omega), Nat.add_sub_cancel_left,
@@ -351,8 +352,8 @@ theorem spectraOf_row {e : program.Env interp} (hs : program.SourceSatAt e)
 
 /-- **The `μ` bits are bits** (`member.mu.boolean`). -/
 theorem mu_bool {e : program.Env interp} (hs : program.SourceSatAt e) {t : ℕ} (ht : t < 512) :
-    program.evalE (program.reader e) 0 (.leaf 57) t = 0 ∨
-      program.evalE (program.reader e) 0 (.leaf 57) t = 1 := by
+    program.evalE (program.reader e) 0 (.leaf 58) t = 0 ∨
+      program.evalE (program.reader e) 0 (.leaf 58) t = 1 := by
   obtain ⟨hc, hl, hsrc⟩ := MldsaCarrierFront.muBool (program := program)
   have h := RealizedProgram.bool_of_boolCheck hc
     (hs.preds _ (RealizedProgram.predicate_mem hl) hsrc) (i := t)
@@ -363,17 +364,17 @@ theorem mu_bool {e : program.Env interp} (hs : program.SourceSatAt e) {t : ℕ} 
 rows: bit `t` is `1` exactly when bit `t` of `μ = H(H(pk) ‖ M′)` is. -/
 theorem muA_eq {e : program.Env interp} (hs : program.SourceSatAt e)
     (hno : ¬ TableSelect.SelBad 0 0 e) {x : RStmt len} (hrows : RowsOf x e.stmt) {t : ℕ}
-    (ht : t < 512) : program.evalE (program.reader e) 0 (.leaf 57) t =
+    (ht : t < 512) : program.evalE (program.reader e) 0 (.leaf 58) t =
       if muBitNat (muOf (x.keyAt (TableSelect.idxOf 0 e)) x.msg) t = 1 then 1 else 0 := by
   set mu := muOf (x.keyAt (TableSelect.idxOf 0 e)) x.msg
   set rd := program.reader e
   have hlimb : ∀ l < 24,
-      (fun b : Fin 22 => if l * 22 + (b : ℕ) < 512 then program.evalE rd 0 (.leaf 57) (l * 22 + b)
+      (fun b : Fin 22 => if l * 22 + (b : ℕ) < 512 then program.evalE rd 0 (.leaf 58) (l * 22 + b)
         else (0 : (interp 0).K)) =
       fun b : Fin 22 => if muBitNat mu (22 * l + b) = 1 then 1 else 0 := by
     intro l hl
     have hw : AllBool (fun b : Fin 22 => if l * 22 + (b : ℕ) < 512 then
-        program.evalE rd 0 (.leaf 57) (l * 22 + b) else (0 : (interp 0).K)) := fun b => by
+        program.evalE rd 0 (.leaf 58) (l * 22 + b) else (0 : (interp 0).K)) := fun b => by
       dsimp only
       split_ifs with h
       · exact mu_bool hs h
@@ -399,7 +400,7 @@ theorem muA_eq {e : program.Env interp} (hs : program.SourceSatAt e)
     beta_reduce at hcast
     replace hrec := hrec.trans hcast.symm
     have hq : natOfBits (fun b : Fin 22 => if l * 22 + (b : ℕ) < 512 then
-        program.evalE rd 0 (.leaf 57) (l * 22 + b) else (0 : (interp 0).K)) = muLimb mu l :=
+        program.evalE rd 0 (.leaf 58) (l * 22 + b) else (0 : (interp 0).K)) = muLimb mu l :=
       (CharP.natCast_injOn_Iio (interp 0).K pGold
         (show natOfBits _ < pGold from (natOfBits_lt _).trans (by norm_num [pGold]))
         (show muLimb mu l < pGold from (Native.muLimb_lt mu l).trans (by norm_num [pGold]))

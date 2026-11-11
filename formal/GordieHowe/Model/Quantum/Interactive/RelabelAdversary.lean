@@ -35,7 +35,7 @@ as `eq r`, returning each reply `a` as `a.map er.symm`. It is `A` absorbed throu
   `C'.relabel eq er`, with the history relabelled (`HistoryEntry.relabel`).
 - `QueryBoundedAdversary.relabel`, `QueryBoundedAdversary.transcriptLaw_relabel`: the same for
   `t`-query adversaries; `RingSignature.GameAdversary.relabel`,
-  `RingSignature.GameAdversary.runLaw_relabel` for game adversaries and the law of a game's run.
+  `RingSignature.runLaw_relabel` for game adversaries and the law of a game's run.
 
 The construction needs `Inhabited Req'` (the blank value of the outer request register of
 `absorb`).

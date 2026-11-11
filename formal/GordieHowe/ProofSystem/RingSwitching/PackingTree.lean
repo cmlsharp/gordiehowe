@@ -30,7 +30,7 @@ on the cells, the form `GordieHowe.FieldProof` and Ligero consume.
 
 **Soundness** (`GordieHowe.RingSwitching.Tree.soundRun`, `GordieHowe.RingSwitching.Tree.soundClose`): the masked reduction's relation, given every
 stage's mask condition on the cells (`MasksValid`: the subfield-mask stages' masks in `S0`, the
-prefix-row test's conclusion), with the errors of the masked reduction and `1/|K|` per combination
+prefix-row test's conclusion), with the errors of the masked reduction and `1/|F|` per combination
 (`GordieHowe.RingSwitching.Tree.sum_runError`).
 
 **Routing** (`GordieHowe.RingSwitching.Tree`). The C++ stage combines the rows that read its region, selected
@@ -156,7 +156,7 @@ noncomputable def runError : {Z : Type} → {nc : ℕ} → (P : Tree F p ι Z nc
   | _, _, (@Tree.route _ _ _ _ _ _ _ _ _ _ _ _ _ _ S R rest), M, ε =>
     rest.runError (M.routedStage R S rest.level) (M.routedStageError R S rest.level ε)
 
-/-- **The run's errors are the masked reduction's plus `1/|K|` per combination**. -/
+/-- **The run's errors are the masked reduction's plus `1/|F|` per combination**. -/
 theorem sum_runError : {Z : Type} → {nc : ℕ} → (P : Tree F p ι Z nc) →
     (M : FieldProof.MaskedReduction F ι Pub Wit cells Z nc) → (ε : M.spec.ChallengeIdx → ℝ≥0) →
     ∑ i, P.runError M ε i = ∑ i, ε i + P.combinations / Fintype.card F

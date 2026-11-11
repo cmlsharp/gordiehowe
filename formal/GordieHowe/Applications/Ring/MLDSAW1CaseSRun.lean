@@ -40,7 +40,7 @@ variable {p : Params} {T : ℕ} {Msg : Type} {N reps : ℕ} {kh kN kS L e : ℕ}
   {Mo : MaskOracle (Bits (queryBits kh kN kS L)) Y p T Msg}
   {βmin : ℚ≥0} {tol : ℕ} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
   {bmsg : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem (Bits (queryBits kh kN kS L)) Y (RingSignature.RingStmt (hedgedBase (concretePrimitivesKeyGen p) O Mo βmin
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem (Bits (queryBits kh kN kS L)) Y (RingSignature.RingStmt (hedgedBase (concretePrimitivesKeyGen p) O Mo βmin
       tol (concreteEnc p) k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS}
   {adm : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → Prop} [hadm : DecidablePred adm] {n Q : ℕ} [NeZero n]
   {Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] [Fintype Y₁] {Frg : Type}
@@ -60,7 +60,7 @@ local notation "Lf" => freshLoop (concretePrimitivesKeyGen p) O Mo βmin k D
 local notation "PSf" => PS
 local notation "X₀f" => W1ExpStmt (concretePrimitivesKeyGen p) RMsg N
 local notation "Rq" => W1Rq Pc O Mo βmin tol (concreteEnc p) k D bmsg PS adm n Q
-local notation "MUR" => MURequest (SignOracle.none Bf) n
+local notation "MUR" => MURequest (SignOracle.none (RingSignature.BaseSigner.core Bf)) n
 
 attribute [local instance] admDecF
 
@@ -74,7 +74,7 @@ noncomputable def w1SecondRunLaw {SC' : Type} [Fintype SC'] [DecidableEq SC']
     {Aux : (Fin n → _root_.MLDSA.Bytes 32) → (Fin Q → KFCoins (p := p) (T := T) k D Y₁) → (Xq → Y₁) → Type}
     (aux : ∀ ξ sc ω, PMF (Aux ξ sc ω))
     {shA : ∀ ξ sc ω, Aux ξ sc ω → AlgShape Xq (XOut kh e) (MUR ⊕ Rq)
-      (MUResponse Bf ⊕ M.Response b)}
+      (MUResponse (Bf).core ⊕ M.Response b)}
     (A : ∀ ξ sc ω (a : Aux ξ sc ω), AdaptiveIAlg (shA ξ sc ω a) (Frg × X₀f))
     (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MUR ⊕ Rq)) (M.Response b) SC')
     (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))))
@@ -87,6 +87,8 @@ noncomputable def w1SecondRunLaw {SC' : Type} [Fintype SC'] [DecidableEq SC']
       kfCanonOut (rel := rel) (enc := penc ξ) (dummyS := dummyS) prf ξ Q (A ξ sc ω a) Psim Ext
         (fun _ w => w) (ok ξ) x.1.out x.2
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **Case S with a second signature in the extraction runs is bounded by Module-SIS**: the
 average over uniform seeds `ξ` with the keys of equal key hashes equal, uniform side coins `sc`,
 uniform base components `ω` and auxiliary inputs `a ∼ aux ξ sc ω`, of the probability that the
@@ -102,7 +104,7 @@ theorem tsum_simProb_w1SecondSig_le (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst 
     {Aux : (Fin n → _root_.MLDSA.Bytes 32) → (Fin Q → KFCoins (p := p) (T := T) k D Y₁) → (Xq → Y₁) → Type}
     (aux : ∀ ξ sc ω, PMF (Aux ξ sc ω))
     {shA : ∀ ξ sc ω, Aux ξ sc ω → AlgShape Xq (XOut kh e) (MUR ⊕ Rq)
-      (MUResponse Bf ⊕ M.Response b)}
+      (MUResponse (Bf).core ⊕ M.Response b)}
     (A : ∀ ξ sc ω (a : Aux ξ sc ω), AdaptiveIAlg (shA ξ sc ω a) (Frg × X₀f))
     (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MUR ⊕ Rq)) (M.Response b) SC')
     (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))))

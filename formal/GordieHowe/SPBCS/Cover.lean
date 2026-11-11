@@ -20,7 +20,7 @@ inputs: `recordsChains_of_verify`) and the stream are recorded, and the sampler 
 challenge from the stream. The transcript read from such chains is the transcript along the proof
 (`RecordsChains.extPast_eq`), so the database extractor, or the targeted extractor, returns a
 witness or `D` lies in `bad` (`mem_of_recordsChains`, `mem_of_recordsChains_targeted`; the flip
-comes from `CausalRBR.exists_flip`). The proof's leaves are those of `D`'s views
+comes from `CausalRBRStmt.exists_flip`). The proof's leaves are those of `D`'s views
 (`openedAs_views_of_check`). `mem_of_verify`, `mem_of_verify_targeted`: CMS19 Proposition 8.12
 (p. 42), knowledge form (p. 44), for the spBCS verifier.
 -/
@@ -242,7 +242,7 @@ variable {M : SPBCS Mg P X k kN kS L e} [∀ j i, Nonempty ((P j).Challenge i)]
 `D` has no digest collision and records the chains `chs` of the proof `π` of `x` at the challenges
 `ch`, the leaves of `π` are those of `D`'s views at the queried positions and the query phase
 accepts, the database extractor returns a witness for `x` or `D` lies in `bad`. The flip comes
-from `CausalRBR.exists_flip` on the transcript along `π`, which is the transcript read from `D`. -/
+from `CausalRBRStmt.exists_flip` on the transcript along `π`, which is the transcript read from `D`. -/
 theorem mem_of_recordsChains [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     (hD : D ∉ digestCollision) (Q : M.IOPQueries V x) (hR : M.RecordsChains D x π chs ch)
     (hopen : M.OpenedAs (fun p i => (M.comp p.label).views D i (π.writes p i)) (Q.pos chs ch)

@@ -8,7 +8,17 @@ the types and bodies of definitions, constructor types of inductives and field t
 every declaration that newly enters, or leaves, the surface a reader must trust.
 
 The roots are the theorems tagged `@[headline]` (`GordieHowe/Headline.lean`): the paper's main theorems
-and their instance corollaries, which are stated at concrete settings, so none is vacuous. The
+(most of them generic over the relation, IOP, realized program or scheme) and the literature results
+it presents as machine-checked, the configuration
+templates (`@[config_template headline]`, generic over a configuration, its facts and a proof
+system), and the templates' printed instances at `MLDSA44.Emulated.ROMParams` and `.QROMParams`, which
+are stated at concrete settings. No check establishes that a generic headline's hypotheses can hold;
+the statement audit reviews them. For a configuration template there is more: each one has a printed
+instance that is itself a headline, proved by applying the template to that configuration's record
+and its proved facts (`configurationFacts`), so the template's hypotheses hold at a concrete
+configuration. `scripts/HeadlineTrust.lean` fails an application headline (the templates included)
+with a compiler-trust hypothesis among its binders, and `scripts/HeadlineAxioms.lean` reports each
+headline's compiler-trust axioms. The
 closure follows `GordieHowe`, `GordieHoweNative`, `GordieHoweCheck`, `LatticeCrypto`, `HashSig`
 and the vendored `ArkLib` and `CompPoly`; every other constant reached (Lean core, Batteries, Mathlib) is listed
 by name after the line `# ==== external constants`, as `# external<TAB><module root><TAB><name>`,
@@ -34,9 +44,12 @@ headline lines, and `check.sh` counts the headlines whose transitive fingerprint
 previous closure, listing those whose own fingerprint did not.
 
 `audited.txt` records audited declarations, one per line:
-`<declaration>\t<commit>\t<audit reference>\t<fingerprint>`, where the fingerprint is the hash of
+`<declaration>\t<commit>\t<audit reason>\t<fingerprint>`, where the fingerprint is the hash of
 the declaration's type (and body, for a definition) that `statement_closure.txt` prints in its
-third column at the audit. An entry certifies that the declaration's statement
+third column at the audit. The reason stands on its own text: after the audit's label, one or two
+sentences saying what the statement says and the fact that makes it right (the lemma, the
+computation, or why a definition matches its source), with no reference to a file outside the
+ledger. An entry certifies that the declaration's statement
 (and body, for a definition) was reviewed adversarially at that commit for faithfulness to its
 source, vacuity, hypotheses that weaken the headlines, and off-by-one errors. A declaration whose
 statement or body changes after its audit must be re-audited: `check.sh` fails on a recorded
@@ -68,7 +81,7 @@ With `--write` it also renames the entries of `unrecorded.txt`.
 
 ## Computability baseline
 
-`computability-f1.tsv.gz` records all 331,488 definitions and 3,852 opaque declarations in the certificate environment at
+`computability-f1.tsv.gz` records 331,435 definitions and 3,852 opaque declarations in the public certificate environment at
 develop `f1aca4f113b14b0549a5fe7e5e7dd4fe5373a0b6`, including dependencies and compiler auxiliaries.
 The accompanying JSON records the toolchain, source-inventory hash and compressed/uncompressed
 hashes. Each row contains the exact declaration name, whether either the declaration or its

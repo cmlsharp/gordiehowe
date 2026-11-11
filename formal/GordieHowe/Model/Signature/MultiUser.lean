@@ -92,9 +92,10 @@ differences:
    library does not prove these statements. Its bounds are stated in terms of `muEufProb` and
    `muSufProb` of explicit adversaries, and a theorem that assumes such a statement takes a named
    predicate over a class of adversaries: `MUEufCmaHard`, `MUSufCmaHard` and their single-user and
-   no-message forms (`GordieHowe/Model/Signature/Assumptions.lean`), and at the library's base
-   signers `MLDSASufCma`, `MLDSAMUSufCma`, `Falcon512EufCma`, `Falcon512MUEufCma`
-   (`GordieHowe/Applications/Ring/BaseSignerAssumptions.lean`).
+   no-message forms (`GordieHowe/Model/Signature/Assumptions.lean`), and at the library's
+   signature schemes `MLDSASufCma`, `MLDSAMUSufCma`, `Falcon512EufCma`, `Falcon512MUEufCma`
+   (`GordieHowe/Applications/MLDSA/Assumptions.lean`,
+   `GordieHowe/Applications/Falcon512/Assumptions.lean`).
 -/
 
 namespace GordieHowe.Signature
@@ -102,7 +103,7 @@ namespace GordieHowe.Signature
 open GordieHowe.Quantum GordieHowe.RingSignature
 open scoped ENNReal
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB)
+variable {X Y : Type} {TB : SchemeTypes} (B : BaseScheme X Y TB)
 
 /-- **The signing oracle of a multi-user game** for the base signer `B`: messages `SMsg`, uniform
 coins, a classical oracle program with at most `q` queries signing a message with a user's key pair
@@ -112,11 +113,6 @@ structure SignOracle where
   SMsg : Type
   /-- The coins of one signature. -/
   Coins : Type
-  [instFintypeSMsg : Fintype SMsg]
-  [instDecEqSMsg : DecidableEq SMsg]
-  [instFintypeCoins : Fintype Coins]
-  [instDecEqCoins : DecidableEq Coins]
-  [instNonemptyCoins : Nonempty Coins]
   /-- The bound on the signer's queries. -/
   q : ℕ
   /-- The signer. -/
@@ -126,15 +122,16 @@ structure SignOracle where
   /-- The base message a signature on the message is for. -/
   base : SMsg → B.BMsg
 
-attribute [instance] SignOracle.instFintypeSMsg SignOracle.instDecEqSMsg
-  SignOracle.instFintypeCoins SignOracle.instDecEqCoins SignOracle.instNonemptyCoins
-
 namespace SignOracle
+
+section Ring
+
+variable {N : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB)
 
 /-- **The ring-aware signing oracle**: a request `(R, m)` by the key pair `kp` is answered by `bsign`
 at the first position of `kp.1` in `R` (as `ofBase` signs), and refused when `kp.1` is not in `R`;
 the signature is for the base message `bmsg R m`. -/
-noncomputable def ring : SignOracle B where
+noncomputable def ring [DecidableEq TB.PK] : SignOracle B.core where
   SMsg := KeyRing B.PK N × B.Msg
   Coins := B.Coins
   q := B.q
@@ -146,9 +143,35 @@ noncomputable def ring : SignOracle B where
     · exact OracleProg.QueriesLE.pure _ _
   base p := B.bmsg p.1 p.2
 
+/-! The instances of the ring-aware oracle's messages and coins: those of `KeyRing B.PK N × B.Msg`
+and of `B.Coins`. -/
+
+section RingInstances
+
+variable [DecidableEq TB.PK]
+
+instance ring.instFintypeSMsg [Fintype TB.PK] [Fintype TB.Msg] : Fintype (ring B).SMsg :=
+  inferInstanceAs (Fintype (KeyRing B.PK N × B.Msg))
+
+instance ring.instDecEqSMsg [DecidableEq TB.Msg] : DecidableEq (ring B).SMsg :=
+  inferInstanceAs (DecidableEq (KeyRing B.PK N × B.Msg))
+
+instance ring.instFintypeCoins [Fintype TB.Coins] : Fintype (ring B).Coins :=
+  inferInstanceAs (Fintype B.Coins)
+
+instance ring.instDecEqCoins [DecidableEq TB.Coins] : DecidableEq (ring B).Coins :=
+  inferInstanceAs (DecidableEq B.Coins)
+
+instance ring.instNonemptyCoins [Nonempty TB.Coins] : Nonempty (ring B).Coins :=
+  inferInstanceAs (Nonempty B.Coins)
+
+end RingInstances
+
+end Ring
+
 /-- **The ordinary signing oracle**: base messages, answered by `ssign`. With it the game is the
 base scheme's own multi-user game. -/
-def std : SignOracle B where
+@[reducible] def std : SignOracle B where
   SMsg := B.BMsg
   Coins := B.Coins
   q := B.q
@@ -156,25 +179,57 @@ def std : SignOracle B where
   sign_queries kp bm c := B.ssign_queries kp.2 bm c
   base bm := bm
 
+section RingStd
+
+variable {N : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB)
+
 /-- **The ring-aware and the ordinary signing oracle together**: a request is a ring and a message
 (`inl`, answered as `ring` answers it, for the base message `bmsg R m`) or a base message (`inr`,
 answered by `ssign`, for itself). With it the game is the multi-user game of a user who signs with
 one key both in rings and in the base scheme (the setting of the key-reuse game of
 `GordieHowe/Model/RingSignature/KeyReuse.lean`). -/
-noncomputable def ringStd : SignOracle B where
+noncomputable def ringStd [DecidableEq TB.PK] : SignOracle B.core where
   SMsg := (KeyRing B.PK N × B.Msg) ⊕ B.BMsg
   Coins := B.Coins
   q := B.q
   sign kp
     | .inl p, c => (ring B).sign kp p c
-    | .inr bm, c => (std B).sign kp bm c
+    | .inr bm, c => (std B.core).sign kp bm c
   sign_queries kp sm c := by
     rcases sm with p | bm
     · exact (ring B).sign_queries kp p c
-    · exact (std B).sign_queries kp bm c
+    · exact (std B.core).sign_queries kp bm c
   base
     | .inl p => (ring B).base p
-    | .inr bm => (std B).base bm
+    | .inr bm => (std B.core).base bm
+
+/-! The instances of the combined oracle's messages and coins: those of
+`(KeyRing B.PK N × B.Msg) ⊕ B.BMsg` and of `B.Coins`. -/
+
+section RingStdInstances
+
+variable [DecidableEq TB.PK]
+
+instance ringStd.instFintypeSMsg [Fintype TB.PK] [Fintype TB.Msg] [Fintype TB.BMsg] :
+    Fintype (ringStd B).SMsg :=
+  inferInstanceAs (Fintype ((KeyRing B.PK N × B.Msg) ⊕ B.BMsg))
+
+instance ringStd.instDecEqSMsg [DecidableEq TB.Msg] [DecidableEq TB.BMsg] :
+    DecidableEq (ringStd B).SMsg :=
+  inferInstanceAs (DecidableEq ((KeyRing B.PK N × B.Msg) ⊕ B.BMsg))
+
+instance ringStd.instFintypeCoins [Fintype TB.Coins] : Fintype (ringStd B).Coins :=
+  inferInstanceAs (Fintype B.Coins)
+
+instance ringStd.instDecEqCoins [DecidableEq TB.Coins] : DecidableEq (ringStd B).Coins :=
+  inferInstanceAs (DecidableEq B.Coins)
+
+instance ringStd.instNonemptyCoins [Nonempty TB.Coins] : Nonempty (ringStd B).Coins :=
+  inferInstanceAs (Nonempty B.Coins)
+
+end RingStdInstances
+
+end RingStd
 
 end SignOracle
 
@@ -189,7 +244,33 @@ inductive MURequest where
   | sign (i : Fin n) (sm : O.SMsg)
   /-- The corruption of user `i`. -/
   | corrupt (i : Fin n)
-deriving DecidableEq
+
+/-- Decidable equality of requests, constructor by constructor and field by field: the definition
+`deriving DecidableEq` generates, without its binders for the type parameters `X` and `Y`, which no
+field reads. -/
+def instDecidableEqMURequest.decEq [DecidableEq O.SMsg] (x y : MURequest O n) :
+    Decidable (x = y) :=
+  match x, y with
+  | @MURequest.publicKey _ _ _ _ _ _ a0, @MURequest.publicKey _ _ _ _ _ _ b0 =>
+    if h : @a0 = @b0 then by subst h; exact isTrue rfl
+    else isFalse (by intro n; injection n; apply h _; assumption)
+  | MURequest.publicKey .., MURequest.sign .. => isFalse (by intro h; injection h)
+  | MURequest.publicKey .., MURequest.corrupt .. => isFalse (by intro h; injection h)
+  | MURequest.sign .., MURequest.publicKey .. => isFalse (by intro h; injection h)
+  | @MURequest.sign _ _ _ _ _ _ a0 a1, @MURequest.sign _ _ _ _ _ _ b0 b1 =>
+    if h : @a0 = @b0 then
+      by subst h; exact (if h : @a1 = @b1 then by subst h; exact isTrue rfl
+      else isFalse (by intro n; injection n; apply h _; assumption))
+    else isFalse (by intro n; injection n; apply h _; assumption)
+  | MURequest.sign .., MURequest.corrupt .. => isFalse (by intro h; injection h)
+  | MURequest.corrupt .., MURequest.publicKey .. => isFalse (by intro h; injection h)
+  | MURequest.corrupt .., MURequest.sign .. => isFalse (by intro h; injection h)
+  | @MURequest.corrupt _ _ _ _ _ _ a0, @MURequest.corrupt _ _ _ _ _ _ b0 =>
+    if h : @a0 = @b0 then by subst h; exact isTrue rfl
+    else isFalse (by intro n; injection n; apply h _; assumption)
+
+instance instDecidableEqMURequest [DecidableEq O.SMsg] : DecidableEq (MURequest O n) :=
+  instDecidableEqMURequest.decEq O n
 
 variable (B) in
 /-- **A reply of the multi-user game**: a public key, a signature, or key coins. -/
@@ -200,7 +281,40 @@ inductive MUResponse where
   | signature (σ : B.BSig)
   /-- The key coins of a corrupted user. -/
   | keyCoins (kc : B.KeyCoins)
-deriving DecidableEq
+
+/-! The decidable equality of replies is the definition `deriving DecidableEq` generates, written
+out: it reads the instances of the field types `TB.PK`, `TB.BSig` and `TB.KeyCoins` from section
+binders, which a deriving handler does not see, and no others (no field has type `X` or `Y`). -/
+
+section DecEq
+
+variable [DecidableEq TB.PK] [DecidableEq TB.BSig] [DecidableEq TB.KeyCoins]
+
+variable (B) in
+/-- Decidable equality of replies, constructor by constructor and field by field. -/
+def instDecidableEqMUResponse.decEq (x y : MUResponse B) :
+    Decidable (x = y) :=
+  match x, y with
+  | @MUResponse.publicKey _ _ _ _ a0, @MUResponse.publicKey _ _ _ _ b0 =>
+    if h : @a0 = @b0 then by subst h; exact isTrue rfl
+    else isFalse (by intro n; injection n; apply h _; assumption)
+  | MUResponse.publicKey .., MUResponse.signature .. => isFalse (by intro h; injection h)
+  | MUResponse.publicKey .., MUResponse.keyCoins .. => isFalse (by intro h; injection h)
+  | MUResponse.signature .., MUResponse.publicKey .. => isFalse (by intro h; injection h)
+  | @MUResponse.signature _ _ _ _ a0, @MUResponse.signature _ _ _ _ b0 =>
+    if h : @a0 = @b0 then by subst h; exact isTrue rfl
+    else isFalse (by intro n; injection n; apply h _; assumption)
+  | MUResponse.signature .., MUResponse.keyCoins .. => isFalse (by intro h; injection h)
+  | MUResponse.keyCoins .., MUResponse.publicKey .. => isFalse (by intro h; injection h)
+  | MUResponse.keyCoins .., MUResponse.signature .. => isFalse (by intro h; injection h)
+  | @MUResponse.keyCoins _ _ _ _ a0, @MUResponse.keyCoins _ _ _ _ b0 =>
+    if h : @a0 = @b0 then by subst h; exact isTrue rfl
+    else isFalse (by intro n; injection n; apply h _; assumption)
+
+instance instDecidableEqMUResponse : DecidableEq (MUResponse B) :=
+  instDecidableEqMUResponse.decEq B
+
+end DecEq
 
 /-- Requests as a sum type. -/
 def MURequest.equivSum : MURequest O n ≃ Fin n ⊕ (Fin n × O.SMsg) ⊕ Fin n where
@@ -215,7 +329,7 @@ def MURequest.equivSum : MURequest O n ≃ Fin n ⊕ (Fin n × O.SMsg) ⊕ Fin n
   left_inv r := by cases r <;> rfl
   right_inv p := by rcases p with _ | ⟨_, _⟩ | _ <;> rfl
 
-instance : Fintype (MURequest O n) :=
+instance instFintypeMURequest [Fintype O.SMsg] : Fintype (MURequest O n) :=
   Fintype.ofEquiv _ (MURequest.equivSum O n).symm
 
 variable (B) in
@@ -232,7 +346,8 @@ def MUResponse.equivSum : MUResponse B ≃ B.PK ⊕ B.BSig ⊕ B.KeyCoins where
   left_inv r := by cases r <;> rfl
   right_inv p := by rcases p with _ | _ | _ <;> rfl
 
-instance : Fintype (MUResponse B) :=
+instance instFintypeMUResponse [Fintype TB.PK] [Fintype TB.BSig] [Fintype TB.KeyCoins] :
+    Fintype (MUResponse B) :=
   Fintype.ofEquiv _ (MUResponse.equivSum B).symm
 
 /-- **The challenger of the multi-user game** at the users' key coins `keys`, answering `Q`
@@ -240,7 +355,8 @@ requests: request number `j < Q` with the signing coins `ω j` (uniform). A publ
 answered with the user's public key, a signing request by the oracle's signer with the user's key
 pair (its refusal `none` passed on), a corruption with the user's key coins. Requests after the
 `Q`-th get `none`. It reprograms nothing. -/
-noncomputable def muChallenger (keys : Fin n → B.KeyCoins) (Q : ℕ) :
+noncomputable def muChallenger [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins]
+    (keys : Fin n → B.KeyCoins) (Q : ℕ) :
     Challenger X Y (MURequest O n) (MUResponse B) where
   Coins := Fin Q → O.Coins
   coins := PMF.uniformOfFintype _
@@ -408,6 +524,9 @@ theorem StrongForges.of_histRelay {keys : Fin n → B.KeyCoins} {H : X → Y}
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
   [Nonempty Y]
 
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Fintype O.SMsg] [DecidableEq O.SMsg]
+
 variable (O n) in
 /-- **An adversary of the multi-user game** with `n` users and at most `t` queries: on the users'
 public keys and the table `V` of the oracle, a `t`-query adversary making requests and outputting a
@@ -417,6 +536,8 @@ abbrev MUAdversary (V : OracleView X Y) (t : ℕ) : Type 1 :=
     (B.PK × B.BMsg × B.BSig) t
 
 variable {V : OracleView X Y} {t : ℕ}
+
+variable [Nonempty TB.KeyCoins] [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins]
 
 /-- **The run of the multi-user game** with `Q` requests: the users' key coins and the oracle
 uniform, the adversary on the public keys and the oracle's table against the challenger. -/

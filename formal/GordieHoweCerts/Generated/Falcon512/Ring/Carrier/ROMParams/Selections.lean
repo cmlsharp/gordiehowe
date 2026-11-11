@@ -25,6 +25,6 @@ namespace GordieHowe.Generated.Falcon512.Ring.Carrier.ROMParams
 
 /-- **The table selections' certificates.** -/
 abbrev selections : List GordieHowe.RealizedProgram.SelCert :=
-  [⟨0, { dom := 0, one := 0, zero := 1, mOne := 18446744069414584320, gamma := 8, chal := 0, pow := 17, dig := 18, idx := 7, pred := 0, idxPred := 9, record := .leaf 6, map := [⟨true, true, 512, 0, 11353340290879379826⟩], parts := [(4, 512)], rows := 64, bits := 6 }⟩]
+  [⟨0, { dom := 0, one := 0, zero := 1, mOne := 18446744069414584320, gamma := 9, chal := 0, pow := 20, dig := 21, idx := 8, pred := 0, idxPred := 9, record := .leaf 7, map := [⟨true, true, 512, 0, 11353340290879379826⟩], parts := [(5, 512)], rows := 64, bits := 6 }⟩]
 
 end GordieHowe.Generated.Falcon512.Ring.Carrier.ROMParams

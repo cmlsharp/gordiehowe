@@ -111,7 +111,8 @@ def user (c : AnonRequest S n) (b : Bool) : Fin n := bif b then c.user₁ else c
 def Valid (keys : Fin n → S.KeyCoins) (c : AnonRequest S n) : Prop :=
   S.pk (keys c.user₀) ∈ c.ring.1 ∧ S.pk (keys c.user₁) ∈ c.ring.1
 
-instance (keys : Fin n → S.KeyCoins) (c : AnonRequest S n) : Decidable (c.Valid keys) :=
+instance instDecidableValid [DecidableEq TS.PK] (keys : Fin n → S.KeyCoins) (c : AnonRequest S n) :
+    Decidable (c.Valid keys) :=
   inferInstanceAs (Decidable (_ ∧ _))
 
 /-- **A valid challenge's signer is in the ring**, in both experiments. -/
@@ -129,6 +130,11 @@ theorem valid_pair (hN : 2 ≤ N) (keys : Fin n → S.KeyCoins) (m : S.Msg) (u�
   ⟨by simp, by simp⟩
 
 end AnonRequest
+
+section Challenger
+
+variable [DecidableEq TS.PK] [Fintype TS.SignCoins] [DecidableEq TS.SignCoins]
+  [Nonempty TS.SignCoins]
 
 /-- **The challenger of experiment `b` of the anonymity game** at the honest users' key coins
 `keys`, answering `Q` challenges: challenge number `j < Q`, if valid, is answered by the scheme's
@@ -171,7 +177,8 @@ theorem anonChallenger_respond_of_not_valid (keys : Fin n → S.KeyCoins) (b : B
   simp [anonChallenger, hc]
 
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
-  [Nonempty Y]
+  [Nonempty Y] [Fintype TS.PK] [Fintype TS.Msg] [DecidableEq TS.Msg] [Fintype TS.Sig]
+  [DecidableEq TS.Sig] [Fintype TS.KeyCoins] [Nonempty TS.KeyCoins]
 
 /-- **An adversary of the anonymity game** with `n` honest users and at most `t` queries: on all
 users' key coins and the table `V` of the oracle, a `t`-query adversary posing challenges and
@@ -233,5 +240,7 @@ anonymity hypothesis is satisfiable. -/
 theorem trivial_anonAdvantage (A : AnonAdversary (RingScheme.trivial X Y N) n V t) (Q : ℕ) :
     anonAdvantage A Q = 0 :=
   anonAdvantage_eq_zero_of_eq (fun _ _ => rfl) A Q
+
+end Challenger
 
 end GordieHowe.RingSignature

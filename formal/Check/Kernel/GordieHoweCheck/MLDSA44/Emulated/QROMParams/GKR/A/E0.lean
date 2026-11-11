@@ -6,9 +6,6 @@ module
 public import GordieHoweCerts.Generated.MLDSA44.Emulated.QROMParams.GKR.A
 public import GordieHoweCheck.MLDSA44.Emulated.QROMParams.GKR.A.E0.P0
 public import GordieHoweCheck.MLDSA44.Emulated.QROMParams.GKR.A.E0.P1
-public import GordieHoweCheck.MLDSA44.Emulated.QROMParams.GKR.A.E0.P2
-public import GordieHoweCheck.MLDSA44.Emulated.QROMParams.GKR.A.E0.P3
-public import GordieHoweCheck.MLDSA44.Emulated.QROMParams.GKR.A.E0.P4
 
 @[expose] public section
 
@@ -16,6 +13,6 @@ public import GordieHoweCheck.MLDSA44.Emulated.QROMParams.GKR.A.E0.P4
 
 namespace GordieHowe.Generated.MLDSA44.Emulated.QROMParams.GKR.A
 
-compose_entry cert ar 0 [1, 1024, 6, 1, 1024, 6, 0, 0, 1, 1, 512, 32, 2, 1024, 1]
+compose_entry cert ar 0 [0, 0, 3, 1, 1024, 16, 2, 1, 1]
 
 end GordieHowe.Generated.MLDSA44.Emulated.QROMParams.GKR.A

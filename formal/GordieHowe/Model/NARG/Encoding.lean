@@ -95,9 +95,6 @@ def Simulator.encode (S : Simulator A B Stmt Proof SimCoins) : Simulator X Y Stm
     (P.encode enc).toFn.prove H x w c = P.toFn.prove (enc.decode H) x w c :=
   OracleProg.run_mapQuery _ _ _ _
 
-@[simp] theorem Prover.coins_encode (P : Prover A B Stmt Wit Proof Coins) :
-    (P.encode enc).coins = P.coins := rfl
-
 @[simp] theorem Simulator.toFn_encode_run (S : Simulator A B Stmt Proof SimCoins) (H : X → Y)
     (x : Stmt) (c : SimCoins) :
     (S.encode enc).toFn.run H x c =

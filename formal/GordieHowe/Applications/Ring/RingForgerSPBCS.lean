@@ -45,19 +45,26 @@ section SPBCS
 
 open SPTerm GordieHowe.Ring
 
-variable {k kN kS L e N : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N : ℕ} {TB : BaseTypes}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
   (M : SPBCS Mg P (RingStmt B) k kN kS L e) (Λ : SiteLayout Mg) {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] (E : (j : ι) → (M.comp j).Encoder)
   {Vr : RingStmt B → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : RingWit B → R → CausalProver P τ (RingStmt B))
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {n t : ℕ}
   {rel : Set (RingStmt B × RingWit B)} {Ext : CausalExtractor P τ (RingStmt B) (RingWit B)}
   {St : CausalStateFn P τ (RingStmt B)} {ε : ChIdx P τ → ℝ≥0}
 
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
+  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] in
 /-- **BKM06 Definition 7 for the ring signature compiled by spBCS from
 MU-EUF-CMA^corr**: `insiderForgeProb_le_muEufProb` at spBCS's compiled verifier and
 knowledge bound (`insiderForgeProb_le_spbcs`), for an oracle-free base signer (`hB`) and an
@@ -87,6 +94,7 @@ theorem insiderForgeProb_le_muEufProb_spbcs (hbind : B.BindsRing) (hB : B.Oracle
   exact insiderForgeProb_le_muEufProb hbind hB
     (compiledBy_spbcsProofSystem M Λ E hb honest) K hrel c₀ f₀ A hS Q
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] in
 /-- **The bound of `insiderForgeProb_le_muEufProb_spbcs` with at most `Q` signing and corruption
 requests**:
 the multi-user forger wins with at most `Q` signing and corruption requests
@@ -254,10 +262,17 @@ variable {X₀ W : Type} {rel₀ : Set (X₀ × W)} {C : RealizedProgram.ProofSy
   {SD : C.SimData} {Inp : Type} {relI : Set (X₀ × Inp)} (Hc : C.Honest SD Inp relI)
   {TD : SPBCS.ProofSystemTranscript C} {kS : ℕ} (hb : TD.MergeBounds kS) {pB : ℕ}
   (hf : TD.ProofFormat kS hb pB) {N : ℕ}
-  {TB : BaseTypes} {B : BaseSigner (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40))) (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant)) N TB}
+  {TB : BaseTypes}
+  {B : BaseSigner (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40))) (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant)) N TB}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] [Inhabited W] [DecidableEq X₀]
   (V₀ : StmtVerifiesRing rel₀ relI B adm)
 
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
+  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] in
 /-- **BKM06 Definition 7 for the ring signature of an IOP whose statements verify base signatures of
 `B`, from MU-EUF-CMA^corr**: `GordieHowe.insiderForgeProb_le_muEufProb`
 at the read verifier and its knowledge bound (`StmtVerifiesRing.insiderForgeProb_le`), for an
@@ -286,6 +301,7 @@ theorem insiderForgeProb_le_muEufProb (hbind : B.BindsRing) (hB : B.OracleFree) 
   exact GordieHowe.insiderForgeProb_le_muEufProb hbind hB _ K
     (fun _ _ h => h) c₀ f₀ A hS Q
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] in
 /-- **The bound of `insiderForgeProb_le_muEufProb` with at most `Q` signing and corruption
 requests**:
 the multi-user forger wins with at most `Q` signing and corruption requests

@@ -289,8 +289,7 @@ theorem extractsFreshQFTest_eq [DecidableEq X] (𝒜 : M.SimExtractionAdversary 
 variable (M B) in
 /-- **Weak simulation-sound extractability of the spBCS compiler for query-free tests, in
 Unruh's form** (Unruh 2017, Definition 14, p. 21, eq. (6) with `d = 1`, `p = 1`, weak variant, for
-residual-state tests without oracle queries; the paper's `def:bcs-se` with freshness in both
-experiments): for every finite type `X'` of queried statements, every query-bounded adversary with
+residual-state tests without oracle queries, with freshness in both experiments): for every finite type `X'` of queried statements, every query-bounded adversary with
 at most `tq` queries of its own and every query-free test of its residual state, the probability of
 Unruh's Prove with the test (`acceptsQFTest`) is at most the probability of Unruh's Extract with the
 test at the coherent database extractor (`extractsFreshQFTest`), plus `ε tq Q`. -/
@@ -315,7 +314,7 @@ the unmeasured registers; `dbExtract` returns a witness, the statement is fresh 
 accepts), plus `simExtractionError kq (max_c ε c) q tq Q` with
 `q` the queries of one run of `Sim`. -/
 theorem simulation_sound_extractability_query_free_unruh [DecidableEq X] {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) {Wit : Type}
+    (hkq : M.QueriesAtMost Qs kq) {Wit : Type}
     {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
     {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     (Sim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X (M.Response B)

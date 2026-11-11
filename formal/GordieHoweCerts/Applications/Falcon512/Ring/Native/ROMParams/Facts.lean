@@ -55,34 +55,32 @@ instance : FalconRingSelect program := ⟨⟨rfl, rfl, rfl, rfl, rfl⟩⟩
 
 set_option maxRecDepth 4096 in
 theorem ring_member : ∃ t, (program.predicate 0).body = .equal 0 (.add (.apply (.sum 512)
-    (.mul (.reindex [(0, 1, 512)] (.reindex [(0, 1, 512)] (.leaf 6))) (.reindex [(0, 1, 512)] (.leaf 20))))
-    (.scale (.const 12288) (.mux (.reindex [(5, 0, 1)] (.leaf 7)) (.reindex [(1, 0, 1)] (.ref 20))
+    (.mul (.reindex [(0, 1, 512)] (.reindex [(0, 1, 512)] (.leaf 5))) (.reindex [(0, 1, 512)] (.leaf 21))))
+    (.scale (.const 12288) (.mux (.reindex [(5, 0, 1)] (.leaf 6)) (.reindex [(1, 0, 1)] (.ref 20))
       (.reindex [(0, 0, 1)] (.ref 20))))) (.leaf 1) t := predicate_member_2esigner_body
 
 set_option maxRecDepth 4096 in
-theorem ring_sig : ∃ t, (program.predicate 1).body = .equal 0 (.add (.apply (.ntt 512 10302 .natural)
-    (.add (.leaf 5) (.scale (.const 12288) (.leaf 10)))) (.scale (.const 12288)
-      (.mul (.reindex [(0, 1, 512)] (.reindex [(0, 1, 512)] (.leaf 6)))
-        (.reindex [(0, 1, 512)] (.reindex [(0, 1, 512)] (.apply (.ntt 512 10302 .natural)
-          (.leaf 9))))))) (.leaf 2) t := predicate_signature_2eequation_body
+theorem ring_sig : ∃ t, (program.predicate 1).body =
+    .equal 0 (sigLhs (.add (.leaf 4) (.scale (.const 12288) (.leaf 9))) 5 8 10 23 24 25 12288)
+      (.leaf 1) t := predicate_signature_2eequation_body
 
 set_option maxRecDepth 4096 in
 theorem ring_idxBool :
-    ∃ t, (program.predicate 14).body = .equal 0 (.mul (.leaf 7) (.leaf 7)) (.leaf 7) t := predicate_member_2esigner_2eindex_2eboolean_body
+    ∃ t, (program.predicate 14).body = .equal 0 (.mul (.leaf 6) (.leaf 6)) (.leaf 6) t := predicate_member_2esigner_2eindex_2eboolean_body
 
 set_option maxRecDepth 4096 in
 /-- The membership's facts: the ring `4`, the spectrum `6`, the powers `20`, the zero constant `1`,
 `ψ = 10302`, `−1 = 12288`, the index bits' check `14`. -/
 @[expose] instance : FalconRingMember program where
-  ring := 4
-  spec := 6
-  pow := 20
+  ring := 3
+  spec := 5
+  pow := 21
   zero := 1
   psi := 10302
   mOne := 12288
   idxPred := 14
-  chal := 5
-  s2 := 9
+  chal := 4
+  s2 := 8
   domainField0 := domainField0_checked
   member := ring_member
   idxBool := ring_idxBool
@@ -102,7 +100,7 @@ set_option maxRecDepth 4096 in
   chal_ne_ring := by decide
   fields := by
     intro v hv
-    change v ∈ [0, 1, 4, 6, 7, 8, 20, 21, 5, 9] at hv
+    change v ∈ [0, 1, 3, 5, 6, 7, 21, 22, 4, 8] at hv
     change program.valueField v = 0
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
     rcases hv with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
@@ -119,134 +117,185 @@ set_option maxRecDepth 4096 in
   sizes := ⟨RealizedProgram.valueShape_size value_member_2esigner_2eindex_header.2, RealizedProgram.valueShape_size value_key_2espectrum_header.2, RealizedProgram.valueShape_size value_statement_2ering_header.2, RealizedProgram.valueShape_size value_statement_2ec_header.2, RealizedProgram.valueShape_size value_s2_header.2⟩
   chal0 := ⟨challenge_member_2ering_2egamma_full.2.2.2,
     challenge_member_2ering_2egamma_full.2.1, challenge_member_2ering_2egamma_full.2.2.1⟩
-  isSourceChal_iff := fun j => by
+  isSourceChal_zero := by
     rw [program.isSourceChal_iff_mem_sourceChallengeIds Generated.Falcon512.Ring.Native.ROMParams.conditions.wellFormed,
-      source_challenges, List.mem_singleton]
+      source_challenges]
+    simp
   values_length := value_member_2eone_header.1
   privKinds := ⟨value_key_2espectrum_kind, value_member_2esigner_2eindex_kind, value_s2_kind⟩
 
 set_option maxRecDepth 4096 in
 /-- The native ring's facts outside the membership. -/
 instance : FalconRingBase program where
-  ids := ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  s1 := 9
+  q := 10
+  r := 11
+  rChal := 1
+  one := 0
+  zero1 := 1
+  pw := 23
+  lam := 24
+  rn := 25
+  pwRef := 37
+  r256Ref := 36
+  sigPred := 1
+  sigE := .add (.leaf 4) (.scale (.const 12288) (.leaf 9))
+  nInv := 12265
+  psiInv := 8974
+  consts := ⟨rfl, rfl⟩
+  invConsts := ⟨rfl, rfl⟩
+  sigE_eq := rfl
+  sigELen := rfl
   sig := ring_sig
-  inSource1 := ⟨predicate_signature_2eequation_role.1, program.inSource_of_source predicate_signature_2eequation_role.2⟩
-  const2 := ⟨isConstant_of_kind value_signature_2ezero_kind, by rw [constEntries_of_kind value_signature_2ezero_kind]; rfl⟩
-  chalKind := value_statement_2ec_kind
-  fields := by
+  inSourceSig := ⟨predicate_signature_2eequation_role.1, program.inSource_of_source predicate_signature_2eequation_role.2⟩
+  const0 := ⟨isConstant_of_kind value_signature_2ezero_kind, by rw [constEntries_of_kind value_signature_2ezero_kind]⟩
+  sigFields := by
     intro v hv
-    change v ∈ [2, 5, 9, 10] at hv
+    change v ∈ [1, 10, 23, 24, 25] at hv
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
-    rcases hv with rfl | rfl | rfl | rfl
+    rcases hv with rfl | rfl | rfl | rfl | rfl
     · exact valueShape_field value_signature_2ezero_header.2
-    · exact valueShape_field value_statement_2ec_header.2
-    · exact valueShape_field value_s2_header.2
-    · exact valueShape_field value_signature_2es1_header.2
-  sizes := ⟨valueShape_size value_s2_header.2, valueShape_size value_signature_2es1_header.2, valueShape_size value_statement_2ec_header.2⟩
-  values_length := value_signature_2es1_header.1
+    · exact valueShape_field value_signature_2eQ_header.2
+    · exact valueShape_field value_signature_2eequation_2epublic0_header.2
+    · exact valueShape_field value_signature_2elambda_header.2
+    · exact valueShape_field value_signature_2eequation_2epublic1_header.2
+  sizes := ⟨valueShape_size value_signature_2es1_header.2, valueShape_size value_signature_2eQ_header.2,
+    valueShape_size value_signature_2eequation_2epublic0_header.2,
+    valueShape_size value_signature_2elambda_header.2,
+    valueShape_size value_signature_2eequation_2epublic1_header.2,
+    valueShape_size value_signature_2ezero_header.2⟩
   primeVals := by
     intro v hv
-    change v ∈ [9, 10] at hv
+    change v ∈ [8, 9] at hv
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
     rcases hv with rfl | rfl
-    · exact ⟨valueShape_role value_s2_header.2, valueShape_typeSource value_s2_header.2, value_s2_type.2⟩
-    · exact ⟨valueShape_role value_signature_2es1_header.2, valueShape_typeSource value_signature_2es1_header.2, value_signature_2es1_type.2⟩
-  privKinds := ⟨value_s2_kind, value_signature_2es1_kind⟩
+    · exact ⟨value_s2_header.1, valueShape_role value_s2_header.2, valueShape_typeSource value_s2_header.2, value_s2_type.2⟩
+    · exact ⟨value_signature_2es1_header.1, valueShape_role value_signature_2es1_header.2, valueShape_typeSource value_signature_2es1_header.2, value_signature_2es1_type.2⟩
+  s1Field := valueShape_field value_signature_2es1_header.2
+  s1Priv := value_signature_2es1_kind
+  qPriv := value_signature_2eQ_kind
+  rPow :=
+    { consts := ⟨isConstant_of_kind value_member_2eone_kind,
+        by rw [constEntries_of_kind value_member_2eone_kind]; rfl⟩
+      kind := value_signature_2er_kind
+      chalField := challenge_signature_2er_full.2.2.1
+      fields := ⟨valueShape_field value_member_2eone_header.2, valueShape_field value_signature_2er_header.2⟩
+      sizes := ⟨valueShape_size value_member_2eone_header.2, valueShape_size value_signature_2er_header.2⟩
+      values_pos := value_member_2eone_header.1 }
+  chalR := ⟨challenge_signature_2er_full.2.2.2, challenge_signature_2er_full.2.1⟩
+  isSourceChal_iff := fun j => by
+    rw [program.isSourceChal_iff_mem_sourceChallengeIds Generated.Falcon512.Ring.Native.ROMParams.conditions.wellFormed,
+      source_challenges]
+    simp
+  rChal_ne := by decide
+  pwKind := value_signature_2eequation_2epublic0_definition
+  lamKind := value_signature_2elambda_definition
+  rnKind := value_signature_2eequation_2epublic1_definition
+  refsOrdered := Generated.Falcon512.Ring.Native.ROMParams.conditions.wellFormed.refsOrdered
+  exprs_pos := by rw [exprs_length]; decide
+  powPw := by
+    rw [powSym_congr (agreesBelow_replica expr_table_holds.2 (by decide +kernel)) _ _ _
+      (by decide +kernel)]
+    decide +kernel
+  pow256 := by
+    rw [powSym_congr (agreesBelow_replica expr_table_holds.2 (by decide +kernel)) _ _ _
+      (by decide +kernel)]
+    decide +kernel
 
 set_option maxRecDepth 4096 in
-theorem norm_center : ∃ t, (program.predicate 2).body = .equal 0 (.add (.mul (.ref 21) (.ref 21))
-    (.scale (.const 12288) (.mul (.add (.add (.ref 22) (.scale (.const 64) (.ref 23)))
-      (.scale (.const 4096) (.ref 24))) (.add (.add (.ref 22) (.scale (.const 64) (.ref 23)))
-        (.scale (.const 4096) (.ref 24)))))) (.leaf 3) t := predicate_norm_2ecenter_body
+theorem norm_center : ∃ t, (program.predicate 2).body = .equal 0 (.add (.mul (.ref 38) (.ref 38))
+    (.scale (.const 12288) (.mul (.add (.add (.ref 39) (.scale (.const 64) (.ref 40)))
+      (.scale (.const 4096) (.ref 41))) (.add (.add (.ref 39) (.scale (.const 64) (.ref 40)))
+        (.scale (.const 4096) (.ref 41)))))) (.leaf 2) t := predicate_norm_2ecenter_body
 set_option maxRecDepth 4096 in
-theorem norm_top : ∃ t, (program.predicate 3).body = .equal 0 (.ref 25) (.leaf 1) t := predicate_norm_2etop_body
+theorem norm_top : ∃ t, (program.predicate 3).body = .equal 0 (.ref 42) (.leaf 1) t := predicate_norm_2etop_body
 set_option maxRecDepth 4096 in
-theorem norm_col0 : ∃ real, (program.predicate 4).body = .mod 0 0 (.mul (.ref 26) (.ref 26))
-    (.add (.ref 27) (.scale (.const 64) (.ref 28))) real := by
+theorem norm_col0 : ∃ real, (program.predicate 4).body = .mod 0 0 (.mul (.ref 43) (.ref 43))
+    (.add (.ref 44) (.scale (.const 64) (.ref 45))) real := by
   obtain ⟨real, h, -⟩ := predicate_norm_2ecolumn0_body
   exact ⟨real, h⟩
 set_option maxRecDepth 4096 in
 theorem norm_col1 : ∃ real, (program.predicate 5).body = .mod 0 0
-    (.add (.scale (.const 2) (.mul (.ref 26) (.ref 29))) (.ref 30))
-    (.add (.ref 31) (.scale (.const 64) (.ref 32))) real := by
+    (.add (.scale (.const 2) (.mul (.ref 43) (.ref 46))) (.ref 47))
+    (.add (.ref 48) (.scale (.const 64) (.ref 49))) real := by
   obtain ⟨real, h, -⟩ := predicate_norm_2ecolumn1_body
   exact ⟨real, h⟩
 set_option maxRecDepth 4096 in
 theorem norm_col2 : ∃ real, (program.predicate 6).body = .mod 0 0
-    (.add (.add (.scale (.const 2) (.mul (.ref 26) (.ref 33))) (.mul (.ref 29) (.ref 29)))
-      (.ref 34)) (.add (.ref 35) (.scale (.const 64) (.ref 36))) real := by
+    (.add (.add (.scale (.const 2) (.mul (.ref 43) (.ref 50))) (.mul (.ref 46) (.ref 46)))
+      (.ref 51)) (.add (.ref 52) (.scale (.const 64) (.ref 53))) real := by
   obtain ⟨real, h, -⟩ := predicate_norm_2ecolumn2_body
   exact ⟨real, h⟩
 set_option maxRecDepth 4096 in
 theorem norm_col3 : ∃ real, (program.predicate 7).body = .mod 0 0
-    (.add (.scale (.const 2) (.mul (.ref 29) (.ref 33))) (.ref 37))
-    (.add (.ref 38) (.scale (.const 64) (.ref 39))) real := by
+    (.add (.scale (.const 2) (.mul (.ref 46) (.ref 50))) (.ref 54))
+    (.add (.ref 55) (.scale (.const 64) (.ref 56))) real := by
   obtain ⟨real, h, -⟩ := predicate_norm_2ecolumn3_body
   exact ⟨real, h⟩
 set_option maxRecDepth 4096 in
 theorem norm_col4 : ∃ real, (program.predicate 8).body = .mod 0 0
-    (.add (.mul (.ref 33) (.ref 33)) (.ref 40)) (.add (.ref 41) (.scale (.const 64) (.ref 42)))
+    (.add (.mul (.ref 50) (.ref 50)) (.ref 57)) (.add (.ref 58) (.scale (.const 64) (.ref 59)))
     real := by
   obtain ⟨real, h, -⟩ := predicate_norm_2ecolumn4_body
   exact ⟨real, h⟩
 set_option maxRecDepth 4096 in
-theorem norm_col5 : ∃ real, (program.predicate 9).body = .mod 0 0 (.ref 43) (.ref 44) real := by
+theorem norm_col5 : ∃ real, (program.predicate 9).body = .mod 0 0 (.ref 60) (.ref 61) real := by
   obtain ⟨real, h, -⟩ := predicate_norm_2ecolumn5_body
   exact ⟨real, h⟩
 set_option maxRecDepth 4096 in
 theorem norm_normalize : ∃ real, (program.predicate 10).body = .mod 0 0
-    (.add (.add (.ref 45) (.apply (.batched 102 (.sum 63)) (.ref 46))) (.ref 47))
-    (.add (.leaf 14) (.scale (.const 64) (.ref 48))) real := by
+    (.add (.add (.ref 62) (.apply (.batched 102 (.sum 63)) (.ref 63))) (.ref 64))
+    (.add (.leaf 15) (.scale (.const 64) (.ref 65))) real := by
   obtain ⟨real, h, -⟩ := predicate_norm_2enormalize_body
   exact ⟨real, h⟩
 set_option maxRecDepth 4096 in
 theorem norm_complement : ∃ real, (program.predicate 11).body = .mod 0 0
-    (.add (.add (.ref 49) (.leaf 16)) (.ref 50)) (.add (.leaf 18) (.scale (.const 64) (.leaf 17)))
+    (.add (.add (.ref 66) (.leaf 17)) (.ref 67)) (.add (.leaf 19) (.scale (.const 64) (.leaf 18)))
     real := by
   obtain ⟨real, h, -⟩ := predicate_norm_2ecomplement_body
   exact ⟨real, h⟩
 set_option maxRecDepth 4096 in
 theorem norm_dcBool : ∃ t, (program.predicate 15).body =
-    .equal 0 (.mul (.leaf 17) (.leaf 17)) (.leaf 17) t := predicate_norm_2eDc_2eboolean_body
+    .equal 0 (.mul (.leaf 18) (.leaf 18)) (.leaf 18) t := predicate_norm_2eDc_2eboolean_body
 set_option maxRecDepth 4096 in
 theorem norm_encB : ∃ t, (program.predicate 16).body =
-    .equal 0 (.mul (.ref 54) (.ref 54)) (.ref 54) t := predicate_enc_2eb_2eboolean_body
+    .equal 0 (.mul (.ref 71) (.ref 71)) (.ref 71) t := predicate_enc_2eb_2eboolean_body
 set_option maxRecDepth 4096 in
-theorem norm_rangeA : ∃ real, (program.predicate 17).body = .mem 0 [.leaf 11] (.range 64) real := predicate_norm_2ea_body
+theorem norm_rangeA : ∃ real, (program.predicate 17).body = .mem 0 [.leaf 12] (.range 64) real := predicate_norm_2ea_body
 set_option maxRecDepth 4096 in
-theorem norm_rangeSq : ∃ real, (program.predicate 18).body = .mem 0 [.leaf 12] (.range 64) real := predicate_norm_2esq_body
+theorem norm_rangeSq : ∃ real, (program.predicate 18).body = .mem 0 [.leaf 13] (.range 64) real := predicate_norm_2esq_body
 set_option maxRecDepth 4096 in
-theorem norm_rangeCc : ∃ real, (program.predicate 19).body = .mem 0 [.leaf 13] (.range 189) real := predicate_norm_2ecc_body
+theorem norm_rangeCc : ∃ real, (program.predicate 19).body = .mem 0 [.leaf 14] (.range 189) real := predicate_norm_2ecc_body
 set_option maxRecDepth 4096 in
-theorem norm_rangeNd : ∃ real, (program.predicate 20).body = .mem 0 [.leaf 14] (.range 64) real := predicate_norm_2end_body
+theorem norm_rangeNd : ∃ real, (program.predicate 20).body = .mem 0 [.leaf 15] (.range 64) real := predicate_norm_2end_body
 set_option maxRecDepth 4096 in
-theorem norm_rangeNc : ∃ real, (program.predicate 21).body = .mem 0 [.leaf 15] (.range 64) real := predicate_norm_2enc_body
+theorem norm_rangeNc : ∃ real, (program.predicate 21).body = .mem 0 [.leaf 16] (.range 64) real := predicate_norm_2enc_body
 set_option maxRecDepth 4096 in
-theorem norm_rangeD : ∃ real, (program.predicate 22).body = .mem 0 [.leaf 16] (.range 64) real := predicate_norm_2eD_body
+theorem norm_rangeD : ∃ real, (program.predicate 22).body = .mem 0 [.leaf 17] (.range 64) real := predicate_norm_2eD_body
 set_option maxRecDepth 4096 in
-theorem norm_high : ∃ real, (program.predicate 23).body = .mem 0 [.ref 51] (.range 16) real := predicate_enc_2ehigh_body
+theorem norm_high : ∃ real, (program.predicate 23).body = .mem 0 [.ref 68] (.range 16) real := predicate_enc_2ehigh_body
 set_option maxRecDepth 4096 in
 theorem norm_slack : ∃ real, (program.predicate 24).body =
-    .mem 0 [.add (.scale (.const 12288) (.apply (.sum 512) (.ref 51))) (.leaf 19)] (.range 393)
+    .mem 0 [.add (.scale (.const 12288) (.apply (.sum 512) (.ref 68))) (.leaf 20)] (.range 393)
       real := predicate_enc_2eslack_body
 
 /-- The norm's index maps of the batches (`6426` entries, decided coordinate by coordinate). -/
-theorem norm_i70_entry : ∀ b < 17, ∀ m < 6, ∀ s < 63, idx49.entry ((6 * b + m) * 63 + s) =
+theorem norm_i70_entry : ∀ b < 17, ∀ m < 6, ∀ s < 63, idx50.entry ((6 * b + m) * 63 + s) =
     if 63 * b + s < 1024 then 6 * (63 * b + s) + m else 6144 := by
-  rw [idx49_eq]
+  rw [idx50_eq]
   decide +kernel
 
 /-- The coefficient and first two digit index maps of the norm. -/
-theorem norm_linear_entries : ∀ i < 1024, idx33.entry i = i ∧
-    idx34.entry i = 3 * i ∧ idx35.entry i = 3 * i + 1 := by
-  rw [idx33_eq, idx34_eq, idx35_eq]
+theorem norm_linear_entries : ∀ i < 1024, idx34.entry i = i ∧
+    idx35.entry i = 3 * i ∧ idx36.entry i = 3 * i + 1 := by
+  rw [idx34_eq, idx35_eq, idx36_eq]
   decide +kernel
 
 /-- The first three digit columns and their carry index maps. -/
-theorem norm_digit_entries : ∀ i < 1024, idx37.entry i = 6 * i ∧ idx38.entry i = 5 * i ∧
-    idx39.entry i = 6 * i + 1 ∧ idx40.entry i = 5 * i + 1 ∧
-    idx41.entry i = 6 * i + 2 ∧ idx42.entry i = 5 * i + 2 := by
-  rw [idx37_eq, idx38_eq, idx39_eq, idx40_eq, idx41_eq, idx42_eq]
+theorem norm_digit_entries : ∀ i < 1024, idx38.entry i = 6 * i ∧ idx39.entry i = 5 * i ∧
+    idx40.entry i = 6 * i + 1 ∧ idx41.entry i = 5 * i + 1 ∧
+    idx42.entry i = 6 * i + 2 ∧ idx43.entry i = 5 * i + 2 := by
+  rw [idx38_eq, idx39_eq, idx40_eq, idx41_eq, idx42_eq, idx43_eq]
   decide +kernel
 
 set_option maxRecDepth 4096 in
@@ -255,54 +304,54 @@ set_option maxRecDepth 4096 in
   dA := 0
   fA := 0
   domainField := domainField0_checked
-  s2 := 9
-  s1 := 10
-  a := 11
-  sq := 12
-  cc := 13
-  nd := 14
-  nc := 15
-  D := 16
-  Dc := 17
-  tgt := 18
-  off := 19
+  s2 := 8
+  s1 := 9
+  a := 12
+  sq := 13
+  cc := 14
+  nd := 15
+  nc := 16
+  D := 17
+  Dc := 18
+  tgt := 19
+  off := 20
   z1 := 1
-  z := 3
-  e0 := 21
+  z := 2
+  e0 := 38
   p0 := 2
-  eMax := 54
+  eMax := 71
   pDc := 15
   pEncB := 16
   pRange := 17
   pHigh := 23
   pSlack := 24
-  eHigh := 51
-  eMid := 53
-  eB := 54
-  iHigh := idx54
-  iMid := idx55
-  i52 := idx33
-  i54 := idx34
-  i55 := idx35
-  i56 := idx36
+  eHigh := 68
+  eMid := 70
+  eB := 71
+  iHigh := idx55
+  iMid := idx56
+  i52 := idx34
+  i54 := idx35
+  i55 := idx36
+  i56 := idx37
   i57 := idx17
-  i58 := idx37
-  i59 := idx38
-  i60 := idx39
-  i61 := idx40
-  i62 := idx41
-  i63 := idx42
-  i64 := idx43
-  i65 := idx44
-  i66 := idx45
-  i67 := idx46
-  i68 := idx47
-  i69 := idx48
-  i70 := idx49
-  i71 := idx50
-  i72 := idx51
-  i73 := idx52
-  i74 := idx53
+  i58 := idx38
+  i59 := idx39
+  i60 := idx40
+  i61 := idx41
+  i62 := idx42
+  i63 := idx43
+  i64 := idx44
+  i65 := idx45
+  i66 := idx46
+  i67 := idx47
+  i68 := idx48
+  i69 := idx49
+  i70 := idx50
+  i71 := idx51
+  i72 := idx52
+  i73 := idx53
+  i74 := idx54
   refsOrdered := Generated.Falcon512.Ring.Native.ROMParams.conditions.wellFormed.refsOrdered
   inSource_A := by
     intro v hv
@@ -382,7 +431,7 @@ set_option maxRecDepth 4096 in
   exprs_enc := ⟨expr_enc_2eb_2eboolean_2eshape_2eright_2eshared_2esecond_2efirst_eq, expr_enc_2eb_2eboolean_2eshape_2eright_2eshared_2efirst_eq, expr_enc_2eb_2eboolean_2eshape_2eright_eq⟩
   norm_le := by decide
   enc_le := by decide
-  idx_enc := by rw [idx54_eq, idx55_eq]; decide +kernel
+  idx_enc := by rw [idx55_eq, idx56_eq]; decide +kernel
   exprs_length := by
     apply program.expr_lt_of_ne_default
     rw [expr_enc_2eb_2eboolean_2eshape_2eright_eq]
@@ -391,7 +440,7 @@ set_option maxRecDepth 4096 in
   sizes_A := ⟨valueShape_size value_s2_header.2, valueShape_size value_signature_2es1_header.2, valueShape_size value_norm_2ea_header.2, valueShape_size value_norm_2esq_header.2, valueShape_size value_norm_2ecc_header.2, valueShape_size value_norm_2end_header.2, valueShape_size value_norm_2enc_header.2, valueShape_size value_norm_2eD_header.2, valueShape_size value_norm_2eDc_header.2, valueShape_size value_member_2ezero_header.2, valueShape_size value_norm_2ecenter_2ezero_header.2⟩
   primeA_all := by
     intro v hv
-    change v ∈ [9, 10, 11, 12, 13, 14, 15, 16] at hv
+    change v ∈ [8, 9, 12, 13, 14, 15, 16, 17] at hv
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
     rcases hv with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
     · exact ⟨value_s2_header.1, valueShape_role value_s2_header.2, valueShape_typeSource value_s2_header.2, value_s2_type.2, valueShape_field value_s2_header.2, isConstant_of_priv value_s2_kind⟩
@@ -413,56 +462,60 @@ set_option maxRecDepth 4096 in
       obtain ⟨hm, he⟩ := sourceRoleTable_mem hr
       rw [Generated.Falcon512.Ring.Native.ROMParams.SourceRoles.roles_eq] at hm
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hm
-      rcases hm with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-      · change 4 = v at he
+      rcases hm with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+      · change 3 = v at he
         subst v
         rw [value_statement_2ering_kind] at hk
         contradiction
-      · change 5 = v at he
+      · change 4 = v at he
         subst v
         rw [value_statement_2ec_kind] at hk
         contradiction
-      · change 6 = v at he
+      · change 5 = v at he
         subst v
         rw [value_key_2espectrum_kind] at hk
         contradiction
-      · change 7 = v at he
+      · change 6 = v at he
         subst v
         rw [value_member_2esigner_2eindex_kind] at hk
         contradiction
-      · change 9 = v at he
+      · change 8 = v at he
         subst v
         rw [value_s2_kind] at hk
         contradiction
-      · change 10 = v at he
+      · change 9 = v at he
         subst v
         rw [value_signature_2es1_kind] at hk
         contradiction
-      · change 11 = v at he
+      · change 10 = v at he
         subst v
-        rw [value_norm_2ea_kind] at hk
+        rw [value_signature_2eQ_kind] at hk
         contradiction
       · change 12 = v at he
         subst v
-        rw [value_norm_2esq_kind] at hk
+        rw [value_norm_2ea_kind] at hk
         contradiction
       · change 13 = v at he
         subst v
-        rw [value_norm_2ecc_kind] at hk
+        rw [value_norm_2esq_kind] at hk
         contradiction
       · change 14 = v at he
         subst v
-        rw [value_norm_2end_kind] at hk
+        rw [value_norm_2ecc_kind] at hk
         contradiction
       · change 15 = v at he
         subst v
-        rw [value_norm_2enc_kind] at hk
+        rw [value_norm_2end_kind] at hk
         contradiction
       · change 16 = v at he
         subst v
-        rw [value_norm_2eD_kind] at hk
+        rw [value_norm_2enc_kind] at hk
         contradiction
       · change 17 = v at he
+        subst v
+        rw [value_norm_2eD_kind] at hk
+        contradiction
+      · change 18 = v at he
         subst v
         rw [value_norm_2eDc_kind] at hk
         contradiction
@@ -477,38 +530,38 @@ set_option maxRecDepth 4096 in
   i52_entry := fun i hi => (norm_linear_entries i hi).1
   i54_entry := fun i hi => (norm_linear_entries i hi).2.1
   i55_entry := fun i hi => (norm_linear_entries i hi).2.2
-  i56_entry := by rw [idx36_eq]; decide +kernel
+  i56_entry := by rw [idx37_eq]; decide +kernel
   i58_entry := fun i hi => (norm_digit_entries i hi).1
   i59_entry := fun i hi => (norm_digit_entries i hi).2.1
   i60_entry := fun i hi => (norm_digit_entries i hi).2.2.1
   i61_entry := fun i hi => (norm_digit_entries i hi).2.2.2.1
   i62_entry := fun i hi => (norm_digit_entries i hi).2.2.2.2.1
   i63_entry := fun i hi => (norm_digit_entries i hi).2.2.2.2.2
-  i64_entry := by rw [idx43_eq]; decide +kernel
-  i65_entry := by rw [idx44_eq]; decide +kernel
-  i66_entry := by rw [idx45_eq]; decide +kernel
-  i67_entry := by rw [idx46_eq]; decide +kernel
-  i68_entry := by rw [idx47_eq]; decide +kernel
-  i52_size := by rw [idx33_eq]; decide +kernel
-  i54_size := by rw [idx34_eq]; decide +kernel
-  i55_size := by rw [idx35_eq]; decide +kernel
-  i56_size := by rw [idx36_eq]; decide +kernel
-  i67_size := by rw [idx46_eq]; decide +kernel
-  i69_entry := by rw [idx48_eq]; decide +kernel
-  i71_entry := by rw [idx50_eq]; decide +kernel
-  i72_entry := by rw [idx51_eq]; decide +kernel
-  i73_entry := by rw [idx52_eq]; decide +kernel
-  i74_entry := by rw [idx53_eq]; decide +kernel
+  i64_entry := by rw [idx44_eq]; decide +kernel
+  i65_entry := by rw [idx45_eq]; decide +kernel
+  i66_entry := by rw [idx46_eq]; decide +kernel
+  i67_entry := by rw [idx47_eq]; decide +kernel
+  i68_entry := by rw [idx48_eq]; decide +kernel
+  i52_size := by rw [idx34_eq]; decide +kernel
+  i54_size := by rw [idx35_eq]; decide +kernel
+  i55_size := by rw [idx36_eq]; decide +kernel
+  i56_size := by rw [idx37_eq]; decide +kernel
+  i67_size := by rw [idx47_eq]; decide +kernel
+  i69_entry := by rw [idx49_eq]; decide +kernel
+  i71_entry := by rw [idx51_eq]; decide +kernel
+  i72_entry := by rw [idx52_eq]; decide +kernel
+  i73_entry := by rw [idx53_eq]; decide +kernel
+  i74_entry := by rw [idx54_eq]; decide +kernel
   i57_entry := by rw [idx17_eq]; decide +kernel
   i70_entry := norm_i70_entry
-  idx_sizes := by rw [idx48_eq, idx49_eq, idx50_eq, idx51_eq, idx52_eq, idx53_eq]; decide +kernel
+  idx_sizes := by rw [idx49_eq, idx50_eq, idx51_eq, idx52_eq, idx53_eq, idx54_eq]; decide +kernel
 
 
 /-- The honest norm's source cells are private by their checked kinds. -/
 instance : FalconNormHonest program where
   privCell := by
     intro v h
-    change v ∈ [9, 10, 11, 12, 13, 14, 15, 16, 17] at h
+    change v ∈ [8, 9, 12, 13, 14, 15, 16, 17, 18] at h
     simp only [List.mem_cons, List.not_mem_nil, or_false] at h
     rcases h with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
     · exact Generated.Falcon512.Ring.Native.ROMParams.conditions.wellFormed.privCellB_of_kind_priv value_s2_header.1 value_s2_kind
@@ -526,9 +579,9 @@ instance : FalconRingRoleFacts program where
   roles := by decide +kernel
   privCell := by
     intro p h
-    change p ∈ [(6, .spec), (7, .bit), (9, .nat .s2), (10, .nat .s1), (11, .nat .a), (12, .nat .sq), (13, .nat .cc), (14, .nat .nd), (15, .nat .nc), (16, .nat .D), (17, .nat .Dc)] at h
+    change p ∈ [(5, .spec), (6, .bit), (8, .nat .s2), (9, .nat .s1), (12, .nat .a), (13, .nat .sq), (14, .nat .cc), (15, .nat .nd), (16, .nat .nc), (17, .nat .D), (18, .nat .Dc), (10, .nat .quot)] at h
     simp only [List.mem_cons, List.not_mem_nil, or_false] at h
-    rcases h with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    rcases h with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
     · exact Generated.Falcon512.Ring.Native.ROMParams.conditions.wellFormed.privCellB_of_kind_priv value_key_2espectrum_header.1 value_key_2espectrum_kind
     · exact Generated.Falcon512.Ring.Native.ROMParams.conditions.wellFormed.privCellB_of_kind_priv value_member_2esigner_2eindex_header.1 value_member_2esigner_2eindex_kind
     · exact Generated.Falcon512.Ring.Native.ROMParams.conditions.wellFormed.privCellB_of_kind_priv value_s2_header.1 value_s2_kind
@@ -540,6 +593,7 @@ instance : FalconRingRoleFacts program where
     · exact Generated.Falcon512.Ring.Native.ROMParams.conditions.wellFormed.privCellB_of_kind_priv value_norm_2enc_header.1 value_norm_2enc_kind
     · exact Generated.Falcon512.Ring.Native.ROMParams.conditions.wellFormed.privCellB_of_kind_priv value_norm_2eD_header.1 value_norm_2eD_kind
     · exact Generated.Falcon512.Ring.Native.ROMParams.conditions.wellFormed.privCellB_of_kind_priv value_norm_2eDc_header.1 value_norm_2eDc_kind
+    · exact Generated.Falcon512.Ring.Native.ROMParams.conditions.wellFormed.privCellB_of_kind_priv value_signature_2eQ_header.1 value_signature_2eQ_kind
 
 /-- The native strategy's predicate coverage follows from the checked complete count and
 ownership facts for the two realization predicates. -/

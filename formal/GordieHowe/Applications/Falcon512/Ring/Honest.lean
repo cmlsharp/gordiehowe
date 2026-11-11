@@ -86,10 +86,12 @@ end RingIn
 
 /-- **The roles of the honest naturals of the Falcon rings' source values**: the native rings'
 `s2`, `signature.s1` and the norm's digits and carries; the carriers' `s2` and `signature.s1` (the
-same naturals), the magnitudes of `s2`, their low parts, and the digits of the values bound to
-their digits (the quotient, the magnitudes of `s1`, the norm). -/
+same naturals), the high half of `h · s2`, the magnitudes of `s2`, their low parts, and the digits
+of the values bound to their digits (the quotient, the magnitudes of `s1`, the norm). -/
 inductive NatRole
   | s2 | s1 | a | sq | cc | nd | nc | D | Dc
+  | quot
+  | high
   | mag2 | low2
   | quotD (k : ℕ)
   | mag1D (k : ℕ)
@@ -132,7 +134,26 @@ noncomputable def budget : ℕ := 50176 - ∑ i : Fin 512, (mag2 w i - mag2 w i 
 -- spec-side
 noncomputable def squares : ℕ := ∑ i : Fin 512, mag1 w i ^ 2 + ∑ i : Fin 512, mag2 w i ^ 2
 
+/-- **The carriers' high half of `h · s2`** (`signature.Q`, `falcon_ring.h`'s
+`carrier_signature_relation`): coefficient `j < 511` of the high half of the product of the key and
+`s2` over the naturals, `Σ_{i + k = 512 + j} h_i s2_k` (below `p`, so the field's high half,
+`Ops.high`). -/
+-- spec-side
+noncomputable def high (j : ℕ) : ℕ :=
+  if j < 511 then ∑ i : Fin 512, ∑ k : Fin 512,
+    if (i : ℕ) + k = j + 512 then (Falcon512.coeff w.h i).val * w.nS2 k else 0 else 0
+
 end Carrier
+
+/-! ### The native rings' quotient -/
+
+/-- **The native rings' honest quotient** of the signature equation by `X^512 + 1`
+(`signature.Q`, `falcon_ring.h`'s `native_signature_relation`): coefficient `j < 511` of the high
+half of `h · s2`, `Σ_{i + k = 512 + j} h_i s2_k`, reduced mod `q`. -/
+-- spec-side
+noncomputable def nativeQuotN (w : NormIn) (j : ℕ) : ℕ :=
+  if j < 511 then (∑ i : Fin 512, ∑ k : Fin 512,
+    if (i : ℕ) + k = j + 512 then (Falcon512.coeff w.h i).val * w.nS2 k else 0) % 12289 else 0
 
 /-- **The honest naturals of a role** at a signature. -/
 -- spec-side
@@ -146,6 +167,8 @@ noncomputable def NatRole.natOf : NatRole → NormIn → ℕ → ℕ
   | .nc, w => w.nNc
   | .D, w => w.nD
   | .Dc, w => w.nDc
+  | .quot, w => nativeQuotN w
+  | .high, w => Carrier.high w
   | .mag2, w => Carrier.mag2 w
   | .low2, w => fun j => Carrier.mag2 w j % 128
   | .quotD k, w => fun j => Carrier.quot w j / 2048 ^ k % 2048
@@ -580,13 +603,16 @@ end Generic
 section Native
 
 variable (program : RealizedProgram) [FalconNorm program] [FalconNormHonest program]
+  [FalconRingPowers program] [FalconRingSelect program] [FalconRingMember program]
+  [FalconRingBase program]
 
-/-- **The native values with honest naturals**: the norm's values. -/
+/-- **The native values with honest naturals**: the norm's values and the signature equation's
+quotient `signature.Q`. -/
 def nativeRoles : List (ℕ × NatRole) :=
   [(FalconNorm.s2 program, .s2), (FalconNorm.s1 program, .s1),
     (FalconNorm.a program, .a), (FalconNorm.sq program, .sq), (FalconNorm.cc program, .cc),
     (FalconNorm.nd program, .nd), (FalconNorm.nc program, .nc), (FalconNorm.D program, .D),
-    (FalconNorm.Dc program, .Dc)]
+    (FalconNorm.Dc program, .Dc), (FalconRandomPoint.q program, .quot)]
 
 variable {program}
 
@@ -595,26 +621,24 @@ variable (program) in
 instance nativeRolesInst : FalconRingRoles program where
   natRoles := nativeRoles program
 
-variable [FalconRingPowers program] [FalconRingSelect program] [FalconRingMember program]
-
 variable (program) in
 /-- **The program facts of a native Falcon ring's honest strategy** (decided per program): domain
-`0` of field `0` holds the norm; the norm reads `s2` (value `9`) and `signature.s1` (value `10`);
-every source predicate is the membership, the signature equation, the index bits' check or one of
-the norm's and the encoding's. -/
+`0` of field `0` holds the norm; the norm reads the ring's `s2` and `signature.s1`; every source
+predicate is the membership, the signature equation, the index bits' check or one of the norm's
+and the encoding's. -/
 class FalconRingHonest : Prop where
   /-- The norm's domain is `0`. -/
   dA_eq : FalconNorm.dA program = 0
   /-- The norm's field is `0`. -/
   fA_eq : FalconNorm.fA program = 0
-  /-- The norm reads `s2` (value `9`) and `signature.s1` (value `10`). -/
-  s2_eq : FalconNorm.s2 program = 9
-  /-- `signature.s1` is value `10`. -/
-  s1_eq : FalconNorm.s1 program = 10
+  /-- The norm reads the ring's `s2`. -/
+  s2_eq : FalconNorm.s2 program = FalconRingMember.s2 program
+  /-- The norm reads `signature.s1`. -/
+  s1_eq : FalconNorm.s1 program = FalconRingBase.s1 program
   /-- Every source predicate is the membership, the signature equation, the index bits' check or
   one of the norm's and the encoding's. -/
   cover : ∀ q < program.predicates.length, program.inSource (program.predicate q) = true →
-    q ∈ [0, 1, 14] ∨
+    q ∈ [0, FalconRandomPoint.sigPred program, FalconRingMember.idxPred program] ∨
     q ∈ [FalconNorm.p0 program, FalconNorm.p0 program + 1, FalconNorm.p0 program + 2,
       FalconNorm.p0 program + 3, FalconNorm.p0 program + 4, FalconNorm.p0 program + 5,
       FalconNorm.p0 program + 6, FalconNorm.p0 program + 7, FalconNorm.p0 program + 8,
@@ -656,7 +680,7 @@ attribute [local instance] ringField_base
 
 section Holds
 
-variable [FalconRingBase program] [AField (I 0)] [AField (I (FalconNorm.fA program))]
+variable [AField (I 0)] [AField (I (FalconNorm.fA program))]
   (y : RingIn G) {c : ∀ k, (program.layout I).Ch k} {π : (program.layout I).Pads}
 
 set_option hygiene false in
@@ -669,59 +693,99 @@ theorem leaf_native_env {v : ℕ} {r : NatRole} (hr : (v, r) ∈ nativeRoles pro
     program.evalE (program.reader env) 0 (.leaf v) j = ((r.natOf y.normIn j : ℕ) : (I 0).K) :=
   leaf_nat_env y (mem_nativeRoles hr) hf hj
 
-/-- **The signature equation holds on the honest values**: the honest `s1` is `c − h · s2`, so the
-transform of `c − s1` is the signer's key's transform times the transform of `s2`
-(`GordieHowe.Falcon512.NativeAlgebraCircuit.Honest.honestSignature_eq`, `DFT.negSpectrum_negacyclicConvCoeff`). -/
-theorem sig_honest : program.HoldsAt env (program.predicate 1).body := by
-  obtain ⟨t, hb⟩ := FalconRingBase.sig (program := program)
-  rw [RealizedProgram.HoldsAt, hb]
-  refine holdsWith_equal0_of fun k hk => ?_
-  rw [exprLen_sigLhs] at hk
-  have hspec' := specOf_env (c := c) (π := π) y hk
-  rw [evalE_sigLhs _ hk, evalE_leaf2 _ hk, hspec', sub_eq_zero]
-  have hs2 : ∀ j < 512, s2Of env j = ((y.normIn.nS2 j : ℕ) : (I 0).K) := fun j hj => by
+/-- **The cast of the honest quotient** is the high half of `h · s2` in a field of characteristic
+`q`. -/
+theorem quotN_cast [CharP (I 0).K 12289] (w : NormIn) {j : ℕ} (hj : j < 511) :
+    ((nativeQuotN w j : ℕ) : (I 0).K) = Ops.high 512
+      (fun i => if hi : i < 512 then Native.Rows.keyVec (F := (I 0).K) w.h ⟨i, hi⟩ else 0)
+      (fun k => ((w.nS2 k : ℕ) : (I 0).K)) j := by
+  rw [nativeQuotN, if_pos hj, ← CharP.cast_eq_mod, Ops.high, Nat.cast_sum]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  rw [Nat.cast_sum]
+  refine Finset.sum_congr rfl fun k _ => ?_
+  split_ifs with h1 h2
+  · rw [Nat.cast_mul]
+    rfl
+  · exact absurd i.isLt h2
+  · exact Nat.cast_zero
+
+/-- **The signature equation holds on the honest values**: the signature equation's polynomial is
+`0`. The honest spectrum is the transform of the signer's key `h`, so its interpolation is `h`; the
+honest `s1` is `c − h · s2` (`GordieHowe.Falcon512.NativeAlgebraCircuit.Honest.honestSignature_eq`)
+and the honest `Q` the high half of `h · s2`, so `h · s2 = (c − s1) + (X^512 + 1) Q` over the
+field (`Ops.polyOf_mul_polyOf`). -/
+theorem sig_honest : program.HoldsAt env (program.predicate (FalconRandomPoint.sigPred program)).body := by
+  rw [holdsAt_sig_iff]
+  suffices h0 : sigPoly env = 0 by rw [h0, Polynomial.eval_zero]
+  set kF : ℕ → (I 0).K := fun i =>
+    if hi : i < 512 then Native.Rows.keyVec (F := (I 0).K) y.normIn.h ⟨i, hi⟩ else 0 with hkF
+  set sF : ℕ → (I 0).K := fun j => ((y.normIn.nS2 j : ℕ) : (I 0).K) with hsF
+  have hs2 : ∀ j < 512, s2Of env j = sF j := fun j hj => by
     unfold s2Of
-    rw [(FalconRingBase.ids (program := program)).2.2.2.2.2.2.2]
-    have h9 := FalconRingHonest.s2_eq (program := program)
-    have hr : (9, NatRole.s2) ∈ nativeRoles program := by rw [← h9]; simp [nativeRoles]
-    exact leaf_native_env y hr ((FalconRingBase.fields (program := program)) 9 (by simp))
-      (by rw [(FalconRingBase.sizes (program := program)).1]; exact hj)
+    have hr : (FalconRingMember.s2 program, NatRole.s2) ∈ nativeRoles program := by
+      rw [← FalconRingHonest.s2_eq (program := program)]; simp [nativeRoles]
+    exact leaf_native_env y hr ((FalconRingMember.fields (program := program)) _ (by simp))
+      (by rw [(FalconRingMember.sizes (program := program)).2.2.2.2]; exact hj)
   have hs1 : ∀ j < 512, s1Of env j = ((y.normIn.nS1 j : ℕ) : (I 0).K) := fun j hj => by
     unfold s1Of
-    have h10 := FalconRingHonest.s1_eq (program := program)
-    have hr : (10, NatRole.s1) ∈ nativeRoles program := by rw [← h10]; simp [nativeRoles]
-    exact leaf_native_env y hr ((FalconRingBase.fields (program := program)) 10 (by simp))
-      (by rw [(FalconRingBase.sizes (program := program)).2.1]; exact hj)
-  have hψ := Native.psiF_pow (I 0).K
-  rw [nttNatural_eq_negSpectrum _ ⟨k, hk⟩, nttNatural_eq_negSpectrum _ ⟨k, hk⟩]
+    have hr : (FalconRingBase.s1 program, NatRole.s1) ∈ nativeRoles program := by
+      rw [← FalconRingHonest.s1_eq (program := program)]; simp [nativeRoles]
+    exact leaf_native_env y hr (FalconRingBase.s1Field (program := program))
+      (by rw [(FalconRingBase.sizes (program := program)).1]; exact hj)
+  have hq : ∀ j < 511, qOf env j = Ops.high 512 kF sF j := fun j hj => by
+    unfold qOf
+    have hr : (FalconRandomPoint.q program, NatRole.quot) ∈ nativeRoles program := by
+      simp [nativeRoles]
+    rw [leaf_native_env y hr ((FalconRandomPoint.sigFields (program := program)) _ (by simp))
+      (by rw [(FalconRingBase.sizes (program := program)).2.1]; exact hj)]
+    exact quotN_cast (I := I) y.normIn hj
+  -- the signature equation: c − s1 = h · s2 in the negacyclic ring
   have hst : (env).stmt = stmtOf (program := program) (I := I) y.x := rfl
-  rw [hst]
-  have hconv : (fun j : Fin falcon512.n => chalEntry (stmtOf (program := program) (I := I) y.x) j -
-      s1Of env j) = LatticeCrypto.negacyclicConvCoeff
-        (Native.Rows.keyVec (F := (I 0).K) y.normIn.h)
-        (fun j : Fin falcon512.n => ((y.normIn.nS2 j : ℕ) : (I 0).K)) := by
-    funext j
-    rw [chalEntry_stmtOf, hs1 j j.isLt, NormIn.nS1_fin,
-      Falcon512.NativeAlgebraCircuit.Honest.honestSignature_eq (F := (I 0).K) y.normIn.h y.normIn.c y.normIn.s2 j]
-    simp only [NormIn.nS2_fin]
+  have hc : ∀ j < 512, chalEntry (env).stmt j - s1Of env j = Ops.negacyclic 512 kF sF j :=
+    fun j hj => by
+    rw [hst, chalEntry_stmtOf y.x ⟨j, hj⟩, hs1 j hj]
+    have hn1 := NormIn.nS1_fin y.normIn ⟨j, hj⟩
+    simp only at hn1
+    rw [hn1, Falcon512.NativeAlgebraCircuit.Honest.honestSignature_eq (F := (I 0).K) y.normIn.h
+      y.normIn.c y.normIn.s2 ⟨j, hj⟩, Ops.negacyclic, Ops.ofFin_of_lt _ hj]
+    have hk : Ops.toFin 512 kF = Native.Rows.keyVec (F := (I 0).K) y.normIn.h := funext fun i => by
+      rw [Ops.toFin_apply, hkF]
+      exact dif_pos i.isLt
+    have hs : Ops.toFin 512 sF =
+        fun i => ((Falcon512.EmulatedAlgebraCircuit.Honest.s₂Coeffs (P := falcon512) y.normIn.s2 i : ℕ) :
+          (I 0).K) := funext fun i => by
+      rw [Ops.toFin_apply, hsF]
+      exact congrArg _ (NormIn.nS2_fin y.normIn i)
+    rw [hk, hs]
     unfold RingIn.normIn
-    ring
-  have hs2' : (fun j : Fin falcon512.n => s2Of env j) =
-      fun j : Fin falcon512.n => ((y.normIn.nS2 j : ℕ) : (I 0).K) := funext fun j => hs2 j j.isLt
-  have hspec : specK program y k = DFT.negSpectrum (psiF (I 0).K)
-      (Native.Rows.keyVec (F := (I 0).K) y.normIn.h) ⟨k, hk⟩ := by
-    unfold specK
-    rw [(FalconRingBase.ids (program := program)).2.2.2.1, nttNatural_eq_negSpectrum _ ⟨k, hk⟩]
-    congr 1
-    funext j
-    rw [keyEntry_add]
+    rw [sub_sub_cancel]
     rfl
-  have e1 := congrArg (fun f => f ⟨k, hk⟩)
-    (DFT.negSpectrum_negacyclicConvCoeff hψ (Native.Rows.keyVec (F := (I 0).K) y.normIn.h)
-      (fun j : Fin falcon512.n => ((y.normIn.nS2 j : ℕ) : (I 0).K)))
-  simp only [Pi.mul_apply] at e1
-  rw [hconv, hs2', hspec]
-  exact e1
+  -- the spectrum's interpolation is the signer's key
+  have hψ : IsPrimitiveRoot ((I 0).decode 10302) (2 * 512) := by
+    rw [decode_psi']
+    exact Native.isPrimitiveRoot_psiF (I 0).K
+  have hn0 : ((512 : ℕ) : (I 0).K) ≠ 0 := Native.natCast_n_ne_zero (I 0).K
+  have hI : ∀ i < 512, Ops.inverseNttNatural 512 ((I 0).decode 10302) (specOf env) i = kF i :=
+    fun i hi => by
+    have hsp : Ops.inverseNttNatural 512 ((I 0).decode 10302) (specOf env) i =
+        Ops.inverseNttNatural 512 ((I 0).decode 10302) (Ops.nttNatural 512 ((I 0).decode 10302) kF) i := by
+      unfold Ops.inverseNttNatural
+      rw [if_pos hi, if_pos hi]
+      congr 2
+      funext m
+      congr 1
+      rw [specOf_env (c := c) (π := π) y m.isLt, specK, (FalconRingBase.consts (program := program)).2]
+      refine RealizedProgram.NamedOp.nttNatural_congr (fun s hs => ?_) m
+      show _ = (if hi : s < 512 then Native.Rows.keyVec (F := (I 0).K) y.normIn.h ⟨s, hi⟩ else 0)
+      rw [dif_pos hs, keyEntry_add y.x y.w.idx ⟨s, hs⟩]
+      rfl
+    rw [hsp, Ops.inverseNttNatural_nttNatural hψ hn0 kF hi]
+  have hmul := Ops.polyOf_mul_polyOf (K := (I 0).K) (n := 512) (by norm_num) kF sF
+  rw [show (512 : ℕ) - 1 = 511 from rfl] at hmul
+  rw [sigPoly, (FalconRingBase.consts (program := program)).2,
+    Ops.polyOf_congr (fun j hj => (eOf_eq env j).trans (hc j hj)), Ops.polyOf_congr hI, Ops.polyOf_congr hs2, Ops.polyOf_congr hq,
+    hmul]
+  ring
 
 /-- **Every source predicate holds at the source environment of the honest values**: the
 membership, the signature equation, the index bits' check (`member_honest`, `sig_honest`,
@@ -734,22 +798,19 @@ theorem source_holds {q : ℕ} (hq : q < program.predicates.length)
     rcases h with rfl | rfl | rfl
     · exact member_honest y
     · exact sig_honest y
-    · have h14 : FalconRingMember.idxPred program = 14 :=
-        (FalconRingBase.ids (program := program)).2.2.2.2.2.1
-      have := idxBool_honest (c := c) (π := π) y
-      rwa [h14] at this
+    · exact idxBool_honest (c := c) (π := π) y
   · exact Norm.preds_honest y.valid (normVals y) q h
 
 end Holds
 
 /-! ### The native needles -/
 
-variable [FalconRingSource program] [FalconRingBase program]
+variable [FalconRingSource program]
   [AField (I 0)] [AField (I (FalconNorm.fA program))]
 
 /-- **The native root lies in `F_q`.** -/
 theorem psi_mem_native : (I 0).decode (FalconRingMember.psi program) ∈ (I 0).node "GF(p^1)" := by
-  rw [(FalconRingBase.ids (program := program)).2.2.2.1, AField.decode_lt _ (by norm_num)]
+  rw [(FalconRingBase.consts (program := program)).2, AField.decode_lt _ (by norm_num)]
   exact natCast_mem_prime0 rfl _
 
 variable (program I PN) in

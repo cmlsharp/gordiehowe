@@ -10,6 +10,8 @@ public import GordieHowe.ProofSystem.GKR.LayerSumcheck
 /-!
 # Deterministic and counting interface for one Longfellow GKR layer
 
+The GKR protocol (Goldwasser, Kalai and Rothblum, STOC 2008) in Longfellow's form.
+
 Each interleaved hand round fixes the two unmasked values p0 and p2 before
 its challenge. The claim uses the source reconstruction p1=incoming-p0.
 `position` reads only earlier rounds. `BadStep` is exactly an incorrect

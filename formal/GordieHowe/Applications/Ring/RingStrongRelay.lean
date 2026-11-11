@@ -44,8 +44,19 @@ namespace GordieHowe.RingSignature
 open Quantum Signature QROM
 open scoped ENNReal
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB} {TPS : PSTypes} {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS}
+variable {X Y : Type} {N : ℕ} {TB : BaseTypes}
+  [Fintype TB.BMsg] [DecidableEq TB.BMsg]
+  [Nonempty TB.KeyCoins]
+  {B : BaseSigner X Y N TB} {TPS : PSTypes} [Fintype TPS.Proof]
+  [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
+  {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {n : ℕ}
+
+variable [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins]
 
 variable (B PS adm n) in
 /-- **The main requests of the strong relay**: a request of the multi-user challenger with the
@@ -57,7 +68,7 @@ abbrev StrongReq : Type :=
 
 variable (B PS) in
 /-- **The main replies of the strong relay**: a reply of the multi-user challenger, or a proof. -/
-abbrev StrongResp : Type := MUResponse B ⊕ PS.Proof
+abbrev StrongResp : Type := MUResponse B.core ⊕ PS.Proof
 
 section Programs
 

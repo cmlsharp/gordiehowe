@@ -242,8 +242,10 @@ theorem pr_ssign_freshBase_le
     have hempty : (Set.ofPred fun c : (freshBase prims O M βmin tol enc 0 D bmsg).Coins =>
         ((freshBase prims O M βmin tol enc 0 D bmsg).ssign sk bm c).run H = some σ) = ∅ :=
       Set.eq_empty_of_forall_notMem fun c hc => by
-        obtain ⟨hk, -⟩ := exists_index_of_run_stdProg_eq_some prims (MaskSource.fresh M) O 0 sk bm c.1 H
-          (by simpa only [w1BaseSigner, ringLoop, Set.mem_setOf_eq] using hc)
+        obtain ⟨hk, -⟩ := exists_index_of_run_stdProg_eq_some prims (MaskSource.fresh M)
+          O.toMLDSAOracles 0 sk bm c.1 H
+          (by simpa only [w1BaseSigner, mldsaT0BaseScheme, W1Loop.stdSigner, ringLoop,
+            Set.mem_setOf_eq] using hc)
         exact absurd hk (lt_irrefl 0)
     rw [hempty, MeasureTheory.measure_empty]
     exact zero_le
@@ -251,8 +253,9 @@ theorem pr_ssign_freshBase_le
       (fun c => ((freshBase prims O M βmin tol enc k D bmsg).ssign sk bm c).run H)
       (fun t cb => M.ans (cb.1 ⟨0, hk⟩ (t, (sk.key, (sk.tr, bm)))))
       (fun t => map_uniform_freshCoins_eq M k D hMask _ _) (fun cb σ' hσ' => by
-        obtain ⟨hk', t, c', hσ⟩ := exists_index_of_run_stdProg_eq_some prims (MaskSource.fresh M) O k sk bm cb.1 H
-          (by simpa only [w1BaseSigner, ringLoop] using hσ')
+        obtain ⟨hk', t, c', hσ⟩ := exists_index_of_run_stdProg_eq_some prims (MaskSource.fresh M)
+          O.toMLDSAOracles k sk bm cb.1 H
+          (by simpa only [w1BaseSigner, mldsaT0BaseScheme, W1Loop.stdSigner, ringLoop] using hσ')
         exact ⟨t, c', hσ⟩) σ
     rwa [Fintype.card_fin] at h
 

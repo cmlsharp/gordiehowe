@@ -10,10 +10,10 @@ public import GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.Frontend.Reading
 /-!
 # GordieHowe frontend: the crossing of the ML-DSA-44 ring carriers
 
-`mac.equal` (predicate `247`; `ring_crossing` and the hash's copies of `μ` and `w1` in
+`mac.equal` (predicate `250`; `ring_crossing` and the hash's copies of `μ` and `w1` in
 `lib/gordiehowe/examples/rings/mldsa_ring.h`, merged into one MAC per domain pair) is
-`cross(H, x, A, y)` with `x` the shared expression `505` (H's `μ`, H's `w1`, then H's decoded
-support and sign of each coefficient alternately) and `y` the shared expression `42` (A's
+`cross(H, x, A, y)` with `x` the shared expression `558` (H's `μ`, H's `w1`, then H's decoded
+support and sign of each coefficient alternately) and `y` the shared expression `95` (A's
 `member.mu`, `hint.w1`, `challenge.c`, in order). The compiler's contract
 (`GordieHowe.RealizedProgram.HoldsWith` of a cross-field `equal`) gives the readings' equality
 where every reading of `x` is below `2`: `μ` and `w1` are bit views, the support and sign bits by
@@ -54,27 +54,27 @@ variable (rd : program.Valuation interp)
 
 /-- The crossing's `x` read through its parts. -/
 theorem x_part {i j k : ℕ} (hj : j < 4)
-    (hk : k < program.exprLen (([.leaf 71, .leaf 73, .ref 503, .ref 504] : List Expr)[j]'
+    (hk : k < program.exprLen (([.leaf ((CarrierHEmbed.σ program).val 120), .leaf ((CarrierHEmbed.σ program).val 70), .ref ((CarrierHEmbed.σ program).ref 523), .ref 557] : List Expr)[j]'
       (by simpa using hj)))
     (he : ∀ m : IndexMap, (∀ t < 6656, m.entry t = t) →
       (∀ k < 256, m.entry (6656 + 2 * k) = 6656 + k) →
       (∀ k < 256, m.entry (6656 + (2 * k + 1)) = 6912 + k) →
-      m.entry i = partBase program [.leaf 71, .leaf 73, .ref 503, .ref 504] j + k) :
-    program.evalE rd 1 (.ref 505) i = program.evalE rd 1
-      (([.leaf 71, .leaf 73, .ref 503, .ref 504] : List Expr)[j]'(by simpa using hj)) k := by
+      m.entry i = partBase program [.leaf ((CarrierHEmbed.σ program).val 120), .leaf ((CarrierHEmbed.σ program).val 70), .ref ((CarrierHEmbed.σ program).ref 523), .ref 557] j + k) :
+    program.evalE rd 1 (.ref 558) i = program.evalE rd 1
+      (([.leaf ((CarrierHEmbed.σ program).val 120), .leaf ((CarrierHEmbed.σ program).val 70), .ref ((CarrierHEmbed.σ program).ref 523), .ref 557] : List Expr)[j]'(by simpa using hj)) k := by
   obtain ⟨m, hm, hlo, hev, hod⟩ := MldsaCarrierFront.exprH (program := program)
-  rw [RealizedProgram.evalE_ref MldsaCarrierRelation.refsOrdered _ _ MldsaCarrierFront.lt505, hm]
+  rw [RealizedProgram.evalE_ref MldsaRandomPoint.refsOrdered _ _ MldsaCarrierFront.lt558, hm]
   exact RealizedProgram.evalE_wiring_part rd 1 m _ _ (by simpa using hj) hk (he m hlo hev hod)
 
 /-- **`x` below `512`** is H's `μ` bit. -/
 theorem x_mu {t : ℕ} (ht : t < 512) :
-    program.evalE rd 1 (.ref 505) t = program.evalE rd 1 (.leaf 71) t :=
+    program.evalE rd 1 (.ref 558) t = program.evalE rd 1 (.leaf ((CarrierHEmbed.σ program).val 120)) t :=
   x_part rd (j := 0) (by norm_num) (by simp [exprLen_leaf, MldsaCarrierFront.lens.2.1, ht])
     fun m hlo _ _ => by rw [hlo t (by omega)]; simp [partBase]
 
 /-- **`x` at `512 + t`** is H's `w1` bit `t`. -/
 theorem x_w1 {t : ℕ} (ht : t < 6144) :
-    program.evalE rd 1 (.ref 505) (512 + t) = program.evalE rd 1 (.leaf 73) t :=
+    program.evalE rd 1 (.ref 558) (512 + t) = program.evalE rd 1 (.leaf ((CarrierHEmbed.σ program).val 70)) t :=
   x_part rd (j := 1) (by norm_num) (by simp [exprLen_leaf, MldsaCarrierFront.lens.2.2.1, ht])
     fun m hlo _ _ => by
       rw [hlo _ (by omega)]
@@ -82,7 +82,7 @@ theorem x_w1 {t : ℕ} (ht : t < 6144) :
 
 /-- **`x` at `6656 + 2 k`** is H's decoded support of coefficient `k`. -/
 theorem x_sup {k : ℕ} (hk : k < 256) :
-    program.evalE rd 1 (.ref 505) (6656 + 2 * k) = program.evalE rd 1 (.ref 503) k :=
+    program.evalE rd 1 (.ref 558) (6656 + 2 * k) = program.evalE rd 1 (.ref ((CarrierHEmbed.σ program).ref 523)) k :=
   x_part rd (j := 2) (by norm_num) (by simp [MldsaCarrierFront.lens.2.2.2.1, hk])
     fun m _ hev _ => by
       rw [hev k hk]
@@ -90,7 +90,7 @@ theorem x_sup {k : ℕ} (hk : k < 256) :
 
 /-- **`x` at `6656 + 2 k + 1`** is H's decoded sign of coefficient `k`. -/
 theorem x_sgn {k : ℕ} (hk : k < 256) :
-    program.evalE rd 1 (.ref 505) (6656 + (2 * k + 1)) = program.evalE rd 1 (.ref 504) k :=
+    program.evalE rd 1 (.ref 558) (6656 + (2 * k + 1)) = program.evalE rd 1 (.ref 557) k :=
   x_part rd (j := 3) (by norm_num) (by simp [MldsaCarrierFront.lens.2.2.2.2.1, hk])
     fun m _ _ hod => by
       rw [hod k hk]
@@ -99,34 +99,34 @@ theorem x_sgn {k : ℕ} (hk : k < 256) :
 
 /-- The crossing's `y` read through its parts. -/
 theorem y_part {i j k : ℕ} (hj : j < 3)
-    (hk : k < program.exprLen (([.leaf 57, .leaf 66, .leaf 62] : List Expr)[j]'
+    (hk : k < program.exprLen (([.leaf 58, .leaf (MldsaCarrierFront.w1A program), .leaf 63] : List Expr)[j]'
       (by simpa using hj)))
-    (he : i = partBase program [.leaf 57, .leaf 66, .leaf 62] j + k) (hi : i < 7168) :
-    program.evalE rd 0 (.ref 42) i = program.evalE rd 0
-      (([.leaf 57, .leaf 66, .leaf 62] : List Expr)[j]'(by simpa using hj)) k := by
+    (he : i = partBase program [.leaf 58, .leaf (MldsaCarrierFront.w1A program), .leaf 63] j + k) (hi : i < 7168) :
+    program.evalE rd 0 (.ref 95) i = program.evalE rd 0
+      (([.leaf 58, .leaf (MldsaCarrierFront.w1A program), .leaf 63] : List Expr)[j]'(by simpa using hj)) k := by
   obtain ⟨m, hm, hid⟩ := MldsaCarrierFront.exprA (program := program)
-  rw [RealizedProgram.evalE_ref MldsaCarrierRelation.refsOrdered _ _
-    (by have := MldsaCarrierFront.lt505 (program := program); omega), hm]
+  rw [RealizedProgram.evalE_ref MldsaRandomPoint.refsOrdered _ _
+    (by have := MldsaCarrierFront.lt558 (program := program); omega), hm]
   exact RealizedProgram.evalE_wiring_part rd 0 m _ _ (by simpa using hj) hk
     (by rw [hid i hi]; exact he)
 
 /-- **`y` below `512`** is A's `μ` bit. -/
 theorem y_mu {t : ℕ} (ht : t < 512) :
-    program.evalE rd 0 (.ref 42) t = program.evalE rd 0 (.leaf 57) t :=
+    program.evalE rd 0 (.ref 95) t = program.evalE rd 0 (.leaf 58) t :=
   y_part rd (j := 0) (by norm_num) (by simp [exprLen_leaf, MldsaCarrierFront.muSize, ht])
     (by simp [partBase]) (by omega)
 
 /-- **`y` at `512 + t`** is A's `w1` bit `t`. -/
 theorem y_w1 {t : ℕ} (ht : t < 6144) :
-    program.evalE rd 0 (.ref 42) (512 + t) = program.evalE rd 0 (.leaf 66) t :=
+    program.evalE rd 0 (.ref 95) (512 + t) = program.evalE rd 0 (.leaf (MldsaCarrierFront.w1A program)) t :=
   y_part rd (j := 1) (by norm_num) (by simp [exprLen_leaf, MldsaCarrierFront.lens.2.2.2.2.2, ht])
     (by simp [partBase, exprLen_leaf, MldsaCarrierFront.muSize]) (by omega)
 
 /-- **`y` at `6656 + i`** is A's challenge bit `i`. -/
 theorem y_c {i : ℕ} (hi : i < 512) :
-    program.evalE rd 0 (.ref 42) (6656 + i) = program.evalE rd 0 (.leaf 62) i :=
+    program.evalE rd 0 (.ref 95) (6656 + i) = program.evalE rd 0 (.leaf 63) i :=
   y_part rd (j := 2) (by norm_num)
-    (by simp [exprLen_leaf, MldsaCarrierRelation.size62, hi])
+    (by simp [exprLen_leaf, (MldsaCarrierRelation.sizes (program := program)).2.2.2.1, hi])
     (by simp [partBase, exprLen_leaf, MldsaCarrierFront.muSize, MldsaCarrierFront.lens.2.2.2.2.2])
     (by omega)
 
@@ -140,17 +140,17 @@ variable [MLDSA44.HField FH]
 naturals are H's `μ`, `w1`, decoded support and sign. -/
 structure RingCrossAt (rd : program.Valuation interp) : Prop where
   /-- The `μ` bits agree. -/
-  mu : ∀ t < 512, (interp 0).toNat (program.evalE rd 0 (.leaf 57) t) =
-    (interp 1).toNat (program.evalE rd 1 (.leaf 71) t)
+  mu : ∀ t < 512, (interp 0).toNat (program.evalE rd 0 (.leaf 58) t) =
+    (interp 1).toNat (program.evalE rd 1 (.leaf ((CarrierHEmbed.σ program).val 120)) t)
   /-- The `w1` bits agree. -/
-  w1 : ∀ t < 6144, (interp 0).toNat (program.evalE rd 0 (.leaf 66) t) =
-    (interp 1).toNat (program.evalE rd 1 (.leaf 73) t)
+  w1 : ∀ t < 6144, (interp 0).toNat (program.evalE rd 0 (.leaf (MldsaCarrierFront.w1A program)) t) =
+    (interp 1).toNat (program.evalE rd 1 (.leaf ((CarrierHEmbed.σ program).val 70)) t)
   /-- The supports agree. -/
-  sup : ∀ k < 256, (interp 0).toNat (program.evalE rd 0 (.leaf 62) (2 * k)) =
-    (interp 1).toNat (program.evalE rd 1 (.ref 503) k)
+  sup : ∀ k < 256, (interp 0).toNat (program.evalE rd 0 (.leaf 63) (2 * k)) =
+    (interp 1).toNat (program.evalE rd 1 (.ref ((CarrierHEmbed.σ program).ref 523)) k)
   /-- The signs agree. -/
-  sgn : ∀ k < 256, (interp 0).toNat (program.evalE rd 0 (.leaf 62) (2 * k + 1)) =
-    (interp 1).toNat (program.evalE rd 1 (.ref 504) k)
+  sgn : ∀ k < 256, (interp 0).toNat (program.evalE rd 0 (.leaf 63) (2 * k + 1)) =
+    (interp 1).toNat (program.evalE rd 1 (.ref 557) k)
 
 /-- An element of domain `H`'s field that is a bit is read below `2`. -/
 theorem toNat_lt_two_of_bool1 {x : (interp 1).K} (h : x = 0 ∨ x = 1) :
@@ -163,24 +163,24 @@ theorem toNat_lt_two_of_bool1 {x : (interp 1).K} (h : x = 0 ∨ x = 1) :
 and sign are bits: the compiler's contract (`RealizedProgram.HoldsWith` of a cross-field `equal`)
 at its premise, every reading of `x` below `2`. -/
 theorem ringCross {e : program.Env interp} (hs : program.SourceSatAt e)
-    (hsup : ∀ k < 256, (interp 1).toNat (program.evalE (program.reader e) 1 (.ref 503) k) < 2)
-    (hsgn : ∀ k < 256, (interp 1).toNat (program.evalE (program.reader e) 1 (.ref 504) k) < 2) :
+    (hsup : ∀ k < 256, (interp 1).toNat (program.evalE (program.reader e) 1 (.ref ((CarrierHEmbed.σ program).ref 523)) k) < 2)
+    (hsgn : ∀ k < 256, (interp 1).toNat (program.evalE (program.reader e) 1 (.ref 557) k) < 2) :
     RingCrossAt (program.reader e) := by
   obtain ⟨hl, hsrc, c, hc⟩ := MldsaCarrierFront.cross (program := program)
-  have hmac : program.HoldsAt e (program.predicate 247).body :=
+  have hmac : program.HoldsAt e (program.predicate (MldsaCarrierFront.crossPred program)).body :=
     hs.preds _ (RealizedProgram.predicate_mem hl) hsrc
   rw [hc] at hmac
   obtain ⟨-, hxy⟩ := hmac
-  change (∀ i < program.exprLen (.ref 505),
+  change (∀ i < program.exprLen (.ref 558),
       (interp (program.domainField 1)).toNat (program.evalE (program.reader e)
-        (program.domainField 1) (.ref 505) i) < 2) → ∀ i < program.exprLen (.ref 505),
+        (program.domainField 1) (.ref 558) i) < 2) → ∀ i < program.exprLen (.ref 558),
       (interp (program.domainField 1)).toNat (program.evalE (program.reader e)
-        (program.domainField 1) (.ref 505) i) =
+        (program.domainField 1) (.ref 558) i) =
       (interp (program.domainField 0)).toNat (program.evalE (program.reader e)
-        (program.domainField 0) (.ref 42) i) at hxy
+        (program.domainField 0) (.ref 95) i) at hxy
   rw [MldsaCarrierFront.domains.2, MldsaCarrierFront.domains.1, MldsaCarrierFront.lens.1] at hxy
   set rd := program.reader e
-  have hpre : ∀ i < 7168, (interp 1).toNat (program.evalE rd 1 (.ref 505) i) < 2 := by
+  have hpre : ∀ i < 7168, (interp 1).toNat (program.evalE rd 1 (.ref 558) i) < 2 := by
     intro i hi
     by_cases h1 : i < 512
     · rw [x_mu rd h1]

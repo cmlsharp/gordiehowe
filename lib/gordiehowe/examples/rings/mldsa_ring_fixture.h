@@ -337,16 +337,11 @@ void carrier_matches_host_witness(size_t R = 64) {
   EXPECT_EQ(av("challenge.c"), f.rc.old.c_bits());
   EXPECT_EQ(av("signature.w"), adv.wp);
   // The relation's committed quotient Q of w' - (A z - c 2^d t1) =
-  // q (qlo + Q), qlo the lowering's: Q = wu - qlo for the host's wu.
-  SignedInt qlo = 0;
-  bool found = false;
-  for (const auto &e : f.c->records().product_mod_equalities)
-    if (e.name == "signature.relation") {
-      qlo = e.qlo;
-      found = true;
-    }
-  ASSERT_TRUE(found);
-  ASSERT_TRUE(qlo < SignedInt(0));
+  // q (qlo + Q), qlo the relation's (carrier_relation_qlo, the assert_mod
+  // lowering's offset): Q = wu - qlo for the host's wu.
+  const __int128 qlo128 = carrier_relation_qlo<S>(P::kMLDSAEmu.B1);
+  ASSERT_LT(qlo128, 0);
+  const SignedInt qlo = -SignedInt(uint64_t(-qlo128));
   std::vector<uint64_t> quot;
   for (int64_t d : ce.wu) {
     const SignedInt x = SignedInt(d) - qlo;

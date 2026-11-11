@@ -38,14 +38,15 @@ open GordieHowe.QROM GordieHowe.SPBCS IOP SPTerm
 
 section SPBCS
 
-variable {k kN kS L e N n t : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N n t : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
   {X₀ Wit₀ : Type} {M : SPBCS Mg P X₀ k kN kS L e} {Λ : SiteLayout Mg} {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] {E : (j : ι) → (M.comp j).Encoder}
   {Vr : X₀ → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  {hb : M.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {hb : M.FormatBounds Qs b b} {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   {honest : Wit₀ → R → CausalProver P τ X₀} {stmt : RingStmt B → X₀} {check : RingStmt B → Bool}
   {input : RingStmt B → RingWit B → Option Wit₀}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {W' : Type} [Fintype W'] [DecidableEq W']
@@ -55,6 +56,13 @@ variable {k kN kS L e N n t : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits (query
 local notation "𝒫" => Ring.spbcsComapProofSystem M Λ E hb honest stmt check input
 
 local notation "𝒫z" => encProver M Λ E hb honest
+
+variable [Fintype TB.BMsg]
+  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig]
+
+variable [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
+  [DecidableEq TB.Coins] [Nonempty TB.Coins]
 
 variable (A : InsiderAdversary
     (ofBase B (Ring.spbcsComapProofSystem M Λ E hb honest stmt check input) adm) n
@@ -114,6 +122,9 @@ noncomputable def distinguisherK [NeZero n] (enc : RingStmt B → RelayWit B →
     (zkTestK A enc keys Q a ds) (M.qVerifier Qs b b).kq
     (fun _ => forgeryTest_queriesLE keys Q _ _)).le
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] [Fintype TB.BMsg] [DecidableEq TB.BMsg]
+  [Fintype TB.BSig] [DecidableEq TB.BSig] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
+  [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The acceptance probability of the distinguisher** is the oracle average of its output law at
 `true`. -/
 theorem acceptProb_distinguisherK [NeZero n] (keys : Fin n → B.KeyCoins) (Q : ℕ)
@@ -137,6 +148,9 @@ theorem acceptProb_distinguisherK [NeZero n] (keys : Fin n → B.KeyCoins) (Q : 
     simp
   rw [this, PMF.toOuterMeasure_apply_singleton]
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] [Fintype TB.BMsg] [DecidableEq TB.BMsg]
+  [Fintype TB.BSig] [DecidableEq TB.BSig] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
+  [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- The acceptance probability of the distinguisher is at most `1`. -/
 theorem acceptProb_distinguisherK_le_one [NeZero n] (keys : Fin n → B.KeyCoins) (Q : ℕ)
     (a : (A.at keys).Aux) (ds : Fin Q → B.Coins)
@@ -151,6 +165,8 @@ theorem acceptProb_distinguisherK_le_one [NeZero n] (keys : Fin n → B.KeyCoins
 /-! ### Real to simulated ring signatures -/
 
 open Classical in
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Nonempty TB.KeyCoins] in
 /-- **The insider game at fixed keys is at most the average, over the signing coins, of the
 distinguisher against the real challenger of the compiled prover at the program's statements, plus
 `Q · εc`**, at each auxiliary value and each oracle, for an oracle-free base signer (`hB`) with
@@ -168,7 +184,7 @@ theorem game_le_sum_realK [NeZero n] (hB : B.OracleFree)
           (Quantum.requests v.chal.logs) (outEquiv k e ∘ H)} ≤
       ∑ ds, PMF.uniformOfFintype (Fin Q → B.Coins) ds *
         (((distinguisherK A enc keys Q a ds).alg ()).compose
-          (realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw)
+          (realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw) (PMF.uniformOfFintype _)
             Q)).outLaw H (some true) + Q * εc := by
   rw [toOuterMeasure_outLaw_unforge_eq_split (ofBase B 𝒫 adm) n (SideOracle.none _)
     ((A.at keys).alg a).toKindAlg keys Q H fun adv lg =>
@@ -179,7 +195,7 @@ theorem game_le_sum_realK [NeZero n] (hB : B.OracleFree)
         (outEquiv k e ∘ H)).trans (add_le_add (le_of_eq ?_) le_rfl)
   have h := ((A.at keys).alg a).outLaw_absorb (σ := PMF.uniformOfFintype (Fin Q → B.Coins))
     (F' := fun ds => zkRelayK B enc keys ds) (C := (checkedSplit 𝒫 adm keys Q).toChallenger)
-    (C' := realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw) Q)
+    (C' := realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw) (PMF.uniformOfFintype _) Q)
     (e := coinSplit Q B.Coins (𝒫).Coins)
     (fun s c' => coins_checkedSplit (PS := 𝒫) (adm := adm) keys Q s c')
     (fun H s c' => (relays_realK (PS := 𝒫) (adm := adm) hB stmt fw enc hz.mem_relH
@@ -196,8 +212,8 @@ theorem game_le_sum_realK [NeZero n] (hB : B.OracleFree)
       (some true)
   rw [AdaptiveIAlg.outLaw_thenProg]
   have hnil := KindAlg.postAss_eq_nil (zkAbsorbedK A enc keys Q a ds).toKindAlg
-    (realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw) Q)
-    (QROM.outWith_realChallenger_assignments _ _ Q)
+    (realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw) (PMF.uniformOfFintype _) Q)
+    (QROM.outWith_realChallenger_assignments _ _ _ Q)
   congr 2
   ext o
   simp only [hnil, run_forgeryTest]
@@ -208,6 +224,8 @@ theorem game_le_sum_realK [NeZero n] (hB : B.OracleFree)
     exact ⟨v, rfl, hv⟩
 
 open Classical in
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **Zero knowledge at one key, one auxiliary value and one draw of signing coins**: the
 distinguisher accepts against the real challenger with probability at most its acceptance against
 the simulated challenger of the spBCS joint simulator plus `zkError δ t Q`
@@ -218,7 +236,7 @@ theorem acceptProb_real_leK [NeZero n] (VE : M.ViewEncoder E Qs) {Pub : Type}
     (hvzk : CausalHVZK VE.MV relH honest pub Sim δ) (keys : Fin n → B.KeyCoins) (Q : ℕ)
     (a : (A.at keys).Aux) (ds : Fin Q → B.Coins) :
     (distinguisherK A enc keys Q a ds).acceptProb
-        (realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw) Q) ≤
+        (realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw) (PMF.uniformOfFintype _) Q) ≤
       (distinguisherK A enc keys Q a ds).acceptProb
           (simChallenger (relZ B 𝒫 adm stmt fw relH)
             ((M.niJointSimulatorProg Λ VE.toViewRead b pub Sim T).comap (stmt ∘ Prod.fst)) Q) +
@@ -250,7 +268,9 @@ theorem acceptProb_real_leK [NeZero n] (VE : M.ViewEncoder E Qs) {Pub : Type}
   · exact funext fun _ => funext fun _ => propext Iff.rfl
   · exact QROM.simChallenger_congr _ _ _ _ _ _ _ _ (fun _ _ => Iff.rfl) _ Q
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] in
 open Classical in
+omit [Fintype R] [DecidableEq R] [Nonempty R] [Nonempty TB.KeyCoins] in
 /-- **The side-coin average of the distinguisher against the simulated challenger is the checked
 simulated game** (`simSplitK` with the test `drawOk`) at each key, auxiliary value and oracle, the
 forgery read under the final oracle, for an oracle-free base signer (`hB`). -/
@@ -300,6 +320,8 @@ theorem sum_sim_eq_checkedK [NeZero n] (hB : B.OracleFree)
 /-! ### The chain -/
 
 open Classical in
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Nonempty TB.KeyCoins] in
 /-- **The chain at one key and one auxiliary value**: the insider game with a nonempty ring,
 averaged over the oracle, is at most the simulated game read from the keys (`simSplitK` with the
 spBCS joint simulator read at `stmt`, without the test), averaged over the oracle and with the
@@ -339,7 +361,7 @@ theorem game_le_simK_at [NeZero n] (hB : B.OracleFree) {εc : ℝ≥0∞}
   have hzk : ∑' H, PMF.uniformOfFintype (Bits (queryBits k kN kS L) → XOut k e) H *
       ∑ ds, PMF.uniformOfFintype (Fin Q → B.Coins) ds *
         (((distinguisherK A enc keys Q a ds).alg ()).compose
-          (realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw)
+          (realChallenger (relZ B 𝒫 adm stmt fw relH) ((𝒫z).comap (stmt ∘ Prod.fst) fw) (PMF.uniformOfFintype _)
             Q)).outLaw H (some true) ≤
       ∑' H, PMF.uniformOfFintype (Bits (queryBits k kN kS L) → XOut k e) H *
         ∑ ds, PMF.uniformOfFintype (Fin Q → B.Coins) ds *

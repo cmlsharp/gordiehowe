@@ -103,6 +103,11 @@ private theorem mapOutput_bind {A B R R' R'' : Type} (p : OracleProg A B R)
     simp only [ih]
     rfl
 
+section Challenger
+
+variable [DecidableEq TS.PK] [Fintype TS.SignCoins] [DecidableEq TS.SignCoins]
+  [Nonempty TS.SignCoins]
+
 /-- **The challenger of `S.withVerify v` relabelled is the challenger of `S`**: it answers by the
 signer of `S`, which `withVerify` keeps. -/
 theorem relabel_unforgeChallenger_withVerify (keys : Fin n → S.KeyCoins) (Q : ℕ) :
@@ -127,8 +132,13 @@ theorem relabel_unforgeChallenger_withVerify (keys : Fin n → S.KeyCoins) (Q : 
   simp only [hr]
   rfl
 
+end Challenger
+
+variable [Fintype O.BMsg] [DecidableEq O.BMsg] [Fintype O.BSig] [DecidableEq O.BSig]
+
 variable {O n}
 
+omit [Fintype O.BMsg] [DecidableEq O.BMsg] [Fintype O.BSig] [DecidableEq O.BSig] in
 /-- **A forgery against `S` outside `E` is a forgery against `S.withVerify v`** for the relabelled
 history, when `v` accepts the signatures `S.verify` accepts outside `E` (`hv`). -/
 theorem forges_withVerify {E : KeyRing S.PK N × S.Msg × S.Sig → Prop}
@@ -156,7 +166,14 @@ theorem forges_withVerify {E : KeyRing S.PK N × S.Msg × S.Sig → Prop}
     exact hf.fresh.not_sideCovered ⟨e, he, i, bm, hreq e _ hr, hmem, hcov⟩
 
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
-  [Nonempty Y] {V : OracleView X Y} {t : ℕ}
+  [Nonempty Y] {V : OracleView X Y} {t : ℕ} [Fintype TS.PK] [DecidableEq TS.PK] [Fintype TS.Msg]
+  [DecidableEq TS.Msg] [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins] [Fintype TS.Sig]
+  [DecidableEq TS.Sig]
+
+section Laws
+
+variable [Nonempty TS.KeyCoins] [Fintype TS.SignCoins] [DecidableEq TS.SignCoins]
+  [Nonempty TS.SignCoins]
 
 /-- **The probability of a forgery in the event `E`** of the forgery: the adversary terminates
 with a forgery (`Forges`) whose ring, message and signature lie in `E`. -/
@@ -169,6 +186,8 @@ theorem forgeProbOn_le_forgeProb (A : UnforgeAdversary S n O V t) (Q : ℕ)
     (E : KeyRing S.PK N × S.Msg × S.Sig → Prop) : forgeProbOn A Q E ≤ forgeProb A Q :=
   MeasureTheory.measure_mono fun _ ⟨p, hp, hf, _⟩ => ⟨p, hp, hf⟩
 
+end Laws
+
 variable [NeZero n]
 
 variable (O) in
@@ -177,6 +196,9 @@ through the identical requests and replies (`GameAdversary.relabel`). -/
 noncomputable abbrev UnforgeAdversary.withVerify (A : UnforgeAdversary S n O V t) :
     UnforgeAdversary (S.withVerify v) n (O.withVerify v) V t :=
   GameAdversary.relabel (withVerifyReq v O n) (withVerifyResp v O) A
+
+variable [Nonempty TS.KeyCoins] [Fintype TS.SignCoins] [DecidableEq TS.SignCoins]
+  [Nonempty TS.SignCoins]
 
 /-- **The relabelled adversary against `S.withVerify v`** has the forgery probability of the event,
 in the run of the adversary against `S`, that its output is a forgery against `S.withVerify v` for

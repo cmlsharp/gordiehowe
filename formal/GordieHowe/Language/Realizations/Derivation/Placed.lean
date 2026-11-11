@@ -18,9 +18,8 @@ where the source predicates hold and the derivations are valid (`DerivationsVali
 * **A placed predicate holds where its predicate does and the realized program holds**
   (`GordieHowe.RealizedProgram.placedHolds_of_derivs`): a `mod_0` has its field equation by the
   realized program (`RealizedAt.integer`), a `mod_p` in the field form by its field `equal` row
-  (`DerivationsValid.fieldRows`, `fieldEq_of_fieldRow`), a product-form `mod_q` by its placed
-  equation (`RealizedAt.product`); every other `mod_q` is placed by its realization circuits, and
-  every other predicate is placed as written.
+  (`DerivationsValid.fieldRows`, `fieldEq_of_fieldRow`); every other `mod_q` is placed by its
+  realization circuits, and every other predicate is placed as written.
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -77,14 +76,12 @@ theorem placedHolds_of_derivs (hwf : ir.WellFormed) (hI : I.Registered ir)
     {pid : ℕ} (hpid : pid < ir.predicates.length)
     (hint : ∀ d lhs rhs real, (ir.predicate pid).body = .mod d 0 lhs rhs real →
       ∀ i < ir.exprLen lhs, ir.evalWith rd d lhs i = ir.evalWith rd d rhs i)
-    (hprod : ∀ d m lhs rhs real, (ir.predicate pid).body = .mod d m lhs rhs real →
-      real.form.isProduct = true → 2 < m → ir.ProductPlaced rd d m lhs rhs real)
     (h : ir.HoldsWith rd (ir.predicate pid).body) : ir.PlacedHolds rd (ir.predicate pid).body := by
   have hpo := hwf.predicates _ (predicate_mem hpid)
   have hrows := hv.fieldRows pid hpid
-  revert hint hprod h hpo hrows
+  revert hint h hpo hrows
   generalize (ir.predicate pid).body = b
-  intro hint hprod h hpo hrows
+  intro hint h hpo hrows
   cases b with
   | mod d q e e' real =>
     by_cases hq : q = 0
@@ -95,10 +92,7 @@ theorem placedHolds_of_derivs (hwf : ir.WellFormed) (hI : I.Registered ir)
       · simp only [PlacedHolds, hf, or_true, ↓reduceIte]
         obtain ⟨hc, h2, hrow⟩ := hrows d q e e' real rfl hq hf
         exact fieldEq_of_fieldRow hwf hI hL hF hpo hc h2 hrow
-      · by_cases hp : real.form.isProduct = true ∧ 2 < q
-        · simp only [PlacedHolds, hq, hf, or_self, ↓reduceIte, if_pos hp]
-          exact hprod d q e e' real rfl hp.1 hp.2
-        · simp only [PlacedHolds, hq, hf, or_self, ↓reduceIte, if_neg hp]
+      · simp only [PlacedHolds, hq, hf, or_self, ↓reduceIte]
   | _ => exact h
 
 /-- **The placed predicates hold, from valid derivations**: domain `d`'s predicate holds on the cells `a` where the source predicates hold, the
@@ -117,7 +111,6 @@ theorem holds_of_sat_derivs (hwf : ir.WellFormed) (hI : I.Registered ir)
     (placedHolds_cellValuation_iff hl a d hp hd').2
       (placedHolds_of_derivs hwf hI hL hd hsat.leafFacts hp
         (fun d' lhs rhs real hb => hreal.integer _ (predicate_mem hp) d' lhs rhs real hb)
-        (fun d' m lhs rhs real hb hf h2 => hreal.product _ (predicate_mem hp) d' m lhs rhs real hb hf h2)
         (hsat.preds _ (predicate_mem hp)))
   have hlow : ∀ p, p < ir.predicates.length → ir.Lowered d p →
       ir.PlacedHolds (ir.cellValuation I d x r (a d)) (ir.predicate p).body := fun p hp h =>

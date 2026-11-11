@@ -50,7 +50,6 @@
 #include "gordiehowe/compiler/plan_export.h"
 #include "gordiehowe/compiler/realized_program.h"
 #include "gordiehowe/expr.h"
-#include "gordiehowe/ops/integer_congruence.h"
 #include "gordiehowe/ops/operators.h"
 #include "gordiehowe/system.h"
 
@@ -239,7 +238,6 @@ class ProgramBuilder : Lowering {
       with_domain(d, [&](const auto &dm) { domain_predicates(dm); });
     with_domain_all([&](const auto &dm) { mod_predicates(dm); });
     cross_predicates();
-    equation_forms();
     step_ones();
     finish();
     return std::move(P_);
@@ -379,6 +377,10 @@ class ProgramBuilder : Lowering {
     const PlanRecords::SpectralConv *rec = nullptr;
     size_t ks = 0, kr = 0;
     Ex src, read, a, b, zero;
+    // In a predicate not affine in its convs: the committed C's leaf as a
+    // shared expression (its entry KC), which the realized reading reads.
+    Ex cread;
+    size_t kc = SIZE_MAX;
     std::string psi;
   };
 
@@ -1712,13 +1714,19 @@ class ProgramBuilder : Lowering {
   }
   template <class F>
   Ex node(const Domain<F> &d, const ExprNode<F> &x) {
+    // The node a rewritten predicate reads a committed conv's C as: its
+    // shared leaf.
+    if (auto c = committed_node_.find(&x); c != committed_node_.end())
+      return memo_[&x] = c->second;
     if (realized_ && has_spec(x)) {
       // The realized reading: each spectrally realized convolution read
       // through its realization, the rest as in the source form.
       auto it = memo_r_.find(&x);
       if (it != memo_r_.end()) return it->second;
       auto sp = spec_.find(&x);
-      Ex e = sp != spec_.end() ? sp->second.read : node_once(d, x);
+      Ex e = sp == spec_.end()             ? node_once(d, x)
+             : sp->second.kc != SIZE_MAX ? sp->second.cread
+                                         : sp->second.read;
       memo_r_[&x] = e;
       return e;
     }
@@ -1911,8 +1919,8 @@ class ProgramBuilder : Lowering {
     const std::string dims =
         std::to_string(B) + " " + std::to_string(la) + " " + std::to_string(lb);
     if (rec->blocks != B || rec->left != la || rec->right != lb ||
-        rec->length < lc)
-      export_fail("the spectral realization of a conv of " + std::to_string(B) +
+        (!rec->direct && rec->length < lc))
+      export_fail("the realization of a conv of " + std::to_string(B) +
                   " rows does not match it");
     const Ex va = reindex(index_map_named(std::move(ia), "IndexMap.convLeft " + dims),
                           na, concat({a, zero}));
@@ -1925,6 +1933,15 @@ class ProgramBuilder : Lowering {
     sp.zero = zero;
     sp.src = share(apply_sum(la, B * lc, mul(va, vb)));
     sp.ks = P_.exprs.size() - 1;
+    if (rec->direct) {
+      // The direct realization: the conv reads as C's leaf (Lean
+      // `SpectralConv.direct`).
+      sp.read = sp.cread = share(leaf(d, rec->c));
+      sp.kr = sp.kc = P_.exprs.size() - 1;
+      committed_node_[rec->cnode.get()] = sp.cread;
+      spec_[&x] = sp;
+      return sp.src;
+    }
     const auto psi = d.field().of_bytes_field(rec->psi.data());
     if (!psi) export_fail("a spectral realization's root is no field element");
     sp.psi = enc(d.field(), *psi);
@@ -1941,6 +1958,11 @@ class ProgramBuilder : Lowering {
                                             std::to_string(lc)),
         B * lc, inv));
     sp.kr = P_.exprs.size() - 1;
+    if (rec->c != SIZE_MAX) {
+      sp.cread = share(leaf(d, rec->c));
+      sp.kc = P_.exprs.size() - 1;
+      committed_node_[rec->cnode.get()] = sp.cread;
+    }
     spec_[&x] = sp;
     return sp.src;
   }
@@ -1967,6 +1989,23 @@ class ProgramBuilder : Lowering {
   void spectral_products(const Domain<F> &d, size_t di, const std::string &owner,
                          const SpecConv &sp) {
     const PlanRecords::SpectralConv &rec = *sp.rec;
+    if (rec.direct) {
+      // The direct realization's products predicate is the domain's
+      // (NAME.products, printed with the domain's predicates).
+      ir::SpectralConv c;
+      c.source = Id(sp.ks);
+      c.read = Id(sp.kr);
+      c.products = kNone;
+      c.blocks = rec.blocks;
+      c.left = rec.left;
+      c.right = rec.right;
+      c.root = "0";
+      c.direct = true;
+      c.squares = rec.squares;
+      conv_products_[rec.products] = P_.convs.size();
+      P_.convs.push_back(std::move(c));
+      return;
+    }
     const size_t B = rec.blocks, la = rec.left, lb = rec.right, M = rec.length;
     auto extend = [&](const Ex &x, size_t l) {
       std::vector<size_t> idx;
@@ -1994,6 +2033,10 @@ class ProgramBuilder : Lowering {
     c.source = Id(sp.ks);
     c.read = Id(sp.kr);
     c.products = Id(preds_.size());
+    if (sp.kc != SIZE_MAX) {
+      c.committed = Id(sp.kc);
+      conv_row_[rec.row] = {P_.convs.size(), &sp};
+    }
     c.blocks = B;
     c.left = la;
     c.right = lb;
@@ -2049,6 +2092,93 @@ class ProgramBuilder : Lowering {
     }
   }
 
+  // The source of predicate NAME, which the conv lowering rewrote to read a
+  // spectral realization (PlanRecords::SpectralConv::source), or null.
+  template <class F>
+  const ExprPtr<F> *spectral_source(const std::string &name) const {
+    for (const auto &sc : cs_.records().spectral_convs)
+      if (sc.pred == name && sc.source != nullptr)
+        return static_cast<const ExprPtr<F> *>(sc.source.get());
+    return nullptr;
+  }
+  // Predicate P of domain D (index DI) with the sides SIDES() gives, its
+  // convolutions converted. Where it reads spectrally realized ones, its
+  // field equation is the realized predicate's (Lean `Target.realized`):
+  // the sides with each read through its realization (SIDES() once more,
+  // realized_; `<name>.realized`, the affine rows the C++ places), with
+  // each realization's products predicate. In a predicate not affine in
+  // its convolutions, which reads each as its committed C, the realized
+  // predicate is the one the domain places, its sides PLACED() (the
+  // rewritten predicate's, C read as its shared leaf). Every predicate
+  // that reads a conv goes through here: a mod_0's, a plain equal's and a
+  // committed-digits row's (domain_predicates). A side the program cannot
+  // state leaves P unmodeled (describe).
+  template <class F, class Sides, class Placed>
+  void describe_realizing(const Domain<F> &d, size_t di, PredRec p, const Sides &sides,
+                          const Placed &placed_sides) {
+    const std::string name = p.name;
+    try {
+      const auto [l, r] = sides();
+      std::vector<const SpecConv *> specs;
+      for (const auto &sc : cs_.records().spectral_convs) {
+        auto sit = spec_.find(sc.conv);
+        if (sc.pred == name && sit != spec_.end()) specs.push_back(&sit->second);
+      }
+      Ex lr, rr;
+      // The placement the realized predicate takes: the affine rows (a
+      // predicate affine in its convs reads INTT(z)), or the predicate's
+      // own (one that is not reads the committed C).
+      TargetRec placed = target_of(di, Placement::kAffine, "");
+      ir::Origin origin;
+      bool committed = false;
+      const size_t at = preds_.size();
+      if (!specs.empty()) {
+        for (const SpecConv *sp : specs) committed = committed || sp->kc != SIZE_MAX;
+        if (committed) {
+          std::tie(lr, rr) = placed_sides();
+        } else {
+          realized_ = true;
+          std::tie(lr, rr) = sides();
+          realized_ = false;
+        }
+        if (committed) {
+          // The realized predicate is the domain's placed one, its origin.
+          placed = p.target;
+          origin = p.p.origin;
+          p.p.origin = ir::Origin{};
+        } else if (p.target.kind != ir::Target::kAffine) {
+          export_fail("predicate '" + name + "' reads a spectral "
+                      "realization off the affine rows");
+        }
+        p.target.kind = ir::Target::kRealized;
+        p.target.realized = preds_.size() + 1;
+      }
+      add_pred(std::move(p), l, r);
+      if (!specs.empty()) {
+        // The domain's placed predicate is the realized one.
+        if (committed)
+          for (auto &[key, id] : dom_pred_)
+            if (id == at) id = preds_.size();
+        PredRec q;
+        q.name = name + ".realized";
+        q.domain = di;
+        q.target = placed;
+        q.role = "realization";
+        q.owner_name = name;
+        q.p.body = ir::Predicate::kEqual;
+        q.p.domain = Id(di);
+        if (committed) q.p.origin = origin;
+        add_pred(std::move(q), lr, rr);
+        for (const SpecConv *sp : specs) spectral_products(d, di, name, *sp);
+      }
+    } catch (const std::runtime_error &e) {
+      realized_ = false;
+      p.p.unmodeled = e.what();
+      p.p.lhs = p.p.rhs = kNone;
+      preds_.push_back(std::move(p));
+    }
+  }
+
   static TargetRec target_of(size_t di, Placement where,
                              const std::string &batch) {
     TargetRec t;
@@ -2072,13 +2202,19 @@ class ProgramBuilder : Lowering {
 
   // Why the asserted node E of an integer equality is not L + (-1) R over
   // the recorded sides' own nodes ("" when it is), naming the rewrite.
+  // With REWRITTEN (the predicate reads a conv as its committed C, which
+  // the conv lowering substituted into the node) the operands are the
+  // rewritten sides, which the program states as the realized predicate's
+  // (Lean `RealizedAdmits` checks they read the recorded ones with each
+  // conv read as its C), not the recorded ones.
   template <class F>
   static std::string int_eq_shape_error(const ExprPtr<F> &e,
                                         const ExprPtr<F> &l,
-                                        const ExprPtr<F> &r, const F &f) {
+                                        const ExprPtr<F> &r, const F &f,
+                                        bool rewritten) {
     if (e == nullptr || e->op != ExprOp::kAdd || e->kids.size() != 2)
       return "the asserted node is no longer a sum (a lowering rewrote it)";
-    if (e->kids[0].get() != l.get())
+    if (!rewritten && e->kids[0].get() != l.get())
       return "the sum's left operand is not the recorded left side "
              "(a lowering rewrote it)";
     const ExprPtr<F> &s = e->kids[1];
@@ -2086,10 +2222,17 @@ class ProgramBuilder : Lowering {
         !(s->c[0] == f.mone()))
       return "the sum's right operand is not a scaling by -1 "
              "(a lowering rewrote it)";
-    if (s->kids[0].get() != r.get())
+    if (!rewritten && s->kids[0].get() != r.get())
       return "the scaled operand is not the recorded right side "
              "(a lowering rewrote it)";
     return "";
+  }
+  // Whether predicate NAME reads a conv as its committed C (the direct
+  // realization, or the batch's in a predicate not affine in its convs).
+  bool reads_committed_conv(const std::string &name) const {
+    for (const auto &sc : cs_.records().spectral_convs)
+      if (sc.pred == name && sc.c != SIZE_MAX) return true;
+    return false;
   }
 
   template <class F>
@@ -2106,11 +2249,6 @@ class ProgramBuilder : Lowering {
     std::map<std::string, const PlanRecords::ModEq *> integer;
     for (const auto &eq : cs_.records().mod_equalities)
       if (eq.integer && eq.domain == d.name) integer[eq.name] = &eq;
-    // The product forms of D (assert_mod over an integer side): their
-    // predicates are mod_m lhs R (product_predicate).
-    std::map<std::string, const PlanRecords::ProductModEq *> product;
-    for (const auto &eq : cs_.records().product_mod_equalities)
-      if (eq.domain == d.name) product[eq.name] = &eq;
     // The predicates (assert_zero, assert_true), each with its target.
     const auto &preds = d.predicates();
     if (plan.pred_targets.size() != preds.size())
@@ -2132,12 +2270,17 @@ class ProgramBuilder : Lowering {
       // (<conv>.c): a part of the predicate that reads the conv (its owner
       // by name).
       if (conv_products(pd.name)) p.role = "realization";
+      if (auto cp = conv_products_.find(pd.name); cp != conv_products_.end())
+        P_.convs.at(cp->second).products = Id(preds_.size());
+      // The relation of an assert_mod over expression sides (mod.h's
+      // expression_sides), NAME.row: a part of its source mod_m.
+      for (const auto &r : cs_.records().mod_rows)
+        if (r.row == pd.name && r.row != r.mod) {
+          p.role = "realization";
+          p.owner_name = r.mod;
+        }
       p.p.domain = Id(di);
       p.p.origin = {ir::Origin::kDecl, Id(di), k};
-      if (auto it = product.find(pd.name); it != product.end()) {
-        product_predicate(d, std::move(p), *it->second);
-        continue;
-      }
       if (auto it = integer.find(pd.name); it != integer.end()) {
         const PlanRecords::ModEq &eq = *it->second;
         mod_names_.insert(eq.name);
@@ -2164,8 +2307,9 @@ class ProgramBuilder : Lowering {
         // recorded sides: the node must still be that sum of the sides'
         // own nodes, which a later lowering's rewrite of the predicate
         // (rewrite_predicate) would break.
+        const bool rewritten = reads_committed_conv(pd.name);
         if (tg.where == Placement::kCircuit) {
-          const std::string why = int_eq_shape_error(pd.e, lhs, rhs, f);
+          const std::string why = int_eq_shape_error(pd.e, lhs, rhs, f, rewritten);
           if (!why.empty())
             export_fail("integer equality '" + pd.name +
                         "' placed in the circuit: " + why);
@@ -2173,54 +2317,36 @@ class ProgramBuilder : Lowering {
             std::fprintf(stderr, "GH_MOD0_ASSERT domain=%s pred=%s ok\n",
                          d.name.c_str(), pd.name.c_str());
         }
-        try {
-          Ex l = convert(d, lhs);
-          Ex r = convert(d, rhs);
-          // The convolutions the predicate reads through a spectral
-          // realization: its field equation is the realized predicate's
-          // (Lean `Target.realized`), the source's sides with each read
-          // through its realization (`<name>.realized`, the affine rows the
-          // C++ places), with each realization's products predicate.
-          std::vector<const SpecConv *> specs;
-          for (const auto &sc : cs_.records().spectral_convs) {
-            auto sit = spec_.find(sc.conv);
-            if (sc.pred == pd.name && sit != spec_.end())
-              specs.push_back(&sit->second);
-          }
-          Ex lr, rr;
-          if (!specs.empty()) {
-            realized_ = true;
-            lr = convert(d, lhs);
-            rr = convert(d, rhs);
-            realized_ = false;
-            if (p.target.kind != ir::Target::kAffine)
-              export_fail("predicate '" + pd.name + "' reads a spectral "
-                          "realization off the affine rows");
-            p.target.kind = ir::Target::kRealized;
-            p.target.realized = preds_.size() + 1;
-          }
-          add_pred(std::move(p), l, r);
-          if (!specs.empty()) {
-            PredRec q;
-            q.name = pd.name + ".realized";
-            q.domain = di;
-            q.target = target_of(di, Placement::kAffine, "");
-            q.role = "realization";
-            q.owner_name = pd.name;
-            q.p.body = ir::Predicate::kEqual;
-            q.p.domain = Id(di);
-            add_pred(std::move(q), lr, rr);
-            for (const SpecConv *sp : specs) spectral_products(d, di, pd.name, *sp);
-          }
-        } catch (const std::runtime_error &e) {
-          realized_ = false;
-          p.p.unmodeled = e.what();
-          p.p.lhs = p.p.rhs = kNone;
-          preds_.push_back(std::move(p));
-        }
+        describe_realizing(
+            d, di, std::move(p),
+            [&] { return std::make_pair(convert(d, lhs), convert(d, rhs)); },
+            // Read as its committed C: the realized predicate is the
+            // rewritten node's sides, lhs' + (-1) rhs'.
+            [&]() -> std::pair<Ex, Ex> {
+              const std::string why = int_eq_shape_error(pd.e, lhs, rhs, f, true);
+              if (!why.empty())
+                export_fail("integer equality '" + pd.name +
+                            "' reading a conv as its committed C: " + why);
+              return std::make_pair(convert(d, pd.e->kids[0]),
+                                    convert(d, pd.e->kids[1]->kids[0]));
+            });
         continue;
       }
       p.p.body = ir::Predicate::kEqual;
+      // A predicate the conv lowering rewrote to read a spectral
+      // realization (a plain equal, an assert_mod's row NAME.row) prints
+      // its source, the expression before the rewrite.
+      if (const auto *src = spectral_source<F>(pd.name);
+          src != nullptr && tg.where != Placement::kQuadratic) {
+        auto zero_side = [&](Ex l) {
+          Ex r = const_leaf(d, repeat_const(d, pd.truth ? f.one() : f.zero(), l.n), l.n);
+          return std::make_pair(std::move(l), std::move(r));
+        };
+        describe_realizing(
+            d, di, std::move(p), [&] { return zero_side(convert(d, *src)); },
+            [&] { return zero_side(convert(d, pd.e)); });
+        continue;
+      }
       describe(std::move(p), [&](PredRec &) {
         if (tg.where == Placement::kQuadratic)
           return std::make_pair(mul(leaf(d, tg.a), leaf(d, tg.b)), leaf(d, tg.c));
@@ -2229,7 +2355,9 @@ class ProgramBuilder : Lowering {
         return std::make_pair(std::move(l), std::move(r));
       });
     }
-    // The lowerings' affine rows.
+    // The lowerings' affine rows. A committed conv's row C = INTT(z)[0, lo)
+    // reads as its committed and its realized readings (Lean
+    // `SpectralConv.committed`).
     for (size_t ai = 0; ai < affine_decls(d).size(); ++ai) {
       const auto &a = affine_decls(d)[ai];
       if (a.pred >= 0) continue;
@@ -2242,6 +2370,12 @@ class ProgramBuilder : Lowering {
       p.p.body = ir::Predicate::kEqual;
       p.p.domain = Id(di);
       p.p.origin = {ir::Origin::kAffineRow, Id(di), ai};
+      if (auto cr = conv_row_.find(a.name); cr != conv_row_.end()) {
+        P_.convs.at(cr->second.first).row = Id(preds_.size());
+        const SpecConv &sp = *cr->second.second;
+        add_pred(std::move(p), sp.cread, sp.read);
+        continue;
+      }
       describe(std::move(p), [&](PredRec &) {
         Ex l = lin(d, a.e);
         Ex r = const_leaf(d, repeat_const(d, f.zero(), l.n), l.n);
@@ -2567,57 +2701,14 @@ class ProgramBuilder : Lowering {
     }
   }
 
-  // The product form EQ (mod.h's product_sides) as the source predicate P:
-  // mod_m P N for its congruence D = P - N, its realization
-  // ModForm::kProduct (kSpectralProduct when the equation is stated in a
-  // transform's spectrum), its target the predicate's own placement (the
-  // equation the domain states), P's and N's intervals, the quotient (its
-  // leaf, qlo, qmax and its range request NAME.q). P and N are the
-  // congruence's terms of each sign (product_parts).
-  template <class F>
-  void product_predicate(const Domain<F> &d, PredRec p,
-                         const PlanRecords::ProductModEq &eq) {
-    mod_names_.insert(eq.name);
-    p.p.body = ir::Predicate::kMod;
-    p.p.q = bound_str(eq.m);
-    ir::ModRealization &m = p.p.mod;
-    m.form = eq.spectral ? ir::ModForm::kSpectralProduct : ir::ModForm::kProduct;
-    m.has_interval = eq.quotient != SIZE_MAX;
-    if (m.has_interval) {
-      m.lhs_lo = int_str(eq.lhs_lo);
-      m.lhs_hi = int_str(eq.lhs_hi);
-      m.rhs_lo = int_str(eq.rhs_lo);
-      m.rhs_hi = int_str(eq.rhs_hi);
-    }
-    m.quotient_lo = int_str(eq.qlo);
-    m.qmax = bound_str(eq.qmax);
-    m.radix = "0";
-    m.target = ir::Target{};
-    p.mod_target = true;
-    if (eq.quotient != SIZE_MAX) {
-      p.mod_ranges = eq.name;
-      mod_ranges_[eq.name] = {eq.name + ".q"};
-    }
-    describe(std::move(p), [&](PredRec &q) {
-      if (eq.quotient != SIZE_MAX) q.p.mod.quotient = leaf(d, eq.quotient).e;
-      const auto &cong = *static_cast<const ops::Congruence<F> *>(eq.cong.get());
-      return product_parts(d, cong, eq.name);
-    });
-  }
-  // The printed forms of the asserted equations (Congruence::equation) of
-  // the spectral product forms placed in a circuit, for the expression
-  // export (emit_export.h): the circuit emits the equation's nodes, the
-  // program prints the predicate's sides P and N (product_predicate), so
-  // the nodes' lins, constants and index maps are converted here. The
-  // constants this adds take value ids after every other value
-  // (late_consts_), so the program's other ids do not move.
   // The all-ones constants of the circuits' step nodes (emit_export.h): a
   // Boolean check on a view (a late or derived value) reads ones - x, and
   // a predicate asserted true reads ones - root, each with the domain's
   // constant of as many ones as the checked value has coordinates. A
-  // constant the program lacks is added here, after equation_forms, so its
-  // value id follows every other value's (late_consts_).
+  // constant the program lacks is added here, after every other value, so
+  // its value id follows every other value's (late_consts_).
   void step_ones() {
+    late_consts_ = const_recs_.size();
     with_domain_all([&](const auto &d) {
       if (d.index < 0) return;
       const DomainPlan &plan = plan_of(size_t(d.index));
@@ -2633,126 +2724,6 @@ class ProgramBuilder : Lowering {
         }
       }
     });
-  }
-
-  void equation_forms() {
-    late_consts_ = const_recs_.size();
-    with_domain_all([&](const auto &d) {
-      const DomainPlan &plan = plan_of(size_t(d.index));
-      const auto &preds = d.predicates();
-      for (const auto &eq : cs_.records().product_mod_equalities) {
-        if (eq.domain != d.name || !eq.spectral) continue;
-        for (size_t k = 0; k < preds.size() && k < plan.pred_targets.size(); ++k)
-          if (preds[k].name == eq.name &&
-              plan.pred_targets[k].where == Placement::kCircuit)
-            node(d, *preds[k].e);
-      }
-    });
-  }
-
-  // The parts P (sign +1) and N (sign -1) of congruence CONG of the product
-  // form NAME as expressions: each row the sum of its terms of that sign
-  // (a zero constant for none), the rows concatenated. A term is the sum of
-  // its integer parts: an expression part is the expression; a kernel part
-  // s (h * x) is the convolution by the spectrum, NamedOp negacyclicConv
-  // (or polyBroadcast over the blocks of its value, read at the part's
-  // block) in NTT form at the transform's root and order (ConvForm .ntt or
-  // .nttNatural), applied to x's coordinates [x_at, x_at + n), scaled by s.
-  // Each part's operand (an expression part's expression; a kernel part's
-  // x before its slice), in order over the rows, terms and parts, and the
-  // kernels' operators are recorded for the derivation (term_operands_,
-  // kernels_).
-  template <class F>
-  std::pair<Ex, Ex> product_parts(const Domain<F> &d,
-                                  const ops::Congruence<F> &cong,
-                                  const std::string &name) {
-    using T = ops::IntPart<F>;
-    auto &operands = term_operands_[name];
-    operands.clear();
-    std::vector<Ex> sides[2];
-    for (size_t i = 0; i < cong.rows(); ++i) {
-      std::optional<Ex> row[2];
-      for (const auto &st : cong.row(i)) {
-        std::optional<Ex> term;
-        for (const T &t : st.term->parts()) {
-          Ex e;
-          if (t.kind == T::kExpr) {
-            e = convert(d, t.e);
-            operands.push_back(e.e);
-          } else {
-            const size_t n = t.ntt->n;
-            const Ex x = convert(d, t.e);
-            operands.push_back(x.e);
-            Ex xs = x;
-            if (t.x_at != 0 || x.n != n) {
-              if (t.x_at + n > x.n) export_fail("a kernel part's operand is short");
-              std::vector<size_t> idx(n);
-              for (size_t j = 0; j < n; ++j) idx[j] = t.x_at + j;
-              xs = reindex(index_map(std::move(idx)), n, x);
-            }
-            const auto kb = kernel_block(d, t.spec.id, t.spec_at, n);
-            if (!kb)
-              export_fail("the spectrum '" + t.spec.name() + "' at " +
-                          std::to_string(t.spec_at) +
-                          " is no aligned block of one value");
-            const auto [v, off] = *kb;
-            const size_t size = cs_.nodes().at(v).n, K = size / n, b = off / n;
-            ir::NamedOp o;
-            o.kind = K == 1 ? ir::NamedOp::kNegacyclicConv
-                            : ir::NamedOp::kPolyBroadcast;
-            o.value = Id(v);
-            if (K > 1) o.nats = {K};
-            o.ntt_form = true;
-            o.natural_order = t.ntt->order == ops::NttOrder::kNatural;
-            o.elt = enc(d.field(), t.ntt->psi);
-            const Id op = op_of(std::move(o));
-            kernels_[{name, t.spec.id, t.spec_at}] = {op, v, b};
-            e = apply(op, K * n, {v}, xs);
-            if (K > 1) {
-              std::vector<size_t> idx(n);
-              for (size_t j = 0; j < n; ++j) idx[j] = b * n + j;
-              e = reindex(index_map(std::move(idx)), n, e);
-            }
-            e = scale(d, t.scale, e);
-          }
-          term = term ? add(*term, e) : e;
-        }
-        if (!term) export_fail("a term of the congruence has no parts");
-        auto &r = row[st.sign > 0 ? 0 : 1];
-        r = r ? add(*r, *term) : *term;
-      }
-      for (int a = 0; a < 2; ++a)
-        sides[a].push_back(row[a] ? *row[a]
-                                  : const_leaf(d, repeat_const(d, d.field().zero(),
-                                                               cong.n()),
-                                               cong.n()));
-    }
-    auto join = [&](std::vector<Ex> &v) { return v.size() == 1 ? v[0] : concat(v); };
-    return {join(sides[0]), join(sides[1])};
-  }
-  // The value and offset of coordinates [AT, AT + N) of node ID when they
-  // are, in order, the coordinates [OFF, OFF + N) of one exported value
-  // with OFF and the value's length multiples of N (ID itself, or the
-  // sources of a view); none otherwise.
-  template <class F>
-  std::optional<std::pair<size_t, size_t>> kernel_block(const Domain<F> &d,
-                                                        size_t id, size_t at,
-                                                        size_t n) const {
-    size_t v = id, off = at;
-    if (cls_[id] != kValue) {
-      const auto *src = d.view_sources(id);
-      if (src == nullptr || at + n > src->size()) return std::nullopt;
-      v = (*src)[at].first;
-      off = (*src)[at].second;
-      if (v == kZeroCoordinate) return std::nullopt;
-      for (size_t j = 0; j < n; ++j)
-        if ((*src)[at + j].first != v || (*src)[at + j].second != off + j)
-          return std::nullopt;
-    }
-    if (v >= cls_.size() || cls_[v] != kValue || n == 0 || off % n != 0 ||
-        cs_.nodes().at(v).n % n != 0)
-      return std::nullopt;
-    return std::make_pair(v, off);
   }
 
   // The assert_mod predicates of domain D (the application's and the MAC
@@ -2781,9 +2752,16 @@ class ProgramBuilder : Lowering {
       p.p.origin = {ir::Origin::kMod, Id(di), ei};
       p.p.q = bound_str(eq.m);
       p.mod_ranges = eq.name;
+      if (eq.expr_sides) expr_mods_.insert(eq.name);
       describe(std::move(p), [&](PredRec &q) {
-        Ex l = lin(d, *static_cast<const Lin<F> *>(eq.lhs.get()));
-        Ex r = lin(d, *static_cast<const Lin<F> *>(eq.rhs.get()));
+        // Expression sides (mod.h's expression_sides) print as the
+        // expressions their row NAME.row reads.
+        Ex l = eq.expr_sides
+                   ? convert(d, *static_cast<const ExprPtr<F> *>(eq.lhs.get()))
+                   : lin(d, *static_cast<const Lin<F> *>(eq.lhs.get()));
+        Ex r = eq.expr_sides
+                   ? convert(d, *static_cast<const ExprPtr<F> *>(eq.rhs.get()))
+                   : lin(d, *static_cast<const Lin<F> *>(eq.rhs.get()));
         q.p.mod = mod_realization(d, eq);
         return std::make_pair(std::move(l), std::move(r));
       });
@@ -3498,10 +3476,14 @@ class ProgramBuilder : Lowering {
     using CS = ir::Certificates::CStep;
     const size_t nv = P_.values.size(), np = P_.predicates.size();
     // The first row of kind K of mod_q M (PlanRecords::ModRow), by the
-    // lowerings' row names (kNone where none).
+    // lowerings' row names (kNone where none); a row the lowering placed
+    // as a predicate (the expression sides' NAME.row) by its name after
+    // the affine rows.
     std::map<std::string, Id> row_id;
     for (size_t i = 0; i < preds_.size(); ++i)
       if (preds_[i].row) row_id.emplace(preds_[i].name, Id(i));
+    for (size_t i = 0; i < preds_.size(); ++i)
+      if (!preds_[i].row) row_id.emplace(preds_[i].name, Id(i));
     auto mod_row = [&](size_t m, PlanRecords::ModRow::Kind k) -> Id {
       if (m >= preds_.size() || preds_[m].mod_ranges.empty()) return kNone;
       for (const auto &r : cs_.records().mod_rows)
@@ -3531,16 +3513,58 @@ class ProgramBuilder : Lowering {
     for (const auto &x : certs_.lookup_owners)
       if (x.value < nv && certs_.gens[x.value].kind == CG::kNone)
         certs_.gens[x.value] = CG{CG::kLookupDigit, x.pid, x.idx, 0, 0, x.second};
+    // A quotient digit that the range planner looks up directly is the
+    // committed record of its lookup: generated as the lookup's one digit
+    // (Lean `commDirectCB`), digit j of the honest quotient.
+    for (size_t m = 0; m < np; ++m) {
+      const ir::Predicate &q = P_.predicates[m];
+      if (q.body != ir::Predicate::kMod || q.role != ir::Predicate::Role::kSource ||
+          q.mod.form != ir::ModForm::kCommittedDigits)
+        continue;
+      for (size_t j = 0; j < q.mod.ranges.size() && j < q.mod.digits.size(); ++j) {
+        const Id lk = q.mod.ranges[j], dj = q.mod.digits[j];
+        if (lk >= np || dj >= P_.nodes.size() || P_.nodes[dj].op != ir::Expr::kLeaf) continue;
+        const ir::Predicate &l = P_.predicates[lk];
+        if (l.body != ir::Predicate::kMem || l.in.implied ||
+            l.in.lookup.kind != ir::LookupKind::kDirect)
+          continue;
+        const size_t v = size_t(P_.nodes[dj].x);
+        if (v < nv && certs_.gens[v].kind == CG::kNone)
+          certs_.gens[v] = CG{CG::kCommDigit, m, j, size_t(lk), 0, false};
+      }
+    }
     // The transformed value z of each spectrally realized convolution: the
     // right side of its products predicate NTT(a) NTT(b) = z.
     for (size_t k = 0; k < P_.convs.size(); ++k) {
       const Id p = P_.convs[k].products;
       if (p >= P_.predicates.size()) continue;
+      // A direct conv's C: its reading's leaf, generated as the source.
+      if (P_.convs[k].direct) {
+        const Id kr = P_.convs[k].read;
+        const Id e = kr < P_.exprs.size() ? P_.exprs[kr] : kNone;
+        if (e < P_.nodes.size() && P_.nodes[e].op == ir::Expr::kLeaf) {
+          const size_t c = size_t(P_.nodes[e].x);
+          if (c < nv && certs_.gens[c].kind == CG::kNone)
+            certs_.gens[c] = CG{CG::kSpecC, k, 0, 0, 0, false};
+        }
+        continue;
+      }
       const Id r = P_.predicates[p].rhs;
       if (r >= P_.nodes.size() || P_.nodes[r].op != ir::Expr::kLeaf) continue;
       const size_t z = size_t(P_.nodes[r].x);
       if (z < nv && certs_.gens[z].kind == CG::kNone)
         certs_.gens[z] = CG{CG::kSpec, k, 0, 0, 0, false};
+      // A committed conv's C: its shared leaf's value, generated as the
+      // conv's source.
+      const Id kc = P_.convs[k].committed;
+      if (kc < P_.exprs.size()) {
+        const Id e = P_.exprs[kc];
+        if (e < P_.nodes.size() && P_.nodes[e].op == ir::Expr::kLeaf) {
+          const size_t c = size_t(P_.nodes[e].x);
+          if (c < nv && certs_.gens[c].kind == CG::kNone)
+            certs_.gens[c] = CG{CG::kSpecC, k, 0, 0, 0, false};
+        }
+      }
     }
     certs_.comp_derivs.assign(np, {});
     certs_.comp_ranks.assign(np, 0);
@@ -3562,8 +3586,8 @@ class ProgramBuilder : Lowering {
         if (rid < np && certs_.comp_derivs[rid].empty())
           certs_.comp_derivs[rid] = {CS{CS::kQuotIn, m}};
     }
-    // A source committed-digits mod_q's quotient-digit lookups by `commIn`
-    // (the first mod_q listing each, as comm_owners), and its field equation
+    // A source committed-digits mod_q's quotient-digit lookups, by digits or
+    // direct, by `commIn` (the first mod_q listing each), and its field equation
     // (its realize record) by `commRow`, naming the lookup of each digit.
     for (size_t m = 0; m < np; ++m) {
       const ir::Predicate &q = P_.predicates[m];
@@ -3577,7 +3601,8 @@ class ProgramBuilder : Lowering {
         if (lk >= np || !certs_.comp_derivs[lk].empty()) continue;
         const ir::Predicate &l = P_.predicates[lk];
         if (l.body != ir::Predicate::kMem || l.in.implied ||
-            l.in.lookup.kind != ir::LookupKind::kDigits)
+            (l.in.lookup.kind != ir::LookupKind::kDigits &&
+             l.in.lookup.kind != ir::LookupKind::kDirect))
           continue;
         CS st{CS::kCommIn, m};
         st.j = j;
@@ -3592,15 +3617,32 @@ class ProgramBuilder : Lowering {
     }
     // The products predicate of each spectrally realized convolution, the
     // realized predicate of each source equal or mod_0 that reads one
-    // (its target `realized q`), and the field row of each source
+    // (its target `realized q`) and of each realization's equal that does,
+    // and the field row of each source
     // field-form mod_q (its realized predicates, Certificates::realize).
     for (size_t k = 0; k < P_.convs.size(); ++k) {
       const Id p = P_.convs[k].products;
       if (p < np && certs_.comp_derivs[p].empty())
         certs_.comp_derivs[p] = {CS{CS::kSpecProd, k}};
+      // A committed conv's row C = INTT(z)[0, lo) by `specC`.
+      const Id row = P_.convs[k].row;
+      if (row < np && certs_.comp_derivs[row].empty())
+        certs_.comp_derivs[row] = {CS{CS::kSpecC, k}};
     }
     for (size_t m = 0; m < np; ++m) {
       const ir::Predicate &q = P_.predicates[m];
+      // A realization's equal that reads a spectral realization (a
+      // committed-digits row): its realized predicate ranks above it (Lean
+      // `specRow` reads its holds by rank).
+      if (q.role == ir::Predicate::Role::kRealization &&
+          q.body == ir::Predicate::kEqual && q.target.kind == ir::Target::kRealized) {
+        const Id r = q.target.id;
+        if (r < np && certs_.comp_derivs[r].empty()) {
+          certs_.comp_derivs[r] = {CS{CS::kSpecRow, m}};
+          certs_.comp_ranks[r] = certs_.comp_ranks[m] + 1;
+        }
+        continue;
+      }
       if (q.role != ir::Predicate::Role::kSource) continue;
       Id r = kNone;
       if (q.body == ir::Predicate::kEqual && q.target.kind == ir::Target::kRealized)
@@ -3851,7 +3893,7 @@ class ProgramBuilder : Lowering {
         gap("value '" + v.name + "' has no type source");
     }
     // Value ids: constants, then nodes in order, then the constants of
-    // the asserted equations (equation_forms).
+    // the circuits' step nodes (step_ones).
     const size_t early = std::min(late_consts_, const_recs_.size());
     for (size_t k = 0; k < early; ++k) id_of_[const_recs_[k].key] = id_of_.size();
     for (size_t id = 0; id < N.size(); ++id)
@@ -4016,24 +4058,6 @@ class ProgramBuilder : Lowering {
       q.needles = r.needles;
       q.size = r.size;
       P_.predicates.push_back(std::move(q));
-    }
-    // The quotient of a source product-form mod_q is a source value (the
-    // declaration commits it with the program), so its range is a source
-    // predicate too, as the source program reads it (Lean `inSource`).
-    for (size_t i = 0; i < P_.predicates.size(); ++i) {
-      const ir::Predicate &m = P_.predicates[i];
-      if (m.body != ir::Predicate::kMod || m.role != ir::Predicate::Role::kSource ||
-          (m.mod.form != ir::ModForm::kProduct &&
-           m.mod.form != ir::ModForm::kSpectralProduct))
-        continue;
-      for (Id rid : m.mod.ranges) {
-        if (rid >= P_.predicates.size()) continue;
-        ir::Predicate &rq = P_.predicates[rid];
-        if (rq.role == ir::Predicate::Role::kRealization && rq.owner == Id(i)) {
-          rq.role = ir::Predicate::Role::kSource;
-          rq.owner = kNone;
-        }
-      }
     }
     // Tables.
     for (const auto &T : tables_) {
@@ -4329,7 +4353,17 @@ class ProgramBuilder : Lowering {
         }
         continue;
       }
-      if (q.target.kind == ir::Target::kRealized) {
+      // A field equal read through committed readings (a predicate not
+      // affine in its convolutions) holds as every field equal does (its
+      // realized predicate's sides with the readings replaced, Lean
+      // `fieldEq_of_realized`): realized, conclude, below.
+      bool committed_read = false;
+      for (const ir::SpectralConv &c : P_.convs)
+        committed_read = committed_read ||
+                         ((c.committed != kNone || c.direct) && c.products < np &&
+                          P_.predicates[c.products].owner == Id(i));
+      if (q.target.kind == ir::Target::kRealized &&
+          !(q.body == ir::Predicate::kEqual && committed_read)) {
         // A predicate read through spectrally realized convolutions: each
         // convolution's source equals its reading once its products
         // predicate holds (linop spectral), so the realized predicate's
@@ -4403,7 +4437,7 @@ class ProgramBuilder : Lowering {
         certs_.derivations[i] = std::move(st);
         continue;
       }
-      if (q.body == ir::Predicate::kEqual && q.target.kind != ir::Target::kRealized) {
+      if (q.body == ir::Predicate::kEqual) {
         ir::DStep r, c;
         r.rule = ir::DStep::kRealized;
         r.id = Id(i);
@@ -4478,6 +4512,13 @@ class ProgramBuilder : Lowering {
         prune(certs_.derivations[i]);
         e = check.check(i);
       }
+      // An assert_mod over expression sides states its sides' intervals as
+      // interval propagation gave them at the lowering (expr_interval); a
+      // walk the check refuses (wider than them, or none) fails the export.
+      if (!e.empty() && expr_mods_.count(P_.predicates[i].name))
+        export_fail("assert_mod '" + P_.predicates[i].name +
+                    "': its derivation from the sides' intervals of the "
+                    "lowering does not check: " + e);
       if (!e.empty()) refuse(i, e);
     }
     // A mod_0 cites its sides' intervals as shared facts (the honest checks
@@ -4722,24 +4763,6 @@ class ProgramBuilder : Lowering {
         }
         case R::kSrc: {
           using K0 = PlanRecords::DerivIvlSrc;
-          if (s.src.kind == K0::kTableKernel) {
-            // The kernel of the product form's term reading the spectrum
-            // (node, offset): its operator, value and block.
-            auto k = kernels_.find({d.pred, s.node, s.a});
-            if (k == kernels_.end())
-              dfail("no kernel reads the spectrum '" +
-                    cs_.nodes().at(s.node).name + "'");
-            const auto &[op, val, blk] = k->second;
-            x.src = ir::DStep::kTableKernel;
-            x.id = Id(id_of_.at(val));
-            x.src_arg = op;
-            x.ints.push_back(std::to_string(blk));
-            for (const auto &q : s.names) {
-              x.tails.push_back(dpid(q, false));
-              if (x.tails.back() == kNone) dfail("no selection '" + q + "'");
-            }
-            break;
-          }
           auto v = id_of_.find(s.node);
           if (v == id_of_.end())
             dfail("a source on '" + cs_.nodes().at(s.node).name +
@@ -4763,8 +4786,6 @@ class ProgramBuilder : Lowering {
                 x.tails.push_back(dpid(q, false));
                 if (x.tails.back() == kNone) dfail("no selection '" + q + "'");
               }
-              break;
-            case K::kTableKernel:
               break;
             case K::kQuadRoot:
             case K::kRootSet:
@@ -4865,7 +4886,6 @@ class ProgramBuilder : Lowering {
       case R::kMac: return D::kMac;
       case R::kLinop: return D::kLinop;
       case R::kConclude: return D::kConclude;
-      case R::kProductMod: return D::kProductMod;
       case R::kInline:
       case R::kViewIvl:
         break;
@@ -4921,16 +4941,6 @@ class ProgramBuilder : Lowering {
         x.a = dexpr(e.args.at(0), pid);
         x.b = dexpr(e.args.at(1), pid);
         break;
-      case K::kTermOperand: {
-        auto t = term_operands_.find(e.item);
-        if (t == term_operands_.end() || e.a >= t->second.size() ||
-            t->second[e.a] == kNone)
-          dfail("no operand of term " + std::to_string(e.a) + " of '" +
-                e.item + "'");
-        x.kind = ir::DExpr::kProgram;
-        x.id = t->second[e.a];
-        break;
-      }
       case K::kApplyIn: {
         const Id q = dpid(e.item, e.row);
         if (q == kNone) dfail("no predicate '" + e.item + "'");
@@ -5175,7 +5185,7 @@ class ProgramBuilder : Lowering {
   std::vector<Cls> cls_;
   std::map<size_t, ValueRec> vals_;
   std::vector<ValueRec> const_recs_;
-  // The constants from equation_forms on (const_recs_[late_consts_, …)):
+  // The constants from step_ones on (const_recs_[late_consts_, …)):
   // their value ids follow every other value's.
   size_t late_consts_ = SIZE_MAX;
   std::map<std::pair<size_t, std::vector<std::string>>, size_t> consts_;
@@ -5200,6 +5210,16 @@ class ProgramBuilder : Lowering {
   std::map<size_t, size_t> mac_place_;
   std::map<std::string, size_t> pred_id_;
   std::set<std::string> mod_names_;
+  // A direct conv's products predicate by name: its conv's index in P_.convs.
+  std::map<std::string, size_t> conv_products_;
+  // A committed conv's affine row by name: its conv's index in P_.convs and
+  // its realization.
+  std::map<std::string, std::pair<size_t, const SpecConv *>> conv_row_;
+  // The shared leaf a committed conv's C reads as, by the node the
+  // rewritten predicate reads it as.
+  std::map<const void *, Ex> committed_node_;
+  // The assert_mods over expression sides (mod.h's expression_sides).
+  std::set<std::string> expr_mods_;
   std::set<size_t> public_view_;
   // The source values bound to their digits (kind bound).
   std::set<size_t> bound_;
@@ -5209,13 +5229,6 @@ class ProgramBuilder : Lowering {
   // requests by name.
   std::map<std::string, std::tuple<Bound, Bound, Bound>> req_bounds_;
   std::map<std::string, std::vector<std::string>> mod_ranges_;
-  // The product forms' term operands (expression ids, kNone for an
-  // expression term), by predicate name, and their kernels: (name, spectrum
-  // node, offset) -> (operator, value key, block) (product_side).
-  std::map<std::string, std::vector<Id>> term_operands_;
-  std::map<std::tuple<std::string, size_t, size_t>,
-           std::tuple<Id, size_t, size_t>>
-      kernels_;
   std::map<size_t, std::vector<std::pair<size_t, size_t>>> public_wiring_;
   std::vector<TableRec> tables_;
   std::vector<std::tuple<DomainPlan::Batch, size_t, bool>> batches_;

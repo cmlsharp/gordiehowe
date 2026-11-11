@@ -30,7 +30,7 @@ commit-and-prove"; LegoSNARK p. 1) for quadratic constraints on cells `ι → F`
 cells extracted from the commit phase (`extract`, part of every extractor built on the system, so
 an instance must give a computable, polynomial-time one), the oracle structure that the BCS
 compilation reads (the leaves and the queried leaves `queries ch`; the byte serialization of a
-leaf is the BCS format's leaf codec, `BCS.Format.leaf`), the proof phase and its verifier `V`,
+leaf is the BCS format's leaf codec, `SPBCS.Setting.leaf`), the proof phase and its verifier `V`,
 with the locality of the verdict (`reads`: the verdict depends on the oracle message only through
 the queried leaves, `SameLeavesAt`, and every other message is read in full, a non-oracle message
 in the sense of CY24 p. 259). Its soundness with commit-phase errors `εc` and proof-phase errors
@@ -280,6 +280,7 @@ structure Honest (CP : CommitProve F ι products Ctx rows) (S : CP.Sim) where
   Coins : Type
   [fintype : Fintype Coins]
   [nonempty : Nonempty Coins]
+  [decEq : DecidableEq Coins]
   /-- The honest oracle message for the cells. -/
   commit : (ι → F) → Coins → CP.Com
   /-- The honest commit rounds for the cells. -/
@@ -299,7 +300,7 @@ structure Honest (CP : CommitProve F ι products Ctx rows) (S : CP.Sim) where
     (fun ρ => CP.view ch (commit x ρ) ((commitRounds x ρ).transcript chc)
       ((prove c x ρ ((commitRounds x ρ).transcript chc)).transcript ch)) =ᵈ S.sim c chc ch
 
-attribute [instance] Honest.fintype Honest.nonempty
+attribute [instance] Honest.fintype Honest.nonempty Honest.decEq
 
 /-! ### Soundness with a condition on the extracted cells -/
 

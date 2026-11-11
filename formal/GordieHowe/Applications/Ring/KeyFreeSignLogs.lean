@@ -52,9 +52,10 @@ open RingSignature.Insider
 section Asks
 
 variable {X Y Y₁ Y₂ : Type} [DecidableEq X] [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂]
-  (sp : OracleSplit Y Y₁ Y₂) {N n : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB)
-  {Pf PC : Type} {iFP : Fintype Pf} {iDP : DecidableEq Pf} {iFC : Fintype PC}
-  {iDC : DecidableEq PC} {iNC : Nonempty PC}
+  (sp : OracleSplit Y Y₁ Y₂) {N n : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
+  (B : BaseSigner X Y N TB)
+  {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
+  [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) ⟨Pf, PC⟩} {adm : KeyRing B.PK N → Prop}
   [DecidablePred adm] {SC X₀ R Pb : Type} (pks : Fin n → B.PK)
   {ksign : B.PK → KeyRing B.PK N → ℕ → B.Msg → SC →
@@ -69,7 +70,7 @@ signing request `r = sign s Rg m` of a member `s` of a supported ring `Rg`, with
 the base component read through `T` overridden by the signature's assignments
 `F.asg … (sp y).2`. -/
 def KFSignedOf (ω : X → Y₁) (T : X → Option Y) (c : ℕ) (r : Req B PS adm n)
-    (r' : MURequest (SignOracle.none B) n ⊕ R) : Prop :=
+    (r' : MURequest (SignOracle.none B.core) n ⊕ R) : Prop :=
   ∃ (s : Fin n) (Rg : KeyRing B.PK N) (m : B.Msg) (hc : c < Q) (q : Pb × B.BSig) (y : Y),
     r = .sign s Rg m ∧ pks s ∈ Rg.1 ∧ adm Rg ∧
     F.out (ωT sp ω T) (pks s) Rg c m (sc ⟨c, hc⟩) = some q ∧
@@ -79,7 +80,7 @@ def KFSignedOf (ω : X → Y₁) (T : X → Option Y) (c : ℕ) (r : Req B PS ad
 
 /-- **A signed request of the relay at the base component `ω`**: the signed request
 (`KFSignedOf`) of the program of some request, request number and table. -/
-def KFSignedAsk (ω : X → Y₁) (r' : MURequest (SignOracle.none B) n ⊕ R) : Prop :=
+def KFSignedAsk (ω : X → Y₁) (r' : MURequest (SignOracle.none B.core) n ⊕ R) : Prop :=
   ∃ T c r, KFSignedOf sp B pks F stmtPω toR sc ω T c r r'
 
 variable (dummyR : Req B PS adm n × ℕ → R)
@@ -95,7 +96,7 @@ def KFSigOut (ω : X → Y₁) (T : X → Option Y) (c : ℕ) (r : Req B PS adm 
     o = some (F.pub (ωT sp ω T) (pks s) Rg m q.1, q.2,
       F.asg (ωT sp ω T) (pks s) Rg m q.1 (sp y).2)
 
-omit [DecidableEq X] in
+omit [DecidableEq X] [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The outputs of the signature at the base component** on every path are `KFSigOut`. -/
 theorem allOut_sigPω (ω : X → Y₁) (T : X → Option Y) (c : ℕ) (r : Req B PS adm n) :
     (sigPω sp B pks F sc ω T c r).AllOut (KFSigOut sp B pks F sc ω T c r) := by
@@ -110,7 +111,7 @@ theorem allOut_sigPω (ω : X → Y₁) (T : X → Option Y) (c : ℕ) (r : Req 
       exact .inl rfl
   · exact .inl rfl
 
-omit [DecidableEq X] in
+omit [DecidableEq X] [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The outputs of the signature over base reads in side-read mode**, its side reads answered by
 `ω`, on every path are `KFSigOut`. -/
 theorem allOut_elimSide_sigK_sgnB [Inhabited X] [Inhabited B.Pub]
@@ -119,7 +120,7 @@ theorem allOut_elimSide_sigK_sgnB [Inhabited X] [Inhabited B.Pub]
     (r : Req B PS adm n) :
     (elimSide (KFReads.viaSide (fun y => (sp y).1) ω).side
         ((KFReads.viaSide (fun y => (sp y).1) ω).lift
-          (Req' := MURequest (SignOracle.none B) n ⊕ R) (Resp' := MUResponse B ⊕ Pf)
+          (Req' := MURequest (SignOracle.none B.core) n ⊕ R) (Resp' := MUResponse B.core ⊕ Pf)
           (fun _ => none) (overT T fun _ => none) (sigK B pks sc (sgnB sp B F S) c r))).AllOut
       (KFSigOut sp B pks F sc ω T c r) := by
   rcases r with i | ⟨s, Rg, msg⟩ | ⟨i, bm⟩
@@ -133,7 +134,7 @@ theorem allOut_elimSide_sigK_sgnB [Inhabited X] [Inhabited B.Pub]
             Sum.inr) id (fun _ => rfl)]
       change OracleProg.AllOut (elimSide _ (translate _ _ _)) _
       have hb : (fun x => baseOf sp ((KFReads.viaSide (fun y => (sp y).1) ω).readAns
-          (Resp' := MUResponse B ⊕ Pf) (fun _ => none) (overT T fun _ => none) (.inr x)
+          (Resp' := MUResponse B.core ⊕ Pf) (fun _ => none) (overT T fun _ => none) (.inr x)
           (.inl (.inr ((KFReads.viaSide (fun y => (sp y).1) ω).side (id x)))))) = ωT sp ω T :=
         ωT_eq sp ω T
       simp only [Function.comp_def] at hb ⊢
@@ -152,13 +153,14 @@ theorem allOut_elimSide_sigK_sgnB [Inhabited X] [Inhabited B.Pub]
       exact .inl rfl
   · exact .inl rfl
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **Every main request of the key-free relay in side-read mode, its side reads answered by `ω`,
 is a dummy or a corruption of its request, or its signed request** (`KFSignedOf`). -/
 theorem asksIn_kfRelaySide_signed [Inhabited X] [Inhabited B.Pub]
     {stmtPω : (X → Y₁) → RingStmt B → X₀}
     (S : KFStmt stmtPω) (ω : X → Y₁)
-    (idle : MURequest (SignOracle.none B) n ⊕ R) (T : X → Option Y) (c : ℕ) (r : Req B PS adm n) :
-    MultiRelay.AsksIn (MUResponse B ⊕ Pf)
+    (idle : MURequest (SignOracle.none B.core) n ⊕ R) (T : X → Option Y) (c : ℕ) (r : Req B PS adm n) :
+    MultiRelay.AsksIn (MUResponse B.core ⊕ Pf)
       (elimSide (kfRelaySide sp B pks F S toR dummyR sc ω idle).side
         ((kfRelaySide sp B pks F S toR dummyR sc ω idle).prog T c r))
       fun r' => r' = reqOf B toR dummyR c r none none ∨
@@ -190,7 +192,10 @@ section SPBCS
 open GordieHowe.SPBCS IOP SPTerm RingSignature.Insider
 
 variable {k kN kS L e N n t : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq Yb]
-  {TB : BaseTypes} {B : BaseSigner Xb Yb N TB}
+  {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
+  [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  {B : BaseSigner Xb Yb N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -200,12 +205,12 @@ variable {k kN kS L e N n t : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq 
   {Stmt Wit SC R Frg : Type} [Fintype Stmt] [DecidableEq Stmt] [Inhabited Stmt]
   [Fintype R] [DecidableEq R] [Inhabited R] [Fintype SC] [DecidableEq SC]
   {rel : Stmt → Wit → Prop} [DecidableRel rel]
-  {enc : MURequest (SignOracle.none B) n ⊕ R → ProofQuery Stmt Wit} {dummyS : Stmt}
+  {enc : MURequest (SignOracle.none B.core) n ⊕ R → ProofQuery Stmt Wit} {dummyS : Stmt}
   {isDummy : X₀ → Bool} [Inhabited M.NIProof]
 
 local notation "Xq" => Bits (queryBits k kN kS L)
 
-local notation "MUR" => MURequest (SignOracle.none B) n
+local notation "MUR" => MURequest (SignOracle.none B.core) n
 
 variable {Y Y₁ Req₀ Resp₀ : Type} [Fintype Y] [DecidableEq Y] [Fintype Y₁] [DecidableEq Y₁]
   [Fintype Req₀] [DecidableEq Req₀] [Fintype Resp₀] [DecidableEq Resp₀] [Inhabited Req₀]
@@ -219,7 +224,7 @@ noncomputable def kfRecord {SC' : Type} [Fintype SC'] [DecidableEq SC'] [Decidab
     (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins) (Q : ℕ)
     {shA₀ : AlgShape Xq Y Req₀ Resp₀} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀))
     {Xs Ys : Type} [AddGroup Ys] [Fintype Ys] [DecidableEq Ys]
-    (G : AssignRelay Xq Y Req₀ Resp₀ (MUR ⊕ R) (MUResponse B ⊕ M.Response b) Xs Ys)
+    (G : AssignRelay Xq Y Req₀ Resp₀ (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) Xs Ys)
     (sp : Y ≃+ Y₁ × XOut k e) (ω : Xq → Y₁)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (c : SPBCS.Reg (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) prf keys Q
@@ -240,14 +245,14 @@ theorem simProb_seAlgKF_asks {SC' : Type} [Fintype SC'] [DecidableEq SC'] [Decid
     (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins) (Q : ℕ)
     {shA₀ : AlgShape Xq Y Req₀ Resp₀} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀))
     {Xs Ys : Type} [AddGroup Ys] [Fintype Ys] [DecidableEq Ys]
-    (G : AssignRelay Xq Y Req₀ Resp₀ (MUR ⊕ R) (MUResponse B ⊕ M.Response b) Xs Ys)
+    (G : AssignRelay Xq Y Req₀ Resp₀ (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) Xs Ys)
     (sp : Y ≃+ Y₁ × XOut k e) (ω : Xq → Y₁)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (kq : ℕ)
     (Ev : SPBCS.Reg (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) prf keys Q
       (((A₀.absorbAssign G Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q → DB Xq (Out k e) → Prop)
     (Pa : MUR ⊕ R → Prop)
-    (hP : ∀ T c r, MultiRelay.AsksIn (MUResponse B ⊕ M.Response b)
+    (hP : ∀ T c r, MultiRelay.AsksIn (MUResponse B.core ⊕ M.Response b)
       (elimSide G.side (G.prog T c r)) Pa)
     (p : MUR ⊕ R → Bool) (hpd : p default = false) (hpi : p G.idle = false) :
     simProb (outEquiv k e)
@@ -296,7 +301,7 @@ theorem simProb_seAlgKF_jTagged {SC' : Type} [Fintype SC'] [DecidableEq SC'] [De
     (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins) (Q : ℕ)
     {shA₀ : AlgShape Xq Y Req₀ Resp₀} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀)) (hA : A₀.TracePreserving)
     {Xs Ys : Type} [AddGroup Ys] [Fintype Ys] [DecidableEq Ys]
-    (G : AssignRelay Xq Y Req₀ Resp₀ (MUR ⊕ R) (MUResponse B ⊕ M.Response b) Xs Ys)
+    (G : AssignRelay Xq Y Req₀ Resp₀ (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) Xs Ys)
     (sp : Y ≃+ Y₁ × XOut k e) (ω : Xq → Y₁)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (kq : ℕ)
@@ -318,7 +323,7 @@ theorem simProb_seAlgKF_jTagged {SC' : Type} [Fintype SC'] [DecidableEq SC'] [De
               c)[i']? = some (some r') →
             AdaptiveIAlg.jTest (X := Xq) (Y := Y) (Req := Req₀) Q j r = true →
             AdaptiveIAlg.jTest (X := Xq) (Y := Y) (Req := Req₀) Q j r' = true → r = r' := by
-  have hsupp := A₀.innerSupp_pureD (Req' := MUR ⊕ R) (Resp' := MUResponse B ⊕ M.Response b) Q j
+  have hsupp := A₀.innerSupp_pureD (Req' := MUR ⊕ R) (Resp' := MUResponse B.core ⊕ M.Response b) Q j
     hA hj
   have hR := (((A₀.absorbAssignP _ _ Q).relayAdv_logInvRaw_good (G.relayOf Q) Q
     ((A₀.absorbAssignP _ _ Q).relayOut (G.relayOf Q)) (AdaptiveIAlg.jTest Q j)
@@ -367,7 +372,7 @@ noncomputable def slotRequest {SC' : Type} [Fintype SC'] [DecidableEq SC'] [Deci
     (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins) (Q : ℕ)
     {shA₀ : AlgShape Xq Y Req₀ Resp₀} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀))
     {Xs Ys : Type} [AddGroup Ys] [Fintype Ys] [DecidableEq Ys]
-    (G : AssignRelay Xq Y Req₀ Resp₀ (MUR ⊕ R) (MUResponse B ⊕ M.Response b) Xs Ys)
+    (G : AssignRelay Xq Y Req₀ Resp₀ (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) Xs Ys)
     (sp : Y ≃+ Y₁ × XOut k e) (ω : Xq → Y₁)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (j : ℕ)
     (c : SPBCS.Reg (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) prf keys Q
@@ -384,7 +389,7 @@ theorem simProb_seAlgKF_slotRequest {SC' : Type} [Fintype SC'] [DecidableEq SC']
     [DecidableEq X₀] (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins)
     (Q : ℕ) {shA₀ : AlgShape Xq Y Req₀ Resp₀} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀)) (hA : A₀.TracePreserving)
     {Xs Ys : Type} [AddGroup Ys] [Fintype Ys] [DecidableEq Ys]
-    (G : AssignRelay Xq Y Req₀ Resp₀ (MUR ⊕ R) (MUResponse B ⊕ M.Response b) Xs Ys)
+    (G : AssignRelay Xq Y Req₀ Resp₀ (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) Xs Ys)
     (sp : Y ≃+ Y₁ × XOut k e) (ω : Xq → Y₁)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (kq : ℕ)
@@ -419,7 +424,7 @@ theorem simProb_seAlgKF_slotAsks {SC' : Type} [Fintype SC'] [DecidableEq SC']
     [DecidableEq X₀] (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins)
     (Q : ℕ) {shA₀ : AlgShape Xq Y Req₀ Resp₀} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀)) (hA : A₀.TracePreserving)
     {Xs Ys : Type} [AddGroup Ys] [Fintype Ys] [DecidableEq Ys]
-    (G : AssignRelay Xq Y Req₀ Resp₀ (MUR ⊕ R) (MUResponse B ⊕ M.Response b) Xs Ys)
+    (G : AssignRelay Xq Y Req₀ Resp₀ (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b) Xs Ys)
     (sp : Y ≃+ Y₁ × XOut k e) (ω : Xq → Y₁)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (kq : ℕ)
@@ -496,20 +501,25 @@ open GordieHowe.SPBCS IOP SPTerm
 
 variable {k kN kS L e N n : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁] [Fintype Y]
   [DecidableEq Y] [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁]
-  {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
+  {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
+  [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins]
+  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
   {X₀ Wit₀ : Type} {M : SPBCS Mg P X₀ k kN kS L e} {Λ : SiteLayout Mg} {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] {E : (j : ι) → (M.comp j).Encoder}
   {Vr : X₀ → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  {R : Type} [Fintype R] [Nonempty R] {honest : Wit₀ → R → CausalProver P τ X₀}
+  {R : Type} [Fintype R] [DecidableEq R] [Nonempty R] {honest : Wit₀ → R → CausalProver P τ X₀}
   {Stmt Wit Rq Frg : Type} {rel : Stmt → Wit → Prop}
-  {enc : MURequest (SignOracle.none B) n ⊕ Rq → ProofQuery Stmt Wit}
+  {enc : MURequest (SignOracle.none B.core) n ⊕ Rq → ProofQuery Stmt Wit}
   [DecidableEq X₀] [Fintype Stmt] [DecidableEq Stmt] [Inhabited Stmt]
   [Fintype Rq] [DecidableEq Rq] [Inhabited Rq]
   [DecidableRel rel] [Inhabited M.NIProof] {dummyS : Stmt}
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The logged requests of the key-free extraction run through the relay at the base
 component** (`simProb_seAlgKF_asks` with `asksIn_kfRelaySide_signed`): for an adversary with
 the key-free relay in side-read mode `kfRelaySide ω` absorbed at the base component `ω`, its
@@ -545,39 +555,39 @@ theorem simProb_seAlgKF_kfSigned (hb : M.FormatBounds Qs b b)
       Req B (Ring.spbcsSplitProofSystem sp M Λ E hb honest stmtProg qS hS check input) adm n × ℕ →
       Rq)
     {Q : ℕ} (sc : Fin Q → SC)
-    (idle : MURequest (SignOracle.none B) n ⊕ Rq) (ω : Bits (queryBits k kN kS L) → Y₁)
+    (idle : MURequest (SignOracle.none B.core) n ⊕ Rq) (ω : Bits (queryBits k kN kS L) → Y₁)
     {SC' : Type} [Fintype SC'] [DecidableEq SC'] (prf : Frg → Option M.NIProof)
     (keys : Fin n → B.KeyCoins)
     {shA₀ : AlgShape (Bits (queryBits k kN kS L)) Y (Req B (Ring.spbcsSplitProofSystem sp M Λ E hb honest stmtProg qS hS check input) adm n) (Resp B (Ring.spbcsSplitProofSystem sp M Λ E hb honest stmtProg qS hS check input) adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀))
     (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e)
-      (Stmt × (MURequest (SignOracle.none B) n ⊕ Rq)) (M.Response b) SC')
+      (Stmt × (MURequest (SignOracle.none B.core) n ⊕ Rq)) (M.Response b) SC')
     (kq : ℕ)
     (Ev : SPBCS.Reg (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) prf keys Q
-      (((A₀.absorbAssign (Resp' := MUResponse B ⊕ M.Response b)
+      (((A₀.absorbAssign (Resp' := MUResponse B.core ⊕ M.Response b)
         (kfRelaySide sp B pks F S toR dummyR sc ω idle) Q).restrictAt sp ω).mapOut Prod.fst))
       Psim Q → DB (Bits (queryBits k kN kS L)) (Out k e) → Prop)
-    (p : MURequest (SignOracle.none B) n ⊕ Rq → Bool) (hpd : p default = false)
+    (p : MURequest (SignOracle.none B.core) n ⊕ Rq → Bool) (hpd : p default = false)
     (hpi : p idle = false) (hpdum : ∀ r, p (.inr (dummyR r)) = false)
     (hpc : ∀ i, p (.inl (.corrupt i)) = false) :
     simProb (outEquiv k e)
         (extAdv Qs (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) prf keys Q
-          (((A₀.absorbAssign (Resp' := MUResponse B ⊕ M.Response b)
+          (((A₀.absorbAssign (Resp' := MUResponse B.core ⊕ M.Response b)
             (kfRelaySide sp B pks F S toR dummyR sc ω idle) Q).restrictAt
             sp ω).mapOut Prod.fst)) Psim Q kq)
         Ev ≤
       simProb (outEquiv k e)
         (extAdv Qs (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) prf keys Q
-          (((A₀.absorbAssign (Resp' := MUResponse B ⊕ M.Response b)
+          (((A₀.absorbAssign (Resp' := MUResponse B.core ⊕ M.Response b)
             (kfRelaySide sp B pks F S toR dummyR sc ω idle) Q).restrictAt
             sp ω).mapOut Prod.fst)) Psim Q kq)
         fun c D => Ev c D ∧
           ∀ r' ∈ Quantum.requests (SPBCS.advWorkspace (seAlgKF (rel := rel) (enc := enc)
             (dummyS := dummyS) prf keys Q
-            (((A₀.absorbAssign (Resp' := MUResponse B ⊕ M.Response b)
+            (((A₀.absorbAssign (Resp' := MUResponse B.core ⊕ M.Response b)
             (kfRelaySide sp B pks F S toR dummyR sc ω idle) Q).restrictAt
               sp ω).mapOut Prod.fst)).toTPKindAlg Psim Q c).1.1.logs, p r' = true →
             KFSignedAsk sp B pks F stmtPω toR sc ω r' := by
-  have hP : ∀ T c r, MultiRelay.AsksIn (MUResponse B ⊕ M.Response b)
+  have hP : ∀ T c r, MultiRelay.AsksIn (MUResponse B.core ⊕ M.Response b)
       (elimSide (kfRelaySide sp B pks F S toR dummyR sc ω idle).side
         ((kfRelaySide sp B pks F S toR dummyR sc ω idle).prog T c r))
       fun r' => p r' = true → KFSignedAsk sp B pks F stmtPω toR sc ω r' := by

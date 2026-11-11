@@ -168,7 +168,7 @@ variable {X Y : Type} {p : Params} {T : ℕ} {Msg : Type} {N reps : ℕ}
   {O : W1Oracles X Y p prims Msg N reps} {Mo : MaskOracle X Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O Mo βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O Mo βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
   {adm : KeyRing (PubKey p prims) N → Prop}
   [hadm : DecidablePred adm] {n Q : ℕ}
   {Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂]
@@ -199,43 +199,53 @@ noncomputable def w1ProofSw (t₀ : RingSignature.Insider.Req Bf PSf adm n × Fi
 the corruptions, key requests and dummy requests kept. -/
 noncomputable def w1MainSw (t₀ : RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1))
     (swσ : Equiv.Perm (FIPSSignature p prims)) :
-    Equiv.Perm (MURequest (SignOracle.none Bf) n ⊕
+    Equiv.Perm (MURequest (SignOracle.none (Bf).core) n ⊕
       W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q) :=
   Equiv.sumCongr (Equiv.refl _) (Equiv.sumCongr (w1ProofSw t₀ swσ) (Equiv.refl _))
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The moved main requests fix the requests to the main challenger**, the idle one among
 them. -/
 theorem w1MainSw_inl (t₀ : RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1))
-    (swσ : Equiv.Perm (FIPSSignature p prims)) (i : MURequest (SignOracle.none Bf) n) :
+    (swσ : Equiv.Perm (FIPSSignature p prims)) (i : MURequest (SignOracle.none (Bf).core) n) :
     w1MainSw t₀ swσ (.inl i) = .inl i :=
   rfl
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The moved main requests fix every request to the main challenger.** -/
 theorem w1MainSw_of_isLeft (t₀ : RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1))
     (swσ : Equiv.Perm (FIPSSignature p prims))
-    (a : MURequest (SignOracle.none Bf) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q)
+    (a : MURequest (SignOracle.none (Bf).core) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q)
     (ha : a.isLeft) : w1MainSw t₀ swσ a = a := by
   rcases a with _ | _
   · rfl
   · exact absurd ha (by simp)
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The moved main requests fix the dummy requests.** -/
 theorem w1MainSw_inr_inr (t₀ : RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1))
     (swσ : Equiv.Perm (FIPSSignature p prims))
     (d : RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1)) :
-    w1MainSw t₀ swσ (.inr (.inr d) : MURequest (SignOracle.none Bf) n ⊕
+    w1MainSw t₀ swσ (.inr (.inr d) : MURequest (SignOracle.none (Bf).core) n ⊕
       W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q) = .inr (.inr d) :=
   rfl
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The moved main requests fix the default request** (by instance inference a dummy
 request). -/
 theorem w1MainSw_default [NeZero n]
     (t₀ : RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1))
     (swσ : Equiv.Perm (FIPSSignature p prims)) :
-    w1MainSw t₀ swσ (default : MURequest (SignOracle.none Bf) n ⊕
+    w1MainSw t₀ swσ (default : MURequest (SignOracle.none (Bf).core) n ⊕
       W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q) = default :=
   rfl
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The moved main request of a request** is the main request of the request with its signature
 moved. -/
 theorem w1MainSw_reqOf (swσ : Equiv.Perm (FIPSSignature p prims))
@@ -255,8 +265,8 @@ variable (sp : Y ≃+ Y₁ × Y₂) [DecidableEq X] [Inhabited X] (hO : O.ReadsF
 
 local notation "Fw" => w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO
 /-- **A request to the main challenger as the idle request** of the relay. -/
-abbrev w1IdleOf (i : MURequest (SignOracle.none Bf) n) :
-    MURequest (SignOracle.none Bf) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q :=
+abbrev w1IdleOf (i : MURequest (SignOracle.none (Bf).core) n) :
+    MURequest (SignOracle.none (Bf).core) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q :=
   .inl i
 
 local notation "Sw" => w1KFStmt prims O Mo βmin tol enc k D bmsg sp
@@ -264,14 +274,16 @@ local notation "Sw" => w1KFStmt prims O Mo βmin tol enc k D bmsg sp
 /-- **The side-mode key-free relay at the ML-DSA ring publishing `w₁`**, at the side coins `sc`,
 the side function `ω` and the idle request `inl i`. -/
 noncomputable abbrev w1KFRelay (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁) (ω : X → Y₁)
-    (i : MURequest (SignOracle.none Bf) n) :=
+    (i : MURequest (SignOracle.none (Bf).core) n) :=
   AssignRelay.relayOf (kfRelaySide (PS := PSf) (adm := adm) sp Bf pks Fw Sw
     (w1ToR (PS := PS) (Q := Q)) (w1DummyR (PS := PS) (Q := Q)) sc ω (w1IdleOf i)) Q
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **(ii-b) at the ML-DSA ring publishing `w₁`**: the side-mode key-free relay at other side
 coins has its shape. -/
 theorem sameShape_w1KFRelaySide (sc sc' : Fin Q → KFCoins (p := p) (T := T) k D Y₁)
-    (ω : X → Y₁) (i : MURequest (SignOracle.none Bf) n) :
+    (ω : X → Y₁) (i : MURequest (SignOracle.none (Bf).core) n) :
     (w1KFRelay (Mo := Mo) (PS := PS) (adm := adm) sp hO pks sc ω i).SameShape
       (w1KFRelay (Mo := Mo) (PS := PS) (adm := adm) sp hO pks sc' ω i).prog :=
   sameShape_kfRelaySide sp Bf pks Fw Sw (w1ToR (PS := PS) (Q := Q)) (w1DummyR (PS := PS) (Q := Q))
@@ -279,10 +291,12 @@ theorem sameShape_w1KFRelaySide (sc sc' : Fin Q → KFCoins (p := p) (T := T) k 
     (fun Rg m y y' => (lockstep_hashesProg sp prims O _ _ _ _ Rg.1).mapOutput
       fun _ _ _ => trivial) sc sc' ω (w1IdleOf i)
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **(ii-c) at the ML-DSA ring publishing `w₁`**: the side-mode key-free relay at side coins
 swapped at one request, with the signature of its proof request moved by `swσ` (`w1MainSw`). -/
 theorem progSwap_w1KFRelaySide (sc sc' : Fin Q → KFCoins (p := p) (T := T) k D Y₁)
-    (ω : X → Y₁) (i : MURequest (SignOracle.none Bf) n)
+    (ω : X → Y₁) (i : MURequest (SignOracle.none (Bf).core) n)
     (J : (RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1)) × (X → Option Y) → Bool)
     (r₀ : (RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1)) × (X → Option Y))
     (swσ : Equiv.Perm (FIPSSignature p prims))
@@ -303,6 +317,8 @@ theorem progSwap_w1KFRelaySide (sc sc' : Fin Q → KFCoins (p := p) (T := T) k D
     sc sc' ω (w1IdleOf i) J r₀ swσ _ hoff hφ
     (fun o x₀ => by simpa using w1MainSw_reqOf swσ r₀.1.1 r₀.1.2 o x₀) rfl
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The moved main requests fix the main request of a request with another tag.** -/
 theorem w1MainSw_reqOf_of_ne (t₀ : RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1))
     (swσ : Equiv.Perm (FIPSSignature p prims)) (r : RingSignature.Insider.Req Bf PSf adm n)
@@ -316,11 +332,13 @@ theorem w1MainSw_reqOf_of_ne (t₀ : RingSignature.Insider.Req Bf PSf adm n × F
     | rfl
     | (simp [reqOf, w1MainSw, w1ProofSw, w1ToR, ht])
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **(ii-d) at the ML-DSA ring publishing `w₁`**: off `J` the side-mode key-free relay asks main
 requests fixed by `w1MainSw`, when every request failing `J` has another request and number than
 `r₀`, or is a corruption (`hJ`). -/
 theorem offTagFixed_w1KFRelaySide (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁)
-    (ω : X → Y₁) (i : MURequest (SignOracle.none Bf) n)
+    (ω : X → Y₁) (i : MURequest (SignOracle.none (Bf).core) n)
     (J : (RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1)) × (X → Option Y) → Bool)
     (r₀ : (RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1)) × (X → Option Y))
     (swσ : Equiv.Perm (FIPSSignature p prims))

@@ -4,19 +4,15 @@
 module
 
 public import GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.GKR.H
-public import GordieHoweCheck.MLDSA44.Native.ROMParams.GKR.H.E10.P0
-public import GordieHoweCheck.MLDSA44.Native.ROMParams.GKR.H.E10.P1
-public import GordieHoweCheck.MLDSA44.Native.ROMParams.GKR.H.E10.P2
-public import GordieHoweCheck.MLDSA44.Native.ROMParams.GKR.H.E10.P3
-public import GordieHoweCheck.MLDSA44.Native.ROMParams.GKR.H.E10.P4
-public import GordieHoweCheck.MLDSA44.Native.ROMParams.GKR.H.E10.P5
+meta import GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.GKR.H
+import all GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of entry 10 of the GKR circuit of domain H, composed from its part modules (generated; do not edit). -/
+/-! The relational check of entry 10 of the GKR circuit of domain H (generated; do not edit). -/
 
 namespace GordieHowe.Generated.MLDSA44.Native.ROMParams.GKR.H
 
-compose_entry cert ar 10 [1, 1024, 6, 0, 0, 7, 1, 204, 33, 0, 0, 2, 2, 4, 13]
+check_entry cert ar 10 [0, 0, 11, 2, 26, 2]
 
 end GordieHowe.Generated.MLDSA44.Native.ROMParams.GKR.H

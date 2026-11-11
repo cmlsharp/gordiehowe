@@ -44,26 +44,28 @@ variable {X Y Stmt Wit Proof : Type} [Fintype X] [DecidableEq X] [Fintype Y] [No
 (Unruh 2017 Definition 6, p. 14, with classical adversaries, whose oracle algorithm makes all its
 queries within the bound): for all `m`, `t` and `Q`, every classical adversary with `m` steps and
 a budget of `t` queries whose output does not read the final oracle, with its first `Q` proof queries
-answered, has advantage at most `ε t Q` between the prover `P` and the simulator `S`. -/
-def ZeroKnowledgeQueryBounded (P : NARG.ProverFn X Y Stmt Wit Proof Coins)
+answered, has advantage at most `ε t Q` between the prover `P`, its coins drawn from `μ`, and the
+simulator `S`. -/
+def ZeroKnowledgeQueryBounded (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ : PMF Coins)
     (S : NARG.SimulatorFn X Y Stmt Proof SimCoins) (ε : ℕ → ℕ → ℝ) : Prop :=
   ∀ (m t Q : ℕ) (𝒜 : Adversary X Y Stmt Wit Proof m t), (∀ r, (𝒜.alg r).PostOracleFree) →
-    𝒜.advantage rel P S Q ≤ ε t Q
+    𝒜.advantage rel P μ S Q ≤ ε t Q
 
 variable {rel}
 
 /-- **Zero knowledge against adversaries unbounded after their steps gives zero knowledge against
 query-bounded adversaries**, at the same error. -/
 theorem ZeroKnowledge.zeroKnowledgeQueryBounded {P : NARG.ProverFn X Y Stmt Wit Proof Coins}
-    {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} {ε : ℕ → ℕ → ℝ} (h : ZeroKnowledge rel P S ε) :
-    ZeroKnowledgeQueryBounded rel P S ε :=
+    {μ : PMF Coins}
+    {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} {ε : ℕ → ℕ → ℝ} (h : ZeroKnowledge rel P μ S ε) :
+    ZeroKnowledgeQueryBounded rel P μ S ε :=
   fun m t Q 𝒜 _ => h m t Q 𝒜
 
 /-- A larger error bound. -/
-theorem ZeroKnowledgeQueryBounded.mono {P : NARG.ProverFn X Y Stmt Wit Proof Coins}
+theorem ZeroKnowledgeQueryBounded.mono {P : NARG.ProverFn X Y Stmt Wit Proof Coins} {μ : PMF Coins}
     {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} {ε ε' : ℕ → ℕ → ℝ}
-    (h : ZeroKnowledgeQueryBounded rel P S ε) (hε : ∀ t Q, ε t Q ≤ ε' t Q) :
-    ZeroKnowledgeQueryBounded rel P S ε' :=
+    (h : ZeroKnowledgeQueryBounded rel P μ S ε) (hε : ∀ t Q, ε t Q ≤ ε' t Q) :
+    ZeroKnowledgeQueryBounded rel P μ S ε' :=
   fun m t Q 𝒜 h𝒜 => (h m t Q 𝒜 h𝒜).trans (hε t Q)
 
 /-- **A deterministic algorithm as an adversary** with trivial coins. -/
@@ -110,18 +112,19 @@ advantage at most
 
 between `P` and `S` with `Q` proof queries answered. -/
 theorem zeroKnowledgeQueryBounded_of_leafKernel {P : NARG.ProverFn X Y Stmt Wit Proof Coins}
+    {μ : PMF Coins}
     {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} [Nonempty SimCoins] {Cm Pos N : Type} [Fintype Cm]
     [Nonempty Cm] [Fintype Pos] [DecidableEq Pos] [Fintype N] [DecidableEq N] [Nonempty N]
     {L : LeafKernel X Y Stmt Wit Proof Cm Pos N} {nsalt : X → Option N} {pub : Finset N}
     (hL : L.Laws nsalt pub) {C₁ : Type} [Fintype C₁] [Nonempty C₁]
     {K₁ : Kernel X Y Stmt Wit Proof C₁} (e : C₁ ≃ LeafCoins Cm Pos N Y)
     (hK₁ : ∀ req O c, K₁ req O c = L.kL req O (e c)) {ε₁ : ℕ → ℕ → ℝ}
-    (h₁ : ZeroKnowledge (liftRel rel) P.liftReq K₁.toSimulator ε₁) {ε₃ : ℝ} (hε₃ : 0 ≤ ε₃)
+    (h₁ : ZeroKnowledge (liftRel rel) P.liftReq μ K₁.toSimulator ε₁) {ε₃ : ℝ} (hε₃ : 0 ≤ ε₃)
     (h₃ : ∀ req O, rel req.stmt req.wit →
       PMF.tvDist ((PMF.uniformOfFintype (LeafCoins Cm Pos N Y)).map fun c => kernelReply rel L.kD c req O)
         ((PMF.uniformOfFintype SimCoins).map fun c => kernelReply rel (S.toKernel (Wit := Wit)) c req O) ≤
         ε₃) :
-    ZeroKnowledgeQueryBounded rel P S fun t Q =>
+    ZeroKnowledgeQueryBounded rel P μ S fun t Q =>
       ε₁ t Q + Q * ((4 * t * Fintype.card Pos +
         4 * (Q * Fintype.card Pos ^ 2 + Fintype.card Pos * pub.card)) / Fintype.card N) + Q * ε₃ := by
   intro m t Q 𝒜 hpost
@@ -133,7 +136,7 @@ theorem zeroKnowledgeQueryBounded_of_leafKernel {P : NARG.ProverFn X Y Stmt Wit 
   have h2 := abs_toReal_acceptProb_progEnv_kL_sub_kD_le (rel := rel) hL A (𝒜.budget r) (hpost r) Q
   have h3 := abs_toReal_acceptProb_progEnv_sub_le rel L.kD (S.toKernel (Wit := Wit)) hε₃ h₃ A Q
   rw [acceptProb_simEnv_eq rel A S Q]
-  have t1 := abs_sub_le (A.acceptProb (realEnv rel P Q)).toReal
+  have t1 := abs_sub_le (A.acceptProb (realEnv rel P μ Q)).toReal
     (A.acceptProb (progEnv rel L.kL Q)).toReal (A.acceptProb (progEnv rel (S.toKernel (Wit := Wit)) Q)).toReal
   have t2 := abs_sub_le (A.acceptProb (progEnv rel L.kL Q)).toReal
     (A.acceptProb (progEnv rel L.kD Q)).toReal (A.acceptProb (progEnv rel (S.toKernel (Wit := Wit)) Q)).toReal

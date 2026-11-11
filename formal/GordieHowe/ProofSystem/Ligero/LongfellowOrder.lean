@@ -48,7 +48,7 @@ accepted query lies in the common agreement set. The column round costs
 (`GordieHowe.Ligero.AgreementThreshold.columnError`), with no list factor.
 
 Round-by-round knowledge soundness (`rbr_knowledge_soundness`) then follows from the two counts
-(`TwoStageTest.rbrKnowledgeSoundness_of_counts`), at the state function `stateFn`
+(`TwoStageTest.rbrKnowledgeSound_of_counts`), at the state function `stateFn`
 (`TwoStageTest.knowledgeState` of `JointBad`) and the named extractor `extractor`.
 -/
 
@@ -98,6 +98,30 @@ structure Parameters (C : GordieHowe.RSCode F N) (A B a l L : ℕ) : Prop
   /-- The Johnson hypotheses of the interleaved code at `A` with list size `L`. -/
   interleaved : InterleavedAgreementList.Parameters N (C.k - 1) A L
 
+omit [Fintype Lin] in
+/-- **The setup at code parameters**: the agreement threshold `A` with the line certificate of `B`
+exceptional challenges, the mask list at `a`, `l` and the interleaved list size `L` from the
+parameter facts `hp`, with the placement, the row order, `t ≤ N` queried columns and `nrep ≥ 1`
+low-degree repetitions. -/
+def Setup.ofParameters {A B a l L : ℕ} (hp : Parameters C A B a l L)
+    (placement : Preparation.Placement C P ι Q) (index : Fin nL ≃ Routing.PreparedRow Lin Q)
+    (t : ℕ) (t_le : t ≤ N) (nrep : ℕ) (nrep_pos : 0 < nrep) : Setup C P products Lin nL where
+  A := A
+  k_le_A := hp.k_le_A
+  B := B
+  line := hp.line
+  placement := placement
+  index := index
+  t := t
+  t_le := t_le
+  nrep := nrep
+  nrep_pos := nrep_pos
+  a := a
+  l := l
+  list := hp.list
+  L := L
+  interleaved := hp.interleaved
+
 variable (S : Setup C P products Lin nL)
 
 /-- The challenge types of the protocol are nonempty (at most `N` queried columns). -/
@@ -111,7 +135,7 @@ variable {Ctx : Type} (rows : Ctx → Lin → AffineForm F ι)
 /-- **The relation**: the rows of the context hold on the cells, with the products. -/
 def relation (rows : Ctx → Lin → AffineForm F ι) (products : Routing.ProductLayout ι Q) :
     Set (Ctx × (ι → F)) :=
-  {p | RowsHold (rows p.1) products p.2}
+  {(c, x) : Ctx × (ι → F) | RowsHold (rows c) products x}
 
 omit [Fintype F] [Fintype ι] [Fintype Q] [Fintype Lin] in
 theorem mem_relation {c : Ctx} {x : ι → F} :
@@ -139,9 +163,9 @@ in the list event `UntestedMaskRow.constraintBad` of some member of the agreemen
 at `A` (`InterleavedAgreementList.list`). Both depend on `O` and the joint challenge only. -/
 def JointBad (c : Ctx) (O : Tableau.Commitment F N R S.nrep)
     (ch : Tableau.Challenge F R nL nQ S.nrep) : Prop :=
-  ch.1 ∈ Fintype.piFinset (fun j => S.exceptional (O.rows.ldtMatrix j)) ∨
+  ch.ldt ∈ Fintype.piFinset (fun j => S.exceptional (O.rows.ldtMatrix j)) ∨
     ∃ fs ∈ InterleavedAgreementList.list C O.rows.tableau S.A,
-      UntestedMaskRow.constraintBad C P (S.linearSystem (rows c)) S.rate_le S.a fs O.masks ch.2
+      UntestedMaskRow.constraintBad C P (S.linearSystem (rows c)) S.list fs O.masks ch.constraint
 
 /-- **The state function** of Ligero in Longfellow's order of challenges: false before the joint
 challenge, `JointBad` after it, and `JointBad` or acceptance on the full transcript
@@ -163,8 +187,9 @@ def extractor : Extractor (spec F N R nL nQ C.k S.t S.nrep) Ctx (ι → F) where
   extract m _ tr :=
     if h : 3 ≤ (m : ℕ) then
       S.extract (tr ⟨0, by omega⟩ : Tableau.Commitment F N R S.nrep).rows
-        (AgreementThreshold.commitTranscript (tr ⟨1, by omega⟩ : Tableau.Challenge F R nL nQ S.nrep).1
-          (tr ⟨2, by omega⟩ : Tableau.Response F C.k S.nrep).1)
+        (AgreementThreshold.commitTranscript
+          (tr ⟨1, by omega⟩ : Tableau.Challenge F R nL nQ S.nrep).ldt
+          (tr ⟨2, by omega⟩ : Tableau.Response F C.k S.nrep).ldt)
     else 0
 
 omit [Fintype F] [Fintype ι] [Fintype Q] [Fintype Lin] in
@@ -172,8 +197,9 @@ omit [Fintype F] [Fintype ι] [Fintype Q] [Fintype Lin] in
 theorem extractor_three (c : Ctx) (tr : (spec F N R nL nQ C.k S.t S.nrep).Transcript ⟨3, by decide⟩) :
     extractor S ⟨3, by decide⟩ c tr =
       S.extract (tr ⟨0, by decide⟩ : Tableau.Commitment F N R S.nrep).rows
-        (AgreementThreshold.commitTranscript (tr ⟨1, by decide⟩ : Tableau.Challenge F R nL nQ S.nrep).1
-          (tr ⟨2, by decide⟩ : Tableau.Response F C.k S.nrep).1) :=
+        (AgreementThreshold.commitTranscript
+          (tr ⟨1, by decide⟩ : Tableau.Challenge F R nL nQ S.nrep).ldt
+          (tr ⟨2, by decide⟩ : Tableau.Response F C.k S.nrep).ldt) :=
   rfl
 
 /-! ### The errors -/
@@ -232,6 +258,15 @@ structure Setup.Numbers (A B nrep t a l L : ℕ) : Prop where
   /-- The list size of the interleaved code. -/
   L_eq : S.L = L
 
+omit [Fintype Lin] [DecidableEq F] in
+/-- **The setup at code parameters has their numbers.** -/
+theorem Setup.numbers_ofParameters {A B a l L : ℕ} (hp : Parameters C A B a l L)
+    (placement : Preparation.Placement C P ι Q) (index : Fin nL ≃ Routing.PreparedRow Lin Q)
+    (t : ℕ) (t_le : t ≤ N) (nrep : ℕ) (nrep_pos : 0 < nrep) :
+    (Setup.ofParameters (products := products) hp placement index t t_le nrep nrep_pos).Numbers
+      A B nrep t a l L :=
+  ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+
 omit [Fintype ι] [Fintype Q] [Fintype Lin] [DecidableEq F] in
 /-- **The round errors of a setup at given numbers** are at most `δ` when the numbers' joint
 error `(B / (|F| − 1)) ^ nrep + L · l / |F|` and column error are (`AgreementThreshold.bounds`). -/
@@ -262,9 +297,9 @@ theorem joint_count (c : Ctx) (O : Tableau.Commitment F N R S.nrep) :
   set Ls := InterleavedAgreementList.list C O.rows.tableau S.A
   set L' := S.linearSystem (rows c)
   have hsub : (Finset.univ.filter fun ch => JointBad S rows c O ch) ⊆
-      (Finset.univ.filter fun ch : Tableau.Challenge F R nL nQ S.nrep => ch.1 ∈ E) ∪
+      (Finset.univ.filter fun ch : Tableau.Challenge F R nL nQ S.nrep => ch.ldt ∈ E) ∪
         Ls.biUnion fun fs => Finset.univ.filter fun ch : Tableau.Challenge F R nL nQ S.nrep =>
-          UntestedMaskRow.constraintBad C P L' S.rate_le S.a fs O.masks ch.2 := by
+          UntestedMaskRow.constraintBad C P L' S.list fs O.masks ch.constraint := by
     intro ch hch
     rcases (Finset.mem_filter.mp hch).2 with h | ⟨fs, hfs, hb⟩
     · exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨Finset.mem_univ _, h⟩)
@@ -272,22 +307,22 @@ theorem joint_count (c : Ctx) (O : Tableau.Commitment F N R S.nrep) :
         (Finset.mem_biUnion.mpr ⟨fs, hfs, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hb⟩⟩)
   have hcard := (Finset.card_le_card hsub).trans ((Finset.card_union_le _ _).trans
     (Nat.add_le_add_left Finset.card_biUnion_le _))
-  have hleft : (Finset.univ.filter fun ch : Tableau.Challenge F R nL nQ S.nrep => ch.1 ∈ E).card =
+  have hleft : (Finset.univ.filter fun ch : Tableau.Challenge F R nL nQ S.nrep => ch.ldt ∈ E).card =
       (Finset.univ.filter fun r => r ∈ E).card * Fintype.card ((Fin nL → F) × (Fin nQ → F)) :=
-    by convert UntestedMaskRow.count_left (fun r => r ∈ E)
+    Tableau.Challenge.card_filter_ldt (fun r => r ∈ E)
   have hright : ∀ fs, (Finset.univ.filter fun ch : Tableau.Challenge F R nL nQ S.nrep =>
-      UntestedMaskRow.constraintBad C P L' S.rate_le S.a fs O.masks ch.2).card =
+      UntestedMaskRow.constraintBad C P L' S.list fs O.masks ch.constraint).card =
         Fintype.card (Tableau.LdtChallenge F R S.nrep) * (Finset.univ.filter fun rc =>
-          UntestedMaskRow.constraintBad C P L' S.rate_le S.a fs O.masks rc).card := fun fs => by
-    convert UntestedMaskRow.count_right
-      (fun rc => UntestedMaskRow.constraintBad C P L' S.rate_le S.a fs O.masks rc)
+          UntestedMaskRow.constraintBad C P L' S.list fs O.masks rc).card := fun fs =>
+    Tableau.Challenge.card_filter_constraint
+      (fun rc => UntestedMaskRow.constraintBad C P L' S.list fs O.masks rc)
   rw [hleft, Finset.sum_congr rfl fun fs _ => hright fs] at hcard
   have hE : ((Finset.univ.filter fun r => r ∈ E).card : ℝ≥0) ≤
       S.commitError * Fintype.card (Tableau.LdtChallenge F R S.nrep) := by
     rw [Finset.filter_mem_eq_inter, Finset.univ_inter]
     exact S.card_piFinset_exceptional O.rows
   have hl : ∀ fs, ((Finset.univ.filter fun rc =>
-      UntestedMaskRow.constraintBad C P L' S.rate_le S.a fs O.masks rc).card : ℝ≥0) ≤
+      UntestedMaskRow.constraintBad C P L' S.list fs O.masks rc).card : ℝ≥0) ≤
         AgreementThreshold.testError S.toSetup * Fintype.card ((Fin nL → F) × (Fin nQ → F)) := by
     intro fs
     have h := UntestedMaskRow.constraint_bad_count C P L' S.a S.list fs O.masks
@@ -298,7 +333,7 @@ theorem joint_count (c : Ctx) (O : Tableau.Commitment F N R S.nrep) :
     exact_mod_cast InterleavedAgreementList.card_list_le_of_parameters O.rows.tableau S.interleaved
   have hsum : (∑ fs ∈ Ls, (Fintype.card (Tableau.LdtChallenge F R S.nrep) *
       (Finset.univ.filter fun rc =>
-        UntestedMaskRow.constraintBad C P L' S.rate_le S.a fs O.masks rc).card : ℕ) : ℝ≥0) ≤
+        UntestedMaskRow.constraintBad C P L' S.list fs O.masks rc).card : ℕ) : ℝ≥0) ≤
         S.L * (Fintype.card (Tableau.LdtChallenge F R S.nrep) *
           (AgreementThreshold.testError S.toSetup * Fintype.card ((Fin nL → F) × (Fin nQ → F)))) := by
     push_cast
@@ -310,7 +345,7 @@ theorem joint_count (c : Ctx) (O : Tableau.Commitment F N R S.nrep) :
           Fintype.card ((Fin nL → F) × (Fin nQ → F)) : ℕ) +
         ((∑ fs ∈ Ls, (Fintype.card (Tableau.LdtChallenge F R S.nrep) *
           (Finset.univ.filter fun rc =>
-            UntestedMaskRow.constraintBad C P L' S.rate_le S.a fs O.masks rc).card : ℕ)) : ℝ≥0) := by
+            UntestedMaskRow.constraintBad C P L' S.list fs O.masks rc).card : ℕ)) : ℝ≥0) := by
         exact_mod_cast hcard
     _ ≤ S.commitError * Fintype.card (Tableau.LdtChallenge F R S.nrep) *
           Fintype.card ((Fin nL → F) × (Fin nQ → F)) +
@@ -319,7 +354,7 @@ theorem joint_count (c : Ctx) (O : Tableau.Commitment F N R S.nrep) :
         push_cast
         exact add_le_add (mul_le_mul_of_nonneg_right hE (by positivity)) (by exact_mod_cast hsum)
     _ = jointError S * Fintype.card (Tableau.Challenge F R nL nQ S.nrep) := by
-        rw [Fintype.card_prod (Tableau.LdtChallenge F R S.nrep), jointError]
+        rw [Tableau.Challenge.card, jointError]
         push_cast
         ring
 
@@ -334,23 +369,26 @@ Ligero with the low-degree test in the commit phase applies (`AgreementThreshold
 every accepted query lies in the common agreement set (`AgreementThreshold.card_filter_le_of_lt`). -/
 theorem column_count (c : Ctx) (O : Tableau.Commitment F N R S.nrep)
     (ch : Tableau.Challenge F R nL nQ S.nrep) (p : Tableau.Response F C.k S.nrep)
-    (hE : ¬ RowsHold (rows c) products (S.extract O.rows (AgreementThreshold.commitTranscript ch.1 p.1)))
+    (hE : ¬ RowsHold (rows c) products
+      (S.extract O.rows (AgreementThreshold.commitTranscript ch.ldt p.ldt)))
     (hb : ¬ JointBad S rows c O ch) :
     ((Finset.univ.filter fun q => accept S rows c O ch p q = true).card : ℝ≥0) ≤
       AgreementThreshold.columnError S.toSetup * Fintype.card (Tableau.Query N S.t) := by
-  let inp : AgreementThreshold.Input Ctx F N R C.k S.nrep := ⟨c, O, AgreementThreshold.commitTranscript ch.1 p.1⟩
+  let inp : AgreementThreshold.Input Ctx F N R C.k S.nrep :=
+    ⟨c, O, AgreementThreshold.commitTranscript ch.ldt p.ldt⟩
   have hnotExc : ¬ S.Exceptional O.rows inp.rounds := fun h =>
     hb (.inl (Fintype.mem_piFinset.mpr fun j => h j))
   have hc : ¬ AgreementThreshold.Claim S.toSetup rows inp := fun h => h.elim hnotExc hE
-  by_cases hD : S.A ≤ (AgreementThreshold.commonAgreement C O.rows ch.1 p.1).card
+  by_cases hD : S.A ≤ (AgreementThreshold.commonAgreement C O.rows ch.ldt p.ldt).card
   · have hrows : RSCode.RowsAgreeOn C O.rows.tableau
-        (AgreementThreshold.commonAgreement C O.rows ch.1 p.1) (S.pinnedRows O.rows inp.rounds) :=
+        (AgreementThreshold.commonAgreement C O.rows ch.ldt p.ldt)
+        (S.pinnedRows O.rows inp.rounds) :=
       ⟨S.natDegree_pinnedRows_lt O.rows inp.rounds,
         fun i _ hj => (S.pinnedRows_agree hnotExc hD hj i).symm⟩
     have hmem := InterleavedAgreementList.mem_list_of_rowsAgreeOn S.k_le_A hrows hD
-    have hbad : ¬ AgreementThreshold.Bad S.toSetup rows inp O.masks ch.2 := fun h =>
+    have hbad : ¬ AgreementThreshold.Bad S.toSetup rows inp O.masks ch.constraint := fun h =>
       hb (.inr ⟨_, hmem, h⟩)
-    exact AgreementThreshold.query_count S.toSetup rows inp hc O.masks ch.2 hbad p.2
+    exact AgreementThreshold.query_count S.toSetup rows inp hc O.masks ch.constraint hbad p.masked
   · have h := AgreementThreshold.card_filter_le_of_lt (not_le.mp hD)
       (p := fun q => accept S rows c O ch p q = true) fun q hq =>
         AgreementThreshold.mem_commonAgreement_of_accept
@@ -360,13 +398,13 @@ theorem column_count (c : Ctx) (O : Tableau.Commitment F N R S.nrep)
       convert h.trans (Nat.le_add_right _ (S.a.descFactorial S.t))
     exact AgreementThreshold.card_le_fraction S.t_le h'
 
-/-- **Round-by-round knowledge soundness of Ligero in Longfellow's order of challenges**
-(Appendix B, Ligero in LF's order of challenges): with the low-degree challenges sent together
-with the constraint challenge (AHIV22 §4.7 step 1; LF draft-03 §4.4.4) and untested masks, at
-agreement threshold `A`, the verifier `verifier` is round-by-round knowledge sound for the
-relation "the rows hold on the cells" (`relation`) at the named extractor `extractor` (the cells
-of the rows pinned by the low-degree response) and the state function `stateFn`, with the round
-errors `error`:
+/-- **Round-by-round knowledge soundness of Ligero in Longfellow's order of challenges** (the
+paper's `lem:ligero-lf-order` in `app:ligero-lf-order`): with the low-degree challenges sent
+together with the constraint challenge (AHIV22 §4.7 step 1; LF draft-03 §4.4.4) and untested masks,
+at agreement threshold `A`, the verifier `verifier` is round-by-round knowledge sound for the
+relation "the rows hold on the cells" (`relation`) at the named extractor `extractor` (the cells of
+the rows pinned by the low-degree response) and the state function `stateFn`, with the round errors
+`error`:
 
 * at the joint challenge, `(B / (|F| − 1)) ^ nrep + L · l / |F|` (`jointError`), where `B` is the
   exceptional count of the line certificate at `A`, `L` the list size of the interleaved code at
@@ -377,10 +415,10 @@ errors `error`:
   (`AgreementThreshold.columnError`), with `a` the mask agreement threshold, and no list factor. -/
 @[headline]
 theorem rbr_knowledge_soundness :
-    rbrKnowledgeSoundness (relation rows products) (verifier S rows) (extractor S)
+    RBRKnowledgeSound (relation rows products) (verifier S rows) (extractor S)
       (stateFn S rows) (error S) :=
   haveI : Nonempty (Tableau.Query N S.t) := Tableau.Query.nonempty_of_le S.t_le
-  TwoStageTest.rbrKnowledgeSoundness_of_counts (JointBad S rows) (accept S rows)
+  TwoStageTest.rbrKnowledgeSound_of_counts (JointBad S rows) (accept S rows)
     (relation rows products) (extractor S) (jointError S) (AgreementThreshold.columnError S.toSetup)
     (fun c O => joint_count S rows c O)
     (fun c tr hE hb => column_count S rows c _ _ _

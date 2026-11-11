@@ -192,6 +192,20 @@ structure FormatBounds {V : X → FullTr P t → Bool} (Qs : ∀ x, M.IOPQueries
   /-- At most `N` leaves per tree. -/
   nLeaves_le : ∀ (p : t.Leaf) i τ, (M.comp p.label).nLeaves i τ ≤ N
 
+variable {M} in
+/-- **Larger bounds are format bounds.** -/
+theorem FormatBounds.mono {V : X → FullTr P t → Bool} {Qs : ∀ x, M.IOPQueries V x}
+    {NQ N NQ' N' : ℕ} (hb : M.FormatBounds Qs NQ N) (hNQ : NQ ≤ NQ') (hN : N ≤ N') :
+    M.FormatBounds Qs NQ' N' where
+  pos_le x chs ch := (hb.pos_le x chs ch).trans hNQ
+  nLeaves_le p i τ := (hb.nLeaves_le p i τ).trans hN
+
+variable {M} in
+/-- **The larger of the two bounds bounds both.** -/
+theorem FormatBounds.max {V : X → FullTr P t → Bool} {Qs : ∀ x, M.IOPQueries V x} {NQ N : ℕ}
+    (hb : M.FormatBounds Qs NQ N) : M.FormatBounds Qs (max NQ N) (max NQ N) :=
+  hb.mono (le_max_left _ _) (le_max_right _ _)
+
 /-! ### Streams -/
 
 variable [∀ j i, Nonempty ((P j).Challenge i)]
@@ -298,7 +312,6 @@ structure ViewRead where
 variable {M} in
 /-- **The format bounds of the simulated views**: wherever writes can be read off a view, the
 opened positions number at most `B`; and every tree has at most `B` leaves. A property of the
-variable {M} in
 read-off functions, discharged from the format bounds of the query phases
 (`ViewEncoder.formatBounds`). -/
 structure ViewRead.FormatBounds (VR : M.ViewRead) (B : ℕ) : Prop where
@@ -438,7 +451,7 @@ end Joint
 
 /-- **The zero-knowledge error of the composite** at the HVZK error `δ`, `t` queries and `Q`
 proof queries: `4Qt/2^(4kS) + Q(Q - 1)/2^(8kS) + Q · (keyCollision (t.size n) k + overrun + δ +
-|Pos| · BCS.leafBound k kN L)`. -/
+|Pos| · SPBCS.leafBound k kN L)`. -/
 noncomputable def zkError (δ : ℝ≥0) (tq Q : ℕ) : ℝ :=
   4 * Q * tq / 2 ^ (4 * kS) + Q * (Q - 1) / 2 ^ (8 * kS) +
     Q * ((SPBCS.keyCollision (t.size n) k).toReal + M.overrun.toReal + δ +
@@ -459,12 +472,12 @@ instance (B : ℕ) (π : M.NIProof) : Decidable (M.Bounded B π) :=
 
 namespace Internal
 
-/-- **A proof device of the hybrid argument; never in a statement reachable from a headline**: a
-proof as a response, the proof itself when it is in the format `B`, none otherwise. The hybrid
-games of this file (below) and of `GordieHowe/SPBCS/ZeroKnowledgeROMQuery.lean` build their
+/-- **A proof as a response**: the proof itself when it is in the format `B`, none otherwise. The
+hybrid games of this file (below) and of `GordieHowe/SPBCS/ZeroKnowledgeROMQuery.lean` build their
 replies with it; within the format bounds it is the constructor of a bounded proof
 (`encodeTotal_of_bounded`), which is how the theorems about the prover `niProver` and the simulator
-`niSimulator` are reached. -/
+`niSimulator` are reached. The simulator with the total encoding (`niSimulatorTotal`, through
+`jointProg`) replies with it, and statements about `niJointSimulatorProg` reach it that way. -/
 def encodeTotal (B : ℕ) (π : M.NIProof) : M.Response B :=
   if h : M.Bounded B π then some ⟨π, h⟩ else none
 
@@ -1370,7 +1383,8 @@ variable (B : ℕ) [∀ j i, Fintype ((M.comp j).MessageWrite i)] {Wit R : Type}
 variable (M) in
 /-- **The prover of the zero-knowledge games, as a function of the quantum oracle**: `prove` at the
 causal prover `honest w ρ`, the Merkle salts `ν` and the salt `σ`, against the oracle seen through
-`H`, serialized into the response register; the coins are uniform. It is the classical semantics of
+`H`, serialized into the response register. Its coins are uniform: the game lemmas of this file
+draw them from `PMF.uniformOfFintype _`. It is the classical semantics of
 the honest prover `niProver` serialized and run through `queryEncoding` (`toFn_encode_niProver`);
 the game lemmas of this file are stated for it. -/
 noncomputable def niProverZKM (E : (j : ι) → (M.comp j).Encoder) {V : X → FullTr P t → Bool}
@@ -1379,7 +1393,6 @@ noncomputable def niProverZKM (E : (j : ι) → (M.comp j).Encoder) {V : X → F
       (SaltedCoins (FiatShamirSalt kS) (M.ProverCoins R)) where
   prove H x w a :=
     SPBCS.Internal.encodeTotal M B (prove (honest w a.coins.iop) x a.salt E a.coins.merkleSalts (chainOracle H) (Qs x))
-  coins := PMF.uniformOfFintype _
 
 end Prover
 
@@ -2162,7 +2175,7 @@ variable (B) in
 open Classical in
 /-- **The spBCS compiler is local in its salt at the joint simulator.** -/
 theorem saltedLocal :
-    SaltedLocal M.saltOfBits (M.niProverZKM B honest E Qs)
+    SaltedLocal M.saltOfBits (M.niProverZKM B honest E Qs) (PMF.uniformOfFintype _)
       (M.niJointSimulator VE.toViewRead B pub Sim T) where
   prove_congr H H' x w c hH := by
     simp only [niProverZKM]
@@ -2360,7 +2373,7 @@ Definition 23.1.8) at the joint simulator `Sim` on public statements `pub x` wit
 preimage samplers `T`, every bound `B` on the proof format, and all finite statement and witness
 types read in through `fx` and `fw`: every distinguisher with a request budget of `tq` queries
 (`EverlastingZeroKnowledgePure`; unbounded after its last proof query), against environments
-answering `Q` proof queries, distinguishes the honest prover `niProverZKM` from the simulator
+answering `Q` proof queries, distinguishes the honest prover `niProverZKM`, on uniform coins, from the simulator
 `niJointSimulator` with advantage at most `zkError δ tq Q`, the error of the compiler over the
 term: `4Qt/2^(4kS) + Q(Q - 1)/2^(8kS) + Q · (keyCollision (t.size n) k + overrun + δ +
 |Pos| · leafBound k kN L)`. -/
@@ -2372,9 +2385,9 @@ theorem everlastingZeroKnowledge [∀ j i, Nonempty ((P j).Challenge i)]
     {rel : Set (X × Wit)} {δ : ℝ≥0} {X' W' : Type} [Fintype X'] [DecidableEq X'] [Fintype W']
     [DecidableEq W'] (fx : X' → X) (fw : W' → Wit) (hvzk : CausalHVZK VE.MV rel honest pub Sim δ) :
     EverlastingZeroKnowledgePure (fun x w => (fx x, fw w) ∈ rel)
-      ((M.niProverZKM B honest E Qs).comap fx fw)
+      ((M.niProverZKM B honest E Qs).comap fx fw) (PMF.uniformOfFintype _)
       ((M.niJointSimulator VE.toViewRead B pub Sim T).comap fx) (M.zkError δ) := by
-  have hzk := everlastingZeroKnowledgePure_of_sliceClose _ _ _ _
+  have hzk := everlastingZeroKnowledgePure_of_sliceClose _ _ _ _ _
     ((saltedLocal B VE honest pub Sim T).comap fx fw)
     ((sliceClose B VE honest pub Sim T hvzk).comap fx fw)
   refine EverlastingZeroKnowledgePure.mono hzk fun tq Q => ?_

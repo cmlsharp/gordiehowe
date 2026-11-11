@@ -34,7 +34,7 @@ namespace GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Structure
 
 open GordieHowe.RealizedProgram GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Program
 
-load_program_ghc "Structure.ghc" "e0b955d087a5d3d8"
+load_program_ghc "Structure.ghc" "cb563608f0ae5107"
 
 /-- The member-value pointers in the emitted structure metadata. -/
 theorem memberValues_eq : records.memberValues = [(0, 47)] := rfl

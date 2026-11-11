@@ -28,7 +28,7 @@ namespace GordieHowe.RingSignature
 open GordieHowe.Quantum
 
 variable {X Y : Type} {N n : ℕ} {TS : RingTypes} (S : RingScheme X Y N TS) (keys : Fin n → S.KeyCoins) (b : Bool)
-  (Q : ℕ)
+  (Q : ℕ) [DecidableEq TS.PK]
 
 /-- **The answer to request number `k`** of the anonymity game at the oracle `H` and the signing
 coins `ω`: for `k < Q` and a valid challenge, the scheme's signature of user `b` with the coins
@@ -44,6 +44,8 @@ noncomputable def anonAns (H : X → Y) (ω : Fin Q → S.SignCoins) (k : ℕ) (
 theorem anonAns_of_le (H : X → Y) (ω : Fin Q → S.SignCoins) {k : ℕ} (hk : Q ≤ k)
     (c : AnonRequest S n) : anonAns S keys b Q H ω k c = none := by
   simp [anonAns, show ¬ k < Q by omega]
+
+variable [Fintype TS.SignCoins] [DecidableEq TS.SignCoins] [Nonempty TS.SignCoins]
 
 /-- The anonymity challenger adds no assignments. -/
 theorem assignments_run_anonChallenger (ω : Fin Q → S.SignCoins)

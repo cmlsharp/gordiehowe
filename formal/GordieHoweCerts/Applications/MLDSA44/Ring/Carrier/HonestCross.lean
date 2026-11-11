@@ -12,16 +12,31 @@ public import GordieHoweCerts.Applications.MLDSA44.Ring.Native.HonestCross
 /-!
 # GordieHowe: the crossing of the ML-DSA-44 ring carriers at the honest values
 
-The crossing `mac.equal` (predicate `247`; `lib/gordiehowe/examples/rings/mldsa_ring.h`,
+The crossing `mac.equal` (predicate `250`; `lib/gordiehowe/examples/rings/mldsa_ring.h`,
 `ring_crossing`, merged with domain `H`'s copies of `μ` and `w1` by the MAC lowering) at the
-source environment of the honest values: domain `H`'s operand (the shared expression `505`:
+source environment of the honest values: domain `H`'s operand (the shared expression `558`:
 `μ ‖ w1 ‖` the decoded support and sign alternately, read through domain `H`'s renaming at the
-core's honest values) and domain `A`'s (`42`: `member.mu ‖ hint.w1 ‖ challenge.c`) read the same
+core's honest values) and domain `A`'s (`95`: `member.mu ‖ hint.w1 ‖ challenge.c`) read the same
 bits (`xH_*`, `yA_*`), so `mac.equal` holds (`cross_holds`) and both operands read bits
 (`crossBits_honest`).
 -/
 
 namespace GordieHowe.MLDSA44.Ring.Carrier
+
+set_option hygiene false in
+local notation "σH" => CarrierHEmbed.σ program
+
+set_option hygiene false in
+local notation "hV" => CarrierHEmbed.V program
+
+set_option hygiene false in
+local notation "σA" => CarrierAEmbed.σ program
+
+set_option hygiene false in
+local notation "aV" => CarrierAEmbed.V program
+
+set_option hygiene false in
+local notation "predMapA" => CarrierAEmbed.pred program
 
 open GordieHowe.Bits GordieHowe.Ring RealizedProgram
 open MLDSA44.NativeAlgebraCircuit (outputBits)
@@ -68,13 +83,13 @@ local notation "RD" => program.reader E
 /-! ## Domain `H`'s operand -/
 
 theorem xH_mu {t : ℕ} (ht : t < 512) :
-    program.evalE RD 1 (.leaf 71) t = muBitsR (K := (interp 1).K) y t := by
-  rw [← σH_val120, ← evalE_pullH E (by decide : (120 : ℕ) ∈ hV) t]
+    program.evalE RD 1 (.leaf ((CarrierHEmbed.σ program).val 120)) t = muBitsR (K := (interp 1).K) y t := by
+  rw [← evalE_pullH E (CarrierHEmbed.readV (program := program) 120 (by decide)) t]
   exact evalE_mu_honest y (readsCells_pullH y x c π) (valH_hash y) ht
 
 theorem xH_w1 {t : ℕ} (ht : t < 6144) :
-    program.evalE RD 1 (.leaf 73) t = w1BitsR (K := (interp 1).K) y t := by
-  rw [← σH_val70, ← evalE_pullH E (by decide : (70 : ℕ) ∈ hV) t]
+    program.evalE RD 1 (.leaf ((CarrierHEmbed.σ program).val 70)) t = w1BitsR (K := (interp 1).K) y t := by
+  rw [← evalE_pullH E (CarrierHEmbed.readV (program := program) 70 (by decide)) t]
   exact evalE_w1_honest y (readsCells_pullH y x c π) (valH_hash y) ht
 
 theorem chalPair_pullH (k : Fin 256) :
@@ -83,25 +98,25 @@ theorem chalPair_pullH (k : Fin 256) :
   chalPair_core y (readsCells_pullH y x c π) (valH_mem y) k
 
 theorem xH_sup {k : ℕ} (hk : k < 256) :
-    program.evalE RD 1 (.ref 503) k =
+    program.evalE RD 1 (.ref ((CarrierHEmbed.σ program).ref 523)) k =
       (HashCircuit.ternaryBits (K := (interp 1).K) (y.c ⟨k, hk⟩)).1 := by
-  rw [← σH_ref523, ← evalE_ref_pullH E (by decide : (523 : ℕ) ∈ hR) k]
+  rw [← evalE_ref_pullH E (CarrierHEmbed.readR (program := program) 523 (by decide)) k]
   exact congrArg Prod.fst (chalPair_pullH y x c π ⟨k, hk⟩)
 
 theorem xH_sgn {k : ℕ} (hk : k < 256) :
-    program.evalE RD 1 (.ref 504) k =
+    program.evalE RD 1 (.ref 557) k =
       (HashCircuit.ternaryBits (K := (interp 1).K) (y.c ⟨k, hk⟩)).2 := by
-  rw [RealizedProgram.evalE_ref MldsaCarrierRelation.refsOrdered _ _
-      (by have := MldsaCarrierFront.lt505 (program := program); omega), MldsaCarrierFront.expr504,
-    ← σH_ref522, ← evalE_ref_pullH E (by decide : (522 : ℕ) ∈ hR) k]
+  rw [RealizedProgram.evalE_ref MldsaRandomPoint.refsOrdered _ _
+      (by have := MldsaCarrierFront.lt558 (program := program); omega), MldsaCarrierFront.expr557,
+    ← evalE_ref_pullH E (CarrierHEmbed.readR (program := program) 522 (by decide)) k]
   exact congrArg Prod.snd (chalPair_pullH y x c π ⟨k, hk⟩)
 
 /-! ## Domain `A`'s operand -/
 
 theorem yA_w1 {t : ℕ} (ht : t < 6144) :
-    program.evalE RD 0 (.leaf 66) t = constBit (w1NatR y (t / 8)) (t % 8) := by
-  have h := evalE_pullA E (f := 0) (v := 63) (by decide) t
-  rw [σA_vals.2.2.2.2] at h
+    program.evalE RD 0 (.leaf (MldsaCarrierFront.w1A program)) t = constBit (w1NatR y (t / 8)) (t % 8) := by
+  have h := evalE_pullA E (f := 0) (v := 63) (CarrierAEmbed.readV 63 (by decide)) t
+  rw [MldsaCarrierFront.valsA.2.2.2.2] at h
   rw [← h]
   refine (rdAE_fixed (readsAE_pullA y x c π) (v := 63) (by simp)
     (by rw [MldsaEmulatedHonest.size64 (program := emu)]; exact ht)).trans ?_
@@ -144,7 +159,7 @@ theorem tern2_A0 (z : ℤ) : (interp 0).toNat (HashCircuit.ternaryBits (K := (in
 
 /-- **The challenge bits at a coefficient**: the support and the sign of the challenge. -/
 theorem yA_c {k : ℕ} (hk : k < 256) (s : Fin 2) :
-    program.evalE RD 0 (.leaf 62) (2 * k + s) = cA y (interp 0).K ⟨k, hk⟩ s := by
+    program.evalE RD 0 (.leaf 63) (2 * k + s) = cA y (interp 0).K ⟨k, hk⟩ s := by
   have hs2 := s.isLt
   rw [rd_c y x c π (by omega)]
   congr 1
@@ -152,22 +167,23 @@ theorem yA_c {k : ℕ} (hk : k < 256) (s : Fin 2) :
   · exact Fin.ext (by simp only; omega)
 
 /-- **`mac.equal` holds** at the honest values. -/
-theorem cross_holds : program.HoldsAt E (program.predicate 247).body := by
+theorem cross_holds :
+    program.HoldsAt E (program.predicate (MldsaCarrierFront.crossPred program)).body := by
   obtain ⟨-, -, cc, hc⟩ := MldsaCarrierFront.cross (program := program)
   rw [HoldsAt, hc]
-  change (∀ i < program.exprLen (.ref 505),
-      (interp (program.domainField 0)).toNat (program.evalE RD (program.domainField 0) (.ref 42) i) <
+  change (∀ i < program.exprLen (.ref 558),
+      (interp (program.domainField 0)).toNat (program.evalE RD (program.domainField 0) (.ref 95) i) <
         2 ^ 1) ∧
-    ((∀ i < program.exprLen (.ref 505),
-      (interp (program.domainField 1)).toNat (program.evalE RD (program.domainField 1) (.ref 505) i) <
+    ((∀ i < program.exprLen (.ref 558),
+      (interp (program.domainField 1)).toNat (program.evalE RD (program.domainField 1) (.ref 558) i) <
         2 ^ 1) →
-      ∀ i < program.exprLen (.ref 505),
-        (interp (program.domainField 1)).toNat (program.evalE RD (program.domainField 1) (.ref 505) i) =
-        (interp (program.domainField 0)).toNat (program.evalE RD (program.domainField 0) (.ref 42) i))
+      ∀ i < program.exprLen (.ref 558),
+        (interp (program.domainField 1)).toNat (program.evalE RD (program.domainField 1) (.ref 558) i) =
+        (interp (program.domainField 0)).toNat (program.evalE RD (program.domainField 0) (.ref 95) i))
   rw [MldsaCarrierFront.domains.2, MldsaCarrierFront.domains.1, MldsaCarrierFront.lens.1]
-  have key : ∀ i < 7168, (interp 1).toNat (program.evalE RD 1 (.ref 505) i) =
-      (interp 0).toNat (program.evalE RD 0 (.ref 42) i) ∧
-      (interp 0).toNat (program.evalE RD 0 (.ref 42) i) < 2 := by
+  have key : ∀ i < 7168, (interp 1).toNat (program.evalE RD 1 (.ref 558) i) =
+      (interp 0).toNat (program.evalE RD 0 (.ref 95) i) ∧
+      (interp 0).toNat (program.evalE RD 0 (.ref 95) i) < 2 := by
     intro i hi
     by_cases h1 : i < 512
     · rw [x_mu RD h1, y_mu RD h1, xH_mu y x c π h1, evalE_mu y x c π h1]
@@ -200,8 +216,8 @@ theorem cross_holds : program.HoldsAt E (program.predicate 247).body := by
 
 /-- **The crossing's operands read bits** at the honest values. -/
 theorem crossBits_honest :
-    (∀ i < 7168, program.evalE RD 1 (.ref 505) i = 0 ∨ program.evalE RD 1 (.ref 505) i = 1) ∧
-      ∀ i < 7168, program.evalE RD 0 (.ref 42) i = 0 ∨ program.evalE RD 0 (.ref 42) i = 1 := by
+    (∀ i < 7168, program.evalE RD 1 (.ref 558) i = 0 ∨ program.evalE RD 1 (.ref 558) i = 1) ∧
+      ∀ i < 7168, program.evalE RD 0 (.ref 95) i = 0 ∨ program.evalE RD 0 (.ref 95) i = 1 := by
   refine ⟨fun i hi => ?_, fun i hi => ?_⟩
   · by_cases h1 : i < 512
     · rw [x_mu RD h1, xH_mu y x c π h1]

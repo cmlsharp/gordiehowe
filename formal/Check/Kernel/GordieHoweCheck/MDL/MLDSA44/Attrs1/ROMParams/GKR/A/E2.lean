@@ -16,6 +16,16 @@ public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.A.E2.P8
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.A.E2.P9
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.A.E2.P10
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.A.E2.P11
+public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.A.E2.P12
+public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.A.E2.P13
+public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.A.E2.P14
+public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.A.E2.P15
+public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.A.E2.P16
+public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.A.E2.P17
+public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.A.E2.P18
+public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.A.E2.P19
+public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.A.E2.P20
+public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.A.E2.P21
 
 @[expose] public section
 
@@ -23,6 +33,6 @@ public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.A.E2.P11
 
 namespace GordieHowe.Generated.MDL.MLDSA44.Attrs1.ROMParams.GKR.A
 
-compose_entry cert ar 2 [1, 1024, 92, 1, 1024, 4, 0, 0, 2, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 4, 0, 0, 2, 0, 0, 3, 0, 0, 2, 0, 0, 3, 0, 0, 2, 0, 0, 3, 0, 0, 4, 0, 0, 1, 0, 0, 1, 0, 0, 4, 0, 0, 1, 0, 0, 3, 1, 1024, 4, 0, 0, 14, 1, 64, 4, 2, 1024, 1]
+compose_entry cert ar 2 [0, 0, 1, 1, 76, 54, 0, 0, 55, 2, 1, 1]
 
 end GordieHowe.Generated.MDL.MLDSA44.Attrs1.ROMParams.GKR.A

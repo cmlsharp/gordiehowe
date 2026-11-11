@@ -150,7 +150,7 @@ def view (x : ι → K) : TowerValue ι m (r * s) → K
   | .bit c => T.product.coord (x (T.word c.group)) c.pos
   | .cell i => x i
 
-omit [DecidableEq K] [Fintype ι] in
+omit [Fintype ι] in
 /-- **The tree decodes the value map** (`lem:unpack-tower`, `StageBasis.coord_tower`): the
 stage-by-stage decoding of the tree at a renamed coordinate is the product-basis decoding. -/
 theorem level_view_rename (nc : ℕ) (x : ι → K) (v : TowerValue ι m (r * s)) :
@@ -163,7 +163,7 @@ theorem level_view_rename (nc : ℕ) (x : ι → K) (v : TowerValue ι m (r * s)
     simp only [tree, Tree.level, Stage.level, Stage.extend, TowerValue.toCoord, view, bitStage,
       subStage, Equiv.symm_apply_apply, Sum.elim_inr, Level.base_view, product, StageBasis.coord_tower]
 
-omit [DecidableEq K] [Fintype ι] in
+omit [Fintype ι] in
 /-- **The tree's input relation is the corollary's**: the renamed claims hold on the tree's
 decoding exactly when the claims hold on the value map. -/
 theorem claimsHold_iff {Pub : Type} {nc : ℕ}
@@ -173,7 +173,7 @@ theorem claimsHold_iff {Pub : Type} {nc : ℕ}
     funext (T.level_view_rename nc x)
   simp only [Tree.ClaimsHold, towerClaims, AffineForm.eval_rename, h]
 
-omit [DecidableEq K] [Fintype ι] in
+omit [Fintype ι] in
 /-- **The mask condition of the tree is the membership claims** on the mask entries. -/
 theorem masksValid_iff (nc : ℕ) (x : ι → K) :
     (T.tree nc).MasksValid x ↔ ∀ j, x (T.entry j) ∈ fixedField K 2 s := by
@@ -188,12 +188,12 @@ theorem routes {Pub Wit : Type} {cells : Wit → ι → K} {nc : ℕ}
     (M : MaskedReduction K ι Pub Wit cells (TowerCoord ι m r s) nc) : (T.tree nc).Routes M :=
   trivial
 
-omit [DecidableEq K] [Fintype ι] in
+omit [Fintype ι] in
 /-- **Two combinations**, one per stage. -/
 theorem combinations_tree (nc : ℕ) : (T.tree nc).combinations = 2 :=
   rfl
 
-omit [DecidableEq K] [Fintype ι] in
+omit [Fintype ι] in
 /-- **Two stages.** -/
 theorem stages_tree (nc : ℕ) : (T.tree nc).stages = 2 :=
   rfl

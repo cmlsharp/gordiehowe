@@ -141,7 +141,10 @@ namespace RingSignature
 section Decompose
 
 variable {m k e : ℕ} {N : ℕ} {TS : RingTypes} {S : RingScheme (Bits m) (XOut k e) N TS} {n : ℕ} {O : SideOracle S}
-  {t : ℕ}
+  {t : ℕ} [Fintype TS.PK] [DecidableEq TS.PK] [Fintype TS.Msg] [DecidableEq TS.Msg]
+  [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins] [Fintype TS.Sig] [DecidableEq TS.Sig]
+
+variable [Fintype O.BMsg] [DecidableEq O.BMsg] [Fintype O.BSig] [DecidableEq O.BSig]
 
 /-- **The adversary of the unforgeability game at the users' key coins**: its start input, the
 users' public keys, with the empty table of `OracleView.queriesOnly`. -/
@@ -151,6 +154,8 @@ abbrev UnforgeAdversary.at (A : UnforgeAdversary S n O (OracleView.queriesOnly _
       (KeyRing S.PK N × S.Msg × S.Sig) t :=
   A (fun i => S.pk (keys i), ())
 
+variable [Fintype TS.SignCoins] [DecidableEq TS.SignCoins] [Nonempty TS.SignCoins]
+
 /-- **The run of the unforgeability game at the users' key coins `keys` and the auxiliary value
 `a`**: the adversary's algorithm at `a` composed with the challenger at `keys`, reading the output
 and the answered requests (as `QueryBoundedAdversary.transcriptLaw` does). -/
@@ -158,6 +163,8 @@ noncomputable abbrev UnforgeAdversary.runAt (A : UnforgeAdversary S n O (OracleV
     (Q : ℕ) (keys : Fin n → S.KeyCoins) (a : (A.at keys).Aux) :=
   ((A.at keys).alg a).toKindAlg.composeBothOut (unforgeChallenger S n O keys Q) fun v =>
     (((A.at keys).alg a).output _ v, ((A.at keys).alg a).history _ v)
+
+variable [Nonempty TS.KeyCoins]
 
 /-- **The forgery probability is an average of model runs** (the oracle uniform, read through
 `outEquiv`): over the users' key coins and the adversary's auxiliary input, of the probability that
@@ -206,7 +213,11 @@ structure ProofSystem.CompiledBy {m k e : ℕ} {Stmt Wit Cl : Type}
 
 namespace BaseSigner
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB)
+variable {X Y : Type} {N : ℕ} {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg]
+  [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] (B : BaseSigner X Y N TB)
 
 /-- **The base message binds the ring and the message** (BKM06 section 5, ePrint 2005/304: the
 base signature is on `M ‖ PK_1 ‖ … ‖ PK_n`): `bmsg R m = bmsg R' m'` gives `R = R'` and
@@ -232,15 +243,18 @@ theorem bindsRing_toBaseSigner_bindOfEncoding (X Y : Type) (N : ℕ) {Sch : Ring
 
 section Relay
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB}
+variable {X Y : Type} {N : ℕ} {TB : BaseTypes}
+  {B : BaseSigner X Y N TB}
   {TPS : PSTypes} {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop} [DecidablePred adm]
+
+variable [DecidableEq TB.PK]
 
 variable (B PS adm) in
 /-- **A relay of the requests of the unforgeability game of `ofBase B PS adm`, with the side oracle
 `O`, to the multi-user game with the signing oracle `SO`**: the message `SO` signs for a ring
 signature on `(R, m)` (`ringMsg`) and for a side signature on `bm` (`sideMsg`). Corruptions are
 relayed as corruptions. -/
-structure MURelay (O : SideOracle (ofBase B PS adm)) (SO : Signature.SignOracle B) where
+structure MURelay (O : SideOracle (ofBase B PS adm)) (SO : Signature.SignOracle B.core) where
   /-- The message of a ring-signing request. -/
   ringMsg : KeyRing B.PK N → B.Msg → SO.SMsg
   /-- The message of a side-signing request. -/
@@ -248,7 +262,7 @@ structure MURelay (O : SideOracle (ofBase B PS adm)) (SO : Signature.SignOracle 
 
 namespace MURelay
 
-variable {O : SideOracle (ofBase B PS adm)} {SO : Signature.SignOracle B} (r : MURelay B PS adm O SO)
+variable {O : SideOracle (ofBase B PS adm)} {SO : Signature.SignOracle B.core} (r : MURelay B PS adm O SO)
   {n : ℕ}
 
 /-- **The relayed request**: a corruption as a corruption, a ring-signing request by `s` as a signing
@@ -260,7 +274,7 @@ def request : UnforgeRequest n O → Signature.MURequest SO n
 
 /-- **The relayed reply**: key coins as key coins; signatures are not relayed (`none`; the
 existential winning condition reads only the requests). -/
-def response : UnforgeResponse O → Option (Signature.MUResponse B)
+def response : UnforgeResponse O → Option (Signature.MUResponse B.core)
   | .keyCoins kc => some (.keyCoins kc)
   | _ => none
 
@@ -348,13 +362,15 @@ end Relay
 
 section Forger
 
-variable {m k e N : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits m) (XOut k e) N TB}
+variable {m k e N : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
+  {B : BaseSigner (Bits m) (XOut k e) N TB}
   {TPS : PSTypes} {PS : ProofSystem (Bits m) (XOut k e) (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop}
   [DecidablePred adm] {O : SideOracle (ofBase B PS adm)} {n t : ℕ} {Cl : Type}
   {V : NARG.QROM.Verifier m k e Cl (RingStmt B)}
 
 /-- The output of the unforgeability game of `ofBase B PS adm` with the answered requests. -/
-abbrev ForgeryReadout {TB : BaseTypes} (B : BaseSigner (Bits m) (XOut k e) N TB)
+abbrev ForgeryReadout {TB : BaseTypes} [DecidableEq TB.PK]
+    (B : BaseSigner (Bits m) (XOut k e) N TB)
     {TPS : PSTypes} (PS : ProofSystem (Bits m) (XOut k e) (RingStmt B) (RingWit B) TPS) (adm : KeyRing B.PK N → Prop)
     [DecidablePred adm] (O : SideOracle (ofBase B PS adm)) (n : ℕ) : Type :=
   (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof)) × UnforgeHist n O
@@ -372,6 +388,15 @@ the base message `bmsg R m` and `σ`; none if `i` is outside the ring. -/
 def decodeWit (x : RingStmt B) (w : RingWit B) : Option (B.PK × B.BMsg × B.BSig) :=
   if h : w.idx < x.ring.1.length then some (x.ring.1[w.idx], B.bmsg x.ring x.msg, w.sig) else none
 
+variable [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins]
+
+variable [Fintype O.BMsg] [DecidableEq O.BMsg] [Fintype O.BSig] [DecidableEq O.BSig]
+
+variable [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
+  [DecidableEq TB.Coins] [Nonempty TB.Coins]
+
 /-- **The success probability of the extraction forger with the default claim `c₀`**: averaged over
 the users' key coins and the adversary's auxiliary input, the probability that in the simulated
 run (a compressed oracle) of the adversary composed with the challenger of the game at the key
@@ -379,7 +404,7 @@ coins, followed by the compiled verifier's queries on the forgery's claim, some 
 returns from the measured database for the forgery's statement decodes to a candidate
 `(pk, bm, σ)` that is a forgery of MU-EUF-CMA^corr with the signing oracle `SO`
 (`Signature.Forges`) at every oracle, for the history relayed by `r`. -/
-noncomputable def extractionSuccessAt {SO : Signature.SignOracle B} (r : MURelay B PS adm O SO)
+noncomputable def extractionSuccessAt {SO : Signature.SignOracle B.core} (r : MURelay B PS adm O SO)
     (A : UnforgeAdversary (ofBase B PS adm) n O (OracleView.queriesOnly _ _) t) (Q : ℕ)
     (hC : PS.CompiledBy V) (ext : RingStmt B → DB (Bits m) (Out k e) → Multiset (RingWit B))
     (c₀ : Cl) : ℝ≥0∞ :=
@@ -393,15 +418,18 @@ noncomputable def extractionSuccessAt {SO : Signature.SignOracle B} (r : MURelay
 
 /-- **The success probability of the extraction forger** (`extractionSuccessAt` at a default
 claim when the claims are inhabited; `0` otherwise, when no proof is accepted). -/
-noncomputable def extractionSuccess {SO : Signature.SignOracle B} (r : MURelay B PS adm O SO)
+noncomputable def extractionSuccess {SO : Signature.SignOracle B.core} (r : MURelay B PS adm O SO)
     (A : UnforgeAdversary (ofBase B PS adm) n O (OracleView.queriesOnly _ _) t) (Q : ℕ)
     (hC : PS.CompiledBy V) (ext : RingStmt B → DB (Bits m) (Out k e) → Multiset (RingWit B)) :
     ℝ≥0∞ :=
   open Classical in if h : Nonempty Cl then extractionSuccessAt r A Q hC ext (Classical.choice h) else 0
 
+variable [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig]
+
 variable {rel : Set (RingStmt B × RingWit B)}
   {ext : RingStmt B → DB (Bits m) (Out k e) → Multiset (RingWit B)} {β : ℕ → ℝ≥0∞}
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] in
 /-- **A forgery passing a test is extracted, except with the knowledge error**, in the
 unforgeability game of `ofBase B PS adm` with any side oracle: for a proof system given by a
 compiled verifier `V` (`hC`) with a knowledge bound for `rel` at `ext` and `β` (`K`), and a test `P`
@@ -450,6 +478,7 @@ theorem forgeProb_le_extractProb (hC : PS.CompiledBy V) (K : V.KnowledgeBound re
     (Ring.tsum_mul_le_tsum_mul_add _ (hstep keys))).trans ?_
   exact Ring.tsum_mul_le_tsum_mul_add _ fun _ => le_rfl
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] in
 /-- **Unforgeability of `ofBase B PS adm` from knowledge soundness and the multi-user game**, with
 any side oracle `O` whose requests a relay `r` to the multi-user game with the signing oracle `SO`
 passes on keeping freshness (`hr`): for a proof system given by a compiled verifier `V` (`hC`) with a
@@ -458,7 +487,7 @@ Proposition 8.12 and Lemmas 5.9–5.10), every witness of `rel` being one of the
 every oracle (`hrel`), the forgery probability of an adversary with at most `t` queries and `Q`
 requests is at most the success probability of the extraction forger (`extractionSuccess`), plus the
 knowledge error at `t + Q · q + kq` queries. -/
-theorem forgeProb_le_of_knowledgeBound {SO : Signature.SignOracle B} (r : MURelay B PS adm O SO)
+theorem forgeProb_le_of_knowledgeBound {SO : Signature.SignOracle B.core} (r : MURelay B PS adm O SO)
     (hr : r.KeepsFresh) (hC : PS.CompiledBy V) (K : V.KnowledgeBound rel ext β)
     (hrel : ∀ x w, (x, w) ∈ rel → ∀ H, RingRel B adm H x w)
     (A : UnforgeAdversary (ofBase B PS adm) n O (OracleView.queriesOnly _ _) t) (Q : ℕ) :
@@ -488,6 +517,7 @@ theorem forgeProb_le_of_knowledgeBound {SO : Signature.SignOracle B} (r : MURela
     obtain ⟨c, -, -⟩ := hC.accepted_of_verify _ _ _ hf.verify_eq
     exact hCl ⟨c⟩
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] in
 /-- **Unforgeability with respect to insider corruption (BKM06 Definition 7) of `ofBase B PS adm`
 for a ring-binding base message**, by knowledge soundness: for a base message that binds the ring
 (`hbind`), a proof system given by a compiled verifier `V` (`hC`) with a knowledge bound for `rel`
@@ -527,7 +557,8 @@ end Forger
 /-- **The relation of an oracle-free base signer is one at every oracle**: a witness of the ring
 relation at one oracle `H₀` is one at every oracle, so `ringRel B adm H₀` meets the relation
 hypothesis of the theorems above. -/
-theorem BaseSigner.OracleFree.ringRel_forall {X Y : Type} {N : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB}
+theorem BaseSigner.OracleFree.ringRel_forall {X Y : Type} {N : ℕ} {TB : BaseTypes}
+    {B : BaseSigner X Y N TB}
     (hB : B.OracleFree) (adm : KeyRing B.PK N → Prop) (H₀ : X → Y) :
     ∀ x w, (x, w) ∈ ringRel B adm H₀ → ∀ H, RingRel B adm H x w := fun x w h H => by
   rw [hB.ringRel_eq adm H₀ H] at h
@@ -539,14 +570,15 @@ section SPBCS
 
 open SPTerm GordieHowe.Ring
 
-variable {k kN kS L e N : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N : ℕ} {TB : BaseTypes}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
   (M : SPBCS Mg P (RingStmt B) k kN kS L e) (Λ : SiteLayout Mg) {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] (E : (j : ι) → (M.comp j).Encoder)
   {Vr : RingStmt B → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : RingWit B → R → CausalProver P τ (RingStmt B))
 
 /-- **The spBCS proof system is given by its compiled verifier** `M.qVerifier Qs b b`, with the
@@ -557,10 +589,16 @@ def compiledBy_spbcsProofSystem :
   stmt_eq _ _ _ hc := stmt_of_mem_spbcsClaim M hc
   accepted_of_verify H x π h := (verify_spbcsProofSystem_eq_true_iff M Λ E hb honest H x π).1 h
 
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
+  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+
 variable {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {n t : ℕ}
   {rel : Set (RingStmt B × RingWit B)} {Ext : CausalExtractor P τ (RingStmt B) (RingWit B)}
   {St : CausalStateFn P τ (RingStmt B)} {ε : ChIdx P τ → ℝ≥0}
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] in
 /-- **Unforgeability with respect to insider corruption (BKM06 Definition 7) of the ring signature
 compiled by spBCS, for a ring-binding base message**: for a base message that binds the ring
 (`hbind`) and the spBCS compilation `M` of a composite that is round-by-round knowledge sound in the

@@ -97,8 +97,10 @@ theorem run_readL {α : Type} (T : X → Option Y) (p : OracleProg X Y α) (h : 
   rw [readL, run_translate]
   rfl
 
-variable {N n : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB) {Pf PC : Type} {iFP : Fintype Pf} {iDP : DecidableEq Pf} {iFC : Fintype PC}
-  {iDC : DecidableEq PC} {iNC : Nonempty PC}
+variable {N n : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
+  (B : BaseSigner X Y N TB) {Pf PC : Type} [Fintype Pf] [DecidableEq Pf]
+  [Fintype PC]
+  [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) ⟨Pf, PC⟩}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {SC X₀ R : Type}
   (pks : Fin n → B.PK)
@@ -133,7 +135,7 @@ def xP : Req B PS adm n → Option (B.Pub × B.BSig × List (Assignment X Y)) �
 `toR x₀ (r, c) σ` of a signed request, the dummy request `dummyR (r, c)` otherwise; the proof
 queries carry the request number `c`. -/
 def reqOf (c : ℕ) : (r : Req B PS adm n) → Option (B.Pub × B.BSig × List (Assignment X Y)) →
-    Option X₀ → MURequest (SignOracle.none B) n ⊕ R
+    Option X₀ → MURequest (SignOracle.none B.core) n ⊕ R
   | .corrupt i, _, _ => .inl (.corrupt i)
   | r, some p, some x₀ => .inr (toR x₀ (r, c) p.2.1)
   | r, _, _ => .inr (dummyR (r, c))
@@ -141,7 +143,7 @@ def reqOf (c : ℕ) : (r : Req B PS adm n) → Option (B.Pub × B.BSig × List (
 /-- **The outer reply**: the key coins of a corruption's main reply; for a signed request, the
 signature `(y, π)` from the main proof `π` and the assignments; nothing otherwise. -/
 def replyOf : Req B PS adm n → Option (B.Pub × B.BSig × List (Assignment X Y)) →
-    Option (MUResponse B ⊕ Pf) → Reply X Y (Resp B PS adm)
+    Option (MUResponse B.core ⊕ Pf) → Reply X Y (Resp B PS adm)
   | .corrupt _, _, some (.inl (.keyCoins kc)) => ⟨some (.keyCoins kc), []⟩
   | .sign _ _ _, some p, a =>
     ⟨(a.bind Sum.getRight?).map fun π => .signature ((p.1, π) : B.Pub × Pf), p.2.2⟩
@@ -149,14 +151,15 @@ def replyOf : Req B PS adm n → Option (B.Pub × B.BSig × List (Assignment X Y
 
 /-- **The relay program of request number `c`** (module docstring). -/
 noncomputable def kfProg (c : ℕ) (r : Req B PS adm n) :
-    OracleProg (X ⊕ (MURequest (SignOracle.none B) n ⊕ R))
-      (Y ⊕ Option (MUResponse B ⊕ Pf)) (Reply X Y (Resp B PS adm)) :=
+    OracleProg (X ⊕ (MURequest (SignOracle.none B.core) n ⊕ R))
+      (Y ⊕ Option (MUResponse B.core ⊕ Pf)) (Reply X Y (Resp B PS adm)) :=
   (readL (fun _ => none) (sigP B pks ksign sc c r)).bind fun o =>
     (readL (lastAssign (asgOf B o)) (xP B stmtP r o)).bind fun x₀ =>
       (askM (reqOf B toR dummyR c r o x₀)).bind fun a => .pure (replyOf B r o a)
 
-variable (h : X → Y) (m : MURequest (SignOracle.none B) n ⊕ R → Option (MUResponse B ⊕ Pf))
+variable (h : X → Y) (m : MURequest (SignOracle.none B.core) n ⊕ R → Option (MUResponse B.core ⊕ Pf))
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The run of the relay program**: the signature at the oracle, the statement program at the
 oracle reprogrammed by its assignments, the main reply to the main request. -/
 theorem run_kfProg (c : ℕ) (r : Req B PS adm n) :
@@ -168,6 +171,7 @@ theorem run_kfProg (c : ℕ) (r : Req B PS adm n) :
   simp only [kfProg, run_bind, run_readL, reprogT_none, ← reprogram_eq_reprogT]
   rfl
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The trace of the relay program**: the reads of the signature, then of the statement
 program, then the main request. -/
 theorem trace_kfProg (c : ℕ) (r : Req B PS adm n) :
@@ -182,7 +186,8 @@ theorem trace_kfProg (c : ℕ) (r : Req B PS adm n) :
     ← reprogram_eq_reprogT]
   rfl
 
-omit [DecidableEq X] [Zero Y] in
+omit [DecidableEq X] [Zero Y]
+  [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The proof query of request number `c` carries `(r, c)`**: it is `toR x₀ (r, c) σ` or
 `dummyR (r, c)`. -/
 theorem reqOf_inr_tag (c : ℕ) (r : Req B PS adm n)
@@ -193,6 +198,7 @@ theorem reqOf_inr_tag (c : ℕ) (r : Req B PS adm n)
     simp only [reqOf, Sum.inr.injEq, reduceCtorEq] at hq <;> subst hq <;>
     first | exact .inl ⟨_, _, rfl⟩ | exact .inr rfl
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **Every proof query the relay program of request number `c` makes carries `(r, c)`.** -/
 theorem mem_trace_kfProg_tag (c : ℕ) (r : Req B PS adm n) (q : R)
     (hq : .inr (.inr q) ∈ (kfProg B pks ksign stmtP toR dummyR sc c r).trace (combineAns h m)) :
@@ -202,11 +208,12 @@ theorem mem_trace_kfProg_tag (c : ℕ) (r : Req B PS adm n) (q : R)
     List.mem_singleton, Sum.inr.injEq, false_or] at hq
   exact reqOf_inr_tag B toR dummyR c r _ _ q hq.symm
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The bookkeeping**: for a signed request, the statement program reads the oracle
 reprogrammed by the signature's assignments, so it runs as `stmtP` at `h.reprogram asg`. -/
 theorem run_xP_sign (s : Fin n) (Rg : KeyRing B.PK N) (msg : B.Msg) (y : B.Pub) (σ : B.BSig)
     (asg : List (Assignment X Y)) :
-    (readL (Req' := MURequest (SignOracle.none B) n ⊕ R) (Resp' := MUResponse B ⊕ Pf)
+    (readL (Req' := MURequest (SignOracle.none B.core) n ⊕ R) (Resp' := MUResponse B.core ⊕ Pf)
         (lastAssign asg)
         (xP B (PS := PS) (adm := adm) stmtP (.sign s Rg msg) (some (y, σ, asg)))).run
         (combineAns h m) =
@@ -307,13 +314,14 @@ noncomputable def kfProgK
       OracleProg (X ⊕ X) (Y ⊕ Yb) (Option (B.Pub × B.BSig × List (Assignment X Y))))
     (stp : RingStmt B → OracleProg (X ⊕ X) (Y ⊕ Yb) X₀) (Rd : KFReads X Y Yb Xs Ys) (T : X → Option Y) (c : ℕ)
     (r : Req B PS adm n) :
-    OracleProg ((X ⊕ Xs) ⊕ (MURequest (SignOracle.none B) n ⊕ R))
-      ((Y ⊕ Ys) ⊕ Option (MUResponse B ⊕ Pf)) (Reply X Y (Resp B PS adm)) :=
+    OracleProg ((X ⊕ Xs) ⊕ (MURequest (SignOracle.none B.core) n ⊕ R))
+      ((Y ⊕ Ys) ⊕ Option (MUResponse B.core ⊕ Pf)) (Reply X Y (Resp B PS adm)) :=
   (Rd.lift (fun _ => none) (Rd.tabB T fun _ => none) (sigK B pks sc sgn c r)).bind fun o =>
     (Rd.lift (lastAssign (asgOf B o)) (Rd.tabB T (lastAssign (asgOf B o))) (xK B stp r o)).bind
       fun x₀ => (OracleProg.query (.inr (reqOf B toR dummyR c r o x₀)) fun b =>
         .pure (b.elim (fun _ => none) id)).bind fun a => .pure (replyOf B r o a)
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The key-free relay program makes no side read after its main request**: its reads come
 before its one main request, and its reply follows it. -/
 theorem kfProgK_noSideAfterAsk
@@ -326,6 +334,7 @@ theorem kfProgK_noSideAfterAsk
     fun _ => OracleProg.NoAsks.bind_noSideAfterAsk
       (OracleProg.noAsks_translate _ _ (fun _ => rfl) _) fun _ _ => trivial
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **Base reads as oracle reads, of programs reading only the oracle**: the relay program over
 base reads in real-query mode, of the signer and the statement program reading only the oracle,
 with its (absent) side reads answered, is the key-free relay program. -/
@@ -337,7 +346,7 @@ theorem elimSide_kfProgK_real (T : X → Option Y) (c : ℕ) (r : Req B PS adm n
   have hlift : ∀ {α : Type} (Tf : X → Option Y) (p : OracleProg X Y α),
       elimSide (KFReads.real (X := X) (Y := Y) (Yb := Y) id).side
         ((KFReads.real (X := X) (Y := Y) (Yb := Y) id).lift
-          (Req' := MURequest (SignOracle.none B) n ⊕ R) (Resp' := MUResponse B ⊕ Pf)
+          (Req' := MURequest (SignOracle.none B.core) n ⊕ R) (Resp' := MUResponse B.core ⊕ Pf)
           Tf (KFReads.real (X := X) (Y := Y) (Yb := Y) id |>.tabB T Tf) (fullOnly p)) =
         readL Tf p := by
     intro α Tf p
@@ -375,7 +384,8 @@ theorem elimSide_kfProgK_real (T : X → Option Y) (c : ℕ) (r : Req B PS adm n
 
 variable {qk qs : ℕ}
 
-omit [DecidableEq X] [Zero Y] in
+omit [DecidableEq X] [Zero Y]
+  [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 theorem sigP_queriesLE (hk : ∀ pk Rg c msg s, (ksign pk Rg c msg s).QueriesLE qk) (c : ℕ)
     (r : Req B PS adm n) : (sigP B pks ksign sc c r).QueriesLE qk := by
   rcases r with i | ⟨s, Rg, msg⟩ | ⟨i, bm⟩
@@ -387,7 +397,8 @@ theorem sigP_queriesLE (hk : ∀ pk Rg c msg s, (ksign pk Rg c msg s).QueriesLE 
       exact fun _ => by simp [trace]
   · exact fun _ => by simp [sigP]
 
-omit [DecidableEq X] [Zero Y] in
+omit [DecidableEq X] [Zero Y]
+  [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 theorem xP_queriesLE (hs : ∀ x, (stmtP x).QueriesLE qs) (r : Req B PS adm n)
     (o : Option (B.Pub × B.BSig × List (Assignment X Y))) :
     (xP B stmtP r o).QueriesLE qs := by
@@ -468,14 +479,15 @@ theorem trace_lift {Yb Xs Ys α : Type} (Rd : KFReads X Y Yb Xs Ys) (Tf Tb : X �
   | nil => rfl
   | cons a l ih => simpa [Sum.getRight?] using ih
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The relay program over base reads makes exactly one main request.** -/
 theorem filterMap_trace_kfProgK {Yb Xs Ys : Type}
     (sgn : B.PK → KeyRing B.PK N → ℕ → B.Msg → SC →
       OracleProg (X ⊕ X) (Y ⊕ Yb) (Option (B.Pub × B.BSig × List (Assignment X Y))))
     (stp : RingStmt B → OracleProg (X ⊕ X) (Y ⊕ Yb) X₀) (Rd : KFReads X Y Yb Xs Ys)
     (T : X → Option Y) (c : ℕ) (r : Req B PS adm n)
-    (o : (X ⊕ Xs) ⊕ (MURequest (SignOracle.none B) n ⊕ R) →
-      (Y ⊕ Ys) ⊕ Option (MUResponse B ⊕ Pf)) :
+    (o : (X ⊕ Xs) ⊕ (MURequest (SignOracle.none B.core) n ⊕ R) →
+      (Y ⊕ Ys) ⊕ Option (MUResponse B.core ⊕ Pf)) :
     ((kfProgK B pks toR dummyR sc sgn stp Rd T c r).trace o).filterMap Sum.getRight? =
       [reqOf B toR dummyR c r ((Rd.lift (fun _ => none) (Rd.tabB T fun _ => none)
           (sigK B pks sc sgn c r)).run o)
@@ -504,9 +516,9 @@ noncomputable def kfRelayOn {Yb Xs Ys : Type}
     (hsides : ∀ T c r (h : X → Y) m,
       (((kfProgK B pks toR dummyR sc sgn stp Rd T c r).trace
         (combineAns (MultiRelay.sideOracle h Rd.side) m)).filter isSideRead).length ≤ qS)
-    (idle : MURequest (SignOracle.none B) n ⊕ R) :
-    AssignRelay X Y (Req B PS adm n) (Resp B PS adm) (MURequest (SignOracle.none B) n ⊕ R)
-      (MUResponse B ⊕ Pf) Xs Ys where
+    (idle : MURequest (SignOracle.none B.core) n ⊕ R) :
+    AssignRelay X Y (Req B PS adm n) (Resp B PS adm) (MURequest (SignOracle.none B.core) n ⊕ R)
+      (MUResponse B.core ⊕ Pf) Xs Ys where
   prog := kfProgK B pks toR dummyR sc sgn stp Rd
   qG := qG
   idle := idle
@@ -520,12 +532,12 @@ noncomputable def kfRelayOn {Yb Xs Ys : Type}
   sides_le := hsides
   asks_eq_one T c r h m := by rw [filterMap_trace_kfProgK]; rfl
 
-omit [DecidableEq X] in
+omit [DecidableEq X] [Fintype Pf] [DecidableEq Pf] [DecidableEq TB.PK] in
 /-- **A program over full and base reads as a relay program makes no main request.** -/
 theorem asksIn_lift {Yb Xs Ys α : Type} (Rd : KFReads X Y Yb Xs Ys) (Tf Tb : X → Option Y)
-    (p : OracleProg (X ⊕ X) (Y ⊕ Yb) α) (P : MURequest (SignOracle.none B) n ⊕ R → Prop) :
-    MultiRelay.AsksIn (MUResponse B ⊕ Pf)
-      (Rd.lift (Req' := MURequest (SignOracle.none B) n ⊕ R) Tf Tb p) P :=
+    (p : OracleProg (X ⊕ X) (Y ⊕ Yb) α) (P : MURequest (SignOracle.none B.core) n ⊕ R → Prop) :
+    MultiRelay.AsksIn (MUResponse B.core ⊕ Pf)
+      (Rd.lift (Req' := MURequest (SignOracle.none B.core) n ⊕ R) Tf Tb p) P :=
   MultiRelay.AsksIn.translate_noMain _ (fun _ _ h => by cases h) _ p P
 
 section Over
@@ -535,9 +547,10 @@ variable {Yb Xs Ys : Type}
     OracleProg (X ⊕ X) (Y ⊕ Yb) (Option (B.Pub × B.BSig × List (Assignment X Y))))
   (stp : RingStmt B → OracleProg (X ⊕ X) (Y ⊕ Yb) X₀) (Rd : KFReads X Y Yb Xs Ys)
 
+omit [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype Pf] [DecidableEq Pf] in
 /-- **Every main request of the relay program over base reads is a `reqOf` of its request.** -/
 theorem asksIn_kfProgK_reqOf (T : X → Option Y) (c : ℕ) (r : Req B PS adm n) :
-    MultiRelay.AsksIn (MUResponse B ⊕ Pf) (kfProgK B pks toR dummyR sc sgn stp Rd T c r)
+    MultiRelay.AsksIn (MUResponse B.core ⊕ Pf) (kfProgK B pks toR dummyR sc sgn stp Rd T c r)
       fun r' => ∃ o x, r' = reqOf B toR dummyR c r o x := by
   unfold kfProgK
   refine MultiRelay.AsksIn.bind (asksIn_lift B _ _ _ _ _) fun o => ?_
@@ -547,9 +560,10 @@ theorem asksIn_kfProgK_reqOf (T : X → Option Y) (c : ℕ) (r : Req B PS adm n)
   cases h
   exact ⟨o, x₀, rfl⟩
 
+omit [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype Pf] [DecidableEq Pf] in
 /-- **A main corruption of the relay program over base reads comes from a corruption.** -/
 theorem asksIn_kfProgK_corrupt (T : X → Option Y) (c : ℕ) (r : Req B PS adm n) :
-    MultiRelay.AsksIn (MUResponse B ⊕ Pf) (kfProgK B pks toR dummyR sc sgn stp Rd T c r)
+    MultiRelay.AsksIn (MUResponse B.core ⊕ Pf) (kfProgK B pks toR dummyR sc sgn stp Rd T c r)
       fun r' => ∀ i, r' = .inl (.corrupt i) → r = .corrupt i := by
   refine MultiRelay.AsksIn.mono (asksIn_kfProgK_reqOf B pks toR dummyR sc sgn stp Rd T c r) ?_
   rintro r' ⟨o, x, rfl⟩ i hi
@@ -566,9 +580,9 @@ the key-free relay over base reads (`kfRelayOn`) of the signer and the statement
 only the oracle, in real-query mode (`KFReads.real`); at most `qk + qs` reads and exactly one main
 request. -/
 noncomputable def kfRelay (hk : ∀ pk Rg c msg s, (ksign pk Rg c msg s).QueriesLE qk)
-    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none B) n ⊕ R) :
-    AssignRelay X Y (Req B PS adm n) (Resp B PS adm) (MURequest (SignOracle.none B) n ⊕ R)
-      (MUResponse B ⊕ Pf) :=
+    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none B.core) n ⊕ R) :
+    AssignRelay X Y (Req B PS adm n) (Resp B PS adm) (MURequest (SignOracle.none B.core) n ⊕ R)
+      (MUResponse B.core ⊕ Pf) :=
   kfRelayOn B pks toR dummyR sc (fun pk Rg c m s => fullOnly (ksign pk Rg c m s))
     (fun x => fullOnly (stmtP x)) (KFReads.real id) (qk + qs) 0 0 (Nat.zero_le _) (Or.inl rfl)
     (fun _ _ _ h => by rw [startsSide_of_isEmpty] at h; cases h)
@@ -584,23 +598,26 @@ noncomputable def kfRelay (hk : ∀ pk Rg c msg s, (ksign pk Rg c msg s).Queries
       omega)
     (fun T c r h m => by rw [length_filter_isSideRead_of_isEmpty]) idle
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The key-free relay's program, its side reads answered**, is `kfProg`. -/
 @[simp] theorem elimProg_kfRelay (hk : ∀ pk Rg c msg s, (ksign pk Rg c msg s).QueriesLE qk)
-    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none B) n ⊕ R)
+    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none B.core) n ⊕ R)
     (T : X → Option Y) :
     (kfRelay B pks ksign stmtP toR dummyR sc hk hs idle).elimProg T =
       kfProg B pks ksign stmtP toR dummyR sc :=
   funext fun c => funext fun r => elimSide_kfProgK_real B pks ksign stmtP toR dummyR sc T c r
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- The key-free relay's padding main request. -/
 @[simp] theorem idle_kfRelay (hk : ∀ pk Rg c msg s, (ksign pk Rg c msg s).QueriesLE qk)
-    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none B) n ⊕ R) :
+    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none B.core) n ⊕ R) :
     (kfRelay B pks ksign stmtP toR dummyR sc hk hs idle).idle = idle :=
   rfl
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The key-free relay's program ignores the table.** -/
 theorem kfRelay_isPlain (hk : ∀ pk Rg c msg s, (ksign pk Rg c msg s).QueriesLE qk)
-    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none B) n ⊕ R) :
+    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none B.core) n ⊕ R) :
     (kfRelay B pks ksign stmtP toR dummyR sc hk hs idle).IsPlain := fun _ _ => rfl
 
 /-! ### Safe assignments -/
@@ -609,8 +626,8 @@ theorem kfRelay_isPlain (hk : ∀ pk Rg c msg s, (ksign pk Rg c msg s).QueriesLE
 signer's assignments keep `f` of the oracle it reads (`hP`), and the main challenger's replies do
 not see reprogramming that keeps `f` (`hresp`). -/
 noncomputable def kfRelay_safeAssign (hk : ∀ pk Rg c msg s, (ksign pk Rg c msg s).QueriesLE qk)
-    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none B) n ⊕ R)
-    (C' : Challenger X Y (MURequest (SignOracle.none B) n ⊕ R) (MUResponse B ⊕ Pf))
+    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none B.core) n ⊕ R)
+    (C' : Challenger X Y (MURequest (SignOracle.none B.core) n ⊕ R) (MUResponse B.core ⊕ Pf))
     {Z : Type} (f : (X → Y) → Z)
     (hP : ∀ pk Rg c msg s H p, (ksign pk Rg c msg s).run H = some p →
       f (H.reprogram p.2.2) = f H)
@@ -749,24 +766,24 @@ end Keeps
 section ReadsLength
 
 variable {Stmt Wit Proof Coins SC' Rq : Type} (rel : Stmt → Wit → Prop) [DecidableRel rel]
-  (enc : MURequest (SignOracle.none B) n ⊕ Rq → ProofQuery Stmt Wit)
+  (enc : MURequest (SignOracle.none B.core) n ⊕ Rq → ProofQuery Stmt Wit)
 
-omit [DecidableEq X] [Zero Y] in
+omit [DecidableEq X] [Zero Y] [DecidableEq TB.PK] in
 /-- **The multi-user part without messages answers by fixed replies below the cap**, so it reads
 its history only through its length there. -/
 theorem muChallenger_none_respond_eq (keys : Fin n → B.KeyCoins) (Q : ℕ)
     (c : (muNone (X := X) (Y := Y) B keys Q).Coins)
-    (hist hist' : List (HistoryEntry (MURequest (SignOracle.none B) n) (MUResponse B)))
-    (r : MURequest (SignOracle.none B) n) (h : hist.length < Q) (h' : hist'.length < Q) :
+    (hist hist' : List (HistoryEntry (MURequest (SignOracle.none B.core) n) (MUResponse B.core)))
+    (r : MURequest (SignOracle.none B.core) n) (h : hist.length < Q) (h' : hist'.length < Q) :
     (muNone B keys Q).respond c hist r = (muNone (X := X) (Y := Y) B keys Q).respond c hist' r := by
   simp only [muNone, h, h', ↓reduceIte]
 
-omit [DecidableEq X] [Zero Y] in
+omit [DecidableEq X] [Zero Y] [DecidableEq TB.PK] in
 /-- **The main challenger of the key-free route reads its history only through its length**
 below the cap. -/
 theorem kfMain_readsLength [Fintype Coins] [DecidableEq Coins]
-    (P : NARG.Prover X Y Stmt Wit Proof Coins) (keys : Fin n → B.KeyCoins) (Q : ℕ) :
-    ReadsLength (kfMain B rel P enc keys Q) Q := by
+    (P : NARG.Prover X Y Stmt Wit Proof Coins) (μ : PMF Coins) (keys : Fin n → B.KeyCoins) (Q : ℕ) :
+    ReadsLength (kfMain B rel P μ enc keys Q) Q := by
   intro c hist hist' r hl hQ
   rcases r with r | q
   · have h1 : (leftHist hist).length < Q := lt_of_le_of_lt (List.length_filterMap_le _ _) hQ
@@ -776,7 +793,7 @@ theorem kfMain_readsLength [Fintype Coins] [DecidableEq Coins]
     rw [muChallenger_none_respond_eq B keys Q c.1 _ _ r h1 h2]
   · simp only [kfMain, Challenger.sumDummy, realChallenger, dummyHist, List.length_map, hl]
 
-omit [DecidableEq X] [Zero Y] in
+omit [DecidableEq X] [Zero Y] [DecidableEq TB.PK] in
 /-- **The simulated main challenger of the key-free route reads its history only through its
 length** below the cap. -/
 theorem kfMainSim_readsLength [Fintype SC'] [DecidableEq SC']
@@ -795,10 +812,11 @@ end ReadsLength
 
 /-! ### Freshness -/
 
-variable {Stmt Wit : Type} (enc : MURequest (SignOracle.none B) n ⊕ R → ProofQuery Stmt Wit)
+variable {Stmt Wit : Type} (enc : MURequest (SignOracle.none B.core) n ⊕ R → ProofQuery Stmt Wit)
   (rel : Stmt → Wit → Prop) (stmtX : Stmt → X₀) (fstX : X₀ → RingStmt B)
 
-omit [DecidableEq X] [Zero Y] in
+omit [DecidableEq X] [Zero Y]
+  [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **An in-relation proof query comes from a signed request with its ring and message**: if the
 main request of request `r` is a proof query `q` in the relation, then `r` is a signing request
 `(s, R, m)` and the ring statement of `q`'s statement has the ring `R` and the message `m`, for
@@ -829,7 +847,8 @@ theorem reqOf_inr_rel
     subst hq
     exact absurd hrel (hdum _)
 
-omit [DecidableEq X] [Zero Y] in
+omit [DecidableEq X] [Zero Y]
+  [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The freshness discharge**: an in-relation proof query asked for a request among `rs`
 differs from every claim `x₀` whose ring statement has a ring and a message no request of `rs`
 signed (`hnot`, the `not_sign` part of `FreshAt`). -/
@@ -864,10 +883,11 @@ request `idle`, the dummy and signing main requests `dummyR` and `toR`, the stat
 - on every path, `toR` carries the statement program's output as its statement (`htoR`);
 - the idle request's proof requests have dummy statements (`hidleS`);
 - the idle request is not a corruption (`hidleC`). -/
-structure KFEncoding {X Y : Type} {N n : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB}
+structure KFEncoding {X Y : Type} {N n : ℕ} {TB : BaseTypes}
+    {B : BaseSigner X Y N TB}
     {R Stmt Wit X₀ Rr Sig X' Y' : Type}
-    (enc : MURequest (SignOracle.none B) n ⊕ R → ProofQuery Stmt Wit) (stmtX : Stmt → X₀)
-    (isDummy : X₀ → Bool) (idle : MURequest (SignOracle.none B) n ⊕ R) (dummyR : Rr → R)
+    (enc : MURequest (SignOracle.none B.core) n ⊕ R → ProofQuery Stmt Wit) (stmtX : Stmt → X₀)
+    (isDummy : X₀ → Bool) (idle : MURequest (SignOracle.none B.core) n ⊕ R) (dummyR : Rr → R)
     (toR : X₀ → Rr → Sig → R) (stmtP : RingStmt B → OracleProg X' Y' X₀)
     (fstX : X₀ → RingStmt B) : Prop where
   /-- The dummy requests have dummy statements. -/

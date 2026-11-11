@@ -382,54 +382,6 @@ theorem gameAdvantage_runLaw_le_of_saltFresh {Start : Type} [Fintype Start] [Non
   gameAdvantage_runLaw_le_of_saltFreshOn A (fun k H H' h => hA k H H' h.1)
     (fun k => (P k).toOn) (fun k => (P' k).toOn) hemb hε E
 
-/-- **Anonymity through the fresh counterparts of the experiments, for first components**: for
-a split `e : Y ≃ Y₁ × Y₂`, a table `V` of the oracle that agrees on oracles related by
-`AgreeOffRangeOn` (equal outside the range of the injective embedding `emb` and equal in their
-second components everywhere), and for every bit `b` and all users' key coins a fresh
-counterpart `C₁ b keys` of the anonymity challenger of experiment `b`
-(`Challenger.SaltFreshPairOn`, salts `ρ ← ν`), the anonymity advantage of every `t`-query
-adversary with `Q` challenges is at most the advantage between the runs against the two fresh
-counterparts plus twice `Pr[two salts collide] + 2 t √ε`. -/
-theorem anonAdvantage_le_of_saltFreshOn {N : ℕ} {TS' : RingTypes} {S' : RingScheme X Y N TS'} {n : ℕ}
-    {V : OracleView X Y} (hV : ∀ H H', AgreeOffRangeOn emb e H H' → V.view H = V.view H')
-    (A : AnonAdversary S' n V t) (Q : ℕ)
-    {C₁ : Bool → (Fin n → S'.KeyCoins) → Challenger X Y (AnonRequest S' n) S'.Sig}
-    (P : ∀ b keys, (anonChallenger S' n keys b Q).SaltFreshPairOn emb e ν (C₁ b keys))
-    (hemb : Function.Injective emb) {ε : ℝ}
-    (hε : ∀ s, (ν.toOuterMeasure {ρ | ∃ i, ρ i = s}).toReal ≤ ε) :
-    anonAdvantage A Q ≤
-      gameAdvantage (runLaw (fun keys H => A (keys, V.view H)) (C₁ false))
-        (runLaw (fun keys H => A (keys, V.view H)) (C₁ true)) anonAccepts +
-        2 * ((ν.toOuterMeasure {ρ | ¬ Function.Injective ρ}).toReal + 2 * t * √ε) := by
-  have hacc : (anonAccepts : Set ((Fin n → S'.KeyCoins) × (X → Y) ×
-      Option (Bool × List (HistoryEntry (AnonRequest S' n) S'.Sig)))) = RunOutIn {true} := by
-    ext x
-    simp [anonAccepts, RunOutIn]
-  rw [anonAdvantage, anonLaw, anonLaw, hacc]
-  exact gameAdvantage_runLaw_le_of_saltFreshOn _ (fun keys H H' h => by rw [hV H H' h])
-    (P false) (P true) hemb hε {true}
-
-/-- **Anonymity through the fresh counterparts of the experiments**: for a table `V` of the oracle
-read off the range of the injective embedding `emb`, and for every bit `b` and all users' key
-coins a fresh counterpart `C₁ b keys` of the anonymity challenger of experiment `b`
-(`Challenger.SaltFreshPair`, salts `ρ ← ν`), the anonymity advantage of every `t`-query adversary
-with `Q` challenges is at most the advantage between the runs against the two fresh counterparts
-plus twice `Pr[two salts collide] + 2 t √ε` (`anonAdvantage_le_of_saltFreshOn` at the split with
-a trivial second component). -/
-theorem anonAdvantage_le_of_saltFresh {N : ℕ} {TS' : RingTypes} {S' : RingScheme X Y N TS'} {n : ℕ}
-    {V : OracleView X Y} (hV : ∀ H H', AgreeOffRange emb H H' → V.view H = V.view H')
-    (A : AnonAdversary S' n V t) (Q : ℕ)
-    {C₁ : Bool → (Fin n → S'.KeyCoins) → Challenger X Y (AnonRequest S' n) S'.Sig}
-    (P : ∀ b keys, (anonChallenger S' n keys b Q).SaltFreshPair emb ν (C₁ b keys))
-    (hemb : Function.Injective emb) {ε : ℝ}
-    (hε : ∀ s, (ν.toOuterMeasure {ρ | ∃ i, ρ i = s}).toReal ≤ ε) :
-    anonAdvantage A Q ≤
-      gameAdvantage (runLaw (fun keys H => A (keys, V.view H)) (C₁ false))
-        (runLaw (fun keys H => A (keys, V.view H)) (C₁ true)) anonAccepts +
-        2 * ((ν.toOuterMeasure {ρ | ¬ Function.Injective ρ}).toReal + 2 * t * √ε) :=
-  anonAdvantage_le_of_saltFreshOn (e := wholeSplit Y) (fun H H' h => hV H H' h.1) A Q
-    (fun b keys => (P b keys).toOn) hemb hε
-
 /-- **`gameAdvantage_runLaw_saltOn_fresh_le` for independent salts of min-entropy `κ`**: for
 salts drawn independently with point probabilities at most `δ` (`δ = 2^{-κ}`), the bound is
 `C(K, 2) δ + 2 t √(K δ)`. -/
@@ -457,11 +409,67 @@ theorem gameAdvantage_runLaw_salt_fresh_le_of_pi {Start : Type} [Fintype Start]
   gameAdvantage_runLaw_saltOn_fresh_le_of_pi A (fun k H H' h => hA k H H' h.1)
     (fun k => (P k).toOn) hemb hδ E
 
+section Anonymity
+
+variable {N : ℕ} {TS' : RingTypes} {S' : RingScheme X Y N TS'} {n : ℕ} [Fintype TS'.PK]
+  [DecidableEq TS'.PK] [Fintype TS'.Msg] [DecidableEq TS'.Msg] [Fintype TS'.Sig]
+  [DecidableEq TS'.Sig]
+  [Fintype TS'.KeyCoins] [Nonempty TS'.KeyCoins] [Fintype TS'.SignCoins] [DecidableEq TS'.SignCoins]
+  [Nonempty TS'.SignCoins]
+
+/-- **Anonymity through the fresh counterparts of the experiments, for first components**: for
+a split `e : Y ≃ Y₁ × Y₂`, a table `V` of the oracle that agrees on oracles related by
+`AgreeOffRangeOn` (equal outside the range of the injective embedding `emb` and equal in their
+second components everywhere), and for every bit `b` and all users' key coins a fresh
+counterpart `C₁ b keys` of the anonymity challenger of experiment `b`
+(`Challenger.SaltFreshPairOn`, salts `ρ ← ν`), the anonymity advantage of every `t`-query
+adversary with `Q` challenges is at most the advantage between the runs against the two fresh
+counterparts plus twice `Pr[two salts collide] + 2 t √ε`. -/
+theorem anonAdvantage_le_of_saltFreshOn
+    {V : OracleView X Y} (hV : ∀ H H', AgreeOffRangeOn emb e H H' → V.view H = V.view H')
+    (A : AnonAdversary S' n V t) (Q : ℕ)
+    {C₁ : Bool → (Fin n → S'.KeyCoins) → Challenger X Y (AnonRequest S' n) S'.Sig}
+    (P : ∀ b keys, (anonChallenger S' n keys b Q).SaltFreshPairOn emb e ν (C₁ b keys))
+    (hemb : Function.Injective emb) {ε : ℝ}
+    (hε : ∀ s, (ν.toOuterMeasure {ρ | ∃ i, ρ i = s}).toReal ≤ ε) :
+    anonAdvantage A Q ≤
+      gameAdvantage (runLaw (fun keys H => A (keys, V.view H)) (C₁ false))
+        (runLaw (fun keys H => A (keys, V.view H)) (C₁ true)) anonAccepts +
+        2 * ((ν.toOuterMeasure {ρ | ¬ Function.Injective ρ}).toReal + 2 * t * √ε) := by
+  have hacc : (anonAccepts : Set ((Fin n → S'.KeyCoins) × (X → Y) ×
+      Option (Bool × List (HistoryEntry (AnonRequest S' n) S'.Sig)))) = RunOutIn {true} := by
+    ext x
+    simp [anonAccepts, RunOutIn]
+  rw [anonAdvantage, anonLaw, anonLaw, hacc]
+  exact gameAdvantage_runLaw_le_of_saltFreshOn _ (fun keys H H' h => by rw [hV H H' h])
+    (P false) (P true) hemb hε {true}
+
+/-- **Anonymity through the fresh counterparts of the experiments**: for a table `V` of the oracle
+read off the range of the injective embedding `emb`, and for every bit `b` and all users' key
+coins a fresh counterpart `C₁ b keys` of the anonymity challenger of experiment `b`
+(`Challenger.SaltFreshPair`, salts `ρ ← ν`), the anonymity advantage of every `t`-query adversary
+with `Q` challenges is at most the advantage between the runs against the two fresh counterparts
+plus twice `Pr[two salts collide] + 2 t √ε` (`anonAdvantage_le_of_saltFreshOn` at the split with
+a trivial second component). -/
+theorem anonAdvantage_le_of_saltFresh
+    {V : OracleView X Y} (hV : ∀ H H', AgreeOffRange emb H H' → V.view H = V.view H')
+    (A : AnonAdversary S' n V t) (Q : ℕ)
+    {C₁ : Bool → (Fin n → S'.KeyCoins) → Challenger X Y (AnonRequest S' n) S'.Sig}
+    (P : ∀ b keys, (anonChallenger S' n keys b Q).SaltFreshPair emb ν (C₁ b keys))
+    (hemb : Function.Injective emb) {ε : ℝ}
+    (hε : ∀ s, (ν.toOuterMeasure {ρ | ∃ i, ρ i = s}).toReal ≤ ε) :
+    anonAdvantage A Q ≤
+      gameAdvantage (runLaw (fun keys H => A (keys, V.view H)) (C₁ false))
+        (runLaw (fun keys H => A (keys, V.view H)) (C₁ true)) anonAccepts +
+        2 * ((ν.toOuterMeasure {ρ | ¬ Function.Injective ρ}).toReal + 2 * t * √ε) :=
+  anonAdvantage_le_of_saltFreshOn (e := wholeSplit Y) (fun H H' h => hV H H' h.1) A Q
+    (fun b keys => (P b keys).toOn) hemb hε
+
 /-- **`anonAdvantage_le_of_saltFreshOn` for independent salts of min-entropy `κ`**: for salts
 drawn independently with point probabilities at most `δ` (`δ = 2^{-κ}`), the anonymity advantage
 is at most the advantage between the runs against the two fresh counterparts plus
 `2 (C(K, 2) δ + 2 t √(K δ))`. -/
-theorem anonAdvantage_le_of_saltFreshOn_of_pi {N : ℕ} {TS' : RingTypes} {S' : RingScheme X Y N TS'} {n : ℕ}
+theorem anonAdvantage_le_of_saltFreshOn_of_pi
     {V : OracleView X Y} (hV : ∀ H H', AgreeOffRangeOn emb e H H' → V.view H = V.view H')
     (A : AnonAdversary S' n V t) (Q : ℕ) {p : Fin K → PMF S}
     {C₁ : Bool → (Fin n → S'.KeyCoins) → Challenger X Y (AnonRequest S' n) S'.Sig}
@@ -479,7 +487,7 @@ theorem anonAdvantage_le_of_saltFreshOn_of_pi {N : ℕ} {TS' : RingTypes} {S' : 
 independently with point probabilities at most `δ` (`δ = 2^{-κ}`), the anonymity advantage is at
 most the advantage between the runs against the two fresh counterparts plus
 `2 (C(K, 2) δ + 2 t √(K δ))`. -/
-theorem anonAdvantage_le_of_saltFresh_of_pi {N : ℕ} {TS' : RingTypes} {S' : RingScheme X Y N TS'} {n : ℕ}
+theorem anonAdvantage_le_of_saltFresh_of_pi
     {V : OracleView X Y} (hV : ∀ H H', AgreeOffRange emb H H' → V.view H = V.view H')
     (A : AnonAdversary S' n V t) (Q : ℕ) {p : Fin K → PMF S}
     {C₁ : Bool → (Fin n → S'.KeyCoins) → Challenger X Y (AnonRequest S' n) S'.Sig}
@@ -491,6 +499,8 @@ theorem anonAdvantage_le_of_saltFresh_of_pi {N : ℕ} {TS' : RingTypes} {S' : Ri
         2 * (K.choose 2 * δ + 2 * t * √(K * δ)) :=
   anonAdvantage_le_of_saltFreshOn_of_pi (e := wholeSplit Y) (fun H H' h => hV H H' h.1) A Q
     (fun b keys => (P b keys).toOn) hemb hδ
+
+end Anonymity
 
 end RingSignature
 

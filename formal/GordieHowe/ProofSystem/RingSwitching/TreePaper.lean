@@ -12,11 +12,12 @@ public import GordieHowe.Headline
 /-!
 # Ring switching along a packing tree, in the form of the paper's theorem
 
-The paper's theorem on ring switching along a packing tree (`thm:tree`, in Appendix C.2, Ring
+The paper's theorem on ring switching along a packing tree (`thm:tree`, in `app:pack-tree-def`, Ring
 switching along a packing tree) states the tree's stages alone, run on fixed linear claims on the
 stored values: (1) a reduction from those claims to linear claims and product constraints on the
-committed data and membership claims on the mask entries, with round error `1/|K|` at each
-combination challenge; (2) completeness; (3) honest-verifier zero knowledge with error `0`.
+committed data and membership claims on the mask entries, with round error `1/|F|` at each
+combination challenge (`F` is the paper's `K`); (2) completeness; (3) honest-verifier zero knowledge
+with error `0`.
 
 The Lean proves the stages as a transformation of a masked reduction (`GordieHowe.RingSwitching.Tree.run`, `GordieHowe.RingSwitching.Tree.soundRun`,
 `GordieHowe.RingSwitching.Tree.honestRun`, `GordieHowe/ProofSystem/RingSwitching/PackingTree.lean`), with the mask condition as a hypothesis of
@@ -28,9 +29,11 @@ pads), which is the paper's protocol:
   logical assignment of the committed cells" to "the output rows and claims hold on the cells and
   every stage's mask condition holds" (`MasksValid`: subfield masks in `S0`), obtained by moving the
   mask condition from the input to the output (`ClaimReduction.sideToOut`).
-* `GordieHowe.RingSwitching.Tree.ringSwitchError_le`, `GordieHowe.RingSwitching.Tree.sum_ringSwitchError`: at most `1/|K|` at every challenge,
-  `combinations/|K| ≤ stages/|K|` in all (`GordieHowe.RingSwitching.Tree.combinations_le_stages`); equality with the
-  number of stages when every stage combines every claim (`GordieHowe.RingSwitching.Tree.AllCombine`).
+* `GordieHowe.RingSwitching.Tree.ringSwitchError_le`,
+  `GordieHowe.RingSwitching.Tree.sum_ringSwitchError`: at most `1/|F|` at every challenge,
+  `combinations/|F| ≤ stages/|F|` in all (`GordieHowe.RingSwitching.Tree.combinations_le_stages`);
+  equality with the number of stages when every stage combines every claim
+  (`GordieHowe.RingSwitching.Tree.AllCombine`).
 * `GordieHowe.RingSwitching.Tree.ringSwitchHonest`: parts (2) and (3), the honest run with its completeness at every pad
   value and its perfect simulation; part (3) is stated with respect to the uniform simulator of
   paper `def:red-sec` (c): the honest transcript under uniform challenges and pads is uniform
@@ -191,19 +194,19 @@ theorem ringSwitchReduction_claimOut (hR : P.Routes (FieldProof.MaskedReduction.
         P.MasksValid (cells w) :=
   and_congr_left' ((P.ringSwitchSound claims hR).claimOut_iff pub w tr)
 
-/-- **Round error at most `1/|K|` at every challenge** of ring switching. -/
+/-- **Round error at most `1/|F|` at every challenge** of ring switching. -/
 theorem ringSwitchError_le (i : (P.ringSwitch (cells := cells) claims).spec.ChallengeIdx) :
     P.ringSwitchError claims i ≤ 1 / Fintype.card F :=
   P.runError_le le_rfl _ _ (fun i => i.1.elim0) i
 
-/-- **The round errors of ring switching sum to `combinations/|K|`.** -/
+/-- **The round errors of ring switching sum to `combinations/|F|`.** -/
 theorem sum_ringSwitchError :
     ∑ i, P.ringSwitchError (cells := cells) claims i = P.combinations / Fintype.card F := by
   refine (P.sum_runError (FieldProof.MaskedReduction.static claims) _).trans ?_
   simp only [add_eq_right]
   exact Finset.sum_eq_zero fun i _ => i.1.elim0
 
-/-- **The soundness error of ring switching is at most `N/|K|`**, `N` the number of stages. -/
+/-- **The soundness error of ring switching is at most `N/|F|`**, `N` the number of stages. -/
 theorem sum_ringSwitchError_le :
     ∑ i, P.ringSwitchError (cells := cells) claims i ≤ P.stages / Fintype.card F := by
   rw [sum_ringSwitchError]
@@ -219,9 +222,9 @@ abbrev RingSwitchTranscript :=
 reduction `ringSwitchReduction` (a `ClaimReduction` with round errors `ringSwitchError`): its input
 claim is "the claims hold on the logical assignment of the committed cells" (`claim_iff`), its
 output claim is "the output rows and claims hold on the cells and every stage's mask condition
-holds" (`claimOut_iff`), every round error is at most `1/|K|` (`error_le`), the errors sum to
-`combinations/|K|` (`sum_error`), there is at most one combination per stage
-(`combinations_le_stages`), so the sum is at most `N/|K|` (`sum_error_le`), and there is exactly one
+holds" (`claimOut_iff`), every round error is at most `1/|F|` (`error_le`), the errors sum to
+`combinations/|F|` (`sum_error`), there is at most one combination per stage
+(`combinations_le_stages`), so the sum is at most `N/|F|` (`sum_error_le`), and there is exactly one
 combination per stage when every stage combines every claim (`combinations_eq_stages`). -/
 structure RingSwitchReduces (hR : P.Routes (FieldProof.MaskedReduction.static (cells := cells) claims)) : Prop where
   /-- The input claim: the fixed claims on the logical assignment of the committed cells. -/
@@ -232,11 +235,11 @@ structure RingSwitchReduces (hR : P.Routes (FieldProof.MaskedReduction.static (c
     (P.ringSwitchReduction claims hR).claimOut ⟨pub, w⟩ tr ↔
       (P.ringSwitch claims).OutHolds (Level.base (F := F)).view pub tr (cells w) ∧
         P.MasksValid (cells w)
-  /-- Round error at most `1/|K|` at every challenge. -/
+  /-- Round error at most `1/|F|` at every challenge. -/
   error_le : ∀ i, P.ringSwitchError (cells := cells) claims i ≤ 1 / Fintype.card F
-  /-- The round errors sum to `combinations/|K|`. -/
+  /-- The round errors sum to `combinations/|F|`. -/
   sum_error : ∑ i, P.ringSwitchError (cells := cells) claims i = P.combinations / Fintype.card F
-  /-- The soundness error is at most `N/|K|`. -/
+  /-- The soundness error is at most `N/|F|`. -/
   sum_error_le : ∑ i, P.ringSwitchError (cells := cells) claims i ≤ P.stages / Fintype.card F
   /-- At most one combination per stage. -/
   combinations_le_stages : P.combinations ≤ P.stages
@@ -246,8 +249,8 @@ structure RingSwitchReduces (hR : P.Routes (FieldProof.MaskedReduction.static (c
 /-- **Paper `thm:tree`, part (1)**: ring switching along a packing tree on fixed linear claims is a
 round-by-round reduction (`ringSwitchReduction`) from the claims on the stored values to the output
 rows and claims on the committed cells and every stage's mask condition, with round error at most
-`1/|K|` at every challenge, at most one combination per stage, and soundness error
-`combinations/|K| ≤ N/|K|`, with equality when every stage combines every claim. -/
+`1/|F|` at every challenge, at most one combination per stage, and soundness error
+`combinations/|F| ≤ N/|F|`, with equality when every stage combines every claim. -/
 @[headline]
 theorem reduces (hR : P.Routes (FieldProof.MaskedReduction.static (cells := cells) claims)) :
     P.RingSwitchReduces claims hR where

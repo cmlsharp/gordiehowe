@@ -21,11 +21,11 @@ route.
 `CutoffScan`. The wire-level gadget proves correspondence to this model;
 only that gadget belongs in an arithmetic circuit.
 
-Soundness (`sound`) quantifies over every argument, including `route` and
-`out`: nothing the prover supplies is assumed correct ahead of the
-`Constraints` hypothesis, and everything known about them comes from that
-hypothesis. `badEvent` (the `AssertFilteredPermutation` fingerprinting
-failure) is a function of the arguments alone, never of the challenge `δ`.
+Soundness (`sound`) quantifies over every argument, including `route` and `out`: nothing the prover
+supplies is assumed correct ahead of the `Constraints` hypothesis, and everything known about them
+comes from that hypothesis. `badEvent` (the fingerprinting failure of the C++
+`assert_filtered_multiset_equal` in `select_first`) is a function of the arguments alone, never of
+the challenge `δ`.
 -/
 
 namespace GordieHowe

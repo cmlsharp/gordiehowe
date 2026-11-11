@@ -28,8 +28,9 @@ fields that `F_q^9` and `F_q^20` (`GordieHowe/Applications/FieldInterps/Basic.le
 Each is the registry entry's field, a constant decoded as its coefficient vector in the C++
 encoding (`GKR.Fold.extDecode`; a constant below the characteristic decodes to its cast), the
 integer reading the constant coordinate, the node `GF(p^1)` the prime subfield, no bit coordinates
-(an odd field), with the code arithmetic of `GKR.Fold.ExtCode.overPrime`. The fields keep the
-namespaces of the configurations that introduced them.
+(an odd field), with the code arithmetic of `GKR.Fold.ExtCode.overPrime`; the constant coordinate is
+additive, so each reads linearly (`FieldInterp.ReadLinear`, the model a field-form `mod_q` reads).
+The fields keep the namespaces of the configurations that introduced them.
 -/
 
 namespace GordieHowe
@@ -69,6 +70,23 @@ theorem _root_.GordieHowe.RealizedProgram.fq6_model : RealizedProgram.fq6.Model 
     mldsaNative6Coords_natCast mldsaNative6Coords_algebraMap
     (fun _ hx => by rwa [RealizedProgram.fq6Node, if_pos rfl] at hx)
     (by rw [RealizedProgram.fq6Node, if_neg (by decide)])
+
+/-- **`F_q^6` reads linearly** (`FieldInterp.ReadLinear`): its integer reading is the constant
+coordinate, additive (`mldsaNative6Coords_add`). -/
+theorem _root_.GordieHowe.RealizedProgram.fq6_readLinear : RealizedProgram.fq6.ReadLinear :=
+  .of_add
+    (fun (x y : MLDSANativeField6) =>
+      show (((mldsaNative6Coords (x + y) 0).val : ℕ) : MLDSANativeField6) =
+        ((mldsaNative6Coords x 0).val : MLDSANativeField6) +
+          ((mldsaNative6Coords y 0).val : MLDSANativeField6) by
+      rw [RealizedProgram.mldsaNative6Coords_add, ZMod.natCast_val, ZMod.natCast_val,
+        ZMod.natCast_val, ZMod.cast_add (dvd_refl _)])
+    (by
+      have h := mldsaNative6Coords_natCast 0
+      simp only [Nat.cast_zero] at h
+      change (((mldsaNative6Coords (0 : MLDSANativeField6) 0).val : ℕ) :
+        MLDSANativeField6) = 0
+      rw [h, ZMod.val_zero, Nat.cast_zero])
 
 /-- **The code arithmetic of `F_q^6` is the field's** (`GKR.Fold.ExtCode.overPrime_hom`). -/
 theorem _root_.GordieHowe.RealizedProgram.fq6_codeHom :
@@ -121,6 +139,23 @@ theorem _root_.GordieHowe.RealizedProgram.fq11_model : RealizedProgram.fq11.Mode
     mldsaNative11Coords_natCast mldsaNative11Coords_algebraMap
     (fun _ hx => by rwa [RealizedProgram.fq11Node, if_pos rfl] at hx)
     (by rw [RealizedProgram.fq11Node, if_neg (by decide)])
+
+/-- **`F_q^11` reads linearly** (`FieldInterp.ReadLinear`): its integer reading is the constant
+coordinate, additive (`mldsaNative11Coords_add`). -/
+theorem _root_.GordieHowe.RealizedProgram.fq11_readLinear : RealizedProgram.fq11.ReadLinear :=
+  .of_add
+    (fun (x y : MLDSANativeField11) =>
+      show (((mldsaNative11Coords (x + y) 0).val : ℕ) : MLDSANativeField11) =
+        ((mldsaNative11Coords x 0).val : MLDSANativeField11) +
+          ((mldsaNative11Coords y 0).val : MLDSANativeField11) by
+      rw [RealizedProgram.mldsaNative11Coords_add, ZMod.natCast_val, ZMod.natCast_val,
+        ZMod.natCast_val, ZMod.cast_add (dvd_refl _)])
+    (by
+      have h := mldsaNative11Coords_natCast 0
+      simp only [Nat.cast_zero] at h
+      change (((mldsaNative11Coords (0 : MLDSANativeField11) 0).val : ℕ) :
+        MLDSANativeField11) = 0
+      rw [h, ZMod.val_zero, Nat.cast_zero])
 
 /-- **The code arithmetic of `F_q^11` is the field's** (`GKR.Fold.ExtCode.overPrime_hom`). -/
 theorem _root_.GordieHowe.RealizedProgram.fq11_codeHom :
@@ -176,6 +211,23 @@ theorem _root_.GordieHowe.RealizedProgram.gold2_model : RealizedProgram.gold2.Mo
     (fun _ hx => by rwa [RealizedProgram.gold2Node, if_pos rfl] at hx)
     (by rw [RealizedProgram.gold2Node, if_neg (by decide)])
 
+/-- **Goldilocks² reads linearly** (`FieldInterp.ReadLinear`): its integer reading is the constant
+coordinate, additive (`goldilocksExt2Coords_add`). -/
+theorem _root_.GordieHowe.RealizedProgram.gold2_readLinear : RealizedProgram.gold2.ReadLinear :=
+  .of_add
+    (fun (x y : GoldilocksExt2) =>
+      show (((goldilocksExt2Coords (x + y) 0).val : ℕ) : GoldilocksExt2) =
+        ((goldilocksExt2Coords x 0).val : GoldilocksExt2) +
+          ((goldilocksExt2Coords y 0).val : GoldilocksExt2) by
+      rw [goldilocksExt2Coords_add, ZMod.natCast_val, ZMod.natCast_val,
+        ZMod.natCast_val, ZMod.cast_add (dvd_refl _)])
+    (by
+      have h := goldilocksExt2Coords_natCast 0
+      simp only [Nat.cast_zero] at h
+      change (((goldilocksExt2Coords (0 : GoldilocksExt2) 0).val : ℕ) :
+        GoldilocksExt2) = 0
+      rw [h, ZMod.val_zero, Nat.cast_zero])
+
 /-- **The code arithmetic of Goldilocks² is the field's** (`GKR.Fold.ExtCode.overPrime_hom`). -/
 theorem _root_.GordieHowe.RealizedProgram.gold2_codeHom :
     RealizedProgram.gold2.CodeHom RealizedProgram.gold2Code.arith :=
@@ -229,6 +281,23 @@ theorem _root_.GordieHowe.RealizedProgram.gold4_model : RealizedProgram.gold4.Mo
     goldilocksExt4Coords_natCast goldilocksExt4Coords_algebraMap
     (fun _ hx => by rwa [RealizedProgram.gold4Node, if_pos rfl] at hx)
     (by rw [RealizedProgram.gold4Node, if_neg (by decide)])
+
+/-- **Goldilocks⁴ reads linearly** (`FieldInterp.ReadLinear`): its integer reading is the constant
+coordinate, additive (`goldilocksExt4Coords_add`). -/
+theorem _root_.GordieHowe.RealizedProgram.gold4_readLinear : RealizedProgram.gold4.ReadLinear :=
+  .of_add
+    (fun (x y : GoldilocksExt4) =>
+      show (((goldilocksExt4Coords (x + y) 0).val : ℕ) : GoldilocksExt4) =
+        ((goldilocksExt4Coords x 0).val : GoldilocksExt4) +
+          ((goldilocksExt4Coords y 0).val : GoldilocksExt4) by
+      rw [goldilocksExt4Coords_add, ZMod.natCast_val, ZMod.natCast_val,
+        ZMod.natCast_val, ZMod.cast_add (dvd_refl _)])
+    (by
+      have h := goldilocksExt4Coords_natCast 0
+      simp only [Nat.cast_zero] at h
+      change (((goldilocksExt4Coords (0 : GoldilocksExt4) 0).val : ℕ) :
+        GoldilocksExt4) = 0
+      rw [h, ZMod.val_zero, Nat.cast_zero])
 
 /-- **The code arithmetic of Goldilocks⁴ is the field's** (`GKR.Fold.ExtCode.overPrime_hom`). -/
 theorem _root_.GordieHowe.RealizedProgram.gold4_codeHom :

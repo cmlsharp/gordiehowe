@@ -33,6 +33,6 @@ namespace GordieHowe.Generated.MLDSA44.Ring.Native.ROMParams.Cert
 
 open GordieHowe.RealizedProgram
 
-load_ghc "Cert.ghc" "ad388d2ac05ea91e"
+load_ghc "Cert.ghc" "8b6a3248d6612884"
 
 end GordieHowe.Generated.MLDSA44.Ring.Native.ROMParams.Cert

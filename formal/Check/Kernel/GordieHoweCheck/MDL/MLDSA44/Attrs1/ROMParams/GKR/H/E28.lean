@@ -7,13 +7,6 @@ public import GordieHoweCerts.Generated.MDL.MLDSA44.Attrs1.ROMParams.GKR.H
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.H.E28.P0
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.H.E28.P1
 public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.H.E28.P2
-public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.H.E28.P3
-public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.H.E28.P4
-public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.H.E28.P5
-public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.H.E28.P6
-public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.H.E28.P7
-public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.H.E28.P8
-public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.H.E28.P9
 
 @[expose] public section
 
@@ -21,6 +14,6 @@ public import GordieHoweCheck.MDL.MLDSA44.Attrs1.ROMParams.GKR.H.E28.P9
 
 namespace GordieHowe.Generated.MDL.MLDSA44.Attrs1.ROMParams.GKR.H
 
-compose_entry cert ar 28 [0, 0, 2, 1, 512, 8, 1, 1024, 4, 0, 0, 2, 0, 0, 3, 1, 1024, 31, 0, 0, 7, 1, 93, 43, 0, 0, 1, 1, 512, 8, 1, 1024, 4, 2, 1024, 1]
+compose_entry cert ar 28 [0, 0, 3, 1, 986, 4, 0, 0, 13, 1, 658, 6, 0, 0, 1, 1, 986, 4, 1, 986, 4, 2, 1, 1]
 
 end GordieHowe.Generated.MDL.MLDSA44.Attrs1.ROMParams.GKR.H

@@ -6,7 +6,8 @@ module
 public import GordieHowe.Language.Realizations.Lowering
 public import GordieHowe.Foundations.Algebra.IntLift
 public import GordieHowe.Applications.Falcon512.Emulated.System.Params
-public import GordieHowe.Applications.Falcon512.System.Source
+public import GordieHowe.Applications.Falcon512.System.Hash
+public import GordieHowe.Applications.Falcon512.System.Params
 public import GordieHowe.Applications.Falcon512.Circuits.EmulatedAlgebra
 public import GordieHowe.Applications.Falcon512.System.Algebra
 

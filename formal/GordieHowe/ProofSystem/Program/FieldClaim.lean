@@ -862,14 +862,16 @@ theorem circuitWidth_le_gkrWidth (i : Fin (ir.circs d).length) :
 
 variable (I d) in
 /-- **The charge of a GKR round of domain `d`**: `max 3 (2 · gkrWidth d)/|K|`. It bounds the
-initial point's `2 m_0/|K|`, as `m_0 ≤ circuitWidth` for every circuit under the compiler trust's
-shape, and every later GKR challenge's `3/|K|` (`GordieHowe.GKR.LayeredCircuit.ShapeAtMost.error_le`). -/
+initial point's `2 m_0/|K|`, as `m_0 ≤ circuitWidth` for every circuit under the circuits'
+correspondence's shapes (`CircuitsEnforce.shape`), and every later GKR challenge's `3/|K|`
+(`GordieHowe.GKR.LayeredCircuit.ShapeAtMost.error_le`). -/
 noncomputable def gkrRoundError : ℝ≥0 :=
   ((max 3 (2 * ir.gkrWidth d) : ℕ) : ℝ≥0) / Fintype.card (I (ir.domainField d)).K
 
-/-- **Every round of GKR's branch is at most `gkrRoundError`** under the compiler trust's shapes
-(`CircuitsEnforce.shape`): each circuit's rounds (`GordieHowe.GKR.LayeredCircuit.ShapeAtMost.error_le`)
-in sequence (`MaskedReduction.ofListError_le`). -/
+/-- **Every round of GKR's branch is at most `gkrRoundError`** under the circuits' correspondence's
+shapes (`CircuitsEnforce.shape`): each circuit's rounds
+(`GordieHowe.GKR.LayeredCircuit.ShapeAtMost.error_le`) in sequence
+(`MaskedReduction.ofListError_le`). -/
 theorem gkrBranchError_le (T : ir.CircuitsEnforce I src) (u : Unit) (k) :
     ir.branchError src rs (.inr u) k ≤ ir.gkrRoundError I d :=
   FieldProof.MaskedReduction.ofListError_le (fun i j => by
@@ -1293,8 +1295,9 @@ theorem exists_smbatch {Pk : (I (ir.domainField d)).Packing} (hB : ir.BatchesOk 
   exact ⟨⟨i, hi⟩, by simp only [Fin.getElem_fin, he]⟩
 
 /-- **A circuit's source read in the domain's field, satisfied on its input on the tree's
-coordinates, gives the circuit's meaning** at the decoded cells, under the trust bundle
-(`circuitHolds_of_treeInput`, the field read along the circuit's domain). -/
+coordinates, gives the circuit's meaning** at the decoded cells, given the circuits'
+correspondence `T` (`CircuitsEnforce`; `circuitHolds_of_treeInput`, the field read along the
+circuit's domain). -/
 theorem circuitHolds_of_castSat (T : ir.CircuitsEnforce I src) {c : Fin ir.circuits.length}
     (hcd : (ir.circuit c).domain = d) {Pk : (I (ir.domainField d)).Packing}
     {rs : List (REdge (I (ir.domainField d)) Pk)} {Pads : Type} [Fintype Pads]
@@ -1352,8 +1355,9 @@ structure ClaimOk (rs : List (REdge (I (ir.domainField d)) Pk)) : Prop where
   /-- The program is well formed. -/
   wf : ir.WellFormed
 
-/-- **The domain's predicate from the masked reduction's relation**, given the trust bundle: the decoded
-cells lie in their bases (`treeDecode_mem`); every circuit's meaning (`circuitHolds_of_castSat`);
+/-- **The domain's predicate from the masked reduction's relation**, given the circuits'
+correspondence (`CircuitsEnforce`): the decoded cells lie in their bases (`treeDecode_mem`); every
+circuit's meaning (`circuitHolds_of_castSat`);
 every affine row and row on views (`rowForm`); every covered batch, on columns
 (`colsBatchAt_holds_iff`) and on bits (`bitsBatchAt_holds_iff`). -/
 theorem holds_of_fieldSat (h : ir.ClaimOk rs) (T : ir.CircuitsEnforce I src) (p : ir.DomainPub I)

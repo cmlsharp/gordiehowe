@@ -249,6 +249,16 @@ omit [Fintype F] in
 instance : Nonempty (QuadMasks C P hrate) :=
   ⟨⟨0, by simpa using (MaskedPolynomialTest.maskCode C hrate).k_pos, fun _ => map_zero _⟩⟩
 
+instance [DecidableEq F] : DecidableEq (DotMasks C P hrate) :=
+  inferInstanceAs (DecidableEq
+    {p : F[X] // p.natDegree < (MaskedPolynomialTest.maskCode C hrate).k ∧
+      Tableau.dotCheck C P p = 0})
+
+instance [DecidableEq F] : DecidableEq (QuadMasks C P hrate) :=
+  inferInstanceAs (DecidableEq
+    {p : F[X] // p.natDegree < (MaskedPolynomialTest.maskCode C hrate).k ∧
+      ∀ j, Tableau.quadCheck C P j p = 0})
+
 variable (P hrate) in
 /-- **The response coins**: the ILDT message values of each of the `nrep` repetitions and the IDOT
 and IQUAD masks. For fixed privacy values they determine the responses, and the honest responses are
@@ -274,6 +284,9 @@ def ResponseCoins.equivProd :
 
 noncomputable instance : Fintype (ResponseCoins P hrate nrep) :=
   Fintype.ofEquiv _ (ResponseCoins.equivProd P hrate nrep).symm
+
+instance [DecidableEq F] : DecidableEq (ResponseCoins P hrate nrep) :=
+  (ResponseCoins.equivProd P hrate nrep).decidableEq
 
 variable (P hrate nrep) in
 /-- **The response coins, enumerated** with the decidable equality of `F`: their three parts
@@ -311,6 +324,9 @@ noncomputable instance : Fintype (Coins hrate Bf nrep) := by
 
 instance : Nonempty (Coins hrate Bf nrep) :=
   ⟨⟨fun _ _ => 0, Classical.arbitrary _⟩⟩
+
+instance [DecidableEq F] : DecidableEq (Coins hrate Bf nrep) :=
+  (Coins.equivProd hrate Bf nrep).decidableEq
 
 variable {Bf}
 
@@ -438,8 +454,8 @@ theorem codeResponse_honest (ω : Witness L Bf) (c : Coins hrate Bf nrep)
     (r : Tableau.Challenge F R nL nQ nrep) (j : Fin nrep) :
     Completeness.codeResponse (honest hprod ω c) r j =
       LigeroInterpolation.interpolate P.nodes
-        (c.response.ildt j + ∑ i, r.1 j i • rowValues ω.toCells c.privacy i) := by
-  change AffineCodeTest.projectedPolynomial (ldtRows ω.toCells c j) (r.1 j) = _
+        (c.response.ildt j + ∑ i, r.ldt j i • rowValues ω.toCells c.privacy i) := by
+  change AffineCodeTest.projectedPolynomial (ldtRows ω.toCells c j) (r.ldt j) = _
   simp only [AffineCodeTest.projectedPolynomial, ldtRows, Fin.cons_zero, Fin.cons_succ, map_add,
     map_sum, map_smul]
 
@@ -447,13 +463,13 @@ omit [Fintype F] in
 theorem dotResponse_honest (ω : Witness L Bf) (c : Coins hrate Bf nrep)
     (r : Tableau.Challenge F R nL nQ nrep) :
     Completeness.dotResponse (honest hprod ω c) r = c.response.dotMask.1 + MaskedConstraintTest.batch
-      (fun l => Tableau.dotPolynomials C P L (rows ω.toCells c) l) r.2.1 := rfl
+      (fun l => Tableau.dotPolynomials C P L (rows ω.toCells c) l) r.lin := rfl
 
 omit [Fintype F] in
 theorem quadResponse_honest (ω : Witness L Bf) (c : Coins hrate Bf nrep)
     (r : Tableau.Challenge F R nL nQ nrep) :
     Completeness.quadResponse (honest hprod ω c) r = c.response.quadMask.1 + MaskedConstraintTest.batch
-      (fun q => Tableau.quadPolynomials C P (rows ω.toCells c) q) r.2.2 := rfl
+      (fun q => Tableau.quadPolynomials C P (rows ω.toCells c) q) r.quad := rfl
 
 /-- The committed matrix and the IDOT and IQUAD masks for coins `c`. They read
 the cells only, so they are fixed before the linear system is known. -/
@@ -506,26 +522,26 @@ variable (L) in
 by field operations: the low-degree response interpolates the ILDT values plus the challenge
 combination of the data rows' values (`codeResponse_honest`), the linear and quadratic responses
 add the masks to the batched row combinations. They read `L` only through the batching of the
-linear polynomials by `r.2.1`; equal to `Completeness.response` (`responseOf_eq`). -/
+linear polynomials by `r.lin`; equal to `Completeness.response` (`responseOf_eq`). -/
 def responseOf (ω : Cells Bf) (c : Coins hrate Bf nrep) (r : Tableau.Challenge F R nL nQ nrep) :
     Tableau.Response F C.k nrep :=
-  (fun j i => LigeroInterpolation.interpolateEval P.nodes
-      (c.response.ildt j + ∑ l, r.1 j l • rowValues ω c.privacy l) (Tableau.responseNode C C.k i),
+  ⟨fun j i => LigeroInterpolation.interpolateEval P.nodes
+      (c.response.ildt j + ∑ l, r.ldt j l • rowValues ω c.privacy l) (Tableau.responseNode C C.k i),
     fun i => c.response.dotMask.1.eval (Tableau.responseNode C (2 * C.k - 1) i) +
-      ∑ l, r.2.1 l * ∑ row, LigeroInterpolation.interpolateEval P.nodes (L.coeff l row)
+      ∑ l, r.lin l * ∑ row, LigeroInterpolation.interpolateEval P.nodes (L.coeff l row)
         (Tableau.responseNode C (2 * C.k - 1) i) *
           rowsEval ω c row (Tableau.responseNode C (2 * C.k - 1) i),
     fun i => c.response.quadMask.1.eval (Tableau.responseNode C (2 * C.k - 1) i) +
-      ∑ q, r.2.2 q * (rowsEval ω c (P.products q 2) (Tableau.responseNode C (2 * C.k - 1) i) -
+      ∑ q, r.quad q * (rowsEval ω c (P.products q 2) (Tableau.responseNode C (2 * C.k - 1) i) -
         rowsEval ω c (P.products q 0) (Tableau.responseNode C (2 * C.k - 1) i) *
-          rowsEval ω c (P.products q 1) (Tableau.responseNode C (2 * C.k - 1) i)))
+          rowsEval ω c (P.products q 1) (Tableau.responseNode C (2 * C.k - 1) i))⟩
 
 omit [Fintype F] in
 theorem responseOf_eq (ω : Witness L Bf) (c : Coins hrate Bf nrep)
     (r : Tableau.Challenge F R nL nQ nrep) :
     responseOf L ω.toCells c r = Completeness.response (honest hprod ω c) r := by
-  refine Prod.ext (funext fun j => funext fun i => ?_)
-    (Prod.ext (funext fun i => ?_) (funext fun i => ?_))
+  refine Tableau.Response.ext (funext fun j => funext fun i => ?_) (funext fun i => ?_)
+    (funext fun i => ?_)
   · change _ = (Completeness.codeResponse (honest hprod ω c) r j).eval _
     rw [codeResponse_honest, LigeroInterpolation.eval_interpolate]
     rfl
@@ -549,7 +565,7 @@ omit [NeZero nrep] in
 /-- The verifier's view of encoded rows, masks, response and query set. -/
 def view {k t : ℕ} (O : Tableau.Rows F N R nrep) (u : Tableau.Aux F N)
     (p : Tableau.Response F k nrep) (q : Tableau.Query N t) : View F R k t nrep :=
-  (p, fun s => (O.column (q s), u.1 (q s), u.2 (q s)))
+  (p, fun s => (O.column (q s), u.dot (q s), u.quad (q s)))
 
 /-- The honest view for the coins `c`: the view of the commitment and the
 response. -/
@@ -651,18 +667,18 @@ IDOT mask plus the batched target times `unitDot`, and the IQUAD mask. Equal to 
 those polynomials (`simResponse_eq`). -/
 def simResponse (r : Tableau.Challenge F R nL nQ nrep) (x : ResponseCoins P hrate nrep) :
     Tableau.Response F C.k nrep :=
-  (fun j i => LigeroInterpolation.interpolateEval P.nodes (x.ildt j)
+  ⟨fun j i => LigeroInterpolation.interpolateEval P.nodes (x.ildt j)
       (Tableau.responseNode C C.k i),
     fun i => x.dotMask.1.eval (Tableau.responseNode C (2 * C.k - 1) i) +
-      (∑ l, r.2.1 l * L.target l) * unitDotEval Hd (Tableau.responseNode C (2 * C.k - 1) i),
-    fun i => x.quadMask.1.eval (Tableau.responseNode C (2 * C.k - 1) i))
+      (∑ l, r.lin l * L.target l) * unitDotEval Hd (Tableau.responseNode C (2 * C.k - 1) i),
+    fun i => x.quadMask.1.eval (Tableau.responseNode C (2 * C.k - 1) i)⟩
 
 omit [Fintype F] [NeZero nrep] in
 theorem simResponse_eq (r : Tableau.Challenge F R nL nQ nrep) (x : ResponseCoins P hrate nrep) :
     simResponse L hrate Hd r x = Tableau.Response.ofPolys C
       (fun j => LigeroInterpolation.interpolate P.nodes (x.ildt j))
-      (x.dotMask.1 + Polynomial.C (∑ l, r.2.1 l * L.target l) * unitDot Hd) x.quadMask.1 := by
-  refine Prod.ext (funext fun j => funext fun i => ?_) (Prod.ext (funext fun i => ?_) rfl)
+      (x.dotMask.1 + Polynomial.C (∑ l, r.lin l * L.target l) * unitDot Hd) x.quadMask.1 := by
+  refine Tableau.Response.ext (funext fun j => funext fun i => ?_) (funext fun i => ?_) rfl
   · simp only [simResponse, Tableau.Response.ofPolys, LigeroInterpolation.eval_interpolate]
   · simp only [simResponse, Tableau.Response.ofPolys, eval_add, eval_mul, eval_C, eval_unitDot]
 
@@ -672,24 +688,25 @@ query set. The responses are sampled from the sets the verifier accepts; the
 ILDT, IDOT and IQUAD openings are the solutions of the three acceptance
 equations at each queried column.
 
-Running time: sampling the coins is uniform sampling from `F`, from a subfield, and from the two
-mask sets; each mask set is the solution space of linear equations over `F` in `2k − 1`
-coefficients, so a basis is found by Gaussian elimination in `O(k³)` field operations and a uniform
-element is a uniform combination of the basis. The output is one Lagrange interpolation over `k`
-nodes (`O(k²)`), `t` evaluations of degree `< 2k − 1` polynomials, and for each queried column
-`O(R)` operations for the ILDT opening, `O(nL · (R + 1) · k)` for the linear source (each
-coefficient interpolant is evaluated once) and `O(nQ)` for the quadratic source. The total is
-polynomial in `k`, `R`, `nL`, `nQ` and `t`. This running time is argued here, not proved in Lean. -/
+Running time: the coins are drawn from `SimCoins`, whose enumeration (its `Fintype` instance) is
+exhaustive: each mask set lists every coefficient vector of length `2k − 1` over `F` and keeps
+those in the set (`polyEnum`, `|F|^(2k − 1)` candidates), and each opening ranges over the
+elements of `F` in its row's blinding field. No running-time bound is proved for drawing them.
+Given the coins, the output is one Lagrange interpolation over `k` nodes (`O(k²)`), `t`
+evaluations of degree `< 2k − 1` polynomials, and for each queried column `O(R)` operations for
+the ILDT opening, `O(nL · (R + 1) · k)` for the linear source (each coefficient interpolant is
+evaluated once) and `O(nQ)` for the quadratic source. This running time is argued here, not
+proved in Lean. -/
 def simulate (r : Tableau.Challenge F R nL nQ nrep) {t : ℕ} (q : Tableau.Query N t)
     (s : SimCoins hrate Hd t nrep) : View F R C.k t nrep :=
   let p := simResponse L hrate Hd r s.response
   let data : Fin R → Fin t → F := fun row j => s.openings row j
   let col : Fin t → Tableau.Column F R nrep := fun j =>
-    ⟨fun m => p.codeEval C m (C.D (q j)) - ∑ i, r.1 m i * data i j, fun i => data i j⟩
+    ⟨fun m => p.codeEval C m (C.D (q j)) - ∑ i, r.ldt m i * data i j, fun i => data i j⟩
   (p, fun j =>
     (col j,
-      p.dotEval C (C.D (q j)) - ∑ l, r.2.1 l * dotAt (L := L) (col j).tableau l (C.D (q j)),
-      p.quadEval C (C.D (q j)) - ∑ l, r.2.2 l * quadAt (P := P) (col j).tableau l))
+      p.dotEval C (C.D (q j)) - ∑ l, r.lin l * dotAt (L := L) (col j).tableau l (C.D (q j)),
+      p.quadEval C (C.D (q j)) - ∑ l, r.quad l * quadAt (P := P) (col j).tableau l))
 
 /-! ## One row: the privacy values to the openings -/
 
@@ -802,11 +819,11 @@ and so is the honest view (`view_honest`). -/
 def publicView (r : Tableau.Challenge F R nL nQ nrep) {t : ℕ} (q : Tableau.Query N t)
     (data : Fin R → Fin t → F) (p : Tableau.Response F C.k nrep) : View F R C.k t nrep :=
   let col : Fin t → Tableau.Column F R nrep := fun j =>
-    ⟨fun m => p.codeEval C m (C.D (q j)) - ∑ i, r.1 m i * data i j, fun i => data i j⟩
+    ⟨fun m => p.codeEval C m (C.D (q j)) - ∑ i, r.ldt m i * data i j, fun i => data i j⟩
   (p, fun j =>
     (col j,
-      p.dotEval C (C.D (q j)) - ∑ l, r.2.1 l * dotAt (L := L) (col j).tableau l (C.D (q j)),
-      p.quadEval C (C.D (q j)) - ∑ l, r.2.2 l * quadAt (P := P) (col j).tableau l))
+      p.dotEval C (C.D (q j)) - ∑ l, r.lin l * dotAt (L := L) (col j).tableau l (C.D (q j)),
+      p.quadEval C (C.D (q j)) - ∑ l, r.quad l * quadAt (P := P) (col j).tableau l))
 
 omit [Fintype F] in
 /-- **The ILDT, IDOT and IQUAD openings are determined**. For every honest tableau, with any masks,
@@ -818,7 +835,7 @@ theorem view_honest (H : Completeness.HonestTableau (C := C) (P := P) (L := L) h
       publicView L r q (fun i s => (H.data i).eval (C.D (q s)))
         (Completeness.response H r) := by
   have hcol : ∀ s, (⟨fun m => (Completeness.response H r).codeEval C m (C.D (q s)) -
-      ∑ i, r.1 m i * (H.data i).eval (C.D (q s)),
+      ∑ i, r.ldt m i * (H.data i).eval (C.D (q s)),
         fun i => (H.data i).eval (C.D (q s))⟩ : Tableau.Column F R nrep) =
       (Completeness.encode H).column (q s) := by
     intro s
@@ -907,10 +924,10 @@ omit [Fintype F] in
 theorem dotResponse_sub_mem (H : Completeness.HonestTableau (C := C) (P := P) (L := L) hrate nrep)
     (r : Tableau.Challenge F R nL nQ nrep) :
     (Completeness.dotResponse H r -
-        Polynomial.C (∑ l, r.2.1 l * L.target l) * unitDot Hd).natDegree <
+        Polynomial.C (∑ l, r.lin l * L.target l) * unitDot Hd).natDegree <
         (MaskedPolynomialTest.maskCode C hrate).k ∧
       Tableau.dotCheck C P (Completeness.dotResponse H r -
-        Polynomial.C (∑ l, r.2.1 l * L.target l) * unitDot Hd) = 0 := by
+        Polynomial.C (∑ l, r.lin l * L.target l) * unitDot Hd) = 0 := by
   have hv := Completeness.valid H r
   have hk : C.k ≤ (MaskedPolynomialTest.maskCode C hrate).k := by
     change C.k ≤ 2 * C.k - 1
@@ -919,7 +936,7 @@ theorem dotResponse_sub_mem (H : Completeness.HonestTableau (C := C) (P := P) (L
   refine ⟨(natDegree_sub_le _ _).trans_lt (max_lt (Completeness.dotResponse_degree H hrate r)
     ((natDegree_C_mul_le _ _).trans_lt ((unitDot_degree (Hd := Hd)).trans_le hk))), ?_⟩
   have hd : Tableau.dotCheck C P (Completeness.dotResponse H r) =
-      ∑ l, r.2.1 l * L.target l := by
+      ∑ l, r.lin l * L.target l := by
     have := hv.1
     rwa [Completeness.response_dot] at this
   rw [map_sub, ← Polynomial.smul_eq_C_mul, map_smul, dotCheck_unitDot, hd, smul_eq_mul, mul_one,
@@ -930,7 +947,7 @@ rewritten as the simulator's sample: a translation of each coin. -/
 noncomputable def responseShift (ω : Witness L Hd.toBlindingFields) (r : Tableau.Challenge F R nL nQ nrep)
     (ρ : ∀ row : Fin R, Privacy P → Hd.field row) (x : ResponseCoins P hrate nrep) :
     ResponseCoins P hrate nrep :=
-  ⟨x.ildt + fun j => ∑ i, r.1 j i • rowValues ω.toCells ρ i,
+  ⟨x.ildt + fun j => ∑ i, r.ldt j i • rowValues ω.toCells ρ i,
     ⟨_, dotResponse_sub_mem Hd (honest Hd.products_ne_zero ω ⟨ρ, x⟩) r⟩,
     ⟨Completeness.quadResponse (honest Hd.products_ne_zero ω ⟨ρ, x⟩) r,
       Completeness.quadResponse_degree (honest Hd.products_ne_zero ω ⟨ρ, x⟩) hrate r,
@@ -942,7 +959,7 @@ omit [Fintype F] in
 @[simp] theorem responseShift_ildt (ω : Witness L Hd.toBlindingFields)
     (r : Tableau.Challenge F R nL nQ nrep) (ρ : ∀ row : Fin R, Privacy P → Hd.field row)
     (x : ResponseCoins P hrate nrep) :
-    (responseShift ω r ρ x).ildt = x.ildt + fun j => ∑ i, r.1 j i • rowValues ω.toCells ρ i :=
+    (responseShift ω r ρ x).ildt = x.ildt + fun j => ∑ i, r.ldt j i • rowValues ω.toCells ρ i :=
   rfl
 
 omit [Fintype F] in
@@ -951,7 +968,7 @@ omit [Fintype F] in
     (x : ResponseCoins P hrate nrep) :
     (responseShift ω r ρ x).dotMask.1 =
       Completeness.dotResponse (honest Hd.products_ne_zero ω ⟨ρ, x⟩) r -
-      Polynomial.C (∑ l, r.2.1 l * L.target l) * unitDot Hd := rfl
+      Polynomial.C (∑ l, r.lin l * L.target l) * unitDot Hd := rfl
 
 omit [Fintype F] in
 @[simp] theorem responseShift_quadMask (ω : Witness L Hd.toBlindingFields)

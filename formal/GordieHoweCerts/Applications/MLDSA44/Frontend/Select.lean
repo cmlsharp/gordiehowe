@@ -499,7 +499,7 @@ theorem idx52_eq {b : ℕ} (hb : b < 8) : idx50.entry b = b := by
 /-- **`h2c.sample.select.start`**: the first threshold is `256 − τ = 217`. -/
 theorem initialOk_thr {e : program.Env interp} (hs : HSatCore e) :
     SelectFirstTau.initialOk 39 (thrBits (program.reader e)) = true := by
-  have h := hs.preds 264 (by norm_num) (by norm_num)
+  have h := hs.preds 264 (by decide) (by decide)
   obtain ⟨_, h264⟩ := pred264 (program := program)
   rw [h264] at h
   simp only [SelectFirstTau.initialOk, List.all_eq_true, List.mem_finRange, true_implies,
@@ -750,7 +750,7 @@ theorem thr_succ {e : program.Env interp} (hs : HSatCore e) {i b : ℕ} (hi : i 
     thrAt (program.reader e) (i + 1) b = thrAt (program.reader e) i b +
       program.evalE (program.reader e) 1 (.ref 512) i *
         ∏ j : Fin 8, if (j : ℕ) < b then thrAt (program.reader e) i j else 1 := by
-  have h := hs.preds 265 (by norm_num) (by norm_num)
+  have h := hs.preds 265 (by decide) (by decide)
   obtain ⟨_, h265⟩ := pred265_body (program := program)
   rw [h265] at h
   have hh := h (8 * i + b) (by
@@ -880,7 +880,7 @@ theorem fingerprintOk_route {e : program.Env interp} (hs : HSatCore e) :
     SelectFirstTau.fingerprintOk selF 39 (candBits (program.reader e)) (jBits (program.reader e))
       (thrBits (program.reader e)) (selDelta (program.reader e)) = true := by
   have h36 := fun i => RealizedProgram.reader_of_constant e (RealizedProgram.kind_of_isConstant (selConstsA (program := program)).1) i
-  have h := hs.preds 266 (by norm_num) (by norm_num)
+  have h := hs.preds 266 (by decide) (by decide)
   obtain ⟨_, h266⟩ := pred266 (program := program)
   rw [h266] at h
   have h0 := h 0 (by

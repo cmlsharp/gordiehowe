@@ -59,17 +59,20 @@ theorem prf_join (ω : X → Y₁) (h : X → Y₂) : prf sp (join sp ω h) = h 
 end RingSignature.OracleSplit
 
 variable {X Y Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] (sp : OracleSplit Y Y₁ Y₂)
-  {N : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB} {n : ℕ}
+  {N : ℕ} {TB : BaseTypes}
+  {B : BaseSigner X Y N TB} {n : ℕ}
 
 /-! ### Signing oracles reading the base component -/
 
 /-- **The signing oracle reads only the base component**: its runs agree at oracles with the same
 base component. -/
-def Signature.SignOracle.ReadsBase (O : SignOracle B) : Prop :=
+def Signature.SignOracle.ReadsBase (O : SignOracle B.core) : Prop :=
   ∀ kp sm c (H H' : X → Y), OracleSplit.base sp H = OracleSplit.base sp H' →
     (O.sign kp sm c).run H = (O.sign kp sm c).run H'
 
 variable {sp}
+
+variable [DecidableEq TB.PK]
 
 /-- The ring-aware signing oracle of a base signer reading only the base component reads only
 the base component. -/
@@ -97,12 +100,12 @@ variable (sp)
 
 section Replies
 
-variable (O : SignOracle B)
+variable (O : SignOracle B.core)
 
 /-- **The multi-user challenger's reply after `k` requests at a fixed base component** `ω` and the
 coins `c`: as `muReplyAfter`, with the signer run at the oracle `join sp ω 0`. -/
 def muReplyAt (ω : X → Y₁) (keys : Fin n → B.KeyCoins) (Q' : ℕ) (c : Fin Q' → O.Coins) (k : ℕ)
-    (r : MURequest O n) : Option (MUResponse B) :=
+    (r : MURequest O n) : Option (MUResponse B.core) :=
   if h : k < Q' then
     match r with
     | .publicKey i => some (.publicKey (B.pk (keys i)))
@@ -110,8 +113,11 @@ def muReplyAt (ω : X → Y₁) (keys : Fin n → B.KeyCoins) (Q' : ℕ) (c : Fi
     | .corrupt i => some (.keyCoins (keys i))
   else none
 
+variable [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins]
+
 variable {O}
 
+omit [DecidableEq TB.PK] in
 /-- **The multi-user challenger at a fixed base component answers by `muReplyAt`**, without
 assignments, at every second component, for a signing oracle reading only the base component. -/
 theorem run_respond_muChallenger_restrictAt (hO : O.ReadsBase sp) (ω : X → Y₁)
@@ -136,20 +142,27 @@ end Replies
 
 /-! ### The table form -/
 
+variable [Fintype TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins]
+
 section Table
 
 variable [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [Nonempty Y] [Nonempty X]
-  [Fintype Y₂] [DecidableEq Y₂] [Nonempty Y₂] {O : SignOracle B} [NeZero n]
+  [Fintype Y₂] [DecidableEq Y₂] [Nonempty Y₂] {O : SignOracle B.core} [NeZero n]
 
 /-- **The table of the replies at a fixed base component** for an adversary of the oracle
 `X → Y₂`: the reply at request number `j` to the request `q` (`muReplyAt`). -/
 def muTabAt {Req Resp Ot : Type} [Fintype Req] [DecidableEq Req] [Fintype Resp]
     [DecidableEq Resp] {shA : AlgShape X Y₂ Req Resp} (A : AdaptiveIAlg shA Ot) (ω : X → Y₁)
     (keys : Fin n → B.KeyCoins) (Q' : ℕ) (c : Fin Q' → O.Coins) :
-    A.OuterTab (MURequest O n) (MUResponse B) :=
+    A.OuterTab (MURequest O n) (MUResponse B.core) :=
   fun j q => muReplyAt sp O ω keys Q' c j q
 
-omit [Fintype Y] [DecidableEq Y] [Nonempty Y] [Nonempty X] [DecidableEq Y₂] [NeZero n] in
+variable [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins]
+
+omit [Fintype Y] [DecidableEq Y] [Nonempty Y] [Nonempty X] [DecidableEq Y₂] [NeZero n]
+  [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] in
 /-- **The restricted multi-user challenger's reply after the requests `rs`** is `muReplyAt` at
 `|rs|`, for a signing oracle reading only the base component. -/
 theorem answerAfter_muChallenger_restrictAt_eq (hO : O.ReadsBase sp) (ω : X → Y₁)
@@ -168,12 +181,14 @@ theorem answerAfter_muChallenger_restrictAt_eq (hO : O.ReadsBase sp) (ω : X →
   · rw [Challenger.answerAfter_toPureEnv_of_le _ _ _ _ (not_lt.1 hi)]
     simp [muReplyAt, hi]
 
+variable [Fintype O.SMsg] [DecidableEq O.SMsg]
+
 omit [Fintype Y] [Nonempty Y] [Nonempty X] in
 /-- **The restricted multi-user challenger at the coins `c` relays the inert challenger** through
 the relay at the table of its replies (`muTabAt`), on the logs of the `A.slots` slots of an
 adversary `A` of the oracle `X → Y₂`. -/
 theorem relays_muTwoRelay_restrictAt (hO : O.ReadsBase sp) {Ot : Type}
-    {shA : AlgShape X Y₂ (MURequest O n) (MUResponse B)} (A : AdaptiveIAlg shA Ot) (ω : X → Y₁)
+    {shA : AlgShape X Y₂ (MURequest O n) (MUResponse B.core)} (A : AdaptiveIAlg shA Ot) (ω : X → Y₁)
     (keys : Fin n → B.KeyCoins) (i₂ : Fin n) (Q' : ℕ) (h₂ : X → Y₂) (c : Fin Q' → O.Coins) :
     ((muRelayAt O keys i₂).atC (A.tabAt (muTabAt sp A ω keys Q' c))).Relays
       ((muChallenger O n keys Q').restrictAt sp ω).toPureEnv (h₂, c)
@@ -200,9 +215,9 @@ requests, the average over uniform coins `c` of the probability that the adversa
 `muTabAt ω c` (`absorbTab`), against the inert challenger, ends with registers and logs in `P`. The
 split form of `toOuterMeasure_outLaw_muChallenger_eq_absorbTab`. -/
 theorem toOuterMeasure_outLaw_muChallenger_restrictAt_eq_absorbTab (hO : O.ReadsBase sp)
-    {Ot : Type} {shA : AlgShape X Y₂ (MURequest O n) (MUResponse B)} (A : AdaptiveIAlg shA Ot) (ω : X → Y₁)
+    {Ot : Type} {shA : AlgShape X Y₂ (MURequest O n) (MUResponse B.core)} (A : AdaptiveIAlg shA Ot) (ω : X → Y₁)
     (keys : Fin n → B.KeyCoins) (i₂ : Fin n) (Q' : ℕ) (h₂ : X → Y₂)
-    (P : DReg A.toKindAlg.W A.width X Y₂ (MURequest O n) (MUResponse B) →
+    (P : DReg A.toKindAlg.W A.width X Y₂ (MURequest O n) (MUResponse B.core) →
       LogReg (MURequest O n) A.slots → Prop) :
     ((A.toKindAlg.composeBothOut ((muChallenger O n keys Q').restrictAt sp ω) id).outLaw
         h₂).toOuterMeasure {o | ∃ v ∈ o, P v.adv v.chal.logs} =

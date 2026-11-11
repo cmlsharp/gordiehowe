@@ -25,14 +25,15 @@ Its two kernels are
 - `kD` (uniform digests): `d` is drawn uniformly with the other coins.
 
 The laws (`LeafKernel.Laws`): the reply reads `d` only at hidden positions, reads `ν` only at the
-other positions, reads the oracle only at salt-free inputs and at inputs carrying the salt of a
-position that is not hidden, and programs only salt-free inputs.
+other positions, reads the oracle only at salt-free inputs, at inputs carrying a public salt in
+`pub`, and at inputs carrying the salt of a position that is not hidden, and programs only salt-free
+inputs.
 
 **The theorem** (`abs_toReal_acceptProb_progEnv_kL_sub_kD_le`): against every classical adversary
 with a budget of `t` queries whose output does not read the final oracle, the games of `kL` and
 `kD` with `Q` proof queries differ by at most
 
-    Q · (4 t |Pos| + 4 Q |Pos|²) / |N|.
+    Q · (4 t |Pos| + 4 (Q |Pos|² + |Pos| |pub|)) / |N|.
 
 **The argument**, per proof query `j` of the hybrid (`kD` below `j`, `kL` from `j` on), from `j` to
 `j + 1`, with `ν` the salts of proof query `j` and `T` the inputs carrying one of them:
@@ -1365,7 +1366,7 @@ theorem abs_lHybProb_zero_sub_le (hL : L.Laws nsalt pub) {m t : ℕ} (A : IAlg X
 leaf kernel with its laws, every classical algorithm with a budget of `t` queries whose output
 does not read the final oracle outputs `true` against the games of the honest-digest kernel `kL`
 and the uniform-digest kernel `kD`, with `Q` proof queries, with probabilities at most
-`Q (4 t |Pos| + 4 Q |Pos|²) / |N|` apart. -/
+`Q (4 t |Pos| + 4 (Q |Pos|² + |Pos| |pub|)) / |N|` apart. -/
 theorem abs_toReal_acceptProb_progEnv_kL_sub_kD_le (hL : L.Laws nsalt pub) {m t : ℕ}
     (A : IAlg X Y Stmt Wit Proof m) (hA : A.Budget t) (hpost : A.PostOracleFree) (Q : ℕ) :
     |(A.acceptProb (progEnv rel L.kL Q)).toReal - (A.acceptProb (progEnv rel L.kD Q)).toReal| ≤

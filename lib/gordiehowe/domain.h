@@ -572,6 +572,9 @@ struct RangeRequest {
   // request bounds nothing in interval propagation.
   bool slack = false;
   bool pending() const { return slack && !interval; }
+  // Realized by one direct lookup only (assert_range_direct): the planner
+  // offers no other realization, and fails the compile when none fits.
+  bool direct_only = false;
   bool lowered = false;
   RangeRealization realization;
   // The table cap of this request (RangeHandle::max_table), 0 when unset.
@@ -1048,6 +1051,16 @@ class Domain : public virtual DomainCore {
     requests_.back().slack = true;
     return h;
   }
+  // A request realized by one direct lookup (RangeRequest::direct_only):
+  // V lies below the rows N of a table, n <= N <= m. A lowering whose
+  // certificates read the request as a lookup of V itself asks for it
+  // (assert_mod's one-digit quotient, mod.h).
+  RangeHandle<F> assert_range_direct(const Lin<F> &v, Bound n, MaxBound m,
+                                     std::string nm) {
+    RangeHandle<F> h = add_request(v, n, m.m, true, std::move(nm));
+    requests_.back().direct_only = true;
+    return h;
+  }
   // A request that interval propagation must establish (kImplied): the
   // integer interval of V, from its terms' proven bounds and constants,
   // lies in [0, N) for some n <= N <= m. The planner searches the terms'
@@ -1388,6 +1401,24 @@ class Domain : public virtual DomainCore {
     for (const auto &r : requests_) k += r.lowered ? 0 : 1;
     return k;
   }
+  // A range request as a quotient prices tables against it (mod.h): its
+  // bounds, whether it is an interval or pending, and its table cap.
+  struct RequestBound {
+    Bound n = 0, m = 0;
+    bool interval = false, pending = false;
+    Bound max_table = 0;
+  };
+  void snapshot_quotient_tables() override {
+    std::vector<RequestBound> t;
+    for (const auto &r : requests_)
+      if (!r.implied_only)
+        t.push_back({r.n, r.m, r.interval, r.pending(), *r.max_table});
+    quotient_tables_ = std::move(t);
+  }
+  // The requests snapshot_quotient_tables recorded, none before the first.
+  const std::optional<std::vector<RequestBound>> &quotient_tables() const {
+    return quotient_tables_;
+  }
 
   // The requests and their realizations (after lowering).
   const std::vector<RangeRequest<F>> &requests() const { return requests_; }
@@ -1409,7 +1440,7 @@ class Domain : public virtual DomainCore {
   // and BLOCKS the rows' column blocks (a public node and its width), in
   // column order; PRED is the predicate that proves it (the selection's
   // digest equation, the lookup's in). Interval propagation reads it
-  // (compiler/range.h, table_hull and table_preimage_hull): a recorded
+  // (compiler/range.h, table_hull): a recorded
   // coordinate lies in the hull of its column's public entries, which PRED
   // establishes (the derivations' interval source, IvlWhy::kTable).
   struct TableLeaf {
@@ -3095,6 +3126,9 @@ class Domain : public virtual DomainCore {
   // The records of public-table selections and lookups (note_table_record).
   std::vector<TableRecord> table_records_;
   std::vector<RangeRequest<F>> requests_;
+  // The request bounds the current mod_q pass prices quotient tables
+  // against (snapshot_quotient_tables).
+  std::optional<std::vector<RequestBound>> quotient_tables_;
   std::map<size_t, Lin<F>> bound_;            // bound node -> its view
   std::map<size_t, std::string> bound_note_;  // report line of a binding
   std::vector<RangeTableStats> range_tables_;

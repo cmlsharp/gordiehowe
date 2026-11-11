@@ -369,6 +369,12 @@ theorem queries_eq (h : Query k kN kS L → Out k e) {V : X → FullTr P t → B
   rw [queries, queryProg, GordieHowe.OracleProg.trace_bind, chains_roundsProg, answers_roundsProg,
     GordieHowe.OracleProg.trace_forEach, chVOfAns_xofAnswers]
 
+/-- **The spBCS verifier makes at most `kq` queries on accepting runs** of the query phases `Qs`:
+the query budget of the knowledge and simulation-extraction theorems. The format bounds give it at
+the paper's `k_q` (`FormatBounds.queriesAtMost`). -/
+def QueriesAtMost {V : X → FullTr P t → Bool} (Qs : ∀ x, M.IOPQueries V x) (kq : ℕ) : Prop :=
+  ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq
+
 end Queries
 
 end

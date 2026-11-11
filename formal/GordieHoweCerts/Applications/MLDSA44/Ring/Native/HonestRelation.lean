@@ -10,13 +10,15 @@ public import GordieHoweCerts.Applications.MLDSA44.Ring.Native.HonestValues
 /-!
 # GordieHowe: the signature relation of the native ML-DSA-44 ring programs at the honest values
 
-The four spectral rows `signature.relation.0 … 3` (predicates `1 … 4`;
-`lib/gordiehowe/examples/rings/mldsa_ring_native.h`, `spectral_relation`) hold at the source
-environment of the honest values (`sig_holds`): the honest `w′` is `computeWApprox(Â, c, z, t1)`
+The four rows `signature.relation.0 … 3` (predicates `rel0 + i`;
+`lib/gordiehowe/examples/rings/mldsa_ring_native.h`, `evaluation_relation`) hold at the source
+environment of the honest values (`sig_holds`): each row's polynomial
+`w_i + (X^256 + 1) Q_i + T_i c − Σ_j A_ij z_j` is `0`. The products split into negacyclic and
+high halves (`Ops.polyOf_mul_polyOf`), the honest quotient `qHon` cancels the high halves, and
+the negacyclic remainder has a vanishing transform: the honest `w′` is `computeWApprox(Â, c, z, t1)`
 (FIPS 204 Algorithm 8, line 9) at the signer's key, so its NTT is
-`Σ_j Â_ij ⊙ NTT(z_j) − NTT(2^d · t1_i) ⊙ NTT(c)` coefficientwise (`ntt_honestW`, the vendored
-`ntt_invNTT` and `MultiplyNTTs`), and the field rows are the images of those `ZMod q` equations
-under the cast `ZMod q → F` (`nttScheme_map`).
+`Σ_j Â_ij ⊙ NTT(z_j) − NTT(2^d · t1_i) ⊙ NTT(c)` coefficientwise (`ntt_honestW`), the image under
+the cast `ZMod q → F` (`nttScheme_map`) of the `ZMod q` equation.
 -/
 
 namespace GordieHowe.MLDSA44.Ring.Native
@@ -117,6 +119,15 @@ local notation "nat" => MldsaRingEmbed.nat program
 set_option hygiene false in
 local notation "σ" => MldsaRingEmbed.σ program
 
+set_option hygiene false in
+local notation "ringV" => MldsaRingEmbed.V program
+
+set_option hygiene false in
+local notation "ringR" => MldsaRingEmbed.R program
+
+set_option hygiene false in
+local notation "predMap" => MldsaRingEmbed.pred program
+
 variable {program : RealizedProgram} [MldsaRingEmbed program] [MldsaRingRelation program]
   [MldsaRingStmt program] [TableSelect program] [MldsaRingFront program] [MldsaRingHonest program]
   {F0 FH : FieldInterp} [QField F0] [HField FH] [Native.MldsaAAlgebra nat] [hN : Native.MldsaNativeHonest nat F0 FH]
@@ -143,8 +154,9 @@ theorem evalE_held {u : ℕ} (hA : u ∈ Native.AValues) {j : ℕ} (hj : j < ((n
   exact (readsA_pull y x c π).cells u hA j hj
 
 /-- **A member's value reads its honest value** at the source environment. -/
-theorem evalE_member {v : ℕ} (hv : v ∈ [MldsaRingRelation.aHat program, MldsaRingRelation.t1 program,
-    MldsaRingFront.muA program, (TableSelect.shape program).idx]) {j : ℕ}
+theorem evalE_member {v : ℕ} (hv : v ∈ [MldsaRandomPoint.aHat program, MldsaRandomPoint.t1 program,
+    MldsaRingFront.muA program, (TableSelect.shape program).idx, MldsaRandomPoint.q program])
+    {j : ℕ}
     (hj : j < (program.value v).size) :
     program.evalE (program.reader E) 0 (.leaf v) j =
       castElt (b := 0) (honestVal program F0 FH y v j) := by
@@ -153,9 +165,9 @@ theorem evalE_member {v : ℕ} (hv : v ∈ [MldsaRingRelation.aHat program, Mlds
 
 /-- The honest value of `member.a_hat`. -/
 theorem honestVal_aHat {j : ℕ} (hj : j < 4096) :
-    castElt (b := 0) (honestVal program F0 FH y (MldsaRingRelation.aHat program) j) =
+    castElt (b := 0) (honestVal program F0 FH y (MldsaRandomPoint.aHat program) j) =
       ((keyEntry y.key j : ℕ) : (interp 0).K) := by
-  have hf := (MldsaRingHonest.memberCells (program := program) (MldsaRingRelation.aHat program)
+  have hf := (MldsaRingHonest.memberCells (program := program) (MldsaRandomPoint.aHat program)
     (by simp)).2
   unfold honestVal
   rw [if_pos rfl, if_pos hj]
@@ -163,102 +175,184 @@ theorem honestVal_aHat {j : ℕ} (hj : j < 4096) :
 
 /-- The honest value of `member.t1`. -/
 theorem honestVal_t1 (j : ℕ) :
-    castElt (b := 0) (honestVal program F0 FH y (MldsaRingRelation.t1 program) j) =
+    castElt (b := 0) (honestVal program F0 FH y (MldsaRandomPoint.t1 program) j) =
       ((keyEntry y.key (4096 + j) : ℕ) : (interp 0).K) := by
   have hd := MldsaRingHonest.member_nodup (program := program)
-  have hf := (MldsaRingHonest.memberCells (program := program) (MldsaRingRelation.t1 program)
+  have hf := (MldsaRingHonest.memberCells (program := program) (MldsaRandomPoint.t1 program)
     (by simp)).2
   unfold honestVal
   rw [if_neg (by simp at hd; exact fun h => hd.1.1 h.symm), if_pos rfl]
   exact castElt_castElt_of_eq hf.symm _
 
-/-- **Coefficient `t` of a polynomial**, `0` past `256`. -/
-def cf (f : _root_.MLDSA.Rq) (t : ℕ) : _root_.MLDSA.Coeff :=
-  if h : t < 256 then MLDSA44.coeff f ⟨t, h⟩ else 0
+/-- The honest value of `signature.Q`: row `t / 255`'s quotient at `t % 255`. -/
+theorem honestVal_q (j : ℕ) :
+    castElt (b := 0) (honestVal program F0 FH y (MldsaRandomPoint.q program) j) =
+      qHon y ((interp 0).decode 1753) (j / 255) (j % 255) := by
+  have hd := MldsaRingHonest.member_nodup (program := program)
+  have hf := (MldsaRingHonest.memberCells (program := program) (MldsaRandomPoint.q program)
+    (by simp)).2
+  simp only [List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or] at hd
+  unfold honestVal
+  rw [if_neg (fun h => hd.1.2.2.2 h.symm), if_neg (fun h => hd.2.1.2.2 h.symm),
+    if_neg (fun h => hd.2.2.1.2 h.symm), if_neg (fun h => hd.2.2.2.1 h.symm), if_pos rfl]
+  exact castElt_castElt_of_eq hf.symm _
 
-theorem cf_get (f : _root_.MLDSA.Rq) : ∀ t (ht : t < 256), cf f t = f.get ⟨t, ht⟩ := fun t ht => by
-  unfold cf
-  rw [dif_pos ht, MLDSA44.coeff_apply]
+/-- **The high half reads only its operands' first `n` coordinates.** -/
+theorem high_congr {K : Type*} [Field K] {n : ℕ} {a a' b b' : ℕ → K} (ha : ∀ t < n, a t = a' t)
+    (hb : ∀ t < n, b t = b' t) (t : ℕ) : Ops.high n a b t = Ops.high n a' b' t := by
+  unfold Ops.high
+  exact Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun k _ => by
+    rw [ha i i.isLt, hb k k.isLt]
 
-/-- **Row `i` of `signature.relation` holds** at the honest values. -/
+/-- **The scheme-order transform of `a + b − Σ_j c_j`** at a frequency below `n`. -/
+theorem nttScheme_add_sub_sum {K : Type*} [Field K] {k n : ℕ} (hn : n = 2 ^ k) (ψ : K)
+    (a b : ℕ → K) (c : Fin 4 → ℕ → K) {m : ℕ} (hm : m < n) :
+    Ops.nttScheme n ψ (fun s => a s + b s - ∑ j, c j s) m =
+      Ops.nttScheme n ψ a m + Ops.nttScheme n ψ b m - ∑ j, Ops.nttScheme n ψ (c j) m := by
+  simp only [Ops.nttScheme_apply hn _ _ hm, add_mul, sub_mul, Finset.sum_mul,
+    Finset.sum_add_distrib, Finset.sum_sub_distrib]
+  rw [Finset.sum_comm]
+
+open Polynomial in
+/-- **Row `i` of `signature.relation` holds** at the honest values: row `i`'s polynomial is `0`.
+With `A_ij`, `T_i` the inverse transforms of the signer's `â_ij`, `t̂_i`, the products split as
+`polyOf_mul_polyOf`, the honest quotient cancels the high halves, and the low part
+`w_i + T_i c − Σ_j A_ij z_j` (negacyclic) has a vanishing transform (`ntt_honestW`). -/
 theorem sig_row (i : Fin 4) :
-    program.HoldsAt E (program.predicate ((i : ℕ) + 1)).body := by
-  obtain ⟨t, hb⟩ := MldsaRingRelation.rows (program := program) i
+    program.HoldsAt E (program.predicate (MldsaRandomPoint.rel0 program + i)).body := by
   obtain ⟨h57, h58, h59, h60, -⟩ := MldsaRingFront.vals (program := program)
   obtain ⟨-, -, -, -, -, -, -, -, hs59, hs60, -⟩ := Native.MldsaNativeHonest.a_bound (program := nat)
-  rw [HoldsAt, hb]
-  intro k hk
-  rw [MldsaRingRelation.rowLen i] at hk
-  unfold evalWith
-  rw [MldsaRingRelation.domainField0 (program := program), evalE_leaf2 E hk, evalE_rowLhs _ i hk,
-    sub_eq_zero]
+  rw [holdsAt_row_iff]
+  suffices h0 : rowPoly E i = 0 by rw [h0, Polynomial.eval_zero]
   have hi := i.isLt
+  have hpw : (256 : ℕ) = 2 ^ 8 := by norm_num
   have hψ : (interp 0).decode 1753 = φ _root_.MLDSA.zeta := by
     rw [decode_psi, show _root_.MLDSA.zeta = ((1753 : ℕ) : _root_.MLDSA.Coeff) from rfl]
     exact (map_natCast _ 1753).symm
+  set ψ := (interp 0).decode 1753 with hψdef
   set w := MLDSA44.PoP.Compose.honestWApprox y.key y.c y.z
-  set cP : _root_.MLDSA.Rq := MLDSA44.ofCoeff fun k => (y.c k : _root_.MLDSA.Coeff)
+  set cP : _root_.MLDSA.Rq := MLDSA44.ofCoeff fun k => (y.c k : _root_.MLDSA.Coeff) with hcP
+  set wF : ℕ → (interp 0).K := fun s => φ (cf (w.get i) s)
   -- the honest readings
-  have hW : ∀ s < 256, program.evalE (program.reader E) 0 (.leaf (MldsaRingRelation.w program))
-      ((i : ℕ) * 256 + s) = φ (cf (w.get i) s) := fun s hs' => by
+  have hW : ∀ s < 256, wRow E i s = wF s := fun s hs' => by
     have hm : (i : ℕ) * 256 + s < 1024 := by omega
-    rw [← h60, evalE_held y x c π (by decide) (by rw [hs60]; exact hm), aValR_60 y _ hm, φ_apply]
-    rw [flat_fm _ i s hs' hm]
+    unfold wRow
+    rw [← h60, evalE_held y x c π (by decide) (by rw [hs60]; exact hm), aValR_60 y _ hm]
+    show _ = φ (cf (w.get i) s)
+    rw [φ_apply, flat_fm _ i s hs' hm]
     unfold cf
     rw [dif_pos hs']
     rfl
-  have hZ : ∀ j : Fin 4, ∀ s < 256, program.evalE (program.reader E) 0
-      (.leaf (MldsaRingRelation.z program)) ((j : ℕ) * 256 + s) = φ (cf (y.z.get j) s) :=
+  have hZ : ∀ j : Fin 4, ∀ s < 256, zRow E j s = zKey (K := (interp 0).K) y j s :=
     fun j s hs' => by
       have hj := j.isLt
       have hm : (j : ℕ) * 256 + s < 1024 := by omega
+      unfold zRow
       rw [← h57, ← evalE_pull E (MldsaRingHonest.aV (program := program) 57 (by simp)) _]
       change Native.rdA (pull E) 57 _ = _
       rw [rdA_58 (readsA_pull y x c π) hm]
       rw [flat_fmz _ j s hs' hm]
-      unfold cf
-      rw [dif_pos hs']
+      unfold zKey cf
+      rw [dif_pos hs', ← φ_apply]
       exact φ_centered _
-  have hC : ∀ s < 256, program.evalE (program.reader E) 0 (.leaf (MldsaRingRelation.c program)) (2 * s) -
-      2 * program.evalE (program.reader E) 0 (.leaf (MldsaRingRelation.c program)) (2 * s + 1) =
-        φ (cf cP s) := fun s hs' => by
+  have hC : ∀ s < 256, cRow E s = cKey (K := (interp 0).K) y s := fun s hs' => by
+    unfold cRow
     rw [← h59, evalE_held y x c π (by decide) (by rw [hs59]; omega),
       evalE_held y x c π (by decide) (by rw [hs59]; omega), aValR_59 y _ (by omega),
       aValR_59 y _ (by omega)]
-    unfold cA cf
+    unfold cA cKey
+    rw [← φ_apply]
+    unfold cf
     rw [dif_pos hs']
     simp only [show 2 * s / 2 = s by omega, show 2 * s % 2 = 0 by omega,
-      show (2 * s + 1) / 2 = s by omega, show (2 * s + 1) % 2 = 1 by omega, cP,
+      show (2 * s + 1) / 2 = s by omega, show (2 * s + 1) % 2 = 1 by omega,
       MLDSA44.coeff_ofCoeff]
     exact ternary_sub _ (c_ternary y _)
-  have hA : ∀ j : Fin 4, program.evalE (program.reader E) 0 (.leaf (MldsaRingRelation.aHat program))
-      ((i : ℕ) * 1024 + ((j : ℕ) * 256 + k)) =
-        φ ((((MLDSA44.expandABounded _root_.MLDSA.mldsa44 y.key.rho).get i).get j).coeffs.get
-          ⟨k, hk⟩) := fun j => by
-    have hj := j.isLt
-    rw [evalE_member y x c π (by simp) (by rw [(MldsaRingRelation.sizes (program := program)).1]; omega),
-      honestVal_aHat y (by omega), show (i : ℕ) * 1024 + ((j : ℕ) * 256 + k) = ((i : ℕ) * 4 + j) * 256 +
-        (⟨k, hk⟩ : Fin 256) by simp only; ring, keyEntry_aHat, φ_apply]
+  have hA : ∀ j : Fin 4, ∀ s < 256, aRow E i j s = aKey (K := (interp 0).K) y i j s :=
+    fun j s hs' => by
+      have hj := j.isLt
+      unfold aRow
+      rw [evalE_member y x c π (by simp)
+        (by rw [(MldsaRingRelation.sizes (program := program)).1]; omega),
+        honestVal_aHat y (by omega)]
+      rfl
+  have hT : ∀ s < 256, tRow E i s = tKey (K := (interp 0).K) y i s := fun s hs' => by
+    unfold tRow
+    rw [evalE_member y x c π (by simp)
+      (by rw [(MldsaRingRelation.sizes (program := program)).2.1]; omega), honestVal_t1]
     rfl
-  have hT : program.evalE (program.reader E) 0 (.leaf (MldsaRingRelation.t1 program))
-      ((i : ℕ) * 256 + k) = φ ((_root_.MLDSA.Concrete.ntt (MLDSA44.Native.Rows.prims.power2RoundShift
-        (y.key.t1.get i))).coeffs.get ⟨k, hk⟩) := by
-    rw [evalE_member y x c π (by simp) (by rw [(MldsaRingRelation.sizes (program := program)).2.1]; omega),
-      honestVal_t1, show (i : ℕ) * 256 + k = (i : ℕ) * 256 + (⟨k, hk⟩ : Fin 256) from rfl,
+  have hQ : ∀ s < 255, qRow E i s = qHon (K := (interp 0).K) y ψ i s := fun s hs' => by
+    unfold qRow
+    rw [evalE_member y x c π (by simp)
+      (by rw [(MldsaRingRelation.sizes (program := program)).2.2.2.2.2]; omega), honestVal_q,
+      show ((i : ℕ) * 255 + s) / 255 = i by omega, show ((i : ℕ) * 255 + s) % 255 = s by omega]
+  -- the key in the transform domain
+  have hAk : ∀ j : Fin 4, ∀ m (hm : m < 256), aKey (K := (interp 0).K) y i j m =
+      φ ((((MLDSA44.expandABounded _root_.MLDSA.mldsa44 y.key.rho).get i).get j).coeffs.get
+        ⟨m, hm⟩) := fun j m hm => by
+    have hj := j.isLt
+    unfold aKey
+    rw [show (i : ℕ) * 1024 + ((j : ℕ) * 256 + m) = ((i : ℕ) * 4 + j) * 256 +
+        (⟨m, hm⟩ : Fin 256) by simp only; ring, keyEntry_aHat, φ_apply]
+    rfl
+  have hTk : ∀ m (hm : m < 256), tKey (K := (interp 0).K) y i m =
+      φ ((_root_.MLDSA.Concrete.ntt (MLDSA44.Native.Rows.prims.power2RoundShift
+        (y.key.t1.get i))).coeffs.get ⟨m, hm⟩) := fun m hm => by
+    unfold tKey
+    rw [show (i : ℕ) * 256 + m = (i : ℕ) * 256 + (⟨m, hm⟩ : Fin 256) from rfl,
       keyEntry_t1, φ_apply]
     rfl
+  set AF : Fin 4 → ℕ → (interp 0).K := fun j => Ops.inverseNtt 256 ψ (aKey y i j)
+  set TF : ℕ → (interp 0).K := Ops.inverseNtt 256 ψ (tKey y i)
+  have hmul : ∀ a b : ℕ → (interp 0).K, Ops.polyOf 256 a * Ops.polyOf 256 b =
+      Ops.polyOf 256 (Ops.negacyclic 256 a b) +
+        (Polynomial.X ^ 256 + 1 : Polynomial (interp 0).K) * Ops.polyOf 255 (Ops.high 256 a b) :=
+    fun a b => Ops.polyOf_mul_polyOf (n := 256) (by norm_num) a b
+  have hqsplit : qHon (K := (interp 0).K) y ψ i =
+      (fun s => ∑ j : Fin 4, Ops.high 256 (AF j) (zKey y j) s) - Ops.high 256 TF (cKey y) := rfl
+  set L : ℕ → (interp 0).K := fun s => wF s + Ops.negacyclic 256 TF (cKey y) s -
+    ∑ j : Fin 4, Ops.negacyclic 256 (AF j) (zKey y j) s with hLdef
+  have hrow : rowPoly E i = Ops.polyOf 256 L := by
+    unfold rowPoly
+    rw [(MldsaRingRelation.consts (program := program)).1, ← hψdef,
+      Ops.polyOf_congr (fun s hs' => (eRow_eq E i hs').trans (hW s hs')), Ops.polyOf_congr hQ,
+      Ops.polyOf_congr (fun s _ => Ops.inverseNtt_congr hT s), Ops.polyOf_congr hC,
+      Finset.sum_congr rfl fun j _ => by
+        rw [Ops.polyOf_congr (fun s _ => Ops.inverseNtt_congr (hA j) s), Ops.polyOf_congr (hZ j)],
+      hqsplit, Ops.polyOf_sub, Ops.polyOf_sum, hmul]
+    simp only [hmul]
+    rw [Finset.sum_add_distrib, ← Finset.mul_sum, hLdef,
+      show (fun s => wF s + Ops.negacyclic 256 TF (cKey y) s -
+        ∑ j : Fin 4, Ops.negacyclic 256 (AF j) (zKey y j) s) =
+        wF + Ops.negacyclic 256 TF (cKey y) -
+          (fun s => ∑ j : Fin 4, Ops.negacyclic 256 (AF j) (zKey y j) s) from rfl,
+      Ops.polyOf_sub, Ops.polyOf_add, Ops.polyOf_sum]
+    ring
+  rw [hrow]
+  refine Ops.polyOf_eq_zero_of_nttScheme hpw psi_isPrimitiveRoot n256_ne_zero fun m hm => ?_
+  rw [hLdef, nttScheme_add_sub_sum hpw _ _ _ _ hm,
+    Ops.nttScheme_negacyclic hpw psi_pow _ _ hm,
+    Ops.nttScheme_inverseNtt hpw psi_isPrimitiveRoot n256_ne_zero _ hm,
+    Finset.sum_congr rfl fun j _ => by
+      rw [Ops.nttScheme_negacyclic hpw psi_pow _ _ hm,
+        Ops.nttScheme_inverseNtt hpw psi_isPrimitiveRoot n256_ne_zero _ hm]]
   have hntt : ∀ (f : _root_.MLDSA.Rq) (g : ℕ → (interp 0).K), (∀ s < 256, g s = φ (cf f s)) →
-      Ops.nttScheme 256 ((interp 0).decode 1753) g k =
-        φ ((_root_.MLDSA.Concrete.ntt f).coeffs.get ⟨k, hk⟩) := fun f g hg => by
-    rw [nttScheme_congr hg, hψ, nttScheme_map, nttScheme_eq_ntt f (cf_get f) ⟨k, hk⟩]
-  rw [hntt (w.get i) _ hW, Finset.sum_congr rfl fun j _ => by rw [hA j, hntt _ _ (hZ j)], hT,
-    hntt cP _ hC]
-  have key := congrArg φ (ntt_honestW y.key y.expandAWithin y.c y.z i ⟨k, hk⟩)
+      Ops.nttScheme 256 ψ g m = φ ((_root_.MLDSA.Concrete.ntt f).coeffs.get ⟨m, hm⟩) :=
+    fun f g hg => by
+      rw [nttScheme_congr hg, hψ, nttScheme_map, nttScheme_eq_ntt f (cf_get f) ⟨m, hm⟩]
+  rw [hntt (w.get i) wF (fun s _ => rfl), hTk m hm,
+    hntt cP (cKey y) (fun s _ => by unfold cKey; rw [φ_apply]),
+    Finset.sum_congr rfl fun j _ => by
+      rw [hAk j m hm, hntt (y.z.get j) (zKey y j) (fun s _ => by unfold zKey; rw [φ_apply])]]
+  have key := congrArg φ (ntt_honestW y.key y.expandAWithin y.c y.z i ⟨m, hm⟩)
   simp only [map_sub, map_sum, map_mul] at key
-  exact key
+  rw [key, hcP, sub_add_cancel]
+  exact sub_self _
 
 /-- **`signature.relation.0 … 3` hold** at the honest values. -/
-theorem sig_holds {q : ℕ} (hq : q ∈ [1, 2, 3, 4]) :
+theorem sig_holds {q : ℕ} (hq : q ∈ [MldsaRandomPoint.rel0 program,
+    MldsaRandomPoint.rel0 program + 1, MldsaRandomPoint.rel0 program + 2,
+    MldsaRandomPoint.rel0 program + 3]) :
     program.HoldsAt E (program.predicate q).body := by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hq
   rcases hq with rfl | rfl | rfl | rfl

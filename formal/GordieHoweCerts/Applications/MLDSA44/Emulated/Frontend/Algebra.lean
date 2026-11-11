@@ -82,8 +82,7 @@ class MldsaEAlgebra (program : RealizedProgram) extends MldsaECross program wher
   /-- `hint_weight.weight`: the hint's sum below `81`. -/
   pred15 : ∃ real, (program.predicate 15).body = .mem 0 [.apply (.sum 1024) (.leaf 59)] (.range 81) real
   /-- `signature.relation`: `q` divides the sides' integer difference. -/
-  pred274 : ∃ real, (program.predicate 274).body = .mod 0 8380417 sigL sigR real ∧
-    real.form.isProduct = false
+  pred274 : ∃ real, (program.predicate 274).body = .mod 0 8380417 sigL sigR real
   /-- `expr7`. -/
   expr7 : program.expr 7 = .reindex idx10 (.leaf 60)
   /-- `expr8`. -/
@@ -173,8 +172,7 @@ theorem pred15 : ∃ real, (program.predicate 15).body =
     .mem 0 [.apply (.sum 1024) (.leaf 59)] (.range 81) real :=
   MldsaEAlgebra.pred15
 
-theorem pred274 : ∃ real, (program.predicate 274).body = .mod 0 8380417 sigL sigR real ∧
-    real.form.isProduct = false :=
+theorem pred274 : ∃ real, (program.predicate 274).body = .mod 0 8380417 sigL sigR real :=
   MldsaEAlgebra.pred274
 
 /-- **A natural below the offset's bound has room in the Goldilocks prime.** -/
@@ -664,7 +662,7 @@ theorem decompose {e : program.Env interp} (hs : EASat e) {m : ℕ} (hm : m < 10
 theorem eq_of_modZero {rd : program.Valuation interp} {d : ℕ} {l r : RealizedProgram.Expr} {real : RealizedProgram.ModRealization}
     (h : program.HoldsWith rd (.mod d 0 l r real)) {i : ℕ} (hi : i < program.exprLen l) :
     program.evalIntWith rd d l i = program.evalIntWith rd d r i := by
-  have := h.1 i hi
+  have := h i hi
   rwa [Nat.cast_zero, zero_dvd_iff, sub_eq_zero] at this
 
 /-- The values UseHint reads are not constants, of field `0`. -/
@@ -929,22 +927,6 @@ theorem idx12_entry {k : ℕ} (hk : k < 256) : idx11.entry k = 2 * k + 1 := by
   simp only [RealizedProgram.IndexMap.entry, hk, if_true]
   omega
 
-/-- **A sum against a negacyclic coefficient row, modulo `q`**, is the negacyclic product's
-coefficient of the casts (`Ops.negacyclic_eq_sum_negCoef`). -/
-theorem cast_sum_negCoef {n : ℕ} (h x : ℕ → ℤ) {k : ℕ} (hk : k < n) :
-    ((∑ k' : Fin n, RealizedProgram.Ops.negCoef n h k k' * x k' : ℤ) : _root_.MLDSA.Coeff) =
-      LatticeCrypto.negacyclicConvCoeff (fun m : Fin n => (h m : _root_.MLDSA.Coeff))
-        (fun m => (x m : _root_.MLDSA.Coeff)) ⟨k, hk⟩ := by
-  push_cast
-  have hmap : ∀ k', ((RealizedProgram.Ops.negCoef n h k k' : ℤ) : _root_.MLDSA.Coeff) =
-      RealizedProgram.Ops.negCoef n (fun s => (h s : _root_.MLDSA.Coeff)) k k' := fun k' =>
-    RealizedProgram.Ops.negCoef_map (Int.castAddHom _root_.MLDSA.Coeff) n h k k'
-  simp only [hmap]
-  rw [Fin.sum_univ_eq_sum_range (fun k' => RealizedProgram.Ops.negCoef n (fun s => (h s : _root_.MLDSA.Coeff)) k k' *
-    (x k' : _root_.MLDSA.Coeff)) n, ← RealizedProgram.Ops.negacyclic_eq_sum_negCoef n _ _ hk, RealizedProgram.Ops.negacyclic,
-    RealizedProgram.Ops.ofFin_of_lt _ hk]
-  rfl
-
 /-- **An opaque statement value reads the statement** in the source program's readings. -/
 theorem reader_opaqueNil (e : program.Env interp) {v : ℕ}
     (h : RealizedProgram.isOpaqueNil (program.value v).kind = true) : program.reader e v = e.stmt v := by
@@ -1080,7 +1062,8 @@ theorem cast_sigL {e : program.Env interp} {pk : MLDSA44.PublicKey44} (hk : KeyO
     RealizedProgram.evalIntWith_scale_const, RealizedProgram.evalIntWith_scale_const, RealizedProgram.evalIntWith_apply,
     RealizedProgram.evalIntWith_apply, (lensA (program := program)).2.2.2.2.2.2.2.2, centered_small (by norm_num [pGold]),
     centered_m16384, applyInt_broadcast hk, applyInt_broadcast hk, Int.cast_add, Int.cast_add,
-    Int.cast_mul, Int.cast_mul, cast_sum_negCoef _ _ k.isLt, cast_sum_negCoef _ _ k.isLt]
+    Int.cast_mul, Int.cast_mul, RealizedProgram.Ops.intCast_sum_negCoef _ _ k.isLt,
+    RealizedProgram.Ops.intCast_sum_negCoef _ _ k.isLt]
   push_cast
   ring
 
@@ -1094,7 +1077,7 @@ theorem cast_sigR {e : program.Env interp} {pk : MLDSA44.PublicKey44} (hk : KeyO
         (fun m => (program.intOf (program.reader e) 58 ((l : ℕ) * 256 + m) : _root_.MLDSA.Coeff)) k := by
   rw [RealizedProgram.evalIntWith_apply, (lensA (program := program)).2.2.2.2.2.2.2.2, applyInt_matVec hk, Int.cast_sum]
   refine Finset.sum_congr rfl fun l _ => ?_
-  exact cast_sum_negCoef (aZ pk i l) (fun m => program.evalIntWith (program.reader e) 0 (.leaf 58)
+  exact RealizedProgram.Ops.intCast_sum_negCoef (aZ pk i l) (fun m => program.evalIntWith (program.reader e) 0 (.leaf 58)
     ((l : ℕ) * 256 + m)) k.isLt
 
 /-- **The naturals of `w'`** (its integer reading, a natural). -/
@@ -1165,9 +1148,9 @@ theorem sig_mod {e : program.Env interp} (hs : program.SourceSatAt e) {pk : MLDS
         (fun m => (program.intOf (program.reader e) 58 ((l : ℕ) * 256 + m) : _root_.MLDSA.Coeff)) k =
       0 := by
   have h := holdsA hs (p := 274) (by simp)
-  obtain ⟨_, hb, -⟩ := pred274 (program := program)
+  obtain ⟨_, hb⟩ := pred274 (program := program)
   rw [hb] at h
-  have hd := h.1 ((i : ℕ) * 256 + k) (by
+  have hd := h ((i : ℕ) * 256 + k) (by
     change _ < program.exprLen sigL
     have : program.exprLen sigL = 1024 := MldsaEAlgebra.lenSigL
     rw [this]

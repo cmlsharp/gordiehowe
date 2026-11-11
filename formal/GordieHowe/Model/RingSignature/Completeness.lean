@@ -66,7 +66,8 @@ theorem pk_mem_honestRing {r : ℕ} (hr : r ≤ N) (keys : Fin r → S.KeyCoins)
 the signing coins. -/
 abbrev CompletenessDraw (r : ℕ) : Type := (X → Y) × (Fin r → S.KeyCoins) × S.SignCoins
 
-variable [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y]
+variable [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] [Fintype TS.KeyCoins]
+  [Nonempty TS.KeyCoins] [Fintype TS.SignCoins] [Nonempty TS.SignCoins]
 
 /-- **The refusal probability** for `r` members, signer position `s` and message `m`: over a
 uniform oracle, uniform key coins of the members and uniform signing coins, the probability that

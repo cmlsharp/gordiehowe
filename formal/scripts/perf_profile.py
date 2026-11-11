@@ -4,9 +4,9 @@
 
 """Per-declaration elaboration and kernel times of a set of modules (the profile of audit/PERF.md).
 
-Each module is elaborated by `lean --json -Dprofiler=true -Dprofiler.threshold=1` against the built
+Each module is elaborated by `lean --json -Dprofiler=true -Dprofiler.threshold=0` against the built
 tree (the modules it imports must be built: run after `lake build`), several at once. Lean's
-profiler reports each timed step over the threshold as a message at its command's position, in
+profiler reports every timed step as a message at its command's position, in
 exclusive categories: `elaboration`, `tactic execution of …`, `typeclass inference of …`, `simp`,
 `interpretation of …`, `attribute application`, `type checking`, and others. Each message is
 attributed to the source command containing its position, and the profile has one row per
@@ -23,7 +23,11 @@ A declaration's name is the one its source command declares, qualified by the na
 there (auxiliary declarations such as `foo._proof_1` or `foo.eq_1` are part of `foo`'s command).
 A command that declares nothing, an `example` or an anonymous instance is named `<…>` by its first
 words. Per module, the row `<unattributed>` holds the difference between Lean's cumulative totals
-(less import and initialization) and the attributed messages: steps under the threshold.
+(less import and initialization) and the attributed messages. The threshold is 0 because Lean
+applies it to each step, not to each command: at 1 ms, the many sub-millisecond steps of a
+`norm_num`- or instance-heavy proof (WeightTail44: 12 s, a quarter of the library's time) are
+reported nowhere and their declarations look several times cheaper than they are. At 0 the
+residual is the steps no message carries (tens of milliseconds a module).
 
 `--trace` instead runs `-Dtrace.profiler=true` and parses its trace tree (`[Elab.command]`,
 `[Elab.async]`, `[Kernel] typechecking declarations [...]`), for diagnosing one declaration. Do
@@ -36,9 +40,11 @@ A module whose `lean` run exceeds the timeout gets the row `<timeout>` with elab
 one that fails gets `<error>` (elab_s its running time) and its first error lines on stderr.
 
 Module selection (scripts/perf_profile.sh is the entry point): the modules changed since a git
-revision, an explicit list, or `--all`, the import closure of GordieHowe.lean. Certificate modules
-(GordieHoweCerts*, GordieHoweCheck.*, and every module importing a generated one, as in
-scripts/cert_boundary.py) and modules outside GordieHowe's closure are skipped, with a note.
+revision, an explicit list, or `--all`, the import closures of GordieHowe.lean and
+GordieHoweCerts.lean. Skipped, with a note: the generated modules and the certificate-check modules
+(`cert_boundary.perf_exempt`: `GordieHoweCerts.Generated.*`, `GordieHoweCheck.*`, the modules
+defining the checks), modules outside the two closures, and the hand-written modules of
+GordieHoweCerts when that library is not built (no olean, or `--no-certs`).
 """
 import argparse
 import bisect
@@ -54,11 +60,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # The launcher uses Python's isolated mode, which omits the script directory from
 # sys.path. Trust only this script's own directory for the shared boundary helper.
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
-from cert_boundary import check_source_dir
+from cert_boundary import check_source_dir, perf_exempt
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 IMPORT = re.compile(r'^(?:public\s+)?(?:meta\s+)?import\s+(?:all\s+)?([A-Za-z0-9_.\']+)', re.M)
-GENERATED = 'GordieHoweCerts.Generated.'
 CERTS = 'GordieHoweCerts'
 CHECK_SRC = check_source_dir()
 VENDOR_LIBS = ('ArkLib', 'CompPoly', 'VCVio', 'ToMathlib', 'PolyFun', 'ToCslib', 'Cslib',
@@ -115,18 +120,22 @@ def closure(root):
     return seen
 
 
-_cert = {}
+def library_closure():
+    """The modules the gate covers: the import closures of GordieHowe and GordieHoweCerts."""
+    lib = closure('GordieHowe')
+    if module_path(CERTS):
+        lib |= closure(CERTS)
+    return lib
 
 
-def is_cert(m):
-    """A certificate module: generated, GordieHoweCerts*, or importing a generated module."""
-    if m.startswith((GENERATED, 'GordieHoweCheck.')) or m == CERTS or m.startswith(CERTS + '.'):
-        return True
-    if m in _cert:
-        return _cert[m]
-    _cert[m] = False  # cycle guard
-    _cert[m] = any(is_cert(i) for i in imports_of(m))
-    return _cert[m]
+def is_certs(m):
+    return m == CERTS or m.startswith(CERTS + '.')
+
+
+def built(m):
+    """Whether module m's olean is in the build tree."""
+    return os.path.isfile(os.path.join(ROOT, '.lake', 'build', 'lib', 'lean',
+                                       m.replace('.', os.sep) + '.olean'))
 
 
 def changed_modules(base):
@@ -152,17 +161,22 @@ def changed_modules(base):
     return mods
 
 
-def select(mods):
+def select(mods, no_certs=False):
     """Split mods into (profiled, skipped with reason)."""
-    lib = closure('GordieHowe')
+    lib = library_closure()
     keep, skip = [], []
     for m in mods:
+        why = perf_exempt(m)
         if module_path(m) is None:
             skip.append((m, 'no source file'))
-        elif is_cert(m):
-            skip.append((m, 'certificate module'))
+        elif why:
+            skip.append((m, why))
         elif m not in lib:
-            skip.append((m, "outside GordieHowe's import closure"))
+            skip.append((m, 'outside the import closures of GordieHowe and GordieHoweCerts'))
+        elif is_certs(m) and no_certs:
+            skip.append((m, 'GordieHoweCerts not built in this run (--no-certs)'))
+        elif is_certs(m) and not built(m):
+            skip.append((m, 'GordieHoweCerts not built (no olean; build it to profile it)'))
         else:
             keep.append(m)
     return keep, skip
@@ -649,7 +663,7 @@ def run_module(m, args, root_opts, lib_opts, raw_dir):
         prof = ['-Dtrace.profiler=true', '-Dtrace.profiler.threshold=%d' % args.threshold_ms,
                 '-DmaxHeartbeats=0']
     else:
-        prof = ['--json', '-Dprofiler=true', '-Dprofiler.threshold=%d' % args.threshold_ms]
+        prof = ['--json', '-Dprofiler=true', '-Dprofiler.threshold=0']
     cmd = (['lean', '-j%d' % args.threads] + prof + options_for(m, root_opts, lib_opts) + [path])
     start = time.time()
     fd, out = tempfile.mkstemp(prefix='perf-', suffix='.out', dir=raw_dir)
@@ -685,13 +699,17 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('modules', nargs='*', help='modules or source paths (with --base: added)')
     ap.add_argument('--base', help='git revision: profile the modules changed since its merge base')
-    ap.add_argument('--all', action='store_true', help="every module of GordieHowe's closure")
+    ap.add_argument('--all', action='store_true',
+                    help='every module of the closures of GordieHowe and GordieHoweCerts')
+    ap.add_argument('--no-certs', action='store_true',
+                    help='skip the modules of GordieHoweCerts (the library is not built in this run)')
     ap.add_argument('-o', '--output', default='-', help='profile TSV (default stdout)')
     ap.add_argument('-j', '--jobs', type=int,
                     default=int(os.environ.get('PQ_LAKE_JOBS') or 8), help='parallel lean runs')
     ap.add_argument('--threads', type=int, default=4, help='threads per lean run (lean -j)')
-    ap.add_argument('--threshold-ms', type=int, default=None,
-                    help='profiler threshold (default 1; with --trace 100)')
+    ap.add_argument('--threshold-ms', type=int, default=100,
+                    help='with --trace, the trace threshold (default 100); budgets always profile '
+                         'every step (profiler.threshold 0)')
     ap.add_argument('--trace', action='store_true',
                     help='trace.profiler mode, for diagnosis only (inflates elaboration times)')
     ap.add_argument('--timeout', type=float, default=900, help='seconds per module')
@@ -701,8 +719,6 @@ def main():
                     help='parse saved output RAW (RAW.json and RAW.err, or a --trace file) of the '
                          'one module given; run nothing')
     args = ap.parse_args()
-    if args.threshold_ms is None:
-        args.threshold_ms = 100 if args.trace else 1
 
     mods = []
     for x in args.modules:
@@ -713,7 +729,7 @@ def main():
     if args.base:
         mods += [m for m in changed_modules(args.base) if m not in mods]
     if args.all:
-        mods += sorted(m for m in closure('GordieHowe') if m not in mods)
+        mods += sorted(m for m in library_closure() if m not in mods)
     if args.parse:
         if len(mods) != 1:
             sys.exit('perf_profile: --parse needs exactly one module')
@@ -727,7 +743,7 @@ def main():
         results = [(mods[0], 'ok', 0.0, rows)]
         write_profile(args.output, results)
         return 0
-    keep, skip = select(mods)
+    keep, skip = select(mods, args.no_certs)
     for why in sorted({w for _, w in skip}):
         ms = [m for m, w in skip if w == why]
         shown = ', '.join(ms[:5]) + (', …' if len(ms) > 5 else '')

@@ -526,6 +526,7 @@ structure Honest (I : Type) (relI : Set (Stmt × I)) (In : Fin m → Type)
   Pads : Type
   [fintype : Fintype Pads]
   [nonempty : Nonempty Pads]
+  [decEq : DecidableEq Pads]
   /-- Circuit `i`'s honest input. -/
   wit : (i : Fin m) → I → Pads → In i
   /-- The phase's honest prover. -/
@@ -542,7 +543,7 @@ structure Honest (I : Type) (relI : Set (Stmt × I)) (In : Fin m → Type)
   /-- The honest transcript has the simulator's law. -/
   identDistrib : ∀ x y, (x, y) ∈ relI → ∀ ch, (fun π => (prover x y π).transcript ch) =ᵈ S.sim x ch
 
-attribute [instance] Honest.fintype Honest.nonempty
+attribute [instance] Honest.fintype Honest.nonempty Honest.decEq
 
 variable {A} {I : Type} {relI : Set (Stmt × I)} {In : Fin m → Type}
   {dom : ∀ i, Pub i → In i → Prop} {S : A.Sim}

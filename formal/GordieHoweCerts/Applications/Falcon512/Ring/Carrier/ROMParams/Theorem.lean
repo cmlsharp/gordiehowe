@@ -16,7 +16,8 @@ public import GordieHoweCerts.Applications.Falcon512.Ring.Carrier.ROMParams.Fact
 
 The frontend's round-by-round knowledge soundness of `Π_P₀` at the Falcon ring relation
 (`GordieHowe.Falcon512.Ring.rbr_carrier`: the relation `GordieHowe.Falcon512.Ring.rel` at the statement's ring and challenge, the
-extractor `GordieHowe.Falcon512.Ring.proj`, the error `511/p^2` at `member.ring.gamma`), composed with the
+extractor `GordieHowe.Falcon512.Ring.proj`, the errors `511/p^2` at `member.ring.gamma` and `1022/p^2` at
+`signature.r`), composed with the
 proof system (`GordieHowe.RealizedProgram.ProofSystem.FieldBranches.causal_rbr_knowledge_soundness` at the forked domains of `proofSystem`),
 and the proof system's completeness and honest-verifier zero knowledge
 (`GordieHowe.RealizedProgram.ProofSystem.FieldBranches.completeness`,
@@ -37,32 +38,37 @@ inputs by the certificates, at the selections' soundness from the program check.
 abbrev proofSystem : ProofSystems :=
   Generated.Falcon512.Ring.Carrier.ROMParams.proofSystem
 
+/-- **The state function of `Π_P₀`'s round-by-round knowledge soundness** (`RealizedProgram.eventState`)
+at the relation, the extractor's projection and the source challenges' event, the frontend's soundness
+proofs as its argument. -/
+abbrev sourceState :=
+  program.eventState interp Ring.rel Ring.proj Ring.carrierEvent Ring.carrierEvent_use Ring.sound_carrier
+
 /-- **Round-by-round knowledge soundness of `Π_P₀` for `Falcon512.Ring.Carrier.ROMParams`** at the ring
 relation `Ring.rel`, the extractor `Ring.extractor` and the errors `511/p^2` at
-`member.ring.gamma`, `0` elsewhere. -/
+`member.ring.gamma`, `1022/p^2` at `signature.r`, `0` elsewhere. -/
 theorem source_rbr_knowledge_soundness :
-    rbrKnowledgeSoundness Ring.rel (program.sourceVerifier interp) Ring.extractor
-      (program.eventState interp Ring.rel Ring.proj Ring.ringEvent
-        Ring.ringEvent_use Ring.sound_carrier)
-      (program.roundError interp (Ring.ringEps interp)) :=
+    RBRKnowledgeSound Ring.rel (program.sourceVerifier interp) Ring.extractor
+      sourceState
+      (program.roundError interp (Ring.carrierEps interp)) :=
   Ring.rbr_carrier
 
 /-- **`Π_P₀`'s round errors vanish at `γ_end`.** -/
 theorem sourceError_final :
     ∀ i, program.rounds.get i.1 = .final →
-      program.roundError interp (Ring.ringEps interp) i = 0 := by
+      program.roundError interp (Ring.carrierEps interp) i = 0 := by
   intro i hi
   simp only [RealizedProgram.roundError, hi]
 
 /-- **The source challenge's error is within its fraction** (`sourceErrors`). -/
-theorem ringEps_le (j : ℕ) (_ : program.IsSourceChal j) :
-    Ring.ringEps interp j ≤ ((sourceErrors j).1 : ℝ≥0) / (sourceErrors j).2 := by
-  unfold Ring.ringEps
-  simp only [sourceErrors]
-  split_ifs
-  · rw [show Fintype.card _ = pGold ^ 2 from by convert goldilocksExt2_card <;> rfl]
+theorem carrierEps_le (j : ℕ) (hj : program.IsSourceChal j) :
+    Ring.carrierEps interp j ≤ ((sourceErrors j).1 : ℝ≥0) / (sourceErrors j).2 := by
+  have hc : Fintype.card (interp 0).K = pGold ^ 2 := by convert goldilocksExt2_card <;> rfl
+  rcases (Ring.isSourceChal_iff_carrier (program := program) j).1 hj with rfl | rfl
+  · simp only [Ring.carrierEps, if_pos rfl, sourceErrors, hc]
     norm_num [pGold]
-  · exact zero_le'
+  · simp only [Ring.carrierEps, one_ne_zero, if_false, if_pos rfl, sourceErrors, hc]
+    norm_num [pGold]
 
 /-- Domain `A`'s node `GF(p^1)` is the prime subfield `F_p`. -/
 instance : Ring.PrimeNode (interp 0) :=
@@ -72,15 +78,15 @@ instance : Ring.PrimeNode (interp 0) :=
     rfl⟩⟩
 
 /-- **The source program's soundness of `Falcon512.Ring.Carrier.ROMParams`** (`Configuration.SourceFront`): the frontend's
-round-by-round knowledge soundness (`source_rbr_knowledge_soundness`) at the ring's errors
-(`Ring.ringEps`, within `ringEps_le`), and the honest nodes' `1` (`Ring.oneNodes`). -/
+round-by-round knowledge soundness (`source_rbr_knowledge_soundness`) at the carrier's errors
+(`Ring.carrierEps`, within `carrierEps_le`), and the honest nodes' `1` (`Ring.oneNodes`). -/
 noncomputable def source :=
   ({ rel := Ring.rel,
      proj := Ring.proj,
-     eps := Ring.ringEps interp,
+     eps := Ring.carrierEps interp,
      sound := source_rbr_knowledge_soundness,
      final := sourceError_final,
-     eps_le := ringEps_le,
+     eps_le := carrierEps_le,
      oneNodes := Ring.oneNodes } :
     Configuration.SourceFront certified Native.CoreWit _)
 

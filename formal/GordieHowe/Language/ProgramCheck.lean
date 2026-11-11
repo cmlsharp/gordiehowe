@@ -112,8 +112,7 @@ descriptor's numbers (`tableauFitB`), one per domain of the field table. -/
   allIdx (fun i _ => tableauFitB (d.tableauDesc i).nums (d.packingDesc i).q d.plan i)
     d.fieldTable.domainFields 0
 
-/-- **The table selections** (`RealizedProgram.selectionsB`): every certificate's gadget facts, and a
-linked certificate for every selection a product form's kernel reads. -/
+/-- **The table selections** (`RealizedProgram.selectionsB`): every certificate's gadget facts. -/
 @[expose] def selectionsPartB : Bool := d.program.selectionsB d.selections
 
 /-- **No opaque value takes an argument.** -/

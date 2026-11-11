@@ -33,7 +33,7 @@ variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [Decida
   [Nonempty Req] (p : OracleProg X Y O) (q : ℕ) (pad : X)
 
 -- TODO(unbundle-M4): replace by a named copy register (`A.CopyReg`, a def with a one-step
--- instance, R2) in AdaptiveTest.lean
+-- instance, so that instance search stops at it) in AdaptiveTest.lean
 /-- Decidable equality of the registers of the compiled program's embedding with the copy
 register (`AdaptiveIAlg.copySplit`), assembled from the workspace factor (the default search
 exceeds its size limit). -/

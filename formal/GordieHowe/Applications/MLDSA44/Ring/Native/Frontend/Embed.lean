@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Language.RealizedProgram.Embed
+public import GordieHowe.Applications.MLDSA44.EmbedFacts
 
 @[expose] public section
 
@@ -13,9 +14,10 @@ public import GordieHowe.Language.RealizedProgram.Embed
 A native ML-DSA-44 ring program (`MLDSA44.Ring.Native.ROMParams`, `MLDSA44.Ring.Native.QROMParams`;
 C++ `lib/gordiehowe/examples/rings/mldsa_ring_native.h`) holds two parts of the native ML-DSA-44
 program at the same parameters (`MLDSA44.Native.ROMParams`, `MLDSA44.Native.QROMParams`;
-`lib/gordiehowe/examples/mldsa/mldsa_native.h`) up to a renaming (`σR`, `σQ`): its values, shared
-expressions and challenges are numbered differently, and the ring program's challenge `j + 1` is
-the native program's challenge `j` (the ring draws the member table's challenge first).
+`lib/gordiehowe/examples/mldsa/mldsa_native.h`) up to a renaming: its values, shared
+expressions and challenges are numbered differently, and the ring program's challenge `j + 2` is
+the native program's challenge `j` (the ring draws the member table's challenge and the signature
+relation's `r` first).
 
 * **Domain `H`'s core** (native predicates `48 … 270`: the Keccak rounds of `c̃'`, SampleInBall's
   stream, the selection and the memory check) is ring predicates `24 … 246`. The native program's
@@ -28,64 +30,25 @@ the native program's challenge `j` (the ring draws the member table's challenge 
   `signature.relation` is not held (the ring program reads the public key from the committed
   member).
 
-The values `ringV` and shared expressions `ringR` are those the two parts read, closed under what
-they read; `MldsaRingEmbed` collects the embedding and the predicate correspondences, decided per
-pair of programs. Through `RealizedProgram.pullEnv` the ring program's source predicates give the
+The compiler computes the renaming, the part's values and shared expressions (those the two parts
+and the frontends read, closed under what they read) and the predicate pairs from the two programs,
+and exports them as each ring program's checked embedding data (C++
+`lib/gordiehowe/compiler/embedding.h`); `MldsaRingEmbed` reads them from the data, with the
+predicate correspondences and the layout facts the frontends read, decided per pair of programs. Through `RealizedProgram.pullEnv` the ring program's source predicates give the
 native program's predicates of both parts (`hPreds_pull`, `aSat`).
 -/
 
 namespace GordieHowe.MLDSA44.Ring.Native
 
-/-- **The native values' identifiers in the ring program at the ROM parameters**: the constants,
-domain `A`'s values `57 … 65` three larger, domain `H`'s `w1` (`69`, `70`) two larger, `μ`
-(`119`, `120`) as the ring's committed `μ` (`69`, `70`), domain `H`'s values `121 … 574` and the
-range digits `575 … 587` shifted down. Values the parts do not read are left in place. -/
-def valR (v : ℕ) : ℕ :=
-  if v < 10 then [6, 3, 4, 5, 1, 7, 8, 9, 8, 11].getD v v
-  else if v < 34 then v + 2
-  else if v < 47 then [34, 43, 41, 37, 38, 39, 10, 36, 37, 38, 39, 40, 42].getD (v - 34) v
-  else if v < 55 then v - 3
-  else if v < 57 then v
-  else if v < 66 then v + 3
-  else if v < 69 then v
-  else if v < 71 then v + 2
-  else if v < 119 then v
-  else if v < 121 then v - 50
-  else if v < 575 then v - 48
-  else v - 46
+/-- **The native values the frontends read by their identifiers**: domain `A`'s `57 … 65`, `w1`
+(`70`), `μ` (`120`), the extracted challenge's `457` and SampleInBall's cells. Each ring program's
+part holds them (`MldsaRingEmbed.readV`). -/
+def readVals : List ℕ :=
+  [57, 58, 59, 60, 61, 62, 63, 64, 65, 70, 120, 457, 556, 557, 560, 561, 562, 563, 564, 565]
 
-/-- **The native values' identifiers in the ring program at the QROM parameters**: those at the
-ROM parameters, every identifier from `10` one smaller (the ROM program's constant `9` is merged
-into an earlier constant). -/
-def valQ (v : ℕ) : ℕ := if 10 ≤ valR v then valR v - 1 else valR v
-
-/-- **The native shared expressions' identifiers in the ring program**: `2 … 8` (domain `A`) are
-`43` larger, `66 …` (domain `H`) `12` smaller. -/
-def refMap (k : ℕ) : ℕ := if k < 66 then k + 43 else k - 12
-
-/-- **The renaming at the ROM parameters**: values by `valR`, shared expressions by `refMap`,
-challenge `j` is `j + 1`. -/
-def σR : RealizedProgram.Renaming := ⟨valR, refMap, (· + 1)⟩
-
-/-- **The renaming at the QROM parameters**: values by `valQ`, shared expressions by `refMap`,
-challenge `j` is `j + 1`. -/
-def σQ : RealizedProgram.Renaming := ⟨valQ, refMap, (· + 1)⟩
-
-/-- **The native values of the two parts**: the constants `0 … 6`, `9 … 33`, `35`, `36`,
-`40 … 54`, domain `A`'s values `57 … 65`, domain `H`'s `w1` (`69`, `70`), `μ` and the core's values
-(`119 … 566`), the MAC's blind (`567`) and the range digits and top row (`575 … 583`). -/
-def ringV : List ℕ :=
-  List.range' 0 7 ++ List.range' 9 25 ++ [35, 36] ++ List.range' 40 15 ++ List.range' 57 9 ++
-    [69, 70] ++ List.range' 119 449 ++ List.range' 575 9
-
-/-- **The native shared expressions of the two parts**: domain `A`'s `2 … 6` and `8`, domain `H`'s
-`66 … 524` (`522 … 524` H's decoded challenge's sign and support, which the ring's crossing reads
-in its own operand). -/
-def ringR : List ℕ := List.range' 2 5 ++ [8] ++ List.range' 66 459
-
-/-- **The native predicates' identifiers in the ring program**: `1 … 5` four larger, `6 … 14` six
-larger, domain `H`'s core `24` smaller. -/
-def predMap (k : ℕ) : ℕ := if k ≤ 5 then k + 4 else if k ≤ 14 then k + 6 else k - 24
+/-- **The native shared expressions the frontends read by their identifiers**: H's decoded
+challenge's sign and support (`522 … 524`), which the ring's crossing reads in its own operand. -/
+def readExprs : List ℕ := [522, 523, 524]
 
 /-- **Domain `A`'s gadget predicates** of the native program: the hint's `w1` bound, decomposition
 and interval (`1`, `2`, `3`), the norm range's top row (`5`), the Booleanities of `h`, `c`, the
@@ -99,33 +62,51 @@ check of a realization value). -/
 def aSource : List ℕ := [1, 2, 3, 6, 7, 8, 9, 11, 12, 13, 14]
 
 /-- **A ring program holds the native program's domain `H` core and domain `A` gadgets**: the
-embedding under its renaming `σ` (`RealizedProgram.Embedding`); native predicate `k` of domain
-`H`'s core is ring predicate `k − 24`, renamed and a source predicate; native predicate `k` of
-`aPreds` is ring predicate `predMap k`, renamed (`RealizedProgram.bodyCorrB`), a source predicate
-for `k ∈ aSource`; the renamed challenges have the native ones' phases, in order. Each ring program
-instantiates it by `decide`, naming its native program (`nat`). -/
+embedding under its renaming `σ` of the part's values `V` and shared expressions `R`
+(`RealizedProgram.Embedding`), each read from the program's checked embedding data; native
+predicate `k` of domain `H`'s core is ring predicate `pred k`, renamed and a source predicate;
+native predicate `k` of `aPreds` is ring predicate `pred k`, renamed
+(`RealizedProgram.bodyCorrB`), a source predicate for `k ∈ aSource`; the renamed challenges have
+the native ones' phases, in order. Each ring program instantiates it from its data, naming its
+native program (`nat`), and decides the facts about the data the frontends read: the values and
+shared expressions they read by identifier are held (`readV`, `readR`), and `pred` is the data's
+pairing of held predicates (`held`, `pred_held`). -/
 class MldsaRingEmbed (program : RealizedProgram) where
   /-- The native program. -/
   nat : RealizedProgram
   /-- The renaming. -/
   σ : RealizedProgram.Renaming
+  /-- The part's values. -/
+  V : List ℕ
+  /-- The part's shared expressions. -/
+  R : List ℕ
+  /-- The ring predicate of each held native predicate. -/
+  pred : ℕ → ℕ
   /-- The embedding. -/
-  embedding : nat.Embedding program σ ringV ringR
-  /-- Native predicate `k` of domain `H`'s core is ring predicate `k − 24`. -/
-  hPredCorr : ∀ k, 48 ≤ k → k ≤ 270 →
-    nat.equalCorrB program σ ringV ringR (nat.predicate k).body
-      (program.predicate (k - 24)).body = true ∧
-      k - 24 < program.predicates.length ∧ program.inSource (program.predicate (k - 24)) = true
-  /-- Native predicate `k` of domain `A`'s gadgets is ring predicate `predMap k`. -/
+  embedding : nat.Embedding program σ V R
+  /-- Native predicate `k` of domain `H`'s core is ring predicate `pred k`. -/
+  hPredCorr : ∀ k, corePredLo ≤ k → k ≤ hPredHi →
+    nat.equalCorrB program σ V R (nat.predicate k).body
+      (program.predicate (pred k)).body = true ∧
+      pred k < program.predicates.length ∧ program.inSource (program.predicate (pred k)) = true
+  /-- Native predicate `k` of domain `A`'s gadgets is ring predicate `pred k`. -/
   aPredCorr : ∀ k ∈ aPreds,
-    nat.bodyCorrB program σ ringV ringR (nat.predicate k).body
-      (program.predicate (predMap k)).body = true ∧ predMap k < program.predicates.length
+    nat.bodyCorrB program σ V R (nat.predicate k).body
+      (program.predicate (pred k)).body = true ∧ pred k < program.predicates.length
   /-- The ring predicates of `aSource` are source predicates. -/
-  aSourceCorr : ∀ k ∈ aSource, program.inSource (program.predicate (predMap k)) = true
+  aSourceCorr : ∀ k ∈ aSource, program.inSource (program.predicate (pred k)) = true
   /-- The renamed challenges have the native ones' phases. -/
   chalPhase : ∀ j, (program.challenge (σ.chal j)).phase = (nat.challenge j).phase
   /-- The challenge renaming keeps the order. -/
   chalMono : Monotone σ.chal
+  /-- The values the frontends read by identifier are held. -/
+  readV : ∀ v ∈ readVals, v ∈ V
+  /-- The shared expressions the frontends read by identifier are held. -/
+  readR : ∀ k ∈ readExprs, k ∈ R
+  /-- The held pairs (native predicate, ring predicate) of the data. -/
+  held : List (ℕ × ℕ)
+  /-- `pred` pairs each held native predicate with its ring predicate. -/
+  pred_held : ∀ p ∈ held, pred p.1 = p.2
 
 set_option linter.unusedSectionVars false
 
@@ -136,6 +117,12 @@ local notation "nat" => MldsaRingEmbed.nat program
 
 set_option hygiene false in
 local notation "σ" => MldsaRingEmbed.σ program
+
+set_option hygiene false in
+local notation "ringV" => MldsaRingEmbed.V program
+
+set_option hygiene false in
+local notation "predMap" => MldsaRingEmbed.pred program
 
 /-- **An environment of the ring program read as one of the native program** (through `σ`,
 `RealizedProgram.pullEnv`). -/
@@ -150,7 +137,7 @@ theorem reader_pull (e : program.Env I) {v : ℕ} (hv : v ∈ ringV) (i : ℕ) :
 /-- **Domain `H`'s core holds** in the environment read as the native program's, where the ring
 source program holds: native predicates `48 … 270`. -/
 theorem hPreds_pull {e : program.Env I} (hs : program.SourceSatAt e) :
-    ∀ k, 48 ≤ k → k ≤ 270 → (nat).HoldsAt (pull e) ((nat).predicate k).body := by
+    ∀ k, corePredLo ≤ k → k ≤ hPredHi → (nat).HoldsAt (pull e) ((nat).predicate k).body := by
   intro k h1 h2
   obtain ⟨hc, hl, hsrc⟩ := MldsaRingEmbed.hPredCorr (program := program) k h1 h2
   exact (RealizedProgram.holdsAt_pullEnv MldsaRingEmbed.embedding e hc).1

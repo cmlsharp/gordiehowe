@@ -50,6 +50,9 @@ inductive Gen where
   | lowDigit (p j : ℕ)
   /-- The late histogram of group `g` of table `t`. -/
   | lateHist (t g : ℕ)
+  /-- The committed `C` of convolution `c` of `RealizedProgram.convs` (read in a predicate not
+  affine in its convolutions): its source's value. -/
+  | specC (c : ℕ)
   deriving DecidableEq, Repr, Inhabited
 
 /-- **The generators of a program's values**, aligned with the values. -/

@@ -19,7 +19,7 @@ statement needs an equation between lengths.
 
 The two composition lemmas:
 
-* `ClaimPhase.append_rbrKnowledgeSoundness`: a phase with a one-shot extractor that produces a
+* `ClaimPhase.append_rbrKnowledgeSound`: a phase with a one-shot extractor that produces a
   claim, followed by a phase that is round-by-round sound relative to that claim, is
   round-by-round knowledge sound with the part-1 extractor, and each round keeps its error;
 * `ClaimProof.and`: two claim-proving phases run in sequence prove the conjunction of their
@@ -413,7 +413,7 @@ end ProtocolSpec
 
 /-- **The context of an appended phase**: the context of the phase before it and that phase's full
 transcript. The second phase of `ClaimReduction.append` and
-`ClaimPhase.append_rbrKnowledgeSoundness` proves a claim about this context. -/
+`ClaimPhase.append_rbrKnowledgeSound` proves a claim about this context. -/
 @[ext]
 structure AppendContext (Ctx : Type) (P : ProtocolSpec n) where
   /-- The context of the phase before. -/
@@ -435,7 +435,7 @@ theorem card_le_of_mapsTo_cast {α β : Type} [Fintype α] [Fintype β] (h : α 
 
 open Classical in
 /-- A claim-producing phase with a one-shot extractor: its state is true whenever its claim
-holds. The fields are those of `KnowledgeStateFunction` and `rbrKnowledgeSoundness`, with
+holds. The fields are those of `KnowledgeStateFunction` and `RBRKnowledgeSound`, with
 acceptance replaced by the claim. -/
 structure ClaimPhase (P : ProtocolSpec n) (StmtIn WitIn : Type) (rel : Set (StmtIn × WitIn))
     [∀ i, Fintype (P.Challenge i)] (ε : P.ChallengeIdx → ℝ≥0) where
@@ -537,7 +537,7 @@ theorem accept_card_le [Fintype P.ChallengeIdx] (B : ClaimProof P Ctx ε) {c : C
     exact ⟨B.full x tr h'.1, h'.2⟩
   let Sfun : KnowledgeStateFunction V' := ⟨S, hempty, hnext, hfull⟩
   let E : Extractor P Ctx Unit := ⟨fun _ _ _ => ()⟩
-  have hE' := knowledgeSoundness_count_of_rbr_count (rel := rel) (ε := ε) E Sfun (by
+  have hE' := knowledgeSound_count_of_rbr_count (rel := rel) (ε := ε) E Sfun (by
     intro x i tr
     refine le_trans (Nat.cast_le.mpr (Finset.card_le_card ?_)) (B.rbr x i tr)
     intro ch hch
@@ -706,14 +706,14 @@ theorem appendStateFn_toFun (A : ClaimPhase P₁ StmtIn WitIn rel ε₁)
 /-- **Append.** A claim-producing phase followed by a phase proving its claim is
 round-by-round knowledge sound for the verifier of the second phase, at the extractor
 `A.E.appendLeft` and the state function `appendStateFn`, and each round keeps its error. -/
-theorem append_rbrKnowledgeSoundness (A : ClaimPhase P₁ StmtIn WitIn rel ε₁)
+theorem append_rbrKnowledgeSound (A : ClaimPhase P₁ StmtIn WitIn rel ε₁)
     (B : ClaimProof P₂ (AppendContext StmtIn P₁) ε₂)
     (hclaim : ∀ x tr, B.claim ⟨x, tr⟩ ↔ A.claim x tr) :
-    rbrKnowledgeSoundness rel (fun x tr => B.V ⟨x, tr.left⟩ tr.right)
+    RBRKnowledgeSound rel (fun x tr => B.V ⟨x, tr.left⟩ tr.right)
       A.E.appendLeft (A.appendStateFn B hclaim) (appendError ε₁ ε₂) := by
   have h0 : ∀ x tr₁ tr₂, A.S (Fin.last n₁) x tr₁ ∨ B.S 0 ⟨x, tr₁⟩ tr₂ → A.S (Fin.last n₁) x tr₁ :=
     fun x tr₁ _ h => h.elim id fun h => A.full x tr₁ ((hclaim x tr₁).mp (B.claim_of_S h))
-  refine rbrKnowledgeSoundness_iff_count.mpr ?_
+  refine rbrKnowledgeSound_iff_count.mpr ?_
   intro x i tr
   rcases ChallengeIdx.inl_or_inr i with ⟨j, rfl⟩ | ⟨j, rfl⟩
   · rw [appendError_inl]
@@ -738,13 +738,13 @@ theorem append_rbrKnowledgeSoundness (A : ClaimPhase P₁ StmtIn WitIn rel ε₁
 open Classical in
 /-- **Append**, knowledge soundness: the error is the sum of the two phases' round errors, at
 the straight-line extractor of `A.E.appendLeft`. -/
-theorem append_knowledgeSoundness (A : ClaimPhase P₁ StmtIn WitIn rel ε₁)
+theorem append_knowledgeSound (A : ClaimPhase P₁ StmtIn WitIn rel ε₁)
     (B : ClaimProof P₂ (AppendContext StmtIn P₁) ε₂)
     (hclaim : ∀ x tr, B.claim ⟨x, tr⟩ ↔ A.claim x tr) :
-    knowledgeSoundness rel (fun x tr => B.V ⟨x, tr.left⟩ tr.right)
+    KnowledgeSound rel (fun x tr => B.V ⟨x, tr.left⟩ tr.right)
       (A.E.appendLeft.straightLine rel) (∑ i, ε₁ i + ∑ j, ε₂ j) := by
   rw [← sum_appendError]
-  exact knowledgeSoundness_of_rbr (A.append_rbrKnowledgeSoundness B hclaim)
+  exact knowledgeSound_of_rbr (A.append_rbrKnowledgeSound B hclaim)
 
 end ClaimPhase
 
@@ -984,13 +984,13 @@ def ClaimProof.stateFn {Ctx : Type} [∀ i, Fintype (P.Challenge i)] [Nonempty P
 `stateFn` and any extractor `E` that succeeds whenever the claim holds (`hE`), with the phase's
 own round errors: while the extractor fails the claim is false, so the state flips only when the
 phase's state flips. -/
-theorem ClaimProof.rbrKnowledgeSoundness {Ctx W : Type} [∀ i, Fintype (P.Challenge i)]
+theorem ClaimProof.rbrKnowledgeSound {Ctx W : Type} [∀ i, Fintype (P.Challenge i)]
     [∀ i, Nonempty (P.Challenge i)] [Nonempty P.ChallengeIdx] {ε : P.ChallengeIdx → ℝ≥0}
     (B : ClaimProof P Ctx ε) {rel : Set (Ctx × W)} (E : Extractor P Ctx W)
     (hE : ∀ k c tr, B.claim c → (c, E k c tr) ∈ rel) :
-    IOP.rbrKnowledgeSoundness rel B.V E B.stateFn ε := by
+    IOP.RBRKnowledgeSound rel B.V E B.stateFn ε := by
   classical
-  refine rbrKnowledgeSoundness_iff_count.mpr fun c i tr => ?_
+  refine rbrKnowledgeSound_iff_count.mpr fun c i tr => ?_
   refine le_trans (Nat.cast_le.mpr (Finset.card_le_card fun ch hch => ?_)) (B.rbr c i tr)
   simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hch ⊢
   obtain ⟨hrel, hnot, hd, hs⟩ := hch

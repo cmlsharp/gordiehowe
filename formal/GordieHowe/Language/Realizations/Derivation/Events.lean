@@ -16,8 +16,7 @@ tables (`TableOk`) and the MACs' realizations (`MacRealizable`: key, tag, blind,
 key), not the recognized shapes of the other predicates. `GordieHowe.RealizedProgram.EventsOk`
 states exactly those; the theorems here (`challengeUseAt_realEvent_ev`,
 `probUniform_realEvent_le_ev`) read only it, so the derivations' validity (`DerivationsValid`)
-gives them. The selection events (`SelEvent`) have their challenge-use rule from their definition
-(`challengeUseAt_selEvent`) and their error bound from the program's selections (`SelSound`).
+gives them.
 
 The definitions are in `GordieHoweNative/Language/Realizations/Derivation/Events.lean`
 (the compiled library `GordieHoweNative`); this module has their lemmas.
@@ -145,40 +144,11 @@ theorem not_macEvent_alpha_ev (hv : ir.EventsOk primeNodes) {t : ℕ} (ht : t < 
 (`EventsOk`): a table's challenge (`TableOk.alpha`) or a MAC's key (`macKeyB`). -/
 theorem isPhaseChal_of_realEvent_ev (hv : ir.EventsOk primeNodes) {j : ℕ} {e : ir.Env I}
     (h : ir.RealEvent j e) : ir.IsPhaseChal j := by
-  rcases h with ⟨t, ht, rfl, -⟩ | ⟨p, hp, dx, x, dy, y, k, real, hb, rfl, -⟩ |
-    ⟨q, -, sh, hk, rfl, -⟩
+  rcases h with ⟨t, ht, rfl, -⟩ | ⟨p, hp, dx, x, dy, y, k, real, hb, rfl, -⟩
   · exact (hv.tables t ht).alpha
   · have h1 := hv.macKey hp hb
     simp only [macKeyB, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h1
     exact h1.1.1.1.1
-  · unfold kernelSel? at hk
-    obtain ⟨-, hp⟩ := Option.filter_eq_some_iff.1 hk
-    simp only [Bool.and_eq_true, decide_eq_true_eq] at hp
-    exact hp.2
-
-/-- **Environments agreeing up to `j` agree on reads fixed when `j` is drawn.** -/
-theorem agreeOn_of_fixedAt {j : ℕ} {R : List Read} (hR : ∀ rd ∈ R, ir.ReadFixedAt j rd)
-    {e e' : ir.Env I} (h : Env.EqUpTo j e e') : Env.AgreeOn R e e' where
-  stmt := h.stmt
-  asg := h.asg
-  chal c hc := h.chal c (hR _ hc)
-  late u hu := h.late u (hR _ hu)
-
-/-- **The challenge-use rule for the selection events**: the event at `j` reads its records, its
-table and the field `equal`s that read only what is fixed when `j` is drawn. -/
-theorem challengeUseAt_selEvent : ChallengeUseAt ir I ir.SelEvent := by
-  intro j e e' h
-  unfold SelEvent
-  refine exists_congr fun q => and_congr_right fun _ => exists_congr fun sh =>
-    and_congr_right fun _ => and_congr_right fun _ => and_congr_right fun hR => and_congr ?_ ?_
-  · exact forall_congr' fun p => forall_congr' fun _ => forall_congr' fun _ =>
-      forall_congr' fun hP => holdsAt_congr (agreeOn_of_fixedAt hP h)
-  · have h1 : ∀ v ∈ sh.records, ir.reader e v = ir.reader e' v := fun v hv =>
-      read_congr _ _ (agreeOn_of_fixedAt (fun rd hrd => hR rd
-        (List.mem_append_left _ (List.mem_flatMap.2 ⟨v, hv, hrd⟩))) h)
-    have h2 : ir.reader e sh.table = ir.reader e' sh.table :=
-      read_congr _ _ (agreeOn_of_fixedAt (fun rd hrd => hR rd (List.mem_append_right _ hrd)) h)
-    exact not_congr (selExact_congr ir h1 h2)
 
 /-- **The challenge-use rule for the realization events** (`EventsOk`): the event at `j`
 reads only the needles and histograms of the groups at `j`, all read before `j`, the binding events
@@ -187,7 +157,7 @@ theorem challengeUseAt_realEvent_ev (hwf : ir.WellFormed) (hv : ir.EventsOk prim
     ChallengeUseAt ir I ir.RealEvent := by
   intro j e e' h
   unfold RealEvent
-  refine or_congr ?_ (or_congr ?_ (challengeUseAt_selEvent j h))
+  refine or_congr ?_ ?_
   · unfold LookupEvent
     refine exists_congr fun t => and_congr_right fun ht => and_congr_right fun hj => ?_
     subst hj
@@ -290,15 +260,15 @@ theorem probUniform_macEvent_le_ev (hwf : ir.WellFormed) (hv : ir.EventsOk prime
   refine (key _ fun p hp => List.mem_range.1 hp).trans (le_of_eq ?_)
   rw [macChunksAt, sum_filterMap_eq_sum_map_getD]
 
-/-- **The lookup and MAC events at challenge `j` have probability at most `lmError`** over `j`
+/-- **The realization event at challenge `j` has probability at most `realError`** over `j`
 (`EventsOk`): at a table's challenge, the lookup polynomials are fixed before `j` is drawn
 and `j` is uniform outside `[0, tmax)` (no MAC is keyed by a table's challenge,
 `not_macEvent_alpha_ev`); at any other challenge, the MACs keyed by `j` have their binding polynomials
 fixed before `j` and `j` is uniform in the MAC field (`probUniform_macEvent_le_ev`). -/
-theorem probUniform_lmEvent_le_ev (hwf : ir.WellFormed) (hv : ir.EventsOk primeNodes)
+theorem probUniform_realEvent_le_ev (hwf : ir.WellFormed) (hv : ir.EventsOk primeNodes)
     (hI : I.Registered ir) (j : ℕ) (e : ir.Env I) :
-    Pr[c ← ir.ChalVal I j : ir.LookupEvent j (e.setChal j c) ∨ ir.MacEvent j (e.setChal j c)] ≤
-      ir.lmError I j := by
+    Pr[c ← ir.ChalVal I j : ir.RealEvent j (e.setChal j c)] ≤ ir.realError I j := by
+  simp only [RealEvent]
   by_cases hex : ∃ t < ir.tables.length, ir.alphaOf t = j
   · obtain ⟨t₀, ht₀, rfl⟩ := hex
     have hev : ∀ c : ir.ChalVal I (ir.alphaOf t₀),
@@ -322,7 +292,7 @@ theorem probUniform_lmEvent_le_ev (hwf : ir.WellFormed) (hv : ir.EventsOk primeN
           reader_setChal (hj ▸ hr) e c]
     simp only [hev]
     refine (probUniform_exists_logupBad_le (hv.tables t₀ ht₀) hI _ _ e).trans ?_
-    rw [lmError_eq]
+    rw [realError_eq]
     refine ENNReal.coe_le_coe.2 (div_le_div_of_nonneg_right ?_ zero_le)
     have heq : ((ir.realGroups (ir.alphaOf t₀)).map fun tg =>
         (ir.groupEvent (ir.reader e) (ir.chalField (ir.alphaOf t₀)) tg.1 tg.2).deg).sum =
@@ -331,7 +301,7 @@ theorem probUniform_lmEvent_le_ev (hwf : ir.WellFormed) (hv : ir.EventsOk primeN
       simp only [List.map_map]
       refine congrArg List.sum (List.map_congr_left fun tg _ => ?_)
       simp only [Function.comp_apply, groupEvent_deg]
-    rw [lmErrorTerms, List.map_append, List.sum_append, ← heq]
+    rw [realErrorTerms, List.map_append, List.sum_append, ← heq]
     exact_mod_cast Nat.le_add_right _ _
   · push Not at hex
     have hnl : ∀ c : ir.ChalVal I j, ¬ ir.LookupEvent j (e.setChal j c) :=
@@ -350,7 +320,7 @@ theorem probUniform_lmEvent_le_ev (hwf : ir.WellFormed) (hv : ir.EventsOk primeN
         have h1 := hv.macKey hp hb
         simp only [macKeyB, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h1
         simp only [tmaxOf, h1.1.1.2]
-      rw [lmError_eq, lmErrorTerms, hgroups, htmax]
+      rw [realError_eq, realErrorTerms, hgroups, htmax]
       have hfst : (ir.macChunksAt real.key).map (Prod.fst ∘ fun n => (n, 0)) =
           ir.macChunksAt real.key := List.map_id _
       simp only [List.map_nil, List.nil_append, List.map_map, Nat.sub_zero, hfst]
@@ -366,16 +336,6 @@ theorem probUniform_lmEvent_le_ev (hwf : ir.WellFormed) (hv : ir.EventsOk primeN
         · rfl
       rw [hnil]
       simp
-
-/-- **The realization event at challenge `j` has probability at most `realError`** over `j`
-(`EventsOk`, `SelSound`): the lookup and MAC events at most `lmError`
-(`probUniform_lmEvent_le_ev`), the selection events at most `selError` (`SelSound`). -/
-theorem probUniform_realEvent_le_ev (hwf : ir.WellFormed) (hv : ir.EventsOk primeNodes)
-    (hI : I.Registered ir) (hsel : ir.SelSound I) (j : ℕ) (e : ir.Env I) :
-    Pr[c ← ir.ChalVal I j : ir.RealEvent j (e.setChal j c)] ≤ ir.realError I j := by
-  simp only [RealEvent, ← or_assoc]
-  rw [realError_eq_add]
-  exact probUniform_or_le_add (probUniform_lmEvent_le_ev hwf hv hI j e) (hsel j e)
 
 end
 

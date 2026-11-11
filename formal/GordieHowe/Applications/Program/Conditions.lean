@@ -177,7 +177,9 @@ def PackingsOk : Prop :=
 instance : Decidable r.PackingsOk := by unfold PackingsOk; infer_instance
 
 /-- **Every domain's tableau fits its field and the plan** (`LigeroCert.validB`,
-`RealizedProgram.planLigeroB`), at every proof that the tableaus check. -/
+`RealizedProgram.planLigeroB`), at every proof that the tableaus check. Like `FieldOkAt`, it is
+stated for every proof of `TableausOk` (module docstring), so any one proof, such as the
+conditions' own `tableaus`, gives it. -/
 def TableausFit : Prop :=
   ∀ h : r.TableausOk, ∀ i < r.fieldTable.domainFields.length,
     (r.tableau h i).validB (r.fieldTable.interp.packing (r.fieldTable.domainField i)).q = true ∧
@@ -373,8 +375,8 @@ structure CoreConditions (d : ProgramData) : Prop where
   tableaus : d.TableausOk
   /-- Every domain's checks. -/
   fields : d.FieldsOk
-  /-- The table selections (`RealizedProgram.selectionsB`): the selections' soundness
-  (`RealizedProgram.selSound_of_selectionsB`). -/
+  /-- The table selections (`RealizedProgram.selectionsB`): every certificate's gadget facts, which
+  the frontends' table selections read (`RealizedProgram.TableSelect.ofSelections`). -/
   selections : d.program.selectionsB d.selections = true
   /-- Every circuit's certificate. -/
   circuits : d.CircuitsOk

@@ -59,7 +59,8 @@ def attAcc (sk : SecretKey p) {R : KeyRing (PubKey p prims) N} (i : Fin R.1.leng
 def attOk (βmin : ℚ≥0) (D : ℕ) (sk : SecretKey p) (R : KeyRing (PubKey p prims) N)
     (i : Fin R.1.length) (hc : Fin R.1.length × BucketVec p → CommitHashBytes p) (u : Fin D)
     (y : MaskBox p) : Bool :=
-  decide (((u : ℕ) : ℚ≥0) < D * (flattenCoin prims sk βmin (realBuckets (prims.expandA sk.rho) y,
+  decide (((u : ℕ) : ℚ≥0) < D * (flattenCoin prims sk (Cutoff.const βmin) (realBuckets
+      (prims.expandA sk.rho) y,
     hc (i, realBuckets (prims.expandA sk.rho) y)) *
     (ringWeights prims βmin (ringT0s prims R.1)).otherWeight i hc
       (realBuckets (prims.expandA sk.rho) y)))
@@ -146,7 +147,7 @@ variable {prims : Primitives p} [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   {O : W1Oracles X Y p prims Msg N reps} {M : MaskOracle X Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
   {adm : KeyRing (PubKey p prims) N → Prop}
   [hadm : DecidablePred adm]
   {Of : SideOracle (freshScheme prims O M βmin tol enc k D bmsg PS adm)} {n : ℕ}
@@ -188,7 +189,8 @@ theorem ringOf_hOrc_reprogBase_eq (sp : Y ≃+ Y₁ × Y₂)
     refine ite_eq_right_of_eq_false _ _ (eq_false fun hx => ?_)
     obtain ⟨w', hw'⟩ := hT' _ hx
     exact hdisj _ _ hw'
-  simp only [PMF.ringOf, ringPts, W1Oracles.hOrc, schemeOrc, W1Oracles.muOrc, W1Oracles.chOrc]
+  simp only [PMF.ringOf, ringPts, MLDSAOracles.hOrc, schemeOrc, MLDSAOracles.muOrc,
+    MLDSAOracles.chOrc]
   rw [hmuPt S hS, hmuPt A hA]
   by_cases hj : O.muAns (H (O.muPt (pubTr prims (R.1.get j), bm))) = mu
   · rw [hj]
@@ -221,7 +223,9 @@ theorem loopOut_reprogBase_eq (sp : Y ≃+ Y₁ × Y₂)
   loopOut_congr prims βmin sk R i ys uv fun c t j =>
     ringOf_hOrc_reprogBase_eq sp hch hdisj R bm mu Z H hS hA (hmS c t) (hmA c t) j
 
-omit [AddGroup Y] in
+omit [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 /-- **The points of a signing request**: the commitment-hash points at the signer's message
 representative of the commitments of all the masks. -/
 theorem mem_w1Pts_sign (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q → (Sf).SignCoins)
@@ -280,6 +284,7 @@ theorem proverReadsPub_acceptAll (sp : Y ≃+ Y₁ × Y₂) :
   fun _ _ _ _ _ _ _ => rfl
 
 open Classical in
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **The reply of the challenger at the oracle reprogrammed on a signing request's points** is
 `replyOf` of the loop's output against the commitment hash of the oracle `O*` reprogrammed on all
 the commitment-hash points of the signer's message representative `µ` (`muChPts`), with the
@@ -332,7 +337,7 @@ theorem response_reprogBase_sign (sp : Y ≃+ Y₁ × Y₂)
     simp only [W1Oracles.gOrc]
     rw [hoff _ fun ⟨b, hb⟩ => hdisjg _ b hb.symm]
   have hmO : O.muOrc (reprogBase sp S Z H) = O.muOrc H := funext fun pt => by
-    simp only [W1Oracles.muOrc]
+    simp only [MLDSAOracles.muOrc]
     rw [hoff _ fun ⟨b, hb⟩ => hdisj _ b hb.symm]
   rcases hcj : c ⟨rs.length, h⟩ with ⟨cb, cp⟩
   simp only [unforgeChallenger, hlen, h, ↓reduceDIte, hcj]
@@ -342,8 +347,8 @@ theorem response_reprogBase_sign (sp : Y ≃+ Y₁ × Y₂)
   swap
   · exact absurd hR hR'
   rw [OracleProg.run_bind]
-  erw [@run_sign_ofBase _ _ _ _ (freshBase prims O M βmin tol enc k D bmsg) _
-    (PS) adm hadm _ (keys s) R m cb cp hR]
+  erw [run_sign_ofBase (freshBase prims O M βmin tol enc k D bmsg) PS adm _ (keys s) R m cb cp
+    hR]
   unfold replyOf
   simp only [OracleProg.run_pure]
   refine congrArg (Option.map UnforgeResponse.signature) ?_
@@ -398,7 +403,7 @@ theorem response_reprogBase_sign (sp : Y ≃+ Y₁ × Y₂)
       have hidx : @List.idxOf (freshBase prims O M βmin tol enc k D bmsg).PK
           instBEqOfDecidableEq ((freshBase prims O M βmin tol enc k D bmsg).pk (keys s)) R.1 =
           List.idxOf (α := PubKey p prims) ((Bf).pk (keys s)) R.1 :=
-        idxOf_decEq_eq _ _
+        rfl
       rw [hpub, hidx]
       refine Prod.ext rfl (hPS _ _ _ _ _ (fun z => (hsnd S z).trans (hsnd _ z).symm) fun z hz => ?_)
       have hreq : (z ∈ S ↔ z ∈ muChPts O mu) →
@@ -455,13 +460,17 @@ noncomputable def w1KeptPts {Q : ℕ} (_c : Fin Q → (Sf).SignCoins)
     Finset X :=
   keepOf O r
 
-omit [AddGroup Y] in
+omit [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 theorem mem_keepOf_signature (σ : (Sf).Sig) (x : X) :
     x ∈ keepOf O (some (UnforgeResponse.signature (S := Sf) (O := Of) σ)) ↔
       ∃ u, O.chPt (u, σ.1) = x := by
   simp [keepOf]
 
-omit [DecidableEq X] [AddGroup Y] in
+omit [DecidableEq X] [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 open Classical in
 /-- `replyOf` refuses when the ring is unsupported or fails the checks. -/
 theorem replyOf_eq_none {H Hp : X → Y} {pk : PubKey p prims} {R : KeyRing (PubKey p prims) N}
@@ -478,7 +487,9 @@ theorem replyOf_eq_none {H Hp : X → Y} {pk : PubKey p prims} {R : KeyRing (Pub
   · simp only [ha, ↓reduceIte]
     rfl
 
-omit [DecidableEq X] [AddGroup Y] in
+omit [DecidableEq X] [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 open Classical in
 /-- `replyOf` refuses when the loop outputs nothing. -/
 theorem replyOf_none {H Hp : X → Y} {pk : PubKey p prims} {R : KeyRing (PubKey p prims) N}
@@ -486,7 +497,9 @@ theorem replyOf_none {H Hp : X → Y} {pk : PubKey p prims} {R : KeyRing (PubKey
   unfold replyOf
   split_ifs <;> rfl
 
-omit [DecidableEq X] [AddGroup Y] in
+omit [DecidableEq X] [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 open Classical in
 /-- `replyOf` of an output on a supported ring passing the checks: its signature. -/
 theorem replyOf_some {H Hp : X → Y} {pk : PubKey p prims} {R : KeyRing (PubKey p prims) N}
@@ -499,7 +512,9 @@ theorem replyOf_some {H Hp : X → Y} {pk : PubKey p prims} {R : KeyRing (PubKey
   simp only [hp.1, hp.2, and_self, ↓reduceIte, Option.map_some]
   exact ⟨_, rfl⟩
 
-omit [DecidableEq X] [AddGroup Y] in
+omit [DecidableEq X] [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 open Classical in
 /-- A signature from `replyOf` is the output's: its public value is the output's `w₁`. -/
 theorem exists_of_replyOf_eq_some {H Hp : X → Y} {pk : PubKey p prims}
@@ -522,7 +537,9 @@ theorem exists_of_replyOf_eq_some {H Hp : X → Y} {pk : PubKey p prims}
     · rw [replyOf_eq_none _ hp] at h
       exact absurd h (by simp)
 
-omit [AddGroup Y] in
+omit [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 open Classical in
 /-- The commitment-hash points of an output's public value are kept points of its reply, on a
 supported ring passing the checks. -/
@@ -573,13 +590,16 @@ theorem toReal_chPt_mask_le
     exact (ENNReal.toReal_nonneg).trans
       (toReal_map_realBuckets_le_commitPointMax aHat (Classical.arbitrary _))
 
-omit [DecidableEq X] [AddGroup Y] in
+omit [DecidableEq X] [AddGroup Y] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y]
+  [Nonempty Y] in
 /-- The position of a member of a ring is below its length. -/
 theorem idxOf_lt_of_mem (keys : Fin n → (Bf).KeyCoins) {s : Fin n} {R : KeyRing (PubKey p prims) N}
     (hR : (Bf).pk (keys s) ∈ R.1) : R.1.idxOf ((Bf).pk (keys s)) < R.1.length :=
   List.idxOf_lt_length_iff.2 hR
 
-omit [AddGroup Y] in
+omit [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 /-- **The points of a signing request**, as the image of the attempts' masks. -/
 theorem w1Pts_sign_eq (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q → (Sf).SignCoins)
     (rs : List (UnforgeRequest (S := Sf) n Of)) (s : Fin n) (R : KeyRing (PubKey p prims) N)
@@ -600,6 +620,7 @@ theorem w1Pts_sign_eq (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q → 
   simp only [Finset.mem_univ, true_and]
 
 open Classical in
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **The response to a signing request at the oracle reprogrammed on its points** is `replyOf`
 of the loop's output at the commitment hash of `O*` (`response_reprogBase_sign`). -/
 theorem w1Resp_sign_eq (sp : Y ≃+ Y₁ × Y₂)
@@ -625,6 +646,7 @@ theorem w1Resp_sign_eq (sp : Y ≃+ Y₁ × Y₂)
   rw [response_reprogBase_sign sp hch hdisj hdisjg hPS h_laws hv henc keys c rs s R m hs2 hR h Z H]
   simp only [hi, ↓reduceDIte]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **The commitment point of a signature's public value is a point of the request**, at the
 signer's message representative, for an honest signer's key. -/
 theorem chPt_mem_w1Pts_of_w1Resp (sp : Y ≃+ Y₁ × Y₂)
@@ -658,13 +680,17 @@ def ovrCoins (b₀ : Bytes 32 × (Bytes 64 × Msg)) (v : Fin k × Fin T → Y) (
 def rdCoins (b₀ : Bytes 32 × (Bytes 64 × Msg)) (ω : (Sf).SignCoins) : Fin k × Fin T → Y :=
   fun ct => ω.1.1 ct.1 (ct.2, b₀)
 
-omit [DecidableEq X] [AddGroup Y] in
+omit [DecidableEq X] [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [Fintype Y] [DecidableEq Y]
+  [Nonempty Y] in
 theorem rdCoins_ovrCoins (b₀ : Bytes 32 × (Bytes 64 × Msg)) (v : Fin k × Fin T → Y)
     (ω : (Sf).SignCoins) : rdCoins b₀ (ovrCoins b₀ v ω) = v := by
   funext ct
   simp [rdCoins, ovrCoins]
 
-omit [DecidableEq X] [AddGroup Y] in
+omit [DecidableEq X] [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [Fintype Y] [DecidableEq Y]
+  [Nonempty Y] in
 theorem ovrCoins_rdCoins (b₀ : Bytes 32 × (Bytes 64 × Msg)) (v : Fin k × Fin T → Y)
     (ω : (Sf).SignCoins) : ovrCoins b₀ (rdCoins b₀ ω) (ovrCoins b₀ v ω) = ω := by
   refine Prod.ext (Prod.ext (funext fun cc => funext fun q => ?_) rfl) rfl
@@ -674,7 +700,9 @@ theorem ovrCoins_rdCoins (b₀ : Bytes 32 × (Bytes 64 × Msg)) (v : Fin k × Fi
     simp [rdCoins, ovrCoins]
   · simp [rdCoins, ovrCoins, hb]
 
-omit [DecidableEq X] [AddGroup Y] in
+omit [DecidableEq X] [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [Fintype Y] [DecidableEq Y]
+  [Nonempty Y] in
 theorem reqMasks_ovrCoins (keys : Fin n → (Sf).KeyCoins) (s : Fin n)
     (R : KeyRing (PubKey p prims) N) (m : RMsg) (v : Fin k × Fin T → Y) (ω : (Sf).SignCoins) :
     reqMasks (M := M) (bmsg := bmsg) ((Sf).sk (keys s)) R m
@@ -683,7 +711,9 @@ theorem reqMasks_ovrCoins (keys : Fin n → (Sf).KeyCoins) (s : Fin n)
   funext cc t
   simp [reqMasks, ovrCoins]
 
-omit [AddGroup Y] in
+omit [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [Fintype Y] [DecidableEq Y]
+  [Nonempty Y] in
 /-- **The points of a signing request at overwritten coins**: the commitment-hash points of the
 decoded overwriting coins. -/
 theorem w1Pts_update_ovrCoins (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q → (Sf).SignCoins)
@@ -700,6 +730,7 @@ theorem w1Pts_update_ovrCoins (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fi
   rw [Function.update_self, reqMasks_ovrCoins keys s]
 
 open Classical in
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **The response to a signing request at overwritten coins** is `replyOf` of `PMF.loopOut` on
 the decoded overwriting coins. -/
 theorem w1Resp_update_ovrCoins (sp : Y ≃+ Y₁ × Y₂)
@@ -738,6 +769,7 @@ theorem w1Resp_update_ovrCoins (sp : Y ≃+ Y₁ × Y₂)
     (loopOut_eq_pmf prims βmin _ R _ _ _ _)
 
 open Classical in
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **A guess from the response to a signing request lands on a hidden point** (a point of the
 request not kept, `w1KeptPts`) with probability at most `2 k T commitPointMax(Â_s)` over the
 request's signing coins, for a fixed `Z`, a uniform mask decoding, an injective commitment-hash
@@ -828,6 +860,7 @@ theorem toReal_guess_mem_hidden_sign_le (sp : Y ≃+ Y₁ × Y₂)
     w1Pts_update_ovrCoins keys c rs s R m hR h H] at hvE
   exact hvE
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **A guess from the response to a request lands on a hidden point** with probability at most
 `2 k T Σ_s commitPointMax(Â_s)` over the request's signing coins (`toReal_guess_mem_hidden_sign_le`
 for a signing request whose signer is in the ring; other requests have no points). -/
@@ -901,6 +934,7 @@ noncomputable def keptPt (keys : Fin n → (Sf).KeyCoins) (H : X → Y)
     else ∅
   | _, _ => ∅
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **The points of a request that its response keeps** are `keptPt` of the response, for an
 honest signer's key: the kept point of a signature is a point of the request
 (`chPt_mem_w1Pts_of_w1Resp`), and the request's points all have the signer's message
@@ -943,6 +977,7 @@ theorem w1Pts_inter_keepOf_eq (sp : Y ≃+ Y₁ × Y₂)
       rcases r with _ | (kc | σ | τ) <;> simp [keptPt, hR]
   · simp [w1Pts, keptPt]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **A request's kept points, given its response, do not depend on the request's coins** (the
 `hkept` hypothesis of `Challenger.HiddenReadsPair.ofPreReprogKeep` for the unforgeability
 challenger, shared coins `Unit`, the coins of each request its signing coins, the points `w1Pts`

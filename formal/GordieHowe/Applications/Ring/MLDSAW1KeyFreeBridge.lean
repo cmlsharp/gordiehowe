@@ -61,10 +61,10 @@ variable {prims : Primitives p} [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   {O : W1Oracles X Y p prims Msg N reps} {M : MaskOracle X Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {Pf PC : Type} {iFP : Fintype Pf} {iDP : DecidableEq Pf} {iFC : Fintype PC}
-  {iDC : DecidableEq PC} {iNC : Nonempty PC}
+  {Pf PCs : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PCs]
+  [DecidableEq PCs] [Nonempty PCs]
   {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg))
-    (RingSignature.RingWitOf (FIPSSignature p prims)) ⟨Pf, PC⟩}
+    (RingSignature.RingWitOf (FIPSSignature p prims)) ⟨Pf, PCs⟩}
   {adm : KeyRing (PubKey p prims) N → Prop}
   [hadm : DecidablePred adm] {n : ℕ}
   {Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] [Fintype Y₁] [DecidableEq Y₁]
@@ -93,6 +93,7 @@ theorem prf_reprogram_w1KFSign (sp : Y ≃+ Y₁ × Y₂) (pk : PubKey p prims)
   exact prf_reprogram_keptValue sp H _ _
 
 open Classical in
+omit [Fintype PCs] [DecidableEq PCs] [Nonempty PCs] [Fintype Msg] [DecidableEq Msg] in
 /-- **The key-free relay challenger at fixed side coins**: with the main challenger on the full
 oracle (`kfMainFull`, the prover `P₂` reading the second components), an event `E` of the
 output, the answered requests and the final oracle in force against `w1C2` at the oracle `H` is
@@ -100,34 +101,34 @@ the average over uniform side coins `sc` of the event against the outer challeng
 the key-free relay at `sc` (`QueryBoundedAdversary.assignLaw_eq_sum_of_relays`; the relay's
 assignments are safe by `prf_reprogram_w1KFSign` and `run_kfMainFull_congr`). -/
 theorem transcriptLawIn_w1C2_eq [Nonempty X] [Inhabited X] [NeZero n] [Fintype Rq] [DecidableEq Rq]
-    [Inhabited (MURequest (SignOracle.none Bf) n ⊕ Rq)] (sp : Y ≃+ Y₁ × Y₂) (rel : Stmt → Wit → Prop)
-    [DecidableRel rel] (P₂ : NARG.Prover X Y₂ Stmt Wit Pf PC)
-    (penc : MURequest (SignOracle.none Bf) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
+    [Inhabited (MURequest (SignOracle.none (Bf).core) n ⊕ Rq)] (sp : Y ≃+ Y₁ × Y₂) (rel : Stmt → Wit → Prop)
+    [DecidableRel rel] (P₂ : NARG.Prover X Y₂ Stmt Wit Pf PC) (μ : PMF PC)
+    (penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → QROM.ProofQuery Stmt Wit)
     (stmtP : RingSignature.RingStmt Bf → OracleProg X Y X₀)
     (toR : X₀ → RingSignature.Insider.Req Bf PSf adm n × ℕ → (Bf).BSig → Rq)
     (dummyR : RingSignature.Insider.Req Bf PSf adm n × ℕ → Rq) {qs : ℕ}
-    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     (keys : Fin n → (Bf).KeyCoins) (Q : ℕ) {Out : Type} {t : ℕ}
     (𝒜 : QueryBoundedAdversary X Y (RingSignature.Insider.Req Bf PSf adm n)
       (RingSignature.Insider.Resp Bf PSf adm) Out t) (H : X → Y)
     (E : Out × List (RingSignature.Insider.Req Bf PSf adm n) × (X → Y) → Prop) :
     (𝒜.transcriptLawIn (w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel
-        (P₂.mapQuery id fun y => (sp y).2) penc stmtP toR dummyR hs idle keys Q) H).toOuterMeasure
+        (P₂.mapQuery id fun y => (sp y).2) μ penc stmtP toR dummyR hs idle keys Q) H).toOuterMeasure
         {x | ∃ p ∈ x, E p} =
       ∑ sc, PMF.uniformOfFintype (Fin Q → KFCoins (p := p) (T := T) k D Y₁) sc *
-        (𝒜.assignLaw (KeyFree.kfGame (KeyFree.kfMainFull sp Bf rel P₂ penc keys Q)
+        (𝒜.assignLaw (KeyFree.kfGame (KeyFree.kfMainFull sp Bf rel P₂ μ penc keys Q)
           (KeyFree.kfRelay Bf (fun i => (Bf).pk (keys i))
             (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) stmtP toR dummyR sc
             (w1KFSign_queries (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) hs idle) Q)
           H).toOuterMeasure {x | ∃ p ∈ x, E p} := by
   rw [← QueryBoundedAdversary.assignLaw_eq_transcriptLawIn]
-  have hRL := KeyFree.kfMain_readsLength Bf rel penc (P₂.mapQuery id fun y => (sp y).2) keys Q
+  have hRL := KeyFree.kfMain_readsLength Bf rel penc (P₂.mapQuery id fun y => (sp y).2) μ keys Q
   exact 𝒜.assignLaw_eq_sum_of_relays (PMF.uniformOfFintype _)
     (fun sc => KeyFree.kfRelay Bf (fun i => (Bf).pk (keys i))
       (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) stmtP toR dummyR sc
       (w1KFSign_queries (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) hs idle)
-    (C' := KeyFree.kfMainFull sp Bf rel P₂ penc keys Q)
-    (fun sc => KeyFree.kfGame (KeyFree.kfMainFull sp Bf rel P₂ penc keys Q)
+    (C' := KeyFree.kfMainFull sp Bf rel P₂ μ penc keys Q)
+    (fun sc => KeyFree.kfGame (KeyFree.kfMainFull sp Bf rel P₂ μ penc keys Q)
       (KeyFree.kfRelay Bf (fun i => (Bf).pk (keys i))
         (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) stmtP toR dummyR sc
         (w1KFSign_queries (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) hs idle) Q)
@@ -139,47 +140,48 @@ theorem transcriptLawIn_w1C2_eq [Nonempty X] [Inhabited X] [NeZero n] [Fintype R
     (fun sc => KeyFree.kfRelay_safeAssign Bf (fun i => (Bf).pk (keys i))
       (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) stmtP toR dummyR sc
       (w1KFSign_queries (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) hs idle
-      (KeyFree.kfMainFull sp Bf rel P₂ penc keys Q) (prf sp)
+      (KeyFree.kfMainFull sp Bf rel P₂ μ penc keys Q) (prf sp)
       (fun pk Rg c msg s H o ho => prf_reprogram_w1KFSign sp pk Rg c msg s H o ho)
-      (fun c' hist r' H L hL => KeyFree.run_kfMainFull_congr sp Bf rel P₂ penc keys Q c' hist r'
+      (fun c' hist r' H L hL => KeyFree.run_kfMainFull_congr sp Bf rel P₂ μ penc keys Q c' hist r'
         hL))
     H E
 
 open Classical in
+omit [Fintype PCs] [DecidableEq PCs] [Nonempty PCs] [Fintype Msg] [DecidableEq Msg] in
 /-- **The key-free relay challenger's game at fixed side coins** (`transcriptLawIn_w1C2_eq` at
 each key draw and oracle): an event of the run against `w1C2` (of the key coins, the oracle and
 the transcript), with the main challenger on the full oracle, is the average over the key coins,
 the oracle and the side coins of the event against `kfGame` at those side coins. The encoding of the
 main requests `penc keys` may read the key coins. -/
 theorem runLawIn_w1C2_eq [Nonempty X] [Inhabited X] [NeZero n] [Fintype Rq] [DecidableEq Rq]
-    [Inhabited (MURequest (SignOracle.none Bf) n ⊕ Rq)] (sp : Y ≃+ Y₁ × Y₂)
-    (rel : Stmt → Wit → Prop) [DecidableRel rel] (P₂ : NARG.Prover X Y₂ Stmt Wit Pf PC)
-    (penc : (Fin n → (Bf).KeyCoins) → MURequest (SignOracle.none Bf) n ⊕ Rq →
+    [Inhabited (MURequest (SignOracle.none (Bf).core) n ⊕ Rq)] (sp : Y ≃+ Y₁ × Y₂)
+    (rel : Stmt → Wit → Prop) [DecidableRel rel] (P₂ : NARG.Prover X Y₂ Stmt Wit Pf PC) (μ : PMF PC)
+    (penc : (Fin n → (Bf).KeyCoins) → MURequest (SignOracle.none (Bf).core) n ⊕ Rq →
       QROM.ProofQuery Stmt Wit)
     (stmtP : RingSignature.RingStmt Bf → OracleProg X Y X₀)
     (toR : X₀ → RingSignature.Insider.Req Bf PSf adm n × ℕ → (Bf).BSig → Rq)
     (dummyR : RingSignature.Insider.Req Bf PSf adm n × ℕ → Rq) {qs : ℕ}
-    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     (Q : ℕ) {Out : Type} {t : ℕ}
     (A : (Fin n → (Bf).KeyCoins) → QueryBoundedAdversary X Y
       (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp Bf PSf adm) Out t)
     (Ev : (Fin n → (Bf).KeyCoins) → (X → Y) →
       Out × List (RingSignature.Insider.Req Bf PSf adm n) × (X → Y) → Prop) :
     (runLawIn (fun keys _ => A keys) (fun keys => w1C2 prims O M βmin tol enc k D bmsg PS adm sp
-        rel (P₂.mapQuery id fun y => (sp y).2) (penc keys) stmtP toR dummyR hs idle keys
+        rel (P₂.mapQuery id fun y => (sp y).2) μ (penc keys) stmtP toR dummyR hs idle keys
         Q)).toOuterMeasure
         {x | ∃ q ∈ x.2.2, Ev x.1 x.2.1 q} =
       ∑' keys, PMF.uniformOfFintype (Fin n → (Bf).KeyCoins) keys *
         ∑' H, PMF.uniformOfFintype (X → Y) H *
           ∑ sc, PMF.uniformOfFintype (Fin Q → KFCoins (p := p) (T := T) k D Y₁) sc *
-            ((A keys).assignLaw (KeyFree.kfGame (KeyFree.kfMainFull sp Bf rel P₂ (penc keys) keys Q)
+            ((A keys).assignLaw (KeyFree.kfGame (KeyFree.kfMainFull sp Bf rel P₂ μ (penc keys) keys Q)
               (KeyFree.kfRelay Bf (fun i => (Bf).pk (keys i))
                 (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) stmtP toR dummyR sc
                 (w1KFSign_queries (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) hs idle) Q)
               H).toOuterMeasure {x | ∃ p ∈ x, Ev keys H p} := by
   rw [toOuterMeasure_runLawIn]
   refine tsum_congr fun keys => congrArg _ (tsum_congr fun H => congrArg _ ?_)
-  exact transcriptLawIn_w1C2_eq sp rel P₂ (penc keys) stmtP toR dummyR hs idle keys Q (A keys) H
+  exact transcriptLawIn_w1C2_eq sp rel P₂ μ (penc keys) stmtP toR dummyR hs idle keys Q (A keys) H
     (Ev keys H)
 
 local notation "Sf" => freshScheme prims O M βmin tol enc k D bmsg PS adm
@@ -196,14 +198,14 @@ theorem runLawIn_w1C1_le_w1C2 [Nonempty X] (sp : Y ≃+ Y₁ × Y₂)
     (h_laws : SigningLaws prims) (hv : VerifyLaws prims)
     (henc : ∀ w : RqVec p.k, enc (prims.highBitsVec w) = bucketsOf (rqVecCoeffs w))
     (rel : Stmt → Wit → Prop) [DecidableRel rel]
-    (P : NARG.Prover X Y Stmt Wit Pf (PSf).Coins)
-    (hPc : P.coins = PMF.uniformOfFintype (PSf).Coins)
-    (penc : (Fin n → (Bf).KeyCoins) → MURequest (SignOracle.none Bf) n ⊕ Rq →
+    (P : NARG.Prover X Y Stmt Wit Pf (PSf).Coins) (μ : PMF (PSf).Coins)
+    (hPc : μ = PMF.uniformOfFintype (PSf).Coins)
+    (penc : (Fin n → (Bf).KeyCoins) → MURequest (SignOracle.none (Bf).core) n ⊕ Rq →
       QROM.ProofQuery Stmt Wit)
     (stmtP : RingSignature.RingStmt Bf → OracleProg X Y X₀)
     (toR : X₀ → RingSignature.Insider.Req Bf PSf adm n × ℕ → (Bf).BSig → Rq)
     (dummyR : RingSignature.Insider.Req Bf PSf adm n × ℕ → Rq) {qs : ℕ}
-    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     (hs1 : ∀ keys : Fin n → (Bf).KeyCoins, ∀ s, polyVecBounded (keyGen prims (keys s)).2.s1 p.eta)
     (hs2 : ∀ keys : Fin n → (Bf).KeyCoins, ∀ s, polyVecBounded (keyGen prims (keys s)).2.s2 p.eta)
     (hPR : ∀ keys, ProverRelays O enc sp P (penc keys) stmtP toR keys)
@@ -216,7 +218,7 @@ theorem runLawIn_w1C1_le_w1C2 [Nonempty X] (sp : Y ≃+ Y₁ × Y₂)
     (runLawIn (fun keys _ => A keys) (fun keys => w1C1 (SideOracle.none Sf) sp keys Q)).toOuterMeasure
         E ≤
       (runLawIn (fun keys _ => A keys) (fun keys => w1C2 prims O M βmin tol enc k D bmsg PS adm sp
-        rel P (penc keys) stmtP toR dummyR hs idle keys Q)).toOuterMeasure E +
+        rel P μ (penc keys) stmtP toR dummyR hs idle keys Q)).toOuterMeasure E +
       ∑' keys, PMF.uniformOfFintype (Fin n → (Bf).KeyCoins) keys *
         (Q * ENNReal.ofReal (((k * T).choose 2 : ℝ) *
           ∑ s, commitPointMax (prims.expandA ((Sf).sk (keys s)).rho))) := by
@@ -224,11 +226,11 @@ theorem runLawIn_w1C1_le_w1C2 [Nonempty X] (sp : Y ≃+ Y₁ × Y₂)
   erw [toOuterMeasure_runLawIn]
   have hstep : ∀ keys H, ((A keys).transcriptLawIn (w1C1 (SideOracle.none Sf) sp keys Q)
       H).toOuterMeasure {o | (keys, H, o) ∈ E} ≤
-      ((A keys).transcriptLawIn (w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P
+      ((A keys).transcriptLawIn (w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P μ
         (penc keys) stmtP toR dummyR hs idle keys Q) H).toOuterMeasure {o | (keys, H, o) ∈ E} +
         Q * ENNReal.ofReal (((k * T).choose 2 : ℝ) *
           ∑ s, commitPointMax (prims.expandA ((Sf).sk (keys s)).rho)) := fun keys H =>
-    transcriptLawIn_w1C1_le_w1C2 sp hO h.hMask h.hch h.hdisj h.hdisjg hPS h_laws hv henc rel P
+    transcriptLawIn_w1C1_le_w1C2 sp hO h.hMask h.hch h.hdisj h.hdisjg hPS h_laws hv henc rel P μ
       hPc (penc keys) stmtP toR dummyR hs idle keys (hs1 keys) (hs2 keys) (hPR keys) (hKR keys) Q
       (A keys) H _
   have avg : ∀ {β : Type} (p : PMF β) (x y : β → ℝ≥0∞) (s : ℝ≥0∞), (∀ b, x b ≤ y b + s) →
@@ -238,7 +240,7 @@ theorem runLawIn_w1C1_le_w1C2 [Nonempty X] (sp : Y ≃+ Y₁ × Y₂)
       _ = _ := by rw [ENNReal.tsum_add, ENNReal.tsum_mul_right, PMF.tsum_coe, one_mul]
   calc _ ≤ ∑' keys, PMF.uniformOfFintype (Fin n → (Bf).KeyCoins) keys *
         (∑' H, PMF.uniformOfFintype (X → Y) H *
-          ((A keys).transcriptLawIn (w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P
+          ((A keys).transcriptLawIn (w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P μ
             (penc keys) stmtP toR dummyR hs idle keys Q) H).toOuterMeasure {o | (keys, H, o) ∈ E} +
         Q * ENNReal.ofReal (((k * T).choose 2 : ℝ) *
           ∑ s, commitPointMax (prims.expandA ((Sf).sk (keys s)).rho))) :=

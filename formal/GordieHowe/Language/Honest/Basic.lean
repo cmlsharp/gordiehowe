@@ -50,9 +50,10 @@ late values are computed after their phase's challenge and read only the pads of
 (`ChallengeOrder.late` and `GordieHowe.RealizedProgram.PadOrderValid`, `challengeCausal_of_respectsReads`,
 `padOrder_of_respectsReads`), so the simulator's messages are uniform (`PadOrder.uniform`).
 
-**The domains' honest provers** (`GordieHowe.RealizedProgram.ProofSystem.HonestDomains`): from the compiler's completeness
-(`CircuitsAccept`), every domain proof's honest prover at the domain's predicate
-(`GordieHowe.RealizedProgram.ProofSystem.honestPred`), as the domain proofs provide them.
+**The domains' honest provers** (`GordieHowe.RealizedProgram.ProofSystem.HonestDomains`): every
+domain proof's honest prover at the domain's predicate
+(`GordieHowe.RealizedProgram.ProofSystem.honestPred`); `fieldHonestDomains` builds them from the
+proof system's `accept` (`CircuitsAccept`).
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -131,7 +132,8 @@ def MacTagsHonest (e : ir.Env I) : Prop :=
 
 /-- **The honest prover of a program** on honest inputs `Inp` related to statements by `relH`: the
 honest strategy (see the module docstring) without the probabilities of its completeness events.
-Every field is a property of the honest prover. Its completeness error is `HonestCore.Complete`. -/
+Every field except `blinds`, a property of the program, is a property of the honest prover. Its
+completeness error is `HonestCore.Complete`. -/
 structure HonestCore {Inp : Type} (relH : Set (ir.Valuation I × Inp)) where
   /-- The honest committed values. -/
   val : Inp → ir.Valuation I
@@ -294,7 +296,7 @@ abbrev honestPred (d : Fin ir.domains.length) :
 abbrev DomainSims : Type 1 := ∀ d, (B.proof d).proof.Sim
 
 /-- **The domains' honest provers**, simulated by `DS`: every domain proof's honest prover at the
-domain's predicate (built from the proof system's `accept`). -/
+domain's predicate; `fieldHonestDomains` builds them from the proof system's `accept`. -/
 abbrev HonestDomains (DS : B.DomainSims) : Type 1 :=
   ∀ d, (B.proof d).Honest (B.honestPred d) (DS d)
 

@@ -23,7 +23,7 @@ and verification `ringVerify` (FIPS 204 Algorithm 8 with the commitment hash `c�
 read from the hash `H` and the recomputed commitment required to equal `w₁`). A verifying
 signature's `w₁` is the commitment recomputed from the key and `(c̃, z, h)`
 (`w1SigScheme_pub_eq_of_verify`). The signer is a parameter (`W1Signer`: finite signing coins, as
-`Falcon512.Ring.Native.Signer`); the scheme's properties used below are hypotheses: correctness
+`Falcon512.Signer`); the scheme's properties used below are hypotheses: correctness
 error `εc` (`SigScheme.CorrectWithin`) and, for converted signatures, the probability `γ` of
 guessing a signature from its `w₁` (`SigScheme.SigGivenPubLe`: the conditional min-entropy of
 `(c̃, z, h)` given `w₁`).
@@ -47,7 +47,7 @@ guessing a signature from its `w₁` (`SigScheme.SigGivenPubLe`: the conditional
   a bound on `SignRelayForger.success` of the earlier interface. Its form over a class of
   adversaries of the interactive model is `Signature.MUSufCmaHard`
   (`GordieHowe/Model/Signature/Assumptions.lean`); `MLDSASufCma` and `MLDSAMUSufCma`
-  (`GordieHowe/Applications/Ring/BaseSignerAssumptions.lean`) name it at `mldsaBaseSigner`.
+  (`GordieHowe/Applications/MLDSA/Assumptions.lean`) name it at `mldsaBaseScheme`.
 - `convertedWinProb_le`: the converted-signature game at `bind R m = m`, knowledge soundness only
   (`RingAdversary.convertedWinProb_le`).
 
@@ -77,14 +77,8 @@ rings read from the message) is a parameter; its properties are hypotheses where
 structure W1Signer (p : Params) (prims : Primitives p) (Msg : Type) where
   /-- The coins of signing. -/
   SignCoins : Type
-  [instFintypeSignCoins : Fintype SignCoins]
-  [instDecEqSignCoins : DecidableEq SignCoins]
-  [instNonemptySignCoins : Nonempty SignCoins]
   /-- Signing with drawn coins: the commitment and the signature. -/
   signWith : SecretKey p → Msg → SignCoins → BucketVec p × FIPSSignature p prims
-
-attribute [instance] W1Signer.instFintypeSignCoins W1Signer.instDecEqSignCoins
-  W1Signer.instNonemptySignCoins
 
 variable [NeZero (bucketCount p)] [nttOps : NTTRingOps] [Fintype prims.Hint]
   [Fintype prims.Power2High] [DecidableEq prims.Power2High] [DecidableEq prims.Hint]
@@ -123,11 +117,12 @@ theorem w1SigScheme_pub_eq_of_verify {H : Orc p Msg} {enc : Vector prims.High p.
 section SPBCS
 
 variable {H : Orc p Msg} {enc : Vector prims.High p.k → BucketVec p} {G : W1Signer p prims Msg}
+  [Fintype G.SignCoins] [DecidableEq G.SignCoins] [Nonempty G.SignCoins]
   {n N : ℕ} {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
   {k e : ℕ} {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)] {kN kS L : ℕ}
-  (Λ : SiteLayout Mg) {B : ℕ} {R : Type} [Fintype R] [Nonempty R]
+  (Λ : SiteLayout Mg) {B : ℕ} {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
 
 /-- **BKM06 Definition 7 for the ML-DSA ring publishing `w₁` with a base message that binds the
 ring** (`BindsRing`, `hbind`), from knowledge soundness of spBCS (`hrbr`) and the format bound
@@ -149,8 +144,9 @@ theorem insiderWinProb_le_of_bindsRing
     (hbind : BindsRing N (Sch := w1SigScheme prims H enc G) bind)
     (hrbr : CausalRBRKnowledgeSound (ringRel adm bind) Vr Ext St ε)
     {t Q : ℕ} (A : BKMAdversary (M.qVerifier Qs B B) (M.Response B) n t Q) :
-    A.insiderWinProb (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind adm ≤
-      (A.forger (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind adm
+    A.insiderWinProb (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding)
+        (PMF.uniformOfFintype _) bind adm ≤
+      (A.forger (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) (PMF.uniformOfFintype _) bind adm
           (M.dbExtractBits Ext)).success +
         knowledgeError k e (kqOf Mg nr B B)
           (t + Q * (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding).q +
@@ -187,6 +183,7 @@ theorem insiderWinProb_le_converted [Inhabited prims.Hint] [NeZero n] [Nonempty 
     (hrbr : CausalRBRKnowledgeSound (ringRel adm fun _ m => m) Vr Ext St ε)
     {t Q : ℕ} (A : BKMAdversary (M.qVerifier Qs B B) (M.Response B) n t Q) :
     A.insiderWinProb (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding)
+        (PMF.uniformOfFintype _)
         (fun _ m => m) adm ≤
       A.strongForgerSuccess Λ VE pub Sim T (fun _ m => m) adm Ext + Q * γ +
         ENNReal.ofReal (M.zkError δ t Q) +
@@ -218,8 +215,9 @@ theorem convertedWinProb_le
     (hrbr : CausalRBRKnowledgeSound (ringRel adm fun _ m => m) Vr Ext St ε)
     {t Q : ℕ} (A : RingAdversary (M.qVerifier Qs B B) (M.Response B) n t Q) :
     A.convertedWinProb (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding)
+        (PMF.uniformOfFintype _)
         (fun _ m => m) ≤
-      (A.forger (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) (fun _ m => m)
+      (A.forger (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) (PMF.uniformOfFintype _) (fun _ m => m)
           (M.dbExtractBits Ext)).success +
         knowledgeError k e (kqOf Mg nr B B)
           (t + Q * (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding).q +

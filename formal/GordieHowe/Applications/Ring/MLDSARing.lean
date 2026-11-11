@@ -118,7 +118,7 @@ noncomputable abbrev mldsaScheme {X₀ W : Type} {rel₀ : Set (X₀ × W)}
     (V : StmtVerifiesRing rel₀ relI (mldsaOn p prims maxAttempts TD kS bmsg) adm)
     [DecidablePred adm] :
     RingScheme (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40))) (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant)) N
-      (ofBaseT (mldsaBaseT p prims len RMsg) (spbcsPST (TD.setting kS hb).model pB Hc.Coins)) :=
+      (ofBaseT (mldsaBaseT p prims len RMsg) (transcriptPST TD kS hb pB Hc.Coins)) :=
   ofBase (mldsaOn p prims maxAttempts TD kS bmsg) (V.proofSystem Hc hb hf) adm
 
 variable {X₀ W : Type} {rel₀ : Set (X₀ × W)} {C : RealizedProgram.ProofSystem.IOP X₀ W rel₀}

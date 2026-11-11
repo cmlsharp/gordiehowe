@@ -25,7 +25,7 @@ the step names, with no search and no global bundle of facts:
   the listed predicates `qs` (`rootSetView`) cover every coordinate of `v`, and `v` lies in the hull
   of their roots. Any list covering the coordinates is valid; none needs to be complete.
 
-The proofs are those of `quadRootOf_spec`, `rootSetView_spec` and `rootSetIvl_spec`
+The proofs are those of `quadRootIvl_spec`, `rootSetView_spec` and `rootSetIvlAt_spec`
 (`GordieHowe/Language/Realizations/RealizeInteger.lean`), with the equation and the bound of `m` as
 hypotheses in place of the facts `IvlFacts` collects. Each conclusion is stated as the cast of a
 natural (`∃ n, … ∧ rd v i = n`), which `Derivation.lean` turns into the step's `ivl` fact.

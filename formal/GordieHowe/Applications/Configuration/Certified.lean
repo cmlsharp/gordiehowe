@@ -23,7 +23,7 @@ application's frontend:
   extractor's projection, the state function, the source challenges' errors, round-by-round
   knowledge soundness of `Π_P₀`, the errors' bound by the generated fractions) and the honest
   nodes' `1`;
-* `GordieHowe.Configuration.Frontend`: the statement's codec and its program statement, the headline
+* `GordieHowe.Configuration.Frontend`: the statement's codec and its program statement, the
   relation and the witness map, the honest relation and the source program's execution, the
   statement of an honest input and the label. `GordieHowe.Configuration.FrontendWith` adds a check
   of the statement (the ring configurations, `IOP.comapWith`). Their facts are Prop structures
@@ -38,7 +38,7 @@ extended stream. The templates (`@[config_template]`) are instantiated once per 
 before the configuration's own templates, in four families:
 
 * `CertifiedSource`: the lowering, the ready data of the honest strategy, and the plan-level
-  headlines at the proof system (`iop_rbr_knowledge_soundness`, `iop_completeness`, `iop_hvzk`);
+  theorems at the proof system (`iop_rbr_knowledge_soundness`, `iop_completeness`, `iop_hvzk`);
 * `CertifiedHonest`: the honest strategy at the frontend's execution;
 * `CertifiedFront`: the IOP read through the statement map, its soundness data, its transcript and
   the honest relation at the statements;
@@ -75,7 +75,7 @@ structure SourceFront (cp : CertifiedProgram P ir I) (W : Type)
   /-- The source challenges' errors. -/
   eps : ℕ → ℝ≥0
   /-- Round-by-round knowledge soundness of `Π_P₀`. -/
-  sound : rbrKnowledgeSoundness rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S
+  sound : RBRKnowledgeSound rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S
     (ir.roundError I eps)
   /-- The errors vanish at `γ_end`. -/
   final : ∀ i, ir.rounds.get i.1 = .final → ir.roundError I eps i = 0
@@ -85,7 +85,7 @@ structure SourceFront (cp : CertifiedProgram P ir I) (W : Type)
   oneNodes : OneNodes I cp.nodes
 
 /-- **An application's frontend at a certified program** (module docstring): the statement's codec,
-its program statement, the headline relation and the witness map, the honest relation, the source
+its program statement, the relation and the witness map, the honest relation, the source
 program's execution at the ready data of the honest strategy, the statement of an honest input
 and the label. -/
 @[config_record]
@@ -96,16 +96,16 @@ structure Frontend (cp : CertifiedProgram P ir I) {W : Type}
   codec : Codec Stmt
   /-- The program statement of a statement. -/
   stmtOf : Stmt → ir.Valuation I
-  /-- The headline relation. -/
-  rel' : Set (Stmt × W')
+  /-- The relation the argument is about. -/
+  rel : Set (Stmt × W')
   /-- The witness map. -/
-  g : Stmt → (ir.Valuation I → W) → W'
+  witnessMap : Stmt → (ir.Valuation I → W) → W'
   /-- The honest relation at the program statements. -/
   relH : Set (ir.Valuation I × HonestIn)
   /-- The execution of the source program at the ready data of the honest strategy. -/
   exec : cp.Ready → ir.SourceExecution I relH
   /-- The statement of an honest input. -/
-  keyStmtOf : HonestIn → Stmt
+  stmtOfHonest : HonestIn → Stmt
   /-- The label. -/
   label : List Byte
 
@@ -122,19 +122,19 @@ variable {cp : CertifiedProgram P ir I} {W : Type} {S : KnowledgeStateFunction (
   {Stmt W' HonestIn : Type}
 
 /-- **The facts of a frontend**: the statement's writes within `2^20` bytes, the label within
-`2^10` bytes, the witness map into the headline relation, no completeness event of the execution,
+`2^10` bytes, the witness map into `rel`, no completeness event of the execution,
 and every honest input honest at its statement. -/
 structure Frontend.Facts (F : Frontend cp src Stmt W' HonestIn) : Prop where
   /-- The statement's writes have at most `2^20` bytes. -/
   codec_le : ∀ x, (F.codec.ser x).length ≤ 2 ^ 20
   /-- The label has at most `2^10` bytes. -/
   label_le : F.label.length ≤ 2 ^ 10
-  /-- The witness map sends the relation at the program statements into the headline relation. -/
-  mem_rel' : ∀ x w, (F.stmtOf x, w) ∈ relOf src.rel → (x, F.g x w) ∈ F.rel'
+  /-- The witness map sends the relation at the program statements into `rel`. -/
+  mem_rel : ∀ x w, (F.stmtOf x, w) ∈ relOf src.rel → (x, F.witnessMap x w) ∈ F.rel
   /-- The execution has no completeness event. -/
   exec_δ : ∀ R, ∑ k, (F.exec R).δ k = 0
   /-- An honest input is honest at its statement. -/
-  keyStmtOf_mem : ∀ y, (F.stmtOf (F.keyStmtOf y), y) ∈ F.relH
+  stmtOfHonest_mem : ∀ y, (F.stmtOf (F.stmtOfHonest y), y) ∈ F.relH
 
 /-- **The facts of a frontend with a statement check** (`Frontend.Facts`, the relations at the
 statements that pass the check). -/
@@ -143,13 +143,20 @@ structure FrontendWith.Facts (F : FrontendWith cp src Stmt W' HonestIn) : Prop w
   codec_le : ∀ x, (F.codec.ser x).length ≤ 2 ^ 20
   /-- The label has at most `2^10` bytes. -/
   label_le : F.label.length ≤ 2 ^ 10
-  /-- The witness map sends the relation at the checked program statements into the headline
-  relation. -/
-  mem_rel' : ∀ x w, F.ok x = true ∧ (F.stmtOf x, w) ∈ relOf src.rel → (x, F.g x w) ∈ F.rel'
+  /-- The witness map sends the relation at the checked program statements into `rel`. -/
+  mem_rel : ∀ x w, F.ok x = true ∧ (F.stmtOf x, w) ∈ relOf src.rel → (x, F.witnessMap x w) ∈ F.rel
   /-- The execution has no completeness event. -/
   exec_δ : ∀ R, ∑ k, (F.exec R).δ k = 0
   /-- An honest input's statement passes the check and is honest. -/
-  keyStmtOf_mem : ∀ y, F.ok (F.keyStmtOf y) = true ∧ (F.stmtOf (F.keyStmtOf y), y) ∈ F.relH
+  stmtOfHonest_mem : ∀ y, F.ok (F.stmtOfHonest y) = true ∧ (F.stmtOf (F.stmtOfHonest y), y) ∈ F.relH
+
+/-- **The source program sound with the frontend's errors** (`RealizedProgram.SourceSound`): `Π_P₀`
+is round-by-round knowledge sound for `src.rel` at the extractor reading `src.proj`, with state
+function `S` and errors `roundError src.eps` (`SourceFront.sound`), which vanish at `γ_end`
+(`SourceFront.final`). -/
+theorem SourceFront.sourceSound (src : SourceFront cp W S) :
+    ir.SourceSound I src.rel src.proj S (ir.roundError I src.eps) :=
+  ⟨src.sound, src.final⟩
 
 /-! ## The source family -/
 
@@ -169,27 +176,41 @@ generated facts and the honest nodes, which contain `1`. -/
 def completionReady : cp.Ready :=
   cp.completionReady src.oneNodes
 
+/-- **The forked domains of the proof system** (`RealizedProgram.ProofSystem.fieldBranches`): the
+generic per-field domain proofs at the ready data of the certified program. -/
+@[config_template]
+abbrev branches (C : ir.ProofSystem P I) :=
+  C.fieldBranches cp.ready
+
+/-- **The forked honest provers of the domains** at the honest strategy `H`
+(`RealizedProgram.ProofSystem.fieldForkHonest`). -/
+@[config_template]
+noncomputable abbrev forkHonest (C : ir.ProofSystem P I) {Inp : Type}
+    {relH : Set (ir.Valuation I × Inp)} (H : ir.HonestCore I relH) :=
+  C.fieldForkHonest cp.ready H
+
 /-- **Soundness at the realized program, in the series–parallel order of `prot:backend`**
 (`RealizedProgram.ProofSystem.FieldBranches.causal_rbr_knowledge_soundness` at the forked domains
-`RealizedProgram.ProofSystem.fieldBranches` of the proof system): the series–parallel composite is
-round-by-round knowledge sound for the source relation at the proof system's extractor
-(`RealizedProgram.ProofSystem.FieldBranches.extractor`, reading the frontend's witness map at the
-realized assignment of the committed cells), with every challenge's own error
-(`RealizedProgram.ProofSystem.IOP.Sound.error`): at a phase's challenge round the sum over the
-phase's challenges of `Π_P₀`'s errors and the realization step's (`RealizedProgram.phaseError`),
-at every other challenge the error of that challenge in its domain's commit rounds, branches or
-join part. -/
-@[config_template headline]
+`RealizedProgram.ProofSystem.fieldBranches` of the proof system and the source program's soundness
+`SourceFront.sourceSound`): the protocol's verifier
+(`RealizedProgram.ProofSystem.FieldBranches.verifier`) is causally round-by-round knowledge sound
+for the source relation at the causal extractor at the frontend's projection
+(`RealizedProgram.ProofSystem.FieldBranches.causalExtractor`, reading the frontend's witness map at
+the realized assignment of the committed cells), with the state function built from the source
+program's soundness (`RealizedProgram.ProofSystem.FieldBranches.stateFn`, which reads `S`) and
+every challenge's own error (`RealizedProgram.ProofSystem.FieldBranches.roundError`):
+at a phase's challenge round the sum over the phase's challenges of `Π_P₀`'s errors and the
+realization step's (`RealizedProgram.phaseError`), at every other challenge the error of that
+challenge in its domain's commit rounds, branches or join part. -/
+@[config_template]
 theorem iop_rbr_knowledge_soundness [Inhabited W] (C : ir.ProofSystem P I) :
-    CausalRBRKnowledgeSound src.rel
-      ((C.fieldBranches cp.ready).soundIOP src.sound src.final).verifier
-      ((C.fieldBranches cp.ready).extractor src.sound src.final)
-      ((C.fieldBranches cp.ready).soundIOPSound (C.fieldBranchesSound cp.ready) src.sound
-        src.final).stateFn
-      ((C.fieldBranches cp.ready).soundIOPSound (C.fieldBranchesSound cp.ready) src.sound
-        src.final).error :=
+    CausalRBRKnowledgeSound src.rel (C.fieldBranches cp.ready).verifier
+      ((C.fieldBranches cp.ready).causalExtractor src.proj)
+      ((C.fieldBranches cp.ready).stateFn (C.fieldBranchesSound cp.ready) src.sourceSound)
+      ((C.fieldBranches cp.ready).roundError (C.fieldBranchesSound cp.ready)
+        (ir.roundError I src.eps)) :=
   (C.fieldBranches cp.ready).causal_rbr_knowledge_soundness (C.fieldBranchesSound cp.ready)
-    src.sound src.final
+    src.sourceSound
 
 /-- **Completeness at the realized program** (`ProofSystem.FieldBranches.completeness` at the
 forked domains `ProofSystem.fieldBranches` of the proof system, the domains' honest provers
@@ -197,13 +218,13 @@ forked domains `ProofSystem.fieldBranches` of the proof system, the domains' hon
 `prot:backend`, if the honest prover `H` has completeness error `errc` (a function of the
 statement) (`hc`), then at every value of the coins, on every honest input, the honest prover is
 rejected with probability at most `errc`. -/
-@[config_template headline]
+@[config_template]
 theorem iop_completeness (C : ir.ProofSystem P I) {Inp : Type}
     {relH : Set (ir.Valuation I × Inp)} (H : ir.HonestCore I relH)
     {errc : ir.Valuation I → ℝ≥0} (hc : H.Complete errc)
-    (c : (C.fieldForkHonest cp.ready H).Coins) :
-    CausalCompleteStmt relH (C.fieldBranches cp.ready).protocol.verifier
-      (fun y => RealizedProgram.ProofSystem.IOP.honest (C.fieldForkHonest cp.ready H) y c) errc :=
+    (c : (forkHonest cp C H).Coins) :
+    CausalCompleteStmt relH (branches cp C).protocol.verifier
+      (fun y => RealizedProgram.ProofSystem.IOP.honest (forkHonest cp C H) y c) errc :=
   (C.fieldBranches cp.ready).completeness (C.fieldHonestDomains cp.ready) _ H hc c
 
 /-- **Honest-verifier zero knowledge at the realized program** (`ProofSystem.FieldBranches.hvzk`
@@ -211,13 +232,13 @@ at the forked domains of the proof system): in the series–parallel order of `p
 honest prover `H` has completeness error `errc` (a function of the statement) (`hc`), the
 simulator of the series–parallel composite is honest-verifier zero knowledge for the honest
 prover with error `errc`. -/
-@[config_template headline]
+@[config_template]
 theorem iop_hvzk (C : ir.ProofSystem P I) {Inp : Type} {relH : Set (ir.Valuation I × Inp)}
     (H : ir.HonestCore I relH) {errc : ir.Valuation I → ℝ≥0} (hc : H.Complete errc) :
-    CausalHVZKStmt (C.fieldBranches cp.ready).protocol.toCausalIOP.views relH
-      (RealizedProgram.ProofSystem.IOP.honest (C.fieldForkHonest cp.ready H)) id
+    CausalHVZKStmt (branches cp C).protocol.toCausalIOP.views relH
+      (RealizedProgram.ProofSystem.IOP.honest (forkHonest cp C H)) id
       (RealizedProgram.ProofSystem.IOP.simulator
-        ((C.fieldBranches cp.ready).simData (C.fieldForkSims cp.ready))) errc :=
+        ((branches cp C).simData (C.fieldForkSims cp.ready))) errc :=
   (C.fieldBranches cp.ready).hvzk (C.fieldHonestDomains cp.ready) _ H hc
 
 end CertifiedSource
@@ -305,7 +326,7 @@ statement and checked (`RealizedProgram.ProofSystem.IOP.comapWith`). -/
 @[config_template]
 abbrev forkIop (C : ir.ProofSystem P I) :
     RealizedProgram.ProofSystem.IOP Stmt (ir.Valuation I → W)
-      {p | F.ok p.1 = true ∧ (F.stmtOf p.1, p.2) ∈ relOf src.rel} :=
+      (checkedRel F.stmtOf F.ok (relOf src.rel)) :=
   C.fieldIopWith cp.ready (CertifiedSource.forkLowering cp src C) F.stmtOf F.ok
 
 /-- **The soundness data of `forkIop`** (`RealizedProgram.ProofSystem.FieldBranches.soundIOPSound`,
@@ -328,7 +349,7 @@ abbrev forkTranscript (C : ir.ProofSystem P I) : ProofSystemTranscript (forkIop 
 program statement is related to the input. -/
 @[config_template keep_binders]
 abbrev ringHonestRel {Inp : Type} (relH : Set (ir.Valuation I × Inp)) : Set (Stmt × Inp) :=
-  {p | F.ok p.1 = true ∧ (F.stmtOf p.1, p.2) ∈ relH}
+  checkedRel F.stmtOf F.ok relH
 
 /-- **The largest round error at the checked statements** (`CertifiedFront.maxRoundError_le` with
 `RealizedProgram.ProofSystem.fieldForkErrorWith_le`). -/
@@ -344,24 +365,41 @@ end CertifiedFrontWith
 
 /-! ## The configurations -/
 
+/-- **A parameter set** (paper `tab:param-sets`): the Fiat–Shamir salt length in bytes (the proof
+salt, also the digest length of the set) and the quantum query cap `qQ` of the knowledge-soundness
+cap forms. -/
+@[config_record]
+structure ParamSet where
+  /-- The Fiat–Shamir salt length in bytes. -/
+  saltBytes : ℕ
+  /-- The quantum query cap. -/
+  quantumQueryCap : ℕ
+
+/-- **The ROM parameter set**: `32`-byte salts and the quantum query cap `2^40`. -/
+@[expose] def ParamSet.rom : ParamSet := ⟨32, 2 ^ 40⟩
+
+/-- **The QROM parameter set**: `48`-byte salts and the quantum query cap `2^100`. -/
+@[expose] def ParamSet.qrom : ParamSet := ⟨48, 2 ^ 100⟩
+
 /-- **The configuration of a certified program at a frontend** (module docstring): the IOP, its
-soundness data and transcript (`CertifiedFront`), `kS`-byte salts, the headline relation and the
+soundness data and transcript (`CertifiedFront`), `kS`-byte salts, the relation and the
 witness map, the honest prover on the generic per-field domain proofs at a strategy, the honest
-strategy and the generated figures, with the query caps `qQ` (quantum) and `2^64` (classical). -/
+strategy and the generated figures, at the parameter set `ps` (its salt length `kS` and quantum query
+cap `qQ`) and the classical query cap `2^64`. -/
 @[expose] noncomputable def ofCertified [DecidableEq Stmt] [Inhabited W]
     (cp : CertifiedProgram P ir I) (src : SourceFront cp W S)
-    (F : Frontend cp src Stmt W' HonestIn) (kS qQ : ℕ) : Configuration where
+    (F : Frontend cp src Stmt W' HonestIn) (ps : ParamSet) : Configuration where
   ProofSystem := ir.ProofSystem P I
   Stmt := Stmt
-  Wit := ir.Valuation I → W
-  rel := {p | (F.stmtOf p.1, p.2) ∈ relOf src.rel}
+  IopWit := ir.Valuation I → W
+  iopRel := {p | (F.stmtOf p.1, p.2) ∈ relOf src.rel}
   iop C := CertifiedFront.forkIop cp src F C
   sound C := CertifiedFront.forkIopSound cp src F C
   T C := CertifiedFront.forkTranscript cp src F C
-  kS := kS
-  Wit' := W'
-  rel' := F.rel'
-  g := F.g
+  kS := ps.saltBytes
+  Wit := W'
+  rel := F.rel
+  witnessMap := F.witnessMap
   Val := ir.Valuation I
   Strategy _ relH := ir.HonestStrategy I relH
   hrel relH := CertifiedFront.keyHonestRel cp src F relH
@@ -372,7 +410,7 @@ strategy and the generated figures, with the query caps `qQ` (quantum) and `2^64
   HonestIn := HonestIn
   relH := F.relH
   strategy := CertifiedHonest.honestStrategy cp src F
-  keyStmtOf := F.keyStmtOf
+  stmtOfHonest := F.stmtOfHonest
   inh := inferInstance
   rounds := cp.figures.rounds
   chernoff := cp.figures.chernoff
@@ -384,7 +422,7 @@ strategy and the generated figures, with the query caps `qQ` (quantum) and `2^64
   errorMax := cp.figures.errorMax
   errorExp := cp.figures.errorExp
   D := cp.figures.D
-  qQ := qQ
+  qQ := ps.quantumQueryCap
   qR := 2 ^ 64
   pos := cp.figures.pos
   k := cp.figures.k
@@ -393,18 +431,18 @@ strategy and the generated figures, with the query caps `qQ` (quantum) and `2^64
 (`ofCertified` with `CertifiedFrontWith`). -/
 @[expose] noncomputable def ofCertifiedWith [DecidableEq Stmt] [Inhabited W]
     (cp : CertifiedProgram P ir I) (src : SourceFront cp W S)
-    (F : FrontendWith cp src Stmt W' HonestIn) (kS qQ : ℕ) : Configuration where
+    (F : FrontendWith cp src Stmt W' HonestIn) (ps : ParamSet) : Configuration where
   ProofSystem := ir.ProofSystem P I
   Stmt := Stmt
-  Wit := ir.Valuation I → W
-  rel := {p | F.ok p.1 = true ∧ (F.stmtOf p.1, p.2) ∈ relOf src.rel}
+  IopWit := ir.Valuation I → W
+  iopRel := checkedRel F.stmtOf F.ok (relOf src.rel)
   iop C := CertifiedFrontWith.forkIop cp src F C
   sound C := CertifiedFrontWith.forkIopSound cp src F C
   T C := CertifiedFrontWith.forkTranscript cp src F C
-  kS := kS
-  Wit' := W'
-  rel' := F.rel'
-  g := F.g
+  kS := ps.saltBytes
+  Wit := W'
+  rel := F.rel
+  witnessMap := F.witnessMap
   Val := ir.Valuation I
   Strategy _ relH := ir.HonestStrategy I relH
   hrel relH := CertifiedFrontWith.ringHonestRel cp src F relH
@@ -415,7 +453,7 @@ strategy and the generated figures, with the query caps `qQ` (quantum) and `2^64
   HonestIn := HonestIn
   relH := F.relH
   strategy := CertifiedHonest.honestStrategy cp src F.toFrontend
-  keyStmtOf := F.keyStmtOf
+  stmtOfHonest := F.stmtOfHonest
   inh := inferInstance
   rounds := cp.figures.rounds
   chernoff := cp.figures.chernoff
@@ -427,7 +465,7 @@ strategy and the generated figures, with the query caps `qQ` (quantum) and `2^64
   errorMax := cp.figures.errorMax
   errorExp := cp.figures.errorExp
   D := cp.figures.D
-  qQ := qQ
+  qQ := ps.quantumQueryCap
   qR := 2 ^ 64
   pos := cp.figures.pos
   k := cp.figures.k
@@ -460,15 +498,15 @@ facts (`mergeBounds`), the end-to-end theorem at the configuration's IOP
 generic honest provers), the figures' bounds from the generated check
 (`RealizedProgram.ProgramFigures.Check.figures`, `RealizedProgram.ProgramFigures.Check.loadsGranted`,
 `CertifiedFront.maxRoundError_le`) and the honest strategy's (`Frontend.Facts.exec_δ`). -/
-theorem ofCertified_grantedFacts {F : Frontend cp src Stmt W' HonestIn} (hF : F.Facts) {kS : ℕ}
-    (hkS : kS ≤ 2 ^ 10) (qQ : ℕ) : (ofCertified cp src F kS qQ).GrantedFacts where
+theorem ofCertified_grantedFacts {F : Frontend cp src Stmt W' HonestIn} (hF : F.Facts) {ps : ParamSet}
+    (hkS : ps.saltBytes ≤ 2 ^ 10) : (ofCertified cp src F ps).GrantedFacts where
   hb := mergeBounds cp src hF hkS
   knowledge C _ hkq := (C.fieldBranches cp.ready).e2e_knowledge (C.fieldBranchesSound cp.ready)
-    src.sound src.final F.stmtOf (CertifiedFront.forkTranscript cp src F C) kS
-    (mergeBounds cp src hF hkS C) hF.mem_rel' hkq
-  e2e C _ _ H _ hkq hf := (C.fieldBranches cp.ready).e2e (C.fieldBranchesSound cp.ready) src.sound
-    src.final F.stmtOf (CertifiedFront.forkTranscript cp src F C) kS (mergeBounds cp src hF hkS C)
-    hF.mem_rel' hkq hf (C.fieldHonestDomains cp.ready) (C.fieldForkHonestDomains cp.ready)
+    src.sourceSound F.stmtOf (CertifiedFront.forkTranscript cp src F C) ps.saltBytes
+    (mergeBounds cp src hF hkS C) hF.mem_rel hkq
+  e2e C _ _ H _ hkq hf := (C.fieldBranches cp.ready).e2e (C.fieldBranchesSound cp.ready)
+    src.sourceSound F.stmtOf (CertifiedFront.forkTranscript cp src F C) ps.saltBytes (mergeBounds cp src hF hkS C)
+    hF.mem_rel hkq hf (C.fieldHonestDomains cp.ready) (C.fieldForkHonestDomains cp.ready)
     H.toHonestCore H.complete
   rounds_le C := (cp.figuresOk.figures (B := C) (Lw := CertifiedSource.forkLowering cp src C)
     (f := F.stmtOf)).rounds_le
@@ -491,15 +529,15 @@ theorem ofCertified_grantedFacts {F : Frontend cp src Stmt W' HonestIn} (hF : F.
     change ∑ k, (CertifiedHonest.honestStrategy cp src F).δ k = 0
     rw [CertifiedHonest.honestStrategy, HonestStrategy.ofCompletionReady_δ]
     exact hF.exec_δ _
-  keyStmtOf_mem := hF.keyStmtOf_mem
+  stmtOfHonest_mem := hF.stmtOfHonest_mem
 
 /-- **The facts of `ofCertified` without granted points** (`Configuration.Facts`): every round's
 load passes the Chernoff test on the default stream (`RealizedProgram.ProgramFigures.Check.loads`
 at `hl`). -/
-theorem ofCertified_facts {F : Frontend cp src Stmt W' HonestIn} (hF : F.Facts) {kS : ℕ}
-    (hkS : kS ≤ 2 ^ 10) (qQ : ℕ) (hl : cp.figures.DefaultLoadsOk cp.numbers) :
-    (ofCertified cp src F kS qQ).Facts where
-  toGrantedFacts := ofCertified_grantedFacts cp src hF hkS qQ
+theorem ofCertified_facts {F : Frontend cp src Stmt W' HonestIn} (hF : F.Facts) {ps : ParamSet}
+    (hkS : ps.saltBytes ≤ 2 ^ 10) (hl : cp.figures.DefaultLoadsOk cp.numbers) :
+    (ofCertified cp src F ps).Facts where
+  toGrantedFacts := ofCertified_grantedFacts cp src hF hkS
   loads C := cp.figuresOk.loads hl (B := C) (Lw := CertifiedSource.forkLowering cp src C)
     (f := F.stmtOf)
 
@@ -507,14 +545,15 @@ theorem ofCertified_facts {F : Frontend cp src Stmt W' HonestIn} (hF : F.Facts) 
 checked statements, `RealizedProgram.ProofSystem.FieldBranches.e2eWith_knowledge`,
 `RealizedProgram.ProofSystem.FieldBranches.e2eWith`). -/
 theorem ofCertifiedWith_grantedFacts {F : FrontendWith cp src Stmt W' HonestIn} (hF : F.Facts)
-    {kS : ℕ} (hkS : kS ≤ 2 ^ 10) (qQ : ℕ) : (ofCertifiedWith cp src F kS qQ).GrantedFacts where
+    {ps : ParamSet}
+    (hkS : ps.saltBytes ≤ 2 ^ 10) : (ofCertifiedWith cp src F ps).GrantedFacts where
   hb := mergeBoundsWith cp src hF hkS
   knowledge C _ hkq := (C.fieldBranches cp.ready).e2eWith_knowledge (C.fieldBranchesSound cp.ready)
-    src.sound src.final F.stmtOf F.ok (CertifiedFrontWith.forkTranscript cp src F C) kS
-    (mergeBoundsWith cp src hF hkS C) hF.mem_rel' hkq
+    src.sourceSound F.stmtOf F.ok (CertifiedFrontWith.forkTranscript cp src F C) ps.saltBytes
+    (mergeBoundsWith cp src hF hkS C) hF.mem_rel hkq
   e2e C _ _ H _ hkq hf := (C.fieldBranches cp.ready).e2eWith (C.fieldBranchesSound cp.ready)
-    src.sound src.final F.stmtOf F.ok (CertifiedFrontWith.forkTranscript cp src F C) kS
-    (mergeBoundsWith cp src hF hkS C) hF.mem_rel' hkq hf (C.fieldHonestDomains cp.ready)
+    src.sourceSound F.stmtOf F.ok (CertifiedFrontWith.forkTranscript cp src F C) ps.saltBytes
+    (mergeBoundsWith cp src hF hkS C) hF.mem_rel hkq hf (C.fieldHonestDomains cp.ready)
     (C.fieldForkHonestDomains cp.ready) H.toHonestCore H.complete
   rounds_le C := (cp.figuresOk.figuresWith (B := C) (Lw := CertifiedSource.forkLowering cp src C)
     (f := F.stmtOf) F.ok).rounds_le
@@ -537,14 +576,14 @@ theorem ofCertifiedWith_grantedFacts {F : FrontendWith cp src Stmt W' HonestIn} 
     change ∑ k, (CertifiedHonest.honestStrategy cp src F.toFrontend).δ k = 0
     rw [CertifiedHonest.honestStrategy, HonestStrategy.ofCompletionReady_δ]
     exact hF.exec_δ _
-  keyStmtOf_mem := hF.keyStmtOf_mem
+  stmtOfHonest_mem := hF.stmtOfHonest_mem
 
 /-- **The facts of `ofCertifiedWith` without granted points** (`ofCertified_facts` at the checked
 statements, `RealizedProgram.ProgramFigures.Check.loadsWith`). -/
-theorem ofCertifiedWith_facts {F : FrontendWith cp src Stmt W' HonestIn} (hF : F.Facts) {kS : ℕ}
-    (hkS : kS ≤ 2 ^ 10) (qQ : ℕ) (hl : cp.figures.DefaultLoadsOk cp.numbers) :
-    (ofCertifiedWith cp src F kS qQ).Facts where
-  toGrantedFacts := ofCertifiedWith_grantedFacts cp src hF hkS qQ
+theorem ofCertifiedWith_facts {F : FrontendWith cp src Stmt W' HonestIn} (hF : F.Facts) {ps : ParamSet}
+    (hkS : ps.saltBytes ≤ 2 ^ 10) (hl : cp.figures.DefaultLoadsOk cp.numbers) :
+    (ofCertifiedWith cp src F ps).Facts where
+  toGrantedFacts := ofCertifiedWith_grantedFacts cp src hF hkS
   loads C := cp.figuresOk.loadsWith hl (B := C) (Lw := CertifiedSource.forkLowering cp src C)
     (f := F.stmtOf) F.ok
 

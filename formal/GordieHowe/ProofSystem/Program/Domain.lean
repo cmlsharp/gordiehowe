@@ -27,10 +27,10 @@ the statements `GordieHowe.RealizedProgram.Valuation`:
   the predicates with target `affine` reading bit views (`GordieHowe.RealizedProgram.ViewRow`, `GordieHowe.RealizedProgram.viewRow`);
 * no quadratic triple (a predicate with a quadratic target is not lowered here).
 
-**A domain under a trust assumption** (`GordieHowe.Domain.guard`): the same field and coordinates
+**A domain under a hypothesis `T`** (`GordieHowe.Domain.guard`): the same field and coordinates
 and one circuit constraint, "`T` gives the domain's predicate"; a domain's circuit proof under the
-compiler trust is defined without the trust bundle, and given `T` it is a circuit proof of the
-domain (`GordieHowe.DomainProof.unguard`).
+circuits' correspondence (`T` is `CircuitsEnforce`) is defined without a proof of `T`, and given
+`T` it is a circuit proof of the domain (`GordieHowe.DomainProof.unguard`).
 
 **Decoding and encoding** (`GordieHowe.RealizedProgram.ofCells`, `GordieHowe.RealizedProgram.toCells`): the committed assignment of the
 program read from the cells, and the cells read from a committed assignment; the two agree at every
@@ -237,10 +237,9 @@ inductive Lowered (d p : ℕ) : Prop where
   | row (hp : p < ir.predicates.length) (hrow : ir.isRow d p = true)
   /-- A family of rows on views of `d`. -/
   | viewRow (hp : p < ir.predicates.length) (hrow : ir.isViewRow d p = true)
-  /-- A field `equal`, a `mod_0` or a product-form `mod_q` placed in circuit `c` of `d`. -/
+  /-- A field `equal` or a `mod_0` placed in circuit `c` of `d`. -/
   | placed (c : ir.DomainCircuit d)
-      (heq : ((ir.predicate p).body.isEqual || (ir.predicate p).body.isIntEq ||
-        (ir.predicate p).body.isProductMod) = true)
+      (heq : ((ir.predicate p).body.isEqual || (ir.predicate p).body.isIntEq) = true)
       (hmem : CircuitEntry.pred p ∈ (ir.circuit c.1).entries ∨
         CircuitEntry.typeCheck p ∈ (ir.circuit c.1).entries)
   /-- A part of batch `b` of `d`. -/

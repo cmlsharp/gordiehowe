@@ -56,8 +56,8 @@ noncomputable instance : Emulated.MldsaEmulatedHonest (CarrierAEmbed.emu program
 
 /-- **The carrier's honest values' facts.** -/
 instance : MldsaCarrierHonest program where
-  qD := ⟨645, [543, 544, 545]⟩
-  kind64 := value_signature_2erelation_2eq_kind
+  qD := ⟨645, [539, 540, 541]⟩
+  kind65 := value_signature_2erelation_2eq_kind
   qFits := ⟨by decide, by decide, by decide⟩
   member_nodup := by decide
   member_none := by decide +kernel
@@ -66,7 +66,7 @@ instance : MldsaCarrierHonest program where
     intro v hv
     have hw := Generated.MLDSA44.Ring.Carrier.ROMParams.conditions.wellFormed
     simp only [List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false] at hv
-    rcases hv with rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    rcases hv with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
     · exact ⟨hw.privCellB_of_kind_priv value_member_2ea_5fhat_header.1 value_member_2ea_5fhat_kind,
         valueShape_field value_member_2ea_5fhat_header.2⟩
     · exact ⟨hw.privCellB_of_kind_priv value_member_2et1_header.1 value_member_2et1_kind,
@@ -75,6 +75,8 @@ instance : MldsaCarrierHonest program where
         valueShape_field value_member_2emu_header.2⟩
     · exact ⟨hw.privCellB_of_kind_priv value_member_2eselect_2eindex_header.1
           value_member_2eselect_2eindex_kind, valueShape_field value_member_2eselect_2eindex_header.2⟩
+    · exact ⟨hw.privCellB_of_kind_priv value_signature_2eQ_header.1 value_signature_2eQ_kind,
+        valueShape_field value_signature_2eQ_header.2⟩
     · exact ⟨hw.privCellB_of_kind_priv value_signature_2erelation_2eq_2edigit_2elow_header.1
           value_signature_2erelation_2eq_2edigit_2elow_kind,
         valueShape_field value_signature_2erelation_2eq_2edigit_2elow_header.2⟩
@@ -103,15 +105,12 @@ instance : MldsaCarrierHonest program where
     have hp : emu.privCellB u = true := h
     rw [kind_of_privCellB hp] at hc
     exact Generated.MLDSA44.Ring.Carrier.ROMParams.conditions.wellFormed.privCellB_of_kind_priv hv.2.1 (Renaming.kindCorr_priv _ hc)
-  coreV := ⟨⟨mem_hV_of_hVB rfl, mem_hV_of_hVB rfl⟩, fun p hp t => mem_hV_of_hVB
-    ((by decide +kernel : ∀ p : Fin 10, (p : ℕ) ≠ 0 → ∀ t : Fin 24, hVB (wordsVal p t) = true)
-      p hp t)⟩
-  selV := fun _ hu => mem_hV_of_hVB
-    ((by decide : ∀ u ∈ [556, 557, 560, 561, 562, 563, 564, 565], hVB u = true) _ hu)
+  coreV := by decide +kernel
+  selV := by decide +kernel
   aVals := by decide +kernel
   boundExprs := by
     change ∀ u ∈ [58, 61, 65, 66], (match (emu.value u).kind with
-      | .bound E => E.opsFree && E.directNodes.all (· ∈ aV) && E.refs.isEmpty
+      | .bound E => E.opsFree && E.directNodes.all (· ∈ CarrierAEmbed.V program) && E.refs.isEmpty
       | _ => false) = true
     intro u hu
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hu
@@ -120,31 +119,39 @@ instance : MldsaCarrierHonest program where
     · rw [Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.value_signature_2ew_kind]; decide +kernel
     · rw [Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.value_hint_2eoffset_kind]; decide +kernel
     · rw [Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.value_hint_2eslack_kind]; decide +kernel
+  hOf_val := by decide +kernel
+  aOf_val := by decide +kernel
+  hOf_valA := by decide +kernel
   bound := Generated.MLDSA44.Ring.Carrier.ROMParams.conditions.derivable.elim fun _ hD => hD.bound
 
 /-- **The carrier's table selection's identifiers.** -/
 instance : MldsaCarrierSelect program where
-  idx58 := rfl
-  pred0 := rfl
-  idxPred8 := rfl
+  idx59 := rfl
 
 /-- **The carrier's quotient's facts.** -/
 instance : MldsaCarrierQuot program where
-  sigReal := predicate_signature_2erelation_body
+  qPred := 18
   qRange := by
     obtain ⟨r, h⟩ := predicate_signature_2erelation_2eq_body
     exact ⟨r, _, h, by decide⟩
-  field64 := valueShape_field value_signature_2erelation_2eq_header.2
-  size64 := valueShape_size value_signature_2erelation_2eq_header.2
-  lt64 := value_signature_2erelation_2eq_header.1
+  field65 := valueShape_field value_signature_2erelation_2eq_header.2
+  size65 := valueShape_size value_signature_2erelation_2eq_header.2
+  lt65 := value_signature_2erelation_2eq_header.1
+
+/-- The source-role rows' classes, at the renamings' inverse tables. -/
+theorem rowsOk : Generated.MLDSA44.Ring.Carrier.ROMParams.SourceRoles.roles.all
+    (rowB (CarrierHEmbed.σ program).val (CarrierAEmbed.σ program).val (invHOf program)
+      (invAOf program) (heldHB program) (heldAB program)
+      [53, 54, 55, 61, 64, 65, 71, 72, 531, 532]) = true := by
+  rw [Generated.MLDSA44.Ring.Carrier.ROMParams.SourceRoles.roles_eq]
+  decide +kernel
 
 /-- **The carrier's execution facts.** -/
 instance : MldsaCarrierExec program where
   wf := Generated.MLDSA44.Ring.Carrier.ROMParams.conditions.wellFormed
-  predicates_length := predicates_length
   nonSource := by
     intro q hq
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hq
+    simp only [carrierRealizationPreds, List.mem_cons, List.not_mem_nil, or_false] at hq
     rcases hq with rfl | rfl | rfl | rfl | rfl | rfl | rfl
     · exact program.inSource_of_realization predicate_mac_2eA_role.2
     · exact program.inSource_of_realization predicate_range_2enorm_2ez_2etop_role.2
@@ -154,6 +161,26 @@ instance : MldsaCarrierExec program where
     · exact program.inSource_of_realization predicate_mac_2ehigh_role.2
     · exact program.inSource_of_realization predicate_mac_2enowrap_role.2
     · exact program.inSource_of_realization predicate_mac_role.2
+  coverage := by
+    -- The held pairs of domain `H` land on the run `26 … 248`, decided once as a list; the 28
+    -- predicates outside it are decided one by one against the short cases.
+    have hheld : ∀ p ∈ CarrierHEmbed.held program, corePredLo ≤ p.1 ∧ p.1 ≤ hPredHi := by
+      decide +kernel
+    have htgt : (CarrierHEmbed.held program).map Prod.snd = List.range' 26 223 := by
+      decide +kernel
+    intro q hq
+    rw [predicates_length] at hq
+    by_cases h : 26 ≤ q ∧ q < 249
+    · left
+      obtain ⟨p, hp, rfl⟩ := List.mem_map.1 (htgt ▸ List.mem_range'_1.2 ⟨h.1, by omega⟩)
+      exact ⟨p, hp, rfl, hheld p hp⟩
+    · right
+      have hm : q ∈ List.range 26 ++ [249, 250] := by
+        simp only [List.mem_append, List.mem_range, List.mem_cons, List.not_mem_nil]
+        omega
+      clear h hq
+      revert q
+      decide +kernel
   checks := statement_checks
   ranges := statement_ranges
   keysSize := valueShape_size value_ring_2ekeys_header.2
@@ -170,32 +197,33 @@ instance : MldsaCarrierExec program where
     rw [hqp, hb] at hr
     cases hr
     exact ⟨rfl, rfl, rfl, rfl⟩
-  len42 := by
-    have hk : program.expr 42 ≠ default := by
+  len95 := by
+    have hk : program.expr 95 ≠ default := by
       rw [expr_mac_2eequal_2eshape_2eright_eq]
       decide
     rw [exprLen_ref Generated.MLDSA44.Ring.Carrier.ROMParams.conditions.wellFormed.refsOrdered
-        (expr_lt_of_ne_default hk), expr_mac_2eequal_2eshape_2eright_eq, exprLen_reindex, idx104_eq]
+        (expr_lt_of_ne_default hk), expr_mac_2eequal_2eshape_2eright_eq, exprLen_reindex, idx108_eq]
     decide
   cell_classes := cell_classes_of_rows (program := program)
-    Generated.MLDSA44.Ring.Carrier.ROMParams.SourceRoleFacts.rolesOk (skip := [52, 53, 54, 60, 63, 64, 68, 69, 528, 529])
-    (by
-      rw [Generated.MLDSA44.Ring.Carrier.ROMParams.SourceRoles.roles_eq]
-      decide +kernel)
-    (by
-      intro v hv
-      simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
-      rcases hv with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-      · rw [value_ring_2etr_kind]; simp
-      · rw [value_ring_2ekeys_kind]; simp
-      · rw [value_ring_2emu_kind]; simp
-      · rw [value_z_kind]; simp
-      · rw [value_signature_2ew_kind]; simp
-      · rw [value_signature_2erelation_2eq_kind]; simp
-      · rw [value_hint_2eoffset_kind]; simp
-      · rw [value_hint_2eslack_kind]; simp
-      · obtain ⟨_, h⟩ := value_member_2etable_2epowers_kind; rw [h]; simp
-      · obtain ⟨_, h⟩ := value_member_2etable_2edigests_kind; rw [h]; simp)
+    Generated.MLDSA44.Ring.Carrier.ROMParams.SourceRoleFacts.rolesOk (skip := [53, 54, 55, 61, 64, 65, 71, 72, 531, 532])
+        (valH := (CarrierHEmbed.σ program).val) (valA := (CarrierAEmbed.σ program).val)
+        (invH := invHOf program) (invA := invAOf program)
+        (heldH := heldHB program) (heldA := heldAB program)
+        rowsOk rfl rfl (fun _ h => mem_of_heldHB h) (fun _ h => mem_of_heldAB h)
+        (by
+          intro v hv
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
+          rcases hv with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+          · rw [value_ring_2etr_kind]; simp
+          · rw [value_ring_2ekeys_kind]; simp
+          · rw [value_ring_2emu_kind]; simp
+          · rw [value_z_kind]; simp
+          · rw [value_signature_2ew_kind]; simp
+          · rw [value_signature_2erelation_2eq_kind]; simp
+          · rw [value_hint_2eoffset_kind]; simp
+          · rw [value_hint_2eslack_kind]; simp
+          · obtain ⟨_, h⟩ := value_member_2etable_2epowers_kind; rw [h]; simp
+          · obtain ⟨_, h⟩ := value_member_2etable_2edigests_kind; rw [h]; simp)
 
 /-- **Every executed source coordinate reads its honest value**, by the program's classifier. -/
 theorem role_coordinates {msgLen : ℕ} (y : RingIn msgLen) {v j : ℕ}
@@ -207,7 +235,11 @@ theorem role_coordinates {msgLen : ℕ} (y : RingIn msgLen) {v j : ℕ}
       program.execOf (mldsaInterpOf RealizedProgram.gold2 RealizedProgram.gf128)
         (honestVal program RealizedProgram.gold2 RealizedProgram.gf128 y) v j := by
   refine role_source_coordinates y Generated.MLDSA44.Ring.Carrier.ROMParams.SourceRoleFacts.rolesOk
-    (skip := [52, 53, 54, 528, 529]) ?_ ?_ hs hc hpad
+    (skip := [53, 54, 55, 531, 532])
+    (valH := (CarrierHEmbed.σ program).val) (valA := (CarrierAEmbed.σ program).val)
+    (invH := invHOf program) (invA := invAOf program)
+    (heldH := heldHB program) (heldA := heldAB program)
+    ?_ rfl rfl (fun _ h => mem_of_heldHB h) (fun _ h => mem_of_heldAB h) ?_ hs hc hpad
   · rw [Generated.MLDSA44.Ring.Carrier.ROMParams.SourceRoles.roles_eq]
     decide +kernel
   · intro v hv

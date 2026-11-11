@@ -6,6 +6,7 @@ module
 public import GordieHowe.Model.QROM.OutputLaw
 public import GordieHowe.Model.QROM.ExpandAdv
 public import GordieHowe.Model.Quantum.Core.Dilation
+public import GordieHowe.Headline
 
 @[expose] public section
 
@@ -359,6 +360,7 @@ theorem reduce_purStage : reduce (purStage A t) = A.realState := by
 at most t queries, Tr_D(|Sim*(A)⟩⟨Sim*(A)|) = (1/(2^n)^(2^m)) ∑_h A_h A_h*": the state of `A`'s
 register in `Sim*(A)`, with the database register traced out, is the state of `A`'s register
 against a uniformly random oracle. -/
+@[headline]
 theorem reduce_simState [DecidableEq B] : reduce (simState e A) = A.realState := by
   rw [simState_eq_compress, reduce_compress e (supported_fourStage A t), reduce_dbFun,
     ← reduce_fourier (Q := QueryReg A.W 1 (Bits m) (BitStr I J)) (fourStage A t),

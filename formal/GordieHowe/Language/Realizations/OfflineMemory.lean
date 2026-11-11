@@ -11,11 +11,12 @@ public import Mathlib.Data.List.FinRange
 /-!
 # Offline memory checking
 
-The two facts every offline-memory-checking argument needs, independent of any scheme: a fingerprint
-identity of two record multisets, packed as products of linear factors over a domain, forces the
-multisets themselves to agree (`multiset_eq_of_prod_X_sub_C_eq`); and, given that the writes to one
-address are chronologically labelled and every intermediate read's label precedes the label of the
-write it is paired with, the multiset agreement forces each read to return the value of the write
+Offline memory checking (Blum, Evans, Gemmell, Kannan and Naor, FOCS 1991). The two facts every
+offline-memory-checking argument needs, independent of any scheme: a fingerprint identity of two
+record multisets, packed as products of linear factors over a domain, forces the multisets
+themselves to agree (`multiset_eq_of_prod_X_sub_C_eq`); and, given that the writes to one address
+are chronologically labelled and every intermediate read's label precedes the label of the write
+it is paired with, the multiset agreement forces each read to return the value of the write
 immediately preceding it (`chronological`).
 -/
 

@@ -21,9 +21,10 @@ zero-knowledge errors of a configuration in that form, for `Q ≤ 2^64` proof qu
   configuration's figures (salt, digest, rounds, Chernoff exponent, positions), with the leaf term
   bounded by `GordieHowe.SPBCS.leafBound_two_mul_le`;
 * `GordieHowe.Configuration.ZKBits.zkErrorROM_le_bits`, `GordieHowe.Configuration.ZKBits.zkError_le_bits`: if the budget is at most
-  `2^-λ`, then `zkErrorROM 0 t Q` and `zkError 0 t Q` are at most `Q · t · 2^-λ` for `t ≥ 1` and
-  `Q ≤ 2^64`. At `Q = 1` this is `λ(err) ≥ λ`; at `Q` proof queries the bit security loses at most
-  `log₂ Q` bits;
+  `2^-λ`, then `zkErrorROM 0` and `zkError 0` have zero-knowledge bit security at least `λ`
+  (`GordieHowe.Configuration.ZKBitSecurityAtLeast`: at most `Q · t · 2^-λ` for `t ≥ 1` and
+  `Q ≤ proofQueryCap = 2^64`). At `Q = 1` this is `λ(err) ≥ λ`; at `Q` proof queries the bit
+  security loses at most `log₂ Q` bits;
 * `GordieHowe.Configuration.ReadsFigures`: a configuration whose salts and figures are given
   numerals (`ofCertified_readsFigures`, `ofCertifiedWith_readsFigures` at the generated figures),
   and `GordieHowe.Configuration.zkBudgetROM_le_two_rpow`, `GordieHowe.Configuration.zkBudget_le_two_rpow`:
@@ -36,6 +37,18 @@ namespace GordieHowe.Configuration
 
 open IOP IOP.ProtocolSpec IOP.SPTerm GordieHowe.SPBCS GordieHowe.SPBCS GordieHowe.QROM SPBCS.Configurations
 open scoped NNReal ENNReal
+
+/-- **The proof-query cap of the zero-knowledge figures**: `2^64` proof queries (paper
+`sec:eval-params`, `Q ≤ 2^64`). The budgets `zkBudgetROM` and `zkBudget` charge the proof-salt
+collisions of up to `proofQueryCap + 1` proof queries. -/
+abbrev proofQueryCap : ℕ := 2 ^ 64
+
+/-- **Zero-knowledge bit security at least `lam`** (paper `sec:eval-params`, the zero-knowledge
+column): for every `t ≥ 1` hash queries and every `Q ≤ proofQueryCap` proof queries, the error
+`err t Q` is at most `Q · t · 2^-lam`. At `Q = 1` this is the paper's `λ(err) ≥ lam`; at `Q` proof
+queries the bit security loses at most `log₂ Q` bits. -/
+def ZKBitSecurityAtLeast (err : ℕ → ℕ → ℝ) (lam : ℝ) : Prop :=
+  ∀ t Q, 1 ≤ t → Q ≤ proofQueryCap → err t Q ≤ Q * t * 2 ^ (-lam)
 
 section
 
@@ -89,19 +102,19 @@ open RealizedProgram
 variable {P : Export.Plan} {ir : RealizedProgram} {I : Interp}
   {cp : CertifiedProgram P ir I} {W : Type}
   {S : KnowledgeStateFunction (ir.sourceVerifier I)} {src : SourceFront cp W S}
-  {Stmt W' HonestIn : Type} [DecidableEq Stmt] [Inhabited W] {kS qQ : ℕ}
+  {Stmt W' HonestIn : Type} [DecidableEq Stmt] [Inhabited W] {ps : ParamSet}
   {f : ProgramFigures}
 
 /-- **The configuration of a certified program reads the program's figures.** -/
 theorem ofCertified_readsFigures {F : Frontend cp src Stmt W' HonestIn} (hf : cp.figures = f) :
-    (ofCertified cp src F kS qQ).ReadsFigures kS f := by
+    (ofCertified cp src F ps).ReadsFigures ps.saltBytes f := by
   subst hf
   exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 /-- **The configuration of a certified program with a statement check reads the program's
 figures.** -/
 theorem ofCertifiedWith_readsFigures {F : FrontendWith cp src Stmt W' HonestIn}
-    (hf : cp.figures = f) : (ofCertifiedWith cp src F kS qQ).ReadsFigures kS f := by
+    (hf : cp.figures = f) : (ofCertifiedWith cp src F ps).ReadsFigures ps.saltBytes f := by
   subst hf
   exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
@@ -180,17 +193,19 @@ theorem request_terms_le (C : R.ProofSystem) :
   exact add_le_add (add_le_add hkc hov)
     (mul_le_mul_of_nonneg_left hleaf (Nat.cast_nonneg _))
 
-/-- **The bit security of zero knowledge in the ROM** (`everlasting_zero_knowledge_rom`'s error): if the
-ROM budget is at most `2^-λ`, then for every `t ≥ 1` hash queries and `Q ≤ 2^64` proof queries,
-`zkErrorROM 0 t Q ≤ Q · t · 2^-λ`. At `Q = 1` the paper's `λ(errzk^C)` is at least `λ`. -/
-theorem zkErrorROM_le_bits (C : R.ProofSystem) {lam : ℝ} (hB : R.zkBudgetROM ≤ 2 ^ (-lam))
-    {t Q : ℕ} (ht : 1 ≤ t) (hQ : Q ≤ 2 ^ 64) :
-    (setting R F C).model.zkErrorROM 0 t Q ≤ Q * t * 2 ^ (-lam) := by
+/-- **The bit security of zero knowledge in the ROM** (the error `zkErrorROM 0` of
+`everlasting_zero_knowledge_honest_rom`): if
+the ROM budget is at most `2^-λ`, then for every `t ≥ 1` hash queries and `Q ≤ proofQueryCap`
+proof queries, `zkErrorROM 0 t Q ≤ Q · t · 2^-λ`. At `Q = 1` the paper's `λ(errzk^C)` is at least
+`λ`. -/
+theorem zkErrorROM_le_bits (C : R.ProofSystem) {lam : ℝ} (hB : R.zkBudgetROM ≤ 2 ^ (-lam)) :
+    ZKBitSecurityAtLeast ((argument R F C).zkErrorROM 0) lam := by
+  intro t Q ht hQ
   have hreq := request_terms_le R F C
   have hQ0 : (0 : ℝ) ≤ Q := Nat.cast_nonneg Q
   have ht1 : (1 : ℝ) ≤ t := by exact_mod_cast ht
   have hQ1 : (Q : ℝ) - 1 ≤ 2 ^ 64 * t := by
-    have : (Q : ℝ) ≤ 2 ^ 64 := by exact_mod_cast hQ
+    have : (Q : ℝ) ≤ 2 ^ 64 := by exact_mod_cast (hQ : Q ≤ 2 ^ 64)
     nlinarith
   have hS : (0 : ℝ) < 2 * 2 ^ (8 * R.kS) := by positivity
   set c : ℝ := (R.rounds.choose 2 : ℝ) / 2 ^ (8 * R.k) + R.rounds / 2 ^ R.chernoff +
@@ -224,17 +239,18 @@ theorem zkErrorROM_le_bits (C : R.ProofSystem) {lam : ℝ} (hB : R.zkBudgetROM �
         ring
     _ ≤ Q * t * 2 ^ (-lam) := mul_le_mul_of_nonneg_left hB (by positivity)
 
-/-- **The bit security of zero knowledge in the QROM** (`everlasting_zero_knowledge_qrom`'s error): if the
-QROM budget is at most `2^-λ`, then for every `t ≥ 1` hash queries and `Q ≤ 2^64` proof queries,
-`zkError 0 t Q ≤ Q · t · 2^-λ`. At `Q = 1` the paper's `λ(errzk)` is at least `λ`. -/
-theorem zkError_le_bits (C : R.ProofSystem) {lam : ℝ} (hB : R.zkBudget ≤ 2 ^ (-lam))
-    {t Q : ℕ} (ht : 1 ≤ t) (hQ : Q ≤ 2 ^ 64) :
-    (setting R F C).model.zkError 0 t Q ≤ Q * t * 2 ^ (-lam) := by
+/-- **The bit security of zero knowledge in the QROM** (the error `zkError 0` of
+`everlasting_zero_knowledge_honest_qrom`): if the QROM budget is at most `2^-λ`, then for every
+`t ≥ 1` hash queries and `Q ≤ proofQueryCap` proof queries, `zkError 0 t Q ≤ Q · t · 2^-λ`. At
+`Q = 1` the paper's `λ(errzk)` is at least `λ`. -/
+theorem zkError_le_bits (C : R.ProofSystem) {lam : ℝ} (hB : R.zkBudget ≤ 2 ^ (-lam)) :
+    ZKBitSecurityAtLeast ((argument R F C).zkError 0) lam := by
+  intro t Q ht hQ
   have hreq := request_terms_le R F C
   have hQ0 : (0 : ℝ) ≤ Q := Nat.cast_nonneg Q
   have ht1 : (1 : ℝ) ≤ t := by exact_mod_cast ht
   have hQ1 : (Q : ℝ) - 1 ≤ 2 ^ 64 * t := by
-    have : (Q : ℝ) ≤ 2 ^ 64 := by exact_mod_cast hQ
+    have : (Q : ℝ) ≤ 2 ^ 64 := by exact_mod_cast (hQ : Q ≤ 2 ^ 64)
     nlinarith
   have hS : (0 : ℝ) < 2 ^ (8 * R.kS) := by positivity
   set c : ℝ := (R.rounds.choose 2 : ℝ) / 2 ^ (8 * R.k) + R.rounds / 2 ^ R.chernoff +

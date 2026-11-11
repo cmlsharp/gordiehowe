@@ -1264,38 +1264,14 @@ struct PlanRecords {
     // side. For M = 0 (INTEGER, assert_int_equal) they are ExprPtr<F>s,
     // EXPR is empty, and SPAN = max(lhs_hi, rhs_hi) - min(lhs_lo, rhs_lo) < p
     // is the no-wrap certificate; its field equation lhs - rhs = 0 is the
-    // domain's predicate of the same name.
+    // domain's predicate of the same name. For M >= 2 over sides that are
+    // not affine (EXPR_SIDES, mod.h's expression_sides) they are
+    // ExprPtr<F>s too, EXPR is empty, and the committed-digits relation is
+    // the domain's predicate NAME.row.
     std::shared_ptr<const void> lhs, rhs;
-    bool integer = false;
+    bool integer = false, expr_sides = false;
     Bound span = 0;
   };
-  // An assert_mod of modulus M >= 2 over a congruence D = 0 of terms not
-  // all affine (mod.h's product form) in DOMAIN: D = P - N, P its terms of
-  // sign +1 and N of sign -1 (ops/integer_congruence.h), its field
-  // equation D - m qlo - m q = 0 in the congruence's normalization the
-  // domain's predicate NAME; ROWS rows, SPECTRAL when the equation is
-  // stated in a transform's spectrum (a row with spectral products). The
-  // record keeps P's and N's integer intervals (lhs_lo, lhs_hi: P;
-  // rhs_lo, rhs_hi: N), the quotient node QUOTIENT (SIZE_MAX for m = p)
-  // committed below QMAX + 1 with the sound bound DMAX (its range request
-  // NAME.q), qlo, and the congruence CONG
-  // (std::shared_ptr<const ops::Congruence<F>> of the domain's field F,
-  // type-erased), which the realized program's export reads: it states
-  // NAME as the source mod_m P N (ModForm::kProduct, kSpectralProduct)
-  // with the derivation productMod. The certificates <name>.leftSpan,
-  // .rightSpan and .cap are the committed quotient's (mod.h's
-  // committed_digits, P and N in the roles of its sides).
-  struct ProductModEq {
-    std::string name, domain;
-    Bound m = 0;
-    bool spectral = false;
-    size_t rows = 1;
-    SignedInt lhs_lo = 0, lhs_hi = 0, rhs_lo = 0, rhs_hi = 0, qlo = 0;
-    Bound qmax = 0, dmax = 0;
-    size_t quotient = SIZE_MAX;
-    std::shared_ptr<const void> cong;
-  };
-  std::vector<ProductModEq> product_mod_equalities;
   // The excluded set U of a challenge drawn uniform in K minus U
   // (Domain::challenge_outside): [0, RANGE), the union of the domain's range
   // tables. CHALLENGE is the domain's alpha:<D>.
@@ -1410,7 +1386,7 @@ struct PlanRecords {
   std::vector<Charge> charges;
   std::vector<MemberCheck> member_checks;
   // A convolution the conv lowering (compiler/conv.h) realizes by the
-  // spectral batch BATCH in an affine context: the source conv node CONV
+  // spectral batch BATCH: the source conv node CONV
   // (an ExprNode of the domain's field, type-erased, owned by the
   // predicate's expression) of BLOCKS rows of operands of LEFT and RIGHT
   // coefficients, read by the predicate PRED as the first LEFT + RIGHT - 1
@@ -1420,6 +1396,24 @@ struct PlanRecords {
   struct SpectralConv {
     std::string pred, batch;
     const void *conv = nullptr;
+    // PRED's expression before the conv lowering rewrote it (ExprPtr<F>
+    // of the domain's field F, type-erased), which the realized program
+    // prints as its source.
+    std::shared_ptr<const void> source;
+    // In a predicate not affine in its convs: the committed C (node C)
+    // PRED reads the conv as, and the affine row ROW, C = INTT(z)[0, lo)
+    // (SIZE_MAX and "" otherwise).
+    size_t c = SIZE_MAX;
+    std::string row;
+    // The node the rewritten PRED reads C as (an ExprNode of the domain's
+    // field, type-erased).
+    std::shared_ptr<const void> cnode;
+    // The direct realization (DIRECT; no batch, z or PSI): C committed and
+    // the predicate PRODUCTS, C = sum_{u+v=k} a_u b_v, a row a square
+    // (SQUARES) when a and b read one row of one value.
+    bool direct = false;
+    std::string products;
+    std::vector<bool> squares;
     size_t z = 0, blocks = 0, left = 0, right = 0, length = 0;
     std::vector<uint8_t> psi;
   };
@@ -1471,8 +1465,6 @@ struct PlanRecords {
     // by the integer C (kScale).
     // kApplyIn: the first operator application (pre-order) of the left side
     // of predicate or row ITEM (a group row's convolution term).
-    // kTermOperand: the operand of part A of the product-form predicate
-    // ITEM's congruence (mod.h's derive_product).
     enum Kind : uint8_t {
       kSide,
       kLeaf,
@@ -1481,8 +1473,7 @@ struct PlanRecords {
       kSub,
       kMul,
       kScale,
-      kApplyIn,
-      kTermOperand
+      kApplyIn
     };
     Kind kind = kLeaf;
     std::string item;
@@ -1494,8 +1485,7 @@ struct PlanRecords {
   // A value's interval source (Lean `IvlSrc`): its constant entries, its
   // statement bound (kDeclared), a nat premise (kNat), the prime field, a
   // Bit; the hull of the public table entries a selection or lookup places
-  // it among (kTableHull); for a spectrum a kernel of the product form
-  // reads, the hull of its coefficient form (kTableKernel).
+  // it among (kTableHull).
   struct DerivIvlSrc {
     enum Kind : uint8_t {
       kConst,
@@ -1506,8 +1496,7 @@ struct PlanRecords {
       kQuadRoot,
       kRootSet,
       kShift,
-      kTableHull,
-      kTableKernel
+      kTableHull
     };
     Kind kind = kConst;
   };
@@ -1541,8 +1530,7 @@ struct PlanRecords {
       kLinop,
       kConclude,
       kInline,
-      kViewIvl,
-      kProductMod
+      kViewIvl
     };
     Rule rule = kConclude;
     // Earlier steps of the derivation, by index; kLinear's coefficients.

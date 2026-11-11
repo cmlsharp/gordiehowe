@@ -89,6 +89,11 @@ def QueryBudget (kq : ℕ) : Prop :=
   ∀ x h π, (T.setting kS hb).model.Accepts h x π ((T.setting kS hb).queries x) →
     ((T.setting kS hb).model.queries x π h ((T.setting kS hb).queries x)).length ≤ kq
 
+/-- **The simulator's queries per proof query** (paper `def:bcs-quantities`(1), `q_S`): two per
+position, one per round of the composite and one per branch. -/
+abbrev simQueries : ℕ :=
+  2 * Fintype.card (T.setting kS hb).model.Pos + C.shape.term.size C.rounds + ∑ d, C.shape.nb d
+
 /-- **Knowledge soundness and soundness at the setting with merges** (paper `thm:e2e`(2),
 `thm:bcs-main`(2)), at the verifier with merges with query budget `kq` (`hkq`), for the relation
 `rel'` and the IOP's extractor with its witness read by `g`, with the largest round error
@@ -133,38 +138,33 @@ form of `def:bcs-se`, in the QROM (`SPBCS.WeakOnlineSimulationExtractable`) and 
 (`SPBCS.WeakOnlineSimulationExtractableROM`, with the classical simulator program and oracle
 simulation error `0`), and simulation-sound extractability (Unruh 2017 Definition 14, p. 21, weak
 variant) for residual-state tests that make no oracle queries and for tests answered by the
-simulated oracle after extraction, with `2 |Pos| + t.size n + Σ_d nb d` simulator queries per
-proof query. They read the honest prover only through its simulator. -/
+simulated oracle after extraction, with `simQueries` (`2 |Pos| + t.size n + Σ_d nb d`) simulator
+queries per proof query. They read the honest prover only through its simulator. -/
 structure SimGuarantees [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) {W' : Type} (rel' : Set (Stmt × W'))
     (g : Stmt → W → W') {kq : ℕ} (hkq : T.QueryBudget kS hb kq) {pB : ℕ} (hf : T.ProofFormat kS hb pB)
     {I' : Type} {relI : Set (Stmt × I')} {SD : C.SimData} (Hc : C.Honest SD I' relI) : Prop where
   /-- Part (5): weak online simulation extractability in the QROM, the joint form of
   `def:bcs-se`. -/
   simOnlineExtractability : (T.setting kS hb).model.WeakOnlineSimulationExtractable pB
-    (T.setting kS hb).queries rel' (C.extractor.mapWit g) kq hkq
+    (T.setting kS hb).queries rel' (C.extractor.mapWit g) kq
     ((T.simulator kS hb hf SD).encode queryEncoding)
     ((T.setting kS hb).model.simExtractionError kq (maxError Sd.error)
-      (2 * Fintype.card (T.setting kS hb).model.Pos + C.shape.term.size C.rounds +
-        ∑ d, C.shape.nb d))
+      (T.simQueries kS hb))
   /-- Part (5): weak online simulation extractability in the ROM, the joint form of
   `def:bcs-se`. -/
   simOnlineExtractabilityROM : T.SimExtractableROM kS hb hf Hc rel' (C.extractor.mapWit g) kq
-    (2 * Fintype.card (T.setting kS hb).model.Pos + C.shape.term.size C.rounds +
-      ∑ d, C.shape.nb d)
+    (T.simQueries kS hb)
     ((T.setting kS hb).model.simExtractionErrorROM kq (maxError Sd.error)
-      (2 * Fintype.card (T.setting kS hb).model.Pos + C.shape.term.size C.rounds +
-        ∑ d, C.shape.nb d))
+      (T.simQueries kS hb))
   /-- Part (5) in Unruh's weak fresh form, for query-free tests. -/
   simExtractability : T.SimExtractable kS hb hf Hc rel' (C.extractor.mapWit g) kq
     ((T.setting kS hb).model.simExtractionError kq (maxError Sd.error)
-      (2 * Fintype.card (T.setting kS hb).model.Pos + C.shape.term.size C.rounds +
-        ∑ d, C.shape.nb d))
+      (T.simQueries kS hb))
   /-- Part (5) for tests that query the oracle, answered by the simulated oracle after
   extraction. -/
   simExtractabilitySimOracle : T.SimExtractableSimOracle kS hb hf Hc rel' (C.extractor.mapWit g) kq
     fun tq tTest Q => (T.setting kS hb).model.simExtractionError kq (maxError Sd.error)
-        (2 * Fintype.card (T.setting kS hb).model.Pos + C.shape.term.size C.rounds +
-          ∑ d, C.shape.nb d) (tq + tTest) Q +
+        (T.simQueries kS hb) (tq + tTest) Q +
       (T.setting kS hb).model.swapError tTest
 
 
@@ -199,14 +199,15 @@ structure Guarantees [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) {W' : Type}
   /-- Part (1): completeness in the ROM against adversaries choosing the statement, at uniform
   coins, Merkle salts and salt. -/
   completeROM : NARG.ROM.Complete (T.prover kS hb hf (RealizedProgram.ProofSystem.IOP.honest Hc))
-    (T.verifierROM kS hb kq) (fun x π => Claim.mk x π.val) (fun x y => (x, y) ∈ relI) fun t =>
+      (PMF.uniformOfFintype _)
+    (T.verifierROM kS hb kq) (fun x π => Claim.mk x π.val) relI fun t =>
       (errc : ℝ≥0∞) + (T.setting kS hb).model.overrun +
         SPBCS.keyCollision (∑ q : C.shape.term.Leaf, C.rounds q.label) T.k + t / 2 ^ (8 * kS)
   /-- Part (1): completeness in the QROM against adversaries choosing the statement, at uniform
   coins, Merkle salts and salt. -/
   completeQROM : NARG.QROM.Complete queryEncoding
-    (T.prover kS hb hf (RealizedProgram.ProofSystem.IOP.honest Hc))
-    (T.verifier kS hb kq) (fun x π => Claim.mk x π.val) (fun x y => (x, y) ∈ relI) fun t =>
+    (T.prover kS hb hf (RealizedProgram.ProofSystem.IOP.honest Hc)) (PMF.uniformOfFintype _)
+    (T.verifier kS hb kq) (fun x π => Claim.mk x π.val) relI fun t =>
       (errc : ℝ≥0∞) + (T.setting kS hb).model.overrun +
         SPBCS.keyCollision (∑ q : C.shape.term.Leaf, C.rounds q.label) T.k + 2 * t / 2 ^ (4 * kS)
   /-- Part (2): knowledge soundness and soundness. -/
@@ -218,7 +219,8 @@ structure Guarantees [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) {W' : Type}
   /-- Part (4): unconditional witness indistinguishability. -/
   witnessIndist : ∀ (eX : SPBCS.BitEncoding Stmt) (eW : SPBCS.BitEncoding I') (Q ℓ : ℕ),
     (T.setting kS hb).model.WitnessIndistinguishableOfLength
-      (T.prover kS hb hf (RealizedProgram.ProofSystem.IOP.honest Hc)) eX eW relI Q ℓ
+      (T.prover kS hb hf (RealizedProgram.ProofSystem.IOP.honest Hc))
+        (PMF.uniformOfFintype _) eX eW relI Q ℓ
       (Q * (T.setting kS hb).model.wiError errc (SPBCS.choiceCount ℓ))
 
 open Classical in
@@ -241,7 +243,8 @@ and (4) at the honest prover with coins:
 and parts (2) and (5) as in `Guarantees`. -/
 structure CoinGuarantees [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) {W' : Type} (rel' : Set (Stmt × W'))
     (g : Stmt → W → W') {kq : ℕ} (hkq : T.QueryBudget kS hb kq) {pB : ℕ} (hf : T.ProofFormat kS hb pB)
-    {I' : Type} {relI : Set (Stmt × I')} {SD : C.SimData} (Hc : C.Honest SD I' relI) {J Ω : Type} [Fintype Ω]
+    {I' : Type} {relI : Set (Stmt × I')} {SD : C.SimData} (Hc : C.Honest SD I' relI) {J Ω : Type}
+    [Fintype Ω] [DecidableEq Ω]
     [Nonempty Ω] (relJ : Set (Stmt × J)) (inp : J → Ω → I') (errc : ℝ≥0) : Prop
     extends T.SimGuarantees kS hb Sd rel' g hkq hf Hc where
   /-- Part (1): completeness, at every value `c` of the honest prover's coins, over the coins `ω`. -/
@@ -251,15 +254,15 @@ structure CoinGuarantees [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) {W' : T
   /-- Part (1): completeness in the ROM against adversaries choosing the statement, at uniform
   coins `ω`, honest coins, Merkle salts and salt. -/
   completeROM : NARG.ROM.Complete
-    (T.prover kS hb hf (RealizedProgram.ProofSystem.IOP.coinHonest Hc inp))
-    (T.verifierROM kS hb kq) (fun x π => Claim.mk x π.val) (fun x y => (x, y) ∈ relJ) fun t =>
+    (T.prover kS hb hf (RealizedProgram.ProofSystem.IOP.coinHonest Hc inp)) (PMF.uniformOfFintype _)
+    (T.verifierROM kS hb kq) (fun x π => Claim.mk x π.val) relJ fun t =>
       (errc : ℝ≥0∞) + (T.setting kS hb).model.overrun +
         SPBCS.keyCollision (∑ q : C.shape.term.Leaf, C.rounds q.label) T.k + t / 2 ^ (8 * kS)
   /-- Part (1): completeness in the QROM against adversaries choosing the statement, at uniform
   coins `ω`, honest coins, Merkle salts and salt. -/
   completeQROM : NARG.QROM.Complete queryEncoding
-    (T.prover kS hb hf (RealizedProgram.ProofSystem.IOP.coinHonest Hc inp))
-    (T.verifier kS hb kq) (fun x π => Claim.mk x π.val) (fun x y => (x, y) ∈ relJ) fun t =>
+    (T.prover kS hb hf (RealizedProgram.ProofSystem.IOP.coinHonest Hc inp)) (PMF.uniformOfFintype _)
+    (T.verifier kS hb kq) (fun x π => Claim.mk x π.val) relJ fun t =>
       (errc : ℝ≥0∞) + (T.setting kS hb).model.overrun +
         SPBCS.keyCollision (∑ q : C.shape.term.Leaf, C.rounds q.label) T.k + 2 * t / 2 ^ (4 * kS)
   /-- Part (2): knowledge soundness and soundness. -/
@@ -271,7 +274,8 @@ structure CoinGuarantees [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) {W' : T
   /-- Part (4): unconditional witness indistinguishability. -/
   witnessIndist : ∀ (eX : SPBCS.BitEncoding Stmt) (eW : SPBCS.BitEncoding J) (Q ℓ : ℕ),
     (T.setting kS hb).model.WitnessIndistinguishableOfLength
-      (T.prover kS hb hf (RealizedProgram.ProofSystem.IOP.coinHonest Hc inp)) eX eW relJ Q ℓ
+      (T.prover kS hb hf (RealizedProgram.ProofSystem.IOP.coinHonest Hc inp))
+        (PMF.uniformOfFintype _) eX eW relJ Q ℓ
       (Q * (T.setting kS hb).model.wiError errc (SPBCS.choiceCount ℓ))
 
 variable {T kS hb}
@@ -299,7 +303,7 @@ theorem simOnlineExtractability [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) 
     {kq : ℕ} (hkq : T.QueryBudget kS hb kq) {pB : ℕ} (hf : T.ProofFormat kS hb pB) {I' : Type}
     {relI : Set (Stmt × I')} {SD : C.SimData} (Hc : C.Honest SD I' relI) :
     (T.setting kS hb).model.WeakOnlineSimulationExtractable pB
-      (T.setting kS hb).queries rel' (C.extractor.mapWit g) kq hkq
+      (T.setting kS hb).queries rel' (C.extractor.mapWit g) kq
       ((T.simulator kS hb hf SD).encode queryEncoding)
       ((T.setting kS hb).model.simExtractionError kq (maxError Sd.error)
         (2 * Fintype.card (T.setting kS hb).model.Pos + C.shape.term.size C.rounds +
@@ -350,19 +354,19 @@ theorem guarantees [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) {W' : Type} {
       (ROM.probUniform_unit_prod _).trans_le (RealizedProgram.ProofSystem.IOP.completeness_of_errorBound Hc hE c x y hy)
     completeROM := by
       have h := (T.setting kS hb).model.complete_rom _ (T.setting kS hb).encoder
-        (T.setting kS hb).queries (fun x y => (x, y) ∈ relI) (T.setting kS hb).layout
+        (T.setting kS hb).queries relI (T.setting kS hb).layout
         (T.setting kS hb).viewEncoder hf
         (fun x y hy => ROM.probUniform_prod_le fun c =>
           RealizedProgram.ProofSystem.IOP.completeness_of_errorBound Hc hE c x y hy) kq
-      simp only [SPTerm.size_eq_sum] at h
+      simp only [SPBCS.completenessError, SPBCS.keyCollisionBound, SPTerm.size_eq_sum] at h
       exact h
     completeQROM := by
       have h := (T.setting kS hb).model.complete_qrom _ (T.setting kS hb).encoder
-        (T.setting kS hb).queries (fun x y => (x, y) ∈ relI) (T.setting kS hb).layout
+        (T.setting kS hb).queries relI (T.setting kS hb).layout
         (T.setting kS hb).viewEncoder hf
         (fun x y hy => ROM.probUniform_prod_le fun c =>
           RealizedProgram.ProofSystem.IOP.completeness_of_errorBound Hc hE c x y hy) kq
-      simp only [SPTerm.size_eq_sum] at h
+      simp only [SPBCS.completenessError, SPBCS.keyCollisionBound, SPTerm.size_eq_sum] at h
       exact h
     knowledge := knowledgeGuarantees Sd hg hkq
     zeroKnowledge := hzk
@@ -379,7 +383,8 @@ extractability (`simGuarantees`). -/
 theorem coinGuarantees [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) {W' : Type} {rel' : Set (Stmt × W')}
     {g : Stmt → W → W'} (hg : ∀ x w, (x, w) ∈ rel → (x, g x w) ∈ rel') {kq : ℕ}
     (hkq : T.QueryBudget kS hb kq) {pB : ℕ} (hf : T.ProofFormat kS hb pB) {I' : Type}
-    {relI : Set (Stmt × I')} {SD : C.SimData} (Hc : C.Honest SD I' relI) {J Ω : Type} [Fintype Ω] [Nonempty Ω] {relJ : Set (Stmt × J)} {inp : J → Ω → I'}
+    {relI : Set (Stmt × I')} {SD : C.SimData} (Hc : C.Honest SD I' relI) {J Ω : Type} [Fintype Ω]
+    [DecidableEq Ω] [Nonempty Ω] {relJ : Set (Stmt × J)} {inp : J → Ω → I'}
     {errc : ℝ≥0} (hE : Hc.app.CoinErrorBound relJ inp fun _ => errc) :
     T.CoinGuarantees kS hb Sd rel' g hkq hf Hc relJ inp errc :=
   have hzk := (T.setting kS hb).model.privacyGuarantees (T.setting kS hb).viewEncoder hf
@@ -389,17 +394,17 @@ theorem coinGuarantees [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) {W' : Typ
       (RealizedProgram.ProofSystem.IOP.completeness_coins Hc hE c)
     completeROM := by
       have h := (T.setting kS hb).model.complete_rom _ (T.setting kS hb).encoder
-        (T.setting kS hb).queries (fun x y => (x, y) ∈ relJ) (T.setting kS hb).layout
+        (T.setting kS hb).queries relJ (T.setting kS hb).layout
         (T.setting kS hb).viewEncoder hf
         (fun x y hy => RealizedProgram.ProofSystem.IOP.completeness_coinHonest Hc hE x y hy) kq
-      simp only [SPTerm.size_eq_sum] at h
+      simp only [SPBCS.completenessError, SPBCS.keyCollisionBound, SPTerm.size_eq_sum] at h
       exact h
     completeQROM := by
       have h := (T.setting kS hb).model.complete_qrom _ (T.setting kS hb).encoder
-        (T.setting kS hb).queries (fun x y => (x, y) ∈ relJ) (T.setting kS hb).layout
+        (T.setting kS hb).queries relJ (T.setting kS hb).layout
         (T.setting kS hb).viewEncoder hf
         (fun x y hy => RealizedProgram.ProofSystem.IOP.completeness_coinHonest Hc hE x y hy) kq
-      simp only [SPTerm.size_eq_sum] at h
+      simp only [SPBCS.completenessError, SPBCS.keyCollisionBound, SPTerm.size_eq_sum] at h
       exact h
     knowledge := knowledgeGuarantees Sd hg hkq
     zeroKnowledge := hzk

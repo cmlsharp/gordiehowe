@@ -49,8 +49,8 @@ variable {prims : Primitives p} [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   {O : W1Oracles X Y p prims Msg N reps} {Mo : MaskOracle X Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {Pf PC : Type} {iFP : Fintype Pf} {iDP : DecidableEq Pf} {iFC : Fintype PC}
-  {iDC : DecidableEq PC} {iNC : Nonempty PC}
+  {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
+  [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O Mo βmin tol enc k D bmsg))
     (RingSignature.RingWitOf (FIPSSignature p prims)) ⟨Pf, PC⟩}
   {adm : KeyRing (PubKey p prims) N → Prop}
@@ -69,6 +69,7 @@ variable (prims O Mo βmin tol enc k D bmsg) in
 noncomputable def w1StmtPω (sp : Y ≃+ Y₁ × Y₂) (ω : X → Y₁) (x : RingSignature.RingStmt Bf) : X₀f :=
   (w1StmtProg sp prims O bmsg x).run ω
 
+omit [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The statement program reads only the base component** (`hstω`). -/
 theorem run_w1StmtP_eq_w1StmtPω (sp : Y ≃+ Y₁ × Y₂) (x : RingSignature.RingStmt Bf) (G : X → Y) :
     (w1StmtP sp x).run G = w1StmtPω prims O Mo βmin tol enc k D bmsg sp (base sp G) x :=
@@ -104,6 +105,7 @@ def w1SideRing (sp : Y ≃+ Y₁ × Y₂) (pks : Fin n → PubKey p prims) (G : 
     f.2.2 = f.2.1.ring.1.map fun pk =>
       w1HashAt O sp (base sp G) pk (bmsg f.2.1.ring f.2.1.msg) f.2.1.pub
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The ring-level side condition** from no collision at `ω` and a program statement that is
 the statement program's output at `G`. -/
 theorem w1SideRing_of (sp : Y ≃+ Y₁ × Y₂) (pks : Fin n → PubKey p prims) (G : X → Y)
@@ -116,6 +118,7 @@ theorem w1SideRing_of (sp : Y ≃+ Y₁ × Y₂) (pks : Fin n → PubKey p prims
   rw [run_w1StmtP_eq_w1StmtPω, w1StmtPω_eq] at hx
   rw [hx]
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **`hEside` of `kfChain_le`** for an event `Ev` giving no collision at the base component
 of the base oracle `H` (`hcoll`) and a program statement that is the statement program's output at
 the final oracle `G` (`hx`). -/
@@ -136,7 +139,7 @@ message representatives at `ω` with a main signing request (`w1Coll`), and ever
 signing request `(s, R', m', xb)` of `rs` has the message-representative point of `pk`, the ring
 statement `(R', m', x.pub)` and lists `c` for its signer (case S). -/
 def w1Side (sp : Y ≃+ Y₁ × Y₂) (pks : Fin n → PubKey p prims) (ω : X → Y₁) (f : Frg × X₀f)
-    (rs : List (MURequest (SignOracle.none Bf) n ⊕
+    (rs : List (MURequest (SignOracle.none (Bf).core) n ⊕
       W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q)) : Prop :=
   ¬ w1Coll (adm := adm) O sp pks ω f.2.1.ring f.2.1.msg rs ∧
     ∀ i (hi : i < f.2.1.ring.1.length) c, f.2.2[i]? = some c →
@@ -147,7 +150,8 @@ def w1Side (sp : Y ≃+ Y₁ × Y₂) (pks : Fin n → PubKey p prims) (ω : X �
         xb.1.ring = R' ∧ xb.1.msg = m' ∧ xb.1.pub = f.2.1.pub ∧
         xb.2.val[R'.1.idxOf (pks s)]? = some c
 
-omit [AddGroup Y] in
+omit [AddGroup Y] [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC]
+  [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **A main signing request made by the relay is tagged with its ring request**. -/
 theorem w1SignEntry_reqOf (c : ℕ) (r : RingSignature.Insider.Req Bf PSf adm n)
     (o : Option (BucketVec p × FIPSSignature p prims × List (Assignment X Y)))
@@ -198,6 +202,7 @@ theorem w1HashAt_ωT (sp : Y ≃+ Y₁ × Y₂) (hmc : ∀ a b, O.muPt a ≠ O.c
       O.chAt sp (ωT sp ω T' (O.chPt (w1MuAt O sp ω pk bm, w₁))) := by
   rw [w1HashAt, w1MuAt_ωT sp hmc ω hT']
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The side conditions are carried through the relay at the base component** (`hside` of
 `kfChain_le` at the ML-DSA ring publishing `w₁`): at the base component `ω = base sp H`,
 from the ring-level side condition at `reprogT Tb H`, the origin of the absorbed tables
@@ -209,11 +214,11 @@ theorem w1Side_of_sideRing [DecidableEq X] [Inhabited X] (sp : Y ≃+ Y₁ × Y�
     (hmc : ∀ a b, O.muPt a ≠ O.chPt b) (hci : Function.Injective O.chPt)
     (S : KFStmt (w1StmtPω prims O Mo βmin tol enc k D bmsg sp))
     (pks : Fin n → PubKey p prims) {Q : ℕ} (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁)
-    (idle : MURequest (SignOracle.none Bf) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q)
+    (idle : MURequest (SignOracle.none (Bf).core) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q)
     (hidle : w1SignEntry idle = none) (H : X → Y) (Tb : X → Option Y)
     (hP : List (AssignRelay.TaggedReq X Y (RingSignature.Insider.Req Bf PSf adm n) Q))
-    (hist' : List (HistoryEntry (MURequest (SignOracle.none Bf) n ⊕
-      W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q) (MUResponse Bf ⊕ Pf)))
+    (hist' : List (HistoryEntry (MURequest (SignOracle.none (Bf).core) n ⊕
+      W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q) (MUResponse (Bf).core ⊕ Pf)))
     (f : Frg × X₀f)
     (hR : w1SideRing O sp pks (reprogT Tb H) (base sp H) f (hP.map AssignRelay.TaggedReq.req))
     (hex : (kfRelaySide sp Bf pks (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO) S
@@ -337,7 +342,8 @@ def w1MuPts (pks : Fin n → PubKey p prims) (R : KeyRing (PubKey p prims) N) (m
       | .sign s R' m' => some (O.muPt (pubTr prims (pks s), bmsg R' m'))
       | _ => none
 
-omit [AddGroup Y] in
+omit [AddGroup Y] [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC]
+  [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- There are at most `N + |rs|` named points. -/
 theorem length_w1MuPts_le (pks : Fin n → PubKey p prims) (R : KeyRing (PubKey p prims) N)
     (m : RMsg) (rs : List (RingSignature.Insider.Req Bf PSf adm n)) :
@@ -345,6 +351,8 @@ theorem length_w1MuPts_le (pks : Fin n → PubKey p prims) (R : KeyRing (PubKey 
   rw [w1MuPts, List.length_append, List.length_map]
   exact Nat.add_le_add R.2 (List.length_filterMap_le _ _)
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype Msg]
+  [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **A ring-level collision is a collision of the message representatives at the named points**:
 two distinct message-representative points among `w1MuPts` with equal decodings at `H`, for
 decodings reading only the first component. -/

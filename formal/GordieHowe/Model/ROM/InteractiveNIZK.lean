@@ -20,7 +20,7 @@ in force after the steps (so the queries after the last step are unbounded, as i
 - `IAlg.accepts`, `QueryBoundedAdversary.acceptProb`, `QueryBoundedAdversary.advantage`: the game
   against an environment of `GordieHowe/Model/Quantum/Pure/Game.lean`, its responder read through
   `toResponder` (`ROM.NIZK.envResponder`).
-- `GordieHowe.ROM.ZeroKnowledge rel P S ε`: every query-bounded adversary with a budget of
+- `GordieHowe.ROM.ZeroKnowledge rel P μ S ε`: every query-bounded adversary with a budget of
   `t` queries has advantage at most `ε t Q`.
 - `IAlg.toNIZK`, `QueryBoundedAdversary.toNIZK`: the maps to the adversaries of
   `GordieHowe/Model/ROM/NIZK.lean`, with equal advantages (`advantage_toNIZK`).
@@ -60,7 +60,7 @@ def Reply.ofNIZK : NIZK.Reply Y Proof → Reply Y (Option Proof)
 /-- A responder of `ROM.NIZK` as a responder. -/
 def toResponder (R : NIZK.Responder X Y Stmt Wit Proof) :
     Responder X Y (ProofQuery Stmt Wit) (Option Proof) :=
-  fun i r O => ((R i r O).response, (R i r O).state)
+  fun i r O => ⟨(R i r O).response, (R i r O).state⟩
 
 /-! ### The game -/
 
@@ -143,14 +143,15 @@ variable [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] (rel : Stmt → Wi
   [DecidableRel rel] {Coins SimCoins : Type} [Fintype Coins] [Fintype SimCoins]
 
 /-- **The advantage of `𝒜`** with `Q` proof queries answered: the difference of its acceptance
-probabilities against the real environment of `P` and the simulated environment of `S`. -/
-noncomputable def advantage (P : NARG.ProverFn X Y Stmt Wit Proof Coins)
+probabilities against the real environment of `P`, its coins drawn from `μ`, and the simulated
+environment of `S`. -/
+noncomputable def advantage (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ : PMF Coins)
     (S : NARG.SimulatorFn X Y Stmt Proof SimCoins) (Q : ℕ) : ℝ :=
-  GordieHowe.advantage (𝒜.acceptProb (realEnv rel P Q)) (𝒜.acceptProb (simEnv rel S Q))
+  GordieHowe.advantage (𝒜.acceptProb (realEnv rel P μ Q)) (𝒜.acceptProb (simEnv rel S Q))
 
-theorem advantage_toNIZK (P : NARG.ProverFn X Y Stmt Wit Proof Coins)
+theorem advantage_toNIZK (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ : PMF Coins)
     (S : NARG.SimulatorFn X Y Stmt Proof SimCoins) (Q : ℕ) :
-    𝒜.toNIZK.advantage rel P S Q = 𝒜.advantage rel P S Q := by
+    𝒜.toNIZK.advantage rel P μ S Q = 𝒜.advantage rel P μ S Q := by
   rw [NIZK.Adversary.advantage, advantage, acceptProb_toNIZK, acceptProb_toNIZK]
 
 end QueryBoundedAdversary

@@ -90,7 +90,8 @@ structure PCtx where
   asgReads v := c.asgReads[v]?.getD []
   nodes k := c.nodes[k]?.getD []
 
-/-- **`readsStep` with the closure table `ct`** in place of `nodesOf`'s (`readsStep_eq_with`). -/
+/-- **`readsStep` with the closure table `ct`** in place of `nodesOf`'s
+(`readsStepWith_closureT`). -/
 @[expose] def readsStepWith (ct : NatTrie (List ℕ)) (r : ℕ → List Read) (v : ℕ) (x : Value) :
     List Read :=
   match x.kind with
@@ -103,7 +104,7 @@ structure PCtx where
   | .message u => [.late u]
   | _ => []
 
-/-- **`asgStep` with the closure table `ct`** in place of `nodesOf`'s (`asgStep_eq_with`). -/
+/-- **`asgStep` with the closure table `ct`** in place of `nodesOf`'s (`asgStepWith_closureT`). -/
 @[expose] def asgStepWith (ir : RealizedProgram) (ct : NatTrie (List ℕ)) (r : ℕ → List ℕ) (v : ℕ)
     (x : Value) : List ℕ :=
   match x.kind with

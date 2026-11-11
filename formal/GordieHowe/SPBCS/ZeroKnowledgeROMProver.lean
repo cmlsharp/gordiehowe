@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.SPBCS.ProverProg
+public import GordieHowe.Headline
 public import GordieHowe.SPBCS.ZeroKnowledgeROMQuery
 public import GordieHowe.Model.NARG.ROM
 
@@ -45,9 +46,11 @@ budget of `tq` queries before each proof query, the prover `niProver` and the si
 `niSimulator` at the joint simulator `Sim` of the composite view (`CausalHVZK`, CY24 Definition
 23.1.8), with proofs in the format `B` of the format bounds `hb`, are indistinguishable with error
 `zkErrorROM δ`. -/
+@[headline]
 theorem everlastingZeroKnowledge_rom (hvzk : CausalHVZK VE.MV rel honest pub Sim δ) :
     NARG.ROM.EverlastingZeroKnowledge (fun x w => (x, w) ∈ rel) (M.niProver Λ honest E hb)
-      (M.niSimulator Λ VE.toViewRead B (ViewEncoder.formatBounds M E VE hb) pub Sim T)
+        (PMF.uniformOfFintype _)
+      (VE.niSimulator Λ hb pub Sim T)
       (M.zkErrorROM δ) := by
   refine NARG.ROM.EverlastingZeroKnowledge.of_encode queryEncoding ?_
   rw [M.toFn_encode_niProver Λ honest E VE hb, M.encode_niSimulator Λ E VE hb,
@@ -61,7 +64,8 @@ queries are counted), at the error `zkErrorROMQuery δ`, with proofs in the form
 format bounds `hb`. -/
 theorem zeroKnowledge_rom (hvzk : CausalHVZK VE.MV rel honest pub Sim δ) :
     NARG.ROM.ZeroKnowledge (fun x w => (x, w) ∈ rel) (M.niProver Λ honest E hb)
-      (M.niSimulator Λ VE.toViewRead B (ViewEncoder.formatBounds M E VE hb) pub Sim T)
+        (PMF.uniformOfFintype _)
+      (VE.niSimulator Λ hb pub Sim T)
       (M.zkErrorROMQuery δ) := by
   refine NARG.ROM.ZeroKnowledge.of_encode queryEncoding ?_
   rw [M.toFn_encode_niProver Λ honest E VE hb, M.encode_niSimulator Λ E VE hb,

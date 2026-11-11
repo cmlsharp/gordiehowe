@@ -19,27 +19,28 @@ public import GordieHowe.Foundations.Fields.P256
 /-!
 # The field element readers
 
-The C++ `sample` of each field of the flagship configurations (the field aliases of the `GordieHowe.MLDSA44.Native.ROMParams` and
-`GordieHowe.MLDSA44.Native.QROMParams` profiles, `lib/params/param_sets.h` lines 100–105 and 140–145), as a `CReader`.
-The configuration-specific instantiation of the generic readers of
-`GordieHowe/SPBCS/Sampler/ChallengeReader.lean`, so it lives with the instances. The benchmark report
-(`lib/bench/report_bench.cc`) selects the profile by `PQ_FIELD_PROFILE`, and each
-configuration of `lib/gordiehowe/examples` draws its challenges in that profile's fields:
+The C++ `sample` of each field of the flagship configurations (the field aliases of the
+`GordieHowe.MLDSA44.Native.ROMParams` and `GordieHowe.MLDSA44.Native.QROMParams` profiles,
+`lib/params/param_sets.h`, `ROMParams` and `QROMParams`), as a `CReader`. The configuration-specific
+instantiation of the generic readers of `GordieHowe/SPBCS/Sampler/ChallengeReader.lean`, so it lives
+with the instances. The benchmark report (`lib/bench/report_bench.cc`) selects the profile by
+`PQ_FIELD_PROFILE`, and each configuration of `lib/gordiehowe/examples` draws its challenges in that
+profile's fields:
 
 | Lean field | C++ type | draw |
 |---|---|---|
-| `GF2_128` | `GF2_128<>` | 16 bytes, no rejection (`gf2_128.h` lines 197–205) |
-| `GF2_256` | `GF2_256<>` | 32 bytes, no rejection (`gf2_256.h` lines 195–203) |
-| `ZMod 12289` | `Fp14` | 2 bytes, masked to 14 bits, rejected if `≥ 12289` (`fp14.h` lines 292–305) |
-| `ZMod 8380417` | `Fp24` | 3 bytes, masked to 23 bits, rejected if `≥ 8380417` (`fp24.h` lines 286–299) |
-| `ZMod pGold` | `Fp64G` | 8 bytes, rejected if `≥ p` (`fp_goldilocks.h` lines 167–174) |
-| `FalconNativeField9` | `Fp14_N<9,2>` | 9 `Fp14` coordinates of `X^9 - 2` (`fp14_n.h` line 258) |
-| `FalconNativeField20` | `NativeWide<Fp14,20,11,2,…,Tower=true>` | 20 `Fp14` coordinates, `e[4j+i]` the coefficient of `u^i v^j` (`fp_native_wide.h` lines 44, 372–379) |
-| `MLDSANativeField6` | `Fp24_6` | 6 `Fp24` coordinates of `X^6 - 7` (`fp24_6.h` line 209) |
+| `GF2_128` | `GF2_128<>` | 16 bytes, no rejection (`gf2_128.h`, `sample`) |
+| `GF2_256` | `GF2_256<>` | 32 bytes, no rejection (`gf2_256.h`, `sample`) |
+| `ZMod 12289` | `Fp14` | 2 bytes, masked to 14 bits, rejected if `≥ 12289` (`fp14.h`, `sample`) |
+| `ZMod 8380417` | `Fp24` | 3 bytes, masked to 23 bits, rejected if `≥ 8380417` (`fp24.h`, `sample`) |
+| `ZMod pGold` | `Fp64G` | 8 bytes, rejected if `≥ p` (`fp_goldilocks.h`, `Fp64G::sample`) |
+| `FalconNativeField9` | `Fp14_N<9,2>` | 9 `Fp14` coordinates of `X^9 - 2` (`fp14_n.h`, `Fp14_N`) |
+| `FalconNativeField20` | `NativeWide<Fp14,20,11,2,…,Tower=true>` | 20 `Fp14` coordinates, `e[4j+i]` the coefficient of `u^i v^j` (`fp_native_wide.h`, `NativeWide`) |
+| `MLDSANativeField6` | `Fp24_6` | 6 `Fp24` coordinates of `X^6 - 7` (`fp24_6.h`, `Fp24_6`, `beta_ = 7`) |
 | `MLDSANativeField11` | `NativeWide<Fp24,11,2,0,…>` | 11 `Fp24` coordinates of `X^11 - 2` |
-| `GoldilocksExt2` | `Fp64G2` | 2 Goldilocks coordinates of `X^2 - 7` (`fp_goldilocks.h` lines 344–349) |
-| `GoldilocksExt4` | `Fp64G4` | 4 Goldilocks coordinates of `X^4 - 7` (`fp_goldilocks4.h` line 180) |
-| `ZMod P256.p` | `Fp256Base` | 32 bytes, masked to 256 bits, rejected if `≥ p` (`fp_generic.h` lines 393–404) |
+| `GoldilocksExt2` | `Fp64G2` | 2 Goldilocks coordinates of `X^2 - 7` (`fp_goldilocks.h`, `Fp64G2`, `kW = 7`) |
+| `GoldilocksExt4` | `Fp64G4` | 4 Goldilocks coordinates of `X^4 - 7` (`fp_goldilocks4.h`, `Fp64G4`) |
+| `ZMod P256.p` | `Fp256Base` | 32 bytes, masked to 256 bits, rejected if `≥ p` (`fp_generic.h`, `sample`) |
 
 The binary fields read their bytes as a little-endian integer whose bit `i` is the coefficient of
 `X^i` (`GF2Poly::of_bytes`, `gf2poly.h` line 55): bit `i` of byte `j` is the coefficient of

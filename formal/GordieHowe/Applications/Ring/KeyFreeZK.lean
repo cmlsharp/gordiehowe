@@ -41,26 +41,29 @@ open GordieHowe.QROM GordieHowe.SPBCS IOP SPTerm
 section SPBCS
 
 variable {k kN kS L e N n t kq : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq Yb]
-  {TB : BaseTypes} {B : BaseSigner Xb Yb N TB}
+  {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
+  [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  {B : BaseSigner Xb Yb N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
   {X₀ Wit₀ : Type} {M : SPBCS Mg P X₀ k kN kS L e} {Λ : SiteLayout Mg} {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] {E : (j : ι) → (M.comp j).Encoder}
   {Vr : X₀ → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  {hb : M.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {hb : M.FormatBounds Qs b b} {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   {honest : Wit₀ → R → CausalProver P τ X₀}
   {Stmt Wit : Type} [Fintype Stmt] [DecidableEq Stmt] [Fintype Wit] [DecidableEq Wit]
   [Inhabited (ProofQuery Stmt Wit)] {stmtX : Stmt → X₀} {fw : Wit → Wit₀}
   {relH : Set (X₀ × Wit₀)} {rel : Stmt → Wit → Prop} [DecidableRel rel]
   {Rq O : Type} [Fintype Rq] [DecidableEq Rq]
-  {enc : MURequest (SignOracle.none B) n ⊕ Rq → ProofQuery Stmt Wit}
+  {enc : MURequest (SignOracle.none B.core) n ⊕ Rq → ProofQuery Stmt Wit}
 
 local notation "𝒫z" => Insider.encProver M Λ E hb honest
 
 variable (A' : QueryBoundedAdversary (Bits (queryBits k kN kS L)) (XOut k e)
-    (MURequest (SignOracle.none B) n ⊕ Rq) (MUResponse B ⊕ M.Response b) O t)
-  (test : O → List (MURequest (SignOracle.none B) n ⊕ Rq) →
+    (MURequest (SignOracle.none B.core) n ⊕ Rq) (MUResponse B.core ⊕ M.Response b) O t)
+  (test : O → List (MURequest (SignOracle.none B.core) n ⊕ Rq) →
     OracleProg (Bits (queryBits k kN kS L)) (XOut k e) Bool)
 
 /-- **The adversary at the auxiliary value `a` with its multi-user requests absorbed** into dummy
@@ -99,7 +102,7 @@ noncomputable def kfDist (henc : Function.Injective enc)
 /-- **The probability that the test accepts at one auxiliary value**: the oracle uniform, the
 test run on the output and the requests at the final oracle in force. -/
 noncomputable def acceptKAt (C : Challenger (Bits (queryBits k kN kS L)) (XOut k e)
-      (MURequest (SignOracle.none B) n ⊕ Rq) (MUResponse B ⊕ M.Response b))
+      (MURequest (SignOracle.none B.core) n ⊕ Rq) (MUResponse B.core ⊕ M.Response b))
     (a : A'.Aux) : ℝ≥0∞ :=
   ∑' H, PMF.uniformOfFintype (Bits (queryBits k kN kS L) → XOut k e) H *
     (((A'.alg a).toKindAlg.composeBothOut C id).outLaw H).toOuterMeasure
@@ -108,7 +111,7 @@ noncomputable def acceptKAt (C : Challenger (Bits (queryBits k kN kS L)) (XOut k
 
 /-- **The probability that the test accepts**, averaged over the auxiliary input. -/
 noncomputable def acceptK (C : Challenger (Bits (queryBits k kN kS L)) (XOut k e)
-      (MURequest (SignOracle.none B) n ⊕ Rq) (MUResponse B ⊕ M.Response b)) :
+      (MURequest (SignOracle.none B.core) n ⊕ Rq) (MUResponse B.core ⊕ M.Response b)) :
     ℝ≥0∞ :=
   ∑' a, A'.aux a * acceptKAt A' test C a
 
@@ -155,13 +158,14 @@ theorem outLaw_kfDist_real (henc : Function.Injective enc)
     (htest : ∀ o rs, (test o rs).QueriesLE kq) (keys : Fin n → B.KeyCoins) (Q : ℕ) (a : A'.Aux)
     (H : Bits (queryBits k kN kS L) → XOut k e) :
     (((kfDist A' test henc htest keys Q a).alg ()).compose
-        (realChallenger rel ((𝒫z).comap stmtX fw) Q)).outLaw H (some true) =
-      (((A'.alg a).toKindAlg.composeBothOut (kfMain B rel ((𝒫z).comap stmtX fw) enc keys Q)
+        (realChallenger rel ((𝒫z).comap stmtX fw) (PMF.uniformOfFintype _) Q)).outLaw H (some true) =
+      (((A'.alg a).toKindAlg.composeBothOut (kfMain B rel ((𝒫z).comap stmtX fw) (PMF.uniformOfFintype _) enc keys Q)
           id).outLaw H).toOuterMeasure
         {o | ∃ v ∈ o, (test ((A'.alg a).out v.adv.workspace.1) (Quantum.requests v.chal.logs)).run
           (H.reprogram ((A'.alg a).toKindAlg.postAss
-            (kfMain B rel ((𝒫z).comap stmtX fw) enc keys Q) v.chal)) = true} := by
-  have h := outLaw_kfMain B rel ((𝒫z).comap stmtX fw) enc henc keys Q (A'.alg a) H
+            (kfMain B rel ((𝒫z).comap stmtX fw) (PMF.uniformOfFintype _) enc keys Q) v.chal)) = true} := by
+  have h := outLaw_kfMain B rel ((𝒫z).comap stmtX fw) (PMF.uniformOfFintype _) enc henc keys Q
+      (A'.alg a) H
     fun adv lg _ _ G => (test ((A'.alg a).out adv.workspace.1) (Quantum.requests lg)).run G = true
   refine Eq.trans ?_ h.symm
   change (((kfAbsorbed A' (enc := enc) keys Q a).thenProg (kfTest A' test keys Q a) kq
@@ -207,7 +211,7 @@ theorem acceptKAt_kfMain_le (hrel : ∀ x w, rel x w ↔ (stmtX x, fw w) ∈ rel
     (VE : M.ViewEncoder E Qs) {Pub : Type} (pub : X₀ → Pub) (Sim : CausalJointSimulator VE.MV Pub)
     (T : M.Preimages) {δ : NNReal} (hvzk : CausalHVZK VE.MV relH honest pub Sim δ)
     (keys : Fin n → B.KeyCoins) (Q : ℕ) (a : A'.Aux) :
-    acceptKAt A' test (kfMain B rel ((𝒫z).comap stmtX fw) enc keys Q) a ≤
+    acceptKAt A' test (kfMain B rel ((𝒫z).comap stmtX fw) (PMF.uniformOfFintype _) enc keys Q) a ≤
       acceptKAt A' test (kfMainSim B rel
         ((M.niJointSimulatorProg Λ VE.toViewRead b pub Sim T).comap stmtX) enc keys Q) a +
         ENNReal.ofReal (M.zkError δ t Q) := by
@@ -233,7 +237,7 @@ theorem acceptKAt_kfMain_le (hrel : ∀ x w, rel x w ↔ (stmtX x, fw w) ∈ rel
     exact ENNReal.ofReal_le_ofReal hr
   have h := hzk t Q _ (kfDist A' test henc htest keys Q a) hD
   have hle : (kfDist A' test henc htest keys Q a).acceptProb
-      (realChallenger rel ((𝒫z).comap stmtX fw) Q) ≤
+      (realChallenger rel ((𝒫z).comap stmtX fw) (PMF.uniformOfFintype _) Q) ≤
       (kfDist A' test henc htest keys Q a).acceptProb
         (simChallenger rel ((M.niJointSimulatorProg Λ VE.toViewRead b pub Sim T).comap stmtX) Q) +
         ENNReal.ofReal (M.zkError δ t Q) := by
@@ -254,7 +258,7 @@ theorem acceptK_kfMain_le (hrel : ∀ x w, rel x w ↔ (stmtX x, fw w) ∈ relH)
     (VE : M.ViewEncoder E Qs) {Pub : Type} (pub : X₀ → Pub) (Sim : CausalJointSimulator VE.MV Pub)
     (T : M.Preimages) {δ : NNReal} (hvzk : CausalHVZK VE.MV relH honest pub Sim δ)
     (keys : Fin n → B.KeyCoins) (Q : ℕ) :
-    acceptK A' test (kfMain B rel ((𝒫z).comap stmtX fw) enc keys Q) ≤
+    acceptK A' test (kfMain B rel ((𝒫z).comap stmtX fw) (PMF.uniformOfFintype _) enc keys Q) ≤
       acceptK A' test (kfMainSim B rel
         ((M.niJointSimulatorProg Λ VE.toViewRead b pub Sim T).comap stmtX) enc keys Q) +
         ENNReal.ofReal (M.zkError δ t Q) := by

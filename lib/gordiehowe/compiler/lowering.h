@@ -600,6 +600,9 @@ class MacEqualityLowering final : public BasicLowering<S> {
              "unsound_per_chunk_mac; they are alternative MAC ablations");
       put_str(summary_.descr, "mac-per-chunk");
     }
+    // The MAC tails' quotients price their tables against the requests
+    // the domains have before any tail is lowered (mod.h).
+    for (auto &d : b.system().domains()) d->snapshot_quotient_tables();
     const auto &N = b.system().graph().nodes;
     const auto phase = b.phases();
     using Key = std::tuple<int, int, size_t>;
@@ -669,6 +672,10 @@ class ModLowering final : public BasicLowering<S> {
   void rewrite(ConstraintSystemBuilder<S> &b) override {
     b.set_summary(&summary_);
     auto &sys = b.system();
+    // The quotients price their tables against the requests the domains
+    // have before any mod_q of the pass is lowered (mod.h), whatever order
+    // the application declared them in.
+    for (auto &d : sys.domains()) d->snapshot_quotient_tables();
     for (auto &e : sys.mods_) {
       if (e.lowered || e.zero != zero_) continue;
       S::dispatch(sys.cores_.at(size_t(e.domain))->field_id, [&](auto tag) {

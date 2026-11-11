@@ -44,7 +44,7 @@ variable {X Y : Type} {p : Params} {T : ℕ} {Msg : Type} {N reps : ℕ}
   {O : W1Oracles X Y p prims Msg N reps} {Mo : MaskOracle X Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O Mo βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O Mo βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS}
   {adm : KeyRing (PubKey p prims) N → Prop}
   [hadm : DecidablePred adm] {n Q : ℕ}
   {Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] [DecidableEq X]
@@ -80,6 +80,8 @@ noncomputable def w1SlotSig
     (c : KFCoins (p := p) (T := T) k D Y₁) : Option (FIPSSignature p prims) :=
   (w1SlotOut sp pks ω r c).map Prod.snd
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The guessing term of a slot's signature from its public part**
     (`PMF.tsum_uniform_slots_guess_le`
 at `w1SlotPub` and `w1SlotSig`) is at most `k · T · |BucketVec| / |MaskBox|`
@@ -119,17 +121,18 @@ theorem iSup_sum_iSup_w1Slot_le [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁
       Rg r.1.2 m
   · simp [w1SlotOut, hr]
 
+omit [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] in
 /-- **A logged signing entry asked by a slot's recorded request carries the slot's signature**:
 for the side-mode key-free relay at the side coins `sc` and the base component `ω`, a main request
 that the relay's program of the tagged request `r` with number `j` can make (`CanAsk`), its side
 reads answered by `ω`, and that is a signing entry, has the signature `w1SlotSig r (sc j)`. -/
 theorem w1EntrySig_of_canAsk [NeZero n] [Fintype X] [Inhabited X] {sc : Fin Q → KFCoins (p := p) (T
     := T) k D Y₁}
-    (hO : O.ReadsFst sp) (idle : MURequest (SignOracle.none Bf) n ⊕
+    (hO : O.ReadsFst sp) (idle : MURequest (SignOracle.none (Bf).core) n ⊕
       W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q)
     (r : AssignRelay.TaggedReq X Y (RingSignature.Insider.Req Bf PSf adm n) Q) (j : Fin Q)
     (hj : (r.1.2 : ℕ) = j)
-    {e : MURequest (SignOracle.none Bf) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q}
+    {e : MURequest (SignOracle.none (Bf).core) n ⊕ W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q}
     (he : MultiRelay.CanAsk (AssignRelay.relayOf (kfRelaySide sp Bf pks
       (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
       (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PS) (Q := Q))
@@ -161,6 +164,8 @@ theorem w1EntrySig_of_canAsk [NeZero n] [Fintype X] [Inhabited X] {sc : Fin Q �
     rw [h2]
     rfl
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **Two signatures of one slot with equal public parts agree on the relation**: for a slot's
 signing request `r = ((sign s Rg m, c), T)` and two coins at which the key-free signer outputs the
 same public part `φ` (published value and base component) with signatures `σ`, `σ'`, at the
@@ -246,6 +251,8 @@ theorem w1Rel_iff_of_w1SlotPub_eq (hO : O.ReadsFst sp) (hdisj : ∀ a b, O.muPt 
         exact hw.symm
   rw [key hc, key hc']
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [DecidableEq Y] [Nonempty Y] in
 /-- **The guess of case S is at most `Q · k · T · |BucketVec| / |MaskBox|`**
 (`PMF.tsum_uniform_slots_guess_le` with `iSup_sum_iSup_w1Slot_le`): for laws `L sc` of outcomes
 at uniform side coins, the slot requests `rq j` and a readout `Fr` whose laws satisfy the slot

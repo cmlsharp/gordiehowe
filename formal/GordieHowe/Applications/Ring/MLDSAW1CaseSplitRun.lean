@@ -54,7 +54,8 @@ variable {p : Params} {T : ℕ} {Msg : Type} {N reps : ℕ}
   {Λ : SiteLayout Mg} {b : ℕ} [∀ j i, Fintype ((Mc.comp j).MessageWrite i)]
   {E : (j : ι) → (Mc.comp j).Encoder}
   {Vr : W1ExpStmt prims RMsg N → FullTr P τ → Bool}
-  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R]
+  [DecidableEq R] [Nonempty R]
   {honest : RingSignature.RingWit (freshBase prims O Mo βmin tol enc k D bmsg) → R →
     CausalProver P τ (W1ExpStmt prims RMsg N)}
   {adm : KeyRing (PubKey p prims) N → Prop}
@@ -75,6 +76,7 @@ attribute [local instance] admDecF
 
 variable {Frg : Type}
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The goal of the key-free chain splits per run into case U, a guess and a second
 signature**: in the simulation-extraction run of `seAlgKF` for an adversary `A₀` with the
 side-mode key-free relay `kfRelaySide` at the side coins `sc` absorbed at the base component `ω`,
@@ -91,24 +93,24 @@ theorem simProb_w1Goal_le
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
     {Stmt Wit : Type} [Fintype Stmt]
     [DecidableEq Stmt] [Inhabited Stmt] {rel : Stmt → Wit → Prop} [DecidableRel rel]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit} {dummyS : Stmt}
+    {penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → ProofQuery Stmt Wit} {dummyS : Stmt}
     [Inhabited Mc.NIProof] (hO : O.ReadsFst sp)
     (ξ : Fin n → (Bf).KeyCoins) (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁) (ω : Xq → Y₁)
-    (idle : MURequest (SignOracle.none Bf) n ⊕ Rq) (hidle : w1SignEntry idle = none)
+    (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) (hidle : w1SignEntry idle = none)
     {SC' : Type} [Fintype SC'] [DecidableEq SC'] (prf : Frg → Option Mc.NIProof)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC')
     (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p prims))) (kq : ℕ) :
     simProb (outEquiv kh e)
         (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS) prf ξ Q
-          (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+          (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
       (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
         (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
         (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
         (w1DummyR (PS := PSh) (Q := Q)) sc ω idle) Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q kq)
         (forgerWinsKF (rel := rel) (enc := penc) (dummyS := dummyS) prf ξ Q
-          (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+          (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
       (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
         (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
         (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -116,13 +118,13 @@ theorem simProb_w1Goal_le
           (fun _ w => w) (w1Goal prims O Mo βmin tol enc k D bmsg adm sp
             (fun j => (Bf).pk (ξ j)) ω)) ≤
       simProb (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS) prf
-          ξ Q (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+          ξ Q (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
       (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
         (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
         (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
         (w1DummyR (PS := PSh) (Q := Q)) sc ω idle) Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q kq)
           (forgerCanonKF (rel := rel) (enc := penc) (dummyS := dummyS) prf ξ Q (((A₀.absorbAssign
-              (Resp' := MUResponse Bf ⊕ Mc.Response b)
+              (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
       (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
         (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
         (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -130,13 +132,13 @@ theorem simProb_w1Goal_le
             (fun _ w => w) (w1Ok prims O Mo βmin tol enc k D bmsg adm (fun j => (Bf).pk (ξ j)))
             (fun f _ w => w1CaseU (bmsg := bmsg) O sp ω f w)) +
         simProb (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS)
-            prf ξ Q (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+            prf ξ Q (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
       (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
         (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
         (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
         (w1DummyR (PS := PSh) (Q := Q)) sc ω idle) Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q kq)
           (forgerCanonKF (rel := rel) (enc := penc) (dummyS := dummyS) prf ξ Q (((A₀.absorbAssign
-              (Resp' := MUResponse Bf ⊕ Mc.Response b)
+              (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
       (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
         (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
         (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -148,13 +150,13 @@ theorem simProb_w1Goal_le
                 (w1StmtPω prims O Mo βmin tol enc k D bmsg sp) (w1ToR (Q := Q)) sc ω e'))
                 +
         simProb (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS)
-            prf ξ Q (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+            prf ξ Q (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
       (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
         (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
         (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
         (w1DummyR (PS := PSh) (Q := Q)) sc ω idle) Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q kq)
           (forgerCanonKF (rel := rel) (enc := penc) (dummyS := dummyS) prf ξ Q (((A₀.absorbAssign
-              (Resp' := MUResponse Bf ⊕ Mc.Response b)
+              (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
       (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
         (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
         (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -164,7 +166,7 @@ theorem simProb_w1Goal_le
   -- TODO(unbundle-M4): the adversary and `rel`/`enc`/`dummyS` are given explicitly; unifying them
   -- against the goal times out.
   have h0 := (simProb_forgerWinsKF_le_canon (rel := rel) (enc := penc) (dummyS := dummyS) Qs prf ξ Q kq (((A₀.absorbAssign
-      (Resp' := MUResponse Bf ⊕ Mc.Response b)
+      (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
       (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
         (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
         (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -177,7 +179,7 @@ theorem simProb_w1Goal_le
   -- comparing the two different `simProb` sums); rewrite by `add_assoc` as a term instead.
   refine le_of_le_of_eq ?_ (add_assoc _ _ _).symm
   refine add_le_add (le_refl _) ?_
-  have hP : ∀ Tb c r, MultiRelay.AsksIn (MUResponse Bf ⊕ Mc.Response b)
+  have hP : ∀ Tb c r, MultiRelay.AsksIn (MUResponse (Bf).core ⊕ Mc.Response b)
       (OracleProg.elimSide (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
         (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
         (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -199,13 +201,13 @@ theorem simProb_w1Goal_le
       rcases r <;> simp [reqOf, w1SignEntry, w1DummyR] at hp
     · exact ⟨Tb, c, r, h'⟩
   have h1 : simProb (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS :=
-      dummyS) prf ξ Q (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+      dummyS) prf ξ Q (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
       (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
         (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
         (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
         (w1DummyR (PS := PSh) (Q := Q)) sc ω idle) Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q kq)
             (forgerCanonKF (rel := rel) (enc := penc) (dummyS := dummyS) prf ξ Q (((A₀.absorbAssign
-                (Resp' := MUResponse Bf ⊕ Mc.Response b)
+                (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
       (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
         (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
         (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -213,13 +215,13 @@ theorem simProb_w1Goal_le
       Psim Ext (fun _ w => w) (w1Ok prims O Mo βmin tol enc k D bmsg adm (fun j => (Bf).pk (ξ j)))
       (fun f rs w => w1CaseS (adm := adm) (fun j => (Bf).pk (ξ j)) f rs w)) ≤
       simProb (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS) prf
-          ξ Q (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+          ξ Q (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
       (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
         (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
         (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
         (w1DummyR (PS := PSh) (Q := Q)) sc ω idle) Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q kq)
             fun c Db => (forgerCanonKF (rel := rel) (enc := penc) (dummyS := dummyS) prf ξ Q
-                (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+                (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
       (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
         (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
         (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -227,7 +229,7 @@ theorem simProb_w1Goal_le
       Psim Ext (fun _ w => w) (w1Ok prims O Mo βmin tol enc k D bmsg adm (fun j => (Bf).pk (ξ j)))
       (fun f rs w => w1CaseS (adm := adm) (fun j => (Bf).pk (ξ j)) f rs w)) c Db ∧
         ∀ r' ∈ Quantum.requests (SPBCS.advWorkspace (seAlgKF (rel := rel) (enc := penc)
-          (dummyS := dummyS) prf ξ Q (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+          (dummyS := dummyS) prf ξ Q (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
       (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
         (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
         (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -243,7 +245,7 @@ theorem simProb_w1Goal_le
       (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
       (w1DummyR (PS := PSh) (Q := Q)) sc ω idle) sp ω Psim kq
     (forgerCanonKF (rel := rel) (enc := penc) (dummyS := dummyS) prf ξ Q (((A₀.absorbAssign (Resp'
-        := MUResponse Bf ⊕ Mc.Response b)
+        := MUResponse (Bf).core ⊕ Mc.Response b)
       (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
         (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
         (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -263,6 +265,7 @@ theorem simProb_w1Goal_le
   · exact .inl ⟨w, hw, hg⟩
   · exact .inr ⟨w, hw, hs⟩
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **Only slot requests ask signing entries** at the side-mode key-free relay: a request whose
 program can ask a signing entry has number below `Q` and is not the blank request, when the
 default request is no signing request (`hdef`; the corruption of user `0` by instance). -/
@@ -271,7 +274,7 @@ theorem w1SlotAsks_hp
     (hdef : ∀ s Rg m, (default : RingSignature.Insider.Req Bf PSf adm n) ≠ .sign s Rg m)
     (hO : O.ReadsFst sp) (ξ : Fin n → (Bf).KeyCoins)
     (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁) (ω : Xq → Y₁)
-    (idle : MURequest (SignOracle.none Bf) n ⊕ Rq) :
+    (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) :
     ∀ r r', (AssignRelay.relayOf (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
         (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
         (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))

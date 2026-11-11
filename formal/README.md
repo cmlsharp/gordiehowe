@@ -77,6 +77,11 @@ correspondences with the C++ are outside what it checks:
 - **Other names.** The pad-copy map `polynomialBits`, statement members (`statement.<member>`), the
   `codec` names and hash names carry their meaning by string.
 - **Reported sizes.** The byte sizes in the figures are stated in the model.
+- **Verifier views.** Each IOP's message views (`GordieHowe.IOP.IOP.msg`: the positions the verifier
+  queries in each prover message and the entries there) are what the C++ verifier reads.
+  Honest-verifier zero knowledge is proved for these views. For the BCS transformation the compiled
+  proof's revealed data is a function of the view (`SPBCS.Reveal.write_congr`,
+  `SPBCS.Reveal.col_congr`).
 
 The SHA-256, SHA3, RSA and mDL programs have certificates only: the exported program is checked, and
 no theorem relates it to the function it is meant to compute. The ML-DSA-44 and Falcon-512 source

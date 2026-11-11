@@ -58,8 +58,9 @@ def liftReqEquiv : ProofQuery Stmt Wit ≃ ProofQuery (ProofQuery Stmt Wit) Unit
   right_inv _ := rfl
 
 /-- The real game of the lifted prover, read on the proof queries, is the real game. -/
-theorem realEnv_liftReq_comapReq {Coins : Type} [Fintype Coins] (P : NARG.ProverFn X Y Stmt Wit Proof Coins)
-    (Q : ℕ) : (realEnv (liftRel rel) P.liftReq Q).comapReq liftReqEquiv = realEnv rel P Q :=
+theorem realEnv_liftReq_comapReq {Coins : Type} [Fintype Coins]
+    (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ : PMF Coins)
+    (Q : ℕ) : (realEnv (liftRel rel) P.liftReq μ Q).comapReq liftReqEquiv = realEnv rel P μ Q :=
   rfl
 
 variable [AddGroup Y] [Fintype Stmt] [DecidableEq Stmt] [Fintype Wit] [DecidableEq Wit]
@@ -99,10 +100,11 @@ theorem acceptProb_progEnv_equiv {C C' : Type} [Fintype C] [Nonempty C] [Fintype
 bound between the prover's real game and the kernel's game**, for every distinguisher with a budget
 of `q` query slots with `n * q ≤ t` and every final unitary. -/
 theorem abs_acceptProb_realEnv_sub_progEnv_le {Coins C : Type} [Fintype Coins] [Fintype C]
-    [Nonempty C] {P : NARG.ProverFn X Y Stmt Wit Proof Coins} {K : Kernel X Y Stmt Wit Proof C}
-    {ε : ℕ → ℕ → ℝ} (h : ZeroKnowledgeAfterAdaptive (liftRel rel) P.liftReq K.toSimulator ε)
+    [Nonempty C] {P : NARG.ProverFn X Y Stmt Wit Proof Coins} {μ : PMF Coins}
+        {K : Kernel X Y Stmt Wit Proof C}
+    {ε : ℕ → ℕ → ℝ} (h : ZeroKnowledgeAfterAdaptive (liftRel rel) P.liftReq μ K.toSimulator ε)
     {t Q q : ℕ} (bud : D.Budget q) (hD : n * q ≤ t) :
-    |D.acceptProb (realEnv rel P Q) post - D.acceptProb (progEnv rel K Q) post| ≤ ε t Q := by
+    |D.acceptProb (realEnv rel P μ Q) post - D.acceptProb (progEnv rel K Q) post| ≤ ε t Q := by
   have h' := h t W n m Q q (D.mapReq liftReqEquiv) (Quantum.Distinguisher.mapPost liftReqEquiv post)
     (bud.mapReq liftReqEquiv) hD
   rw [QROM.advantage, GordieHowe.advantage, Quantum.Distinguisher.acceptProb_mapReq,
@@ -288,19 +290,20 @@ oracle (`h₃`). Then every distinguisher with a budget of `q` query slots of `n
 between `P` and `S` with `Q` proof queries answered. -/
 theorem zeroKnowledgeQueryBoundedPure_of_leafKernel {Coins SimCoins : Type} [Fintype Coins]
     [Fintype SimCoins] [Nonempty SimCoins] {P : NARG.ProverFn X Y Stmt Wit Proof Coins}
+        {μ : PMF Coins}
     {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} {Cm Pos N : Type} [Fintype Cm]
     [Nonempty Cm] [Fintype Pos] [DecidableEq Pos] [Fintype N] [DecidableEq N] [Nonempty N]
     {L : LeafKernel X Y Stmt Wit Proof Cm Pos N} {nsalt : X → Option N} {pub : Finset N}
     (hL : L.Laws nsalt pub) {C₁ : Type} [Fintype C₁] [Nonempty C₁]
     {K₁ : Kernel X Y Stmt Wit Proof C₁} (e : C₁ ≃ LeafCoins Cm Pos N Y)
     (hK₁ : ∀ req O c, K₁ req O c = L.kL req O (e c)) {ε₁ : ℕ → ℕ → ℝ}
-    (h₁ : ZeroKnowledgeAfterAdaptive (liftRel rel) P.liftReq K₁.toSimulator ε₁)
+    (h₁ : ZeroKnowledgeAfterAdaptive (liftRel rel) P.liftReq μ K₁.toSimulator ε₁)
     {ε₃ : ℝ} (hε₃ : 0 ≤ ε₃)
     (h₃ : ∀ req O, rel req.stmt req.wit →
       PMF.tvDist ((PMF.uniformOfFintype (LeafCoins Cm Pos N Y)).map fun c => kernelReply rel L.kD c req O)
         ((PMF.uniformOfFintype SimCoins).map fun c => kernelReply rel (S.toKernel (Wit := Wit)) c req O) ≤
         ε₃) :
-    ZeroKnowledgeQueryBoundedPure rel P S fun t Q =>
+    ZeroKnowledgeQueryBoundedPure rel P μ S fun t Q =>
       ε₁ t Q + Q * (4 * t * √(Fintype.card Pos / Fintype.card N) +
         3 * ((pub.card * Fintype.card Pos + Q * Fintype.card Pos ^ 2 + Fintype.card Pos ^ 2) /
           Fintype.card N)) + Q * ε₃ := by
@@ -317,7 +320,7 @@ theorem zeroKnowledgeQueryBoundedPure_of_leafKernel {Coins SimCoins : Type} [Fin
   have hQ : (0 : ℝ) ≤ Q := Nat.cast_nonneg Q
   have hq' := mul_le_mul_of_nonneg_left hq hQ
   rw [QROM.advantage, GordieHowe.advantage, acceptProb_simEnv_eq rel D Quantum.noPost S Q]
-  have t1 := abs_sub_le (D.acceptProb (realEnv rel P Q) Quantum.noPost)
+  have t1 := abs_sub_le (D.acceptProb (realEnv rel P μ Q) Quantum.noPost)
     (D.acceptProb (progEnv rel L.kL Q) Quantum.noPost) (D.acceptProb (progEnv rel (S.toKernel (Wit := Wit)) Q) Quantum.noPost)
   have t2 := abs_sub_le (D.acceptProb (progEnv rel L.kL Q) Quantum.noPost)
     (D.acceptProb (progEnv rel L.kD Q) Quantum.noPost) (D.acceptProb (progEnv rel (S.toKernel (Wit := Wit)) Q) Quantum.noPost)
@@ -358,33 +361,34 @@ theorem zeroKnowledgeQueryBoundedPure_comap_of_leafKernel {Stmt₀ Wit₀ : Type
     {Sd C SC : Type} [Fintype Sd] [DecidableEq Sd] [Nonempty Sd] [Fintype C] [Nonempty C]
     [Fintype SC] [Nonempty SC] {saltOf : X → Option Sd} {SimCoins : Type} [Fintype SimCoins]
     [Nonempty SimCoins] {P : NARG.ProverFn X Y Stmt₀ Wit₀ Proof (SaltedCoins Sd C)}
-    {S : NARG.SimulatorFn X Y Stmt₀ Proof SimCoins} {Cm Pos N : Type} [Fintype Cm]
+    {μ : PMF (SaltedCoins Sd C)} {S : NARG.SimulatorFn X Y Stmt₀ Proof SimCoins} {Cm Pos N : Type}
+        [Fintype Cm]
     [Nonempty Cm] [Fintype Pos] [DecidableEq Pos] [Fintype N] [DecidableEq N] [Nonempty N]
     {L : LeafKernel X Y Stmt₀ Wit₀ Proof Cm Pos N} {nsalt : X → Option N} {pub : Finset N}
     (hL : L.Laws nsalt pub) {K₁ : Kernel X Y Stmt₀ Wit₀ Proof (SaltedCoins Sd SC)}
     (e : SaltedCoins Sd SC ≃ LeafCoins Cm Pos N Y)
     (hK₁ : ∀ req O c, K₁ req O c = L.kL req O (e c)) {η : (X → Y) → ℝ}
-    (hloc : SaltedLocal saltOf P.liftReq K₁.toSimulator)
+    (hloc : SaltedLocal saltOf P.liftReq μ K₁.toSimulator)
     (hcl : SliceCloseAt saltOf (liftRel rel₀) P.liftReq K₁.toSimulator η)
     {ε₃ : ℝ} (hε₃ : 0 ≤ ε₃)
     (h₃ : ∀ req O, rel₀ req.stmt req.wit →
       PMF.tvDist ((PMF.uniformOfFintype (LeafCoins Cm Pos N Y)).map fun c => kernelReply rel₀ L.kD c req O)
         ((PMF.uniformOfFintype SimCoins).map fun c => kernelReply rel₀ (S.toKernel (Wit := Wit₀)) c req O) ≤
         ε₃) (fx : Stmt → Stmt₀) (fw : Wit → Wit₀) :
-    ZeroKnowledgeQueryBoundedPure (fun x w => rel₀ (fx x) (fw w)) (P.comap fx fw)
+    ZeroKnowledgeQueryBoundedPure (fun x w => rel₀ (fx x) (fw w)) (P.comap fx fw) μ
       (S.comap fx) fun t Q =>
       4 * Q * t / √(Fintype.card Sd) + Q * (Q - 1) / Fintype.card Sd + Q * 𝔼[H ← (X → Y) : η H] +
         Q * (4 * t * √(Fintype.card Pos / Fintype.card N) +
           3 * ((pub.card * Fintype.card Pos + Q * Fintype.card Pos ^ 2 + Fintype.card Pos ^ 2) /
             Fintype.card N)) + Q * ε₃ := by
   set f : ProofQuery Stmt Wit → ProofQuery Stmt₀ Wit₀ := ProofQuery.map fx fw
-  have hloc' : SaltedLocal saltOf (P.comap fx fw).liftReq (K₁.comapReq f).toSimulator :=
+  have hloc' : SaltedLocal saltOf (P.comap fx fw).liftReq μ (K₁.comapReq f).toSimulator :=
     hloc.comap f id
   have hcl' : SliceClose saltOf (liftRel fun x w => rel₀ (fx x) (fw w)) (P.comap fx fw).liftReq
       (K₁.comapReq f).toSimulator η := by
     have h0 := hcl.sliceClose
     exact h0.comap f id
-  have h₁ := zeroKnowledgeAfterAdaptive_of_sliceClose saltOf _ _ _ hloc' hcl'
+  have h₁ := zeroKnowledgeAfterAdaptive_of_sliceClose saltOf _ _ _ _ hloc' hcl'
   have hc := zeroKnowledgeQueryBoundedPure_of_leafKernel (rel := fun x w => rel₀ (fx x) (fw w))
     (P := P.comap fx fw) (S := S.comap fx) (L := L.comapReq f) (K₁ := K₁.comapReq f)
     (hL.comapReq f) e

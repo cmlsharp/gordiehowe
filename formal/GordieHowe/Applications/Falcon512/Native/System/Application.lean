@@ -11,7 +11,9 @@ public import GordieHowe.Language.Realizations.ModEquality
 public import GordieHowe.Foundations.Algebra.ParityReduction
 public import GordieHowe.Foundations.Algebra.ConvMatrix
 public import GordieHowe.Foundations.Algebra.ReconstructSum
-public import GordieHowe.Applications.Falcon512.System.Source
+public import GordieHowe.Applications.Falcon512.System.Hash
+public import GordieHowe.Foundations.Algebra.IntLift
+public import GordieHowe.Applications.Falcon512.System.Params
 public import GordieHowe.Language.Realizations.Lowering
 public import GordieHowe.Language.Library.Select.CutoffBits
 public import GordieHowe.Language.Realizations.MaskSubfield
@@ -38,7 +40,7 @@ assignment into the Falcon-512 proof-of-possession relation (`GordieHowe.Falcon5
 namespace GordieHowe.Falcon512.Native
 
 open IOP RealizedProgram.ProofSystem.PhaseLayout GordieHowe.Bits
-open GordieHowe.Falcon512.Emulated (PublicKey nonceOf messageOf bytesOf nonceOf_toNat messageOf_toNat)
+open GordieHowe.Falcon512.Emulated (nonceOf messageOf bytesOf nonceOf_toNat messageOf_toNat)
 
 variable {KH F : Type} [Field KH] [DecidableEq KH] [Field F] [DecidableEq F]
   {msgLen : ℕ}

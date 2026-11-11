@@ -174,13 +174,13 @@ variable (ir : RealizedProgram) [r : CReader]
 /-- **Predicate `pr` is the field equation of the committed-digits `mod_q` `m`** whose quotient
 digit `j` is the record of the lookup `lks[j]`, as a check at a certificate reader: `m` has its
 honest-quotient facts (the shared verdict `commMod`), `pr` is its field equation (`commRowB`), and
-`lks` names one lookup per quotient digit with its facts (`commLookupCB`). -/
+`lks` names one lookup per quotient digit with its facts (`commRecCB`). -/
 @[expose] def commRowCB (G : Gens) (m : ℕ) (lks : List ℕ) (pr : Predicate) : Bool :=
   match (r.predicate m).body with
   | .mod d q e e' real =>
     r.commMod m && ir.commRowB d q e e' real pr.body &&
       lks.length == real.digits.length &&
-      (List.range lks.length).all fun j => ir.commLookupCB G (lks.getD j 0) m j
+      (List.range lks.length).all fun j => ir.commRecCB G (lks.getD j 0) m j
   | _ => false
 
 /-- **A late member `m` of a mixed group at the late histogram `v` of table `t` reads a digit of the
@@ -200,7 +200,7 @@ variable (ir : RealizedProgram) (primeNodes : ℕ → List String) in
 /-- **Predicate `pr` is the field equation of the committed-digits `mod_q` `m`** whose quotient
 digit `j` is the record of the lookup `lks[j]`, as a check (`CReader.commRowCB` at the program):
 `m` has its honest-quotient facts (`commModCB`), `pr` is its field equation (`commRowB`), and `lks`
-names one lookup per quotient digit with its facts (`commLookupCB`). -/
+names one lookup per quotient digit with its facts (`commRecCB`). -/
 @[expose] def commRowCB (S : Structure) (G : Gens) (m : ℕ) (lks : List ℕ) (pr : Predicate) :
     Bool :=
   @CReader.commRowCB ir (CReader.ofProgram ir primeNodes S G) G m lks pr

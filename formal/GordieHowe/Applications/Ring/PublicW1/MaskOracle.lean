@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Applications.Ring.PublicW1.PublicValue
+public import GordieHowe.Foundations.ToMathlib.PMFUniformPullback
 public import GordieHowe.Foundations.ToMathlib.PMFOracleQuenched
 public import GordieHowe.Foundations.ToMathlib.PMFRejection
 public import GordieHowe.Foundations.ToMathlib.PMFUniform
@@ -146,7 +147,8 @@ variable {V C K : Type} [Fintype V] [DecidableEq V] [Fintype C] [DecidableEq C] 
 
 /-- **The keep probability of a ring attempt** is at least its level times the total ring
 weight, less its deviation. -/
-theorem RingPair.massAt_sub_dev_le (R : RingPair K V C) (b : Bool) (G : K × V → C) :
+theorem RingPair.massAt_sub_dev_le (R : RingPair K V C) [Fintype R.Mem] [DecidableEq R.Mem]
+    (b : Bool) (G : K × V → C) :
     (R.signer b).β * R.massAt G - R.dev b G ≤ (1 - R.attempt b G none).toReal := by
   rw [← sum_toReal_apply_some]
   unfold RingPair.massAt RingPair.dev weightedDev RingWeights.weightMass
@@ -157,7 +159,8 @@ theorem RingPair.massAt_sub_dev_le (R : RingPair K V C) (b : Bool) (G : K × V �
   unfold RingPair.attempt at this ⊢
   linarith
 
-variable {M : Type} [Fintype M] [Nonempty M] (R : M → RingPair K V C) {θ : ℝ}
+variable {M : Type} [Fintype M] [Nonempty M] (R : M → RingPair K V C) [∀ m, Fintype (R m).Mem]
+  [∀ m, DecidableEq (R m).Mem] [∀ m b, Fintype ((R m).signer b).Y] {θ : ℝ}
 
 /-- **A small family bound keeps every ring attempt**: if the family bound at `G` is below `1/2`,
 every signer of every ring of the family keeps with probability at least its level times `θ`
@@ -345,17 +348,6 @@ theorem untilSome_pure_some (a : α) : untilSome (PMF.pure (some a)) = PMF.pure 
   cases o with
   | none => rw [untilSome_apply_none h]; simp
   | some x => rw [untilSome_apply_some]; simp [PMF.pure_apply]
-
-/-- **A coordinate of a product law has the coordinate's law.** -/
-theorem pi_map_eval {ι' : Type*} [Fintype ι'] [DecidableEq ι'] {δ : ι' → Type*}
-    [∀ i, Fintype (δ i)] [∀ i, DecidableEq (δ i)] (ν : ∀ i, PMF (δ i)) (j : ι') :
-    (pi ν).map (fun T => T j) = ν j := by
-  ext x
-  simp only [map_apply, tsum_fintype]
-  have := sum_pi_mul_apply_coord ν j fun b => if x = b then 1 else 0
-  simp only [mul_ite, mul_one, mul_zero, Finset.sum_ite_eq, Finset.mem_univ, if_true] at this
-  rw [← this]
-  exact Finset.sum_congr rfl fun T _ => by split_ifs <;> simp
 
 /-- **One point of the masks of a uniform function on pairs**, for every first coordinate, is a
 uniform function of the first coordinate. -/
@@ -1455,7 +1447,9 @@ end Compare
 
 section GameRounds
 
-variable {N : ℕ} {RMsg : Type} [DecidableEq RMsg] {S : PubSigner N RMsg}
+variable {N : ℕ} {RMsg : Type} [DecidableEq RMsg] {S : PubSigner N RMsg} [DecidableEq S.PK]
+  [Fintype S.Pub] [DecidableEq S.Pub] [Fintype S.Sig] [DecidableEq S.Sig]
+  [∀ H R m, Decidable (S.Admit H R m)]
   {k kN kS L e : ℕ} {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)}
   [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)]
@@ -1463,7 +1457,8 @@ variable {N : ℕ} {RMsg : Type} [DecidableEq RMsg] {S : PubSigner N RMsg}
 
 /-- **The statement and witness proved for a challenge** with the public value and base
 signature `x` in the experiment `b` at the oracle `H`, or `⊥` when the signer refuses the ring. -/
-def PubSigner.proved (S : PubSigner N RMsg) (H : S.Orc) (b : Bool) (c : S.Choice n)
+def PubSigner.proved (S : PubSigner N RMsg) [∀ H R m, Decidable (S.Admit H R m)] (H : S.Orc)
+    (b : Bool) (c : S.Choice n)
     (x : S.Pub × S.Sig) : Option (S.Stmt × S.Wit) :=
   if S.Admit H c.ring c.msg then some (S.stmt c.ring c.msg x.1, S.wit (c.idx b) x.2) else none
 
@@ -1480,8 +1475,9 @@ namespace PubAnonAdversary
 
 variable (A : PubAnonAdversary S M n Q) (E : (j : ι) → (M.comp j).Encoder)
   {V : S.Orc → S.Stmt → FullTr P τ → Bool} (Qs : ∀ H x, M.IOPQueries (V H) x) {R : Type}
-  [Fintype R] [Nonempty R] (honest : S.Orc → S.Wit → R → CausalProver P τ S.Stmt)
+  [Fintype R] [DecidableEq R] [Nonempty R] (honest : S.Orc → S.Wit → R → CausalProver P τ S.Stmt)
 
+omit [DecidableEq R] in
 /-- **The game with the signature table is the game drawing each round's signature in the
 round**: only the chosen challenge's entry of each round's row is read. -/
 theorem tableLaw_bind_run_eq (H : S.Orc) (keys : Fin n → S.KeyCoins) (b : Bool) :
@@ -1518,41 +1514,36 @@ seed, the message representative and the attempt index), repeated until it accep
 uniform slice every time (`signLaw_eq`); the hedged signer (`real`) draws a uniform nonce
 `r : Rnd` for every attempt and reads its slice from the mask oracle at `r`. `dflt` is the
 output of a loop that never accepts. -/
-structure MaskedSigner (S : PubSigner N RMsg) where
+structure MaskedSigner (S : PubSigner N RMsg) [Fintype S.Pub] [Fintype S.Sig] where
   /-- Nonces. -/
   Rnd : Type
   /-- The rest of a mask point. -/
   Pt : Type
   /-- Masks. -/
   Mask : Type
-  [instFintypeRnd : Fintype Rnd]
-  [instNonemptyRnd : Nonempty Rnd]
-  [instDecEqRnd : DecidableEq Rnd]
-  [instFintypePt : Fintype Pt]
-  [instDecEqPt : DecidableEq Pt]
-  [instFintypeMask : Fintype Mask]
-  [instNonemptyMask : Nonempty Mask]
-  [instDecEqMask : DecidableEq Mask]
   /-- One attempt at a mask slice: the oracle of the base scheme, the secret key, the ring, the
   position, the message and the masks. -/
   attempt : S.Orc → S.SK → RingOf S.PK N → ℕ → RMsg → (Pt → Mask) → PMF (Option (S.Pub × S.Sig))
   /-- The output of a loop that never accepts. -/
   dflt : S.Pub × S.Sig
-  /-- The ideal signer repeats the attempt with fresh uniform masks until it accepts. -/
-  signLaw_eq : ∀ H sk R i m, S.signLaw H sk R i m =
+  /-- The ideal signer repeats the attempt with fresh uniform masks until it accepts, at every
+  choice of the instances on `Pt` and `Mask` (they are unique). -/
+  signLaw_eq : ∀ [Fintype Pt] [DecidableEq Pt] [Fintype Mask] [Nonempty Mask] H sk R i m,
+    S.signLaw H sk R i m =
     (untilSome ((PMF.uniformOfFintype (Pt → Mask)).bind (attempt H sk R i m))).map
       fun o => o.getD dflt
 
-attribute [instance] MaskedSigner.instFintypeRnd MaskedSigner.instNonemptyRnd
-  MaskedSigner.instDecEqRnd MaskedSigner.instFintypePt MaskedSigner.instDecEqPt
-  MaskedSigner.instFintypeMask MaskedSigner.instNonemptyMask MaskedSigner.instDecEqMask
-
 namespace MaskedSigner
 
-variable {S : PubSigner N RMsg} (W : MaskedSigner S)
+variable {S : PubSigner N RMsg} [Fintype S.PK] [DecidableEq S.PK] [Fintype S.KeyCoins]
+  [Nonempty S.KeyCoins] [Fintype S.Pub] [DecidableEq S.Pub] [Fintype S.Sig] [DecidableEq S.Sig]
+  [Fintype S.Orc] [Nonempty S.Orc] [∀ H R m, Decidable (S.Admit H R m)] (W : MaskedSigner S)
 
 /-- **The mask oracle**: a mask at every nonce and point. -/
 abbrev MaskOrc : Type := W.Rnd × W.Pt → W.Mask
+
+variable [Fintype W.Rnd] [Nonempty W.Rnd] [DecidableEq W.Rnd] [Fintype W.Pt] [DecidableEq W.Pt]
+  [Fintype W.Mask] [Nonempty W.Mask]
 
 /-- **The hedged signer**: the oracle of the base scheme with the mask oracle; every attempt draws
 a uniform nonce and reads its masks from the mask oracle's slice at that nonce, until one accepts.
@@ -1564,10 +1555,36 @@ noncomputable def real : PubSigner N RMsg :=
       (untilSome ((PMF.uniformOfFintype W.Rnd).bind fun r =>
         W.attempt HY.1 sk R i m fun x => HY.2 (r, x))).map fun o => o.getD W.dflt
     rel := fun HY => S.rel HY.1
-    Admit := fun HY R m => S.Admit HY.1 R m
-    instFintypeOrc := inferInstance
-    instNonemptyOrc := inferInstance
-    instDecAdmit := fun HY R m => S.instDecAdmit HY.1 R m }
+    Admit := fun HY R m => S.Admit HY.1 R m }
+
+/-! The instances of the hedged signer's types: those of `S`, and for the oracle those of `S.Orc`
+and of the mask oracle, assembled from the instances of `W`'s types. -/
+
+instance real.instFintypePK : Fintype W.real.PK := inferInstanceAs (Fintype S.PK)
+
+instance real.instDecEqPK : DecidableEq W.real.PK := inferInstanceAs (DecidableEq S.PK)
+
+instance real.instFintypeKeyCoins : Fintype W.real.KeyCoins := inferInstanceAs (Fintype S.KeyCoins)
+
+instance real.instNonemptyKeyCoins : Nonempty W.real.KeyCoins :=
+  inferInstanceAs (Nonempty S.KeyCoins)
+
+instance real.instFintypePub : Fintype W.real.Pub := inferInstanceAs (Fintype S.Pub)
+
+instance real.instDecEqPub : DecidableEq W.real.Pub := inferInstanceAs (DecidableEq S.Pub)
+
+instance real.instFintypeSig : Fintype W.real.Sig := inferInstanceAs (Fintype S.Sig)
+
+instance real.instDecEqSig : DecidableEq W.real.Sig := inferInstanceAs (DecidableEq S.Sig)
+
+instance real.instFintypeOrc : Fintype W.real.Orc := inferInstanceAs (Fintype (S.Orc × W.MaskOrc))
+
+instance real.instNonemptyOrc : Nonempty W.real.Orc :=
+  inferInstanceAs (Nonempty (S.Orc × W.MaskOrc))
+
+instance real.instDecAdmit [hA : ∀ H R m, Decidable (S.Admit H R m)] (H : W.real.Orc)
+    (R : RingOf W.real.PK N) (m : RMsg) : Decidable (W.real.Admit H R m) :=
+  hA (show S.Orc × W.MaskOrc from H).1 R m
 
 end MaskedSigner
 
@@ -1577,7 +1594,12 @@ end Hedged
 
 section HedgedGame
 
-variable {N : ℕ} {RMsg : Type} [DecidableEq RMsg] {S : PubSigner N RMsg} (W : MaskedSigner S)
+variable {N : ℕ} {RMsg : Type} [DecidableEq RMsg] {S : PubSigner N RMsg} [DecidableEq S.PK]
+  [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Pub] [DecidableEq S.Pub] [Fintype S.Sig]
+  [DecidableEq S.Sig] [Fintype S.Orc] [Nonempty S.Orc] [∀ H R m, Decidable (S.Admit H R m)]
+  (W : MaskedSigner S)
+  [Fintype W.Rnd] [Nonempty W.Rnd] [DecidableEq W.Rnd] [Fintype W.Pt] [DecidableEq W.Pt]
+  [Fintype W.Mask] [Nonempty W.Mask]
   {k kN kS L e : ℕ} {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)}
   [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)]
@@ -1625,10 +1647,12 @@ noncomputable def hedgeError (Q q k : ℕ) (ρ : ℝ≥0∞) : ℝ≥0∞ :=
     (Q + 1) * q * (Q * k) * (Fintype.card W.Rnd : ℝ≥0∞)⁻¹ + 2 * Q * ρ ^ k
 
 variable {W} {E : (j : ι) → (M.comp j).Encoder} {V : S.Orc → S.Stmt → FullTr P τ → Bool}
-  {Qs : ∀ H x, M.IOPQueries (V H) x} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ H x, M.IOPQueries (V H) x} {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   {honest : S.Orc → S.Wit → R → CausalProver P τ S.Stmt}
 
+omit [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc] [Nonempty S.Orc] in
 open Classical in
+omit [DecidableEq R] in
 /-- **At fixed users' coins, oracle of the base scheme and experiment**: the hedged game and the
 game of the adversary at a fixed mask oracle, both averaged over a uniform mask oracle, are
 within the hedged error. -/
@@ -1669,9 +1693,11 @@ theorem eclose_hedged (A : PubAnonAdversary W.real M n Q)
   simp only [hI]
   exact core
 
-omit [DecidableEq RMsg] in
+omit [DecidableEq RMsg] [DecidableEq S.PK] [DecidableEq S.Sig] [DecidableEq S.Pub]
+  [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc] [Nonempty S.Orc] in
 /-- The hedged error is finite for `ρ ≤ 1`. -/
-theorem hedgeError_ne_top (W : MaskedSigner S) (Q q k : ℕ) {ρ : ℝ≥0∞} (hρ : ρ ≤ 1) :
+theorem hedgeError_ne_top (W : MaskedSigner S) [Fintype W.Rnd] [Nonempty W.Rnd] (Q q k : ℕ)
+    {ρ : ℝ≥0∞} (hρ : ρ ≤ 1) :
     W.hedgeError Q q k ρ ≠ ⊤ := by
   unfold hedgeError
   have hc : (Fintype.card W.Rnd : ℝ≥0∞)⁻¹ ≠ ⊤ :=
@@ -1693,6 +1719,7 @@ theorem toReal_sum_uniform_mul {A : Type*} [Fintype A] [Nonempty A] {f : A → �
   exact PMF.sum_toReal_uniformOfFintype_mul _
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity of the hedged signer from anonymity of the ideal-mask signer** (the step from
 the idealized signer to FIPS 204 hedged signing, with the mask derivation
 `ExpandMask(H(K ‖ rnd ‖ µ), κ)` a random oracle `W.MaskOrc` and a fresh nonce `rnd` for every
@@ -1797,12 +1824,14 @@ theorem advantage_le_atMask (A : PubAnonAdversary W.real M n Q)
   rw [abs_le] at h0 h1 hmix ⊢
   constructor <;> linarith [h0.1, h0.2, h1.1, h1.2, hmix.1, hmix.2]
 
-omit [DecidableEq RMsg] in
+omit [DecidableEq RMsg] [DecidableEq S.PK] [DecidableEq S.Sig] [DecidableEq S.Pub]
+  [Fintype S.KeyCoins] [Nonempty S.KeyCoins] [Fintype S.Orc] [Nonempty S.Orc] in
 open Classical in
 /-- **The hedged error at a keep bound on a good event**, averaged: with `ρ = 1 - L` on the good
 event and `ρ = 1` off it, the hedged error is at most
 `(Q k)² / |R| + (Q + 1) q Q k / |R| + 2 Q ((1 - L)^k + Pr[¬ good])`. -/
-theorem expect_toReal_hedgeError_le (W : MaskedSigner S) (Q q ka : ℕ) {α β : Type*} [Fintype α]
+theorem expect_toReal_hedgeError_le (W : MaskedSigner S) [Fintype W.Rnd] [Nonempty W.Rnd]
+    (Q q ka : ℕ) {α β : Type*} [Fintype α]
     [Nonempty α] [Fintype β] [Nonempty β] (Good : α → β → Prop) {L : ℝ} (hL0 : 0 ≤ L)
     (hL1 : L ≤ 1) :
     𝔼 a, 𝔼 b, (W.hedgeError Q q ka (1 - if Good a b then ENNReal.ofReal L else 0)).toReal ≤

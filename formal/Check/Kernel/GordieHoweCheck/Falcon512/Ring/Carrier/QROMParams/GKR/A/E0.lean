@@ -13,6 +13,6 @@ import all GordieHoweCerts.Generated.Falcon512.Ring.Carrier.QROMParams.Program
 
 namespace GordieHowe.Generated.Falcon512.Ring.Carrier.QROMParams.GKR.A
 
-check_entry cert ar 0 [0, 0, 4, 2, 1024, 1]
+check_entry cert ar 0 [0, 0, 4, 2, 1, 1]
 
 end GordieHowe.Generated.Falcon512.Ring.Carrier.QROMParams.GKR.A

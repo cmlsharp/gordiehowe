@@ -907,8 +907,10 @@ TEST(GordieHoweMod, MacCheckAtTheBound) {
   EXPECT_TRUE(rejected(*c, st, bad, kNoTamper));
 
   // The MAC of 12 chunks into F_q: one group below q, its quotient below
-  // 6103 one derived digit (a check below 8192 gives the domain a table
-  // above it), under the cap (q - 1 - 1) / 2 + 1 = 6144.
+  // 6103. A check below 8192 gives the domain a table above the quotient's
+  // bound, but outside its cap (q - 1 - 1) / 2 + 1 = 6144: one digit would
+  // open a table of its own (6103 rows for 256 needles), so the quotient
+  // takes two digits, in tables of 74 and 83 rows, on cost.
   Sys ms("gh-mac-bound-mac");
   auto &MH = ms.domain(env().h_profile(), "H");
   auto &MN = ms.domain(env().n_profile(), "N");
@@ -918,13 +920,158 @@ TEST(GordieHoweMod, MacCheckAtTheBound) {
   assert_range(z, 8192, "z");
   auto mc = compile(ms, native_profile());
   has(mc->report(), "nch = 12, convMax = 1017, acc_max = 12205 < p");
-  has(mc->report(), "quotient in [0, 6102]: one derived digit 'mac.q' below "
-                    "6103 (MaxBound 6144)");
+  has(mc->report(), "quotient in [0, 6102]: 2 digits, radix B = 74, "
+                    "committed below 74, top 'mac.high' derived below 83");
   Assignment mw;
   mw.set(xh, HV(kNch * kW, hf.one()));
   mw.set(z, NV{nf().of_scalar(8191)});
   EXPECT_TRUE(honest(*mc, {}, mw));
   EXPECT_TRUE(rejected(*mc, {}, mw, flip_at<NV>(nf(), xn.id, 3071)));
+}
+
+// The 12-chunk MAC into Goldilocks^4 (acc_max = 12205, the quotient below
+// 6103) beside a check z below 12000, whose candidate table 12000 lets the
+// quotient take one digit. A one-digit quotient is looked up directly
+// (assert_range_direct): the completeness certificate derives the lookup
+// of the quotient itself, but not the digits and reconstruction row of a
+// digit decomposition of a derived value. Under a domain cap of 4096 rows
+// (z's own cap raised to 12000) the planner used to realize the one-digit
+// quotient by two digits in the table of 79 rows it picked for z, and the
+// export failed; no direct table fits the quotient there, so the MAC takes
+// the digit form. Without the cap the quotient takes one digit, looked up
+// directly. With z below 20000 under its own cap of 20000 rows instead,
+// the candidate table 20000 lets the quotient take one digit too, but no
+// other request asks for a table the quotient fits (6103 to 16384 rows):
+// one digit would open a table of 6103 rows, while two digits cost a
+// committed digit, two needles and tables near sqrt(6103), so the digit
+// form is taken on cost. Each exports with every predicate derived, passes
+// the program's checks, and proves honestly.
+enum class MacQuot { kShared, kCapped, kCostly };
+std::string mac_quot_export(MacQuot mode) {
+  const bool capped = mode != MacQuot::kShared;
+  const Bound zb = mode == MacQuot::kCostly ? 20000 : 12000;
+  constexpr size_t kW = HF::kBits, kNch = 12;
+  const HF &hf = env().hf;
+  Sys ms("gh-mac-quot-direct");
+  auto &MH = ms.domain(env().h_profile(), "H");
+  auto &MA = ms.domain(env().a_profile(), "A");
+  auto [xh, xa] = crossing<HF, AF>(ms, MH, MA, "x", kNch * kW);
+  assert_same_bits(xh, xa);
+  auto z = MA.priv(Subfield{}, "z", 1);
+  if (mode == MacQuot::kCapped) {
+    MA.max_table(4096);
+    assert_range(z, 12000, "z").max_table(12000);
+  } else if (mode == MacQuot::kCostly) {
+    assert_range(z, zb, "z").max_table(zb);
+  } else {
+    assert_range(z, 12000, "z");
+  }
+  auto mc = compile(ms, native_profile());
+  const compiler::ExportMeta meta{mode == MacQuot::kShared   ? "mac-quot"
+                                  : mode == MacQuot::kCapped ? "mac-quot-capped"
+                                                             : "mac-quot-costly",
+                                  "wide",
+                                  "c0ffee", "run-0", 0};
+  try {
+    const auto p = compiler::build_program(*mc, meta);
+    examples::check_program(p);
+    for (const auto &[n, why] : p.deriv_gaps) ADD_FAILURE() << n << ": " << why;
+    // GH_MAC_QUOT_EXPORT=DIR writes the export there (for its Lean check).
+    if (const char *dir = std::getenv("GH_MAC_QUOT_EXPORT"))
+      examples::write_plan(*mc, dir, meta);
+  } catch (const std::exception &e) {
+    ADD_FAILURE() << e.what();
+  }
+  {
+    using CS = ir::Certificates::CStep;
+    const auto steps = mac_steps(*mc);
+    auto role = [&](const char *nm) {
+      auto it = steps.find(nm);
+      return it == steps.end() ? std::string("none") : it->second;
+    };
+    const std::string r = "0 1 ";
+    EXPECT_EQ(role("mac"), r + std::to_string(int(CS::kTail)));
+    EXPECT_EQ(role("mac.q"), capped ? "none" : r + std::to_string(int(CS::kQuotLookup)));
+    EXPECT_EQ(role("mac.high"), capped ? r + std::to_string(int(CS::kTopLookup)) : "none");
+  }
+  Assignment mw;
+  mw.set(xh, HV(kNch * kW, hf.one()));
+  mw.set(z, AV{af().of_scalar(uint64_t(zb - 1))});
+  EXPECT_TRUE(honest(*mc, {}, mw));
+  return mc->report();
+}
+TEST(GordieHoweMod, MacOneDigitQuotientLookedUpDirectly) {
+  const std::string r = mac_quot_export(MacQuot::kShared);
+  has(r, "quotient in [0, 6102]: one derived digit 'mac.q' below 6103");
+  has(r, "mac.q: direct T=");
+  EXPECT_EQ(r.find("mac.q: digits"), std::string::npos) << r;
+  EXPECT_EQ(r.find("mac.q: two-sided"), std::string::npos) << r;
+  const std::string c = mac_quot_export(MacQuot::kCapped);
+  EXPECT_EQ(c.find("one derived digit 'mac.q'"), std::string::npos) << c;
+  has(c, "top 'mac.high' derived");
+  const std::string d = mac_quot_export(MacQuot::kCostly);
+  EXPECT_EQ(d.find("one derived digit 'mac.q'"), std::string::npos) << d;
+  has(d, "top 'mac.high' derived");
+}
+
+// Two assert_mods of one domain whose quotients would share a table: X
+// over 4096 coordinates below 2^20 modulo 5000 (its quotient below 210)
+// and Y over one coordinate below 2^20 modulo 5150 (below 204), the
+// domain's tables capped at 4096 rows: the sides' requests offer the
+// table of 1024 rows (two digits of 2^20) that a quotient may take, and
+// no request asks for a table of the quotients' size. One digit is X's
+// cheaper form even with a table of its own; Y's one digit would open a
+// table that only X's quotient asks for, so on its own Y's quotient takes
+// digits. Each quotient prices its tables against the requests the domain
+// has before the assert_mods are lowered, so the forms do not depend on
+// the order of the two declarations: declared X then Y, or Y then X, each
+// quotient takes the same form.
+std::map<std::string, std::string> mod_order_forms(bool x_first) {
+  Sys cs("gh-mod-order");
+  auto &A = cs.domain(env().a_profile(), "A");
+  A.max_table(4096);
+  constexpr size_t kX = 4096;
+  auto x = A.priv(Subfield{}, "x", kX);
+  auto y = A.priv(Subfield{}, "y", 1);
+  assert_range(x, Bound::pow2(20), "x");
+  assert_range(y, Bound::pow2(20), "y");
+  auto cx = A.priv(Subfield{}, "cx", kX, depends_on(x),
+                     [](const std::vector<uint64_t> &u) {
+                       std::vector<uint64_t> r(u.size());
+                       for (size_t i = 0; i < u.size(); ++i) r[i] = u[i] % 5000;
+                       return r;
+                     });
+  auto cy = A.priv(Subfield{}, "cy", 1, depends_on(y),
+                     [](const std::vector<uint64_t> &u) {
+                       std::vector<uint64_t> r(u.size());
+                       for (size_t i = 0; i < u.size(); ++i) r[i] = u[i] % 5150;
+                       return r;
+                     });
+  assert_range(cx, 5000, "cx");
+  assert_range(cy, 5150, "cy");
+  if (x_first) {
+    assert_mod(x, cx, 5000, "X");
+    assert_mod(y, cy, 5150, "Y");
+  } else {
+    assert_mod(y, cy, 5150, "Y");
+    assert_mod(x, cx, 5000, "X");
+  }
+  const std::string r = compile(cs, native_profile())->report();
+  std::map<std::string, std::string> forms;
+  for (const std::string nm : {"X", "Y"}) {
+    const size_t at = r.find("assert_mod '" + nm + "'");
+    EXPECT_NE(at, std::string::npos) << r;
+    if (at == std::string::npos) continue;
+    forms[nm] = r.substr(at, r.find('\n', at) - at);
+    std::printf("GH_MOD_ORDER %s %s\n", x_first ? "XY" : "YX", forms[nm].c_str());
+  }
+  return forms;
+}
+TEST(GordieHoweMod, QuotientFormIndependentOfDeclarationOrder) {
+  const auto xy = mod_order_forms(true), yx = mod_order_forms(false);
+  EXPECT_EQ(xy, yx);
+  EXPECT_NE(xy.at("X").find("one derived digit 'X.q'"), std::string::npos) << xy.at("X");
+  EXPECT_EQ(xy.at("Y").find("one derived digit"), std::string::npos) << xy.at("Y");
 }
 
 // The 12-chunk MAC into F_q with only a table of TABLE rows (a check below

@@ -393,7 +393,7 @@ inline void get(R &r, Predicate &x) {
   l.max = r.s();
   x.q = r.s();
   ModRealization &m = x.mod;
-  m.form = r.e<ModForm>(uint64_t(ModForm::kSpectralProduct));
+  m.form = r.e<ModForm>(uint64_t(ModForm::kInteger));
   m.has_interval = r.flag();
   m.lhs_lo = r.s();
   m.lhs_hi = r.s();
@@ -648,7 +648,7 @@ inline void get_index_maps(R &r, std::vector<std::vector<size_t>> &maps) {
 }  // namespace io_internal
 
 // The format's tag and version; bumped when the layout changes.
-inline constexpr uint64_t kProgramFormat = 8;
+inline constexpr uint64_t kProgramFormat = 10;
 
 inline std::vector<uint8_t> write_program(const Program &p) {
   using namespace io_internal;
@@ -765,8 +765,10 @@ inline std::vector<uint8_t> write_program(const Program &p) {
   w.list(p.convs, [](W &w2, const SpectralConv &c) {
     for (uint64_t x : {uint64_t(c.source), uint64_t(c.read), uint64_t(c.products),
                        uint64_t(c.blocks), uint64_t(c.left), uint64_t(c.right),
-                       uint64_t(c.length)})
+                       uint64_t(c.length), uint64_t(c.committed), uint64_t(c.row),
+                       uint64_t(c.direct)})
       w2.u(x);
+    w2.list(c.squares, [](W &w3, bool sq) { w3.u(sq ? 1 : 0); });
     w2.s(c.root);
   });
   w.list(p.realizations, [](W &w2, const DomainRealization &d) {
@@ -922,6 +924,10 @@ inline std::optional<Program> read_program(const std::vector<uint8_t> &b) {
     c.left = r2.z();
     c.right = r2.z();
     c.length = r2.z();
+    c.committed = r2.id();
+    c.row = r2.id();
+    c.direct = r2.z() != 0;
+    r2.list(c.squares, [](R &r3, bool &sq) { sq = r3.z() != 0; }, 0);
     c.root = r2.s();
   });
   r.list(p.realizations, [](R &r2, DomainRealization &d) {

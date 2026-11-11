@@ -225,8 +225,6 @@ class DerivsWriter {
           case S::kQuadRoot: out.ctor(6); out.nat(s.tails.at(0)); p(0); break;
           case S::kRootSet: out.ctor(7); tails(); break;
           case S::kTableHull: out.ctor(8); tails(); z(0); z(1); break;
-          case S::kTableKernel:
-            out.ctor(9); out.nat(s.src_arg); write_decimal(out, s.ints.at(2)); tails(); z(0); z(1); break;
           default: throw Error("unknown derivation interval source");
         }
         break;
@@ -262,9 +260,8 @@ class DerivsWriter {
       case S::kHyp: out.ctor(27); out.nat(s.id); break;
       case S::kFact: out.ctor(28); out.nat(s.id); break;
       case S::kGroupedMod: out.ctor(30); tails(); nats(out, s.premises); break;
-      case S::kProductMod: out.ctor(31); nats(out, s.premises); break;
-      case S::kCircuitAssert: out.ctor(32); out.nat(s.id); break;
-      case S::kInputPremise: out.ctor(33); out.nat(s.id); break;
+      case S::kCircuitAssert: out.ctor(31); out.nat(s.id); break;
+      case S::kInputPremise: out.ctor(32); out.nat(s.id); break;
       default: throw Error("unknown derivation step");
     }
   }

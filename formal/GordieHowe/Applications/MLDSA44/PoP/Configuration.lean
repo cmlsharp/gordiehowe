@@ -253,6 +253,7 @@ signature bytes decode (`VerifiesBytes.decode`), `SampleInBall(c̃)` finishes wi
 sampler's `264` candidates, so the fixed-stream selection on the `272`-byte stream succeeds
 (`acceptedCandidates_isSome_of_sampleInBallPoly?`), and the decoded signature verifies. No
 signature of the relation is excluded. -/
+@[headline]
 theorem valid_ofWitness {x : MLDSA44.PoP.Statement ctxLen} {w : MLDSA44.PoP.Witness msgLen}
     (h : (x, w) ∈ rel ctxLen msgLen) : (ofWitness x w).Valid := by
   obtain ⟨c, z, hh, hdec, hver⟩ := h.decode

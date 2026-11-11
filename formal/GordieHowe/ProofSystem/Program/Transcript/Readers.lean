@@ -25,9 +25,9 @@ public import GordieHowe.ProofSystem.GKR.CircuitBudget
 # The challenge readers of a source reduction and the largest loads of the circuits
 
 The readers of the GKR rounds of a source circuit's reduction (`SpecReaders.sourceInteraction`), and
-the largest load of a challenge round of the relatively packed A circuit at its soundness setups
-(`AlgebraCircuit.RelativeSoundSetup.load`), which bounds the loads
-of the circuit proofs' readers (`GordieHowe/ProofSystem/Program/Transcript/CircuitCodecs.lean`).
+their loads, at most `gkrLoad` of the output dimension (`SpecReaders.sourceInteraction_allLoads`),
+which bound the loads of the circuit proofs' readers
+(`GordieHowe/ProofSystem/Program/Transcript/CircuitCodecs.lean`).
 -/
 
 namespace GordieHowe.SPBCS

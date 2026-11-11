@@ -6,14 +6,15 @@
 // statement of mldsa_ring.h: the prover holds a signature on the message
 // under one member's key, without revealing which.
 //
-// Domain A is the profile's Goldilocks extension. With the key committed
-// the signature relation is bilinear, so it holds in the spectrum of a
-// carrier transform: p - 1 = 2^32 (2^32 - 1) gives a 2N-th root of unity
-// in F_p, and the integer products stay below p, so the transform is exact.
-// The relation is w' = A z - c 2^d t1 (mod q) over the integers, w'
-// committed and range-checked, the quotient the assert_mod lowering's. A
-// member's key row is A's
-// coefficients, then 2^d t1, and the record holds their carrier spectra.
+// Domain A is the profile's Goldilocks extension. The relation is
+// w' = A z - c 2^d t1 (mod q) over the integers, w' committed and
+// range-checked, with the quotient committed as assert_mod's committed
+// form commits it (random_point.h, relation_quotient). With the key
+// committed as carrier spectra (a transform of length 2N in F_p: p - 1 =
+// 2^32 (2^32 - 1) gives a 2N-th root of unity), the relation is checked as
+// a polynomial identity over F_p at one random point (carrier_relation). A
+// member's key row is A's coefficients, then 2^d t1, and the record holds
+// their carrier spectra.
 // The norm, UseHint (with its wrap quotient) and hint-weight checks are
 // the proof of possession's. Domain H recomputes the challenge from the
 // committed mu, and one MAC carries mu, w1 and the challenge.
@@ -23,8 +24,9 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "gordiehowe/examples/mldsa/mldsa_shape_inputs.h"
@@ -35,24 +37,14 @@
 #include "gordiehowe/examples/mldsa/mldsa_hash.h"
 #include "gordiehowe/examples/mldsa/mldsa_params.h"
 #include "gordiehowe/examples/rings/mldsa_ring.h"
+#include "gordiehowe/examples/rings/random_point.h"
 #include "gordiehowe/examples/shared/setup.h"
 #include "gordiehowe/lib/table.h"
 #include "gordiehowe/ops/ntt.h"
-#include "gordiehowe/ops/spectral.h"
 #include "gordiehowe/relation.h"
 #include "gordiehowe/system.h"
 
 namespace proofs::gordiehowe::examples::mldsa {
-
-// A multiple of q at least u's bound L N (q - 1)(bound - 1) + tau (q - 1),
-// for u = A z - c 2^d t1: u + kResidueShift is a nonnegative integer below
-// p (and below 2^64) whose residue mod q is u's, which the generator of w'
-// reads.
-template <class S>
-inline constexpr uint64_t kResidueShift =
-    kQ * ((S::kL * kN * (kQ - 1) * (S::kBound - 1) + S::kTau * (kQ - 1) +
-           kQ - 1) /
-          kQ);
 
 // --------------------------------------------------------------- gadgets --
 
@@ -64,77 +56,162 @@ Op<AF> carrier_ntt(const AF &af) {
                   ops::Stages::every(4), ops::NttOrder::kScheme);
 }
 
-// w' = A z - c 2^d t1 (mod q) over the integers (FIPS 204 Algorithm 8,
-// line 9, with the key committed): the advice w' (canonical), its range
-// request, and one assert_mod of K spectral rows over the L + 1 shared
-// operands z_j and c = support - 2 sign:
-//   w'_i = sum_j A_hat[i][j] z_j - t1_hat[i] c  (mod q).
-// The ring's table selects A_hat and t1_hat, so A's and 2^d t1's
-// coefficients lie in the hull of the ring's bounded keys; the lowering
-// reads that interval, z's norm request and c's bits, derives the
-// quotient's interval and commits it, and states the rows as one spectral
-// circuit. The generator computes u_i = A z - c t1 in the same spectrum
-// and takes w' = u mod q. Returns w'.
+// The relation's sides' integer intervals, as the assert_mod lowering reads
+// them: w' in [0, B^2 - 1] (its request), and sum_j a_ij z_j - t1_i c with
+// a's and 2^d t1's coefficients in [0, q - 1], z in [-(bound - 1),
+// bound - 1] and c in [-2, 1].
+template <class S>
+std::pair<IntInterval, IntInterval> carrier_relation_sides(uint64_t B) {
+  namespace rp = examples::random_point;
+  const SignedInt q1 = SignedInt(kQ) - 1, b1 = SignedInt(S::kBound) - 1;
+  const IntInterval P{0, SignedInt(B) * SignedInt(B) - 1};
+  IntInterval N{0, 0};
+  for (size_t j = 0; j < S::kL; ++j)
+    N = rp::add_intervals(N, rp::negacyclic_interval(kN, {0, q1}, {-b1, b1}));
+  N = rp::add_intervals(
+      N, rp::negate_interval(rp::negacyclic_interval(kN, {0, q1}, {-2, 1})));
+  return {P, N};
+}
+
+// The relation's quotient offset qlo (quotient_shape.h):
+// ceil((min P - max N) / q).
+template <class S>
+__int128 carrier_relation_qlo(uint64_t B) {
+  const auto [P, N] = carrier_relation_sides<S>(B);
+  return static_cast<__int128>(quotient_shape(P, N, kQ).qlo);
+}
+
+// The relation w' = A z - c 2^d t1 (mod q) over the integers (FIPS 204
+// Algorithm 8, line 9, with the key committed), at one random point
+// (random_point.h). The congruence per row is
+// w'_i - (sum_j a_ij z_j - t1_i c) = 0 (mod q) over the integers, with the
+// intervals its lowering reads (carrier_relation_sides): w' in
+// [0, B^2 - 1] (its request), a's and 2^d t1's coefficients in [0, q - 1]
+// (the ring's bounded keys, selected by the member's table), z in
+// [-(bound - 1), bound - 1] (the norm's centered request) and
+// c = support - 2 sign in [-2, 1] (bits). The quotient relation.q
+// ([K][N]), its request and certificates are the lowering's; the field
+// identities
+//   w'_i - q qlo - q q'_i = sum_j a_ij z_j - t1_i c   in F_p[X]/(X^n + 1)
+// are checked at r with the committed high halves Q_i, one predicate per
+// row (relation.0 ... relation.K-1). Returns w'.
 template <class S, class D, class AF, class PZ>
 Ref<AF, Subfield<>, Committed> carrier_relation(
-    const Scope &s, D &A, const Member<AF> &m,
-    const Ref<AF, Subfield<>, PZ> &z, const Ref<AF, Bit, Committed> &c,
-    uint64_t B) {
+    const Scope &s, D &A, const Member<AF> &m, const Ref<AF, Subfield<>, PZ> &z,
+    const Ref<AF, Bit, Committed> &c, uint64_t B) {
+  namespace rp = examples::random_point;
   using Elt = typename AF::Elt;
+  using I128s = std::vector<__int128>;
   constexpr size_t kK = S::kK, kL = S::kL;
-  constexpr uint64_t kShift = kResidueShift<S>;
   const AF *pa = &A.field();
   const auto ntt = carrier_ntt(A.field());
   const auto staged = ntt.spec->staged;
-  // The honest w' (below q) fits its range request below B^2.
   s.note("certify", "relation.wRange",
          term("q", kQ) <= term("B^2", Bound(B) * B), A);
+  // The full products u_i = sum_j a_ij z_j - t1_i c over Z[X], [K][2N - 1].
+  auto full = [pa, staged](
+                  const std::vector<Elt> &a_hat, const std::vector<Elt> &t1,
+                  const std::vector<Elt> &zv, const std::vector<Elt> &cv) {
+    const AF &f = *pa;
+    const ops::NegacyclicNtt<AF> nt(f, kN, staged->psi);
+    const rp::FullProduct<AF> fp(f, kN);
+    // A spectrum's coefficients (the carrier transform inverted), then
+    // their padded spectrum.
+    auto key = [&](const std::vector<Elt> &spec, size_t at) {
+      std::vector<Elt> row(spec.begin() + long(at),
+                           spec.begin() + long(at + kN));
+      nt.inverse(row);
+      return fp.spectrum(row);
+    };
+    std::vector<std::vector<Elt>> zs(kL);
+    for (size_t j = 0; j < kL; ++j) zs[j] = fp.spectrum(zv, j * kN);
+    std::vector<Elt> cc(kN);
+    for (size_t k = 0; k < kN; ++k)
+      cc[k] = f.subf(cv[2 * k], f.addf(cv[2 * k + 1], cv[2 * k + 1]));
+    const std::vector<Elt> ch = fp.spectrum(cc);
+    std::vector<I128s> u(kK);
+    for (size_t i = 0; i < kK; ++i) {
+      std::vector<Elt> acc = fp.zero();
+      for (size_t j = 0; j < kL; ++j)
+        fp.mul_acc(acc, key(a_hat, (i * kL + j) * kN), zs[j], 1);
+      fp.mul_acc(acc, key(t1, i * kN), ch, -1);
+      u[i] = fp.coefficients(std::move(acc));
+    }
+    return u;
+  };
+  // w, relation.q and Q read the same products: computed once per witness.
+  const auto cache =
+      std::make_shared<rp::ProductCache<Elt, std::vector<I128s>>>();
+  auto products = [cache, full](
+                      const std::vector<Elt> &a_hat, const std::vector<Elt> &t1,
+                      const std::vector<Elt> &zv, const std::vector<Elt> &cv) {
+    return cache->get(full, a_hat, t1, zv, cv);
+  };
   const auto w = s[A].priv(
       Subfield{}, "w", Shape{kK, kN}, depends_on(m.a_hat, m.t1, z, c),
-      [pa, staged](const std::vector<Elt> &a_hat, const std::vector<Elt> &t1,
-                   const std::vector<Elt> &zv, const std::vector<Elt> &cv) {
-        const AF &f = *pa;
-        const ops::NegacyclicNtt<AF> nt(f, kN, staged->psi);
-        std::vector<std::vector<Elt>> zh(kL);
-        for (size_t j = 0; j < kL; ++j) {
-          zh[j].assign(zv.begin() + j * kN, zv.begin() + (j + 1) * kN);
-          nt.forward(zh[j]);
-        }
-        std::vector<Elt> ch(kN);
-        for (size_t k = 0; k < kN; ++k)
-          ch[k] = f.subf(cv[2 * k], f.addf(cv[2 * k + 1], cv[2 * k + 1]));
-        nt.forward(ch);
-        uint64_t ok = 1;
-        const ct::Divisor64 dq(kQ);
+      [pa, products](const std::vector<Elt> &a_hat, const std::vector<Elt> &t1,
+                     const std::vector<Elt> &zv, const std::vector<Elt> &cv) {
+        const auto u = products(a_hat, t1, zv, cv);
         std::vector<Elt> wo(kK * kN);
-        for (size_t i = 0; i < kK; ++i) {
-          std::vector<Elt> u(kN);
+        for (size_t i = 0; i < kK; ++i)
           for (size_t k = 0; k < kN; ++k) {
-            Elt x = f.negf(f.mulf(t1[i * kN + k], ch[k]));
-            for (size_t j = 0; j < kL; ++j)
-              f.add(x, f.mulf(a_hat[(i * kL + j) * kN + k], zh[j][k]));
-            u[k] = x;
+            __int128 v = u[i][k] - (k + 1 < kN ? u[i][kN + k] : 0);
+            v %= __int128(kQ);
+            if (v < 0) v += __int128(kQ);
+            wo[i * kN + k] = pa->of_scalar(uint64_t(v));
           }
-          nt.inverse(u);
-          for (size_t k = 0; k < kN; ++k) {
-            const NatInt v =
-                nat_of_ct(f, f.addf(u[k], f.of_scalar(kShift)), ok);
-            ok &= ct::is_zero(uint64_t(v >> 64));
-            wo[i * kN + k] =
-                f.of_scalar(uint64_t(dq.divmod(uint64_t(v)).r));
-          }
-        }
-        if (!ok) throw std::runtime_error("carrier relation: u outside F_p");
         return wo;
       });
   assert_range(w, B * B, s.name("w"));
+  const auto [P, N] = carrier_relation_sides<S>(B);
+  const rp::RelationQuotient ps =
+      rp::relation_quotient(s, A, "relation", P, N, kQ);
+  const __int128 qlo = ps.qlo;
+  const auto qq = s[A].priv(
+      Subfield{}, "relation.q", Shape{kK, kN},
+      depends_on(m.a_hat, m.t1, z, c, w),
+      [pa, products, qlo](
+          const std::vector<Elt> &a_hat, const std::vector<Elt> &t1,
+          const std::vector<Elt> &zv, const std::vector<Elt> &cv,
+          const std::vector<Elt> &wv) {
+        const auto u = products(a_hat, t1, zv, cv);
+        std::vector<Elt> out(kK * kN);
+        for (size_t i = 0; i < kK; ++i)
+          for (size_t k = 0; k < kN; ++k) {
+            const __int128 v = u[i][k] - (k + 1 < kN ? u[i][kN + k] : 0);
+            const __int128 d = rp::signed_of(*pa, wv[i * kN + k]) - v;
+            if (d % __int128(kQ) != 0)
+              fail("carrier_relation: the ML-DSA congruence fails");
+            out[i * kN + k] = rp::elt_of(*pa, d / __int128(kQ) - qlo);
+          }
+        return out;
+      });
+  assert_range(qq, ps.nq, MaxBound{ps.dmax}, s.name("relation.q"));
+  const auto Q = s[A].priv(
+      Subfield{}, "Q", Shape{kK, kN - 1}, depends_on(m.a_hat, m.t1, z, c),
+      [pa, products](const std::vector<Elt> &a_hat, const std::vector<Elt> &t1,
+                     const std::vector<Elt> &zv, const std::vector<Elt> &cv) {
+        const auto u = products(a_hat, t1, zv, cv);
+        std::vector<Elt> out(kK * (kN - 1));
+        for (size_t i = 0; i < kK; ++i)
+          for (size_t k = 0; k + 1 < kN; ++k)
+            out[i * (kN - 1) + k] = rp::elt_of(*pa, u[i][kN + k]);
+        return out;
+      });
   const auto cpoly = challenge_poly(s, c);
-  std::vector<ops::SpectralRow<AF>> rows;
-  for (size_t i = 0; i < kK; ++i)
-    rows.push_back(ops::spectral_row(
-        w[i], ops::SpectralMatVec(m.a_hat[i], z, ntt) -
-                  ops::SpectralProduct(m.t1[i], cpoly, ntt)));
-  assert_mod(rows, kQ, s.name("relation"));
+  const auto pt = rp::point(s, A, *staged, ops::Stages::every(4));
+  const Elt mqlo = rp::elt_of(*pa, __int128(kQ) * qlo);
+  std::vector<Expr<AF>> zr;
+  for (size_t j = 0; j < kL; ++j) zr.push_back((z[j] * pt.pw).sum());
+  const Expr<AF> crr = (cpoly * pt.pw).sum();
+  for (size_t i = 0; i < kK; ++i) {
+    const Expr<AF> E = Expr<AF>(w[i] - kQ * qq[i]) - mqlo;
+    Expr<AF> e = (E * pt.pw).sum() + pt.rn1 * (Q[i] * pt.pw1).sum() +
+                 (m.t1[i] * pt.lam).sum() * crr;
+    for (size_t j = 0; j < kL; ++j)
+      e = e - (m.a_hat[i][j] * pt.lam).sum() * zr[j];
+    assert_zero(e, s.name("relation." + std::to_string(i)));
+  }
   return w;
 }
 
@@ -175,7 +252,8 @@ void mldsa_ring_carrier_relation(
   if constexpr (std::is_same_v<S, MLDSA44>) {
     auto shapes = mldsa_ring_carrier_shape_inputs(cs);
     shapes.phase_count = true;
-    shapes.expr_table_end = "member.select.shape.left.second.first.second.first";
+    shapes.expr_table_end =
+        "signature.relation.3.shape.left.second.first.first.first.first";
     shapes.embeddings.push_back(mldsa_ring_carrier_native_embedding());
     shapes.embeddings.push_back(mldsa_ring_carrier_emulated_embedding());
     mldsa_source_roles<S>(cs, shapes, SourceFamily::kRingCarrier);

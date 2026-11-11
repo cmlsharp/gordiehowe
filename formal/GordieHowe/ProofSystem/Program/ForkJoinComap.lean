@@ -47,7 +47,7 @@ def Sound.comap {C : IOP Stmt W rel} (S : C.Sound) (f : Stmt' → Stmt) :
 /-- **A multi-circuit IOP with forked domains at the statements `Stmt'` with a statement check**:
 the application phase read through `f` and checking `chk`. -/
 def comapWith (C : IOP Stmt W rel) (f : Stmt' → Stmt) (chk : Stmt' → Bool) :
-    IOP Stmt' W {p | chk p.1 = true ∧ (f p.1, p.2) ∈ rel} where
+    IOP Stmt' W (checkedRel f chk rel) where
   m := C.m
   neZero := C.neZero
   Pub := C.Pub
@@ -93,7 +93,7 @@ def Honest.comap {C : IOP Stmt W rel} {S : C.SimData} (Hc : C.Honest S I relI) (
 simulated by `SimData.comapWith`. -/
 def Honest.comapWith {C : IOP Stmt W rel} {S : C.SimData} (Hc : C.Honest S I relI) (f : Stmt' → Stmt)
     (chk : Stmt' → Bool) :
-    (C.comapWith f chk).Honest (S.comapWith f chk) I {p | chk p.1 = true ∧ (f p.1, p.2) ∈ relI} where
+    (C.comapWith f chk).Honest (S.comapWith f chk) I (checkedRel f chk relI) where
   In := Hc.In
   dom := Hc.dom
   app := Hc.app.comapWith f chk

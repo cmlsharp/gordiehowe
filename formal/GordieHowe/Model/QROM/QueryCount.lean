@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Model.QROM.Lifting
 public import GordieHowe.Model.Quantum.O2H.Budget
+public import GordieHowe.Headline
 
 @[expose] public section
 
@@ -1072,6 +1073,7 @@ end QueryCount
 at no more than `b` of its `t` query steps (`QueryCount`), then for a database property `R` with
 `∅ ∉ R`, `Pr[D ∈ R] ≤ b² · 6 · I(R, b)`. With `b = t` and every step counted this is CMS19's
 `t² · 6 · I(R, t)` (`Lifting.measured_le`). -/
+@[headline]
 theorem Lifting.measured_le_of_queryCount [Fintype B] [Nonempty B] {C : Type} {k b : ℕ}
     (𝒜 : Adv (Bits m) (BitStr I J) B C k t) (h : QueryCount e 𝒜 b) (R : Set (DB (Bits m) B))
     (hR : (∅ : DB (Bits m) B) ∉ R) :

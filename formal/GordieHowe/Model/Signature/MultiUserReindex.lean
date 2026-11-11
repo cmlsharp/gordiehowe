@@ -101,8 +101,14 @@ theorem countND_requestsBefore_lt {Req : Type} [DecidableEq Req] {m : ℕ} (d : 
 namespace Signature
 
 variable {N n : ℕ} {m : ℕ} {I J Bd : Type} [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J]
-  {TB : BaseTypes} {B : BaseSigner (Bits m) (BitStr I J) N TB} (O : SignOracle B) (e : BitStr I J ≃ Bd) {t : ℕ}
+  {TB : BaseTypes}
+  {B : BaseSigner (Bits m) (BitStr I J) N TB} (O : SignOracle B.core) (e : BitStr I J ≃ Bd) {t : ℕ}
   {Ot : Type}
+
+variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty O.Coins]
 
 open Classical in
 /-- **The reindexing of the multi-user challenger's coins** (module docstring): for a dummy request
@@ -112,7 +118,7 @@ of earlier non-dummy requests is that of the instance answered as the challenger
 coins at the step. -/
 theorem sum_simLaw_countND_muReply [Inhabited (MURequest O n)] (keys : Fin n → B.KeyCoins)
     {Q' : ℕ} (hQ : t + 1 ≤ Q') (d₂ : MURequest O n) (hd₂ : ∀ i sm, d₂ ≠ .sign i sm)
-    (G : ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B) t Ot)
+    (G : ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B.core) t Ot)
     (S : Set (Ot × DB (Bits m) Bd)) :
     ∑ ω, PMF.uniformOfFintype (Fin Q' → O.Coins) ω *
         simLaw e (G.instLog fun _ prev r =>

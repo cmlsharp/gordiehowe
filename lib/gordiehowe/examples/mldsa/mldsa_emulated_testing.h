@@ -145,20 +145,37 @@ std::vector<__int128> signature_residual(const Existing<S> &e) {
   return out;
 }
 
-// The plan export of profile P (plan_export.h): the system of the benchmark
-// example's message and context lengths, compiled, written to
-// DIR with its realized program (write_plan). Returns the plan's
-// path.
-template <class P>
-std::string export_plan(const std::string &dir, const std::string &commit,
-                        const std::string &run_id) {
+// FN at the system the plan export of profile P compiles: the benchmark
+// example's message and context lengths.
+template <class P, class Fn>
+auto with_export_system(Fn fn) {
   const auto &ex = ml_dsa::GetMlDsa44BenchmarkExample();
   const Env<P> env;
   MLDSAEmulatedSystem<P, MLDSA44> t(env, ex.msg.size(), ex.ctx.size());
   const auto c = t.compile();
-  const compiler::ExportMeta meta{"mldsa-emulated", P::kId, commit,
-                        run_id, ex.msg.size(), ex.ctx.size()};
-  return write_plan(*c, dir, meta);
+  return fn(*c, ex.msg.size(), ex.ctx.size());
+}
+
+// The plan export of profile P (plan_export.h): the export system
+// (with_export_system), compiled, written to DIR with its realized program
+// (write_plan), with the native program's domain `H` it holds
+// (mldsa_emulated_native_embedding). Returns the plan's path.
+template <class P>
+std::string export_plan(const std::string &dir, const std::string &commit,
+                        const std::string &run_id) {
+  const ir::Program native = mldsa::support::export_program<P>();
+  return with_export_system<P>([&](const auto &c, size_t msg, size_t ctx) {
+    const compiler::ExportMeta meta{"mldsa-emulated", P::kId, commit, run_id, msg, ctx};
+    return write_plan(c, dir, meta, {{"mldsa-native", &native}});
+  });
+}
+
+// The realized program export_plan writes, whose parts the programs that
+// hold them read at their export (compiler::append_embedding_facts).
+template <class P>
+ir::Program export_program() {
+  return with_export_system<P>(
+      [](const auto &c, size_t, size_t) { return c.program(); });
 }
 
 }  // namespace proofs::gordiehowe::examples::mldsa::emulated::support

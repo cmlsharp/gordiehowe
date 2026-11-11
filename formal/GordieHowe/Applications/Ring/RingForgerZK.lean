@@ -232,14 +232,18 @@ open IOP.SPTerm Signature
 
 section ZK
 
-variable {k kN kS L e N n t : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N n t : ℕ} {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
+  [Fintype TB.Msg] [DecidableEq TB.Msg]
+  [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins]
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
   {X₀ Wit₀ : Type} [DecidableEq X₀] {M : SPBCS Mg P X₀ k kN kS L e} {Λ : SiteLayout Mg} {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] {E : (j : ι) → (M.comp j).Encoder}
   {Vr : X₀ → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  {hb : M.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {hb : M.FormatBounds Qs b b} {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   {honest : Wit₀ → R → CausalProver P τ X₀} {stmt : RingStmt B → X₀} {check : RingStmt B → Bool}
   {input : RingStmt B → RingWit B → Option Wit₀}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {WitK : Type}
@@ -257,7 +261,9 @@ local notation "ZAdv" => QueryBoundedAdversary (Bits (queryBits k kN kS L)) (XOu
   (KeyRing (RingScheme.PK (ofBase B 𝒫 adm)) N × RingScheme.Msg (ofBase B 𝒫 adm) ×
     RingScheme.Sig (ofBase B 𝒫 adm)) t
 
-omit [Nonempty B.BSig] ert in
+variable [Fintype TB.BSig] [DecidableEq TB.BSig]
+
+omit [Nonempty B.BSig] ert [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **One term of `zkForgerSuccess` as an extraction run of the table form**: the extraction run
 of the simulation-extraction adversary `seAlg` (`extAdv`) is the extraction run (`extRun`) of the
 adversary at the table `keyReply keys` through `seTwo`, with the expansion and the win read
@@ -356,7 +362,7 @@ noncomputable def zkExp (𝒜 : ZAdv)
       (RelayStmt B 𝒫 adm n) (M.Response b) SC) :
     Expansion (Bits (queryBits k kN kS L)) (Out k e)
       (ExtReg (𝒜.alg a) (simExtChallenger Psim Q) (MURequest (SignOracle.ring B) n)
-        (MUResponse B)) :=
+        (MUResponse B.core)) :=
   ⟨fun r => (simExtractionExpansion (((𝒜.alg a).absorbTab (seTwo B pks refuses pubOf ds)
       (tab₀ (𝒜.alg a))).mapOut claimOfOut).toTPKindAlg Psim Q Qs).next
     (Quantum.AdaptiveIAlg.insertTabM (𝒜.alg a) (simExtChallenger Psim Q)
@@ -370,13 +376,13 @@ noncomputable def zkDefault (𝒜 : ZAdv)
     [DecidableEq SC] (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e)
       (RelayStmt B 𝒫 adm n) (M.Response b) SC) :
     ExtReg (𝒜.alg a) (simExtChallenger Psim Q) (MURequest (SignOracle.ring B) n)
-      (MUResponse B) :=
+      (MUResponse B.core) :=
   Quantum.AdaptiveIAlg.dropTabM (𝒜.alg a) (simExtChallenger Psim Q)
     (seTwo B pks refuses pubOf ds) (tab₀ (𝒜.alg a)) claimOfOut
     ((((𝒜.alg a).absorbTab (seTwo B pks refuses pubOf ds) (tab₀ (𝒜.alg a))).mapOut
       claimOfOut).toTPKindAlg.composeBothOut (simExtChallenger Psim Q) id).defaultOut
 
-omit [Nonempty B.BSig] ert in
+omit [Nonempty B.BSig] ert [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **One term of `zkForgerSuccess` as an extraction run at the adversary**
 (`simProb_extAdv_seAlg_eq` with the expansion and the default read at the empty table, the win at
 `A.at keys`): only the table, `keyReply keys`, holds the users' key coins. -/
@@ -403,7 +409,7 @@ theorem simProb_extAdv_seAlg_eq_zk (refuses : KeyRing B.PK N → ℕ → B.Msg �
         (simExtChallenger Psim Q) (seTwo B (fun i => B.pk (keys i)) refuses pubOf ds)
         (fun _ => keyReply B keys) claimOfOut r)⟩ :
       Expansion (Bits (queryBits k kN kS L)) (Out k e) (ExtReg ((A.at keys).alg a)
-        (simExtChallenger Psim Q) (MURequest (SignOracle.ring B) n) (MUResponse B))) =
+        (simExtChallenger Psim Q) (MURequest (SignOracle.ring B) n) (MUResponse B.core))) =
       zkExp (A.at keys) refuses pubOf (fun i => B.pk (keys i)) Q a ds Psim := by
     unfold zkExp
     congr 1
@@ -420,7 +426,7 @@ theorem simProb_extAdv_seAlg_eq_zk (refuses : KeyRing B.PK N → ℕ → B.Msg �
   rw [hE, ← hd]
   rfl
 
-omit [Nonempty B.BSig] [DecidableEq X₀] ert in
+omit [Nonempty B.BSig] [DecidableEq X₀] ert [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **Every multi-user request of the zero-knowledge forger is the dummy or a corruption among
 the adversary's first `Q` requests**: on every basis state of nonzero amplitude of the
 compressed-oracle simulation of the bridge at an adversary `𝒜` (against any replies `rep`), every
@@ -431,7 +437,7 @@ theorem zk_bridge_requests (𝒜 : ZAdv)
     (pks : Fin n → B.PK) (Q : ℕ) (a : 𝒜.Aux) (ds : Fin Q → B.Coins) {SC : Type} [Fintype SC]
     [DecidableEq SC] (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e)
       (RelayStmt B 𝒫 adm n) (M.Response b) SC) (kq : ℕ)
-    (rep : ℕ → MURequest (SignOracle.ring B) n → Option (MUResponse B)) {bs}
+    (rep : ℕ → MURequest (SignOracle.ring B) n → Option (MUResponse B.core)) {bs}
     (hbs : simState (outEquiv k e) ((bridgeAlg (outEquiv k e) (𝒜.alg a)
       (simExtChallenger Psim Q) (seTwo B pks refuses pubOf ds) (.publicKey 0)
       (zkExp 𝒜 refuses pubOf pks Q a ds Psim) kq (zkDefault 𝒜 refuses pubOf pks Q a ds Psim)).inst
@@ -465,12 +471,16 @@ corruption among the first `Q` logged requests. -/
 def ZKCand (𝒜 : ZAdv) (Ext : CausalExtractor P τ X₀ WitK) (pks : Fin n → B.PK) (Q : ℕ)
     {a : 𝒜.Aux}
     {C₁ : Challenger (Bits (queryBits k kN kS L)) (XOut k e) (RelayStmt B 𝒫 adm n) (M.Response b)}
-    (r : ExtReg (𝒜.alg a) C₁ (MURequest (SignOracle.ring B) n) (MUResponse B))
+    (r : ExtReg (𝒜.alg a) C₁ (MURequest (SignOracle.ring B) n) (MUResponse B.core))
     (D : DB (Bits (queryBits k kN kS L)) (Out k e)) (f : B.PK × B.BMsg × B.BSig) : Prop :=
   ∃ w ∈ M.dbExtractBits Ext (stmt (outStmt (extForgery r))) D,
     f ∈ decodeWit (outStmt (extForgery r)) (wit (outStmt (extForgery r)) w) ∧
     ∀ H, B.bverify H f.1 f.2.1 f.2.2 = true ∧
       ∃ i, pks i = f.1 ∧ UnforgeRequest.corrupt i ∉ (requests (GordieHowe.extLogs r)).take Q
+
+variable [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+
+variable [Nonempty TB.KeyCoins]
 
 variable (B) in
 /-- **The ring statement of a forgery** `(R, m, (y, π))`: `(R, m, y)`. -/
@@ -483,7 +493,7 @@ statement, in the order of `SPBCS.dbExtractBitsList`.
 
 Running time: one run of `SPBCS.dbExtractBitsList`, then one application of `wit` and one decoding
 per witness. This running time is argued here, not proved in Lean. -/
-def zkCands {TPS : PSTypes} {PS : ProofSystem (Bits (queryBits k kN kS L)) (XOut k e) (RingStmt B) (RingWit B) TPS}
+def zkCands {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] {PS : ProofSystem (Bits (queryBits k kN kS L)) (XOut k e) (RingStmt B) (RingWit B) TPS}
     (𝒜 : QueryBoundedAdversary (Bits (queryBits k kN kS L)) (XOut k e)
       (UnforgeRequest n (SideOracle.none (ofBase B PS adm)))
       (UnforgeResponse (SideOracle.none (ofBase B PS adm)))
@@ -491,7 +501,7 @@ def zkCands {TPS : PSTypes} {PS : ProofSystem (Bits (queryBits k kN kS L)) (XOut
         RingScheme.Sig (ofBase B PS adm)) t)
     (Ext : CausalExtractor P τ X₀ WitK) {a : 𝒜.Aux}
     {C₁ : Challenger (Bits (queryBits k kN kS L)) (XOut k e) (RelayStmt B PS adm n) (M.Response b)}
-    (r : ExtReg (𝒜.alg a) C₁ (MURequest (SignOracle.ring B) n) (MUResponse B))
+    (r : ExtReg (𝒜.alg a) C₁ (MURequest (SignOracle.ring B) n) (MUResponse B.core))
     (D : DB (Bits (queryBits k kN kS L)) (Out k e)) : List (B.PK × B.BMsg × B.BSig) :=
   (M.dbExtractBitsList Ext (stmt (forgeryStmt B (extForgery r))) D).filterMap fun w =>
     decodeWit (forgeryStmt B (extForgery r)) (wit (forgeryStmt B (extForgery r)) w)
@@ -501,7 +511,7 @@ under the key of a user with no corruption among the first `Q` logged requests o
 
 Running time: one base verification, then at most `n` comparisons of keys and `n` searches of the
 first `Q` logged requests. This running time is argued here, not proved in Lean. -/
-def zkCandTest {TPS : PSTypes} {PS : ProofSystem (Bits (queryBits k kN kS L)) (XOut k e) (RingStmt B) (RingWit B) TPS}
+def zkCandTest {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] {PS : ProofSystem (Bits (queryBits k kN kS L)) (XOut k e) (RingStmt B) (RingWit B) TPS}
     (𝒜 : QueryBoundedAdversary (Bits (queryBits k kN kS L)) (XOut k e)
       (UnforgeRequest n (SideOracle.none (ofBase B PS adm)))
       (UnforgeResponse (SideOracle.none (ofBase B PS adm)))
@@ -509,7 +519,7 @@ def zkCandTest {TPS : PSTypes} {PS : ProofSystem (Bits (queryBits k kN kS L)) (X
         RingScheme.Sig (ofBase B PS adm)) t)
     (pks : Fin n → B.PK) (Q : ℕ) {a : 𝒜.Aux}
     {C₁ : Challenger (Bits (queryBits k kN kS L)) (XOut k e) (RelayStmt B PS adm n) (M.Response b)}
-    (r : ExtReg (𝒜.alg a) C₁ (MURequest (SignOracle.ring B) n) (MUResponse B))
+    (r : ExtReg (𝒜.alg a) C₁ (MURequest (SignOracle.ring B) n) (MUResponse B.core))
     (f : B.PK × B.BMsg × B.BSig) : Bool :=
   decide (B.bverify 0 f.1 f.2.1 f.2.2 = true ∧
     ∃ i, pks i = f.1 ∧ UnforgeRequest.corrupt i ∉ (requests (GordieHowe.extLogs r)).take Q)
@@ -519,7 +529,7 @@ def zkCandTest {TPS : PSTypes} {PS : ProofSystem (Bits (queryBits k kN kS L)) (X
 
 Running time: that of `zkCands` and one run of `zkCandTest` per candidate. This running time is
 argued here, not proved in Lean. -/
-def zkReadout {TPS : PSTypes} {PS : ProofSystem (Bits (queryBits k kN kS L)) (XOut k e) (RingStmt B) (RingWit B) TPS}
+def zkReadout {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] {PS : ProofSystem (Bits (queryBits k kN kS L)) (XOut k e) (RingStmt B) (RingWit B) TPS}
     (𝒜 : QueryBoundedAdversary (Bits (queryBits k kN kS L)) (XOut k e)
       (UnforgeRequest n (SideOracle.none (ofBase B PS adm)))
       (UnforgeResponse (SideOracle.none (ofBase B PS adm)))
@@ -530,12 +540,13 @@ def zkReadout {TPS : PSTypes} {PS : ProofSystem (Bits (queryBits k kN kS L)) (XO
     {kq : ℕ}
     (f₀ : B.PK × B.BMsg × B.BSig)
     (o : BaseGame.Tuple (Bits (queryBits k kN kS L)) (Out k e)
-      (ExtReg (𝒜.alg a) C₁ (MURequest (SignOracle.ring B) n) (MUResponse B)) kq ×
+      (ExtReg (𝒜.alg a) C₁ (MURequest (SignOracle.ring B) n) (MUResponse B.core)) kq ×
         DB (Bits (queryBits k kN kS L)) (Out k e)) : B.PK × B.BMsg × B.BSig :=
   ((zkCands (stmt := stmt) (wit := wit) 𝒜 Ext o.1.out o.2).find?
     (zkCandTest 𝒜 pks Q o.1.out)).getD f₀
 
-omit [Nonempty B.BSig] ert in
+omit [Nonempty B.BSig] ert [Fintype R] [DecidableEq R] [Nonempty R] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The forger's win in the extraction run gives a candidate.** -/
 theorem zkCand_of_forgerWinsQ (𝒜 : ZAdv)
     (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub)
@@ -543,7 +554,7 @@ theorem zkCand_of_forgerWinsQ (𝒜 : ZAdv)
     [Fintype SC] [DecidableEq SC] (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e)
       (RelayStmt B 𝒫 adm n) (M.Response b) SC) (Ext : CausalExtractor P τ X₀ WitK)
     (r : ExtReg (𝒜.alg a) (simExtChallenger Psim Q) (MURequest (SignOracle.ring B) n)
-      (MUResponse B)) (D : DB (Bits (queryBits k kN kS L)) (Out k e))
+      (MUResponse B.core)) (D : DB (Bits (queryBits k kN kS L)) (Out k e))
     (h : forgerWinsQ (wit := wit) 𝒜 refuses pubOf keys Q a ds Psim Ext
       (Quantum.AdaptiveIAlg.insertTabM (𝒜.alg a) (simExtChallenger Psim Q)
         (seTwo B (fun i => B.pk (keys i)) refuses pubOf ds) (fun _ => keyReply B keys)
@@ -554,7 +565,9 @@ theorem zkCand_of_forgerWinsQ (𝒜 : ZAdv)
   obtain ⟨i, hi, hc, -⟩ := (hF H).exists_user
   exact ⟨i, hi, fun hm => hc (corrupted_corruptHist.2 hm)⟩
 
-omit [Nonempty B.BSig] [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty M.NIProof] ert in
+omit [Nonempty B.BSig] [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty M.NIProof] ert [Fintype R]
+  [DecidableEq R] [Nonempty R] [Fintype TB.BSig] [DecidableEq TB.BSig] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The readout is a forgery for the multi-user requests of the forger**: when there is a
 candidate, for multi-user requests `mrs` that are `publicKey 0` or corruptions among the first
 `Q` logged requests (`zk_bridge_requests`), the readout is a forgery of MU-EUF-CMA^corr for
@@ -565,7 +578,7 @@ theorem forgesReq_zkReadout (𝒜 : ZAdv) (Ext : CausalExtractor P τ X₀ WitK)
     {kq : ℕ}
     (f₀ : B.PK × B.BMsg × B.BSig)
     (o : BaseGame.Tuple (Bits (queryBits k kN kS L)) (Out k e)
-      (ExtReg (𝒜.alg a) C₁ (MURequest (SignOracle.ring B) n) (MUResponse B)) kq ×
+      (ExtReg (𝒜.alg a) C₁ (MURequest (SignOracle.ring B) n) (MUResponse B.core)) kq ×
         DB (Bits (queryBits k kN kS L)) (Out k e))
     (hc : ∃ f, ZKCand (wit := wit) 𝒜 Ext (fun i => B.pk (keys i)) Q o.1.out o.2 f)
     (mrs : List (MURequest (SignOracle.ring B) n))
@@ -604,9 +617,9 @@ noncomputable def zkAux (Q : ℕ) (pks : Fin n → B.PK) :
     PMF ((A (pks, ())).Aux × (Fin Q → B.Coins)) :=
   (A (pks, ())).aux.bind fun a => (PMF.uniformOfFintype (Fin Q → B.Coins)).map fun ds => (a, ds)
 
-omit ert in
-omit [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig] [Nonempty M.NIProof] [NeZero n]
-  [DecidableEq X₀] in
+omit ert [Fintype TB.BSig] [DecidableEq TB.BSig] [DecidableEq TB.Coins] [Nonempty B.Msg]
+  [Nonempty B.Pub] [Nonempty B.BSig] [Nonempty M.NIProof] [NeZero n] [DecidableEq X₀] [Fintype R]
+  [DecidableEq R] [Nonempty R] [Nonempty TB.KeyCoins] in
 /-- **The auxiliary input is the product of the adversary's and the uniform coins.** -/
 theorem zkAux_apply (Q : ℕ) (pks : Fin n → B.PK) (p : (A (pks, ())).Aux × (Fin Q → B.Coins)) :
     zkAux B A Q pks p = (A (pks, ())).aux p.1 * PMF.uniformOfFintype (Fin Q → B.Coins) p.2 := by
@@ -668,7 +681,7 @@ section
 set_option allowUnsafeReducibility true in
 attribute [local irreducible] Quantum.extRun
 
-omit [Nonempty B.BSig] ert in
+omit [Nonempty B.BSig] ert [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The zero-knowledge route's forger is a multi-user forger**: for a signing oracle without
 queries (`hB`), with `Q'` at least the bridge's request points (`hQ`) and the adversary's slots
 (`hslots`), the average over the key coins, the signing coins and the auxiliary input of the
@@ -742,7 +755,7 @@ theorem sum_simProb_extAdv_le_muEufProb (hB : B.OracleFree)
   -- the public keys spelled at `BitStr` as in `sum_simLaw_extRun_le_muEufProb_tableForger`
   have h2 : zkSum (wit := wit) refuses pubOf keys Q Psim Ext kq (A.at keys) =
       zkSum (wit := wit) refuses pubOf keys Q Psim Ext kq
-        (A (fun i => @BaseSigner.pk _ (BitStr (Fin (k + e)) (Fin 8)) _ _ B (keys i), ())) :=
+        (A (fun i => @Signature.BaseScheme.pk _ (BitStr (Fin (k + e)) (Fin 8)) _ B.core (keys i), ())) :=
     congrArg (zkSum (wit := wit) refuses pubOf keys Q Psim Ext kq) rfl
   refine h1.trans (h2.trans ?_)
   rw [zkSum, ENNReal.tsum_prod']
@@ -757,14 +770,18 @@ end ZK
 
 section ZKBound
 
-variable {k kN kS L e N n t : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N n t : ℕ} {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
+  [Fintype TB.Msg] [DecidableEq TB.Msg]
+  [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins]
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
   {X₀ Wit₀ : Type} [DecidableEq X₀] {M : SPBCS Mg P X₀ k kN kS L e} {Λ : SiteLayout Mg} {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] {E : (j : ι) → (M.comp j).Encoder}
   {Vr : X₀ → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  {hb : M.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {hb : M.FormatBounds Qs b b} {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   {honest : Wit₀ → R → CausalProver P τ X₀} {stmt : RingStmt B → X₀} {check : RingStmt B → Bool}
   {input : RingStmt B → RingWit B → Option Wit₀}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {W' : Type} [Fintype W'] [DecidableEq W']
@@ -806,7 +823,10 @@ noncomputable def zkQ' (VE : M.ViewEncoder E Qs) {Pub : Type} (pub : X₀ → Pu
   S * ((zkPsim n Λ hb honest stmt check input adm VE pub Sim T).q + w) + w * P' +
     (kqOf Mg nr b b + Q * (zkPsim n Λ hb honest stmt check input adm VE pub Sim T).q) + 1
 
-omit [Nonempty B.BSig] in
+variable [Fintype TB.BSig] [DecidableEq TB.BSig] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
+  [DecidableEq TB.Coins] [Nonempty TB.Coins]
+
+omit [Nonempty B.BSig] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The zero-knowledge route's term is bounded by MU-EUF-CMA^corr**: for an oracle-free base
 signer (`hB`) and an adversary with the schedule bound `S`, `w`, `P'` (`hS`), `zkForgerTerm` is at
 most the success probability of the explicit multi-user forger `zkForger` in MU-EUF-CMA^corr with
@@ -961,17 +981,23 @@ end ZKBound
 
 section Identity
 
-variable {k kN kS L e N n t : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N n t : ℕ} {TB : BaseTypes}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
   {M : SPBCS Mg P (RingStmt B) k kN kS L e} {Λ : SiteLayout Mg} {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] {E : (j : ι) → (M.comp j).Encoder}
   {Vr : RingStmt B → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  {hb : M.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {hb : M.FormatBounds Qs b b} {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   {honest : RingWit B → R → CausalProver P τ (RingStmt B)}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm]
   [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig]
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins]
 
 open Classical in
 /-- **BKM06 Definition 7 for the ring signature compiled by spBCS (`spbcsProofSystem`), from zero

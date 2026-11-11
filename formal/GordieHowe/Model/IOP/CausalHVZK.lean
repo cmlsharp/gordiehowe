@@ -7,6 +7,7 @@ public import GordieHowe.Model.IOP.CausalComplete
 public import GordieHowe.Model.IOP.HVZK
 public import GordieHowe.Model.IOP.Append
 public import GordieHowe.Model.IOP.Completeness
+public import GordieHowe.Headline
 
 @[expose] public section
 
@@ -384,6 +385,7 @@ part's view; and from every pair of `rel` and every honest first-part run, `wit`
 `rel₂` (`split_witness`). The composite of the honest provers, with independent coins and the
 second reading its witness off its statement, is zero knowledge for `rel` at `S₁.seq S₂` with
 error `δ₁ + δ₂`. -/
+@[headline]
 theorem CausalHVZK.seq {M₁ : CausalViews P a} {M₂ : CausalViews P b} {W₂ : Type}
     {rel : Set (Stmt × Wit)}
     {rel₂ : Set ((Stmt × FullTr P a) × W₂)} {honest₁ : Wit → R₁ → CausalProver P a Stmt}
@@ -448,6 +450,7 @@ theorem CausalHVZK.seq {M₁ : CausalViews P a} {M₂ : CausalViews P b} {W₂ :
 `S₁` and for `rel₂` at `S₂`, on the same statements, witnesses and public statements, run side by
 side or one after the other without reading each other's transcripts, with independent coins, are
 zero knowledge for both relations at `S₁.indep S₂` with error `δ₁ + δ₂`. -/
+@[headline]
 theorem CausalHVZK.par {k : Comp} {M₁ : CausalViews P a} {M₂ : CausalViews P b}
     {rel₁ rel₂ : Set (Stmt × Wit)}
     {honest₁ : Wit → R₁ → CausalProver P a Stmt} {honest₂ : Wit → R₂ → CausalProver P b Stmt}

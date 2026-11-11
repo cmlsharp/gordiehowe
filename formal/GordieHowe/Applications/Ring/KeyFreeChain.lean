@@ -47,21 +47,32 @@ section Chain
 
 variable {k kN kS L e N n t : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁] [Fintype Y]
   [DecidableEq Y] [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁]
-  {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
+  {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
+  [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins]
+  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
   {X₀ Wit₀ : Type} {M : SPBCS Mg P X₀ k kN kS L e} {Λ : SiteLayout Mg} {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] {E : (j : ι) → (M.comp j).Encoder}
   {Vr : X₀ → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  {R : Type} [Fintype R] [Nonempty R] {honest : Wit₀ → R → CausalProver P τ X₀}
+  {R : Type} [Fintype R] [DecidableEq R] [Nonempty R] {honest : Wit₀ → R → CausalProver P τ X₀}
   {Stmt Wit Rq Frg : Type} {rel : Stmt → Wit → Prop}
-  {enc : MURequest (SignOracle.none B) n ⊕ Rq → ProofQuery Stmt Wit} {stmtX : Stmt → X₀}
+  {enc : MURequest (SignOracle.none B.core) n ⊕ Rq → ProofQuery Stmt Wit} {stmtX : Stmt → X₀}
   [DecidableEq X₀] [Fintype Stmt] [DecidableEq Stmt] [Inhabited Stmt] [Fintype Wit]
   [DecidableEq Wit] [Inhabited (ProofQuery Stmt Wit)] [Fintype Rq] [DecidableEq Rq] [Inhabited Rq]
   [DecidableRel rel] [Inhabited M.NIProof] {dummyS : Stmt} {isDummy : X₀ → Bool}
 
+variable [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg]
+  [Fintype TB.Pub] [DecidableEq TB.Pub] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
+  [DecidableEq TB.Coins] [Nonempty TB.Coins]
+
 open Classical in
+omit [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 /-- **The key-free chain** at fixed users' key coins `keys` and side coins
 `sc`. For the spBCS proof system on the second component (`spbcsSplitProofSystem`) and an
 adversary `𝒜` of the key-free ring game (`kfGame` of the key-free relay over `kfMainFull` with the
@@ -106,7 +117,7 @@ theorem kfChain_le (hk : 0 < k) (hb : M.FormatBounds Qs b b)
       (Resp B (Ring.spbcsSplitProofSystem sp M Λ E hb honest stmtProg qS hS check input) adm)]
     [Inhabited
       (Req B (Ring.spbcsSplitProofSystem sp M Λ E hb honest stmtProg qS hS check input) adm n)]
-    [Inhabited (MURequest (SignOracle.none B) n ⊕ Rq)]
+    [Inhabited (MURequest (SignOracle.none B.core) n ⊕ Rq)]
     {SC : Type} (pks : Fin n → B.PK)
     (ksign : B.PK → KeyRing B.PK N → ℕ → B.Msg → SC →
       OracleProg (Bits (queryBits k kN kS L)) Y
@@ -120,25 +131,25 @@ theorem kfChain_le (hk : 0 < k) (hb : M.FormatBounds Qs b b)
       Rq)
     {Q : ℕ} (sc : Fin Q → SC) {qk qs : ℕ} (keys : Fin n → B.KeyCoins)
     (hks : ∀ pk Rg c msg s, (ksign pk Rg c msg s).QueriesLE qk)
-    (hst : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none B) n ⊕ Rq)
+    (hst : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none B.core) n ⊕ Rq)
     (fstX : X₀ → RingStmt B)
     {Xs Ys : Type} [AddGroup Ys] [Fintype Ys] [DecidableEq Ys]
     (G₂ : (Bits (queryBits k kN kS L) → Y₁) →
       AssignRelay (Bits (queryBits k kN kS L)) Y
         (Req B (Ring.spbcsSplitProofSystem sp M Λ E hb honest stmtProg qS hS check input) adm n)
         (Resp B (Ring.spbcsSplitProofSystem sp M Λ E hb honest stmtProg qS hS check input) adm)
-        (MURequest (SignOracle.none B) n ⊕ Rq)
-        (MUResponse B ⊕ M.Response b) Xs Ys)
+        (MURequest (SignOracle.none B.core) n ⊕ Rq)
+        (MUResponse B.core ⊕ M.Response b) Xs Ys)
     (qG qP : ℕ) (hG : ∀ ω, (G₂ ω).qG ≤ qG) (hP : ∀ ω, (G₂ ω).qP ≤ qP)
     (hag : ∀ H, (kfRelay B pks ksign stmtP toR dummyR sc hks hst idle).AgreeAt H
       (G₂ (base sp H)))
     (hA : ∀ ω (p : AssignRelay.TaggedReq (Bits (queryBits k kN kS L)) Y
         (Req B (Ring.spbcsSplitProofSystem sp M Λ E hb honest stmtProg qS hS check input) adm n) Q),
-      MultiRelay.AsksIn (MUResponse B ⊕ M.Response b) (((G₂ ω).relayOf Q).prog p)
+      MultiRelay.AsksIn (MUResponse B.core ⊕ M.Response b) (((G₂ ω).relayOf Q).prog p)
         (FromSigned B enc stmtX fstX isDummy p.req))
     (hAc : ∀ ω (p : AssignRelay.TaggedReq (Bits (queryBits k kN kS L)) Y
         (Req B (Ring.spbcsSplitProofSystem sp M Λ E hb honest stmtProg qS hS check input) adm n) Q),
-      MultiRelay.AsksIn (MUResponse B ⊕ M.Response b) (((G₂ ω).relayOf Q).prog p)
+      MultiRelay.AsksIn (MUResponse B.core ⊕ M.Response b) (((G₂ ω).relayOf Q).prog p)
         fun r' => ∀ i, r' = .inl (.corrupt i) → p.req = .corrupt i)
     {fw : Wit → Wit₀} {relH : Set (X₀ × Wit₀)}
     (hrel : ∀ x w, rel x w ↔ (stmtX x, fw w) ∈ relH) (henc : Function.Injective enc)
@@ -151,9 +162,9 @@ theorem kfChain_le (hk : 0 < k) (hb : M.FormatBounds Qs b b)
     {St : CausalStateFn P τ X₀} {ε : ChIdx P τ → NNReal}
     (hrbr : CausalRBRKnowledgeSound relK Vr Ext St ε) (wit : X₀ → WitK → W)
     (side : (Bits (queryBits k kN kS L) → Y₁) → Frg × X₀ →
-      List (MURequest (SignOracle.none B) n ⊕ Rq) → Prop)
+      List (MURequest (SignOracle.none B.core) n ⊕ Rq) → Prop)
     (Goal : (Bits (queryBits k kN kS L) → Y₁) → Frg × X₀ →
-      List (MURequest (SignOracle.none B) n ⊕ Rq) → W → Prop)
+      List (MURequest (SignOracle.none B.core) n ⊕ Rq) → W → Prop)
     (hgoal : ∀ ω p rs w, checkX p.2 p.1 = true →
       kfFresh enc stmtX isDummy (fun i => B.pk (keys i)) fstX side ω p rs → (p.2, w) ∈ relK →
       Goal ω p rs (wit p.2 w))
@@ -184,7 +195,7 @@ theorem kfChain_le (hk : 0 < k) (hb : M.FormatBounds Qs b b)
       (G₂ (base sp H)).Explains Q H T hP hist' →
       side (base sp H) p (hist'.map HistoryEntry.request)) :
     ∑' H, PMF.uniformOfFintype (Bits (queryBits k kN kS L) → Y) H *
-        (𝒜.assignLaw (kfGame (kfMainFull sp B rel ((encProver M Λ E hb honest).comap stmtX fw)
+        (𝒜.assignLaw (kfGame (kfMainFull sp B rel ((encProver M Λ E hb honest).comap stmtX fw) (PMF.uniformOfFintype _)
           enc keys Q) (kfRelay B pks ksign stmtP toR dummyR sc hks hst idle) Q) H).toOuterMeasure
           {x | ∃ p ∈ x, Ev H p} ≤
       ∑' ω, PMF.uniformOfFintype (Bits (queryBits k kN kS L) → Y₁) ω *
@@ -208,7 +219,8 @@ theorem kfChain_le (hk : 0 < k) (hb : M.FormatBounds Qs b b)
             (M.niJointSimulatorProg Λ VE.toViewRead b pub Sim T).q (t + Q * qG + Q * qP) Q +
           ENNReal.ofReal (M.zkError δ (t + Q * qG + Q * qP) Q)) := by
   refine (kfChainFull_le sp B pks ksign stmtP toR dummyR sc hks hst idle enc rel stmtX fstX
-    ((encProver M Λ E hb honest).comap stmtX fw) keys 𝒜 hpatch hkf G₂ qG qP hG hP hag hA hAc Ev
+    ((encProver M Λ E hb honest).comap stmtX fw)
+      (PMF.uniformOfFintype _) keys 𝒜 hpatch hkf G₂ qG qP hG hP hag hA hAc Ev
     (fun p h => ∃ π ∈ prfOf p.1, (M.qVerifier Qs b b).Accepted (outEquiv k e ∘ h) ⟨p.2, π⟩)
     (fun p => checkX p.2 p.1 = true) sideRing side
     (fun H p rs G h => ⟨(hE H p rs G h).1, (hE H p rs G h).2.1, (hE H p rs G h).2.2.1,
@@ -220,8 +232,8 @@ theorem kfChain_le (hk : 0 < k) (hb : M.FormatBounds Qs b b)
   have hbr := fun h => Quantum.QueryBoundedAdversary.transcriptLaw_eq_tsum_test
     (QueryBoundedAdversary.restrictAt sp ω (𝒜.absorbAssign (PMF.pure ())
       (fun _ => G₂ ω) qG (fun _ => hG ω) qP (fun _ => hP ω) Q))
-    (C := kfMain B rel ((encProver M Λ E hb honest).comap stmtX fw) enc keys Q)
-    (kfMain_noAssign B rel _ enc keys Q) h
+    (C := kfMain B rel ((encProver M Λ E hb honest).comap stmtX fw) (PMF.uniformOfFintype _) enc keys Q)
+    (kfMain_noAssign B rel _ _ enc keys Q) h
     (fun o rs => (∃ π ∈ prfOf o.1, (M.qVerifier Qs b b).Accepted (outEquiv k e ∘ h) ⟨o.2, π⟩) ∧
       checkX o.2 o.1 = true ∧ kfFresh enc stmtX isDummy (fun i => B.pk (keys i)) fstX side ω o rs)
     (kfWinTest M b Qs enc stmtX isDummy (fun i => B.pk (keys i)) fstX side prfOf checkX Q ω)

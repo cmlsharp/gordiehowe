@@ -228,7 +228,6 @@ def srcFact (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (fs : Li
       | none => none
     else none
   | .tableHull _ _ _ => none
-  | .tableKernel _ _ _ _ _ => none
 
 /-- **The intervals of an `ivlExpr` step's premises**, in order: the `ivl` facts of domain `d` at
 the premises `ks`. -/
@@ -528,7 +527,7 @@ def congrFact (fs : List Fact) (pid : ℕ) (body : PredBody) (k : ℕ) : Option 
   | some (.dvd d' x q') =>
     match body with
     | .mod d q e e' real =>
-      if d' = d ∧ q' = q ∧ x.beq (.sub e e') = true ∧ real.form.isProduct = false then
+      if d' = d ∧ q' = q ∧ x.beq (.sub e e') = true then
         some (.holds pid)
       else none
     | _ => none

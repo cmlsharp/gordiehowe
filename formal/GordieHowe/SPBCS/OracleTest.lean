@@ -5,7 +5,6 @@ module
 
 public import GordieHowe.SPBCS.SimExtractTest
 public import GordieHowe.SPBCS.ProverProg
-public import GordieHowe.SPBCS.SimExtractTest
 public import GordieHowe.Model.Quantum.Interactive.ProgAlg
 public import GordieHowe.Model.Quantum.Interactive.KeptTestAdaptive
 public import GordieHowe.Model.Quantum.Interactive.Embed
@@ -13,7 +12,6 @@ public import GordieHowe.Model.Quantum.Interactive.Test
 public import GordieHowe.Model.Quantum.OracleTestBoundary
 public import GordieHowe.Model.QROM.Instability
 public import GordieHowe.SPBCS.Extraction.ProveLemmas
-public import GordieHowe.SPBCS.ProverProg
 public import GordieHowe.SPBCS.Extractor
 public import GordieHowe.SPBCS.Extraction.KnowledgeError
 public import GordieHowe.Model.QROM.QueryBits
@@ -63,8 +61,8 @@ the spBCS compiler (`acc = GordieHowe.SPBCS.Accepts`, `Pv` the prover `GordieHow
 - `FixedSimExtractionAdversary`: adversaries with a static schedule (`Quantum.IAlg`); with
   channels as steps, their embedding is a query-bounded adversary of `def:adversary`
   (`toQueryBounded`).
-- `oracleTestAdversary Pv π₀ x wit X'`: the honest prover program on `x` with a witness drawn from
-  `wit`, plus one kept query on the uniform superposition of the Merkle-node inputs (`nodeInputs`),
+- `oracleTestAdversary Pv π₀ law x wit X'`: the honest prover program on `x` with a witness drawn
+  from `wit` and coins drawn from `law`, plus one kept query on the uniform superposition of the Merkle-node inputs (`nodeInputs`),
   no proof query; `oracleTestQB`: its embedding, a query-bounded adversary with one query more than the
   prover program; `oracleTestQBTest`: its test (one query to the final oracle, then the projective
   measurement onto that superposition), a residual-state test of the adversaries with run-time
@@ -78,9 +76,9 @@ the spBCS compiler (`acc = GordieHowe.SPBCS.Accepts`, `Pv` the prover `GordieHow
 - `oracleTest_eq6_fails_eventually_with` (and `GordieHowe.SPBCS.oracleTest_eq6_fails_eventually` for the
   spBCS compiler): along a family of instances within the bounds `OracleTestBounds` (statements,
   witness laws and rejection bounds depending on `η`; digests of at least `η` bytes, completeness
-  error eventually at most `1/2`, the byte lengths of the model, the statement and the witnesses
-  polynomial in `η`), with polynomially bounded assignment lists, eq. (6) fails for all large `η`,
-  for every polynomially bounded `p`, every `d` and every negligible `µ`.
+  error eventually at most `1/2`), with polynomially bounded assignment lists, eq. (6) fails
+  (`Quantum.Eq6Fails`) for all large `η`, for every positive polynomially bounded `p`
+  (`Quantum.PolyBounded`), every `d` and every negligible `µ` (`Quantum.Negligible`).
 -/
 
 section
@@ -294,7 +292,7 @@ section Lemma1
 
 variable {Wit C : Type}
   (Pv : NARG.Prover (Bits (queryBits k kN kS L)) (XOut k e) X Wit (M.Response B) C)
-  (π₀ : X → Wit → C → M.NIProof)
+  (π₀ : X → Wit → C → M.NIProof) (law : PMF C)
 
 /-- A response read as a proof, with the fallback `π₀` where no proof was built. -/
 def responseProof (π₀ : M.NIProof) : M.Response B → M.NIProof
@@ -328,7 +326,7 @@ theorem run_claimProg (x : X) (w : Wit) (c : C) (H : Bits (queryBits k kN kS L) 
 
 variable (M B) in
 /-- **The adversary of the oracle-test gap lemma**: on the auxiliary input of a
-witness `w` (drawn from `wit`) and the prover's coins `c`, the compilation of
+witness `w` (drawn from `wit`) and the prover's coins `c` (drawn from `law`), the compilation of
 `claimProg Pv π₀ x w c` with one extra query on the uniform superposition of the Merkle-node
 inputs with the answer register at `0`, whose registers it keeps (`OracleProg.toIAlg`); its
 statement is `x`, it makes no proof query (`Q = 0`) and at most `Pv.q + 1` queries.
@@ -341,7 +339,7 @@ prover program is. This running time is argued here, not proved in Lean. -/
 noncomputable def oracleTestAdversary (x : X) (wit : PMF Wit) (X' : Type) [Fintype X']
     [DecidableEq X'] [Nonempty X'] : M.FixedSimExtractionAdversary B X' (Pv.q + 1) 0 where
   Aux := Wit × C
-  aux := wit.bind fun w => Pv.coins.map fun c => (w, c)
+  aux := wit.bind fun w => law.map fun c => (w, c)
   alg a := OracleProg.toIAlg (Req := X') (claimProg Pv π₀ x a.1 a.2) Pv.q padInput
     (zeroUniform nodeInputs) (norm_graphState nodeInputs_nonempty 0)
   requests_le a := by
@@ -359,7 +357,7 @@ Running time: that of `oracleTestAdversary`. This running time is argued here, n
 Lean. -/
 noncomputable def oracleTestQB (x : X) (wit : PMF Wit) (X' : Type) [Fintype X'] [DecidableEq X']
     [Nonempty X'] : M.QBSimExtractionAdversary B X' (Pv.q + 1) :=
-  (oracleTestAdversary M B Pv π₀ x wit X').toQueryBounded fun a =>
+  (oracleTestAdversary M B Pv π₀ law x wit X').toQueryBounded fun a =>
     OracleProg.toIAlg_tracePreserving (Req := X') (Resp := M.Response B)
       (claimProg Pv π₀ x a.1 a.2) Pv.q padInput (zeroUniform nodeInputs)
       (norm_graphState nodeInputs_nonempty 0)
@@ -373,7 +371,8 @@ answer register at `0`; one query.
 Running time: one query and the inverse of the state preparation (`O(k)` gates).
 This running time is argued here, not proved in Lean. -/
 noncomputable def oracleTestQBTest (x : X) (wit : PMF Wit) (X' : Type) [Fintype X']
-    [DecidableEq X'] [Nonempty X'] : ((oracleTestQB M B Pv π₀ x wit X').toSimExtraction 0).QTest 1 where
+    [DecidableEq X'] [Nonempty X'] :
+        ((oracleTestQB M B Pv π₀ law x wit X').toSimExtraction 0).QTest 1 where
   test a := (OracleProg.keptTest (Req := X') (claimProg Pv π₀ x a.1 a.2) Pv.q padInput
     (zeroUniform nodeInputs) (norm_graphState nodeInputs_nonempty 0) keptAccept).toAdaptive
   queries_le _ := le_rfl
@@ -449,7 +448,8 @@ theorem outLaw_oracleTest_withTest (x : X) (a : Wit × C) (Ch : Challenger (Bits
   refine (key (((𝔸).toAdaptive.withTest 𝕋).core.toAdaptive (queryCount (𝔸).sched)) rfl HEq.rfl v
     HEq.rfl).trans (h.trans ?_)
   -- TODO(unbundle-M4): replace by a named copy register (`A.CopyReg`, a def with a one-step
-  -- instance, R2) in AdaptiveTest.lean; the default search exceeds its size limit
+  -- instance, so that instance search stops at it) in AdaptiveTest.lean; the default search
+  -- exceeds its size limit
   let : Fintype (DReg ((𝔸).toAdaptive.withTest 𝕋).W ((𝔸).toAdaptive.withTest 𝕋).width
       (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)) :=
     @instFintypeProd _ _ (@instFintypeProd _ _ inferInstance inferInstance) inferInstance
@@ -487,7 +487,7 @@ theorem winsWith_oracleTestVStar_iff (x : X) (wit : PMF Wit) (a : Wit × C)
     (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B) SC)
     (fx : X' → X) (H : Bits (queryBits k kN kS L) → XOut k e) (c : (simExtChallenger Psim 0).Coins) :
     (WinsWith acc ((𝔸).toAdaptive.withTest 𝕋).toTPKindAlg Psim 0 fx H (oracleTestVStar (M := M) (B := B) (X' := X') Pv π₀ x a (simExtChallenger Psim 0) H c) ∧
-      (oracleTestQBTest Pv π₀ x wit X').okWithTest a
+      (oracleTestQBTest Pv π₀ law x wit X').okWithTest a
         (advWorkspace ((𝔸).toAdaptive.withTest 𝕋).toTPKindAlg Psim 0 (oracleTestVStar (M := M) (B := B) (X' := X') Pv π₀ x a (simExtChallenger Psim 0) H c)).1) ↔
       acc H ((claimProg Pv π₀ x a.1 a.2).run H) := by
   set vStar := oracleTestVStar (M := M) (B := B) (X' := X') Pv π₀ x a (simExtChallenger Psim 0)
@@ -510,7 +510,7 @@ theorem winsWith_oracleTestVStar_iff (x : X) (wit : PMF Wit) (a : Wit × C)
         ((claimProg Pv π₀ x a.1 a.2).run 0) = _
     rw [OracleProg.result_answers_tab (claimProg Pv π₀ x a.1 a.2) Pv.q padInput H
       (length_trace_claimProg_le Pv π₀ x a.1 a.2 H), Option.getD_some]
-  have hok : (oracleTestQBTest Pv π₀ x wit X').okWithTest a
+  have hok : (oracleTestQBTest Pv π₀ law x wit X').okWithTest a
       (advWorkspace ((𝔸).toAdaptive.withTest 𝕋).toTPKindAlg Psim 0 (vStar H c)).1 := rfl
   rw [WinsWith, hq, hf, ho]
   simp only [List.not_mem_nil, IsEmpty.forall_iff, forall_const, true_and, and_iff_left hok]
@@ -527,22 +527,23 @@ Merkle-node inputs and the test accepts. -/
 theorem winTestProbWith_oracleTestQB (x : X) (wit : PMF Wit) (a : Wit × C)
     (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B) SC)
     (fx : X' → X) :
-    winTestProbWith acc ((((oracleTestQB M B Pv π₀ x wit X').toSimExtraction 0).alg a).withTest
-      ((oracleTestQBTest Pv π₀ x wit X').test a)) Psim 0 fx
-      ((oracleTestQBTest Pv π₀ x wit X').okWithTest a) =
+    winTestProbWith acc ((((oracleTestQB M B Pv π₀ law x wit X').toSimExtraction 0).alg a).withTest
+      ((oracleTestQBTest Pv π₀ law x wit X').test a)) Psim 0 fx
+      ((oracleTestQBTest Pv π₀ law x wit X').okWithTest a) =
       Pr[H ← (Bits (queryBits k kN kS L) → XOut k e) : acc H ((claimProg Pv π₀ x a.1 a.2).run H)] := by
   classical
   set C := simExtChallenger Psim 0
   set vStar := oracleTestVStar (M := M) (B := B) (X' := X') Pv π₀ x a C
   have hlaw := outLaw_oracleTest_withTest Pv π₀ x a C
-  have hwin := winsWith_oracleTestVStar_iff (acc := acc) Pv π₀ x wit a Psim fx
+  have hwin := winsWith_oracleTestVStar_iff (acc := acc) Pv π₀ law x wit a Psim fx
   -- the probability
   show winTestProbWith acc ((𝔸).toAdaptive.withTest 𝕋) Psim 0 fx
-    ((oracleTestQBTest Pv π₀ x wit X').okWithTest a) = _
+    ((oracleTestQBTest Pv π₀ law x wit X').okWithTest a) = _
   unfold winTestProbWith
   show (((((𝔸).toAdaptive.withTest 𝕋).toKindAlg.composeBothOut C id).realLaw (outEquiv k e)).toOuterMeasure
     {o | ∃ v, o.out = some v ∧ WinsWith acc ((𝔸).toAdaptive.withTest 𝕋).toTPKindAlg Psim 0 fx ((outEquiv k e).symm ∘ o.oracle) v ∧
-      (oracleTestQBTest Pv π₀ x wit X').okWithTest a (advWorkspace ((𝔸).toAdaptive.withTest 𝕋).toTPKindAlg Psim 0 v).1}) = _
+      (oracleTestQBTest Pv π₀ law x wit X').okWithTest a
+        (advWorkspace ((𝔸).toAdaptive.withTest 𝕋).toTPKindAlg Psim 0 v).1}) = _
   unfold Alg.realLaw
   rw [PMF.toOuterMeasure_bind_apply, probUniform, PMF.toOuterMeasure_apply]
   refine tsum_congr fun H => ?_
@@ -550,7 +551,8 @@ theorem winTestProbWith_oracleTestQB (x : X) (wit : PMF Wit) (a : Wit × C)
   have hset : ((fun o => (⟨o, outEquiv k e ∘ H⟩ : Outcome _ _ _)) ∘
       fun c => some (vStar H c)) ⁻¹'
       {o | ∃ v, o.out = some v ∧ WinsWith acc ((𝔸).toAdaptive.withTest 𝕋).toTPKindAlg Psim 0 fx ((outEquiv k e).symm ∘ o.oracle) v ∧
-        (oracleTestQBTest Pv π₀ x wit X').okWithTest a (advWorkspace ((𝔸).toAdaptive.withTest 𝕋).toTPKindAlg Psim 0 v).1} =
+        (oracleTestQBTest Pv π₀ law x wit X').okWithTest a
+          (advWorkspace ((𝔸).toAdaptive.withTest 𝕋).toTPKindAlg Psim 0 v).1} =
       {_c | acc H ((claimProg Pv π₀ x a.1 a.2).run H)} := by
     ext c
     simp only [Set.mem_preimage, Set.mem_ofPred_eq, Function.comp_apply, Option.some.injEq,
@@ -574,17 +576,17 @@ omit [∀ j i, Nonempty ((P j).Challenge i)] in
 theorem oracleTest_acceptsQTestWith_le_one (x : X) (wit : PMF Wit)
     (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B) SC)
     (fx : X' → X) :
-    ((oracleTestQB M B Pv π₀ x wit X').toSimExtraction 0).acceptsQTestWith acc Psim fx
-      (oracleTestQBTest Pv π₀ x wit X') ≤ 1 := by
-  show ∑' a, (oracleTestAdversary M B Pv π₀ x wit X').aux a * winTestProbWith acc _ Psim 0 fx _
+    ((oracleTestQB M B Pv π₀ law x wit X').toSimExtraction 0).acceptsQTestWith acc Psim fx
+      (oracleTestQBTest Pv π₀ law x wit X') ≤ 1 := by
+  show ∑' a, (oracleTestAdversary M B Pv π₀ law x wit X').aux a * winTestProbWith acc _ Psim 0 fx _
     ≤ 1
-  calc _ ≤ ∑' a, (oracleTestAdversary M B Pv π₀ x wit X').aux a * 1 :=
+  calc _ ≤ ∑' a, (oracleTestAdversary M B Pv π₀ law x wit X').aux a * 1 :=
         ENNReal.tsum_le_tsum fun a => mul_le_mul' le_rfl (PMF.toOuterMeasure_apply_le_one _ _)
     _ = 1 := by rw [ENNReal.tsum_mul_right, PMF.tsum_coe, one_mul]
 
 omit [∀ j i, Nonempty ((P j).Challenge i)] in
 /-- **The oracle-test gap lemma, for Prove**: for the query-bounded adversary
-`oracleTestQB M B Pv π₀ x wit X'` and its test `oracleTestQBTest`, the probability of winning Prove
+`oracleTestQB M B Pv π₀ law x wit X'` and its test `oracleTestQBTest`, the probability of winning Prove
 with `acc` and the test accepting is at least `1 − εc`, against any simulator, when `acc` rejects
 the claim of the prover program on `x` with probability at most `εc` at every witness of `wit` and
 all coins (`hc`). -/
@@ -593,34 +595,34 @@ theorem oracleTest_acceptsQTestWith_ge {εc : ℝ≥0∞} (x : X) (wit : PMF Wit
       ¬ acc H ((claimProg Pv π₀ x w c).run H)] ≤ εc)
     (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B) SC)
     (fx : X' → X) :
-    1 - εc ≤ ((oracleTestQB M B Pv π₀ x wit X').toSimExtraction 0).acceptsQTestWith acc Psim fx
-      (oracleTestQBTest Pv π₀ x wit X') := by
-  have hper : ∀ a, (oracleTestAdversary M B Pv π₀ x wit X').aux a ≠ 0 →
-      1 - εc ≤ winTestProbWith acc ((((oracleTestQB M B Pv π₀ x wit X').toSimExtraction 0).alg
-        a).withTest ((oracleTestQBTest Pv π₀ x wit X').test a)) Psim 0 fx
-        ((oracleTestQBTest Pv π₀ x wit X').okWithTest a) := by
+    1 - εc ≤ ((oracleTestQB M B Pv π₀ law x wit X').toSimExtraction 0).acceptsQTestWith acc Psim fx
+      (oracleTestQBTest Pv π₀ law x wit X') := by
+  have hper : ∀ a, (oracleTestAdversary M B Pv π₀ law x wit X').aux a ≠ 0 →
+      1 - εc ≤ winTestProbWith acc ((((oracleTestQB M B Pv π₀ law x wit X').toSimExtraction 0).alg
+        a).withTest ((oracleTestQBTest Pv π₀ law x wit X').test a)) Psim 0 fx
+        ((oracleTestQBTest Pv π₀ law x wit X').okWithTest a) := by
     intro a ha
     have hw : a.1 ∈ wit.support := by
       obtain ⟨w, hw, hc⟩ := (PMF.mem_support_bind_iff
-        (wit) (fun w => Pv.coins.map fun c => (w, c)) a).1 ha
+        (wit) (fun w => law.map fun c => (w, c)) a).1 ha
       rw [PMF.support_map] at hc
       obtain ⟨c, _, rfl⟩ := hc
       exact hw
-    rw [winTestProbWith_oracleTestQB Pv π₀ acc x wit a Psim fx]
+    rw [winTestProbWith_oracleTestQB Pv π₀ law acc x wit a Psim fx]
     have hadd := probUniform_add_not (C := Bits (queryBits k kN kS L) → XOut k e) fun H =>
       acc H ((claimProg Pv π₀ x a.1 a.2).run H)
     rw [ENNReal.eq_sub_of_add_eq (ne_top_of_le_ne_top ENNReal.one_ne_top
       (le_of_le_of_eq le_add_self hadd)) hadd]
     exact tsub_le_tsub_left (hc a.1 hw a.2) 1
-  show 1 - εc ≤ ∑' a, (oracleTestAdversary M B Pv π₀ x wit X').aux a *
-    winTestProbWith acc ((((oracleTestQB M B Pv π₀ x wit X').toSimExtraction 0).alg a).withTest
-      ((oracleTestQBTest Pv π₀ x wit X').test a)) Psim 0 fx
-      ((oracleTestQBTest Pv π₀ x wit X').okWithTest a)
+  show 1 - εc ≤ ∑' a, (oracleTestAdversary M B Pv π₀ law x wit X').aux a *
+    winTestProbWith acc ((((oracleTestQB M B Pv π₀ law x wit X').toSimExtraction 0).alg a).withTest
+      ((oracleTestQBTest Pv π₀ law x wit X').test a)) Psim 0 fx
+      ((oracleTestQBTest Pv π₀ law x wit X').okWithTest a)
   calc 1 - εc
-      = ∑' a, (oracleTestAdversary M B Pv π₀ x wit X').aux a * (1 - εc) := by
+      = ∑' a, (oracleTestAdversary M B Pv π₀ law x wit X').aux a * (1 - εc) := by
         rw [ENNReal.tsum_mul_right, PMF.tsum_coe, one_mul]
     _ ≤ _ := ENNReal.tsum_le_tsum fun a => by
-        by_cases ha : (oracleTestAdversary M B Pv π₀ x wit X').aux a = 0
+        by_cases ha : (oracleTestAdversary M B Pv π₀ law x wit X').aux a = 0
         · simp [ha]
         · exact mul_le_mul' le_rfl (hper a ha)
 
@@ -635,20 +637,20 @@ variable [Nonempty X']
 omit [∀ j i, Nonempty ((P j).Challenge i)] in
 /-- **Eq. (6) fails eventually along a family, for every blind extractor** (Unruh 2017, Definition
 14, p. 21: "a polynomial `p > 0`" and "a negligible `µ`"): for a family of
-models `M η` with digests of at least `η` bytes (`hk`), prover programs `Pv η` and acceptance
+models `M η` with digests of at least `η` bytes (`hk`), prover programs `Pv η` with coin laws `law η` and acceptance
 predicates `acc η` that reject the claim of the prover program on the statement `x η` with
 probability at most `εc η` at every witness of the witness law `wit η` and all coins (`hc`), `εc η` eventually at most `1/2` (`hεc`), and
-extractors blind on the Merkle-node inputs whose assignment lists have length at most `ℓ η ≤ C'
-η^c'` for all large `η` (`hℓ`), the adversary of the oracle-test gap lemma, a query-bounded adversary of
-`def:adversary` (`oracleTestQB`), and its test (`oracleTestQBTest`) make eq. (6) fail for all large `η`, for every `p`
-bounded by a polynomial `C η^c`, every exponent `d` and every negligible `µ`
+extractors blind on the Merkle-node inputs whose assignment lists have polynomially bounded length
+`ℓ η` (`hℓ`), the adversary of the oracle-test gap lemma, a query-bounded adversary of
+`def:adversary` (`oracleTestQB`), and its test (`oracleTestQBTest`) make eq. (6) fail for all large
+`η`, for every positive polynomially bounded `p`, every exponent `d` and every negligible `µ`
 (`Quantum.eq6_fails_eventually`, `lemma1Error_negligible`). -/
 theorem oracleTest_eq6_fails_eventually_with {k kN kS L e : ℕ → ℕ}
     {M : ∀ η, SPBCS Mg P X (k η) (kN η) (kS η) (L η) (e η)} {B : ℕ → ℕ}
     [∀ η j i, Fintype (((M η).comp j).MessageWrite i)] {Wit : Type} {Cn : ℕ → Type}
     (Pv : ∀ η, NARG.Prover (Bits (queryBits (k η) (kN η) (kS η) (L η))) (XOut (k η) (e η)) X Wit
       ((M η).Response (B η)) (Cn η))
-    (π₀ : ∀ η, X → Wit → Cn η → (M η).NIProof)
+    (π₀ : ∀ η, X → Wit → Cn η → (M η).NIProof) (law : ∀ η, PMF (Cn η))
     (acc : ∀ η, (Bits (queryBits (k η) (kN η) (kS η) (L η)) → XOut (k η) (e η)) →
       Claim X (M η).NIProof → Prop)
     {εc : ℕ → ℝ≥0∞} (x : ℕ → X) (wit : ℕ → PMF Wit)
@@ -658,71 +660,53 @@ theorem oracleTest_eq6_fails_eventually_with {k kN kS L e : ℕ → ℕ}
     (hεc : ∀ᶠ η in Filter.atTop, εc η ≤ 1 / 2) (hk : ∀ η, η ≤ k η)
     (Psim : ∀ η, NARG.Simulator (Bits (queryBits (k η) (kN η) (kS η) (L η))) (XOut (k η) (e η)) X'
       ((M η).Response (B η)) SC)
-    (fx : X' → X) {ℓ : ℕ → ℕ} {C' : ℝ} {c' : ℕ}
-    (hℓ : ∀ᶠ η in Filter.atTop, (ℓ η : ℝ) ≤ C' * (η : ℝ) ^ c')
+    (fx : X' → X) {ℓ : ℕ → ℕ} (hℓ : PolyBounded fun η => (ℓ η : ℝ))
     (Ext : ∀ η, BlindExtractor (Bits (queryBits (k η) (kN η) (kS η) (L η))) (XOut (k η) (e η))
       nodeInputs (ℓ η))
-    {p μ : ℕ → ℝ} {C : ℝ} {c : ℕ} (hC : 0 < C) (hp : ∀ η, 0 < p η)
-    (hpoly : ∀ η, p η ≤ C * (η : ℝ) ^ c) (d : ℕ)
-    (hμ : ∀ j : ℕ, ∀ᶠ η : ℕ in Filter.atTop, (η : ℝ) ^ j * μ η ≤ 1) :
-    ∀ᶠ η in Filter.atTop, (Ext η).extractAccept <
-      (p η)⁻¹ * (((oracleTestQB (M η) (B η) (Pv η) (π₀ η) (x η) (wit η) X').toSimExtraction
+    {p μ : ℕ → ℝ} (hp : ∀ η, 0 < p η) (hpoly : PolyBounded p) (d : ℕ) (hμ : Negligible μ) :
+    ∀ᶠ η in Filter.atTop, Eq6Fails (Ext η).extractAccept
+      (((oracleTestQB (M η) (B η) (Pv η) (π₀ η) (law η) (x η) (wit η) X').toSimExtraction
           0).acceptsQTestWith (acc η) (Psim η) fx
-          (oracleTestQBTest (Pv η) (π₀ η) (x η) (wit η) X')).toReal ^ d - μ η := by
+          (oracleTestQBTest (Pv η) (π₀ η) (law η) (x η) (wit η) X')).toReal (p η) d (μ η) := by
+  obtain ⟨C', c', hℓ⟩ := hℓ
   have hC' : 0 ≤ C' := by
     obtain ⟨η, hη, h1⟩ := (hℓ.and (Filter.eventually_ge_atTop 1)).exists
     have hpos : (0 : ℝ) < (η : ℝ) ^ c' := pow_pos (by exact_mod_cast h1) _
     exact nonneg_of_mul_nonneg_left ((Nat.cast_nonneg _).trans hη) hpos
   refine Quantum.eq6_fails_eventually (a := fun η => ((√(Fintype.card (XOut (k η) (e η)) : ℝ))⁻¹ +
       √(ℓ η / (nodeInputs (k := k η) (kN := kN η) (kS := kS η) (L := L η)).card)) ^ 2)
-    (ε := fun η => (εc η).toReal) hC hp hpoly ?_ ?_ ?_ (lemma1Error_negligible hk hC' hℓ) hμ
+    (ε := fun η => (εc η).toReal) hp hpoly ?_ ?_ ?_ (lemma1Error_negligible hk hC' hℓ) hμ
   · filter_upwards [hεc] with η hη
     have hη1 : εc η ≤ 1 := hη.trans (by norm_num)
     have h1 := ENNReal.toReal_mono (ne_top_of_le_ne_top ENNReal.one_ne_top
-      (oracleTest_acceptsQTestWith_le_one (Pv η) (π₀ η) (acc η) (x η) (wit η) (Psim η) fx))
-      (oracleTest_acceptsQTestWith_ge (Pv η) (π₀ η) (acc η) (x η) (wit η) (hc η) (Psim η) fx)
+      (oracleTest_acceptsQTestWith_le_one (Pv η) (π₀ η) (law η) (acc η) (x η) (wit η) (Psim η) fx))
+      (oracleTest_acceptsQTestWith_ge (Pv η) (π₀ η) (law η) (acc η) (x η) (wit η) (hc η) (Psim η) fx)
     rwa [ENNReal.toReal_sub_of_le hη1 ENNReal.one_ne_top, ENNReal.toReal_one] at h1
   · filter_upwards [hεc] with η hη
     have := ENNReal.toReal_mono (by norm_num) hη
     simpa using this
   · exact Filter.Eventually.of_forall fun η => (Ext η).extractAccept_le nodeInputs_nonempty
 
-/-- **The bounds of a family of instances for the oracle test** (Unruh 2017, Definition 14, p. 21:
-the adversary and the test range over polynomial-time families of circuits, the test making
-polynomially many queries, p. 19; the auxiliary input is a state of polynomial length, p. 21 and
-footnote 16, p. 20), for a family of models `M η` of one composite, IOP rejection bounds `ε η`,
-statements `x η` and witness laws `wit η`, the byte lengths `size` and `wsize` of the encodings of
-statements and witnesses, and one constant pair `C, c`:
+/-- **The bounds of a family of instances for the oracle test**, for a family of models `M η` of
+one composite and IOP rejection bounds `ε η`:
 - `k_ge`: digests of at least `η` bytes;
-- `completenessError_le`: the completeness error `ε η + overrun + keyCollision (t.size n) k` is
-  eventually at most `1/2`;
-- `lengths_le`: eventually the digest, the XOF extension, the Merkle salt, the Fiat–Shamir salt
-  and the chain input have at most `C η^c` bytes in all;
-- `sizes_le`: eventually the statement and every witness of the witness law have at most `C η^c`
-  bytes in all (`|x| + |w| ≤ C k^c'`).
+- `completenessError_le`: the completeness error `completenessError (ε η)` is eventually at most
+  `1/2`.
 
-The honest IOP prover does not depend on `η`; its running time on the statement and a witness is
-polynomial in their lengths, which `sizes_le` bounds. The compiled honest prover adds hashing and
-Merkle trees on inputs of at most `L` bytes, and the adversary and test of the oracle-test gap lemma
-add one query each, one `X` gate and `16k` Hadamard gates (`oracleTestAdversary`,
-`oracleTestQBTest`), so, by this argument, they run in time polynomial in `η` under these bounds.
-The development has no cost model for quantum algorithms: `lengths_le` and `sizes_le` record the
-polynomial-time quantifiers of Unruh's definition, and the proofs do not use them (the probability
-inequality holds without them). -/
+These are the hypotheses the probability inequality of `oracleTest_eq6_fails_eventually` uses.
+Unruh's Definition 14 (p. 21) also quantifies over polynomial-time adversaries and tests. The
+development has no cost model for quantum algorithms, so that the adversary and test of the
+oracle-test gap lemma run in polynomial time is argued in the paper, not proved in Lean: the honest
+IOP prover's running time is polynomial in the lengths of the statement and the witness, the
+compiled honest prover adds hashing and Merkle trees on inputs of at most `L` bytes, and the
+adversary and test add one query each, one `X` gate and `16k` Hadamard gates
+(`oracleTestAdversary`, `oracleTestQBTest`). -/
 structure OracleTestBounds {k kN kS L e : ℕ → ℕ}
-    (M : ∀ η, SPBCS Mg P X (k η) (kN η) (kS η) (L η) (e η)) (ε : ℕ → ℝ≥0∞) {Wit : Type}
-    (x : ℕ → X) (wit : ℕ → PMF Wit) (size : X → ℕ) (wsize : Wit → ℕ) (C : ℝ) (c : ℕ) : Prop where
+    (M : ∀ η, SPBCS Mg P X (k η) (kN η) (kS η) (L η) (e η)) (ε : ℕ → ℝ≥0∞) : Prop where
   /-- Digests have at least `η` bytes. -/
   k_ge : ∀ η, η ≤ k η
   /-- The completeness error is eventually at most `1/2`. -/
-  completenessError_le : ∀ᶠ η in Filter.atTop,
-    ε η + (M η).overrun + SPBCS.keyCollision (t.size n) (k η) ≤ 1 / 2
-  /-- The byte lengths of the model are eventually at most `C η^c` in all. -/
-  lengths_le : ∀ᶠ η in Filter.atTop, (k η + e η + kN η + kS η + L η : ℝ) ≤ C * (η : ℝ) ^ c
-  /-- The statement and every witness of the witness law have eventually at most `C η^c` bytes
-  in all. -/
-  sizes_le : ∀ᶠ η in Filter.atTop, ∀ w ∈ (wit η).support,
-    (size (x η) + wsize w : ℝ) ≤ C * (η : ℝ) ^ c
+  completenessError_le : ∀ᶠ η in Filter.atTop, (M η).completenessError (ε η) ≤ 1 / 2
 
 end Family
 
@@ -802,8 +786,9 @@ prover. -/
 noncomputable abbrev honestOracleTestQB (hb : M.FormatBounds Qs B B) (x : X) (wit : PMF Wit) (X' : Type) [Fintype X']
     [DecidableEq X'] [Nonempty X'] :
     M.QBSimExtractionAdversary B X' ((((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding).q + 1) :=
-  oracleTestQB M B (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) (honestFallback E Qs honest) x
-    wit X'
+  oracleTestQB M B (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding)
+      (honestFallback E Qs honest)
+    (PMF.uniformOfFintype _) x wit X'
 
 variable (M B E Qs) in
 /-- **The test of the oracle-test gap lemma for `honestOracleTestQB`** (`SPBCS.oracleTestQBTest`): one query
@@ -812,21 +797,23 @@ Merkle-node inputs with the answer register at `0`. -/
 noncomputable abbrev honestOracleTestQBTest (hb : M.FormatBounds Qs B B) (x : X) (wit : PMF Wit) (X' : Type) [Fintype X']
     [DecidableEq X'] [Nonempty X'] :
     ((honestOracleTestQB M B Λ E Qs honest hb x wit X').toSimExtraction 0).QTest 1 :=
-  oracleTestQBTest (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) (honestFallback E Qs honest) x wit X'
+  oracleTestQBTest (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding)
+      (honestFallback E Qs honest)
+    (PMF.uniformOfFintype _) x wit X'
 
 /-- **Eq. (6) fails eventually for the spBCS compiler, for every blind extractor** (Unruh
-2017, Definition 14, p. 21: "a polynomial `p > 0`" and "a negligible `µ`"): for a family of spBCS compilers `M η` of one
-composite and one term with merges, at one site layout `Λ`, within the bounds
-`SPBCS.OracleTestBounds` at constants `C', c'` (digests of at least `η` bytes, completeness
-error `ε η + overrun + keyCollision (t.size n) k` eventually at most `1/2`, byte lengths of the
-model, the statement and the witnesses at most `C' η^c'`), with `B η` bounding the proof format
-(`hb`), when the composite verifier rejects the honest run on the statement `x η` with probability
-at most `ε η` at every witness of `wit η` and all coins (`hε`), and for extractors blind on the
-Merkle-node inputs whose assignment lists have length at most `ℓ η ≤ C' η^c'` for all large `η`, the adversary
-`honestOracleTestQB` and its test `honestOracleTestQBTest` make eq. (6) fail for all large `η`, for
-every `p` bounded by a polynomial `C η^c`, every exponent `d` and every negligible `µ`. By the argument of `SPBCS.OracleTestBounds`, the
-adversary and the test run in time polynomial in `η` under the bounds, so the statement has
-Unruh's quantifiers. -/
+2017, Definition 14, p. 21: "a polynomial `p > 0`" and "a negligible `µ`"): for a family of spBCS
+compilers `M η` of one composite and one term with merges, at one site layout `Λ`, within the
+bounds `SPBCS.OracleTestBounds` (digests of at least `η` bytes, completeness error
+`completenessError (ε η)` eventually at most `1/2`), with `B η` bounding the proof format (`hb`),
+when the composite verifier rejects the honest run on the statement `x η` with probability at most
+`ε η` at every witness of `wit η` and all coins (`hε`), and for extractors blind on the
+Merkle-node inputs whose assignment lists have polynomially bounded length `ℓ η`, the adversary
+`honestOracleTestQB` and its test `honestOracleTestQBTest` make eq. (6) fail (`Eq6Fails`) for all
+large `η`, for every positive polynomially bounded `p`, every exponent `d` and every negligible
+`µ`. Lean proves this probability inequality. That the adversary and the test run in time
+polynomial in `η`, which Unruh's quantifiers also require, is argued in the paper and not proved
+(`SPBCS.OracleTestBounds`). -/
 @[headline]
 theorem oracleTest_eq6_fails_eventually {k kN kS L e : ℕ → ℕ}
     {M : ∀ η, SPBCS Mg P X (k η) (kN η) (kS η) (L η) (e η)} {B : ℕ → ℕ}
@@ -836,28 +823,25 @@ theorem oracleTest_eq6_fails_eventually {k kN kS L e : ℕ → ℕ}
     {ε : ℕ → ℝ≥0∞} (x : ℕ → X) (wit : ℕ → PMF Wit)
     (hε : ∀ η, ∀ w ∈ (wit η).support, ∀ r,
       Pr[ch ← Chs P t : V (x η) ((honest w r).run (x η) ch) ≠ true] ≤ ε η)
-    {size : X → ℕ} {wsize : Wit → ℕ} {C' : ℝ} {c' : ℕ}
-    (hS : SPBCS.OracleTestBounds (fun η => (M η)) ε x wit size wsize C' c')
+    (hS : SPBCS.OracleTestBounds (fun η => (M η)) ε)
     (Psim : ∀ η, NARG.Simulator (Bits (queryBits (k η) (kN η) (kS η) (L η))) (XOut (k η) (e η)) X'
       ((M η).Response (B η)) SC)
-    (fx : X' → X) {ℓ : ℕ → ℕ} (hℓ : ∀ᶠ η in Filter.atTop, (ℓ η : ℝ) ≤ C' * (η : ℝ) ^ c')
+    (fx : X' → X) {ℓ : ℕ → ℕ} (hℓ : PolyBounded fun η => (ℓ η : ℝ))
     (Ext : ∀ η, BlindExtractor (Bits (queryBits (k η) (kN η) (kS η) (L η))) (XOut (k η) (e η))
       nodeInputs (ℓ η))
-    {p μ : ℕ → ℝ} {C : ℝ} {c : ℕ} (hC : 0 < C) (hp : ∀ η, 0 < p η)
-    (hpoly : ∀ η, p η ≤ C * (η : ℝ) ^ c) (d : ℕ)
-    (hμ : ∀ j : ℕ, ∀ᶠ η : ℕ in Filter.atTop, (η : ℝ) ^ j * μ η ≤ 1) :
-    ∀ᶠ η in Filter.atTop, (Ext η).extractAccept <
-      (p η)⁻¹ * (acceptsQTest (Qs η)
+    {p μ : ℕ → ℝ} (hp : ∀ η, 0 < p η) (hpoly : PolyBounded p) (d : ℕ) (hμ : Negligible μ) :
+    ∀ᶠ η in Filter.atTop, Eq6Fails (Ext η).extractAccept
+      (acceptsQTest (Qs η)
         ((honestOracleTestQB (M η) (B η) Λ (E η) (Qs η) honest (hb η) (x η) (wit η) X').toSimExtraction 0)
         (Psim η) fx
-        (honestOracleTestQBTest (M η) (B η) Λ (E η) (Qs η) honest (hb η) (x η) (wit η) X')).toReal ^ d -
-        μ η :=
+        (honestOracleTestQBTest (M η) (B η) Λ (E η) (Qs η) honest (hb η) (x η) (wit η) X')).toReal
+      (p η) d (μ η) :=
   SPBCS.oracleTest_eq6_fails_eventually_with
     (fun η => (((M η).niProver Λ honest (E η) (hb η)).mapOutput some).encode queryEncoding)
-    (fun η => honestFallback (E η) (Qs η) honest)
+    (fun η => honestFallback (E η) (Qs η) honest) (fun _ => PMF.uniformOfFintype _)
     (fun η H o => (M η).Accepts (chainOracle H) o.stmt o.proof (Qs η o.stmt)) x wit
     (fun η w hw c => prob_not_accepts_claimProg_le Λ honest (VE η) (hb η) (x η) w c (hε η w hw _))
-    hS.completenessError_le hS.k_ge Psim fx hℓ Ext hC hp hpoly d hμ
+    hS.completenessError_le hS.k_ge Psim fx hℓ Ext hp hpoly d hμ
 
 end
 

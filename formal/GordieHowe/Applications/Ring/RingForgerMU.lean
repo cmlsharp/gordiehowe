@@ -47,10 +47,17 @@ namespace GordieHowe.RingSignature
 open Quantum Signature
 open scoped ENNReal
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB} {TPS : PSTypes} {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS}
+variable {X Y : Type} {N : ℕ} {TB : BaseTypes}
+  {B : BaseSigner X Y N TB} {TPS : PSTypes}
+  {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {n : ℕ}
 
 /-! ### The game's replies -/
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins]
 
 variable (B PS adm) in
 /-- **The game's reply to a request** at the users' key coins `keys`, the oracle `H` and the
@@ -65,6 +72,9 @@ noncomputable def ringReply (keys : Fin n → B.KeyCoins) (H : X → Y) (c : B.C
     else none
   | .sideSign _ bm => bm.elim
 
+omit [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The game's reply to a member's request on a supported ring** is `signAt` at the member's
 first position. -/
 theorem ringReply_sign_of_mem (keys : Fin n → B.KeyCoins) (H : X → Y) (c : B.Coins × PS.Coins)
@@ -81,6 +91,9 @@ theorem ringReply_sign_of_mem (keys : Fin n → B.KeyCoins) (H : X → Y) (c : B
       (sign_ofBase_of_mem B PS adm (kp := (ofBase B PS adm).keyGen (keys s)) hm' ha m c))
   · exact absurd hm h
 
+omit [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The game refuses a request off a supported ring holding the member's key.** -/
 theorem ringReply_sign_of_not (keys : Fin n → B.KeyCoins) (H : X → Y) (c : B.Coins × PS.Coins)
     {s : Fin n} {R : KeyRing (ofBase B PS adm).PK N} {m : (ofBase B PS adm).Msg}
@@ -98,8 +111,12 @@ theorem ringReply_sign_of_not (keys : Fin n → B.KeyCoins) (H : X → Y) (c : B
     rfl
   · rfl
 
+omit [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  [Nonempty TB.KeyCoins] in
 /-- **The numbered challenger never reprograms.** -/
 theorem numChallenger_noAssign [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
+    [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
     (keys : Fin n → B.KeyCoins) (Q : ℕ) :
     (numChallenger B PS adm n (SideOracle.none _) keys Q).NoAssign := by
   intro c hist r G
@@ -117,10 +134,14 @@ theorem numChallenger_noAssign [Fintype X] [DecidableEq X] [Fintype Y] [Decidabl
     · exact bm.elim
   · rfl
 
+omit [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  [Nonempty TB.KeyCoins] in
 /-- **The numbered challenger's reply** to a request numbered below `Q` is the game's reply with
 the base signer's coins of that number and the request's prover's coins. -/
 theorem answerAfter_numChallenger [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
-    [AddGroup Y] [Nonempty Y] (keys : Fin n → B.KeyCoins) (Q : ℕ) (H : X → Y)
+    [AddGroup Y] [Nonempty Y] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
+    (keys : Fin n → B.KeyCoins) (Q : ℕ) (H : X → Y)
     (b : Fin Q → B.Coins) (rs : List (NumReq B PS adm n (SideOracle.none _)))
     (r : NumReq B PS adm n (SideOracle.none _))
     (hi : rs.length < Q) :
@@ -174,7 +195,7 @@ challenger, then, for a base signature `σ`, its public value `y` and the honest
 `(R, m, y)` with the witness at the first position of `pks s`, as relay queries. -/
 def relayRingSign (pks : Fin n → B.PK) (ρ : PS.Coins) (s : Fin n) (R : KeyRing B.PK N)
     (m : B.Msg) :
-    OracleProg (X ⊕ MURequest (SignOracle.ring B) n) (Y ⊕ Option (MUResponse B))
+    OracleProg (X ⊕ MURequest (SignOracle.ring B) n) (Y ⊕ Option (MUResponse B.core))
       (Option (RResp B PS adm (SideOracle.none _))) :=
   (askResp (.sign s (R, m))).bind fun
     | some (.signature σ) => (MultiRelay.liftQ (B.pub (pks s) σ)).bind fun y =>
@@ -189,7 +210,7 @@ a corruption asked as it is; a ring-signing request by a member of a supported r
 `relayRingSign`; the other ring-signing requests refused without a request. -/
 noncomputable def forgerProg (pks : Fin n → B.PK) :
     NumReq B PS adm n (SideOracle.none _) → OracleProg (X ⊕ MURequest (SignOracle.ring B) n)
-      (Y ⊕ Option (MUResponse B)) (Option (RResp B PS adm (SideOracle.none _)))
+      (Y ⊕ Option (MUResponse B.core)) (Option (RResp B PS adm (SideOracle.none _)))
   | (_, .corrupt i) => (askResp (.corrupt i)).mapOutput fun
       | some (.keyCoins kc) => some (.keyCoins kc)
       | _ => none
@@ -203,7 +224,7 @@ public key of user `i₁`. -/
 noncomputable def forgerRelay (pks : Fin n → B.PK) (i₁ : Fin n) :
     MultiRelay X Y (NumReq B PS adm n (SideOracle.none _)) (RResp B PS adm (SideOracle.none _))
       (MURequest (SignOracle.ring B) n)
-      (MUResponse B) where
+      (MUResponse B.core) where
   prog := MultiRelay.plainProg (forgerProg B PS adm pks)
   K := 1
   K_pos := Nat.one_pos
@@ -222,10 +243,14 @@ def ForgerAsk : NumReq B PS adm n (SideOracle.none _) → MURequest (SignOracle.
   | (_, .sign s R m), r' => r' = .sign s (R, m)
   | (_, .sideSign _ _), _ => False
 
+omit [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
+  [DecidableEq TB.Coins] [Nonempty TB.Coins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg]
+  in
 /-- **Every main request of a relay program is one its request relays to.** -/
 theorem asksIn_forgerProg [Zero Y] (pks : Fin n → B.PK)
     (r : NumReq B PS adm n (SideOracle.none _)) :
-    MultiRelay.AsksIn (MUResponse B) (forgerProg B PS adm pks r) (ForgerAsk B PS adm r) := by
+    MultiRelay.AsksIn (MUResponse B.core) (forgerProg B PS adm pks r) (ForgerAsk B PS adm r) := by
   obtain ⟨ρ, r⟩ := r
   rcases r with i | ⟨s, R, m⟩ | ⟨i, bm⟩
   · exact (asksIn_askResp _).mapOutput _
@@ -250,9 +275,12 @@ variable [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [A
 
 /-- The multi-user challenger's replies. -/
 noncomputable abbrev ringMUAns : List (MURequest (SignOracle.ring B) n) →
-    MURequest (SignOracle.ring B) n → Option (MUResponse B) :=
+    MURequest (SignOracle.ring B) n → Option (MUResponse B.core) :=
   (muChallenger (SignOracle.ring B) n keys Q').toPureEnv.answerAfter (H, c')
 
+omit [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.PK]
+  [Fintype TB.Msg] [DecidableEq TB.Msg] in
 /-- **A relayed request runs with the game's reply**: the request `(ρ, r)`, after the main requests
 `L` (fewer than `Q'`), runs with the game's reply at the coins `(c' |L|, ρ)`, at most one main
 request and `qPub + PS.q` queries. -/
@@ -269,7 +297,7 @@ theorem runsWith_forgerProg (L : List (MURequest (SignOracle.ring B) n)) (hL : L
       (k := fun b => OracleProg.pure (b.elim (fun _ => none) id)) (.corrupt i)
       (MultiRelay.RunsWith.pure _ _)).mapOutput (fun
         | some (.keyCoins kc) => some (.keyCoins kc)
-        | _ => none : Option (MUResponse B) → Option (RResp B PS adm (SideOracle.none _)))
+        | _ => none : Option (MUResponse B.core) → Option (RResp B PS adm (SideOracle.none _)))
     refine ⟨_, _, h.congr_res ?_, by simp, Nat.zero_le _⟩
     simp only [Sum.elim_inr, id, ringMUAns, hans _ hL, muReply]
     rfl
@@ -277,12 +305,12 @@ theorem runsWith_forgerProg (L : List (MURequest (SignOracle.ring B) n)) (hL : L
     by_cases hc : B.pk (keys s) ∈ R.1 ∧ adm R
     · rw [if_pos hc]
       have hq : MultiRelay.RunsWith (ringMUAns keys Q' H c') H L
-          (askResp (Resp' := MUResponse B) (.sign s (R, m)))
+          (askResp (Resp' := MUResponse B.core) (.sign s (R, m)))
           (ringMUAns keys Q' H c' L (.sign s (R, m))) [.sign s (R, m)] 0 :=
         MultiRelay.RunsWith.query_inr (ansM := ringMUAns keys Q' H c') (H := H) (rs := L)
           (k := fun b => OracleProg.pure (b.elim (fun _ => none) id)) (.sign s (R, m))
           (MultiRelay.RunsWith.pure _ _)
-      have ha : (ringMUAns keys Q' H c' L (.sign s (R, m)) : Option (MUResponse B)) =
+      have ha : (ringMUAns keys Q' H c' L (.sign s (R, m)) : Option (MUResponse B.core)) =
           ((B.bsign (B.keyGen (keys s)).2 R (R.1.idxOf (B.pk (keys s))) m
             (c' ⟨L.length, hL⟩)).run H).map .signature := by
         rw [ringMUAns, hans _ hL]
@@ -302,9 +330,9 @@ theorem runsWith_forgerProg (L : List (MURequest (SignOracle.ring B) n)) (hL : L
           (c' ⟨L.length, hL⟩, ρ).1).run H = none from hb]
         rfl
       · have hp := MultiRelay.RunsWith.liftQ (ansM := ringMUAns keys Q' H c') (H := H)
-          (Resp' := MUResponse B) (L ++ [.sign s (R, m)]) (B.pub (B.pk (keys s)) σ)
+          (Resp' := MUResponse B.core) (L ++ [.sign s (R, m)]) (B.pub (B.pk (keys s)) σ)
         have hpr := MultiRelay.RunsWith.liftQ (ansM := ringMUAns keys Q' H c') (H := H)
-          (Resp' := MUResponse B) (L ++ [.sign s (R, m)] ++ [])
+          (Resp' := MUResponse B.core) (L ++ [.sign s (R, m)] ++ [])
           (PS.prove ⟨R, m, (B.pub (B.pk (keys s)) σ).run H⟩ ⟨R.1.idxOf (B.pk (keys s)), σ⟩ ρ)
         refine ⟨[.sign s (R, m)] ++ ([] ++ []),
           0 + (((B.pub (B.pk (keys s)) σ).trace H).length +
@@ -332,8 +360,10 @@ end Runs
 section Relays
 
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
-  [AddGroup Y] [Nonempty Y] [NeZero n]
+  [AddGroup Y] [Nonempty Y] [NeZero n] [Fintype TPS.Proof] [DecidableEq TPS.Proof]
+  [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
 
+omit [Nonempty TB.KeyCoins] in
 /-- **The numbered challenger with `Q` requests is the relay `forgerRelay` of the multi-user
 challenger with `Q' ≥ Q` requests** (`MultiRelay.RelaysChallenger`), along the restriction of the
 coins to the first `Q`: each numbered request is answered as its relay program answers it against
@@ -380,6 +410,9 @@ def RingFreshReq (keys : Fin n → B.KeyCoins) (o : KeyRing B.PK N × B.Msg × (
   (∀ pk ∈ o.1.1, ∃ i, B.pk (keys i) = pk ∧ UnforgeRequest.corrupt i ∉ rs) ∧
     ∀ s, UnforgeRequest.sign s o.1 o.2.1 ∉ rs
 
+omit [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] [Nonempty TB.KeyCoins] in
 /-- **A fresh ring and message are fresh for the requests of the history.** -/
 theorem Fresh.ringFreshReq {keys : Fin n → B.KeyCoins}
     {hist : UnforgeHist (S := ofBase B PS adm) n (SideOracle.none _)}
@@ -397,11 +430,15 @@ variable (B) in
 /-- **A ring forgery is fresh for the multi-user requests `mrs`** (of any signing oracle `O`):
 every key of its ring is the key of a user that no request of `mrs` corrupts, and no request of
 `mrs` asks a member of the ring to sign for its base message `bmsg R m`. -/
-def MUFreshReq {O : SignOracle B} (keys : Fin n → B.KeyCoins)
+def MUFreshReq {O : SignOracle B.core} (keys : Fin n → B.KeyCoins)
     (o : KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof)) (mrs : List (MURequest O n)) : Prop :=
   (∀ pk ∈ o.1.1, ∃ i, B.pk (keys i) = pk ∧ MURequest.corrupt i ∉ mrs) ∧
     ∀ j sm, MURequest.sign j sm ∈ mrs → B.pk (keys j) ∈ o.1.1 → O.base sm ≠ B.bmsg o.1 o.2.1
 
+omit [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.PK]
+  [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 /-- **Freshness passes through the relay** for a ring-binding base message: if every multi-user
 request is the idle public-key request or one that a numbered request of `hist` relays to
 (`ForgerAsk`), a ring forgery fresh for the requests of `hist` (read without their prover's coins)
@@ -439,21 +476,25 @@ end Fresh
 section Game
 
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
-  [AddGroup Y] [Nonempty Y] [NeZero n] {t : ℕ}
+  [AddGroup Y] [Nonempty Y] [NeZero n] {t : ℕ} [Fintype TPS.Proof] [DecidableEq TPS.Proof]
+  [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
 
 variable (X Y B PS adm n) in
 /-- **A relay family**: for each list of the users' public keys, a relay (`MultiRelay`) of the
 numbered requests of the game with the side oracle `SO` to the multi-user challenger with the
 signing oracle `O`. -/
-abbrev RelayFam (SO : SideOracle (ofBase B PS adm)) (O : SignOracle B) : Type :=
+abbrev RelayFam (SO : SideOracle (ofBase B PS adm)) (O : SignOracle B.core) : Type :=
   (Fin n → B.PK) → MultiRelay X Y (NumReq B PS adm n SO) (RResp B PS adm SO) (MURequest O n)
-    (MUResponse B)
+    (MUResponse B.core)
 
+omit [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 /-- **The relayed forger through a relay** `F` of an adversary of the unforgeability game with the
 side oracle `SO`, at the users' public keys `pks` and the prover's coins `ρ`: the adversary
 absorbed through `numRelay Q ρ`, relayed by `F` answering `Q` requests. At most
 `t + Q · F.qR` queries (`F` has no side reads, so no pad sub-slots). -/
-noncomputable def relayedForgerVia {SO : SideOracle (ofBase B PS adm)} {Req' Resp' : Type}
+noncomputable def relayedForgerVia {SO : SideOracle (ofBase B PS adm)} [Fintype SO.BMsg]
+    [DecidableEq SO.BMsg] [Fintype SO.BSig] [DecidableEq SO.BSig] {Req' Resp' : Type}
     [Fintype Req'] [DecidableEq Req'] [Fintype Resp'] [DecidableEq Resp'] [Inhabited Req']
     (A : UnforgeAdversary (ofBase B PS adm) n SO (OracleView.queriesOnly X Y) t)
     (F : MultiRelay X Y (NumReq B PS adm n SO) (RResp B PS adm SO) Req' Resp')
@@ -471,7 +512,7 @@ multi-user challenger by `forgerRelay pks i₁` (`relayedForgerVia`). At most
 noncomputable def relayedForger (A : InsiderAdversary (ofBase B PS adm) n
     (OracleView.queriesOnly X Y) t) (pks : Fin n → B.PK) (i₁ : Fin n) (Q : ℕ)
     (ρ : Fin Q → PS.Coins) :
-    QueryBoundedAdversary X Y (MURequest (SignOracle.ring B) n) (MUResponse B)
+    QueryBoundedAdversary X Y (MURequest (SignOracle.ring B) n) (MUResponse B.core)
       (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof)) (t + Q * (B.qPub + PS.q)) :=
   relayedForgerVia A (forgerRelay B PS adm pks i₁) pks Q ρ
 

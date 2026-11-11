@@ -139,7 +139,7 @@ inline const Schema &gkr_schema() {
                 {{"none", {}}, {"source", {}}, {"lookupDigit", {N, "Bool", N}},
                  {"commDigit", {N, N, N, N}}, {"spec", {N}}, {"staticHist", {N, N}},
                  {"tag", {N}}, {"acc", {N}}, {"quotDigit", {N}}, {"digitsAcc", {N}},
-                 {"lowDigit", {N, N}}, {"lateHist", {N, N}}});
+                 {"lowDigit", {N, N}}, {"lateHist", {N, N}}, {"specC", {N}}});
     s.inductive(rp + "LogicOp", 0,
                 {{"lt", {}}, {"leq", {}}, {"eq", {}}, {"any", {}}, {"all", {}}});
     const std::string ex = rp + "Expr", st = rp + "Step", ns = "List Nat",
@@ -153,8 +153,7 @@ inline const Schema &gkr_schema() {
     s.inductive(rp + "IvlSrc", 0,
                 {{"const", {}}, {"declared", {N}}, {"nat", {N}}, {"prime", {}},
                  {"opaqueBit", {}}, {"shift", {N}}, {"quadRoot", {N, N}},
-                 {"rootSet", {ns}}, {"tableHull", {ns, "Int", "Int"}},
-                 {"tableKernel", {N, N, ns, "Int", "Int"}}});
+                 {"rootSet", {ns}}, {"tableHull", {ns, "Int", "Int"}}});
     s.inductive(rp + "LinOpStep", 0,
                 {{"congr", {N, ex}}, {"rows", {rp + "NamedOp", ex, rows, rows}},
                  {"spectral", {N, N}}, {"nttInv", {N, N, ex}}, {"inttInv", {N, N, ex}},
@@ -176,7 +175,7 @@ inline const Schema &gkr_schema() {
                  {"congr", {N}}, {"mac", {ns, "Option Nat", ns}},
                  {"linop", {rp + "LinOpStep"}}, {"conclude", {N}}, {"hyp", {N}},
                  {"fact", {N}}, {"inDom", {N, st}}, {"groupedMod", {ns, ns}},
-                 {"productMod", {ns}}, {"circuitAssert", {N}}, {"inputPremise", {N}}});
+                 {"circuitAssert", {N}}, {"inputPremise", {N}}});
     s.inductive(rp + "MacRole", 0,
                 {{"tail", {}}, {"h", {}}, {"accRow", {}}, {"groupRow", {N}},
                  {"residues", {}}, {"gqLookup", {}}, {"quotLookup", {}},
@@ -185,7 +184,8 @@ inline const Schema &gkr_schema() {
                 {{"pure", {st}}, {"conclude", {N}}, {"source", {}}, {"quotIn", {N}},
                  {"digitRow", {N}}, {"macRow", {N, N, rp + "MacRole"}}, {"padBool", {}},
                  {"commIn", {N, N}}, {"commRow", {N, ns}}, {"hyp", {N}},
-                 {"specProd", {N}}, {"specRow", {N}}, {"fieldRow", {}}, {"twoTail", {N, N}}});
+                 {"specProd", {N}}, {"specRow", {N}}, {"fieldRow", {}}, {"twoTail", {N, N}},
+                 {"specC", {N}}});
     s.structure(rp + "CDerivations", 0,
                 {"derivs : List (List " + rp + "CStep)", "ranks : Nat"});
     s.inductive(rp + "RealCircuit", 0,
@@ -193,18 +193,16 @@ inline const Schema &gkr_schema() {
     s.inductive(rp + "Fact", 0,
                 {{"eq", {N, ex, ex}}, {"nat", {N, ex, N}}, {"ivl", {N, ex, "Int", "Int"}},
                  {"intEq", {N, ex, ex}}, {"dvd", {N, ex, N}}, {"inRows", {N, ex}},
-                 {"holds", {N}}, {"kernel", {N, N, N, N, N, "Bool", "Int", "Int"}},
-                 {"real", {rp + "RealCircuit"}}});
+                 {"holds", {N}}, {"real", {rp + "RealCircuit"}}});
     s.structure(rp + "SharedEntry", 0,
                 {"fact : " + rp + "Fact", "rank : Nat", "steps : List " + st});
     s.inductive(rp + "GadgetKind", 0,
-                {{"selectRow", {}}, {"spectralProduct", {}}, {"selectFirst", {}},
+                {{"selectRow", {}}, {"selectFirst", {}},
                  {"keccak", {}}, {"macSite", {}}, {"modField", {}}, {"modCommitted", {}},
                  {"modGrouped", {}}, {"modDigits", {}}, {"modOneDigit", {}},
                  {"lookupTwoSided", {}}, {"lookupDigits", {}}, {"packedTable", {}}});
     s.inductive(rp + "GadgetPart", 0,
-                {{"expr", {rp + "Expr"}}, {"kernel", {"Nat", "Nat", "Nat", "Nat", "Nat", "Nat"}},
-                 {"stream", {"Nat", "Option Nat"}}, {"kernelOf", {"Nat", "Nat", "Nat"}}});
+                {{"expr", {rp + "Expr"}}, {"stream", {"Nat", "Option Nat"}}});
     s.structure(rp + "Gadget", 0,
                 {"kind : " + rp + "GadgetKind", "preds : List Nat", "values : List Nat",
                  "params : List Nat", "parts : List " + rp + "GadgetPart"});

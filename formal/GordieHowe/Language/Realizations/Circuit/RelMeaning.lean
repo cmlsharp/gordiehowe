@@ -20,8 +20,6 @@ meaning check (`GordieHowe.RealizedProgram.entryMeaningB`) then gives the entry'
   below `X`'s length (`nfUnitEqB_sound`).
 * **A placed field equation** `l = r` follows when `X = ±(l − r)` is zero below `X`'s length and
   `l` is no longer than `X` (`sides_of_nfUnitEqB`).
-* **A placed product form** follows from its asserted equation
-  (`productPlaced_of_productEquationB`).
 -/
 
 namespace GordieHowe.RealizedProgram
@@ -113,10 +111,9 @@ theorem placedHolds_of_placedSides {b : PredBody} {d : ℕ} {l r : Expr}
 
 /-- **The meaning check is sound**: an entry whose root's print `X` meets `entryMeaningB`, every
 coordinate of `X` zero, holds (`EntryHolds`). -/
-theorem entryHolds_of_entryMeaningB (hM : ir.DerivModel I primeNodes)
-    [CharP (I (ir.circField c)).K chr] (hN : ir.NormModel rd (ir.circField c) chr)
-    (hneg : (I (ir.circField c)).decode neg1 = -1)
-    (hB : ir.BoundReads rd) {en : CircuitEntry} {«X» : Option Expr}
+theorem entryHolds_of_entryMeaningB [CharP (I (ir.circField c)).K chr]
+    (hN : ir.NormModel rd (ir.circField c) chr) (hneg : (I (ir.circField c)).decode neg1 = -1)
+    {en : CircuitEntry} {«X» : Option Expr}
     (h : ir.entryMeaningB c chr neg1 en «X» = true)
     (hX : ∀ «Y», «X» = some «Y» → ∀ i < ir.exprLen «Y», ir.evalWith rd (ir.circuit c).domain «Y» i = 0) :
     ir.EntryHolds rd en := by
@@ -126,12 +123,7 @@ theorem entryHolds_of_entryMeaningB (hM : ir.DerivModel I primeNodes)
         | some (d, l, r) =>
           Nat.beq d (ir.circuit c).domain && Nat.beq (ir.exprLen l) (ir.exprLen «Y») &&
             ir.nfUnitEqB d chr neg1 «Y» (.sub l r)
-        | none =>
-          match (ir.predicate p).body with
-          | .mod d q P N real =>
-            real.form.isProduct && Nat.blt 2 q && Nat.beq d (ir.circuit c).domain &&
-              ir.productEquationB d q «Y» P N real
-          | _ => false) = true →
+        | none => false) = true →
       ir.PlacedHolds rd (ir.predicate p).body := by
     intro p «Y» hY hm
     have hXY := hX «Y» hY
@@ -140,22 +132,7 @@ theorem entryHolds_of_entryMeaningB (hM : ir.DerivModel I primeNodes)
       simp only [Bool.and_eq_true, Nat.beq_eq] at hm
       obtain ⟨⟨rfl, hl⟩, hu⟩ := hm
       exact placedHolds_of_placedSides hs (sides_of_nfUnitEqB hN hneg hl.le hu hXY)
-    · rename_i hs
-      split at hm
-      · rename_i d q P N real hb
-        simp only [Bool.and_eq_true, Nat.blt_eq, Nat.beq_eq] at hm
-        obtain ⟨⟨⟨hprod, hq⟩, rfl⟩, he⟩ := hm
-        have hnot : ¬(q = 0 ∨ real.form = .field) := by
-          intro hc
-          rw [hb] at hs
-          simp only [placedSides?] at hs
-          have : (Nat.beq q 0 || decide (real.form = .field)) = true := by
-            simpa [Nat.beq_eq] using hc
-          simp [this] at hs
-        rw [hb]
-        simp only [PlacedHolds, hnot, hprod, hq, and_self, ↓reduceIte]
-        exact productPlaced_of_productEquationB hM hN.consts hB he hXY
-      · cases hm
+    · cases hm
   cases en with
   | typeCheck p =>
     cases «X» with

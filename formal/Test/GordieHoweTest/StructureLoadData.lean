@@ -21,15 +21,14 @@ open GordieHowe GordieHowe.RealizedProgram
 
 -- Loaded literal bodies are the interface under test.
 @[expose] public section
-load_program_ghc "ProgramCertData/Structure.ghc" "c802f0c69ac55cca"
+load_program_ghc "ProgramCertData/Structure.ghc" "e6112ab40def8548"
 end
 
 namespace Literal
 local notation "ℕ" => Nat
 @[expose] def records : RealizedProgram.Structure where
   gadgets := [
-    { kind := .selectRow, preds := [0, 1], values := [2, 3], params := [4, 5], parts := [.expr (.reindex idx0 (.leaf 3)), .kernel 0 1 2 3 4 5, .stream 2 none, .stream 2 (some 3), .kernelOf 4 5 6] },
-    { kind := .spectralProduct, preds := [0, 1], values := [2, 3], params := [4, 5], parts := [] },
+    { kind := .selectRow, preds := [0, 1], values := [2, 3], params := [4, 5], parts := [.expr (.reindex idx0 (.leaf 3)), .stream 2 none, .stream 2 (some 3)] },
     { kind := .selectFirst, preds := [0, 1], values := [2, 3], params := [4, 5], parts := [] },
     { kind := .keccak, preds := [0, 1], values := [2, 3], params := [4, 5], parts := [] },
     { kind := .macSite, preds := [0, 1], values := [2, 3], params := [4, 5], parts := [] },

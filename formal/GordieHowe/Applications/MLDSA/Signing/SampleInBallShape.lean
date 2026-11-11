@@ -230,17 +230,17 @@ theorem tvDist_flatRingProver_mldsa65_concrete_le [Nonempty (MaskBox mldsa65)]
     (aHat : TqMatrix mldsa65.k mldsa65.l) (hs2 : polyVecBounded sk.s2 mldsa65.eta)
     (ht0 : polyVecNorm sk.t0 ≤ 2 ^ (droppedBits - 1)) {N : ℕ} (i : Fin N) {βmin : ℚ≥0}
     (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
-    (hkeep : SignerKeeps (concretePrimitives mldsa65) sk aHat βmin) :
+    (hkeep : SignerKeeps (concretePrimitives mldsa65) sk aHat (Cutoff.const βmin)) :
     tvDist (flatRingProver (concretePrimitives mldsa65) sk aHat
-          (standardRing (concretePrimitives mldsa65) N) i βmin)
+          (standardRing (concretePrimitives mldsa65) N) i (Cutoff.const βmin))
         ((PMF.uniformOfFintype (BucketVec mldsa65)).bind fun v =>
           (PMF.uniformOfFintype (Fin N × BucketVec mldsa65 → CommitHashBytes mldsa65)).map
             fun H => (H, some v)) ≤
       ringOracleError (concretePrimitives mldsa65) sk aHat
-          (standardRing (concretePrimitives mldsa65) N) i βmin +
-        regError (concretePrimitives mldsa65) sk aHat βmin +
+          (standardRing (concretePrimitives mldsa65) N) i (Cutoff.const βmin) +
+        regError (concretePrimitives mldsa65) sk aHat (Cutoff.const βmin) +
         flatError (concretePrimitives mldsa65) sk
-          (standardRing (concretePrimitives mldsa65) N) i βmin :=
+          (standardRing (concretePrimitives mldsa65) N) i (Cutoff.const βmin) :=
   SigningLaws.tvDist_flatRingProver_mldsa65_le (concretePrimitives mldsa65)
     (signingLaws_concrete mldsa65 (Or.inr (Or.inl rfl)))
     (sampleInBallShape_concrete mldsa65) sk aHat hs2 ht0 i hβ0 hβ1 hkeep
@@ -253,17 +253,17 @@ theorem tvDist_flatRingProver_mldsa87_concrete_le [Nonempty (MaskBox mldsa87)]
     (aHat : TqMatrix mldsa87.k mldsa87.l) (hs2 : polyVecBounded sk.s2 mldsa87.eta)
     (ht0 : polyVecNorm sk.t0 ≤ 2 ^ (droppedBits - 1)) {N : ℕ} (i : Fin N) {βmin : ℚ≥0}
     (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
-    (hkeep : SignerKeeps (concretePrimitives mldsa87) sk aHat βmin) :
+    (hkeep : SignerKeeps (concretePrimitives mldsa87) sk aHat (Cutoff.const βmin)) :
     tvDist (flatRingProver (concretePrimitives mldsa87) sk aHat
-          (standardRing (concretePrimitives mldsa87) N) i βmin)
+          (standardRing (concretePrimitives mldsa87) N) i (Cutoff.const βmin))
         ((PMF.uniformOfFintype (BucketVec mldsa87)).bind fun v =>
           (PMF.uniformOfFintype (Fin N × BucketVec mldsa87 → CommitHashBytes mldsa87)).map
             fun H => (H, some v)) ≤
       ringOracleError (concretePrimitives mldsa87) sk aHat
-          (standardRing (concretePrimitives mldsa87) N) i βmin +
-        regError (concretePrimitives mldsa87) sk aHat βmin +
+          (standardRing (concretePrimitives mldsa87) N) i (Cutoff.const βmin) +
+        regError (concretePrimitives mldsa87) sk aHat (Cutoff.const βmin) +
         flatError (concretePrimitives mldsa87) sk
-          (standardRing (concretePrimitives mldsa87) N) i βmin :=
+          (standardRing (concretePrimitives mldsa87) N) i (Cutoff.const βmin) :=
   SigningLaws.tvDist_flatRingProver_mldsa87_le (concretePrimitives mldsa87)
     (signingLaws_concrete mldsa87 (Or.inr (Or.inr rfl)))
     (sampleInBallShape_concrete mldsa87) sk aHat hs2 ht0 i hβ0 hβ1 hkeep

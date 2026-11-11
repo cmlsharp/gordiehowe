@@ -36,7 +36,7 @@ it as in `GordieHowe/Model/Quantum/Core/Oracle.lean`.
   the environment's tape. AHU19 p. 9: "A alternatingly applies a fixed unitary U on all registers
   (independent of z and O)". The single exception is the unitary `post` applied after the last slot,
   which receives the whole oracle in force at the end: the phase after the last proof query in
-  everlasting zero knowledge (the paper's Definition 6.2), Fractal's "unbounded adversaries that see
+  everlasting zero knowledge (the paper's `def:narg-zk-post`), Fractal's "unbounded adversaries that see
   the whole oracle" (ePrint 2019/1076, p. 39). The bounded game takes `post = noPost`.
 
 - **The adaptive schedule.** Slot `k` is one basis permutation (`Distinguisher.eventPerm`)

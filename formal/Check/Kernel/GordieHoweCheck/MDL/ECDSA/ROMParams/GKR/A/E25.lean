@@ -13,6 +13,6 @@ import all GordieHoweCerts.Generated.MDL.ECDSA.ROMParams.Program
 
 namespace GordieHowe.Generated.MDL.ECDSA.ROMParams.GKR.A
 
-check_entry cert ar 25 [0, 0, 16, 0, 0, 16, 0, 0, 18, 0, 0, 14, 0, 0, 1, 2, 1024, 1]
+check_entry cert ar 25 [0, 0, 65, 2, 1, 1]
 
 end GordieHowe.Generated.MDL.ECDSA.ROMParams.GKR.A

@@ -196,7 +196,8 @@ theorem pinned_family_query_count {m' : ℕ} {x : Fin N → F} (hx : Function.In
     (hcheck (MaskedConstraintFamily.chosenCheck check g target hfalse)) t
 
 end FiniteList
-/-- Johnson incidence bound, with strict agreement threshold `a`. -/
+/-- Johnson incidence bound, with strict agreement threshold `a` (`lem:johnson`; DKT26 eq. (67);
+GRS Thm. 7.3.3). -/
 def listBound (N d a : ℕ) : ℕ := N * (a + 1 - d) / ((a + 1)^2 - N*d)
 
 /-- The least agreement threshold `a` with `d·(N − 1) ≤ a·(a + 1)`: the integer square root of

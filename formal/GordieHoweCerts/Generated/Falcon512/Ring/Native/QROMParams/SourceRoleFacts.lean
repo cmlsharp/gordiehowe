@@ -31,80 +31,86 @@ theorem rolesOk : SourceRolesOk Program.program SourceRoles.roles :=
 
 /-- **The declared role of `statement.ring`.** -/
 theorem role_statement_2ering_lookup :
-    SourceRoles.classifier.lookup 4 = some (.stmtMember, 0) := by
+    SourceRoles.classifier.lookup 3 = some (.stmtMember, 0) := by
   rw [SourceRoles.classifier_eq]
   exact rolesOk.lookup_at (k := 0) (by rw [SourceRoles.roles_eq]; rfl)
 
 /-- **The declared role of `statement.c`.** -/
 theorem role_statement_2ec_lookup :
-    SourceRoles.classifier.lookup 5 = some (.stmtMember, 1) := by
+    SourceRoles.classifier.lookup 4 = some (.stmtMember, 1) := by
   rw [SourceRoles.classifier_eq]
   exact rolesOk.lookup_at (k := 1) (by rw [SourceRoles.roles_eq]; rfl)
 
 /-- **The declared role of `key.spectrum`.** -/
 theorem role_key_2espectrum_lookup :
-    SourceRoles.classifier.lookup 6 = some (.ringSigma, 0) := by
+    SourceRoles.classifier.lookup 5 = some (.ringSigma, 0) := by
   rw [SourceRoles.classifier_eq]
   exact rolesOk.lookup_at (k := 2) (by rw [SourceRoles.roles_eq]; rfl)
 
 /-- **The declared role of `member.signer.index`.** -/
 theorem role_member_2esigner_2eindex_lookup :
-    SourceRoles.classifier.lookup 7 = some (.selection, 0) := by
+    SourceRoles.classifier.lookup 6 = some (.selection, 0) := by
   rw [SourceRoles.classifier_eq]
   exact rolesOk.lookup_at (k := 3) (by rw [SourceRoles.roles_eq]; rfl)
 
 /-- **The declared role of `s2`.** -/
 theorem role_s2_lookup :
-    SourceRoles.classifier.lookup 9 = some (.aWitness, 0) := by
+    SourceRoles.classifier.lookup 8 = some (.aWitness, 0) := by
   rw [SourceRoles.classifier_eq]
   exact rolesOk.lookup_at (k := 4) (by rw [SourceRoles.roles_eq]; rfl)
 
 /-- **The declared role of `signature.s1`.** -/
 theorem role_signature_2es1_lookup :
-    SourceRoles.classifier.lookup 10 = some (.aWitness, 1) := by
+    SourceRoles.classifier.lookup 9 = some (.aWitness, 1) := by
   rw [SourceRoles.classifier_eq]
   exact rolesOk.lookup_at (k := 5) (by rw [SourceRoles.roles_eq]; rfl)
 
-/-- **The declared role of `norm.a`.** -/
-theorem role_norm_2ea_lookup :
-    SourceRoles.classifier.lookup 11 = some (.aWitness, 2) := by
+/-- **The declared role of `signature.Q`.** -/
+theorem role_signature_2eQ_lookup :
+    SourceRoles.classifier.lookup 10 = some (.aWitness, 9) := by
   rw [SourceRoles.classifier_eq]
   exact rolesOk.lookup_at (k := 6) (by rw [SourceRoles.roles_eq]; rfl)
 
-/-- **The declared role of `norm.sq`.** -/
-theorem role_norm_2esq_lookup :
-    SourceRoles.classifier.lookup 12 = some (.aWitness, 3) := by
+/-- **The declared role of `norm.a`.** -/
+theorem role_norm_2ea_lookup :
+    SourceRoles.classifier.lookup 12 = some (.aWitness, 2) := by
   rw [SourceRoles.classifier_eq]
   exact rolesOk.lookup_at (k := 7) (by rw [SourceRoles.roles_eq]; rfl)
 
-/-- **The declared role of `norm.cc`.** -/
-theorem role_norm_2ecc_lookup :
-    SourceRoles.classifier.lookup 13 = some (.aWitness, 4) := by
+/-- **The declared role of `norm.sq`.** -/
+theorem role_norm_2esq_lookup :
+    SourceRoles.classifier.lookup 13 = some (.aWitness, 3) := by
   rw [SourceRoles.classifier_eq]
   exact rolesOk.lookup_at (k := 8) (by rw [SourceRoles.roles_eq]; rfl)
 
-/-- **The declared role of `norm.nd`.** -/
-theorem role_norm_2end_lookup :
-    SourceRoles.classifier.lookup 14 = some (.aWitness, 5) := by
+/-- **The declared role of `norm.cc`.** -/
+theorem role_norm_2ecc_lookup :
+    SourceRoles.classifier.lookup 14 = some (.aWitness, 4) := by
   rw [SourceRoles.classifier_eq]
   exact rolesOk.lookup_at (k := 9) (by rw [SourceRoles.roles_eq]; rfl)
 
-/-- **The declared role of `norm.nc`.** -/
-theorem role_norm_2enc_lookup :
-    SourceRoles.classifier.lookup 15 = some (.aWitness, 6) := by
+/-- **The declared role of `norm.nd`.** -/
+theorem role_norm_2end_lookup :
+    SourceRoles.classifier.lookup 15 = some (.aWitness, 5) := by
   rw [SourceRoles.classifier_eq]
   exact rolesOk.lookup_at (k := 10) (by rw [SourceRoles.roles_eq]; rfl)
 
-/-- **The declared role of `norm.D`.** -/
-theorem role_norm_2eD_lookup :
-    SourceRoles.classifier.lookup 16 = some (.aWitness, 7) := by
+/-- **The declared role of `norm.nc`.** -/
+theorem role_norm_2enc_lookup :
+    SourceRoles.classifier.lookup 16 = some (.aWitness, 6) := by
   rw [SourceRoles.classifier_eq]
   exact rolesOk.lookup_at (k := 11) (by rw [SourceRoles.roles_eq]; rfl)
 
-/-- **The declared role of `norm.Dc`.** -/
-theorem role_norm_2eDc_lookup :
-    SourceRoles.classifier.lookup 17 = some (.aWitness, 8) := by
+/-- **The declared role of `norm.D`.** -/
+theorem role_norm_2eD_lookup :
+    SourceRoles.classifier.lookup 17 = some (.aWitness, 7) := by
   rw [SourceRoles.classifier_eq]
   exact rolesOk.lookup_at (k := 12) (by rw [SourceRoles.roles_eq]; rfl)
+
+/-- **The declared role of `norm.Dc`.** -/
+theorem role_norm_2eDc_lookup :
+    SourceRoles.classifier.lookup 18 = some (.aWitness, 8) := by
+  rw [SourceRoles.classifier_eq]
+  exact rolesOk.lookup_at (k := 13) (by rw [SourceRoles.roles_eq]; rfl)
 
 end GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.SourceRoleFacts

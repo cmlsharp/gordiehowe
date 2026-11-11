@@ -94,6 +94,7 @@ open GordieHowe.Quantum
 
 variable {X Y : Type} [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y]
   [AddGroup Y] [Nonempty Y] {N n : ℕ} {TS : RingTypes} {S : RingScheme X Y N TS} {V : OracleView X Y} {t : ℕ}
+  [DecidableEq TS.PK] [Fintype TS.SignCoins] [DecidableEq TS.SignCoins] [Nonempty TS.SignCoins]
 
 /-- **A deterministic classical strategy of the anonymity game** with `n` honest users: from the
 oracle and the visible history, its next move (a challenge, or `none` for a query slot) and its
@@ -108,6 +109,9 @@ noncomputable def detAnonWin (keys : Fin n → S.KeyCoins) (b : Bool) (Q : ℕ) 
     (s : (X → Y) → AnonDetStrategy S n) : ℝ :=
   𝔼 H, Interaction.winProb (s H).toStrategy ((anonChallenger S n keys b Q).classicalAt H) (m H)
     {p | p.2 = some true}
+
+variable [Fintype TS.PK] [Fintype TS.Msg] [DecidableEq TS.Msg] [Fintype TS.Sig] [DecidableEq TS.Sig]
+  [Fintype TS.KeyCoins] [Nonempty TS.KeyCoins]
 
 /-- **The law of the anonymity game's output**: the key coins, the oracle and the auxiliary input
 drawn, the composed algorithm's output law. -/
@@ -134,6 +138,7 @@ theorem anonAcceptProb_eq (A : AnonAdversary S n V t) (Q : ℕ) (b : Bool) :
   · rfl
   · rw [PMF.toOuterMeasure_apply_singleton]
 
+omit [Fintype TS.SignCoins] [DecidableEq TS.SignCoins] [Nonempty TS.SignCoins] in
 /-- **One direction of the reduction** for two challenger families: if every family of
 deterministic strategies wins against `C₀ keys` with at most `ε keys` more probability than against
 `C₁ keys`, the output law's probability of `1` is at most `𝔼 ε` more against `C₀` than against

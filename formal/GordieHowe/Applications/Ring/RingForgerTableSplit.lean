@@ -59,9 +59,15 @@ open scoped ENNReal
 
 variable {m : ℕ} {I J Bd : Type} [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J]
   {Y Y₁ : Type} [DecidableEq Y] [AddGroup Y] [AddGroup Y₁] (sp : OracleSplit Y Y₁ (BitStr I J))
-  {N n : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits m) Y N TB} (O : SignOracle B) (e : BitStr I J ≃ Bd)
+  {N n : ℕ} {TB : BaseTypes}
+  {B : BaseSigner (Bits m) Y N TB} (O : SignOracle B.core) (e : BitStr I J ≃ Bd)
 
 /-! ### The reindexing of the coins at a fixed base component -/
+
+variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty O.Coins]
 
 open Classical in
 /-- **The reindexing of the multi-user challenger's coins at a fixed base component**
@@ -72,7 +78,7 @@ instance answered with the coins at the step. -/
 theorem sum_simLaw_countND_muReplyAt [NeZero n] {t : ℕ} {Ot : Type} (ω : Bits m → Y₁)
     (keys : Fin n → B.KeyCoins) {Q' : ℕ} (hQ : t + 1 ≤ Q') (d₂ : MURequest O n)
     (hd₂ : ∀ i sm, d₂ ≠ .sign i sm)
-    (G : ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B) t Ot)
+    (G : ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B.core) t Ot)
     (S : Set (Ot × DB (Bits m) Bd)) :
     ∑ c, PMF.uniformOfFintype (Fin Q' → O.Coins) c *
         simLaw e (G.instLog fun _ prev r =>
@@ -132,25 +138,26 @@ variable {Req Resp Req₁ Resp₁ Ot : Type} [Fintype Req] [DecidableEq Req] [Fi
   [Inhabited Req₁]
   {shA : AlgShape (Bits m) (BitStr I J) Req Resp} (A : AdaptiveIAlg shA Ot)
   (C₁ : Challenger (Bits m) (BitStr I J) Req₁ Resp₁)
-  (F : TwoRelay Req Resp Req₁ Resp₁ (MURequest O n) (MUResponse B))
-  (d₂ : MURequest O n) (E : Expansion (Bits m) Bd (ExtReg A C₁ (MURequest O n) (MUResponse B)))
-  (kq : ℕ) (d₀ : ExtReg A C₁ (MURequest O n) (MUResponse B))
+  (F : TwoRelay Req Resp Req₁ Resp₁ (MURequest O n) (MUResponse B.core))
+  (d₂ : MURequest O n) (E : Expansion (Bits m) Bd (ExtReg A C₁ (MURequest O n) (MUResponse B.core)))
+  (kq : ℕ) (d₀ : ExtReg A C₁ (MURequest O n) (MUResponse B.core))
 
 /-- **The replies used against the bridge algorithm for a table `tab` at the base component `ω`**:
 as `Signature.bridgeRepliesTab`, with the replies `muReplyAt` off the answer steps. -/
 noncomputable def bridgeRepliesTabAt (ω : Bits m → Y₁) (keys : Fin n → B.KeyCoins) (Q' : ℕ)
-    (c : Fin Q' → O.Coins) (tab : A.OuterTab (MURequest O n) (MUResponse B)) :
-    ℕ → List (MURequest O n) → MURequest O n → Option (MUResponse B) := fun k prev q =>
+    (c : Fin Q' → O.Coins) (tab : A.OuterTab (MURequest O n) (MUResponse B.core)) :
+    ℕ → List (MURequest O n) → MURequest O n → Option (MUResponse B.core) := fun k prev q =>
   if answerSlot A C₁ k = none then muReplyAt sp O ω keys Q' c (ReqQueryAlg.countND d₂ prev) q
   else A.tabAt tab (ReqQueryAlg.countND d₂ prev) q
 
+omit [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **The table's replies and `bridgeRepliesTabAt` give the same instance** of the bridge algorithm
 read after permutations `π` of its query registers. -/
 theorem instLog_withPerm_tabAt_eq
     (π : Fin (bT A C₁ F kq + 1) →
       Equiv.Perm (QueryReg (bridgeAlg e A C₁ F d₂ E kq d₀).W 1 (Bits m) (BitStr I J)))
     (ω : Bits m → Y₁) (keys : Fin n → B.KeyCoins) (Q' : ℕ) (c : Fin Q' → O.Coins)
-    (tab : A.OuterTab (MURequest O n) (MUResponse B)) :
+    (tab : A.OuterTab (MURequest O n) (MUResponse B.core)) :
     ((bridgeAlg e A C₁ F d₂ E kq d₀).withPerm π).instLog (fun _ prev q => A.tabAt tab
       (ReqQueryAlg.countND d₂ prev) q) =
       ((bridgeAlg e A C₁ F d₂ E kq d₀).withPerm π).instLog
@@ -163,11 +170,12 @@ theorem instLog_withPerm_tabAt_eq
   exact (bridgeAlg_write_of_none A C₁ F e d₂ E kq d₀ hk x).trans
     (bridgeAlg_write_of_none A C₁ F e d₂ E kq d₀ hk y).symm
 
+omit [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **For a table agreeing with the multi-user challenger's replies at the base component `ω`**
 (`htab`), `bridgeRepliesTabAt` are the count-indexed replies `muReplyAt` at every pattern of
 requests of the bridge algorithm. -/
 theorem repliesAt_bridgeRepliesTabAt (ω : Bits m → Y₁) (keys : Fin n → B.KeyCoins) (Q' : ℕ)
-    (c : Fin Q' → O.Coins) (tab : A.OuterTab (MURequest O n) (MUResponse B))
+    (c : Fin Q' → O.Coins) (tab : A.OuterTab (MURequest O n) (MUResponse B.core))
     (htab : ∀ (j : Fin A.slots) q, (q = d₂ ∨ ∃ c r, F.outer c r = some q) →
       tab j q = muReplyAt sp O ω keys Q' c j q)
     (L : Fin (bT A C₁ F kq + 1) → MURequest O n)
@@ -199,10 +207,10 @@ theorem sum_simLaw_withPerm_tab_eq [NeZero n]
       Equiv.Perm (QueryReg (bridgeAlg e A C₁ F d₂ E kq d₀).W 1 (Bits m) (BitStr I J)))
     (hd₂ : ∀ i sm, d₂ ≠ .sign i sm) (ω : Bits m → Y₁) (keys : Fin n → B.KeyCoins) {Q' : ℕ}
     (hQ : bT A C₁ F kq + 1 ≤ Q')
-    (tab : (Fin Q' → O.Coins) → A.OuterTab (MURequest O n) (MUResponse B))
+    (tab : (Fin Q' → O.Coins) → A.OuterTab (MURequest O n) (MUResponse B.core))
     (htab : ∀ c (j : Fin A.slots) q, (q = d₂ ∨ ∃ c r, F.outer c r = some q) →
       tab c j q = muReplyAt sp O ω keys Q' c j q)
-    (S : Set (BaseGame.Tuple (Bits m) Bd (ExtReg A C₁ (MURequest O n) (MUResponse B)) kq ×
+    (S : Set (BaseGame.Tuple (Bits m) Bd (ExtReg A C₁ (MURequest O n) (MUResponse B.core)) kq ×
       DB (Bits m) Bd)) :
     ∑ c, PMF.uniformOfFintype (Fin Q' → O.Coins) c *
         simLaw e (((bridgeAlg e A C₁ F d₂ E kq d₀).withPerm π).instLog fun _ prev q =>
@@ -242,10 +250,10 @@ theorem sum_simLaw_extRun_withStep_tab [NeZero n] (hA : A.TracePreserving)
     (hst : ∀ k, KrausMap.LeftPerm (P.toStepAdds.perm ω k) (st' k) (A.step k))
     (hTP' : (A.withStep st').TracePreserving) (hlast : P.Off lastStep)
     (keys : Fin n → B.KeyCoins) {Q' : ℕ} (hQ : bT A C₁ F kq + 1 ≤ Q')
-    (tab : (Fin Q' → O.Coins) → A.OuterTab (MURequest O n) (MUResponse B))
+    (tab : (Fin Q' → O.Coins) → A.OuterTab (MURequest O n) (MUResponse B.core))
     (htab : ∀ c (j : Fin A.slots) q, (q = d₂ ∨ ∃ c r, F.outer c r = some q) →
       tab c j q = muReplyAt sp O ω keys Q' c j q)
-    (S : Set (BaseGame.Tuple (Bits m) Bd (ExtReg A C₁ (MURequest O n) (MUResponse B)) kq ×
+    (S : Set (BaseGame.Tuple (Bits m) Bd (ExtReg A C₁ (MURequest O n) (MUResponse B.core)) kq ×
       DB (Bits m) Bd)) :
     ∑ c, PMF.uniformOfFintype (Fin Q' → O.Coins) c *
         simLaw e (extRun e (A.withStep st') C₁ F E kq d₀ (tab c)) S =
@@ -281,17 +289,17 @@ that is not a signing request (`hd₂`), at least as many answered requests as r
 averages of `simLaw` agree, the bridge's instance answered as the challenger at `ω` answers. -/
 theorem sum_simLaw_extRun_restrictAt_tab [NeZero n] {shA : AlgShape (Bits m) Y Req Resp} (A : AdaptiveIAlg shA Ot)
     (hA : A.TracePreserving) (C₁ : Challenger (Bits m) (BitStr I J) Req₁ Resp₁)
-    (F : TwoRelay Req Resp Req₁ Resp₁ (MURequest O n) (MUResponse B)) (d₂ : MURequest O n)
+    (F : TwoRelay Req Resp Req₁ Resp₁ (MURequest O n) (MUResponse B.core)) (d₂ : MURequest O n)
     (hout : ∀ c r q, F.outer c r = some q → q ≠ d₂) (hd₂ : ∀ i sm, d₂ ≠ .sign i sm)
-    (E : Expansion (Bits m) Bd (ExtReg (A.restrictAt sp 0) C₁ (MURequest O n) (MUResponse B)))
-    (kq : ℕ) (d₀ : ExtReg (A.restrictAt sp 0) C₁ (MURequest O n) (MUResponse B))
+    (E : Expansion (Bits m) Bd (ExtReg (A.restrictAt sp 0) C₁ (MURequest O n) (MUResponse B.core)))
+    (kq : ℕ) (d₀ : ExtReg (A.restrictAt sp 0) C₁ (MURequest O n) (MUResponse B.core))
     (ω : Bits m → Y₁) (keys : Fin n → B.KeyCoins) {Q' : ℕ}
     (hQ : bT (A.restrictAt sp 0) C₁ F kq + 1 ≤ Q')
-    (tab : (Fin Q' → O.Coins) → (A.restrictAt sp ω).OuterTab (MURequest O n) (MUResponse B))
+    (tab : (Fin Q' → O.Coins) → (A.restrictAt sp ω).OuterTab (MURequest O n) (MUResponse B.core))
     (htab : ∀ c (j : Fin A.slots) q, (q = d₂ ∨ ∃ c r, F.outer c r = some q) →
       tab c j q = muReplyAt sp O ω keys Q' c j q)
     (S : Set (BaseGame.Tuple (Bits m) Bd
-      (ExtReg (A.restrictAt sp 0) C₁ (MURequest O n) (MUResponse B)) kq × DB (Bits m) Bd)) :
+      (ExtReg (A.restrictAt sp 0) C₁ (MURequest O n) (MUResponse B.core)) kq × DB (Bits m) Bd)) :
     ∑ c, PMF.uniformOfFintype (Fin Q' → O.Coins) c *
         simLaw e (extRun e (A.restrictAt sp ω) C₁ F E kq d₀ (tab c)) S =
       ∑ c, PMF.uniformOfFintype (Fin Q' → O.Coins) c *
@@ -424,7 +432,9 @@ end Drops
 
 /-! ### The challenger's replies at an oracle -/
 
-omit [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J] [DecidableEq Y] in
+omit [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J] [DecidableEq Y] [Fintype TB.PK]
+  [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Fintype O.SMsg] [DecidableEq O.SMsg] in
 /-- **The multi-user challenger answers by `muReplyAt` at the oracle's base component**, without
 assignments, for a signing oracle reading only the base component. -/
 theorem run_respond_muChallenger_base (hO : O.ReadsBase sp) (keys : Fin n → B.KeyCoins) (Q' : ℕ)
@@ -442,6 +452,8 @@ theorem run_respond_muChallenger_base (hO : O.ReadsBase sp) (keys : Fin n → B.
 
 /-! ### The forger over a list of additions -/
 
+variable [Nonempty TB.KeyCoins]
+
 section Adds
 
 variable [Fintype Y] [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁] [NeZero n]
@@ -451,19 +463,19 @@ variable [Fintype Y] [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y�
   (Aux : (Fin n → B.PK) → Type) (aux : ∀ pks, PMF (Aux pks))
   {shA : ∀ pks, Aux pks → AlgShape (Bits m) (BitStr I J) Req Resp} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) Ot)
   (C₁ : ∀ pks, Aux pks → Challenger (Bits m) (BitStr I J) Req₁ Resp₁)
-  (F : ∀ pks, Aux pks → TwoRelay Req Resp Req₁ Resp₁ (MURequest O n) (MUResponse B))
+  (F : ∀ pks, Aux pks → TwoRelay Req Resp Req₁ Resp₁ (MURequest O n) (MUResponse B.core))
   (d₂ : MURequest O n)
-  (E : ∀ pks p, Expansion (Bits m) Bd (ExtReg (A pks p) (C₁ pks p) (MURequest O n) (MUResponse B)))
-  (kq : ℕ) (d₀ : ∀ pks p, ExtReg (A pks p) (C₁ pks p) (MURequest O n) (MUResponse B))
+  (E : ∀ pks p, Expansion (Bits m) Bd (ExtReg (A pks p) (C₁ pks p) (MURequest O n) (MUResponse B.core)))
+  (kq : ℕ) (d₀ : ∀ pks p, ExtReg (A pks p) (C₁ pks p) (MURequest O n) (MUResponse B.core))
   (g : ∀ pks p, BaseGame.Tuple (Bits m) Bd
-    (ExtReg (A pks p) (C₁ pks p) (MURequest O n) (MUResponse B)) kq ×
+    (ExtReg (A pks p) (C₁ pks p) (MURequest O n) (MUResponse B.core)) kq ×
       DB (Bits m) Bd → B.PK × B.BMsg × B.BSig)
 
 /-- The bridge algorithm of the extraction run of `A pks p`. -/
 noncomputable abbrev addsBridge (pks : Fin n → B.PK) (p : Aux pks) :
-    ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B)
+    ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B.core)
       (bT (A pks p) (C₁ pks p) (F pks p) kq)
-      (BaseGame.Tuple (Bits m) Bd (ExtReg (A pks p) (C₁ pks p) (MURequest O n) (MUResponse B))
+      (BaseGame.Tuple (Bits m) Bd (ExtReg (A pks p) (C₁ pks p) (MURequest O n) (MUResponse B.core))
         kq) :=
   bridgeAlg e (A pks p) (C₁ pks p) (F pks p) d₂ (E pks p) kq (d₀ pks p)
 
@@ -587,17 +599,17 @@ theorem sum_simLaw_le_muLaw_tableForgerAdds (hO : O.ReadsBase sp)
       t')
     {Q' : ℕ} (hQ : ∀ pks p, bT (A pks p) (C₁ pks p) (F pks p) kq + 1 ≤ Q')
     (tab : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (_ : Bits m → Y₁),
-      (Fin Q' → O.Coins) → (A _ p).OuterTab (MURequest O n) (MUResponse B))
+      (Fin Q' → O.Coins) → (A _ p).OuterTab (MURequest O n) (MUResponse B.core))
     (htab : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Bits m → Y₁) c
       (j : Fin (A _ p).slots) q,
       (q = d₂ ∨ ∃ c' r, (F (fun i => B.pk (keys i)) p).outer c' r = some q) →
         tab keys p ω c j q = muReplyAt sp O ω keys Q' c j q)
     (W : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (_ : Bits m → Y₁),
       Set (BaseGame.Tuple (Bits m) Bd (ExtReg (A _ p) (C₁ (fun i => B.pk (keys i)) p)
-        (MURequest O n) (MUResponse B)) kq × DB (Bits m) Bd))
+        (MURequest O n) (MUResponse B.core)) kq × DB (Bits m) Bd))
     (run : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (_ : Bits m → Y₁),
       (Fin Q' → O.Coins) → MeasureTheory.OuterMeasure (BaseGame.Tuple (Bits m) Bd
-        (ExtReg (A _ p) (C₁ (fun i => B.pk (keys i)) p) (MURequest O n) (MUResponse B)) kq ×
+        (ExtReg (A _ p) (C₁ (fun i => B.pk (keys i)) p) (MURequest O n) (MUResponse B.core)) kq ×
           DB (Bits m) Bd))
     (hrun : ∀ keys p ω c, run keys p ω c = simLaw e
       (((addsBridge O e Aux A C₁ F d₂ E kq d₀ _ p).withPerm ((Pb _ p).perm ω)).instLog
@@ -671,14 +683,14 @@ theorem sum_simLaw_extRun_le_muLaw_tableForgerAdds (hO : O.ReadsBase sp)
       t')
     {Q' : ℕ} (hQ : ∀ pks p, bT (A pks p) (C₁ pks p) (F pks p) kq + 1 ≤ Q')
     (tab : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (_ : Bits m → Y₁),
-      (Fin Q' → O.Coins) → (A _ p).OuterTab (MURequest O n) (MUResponse B))
+      (Fin Q' → O.Coins) → (A _ p).OuterTab (MURequest O n) (MUResponse B.core))
     (htab : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Bits m → Y₁) c
       (j : Fin (A _ p).slots) q,
       (q = d₂ ∨ ∃ c' r, (F (fun i => B.pk (keys i)) p).outer c' r = some q) →
         tab keys p ω c j q = muReplyAt sp O ω keys Q' c j q)
     (W : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (_ : Bits m → Y₁),
       Set (BaseGame.Tuple (Bits m) Bd (ExtReg (A _ p) (C₁ (fun i => B.pk (keys i)) p)
-        (MURequest O n) (MUResponse B)) kq × DB (Bits m) Bd))
+        (MURequest O n) (MUResponse B.core)) kq × DB (Bits m) Bd))
     (Ev : (Fin n → B.KeyCoins) → (Bits m → Y) → B.PK × B.BMsg × B.BSig →
       List (MURequest O n) → Prop)
     (hwin : ∀ keys p ω (h : Bits m → BitStr I J) c b,
@@ -728,17 +740,17 @@ theorem sum_simLaw_le_muEufProb_tableForgerAdds (hO : O.ReadsBase sp)
       t')
     {Q' : ℕ} (hQ : ∀ pks p, bT (A pks p) (C₁ pks p) (F pks p) kq + 1 ≤ Q')
     (tab : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (_ : Bits m → Y₁),
-      (Fin Q' → O.Coins) → (A _ p).OuterTab (MURequest O n) (MUResponse B))
+      (Fin Q' → O.Coins) → (A _ p).OuterTab (MURequest O n) (MUResponse B.core))
     (htab : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Bits m → Y₁) c
       (j : Fin (A _ p).slots) q,
       (q = d₂ ∨ ∃ c' r, (F (fun i => B.pk (keys i)) p).outer c' r = some q) →
         tab keys p ω c j q = muReplyAt sp O ω keys Q' c j q)
     (W : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (_ : Bits m → Y₁),
       Set (BaseGame.Tuple (Bits m) Bd (ExtReg (A _ p) (C₁ (fun i => B.pk (keys i)) p)
-        (MURequest O n) (MUResponse B)) kq × DB (Bits m) Bd))
+        (MURequest O n) (MUResponse B.core)) kq × DB (Bits m) Bd))
     (run : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (_ : Bits m → Y₁),
       (Fin Q' → O.Coins) → MeasureTheory.OuterMeasure (BaseGame.Tuple (Bits m) Bd
-        (ExtReg (A _ p) (C₁ (fun i => B.pk (keys i)) p) (MURequest O n) (MUResponse B)) kq ×
+        (ExtReg (A _ p) (C₁ (fun i => B.pk (keys i)) p) (MURequest O n) (MUResponse B.core)) kq ×
           DB (Bits m) Bd))
     (hrun : ∀ keys p ω c, run keys p ω c = simLaw e
       (((addsBridge O e Aux A C₁ F d₂ E kq d₀ _ p).withPerm ((Pb _ p).perm ω)).instLog
@@ -784,14 +796,14 @@ theorem sum_simLaw_extRun_le_muEufProb_tableForgerAdds (hO : O.ReadsBase sp)
       t')
     {Q' : ℕ} (hQ : ∀ pks p, bT (A pks p) (C₁ pks p) (F pks p) kq + 1 ≤ Q')
     (tab : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (_ : Bits m → Y₁),
-      (Fin Q' → O.Coins) → (A _ p).OuterTab (MURequest O n) (MUResponse B))
+      (Fin Q' → O.Coins) → (A _ p).OuterTab (MURequest O n) (MUResponse B.core))
     (htab : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Bits m → Y₁) c
       (j : Fin (A _ p).slots) q,
       (q = d₂ ∨ ∃ c' r, (F (fun i => B.pk (keys i)) p).outer c' r = some q) →
         tab keys p ω c j q = muReplyAt sp O ω keys Q' c j q)
     (W : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (_ : Bits m → Y₁),
       Set (BaseGame.Tuple (Bits m) Bd (ExtReg (A _ p) (C₁ (fun i => B.pk (keys i)) p)
-        (MURequest O n) (MUResponse B)) kq × DB (Bits m) Bd))
+        (MURequest O n) (MUResponse B.core)) kq × DB (Bits m) Bd))
     (hwin : ∀ keys p ω (h : Bits m → BitStr I J) c b,
       simState e ((bridgeAlgAdds e (A _ p) (C₁ _ p) (F _ p) d₂ (E _ p) kq (d₀ _ p) (P _ p) ω).inst
         (muReplyAt sp O ω keys Q' c)) b ≠ 0 →
@@ -828,22 +840,22 @@ variable [Fintype Y] [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y�
   (Aux : (Fin n → B.PK) → Type) (aux : ∀ pks, PMF (Aux pks))
   {shA : ∀ pks, Aux pks → AlgShape (Bits m) Y Req Resp} (A : ∀ pks (aux : Aux pks), AdaptiveIAlg (shA pks aux) Ot)
   (C₁ : ∀ pks, Aux pks → Challenger (Bits m) (BitStr I J) Req₁ Resp₁)
-  (F : ∀ pks, Aux pks → TwoRelay Req Resp Req₁ Resp₁ (MURequest O n) (MUResponse B))
+  (F : ∀ pks, Aux pks → TwoRelay Req Resp Req₁ Resp₁ (MURequest O n) (MUResponse B.core))
   (d₂ : MURequest O n)
   (E : ∀ pks p, Expansion (Bits m) Bd
-    (ExtReg ((A pks p).restrictAt sp 0) (C₁ pks p) (MURequest O n) (MUResponse B)))
+    (ExtReg ((A pks p).restrictAt sp 0) (C₁ pks p) (MURequest O n) (MUResponse B.core)))
   (kq : ℕ) (d₀ : ∀ pks p, ExtReg ((A pks p).restrictAt sp 0) (C₁ pks p) (MURequest O n)
-    (MUResponse B))
+    (MUResponse B.core))
   (g : ∀ pks p, BaseGame.Tuple (Bits m) Bd
-    (ExtReg ((A pks p).restrictAt sp 0) (C₁ pks p) (MURequest O n) (MUResponse B)) kq ×
+    (ExtReg ((A pks p).restrictAt sp 0) (C₁ pks p) (MURequest O n) (MUResponse B.core)) kq ×
       DB (Bits m) Bd → B.PK × B.BMsg × B.BSig)
 
 /-- The bridge algorithm of the extraction run of `A pks p` read at the zero base component. -/
 noncomputable abbrev splitBridge (pks : Fin n → B.PK) (p : Aux pks) :
-    ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B)
+    ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B.core)
       (bT ((A pks p).restrictAt sp 0) (C₁ pks p) (F pks p) kq)
       (BaseGame.Tuple (Bits m) Bd
-        (ExtReg ((A pks p).restrictAt sp 0) (C₁ pks p) (MURequest O n) (MUResponse B)) kq) :=
+        (ExtReg ((A pks p).restrictAt sp 0) (C₁ pks p) (MURequest O n) (MUResponse B.core)) kq) :=
   bridgeAlg e ((A pks p).restrictAt sp 0) (C₁ pks p) (F pks p) d₂ (E pks p) kq (d₀ pks p)
 
 /-- The query points of the bridge with the scratch register `Y₁ × Y₂`: the drops of the base
@@ -914,10 +926,10 @@ theorem toOuterMeasure_muLaw_tableForgerSplit (hO : O.ReadsBase sp) (t' : ℕ)
 
 /-- The bridge of `A pks p` read at the zero base component with the drops at `ω`. -/
 noncomputable abbrev splitDrop (pks : Fin n → B.PK) (p : Aux pks) (ω : Bits m → Y₁) :
-    ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B)
+    ReqQueryAlg (Bits m) (BitStr I J) (MURequest O n) (MUResponse B.core)
       (bT ((A pks p).restrictAt sp 0) (C₁ pks p) (F pks p) kq)
       (BaseGame.Tuple (Bits m) Bd
-        (ExtReg ((A pks p).restrictAt sp 0) (C₁ pks p) (MURequest O n) (MUResponse B)) kq) :=
+        (ExtReg ((A pks p).restrictAt sp 0) (C₁ pks p) (MURequest O n) (MUResponse B.core)) kq) :=
   bridgeAlgDrop e ((A pks p).restrictAt sp 0) (C₁ pks p) (F pks p) d₂ (E pks p) kq (d₀ pks p)
     ((A pks p).restrictBaseW sp) ω
 
@@ -939,14 +951,14 @@ theorem sum_simLaw_extRun_le_muLaw_tableForgerSplit (hO : O.ReadsBase sp)
     {Q' : ℕ} (hQ : ∀ pks p, bT ((A pks p).restrictAt sp 0) (C₁ pks p) (F pks p) kq + 1 ≤ Q')
     (tab : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Bits m → Y₁),
       (Fin Q' → O.Coins) →
-        ((A (fun i => B.pk (keys i)) p).restrictAt sp ω).OuterTab (MURequest O n) (MUResponse B))
+        ((A (fun i => B.pk (keys i)) p).restrictAt sp ω).OuterTab (MURequest O n) (MUResponse B.core))
     (htab : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Bits m → Y₁) c
       (j : Fin ((A (fun i => B.pk (keys i)) p).restrictAt sp ω).slots) q,
       (q = d₂ ∨ ∃ c' r, (F (fun i => B.pk (keys i)) p).outer c' r = some q) →
         tab keys p ω c j q = muReplyAt sp O ω keys Q' c j q)
     (W : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (_ : Bits m → Y₁),
       Set (BaseGame.Tuple (Bits m) Bd (ExtReg ((A (fun i => B.pk (keys i)) p).restrictAt sp 0)
-        (C₁ (fun i => B.pk (keys i)) p) (MURequest O n) (MUResponse B)) kq × DB (Bits m) Bd))
+        (C₁ (fun i => B.pk (keys i)) p) (MURequest O n) (MUResponse B.core)) kq × DB (Bits m) Bd))
     (Ev : (Fin n → B.KeyCoins) → (Bits m → Y) → B.PK × B.BMsg × B.BSig →
       List (MURequest O n) → Prop)
     (hwin : ∀ keys p ω (h : Bits m → BitStr I J) c b,
@@ -1001,14 +1013,14 @@ theorem sum_simLaw_extRun_le_muEufProb_tableForgerSplit (hO : O.ReadsBase sp)
     {Q' : ℕ} (hQ : ∀ pks p, bT ((A pks p).restrictAt sp 0) (C₁ pks p) (F pks p) kq + 1 ≤ Q')
     (tab : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Bits m → Y₁),
       (Fin Q' → O.Coins) →
-        ((A (fun i => B.pk (keys i)) p).restrictAt sp ω).OuterTab (MURequest O n) (MUResponse B))
+        ((A (fun i => B.pk (keys i)) p).restrictAt sp ω).OuterTab (MURequest O n) (MUResponse B.core))
     (htab : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Bits m → Y₁) c
       (j : Fin ((A (fun i => B.pk (keys i)) p).restrictAt sp ω).slots) q,
       (q = d₂ ∨ ∃ c' r, (F (fun i => B.pk (keys i)) p).outer c' r = some q) →
         tab keys p ω c j q = muReplyAt sp O ω keys Q' c j q)
     (W : ∀ (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (_ : Bits m → Y₁),
       Set (BaseGame.Tuple (Bits m) Bd (ExtReg ((A (fun i => B.pk (keys i)) p).restrictAt sp 0)
-        (C₁ (fun i => B.pk (keys i)) p) (MURequest O n) (MUResponse B)) kq × DB (Bits m) Bd))
+        (C₁ (fun i => B.pk (keys i)) p) (MURequest O n) (MUResponse B.core)) kq × DB (Bits m) Bd))
     (hwin : ∀ keys p ω (h : Bits m → BitStr I J) c b,
       simState e ((splitDrop sp O e Aux A C₁ F d₂ E kq d₀ (fun i => B.pk (keys i)) p ω).inst
         (muReplyAt sp O ω keys Q' c)) b ≠ 0 →

@@ -160,9 +160,10 @@ theorem reconstruct_isNatBelow {B k : ℕ} {lo : List K} (hlen : lo.length = k)
 
 /-! ### The combined lookup argument -/
 
-/-- Balanced fraction tree used by `logup_range_check`: each leaf is `(1,d)`
-and each internal node cross-multiplies its two children. The empty-list
-value `(0,1)` is a total extension; the C++ builder requires nonempty input. -/
+/-- Balanced fraction tree of the range lowering's lookup
+(`lib/gordiehowe/compiler/log_derivative.h`): each leaf is `(1,d)` and each internal node
+cross-multiplies its two children. The empty-list value `(0,1)` is a total extension; the C++
+builder requires nonempty input. -/
 def fracTree (d : List K) : K × K := FractionTree.balanced d
 
 omit [DecidableEq K] in

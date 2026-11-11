@@ -12,8 +12,9 @@ public import GordieHoweNative.Language.Assumptions
 /-!
 # GordieHowe: what a program's GKR circuits enforce
 
-The trust bundle of the plan's GKR circuits at the level of the realized program (the paper's `sec:formal-assumptions`),
-in two directions:
+The interface between the plan's GKR circuits and the realized program (the paper's
+`sec:formal-assumptions`), in two directions, both proved for every exported program from its
+checked GKR certificates (`ProgramCerts.circuitsEnforce`, `ProgramCerts.circuitsAccept`):
 
 * **soundness** (`GordieHowe.RealizedProgram.CircuitsEnforce`): for every circuit `c` of the program, a GKR source
   circuit (`GordieHowe.RealizedProgram.CircuitSource`: input dimension `d`, the source `S`, its nodes and `hfit`, the
@@ -200,14 +201,12 @@ def RealHolds (rd : ir.Valuation I) : RealCircuit → Prop
 /-! ## The meaning of a circuit -/
 
 /-- **A predicate placed in a circuit holds** at `rd`: a `mod_q`'s field equation (`e = e'` in the
-field, for `q = 0` or the field form; for the product form with `q > 2` its placed equation,
-`RealizedProgram.ProductPlaced`; the other forms' equations are given no meaning), any other
+field, for `q = 0` or the field form; the other forms' equations are given no meaning), any other
 predicate itself (`RealizedProgram.HoldsWith`). -/
 def PlacedHolds (rd : ir.Valuation I) : PredBody → Prop
   | .mod d q e e' real =>
     if q = 0 ∨ real.form = .field then
       ∀ i < ir.exprLen e, ir.evalWith rd d e i = ir.evalWith rd d e' i
-    else if real.form.isProduct = true ∧ 2 < q then ir.ProductPlaced rd d q e e' real
     else True
   | b => ir.HoldsWith rd b
 
@@ -309,7 +308,7 @@ def circuitInput (c : ℕ) (x : ir.Valuation I) (r : (ir.layout I).Run) (a : ir.
     (·.privValue? (fun u i => castElt (a.val u i)) (fun u i => castElt (a.pad u i))
       (fun u i => castElt (ir.reader (ir.layoutEnv I x (ir.bindAsg a) r) u i)) j)).getD 0
 
-/-! ## The trust bundle -/
+/-! ## The circuits' correspondence -/
 
 /-- **The width bound of circuit `c`**: `⌈log₂⌉` of the larger of its wires and its inputs, so
 the compiled circuit's output layer and every layer's inputs have at most `2^width` wires. -/
@@ -327,8 +326,9 @@ structure CircuitSource (c : ℕ) where
   /-- The circuit's inputs fit. -/
   hfit : (ir.circuit c).inputCount ≤ 2 ^ d
 
-/-- **Trust base: the program's GKR circuits enforce their entries** (soundness direction of the
-compiler correspondence, the paper's `sec:formal-assumptions`): for every circuit `c`, every
+/-- **The program's GKR circuits enforce their entries** (proved by `ProgramCerts.circuitsEnforce`;
+the soundness direction of the circuits' correspondence, the paper's first and third assumptions
+on the GKR circuits in `sec:formal-assumptions`): for every circuit `c`, every
 statement `x` and run `r`, every input vector `v` whose public inputs are the verifier's
 (`publicInput`), on which the proof system's premises hold (`InputPremises`: the bit views read the
 decoded words' bits) and that satisfies the source circuit gives the meaning of every entry of `c`
@@ -352,8 +352,9 @@ coordinate that is not a coordinate of a late value. -/
 def PadsAgreeOff (a a' : ir.Assignment I) : Prop :=
   ∀ u i, ¬ (u < ir.values.length ∧ ir.IsLate u ∧ i < (ir.value u).size) → a.pad u i = a'.pad u i
 
-/-- **Trust base, honest prover: the program's GKR circuits accept honest inputs** (completeness
-direction of the compiler correspondence): at every committed assignment `a` whose pads are zero off
+/-- **The program's GKR circuits accept honest inputs** (proved by `ProgramCerts.circuitsAccept`;
+the completeness direction of the circuits' correspondence, the paper's second assumption on the
+GKR circuits in `sec:formal-assumptions`): at every committed assignment `a` whose pads are zero off
 the late values' coordinates (`PadsAgreeOff` with the zero assignment), wherever every entry of
 circuit `c` holds at the reader of the layout's environment at the realized assignment
 (`bindAsg`), the source accepts the honest input vector (`circuitInput`). The honest prover's

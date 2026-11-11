@@ -90,6 +90,7 @@ structure MaskKit (K : Type) [Field K] [Fintype K] (p m d : ℕ) [ExpChar K p] (
   Pads : Type
   [fintype : Fintype Pads]
   [nonempty : Nonempty Pads]
+  [decEq : DecidableEq Pads]
   /-- The masks the pads give. -/
   sigmaOf : Pads → Fin d → K
   /-- The masks are uniform. -/
@@ -115,7 +116,7 @@ structure MaskKit (K : Type) [Field K] [Fintype K] (p m d : ℕ) [ExpChar K p] (
   card_Q_le : ∀ {ι : Type} (cp : Fin nPre → ι) (co : Fin nOwn → ι),
     Fintype.card (scheme cp co).Q ≤ nOwn
 
-attribute [instance] MaskKit.fintype MaskKit.nonempty
+attribute [instance] MaskKit.fintype MaskKit.nonempty MaskKit.decEq
 
 namespace MaskKit
 
@@ -136,7 +137,7 @@ def honest (M : MaskKit K p m d S0) {ι : Type} (cp : Fin M.nPre → ι) (co : F
 /-- **Subfield masks as a kit** (`MaskScheme.subfieldMasks`): `d · r` prefix cells `s_{k,i}` at
 `k r + i` (`finProdFinEquiv`), no own cell, the basis `γ` of `K` over `S0 ⊆ F_{p^m}` (`hγ`, a
 fact about the field data); the honest cells are uniform in `S0`. -/
-def subfield {r : ℕ} (γ : Fin r → K) (hS0 : S0 ≤ fixedField K p m)
+def subfield [DecidableEq K] {r : ℕ} (γ : Fin r → K) (hS0 : S0 ≤ fixedField K p m)
     [Fintype S0] (hγ : Function.Bijective fun s : Fin r → S0 => ∑ i, γ i * s i) :
     MaskKit K p m d S0 where
   nPre := d * r
@@ -187,15 +188,16 @@ theorem chainVal_chain (σ : Fin d → K) (c : SquaringCell d) :
 
 /-- **Cells holding the chain values commit the honest squaring chain**
 (`MaskScheme.squaringChainHonest`). -/
-theorem commits_chainVal [ExpChar K 2] {ι : Type} (co : Fin (d + ∑ k : Fin d, (k : ℕ)) → ι)
-    (σ : Fin d → K) (x : ι → K) (h : ∀ o, x (co o) = chainVal σ o) :
+theorem commits_chainVal [DecidableEq K] [ExpChar K 2] {ι : Type}
+    (co : Fin (d + ∑ k : Fin d, (k : ℕ)) → ι) (σ : Fin d → K) (x : ι → K)
+    (h : ∀ o, x (co o) = chainVal σ o) :
     (MaskScheme.squaringChainHonest (F := K) (chainCells co)).Commits σ x :=
   ⟨fun k => (h _).trans (chainVal_sigma σ k), fun c => (h _).trans (chainVal_chain σ c)⟩
 
 /-- **Squaring-chain masks over `GF(2)` as a kit** (`MaskScheme.squaringChain`): no prefix cell,
 `d + d(d − 1)/2` own cells (`chainCells`); the honest masks are uniform in `K^d`, the chain cells
 their squarings (`MaskScheme.squaringChainHonest`). -/
-def bitChain [ExpChar K 2] {S0 : Subfield K} : MaskKit K 2 1 d S0 where
+def bitChain [DecidableEq K] [ExpChar K 2] {S0 : Subfield K} : MaskKit K 2 1 d S0 where
   nPre := 0
   nOwn := d + ∑ k : Fin d, (k : ℕ)
   scheme _ co := MaskScheme.squaringChain (chainCells co)
@@ -244,7 +246,7 @@ theorem chainOverVal_chain (b : ℕ) (σ : Fin d → K) (c : ChainCell b d) :
 
 /-- **Cells holding the chain values commit the honest squaring chain over `GF(2^b)`**
 (`MaskScheme.squaringChainOverHonest`). -/
-theorem commits_chainOverVal [ExpChar K 2] {b : ℕ} {ι : Type}
+theorem commits_chainOverVal [DecidableEq K] [ExpChar K 2] {b : ℕ} {ι : Type}
     (co : Fin (d + ∑ k : Fin d, b * (k : ℕ)) → ι) (σ : Fin d → K) (x : ι → K)
     (h : ∀ o, x (co o) = chainOverVal b σ o) :
     (MaskScheme.squaringChainOverHonest (F := K) (chainOverCells co)).Commits σ x :=
@@ -255,7 +257,7 @@ theorem commits_chainOverVal [ExpChar K 2] {b : ℕ} {ι : Type}
 `lem:bits-sound`(2),(3) at every `b`): no prefix cell, `d + b d(d − 1)/2` own cells
 (`chainOverCells`); the honest masks are uniform in `K^d`, the chain cells their squarings
 (`MaskScheme.squaringChainOverHonest`). `bitChain` is the case `b = 1` with its own cell type. -/
-def chain [ExpChar K 2] (b : ℕ) {S0 : Subfield K} : MaskKit K 2 b d S0 where
+def chain [DecidableEq K] [ExpChar K 2] (b : ℕ) {S0 : Subfield K} : MaskKit K 2 b d S0 where
   nPre := 0
   nOwn := d + ∑ k : Fin d, b * (k : ℕ)
   scheme _ co := MaskScheme.squaringChainOver (chainOverCells co)

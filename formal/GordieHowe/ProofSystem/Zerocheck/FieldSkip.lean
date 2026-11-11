@@ -14,11 +14,12 @@ public import Mathlib.LinearAlgebra.Lagrange
 /-!
 # The univariate-skip zerocheck over any field, for any relation
 
-GordieHowe's field-generic batching (`lib/gordiehowe/compiler/field_skip.h`, `MaskedFieldSkip`)
-proves that a relation `Q` of total degree at most `D` on `k` operands holds on every instance
-`t = r w + z` of a batch, in any characteristic. This file states the unmasked reduction;
-`GordieHowe/ProofSystem/Zerocheck/UnivariateSkip.lean` reads it at `Q = a b + c` (`D = 2`, `k = 3`) in characteristic
-two.
+The univariate skip (Gruen, IACR ePrint 2024/108). GordieHowe's field-generic batching
+(`lib/gordiehowe/compiler/field_skip.h`, `MaskedFieldSkip`) proves that a relation `Q` of total
+degree at most `D` on `k` operands holds on every instance `t = r w + z` of a batch, in any
+characteristic. This file states the unmasked reduction;
+`GordieHowe/ProofSystem/Zerocheck/UnivariateSkip.lean` reads it at `Q = a b + c` (`D = 2`, `k = 3`)
+in characteristic two.
 
 * **The skip domain** (`SkipPoints K w D`): `D (w − 1) + 1` distinct points, the first `w` the
   instances' skip coordinates (`pt`), the other `(D − 1)(w − 1)` the skip message's points.

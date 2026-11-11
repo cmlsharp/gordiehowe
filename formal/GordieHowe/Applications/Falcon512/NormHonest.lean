@@ -262,7 +262,7 @@ end Reading
 theorem modZero_of_eq {rd : program.Valuation I} {d : ℕ} {l r : RealizedProgram.Expr} {real : RealizedProgram.ModRealization}
     (h : ∀ i < program.exprLen l, program.evalIntWith rd d l i = program.evalIntWith rd d r i) :
     program.HoldsWith rd (.mod d 0 l r real) := by
-  refine (RealizedProgram.holdsWith_mod_iff (.inr (by omega))).2 fun i hi => ?_
+  refine RealizedProgram.holdsWith_mod_iff.2 fun i hi => ?_
   rw [Nat.cast_zero, zero_dvd_iff, sub_eq_zero]
   exact h i hi
 

@@ -121,17 +121,17 @@ def masks : Tableau.Aux F N :=
 
 /-- The projected row polynomial of repetition `j` used by the affine code test. -/
 noncomputable def codeResponse (r : Tableau.Challenge F R nL nQ nrep) (j : Fin nrep) : F[X] :=
-  AffineCodeTest.projectedPolynomial (H.ldtRows j) (r.1 j)
+  AffineCodeTest.projectedPolynomial (H.ldtRows j) (r.ldt j)
 
 /-- The IDOT response after the linear batching challenge. -/
 noncomputable def dotResponse (r : Tableau.Challenge F R nL nQ nrep) : F[X] :=
   H.dotMask + MaskedConstraintTest.batch
-    (fun l => Tableau.dotPolynomials C P L H.rows l) r.2.1
+    (fun l => Tableau.dotPolynomials C P L H.rows l) r.lin
 
 /-- The IQUAD response after the quadratic batching challenge. -/
 noncomputable def quadResponse (r : Tableau.Challenge F R nL nQ nrep) : F[X] :=
   H.quadMask + MaskedConstraintTest.batch
-    (fun q => Tableau.quadPolynomials C P H.rows q) r.2.2
+    (fun q => Tableau.quadPolynomials C P H.rows q) r.quad
 
 theorem encode_decode :
     RSCode.nearbyRows C (encode H).tableau = some H.rows := by
@@ -194,25 +194,25 @@ theorem quad_batch_degree_mask (hrate : 2 * C.k - 1 ≤ N)
 
 theorem codeResponse_degree (r : Tableau.Challenge F R nL nQ nrep) (j : Fin nrep) :
     (codeResponse H r j).natDegree < C.k :=
-  AffineCodeTest.projectedPolynomial_degree (H.ldtRows_degree j) (r.1 j)
+  AffineCodeTest.projectedPolynomial_degree (H.ldtRows_degree j) (r.ldt j)
 
 theorem dotResponse_degree (hrate : 2 * C.k - 1 ≤ N)
     (r : Tableau.Challenge F R nL nQ nrep) :
     (dotResponse H r).natDegree <
       (MaskedPolynomialTest.maskCode C hrate).k := by
   apply add_degree_lt_mask hrate H.dotMask
-    (MaskedConstraintTest.batch (fun l => Tableau.dotPolynomials C P L H.rows l) r.2.1)
+    (MaskedConstraintTest.batch (fun l => Tableau.dotPolynomials C P L H.rows l) r.lin)
     H.dotMask_degree
-    (batch_degree_mask hrate _ (fun l => dot_polynomial_degree H hrate l) r.2.1)
+    (batch_degree_mask hrate _ (fun l => dot_polynomial_degree H hrate l) r.lin)
 
 theorem quadResponse_degree (hrate : 2 * C.k - 1 ≤ N)
     (r : Tableau.Challenge F R nL nQ nrep) :
     (quadResponse H r).natDegree <
       (MaskedPolynomialTest.maskCode C hrate).k := by
   apply add_degree_lt_mask hrate H.quadMask
-    (MaskedConstraintTest.batch (fun q => Tableau.quadPolynomials C P H.rows q) r.2.2)
+    (MaskedConstraintTest.batch (fun q => Tableau.quadPolynomials C P H.rows q) r.quad)
     H.quadMask_degree
-    (quad_batch_degree_mask hrate _ (fun q => quad_polynomial_degree H hrate q) r.2.2)
+    (quad_batch_degree_mask hrate _ (fun q => quad_polynomial_degree H hrate q) r.quad)
 
 /-- The response formed after the verifier's algebraic challenge: the values of the three
 response polynomials on the response nodes (`Tableau.Response.ofPolys`). Its degree bounds are
@@ -241,9 +241,9 @@ theorem valid (r : Tableau.Challenge F R nL nQ nrep) :
     rw [H.dotMask_zero]
     simp only [zero_add]
     calc
-      ∑ i, r.2.1 i * Tableau.dotCheck C P
+      ∑ i, r.lin i * Tableau.dotCheck C P
           (Tableau.dotPolynomials C P L H.rows i) =
-          ∑ i, r.2.1 i * L.target i := by
+          ∑ i, r.lin i * L.target i := by
             apply Finset.sum_congr rfl
             intro i hi
             rw [H.rows_holds.1 i]
@@ -257,7 +257,7 @@ theorem valid (r : Tableau.Challenge F R nL nQ nrep) :
 
 theorem codeAccept (r : Tableau.Challenge F R nL nQ nrep)
     {t : ℕ} (q : Tableau.Query N t) :
-    Tableau.CodeAccept C (encode H) r.1
+    Tableau.CodeAccept C (encode H) r.ldt
       (codeResponse H r) q := by
   intro j s
   simp only [codeResponse, AffineCodeTest.projection, encode_ldtMatrix,
@@ -265,7 +265,7 @@ theorem codeAccept (r : Tableau.Challenge F R nL nQ nrep)
 
 theorem dotAccept (r : Tableau.Challenge F R nL nQ nrep)
     {t : ℕ} (q : Tableau.Query N t) :
-    Tableau.DotAccept C P L (encode H).tableau (masks H).1 r.2.1
+    Tableau.DotAccept C P L (encode H).tableau (masks H).dot r.lin
       (dotResponse H r) q := by
   intro s
   simp only [Tableau.DotAccept, masks, dotResponse,
@@ -275,7 +275,7 @@ theorem dotAccept (r : Tableau.Challenge F R nL nQ nrep)
 
 theorem quadAccept (r : Tableau.Challenge F R nL nQ nrep)
     {t : ℕ} (q : Tableau.Query N t) :
-    Tableau.QuadAccept C P (encode H).tableau (masks H).2 r.2.2
+    Tableau.QuadAccept C P (encode H).tableau (masks H).quad r.quad
       (quadResponse H r) q := by
   intro s
   simp only [Tableau.QuadAccept, masks, quadResponse,

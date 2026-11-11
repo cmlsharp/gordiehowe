@@ -19,6 +19,9 @@ and its transcript `TD` are over the program's statements and do not depend on `
 signer's oracle is the compiled oracle `Bits (queryBits TD.k (2 TD.k) kS 2^40) → XOut TD.k e` of
 `TD`, so `B` is chosen after `TD`.
 
+- `transcriptPST TD kS hb pB R`: the types of the spBCS proof system at the transcript `TD`
+  (`spbcsPST` at the model of `TD.setting kS hb`), its proofs and coins the named types
+  `TranscriptProof` and `TranscriptCoins` over the transcript, each with its instances.
 - `BaseVerifiesRing ir I rel relH B adm`: the program verifies base signatures of `B` for the ring
   relation `ringRel B adm H` at every oracle `H`: a map of ring statements to the program's
   statements, a statement check, a map of the program's witnesses to ring witnesses (soundness at
@@ -48,6 +51,61 @@ open IOP GordieHowe.SPBCS GordieHowe.QROM Quantum RealizedProgram RealizedProgra
   GordieHowe.RingSignature
 open scoped NNReal ENNReal
 
+section TranscriptTypes
+
+variable {X₀ W : Type} {rel₀ : Set (X₀ × W)} {C : RealizedProgram.ProofSystem.IOP X₀ W rel₀}
+  (TD : SPBCS.ProofSystemTranscript C) (kS : ℕ) (hb : TD.MergeBounds kS)
+
+/-- **The proofs of the spBCS proof system at a transcript** `TD` of an IOP `C`, at `kS`-byte
+salts under the merge bounds `hb`, in the format `pB`: the responses of the model of the setting
+`TD.setting kS hb`. A named type over the transcript, with its instances registered once: spelled
+through the setting's model, every mention and every instance found by search repeats the setting
+with all its implicit arguments. -/
+def TranscriptProof (pB : ℕ) : Type := (TD.setting kS hb).model.Response pB
+
+/-- **The coins of the spBCS proof system at a transcript** `TD` with causal-prover coins `R`: the
+Fiat–Shamir salt with the prover's coins of the model of the setting `TD.setting kS hb`. A named
+type over the transcript, as `TranscriptProof`. -/
+def TranscriptCoins (R : Type) : Type :=
+  SaltedCoins (FiatShamirSalt kS) ((TD.setting kS hb).model.ProverCoins R)
+
+variable {TD kS hb}
+
+noncomputable instance TranscriptProof.instFintype {pB : ℕ} :
+    Fintype (TranscriptProof TD kS hb pB) :=
+  inferInstanceAs (Fintype ((TD.setting kS hb).model.Response pB))
+
+instance TranscriptProof.instDecidableEq {pB : ℕ} : DecidableEq (TranscriptProof TD kS hb pB) :=
+  inferInstanceAs (DecidableEq ((TD.setting kS hb).model.Response pB))
+
+instance TranscriptProof.instNonempty {pB : ℕ} : Nonempty (TranscriptProof TD kS hb pB) :=
+  inferInstanceAs (Nonempty ((TD.setting kS hb).model.Response pB))
+
+instance TranscriptCoins.instFintype {R : Type} [Fintype R] :
+    Fintype (TranscriptCoins TD kS hb R) :=
+  inferInstanceAs
+    (Fintype (SaltedCoins (FiatShamirSalt kS) ((TD.setting kS hb).model.ProverCoins R)))
+
+instance TranscriptCoins.instDecidableEq {R : Type} [DecidableEq R] :
+    DecidableEq (TranscriptCoins TD kS hb R) :=
+  inferInstanceAs
+    (DecidableEq (SaltedCoins (FiatShamirSalt kS) ((TD.setting kS hb).model.ProverCoins R)))
+
+instance TranscriptCoins.instNonempty {R : Type} [Nonempty R] :
+    Nonempty (TranscriptCoins TD kS hb R) :=
+  inferInstanceAs
+    (Nonempty (SaltedCoins (FiatShamirSalt kS) ((TD.setting kS hb).model.ProverCoins R)))
+
+variable (TD kS hb)
+
+/-- **The types of the spBCS proof system at a transcript** `TD`, proofs in the format `pB` and
+causal-prover coins `R`: `spbcsPST` at the model of the setting `TD.setting kS hb`, with the proofs
+and coins named over the transcript (`TranscriptProof`, `TranscriptCoins`). -/
+noncomputable abbrev transcriptPST (pB : ℕ) (R : Type) : PSTypes :=
+  ⟨TranscriptProof TD kS hb pB, TranscriptCoins TD kS hb R⟩
+
+end TranscriptTypes
+
 /-- **The program verifies base signatures of `B` for the ring relation** `RingSignature.ringRel B adm H` at
 every oracle `H` (BKM06 Definition 1, ePrint 2005/304, p. 3, with `Vrfy_R(M, σ)` the program's
 verifier on the statement of `(R, M, y)`): for a relation `rel` of the program's statements and
@@ -61,7 +119,8 @@ check `check`, with
   prover at the program's statement. -/
 structure BaseVerifiesRing (ir : RealizedProgram) (I : RealizedProgram.Interp) {W : Type}
     (rel : Set (ir.Valuation I × W)) {Inp : Type} (relH : Set (ir.Valuation I × Inp)) {Xo Yo : Type}
-    {N : ℕ} {TB : BaseTypes} (B : BaseSigner Xo Yo N TB) (adm : KeyRing B.PK N → Prop) where
+    {N : ℕ} {TB : BaseTypes}
+    (B : BaseSigner Xo Yo N TB) (adm : KeyRing B.PK N → Prop) where
   /-- The program's statement of a ring statement. -/
   stmt : RingSignature.RingStmt B → ir.Valuation I
   /-- The check of a ring statement. -/
@@ -85,7 +144,8 @@ variable {ir : RealizedProgram} {I : RealizedProgram.Interp} {W : Type}
 
 /-- **For a base signer verifying without the oracle, the conditions at one oracle suffice**: the
 ring relation is the same at every oracle (`VerifiesWithoutOracle.ringRel_eq`). -/
-def ofVerifiesWithoutOracle {Xo Yo : Type} {N : ℕ} {TB : BaseTypes} {B : BaseSigner Xo Yo N TB}
+def ofVerifiesWithoutOracle {Xo Yo : Type} {N : ℕ} {TB : BaseTypes}
+    {B : BaseSigner Xo Yo N TB}
     {adm : KeyRing B.PK N → Prop} (hB : B.VerifiesWithoutOracle) (H₀ : Xo → Yo)
     (stmt : RingSignature.RingStmt B → ir.Valuation I) (check : RingSignature.RingStmt B → Bool) (wit : RingSignature.RingStmt B → W → RingSignature.RingWit B)
     (sound : ∀ x w, check x = true → (stmt x, w) ∈ rel → (x, wit x w) ∈ RingSignature.ringRel B adm H₀)
@@ -108,7 +168,8 @@ variable {Pl : Export.Plan} {PB : ir.ProofSystem Pl I} {F : PB.FieldBranches}
   {proj : ir.Valuation I → ir.Assignment I → W} {errc : ℝ≥0}
   (G : ProgramHypotheses F rel proj relH errc) {TD : SPBCS.ProofSystemTranscript G.iop} {kS : ℕ}
   (hb : TD.MergeBounds kS) {pB : ℕ} (hf : TD.ProofFormat kS hb pB) {N : ℕ}
-  {TB : BaseTypes} {B : BaseSigner (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40))) (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant)) N TB}
+  {TB : BaseTypes}
+  {B : BaseSigner (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40))) (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant)) N TB}
   {adm : KeyRing B.PK N → Prop} (V : BaseVerifiesRing ir I rel relH B adm)
 
 /-- **The proof system of the program for the ring relation**: spBCS at the setting with merges of
@@ -119,7 +180,7 @@ verification after the check `V.check`. -/
 noncomputable abbrev proofSystem :
     RingSignature.ProofSystem (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40))) (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant))
       (RingSignature.RingStmt B) (RingSignature.RingWit B)
-      (spbcsPST (TD.setting kS hb).model pB G.honestIOP.Coins) :=
+      (transcriptPST TD kS hb pB G.honestIOP.Coins) :=
   spbcsComapProofSystem (TD.setting kS hb).model (TD.setting kS hb).layout
     (TD.setting kS hb).encoder hf (RealizedProgram.ProofSystem.IOP.honest G.honestIOP) V.stmt
     V.check V.input
@@ -138,6 +199,9 @@ theorem proofSystem_completeWithin :
 
 variable [DecidablePred adm]
 
+variable [DecidableEq TB.PK] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
+  [Nonempty TB.Coins]
+
 /-- **Completeness of the ring signature of a program that verifies base signatures of `B`**
 (BKM06 Definition 1 with errors, averaged over honest rings), under the hypotheses of Theorem 5.2
 (`G`): for a base signer with refusal rate `ρ` on honest rings (`hρ`) and correctness error `εc`
@@ -153,6 +217,7 @@ theorem completeWithin {ρ εc : ℝ≥0∞} (hρ : B.RefuseWithin adm ρ) (hc :
           ((B.q + B.qPub : ℕ) : ℝ≥0∞) / 2 ^ (8 * kS))) :=
   completeWithin_ofBase B _ adm hρ hc (V.proofSystem_completeWithin G hb hf)
 
+omit [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins] in
 /-- **Completeness per key of the ring signature of a program that verifies base signatures of
 `B`**: as `completeWithin`, with the per-key refusal rate `ρ` (`RefuseAtWithin`), at every key and
 every supported ring holding it. -/

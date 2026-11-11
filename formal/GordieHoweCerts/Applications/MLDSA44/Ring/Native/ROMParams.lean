@@ -27,7 +27,7 @@ The native ML-DSA-44 ring at the ROM parameters as a configuration under spBCS
 witness read at the statement's program statement (`ringWit`), the honest prover, the honest
 strategy `honestStrategy 34`, and the figures), its facts `configurationFacts`, and the instances
 of the templates of the families `Common`, `GordieHowe.Configuration.ZeroKnowledgeROM` and
-`GordieHowe.Configuration.AdaptiveCompleteness`. The extractor is `ringKeyExtractor`. The ring
+`GordieHowe.Configuration.AdaptiveCompleteness`. The extractor is `extractor`. The ring
 signatures at every message length are in
 `GordieHoweCerts/Applications/MLDSA44/Ring/Native/ROMParams/RingScheme.lean`.
 
@@ -37,9 +37,9 @@ frontend (`frontend`): its IOP, transcript, honest strategy and honest relation 
 of the generic templates (`GordieHowe.Configuration.CertifiedSource`,
 `GordieHowe.Configuration.CertifiedHonest`, `GordieHowe.Configuration.CertifiedFrontWith`).
 
-The figures: at most `2273` rounds, every round's load within `2^-2800`, trees of at most `3193`
-leaves, `137` queried leaves, `6331` verifier queries, round errors at most `81059020 / 2^140`,
-`4549` digests per input, the query caps `2^40` (QROM) and `2^64` (ROM), `6303` positions and
+The figures: at most `2209` rounds, every round's load within `2^-2800`, trees of at most `3499`
+leaves, `137` queried leaves, `6203` verifier queries, round errors at most `91940078 / 2^140`,
+`4421` digests per input, the quantum query cap `2^40` and the classical query cap `2^64`, `6692` positions and
 `32`-byte digests.
 
 * **The honest relation** (`ringHonestRel msgLen relH`): statements that pass the check and whose
@@ -106,11 +106,11 @@ noncomputable def frontend (msgLen : ℕ) :
       (RingIn msgLen) where
   codec := stmtCodecN msgLen 64
   stmtOf := Native.stmtOf (program := program) (I := interp)
-  rel' := ringRel64 msgLen
-  g := ringWit
+  rel := ringRel64 msgLen
+  witnessMap := ringWit
   relH := Native.relH (msgLen := msgLen) program RealizedProgram.fq6 RealizedProgram.gf128
   exec := sourceExec
-  keyStmtOf y := y.x
+  stmtOfHonest y := y.x
   label := labelNative
   ok := ringOk
 
@@ -149,17 +149,17 @@ theorem ringMergeBounds (hmsg : msgLen ≤ 2 ^ 19) : (ringTranscript msgLen C).M
   Configuration.mergeBoundsWith certified source (frontendFacts hmsg) (by norm_num) C
 
 /-- **The figures of `ringIop`** (`RealizedProgram.ProgramFigures.Check.figuresWith`, the generated figures): at
-most `2273` rounds, trees of at most `3193` leaves, `137` queried leaves, `6331` verifier queries, `4549`
-digests per input and `6303` positions. -/
-theorem ringFigures : (ringIop msgLen C).Figures 2273 3193 137 6331 4549 6303 :=
+most `2209` rounds, trees of at most `3499` leaves, `137` queried leaves, `6203` verifier queries, `4421`
+digests per input and `6692` positions. -/
+theorem ringFigures : (ringIop msgLen C).Figures 2209 3499 137 6203 4421 6692 :=
   by simpa only [figures_eq, show certified.figures = figures from rfl] using
     certified.figuresOk.figuresWith (B := C) (Lw := ringLowering C) ringOk
 
 variable {msgLen} in
-/-- **The proof format `max 3193 137`**: every tree has at most `3193` leaves and every query phase
+/-- **The proof format `max 3499 137`**: every tree has at most `3499` leaves and every query phase
 opens at most `137` positions (`ringFigures`). -/
 theorem ringProofFormat (hmsg : msgLen ≤ 2 ^ 19) :
-    (ringTranscript msgLen C).ProofFormat 32 (ringMergeBounds C hmsg) (max 3193 137) :=
+    (ringTranscript msgLen C).ProofFormat 32 (ringMergeBounds C hmsg) (max 3499 137) :=
   ProofSystemTranscript.formatBounds (ringMergeBounds C hmsg)
     (fun d => ((ringFigures msgLen C).leaves_le d).trans (le_max_left _ _))
     fun ch => ((ringFigures msgLen C).queries_le ch).trans (le_max_right _ _)
@@ -170,21 +170,20 @@ theorem msgLen_le : 2 + 32 ≤ 2 ^ 19 := by norm_num
 /-! ## The configuration -/
 
 /-- **`MLDSA44.Ring.Native.ROMParams` as a configuration under spBCS** at `34`-byte message representatives
-(module docstring, `Configuration.ofCertifiedWith`): `32`-byte salts and the query cap `2 ^ 40`. -/
+(module docstring, `Configuration.ofCertifiedWith`): the ROM parameter set `ParamSet.rom` (`32`-byte salts and the quantum query cap `2 ^ 40`). -/
 noncomputable def configuration : Configuration :=
-  .ofCertifiedWith certified source (frontend (2 + 32)) 32 (2 ^ 40)
+  .ofCertifiedWith certified source (frontend (2 + 32)) .rom
 
 /-- **The facts of `configuration`** (`Configuration.ofCertifiedWith_facts`): the frontend's
 (`frontendFacts` at `msgLen_le`) and the generated loads' check
 (`GordieHowe.RuntimeInputs.FiguresFacts.loads`). -/
 theorem configurationFacts : configuration.Facts :=
-  Configuration.ofCertifiedWith_facts certified source (frontendFacts msgLen_le) (by norm_num) _
+  Configuration.ofCertifiedWith_facts certified source (frontendFacts msgLen_le) (Nat.le_of_ble_eq_true rfl)
     (conditions.fullFacts.figures.loads rfl)
 
 instantiate_config GordieHowe.MLDSA44.Ring.Native.ROMParams
   from [GordieHowe.Configuration.Common, GordieHowe.Configuration.ZeroKnowledgeROM,
     GordieHowe.Configuration.AdaptiveCompleteness]
-  renaming keyExtractor → ringKeyExtractor
   folding [ringStmtRel] configuration configurationFacts at proofSystem
 
 end GordieHowe.MLDSA44.Ring.Native.ROMParams

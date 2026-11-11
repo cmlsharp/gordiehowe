@@ -4,16 +4,15 @@
 module
 
 public import GordieHoweCerts.Generated.Falcon512.Native.QROMParams.GKR.A
-public import GordieHoweCheck.Falcon512.Native.QROMParams.GKR.A.E2.P0
-public import GordieHoweCheck.Falcon512.Native.QROMParams.GKR.A.E2.P1
-public import GordieHoweCheck.Falcon512.Native.QROMParams.GKR.A.E2.P2
+meta import GordieHoweCerts.Generated.Falcon512.Native.QROMParams.GKR.A
+import all GordieHoweCerts.Generated.Falcon512.Native.QROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of entry 2 of the GKR circuit of domain A, composed from its part modules (generated; do not edit). -/
+/-! The relational check of entry 2 of the GKR circuit of domain A (generated; do not edit). -/
 
 namespace GordieHowe.Generated.Falcon512.Native.QROMParams.GKR.A
 
-compose_entry cert ar 2 [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1024, 6, 0, 0, 1, 1, 1024, 5, 0, 0, 3, 1, 170, 7, 2, 1024, 1]
+check_entry cert ar 2 [0, 0, 11, 2, 1, 1]
 
 end GordieHowe.Generated.Falcon512.Native.QROMParams.GKR.A

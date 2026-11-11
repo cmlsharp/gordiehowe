@@ -43,18 +43,20 @@ open scoped NNReal ENNReal BigOperators
 
 section Comap
 
-variable {k kN kS L e N : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N : ℕ} {TB : BaseTypes}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)] {X₀ Wit₀ : Type}
   (M : SPBCS Mg P X₀ k kN kS L e) (Λ : SiteLayout Mg) {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] (E : (j : ι) → (M.comp j).Encoder)
   {Vr : X₀ → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : Wit₀ → R → CausalProver P τ X₀) (stmt : RingSignature.RingStmt B → X₀)
   (check : RingSignature.RingStmt B → Bool)
   (input : RingSignature.RingStmt B → RingSignature.RingWit B → Option Wit₀)
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **The law of a proof of the comap proof system with an honest input `y`** is the spBCS proof
 law at `chainOracle H`, the statement `stmt x` and the input `y`, each proof in the format. -/
 theorem proofLaw_spbcsComapProofSystem_of_input (VE : M.ViewEncoder E Qs)
@@ -77,6 +79,7 @@ theorem proofLaw_spbcsComapProofSystem_of_input (VE : M.ViewEncoder E Qs)
   rw [hp, ← hp1, toResponse, dite_eq_left p.2]
   rfl
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **Witness indistinguishability with public outputs of the comap proof system** at error
 `wiError δ`: for a relation `rel` whose pairs have honest inputs in `rel₀` (`hrel`) at which the
 composite's honest prover has honest-verifier zero knowledge at error `δ` (`hz`, what the proof
@@ -113,6 +116,7 @@ theorem pubWI_spbcsComapProofSystem (VE : M.ViewEncoder E Qs) {rel₀ : Set (X�
   rw [hy]
   rfl
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **Witness indistinguishability of the comap proof system at the oracles with a fixed off-query
 part** `ω₂`, under the hypotheses of `pubWI_spbcsComapProofSystem`. -/
 theorem pubWI_spbcsComapProofSystem_split (VE : M.ViewEncoder E Qs) {rel₀ : Set (X₀ × Wit₀)}
@@ -156,7 +160,8 @@ variable {X₀ W : Type} {rel₀ : Set (X₀ × W)} {C : RealizedProgram.ProofSy
   {SD : C.SimData} {Inp : Type} {relI : Set (X₀ × Inp)} (Hc : C.Honest SD Inp relI)
   {TD : SPBCS.ProofSystemTranscript C} {kS : ℕ} (hb : TD.MergeBounds kS) {pB : ℕ}
   (hf : TD.ProofFormat kS hb pB) {N : ℕ}
-  {TB : BaseTypes} {B : BaseSigner (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40))) (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant)) N TB}
+  {TB : BaseTypes}
+  {B : BaseSigner (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40))) (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant)) N TB}
   {adm : KeyRing B.PK N → Prop} {W' : Type} {rel : Set (X₀ × W')}
   (V : StmtVerifiesRing rel relI B adm)
 
@@ -172,6 +177,10 @@ theorem pubWI_proofSystem {errc : ℝ≥0} (hE : Hc.app.ErrorBound fun _ => errc
     (RealizedProgram.ProofSystem.IOP.hvzk_of_errorBound Hc hE) fun x w h => V.input_mem H x w h
 
 variable [DecidablePred adm] {n : ℕ}
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
 
 /-- **Anonymity of the ring signature of a compiled IOP over its own statements** (the program
 form, Theorem 5.2, of `anonAdvantage_ofBase_le`; BKM06 Definition 4 with `Q` adaptive challenges,

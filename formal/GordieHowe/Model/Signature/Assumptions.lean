@@ -70,7 +70,8 @@ namespace GordieHowe.Signature
 open GordieHowe.Quantum GordieHowe.RingSignature
 open scoped ENNReal
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB} {O : SignOracle B} {n : ℕ}
+variable {X Y : Type} {TB : SchemeTypes}
+  {B : BaseScheme X Y TB} {O : SignOracle B} {n : ℕ}
 
 /-- With a user, the game has a request: the public key of user `0`. -/
 instance [NeZero n] : Nonempty (MURequest O n) :=
@@ -80,6 +81,12 @@ variable [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [A
   [Nonempty Y] {V : OracleView X Y} {t : ℕ}
 
 /-! ### The predicates -/
+
+variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins]
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
 
 /-- **MU-EUF-CMA^corr is `ε`-hard for the class `𝒜` with `Q` requests**: every adversary of `𝒜`
 has success probability at most `ε` (`muEufProb`). -/
@@ -328,8 +335,9 @@ noncomputable def keyHitProb : ℝ≥0∞ :=
   ⨆ pk : B.PK,
     (PMF.uniformOfFintype (Fin n → B.KeyCoins)).toOuterMeasure {keys | ∃ i, B.pk (keys i) = pk}
 
-omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
-  [Nonempty Y] in
+omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y]
+  [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [DecidableEq TB.KeyCoins] in
 /-- **A union bound over the users**: a fixed key is some user's key with probability at most `n`
 times the largest probability that the key of uniform key coins is a fixed key. -/
 theorem keyHitProb_le :
@@ -480,6 +488,8 @@ end Draw
 
 /-! ### The unrestricted class fails -/
 
+variable [Fintype TB.BMsg] [Fintype TB.Coins] [Nonempty TB.Coins]
+
 section Brute
 
 variable (B) in
@@ -488,8 +498,9 @@ coins, some base message and base signature verify under the key. -/
 def Signable : Prop :=
   ∀ (H : X → Y) (kc : B.KeyCoins), ∃ bm σ, B.bverify H (B.pk kc) bm σ = true
 
-omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
-  [Nonempty Y] in
+omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y]
+  [Fintype TB.PK] [DecidableEq TB.PK] [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] in
 /-- **Correct signing gives verifying signatures**: if the ordinary signer has correctness error
 `εc` and refusal rate `ρ` with `εc + ρ < 1`, then at every oracle and key, every base message has a
 verifying signature, so `Signable` holds when there is a base message. -/
@@ -530,6 +541,7 @@ noncomputable def bruteAdv [Nonempty (B.BMsg × B.BSig)] (i₀ : Fin n) (t : ℕ
   (QueryBoundedAdversary.ofLaw X Y (MURequest O n) (MUResponse B)
     (PMF.pure (bruteOut i₀ inp))).mono (Nat.zero_le t)
 
+omit [Fintype TB.BMsg] [Fintype TB.Coins] [Nonempty TB.Coins] in
 /-- **The brute-force adversary forges with probability `1`** when every key has a verifying
 signature at every oracle (`Signable`). -/
 theorem muEufProb_bruteAdv [Nonempty (B.BMsg × B.BSig)] (hs : Signable B) (i₀ : Fin n) (t Q : ℕ) :
@@ -552,6 +564,7 @@ theorem muEufProb_bruteAdv [Nonempty (B.BMsg × B.BSig)] (hs : Signable B) (i₀
   exact Classical.epsilon_spec (p := fun p : B.BMsg × B.BSig =>
     B.bverify H (B.pk (keys i₀)) p.1 p.2 = true) ⟨(bm, σ), hv⟩
 
+omit [Fintype TB.BMsg] [Fintype TB.Coins] [Nonempty TB.Coins] in
 /-- **With the oracle as a table, no bound below `1` holds for every adversary** of
 MU-EUF-CMA^corr, when every key has a verifying signature at every oracle (`Signable`): the
 brute-force adversary (`bruteAdv`), with no query and no request, wins with probability `1`. -/
@@ -579,10 +592,13 @@ noncomputable def drawBruteAdv [Nonempty (B.BMsg × B.BSig)] (i₀ : Fin n) (V :
   (QueryBoundedAdversary.ofLaw X Y (MURequest O n) (MUResponse B)
     (PMF.pure (drawOut i₀ inp.1))).mono (Nat.zero_le t)
 
+omit [Fintype TB.BMsg] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [Nonempty TB.Coins]
+  [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 theorem drawBruteAdv_mem [Nonempty (B.BMsg × B.BSig)] (i₀ : Fin n) (V : OracleView X Y) (t : ℕ) :
     drawBruteAdv O i₀ V t ∈ drawAdversaries O n V t :=
   ⟨fun pks => PMF.pure (drawOut i₀ pks), fun _ => rfl⟩
 
+omit [Fintype TB.BMsg] [Fintype TB.Coins] [Nonempty TB.Coins] in
 /-- **The drawing adversary forges with probability `1`** when verification does not read the
 oracle and every key has a verifying signature (`Signable`). -/
 theorem muEufProb_drawBruteAdv [Nonempty (B.BMsg × B.BSig)]
@@ -608,6 +624,7 @@ theorem muEufProb_drawBruteAdv [Nonempty (B.BMsg × B.BSig)]
   exact Classical.epsilon_spec (p := fun p : B.BMsg × B.BSig =>
     B.bverify (Classical.arbitrary (X → Y)) (B.pk (keys i₀)) p.1 p.2 = true) ⟨(bm, σ), hvf⟩
 
+omit [Fintype TB.BMsg] [Fintype TB.Coins] [Nonempty TB.Coins] in
 /-- **When verification does not read the oracle, the drawing adversaries are not hard below `1`**
 in MU-EUF-CMA^corr, for every view of the oracle: a draw that reads the public keys forges with
 probability `1` (`muEufProb_drawBruteAdv`). The base signers of ML-DSA and Falcon-512 verify
@@ -622,6 +639,7 @@ theorem not_muEufCmaHard_drawAdversaries (hv : ∀ H H' : X → Y, B.bverify H =
   rw [muEufProb_drawBruteAdv hv hs] at h1
   exact absurd hε (not_lt.2 h1)
 
+omit [Fintype TB.BMsg] [Fintype TB.Coins] [Nonempty TB.Coins] in
 /-- **When verification does not read the oracle, no bound below `1` holds for every adversary**
 of MU-EUF-CMA^corr, for every view of the oracle, query access only included. -/
 theorem not_muEufCmaHard_univ_of_bverify_eq (hv : ∀ H H' : X → Y, B.bverify H = B.bverify H')
@@ -631,6 +649,7 @@ theorem not_muEufCmaHard_univ_of_bverify_eq (hv : ∀ H H' : X → Y, B.bverify 
 
 end Brute
 
+omit [Fintype TB.BMsg] [Fintype TB.Coins] [Nonempty TB.Coins] in
 /-- **With the oracle as a table, no bound below `1` holds for every adversary of EUF-CMA**,
 when every key has a verifying signature at every oracle (`not_muEufCmaHard_univ_whole` with one
 user). -/

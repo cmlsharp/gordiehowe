@@ -23,8 +23,6 @@ namespace GordieHowe.RealizedProgram
 inductive GadgetKind where
   /-- `select_row` (`lib/table.h`): a row selected from a public table by a challenge. -/
   | selectRow
-  /-- A spectral product form of a `mod_q` (`mod.h`, `product_sides`). -/
-  | spectralProduct
   /-- The first-`n` cutoff selection (`lib/select.h`, `lib/cutoff_select.h`). -/
   | selectFirst
   /-- One Keccak permutation (`lib/keccak.h`), its rounds in order. -/
@@ -53,14 +51,8 @@ inductive GadgetKind where
 inductive GadgetPart where
   /-- A printed expression. -/
   | expr (e : Expr)
-  /-- A kernel part of a spectral product: the scale's code, the value, its block count, the block,
-  the operator's index and the operand's. -/
-  | kernel (scale value blocks block op operand : Nat)
   /-- A run of a selection's stream: the bit view, and the slot of the zero it is padded with. -/
   | stream (bitView : Nat) (zeroSlot : Option Nat)
-  /-- A selected record's kernel: record slot `record` is read by part `part` of the spectral
-  product of predicate `pred`. -/
-  | kernelOf (record pred part : Nat)
   deriving Repr, Inhabited
 
 /-- **A gadget record.** -/

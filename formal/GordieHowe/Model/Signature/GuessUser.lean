@@ -74,9 +74,13 @@ namespace GordieHowe.Signature
 open GordieHowe.Quantum GordieHowe.RingSignature
 open scoped ENNReal
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB} (O : SignOracle B) {n : ℕ}
+variable {X Y : Type} {TB : SchemeTypes}
+  {B : BaseScheme X Y TB} (O : SignOracle B) {n : ℕ}
 
 /-! ### The requests -/
+
+variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins]
 
 variable {O} in
 /-- **A request about user `i`**: its public key, a signature of user `i`, or its corruption. -/
@@ -99,6 +103,7 @@ noncomputable def coinRelay (Q : ℕ) (ρ : Fin Q → O.Coins) :
   route c r := (if h : c < Q then ρ ⟨c, h⟩ else Classical.arbitrary _, r)
   answer _ _ a := a
 
+omit [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins] in
 /-- The relay of a request number is injective. -/
 theorem coinRelay_route_injective (Q : ℕ) (ρ : Fin Q → O.Coins) (c : ℕ) :
     Function.Injective ((coinRelay O (n := n) Q ρ).route c) :=
@@ -118,6 +123,8 @@ noncomputable def localProg (keys : Fin n → B.KeyCoins) (c : O.Coins) :
   | .sign j sm => (O.sign (B.keyGen (keys j)) sm c).mapOutput fun o => o.map .signature
   | .corrupt j => .pure (some (.keyCoins (keys j)))
 
+omit [Nonempty O.Coins] [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins]
+  [DecidableEq O.Coins] in
 /-- **The program's result is the multi-user challenger's reply.** -/
 theorem run_localProg (keys : Fin n → B.KeyCoins) (c : O.Coins) (H : X → Y) (r : MURequest O n) :
     (localProg O keys c r).run H = muReply O keys H c r := by
@@ -126,6 +133,8 @@ theorem run_localProg (keys : Fin n → B.KeyCoins) (c : O.Coins) (H : X → Y) 
   · simp only [localProg, OracleProg.run_mapOutput, muReply]
   · rfl
 
+omit [Nonempty O.Coins] [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins]
+  [DecidableEq O.Coins] in
 /-- The program makes at most `O.q` queries. -/
 theorem localProg_queries (keys : Fin n → B.KeyCoins) (c : O.Coins) (H : X → Y)
     (r : MURequest O n) : ((localProg O keys c r).trace H).length ≤ O.q := by
@@ -158,6 +167,9 @@ end Relay
 
 
 /-! ### The challenger of requests with their coins -/
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
 
 section Challenger
 
@@ -194,6 +206,8 @@ noncomputable def guessChallenger (i : Fin n) (keys : Fin n → B.KeyCoins) (Q :
     · rw [dif_neg h]
       simp
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Fintype O.SMsg] [DecidableEq O.SMsg] in
 /-- The challenger assigns nothing. -/
 theorem guessChallenger_noAssign (i : Fin n) (keys : Fin n → B.KeyCoins) (Q : ℕ) :
     (guessChallenger O i keys Q).NoAssign := by
@@ -205,6 +219,8 @@ theorem guessChallenger_noAssign (i : Fin n) (keys : Fin n → B.KeyCoins) (Q : 
   · rw [dif_neg h]
     rfl
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Fintype O.SMsg] [DecidableEq O.SMsg] in
 /-- **The challenger's reply** to a request numbered below `Q` is `muReply` with the challenger's
 coins of that request for a request about user `i`, with the request's coins otherwise. -/
 theorem answerAfter_guessChallenger (i : Fin n) (keys : Fin n → B.KeyCoins) (Q : ℕ) (H : X → Y)
@@ -231,6 +247,9 @@ theorem answerAfter_guessChallenger (i : Fin n) (keys : Fin n → B.KeyCoins) (Q
   · rfl
 
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins] [Fintype O.SMsg] [DecidableEq O.SMsg] in
 /-- **A request about user `i` is answered as the same request about user `0` at user `i`'s key
 coins.** -/
 theorem muReply_suReq (keys : Fin n → B.KeyCoins) (H : X → Y) (c : O.Coins) {i : Fin n}
@@ -291,6 +310,8 @@ theorem relaysChallenger_guessRelay (i : Fin n) (keys : Fin n → B.KeyCoins)
         exact (run_localProg O keys _ H _).symm }
 
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Fintype O.SMsg] [DecidableEq O.SMsg] in
 /-- **The multi-user challenger signing user `i`'s requests with its coins and the others with `ρ`
 relays the challenger of requests with their coins** through `coinRelay Q ρ`, at the same coins. -/
 theorem relaysChallenger_coinRelay (i : Fin n) (keys : Fin n → B.KeyCoins) (Q : ℕ)
@@ -328,6 +349,9 @@ def Qual (keys : Fin n → B.KeyCoins) (H : X → Y) (i : Fin n) (f : B.PK × B.
   B.bverify H f.1 f.2.1 f.2.2 = true ∧ B.pk (keys i) = f.1 ∧ MURequest.corrupt i ∉ rs ∧
     ∀ sm, MURequest.sign i sm ∈ rs → O.base sm ≠ f.2.1
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Fintype O.SMsg] [DecidableEq O.SMsg]
+  [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **A forgery of MU-EUF-CMA^corr is one for which some user qualifies** at the history's
 requests. -/
 theorem Forges.exists_qual {keys : Fin n → B.KeyCoins} {H : X → Y} {f : B.PK × B.BMsg × B.BSig}
@@ -340,6 +364,9 @@ theorem Forges.exists_qual {keys : Fin n → B.KeyCoins} {H : X → Y} {f : B.PK
   · obtain ⟨e, he, hr⟩ := List.mem_map.1 hm
     exact ⟨e, he, sm, hr, hb⟩
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Fintype O.SMsg] [DecidableEq O.SMsg]
+  [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **A request with its coins is about user `i` exactly when its request is.** The main request of
 `guessProg i keys` at a request about user `i` is its `suReq`; it asks nothing at another. -/
 theorem asksIn_guessProg [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y]
@@ -354,6 +381,9 @@ theorem asksIn_guessProg [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [D
       ans r' hr⟩
   · exact MultiRelay.AsksIn.liftQ _ _
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Fintype O.SMsg] [DecidableEq O.SMsg]
+  [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **A qualifying user `i` gives a forgery of the single-user game** at user `i`'s key coins for
 every history of main requests that are the idle request or the `suReq` of requests about user `i`
 of a history at which user `i` qualifies. -/
@@ -396,8 +426,10 @@ section Guess
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
   [AddGroup Y] [Nonempty Y]
 
-omit [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
-  [AddGroup Y] [Nonempty Y] in
+omit [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
+  [Nonempty Y] [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Fintype O.SMsg] [DecidableEq O.SMsg]
+  [Fintype O.Coins] [DecidableEq O.Coins] in
 /-- **The requests of the relay attaching coins are the requests.** -/
 theorem map_snd_relayList_coinRelay (Q : ℕ) (ρ : Fin Q → O.Coins) (rs : List (MURequest O n)) :
     ((coinRelay O Q ρ).relayList rs).map Prod.snd = rs := by
@@ -452,6 +484,8 @@ end Guess
 def guessKeys (i : Fin n) (keys : Fin n → B.KeyCoins) (pk : B.PK) : Fin n → B.PK :=
   fun j => if j = i then pk else B.pk (keys j)
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
 /-- **The guessed public keys** at the key coins updated at user `i` are the public keys of the
 updated key coins. -/
 theorem guessKeys_update (i : Fin n) (keys : Fin n → B.KeyCoins) (k : B.KeyCoins) :
@@ -467,6 +501,9 @@ section Update
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
   [Nonempty Y]
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Fintype O.SMsg] [DecidableEq O.SMsg]
+  [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **The relay reads the key coins only off user `i`.** -/
 theorem guessRelay_update (i : Fin n) (keys : Fin n → B.KeyCoins) (k : B.KeyCoins) :
     guessRelay O i (Function.update keys i k) = guessRelay O i keys := by
@@ -490,6 +527,8 @@ variable [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [Dec
 
 variable [NeZero n]
 
+variable [Nonempty TB.KeyCoins]
+
 /-- **The single-user adversary guessing the target user** (module docstring): it draws a user `i`,
 the key coins `keys` of all users and the signing coins `ρ` uniformly, and runs the adversary on the
 public keys `guessKeys i keys pk` (its own key `pk` at user `i`) absorbed through `coinRelay Q ρ`
@@ -505,6 +544,7 @@ noncomputable def suGuess (A : MUAdversary O n V t) (Q : ℕ) : SUAdversary O V 
 
 /-! ### The bound -/
 
+omit [Nonempty TB.KeyCoins] in
 /-- **The relayed adversary at one draw** of the target user `i`, the key coins `keys` and the
 signing coins `ρ`, with the single-user key `pk`, at the oracle `H`. -/
 noncomputable abbrev guessAdv (A : MUAdversary O n V t) (Q : ℕ) (i : Fin n)
@@ -512,12 +552,14 @@ noncomputable abbrev guessAdv (A : MUAdversary O n V t) (Q : ℕ) (i : Fin n)
   ((A (guessKeys i keys pk, V.view H)).absorbQB (coinRelay O Q ρ)
     (coinRelay_route_injective O Q ρ)).relay (guessRelay O i keys) Q
 
+omit [Nonempty TB.KeyCoins] in
 /-- **The single-user forgery probability at one draw**, with the single-user key coins `k`. -/
 noncomputable def guessWin (A : MUAdversary O n V t) (Q : ℕ) (i : Fin n)
     (keys : Fin n → B.KeyCoins) (ρ : Fin Q → O.Coins) (k : B.KeyCoins) (H : X → Y) : ℝ≥0∞ :=
   ((guessAdv O A Q i keys ρ (B.pk k) H).transcriptLaw (muChallenger O 1 (fun _ => k) Q)
     H).toOuterMeasure {x | ∃ p ∈ x, Forges (fun _ => k) H p.1 p.2}
 
+omit [Nonempty TB.KeyCoins] in
 /-- **The draw reads the key coins only off the target user.** -/
 theorem guessWin_update (A : MUAdversary O n V t) (Q : ℕ) (i : Fin n) (keys : Fin n → B.KeyCoins)
     (x : B.KeyCoins) (ρ : Fin Q → O.Coins) (k : B.KeyCoins) (H : X → Y) :
@@ -586,6 +628,11 @@ theorem suEufProb_suGuess (A : MUAdversary O n V t) (Q : ℕ) :
     tsum_fintype (L := .unconditional _), QueryBoundedAdversary.transcriptLaw_mono]
   rfl
 
+variable [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The key coins re-split at the target user**: the average over the key coins of the draw at
 the target user's own key coins is the average over the key coins and independent single-user key
 coins. -/
@@ -597,6 +644,10 @@ theorem sum_guessWin_resplit (A : MUAdversary O n V t) (Q : ℕ) (i : Fin n) (ρ
   rw [Interaction.sum_uniform_update i (fun keys => guessWin O A Q i keys ρ (keys i) H)]
   simp only [Function.update_self, guessWin_update]
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BMsg]
+  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [DecidableEq TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] [Fintype O.SMsg] [DecidableEq O.SMsg] [DecidableEq O.Coins] in
 /-- **The uniform law on the draws** is the product of the uniform laws. -/
 theorem uniform_draw_apply (Q : ℕ) (z : Fin n × (Fin n → B.KeyCoins) × (Fin Q → O.Coins)) :
     PMF.uniformOfFintype (Fin n × (Fin n → B.KeyCoins) × (Fin Q → O.Coins)) z =
@@ -618,6 +669,11 @@ about user `i`, the idle request (the public key of user `0`) otherwise. -/
 def guessMain (i : Fin n) (r : O.Coins × MURequest O n) : MURequest O 1 :=
   if aboutUser i r.2 then suReq r.2 else .publicKey 0
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BMsg]
+  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] [Nonempty O.Coins] [Fintype O.SMsg]
+  [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins] in
 /-- **The relay of one request makes its one main request.** -/
 theorem filterMap_runEntries_guessRelay (i : Fin n) (keys : Fin n → B.KeyCoins)
     (ans : List (MURequest O 1) → MURequest O 1 → Option (MUResponse B)) (H : X → Y)
@@ -639,6 +695,10 @@ theorem filterMap_runEntries_guessRelay (i : Fin n) (keys : Fin n → B.KeyCoins
       (localProg_queries O keys c H r)]
     simp [guessRelay, guessMain, ha]
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BMsg]
+  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] [Nonempty O.Coins] in
 /-- **The main requests of the guess relay**, position by position: the first `Q` requests' main
 requests `guessMain`, the idle request for each later one. -/
 theorem mainReqs_guessRelay (i : Fin n) (keys : Fin n → B.KeyCoins) (Q : ℕ)
@@ -676,7 +736,11 @@ def QualW (keys : Fin n → B.KeyCoins) (H : X → Y) (i : Fin n) (Qs : ℕ)
     (f : B.PK × B.BMsg × B.BSig) (rs : List (MURequest O n)) : Prop :=
   Qual keys H i f rs ∧ rs.countP MURequest.isSignOrCorrupt ≤ Qs
 
-omit [NeZero n] in
+omit [NeZero n] [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BMsg]
+  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] [Fintype O.SMsg]
+  [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **The main request of a request is a signing or corruption request only if the request is.** -/
 theorem countP_map_guessMain_le (i : Fin n) (rs : List (O.Coins × MURequest O n)) :
     (rs.map (guessMain O i)).countP MURequest.isSignOrCorrupt ≤
@@ -691,6 +755,9 @@ theorem countP_map_guessMain_le (i : Fin n) (rs : List (O.Coins × MURequest O n
 
 variable (O)
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 /-- **The guess at a fixed user, keys and oracle, with few signing and corruption requests**: as
 `qual_le_guess`, the single-user history with at most as many signing and corruption requests as
 the multi-user one (`mainReqs_guessRelay`). -/
@@ -761,6 +828,9 @@ theorem qualW_le_guess (i : Fin n)
         _ ≤ (rs.map Prod.snd).countP MURequest.isSignOrCorrupt :=
             ((List.take_sublist Q rs).map Prod.snd).countP_le
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 /-- **The single-user forgery probability at one draw, with at most `Qs` signing and corruption
 requests**, with the single-user key coins `k`. -/
 noncomputable def guessWinW (A : MUAdversary O n V t) (Q Qs : ℕ) (i : Fin n)
@@ -768,6 +838,9 @@ noncomputable def guessWinW (A : MUAdversary O n V t) (Q Qs : ℕ) (i : Fin n)
   ((guessAdv O A Q i keys ρ (B.pk k) H).transcriptLaw (muChallenger O 1 (fun _ => k) Q)
     H).toOuterMeasure {x | ∃ p ∈ x, Forges (fun _ => k) H p.1 p.2 ∧ signCorruptCount p.2 ≤ Qs}
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 /-- **The draw reads the key coins only off the target user.** -/
 theorem guessWinW_update (A : MUAdversary O n V t) (Q Qs : ℕ) (i : Fin n)
     (keys : Fin n → B.KeyCoins)
@@ -781,6 +854,8 @@ theorem guessWinW_update (A : MUAdversary O n V t) (Q Qs : ℕ) (i : Fin n)
   simp only [guessWinW, guessAdv, hk]
   rw [guessRelay_update]
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The multi-user forgery probability with at most `Qs` signing and corruption requests is at
 most the sum over the users of their guessed ones**: `qualW_le_guess` at every key coins
 and oracle, after the union over the qualifying user. -/
@@ -810,6 +885,8 @@ theorem muEufProbWithin_le_sum_guessWinW (A : MUAdversary O n V t) (Q Qs : ℕ) 
   refine (qualW_le_guess O i keys Q Qs _ H).trans_eq ?_
   simp only [guessWinW, guessAdv, hA]
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The single-user adversary's success with at most `Qs` signing and corruption requests**: the
 average over its key coins, the oracle and the draw of the guessed forgery probabilities. -/
 theorem muEufProbWithin_suGuess (A : MUAdversary O n V t) (Q Qs : ℕ) :
@@ -837,6 +914,8 @@ theorem muEufProbWithin_suGuess (A : MUAdversary O n V t) (Q Qs : ℕ) :
     tsum_fintype (L := .unconditional _), QueryBoundedAdversary.transcriptLaw_mono]
   rfl
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The key coins re-split at the target user**: the average over the key coins of the draw at
 the target user's own key coins is the average over the key coins and independent single-user key
 coins. -/
@@ -866,7 +945,11 @@ def QualS (keys : Fin n → B.KeyCoins) (H : X → Y) (i : Fin n) (f : B.PK × B
   B.bverify H f.1 f.2.1 f.2.2 = true ∧ B.pk (keys i) = f.1 ∧ ¬ Corrupted hist i ∧
     ¬ Returned hist i f.2.1 f.2.2
 
-omit [NeZero n] in
+omit [NeZero n] [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BMsg]
+  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] [Fintype O.SMsg]
+  [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **A strong forgery is one for which some user qualifies.** -/
 theorem StrongForges.exists_qualS {keys : Fin n → B.KeyCoins} {H : X → Y}
     {f : B.PK × B.BMsg × B.BSig} {hist : MUHist O n} (h : StrongForges keys H f hist) :
@@ -880,7 +963,11 @@ def dropCoins (hist : List (HistoryEntry (O.Coins × MURequest O n) (MUResponse 
 
 variable (O)
 
-omit [NeZero n] in
+omit [NeZero n] [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BMsg]
+  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] [Fintype O.SMsg]
+  [DecidableEq O.SMsg] in
 /-- **The reply of the multi-user challenger signing user `i`'s requests with its coins and the
 others with `ρ`**, to a request numbered below `Q`. -/
 theorem answerAfter_muChallengerAt (keys : Fin n → B.KeyCoins) (Q : ℕ)
@@ -906,7 +993,10 @@ theorem answerAfter_muChallengerAt (keys : Fin n → B.KeyCoins) (Q : ℕ)
     rfl
   · rfl
 
-omit [NeZero n] in
+omit [NeZero n] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
 /-- **The coin relay keeps the history**: the history of the requests with their coins against the
 challenger of requests with their coins, read without the coins, is the multi-user history against
 the challenger signing user `i`'s requests with its coins and the others with `ρ`, at the same
@@ -934,9 +1024,14 @@ theorem dropCoins_histAlong_coinRelay (i : Fin n) (keys : Fin n → B.KeyCoins) 
   · exact congrArg ρ (Fin.ext htake'.symm)
 
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BMsg]
+  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
   [AddGroup Y] [Nonempty Y] in
-omit [NeZero n] in
+omit [NeZero n] [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins] in
 /-- **A main request of the guess relay other than the idle request** is the `suReq` of a request
 about user `i` at the same position. -/
 theorem guessList_getElem (i : Fin n) (Q k : ℕ) (rs : List (O.Coins × MURequest O n))
@@ -966,8 +1061,11 @@ theorem guessList_getElem (i : Fin n) (Q k : ℕ) (rs : List (O.Coins × MUReque
   · rw [List.getElem_append_right (by simp; omega), List.getElem_replicate] at hne
     exact absurd rfl hne
 
-variable [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
-  [AddGroup Y] [Nonempty Y] in
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in variable [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y]
+  [DecidableEq Y] [AddGroup Y] [Nonempty Y] [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
 /-- **A user qualifying for a strong forgery gives a strong forgery of the single-user game** at its
 key coins, at the history of the guess relay's main requests (`mainReqs_guessRelay`, with an idle
 tail) against the single-user challenger, at the coins `c'` of both challengers. -/
@@ -1044,7 +1142,11 @@ theorem QualS.strongForges_su {keys : Fin n → B.KeyCoins} {H : X → Y} {i : F
       rw [← hresp, muReply_suReq O keys H _ ha, hsu]
 
 
-omit [NeZero n] in
+omit [NeZero n] [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BMsg]
+  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] [Fintype O.SMsg]
+  [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins] in
 /-- The relay of a prefix is the prefix of the relay. -/
 theorem relayList_take_coinRelay (Q : ℕ) (ρ : Fin Q → O.Coins) (rs : List (MURequest O n))
     (m : ℕ) :
@@ -1052,6 +1154,9 @@ theorem relayList_take_coinRelay (Q : ℕ) (ρ : Fin Q → O.Coins) (rs : List (
   refine List.ext_getElem (by simp) fun j h1 h2 => ?_
   simp [SideRelay.relayList]
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
   [AddGroup Y] [Nonempty Y] in
 /-- **The guess at a fixed user, keys and oracle, for strong forgeries**: as `qual_le_guess`, the
@@ -1088,6 +1193,9 @@ theorem qualS_le_guess (i : Fin n) (keys : Fin n → B.KeyCoins) (Q : ℕ) {t : 
       (fun p => StrongForges (fun _ => keys i) H p.1 p.2)
       fun c' o rs k hlen hq => QualS.strongForges_su O hlen c' hq
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 /-- **The single-user strong forgery probability at one draw**, with the single-user key coins `k`.
 -/
 noncomputable def guessWinS (A : MUAdversary O n V t) (Q : ℕ) (i : Fin n)
@@ -1095,6 +1203,9 @@ noncomputable def guessWinS (A : MUAdversary O n V t) (Q : ℕ) (i : Fin n)
   ((guessAdv O A Q i keys ρ (B.pk k) H).transcriptLaw (muChallenger O 1 (fun _ => k) Q)
     H).toOuterMeasure {x | ∃ p ∈ x, StrongForges (fun _ => k) H p.1 p.2}
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 /-- **The draw reads the key coins only off the target user.** -/
 theorem guessWinS_update (A : MUAdversary O n V t) (Q : ℕ) (i : Fin n) (keys : Fin n → B.KeyCoins)
     (x : B.KeyCoins) (ρ : Fin Q → O.Coins) (k : B.KeyCoins) (H : X → Y) :
@@ -1107,6 +1218,8 @@ theorem guessWinS_update (A : MUAdversary O n V t) (Q : ℕ) (i : Fin n) (keys :
   simp only [guessWinS, guessAdv, hk]
   rw [guessRelay_update]
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The multi-user strong forgery probability is at most the sum over the users of their guessed
 strong forgery probabilities**: `qualS_le_guess` at every key coins
 and oracle, after the union over the qualifying user. -/
@@ -1136,6 +1249,8 @@ theorem muSufProb_le_sum_guessWinS (A : MUAdversary O n V t) (Q : ℕ) :
   refine (qualS_le_guess O i keys Q _ H).trans_eq ?_
   simp only [guessWinS, guessAdv, hA]
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The single-user adversary's success in SUF-CMA**: the average over its key coins, the oracle
 and the draw of the guessed forgery probabilities. -/
 theorem suSufProb_suGuess (A : MUAdversary O n V t) (Q : ℕ) :
@@ -1163,6 +1278,8 @@ theorem suSufProb_suGuess (A : MUAdversary O n V t) (Q : ℕ) :
     tsum_fintype (L := .unconditional _), QueryBoundedAdversary.transcriptLaw_mono]
   rfl
 
+omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The key coins re-split at the target user**: the average over the key coins of the draw at
 the target user's own key coins is the average over the key coins and independent single-user key
 coins. -/

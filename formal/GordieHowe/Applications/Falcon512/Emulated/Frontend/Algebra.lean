@@ -552,7 +552,7 @@ theorem congruent {e : program.Env interp} (hs : program.SourceSatAt e) {pk : Pu
   obtain ⟨real, hb⟩ := FalconEAlg.sig (program := program)
   have h := holdsAt hs (p := 297) (by simp)
   rw [hb] at h
-  have hd := h.1 i (by
+  have hd := h i (by
     rw [sigLhs, RealizedProgram.exprLen_add, RealizedProgram.exprLen_leaf, hz597]
     exact i.isLt)
   rw [evalIntWith_sigRhs hs i, sigLhs, RealizedProgram.evalIntWith_add,
@@ -591,7 +591,7 @@ theorem low2_eq {e : program.Env interp} (hs : program.SourceSatAt e) {mag2N low
   obtain ⟨r, hbd⟩ := FalconEAlg.high2 (program := program)
   have h := holdsAt hs (p := 298) (by simp)
   rw [hbd] at h
-  have hd := h.1 i (by rw [RealizedProgram.exprLen_leaf, hz599]; exact i.isLt)
+  have hd := h i (by rw [RealizedProgram.exprLen_leaf, hz599]; exact i.isLt)
   rw [RealizedProgram.evalIntWith_leaf, RealizedProgram.evalIntWith_leaf,
     intOf_priv hk599 (FalconEAlg.fields 599 (by simp)) (hmag2C i)
       (by have := hmag2N i; norm_num [pGold]; omega),

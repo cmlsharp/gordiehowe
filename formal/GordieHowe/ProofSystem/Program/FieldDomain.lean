@@ -22,9 +22,10 @@ packing tree and Ligero numbers and the field's packing facts (`FieldInterp.Pack
   edge's stage combining the claims that read its child, `claimReads`, with no combination when at
   most one does) on the tree layout with Ligero at the certified numbers (`TreeSpec.layoutDomain`),
   the masked reduction of the domain's batches, circuits and rows (`fieldMaskedReduction`);
-* **the circuit proof** (`GordieHowe.RealizedProgram.fieldProof`): of the domain's predicate under the compiler trust
-  (`Domain.guard`), the witness the committed cells, the domain's cells decoded from them
-  (`treeDecode`); its soundness (`GordieHowe.RealizedProgram.fieldSound`);
+* **the circuit proof** (`GordieHowe.RealizedProgram.fieldProof`): of the domain's predicate under
+  the circuits' correspondence (`CircuitsEnforce`, a field of the proof system proved from the GKR
+  certificates; `Domain.guard`), the witness the committed cells, the domain's cells decoded from
+  them (`treeDecode`); its soundness (`GordieHowe.RealizedProgram.fieldSound`);
 * **the errors** (`GordieHowe.RingSwitching.TreeFieldProof.knowledgeError`, `GordieHowe.RingSwitching.TreeFieldProof.sum_commitError`): each covered batch's
   phase errors, each circuit's GKR error `numerator/|K|`, `1/|K|` per combination of the tree (at
   most one per edge, `combinations_fieldTreeOf_le`), and the tree layout's proof-phase error; the
@@ -116,8 +117,8 @@ def fieldDomain :
     (routes_path _ 0 _ _ _ _ (readsOnly_fieldMaskedReduction src R.rs))
 
 variable (ir I) in
-/-- **What domain `d`'s proof proves** on the committed cells `x`: given the compiler trust, the
-domain's predicate on the decoded cells. -/
+/-- **What domain `d`'s proof proves** on the committed cells `x`: given the circuits'
+correspondence (`CircuitsEnforce`), the domain's predicate on the decoded cells. -/
 abbrev FieldHolds (src : ∀ c : Fin ir.circuits.length, ir.CircuitSource I c) {d : ℕ}
     {Pk : (I (ir.domainField d)).Packing} (rs : List (REdge (I (ir.domainField d)) Pk))
     (p : ir.DomainPub I) (x : ir.FCell src Pk rs → (I (ir.domainField d)).K) : Prop :=
@@ -126,7 +127,7 @@ abbrev FieldHolds (src : ∀ c : Fin ir.circuits.length, ir.CircuitSource I c) {
 
 /-- **The relation of domain `d`'s tree domain**: the masked reduction's relation (`FieldSat`) on the
 committed cells, which are the witness; it gives the domain's predicate on the decoded cells under
-the compiler trust (`holds_of_fieldSat`).
+the circuits' correspondence (`CircuitsEnforce`; `holds_of_fieldSat`).
 
 Running time of the readout: it returns the committed cells unchanged.
 This running time is argued here, not proved in Lean. -/
@@ -135,7 +136,8 @@ def fieldRelation : (ir.fieldDomain src R).Relation (ir.FieldHolds I src R.rs) w
   readout x := x
   readout_sound p x _ h T := ir.holds_of_fieldSat src R.rs R.claimOk T p x h
 
-/-- **The circuit proof of domain `d` under the compiler trust** (see the module docstring). -/
+/-- **The circuit proof of domain `d` under the circuits' correspondence** (`CircuitsEnforce`; see
+the module docstring). -/
 def fieldProof :
     DomainProof (ir.layout I) (ir.Valuation I) ((ir.domainOf I d).guard (ir.CircuitsEnforce I src)) where
   Pub := ir.DomainPub I

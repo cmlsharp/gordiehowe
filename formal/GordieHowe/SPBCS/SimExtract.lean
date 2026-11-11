@@ -181,7 +181,7 @@ variable {C : Type} [Fintype C] [DecidableEq (SaltedCoins (FiatShamirSalt kS) C)
 /-- Expanding a fresh accepting run that passes the test gives a winning tuple of `simExtGame`
 that passes the test. -/
 theorem winTestProb_le_winO
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq)
+    (hkq : M.QueriesAtMost Qs kq)
     {Psim' : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
       (SaltedCoins (FiatShamirSalt kS) C)}
     (hA : M.SimAssignsAtKeys B Psim' fx)
@@ -220,10 +220,10 @@ theorem winTestProb_le_winO
 
 /-- **Simulation-sound extractability of the spBCS argument at one adversary and a query-free
 test**, with freshness in the extraction experiment: `winTestProb ok ≤ extractFreshTestProb ok +
-knowledgeError k e (kq + Q q) (b + kq + Q q) c_in nJ (max_c ε c)`, with `b` the per-branch query
+knowledgeError k e (kq + Q q) (b + kq + Q q) c nJ (maxError ε)`, with `b` the per-branch query
 count of the composed algorithm. -/
 theorem winTestProb_le_fresh [DecidableEq X]
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) {Wit : Type}
+    (hkq : M.QueriesAtMost Qs kq) {Wit : Type}
     {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
     {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     (Psim' : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
@@ -337,7 +337,7 @@ theorem SimulationSoundExtractableFreshGame.queryBounded [DecidableEq X] {Wit : 
 (proof-internal): the bound of `simulation_sound_extractability` for every adversary of the
 simulation-extraction game, whose steps need not be channels. -/
 theorem simulation_sound_extractability_game [DecidableEq X] {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) {Wit : Type}
+    (hkq : M.QueriesAtMost Qs kq) {Wit : Type}
     {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
     {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     (Sim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X (M.Response B)
@@ -367,10 +367,10 @@ in both events): for a composite causally round-by-round knowledge sound at the 
 `E` with errors `ε` (`hrbr`), query phases whose accepting runs make at most `kq` verifier queries
 (`hkq`), and a counted simulator program `Sim` that assigns only at the keys of its chain inputs
 (`hA`), with the simulation oracle running `Sim` on any statement: against every query-bounded
-adversary, the bound `simExtractionError kq (max_c ε c) q tq Q` with `q` the queries of one run
+adversary, the bound `simExtractionError kq (maxError ε) q tq Q` with `q` the queries of one run
 of `Sim`, the extractor `dbExtract`. -/
 theorem simulation_sound_extractability [DecidableEq X] {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq) {Wit : Type}
+    (hkq : M.QueriesAtMost Qs kq) {Wit : Type}
     {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
     {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     (Sim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X (M.Response B)

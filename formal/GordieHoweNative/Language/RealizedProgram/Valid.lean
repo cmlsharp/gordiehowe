@@ -50,8 +50,8 @@ def NamedOp.operands : NamedOp → List ℕ
 
 /-- **The operands a named operator requires public** (`Expr.pubNodes`): its operands
 (`NamedOp.operands`), but none for a negacyclic convolution or a polynomial broadcast in transform
-form, whose spectra a committed value may hold (the product form's kernels, which the circuit
-multiplies by the operand's transform). -/
+form, whose spectra a committed value may hold (the circuit multiplies them by the operand's
+transform). -/
 def NamedOp.pubOperands : NamedOp → List ℕ
   | .negacyclicConv _ (.ntt _) => []
   | .negacyclicConv _ (.nttNatural _) => []
@@ -233,12 +233,11 @@ def InSet.exprs : InSet → List Expr
   | _ => []
 
 /-- **The expressions of a predicate body**, each with its domain: an `in` reads its records and
-the expression of its set, a product-form `mod_q` its sides and its quotient. -/
+the expression of its set, a `mod_q` its sides. -/
 def PredBody.exprs : PredBody → List (ℕ × Expr)
   | .equal d e e' _ => [(d, e), (d, e')]
   | .mem d records set _ => (records ++ set.exprs).map ((d, ·))
-  | .mod d _ e e' real =>
-    [(d, e), (d, e')] ++ if real.form.isProduct then real.quotient.toList.map ((d, ·)) else []
+  | .mod d _ e e' _ => [(d, e), (d, e')]
   | .cross dx x dy y _ _ => [(dx, x), (dy, y)]
 
 section
@@ -774,18 +773,65 @@ theorem convProductsOkB_iff (c : SpectralConv) (s : ConvSource) (r : ConvRead) (
   unfold convProductsOkB ConvProductsOk
   cases lhs.convProducts? <;> simp
 
+/-- **The committed reading of `c`, if any, is linked to its reading in domain `d`**: with
+`c.committed = some (kc, r)`, the shared expression `kc` has the reading's length and the predicate
+`r` is the field `equal` `.ref kc = .ref c.read` of `d` whose target is no realization's (the
+affine row `C = INTT_M(z)[0, lo)` of a convolution read in a predicate not affine in its
+convolutions). Then, wherever `r` holds, `kc` reads as the reading. -/
+def CommittedOk (d : ℕ) (c : SpectralConv) : Prop :=
+  match c.committed with
+  | none => True
+  | some (kc, r) =>
+    r < ir.predicates.length ∧ ir.exprLen (.ref kc) = ir.exprLen (.ref c.read) ∧
+      ∃ t, (ir.predicate r).body = .equal d (.ref kc) (.ref c.read) t ∧ t.isRealized = false
+
+/-- **`CommittedOk`, decided.** -/
+def committedOkB (d : ℕ) (c : SpectralConv) : Bool :=
+  match c.committed with
+  | none => true
+  | some (kc, r) =>
+    decide (r < ir.predicates.length) && decide (ir.exprLen (.ref kc) = ir.exprLen (.ref c.read)) &&
+      match (ir.predicate r).body with
+      | .equal d' (.ref k) (.ref k') t =>
+        decide (d' = d) && k == kc && k' == c.read && !t.isRealized
+      | _ => false
+
+theorem committedOkB_iff (d : ℕ) (c : SpectralConv) :
+    ir.committedOkB d c = true ↔ ir.CommittedOk d c := by
+  unfold committedOkB CommittedOk
+  rcases c.committed with _ | ⟨kc, r⟩
+  · simp
+  · simp only [Bool.and_eq_true, decide_eq_true_eq]
+    constructor
+    · rintro ⟨⟨hr, hl⟩, hb⟩
+      refine ⟨hr, hl, ?_⟩
+      split at hb
+      · rename_i d' k k' t hbody
+        simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq, Bool.not_eq_true'] at hb
+        obtain ⟨⟨⟨rfl, rfl⟩, rfl⟩, ht⟩ := hb
+        exact ⟨t, hbody, ht⟩
+      · cases hb
+    · rintro ⟨hr, hl, t, hbody, ht⟩
+      refine ⟨⟨hr, hl⟩, ?_⟩
+      rw [hbody]
+      simp [ht]
+
+instance (d : ℕ) (c : SpectralConv) : Decidable (ir.CommittedOk d c) :=
+  decidable_of_iff _ (ir.committedOkB_iff d c)
+
 /-- **The convolution `c` is spectrally realized in domain `d`** (compiler/conv.h, the batch
 form): its source and its reading have the forms of `Expr.convSource?` and `Expr.convRead?`, its
 products predicate is a field `equal` of `d` between a spectral product (`Expr.convProducts?`) and
-the transformed value `z` whose target is no realization's, and the facts `ConvFacts` hold
-(`ConvProductsOk`). Then, wherever the
-products predicate holds, the reading equals the source below their common length
-(`RealizedProgram.convRead_eq_source`). -/
+the transformed value `z` whose target is no realization's, the facts `ConvFacts` hold
+(`ConvProductsOk`), and its committed reading, if any, is linked to its reading (`CommittedOk`).
+Then, wherever the products predicate holds, the reading equals the source below their common
+length (`RealizedProgram.convRead_eq_source`), and so does the committed reading where its row
+holds. -/
 def ConvOkAt (d : ℕ) (c : SpectralConv) : Prop :=
   match (ir.expr c.source).convSource?, (ir.expr c.read).convRead?,
       (ir.predicate c.products).body with
   | some s, some r, .equal d' lhs (.leaf z) t =>
-    d' = d ∧ t.isRealized = false ∧ ir.ConvProductsOk c s r d z lhs
+    d' = d ∧ t.isRealized = false ∧ ir.ConvProductsOk c s r d z lhs ∧ ir.CommittedOk d c
   | _, _, _ => False
 
 /-- **`ConvOkAt`, decided.** -/
@@ -793,7 +839,7 @@ def convOkAtB (d : ℕ) (c : SpectralConv) : Bool :=
   match (ir.expr c.source).convSource?, (ir.expr c.read).convRead?,
       (ir.predicate c.products).body with
   | some s, some r, .equal d' lhs (.leaf z) t =>
-    decide (d' = d) && !t.isRealized && ir.convProductsOkB c s r d z lhs
+    decide (d' = d) && !t.isRealized && ir.convProductsOkB c s r d z lhs && ir.committedOkB d c
   | _, _, _ => false
 
 theorem convOkAtB_iff (d : ℕ) (c : SpectralConv) : ir.convOkAtB d c = true ↔ ir.ConvOkAt d c := by
@@ -802,10 +848,222 @@ theorem convOkAtB_iff (d : ℕ) (c : SpectralConv) : ir.convOkAtB d c = true ↔
     cases (ir.predicate c.products).body <;> try simp
   all_goals
     rename_i d' lhs rhs t
-    cases rhs <;> simp [convProductsOkB_iff, and_assoc]
+    cases rhs <;> simp [convProductsOkB_iff, committedOkB_iff, and_assoc]
 
 instance (d : ℕ) (c : SpectralConv) : Decidable (ir.ConvOkAt d c) :=
   decidable_of_iff _ (ir.convOkAtB_iff d c)
+
+/-- **The parts of a direct convolution's products** (the left side of `SpectralConv.products`
+of a `direct` convolution): `C`'s side `cv`, the constant `s` (`p − 1`) and the linear map's rows
+over the products of the operands' views `ia`, `ib` of `a` and `b`. -/
+structure DirectProducts where
+  /-- The committed `C`'s side. -/
+  cv : Expr
+  /-- The constant multiplying the sums. -/
+  s : ℕ
+  /-- The sums' rows. -/
+  rows : List (List (ℕ × Coef))
+  /-- The left operand's view. -/
+  ia : IndexMap
+  /-- The left operand. -/
+  a : Expr
+  /-- The right operand's view. -/
+  ib : IndexMap
+  /-- The right operand. -/
+  b : Expr
+
+/-- **The parts of an expression of the form** `C − Σ_rows (ia a) · (ib b)`,
+`.add cv (.scale (.const s) (.linear rows (.mul (.reindex ia a) (.reindex ib b))))`, none for any
+other. -/
+def _root_.GordieHowe.RealizedProgram.Expr.directProducts? : Expr → Option DirectProducts
+  | .add cv (.scale (.const s) (.linear rows (.mul (.reindex ia a) (.reindex ib b)))) =>
+    some ⟨cv, s, rows, ia, a, ib, b⟩
+  | _ => none
+
+/-- **The value an expression reads at a coordinate through its views**: `.reindex m e` at `i`
+is `e` at entry `i` of `m`, any other expression at `i` itself. -/
+def _root_.GordieHowe.RealizedProgram.Expr.site : Expr → ℕ → Expr × ℕ
+  | .reindex m e, i => Expr.site e (m.entry i)
+  | e, i => (e, i)
+
+/-- **`e` reads `x` at its first `n` coordinates**: `e` is `x`, or a view of `x` whose first `n`
+entries are `0, …, n − 1`. -/
+def _root_.GordieHowe.RealizedProgram.Expr.IdView (e x : Expr) (n : ℕ) : Prop :=
+  e = x ∨ ∃ m, e = .reindex m x ∧ ∀ j < n, m.entry j = j
+
+/-- **`Expr.IdView`, decided** (expressions compared by `Expr.beqK`). -/
+def _root_.GordieHowe.RealizedProgram.Expr.idViewB (e x : Expr) (n : ℕ) : Bool :=
+  e.beqK x ||
+    match e with
+    | .reindex m x' => x'.beqK x && (List.range n).all fun j => m.entry j == j
+    | _ => false
+
+theorem _root_.GordieHowe.RealizedProgram.Expr.idViewB_iff (e x : Expr) (n : ℕ) :
+    e.idViewB x n = true ↔ e.IdView x n := by
+  unfold Expr.idViewB Expr.IdView
+  rw [Bool.or_eq_true, Expr.beqK_iff]
+  apply or_congr Iff.rfl
+  constructor
+  · intro h
+    split at h
+    · rename_i m x'
+      simp only [Bool.and_eq_true, Expr.beqK_iff, List.all_eq_true, List.mem_range,
+        beq_iff_eq] at h
+      exact ⟨m, by rw [h.1], h.2⟩
+    · cases h
+  · rintro ⟨m, rfl, hm⟩
+    simp only [Bool.and_eq_true, Expr.beqK_iff, List.all_eq_true, List.mem_range, beq_iff_eq]
+    exact ⟨trivial, hm⟩
+
+/-- **The terms of coordinate `k` of block `blk` of a direct convolution** of operand rows of
+lengths `la` and `lb` (compiler/conv.h, `direct`): for each `u < la` with `k − u` below `lb`, the
+operands' coordinates `blk la + u` and `blk lb + (k − u)` with the coefficient `1`; in a square
+block (`sq`: the operands' rows are one row of one value) only those with `u ≤ k − u`, the
+coefficient `2` for `u < k − u`. -/
+def directTerms (la lb blk k : ℕ) (sq : Bool) : List (ℕ × ℕ × Coef) :=
+  (List.range la).filterMap fun u =>
+    if u ≤ k ∧ k - u < lb ∧ (sq = false ∨ u ≤ k - u) then
+      some (blk * la + u, blk * lb + (k - u), .const (if sq = true ∧ u ≠ k - u then 2 else 1))
+    else none
+
+/-- **The facts of a directly realized convolution** `c` in domain `d` (field `F` of
+characteristic `p`), its source's parts `s`, its products' `q`, `C` the committed value it reads as
+and `z` the products' right side: the identifiers exist; the source sums width `la` over the
+operands' views `IndexMap.convLeft B la lb` and `IndexMap.convRight B la lb`; the zero constants lie
+in `F` and hold `0`; the operands have `B la` and `B lb` coordinates; `C` and the products' `C` side
+have `B (la + lb − 1)`, the side reading `C` unchanged; the products' operands read the source's unchanged;
+the constant is `p − 1` (`−1`) with `2 < p`; row `blk (la + lb − 1) + k` of the sums has the terms
+`directTerms` (their operand coordinates through `ia` and `ib`), and a square block's operands read
+one value's coordinates. Where the products predicate holds, `C` is then the convolution
+(`RealizedProgram.directRead_eq_source`). -/
+def DirectFacts (c : SpectralConv) (s : ConvSource) (q : DirectProducts) (d C z : ℕ) : Prop :=
+  c.source < ir.exprs.length ∧ c.read < ir.exprs.length ∧ c.products < ir.predicates.length ∧
+    s.la = c.left ∧ s.mA = IndexMap.convLeft c.blocks c.left c.right ∧
+    s.mB = IndexMap.convRight c.blocks c.left c.right ∧
+    (∀ v ∈ [s.zA, s.zB, z], ir.zeroConst v = true) ∧
+    (∀ v ∈ [s.zA, s.zB, z], ir.valueField v = ir.domainField d) ∧
+    ir.exprLen s.a = c.blocks * c.left ∧ ir.exprLen s.b = c.blocks * c.right ∧
+    0 < c.left ∧ 0 < c.right ∧
+    (ir.value C).size = c.blocks * (c.left + c.right - 1) ∧
+    q.cv.IdView (.leaf C) (c.blocks * (c.left + c.right - 1)) ∧
+    ir.exprLen q.cv = c.blocks * (c.left + c.right - 1) ∧
+    q.a.IdView s.a (c.blocks * c.left) ∧ q.b.IdView s.b (c.blocks * c.right) ∧
+    q.s + 1 = (ir.field (ir.domainField d)).characteristic ∧
+    2 < (ir.field (ir.domainField d)).characteristic ∧
+    (∀ i < c.blocks * (c.left + c.right - 1),
+      (q.rows.getD i []).map (fun t => (q.ia.entry t.1, q.ib.entry t.1, t.2)) =
+        directTerms c.left c.right (i / (c.left + c.right - 1)) (i % (c.left + c.right - 1))
+          (c.squares.getD (i / (c.left + c.right - 1)) false)) ∧
+    ∀ blk < c.blocks, c.squares.getD blk false = true →
+      c.left = c.right ∧ ∀ u < c.left, s.a.site (blk * c.left + u) = s.b.site (blk * c.right + u)
+
+/-- **`DirectFacts`, decided** (expressions compared by `Expr.beqK`, index maps by `List.beq`). -/
+def directFactsB (c : SpectralConv) (s : ConvSource) (q : DirectProducts) (d C z : ℕ) : Bool :=
+  decide (c.source < ir.exprs.length) && decide (c.read < ir.exprs.length) &&
+    decide (c.products < ir.predicates.length) && s.la == c.left &&
+    s.mA == IndexMap.convLeft c.blocks c.left c.right &&
+    s.mB == IndexMap.convRight c.blocks c.left c.right &&
+    [s.zA, s.zB, z].all (ir.zeroConst ·) &&
+    [s.zA, s.zB, z].all (fun v => ir.valueField v == ir.domainField d) &&
+    ir.exprLen s.a == c.blocks * c.left && ir.exprLen s.b == c.blocks * c.right &&
+    decide (0 < c.left) && decide (0 < c.right) &&
+    (ir.value C).size == c.blocks * (c.left + c.right - 1) &&
+    q.cv.idViewB (.leaf C) (c.blocks * (c.left + c.right - 1)) &&
+    ir.exprLen q.cv == c.blocks * (c.left + c.right - 1) &&
+    q.a.idViewB s.a (c.blocks * c.left) && q.b.idViewB s.b (c.blocks * c.right) &&
+    q.s + 1 == (ir.field (ir.domainField d)).characteristic &&
+    decide (2 < (ir.field (ir.domainField d)).characteristic) &&
+    (List.range (c.blocks * (c.left + c.right - 1))).all (fun i =>
+      (q.rows.getD i []).map (fun t => (q.ia.entry t.1, q.ib.entry t.1, t.2)) ==
+        directTerms c.left c.right (i / (c.left + c.right - 1)) (i % (c.left + c.right - 1))
+          (c.squares.getD (i / (c.left + c.right - 1)) false)) &&
+    (List.range c.blocks).all fun blk =>
+      !c.squares.getD blk false ||
+        (c.left == c.right && (List.range c.left).all fun u =>
+          (s.a.site (blk * c.left + u)).1.beqK (s.b.site (blk * c.right + u)).1 &&
+            (s.a.site (blk * c.left + u)).2 == (s.b.site (blk * c.right + u)).2)
+
+theorem directFactsB_iff (c : SpectralConv) (s : ConvSource) (q : DirectProducts) (d C z : ℕ) :
+    ir.directFactsB c s q d C z = true ↔ ir.DirectFacts c s q d C z := by
+  unfold directFactsB DirectFacts
+  simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq, List.all_eq_true, List.mem_range,
+    Expr.idViewB_iff, Bool.or_eq_true, Bool.not_eq_true', Expr.beqK_iff, Prod.ext_iff,
+    and_assoc]
+  constructor
+  · rintro ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19,
+      h20, h21⟩
+    refine ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19,
+      h20, fun blk hb hsq => ?_⟩
+    rcases h21 blk hb with h | h
+    · rw [h] at hsq
+      cases hsq
+    · exact ⟨h.1, fun u hu => (h.2 u hu)⟩
+  · rintro ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19,
+      h20, h21⟩
+    refine ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19,
+      h20, fun blk hb => ?_⟩
+    cases hsq : c.squares.getD blk false
+    · exact .inl rfl
+    · exact .inr ⟨(h21 blk hb hsq).1, fun u hu => (h21 blk hb hsq).2 u hu⟩
+
+instance (c : SpectralConv) (s : ConvSource) (q : DirectProducts) (d C z : ℕ) :
+    Decidable (ir.DirectFacts c s q d C z) :=
+  decidable_of_iff _ (ir.directFactsB_iff c s q d C z)
+
+/-- **The convolution `c` is directly realized in domain `d`** (compiler/conv.h, the direct
+form): its source has the form of `Expr.convSource?`, its reading is the committed `C`'s leaf, it
+has no committed reading besides, and its products predicate is a field `equal` of `d` whose
+target is no realization's, between `C − Σ_rows (ia a) · (ib b)` (`Expr.directProducts?`) and a
+zero constant `z`, with the facts `DirectFacts`. Then, wherever the products predicate holds, the
+reading equals the source below their common length (`RealizedProgram.directRead_eq_source`). -/
+def DirectOkAt (d : ℕ) (c : SpectralConv) : Prop :=
+  match (ir.expr c.source).convSource?, ir.expr c.read, (ir.predicate c.products).body with
+  | some s, .leaf C, .equal d' lhs (.leaf z) t =>
+    match lhs.directProducts? with
+    | some q => d' = d ∧ t.isRealized = false ∧ c.committed = none ∧ ir.DirectFacts c s q d C z
+    | none => False
+  | _, _, _ => False
+
+/-- **`DirectOkAt`, decided.** -/
+def directOkAtB (d : ℕ) (c : SpectralConv) : Bool :=
+  match (ir.expr c.source).convSource?, ir.expr c.read, (ir.predicate c.products).body with
+  | some s, .leaf C, .equal d' lhs (.leaf z) t =>
+    match lhs.directProducts? with
+    | some q =>
+      decide (d' = d) && !t.isRealized && c.committed.isNone && ir.directFactsB c s q d C z
+    | none => false
+  | _, _, _ => false
+
+theorem directOkAtB_iff (d : ℕ) (c : SpectralConv) :
+    ir.directOkAtB d c = true ↔ ir.DirectOkAt d c := by
+  unfold directOkAtB DirectOkAt
+  split
+  · split
+    · simp [directFactsB_iff, Option.isNone_iff_eq_none, and_assoc]
+    · simp
+  · simp
+
+instance (d : ℕ) (c : SpectralConv) : Decidable (ir.DirectOkAt d c) :=
+  decidable_of_iff _ (ir.directOkAtB_iff d c)
+
+/-- **The convolution `c` is realized in domain `d`**: directly (`DirectOkAt`) for a `direct`
+convolution, spectrally (`ConvOkAt`) otherwise. -/
+def ConvRealizedAt (d : ℕ) (c : SpectralConv) : Prop :=
+  if c.direct then ir.DirectOkAt d c else ir.ConvOkAt d c
+
+/-- **`ConvRealizedAt`, decided.** -/
+def convRealizedAtB (d : ℕ) (c : SpectralConv) : Bool :=
+  if c.direct then ir.directOkAtB d c else ir.convOkAtB d c
+
+theorem convRealizedAtB_iff (d : ℕ) (c : SpectralConv) :
+    ir.convRealizedAtB d c = true ↔ ir.ConvRealizedAt d c := by
+  unfold convRealizedAtB ConvRealizedAt
+  split
+  · exact ir.directOkAtB_iff d c
+  · exact ir.convOkAtB_iff d c
+
+instance (d : ℕ) (c : SpectralConv) : Decidable (ir.ConvRealizedAt d c) :=
+  decidable_of_iff _ (ir.convRealizedAtB_iff d c)
 
 /-- **`Expr.matchB` consuming the given conversions in mismatch order**: at a pair of different
 shared expressions `k`, `k'` the next conversion `j` of `js` must pass `ok j k k'`; the rest of `js`
@@ -829,11 +1087,13 @@ def _root_.GordieHowe.RealizedProgram.Expr.matchL (ok : ℕ → ℕ → ℕ → 
   | .apply op a, .apply op' a', js => if op = op' then Expr.matchL ok a a' js else none
   | e, e', js => if e.beqK e' then some js else none
 
-/-- **Conversion `j` is a spectrally realized convolution of domain `d` with source `k` and
-reading `k'`** (`ConvOkAt`), read at the pointer `j`. -/
+/-- **Conversion `j` is a realized convolution of domain `d` with source `k` and reading or
+committed reading `k'`** (`ConvRealizedAt`), read at the pointer `j`. -/
 def convAtB (d j k k' : ℕ) : Bool :=
   match ir.convs[j]? with
-  | some c => c.source == k && c.read == k' && ir.convOkAtB d c
+  | some c =>
+    c.source == k && (c.read == k' || c.committed.map Prod.fst == some k') &&
+      ir.convRealizedAtB d c
   | none => false
 
 /-- **`RealizedAdmits`, at the given conversions** (`Route.realized q js`): `q` is a field `equal`

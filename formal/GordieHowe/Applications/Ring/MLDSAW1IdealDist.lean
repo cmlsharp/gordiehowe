@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Applications.Ring.MLDSAW1Anonymity
+public import GordieHowe.Foundations.ToMathlib.PMFUniformPullback
 public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1Concentration
 
 @[expose] public section
@@ -31,7 +32,7 @@ Bounded loops with a finite keep coin (about Mathlib objects):
   `T` masks and a keep coin on `Fin D` is within `1 / D` of the call with the real coin, and the
   bounded loop of `k` such calls is within `k / D + r^k` of the unbounded loop of one attempt with
   one uniform mask**, `r` the rejection probability of that attempt, for `T ≥ 1`.
-- `PMF.map_uniformOfFintype_comp_embedding`, `PMF.map_uniformOfFintype_comp_left`,
+- `PMF.map_uniformOfFintype_comp_left`,
   `PMF.map_uniformOfFintype_prodMap`, `PMF.expect_eq_sum_uniformOfFintype`,
   `PMF.expect_comp_of_map_eq`, `PMF.map_uniformOfFintype_callCoins`: uniform laws under
   restriction along an embedding, decoding, products and the per-call coins.
@@ -399,15 +400,6 @@ section Uniform
 variable {A A' Y Z : Type*} [Fintype A] [DecidableEq A] [Fintype A'] [DecidableEq A'] [Fintype Y]
   [Nonempty Y] [Fintype Z] [Nonempty Z]
 
-/-- **The pullback of a uniform function along an embedding is uniform** (`splitAlong`). -/
-theorem map_uniformOfFintype_comp_embedding (e : A' ↪ A) :
-    (uniformOfFintype (A → Y)).map (fun g a => g (e a)) = uniformOfFintype (A' → Y) := by
-  rw [← map_uniformOfFintype_equiv (GordieHowe.splitAlong (Y' := Y) e).symm, map_comp]
-  have h : ((fun g a => g (e a)) ∘ (GordieHowe.splitAlong (Y' := Y) e).symm) = Prod.snd := by
-    funext q a
-    exact GordieHowe.splitAlong_symm_apply_embed e q.1 q.2 a
-  rw [h, map_snd_uniformOfFintype]
-
 /-- **Decoding the values of a uniform function** by a map pushing the uniform law to the uniform
 law gives a uniform function (`pi_map`). -/
 theorem map_uniformOfFintype_comp_left {φ : Y → Z}
@@ -660,27 +652,6 @@ variable (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   [DecidableEq RMsg] (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg)
 
 omit [Fintype prims.Power2High] [DecidableEq prims.Power2High] [Fintype prims.Hint]
-  [DecidableEq prims.Hint] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y]
-  [Nonempty Y] in
-/-- **The recomputed commitment of an accepted attempt is its commitment** for an honest key with
-`‖s₂‖∞ ≤ η`, given the signing and verification laws and a coherent encoding
-(`ringVerify_attemptOutput`). -/
-theorem w1Of_attemptOutput (h_laws : SigningLaws prims) (hv : VerifyLaws prims)
-    (henc : ∀ w : RqVec p.k, enc (prims.highBitsVec w) = bucketsOf (rqVecCoeffs w))
-    {seed : Bytes 32} (hs2 : polyVecBounded (keyGen prims seed).2.s2 p.eta) (y : MaskBox p)
-    (c : CommitHashBytes p)
-    (hacc : attemptAccept prims (keyGen prims seed).2 (prims.expandA (keyGen prims seed).2.rho) y c =
-      true) :
-    w1Of prims enc (keyGen prims seed).1 (attemptOutput prims (keyGen prims seed).2
-      (prims.expandA (keyGen prims seed).2.rho) (y, c)) =
-      realBuckets (prims.expandA (keyGen prims seed).2.rho) y := by
-  have hver := ringVerify_attemptOutput prims h_laws hv henc (seed := seed)
-    (pk := (keyGenFromSeed p prims seed).1) (sk := (keyGenFromSeed p prims seed).2) rfl hs2
-    (Msg := Unit) (fun _ => c) () y (by simpa only [keyGen, keyGenFromSeed_rho] using hacc)
-  simp only [ringVerify, Bool.and_eq_true, decide_eq_true_eq] at hver
-  simpa only [w1Of, keyGen, keyGenFromSeed_rho, pubPk] using hver.1.1.2
-
-omit [Fintype prims.Power2High] [DecidableEq prims.Power2High] [Fintype prims.Hint]
   [DecidableEq prims.Hint] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y]
   [NeZero D] in
 /-- **One call with its recomputed commitment is the finite-coin call with its commitment**
@@ -696,7 +667,7 @@ theorem callOut_map_w1Of (h_laws : SigningLaws prims) (hv : VerifyLaws prims)
       (weightedAttemptMasksFin (ringWeights prims βmin (ringT0s prims R.1)) i
         (realBuckets (prims.expandA (keyGen prims seed).2.rho))
         (attemptAccept prims (keyGen prims seed).2 (prims.expandA (keyGen prims seed).2.rho))
-        (fun a => (flattenCoin prims (keyGen prims seed).2 βmin a : ℝ≥0∞))
+        (fun a => (flattenCoin prims (keyGen prims seed).2 (Cutoff.const βmin) a : ℝ≥0∞))
         (fun y c => attemptOutput prims (keyGen prims seed).2
           (prims.expandA (keyGen prims seed).2.rho) (y, c)) hc D ys u).map Prod.fst := by
   unfold callOut weightedAttemptMasksFin
@@ -754,7 +725,7 @@ theorem refusalPubLaw_freshBase_eq
           ⟨R.1.idxOf ((freshBase prims O M βmin tol enc k D bmsg).pk kc), hi⟩
           (realBuckets (prims.expandA (keyGen prims kc).2.rho))
           (attemptAccept prims (keyGen prims kc).2 (prims.expandA (keyGen prims kc).2.rho))
-          (fun a => (flattenCoin prims (keyGen prims kc).2 βmin a : ℝ≥0∞))
+          (fun a => (flattenCoin prims (keyGen prims kc).2 (Cutoff.const βmin) a : ℝ≥0∞))
           (fun y c => attemptOutput prims (keyGen prims kc).2
             (prims.expandA (keyGen prims kc).2.rho) (y, c))
           (PMF.ringOf (ringPts prims R.1 (bmsg R m)) (O.hOrc H)) D z.1 z.2) k).map
@@ -766,7 +737,7 @@ theorem refusalPubLaw_freshBase_eq
       ⟨R.1.idxOf ((freshBase prims O M βmin tol enc k D bmsg).pk kc), hi⟩
       (realBuckets (prims.expandA (keyGen prims kc).2.rho))
       (attemptAccept prims (keyGen prims kc).2 (prims.expandA (keyGen prims kc).2.rho))
-      (fun a => (flattenCoin prims (keyGen prims kc).2 βmin a : ℝ≥0∞))
+      (fun a => (flattenCoin prims (keyGen prims kc).2 (Cutoff.const βmin) a : ℝ≥0∞))
       (fun y c => attemptOutput prims (keyGen prims kc).2 (prims.expandA (keyGen prims kc).2.rho)
         (y, c))
       (PMF.ringOf (ringPts prims R.1 (bmsg R m)) (O.hOrc H)) D z.1 z.2
@@ -794,7 +765,6 @@ theorem refusalPubLaw_freshBase_eq
         fun cb : (Fin k → MaskPt T Msg → Y) × (Fin k → Fin D) =>
           fun j => ((fun t => M.ans (cb.1 j (e t))), cb.2 j) := rfl
   unfold BaseSigner.refusalPubLaw
-  simp only [RingSignature.idxOf_decEq_eq]
   refine (congrArg (fun f => PMF.map f (uniformOfFintype _)) ((funext key).trans hfun)).trans ?_
   refine (PMF.map_comp _ _ _).symm.trans ?_
   erw [map_uniformOfFintype_callCoins (B := Fin D) k e hMask]
@@ -822,19 +792,20 @@ theorem tvDist_refusalPubLaw_freshBase_le (hT : 0 < T)
         ⟨R.1.idxOf ((freshBase prims O M βmin tol enc k D bmsg).pk kc), hi⟩ (maskUniform p)
         (realBuckets (prims.expandA (keyGen prims kc).2.rho))
         (attemptAccept prims (keyGen prims kc).2 (prims.expandA (keyGen prims kc).2.rho))
-        (fun a => (flattenCoin prims (keyGen prims kc).2 βmin a : ℝ≥0∞))
-        (coe_flattenCoin_le_one prims (keyGen prims kc).2 βmin)
+        (fun a => (flattenCoin prims (keyGen prims kc).2 (Cutoff.const βmin) a : ℝ≥0∞))
+        (coe_flattenCoin_le_one prims (keyGen prims kc).2 (Cutoff.const βmin))
         (PMF.ringOf (ringPts prims R.1 (bmsg R m)) (O.hOrc H)))) ≤
       k * (D : ℝ)⁻¹ + ((weightedAttempt (ringWeights prims βmin (ringT0s prims R.1))
         ⟨R.1.idxOf ((freshBase prims O M βmin tol enc k D bmsg).pk kc), hi⟩ (maskUniform p)
         (realBuckets (prims.expandA (keyGen prims kc).2.rho))
         (attemptAccept prims (keyGen prims kc).2 (prims.expandA (keyGen prims kc).2.rho))
-        (fun a => (flattenCoin prims (keyGen prims kc).2 βmin a : ℝ≥0∞))
-        (coe_flattenCoin_le_one prims (keyGen prims kc).2 βmin)
+        (fun a => (flattenCoin prims (keyGen prims kc).2 (Cutoff.const βmin) a : ℝ≥0∞))
+        (coe_flattenCoin_le_one prims (keyGen prims kc).2 (Cutoff.const βmin))
         (PMF.ringOf (ringPts prims R.1 (bmsg R m)) (O.hOrc H)) none) ^ k).toReal := by
   rw [refusalPubLaw_freshBase_eq prims O M βmin tol enc k D bmsg hMask h_laws hv henc hs2 H R m hi
     hok]
-  exact tvDist_firstSome_finCall_le _ _ _ _ _ (coe_flattenCoin_le_one prims _ βmin) _ _ hT D k
+  exact tvDist_firstSome_finCall_le _ _ _ _ _ (coe_flattenCoin_le_one prims _ (Cutoff.const βmin))
+      _ _ hT D k
 
 end Law
 
@@ -850,8 +821,9 @@ variable (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : NTTRingOps]
 
 /-- **Two signers of a ring with distinct message representatives as a ring pair**: the members'
 points `µ_j = H_µ(tr_j, m)` of the commitment-hash oracle (`ringMus`), the member weights of the
-published `t₀`s, the two signers' positions `pos` and their ring attempts (`ringLoopSigner`) at
+published `t₀`s, the two signers' positions `pos` and their ring attempts (`flatLoopSigner`) at
 their secret keys `sk`. -/
+@[reducible]
 noncomputable def reqPair (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβt : (βmin : ℝ≥0∞) ≠ ⊤)
     (Hmu : MuOrc Msg) (R : KeyRing (PubKey p prims) N) (m : Msg) (hmu : MuDistinct prims Hmu R m)
     (pos : Bool → Fin R.1.length) (sk : Bool → SecretKey p) :
@@ -860,7 +832,8 @@ noncomputable def reqPair (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞) �
   pt := ⟨ringMus prims Hmu R.1 m, ringMus_injective prims hmu⟩
   wts := ringWeights prims βmin (ringT0s prims R.1)
   pos := pos
-  signer b := ringLoopSigner prims (sk b) (prims.expandA (sk b).rho) hp hβ0 hβt
+  signer b := flatLoopSigner prims (sk b) (prims.expandA (sk b).rho) hp (cut := Cutoff.const βmin)
+      hβ0 hβt
 
 /-- **The attempt of a signer of the ring pair** against the commitment-hash oracle read from `H`
 is its weighted attempt against the members' commitment hashes read from `H`. -/
@@ -871,8 +844,8 @@ theorem reqPair_attempt (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞) ≠ 
     (reqPair prims βmin hp hβ0 hβt (O.muOrc H) R m hmu pos sk).attempt b (O.chOrc H) =
       weightedAttempt (ringWeights prims βmin (ringT0s prims R.1)) (pos b) (maskUniform p)
         (realBuckets (prims.expandA (sk b).rho)) (attemptAccept prims (sk b) (prims.expandA (sk b).rho))
-        (fun a => (flattenCoin prims (sk b) βmin a : ℝ≥0∞))
-        (coe_flattenCoin_le_one prims (sk b) βmin)
+        (fun a => (flattenCoin prims (sk b) (Cutoff.const βmin) a : ℝ≥0∞))
+        (coe_flattenCoin_le_one prims (sk b) (Cutoff.const βmin))
         (PMF.ringOf (ringPts prims R.1 m) (O.hOrc H)) :=
   rfl
 
@@ -889,14 +862,16 @@ variable (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   (O : W1Oracles X Y p prims Msg N reps) (M : MaskOracle X Y p T Msg) (βmin : ℚ≥0) (tol : ℕ)
   (enc : Vector prims.High p.k → BucketVec p) (k D : ℕ) [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg)
-  {TPS : PSTypes} (PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS)
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] (PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS)
   (adm : KeyRing (PubKey p prims) N → Prop) [DecidablePred adm]
   (n : ℕ) (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβt : (βmin : ℝ≥0∞) ≠ ⊤)
 
 local notation "Bf" => freshBase prims O M βmin tol enc k D bmsg
 local notation "Sh" => hedgedScheme prims O M βmin tol enc k D bmsg PS adm
 
-omit [Inhabited prims.Hint] in
+omit [Inhabited prims.Hint] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 /-- The position of user `b` of a valid challenge is in its ring. -/
 theorem idxOf_lt_of_valid {keys : Fin n → Bytes 32} {c : AnonRequest (Sh) n} (hc : c.Valid keys)
     (b : Bool) : c.ring.1.idxOf ((Bf).pk (keys (c.user b))) < c.ring.1.length :=
@@ -904,6 +879,7 @@ theorem idxOf_lt_of_valid {keys : Fin n → Bytes 32} {c : AnonRequest (Sh) n} (
 
 /-- **The two users' signers of a valid challenge with distinct message representatives** as a
 ring pair (`reqPair` at the users' positions and secret keys). -/
+@[reducible]
 noncomputable def chalPair (keys : Fin n → Bytes 32) (Hmu : MuOrc Msg) (c : AnonRequest (Sh) n)
     (hc : c.Valid keys) (hmu : MuDistinct prims Hmu c.ring (bmsg c.ring c.msg)) :
     PMF.RingPair (Bytes 64) (BucketVec p) (CommitHashBytes p) :=
@@ -913,6 +889,8 @@ noncomputable def chalPair (keys : Fin n → Bytes 32) (Hmu : MuOrc Msg) (c : An
     (fun b => (keyGen prims (keys (c.user b))).2)
 
 open Classical in
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **A valid challenge admitted by the fresh-mask base signer**: the two users' laws are within
 the distance of the unbounded ideal loops of its ring pair (`chalPair`), plus for each user `k / D`
 and the probability that `k` ideal attempts all reject (`tvDist_refusalPubLaw_freshBase_le`). -/
@@ -965,6 +943,7 @@ noncomputable instance (keys : Fin n → Bytes 32) (Hmu : MuOrc Msg) (s : ℝ) :
   Subtype.fintype _
 
 /-- **The ring pairs of the valid challenges of low defect** (`chalPair`). -/
+@[reducible]
 noncomputable def lowFamily (keys : Fin n → Bytes 32) (Hmu : MuOrc Msg) (s : ℝ)
     (c : LowChal prims O M βmin tol enc k D bmsg PS adm n keys Hmu s) :
     PMF.RingPair (Bytes 64) (BucketVec p) (CommitHashBytes p) :=
@@ -984,6 +963,8 @@ noncomputable def lowError (keys : Fin n → Bytes 32) (Hmu : MuOrc Msg) (s θ :
 
 variable {prims O M βmin tol enc k D bmsg PS adm n}
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- The rings of defect at most `s < 1` have positive mass. -/
 theorem lowFamily_mass_pos {s : ℝ} (hs1 : s < 1) (keys : Fin n → Bytes 32) (Hmu : MuOrc Msg)
     (c : LowChal prims O M βmin tol enc k D bmsg PS adm n keys Hmu s) :
@@ -991,6 +972,8 @@ theorem lowFamily_mass_pos {s : ℝ} (hs1 : s < 1) (keys : Fin n → Bytes 32) (
   RingWeights.mass_pos _ fun v => (sub_pos.2 hs1).trans_le
     (one_sub_le_colMass_of_ringDefect_le prims hp hβ0 hβt c.2.2.2 v)
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- The family bound of the valid challenges of low defect is nonnegative. -/
 theorem lowError_nonneg {s θ : ℝ} (hs1 : s < 1) (hθ0 : 0 < θ) (keys : Fin n → Bytes 32)
     (Hmu : MuOrc Msg) (Hch : ChOrc p) :
@@ -1000,20 +983,22 @@ theorem lowError_nonneg {s θ : ℝ} (hs1 : s < 1) (hθ0 : 0 < θ) (keys : Fin n
   · exact familyBound_nonneg hθ0 (lowFamily_mass_pos hp hβ0 hβt hs1 keys Hmu) Hch
   · exact le_rfl
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The error of a ring of low defect** is at most `2 / ((1 - s) θ)` times the sum of the honest
 users' regularity gaps (`RingPair.error_le_of_massRatio_le`, `massRatio_le_of_ringDefect_le`,
-`relColError_le_ringRegGap`). -/
+`relColError_le_signerRegGap`). -/
 theorem lowFamily_error_le (h_laws : SigningLaws prims)
     (hs2 : ∀ seed, polyVecBounded (keyGen prims seed).2.s2 p.eta) {s θ : ℝ} (hθ0 : 0 < θ)
     (hs1 : s < 1) (keys : Fin n → Bytes 32) (Hmu : MuOrc Msg)
     (c : LowChal prims O M βmin tol enc k D bmsg PS adm n keys Hmu s) :
     (lowFamily prims O M βmin tol enc k D bmsg PS adm n hp hβ0 hβt keys Hmu s c).error θ ≤
-      2 * (1 - s)⁻¹ / θ * ∑ u, ringRegGap prims (keyGen prims (keys u)).2
-        (prims.expandA (keyGen prims (keys u)).2.rho) βmin := by
+      2 * (1 - s)⁻¹ / θ * ∑ u, signerRegGap prims (keyGen prims (keys u)).2
+        (prims.expandA (keyGen prims (keys u)).2.rho) (Cutoff.const βmin) := by
   set R := lowFamily prims O M βmin tol enc k D bmsg PS adm n hp hβ0 hβt keys Hmu s c
   have hκ0 : 0 ≤ (1 - s)⁻¹ := (inv_pos.2 (sub_pos.2 hs1)).le
-  set G := ∑ u, ringRegGap prims (keyGen prims (keys u)).2
-    (prims.expandA (keyGen prims (keys u)).2.rho) βmin
+  set G := ∑ u, signerRegGap prims (keyGen prims (keys u)).2
+    (prims.expandA (keyGen prims (keys u)).2.rho) (Cutoff.const βmin)
   refine (RingPair.error_le_of_massRatio_le R hθ0 (fun v => (sub_pos.2 hs1).trans_le
     (one_sub_le_colMass_of_ringDefect_le prims hp hβ0 hβt c.2.2.2 v))
     (massRatio_le_of_ringDefect_le prims hp hβ0 hβt c.2.2.2 hs1)).trans ?_
@@ -1024,16 +1009,19 @@ theorem lowFamily_error_le (h_laws : SigningLaws prims)
         (Bf).pk (keys (c.1.user b)) := List.getElem_idxOf hlt
     have hi : ringT0s prims c.1.ring.1 (R.pos b) = (keyGen prims (keys (c.1.user b))).2.t0 :=
       congrArg (fun x : PubKey p prims => x.2.2) hget
-    exact (relColError_le_ringRegGap prims _ _ hp h_laws (hs2 _) _ _ hi hβ0 hβt).trans
-      (Finset.single_le_sum (f := fun u => ringRegGap prims (keyGen prims (keys u)).2
-        (prims.expandA (keyGen prims (keys u)).2.rho) βmin)
-        (fun u _ => ringRegGap_nonneg prims _ _ βmin) (Finset.mem_univ (c.1.user b)))
+    exact (relColError_le_signerRegGap prims _ _ hp h_laws (hs2 _) _ _ hi hβ0 hβt).trans
+      (Finset.single_le_sum (f := fun u => signerRegGap prims (keyGen prims (keys u)).2
+        (prims.expandA (keyGen prims (keys u)).2.rho) (Cutoff.const βmin))
+        (fun u _ => signerRegGap_nonneg prims _ _ (Cutoff.const βmin)) (Finset.mem_univ (c.1.user
+            b)))
   calc (1 - s)⁻¹ / θ * ∑ b : Bool, relColError R.wts (R.pos b) (R.signer b).P (R.signer b).w1
         (R.signer b).acc (R.signer b).κ (R.signer b).β
       ≤ (1 - s)⁻¹ / θ * ∑ _b : Bool, G :=
         mul_le_mul_of_nonneg_left (Finset.sum_le_sum fun b _ => hb b) (div_nonneg hκ0 hθ0.le)
     _ = 2 * (1 - s)⁻¹ / θ * G := by rw [Fintype.sum_bool]; ring
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The weight variance proxy of a ring of low defect**: at most
 `N / ((1 - θ)² (1 - s)² |V|)` (`RingPair.countVar_le`). -/
 theorem lowFamily_countVar_le {s θ : ℝ} (hθ1 : θ < 1) (hs1 : s < 1) (keys : Fin n → Bytes 32)
@@ -1045,6 +1033,8 @@ theorem lowFamily_countVar_le {s θ : ℝ} (hθ1 : θ < 1) (hs1 : s < 1) (keys :
     (RingWeights.mul_card_le_mass _ fun v =>
       one_sub_le_colMass_of_ringDefect_le prims hp hβ0 hβt c.2.2.2 v)
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The deviation variance proxy of a ring of low defect**: both signers have the level
 `β = K · β_min`, so it is at most
 `4N / (θ (1 - s))² · (2 ∑_u CP(Â_u) / (β |V|)² + 2 / |V|)` with `CP(Â_u)` the collision probability
@@ -1084,6 +1074,8 @@ theorem lowFamily_devVar_le {s θ : ℝ} (hθ0 : 0 < θ) (hs1 : s < 1) (keys : F
   linarith
 
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The average family bound over the commitment-hash oracle**: at most `2 / ((1 - s) θ)` times
 the sum of the honest users' regularity gaps plus the McDiarmid terms of the variance proxies
 (`lowFamily_devVar_le`, `lowFamily_countVar_le`), with `C` a bound on the valid challenges for
@@ -1095,8 +1087,8 @@ theorem expect_lowError_le (h_laws : SigningLaws prims)
       (Finset.univ.filter fun c : AnonRequest (Sh) n => c.Valid keys).card ≤ C)
     (keys : Fin n → Bytes 32) (Hmu : MuOrc Msg) :
     𝔼 Hch : ChOrc p, lowError prims O M βmin tol enc k D bmsg PS adm n hp hβ0 hβt keys Hmu s θ Hch ≤
-      2 * (1 - s)⁻¹ / θ * ∑ u, ringRegGap prims (keyGen prims (keys u)).2
-          (prims.expandA (keyGen prims (keys u)).2.rho) βmin +
+      2 * (1 - s)⁻¹ / θ * ∑ u, signerRegGap prims (keyGen prims (keys u)).2
+          (prims.expandA (keyGen prims (keys u)).2.rho) (Cutoff.const βmin) +
         √(4 * N / (θ * (1 - s)) ^ 2 *
             (2 * (∑ u, commitCollision (prims.expandA (keyGen prims (keys u)).2.rho)) /
                 ((standinScale p * βmin).toReal * Fintype.card (BucketVec p)) ^ 2 +
@@ -1110,10 +1102,10 @@ theorem expect_lowError_le (h_laws : SigningLaws prims)
   have hsd0 : 0 ≤ sd := mul_nonneg (by positivity) (add_nonneg (div_nonneg (mul_nonneg zero_le_two
     (Finset.sum_nonneg fun u _ => commitCollision_nonneg _)) (sq_nonneg _)) (by positivity))
   have hsc0 : 0 ≤ sc := by positivity
-  have he0 : 0 ≤ 2 * (1 - s)⁻¹ / θ * ∑ u, ringRegGap prims (keyGen prims (keys u)).2
-      (prims.expandA (keyGen prims (keys u)).2.rho) βmin :=
+  have he0 : 0 ≤ 2 * (1 - s)⁻¹ / θ * ∑ u, signerRegGap prims (keyGen prims (keys u)).2
+      (prims.expandA (keyGen prims (keys u)).2.rho) (Cutoff.const βmin) :=
     mul_nonneg (div_nonneg (mul_nonneg zero_le_two (inv_pos.2 (sub_pos.2 hs1)).le) hθ0.le)
-      (Finset.sum_nonneg fun u _ => ringRegGap_nonneg prims _ _ βmin)
+      (Finset.sum_nonneg fun u _ => signerRegGap_nonneg prims _ _ (Cutoff.const βmin))
   by_cases h : Nonempty (LowChal prims O M βmin tol enc k D bmsg PS adm n keys Hmu s)
   · have hor : ∀ Hch, lowError prims O M βmin tol enc k D bmsg PS adm n hp hβ0 hβt keys Hmu s θ Hch =
         haveI := h
@@ -1156,6 +1148,8 @@ noncomputable def couplingBound (keys : Fin n → Bytes 32) (s θ Lk : ℝ)
   2 * lowError prims O M βmin tol enc k D bmsg PS adm n hp hβ0 hβt keys HG.1.1 s θ HG.1.2 +
     2 * (k * (D : ℝ)⁻¹) + 2 * (1 - Lk) ^ k
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- The coupling bound on rings of low defect is nonnegative. -/
 theorem couplingBound_nonneg {s θ Lk : ℝ} (hs1 : s < 1) (hθ0 : 0 < θ) (hLk1 : Lk ≤ 1)
     (keys : Fin n → Bytes 32) (HG : GameOrc prims Msg N reps) :
@@ -1166,6 +1160,8 @@ theorem couplingBound_nonneg {s θ Lk : ℝ} (hs1 : s < 1) (hθ0 : 0 < θ) (hLk1
   have h3 : (0 : ℝ) ≤ k * (D : ℝ)⁻¹ := by positivity
   linarith
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **The two users' laws of a valid challenge on a ring of defect at most `s` are within the
 coupling bound on rings of low defect** at the game's oracles read from `H`, for `T ≥ 1` masks per
 call, a uniform mask decoding, honest keys, and any `Lk ≤ 1` at most the keep level: a refused ring
@@ -1222,7 +1218,7 @@ theorem tvDist_refusalPubLaw_le_couplingBound (hT : 0 < T)
           unfold keepLevel
           change (standinScale p * βmin).toReal * (θ * ((1 - s) * Fintype.card (BucketVec p))) / 2 ≤
             (standinScale p * βmin).toReal * (θ * P.wts.mass) / 2
-          have hβ := ringLevel_pos hp hβ0 hβt
+          have hβ := flatLevel_pos (cut := Cutoff.const βmin) hp hβ0 hβt
           gcongr
         have ha1 : P.attempt b (O.chOrc H) none ≤ 1 := PMF.coe_le_one _ _
         rw [ENNReal.toReal_sub_of_le ha1 ENNReal.one_ne_top, ENNReal.toReal_one] at hlev
@@ -1250,11 +1246,11 @@ variable (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   [Nonempty (MaskBox p)] (βmin : ℚ≥0)
 
 /-- **The average regularity gap of an honest key** at the cut-off `β_min`: the regularity gap
-`ringRegGap` of the key of a uniform seed at its matrix `Â = ExpandA(ρ)` (FIPS 204 key generation
+`signerRegGap` of the key of a uniform seed at its matrix `Â = ExpandA(ρ)` (FIPS 204 key generation
 `keyGen` at the primitives `prims`). -/
 noncomputable def regGapAt : ℝ :=
-  𝔼 seed : Bytes 32, ringRegGap prims (keyGen prims seed).2 (prims.expandA (keyGen prims seed).2.rho)
-    βmin
+  𝔼 seed : Bytes 32, signerRegGap prims (keyGen prims seed).2 (prims.expandA (keyGen prims seed).2.rho)
+    (Cutoff.const βmin)
 
 /-- **The average commitment collision probability of an honest key**: `commitCollision` at the
 matrix `Â = ExpandA(ρ)` of the key of a uniform seed. -/
@@ -1373,7 +1369,7 @@ variable (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   (O : W1Oracles X Y p prims Msg N reps) (M : MaskOracle X Y p T Msg) (βmin : ℚ≥0) (tol : ℕ)
   (enc : Vector prims.High p.k → BucketVec p) (k D : ℕ) [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg)
-  {TPS : PSTypes} (PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS)
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] (PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS)
   (adm : KeyRing (PubKey p prims) N → Prop) [DecidablePred adm]
   (n : ℕ) (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβt : (βmin : ℝ≥0∞) ≠ ⊤) [Fintype X]
   [DecidableEq X]
@@ -1381,6 +1377,8 @@ variable (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : NTTRingOps]
 local notation "Sh" => hedgedScheme prims O M βmin tol enc k D bmsg PS adm
 
 open Classical in
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **The coupling error of the fresh-mask signer at fixed oracles is at most the coupling bound
 on rings of low defect** at the game's oracles read off the split, when every supported ring has
 defect at most `s` (`hadm`; `tvDist_refusalPubLaw_le_couplingBound` for every valid challenge
@@ -1413,6 +1411,8 @@ theorem idealDist_le_couplingBound (hT : 0 < T)
 
 include hp hβ0 hβt in
 open Classical in
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **The averaged coupling error of the fresh-mask signer on rings of low defect**: averaged over
 the honest users' coins and the oracle at the base signer's points, `idealDist` is at most
 `w1CouplingError` when every supported ring has defect at most `s` (`hadm`), for `T ≥ 1`
@@ -1443,8 +1443,8 @@ theorem expect_idealDist_le (hT : 0 < T) (hO : O.UniformSplit)
   set L : ℝ := Real.log C
   set sc : ℝ := N / ((1 - θ) ^ 2 * (1 - s) ^ 2 * W)
   set K : ℝ := 2 * (k * (D : ℝ)⁻¹) + 2 * (1 - Lk) ^ k
-  set gap : (Fin n → Bytes 32) → ℝ := fun keys => ∑ u, ringRegGap prims (keyGen prims (keys u)).2
-    (prims.expandA (keyGen prims (keys u)).2.rho) βmin
+  set gap : (Fin n → Bytes 32) → ℝ := fun keys => ∑ u, signerRegGap prims (keyGen prims (keys u)).2
+    (prims.expandA (keyGen prims (keys u)).2.rho) (Cutoff.const βmin)
   set cp : (Fin n → Bytes 32) → ℝ := fun keys =>
     ∑ u, commitCollision (prims.expandA (keyGen prims (keys u)).2.rho)
   have hL0 : 0 ≤ L := Real.log_natCast_nonneg C
@@ -1484,7 +1484,8 @@ theorem expect_idealDist_le (hT : 0 < T) (hO : O.UniformSplit)
   have hgap : 𝔼 keys : Fin n → Bytes 32, gap keys = n * regGapAt prims βmin := by
     simp only [gap]
     rw [Finset.expect_sum_comm, Finset.sum_congr rfl fun u _ => PMF.expect_apply_eval u
-      (fun x => ringRegGap prims (keyGen prims x).2 (prims.expandA (keyGen prims x).2.rho) βmin)]
+      (fun x => signerRegGap prims (keyGen prims x).2 (prims.expandA (keyGen prims x).2.rho)
+          (Cutoff.const βmin))]
     simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, regGapAt]
   have hcp : 𝔼 keys : Fin n → Bytes 32, cp keys = n * collAt prims := by
     simp only [cp]

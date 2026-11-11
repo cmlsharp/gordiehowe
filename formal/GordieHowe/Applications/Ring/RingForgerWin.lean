@@ -122,10 +122,16 @@ end Logs
 
 /-! ### The forgery read from the extraction -/
 
-variable {m k e N : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits m) (XOut k e) N TB}
-  {TPS : PSTypes} {PS : ProofSystem (Bits m) (XOut k e) (RingStmt B) (RingWit B) TPS}
+variable {m k e N : ℕ} {TB : BaseTypes}
+  {B : BaseSigner (Bits m) (XOut k e) N TB}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem (Bits m) (XOut k e) (RingStmt B) (RingWit B) TPS}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {n : ℕ} [NeZero n]
-  {Cl : Type} {V : NARG.QROM.Verifier m k e Cl (RingStmt B)} {O : SignOracle B}
+  {Cl : Type} {V : NARG.QROM.Verifier m k e Cl (RingStmt B)} {O : SignOracle B.core}
+
+variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty O.Coins]
 
 variable (B PS adm) in
 /-- **The forgery read from the extraction run** (the multi-user forger's readout): the decoding
@@ -138,16 +144,18 @@ running time is argued here, not proved in Lean. -/
 def muReadout (hC : PS.CompiledBy V) (c₀ : Cl)
     (ext : RingStmt B → DB (Bits m) (Out k e) → List (RingWit B))
     (f₀ : B.PK × B.BMsg × B.BSig)
-    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B)} {A : AdaptiveIAlg shA (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof))}
+    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B.core)} {A : AdaptiveIAlg shA (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof))}
     {C₁ : Challenger (Bits m) (XOut k e) (MURequest O n) Unit} {kq : ℕ}
     (o : BaseGame.Tuple (Bits m) (Out k e)
-      (ExtReg A C₁ (MURequest O n) (MUResponse B)) kq × DB (Bits m) (Out k e)) :
+      (ExtReg A C₁ (MURequest O n) (MUResponse B.core)) kq × DB (Bits m) (Out k e)) :
     B.PK × B.BMsg × B.BSig :=
   (((ext (V.stmt (ringClaim B PS hC c₀ (extForgery o.1.out))) o.2).find? fun w =>
       decide (RingRel B adm 0 (V.stmt (ringClaim B PS hC c₀ (extForgery o.1.out))) w)).bind
     (decodeWit (V.stmt (ringClaim B PS hC c₀ (extForgery o.1.out))))).getD f₀
 
-omit [NeZero n] in
+omit [NeZero n] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins] in
 /-- **An output passing the extraction's test with a witness in `rel` reads as a forgery** of
 MU-EUF-CMA^corr for multi-user requests `mrs` (`ForgesReq`), at every oracle `H`, for a base signer
 verifying without the oracle (`hB`) when every witness of `rel` is one of the ring relation at the
@@ -157,10 +165,10 @@ theorem forgesReq_muReadout (hC : PS.CompiledBy V) (c₀ : Cl) {rel : Set (RingS
     {ext : RingStmt B → DB (Bits m) (Out k e) → List (RingWit B)} (f₀ : B.PK × B.BMsg × B.BSig)
     (keys : Fin n → B.KeyCoins) (H : Bits m → XOut k e) (hB : B.VerifiesWithoutOracle)
     (hrel : ∀ x w, (x, w) ∈ rel → RingRel B adm 0 x w) (Q' : ℕ)
-    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B)} {A : AdaptiveIAlg shA (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof))}
+    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B.core)} {A : AdaptiveIAlg shA (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof))}
     {C₁ : Challenger (Bits m) (XOut k e) (MURequest O n) Unit} {kq : ℕ}
     (o : BaseGame.Tuple (Bits m) (Out k e)
-      (ExtReg A C₁ (MURequest O n) (MUResponse B)) kq × DB (Bits m) (Out k e))
+      (ExtReg A C₁ (MURequest O n) (MUResponse B.core)) kq × DB (Bits m) (Out k e))
     (mrs : List (MURequest O n))
     (hlen : (requests (extLogs o.1.out)).length ≤ Q')
     (hmrs : ∀ r ∈ mrs, (∀ i, r = .corrupt i → r ∈ requests (extLogs o.1.out)) ∧
@@ -201,18 +209,20 @@ theorem forgesReq_muReadout (hC : PS.CompiledBy V) (c₀ : Cl) {rel : Set (RingS
   show B.bmsg _ _ = _
   rw [hring, hmsg]
 
-omit [DecidablePred adm] in
+omit [DecidablePred adm] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [DecidableEq TB.Pub] [Fintype O.Coins]
+  [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **The correspondence of the multi-user requests to the relayed forger's requests**: under the
 logs statement (`hlogs`), on every basis state of nonzero amplitude of the bridge's simulation,
 every corrupting or signing multi-user request it logs is a logged request of the relayed forger
 (in the absorbed logs the output reads). -/
 theorem mem_requests_of_bridgeLogs (i₂ : Fin n) {pk₀ : B.PK}
-    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B)} {A : AdaptiveIAlg shA (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof))}
+    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B.core)} {A : AdaptiveIAlg shA (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof))}
     {C₁ : Challenger (Bits m) (XOut k e) (MURequest O n) Unit}
     {E : Expansion (Bits m) (Out k e)
-      (ExtReg A C₁ (MURequest O n) (MUResponse B))} {kq : ℕ}
-    {d₀ : ExtReg A C₁ (MURequest O n) (MUResponse B)}
-    {a : ℕ → MURequest O n → Option (MUResponse B)}
+      (ExtReg A C₁ (MURequest O n) (MUResponse B.core))} {kq : ℕ}
+    {d₀ : ExtReg A C₁ (MURequest O n) (MUResponse B.core)}
+    {a : ℕ → MURequest O n → Option (MUResponse B.core)}
     (hlogs : BridgeLogsAt (outEquiv k e) A C₁ (muTwoRelay O n pk₀ i₂) (.publicKey 0)
       E kq d₀ a) {b}
     (hb : simState (outEquiv k e) ((bridgeAlg (outEquiv k e) A C₁
@@ -228,6 +238,8 @@ theorem mem_requests_of_bridgeLogs (i₂ : Fin n) {pk₀ : B.PK}
   · rw [← muTwoRelay_outer_eq_self ho hq]
     exact (mem_requests_iff _ _).2 ⟨j, hj⟩
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **The extraction's event on the bridge is a forgery of the multi-user game** (module docstring):
 for the bridge of an adversary `A` (at most `Q'` slots, `hslots`) through `muTwoRelay O n pk₀ i₂` with
 the dummy `publicKey 0`, whose logged requests are read from the absorbed logs at the replies `a`
@@ -241,12 +253,12 @@ theorem simLaw_bridge_le_forgesReq (hC : PS.CompiledBy V) (c₀ : Cl)
     {ext : RingStmt B → DB (Bits m) (Out k e) → List (RingWit B)} (f₀ : B.PK × B.BMsg × B.BSig)
     (keys : Fin n → B.KeyCoins) (i₂ : Fin n) (pk₀ : B.PK) (H : Bits m → XOut k e)
     (hB : B.VerifiesWithoutOracle) (hrel : ∀ x w, (x, w) ∈ rel → RingRel B adm 0 x w) (Q' : ℕ)
-    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B)} (A : AdaptiveIAlg shA (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof))) (hslots : A.slots ≤ Q')
+    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B.core)} (A : AdaptiveIAlg shA (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof))) (hslots : A.slots ≤ Q')
     (C₁ : Challenger (Bits m) (XOut k e) (MURequest O n) Unit)
     (E : Expansion (Bits m) (Out k e)
-      (ExtReg A C₁ (MURequest O n) (MUResponse B))) (kq : ℕ)
-    (d₀ : ExtReg A C₁ (MURequest O n) (MUResponse B))
-    (a : ℕ → MURequest O n → Option (MUResponse B))
+      (ExtReg A C₁ (MURequest O n) (MUResponse B.core))) (kq : ℕ)
+    (d₀ : ExtReg A C₁ (MURequest O n) (MUResponse B.core))
+    (a : ℕ → MURequest O n → Option (MUResponse B.core))
     (hlogs : BridgeLogsAt (outEquiv k e) A C₁ (muTwoRelay O n pk₀ i₂) (.publicKey 0)
       E kq d₀ a) :
     simLaw (outEquiv k e) ((bridgeAlg (outEquiv k e) A C₁ (muTwoRelay O n pk₀ i₂)

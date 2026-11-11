@@ -75,8 +75,8 @@ variable {prims : Primitives p} [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   {O : W1Oracles X Y p prims Msg N reps} {M : MaskOracle X Y p T Msg} {βmin : ℚ≥0} {tol : ℕ}
   {enc : Vector prims.High p.k → BucketVec p} {k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] {bmsg : KeyRing (PubKey p prims) N → RMsg → Msg}
-  {Pf PC : Type} {iFP : Fintype Pf} {iDP : DecidableEq Pf} {iFC : Fintype PC}
-  {iDC : DecidableEq PC} {iNC : Nonempty PC}
+  {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
+  [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg))
     (RingSignature.RingWitOf (FIPSSignature p prims)) ⟨Pf, PC⟩}
   {adm : KeyRing (PubKey p prims) N → Prop}
@@ -91,7 +91,9 @@ local notation "PSf" => PS
 
 attribute [local instance] admDecF
 
-omit [Fintype X] [DecidableEq X] [Nonempty X] [NeZero n] [AddGroup Y] in
+omit [Fintype X] [DecidableEq X] [Nonempty X] [NeZero n] [AddGroup Y] [Fintype Pf] [DecidableEq Pf]
+  [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
+  [DecidableEq Y] [Nonempty Y] in
 /-- **The average point bound over the key coins is `n · commitPointAt`**: the key-generation
 matrix of a fresh scheme's secret key is `keyGenMatrix` of its seed. -/
 theorem sum_inv_card_mul_commitPointMax :
@@ -128,14 +130,14 @@ theorem insiderForgeProb_le_w1C2 [Nonempty Y₁]
     {Vp : RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg) →
       Pf → OracleProg X Y Bool} {qv : ℕ} (hV : PS.VerifiesBy Vp qv)
     (rel : Stmt → Wit → Prop) [DecidableRel rel]
-    (P : NARG.Prover X Y Stmt Wit Pf (PSf).Coins)
-    (hPc : P.coins = PMF.uniformOfFintype (PSf).Coins)
-    (penc : (Fin n → (Bf).KeyCoins) → MURequest (SignOracle.none Bf) n ⊕ Rq →
+    (P : NARG.Prover X Y Stmt Wit Pf (PSf).Coins) (μ : PMF (PSf).Coins)
+    (hPc : μ = PMF.uniformOfFintype (PSf).Coins)
+    (penc : (Fin n → (Bf).KeyCoins) → MURequest (SignOracle.none (Bf).core) n ⊕ Rq →
       QROM.ProofQuery Stmt Wit)
     (stmtP : RingSignature.RingStmt Bf → OracleProg X Y X₀)
     (toR : X₀ → RingSignature.Insider.Req Bf PSf adm n × ℕ → (Bf).BSig → Rq)
     (dummyR : RingSignature.Insider.Req Bf PSf adm n × ℕ → Rq) {qs : ℕ}
-    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (hs : ∀ x, (stmtP x).QueriesLE qs) (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     (hPR : ∀ keys, ProverRelays O enc sp P (penc keys) stmtP toR keys)
     (hKR : ∀ keys, KeptInRel enc rel (penc keys) stmtP toR keys)
     {t w : ℕ} (A : InsiderAdversary (Sh) n (OracleView.queriesOnly X Y) t)
@@ -145,7 +147,7 @@ theorem insiderForgeProb_le_w1C2 [Nonempty Y₁]
     (insiderForgeProb A Q).toReal ≤
       ((runLawIn (fun keys _ => w1FreshAdv prims O M βmin tol enc k D bmsg PS adm A
           (fun i => (Bf).pk (keys i), ()))
-        (fun keys => w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P (penc keys) stmtP toR
+        (fun keys => w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P μ (penc keys) stmtP toR
           dummyR hs idle keys Q)).toOuterMeasure
         {x | ∃ q ∈ x.2.2, Forges x.1 q.2.2 q.1 (Challenger.histOf q.2.1)}).toReal +
       ((Q * k).choose 2 * (2 ^ 256 : ℝ)⁻¹ + 2 * t * √((Q * k : ℕ) * (2 ^ 256 : ℝ)⁻¹)) +
@@ -171,13 +173,13 @@ theorem insiderForgeProb_le_w1C2 [Nonempty Y₁]
         {x | ∃ q ∈ x.2.2, Forges x.1 q.2.2 q.1 (Challenger.histOf q.2.1)} ≤
       (runLawIn (fun keys _ => w1FreshAdv prims O M βmin tol enc k D bmsg PS adm A
           (fun i => (Bf).pk (keys i), ()))
-        (fun keys => w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P (penc keys) stmtP toR
+        (fun keys => w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P μ (penc keys) stmtP toR
           dummyR hs idle keys Q)).toOuterMeasure
         {x | ∃ q ∈ x.2.2, Forges x.1 q.2.2 q.1 (Challenger.histOf q.2.1)} +
       ∑' keys, PMF.uniformOfFintype (Fin n → (Bf).KeyCoins) keys *
         (Q * ENNReal.ofReal (((k * T).choose 2 : ℝ) *
           ∑ s, commitPointMax (prims.expandA ((Sf).sk (keys s)).rho))) :=
-    runLawIn_w1C1_le_w1C2 sp h.toW1SplitMask h.hO hPS h_laws hv henc rel P hPc penc
+    runLawIn_w1C1_le_w1C2 sp h.toW1SplitMask h.hO hPS h_laws hv henc rel P μ hPc penc
       stmtP toR dummyR hs idle (fun keys s => hs1 _) (fun keys s => hs2 _) hPR hKR Q
       (fun keys => w1FreshAdv prims O M βmin tol enc k D bmsg PS adm A
         (fun i => (Bf).pk (keys i), ())) _

@@ -23,7 +23,8 @@ The native Falcon-512 proof of possession at the ROM parameters as a configurati
 `forkIop`, its transcript `forkTranscript`, `32`-byte Fiat–Shamir salts, the Falcon-512
 proof-of-possession relation at the key `keyWitRel` with the witness read at the key's statement
 values, the honest prover, the honest strategy `honestStrategy`, and the figures), its facts
-`configurationFacts`, and the instances of the templates of the families `Common`, `GordieHowe.Configuration.ZeroKnowledgeROM` and `GordieHowe.Configuration.AdaptiveCompleteness`.
+`configurationFacts`, and the instances of the templates of the families `Common`, `GordieHowe.Configuration.ZeroKnowledgeROM`,
+`GordieHowe.Configuration.AdaptiveCompleteness` and `GordieHowe.Configuration.PaperRelation`.
 
 The configuration is `GordieHowe.Configuration.ofCertified` at the generated certified data
 (`GordieHowe.Generated.Falcon512.Native.ROMParams.certified`), the source program's soundness (`source`) and the
@@ -33,8 +34,7 @@ of the generic templates (`GordieHowe.Configuration.CertifiedSource`,
 
 The figures: at most `2357` rounds, every round's load within `2^-2780`, trees of at most `3604`
 leaves, `153` queried leaves, `6711` verifier queries (`2 · 2357 + 8 + 153 · 13`), round errors at
-most `3586440187 / 2^140`, `4721` digests per input (`2 · 2357 + 6 + 1`), the query caps `2^40`
-(QROM) and `2^64` (ROM), `5298` positions (`3604 + 1694`) and `32`-byte digests.
+most `3586440187 / 2^140`, `4721` digests per input (`2 · 2357 + 6 + 1`), the quantum query cap `2^40` and the classical query cap `2^64`, `5298` positions (`3604 + 1694`) and `32`-byte digests.
 
 The realization step's derivations (`RealizedProgram.Derivable`) include the MAC `mac.equal` with
 its H predicate `mac.H`, its tail `mac` in the grouped form (four groups of sixteen chunks, two
@@ -58,7 +58,6 @@ namespace GordieHowe.Falcon512.Native.ROMParams
 open RealizedProgram.Export RealizedProgram.ProofSystem.PhaseLayout IOP RelativePacking GordieHowe.SPBCS GordieHowe.QROM SPBCS.Configurations GordieHowe.Configuration
 open Generated.Falcon512.Native.ROMParams.Program (program)
 open Generated.Falcon512.Native.ROMParams (interp certified conditions)
-open GordieHowe.Falcon512.Emulated (PublicKey)
 open scoped NNReal ENNReal
 
 /-! ## The frontend -/
@@ -126,17 +125,17 @@ theorem label_le : label.length ≤ 2 ^ 10 :=
   Nat.le_of_ble_eq_true rfl
 
 /-- **The frontend of `Falcon512.Native.ROMParams`** (`Configuration.Frontend`): the statements `PublicKey` with the codec
-`falconKeyCodec`, read as their statement values (`stmtOf`), the headline relation `keyWitRel`, the honest
+`falconKeyCodec`, read as their statement values (`stmtOf`), the relation `keyWitRel`, the honest
 inputs `HonestIn` at `relH program RealizedProgram.gf128 RealizedProgram.fq9` with the execution `sourceExec`, and the label `label`. -/
 noncomputable def frontend :
     Configuration.Frontend certified source PublicKey VarWitness HonestIn where
   codec := falconKeyCodec
   stmtOf := stmtOf
-  rel' := keyWitRel
-  g s w := w (stmtOf s)
+  rel := keyWitRel
+  witnessMap s w := w (stmtOf s)
   relH := relH program RealizedProgram.gf128 RealizedProgram.fq9
   exec := sourceExec
-  keyStmtOf y := y.y.pk
+  stmtOfHonest y := y.y.pk
   label := label
 
 /-- **The facts of `frontend`**: the statement's writes (`stmtCodec_ser_le`), the label
@@ -152,14 +151,14 @@ instantiate_config GordieHowe.Falcon512.Native.ROMParams
 /-! ## The configuration -/
 
 /-- **`Falcon512.Native.ROMParams` as a configuration under spBCS** (module docstring,
-`Configuration.ofCertified`): `32`-byte salts and the query cap `2 ^ 40`. -/
+`Configuration.ofCertified`): the ROM parameter set `ParamSet.rom` (`32`-byte salts and the quantum query cap `2 ^ 40`). -/
 noncomputable def configuration : Configuration :=
-  .ofCertified certified source frontend 32 (2 ^ 40)
+  .ofCertified certified source frontend .rom
 
 /-- **The facts of `configuration`** (`Configuration.ofCertified_facts`): the frontend's
 (`frontendFacts`) and the generated loads' check (`GordieHowe.RuntimeInputs.FiguresFacts.loads`). -/
 theorem configurationFacts : configuration.Facts :=
-  Configuration.ofCertified_facts certified source frontendFacts (by norm_num) _
+  Configuration.ofCertified_facts certified source frontendFacts (Nat.le_of_ble_eq_true rfl)
     (conditions.fullFacts.figures.loads rfl)
 
 /-- **The honest inputs of the supported pairs of the paper's relation**
@@ -169,8 +168,8 @@ such pair has the honest input `HonestIn.ofRel` at its key. -/
 def honestOfRel : configuration.HonestOf where
   rel := Native.keySupportedRel
   rel_subset _ h := h.1
-  honestOf p hp := Falcon512.Native.HonestIn.ofRel p.1 p.2 hp
-  keyStmtOf_honestOf _ _ := rfl
+  honestOf x w hp := Falcon512.Native.HonestIn.ofRel x w hp
+  stmtOfHonest_honestOf _ _ _ := rfl
 
 instantiate_config GordieHowe.Falcon512.Native.ROMParams
   from [GordieHowe.Configuration.Common, GordieHowe.Configuration.ZeroKnowledgeROM,

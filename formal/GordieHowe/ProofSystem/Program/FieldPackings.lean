@@ -116,8 +116,9 @@ def fq6Packing : fq6.Packing where
   p := 8380417
   expChar := inferInstanceAs (ExpChar MLDSANativeField6 8380417)
   n := 6
-  top_eq := fq6_top
+  card_eq := mldsaNativeField_card
   s0 := 1
+  s0_dvd := one_dvd _
   decS0 := fun x => decidableMemFixedField (K := MLDSANativeField6) x
   edge := fq6Edges
   nodeDeg := fq6NodeDeg
@@ -276,8 +277,9 @@ def gf128Packing : gf128.Packing where
   p := 2
   expChar := inferInstanceAs (ExpChar GF2_128 2)
   n := 128
-  top_eq := gf128_top
+  card_eq := gf2_128_card
   s0 := 16
+  s0_dvd := by decide
   decS0 := fun x => decidableMemFixedField (K := GF2_128) x
   edge := gf128Edges
   nodeDeg := gf128NodeDeg
@@ -361,8 +363,9 @@ def fq9Packing : fq9.Packing where
   p := 12289
   expChar := inferInstanceAs (ExpChar FalconNativeField9 12289)
   n := 9
-  top_eq := fixedField_top_of_rel (K := FalconNativeField9)
+  card_eq := falconNativeField_card
   s0 := 1
+  s0_dvd := one_dvd _
   decS0 := fun x => decidableMemFixedField (K := FalconNativeField9) x
   edge := primeEdges (K := FalconNativeField9) falconNativeRelativeBasis
   nodeDeg := primeNodeDeg 9
@@ -388,8 +391,9 @@ def fq11Packing : RealizedProgram.fq11.Packing where
   p := 8380417
   expChar := inferInstanceAs (ExpChar MLDSANativeField11 8380417)
   n := 11
-  top_eq := fixedField_top_of_rel (K := MLDSANativeField11)
+  card_eq := mldsaNativeField11_card
   s0 := 1
+  s0_dvd := one_dvd _
   decS0 := fun x => decidableMemFixedField (K := MLDSANativeField11) x
   edge := primeEdges (K := MLDSANativeField11) mldsa11RelativeBasis
   nodeDeg := primeNodeDeg 11
@@ -415,8 +419,9 @@ def gold2Packing : RealizedProgram.gold2.Packing where
   p := pGold
   expChar := inferInstanceAs (ExpChar GoldilocksExt2 pGold)
   n := 2
-  top_eq := fixedField_top_of_rel (K := GoldilocksExt2)
+  card_eq := goldilocksExt2_card
   s0 := 1
+  s0_dvd := one_dvd _
   decS0 := fun x => decidableMemFixedField (K := GoldilocksExt2) x
   edge := primeEdges (K := GoldilocksExt2) goldilocksExt2RelativeBasis
   nodeDeg := primeNodeDeg 2
@@ -442,8 +447,9 @@ def gold4Packing : RealizedProgram.gold4.Packing where
   p := pGold
   expChar := inferInstanceAs (ExpChar GoldilocksExt4 pGold)
   n := 4
-  top_eq := fixedField_top_of_rel (K := GoldilocksExt4)
+  card_eq := goldilocksExt4_card
   s0 := 1
+  s0_dvd := one_dvd _
   decS0 := fun x => decidableMemFixedField (K := GoldilocksExt4) x
   edge := primeEdges (K := GoldilocksExt4) goldilocksExt4RelativeBasis
   nodeDeg := primeNodeDeg 4
@@ -496,8 +502,9 @@ def fq20Packing : fq20.Packing where
   p := 12289
   expChar := inferInstanceAs (ExpChar FalconNativeField20 12289)
   n := 20
-  top_eq := fixedField_top_of_rel (K := FalconNativeField20)
+  card_eq := falconNativeField20_card
   s0 := 1
+  s0_dvd := one_dvd _
   decS0 := fun x => decidableMemFixedField (K := FalconNativeField20) x
   edge := fq20Edges
   nodeDeg := primeNodeDeg 20
@@ -629,8 +636,9 @@ def gf256Packing : gf256.Packing where
   p := 2
   expChar := inferInstanceAs (ExpChar GF2_256 2)
   n := 256
-  top_eq := gf256_top
+  card_eq := gf2_256_card
   s0 := 16
+  s0_dvd := by decide
   decS0 := fun x => decidableMemFixedField (K := GF2_256) x
   edge := gf256Edges
   nodeDeg := gf256NodeDeg

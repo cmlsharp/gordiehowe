@@ -73,7 +73,9 @@ instance challengeFintype [Fintype F] {d : ℕ} (C : Circuit F d) (i : Index C) 
     | .inr (.inl _) => inferInstanceAs (Fintype F)
     | .inr (.inr j) => challengeFintype tail j
 
-/-- Numerator of the proved field-sized error for this challenge. -/
+/-- Numerator of the proved field-sized error for this challenge. A sumcheck round costs `2`, and
+a hand-zero round (`(schedule d).get j` with first component `false`) one more, for the
+assertion-tracking event (`AssertionStep`, `assertionStep_count`). -/
 def cost {d : ℕ} (C : Circuit F d) (i : Index C) : ℕ :=
   match C with
   | .input _ => 1

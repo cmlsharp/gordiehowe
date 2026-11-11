@@ -21,14 +21,14 @@ seven roots at cell size `523383` (`cellWindowDelta`, `SmallSupportWindows.lean`
   the relative column error at most `11 · 2^-101`
   (`sum_sq_sum_abs_realMass_sub_le_mldsa44_box_seven`,
   `expect_sq_sum_expect_abs_realMass_sub_le_mldsa44_box_seven`,
-  `expect_ringRegGap_le_sqrt_mldsa44_box_seven`, and
-  `expect_ringRegGap_le_sqrt_mldsa44_box_seven_of_nonneg` for a weight that may vanish).
+  `expect_signerRegGap_le_sqrt_mldsa44_box_seven`, and
+  `expect_signerRegGap_le_sqrt_mldsa44_box_seven_of_nonneg` for a weight that may vanish).
 * ML-DSA-65 and ML-DSA-87, fixed modes for `t ≤ 7` with the hint kernel
   (`averagedSecondMoment_signerCells_le_seven`, hybrid term for large supports,
   `envelope_seven_mldsa65`, `envelope_seven_mldsa87`): the averaged second moment is at most
   `2^-398` and `2^-588`, the relative column error at most `11 · 2^-199` and `12 · 2^-294`, and
-  `𝔼_Â ringRegGap ≤ R / β_min · √(𝔼_Â (w Â)⁻²)` with these `R`
-  (`expect_ringRegGap_le_sqrt_mldsa65_seven`, `expect_ringRegGap_le_sqrt_mldsa87_seven`).
+  `𝔼_Â signerRegGap ≤ R / β_min · √(𝔼_Â (w Â)⁻²)` with these `R`
+  (`expect_signerRegGap_le_sqrt_mldsa65_seven`, `expect_signerRegGap_le_sqrt_mldsa87_seven`).
   Numerically the fixed-mode bound with the hint kernel is smaller than the sharp slot count for
   every `t ≤ 7` at these two parameter sets (`EnvelopeSeven.lean`).
 -/
@@ -305,8 +305,8 @@ theorem expect_sq_sum_expect_abs_realMass_sub_le_mldsa44_box_seven (sk₀ : Secr
 `SampleInBall = G` of challenge shape and the concrete NTT, for keys with `s₁, s₂` in the
 `η`-box, `t₀` recomputed from the uniform matrix `Â`, and any positive lower bound `w Â` on the
 mean member weights of every bucket vector,
-`𝔼_Â ringRegGap ≤ 11 · 2^-101 / β_min · √(𝔼_Â (w Â)⁻²)`. -/
-theorem expect_ringRegGap_le_sqrt_mldsa44_box_seven (sk₀ : SecretKey _root_.MLDSA.mldsa44)
+`𝔼_Â signerRegGap ≤ 11 · 2^-101 / β_min · √(𝔼_Â (w Â)⁻²)`. -/
+theorem expect_signerRegGap_le_sqrt_mldsa44_box_seven (sk₀ : SecretKey _root_.MLDSA.mldsa44)
     (hs1 : polyVecBounded sk₀.s1 _root_.MLDSA.mldsa44.eta) (hs2 : polyVecBounded sk₀.s2 _root_.MLDSA.mldsa44.eta)
     {G : CommitHashBytes _root_.MLDSA.mldsa44 → ChallengePoly}
     (hG : SampleInBallShape (concreteWithSampleInBall _root_.MLDSA.mldsa44 G))
@@ -314,24 +314,24 @@ theorem expect_ringRegGap_le_sqrt_mldsa44_box_seven (sk₀ : SecretKey _root_.ML
     {w : TqMatrix _root_.MLDSA.mldsa44.k _root_.MLDSA.mldsa44.l → ℝ}
     (hw0 : ∀ aHat, 0 < w aHat)
     (hw : ∀ (aHat : TqMatrix _root_.MLDSA.mldsa44.k _root_.MLDSA.mldsa44.l) v, w aHat ≤ 𝔼 c,
-      (memberWeight (concreteWithSampleInBall _root_.MLDSA.mldsa44 G) βmin
+      (flatWeight (concreteWithSampleInBall _root_.MLDSA.mldsa44 G) (Cutoff.const βmin)
         (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))).t0 (v, c) : ℝ≥0∞).toReal) :
-    𝔼 aHat : TqMatrix _root_.MLDSA.mldsa44.k _root_.MLDSA.mldsa44.l, ringRegGap (concreteWithSampleInBall _root_.MLDSA.mldsa44 G)
-        (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))) aHat βmin ≤
+    𝔼 aHat : TqMatrix _root_.MLDSA.mldsa44.k _root_.MLDSA.mldsa44.l, signerRegGap (concreteWithSampleInBall _root_.MLDSA.mldsa44 G)
+        (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))) aHat (Cutoff.const βmin) ≤
       11 / 2 ^ 101 / (βmin : ℝ≥0∞).toReal *
         √(𝔼 aHat : TqMatrix _root_.MLDSA.mldsa44.k _root_.MLDSA.mldsa44.l, (w aHat ^ 2)⁻¹) :=
-  expect_ringRegGap_le_sqrt
+  expect_signerRegGap_le_sqrt
     (SigningParams.of_isApproved (p := _root_.MLDSA.mldsa44) (Or.inl rfl)) _
     (fun aHat => keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))) hβ0 hβt hw0 hw
     (by norm_num)
     (expect_sq_sum_expect_abs_realMass_sub_le_mldsa44_box_seven sk₀ hs1 hs2 hG)
 
 /-- **The mean regularity gap at ML-DSA-44 by Cauchy–Schwarz over the matrix, with a weight that
-may vanish.** As `expect_ringRegGap_le_sqrt_mldsa44_box_seven`, for a lower bound `w Â ≥ 0` on
+may vanish.** As `expect_signerRegGap_le_sqrt_mldsa44_box_seven`, for a lower bound `w Â ≥ 0` on
 the mean member weights of every bucket vector such that `w Â = 0` only when every mean member
-weight of `Â` is `0` (`expect_ringRegGap_le_sqrt_of_nonneg`):
-`𝔼_Â ringRegGap ≤ 11 · 2^-101 / β_min · √(𝔼_Â (w Â)⁻²)`, with `0⁻¹ = 0`. -/
-theorem expect_ringRegGap_le_sqrt_mldsa44_box_seven_of_nonneg
+weight of `Â` is `0` (`expect_signerRegGap_le_sqrt_of_nonneg`):
+`𝔼_Â signerRegGap ≤ 11 · 2^-101 / β_min · √(𝔼_Â (w Â)⁻²)`, with `0⁻¹ = 0`. -/
+theorem expect_signerRegGap_le_sqrt_mldsa44_box_seven_of_nonneg
     (sk₀ : SecretKey _root_.MLDSA.mldsa44) (hs1 : polyVecBounded sk₀.s1 _root_.MLDSA.mldsa44.eta)
     (hs2 : polyVecBounded sk₀.s2 _root_.MLDSA.mldsa44.eta)
     {G : CommitHashBytes _root_.MLDSA.mldsa44 → ChallengePoly}
@@ -339,17 +339,17 @@ theorem expect_ringRegGap_le_sqrt_mldsa44_box_seven_of_nonneg
     {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβt : (βmin : ℝ≥0∞) ≠ ⊤)
     {w : TqMatrix _root_.MLDSA.mldsa44.k _root_.MLDSA.mldsa44.l → ℝ} (hw0 : ∀ aHat, 0 ≤ w aHat)
     (hw : ∀ (aHat : TqMatrix _root_.MLDSA.mldsa44.k _root_.MLDSA.mldsa44.l) v, w aHat ≤ 𝔼 c,
-      (memberWeight (concreteWithSampleInBall _root_.MLDSA.mldsa44 G) βmin
+      (flatWeight (concreteWithSampleInBall _root_.MLDSA.mldsa44 G) (Cutoff.const βmin)
         (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))).t0 (v, c) : ℝ≥0∞).toReal)
     (hzero : ∀ aHat, w aHat = 0 → ∀ v, 𝔼 c,
-      (memberWeight (concreteWithSampleInBall _root_.MLDSA.mldsa44 G) βmin
+      (flatWeight (concreteWithSampleInBall _root_.MLDSA.mldsa44 G) (Cutoff.const βmin)
         (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))).t0 (v, c) : ℝ≥0∞).toReal = 0) :
     𝔼 aHat : TqMatrix _root_.MLDSA.mldsa44.k _root_.MLDSA.mldsa44.l,
-        ringRegGap (concreteWithSampleInBall _root_.MLDSA.mldsa44 G)
-          (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))) aHat βmin ≤
+        signerRegGap (concreteWithSampleInBall _root_.MLDSA.mldsa44 G)
+          (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))) aHat (Cutoff.const βmin) ≤
       11 / 2 ^ 101 / (βmin : ℝ≥0∞).toReal *
         √(𝔼 aHat : TqMatrix _root_.MLDSA.mldsa44.k _root_.MLDSA.mldsa44.l, (w aHat ^ 2)⁻¹) :=
-  expect_ringRegGap_le_sqrt_of_nonneg
+  expect_signerRegGap_le_sqrt_of_nonneg
     (SigningParams.of_isApproved (p := _root_.MLDSA.mldsa44) (Or.inl rfl)) _
     (fun aHat => keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))) hβ0 hβt hw0 hw hzero
     (by norm_num)
@@ -487,8 +487,8 @@ theorem expect_sq_sum_expect_abs_realMass_sub_le_mldsa65_seven (sk₀ : SecretKe
 `SampleInBall = G` of challenge shape and the concrete NTT, for keys with `s₁, s₂` in the
 `η`-box, `t₀` recomputed from the uniform matrix `Â`, and any positive lower bound `w Â` on the
 mean member weights of every bucket vector,
-`𝔼_Â ringRegGap ≤ 11 · 2^-199 / β_min · √(𝔼_Â (w Â)⁻²)`. -/
-theorem expect_ringRegGap_le_sqrt_mldsa65_seven (sk₀ : SecretKey mldsa65)
+`𝔼_Â signerRegGap ≤ 11 · 2^-199 / β_min · √(𝔼_Â (w Â)⁻²)`. -/
+theorem expect_signerRegGap_le_sqrt_mldsa65_seven (sk₀ : SecretKey mldsa65)
     (hs1 : polyVecBounded sk₀.s1 mldsa65.eta) (hs2 : polyVecBounded sk₀.s2 mldsa65.eta)
     {G : CommitHashBytes mldsa65 → ChallengePoly}
     (hG : SampleInBallShape (concreteWithSampleInBall mldsa65 G))
@@ -496,13 +496,13 @@ theorem expect_ringRegGap_le_sqrt_mldsa65_seven (sk₀ : SecretKey mldsa65)
     {w : TqMatrix mldsa65.k mldsa65.l → ℝ}
     (hw0 : ∀ aHat, 0 < w aHat)
     (hw : ∀ (aHat : TqMatrix mldsa65.k mldsa65.l) v, w aHat ≤ 𝔼 c,
-      (memberWeight (concreteWithSampleInBall mldsa65 G) βmin
+      (flatWeight (concreteWithSampleInBall mldsa65 G) (Cutoff.const βmin)
         (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))).t0 (v, c) : ℝ≥0∞).toReal) :
-    𝔼 aHat : TqMatrix mldsa65.k mldsa65.l, ringRegGap (concreteWithSampleInBall mldsa65 G)
-        (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))) aHat βmin ≤
+    𝔼 aHat : TqMatrix mldsa65.k mldsa65.l, signerRegGap (concreteWithSampleInBall mldsa65 G)
+        (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))) aHat (Cutoff.const βmin) ≤
       11 / 2 ^ 199 / (βmin : ℝ≥0∞).toReal *
         √(𝔼 aHat : TqMatrix mldsa65.k mldsa65.l, (w aHat ^ 2)⁻¹) :=
-  expect_ringRegGap_le_sqrt
+  expect_signerRegGap_le_sqrt
     (SigningParams.of_isApproved (p := mldsa65) (Or.inr (Or.inl rfl))) _
     (fun aHat => keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))) hβ0 hβt hw0 hw
     (by norm_num)
@@ -539,17 +539,21 @@ theorem sum_expect_abs_realMass_sub_le_mldsa65_seven (sk₀ : SecretKey mldsa65)
         (sum_abs_realMass_sub_le_mldsa65_seven sk₀ hs1 hs2 c hG).trans_eq (by ring)
 
 /-- **The averaged regularity gap at ML-DSA-65.** For keys with `s₁, s₂` in the `η`-box, `t₀`
-recomputed from the uniform matrix `Â`, and mean member weights at least `μ > 0`,
-`𝔼_Â ringRegGap ≤ 11 · 2^-199 / (μ β_min)`. -/
-theorem expect_ringRegGap_le_mldsa65_seven (sk₀ : SecretKey mldsa65)
+recomputed from the uniform matrix `Â`, a cut-off with level `top`, and a set `S` of matrices on
+which every column mean of the flattened weight times the shape is at least `μ > 0`,
+`𝔼_Â 1_S(Â) · signerRegGap ≤ 11 · 2^-199 / (μ · top)`. -/
+theorem expect_signerRegGap_le_mldsa65_seven (sk₀ : SecretKey mldsa65)
     (hs1 : polyVecBounded sk₀.s1 mldsa65.eta) (hs2 : polyVecBounded sk₀.s2 mldsa65.eta)
-    {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβt : (βmin : ℝ≥0∞) ≠ ⊤) {μ : ℝ} (hμ : 0 < μ)
-    (hmw : ∀ (aHat : TqMatrix mldsa65.k mldsa65.l) v, μ ≤ 𝔼 c,
-      (memberWeight (concretePrimitives mldsa65) βmin
-        (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))).t0 (v, c) : ℝ≥0∞).toReal) :
-    𝔼 aHat : TqMatrix mldsa65.k mldsa65.l, ringRegGap (concretePrimitives mldsa65)
-        (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))) aHat βmin ≤
-      11 / 2 ^ 199 / (μ * (βmin : ℝ≥0∞).toReal) := by
+    {cut : Cutoff mldsa65} (hβ0 : (cut.top : ℝ≥0∞) ≠ 0) (hβt : (cut.top : ℝ≥0∞) ≠ ⊤) {μ : ℝ}
+    (hμ : 0 < μ) (S : Set (TqMatrix mldsa65.k mldsa65.l))
+    (hmw : ∀ aHat ∈ S, ∀ v, μ ≤ 𝔼 c,
+      ((flatWeight (concretePrimitives mldsa65) cut
+        (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))).t0 (v, c) : ℝ≥0∞) *
+          (cut.shape c : ℝ≥0∞)).toReal) :
+    𝔼 aHat : TqMatrix mldsa65.k mldsa65.l,
+        S.indicator (fun aHat => signerRegGap (concretePrimitives mldsa65)
+          (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))) aHat cut) aHat ≤
+      11 / 2 ^ 199 / (μ * (cut.top : ℝ≥0∞).toReal) := by
   have hp := SigningParams.of_isApproved (p := mldsa65) (Or.inr (Or.inl rfl))
   set sk := fun aHat : TqMatrix mldsa65.k mldsa65.l =>
     keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))
@@ -561,29 +565,35 @@ theorem expect_ringRegGap_le_mldsa65_seven (sk₀ : SecretKey mldsa65)
   have hV : 0 < V := Nat.cast_pos.mpr (Fintype.card_pos (α := BucketVec mldsa65))
   have hT : 0 < T := Nat.cast_pos.mpr (Fintype.card_pos (α := TqMatrix mldsa65.k mldsa65.l))
   have hCs : 0 < Cs := Nat.cast_pos.mpr (Fintype.card_pos (α := CommitHashBytes mldsa65))
-  have hβ : 0 < (βmin : ℝ≥0∞).toReal := ENNReal.toReal_pos hβ0 hβt
-  set D := μ * ((standinScale mldsa65 * βmin).toReal * V)
+  have hβ : 0 < (cut.top : ℝ≥0∞).toReal := ENNReal.toReal_pos hβ0 hβt
+  set D := μ * ((standinScale mldsa65 * cut.top).toReal * V)
   have hD : 0 < D := by simp only [D]; rw [ENNReal.toReal_mul]; positivity
   set E : TqMatrix mldsa65.k mldsa65.l → BucketVec mldsa65 → CommitHashBytes mldsa65 → ℝ :=
     fun aHat v c => |(realMass (concretePrimitives mldsa65) (sk aHat) aHat v c).toReal -
       (zAcceptFraction mldsa65 * standinMass (concretePrimitives mldsa65) (sk aHat) v c).toReal|
-  have hstep : ∀ aHat, ringRegGap (concretePrimitives mldsa65) (sk aHat) aHat βmin ≤
-      (∑ v, 𝔼 c, E aHat v c) / D := fun aHat =>
-    ringRegGap_le hp _ (sk aHat) aHat hβ0 hβt hμ (hmw aHat)
+  have hstep : ∀ aHat, S.indicator (fun aHat => signerRegGap (concretePrimitives mldsa65) (sk aHat)
+      aHat cut) aHat ≤ (∑ v, 𝔼 c, E aHat v c) / D := fun aHat => by
+    by_cases h : aHat ∈ S
+    · rw [Set.indicator_of_mem h]
+      exact signerRegGap_le hp _ (sk aHat) aHat hβ0 hβt hμ (hmw aHat h)
+    · rw [Set.indicator_of_notMem h]
+      exact div_nonneg (Finset.sum_nonneg fun _ _ =>
+        Finset.expect_nonneg fun _ _ => abs_nonneg _) hD.le
   have hsum : ∑ aHat, ∑ v, 𝔼 c, E aHat v c ≤ T * (K * V * (11 / 2 ^ 199)) := by
     have h := sum_expect_abs_realMass_sub_le_mldsa65_seven sk₀ hs1 hs2
       (G := (concretePrimitives mldsa65).sampleInBall)
       (by rw [concreteWithSampleInBall_concrete]; exact sampleInBallShape_concrete mldsa65)
     rw [concreteWithSampleInBall_concrete] at h
     exact h
-  calc 𝔼 aHat, ringRegGap (concretePrimitives mldsa65) (sk aHat) aHat βmin
+  calc 𝔼 aHat, S.indicator (fun aHat => signerRegGap (concretePrimitives mldsa65) (sk aHat)
+        aHat cut) aHat
       ≤ 𝔼 aHat : TqMatrix mldsa65.k mldsa65.l, (∑ v, 𝔼 c, E aHat v c) / D :=
         Finset.expect_le_expect fun aHat _ => hstep aHat
     _ = (∑ aHat, ∑ v, 𝔼 c, E aHat v c) / T / D := by
         rw [Finset.expect_eq_sum_div_card, ← Finset.sum_div, Finset.card_univ]
         ring
     _ ≤ T * (K * V * (11 / 2 ^ 199)) / T / D := by gcongr
-    _ = 11 / 2 ^ 199 / (μ * (βmin : ℝ≥0∞).toReal) := by
+    _ = 11 / 2 ^ 199 / (μ * (cut.top : ℝ≥0∞).toReal) := by
         simp only [D]
         rw [ENNReal.toReal_mul]
         field_simp
@@ -721,8 +731,8 @@ theorem expect_sq_sum_expect_abs_realMass_sub_le_mldsa87_seven (sk₀ : SecretKe
 `SampleInBall = G` of challenge shape and the concrete NTT, for keys with `s₁, s₂` in the
 `η`-box, `t₀` recomputed from the uniform matrix `Â`, and any positive lower bound `w Â` on the
 mean member weights of every bucket vector,
-`𝔼_Â ringRegGap ≤ 12 · 2^-294 / β_min · √(𝔼_Â (w Â)⁻²)`. -/
-theorem expect_ringRegGap_le_sqrt_mldsa87_seven (sk₀ : SecretKey mldsa87)
+`𝔼_Â signerRegGap ≤ 12 · 2^-294 / β_min · √(𝔼_Â (w Â)⁻²)`. -/
+theorem expect_signerRegGap_le_sqrt_mldsa87_seven (sk₀ : SecretKey mldsa87)
     (hs1 : polyVecBounded sk₀.s1 mldsa87.eta) (hs2 : polyVecBounded sk₀.s2 mldsa87.eta)
     {G : CommitHashBytes mldsa87 → ChallengePoly}
     (hG : SampleInBallShape (concreteWithSampleInBall mldsa87 G))
@@ -730,13 +740,13 @@ theorem expect_ringRegGap_le_sqrt_mldsa87_seven (sk₀ : SecretKey mldsa87)
     {w : TqMatrix mldsa87.k mldsa87.l → ℝ}
     (hw0 : ∀ aHat, 0 < w aHat)
     (hw : ∀ (aHat : TqMatrix mldsa87.k mldsa87.l) v, w aHat ≤ 𝔼 c,
-      (memberWeight (concreteWithSampleInBall mldsa87 G) βmin
+      (flatWeight (concreteWithSampleInBall mldsa87 G) (Cutoff.const βmin)
         (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))).t0 (v, c) : ℝ≥0∞).toReal) :
-    𝔼 aHat : TqMatrix mldsa87.k mldsa87.l, ringRegGap (concreteWithSampleInBall mldsa87 G)
-        (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))) aHat βmin ≤
+    𝔼 aHat : TqMatrix mldsa87.k mldsa87.l, signerRegGap (concreteWithSampleInBall mldsa87 G)
+        (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))) aHat (Cutoff.const βmin) ≤
       12 / 2 ^ 294 / (βmin : ℝ≥0∞).toReal *
         √(𝔼 aHat : TqMatrix mldsa87.k mldsa87.l, (w aHat ^ 2)⁻¹) :=
-  expect_ringRegGap_le_sqrt
+  expect_signerRegGap_le_sqrt
     (SigningParams.of_isApproved (p := mldsa87) (Or.inr (Or.inr rfl))) _
     (fun aHat => keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))) hβ0 hβt hw0 hw
     (by positivity)
@@ -773,17 +783,21 @@ theorem sum_expect_abs_realMass_sub_le_mldsa87_seven (sk₀ : SecretKey mldsa87)
         (sum_abs_realMass_sub_le_mldsa87_seven sk₀ hs1 hs2 c hG).trans_eq (by ring)
 
 /-- **The averaged regularity gap at ML-DSA-87.** For keys with `s₁, s₂` in the `η`-box, `t₀`
-recomputed from the uniform matrix `Â`, and mean member weights at least `μ > 0`,
-`𝔼_Â ringRegGap ≤ 12 · 2^-294 / (μ β_min)`. -/
-theorem expect_ringRegGap_le_mldsa87_seven (sk₀ : SecretKey mldsa87)
+recomputed from the uniform matrix `Â`, a cut-off with level `top`, and a set `S` of matrices on
+which every column mean of the flattened weight times the shape is at least `μ > 0`,
+`𝔼_Â 1_S(Â) · signerRegGap ≤ 12 · 2^-294 / (μ · top)`. -/
+theorem expect_signerRegGap_le_mldsa87_seven (sk₀ : SecretKey mldsa87)
     (hs1 : polyVecBounded sk₀.s1 mldsa87.eta) (hs2 : polyVecBounded sk₀.s2 mldsa87.eta)
-    {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβt : (βmin : ℝ≥0∞) ≠ ⊤) {μ : ℝ} (hμ : 0 < μ)
-    (hmw : ∀ (aHat : TqMatrix mldsa87.k mldsa87.l) v, μ ≤ 𝔼 c,
-      (memberWeight (concretePrimitives mldsa87) βmin
-        (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))).t0 (v, c) : ℝ≥0∞).toReal) :
-    𝔼 aHat : TqMatrix mldsa87.k mldsa87.l, ringRegGap (concretePrimitives mldsa87)
-        (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))) aHat βmin ≤
-      12 / 2 ^ 294 / (μ * (βmin : ℝ≥0∞).toReal) := by
+    {cut : Cutoff mldsa87} (hβ0 : (cut.top : ℝ≥0∞) ≠ 0) (hβt : (cut.top : ℝ≥0∞) ≠ ⊤) {μ : ℝ}
+    (hμ : 0 < μ) (S : Set (TqMatrix mldsa87.k mldsa87.l))
+    (hmw : ∀ aHat ∈ S, ∀ v, μ ≤ 𝔼 c,
+      ((flatWeight (concretePrimitives mldsa87) cut
+        (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))).t0 (v, c) : ℝ≥0∞) *
+          (cut.shape c : ℝ≥0∞)).toReal) :
+    𝔼 aHat : TqMatrix mldsa87.k mldsa87.l,
+        S.indicator (fun aHat => signerRegGap (concretePrimitives mldsa87)
+          (keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))) aHat cut) aHat ≤
+      12 / 2 ^ 294 / (μ * (cut.top : ℝ≥0∞).toReal) := by
   have hp := SigningParams.of_isApproved (p := mldsa87) (Or.inr (Or.inr rfl))
   set sk := fun aHat : TqMatrix mldsa87.k mldsa87.l =>
     keyOf sk₀ (keyMap (fun b => sk₀.s1.get b) (matOfHat aHat))
@@ -795,29 +809,35 @@ theorem expect_ringRegGap_le_mldsa87_seven (sk₀ : SecretKey mldsa87)
   have hV : 0 < V := Nat.cast_pos.mpr (Fintype.card_pos (α := BucketVec mldsa87))
   have hT : 0 < T := Nat.cast_pos.mpr (Fintype.card_pos (α := TqMatrix mldsa87.k mldsa87.l))
   have hCs : 0 < Cs := Nat.cast_pos.mpr (Fintype.card_pos (α := CommitHashBytes mldsa87))
-  have hβ : 0 < (βmin : ℝ≥0∞).toReal := ENNReal.toReal_pos hβ0 hβt
-  set D := μ * ((standinScale mldsa87 * βmin).toReal * V)
+  have hβ : 0 < (cut.top : ℝ≥0∞).toReal := ENNReal.toReal_pos hβ0 hβt
+  set D := μ * ((standinScale mldsa87 * cut.top).toReal * V)
   have hD : 0 < D := by simp only [D]; rw [ENNReal.toReal_mul]; positivity
   set E : TqMatrix mldsa87.k mldsa87.l → BucketVec mldsa87 → CommitHashBytes mldsa87 → ℝ :=
     fun aHat v c => |(realMass (concretePrimitives mldsa87) (sk aHat) aHat v c).toReal -
       (zAcceptFraction mldsa87 * standinMass (concretePrimitives mldsa87) (sk aHat) v c).toReal|
-  have hstep : ∀ aHat, ringRegGap (concretePrimitives mldsa87) (sk aHat) aHat βmin ≤
-      (∑ v, 𝔼 c, E aHat v c) / D := fun aHat =>
-    ringRegGap_le hp _ (sk aHat) aHat hβ0 hβt hμ (hmw aHat)
+  have hstep : ∀ aHat, S.indicator (fun aHat => signerRegGap (concretePrimitives mldsa87) (sk aHat)
+      aHat cut) aHat ≤ (∑ v, 𝔼 c, E aHat v c) / D := fun aHat => by
+    by_cases h : aHat ∈ S
+    · rw [Set.indicator_of_mem h]
+      exact signerRegGap_le hp _ (sk aHat) aHat hβ0 hβt hμ (hmw aHat h)
+    · rw [Set.indicator_of_notMem h]
+      exact div_nonneg (Finset.sum_nonneg fun _ _ =>
+        Finset.expect_nonneg fun _ _ => abs_nonneg _) hD.le
   have hsum : ∑ aHat, ∑ v, 𝔼 c, E aHat v c ≤ T * (K * V * (12 / 2 ^ 294)) := by
     have h := sum_expect_abs_realMass_sub_le_mldsa87_seven sk₀ hs1 hs2
       (G := (concretePrimitives mldsa87).sampleInBall)
       (by rw [concreteWithSampleInBall_concrete]; exact sampleInBallShape_concrete mldsa87)
     rw [concreteWithSampleInBall_concrete] at h
     exact h
-  calc 𝔼 aHat, ringRegGap (concretePrimitives mldsa87) (sk aHat) aHat βmin
+  calc 𝔼 aHat, S.indicator (fun aHat => signerRegGap (concretePrimitives mldsa87) (sk aHat)
+        aHat cut) aHat
       ≤ 𝔼 aHat : TqMatrix mldsa87.k mldsa87.l, (∑ v, 𝔼 c, E aHat v c) / D :=
         Finset.expect_le_expect fun aHat _ => hstep aHat
     _ = (∑ aHat, ∑ v, 𝔼 c, E aHat v c) / T / D := by
         rw [Finset.expect_eq_sum_div_card, ← Finset.sum_div, Finset.card_univ]
         ring
     _ ≤ T * (K * V * (12 / 2 ^ 294)) / T / D := by gcongr
-    _ = 12 / 2 ^ 294 / (μ * (βmin : ℝ≥0∞).toReal) := by
+    _ = 12 / 2 ^ 294 / (μ * (cut.top : ℝ≥0∞).toReal) := by
         simp only [D]
         rw [ENNReal.toReal_mul]
         field_simp

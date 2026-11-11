@@ -330,7 +330,6 @@ theorem toReal_map_maskUniform_apply (hq : 2 * p.gamma1 < modulus) {β : Type*} 
     refine Finset.sum_congr rfl fun y _ => ?_
     by_cases h : f y = v
     · simp only [h, ite_true, maskUniform, PMF.uniformOfFintype_apply]
-      exact rfl
     · simp only [h, Ne.symm h, ite_false]
   have hc : Fintype.card (MaskBox p) = (2 * p.gamma1) ^ (ringDegree * p.l) := by
     rw [← Nat.card_eq_fintype_card]; exact natCard_maskBox hq

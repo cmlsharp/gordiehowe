@@ -42,9 +42,14 @@ open scoped ENNReal
 
 variable {Sch : SigScheme} {n : ℕ}
 
+variable [Nonempty Sch.KeyCoins]
+
 /-- The public keys are inhabited (by the key of any key-generation coins). -/
 noncomputable instance SigScheme.instNonemptyPK : Nonempty Sch.PK :=
   ⟨Sch.pk (Classical.arbitrary _)⟩
+
+variable [DecidableEq Sch.PK] [Nonempty Sch.Pub] [Fintype Sch.KeyCoins] [Fintype Sch.SignCoins]
+  [DecidableEq Sch.SignCoins] [Nonempty Sch.SignCoins]
 
 variable (Sch n) in
 /-- **A program over the base oracles** of the multi-user game. -/
@@ -53,12 +58,11 @@ abbrev BaseProg (α : Type) : Type := OracleProg (BaseRequest Sch n) (BaseRespon
 /-- **A relay of requests through the base oracles**: request number `c` with request `r` is sent
 to the main challenger as the result of the program `route ω c r` over the base oracles, and its
 reply is the result of `answer ω c r` applied to the main reply, at the relay's coins `ω`. The
-programs make no signing request. -/
+programs make no signing request. The relay holds its coin type only: the finiteness and decidable
+equality of the coins are instance-implicit binders on its projection (`[Fintype F.Coins]`). -/
 structure BaseRelay (Sch : SigScheme) (n : ℕ) (Req Resp Req' Resp' : Type) where
   /-- The relay's coins. -/
   Coins : Type
-  [instFintypeCoins : Fintype Coins]
-  [instDecEqCoins : DecidableEq Coins]
   /-- Their distribution. -/
   coins : PMF Coins
   /-- The main request, from the base oracles. -/
@@ -69,8 +73,6 @@ structure BaseRelay (Sch : SigScheme) (n : ℕ) (Req Resp Req' Resp' : Type) whe
   route_no_sign : ∀ ω c r O, ∀ b ∈ (route ω c r).trace O, b.isSign = false
   /-- The answers make no signing request. -/
   answer_no_sign : ∀ ω c r O, ∀ b ∈ (answer ω c r).trace O, b.isSign = false
-
-attribute [instance] BaseRelay.instFintypeCoins BaseRelay.instDecEqCoins
 
 namespace BaseRelay
 
@@ -95,6 +97,8 @@ noncomputable def calls (keys : Fin n → Sch.KeyCoins) (ω : F.Coins) (reqs : L
   reqs.zipIdx.flatMap fun p =>
     (F.route ω p.2 p.1).trace (oracle keys) ++ (F.answer ω p.2 p.1).trace (oracle keys)
 
+omit [Nonempty Sch.KeyCoins] [DecidableEq Sch.PK] [Nonempty Sch.Pub] [Fintype Sch.KeyCoins]
+  [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins] in
 /-- **A base relay makes no signing request.** -/
 theorem not_sign_mem_calls (keys : Fin n → Sch.KeyCoins) (ω : F.Coins) (reqs : List Req)
     (i : Fin n) (m : Sch.Msg) : BaseRequest.sign i m ∉ F.calls keys ω reqs := by
@@ -150,7 +154,8 @@ variable {M : SPBCS Mg P (RingStmt Sch RMsg N) k kN kS L e} {B : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] {Vr : RingStmt Sch RMsg N → FullTr P τ → Bool}
   (Qs : ∀ x, M.IOPQueries Vr x) {Req Resp Stmt' SC : Type} [Fintype Req] [DecidableEq Req]
   [Fintype Resp] [DecidableEq Resp] [Fintype Stmt'] [DecidableEq Stmt'] [Inhabited Stmt']
-  [Fintype SC] [DecidableEq SC] (F : RelayForger Sch n M B Req Resp Stmt' SC) (Q kq : ℕ)
+  [Fintype SC] [DecidableEq SC] (F : RelayForger Sch n M B Req Resp Stmt' SC)
+  [DecidableEq F.relay.Coins] (Q kq : ℕ)
 
 /-- **The run of the forger** at the users' coins `keys`, the relay's coins `ω` and the auxiliary
 value `a`: `extAdv` of the algorithm with its requests absorbed through the relay at `keys`. -/
@@ -173,6 +178,8 @@ noncomputable def output (keys : Fin n → Sch.KeyCoins) (ω : F.relay.Coins) (a
       fun i m => BaseRequest.sign i m ∈ F.relay.calls keys ω (F.made Q keys ω a c))
     {f | ∃ w ∈ F.extractor (advOut ((F.alg a).absorb (F.relay.atKeys keys ω)).toTPKindAlg F.sim Q c).stmt D,
       f ∈ F.decode (advOut ((F.alg a).absorb (F.relay.atKeys keys ω)).toTPKindAlg F.sim Q c).stmt w}
+
+variable [Fintype F.relay.Coins]
 
 /-- **The success probability of the forger in the multi-user game with adaptive corruption**
 (Bader, Hofheinz, Jager, Kiltz, Li, TCC 2015, ePrint 2014/797, Definition 2, p. 6, with the
@@ -219,6 +226,7 @@ noncomputable def bkmAnswerProg {Resp : Type} (adm : List Sch.PK → Prop) {Q : 
       .pure fun a => Ring.sideAnswer (fun _ => pk) (fun _ => Classical.arbitrary _) adm pubs c
         (.ringSign s R m) a
 
+omit [Fintype Sch.KeyCoins] in
 variable (Sch n N RMsg) in
 /-- **The base relay of the requests of BKM06 Definition 7** with `Q` answered requests, for the
 admissible rings `adm` and the public values `pubOf` of signing coins: its coins are signing coins
@@ -261,7 +269,26 @@ noncomputable def bkmBaseRelay (Resp : Type) (adm : List Sch.PK → Prop)
       · rfl
       · split at hb <;> simp at hb
 
-omit [Nonempty RMsg] in
+/-! The instances of the relay's coins: those of `Fin Q → Sch.SignCoins`. -/
+
+section BKMBaseRelayInstances
+
+variable {Resp : Type} {adm : List Sch.PK → Prop} {pubOf : Sch.SignCoins → Sch.Pub} {Q : ℕ}
+
+omit [Fintype Sch.KeyCoins] in
+instance bkmBaseRelay.instFintypeCoins :
+    Fintype (bkmBaseRelay Sch n N RMsg Resp adm pubOf Q).Coins :=
+  inferInstanceAs (Fintype (Fin Q → Sch.SignCoins))
+
+omit [Fintype Sch.KeyCoins] in
+instance bkmBaseRelay.instDecEqCoins :
+    DecidableEq (bkmBaseRelay Sch n N RMsg Resp adm pubOf Q).Coins :=
+  inferInstanceAs (DecidableEq (Fin Q → Sch.SignCoins))
+
+end BKMBaseRelayInstances
+
+omit [Nonempty RMsg] [Fintype Sch.KeyCoins] [Nonempty Sch.KeyCoins] [Fintype Sch.SignCoins]
+  [DecidableEq Sch.SignCoins] [Nonempty Sch.SignCoins] in
 /-- The statement of a request depends on the public keys only through the signer's. -/
 theorem stmtAt_signerKey [Nonempty RMsg] (pkOf : Fin n → Sch.PK) (adm : List Sch.PK → Prop) {Q : ℕ}
     (pubs : Fin Q → Sch.Pub) (c : ℕ) (r : BKMRequest Sch n N RMsg) {pk : Sch.PK}
@@ -273,6 +300,7 @@ theorem stmtAt_signerKey [Nonempty RMsg] (pkOf : Fin n → Sch.PK) (adm : List S
   · rw [hpk s R m rfl]
     rfl
 
+omit [Fintype Sch.KeyCoins] [DecidableEq Sch.SignCoins] in
 /-- **At the users' coins, the base relay of BKM06 is the relay of statements** `seRelay` at their
 public keys and coins, with the public values of the relay's coins. -/
 theorem atKeys_bkmBaseRelay {Resp : Type} (adm : List Sch.PK → Prop)
@@ -302,6 +330,7 @@ theorem atKeys_bkmBaseRelay {Resp : Type} (adm : List Sch.PK → Prop)
         signerIn]
       split_ifs <;> rfl
 
+omit [Fintype Sch.KeyCoins] [DecidableEq Sch.SignCoins] in
 /-- **The base calls of the requests of BKM06 corrupt exactly the users whose corruption was
 requested.** -/
 theorem corrupt_mem_calls_bkmBaseRelay {Resp : Type} (adm : List Sch.PK → Prop)

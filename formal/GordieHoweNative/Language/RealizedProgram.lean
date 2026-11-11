@@ -540,11 +540,7 @@ derived quotient bounded by one `in` (`oneDigit`), digits in base `radix` with t
 (`digits`) or all committed (`committedDigits`), the field equation itself for `q = p` (`field`),
 the grouped form when the left side reaches `p` (`grouped`), integer equality (`integer`,
 `q = 0`, `assert_int_equal`: the field equation `e = e'` with the sides' intervals and their span
-below `p`), or the product form (`product`, `spectralProduct`; `lib/gordiehowe/ops/integer_congruence.h`): the
-congruence `e − e' = q (quotientLo + Q)` of terms that are not all affine, `e` the terms of sign
-`+1` and `e'` of sign `−1`, `Q` a quotient the program declares, stated in the field coordinate
-by coordinate (`product`) or, row by row, in the spectrum of its convolutions' transform
-(`spectralProduct`, `RealizedProgram.ProductPlaced`). -/
+below `p`). -/
 inductive ModForm where
   /-- The field equation, `q = p`. -/
   | field
@@ -562,17 +558,7 @@ inductive ModForm where
   | grouped
   /-- Integer equality, `q = 0` (`assert_int_equal`). -/
   | integer
-  /-- The product form, its equation in the field. -/
-  | product
-  /-- The product form, its equation in the spectrum of its convolutions' transform. -/
-  | spectralProduct
   deriving Repr, DecidableEq, Inhabited
-
-/-- Whether a `mod_q`'s realization is the product form (`product` or `spectralProduct`). -/
-def ModForm.isProduct : ModForm → Bool
-  | .product => true
-  | .spectralProduct => true
-  | _ => false
 
 /-- **The grouped form of a `mod_q`**: per group `g` of units `(first, count)` the accumulator `S_g`,
 its quotient digits in base `base` (`digitCount` digits, `groupDigits`), the residue
@@ -1144,7 +1130,12 @@ expression `source` (`.apply (.sum la) (.mul (.reindex (IndexMap.convLeft B la l
 the first `la + lb − 1` coordinates of each block of `INTT_M(z)` (`.reindex (IndexMap.blockPrefix B
 M (la + lb − 1)) (.apply (.batched B (.inverseNtt M ψ)) (.leaf z))`), where the predicate
 `products` states `z = NTT_M(a) · NTT_M(b)` on the operands zero-extended to `M`, at the root `ψ`
-(the natural of the C++ encoding). The checks are `RealizedProgram.convOkB`. -/
+(the natural of the C++ encoding). In a predicate not affine in its convolutions the compiler commits
+`C` with the affine row `C = read` and the predicate reads `C`: `committed` names the shared
+expression `kc` (`C`'s leaf) it reads and the row `r` (`.equal d (.ref kc) (.ref read) _`). The
+checks are `RealizedProgram.convOkAtB`. A `direct` convolution (compiler/conv.h, the direct form)
+is read as its committed `C` (`read`, `C`'s leaf), which its `products` predicate, in the circuit,
+states as `Σ_{u+v=k} a_u b_v` (`RealizedProgram.DirectOkAt`). -/
 structure SpectralConv where
   /-- The shared expression of the source convolution. -/
   source : Nat
@@ -1162,6 +1153,16 @@ structure SpectralConv where
   length : Nat
   /-- The root `ψ`. -/
   root : Nat
+  /-- The committed `C`'s shared leaf and its row `C = read`, in a predicate not affine in its
+  convolutions. -/
+  committed : Option (Nat × Nat) := none
+  /-- The direct realization: `read` is the committed `C`'s leaf and `products` the predicate
+  `C = Σ_{u+v=k} a_u b_v` (`RealizedProgram.DirectOkAt`); the transform's `length` and `root` are
+  unused. -/
+  direct : Bool := false
+  /-- The direct realization's blocks that sum a square once (`a` and `b` reading one row of one
+  value): the products `a_u b_v` for `u ≤ v`, twice for `u < v`. -/
+  squares : List Bool := []
   deriving Repr, DecidableEq, Inhabited
 
 /-- **The realized program of a plan**: the phases, the statement's parameters, fields, domains,

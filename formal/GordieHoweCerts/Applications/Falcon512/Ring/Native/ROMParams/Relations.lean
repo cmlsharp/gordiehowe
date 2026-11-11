@@ -21,7 +21,7 @@ namespace GordieHowe.Falcon512.Ring.Native.ROMParams
 open RealizedProgram.Export RealizedProgram.ProofSystem.PhaseLayout IOP RelativePacking GordieHowe.SPBCS GordieHowe.QROM SPBCS.Configurations GordieHowe.Ring
 open Generated.Falcon512.Ring.Native.ROMParams.Program (program)
 open Generated.Falcon512.Ring.Native.ROMParams (interp ProofSystems)
-open Native (Signer CoreWit scheme)
+open Native (CoreWit scheme)
 open scoped NNReal ENNReal
 
 variable {G : Signer 32} (C : ProofSystems)

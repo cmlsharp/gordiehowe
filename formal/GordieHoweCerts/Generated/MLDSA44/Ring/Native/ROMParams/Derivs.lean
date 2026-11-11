@@ -28,7 +28,7 @@ namespace GordieHowe.Generated.MLDSA44.Ring.Native.ROMParams.Derivs
 
 open GordieHowe.RealizedProgram GordieHowe.Generated.MLDSA44.Ring.Native.ROMParams.Program
 
-load_program_ghc "Derivs.ghc" "db234d902c189d86"
+load_program_ghc "Derivs.ghc" "6d807772cb4e070d"
 
 /-- The derivations, as the checker reads them. -/
 def derivations : Derivations := { derivs := derivs, ranks := ranks, shared := shared }

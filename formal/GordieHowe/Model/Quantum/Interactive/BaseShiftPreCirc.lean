@@ -12,7 +12,7 @@ public import GordieHowe.Model.Quantum.Interactive.BaseShiftPre
 
 For Kraus maps `st` of a kind algorithm `T` that are `T`'s read after permutations `σ k`
 (`KrausMap.RightPerm`), the adversary's Kraus maps on the composed registers are read after the
-lifted permutations (`KindAlg.rightPerm_advKraus`, `KindAlg.rightPerm_advKraus_liftAnc`), and the
+lifted permutations (`rightPerm_advKraus_liftAnc`), and the
 gates of each piece of the composed circuit after its last query are basis permutations
 (`Circuit.PermTail`): the pair exchanges and the reprogramming's permutations.
 

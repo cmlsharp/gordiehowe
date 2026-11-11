@@ -11,14 +11,16 @@ namespace GordieHowe.MLDSA44.Ring
 
 open RealizedProgram
 
-/-- The selected member's algebra inputs. The carrier additionally supplies the signature
-relation's quotient; the native profile has no quotient source role. -/
+/-- The selected member's algebra inputs, the signature relation's quotient by `q` (the carrier's
+`carry` slot `0`, `signature.relation.q`) and the high halves of its products by `X^n + 1`
+(algebra slot `8`, `signature.Q`, of both rings). -/
 structure MemberSourceValues (K : Type) where
   aHat : Nat → K
   t1 : Nat → K
   mu : Nat → K
   index : Nat → K
   quotient : Nat → K
+  high : Nat → K
 
 /-- Interpret the ring-specific roles and delegate the common ML-DSA witness roles to their
 algebra, hash and selection interpreters. The ring index is selection slot eight in field zero;
@@ -34,6 +36,7 @@ SampleInBall's selection slots remain in field one. No program identifier select
   | some (.ringSigma, 2) => castElt (a := 0) (m.mu j)
   | some (.selection, 8) => castElt (a := 0) (m.index j)
   | some (.carry, 0) => castElt (a := 0) (m.quotient j)
+  | some (.aWitness, 8) => castElt (a := 0) (m.high j)
   | _ => Native.sourceVal a h s classifier v j
 
 variable {program : RealizedProgram} {I : Interp}
@@ -66,10 +69,17 @@ theorem sourceVal_quotient (hr : classifier.lookup v = some (.carry, 0)) (j : Na
     sourceVal (program := program) m a h s classifier v j = castElt (a := 0) (m.quotient j) := by
   simp only [sourceVal, hr]
 
-/-- Algebra witness roles retain the shared ML-DSA meaning. -/
-theorem sourceVal_algebra (hr : classifier.lookup v = some (.aWitness, slot)) (j : Nat) :
+/-- The high halves' slot (algebra slot `8`) reads the high halves' coordinates. -/
+theorem sourceVal_high (hr : classifier.lookup v = some (.aWitness, 8)) (j : Nat) :
+    sourceVal (program := program) m a h s classifier v j = castElt (a := 0) (m.high j) := by
+  simp only [sourceVal, hr]
+
+/-- Algebra witness roles other than the quotient's retain the shared ML-DSA meaning. -/
+theorem sourceVal_algebra (hr : classifier.lookup v = some (.aWitness, slot)) (hs : slot ≠ 8)
+    (j : Nat) :
     sourceVal (program := program) m a h s classifier v j = a.valuation classifier v j := by
   simp only [sourceVal, hr]
+  split <;> simp_all
   exact Native.sourceVal_algebra a h s hr j
 
 /-- Hash-bit roles retain the shared hash meaning. -/

@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Model.Quantum.Core.MixedAlg
 public import GordieHowe.Model.Quantum.O2H.Basic
+public import GordieHowe.Headline
 
 @[expose] public section
 
@@ -190,6 +191,7 @@ omit [Nonempty R] [Nonempty M] in
 /-- **AHU19 Theorem 3** (pp. 11–12) for general algorithms: "Let A be quantum oracle algorithm
 with query depth d (not necessarily unitary). … Then |P_left − P_right| ≤ 2d √P_guess."
 Derived from `o2h` applied to the unitary dilation of `G` (`MixedAlg.dilate`). -/
+@[headline]
 theorem o2h_mixed :
     GordieHowe.advantage (s.pLeftMixed G E) (s.pRightMixed G E) ≤ 2 * d * √(s.pGuessMixed G s.H) :=
   s.of_dilAlg G E (P := fun a b c => GordieHowe.advantage a b ≤ 2 * d * √c) (by simp)

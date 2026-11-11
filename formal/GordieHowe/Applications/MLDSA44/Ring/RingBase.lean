@@ -31,7 +31,7 @@ proves the ring relation at every `len` and `ringVerifies` holds for every `bmsg
 
 namespace GordieHowe.MLDSA44.Ring
 
-open GordieHowe.Ring GordieHowe.RingSignature _root_.MLDSA
+open GordieHowe.Ring GordieHowe.RingSignature _root_.MLDSA GordieHowe.MLDSA
 
 attribute [local instance] _root_.MLDSA.Concrete.concreteNTTRingOps
 

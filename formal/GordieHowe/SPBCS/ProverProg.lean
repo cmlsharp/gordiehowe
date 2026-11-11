@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.SPBCS.SimProg
+public import GordieHowe.Headline
 public import GordieHowe.SPBCS.Extractor
 public import GordieHowe.SPBCS.Extraction.KnowledgeError
 public import GordieHowe.Model.QROM.QueryBits
@@ -229,8 +230,9 @@ variable [∀ j i, Nonempty ((P j).Challenge i)] {Wit R : Type} [Fintype R] [Non
 
 /-- **The honest prover of the compiled composite as a counted oracle program**, for a key
 program `kp x σ` at each statement and salt making at most `K` queries. On the statement `x`, the
-witness `w` and the uniform coins (the Fiat–Shamir salt `σ`, the causal prover's coins and a Merkle
-salt per position), the prover program `proverProg` of `honest w` (module docstring).
+witness `w` and the coins (the Fiat–Shamir salt `σ`, the causal prover's coins and a Merkle salt
+per position, drawn uniformly by the probability semantics), the prover program `proverProg` of
+`honest w` (module docstring).
 
 Running time: polynomial in the proof size when `kp` is. Per prover round of a leaf, one run of
 the causal prover's message function (polynomial by assumption on the IOP prover), the leaf
@@ -238,14 +240,13 @@ encodings `E` and the leaf and node queries of the round's trees; per challenge 
 the key program and one `xof` query; then the query phase's positions, the opened leaves and one
 multiproof per tree read from the heaps. Oracle queries: at most `2 |Pos| + (K + 1) · t.size n`.
 This running time is argued here, not proved in Lean. -/
-noncomputable def niProverProgOf (E : (j : ι) → (M.comp j).Encoder)
+def niProverProgOf (E : (j : ι) → (M.comp j).Encoder)
     (kp : X → FiatShamirSalt kS → M.KeyProg) {K : ℕ}
     (hK : ∀ x σ chs c h, ((kp x σ chs c).trace h).length ≤ K) {V : X → FullTr P t → Bool}
     {Qs : ∀ x, M.IOPQueries V x} {B : ℕ} (hb : M.FormatBounds Qs B B) :
     NARG.Prover (Query k kN kS L) (Out k e) X Wit (M.BProof B)
       (SaltedCoins (FiatShamirSalt kS) (M.ProverCoins R)) where
   prog x w a := M.proverProg E (honest w a.coins.iop) x a.coins.merkleSalts a.salt (kp x a.salt) hb
-  coins := PMF.uniformOfFintype _
   q := 2 * Fintype.card M.Pos + (K + 1) * t.size n
   prog_queries x w a h := length_trace_proverProg_le E _ x _ _ (hK x a.salt) hb h
 
@@ -533,16 +534,19 @@ variable {Wit R : Type} [Fintype R] [Nonempty R] (honest : Wit → R → CausalP
 
 /-- **The honest prover of the spBCS compiler** (paper `prot:generalized-bcs`): the generic prover
 program (`niProverProgOf`) at the key program with merges,
-against the compiler's oracle `Query → Out`, with uniform coins (the Fiat–Shamir salt, the causal
-prover's coins and a Merkle salt per position). Its proofs are in the format `B` by the format
+against the compiler's oracle `Query → Out`, with coins the Fiat–Shamir salt, the causal prover's
+coins and a Merkle salt per position, whose law is an argument of each statement
+(`NARG.Prover.uniformLaw` is the uniform one). Its proofs are in the format `B` by the format
 bounds `hb` of the query phases. At most `2 |Pos| + (|sites| + 2) · t.size n` queries.
-Completeness, zero knowledge and witness indistinguishability are stated for this one object; in
-the quantum random-oracle model it runs through `queryEncoding`.
+Zero knowledge, witness indistinguishability and adaptive completeness (`complete_rom`,
+`complete_qrom`) are stated for this one object; in the quantum random-oracle model it runs
+through `queryEncoding`. Completeness at a fixed statement (`CompletenessGuarantees`) is stated for
+the compiled proof `prove`, which is this prover's classical semantics (`toFn_niProver`).
 
 Running time: that of `SPBCS.niProverProgOf`, with, per challenge, the final inputs of all
 sites (`|sites|` `transcript` queries, each one encoding, after sorting the sites of `Λ` by rank)
 and its chain input. This running time is argued here, not proved in Lean. -/
-noncomputable def niProver (E : (j : ι) → (M.comp j).Encoder) {V : X → FullTr P t → Bool}
+def niProver (E : (j : ι) → (M.comp j).Encoder) {V : X → FullTr P t → Bool}
     {Qs : ∀ x, M.IOPQueries V x} {B : ℕ} (hb : M.FormatBounds Qs B B) :
     NARG.Prover (Query k kN kS L) (Out k e) X Wit (M.BProof B)
       (SaltedCoins (FiatShamirSalt kS) (M.ProverCoins R)) :=
@@ -601,15 +605,16 @@ maps `fx` and `fw` (`comap`). This is no restriction on the adversaries of `def:
 registers are those of Watrous (TQI, Definition 2.1, p. 59), whose alphabets are finite (p. 1), so
 the proof queries of one adversary range over a finite set of statements and witnesses, which `X'`, `W'`
 with the inclusions `fx`, `fw` cover. -/
-theorem everlastingZeroKnowledge_qrom (E : (j : ι) → (M.comp j).Encoder)
+@[headline]
+theorem everlastingZeroKnowledge_qrom [DecidableEq R] (E : (j : ι) → (M.comp j).Encoder)
     {V : X → FullTr P t → Bool} {Qs : ∀ x, M.IOPQueries V x} (VE : M.ViewEncoder E Qs) {B : ℕ}
     (hb : M.FormatBounds Qs B B) {Pub : Type} {pub : X → Pub} {Sim : CausalJointSimulator VE.MV Pub}
     (T : M.Preimages) {rel : Set (X × Wit)} {δ : NNReal} {X' W' : Type} [Fintype X'] [DecidableEq X']
     [Fintype W'] [DecidableEq W'] (fx : X' → X) (fw : W' → Wit)
     (hvzk : CausalHVZK VE.MV rel honest pub Sim δ) :
     GordieHowe.NARG.QROM.EverlastingZeroKnowledge (fun x w => (fx x, fw w) ∈ rel) queryEncoding
-      ((M.niProver Λ honest E hb).comap fx fw)
-      ((M.niSimulator Λ VE.toViewRead B (ViewEncoder.formatBounds M E VE hb) pub Sim T).comap fx)
+      ((M.niProver Λ honest E hb).comap fx fw) (PMF.uniformOfFintype _)
+      ((VE.niSimulator Λ hb pub Sim T).comap fx)
       (M.zkError δ) := by
   apply EverlastingZeroKnowledgePure.everlastingZeroKnowledge
   rw [NARG.Prover.mapOutput_comap, NARG.Prover.encode_comap, NARG.Simulator.encode_comap,

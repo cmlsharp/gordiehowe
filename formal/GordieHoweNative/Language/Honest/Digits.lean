@@ -36,7 +36,7 @@ def tableRowReads (t : ℕ) : List ℕ :=
   | .expr e' => ir.exprNodes e'
 
 variable (ir) in
-/-- **`DigitsMac.topRoom`, as a check**: every lookup of a single record `D` with `D.beq top` into
+/-- **`DigitsMacC.topRoom`, as a check**: every lookup of a single record `D` with `D.beq top` into
 a range `[0, N)` is of domain `dy` with `m < N`. -/
 def topRoomB (top : Expr) (dy m : ℕ) : Bool :=
   ir.predicates.all fun p =>
@@ -45,7 +45,7 @@ def topRoomB (top : Expr) (dy m : ℕ) : Bool :=
     | _ => true
 
 variable (ir) in
-/-- **`DigitsMac.wrapRoom`, as a check**: every membership of a single record `D` with `D.beq W`
+/-- **`DigitsMacC.wrapRoom`, as a check**: every membership of a single record `D` with `D.beq W`
 in a range `[0, N)` is of domain `dy` with `m < N`. -/
 def wrapRoomB (W : Expr) (dy m : ℕ) : Bool :=
   ir.predicates.all fun p =>

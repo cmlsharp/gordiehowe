@@ -45,7 +45,8 @@ The extraction procedures of other types (`extractorFunctions`: the database ext
 return a `Multiset`) are checked the same way, and every definition named like an extractor whose
 result is a `Multiset`, `Option`, `List` or `Finset` must be listed there or exempted with a reason
 (`notExtractors`). The configuration templates of `configProcedures` (the decoding of the
-database extractor's queries, `queryDecoder`) are checked the same way at the template and at
+database extractor's queries, `queryDecoder`, and the online extractors `extractorQROM` and
+`extractorROM`) are checked the same way at the template and at
 every configuration's instance.
 
 Structure projections, constructors, recursors, matchers and other auxiliary declarations are
@@ -107,7 +108,8 @@ extractor's computation but have no cost-bearing type. The template and each con
 instance (a declaration of the `GordieHowe` namespace with the template's last name component)
 are checked like `extractorFunctions`. -/
 def configProcedures : List Name :=
-  [``GordieHowe.Configuration.Common.queryDecoder]
+  [``GordieHowe.Configuration.Common.queryDecoder, ``GordieHowe.Configuration.Common.extractorQROM,
+    ``GordieHowe.Configuration.Common.extractorROM]
 
 /-- Whether `un` is an extractor procedure: listed in `extractorFunctions`, or a configuration
 template of `configProcedures` or an instance of one. -/

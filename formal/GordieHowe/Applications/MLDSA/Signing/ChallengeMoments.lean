@@ -317,6 +317,12 @@ theorem challengeBall_nonempty {τ : ℕ} (hτ : τ ≤ ringDegree) : Nonempty (
   let ω : ChallengeSeed ringDegree τ := (⟨S, hS⟩, fun _ => true)
   exact ⟨⟨ω.poly, isChallenge_seedPoly ω⟩⟩
 
+/-- **A ternary polynomial is a challenge of its own weight**: a polynomial with centered
+coefficients in `{-1, 0, 1}` lies in `B_w` for `w` its number of nonzero coefficients. -/
+abbrev ChallengeBall.ofWeight (c : Rq) (hc1 : polyNorm c ≤ 1) :
+    ChallengeBall (univ.filter fun j : Fin ringDegree => c.get j ≠ 0).card :=
+  ⟨c, hc1, rfl⟩
+
 /-- **Summing through a map with fibers of equal size**: if `f` lands in `Q` and every `b ∈ Q`
 has exactly `k` preimages, then `∑_a F (f a) = k · ∑_{b ∈ Q} F b`. -/
 theorem sum_comp_eq_mul {α β : Type*} [Fintype α] [Fintype β] [DecidableEq β]

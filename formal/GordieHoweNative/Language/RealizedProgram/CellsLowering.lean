@@ -23,9 +23,9 @@ namespace GordieHowe.RealizedProgram
 open Export
 
 /-- **Whether a predicate body needs a lowering route** (`Structure.routes`): a field `equal`, a
-`mod_0` or a product-form `mod_q`, the predicates `CellsValid.equal` covers. -/
+`mod_0`, the predicates `CellsValid.equal` covers. -/
 def _root_.GordieHowe.RealizedProgram.PredBody.needsRoute (b : PredBody) : Bool :=
-  b.isEqual || b.isIntEq || b.isProductMod
+  b.isEqual || b.isIntEq
 
 /-- **Whether a predicate body needs its H half hosted by a circuit** (`Structure.macHosts`): a
 hosted cross-field `equal` (no `x`-side blind) with no `<mac>.H` predicate. -/

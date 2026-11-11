@@ -215,10 +215,7 @@ inline ProgramData data_of(const ir::Program &p, std::string text) {
     if (q.body == ir::Predicate::kEqual) {
       o.target = Printer::target(q.target);
       if (q.target.kind == ir::Target::kGkr) o.circuit = q.target.id;
-    } else if (q.body == ir::Predicate::kMod &&
-               (q.mod.form == ir::ModForm::kInteger ||
-                q.mod.form == ir::ModForm::kProduct ||
-                q.mod.form == ir::ModForm::kSpectralProduct) &&
+    } else if (q.body == ir::Predicate::kMod && q.mod.form == ir::ModForm::kInteger &&
                q.mod.target) {
       o.target = Printer::target(*q.mod.target);
       if (q.mod.target->kind == ir::Target::kGkr) o.circuit = q.mod.target->id;

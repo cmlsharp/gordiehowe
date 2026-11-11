@@ -7,6 +7,7 @@ public import LatticeCrypto.Ring.Transform
 public import LatticeCrypto.Ring.Norms
 public import GordieHowe.Model.Lattice.Search
 public import GordieHowe.Foundations.ToMathlib.FintypeBytes
+public import VCVio.OracleComp.Constructions.SampleableType.Basic
 
 @[expose] public section
 
@@ -98,17 +99,20 @@ def MSISHard (βz βu : ℕ)
 
 variable {norm}
 
+omit [DecidableEq Hat] in
 theorem msisWinProb_mono {βz βu βz' βu' : ℕ} (hz : βz ≤ βz') (hu : βu ≤ βu')
     (A : PolyMatrix Hat k l → PMF (Option (PolyVec ring.Poly l × PolyVec ring.Poly k))) :
     msisWinProb norm βz βu A ≤ msisWinProb norm βz' βu' A :=
   winProb_mono (fun _ _ h => h.mono hz hu) A
 
+omit [DecidableEq Hat] in
 /-- Hardness at larger bounds gives hardness at smaller ones. -/
 theorem MSISHard.mono_bounds {βz βu βz' βu' : ℕ} (hz : βz ≤ βz') (hu : βu ≤ βu')
     {𝒜 : Set (PolyMatrix Hat k l → PMF (Option (PolyVec ring.Poly l × PolyVec ring.Poly k)))}
     {ε : ℝ≥0∞} (h : MSISHard norm βz' βu' 𝒜 ε) : MSISHard norm βz βu 𝒜 ε :=
   Hard.mono_valid h fun _ _ hx => hx.mono hz hu
 
+omit [DecidableEq Hat] in
 /-- **The one-bound form is the two-bound form at `max`**: hardness of `MSIS_{k,ℓ,ζ'}` with
 `ζ' = max βz βu` (the Dilithium specification's eq. (8) form) gives hardness with bounds `βz`,
 `βu`. -/
@@ -117,6 +121,7 @@ theorem MSISHard.of_max {βz βu : ℕ}
     {ε : ℝ≥0∞} (h : MSISHard norm (max βz βu) (max βz βu) 𝒜 ε) : MSISHard norm βz βu 𝒜 ε :=
   h.mono_bounds (le_max_left _ _) (le_max_right _ _)
 
+omit [DecidableEq Hat] in
 /-- **The `n`-instance Module-SIS game** is won at most `n` times as often as the single-instance
 game, by the guessing adversary (`Search.multiWinProb_le_card_mul`). -/
 theorem msisMultiWinProb_le (βz βu : ℕ) {n : ℕ} [NeZero n]

@@ -32,6 +32,8 @@ open scoped ENNReal
 
 variable {Sch : SigScheme} {n N : ℕ} {RMsg : Type} [Nonempty RMsg]
 
+variable [Nonempty Sch.KeyCoins] [Nonempty Sch.SignCoins]
+
 /-- **The signature of a base answer**: the signature of a signing answer, `dummySig` otherwise. -/
 noncomputable def sigOfAnswer (bind : List Sch.PK → RMsg → Sch.Msg) : BaseResponse Sch → Sch.Sig
   | .signature σ => σ
@@ -41,6 +43,8 @@ noncomputable def sigOfAnswer (bind : List Sch.PK → RMsg → Sch.Msg) : BaseRe
 noncomputable def pkOfAnswer : BaseResponse Sch → Sch.PK
   | .publicKey pk => pk
   | _ => Classical.arbitrary _
+
+variable [DecidableEq Sch.PK] [Nonempty Sch.Pub]
 
 open Classical in
 /-- **The ring-signing step of request number `c` after the signer's public key `pk`**: for a
@@ -84,6 +88,10 @@ theorem bkmSignProg_signs_le [Nonempty RMsg] (Resp : Type) (adm : List Sch.PK �
   · simp only [bkmSignProg, OracleProg.trace_query, bkmSignStep]
     split_ifs <;> simp [OracleProg.trace_query, List.filter, BaseRequest.isSign]
 
+variable [Fintype Sch.PK] [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Fintype Sch.Sig]
+  [DecidableEq Sch.Sig] [Fintype Sch.Pub] [DecidableEq Sch.Pub] [Fintype Sch.KeyCoins]
+  [DecidableEq Sch.KeyCoins] [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins]
+
 variable (Sch n N RMsg) in
 /-- **The signing relay of the requests of BKM06 Definition 7** with `Q` answered requests, for
 the admissible rings `adm` and the base-message map `bind` (`bkmSignProg`).
@@ -99,6 +107,8 @@ noncomputable def bkmSignRelay (Resp : Type) (adm : List Sch.PK → Prop)
 
 variable {Resp : Type} (adm : List Sch.PK → Prop) (bind : List Sch.PK → RMsg → Sch.Msg)
 
+omit [Fintype Sch.PK] [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub]
+  [DecidableEq Sch.Pub] [DecidableEq Sch.KeyCoins] [DecidableEq Sch.SignCoins] in
 /-- **At the users' coins and the signing tables, the signing relay of BKM06 is the relay of
 statements with the signers' public values** `seRelayPub`, at the public values of the signatures
 at the tables' entries (`sigPubs` at `rdTable`). -/
@@ -154,7 +164,8 @@ theorem atKeys_bkmSignRelay {Q : ℕ} (keys : Fin n → Sch.KeyCoins) (tabs : Fi
         · rfl
         · rfl
 
-omit [Nonempty RMsg] in
+omit [Nonempty RMsg] [Fintype Sch.PK] [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub]
+  [DecidableEq Sch.Pub] [DecidableEq Sch.KeyCoins] [DecidableEq Sch.SignCoins] in
 /-- **The base calls of a request of BKM06 through the signing relay**: a public key or
 corruption is forwarded; a ring-signing request `(s, R, m)` asks `s`'s public key and, when it is
 a member's request below `Q`, the signature of `s` on `bind R m`. -/

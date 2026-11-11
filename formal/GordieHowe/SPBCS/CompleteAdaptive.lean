@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.SPBCS.Complete
+public import GordieHowe.Headline
 public import GordieHowe.SPBCS.Salt
 public import GordieHowe.Model.ROM.AdaptiveCompleteness
 public import GordieHowe.SPBCS.Extraction.CompletenessAdaptive
@@ -132,14 +133,15 @@ open Classical in
 the run of the causal prover `prv r` with probability at most `ε` over uniform coins `r` and
 uniform challenges (the completeness error of `def:iop-complete`), then over uniform coins and a
 uniform oracle the compiled verifier rejects the honest proof, with any Merkle salts `ν` and
-Fiat–Shamir salt `σ`, with probability at most `ε + overrun + keyCollision (t.size n) k`. -/
+Fiat–Shamir salt `σ`, with probability at most `completenessError ε`. -/
+@[headline]
 theorem prob_not_accepts_prove_coins_le {R : Type} [Fintype R] [Nonempty R]
     (prv : R → CausalProver P t X) {ε : ℝ≥0∞}
     (hε : Pr[q ← R × Chs P t : V x ((prv q.1).run x q.2) ≠ true] ≤ ε) :
     Pr[q ← R × (Query k kN kS L → Out k e) :
         ¬ M.Accepts q.2 x (prove (prv q.1) x σ E ν q.2 Q) Q] ≤
-      ε + M.overrun + SPBCS.keyCollision (t.size n) k := by
-  rw [ROM.probUniform_prod_eq_sum]
+      M.completenessError ε := by
+  rw [completenessError, ROM.probUniform_prod_eq_sum]
   refine (ROM.sum_inv_card_mul_le_add fun r =>
     (prob_not_accepts_prove_le (prv r) x σ E ν Q le_rfl).trans_eq (add_assoc _ _ _)).trans ?_
   rw [← ROM.probUniform_prod_eq_sum (fun q : R × Chs P t => V x ((prv q.1).run x q.2) ≠ true),

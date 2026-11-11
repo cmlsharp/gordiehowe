@@ -26,6 +26,6 @@ open GordieHowe.Generated.MLDSA44.Ring.Native.ROMParams.Program
 /-- The code arithmetic of the circuit's field. -/
 def ar : CodeArith := (RealizedProgram.gf2_128Code.arith)
 
-load_ghc "H.ghc" "83610373e4add7ed"
+load_ghc "H.ghc" "d5911f4344339911"
 
 end GordieHowe.Generated.MLDSA44.Ring.Native.ROMParams.GKR.H

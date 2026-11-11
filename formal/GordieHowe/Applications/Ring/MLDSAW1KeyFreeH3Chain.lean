@@ -62,7 +62,8 @@ variable {p : Params} {T : ℕ} {Msg : Type} {N reps : ℕ}
   {Λ : SiteLayout Mg} {b : ℕ} [∀ j i, Fintype ((Mc.comp j).MessageWrite i)]
   {E : (j : ι) → (Mc.comp j).Encoder}
   {Vr : W1ExpStmt prims RMsg N → FullTr P τ → Bool}
-  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R]
+  [DecidableEq R] [Nonempty R]
   {honest : RingSignature.RingWit (freshBase prims O Mo βmin tol enc k D bmsg) → R →
     CausalProver P τ (W1ExpStmt prims RMsg N)}
   {adm : KeyRing (PubKey p prims) N → Prop}
@@ -125,14 +126,14 @@ theorem runLawIn_w1C2_le_add_w1ForgeEv
     (runLawIn (fun keys _ => A' keys)
         (fun keys => w1C2 prims O Mo βmin tol enc k D bmsg PSh adm sp
           (w1Rel prims O Mo βmin tol enc k D bmsg PSh adm n Q)
-          (w1MainProver (adm := adm) sp Mc Λ E hb honest n Q chk)
+          (w1MainProver (adm := adm) sp Mc Λ E hb honest n Q chk) (PMF.uniformOfFintype _)
           (w1Enc fun i => (Bf).pk (keys i)) (w1StmtP sp) w1ToR w1DummyR (w1StmtP_queries sp) w1Idle
           keys Q)).toOuterMeasure
         {x | ∃ q ∈ x.2.2, Forges x.1 q.2.2 q.1 (Challenger.histOf q.2.1)} ≤
       (runLawIn (fun keys _ => A' keys)
         (fun keys => w1C2 prims O Mo βmin tol enc k D bmsg PSh adm sp
           (w1Rel prims O Mo βmin tol enc k D bmsg PSh adm n Q)
-          (w1MainProver (adm := adm) sp Mc Λ E hb honest n Q chk)
+          (w1MainProver (adm := adm) sp Mc Λ E hb honest n Q chk) (PMF.uniformOfFintype _)
           (w1Enc fun i => (Bf).pk (keys i)) (w1StmtP sp) w1ToR w1DummyR (w1StmtP_queries sp) w1Idle
           keys Q)).toOuterMeasure
         {x | ∃ q ∈ x.2.2, w1ForgeEv sp O x.1 x.2.1 q} +
@@ -146,7 +147,7 @@ theorem runLawIn_w1C2_le_add_w1ForgeEv
   have hl := toOuterMeasure_runLawIn_inter_length A' (fun keys => w1C2 prims O Mo βmin tol enc k D
     bmsg PSh adm sp
       (w1Rel prims O Mo βmin tol enc k D bmsg PSh adm n Q)
-      (w1MainProver (adm := adm) sp Mc Λ E hb honest n Q chk)
+      (w1MainProver (adm := adm) sp Mc Λ E hb honest n Q chk) (PMF.uniformOfFintype _)
       (w1Enc fun i => (Bf).pk (keys i)) (w1StmtP sp) w1ToR w1DummyR (w1StmtP_queries sp) w1Idle
       keys Q) (Q := Q) (fun _ => rfl)
     {x | ∃ q ∈ x.2.2, Forges x.1 q.2.2 q.1 (Challenger.histOf q.2.1)}
@@ -154,7 +155,7 @@ theorem runLawIn_w1C2_le_add_w1ForgeEv
   have hc := runLawIn_le_add_collision O.muAns hf A' (fun keys => w1C2 prims O Mo βmin tol enc k D
     bmsg PSh adm sp
       (w1Rel prims O Mo βmin tol enc k D bmsg PSh adm n Q)
-      (w1MainProver (adm := adm) sp Mc Λ E hb honest n Q chk)
+      (w1MainProver (adm := adm) sp Mc Λ E hb honest n Q chk) (PMF.uniformOfFintype _)
       (w1Enc fun i => (Bf).pk (keys i)) (w1StmtP sp) w1ToR w1DummyR (w1StmtP_queries sp) w1Idle
       keys Q)
     (Q := Q) (qC := w1KFq N reps k T + 2 * N +
@@ -216,7 +217,7 @@ theorem runLawIn_w1ForgeEv_le [Inhabited Mc.NIProof]
     (runLawIn (fun keys _ => A' keys)
         (fun keys => w1C2 prims O Mo βmin tol enc k D bmsg PSh adm sp
           (w1Rel prims O Mo βmin tol enc k D bmsg PSh adm n Q)
-          (w1MainProver (adm := adm) sp Mc Λ E hb honest n Q chk)
+          (w1MainProver (adm := adm) sp Mc Λ E hb honest n Q chk) (PMF.uniformOfFintype _)
           (w1Enc fun i => (Bf).pk (keys i)) (w1StmtP sp) w1ToR w1DummyR (w1StmtP_queries sp) w1Idle
           keys Q)).toOuterMeasure
         {x | ∃ q ∈ x.2.2, w1ForgeEv sp O x.1 x.2.1 q} ≤
@@ -266,7 +267,7 @@ theorem runLawIn_w1ForgeEv_le [Inhabited Mc.NIProof]
   have he := runLawIn_w1C2_eq (RMsg := RMsg) (PS := PSh) sp
     (w1Rel prims O Mo βmin tol enc k D bmsg PSh adm n Q)
     ((RingSignature.Insider.encProver Mc Λ E hb honest).comap w1StmtX
-      (RingSignature.Insider.RelayWit.toWit (B := Bf)))
+      (RingSignature.Insider.RelayWit.toWit (B := Bf))) (PMF.uniformOfFintype _)
     (fun keys => w1Enc fun i => (Bf).pk (keys i)) (w1StmtP sp) w1ToR w1DummyR
     (w1StmtP_queries sp) w1Idle Q A' (fun keys H q => w1ForgeEv sp O keys H q)
   refine le_of_eq_of_le he ?_
@@ -297,7 +298,7 @@ theorem insiderForgeProb_le_w1C2_w1HPS [Inhabited Mc.NIProof]
         chk A (fun i => (Bf).pk (keys i))))
         (fun keys => w1C2 prims O Mo βmin tol enc k D bmsg PSh adm sp
           (w1Rel prims O Mo βmin tol enc k D bmsg PSh adm n Q)
-          (w1MainProver (adm := adm) sp Mc Λ E hb honest n Q chk)
+          (w1MainProver (adm := adm) sp Mc Λ E hb honest n Q chk) (PMF.uniformOfFintype _)
           (w1Enc fun i => (Bf).pk (keys i)) (w1StmtP sp) w1ToR w1DummyR (w1StmtP_queries sp) w1Idle
           keys Q)).toOuterMeasure
         {x | ∃ q ∈ x.2.2, Forges x.1 q.2.2 q.1 (Challenger.histOf q.2.1)}).toReal +
@@ -313,7 +314,7 @@ theorem insiderForgeProb_le_w1C2_w1HPS [Inhabited Mc.NIProof]
   have h1 := insiderForgeProb_le_w1C2 (PS := PSh) sp h (h.w1HPS_hPSm hQm) (h.w1HPS_hPSv hQm)
     h.w1HPS_proverReadsPub h_laws hv henc hs1 hs2 hV
     (w1Rel prims O Mo βmin tol enc k D bmsg PSh adm n Q)
-    (w1MainProver (adm := adm) sp Mc Λ E hb honest n Q chk) w1MainProver_coins
+    (w1MainProver (adm := adm) sp Mc Λ E hb honest n Q chk) (PMF.uniformOfFintype _) rfl
     (fun keys => w1Enc fun i => (Bf).pk (keys i)) (w1StmtP sp) w1ToR w1DummyR
     (w1StmtP_queries sp) w1Idle (fun keys => w1ProverRelays keys)
     (fun keys => w1KeptInRel (Q := Q) sp h.hO keys) A (fun keys => hw fun i => (Bf).pk (keys i)) Q

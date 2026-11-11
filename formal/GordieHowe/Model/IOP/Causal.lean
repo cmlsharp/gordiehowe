@@ -30,7 +30,8 @@ in `a` and `p` in `b`. Leaves in different branches of a `par` are unordered.
   leaf paths and the messages, to derive the challenge.
 
 **Causal round-by-round soundness** (`CausalRBRStmt`, with errors that may depend on the statement;
-`CausalRBR` at errors that do not; the name is ours). A state function assigns to
+`CausalRBR` at errors that do not; the paper's `def:rbr`, after CMS19 Definitions 8.3 and 8.5). A
+state function assigns to
 every leaf, prefix length, statement, causal context and own prefix a proposition
 (`CausalStateFn`), and a causal extractor reads a candidate witness off the causal past of a
 challenge (`CausalExtractor`). The two conditions:
@@ -44,7 +45,7 @@ challenge (`CausalExtractor`). The two conditions:
 Both conditions read the state only through causal pasts, so a compiler that derives each
 challenge from a hash of its causal past charges each query only the error of the challenge it
 answers. For one protocol, `exists_flip` is what `KnowledgeStateFunction.exists_flip` and the
-straight-line extractor (`knowledgeSoundness_count_of_rbr_count`) give; here it is the defining
+straight-line extractor (`knowledgeSound_count_of_rbr_count`) give; here it is the defining
 condition, since the composite has no single round order from which to derive it.
 `GordieHowe.IOP.CausalRBRKnowledgeSoundStmt` is the case with input claim false and output claim
 acceptance (the paper's `def:rbr`), and `GordieHowe.IOP.CausalRBRKnowledgeSound` its case at errors
@@ -398,11 +399,11 @@ structure CausalPast {t : SPTerm ι} (c : ChIdx P t) where
   /-- The full transcripts of the leaves sequenced before. -/
   ctx : CausalCtx P c.leaf
   /-- The leaf's own messages before the challenge round. -/
-  own : (P c.leaf.label).Transcript c.idx.1.castSucc
+  own : (P c.leaf.label).Transcript c.idx.before
 
 /-- The causal past of a challenge read off a composite transcript. -/
 def FullTr.past {t : SPTerm ι} (f : FullTr P t) (c : ChIdx P t) : CausalPast P c :=
-  ⟨f.ctx c.leaf, (f c.leaf).take c.idx.1.castSucc (Fin.le_last _)⟩
+  ⟨f.ctx c.leaf, (f c.leaf).take c.idx.before (Fin.le_last _)⟩
 
 variable (P) in
 /-- **A causal one-shot extractor**: a candidate witness from the statement and the causal past of
@@ -432,8 +433,8 @@ the leaf's state is false on its prefix before the challenge round and true afte
 `ch`. -/
 def FlipAt {t : SPTerm ι} {Stmt : Type} (S : CausalStateFn P t Stmt) (c : ChIdx P t) (x : Stmt)
     (past : CausalPast P c) (ch : c.Challenge) : Prop :=
-  ¬ S c.leaf c.idx.1.castSucc x past.ctx past.own ∧
-    S c.leaf c.idx.1.succ x past.ctx ((P c.leaf.label).concat past.own ch)
+  ¬ S c.leaf c.idx.before x past.ctx past.own ∧
+    S c.leaf c.idx.after x past.ctx ((P c.leaf.label).concat past.own ch)
 
 /-- **Causal round-by-round soundness** of the state function `S` at the causal extractor `E` for
 `rel`, with per-challenge errors `ε` that may depend on the statement, reducing the input claim

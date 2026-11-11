@@ -3,8 +3,7 @@
 
 // GordieHowe: integer intervals and their arithmetic, for interval
 // propagation (compiler/range.h, compiler/mod.h) and for the operators
-// that bound their own outputs (OpSpec::interval, linear.h; the terms of
-// assert_mod's integer congruences, ops/integer_congruence.h).
+// that bound their own outputs (OpSpec::interval, linear.h).
 //
 // Every operation is checked against a cap 2^CAP_BITS: a result or an
 // intermediate product whose magnitude reaches the cap gives none, as

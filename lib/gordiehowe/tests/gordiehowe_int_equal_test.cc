@@ -19,13 +19,52 @@
 //                                      and takes a pin
 //   GordieHoweIntEqual.ProductMod      assert_mod over a product side,
 //                                      m >= 2: its committed quotient,
-//                                      certificates and record, an honest
-//                                      proof, a wrong quotient and a wrong
-//                                      residue rejected; the realized
-//                                      program's source mod_m with its
-//                                      productMod derivation, which the
-//                                      C++ check accepts and refuses
-//                                      mutated
+//                                      certificates and row predicate, an
+//                                      honest proof, a wrong quotient and a
+//                                      wrong residue rejected; the realized
+//                                      program's source mod_m in the
+//                                      committed-digits form with its row
+//                                      and derivation, which the C++ check
+//                                      accepts and refuses mutated
+//   GordieHoweIntEqual.ConvEqualBatchExport, ConvMulBatchExport,
+//   ConvEqualDirectExport, ConvEqualExport, ConvIntEqualDirectExport,
+//   ConvIntMulBatchExport
+//                                      a plain equal reading a batch conv,
+//                                      affine in it or not (C committed),
+//                                      a direct one, an unpinned one, and
+//                                      integer equalities reading a
+//                                      direct one and, not affine in it,
+//                                      a batch one (C committed):
+//                                      exported and checked, honest, a
+//                                      wrong value rejected
+//   GordieHoweIntEqual.FieldModScalarExport, FieldModConvExport,
+//   FieldModAffineExport
+//                                      assert_mod(a b, c, p),
+//                                      assert_mod(conv(h, x), c, p), h
+//                                      private, and assert_mod(a + b, c, p)
+//                                      over Goldilocks^4: the field form,
+//                                      its row placed (an affine row for
+//                                      affine sides); exported and checked,
+//                                      honest, a wrong c rejected
+//   GordieHoweIntEqual.ProductModScalarExport, ProductModScalarDirectExport,
+//   ProductModConvExport, ProductModConvBatchExport, ModOperatorExport, ModOperatorDirectExport
+//                                      assert_mod(a b, c, q) (committed
+//                                      digits over expression sides; its
+//                                      quotient in digits, or looked up
+//                                      directly),
+//                                      assert_mod(conv(h, x), c, q), h
+//                                      private (committed digits; the conv
+//                                      unpinned, realized directly, or
+//                                      batch),
+//                                      assert_mod(AcyclicConv(h)(x), c, q)
+//                                      (committed digits, an affine row;
+//                                      its quotient in digits, or looked
+//                                      up directly), each with quotient
+//                                      lower end 0:
+//                                      exported with every predicate
+//                                      derived and checked, honest, a
+//                                      forged quotient and a wrong residue
+//                                      rejected
 //   GordieHoweOpInterval.Primitives    int_interval's product, acyclic and
 //                                      negacyclic intervals against the
 //                                      extremes over every vertex and
@@ -76,6 +115,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <random>
 #include <string>
@@ -96,6 +136,7 @@
 #include "gordiehowe/compiler/plan_export.h"
 #include "gordiehowe/compiler/plan_program.h"
 #include "gordiehowe/compiler/program_builder.h"
+#include "gordiehowe/examples/shared/domain_profile.h"
 #include "gordiehowe/examples/shared/program_testing.h"
 #include "gordiehowe/instances.h"
 #include "gordiehowe/system.h"
@@ -388,68 +429,14 @@ TEST(GordieHoweIntEqual, ModZero) {
   EXPECT_TRUE(rejected(*c3, w, add_one(s3.c.id, 1)));
 }
 
-// The derivation of product-form predicate PID of P (certificates C0)
-// checks; every mutation of its productMod step or of the predicate is
-// refused: a premise dropped, two premises swapped, a premise replaced by
-// another fact, R's or lhs's interval widened past p, the modulus made p
-// or another, the form changed, the quotient's range premise cut to its
-// lhs.
-void expect_product_mutants(const ir::Program &P, const ir::Certificates &c0,
-                            size_t pid) {
-  auto refused = [&](const ir::Program &p, ir::Certificates c) {
-    compiler::DerivChecker check(p, c);
-    return check.check(pid);
-  };
-  ASSERT_EQ(refused(P, c0), "");
-  const auto &d0 = c0.derivations.at(pid);
-  const size_t last = d0.size() - 1;
-  const size_t np = d0[last].premises.size();
-  ASSERT_GE(np, 3u);
-  auto with = [&](auto edit) {
-    ir::Certificates c = c0;
-    edit(c.derivations[pid]);
-    return refused(P, c);
-  };
-  EXPECT_NE(with([](auto &d) { d.back().premises.pop_back(); }), "");
-  EXPECT_NE(with([](auto &d) { d.back().premises.erase(d.back().premises.begin()); }), "");
-  EXPECT_NE(with([](auto &d) { std::swap(d.back().premises[0], d.back().premises[1]); }), "");
-  EXPECT_NE(with([](auto &d) { std::swap(d.back().premises[1], d.back().premises[2]); }), "");
-  EXPECT_NE(with([](auto &d) { d.back().premises[2] = d.back().premises[0]; }), "");
-  EXPECT_NE(with([](auto &d) { d.back().premises.push_back(d.back().premises[0]); }), "");
-  // An interval premise widened past p.
-  const std::string p = P.fields.at(P.domains.at(P.predicates[pid].domain).field).characteristic;
-  for (size_t k : {size_t(1), np - 1}) {
-    EXPECT_NE(with([&](auto &d) {
-                const size_t at = d.back().premises[k];
-                ASSERT_EQ(d[at].rule, ir::DStep::kIvlExpr);
-                d[at].ints = {"-" + p, p};
-              }),
-              "")
-        << "premise " << k;
-  }
-  // The predicate's modulus, form or quotient changed.
-  auto with_pred = [&](auto edit) {
-    ir::Program p2 = P;
-    edit(p2.predicates[pid]);
-    return refused(p2, c0);
-  };
-  EXPECT_NE(with_pred([&](ir::Predicate &q) { q.q = p; }), "");
-  EXPECT_NE(with_pred([](ir::Predicate &q) { q.q = "1"; }), "");
-  EXPECT_NE(with_pred([](ir::Predicate &q) {
-              q.mod.form = q.mod.form == ir::ModForm::kProduct
-                               ? ir::ModForm::kSpectralProduct
-                               : ir::ModForm::kProduct;
-            }),
-            "");
-  EXPECT_NE(with_pred([](ir::Predicate &q) { q.mod.form = ir::ModForm::kOneDigit; }), "");
-  EXPECT_NE(with_pred([](ir::Predicate &q) { q.mod.quotient = q.lhs; }), "");
-  EXPECT_NE(with_pred([](ir::Predicate &q) { std::swap(q.lhs, q.rhs); }), "");
-}
-
-// assert_mod(a b, c, 97) with a, b below 1024 and c below 97: the product
-// form commits the quotient below floor(1023^2 / 97) + 1, states one predicate,
-// and records its plan record; an honest proof verifies, and a wrong
-// quotient or a wrong residue is rejected.
+// assert_mod(a b, c, 97) with a, b below 1024 and c below 97: the
+// committed-quotient form over the expression sides commits the quotient
+// below floor(1023^2 / 97) + 1 and states the relation as the predicate
+// product.row; an honest proof verifies, and a wrong quotient or a wrong
+// residue is rejected. The realized program states the source mod_97 (a b)
+// c in the committed-digits form, its row a realization it owns, and its
+// derivation (lift from the row, the sides' intervals and the quotient's
+// range), which the C++ check accepts and refuses mutated.
 TEST(GordieHoweIntEqual, ProductMod) {
   Sys cs("gh-int-mod-product");
   auto &A = cs.domain(env().a_profile(), "A");
@@ -468,49 +455,456 @@ TEST(GordieHoweIntEqual, ProductMod) {
   auto comp = compile(cs, table_profile());
   const std::string r = comp->report();
   has(r, "assert_mod 'product': lhs in [0, 1046529], rhs in [0, 96], m = 97, "
-         "quotient in [0, 10788]; a committed quotient 'product.q' below "
+         "quotient in [0, 10788]: a committed quotient 'product.q' below "
          "10789");
+  has(r, "the relation as the predicate 'product.row'");
   has(r, "certify:product.leftSpan");
   has(r, "certify:product.rightSpan");
   has(r, "certify:product.cap");
-  ASSERT_EQ(comp->records().product_mod_equalities.size(), 1u);
-  const auto &e = comp->records().product_mod_equalities[0];
-  EXPECT_EQ(e.qmax, Bound(10788));
-  EXPECT_FALSE(e.spectral);
   Assignment w;
   w.set(a, values({3, 1023, 0, 77}));
   w.set(b, values({5, 1023, 9, 100}));
   EXPECT_TRUE(honest(*comp, w));
   EXPECT_TRUE(rejected(*comp, w, add_one(id_of(cs, "product.q"), 1)));
   EXPECT_TRUE(rejected(*comp, w, add_one(c.id, 2)));
-  // The realized program states the source mod_97 (a b) c, its target the
-  // predicate's equation, its quotient owned by it; the plan holds no
-  // separate record.
   const compiler::ExportMeta meta{"product", "wide", "c0ffee", "run-0", 0};
-  const std::string plan = compiler::export_lean_plan(*comp, meta);
-  EXPECT_EQ(plan.find("productModEqualities"), std::string::npos);
   const auto prog = compiler::build_program(*comp, meta);
   for (const auto &x : compiler::program_errors(prog)) ADD_FAILURE() << x;
   for (const auto &x : compiler::module_errors(prog)) ADD_FAILURE() << x;
-  // Its derivation: productMod from ivl lhs, nat Q and ivl R, which the
-  // C++ check accepts, and refuses mutated.
   ir::Certificates c0;
   const ir::Program P = compiler::build_ir(*comp, c0);
-  size_t pid = SIZE_MAX;
-  for (size_t i = 0; i < P.predicates.size(); ++i)
+  size_t pid = SIZE_MAX, rid = SIZE_MAX;
+  for (size_t i = 0; i < P.predicates.size(); ++i) {
     if (P.predicates[i].name == "product") pid = i;
+    if (P.predicates[i].name == "product.row") rid = i;
+  }
   ASSERT_NE(pid, SIZE_MAX);
+  ASSERT_NE(rid, SIZE_MAX);
   const ir::Predicate &q = P.predicates[pid];
   EXPECT_EQ(q.body, ir::Predicate::kMod);
   EXPECT_EQ(q.q, "97");
-  EXPECT_EQ(q.mod.form, ir::ModForm::kProduct);
+  EXPECT_EQ(q.role, ir::Predicate::Role::kSource);
+  EXPECT_EQ(q.mod.form, ir::ModForm::kCommittedDigits);
   EXPECT_EQ(q.mod.qmax, "10788");
-  ASSERT_TRUE(q.mod.target.has_value());
+  EXPECT_EQ(q.mod.quotient_lo, "0");
+  EXPECT_EQ(q.mod.digits.size(), 1u);
+  EXPECT_FALSE(q.mod.target.has_value());
+  const ir::Predicate &row = P.predicates[rid];
+  EXPECT_EQ(row.body, ir::Predicate::kEqual);
+  EXPECT_EQ(row.role, ir::Predicate::Role::kRealization);
+  EXPECT_EQ(row.owner, ir::Id(pid));
   EXPECT_EQ(c0.deriv_gaps.at(pid), "");
   ASSERT_FALSE(c0.derivations.at(pid).empty());
-  EXPECT_EQ(c0.derivations[pid].back().rule, ir::DStep::kProductMod);
-  EXPECT_EQ(c0.derivations[pid].back().premises.size(), 3u);
-  expect_product_mutants(P, c0, pid);
+  EXPECT_EQ(c0.derivations[pid].back().rule, ir::DStep::kCongr);
+  // Mutations: the lift's interval premise widened past p, the modulus
+  // changed, the sides swapped.
+  auto refused = [&](const ir::Program &p, ir::Certificates c) {
+    compiler::DerivChecker check(p, c);
+    return check.check(pid);
+  };
+  ASSERT_EQ(refused(P, c0), "");
+  const std::string p = P.fields.at(P.domains.at(q.domain).field).characteristic;
+  {
+    ir::Certificates c1 = c0;
+    auto &d = c1.derivations[pid];
+    const size_t lift = d.back().premises.at(0);
+    ASSERT_EQ(d.at(lift).rule, ir::DStep::kLift);
+    const size_t iv = d[lift].premises.at(1);
+    ASSERT_EQ(d.at(iv).rule, ir::DStep::kIvlExpr);
+    d[iv].ints = {"-" + p, p};
+    EXPECT_NE(refused(P, c1), "");
+  }
+  auto with_pred = [&](auto edit) {
+    ir::Program p2 = P;
+    edit(p2.predicates[pid]);
+    return refused(p2, c0);
+  };
+  EXPECT_NE(with_pred([](ir::Predicate &x) { x.q = "89"; }), "");
+  EXPECT_NE(with_pred([](ir::Predicate &x) { std::swap(x.lhs, x.rhs); }), "");
+}
+
+// The exports of assert_mod over sides that are not plain sums: KIND
+// kScalar is assert_mod(a b, c, q) over four coordinates, a and b below
+// 1024, in the committed-digits form over the expression sides, its
+// quotient below 86 in two digits; kScalarDirect is the same with a and b
+// below 256, its quotient below 6, which the range planner looks up
+// directly; kConv is
+// assert_mod(conv(h, x), c, q) for h and x private polynomials of 16
+// coefficients below 1024 (an operator such as NegacyclicConv takes public
+// parameters only, so a private h enters through conv), in the
+// committed-digits form over the expression sides, the conv unpinned: the
+// placement rule realizes it directly (the test prints and checks it), its
+// row product.row reading the conv as its committed C, which the circuit's
+// products predicate C = sum a_u b_v defines (Target.realized); kConvBatch
+// pins it to the batch realization, the row reading it through its
+// spectral realization; kOperator is assert_mod(AcyclicConv(h)(x), c, q) for a public h of
+// 16 coefficients below 1024 and x private of 16 below 1024, an affine side
+// no circuit reads, in the committed-digits form with an affine row, its
+// quotient below 1363 in two digits; kOperatorDirect is the same with h
+// below 64, its quotient below 84, which the range planner looks up
+// directly in the 111-row table of c's two-sided lookup. c is
+// the residue mod q = 12289, so every quotient's lower end is 0 (no
+// shift). The committed-digits exports' domain takes the QROM parameters'
+// profile, with which the export states the program's data and check.
+// Each exports with every predicate derived and passes the program's
+// checks, proves honestly, and rejects a forged quotient and a wrong
+// residue. GH_PRODUCT_MOD_EXPORT=DIR writes each export there (for its
+// Lean check).
+// Prints the line of COMP's report that states its conv's realization.
+template <class Comp>
+void print_conv_realization(const Comp &comp) {
+  const std::string rep = comp.report();
+  const size_t at = rep.find("conv '");
+  if (at != std::string::npos)
+    std::printf("GH_CONV_REALIZATION %s\n",
+                rep.substr(at, rep.find('\n', at) - at).c_str());
+}
+
+enum class ProductModKind {
+  kScalar,
+  kScalarDirect,
+  kConv,
+  kConvBatch,
+  kOperator,
+  kOperatorDirect
+};
+void product_mod_export(ProductModKind kind) {
+  constexpr uint64_t kQ = 12289;
+  constexpr size_t kN = 16;
+  const bool sc_direct = kind == ProductModKind::kScalarDirect;
+  const bool scalar = kind == ProductModKind::kScalar || sc_direct;
+  const bool conv_batch = kind == ProductModKind::kConvBatch;
+  const bool conv_side = kind == ProductModKind::kConv;
+  const bool op_direct = kind == ProductModKind::kOperatorDirect;
+  const bool op_side = kind == ProductModKind::kOperator || op_direct;
+  const std::string name = sc_direct   ? "product-mod-scalar-direct"
+                           : scalar    ? "product-mod-scalar"
+                           : conv_side ? "product-mod-conv"
+                           : conv_batch ? "product-mod-conv-batch"
+                           : op_direct ? "mod-operator-direct"
+                                       : "mod-operator";
+  Sys cs("gh-" + name);
+  // The QROM parameters' profile of the domain (its tableau certified), its
+  // packing chain the one Goldilocks^4's Lean packing facts have an edge
+  // for (1:4; a program this small would take 1, 2, 4), so that the export
+  // carries the program's data and check.
+  auto qrom = examples::domain_profile<param_sets::QROMParams>(env().af,
+                                                               env().rsa.factory());
+  std::erase_if(qrom.rates.stage.chains, [](const compiler::ChainRate &c) {
+    return c.chain != std::vector<size_t>{1, 4};
+  });
+  auto &A = cs.domain(qrom, "A");
+  const size_t la = scalar ? 4 : kN;
+  std::vector<uint64_t> hv(kN);
+  const uint64_t hb = op_direct ? 64 : 1024;
+  for (size_t i = 0; i < kN; ++i) hv[i] = (29 * i + hb - 1) % hb;
+  const auto a = A.priv(Subfield{}, scalar ? "a" : "h", la);
+  const auto b = A.priv(Subfield{}, scalar ? "b" : "x", la);
+  // The operands' bound.
+  const uint64_t ab = sc_direct ? 256 : 1024;
+  assert_range(a, ab, scalar ? "a" : "h");
+  assert_range(b, ab, scalar ? "b" : "x");
+  const size_t lc = scalar ? la : 2 * kN - 1;
+  const auto c = A.priv(
+      Subfield{}, "c", lc, depends_on(a, b),
+      [scalar, op_side, hv](const std::vector<uint64_t> &u,
+                            const std::vector<uint64_t> &v) {
+        std::vector<uint64_t> r(u.size());
+        if (scalar) {
+          for (size_t i = 0; i < u.size(); ++i) r[i] = u[i] * v[i];
+        } else if (op_side) {
+          r = schoolbook(v, hv, v.size(), hv.size());
+        } else {
+          r = schoolbook(u, v, u.size(), v.size());
+        }
+        for (auto &e : r) e %= kQ;
+        return r;
+      });
+  assert_range(c, kQ, "c");
+  if (scalar)
+    assert_mod(a * b, c, kQ, "product");
+  else if (conv_batch)
+    assert_mod(conv(a, b).pin(ConvRealization::kBatch), c, kQ, "product");
+  else if (op_side)
+    assert_mod(ops::AcyclicConv(A.constant("hpub", values(hv)), kN,
+                                ops::EntryBound{hb})(b),
+               c, kQ, "product");
+  else
+    assert_mod(conv(a, b), c, kQ, "product");
+  auto comp = compile(cs, table_profile());
+  if (conv_side) print_conv_realization(*comp);
+  const compiler::ExportMeta meta{name, "wide", "c0ffee", "run-0", 0};
+  try {
+    const auto p = compiler::build_program(*comp, meta);
+    examples::check_program(p);
+    for (const auto &[n, why] : p.deriv_gaps) ADD_FAILURE() << n << ": " << why;
+    // The unpinned conv's realization, as the placement rule chose it: the
+    // direct one.
+    if (conv_side) {
+      ASSERT_EQ(comp->program().convs.size(), 1u);
+      EXPECT_TRUE(comp->program().convs[0].direct);
+    }
+    // The source predicate (the affine form's row shares its name).
+    bool found = false;
+    for (const auto &q : comp->program().predicates)
+      if (q.name == "product" && q.body == ir::Predicate::kMod) {
+        found = true;
+        EXPECT_EQ(q.mod.form, ir::ModForm::kCommittedDigits);
+        EXPECT_EQ(q.mod.quotient_lo, "0");
+      }
+    EXPECT_TRUE(found);
+    // The committed-digits forms' quotient: in two digits, or looked up
+    // directly.
+    for (const auto &q : comp->program().predicates)
+        if (q.name == "product.q" && q.body == ir::Predicate::kMem)
+          EXPECT_EQ(q.in.lookup.kind, op_direct || sc_direct
+                                          ? ir::LookupKind::kDirect
+                                          : ir::LookupKind::kDigits);
+    // The exports state the program's data and check.
+    const compiler::SystemPlan sp =
+        compiler::system_plan(compiler::proof_module_data(*comp, meta, p));
+    EXPECT_TRUE(sp.ok) << sp.why;
+    if (const char *dir = std::getenv("GH_PRODUCT_MOD_EXPORT"))
+      examples::write_plan(*comp, dir, meta);
+  } catch (const std::exception &e) {
+    ADD_FAILURE() << e.what();
+  }
+  std::vector<uint64_t> av(la), bv(la);
+  for (size_t i = 0; i < la; ++i) {
+    av[i] = (37 * i + ab - 1) % ab;
+    bv[i] = (91 * i + 5) % ab;
+  }
+  av[0] = ab - 1;
+  bv[0] = ab - 1;
+  Assignment w;
+  w.set(a, values(av));
+  w.set(b, values(bv));
+  EXPECT_TRUE(honest(*comp, w)) << name;
+  EXPECT_TRUE(rejected(*comp, w, add_one(id_of(cs, "product.q"), 0))) << name;
+  EXPECT_TRUE(rejected(*comp, w, add_one(c.id, 1))) << name;
+}
+TEST(GordieHoweIntEqual, ProductModScalarExport) {
+  product_mod_export(ProductModKind::kScalar);
+}
+TEST(GordieHoweIntEqual, ProductModScalarDirectExport) {
+  product_mod_export(ProductModKind::kScalarDirect);
+}
+TEST(GordieHoweIntEqual, ProductModConvExport) {
+  product_mod_export(ProductModKind::kConv);
+}
+TEST(GordieHoweIntEqual, ProductModConvBatchExport) {
+  product_mod_export(ProductModKind::kConvBatch);
+}
+
+// assert_mod at m = p, the Goldilocks prime, in a domain over Goldilocks^4
+// (its integer reading the constant coordinate, linear): KIND kScalar is
+// a b = c (mod p) for a, b private below 1024 of four coordinates, kConv
+// conv(h, x) = c (mod p) for h and x private polynomials of 16 coefficients
+// below 1024 (the conv unpinned, realized directly), kAffine a + b = c
+// (mod p). The lowering states the field form: the source mod_p with no
+// quotient and its field row lhs - rhs = 0, an affine row for affine sides,
+// otherwise the predicate product.row placed in the circuit (reading the
+// conv through its realization, the row's target realized), derived by
+// fieldDvd. It exports with every predicate derived and checked, proves
+// honestly and rejects a wrong c; the domain takes the QROM profile
+// (packing chain 1, 4) so the export states the program's data and check.
+// GH_PRODUCT_MOD_EXPORT=DIR writes it there.
+enum class FieldModKind { kScalar, kConv, kAffine };
+void field_mod_export(FieldModKind kind) {
+  constexpr size_t kN = 16;
+  const bool conv_side = kind == FieldModKind::kConv;
+  const bool affine = kind == FieldModKind::kAffine;
+  const std::string name = conv_side ? "field-mod-conv"
+                           : affine  ? "field-mod-affine"
+                                     : "field-mod-scalar";
+  Sys cs("gh-" + name);
+  auto qrom = examples::domain_profile<param_sets::QROMParams>(env().af,
+                                                               env().rsa.factory());
+  std::erase_if(qrom.rates.stage.chains, [](const compiler::ChainRate &c) {
+    return c.chain != std::vector<size_t>{1, 4};
+  });
+  auto &A = cs.domain(qrom, "A");
+  const Bound p = field_characteristic(env().af);
+  const size_t la = conv_side ? kN : 4;
+  const auto a = A.priv(Subfield{}, conv_side ? "h" : "a", la);
+  const auto b = A.priv(Subfield{}, conv_side ? "x" : "b", la);
+  assert_range(a, 1024, conv_side ? "h" : "a");
+  assert_range(b, 1024, conv_side ? "x" : "b");
+  const size_t lc = conv_side ? 2 * kN - 1 : la;
+  const auto c = A.priv(Subfield{}, "c", lc, depends_on(a, b),
+                        [kind](const std::vector<uint64_t> &u,
+                               const std::vector<uint64_t> &v) {
+                          if (kind == FieldModKind::kConv)
+                            return schoolbook(u, v, u.size(), v.size());
+                          std::vector<uint64_t> r(u.size());
+                          for (size_t i = 0; i < u.size(); ++i)
+                            r[i] = kind == FieldModKind::kAffine ? u[i] + v[i] : u[i] * v[i];
+                          return r;
+                        });
+  if (conv_side)
+    assert_mod(conv(a, b), c, p, "product");
+  else if (affine)
+    assert_mod(a + b, c, p, "product");
+  else
+    assert_mod(a * b, c, p, "product");
+  auto comp = compile(cs, table_profile());
+  const compiler::ExportMeta meta{name, "wide", "c0ffee", "run-0", 0};
+  try {
+    const auto pd = compiler::build_program(*comp, meta);
+    examples::check_program(pd);
+    for (const auto &[n, why] : pd.deriv_gaps) ADD_FAILURE() << n << ": " << why;
+    bool found = false, row = false;
+    for (const auto &q : comp->program().predicates) {
+      if (q.name == "product" && q.body == ir::Predicate::kMod) {
+        found = true;
+        EXPECT_EQ(q.mod.form, ir::ModForm::kField);
+      }
+      row = row || (q.name == "product.row" && q.body == ir::Predicate::kEqual);
+    }
+    EXPECT_TRUE(found);
+    EXPECT_EQ(row, !affine);
+    const compiler::SystemPlan sp =
+        compiler::system_plan(compiler::proof_module_data(*comp, meta, pd));
+    EXPECT_TRUE(sp.ok) << sp.why;
+    if (const char *dir = std::getenv("GH_PRODUCT_MOD_EXPORT"))
+      examples::write_plan(*comp, dir, meta);
+  } catch (const std::exception &e) {
+    ADD_FAILURE() << e.what();
+  }
+  std::vector<uint64_t> av(la), bv(la);
+  for (size_t i = 0; i < la; ++i) {
+    av[i] = (37 * i + 1023) % 1024;
+    bv[i] = (91 * i + 5) % 1024;
+  }
+  Assignment w;
+  w.set(a, values(av));
+  w.set(b, values(bv));
+  EXPECT_TRUE(honest(*comp, w)) << name;
+  EXPECT_TRUE(rejected(*comp, w, add_one(c.id, 1))) << name;
+}
+TEST(GordieHoweIntEqual, FieldModScalarExport) { field_mod_export(FieldModKind::kScalar); }
+TEST(GordieHoweIntEqual, FieldModConvExport) { field_mod_export(FieldModKind::kConv); }
+TEST(GordieHoweIntEqual, FieldModAffineExport) { field_mod_export(FieldModKind::kAffine); }
+
+// A plain field equal reading conv(h, x), for h and x private polynomials
+// of 16 coefficients below 1024 and c their schoolbook product, the conv
+// pinned to the realization R (kAuto: the placement rule's, which the test
+// prints). With the direct realization the realized predicate reads C,
+// which the circuit's products predicate C = sum a_u b_v defines. With
+// INTEGER the equation is the integer equality assert_int_equal (mod_0)
+// of its sides, the realized predicate the rewritten node's sides. Unless
+// NONAFFINE, conv(h, x) - c = 0,
+// affine in the conv: the export prints the equal over the conv's source
+// with the target realized, its realized predicate equal.realized reading
+// INTT(z). With NONAFFINE, conv(h, x) y - w = 0 for a private y below 1024
+// and w = c y, not affine in the conv: the lowering commits C with the
+// affine row C = INTT(z)[0, 31), the realized predicate, placed where the
+// predicate is, reads C, and the row reads C and INTT(z). Either way the
+// batch's products predicate is the realization's part, every predicate
+// derived and checked; an honest proof, a wrong c (or w) rejected. The
+// domain takes the QROM profile (packing chain 1, 4) so the export states
+// the program's data and check. GH_PRODUCT_MOD_EXPORT=DIR writes it there.
+void conv_equal(ConvRealization r, bool nonaffine, bool integer = false) {
+  constexpr size_t kN = 16;
+  const std::string name =
+      std::string(integer ? "conv-int-" : "conv-") + (nonaffine ? "mul" : "equal") +
+      (r == ConvRealization::kAuto ? "" : std::string("-") + conv_realization_name(r));
+  Sys cs("gh-" + name);
+  auto qrom = examples::domain_profile<param_sets::QROMParams>(env().af,
+                                                               env().rsa.factory());
+  std::erase_if(qrom.rates.stage.chains, [](const compiler::ChainRate &c) {
+    return c.chain != std::vector<size_t>{1, 4};
+  });
+  auto &A = cs.domain(qrom, "A");
+  const auto h = A.priv(Subfield{}, "h", kN);
+  const auto x = A.priv(Subfield{}, "x", kN);
+  const auto y = A.priv(Subfield{}, "y", 2 * kN - 1);
+  assert_range(h, 1024, "h");
+  assert_range(x, 1024, "x");
+  assert_range(y, 1024, "y");
+  const auto c = A.priv(Subfield{}, "c", 2 * kN - 1, depends_on(h, x, y),
+                        [nonaffine](const std::vector<uint64_t> &u,
+                                    const std::vector<uint64_t> &v,
+                                    const std::vector<uint64_t> &t) {
+                          std::vector<uint64_t> r =
+                              schoolbook(u, v, u.size(), v.size());
+                          if (nonaffine)
+                            for (size_t i = 0; i < r.size(); ++i) r[i] *= t[i];
+                          return r;
+                        });
+  if (integer && nonaffine)
+    assert_int_equal(conv(h, x).pin(r) * y, c, "equal");
+  else if (integer)
+    assert_int_equal(conv(h, x).pin(r), c, "equal");
+  else if (nonaffine)
+    assert_zero(conv(h, x).pin(r) * y - c, "equal");
+  else
+    assert_zero(conv(h, x).pin(r) - c, "equal");
+  auto comp = compile(cs, table_profile());
+  if (r == ConvRealization::kAuto) print_conv_realization(*comp);
+  const compiler::ExportMeta meta{name, "wide", "c0ffee", "run-0", 0};
+  try {
+    const auto p = compiler::build_program(*comp, meta);
+    examples::check_program(p);
+    for (const auto &[n, why] : p.deriv_gaps) ADD_FAILURE() << n << ": " << why;
+    bool realized = false;
+    for (const auto &q : comp->program().predicates)
+      if (q.name == "equal" &&
+          q.body == (integer ? ir::Predicate::kMod : ir::Predicate::kEqual))
+        realized = integer ? q.mod.target && q.mod.target->kind == ir::Target::kRealized
+                           : q.target.kind == ir::Target::kRealized;
+    EXPECT_TRUE(realized);
+    ASSERT_EQ(comp->program().convs.size(), 1u);
+    const ir::SpectralConv &cv = comp->program().convs[0];
+    if (r == ConvRealization::kBatch) {
+      EXPECT_FALSE(cv.direct);
+      EXPECT_EQ(cv.committed != ir::kNone, nonaffine);
+    } else {
+      // Pinned direct, or unpinned: the placement rule realizes it
+      // directly.
+      EXPECT_TRUE(cv.direct);
+    }
+    const compiler::SystemPlan sp =
+        compiler::system_plan(compiler::proof_module_data(*comp, meta, p));
+    EXPECT_TRUE(sp.ok) << sp.why;
+    if (const char *dir = std::getenv("GH_PRODUCT_MOD_EXPORT"))
+      examples::write_plan(*comp, dir, meta);
+  } catch (const std::exception &e) {
+    ADD_FAILURE() << e.what();
+  }
+  std::vector<uint64_t> hv(kN), xv(kN), yv(2 * kN - 1);
+  for (size_t i = 0; i < kN; ++i) {
+    hv[i] = (37 * i + 1023) % 1024;
+    xv[i] = (91 * i + 5) % 1024;
+  }
+  for (size_t i = 0; i < yv.size(); ++i) yv[i] = (53 * i + 7) % 1024;
+  Assignment w;
+  w.set(h, values(hv));
+  w.set(x, values(xv));
+  w.set(y, values(yv));
+  EXPECT_TRUE(honest(*comp, w)) << name;
+  EXPECT_TRUE(rejected(*comp, w, add_one(c.id, 1))) << name;
+}
+TEST(GordieHoweIntEqual, ConvEqualBatchExport) {
+  conv_equal(ConvRealization::kBatch, false);
+}
+TEST(GordieHoweIntEqual, ConvMulBatchExport) { conv_equal(ConvRealization::kBatch, true); }
+TEST(GordieHoweIntEqual, ConvEqualDirectExport) {
+  conv_equal(ConvRealization::kDirect, false);
+}
+TEST(GordieHoweIntEqual, ConvEqualExport) { conv_equal(ConvRealization::kAuto, false); }
+TEST(GordieHoweIntEqual, ConvIntEqualDirectExport) {
+  conv_equal(ConvRealization::kDirect, false, true);
+}
+TEST(GordieHoweIntEqual, ConvIntMulBatchExport) {
+  conv_equal(ConvRealization::kBatch, true, true);
+}
+
+TEST(GordieHoweIntEqual, ModOperatorExport) {
+  product_mod_export(ProductModKind::kOperator);
+}
+TEST(GordieHoweIntEqual, ModOperatorDirectExport) {
+  product_mod_export(ProductModKind::kOperatorDirect);
 }
 
 // x and y nonnegative below 100 honestly (Slack), c = x + y below 200:

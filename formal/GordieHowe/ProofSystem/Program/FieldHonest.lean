@@ -227,7 +227,7 @@ theorem colsBatchOkB_of (cb : ir.CBatch I d .columns) : ir.colsBatchOkB d cb.idx
 theorem bitsBatchOkB_of (cb : ir.CBatch I d .bits) : ir.bitsBatchOkB d cb.idx = true := by
   simp only [bitsBatchOkB, cb.ok, cb.operands, Bool.true_and, beq_self_eq_true]
 
-/-- **Completeness of the compiler correspondence on the tree's coordinates**, the circuit's
+/-- **Completeness of the circuits' correspondence on the tree's coordinates**, the circuit's
 source read along its domain: where the circuit's meaning holds at the decoded cells and the
 filler cells decode to `0`, the source accepts the input of the logical assignment
 (`treeInput_eq_circuitInput`, `CircuitsAccept`, whose premise on the pads the cells' assignment
@@ -321,7 +321,7 @@ assignment (`fieldHonestLog`): the honest batch (`BatchedZerocheck.AffineBatch.h
 `BatchedZerocheck.MergedAffineBatch.fusedHonest`) where the domain's batched relation holds on the cells
 (`colsBatchAt_holds_iff`, `bitsBatchAt_holds_iff`, `mergedBatchAt_holds_iff`,
 `mergedBatchAt_holds_iff_bits`), with the bit sumcheck on bits (`bitHonest`), or the honest GKR of
-every circuit (`GKR.LayeredCircuit.maskedHonest`) through the compiler's completeness; simulated by
+every circuit (`GKR.LayeredCircuit.maskedHonest`) through `CircuitsAccept`; simulated by
 `branchSim`. -/
 noncomputable def branchHonest (hok : ir.ClaimOk rs) (TA : ir.CircuitsAccept I src) :
     (j : ir.BranchIdx d Pk) → (ir.branchIP src rs j).Honest
@@ -829,7 +829,8 @@ noncomputable def fieldHonestData :
 /-- **The honest prover of domain `d`'s circuit proof** (`GordieHowe.DomainProof.Honest`) at an
 honest predicate `hpred` giving the domain's predicate (`hh`): the cells with filler `0` as the
 honest input (`zeroFiller`, `holds_zeroFiller`), the tree domain's honest prover at the honest data
-(`fieldHonestData`). `TA`: the compiler's completeness (trust base). -/
+(`fieldHonestData`). `TA`: the circuits accept honest inputs (`CircuitsAccept`, a field of the
+proof system proved from the GKR certificates). -/
 noncomputable def fieldHonest {hpred : (ir.layout I).Constraint (ir.Valuation I) (ir.domainOf I d).Cells}
     (hh : ∀ x a r, hpred x a r → (ir.domainOf I d).Holds x a r) :
     (ir.fieldProof src R).Honest hpred (fieldSim src R) where

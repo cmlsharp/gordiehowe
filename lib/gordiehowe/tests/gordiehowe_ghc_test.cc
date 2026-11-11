@@ -498,14 +498,14 @@ TEST(GordieHoweGhc, RealizationDerivations) {
                     S::kFieldDvd, S::kGroupedMod, S::kIvlApply, S::kIvlLogic,
                     S::kFact, S::kTransport, S::kLift, S::kDigits, S::kCongr,
                     S::kMac, S::kLinop, S::kConclude, S::kHyp, S::kIvlDisjoint,
-                    S::kProductMod, S::kCircuitAssert, S::kInputPremise}) {
+                    S::kCircuitAssert, S::kInputPremise}) {
     S s; s.rule = rule; s.id = 7; s.premises = {0, 1, 2}; s.coeffs = {"-4", "0", "7"};
     s.exprs = {0, 1}; s.ints = {"5", "12", "2"}; s.members = {{{1, 2, 3}}};
     s.tails = {1, 2}; s.h = 3; s.src_arg = 2; s.in_dom = 1;
     steps.push_back(s);
   }
   for (auto src : {S::kConst, S::kDeclared, S::kNat, S::kPrime, S::kOpaqueBit,
-                   S::kQuadRoot, S::kRootSet, S::kShift, S::kTableHull, S::kTableKernel}) {
+                   S::kQuadRoot, S::kRootSet, S::kShift, S::kTableHull}) {
     S s; s.rule = S::kSrc; s.id = 3; s.src = src; s.src_arg = 2; s.premises = {0};
     s.tails = {1, 2}; s.ints = {"-18446744073709551617", "9", "2"}; steps.push_back(s);
   }
@@ -564,14 +564,13 @@ TEST(GordieHoweGhc, StructureRecords) {
   ir::Expr reindex; reindex.op = ir::Expr::kReindex; reindex.x = 0; reindex.a = 0;
   program.nodes.push_back(reindex);
   R r;
-  for (auto k : {K::selectRow, K::spectralProduct, K::selectFirst, K::keccak,
+  for (auto k : {K::selectRow, K::selectFirst, K::keccak,
                  K::macSite, K::modField, K::modCommitted, K::modGrouped,
                  K::modDigits, K::modOneDigit, K::lookupTwoSided, K::lookupDigits,
                  K::packedTable})
     r.gadgets.push_back({k, {0, 1}, {2, 3}, {4, 5}, {}});
-  r.gadgets[0].parts = {{P::expr, {1}, {}}, {P::kernel, {0, 1, 2, 3, 4, 5}, {}},
-                        {P::stream, {2}, {}}, {P::stream, {2}, 3},
-                        {P::kernelOf, {4, 5, 6}, {}}};
+  r.gadgets[0].parts = {{P::expr, {1}, {}}, {P::stream, {2}, {}},
+                        {P::stream, {2}, 3}};
   r.origins = {{0, {1, 2}}, {3, {4, 5}}};
   for (size_t n = 0; n < 140; ++n) r.messages.push_back({n, n + 1});
   r.bound_recs = {{1, 2}};

@@ -38,7 +38,6 @@
 #include "gordiehowe/ct.h"
 #include "gordiehowe/expr.h"
 #include "gordiehowe/ops/operators.h"
-#include "gordiehowe/ops/integer_congruence.h"
 
 namespace proofs::gordiehowe {
 
@@ -118,6 +117,12 @@ class DomainCore {
   virtual std::vector<size_t> bound_ids() const = 0;
   // Range requests not yet lowered.
   virtual size_t pending_requests() const = 0;
+  // Records the honest bounds of the range requests the domain has now
+  // (not implied-only, not pending), which the quotients of the next pass
+  // that lowers mod_q's (the MAC tails', the application's assert_mods)
+  // price their tables against (mod.h's table_rows_cost), so that no
+  // quotient's form depends on the order the pass lowers them in.
+  virtual void snapshot_quotient_tables() = 0;
   // The realization of the range request named NM, null when the domain
   // has none; LOWERED tells whether the lowering selected it.
   virtual const RangeRealization *find_request(const std::string &nm,
@@ -133,23 +138,18 @@ class DomainCore {
 // lowered at compile by mod.h. For M >= 2 with affine sides they are LHS
 // and RHS. For M = 0, the integer equality, they are any expressions L and
 // R (products and conv included), lowered to assert_zero(l - r) under PIN
-// once interval propagation keeps both sides in [0, p). For M >= 2 with a
-// term that is not affine (the product form) it is the congruence CONG
-// (ops/integer_congruence.h: the difference D of signed terms, any an
-// expression or a spectral product), lowered with a committed quotient to
-// one predicate, CONG's equation, under PIN.
+// once interval propagation keeps both sides in [0, p). For M >= 2, below
+// p, with a side that is not affine they are L and R too, lowered with a
+// committed quotient to the predicate NAME.row under PIN (mod.h's
+// expression_sides); for M = p, to the field row NAME.row, L - R = 0,
+// under PIN.
 template <class F>
 struct ModDecl {
   Lin<F> lhs, rhs;
   Bound m = 0;
   std::string name;
   ExprPtr<F> l, r;
-  std::shared_ptr<const ops::Congruence<F>> cong;
   std::shared_ptr<Placement> pin;
-  // The product form's quotient Q (a value of the program), and the lower
-  // end qlo its generator reads, which the lowering sets.
-  std::optional<Ref<F>> q;
-  std::shared_ptr<SignedInt> qlo;
 };
 
 class LoweringContext;
@@ -420,10 +420,16 @@ class Scope {
   // a quotient with its range requests and no-wrap condition, grouped when LHS
   // is a sum of nonnegative terms whose total reaches p; its lowering realizes
   // it, so the returned predicate has no placement. M >= 2 over sides with
-  // products or conv: a committed quotient with its range request and
-  // no-wrap conditions, and one predicate lhs - rhs - m (qlo + q) = 0,
-  // placed as usual (pin() fixes it). NM names it (assert_mod.<k> by
-  // default).
+  // products, conv or operators (e.g. assert_mod(a * b, c, q), or
+  // assert_mod(conv(h, x), c, q) with h private): a committed quotient with
+  // its range request and no-wrap conditions, and one predicate
+  // lhs - rhs - m (qlo + q) = 0, placed as usual (pin() fixes it): below p
+  // the committed-digits form over the expressions, its predicate NAME.row;
+  // at p the field form, its field row NAME.row, lhs - rhs = 0, with no
+  // quotient. These are the
+  // supported forms of a congruence; a field equality in a transform's
+  // spectrum is ops::assert_spectral (ops/spectral.h). NM names it
+  // (assert_mod.<k> by default).
   template <class X, class Y,
             class = std::enable_if_t<kIsPoly<X> && kIsPoly<Y>>>
   Predicate assert_mod(const X &lhs, const Y &rhs, Bound m,
@@ -461,99 +467,29 @@ class Scope {
       const ExprPtr<F> l = expr_node(lhs), r = expr_node(rhs);
       if (l->n != r->n)
         fail("assert_mod '" + scoped(label) + "': the sides' lengths differ");
-      using T = std::shared_ptr<const ops::IntegerTerm<F>>;
-      return product_mod<F>(
-          std::make_shared<const ops::Congruence<F>>(
-              std::vector<typename ops::Congruence<F>::Row>{
-                  {ops::plus<F>(T(std::make_shared<const ops::ExprTerm<F>>(l))),
-                   ops::minus<F>(T(std::make_shared<const ops::ExprTerm<F>>(r)))}},
-              "assert_mod '" + scoped(label) + "'"),
-          m, label);
+      // The expressions themselves (mod.h's expression_sides), whichever
+      // realization the conv lowering gives a conv: below p the
+      // committed-digits form, at p the field form.
+      std::vector<size_t> ids = expr_deps(l);
+      const auto rd = expr_deps(r);
+      ids.insert(ids.end(), rd.begin(), rd.end());
+      auto &d = infer<F>(ids, label);
+      if (sys_->profile_)
+        fail("assert_mod '" + scoped(label) + "' declared after the "
+             "system was lowered");
+      auto pin = std::make_shared<Placement>(Placement::kAuto);
+      SystemCore::PendingMod pm;
+      pm.domain = d.index;
+      ModDecl<F> decl;
+      decl.m = m;
+      decl.name = scoped(label);
+      decl.l = l;
+      decl.r = r;
+      decl.pin = pin;
+      pm.decl = std::make_shared<const ModDecl<F>>(std::move(decl));
+      sys_->mods_.push_back(std::move(pm));
+      return Predicate(pin);
     }
-  }
-  // D = 0 (mod M) as integers for the congruence CONG
-  // (ops/integer_congruence.h: rows of signed terms, any an expression or a
-  // spectral product), M >= 2: the product form with any terms
-  // (ops/spectral.h's assert_mod over spectral rows). The lowering bounds
-  // each term by its own interval, commits one quotient for all rows and
-  // states CONG's equation as one predicate (mod.h). NM names it
-  // (assert_mod.<k> by default).
-  template <class F>
-  Predicate assert_mod_congruence(std::shared_ptr<const ops::Congruence<F>> cong,
-                                  Bound m, const std::string &nm = "") const {
-    static_assert(!F::kCharacteristicTwo,
-                  "assert_mod: integers mod m exist in odd characteristic");
-    const std::string label =
-        nm.empty() ? "assert_mod." + std::to_string(sys_->mods_.size()) : nm;
-    if (cong == nullptr) fail("assert_mod '" + scoped(label) + "': no terms");
-    if (m < 2)
-      fail("assert_mod '" + scoped(label) + "': a congruence of terms takes a "
-           "modulus m >= 2");
-    return product_mod<F>(std::move(cong), m, label);
-  }
-  // assert_mod for M >= 2 over the congruence CONG (the product form): the
-  // declaration under LABEL, its pin (CONG's placement, or any), and the
-  // quotient LABEL.q of CONG's dims, unless M is the characteristic. The
-  // quotient is a value of the program, which the lowering ranges: its
-  // generator computes (D - m qlo) / m from D, read off CONG's equation at
-  // no quotient (CONG's to_difference), qlo the lowering's.
-  template <class F>
-  Predicate product_mod(std::shared_ptr<const ops::Congruence<F>> cong, Bound m,
-                        const std::string &label) const {
-    auto &d = infer<F>(cong->deps(), label);
-    if (sys_->profile_)
-      fail("assert_mod '" + scoped(label) + "' declared after the system "
-           "was lowered");
-    const auto placed = cong->placement();
-    auto pin = std::make_shared<Placement>(placed ? *placed : Placement::kAuto);
-    SystemCore::PendingMod pm;
-    pm.domain = d.index;
-    ModDecl<F> decl;
-    decl.m = m;
-    decl.name = scoped(label);
-    decl.cong = cong;
-    decl.pin = pin;
-    const F *pf = &d.field();
-    if (m != field_characteristic(*pf)) {
-      using Elt = typename F::Elt;
-      const Shape shape(cong->dims());
-      auto qlo = std::make_shared<SignedInt>(0);
-      const bool small = field_characteristic(*pf) <= Bound::pow2(64);
-      const ct::Divisor64 dm(small ? uint64_t(m) : 1);
-      // The lowering refuses an m (Qmax + 1) beyond 128 bits, so the
-      // generator's dividends and m are NatInts.
-      const NatInt mn = m.fits128() ? static_cast<NatInt>(m) : NatInt(1);
-      auto gen = [pf, cong, qlo, m, mn, small, dm](const std::vector<Elt> &v) {
-        std::vector<Elt> z = v;
-        cong->to_difference(z);
-        const SignedInt mq = SignedInt(m) * *qlo;
-        const Elt mqlo = mq.negative() ? pf->negf(elt_of_nat(*pf, Bound(-mq)))
-                                       : elt_of_nat(*pf, Bound(mq));
-        std::vector<Elt> out(z.size());
-        for (size_t i = 0; i < z.size(); ++i) {
-          uint64_t ok = 1;
-          const NatInt x = nat_of_ct(*pf, pf->subf(z[i], mqlo), ok);
-          const NatInt q = small ? NatInt(dm.divmod(uint64_t(x)).q)
-                                 : NatInt(ct::divmod(x, mn).q);
-          out[i] = elt_of_nat(*pf, q);
-        }
-        return out;
-      };
-      const Expr<F> dep = cong->equation(
-          [](size_t, const ExprPtr<F> &e) { return Expr<F>(e); });
-      if (d.prime == Space::kField)
-        decl.q = d.priv_in(*this, Field{}, label + ".q", shape, depends_on(dep),
-                           gen);
-      else
-        decl.q = d.priv_in(*this, Subfield{}, label + ".q", shape,
-                           depends_on(dep), gen);
-      decl.qlo = qlo;
-    }
-    pm.decl = std::make_shared<const ModDecl<F>>(std::move(decl));
-    sys_->mods_.push_back(std::move(pm));
-    if (placed)
-      return Predicate::unplaced("assert_mod (its equation's placement)");
-    return Predicate(pin);
   }
   // assert_mod(lhs, rhs, 0) under LABEL: the integer equality's
   // declaration, its sides as expressions and a pin.
@@ -1352,10 +1288,6 @@ struct Predicates {
   template <class... A>
   static Predicate mod(const Scope &sc, A &&...a) {
     return sc.assert_mod(std::forward<A>(a)...);
-  }
-  template <class... A>
-  static Predicate mod_congruence(const Scope &sc, A &&...a) {
-    return sc.assert_mod_congruence(std::forward<A>(a)...);
   }
   template <class... A>
   static void same_bits(const Scope &sc, A &&...a) {

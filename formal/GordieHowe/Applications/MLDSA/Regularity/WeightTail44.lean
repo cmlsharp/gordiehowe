@@ -20,13 +20,13 @@ ML-DSA-87 (`FloorParams`) does not apply. This file bounds `𝔼_{s, Â, G} w⁻
 
 **Lines.** For a line `α - σ N x₀ ≤ Pr[Bin(N, x₀) ≤ ω]` (`σ ≥ 0`, every `N ≤ 256 k`) and hint
 fraction bounds at most `x₀`, `α π_G - σ m_G` is at most the mean member weight in every bucket
-vector (`line_le_expect_memberWeight`), where `π_G = 𝔼_c̃ 1[‖G(c̃)·t₀‖∞ < γ₂]`
+vector (`line_le_expect_flatWeight`), where `π_G = 𝔼_c̃ 1[‖G(c̃)·t₀‖∞ < γ₂]`
 (`ct0Indicator`) and `m_G = 𝔼_c̃ hintBoundSum(G(c̃), t₀)`. At ML-DSA-44 every hint fraction bound
 of a shift `|b| ≤ τ 2^12` is at most `x₀ = 21/25` (`hintFractionBound_le_mldsa44`), and the four
 lines of `WeightLines44.lean` and the line `(2^-3072, 0)` give the weight
 `mldsa44OracleWeight G t₀ = max(mldsa44LineValue(π_G, m_G), 2^-3072 π_G)`
-(`mldsa44OracleWeight_le_expect_memberWeight`). It is `0` only if every `c̃` fails the ct₀-check,
-and then every mean member weight is `0` (`expect_memberWeight_eq_zero_of_mldsa44OracleWeight`).
+(`mldsa44OracleWeight_le_expect_flatWeight`). It is `0` only if every `c̃` fails the ct₀-check,
+and then every mean member weight is `0` (`expect_flatWeight_eq_zero_of_mldsa44OracleWeight`).
 
 **The oracle average.** Hoeffding's inequality over the values of `G` (`2^256` commitment hashes,
 deviation `2^-64`) for `π_G` and `m_G`, and `w ≥ 2^-3072 · 2^-256` whenever `π_G > 0`, give
@@ -98,28 +98,28 @@ theorem ct0Indicator_eq_zero_or_eq_one (γ₂ : ℕ) {k : ℕ} (c : Rq) (t0 : Rq
 
 /-- **The member weight is at most the ct₀ indicator**: `min(1, aw/β_min) ≤ 1[‖b‖∞ < γ₂]` for
 `prims` with `SampleInBall = G`, since the acceptance weight vanishes when the check fails. -/
-theorem toReal_memberWeight_le_ct0Indicator (prims : Primitives p)
+theorem toReal_flatWeight_le_ct0Indicator (prims : Primitives p)
     (G : CommitHashBytes p → ChallengeBall p.tau)
     (hG : ∀ cTilde, prims.sampleInBall cTilde = (G cTilde).1) (βmin : ℚ≥0) (t0 : RqVec p.k)
     (v : BucketVec p) (cTilde : CommitHashBytes p) :
-    (memberWeight prims βmin t0 (v, cTilde) : ℝ≥0∞).toReal ≤
+    (flatWeight prims (Cutoff.const βmin) t0 (v, cTilde) : ℝ≥0∞).toReal ≤
       ct0Indicator p.gamma2 (G cTilde).1 t0 := by
   unfold ct0Indicator
   split_ifs with h
-  · have h1 : (memberWeight prims βmin t0 (v, cTilde) : ℝ≥0∞) ≤ 1 :=
+  · have h1 : (flatWeight prims (Cutoff.const βmin) t0 (v, cTilde) : ℝ≥0∞) ≤ 1 :=
       ENNReal.nnratCast_le_one.2 (NNRat.minOneDiv_le_one _ _)
     simpa using ENNReal.toReal_mono ENNReal.one_ne_top h1
   · have h0 : t0Weight prims t0 (v, cTilde) = 0 := by
       simp only [t0Weight, acceptWeightQ, hG]
       rw [if_neg h, zero_mul, Rat.toNNRat_zero]
-    simp [memberWeight, NNRat.minOneDiv, h0]
+    simp [flatWeight, NNRat.minOneDiv, h0]
 
 /-- **A line below the mean member weight.** For `prims` with `SampleInBall = G`, `β_min ≤ 1`,
 hint fraction bounds `hintFractionBound((G(c̃)·t₀)_x) ≤ x₀`, `σ ≥ 0` and a line
 `α - σ N x₀ ≤ Pr[Bin(N, x₀) ≤ ω]` at every `N ≤ 256 k`, in every bucket vector `v`:
-`α 𝔼_c̃ 1[‖G(c̃)·t₀‖∞ < γ₂] - σ 𝔼_c̃ hintBoundSum(G(c̃), t₀) ≤ 𝔼_c̃ memberWeight(t₀, (v, c̃))`
-(`line_le_expect_acceptWeight`, `toReal_t0Weight_le_memberWeight`). -/
-theorem line_le_expect_memberWeight (hp : SigningParams p) (prims : Primitives p)
+`α 𝔼_c̃ 1[‖G(c̃)·t₀‖∞ < γ₂] - σ 𝔼_c̃ hintBoundSum(G(c̃), t₀) ≤ 𝔼_c̃ flatWeight(t₀, (v, c̃))`
+(`line_le_expect_acceptWeight`, `toReal_t0Weight_le_flatWeight`). -/
+theorem line_le_expect_flatWeight (hp : SigningParams p) (prims : Primitives p)
     (G : CommitHashBytes p → ChallengeBall p.tau)
     (hG : ∀ cTilde, prims.sampleInBall cTilde = (G cTilde).1) {βmin : ℚ≥0} (hβ : (βmin : ℝ≥0∞) ≤ 1)
     (t0 : RqVec p.k) {x₀ α σ : ℝ}
@@ -128,7 +128,7 @@ theorem line_le_expect_memberWeight (hp : SigningParams p) (prims : Primitives p
     (v : BucketVec p) :
     α * 𝔼 cTilde, ct0Indicator p.gamma2 (G cTilde).1 t0 -
         σ * 𝔼 cTilde, hintBoundSum p.gamma2 p.beta (G cTilde).1 t0 ≤
-      𝔼 cTilde, (memberWeight prims βmin t0 (v, cTilde) : ℝ≥0∞).toReal := by
+      𝔼 cTilde, (flatWeight prims (Cutoff.const βmin) t0 (v, cTilde) : ℝ≥0∞).toReal := by
   have hcard : Fintype.card (Fin p.k × Fin ringDegree) = p.k * ringDegree := by
     rw [Fintype.card_prod, Fintype.card_fin, Fintype.card_fin]
   have h := line_le_expect_acceptWeight (C := CommitHashBytes p) hp.beta_lt_gamma2
@@ -136,7 +136,7 @@ theorem line_le_expect_memberWeight (hp : SigningParams p) (prims : Primitives p
     (fun N hN => hline N (hcard ▸ hN)) (fun x => (v x).val)
   simp only [ct0Indicator, hintBoundSum]
   refine h.trans (Finset.expect_le_expect fun cTilde _ => ?_)
-  refine le_trans (le_of_eq ?_) (toReal_t0Weight_le_memberWeight prims hp hβ t0 (v, cTilde))
+  refine le_trans (le_of_eq ?_) (toReal_t0Weight_le_flatWeight prims hp hβ t0 (v, cTilde))
   rw [coe_t0Weight, ENNReal.toReal_ofReal (acceptWeight_nonneg hp.beta_lt_gamma2 _ _ _), hG]
 
 end Lines
@@ -244,7 +244,7 @@ variable [nttOps : NTTRingOps]
 
 /-- **The member-weight lower bound at ML-DSA-44 under the oracle `G`**:
 `max(mldsa44LineValue(π_G, m_G), 2^-3072 π_G)` with `π_G = 𝔼_c̃ 1[‖G(c̃)·t₀‖∞ < γ₂]` and
-`m_G = 𝔼_c̃ hintBoundSum(G(c̃), t₀)` (`mldsa44OracleWeight_le_expect_memberWeight`). -/
+`m_G = 𝔼_c̃ hintBoundSum(G(c̃), t₀)` (`mldsa44OracleWeight_le_expect_flatWeight`). -/
 noncomputable def mldsa44OracleWeight
     (G : CommitHashBytes _root_.MLDSA.mldsa44 → ChallengeBall _root_.MLDSA.mldsa44.tau)
     (t0 : RqVec _root_.MLDSA.mldsa44.k) : ℝ :=
@@ -290,15 +290,16 @@ theorem hintBoundSum_mem_mldsa44 (c : ChallengeBall _root_.MLDSA.mldsa44.tau)
 
 /-- **The weight bounds the mean member weight at ML-DSA-44**: for `prims` with
 `SampleInBall = G`, `β_min ≤ 1`, `‖t₀‖∞ ≤ 2^12` and every bucket vector `v`,
-`mldsa44OracleWeight G t₀ ≤ 𝔼_c̃ memberWeight(t₀, (v, c̃))` (`line_le_expect_memberWeight` at the
+`mldsa44OracleWeight G t₀ ≤ 𝔼_c̃ flatWeight(t₀, (v, c̃))` (`line_le_expect_flatWeight` at the
 five lines). -/
-theorem mldsa44OracleWeight_le_expect_memberWeight [NeZero (bucketCount _root_.MLDSA.mldsa44)]
+theorem mldsa44OracleWeight_le_expect_flatWeight [NeZero (bucketCount _root_.MLDSA.mldsa44)]
     (prims : Primitives _root_.MLDSA.mldsa44)
     (G : CommitHashBytes _root_.MLDSA.mldsa44 → ChallengeBall _root_.MLDSA.mldsa44.tau)
     (hG : ∀ cTilde, prims.sampleInBall cTilde = (G cTilde).1) {βmin : ℚ≥0} (hβ : (βmin : ℝ≥0∞) ≤ 1)
     (t0 : RqVec _root_.MLDSA.mldsa44.k) (ht0 : polyVecNorm t0 ≤ 4096)
     (v : BucketVec _root_.MLDSA.mldsa44) :
-    mldsa44OracleWeight G t0 ≤ 𝔼 cTilde, (memberWeight prims βmin t0 (v, cTilde) : ℝ≥0∞).toReal :=
+    mldsa44OracleWeight G t0 ≤ 𝔼 cTilde, (flatWeight prims (Cutoff.const βmin) t0 (v, cTilde) :
+        ℝ≥0∞).toReal :=
       by
   have hp := SigningParams.of_isApproved isApproved_mldsa44
   have hx : ∀ cTilde x, hintFractionBound _root_.MLDSA.mldsa44.gamma2 _root_.MLDSA.mldsa44.beta
@@ -310,7 +311,7 @@ theorem mldsa44OracleWeight_le_expect_memberWeight [NeZero (bucketCount _root_.M
   have hl := fun {α σ : ℝ} (hσ : 0 ≤ σ)
       (hline : ∀ N ≤ _root_.MLDSA.mldsa44.k * ringDegree, α - σ * N * (21 / 25) ≤
         binomialCdf (21 / 25) N _root_.MLDSA.mldsa44.omega) =>
-    line_le_expect_memberWeight hp prims G hG hβ t0 hx hσ hline v
+    line_le_expect_flatWeight hp prims G hG hβ t0 hx hσ hline v
   rw [mldsa44_omega] at hl
   unfold mldsa44OracleWeight mldsa44LineValue
   refine max_le (max_le (max_le (max_le ?_ ?_) ?_) ?_) ?_
@@ -324,15 +325,15 @@ theorem mldsa44OracleWeight_le_expect_memberWeight [NeZero (bucketCount _root_.M
 omit [NTTRingLaws nttOps] in
 /-- **A zero weight means zero member weights**: if `mldsa44OracleWeight G t₀ = 0`, every `c̃`
 fails the ct₀-check, so the mean member weight of every bucket vector is `0`
-(`toReal_memberWeight_le_ct0Indicator`). -/
-theorem expect_memberWeight_eq_zero_of_mldsa44OracleWeight
+(`toReal_flatWeight_le_ct0Indicator`). -/
+theorem expect_flatWeight_eq_zero_of_mldsa44OracleWeight
     [NeZero (bucketCount _root_.MLDSA.mldsa44)]
     (prims : Primitives _root_.MLDSA.mldsa44)
     (G : CommitHashBytes _root_.MLDSA.mldsa44 → ChallengeBall _root_.MLDSA.mldsa44.tau)
     (hG : ∀ cTilde, prims.sampleInBall cTilde = (G cTilde).1) (βmin : ℚ≥0)
     (t0 : RqVec _root_.MLDSA.mldsa44.k) (h : mldsa44OracleWeight G t0 = 0)
     (v : BucketVec _root_.MLDSA.mldsa44) :
-    𝔼 cTilde, (memberWeight prims βmin t0 (v, cTilde) : ℝ≥0∞).toReal = 0 := by
+    𝔼 cTilde, (flatWeight prims (Cutoff.const βmin) t0 (v, cTilde) : ℝ≥0∞).toReal = 0 := by
   have hp0 : 0 ≤ 𝔼 cTilde, ct0Indicator _root_.MLDSA.mldsa44.gamma2 (G cTilde).1 t0 :=
     Finset.expect_nonneg fun _ _ => ct0Indicator_nonneg _ _ _
   have hπ : 𝔼 cTilde, ct0Indicator _root_.MLDSA.mldsa44.gamma2 (G cTilde).1 t0 = 0 := by
@@ -342,7 +343,7 @@ theorem expect_memberWeight_eq_zero_of_mldsa44OracleWeight
     nlinarith
   refine le_antisymm ?_ (Finset.expect_nonneg fun _ _ => ENNReal.toReal_nonneg)
   exact (Finset.expect_le_expect fun cTilde _ =>
-    toReal_memberWeight_le_ct0Indicator prims G hG βmin t0 v cTilde).trans hπ.le
+    toReal_flatWeight_le_ct0Indicator prims G hG βmin t0 v cTilde).trans hπ.le
 
 omit nttOps [NTTRingLaws nttOps] in
 /-- `(e₁ + e₂) · 2^6656 ≤ 2^-1000` for the two Hoeffding tails at `2^256` commitment hashes and
@@ -1891,9 +1892,7 @@ theorem expect_expect_expect_inv_sq_mldsa44OracleWeight_le (sk : SecretKey _root
       (aHat : TqMatrix _root_.MLDSA.mldsa44.k _root_.MLDSA.mldsa44.l), polyVecNorm
       (keyOf (keyOfCoeffs sk e)
           (keyMap (fun b => (keyOfCoeffs sk e).s1.get b) (matOfHat aHat))).t0 ≤ 4096 :=
-    fun e aHat => by
-      rw [matrixKey_t0]
-      exact polyVecNorm_edgeT0Of_le _
+    fun e aHat => polyVecNorm_matrixKey_t0_le _ aHat
   have hS : ∀ (e : SecretCoeffs _root_.MLDSA.mldsa44)
       (aHat : TqMatrix _root_.MLDSA.mldsa44.k _root_.MLDSA.mldsa44.l),
       t0SqNorm (keyOf (keyOfCoeffs sk e)

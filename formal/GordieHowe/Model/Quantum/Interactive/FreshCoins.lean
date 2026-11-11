@@ -468,7 +468,10 @@ namespace GordieHowe.Signature
 
 open GordieHowe.Quantum GordieHowe.RingSignature
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB} (O : SignOracle B) (n : ℕ)
+variable {X Y : Type} {TB : SchemeTypes}
+  {B : BaseScheme X Y TB} (O : SignOracle B) (n : ℕ)
+
+variable [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins]
 
 /-- **The multi-user challenger with a parameter for the other requests**: as `muChallenger`,
 except that a signing request `r` numbered `j < Q` is signed with the coin `a j` when `tgt r` holds
@@ -500,8 +503,11 @@ noncomputable def muChallengerAt (keys : Fin n → B.KeyCoins) (Q : ℕ)
       · simp
     · simp
 
+variable [Fintype O.SMsg] [DecidableEq O.SMsg]
+
 variable {O n}
 
+omit [Fintype O.SMsg] [DecidableEq O.SMsg] in
 /-- **The multi-user challenger with a parameter never reprograms.** -/
 theorem muChallengerAt_noAssign (keys : Fin n → B.KeyCoins) (Q : ℕ)
     (tgt : MURequest O n → Bool) (ρ : Fin Q → O.Coins) :
@@ -542,6 +548,9 @@ noncomputable def muChallengerAt_freshCoins (keys : Fin n → B.KeyCoins) (Q : �
 
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
   [Nonempty Y] {Out : Type} {t : ℕ}
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
 
 /-- **The multi-user transcript law, the other requests' coins drawn outside**: at every oracle
 `H`, the transcript law of every adversary against `muChallenger` is the average over a uniform

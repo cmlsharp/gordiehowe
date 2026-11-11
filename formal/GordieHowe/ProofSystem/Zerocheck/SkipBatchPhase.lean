@@ -18,7 +18,7 @@ operands, or a skip event occurred at a challenge already drawn" (`reduction`), 
 transcript family (`phaseFamily`) and the hiding law of a masked honest phase
 (`maskedPhase_identDistrib`). The skip message has `e` coordinates, read at the skip domain's
 `(D − 1)(w − 1)` points through `he : (D − 1)(w − 1) = e`, so that both the field batch
-(`e = (2 − 1)(w − 1)`) and the bit-packed Keccak batch (`e = w − 1`, `HashCircuit.Skip.phase`) are
+(`e = (2 − 1)(w − 1)`) and the bit-packed Keccak batch (`e = w − 1`, `BatchedZerocheck.phase`) are
 this phase at `D = 2` by definition. It reuses `HashCircuit.Skip`'s alternating rounds (`Skip.alt`,
 `altFamily`) and one-move phases.
 

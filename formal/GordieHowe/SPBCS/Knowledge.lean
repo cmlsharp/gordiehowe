@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.SPBCS.Cover
+public import GordieHowe.Headline
 public import GordieHowe.SPBCS.Extraction.KnowledgeError
 public import GordieHowe.Model.QROM.QueryBits
 public import GordieHowe.Model.QROM.QueryCount
@@ -23,8 +24,9 @@ CMS19 section 8.5.2 (pp. 43–44, knowledge) for the spBCS compiler
   (paper `prot:bcs-db-extractor`, `GordieHowe/SPBCS/Extractor.lean`).
 * `dbProb_bad_union_le_of_queryCount`: the measured database of an algorithm with per-branch
   query count `b` lies in `bad ∪ P_col` with probability at most
-  `6b² (max_c ε c + (max 2 c_in + nJ + 1) b / 2^(8k))`; the error is
-  `knowledgeError k e kq t c_in nJ κ`, the knowledge error with `nJ` extra digests per input.
+  `6b² (maxError ε + (max 2 c + nJ + 1) b / 2^(8k))`; the error is
+  `knowledgeError k e kq t c nJ κ`, the knowledge error with `c = M.senc.digestsPerInput`
+  digests per chain input and `nJ` extra digests per input.
 -/
 
 namespace GordieHowe.SPBCS
@@ -114,7 +116,8 @@ section QueryCount
 variable {M} [∀ j i, Nonempty ((P j).Challenge i)] {V : X → FullTr P t → Bool}
 
 /-- The measured-database bound for the spBCS compiler at a per-branch query count `b`:
-`6b² (max_c ε c + (max 2 c_in + maxNb + 1) b / 2^(8k))`. -/
+`6b² (maxError ε + (max 2 c + maxNb + 1) b / 2^(8k))`. -/
+@[headline]
 theorem dbProb_bad_union_le_of_queryCount {Wit : Type} {rel : Set (X × Wit)}
     {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X} {ε : ChIdx P t → ℝ≥0}
     (hrbr : CausalRBRKnowledgeSound rel V E St ε) {C : Type} {K tq b : ℕ}

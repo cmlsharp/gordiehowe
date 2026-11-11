@@ -70,14 +70,6 @@ section
 
 variable (ir : RealizedProgram) {I : Interp}
 
-/-- **Coefficient `i` of the polynomial whose spectrum is coordinates `[b n, (b + 1) n)` of value
-`v`**, in domain `d`'s field: the inverse transform of length `n` at the root `psi`, in natural
-order when `natural`, in scheme order otherwise (`NamedOp.formPoly`). -/
-def kernelPoly (rd : ir.Valuation I) (d v b n psi : ℕ) (natural : Bool) (i : ℕ) :
-    (I (ir.domainField d)).K :=
-  NamedOp.formPoly (I := I) (ir.domainField d) n (fun k => castElt (rd v (b * n + k)))
-    (if natural then .nttNatural psi else .ntt psi) i
-
 /-- **A fact holds** at the reader `rd`. -/
 def Fact.HoldsWith (rd : ir.Valuation I) : Fact → Prop
   | .eq d e₁ e₂ => ∀ i < ir.exprLen e₁, ir.evalWith rd d e₁ i = ir.evalWith rd d e₂ i
@@ -90,11 +82,6 @@ def Fact.HoldsWith (rd : ir.Valuation I) : Fact → Prop
   | .inRows t e => ∀ i < ir.exprLen e, ∃ j, ir.tableRow rd (ir.chalField (ir.alphaOf t)) t j =
       ir.evalE rd (ir.chalField (ir.alphaOf t)) e i
   | .holds p => ir.HoldsWith rd (ir.predicate p).body
-  | .kernel d v b n psi natural lo hi => ∀ i < n,
-      lo ≤ (I (ir.domainField d)).coefInt (ir.kernelPoly rd d v b n psi natural i) ∧
-      (I (ir.domainField d)).coefInt (ir.kernelPoly rd d v b n psi natural i) ≤ hi ∧
-      (((I (ir.domainField d)).coefInt (ir.kernelPoly rd d v b n psi natural i) : ℤ) :
-        (I (ir.domainField d)).K) = ir.kernelPoly rd d v b n psi natural i
   | .real rc => ir.RealHolds rd rc
 
 variable {ir} in

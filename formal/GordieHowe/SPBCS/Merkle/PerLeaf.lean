@@ -430,7 +430,7 @@ that `leafAt` reads. -/
 theorem leafAt_of_check (hcol : D ∉ digestCollision) {n : ℕ} {rt : Digest k} {js : List ℕ}
     {lvs : List (MerkleLeaf kN L)} {path : List (Digest k)}
     (hq : ∀ q ∈ (treeProg n js lvs path).trace h, D.lookup q = some (h q))
-    (hc : format.check h n rt js lvs path) {j : ℕ} {a : MerkleLeaf kN L} (hja : (j, a) ∈ js.zip lvs)
+    (hc : format.Check h n rt js lvs path) {j : ℕ} {a : MerkleLeaf kN L} (hja : (j, a) ∈ js.zip lvs)
     (hj : j < n) : leafAt D n rt ⟨j, hj⟩ = some a := by
   obtain ⟨-, -, -, -, hrt⟩ := hc
   change (treeProg n js lvs path).run h = some rt at hrt
@@ -502,7 +502,7 @@ theorem run_rootsProg_honest :
 at least one, with their honest paths, are accepted against the honest root. -/
 theorem check_path {js : List ℕ} {lvs : List (MerkleLeaf kN L)} (hnd : js.Nodup)
     (hjs : ∀ j ∈ js, j < n) (hne : js ≠ []) (hlv : List.Forall₂ (fun j a => a = lf j) js lvs) :
-    format.check h n (root h n lf) js lvs (format.path h n js lf) := by
+    format.Check h n (root h n lf) js lvs (format.path h n js lf) := by
   refine ⟨hnd, hjs, hlv.length_eq.symm, by simp [MerkleFormat.path, format], ?_⟩
   change (treeProg n js lvs (format.path h n js lf)).run h = some (root h n lf)
   rw [run_treeProg, run_rootsProg_honest h hjs hlv,

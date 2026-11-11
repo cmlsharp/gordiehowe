@@ -39,9 +39,9 @@ member `j` has `H (j, w1 y)` off its excluded set (`ExclSets`), and keeps `w1 y`
   concentration term (`oracleConcError`) and the distance of the signer's accepted `(v, c)` from
   `signerTarget`, provided the signer's fresh attempt keeps with positive probability
   (`jointAttempt_ringAttempt_ne_one`: then so does the ring attempt);
-- `oracleConcError_le`: the concentration term is at most `√(δ / q̄) / 2` when every value
-  `w1 y = v` has probability at most `δ` (two columns of a uniform function are independent,
-  `sum_uniform_column_mul`, so the variance of `q H` is at most `δ · q̄`);
+- `oracleConcError`: the concentration term, at most `√(δ / q̄) / 2` when every value `w1 y = v`
+  has probability at most `δ` (`oracleConcError_le` in `PMFOracleSide.lean`, a case of the
+  core bound `quenchedConc_le`);
 - `tvDist_condSomeOr_freshAttempt_flatten_le`: if the fresh attempt's accepted mass is
   proportional to `u · w`, flattening with the coin `min 1 (β / w)` brings its accepted law within
   `∑ u · (β - w) / ∑ u · min w β` of `u` (`FlattenHyp.tvDist_condSome_thin_le`).
@@ -780,31 +780,6 @@ variable {N V C : Type*} [Fintype N] [DecidableEq N] [Fintype V] [DecidableEq V]
   (E : ExclSets N C) (i : N) {Y : Type*} [Fintype Y] (P : PMF Y) (w1 : Y → V)
   (acc : Y → C → Bool) (κ : V × C → ℝ≥0∞) (hκ : ∀ a, κ a ≤ 1)
 
-/-- The column of `H` at `v`: every member's value at `v`. -/
-def column (H : N × V → C) (v : V) : N → C := fun j => H (j, v)
-
-omit [DecidableEq C] [Nonempty V] in
-/-- **Two columns of a uniform function are independent.** -/
-theorem sum_uniform_column_mul {v v' : V} (hv : v ≠ v') (φ ψ : (N → C) → ℝ) :
-    ∑ H : N × V → C, (Fintype.card (N × V → C) : ℝ)⁻¹ * (φ (column H v) * ψ (column H v')) =
-      (∑ H : N × V → C, (Fintype.card (N × V → C) : ℝ)⁻¹ * φ (column H v)) *
-        ∑ H : N × V → C, (Fintype.card (N × V → C) : ℝ)⁻¹ * ψ (column H v') := by
-  classical
-  let e : (N × V → C) ≃ (V → N → C) :=
-    ⟨fun H v j => H (j, v), fun f x => f x.2 x.1, fun _ => rfl, fun _ => rfl⟩
-  have hcard : Fintype.card (N × V → C) = Fintype.card (V → N → C) := Fintype.card_congr e
-  have h1 := Fintype.sum_equiv e
-    (fun H => (Fintype.card (N × V → C) : ℝ)⁻¹ * (φ (column H v) * ψ (column H v')))
-    (fun f => (Fintype.card (V → N → C) : ℝ)⁻¹ * (φ (f v) * ψ (f v'))) fun H => by
-      rw [hcard]; rfl
-  have h2 := Fintype.sum_equiv e
-    (fun H => (Fintype.card (N × V → C) : ℝ)⁻¹ * φ (column H v))
-    (fun f => (Fintype.card (V → N → C) : ℝ)⁻¹ * φ (f v)) fun H => by rw [hcard]; rfl
-  have h3 := Fintype.sum_equiv e
-    (fun H => (Fintype.card (N × V → C) : ℝ)⁻¹ * ψ (column H v'))
-    (fun f => (Fintype.card (V → N → C) : ℝ)⁻¹ * ψ (f v')) fun H => by rw [hcard]; rfl
-  rw [h1, h2, h3, sum_pi_mul_apply_mul_apply hv, sum_pi_mul_apply, sum_pi_mul_apply]
-
 omit [Fintype V] [Fintype C] [DecidableEq C] [Nonempty C] [Nonempty V] in
 /-- `Pr_y[w1 y = v ∧ acc y c]` is at most `Pr_y[w1 y = v]`. -/
 theorem signerMass_le_map (v : V) (c : C) : signerMass P w1 acc v c ≤ P.map w1 v := by
@@ -828,140 +803,6 @@ theorem _root_.ENNReal.toReal_tsub_one {x : ℝ≥0∞} (hx : x ≠ ⊤) :
     have := ENNReal.toReal_mono hx h
     simp only [ENNReal.toReal_one] at this
     linarith
-
-omit [Nonempty V] in
-/-- **The oracle concentration bound**: if every commitment `w1 y = v` has probability at most
-`δ`, the oracle concentration term is at most `√(δ / q̄) / 2`, with `q̄` the keep probability of
-one ring attempt against a uniform oracle. The keep probability `q H` against a fixed oracle is a
-sum over columns `v` of terms each at most `δ` that depend on the column of `H` at `v` only, so its
-variance is at most `δ · q̄`. -/
-theorem oracleConcError_le {δ : ℝ} (hδ : ∀ v, (P.map w1 v).toReal ≤ δ)
-    (h : jointAttempt (uniformOfFintype _) (ringAttempt E i P w1 acc κ hκ) none ≠ 1) :
-    oracleConcError E i P w1 acc κ hκ ≤
-      √(δ / (1 - jointAttempt (uniformOfFintype _) (ringAttempt E i P w1 acc κ hκ) none).toReal)
-        / 2 := by
-  classical
-  set U := uniformOfFintype (N × V → C)
-  set J := jointAttempt U (ringAttempt E i P w1 acc κ hκ)
-  set A := ringAttempt E i P w1 acc κ hκ
-  set c0 : ℝ := (Fintype.card (N × V → C) : ℝ)⁻¹
-  have hU : ∀ H, (U H).toReal = c0 := fun H => toReal_uniformOfFintype_apply H
-  have hc0 : ∑ _H : N × V → C, c0 = 1 := by
-    rw [sum_const, card_univ, nsmul_eq_mul]
-    exact mul_inv_cancel₀ (by exact_mod_cast Fintype.card_ne_zero)
-  have hc0nn : 0 ≤ c0 := inv_nonneg.2 (Nat.cast_nonneg _)
-  -- the per-column keep probabilities
-  let φ : V → (N → C) → ℝ := fun v cs =>
-    (signerMass P w1 acc v (cs i) * κ (v, cs i) *
-      (if ∀ j, j ≠ i → cs j ∉ E.excl j then 1 else 0)).toReal
-  let G : V → (N × V → C) → ℝ := fun v H => (A H (some v)).toReal
-  have hG : ∀ v H, G v H = φ v (column H v) := fun v H => by
-    simp only [G, φ, A, ringAttempt_apply_some, column]
-    rfl
-  have hφ0 : ∀ v cs, 0 ≤ φ v cs := fun _ _ => ENNReal.toReal_nonneg
-  have hφδ : ∀ v cs, φ v cs ≤ δ := fun v cs => by
-    refine le_trans (ENNReal.toReal_mono (apply_ne_top _ _) ?_) (hδ v)
-    calc signerMass P w1 acc v (cs i) * κ (v, cs i) *
-          (if ∀ j, j ≠ i → cs j ∉ E.excl j then 1 else 0)
-        ≤ signerMass P w1 acc v (cs i) * 1 * 1 := by
-          gcongr
-          · exact hκ _
-          · split_ifs <;> simp
-      _ ≤ P.map w1 v := by rw [mul_one, mul_one]; exact signerMass_le_map P w1 acc v _
-  set Q : (N × V → C) → ℝ := fun H => ∑ v, G v H
-  have hQ : ∀ H, (1 - A H none).toReal = Q H := fun H => by
-    rw [← sum_apply_some, ENNReal.toReal_sum fun v _ => apply_ne_top _ _]
-  -- the average keep probability
-  set m := (1 - J none).toReal with hm_def
-  have hsum : ∑ H, U H * (1 - A H none) + J none = 1 := by
-    rw [show J = jointAttempt U A from rfl, jointAttempt_apply_none, ← sum_add_distrib]
-    calc ∑ H, (U H * (1 - A H none) + U H * A H none) = ∑ H, U H :=
-          sum_congr rfl fun H _ => by
-            rw [← mul_add, tsub_add_cancel_of_le (coe_le_one _ _), mul_one]
-      _ = 1 := sum_coe U
-  have hJt : J none ≠ ⊤ := apply_ne_top _ _
-  have hm : m = ∑ H, c0 * Q H := by
-    rw [hm_def, ← ENNReal.eq_sub_of_add_eq hJt hsum, ENNReal.toReal_sum fun H _ =>
-      ENNReal.mul_ne_top (apply_ne_top _ _) (ne_top_of_le_ne_top ENNReal.one_ne_top tsub_le_self)]
-    exact sum_congr rfl fun H _ => by rw [ENNReal.toReal_mul, hU, hQ]
-  have hs0 : 1 - J none ≠ 0 := one_sub_apply_none_ne_zero h
-  have hm0 : 0 < m := ENNReal.toReal_pos hs0 (ne_top_of_le_ne_top ENNReal.one_ne_top tsub_le_self)
-  -- the second moment
-  have hmom : ∑ H, c0 * Q H ^ 2 ≤ m ^ 2 + δ * m := by
-    have hexp : ∀ H, c0 * Q H ^ 2 = ∑ v, ∑ v', c0 * (G v H * G v' H) := fun H => by
-      rw [sq, show Q H = ∑ v, G v H from rfl, sum_mul_sum, mul_sum]
-      exact sum_congr rfl fun v _ => by rw [mul_sum]
-    have hpair : ∀ v v', ∑ H, c0 * (G v H * G v' H) ≤
-        (∑ H, c0 * G v H) * (∑ H, c0 * G v' H) + if v = v' then δ * ∑ H, c0 * G v H else 0 := by
-      intro v v'
-      by_cases hvv : v = v'
-      · subst hvv
-        rw [if_pos rfl]
-        have hle : ∑ H, c0 * (G v H * G v H) ≤ δ * ∑ H, c0 * G v H := by
-          rw [mul_sum]
-          refine sum_le_sum fun H _ => ?_
-          rw [hG]
-          have h0 := hφ0 v (column H v)
-          have h1 := hφδ v (column H v)
-          have := mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_right h1 h0) hc0nn
-          linarith
-        have hsq : 0 ≤ (∑ H, c0 * G v H) * (∑ H, c0 * G v H) := mul_self_nonneg _
-        linarith
-      · rw [if_neg hvv, add_zero]
-        simp only [hG]
-        exact (sum_uniform_column_mul hvv (φ v) (φ v')).le
-    calc ∑ H, c0 * Q H ^ 2 = ∑ v, ∑ v', ∑ H, c0 * (G v H * G v' H) := by
-          simp only [hexp]
-          rw [sum_comm]
-          exact sum_congr rfl fun v _ => sum_comm
-      _ ≤ ∑ v, ∑ v', ((∑ H, c0 * G v H) * (∑ H, c0 * G v' H) +
-            if v = v' then δ * ∑ H, c0 * G v H else 0) :=
-          sum_le_sum fun v _ => sum_le_sum fun v' _ => hpair v v'
-      _ = (∑ v, ∑ H, c0 * G v H) ^ 2 + δ * ∑ v, ∑ H, c0 * G v H := by
-          simp only [sum_add_distrib, sum_ite_eq, mem_univ, ite_true, ← mul_sum, ← sum_mul, sq]
-      _ = m ^ 2 + δ * m := by
-          have : ∑ v, ∑ H, c0 * G v H = m := by
-            rw [hm, sum_comm]
-            exact sum_congr rfl fun H _ => by rw [← mul_sum]
-          rw [this]
-  -- the concentration term in `ℝ`
-  set X : (N × V → C) → ℝ := fun H => Q H / m - 1
-  have hconc : oracleConcError E i P w1 acc κ hκ = ∑ H, c0 * max (X H) 0 := by
-    rw [oracleConcError, ENNReal.toReal_sum fun H _ => ENNReal.mul_ne_top (apply_ne_top _ _)
-      (ne_top_of_le_ne_top (ENNReal.div_ne_top ENNReal.one_ne_top hs0)
-        (tsub_le_self.trans (ENNReal.div_le_div_right tsub_le_self _)))]
-    refine sum_congr rfl fun H _ => ?_
-    rw [ENNReal.toReal_mul, hU, ENNReal.toReal_tsub_one (ENNReal.div_ne_top
-      (ne_top_of_le_ne_top ENNReal.one_ne_top tsub_le_self) hs0), ENNReal.toReal_div, hQ]
-  have hX0 : ∑ H, c0 * X H = 0 := by
-    simp only [X, mul_sub, mul_one, sum_sub_distrib, hc0, mul_div_assoc', ← sum_div, ← hm,
-      div_self hm0.ne', sub_self]
-  have hmax : ∀ x : ℝ, max x 0 = (x + |x|) / 2 := fun x => by
-    rcases le_total 0 x with hx | hx
-    · rw [max_eq_left hx, abs_of_nonneg hx]; ring
-    · rw [max_eq_right hx, abs_of_nonpos hx]; ring
-  have hX2 : ∑ H, c0 * X H ^ 2 ≤ δ / m := by
-    have hexp : ∀ H, c0 * X H ^ 2 = c0 * Q H ^ 2 / m ^ 2 - 2 * (c0 * Q H) / m + c0 := fun H => by
-      simp only [X]; field_simp; ring
-    have hmom' : c0 * ∑ H, Q H ^ 2 ≤ m ^ 2 + δ * m := by rw [mul_sum]; exact hmom
-    simp only [hexp, sum_add_distrib, sum_sub_distrib, ← sum_div, ← mul_sum, ← hm, hc0]
-    have : (c0 * ∑ H, Q H ^ 2) / m ^ 2 ≤ (m ^ 2 + δ * m) / m ^ 2 :=
-      div_le_div_of_nonneg_right hmom' (by positivity)
-    have h2 : (m ^ 2 + δ * m) / m ^ 2 = 1 + δ / m := by field_simp
-    rw [show 2 * m / m = 2 by field_simp]
-    linarith
-  have hexpect : ∀ f : (N × V → C) → ℝ, ∑ H, c0 * f H = 𝔼 H, f H := fun f => by
-    rw [Fintype.expect_eq_sum_div_card, sum_div]
-    exact sum_congr rfl fun H _ => by rw [div_eq_inv_mul]
-  have habs : ∑ H, c0 * |X H| ≤ √(δ / m) := by
-    rw [hexpect]
-    calc 𝔼 H, |X H| = 𝔼 H, √(X H ^ 2) := by simp only [Real.sqrt_sq_eq_abs]
-      _ ≤ √(𝔼 H, X H ^ 2) := Real.expect_sqrt_le_sqrt_expect _ fun H => sq_nonneg _
-      _ ≤ √(δ / m) := Real.sqrt_le_sqrt (by rw [← hexpect]; exact hX2)
-  rw [hconc]
-  calc ∑ H, c0 * max (X H) 0 = (∑ H, c0 * X H + ∑ H, c0 * |X H|) / 2 := by
-        simp only [hmax, mul_div_assoc', ← sum_div, mul_add, sum_add_distrib]
-    _ ≤ √(δ / m) / 2 := by rw [hX0, zero_add]; gcongr
 
 end OracleConcentration
 

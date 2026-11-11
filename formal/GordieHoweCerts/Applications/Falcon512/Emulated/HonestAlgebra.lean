@@ -68,7 +68,7 @@ def aValues : List ℕ := [595, 596, 597, 599, 600, 612, 613, 622, 623, 624]
 (`FalconEAlg`; each program instantiates them by `decide`): the values bound to their digits
 (`magnitudes.mag1` to `612 + 128 · 613`, `norm.squares` to `622 + 2048 · 623 + 2048² · 624`) and
 their `BoundOk`; the committed values of `aValues`, checked committed cells of field `1`, and the
-digits' sizes; `signature.equation` and `encoding.high2` in a form other than the product form;
+digits' sizes; the bodies of `signature.equation` and `encoding.high2`;
 `c_A`'s type check (predicate `284`); `mac.equal` (predicate `299`), crossing the raw view `589`
 of field `0` and `c_A`. -/
 class FalconEHonest (program : RealizedProgram) [FalconACore program] [FalconEAlg program] :
@@ -87,12 +87,10 @@ class FalconEHonest (program : RealizedProgram) [FalconACore program] [FalconEAl
     (program.value 622).size = 1 ∧ (program.value 623).size = 1 ∧ (program.value 624).size = 1
   /-- The program has the bound values. -/
   lens : 602 < program.values.length
-  /-- `signature.equation`, not in the product form. -/
-  sigForm : ∃ real, (program.predicate 297).body = .mod 1 12289 sigLhs sigRhs real ∧
-    real.form.isProduct = false
-  /-- `encoding.high2`, not in the product form. -/
-  high2Form : ∃ real, (program.predicate 298).body = .mod 1 128 (.leaf 599) (.leaf 600) real ∧
-    real.form.isProduct = false
+  /-- `signature.equation`. -/
+  sigForm : ∃ real, (program.predicate 297).body = .mod 1 12289 sigLhs sigRhs real
+  /-- `encoding.high2`. -/
+  high2Form : ∃ real, (program.predicate 298).body = .mod 1 128 (.leaf 599) (.leaf 600) real
   /-- `c_A`'s type check. -/
   caBody : ∃ t, (program.predicate 284).body = .equal 1 (.mul (.leaf 595) (.leaf 595)) (.leaf 595) t
   /-- `mac.equal` crosses the raw view `589` and `c_A`. -/
@@ -436,10 +434,10 @@ theorem ranges_honest (hy : y.Valid) :
 
 /-- **`encoding.high2` holds**: `128 ∣ mag2 − mag2 mod 128` on the integer readings. -/
 theorem high2_honest (hy : y.Valid) : program.HoldsAt env (program.predicate 298).body := by
-  obtain ⟨r, hb, hr⟩ := FalconEHonest.high2Form (program := program)
+  obtain ⟨r, hb⟩ := FalconEHonest.high2Form (program := program)
   obtain ⟨-, -, -, hk599, hk600⟩ := FalconEAlg.privKinds (program := program)
   obtain ⟨-, -, -, -, hz599, -⟩ := FalconEAlg.sizes (program := program)
-  rw [HoldsAt, hb, holdsWith_mod_iff (.inl hr)]
+  rw [HoldsAt, hb, holdsWith_mod_iff]
   intro i hi
   rw [exprLen_leaf, hz599] at hi
   have hm := Ring.Carrier.mag2_lt (Native.hIn_valid hy) (w := Native.hIn y) i
@@ -551,9 +549,9 @@ readings `s1 + h · s2 ≡ c (mod q)`, `h` the key's coefficients (`keyNat_of_ke
 samples (`EmulatedAlgebraCircuit.Honest.congruent_honest`). -/
 theorem sig_honest (hy : y.Valid) (hx : keyOf x = some y.pk) :
     program.HoldsAt env (program.predicate 297).body := by
-  obtain ⟨real, hb, hr⟩ := FalconEHonest.sigForm (program := program)
+  obtain ⟨real, hb⟩ := FalconEHonest.sigForm (program := program)
   obtain ⟨-, -, hz597, -⟩ := FalconEAlg.sizes (program := program)
-  rw [HoldsAt, hb, holdsWith_mod_iff (.inl hr)]
+  rw [HoldsAt, hb, holdsWith_mod_iff]
   intro i hi
   rw [sigLhs, exprLen_add, exprLen_leaf, hz597] at hi
   rw [evalIntWith_sigLhs_honest h hi]

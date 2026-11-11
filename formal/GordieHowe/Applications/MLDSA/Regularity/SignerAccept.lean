@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Applications.MLDSA.Signing.RingSigner
+public import GordieHowe.Applications.MLDSA.Flattened.Core.Weights
 public import GordieHowe.Applications.MLDSA44.Spec.Encoding
 public import GordieHowe.Applications.MLDSA.Regularity.RqRegularity
 import all LatticeCrypto.MLDSA.Concrete.Rounding

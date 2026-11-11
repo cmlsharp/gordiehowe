@@ -9,10 +9,10 @@ import all GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Progr
 
 @[expose] public section
 
-/-! The relational check of leaves 20 to 29 of entry 2 of the GKR circuit of domain A (generated; do not edit). -/
+/-! The relational check of leaves 16 to 20 of entry 2 of the GKR circuit of domain A (generated; do not edit). -/
 
 namespace GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.A
 
-check_entry_leaves cert ar 2 [1, 1024, 4, 1, 1024, 4, 1, 1024, 2, 1, 1024, 2, 1, 1024, 2, 0, 0, 5, 2, 256, 161] 20 30
+check_entry_leaves cert ar 2 [0, 0, 10, 2, 1739, 24] 16 21
 
 end GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.A

@@ -22,9 +22,9 @@ public import GordieHoweCerts.Applications.MLDSA44.Emulated.ROMParams.Frontend.B
 
 The program facts of the ML-DSA-44 ring carrier's frontend at the ROM parameters
 (`GordieHowe.Generated.MLDSA44.Ring.Carrier.ROMParams.Program.program`, fields Goldilocks² and
-`GF(2^128)`), decided here: `Native.MldsaRingStmt` (`ring.keys` value `53`, `ring.mu` value `54`;
-the frontend does not read `ring.tr`, value `52`), `MldsaCarrierFront` (the record,
-`member.mu` `57`, the crossing `mac.equal` of the shared expressions `505` and `42`), the native
+`GF(2^128)`), decided here: `Native.MldsaRingStmt` (`ring.keys` value `54`, `ring.mu` value `55`;
+the frontend does not read `ring.tr`, value `53`), `MldsaCarrierFront` (the record,
+`member.mu` `58`, the crossing `mac.equal` of the shared expressions `558` and `95`), the native
 program's `MldsaHSample`,
 `MldsaHHashCore`, `MldsaHConsts` and `MldsaHConstsSelect` at the native program
 whose domain `H` core the carrier holds, and the emulated program's `MldsaEAlgebra` (with its
@@ -42,8 +42,8 @@ open Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts
 
 /-- The carrier at the ROM parameters has the statement values' facts. -/
 instance : Native.MldsaRingStmt program where
-  keys := 53
-  mu := 54
+  keys := 54
+  mu := 55
   keysKind := Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.value_ring_2ekeys_kind
   muKind := Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.value_ring_2emu_kind
   fields := ⟨RealizedProgram.valueShape_field Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.value_ring_2ekeys_header.2,
@@ -91,22 +91,38 @@ instance : MLDSA44.MldsaHConsts
 /-! The crossing's index maps: `x` reads `μ ‖ w1` below `6656`, then the support and the sign of
 each coefficient alternately; `y` reads its parts in order. -/
 
-theorem idx161_lo' : ∀ a < 104, ∀ b < 64, idx161.entry (64 * a + b) = 64 * a + b := by
+theorem idx165_lo' : ∀ a < 104, ∀ b < 64, idx165.entry (64 * a + b) = 64 * a + b := by
   decide +kernel
-theorem idx161_lo : ∀ t < 6656, idx161.entry t = t := fun t ht => by
-  have h := idx161_lo' (t / 64) (by omega) (t % 64) (by omega)
+theorem idx165_lo : ∀ t < 6656, idx165.entry t = t := fun t ht => by
+  have h := idx165_lo' (t / 64) (by omega) (t % 64) (by omega)
   rwa [Nat.div_add_mod] at h
-theorem idx161_even : ∀ k < 256, idx161.entry (6656 + 2 * k) = 6656 + k := by decide +kernel
-theorem idx161_odd : ∀ k < 256, idx161.entry (6656 + (2 * k + 1)) = 6912 + k := by decide +kernel
-theorem idx104_eq : idx104 = [(0, 1, 7168)] := by decide +kernel
+theorem idx165_even : ∀ k < 256, idx165.entry (6656 + 2 * k) = 6656 + k := by decide +kernel
+theorem idx165_odd : ∀ k < 256, idx165.entry (6656 + (2 * k + 1)) = 6912 + k := by decide +kernel
+theorem idx108_eq : idx108 = [(0, 1, 7168)] := by decide +kernel
+
+/-- Where the renamings put the values and shared expressions the frontend reads, at this
+carrier. -/
+theorem σH_ids : (CarrierHEmbed.σ program).val 120 = 74 ∧ (CarrierHEmbed.σ program).val 70 = 76 ∧
+    (CarrierHEmbed.σ program).val 457 = 413 ∧ (CarrierHEmbed.σ program).ref 523 = 556 ∧
+    (CarrierHEmbed.σ program).ref 522 = 555 := by decide +kernel
+
+theorem σA_ids : (CarrierAEmbed.σ program).val 58 = 61 ∧ (CarrierAEmbed.σ program).val 59 = 62 ∧
+    (CarrierAEmbed.σ program).val 60 = 63 ∧ (CarrierAEmbed.σ program).val 61 = 64 ∧
+    (CarrierAEmbed.σ program).val 63 = 69 := by decide +kernel
 
 set_option maxRecDepth 8192 in
 /-- The carrier at the ROM parameters has the frontend's facts. -/
 instance : MldsaCarrierFront program where
+  hA := 62
+  w1A := 69
+  muBoolPred := 10
+  crossPred := 250
+  valsA := ⟨σA_ids.1.trans z_eq.symm, σA_ids.2.1, σA_ids.2.2.1.trans c_eq.symm,
+    σA_ids.2.2.2.1.trans w_eq.symm, σA_ids.2.2.2.2⟩
   shape := ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   domains := ⟨Generated.MLDSA44.Ring.Carrier.ROMParams.conditions.fieldTable.domainField_eq 0 (by decide),
     Generated.MLDSA44.Ring.Carrier.ROMParams.conditions.fieldTable.domainField_eq 1 (by decide)⟩
-  lt505 := expr_lt_of_ne_default (by
+  lt558 := expr_lt_of_ne_default (by
     rw [expr_mac_2eequal_2eshape_2eleft_eq]
     decide)
   expr0 := Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.expr_member_2eselect_2eshape_2eleft_2efirst_2esecond_2esecond_2efirst_2efirst_2efirst_2eshared_2efirst_2esecond_2efirst_2efirst_eq
@@ -122,43 +138,54 @@ instance : MldsaCarrierFront program where
   cross := ⟨Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.predicate_mac_2eequal_role.1,
     program.inSource_of_source Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.predicate_mac_2eequal_role.2,
     Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.predicate_mac_2eequal_body⟩
-  exprH := ⟨idx161, Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_eq, idx161_lo, idx161_even, idx161_odd⟩
-  expr504 := Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_eq
-  exprA := ⟨idx104, Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eright_eq, fun t ht => by rw [idx104_eq, IndexMap.entry_step_one ht, Nat.zero_add]⟩
+  exprH := by
+    rw [σH_ids.1, σH_ids.2.1, σH_ids.2.2.2.1]
+    exact ⟨idx165, Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_eq, idx165_lo, idx165_even, idx165_odd⟩
+  expr557 := by
+    rw [σH_ids.2.2.2.2]
+    exact Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_eq
+  exprA := ⟨idx108, Generated.MLDSA44.Ring.Carrier.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eright_eq, fun t ht => by rw [idx108_eq, IndexMap.entry_step_one ht, Nat.zero_add]⟩
   lens := by
-    have hk : program.expr 505 ≠ default := by
+    rw [σH_ids.1, σH_ids.2.1, σH_ids.2.2.2.1]
+    have hk : program.expr 558 ≠ default := by
       rw [expr_mac_2eequal_2eshape_2eleft_eq]
       decide
     refine ⟨?_, valueShape_size value_mu_header.2, valueShape_size value_w1_header.2, ?_, ?_,
       valueShape_size value_hint_2ew1_header.2⟩
     · rw [exprLen_ref Generated.MLDSA44.Ring.Carrier.ROMParams.conditions.wellFormed.refsOrdered
-          (expr_lt_of_ne_default hk), expr_mac_2eequal_2eshape_2eleft_eq, exprLen_reindex, idx161_eq]
+          (expr_lt_of_ne_default hk), expr_mac_2eequal_2eshape_2eleft_eq, exprLen_reindex, idx165_eq]
       decide
-    · have hk' : program.expr 503 ≠ default := by
+    · have hk' : program.expr 556 ≠ default := by
         rw [expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2efirst_eq]
         decide
       rw [exprLen_ref Generated.MLDSA44.Ring.Carrier.ROMParams.conditions.wellFormed.refsOrdered
           (expr_lt_of_ne_default hk'), expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2efirst_eq,
         exprLen_add, exprLen_leaf]
       exact valueShape_size value_h2c_2esample_2emem_2ec_5fenc_header.2
-    · have hk' : program.expr 502 ≠ default := by
+    · have hk' : program.expr 555 ≠ default := by
         rw [expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_2eshared_eq]
         decide
-      have hk'' : program.expr 504 ≠ default := by
+      have hk'' : program.expr 557 ≠ default := by
         rw [expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_eq]
         decide
-      change program.exprLen (.ref 504) = 256
+      change program.exprLen (.ref 557) = 256
       rw [exprLen_ref Generated.MLDSA44.Ring.Carrier.ROMParams.conditions.wellFormed.refsOrdered (expr_lt_of_ne_default hk''), expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_eq,
         exprLen_ref Generated.MLDSA44.Ring.Carrier.ROMParams.conditions.wellFormed.refsOrdered (expr_lt_of_ne_default hk'), expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_2eshared_eq]
       rw [exprLen_add, exprLen_mul, exprLen_leaf]
       exact valueShape_size value_h2c_2esample_2emem_2ec_5fenc_header.2
-  bitViews := ⟨by simp only [isBitView, value_mu_kind], by simp only [isBitView, value_w1_kind]⟩
+  bitViews := by
+    rw [σH_ids.1, σH_ids.2.1]
+    exact ⟨by simp only [isBitView, value_mu_kind], by simp only [isBitView, value_w1_kind]⟩
   chal0 := by
     rw [program.isSourceChal_iff_mem_sourceChallengeIds Generated.MLDSA44.Ring.Carrier.ROMParams.conditions.wellFormed,
       source_challenges]
     decide +kernel
+  chal1 := by
+    rw [program.isSourceChal_iff_mem_sourceChallengeIds Generated.MLDSA44.Ring.Carrier.ROMParams.conditions.wellFormed,
+      source_challenges]
+    decide +kernel
   chalIff j := by
-    change program.IsSourceChal (j + 1) ↔ nat.IsSourceChal j
+    change program.IsSourceChal (j + 2) ↔ nat.IsSourceChal j
     rw [program.isSourceChal_iff_mem_sourceChallengeIds Generated.MLDSA44.Ring.Carrier.ROMParams.conditions.wellFormed,
       nat.isSourceChal_iff_mem_sourceChallengeIds Generated.MLDSA44.Native.ROMParams.conditions.wellFormed,
       source_challenges, Generated.MLDSA44.Native.ROMParams.ShapeFacts.source_challenges]
@@ -183,22 +210,34 @@ instance : MldsaCarrierFront program where
         challenge_h2c_2esample_2emem_2edelta_full.2.2.1.trans
           Generated.MLDSA44.Native.ROMParams.ShapeFacts.challenge_h2c_2esample_2emem_2edelta_full.2.2.1.symm⟩
   projReads := by
+    rw [σH_ids.2.2.1, z_eq]
     intro v hv
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
     rcases hv with rfl | rfl | rfl
     · exact program.nodeReads_of_bits_priv value_h2c_2ec_5ftilde_2eout_kind value_h2c_2ec_5ftilde_2er167_2evalue_2ewords_kind _
     · exact program.nodeReads_of_bound value_z_kind _
     · exact program.nodeReads_of_priv value_h_kind _
+  relReads := by
+    intro v hv
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
+    rcases hv with rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    · exact program.nodeReads_of_bound value_signature_2ew_kind _
+    · exact program.nodeReads_of_bound value_signature_2erelation_2eq_kind _
+    · exact program.nodeReads_of_priv value_signature_2eQ_kind _
+    · exact program.nodeReads_of_priv value_member_2et1_kind _
+    · exact program.nodeReads_of_priv value_member_2ea_5fhat_kind _
+    · exact program.nodeReads_of_bound value_z_kind _
+    · exact program.nodeReads_of_priv value_challenge_2ec_kind _
 
 open Generated.MLDSA44.Emulated.ROMParams (interp)
 
 /-- **Round-by-round knowledge soundness of `Π_P₀` for `MLDSA44.Ring.Carrier.ROMParams`**
 (`Ring.Carrier.rbr_of_views` at the native frontend's `sampleView` and `hashViewCore`): the
 relation `Ring.Carrier.rel`, the extractor `Ring.Carrier.extractor` and the errors
-`Ring.Carrier.ringEps` (`5143/|Goldilocks²|` at `member.table.gamma`, SampleInBall's `264/2^128` and
-`295/2^128` at the carrier's challenges `1`, `2`). -/
+`Ring.Carrier.ringEps` (`5143/|Goldilocks²|` at `member.table.gamma`, `2040/|Goldilocks²|` at
+`signature.r`, SampleInBall's `264/2^128` and `295/2^128` at the carrier's challenges `2`, `3`). -/
 theorem source_rbr_knowledge_soundness :
-    rbrKnowledgeSoundness (rel (program := program) (F0 := RealizedProgram.gold2)
+    RBRKnowledgeSound (rel (program := program) (F0 := RealizedProgram.gold2)
         (FH := RealizedProgram.gf128)) (program.sourceVerifier interp) extractor
       (program.eventState interp rel proj (ringEvent MLDSA44.sampleView)
         (ringEvent_use MLDSA44.sampleView)

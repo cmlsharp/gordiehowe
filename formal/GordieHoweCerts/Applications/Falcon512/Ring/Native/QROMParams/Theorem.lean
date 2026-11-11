@@ -41,42 +41,48 @@ theorem normSound : Ring.NormSound (program := program) (I := interp) := fun e h
   exact ⟨Norm.algOf e ((k / 64 : ℕ) : _), fun _ => rfl, Norm.normHolds hs _,
     Norm.encodingBits hs _, ⟨Norm.digitsBelow hs, Norm.encodingRequests hs hk hkv⟩⟩
 
+/-- **The state function of `Π_P₀`'s round-by-round knowledge soundness** (`RealizedProgram.eventState`)
+at the relation, the extractor's projection and the source challenges' event, the frontend's soundness
+proofs as its argument. -/
+abbrev sourceState :=
+  program.eventState interp Ring.rel Ring.proj Ring.nativeEvent Ring.nativeEvent_use (Ring.sound_of_norm normSound)
+
 /-- **Round-by-round knowledge soundness of `Π_P₀` for `Falcon512.Ring.Native.QROMParams`** at the ring
 relation `Ring.rel`, the extractor `Ring.extractor` and the errors `511/q^20` at
-`member.ring.gamma`, `0` elsewhere. -/
+`member.ring.gamma`, `1022/q^20` at `signature.r`, `0` elsewhere. -/
 theorem source_rbr_knowledge_soundness :
-    rbrKnowledgeSoundness Ring.rel (program.sourceVerifier interp) Ring.extractor
-      (program.eventState interp Ring.rel Ring.proj Ring.ringEvent
-        Ring.ringEvent_use (Ring.sound_of_norm normSound))
-      (program.roundError interp (Ring.ringEps interp)) :=
+    RBRKnowledgeSound Ring.rel (program.sourceVerifier interp) Ring.extractor
+      sourceState
+      (program.roundError interp (Ring.nativeEps (program := program) interp)) :=
   Ring.rbr_of_norm normSound
 
 /-- **`Π_P₀`'s round errors vanish at `γ_end`.** -/
 theorem sourceError_final :
-    ∀ i, program.rounds.get i.1 = .final → program.roundError interp (Ring.ringEps interp) i = 0 := by
+    ∀ i, program.rounds.get i.1 = .final → program.roundError interp (Ring.nativeEps (program := program) interp) i = 0 := by
   intro i hi
   simp only [RealizedProgram.roundError, hi]
 
 /-- **The source challenge's error is within its fraction** (`sourceErrors`). -/
-theorem ringEps_le (j : ℕ) (_ : program.IsSourceChal j) :
-    Ring.ringEps interp j ≤ ((sourceErrors j).1 : ℝ≥0) / (sourceErrors j).2 := by
-  unfold Ring.ringEps
-  simp only [sourceErrors]
-  split_ifs
-  · rw [show Fintype.card _ = 12289 ^ 20 from by convert falconNativeField20_card <;> rfl]
+theorem nativeEps_le (j : ℕ) (hj : program.IsSourceChal j) :
+    Ring.nativeEps (program := program) interp j ≤ ((sourceErrors j).1 : ℝ≥0) / (sourceErrors j).2 := by
+  have hc : Fintype.card (interp 0).K = 12289 ^ 20 := by convert falconNativeField20_card <;> rfl
+  rcases (FalconRandomPoint.isSourceChal_iff (program := program) j).1 hj with rfl | rfl
+  · simp only [Ring.nativeEps, if_pos rfl, sourceErrors, hc]
     norm_num
-  · exact zero_le'
+  · have h1 : FalconRandomPoint.rChal program = 1 := rfl
+    simp only [Ring.nativeEps, h1, sourceErrors, hc]
+    norm_num
 
 /-- **The source program's soundness of `Falcon512.Ring.Native.QROMParams`** (`Configuration.SourceFront`): the frontend's
 round-by-round knowledge soundness (`source_rbr_knowledge_soundness`) at the ring's errors
-(`Ring.ringEps`, within `ringEps_le`), and the honest nodes' `1` (`Ring.oneNodes`). -/
+(`Ring.nativeEps`, within `nativeEps_le`), and the honest nodes' `1` (`Ring.oneNodes`). -/
 noncomputable def source :=
   ({ rel := Ring.rel,
      proj := Ring.proj,
-     eps := Ring.ringEps interp,
+     eps := Ring.nativeEps (program := program) interp,
      sound := source_rbr_knowledge_soundness,
      final := sourceError_final,
-     eps_le := ringEps_le,
+     eps_le := nativeEps_le,
      oneNodes := Ring.oneNodes } :
     Configuration.SourceFront certified Native.CoreWit _)
 

@@ -58,9 +58,10 @@ section Generic
 variable {O : W1Oracles X Y p (concretePrimitivesKeyGen p) Msg N reps}
   {M : MaskOracle X Y p T Msg}
   {bmsg : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase p O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase p O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS}
   {adm : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → Prop} [DecidablePred adm]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- **Completeness of the ML-DSA ring signature publishing `w₁` at the concrete primitives**
 (`completeWithin_ofBase` with correctness error `0`): for a refusal rate `ρ` of the base signer on
 honest supported rings (`hρ`) and a proof system adaptively complete for the ring relation at
@@ -100,9 +101,10 @@ local notation "Kg" => concretePrimitivesKeyGen _root_.MLDSA.mldsa44
 
 variable {O : W1Oracles X Y Pm Kg Msg N reps} {M : MaskOracle X Y Pm T Msg}
   {bmsg : KeyRing (PubKey Pm Kg) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing (PubKey Pm (concretePrimitivesKeyGen Pm)) N → Prop} [DecidablePred adm]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- **Completeness of the ML-DSA-44 ring signature publishing `w₁`** (`w1Scheme44`;
 `w1Concrete.completeWithin` at ML-DSA-44). -/
 @[headline]
@@ -124,9 +126,10 @@ local notation "Kg" => concretePrimitivesKeyGen _root_.MLDSA.mldsa65
 
 variable {O : W1Oracles X Y Pm Kg Msg N reps} {M : MaskOracle X Y Pm T Msg}
   {bmsg : KeyRing (PubKey Pm Kg) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing (PubKey Pm (concretePrimitivesKeyGen Pm)) N → Prop} [DecidablePred adm]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- **Completeness of the ML-DSA-65 ring signature publishing `w₁`** (`w1Scheme65`;
 `w1Concrete.completeWithin` at ML-DSA-65). -/
 @[headline]
@@ -148,9 +151,10 @@ local notation "Kg" => concretePrimitivesKeyGen _root_.MLDSA.mldsa87
 
 variable {O : W1Oracles X Y Pm Kg Msg N reps} {M : MaskOracle X Y Pm T Msg}
   {bmsg : KeyRing (PubKey Pm Kg) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing (PubKey Pm (concretePrimitivesKeyGen Pm)) N → Prop} [DecidablePred adm]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- **Completeness of the ML-DSA-87 ring signature publishing `w₁`** (`w1Scheme87`;
 `w1Concrete.completeWithin` at ML-DSA-87). -/
 @[headline]
@@ -172,11 +176,12 @@ section BindGeneric
 variable {O : W1Oracles X Y p (concretePrimitivesKeyGen p)
     (KeyRing (PubKey p (concretePrimitivesKeyGen p)) N × RMsg) N reps}
   {M : MaskOracle X Y p T (KeyRing (PubKey p (concretePrimitivesKeyGen p)) N × RMsg)}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase p O M βmin tol k D Prod.mk)) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase p O M βmin tol k D Prod.mk)) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS}
   {adm : KeyRing
     (w1ConcreteBase p O M βmin tol k D Prod.mk).PK N → Prop}
   [DecidablePred adm]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- **Completeness of the ML-DSA ring signature publishing `w₁` with ring-binding base messages**
 (`w1BindConcrete`; `w1Concrete.completeWithin` at `bmsg := Prod.mk`). -/
 @[headline]
@@ -201,11 +206,12 @@ local notation "Kg" => concretePrimitivesKeyGen _root_.MLDSA.mldsa44
 variable {O : W1Oracles X Y Pm Kg
     (KeyRing (PubKey Pm Kg) N × RMsg) N reps}
   {M : MaskOracle X Y Pm T (KeyRing (PubKey Pm Kg) N × RMsg)}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D Prod.mk)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D Prod.mk)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing
     (w1ConcreteBase Pm O M βmin tol k D Prod.mk).PK N → Prop}
   [DecidablePred adm]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- **Completeness of the ML-DSA-44 ring signature publishing `w₁` with ring-binding base messages**
 (`w1BindScheme44`; `w1Scheme44.completeWithin` at `bmsg := Prod.mk`). -/
 @[headline]
@@ -230,11 +236,12 @@ local notation "Kg" => concretePrimitivesKeyGen _root_.MLDSA.mldsa65
 variable {O : W1Oracles X Y Pm Kg
     (KeyRing (PubKey Pm Kg) N × RMsg) N reps}
   {M : MaskOracle X Y Pm T (KeyRing (PubKey Pm Kg) N × RMsg)}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D Prod.mk)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D Prod.mk)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing
     (w1ConcreteBase Pm O M βmin tol k D Prod.mk).PK N → Prop}
   [DecidablePred adm]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- **Completeness of the ML-DSA-65 ring signature publishing `w₁` with ring-binding base messages**
 (`w1BindScheme65`; `w1Scheme65.completeWithin` at `bmsg := Prod.mk`). -/
 @[headline]
@@ -259,11 +266,12 @@ local notation "Kg" => concretePrimitivesKeyGen _root_.MLDSA.mldsa87
 variable {O : W1Oracles X Y Pm Kg
     (KeyRing (PubKey Pm Kg) N × RMsg) N reps}
   {M : MaskOracle X Y Pm T (KeyRing (PubKey Pm Kg) N × RMsg)}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D Prod.mk)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D Prod.mk)) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing
     (w1ConcreteBase Pm O M βmin tol k D Prod.mk).PK N → Prop}
   [DecidablePred adm]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- **Completeness of the ML-DSA-87 ring signature publishing `w₁` with ring-binding base messages**
 (`w1BindScheme87`; `w1Scheme87.completeWithin` at `bmsg := Prod.mk`). -/
 @[headline]
@@ -285,11 +293,12 @@ section ConvGeneric
 variable {O : W1Oracles X Y p (concretePrimitivesKeyGen p)
     Msg N reps}
   {M : MaskOracle X Y p T Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase p O M βmin tol k D (RMsg := Msg) (fun _ m => m))) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase p O M βmin tol k D (RMsg := Msg) (fun _ m => m))) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS}
   {adm : KeyRing
     (w1ConcreteBase p O M βmin tol k D (RMsg := Msg) (fun _ m => m)).PK N → Prop}
   [DecidablePred adm]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- **Completeness of the converted ML-DSA ring signature publishing `w₁`** (`w1ConvConcrete`;
 `w1Concrete.completeWithin` at `bmsg := fun _ m => m`). -/
 @[headline]
@@ -314,11 +323,12 @@ local notation "Kg" => concretePrimitivesKeyGen _root_.MLDSA.mldsa44
 variable {O : W1Oracles X Y Pm Kg
     Msg N reps}
   {M : MaskOracle X Y Pm T Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D (RMsg := Msg) (fun _ m => m))) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D (RMsg := Msg) (fun _ m => m))) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing
     (w1ConcreteBase Pm O M βmin tol k D (RMsg := Msg) (fun _ m => m)).PK N → Prop}
   [DecidablePred adm]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- **Completeness of the converted ML-DSA-44 ring signature publishing `w₁`** (`w1ConvScheme44`;
 `w1Scheme44.completeWithin` at `bmsg := fun _ m => m`). -/
 @[headline]
@@ -343,11 +353,12 @@ local notation "Kg" => concretePrimitivesKeyGen _root_.MLDSA.mldsa65
 variable {O : W1Oracles X Y Pm Kg
     Msg N reps}
   {M : MaskOracle X Y Pm T Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D (RMsg := Msg) (fun _ m => m))) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D (RMsg := Msg) (fun _ m => m))) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing
     (w1ConcreteBase Pm O M βmin tol k D (RMsg := Msg) (fun _ m => m)).PK N → Prop}
   [DecidablePred adm]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- **Completeness of the converted ML-DSA-65 ring signature publishing `w₁`** (`w1ConvScheme65`;
 `w1Scheme65.completeWithin` at `bmsg := fun _ m => m`). -/
 @[headline]
@@ -372,11 +383,12 @@ local notation "Kg" => concretePrimitivesKeyGen _root_.MLDSA.mldsa87
 variable {O : W1Oracles X Y Pm Kg
     Msg N reps}
   {M : MaskOracle X Y Pm T Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D (RMsg := Msg) (fun _ m => m))) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase Pm O M βmin tol k D (RMsg := Msg) (fun _ m => m))) (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm))) TPS}
   {adm : KeyRing
     (w1ConcreteBase Pm O M βmin tol k D (RMsg := Msg) (fun _ m => m)).PK N → Prop}
   [DecidablePred adm]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- **Completeness of the converted ML-DSA-87 ring signature publishing `w₁`** (`w1ConvScheme87`;
 `w1Scheme87.completeWithin` at `bmsg := fun _ m => m`). -/
 @[headline]

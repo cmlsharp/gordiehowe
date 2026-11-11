@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.SPBCS.Knowledge
+public import GordieHowe.Headline
 public import GordieHowe.SPBCS.SimAssign
 public import GordieHowe.SPBCS.SimProg
 public import GordieHowe.SPBCS.Extractor
@@ -528,6 +529,7 @@ variable {Wit : Type} {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit}
 
 /-- **A database consistent with a tuple of `simExtGame` extracts, is in `bad`, or has a digest
 collision.** -/
+@[headline]
 theorem cover_simExtGame [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
     {K : ℕ}
     {o : GordieHowe.QROM.BaseGame.Tuple (Bits (queryBits k kN kS L)) (Out k e) (M.Register B A Psim Q) K}
@@ -596,7 +598,7 @@ theorem oracleAfter_transcript (hA : M.SimAssignsAtKeys B Psim' fx)
 digest length; `hkq`, accepting runs make at most `kq` verifier queries; `hA`, the simulator
 program assigns only at the keys of its chain inputs. -/
 theorem expand_mem_simExtGame {kq : ℕ}
-    (hkq : ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq)
+    (hkq : M.QueriesAtMost Qs kq)
     (hA : M.SimAssignsAtKeys B Psim' fx)
     {H : Bits (queryBits k kN kS L) → XOut k e} {v : M.Register B A' Psim' Q}
     (hv : A'.Consistent (simExtChallenger Psim' Q) H v) (hw : Wins A' Psim' Q Qs fx H v) :

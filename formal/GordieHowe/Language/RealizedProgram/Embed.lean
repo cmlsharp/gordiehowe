@@ -16,10 +16,10 @@ public import GordieHoweNative.Language.RealizedProgram.Embed
 
 Two realized programs of one interpretation can hold one part (a set of values, shared
 expressions and predicates) up to a renaming of the value, shared-expression and challenge
-identifiers: the emulated ML-DSA program at the ROM parameters holds the native one's domain `H`
-with every value identifier one larger and every shared-expression identifier two larger (export
-`c825eb05`), and the ML-DSA ring programs hold parts of the ML-DSA programs with every challenge
-identifier one larger. This file transports that part's semantics:
+identifiers. The native ML-DSA-44 ring programs hold two parts of the native ML-DSA-44 program
+(`MldsaRingEmbed`). The compiler computes the renaming, the part's values and its shared
+expressions from the two programs (`lib/gordiehowe/compiler/embedding.h`) and exports them as
+checked embedding data. This file transports that part's semantics:
 
 * **the renaming** (`Renaming`, `Renaming.expr`, `Renaming.kind?`) of an expression's leaves,
   coefficients and references and of a value's kind;
@@ -817,23 +817,12 @@ theorem holdsAt_pullEnv_body (hE : ir.Embedding ir' σ V R) (e' : ir'.Env I) {b 
     rw [evalE_rename hE e' (hok' x hx).1 (hok' x hx).2.1 (hok' x hx).2.2]
   · rename_i d q x y real d' q' x' y' real'
     simp only [Bool.and_eq_true, beq_iff_eq] at hb
-    obtain ⟨⟨⟨⟨⟨⟨⟨⟨rfl, hd⟩, rfl⟩, hx⟩, hy⟩, hprod⟩, hlo⟩, hqmax⟩, hq⟩ := hb
+    obtain ⟨⟨⟨⟨⟨⟨⟨rfl, hd⟩, rfl⟩, hx⟩, hy⟩, -⟩, -⟩, -⟩ := hb
     obtain ⟨rfl, hX⟩ := exprCorrB_iff.1 hx
     obtain ⟨rfl, hY⟩ := exprCorrB_iff.1 hy
     simp only [HoldsAt, HoldsWith]
     rw [exprLen_rename hE hX.1 hX.2.1 hX.2.2, evalIntWith_rename hE e' hd hX.1 hX.2.1 hX.2.2,
       evalIntWith_rename hE e' hd hY.1 hY.2.1 hY.2.2]
-    refine and_congr Iff.rfl ?_
-    rcases hQ : real.quotient with _ | Q <;> rcases hQ' : real'.quotient with _ | Q' <;>
-      simp only [quotCorrB, hQ, hQ', reduceCtorEq] at hq
-    · simp only [ProductQuotWith, hQ, hQ']
-    · obtain ⟨rfl, hQo⟩ := exprCorrB_iff.1 hq
-      simp only [ProductQuotWith, hQ, hQ', evalWith, hprod, hlo, hqmax]
-      rw [exprLen_rename hE hX.1 hX.2.1 hX.2.2, evalIntWith_rename hE e' hd hX.1 hX.2.1 hX.2.2,
-        evalIntWith_rename hE e' hd hY.1 hY.2.1 hY.2.2,
-        evalIntWith_rename hE e' hd hQo.1 hQo.2.1 hQo.2.2, hd,
-        evalE_rename hE e' hX.1 hX.2.1 hX.2.2, evalE_rename hE e' hY.1 hY.2.1 hY.2.2,
-        evalE_rename hE e' hQo.1 hQo.2.1 hQo.2.2]
   · exact absurd hb Bool.false_ne_true
 
 /-- **A value of `V` lies in its type** in the environment read through the renaming where its
@@ -1032,9 +1021,9 @@ theorem bodyCorrB_congr {ir ir' : RealizedProgram} {σ σ' : Renaming} {V R : Li
         (Renaming.exprs_eq_map _ _).symm)
     exact ⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, by rw [he]; exact h5⟩, h6⟩
   · simp only [Bool.and_eq_true] at h ⊢
-    obtain ⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩ := h
-    exact ⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, exprCorrB_congr hv hr h4⟩, exprCorrB_congr hv hr h5⟩, h6⟩, h7⟩, h8⟩,
-      quotCorrB_congr hv hr h9⟩
+    obtain ⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩ := h
+    exact ⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, exprCorrB_congr hv hr h4⟩, exprCorrB_congr hv hr h5⟩, h6⟩, h7⟩,
+      quotCorrB_congr hv hr h8⟩
   · simp at h
 
 theorem Renaming.kind?_congr {σ σ' : Renaming} {k : Kind}
@@ -1091,6 +1080,88 @@ theorem EmbedData.Agrees.ref_eq (ha : d.Agrees σ) {k : ℕ} (h : k < d.refs.len
 theorem EmbedData.Agrees.chal_eq (ha : d.Agrees σ) {j : ℕ} (h : j < d.chals.length) :
     d.renaming.chal j = σ.chal j := by
   rw [EmbedData.renaming_chal, ha.chal j h]
+
+/-- **The data's renaming, with the challenges past its list following the list's largest
+image**: challenge `j` below the list's length is its listed image, and challenge
+`chals.length + i` is `m + 1 + i`, `m` the largest listed image. `EmbedData.renaming` leaves a
+challenge past the list in place, which may coincide with a listed image or precede one; here the
+renamed challenges keep their order and stay distinct wherever the list increases strictly
+(`EmbedData.renamingAfter_chal_strictMono`). Both matter for the larger program's environments
+read as the smaller one's (`pullEnv`): in order, so that environments agreeing up to a renamed
+challenge agree, so read, up to the challenge itself (`eqUpTo_pullEnv`); distinct, so that
+sampling a renamed challenge samples the smaller program's challenge
+(`probUniform_pullEnv_setChal`). It agrees with the data (`EmbedData.agrees_renamingAfter`). -/
+def EmbedData.renamingAfter (d : EmbedData) : Renaming :=
+  ⟨d.renaming.val, d.renaming.ref, fun j =>
+    if j < d.chals.length then d.chals.getD j j
+    else j - d.chals.length + (d.chals.foldr max 0 + 1)⟩
+
+theorem EmbedData.renamingAfter_val (v : ℕ) : d.renamingAfter.val v = d.vals.getD v v :=
+  EmbedData.renaming_val (d := d) v
+
+theorem EmbedData.renamingAfter_ref (k : ℕ) : d.renamingAfter.ref k = d.refs.getD k k :=
+  EmbedData.renaming_ref (d := d) k
+
+/-- `renamingAfter` agrees with the data. -/
+theorem EmbedData.agrees_renamingAfter (d : EmbedData) : d.Agrees d.renamingAfter where
+  val v _ := EmbedData.renaming_val (d := d) v
+  ref k _ := EmbedData.renaming_ref (d := d) k
+  chal _ h := if_pos h
+
+theorem EmbedData.le_foldr_max : ∀ {l : List ℕ} {x : ℕ}, x ∈ l → x ≤ l.foldr max 0
+  | a :: l, x, h => by
+    rcases List.mem_cons.1 h with rfl | h
+    · exact le_max_left _ _
+    · exact (EmbedData.le_foldr_max h).trans (le_max_right _ _)
+
+/-- **`renamingAfter`'s challenges keep their order and stay distinct** where the data's list of
+challenge images increases strictly. -/
+theorem EmbedData.renamingAfter_chal_strictMono (h : d.chals.Pairwise (· < ·)) :
+    StrictMono d.renamingAfter.chal := by
+  intro a b hab
+  have hp := List.pairwise_iff_getElem.1 h
+  change (if a < d.chals.length then d.chals.getD a a
+      else a - d.chals.length + (d.chals.foldr max 0 + 1)) <
+    (if b < d.chals.length then d.chals.getD b b
+      else b - d.chals.length + (d.chals.foldr max 0 + 1))
+  by_cases hb : b < d.chals.length
+  · have ha : a < d.chals.length := hab.trans hb
+    rw [if_pos ha, if_pos hb, List.getD_eq_getElem _ _ ha, List.getD_eq_getElem _ _ hb]
+    exact hp a b ha hb hab
+  · rw [if_neg hb]
+    by_cases ha : a < d.chals.length
+    · rw [if_pos ha, List.getD_eq_getElem _ _ ha]
+      have := EmbedData.le_foldr_max (List.getElem_mem ha)
+      omega
+    · rw [if_neg ha]
+      omega
+
+/-- **The inverse of a renaming of values on a list**, as a table: at each image, the value of `V`
+renamed to it (the last listed, where several are). -/
+def Renaming.invOn (σ : Renaming) (V : List ℕ) : NatTrie ℕ :=
+  V.foldl (fun t u => t.set (σ.val u) u) .nil
+
+theorem Renaming.invOn_aux (σ : Renaming) :
+    ∀ (V : List ℕ) (t : NatTrie ℕ) {w u : ℕ},
+      (V.foldl (fun t u => t.set (σ.val u) u) t).get? w = some u →
+        (u ∈ V ∧ σ.val u = w) ∨ t.get? w = some u
+  | [], _, _, _, h => .inr h
+  | x :: V, t, w, u, h => by
+    rcases Renaming.invOn_aux σ V _ h with h | h
+    · exact .inl ⟨List.mem_cons_of_mem _ h.1, h.2⟩
+    · rw [NatTrie.get?_set] at h
+      split at h
+      · rename_i hw
+        cases h
+        exact .inl ⟨List.mem_cons.2 (.inl rfl), hw.symm⟩
+      · exact .inr h
+
+/-- **A value the table gives is a value of `V` renamed to the image.** -/
+theorem Renaming.invOn_spec {σ : Renaming} {V : List ℕ} {w u : ℕ}
+    (h : (σ.invOn V).get? w = some u) : u ∈ V ∧ σ.val u = w := by
+  rcases Renaming.invOn_aux σ V .nil h with h | h
+  · exact h
+  · simp at h
 
 theorem EmbedData.kindCorr_of_covered (ha : d.Agrees σ) {k k' : Kind}
     (hc : d.kindCoveredB k = true) (h : d.renaming.kindCorr k k' = true) :

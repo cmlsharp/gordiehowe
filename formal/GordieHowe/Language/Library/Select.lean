@@ -14,10 +14,11 @@ public import GordieHowe.Foundations.ToMathlib.List
 /-!
 # GordieHowe frontend: the first-`n` selection
 
-The source program's selection of the first `n` of `S` samples below `bound` (the C++ `gp_select`):
-four predicates and three shared expressions of a binary domain, which together are the gadget
-`SelectFirstCutoff.run` (`GordieHowe/Language/Library/Select/CutoffBits.lean`) on the samples, the selected words and
-the route:
+The source program's selection of the first `n` of `S` samples below `bound` (the C++
+`select_first_n`, `lib/gordiehowe/lib/cutoff_select.h`): four predicates and three shared
+expressions of a binary domain, which together are the gadget `SelectFirstCutoff.run`
+(`GordieHowe/Language/Library/Select/CutoffBits.lean`) on the samples, the selected words and the
+route:
 
 * `start`: `count[0] + 1 = 0`;
 * `step`: `count[i+1] + count[i] · mux(acc[i], g, 1) = 0` for `i < S − 1`;

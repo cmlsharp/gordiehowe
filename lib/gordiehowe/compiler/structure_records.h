@@ -873,9 +873,9 @@ inline bool same(const ir::Program &P, program_printer_internal::Printer &pr, ir
 // `Expr.matchB`, Valid.lean): pre-order, a before b, through add, sub,
 // mul, concat (both children) and scale, reindex, apply (equal parameters,
 // one child). At a pair of shared entries k, k' with k != k' the conversion
-// j with convs[j].source == k and convs[j].read == k' (the first); equal
-// entries consume nothing; any other difference fails the export, naming
-// WHO.
+// j with convs[j].source == k and convs[j].read or committed == k' (the
+// first); equal entries consume nothing; any other difference fails the
+// export, naming WHO.
 inline void mismatches(const ir::Program &P, ir::Id e, ir::Id f, std::vector<size_t> &out,
                        const std::string &who) {
   program_printer_internal::Printer pr(P);
@@ -891,7 +891,8 @@ inline void mismatches(const ir::Program &P, ir::Id e, ir::Id f, std::vector<siz
       if (nx.x == ny.x) continue;
       size_t j = 0;
       while (j < P.convs.size() &&
-             !(P.convs[j].source == nx.x && P.convs[j].read == ny.x))
+             !(P.convs[j].source == nx.x &&
+               (P.convs[j].read == ny.x || P.convs[j].committed == ny.x)))
         ++j;
       if (j == P.convs.size())
         plan_export_internal::export_fail(
@@ -978,8 +979,8 @@ inline bool reads_bits(const ir::Program &P, const std::vector<ir::Id> &roots) {
 }
 
 // The routes of program P (Lean `Structure.routes`): one per predicate
-// that needs one (Lean `PredBody.needsRoute`: a field equal, a mod_0, a
-// product-form mod_q), by its printed target.
+// that needs one (Lean `PredBody.needsRoute`: a field equal, a mod_0), by
+// its printed target.
 inline void routes(const ir::Program &P, StructureRecords &out) {
   using Route = StructureRecords::Route;
   using K = Route::Kind;
@@ -996,11 +997,8 @@ inline void routes(const ir::Program &P, StructureRecords &out) {
   };
   for (size_t pid = 0; pid < P.predicates.size(); ++pid) {
     const ir::Predicate &q = P.predicates[pid];
-    const bool product = q.body == ir::Predicate::kMod &&
-                         (q.mod.form == ir::ModForm::kProduct ||
-                          q.mod.form == ir::ModForm::kSpectralProduct);
     const bool int_eq = q.body == ir::Predicate::kMod && q.q == "0";
-    if (q.body != ir::Predicate::kEqual && !int_eq && !product) continue;
+    if (q.body != ir::Predicate::kEqual && !int_eq) continue;
     const std::string who = "the predicate " + pred_name(P, pid);
     const ir::Target *t = q.body == ir::Predicate::kEqual ? &q.target
                           : q.mod.target                  ? &*q.mod.target
@@ -1156,11 +1154,6 @@ template <class S>
 void fill_select_rows(const BasicCompiledSystem<S> &, const ProgramData &,
                       StructureRecords &) {}
 
-// Batch 5 (gadgets): the spectralProduct gadget records.
-template <class S>
-void fill_spectral(const BasicCompiledSystem<S> &, const ProgramData &,
-                   StructureRecords &) {}
-
 // Batch 5 (gadgets): the selectFirst gadget records.
 template <class S>
 void fill_select_first(const BasicCompiledSystem<S> &, const ProgramData &,
@@ -1279,7 +1272,7 @@ void fill_requests(const BasicCompiledSystem<S> &cs, const ProgramData &,
   // (plan_export.h, mod_equalities()), with their quotient's form.
   size_t k = 0;
   for (const auto &e : rec.mod_equalities) {
-    if (e.integer) continue;
+    if (e.integer || e.expr_sides) continue;
     const size_t idx = k++;
     // Its quotient (plan_export.h, quotient_of): the grouped form's final
     // quotient, else the Mod of its name.
@@ -1329,7 +1322,6 @@ StructureRecords build_structure(const BasicCompiledSystem<S> &cs, const Program
   fill_hosts(cs, p, r);
   fill_chal_values(cs, p, r);
   fill_select_rows(cs, p, r);
-  fill_spectral(cs, p, r);
   fill_select_first(cs, p, r);
   fill_keccak(cs, p, r);
   fill_packed(cs, p, r);

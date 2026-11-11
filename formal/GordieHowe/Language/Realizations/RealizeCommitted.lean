@@ -145,6 +145,43 @@ theorem commShift_spec {K : Type} [Ring K] {p : ℕ} [CharP K p] (hp : 0 < p) (q
   rw [← Int.cast_natCast, Int.toNat_of_nonneg h0]
   exact (CharP.intCast_eq_intCast K p).2 (Int.mod_modEq _ _)
 
+/-- **The head of a committed-digits row** (`commHeadB`): at `e`'s coordinates it reads `e − e'`
+less the shift `commShift`, of `e`'s length, where a constant holding the shift reads it (`hsh`);
+the head without a shift term has shift `0`. -/
+theorem evalE_of_commHeadB (rd : ir.Valuation I) {d q : ℕ}
+    [CharP (I (ir.domainField d)).K (ir.charOf (ir.domainField d))]
+    (hdec : ∀ c < ir.charOf (ir.domainField d),
+      (I (ir.domainField d)).decode c = (c : (I (ir.domainField d)).K))
+    {e e' : Expr} {real : ModRealization}
+    (hsh : ∀ sh, ir.constAll sh (commShift (ir.charOf (ir.domainField d)) q real) (ir.exprLen e)
+      (ir.domainField d) = true → ∀ i < ir.exprLen e, ir.evalE rd (ir.domainField d) (.leaf sh) i =
+        (commShift (ir.charOf (ir.domainField d)) q real : (I (ir.domainField d)).K))
+    {h : Expr} (hh : ir.commHeadB d q e e' real h = true) :
+    (∀ i < ir.exprLen e, ir.evalE rd (ir.domainField d) h i =
+      ir.evalE rd (ir.domainField d) e i - ir.evalE rd (ir.domainField d) e' i -
+        (commShift (ir.charOf (ir.domainField d)) q real : (I (ir.domainField d)).K)) ∧
+      ir.exprLen h = ir.exprLen e := by
+  unfold commHeadB at hh
+  rw [Bool.or_eq_true_iff] at hh
+  rcases hh with hh | hh
+  · split at hh
+    · rename_i Xh b sh
+      simp only [Bool.and_eq_true, beq_iff_eq] at hh
+      obtain ⟨⟨hX, hb⟩, hc⟩ := hh
+      obtain ⟨hXe, hXl⟩ := evalE_of_subB rd hdec e e' Xh hX
+      refine ⟨fun i hi => ?_, by rw [exprLen_add, hXl]⟩
+      have h1 : (I (ir.domainField d)).decode b = -1 := by
+        rw [hdec b (by omega), eq_neg_iff_add_eq_zero, ← Nat.cast_one, ← Nat.cast_add, hb,
+          CharP.cast_eq_zero]
+      rw [evalE_add, evalE_scale_const, hXe i, h1, hsh sh hc i hi]
+      ring
+    · cases hh
+  · simp only [Bool.and_eq_true, beq_iff_eq] at hh
+    obtain ⟨h0, hX⟩ := hh
+    obtain ⟨hXe, hXl⟩ := evalE_of_subB rd hdec e e' h hX
+    refine ⟨fun i _ => ?_, hXl⟩
+    rw [hXe i, h0, Nat.cast_zero, sub_zero]
+
 /-- **Committed digits bounded by direct or digit `in`s** (`commRangeOf`): under the leaf facts, at a
 coordinate below the left side's length, the digits' value in base `B` is the cast of a number at
 most `Σ_j B^j (N_j − 1)`. -/
@@ -214,7 +251,7 @@ theorem holdsWith_mod_of_committed (hwf : ir.WellFormed) (hI : I.Registered ir)
       (I (ir.domainField d)).decode c = (c : (I (ir.domainField d)).K) := hdec0
   have hf : ir.domainField d < ir.fields.length := domainField_lt hwf he.1
   have hp0 : 0 < ir.charOf (ir.domainField d) := by have := hok.char; omega
-  refine (holdsWith_mod_iff (.inl (by rw [hok.form]; rfl))).2 ?_
+  refine holdsWith_mod_iff.2 ?_
   intro i hi
   obtain ⟨⟨ha1, ha2⟩, hca⟩ := exprIvl_within hwf hI hL hF hK hLok he.1 hok.char he.2 hok.lhs hi
   obtain ⟨⟨hb1, hb2⟩, hcb⟩ := exprIvl_within hwf hI hL hF hK hLok he.1 hok.char he'.2 hok.rhs
@@ -225,11 +262,6 @@ theorem holdsWith_mod_of_committed (hwf : ir.WellFormed) (hI : I.Registered ir)
   obtain ⟨Q, hQ, hQv⟩ := digitsVal_of_commRanges hF real.radix hi real.digits real.ranges _ hbd hl
   obtain ⟨pr, hpr, hrow⟩ := List.any_eq_true.1 hok.row
   obtain ⟨qi, hqi, rfl⟩ := exists_index_of_mem hpr
-  have hneg : ∀ c, c + 1 = ir.charOf (ir.domainField d) →
-      (I (ir.domainField d)).decode c = -1 := by
-    intro c hc
-    rw [hdec c (by omega), eq_neg_iff_add_eq_zero, ← Nat.cast_one, ← Nat.cast_add, hc,
-      CharP.cast_eq_zero]
   obtain ⟨hshl, hshc⟩ := commShift_spec (K := (I (ir.domainField d)).K) hp0 q real
   unfold commRowB at hrow
   split at hrow
@@ -240,45 +272,39 @@ theorem holdsWith_mod_of_committed (hwf : ir.WellFormed) (hI : I.Registered ir)
     split at hm
     · rename_i h hpeel
       obtain ⟨hev, hlenL⟩ := evalE_of_commPeel rd hdec _ L hpeel
-      unfold commHeadB at hm
-      split at hm
-      · rename_i Xh b sh
-        simp only [Bool.and_eq_true, beq_iff_eq] at hm
-        obtain ⟨⟨hX, hb⟩, hsh⟩ := hm
-        obtain ⟨hXe, hXl⟩ := evalE_of_subB rd hdec e e' Xh hX
-        have hH := hF.equals qi hqi (by rw [hbody]; rfl)
-        rw [hbody] at hH
-        have hrow := hH i (by rw [hlenL, exprLen_add, hXl]; exact hi)
-        simp only [evalWith] at hrow
-        rw [hev i, evalE_add, evalE_scale_const, hXe i, hneg b hb,
-          evalE_leaf_constAll hL hF hsh hf hshl hi,
-          evalE_leaf_constAll hL hF hz hf hp0 hi, hshc, List.map_reverse, List.sum_reverse,
-          sum_zipIdx_mul q real.radix (fun D => ir.evalE rd (ir.domainField d) D i) real.digits 0]
-          at hrow
-        have hQv' : digitsVal (real.radix : (I (ir.domainField d)).K)
-            (real.digits.map fun D => ir.evalE rd (ir.domainField d) D i) = (Q : _) := hQv
-        rw [hQv'] at hrow
-        have hz' : IntIn (real.lhsLo - real.rhsHi) (real.lhsHi - real.rhsLo)
-            (ir.evalIntWith rd d e i - ir.evalIntWith rd d e' i)
-            (ir.evalWith rd d e i - ir.evalWith rd d e' i) :=
-          ⟨by linarith, by linarith, by push_cast; rw [hca, hcb]⟩
-        have hM : (((q * digitsMax real.radix (ir.commN d e real) + 1 : ℕ) : ℤ)) - 1 +
-            ((q : ℤ) * real.quotientLo - (real.lhsLo - real.rhsHi)) <
-              ir.charOf (ir.domainField d) := by
-          have := hok.noWrapDigits
-          push_cast at this ⊢
-          linarith
-        have hQle : Q ≤ digitsMax real.radix (ir.commN d e real) := hQ
-        have hlift := IntIn.sub_eq_natCast (p := ir.charOf (ir.domainField d))
-          (c := (q : ℤ) * real.quotientLo) (n := q * Q) hz' (by linarith [hok.noWrap]) hM
-          (Nat.lt_succ_of_le (Nat.mul_le_mul_left q hQle))
-          (by
-            simp only [evalWith]
-            push_cast
-            push_cast at hrow
-            linear_combination hrow)
-        exact ⟨real.quotientLo + Q, by push_cast at hlift; linarith⟩
-      · cases hm
+      obtain ⟨hhe, hhl⟩ := evalE_of_commHeadB rd (d := d) hdec
+        (fun _ hc _ hi' => evalE_leaf_constAll hL hF hc hf hshl hi') hm
+      have hH := hF.equals qi hqi (by rw [hbody]; rfl)
+      rw [hbody] at hH
+      have hrow := hH i (by rw [hlenL, hhl]; exact hi)
+      simp only [evalWith] at hrow
+      rw [hev i, hhe i hi,
+        evalE_leaf_constAll hL hF hz hf hp0 hi, hshc, List.map_reverse, List.sum_reverse,
+        sum_zipIdx_mul q real.radix (fun D => ir.evalE rd (ir.domainField d) D i) real.digits 0]
+        at hrow
+      have hQv' : digitsVal (real.radix : (I (ir.domainField d)).K)
+          (real.digits.map fun D => ir.evalE rd (ir.domainField d) D i) = (Q : _) := hQv
+      rw [hQv'] at hrow
+      have hz' : IntIn (real.lhsLo - real.rhsHi) (real.lhsHi - real.rhsLo)
+          (ir.evalIntWith rd d e i - ir.evalIntWith rd d e' i)
+          (ir.evalWith rd d e i - ir.evalWith rd d e' i) :=
+        ⟨by linarith, by linarith, by push_cast; rw [hca, hcb]⟩
+      have hM : (((q * digitsMax real.radix (ir.commN d e real) + 1 : ℕ) : ℤ)) - 1 +
+          ((q : ℤ) * real.quotientLo - (real.lhsLo - real.rhsHi)) <
+            ir.charOf (ir.domainField d) := by
+        have := hok.noWrapDigits
+        push_cast at this ⊢
+        linarith
+      have hQle : Q ≤ digitsMax real.radix (ir.commN d e real) := hQ
+      have hlift := IntIn.sub_eq_natCast (p := ir.charOf (ir.domainField d))
+        (c := (q : ℤ) * real.quotientLo) (n := q * Q) hz' (by linarith [hok.noWrap]) hM
+        (Nat.lt_succ_of_le (Nat.mul_le_mul_left q hQle))
+        (by
+          simp only [evalWith]
+          push_cast
+          push_cast at hrow
+          linear_combination hrow)
+      exact ⟨real.quotientLo + Q, by push_cast at hlift; linarith⟩
     · cases hm
   · cases hrow
 

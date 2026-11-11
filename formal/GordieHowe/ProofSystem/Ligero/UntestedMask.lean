@@ -226,6 +226,27 @@ theorem error_le_of {δ : ℝ≥0} (htest : Ligero.AgreementThreshold.testError 
   · simp only [ite_true]
     exact hcol
 
+omit [DecidableEq K] [Fintype ι] [Fintype Q] [Fintype Lin] in
+/-- **The error at the constraint challenge** is the test error `l/|K|`. -/
+theorem error_constraintIdx :
+    error S (Ligero.AgreementThreshold.constraintIdx C.k S.t) =
+      Ligero.AgreementThreshold.testError S.toSetup := by
+  classical
+  simp only [error, Ligero.AgreementThreshold.constraintIdx_ne_queryIdx, ite_false, ite_self,
+    add_zero]
+  exact Ligero.AgreementThreshold.proofError_constraintIdx _ _
+
+omit [DecidableEq K] [Fintype ι] [Fintype Q] [Fintype Lin] in
+/-- **The error at the column query** is the column error and, when the prefix is nonempty, the
+joint subfield term. -/
+theorem error_queryIdx :
+    error S (Ligero.AgreementThreshold.queryIdx K N nL nQ C.k S.t) =
+      Ligero.AgreementThreshold.columnError S.toSetup +
+        if np = 0 then 0 else SubfieldTest.jointSubfieldError C.k N S.t := by
+  classical
+  simp only [error, ite_true]
+  rfl
+
 omit [Fintype K] [Fintype Lin] in
 /-- With no prefix cell the prefix-row test accepts every transcript. -/
 theorem verdict_of_eq_zero (h : np = 0) (c : Input Ctx K N R C.k S.nrep)

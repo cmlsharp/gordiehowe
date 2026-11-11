@@ -4,8 +4,9 @@
 module
 
 public import GordieHowe.Applications.MLDSA.Signing.Ideal
+public import GordieHowe.Applications.MLDSA.Signing.Cutoff
 public import GordieHowe.Applications.MLDSA.Signing.Surrogate
-public import GordieHowe.Foundations.ToMathlib.PMFOracleLoop
+public import GordieHowe.Foundations.ToMathlib.PMFOracleSide
 public import GordieHowe.Foundations.ToMathlib.NNRatENNReal
 import all LatticeCrypto.MLDSA.Concrete.Rounding
 
@@ -24,10 +25,11 @@ ct₀-check (`exclSet`, `ringExclSets`).
 
 The flattened ring prover (`flatRingProver`) repeats until it keeps: one idealized attempt; reject
 if some other member's hash `H (j, w₁)` is excluded; keep with probability
-`min 1 (β_min / signerWeight)`, `signerWeight` the uniform-`w` acceptance weight of the ct₀ and
-hint checks (`acceptWeight`). It outputs the oracle with the kept `w₁`. The cut-off `β_min`, the
-weight and the coin are rational (`ℚ≥0`, computed by `acceptWeightQ`), so that a signer comparing
-them has compiled code; the laws read them cast to `ℝ≥0∞` (`coe_signerWeight`, `coe_flattenCoin`).
+`min 1 (val c̃ / signerWeight)`, `signerWeight` the uniform-`w` acceptance weight of the ct₀ and
+hint checks (`acceptWeight`) and `val` a public cut-off (`Cutoff`). It outputs the oracle with the
+kept `w₁`. The cut-off, the weight and the coin are rational (`ℚ≥0`, computed by
+`acceptWeightQ`), so that a signer comparing them has compiled code; the laws read them cast to
+`ℝ≥0∞` (`coe_signerWeight`, `coe_flattenCoin`).
 
 * `poissonBinomialCdf_anti`, `hintFractionBound`, `acceptWeightLower`,
   `acceptWeightLower_le_acceptWeight`: the Poisson-binomial CDF is antitone in each success
@@ -583,29 +585,29 @@ theorem coe_signerWeight (vc : BucketVec p × CommitHashBytes p) :
         fun x => (vc.1 x).val) := by
   rw [signerWeight, ← ENNReal.ofReal_ratCast, cast_acceptWeightQ]
 
-/-- **The flattening coin**: keep `(v, c̃)` with probability `min 1 (β_min / signerWeight)`
-(`NNRat.minOneDiv`, the value of `ℝ≥0∞` at a zero weight). In `ℝ≥0∞` it is `flattenKeep` of the
-flattening weight (`coe_flattenCoin`). -/
-def flattenCoin (βmin : ℚ≥0) (vc : BucketVec p × CommitHashBytes p) : ℚ≥0 :=
-  NNRat.minOneDiv βmin (signerWeight prims sk vc)
+/-- **The flattening coin**: keep `(v, c̃)` with probability `min 1 (val c̃ / signerWeight)` for
+the cut-off `val` (`NNRat.minOneDiv`, the value of `ℝ≥0∞` at a zero weight). -/
+def flattenCoin (cut : Cutoff p) (vc : BucketVec p × CommitHashBytes p) : ℚ≥0 :=
+  NNRat.minOneDiv (cut.val vc.2) (signerWeight prims sk vc)
 
 omit [NeZero (bucketCount p)] [Nonempty (MaskBox p)] in
-theorem flattenCoin_le_one (βmin : ℚ≥0) (vc : BucketVec p × CommitHashBytes p) :
-    flattenCoin prims sk βmin vc ≤ 1 :=
+theorem flattenCoin_le_one (cut : Cutoff p) (vc : BucketVec p × CommitHashBytes p) :
+    flattenCoin prims sk cut vc ≤ 1 :=
   NNRat.minOneDiv_le_one _ _
 
 omit [NeZero (bucketCount p)] [Nonempty (MaskBox p)] in
-/-- The flattening coin in `ℝ≥0∞` is `flattenKeep` of the flattening weight. -/
-theorem coe_flattenCoin (βmin : ℚ≥0) (vc : BucketVec p × CommitHashBytes p) :
-    (flattenCoin prims sk βmin vc : ℝ≥0∞) =
-      flattenKeep (fun a => (signerWeight prims sk a : ℝ≥0∞)) βmin vc := by
-  rw [flattenCoin, ENNReal.nnratCast_minOneDiv, flattenKeep]
+/-- The flattening coin in `ℝ≥0∞` is `min 1 (val c̃ / signerWeight)`; at a constant cut-off it is
+`flattenKeep` of the flattening weight. -/
+theorem coe_flattenCoin (cut : Cutoff p) (vc : BucketVec p × CommitHashBytes p) :
+    (flattenCoin prims sk cut vc : ℝ≥0∞) =
+      min 1 ((cut.val vc.2 : ℝ≥0∞) / (signerWeight prims sk vc : ℝ≥0∞)) := by
+  rw [flattenCoin, ENNReal.nnratCast_minOneDiv]
 
 omit [NeZero (bucketCount p)] [Nonempty (MaskBox p)] in
 /-- The flattening coin in `ℝ≥0∞` is a probability. -/
-theorem coe_flattenCoin_le_one (βmin : ℚ≥0) (vc : BucketVec p × CommitHashBytes p) :
-    (flattenCoin prims sk βmin vc : ℝ≥0∞) ≤ 1 :=
-  ENNReal.nnratCast_le_one.2 (flattenCoin_le_one prims sk βmin vc)
+theorem coe_flattenCoin_le_one (cut : Cutoff p) (vc : BucketVec p × CommitHashBytes p) :
+    (flattenCoin prims sk cut vc : ℝ≥0∞) ≤ 1 :=
+  ENNReal.nnratCast_le_one.2 (flattenCoin_le_one prims sk cut vc)
 
 include nttOps in
 /-- The commitment `w₁ = HighBits(Â·y)` of a mask, as a bucket vector. -/
@@ -622,23 +624,23 @@ def standinAccept (w : CoeffIndex p → Coeff) (cTilde : CommitHashBytes p) : Bo
 /-- **The real flattened accepted law** of `(w₁, c̃)`: one idealized attempt (`y` uniform on the
 mask box, `c̃` a fresh uniform hash, the four checks of `signAccept`) followed by the flattening
 coin, conditioned on keeping. -/
-noncomputable def realKeptLaw (βmin : ℚ≥0) : PMF (BucketVec p × CommitHashBytes p) :=
+noncomputable def realKeptLaw (cut : Cutoff p) : PMF (BucketVec p × CommitHashBytes p) :=
   condSomeOr (freshAttempt (maskUniform p) (realBuckets aHat) (attemptAccept prims sk aHat)
-    (fun a => (flattenCoin prims sk βmin a : ℝ≥0∞)) (coe_flattenCoin_le_one prims sk βmin))
+    (fun a => (flattenCoin prims sk cut a : ℝ≥0∞)) (coe_flattenCoin_le_one prims sk cut))
     (uniformOfFintype _)
 
 /-- **The stand-in flattened accepted law** of `(w₁, c̃)`: `w` uniform on the coefficient vectors,
 `c̃` uniform, the stand-in checks, the flattening coin, conditioned on keeping. -/
-noncomputable def standinKeptLaw (βmin : ℚ≥0) : PMF (BucketVec p × CommitHashBytes p) :=
+noncomputable def standinKeptLaw (cut : Cutoff p) : PMF (BucketVec p × CommitHashBytes p) :=
   condSomeOr (freshAttempt (uniformOfFintype (CoeffIndex p → Coeff)) bucketsOf
-    (standinAccept prims sk) (fun a => (flattenCoin prims sk βmin a : ℝ≥0∞))
-    (coe_flattenCoin_le_one prims sk βmin)) (uniformOfFintype _)
+    (standinAccept prims sk) (fun a => (flattenCoin prims sk cut a : ℝ≥0∞))
+    (coe_flattenCoin_le_one prims sk cut)) (uniformOfFintype _)
 
 /-- **The regularity term**: the distance between the real and the stand-in flattened accepted
 laws of `(w₁, c̃)`, for the signer's key. It measures how far `w = Â·y` for `y` uniform on the mask
 box, jointly with the z-check, is from a uniform `w`. -/
-noncomputable def regError (βmin : ℚ≥0) : ℝ :=
-  tvDist (realKeptLaw prims sk aHat βmin) (standinKeptLaw prims sk βmin)
+noncomputable def regError (cut : Cutoff p) : ℝ :=
+  tvDist (realKeptLaw prims sk aHat cut) (standinKeptLaw prims sk cut)
 
 omit [NeZero (bucketCount p)] [Nonempty (MaskBox p)] in
 /-- The ct₀-check passes on every coefficient exactly when `c̃` is not excluded. -/
@@ -757,28 +759,28 @@ variable (sk : SecretKey p) (aHat : TqMatrix p.k p.l) (E : ExclSets (Fin N) (Com
 attempts until one keeps: an idealized FIPS 204 attempt with challenge `H (i, w₁)`, rejected if
 some other member `j` has `H (j, w₁)` in its excluded set, kept with the flattening coin. The
 output is `H` with the kept `w₁`. -/
-noncomputable def flatRingProver (βmin : ℚ≥0) :
+noncomputable def flatRingProver (cut : Cutoff p) :
     PMF ((Fin N × BucketVec p → CommitHashBytes p) × Option (BucketVec p)) :=
   ringProver E i (maskUniform p) (realBuckets aHat) (attemptAccept prims sk aHat)
-    (fun a => (flattenCoin prims sk βmin a : ℝ≥0∞)) (coe_flattenCoin_le_one prims sk βmin)
+    (fun a => (flattenCoin prims sk cut a : ℝ≥0∞)) (coe_flattenCoin_le_one prims sk cut)
 
 /-- **The oracle concentration term** of the flattened ring prover with signer `i`:
 `E_H[(q H / q̄ - 1)⁺]`, `q H` the keep probability of one attempt against the oracle `H`. -/
-noncomputable def ringOracleError (βmin : ℚ≥0) : ℝ :=
+noncomputable def ringOracleError (cut : Cutoff p) : ℝ :=
   oracleConcError E i (maskUniform p) (realBuckets aHat) (attemptAccept prims sk aHat)
-    (fun a => (flattenCoin prims sk βmin a : ℝ≥0∞)) (coe_flattenCoin_le_one prims sk βmin)
+    (fun a => (flattenCoin prims sk cut a : ℝ≥0∞)) (coe_flattenCoin_le_one prims sk cut)
 
-/-- **The flattening term** for signer `i`: `E_u[(β_min - w)⁺] / E_u[min(w, β_min)]` with `u` the
+/-- **The flattening term** for signer `i`: `E_u[(val - w)⁺] / E_u[min(w, val)]` with `u` the
 uniform law on bucket vectors and hashes off the signer's excluded set and `w` the flattening
 weight (`FlattenHyp.tvDist_condSome_thin_le`). -/
-noncomputable def flatError (βmin : ℚ≥0) : ℝ :=
-  ((∑ a, signerTarget E i a * ((βmin : ℝ≥0∞) - (signerWeight prims sk a : ℝ≥0∞))) /
-    ∑ a, signerTarget E i a * min (signerWeight prims sk a : ℝ≥0∞) (βmin : ℝ≥0∞)).toReal
+noncomputable def flatError (cut : Cutoff p) : ℝ :=
+  ((∑ a, signerTarget E i a * ((cut.val a.2 : ℝ≥0∞) - (signerWeight prims sk a : ℝ≥0∞))) /
+    ∑ a, signerTarget E i a * min (signerWeight prims sk a : ℝ≥0∞) (cut.val a.2 : ℝ≥0∞)).toReal
 
 /-- The signer's real fresh attempt keeps with positive probability. -/
-def SignerKeeps (βmin : ℚ≥0) : Prop :=
+def SignerKeeps (cut : Cutoff p) : Prop :=
   freshAttempt (maskUniform p) (realBuckets aHat) (attemptAccept prims sk aHat)
-    (fun a => (flattenCoin prims sk βmin a : ℝ≥0∞)) (coe_flattenCoin_le_one prims sk βmin) none ≠ 1
+    (fun a => (flattenCoin prims sk cut a : ℝ≥0∞)) (coe_flattenCoin_le_one prims sk cut) none ≠ 1
 
 /-- The largest probability of one commitment `w₁ = HighBits(Â·y)` for `y` uniform on the mask
 box (the min-entropy of `w₁`). -/
@@ -786,16 +788,16 @@ noncomputable def w1MaxProb : ℝ :=
   univ.sup' univ_nonempty fun v => ((maskUniform p).map (realBuckets aHat) v).toReal
 
 /-- The keep probability of one attempt of the flattened ring prover against a uniform oracle. -/
-noncomputable def ringKeepProb (βmin : ℚ≥0) : ℝ :=
+noncomputable def ringKeepProb (cut : Cutoff p) : ℝ :=
   (1 - jointAttempt (uniformOfFintype _) (ringAttempt E i (maskUniform p) (realBuckets aHat)
-    (attemptAccept prims sk aHat) (fun a => (flattenCoin prims sk βmin a : ℝ≥0∞))
-    (coe_flattenCoin_le_one prims sk βmin)) none).toReal
+    (attemptAccept prims sk aHat) (fun a => (flattenCoin prims sk cut a : ℝ≥0∞))
+    (coe_flattenCoin_le_one prims sk cut)) none).toReal
 
 /-- **The oracle concentration term is at most `√(δ / q̄) / 2`**, with `δ` the largest probability
 of one commitment `w₁` and `q̄` the keep probability of one attempt (`oracleConcError_le`). -/
-theorem ringOracleError_le {βmin : ℚ≥0} (hkeep : SignerKeeps prims sk aHat βmin) :
-    ringOracleError prims sk aHat E i βmin ≤
-      √(w1MaxProb aHat / ringKeepProb prims sk aHat E i βmin) / 2 :=
+theorem ringOracleError_le {cut : Cutoff p} (hkeep : SignerKeeps prims sk aHat cut) :
+    ringOracleError prims sk aHat E i cut ≤
+      √(w1MaxProb aHat / ringKeepProb prims sk aHat E i cut) / 2 :=
   oracleConcError_le E i _ _ _ _ _ (fun v => le_sup' (fun v => ((maskUniform p).map
     (realBuckets aHat) v).toReal) (mem_univ v))
     (jointAttempt_ringAttempt_ne_one E i _ _ _ _ _ hkeep)
@@ -808,17 +810,20 @@ Hypotheses: the signer's excluded set is that of its own `t₀`, and its attempt
 probability. -/
 theorem SigningLaws.tvDist_flatRingProver_le (hp : SigningParams p) (h_laws : SigningLaws prims)
     (hs2 : polyVecBounded sk.s2 p.eta) (hEi : E.excl i = exclSet prims sk.t0) {βmin : ℚ≥0}
-    (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hkeep : SignerKeeps prims sk aHat βmin) :
-    tvDist (flatRingProver prims sk aHat E i βmin) (ringTarget (BucketVec p) E) ≤
-      ringOracleError prims sk aHat E i βmin + regError prims sk aHat βmin +
-        flatError prims sk E i βmin := by
+    (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hkeep : SignerKeeps prims sk aHat
+        (Cutoff.const βmin)) :
+    tvDist (flatRingProver prims sk aHat E i (Cutoff.const βmin)) (ringTarget (BucketVec p) E) ≤
+      ringOracleError prims sk aHat E i (Cutoff.const βmin) + regError prims sk aHat
+          (Cutoff.const βmin) +
+        flatError prims sk E i (Cutoff.const βmin) := by
   refine (tvDist_ringProver_ringTarget_le E i _ _ _ _ _ hkeep).trans ?_
   rw [add_assoc]
   refine add_le_add le_rfl ?_
-  have hreal : condSome _ hkeep = realKeptLaw prims sk aHat βmin :=
+  have hreal : condSome _ hkeep = realKeptLaw prims sk aHat (Cutoff.const βmin) :=
     (condSomeOr_of_ne _ hkeep).symm
   rw [hreal]
-  refine (tvDist_triangle _ (standinKeptLaw prims sk βmin) _).trans (add_le_add le_rfl ?_)
+  refine (tvDist_triangle _ (standinKeptLaw prims sk (Cutoff.const βmin)) _).trans (add_le_add
+      le_rfl ?_)
   -- the stand-in is proportional to `u · w`
   set u := signerTarget (V := BucketVec p) E i
   set w : BucketVec p × CommitHashBytes p → ℝ≥0∞ := fun a => (signerWeight prims sk a : ℝ≥0∞)
@@ -880,8 +885,9 @@ theorem SigningLaws.tvDist_flatRingProver_le (hp : SigningParams p) (h_laws : Si
     rcases min_eq_iff.1 h0 with ⟨h1, -⟩ | ⟨h1, -⟩
     · exact hwpos h1
     · exact hβ0 h1
-  have hκ : (fun a => (flattenCoin prims sk βmin a : ℝ≥0∞)) = flattenKeep w βmin :=
-    funext (coe_flattenCoin prims sk βmin)
+  have hκ : (fun a => (flattenCoin prims sk (Cutoff.const βmin) a : ℝ≥0∞)) =
+      flattenKeep w βmin :=
+    funext (coe_flattenCoin prims sk (Cutoff.const βmin))
   rw [standinKeptLaw]
   simp only [hκ]
   exact tvDist_condSomeOr_freshAttempt_flatten_le _ _ _ u
@@ -891,10 +897,12 @@ theorem SigningLaws.tvDist_flatRingProver_le (hp : SigningParams p) (h_laws : Si
 /-- `SigningLaws.tvDist_flatRingProver_le` from the full primitive laws. -/
 theorem tvDist_flatRingProver_le (hp : SigningParams p) (h_laws : Primitives.Laws prims nttOps)
     (hs2 : polyVecBounded sk.s2 p.eta) (hEi : E.excl i = exclSet prims sk.t0) {βmin : ℚ≥0}
-    (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hkeep : SignerKeeps prims sk aHat βmin) :
-    tvDist (flatRingProver prims sk aHat E i βmin) (ringTarget (BucketVec p) E) ≤
-      ringOracleError prims sk aHat E i βmin + regError prims sk aHat βmin +
-        flatError prims sk E i βmin :=
+    (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hkeep : SignerKeeps prims sk aHat
+        (Cutoff.const βmin)) :
+    tvDist (flatRingProver prims sk aHat E i (Cutoff.const βmin)) (ringTarget (BucketVec p) E) ≤
+      ringOracleError prims sk aHat E i (Cutoff.const βmin) + regError prims sk aHat
+          (Cutoff.const βmin) +
+        flatError prims sk E i (Cutoff.const βmin) :=
   SigningLaws.tvDist_flatRingProver_le prims sk aHat E i hp h_laws.toSigningLaws
     hs2 hEi hβ0 hβ1 hkeep
 
@@ -913,11 +921,12 @@ theorem SigningLaws.tvDist_flatRingProver_published_le (hp : SigningParams p)
     (h_laws : SigningLaws prims) (hs2 : polyVecBounded sk.s2 p.eta)
     (t0s : Fin N → RqVec p.k) (hne : ∀ j, (exclSet prims (t0s j))ᶜ.Nonempty)
     (hi : t0s i = sk.t0) {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
-    (hkeep : SignerKeeps prims sk aHat βmin) :
-    tvDist (flatRingProver prims sk aHat (publishedRing prims t0s hne) i βmin)
+    (hkeep : SignerKeeps prims sk aHat (Cutoff.const βmin)) :
+    tvDist (flatRingProver prims sk aHat (publishedRing prims t0s hne) i (Cutoff.const βmin))
         (ringTarget (BucketVec p) (publishedRing prims t0s hne)) ≤
-      ringOracleError prims sk aHat (publishedRing prims t0s hne) i βmin +
-        regError prims sk aHat βmin + flatError prims sk (publishedRing prims t0s hne) i βmin :=
+      ringOracleError prims sk aHat (publishedRing prims t0s hne) i (Cutoff.const βmin) +
+        regError prims sk aHat (Cutoff.const βmin) + flatError prims sk (publishedRing prims t0s
+            hne) i (Cutoff.const βmin) :=
   tvDist_flatRingProver_le prims sk aHat _ i hp h_laws hs2 (by
     change exclSet prims (t0s i) = _; rw [hi]) hβ0 hβ1 hkeep
 
@@ -926,11 +935,12 @@ theorem tvDist_flatRingProver_published_le (hp : SigningParams p)
     (h_laws : Primitives.Laws prims nttOps) (hs2 : polyVecBounded sk.s2 p.eta)
     (t0s : Fin N → RqVec p.k) (hne : ∀ j, (exclSet prims (t0s j))ᶜ.Nonempty)
     (hi : t0s i = sk.t0) {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
-    (hkeep : SignerKeeps prims sk aHat βmin) :
-    tvDist (flatRingProver prims sk aHat (publishedRing prims t0s hne) i βmin)
+    (hkeep : SignerKeeps prims sk aHat (Cutoff.const βmin)) :
+    tvDist (flatRingProver prims sk aHat (publishedRing prims t0s hne) i (Cutoff.const βmin))
         (ringTarget (BucketVec p) (publishedRing prims t0s hne)) ≤
-      ringOracleError prims sk aHat (publishedRing prims t0s hne) i βmin +
-        regError prims sk aHat βmin + flatError prims sk (publishedRing prims t0s hne) i βmin :=
+      ringOracleError prims sk aHat (publishedRing prims t0s hne) i (Cutoff.const βmin) +
+        regError prims sk aHat (Cutoff.const βmin) + flatError prims sk (publishedRing prims t0s
+            hne) i (Cutoff.const βmin) :=
   SigningLaws.tvDist_flatRingProver_published_le prims sk aHat i hp h_laws.toSigningLaws
     hs2 t0s hne hi hβ0 hβ1 hkeep
 
@@ -942,13 +952,16 @@ theorem SigningLaws.tvDist_flatRingProver_signers_le (hp : SigningParams p)
     (hs₀ : polyVecBounded sk₀.s2 p.eta) (hs₁ : polyVecBounded sk₁.s2 p.eta) {i₀ i₁ : Fin N}
     (hE₀ : E.excl i₀ = exclSet prims sk₀.t0) (hE₁ : E.excl i₁ = exclSet prims sk₁.t0)
     {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
-    (hk₀ : SignerKeeps prims sk₀ aHat₀ βmin)
-    (hk₁ : SignerKeeps prims sk₁ aHat₁ βmin) :
-    tvDist (flatRingProver prims sk₀ aHat₀ E i₀ βmin) (flatRingProver prims sk₁ aHat₁ E i₁ βmin) ≤
-      (ringOracleError prims sk₀ aHat₀ E i₀ βmin + regError prims sk₀ aHat₀ βmin +
-          flatError prims sk₀ E i₀ βmin) +
-        (ringOracleError prims sk₁ aHat₁ E i₁ βmin + regError prims sk₁ aHat₁ βmin +
-          flatError prims sk₁ E i₁ βmin) := by
+    (hk₀ : SignerKeeps prims sk₀ aHat₀ (Cutoff.const βmin))
+    (hk₁ : SignerKeeps prims sk₁ aHat₁ (Cutoff.const βmin)) :
+    tvDist (flatRingProver prims sk₀ aHat₀ E i₀ (Cutoff.const βmin)) (flatRingProver prims sk₁
+        aHat₁ E i₁ (Cutoff.const βmin)) ≤
+      (ringOracleError prims sk₀ aHat₀ E i₀ (Cutoff.const βmin) + regError prims sk₀ aHat₀
+          (Cutoff.const βmin) +
+          flatError prims sk₀ E i₀ (Cutoff.const βmin)) +
+        (ringOracleError prims sk₁ aHat₁ E i₁ (Cutoff.const βmin) + regError prims sk₁ aHat₁
+            (Cutoff.const βmin) +
+          flatError prims sk₁ E i₁ (Cutoff.const βmin)) := by
   refine (tvDist_triangle _ (ringTarget (BucketVec p) E) _).trans (add_le_add
     (tvDist_flatRingProver_le prims sk₀ aHat₀ E i₀ hp h_laws hs₀ hE₀ hβ0 hβ1 hk₀) ?_)
   rw [tvDist_comm]
@@ -960,18 +973,22 @@ theorem tvDist_flatRingProver_signers_le (hp : SigningParams p)
     (hs₀ : polyVecBounded sk₀.s2 p.eta) (hs₁ : polyVecBounded sk₁.s2 p.eta) {i₀ i₁ : Fin N}
     (hE₀ : E.excl i₀ = exclSet prims sk₀.t0) (hE₁ : E.excl i₁ = exclSet prims sk₁.t0)
     {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
-    (hk₀ : SignerKeeps prims sk₀ aHat₀ βmin)
-    (hk₁ : SignerKeeps prims sk₁ aHat₁ βmin) :
-    tvDist (flatRingProver prims sk₀ aHat₀ E i₀ βmin) (flatRingProver prims sk₁ aHat₁ E i₁ βmin) ≤
-      (ringOracleError prims sk₀ aHat₀ E i₀ βmin + regError prims sk₀ aHat₀ βmin +
-          flatError prims sk₀ E i₀ βmin) +
-        (ringOracleError prims sk₁ aHat₁ E i₁ βmin + regError prims sk₁ aHat₁ βmin +
-          flatError prims sk₁ E i₁ βmin) :=
+    (hk₀ : SignerKeeps prims sk₀ aHat₀ (Cutoff.const βmin))
+    (hk₁ : SignerKeeps prims sk₁ aHat₁ (Cutoff.const βmin)) :
+    tvDist (flatRingProver prims sk₀ aHat₀ E i₀ (Cutoff.const βmin)) (flatRingProver prims sk₁
+        aHat₁ E i₁ (Cutoff.const βmin)) ≤
+      (ringOracleError prims sk₀ aHat₀ E i₀ (Cutoff.const βmin) + regError prims sk₀ aHat₀
+          (Cutoff.const βmin) +
+          flatError prims sk₀ E i₀ (Cutoff.const βmin)) +
+        (ringOracleError prims sk₁ aHat₁ E i₁ (Cutoff.const βmin) + regError prims sk₁ aHat₁
+            (Cutoff.const βmin) +
+          flatError prims sk₁ E i₁ (Cutoff.const βmin)) :=
   SigningLaws.tvDist_flatRingProver_signers_le prims E hp h_laws.toSigningLaws
     hs₀ hs₁ hE₀ hE₁ hβ0 hβ1 hk₀ hk₁
 
-/-- `SampleInBall` outputs (FIPS 204 Algorithm 29) have centered coefficients in `{-1, 0, 1}` and
-at most `τ` nonzero coefficients. -/
+/-- **The shape of `SampleInBall` outputs that the floor reads**: centered coefficients in
+`{-1, 0, 1}` and at most `τ` nonzero coefficients. FIPS 204 Algorithm 29 returns exactly `τ`
+nonzero coefficients; this hypothesis asks for the upper bound only. -/
 structure SampleInBallShape : Prop where
   /-- Every coefficient has centered absolute value at most `1`. -/
   norm_le_one : ∀ cTilde, polyNorm (prims.sampleInBall cTilde) ≤ 1
@@ -1002,12 +1019,13 @@ theorem SigningLaws.tvDist_flatRingProver_floor_le (hp : SigningParams p)
     (hshape : SampleInBallShape prims)
     (hs2 : polyVecBounded sk.s2 p.eta) (ht0 : polyVecNorm sk.t0 ≤ 2 ^ (droppedBits - 1))
     (i : Fin N) {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
-    (hkeep : SignerKeeps prims sk aHat βmin) :
-    tvDist (flatRingProver prims sk aHat (standardRing prims N) i βmin)
+    (hkeep : SignerKeeps prims sk aHat (Cutoff.const βmin)) :
+    tvDist (flatRingProver prims sk aHat (standardRing prims N) i (Cutoff.const βmin))
         ((uniformOfFintype (BucketVec p)).bind fun v =>
           (uniformOfFintype (Fin N × BucketVec p → CommitHashBytes p)).map fun H => (H, some v)) ≤
-      ringOracleError prims sk aHat (standardRing prims N) i βmin + regError prims sk aHat βmin +
-        flatError prims sk (standardRing prims N) i βmin := by
+      ringOracleError prims sk aHat (standardRing prims N) i (Cutoff.const βmin) + regError prims
+          sk aHat (Cutoff.const βmin) +
+        flatError prims sk (standardRing prims N) i (Cutoff.const βmin) := by
   rw [← ringTarget_of_excl_eq_empty (standardRing prims N) fun _ => rfl]
   refine tvDist_flatRingProver_le prims sk aHat _ i hp h_laws hs2 ?_ hβ0 hβ1 hkeep
   rw [exclSet_eq_empty_of_floor prims hfloor h_laws.transform hshape ht0]
@@ -1020,12 +1038,13 @@ theorem tvDist_flatRingProver_floor_le (hp : SigningParams p)
     (_h_ntt : NTTRingLaws nttOps) (hshape : SampleInBallShape prims)
     (hs2 : polyVecBounded sk.s2 p.eta) (ht0 : polyVecNorm sk.t0 ≤ 2 ^ (droppedBits - 1))
     (i : Fin N) {βmin : ℚ≥0} (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
-    (hkeep : SignerKeeps prims sk aHat βmin) :
-    tvDist (flatRingProver prims sk aHat (standardRing prims N) i βmin)
+    (hkeep : SignerKeeps prims sk aHat (Cutoff.const βmin)) :
+    tvDist (flatRingProver prims sk aHat (standardRing prims N) i (Cutoff.const βmin))
         ((uniformOfFintype (BucketVec p)).bind fun v =>
           (uniformOfFintype (Fin N × BucketVec p → CommitHashBytes p)).map fun H => (H, some v)) ≤
-      ringOracleError prims sk aHat (standardRing prims N) i βmin + regError prims sk aHat βmin +
-        flatError prims sk (standardRing prims N) i βmin :=
+      ringOracleError prims sk aHat (standardRing prims N) i (Cutoff.const βmin) + regError prims
+          sk aHat (Cutoff.const βmin) +
+        flatError prims sk (standardRing prims N) i (Cutoff.const βmin) :=
   SigningLaws.tvDist_flatRingProver_floor_le prims sk aHat hp hfloor h_laws.toSigningLaws
     hshape hs2 ht0 i hβ0 hβ1 hkeep
 
@@ -1048,13 +1067,15 @@ theorem SigningLaws.tvDist_flatRingProver_mldsa65_le (prims : Primitives mldsa65
     (hshape : SampleInBallShape prims) (sk : SecretKey mldsa65)
     (aHat : TqMatrix mldsa65.k mldsa65.l) (hs2 : polyVecBounded sk.s2 mldsa65.eta)
     (ht0 : polyVecNorm sk.t0 ≤ 2 ^ (droppedBits - 1)) {N : ℕ} (i : Fin N) {βmin : ℚ≥0}
-    (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hkeep : SignerKeeps prims sk aHat βmin) :
-    tvDist (flatRingProver prims sk aHat (standardRing prims N) i βmin)
+    (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hkeep : SignerKeeps prims sk aHat
+        (Cutoff.const βmin)) :
+    tvDist (flatRingProver prims sk aHat (standardRing prims N) i (Cutoff.const βmin))
         ((uniformOfFintype (BucketVec mldsa65)).bind fun v =>
           (uniformOfFintype (Fin N × BucketVec mldsa65 → CommitHashBytes mldsa65)).map
             fun H => (H, some v)) ≤
-      ringOracleError prims sk aHat (standardRing prims N) i βmin + regError prims sk aHat βmin +
-        flatError prims sk (standardRing prims N) i βmin :=
+      ringOracleError prims sk aHat (standardRing prims N) i (Cutoff.const βmin) + regError prims
+          sk aHat (Cutoff.const βmin) +
+        flatError prims sk (standardRing prims N) i (Cutoff.const βmin) :=
   tvDist_flatRingProver_floor_le prims sk aHat (SigningParams.of_isApproved (Or.inr (Or.inl rfl))) ct0_floor_mldsa65 h_laws
     hshape hs2 ht0 i hβ0 hβ1 hkeep
 
@@ -1065,13 +1086,15 @@ theorem tvDist_flatRingProver_mldsa65_le (prims : Primitives mldsa65) [nttOps : 
     (_h_ntt : NTTRingLaws nttOps) (hshape : SampleInBallShape prims) (sk : SecretKey mldsa65)
     (aHat : TqMatrix mldsa65.k mldsa65.l) (hs2 : polyVecBounded sk.s2 mldsa65.eta)
     (ht0 : polyVecNorm sk.t0 ≤ 2 ^ (droppedBits - 1)) {N : ℕ} (i : Fin N) {βmin : ℚ≥0}
-    (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hkeep : SignerKeeps prims sk aHat βmin) :
-    tvDist (flatRingProver prims sk aHat (standardRing prims N) i βmin)
+    (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hkeep : SignerKeeps prims sk aHat
+        (Cutoff.const βmin)) :
+    tvDist (flatRingProver prims sk aHat (standardRing prims N) i (Cutoff.const βmin))
         ((uniformOfFintype (BucketVec mldsa65)).bind fun v =>
           (uniformOfFintype (Fin N × BucketVec mldsa65 → CommitHashBytes mldsa65)).map
             fun H => (H, some v)) ≤
-      ringOracleError prims sk aHat (standardRing prims N) i βmin + regError prims sk aHat βmin +
-        flatError prims sk (standardRing prims N) i βmin :=
+      ringOracleError prims sk aHat (standardRing prims N) i (Cutoff.const βmin) + regError prims
+          sk aHat (Cutoff.const βmin) +
+        flatError prims sk (standardRing prims N) i (Cutoff.const βmin) :=
   SigningLaws.tvDist_flatRingProver_mldsa65_le prims h_laws.toSigningLaws
     hshape sk aHat hs2 ht0 i hβ0 hβ1 hkeep
 
@@ -1084,13 +1107,15 @@ theorem SigningLaws.tvDist_flatRingProver_mldsa87_le (prims : Primitives mldsa87
     (hshape : SampleInBallShape prims) (sk : SecretKey mldsa87)
     (aHat : TqMatrix mldsa87.k mldsa87.l) (hs2 : polyVecBounded sk.s2 mldsa87.eta)
     (ht0 : polyVecNorm sk.t0 ≤ 2 ^ (droppedBits - 1)) {N : ℕ} (i : Fin N) {βmin : ℚ≥0}
-    (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hkeep : SignerKeeps prims sk aHat βmin) :
-    tvDist (flatRingProver prims sk aHat (standardRing prims N) i βmin)
+    (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hkeep : SignerKeeps prims sk aHat
+        (Cutoff.const βmin)) :
+    tvDist (flatRingProver prims sk aHat (standardRing prims N) i (Cutoff.const βmin))
         ((uniformOfFintype (BucketVec mldsa87)).bind fun v =>
           (uniformOfFintype (Fin N × BucketVec mldsa87 → CommitHashBytes mldsa87)).map
             fun H => (H, some v)) ≤
-      ringOracleError prims sk aHat (standardRing prims N) i βmin + regError prims sk aHat βmin +
-        flatError prims sk (standardRing prims N) i βmin :=
+      ringOracleError prims sk aHat (standardRing prims N) i (Cutoff.const βmin) + regError prims
+          sk aHat (Cutoff.const βmin) +
+        flatError prims sk (standardRing prims N) i (Cutoff.const βmin) :=
   tvDist_flatRingProver_floor_le prims sk aHat (SigningParams.of_isApproved (Or.inr (Or.inr rfl))) ct0_floor_mldsa87 h_laws
     hshape hs2 ht0 i hβ0 hβ1 hkeep
 
@@ -1101,13 +1126,15 @@ theorem tvDist_flatRingProver_mldsa87_le (prims : Primitives mldsa87) [nttOps : 
     (_h_ntt : NTTRingLaws nttOps) (hshape : SampleInBallShape prims) (sk : SecretKey mldsa87)
     (aHat : TqMatrix mldsa87.k mldsa87.l) (hs2 : polyVecBounded sk.s2 mldsa87.eta)
     (ht0 : polyVecNorm sk.t0 ≤ 2 ^ (droppedBits - 1)) {N : ℕ} (i : Fin N) {βmin : ℚ≥0}
-    (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hkeep : SignerKeeps prims sk aHat βmin) :
-    tvDist (flatRingProver prims sk aHat (standardRing prims N) i βmin)
+    (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hkeep : SignerKeeps prims sk aHat
+        (Cutoff.const βmin)) :
+    tvDist (flatRingProver prims sk aHat (standardRing prims N) i (Cutoff.const βmin))
         ((uniformOfFintype (BucketVec mldsa87)).bind fun v =>
           (uniformOfFintype (Fin N × BucketVec mldsa87 → CommitHashBytes mldsa87)).map
             fun H => (H, some v)) ≤
-      ringOracleError prims sk aHat (standardRing prims N) i βmin + regError prims sk aHat βmin +
-        flatError prims sk (standardRing prims N) i βmin :=
+      ringOracleError prims sk aHat (standardRing prims N) i (Cutoff.const βmin) + regError prims
+          sk aHat (Cutoff.const βmin) +
+        flatError prims sk (standardRing prims N) i (Cutoff.const βmin) :=
   SigningLaws.tvDist_flatRingProver_mldsa87_le prims h_laws.toSigningLaws
     hshape sk aHat hs2 ht0 i hβ0 hβ1 hkeep
 

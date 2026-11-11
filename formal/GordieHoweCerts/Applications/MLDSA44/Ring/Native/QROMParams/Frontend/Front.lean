@@ -73,14 +73,14 @@ instance : MLDSA44.MldsaHConstsSelect (MldsaRingEmbed.nat program)
 /-! The crossing's index maps: `x` reads `μ ‖ w1` below `6656`, then the support and the sign of
 each coefficient alternately; `y` reads its parts in order. -/
 
-theorem idx163_lo' : ∀ a < 104, ∀ b < 64, idx163.entry (64 * a + b) = 64 * a + b := by
+theorem idx164_lo' : ∀ a < 104, ∀ b < 64, idx164.entry (64 * a + b) = 64 * a + b := by
   decide +kernel
-theorem idx163_lo : ∀ t < 6656, idx163.entry t = t := fun t ht => by
-  have h := idx163_lo' (t / 64) (by omega) (t % 64) (by omega)
+theorem idx164_lo : ∀ t < 6656, idx164.entry t = t := fun t ht => by
+  have h := idx164_lo' (t / 64) (by omega) (t % 64) (by omega)
   rwa [Nat.div_add_mod] at h
-theorem idx163_even : ∀ k < 256, idx163.entry (6656 + 2 * k) = 6656 + k := by decide +kernel
-theorem idx163_odd : ∀ k < 256, idx163.entry (6656 + (2 * k + 1)) = 6912 + k := by decide +kernel
-theorem idx106_eq : idx106 = [(0, 1, 7168)] := by decide +kernel
+theorem idx164_even : ∀ k < 256, idx164.entry (6656 + 2 * k) = 6656 + k := by decide +kernel
+theorem idx164_odd : ∀ k < 256, idx164.entry (6656 + (2 * k + 1)) = 6912 + k := by decide +kernel
+theorem idx107_eq : idx107 = [(0, 1, 7168)] := by decide +kernel
 
 /-- A checked node-typed source header. -/
 private theorem typedCell {v : ℕ} {h : ValueShape}
@@ -95,15 +95,19 @@ set_option maxRecDepth 8192 in
 instance : MldsaRingFront program where
   muA := 56
   hA := 60
-  w1A := 64
-  muH := 69
-  w1H := 71
+  w1A := 66
+  muH := 71
+  w1H := 73
+  muBoolPred := 10
+  crossPred := 248
+  crossH := 553
+  crossA := 90
   shape := ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   domains := ⟨Generated.MLDSA44.Ring.Native.QROMParams.conditions.fieldTable.domainField_eq 0 (by decide),
     Generated.MLDSA44.Ring.Native.QROMParams.conditions.fieldTable.domainField_eq 1 (by decide)⟩
-  lt513 := expr_lt_of_ne_default (by
+  ltCross := ⟨by decide, expr_lt_of_ne_default (by
     rw [expr_mac_2eequal_2eshape_2eleft_eq]
-    decide)
+    decide)⟩
   expr0 := Generated.MLDSA44.Ring.Native.QROMParams.ShapeFacts.expr_member_2eselect_2eshape_2eleft_2efirst_2esecond_2esecond_2efirst_2efirst_2efirst_2eshared_2efirst_2esecond_2efirst_2efirst_eq
   expr1 := Generated.MLDSA44.Ring.Native.QROMParams.ShapeFacts.expr_member_2eselect_2eshape_2eleft_2efirst_2esecond_2esecond_2efirst_2efirst_2efirst_eq
   muSize := RealizedProgram.valueShape_size Generated.MLDSA44.Ring.Native.QROMParams.ShapeFacts.value_member_2emu_header.2
@@ -117,32 +121,32 @@ instance : MldsaRingFront program where
   cross := ⟨Generated.MLDSA44.Ring.Native.QROMParams.ShapeFacts.predicate_mac_2eequal_role.1,
     program.inSource_of_source Generated.MLDSA44.Ring.Native.QROMParams.ShapeFacts.predicate_mac_2eequal_role.2,
     Generated.MLDSA44.Ring.Native.QROMParams.ShapeFacts.predicate_mac_2eequal_body⟩
-  exprH := ⟨idx163, Generated.MLDSA44.Ring.Native.QROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_eq, idx163_lo, idx163_even, idx163_odd⟩
-  exprA := ⟨idx106, Generated.MLDSA44.Ring.Native.QROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eright_eq, fun t ht => by rw [idx106_eq, IndexMap.entry_step_one ht, Nat.zero_add]⟩
+  exprH := ⟨idx164, Generated.MLDSA44.Ring.Native.QROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_eq, idx164_lo, idx164_even, idx164_odd⟩
+  exprA := ⟨idx107, Generated.MLDSA44.Ring.Native.QROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eright_eq, fun t ht => by rw [idx107_eq, IndexMap.entry_step_one ht, Nat.zero_add]⟩
   lens := by
-    have hk : program.expr 513 ≠ default := by
+    have hk : program.expr 553 ≠ default := by
       rw [expr_mac_2eequal_2eshape_2eleft_eq]
       decide
     refine ⟨?_, valueShape_size value_mu_header.2, valueShape_size value_w1_header.2, ?_, ?_,
       valueShape_size value_hint_2ew1_header.2⟩
     · rw [exprLen_ref Generated.MLDSA44.Ring.Native.QROMParams.conditions.wellFormed.refsOrdered
-          (expr_lt_of_ne_default hk), expr_mac_2eequal_2eshape_2eleft_eq, exprLen_reindex, idx163_eq]
+          (expr_lt_of_ne_default hk), expr_mac_2eequal_2eshape_2eleft_eq, exprLen_reindex, idx164_eq]
       decide
-    · have hk' : program.expr 511 ≠ default := by
+    · have hk' : program.expr 551 ≠ default := by
         rw [expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2efirst_eq]
         decide
-      change program.exprLen (.ref 511) = 256
+      change program.exprLen (.ref 551) = 256
       rw [exprLen_ref Generated.MLDSA44.Ring.Native.QROMParams.conditions.wellFormed.refsOrdered
           (expr_lt_of_ne_default hk'), expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2efirst_eq,
         exprLen_add, exprLen_leaf]
       exact valueShape_size value_h2c_2esample_2emem_2ec_5fenc_header.2
-    · have hk' : program.expr 510 ≠ default := by
+    · have hk' : program.expr 550 ≠ default := by
         rw [expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_2eshared_eq]
         decide
-      have hk'' : program.expr 512 ≠ default := by
+      have hk'' : program.expr 552 ≠ default := by
         rw [expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_eq]
         decide
-      change program.exprLen (.ref 512) = 256
+      change program.exprLen (.ref 552) = 256
       rw [exprLen_ref Generated.MLDSA44.Ring.Native.QROMParams.conditions.wellFormed.refsOrdered (expr_lt_of_ne_default hk''), expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_eq,
         exprLen_ref Generated.MLDSA44.Ring.Native.QROMParams.conditions.wellFormed.refsOrdered (expr_lt_of_ne_default hk'), expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_2eshared_eq]
       rw [exprLen_add, exprLen_mul, exprLen_leaf]
@@ -160,13 +164,38 @@ instance : MldsaRingFront program where
     · exact typedCell value_h2c_2esample_2emem_2efinal_5forigin_header
     · exact typedCell value_h2c_2esample_2emem_2eunit_header
     · exact typedCell value_h2c_2esample_2emem_2eorigin_header
-  chalSucc _ := rfl
+  sibOff := 2
+  chalSucc := chal2
   chal0 := by
     rw [program.isSourceChal_iff_mem_sourceChallengeIds Generated.MLDSA44.Ring.Native.QROMParams.conditions.wellFormed,
       source_challenges]
     decide +kernel
+  chalR := ⟨by
+    rw [program.isSourceChal_iff_mem_sourceChallengeIds Generated.MLDSA44.Ring.Native.QROMParams.conditions.wellFormed,
+      source_challenges]
+    decide +kernel, by decide, by decide⟩
+  relReads := by
+    intro v hv
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
+    rcases hv with rfl | rfl | rfl | rfl | rfl | rfl
+    · exact program.nodeReads_of_priv value_signature_2ew_kind _
+    · exact program.nodeReads_of_priv value_signature_2eQ_kind _
+    · exact program.nodeReads_of_priv value_member_2et1_kind _
+    · exact program.nodeReads_of_priv value_member_2ea_5fhat_kind _
+    · exact program.nodeReads_of_bound value_z_kind _
+    · exact program.nodeReads_of_priv value_challenge_2ec_kind _
+  chalCases j hj := by
+    rw [program.isSourceChal_iff_mem_sourceChallengeIds Generated.MLDSA44.Ring.Native.QROMParams.conditions.wellFormed,
+      source_challenges] at hj
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hj
+    change j = 0 ∨ j = 1 ∨ ∃ j', j = j' + 2
+    rcases hj with rfl | rfl | rfl | rfl
+    · exact .inl rfl
+    · exact .inr (.inl rfl)
+    · exact .inr (.inr ⟨0, rfl⟩)
+    · exact .inr (.inr ⟨1, rfl⟩)
   chalIff j := by
-    change program.IsSourceChal (j + 1) ↔ nat.IsSourceChal j
+    change program.IsSourceChal (j + 2) ↔ nat.IsSourceChal j
     rw [program.isSourceChal_iff_mem_sourceChallengeIds Generated.MLDSA44.Ring.Native.QROMParams.conditions.wellFormed,
       nat.isSourceChal_iff_mem_sourceChallengeIds Generated.MLDSA44.Native.QROMParams.conditions.wellFormed,
       source_challenges, Generated.MLDSA44.Native.QROMParams.ShapeFacts.source_challenges]
@@ -206,7 +235,7 @@ relation `Ring.Native.rel`, the extractor `Ring.Native.extractor` and the errors
 `Ring.Native.ringEps` (`5143/|F_q^11|` at `member.table.gamma`, SampleInBall's `264/2^256` and
 `295/2^256` at the ring's challenges `1`, `2`). -/
 theorem source_rbr_knowledge_soundness :
-    rbrKnowledgeSoundness (rel (program := program) (F0 := RealizedProgram.fq11)
+    RBRKnowledgeSound (rel (program := program) (F0 := RealizedProgram.fq11)
         (FH := RealizedProgram.gf256)) (program.sourceVerifier interp) extractor
       (program.eventState interp rel proj (ringEvent MLDSA44.sampleView)
         (ringEvent_use MLDSA44.sampleView)

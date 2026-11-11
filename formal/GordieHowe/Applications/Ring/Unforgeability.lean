@@ -74,7 +74,9 @@ theorem tsum_mul_le_tsum_mul_add {α : Type*} (μ : PMF α) {x y : α → ℝ≥
 
 section Generic
 
-variable {Sch : SigScheme} {n m k e : ℕ} {Stmt Pf Wit : Type}
+variable {Sch : SigScheme} [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins] [Nonempty Sch.KeyCoins]
+  [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins] [Nonempty Sch.SignCoins] {n m k e : ℕ}
+  {Stmt Pf Wit : Type}
   {V : NARG.QROM.Verifier m k e (Claim Stmt Pf) Stmt}
 
 /-- **An accepted fresh claim is a forgery of the extraction forger, except with the knowledge
@@ -86,7 +88,10 @@ auxiliary input, that the forger's algorithm composed with its layer's challenge
 an accepted claim that passes `fresh` is at most the forger's success probability plus the
 knowledge error at `t + Q · q + kq` queries. Hypothesis `ht`: the algorithm makes at most `t`
 queries of its own on every branch; `q` is the layer's bound on the queries of one reply. -/
-theorem ExtractionForger.winProb_le_of_knowledgeBound (F : ExtractionForger V Sch n Wit)
+theorem ExtractionForger.winProb_le_of_knowledgeBound {Req Resp : Type} [Fintype Req]
+    [DecidableEq Req] [Fintype Resp]
+    [DecidableEq Resp] (F : ExtractionForger V Sch n Wit Req Resp) [Fintype F.layer.Coins]
+    [DecidableEq F.layer.Coins]
     (hV : ∀ c, V.stmt c = c.stmt) {rel : Set (Stmt × Wit)} {β : ℕ → ℝ≥0∞}
     (K : V.KnowledgeBound rel F.extractor β) {t : ℕ}
     (ht : ∀ a, (F.alg a).width * ((F.alg a).budget + (F.alg a).post) ≤ t)
@@ -128,11 +133,16 @@ theorem ExtractionForger.winProb_le_of_knowledgeBound (F : ExtractionForger V Sc
 
 end Generic
 
-variable {Sch : SigScheme} {n : ℕ} {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
+variable {Sch : SigScheme} [Fintype Sch.PK] [DecidableEq Sch.PK] [Fintype Sch.Msg]
+  [DecidableEq Sch.Msg] [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub]
+  [DecidableEq Sch.Pub] [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins] [Nonempty Sch.KeyCoins]
+  [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins] [Nonempty Sch.SignCoins] {n : ℕ} {RMsg : Type}
+  [Fintype RMsg] [DecidableEq RMsg]
   {N : ℕ} {adm : List Sch.PK → Prop} {m k e : ℕ} {Pf Resp Coins : Type} [Fintype Resp]
-  [DecidableEq Resp] [Fintype Coins]
+  [DecidableEq Resp] [Fintype Coins] [DecidableEq Coins]
   {V : NARG.QROM.Verifier m k e (Claim (RingStmt Sch RMsg N) Pf) (RingStmt Sch RMsg N)}
   (Pv : NARG.Prover (Bits m) (XOut k e) (RingStmt Sch RMsg N) (RingWit Sch) Resp Coins)
+    (μ : PMF Coins)
   (bind : List Sch.PK → RMsg → Sch.Msg)
 
 /-- **The decoding of an extracted ring witness**: the key at the witness's position, the base
@@ -146,7 +156,8 @@ variable {t Q : ℕ} (A : RingAdversary V Resp n t Q)
 
 /-- **The forger built from a ring adversary** (`ExtractionForger`): the adversary run through the
 ring layer over the base oracles (`ringLayer`, answering `Q` requests), the straight-line database
-extractor `ext` at the statement of the forgery, and the decoding `decodeRing`.
+extractor `ext` at the statement of the forgery, and the decoding `decodeRing`. Reducible, so
+instance search reaches the coins of its layer.
 
 Running time: the adversary's run composed with the ring challenger (each of its at most `Q`
 requests answered by the ring layer: one base signature or corruption call and one run of the
@@ -156,11 +167,10 @@ p. 7; DFMS22, ePrint 2021/280, App. B); the measurement of the database; `ext` o
 spBCS, `SPBCS.dbExtractBits`, polynomial by its Running time paragraph); one
 base signature verification per candidate to select a witness; and `decodeRing`, linear in the ring
 size. This running time is argued here, not proved in Lean. -/
-noncomputable def forger (ext : RingStmt Sch RMsg N → DB (Bits m) (Out k e) → Multiset (RingWit Sch)) :
-    ExtractionForger V Sch n (RingWit Sch) where
-  Req := RingRequest Sch n N RMsg
-  Resp := RingResponse Sch Resp
-  layer := ringLayer Pv bind
+@[reducible] noncomputable def forger
+    (ext : RingStmt Sch RMsg N → DB (Bits m) (Out k e) → Multiset (RingWit Sch)) :
+    ExtractionForger V Sch n (RingWit Sch) (RingRequest Sch n N RMsg) (RingResponse Sch Resp) where
+  layer := ringLayer Pv μ bind
   Q := Q
   Aux := A.Aux
   aux := A.aux
@@ -169,25 +179,25 @@ noncomputable def forger (ext : RingStmt Sch RMsg N → DB (Bits m) (Out k e) �
   extractor := ext
   decode := decodeRing bind
 
-variable {Pv bind}
+variable {Pv μ bind}
 
 /-- **A fresh forgery's extracted witness is a base forgery**: if the forgery is fresh
 (`ConvertedFresh`) and `(i, σ)` is a witness of the ring relation for its statement, the decoded
 candidate is a forgery of the multi-user game for the records of the run. -/
-theorem baseForgery_decodeRing {a : A.Aux} {v : A.Register Pv bind a}
-    (hf : A.ConvertedFresh Pv bind a v) {w : RingWit Sch}
-    (hw : RingRel bind (A.claim Pv bind a v).stmt w) :
-    ∃ f ∈ decodeRing bind (A.claim Pv bind a v).stmt w,
+theorem baseForgery_decodeRing {a : A.Aux} {v : A.Register Pv μ bind a}
+    (hf : A.ConvertedFresh Pv μ bind a v) {w : RingWit Sch}
+    (hw : RingRel bind (A.claim Pv μ bind a v).stmt w) :
+    ∃ f ∈ decodeRing bind (A.claim Pv μ bind a v).stmt w,
       BaseForgery v.chal.coins.1
-        ((ringLayer Pv bind).Corrupted Q v.chal.coins (A.answered Pv bind a v))
-        ((ringLayer Pv bind).Signed Q v.chal.coins (A.answered Pv bind a v)) f := by
+        ((ringLayer Pv μ bind).Corrupted Q v.chal.coins (A.answered Pv μ bind a v))
+        ((ringLayer Pv μ bind).Signed Q v.chal.coins (A.answered Pv μ bind a v)) f := by
   refine ⟨_, by rw [decodeRing, dite_eq_left_of_eq_true (eq_true hw.idx_lt)]; rfl, hw.verify_eq, ?_⟩
   obtain ⟨i, hi, hc⟩ := hf.honest_ring _ hw.mem_ring
   refine ⟨i, hi, hc, hf.unsigned i ?_⟩
   rw [hi]
   exact hw.mem_ring
 
-variable (Pv bind)
+variable (Pv μ bind)
 
 /-- **Unforgeability in the converted-signature game for a compiled verifier with a knowledge
 bound** (`GordieHowe/Applications/Ring/Games.lean`), at one ring adversary: for a compiled verifier `V` whose claims'
@@ -195,26 +205,31 @@ statements are read by `Claim.stmt` (`hV`), with a knowledge bound for the ring 
 database extractor `ext` and the database bound `β` (`K`, CMS19 Proposition 8.12 and Lemmas
 5.9–5.10), the probability that a ring adversary with at most `Q` requests and `t` queries of its
 own wins the converted-signature game (`convertedWinProb`) is at most the success probability of the
-explicit forger `A.forger Pv bind ext` in the multi-user signature game with adaptive corruption,
+explicit forger `A.forger Pv μ bind ext` in the multi-user signature game with adaptive corruption,
 plus the knowledge error at `t + Q · q + kq` queries (`q = Pv.q` the queries of one honest prover
 run). -/
 theorem convertedWinProb_le_of_knowledgeBound (hV : ∀ c, V.stmt c = c.stmt)
     {ext : RingStmt Sch RMsg N → DB (Bits m) (Out k e) → Multiset (RingWit Sch)} {β : ℕ → ℝ≥0∞}
     (K : V.KnowledgeBound (ringRel adm bind) ext β) :
-    A.convertedWinProb Pv bind ≤ (A.forger Pv bind ext).success +
+    A.convertedWinProb Pv μ bind ≤ (A.forger Pv μ bind ext).success +
       V.knowledgeError β (t + Q * Pv.q + V.kq) :=
-  (A.forger Pv bind ext).winProb_le_of_knowledgeBound hV K A.queries_le (A.ConvertedFresh Pv bind)
+  (A.forger Pv μ bind ext).winProb_le_of_knowledgeBound hV K A.queries_le
+    (A.ConvertedFresh Pv μ bind)
     fun _ _ _ hf hw => A.baseForgery_decodeRing hf hw.2
 
 /-! ### The base calls of the ring layer -/
 
-omit [Fintype RMsg] [DecidableEq RMsg] [Fintype Resp] [DecidableEq Resp] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype Resp] [DecidableEq Resp] [Fintype Sch.PK]
+  [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub]
+  [DecidableEq Sch.Pub] [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins] [Nonempty Sch.KeyCoins]
+  [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins] [Nonempty Sch.SignCoins] [DecidableEq Coins]
+  in
 /-- **The base calls of the ring layer that sign**: a base signature by user `i` on `m'` is asked
 only by an ordinary signing request `(i, m')`, or by a ring-signing request by `i` on a ring `R`
 and message `m` with `bind R m = m'`. -/
 theorem sign_mem_trace_ringLayer {req : RingRequest Sch n N RMsg} {c}
     {O : BaseRequest Sch n → BaseResponse Sch} {i : Fin n} {m' : Sch.Msg}
-    (h : BaseRequest.sign i m' ∈ ((ringLayer Pv bind).prog req c).trace O) :
+    (h : BaseRequest.sign i m' ∈ ((ringLayer Pv μ bind).prog req c).trace O) :
     req = .base (.sign i m') ∨ ∃ ring m, req = .ringSign i ring m ∧ bind ring.1 m = m' := by
   rcases req with r | ⟨s, ring, m⟩
   · simp only [ringLayer, OracleProg.trace_query, OracleProg.trace_pure, List.mem_singleton] at h
@@ -235,11 +250,14 @@ theorem sign_mem_trace_ringLayer {req : RingRequest Sch n N RMsg} {c}
     · rw [hO] at h
       simp at h
 
-omit [Fintype RMsg] [DecidableEq RMsg] [Fintype Resp] [DecidableEq Resp] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype Resp] [DecidableEq Resp] [Fintype Sch.PK]
+  [Fintype Sch.Msg] [DecidableEq Sch.Msg] [Fintype Sch.Sig] [DecidableEq Sch.Sig] [Fintype Sch.Pub]
+  [DecidableEq Sch.Pub] [Fintype Sch.KeyCoins] [DecidableEq Sch.KeyCoins] [Nonempty Sch.KeyCoins]
+  [Fintype Sch.SignCoins] [DecidableEq Sch.SignCoins] [Nonempty Sch.SignCoins] in
 /-- A base call of the answered requests comes from one of them. -/
-theorem exists_mem_of_signed {Q : ℕ} {ω : (ringLayer Pv bind).Draw Q}
+theorem exists_mem_of_signed {Q : ℕ} {ω : (ringLayer Pv μ bind).Draw Q}
     {reqs : List (RingRequest Sch n N RMsg)} {i : Fin n} {m' : Sch.Msg}
-    (h : (ringLayer Pv bind).Signed Q ω reqs i m') :
+    (h : (ringLayer Pv μ bind).Signed Q ω reqs i m') :
     ∃ req ∈ reqs, req = .base (.sign i m') ∨
       ∃ ring m, req = .ringSign i ring m ∧ bind ring.1 m = m' := by
   obtain ⟨⟨req, c⟩, hp, hc⟩ := List.mem_flatMap.1 h
@@ -247,7 +265,7 @@ theorem exists_mem_of_signed {Q : ℕ} {ω : (ringLayer Pv bind).Draw Q}
   refine ⟨req, hreq, ?_⟩
   simp only [OracleLayer.callsAt] at hc
   split_ifs at hc
-  · exact sign_mem_trace_ringLayer Pv bind hc
+  · exact sign_mem_trace_ringLayer Pv μ bind hc
   · simp at hc
 
 end RingAdversary
@@ -262,7 +280,7 @@ variable {t Q : ℕ} (A : BKMAdversary V Resp n t Q)
 adversary run through the layer of BKM06 over the base oracles (`bkmLayer`, answering `Q`
 requests), the straight-line database extractor `ext` at the statement of the forgery, and the
 decoding `decodeRing`. Its layer makes no ordinary signing call other than those of the
-ring-signing requests.
+ring-signing requests. Reducible, so instance search reaches the coins of its layer.
 
 Running time: that of `RingAdversary.forger`: the adversary's run composed with the challenger of
 BKM06 (each of its at most `Q` requests answered by the ring layer: one public-key, corruption or
@@ -272,11 +290,10 @@ then the verifier's `kq` queries on the forgery, all answered by the compressed 
 measurement of the database; `ext` on it (for spBCS, `SPBCS.dbExtractBits`, polynomial by its
 Running time paragraph); one base signature verification per candidate to select a witness; and
 `decodeRing`, linear in the ring size. This running time is argued here, not proved in Lean. -/
-noncomputable def forger (adm : List Sch.PK → Prop) (ext : RingStmt Sch RMsg N → DB (Bits m) (Out k e) → Multiset (RingWit Sch)) :
-    ExtractionForger V Sch n (RingWit Sch) where
-  Req := BKMRequest Sch n N RMsg
-  Resp := RingResponse Sch Resp
-  layer := bkmLayer Pv bind adm
+@[reducible] noncomputable def forger (adm : List Sch.PK → Prop)
+    (ext : RingStmt Sch RMsg N → DB (Bits m) (Out k e) → Multiset (RingWit Sch)) :
+    ExtractionForger V Sch n (RingWit Sch) (BKMRequest Sch n N RMsg) (RingResponse Sch Resp) where
+  layer := bkmLayer Pv μ bind adm
   Q := Q
   Aux := A.Aux
   aux := A.aux
@@ -285,8 +302,9 @@ noncomputable def forger (adm : List Sch.PK → Prop) (ext : RingStmt Sch RMsg N
   extractor := ext
   decode := decodeRing bind
 
-variable {Pv bind}
+variable {Pv μ bind}
 
+omit [Fintype Sch.Msg] [DecidableEq Sch.Msg] in
 /-- **A fresh forgery's extracted witness is a base forgery when `bind` binds the ring**
 (`BindsRing`): if the
 forgery on `(R*, m*)` is fresh in the sense of BKM06 (`InsiderFresh`) and `(i, σ)` is a witness of
@@ -295,20 +313,20 @@ the multi-user game for the records of the run. A member asked to sign `bind R* 
 ring-signing request on some `(R, m)` with `bind R m = bind R* m*` (the requests of BKM06 include
 no ordinary signing request), hence on `(R*, m*)`, which `no_ringSign` excludes. -/
 theorem baseForgery_decodeRing (hbind : BindsRing N bind) {a : A.Aux}
-    {v : A.Register Pv bind adm a} (hf : A.InsiderFresh Pv bind adm a v) {w : RingWit Sch}
-    (hw : RingRel bind (A.claim Pv bind adm a v).stmt w) :
-    ∃ f ∈ decodeRing bind (A.claim Pv bind adm a v).stmt w,
+    {v : A.Register Pv μ bind adm a} (hf : A.InsiderFresh Pv μ bind adm a v) {w : RingWit Sch}
+    (hw : RingRel bind (A.claim Pv μ bind adm a v).stmt w) :
+    ∃ f ∈ decodeRing bind (A.claim Pv μ bind adm a v).stmt w,
       BaseForgery v.chal.coins.1
-        ((bkmLayer Pv bind adm).Corrupted Q v.chal.coins (A.answered Pv bind adm a v))
-        ((bkmLayer Pv bind adm).Signed Q v.chal.coins (A.answered Pv bind adm a v)) f := by
+        ((bkmLayer Pv μ bind adm).Corrupted Q v.chal.coins (A.answered Pv μ bind adm a v))
+        ((bkmLayer Pv μ bind adm).Signed Q v.chal.coins (A.answered Pv μ bind adm a v)) f := by
   refine ⟨_, by rw [decodeRing, dite_eq_left_of_eq_true (eq_true hw.idx_lt)]; rfl, hw.verify_eq, ?_⟩
   obtain ⟨i, hi, hc⟩ := hf.honest_ring _ hw.mem_ring
   refine ⟨i, hi, hc, fun hs => ?_⟩
-  have hs' : (ringLayer Pv bind).Signed Q v.chal.coins
-      ((A.answered Pv bind adm a v).map BKMRequest.toRingRequest) i
-      (bind (A.claim Pv bind adm a v).stmt.ring.1 (A.claim Pv bind adm a v).stmt.msg) :=
+  have hs' : (ringLayer Pv μ bind).Signed Q v.chal.coins
+      ((A.answered Pv μ bind adm a v).map BKMRequest.toRingRequest) i
+      (bind (A.claim Pv μ bind adm a v).stmt.ring.1 (A.claim Pv μ bind adm a v).stmt.msg) :=
     mem_calls_ringLayer_of_mem_calls_bkmLayer hs
-  obtain ⟨req, hreq, hor⟩ := RingAdversary.exists_mem_of_signed Pv bind hs'
+  obtain ⟨req, hreq, hor⟩ := RingAdversary.exists_mem_of_signed Pv μ bind hs'
   obtain ⟨r, hr, rfl⟩ := List.mem_map.1 hreq
   rcases hor with hb | ⟨ring, m, hrr, hm⟩
   · exact BKMRequest.toRingRequest_ne_sign r _ _ hb
@@ -320,24 +338,26 @@ theorem baseForgery_decodeRing (hbind : BindsRing N bind) {a : A.Aux}
       obtain ⟨rfl, rfl, rfl⟩ := hrr
       exact hf.no_ringSign _ _ _ hr (hbind _ _ _ _ hm)
 
-variable (Pv bind)
+variable (Pv μ bind)
 
+omit [Fintype Sch.Msg] [DecidableEq Sch.Msg] in
 /-- **Unforgeability with respect to insider corruption (BKM06 Definition 7) for a compiled
 verifier with a knowledge bound**, for a base message that binds the ring (`BindsRing`,
 `hbind`), at one adversary of BKM06: for a compiled verifier `V` whose claims' statements are read
 by `Claim.stmt` (`hV`), with a knowledge bound for the ring relation at the database extractor
 `ext` and the database bound `β` (`K`, CMS19 Proposition 8.12 and Lemmas 5.9–5.10), the
 probability that an adversary of BKM06 with at most `Q` requests and `t` queries of its own wins
-(`insiderWinProb`) is at most the success probability of the explicit forger `A.forger Pv bind adm ext`
+(`insiderWinProb`) is at most the success probability of the explicit forger `A.forger Pv μ bind adm ext`
 in the multi-user signature game with adaptive corruption, plus the knowledge error at
 `t + Q · q + kq` queries (`q = Pv.q` the queries of one honest prover run). -/
 theorem insiderWinProb_le_of_knowledgeBound (hbind : BindsRing N bind)
     (hV : ∀ c, V.stmt c = c.stmt)
     {ext : RingStmt Sch RMsg N → DB (Bits m) (Out k e) → Multiset (RingWit Sch)} {β : ℕ → ℝ≥0∞}
     (K : V.KnowledgeBound (ringRel adm bind) ext β) :
-    A.insiderWinProb Pv bind adm ≤ (A.forger Pv bind adm ext).success +
+    A.insiderWinProb Pv μ bind adm ≤ (A.forger Pv μ bind adm ext).success +
       V.knowledgeError β (t + Q * Pv.q + V.kq) :=
-  (A.forger Pv bind adm ext).winProb_le_of_knowledgeBound hV K A.queries_le (A.InsiderFresh Pv bind adm)
+  (A.forger Pv μ bind adm ext).winProb_le_of_knowledgeBound hV K A.queries_le
+    (A.InsiderFresh Pv μ bind adm)
     fun _ _ _ hf hw => A.baseForgery_decodeRing hbind hf hw.2
 
 end BKMAdversary
@@ -354,7 +374,7 @@ variable {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ} {P : (j
   {M : SPBCS Mg P (RingStmt Sch RMsg N) k kN kS L e} (Λ : SiteLayout Mg) {B : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] {E : (j : ι) → (M.comp j).Encoder}
   {Vr : RingStmt Sch RMsg N → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  (hb : M.FormatBounds Qs B B) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs B B) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : RingWit Sch → R → CausalProver P τ (RingStmt Sch RMsg N))
   {Ext : CausalExtractor P τ (RingStmt Sch RMsg N) (RingWit Sch)}
   {St : CausalStateFn P τ (RingStmt Sch RMsg N)} {ε : ChIdx P τ → ℝ≥0}
@@ -373,12 +393,13 @@ the explicit forger `A.forger … (M.dbExtractBits Ext)` in the multi-user signa
 adaptive corruption, plus the knowledge error of spBCS at `t + Q · q + kq`
 queries (`q` the queries of one honest prover run, `kq = kqOf Mg nr B B` the verifier's). -/
 theorem convertedWinProb_le (hrbr : CausalRBRKnowledgeSound (ringRel adm bind) Vr Ext St ε) :
-    A.convertedWinProb (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind ≤
-      (A.forger (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind (M.dbExtractBits Ext)).success +
+    A.convertedWinProb (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding)
+        (PMF.uniformOfFintype _) bind ≤
+      (A.forger (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) (PMF.uniformOfFintype _) bind (M.dbExtractBits Ext)).success +
         knowledgeError k e (kqOf Mg nr B B)
           (t + Q * (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding).q + kqOf Mg nr B B) M.senc.digestsPerInput
           Mg.nJ (maxError ε) :=
-  A.convertedWinProb_le_of_knowledgeBound _ bind (fun _ => rfl)
+  A.convertedWinProb_le_of_knowledgeBound _ _ bind (fun _ => rfl)
     (M.knowledgeBound (ringRel adm bind) Ext St hrbr Qs _
       fun _ _ _ hv => queries_length_le_of_formatBounds hb hv)
 
@@ -391,8 +412,9 @@ base scheme for this forger), the adversary wins with probability at most `ε'` 
 error of spBCS. -/
 theorem convertedWinProb_le_of_success_le
     (hrbr : CausalRBRKnowledgeSound (ringRel adm bind) Vr Ext St ε) {ε' : ℝ≥0∞}
-    (hSig : (A.forger (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind (M.dbExtractBits Ext)).success ≤ ε') :
-    A.convertedWinProb (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind ≤
+    (hSig : (A.forger (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) (PMF.uniformOfFintype _) bind (M.dbExtractBits Ext)).success ≤ ε') :
+    A.convertedWinProb (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding)
+        (PMF.uniformOfFintype _) bind ≤
       ε' + knowledgeError k e (kqOf Mg nr B B)
         (t + Q * (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding).q + kqOf Mg nr B B) M.senc.digestsPerInput
         Mg.nJ (maxError ε) :=
@@ -410,7 +432,7 @@ variable {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ} {P : (j
   {M : SPBCS Mg P (RingStmt Sch RMsg N) k kN kS L e} (Λ : SiteLayout Mg) {B : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] {E : (j : ι) → (M.comp j).Encoder}
   {Vr : RingStmt Sch RMsg N → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  (hb : M.FormatBounds Qs B B) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs B B) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : RingWit Sch → R → CausalProver P τ (RingStmt Sch RMsg N))
   {Ext : CausalExtractor P τ (RingStmt Sch RMsg N) (RingWit Sch)}
   {St : CausalStateFn P τ (RingStmt Sch RMsg N)} {ε : ChIdx P τ → ℝ≥0}
@@ -418,6 +440,7 @@ variable {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ} {P : (j
 
 include hb
 
+omit [Fintype Sch.Msg] [DecidableEq Sch.Msg] in
 /-- **Unforgeability of the ring signature compiled by spBCS with respect to insider corruption**
 (BKM06 Definition 7, TCC 2006, LNCS p. 67; ePrint 2005/304, p. 7: adversarially chosen rings,
 adaptive corruption, ring-signing queries, no ordinary signing oracle) for a base message that
@@ -434,15 +457,17 @@ the knowledge error of spBCS at `t + Q · q + kq` queries (`q` the queries of on
 run, `kq = kqOf Mg nr B B` the verifier's). -/
 theorem insiderWinProb_le (hbind : BindsRing N bind)
     (hrbr : CausalRBRKnowledgeSound (ringRel adm bind) Vr Ext St ε) :
-    A.insiderWinProb (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind adm ≤
-      (A.forger (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind adm (M.dbExtractBits Ext)).success +
+    A.insiderWinProb (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding)
+        (PMF.uniformOfFintype _) bind adm ≤
+      (A.forger (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) (PMF.uniformOfFintype _) bind adm (M.dbExtractBits Ext)).success +
         knowledgeError k e (kqOf Mg nr B B)
           (t + Q * (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding).q + kqOf Mg nr B B) M.senc.digestsPerInput
           Mg.nJ (maxError ε) :=
-  A.insiderWinProb_le_of_knowledgeBound _ bind hbind (fun _ => rfl)
+  A.insiderWinProb_le_of_knowledgeBound _ _ bind hbind (fun _ => rfl)
     (M.knowledgeBound (ringRel adm bind) Ext St hrbr Qs _
       fun _ _ _ hv => queries_length_le_of_formatBounds hb hv)
 
+omit [Fintype Sch.Msg] [DecidableEq Sch.Msg] in
 /-- **Unforgeability with respect to insider corruption (BKM06 Definition 7) of the ring signature
 compiled by spBCS under the base assumption**, for a base message that binds the ring (`hbind`):
 if the forger built from the adversary succeeds in the multi-user signature game with adaptive
@@ -451,8 +476,9 @@ forger), the adversary of BKM06 wins with probability at most `ε'` plus the kno
 spBCS. -/
 theorem insiderWinProb_le_of_success_le (hbind : BindsRing N bind)
     (hrbr : CausalRBRKnowledgeSound (ringRel adm bind) Vr Ext St ε) {ε' : ℝ≥0∞}
-    (hSig : (A.forger (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind adm (M.dbExtractBits Ext)).success ≤ ε') :
-    A.insiderWinProb (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) bind adm ≤
+    (hSig : (A.forger (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding) (PMF.uniformOfFintype _) bind adm (M.dbExtractBits Ext)).success ≤ ε') :
+    A.insiderWinProb (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding)
+        (PMF.uniformOfFintype _) bind adm ≤
       ε' + knowledgeError k e (kqOf Mg nr B B)
         (t + Q * (((M.niProver Λ honest E hb).mapOutput some).encode queryEncoding).q + kqOf Mg nr B B) M.senc.digestsPerInput
         Mg.nJ (maxError ε) :=

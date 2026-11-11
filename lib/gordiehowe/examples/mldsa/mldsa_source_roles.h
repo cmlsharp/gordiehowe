@@ -52,6 +52,9 @@ void mldsa_source_roles(const Scope &s, NamedShapeInputs &shapes, SourceFamily f
     role(a_names[i], SourceRole::kAWitness, i);
   if (family == SourceFamily::kRingCarrier)
     role("signature.relation.q", SourceRole::kCarry, 0);
+  // The rings' quotients by X^n + 1 (mldsa_ring_native.h,
+  // evaluation_relation; mldsa_ring_carrier.h, carrier_relation).
+  if (ring) role("signature.Q", SourceRole::kAWitness, 8);
 
   const char *selection_names[] = {
       "h2c.sample.select.j", "h2c.sample.select.threshold.words",

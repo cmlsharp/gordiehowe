@@ -17,6 +17,8 @@ with their result `run h` and their query list `trace h`, and the padded query s
 model answer requests with such programs (`GordieHowe/Model/Quantum/Interactive/Basic.lean`); the verifier's
 queries are given as one (`GordieHowe.SPBCS.roundsProg`, `GordieHowe/SPBCS/Verifier.lean`), and
 `OracleProg.toExpansion` (`GordieHowe/Model/QROM/Expansion.lean`) turns a program family into a query expansion.
+`QueriesLE.pure`, `QueriesLE.bind`, `QueriesLE.query`, `QueriesLE.tabulate`: the query bounds of
+`pure`, sequential composition, a query and a tabulation.
 `AllOut p P`: every output of `p`, on every path of answers, satisfies `P` (`AllOut.run`,
 `mono`, `mapOutput`, `translate`).
 -/
@@ -149,6 +151,26 @@ theorem QueriesLE.mapOutput {p : OracleProg A B R} {q : ℕ} (hp : p.QueriesLE q
     (p.mapOutput f).QueriesLE q :=
   fun h => (trace_mapOutput h f p).symm ▸ hp h
 
+/-- A program that returns at once makes no queries. -/
+theorem QueriesLE.pure (r : R) (q : ℕ) : (OracleProg.pure r : OracleProg A B R).QueriesLE q :=
+  fun _ => Nat.zero_le _
+
+/-- **The query bound of a sequential composition**: `p` with at most `q₁` queries, then a
+continuation with at most `q₂` queries on every result, makes at most `q₁ + q₂` queries. -/
+theorem QueriesLE.bind {p : OracleProg A B R} {f : R → OracleProg A B S} {q₁ q₂ : ℕ}
+    (hp : p.QueriesLE q₁) (hf : ∀ r, (f r).QueriesLE q₂) : (p.bind f).QueriesLE (q₁ + q₂) :=
+  fun h => by
+    rw [trace_bind, List.length_append]
+    exact Nat.add_le_add (hp h) (hf _ h)
+
+/-- **A query, then a continuation with at most `q` queries on every answer**, makes at most
+`q + 1` queries. -/
+theorem QueriesLE.query (a : A) {k : B → OracleProg A B R} {q : ℕ} (hk : ∀ b, (k b).QueriesLE q) :
+    (OracleProg.query a k).QueriesLE (q + 1) :=
+  fun h => by
+    rw [trace_query, List.length_cons]
+    exact Nat.add_le_add_right (hk _ h) 1
+
 /-! ### Combinators: renaming queries, tabulating, iterating -/
 
 section Combinators
@@ -227,6 +249,18 @@ theorem length_trace_iterate_le (step : ℕ → S → OracleProg A B S) (c : ℕ
     exact Nat.add_le_add (length_trace_iterate_le step c hc m s) (hc _ _)
 
 end Combinators
+
+/-- **The query bound of a tabulation**: programs with at most `q` queries at each of the `|l|`
+indices make at most `|l| · q` queries. -/
+theorem QueriesLE.tabulate {ι : Type*} [DecidableEq ι] (d : ι → R) (l : List ι)
+    {P : ι → OracleProg A B R} {q : ℕ} (hP : ∀ i, (P i).QueriesLE q) :
+    (OracleProg.tabulate d l P).QueriesLE (l.length * q) := fun h => by
+  rw [length_trace_tabulate]
+  induction l with
+  | nil => exact Nat.zero_le _
+  | cons i l ih =>
+    rw [List.map_cons, List.sum_cons, List.length_cons, Nat.succ_mul, Nat.add_comm (l.length * q)]
+    exact Nat.add_le_add (hP i h) ih
 
 /-! ### Dependence on the oracle, and translation -/
 

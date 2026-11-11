@@ -34,16 +34,12 @@ variable {P : Export.Plan} {ir : RealizedProgram} {I : Interp}
 
 /-- **The proof system of a program on the generic per-field domain proofs**: the program's checks
 `checks` at the opaque ranges `orng`, the model `model` of the interpretation, the GKR sources
-`src` with their facts (`enforce`, `accept`), every domain's circuit proof `fieldProof` at its ready
-data `R d`, and the selections' bound `hsel` (by default from a program without a product form,
-`RealizedProgram.selSound_of_noProduct`). -/
+`src` with their facts (`enforce`, `accept`) and every domain's circuit proof `fieldProof` at its
+ready data `R d`. -/
 def ofFieldProofs {orng : List (ℕ × ℕ)} (checks : ir.Checks P orng)
     (model : I.Model P ir orng) (src : ∀ c : Fin ir.circuits.length, ir.CircuitSource I c)
     (enforce : ir.CircuitsEnforce I src) (accept : ir.CircuitsAccept I src)
-    (R : ∀ d : Fin ir.domains.length, ir.FieldReady I d P)
-    -- TODO(sealed-data): this default runs `decide +kernel` on the program at each use, where
-    -- `ir` is generated data. Callers should pass a compiler-emitted fact (no product form).
-    (hsel : ir.SelSound I := by exact RealizedProgram.selSound_of_noProduct _ (by decide +kernel)) :
+    (R : ∀ d : Fin ir.domains.length, ir.FieldReady I d P) :
     ir.ProofSystem P I where
   opaqueRanges := orng
   checks := checks
@@ -52,7 +48,6 @@ def ofFieldProofs {orng : List (ℕ × ℕ)} (checks : ir.Checks P orng)
   enforce := enforce
   accept := accept
   proof d := (ir.fieldProof src (R d)).unguard enforce
-  selSound := hsel
 
 end ProofSystem
 
@@ -66,7 +61,7 @@ variable (B : ir.ProofSystem P I) (R : ∀ d : Fin ir.domains.length, ir.FieldRe
 every domain's circuit proof `fieldProof` at its ready data `R d` (`ofFieldProofs`). A proof system
 built by `ofFieldProofs` at `R` is its own `withFieldProofs R`. -/
 def withFieldProofs : ir.ProofSystem P I :=
-  ofFieldProofs B.checks B.model B.src B.enforce B.accept R B.selSound
+  ofFieldProofs B.checks B.model B.src B.enforce B.accept R
 
 /-- **The domains' simulator data of the proof system** (`fieldSim`). -/
 def fieldSims : (B.withFieldProofs R).DomainSims := fun d => ir.fieldSim B.src (R d)

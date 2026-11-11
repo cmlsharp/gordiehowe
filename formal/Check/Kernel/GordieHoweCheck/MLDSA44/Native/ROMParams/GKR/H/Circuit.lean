@@ -14,15 +14,16 @@ public import GordieHoweCheck.MLDSA44.Native.ROMParams.GKR.H.E7
 public import GordieHoweCheck.MLDSA44.Native.ROMParams.GKR.H.E8
 public import GordieHoweCheck.MLDSA44.Native.ROMParams.GKR.H.E9
 public import GordieHoweCheck.MLDSA44.Native.ROMParams.GKR.H.E10
+public import GordieHoweCheck.MLDSA44.Native.ROMParams.GKR.H.Header
 meta import GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.GKR.H
 import all GordieHoweCerts.Generated.MLDSA44.Native.ROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of the GKR circuit of domain H, from its entries' (generated; do not edit). -/
+/-! The relational check of the GKR circuit of domain H, from its header's and entries' (generated; do not edit). -/
 
 namespace GordieHowe.Generated.MLDSA44.Native.ROMParams.GKR.H
 
-check_circuit cert ar
+compose_circuit cert ar
 
 end GordieHowe.Generated.MLDSA44.Native.ROMParams.GKR.H

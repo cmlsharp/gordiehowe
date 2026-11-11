@@ -10,15 +10,16 @@ public import GordieHoweCheck.MLDSA44.Ring.Carrier.QROMParams.GKR.H.E3
 public import GordieHoweCheck.MLDSA44.Ring.Carrier.QROMParams.GKR.H.E4
 public import GordieHoweCheck.MLDSA44.Ring.Carrier.QROMParams.GKR.H.E5
 public import GordieHoweCheck.MLDSA44.Ring.Carrier.QROMParams.GKR.H.E6
+public import GordieHoweCheck.MLDSA44.Ring.Carrier.QROMParams.GKR.H.Header
 meta import GordieHoweCerts.Generated.MLDSA44.Ring.Carrier.QROMParams.GKR.H
 import all GordieHoweCerts.Generated.MLDSA44.Ring.Carrier.QROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of the GKR circuit of domain H, from its entries' (generated; do not edit). -/
+/-! The relational check of the GKR circuit of domain H, from its header's and entries' (generated; do not edit). -/
 
 namespace GordieHowe.Generated.MLDSA44.Ring.Carrier.QROMParams.GKR.H
 
-check_circuit cert ar
+compose_circuit cert ar
 
 end GordieHowe.Generated.MLDSA44.Ring.Carrier.QROMParams.GKR.H

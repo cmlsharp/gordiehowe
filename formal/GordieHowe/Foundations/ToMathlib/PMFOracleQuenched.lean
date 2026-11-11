@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Foundations.ToMathlib.PMFOracleLoop
+public import GordieHowe.Foundations.ToMathlib.PMFOracleSide
 public import GordieHowe.Foundations.ToMathlib.UniformFunction
 public import GordieHowe.Foundations.ToMathlib.McDiarmid
 public import GordieHowe.Foundations.ToMathlib.NNRatENNReal
@@ -18,15 +18,23 @@ with value `c` by `wt j (v, c) ∈ [0, 1]` (`RingWeights`, the cast of a rationa
 `otherWeight` and `ringWeight` are rational, `coe_otherWeight`, `coe_ringWeight`). The signer `i`
 repeats attempts (`weightedAttempt`): draw `y`, read its own value `H (i, w1 y)`, reject unless
 `acc` accepts, and keep `w1 y` with probability `κ (w1 y, H (i, w1 y))` times the other members'
-weights `∏_{j ≠ i} wt j (w1 y, H (j, w1 y))` (`otherWeight`). At a fixed oracle `H`:
+weights `∏_{j ≠ i} wt j (w1 y, H (j, w1 y))` (`otherWeight`).
+
+The signer's attempt is the core attempt of `PMFOracleSide.lean` (`quenchedAttempt`) with side data
+the other members' values, read through the column split (`columnSplit`), and keep factor the other
+members' factor (`RingWeights.otherFactor`): `weightedAttempt_eq_quenchedAttempt`,
+`weightedDev_eq_quenchedDev`. The column deviation, column error, mean weight and relative column
+error (`colDev`, `colError`, `RingWeights.meanWeight`, `relColError`) are the core's with the
+signer's weight. At a fixed oracle `H`:
 
 - `tvDist_untilSome_untilSome_le_weight`: two unbounded loops whose accepted masses are close to
   `β₀ · g` and `β₁ · g` for one nonnegative `g` are within their normalized deviations;
 - `weightedDev`, `weightedDev_eq`, `expect_weightedDev`, `RingWeights.expect_weightMass`: the
   deviation of the signer's attempt from `β` times the ring weight `∏_j wt j (v, H (j, v))`
-  (`ringWeight`) is a sum of column terms, with explicit means against a uniform oracle;
+  (`ringWeight`) is a sum of column terms, with explicit means against a uniform oracle
+  (`quenchedDev_eq`, `expect_quenchedDev_of_eq`);
 - `ringOf`, `abs_weightedDev_update_le`, `abs_weightMass_update_le`: bounded differences when the
-  ring sits inside a larger oracle;
+  ring sits inside a larger oracle (`abs_quenchedDev_update_le` for the deviation);
 - `RingPair`, `familyBound`, `tvDist_le_familyBound`, `one_le_familyBound_of_never`,
   `expect_familyBound_le`: the expected largest distance over many rings, by McDiarmid
   (`expect_sup'_le_of_boundedDiff`);
@@ -218,9 +226,6 @@ theorem RingWeights.wt_le_one {N V C : Type*} (s : RingWeights N V C) (j : N) (a
     s.wt j a ≤ 1 :=
   ENNReal.nnratCast_le_one.2 (s.wtQ_le_one j a)
 
-/-- A probability in `ℝ` is at most one. -/
-theorem _root_.ENNReal.toReal_le_one_of_le_one {x : ℝ≥0∞} (h : x ≤ 1) : x.toReal ≤ 1 := by
-  simpa using ENNReal.toReal_mono ENNReal.one_ne_top h
 
 section Weighted
 
@@ -269,10 +274,31 @@ theorem ringWeight_eq_mul (i : N) (H : N × V → C) (v : V) :
   rw [coe_ringWeight, coe_otherWeight]
   exact (Finset.mul_prod_erase univ (fun j => s.wt j (v, H (j, v))) (mem_univ i)).symm
 
+/-- **The other members' factor** for the signer `i` at a column whose other members' values are
+`z`: `∏_{j ≠ i} wt j (v, z j)`. It is the keep factor of the ring signer as a core attempt
+(`weightedAttempt_eq_quenchedAttempt`), and does not read the signer's value `c`. -/
+noncomputable def otherFactor (i : N) (a : V × C × ({j // j ≠ i} → C)) : ℝ≥0∞ :=
+  ∏ j : {j // j ≠ i}, s.wt j (a.1, a.2.2 j)
+
+omit [Fintype V] [DecidableEq V] [Fintype C] [DecidableEq C] in
+theorem otherFactor_le_one (i : N) (a : V × C × ({j // j ≠ i} → C)) : s.otherFactor i a ≤ 1 :=
+  Finset.prod_le_one' fun j _ => s.wt_le_one j _
+
+/-- At the other members' values of a column of `H`, the factor is the other members' weight. -/
+theorem otherFactor_mk (i : N) (H : N × V → C) (v : V) (c : C) :
+    s.otherFactor i (v, c, fun j => H (j.1, v)) = s.otherWeight i H v := by
+  rw [coe_otherWeight, otherFactor]
+  exact (Finset.prod_subtype (univ.erase i) (fun j => by simp)
+    (fun j => s.wt j (v, H (j, v)))).symm
+
 variable [Nonempty C]
 
 /-- **The mean weight** of member `j` at column `v`: `𝔼_c wt j (v, c)`. -/
-noncomputable def meanWeight (j : N) (v : V) : ℝ := 𝔼 c : C, (s.wt j (v, c)).toReal
+noncomputable def meanWeight (j : N) (v : V) : ℝ := quenchedMeanWeight (s.wt j) v
+
+omit [Fintype N] [DecidableEq N] [Fintype V] [DecidableEq V] [DecidableEq C] [Nonempty C] in
+theorem meanWeight_eq (j : N) (v : V) : s.meanWeight j v = 𝔼 c : C, (s.wt j (v, c)).toReal :=
+  rfl
 
 /-- **The column mass** `∏_j 𝔼_c wt j (v, c)`: the mean ring weight of column `v` against a
 uniform oracle. -/
@@ -281,8 +307,9 @@ noncomputable def colMass (v : V) : ℝ := ∏ j, s.meanWeight j v
 /-- **The ring mass** `∑_v ∏_j 𝔼_c wt j (v, c)`: the mean total ring weight. -/
 noncomputable def mass : ℝ := ∑ v, s.colMass v
 
+omit [Fintype N] [DecidableEq N] [Fintype V] [DecidableEq V] [DecidableEq C] [Nonempty C] in
 theorem meanWeight_nonneg (j : N) (v : V) : 0 ≤ s.meanWeight j v :=
-  Finset.expect_nonneg fun _ _ => ENNReal.toReal_nonneg
+  quenchedMeanWeight_nonneg _ v
 
 theorem colMass_nonneg (v : V) : 0 ≤ s.colMass v :=
   Finset.prod_nonneg fun j _ => s.meanWeight_nonneg j v
@@ -307,23 +334,36 @@ noncomputable def weightedAttempt (H : N × V → C) : PMF (Option V) :=
         (keepWeight_le_one s i κ hκ H (w1 y))
     else pure none
 
+omit [Fintype Y] in
+/-- **The weighted ring attempt is the core attempt** (`quenchedAttempt`) with the other members'
+factor, read through the column split. -/
+theorem weightedAttempt_eq_quenchedAttempt (H : N × V → C) :
+    weightedAttempt s i P w1 acc κ hκ H =
+      quenchedAttempt P w1 acc κ hκ (s.otherFactor i) (s.otherFactor_le_one i)
+        (columnSplit i H) := by
+  unfold weightedAttempt quenchedAttempt
+  refine congrArg P.bind (funext fun y => ?_)
+  simp only [columnSplit_apply, s.otherFactor_mk]
+
 /-- The weighted attempt keeps `v` with probability
 `signerMass v (H (i, v)) · κ (v, H (i, v)) · otherWeight v`. -/
 theorem weightedAttempt_apply_some (H : N × V → C) (v : V) :
     weightedAttempt s i P w1 acc κ hκ H (some v) =
       signerMass P w1 acc v (H (i, v)) * κ (v, H (i, v)) * s.otherWeight i H v := by
-  rw [weightedAttempt, bind_apply, tsum_fintype, signerMass, sum_mul, sum_mul]
-  refine sum_congr rfl fun y _ => ?_
-  by_cases hv : w1 y = v
-  · subst hv
-    by_cases ha : acc y (H (i, w1 y)) = true <;> simp [ha, keepOrReject_apply_some, mul_assoc]
-  · have hv' : v ≠ w1 y := Ne.symm hv
-    split_ifs <;> first | (exfalso; tauto) | simp [keepOrReject_apply_some, hv']
+  rw [weightedAttempt_eq_quenchedAttempt, quenchedAttempt_apply_some, columnSplit_apply,
+    s.otherFactor_mk]
 
 /-- **The column deviation** of the signer at column `v` with its value `c`:
-`|signerMass v c · κ (v, c) - β · wt i (v, c)|`. -/
+`|signerMass v c · κ (v, c) - β · wt i (v, c)|`, the core's column deviation with the signer's
+weight. -/
 noncomputable def colDev (β : ℝ) (v : V) (c : C) : ℝ :=
-  |(signerMass P w1 acc v c * κ (v, c)).toReal - β * (s.wt i (v, c)).toReal|
+  quenchedColDev P w1 acc κ (s.wt i) β v c
+
+omit [Fintype N] [DecidableEq N] [Fintype V] [Fintype C] [DecidableEq C] in
+theorem colDev_eq (β : ℝ) (v : V) (c : C) :
+    colDev s i P w1 acc κ β v c =
+      |(signerMass P w1 acc v c * κ (v, c)).toReal - β * (s.wt i (v, c)).toReal| :=
+  rfl
 
 /-- **The deviation of the signer's weighted attempt at the oracle `H`** from `β` times the ring
 weight: `∑_v |A_H (some v) - β · ringWeight H v|`. -/
@@ -331,130 +371,57 @@ noncomputable def weightedDev (β : ℝ) (H : N × V → C) : ℝ :=
   ∑ v, |(weightedAttempt s i P w1 acc κ hκ H (some v)).toReal -
     β * (s.ringWeight H v : ℝ≥0∞).toReal|
 
+/-- **The deviation is the core deviation** (`quenchedDev`) with the other members' factor and the
+signer's weight, read through the column split. -/
+theorem weightedDev_eq_quenchedDev (β : ℝ) (H : N × V → C) :
+    weightedDev s i P w1 acc κ hκ β H =
+      quenchedDev P w1 acc κ hκ (s.otherFactor i) (s.otherFactor_le_one i) (s.wt i) β
+        (columnSplit i H) := by
+  unfold weightedDev quenchedDev
+  refine Finset.sum_congr rfl fun v _ => ?_
+  rw [weightedAttempt_eq_quenchedAttempt, s.ringWeight_eq_mul i, columnSplit_apply,
+    s.otherFactor_mk]
+
 /-- **The deviation is a sum of column terms**: the other members' weight times the column
-deviation. -/
+deviation (`quenchedDev_eq`). -/
 theorem weightedDev_eq (β : ℝ) (H : N × V → C) :
     weightedDev s i P w1 acc κ hκ β H =
       ∑ v, (s.otherWeight i H v : ℝ≥0∞).toReal * colDev s i P w1 acc κ β v (H (i, v)) := by
-  refine Finset.sum_congr rfl fun v _ => ?_
-  have key : ∀ a b c d : ℝ, 0 ≤ c → |a * c - d * (b * c)| = c * |a - d * b| := fun a b c d hc => by
-    rw [show a * c - d * (b * c) = c * (a - d * b) by ring, abs_mul, abs_of_nonneg hc]
-  have e1 : (signerMass P w1 acc v (H (i, v)) * κ (v, H (i, v)) * s.otherWeight i H v).toReal =
-      (signerMass P w1 acc v (H (i, v)) * κ (v, H (i, v))).toReal *
-        (s.otherWeight i H v : ℝ≥0∞).toReal := ENNReal.toReal_mul
-  have e2 : (s.wt i (v, H (i, v)) * s.otherWeight i H v).toReal =
-      (s.wt i (v, H (i, v))).toReal * (s.otherWeight i H v : ℝ≥0∞).toReal := ENNReal.toReal_mul
-  rw [weightedAttempt_apply_some, s.ringWeight_eq_mul i, colDev, e1, e2]
-  exact key _ _ _ _ ENNReal.toReal_nonneg
+  rw [weightedDev_eq_quenchedDev, quenchedDev_eq]
+  simp only [columnSplit_apply, s.otherFactor_mk]
+  rfl
 
+omit [Fintype N] [DecidableEq N] [Fintype V] [Fintype C] [DecidableEq C] in
 include hκ in
-/-- The column deviation is at most `Pr[w1 = v] + β`. -/
+/-- The column deviation is at most `Pr[w1 = v] + β` (`quenchedColDev_le`). -/
 theorem colDev_le {β : ℝ} (hβ : 0 ≤ β) (v : V) (c : C) :
-    colDev s i P w1 acc κ β v c ≤ (P.map w1 v).toReal + β := by
-  have hm : (signerMass P w1 acc v c * κ (v, c)).toReal ≤ (P.map w1 v).toReal :=
-    ENNReal.toReal_mono ((P.map w1).apply_ne_top v)
-      ((mul_le_of_le_one_right' (hκ (v, c))).trans (signerMass_le_map P w1 acc v c))
-  have hm0 : 0 ≤ (signerMass P w1 acc v c * κ (v, c)).toReal := ENNReal.toReal_nonneg
-  have hw1 : (s.wt i (v, c)).toReal ≤ 1 := ENNReal.toReal_le_one_of_le_one (s.wt_le_one i _)
-  have hw0 : 0 ≤ (s.wt i (v, c)).toReal := ENNReal.toReal_nonneg
-  have hbw : β * (s.wt i (v, c)).toReal ≤ β := mul_le_of_le_one_right hβ hw1
-  have hbw0 : 0 ≤ β * (s.wt i (v, c)).toReal := mul_nonneg hβ hw0
-  unfold colDev
-  rw [abs_le]
-  constructor <;> linarith
+    colDev s i P w1 acc κ β v c ≤ (P.map w1 v).toReal + β :=
+  quenchedColDev_le P w1 acc κ hκ (s.wt i) (s.wt_le_one i) hβ v c
 
 variable [Nonempty C]
 
 /-- **The signer's column error** at column `v`:
-`𝔼_c |signerMass v c · κ (v, c) - β · wt i (v, c)|`. -/
-noncomputable def colError (β : ℝ) (v : V) : ℝ := 𝔼 c, colDev s i P w1 acc κ β v c
+`𝔼_c |signerMass v c · κ (v, c) - β · wt i (v, c)|`, the core's column error with the signer's
+weight. -/
+noncomputable def colError (β : ℝ) (v : V) : ℝ := quenchedColError P w1 acc κ (s.wt i) β v
 
-/-- **The signer's relative column error**: `∑_v colError v / 𝔼_c wt i (v, c)`, over `β · |V|`.
-It compares the signer's kept mass at each column with `β` times its own weight, relative to its
-mean weight. -/
-noncomputable def relColError (β : ℝ) : ℝ :=
-  (∑ v, colError s i P w1 acc κ β v / s.meanWeight i v) / (β * Fintype.card V)
+/-- **The signer's relative column error**: `∑_v colError v / 𝔼_c wt i (v, c)`, over `β · |V|`,
+the core's relative column error with the signer's weight. It compares the signer's kept mass at
+each column with `β` times its own weight, relative to its mean weight. -/
+noncomputable def relColError (β : ℝ) : ℝ := quenchedRelColError P w1 acc κ (s.wt i) β
 
-theorem colError_nonneg (β : ℝ) (v : V) : 0 ≤ colError s i P w1 acc κ β v :=
-  Finset.expect_nonneg fun _ _ => abs_nonneg _
-
-end Weighted
-
-/-! ### Averages over a uniform function -/
-
-section Uniform
-
-/-- **The pullback of a uniform function along an embedding is uniform.** -/
-theorem expect_comp_embedding {A X' Y' : Type*} [Fintype A] [DecidableEq A] [Fintype X']
-    [DecidableEq X'] [Fintype Y'] [Nonempty Y'] (f : A ↪ X') (Φ : (A → Y') → ℝ) :
-    𝔼 G : X' → Y', Φ (fun a => G (f a)) = 𝔼 g : A → Y', Φ g := by
-  rw [← Fintype.expect_equiv (GordieHowe.splitAlong f).symm
-    (fun q => Φ (fun a => (GordieHowe.splitAlong f).symm q (f a))) (fun G => Φ fun a => G (f a))
-    fun _ => rfl, ← Finset.univ_product_univ,
-    Finset.expect_product' _ _ fun Fo FX =>
-      Φ fun a => (GordieHowe.splitAlong f).symm (Fo, FX) (f a)]
-  simp only [GordieHowe.splitAlong_symm_apply_embed]
-  exact Fintype.expect_const _
-
-/-- **One coordinate of a uniform function is uniform.** -/
-theorem expect_apply_eval {X' Y' : Type*} [Fintype X'] [DecidableEq X'] [Fintype Y'] [Nonempty Y']
-    (x : X') (φ : Y' → ℝ) : 𝔼 G : X' → Y', φ (G x) = 𝔼 y, φ y := by
-  refine (expect_comp_embedding (A := Unit) ⟨fun _ => x, fun _ _ _ => rfl⟩
-    (fun g => φ (g ()))).trans ?_
-  exact Fintype.expect_equiv (Equiv.funUnique Unit Y') _ _ fun _ => rfl
-
-/-- An average over pairs of a function of the first coordinate is its average, for any
-`Fintype` instance on the pairs. -/
-theorem _root_.Finset.expect_comp_fst {α β : Type*} [Fintype α] [Fintype β] [Nonempty β]
-    [hαβ : Fintype (α × β)] (f : α → ℝ) : 𝔼 x : α × β, f x.1 = 𝔼 a, f a := by
-  obtain rfl : hαβ = instFintypeProd α β := Subsingleton.elim _ _
-  rw [← Finset.univ_product_univ, Finset.expect_product]
-  show 𝔼 a : α, 𝔼 _b : β, f a = _
-  exact Finset.expect_congr rfl fun a _ => Finset.expect_const univ_nonempty _
-
-/-- An average over pairs of a function of the second coordinate is its average, for any
-`Fintype` instance on the pairs. -/
-theorem _root_.Finset.expect_comp_snd {α β : Type*} [Fintype α] [Nonempty α] [Fintype β]
-    [hαβ : Fintype (α × β)] (f : β → ℝ) : 𝔼 x : α × β, f x.2 = 𝔼 b, f b := by
-  obtain rfl : hαβ = instFintypeProd α β := Subsingleton.elim _ _
-  rw [← Finset.univ_product_univ, Finset.expect_product]
-  show 𝔼 _a : α, 𝔼 b : β, f b = _
-  exact Finset.expect_const univ_nonempty _
-
-/-- **The average of a product of functions of independent uniform coordinates** is the product
-of the averages. -/
-theorem expect_prod_apply {ι Y' : Type*} [Fintype ι] [DecidableEq ι] [Fintype Y'] [Nonempty Y']
-    (φ : ι → Y' → ℝ) : 𝔼 g : ι → Y', ∏ j, φ j (g j) = ∏ j, 𝔼 y, φ j y := by
-  simp only [Fintype.expect_eq_sum_div_card, Fintype.card_pi, Finset.prod_const, Finset.card_univ]
-  rw [← Fintype.prod_sum, Finset.prod_div_distrib, Finset.prod_const, Finset.card_univ]
-  push_cast
+omit [Fintype N] [DecidableEq N] [DecidableEq C] [Nonempty C] in
+/-- The relative column error in terms of the ring's column error and mean weight. -/
+theorem relColError_eq (β : ℝ) :
+    relColError s i P w1 acc κ β =
+      (∑ v, colError s i P w1 acc κ β v / s.meanWeight i v) / (β * Fintype.card V) :=
   rfl
 
-/-- A function of one column of a uniform oracle has the average over a uniform column. -/
-theorem expect_column {N V C : Type*} [Fintype N] [DecidableEq N] [Fintype V] [DecidableEq V]
-    [Fintype C] [Nonempty C] (v : V) (Φ : (N → C) → ℝ) :
-    𝔼 H : N × V → C, Φ (fun j => H (j, v)) = 𝔼 col : N → C, Φ col :=
-  expect_comp_embedding ⟨fun j => (j, v), fun _ _ h => (Prod.mk.inj h).1⟩ Φ
+omit [Fintype N] [DecidableEq N] [Fintype V] [DecidableEq C] [Nonempty C] in
+theorem colError_nonneg (β : ℝ) (v : V) : 0 ≤ colError s i P w1 acc κ β v :=
+  quenchedColError_nonneg P w1 acc κ (s.wt i) β v
 
-/-- **The collision probability of a function of a uniform point**: for `y` uniform on `Y`,
-`∑_w Pr[f y = w]² = Pr_{y, y'}[f y = f y']` with `y, y'` independent. -/
-theorem sum_sq_toReal_map_uniformOfFintype {Y W : Type*} [Fintype Y] [Nonempty Y] [Fintype W]
-    [DecidableEq W] (f : Y → W) :
-    ∑ w, ((uniformOfFintype Y).map f w).toReal ^ 2 =
-      𝔼 y, 𝔼 y', if f y = f y' then (1 : ℝ) else 0 := by
-  have h : ∀ w, ((uniformOfFintype Y).map f w).toReal = 𝔼 y, if f y = w then (1 : ℝ) else 0 := by
-    intro w
-    rw [toReal_map_apply, Fintype.expect_eq_sum_div_card, Finset.sum_div]
-    refine Finset.sum_congr rfl fun y _ => ?_
-    rw [toReal_uniformOfFintype_apply]
-    split_ifs <;> simp
-  simp_rw [h, sq, Finset.expect_mul_expect, ← Finset.expect_sum_comm]
-  refine Finset.expect_congr rfl fun y _ => Finset.expect_congr rfl fun y' _ => ?_
-  simp_rw [ite_mul, one_mul, zero_mul]
-  rw [Finset.sum_ite_eq]
-  simp [eq_comm]
-
-end Uniform
+end Weighted
 
 /-! ### Means against a uniform oracle -/
 
@@ -480,27 +447,17 @@ weights times the signer's column error. -/
 theorem expect_weightedDev (β : ℝ) :
     𝔼 H : N × V → C, weightedDev s i P w1 acc κ hκ β H =
       ∑ v, (∏ j ∈ univ.erase i, s.meanWeight j v) * colError s i P w1 acc κ β v := by
-  simp only [weightedDev_eq, RingWeights.coe_otherWeight]
-  rw [Finset.expect_sum_comm]
+  simp only [weightedDev_eq_quenchedDev]
+  rw [expect_comp_equiv (columnSplit i) fun F => quenchedDev P w1 acc κ hκ (s.otherFactor i)
+      (s.otherFactor_le_one i) (s.wt i) β F,
+    expect_quenchedDev_of_eq P w1 acc κ hκ _ _ (s.wt i)
+      (fun a : V × ({j // j ≠ i} → C) => ∏ j : {j // j ≠ i}, s.wt j (a.1, a.2 j))
+      (fun _ _ _ => rfl) β]
   refine Finset.sum_congr rfl fun v _ => ?_
-  have hcol := expect_column (N := N) (C := C) v fun col =>
-    (∏ j ∈ univ.erase i, s.wt j (v, col j)).toReal * colDev s i P w1 acc κ β v (col i)
-  refine hcol.trans ?_
-  have hprod : ∀ col : N → C,
-      (∏ j ∈ univ.erase i, s.wt j (v, col j)).toReal * colDev s i P w1 acc κ β v (col i) =
-        ∏ j, (if j = i then colDev s i P w1 acc κ β v (col j) else (s.wt j (v, col j)).toReal) :=
-    fun col => by
-      rw [ENNReal.toReal_prod, ← Finset.mul_prod_erase univ _ (mem_univ i), if_pos rfl, mul_comm]
-      congr 1
-      exact Finset.prod_congr rfl fun j hj => by rw [if_neg (Finset.ne_of_mem_erase hj)]
-  simp only [hprod]
-  rw [expect_prod_apply (fun j y => if j = i then colDev s i P w1 acc κ β v y
-      else (s.wt j (v, y)).toReal), ← Finset.mul_prod_erase univ _ (mem_univ i), mul_comm]
-  simp only [↓reduceIte]
   congr 1
-  refine Finset.prod_congr rfl fun j hj => ?_
-  simp only [if_neg (Finset.ne_of_mem_erase hj)]
-  rfl
+  simp only [ENNReal.toReal_prod]
+  rw [expect_prod_apply (fun (j : {j // j ≠ i}) y => (s.wt j (v, y)).toReal)]
+  exact (Finset.prod_subtype (univ.erase i) (fun j => by simp) (fun j => s.meanWeight j v)).symm
 
 end WeightedMean
 
@@ -577,12 +534,22 @@ theorem abs_weightedDev_update_le {β : ℝ} (hβ : 0 ≤ β) (G : K × V → C)
     |weightedDev s i P w1 acc κ hκ β (ringOf pt (Function.update G (k, v) c)) -
         weightedDev s i P w1 acc κ hκ β (ringOf pt G)| ≤
       if k ∈ Set.range pt then (P.map w1 v).toReal + β else 0 := by
-  simp only [weightedDev_eq, RingWeights.coe_otherWeight]
-  exact abs_sum_column_update_le pt (fun v col => (∏ j ∈ univ.erase i, s.wt j (v, col j)).toReal *
-    colDev s i P w1 acc κ β v (col i)) (fun v col => ⟨mul_nonneg ENNReal.toReal_nonneg
-      (abs_nonneg _), (mul_le_of_le_one_left (abs_nonneg _) (ENNReal.toReal_le_one_of_le_one
-        (Finset.prod_le_one' fun j _ => s.wt_le_one j _))).trans
-          (colDev_le s i P w1 acc κ hκ hβ v (col i))⟩) G k v c
+  by_cases hk : k ∈ Set.range pt
+  · rw [if_pos hk, weightedDev_eq_quenchedDev, weightedDev_eq_quenchedDev]
+    have hsplit : columnSplit i (ringOf pt (Function.update G (k, v) c)) =
+        Function.update (columnSplit i (ringOf pt G)) v
+          (columnSplit i (ringOf pt (Function.update G (k, v) c)) v) := by
+      funext v'
+      by_cases hv : v' = v
+      · subst hv
+        rw [Function.update_self]
+      · rw [Function.update_of_ne hv, columnSplit_apply, columnSplit_apply]
+        exact Prod.ext (ringOf_update_apply pt G k v c (i, v') (Or.inl hv))
+          (funext fun j => ringOf_update_apply pt G k v c (j.1, v') (Or.inl hv))
+    rw [hsplit]
+    exact abs_quenchedDev_update_le P w1 acc κ hκ _ _ (s.wt i) (s.wt_le_one i) hβ _ v _
+  · rw [if_neg hk, show ringOf pt (Function.update G (k, v) c) = ringOf pt G from
+      funext fun x => ringOf_update_apply pt G k v c x (Or.inr hk), sub_self, abs_zero]
 
 end Embedded
 
@@ -595,7 +562,6 @@ keep coin `κ`, and a level `β > 0` of its flattened kept mass. -/
 structure LoopSigner (V C : Type) where
   /-- The proposals. -/
   Y : Type
-  [instFintypeY : Fintype Y]
   /-- The proposal law. -/
   P : PMF Y
   /-- The commitment of a proposal. -/
@@ -611,15 +577,11 @@ structure LoopSigner (V C : Type) where
   /-- The level is positive. -/
   hβ : 0 < β
 
-attribute [instance] LoopSigner.instFintypeY
-
 /-- **Two signers of one ring inside a larger oracle** `K × V → C`: the members' distinct points
 `pt`, their column weights `wts`, and the two signers' positions and attempts. -/
 structure RingPair (K V C : Type) where
   /-- The members. -/
   Mem : Type
-  [instFintypeMem : Fintype Mem]
-  [instDecEqMem : DecidableEq Mem]
   /-- The members' points. -/
   pt : Mem ↪ K
   /-- The members' column weights. -/
@@ -629,14 +591,12 @@ structure RingPair (K V C : Type) where
   /-- The two signers. -/
   signer : Bool → LoopSigner V C
 
-attribute [instance] RingPair.instFintypeMem RingPair.instDecEqMem
-
 variable {V C K : Type} [Fintype V] [DecidableEq V] [Fintype C] [DecidableEq C] [Nonempty C]
   [Fintype K] [DecidableEq K]
 
 namespace RingPair
 
-variable (R : RingPair K V C)
+variable (R : RingPair K V C) [Fintype R.Mem] [DecidableEq R.Mem] [∀ b, Fintype (R.signer b).Y]
 
 /-- The attempt of signer `b` against the larger oracle `G`. -/
 noncomputable def attempt (b : Bool) (G : K × V → C) : PMF (Option V) :=
@@ -667,6 +627,7 @@ noncomputable def devVar (θ : ℝ) : ℝ :=
 noncomputable def countVar (θ : ℝ) : ℝ :=
   Fintype.card R.Mem * Fintype.card V / ((1 - θ) * R.wts.mass) ^ 2
 
+omit [∀ b, Fintype (R.signer b).Y] in
 /-- **The distance of the two signers' loops at one oracle**, at most the normalized deviations
 and the indicator of too little total ring weight. -/
 theorem tvDist_untilSome_le (θ : ℝ) (hθ : 0 < θ) (hμ : 0 < R.wts.mass) (G : K × V → C) :
@@ -677,6 +638,7 @@ theorem tvDist_untilSome_le (θ : ℝ) (hθ : 0 < θ) (hμ : 0 < R.wts.mass) (G 
   tvDist_untilSome_untilSome_le_weight _ _ (fun _ => ENNReal.toReal_nonneg) (R.signer false).hβ
     (R.signer true).hβ (mul_pos hθ hμ)
 
+omit [DecidableEq R.Mem] [(b : Bool) → Fintype (R.signer b).Y] in
 /-- Too little total ring weight: the indicator is at most the normalized shortfall, or zero. -/
 theorem ite_massAt_lt_le (θ : ℝ) (hθ : θ < 1) (hμ : 0 < R.wts.mass) (G : K × V → C) :
     (if R.massAt G < θ * R.wts.mass then (1 : ℝ) else 0) ≤
@@ -687,6 +649,7 @@ theorem ite_massAt_lt_le (θ : ℝ) (hθ : θ < 1) (hμ : 0 < R.wts.mass) (G : K
     linarith
   · exact le_max_left _ _
 
+omit [DecidableEq R.Mem] [(b : Bool) → Fintype (R.signer b).Y] in
 /-- The number of points of the ring. -/
 theorem sum_ite_mem_range (a : ℝ) :
     ∑ k : K, (if k ∈ Set.range R.pt then a else 0) = Fintype.card R.Mem * a := by
@@ -697,6 +660,7 @@ theorem sum_ite_mem_range (a : ℝ) :
     ext k; simp
   rw [this, Finset.card_map, Finset.card_univ]
 
+omit [DecidableEq R.Mem] [(b : Bool) → Fintype (R.signer b).Y] in
 /-- The squared bounded differences of a family on the ring's points. -/
 theorem sum_sq_ite_mem_range (a : V → ℝ) :
     ∑ x : K × V, (if x.1 ∈ Set.range R.pt then a x.2 else 0) ^ 2 =
@@ -706,7 +670,8 @@ theorem sum_sq_ite_mem_range (a : V → ℝ) :
   rw [← R.sum_ite_mem_range (a v ^ 2)]
   exact Finset.sum_congr rfl fun k _ => by split_ifs <;> simp
 
-omit [DecidableEq V] [DecidableEq C] [Nonempty C] [Fintype K] [DecidableEq K] in
+omit [DecidableEq V] [DecidableEq C] [Nonempty C] [Fintype K] [DecidableEq K]
+  [DecidableEq R.Mem] [∀ b, Fintype (R.signer b).Y] in
 /-- **The weight variance proxy from a lower bound on the mass**: with at most `N` members and
 ring mass at least `m · |V|`, `m > 0`, `countVar θ ≤ N / ((1 - θ)² m² |V|)` for `θ < 1`. -/
 theorem countVar_le [Nonempty V] {N : ℕ} {θ m : ℝ} (hcard : Fintype.card R.Mem ≤ N)
@@ -724,7 +689,8 @@ theorem countVar_le [Nonempty V] {N : ℕ} {θ m : ℝ} (hcard : Fintype.card R.
     _ = N / ((1 - θ) ^ 2 * m ^ 2 * Fintype.card V) := by
         field_simp
 
-omit [DecidableEq V] [DecidableEq C] [Nonempty C] [Fintype K] [DecidableEq K] in
+omit [DecidableEq V] [DecidableEq C] [Nonempty C] [Fintype K] [DecidableEq K]
+  [DecidableEq R.Mem] [∀ b, Fintype (R.signer b).Y] in
 /-- **The deviation variance proxy from a lower bound on the mass**: with at most `N` members,
 ring mass at least `m · |V|`, `m > 0`, and both signers at the level `β`,
 `devVar θ ≤ 4N / (θ m)² · ∑_b (∑_v Pr[w1_b = v]² / (β |V|)² + 1 / |V|)` for `θ > 0`, from
@@ -769,7 +735,8 @@ theorem devVar_le [Nonempty V] {N : ℕ} {θ m β : ℝ} (hcard : Fintype.card R
 
 end RingPair
 
-variable {M : Type} [Fintype M] [Nonempty M] (R : M → RingPair K V C) (θ : ℝ)
+variable {M : Type} [Fintype M] [Nonempty M] (R : M → RingPair K V C) [∀ m, Fintype (R m).Mem]
+  [∀ m, DecidableEq (R m).Mem] [∀ m b, Fintype ((R m).signer b).Y] (θ : ℝ)
 
 /-- The normalizing constant of signer `b` of ring `m`: its level times `θ` times the ring mass. -/
 noncomputable def famDen (m : M) (b : Bool) : ℝ := ((R m).signer b).β * (θ * (R m).wts.mass)
@@ -790,6 +757,7 @@ noncomputable def familyBound (G : K × V → C) : ℝ :=
 
 variable {R θ}
 
+omit [(m : M) → (b : Bool) → Fintype ((R m).signer b).Y] in
 /-- **The distance of the two signers' loops of every ring is at most the bound.** -/
 theorem tvDist_le_familyBound (hθ0 : 0 < θ) (hθ1 : θ < 1) (hμ : ∀ m, 0 < (R m).wts.mass)
     (m : M) (G : K × V → C) :
@@ -811,6 +779,7 @@ theorem tvDist_le_familyBound (hθ0 : 0 < θ) (hθ1 : θ < 1) (hμ : ∀ m, 0 < 
   unfold familyBound
   linarith
 
+omit [∀ m b, Fintype ((R m).signer b).Y] in
 /-- **A signer that never keeps makes the bound at least one**: its deviation is `β` times the
 total ring weight. -/
 theorem one_le_familyBound_of_never (hθ0 : 0 < θ) (hθ1 : θ < 1) (hμ : ∀ m, 0 < (R m).wts.mass)
@@ -857,6 +826,7 @@ theorem one_le_familyBound_of_never (hθ0 : 0 < θ) (hθ1 : θ < 1) (hμ : ∀ m
       le_trans (div_nonneg (hdev0 b) (hden b).le) (hDev.trans hsupD)
     linarith
 
+omit [∀ m b, Fintype ((R m).signer b).Y] in
 /-- **The bound is nonnegative.** -/
 theorem familyBound_nonneg (hθ0 : 0 < θ) (hμ : ∀ m, 0 < (R m).wts.mass) (G : K × V → C) :
     0 ≤ familyBound R θ G := by
@@ -1063,6 +1033,7 @@ theorem sum_prod_erase_mul_le (i : N) (hpos : ∀ v, 0 < s.colMass v) {κ : ℝ}
 theorem mass_pos (hpos : ∀ v, 0 < s.colMass v) : 0 < s.mass :=
   Finset.sum_pos (fun v _ => hpos v) univ_nonempty
 
+omit [Fintype N] [DecidableEq N] [Fintype V] [DecidableEq V] [Nonempty V] [DecidableEq C] in
 /-- A mean weight is at most one. -/
 theorem meanWeight_le_one (j : N) (v : V) : s.meanWeight j v ≤ 1 :=
   (Finset.expect_le_expect fun _ _ => ENNReal.toReal_le_one_of_le_one (s.wt_le_one j _)).trans_eq
@@ -1106,7 +1077,8 @@ end RingWeights
 the ring error at the threshold fraction `θ` is at most `κ / θ` times the sum of the two signers'
 relative column errors. -/
 theorem RingPair.error_le_of_massRatio_le {K V C : Type} [Fintype V] [DecidableEq V]
-    [Nonempty V] [Fintype C] [DecidableEq C] [Nonempty C] (R : RingPair K V C) {θ : ℝ}
+    [Nonempty V] [Fintype C] [DecidableEq C] [Nonempty C] (R : RingPair K V C) [Fintype R.Mem]
+    [DecidableEq R.Mem] [∀ b, Fintype (R.signer b).Y] {θ : ℝ}
     (hθ : 0 < θ) (hpos : ∀ v, 0 < R.wts.colMass v) {κ : ℝ} (hκ : R.wts.massRatio ≤ κ) :
     R.error θ ≤ κ / θ * ∑ b : Bool, relColError R.wts (R.pos b) (R.signer b).P
       (R.signer b).w1 (R.signer b).acc (R.signer b).κ (R.signer b).β := by
@@ -1120,7 +1092,7 @@ theorem RingPair.error_le_of_massRatio_le {K V C : Type} [Fintype V] [DecidableE
     (R.pos b) (R.signer b).P (R.signer b).w1 (R.signer b).acc (R.signer b).κ (R.signer b).β v
   rw [div_le_iff₀ (mul_pos hβ (mul_pos hθ hμ))]
   refine h.trans (le_of_eq ?_)
-  unfold relColError
+  rw [relColError_eq]
   field_simp
 
 end Admissible

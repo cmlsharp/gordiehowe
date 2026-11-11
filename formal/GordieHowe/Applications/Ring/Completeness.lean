@@ -45,12 +45,15 @@ def signWit (kc : Sch.KeyCoins) (R : RingOf Sch.PK N) (m : RMsg) (i : ℕ) (c : 
     RingWit Sch :=
   ⟨i, Sch.signWith (Sch.sk kc) (bind R.1 m) c⟩
 
+variable [Fintype Sch.SignCoins] [Nonempty Sch.SignCoins]
+
 variable {k kN kS L e : ℕ} {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
   (M : SPBCS Mg P (RingStmt Sch RMsg N) k kN kS L e) (E : (j : ι) → (M.comp j).Encoder)
   {V : RingStmt Sch RMsg N → FullTr P τ → Bool} (Qs : ∀ x, M.IOPQueries V x) {R : Type}
-  [Fintype R] [Nonempty R] (honest : RingWit Sch → R → CausalProver P τ (RingStmt Sch RMsg N))
+  [Fintype R] [DecidableEq R] [Nonempty R]
+  (honest : RingWit Sch → R → CausalProver P τ (RingStmt Sch RMsg N))
 
 /-- **The probability that an honest ring signature is rejected**: the member with the key of `kc`
 at position `i` of the ring `R` signs `m`, its base signature drawn with uniform signing coins and
@@ -64,6 +67,7 @@ noncomputable def ringRejectProb (kc : Sch.KeyCoins) (Rg : RingOf Sch.PK N) (m :
       (prove (honest (signWit bind kc Rg m i q.1) q.2.1) (signStmt bind kc Rg m q.1) σ E ν q.2.2
         (Qs (signStmt bind kc Rg m q.1))) (Qs (signStmt bind kc Rg m q.1))]
 
+omit [DecidableEq R] in
 /-- **Completeness of the ring signature** (BKM06 Definition 1, correctness): on an admissible ring
 (`hadm`) holding the key of `kc` at position `i` (`hi`, `hR`), the honest ring signature is
 rejected with probability at most the base scheme's correctness error `εc` (`hcorr`: the base

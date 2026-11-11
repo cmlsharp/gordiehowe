@@ -19,10 +19,10 @@ The frontend's round-by-round knowledge soundness of `Π_P₀` at the ML-DSA-44 
 (`GordieHowe.MLDSA44.Ring.Carrier.QROMParams.source_rbr_knowledge_soundness`: the relation
 `GordieHowe.MLDSA44.Ring.Carrier.rel` at every checked ring statement whose rows the statement
 holds, the extractor `GordieHowe.MLDSA44.Ring.Carrier.extractor`, the errors `sourceEps`:
-`5143/|Goldilocks^4|` at `member.table.gamma`, SampleInBall's `264/2^256` and `295/2^256` at the ring's
-challenges `1` and `2`), composed with the proof system
+`5143/|Goldilocks^4|` at `member.table.gamma`, `2040/|Goldilocks^4|` at `signature.r`, SampleInBall's `264/2^256` and `295/2^256` at
+the ring's challenges `2` and `3`), composed with the proof system
 (`GordieHowe.RealizedProgram.ProofSystem.FieldBranches.causal_rbr_knowledge_soundness` at the forked
-domains of `proofSystem`) in the headline `iop_rbr_knowledge_soundness`. Circuit enforcement
+domains of `proofSystem`) in `iop_rbr_knowledge_soundness`. Circuit enforcement
 follows from the generated certificates.
 -/
 
@@ -42,7 +42,8 @@ abbrev proofSystem : ProofSystems :=
 
 /-- **The round errors of `Π_P₀`'s challenges** (`Carrier.ringEps` at SampleInBall's view
 `MLDSA44.sampleView`): `5143/|Goldilocks^4|` at `member.table.gamma` (challenge `0`),
-`264/2^256` and `295/2^256` at the ring's challenges `1` and `2`. -/
+`2040/|Goldilocks^4|` at `signature.r` (challenge `1`), `264/2^256` and `295/2^256` at the ring's
+challenges `2` and `3`. -/
 noncomputable abbrev sourceEps : ℕ → ℝ≥0 :=
   Carrier.ringEps (program := program) (F0 := RealizedProgram.gold4) (FH := RealizedProgram.gf256)
     MLDSA44.sampleView
@@ -57,9 +58,14 @@ theorem sourceError_final (ε : ℕ → ℝ≥0) :
 /-- **The source challenges' errors are within their fractions** (`sourceErrors`). -/
 theorem sourceEps_le (j : ℕ) (_ : program.IsSourceChal j) :
     sourceEps j ≤ ((sourceErrors j).1 : ℝ≥0) / (sourceErrors j).2 := by
-  rcases j with _ | _ | _ | j
+  have hc : Fintype.card (interp 0).K = pGold ^ 4 := by convert goldilocksExt4_card <;> rfl
+  rcases j with _ | _ | _ | _ | j
   · change ((5143 : ℕ) : ℝ≥0) / Fintype.card (interp 0).K ≤ _
-    rw [show Fintype.card (interp 0).K = pGold ^ 4 from by convert goldilocksExt4_card <;> rfl]
+    rw [hc]
+    simp only [sourceErrors, ↓reduceIte]
+    norm_num [pGold]
+  · change ((2040 : ℕ) : ℝ≥0) / Fintype.card (interp 0).K ≤ _
+    rw [hc]
     simp only [sourceErrors, ↓reduceIte]
     norm_num [pGold]
   · change MLDSA44.sampleEpsOf 256 0 ≤ _

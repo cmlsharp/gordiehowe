@@ -68,10 +68,16 @@ section Game
 
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
   [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁] [Fintype Y₂] [DecidableEq Y₂]
-  [Nonempty Y₂] {N n t : ℕ} [NeZero n] {TB : BaseTypes} {B : BaseSigner X Y N TB}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop} [DecidablePred adm]
+  [Nonempty Y₂] {N n t : ℕ} [NeZero n] {TB : BaseTypes}
+  {B : BaseSigner X Y N TB}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop} [DecidablePred adm]
   {R : Type} (P : KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof) → OracleProg X Y R) (q : ℕ)
   (hP : ∀ o, (P o).QueriesLE q)
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins]
 
 variable (B PS adm) in
 /-- **The relayed forger followed by the program `P` on its output**: at most
@@ -79,7 +85,7 @@ variable (B PS adm) in
 noncomputable abbrev relayedForgerThen
     (A : InsiderAdversary (ofBase B PS adm) n (OracleView.queriesOnly X Y) t) (pks : Fin n → B.PK)
     (i₁ : Fin n) (Q : ℕ) (ρ : Fin Q → PS.Coins) :
-    QueryBoundedAdversary X Y (MURequest (SignOracle.ring B) n) (MUResponse B)
+    QueryBoundedAdversary X Y (MURequest (SignOracle.ring B) n) (MUResponse B.core)
       ((KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof)) × R) (t + Q * (B.qPub + PS.q) + q) :=
   (relayedForger B PS adm A pks i₁ Q ρ).thenProgOut P q hP q fun _ => (one_mul q).le
 
@@ -142,15 +148,18 @@ end Split
 section Knowledge
 
 variable {m k e N n : ℕ} {Y₁ : Type} [AddGroup Y₁] {Y : Type} [AddGroup Y] [Fintype Y] [DecidableEq Y]
-  {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes} {B : BaseSigner (Bits m) Y N TB}
-  {TPS : PSTypes} {PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop}
-  [DecidablePred adm] {O : SignOracle B} [NeZero n] {X₀ Cl : Type}
+  {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes}
+  {B : BaseSigner (Bits m) Y N TB}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop}
+  [DecidablePred adm] {O : SignOracle B.core} [NeZero n] {X₀ Cl : Type}
   {V : NARG.QROM.Verifier m k e Cl X₀} {rel : Set (X₀ × RingWit B)}
   {ext : X₀ → DB (Bits m) (Out k e) → Multiset (RingWit B)} {β : ℕ → ℝ≥0∞}
 
 /-- The output of the relayed forger followed by the program: a ring signature and a program
 statement. -/
-abbrev SplitOut {TB : BaseTypes} (B : BaseSigner (Bits m) Y N TB) {TPS : PSTypes} (PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) TPS)
+abbrev SplitOut {TB : BaseTypes}
+    (B : BaseSigner (Bits m) Y N TB) {TPS : PSTypes}
+    (PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) TPS)
     (X₀ : Type) : Type :=
   (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof)) × X₀
 
@@ -159,20 +168,27 @@ one. -/
 def splitClaim (cl : X₀ → PS.Proof → Option Cl) (c₀ : Cl) (o : SplitOut B PS X₀) : Cl :=
   (cl o.2 o.1.2.2.2).getD c₀
 
+variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+
 variable (sp) in
 /-- **The test of the extraction at the base component `ω`**: the program statement is the one of
 the forgery's statement at `ω`, the claim's statement is the program statement, and the forgery is
 fresh for the first `Q'` logged multi-user requests. -/
 def splitTest (hC : PS.CompiledBySplit sp V) (cl : X₀ → PS.Proof → Option Cl) (c₀ : Cl)
     (ω : Bits m → Y₁) (keys : Fin n → B.KeyCoins) (Q' : ℕ)
-    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B)} {A : AdaptiveIAlg shA (SplitOut B PS X₀)}
+    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B.core)} {A : AdaptiveIAlg shA (SplitOut B PS X₀)}
     {C₁ : Challenger (Bits m) (XOut k e) (MURequest O n) Unit}
-    (v : ExtReg A C₁ (MURequest O n) (MUResponse B)) : Prop :=
+    (v : ExtReg A C₁ (MURequest O n) (MUResponse B.core)) : Prop :=
   (extForgery v).2 = hC.stmtAt ω ⟨(extForgery v).1.1, (extForgery v).1.2.1, (extForgery v).1.2.2.1⟩ ∧
     V.stmt (splitClaim cl c₀ (extForgery v)) = (extForgery v).2 ∧
     MUFreshReq B (PS := PS) keys (extForgery v).1 ((requests (extLogs v)).take Q')
 
-omit [Fintype Y] [DecidableEq Y] in
+omit [Fintype Y] [DecidableEq Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype TB.PK] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
 /-- **A verifying ring signature at an oracle with base component `ω`, with its program statement
 at `ω`, has an accepted claim** against the second component. -/
 theorem accepted_splitClaim (hC : PS.CompiledBySplit sp V) {cl : X₀ → PS.Proof → Option Cl}
@@ -190,7 +206,8 @@ theorem accepted_splitClaim (hC : PS.CompiledBySplit sp V) {cl : X₀ → PS.Pro
   refine ⟨hcl' ▸ hacc, ?_⟩
   rw [hcl', hC.stmt_eq _ _ _ _ hc, hx]
 
-omit [Fintype Y] in
+omit [Fintype Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype O.Coins] [DecidableEq O.Coins] in
 /-- **The knowledge step at one table and a fixed base component** (the split form of
 `tsum_le_extRun`): for a proof system compiled by `V` at each base component (`hC`) whose claims
 factor through the program statement (`hcl`), and a knowledge bound for `rel` (`K`), averaged over
@@ -201,10 +218,10 @@ extraction run extracts a witness for the claim with the test passing, plus the 
 theorem tsum_le_extRun_split (hC : PS.CompiledBySplit sp V) {cl : X₀ → PS.Proof → Option Cl}
     (hcl : ∀ ω x π, hC.claim ω x π = cl (hC.stmtAt ω x) π) (K : V.KnowledgeBound rel ext β)
     (c₀ : Cl) (ω : Bits m → Y₁) (keys : Fin n → B.KeyCoins) (i₂ : Fin n) (Q' : ℕ)
-    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B)} (A : AdaptiveIAlg shA (SplitOut B PS X₀))
-    (tab : A.OuterTab (MURequest O n) (MUResponse B))
+    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B.core)} (A : AdaptiveIAlg shA (SplitOut B PS X₀))
+    (tab : A.OuterTab (MURequest O n) (MUResponse B.core))
     (d₀ : ExtReg A (inertChallenger (Bits m) (XOut k e) (MURequest O n) Q')
-      (MURequest O n) (MUResponse B))
+      (MURequest O n) (MUResponse B.core))
     {t' : ℕ} (ht : A.width * (A.budget + A.post) ≤ t') :
     ∑' h, PMF.uniformOfFintype (Bits m → XOut k e) h *
       (((A.absorbTab (muRelayAt O keys i₂) tab).toKindAlg.composeBothOut
@@ -255,6 +272,8 @@ theorem tsum_le_extRun_split (hC : PS.CompiledBySplit sp V) {cl : X₀ → PS.Pr
   obtain ⟨hacc, hst⟩ := accepted_splitClaim (adm := adm) hC hcl c₀ ω h hver hx
   exact ⟨v, hv, hacc, hx, hst, hf⟩
 
+variable [Nonempty O.Coins]
+
 /-- **Transcripts against the restricted multi-user challenger as runs of the table form** (the
 split form of `transcriptLaw_relayedForger_eq`): for a signing oracle reading only the base
 component, an event of the output and the multi-user requests of an adversary of the oracle
@@ -263,7 +282,7 @@ average, over the auxiliary input and the challenger's coins, of the probability
 holding the table at the coins, against the inert challenger, ends with an output and logs of that
 kind. -/
 theorem transcriptLaw_restrictAt_eq_absorbTab (hO : O.ReadsBase sp) {Ot : Type} {t : ℕ}
-    (𝒜 : QueryBoundedAdversary (Bits m) (XOut k e) (MURequest O n) (MUResponse B) Ot t)
+    (𝒜 : QueryBoundedAdversary (Bits m) (XOut k e) (MURequest O n) (MUResponse B.core) Ot t)
     (keys : Fin n → B.KeyCoins) (i₂ : Fin n) (Q' : ℕ) (ω : Bits m → Y₁) (h : Bits m → XOut k e)
     (E : Ot → List (MURequest O n) → Prop) :
     (𝒜.transcriptLaw ((muChallenger O n keys Q').restrictAt sp ω) h).toOuterMeasure
@@ -294,11 +313,17 @@ section Chain
 
 variable {m k e N n : ℕ} {Y₁ : Type} [AddGroup Y₁] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁]
   {Y : Type} [AddGroup Y] [Fintype Y] [DecidableEq Y] [Nonempty Y]
-  {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes} {B : BaseSigner (Bits m) Y N TB}
-  {TPS : PSTypes} {PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop}
+  {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes}
+  {B : BaseSigner (Bits m) Y N TB}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop}
   [DecidablePred adm] [NeZero n] {X₀ Cl : Type} {V : NARG.QROM.Verifier m k e Cl X₀}
   {rel : Set (X₀ × RingWit B)} {ext : X₀ → DB (Bits m) (Out k e) → Multiset (RingWit B)}
   {β : ℕ → ℝ≥0∞} {t : ℕ}
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins]
 
 variable (sp B PS adm) in
 /-- **The relayed forger followed by `P`, read at the base component `ω`**, at the auxiliary value
@@ -314,14 +339,18 @@ noncomputable abbrev splitAlg {X₀ : Type}
 /-- **The default output of the extraction run** of an adversary of the oracle
 `Bits m → XOut k e` with requests to the multi-user challenger: that of its run with the empty
 table. -/
-noncomputable abbrev splitDefault {O : SignOracle B} {Ot : Type} (Q' : ℕ) (pk₀ : B.PK) (i₂ : Fin n)
-    {shA' : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B)} (A' : AdaptiveIAlg shA' Ot) :
+noncomputable abbrev splitDefault {O : SignOracle B.core} [Fintype O.SMsg] [DecidableEq O.SMsg]
+    {Ot : Type} (Q' : ℕ) (pk₀ : B.PK) (i₂ : Fin n)
+    {shA' : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B.core)} (A' : AdaptiveIAlg shA' Ot) :
     ExtReg A' (inertChallenger (Bits m) (XOut k e) (MURequest O n) Q')
-      (MURequest O n) (MUResponse B) :=
+      (MURequest O n) (MUResponse B.core) :=
   dropTabCW A' (inertChallenger (Bits m) (XOut k e) (MURequest O n) Q') (muTwoRelay O n pk₀ i₂)
     (tab₀ A') (((A'.absorbTab (muTwoRelay O n pk₀ i₂) (tab₀ A')).toTPKindAlg.composeBothOut
       (inertChallenger (Bits m) (XOut k e) (MURequest O n) Q') id)).defaultOut
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] [Fintype TB.Msg]
+  [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.Coins]
+  [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The game at a fixed base component up to the extraction runs** (the step after
 `insiderForgeProb_le_split`, for any signing oracle reading only the base component, `hO`): for a
 proof system compiled by `V` at each base component (`hC`) whose claims factor through the program
@@ -334,13 +363,14 @@ prover's coins, of the probability that `𝒜 keys ρ` read at `ω` against the 
 the auxiliary input and the challenger's coins `c`, of the probability that the extraction run of
 `𝒜 keys ρ` read at `ω`, holding the table of the challenger's replies at `ω` and `c`, extracts a
 witness with the test passing, plus the knowledge error at `t' + kq` queries. -/
-theorem forgeSum_le_extRun_split {O : SignOracle B} (hO : O.ReadsBase sp)
+theorem forgeSum_le_extRun_split {O : SignOracle B.core} [Fintype O.SMsg] [DecidableEq O.SMsg]
+    [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] (hO : O.ReadsBase sp)
     (hC : PS.CompiledBySplit sp V) {cl : X₀ → PS.Proof → Option Cl}
     (hcl : ∀ ω x π, hC.claim ω x π = cl (hC.stmtAt ω x) π) (K : V.KnowledgeBound rel ext β)
     (c₀ : Cl) (P : KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof) → OracleProg (Bits m) Y X₀)
     (hPst : ∀ o ω h, (P o).run (join sp ω h) = hC.stmtAt ω ⟨o.1, o.2.1, o.2.2.1⟩) {Q t' : ℕ}
     (𝒜 : (Fin n → B.KeyCoins) → (Fin Q → PS.Coins) →
-      QueryBoundedAdversary (Bits m) Y (MURequest O n) (MUResponse B) (SplitOut B PS X₀) t')
+      QueryBoundedAdversary (Bits m) Y (MURequest O n) (MUResponse B.core) (SplitOut B PS X₀) t')
     (i₂ : Fin n) (Q' : ℕ) :
     ∑' keys, PMF.uniformOfFintype (Fin n → B.KeyCoins) keys *
       ∑' ω, PMF.uniformOfFintype (Bits m → Y₁) ω * ∑' h, PMF.uniformOfFintype (Bits m → XOut k e) h *
@@ -360,12 +390,12 @@ theorem forgeSum_le_extRun_split {O : SignOracle B} (hO : O.ReadsBase sp)
                     (muRelayAt O keys i₂)
                     (SPBCS.QROM.expansionVia V fun (v : ExtReg (((𝒜 keys ρ).alg a).restrictAt sp 0)
                       (inertChallenger (Bits m) (XOut k e) (MURequest O n) Q') (MURequest O n)
-                        (MUResponse B)) => splitClaim cl c₀ (extForgery v)) V.kq
+                        (MUResponse B.core)) => splitClaim cl c₀ (extForgery v)) V.kq
                     (splitDefault Q' (B.pk (keys 0)) i₂ (((𝒜 keys ρ).alg a).restrictAt sp 0))
                     (muTabAt sp (((𝒜 keys ρ).restrictAt sp ω).alg a) ω keys Q' c))
                   (fun (v : ExtReg (((𝒜 keys ρ).alg a).restrictAt sp 0)
                       (inertChallenger (Bits m) (XOut k e) (MURequest O n) Q') (MURequest O n)
-                        (MUResponse B)) D => splitTest sp hC cl c₀ ω keys Q' v ∧
+                        (MUResponse B.core)) D => splitTest sp hC cl c₀ ω keys Q' v ∧
                     NARG.ExtractsAt rel ext (V.stmt (splitClaim cl c₀ (extForgery v))) D) +
         V.knowledgeError β (t' + V.kq) := by
   refine Ring.tsum_mul_le_tsum_mul_add _ fun keys => Ring.tsum_mul_le_tsum_mul_add _ fun ω => ?_
@@ -438,7 +468,7 @@ theorem insiderForgeProb_le_extRun_split (hbind : B.BindsRing) (hB : B.ReadsOnly
                     (((relayedForgerThen B PS adm P q hP A (fun i => B.pk (keys i)) i₁ Q ρ).alg
                       a).restrictAt sp 0)
                     (inertChallenger (Bits m) (XOut k e) (MURequest (SignOracle.ring B) n) Q')
-                    (MURequest (SignOracle.ring B) n) (MUResponse B)) =>
+                    (MURequest (SignOracle.ring B) n) (MUResponse B.core)) =>
                       splitClaim cl c₀ (extForgery v)) V.kq
                   (splitDefault Q' (B.pk (keys 0)) i₂
                     (((relayedForgerThen B PS adm P q hP A (fun i => B.pk (keys i)) i₁ Q ρ).alg
@@ -449,7 +479,7 @@ theorem insiderForgeProb_le_extRun_split (hbind : B.BindsRing) (hB : B.ReadsOnly
                     (((relayedForgerThen B PS adm P q hP A (fun i => B.pk (keys i)) i₁ Q ρ).alg
                       a).restrictAt sp 0)
                     (inertChallenger (Bits m) (XOut k e) (MURequest (SignOracle.ring B) n) Q')
-                    (MURequest (SignOracle.ring B) n) (MUResponse B)) D =>
+                    (MURequest (SignOracle.ring B) n) (MUResponse B.core)) D =>
                   splitTest sp hC cl c₀ ω keys Q' v ∧
                   NARG.ExtractsAt rel ext (V.stmt (splitClaim cl c₀ (extForgery v))) D) +
       V.knowledgeError β (t + Q * (B.qPub + PS.q) + q + V.kq) := by
@@ -468,10 +498,16 @@ end Chain
 section Win
 
 variable {m k e N n : ℕ} {Y₁ : Type} [AddGroup Y₁] {Y : Type} [AddGroup Y] [Fintype Y]
-  [DecidableEq Y] {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes} {B : BaseSigner (Bits m) Y N TB}
-  {TPS : PSTypes} {PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop}
-  [DecidablePred adm] {O : SignOracle B} [NeZero n] {X₀ Cl : Type}
+  [DecidableEq Y] {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes}
+  {B : BaseSigner (Bits m) Y N TB}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop}
+  [DecidablePred adm] {O : SignOracle B.core} [NeZero n] {X₀ Cl : Type}
   {V : NARG.QROM.Verifier m k e Cl X₀}
+
+variable [Fintype O.SMsg] [DecidableEq O.SMsg]
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
 
 variable (B) in
 /-- **The decoding of a witness** `(i, σ)` for the ring statement `(R, m, y)`: the key at position
@@ -485,10 +521,10 @@ witness in `rel` among those `ext` returns from the measured database for the cl
 the forgery's ring statement; `f₀` if there is none. -/
 noncomputable def splitReadout (cl : X₀ → PS.Proof → Option Cl) (c₀ : Cl) (rel : Set (X₀ × RingWit B))
     (ext : X₀ → DB (Bits m) (Out k e) → Multiset (RingWit B)) (f₀ : B.PK × B.BMsg × B.BSig)
-    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B)} {A : AdaptiveIAlg shA (SplitOut B PS X₀)}
+    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B.core)} {A : AdaptiveIAlg shA (SplitOut B PS X₀)}
     {C₁ : Challenger (Bits m) (XOut k e) (MURequest O n) Unit} {kq : ℕ}
     (o : BaseGame.Tuple (Bits m) (Out k e)
-      (ExtReg A C₁ (MURequest O n) (MUResponse B)) kq × DB (Bits m) (Out k e)) :
+      (ExtReg A C₁ (MURequest O n) (MUResponse B.core)) kq × DB (Bits m) (Out k e)) :
     B.PK × B.BMsg × B.BSig :=
   open Classical in
   if h : ∃ w ∈ ext (V.stmt (splitClaim cl c₀ (extForgery o.1.out))) o.2,
@@ -497,7 +533,8 @@ noncomputable def splitReadout (cl : X₀ → PS.Proof → Option Cl) (c₀ : Cl
       (extForgery o.1.out).1.2.2.1⟩ h.choose).getD f₀
   else f₀
 
-omit [Fintype Y] [DecidablePred adm] [NeZero n] in
+omit [Fintype Y] [DecidablePred adm] [NeZero n] [Fintype TPS.Proof] [DecidableEq TPS.Proof]
+  [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] in
 /-- **An output passing the extraction's test at the base component `ω` with a witness in `rel`
 reads as a forgery** of MU-EUF-CMA^corr for multi-user requests `mrs` at every oracle `H` with
 base component `ω`, when every witness of `rel` for the program statement of a ring statement at `ω`
@@ -508,10 +545,10 @@ theorem forgesReq_splitReadout (hC : PS.CompiledBySplit sp V) {cl : X₀ → PS.
     {ext : X₀ → DB (Bits m) (Out k e) → Multiset (RingWit B)} (f₀ : B.PK × B.BMsg × B.BSig)
     (keys : Fin n → B.KeyCoins) (ω : Bits m → Y₁) (H : Bits m → Y)
     (hrel : ∀ x w, (hC.stmtAt ω x, w) ∈ rel → RingRel B adm H x w) (Q' : ℕ)
-    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B)} {A : AdaptiveIAlg shA (SplitOut B PS X₀)}
+    {shA : AlgShape (Bits m) (XOut k e) (MURequest O n) (MUResponse B.core)} {A : AdaptiveIAlg shA (SplitOut B PS X₀)}
     {C₁ : Challenger (Bits m) (XOut k e) (MURequest O n) Unit} {kq : ℕ}
     (o : BaseGame.Tuple (Bits m) (Out k e)
-      (ExtReg A C₁ (MURequest O n) (MUResponse B)) kq × DB (Bits m) (Out k e))
+      (ExtReg A C₁ (MURequest O n) (MUResponse B.core)) kq × DB (Bits m) (Out k e))
     (mrs : List (MURequest O n))
     (hlen : (requests (extLogs o.1.out)).length ≤ Q')
     (hmrs : ∀ r ∈ mrs, (∀ i, r = .corrupt i → r ∈ requests (extLogs o.1.out)) ∧

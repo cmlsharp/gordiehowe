@@ -38,7 +38,10 @@ open scoped Classical NNReal
 
 variable {F : Type} [Field F]
 
-/-- The three interpolation nodes used by the implementation. -/
+/-- The three interpolation nodes used by the implementation: `0`, `1` and a third point, which is
+not `2` in general, because `2 = 0` in characteristic two (`Nodes.zeroOneTwo` takes `2` in
+characteristic `p > 2`; the binary fields take a subfield generator,
+`GKR.ConcreteNodes.gf2_128Nodes`). -/
 structure _root_.GordieHowe.Sumcheck.Nodes (F : Type) [Field F] where
   point : Fin 3 → F
   injective : Function.Injective point

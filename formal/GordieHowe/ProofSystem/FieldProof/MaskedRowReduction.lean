@@ -235,6 +235,7 @@ structure Honest (M : MaskedRowReduction F ι Pub Wit cells) (In : Type) (dom : 
   Pads : Type
   [fintype : Fintype Pads]
   [nonempty : Nonempty Pads]
+  [decEq : DecidableEq Pads]
   /-- The honest prover's transcript family. -/
   prover : Pub → In → Pads → CausalTranscript M.spec
   /-- The committed witness holds the honest input and the pads. -/
@@ -245,7 +246,7 @@ structure Honest (M : MaskedRowReduction F ι Pub Wit cells) (In : Type) (dom : 
   /-- The honest transcript has the simulator's law. -/
   identDistrib : ∀ p x, dom p x → ∀ ch, (fun π => (prover p x π).transcript ch) =ᵈ S.sim p ch
 
-attribute [instance] Honest.fintype Honest.nonempty
+attribute [instance] Honest.fintype Honest.nonempty Honest.decEq
 
 /-! ### Rows with no rounds -/
 

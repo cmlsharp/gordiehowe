@@ -82,9 +82,10 @@ theorem ωT_overT (ω : X → Y₁) (T L : X → Option Y) :
 
 /-! ### The program -/
 
-variable [DecidableEq X] {N n : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB)
-  {Pf PC : Type} {iFP : Fintype Pf} {iDP : DecidableEq Pf} {iFC : Fintype PC}
-  {iDC : DecidableEq PC} {iNC : Nonempty PC}
+variable [DecidableEq X] {N n : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
+  (B : BaseSigner X Y N TB)
+  {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
+  [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) ⟨Pf, PC⟩}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {SC X₀ R Pb : Type}
   (pks : Fin n → B.PK)
@@ -115,7 +116,7 @@ def stpB (x : RingStmt B) : OracleProg (X ⊕ X) (Y ⊕ Y₁) X₀ :=
 
 variable {sp B F S}
 
-omit [DecidableEq X] in
+omit [DecidableEq X] [DecidableEq TB.PK] in
 /-- The full and base reads of the signer: one full read, `qOut` base reads, and `qSt` more on
 refusal. -/
 theorem sgnB_reads (pk : B.PK) (Rg : KeyRing B.PK N) (c : ℕ) (msg : B.Msg) (s : SC)
@@ -141,7 +142,7 @@ theorem sgnB_reads (pk : B.PK) (Rg : KeyRing B.PK N) (c : ℕ) (msg : B.Msg) (s 
     simp [Function.comp_def, List.filter_cons]
     omega
 
-omit [DecidableEq X] in
+omit [DecidableEq X] [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- The signature over base reads: one full read, `qOut` base reads, and `qSt` more on refusal. -/
 theorem sigK_sgnB_reads (c : ℕ) (r : Req B PS adm n) (o : X ⊕ X → Y ⊕ Y₁) :
     (((sigK B pks sc (sgnB sp B F S) c r).trace o).filter Sum.isLeft).length ≤ 1 ∧
@@ -156,7 +157,7 @@ theorem sigK_sgnB_reads (c : ℕ) (r : Req B PS adm n) (o : X ⊕ X → Y ⊕ Y�
       simp [trace]
   · simp [sigK]
 
-omit [DecidableEq X] in
+omit [DecidableEq X] [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- The statement program over base reads makes no full read and at most `qSt` base reads. -/
 theorem xK_stpB_reads (r : Req B PS adm n) (o' : Option (B.Pub × B.BSig × List (Assignment X Y)))
     (o : X ⊕ X → Y ⊕ Y₁) :
@@ -169,10 +170,11 @@ theorem xK_stpB_reads (r : Req B PS adm n) (o' : Option (B.Pub × B.BSig × List
     List.length_nil, true_and]
   exact S.stmtPB_queries _ _
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The reads of the key-free relay program in side-read mode**: one oracle read, `qOut + qSt`
 side reads. -/
 theorem kfProgK_viaSide_reads (ω : X → Y₁) (T : X → Option Y) (c : ℕ) (r : Req B PS adm n)
-    (h : X → Y) (m : MURequest (SignOracle.none B) n ⊕ R → Option (MUResponse B ⊕ Pf)) :
+    (h : X → Y) (m : MURequest (SignOracle.none B.core) n ⊕ R → Option (MUResponse B.core ⊕ Pf)) :
     (((kfProgK B pks toR dummyR sc (sgnB sp B F S) (stpB sp B S)
         (KFReads.viaSide (fun y => (sp y).1) ω) T c r).trace
         (combineAns (MultiRelay.sideOracle h (KFReads.viaSide (fun y => (sp y).1) ω).side)
@@ -212,18 +214,19 @@ key-free relay over base reads (`kfRelayOn`) of the signer `sgnB` and the statem
 its base reads the side reads of `ω` (`KFReads.viaSide`); one oracle read, `qOut + qSt` side
 reads, a pad sub-slot, exactly one main request. -/
 noncomputable def kfRelaySide (ω : X → Y₁)
-    (idle : MURequest (SignOracle.none B) n ⊕ R) :
-    AssignRelay X Y (Req B PS adm n) (Resp B PS adm) (MURequest (SignOracle.none B) n ⊕ R)
-      (MUResponse B ⊕ Pf) X Y₁ :=
+    (idle : MURequest (SignOracle.none B.core) n ⊕ R) :
+    AssignRelay X Y (Req B PS adm n) (Resp B PS adm) (MURequest (SignOracle.none B.core) n ⊕ R)
+      (MUResponse B.core ⊕ Pf) X Y₁ :=
   kfRelayOn B pks toR dummyR sc (sgnB sp B F S) (stpB sp B S)
     (KFReads.viaSide (fun y => (sp y).1) ω) 1 (F.qOut + S.qSt) 1 le_rfl (Or.inr ⟨default⟩)
     (fun _ _ _ _ => le_rfl)
     (fun T c r h m => (kfProgK_viaSide_reads pks toR dummyR sc ω T c r h m).1)
     (fun T c r h m => (kfProgK_viaSide_reads pks toR dummyR sc ω T c r h m).2) idle
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The key-free relay in side-read mode has no trailing side reads** (`kfProgK_noSideAfterAsk`):
 its programs' base reads come before their one main request. -/
-theorem noTrailingSides_kfRelaySide (ω : X → Y₁) (idle : MURequest (SignOracle.none B) n ⊕ R)
+theorem noTrailingSides_kfRelaySide (ω : X → Y₁) (idle : MURequest (SignOracle.none B.core) n ⊕ R)
     (Q' : ℕ) :
     (AssignRelay.relayOf (kfRelaySide sp B pks F S toR dummyR sc ω idle) Q').NoTrailingSides :=
   AssignRelay.noTrailingSides_relayOf _ _ fun T c r =>
@@ -234,7 +237,7 @@ theorem noTrailingSides_kfRelaySide (ω : X → Y₁) (idle : MURequest (SignOra
 
 variable {pks toR dummyR sc}
 
-omit [DecidableEq X] in
+omit [DecidableEq X] [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The signature over base reads in side-read mode is the signature at the base component**
 `ω`, its full reads answered by `h` and its base reads by `ω` through the table `T`. -/
 theorem run_sigK_sgnB (ω : X → Y₁) (h : X → Y) (T : X → Option Y) (c : ℕ) (r : Req B PS adm n) :
@@ -260,6 +263,7 @@ theorem run_sigK_sgnB (ω : X → Y₁) (h : X → Y) (T : X → Option Y) (c : 
       rfl
   · rfl
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The statement over base reads in side-read mode is the statement at the base component**
 `ω`, its base reads answered by `ω` through the table `T` overridden by the signature's
 assignments. -/
@@ -273,6 +277,7 @@ theorem run_xK_stpB (ω : X → Y₁) (h : X → Y) (T : X → Option Y) (r : Re
   rw [← S.run_stmtPB, ← ωT_eq sp ω]
   rfl
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The key-free relay in side-read mode agrees with the key-free relay** at every oracle `H`
 of base component `ω` (`AssignRelay.AgreeAt`), for a signer factoring through the base component
 (`F`, with its program `F.outB`) and a statement program reading only the base component (`hst`, with
@@ -280,7 +285,7 @@ its program `S`). -/
 theorem agreeAt_kfRelaySide {stmtP : RingStmt B → OracleProg X Y X₀} {qk qs : ℕ}
     (hk : ∀ pk Rg c msg s, (ksign pk Rg c msg s).QueriesLE qk) (hs : ∀ x, (stmtP x).QueriesLE qs)
     (hst : ∀ x (G : X → Y), (stmtP x).run G = stmtPω (base sp G) x)
-    (idle : MURequest (SignOracle.none B) n ⊕ R) (H : X → Y) :
+    (idle : MURequest (SignOracle.none B.core) n ⊕ R) (H : X → Y) :
     (kfRelay B pks ksign stmtP toR dummyR sc hk hs idle).AgreeAt H
       (kfRelaySide sp B pks F S toR dummyR sc (base sp H) idle) := by
   have hsig := fun T c r => (run_sigK_sgnB (F := F) (S := S) (pks := pks) (sc := sc) (adm := adm)
@@ -306,11 +311,12 @@ theorem agreeAt_kfRelaySide {stmtP : RingStmt B → OracleProg X Y X₀} {qk qs 
     rw [hsig T c r, run_xK_stpB, xPω_eq hst]
     simp [List.filterMap_append, List.filterMap_map, Function.comp_def]
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The run of the key-free relay in side-read mode, its side reads answered**: the outer reply
 of the signature `sigPω` at `ω` read through `T` and the main reply to its main request. -/
 theorem run_elimProg_kfRelaySide (ω : X → Y₁)
-    (idle : MURequest (SignOracle.none B) n ⊕ R) (T : X → Option Y) (c : ℕ) (r : Req B PS adm n)
-    (h : X → Y) (m : MURequest (SignOracle.none B) n ⊕ R → Option (MUResponse B ⊕ Pf)) :
+    (idle : MURequest (SignOracle.none B.core) n ⊕ R) (T : X → Option Y) (c : ℕ) (r : Req B PS adm n)
+    (h : X → Y) (m : MURequest (SignOracle.none B.core) n ⊕ R → Option (MUResponse B.core ⊕ Pf)) :
     ((kfRelaySide sp B pks F S toR dummyR sc ω idle).elimProg T c r).run (combineAns h m) =
       replyOf B r ((sigPω sp B pks F sc ω T c r).run h)
         (m (reqOf B toR dummyR c r ((sigPω sp B pks F sc ω T c r).run h)
@@ -323,11 +329,12 @@ theorem run_elimProg_kfRelaySide (ω : X → Y₁)
   rw [run_sigK_sgnB, run_xK_stpB]
   rfl
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The main request of the key-free relay in side-read mode**: the `reqOf` of the signature
 `sigPω` at `ω` read through `T`. -/
 theorem mainOf_kfRelaySide (ω : X → Y₁)
-    (idle : MURequest (SignOracle.none B) n ⊕ R) (T : X → Option Y) (H : X → Y)
-    (m : MURequest (SignOracle.none B) n ⊕ R → Option (MUResponse B ⊕ Pf)) (c : ℕ)
+    (idle : MURequest (SignOracle.none B.core) n ⊕ R) (T : X → Option Y) (H : X → Y)
+    (m : MURequest (SignOracle.none B.core) n ⊕ R → Option (MUResponse B.core ⊕ Pf)) (c : ℕ)
     (r : Req B PS adm n) :
     (kfRelaySide sp B pks F S toR dummyR sc ω idle).mainOf T H m c r =
       reqOf B toR dummyR c r ((sigPω sp B pks F sc ω T c r).run (reprogT T H))
@@ -343,6 +350,7 @@ theorem mainOf_kfRelaySide (ω : X → Y₁)
   rw [run_sigK_sgnB, run_xK_stpB]
   rfl
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The statement over base reads in side-read mode, its side reads answered**, is the
 statement at the base component `ω` read through the table `T` overridden by the signature's
 assignments. -/
@@ -350,7 +358,7 @@ theorem elimSide_lift_xK_stpB (ω : X → Y₁) (T : X → Option Y) (r : Req B 
     (o : Option (B.Pub × B.BSig × List (Assignment X Y))) :
     elimSide (KFReads.viaSide (fun y => (sp y).1) ω).side
         ((KFReads.viaSide (fun y => (sp y).1) ω).lift
-          (Req' := MURequest (SignOracle.none B) n ⊕ R) (Resp' := MUResponse B ⊕ Pf)
+          (Req' := MURequest (SignOracle.none B.core) n ⊕ R) (Resp' := MUResponse B.core ⊕ Pf)
           (lastAssign (asgOf B o)) (overT T (lastAssign (asgOf B o))) (xK B (stpB sp B S) r o)) =
       .pure (xPω sp B stmtPω ω T r o) := by
   rcases r with i | ⟨s, Rg, msg⟩ | ⟨i, bm⟩ <;> rcases o with _ | p
@@ -378,7 +386,7 @@ request `sign s Rg msg` of `hP`, whose signature is `σ`, and the request's main
 `inr (toR x₀ r σ)`, `x₀` the statement `stmtPω` after those assignments, is a request of
 `hist'`. -/
 def KFEntryFrom (ω : X → Y₁) (H : X → Y) (hP : List (AssignRelay.TaggedReq X Y (Req B PS adm n) Q))
-    (hist' : List (HistoryEntry (MURequest (SignOracle.none B) n ⊕ R) (MUResponse B ⊕ Pf)))
+    (hist' : List (HistoryEntry (MURequest (SignOracle.none B.core) n ⊕ R) (MUResponse B.core ⊕ Pf)))
     (x : X) (y : Y) : Prop :=
   ∃ p ∈ hP, ∃ s Rg msg q σ, ∃ hc : (p.num : ℕ) < Q ∧ pks s ∈ Rg.1 ∧ adm Rg,
     p.req = .sign s Rg msg ∧
@@ -394,24 +402,25 @@ variable (sp B pks F stmtPω toR sc) in
 `hP` has its origin in a signing request of `hP` (`KFEntryFrom`). -/
 def KFTableFacts (ω : X → Y₁) (H : X → Y) (T : X → Option Y)
     (hP : List (AssignRelay.TaggedReq X Y (Req B PS adm n) Q))
-    (hist' : List (HistoryEntry (MURequest (SignOracle.none B) n ⊕ R) (MUResponse B ⊕ Pf))) :
+    (hist' : List (HistoryEntry (MURequest (SignOracle.none B.core) n ⊕ R) (MUResponse B.core ⊕ Pf))) :
     Prop :=
   (∀ x y, T x = some y → KFEntryFrom sp B pks F stmtPω toR sc ω H hP hist' x y) ∧
     ∀ q ∈ hP, ∀ x y, q.tab x = some y → KFEntryFrom sp B pks F stmtPω toR sc ω H hP hist' x y
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **`KFEntryFrom` from the table origin** (`AssignRelay.TableFrom`) of the key-free relay in
 side-read mode. -/
 theorem kfEntryFrom_of_tableFrom (ω : X → Y₁)
-    (idle : MURequest (SignOracle.none B) n ⊕ R) (H : X → Y)
+    (idle : MURequest (SignOracle.none B.core) n ⊕ R) (H : X → Y)
     (hP : List (AssignRelay.TaggedReq X Y (Req B PS adm n) Q))
-    (hist' : List (HistoryEntry (MURequest (SignOracle.none B) n ⊕ R) (MUResponse B ⊕ Pf)))
+    (hist' : List (HistoryEntry (MURequest (SignOracle.none B.core) n ⊕ R) (MUResponse B.core ⊕ Pf)))
     (x : X) (y : Y) (h : (kfRelaySide sp B pks F S toR dummyR sc ω idle).TableFrom H hP hist' x y) :
     KFEntryFrom sp B pks F stmtPω toR sc ω H hP hist' x y := by
   obtain ⟨p, hp, m, ha, e', he', hreq⟩ := h
   rw [run_elimProg_kfRelaySide] at ha
   rw [mainOf_kfRelaySide] at hreq
   have key : ∀ (r : Req B PS adm n) (o : Option (B.Pub × B.BSig × List (Assignment X Y)))
-      (a : Option (MUResponse B ⊕ Pf)), lastAssign (replyOf B r o a).assignments x = some y →
+      (a : Option (MUResponse B.core ⊕ Pf)), lastAssign (replyOf B r o a).assignments x = some y →
       ∃ s Rg msg p', r = .sign s Rg msg ∧ o = some p' ∧ lastAssign p'.2.2 x = some y := by
     intro r o a h
     unfold replyOf at h
@@ -435,25 +444,27 @@ theorem kfEntryFrom_of_tableFrom (ω : X → Y₁)
   · rw [sigPω, dite_eq_right_of_eq_false (eq_false hc)] at ho
     cases ho
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **`KFTableFacts` from the explanation** (`AssignRelay.Explains`) of the key-free relay in
 side-read mode. -/
 theorem kfTableFacts_of_explains (ω : X → Y₁)
-    (idle : MURequest (SignOracle.none B) n ⊕ R) (H : X → Y) (T : X → Option Y)
+    (idle : MURequest (SignOracle.none B.core) n ⊕ R) (H : X → Y) (T : X → Option Y)
     (hP : List (AssignRelay.TaggedReq X Y (Req B PS adm n) Q))
-    (hist' : List (HistoryEntry (MURequest (SignOracle.none B) n ⊕ R) (MUResponse B ⊕ Pf)))
+    (hist' : List (HistoryEntry (MURequest (SignOracle.none B.core) n ⊕ R) (MUResponse B.core ⊕ Pf)))
     (h : (kfRelaySide sp B pks F S toR dummyR sc ω idle).Explains Q H T hP hist') :
     KFTableFacts sp B pks F stmtPω toR sc ω H T hP hist' :=
   ⟨fun x y hx => kfEntryFrom_of_tableFrom ω idle H hP hist' x y (h.2.1 x y hx),
     fun q hq x y hx => kfEntryFrom_of_tableFrom ω idle H hP hist' x y (h.2.2 q hq x y hx)⟩
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The main requests explained through the key-free relay in side-read mode**: each request
 of `hist'` is the padding request or a `reqOf` of a tagged request of `hP`. -/
 theorem reqOf_of_explains (ω : X → Y₁)
-    (idle : MURequest (SignOracle.none B) n ⊕ R) (H : X → Y) (T : X → Option Y)
+    (idle : MURequest (SignOracle.none B.core) n ⊕ R) (H : X → Y) (T : X → Option Y)
     (hP : List (AssignRelay.TaggedReq X Y (Req B PS adm n) Q))
-    (hist' : List (HistoryEntry (MURequest (SignOracle.none B) n ⊕ R) (MUResponse B ⊕ Pf)))
+    (hist' : List (HistoryEntry (MURequest (SignOracle.none B.core) n ⊕ R) (MUResponse B.core ⊕ Pf)))
     (h : (kfRelaySide sp B pks F S toR dummyR sc ω idle).Explains Q H T hP hist')
-    {e' : HistoryEntry (MURequest (SignOracle.none B) n ⊕ R) (MUResponse B ⊕ Pf)}
+    {e' : HistoryEntry (MURequest (SignOracle.none B.core) n ⊕ R) (MUResponse B.core ⊕ Pf)}
     (he' : e' ∈ hist') :
     e'.request = idle ∨ ∃ p ∈ hP, ∃ o x, e'.request = reqOf B toR dummyR p.num p.req o x := by
   rcases h.1 e' he' with h' | ⟨p', hp', hc⟩

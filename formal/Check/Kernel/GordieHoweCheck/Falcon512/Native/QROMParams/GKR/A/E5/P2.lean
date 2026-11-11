@@ -9,10 +9,10 @@ import all GordieHoweCerts.Generated.Falcon512.Native.QROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of leaves 21 to 29 of entry 5 of the GKR circuit of domain A (generated; do not edit). -/
+/-! The relational check of leaves 13 to 16 of entry 5 of the GKR circuit of domain A (generated; do not edit). -/
 
 namespace GordieHowe.Generated.Falcon512.Native.QROMParams.GKR.A
 
-check_entry_leaves cert ar 5 [0, 0, 4, 0, 0, 6, 0, 0, 4, 2, 256, 144] 21 30
+check_entry_leaves cert ar 5 [0, 0, 14, 2, 1955, 19] 13 17
 
 end GordieHowe.Generated.Falcon512.Native.QROMParams.GKR.A

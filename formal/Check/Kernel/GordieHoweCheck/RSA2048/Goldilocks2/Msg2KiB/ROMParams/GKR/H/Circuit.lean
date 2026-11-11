@@ -9,15 +9,16 @@ public import GordieHoweCheck.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.H.E2
 public import GordieHoweCheck.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.H.E3
 public import GordieHoweCheck.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.H.E4
 public import GordieHoweCheck.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.H.E5
+public import GordieHoweCheck.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.H.Header
 meta import GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.H
 import all GordieHoweCerts.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of the GKR circuit of domain H, from its entries' (generated; do not edit). -/
+/-! The relational check of the GKR circuit of domain H, from its header's and entries' (generated; do not edit). -/
 
 namespace GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.H
 
-check_circuit cert ar
+compose_circuit cert ar
 
 end GordieHowe.Generated.RSA2048.Goldilocks2.Msg2KiB.ROMParams.GKR.H

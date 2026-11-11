@@ -41,16 +41,21 @@ namespace GordieHowe.Ring
 
 section Restrict
 
-variable {N : ℕ} {RMsg : Type} {S : PubSigner N RMsg}
+variable {N : ℕ} {RMsg : Type} {S : PubSigner N RMsg} [∀ H R m, Decidable (S.Admit H R m)]
+
+variable [Fintype S.Sig] [Fintype S.Pub]
 
 /-- **The hedged signer of the signer that also refuses the rings outside `Ok`**: the same
 nonces, mask points, masks and attempts; only the refusal rule changes (`PubSigner.restrict`). -/
+@[reducible]
 def MaskedSigner.restrict (W : MaskedSigner S) (Ok : S.Orc → RingOf S.PK N → RMsg → Prop) :
     MaskedSigner (S.restrict Ok) :=
   { W with signLaw_eq := W.signLaw_eq }
 
 /-- The hedged signer of the restricted signer is the restricted hedged signer. -/
-theorem MaskedSigner.real_restrict (W : MaskedSigner S) (Ok : S.Orc → RingOf S.PK N → RMsg → Prop) :
+theorem MaskedSigner.real_restrict (W : MaskedSigner S) [Fintype W.Rnd] [Nonempty W.Rnd]
+    [DecidableEq W.Rnd] [Fintype W.Pt] [DecidableEq W.Pt] [Fintype W.Mask] [Nonempty W.Mask]
+    (Ok : S.Orc → RingOf S.PK N → RMsg → Prop) :
     (W.restrict Ok).real = W.real.restrict fun HY R m => Ok HY.1 R m :=
   rfl
 
@@ -104,8 +109,8 @@ theorem expect_restrictBad_le
               (A.choose 0 keys H h Fin.elim0).msg
           then 1 else 0 : ℝ) ≤
       (q + 1) * checkError reps tol s x := by
-  refine (Finset.expect_prod_eq_expect_expect (α := SchOrc p Msg) (β := CheckOrc p prims N reps)
-    (hαβ := (pubSigner prims (Msg := Msg) N βmin reps tol enc).instFintypeOrc) _).trans_le ?_
+  refine (Finset.expect_prod_eq_expect_expect (α := SchOrc p Msg)
+    (β := CheckOrc p prims N reps) _).trans_le ?_
   refine (Finset.expect_le_expect fun H _ => ?_).trans_eq (Fintype.expect_const _)
   rw [Finset.expect_comm]
   refine (Finset.expect_le_expect fun h _ => ?_).trans_eq (Fintype.expect_const _)
@@ -122,11 +127,12 @@ theorem expect_restrictBad_le
 variable {E : (j : ι) → (M.comp j).Encoder}
   {V : GameOrc prims Msg N reps → (pubSigner prims (Msg := Msg) N βmin reps tol enc).Stmt →
     FullTr P τ → Bool}
-  {Qs : ∀ H x, M.IOPQueries (V H) x} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ H x, M.IOPQueries (V H) x} {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   {honest : GameOrc prims Msg N reps → (pubSigner prims (Msg := Msg) N βmin reps tol enc).Wit →
     R → CausalProver P τ (pubSigner prims (Msg := Msg) N βmin reps tol enc).Stmt}
 
 open Classical in
+omit [DecidableEq R] in
 /-- **The hedged signer against the hedged signer that also refuses the rings of defect above
 `s`** (one challenge): for an adversary whose choices read the check oracle through `q` queries
 at every mask oracle (`hqc`), the advantage is at most the advantage against the restricted
@@ -152,7 +158,6 @@ theorem advantage_hedged_le_restrictLow
   refine (Finset.expect_prod_eq_expect_expect
     (α := (pubSigner prims (Msg := Msg) N βmin reps tol enc).Orc)
     (β := (hedgedSigner prims (Msg := Msg) N βmin reps tol enc T hT).MaskOrc)
-    (hαβ := (hedgedSigner prims (Msg := Msg) N βmin reps tol enc T hT).real.instFintypeOrc)
     _).trans_le ?_
   rw [Finset.expect_comm]
   refine (Finset.expect_le_expect fun Y _ => ?_).trans_eq (Fintype.expect_const _)
@@ -242,6 +247,7 @@ theorem expect_ite_oracleError_le
     linarith
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity against the restricted hedged signer from anonymity against the restricted
 ideal-mask signer** (one challenge): for an adversary and a distinguisher with `q` mask-oracle
 queries per phase (`hq`), against the hedged signer that also refuses the rings of defect above
@@ -309,6 +315,7 @@ variable {Msg : Type} [Fintype Msg] [DecidableEq Msg] {N : ℕ} {βmin : ℚ≥0
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
       (Msg := Msg) N βmin reps tol (concreteEnc _root_.MLDSA.mldsa44)).Stmt → FullTr P τ → Bool}
   {Qs : ∀ GB GS GA H x, (M GB GS GA).IOPQueries (V GB GS GA H) x} {R : Type} [Fintype R]
+  [DecidableEq R]
   [Nonempty R]
   {honest : ∀ GB GS GA, GameOrc (concretePrimitivesKeyGen _root_.MLDSA.mldsa44) Msg N reps →
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
@@ -322,6 +329,7 @@ variable {Msg : Type} [Fintype Msg] [DecidableEq Msg] {N : ℕ} {βmin : ℚ≥0
       Prop)
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-44 with FIPS 204 hedged signing, against adversaries with `q`
 check-oracle queries** (BKM06 Definition 4, ePrint 2005/304, p. 6, `Q = 1`, keys given at the
 start as in CCLM22 Experiment 2, p. 21): `advantage_le_bkm06_mldsa44_hedged` with the check term
@@ -420,6 +428,7 @@ theorem advantage_le_bkm06_mldsa44_hedged_query (hβ0 : (βmin : ℝ≥0∞) ≠
     (A GB GS GA) (D GB GS GA) (hq GB GS GA) ka (sbar GB GS GA) (hkeep GB GS GA)
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-44 with FIPS 204 hedged signing against adversaries with `q`
 check-oracle queries, the keep bound discharged** (BKM06 Definition 4, ePrint 2005/304, p. 6,
 `Q = 1`): `advantage_le_bkm06_mldsa44_hedged_keep` with the check term `2 (q + 1) / 2^240` in
@@ -689,6 +698,7 @@ variable {Msg : Type} [Fintype Msg] [DecidableEq Msg] {N : ℕ} {βmin : ℚ≥0
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
       (Msg := Msg) N βmin reps tol (concreteEnc mldsa65)).Stmt → FullTr P τ → Bool}
   {Qs : ∀ GB GS GA H x, (M GB GS GA).IOPQueries (V GB GS GA H) x} {R : Type} [Fintype R]
+  [DecidableEq R]
   [Nonempty R]
   {honest : ∀ GB GS GA, GameOrc (concretePrimitivesKeyGen mldsa65) Msg N reps →
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
@@ -702,6 +712,7 @@ variable {Msg : Type} [Fintype Msg] [DecidableEq Msg] {N : ℕ} {βmin : ℚ≥0
       Prop)
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-65 with FIPS 204 hedged signing, against adversaries with `q`
 check-oracle queries** (BKM06 Definition 4, ePrint 2005/304, p. 6, `Q = 1`, keys given at the
 start as in CCLM22 Experiment 2, p. 21): `advantage_le_bkm06_mldsa65_hedged` with the check term
@@ -800,6 +811,7 @@ theorem advantage_le_bkm06_mldsa65_hedged_query (hβ0 : (βmin : ℝ≥0∞) ≠
     (A GB GS GA) (D GB GS GA) (hq GB GS GA) ka (sbar GB GS GA) (hkeep GB GS GA)
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-65 with FIPS 204 hedged signing against adversaries with `q`
 check-oracle queries, the keep bound discharged** (BKM06 Definition 4, ePrint 2005/304, p. 6,
 `Q = 1`): `advantage_le_bkm06_mldsa65_hedged_keep` with the check term `2 (q + 1) / 2^240` in
@@ -1068,6 +1080,7 @@ variable {Msg : Type} [Fintype Msg] [DecidableEq Msg] {N : ℕ} {βmin : ℚ≥0
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
       (Msg := Msg) N βmin reps tol (concreteEnc mldsa87)).Stmt → FullTr P τ → Bool}
   {Qs : ∀ GB GS GA H x, (M GB GS GA).IOPQueries (V GB GS GA H) x} {R : Type} [Fintype R]
+  [DecidableEq R]
   [Nonempty R]
   {honest : ∀ GB GS GA, GameOrc (concretePrimitivesKeyGen mldsa87) Msg N reps →
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
@@ -1081,6 +1094,7 @@ variable {Msg : Type} [Fintype Msg] [DecidableEq Msg] {N : ℕ} {βmin : ℚ≥0
       Prop)
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-87 with FIPS 204 hedged signing, against adversaries with `q`
 check-oracle queries** (BKM06 Definition 4, ePrint 2005/304, p. 6, `Q = 1`, keys given at the
 start as in CCLM22 Experiment 2, p. 21): `advantage_le_bkm06_mldsa87_hedged` with the check term
@@ -1179,6 +1193,7 @@ theorem advantage_le_bkm06_mldsa87_hedged_query (hβ0 : (βmin : ℝ≥0∞) ≠
     (A GB GS GA) (D GB GS GA) (hq GB GS GA) ka (sbar GB GS GA) (hkeep GB GS GA)
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-87 with FIPS 204 hedged signing against adversaries with `q`
 check-oracle queries, the keep bound discharged** (BKM06 Definition 4, ePrint 2005/304, p. 6,
 `Q = 1`): `advantage_le_bkm06_mldsa87_hedged_keep` with the check term `2 (q + 1) / 2^240` in

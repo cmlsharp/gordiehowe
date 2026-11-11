@@ -116,7 +116,7 @@ answering `Q` proof queries, distinguishes the prover `niProverZKM` from the sim
 theorem zeroKnowledgeQuery {X' W' : Type} [Fintype X'] [DecidableEq X'] [Fintype W']
     [DecidableEq W'] (fx : X' → X) (fw : W' → Wit) (hvzk : CausalHVZK VE.MV rel honest pub Sim δ) :
     ZeroKnowledgeQueryBoundedPure (fun x w => (fx x, fw w) ∈ rel)
-      ((M.niProverZKM B honest E Qs).comap fx fw)
+      ((M.niProverZKM B honest E Qs).comap fx fw) (PMF.uniformOfFintype _)
       ((M.niJointSimulator VE.toViewRead B pub Sim T).comap fx) (M.zkErrorQuery δ) := by
   have hε₃ : (0 : ℝ) ≤ M.overrun.toReal + δ := add_nonneg ENNReal.toReal_nonneg δ.2
   refine (zeroKnowledgeQueryBoundedPure_comap_of_leafKernel (rel₀ := fun x w => (x, w) ∈ rel)
@@ -151,12 +151,12 @@ adversaries** (`NARG.QROM.ZeroKnowledge`, Unruh 2017 Definition 6, p. 14, over t
 and the simulator `niSimulator`, with proofs in the format `B` of the format bounds `hb`, run
 through `queryEncoding` and answering `Q` proof queries; every `tq`-query adversary has advantage
 at most `zkErrorQuery δ tq Q`. -/
-theorem zeroKnowledgeQuery_queryBounded (hb : M.FormatBounds Qs B B) {X' W' : Type} [Fintype X']
-    [DecidableEq X'] [Fintype W'] [DecidableEq W'] (fx : X' → X) (fw : W' → Wit)
+theorem zeroKnowledgeQuery_queryBounded [DecidableEq R] (hb : M.FormatBounds Qs B B) {X' W' : Type}
+    [Fintype X'] [DecidableEq X'] [Fintype W'] [DecidableEq W'] (fx : X' → X) (fw : W' → Wit)
     (hvzk : CausalHVZK VE.MV rel honest pub Sim δ) :
     GordieHowe.NARG.QROM.ZeroKnowledge (fun x w => (fx x, fw w) ∈ rel) queryEncoding
-      ((M.niProver Λ honest E hb).comap fx fw)
-      ((M.niSimulator Λ VE.toViewRead B (ViewEncoder.formatBounds M E VE hb) pub Sim T).comap fx)
+      ((M.niProver Λ honest E hb).comap fx fw) (PMF.uniformOfFintype _)
+      ((VE.niSimulator Λ hb pub Sim T).comap fx)
       (M.zkErrorQuery δ) := by
   apply ZeroKnowledgeQueryBoundedPure.zeroKnowledgeQueryBounded
   rw [NARG.Prover.mapOutput_comap, NARG.Prover.encode_comap, NARG.Simulator.encode_comap,

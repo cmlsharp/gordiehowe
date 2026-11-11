@@ -9,7 +9,7 @@ public import GordieHoweNative.Language.Realizations.Derivation.Grouped
 public import GordieHoweNative.Language.Realizations.Derivation.Mac
 public import GordieHoweNative.Language.Realizations.Derivation.OpIvl
 public import GordieHoweNative.Language.Realizations.Derivation.Solve
-public import GordieHoweNative.Language.Realizations.Derivation.TableKernel
+public import GordieHoweNative.Language.Realizations.Derivation.Events
 
 /-!
 # GordieHowe: the compiled definitions of `GordieHowe.Language.Realizations.Derivation`
@@ -46,7 +46,7 @@ def stepFact (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (ctx : 
   | .holdsIn k => ir.holdsInFact fs k
   | .src v s =>
     if ir.srcGuard body.dom v = true then
-      (ir.srcFact primeNodes sr fs body.dom v s).or (ir.tableKernelFact sr ctx self body.dom v s)
+      ir.srcFact primeNodes sr fs body.dom v s
     else none
   | .ivlNat k => ir.ivlNatFact fs body.dom k
   | .ivlExpr ks x lo hi => ir.ivlExprFact fs body.dom ks x lo hi
@@ -72,7 +72,6 @@ def stepFact (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (ctx : 
   | .fact k => if ctx.srank k < self then ctx.sfact k else none
   | .inDom d s => stepFact primeNodes sr ctx self pid (entryBody d) fs s
   | .groupedMod rows ivs => ir.groupedFact ctx self pid body fs rows ivs
-  | .productMod ks => ir.productModFact fs pid body ks
   | .circuitAssert _ => none
   | .inputPremise _ => none
 
@@ -238,11 +237,6 @@ def fieldRowOkE (S : Structure) (pid : ℕ) : PredBody → Except StructFailure 
 /-- **`fieldRowOkE` as a `Bool`.** -/
 def fieldRowOkB (S : Structure) (pid : ℕ) (b : PredBody) : Bool := Twin.okB (ir.fieldRowOkE S pid b)
 
-/-- **A product-form `mod_q` passes the structural check** (`productOkB`) in a field of
-characteristic above `2`; any other predicate body needs nothing. -/
-def productValidB (b : PredBody) : Bool :=
-  !b.isProductMod || (ir.productOkB b && decide (2 < ir.charOf (ir.domainField b.dom)))
-
 /-- **The checker of `DerivationsValid`**: one derivation per predicate and every shared entry,
 each checking at its rank, and the field rows at the structure records' pointers (`S`). -/
 def derivsB (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (S : Structure)
@@ -253,8 +247,7 @@ def derivsB (primeNodes : ℕ → List String) (sr : List (ℕ × ℕ)) (S : Str
     (ir.predicates.zipIdx.all fun pq => !derivCrossB pq.1.body || ir.macOkB pq.2 pq.1.body) &&
     allIdx (fun pid p => ir.lookupCoreB pid p.body) ir.predicates 0 &&
     allIdx (fun _ x => ir.boundOkV x) ir.values 0 &&
-    allIdx (fun pid p => ir.fieldRowOkB S pid p.body) ir.predicates 0 &&
-    allIdx (fun _ p => ir.productValidB p.body) ir.predicates 0
+    allIdx (fun pid p => ir.fieldRowOkB S pid p.body) ir.predicates 0
 
 end
 

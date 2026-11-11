@@ -26,15 +26,11 @@ class StructureWriter {
         arity(p.args, 1);
         if (p.args[0] >= ir::kNone) throw Error("invalid gadget expression index");
         out.ctor(0); out.bytes(exprs_.expr(ir::Id(p.args[0]))); break;
-      case K::kernel:
-        arity(p.args, 6); out.ctor(1); fields(out, p.args); break;
       case K::stream:
-        arity(p.args, 1); out.ctor(2); fields(out, p.args);
+        arity(p.args, 1); out.ctor(1); fields(out, p.args);
         out.ctor(p.zero_slot ? 1 : 0);
         if (p.zero_slot) out.nat(*p.zero_slot);
         break;
-      case K::kernelOf:
-        arity(p.args, 3); out.ctor(3); fields(out, p.args); break;
       default: throw Error("unknown gadget part");
     }
   }
@@ -43,18 +39,17 @@ class StructureWriter {
     using K = Records::GadgetKind;
     switch (k) {
       case K::selectRow: out.ctor(0); break;
-      case K::spectralProduct: out.ctor(1); break;
-      case K::selectFirst: out.ctor(2); break;
-      case K::keccak: out.ctor(3); break;
-      case K::macSite: out.ctor(4); break;
-      case K::modField: out.ctor(5); break;
-      case K::modCommitted: out.ctor(6); break;
-      case K::modGrouped: out.ctor(7); break;
-      case K::modDigits: out.ctor(8); break;
-      case K::modOneDigit: out.ctor(9); break;
-      case K::lookupTwoSided: out.ctor(10); break;
-      case K::lookupDigits: out.ctor(11); break;
-      case K::packedTable: out.ctor(12); break;
+      case K::selectFirst: out.ctor(1); break;
+      case K::keccak: out.ctor(2); break;
+      case K::macSite: out.ctor(3); break;
+      case K::modField: out.ctor(4); break;
+      case K::modCommitted: out.ctor(5); break;
+      case K::modGrouped: out.ctor(6); break;
+      case K::modDigits: out.ctor(7); break;
+      case K::modOneDigit: out.ctor(8); break;
+      case K::lookupTwoSided: out.ctor(9); break;
+      case K::lookupDigits: out.ctor(10); break;
+      case K::packedTable: out.ctor(11); break;
       default: throw Error("unknown gadget kind");
     }
   }

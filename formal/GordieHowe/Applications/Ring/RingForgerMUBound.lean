@@ -37,15 +37,24 @@ namespace GordieHowe
 open Quantum Signature RingSignature QROM IOP
 open scoped ENNReal
 
-variable {m k e N : ℕ} {TB : BaseTypes} {B : BaseSigner (Bits m) (XOut k e) N TB}
-  {TPS : PSTypes} {PS : ProofSystem (Bits m) (XOut k e) (RingStmt B) (RingWit B) TPS}
+variable {m k e N : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
+  {B : BaseSigner (Bits m) (XOut k e) N TB}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem (Bits m) (XOut k e) (RingStmt B) (RingWit B) TPS}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {n t : ℕ} [NeZero n]
-  {SO : SideOracle (ofBase B PS adm)} {O : SignOracle B}
+  {SO : SideOracle (ofBase B PS adm)} {O : SignOracle B.core}
   {Cl : Type} {V : NARG.QROM.Verifier m k e Cl (RingStmt B)}
   {rel : Set (RingStmt B × RingWit B)}
   {ext : RingStmt B → DB (Bits m) (Out k e) → List (RingWit B)} {β : ℕ → ℝ≥0∞}
 
 /-! ### The multi-user forger -/
+
+variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins] [Fintype SO.BMsg] [DecidableEq SO.BMsg] [Fintype SO.BSig] [DecidableEq SO.BSig]
+
+variable [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins]
 
 variable (B PS adm) in
 /-- **The multi-user forger's auxiliary input**: the adversary's auxiliary input on the public keys
@@ -55,7 +64,8 @@ noncomputable def ringAux
     (Q : ℕ) (pks : Fin n → B.PK) : PMF ((A (pks, ())).Aux × (Fin Q → PS.Coins)) :=
   (A (pks, ())).aux.bind fun a => (PMF.uniformOfFintype (Fin Q → PS.Coins)).map fun ρ => (a, ρ)
 
-omit [NeZero n] in
+omit [NeZero n] [DecidableEq TPS.Coins] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The auxiliary input is the product of the adversary's and the uniform coins.** -/
 theorem ringAux_apply
     (A : UnforgeAdversary (ofBase B PS adm) n SO (OracleView.queriesOnly (Bits m) (XOut k e)) t)
@@ -97,12 +107,12 @@ noncomputable abbrev ringBridgeAlg (hC : PS.CompiledBy V) (c₀ : Cl)
     (A : UnforgeAdversary (ofBase B PS adm) n SO (OracleView.queriesOnly (Bits m) (XOut k e)) t)
     (F : RelayFam (Bits m) (XOut k e) B PS adm n SO O) (pks : Fin n → B.PK) (i₂ : Fin n)
     (Q Q' : ℕ) (p : (A (pks, ())).Aux × (Fin Q → PS.Coins)) :
-    ReqQueryAlg (Bits m) (XOut k e) (MURequest O n) (MUResponse B)
+    ReqQueryAlg (Bits m) (XOut k e) (MURequest O n) (MUResponse B.core)
       (ringBridgeDepth B PS adm V A F pks i₂ Q Q' p)
       (BaseGame.Tuple (Bits m) (Out k e)
         (ExtReg (ringRelAlg B PS adm A F pks Q p)
           (inertChallenger (Bits m) (XOut k e) (MURequest O n) Q')
-          (MURequest O n) (MUResponse B)) V.kq) := by
+          (MURequest O n) (MUResponse B.core)) V.kq) := by
   -- TODO(unbundle-M4): at default transparency, matching `ringBridgeDepth` against the bridge's
   -- depth unfolds `Nat.add` into the relayed forger's shape; the abbrev unfolds at reducible
   -- transparency
@@ -131,7 +141,7 @@ noncomputable def ringMUForger (hC : PS.CompiledBy V) (c₀ : Cl)
     (fun pks p => BaseGame.Tuple (Bits m) (Out k e)
       (ExtReg (ringRelAlg B PS adm A F pks Q p)
         (inertChallenger (Bits m) (XOut k e) (MURequest O n) Q')
-        (MURequest O n) (MUResponse B)) V.kq)
+        (MURequest O n) (MUResponse B.core)) V.kq)
     (fun pks p => ringBridgeAlg B PS adm hC c₀ A F pks i₂ Q Q' p)
     (fun _ _ => muReadout B PS adm hC c₀ ext f₀)
 
@@ -143,6 +153,8 @@ theorem _root_.GordieHowe.Quantum.KindAlg.composeBothOut_depth {X Y Req Resp O O
     (A.composeBothOut C f).depth = A.slots * (C.q + A.width) + A.width * A.post :=
   A.composeBoth_depth C
 
+omit [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+  [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **The bridge's request points less one**: the relayed forger's slots plus `kq`. -/
 theorem ringBridgeDepth_eq
     (A : UnforgeAdversary (ofBase B PS adm) n SO (OracleView.queriesOnly (Bits m) (XOut k e)) t)
@@ -225,6 +237,8 @@ theorem forgeProb_le_muEufProb (hO : O.NoQuery)
 
 /-! ### The number of requests from a schedule bound -/
 
+omit [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+  [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **The slots of the relayed forger**: the adversary's slots and post batches, each split into
 at most `max width F.len` single steps (`Distinguisher.relaySlots`). -/
 theorem ringRelAlg_slots
@@ -242,6 +256,8 @@ least `Q`, and at least the bridge's request points `(S + P) · max w L + kq + 1
 def ringQ' (V : NARG.QROM.Verifier m k e Cl (RingStmt B)) (Q S w P L : ℕ) : ℕ :=
   max Q ((S + P) * max w L + V.kq + 1)
 
+omit [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+  [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **The bridge's request points are at most `ringQ'`** under a schedule bound. -/
 theorem ringBridgeDepth_add_one_le
     {A : UnforgeAdversary (ofBase B PS adm) n SO (OracleView.queriesOnly (Bits m) (XOut k e)) t}
@@ -254,6 +270,7 @@ theorem ringBridgeDepth_add_one_le
   exact Nat.mul_le_mul (Nat.add_le_add (hS.slots_le _ p.1) (hS.post_le _ p.1))
     (max_le_max (hS.width_le _ p.1) (hL pks))
 
+omit [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
 /-- **The relayed forger's slots are at most `ringQ'`** under a schedule bound. -/
 theorem ringRelAlg_slots_le
     {A : UnforgeAdversary (ofBase B PS adm) n SO (OracleView.queriesOnly (Bits m) (XOut k e)) t}
@@ -265,6 +282,8 @@ theorem ringRelAlg_slots_le
   rw [ringBridgeDepth_eq] at h
   omega
 
+omit [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+  [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **The multi-user forger's requests** (the trivial count): on every start input and auxiliary
 value, its algorithm has `ringBridgeDepth + 1` slots, each a request, so it sends at most
 `(S + P) · max w L + kq + 1` multi-user requests (signing requests among them) under a schedule

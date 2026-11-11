@@ -25,6 +25,11 @@ proves the reading sound:
   shared expression `read` equals the shared expression `source` below their common length, the
   index maps' entries read off once (`IndexMap.entry_convLeft`, `IndexMap.entry_convRight`,
   `IndexMap.entry_zeroExtend`, `IndexMap.entry_blockPrefix`);
+* **a direct reading is the source** (`directRead_eq_source`): the direct form of compiler/conv.h
+  commits `C` and states `C = Σ_{u+v=k} a_u b_v` in the circuit (`DirectOkAt`); where that
+  predicate holds, `C` equals the source, its sums' terms (`directTerms`, a square block's
+  products `a_u a_v` with `u < v` counted once with coefficient `2`) summing to the source's
+  (`directTerms_sum`, `directSums_eq_source`);
 * **a realized field equation holds** (`fieldEq_of_realized`): where every field `equal` with no
   realization target holds, the field equation `e = e'` of a predicate with the target
   `realized q` (`RealizedAdmits`) holds, as `q`'s sides are `e` and `e'` with convolutions read
@@ -361,6 +366,131 @@ theorem Expr.eq_of_convProducts? {e : Expr} {q : ConvProducts} (h : e.convProduc
   · intro h
     cases h
 
+theorem Expr.eq_of_directProducts? {e : Expr} {q : DirectProducts}
+    (h : e.directProducts? = some q) :
+    e = .add q.cv (.scale (.const q.s) (.linear q.rows (.mul (.reindex q.ia q.a)
+      (.reindex q.ib q.b)))) := by
+  revert h
+  unfold Expr.directProducts?
+  split
+  · intro h
+    cases h
+    rfl
+  · intro h
+    cases h
+
+/-! ## The sums of a direct convolution -/
+
+/-- **A sum over the kept images of a list** is the sum over the list, `0` where nothing is kept. -/
+theorem sum_map_filterMap {α β K : Type*} [AddCommMonoid K] (g : α → Option β) (h : β → K) :
+    ∀ l : List α, ((l.filterMap g).map h).sum = (l.map fun a => (g a).elim 0 h).sum
+  | [] => rfl
+  | a :: l => by
+    have ih := sum_map_filterMap g h l
+    cases hg : g a <;> simp [List.filterMap_cons, hg, ih]
+
+/-- **The terms of a direct convolution's coordinate sum to the convolution's**: at coefficients
+reading `1` and `2` as such, the terms `directTerms la lb blk k sq` of the operands `A` and `B` sum
+to `Σ_{u+v=k} A[blk la + u] B[blk lb + v]`. In a square block (the operands' rows equal, `la = lb`)
+the products `A_u A_v` with `u < v` are counted once with coefficient `2`, the sum's terms at `u`
+and at `k − u` being equal. -/
+theorem directTerms_sum {K : Type*} [CommRing K] (cf : Coef → K) (h1 : cf (.const 1) = 1)
+    (h2 : cf (.const 2) = 2) (A B : ℕ → K) {la lb blk k : ℕ} {sq : Bool}
+    (hsq : sq = true → la = lb ∧ ∀ u < la, A (blk * la + u) = B (blk * lb + u)) :
+    ((directTerms la lb blk k sq).map fun x => cf x.2.2 * (A x.1 * B x.2.1)).sum =
+      ∑ t ∈ Finset.range la,
+        if t ≤ k ∧ k - t < lb then A (blk * la + t) * B (blk * lb + (k - t)) else 0 := by
+  unfold directTerms
+  rw [sum_map_filterMap, sum_map_range]
+  cases sq with
+  | false =>
+    refine Finset.sum_congr rfl fun u _ => ?_
+    by_cases hc : u ≤ k ∧ k - u < lb
+    · simp [hc, h1]
+    · simp [hc]
+  | true =>
+    obtain ⟨hab, hAB⟩ := hsq rfl
+    subst lb
+    -- The rows' terms: twice those below the middle, once the middle.
+    have hL : ∀ t ∈ Finset.range la,
+        ((if t ≤ k ∧ k - t < la ∧ (true = false ∨ t ≤ k - t) then
+          some (blk * la + t, blk * la + (k - t),
+            Coef.const (if true = true ∧ t ≠ k - t then 2 else 1)) else none).elim 0
+          fun x => cf x.2.2 * (A x.1 * B x.2.1)) =
+          (if t ≤ k ∧ k - t < la ∧ t < k - t then A (blk * la + t) * A (blk * la + (k - t)) else 0) +
+            (if t ≤ k ∧ k - t < la ∧ t = k - t then A (blk * la + t) * A (blk * la + (k - t)) else 0) +
+            (if t ≤ k ∧ k - t < la ∧ t < k - t then A (blk * la + t) * A (blk * la + (k - t)) else 0) := by
+      intro t _
+      by_cases hc : t ≤ k ∧ k - t < la ∧ t ≤ k - t
+      · rw [if_pos ⟨hc.1, hc.2.1, .inr hc.2.2⟩]
+        simp only [Option.elim]
+        rw [← hAB _ hc.2.1]
+        rcases Nat.lt_or_eq_of_le hc.2.2 with h | h
+        · rw [if_pos ⟨trivial, Nat.ne_of_lt h⟩, h2, if_pos ⟨hc.1, hc.2.1, h⟩,
+            if_neg (show ¬ (t ≤ k ∧ k - t < la ∧ t = k - t) from fun h' => Nat.ne_of_lt h h'.2.2),
+            add_zero, two_mul]
+        · rw [if_neg (show ¬ (True ∧ t ≠ k - t) from fun h' => h'.2 h), h1,
+            if_neg (show ¬ (t ≤ k ∧ k - t < la ∧ t < k - t) from fun h' => absurd h'.2.2 (by omega)),
+            if_pos ⟨hc.1, hc.2.1, h⟩, one_mul, zero_add, add_zero]
+      · rw [if_neg (show ¬ (t ≤ k ∧ k - t < la ∧ (true = false ∨ t ≤ k - t)) from fun h =>
+          hc ⟨h.1, h.2.1, h.2.2.resolve_left (by decide)⟩)]
+        simp only [Option.elim]
+        rw [if_neg (show ¬ (t ≤ k ∧ k - t < la ∧ t < k - t) from fun h =>
+            hc ⟨h.1, h.2.1, h.2.2.le⟩),
+          if_neg (show ¬ (t ≤ k ∧ k - t < la ∧ t = k - t) from fun h => hc ⟨h.1, h.2.1, h.2.2.le⟩),
+          add_zero, add_zero]
+    -- The convolution's terms: those below the middle, the middle and those above it.
+    have hB : ∀ t ∈ Finset.range la,
+        (if t ≤ k ∧ k - t < la then A (blk * la + t) * B (blk * la + (k - t)) else 0) =
+          (if t ≤ k ∧ k - t < la ∧ t < k - t then A (blk * la + t) * A (blk * la + (k - t)) else 0) +
+            (if t ≤ k ∧ k - t < la ∧ t = k - t then A (blk * la + t) * A (blk * la + (k - t)) else 0) +
+            (if t ≤ k ∧ k - t < la ∧ k - t < t then A (blk * la + t) * A (blk * la + (k - t)) else 0) := by
+      intro t _
+      by_cases hc : t ≤ k ∧ k - t < la
+      · rw [if_pos hc, ← hAB _ hc.2]
+        rcases lt_trichotomy t (k - t) with h | h | h
+        · rw [if_pos ⟨hc.1, hc.2, h⟩,
+            if_neg (show ¬ (t ≤ k ∧ k - t < la ∧ t = k - t) from fun h' => absurd h'.2.2 (by omega)),
+            if_neg (show ¬ (t ≤ k ∧ k - t < la ∧ k - t < t) from fun h' => absurd h'.2.2 (by omega)),
+            add_zero, add_zero]
+        · rw [if_neg (show ¬ (t ≤ k ∧ k - t < la ∧ t < k - t) from fun h' => absurd h'.2.2 (by omega)),
+            if_pos ⟨hc.1, hc.2, h⟩,
+            if_neg (show ¬ (t ≤ k ∧ k - t < la ∧ k - t < t) from fun h' => absurd h'.2.2 (by omega)),
+            zero_add, add_zero]
+        · rw [if_neg (show ¬ (t ≤ k ∧ k - t < la ∧ t < k - t) from fun h' => absurd h'.2.2 (by omega)),
+            if_neg (show ¬ (t ≤ k ∧ k - t < la ∧ t = k - t) from fun h' => absurd h'.2.2 (by omega)),
+            if_pos ⟨hc.1, hc.2, h⟩, zero_add, zero_add]
+      · rw [if_neg hc,
+          if_neg (show ¬ (t ≤ k ∧ k - t < la ∧ t < k - t) from fun h => hc ⟨h.1, h.2.1⟩),
+          if_neg (show ¬ (t ≤ k ∧ k - t < la ∧ t = k - t) from fun h => hc ⟨h.1, h.2.1⟩),
+          if_neg (show ¬ (t ≤ k ∧ k - t < la ∧ k - t < t) from fun h => hc ⟨h.1, h.2.1⟩),
+          add_zero, add_zero]
+    -- The terms above the middle are those below it, reflected (`t ↦ k − t`).
+    have hrefl : ∑ t ∈ Finset.range la,
+        (if t ≤ k ∧ k - t < la ∧ k - t < t then A (blk * la + t) * A (blk * la + (k - t)) else 0) =
+        ∑ t ∈ Finset.range la, (if t ≤ k ∧ k - t < la ∧ t < k - t then A (blk * la + t) * A (blk * la + (k - t)) else 0) := by
+      rw [← Finset.sum_filter, ← Finset.sum_filter]
+      refine Finset.sum_nbij' (fun t => k - t) (fun t => k - t) ?_ ?_ ?_ ?_ ?_
+      · intro t ht
+        simp only [Finset.mem_filter, Finset.mem_range] at ht ⊢
+        omega
+      · intro t ht
+        simp only [Finset.mem_filter, Finset.mem_range] at ht ⊢
+        omega
+      · intro t ht
+        simp only [Finset.mem_filter, Finset.mem_range] at ht
+        omega
+      · intro t ht
+        simp only [Finset.mem_filter, Finset.mem_range] at ht
+        omega
+      · intro t ht
+        simp only [Finset.mem_filter, Finset.mem_range] at ht
+        rw [show k - (k - t) = t by omega, mul_comm]
+    refine (Finset.sum_congr rfl hL).trans ?_
+    refine Eq.trans ?_ (Finset.sum_congr rfl hB).symm
+    simp only [Finset.sum_add_distrib]
+    rw [hrefl]
+
 section
 
 variable {ir : RealizedProgram} {I : Interp}
@@ -429,7 +559,7 @@ theorem convRead_eq_source (ho : ir.RefsOrdered) {rd : ir.Valuation I} {d : ℕ}
   split at hc
   case h_2 => exact hc.elim
   rename_i s r d' lhs z t hsrc hread hbody
-  obtain ⟨hd, -, hpo⟩ := hc
+  obtain ⟨hd, -, hpo, -⟩ := hc
   rw [hd] at hbody
   unfold ConvProductsOk at hpo
   split at hpo
@@ -591,7 +721,7 @@ theorem ConvOkAt.facts {d : ℕ} {c : SpectralConv} (hc : ir.ConvOkAt d c) {lhs 
   rw [hb] at hbody
   simp only [PredBody.equal.injEq, Expr.leaf.injEq] at hbody
   obtain ⟨-, rfl, rfl, rfl⟩ := hbody
-  obtain ⟨-, -, hpo⟩ := hc
+  obtain ⟨-, -, hpo, -⟩ := hc
   unfold ConvProductsOk at hpo
   split at hpo
   case h_2 => exact hpo.elim
@@ -735,11 +865,245 @@ theorem ConvOkAt.products {d : ℕ} {c : SpectralConv} (hc : ir.ConvOkAt d c) :
   split at hc
   case h_2 => exact hc.elim
   rename_i s r d' lhs z t _ _ hbody
-  obtain ⟨rfl, ht, hpo⟩ := hc
+  obtain ⟨rfl, ht, hpo, -⟩ := hc
   unfold ConvProductsOk at hpo
   split at hpo
   case h_2 => exact hpo.elim
   exact ⟨hpo.products_lt, lhs, z, t, hbody, ht⟩
+
+/-- **The committed reading of a spectrally realized convolution is linked to its reading**
+(`ConvOkAt`, `CommittedOk`). -/
+theorem ConvOkAt.committed {d : ℕ} {c : SpectralConv} (hc : ir.ConvOkAt d c) {kc r : ℕ}
+    (hcm : c.committed = some (kc, r)) :
+    r < ir.predicates.length ∧ ir.exprLen (.ref kc) = ir.exprLen (.ref c.read) ∧
+      ∃ t, (ir.predicate r).body = .equal d (.ref kc) (.ref c.read) t ∧ t.isRealized = false := by
+  unfold ConvOkAt at hc
+  split at hc
+  case h_2 => exact hc.elim
+  obtain ⟨-, -, -, hcm'⟩ := hc
+  unfold CommittedOk at hcm'
+  rw [hcm] at hcm'
+  exact hcm'
+
+/-! ## The direct realization -/
+
+/-- **An expression's coordinate is the coordinate it reads through its views** (`Expr.site`). -/
+theorem evalE_site (rd : ir.Valuation I) (f : ℕ) :
+    ∀ (e : Expr) (i : ℕ), ir.evalE rd f e i = ir.evalE rd f (e.site i).1 (e.site i).2
+  | .reindex m e, i => by
+    rw [evalE_reindex, evalE_site rd f e (m.entry i)]
+    rfl
+  | .leaf _, _ | .add _ _, _ | .sub _ _, _ | .scale _ _, _ | .mul _ _, _ | .concat _ _, _
+  | .linear _ _, _ | .prod _ _, _ | .mux _ _ _, _ | .apply _ _, _ | .ref _, _
+  | .logic _ _ _, _ => rfl
+
+/-- **An identity view reads its expression** below its length (`Expr.IdView`). -/
+theorem evalE_of_idView (rd : ir.Valuation I) (f : ℕ) {e x : Expr} {n : ℕ} (h : e.IdView x n) :
+    ∀ j < n, ir.evalE rd f e j = ir.evalE rd f x j := by
+  rcases h with rfl | ⟨m, rfl, hm⟩
+  · exact fun _ _ => rfl
+  · intro j hj
+    rw [evalE_reindex, hm j hj]
+
+/-- **A direct convolution's sums read its source** (`DirectFacts`): at a reader whose zero
+constants read `0` and whose field decodes the naturals below its characteristic to their casts,
+coordinate `blk (la + lb − 1) + k` of the products' sums is `Σ_{u+v=k} a[blk la + u] b[blk lb + v]`
+(`directTerms_sum`), which the source sums over the views `convLeft`, `convRight`. -/
+theorem directSums_eq_source (ho : ir.RefsOrdered) {rd : ir.Valuation I} {d : ℕ}
+    (hzero : ∀ v, ir.zeroConst v = true → ir.valueField v = ir.domainField d →
+      ∀ i, ir.evalE rd (ir.domainField d) (.leaf v) i = 0)
+    (hdec : ∀ c < (ir.field (ir.domainField d)).characteristic,
+      (I (ir.domainField d)).decode c = (c : (I (ir.domainField d)).K))
+    {c : SpectralConv} {s : ConvSource} {q : DirectProducts} {C z : ℕ}
+    (hsrc : (ir.expr c.source).convSource? = some s) (F : ir.DirectFacts c s q d C z) :
+    ∀ i < c.blocks * (c.left + c.right - 1),
+      ir.evalE rd (ir.domainField d)
+          (.linear q.rows (.mul (.reindex q.ia q.a) (.reindex q.ib q.b))) i =
+        ir.evalE rd (ir.domainField d) (.ref c.source) i := by
+  obtain ⟨hsl, -, -, hFla, hmA, hmB, hzs, hfs, hlenA, hlenB, hla, hlb, -, -, -, hqa, hqb, -, h2,
+    hrows, hsq⟩ := F
+  set f := ir.domainField d with hfdef
+  set B := c.blocks
+  set la := c.left
+  set lb := c.right
+  have hS := Expr.eq_of_convSource? hsrc
+  rw [hFla] at hS
+  have hzA := hzero s.zA (hzs s.zA (by simp)) (hfs s.zA (by simp))
+  intro i hi
+  set lc := la + lb - 1
+  have hlc : 0 < lc := by omega
+  set blk := i / lc
+  set k := i % lc
+  have hk : k < lc := Nat.mod_lt _ hlc
+  have hblk : blk < B := (Nat.div_lt_iff_lt_mul hlc).2 hi
+  have hik : i = blk * lc + k := by
+    have := Nat.div_add_mod i lc
+    rw [Nat.mul_comm] at this
+    exact this.symm
+  -- The source.
+  have hsource : ir.evalE rd f (.ref c.source) i =
+      ∑ t : Fin la, if (t : ℕ) ≤ k ∧ k - t < lb then
+        ir.evalE rd f s.a (blk * la + t) * ir.evalE rd f s.b (blk * lb + (k - t)) else 0 := by
+    rw [evalE_ref ho rd f hsl, hS, evalE_apply_sum]
+    refine Finset.sum_congr rfl fun t _ => ?_
+    have ht := t.isLt
+    rw [evalE_mul, evalE_reindex, evalE_reindex, hmA, hmB, hik,
+      IndexMap.entry_convLeft hla hblk hk ht, IndexMap.entry_convRight hla hblk hk ht]
+    by_cases hcond : k + 1 - lb ≤ (t : ℕ) ∧ (t : ℕ) ≤ k
+    · rw [if_pos hcond, if_pos hcond, if_pos ⟨hcond.2, by omega⟩, evalE_concat, evalE_concat,
+        if_pos (by rw [hlenA]; exact IndexMap.block_lt hblk ht),
+        if_pos (by rw [hlenB]; exact IndexMap.block_lt hblk (show k - (t : ℕ) < lb by omega))]
+    · rw [if_neg hcond, if_neg hcond, if_neg (fun h => hcond ⟨by omega, h.1⟩), evalE_concat,
+        if_neg (by rw [hlenA]; omega), hlenA, Nat.sub_self, hzA, zero_mul]
+  -- The sums, by their terms.
+  have hlin : ir.evalE rd f (.linear q.rows (.mul (.reindex q.ia q.a) (.reindex q.ib q.b))) i =
+      ((((q.rows.getD i []).map fun t => (q.ia.entry t.1, q.ib.entry t.1, t.2))).map
+        fun x => Coef.eval ir f rd x.2.2 * (ir.evalE rd f q.a x.1 * ir.evalE rd f q.b x.2.1)).sum := by
+    rw [List.map_map]
+    rfl
+  have hp : 2 < (ir.field f).characteristic := h2
+  have h1 : Coef.eval ir f rd (.const 1) = 1 := by
+    change (I f).decode 1 = 1
+    rw [hdec 1 (by omega), Nat.cast_one]
+  have h2' : Coef.eval ir f rd (.const 2) = 2 := by
+    change (I f).decode 2 = 2
+    rw [hdec 2 hp, Nat.cast_ofNat]
+  have hA : ∀ x < B * la, ir.evalE rd f q.a x = ir.evalE rd f s.a x := evalE_of_idView rd f hqa
+  have hB : ∀ x < B * lb, ir.evalE rd f q.b x = ir.evalE rd f s.b x := evalE_of_idView rd f hqb
+  have hsq' : c.squares.getD blk false = true → la = lb ∧ ∀ u < la,
+      ir.evalE rd f q.a (blk * la + u) = ir.evalE rd f q.b (blk * lb + u) := by
+    intro hs
+    obtain ⟨hab, hsite⟩ := hsq blk hblk hs
+    refine ⟨hab, fun u hu => ?_⟩
+    rw [hA _ (IndexMap.block_lt hblk hu), hB _ (IndexMap.block_lt hblk (by omega)),
+      evalE_site rd f s.a, evalE_site rd f s.b, hsite u hu]
+  rw [hlin, hrows i hi, directTerms_sum _ h1 h2' _ _ hsq', hsource, Finset.sum_range]
+  refine Finset.sum_congr rfl fun t _ => ?_
+  have ht := t.isLt
+  split_ifs with hc
+  · rw [hA _ (IndexMap.block_lt hblk ht), hB _ (IndexMap.block_lt hblk hc.2)]
+  · rfl
+
+/-- **The constant `p − 1` reads `−1`** in a field of characteristic `p` decoding the naturals
+below `p` to their casts. -/
+theorem decode_pred_char {f s : ℕ}
+    (hdec : ∀ c < (ir.field f).characteristic, (I f).decode c = (c : (I f).K))
+    (hchar : CharP (I f).K (ir.field f).characteristic) (hs : s + 1 = (ir.field f).characteristic) :
+    (I f).decode s = -1 := by
+  rw [hdec s (by omega)]
+  have h : ((s + 1 : ℕ) : (I f).K) = 0 := by
+    rw [hs]
+    exact CharP.cast_eq_zero _ _
+  push_cast at h
+  linear_combination h
+
+/-- **Where its products predicate holds, a directly realized convolution's reading is its
+source** (`DirectOkAt`): the reading is the committed `C`, of the source's length; the products
+predicate states `C − Σ_rows (ia a)(ib b) = 0` (its constant `p − 1` reading `−1`), and the sums
+read the source (`directSums_eq_source`). -/
+theorem directRead_eq_source (ho : ir.RefsOrdered) {rd : ir.Valuation I} {d : ℕ}
+    (hzero : ∀ v, ir.zeroConst v = true → ir.valueField v = ir.domainField d →
+      ∀ i, ir.evalE rd (ir.domainField d) (.leaf v) i = 0)
+    (hdec : ∀ c < (ir.field (ir.domainField d)).characteristic,
+      (I (ir.domainField d)).decode c = (c : (I (ir.domainField d)).K))
+    (hchar : CharP (I (ir.domainField d)).K (ir.field (ir.domainField d)).characteristic)
+    {c : SpectralConv} (hc : ir.DirectOkAt d c)
+    (hprod : ir.HoldsWith rd (ir.predicate c.products).body) :
+    ir.exprLen (.ref c.read) = ir.exprLen (.ref c.source) ∧
+      ∀ i < ir.exprLen (.ref c.source),
+        ir.evalE rd (ir.domainField d) (.ref c.source) i =
+          ir.evalE rd (ir.domainField d) (.ref c.read) i := by
+  unfold DirectOkAt at hc
+  split at hc
+  case h_2 => exact hc.elim
+  rename_i s C d' lhs z t hsrc hread hbody
+  split at hc
+  case h_2 => exact hc.elim
+  rename_i q hq
+  obtain ⟨hdd, -, -, F⟩ := hc
+  subst d'
+  have F' := F
+  obtain ⟨hsl, hrl, -, hFla, hmA, -, hzs, hfs, -, -, hla, -, hCsz, hCv, hlenP, -, -, hneg, -,
+    -, -⟩ := F'
+  set f := ir.domainField d with hfdef
+  have hS := Expr.eq_of_convSource? hsrc
+  have hQ := Expr.eq_of_directProducts? hq
+  rw [hFla] at hS
+  have hlenS : ir.exprLen (.ref c.source) = c.blocks * (c.left + c.right - 1) := by
+    rw [exprLen_ref ho hsl, hS, exprLen_apply, exprLen_mul, exprLen_reindex, hmA,
+      IndexMap.size_convLeft hla]
+    simp only [NamedOp.cols, NamedOp.rows, Nat.mul_one]
+    rw [← Nat.mul_assoc, Nat.mul_div_cancel _ hla]
+  have hlenR : ir.exprLen (.ref c.read) = c.blocks * (c.left + c.right - 1) := by
+    rw [exprLen_ref ho hrl, hread, exprLen_leaf, hCsz]
+  refine ⟨hlenR.trans hlenS.symm, fun i hi => ?_⟩
+  rw [hlenS] at hi
+  have hz := hzero z (hzs z (by simp)) (hfs z (by simp))
+  have hs1 := decode_pred_char (f := f) hdec hchar hneg
+  have hh : ir.HoldsWith rd (ir.predicate c.products).body := hprod
+  rw [hbody, hQ] at hh
+  have h1 := hh i (by rw [exprLen_add, hlenP]; exact hi)
+  simp only [evalWith] at h1
+  rw [evalE_add, evalE_scale_const, hs1, hz] at h1
+  rw [← directSums_eq_source ho hzero hdec hsrc F i hi, evalE_ref ho rd f hrl, hread,
+    ← evalE_of_idView rd f hCv i hi]
+  linear_combination -h1
+
+/-- **The products predicate of a directly realized convolution** is a field `equal` of the program
+whose target is no realization's, and it has no committed reading besides `C`. -/
+theorem DirectOkAt.products {d : ℕ} {c : SpectralConv} (hc : ir.DirectOkAt d c) :
+    (c.products < ir.predicates.length ∧ ∃ lhs z t,
+      (ir.predicate c.products).body = .equal d lhs (.leaf z) t ∧ t.isRealized = false) ∧
+      c.committed = none := by
+  unfold DirectOkAt at hc
+  split at hc
+  case h_2 => exact hc.elim
+  rename_i s C d' lhs z t _ _ hbody
+  split at hc
+  case h_2 => exact hc.elim
+  obtain ⟨rfl, ht, hcm, F⟩ := hc
+  exact ⟨⟨F.2.2.1, lhs, z, t, hbody, ht⟩, hcm⟩
+
+/-- **Where its products predicate holds, a realized convolution's reading is its source**
+(`ConvRealizedAt`: `directRead_eq_source`, `convRead_eq_source`). -/
+theorem convRealized_read_eq_source (ho : ir.RefsOrdered) {rd : ir.Valuation I} {d : ℕ}
+    (hzero : ∀ v, ir.zeroConst v = true → ir.valueField v = ir.domainField d →
+      ∀ i, ir.evalE rd (ir.domainField d) (.leaf v) i = 0)
+    (hdec : ∀ c < (ir.field (ir.domainField d)).characteristic,
+      (I (ir.domainField d)).decode c = (c : (I (ir.domainField d)).K))
+    (hchar : CharP (I (ir.domainField d)).K (ir.field (ir.domainField d)).characteristic)
+    {c : SpectralConv} (hc : ir.ConvRealizedAt d c)
+    (hprod : ir.HoldsWith rd (ir.predicate c.products).body) :
+    ir.exprLen (.ref c.read) = ir.exprLen (.ref c.source) ∧
+      ∀ i < ir.exprLen (.ref c.source),
+        ir.evalE rd (ir.domainField d) (.ref c.source) i =
+          ir.evalE rd (ir.domainField d) (.ref c.read) i := by
+  unfold ConvRealizedAt at hc
+  split at hc
+  · exact directRead_eq_source ho hzero hdec hchar hc hprod
+  · exact convRead_eq_source ho hzero hdec hchar hc hprod
+
+/-- **The products predicate of a realized convolution** is a field `equal` of the program whose
+target is no realization's. -/
+theorem ConvRealizedAt.products {d : ℕ} {c : SpectralConv} (hc : ir.ConvRealizedAt d c) :
+    c.products < ir.predicates.length ∧ ∃ lhs z t,
+      (ir.predicate c.products).body = .equal d lhs (.leaf z) t ∧ t.isRealized = false := by
+  unfold ConvRealizedAt at hc
+  split at hc
+  · exact hc.products.1
+  · exact ConvOkAt.products hc
+
+/-- **The committed reading of a realized convolution is linked to its reading** (a directly
+realized one has none). -/
+theorem ConvRealizedAt.committed {d : ℕ} {c : SpectralConv} (hc : ir.ConvRealizedAt d c)
+    {kc r : ℕ} (hcm : c.committed = some (kc, r)) :
+    r < ir.predicates.length ∧ ir.exprLen (.ref kc) = ir.exprLen (.ref c.read) ∧
+      ∃ t, (ir.predicate r).body = .equal d (.ref kc) (.ref c.read) t ∧ t.isRealized = false := by
+  unfold ConvRealizedAt at hc
+  split at hc
+  · rw [hc.products.2] at hcm
+    cases hcm
+  · exact ConvOkAt.committed hc hcm
 
 /-- **A zero constant reads `0`** in every environment where its field decodes `0` to `0`. -/
 theorem evalE_leaf_zeroConst (e : ir.Env I) {f v : ℕ} (hv : ir.zeroConst v = true)
@@ -759,24 +1123,45 @@ theorem evalE_leaf_zeroConst (e : ir.Env I) {f v : ℕ} (hv : ir.zeroConst v = t
     rw [h00, castElt_decode hf, h0]
   · cases hv
 
+/-- **A spectrally realized convolution's facts at a reader**: its products predicate holds, and
+so does its committed reading's row, if it has one. -/
+def SpecHolds (rd : ir.Valuation I) (c : SpectralConv) : Prop :=
+  ir.HoldsWith rd (ir.predicate c.products).body ∧
+    ∀ kc r, c.committed = some (kc, r) → ir.HoldsWith rd (ir.predicate r).body
+
 /-- **The shared expressions of a convolution and its reading agree below their length**
 (`ConvPair`), where every spectrally realized convolution's products predicate holds
-(`convRead_eq_source`). -/
+(`convRead_eq_source`), and so do a committed reading and its convolution where its row holds. -/
 theorem convPair_agree (ho : ir.RefsOrdered) {rd : ir.Valuation I} {d : ℕ}
     (hzero : ∀ v, ir.zeroConst v = true → ir.valueField v = ir.domainField d →
       ∀ i, ir.evalE rd (ir.domainField d) (.leaf v) i = 0)
     (hdec : ∀ c < (ir.field (ir.domainField d)).characteristic,
       (I (ir.domainField d)).decode c = (c : (I (ir.domainField d)).K))
     (hchar : CharP (I (ir.domainField d)).K (ir.field (ir.domainField d)).characteristic)
-    (hprod : ∀ c ∈ ir.convs, ir.ConvOkAt d c → ir.HoldsWith rd (ir.predicate c.products).body) :
+    (hprod : ∀ c ∈ ir.convs, ir.ConvRealizedAt d c → ir.SpecHolds rd c) :
     ∀ k k', decide (ir.ConvPair d k k') = true →
       ir.refLen ir.exprs.length k' = ir.refLen ir.exprs.length k ∧
         ∀ i < ir.refLen ir.exprs.length k,
           ir.refVal rd ir.exprs.length (ir.domainField d) k i =
             ir.refVal rd ir.exprs.length (ir.domainField d) k' i := by
   intro k k' h
-  obtain ⟨c, hc, rfl, rfl, hok⟩ := of_decide_eq_true h
-  exact convRead_eq_source ho hzero hdec hchar hok (hprod c hc hok)
+  obtain ⟨c, hc, rfl, hk', hok⟩ := of_decide_eq_true h
+  obtain ⟨hp, hrow⟩ := hprod c hc hok
+  obtain ⟨hl, he⟩ := convRealized_read_eq_source ho hzero hdec hchar hok hp
+  rcases hk' with rfl | hk'
+  · exact ⟨hl, he⟩
+  · rcases hcm : c.committed with _ | ⟨kc, r⟩
+    · rw [hcm] at hk'
+      cases hk'
+    · rw [hcm] at hk'
+      simp only [Option.map_some, Option.some.injEq] at hk'
+      subst hk'
+      obtain ⟨-, hlen, t, hb, -⟩ := hok.committed hcm
+      have hh := hrow kc r hcm
+      rw [hb] at hh
+      refine ⟨hlen.trans hl, fun i hi => (he i hi).trans (hh i ?_).symm⟩
+      rw [hlen, hl]
+      exact hi
 
 /-- **A realized predicate's sides read as the source's** (`RealizedAdmits`): `q` is a field
 `equal` whose sides have the lengths of `e` and `e'` and their values below them, where the
@@ -826,7 +1211,9 @@ theorem fieldEq_of_realized (ho : ir.RefsOrdered) {rd : ir.Valuation I} {d : ℕ
     ∀ i < ir.exprLen e, ir.evalWith rd d e i = ir.evalWith rd d e' i := by
   have hP := convPair_agree ho hzero hdec hchar fun c _ hok => by
     obtain ⟨hpl, lhs, z, t', hb, ht'⟩ := hok.products
-    exact hnr c.products hpl _ _ _ _ hb ht'
+    refine ⟨hnr c.products hpl _ _ _ _ hb ht', fun kc r hcm => ?_⟩
+    obtain ⟨hr, -, t'', hb', ht''⟩ := hok.committed hcm
+    exact hnr r hr _ _ _ _ hb' ht''
   obtain ⟨hq, E, E', t, hbody, ht, hl, hl', hE, hE'⟩ := realized_sides hP hR hs hs'
   have hq' := hnr q hq _ _ _ _ hbody ht
   rw [hbody] at hq'
@@ -842,7 +1229,7 @@ theorem holdsWith_realized_of_fieldEq (ho : ir.RefsOrdered) {rd : ir.Valuation I
     (hdec : ∀ c < (ir.field (ir.domainField d)).characteristic,
       (I (ir.domainField d)).decode c = (c : (I (ir.domainField d)).K))
     (hchar : CharP (I (ir.domainField d)).K (ir.field (ir.domainField d)).characteristic)
-    (hprod : ∀ c ∈ ir.convs, ir.ConvOkAt d c → ir.HoldsWith rd (ir.predicate c.products).body)
+    (hprod : ∀ c ∈ ir.convs, ir.ConvRealizedAt d c → ir.SpecHolds rd c)
     {e e' : Expr} {q : ℕ} (hR : ir.RealizedAdmits d e e' q) (hs : ir.exprShapeOk e = true)
     (hs' : ir.exprShapeOk e' = true) (hlen : ir.exprLen e' = ir.exprLen e)
     (hfe : ∀ i < ir.exprLen e, ir.evalWith rd d e i = ir.evalWith rd d e' i) :

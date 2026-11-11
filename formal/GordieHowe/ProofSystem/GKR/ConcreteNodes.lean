@@ -63,12 +63,14 @@ theorem gf2_256SubfieldGen_ne_one : gf2_256SubfieldGen ≠ (1 : GF2_256) := by
   norm_num at ho
 
 /-- The GKR sumcheck nodes of `GF2_128`: `poly_evaluation_points_ = [0, 1, g, …]`
-(`lib/gf2k/gf2_128.h:136-141`). -/
+(`lib/gf2k/gf2_128.h:136-141`). The third node is the subfield generator `g`, not `2`, which is
+`0` in characteristic two. -/
 def gf2_128Nodes : Sumcheck.Nodes GF2_128 :=
   zeroOneGen gf2_128SubfieldGen gf2_128SubfieldGen_ne_zero gf2_128SubfieldGen_ne_one
 
 /-- The GKR sumcheck nodes of `GF2_256`: `poly_evaluation_points_ = [0, 1, g, …]`
-(`lib/gf2k/gf2_256.h:130-135`). -/
+(`lib/gf2k/gf2_256.h:130-135`). The third node is the subfield generator `g`, not `2`, which is
+`0` in characteristic two. -/
 def gf2_256Nodes : Sumcheck.Nodes GF2_256 :=
   zeroOneGen gf2_256SubfieldGen gf2_256SubfieldGen_ne_zero gf2_256SubfieldGen_ne_one
 

@@ -16,7 +16,7 @@ distinguishers with a query budget (`GordieHowe.QROM.ZeroKnowledgeAfterAdaptive`
 slot before the last slot. This file proves the same bound against distinguishers with a request
 budget (`Distinguisher.RequestBudget`), which charges only the query slots before each proof query, so
 the queries after a branch's last proof query, wherever it falls at run time, are unbounded: everlasting
-zero knowledge (the paper's Definition 6.2, `def:narg-zk-post`). Only the O2H step changes
+zero knowledge (the paper's `def:narg-zk-post`). Only the O2H step changes
 (`Distinguisher.advantage_acceptProbOn_made_le_of_fresh_secret_requestBudget`).
 
 - `GordieHowe.QROM.EverlastingZeroKnowledgePure`: the notion for the pure games.
@@ -38,29 +38,30 @@ variable {X Y Stmt Wit Proof Coins SimCoins : Type*} (rel : Stmt → Wit → Pro
   [Fintype Coins] [Fintype SimCoins]
 
 /-- **Everlasting zero knowledge, against distinguishers with a request budget** (Unruh
-2017 Definition 6, p. 14, with the query bound of the paper's Definition 6.2, `def:narg-zk-post`).
+2017 Definition 6, p. 14, with the query bound of the paper's `def:narg-zk-post`).
 For every query bound `t`, every distinguisher with `m` slots of `n` parallel queries or one proof query
 and a request budget of `q` slots (`Distinguisher.RequestBudget`: on every branch at most `q` slots
 before each proof query are queries, at slots and with proof queries the branch chooses at run time; after
 its last proof query the branch queries at any number of slots) with `n * q ≤ t`, against environments
 answering `Q` proof queries, and every final unitary `post` that depends on the whole oracle in force at
-the end and keeps the halted branches, has advantage at most `ε t Q` against the simulator `S`.
-Request slots are not counted. -/
-def EverlastingZeroKnowledgePure (P : NARG.ProverFn X Y Stmt Wit Proof Coins)
+the end and keeps the halted branches, has advantage at most `ε t Q` between the prover `P`, its
+coins drawn from `μ`, and the simulator `S`. Request slots are not counted. -/
+def EverlastingZeroKnowledgePure (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ : PMF Coins)
     (S : NARG.SimulatorFn X Y Stmt Proof SimCoins) (ε : ℕ → ℕ → ℝ) : Prop :=
   ∀ (t : ℕ) (W : Type) [Fintype W] (n m Q q : ℕ)
     (D : Quantum.Distinguisher W X Y (ProofQuery Stmt Wit) Proof n m)
     (post : (X → Y) → Quantum.QState (Quantum.DReg W n X Y (ProofQuery Stmt Wit) Proof) ≃ₗᵢ[ℂ]
       Quantum.QState (Quantum.DReg W n X Y (ProofQuery Stmt Wit) Proof)) (rb : D.RequestBudget q),
-    rb.PostRejectsHalted post → n * q ≤ t → QROM.advantage (Q := Q) rel P S D post ≤ ε t Q
+    rb.PostRejectsHalted post → n * q ≤ t → QROM.advantage (Q := Q) rel P μ S D post ≤ ε t Q
 
 variable {rel}
 
 /-- A larger error bound. -/
 theorem EverlastingZeroKnowledgePure.mono {P : NARG.ProverFn X Y Stmt Wit Proof Coins}
+    {μ : PMF Coins}
     {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} {ε ε' : ℕ → ℕ → ℝ}
-    (h : EverlastingZeroKnowledgePure rel P S ε) (hε : ∀ t Q, ε t Q ≤ ε' t Q) :
-    EverlastingZeroKnowledgePure rel P S ε' :=
+    (h : EverlastingZeroKnowledgePure rel P μ S ε) (hε : ∀ t Q, ε t Q ≤ ε' t Q) :
+    EverlastingZeroKnowledgePure rel P μ S ε' :=
   fun t W _ n m Q q D post rb hpost hD => (h t W n m Q q D post rb hpost hD).trans (hε t Q)
 
 end Notion
@@ -72,7 +73,8 @@ section Salted
 variable [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype Sd]
   [DecidableEq Sd] [Nonempty Sd] [Fintype C] [Nonempty C] [Fintype SC] [Nonempty SC]
   [Fintype Proof] [DecidableEq Proof] (saltOf : X → Option Sd) (rel : Stmt → Wit → Prop) [DecidableRel rel]
-  (P : NARG.ProverFn X Y Stmt Wit Proof (SaltedCoins Sd C)) (S : NARG.SimulatorFn X Y Stmt Proof (SaltedCoins Sd SC))
+  (P : NARG.ProverFn X Y Stmt Wit Proof (SaltedCoins Sd C)) (μ : PMF (SaltedCoins Sd C))
+    (S : NARG.SimulatorFn X Y Stmt Proof (SaltedCoins Sd SC))
 
 variable [AddCommGroup Y] [Fintype Stmt] [DecidableEq Stmt] [Fintype Wit] [DecidableEq Wit]
   {W : Type} [Fintype W] {n m Q : ℕ}
@@ -126,10 +128,12 @@ theorem abs_stepEnvS_sub_le_requestBudget {q : ℕ} (rb : D.RequestBudget q)
 most `4 q √(n / |Sd|)` (two O2H steps over the `q` query slots of a request budget `rb`) plus
 `2 j / |Sd|` (an earlier simulator drew proof query `j`'s salt, twice) plus `𝔼 H, η H` (proof query
 `j`'s kernel). -/
-theorem abs_acceptProb_hybridEnv_sub_le_requestBudget {η : (X → Y) → ℝ} (hloc : SaltedLocal saltOf P S)
+theorem abs_acceptProb_hybridEnv_sub_le_requestBudget {η : (X → Y) → ℝ}
+    (hloc : SaltedLocal saltOf P μ S)
     (hclose : SliceClose saltOf rel P S η) {q : ℕ} (rb : D.RequestBudget q)
     (hpost : rb.PostRejectsHalted post) (j : Fin Q) :
-    |D.acceptProb (hybridEnv rel P S Q j) post - D.acceptProb (hybridEnv rel P S Q (j + 1)) post| ≤
+    |D.acceptProb (hybridEnv rel P μ S Q j) post - D.acceptProb
+      (hybridEnv rel P μ S Q (j + 1)) post| ≤
       4 * q * √(n / Fintype.card Sd) + 2 * j / Fintype.card Sd +
         𝔼[H ← (X → Y) : η H] := by
   have hsplit : ∀ E : Quantum.Env (HTape X Y Sd C SC Q) (ProofQuery Stmt Wit) Proof X Y Q, D.acceptProb E post =
@@ -137,15 +141,15 @@ theorem abs_acceptProb_hybridEnv_sub_le_requestBudget {η : (X → Y) → ℝ} (
     fun E => by
       rw [← Quantum.Distinguisher.acceptProbOn_univ, D.acceptProbOn_eq_add post E Set.univ (Quantum.madeLogs (j : ℕ)),
         Set.univ_inter, Set.univ_inter]
-  rw [hsplit, hsplit, acceptProbOn_hybridEnv_notMade rel P S D post j,
-    add_sub_add_right_eq_sub, acceptProbOn_hybridEnv_eq_relabelP saltOf rel P S D post hloc j,
-    acceptProbOn_hybridEnv_eq_relabelS saltOf rel P S D post hloc j]
+  rw [hsplit, hsplit, acceptProbOn_hybridEnv_notMade rel P μ S D post j,
+    add_sub_add_right_eq_sub, acceptProbOn_hybridEnv_eq_relabelP saltOf rel P μ S D post hloc j,
+    acceptProbOn_hybridEnv_eq_relabelS saltOf rel P μ S D post hloc j]
   have hsqrt : √(n * (Fintype.card Sd : ℝ)⁻¹) = √(n / Fintype.card Sd) := by rw [div_eq_mul_inv]
-  have h1 := abs_relabelEnvP_sub_le saltOf rel P S D post hloc j
+  have h1 := abs_relabelEnvP_sub_le saltOf rel P μ S D post hloc j
   have h2 := abs_stepEnvP_sub_le_requestBudget saltOf rel P S D post rb hpost j
-  have h3 := abs_stepEnv_kernel_le saltOf rel P S D post hloc hclose j
+  have h3 := abs_stepEnv_kernel_le saltOf rel P μ S D post hloc hclose j
   have h4 := abs_stepEnvS_sub_le_requestBudget saltOf rel P S D post rb hpost j
-  have h5 := abs_relabelEnvS_sub_le saltOf rel P S D post hloc j
+  have h5 := abs_relabelEnvS_sub_le saltOf rel P μ S D post hloc j
   rw [hsqrt] at h2 h4
   have e : ∀ a b c d e f : ℝ, |a - f| ≤ |a - b| + |c - b| + |c - d| + |d - e| + |f - e| := by
     intro a b c d e f
@@ -178,8 +182,8 @@ branches, has advantage at most `4 Q t / √|Sd| + Q (Q - 1) / |Sd| + Q · 𝔼 
 simulator `S`. The proof is that of `zeroKnowledgeAfterAdaptive_of_sliceClose`, with the O2H step
 of `Distinguisher.advantage_acceptProbOn_made_le_of_fresh_secret_requestBudget`. -/
 theorem everlastingZeroKnowledgePure_of_sliceClose {η : (X → Y) → ℝ}
-    (hloc : SaltedLocal saltOf P S) (hclose : SliceClose saltOf rel P S η) :
-    EverlastingZeroKnowledgePure rel P S fun t Q =>
+    (hloc : SaltedLocal saltOf P μ S) (hclose : SliceClose saltOf rel P S η) :
+    EverlastingZeroKnowledgePure rel P μ S fun t Q =>
       4 * Q * t / √(Fintype.card Sd) + Q * (Q - 1) / Fintype.card Sd + Q * 𝔼[H ← (X → Y) : η H] := by
   intro t W _ n m Q q D post rb hpost hD
   have hc : (0 : ℝ) < Fintype.card Sd := Nat.cast_pos.2 Fintype.card_pos
@@ -194,15 +198,16 @@ theorem everlastingZeroKnowledgePure_of_sliceClose {η : (X → Y) → ℝ}
             mul_le_mul_of_nonneg_left h1 (by positivity)
         _ = (n * q : ℕ) := by push_cast; ring
         _ ≤ t := by exact_mod_cast hD
-  have hstep : ∀ j : Fin Q, |D.acceptProb (hybridEnv rel P S Q j) post -
-      D.acceptProb (hybridEnv rel P S Q (j + 1)) post| ≤
+  have hstep : ∀ j : Fin Q, |D.acceptProb (hybridEnv rel P μ S Q j) post -
+      D.acceptProb (hybridEnv rel P μ S Q (j + 1)) post| ≤
         4 * t / √(Fintype.card Sd) + 2 * j / Fintype.card Sd + 𝔼[H ← (X → Y) : η H] := fun j => by
-    refine (abs_acceptProb_hybridEnv_sub_le_requestBudget saltOf rel P S D post hloc hclose rb hpost j).trans ?_
+    refine (abs_acceptProb_hybridEnv_sub_le_requestBudget saltOf rel P μ S D post hloc hclose rb hpost j).trans ?_
     have : 4 * (q : ℝ) * √(n / Fintype.card Sd) ≤ 4 * t / √(Fintype.card Sd) := by
       rw [Real.sqrt_div' _ hc.le, mul_div_assoc', mul_assoc]
       gcongr
     linarith
-  refine (advantage_le_sum_hybrid rel D post P S).trans ((Finset.sum_le_sum fun j _ => hstep j).trans ?_)
+  refine (advantage_le_sum_hybrid rel D post P μ S).trans
+      ((Finset.sum_le_sum fun j _ => hstep j).trans ?_)
   rw [Finset.sum_add_distrib, Finset.sum_add_distrib, Finset.sum_const, Finset.sum_const,
     Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, nsmul_eq_mul]
   have hsum : ∑ j : Fin Q, 2 * (j : ℝ) / Fintype.card Sd = Q * (Q - 1) / Fintype.card Sd := by

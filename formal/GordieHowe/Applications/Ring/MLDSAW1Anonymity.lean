@@ -123,7 +123,7 @@ theorem W1Oracles.gOrc_eq_of_split {O : W1Oracles X Y p prims Msg N reps} {H H' 
 /-- The commitment hash read off two oracles with the same first part agrees. -/
 theorem W1Oracles.hOrc_eq_of_split {O : W1Oracles X Y p prims Msg N reps} {H H' : X → Y}
     (h : (O.split H).1 = (O.split H').1) : O.hOrc H = O.hOrc H' := by
-  simp only [W1Oracles.hOrc, O.muOrc_eq_of_split h, O.chOrc_eq_of_split h]
+  simp only [MLDSAOracles.hOrc, O.muOrc_eq_of_split h, O.chOrc_eq_of_split h]
 
 end Split
 
@@ -179,7 +179,7 @@ theorem readsOnly_freshBase [Fintype Y] [DecidableEq Y] [Nonempty Y]
   run_pub _ _ _ _ _ := rfl
   bverify_eq H H' h := by
     funext pk bm σ
-    simp only [w1BaseSigner, O.hOrc_eq_of_split h]
+    simp only [w1BaseSigner, mldsaT0BaseScheme_bverify, O.hOrc_eq_of_split h]
 
 end Run
 
@@ -218,7 +218,8 @@ variable {Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂]
   {sp : RingSignature.OracleSplit Y Y₁ Y₂}
 
 /-- A decoding reading only the first component decodes `y` as `sp⁻¹ ((sp y).1, 0)`. -/
-theorem MaskOracle.ans_eq_of_readsFst {M : MaskOracle X Y p T Msg} (hMsp : M.ReadsFst sp) (y : Y) :
+theorem _root_.GordieHowe.MLDSA.MaskOracle.ans_eq_of_readsFst {M : MaskOracle X Y p T Msg}
+    (hMsp : M.ReadsFst sp) (y : Y) :
     M.ans y = M.ans (sp.symm ((sp y).1, 0)) :=
   hMsp _ _ (by simp)
 
@@ -255,7 +256,7 @@ abbrev hedgedBase : BaseSigner X Y N (w1BaseT prims Msg RMsg (ringCoins (Bytes 3
   w1BaseSigner prims O βmin tol enc (hedgedLoop prims O M βmin k D) bmsg
 
 /-- **The base signer with fresh masks**: `w1BaseSigner` with the loop of the fresh source. -/
-abbrev freshBase : BaseSigner X Y N (w1BaseT prims Msg RMsg (ringCoins (MaskPt T Msg → Y) k D)) :=
+abbrev freshBase : BaseSigner X Y N (w1BaseT prims Msg RMsg (ringCoins (MaskFn T Msg Y) k D)) :=
   w1BaseSigner prims O βmin tol enc (freshLoop prims O M βmin k D) bmsg
 
 variable {TPS : PSTypes} (PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS)
@@ -267,9 +268,10 @@ abbrev hedgedScheme : RingScheme X Y N (ofBaseT (w1BaseT prims Msg RMsg (ringCoi
 
 /-- **The scheme with fresh masks**: `ofBase` of the fresh base signer, with the proof system `PS`
 on the same rings. -/
-abbrev freshScheme : RingScheme X Y N (ofBaseT (w1BaseT prims Msg RMsg (ringCoins (MaskPt T Msg → Y) k D)) TPS) :=
+abbrev freshScheme :
+    RingScheme X Y N (ofBaseT (w1BaseT prims Msg RMsg (ringCoins (MaskFn T Msg Y) k D)) TPS) :=
   @RingSignature.ofBase X Y N _ _ (freshBase prims O M βmin tol enc k D bmsg)
-    (PS)
+    (PS) _
     adm ‹DecidablePred adm›
 
 variable (n : ℕ)
@@ -279,6 +281,7 @@ local notation "Bf" => freshBase prims O M βmin tol enc k D bmsg
 local notation "Sh" => hedgedScheme prims O M βmin tol enc k D bmsg PS adm
 local notation "Sf" => freshScheme prims O M βmin tol enc k D bmsg PS adm
 
+omit [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **Hedged signing is signing with fresh masks read off the oracle**: at the oracle `H`, the
 hedged scheme's signer with the nonces `rv` is the fresh scheme's signer whose mask function of
 call `c` is `u ↦ H (M.pt (rv c, u))`, the values of the oracle on the slice of the nonce. -/
@@ -301,7 +304,8 @@ theorem hedgedScheme.run_sign (kp : (Bh).PK × (Bh).SK) (R : KeyRing (PubKey p p
     rfl
   · rfl
 
-variable (n : ℕ)
+variable (n : ℕ) [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
 
 /-- **The anonymity challenger of the hedged scheme with the signer on other rings**: the
 challenges and signatures of the hedged scheme on the rings `adm`, answered as the anonymity
@@ -329,7 +333,7 @@ noncomputable def restrChallenger (adm' : KeyRing (PubKey p prims) N → Prop) [
     · simp
     · simp
 
-omit [Fintype Y] [DecidableEq Y] [Nonempty Y] in
+omit [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **At `adm' = adm` the challenger is the anonymity challenger** of the hedged scheme. -/
 theorem anonChallenger_eq_restrChallenger (keys : Fin n → Bytes 32) (b : Bool) (Q : ℕ) :
     anonChallenger (Sh) n keys b Q =
@@ -349,7 +353,7 @@ noncomputable def restrAns (adm' : KeyRing (PubKey p prims) N → Prop) [Decidab
     else none
   else none
 
-omit [Fintype Y] [DecidableEq Y] [Nonempty Y] in
+omit [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **`restrChallenger` answers request by request** by `restrAns`, and reprograms nothing. -/
 theorem restrChallenger_answersBy (adm' : KeyRing (PubKey p prims) N → Prop) [DecidablePred adm']
     (keys : Fin n → Bytes 32) (b : Bool) (Q : ℕ) :
@@ -380,6 +384,8 @@ noncomputable def hopAns (keys : Fin n → Bytes 32) (b : Bool) (Q : ℕ)
     else none
   else none
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] in
 /-- **Fresh signing reads the oracle only at the base signer's points and the prover's points**:
 at two oracles with the same first part of the split at which every honest proof is the same, the
 fresh scheme's signer has the same output. -/
@@ -570,7 +576,8 @@ theorem hedgedScheme.anonAdvantage_le [Nonempty X] [AddGroup Y] (hM : Function.I
 
 section Restr
 
-omit [Fintype X] [DecidableEq X] in
+omit [Fintype X] [DecidableEq X] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **Fresh signing reads the masks only through their decodings**: the fresh scheme's signer
 with mask functions `g` and `g'` whose decoded masks agree has the same output. -/
 theorem freshScheme.run_sign_mask_congr (adm' : KeyRing (PubKey p prims) N → Prop) [DecidablePred adm']
@@ -584,7 +591,7 @@ theorem freshScheme.run_sign_mask_congr (adm' : KeyRing (PubKey p prims) N → P
       erw [run_bsign_w1BaseSigner prims O βmin tol enc (MaskSource.fresh M) k D bmsg sk R i m (g, uv)
         H, run_bsign_w1BaseSigner prims O βmin tol enc (MaskSource.fresh M) k D bmsg sk R i m
         (g', uv) H]
-      simp only [MaskSource.fresh, OracleProg.run_pure, hg]
+      simp only [OracleProg.run_pure, hg]
   unfold freshScheme RingSignature.ofBase
   dsimp only
   split_ifs
@@ -620,7 +627,9 @@ noncomputable def restrHopAns (adm' : KeyRing (PubKey p prims) N → Prop) [Deci
     else none
   else none
 
-omit [Fintype X] [DecidableEq X] [Fintype Y₁] [Fintype Y₂] in
+omit [Fintype X] [DecidableEq X] [Fintype Y₁] [Fintype Y₂] [Fintype TPS.Proof]
+  [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
+  [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **`restrAns` is `restrHopAns` at the base components of the oracle on the slices** of the
 nonces, for a mask decoding reading only the first component. -/
 theorem restrAns_eq_restrHopAns (adm' : KeyRing (PubKey p prims) N → Prop) [DecidablePred adm']
@@ -912,7 +921,8 @@ theorem pubWI_acceptAll [Fintype X] [Fintype Y] [Nonempty Y] {Stmt Wit Pub Ω : 
 
 /-- **Every scheme has at most `card` valid challenges**: the hypothesis `hC` holds at `C` the
 number of challenges. -/
-theorem card_filter_valid_le {TS : RingTypes} {S : RingScheme X Y N TS} {n : ℕ} (keys : Fin n → S.KeyCoins) :
+theorem card_filter_valid_le {TS : RingTypes} [Fintype TS.PK] [DecidableEq TS.PK] [Fintype TS.Msg]
+    {S : RingScheme X Y N TS} {n : ℕ} (keys : Fin n → S.KeyCoins) :
     (Finset.univ.filter fun c : RingSignature.AnonRequest S n => c.Valid keys).card ≤
       Fintype.card (RingSignature.AnonRequest S n) :=
   Finset.card_filter_le _ _
@@ -932,7 +942,9 @@ variable [NeZero (bucketCount p)] [Nonempty (MaskBox p)] [Fintype Msg] [Decidabl
   {O : W1Oracles X Y p (concretePrimitivesKeyGen p) Msg N reps} {M : MaskOracle X Y p T Msg}
   {βmin : ℚ≥0} {tol k D : ℕ} [NeZero D] {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
   {bmsg : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → RMsg → Msg}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase p O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
+  {PS : ProofSystem X Y (RingSignature.RingStmt (w1ConcreteBase p O M βmin tol k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) TPS}
   {adm : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → Prop} [DecidablePred adm] {n : ℕ}
 
 open Classical in

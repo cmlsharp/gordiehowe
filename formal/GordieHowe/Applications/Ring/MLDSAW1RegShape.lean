@@ -49,7 +49,8 @@ variable {p : Params} {T : ℕ} {Msg : Type} {N reps : ℕ}
   {Λ : SiteLayout Mg} {b : ℕ} [∀ j i, Fintype ((Mc.comp j).MessageWrite i)]
   {E : (j : ι) → (Mc.comp j).Encoder}
   {Vr : W1ExpStmt prims RMsg N → FullTr P τ → Bool}
-  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R]
+  [DecidableEq R] [Nonempty R]
   {honest : RingSignature.RingWit (freshBase prims O Mo βmin tol enc k D bmsg) → R →
     CausalProver P τ (W1ExpStmt prims RMsg N)}
   {adm : KeyRing (PubKey p prims) N → Prop}
@@ -72,7 +73,7 @@ variable {Frg : Type}
 
 section RegShape
 
-omit [Nonempty Y₁] in
+omit [Nonempty Y₁] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The shape of the absorbed adversary at any side coins**: `AlgShape.absorbAssignS` at `A₀`'s
 shape, one oracle read, one pad sub-slot and `qOut + qSt` side reads. -/
 theorem absorbAssign_kfRelaySide_toShape
@@ -84,10 +85,10 @@ theorem absorbAssign_kfRelaySide_toShape
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
     [Inhabited Mc.NIProof] (hO : O.ReadsFst sp)
     (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁)
-    (idle : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
     (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁) :
-    (A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+    (A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
         (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
           (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
           (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -97,7 +98,7 @@ theorem absorbAssign_kfRelaySide_toShape
         (w1KFStmt prims O Mo βmin tol enc k D bmsg sp).qSt) :=
   rfl
 
-omit [Nonempty Y₁] in
+omit [Nonempty Y₁] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The composed registers of the simulation-extraction adversary at any side coins** are the
 composed work register (`KindShape.CW`) of the trace-preserving shape of `seAlgKFS` at the
 restricted (`AlgShape.restrictAtS`) shape of `absorbAssign_kfRelaySide_toShape`. -/
@@ -110,17 +111,17 @@ theorem reg_seAlgKF_kfRelaySide
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
     {Stmt Wit : Type} [Fintype Stmt]
     [DecidableEq Stmt] [Inhabited Stmt] {rel : Stmt → Wit → Prop} [DecidableRel rel]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit} {dummyS : Stmt}
+    {penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → ProofQuery Stmt Wit} {dummyS : Stmt}
     [Inhabited Mc.NIProof] (hO : O.ReadsFst sp)
     (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁)
-    (idle : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     {SC' : Type} [Fintype SC'] [DecidableEq SC'] (prf : Frg → Option Mc.NIProof)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC')
     (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁) :
     SPBCS.Reg (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS) prf ξ Q
-        (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+        (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
         (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
           (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
           (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -133,6 +134,7 @@ theorem reg_seAlgKF_kfRelaySide
         (simExtChallenger Psim Q) :=
   rfl
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The composed registers of the simulation-extraction adversary do not depend on the side
 coins** (`reg_seAlgKF_kfRelaySide` at `sc` and `sc'`). -/
 theorem reg_seAlgKF_kfRelaySide_coins
@@ -144,24 +146,24 @@ theorem reg_seAlgKF_kfRelaySide_coins
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
     {Stmt Wit : Type} [Fintype Stmt]
     [DecidableEq Stmt] [Inhabited Stmt] {rel : Stmt → Wit → Prop} [DecidableRel rel]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit} {dummyS : Stmt}
+    {penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → ProofQuery Stmt Wit} {dummyS : Stmt}
     [Inhabited Mc.NIProof] (hO : O.ReadsFst sp)
     (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁)
-    (idle : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     {SC' : Type} [Fintype SC'] [DecidableEq SC'] (prf : Frg → Option Mc.NIProof)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC')
     (sc sc' : Fin Q → KFCoins (p := p) (T := T) k D Y₁) :
     SPBCS.Reg (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS) prf ξ Q
-        (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+        (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
         (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
           (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
           (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
           (w1DummyR (PS := PSh) (Q := Q)) sc ω idle) Q).restrictAt sp
           ω).mapOut Prod.fst)) Psim Q =
       SPBCS.Reg (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS) prf ξ Q
-        (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+        (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
         (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
           (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
           (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))

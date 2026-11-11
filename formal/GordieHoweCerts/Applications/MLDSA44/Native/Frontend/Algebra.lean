@@ -646,7 +646,7 @@ theorem decompose {e : program.Env interp} (hs : ASat e) {m : ℕ} (hm : m < 102
 theorem eq_of_modZero {rd : program.Valuation interp} {d : ℕ} {l r : RealizedProgram.Expr} {real : RealizedProgram.ModRealization}
     (h : program.HoldsWith rd (.mod d 0 l r real)) {i : ℕ} (hi : i < program.exprLen l) :
     program.evalIntWith rd d l i = program.evalIntWith rd d r i := by
-  have := h.1 i hi
+  have := h i hi
   rwa [Nat.cast_zero, zero_dvd_iff, sub_eq_zero] at this
 
 /-- The characteristic of `F_q^6` as the program reads it. -/

@@ -87,8 +87,8 @@ theorem ref0_eq (e : program.Env interp) {t : ℕ} (ht : t < 528) :
   have hz : program.evalE (program.reader e) 0 (.leaf 0) 0 = 0 := by
     have := TableSelect.evalE_zero (f := 0) domainField_shape e
     rwa [MldsaRingFront.shape.2.2.2.1] at this
-  rw [RealizedProgram.evalE_ref MldsaRingRelation.refsOrdered _ _
-      (by have := MldsaRingFront.lt513 (program := program); omega),
+  rw [RealizedProgram.evalE_ref MldsaRandomPoint.refsOrdered _ _
+      (by have := MldsaRingFront.ltCross (program := program); omega),
     MldsaRingFront.expr0, evalE_reindex, evalE_concat, exprLen_leaf, MldsaRingFront.muSize]
   by_cases h : t < 512
   · have he : IndexMap.entry [(0, 1, 513), (512, 0, 15)] t = t := by
@@ -104,11 +104,11 @@ theorem ref0_eq (e : program.Env interp) {t : ℕ} (ht : t < 528) :
 theorem ref1_eq (rd : program.Valuation interp) {c : ℕ} (hc : c < 5144) :
     program.evalE rd 0 (.ref 1) c =
       if c < 5120 then
-        (if c < 4096 then program.evalE rd 0 (.leaf (MldsaRingRelation.aHat program)) c
-          else program.evalE rd 0 (.leaf (MldsaRingRelation.t1 program)) (c - 4096))
+        (if c < 4096 then program.evalE rd 0 (.leaf (MldsaRandomPoint.aHat program)) c
+          else program.evalE rd 0 (.leaf (MldsaRandomPoint.t1 program)) (c - 4096))
       else program.evalE rd 0 (.apply (.batched 24 (.fromDigits 22 2)) (.ref 0)) (c - 5120) := by
-  rw [RealizedProgram.evalE_ref MldsaRingRelation.refsOrdered _ _
-      (by have := MldsaRingFront.lt513 (program := program); omega),
+  rw [RealizedProgram.evalE_ref MldsaRandomPoint.refsOrdered _ _
+      (by have := MldsaRingFront.ltCross (program := program); omega),
     MldsaRingFront.expr1, evalE_reindex, IndexMap.entry_step_one hc, Nat.zero_add, evalE_concat,
     exprLen_reindex, IndexMap.size_single]
   by_cases h : c < 5120
@@ -122,13 +122,13 @@ theorem ref1_eq (rd : program.Valuation interp) {c : ℕ} (hc : c < 5144) :
 /-- **The record's `â`**: coordinate `c < 4096` is `member.a_hat`'s. -/
 theorem rec_aHat (rd : program.Valuation interp) {c : ℕ} (hc : c < 4096) :
     program.evalE rd 0 (.ref 1) c =
-      program.evalE rd 0 (.leaf (MldsaRingRelation.aHat program)) c := by
+      program.evalE rd 0 (.leaf (MldsaRandomPoint.aHat program)) c := by
   rw [ref1_eq rd (by omega), if_pos (by omega), if_pos hc]
 
 /-- **The record's `t̂`**: coordinate `4096 + c` is `member.t1`'s coordinate `c`. -/
 theorem rec_t1 (rd : program.Valuation interp) {c : ℕ} (hc : c < 1024) :
     program.evalE rd 0 (.ref 1) (4096 + c) =
-      program.evalE rd 0 (.leaf (MldsaRingRelation.t1 program)) c := by
+      program.evalE rd 0 (.leaf (MldsaRandomPoint.t1 program)) c := by
   rw [ref1_eq rd (by omega), if_pos (by omega), if_neg (by omega), Nat.add_sub_cancel_left]
 
 /-- **The record's limb `l`**: coordinate `5120 + l` is `Σ_b 2^b μ_{22 l + b}` of the

@@ -20,6 +20,7 @@ is the whole field (a prime field has no proper subfield); no bit coordinates.
 
 * Its model at the prime node `F_p256` (`p256_model`: the domain's prime-subfield node is the field
   itself, `primeNodesOf`).
+* Its linear integer reading (`p256_readLinear`): the value cast back is the element.
 * Its code arithmetic (`p256_codeHom`): the arithmetic modulo `p` (`GKR.Fold.primeArith`), the
   arithmetic the GKR certificates of a degree-1 field read with the fast path `.withPrime p`
   (`lib/gordiehowe/compiler/emit_export.h`, `field_arith`; `p256Code_primeOn`).
@@ -74,6 +75,18 @@ theorem p256_model : p256.Model ["F_p256"] [] where
   bitNode _ hE := absurd hE List.not_mem_nil
   bitsAdditive := FieldInterp.bitsAdditive_of_noBits fun _ _ _ => rfl
 
+/-- **`F_p256` reads linearly** (`FieldInterp.ReadLinear`): its integer reading is the value, whose
+cast back is the element itself (`ZMod.natCast_zmod_val`). -/
+theorem p256_readLinear : p256.ReadLinear :=
+  .of_add
+    (fun (x y : ZMod P256.p) =>
+      show (((x + y).val : ℕ) : ZMod P256.p) =
+        ((x.val : ℕ) : ZMod P256.p) + ((y.val : ℕ) : ZMod P256.p) by
+      rw [ZMod.natCast_zmod_val, ZMod.natCast_zmod_val, ZMod.natCast_zmod_val])
+    (by
+      change (((0 : ZMod P256.p).val : ℕ) : ZMod P256.p) = 0
+      rw [ZMod.natCast_zmod_val])
+
 /-- **The code arithmetic of `F_p256` is the arithmetic modulo `p`** (`FieldInterp.codeHom_cast`:
 constants decode as casts). -/
 theorem p256_codeHom :
@@ -109,8 +122,9 @@ def p256Packing : p256.Packing where
   p := P256.p
   expChar := inferInstanceAs (ExpChar (ZMod P256.p) P256.p)
   n := 1
-  top_eq := p256_top
+  card_eq := by rw [pow_one]; exact ZMod.card _
   s0 := 1
+  s0_dvd := one_dvd _
   decS0 := fun x => decidableMemFixedField (K := ZMod P256.p) x
   edge _ _ _ := none
   nodeDeg _ := some 1

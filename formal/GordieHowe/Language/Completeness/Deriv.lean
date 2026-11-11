@@ -32,7 +32,7 @@ cites only predicates of smaller rank.
   whose digits are generated as its digits holds (`digitRow`); a predicate of the MAC of a MAC site
   read at a `macSite` structure record (`macSiteAt`) holds in the role its step names (`macRow`),
   and so does the tail of a MAC check over a field of characteristic `2`
-  (`twoTail`); the Boolean check of a pad copy holds (`padBool`); a digit lookup
+  (`twoTail`); the Boolean check of a pad copy holds (`padBool`); a digit or direct lookup
   whose record is a committed quotient digit holds (`commIn`); the field equation of a
   committed-digits `mod_q` holds (`commRow`); the products predicate of a spectrally realized
   convolution holds (`specProd`), and so does a realization of a source predicate's field equation
@@ -93,8 +93,9 @@ structure CEnvFacts (primeNodes : ℕ → List String) (S : Structure) (G : Gens
   /-- The Boolean checks of the pad copies hold. -/
   padBool : ∀ pid < ir.predicates.length, ir.padCopyBoolB pid = true →
     ir.noGenPredB (ir.predicate pid).body = true → ir.HoldsWith rd (ir.predicate pid).body
-  /-- The digit lookups whose records are quotient digits of committed-digits `mod_q`s hold. -/
-  commIn : ∀ m j, ∀ pid < ir.predicates.length, ir.commLookupCB G pid m j = true →
+  /-- The digit and direct lookups whose records are quotient digits of committed-digits
+  `mod_q`s hold. -/
+  commIn : ∀ m j, ∀ pid < ir.predicates.length, ir.commRecCB G pid m j = true →
     ir.commModCB primeNodes S m = true → ir.noGenPredB (ir.predicate pid).body = true →
       ir.HoldsWith rd (ir.predicate pid).body
   /-- The field equations of the committed-digits `mod_q`s hold. -/
@@ -106,9 +107,13 @@ structure CEnvFacts (primeNodes : ℕ → List String) (S : Structure) (G : Gens
   specProd : ∀ k cv, ir.convs[k]? = some cv → ir.specHonestCB primeNodes S G k = true →
     ir.noGenPredB (ir.predicate cv.products).body = true →
       ir.HoldsWith rd (ir.predicate cv.products).body
-  /-- The realizations of the source predicates' field equations through the spectrally realized
-  convolutions hold. -/
+  /-- The realizations of the predicates' field equations through the spectrally realized
+  convolutions hold, of a source predicate's, or of a predicate reading no generated late value
+  that holds. -/
   specRow : ∀ m, ∀ pid < ir.predicates.length, ir.specRowCB primeNodes S G m pid = true →
+    (ir.inSource (ir.predicate m) = true ∨
+      (m < ir.predicates.length ∧ ir.noGenPredB (ir.predicate m).body = true ∧
+        ir.HoldsWith rd (ir.predicate m).body)) →
     ir.noGenPredB (ir.predicate pid).body = true → ir.HoldsWith rd (ir.predicate pid).body
   /-- The field equations of the source field-form `mod_q`s hold. -/
   fieldRow : ∀ pid < ir.predicates.length, ir.fieldRowRealB pid = true →
@@ -116,6 +121,11 @@ structure CEnvFacts (primeNodes : ℕ → List String) (S : Structure) (G : Gens
   /-- The tails of the MAC checks over the fields of characteristic `2` hold. -/
   twoTail : ∀ st, ir.twoMacCB primeNodes G st = true →
     ir.HoldsWith rd (ir.predicate (ir.twoTail st)).body
+  /-- The rows of the committed readings of the spectrally realized convolutions with their honest
+  facts hold. -/
+  specC : ∀ k cv, ir.convs[k]? = some cv → ir.specHonestCB primeNodes S G k = true →
+    ∀ kc r, cv.committed = some (kc, r) → ir.noGenPredB (ir.predicate r).body = true →
+      ir.HoldsWith rd (ir.predicate r).body
 
 end
 
@@ -226,7 +236,9 @@ theorem cstepFact_sound (hE : ir.CEnvFacts I primeNodes S G rd) {P self pid : �
       CReader.ofProgram_site, CReader.ofProgram_commMod] at h
     split_ifs at h with hq
     cases h
-    exact hE.specRow m pid hpid hq.1 hq.2
+    obtain ⟨hs, hm, hn⟩ := hq
+    exact hE.specRow m pid hpid hs
+      (hm.imp id fun ⟨hl, hr, hg⟩ => ⟨hl, hg, hc m hl hr⟩) hn
   | fieldRow =>
     simp only [cstepFact, CReader.cstepFact, CReader.ofProgram_nPreds,
       CReader.ofProgram_site, CReader.ofProgram_commMod] at h
@@ -244,6 +256,22 @@ theorem cstepFact_sound (hE : ir.CEnvFacts I primeNodes S G rd) {P self pid : �
       obtain ⟨h2, rfl⟩ := hq
       exact hE.twoTail st h2
     · cases h
+  | specC k =>
+    simp only [cstepFact, CReader.cstepFact, CReader.ofProgram_nPreds,
+      CReader.ofProgram_site, CReader.ofProgram_commMod] at h
+    split_ifs at h with hq
+    cases h
+    obtain ⟨hk, hs, hn⟩ := hq
+    rcases hcv : ir.convs[k]? with _ | cv
+    · rw [hcv] at hk
+      cases hk
+    · rw [hcv, Option.bind_some] at hk
+      rcases hcm : cv.committed with _ | ⟨kc, r⟩
+      · rw [hcm] at hk
+        cases hk
+      · rw [hcm, Option.map_some, Option.some.injEq] at hk
+        subst hk
+        exact hE.specC k cv hcv hs kc _ hcm hn
 
 /-- **The steps of a completeness derivation that run give facts that hold**, from facts that
 hold. -/

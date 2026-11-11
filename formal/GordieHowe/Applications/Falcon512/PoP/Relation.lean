@@ -16,7 +16,7 @@ public import GordieHowe.Applications.Configuration.Witness
 /-!
 # The Falcon-512 proof-of-possession relation
 
-`PoP.Falcon512.rel msgLen` is the relation a Falcon-512 proof of possession proves: the
+`Falcon512.PoP.rel msgLen` is the relation a Falcon-512 proof of possession proves: the
 serialized verifier `Falcon512.verify` accepts the witness's `msgLen` message bytes and signature
 (`GordieHowe.Falcon512.PoP.Witness`) under the public key.
 -/
@@ -42,7 +42,15 @@ abbrev Witness (msgLen : ℕ) : Type := Configuration.Witness msgLen _root_.Falc
 message bytes and signature under the public key. -/
 def rel (msgLen : ℕ) :
     Set (_root_.Falcon.PublicKey _root_.Falcon.Concrete.params512 × Witness msgLen) :=
-  {p | Falcon512.verify p.1 (List.ofFn p.2.message) p.2.signature}
+  Function.uncurry fun pk w => Falcon512.verify pk (List.ofFn w.message) w.signature
+
+/-- **The Falcon-512 proof-of-possession relation for messages of at most `nm` bytes**
+(`Configuration.relUpTo`): the witness's message, of its length `L ≤ nm`, and signature are in
+`rel L`. -/
+def relUpTo (nm : ℕ) :
+    Set (_root_.Falcon.PublicKey _root_.Falcon.Concrete.params512 ×
+      Configuration.VarWitness nm _root_.Falcon.Signature) :=
+  Configuration.relUpTo rel nm
 
 /-- **The Falcon-512 relation at the signatures the circuits sample**: the pairs of `rel` whose
 `HashToPoint` succeeds on the H circuit's fixed stream of `S = 717` samples

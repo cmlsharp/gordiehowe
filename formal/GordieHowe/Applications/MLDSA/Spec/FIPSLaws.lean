@@ -4,7 +4,7 @@
 module
 
 public import GordieHowe.Applications.MLDSA.Spec.ExpandMask
-public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1
+public import GordieHowe.Applications.MLDSA.Signing.PublishedKey
 
 @[expose] public section
 
@@ -25,7 +25,7 @@ those at `concretePrimitivesKeyGen` through the abstract-bundle lemmas of `Expan
 
 namespace GordieHowe.MLDSA.Spec
 
-open _root_.MLDSA _root_.MLDSA.Concrete GordieHowe.Ring.MLDSAW1
+open _root_.MLDSA _root_.MLDSA.Concrete
 
 attribute [local instance] concreteNTTRingOps
 

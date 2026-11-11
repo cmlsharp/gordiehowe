@@ -44,7 +44,7 @@ open scoped ENNReal GordieHowe.IOP
 section Concrete
 
 variable {k kN kS L : ℕ} {p : Params} {prims : Primitives p} {Msg : Type} {N reps T : ℕ}
-  [Fintype Msg] [Fintype (PubKey p prims)] [DecidableEq (PubKey p prims)]
+  [Fintype Msg] [Fintype prims.Power2High] [DecidableEq prims.Power2High]
   {I₁ : Type} [Fintype I₁] [DecidableEq I₁]
 
 /-- **The base signer's oracles on the base component**: the points of `W1Placement.lean`, the
@@ -86,7 +86,7 @@ end Concrete
 section ConcretePlaced
 
 variable {k kN kS L e : ℕ} {p : Params} {prims : Primitives p} {Msg : Type} {N reps T : ℕ}
-  [Fintype Msg] [Fintype (PubKey p prims)] [DecidableEq (PubKey p prims)]
+  [Fintype Msg] [Fintype prims.Power2High] [DecidableEq prims.Power2High]
   {I₁ : Type} [Fintype I₁] [DecidableEq I₁] [Nonempty (MaskBox p)]
 
 /-- **The concrete oracles satisfy the oracle facts** (`W1OracleFacts`) when the mask decoding
@@ -149,12 +149,14 @@ variable {p : Params} {T : ℕ} {Msg : Type} {N reps : ℕ}
   {Λ : SiteLayout Mg} {b : ℕ} [∀ j i, Fintype ((Mc.comp j).MessageWrite i)]
   {E : (j : ι) → (Mc.comp j).Encoder}
   {Vr : W1ExpStmt prims RMsg N → FullTr P τ → Bool}
-  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R]
+  [DecidableEq R] [Nonempty R]
   {honest : RingSignature.RingWit (freshBase prims O Mo βmin tol enc k D bmsg) → R →
     CausalProver P τ (W1ExpStmt prims RMsg N)}
   {Y₂ : Type} [AddGroup Y₂] {sp' : Y ≃+ Y₁ × Y₂}
   {chk : RingSignature.RingStmt (freshBase prims O Mo βmin tol enc k D bmsg) → Bool}
 
+omit [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **The hedged prover reads no mask point** (`hPSm` of `insiderForgeProb_le_w1C2`), for any
 check. -/
 theorem W1OracleFacts.w1HPS_hPSm (h : W1OracleFacts O Mo sp')
@@ -164,6 +166,7 @@ theorem W1OracleFacts.w1HPS_hPSm (h : W1OracleFacts O Mo sp')
         ((w1HPS sp prims O Mo βmin tol enc k D bmsg Mc Λ E hb honest chk).prove x w c).run H' :=
   w1HPS_run_prove_eq_of_agreeOffRange h.hdisjM hQ
 
+omit [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The hedged verifier reads no mask point** (`hPSv` of `insiderForgeProb_le_w1C2`), for any
 check. -/
 theorem W1OracleFacts.w1HPS_hPSv (h : W1OracleFacts O Mo sp')
@@ -173,6 +176,7 @@ theorem W1OracleFacts.w1HPS_hPSv (h : W1OracleFacts O Mo sp')
         (w1HPS sp prims O Mo βmin tol enc k D bmsg Mc Λ E hb honest chk).verify H' x π :=
   w1HPS_verify_eq_of_agreeOffRange h.hdisjM hQ
 
+omit [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [DecidableEq R] [DecidableEq Y] in
 /-- **`ProverReadsPub` for the hedged proof system** (`hPS` of `insiderForgeProb_le_w1C2`), for
 any check. -/
 theorem W1OracleFacts.w1HPS_proverReadsPub (h : W1OracleFacts O Mo sp') :
@@ -199,12 +203,13 @@ variable {k kN kS L e : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁] [Finty
   {M : SPBCS Mg P (W1ExpStmt prims RMsg N) k kN kS L e} {Λ : SiteLayout Mg}
   {b : ℕ} [∀ j i, Fintype ((M.comp j).MessageWrite i)] {E : (j : ι) → (M.comp j).Encoder}
   {Vr : W1ExpStmt prims RMsg N → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  {hb : M.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {hb : M.FormatBounds Qs b b} {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   {honest : RingSignature.RingWit (w1BaseSigner prims O βmin tol enc Lp bmsg) → R →
     CausalProver P τ (W1ExpStmt prims RMsg N)}
   {T : ℕ} {Mo : MaskOracle (Bits (queryBits k kN kS L)) Y p T Msg}
   {Y₂ : Type} [AddGroup Y₂] {sp' : Y ≃+ Y₁ × Y₂}
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] in
 /-- **The prover of `w1PS` reads no mask point.** -/
 theorem W1OracleFacts.w1PS_hPSm (h : W1OracleFacts O Mo sp')
     (hQ : ∀ q : Query k kN kS L, Query.toBits q ∉ Set.range Mo.pt) :
@@ -213,6 +218,7 @@ theorem W1OracleFacts.w1PS_hPSm (h : W1OracleFacts O Mo sp')
         ((w1PS sp prims O βmin tol enc Lp bmsg M Λ E hb honest).prove x w c).run H' :=
   w1PS_run_prove_eq_of_agreeOffRange h.hdisjM hQ
 
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The verifier of `w1PS` reads no mask point.** -/
 theorem W1OracleFacts.w1PS_hPSv (h : W1OracleFacts O Mo sp')
     (hQ : ∀ q : Query k kN kS L, Query.toBits q ∉ Set.range Mo.pt) :
@@ -229,19 +235,10 @@ section Exists
 
 variable {k kN kS L e : ℕ} {Msg : Type} {N reps T : ℕ} [Fintype Msg]
 
-instance instNonemptyMaskBox44 : Nonempty (MaskBox _root_.MLDSA.mldsa44) :=
-  maskBox_nonempty (by decide)
-
-instance instNonemptyMaskBox65 : Nonempty (MaskBox _root_.MLDSA.mldsa65) :=
-  maskBox_nonempty (by decide)
-
-instance instNonemptyMaskBox87 : Nonempty (MaskBox _root_.MLDSA.mldsa87) :=
-  maskBox_nonempty (by decide)
-
 /-- **The oracle facts at ML-DSA-44**: for `L` at least the four point domains' cardinalities and
 `18432 ≤ 8 |I₁|`, there is a mask decoding for which the concrete oracles satisfy them. -/
 theorem w1OraclesPlaced_exists44 {prims : Primitives _root_.MLDSA.mldsa44}
-    [Fintype (PubKey _ prims)] [DecidableEq (PubKey _ prims)] {I₁ : Type} [Fintype I₁]
+    [Fintype prims.Power2High] [DecidableEq prims.Power2High] {I₁ : Type} [Fintype I₁]
     [DecidableEq I₁]
     (hL : max (max (Fintype.card (Bytes 64 × Msg))
       (Fintype.card (Bytes 64 × BucketVec _root_.MLDSA.mldsa44)))
@@ -258,7 +255,7 @@ theorem w1OraclesPlaced_exists44 {prims : Primitives _root_.MLDSA.mldsa44}
 /-- **The oracle facts at ML-DSA-65**: for `L` at least the four point domains' cardinalities and
 `25600 ≤ 8 |I₁|`, there is a mask decoding for which the concrete oracles satisfy them. -/
 theorem w1OraclesPlaced_exists65 {prims : Primitives _root_.MLDSA.mldsa65}
-    [Fintype (PubKey _ prims)] [DecidableEq (PubKey _ prims)] {I₁ : Type} [Fintype I₁]
+    [Fintype prims.Power2High] [DecidableEq prims.Power2High] {I₁ : Type} [Fintype I₁]
     [DecidableEq I₁]
     (hL : max (max (Fintype.card (Bytes 64 × Msg))
       (Fintype.card (Bytes 64 × BucketVec _root_.MLDSA.mldsa65)))
@@ -275,7 +272,7 @@ theorem w1OraclesPlaced_exists65 {prims : Primitives _root_.MLDSA.mldsa65}
 /-- **The oracle facts at ML-DSA-87**: for `L` at least the four point domains' cardinalities and
 `35840 ≤ 8 |I₁|`, there is a mask decoding for which the concrete oracles satisfy them. -/
 theorem w1OraclesPlaced_exists87 {prims : Primitives _root_.MLDSA.mldsa87}
-    [Fintype (PubKey _ prims)] [DecidableEq (PubKey _ prims)] {I₁ : Type} [Fintype I₁]
+    [Fintype prims.Power2High] [DecidableEq prims.Power2High] {I₁ : Type} [Fintype I₁]
     [DecidableEq I₁]
     (hL : max (max (Fintype.card (Bytes 64 × Msg))
       (Fintype.card (Bytes 64 × BucketVec _root_.MLDSA.mldsa87)))
@@ -292,7 +289,7 @@ theorem w1OraclesPlaced_exists87 {prims : Primitives _root_.MLDSA.mldsa87}
 /-- **`w1OraclesPlaced_exists44` at `I₁ = Fin 4480`**: the byte embeddings are the first
 indices, so the placed oracles exist whenever `L` meets the fit bound. -/
 theorem w1OraclesPlaced_exists44_fin {prims : Primitives _root_.MLDSA.mldsa44}
-    [Fintype (PubKey _ prims)] [DecidableEq (PubKey _ prims)]
+    [Fintype prims.Power2High] [DecidableEq prims.Power2High]
     (hL : max (max (Fintype.card (Bytes 64 × Msg))
       (Fintype.card (Bytes 64 × BucketVec _root_.MLDSA.mldsa44)))
       (max (Fintype.card (KeyRing (PubKey _ prims) N × Fin N × Fin reps))
@@ -307,7 +304,7 @@ theorem w1OraclesPlaced_exists44_fin {prims : Primitives _root_.MLDSA.mldsa44}
 /-- **`w1OraclesPlaced_exists65` at `I₁ = Fin 4480`**: the byte embeddings are the first
 indices, so the placed oracles exist whenever `L` meets the fit bound. -/
 theorem w1OraclesPlaced_exists65_fin {prims : Primitives _root_.MLDSA.mldsa65}
-    [Fintype (PubKey _ prims)] [DecidableEq (PubKey _ prims)]
+    [Fintype prims.Power2High] [DecidableEq prims.Power2High]
     (hL : max (max (Fintype.card (Bytes 64 × Msg))
       (Fintype.card (Bytes 64 × BucketVec _root_.MLDSA.mldsa65)))
       (max (Fintype.card (KeyRing (PubKey _ prims) N × Fin N × Fin reps))
@@ -322,7 +319,7 @@ theorem w1OraclesPlaced_exists65_fin {prims : Primitives _root_.MLDSA.mldsa65}
 /-- **`w1OraclesPlaced_exists87` at `I₁ = Fin 4480`**: the byte embeddings are the first
 indices, so the placed oracles exist whenever `L` meets the fit bound. -/
 theorem w1OraclesPlaced_exists87_fin {prims : Primitives _root_.MLDSA.mldsa87}
-    [Fintype (PubKey _ prims)] [DecidableEq (PubKey _ prims)]
+    [Fintype prims.Power2High] [DecidableEq prims.Power2High]
     (hL : max (max (Fintype.card (Bytes 64 × Msg))
       (Fintype.card (Bytes 64 × BucketVec _root_.MLDSA.mldsa87)))
       (max (Fintype.card (KeyRing (PubKey _ prims) N × Fin N × Fin reps))

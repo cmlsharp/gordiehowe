@@ -79,6 +79,15 @@ local notation "nat" => MldsaRingEmbed.nat program
 set_option hygiene false in
 local notation "σ" => MldsaRingEmbed.σ program
 
+set_option hygiene false in
+local notation "ringV" => MldsaRingEmbed.V program
+
+set_option hygiene false in
+local notation "ringR" => MldsaRingEmbed.R program
+
+set_option hygiene false in
+local notation "predMap" => MldsaRingEmbed.pred program
+
 /-! ## The relation -/
 
 /-- **The relation of the theorem at a native ML-DSA-44 ring program's realized program**: at
@@ -148,11 +157,8 @@ theorem proj_idx (e : program.Env interp) :
 of its statement and committed assignment. -/
 theorem reader_pull_commitEnv (e : program.Env interp) {v : ℕ} (hv : v ∈ [457, 57, 58]) :
     (nat).reader (pull (commitEnv e.stmt e.asg)) v = (nat).reader (pull e) v := by
-  have hvV : v ∈ ringV := by
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
-    rcases hv with rfl | rfl | rfl <;>
-      simp only [ringV, List.mem_append, List.mem_range'_1, List.mem_cons, List.not_mem_nil] <;>
-      omega
+  have hvV : v ∈ ringV :=
+    MldsaRingEmbed.readV v ((by decide : ∀ v ∈ [457, 57, 58], v ∈ readVals) v hv)
   funext i
   rw [reader_pull _ hvV, reader_pull _ hvV,
     RealizedProgram.reader_eq_of_nodeReads_nil (MldsaRingFront.projReads _ (by
@@ -169,24 +175,50 @@ theorem proj_sig (e : program.Env interp) :
 
 variable (sv : MLDSA44.SampleView nat F0 FH)
 
-/-- **The source program's events**: the selection's at `member.table.gamma` (challenge `0`) and
-the native SampleInBall events at the ring's challenge `j + 1`, read in the environment read as
-the native program's. -/
+/-- **The source program's events**: the selection's at `member.table.gamma` (challenge `0`), the
+signature relation's at `signature.r` (`relEvent`: some row's nonzero polynomial vanishes at `r`)
+and the native SampleInBall events at the ring's challenge `j + sibOff`, read in the environment
+read as the native program's. -/
 def ringEvent (j : ℕ) (e : program.Env interp) : Prop :=
-  TableSelect.SelBad 0 j e ∨ ∃ j', j = j' + 1 ∧ sv.event j' (pull e)
+  TableSelect.SelBad 0 j e ∨ (j = MldsaRandomPoint.rChal program ∧ (relEvent e).BadAt (rOf e)) ∨
+    ∃ j', j = j' + MldsaRingFront.sibOff program ∧ sv.event j' (pull e)
 
-/-- **The events' errors**: `5143/|F_q^m|` at `member.table.gamma`, the native error of challenge
-`j` at the ring's challenge `j + 1`. -/
+/-- **The events' errors**: `5143/|F_q^m|` at `member.table.gamma`, `2040/|F_q^m|` at
+`signature.r`, the native error of challenge `j` at the ring's challenge `j + sibOff`. -/
 noncomputable def ringEps (j : ℕ) : ℝ≥0 :=
-  if j = 0 then ((5143 : ℕ) : ℝ≥0) / Fintype.card (interp 0).K else sv.eps (j - 1)
+  if j = 0 then ((5143 : ℕ) : ℝ≥0) / Fintype.card (interp 0).K
+  else if j = MldsaRandomPoint.rChal program then ((2040 : ℕ) : ℝ≥0) / Fintype.card (interp 0).K
+  else sv.eps (j - MldsaRingFront.sibOff program)
+
+omit [QField F0] in
+theorem relEvent_congr {e e' : program.Env interp} (hs : e.stmt = e'.stmt) (ha : e.asg = e'.asg) :
+    relEvent e = relEvent e' := by
+  have hrd : ∀ v ∈ [MldsaRandomPoint.w program, MldsaRandomPoint.q program,
+      MldsaRandomPoint.t1 program, MldsaRandomPoint.aHat program, MldsaRandomPoint.z program,
+      MldsaRandomPoint.c program], ∀ t,
+      program.evalE (program.reader e) 0 (.leaf v) t =
+        program.evalE (program.reader e') 0 (.leaf v) t := fun v hv t => by
+    rw [RealizedProgram.evalE_leaf, RealizedProgram.evalE_leaf,
+      RealizedProgram.reader_eq_of_nodeReads_nil (MldsaRingFront.relReads v hv) hs ha]
+  refine relEvent_congr_of (fun i t ht => ?_) (fun v hv => hrd v ?_)
+  · rw [eRow_eq e i ht, eRow_eq e' i ht]
+    exact hrd _ (by simp) _
+  · simp only [List.mem_cons, List.not_mem_nil, or_false] at hv ⊢
+    tauto
 
 /-- **The challenge-use rule** (`RealizedProgram.ChallengeUseAt`): the selection's
-(`TableSelect.selBad_use`), and the native one's through the renaming (`eqUpTo_pull`). -/
+(`TableSelect.selBad_use`), the relation's (its polynomial reads the committed values, its
+challenge `r`), and the native one's through the renaming (`eqUpTo_pull`). -/
 theorem ringEvent_use : RealizedProgram.ChallengeUseAt program interp (ringEvent sv) := by
   intro j e e' h
   unfold ringEvent
-  refine or_congr (TableSelect.selBad_use (f := 0) j h) ⟨?_, ?_⟩ <;> rintro ⟨j', rfl, hj'⟩ <;>
-    refine ⟨j', rfl, ?_⟩
+  refine or_congr (TableSelect.selBad_use (f := 0) j h) (or_congr ?_ ⟨?_, ?_⟩)
+  · constructor <;> rintro ⟨rfl, hb⟩ <;> refine ⟨rfl, ?_⟩
+    · have hr : rOf e = rOf e' := by unfold rOf; rw [h.chal _ (Or.inr ⟨rfl, le_refl _⟩)]
+      rwa [← relEvent_congr h.stmt h.asg, ← hr]
+    · have hr : rOf e = rOf e' := by unfold rOf; rw [h.chal _ (Or.inr ⟨rfl, le_refl _⟩)]
+      rwa [relEvent_congr h.stmt h.asg, hr]
+  all_goals rintro ⟨j', rfl, hj'⟩; refine ⟨j', rfl, ?_⟩
   · have h' : RealizedProgram.Env.EqUpTo ((σ).chal j') e e' := by
       rw [MldsaRingFront.chalSucc]; exact h
     exact (sv.use j' (eqUpTo_pull h')).1 hj'
@@ -199,21 +231,26 @@ theorem W_eq : TableSelect.W program = 5144 := by
   unfold TableSelect.W
   rw [MldsaRingFront.shape.2.2.2.2.2.2.1, nativeMap_facts.1]
 
+omit [QField F0] in
 /-- **The events' probabilities** (`RealizedProgram.rbr_of_events`' `hbound`): at most
-`5143/|F_q^m|` at `member.table.gamma` (`TableSelect.selBad_bound`, Schwartz–Zippel) and the native
-error at the ring's challenge `j + 1` (`SampleView.bound`, through
+`5143/|F_q^m|` at `member.table.gamma` (`TableSelect.selBad_bound`, Schwartz–Zippel), `2040/|F_q^m|`
+at `signature.r` (`RealizedProgram.probUniform_badAt_setChal_le`) and the native error at the
+ring's challenge `j + sibOff` (`SampleView.bound`, through
 `RealizedProgram.probUniform_pullEnv_setChal`). -/
 theorem ringEvent_bound : ∀ j, program.IsSourceChal j → ∀ e : program.Env interp,
     Pr[c ← program.ChalVal interp j : ringEvent sv j (e.setChal j c)] ≤ (ringEps sv j : ℝ≥0∞) := by
   intro j hj e
   have hchal := (MldsaRingFront.shape (program := program)).2.1
-  rcases j with _ | j
+  obtain ⟨-, hr0, hrlt⟩ := MldsaRingFront.chalR (program := program)
+  rcases MldsaRingFront.chalCases j hj with rfl | rfl | ⟨j, rfl⟩
   · have hset : ∀ c, ringEvent sv 0 (e.setChal 0 c) ↔ TableSelect.SelBad 0 0 (e.setChal 0 c) :=
       fun c => by
         unfold ringEvent
-        refine ⟨fun h => h.resolve_right ?_, .inl⟩
-        rintro ⟨j', hj', -⟩
-        omega
+        refine ⟨fun h => ?_, .inl⟩
+        rcases h with h | ⟨h, -⟩ | ⟨j', hj', -⟩
+        · exact h
+        · omega
+        · omega
     simp only [hset]
     have h := TableSelect.selBad_bound (f := 0) domainField_shape e
     rw [hchal] at h
@@ -221,20 +258,42 @@ theorem ringEvent_bound : ∀ j, program.IsSourceChal j → ∀ e : program.Env 
     rw [if_pos rfl]
     rw [W_eq] at h
     exact h
+  · have hset : ∀ c, ringEvent sv (MldsaRandomPoint.rChal program)
+        (e.setChal (MldsaRandomPoint.rChal program) c) ↔
+        (relEvent e).BadAt (RealizedProgram.castElt
+          ((e.setChal (MldsaRandomPoint.rChal program) c).chal (MldsaRandomPoint.rChal program) 0)) :=
+      fun c => by
+        unfold ringEvent TableSelect.SelBad
+        rw [hchal, relEvent_congr (e := e.setChal _ c) (e' := e) rfl rfl]
+        constructor
+        · rintro (⟨h, -⟩ | ⟨-, h⟩ | ⟨j', hj', -⟩)
+          · omega
+          · exact h
+          · omega
+        · exact fun h => .inr (.inl ⟨rfl, h⟩)
+    simp only [hset]
+    unfold ringEps
+    rw [if_neg hr0, if_pos rfl]
+    obtain ⟨hsz, hsm⟩ := MldsaRandomPoint.chalR (program := program)
+    refine (RealizedProgram.probUniform_badAt_setChal_le hsz hsm
+      (MldsaRandomPoint.rPow (program := program)).chalField (relEvent e) e).trans ?_
+    simp [relEvent, ChallengeEvent.prodNonzero]
   · have hnat := (MldsaRingFront.chalIff j).1 hj
-    have hset : ∀ c, ringEvent sv (j + 1) (e.setChal (j + 1) c) ↔
-        sv.event j (pull (e.setChal (j + 1) c)) := fun c => by
+    have hset : ∀ c, ringEvent sv (j + MldsaRingFront.sibOff program)
+        (e.setChal (j + MldsaRingFront.sibOff program) c) ↔
+        sv.event j (pull (e.setChal (j + MldsaRingFront.sibOff program) c)) := fun c => by
       unfold ringEvent TableSelect.SelBad
       rw [hchal]
       constructor
-      · rintro (⟨h, -⟩ | ⟨j', hj', h⟩)
+      · rintro (⟨h, -⟩ | ⟨h, -⟩ | ⟨j', hj', h⟩)
+        · omega
         · omega
         · obtain rfl : j' = j := by omega
           exact h
-      · exact fun h => .inr ⟨j, rfl, h⟩
+      · exact fun h => .inr (.inr ⟨j, rfl, h⟩)
     simp only [hset]
     unfold ringEps
-    rw [if_neg (Nat.succ_ne_zero j), Nat.add_sub_cancel]
+    rw [if_neg (by omega), if_neg (by omega), Nat.add_sub_cancel]
     obtain ⟨hsz', hsm', hsz, hsm, hf⟩ := MldsaRingFront.chalShape j hnat
     rw [← MldsaRingFront.chalSucc (program := program) j] at hsz' hsm' hf ⊢
     rw [RealizedProgram.probUniform_pullEnv_setChal hsz' hsm' hsz hsm hf
@@ -300,8 +359,11 @@ theorem mem_rel_of_source (hv : MLDSA44.HashViewCore nat F0 FH)
     (e.stmt, proj e.stmt e.asg) ∈ rel := by
   intro len x hok hrows
   have hsel : ¬ TableSelect.SelBad 0 0 e := fun h => hno 0 MldsaRingFront.chal0 (.inl h)
+  have hrel : ¬ (relEvent e).BadAt (rOf e) := fun h =>
+    hno _ (MldsaRingFront.chalR (program := program)).1 (.inr (.inl ⟨rfl, h⟩))
   have hnoN : ∀ j, (nat).IsSourceChal j → ¬ sv.event j (pull e) := fun j hj h =>
-    hno (j + 1) ((MldsaRingFront.chalIff j).2 hj) (.inr ⟨j, rfl, h⟩)
+    hno (j + MldsaRingFront.sibOff program) ((MldsaRingFront.chalIff j).2 hj)
+      (.inr (.inr ⟨j, rfl, h⟩))
   have hcore := hSatCore hs
   have hA := aSatNat hs
   have hsam := sv.sound (pull e) hcore hnoN
@@ -323,7 +385,7 @@ theorem mem_rel_of_source (hv : MLDSA44.HashViewCore nat F0 FH)
   have hW : wOf rd = _root_.MLDSA.computeWApprox _root_.MLDSA.mldsa44 Native.Rows.prims
       (nttOps := _root_.MLDSA.Concrete.concreteNTTRingOps) (Native.Rows.aHat pk) (cPoly rd)
       (zOf rd) pk.t1 :=
-    algebra_eq_of_cast hs (fun i j k => by
+    algebra_eq_of_cast hs hrel (fun i j k => by
         rw [aHatVals_eq hs hsel hrows, hkey]
         unfold aHatNat Native.Rows.aHat
         rw [MLDSA44.expandABounded_eq_expandAFull hexp])
@@ -379,9 +441,10 @@ theorem sound_of_views (hv : MLDSA44.HashViewCore nat F0 FH) :
 (`RealizedProgram.rbr_of_events`), given the native frontend's hash view of domain `H`'s core
 (`HashViewCore`, the Keccak trace's instance) and SampleInBall's view (`SampleView`) of the
 native program: the relation `rel`, the extractor `extractor`, the errors `5143/|F_q^m|` at
-`member.table.gamma` and SampleInBall's at the ring's challenges `1`, `2` (`ringEps`). -/
+`member.table.gamma`, `2040/|F_q^m|` at `signature.r` and SampleInBall's at the ring's challenges
+`j + sibOff` (`ringEps`). -/
 theorem rbr_of_views (hv : MLDSA44.HashViewCore nat F0 FH) :
-    rbrKnowledgeSoundness rel (program.sourceVerifier interp) extractor
+    RBRKnowledgeSound rel (program.sourceVerifier interp) extractor
       (program.eventState interp rel proj (ringEvent sv) (ringEvent_use sv) (sound_of_views sv hv))
       (program.roundError interp (ringEps sv)) :=
   program.rbr_of_events interp rel proj (ringEvent sv) (ringEps sv) (ringEvent_use sv)

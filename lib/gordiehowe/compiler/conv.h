@@ -231,6 +231,7 @@ class ConvRealizer : Lowering {
       if (!any) phase_ = b_.phases();
       any = true;
       pred_ = predicate_name(d_, k);
+      src_ = e;
       affine_ctx_ = affine_in_convs(*e);
       const ExprPtr<F> ne = go(e);
       rewrite_predicate(d_, k, ne);
@@ -559,8 +560,7 @@ class ConvRealizer : Lowering {
     }
     const Ref<F> C =
         commit_product(nm + ".c", Shape(out), a, b, la, lb, M, psi);
-    direct(nm, C, a, b, ra, rb, la, lb, B);
-    return expr_internal::leaf(leaf_lin(C, out));
+    return direct(nm, C, a, b, ra, rb, la, lb, B, &x);
   }
 
   // The work of one proof of the spectral batch over the row views RA, RB
@@ -598,17 +598,22 @@ class ConvRealizer : Lowering {
     return w;
   }
 
-  // C - sum_{u+v=i} a_u b_v = 0 in the circuit.
-  void direct(const std::string &nm, const Ref<F> &C, const ExprPtr<F> &a,
-              const ExprPtr<F> &b, const std::optional<RowView> &ra,
-              const std::optional<RowView> &rb, size_t la, size_t lb,
-              size_t B) {
+  // C - sum_{u+v=i} a_u b_v = 0 in the circuit; the conv X reads as C. The
+  // record states the realization for the program export
+  // (program_builder.h, Lean `SpectralConv.direct`): X, C, the predicate
+  // NM.products and the blocks that sum a square once.
+  ExprPtr<F> direct(const std::string &nm, const Ref<F> &C, const ExprPtr<F> &a,
+                    const ExprPtr<F> &b, const std::optional<RowView> &ra,
+                    const std::optional<RowView> &rb, size_t la, size_t lb,
+                    size_t B, const Node_ *x) {
     const size_t lo = la + lb - 1;
     const bool same = ra && rb && same_table(*ra, *rb);
     std::vector<size_t> ia, ib;
     std::vector<std::vector<std::pair<size_t, uint64_t>>> rows(B * lo);
+    std::vector<bool> squares;
     for (size_t r = 0; r < B; ++r) {
       const bool square = same && ra->rows[r] == rb->rows[r];
+      squares.push_back(square);
       for (size_t u = 0; u < la; ++u)
         for (size_t v = square ? u : 0; v < lb; ++v) {
           rows[r * lo + u + v].push_back({ia.size(), square && u != v ? 2 : 1});
@@ -622,6 +627,21 @@ class ConvRealizer : Lowering {
         ops::sparse_matrix(f_, "conv_sums", ia.size(), rows)(prod);
     const Expr<F> e = Expr<F>(C).flat() - sums;
     add_predicate(d_, nm + ".products", e.node, circuit_pin());
+    const ExprPtr<F> read = expr_internal::leaf(leaf_lin(C, x->dims()));
+    PlanRecords::SpectralConv rec;
+    rec.pred = pred_;
+    rec.source = std::make_shared<const ExprPtr<F>>(src_);
+    rec.conv = x;
+    rec.blocks = B;
+    rec.left = la;
+    rec.right = lb;
+    rec.c = C.id;
+    rec.cnode = read;
+    rec.direct = true;
+    rec.products = nm + ".products";
+    rec.squares = std::move(squares);
+    b_.records().spectral_convs.push_back(std::move(rec));
+    return read;
   }
 
   // z = NTT_M(a) NTT_M(b) committed and batched; conv reads as the first
@@ -703,19 +723,20 @@ class ConvRealizer : Lowering {
     Lin<F> c = Gather(f_, first, M)(ops::InverseNtt(f_, M, psi)(
         Lin<F>(Ref<F>(z))));
     c.shape = out;
+    // The plan export states this realization (plan_program.h).
+    PlanRecords::SpectralConv rec;
+    rec.pred = pred_;
+    rec.source = std::make_shared<const ExprPtr<F>>(src_);
+    rec.batch = nm + ".spectra";
+    rec.conv = x;
+    rec.z = z.id;
+    rec.blocks = B;
+    rec.left = la;
+    rec.right = lb;
+    rec.length = M;
+    rec.psi.resize(F::kBytes);
+    f_.to_bytes_field(rec.psi.data(), psi);
     if (!commit_c) {
-      // The plan export states this realization (plan_program.h).
-      PlanRecords::SpectralConv rec;
-      rec.pred = pred_;
-      rec.batch = nm + ".spectra";
-      rec.conv = x;
-      rec.z = z.id;
-      rec.blocks = B;
-      rec.left = la;
-      rec.right = lb;
-      rec.length = M;
-      rec.psi.resize(F::kBytes);
-      f_.to_bytes_field(rec.psi.data(), psi);
       b_.records().spectral_convs.push_back(std::move(rec));
       return expr_internal::leaf(c);
     }
@@ -723,7 +744,12 @@ class ConvRealizer : Lowering {
         commit_product(nm + ".c", Shape(out), a, b, la, lb, M, psi);
     const Lin<F> cl = leaf_lin(C, out);
     d_.affine(nm + ".intt", cl - c);
-    return expr_internal::leaf(cl);
+    const ExprPtr<F> read = expr_internal::leaf(cl);
+    rec.c = C.id;
+    rec.row = nm + ".intt";
+    rec.cnode = read;
+    b_.records().spectral_convs.push_back(std::move(rec));
+    return read;
   }
 
   Domain<F> &d_;
@@ -733,6 +759,8 @@ class ConvRealizer : Lowering {
   std::map<const Node_ *, ExprPtr<F>> memo_;
   std::map<const Node_ *, bool> seen_;
   std::string pred_;
+  // The predicate's expression before its rewrite.
+  ExprPtr<F> src_;
   bool affine_ctx_ = false;
   size_t count_ = 0;
 };

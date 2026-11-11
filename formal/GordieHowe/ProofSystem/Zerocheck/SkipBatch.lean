@@ -50,8 +50,9 @@ characteristic two).
   (`FieldSkip.mergeEvent`) and keeps every other charge. The C++ records no charge for this `γ`.
 * **No constant term.** The zero instances that pad the batch satisfy `Q` only because `Q` has no
   constant term (`FieldRelation::error`, `relation_error`); the C++ keeps this as a validity
-  condition of the relation and enters a constant monomial as a monomial of a constant operand
-  (`domain.h`, `batch_parts`), so the Lean keeps it too (`MonoRelation.deg_pos`).
+  condition of the relation and enters a constant monomial as part of an operand
+  (`compiler/batch_form.h`: the part of degree at most one, constants included, is one operand), so
+  the Lean keeps it too (`MonoRelation.deg_pos`).
 -/
 
 namespace GordieHowe.BatchedZerocheck

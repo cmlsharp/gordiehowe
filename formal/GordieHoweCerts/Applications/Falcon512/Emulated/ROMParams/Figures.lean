@@ -15,8 +15,8 @@ The bit security of the emulated Falcon-512 proof of possession at the ROM param
 paper's measure `λ(err) = min over t ≥ 1 of log₂ (t / min(1, err(t)))` (`sec:eval-params`),
 certified from the generated figures (`GordieHowe.Generated.Falcon512.Emulated.ROMParams.figures`).
 
-Zero knowledge: for every `t ≥ 1` hash queries and `Q ≤ 2^64` proof queries, the error of
-`everlasting_zero_knowledge_rom` is at most `Q · t · 2^-λ`.
+Zero knowledge: for every `t ≥ 1` hash queries and `Q ≤ proofQueryCap = 2^64` proof queries, the error `zkErrorROM 0` of
+`everlasting_zero_knowledge_honest_rom` is at most `Q · t · 2^-λ`.
 
 Knowledge soundness: for every `t ≥ 1` hash queries, the classical knowledge error of
 `knowledge_soundness_rom_at` and `soundness_rom_at` against `t`-query adversaries,
@@ -46,18 +46,16 @@ most `6165/2^129` (`zkBudgetROM_le_two_rpow` at the generated figures). -/
 theorem zkBudgetROM_le : configuration.zkBudgetROM ≤ (2 : ℝ) ^ (-116.41 : ℝ) :=
   zkBudgetROM_le_two_rpow
     (ofCertified_readsFigures Generated.Falcon512.Emulated.ROMParams.figures_eq)
-    (M := 6165) (E := 129) (e := 11641) (by norm_num) (by norm_num [Nat.choose_two_right])
+    (M := 6165) (E := 129) (e := 11641) (by norm_num) (by norm_num [Nat.choose_two_right, ParamSet.rom, ParamSet.qrom])
     (by decide +kernel)
 
 /-- **The bit security of everlasting zero knowledge of the emulated Falcon-512 proof of possession
-at the ROM parameters**: for every `t ≥ 1` hash queries and `Q ≤ 2^64` proof queries, the error of
-`everlasting_zero_knowledge_rom` is at most `Q · t · 2^-116.41`. -/
-@[headline]
-theorem zero_knowledge_bits_rom {t Q : ℕ} (ht : 1 ≤ t) (hQ : Q ≤ 2 ^ 64) :
-    (Configuration.Common.setting configuration configurationFacts proofSystem).model.zkErrorROM 0 t Q ≤
-      Q * t * (2 : ℝ) ^ (-116.41 : ℝ) :=
+at the ROM parameters**: for every `t ≥ 1` hash queries and `Q ≤ proofQueryCap = 2^64` proof queries, the error `zkErrorROM 0` of
+`everlasting_zero_knowledge_honest_rom` is at most `Q · t · 2^-116.41`. -/
+theorem zero_knowledge_bits_rom :
+    ZKBitSecurityAtLeast ((argument proofSystem).zkErrorROM 0) 116.41 :=
   Configuration.ZKBits.zkErrorROM_le_bits configuration configurationFacts proofSystem
-    zkBudgetROM_le ht hQ
+    zkBudgetROM_le
 
 /-- **The classical knowledge budget of `Falcon512.Emulated.ROMParams` below `2 ^ 102` queries** is
 at most `2^-102.00`: at most `2/2^103` (`knowledgeBudgetROM_le_two_rpow` at the generated figures).
@@ -73,11 +71,9 @@ ROM parameters**: for every `t ≥ 1` hash queries, the classical knowledge erro
 `knowledge_soundness_rom_at` and `soundness_rom_at` against `t`-query adversaries, evaluated at `t +
 kq` as in the paper's `errks^C(t)` and `analysis/eval_params.py`, satisfies `min(1, err) ≤ t ·
 2^-102.00`, so `λ(errks^C) ≥ 102.00`. -/
-@[headline]
-theorem soundness_bits_rom {t : ℕ} (ht : 1 ≤ t) :
-    (min 1 (Configuration.Common.knowledgeErrorROM configuration configurationFacts
-      (t + configuration.kq))).toReal ≤ t * (2 : ℝ) ^ (-102.00 : ℝ) :=
+theorem soundness_bits_rom :
+    BitSecurityAtLeast extractionErrorROM 102.00 :=
   SoundnessBits.knowledgeErrorROM_le_bits configuration configurationFacts (e := 10200)
-    (by norm_num) (by decide +kernel) (knowledgeBudgetROM_le) ht
+    (by norm_num) (by decide +kernel) (knowledgeBudgetROM_le)
 
 end GordieHowe.Falcon512.Emulated.ROMParams

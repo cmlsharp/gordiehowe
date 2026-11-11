@@ -27,13 +27,12 @@ and the verifier continues with the division-free update
   `claim' = eq(ρ_i, s_i) · claim + prefix_{i+1} · ((s_i − ρ_i) · q1 + (s_i² − ρ_i) · q2)`
 
 (`EqFactoredDeg.step`, `EqFactoredDeg.claims` at `D = 2`). No round has a consistency check;
-the last claim is compared with the summand at `s`. Source:
-`lib/sumcheck/keccak_skip_argument.h:323-343` and `lib/sumcheck/boolean_skip.h:250-269` at `41f8aa26`, where in characteristic two the update
-reads `(1 + ρ_i + s_i) · claim + prefix_{i+1} · ((ρ_i + s_i) q1 + (ρ_i + s_i²) q2)`
+the last claim is compared with the summand at `s`. Source: `lib/sumcheck/boolean_skip.h`,
+`BasicBooleanSkip::verify`, where in characteristic two the update reads
+`(1 + ρ_i + s_i) · claim + prefix_{i+1} · ((ρ_i + s_i) q1 + (ρ_i + s_i²) q2)`
 (`eqLin_charTwo`: `eq(ρ, x) = 1 + (ρ + x)`) and `prefix_n = eq(ρ, s)` weights the terminal check
-(`prefixEq_last`, `boolean_skip.h:265-269`). The honest prover's `q1`, `q2` are
-`boolean_skip.h:157-165` and `196-212`: the eq table `e` is folded once per round,
-`e[k] = e[2k] + e[2k+1]` (lines 140-150, 181, 220), so it holds `eq(ρ_{>i}, ·)` in round `i`.
+(`prefixEq_last`). The honest prover's `q1`, `q2` are `BasicBooleanSkip::prove`'s: the eq table
+`e` is folded once per round, `e[k] = e[2k] + e[2k+1]`, so it holds `eq(ρ_{>i}, ·)` in round `i`.
 
 Soundness and completeness are those of `GordieHowe/ProofSystem/Zerocheck/EqFactoredDeg.lean` at
 `D = 2`: each update is the evaluation at `s_i` of a cubic whose endpoint sum is the incoming claim, so each round's event is `Sumcheck.Coefficient.roundEvent` of
@@ -58,7 +57,7 @@ def eqLin (ρ x : K) : K := ρ * x + (1 - ρ) * (1 - x)
 @[simp] theorem eqLin_one (ρ : K) : eqLin ρ 1 = ρ := by simp [eqLin]
 
 /-- In characteristic two the factor is `1 + ρ + x` (`eq_i = 1 + ρ_i + s`,
-`keccak_skip_argument.h:335`). -/
+`BasicBooleanSkip::verify`). -/
 theorem eqLin_charTwo [CharP K 2] (ρ x : K) : eqLin ρ x = 1 + (ρ + x) := by
   unfold eqLin
   linear_combination (ρ * x - ρ - x) * CharTwo.two_eq_zero (R := K)

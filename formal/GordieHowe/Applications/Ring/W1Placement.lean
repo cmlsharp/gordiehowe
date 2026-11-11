@@ -77,12 +77,12 @@ open GordieHowe.QROM (Bits appPt appPt_ne_of_tag_ne appPt_notMem_range_toBits Qu
   queryBits transcript_le_payloadBits)
 
 variable {p : Params} {prims : Primitives p} {Msg : Type} {N reps T : ℕ}
-  [Fintype Msg] [Fintype (PubKey p prims)] [DecidableEq (PubKey p prims)]
+  [Fintype Msg] [Fintype prims.Power2High] [DecidableEq prims.Power2High]
 
 /-- **The ML-DSA ring's oracle domains fit the payload**: each of the four application points'
 domains has at most `2 ^ payloadBits k kN kS L` elements. -/
 structure W1Fit (k kN kS L : ℕ) (p : Params) (prims : Primitives p) (Msg : Type) (N reps T : ℕ)
-    [Fintype Msg] [Fintype (PubKey p prims)] [DecidableEq (PubKey p prims)] : Prop where
+    [Fintype Msg] [Fintype prims.Power2High] [DecidableEq prims.Power2High] : Prop where
   mu : Fintype.card (Bytes 64 × Msg) ≤ 2 ^ payloadBits k kN kS L
   ch : Fintype.card (Bytes 64 × BucketVec p) ≤ 2 ^ payloadBits k kN kS L
   g : Fintype.card (KeyRing (PubKey p prims) N × Fin N × Fin reps) ≤ 2 ^ payloadBits k kN kS L
@@ -144,7 +144,7 @@ theorem w1MaskPt_notMem_range_toBits (a : Bytes 32 × MaskPt T Msg) :
     w1MaskPt F a ∉ Set.range (Query.toBits (k := k) (kN := kN) (kS := kS) (L := L)) :=
   appPt_notMem_range_toBits _ (by decide) _ _ a
 
-omit [Fintype Msg] [Fintype (PubKey p prims)] [DecidableEq (PubKey p prims)] in
+omit [Fintype Msg] [Fintype prims.Power2High] [DecidableEq prims.Power2High] in
 /-- A cardinality of at most `L` is below `2 ^ payloadBits k kN kS L`. -/
 theorem card_le_two_pow_payloadBits {c : ℕ} (h : c ≤ L) : c ≤ 2 ^ payloadBits k kN kS L := by
   have h8 : L ≤ payloadBits k kN kS L := by

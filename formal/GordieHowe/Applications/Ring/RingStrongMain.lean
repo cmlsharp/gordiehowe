@@ -53,10 +53,11 @@ open scoped ENNReal
 namespace QROM
 
 variable {X Y Stmt Wit Proof Coins : Type} (rel : Stmt → Wit → Prop) [DecidableRel rel]
-  [Fintype Coins] [DecidableEq Coins] (P : NARG.Prover X Y Stmt Wit Proof Coins) (Q : ℕ)
+  [Fintype Coins] [DecidableEq Coins] (P : NARG.Prover X Y Stmt Wit Proof Coins) (μ : PMF Coins)
+  (Q : ℕ)
 
 /-- **The real challenger never reprograms.** -/
-theorem realChallenger_noAssign : (realChallenger rel P Q).NoAssign := by
+theorem realChallenger_noAssign : (realChallenger rel P μ Q).NoAssign := by
   intro c hist r G
   simp only [realChallenger]
   split_ifs <;> simp [OracleProg.run_bind]
@@ -66,16 +67,16 @@ the coins of that number if the relation holds, else `none`. -/
 theorem answerAfter_realChallenger [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y]
     (H : X → Y) (c : Fin Q → Coins) (rs : List (ProofQuery Stmt Wit)) (x : ProofQuery Stmt Wit)
     (hi : rs.length < Q) :
-    (realChallenger rel P Q).toPureEnv.answerAfter (H, c) rs x =
+    (realChallenger rel P μ Q).toPureEnv.answerAfter (H, c) rs x =
       if rel x.stmt x.wit then some ((P.prog x.stmt x.wit (c ⟨rs.length, hi⟩)).run H)
       else none := by
-  have hn := realChallenger_noAssign rel P Q
+  have hn := realChallenger_noAssign rel P μ Q
   obtain ⟨-, -, h3⟩ := hn.oracleIn H c rs
   rw [hn.answerAfter_eq H c rs x hi]
-  have hl : ((realChallenger rel P Q).toPureEnv.oracleIn (H, c) rs).hist.length = rs.length := by
+  have hl : ((realChallenger rel P μ Q).toPureEnv.oracleIn (H, c) rs).hist.length = rs.length := by
     rw [h3]
     exact min_eq_left hi.le
-  generalize ((realChallenger rel P Q).toPureEnv.oracleIn (H, c) rs).hist = hist at hl ⊢
+  generalize ((realChallenger rel P μ Q).toPureEnv.oracleIn (H, c) rs).hist = hist at hl ⊢
   have hi' : hist.length < Q := hl ▸ hi
   have hf : (⟨hist.length, hi'⟩ : Fin Q) = ⟨rs.length, hi⟩ := Fin.ext hl
   simp only [realChallenger, hi', ↓reduceDIte, hf]
@@ -105,16 +106,22 @@ end Quantum.MultiRelay
 
 namespace RingSignature
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB} {TPS : PSTypes} {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS}
+variable {X Y : Type} {N : ℕ} {TB : BaseTypes}
+  {B : BaseSigner X Y N TB} {TPS : PSTypes} [Fintype TPS.Proof]
+  [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
+  {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {n : ℕ}
 
 /-! ### The game's challenger -/
+
+variable [DecidableEq TB.PK] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
 
 section Game
 
 variable [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y]
 
-omit [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y] in
+omit [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y]
+  [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **The game's challenger never reprograms.** -/
 theorem unforgeChallenger_noAssign (keys : Fin n → B.KeyCoins) (Q : ℕ) :
     (unforgeChallenger (ofBase B PS adm) n (SideOracle.none _) keys Q).NoAssign := by
@@ -130,7 +137,7 @@ theorem unforgeChallenger_noAssign (keys : Fin n → B.KeyCoins) (Q : ℕ) :
     · exact bm.elim
   · rfl
 
-omit [DecidableEq Y] [AddGroup Y] in
+omit [DecidableEq Y] [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **The game's reply** to request number `|rs|` below `Q`: `ringReply` at the coins of that
 number. -/
 theorem answerAfter_unforgeChallenger (keys : Fin n → B.KeyCoins) (Q : ℕ) (H : X → Y)
@@ -162,14 +169,17 @@ end Game
 
 /-! ### The main challenger -/
 
+variable [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+
 variable (B PS adm n) in
 /-- **The prover of the relayed proof queries**: on a relayed statement `x` (a ring statement and a
 request) and a witness register `w`, `PS`'s prover on the ring statement `x.1` and the ring witness
-of `w`, with uniform coins. -/
-noncomputable def ringProver :
+of `w`. Its coins are uniform: the challengers draw them from `PMF.uniformOfFintype PS.Coins`. -/
+def ringProver :
     NARG.Prover X Y (Insider.RelayStmt B PS adm n) (Insider.RelayWit B) PS.Proof PS.Coins where
   prog x w c := PS.prove x.1 w.toWit c
-  coins := PMF.uniformOfFintype _
   q := PS.q
   prog_queries _ _ _ := PS.prove_queries _ _ _
 
@@ -185,12 +195,15 @@ challenger of the relayed proof queries (the trivial relation, the prover `ringP
 noncomputable def strongMain (keys : Fin n → B.KeyCoins) (Q : ℕ) :
     Challenger X Y (StrongReq B PS adm n) (StrongResp B PS) :=
   Challenger.sum (muChallenger (SignOracle.ring B) n keys Q)
-    (realChallenger (fun _ _ => True) (ringProver B PS adm n) Q)
+    (realChallenger (fun _ _ => True) (ringProver B PS adm n) (PMF.uniformOfFintype _) Q)
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  [Nonempty TB.KeyCoins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] in
 /-- **The main challenger never reprograms.** -/
 theorem strongMain_noAssign (keys : Fin n → B.KeyCoins) (Q : ℕ) :
     (strongMain B PS adm n keys Q).NoAssign :=
-  (muChallenger_noAssign _ keys Q).sum (realChallenger_noAssign _ _ Q)
+  (muChallenger_noAssign _ keys Q).sum (realChallenger_noAssign _ _ _ Q)
 
 variable (keys : Fin n → B.KeyCoins) (Q : ℕ) (H : X → Y)
   (c' : (Fin Q → B.Coins) × (Fin Q → PS.Coins))
@@ -200,6 +213,9 @@ noncomputable abbrev strongAns : List (StrongReq B PS adm n) → StrongReq B PS 
     Option (StrongResp B PS) :=
   (strongMain B PS adm n keys Q).toPureEnv.answerAfter (H, c')
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  [Nonempty TB.KeyCoins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] in
 /-- **The main reply to a multi-user request** after main requests `L` with `k < Q` multi-user
 requests and at most `Q` proof queries: the multi-user reply with the coins number `k`. -/
 theorem strongAns_inl (L : List (StrongReq B PS adm n)) (x : MURequest (SignOracle.ring B) n)
@@ -209,12 +225,15 @@ theorem strongAns_inl (L : List (StrongReq B PS adm n)) (x : MURequest (SignOrac
       (muReply (SignOracle.ring B) keys H (c'.1 ⟨k, hk⟩) x).map Sum.inl := by
   subst hl
   change (Challenger.sum (muChallenger (SignOracle.ring B) n keys Q)
-    (realChallenger (fun _ _ => True) (ringProver B PS adm n) Q)).toPureEnv.answerAfter (H, c') L
+    (realChallenger (fun _ _ => True) (ringProver B PS adm n) (PMF.uniformOfFintype _) Q)).toPureEnv.answerAfter (H, c') L
       (.inl x) = _
   rw [(muChallenger_noAssign (SignOracle.ring B) keys Q).answerAfter_sum_inl
-    (realChallenger_noAssign (fun _ _ => True) (ringProver B PS adm n) Q) H c' L x hk hr,
+    (realChallenger_noAssign (fun _ _ => True) (ringProver B PS adm n) (PMF.uniformOfFintype _) Q) H c' L x hk hr,
     answerAfter_muChallenger _ keys Q H c'.1 _ x hk]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  [Nonempty TB.KeyCoins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] in
 /-- **The main reply to a proof query** after main requests `L` with at most `Q` multi-user
 requests and `k < Q` proof queries: the proof of `PS` with the coins number `k`. -/
 theorem strongAns_inr (L : List (StrongReq B PS adm n))
@@ -224,11 +243,11 @@ theorem strongAns_inr (L : List (StrongReq B PS adm n))
       some (.inr ((PS.prove x.stmt.1 x.wit.toWit (c'.2 ⟨k, hk⟩)).run H)) := by
   subst hr
   change (Challenger.sum (muChallenger (SignOracle.ring B) n keys Q)
-    (realChallenger (fun _ _ => True) (ringProver B PS adm n) Q)).toPureEnv.answerAfter (H, c') L
+    (realChallenger (fun _ _ => True) (ringProver B PS adm n) (PMF.uniformOfFintype _) Q)).toPureEnv.answerAfter (H, c') L
       (.inr x) = _
   rw [(muChallenger_noAssign (SignOracle.ring B) keys Q).answerAfter_sum_inr
-    (realChallenger_noAssign (fun _ _ => True) (ringProver B PS adm n) Q) H c' L x hl hk,
-    answerAfter_realChallenger _ _ Q H c'.2 _ x hk]
+    (realChallenger_noAssign (fun _ _ => True) (ringProver B PS adm n) (PMF.uniformOfFintype _) Q) H c' L x hl hk,
+    answerAfter_realChallenger _ _ _ Q H c'.2 _ x hk]
   simp only [↓reduceIte]
   rfl
 
@@ -236,8 +255,12 @@ theorem strongAns_inr (L : List (StrongReq B PS adm n))
 
 variable [Zero Y] [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig]
 
-omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y]
-  [Nonempty Y] in
+omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y]
+  [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
+  [DecidableEq TB.Coins] [Nonempty TB.Coins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg]
+  in
 /-- The dummy proof query runs with its reply. -/
 theorem runsWith_askDummy (ansM : List (StrongReq B PS adm n) → StrongReq B PS adm n →
       Option (StrongResp B PS)) (rs : List (StrongReq B PS adm n))
@@ -245,6 +268,9 @@ theorem runsWith_askDummy (ansM : List (StrongReq B PS adm n) → StrongReq B PS
     MultiRelay.RunsWith ansM H rs (askDummy B PS adm r o) o [.inr (dummyQuery B PS adm r)] 0 :=
   (MultiRelay.runsWith_askResp ansM H rs _).mapOutput (fun _ => o)
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  [Nonempty TB.KeyCoins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] in
 /-- **A relayed request runs with the game's reply**: the request `r`, after main requests `L` with
 `k < Q` multi-user requests and `k` proof queries, runs with the game's reply at the coins
 `(c'.1 k, c'.2 k)`, a multi-user request and then a proof query, and at most `qPub` queries. -/
@@ -319,6 +345,9 @@ theorem runsWith_strongProg (L : List (StrongReq B PS adm n)) {k : ℕ} (hk : k 
 
 variable [Inhabited X] [NeZero n]
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+  [Nonempty TB.KeyCoins] in
 /-- **The main requests after the requests `rs`** (at most `Q`) have `|rs|` multi-user requests and
 `|rs|` proof queries: each request makes a multi-user request and then a proof query. -/
 theorem length_mainReqs_strong (i₁ : Fin n) (rs : List (RReq B PS adm n (SideOracle.none _)))
@@ -341,6 +370,7 @@ theorem length_mainReqs_strong (i₁ : Fin n) (rs : List (RReq B PS adm n (SideO
       ih1, ih2]
     constructor <;> simp [strongRelay, List.filterMap_cons]
 
+omit [Nonempty TB.KeyCoins] in
 /-- **The game's challenger with `Q` requests is the relay `strongRelay` of the main challenger**
 `strongMain keys Q` (`MultiRelay.RelaysChallenger`), along the pairing of the two parts' coins:
 request number `j` reads the multi-user coins and the prover's coins number `j`. -/
@@ -380,6 +410,11 @@ def StrongAsk (r : RReq B PS adm n (SideOracle.none _)) : StrongReq B PS adm n �
     | .sideSign _ _ => False
   | .inr _ => True
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.PK]
+  [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 /-- **Every main request of a relay program is one its request relays to.** -/
 theorem asksIn_strongProg [Zero Y] [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig]
     (pks : Fin n → B.PK) (r : RReq B PS adm n (SideOracle.none _)) :
@@ -414,6 +449,11 @@ def StrongFreshReq (keys : Fin n → B.KeyCoins) (o : KeyRing B.PK N × B.Msg ×
   (∀ pk ∈ o.1.1, ∃ i, B.pk (keys i) = pk ∧ MURequest.corrupt i ∉ mrs) ∧
     ∀ s, MURequest.sign s (o.1, o.2.1) ∉ mrs
 
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
+  [Nonempty TPS.Coins] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.PK]
+  [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 /-- **Freshness passes through the strong relay**: if every main request is the idle public-key
 request or one that a request of `grs` relays to (`StrongAsk`), a ring forgery fresh for `grs` is
 fresh for the multi-user main requests. -/

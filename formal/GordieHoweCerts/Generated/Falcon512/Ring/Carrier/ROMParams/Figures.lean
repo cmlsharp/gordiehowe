@@ -20,10 +20,10 @@ The figures (`figures`): at most `955` rounds, trees of at most `2560` leaves, `
 round error at most `43660620 / 2^140`, every load passing the Chernoff test `2^-4160` at
 `z = 65 / 64`; the domains' largest arrays (`1024`), largest challenge reads and other reads (`600`;
 `600`), no grants, and the source challenges' errors `511 / 18446744069414584321 ^ 2` at challenge
-`0`. The rounds, leaves, queries, verifier queries, digests, positions and the digest length are the
-compiler's; the Chernoff exponent and point, the largest arrays and reads, the grants and the
-largest round error's bound are the configuration's inputs. The check of the figures is
-`GordieHowe.ProgramData.FiguresOk`.
+`0` and `1022 / 18446744069414584321 ^ 2` at challenge `1`. The rounds, leaves, queries, verifier
+queries, digests, positions and the digest length are the compiler's; the Chernoff exponent and
+point, the largest arrays and reads, the grants and the largest round error's bound are the
+configuration's inputs. The check of the figures is `GordieHowe.ProgramData.FiguresOk`.
 -/
 
 namespace GordieHowe.Generated.Falcon512.Ring.Carrier.ROMParams
@@ -50,8 +50,10 @@ theorem figures_eq : figures = ⟨955, 2560, 96, 3160, 958, 2560, 32, 43660620, 
   rfl
 
 /-- **The error fractions of the source challenges** (the plan's degree bounds of their events over
-their fields' sizes): `511 / 18446744069414584321 ^ 2` at challenge `0`. -/
-def sourceErrors (_ : Nat) : Nat × Nat := (511, 18446744069414584321 ^ 2)
+their fields' sizes): `511 / 18446744069414584321 ^ 2` at challenge `0` and
+`1022 / 18446744069414584321 ^ 2` at challenge `1`. -/
+def sourceErrors (j : Nat) : Nat × Nat :=
+  if j = 0 then (511, 18446744069414584321 ^ 2) else (1022, 18446744069414584321 ^ 2)
 
 /-- **The figures' data.** -/
 abbrev figuresData : GordieHowe.FiguresData :=

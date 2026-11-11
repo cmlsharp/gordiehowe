@@ -51,9 +51,9 @@ structure PrefixRBR (A : Reduction P (leaf j) D X₁ X₂) (R₁ : Set (X₁ × 
     ¬ S m.castSucc (x, d) tr → ¬ S m.succ (x, d) ((P j).concat tr msg)
   /-- (iii) From a false state, a uniform challenge makes it true with probability at most
   `ε i`. -/
-  rbr : ∀ (i : (P j).ChallengeIdx) x d (tr : (P j).Transcript i.1.castSucc),
-    ¬ S i.1.castSucc (x, d) tr →
-      Pr[ch ← (P j).Challenge i : S i.1.succ (x, d) ((P j).concat tr ch)] ≤ ε i
+  rbr : ∀ (i : (P j).ChallengeIdx) x d (tr : (P j).Transcript i.before),
+    ¬ S i.before (x, d) tr →
+      Pr[ch ← (P j).Challenge i : S i.after (x, d) ((P j).concat tr ch)] ≤ ε i
   /-- (iv) A full transcript with a false state has its output outside `R₂`. -/
   out_not_mem : ∀ x d (f : FullTr P (leaf j)), ¬ S (Fin.last (n j)) (x, d) (f (.here j)) →
     (A.out x f, d) ∉ R₂
@@ -77,7 +77,7 @@ theorem PrefixRBR.toRBR {A : Reduction P (leaf j) D X₁ X₂} {R₁ : Set (X₁
 /-- The challenge `ch` after the prefix `tr` moves the leaf's state `S` from false to true, read
 at the empty causal context. -/
 abbrev leafFlip (S : CausalStateFn P (leaf j) (X₁ × D)) (i : (P j).ChallengeIdx) (s : X₁ × D)
-    (tr : (P j).Transcript i.1.castSucc) (ch : (P j).Challenge i) : Prop :=
+    (tr : (P j).Transcript i.before) (ch : (P j).Challenge i) : Prop :=
   FlipAt S ⟨.here j, i⟩ s ⟨CausalCtx.ofHere j, tr⟩ ch
 
 /-- **The "only if" direction of paper `lem:red-prefix`**: from a state function of

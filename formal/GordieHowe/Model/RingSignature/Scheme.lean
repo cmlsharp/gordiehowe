@@ -26,10 +26,9 @@ Oracles", TCC 2006 (BKM06), Definition 1 (ePrint 2005/304, p. 3): `Gen`, `Sign_{
 - `RingScheme.RefusesOutside`: the signer refuses every ring that does not hold its public key and
   every unsupported ring.
 - `RingScheme.signLaw`: the law of the signer's output at an oracle.
-- `OracleProg.QueriesLE.pure`, `OracleProg.QueriesLE.bind`, `OracleProg.QueriesLE.query`,
-  `OracleProg.QueriesLE.queryAll`,
-  `OracleProg.QueriesLE.tabulate`, `OracleProg.QueriesLE.iterate`: query bounds of the program
-  combinators the constructions use.
+- `OracleProg.QueriesLE.queryAll`, `OracleProg.QueriesLE.iterate`: query bounds of the program
+  combinators the constructions use (those of `pure`, `bind`, `query` and `tabulate` are in
+  `GordieHowe/Model/NARG/OracleProg.lean`).
 
 ## Comparison with BKM06 Definition 1
 
@@ -68,41 +67,10 @@ namespace OracleProg
 
 variable {A B R S : Type*}
 
-/-- A program that returns at once makes no queries. -/
-theorem QueriesLE.pure (r : R) (q : ℕ) : (OracleProg.pure r : OracleProg A B R).QueriesLE q :=
-  fun _ => Nat.zero_le _
-
-/-- **The query bound of a sequential composition**: `p` with at most `q₁` queries, then a
-continuation with at most `q₂` queries on every result, makes at most `q₁ + q₂` queries. -/
-theorem QueriesLE.bind {p : OracleProg A B R} {f : R → OracleProg A B S} {q₁ q₂ : ℕ}
-    (hp : p.QueriesLE q₁) (hf : ∀ r, (f r).QueriesLE q₂) : (p.bind f).QueriesLE (q₁ + q₂) :=
-  fun h => by
-    rw [trace_bind, List.length_append]
-    exact Nat.add_le_add (hp h) (hf _ h)
-
-/-- **A query, then a continuation with at most `q` queries on every answer**, makes at most
-`q + 1` queries. -/
-theorem QueriesLE.query (a : A) {k : B → OracleProg A B R} {q : ℕ} (hk : ∀ b, (k b).QueriesLE q) :
-    (OracleProg.query a k).QueriesLE (q + 1) :=
-  fun h => by
-    rw [trace_query, List.length_cons]
-    exact Nat.add_le_add_right (hk _ h) 1
-
 /-- **A query to each element of a list** makes as many queries as the list has elements. -/
 theorem QueriesLE.queryAll (l : List A) :
     (queryAll l : OracleProg A B (List B)).QueriesLE l.length :=
   fun h => by rw [trace_queryAll]
-
-/-- **The query bound of a tabulation**: programs with at most `q` queries at each of the `|l|`
-indices make at most `|l| · q` queries. -/
-theorem QueriesLE.tabulate {ι : Type*} [DecidableEq ι] (d : ι → R) (l : List ι)
-    {P : ι → OracleProg A B R} {q : ℕ} (hP : ∀ i, (P i).QueriesLE q) :
-    (OracleProg.tabulate d l P).QueriesLE (l.length * q) := fun h => by
-  rw [length_trace_tabulate]
-  refine (List.sum_le_length_nsmul _ q fun x hx => ?_).trans ?_
-  · obtain ⟨i, -, rfl⟩ := List.mem_map.1 hx
-    exact hP i h
-  · simp
 
 /-- **The query bound of an iteration**: `m` steps with at most `q` queries each make at most
 `m · q` queries. -/
@@ -139,9 +107,11 @@ instance (PK : Type) [Fintype PK] [DecidableEq PK] (N : ℕ) : Fintype (KeyRing 
   ⟨keyRingFinset PK N, mem_keyRingFinset PK N⟩
 
 /-- **The types of a ring signature scheme**: public keys, secret keys, messages, signatures and
-the coins of key generation and of signing, with the finiteness and decidable equality the games
-read. A `RingScheme` takes its types as this parameter, so the types of a constructed scheme are
-computed from types data and never read back from the scheme. -/
+the coins of key generation and of signing. A `RingScheme` takes its types as this parameter, so the
+types of a constructed scheme are computed from types data and never read back from the scheme.
+The record holds types only: the finiteness and decidable equality the games read are
+instance-implicit binders on its projections (`[Fintype T.PK]`), found by instance search on the
+named types of a concrete record. -/
 structure RingTypes where
   /-- Public keys. -/
   PK : Type
@@ -155,23 +125,6 @@ structure RingTypes where
   KeyCoins : Type
   /-- The coins of signing. -/
   SignCoins : Type
-  [instFintypePK : Fintype PK]
-  [instDecEqPK : DecidableEq PK]
-  [instFintypeMsg : Fintype Msg]
-  [instDecEqMsg : DecidableEq Msg]
-  [instFintypeSig : Fintype Sig]
-  [instDecEqSig : DecidableEq Sig]
-  [instFintypeKeyCoins : Fintype KeyCoins]
-  [instDecEqKeyCoins : DecidableEq KeyCoins]
-  [instNonemptyKeyCoins : Nonempty KeyCoins]
-  [instFintypeSignCoins : Fintype SignCoins]
-  [instDecEqSignCoins : DecidableEq SignCoins]
-  [instNonemptySignCoins : Nonempty SignCoins]
-
-attribute [instance] RingTypes.instFintypePK RingTypes.instDecEqPK RingTypes.instFintypeMsg
-  RingTypes.instDecEqMsg RingTypes.instFintypeSig RingTypes.instDecEqSig
-  RingTypes.instFintypeKeyCoins RingTypes.instDecEqKeyCoins RingTypes.instNonemptyKeyCoins
-  RingTypes.instFintypeSignCoins RingTypes.instDecEqSignCoins RingTypes.instNonemptySignCoins
 
 /-- **A ring signature scheme in the random-oracle model** (BKM06 Definition 1, ePrint 2005/304,
 p. 3) with the random oracle `X → Y`, rings of at most `N` keys and the types `T`: key generation
@@ -229,21 +182,27 @@ def RefusesOutside : Prop :=
   ∀ (kp : S.PK × S.SK) (R : KeyRing S.PK N) (m : S.Msg) (c : S.SignCoins) (H : X → Y),
     (kp.1 ∉ R.1 ∨ ¬ S.Supported R) → (S.sign kp R m c).run H = none
 
-/-- **The law of the signer's output** at the oracle `H`: the signing coins uniform. -/
-noncomputable def signLaw (H : X → Y) (kp : S.PK × S.SK) (R : KeyRing S.PK N) (m : S.Msg) :
-    PMF (Option S.Sig) :=
-  (PMF.uniformOfFintype S.SignCoins).map fun c => (S.sign kp R m c).run H
-
 /-- `RefusesOutside`, unfolded. -/
 theorem refusesOutside_iff : S.RefusesOutside ↔
     ∀ (kp : S.PK × S.SK) (R : KeyRing S.PK N) (m : S.Msg) (c : S.SignCoins) (H : X → Y),
       (kp.1 ∉ R.1 ∨ ¬ S.Supported R) → (S.sign kp R m c).run H = none := by
   rw [RefusesOutside]
 
+section Laws
+
+variable [Fintype T.SignCoins] [Nonempty T.SignCoins]
+
+/-- **The law of the signer's output** at the oracle `H`: the signing coins uniform. -/
+noncomputable def signLaw (H : X → Y) (kp : S.PK × S.SK) (R : KeyRing S.PK N) (m : S.Msg) :
+    PMF (Option S.Sig) :=
+  (PMF.uniformOfFintype S.SignCoins).map fun c => (S.sign kp R m c).run H
+
 /-- `signLaw`, unfolded. -/
 theorem signLaw_eq (H : X → Y) (kp : S.PK × S.SK) (R : KeyRing S.PK N) (m : S.Msg) :
     S.signLaw H kp R m = (PMF.uniformOfFintype S.SignCoins).map fun c => (S.sign kp R m c).run H := by
   rw [signLaw]
+
+end Laws
 
 end RingScheme
 

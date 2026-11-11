@@ -46,10 +46,9 @@ open scoped NNReal ENNReal
 
 /-- **The statements of the BCS transformation**: encoded ML-DSA-44 public keys (with the empty
 context) whose decoded key's `ExpandA` finishes within `1008` SHAKE128 bytes per `RejNTTPoly`
-call (`MLDSA44.ExpandAWithin`, FIPS 204 Algorithm 32 with the bound Appendix C permits). At the
-other keys no signature verifies (`MLDSA44.Verifies.expandA`). -/
-abbrev KeyStmt : Type :=
-  {s : MLDSA44.PoP.Statement 0 // MLDSA44.ExpandAWithin _root_.MLDSA.mldsa44 (MLDSA44.pkDecode44 s.key).rho}
+call (`MLDSA44.PoP.KeyStmt`, FIPS 204 Algorithm 32 with the bound Appendix C permits). At the
+other keys no signature verifies (`MLDSA44.PoP.relUpTo_expandAWithin`). -/
+abbrev KeyStmt : Type := MLDSA44.PoP.KeyStmt
 
 /-- **Equality of statements is decidable**: `MLDSA44.PoP.Statement`'s derived instance on the
 subtype, which compares the `1312` key bytes. It is irreducible, so that unifying it with a

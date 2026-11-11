@@ -20,7 +20,7 @@ work register alone, so it commutes with `τ` (`simQueryKernel_simWorkPerm`).
 - `hadamardKernel_simWorkPerm`, `decKernel_simWorkPerm`, `phaseKernel_simWorkPerm`,
   `simQueryKernel_simWorkPerm`: the kernels of the simulated query are invariant (they keep the
   work register, `simQueryKernel_work`).
-- `KrausMap.apply_submatrix_of_op`, `KrausMap.apply_supported`: a Kraus map along a permutation,
+- `KrausMap.apply_submatrix_of_op`, `KrausMapRelabel.apply_supported`: a Kraus map along a permutation,
   and on a set of basis states.
 - `densityRun_relabel`: the two runs.
 -/

@@ -192,7 +192,7 @@ the combinations (every inner node receiving two or more rows, and the root's co
 has a child). -/
 @[headline]
 theorem knowledge_soundness :
-    knowledgeSoundness (T.relation Rel H) (T.proof Rel).toShape.verifier
+    KnowledgeSound (T.relation Rel H) (T.proof Rel).toShape.verifier
       (T.proof Rel).toShape.extractor (T.knowledgeError ε) := by
   have h := FieldProof.knowledge_soundness (T.sound Rel H)
   rwa [T.sum_ipError H, T.sum_cpError H] at h

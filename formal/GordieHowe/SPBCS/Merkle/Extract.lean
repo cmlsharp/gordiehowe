@@ -315,10 +315,13 @@ def view (D : ODB k kN kS L e) (n : ℕ) (rt : Digest k) : MerkleView k kN L n :
 def NoVisitedCollision (D : ODB k kN kS L e) (n : ℕ) (rt : Digest k) : Prop :=
   ∀ p < 2 * n, ∀ u, label D n rt p = some u → (preimages D u).card ≤ 1
 
-open Classical in
+/-- **The collision check is decided** at the digest of each visited position. -/
+instance (D : ODB k kN kS L e) (n : ℕ) (rt : Digest k) : Decidable (NoVisitedCollision D n rt) :=
+  decidable_of_iff (∀ p < 2 * n, ∀ u ∈ label D n rt p, (preimages D u).card ≤ 1) Iff.rfl
+
 /-- `extract(D, rt)` (CMS19 section 6.1, p. 31) for Longfellow's `n`-leaf heap layout:
 the extracted tree, or `⊥` when a visited digest has a collision. -/
-noncomputable def extract (D : ODB k kN kS L e) (n : ℕ) (rt : Digest k) : Option (MerkleView k kN L n) :=
+def extract (D : ODB k kN kS L e) (n : ℕ) (rt : Digest k) : Option (MerkleView k kN L n) :=
   if NoVisitedCollision D n rt then some (view D n rt) else none
 
 theorem extract_eq_some (h : D ∉ digestCollision) : extract D n rt = some (view D n rt) := by

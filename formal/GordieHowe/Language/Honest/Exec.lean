@@ -535,6 +535,13 @@ def specNat (rd : ir.Valuation I) (c : SpectralConv) (i : ℕ) : ℕ :=
   | .equal d lhs _ _ => (I (ir.domainField d)).toNat (ir.evalWith rd d lhs i)
   | _ => 0
 
+/-- **The honest committed `C` of the convolution `c` at coordinate `i`** at the reader `rd`: the
+integer reading of its source, in the domain of its products predicate. -/
+def specCNat (rd : ir.Valuation I) (c : SpectralConv) (i : ℕ) : ℕ :=
+  match (ir.predicate c.products).body with
+  | .equal d _ _ _ => (I (ir.domainField d)).toNat (ir.evalWith rd d (.ref c.source) i)
+  | _ => 0
+
 /-- **The needles a static histogram counts** in group `g` of table `t`: with a late histogram
 beside it, the needles of the members reading no late value (`staticNeedles`; the late histogram
 counts the others); otherwise all the group's needles. -/
@@ -950,7 +957,8 @@ theorem natTyped_of_natTypedInB {L : List (ℕ × String)} (hL : OneNodes I L) {
     exact hL _ h
   · cases h
 
-/-- **Every committed cell's node contains `1`** where each is a listed node (`HonestFacts.oneMem`). -/
+/-- **Every committed cell's node contains `1`** where each is a listed node
+(`CommittedFacts.oneMem`). -/
 theorem oneMem_of_cellNodeIn {L : List (ℕ × String)} (hL : OneNodes I L)
     (h : ∀ v < ir.values.length, ir.isCellValue (ir.value v).domain v = true →
       ir.cellNodeInB L v = true) :
@@ -959,7 +967,7 @@ theorem oneMem_of_cellNodeIn {L : List (ℕ × String)} (hL : OneNodes I L)
 
 /-- **Every realization value typed by its node is a committed cell whose type contains the
 naturals** where each is a committed cell of the field or a listed node's type
-(`HonestFacts.realTypes`). -/
+(`CommittedFacts.realTypes`). -/
 theorem realTypes_of_natTypedIn {L : List (ℕ × String)} (hL : OneNodes I L)
     (h : ∀ v < ir.values.length, (ir.value v).typeSource = .node → ¬ ir.IsLate v →
       ¬ ir.IsSourceValue v → ir.privCellB v = true ∧ ir.natTypedInB L v = true) :

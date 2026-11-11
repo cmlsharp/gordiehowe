@@ -37,14 +37,10 @@ set_option linter.unusedSectionVars false
 variable {msgLen : ℕ}
 
 /-- **The identifiers of a carrier's table selection** (decided per carrier): the index bits are
-value `58`, the selection predicate `0`, the index bits' check predicate `8`. -/
+value `59`, the selection predicate `0`, the index bits' check predicate `11`. -/
 class MldsaCarrierSelect (program : RealizedProgram) [TableSelect program] : Prop where
-  /-- The index bits are value `58`. -/
-  idx58 : (TableSelect.shape program).idx = 58
-  /-- The selection is predicate `0`. -/
-  pred0 : (TableSelect.shape program).pred = 0
-  /-- The index bits' check is predicate `8`. -/
-  idxPred8 : (TableSelect.shape program).idxPred = 8
+  /-- The index bits are value `59`. -/
+  idx59 : (TableSelect.shape program).idx = 59
 
 variable {program : RealizedProgram} [CarrierHEmbed program] [CarrierAEmbed program]
   [MldsaEAlgebra (CarrierAEmbed.emu program)] [MldsaCarrierHonest program]
@@ -70,7 +66,7 @@ set_option hygiene false in
 local notation "E" => program.srcEnv interp x (honestVal program F0 FH y) c π
 
 /-- **A member value or a quotient digit reads its honest value** at the source environment. -/
-theorem evalE_member {v : ℕ} (hv : v ∈ [55, 56, 57, 58] ++ (qD).ids) {j : ℕ}
+theorem evalE_member {v : ℕ} (hv : v ∈ [56, 57, 58, 59, 66] ++ (qD).ids) {j : ℕ}
     (hj : j < (program.value v).size) :
     program.evalE (program.reader E) 0 (.leaf v) j = castElt (b := 0) (honestVal program F0 FH y v j) := by
   rw [evalE_leaf, reader_srcEnv_of_privCellB x _ c π
@@ -78,15 +74,15 @@ theorem evalE_member {v : ℕ} (hv : v ∈ [55, 56, 57, 58] ++ (qD).ids) {j : �
 
 /-- **`member.mu` reads the bits of the signer's `μ`.** -/
 theorem evalE_mu {t : ℕ} (ht : t < 512) :
-    program.evalE (program.reader E) 0 (.leaf 57) t = ((muBitNat y.mu t : ℕ) : (interp 0).K) := by
+    program.evalE (program.reader E) 0 (.leaf 58) t = ((muBitNat y.mu t : ℕ) : (interp 0).K) := by
   rw [evalE_member y x c π (by simp) (by rw [MldsaCarrierFront.muSize]; exact ht),
     (honestVal_member y t).2.2.1]
 
 /-- **The index bits read the bits of the signer's position.** -/
 theorem evalE_idx {i : ℕ} (hi : i < 6) :
-    program.evalE (program.reader E) 0 (.leaf 58) i = ((y.w.idx / 2 ^ i % 2 : ℕ) : (interp 0).K) := by
+    program.evalE (program.reader E) 0 (.leaf 59) i = ((y.w.idx / 2 ^ i % 2 : ℕ) : (interp 0).K) := by
   have hs := (TableSelect.sizes (program := program)).2.2.1
-  rw [MldsaCarrierFront.shape.2.2.2.2.2.2.2.2, MldsaCarrierSelect.idx58] at hs
+  rw [MldsaCarrierFront.shape.2.2.2.2.2.2.2.2, MldsaCarrierSelect.idx59] at hs
   rw [evalE_member y x c π (by simp) (by rw [hs]; exact hi), (honestVal_member y i).2.2.2.1]
 
 theorem bit_lt_gold (n i : ℕ) : n / 2 ^ i % 2 < pGold :=
@@ -97,7 +93,7 @@ theorem bitsOf_honest {i : ℕ} (hi : i < (TableSelect.shape program).bits) :
     TableSelect.bitsOf 0 E i = y.w.idx / 2 ^ i % 2 := by
   have h6 := (MldsaCarrierFront.shape (program := program)).2.2.2.2.2.2.2.2
   unfold TableSelect.bitsOf
-  rw [if_pos hi, MldsaCarrierSelect.idx58, evalE_idx y x c π (by rw [h6] at hi; exact hi)]
+  rw [if_pos hi, MldsaCarrierSelect.idx59, evalE_idx y x c π (by rw [h6] at hi; exact hi)]
   exact RealizedProgram.PrimeCastField.toNat_natCast (p := pGold) _ (bit_lt_gold _ _)
 
 /-- **The index bits name the signer's position.** -/
@@ -129,11 +125,12 @@ theorem idxBool_honest :
   have hs := (TableSelect.sizes (program := program)).2.2.1
   rw [exprLen_mul, exprLen_leaf, hs, MldsaCarrierFront.shape.2.2.2.2.2.2.2.2] at hi
   unfold evalWith
-  rw [domainField_shape, evalE_mul, MldsaCarrierSelect.idx58, evalE_idx y x c π hi]
+  rw [domainField_shape, evalE_mul, MldsaCarrierSelect.idx59, evalE_idx y x c π hi]
   rcases Nat.mod_two_eq_zero_or_one (y.w.idx / 2 ^ i) with h | h <;> rw [h] <;> simp
 
 /-- **`member.mu.boolean` holds**: the committed `μ` bits are bits. -/
-theorem muBool_honest : program.HoldsAt E (program.predicate 7).body := by
+theorem muBool_honest :
+    program.HoldsAt E (program.predicate (MldsaCarrierFront.muBoolPred program)).body := by
   obtain ⟨hc, -, -⟩ := MldsaCarrierFront.muBool (program := program)
   refine holdsWith_of_boolCheck hc fun i hi => ?_
   rw [MldsaCarrierFront.muSize] at hi
@@ -168,12 +165,14 @@ theorem record_honest (hx : RowsOf y.x x) {cc : ℕ} (hc : cc < 5144) :
   have hidx := y.idx_lt_64
   by_cases h1 : cc < 4096
   · rw [rec_aHat _ h1, evalE_member y x c π (by simp)
-      (by rw [MldsaCarrierRelation.size55]; exact h1), (honestVal_member y cc).1, if_pos h1,
+      (by rw [(MldsaCarrierRelation.sizes (program := program)).1]; exact h1),
+      (honestVal_member y cc).1, if_pos h1,
       rowApply_key y x hx (by omega)]
   by_cases h2 : cc < 5120
   · obtain ⟨d, hd, rfl⟩ : ∃ d < 1024, cc = 4096 + d := ⟨cc - 4096, by omega, by omega⟩
     rw [rec_t1 _ hd, evalE_member y x c π (by simp)
-      (by rw [MldsaCarrierRelation.size56]; exact hd), (honestVal_member y d).2.1, if_pos hd,
+      (by rw [(MldsaCarrierRelation.sizes (program := program)).2.1]; exact hd),
+      (honestVal_member y d).2.1, if_pos hd,
       rowApply_key y x hx h2]
   · obtain ⟨l, hl, rfl⟩ : ∃ l < 24, cc = 5120 + l := ⟨cc - 5120, by omega, by omega⟩
     rw [rec_mu E hl, rowApply_carrier_mu _ _ hl, rowEntry, if_neg h2, if_pos (by omega),
@@ -222,7 +221,7 @@ theorem select_honest (hx : RowsOf y.x x) :
     rw [bitsOf_honest y x c π hi]
     refine ⟨Nat.le_of_lt_succ (Nat.mod_lt _ (by norm_num)), ?_⟩
     rw [h6] at hi
-    rw [MldsaCarrierSelect.idx58]
+    rw [MldsaCarrierSelect.idx59]
     exact evalE_idx y x c π hi
   obtain ⟨hlen, hval⟩ := TableSelect.evalE_lhs domainField_shape E hT hF hbits
   rw [HoldsAt, hbody]

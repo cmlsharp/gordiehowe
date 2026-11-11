@@ -347,6 +347,8 @@ instance {K : Type} [Fintype K] : Fintype (FreePads K w D n k) :=
 
 instance {K : Type} [Nonempty K] : Nonempty (FreePads K w D n k) := equivProd.nonempty
 
+instance {K : Type} [DecidableEq K] : DecidableEq (FreePads K w D n k) := equivProd.decidableEq
+
 instance : AddCommGroup (FreePads K w D n k) := equivProd.addCommGroup
 
 @[simp] theorem add_skip (φ ψ : FreePads K w D n k) : (φ + ψ).skip = φ.skip + ψ.skip := rfl

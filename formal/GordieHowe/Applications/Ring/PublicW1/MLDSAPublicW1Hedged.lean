@@ -5,6 +5,7 @@ module
 
 public import GordieHowe.Applications.Ring.PublicW1.MLDSAPublicW1Regularity
 public import GordieHowe.Applications.Ring.PublicW1.MaskOracle
+public import GordieHowe.Applications.MLDSA.Signing.Hedged
 
 @[expose] public section
 
@@ -64,10 +65,6 @@ variable {p : Params} (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : 
   [Inhabited prims.Hint] [Fintype prims.Hint] [DecidableEq prims.Hint]
   [Fintype prims.Power2High] [DecidableEq prims.Power2High]
 
-/-- **The points of the mask oracle at one nonce**: the attempt counter, the secret seed `K` and
-the message point `(tr, m)`, the input of `µ`. -/
-abbrev MaskPt (T : ℕ) (Msg : Type) : Type := Fin T × (Bytes 32 × (Bytes 64 × Msg))
-
 open Classical in
 /-- **One hedged call of the base signer, then the flattening coin**: on a ring admissible at the
 game's oracles with the position in range, the first of the `T` masks `Z (κ, (K, (tr, m)))` of the
@@ -80,7 +77,8 @@ noncomputable def hedgeAttempt (βmin : ℚ≥0) (tol : ℕ) {N reps : ℕ} (T :
   if h : i < R.1.length ∧ RingAdmissible prims βmin tol HG R m then
     PMF.weightedAttemptMasks (ringWeights prims βmin (ringT0s prims R.1)) ⟨i, h.1⟩
       (realBuckets (prims.expandA sk.rho)) (attemptAccept prims sk (prims.expandA sk.rho))
-      (fun a => (flattenCoin prims sk βmin a : ℝ≥0∞)) (coe_flattenCoin_le_one prims sk βmin)
+      (fun a => (flattenCoin prims sk (Cutoff.const βmin) a : ℝ≥0∞)) (coe_flattenCoin_le_one prims
+          sk (Cutoff.const βmin))
       (fun y c => attemptOutput prims sk (prims.expandA sk.rho) (y, c))
       (ringOf (ringPts prims R.1 m) (schemeOrc HG.1)) fun t => Z (t, (sk.key, (sk.tr, m)))
   else PMF.pure (some default)
@@ -94,7 +92,8 @@ theorem uniform_bind_hedgeAttempt {βmin : ℚ≥0} {tol N reps T : ℕ}
       (PMF.uniformOfFintype (Fin T → MaskBox p)).bind
         (PMF.weightedAttemptMasks (ringWeights prims βmin (ringT0s prims R.1)) ⟨i, h.1⟩
           (realBuckets (prims.expandA sk.rho)) (attemptAccept prims sk (prims.expandA sk.rho))
-          (fun a => (flattenCoin prims sk βmin a : ℝ≥0∞)) (coe_flattenCoin_le_one prims sk βmin)
+          (fun a => (flattenCoin prims sk (Cutoff.const βmin) a : ℝ≥0∞)) (coe_flattenCoin_le_one
+              prims sk (Cutoff.const βmin))
           (fun y c => attemptOutput prims sk (prims.expandA sk.rho) (y, c))
           (ringOf (ringPts prims R.1 m) (schemeOrc HG.1))) := by
   unfold hedgeAttempt
@@ -102,10 +101,37 @@ theorem uniform_bind_hedgeAttempt {βmin : ℚ≥0} {tol N reps T : ℕ}
   rw [← PMF.uniform_map_slice (ι' := Fin T) (M := MaskBox p) (sk.key, (sk.tr, m)), PMF.bind_map]
   rfl
 
+/-- **The ideal-mask signer repeats the hedged attempt** with fresh uniform masks until it
+accepts, with the default output for a loop that never accepts. -/
+theorem signLaw_eq_untilSome_hedgeAttempt (N : ℕ) (βmin : ℚ≥0) (reps tol : ℕ)
+    (enc : Vector prims.High p.k → BucketVec p) (T : ℕ) (hT : 0 < T)
+    (HG : GameOrc prims Msg N reps) (sk : SecretKey p) (R : RingOf (PubKey p prims) N) (i : ℕ)
+    (m : Msg) :
+    (pubSigner prims (Msg := Msg) N βmin reps tol enc).signLaw HG sk R i m =
+      (untilSome ((PMF.uniformOfFintype (MaskPt T Msg → MaskBox p)).bind
+        (hedgeAttempt prims βmin tol T HG sk R i m))).map
+        fun o => o.getD (default : BucketVec p × FIPSSignature p prims) := by
+  show signLaw prims βmin tol HG sk R i m = _
+  unfold signLaw
+  split_ifs with h
+  · refine congrArg (PMF.map _) ?_
+    exact (PMF.untilSome_uniform_bind_weightedAttemptMasks _ _ _ _ _ _ _ _ hT).symm.trans
+      (congrArg untilSome (uniform_bind_hedgeAttempt prims HG sk m h).symm)
+  · have h0 : (PMF.uniformOfFintype (MaskPt T Msg → MaskBox p)).bind
+        (hedgeAttempt prims βmin tol T HG sk R i m) = PMF.pure (some default) := by
+      unfold hedgeAttempt
+      simp only [dif_neg h, PMF.bind_const]
+    show _ = PMF.map _ (untilSome ((PMF.uniformOfFintype (MaskPt T Msg → MaskBox p)).bind
+      (hedgeAttempt prims βmin tol T HG sk R i m)))
+    rw [h0, PMF.untilSome_pure_some]
+    exact (PMF.pure_map (fun o : Option (BucketVec p × FIPSSignature p prims) => o.getD default)
+      (some default)).symm
+
 /-- **The hedged ring signer** (the README construction with FIPS 204 hedged signing): at most
 `T` masks per call of ML-DSA.Sign, a fresh nonce for every call, the mask oracle on
 `MaskPt T Msg` at every nonce. With fresh uniform masks its signing loop is the ideal-mask
-signer's. -/
+signer's (`signLaw_eq_untilSome_hedgeAttempt`). -/
+@[reducible]
 noncomputable def hedgedSigner (N : ℕ) (βmin : ℚ≥0) (reps tol : ℕ)
     (enc : Vector prims.High p.k → BucketVec p) (T : ℕ) (hT : 0 < T) :
     MaskedSigner (pubSigner prims (Msg := Msg) N βmin reps tol enc) where
@@ -114,23 +140,20 @@ noncomputable def hedgedSigner (N : ℕ) (βmin : ℚ≥0) (reps tol : ℕ)
   Mask := MaskBox p
   attempt HG sk R i m Z := hedgeAttempt prims βmin tol T HG sk R i m Z
   dflt := (default : BucketVec p × FIPSSignature p prims)
-  signLaw_eq := fun (HG : GameOrc prims Msg N reps) (sk : SecretKey p)
-      (R : RingOf (PubKey p prims) N) (i : ℕ) (m : Msg) => by
-    show signLaw prims βmin tol HG sk R i m = _
-    unfold signLaw
-    split_ifs with h
-    · refine congrArg (PMF.map _) ?_
-      exact (PMF.untilSome_uniform_bind_weightedAttemptMasks _ _ _ _ _ _ _ _ hT).symm.trans
-        (congrArg untilSome (uniform_bind_hedgeAttempt prims HG sk m h).symm)
-    · have h0 : (PMF.uniformOfFintype (MaskPt T Msg → MaskBox p)).bind
-          (hedgeAttempt prims βmin tol T HG sk R i m) = PMF.pure (some default) := by
-        unfold hedgeAttempt
-        simp only [dif_neg h, PMF.bind_const]
-      show _ = PMF.map _ (untilSome ((PMF.uniformOfFintype (MaskPt T Msg → MaskBox p)).bind
-        (hedgeAttempt prims βmin tol T HG sk R i m)))
-      rw [h0, PMF.untilSome_pure_some]
-      exact (PMF.pure_map (fun o : Option (BucketVec p × FIPSSignature p prims) => o.getD default)
-        (some default)).symm
+  signLaw_eq HG sk R i m := by
+    refine (signLaw_eq_untilSome_hedgeAttempt prims N βmin reps tol enc T hT HG sk R i m).trans ?_
+    congr 4
+    exact Subsingleton.elim _ _
+
+omit [Nonempty (MaskBox p)] [Inhabited prims.Hint] [Fintype prims.Hint] [DecidableEq prims.Hint]
+  [Fintype prims.Power2High] [DecidableEq prims.Power2High] in
+/-- **The mask oracles of the hedged signer are finite**: registered once on the hedged signer's
+mask oracle, so that instance search finds it in one step inside larger types (the hedged signer's
+oracle pairs) instead of rebuilding it from the nonce, point and mask types. -/
+instance hedgedSigner.instFintypeMaskOrc {N : ℕ} {βmin : ℚ≥0} {reps tol : ℕ}
+    {enc : Vector prims.High p.k → BucketVec p} {T : ℕ} {hT : 0 < T} :
+    Fintype (hedgedSigner prims (Msg := Msg) N βmin reps tol enc T hT).MaskOrc :=
+  inferInstanceAs (Fintype (Bytes 32 × MaskPt T Msg → MaskBox p))
 
 /-! ### Anonymity against the hedged signer -/
 
@@ -176,10 +199,11 @@ theorem meanAttempt_none_le (keys : Fin n → _root_.MLDSA.Bytes 32) (HG : GameO
 variable {E : (j : ι) → (M.comp j).Encoder}
   {V : GameOrc prims Msg N reps → (pubSigner prims (Msg := Msg) N βmin reps tol enc).Stmt →
     FullTr P τ → Bool}
-  {Qs : ∀ H x, M.IOPQueries (V H) x} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ H x, M.IOPQueries (V H) x} {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   {honest : GameOrc prims Msg N reps → (pubSigner prims (Msg := Msg) N βmin reps tol enc).Wit →
     R → CausalProver P τ (pubSigner prims (Msg := Msg) N βmin reps tol enc).Stmt}
 
+omit [DecidableEq R] in
 /-- **Anonymity against FIPS 204 hedged signing from anonymity against the ideal-mask signer**
 (BKM06 Definition 4, ePrint 2005/304, p. 6, keys given at the start as in CCLM22 Experiment 2,
 p. 21): for an adversary and a distinguisher that read the mask oracle (`H(K ‖ rnd ‖ µ)` composed
@@ -330,7 +354,6 @@ theorem expect_ite_keepGood_le (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0�
         RingCheck prims βmin tol G c.ring then 1 else 0 := fun G =>
     if_congr Iff.rfl rfl rfl
   refine (Finset.expect_comp_snd
-    (hαβ := (pubSigner prims (Msg := Msg) N βmin reps tol enc).instFintypeOrc)
     (fun G => (if BadPass prims A s keys G then 1 else 0 : ℝ))).trans_le ?_
   rw [Finset.expect_congr rfl fun G _ => hB G]
   convert (expect_exists_ringCheck_le prims βmin tol (A.validChoices keys) RingChoice.ring s
@@ -349,7 +372,6 @@ theorem expect_expect_oracleError_le (hp : SigningParams p) (hβ0 : (βmin : ℝ
       anonError (A := A) hp hβ0 hβt s θ C :=
   Finset.expect_le_expect fun keys _ =>
     (Finset.expect_comp_fst
-      (hαβ := (pubSigner prims (Msg := Msg) N βmin reps tol enc).instFintypeOrc)
       (fun H => oracleError prims A hp hβ0 hβt s θ keys H)).trans_le
       (expect_schOrc_oracleError_le hp hβ0 hβt h_laws hs2 hθ0 hθ1 hs1 hC keys)
 
@@ -410,6 +432,7 @@ variable {Msg : Type} [Fintype Msg] [DecidableEq Msg] {N : ℕ} {βmin : ℚ≥0
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
       (Msg := Msg) N βmin reps tol (concreteEnc _root_.MLDSA.mldsa44)).Stmt → FullTr P τ → Bool}
   {Qs : ∀ GB GS GA H x, (M GB GS GA).IOPQueries (V GB GS GA H) x} {R : Type} [Fintype R]
+  [DecidableEq R]
   [Nonempty R]
   {honest : ∀ GB GS GA, GameOrc (concretePrimitivesKeyGen _root_.MLDSA.mldsa44) Msg N reps →
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
@@ -421,6 +444,7 @@ variable {Msg : Type} [Fintype Msg] [DecidableEq Msg] {N : ℕ} {βmin : ℚ≥0
     (Query k kN kS L → Out k e) → PubHist (BucketVec _root_.MLDSA.mldsa44) (M GB GS GA).NIProof 1 → Prop)
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-44 with FI_root_.MLDSA.mldsa44 204 hedged signing at the check parameters**
 (BKM06 Definition 4, ePrint 2005/304, p. 6, `Q = 1`, keys given at the start as in CCLM22
 Experiment 2, p. 21): `advantage_le_bkm06_mldsa44_checkParams` for the ideal-mask signer at every
@@ -500,6 +524,7 @@ theorem advantage_le_bkm06_mldsa44_hedged (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (h
     (A GB GS GA) (D GB GS GA) (hq GB GS GA) ka (sbar GB GS GA) (hkeep GB GS GA)
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-44 with FI_root_.MLDSA.mldsa44 204 hedged signing, the keep bound discharged**
 (BKM06 Definition 4, ePrint 2005/304, p. 6, `Q = 1`): `advantage_le_bkm06_mldsa44_hedged` with the
 keep bound `s̄ = β_min θ / 64` on the good event (`keepBound_of_keepGood`: the anonymity error
@@ -686,6 +711,7 @@ variable {Msg : Type} [Fintype Msg] [DecidableEq Msg] {N : ℕ} {βmin : ℚ≥0
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
       (Msg := Msg) N βmin reps tol (concreteEnc mldsa65)).Stmt → FullTr P τ → Bool}
   {Qs : ∀ GB GS GA H x, (M GB GS GA).IOPQueries (V GB GS GA H) x} {R : Type} [Fintype R]
+  [DecidableEq R]
   [Nonempty R]
   {honest : ∀ GB GS GA, GameOrc (concretePrimitivesKeyGen mldsa65) Msg N reps →
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
@@ -697,6 +723,7 @@ variable {Msg : Type} [Fintype Msg] [DecidableEq Msg] {N : ℕ} {βmin : ℚ≥0
     (Query k kN kS L → Out k e) → PubHist (BucketVec mldsa65) (M GB GS GA).NIProof 1 → Prop)
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-65 with FImldsa65 204 hedged signing at the check parameters**
 (BKM06 Definition 4, ePrint 2005/304, p. 6, `Q = 1`, keys given at the start as in CCLM22
 Experiment 2, p. 21): `advantage_le_bkm06_mldsa65_checkParams` for the ideal-mask signer at every
@@ -776,6 +803,7 @@ theorem advantage_le_bkm06_mldsa65_hedged (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (h
     (A GB GS GA) (D GB GS GA) (hq GB GS GA) ka (sbar GB GS GA) (hkeep GB GS GA)
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-65 with FImldsa65 204 hedged signing, the keep bound discharged**
 (BKM06 Definition 4, ePrint 2005/304, p. 6, `Q = 1`): `advantage_le_bkm06_mldsa65_hedged` with the
 keep bound `s̄ = β_min θ / 64` on the good event (`keepBound_of_keepGood`: the anonymity error
@@ -961,6 +989,7 @@ variable {Msg : Type} [Fintype Msg] [DecidableEq Msg] {N : ℕ} {βmin : ℚ≥0
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
       (Msg := Msg) N βmin reps tol (concreteEnc mldsa87)).Stmt → FullTr P τ → Bool}
   {Qs : ∀ GB GS GA H x, (M GB GS GA).IOPQueries (V GB GS GA H) x} {R : Type} [Fintype R]
+  [DecidableEq R]
   [Nonempty R]
   {honest : ∀ GB GS GA, GameOrc (concretePrimitivesKeyGen mldsa87) Msg N reps →
     (pubSigner (withExpandA (oraclePrimitives GB GS) GA)
@@ -972,6 +1001,7 @@ variable {Msg : Type} [Fintype Msg] [DecidableEq Msg] {N : ℕ} {βmin : ℚ≥0
     (Query k kN kS L → Out k e) → PubHist (BucketVec mldsa87) (M GB GS GA).NIProof 1 → Prop)
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-87 with FImldsa87 204 hedged signing at the check parameters**
 (BKM06 Definition 4, ePrint 2005/304, p. 6, `Q = 1`, keys given at the start as in CCLM22
 Experiment 2, p. 21): `advantage_le_bkm06_mldsa87_checkParams` for the ideal-mask signer at every
@@ -1051,6 +1081,7 @@ theorem advantage_le_bkm06_mldsa87_hedged (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (h
     (A GB GS GA) (D GB GS GA) (hq GB GS GA) ka (sbar GB GS GA) (hkeep GB GS GA)
 
 open Classical in
+omit [DecidableEq R] in
 /-- **Anonymity at ML-DSA-87 with FImldsa87 204 hedged signing, the keep bound discharged**
 (BKM06 Definition 4, ePrint 2005/304, p. 6, `Q = 1`): `advantage_le_bkm06_mldsa87_hedged` with the
 keep bound `s̄ = β_min θ / 64` on the good event (`keepBound_of_keepGood`: the anonymity error

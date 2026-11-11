@@ -40,7 +40,8 @@ namespace GordieHowe
 open Quantum Signature RingSignature
 open scoped ENNReal
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB} {O : SignOracle B} {n : ℕ}
+variable {X Y : Type} {N : ℕ} {TB : BaseTypes}
+  {B : BaseSigner X Y N TB} {O : SignOracle B.core} {n : ℕ}
 
 /-! ### The inert challenger and the relay -/
 
@@ -58,12 +59,15 @@ noncomputable def inertChallenger (Req : Type) [Fintype Req] [DecidableEq Req] (
 
 variable [NeZero n]
 
+variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins]
+
 variable (O n) in
 /-- **Every request an outer request, none of them the dummy `publicKey 0`**: request `r` is sent
 to the inner challenger as itself; its outer request is `r`, except `publicKey 0`, whose outer
 request is `publicKey i₂` and whose reply is the key `pk₀` when the outer request is answered. -/
-def muTwoRelay (pk₀ : B.PK) (i₂ : Fin n) : TwoRelay (MURequest O n) (MUResponse B)
-    (MURequest O n) Unit (MURequest O n) (MUResponse B) where
+def muTwoRelay (pk₀ : B.PK) (i₂ : Fin n) : TwoRelay (MURequest O n) (MUResponse B.core)
+    (MURequest O n) Unit (MURequest O n) (MUResponse B.core) where
   route₁ _ r := r
   answer₁ _ _ _ := none
   outer
@@ -78,13 +82,17 @@ def muTwoRelay (pk₀ : B.PK) (i₂ : Fin n) : TwoRelay (MURequest O n) (MURespo
 variable (O) in
 /-- The relay `muTwoRelay` at the users' key coins `keys`: the key of user `0` known. -/
 abbrev muRelayAt (keys : Fin n → B.KeyCoins) (i₂ : Fin n) : TwoRelay (MURequest O n)
-    (MUResponse B) (MURequest O n) Unit (MURequest O n) (MUResponse B) :=
+    (MUResponse B.core) (MURequest O n) Unit (MURequest O n) (MUResponse B.core) :=
   muTwoRelay O n (B.pk (keys 0)) i₂
 
+omit [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins] in
 theorem muTwoRelay_outer (pk₀ : B.PK) (i₂ : Fin n) :
     ∀ c r, ((muTwoRelay O n pk₀ i₂).outer c r).isSome := fun _ r => by
   cases r <;> rfl
 
+omit [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins] in
 /-- **No outer request of the relay is the dummy `publicKey 0`**, for `i₂ ≠ 0`. -/
 theorem muTwoRelay_outer_ne (pk₀ : B.PK) {i₂ : Fin n} (hi₂ : i₂ ≠ 0) :
     ∀ c r q, (muTwoRelay O n pk₀ i₂).outer c r = some q → q ≠ .publicKey 0 := fun _ r q h => by
@@ -108,6 +116,8 @@ theorem muTwoRelay_outer_ne (pk₀ : B.PK) {i₂ : Fin n} (hi₂ : i₂ ≠ 0) :
     intro h'
     cases h'
 
+omit [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins] in
 /-- **The outer request of a corrupting or signing request is itself** (`muTwoRelay`). -/
 theorem muTwoRelay_outer_eq_self {pk₀ : B.PK} {i₂ : Fin n} {c : ℕ} {r q : MURequest O n}
     (h : (muTwoRelay O n pk₀ i₂).outer c r = some q)
@@ -124,6 +134,8 @@ theorem muTwoRelay_outer_eq_self {pk₀ : B.PK} {i₂ : Fin n} {c : ℕ} {r q : 
     simp only [muTwoRelay, Option.some.injEq] at h
     exact h
 
+omit [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
+  [Nonempty O.Coins] in
 /-- **Through `muTwoRelay`, an outer request is a signing or corruption request exactly when the
 request is.** -/
 theorem isSignOrCorrupt_muTwoRelay_outer (pk₀ : B.PK) (i₂ : Fin n) (c : ℕ) (r : MURequest O n) :
@@ -133,13 +145,13 @@ theorem isSignOrCorrupt_muTwoRelay_outer (pk₀ : B.PK) (i₂ : Fin n) (c : ℕ)
 variable [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y]
   [Nonempty X]
 
-omit [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y]
-  [Nonempty X] in
+omit [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y] [Nonempty X]
+  in
 /-- **The inert challenger never reprograms.** -/
 theorem inertChallenger_noAssign (Req : Type) [Fintype Req] [DecidableEq Req] (Q' : ℕ) :
     (inertChallenger X Y Req Q').NoAssign := fun _ _ _ _ => rfl
 
-omit [NeZero n] in
+omit [NeZero n] [Fintype O.SMsg] [DecidableEq O.SMsg] in
 /-- **The multi-user challenger's reply after the requests `rs`** is `muReplyAfter` at `|rs|`, for a
 signing oracle without queries. -/
 theorem answerAfter_muChallenger_eq (hO : O.NoQuery) (keys : Fin n → B.KeyCoins) (Q' : ℕ)
@@ -155,11 +167,14 @@ theorem answerAfter_muChallenger_eq (hO : O.NoQuery) (keys : Fin n → B.KeyCoin
   · rw [Challenger.answerAfter_toPureEnv_of_le _ _ _ _ (not_lt.1 hi)]
     simp [muReplyAfter, hi]
 
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+
 /-- **The multi-user challenger at the coins `ω` relays the inert challenger** through the relay at
 the table of its replies, on the logs of the `A.slots` slots of an adversary `A`: the count of the
 earlier requests stays below the number of slots, where the table is the challenger's reply. -/
 theorem relays_muTwoRelay (hO : O.NoQuery) {Ot : Type}
-    {shA : AlgShape X Y (MURequest O n) (MUResponse B)} (A : AdaptiveIAlg shA Ot) (keys : Fin n → B.KeyCoins)
+    {shA : AlgShape X Y (MURequest O n) (MUResponse B.core)} (A : AdaptiveIAlg shA Ot) (keys : Fin n → B.KeyCoins)
     (i₂ : Fin n) (Q' : ℕ) (H : X → Y) (ω : Fin Q' → O.Coins) :
     ((muRelayAt O keys i₂).atC (A.tabAt (muTab A keys Q' ω))).Relays
       (muChallenger O n keys Q').toPureEnv (H, ω)
@@ -179,11 +194,13 @@ theorem relays_muTwoRelay (hO : O.NoQuery) {Ot : Type}
     rw [(muChallenger_noAssign O keys Q').oracle_eq H ω lg,
       (inertChallenger_noAssign (MURequest O n) Q').oracle_eq H () _]
 
-omit [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y]
-  [Nonempty X] in
+omit [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y] [Nonempty X]
+  [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins]
+  [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- The relay of the requests to the inert challenger is injective. -/
 theorem muTwoRelay_route_injective (pk₀ : B.PK) (i₂ : Fin n)
-    (b : ℕ → MURequest O n → Option (MUResponse B)) (c : ℕ) :
+    (b : ℕ → MURequest O n → Option (MUResponse B.core)) (c : ℕ) :
     Function.Injective (((muTwoRelay O n pk₀ i₂).atC b).route c) := fun _ _ h => h
 
 /-! ### The run against the multi-user challenger as runs with tables -/
@@ -195,9 +212,9 @@ average over uniform coins `ω` of the probability that the adversary with the t
 (`absorbTab`), against the inert challenger, ends with registers and logs (read through the table's
 removal and the absorbed registers) in `P`. -/
 theorem toOuterMeasure_outLaw_muChallenger_eq_absorbTab (hO : O.NoQuery) {Ot : Type}
-    {shA : AlgShape X Y (MURequest O n) (MUResponse B)} (A : AdaptiveIAlg shA Ot) (keys : Fin n → B.KeyCoins)
+    {shA : AlgShape X Y (MURequest O n) (MUResponse B.core)} (A : AdaptiveIAlg shA Ot) (keys : Fin n → B.KeyCoins)
     (i₂ : Fin n) (Q' : ℕ) (H : X → Y)
-    (P : DReg A.toKindAlg.W A.width X Y (MURequest O n) (MUResponse B) →
+    (P : DReg A.toKindAlg.W A.width X Y (MURequest O n) (MUResponse B.core) →
       LogReg (MURequest O n) A.slots → Prop) :
     ((A.toKindAlg.composeBothOut (muChallenger O n keys Q') id).outLaw H).toOuterMeasure
         {o | ∃ v ∈ o, P v.adv v.chal.logs} =

@@ -33,7 +33,6 @@ namespace GordieHowe.Falcon512.Native.QROMParams
 open RealizedProgram.Export RealizedProgram.ProofSystem.PhaseLayout IOP RelativePacking GordieHowe.SPBCS GordieHowe.QROM SPBCS.Configurations
 open Generated.Falcon512.Native.QROMParams.Program (program)
 open Generated.Falcon512.Native.QROMParams (interp ProofSystems)
-open GordieHowe.Falcon512.Emulated (PublicKey)
 open scoped NNReal ENNReal
 
 /-! ## The compiled circuits and the multi-circuit IOP -/

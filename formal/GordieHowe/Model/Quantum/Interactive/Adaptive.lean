@@ -470,7 +470,7 @@ attribute [instance] AlgShape.instFintypeW AlgShape.instDecidableEqW AlgShape.in
 
 /-- **The workspace with the query counter at a shape** (`AdaptiveIAlg.toKindAlg`): the shape's
 workspace and the number of query slots so far. A named type, so that instance search over the
-registers built from it stops at its own instances (design rule R2). -/
+registers built from it stops at its own instances. -/
 def AlgShape.CntW {X Y Req Resp : Type} (s : AlgShape X Y Req Resp) : Type := s.W × Fin (s.budget + 2)
 
 instance AlgShape.instFintypeCntW {X Y Req Resp : Type} (s : AlgShape X Y Req Resp) :
@@ -582,8 +582,9 @@ abbrev instFintypeR (_ : AdaptiveIAlg sh O) : Fintype sh.R := sh.instFintypeR
 
 end AdaptiveIAlg
 
-/-- **`omega` over the accessors of an adversary** (design rule R5): unfolds the accessors to the
-fields of the shape, so that `A.slots` and `sh.slots` are one atom, then runs `omega`. -/
+/-- **`omega` over the accessors of an adversary**: unfolds the accessors to the fields of the
+shape, then runs `omega`. `omega` does not unfold the accessors, so without this step it treats
+`A.slots` and `sh.slots` as different atoms. -/
 macro "shape_omega" : tactic =>
   `(tactic| ((try simp only [AdaptiveIAlg.slots, AdaptiveIAlg.post, AdaptiveIAlg.budget,
     AdaptiveIAlg.width] at *); omega))

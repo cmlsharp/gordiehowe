@@ -50,8 +50,8 @@ oracle `G = SampleInBall`.
   `𝔼_G w_G⁻² ≤ acceptFloor(Mb + t, Qb + t₂)⁻² + (e^{-2N t²/H²} + e^{-2N t₂²/H₂²}) e^{2(H + κ H₂)}`
   with `N = 256^(λ/4)`, `H = 256 k x₀` and `H₂ = 256 k x₀²` the largest values of the two sums,
   and `e^{-H - κ H₂}` the floor on the bad event.
-* **The member weight** (`oracleAcceptFloor_le_expect_memberWeight`): for `β_min ≤ 1` and every
-  `v`, `w_G(t₀) ≤ 𝔼_c̃ memberWeight(t₀, (v, c̃))`.
+* **The member weight** (`oracleAcceptFloor_le_expect_flatWeight`): for `β_min ≤ 1` and every
+  `v`, `w_G(t₀) ≤ 𝔼_c̃ flatWeight(t₀, (v, c̃))`.
 * **ML-DSA-65 and ML-DSA-87** (`floorParams_mldsa65`, `floorParams_mldsa87`,
   `expect_inv_sq_oracleAcceptFloor_le_mldsa65`, `_mldsa87`): `x₀ = 48/125`, `κ = 341/500`
   (resp. `x₀ = 47/100`, `κ = 747/1000`) and `t = t₂ = 2^-64` give
@@ -324,6 +324,15 @@ theorem abs_centeredCoeffs_smul_le {τ k : ℕ} (c : ChallengeBall τ) (t0 : RqV
   rw [← Int.cast_abs, Int.abs_eq_natAbs]
   exact_mod_cast h'
 
+/-- The coefficients of `c · t₀` for a ternary `c` of weight at most `τ` and `‖t₀‖∞ ≤ 2^12` are
+at most `τ 2^12` in absolute value. -/
+theorem abs_centeredCoeffs_smul_le_of_weight_le {τ k : ℕ} {c : Rq} (hc1 : polyNorm c ≤ 1)
+    (hcw : (univ.filter fun j : Fin ringDegree => c.get j ≠ 0).card ≤ τ) (t0 : RqVec k)
+    (ht0 : polyVecNorm t0 ≤ 4096) (x : Fin k × Fin ringDegree) :
+    |((centeredCoeffs (c • t0) x : ℤ) : ℝ)| ≤ ((τ * 4096 : ℕ) : ℝ) :=
+  (abs_centeredCoeffs_smul_le (ChallengeBall.ofWeight c hc1) t0 ht0 x).trans
+    (by gcongr)
+
 /-- **The hint mean over a uniform challenge, by `𝔼|b| ≤ √(𝔼 b²)`**: for `c` uniform on `B_τ`
 (`τ ≤ 256`), `‖t₀‖∞ ≤ 2^12` and `2τ 2^12 < q`,
 `𝔼_c hintBoundSum(c, t₀) ≤ (16 √τ / L) ∑_j ‖t₀,j‖₂`, `L = 2(γ₂ - β) - 1`. -/
@@ -415,7 +424,7 @@ variable {p : Params} [nttOps : NTTRingOps]
 /-- **The acceptance floor of `t₀` under the oracle `G`**: `acceptFloor` at the averages over the
 commitment hash `c̃` of `hintBoundSum` and `hintBoundSqSum` at the challenge `G(c̃)`. A lower bound
 on the mean member weight of `t₀` in every bucket vector
-(`oracleAcceptFloor_le_expect_memberWeight`). -/
+(`oracleAcceptFloor_le_expect_flatWeight`). -/
 noncomputable def oracleAcceptFloor (p : Params) (κ : ℝ)
     (G : CommitHashBytes p → ChallengeBall p.tau) (t0 : RqVec p.k) : ℝ :=
   acceptFloor p.omega κ (𝔼 cTilde, hintBoundSum p.gamma2 p.beta (G cTilde).1 t0)
@@ -478,14 +487,14 @@ theorem acceptFloor_le_expect_challengeBall_acceptWeight (hf : FloorParams p x�
 
 /-- **The acceptance floor under the oracle bounds the member weight**: for `prims` with
 `SampleInBall = G`, `β_min ≤ 1`, `‖t₀‖∞ ≤ 2^12` and every bucket vector `v`,
-`oracleAcceptFloor p κ G t₀ ≤ 𝔼_c̃ memberWeight(t₀, (v, c̃))`. -/
-theorem oracleAcceptFloor_le_expect_memberWeight [NeZero (bucketCount p)]
+`oracleAcceptFloor p κ G t₀ ≤ 𝔼_c̃ flatWeight(t₀, (v, c̃))`. -/
+theorem oracleAcceptFloor_le_expect_flatWeight [NeZero (bucketCount p)]
     (hf : FloorParams p x₀ κ) (prims : Primitives p)
     (G : CommitHashBytes p → ChallengeBall p.tau)
     (hG : ∀ cTilde, prims.sampleInBall cTilde = (G cTilde).1) {βmin : ℚ≥0} (hβ : (βmin : ℝ≥0∞) ≤ 1)
     (t0 : RqVec p.k) (ht0 : polyVecNorm t0 ≤ 4096) (v : BucketVec p) :
     oracleAcceptFloor p κ G t0 ≤
-      𝔼 cTilde, (memberWeight prims βmin t0 (v, cTilde) : ℝ≥0∞).toReal := by
+      𝔼 cTilde, (flatWeight prims (Cutoff.const βmin) t0 (v, cTilde) : ℝ≥0∞).toReal := by
   have hfl := acceptFloor_le_expect_acceptWeight_of_hintFractionBound (ω := p.omega)
     (fun cTilde : CommitHashBytes p => centeredCoeffs ((G cTilde).1 • t0))
     (fun c x => hf.abs_lt (G c) t0 ht0 x) (fun c x => hf.hintFractionBound_le (G c) t0 ht0 x)
@@ -501,7 +510,7 @@ theorem oracleAcceptFloor_le_expect_memberWeight [NeZero (bucketCount p)]
     simp only [hG]
   rw [← ht]
   refine ENNReal.toReal_mono (ENNReal.nnratCast_ne_top _) ?_
-  rw [coe_memberWeight]
+  rw [coe_flatWeight]
   refine le_min ?_ ((div_one _).symm.le.trans (ENNReal.div_le_div_left hβ _))
   rw [coe_t0Weight]
   exact ENNReal.ofReal_le_one.2 (by rw [hG]; exact haw1)

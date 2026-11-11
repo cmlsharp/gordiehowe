@@ -4,6 +4,8 @@
 module
 
 public import GordieHowe.Applications.Ring.PublicW1.PublicValue
+public import GordieHowe.Applications.MLDSA.Signing.PublishedKey
+public import GordieHowe.Applications.MLDSA.Signing.Oracles
 public import GordieHowe.Applications.MLDSA.Signing.RingSigner
 public import GordieHowe.Applications.MLDSA.Signing.SampleInBallShape
 public import GordieHowe.Applications.MLDSA.Signing.ChallengeMoments
@@ -15,7 +17,8 @@ import all LatticeCrypto.MLDSA.Concrete.Rounding
 /-!
 # The ML-DSA ring signature publishing `w₁`
 
-Every ring member publishes `(ρ, t₁, t₀)` (`PubKey`). The game has three random oracles: the
+Every ring member publishes `(ρ, t₁, t₀)` (`PubKey`, with the key generation `keyGen`, in
+`Applications/MLDSA/Signing/PublishedKey.lean`). The game has three random oracles: the
 message-representative oracle `H_µ` (`µ = H(tr ‖ M′)`, FIPS 204 Algorithm 7 line 6), the
 commitment-hash oracle `H` on `(µ, w₁)` (`c̃ = H(µ ‖ w1Encode(w₁))`, line 15), and the check
 oracle `G`. The signer of position `i` runs the weighted ring loop of `RingSigner.lean` against
@@ -28,7 +31,7 @@ position.
 (`PubSigner.Admit`): in the anonymity game the adversary chooses any ring holding the two users'
 keys and sees `⊥` for a ring the signer refuses.
 
-* `checkWeight`, `checkWeight_le_t0Weight`, `memberWeight_eq_one_of_le_checkWeight`: the
+* `checkWeight`, `checkWeight_le_t0Weight`, `flatWeight_eq_one_of_le_checkWeight`: the
   bucket-free acceptance weight `acceptWeightLower` of `b = SampleInBall(c̃)·t₀`, rational
   (`coe_checkWeight`), at most the acceptance weight in every bucket vector; where it reaches
   `β_min` the member weight is one. The check compares rationals and has compiled code.
@@ -60,19 +63,20 @@ keys and sees `⊥` for a ring the signer refuses.
   challenges of the adversary's set valid for any key vector (`PubAnonAdversary.ValidCountLe`),
   `anonError` the
   average over the users' coins of `2 / ((1 - s) θ)` times the largest regularity gap of an honest
-  key (`ringRegGap`) plus the McDiarmid terms, for every defect budget `s < 1` and `x ≥ 1`.
-* `concreteEnc_highBitsVec`, `verifyLaws_concrete`, `advantage_le_concrete`: the same at the
-  concrete primitives with the FIPS 204 `ExpandS` (`concretePrimitivesKeyGen`) of every approved
-  parameter set (ML-DSA-44, 65, 87), with no hypothesis on the primitives.
-* `withExpandA`, `regGapAvg`, `expect_regGap_withExpandA`, `idealAnonError`, `advantage_le_ideal`:
-  the game with `ExpandA` a random oracle (the primitives with
+  key (`signerRegGap`) plus the McDiarmid terms, for every defect budget `s < 1` and `x ≥ 1`.
+* `advantage_le_concrete`: the same at the concrete primitives with the FIPS 204 `ExpandS`
+  (`concretePrimitivesKeyGen`) of every approved parameter set (ML-DSA-44, 65, 87), with no
+  hypothesis on the primitives (the laws and the encoding:
+  `Applications/MLDSA/Signing/PublishedKey.lean`).
+* `regGapAvg`, `expect_regGap_withExpandA`, `idealAnonError`, `advantage_le_ideal`:
+  the game with `ExpandA` a random oracle (the primitives `withExpandA` with
   `ExpandA := G`, averaged over a uniform `G`), with the regularity term
   `2 / ((1 - s) θ) · n · regGapAvg`, `regGapAvg` the regularity gap averaged over the seed and a
   uniform
   matrix; the factor `n` bounds the largest of the `n` honest users' gaps by their sum. At the
   concrete primitives, with `SampleInBall` and `ExpandS` random oracles as well:
   `advantage_le_ideal_concrete` in `MLDSAPublicW1Regularity.lean`.
-* `withSampleInBall`, `expect_withSampleInBall`, `expect_memberWeight_withSampleInBall`: the
+* `withSampleInBall`, `expect_withSampleInBall`, `expect_flatWeight_withSampleInBall`: the
   primitives with `SampleInBall := G` for a random oracle `G` onto the challenge set `B_τ`
   (`ChallengeBall`); averaged over a uniform `G`, the challenge of every commitment hash is uniform
   on `B_τ`.
@@ -105,30 +109,6 @@ open scoped ENNReal BigOperators
 
 variable {p : Params} (prims : Primitives p)
 
-/-- **A published ML-DSA key with `k` rows of `t₁` coefficients in `P`**: `(ρ, t₁, t₀)`. A named
-type, so instance search stops at the name: the `BEq` of keys is the one of their decidable
-equality, the instance generic constructions over a types record use. -/
-def PubKeyOf (P : Type) (k : ℕ) : Type := Bytes 32 × Vector P k × RqVec k
-
-instance {P : Type} [DecidableEq P] {k : ℕ} : DecidableEq (PubKeyOf P k) :=
-  inferInstanceAs (DecidableEq (Bytes 32 × Vector P k × RqVec k))
-
-instance {P : Type} [Fintype P] {k : ℕ} : Fintype (PubKeyOf P k) :=
-  inferInstanceAs (Fintype (Bytes 32 × Vector P k × RqVec k))
-
-instance {P : Type} [Nonempty P] {k : ℕ} : Nonempty (PubKeyOf P k) :=
-  inferInstanceAs (Nonempty (Bytes 32 × Vector P k × RqVec k))
-
-/-- **A published ML-DSA key**: `(ρ, t₁, t₀)` (FIPS 204 §5.1 public key `(ρ, t₁)` with `t₀`, which
-need not be secret, §6.1). -/
-abbrev PubKey (p : Params) (prims : Primitives p) : Type := PubKeyOf prims.Power2High p.k
-
-/-- The FIPS 204 public key `(ρ, t₁)` of a published key. -/
-def pubPk (x : PubKey p prims) : PublicKey p prims := ⟨x.1, x.2.1⟩
-
-/-- The hash `tr = H(pkEncode(ρ, t₁))` of a published key (FIPS 204 Algorithm 8 line 6). -/
-def pubTr (x : PubKey p prims) : Bytes 64 := prims.hashPublicKey x.1 x.2.1
-
 /-- The published `t₀`s of a ring. -/
 def ringT0s (l : List (PubKey p prims)) : Fin l.length → RqVec p.k := fun j => (l.get j).2.2
 
@@ -136,86 +116,8 @@ def ringT0s (l : List (PubKey p prims)) : Fin l.length → RqVec p.k := fun j =>
 def ringPts {Msg : Type} (l : List (PubKey p prims)) (m : Msg) : Fin l.length → Bytes 64 × Msg :=
   fun j => (pubTr prims (l.get j), m)
 
-/-- The FIPS 204 signature as a triple. -/
-def sigEquiv : FIPSSignature p prims ≃ CommitHashBytes p × RqVec p.l × Vector prims.Hint p.k where
-  toFun s := (s.cTilde, s.z, s.h)
-  invFun x := ⟨x.1, x.2.1, x.2.2⟩
-  left_inv _ := rfl
-  right_inv _ := rfl
-
-instance [Fintype prims.Hint] : Fintype (FIPSSignature p prims) :=
-  Fintype.ofEquiv _ (sigEquiv prims).symm
-
-instance instDecEqFIPSSignature [DecidableEq prims.Hint] : DecidableEq (FIPSSignature p prims) :=
-  (sigEquiv prims).decidableEq
-
-instance [Inhabited prims.Hint] : Inhabited (FIPSSignature p prims) :=
-  ⟨⟨Vector.replicate _ 0, 0, Vector.replicate _ default⟩⟩
-
-/-! ### The concrete primitives -/
-
-section Concrete
-
-open _root_.MLDSA.Concrete
-
-attribute [local instance] concreteNTTRingOps
-
-/-- **The concrete encoding of commitments as bucket vectors**: each coefficient of
-`w₁ ∈ R_q^k` (the concrete `HighBits` representative, FIPS 204 Algorithm 37) as its residue. -/
-def concreteEnc (p : Params) [NeZero (bucketCount p)]
-    (w : Vector (GordieHowe.MLDSA.Spec.concretePrimitivesKeyGen p).High p.k) : BucketVec p :=
-  fun x => Fin.ofNat _ ((w.get x.1).get x.2).val
-
-/-- **The concrete encoding is coherent with `bucketsOf`**, at every approved parameter set. -/
-theorem concreteEnc_highBitsVec {p : Params} [NeZero (bucketCount p)] (hp : p.isApproved)
-    (w : RqVec p.k) :
-    concreteEnc p ((GordieHowe.MLDSA.Spec.concretePrimitivesKeyGen p).highBitsVec w) =
-      bucketsOf (rqVecCoeffs w) := by
-  have hsp := SigningParams.of_isApproved hp
-  funext x
-  have hlt := highBitsCoeff_lt_bucketCount hsp (rqVecCoeffs w x)
-  have hq : bucketCount p < modulus := by
-    unfold bucketCount
-    exact lt_of_le_of_lt (Nat.div_le_self _ _) (by norm_num [modulus])
-  simp only [concreteEnc, bucketsOf, Primitives.highBitsVec,
-    GordieHowe.MLDSA.Spec.concretePrimitivesKeyGen, concretePrimitives, highBits, Vector.get_map,
-    Vector.get_ofFn]
-  congr 1
-  exact ZMod.val_natCast_of_lt (lt_trans hlt hq)
-
-/-- **The concrete primitives satisfy the verification laws** at every approved parameter set. -/
-theorem verifyLaws_concrete {p : Params} (hp : p.isApproved) :
-    VerifyLaws (concretePrimitives p) (nttOps := concreteNTTRingOps) where
-  transform := concreteNTTRingLaws
-  power2Round_decomp := concretePower2Round_high_low_decomp
-  useHint_makeHint z r hz := concreteRounding_useHint_correct_of_isApproved p hp z r
-    (by rwa [polyNorm_eq_cInfNorm] at hz)
-
-end Concrete
-
 variable [NeZero (bucketCount p)] [nttOps : NTTRingOps] [Nonempty (MaskBox p)]
   {Msg : Type} [Fintype Msg] [DecidableEq Msg]
-
-/-- **The commitment hash of a message point and a bucket vector**, as the base signer and the
-verifier read it (`ringVerify`): `H((tr, m), w₁)`, the composition `H(µ ‖ w1Encode(w₁))` with
-`µ = H(tr ‖ m)` of the game's two oracles (`schemeOrc`). -/
-abbrev Orc (p : Params) (Msg : Type) : Type := (Bytes 64 × Msg) × BucketVec p → CommitHashBytes p
-
-/-- **The message-representative oracle**: `µ = H(tr ‖ M′)` (FIPS 204 Algorithm 7 line 6) on the
-points `(tr, m)`. -/
-abbrev MuOrc (Msg : Type) : Type := Bytes 64 × Msg → Bytes 64
-
-/-- **The commitment-hash oracle**: `c̃ = H(µ ‖ w1Encode(w₁))` (FIPS 204 Algorithm 7 line 15) on
-the points `(µ, w₁)`. -/
-abbrev ChOrc (p : Params) : Type := Bytes 64 × BucketVec p → CommitHashBytes p
-
-/-- **The scheme's oracles**: the message-representative oracle and the commitment-hash oracle,
-independent random oracles in the game. -/
-abbrev SchOrc (p : Params) (Msg : Type) : Type := MuOrc Msg × ChOrc p
-
-/-- **The commitment hash of the scheme's oracles**: `H((tr, m), w₁) = H(µ ‖ w1Encode(w₁))` with
-`µ = H(tr ‖ m)`. -/
-def schemeOrc (H : SchOrc p Msg) : Orc p Msg := fun x => H.2 (H.1 x.1, x.2)
 
 /-- **The members' message representatives** `µ_j = H(tr_j ‖ m)` of a ring and a message. -/
 def ringMus (Hmu : MuOrc Msg) (l : List (PubKey p prims)) (m : Msg) : Fin l.length → Bytes 64 :=
@@ -223,83 +125,19 @@ def ringMus (Hmu : MuOrc Msg) (l : List (PubKey p prims)) (m : Msg) : Fin l.leng
 
 /-! ### The public ring check -/
 
-open LatticeCrypto TransformOps in
-/-- **The check weight of a published `t₀`** at the commitment hash `c̃`: the bucket-free
-acceptance weight `acceptWeightLower` of the shift `b = SampleInBall(c̃)·t₀`, at most the
-acceptance weight `t0Weight` in every bucket vector (`checkWeight_le_t0Weight`). -/
-def checkWeight (t0 : RqVec p.k) (cTilde : CommitHashBytes p) : ℚ≥0 :=
-  (acceptWeightLowerQ p.gamma2 p.beta p.omega
-    (centeredCoeffs (prims.sampleInBall cTilde • t0))).toNNRat
-
-omit [NeZero (bucketCount p)] [Nonempty (MaskBox p)] in
-open LatticeCrypto TransformOps in
-/-- The check weight in `ℝ≥0∞` is the real bucket-free acceptance weight. -/
-theorem coe_checkWeight (t0 : RqVec p.k) (cTilde : CommitHashBytes p) :
-    (checkWeight prims t0 cTilde : ℝ≥0∞) = ENNReal.ofReal (acceptWeightLower p.gamma2 p.beta
-      p.omega (centeredCoeffs (prims.sampleInBall cTilde • t0))) := by
-  rw [checkWeight, ← ENNReal.ofReal_ratCast, cast_acceptWeightLowerQ]
-
-omit [NeZero (bucketCount p)] [Nonempty (MaskBox p)] in
-/-- The check weight is at most the acceptance weight in every bucket vector
-(`acceptWeightLower_le_acceptWeight`). -/
-theorem checkWeight_le_t0Weight (hp : SigningParams p) (t0 : RqVec p.k)
-    (vc : BucketVec p × CommitHashBytes p) :
-    (checkWeight prims t0 vc.2 : ℝ≥0∞) ≤ (t0Weight prims t0 vc : ℝ≥0∞) := by
-  rw [coe_checkWeight, coe_t0Weight]
-  exact ENNReal.ofReal_le_ofReal (acceptWeightLower_le_acceptWeight hp.beta_lt_gamma2 _ _ _)
-
-omit [NeZero (bucketCount p)] [Nonempty (MaskBox p)] in
-/-- **The member weight is one where the check weight reaches the cut-off**: for
-`β_min ∈ (0, ∞)` and `β_min ≤ checkWeight(t₀, c̃)`, `min(1, aw / β_min) = 1` in every bucket
-vector. -/
-theorem memberWeight_eq_one_of_le_checkWeight (hp : SigningParams p) {βmin : ℚ≥0}
-    (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβt : (βmin : ℝ≥0∞) ≠ ⊤) {t0 : RqVec p.k}
-    {vc : BucketVec p × CommitHashBytes p}
-    (h : βmin ≤ checkWeight prims t0 vc.2) : memberWeight prims βmin t0 vc = 1 := by
-  rw [← ENNReal.nnratCast_inj, coe_memberWeight, ENNReal.nnratCast_one]
-  exact le_antisymm (min_le_left _ _) (le_min le_rfl ((ENNReal.div_self hβ0 hβt).symm.le.trans
-    (ENNReal.div_le_div_right ((ENNReal.nnratCast_le_nnratCast.2 h).trans
-      (checkWeight_le_t0Weight prims hp t0 vc)) βmin)))
-
-/-- **The check defect of a published `t₀`** at the cut-off `β_min`: the probability over a
-uniform commitment hash `c̃` that the check weight is below `β_min`. -/
-noncomputable def checkDefect (βmin : ℚ≥0) (t0 : RqVec p.k) : ℝ :=
-  𝔼 cTilde : CommitHashBytes p, if checkWeight prims t0 cTilde < βmin then 1 else 0
-
-omit [NeZero (bucketCount p)] [Nonempty (MaskBox p)] in
-/-- The check defect is a probability. -/
-theorem checkDefect_le_one (βmin : ℚ≥0) (t0 : RqVec p.k) : checkDefect prims βmin t0 ≤ 1 :=
-  (Finset.expect_le_expect fun _ _ => by split_ifs <;> norm_num).trans_eq
-    (Finset.expect_const univ_nonempty 1)
-
 /-- **The ring defect** at the cut-off `β_min`: the sum of the members' check defects. -/
 noncomputable def ringDefect (βmin : ℚ≥0) (l : List (PubKey p prims)) : ℝ :=
-  ∑ j, checkDefect prims βmin (ringT0s prims l j)
+  ∑ j, checkDefect prims (Cutoff.const βmin) (ringT0s prims l j)
 
 omit [Nonempty (MaskBox p)] in
 /-- **Every mean member weight is at least one minus the member's check defect**, in every
-bucket vector (`memberWeight_eq_one_of_le_checkWeight`). -/
+bucket vector (`one_sub_checkDefect_le_expect_flatWeight`). -/
 theorem one_sub_checkDefect_le_meanWeight (hp : SigningParams p) {βmin : ℚ≥0}
     (hβ0 : (βmin : ℝ≥0∞) ≠ 0)
     (hβt : (βmin : ℝ≥0∞) ≠ ⊤) (l : List (PubKey p prims)) (j : Fin l.length) (v : BucketVec p) :
-    1 - checkDefect prims βmin (ringT0s prims l j) ≤
-      (ringWeights prims βmin (ringT0s prims l)).meanWeight j v := by
-  unfold RingWeights.meanWeight checkDefect
-  have h1 : (1 : ℝ) - 𝔼 c : CommitHashBytes p,
-      (if checkWeight prims (ringT0s prims l j) c < βmin then 1 else 0 : ℝ) =
-        𝔼 c : CommitHashBytes p,
-          (1 - if checkWeight prims (ringT0s prims l j) c < βmin then 1 else 0 : ℝ) := by
-    rw [Finset.expect_sub_distrib, Finset.expect_const univ_nonempty]
-  rw [h1]
-  refine Finset.expect_le_expect fun c _ => ?_
-  split_ifs with h
-  · rw [sub_self]
-    exact ENNReal.toReal_nonneg
-  · have h1 : memberWeight prims βmin (ringT0s prims l j) (v, c) = 1 :=
-      memberWeight_eq_one_of_le_checkWeight prims hp hβ0 hβt (not_lt.1 h)
-    change (1 : ℝ) - 0 ≤ (memberWeight prims βmin (ringT0s prims l j) (v, c) : ℝ≥0∞).toReal
-    rw [h1]
-    simp
+    1 - checkDefect prims (Cutoff.const βmin) (ringT0s prims l j) ≤
+      (ringWeights prims βmin (ringT0s prims l)).meanWeight j v :=
+  one_sub_checkDefect_le_expect_flatWeight prims hp hβ0 (ringT0s prims l j) v
 
 omit [Nonempty (MaskBox p)] in
 /-- **The column masses of a ring of defect at most `s`** are at least `1 - s`
@@ -367,6 +205,11 @@ def RingAdmissible (βmin : ℚ≥0) (tol : ℕ) {N reps : ℕ} (HG : GameOrc pr
     (l : RingOf (PubKey p prims) N) (m : Msg) : Prop :=
   MuDistinct prims HG.1.1 l m ∧ RingCheck prims βmin tol HG.2 l
 
+/-- **Admissibility is decided classically**: `RingCheck` compares real defects. -/
+noncomputable instance (βmin : ℚ≥0) (tol : ℕ) {N reps : ℕ} (HG : GameOrc prims Msg N reps)
+    (l : RingOf (PubKey p prims) N) (m : Msg) : Decidable (RingAdmissible prims βmin tol HG l m) :=
+  Classical.dec _
+
 /-- **A ring of defect at most `s`** at the cut-off `β_min`. -/
 def LowDefect (βmin : ℚ≥0) (s : ℝ) {N : ℕ} (l : RingOf (PubKey p prims) N) : Prop :=
   ringDefect prims βmin l.1 ≤ s
@@ -379,7 +222,8 @@ noncomputable def ringAttemptOut (βmin : ℚ≥0) (sk : SecretKey p) (l : List 
     PMF (Option (BucketVec p × FIPSSignature p prims)) :=
   weightedAttemptWith (ringWeights prims βmin (ringT0s prims l)) i (maskUniform p)
     (realBuckets (prims.expandA sk.rho)) (attemptAccept prims sk (prims.expandA sk.rho))
-    (fun a => (flattenCoin prims sk βmin a : ℝ≥0∞)) (coe_flattenCoin_le_one prims sk βmin)
+    (fun a => (flattenCoin prims sk (Cutoff.const βmin) a : ℝ≥0∞)) (coe_flattenCoin_le_one prims sk
+        (Cutoff.const βmin))
     (fun y c => attemptOutput prims sk (prims.expandA sk.rho) (y, c)) (ringOf (ringPts prims l m) H)
 
 variable [Inhabited prims.Hint] [Fintype prims.Hint]
@@ -397,22 +241,6 @@ noncomputable def signLaw (βmin : ℚ≥0) (tol : ℕ) {N reps : ℕ} (HG : Gam
     (untilSome (ringAttemptOut prims βmin sk R.1 ⟨i, h.1⟩ m (schemeOrc HG.1))).map
       fun o => o.getD default
   else PMF.pure default
-
-/-- **ML-DSA key generation with `t₀` published** (FIPS 204 Algorithm 6, `keyGenFromSeed`): the
-published key `(ρ, t₁, t₀)` and the secret key of a seed. -/
-def keyGen (seed : Bytes 32) : PubKey p prims × SecretKey p :=
-  (((keyGenFromSeed p prims seed).1.rho, (keyGenFromSeed p prims seed).1.t1,
-    (keyGenFromSeed p prims seed).2.t0), (keyGenFromSeed p prims seed).2)
-
-/-- The secret key's `ρ` is the public key's. -/
-theorem keyGenFromSeed_rho (seed : Bytes 32) :
-    (keyGenFromSeed p prims seed).2.rho = (keyGenFromSeed p prims seed).1.rho := rfl
-
-/-- The secret key's `tr` is `H(pkEncode(ρ, t₁))`. -/
-theorem keyGenFromSeed_tr (seed : Bytes 32) :
-    (keyGenFromSeed p prims seed).2.tr =
-      prims.hashPublicKey (keyGenFromSeed p prims seed).1.rho (keyGenFromSeed p prims seed).1.t1 :=
-  rfl
 
 variable [Fintype prims.Power2High] [DecidableEq prims.Power2High] [DecidableEq prims.Hint]
 
@@ -466,14 +294,15 @@ theorem expect_ringCheck_le (βmin : ℚ≥0) (tol : ℕ) {N reps : ℕ} (l : Ri
       exact pow_le_pow_right₀ hx h
     · positivity
   have hψ : ∀ jr, 𝔼 c, ψ jr c =
-      1 - (1 - x⁻¹) * checkDefect prims βmin (ringT0s prims l.1 jr.1) := fun jr => by
+      1 - (1 - x⁻¹) * checkDefect prims (Cutoff.const βmin) (ringT0s prims l.1 jr.1) := fun jr => by
     have h : ∀ c, ψ jr c = 1 - (1 - x⁻¹) *
         (if checkWeight prims (ringT0s prims l.1 jr.1) c < βmin then 1 else 0) := fun c => by
       simp only [ψ]
       split_ifs <;> ring
     rw [Finset.expect_congr rfl fun c _ => h c, Finset.expect_sub_distrib,
       Finset.expect_const univ_nonempty, ← Finset.mul_expect, checkDefect]
-  have hsum : ∑ jr : Fin l.1.length × Fin reps, checkDefect prims βmin (ringT0s prims l.1 jr.1) =
+  have hsum : ∑ jr : Fin l.1.length × Fin reps, checkDefect prims (Cutoff.const βmin) (ringT0s
+      prims l.1 jr.1) =
       reps * ringDefect prims βmin l.1 := by
     rw [Fintype.sum_prod_type, ringDefect, Finset.mul_sum]
     simp
@@ -484,12 +313,13 @@ theorem expect_ringCheck_le (βmin : ℚ≥0) (tol : ℕ) {N reps : ℕ} (l : Ri
         rw [← Finset.mul_expect, PMF.expect_comp_embedding e (fun g => ∏ jr, ψ jr (g jr)),
           PMF.expect_prod_apply]
     _ ≤ x ^ tol * ∏ jr : Fin l.1.length × Fin reps,
-          Real.exp (-((1 - x⁻¹) * checkDefect prims βmin (ringT0s prims l.1 jr.1))) := by
+          Real.exp (-((1 - x⁻¹) * checkDefect prims (Cutoff.const βmin) (ringT0s prims l.1
+              jr.1))) := by
         refine mul_le_mul_of_nonneg_left (Finset.prod_le_prod₀
           (fun jr _ => Finset.expect_nonneg fun c _ => hψ0 jr c) fun jr _ => ?_) (by positivity)
         rw [hψ jr]
         linarith [Real.add_one_le_exp (-((1 - x⁻¹) *
-          checkDefect prims βmin (ringT0s prims l.1 jr.1)))]
+          checkDefect prims (Cutoff.const βmin) (ringT0s prims l.1 jr.1)))]
     _ = x ^ tol * Real.exp (-((1 - x⁻¹) * (reps * ringDefect prims βmin l.1))) := by
         rw [← Real.exp_sum, Finset.sum_neg_distrib, ← Finset.mul_sum, hsum]
     _ ≤ checkError reps tol s x :=
@@ -533,8 +363,9 @@ failed samples per ring, and the encoding
 `enc` of recomputed commitments as bucket vectors: published keys `(ρ, t₁, t₀)`, the game's
 oracles `((H_µ, H), G)` (`H_µ` on `(tr, m)`, `H` on `(µ, w₁)`, `G` the check oracle), public value
 `w₁`, base signature `(c̃, z, h)`, the ring relation `ringVerify` against `H(µ ‖ w1Encode(w₁))`
-at the signer's position, and the refusal rule `RingAdmissible` at the game's oracles. -/
-noncomputable def pubSigner (N : ℕ) (βmin : ℚ≥0) (reps tol : ℕ)
+at the signer's position, and the refusal rule `RingAdmissible` at the game's oracles. Reducible, so
+instance search reaches the named types of its fields. -/
+@[reducible] noncomputable def pubSigner (N : ℕ) (βmin : ℚ≥0) (reps tol : ℕ)
     (enc : Vector prims.High p.k → BucketVec p) : PubSigner N Msg where
   PK := PubKey p prims
   SK := SecretKey p
@@ -554,7 +385,6 @@ noncomputable def pubSigner (N : ℕ) (βmin : ℚ≥0) (reps tol : ℕ)
     ringVerify prims (schemeOrc HG.1) enc (pubPk prims (x.1.ring.1.get ⟨x.2.idx, h⟩)) x.1.msg
       x.1.pub x.2.sig = true}
   Admit HG R m := RingAdmissible prims βmin tol HG R m
-  instDecAdmit _ _ _ := Classical.dec _
 
 /-- **Every output of an honest signer that keeps with positive probability is valid**: for the
 key of `seed` with `‖s₂‖∞ ≤ η`, at its position of a ring admissible at the game's oracles, if one
@@ -610,6 +440,7 @@ variable (N : ℕ) (βmin : ℚ≥0) (reps tol : ℕ) (enc : Vector prims.High p
 
 /-- **The two signers of a challenge as a ring pair at the members' points `pt`**: the member
 weights of the published `t₀`s and the two users' ring signers at their positions. -/
+@[reducible]
 noncomputable def ringPairAt (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞) ≠ 0)
     (hβt : (βmin : ℝ≥0∞) ≠ ⊤) {K : Type}
     (keys : Fin n → Bytes 32) (c : (pubSigner prims (Msg := Msg) N βmin reps tol enc).Choice n)
@@ -619,11 +450,12 @@ noncomputable def ringPairAt (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞)
   pt := pt
   wts := ringWeights prims βmin (ringT0s prims c.ring.1)
   pos b := ⟨c.idx b, by cases b <;> simp [RingChoice.idx, hc.idx₀_lt, hc.idx₁_lt]⟩
-  signer b := ringLoopSigner prims (keyGen prims (keys (c.user b))).2
-    (prims.expandA (keyGen prims (keys (c.user b))).2.rho) hp hβ0 hβt
+  signer b := flatLoopSigner prims (keyGen prims (keys (c.user b))).2
+    (prims.expandA (keyGen prims (keys (c.user b))).2.rho) hp (cut := Cutoff.const βmin) hβ0 hβt
 
 /-- **The two signers of a challenge with distinct message representatives as a ring pair**:
 `ringPairAt` at the members' points `µ_j = H_µ(tr_j ‖ m)` of the commitment-hash oracle. -/
+@[reducible]
 noncomputable def ringPair (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞) ≠ 0)
     (hβt : (βmin : ℝ≥0∞) ≠ ⊤)
     (keys : Fin n → Bytes 32) (Hmu : MuOrc Msg)
@@ -678,59 +510,29 @@ section UniformKeys
 
 open LatticeCrypto TransformOps
 
-/-- **The primitives with `ExpandA` replaced by `G`**: the primitives of the game in which
-`ExpandA` (FIPS 204 Algorithm 32) is a random oracle `G`. -/
-abbrev withExpandA (G : Bytes 32 → TqMatrix p.k p.l) : Primitives p :=
-  { prims with expandA := G }
-
-/-- **The secret key assembled from key material** (FIPS 204 Algorithm 6 lines 5-9, with the
-matrix `Â` in place of `ExpandA(ρ)`; the assembly of `validKeyPairShort`): `t = Â·s₁ + s₂` split
-by `Power2Round` into `(t₁, t₀)`, and `tr = H(pkEncode(ρ, t₁))`. -/
-def idealSecretKey (rho key : Bytes 32) (aHat : TqMatrix p.k p.l) (s : RqVec p.l × RqVec p.k) :
-    SecretKey p :=
-  ⟨rho, key, prims.hashPublicKey rho (prims.power2RoundVec (aHat * s.1 + s.2)).1, s.1, s.2,
-    (prims.power2RoundVec (aHat * s.1 + s.2)).2⟩
-
-/-- **Key generation with `ExpandA := G`** is the key of `ρ`, `K` from `expandSeed`, the matrix
-`G ρ`, and `(s₁, s₂) = ExpandS(ρ')`. -/
-theorem keyGen_withExpandA (G : Bytes 32 → TqMatrix p.k p.l) (seed : Bytes 32) :
-    (keyGen (withExpandA prims G) seed).2 =
-      idealSecretKey prims (prims.expandSeed seed).1 (prims.expandSeed seed).2.2
-        (G (prims.expandSeed seed).1) (prims.expandS (prims.expandSeed seed).2.1) :=
-  rfl
-
-/-- **The average regularity gap with a uniform matrix**: `ringRegGap` (whose challenge `c̃` is
+/-- **The average regularity gap with a uniform matrix**: `signerRegGap` (whose challenge `c̃` is
 uniform, `c = SampleInBall(c̃)`) at the key of a uniform seed's `ρ`, `K` and
 `(s₁, s₂) = ExpandS(ρ')` (FIPS 204 Algorithm 33, the concrete `ExpandS` of the primitives) with
 the matrix `Â` uniform and independent of the seed. -/
 noncomputable def regGapAvg (βmin : ℚ≥0) : ℝ :=
   𝔼 seed : Bytes 32, 𝔼 aHat : TqMatrix p.k p.l,
-    ringRegGap prims (idealSecretKey prims (prims.expandSeed seed).1 (prims.expandSeed seed).2.2
-      aHat (prims.expandS (prims.expandSeed seed).2.1)) aHat βmin
+    signerRegGap prims (idealSecretKey prims (prims.expandSeed seed).1 (prims.expandSeed seed).2.2
+      aHat (prims.expandS (prims.expandSeed seed).2.1)) aHat (Cutoff.const βmin)
 
 /-- **With `ExpandA` a random oracle, the average over the oracle and honest key generation of
 the regularity gap is `regGapAvg`**: the oracle's value at `ρ` is uniform
 (`PMF.expect_apply_eval`). -/
 theorem expect_regGap_withExpandA (βmin : ℚ≥0) :
     𝔼 G : Bytes 32 → TqMatrix p.k p.l, 𝔼 seed : Bytes 32,
-        ringRegGap (withExpandA prims G) (keyGen (withExpandA prims G) seed).2
-          ((withExpandA prims G).expandA (keyGen (withExpandA prims G) seed).2.rho) βmin =
+        signerRegGap (withExpandA prims G) (keyGen (withExpandA prims G) seed).2
+          ((withExpandA prims G).expandA (keyGen (withExpandA prims G) seed).2.rho)
+              (Cutoff.const βmin) =
       regGapAvg prims βmin := by
   rw [Finset.expect_comm]
   refine Finset.expect_congr rfl fun seed _ => ?_
-  exact PMF.expect_apply_eval (prims.expandSeed seed).1 (fun aHat => ringRegGap prims
+  exact PMF.expect_apply_eval (prims.expandSeed seed).1 (fun aHat => signerRegGap prims
     (idealSecretKey prims (prims.expandSeed seed).1 (prims.expandSeed seed).2.2 aHat
-      (prims.expandS (prims.expandSeed seed).2.1)) aHat βmin)
-
-/-- The signing laws do not read `ExpandA`. -/
-theorem SigningLaws.withExpandA (h : SigningLaws prims) (G : Bytes 32 → TqMatrix p.k p.l) :
-    SigningLaws (withExpandA prims G) :=
-  ⟨h.transform, h.hide_low, h.sampleInBall_smul_bound⟩
-
-/-- The verification laws do not read `ExpandA`. -/
-theorem VerifyLaws.withExpandA (h : VerifyLaws prims) (G : Bytes 32 → TqMatrix p.k p.l) :
-    VerifyLaws (withExpandA prims G) :=
-  ⟨h.transform, h.power2Round_decomp, h.useHint_makeHint⟩
+      (prims.expandS (prims.expandSeed seed).2.1)) aHat (Cutoff.const βmin))
 
 end UniformKeys
 
@@ -768,17 +570,18 @@ omit [NeZero (bucketCount p)] [Nonempty (MaskBox p)] [Inhabited prims.Hint] [Fin
 /-- **The mean member weight with `SampleInBall` a random oracle onto `B_τ`**: averaged over the
 oracle and the commitment hash, the member weight `min(1, aw / β_min)` of `t₀` in bucket vector
 `v` is its average over a uniform challenge `c ∈ B_τ` with the shift `b = c·t₀`. -/
-theorem expect_memberWeight_withSampleInBall (hτ : p.tau ≤ ringDegree) (βmin : ℚ≥0)
+theorem expect_flatWeight_withSampleInBall (hτ : p.tau ≤ ringDegree) (βmin : ℚ≥0)
     (t0 : RqVec p.k) (v : BucketVec p) :
     𝔼 G : CommitHashBytes p → ChallengeBall p.tau, 𝔼 cTilde : CommitHashBytes p,
-        (memberWeight (withSampleInBall prims fun c => (G c).1) βmin t0 (v, cTilde) : ℝ≥0∞).toReal =
+        (flatWeight (withSampleInBall prims fun c => (G c).1) (Cutoff.const βmin) t0 (v, cTilde) :
+            ℝ≥0∞).toReal =
       𝔼 c : ChallengeBall p.tau, (min 1 (ENNReal.ofReal (acceptWeight p.gamma2 p.beta p.omega
         (centeredCoeffs (c.1 • t0)) fun x => (v x).val) / βmin)).toReal := by
   have h := expect_withSampleInBall prims hτ fun _ c => (min 1 (ENNReal.ofReal
     (acceptWeight p.gamma2 p.beta p.omega (centeredCoeffs (c • t0)) fun x => (v x).val) /
       βmin)).toReal
   rw [Finset.expect_const univ_nonempty] at h
-  simp only [coe_memberWeight, coe_t0Weight]
+  simp only [coe_flatWeight, coe_t0Weight]
   exact h
 
 end RandomChallenge
@@ -810,6 +613,7 @@ noncomputable instance (s : ℝ) (keys : Fin n → _root_.MLDSA.Bytes 32) :
 /-- **The rings of the challenges of defect at most `s`** at the users' coins `keys`, as ring
 pairs at the positions (`ringPairAt` at `Fin N`); their variance proxies and errors do not read the
 points. -/
+@[reducible]
 noncomputable def family (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβt : (βmin : ℝ≥0∞) ≠ ⊤)
     (s : ℝ)
     (keys : Fin n → _root_.MLDSA.Bytes 32) (c : ValidChoice prims A s keys) :
@@ -829,6 +633,7 @@ noncomputable instance (s : ℝ) (keys : Fin n → _root_.MLDSA.Bytes 32) (Hmu :
 
 /-- **The rings of the challenges of defect at most `s` with distinct message representatives**
 at the users' coins and `H_µ`, as ring pairs at the members' points `µ_j` (`ringPair`). -/
+@[reducible]
 noncomputable def familyMu (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞) ≠ 0)
     (hβt : (βmin : ℝ≥0∞) ≠ ⊤) (s : ℝ)
     (keys : Fin n → _root_.MLDSA.Bytes 32) (Hmu : MuOrc Msg) (c : ValidChoiceMu prims A s keys Hmu) :
@@ -852,10 +657,10 @@ noncomputable def oracleError (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞
     haveI := h; familyBound (familyMu prims A hp hβ0 hβt s keys H.1) θ H.2
   else 0
 
-/-- **The largest regularity gap** of the honest users' keys (`ringRegGap`). -/
+/-- **The largest regularity gap** of the honest users' keys (`signerRegGap`). -/
 noncomputable def maxRegGap (βmin : ℚ≥0) [NeZero n] (keys : Fin n → _root_.MLDSA.Bytes 32) : ℝ :=
-  univ.sup' univ_nonempty fun u => ringRegGap prims (keyGen prims (keys u)).2
-    (prims.expandA (keyGen prims (keys u)).2.rho) βmin
+  univ.sup' univ_nonempty fun u => signerRegGap prims (keyGen prims (keys u)).2
+    (prims.expandA (keyGen prims (keys u)).2.rho) (Cutoff.const βmin)
 
 open Classical in
 /-- The largest deviation variance proxy of the rings of defect at most `s`. -/
@@ -1020,27 +825,30 @@ theorem signsValidly_of_keeps (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞
 /-- The largest regularity gap is nonnegative. -/
 theorem maxRegGap_nonneg [NeZero n] (keys : Fin n → _root_.MLDSA.Bytes 32) :
     0 ≤ maxRegGap prims βmin keys :=
-  (ringRegGap_nonneg prims _ _ βmin).trans (Finset.le_sup' (fun u => ringRegGap prims
-    (keyGen prims (keys u)).2 (prims.expandA (keyGen prims (keys u)).2.rho) βmin) (mem_univ 0))
+  (signerRegGap_nonneg prims _ _ (Cutoff.const βmin)).trans (Finset.le_sup' (fun u => signerRegGap
+      prims
+    (keyGen prims (keys u)).2 (prims.expandA (keyGen prims (keys u)).2.rho) (Cutoff.const βmin))
+        (mem_univ 0))
 
 /-- The largest regularity gap is at most the sum of the honest users' gaps. -/
 theorem maxRegGap_le_sum [NeZero n] (keys : Fin n → _root_.MLDSA.Bytes 32) :
     maxRegGap prims βmin keys ≤
-      ∑ u, ringRegGap prims (keyGen prims (keys u)).2
-        (prims.expandA (keyGen prims (keys u)).2.rho) βmin :=
-  Finset.sup'_le _ _ fun u _ => Finset.single_le_sum (f := fun u => ringRegGap prims
-    (keyGen prims (keys u)).2 (prims.expandA (keyGen prims (keys u)).2.rho) βmin)
-    (fun _ _ => ringRegGap_nonneg prims _ _ βmin) (mem_univ u)
+      ∑ u, signerRegGap prims (keyGen prims (keys u)).2
+        (prims.expandA (keyGen prims (keys u)).2.rho) (Cutoff.const βmin) :=
+  Finset.sup'_le _ _ fun u _ => Finset.single_le_sum (f := fun u => signerRegGap prims
+    (keyGen prims (keys u)).2 (prims.expandA (keyGen prims (keys u)).2.rho) (Cutoff.const βmin))
+    (fun _ _ => signerRegGap_nonneg prims _ _ (Cutoff.const βmin)) (mem_univ u)
 
 /-- **The average over the users' coins of the largest regularity gap** is at most `n` times the
 average regularity gap of one honest key (`maxRegGap_le_sum`, each user's coins uniform). -/
 theorem expect_maxRegGap_le [NeZero n] :
     𝔼 keys : Fin n → _root_.MLDSA.Bytes 32, maxRegGap prims βmin keys ≤
-      n * 𝔼 seed : _root_.MLDSA.Bytes 32, ringRegGap prims (keyGen prims seed).2
-        (prims.expandA (keyGen prims seed).2.rho) βmin := by
+      n * 𝔼 seed : _root_.MLDSA.Bytes 32, signerRegGap prims (keyGen prims seed).2
+        (prims.expandA (keyGen prims seed).2.rho) (Cutoff.const βmin) := by
   refine (Finset.expect_le_expect fun keys _ => maxRegGap_le_sum keys).trans_eq ?_
   rw [Finset.expect_sum_comm, Finset.sum_congr rfl fun u _ => PMF.expect_apply_eval u
-    (fun x => ringRegGap prims (keyGen prims x).2 (prims.expandA (keyGen prims x).2.rho) βmin)]
+    (fun x => signerRegGap prims (keyGen prims x).2 (prims.expandA (keyGen prims x).2.rho)
+        (Cutoff.const βmin))]
   simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
 /-- **The average over the commitment-hash oracle of the anonymity error at the users' coins
@@ -1049,7 +857,7 @@ at most `2 / ((1 - s) θ)` times the largest regularity gap of the honest keys, 
 terms of the largest variance proxies, for an adversary with at most `C` challenges of its set
 valid for any key vector (`expect_familyBound_le`; `RingPair.error_le_of_massRatio_le` with the mass ratio at most
 `1 / (1 - s)` of a ring of defect at most `s`, `massRatio_le_of_ringDefect_le`;
-`relColError_le_ringRegGap`). -/
+`relColError_le_signerRegGap`). -/
 theorem expect_oracleError_le (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞) ≠ 0)
     (hβt : (βmin : ℝ≥0∞) ≠ ⊤)
     (h_laws : SigningLaws prims) (hs2 : ∀ seed, polyVecBounded (keyGen prims seed).2.s2 p.eta)
@@ -1096,9 +904,10 @@ theorem expect_oracleError_le (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞
         have hi : ringT0s prims c.1.1.ring.1 ⟨c.1.1.idx b, hlt⟩ =
             (keyGen prims (keys (c.1.1.user b))).2.t0 :=
           congrArg (fun x : PubKey p prims => x.2.2) (get_idx_eq c.2.1 b hlt)
-        exact (relColError_le_ringRegGap prims _ _ hp h_laws (hs2 _) _ _ hi hβ0 hβt).trans
-          (Finset.le_sup' (fun u => ringRegGap prims (keyGen prims (keys u)).2
-            (prims.expandA (keyGen prims (keys u)).2.rho) βmin) (mem_univ (c.1.1.user b)))
+        exact (relColError_le_signerRegGap prims _ _ hp h_laws (hs2 _) _ _ hi hβ0 hβt).trans
+          (Finset.le_sup' (fun u => signerRegGap prims (keyGen prims (keys u)).2
+            (prims.expandA (keyGen prims (keys u)).2.rho) (Cutoff.const βmin)) (mem_univ
+                (c.1.1.user b)))
       calc (1 - s)⁻¹ / θ * ∑ b : Bool, relColError (R c).wts ((R c).pos b) ((R c).signer b).P
             ((R c).signer b).w1 ((R c).signer b).acc ((R c).signer b).κ ((R c).signer b).β
           ≤ (1 - s)⁻¹ / θ * ∑ _b : Bool, maxRegGap prims βmin keys :=
@@ -1168,7 +977,8 @@ theorem anonError_le_keyAvg (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞) 
     (hθ0 : 0 < θ) (hs1 : s < 1) [NeZero n] (C : ℕ) :
     anonError (A := A) hp hβ0 hβt s θ C ≤
       2 * (1 - s)⁻¹ / θ * (n * 𝔼 seed : _root_.MLDSA.Bytes 32,
-          ringRegGap prims (keyGen prims seed).2 (prims.expandA (keyGen prims seed).2.rho) βmin) +
+          signerRegGap prims (keyGen prims seed).2 (prims.expandA (keyGen prims seed).2.rho)
+              (Cutoff.const βmin)) +
         𝔼 keys : Fin n → _root_.MLDSA.Bytes 32,
           (√(maxDevVar prims A hp hβ0 hβt s θ keys * Real.log C / 2) +
             √(maxCountVar prims A hp hβ0 hβt s θ keys * Real.log (C + 1) / 2)) := by
@@ -1218,7 +1028,6 @@ theorem expect_ite_good_le (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞) �
         RingCheck prims βmin tol G c.ring then 1 else 0 := fun G =>
     if_congr Iff.rfl rfl rfl
   refine (Finset.expect_comp_snd
-    (hαβ := (pubSigner prims (Msg := Msg) N βmin reps tol enc).instFintypeOrc)
     (fun G => (if BadPass prims A s keys G then 1 else 0 : ℝ))).trans_le ?_
   rw [Finset.expect_congr rfl fun G _ => hB G]
   convert (expect_exists_ringCheck_le prims βmin tol (A.validChoices keys) RingChoice.ring s
@@ -1294,7 +1103,6 @@ theorem advantage_le (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) 
       anonError (A := A) hp hβ0 hβt s θ C :=
     Finset.expect_le_expect fun keys _ =>
       (Finset.expect_comp_fst
-        (hαβ := (pubSigner prims (Msg := Msg) N βmin reps tol enc).instFintypeOrc)
         (fun H => oracleError prims A hp hβ0 hβt s θ keys H)).trans_le
         (expect_schOrc_oracleError_le hp hβ0 hβt h_laws hs2 hθ0 hθ1 hs1 hC keys)
   have hQ : (0 : ℝ) ≤ Q := Nat.cast_nonneg _
@@ -1349,8 +1157,9 @@ theorem expect_le_ideal_of (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞) �
   have hG : ∀ G : _root_.MLDSA.Bytes 32 → TqMatrix p.k p.l,
       f G ≤
         (Q + 1) * (2 * (1 - s)⁻¹ / θ * (n * 𝔼 seed : _root_.MLDSA.Bytes 32,
-            ringRegGap (withExpandA prims G) (keyGen (withExpandA prims G) seed).2
-            ((withExpandA prims G).expandA (keyGen (withExpandA prims G) seed).2.rho) βmin) +
+            signerRegGap (withExpandA prims G) (keyGen (withExpandA prims G) seed).2
+            ((withExpandA prims G).expandA (keyGen (withExpandA prims G) seed).2.rho)
+                (Cutoff.const βmin)) +
           𝔼 keys : Fin n → _root_.MLDSA.Bytes 32,
             (√(maxDevVar (withExpandA prims G) (A G) hp hβ0 hβt s θ keys * Real.log C / 2) +
               √(maxCountVar (withExpandA prims G) (A G) hp hβ0 hβt s θ keys *
@@ -1473,15 +1282,6 @@ instance (p : Params) : Fintype (concretePrimitivesKeyGen p).Power2High :=
 instance (p : Params) : DecidableEq (concretePrimitivesKeyGen p).Power2High :=
   inferInstanceAs (DecidableEq Rq)
 
-instance : NeZero (bucketCount mldsa44) :=
-  ⟨(SigningParams.of_isApproved (Or.inl rfl)).bucketCount_pos.ne'⟩
-
-instance : Nonempty (MaskBox mldsa44) := maskBox_nonempty (by decide)
-
-instance : Nonempty (MaskBox mldsa65) := maskBox_nonempty (by decide)
-
-instance : Nonempty (MaskBox mldsa87) := maskBox_nonempty (by decide)
-
 variable {p : Params} [NeZero (bucketCount p)] [Nonempty (MaskBox p)] {Msg : Type} [Fintype Msg]
   [DecidableEq Msg] {N : ℕ} {βmin : ℚ≥0} {reps tol : ℕ}
   {k kN kS L e : ℕ} {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
@@ -1492,28 +1292,6 @@ variable {p : Params} [NeZero (bucketCount p)] [Nonempty (MaskBox p)] {Msg : Typ
     (concreteEnc p)).Stmt k kN kS L e} {n Q : ℕ}
   (A : PubAnonAdversary (pubSigner (concretePrimitivesKeyGen p) (Msg := Msg) N βmin reps tol
     (concreteEnc p)) M n Q)
-
-/-- **The concrete primitives with the FIPS 204 `ExpandS` satisfy the signing laws**: the fields
-of `signingLaws_concrete`, which do not read `expandS`. -/
-theorem signingLaws_concreteKeyGen (p : Params) (hp : p.isApproved) :
-    SigningLaws (concretePrimitivesKeyGen p) :=
-  let h := signingLaws_concrete p hp
-  ⟨h.transform, h.hide_low, h.sampleInBall_smul_bound⟩
-
-/-- **The concrete primitives with the FIPS 204 `ExpandS` satisfy the verification laws**: the
-fields of `verifyLaws_concrete`, which do not read `expandS`. -/
-theorem verifyLaws_concreteKeyGen {p : Params} (hp : p.isApproved) :
-    VerifyLaws (concretePrimitivesKeyGen p) (nttOps := concreteNTTRingOps) :=
-  let h := verifyLaws_concrete hp
-  ⟨h.transform, h.power2Round_decomp, h.useHint_makeHint⟩
-
-/-- **The concrete encoding is coherent with `bucketsOf`** at the primitives with the FIPS 204
-`ExpandS`, at every approved parameter set (`concreteEnc_highBitsVec`). -/
-theorem concreteEnc_highBitsVec_keyGen {p : Params} [NeZero (bucketCount p)] (hp : p.isApproved)
-    (w : RqVec p.k) :
-    concreteEnc p ((GordieHowe.MLDSA.Spec.concretePrimitivesKeyGen p).highBitsVec w) =
-      bucketsOf (rqVecCoeffs w) :=
-  concreteEnc_highBitsVec hp w
 
 /-- **Anonymity of the ML-DSA ring signature publishing `w₁` at the concrete primitives** (the
 vendored FIPS 204 primitives with the FIPS 204 `ExpandS`, `concretePrimitivesKeyGen`, and the

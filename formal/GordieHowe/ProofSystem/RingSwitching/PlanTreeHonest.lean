@@ -14,7 +14,7 @@ The honest prover of the tree of planned edges (`PEdge.path`), generic in the ed
 
 * **the honest masks** (`PEdge.maskHonest`): each edge's kit's honest masks on its mask cells
   (`MaskKit.honest`);
-* **the masks' pads** (`PEdge.MaskPads`, `PEdge.MaskPads.get`) and the masks' commitment
+* **the masks' pads** (`PEdge.MaskPads`) and the masks' commitment
   (`PEdge.MaskCommits`; `PEdge.maskCommits_of_maskVal` when the mask cells hold the masks' values
   and are distinct): every edge's mask cells hold its kit's values;
 * **the honest run's pads** (`PEdge.splitPads`): the masked reduction's pads and every edge's mask pads;

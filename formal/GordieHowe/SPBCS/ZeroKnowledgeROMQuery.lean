@@ -20,7 +20,7 @@ adversaries): the prover `niProverZKM` and simulator `niJointSimulator` of
 from fresh streams, the digests of the positions not opened at the challenges read from a value
 per position. The error is the compiler's `SPBCS.zkErrorROMQuery δ`:
 
-    Q t / 2^(8k) + Q (Q - 1) / (2 · 2^(8k)) + Q · keyCollision (t.size n) k
+    Q t / 2^(8 kS) + Q (Q - 1) / (2 · 2^(8 kS)) + Q · keyCollision (t.size n) k
     + Q (4 t U + 4 (Q U² + U)) / 2^(8kN) + Q · (overrun + δ)          (`U = |Pos|`).
 -/
 
@@ -439,7 +439,7 @@ omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
 open Classical in
 /-- **The lazily sampled merge reply is local in its salt**, with the honest prover. -/
 theorem saltedLocal_lazy :
-    SaltedLocal M.saltOfBits (M.niProverZKM B honest E Qs).liftReq
+    SaltedLocal M.saltOfBits (M.niProverZKM B honest E Qs).liftReq (PMF.uniformOfFintype _)
       (lazyKernel VE B honest).toSimulator where
   prove_congr H H' r _ c hH := by
     simp only [NARG.ProverFn.liftReq, niProverZKM]
@@ -656,6 +656,7 @@ not read the final oracle distinguishes the prover `niProverZKM` from the simula
 `zkErrorROMQuery δ t Q`. -/
 theorem zeroKnowledgeROMQuery (hvzk : CausalHVZK VE.MV rel honest pub Sim δ) :
     ROM.NIZK.ZeroKnowledgeQueryBounded (fun x w => (x, w) ∈ rel) (M.niProverZKM B honest E Qs)
+        (PMF.uniformOfFintype _)
       (M.niJointSimulator VE.toViewRead B pub Sim T) (M.zkErrorROMQuery δ) := by
   have h1 := ROM.NIZK.zeroKnowledge_of_sliceCloseAt (saltedLocal_lazy VE B honest)
     (sliceCloseAt_lazy VE B honest (rel := rel))
@@ -687,6 +688,7 @@ Definition 6, p. 14, with classical adversaries all of whose queries are counted
 `zeroKnowledgeROMQuery`. -/
 theorem zeroKnowledgeROMQuery_games (hvzk : CausalHVZK VE.MV rel honest pub Sim δ) :
     GordieHowe.ROM.ZeroKnowledge (fun x w => (x, w) ∈ rel) (M.niProverZKM B honest E Qs)
+        (PMF.uniformOfFintype _)
       (M.niJointSimulator VE.toViewRead B pub Sim T) (M.zkErrorROMQuery δ) :=
   ROM.QueryBoundedAdversary.zeroKnowledge_of_queryBounded
     (zeroKnowledgeROMQuery VE B honest pub T hvzk)

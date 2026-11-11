@@ -243,6 +243,10 @@ for each mask. -/
 abbrev Kernel (F : Type) [Field F] (k t : ℕ) : Type :=
   MaskPieces.kernel F (threeShifts k t) (threeBounds k)
 
+instance (F : Type) [Field F] [DecidableEq F] (k t : ℕ) : DecidableEq (Kernel F k t) :=
+  inferInstanceAs
+    (DecidableEq {p : Fin 3 → F[X] // p ∈ MaskPieces.kernel F (threeShifts k t) (threeBounds k)})
+
 /-- **The coefficient-block splitting** of `M`: `(M mod X ^ k, 0, M div X ^ k)`. -/
 noncomputable def blockSplit (k : ℕ) (M : F[X]) : Fin 3 → F[X] :=
   ![M %ₘ (Polynomial.X ^ k : F[X]), 0, M /ₘ (Polynomial.X ^ k : F[X])]
@@ -389,6 +393,10 @@ noncomputable instance (Bf : HVZK.BlindingFields C P) (t : ℕ) : Fintype (Coins
 instance (Bf : HVZK.BlindingFields C P) (t : ℕ) : Nonempty (Coins hrate Bf t nrep) :=
   ⟨⟨Classical.arbitrary _, 0, 0⟩⟩
 
+instance [DecidableEq F] (Bf : HVZK.BlindingFields C P) (t : ℕ) :
+    DecidableEq (Coins hrate Bf t nrep) :=
+  (Coins.equivProd hrate Bf t nrep).decidableEq
+
 variable {Bf : HVZK.BlindingFields C P} (pr : PieceRows R) {t : ℕ}
 
 /-- The IDOT mask of the honest coins. -/
@@ -507,10 +515,10 @@ nodes of each mask plus the batched constraint polynomials of the honest rows. -
 noncomputable def honestMasked (ω : HVZK.Cells Bf) (c : Coins hrate Bf t nrep)
     (r : Tableau.Challenge F R nL nQ nrep) : Ligero.AgreementThreshold.MaskedResponse F C.k :=
   (fun i => (c.dotMask + MaskedConstraintTest.batch
-      (fun l => Tableau.dotPolynomials C P L (honestLdtRows pr ω c 0) l) r.2.1).eval
+      (fun l => Tableau.dotPolynomials C P L (honestLdtRows pr ω c 0) l) r.lin).eval
         (Tableau.responseNode C (2 * C.k - 1) i),
     fun i => (c.quadMask + MaskedConstraintTest.batch
-      (fun q => Tableau.quadPolynomials C P (honestLdtRows pr ω c 0) q) r.2.2).eval
+      (fun q => Tableau.quadPolynomials C P (honestLdtRows pr ω c 0) q) r.quad).eval
         (Tableau.responseNode C (2 * C.k - 1) i))
 
 /-- **The honest tableau** of the witness `ω` and the coins `c`: the honest rows, which satisfy the
@@ -613,8 +621,8 @@ def simData (r : Tableau.Challenge F R nL nQ nrep) (q : Tableau.Query N t) (o : 
   fun i s =>
     let x := C.D (q s)
     let col : Fin (R + 1) → F := Fin.cases 0 fun i => o i s
-    pr.fill (pieceColumn C.k t x (p.dotEval C x - ∑ l, r.2.1 l * HVZK.dotAt (L := L) col l x) dot s)
-      (pieceColumn C.k t x (p.quadEval C x - ∑ l, r.2.2 l * HVZK.quadAt (P := P) col l) quad s)
+    pr.fill (pieceColumn C.k t x (p.dotEval C x - ∑ l, r.lin l * HVZK.dotAt (L := L) col l x) dot s)
+      (pieceColumn C.k t x (p.quadEval C x - ∑ l, r.quad l * HVZK.quadAt (P := P) col l) quad s)
       col i.succ
 
 variable (L hrate pr) in
@@ -692,32 +700,32 @@ same and the constraint polynomials read neither row `0` nor the piece rows. -/
 theorem response_honestTableau_eq (ω : HVZK.Witness L Bf) (r : Tableau.Challenge F R nL nQ nrep)
     (c : Coins hrate Bf t nrep) :
     Completeness.response (honestTableau hprod hs ω c) r =
-      Completeness.response (HVZK.honest hprod ω (shiftCoins (pr := pr) ω.toCells r.1 c)) r := by
+      Completeness.response (HVZK.honest hprod ω (shiftCoins (pr := pr) ω.toCells r.ldt c)) r := by
   have hrow : ∀ row, row ≠ 0 → row ∉ pr.toList → honestLdtRows pr ω.toCells c 0 row =
-      HVZK.rows ω.toCells (shiftCoins (pr := pr) ω.toCells r.1 c) row := by
+      HVZK.rows ω.toCells (shiftCoins (pr := pr) ω.toCells r.ldt c) row := by
     intro row h0 hm
     obtain ⟨i, rfl⟩ := Fin.exists_succ_eq.mpr h0
     change honestRows pr ω.toCells c i.succ = _
     rw [honestRows_of_not_mem ω.toCells c hm, HVZK.rows_succ, HVZK.rows_succ]
     rfl
   have hcode : (fun j => AffineCodeTest.projectedPolynomial (honestLdtRows pr ω.toCells c j)
-      (r.1 j)) = fun j => AffineCodeTest.projectedPolynomial
-        (HVZK.ldtRows ω.toCells (shiftCoins (pr := pr) ω.toCells r.1 c) j) (r.1 j) :=
-    funext (codeResponse_honestRows ω.toCells r.1 c)
+      (r.ldt j)) = fun j => AffineCodeTest.projectedPolynomial
+        (HVZK.ldtRows ω.toCells (shiftCoins (pr := pr) ω.toCells r.ldt c) j) (r.ldt j) :=
+    funext (codeResponse_honestRows ω.toCells r.ldt c)
   simp only [Completeness.response, Completeness.dotResponse, Completeness.quadResponse]
   change Tableau.Response.ofPolys C
-      (fun j => AffineCodeTest.projectedPolynomial (honestLdtRows pr ω.toCells c j) (r.1 j))
+      (fun j => AffineCodeTest.projectedPolynomial (honestLdtRows pr ω.toCells c j) (r.ldt j))
       (c.dotMask + MaskedConstraintTest.batch
-        (fun l => Tableau.dotPolynomials C P L (honestLdtRows pr ω.toCells c 0) l) r.2.1)
+        (fun l => Tableau.dotPolynomials C P L (honestLdtRows pr ω.toCells c 0) l) r.lin)
       (c.quadMask + MaskedConstraintTest.batch
-        (fun q => Tableau.quadPolynomials C P (honestLdtRows pr ω.toCells c 0) q) r.2.2) =
+        (fun q => Tableau.quadPolynomials C P (honestLdtRows pr ω.toCells c 0) q) r.quad) =
     Tableau.Response.ofPolys C
       (fun j => AffineCodeTest.projectedPolynomial
-        (HVZK.ldtRows ω.toCells (shiftCoins (pr := pr) ω.toCells r.1 c) j) (r.1 j))
+        (HVZK.ldtRows ω.toCells (shiftCoins (pr := pr) ω.toCells r.ldt c) j) (r.ldt j))
       (c.dotMask + MaskedConstraintTest.batch (fun l => Tableau.dotPolynomials C P L
-        (HVZK.rows ω.toCells (shiftCoins (pr := pr) ω.toCells r.1 c)) l) r.2.1)
+        (HVZK.rows ω.toCells (shiftCoins (pr := pr) ω.toCells r.ldt c)) l) r.lin)
       (c.quadMask + MaskedConstraintTest.batch (fun q => Tableau.quadPolynomials C P
-        (HVZK.rows ω.toCells (shiftCoins (pr := pr) ω.toCells r.1 c)) q) r.2.2)
+        (HVZK.rows ω.toCells (shiftCoins (pr := pr) ω.toCells r.ldt c)) q) r.quad)
   rw [hcode]
   simp only [hs.dotPolynomials_congr hrow, hs.quadPolynomials_congr hprod hrow]
 
@@ -773,13 +781,13 @@ theorem honestView_eq (ω : HVZK.Witness L Hd.toBlindingFields) (r : Tableau.Cha
     rw [honestRows_of_not_mem ω.toCells c hm]
     exact hcolH _ h0
   have hmD : (Completeness.response H r).dotEval C x -
-      ∑ l, r.2.1 l * HVZK.dotAt (L := L) col l x = c.dotMask.eval x := by
+      ∑ l, r.lin l * HVZK.dotAt (L := L) col l x = c.dotMask.eval x := by
     rw [← Tableau.Response.eval_dot, Completeness.response_dot]
     simp only [Completeness.dotResponse, MaskedConstraintTest.batch, eval_add, eval_finsetSum,
       eval_mul, eval_C, eval_dotPolynomials, hs.dotAt_congr hcol]
     exact add_sub_cancel_right _ _
   have hmQ : (Completeness.response H r).quadEval C x -
-      ∑ l, r.2.2 l * HVZK.quadAt (P := P) col l = c.quadMask.eval x := by
+      ∑ l, r.quad l * HVZK.quadAt (P := P) col l = c.quadMask.eval x := by
     rw [← Tableau.Response.eval_quad, Completeness.response_quad]
     simp only [Completeness.quadResponse, MaskedConstraintTest.batch, eval_add, eval_finsetSum,
       eval_mul, eval_C, eval_quadPolynomials, hs.quadAt_congr Hd.products_ne_zero hcol]
@@ -800,10 +808,10 @@ theorem honestView_eq (ω : HVZK.Witness L Hd.toBlindingFields) (r : Tableau.Cha
     · rfl
   change (honestRows pr ω.toCells c i.succ).eval x = pr.fill
     (pieceColumn C.k t x ((Completeness.response H r).dotEval C x -
-      ∑ l, r.2.1 l * HVZK.dotAt (L := L) col l x)
+      ∑ l, r.lin l * HVZK.dotAt (L := L) col l x)
       (honestOpenings (fun s => C.D (q s)) c.dotMask c.dotKernel) s)
     (pieceColumn C.k t x ((Completeness.response H r).quadEval C x -
-      ∑ l, r.2.2 l * HVZK.quadAt (P := P) col l)
+      ∑ l, r.quad l * HVZK.quadAt (P := P) col l)
       (honestOpenings (fun s => C.D (q s)) c.quadMask c.quadKernel) s)
     col i.succ
   rw [hmD, hmQ, honestRows, PieceRows.fill_map (fun f : F[X] => f.eval x),
@@ -831,12 +839,12 @@ theorem identDistrib (ω : HVZK.Witness L Hd.toBlindingFields) (r : Tableau.Chal
         (HVZK.simResponse L hrate Hd r z.1, z.2)) := by
     intro ρ
     let off := fun (y : HVZK.ResponseCoins P hrate nrep × (Kernel F C.k t × Kernel F C.k t)) =>
-      fun j => ildtOffset (pr := pr) ω.toCells (r.1 j)
+      fun j => ildtOffset (pr := pr) ω.toCells (r.ldt j)
         (⟨⟨ρ, y.1⟩, y.2.1, y.2.2⟩ : Coins hrate Hd.toBlindingFields t nrep)
     have hoff : ∀ (y : HVZK.ResponseCoins P hrate nrep × (Kernel F C.k t × Kernel F C.k t))
         (v : Fin nrep → Fin C.k → F), off (⟨v, y.1.dotMask, y.1.quadMask⟩, y.2) = off y := by
       rintro ⟨⟨v₀, dm, qm⟩, κd, κq⟩ v
-      exact funext fun j => ildtOffset_congr ω.toCells (r.1 j) ρ v v₀ dm qm κd κq
+      exact funext fun j => ildtOffset_congr ω.toCells (r.ldt j) ρ v v₀ dm qm κd κq
     let e : HVZK.ResponseCoins P hrate nrep × (Kernel F C.k t × Kernel F C.k t) ≃
         HVZK.ResponseCoins P hrate nrep × (Kernel F C.k t × Kernel F C.k t) :=
       { toFun := fun y => (⟨y.1.ildt + off y, y.1.dotMask, y.1.quadMask⟩, y.2)
@@ -970,7 +978,8 @@ challenge of the commit rounds and the constraint challenge. -/
 noncomputable def prove (ctx : Ctx) (x : ι → F) (c : Pl.Coins) (r : (commitProve S rows).Rounds) :
     CausalTranscript (commitProve S rows).spec :=
   Ligero.AgreementThreshold.honestProof fun rc =>
-    ZK.honestMasked (S.linearSystem (rows ctx)) S.pieces (Pl.cells x) c (ldtChallenge r, rc)
+    ZK.honestMasked (S.linearSystem (rows ctx)) S.pieces (Pl.cells x) c
+      (.ofConstraint (ldtChallenge r) rc)
 
 /-- **Completeness of the honest prover** (`Ligero.Completeness.accept` at the honest tableau
 `ZK.honestTableau`, whose recombined masks are the honest masks, `ZK.masks_honestCommit`): on
@@ -986,7 +995,8 @@ theorem complete (ctx : Ctx) (x : ι → F)
   have hs := Pl.free.separate (products := products) S.index (rows ctx)
   set H := ZK.honestTableau Pl.layout.products_ne_zero hs
     (Pl.witness rows hx.admissible ctx hx.rowsHold) c
-  have hacc := Completeness.accept H (chc (ldtIdx F R C.k S.nrep), Ligero.AgreementThreshold.chConstraint ch)
+  have hacc := Completeness.accept H
+    (.ofConstraint (chc (ldtIdx F R C.k S.nrep)) (Ligero.AgreementThreshold.chConstraint ch))
     (chQuery ch)
   have hm : Completeness.masks H = S.pieces.masks C S.t (Completeness.encode H).tableau :=
     (ZK.masks_honestCommit Pl.free.nodup Pl.free.zero_not_mem (Pl.cells x) c).symm
@@ -1005,8 +1015,9 @@ commit rounds, the constraint challenge, the masked responses and the query as t
 transcript. -/
 def viewOf (r : Tableau.LdtChallenge F R S.nrep) (rc : ConstraintChallenge F nL nQ)
     (q : Tableau.Query N S.t) (v : HVZK.View F R C.k S.t S.nrep) : (commitProve S rows).View :=
-  ⟨Ligero.AgreementThreshold.viewLeaves Prod.fst q v, Ligero.AgreementThreshold.commitTranscript r v.1.1,
-    Ligero.AgreementThreshold.proofTranscript rc v.1.2 q⟩
+  ⟨Ligero.AgreementThreshold.viewLeaves Prod.fst q v,
+    Ligero.AgreementThreshold.commitTranscript r v.1.ldt,
+    Ligero.AgreementThreshold.proofTranscript rc v.1.masked q⟩
 
 /-- **The simulator** of Ligero at agreement threshold `A` with the mask test: on the context `c`,
 the low-degree challenge (in `chc`) and the proof-phase challenges, the tableau simulator of
@@ -1025,7 +1036,8 @@ def simulate (c : Ctx) (chc : (AgreementThreshold.commitSpec F R C.k S.nrep).Cha
     (commitProve S rows).View :=
   viewOf S rows (chc (ldtIdx F R C.k S.nrep)) (Ligero.AgreementThreshold.chConstraint ch) (chQuery ch)
     (ZK.simulate (S.linearSystem (rows c)) S.rate_le S.pieces Hd.layout
-      (chc (ldtIdx F R C.k S.nrep), Ligero.AgreementThreshold.chConstraint ch) (chQuery ch) s)
+      (.ofConstraint (chc (ldtIdx F R C.k S.nrep)) (Ligero.AgreementThreshold.chConstraint ch))
+      (chQuery ch) s)
 
 /-- **The simulator of Ligero at agreement threshold `A` with the mask test**: `simulate` at the
 hiding data `Hd`, on its coins (`ZK.SimCoins`).
@@ -1051,7 +1063,8 @@ noncomputable def honest : (commitProve S rows).Honest (honestSim Hd rows) where
     have hs := Hd.free.separate (products := products) S.index (rows ctx)
     have key := (ZK.identDistrib (hrate := S.rate_le) hs
       (Hd.witness rows hx.admissible ctx hx.rowsHold)
-      (chc (ldtIdx F R C.k S.nrep), Ligero.AgreementThreshold.chConstraint ch) (chQuery ch) Hd.t_le_privacy
+      (.ofConstraint (chc (ldtIdx F R C.k S.nrep)) (Ligero.AgreementThreshold.chConstraint ch))
+      (chQuery ch) Hd.t_le_privacy
       Hd.t_le_half).comp
         (viewOf S rows (chc (ldtIdx F R C.k S.nrep)) (Ligero.AgreementThreshold.chConstraint ch) (chQuery ch))
     refine IdentDistrib.trans (IdentDistrib.of_equiv (Equiv.refl _) fun ρ => ?_) key

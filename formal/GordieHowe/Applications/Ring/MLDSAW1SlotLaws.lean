@@ -45,7 +45,7 @@ the request and the readout is unchanged (`toOuterMeasure_extLaw_withStep_label_
   `hsim`, `hrel` of `w1SlotLaw_h2` at `w1Enc`, a simulator reading only the program statement, and
   `w1Rel` (`w1Rel_iff_of_w1SlotPub_eq`).
 - `readsClaimDB_w1CanonSig`: the readout reads only the claim, the database and the corruptions.
-- `cast_natOutcome`, `toOuterMeasure_simPMF_congr`: the casts to the shared outcome type.
+- `cast_natOutcome`: the casts to the shared outcome type.
 - `w1SlotLaw_h1_of_eqOn`, **`w1SlotLaw_h1`**: the law of slot `j`'s request does not depend on
   its coin.
 - `w1CanonSigR`, `w1SlotGuess`, `w1SlotLaw_hG`: the readout at the registers, the guess event,
@@ -80,9 +80,13 @@ namespace GordieHowe.RingSignature.KeyFree
 open Quantum Signature QROM OracleProg RingSignature.OracleSplit RingSignature.Insider
 
 variable {X Y Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] (sp : OracleSplit Y Y₁ Y₂)
-  [DecidableEq X] {N n : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB)
-  {Pf PC : Type} {iFP : Fintype Pf} {iDP : DecidableEq Pf} {iFC : Fintype PC}
-  {iDC : DecidableEq PC} {iNC : Nonempty PC}
+  [DecidableEq X] {N n : ℕ} {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg]
+  [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] (B : BaseSigner X Y N TB)
+  {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
+  [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) ⟨Pf, PC⟩}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {SC X₀ R Pb : Type}
   (pks : Fin n → B.PK)
@@ -93,11 +97,16 @@ variable {X Y Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] (sp
   (toR : X₀ → Req B PS adm n × ℕ → B.BSig → R) (dummyR : Req B PS adm n × ℕ → R) {Q : ℕ}
   [Inhabited X] [Inhabited B.Pub]
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TB.PK]
+  [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 /-- **The side-mode key-free relay's program of a request reads only its own side coins**: at
 side coins `sc'` agreeing with `sc` at the request's number when it is a signing request, the
 programs of the request are equal (`kfProgK_congr`). -/
 theorem relayOf_kfRelaySide_prog_congr (sc sc' : Fin Q → SC) (ω : X → Y₁)
-    (idle : MURequest (SignOracle.none B) n ⊕ R)
+    (idle : MURequest (SignOracle.none B.core) n ⊕ R)
     (r : (Req B PS adm n × Fin (Q + 1)) × (X → Option Y))
     (h : ∀ s Rg m (hc : (r.1.2 : ℕ) < Q), r.1.1 = .sign s Rg m →
       sc' ⟨r.1.2, hc⟩ = sc ⟨r.1.2, hc⟩) :
@@ -130,11 +139,16 @@ def KFOutOfSig (ω : X → Y₁) (T : X → Option Y) (c : ℕ) (r : Req B PS ad
     r = .sign s Rg m ∧ (F.outB (pks s) Rg c m (sc ⟨c, h.1⟩)).run (ωT sp ω T) = some (q, kp) ∧
       o = some (kp.2.1, q.2, kp.2.2 (prfOf sp y))
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TB.PK]
+  [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 /-- **The resolved side-mode signature returns only `KFOutOfSig`.** -/
 theorem resolve_sigK_allOut (sc : Fin Q → SC) (ω : X → Y₁) (T : X → Option Y) (c : ℕ)
     (r : Req B PS adm n) :
     (resolve ω ((KFReads.viaSide (fun y => (sp y).1) ω).lift
-        (Req' := MURequest (SignOracle.none B) n ⊕ R) (Resp' := MUResponse B ⊕ Pf)
+        (Req' := MURequest (SignOracle.none B.core) n ⊕ R) (Resp' := MUResponse B.core ⊕ Pf)
         (fun _ => none) ((KFReads.viaSide (fun y => (sp y).1) ω).tabB T fun _ => none)
         (sigK B pks sc (sgnB sp B F S) c r))).AllOut
       (KFOutOfSig sp B pks F sc ω T c r) := by
@@ -160,11 +174,16 @@ theorem resolve_sigK_allOut (sc : Fin Q → SC) (ω : X → Y₁) (T : X → Opt
     · exact Or.inl rfl
   · exact Or.inl rfl
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TB.PK]
+  [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 /-- **The resolved side-mode statement** is the statement at the base component (`xPω`). -/
 theorem resolve_xK_stpB (ω : X → Y₁) (T : X → Option Y) (r : Req B PS adm n)
     (o : Option (B.Pub × B.BSig × List (Assignment X Y))) :
     resolve ω ((KFReads.viaSide (fun y => (sp y).1) ω).lift
-        (Req' := MURequest (SignOracle.none B) n ⊕ R) (Resp' := MUResponse B ⊕ Pf)
+        (Req' := MURequest (SignOracle.none B.core) n ⊕ R) (Resp' := MUResponse B.core ⊕ Pf)
         (lastAssign (asgOf B o))
         ((KFReads.viaSide (fun y => (sp y).1) ω).tabB T (lastAssign (asgOf B o)))
         (xK B (stpB sp B S) r o)) = .pure (xPω sp B stmtPω ω T r o) := by
@@ -175,12 +194,17 @@ theorem resolve_xK_stpB (ω : X → Y₁) (T : X → Option Y) (r : Req B PS adm
   rw [xPω, ← S.run_stmtPB, ← ωT_eq sp ω]
   rfl
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TB.PK]
+  [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 /-- **The resolved side-mode key-free relay program with one request's signature moved**
 (`resolve_kfProgK_swap` with `sw` moving the main requests alike only at the signatures the
 signer can return, `KFOutOfSig`, and at the statements it then asks, `xPω`). -/
 theorem resolve_kfProgK_swap_side (sc sc' : Fin Q → SC) (ω : X → Y₁) (T : X → Option Y) (c : ℕ)
     (r : Req B PS adm n) (swσ : B.BSig → B.BSig)
-    (sw : MURequest (SignOracle.none B) n ⊕ R → MURequest (SignOracle.none B) n ⊕ R)
+    (sw : MURequest (SignOracle.none B.core) n ⊕ R → MURequest (SignOracle.none B.core) n ⊕ R)
     (hφ : CoinSwapAt sp B pks F sc sc' ω T c r swσ)
     (hsw : ∀ o, KFOutOfSig sp B pks F sc ω T c r o →
       sw (reqOf B toR dummyR c r o (xPω sp B stmtPω ω T r o)) =
@@ -199,6 +223,11 @@ theorem resolve_kfProgK_swap_side (sc sc' : Fin Q → SC) (ω : X → Y₁) (T :
     resolve_bind, resolve_bind, resolve_xK_stpB]
   simp only [OracleProg.bind, translate, translate_bind, Sum.map_inr, hsw o ho, replyOf_mapSig]
 
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TB.PK]
+  [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig]
+  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
+  [Nonempty TB.Coins] in
 /-- **(ii-c) with the main requests moved only where the signer can return**
 (`progSwap_kfRelaySide` with `resolve_kfProgK_swap_side`): `sw` needs to move the main request of
 `r₀` alike only at the signatures `KFOutOfSig` and the statements `xPω` asked at them. -/
@@ -209,10 +238,10 @@ theorem progSwap_kfRelaySide_side
       (fun _ _ _ _ => True) (fun _ _ => True) (S.stmtPB ⟨Rg, m, y⟩) (S.stmtPB ⟨Rg, m, y'⟩))
     (hcO : ∀ pk Rg c m s, CountsLE (fun _ => true) F.qOut (F.outB pk Rg c m s))
     (hcS : ∀ x, CountsLE (fun _ => true) S.qSt (S.stmtPB x))
-    (sc sc' : Fin Q → SC) (ω : X → Y₁) (idle : MURequest (SignOracle.none B) n ⊕ R)
+    (sc sc' : Fin Q → SC) (ω : X → Y₁) (idle : MURequest (SignOracle.none B.core) n ⊕ R)
     (J : (Req B PS adm n × Fin (Q + 1)) × (X → Option Y) → Bool)
     (r₀ : (Req B PS adm n × Fin (Q + 1)) × (X → Option Y)) (swσ : B.BSig → B.BSig)
-    (sw : Equiv.Perm (MURequest (SignOracle.none B) n ⊕ R))
+    (sw : Equiv.Perm (MURequest (SignOracle.none B.core) n ⊕ R))
     (hoff : ∀ r, J r = false → ∀ s Rg m (hc : (r.1.2 : ℕ) < Q), r.1.1 = .sign s Rg m →
       sc' ⟨r.1.2, hc⟩ = sc ⟨r.1.2, hc⟩)
     (hφ : CoinSwapAt sp B pks F sc sc' ω r₀.2 r₀.1.2 r₀.1.1 swσ)
@@ -262,7 +291,8 @@ variable {p : Params} {T : ℕ} {Msg : Type} {N reps : ℕ}
   {Λ : SiteLayout Mg} {b : ℕ} [∀ j i, Fintype ((Mc.comp j).MessageWrite i)]
   {E : (j : ι) → (Mc.comp j).Encoder}
   {Vr : W1ExpStmt prims RMsg N → FullTr P τ → Bool}
-  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R] [Nonempty R]
+  {Qs : ∀ x, Mc.IOPQueries Vr x} {hb : Mc.FormatBounds Qs b b} {R : Type} [Fintype R]
+  [DecidableEq R] [Nonempty R]
   {honest : RingSignature.RingWit (freshBase prims O Mo βmin tol enc k D bmsg) → R →
     CausalProver P τ (W1ExpStmt prims RMsg N)}
   {adm : KeyRing (PubKey p prims) N → Prop}
@@ -300,10 +330,10 @@ noncomputable abbrev w1ShapeS
     [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)] (hO : O.ReadsFst sp)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f)) :
-    AlgShape Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq)) (Mc.Response b) :=
+    AlgShape Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq)) (Mc.Response b) :=
   seAlgKFS (Stmt := Stmt) (M := Mc) (B := Bf)
-    ((A₀.toShape.absorbAssignS (Req' := MURequest (SignOracle.none Bf) n ⊕ Rq)
-      (Resp' := MUResponse Bf ⊕ Mc.Response b) Y₁ Q 1 1
+    ((A₀.toShape.absorbAssignS (Req' := MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
+      (Resp' := MUResponse (Bf).core ⊕ Mc.Response b) Y₁ Q 1 1
       ((w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO).qOut +
       (w1KFStmt prims O Mo βmin tol enc k D bmsg sp).qSt)).restrictAtS Y₁ (XOut kh e))
 
@@ -319,16 +349,17 @@ abbrev W1Outcome
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)] (hO : O.ReadsFst sp)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp
         Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ) : Type :=
   BaseGame.Tuple Xq (Out kh e)
     (CWork (w1ShapeS sp hO A₀ (Stmt := Stmt) (Q := Q)).CntW
       (w1ShapeS sp hO A₀ (Stmt := Stmt) (Q := Q)).width Xq (XOut kh e)
-      (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq)) (Mc.Response b)
+      (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq)) (Mc.Response b)
       (w1ShapeS sp hO A₀ (Stmt := Stmt) (Q := Q)).slots (simExtChallenger Psim Q).q
       (simExtChallenger Psim Q).Coins)
     (kq + Q * Psim.q) × DB Xq (Out kh e)
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The extraction outcomes at any side coins are `W1Outcome`** (rfl, against the shape term
 only). -/
 theorem kfOutcome_eq_w1Outcome
@@ -337,15 +368,15 @@ theorem kfOutcome_eq_w1Outcome
     [Fintype (RingSignature.Insider.Resp Bf PSf adm)]
     [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit} (hO : O.ReadsFst sp) (ξ :
+    {penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → ProofQuery Stmt Wit} (hO : O.ReadsFst sp) (ξ :
         Fin n → (Bf).KeyCoins) (ω : Xq → Y₁)
-    (idle : MURequest (SignOracle.none Bf) n ⊕ Rq) (prf : Frg → Option Mc.NIProof)
+    (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) (prf : Frg → Option Mc.NIProof)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp
         Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ) (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁) :
     KFOutcome (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS) prf ξ Q
-        (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+        (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
         (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
           (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
           (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -353,6 +384,7 @@ theorem kfOutcome_eq_w1Outcome
               kq = W1Outcome sp hO A₀ Psim kq :=
   rfl
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The extraction outcomes at any side coins, typed through `SPBCS.Reg`, are `W1Outcome`**
 (rfl, against the shape term only). -/
 theorem natOutcome_eq_w1Outcome
@@ -361,16 +393,16 @@ theorem natOutcome_eq_w1Outcome
     [Fintype (RingSignature.Insider.Resp Bf PSf adm)]
     [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit} (hO : O.ReadsFst sp) (ξ :
+    {penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → ProofQuery Stmt Wit} (hO : O.ReadsFst sp) (ξ :
         Fin n → (Bf).KeyCoins) (ω : Xq → Y₁)
-    (idle : MURequest (SignOracle.none Bf) n ⊕ Rq) (prf : Frg → Option Mc.NIProof)
+    (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) (prf : Frg → Option Mc.NIProof)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp
         Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ) (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁) :
     (BaseGame.Tuple Xq (Out kh e) (SPBCS.Reg (seAlgKF (rel := rel) (enc := penc) (dummyS :=
         dummyS) prf ξ Q
-        (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+        (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
         (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
           (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
           (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -389,13 +421,14 @@ noncomputable def w1SlotReq
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)] (hO : O.ReadsFst sp)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp
         Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ) (j : Fin Q) (o : W1Outcome sp hO A₀ Psim kq) :
     Option (AssignRelay.TaggedReq Xq Y (RingSignature.Insider.Req Bf PSf adm n) Q) :=
   MultiRelay.firstJ (AdaptiveIAlg.jTest (X := Xq) (Y := Y) (Req := (RingSignature.Insider.Req Bf
       PSf adm n)) Q j)
     (MultiRelay.recList o.1.out.adv.workspace.1.1.work.1.1.record)
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The request of slot `j` is the label `kfLabel`** of the relay's test of number `j`, at any
 side coins (rfl). -/
 theorem w1SlotReq_eq_kfLabel
@@ -404,16 +437,16 @@ theorem w1SlotReq_eq_kfLabel
     [Fintype (RingSignature.Insider.Resp Bf PSf adm)]
     [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit} (hO : O.ReadsFst sp) (ξ :
+    {penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → ProofQuery Stmt Wit} (hO : O.ReadsFst sp) (ξ :
         Fin n → (Bf).KeyCoins) (ω : Xq → Y₁)
-    (idle : MURequest (SignOracle.none Bf) n ⊕ Rq) (prf : Frg → Option Mc.NIProof)
+    (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) (prf : Frg → Option Mc.NIProof)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp
         Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ) (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁) (j : Fin Q)
     (o : W1Outcome sp hO A₀ Psim kq) :
     w1SlotReq sp hO A₀ Psim kq j o = kfLabel (rel := rel) (enc := penc) (dummyS := dummyS)
-      (prf := prf) (keys := ξ) (Q := Q) (A := (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕
+      (prf := prf) (keys := ξ) (Q := Q) (A := (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕
           Mc.Response b)
         (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
           (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
@@ -427,6 +460,7 @@ theorem w1SlotReq_eq_kfLabel
         (w1DummyR (PS := PSh) (Q := Q)) sc ω idle) Q) (AdaptiveIAlg.jTest Q j) w.1.1) o :=
   rfl
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The request of slot `j` is `slotRequest`** at any side coins (rfl). -/
 theorem w1SlotReq_eq_slotRequest
     [Fintype (RingSignature.Insider.Req Bf PSf adm n)]
@@ -434,12 +468,12 @@ theorem w1SlotReq_eq_slotRequest
     [Fintype (RingSignature.Insider.Resp Bf PSf adm)]
     [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit} (hO : O.ReadsFst sp) (ξ :
+    {penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → ProofQuery Stmt Wit} (hO : O.ReadsFst sp) (ξ :
         Fin n → (Bf).KeyCoins)
-    (ω : Xq → Y₁) (idle : MURequest (SignOracle.none Bf) n ⊕ Rq) (prf : Frg → Option Mc.NIProof)
+    (ω : Xq → Y₁) (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) (prf : Frg → Option Mc.NIProof)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp
         Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ) (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁) (j : Fin Q)
     (o : W1Outcome sp hO A₀ Psim kq) :
     w1SlotReq sp hO A₀ Psim kq j o = slotRequest (rel := rel) (enc := penc) (dummyS := dummyS)
@@ -459,10 +493,11 @@ noncomputable def w1OutS
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
     (hO : O.ReadsFst sp)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ) (o : W1Outcome sp hO A₀ Psim kq) : Frg × X₀f :=
   A₀.out o.1.out.adv.workspace.1.1.work.1.1.inner.1.1.1.1.1.1.work
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The output of an outcome is the absorbed adversary's output** at any side coins (rfl). -/
 theorem w1OutS_eq
     [Fintype (RingSignature.Insider.Req Bf PSf adm n)]
@@ -470,20 +505,20 @@ theorem w1OutS_eq
     [Fintype (RingSignature.Insider.Resp Bf PSf adm)]
     [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit} (hO : O.ReadsFst sp)
+    {penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → ProofQuery Stmt Wit} (hO : O.ReadsFst sp)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ)
-    (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁) (idle : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁) (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁) (prf : Frg → Option Mc.NIProof)
     (o : W1Outcome sp hO A₀ Psim kq) :
-    w1OutS sp hO A₀ Psim kq o = (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+    w1OutS sp hO A₀ Psim kq o = (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
         (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
           (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
           (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
           (w1DummyR (PS := PSh) (Q := Q)) sc ω idle) Q).restrictAt sp ω).mapOut Prod.fst).out
       (SPBCS.advWorkspace (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS) prf ξ Q
-        (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+        (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
         (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
           (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
           (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -500,12 +535,12 @@ noncomputable def w1CanonSigR
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
     (hO : O.ReadsFst sp)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p prims)))
     (pks : Fin n → PubKey p prims)
     (c : CWork (w1ShapeS sp hO A₀ (Stmt := Stmt) (Q := Q)).CntW
       (w1ShapeS sp hO A₀ (Stmt := Stmt) (Q := Q)).width Xq (XOut kh e)
-      (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq)) (Mc.Response b)
+      (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq)) (Mc.Response b)
       (w1ShapeS sp hO A₀ (Stmt := Stmt) (Q := Q)).slots (simExtChallenger Psim Q).q
       (simExtChallenger Psim Q).Coins)
     (D₀ : DB Xq (Out kh e)) : Option (FIPSSignature p prims) :=
@@ -526,12 +561,13 @@ noncomputable def w1CanonSig
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
     (hO : O.ReadsFst sp)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ) (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p prims)))
     (pks : Fin n → PubKey p prims) (o : W1Outcome sp hO A₀ Psim kq) :
     Option (FIPSSignature p prims) :=
   w1CanonSigR sp hO A₀ Psim Ext pks o.1.out o.2
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The readout is the canonical witness's signature of `kfCanonOut`** at any side coins
 (rfl). -/
 theorem w1CanonSig_eq
@@ -540,17 +576,17 @@ theorem w1CanonSig_eq
     [Fintype (RingSignature.Insider.Resp Bf PSf adm)]
     [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit} (hO : O.ReadsFst sp)
+    {penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → ProofQuery Stmt Wit} (hO : O.ReadsFst sp)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ)
     (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p prims)))
-    (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁) (idle : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁) (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁) (prf : Frg → Option Mc.NIProof)
     (o : W1Outcome sp hO A₀ Psim kq) :
     w1CanonSig sp hO A₀ Psim kq Ext (fun j => (Bf).pk (ξ j)) o =
       (kfCanonOut (rel := rel) (enc := penc) (dummyS := dummyS) prf ξ Q (((A₀.absorbAssign (Resp'
-          := MUResponse Bf ⊕ Mc.Response b)
+          := MUResponse (Bf).core ⊕ Mc.Response b)
         (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
           (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
           (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -574,9 +610,11 @@ theorem firstJ_spec {Req : Type} {J : Req → Bool} {es : List (Option Req)} {r 
       subst h
       simpa using hJ
 
+omit [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R]
+  [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The moved main requests at the identity move of the signatures** are the main requests. -/
 theorem w1MainSw_one (t₀ : RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1))
-    (x : MURequest (SignOracle.none Bf) n ⊕ Rq) : w1MainSw t₀ 1 x = x := by
+    (x : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) : w1MainSw t₀ 1 x = x := by
   rcases x with _ | (⟨a, t, σ⟩ | d)
   · rfl
   · simp [w1MainSw, w1ProofSw]
@@ -592,6 +630,8 @@ noncomputable def w1SlotSw (pks : Fin n → PubKey p prims) (ω : Xq → Y₁)
   | some σ, some σ' => Equiv.swap σ σ'
   | _, _ => 1
 
+omit [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R]
+  [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The move at a request that is not a signing request is the identity.** -/
 theorem w1SlotSw_of_not_sign (pks : Fin n → PubKey p prims) (ω : Xq → Y₁)
     (r : AssignRelay.TaggedReq Xq Y (RingSignature.Insider.Req Bf PSf adm n) Q)
@@ -630,12 +670,14 @@ noncomputable def w1ProofSwG (t₀ : RingSignature.Insider.Req Bf PSf adm n × F
 noncomputable def w1MainSwG (t₀ : RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1))
     (G : W1BStmt prims RMsg N → Prop) (swσ : Equiv.Perm (FIPSSignature p
         prims)) :
-    Equiv.Perm (MURequest (SignOracle.none Bf) n ⊕ Rq) :=
+    Equiv.Perm (MURequest (SignOracle.none (Bf).core) n ⊕ Rq) :=
   Equiv.sumCongr (Equiv.refl _) (Equiv.sumCongr (w1ProofSwG sp t₀ G swσ) (Equiv.refl _))
 
+omit [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R]
+  [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The gated move at the identity move of the signatures** is the identity. -/
 theorem w1MainSwG_one (t₀ : RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1))
-    (G : W1BStmt prims RMsg N → Prop) (x : MURequest (SignOracle.none Bf) n ⊕
+    (G : W1BStmt prims RMsg N → Prop) (x : MURequest (SignOracle.none (Bf).core) n ⊕
         Rq) :
     w1MainSwG sp t₀ G 1 x = x := by
   rcases x with _ | (⟨a, t, σ⟩ | d)
@@ -643,6 +685,8 @@ theorem w1MainSwG_one (t₀ : RingSignature.Insider.Req Bf PSf adm n × Fin (Q +
   · simp [w1MainSwG, w1ProofSwG]
   · rfl
 
+omit [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R]
+  [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The gated move fixes the main request of a request with another tag.** -/
 theorem w1MainSwG_reqOf_of_ne (t₀ : RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1))
     (G : W1BStmt prims RMsg N → Prop) (swσ : Equiv.Perm (FIPSSignature p prims))
@@ -667,6 +711,8 @@ def w1SlotGate [Inhabited Xq] (hO : O.ReadsFst sp) (pks : Fin n → PubKey p pri
     ∃ x₀, xPω sp Bf (w1StmtPω prims O Mo βmin tol enc k D bmsg sp) ω r.2 r.1.1 o = some x₀ ∧
       w1Bnd x₀ = xb
 
+omit [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R]
+  [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **Equal public parts give a swap of the signatures** (`CoinSwapAt`): at side coins `sc₁`,
 `sc₂` whose coins at the request's number `j` have equal public parts (`w1SlotPub`), the
 key-free signer's base-component program at `sc₂` runs as at `sc₁` with the signature moved by
@@ -700,6 +746,7 @@ theorem coinSwapAt_w1Slot [Inhabited Xq] (hO : O.ReadsFst sp) (pks : Fin n → P
     | (subst hp
        exact congrArg some (Prod.ext (Prod.ext rfl (Equiv.swap_apply_left σ σ').symm) rfl))
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] [Nonempty Y] in
 /-- **The readout of two outcomes agrees** when their claims' statements, their databases and their
 corruptions among the first `Q` main requests agree (the content of `readsClaimDB_w1CanonSig`,
 stated on `W1Outcome`). -/
@@ -712,13 +759,13 @@ theorem w1CanonSig_congr
     (ξ : Fin n → (Bf).KeyCoins)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n)
       (RingSignature.Insider.Resp Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ)
     (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p prims))) (o o' : W1Outcome sp hO A₀ Psim kq)
     (hx : (w1OutS sp hO A₀ Psim kq o).2 = (w1OutS sp hO A₀ Psim kq o').2) (hD : o.2 = o'.2)
-    (hcor : ∀ i, (Sum.inl (MURequest.corrupt i) : MURequest (SignOracle.none Bf) n ⊕ Rq) ∈
+    (hcor : ∀ i, (Sum.inl (MURequest.corrupt i) : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) ∈
         (Quantum.requests o.1.out.adv.workspace.1.1.logs).take Q ↔
-      (Sum.inl (MURequest.corrupt i) : MURequest (SignOracle.none Bf) n ⊕ Rq) ∈
+      (Sum.inl (MURequest.corrupt i) : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) ∈
         (Quantum.requests o'.1.out.adv.workspace.1.1.logs).take Q) :
     w1CanonSig sp hO A₀ Psim kq Ext (fun j => (Bf).pk (ξ j)) o =
       w1CanonSig sp hO A₀ Psim kq Ext (fun j => (Bf).pk (ξ j)) o' := by
@@ -734,6 +781,7 @@ theorem w1CanonSig_congr
   unfold w1CanonSig w1CanonSigR
   congr 2 <;> first | exact hok | exact hx | exact hD
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The readout reads only the claim, the database and the corruptions** among the first `Q`
 main requests (`ReadsClaimDB`): the canonical witness reads the claim's statement and the
 database, and `w1Ok` reads the logged requests only through the corruptions (`w1Honest`). -/
@@ -743,15 +791,15 @@ theorem readsClaimDB_w1CanonSig
     [Fintype (RingSignature.Insider.Resp Bf PSf adm)]
     [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit} (hO : O.ReadsFst sp)
+    {penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → ProofQuery Stmt Wit} (hO : O.ReadsFst sp)
     (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁)
-    (idle : MURequest (SignOracle.none Bf) n ⊕ Rq) (prf : Frg → Option Mc.NIProof)
+    (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) (prf : Frg → Option Mc.NIProof)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ) (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁)
     (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p prims))) (z : FIPSSignature p prims) :
     ReadsClaimDB (rel := rel) (enc := penc) (dummyS := dummyS) (prf := prf) (keys := ξ) (Q := Q)
-      (A := (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+      (A := (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
         (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
           (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
           (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -762,6 +810,7 @@ theorem readsClaimDB_w1CanonSig
   exact iff_of_eq (congrArg (· = some z) (w1CanonSig_congr sp hO ξ A₀ Psim kq Ext o o'
     (congrArg SPBCS.Claim.stmt hc) hD hcor))
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The cast of the outcomes along `natOutcome_eq_w1Outcome` is the identity.** -/
 theorem cast_natOutcome
     [Fintype (RingSignature.Insider.Req Bf PSf adm n)]
@@ -769,11 +818,11 @@ theorem cast_natOutcome
     [Fintype (RingSignature.Insider.Resp Bf PSf adm)]
     [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit} (hO : O.ReadsFst sp)
+    {penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → ProofQuery Stmt Wit} (hO : O.ReadsFst sp)
     (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁)
-    (idle : MURequest (SignOracle.none Bf) n ⊕ Rq) (prf : Frg → Option Mc.NIProof)
+    (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) (prf : Frg → Option Mc.NIProof)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ) (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁)
     (o : W1Outcome sp hO A₀ Psim kq) :
     @Eq (W1Outcome sp hO A₀ Psim kq)
@@ -781,189 +830,13 @@ theorem cast_natOutcome
         idle prf A₀ Psim kq sc) o) o :=
   @cast_eq (BaseGame.Tuple Xq (Out kh e) (SPBCS.Reg (seAlgKF (rel := rel) (enc := penc) (dummyS :=
       dummyS) prf ξ Q
-        (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+        (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
         (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
           (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
           (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
           (w1DummyR (PS := PSh) (Q := Q)) sc ω idle) Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q)
               (kq + Q * Psim.q) ×
       DB Xq (Out kh e)) _ o
-
-/-- **The extraction laws of equal adversaries on an event of a shared outcome type**: at
-`Ag₂ = Ag'`, the laws give the same probability to the preimages of `S` under the casts of their
-outcome types (`SPBCS.Reg`) to `Ω`. -/
-theorem toOuterMeasure_simPMF_congr
-    [Fintype (RingSignature.Insider.Req Bf PSf adm n)]
-    [DecidableEq (RingSignature.Insider.Req Bf PSf adm n)]
-    [Fintype (RingSignature.Insider.Resp Bf PSf adm)]
-    [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
-    [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
-    {shAg₂ : AlgShape Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq)) (Mc.Response b)} {Ag₂ Ag' : AdaptiveIAlg shAg₂ (Claim X₀f Mc.NIProof)} (h : Ag₂ = Ag')
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
-      (Mc.Response b) SC') (kq : ℕ) {Ω : Type}
-    (h₂ : (BaseGame.Tuple Xq (Out kh e) (SPBCS.Reg Ag₂ Psim Q) (kq + Q * Psim.q) ×
-      DB Xq (Out kh e)) = Ω)
-    (h' : (BaseGame.Tuple Xq (Out kh e) (SPBCS.Reg Ag' Psim Q) (kq + Q * Psim.q) ×
-      DB Xq (Out kh e)) = Ω) (S : Set Ω) :
-    (simPMF (outEquiv kh e) (extAdv Qs Ag₂ Psim Q kq)).toOuterMeasure (cast h₂ ⁻¹' S) =
-      (simPMF (outEquiv kh e) (extAdv Qs Ag' Psim Q kq)).toOuterMeasure (cast h' ⁻¹' S) := by
-  subst h
-  rfl
-
-/-- **`toOuterMeasure_simPMF_congr` at named preimages**: at `Ag₂ = Ag'`, sets `S₂` and `S'` that
-are the preimages of `S` under the casts of the outcome types get the same probability. -/
-theorem toOuterMeasure_simPMF_congr_of_preimage
-    [Fintype (RingSignature.Insider.Req Bf PSf adm n)]
-    [DecidableEq (RingSignature.Insider.Req Bf PSf adm n)]
-    [Fintype (RingSignature.Insider.Resp Bf PSf adm)]
-    [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
-    [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
-    {shAg₂ : AlgShape Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq)) (Mc.Response b)} {Ag₂ Ag' : AdaptiveIAlg shAg₂ (Claim X₀f Mc.NIProof)} (h : Ag₂ = Ag')
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
-      (Mc.Response b) SC') (kq : ℕ) {Ω : Type}
-    (h₂ : (BaseGame.Tuple Xq (Out kh e) (SPBCS.Reg Ag₂ Psim Q) (kq + Q * Psim.q) ×
-      DB Xq (Out kh e)) = Ω)
-    (h' : (BaseGame.Tuple Xq (Out kh e) (SPBCS.Reg Ag' Psim Q) (kq + Q * Psim.q) ×
-      DB Xq (Out kh e)) = Ω) (S : Set Ω)
-    {S₂ : Set (BaseGame.Tuple Xq (Out kh e) (SPBCS.Reg Ag₂ Psim Q) (kq + Q * Psim.q) ×
-      DB Xq (Out kh e))}
-    {S' : Set (BaseGame.Tuple Xq (Out kh e) (SPBCS.Reg Ag' Psim Q) (kq + Q * Psim.q) ×
-      DB Xq (Out kh e))}
-    (hS₂ : cast h₂ ⁻¹' S = S₂) (hS' : cast h' ⁻¹' S = S') :
-    (simPMF (outEquiv kh e) (extAdv Qs Ag₂ Psim Q kq)).toOuterMeasure S₂ =
-      (simPMF (outEquiv kh e) (extAdv Qs Ag' Psim Q kq)).toOuterMeasure S' := by
-  subst hS₂ hS'
-  exact toOuterMeasure_simPMF_congr (Qs := Qs) (Λ := Λ) (E := E) (hb := hb) (honest := honest)
-    (chk := chk) sp h Psim kq h₂ h' S
-
-
-/-- **Heterogeneously equal laws give an event of a shared outcome type the same probability**,
-read through casts of their outcome types to `Ω`. -/
-theorem _root_.PMF.toOuterMeasure_cast_preimage_heq {α β Ω : Type} {μ : PMF α} {ν : PMF β}
-    (h : μ ≍ ν) (h₂ : α = Ω) (h' : β = Ω) (S : Set Ω) :
-    μ.toOuterMeasure (cast h₂ ⁻¹' S) = ν.toOuterMeasure (cast h' ⁻¹' S) := by
-  subst h₂ h'
-  cases h
-  rfl
-
--- TODO(unbundle-M4): at the concrete relays, combining the `HEq` of
--- `seAlgKF_absorbAssign_eq_withStep` with its shape equation unfolds the concrete `Fintype`
--- instances of the two shapes; at free relays it does not
-/-- **The outcome types of the absorbed adversaries with `G'` and with `G` and `p'`'s steps are
-equal**, for relays of `G'` that are `G`'s with the programs `p'` of the same shape. -/
-theorem tuple_absorbAssign_withStep_eq
-    [Fintype (RingSignature.Insider.Req Bf PSf adm n)]
-    [DecidableEq (RingSignature.Insider.Req Bf PSf adm n)]
-    [Fintype (RingSignature.Insider.Resp Bf PSf adm)]
-    [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
-    [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit}
-    (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁) (prf : Frg → Option Mc.NIProof)
-    {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n)
-      (RingSignature.Insider.Resp Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    {Xs Ys : Type} [AddGroup Ys] [Fintype Ys] [DecidableEq Ys]
-    {G G' : AssignRelay Xq Y (RingSignature.Insider.Req Bf PSf adm n)
-      (RingSignature.Insider.Resp Bf PSf adm) (MURequest (SignOracle.none Bf) n ⊕ Rq)
-      (MUResponse Bf ⊕ Mc.Response b) Xs Ys}
-    {p' : (RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1)) × (Xq → Option Y) →
-      OracleProg ((Xq ⊕ Xs) ⊕ (MURequest (SignOracle.none Bf) n ⊕ Rq))
-        ((Y ⊕ Ys) ⊕ Option (MUResponse Bf ⊕ Mc.Response b))
-        (Option (AssignRelay.RespD Xq Y (RingSignature.Insider.Resp Bf PSf adm)
-          (MURequest (SignOracle.none Bf) n ⊕ Rq) (MUResponse Bf ⊕ Mc.Response b)))}
-    (hG : G'.relayOf Q = (G.relayOf Q).withProg p')
-    (hS : (G.relayOf Q).SameShape p')
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
-      (Mc.Response b) SC') (kq : ℕ) :
-    (BaseGame.Tuple Xq (Out kh e) (SPBCS.Reg (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS)
-        prf ξ Q
-        (((A₀.absorbAssign G' Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q) (kq + Q * Psim.q) ×
-      DB Xq (Out kh e)) =
-      (BaseGame.Tuple Xq (Out kh e) (SPBCS.Reg ((seAlgKF (rel := rel) (enc := penc) (dummyS :=
-          dummyS) prf ξ Q
-        (((A₀.absorbAssign G Q).restrictAt sp ω).mapOut Prod.fst)).withStep
-        (AdaptiveIAlg.absorbTabStep (((A₀.absorbAssign G Q).restrictAt sp ω).mapOut Prod.fst)
-          (seTwoKF (Proof := Mc.Response b) Bf rel penc dummyS ((Bf).pk ∘ ξ) Q)
-          ((A₀.absorbAssign G Q).restrictStep
-            ((A₀.absorbAssignP _ _ Q).relayStepWith (G.relayOf Q) Q p'
-              ((A₀.absorbAssignP _ _ Q).relayOut (G.relayOf Q))) sp ω))) Psim Q) (kq + Q * Psim.q) ×
-        DB Xq (Out kh e)) := by
-  have hs := seAlgKF_absorbAssign_toShape_eq (rel := rel) (enc := penc) (dummyS := dummyS)
-    (Stmt := Stmt) prf ξ Q (A := A₀) (sp := sp) (H₁ := ω) (f := Prod.fst) hG
-  have h := seAlgKF_absorbAssign_eq_withStep (rel := rel) (enc := penc) (dummyS := dummyS)
-    (Stmt := Stmt) prf ξ Q (A := A₀) (sp := sp) (H₁ := ω) (f := Prod.fst) hG hS
-  congr 3
-
-/-- **The extraction laws of the absorbed adversaries with `G'` and with `G` and `p'`'s steps agree
-on an event of a shared outcome type**, at named preimages
-    (`toOuterMeasure_simPMF_congr_of_preimage`). -/
-theorem toOuterMeasure_simPMF_absorbAssign_withStep
-    [Fintype (RingSignature.Insider.Req Bf PSf adm n)]
-    [DecidableEq (RingSignature.Insider.Req Bf PSf adm n)]
-    [Fintype (RingSignature.Insider.Resp Bf PSf adm)]
-    [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
-    [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit}
-    (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁) (prf : Frg → Option Mc.NIProof)
-    {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n)
-      (RingSignature.Insider.Resp Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    {Xs Ys : Type} [AddGroup Ys] [Fintype Ys] [DecidableEq Ys]
-    {G G' : AssignRelay Xq Y (RingSignature.Insider.Req Bf PSf adm n)
-      (RingSignature.Insider.Resp Bf PSf adm) (MURequest (SignOracle.none Bf) n ⊕ Rq)
-      (MUResponse Bf ⊕ Mc.Response b) Xs Ys}
-    {p' : (RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1)) × (Xq → Option Y) →
-      OracleProg ((Xq ⊕ Xs) ⊕ (MURequest (SignOracle.none Bf) n ⊕ Rq))
-        ((Y ⊕ Ys) ⊕ Option (MUResponse Bf ⊕ Mc.Response b))
-        (Option (AssignRelay.RespD Xq Y (RingSignature.Insider.Resp Bf PSf adm)
-          (MURequest (SignOracle.none Bf) n ⊕ Rq) (MUResponse Bf ⊕ Mc.Response b)))}
-    (hG : G'.relayOf Q = (G.relayOf Q).withProg p')
-    (hS : (G.relayOf Q).SameShape p')
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
-      (Mc.Response b) SC') (kq : ℕ) {Ω : Type}
-    (h₂ : (BaseGame.Tuple Xq (Out kh e) (SPBCS.Reg (seAlgKF (rel := rel) (enc := penc) (dummyS :=
-        dummyS) prf ξ Q
-        (((A₀.absorbAssign G' Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q) (kq + Q * Psim.q) ×
-      DB Xq (Out kh e)) = Ω)
-    (h' : (BaseGame.Tuple Xq (Out kh e) (SPBCS.Reg ((seAlgKF (rel := rel) (enc := penc) (dummyS :=
-        dummyS) prf ξ Q
-        (((A₀.absorbAssign G Q).restrictAt sp ω).mapOut Prod.fst)).withStep
-        (AdaptiveIAlg.absorbTabStep (((A₀.absorbAssign G Q).restrictAt sp ω).mapOut Prod.fst)
-          (seTwoKF (Proof := Mc.Response b) Bf rel penc dummyS ((Bf).pk ∘ ξ) Q)
-          ((A₀.absorbAssign G Q).restrictStep
-            ((A₀.absorbAssignP _ _ Q).relayStepWith (G.relayOf Q) Q p'
-              ((A₀.absorbAssignP _ _ Q).relayOut (G.relayOf Q))) sp ω))) Psim Q) (kq + Q * Psim.q) ×
-      DB Xq (Out kh e)) = Ω) (S : Set Ω) {S₂ S' : Set _} (hS₂ : cast h₂ ⁻¹' S = S₂)
-    (hS' : cast h' ⁻¹' S = S') :
-    (simPMF (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS) prf ξ
-        Q
-        (((A₀.absorbAssign G' Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q kq)).toOuterMeasure S₂ =
-      (simPMF (outEquiv kh e) (extAdv Qs ((seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS)
-          prf ξ Q
-        (((A₀.absorbAssign G Q).restrictAt sp ω).mapOut Prod.fst)).withStep
-        (AdaptiveIAlg.absorbTabStep (((A₀.absorbAssign G Q).restrictAt sp ω).mapOut Prod.fst)
-          (seTwoKF (Proof := Mc.Response b) Bf rel penc dummyS ((Bf).pk ∘ ξ) Q)
-          ((A₀.absorbAssign G Q).restrictStep
-            ((A₀.absorbAssignP _ _ Q).relayStepWith (G.relayOf Q) Q p'
-              ((A₀.absorbAssignP _ _ Q).relayOut (G.relayOf Q))) sp ω))) Psim Q kq)).toOuterMeasure
-                  S' := by
-  subst hS₂ hS'
-  have hs := seAlgKF_absorbAssign_toShape_eq (rel := rel) (enc := penc) (dummyS := dummyS)
-    (Stmt := Stmt) prf ξ Q (A := A₀) (sp := sp) (H₁ := ω) (f := Prod.fst) hG
-  have h := seAlgKF_absorbAssign_eq_withStep (rel := rel) (enc := penc) (dummyS := dummyS)
-    (Stmt := Stmt) prf ξ Q (A := A₀) (sp := sp) (H₁ := ω) (f := Prod.fst) hG hS
-  have hμ : simPMF (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS :=
-      dummyS) prf ξ Q
-        (((A₀.absorbAssign G' Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q kq) ≍
-      simPMF (outEquiv kh e) (extAdv Qs ((seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS) prf
-          ξ Q
-        (((A₀.absorbAssign G Q).restrictAt sp ω).mapOut Prod.fst)).withStep
-        (AdaptiveIAlg.absorbTabStep (((A₀.absorbAssign G Q).restrictAt sp ω).mapOut Prod.fst)
-          (seTwoKF (Proof := Mc.Response b) Bf rel penc dummyS ((Bf).pk ∘ ξ) Q)
-          ((A₀.absorbAssign G Q).restrictStep
-            ((A₀.absorbAssignP _ _ Q).relayStepWith (G.relayOf Q) Q p'
-              ((A₀.absorbAssignP _ _ Q).relayOut (G.relayOf Q))) sp ω))) Psim Q kq) := by
-    congr
-  exact PMF.toOuterMeasure_cast_preimage_heq hμ h₂ h' S
-
 
 omit nttOps in
 /-- **The law of a cast along `h` at a set whose preimage is named**: the image law of `μ` under
@@ -973,6 +846,7 @@ theorem toOuterMeasure_map_cast_of_preimage {α β : Type} (μ : PMF α) (h : α
     (μ.map (cast h)).toOuterMeasure S = μ.toOuterMeasure S' := by
   rw [PMF.toOuterMeasure_map_apply, hS]
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **(h1) at two side coins agreeing off slot `j`**: at side coins `sc`
 updated at `j` to `c` or `c'`, the extraction runs give the event `w1SlotReq j = some r` the same
 probability (`toOuterMeasure_extLaw_withStep_label_of_blockNone` with
@@ -984,21 +858,21 @@ theorem w1SlotLaw_h1_of_eqOn {rel : Stmt → Wit → Prop} [DecidableRel rel] {d
     [Fintype (RingSignature.Insider.Resp Bf PSf adm)]
     [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit} (hdef : ∀ s Rg m,
+    {penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → ProofQuery Stmt Wit} (hdef : ∀ s Rg m,
         (default : RingSignature.Insider.Req Bf PSf adm n) ≠ .sign s Rg m)
     (hO : O.ReadsFst sp) (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁)
-    (idle : MURequest (SignOracle.none Bf) n ⊕ Rq) (prf : Frg → Option Mc.NIProof)
+    (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) (prf : Frg → Option Mc.NIProof)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp
         Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
     (hA : A₀.TracePreserving)
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ)
     (j : Fin Q) (sc₁ sc₂ : Fin Q → KFCoins (p := p) (T := T) k D Y₁)
     (hsc : ∀ i, i ≠ j → sc₂ i = sc₁ i)
     (r : AssignRelay.TaggedReq Xq Y (RingSignature.Insider.Req Bf PSf adm n) Q) :
     ((simPMF (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS) prf
         ξ Q
-          (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+          (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
           (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
             (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
             (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -1009,7 +883,7 @@ theorem w1SlotLaw_h1_of_eqOn {rel : Stmt → Wit → Prop} [DecidableRel rel] {d
           {o | w1SlotReq sp hO A₀ Psim kq j o = some r} =
       ((simPMF (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS)
           prf ξ Q
-          (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+          (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
           (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
             (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
             (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -1025,7 +899,7 @@ theorem w1SlotLaw_h1_of_eqOn {rel : Stmt → Wit → Prop} [DecidableRel rel] {d
         ((simPMF (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS)
             prf
             ξ Q
-              (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+              (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
               (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
                 (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
                 (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -1038,7 +912,7 @@ theorem w1SlotLaw_h1_of_eqOn {rel : Stmt → Wit → Prop} [DecidableRel rel] {d
               Ev =
           ((simPMF (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS)
               prf ξ Q
-              (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+              (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
               (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
                 (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
                 (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -1066,9 +940,9 @@ theorem w1SlotLaw_h1_of_eqOn {rel : Stmt → Wit → Prop} [DecidableRel rel] {d
   have a₂ := natOutcome_eq_w1Outcome (rel := rel) (penc := penc) (dummyS := dummyS) sp hO ξ ω
     idle prf A₀ Psim kq sc₂
   -- TODO(unbundle-M4): the two absorbed adversaries have shapes indexed by each relay's numbers;
-  -- their outcome types and laws are compared at a free relay (`tuple_absorbAssign_withStep_eq`)
-  have a₁' := (tuple_absorbAssign_withStep_eq (Qs := Qs) (Λ := Λ) (E := E)
-    (hb := hb) (honest := honest) (chk := chk) (rel := rel) (penc := penc) (dummyS := dummyS)
+  -- their outcome types and laws are compared at a free relay (`tuple_seAlgKF_absorbAssign_withStep_eq`)
+  have a₁' := (tuple_seAlgKF_absorbAssign_withStep_eq (rel := rel) (enc := penc) (dummyS := dummyS)
+    (Stmt := Stmt) prf ξ Q (A := A₀) (sp := sp) (H₁ := ω) (f := Prod.fst)
     (G := (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
       (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
       (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -1077,7 +951,7 @@ theorem w1SlotLaw_h1_of_eqOn {rel : Stmt → Wit → Prop} [DecidableRel rel] {d
       (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
       (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
       (w1DummyR (PS := PSh) (Q := Q)) sc₂ ω idle))
-    sp ξ ω prf A₀ hG hS Psim kq).symm.trans a₂
+    hG hS Psim kq).symm.trans a₂
   have hc₂ := cast_natOutcome (Qs := Qs) (rel := rel) (penc := penc) (dummyS := dummyS) sp hO ξ ω
     idle prf A₀ Psim kq sc₂
   have hc₁ : ∀ o : W1Outcome sp hO A₀ Psim kq, @Eq (W1Outcome sp hO A₀ Psim kq) (cast a₁' o) o :=
@@ -1086,8 +960,8 @@ theorem w1SlotLaw_h1_of_eqOn {rel : Stmt → Wit → Prop} [DecidableRel rel] {d
     Set.ext fun o => iff_of_eq (congrArg (· ∈ Ev) (hc₂ o))
   have hE₁ : Set.preimage (cast a₁') Ev = Ev :=
     Set.ext fun o => iff_of_eq (congrArg (· ∈ Ev) (hc₁ o))
-  have hR := toOuterMeasure_simPMF_absorbAssign_withStep (Qs := Qs) (Λ := Λ) (E := E)
-    (hb := hb) (honest := honest) (chk := chk) (rel := rel) (penc := penc) (dummyS := dummyS)
+  have hR := toOuterMeasure_simPMF_seAlgKF_absorbAssign_withStep (rel := rel) (enc := penc)
+    (dummyS := dummyS) (Stmt := Stmt) prf ξ Q (A := A₀) (sp := sp) (H₁ := ω) (f := Prod.fst)
     (G := (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
       (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
       (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -1096,8 +970,8 @@ theorem w1SlotLaw_h1_of_eqOn {rel : Stmt → Wit → Prop} [DecidableRel rel] {d
       (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
       (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
       (w1DummyR (PS := PSh) (Q := Q)) sc₂ ω idle))
-    (Ω := W1Outcome sp hO A₀ Psim kq) sp ξ ω prf A₀ hG hS Psim kq a₂ a₁' Ev hE₂ hE₁
-  have hN := AdaptiveIAlg.blockNone_absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b) A₀ sp ω
+    hG hS Psim kq (Qs := Qs) (Ω := W1Outcome sp hO A₀ Psim kq) a₂ a₁' Ev hE₂ hE₁
+  have hN := AdaptiveIAlg.blockNone_absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b) A₀ sp ω
       Prod.fst hA j.isLt hS (by
       intro r' hr
       refine relayOf_kfRelaySide_prog_congr sp Bf _ _ _ _ _ _ _ ω idle r' fun s Rg m hc hs => ?_
@@ -1131,6 +1005,8 @@ theorem w1SlotLaw_h1_of_eqOn {rel : Stmt → Wit → Prop} [DecidableRel rel] {d
   refine Eq.trans ?_ (toOuterMeasure_map_cast_of_preimage _ a₂ Ev hE₂).symm
   exact Eq.symm (hR.trans hM)
 
+omit [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R]
+  [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The swap of the proof queries keeps the statements** of `w1Enc`. -/
 theorem w1Enc_stmt_proofSwG [Nonempty RMsg] [Nonempty (FIPSSignature p
     prims)] (pks : Fin n → PubKey p prims)
@@ -1142,13 +1018,15 @@ theorem w1Enc_stmt_proofSwG [Nonempty RMsg] [Nonempty (FIPSSignature p
       ((w1Enc (PS := PSh) (adm := adm) (Q := Q) pks) (.inr q)).stmt := by
   rcases q with ⟨a, t, σ⟩ | d <;> rfl
 
+omit [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R]
+  [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **A simulator reading only the program statement does not see the swap** of the tagged
 statements. -/
 theorem prog_comap_w1MainSwG {SC' : Type} [Fintype SC'] [DecidableEq SC']
     (Psim₀ : NARG.Simulator Xq (XOut kh e) X₀f (Mc.Response b) SC')
     (t₀ : RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1))
     (G : W1BStmt prims RMsg N → Prop) (swσ : Equiv.Perm (FIPSSignature p prims))
-    (x : W1Stmt prims O Mo βmin tol enc k D bmsg PSh adm n Q × (MURequest (SignOracle.none Bf) n ⊕
+    (x : W1Stmt prims O Mo βmin tol enc k D bmsg PSh adm n Q × (MURequest (SignOracle.none (Bf).core) n ⊕
         Rq))
     (c : SC') :
     (Psim₀.comap (w1StmtX ∘ Prod.fst)).prog
@@ -1156,6 +1034,7 @@ theorem prog_comap_w1MainSwG {SC' : Type} [Fintype SC'] [DecidableEq SC']
       (Psim₀.comap (w1StmtX ∘ Prod.fst)).prog x c :=
   rfl
 
+omit [∀ j i, Fintype ((Mc.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The gated swap keeps the relation `w1Rel`** at the slot `j`'s request `r` with equal
 public parts at the two coins (`w1Rel_iff_of_w1SlotPub_eq` at the gated statements). -/
 theorem w1Rel_proofSwG_iff [Inhabited Xq] [Nonempty RMsg] [Nonempty
@@ -1235,6 +1114,7 @@ theorem w1Rel_proofSwG_iff [Inhabited Xq] [Nonempty RMsg] [Nonempty
     exact key
   rw [Equiv.swap_apply_of_ne_of_ne e1 e2]
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **(h2) at two side coins agreeing off slot `j`**: at side coins agreeing off `j` whose coins
 at `j` give the request `r` equal public parts (`hpub`), the extraction runs give the event that
 slot `j`'s request is `r` and the readout is `z` the same probability
@@ -1247,14 +1127,14 @@ theorem w1SlotLaw_h2_of_eqOn {rel : Stmt → Wit → Prop} [DecidableRel rel] {d
     [Fintype (RingSignature.Insider.Resp Bf PSf adm)]
     [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit} (hdef : ∀ s Rg m,
+    {penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → ProofQuery Stmt Wit} (hdef : ∀ s Rg m,
         (default : RingSignature.Insider.Req Bf PSf adm n) ≠ .sign s Rg m)
     (hO : O.ReadsFst sp) (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁)
-    (i : MURequest (SignOracle.none Bf) n) (prf : Frg → Option Mc.NIProof)
+    (i : MURequest (SignOracle.none (Bf).core) n) (prf : Frg → Option Mc.NIProof)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp
         Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
     (hA : A₀.TracePreserving)
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ)
     (j : Fin Q) (sc₁ sc₂ : Fin Q → KFCoins (p := p) (T := T) k D Y₁)
     (hsc : ∀ i, i ≠ j → sc₂ i = sc₁ i)
@@ -1277,27 +1157,27 @@ theorem w1SlotLaw_h2_of_eqOn {rel : Stmt → Wit → Prop} [DecidableRel rel] {d
       Psim.prog (((Equiv.refl Stmt).prodCongr (w1MainSwG sp t₀ G swσ)) x) c = Psim.prog x c) :
     ((simPMF (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS) prf
         ξ Q
-          (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+          (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
           (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
             (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
             (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
-            (w1DummyR (PS := PSh) (Q := Q)) sc₁ ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕
+            (w1DummyR (PS := PSh) (Q := Q)) sc₁ ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕
                 Rq)) Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q kq)).map
         (cast (natOutcome_eq_w1Outcome (rel := rel) (penc := penc) (dummyS := dummyS) sp hO ξ ω
-            (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq)
+            (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
           prf A₀ Psim kq sc₁))).toOuterMeasure
           {o | w1SlotReq sp hO A₀ Psim kq j o = some r ∧
             w1CanonSig sp hO A₀ Psim kq Ext (fun j => (Bf).pk (ξ j)) o = some z} =
       ((simPMF (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS)
           prf ξ Q
-          (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+          (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
           (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
             (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
             (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
-            (w1DummyR (PS := PSh) (Q := Q)) sc₂ ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕
+            (w1DummyR (PS := PSh) (Q := Q)) sc₂ ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕
                 Rq)) Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q kq)).map
         (cast (natOutcome_eq_w1Outcome (rel := rel) (penc := penc) (dummyS := dummyS) sp hO ξ ω
-            (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq)
+            (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
           prf A₀ Psim kq sc₂))).toOuterMeasure
           {o | w1SlotReq sp hO A₀ Psim kq j o = some r ∧
             w1CanonSig sp hO A₀ Psim kq Ext (fun j => (Bf).pk (ξ j)) o = some z} := by
@@ -1309,28 +1189,28 @@ theorem w1SlotLaw_h2_of_eqOn {rel : Stmt → Wit → Prop} [DecidableRel rel] {d
         ((simPMF (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS)
             prf
             ξ Q
-              (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+              (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
               (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
                 (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
                 (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
-                (w1DummyR (PS := PSh) (Q := Q)) sc₁ ω (Sum.inl i : MURequest (SignOracle.none Bf) n
+                (w1DummyR (PS := PSh) (Q := Q)) sc₁ ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n
                     ⊕
                     Rq)) Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q kq)).map
             (cast (natOutcome_eq_w1Outcome (rel := rel) (penc := penc) (dummyS := dummyS) sp hO ξ ω
-                (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq)
+                (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
               prf A₀ Psim kq sc₁))).toOuterMeasure
               Ev =
           ((simPMF (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS)
               prf ξ Q
-              (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+              (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
               (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
                 (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
                 (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
-                (w1DummyR (PS := PSh) (Q := Q)) sc₂ ω (Sum.inl i : MURequest (SignOracle.none Bf) n
+                (w1DummyR (PS := PSh) (Q := Q)) sc₂ ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n
                     ⊕
                     Rq)) Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q kq)).map
             (cast (natOutcome_eq_w1Outcome (rel := rel) (penc := penc) (dummyS := dummyS) sp hO ξ ω
-                (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq)
+                (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
               prf A₀ Psim kq sc₂))).toOuterMeasure
               Ev from H _ rfl
   intro Ev hEv
@@ -1354,47 +1234,47 @@ theorem w1SlotLaw_h2_of_eqOn {rel : Stmt → Wit → Prop} [DecidableRel rel] {d
     (w1DummyR (PS := PSh) (Q := Q))
     (fun pk Rg c m s s' => lockstep_w1KFOutB prims O sp βmin tol enc k D bmsg pk Rg c m s s')
     (fun Rg m y y' => (lockstep_hashesProg sp prims O _ _ _ _ Rg.1).mapOutput
-      fun _ _ _ => trivial) sc₁ sc₂ ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq)
+      fun _ _ _ => trivial) sc₁ sc₂ ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
   have hG := relayOf_kfRelaySide_eq_withProg sp Bf (fun j => (Bf).pk (ξ j))
     (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
     (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
-    (w1DummyR (PS := PSh) (Q := Q)) sc₁ sc₂ ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (w1DummyR (PS := PSh) (Q := Q)) sc₁ sc₂ ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
   have a₁ := natOutcome_eq_w1Outcome (rel := rel) (penc := penc) (dummyS := dummyS) sp hO ξ ω
-    (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq) prf A₀ Psim kq sc₁
+    (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) prf A₀ Psim kq sc₁
   have a₂ := natOutcome_eq_w1Outcome (rel := rel) (penc := penc) (dummyS := dummyS) sp hO ξ ω
-    (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq) prf A₀ Psim kq sc₂
+    (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) prf A₀ Psim kq sc₂
   -- TODO(unbundle-M4): the two absorbed adversaries have shapes indexed by each relay's numbers;
-  -- their outcome types and laws are compared at a free relay (`tuple_absorbAssign_withStep_eq`)
-  have a₁' := (tuple_absorbAssign_withStep_eq (Qs := Qs) (Λ := Λ) (E := E)
-    (hb := hb) (honest := honest) (chk := chk) (rel := rel) (penc := penc) (dummyS := dummyS)
+  -- their outcome types and laws are compared at a free relay (`tuple_seAlgKF_absorbAssign_withStep_eq`)
+  have a₁' := (tuple_seAlgKF_absorbAssign_withStep_eq (rel := rel) (enc := penc) (dummyS := dummyS)
+    (Stmt := Stmt) prf ξ Q (A := A₀) (sp := sp) (H₁ := ω) (f := Prod.fst)
     (G := (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
       (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
       (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
-      (w1DummyR (PS := PSh) (Q := Q)) sc₁ ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq)))
+      (w1DummyR (PS := PSh) (Q := Q)) sc₁ ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)))
     (G' := (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
       (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
       (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
-      (w1DummyR (PS := PSh) (Q := Q)) sc₂ ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq)))
-    sp ξ ω prf A₀ hG hS Psim kq).symm.trans a₂
+      (w1DummyR (PS := PSh) (Q := Q)) sc₂ ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)))
+    hG hS Psim kq).symm.trans a₂
   have hc₂ := cast_natOutcome (Qs := Qs) (rel := rel) (penc := penc) (dummyS := dummyS) sp hO ξ ω
-    (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq) prf A₀ Psim kq sc₂
+    (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) prf A₀ Psim kq sc₂
   have hc₁ : ∀ o : W1Outcome sp hO A₀ Psim kq, @Eq (W1Outcome sp hO A₀ Psim kq) (cast a₁' o) o :=
     fun o => cast_eq a₁' o
   have hE₂ : Set.preimage (cast a₂) Ev = Ev :=
     Set.ext fun o => iff_of_eq (congrArg (· ∈ Ev) (hc₂ o))
   have hE₁ : Set.preimage (cast a₁') Ev = Ev :=
     Set.ext fun o => iff_of_eq (congrArg (· ∈ Ev) (hc₁ o))
-  have hR := toOuterMeasure_simPMF_absorbAssign_withStep (Qs := Qs) (Λ := Λ) (E := E)
-    (hb := hb) (honest := honest) (chk := chk) (rel := rel) (penc := penc) (dummyS := dummyS)
+  have hR := toOuterMeasure_simPMF_seAlgKF_absorbAssign_withStep (rel := rel) (enc := penc)
+    (dummyS := dummyS) (Stmt := Stmt) prf ξ Q (A := A₀) (sp := sp) (H₁ := ω) (f := Prod.fst)
     (G := (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
       (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
       (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
-      (w1DummyR (PS := PSh) (Q := Q)) sc₁ ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq)))
+      (w1DummyR (PS := PSh) (Q := Q)) sc₁ ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)))
     (G' := (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
       (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
       (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
-      (w1DummyR (PS := PSh) (Q := Q)) sc₂ ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq)))
-    (Ω := W1Outcome sp hO A₀ Psim kq) sp ξ ω prf A₀ hG hS Psim kq a₂ a₁' Ev hE₂ hE₁
+      (w1DummyR (PS := PSh) (Q := Q)) sc₂ ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)))
+    hG hS Psim kq (Qs := Qs) (Ω := W1Outcome sp hO A₀ Psim kq) a₂ a₁' Ev hE₂ hE₁
   have hφ := coinSwapAt_w1Slot (T := T) (Mo := Mo) (Λ := Λ) (E := E) (hb := hb)
     (honest := honest) (chk := chk) (adm := adm) sp hO (fun j => (Bf).pk (ξ j)) sc₁ sc₂ ω r j hj
         hpub
@@ -1408,7 +1288,7 @@ theorem w1SlotLaw_h2_of_eqOn {rel : Stmt → Wit → Prop} [DecidableRel rel] {d
     (fun pk Rg c m s => countsLE_w1KFOutB prims O sp βmin tol enc k D bmsg pk Rg c m s)
     (fun x => ((countsLE_hashesProg sp prims O _ _ x.ring.1).mapOutput).mono
       (Nat.mul_le_mul_left 2 x.ring.2))
-    sc₁ sc₂ ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    sc₁ sc₂ ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     (AdaptiveIAlg.jTest (X := Xq) (Y := Y) (Req := RingSignature.Insider.Req Bf PSf adm n) Q j) r
     (w1SlotSw sp (fun j => (Bf).pk (ξ j)) ω r (sc₁ j) (sc₂ j)) (w1MainSwG sp (r.1.1, w1Num Q
         r.1.2) (w1SlotGate sp hO (fun j => (Bf).pk (ξ j)) sc₁ ω r) (w1SlotSw sp (fun j => (Bf).pk
@@ -1446,7 +1326,7 @@ theorem w1SlotLaw_h2_of_eqOn {rel : Stmt → Wit → Prop} [DecidableRel rel] {d
   have hoffT := offTagFixed_kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
     (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
     (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
-    (w1DummyR (PS := PSh) (Q := Q)) sc₁ ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (w1DummyR (PS := PSh) (Q := Q)) sc₁ ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
     (AdaptiveIAlg.jTest (X := Xq) (Y := Y) (Req := RingSignature.Insider.Req Bf PSf adm n) Q j)
     (w1MainSwG sp (r.1.1, w1Num Q r.1.2) (w1SlotGate sp hO (fun j => (Bf).pk (ξ j)) sc₁ ω r)
         (w1SlotSw sp (fun j => (Bf).pk (ξ j)) ω r (sc₁ j) (sc₂ j)))
@@ -1477,11 +1357,11 @@ theorem w1SlotLaw_h2_of_eqOn {rel : Stmt → Wit → Prop} [DecidableRel rel] {d
     (prf := prf) (keys := ξ) (rel := rel) (enc := penc) (dummyS := dummyS) h kq
     (fun o => w1CanonSig sp hO A₀ Psim kq Ext (fun j => (Bf).pk (ξ j)) o = some z)
     (readsClaimDB_w1CanonSig (rel := rel) (penc := penc) (dummyS := dummyS) sp hO ξ ω (Sum.inl i :
-        MURequest (SignOracle.none Bf) n ⊕ Rq) prf
+        MURequest (SignOracle.none (Bf).core) n ⊕ Rq) prf
       A₀ Psim kq sc₁ Ext z)
     Ev fun o => by rw [hEv]; exact Iff.rfl
   have hc₁₁ := cast_natOutcome (Qs := Qs) (rel := rel) (penc := penc) (dummyS := dummyS) sp hO ξ ω
-        (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq)
+        (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
       prf A₀ Psim kq sc₁
   have hE₁₁ : Set.preimage (cast a₁) Ev = Ev :=
     Set.ext fun o => iff_of_eq (congrArg (· ∈ Ev) (hc₁₁ o))
@@ -1500,7 +1380,7 @@ def w1SlotGuess
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
     (hO : O.ReadsFst sp) (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ) (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p prims))) (sc
           : Fin Q → KFCoins (p := p) (T := T) k D Y₁)
     (o : W1Outcome sp hO A₀ Psim kq) : Prop :=
@@ -1511,6 +1391,7 @@ def w1SlotGuess
         (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
         (w1StmtPω prims O Mo βmin tol enc k D bmsg sp) (w1ToR (Q := Q)) sc ω e'
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **(hG) The guess event is a slot's signature guess**: its probability is at most that of the
 readout being the signature `w1SlotSig` of some slot's request at its coin
 (`simProb_seAlgKF_slotAsks` with `w1SlotAsks_hp` and `w1EntrySig_of_canAsk`). -/
@@ -1520,40 +1401,40 @@ theorem w1SlotLaw_hG {rel : Stmt → Wit → Prop} [DecidableRel rel] {dummyS : 
     [Fintype (RingSignature.Insider.Resp Bf PSf adm)]
     [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit}
+    {penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → ProofQuery Stmt Wit}
     (hdef : ∀ s Rg m, (default : RingSignature.Insider.Req Bf PSf adm n) ≠ .sign s Rg m)
     (hO : O.ReadsFst sp) (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ) (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p prims))) (i
-          : MURequest (SignOracle.none Bf) n) (prf : Frg → Option Mc.NIProof)
+          : MURequest (SignOracle.none (Bf).core) n) (prf : Frg → Option Mc.NIProof)
     (hA : A₀.TracePreserving) (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁) :
     ((simPMF (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS)
-          prf ξ Q (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+          prf ξ Q (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
           (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
             (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
             (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
-            (w1DummyR (PS := PSh) (Q := Q)) sc ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕
+            (w1DummyR (PS := PSh) (Q := Q)) sc ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕
                 Rq)) Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q kq)).map
         (cast (natOutcome_eq_w1Outcome (rel := rel) (penc := penc) (dummyS := dummyS) sp hO ξ ω
-          (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq) prf A₀ Psim kq sc))).toOuterMeasure
+          (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) prf A₀ Psim kq sc))).toOuterMeasure
               {o | w1SlotGuess sp hO ξ ω A₀ Psim kq Ext sc o} ≤
       ((simPMF (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS)
-          prf ξ Q (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+          prf ξ Q (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
           (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
             (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
             (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
-            (w1DummyR (PS := PSh) (Q := Q)) sc ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕
+            (w1DummyR (PS := PSh) (Q := Q)) sc ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕
                 Rq)) Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q kq)).map
         (cast (natOutcome_eq_w1Outcome (rel := rel) (penc := penc) (dummyS := dummyS) sp hO ξ ω
-          (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq) prf A₀ Psim kq sc))).toOuterMeasure
+          (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) prf A₀ Psim kq sc))).toOuterMeasure
               {o | ∃ j r z, w1SlotReq sp hO A₀ Psim kq j o = some r ∧
         w1SlotSig sp (fun j => (Bf).pk (ξ j)) ω r (sc j) = some z ∧
         w1CanonSig sp hO A₀ Psim kq Ext (fun j => (Bf).pk (ξ j)) o = some z} := by
   have hc := cast_natOutcome (Qs := Qs) (rel := rel) (penc := penc) (dummyS := dummyS) sp hO ξ ω
-    (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq) prf A₀ Psim kq sc
+    (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) prf A₀ Psim kq sc
   have h1 : Set.preimage (cast (natOutcome_eq_w1Outcome (rel := rel) (penc := penc)
-      (dummyS := dummyS) sp hO ξ ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq) prf A₀ Psim
+      (dummyS := dummyS) sp hO ξ ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) prf A₀ Psim
           kq sc))
       {o | w1SlotGuess sp hO ξ ω A₀ Psim kq Ext sc o} =
       {x | (fun c Db => ∃ z, w1CanonSigR sp hO A₀ Psim Ext (fun j => (Bf).pk (ξ j)) c Db = some z ∧
@@ -1567,7 +1448,7 @@ theorem w1SlotLaw_hG {rel : Stmt → Wit → Prop} [DecidableRel rel] {dummyS : 
     Set.ext fun x => (iff_of_eq (congrArg (· ∈ {o | w1SlotGuess sp hO ξ ω A₀ Psim kq Ext sc o})
       (hc x))).trans Iff.rfl
   have h2 : Set.preimage (cast (natOutcome_eq_w1Outcome (rel := rel) (penc := penc)
-      (dummyS := dummyS) sp hO ξ ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq) prf A₀ Psim
+      (dummyS := dummyS) sp hO ξ ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) prf A₀ Psim
           kq sc))
       {o | ∃ j r z, w1SlotReq sp hO A₀ Psim kq j o = some r ∧
         w1SlotSig sp (fun j => (Bf).pk (ξ j)) ω r (sc j) = some z ∧
@@ -1577,7 +1458,7 @@ theorem w1SlotLaw_hG {rel : Stmt → Wit → Prop} [DecidableRel rel] {dummyS : 
           A₀ (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
             (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
             (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
-            (w1DummyR (PS := PSh) (Q := Q)) sc ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕
+            (w1DummyR (PS := PSh) (Q := Q)) sc ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕
                 Rq)) sp ω Psim j c = some r ∧
           w1SlotSig sp (fun j => (Bf).pk (ξ j)) ω r (sc j) = some z ∧
           w1CanonSigR sp hO A₀ Psim Ext (fun j => (Bf).pk (ξ j)) c Db = some z) x.1.out x.2} :=
@@ -1596,7 +1477,7 @@ theorem w1SlotLaw_hG {rel : Stmt → Wit → Prop} [DecidableRel rel] {dummyS : 
     A₀ hA (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
       (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
       (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
-      (w1DummyR (PS := PSh) (Q := Q)) sc ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq)) sp
+      (w1DummyR (PS := PSh) (Q := Q)) sc ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)) sp
           ω Psim kq (fun c Db => ∃ z, w1CanonSigR sp hO A₀ Psim Ext (fun j => (Bf).pk (ξ j)) c Db
               = some z ∧
         ∃ e' ∈ (Quantum.requests c.adv.workspace.1.1.logs).take Q,
@@ -1605,13 +1486,13 @@ theorem w1SlotLaw_hG {rel : Stmt → Wit → Prop} [DecidableRel rel] {dummyS : 
             (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
             (w1StmtPω prims O Mo βmin tol enc k D bmsg sp) (w1ToR (Q := Q)) sc ω e')
     (fun r => (w1SignEntry r).isSome) rfl rfl
-    (w1SlotAsks_hp sp hdef hO ξ sc ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq))).trans
+    (w1SlotAsks_hp sp hdef hO ξ sc ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq))).trans
         (simProb_mono (R' := (fun c Db => ∃ j : Fin Q, ∃ r z, slotRequest (rel := rel) (enc :=
             penc) (dummyS := dummyS) prf ξ Q
           A₀ (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
             (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
             (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
-            (w1DummyR (PS := PSh) (Q := Q)) sc ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕
+            (w1DummyR (PS := PSh) (Q := Q)) sc ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕
                 Rq)) sp ω Psim j c = some r ∧
           w1SlotSig sp (fun j => (Bf).pk (ξ j)) ω r (sc j) = some z ∧
           w1CanonSigR sp hO A₀ Psim Ext (fun j => (Bf).pk (ξ j)) c Db = some z)) _ _ fun c Db h =>
@@ -1619,9 +1500,11 @@ theorem w1SlotLaw_hG {rel : Stmt → Wit → Prop} [DecidableRel rel] {dummyS : 
   obtain ⟨⟨z, hz, e', he', hs, hsig, -⟩, hall⟩ := h
   obtain ⟨j, r, hr, hj, hca⟩ := hall e' (List.mem_of_mem_take he') hs
   exact ⟨j, r, z, hr, (w1EntrySig_of_canAsk sp (fun j => (Bf).pk (ξ j)) ω hO (Sum.inl i :
-      MURequest (SignOracle.none Bf) n ⊕ Rq) r j hj hca hs).symm.trans hsig,
+      MURequest (SignOracle.none (Bf).core) n ⊕ Rq) r j hj hca hs).symm.trans hsig,
     hz⟩
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **(h1) The law of slot `j`'s request does not depend on its side coin**: at side coins `sc`
 updated at `j` to `c` or `c'`, the extraction runs give the event `w1SlotReq j = some r` the same
 probability (`toOuterMeasure_extLaw_withStep_label_of_blockNone` with
@@ -1633,20 +1516,20 @@ theorem w1SlotLaw_h1 {rel : Stmt → Wit → Prop} [DecidableRel rel] {dummyS : 
     [Fintype (RingSignature.Insider.Resp Bf PSf adm)]
     [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit} (hdef : ∀ s Rg m,
+    {penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → ProofQuery Stmt Wit} (hdef : ∀ s Rg m,
         (default : RingSignature.Insider.Req Bf PSf adm n) ≠ .sign s Rg m)
     (hO : O.ReadsFst sp) (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁)
-    (idle : MURequest (SignOracle.none Bf) n ⊕ Rq) (prf : Frg → Option Mc.NIProof)
+    (idle : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) (prf : Frg → Option Mc.NIProof)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp
         Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
     (hA : A₀.TracePreserving)
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ) :
     ∀ (j : Fin Q) (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁)
       (r : AssignRelay.TaggedReq Xq Y (RingSignature.Insider.Req Bf PSf adm n) Q)
       (c c' : KFCoins (p := p) (T := T) k D Y₁), ((simPMF (outEquiv kh e) (extAdv Qs (seAlgKF (rel
           := rel) (enc := penc) (dummyS := dummyS) prf ξ Q
-          (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+          (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
           (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
             (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
             (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -1657,7 +1540,7 @@ theorem w1SlotLaw_h1 {rel : Stmt → Wit → Prop} [DecidableRel rel] {dummyS : 
           {o | w1SlotReq sp hO A₀ Psim kq j o = some r} =
       ((simPMF (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS)
           prf ξ Q
-          (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+          (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
           (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
             (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
             (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
@@ -1670,7 +1553,9 @@ theorem w1SlotLaw_h1 {rel : Stmt → Wit → Prop} [DecidableRel rel] {dummyS : 
     (Function.update sc j c) (Function.update sc j c')
     (fun i hi => by rw [Function.update_of_ne hi, Function.update_of_ne hi]) r
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **(h2) The joint law of slot `j`'s request and the readout depends on its side coin only
 through the public part**: at side coins `sc` updated at `j` to coins `c`, `c'` with equal public
 parts at the request `r` (`w1SlotPub`), the extraction runs give the event that slot `j`'s request
@@ -1681,14 +1566,14 @@ theorem w1SlotLaw_h2 {rel : Stmt → Wit → Prop} [DecidableRel rel] {dummyS : 
     [Fintype (RingSignature.Insider.Resp Bf PSf adm)]
     [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit} (hdef : ∀ s Rg m,
+    {penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → ProofQuery Stmt Wit} (hdef : ∀ s Rg m,
         (default : RingSignature.Insider.Req Bf PSf adm n) ≠ .sign s Rg m)
     (hO : O.ReadsFst sp) (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁)
-    (i : MURequest (SignOracle.none Bf) n) (prf : Frg → Option Mc.NIProof)
+    (i : MURequest (SignOracle.none (Bf).core) n) (prf : Frg → Option Mc.NIProof)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp
         Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
     (hA : A₀.TracePreserving)
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ)
     (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p prims)))
     (hstmt : ∀ (t₀ : RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1)) G swσ q,
@@ -1714,27 +1599,27 @@ theorem w1SlotLaw_h2 {rel : Stmt → Wit → Prop} [DecidableRel rel] {dummyS : 
       w1SlotPub sp (fun j => (Bf).pk (ξ j)) ω r c = w1SlotPub sp (fun j => (Bf).pk (ξ j)) ω r c' →
       ((simPMF (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS)
           prf ξ Q
-          (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+          (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
           (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
             (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
             (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
             (w1DummyR (PS := PSh) (Q := Q)) (Function.update sc j c) ω (Sum.inl i : MURequest
-                (SignOracle.none Bf) n ⊕ Rq)) Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q kq)).map
+                (SignOracle.none (Bf).core) n ⊕ Rq)) Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q kq)).map
         (cast (natOutcome_eq_w1Outcome (rel := rel) (penc := penc) (dummyS := dummyS) sp hO ξ ω
-            (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq)
+            (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
           prf A₀ Psim kq (Function.update sc j c)))).toOuterMeasure
           {o | w1SlotReq sp hO A₀ Psim kq j o = some r ∧
             w1CanonSig sp hO A₀ Psim kq Ext (fun j => (Bf).pk (ξ j)) o = some z} =
       ((simPMF (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS)
           prf ξ Q
-          (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+          (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
           (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
             (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
             (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
             (w1DummyR (PS := PSh) (Q := Q)) (Function.update sc j c') ω (Sum.inl i : MURequest
-                (SignOracle.none Bf) n ⊕ Rq)) Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q kq)).map
+                (SignOracle.none (Bf).core) n ⊕ Rq)) Q).restrictAt sp ω).mapOut Prod.fst)) Psim Q kq)).map
         (cast (natOutcome_eq_w1Outcome (rel := rel) (penc := penc) (dummyS := dummyS) sp hO ξ ω
-            (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq)
+            (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
           prf A₀ Psim kq (Function.update sc j c')))).toOuterMeasure
           {o | w1SlotReq sp hO A₀ Psim kq j o = some r ∧
             w1CanonSig sp hO A₀ Psim kq Ext (fun j => (Bf).pk (ξ j)) o = some z} :=
@@ -1745,6 +1630,7 @@ theorem w1SlotLaw_h2 {rel : Stmt → Wit → Prop} [DecidableRel rel] {dummyS : 
     (fun hj => hrel j _ _ r hj (by simpa only [Function.update_self] using hp)) hsim
 
 
+omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The slot laws bound the guess of case S** (`tsum_w1Guess_le` at the laws `L sc` of the
 extraction runs, the slot requests `w1SlotReq`, the readout `w1CanonSig`, `w1SlotLaw_h1`,
 `w1SlotLaw_h2` and `w1SlotLaw_hG`): averaged over uniform side coins, the guess event
@@ -1755,14 +1641,14 @@ theorem slotLaws_kfExtractionLaw {rel : Stmt → Wit → Prop} [DecidableRel rel
     [Fintype (RingSignature.Insider.Resp Bf PSf adm)]
     [DecidableEq (RingSignature.Insider.Resp Bf PSf adm)]
     [Inhabited (RingSignature.Insider.Req Bf PSf adm n)]
-    {penc : MURequest (SignOracle.none Bf) n ⊕ Rq → ProofQuery Stmt Wit} (hdef : ∀ s Rg m,
+    {penc : MURequest (SignOracle.none (Bf).core) n ⊕ Rq → ProofQuery Stmt Wit} (hdef : ∀ s Rg m,
         (default : RingSignature.Insider.Req Bf PSf adm n) ≠ .sign s Rg m)
     (hO : O.ReadsFst sp) (ξ : Fin n → (Bf).KeyCoins) (ω : Xq → Y₁)
-    (i : MURequest (SignOracle.none Bf) n) (prf : Frg → Option Mc.NIProof)
+    (i : MURequest (SignOracle.none (Bf).core) n) (prf : Frg → Option Mc.NIProof)
     {shA₀ : AlgShape Xq Y (RingSignature.Insider.Req Bf PSf adm n) (RingSignature.Insider.Resp
         Bf PSf adm)} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀f))
     (hA : A₀.TracePreserving)
-    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none Bf) n ⊕ Rq))
+    (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MURequest (SignOracle.none (Bf).core) n ⊕ Rq))
       (Mc.Response b) SC') (kq : ℕ)
     (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p prims)))
     (hstmt : ∀ (t₀ : RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1)) G swσ q,
@@ -1784,31 +1670,31 @@ theorem slotLaws_kfExtractionLaw {rel : Stmt → Wit → Prop} [DecidableRel rel
       Psim.prog (((Equiv.refl Stmt).prodCongr (w1MainSwG sp t₀ G swσ)) x) c = Psim.prog x c) :
     ∑' sc, PMF.uniformOfFintype (Fin Q → KFCoins (p := p) (T := T) k D Y₁) sc *
         ((simPMF (outEquiv kh e) (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS)
-          prf ξ Q (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+          prf ξ Q (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
           (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
             (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
             (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
-            (w1DummyR (PS := PSh) (Q := Q)) sc ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕
+            (w1DummyR (PS := PSh) (Q := Q)) sc ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕
                 Rq)) Q).restrictAt sp ω).mapOut Prod.fst))
           Psim Q kq)).map
         (cast (natOutcome_eq_w1Outcome (rel := rel) (penc := penc) (dummyS := dummyS) sp hO ξ ω
-          (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq) prf A₀ Psim kq sc))).toOuterMeasure
+          (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) prf A₀ Psim kq sc))).toOuterMeasure
               {o | w1SlotGuess sp hO ξ ω A₀ Psim kq Ext sc o} ≤
       Q * (k * T * Fintype.card (BucketVec p) / Fintype.card (MaskBox p)) :=
   tsum_w1Guess_le (PS := PSh) sp (fun j => (Bf).pk (ξ j)) ω (fun sc => ((simPMF (outEquiv kh e)
       (extAdv Qs (seAlgKF (rel := rel) (enc := penc) (dummyS := dummyS)
-          prf ξ Q (((A₀.absorbAssign (Resp' := MUResponse Bf ⊕ Mc.Response b)
+          prf ξ Q (((A₀.absorbAssign (Resp' := MUResponse (Bf).core ⊕ Mc.Response b)
           (kfRelaySide sp Bf (fun j => (Bf).pk (ξ j))
             (w1KFFactors (T := T) prims O sp βmin tol enc k D bmsg hO)
             (w1KFStmt prims O Mo βmin tol enc k D bmsg sp) (w1ToR (PS := PSh) (Q := Q))
-            (w1DummyR (PS := PSh) (Q := Q)) sc ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕
+            (w1DummyR (PS := PSh) (Q := Q)) sc ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕
                 Rq)) Q).restrictAt sp ω).mapOut Prod.fst))
           Psim Q kq)).map
         (cast (natOutcome_eq_w1Outcome (rel := rel) (penc := penc) (dummyS := dummyS) sp hO ξ ω
-          (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq) prf A₀ Psim kq sc))))
+          (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq) prf A₀ Psim kq sc))))
     (fun j o => w1SlotReq sp hO A₀ Psim kq j o) (w1CanonSig sp hO A₀ Psim kq Ext (fun j => (Bf).pk
         (ξ j)))
-    (w1SlotLaw_h1 (Qs := Qs) sp hdef hO ξ ω (Sum.inl i : MURequest (SignOracle.none Bf) n ⊕ Rq)
+    (w1SlotLaw_h1 (Qs := Qs) sp hdef hO ξ ω (Sum.inl i : MURequest (SignOracle.none (Bf).core) n ⊕ Rq)
         prf A₀ hA Psim kq)
     (w1SlotLaw_h2 (Qs := Qs) sp hdef hO ξ ω i prf A₀ hA Psim kq Ext hstmt hrel hsim)
     (fun sc o => w1SlotGuess sp hO ξ ω A₀ Psim kq Ext sc o)

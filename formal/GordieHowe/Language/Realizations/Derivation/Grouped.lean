@@ -82,7 +82,7 @@ theorem groupedFact_sound (hwf : ir.WellFormed) (hI : I.Registered ir)
         · rename_i Rb Nd N lob hib lo' hi' hnums
           split_ifs at hf with hcond
           cases hf
-          obtain ⟨hform, hq, h2, hunits, hres, hfin, hrows, hlenQ, hgb, htail, hnw, hNw⟩ := hcond
+          obtain ⟨hq, h2, hunits, hres, hfin, hrows, hlenQ, hgb, htail, hnw, hNw⟩ := hcond
           obtain ⟨hRf, hDf, hQf, hBf, hXf⟩ := groupedNums_sound hfs hnums
           have hpo := hwf.predicates _ (predicate_mem hpid)
           rw [hb] at hpo
@@ -90,7 +90,7 @@ theorem groupedFact_sound (hwf : ir.WellFormed) (hI : I.Registered ir)
             List.all_eq_true.1 hrows g (List.mem_range.2 hg)
           show ir.HoldsWith (ir.reader e) (ir.predicate pid).body
           rw [hb]
-          refine holdsWith_mod_of_grouped_named hwf hI hL e hpo hform hq h2 hu hunits hres hfin rows
+          refine holdsWith_mod_of_grouped_named hwf hI hL e hpo hq h2 hu hunits hres hfin rows
             (fun g hg => ?_) (fun g hg => ?_) (fun g hg Eg hEg => ?_) hRf hDf
             (fun i hi => hQf i (lt_of_lt_of_le hi hlenQ)) hBf hXf hgb htail hnw hNw
           · have := hrw g hg

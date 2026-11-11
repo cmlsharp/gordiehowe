@@ -168,9 +168,9 @@ abbrev ProofFormat (pB : ℕ) : Prop :=
   (T.setting kS hb).model.FormatBounds (T.setting kS hb).queries pB pB
 
 /-- **The honest prover of the setting** at the causal honest prover `honest` with coins in `R`:
-`SPBCS.niProver`, with uniform coins, Merkle salts and salt, its proofs in the format
-`pB` (`hf`). -/
-noncomputable abbrev prover {pB : ℕ} (hf : T.ProofFormat kS hb pB) {I' R : Type} [Fintype R] [Nonempty R]
+`SPBCS.niProver`, with coins, Merkle salts and salt whose law is an argument of each statement,
+its proofs in the format `pB` (`hf`). -/
+abbrev prover {pB : ℕ} (hf : T.ProofFormat kS hb pB) {I' R : Type} [Fintype R] [Nonempty R]
     (honest : I' → R → CausalProver C.P C.term Stmt) :=
   (T.setting kS hb).model.niProver (T.setting kS hb).layout honest (T.setting kS hb).encoder hf
 
@@ -260,6 +260,7 @@ def ZeroKnowledge {pB : ℕ} (hf : T.ProofFormat kS hb pB) {I' : Type} {relI : S
     (fw : W' → I'),
     NARG.QROM.EverlastingZeroKnowledge (fun x w => (fx x, fw w) ∈ relI) queryEncoding
       ((T.prover kS hb hf (RealizedProgram.ProofSystem.IOP.honest Hc)).comap fx fw)
+        (PMF.uniformOfFintype _)
       ((T.simulator kS hb hf SD).comap fx) ε
 
 variable (T kS hb) in
@@ -275,6 +276,7 @@ def ZeroKnowledgeQuery {pB : ℕ} (hf : T.ProofFormat kS hb pB) {I' : Type} {rel
     (fw : W' → I'),
     NARG.QROM.ZeroKnowledge (fun x w => (fx x, fw w) ∈ relI) queryEncoding
       ((T.prover kS hb hf (RealizedProgram.ProofSystem.IOP.honest Hc)).comap fx fw)
+        (PMF.uniformOfFintype _)
       ((T.simulator kS hb hf SD).comap fx) ε
 
 variable (T kS hb) in
@@ -286,7 +288,8 @@ the compiled prover of `Hc` against the compiled simulator of
 def ZeroKnowledgeROM {pB : ℕ} (hf : T.ProofFormat kS hb pB) {I' : Type} {relI : Set (Stmt × I')} {SD : C.SimData} (Hc : C.Honest SD I' relI)
     (ε : ℕ → ℕ → ℝ) : Prop :=
   NARG.ROM.EverlastingZeroKnowledge (fun x w => (x, w) ∈ relI)
-    (T.prover kS hb hf (RealizedProgram.ProofSystem.IOP.honest Hc)) (T.simulator kS hb hf SD) ε
+    (T.prover kS hb hf (RealizedProgram.ProofSystem.IOP.honest Hc)) (PMF.uniformOfFintype _)
+      (T.simulator kS hb hf SD) ε
 
 variable (T kS hb) in
 open Classical in
@@ -297,7 +300,8 @@ the compiled prover of `Hc` against the compiled simulator of
 def ZeroKnowledgeROMQuery {pB : ℕ} (hf : T.ProofFormat kS hb pB) {I' : Type} {relI : Set (Stmt × I')} {SD : C.SimData} (Hc : C.Honest SD I' relI)
     (ε : ℕ → ℕ → ℝ) : Prop :=
   NARG.ROM.ZeroKnowledge (fun x w => (x, w) ∈ relI)
-    (T.prover kS hb hf (RealizedProgram.ProofSystem.IOP.honest Hc)) (T.simulator kS hb hf SD) ε
+    (T.prover kS hb hf (RealizedProgram.ProofSystem.IOP.honest Hc)) (PMF.uniformOfFintype _)
+      (T.simulator kS hb hf SD) ε
 
 variable (T kS hb) in
 open Classical in

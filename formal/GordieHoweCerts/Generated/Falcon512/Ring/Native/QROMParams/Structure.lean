@@ -34,9 +34,9 @@ namespace GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.Structure
 
 open GordieHowe.RealizedProgram GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.Program
 
-load_program_ghc "Structure.ghc" "78530b4c0945cc31"
+load_program_ghc "Structure.ghc" "5c84ddd4e12eef1f"
 
 /-- The member-value pointers in the emitted structure metadata. -/
-theorem memberValues_eq : records.memberValues = [(0, 4), (1, 5)] := rfl
+theorem memberValues_eq : records.memberValues = [(0, 3), (1, 4)] := rfl
 
 end GordieHowe.Generated.Falcon512.Ring.Native.QROMParams.Structure

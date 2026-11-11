@@ -13,6 +13,6 @@ import all GordieHoweCerts.Generated.Falcon512.Native.QROMParams.Program
 
 namespace GordieHowe.Generated.Falcon512.Native.QROMParams.GKR.H
 
-check_entry cert ar 5 [0, 0, 12, 0, 0, 1, 2, 1024, 1]
+check_entry cert ar 5 [0, 0, 13, 2, 1, 1]
 
 end GordieHowe.Generated.Falcon512.Native.QROMParams.GKR.H

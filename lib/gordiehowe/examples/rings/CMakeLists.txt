@@ -49,9 +49,12 @@ gordiehowe_add_bench(falcon_ring_bench
                      EXAMPLES falcon_ring_carrier falcon_ring_native
                               falcon1024_ring_carrier falcon1024_ring_native
                      SETS gold2_sha256 gold4 fp14_9 falcon20)
+# Its export compiles the native and emulated ML-DSA-44 programs, whose
+# parts the arms hold (mldsa_ring_bench.cc's export_plans).
 gordiehowe_add_bench(mldsa_ring_bench
                      EXAMPLES mldsa_ring_native mldsa_ring_carrier
                               mldsa65_ring_native mldsa65_ring_carrier
                               mldsa87_ring_native mldsa87_ring_carrier
+                              mldsa_native mldsa_emulated
                      SETS rom_ml_dsa qrom_ml_dsa rom_emu qrom_emu)
 target_link_libraries(mldsa_ring_bench ml_dsa sha3 OpenSSL::Crypto)

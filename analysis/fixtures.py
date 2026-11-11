@@ -16,7 +16,7 @@ import tempfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 # The ROM run (repro.sh's rom stage): its narrow/ directory, the files the tests read.
-ROM_RUN = "2026-10-19-rom-run"
+ROM_RUN = "2026-11-07-rom-run"
 _ROOT = []
 
 

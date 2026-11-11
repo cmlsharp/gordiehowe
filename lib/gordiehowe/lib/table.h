@@ -303,6 +303,48 @@ class RowMap {
   size_t width_ = 0;
 };
 
+// The powers of a public challenge gamma as expressions of exact degree: SQ[j]
+// = gamma^(2^j), RANGE(n) = [gamma^0, ..., gamma^(n - 1)] (the first h = 2^j <
+// n powers, then gamma^h times RANGE(n - h), so degree n - 1), and AT(e) =
+// gamma^e, the product of the squarings of e's bits.
+template <class F>
+class GammaPowers {
+ public:
+  GammaPowers(const Domain<F> &D, const Ref<F, Field, Public> &gamma) : D_(D) {
+    sq_.push_back(Expr<F>(gamma));
+  }
+  Expr<F> range(size_t n) {
+    check(n >= 1, "GammaPowers: an empty range");
+    auto it = ranges_.find(n);
+    if (it != ranges_.end()) return it->second;
+    Expr<F> out = D_.constant(std::vector<uint64_t>{1});
+    if (n > 1) {
+      size_t j = 0;
+      while ((size_t{2} << j) < n) ++j;
+      const size_t h = size_t{1} << j;
+      out = range(h).concat(square(j) * range(n - h));
+    }
+    ranges_.emplace(n, out);
+    return out;
+  }
+  Expr<F> at(size_t e) {
+    check(e >= 1, "GammaPowers: gamma^0 is a constant");
+    std::optional<Expr<F>> out;
+    for (size_t b = 0; (e >> b) != 0; ++b)
+      if ((e >> b) & 1) out = out ? *out * square(b) : square(b);
+    return *out;
+  }
+
+ private:
+  Expr<F> square(size_t j) {
+    while (sq_.size() <= j) sq_.push_back(sq_.back() * sq_.back());
+    return sq_[j];
+  }
+  const Domain<F> &D_;
+  std::vector<Expr<F>> sq_;
+  std::map<size_t, Expr<F>> ranges_;
+};
+
 namespace table_internal {
 
 // The degree of a record digest in gamma: the largest exponent e(c) =
@@ -375,49 +417,6 @@ Expr<F> concat_all(const std::vector<Expr<F>> &parts, size_t a, size_t e) {
   const size_t m = a + (e - a) / 2;
   return concat_all(parts, a, m).concat(concat_all(parts, m, e));
 }
-
-// The powers of gamma as expressions of exact degree: SQ[j] = gamma^(2^j),
-// RANGE(n) = [gamma^0, ..., gamma^(n - 1)] (the first h = 2^j < n powers,
-// then gamma^h times RANGE(n - h), so degree n - 1), and AT(e) = gamma^e,
-// the product of the squarings of e's bits.
-template <class F>
-class GammaPowers {
- public:
-  GammaPowers(const Domain<F> &D, const Ref<F, Field, Public> &gamma)
-      : D_(D) {
-    sq_.push_back(Expr<F>(gamma));
-  }
-  Expr<F> range(size_t n) {
-    check(n >= 1, "GammaPowers: an empty range");
-    auto it = ranges_.find(n);
-    if (it != ranges_.end()) return it->second;
-    Expr<F> out = D_.constant(std::vector<uint64_t>{1});
-    if (n > 1) {
-      size_t j = 0;
-      while ((size_t{2} << j) < n) ++j;
-      const size_t h = size_t{1} << j;
-      out = range(h).concat(square(j) * range(n - h));
-    }
-    ranges_.emplace(n, out);
-    return out;
-  }
-  Expr<F> at(size_t e) {
-    check(e >= 1, "GammaPowers: gamma^0 is a constant");
-    std::optional<Expr<F>> out;
-    for (size_t b = 0; (e >> b) != 0; ++b)
-      if ((e >> b) & 1) out = out ? *out * square(b) : square(b);
-    return *out;
-  }
-
- private:
-  Expr<F> square(size_t j) {
-    while (sq_.size() <= j) sq_.push_back(sq_.back() * sq_.back());
-    return sq_[j];
-  }
-  const Domain<F> &D_;
-  std::vector<Expr<F>> sq_;
-  std::map<size_t, Expr<F>> ranges_;
-};
 
 // The table's powers (gamma^k for k < W_max, then gamma^off per offset
 // leaf) and digests (d_j = <row_j, M^T g> over the column blocks PARTS of

@@ -4,15 +4,15 @@
 module
 
 public import GordieHoweCerts.Generated.MLDSA44.Ring.Carrier.QROMParams.GKR.H
-public import GordieHoweCheck.MLDSA44.Ring.Carrier.QROMParams.GKR.H.E4.P0
-public import GordieHoweCheck.MLDSA44.Ring.Carrier.QROMParams.GKR.H.E4.P1
+meta import GordieHoweCerts.Generated.MLDSA44.Ring.Carrier.QROMParams.GKR.H
+import all GordieHoweCerts.Generated.MLDSA44.Ring.Carrier.QROMParams.Program
 
 @[expose] public section
 
-/-! The relational check of entry 4 of the GKR circuit of domain H, composed from its part modules (generated; do not edit). -/
+/-! The relational check of entry 4 of the GKR circuit of domain H (generated; do not edit). -/
 
 namespace GordieHowe.Generated.MLDSA44.Ring.Carrier.QROMParams.GKR.H
 
-compose_entry cert ar 4 [0, 0, 24, 0, 0, 8, 1, 64, 5, 0, 0, 28, 1, 64, 5, 0, 0, 2, 1, 256, 3, 2, 1024, 1]
+check_entry cert ar 4 [0, 0, 65, 2, 1, 1]
 
 end GordieHowe.Generated.MLDSA44.Ring.Carrier.QROMParams.GKR.H

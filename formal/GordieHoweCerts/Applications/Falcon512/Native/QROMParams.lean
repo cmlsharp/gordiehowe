@@ -24,7 +24,8 @@ The native Falcon-512 proof of possession at the QROM parameters as a configurat
 proof-of-possession relation at the key `keyWitRel` with the witness read at the key's statement
 values, the honest prover, the honest strategy `honestStrategy`, and the figures), its facts
 `configurationFacts` (with granted points: `GrantedFacts`), and the instances of the templates of the
-families `Common`, `Query` and `GordieHowe.Configuration.AdaptiveCompleteness`.
+families `Common`, `GordieHowe.Configuration.ZeroKnowledgeQROM`,
+`GordieHowe.Configuration.AdaptiveCompleteness` and `GordieHowe.Configuration.PaperRelation`.
 
 The configuration is `GordieHowe.Configuration.ofCertified` at the generated certified data
 (`GordieHowe.Generated.Falcon512.Native.QROMParams.certified`), the source program's soundness (`source`) and the
@@ -35,7 +36,7 @@ of the generic templates (`GordieHowe.Configuration.CertifiedSource`,
 The figures: at most `2315` rounds, every round's load within `2^-1870` at its own stream length,
 trees of at most `4069` leaves, `255` queried leaves, `7951` verifier queries
 (`2 · 2315 + 6 + 255 · 13`), round errors at most `13358901 / 2^260`, `4635` digests per input
-(`2 · 2315 + 4 + 1`), the query caps `2^100` (QROM) and `2^64` (ROM), `7327` positions
+(`2 · 2315 + 4 + 1`), the quantum query cap `2^100` and the classical query cap `2^64`, `7327` positions
 (`4069 + 3258`) and `48`-byte digests.
 
 The realization step's derivations (`RealizedProgram.Derivable`) include the MAC `mac.equal` with
@@ -65,7 +66,6 @@ namespace GordieHowe.Falcon512.Native.QROMParams
 open RealizedProgram.Export RealizedProgram.ProofSystem.PhaseLayout IOP RelativePacking GordieHowe.SPBCS GordieHowe.QROM SPBCS.Configurations GordieHowe.Configuration
 open Generated.Falcon512.Native.QROMParams.Program (program)
 open Generated.Falcon512.Native.QROMParams (interp certified conditions)
-open GordieHowe.Falcon512.Emulated (PublicKey)
 open scoped NNReal ENNReal
 
 /-! ## The frontend -/
@@ -133,17 +133,17 @@ theorem label_le : label.length ≤ 2 ^ 10 :=
   Nat.le_of_ble_eq_true rfl
 
 /-- **The frontend of `Falcon512.Native.QROMParams`** (`Configuration.Frontend`): the statements `PublicKey` with the codec
-`falconKeyCodec`, read as their statement values (`stmtOf`), the headline relation `keyWitRel`, the honest
+`falconKeyCodec`, read as their statement values (`stmtOf`), the relation `keyWitRel`, the honest
 inputs `Native.HonestIn` at `Native.relH program RealizedProgram.gf256 RealizedProgram.fq20` with the execution `sourceExec`, and the label `label`. -/
 noncomputable def frontend :
     Configuration.Frontend certified source PublicKey VarWitness Native.HonestIn where
   codec := falconKeyCodec
   stmtOf := stmtOf
-  rel' := keyWitRel
-  g s w := w (stmtOf s)
+  rel := keyWitRel
+  witnessMap s w := w (stmtOf s)
   relH := Native.relH program RealizedProgram.gf256 RealizedProgram.fq20
   exec := sourceExec
-  keyStmtOf y := y.y.pk
+  stmtOfHonest y := y.y.pk
   label := label
 
 /-- **The facts of `frontend`**: the statement's writes (`stmtCodec_ser_le`), the label
@@ -159,14 +159,14 @@ instantiate_config GordieHowe.Falcon512.Native.QROMParams
 /-! ## The configuration -/
 
 /-- **`Falcon512.Native.QROMParams` as a configuration under spBCS** (module docstring,
-`Configuration.ofCertified`): `48`-byte salts and the query cap `2 ^ 100`. -/
+`Configuration.ofCertified`): the QROM parameter set `ParamSet.qrom` (`48`-byte salts and the quantum query cap `2 ^ 100`). -/
 noncomputable def configuration : Configuration :=
-  .ofCertified certified source frontend 48 (2 ^ 100)
+  .ofCertified certified source frontend .qrom
 
 /-- **The facts of `configuration`** (`Configuration.ofCertified_grantedFacts`): the frontend's
 (`frontendFacts`). -/
 theorem configurationFacts : configuration.GrantedFacts :=
-  Configuration.ofCertified_grantedFacts certified source frontendFacts (by norm_num) _
+  Configuration.ofCertified_grantedFacts certified source frontendFacts (Nat.le_of_ble_eq_true rfl)
 
 /-- **The honest inputs of the supported pairs of the paper's relation**
 (`Configuration.HonestOf` at `Falcon512.Native.keySupportedRel`: the pairs of `keyWitRel` whose
@@ -175,8 +175,8 @@ such pair has the honest input `HonestIn.ofRel` at its key. -/
 def honestOfRel : configuration.HonestOf where
   rel := Native.keySupportedRel
   rel_subset _ h := h.1
-  honestOf p hp := HonestIn.ofRel p.1 p.2 hp
-  keyStmtOf_honestOf _ _ := rfl
+  honestOf x w hp := HonestIn.ofRel x w hp
+  stmtOfHonest_honestOf _ _ _ := rfl
 
 instantiate_config GordieHowe.Falcon512.Native.QROMParams
   from [GordieHowe.Configuration.Common, GordieHowe.Configuration.ZeroKnowledgeQROM,

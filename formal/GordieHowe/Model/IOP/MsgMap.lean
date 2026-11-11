@@ -13,7 +13,7 @@ public import GordieHowe.Model.IOP.RBR
 Two protocols `Q` and `P` with the same rounds and directions, and a map of messages from each
 round of `Q` to the same round of `P` that is a bijection at every challenge round
 (`ProtocolSpec.MsgMap`), relate their transcripts round by round (`MsgMap.transcript`).
-Round-by-round knowledge soundness of `P` gives that of `Q` (`rbrKnowledgeSoundness.comap`): at
+Round-by-round knowledge soundness of `P` gives that of `Q` (`RBRKnowledgeSound.comap`): at
 the extractor and the state function read through the map (`Extractor.comap`,
 `KnowledgeStateFunction.comap`), for every verifier of `Q` that accepts only transcripts whose
 image the verifier of `P` accepts, with the error of each challenge round of `Q` the error of the
@@ -154,13 +154,13 @@ def KnowledgeStateFunction.comap {V : Verifier P StmtIn} (S : KnowledgeStateFunc
 knowledge sound for `rel` at `V`, `E`, `S` and errors `ε`, then `Q` is, at every verifier `V'` that
 accepts only transcripts whose image `V` accepts, the extractor and the state function read through
 the map, and the error of each challenge round of `Q` that of the same round of `P`. -/
-theorem rbrKnowledgeSoundness.comap [∀ i, Fintype (P.Challenge i)]
+theorem RBRKnowledgeSound.comap [∀ i, Fintype (P.Challenge i)]
     [∀ i, Nonempty (P.Challenge i)] [∀ i, Fintype (Q.Challenge i)]
     [∀ i, Nonempty (Q.Challenge i)] {rel : Set (StmtIn × W)} {V : Verifier P StmtIn}
     {E : Extractor P StmtIn W} {S : KnowledgeStateFunction V} {ε : P.ChallengeIdx → ℝ≥0}
-    (h : rbrKnowledgeSoundness rel V E S ε) (g : Q.MsgMap P) {V' : Verifier Q StmtIn}
+    (h : RBRKnowledgeSound rel V E S ε) (g : Q.MsgMap P) {V' : Verifier Q StmtIn}
     (hV : ∀ x tr, V' x tr = true → V x (g.transcript tr) = true) :
-    rbrKnowledgeSoundness rel V' (E.comap g) (S.comap g hV) fun i => ε (g.chalIdx i) := by
+    RBRKnowledgeSound rel V' (E.comap g) (S.comap g hV) fun i => ε (g.chalIdx i) := by
   intro x i tr
   have hb := g.bijective i.1 i.2
   change Pr[c ← Q.Challenge i : (x, E i.1.castSucc x (g.transcript tr)) ∉ rel ∧

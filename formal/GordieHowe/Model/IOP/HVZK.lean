@@ -85,9 +85,13 @@ variable {n : ℕ}
 `read m : ι → A`, at the positions `queries ch`. The positions have decidable equality, so that
 what the verifier sees (`see`) is computable. -/
 structure MessageView (M Ch ι A : Type) where
+  /-- The message as a table of entries indexed by positions. -/
   read : M → ι → A
+  /-- The table determines the message. -/
   read_injective : Function.Injective read
+  /-- The positions the verifier queries at the challenges. -/
   queries : Ch → Finset ι
+  /-- Decidable equality of the positions. -/
   [decEq : DecidableEq ι]
 
 namespace MessageView
@@ -252,16 +256,19 @@ end TranscriptView
 
 /-- A verifier together with how it reads each prover message, such that its decision depends only
 on what it reads. `reads` only requires the view to suffice for the decision, so a view could report
-less than the verifier receives and make `HVZK` weaker. Each concrete IOP carries the obligation
-that its views are what the C++ verifier reads; for the BCS transformation the compiled proof's
-revealed data is a function of the view (`SPBCS.Reveal.write_congr`,
-`SPBCS.Reveal.col_congr`). -/
+less than the verifier receives and make `HVZK` weaker. That the views of a concrete IOP are what
+the C++ verifier reads is a correspondence the Lean does not check; `formal/README.md` lists it
+under "What the C++ and the Lean must agree on". For the BCS transformation the compiled proof's
+revealed data is a function of the view (`SPBCS.Reveal.write_congr`, `SPBCS.Reveal.col_congr`). -/
 structure IOP (P : ProtocolSpec n) (Stmt : Type) where
+  /-- The verifier's decision on the statement and the full transcript. -/
   V : Verifier P Stmt
   /-- The positions of each prover message. -/
   Idx : P.MessageIdx → Type
   /-- The entry type of each prover message. -/
   Ans : P.MessageIdx → Type
+  /-- How the verifier reads each prover message: the positions it queries at the challenges, and
+  the entries there. -/
   msg : ∀ i : P.MessageIdx, MessageView (P.Type i.1) P.Challenges (Idx i) (Ans i)
   /-- **Query locality**: the decision is a function of the verifier's view of the transcript. -/
   reads : ∀ x (tr tr' : P.Transcript (Fin.last n)),

@@ -70,6 +70,10 @@ class MldsaRingFront (program : RealizedProgram) [MldsaRingEmbed program]
   muH : ℕ
   /-- Domain `H`'s `w1`. -/
   w1H : ℕ
+  /-- `member.mu.boolean`, the `μ` bits' Booleanity. -/
+  muBoolPred : ℕ
+  /-- `mac.equal`, the crossing. -/
+  crossPred : ℕ
   /-- The table's shape. -/
   shape : (TableSelect.shape program).dom = 0 ∧ (TableSelect.shape program).chal = 0 ∧
     (TableSelect.shape program).mOne = 8380416 ∧ (TableSelect.shape program).zero = 0 ∧
@@ -80,35 +84,41 @@ class MldsaRingFront (program : RealizedProgram) [MldsaRingEmbed program]
     (TableSelect.shape program).bits = 6
   /-- Domain `A` is field `0`, domain `H` field `1`. -/
   domains : program.domainField 0 = 0 ∧ program.domainField 1 = 1
-  /-- The program has the shared expressions `0 … 513`. -/
-  lt513 : 513 < program.exprs.length
+  /-- The crossing's operand of domain `H`. -/
+  crossH : ℕ
+  /-- The crossing's operand of domain `A`. -/
+  crossA : ℕ
+  /-- The program has the crossing's shared expressions. -/
+  ltCross : crossA < crossH ∧ crossH < program.exprs.length
   /-- Shared expression `0`: the `μ` bits and `15` zeros. -/
   expr0 : program.expr 0 = .reindex [(0, 1, 513), (512, 0, 15)] (.concat (.leaf muA) (.leaf 0))
   /-- Shared expression `1`: the record. -/
   expr1 : program.expr 1 = .reindex [(0, 1, 5144)]
     (.concat (.reindex [(0, 1, 5120)] (.concat (.reindex [(0, 1, 4096)]
-        (.leaf (MldsaRingRelation.aHat program)))
-      (.reindex [(0, 1, 1024)] (.leaf (MldsaRingRelation.t1 program)))))
+        (.leaf (MldsaRandomPoint.aHat program)))
+      (.reindex [(0, 1, 1024)] (.leaf (MldsaRandomPoint.t1 program)))))
       (.reindex [(0, 1, 24)] (.apply (.batched 24 (.fromDigits 22 2)) (.ref 0))))
   /-- `member.mu` has `512` coordinates. -/
   muSize : (program.value muA).size = 512
   /-- `member.mu.boolean` checks the `μ` bits, a source predicate. -/
-  muBool : (program.predicate 10).body.boolCheck? = some ⟨0, muA⟩ ∧
-    10 < program.predicates.length ∧ program.inSource (program.predicate 10) = true
+  muBool : (program.predicate muBoolPred).body.boolCheck? = some ⟨0, muA⟩ ∧
+    muBoolPred < program.predicates.length ∧
+    program.inSource (program.predicate muBoolPred) = true
   /-- `mac.equal` crosses `513` of domain `H` and `50` of domain `A`, a source predicate. -/
-  cross : 248 < program.predicates.length ∧ program.inSource (program.predicate 248) = true ∧
-    ∃ c, (program.predicate 248).body = .cross 1 (.ref 513) 0 (.ref 50) {} c
+  cross : crossPred < program.predicates.length ∧
+    program.inSource (program.predicate crossPred) = true ∧
+    ∃ c, (program.predicate crossPred).body = .cross 1 (.ref crossH) 0 (.ref crossA) {} c
   /-- The crossing's `x`: H's `μ`, `w1`, then the decoded support and sign alternately. -/
-  exprH : ∃ m : IndexMap, program.expr 513 = .reindex m (concatR (.leaf muH)
+  exprH : ∃ m : IndexMap, program.expr crossH = .reindex m (concatR (.leaf muH)
       [.leaf w1H, .ref ((MldsaRingEmbed.σ program).ref 523),
         .ref ((MldsaRingEmbed.σ program).ref 524)]) ∧
     (∀ t < 6656, m.entry t = t) ∧ (∀ k < 256, m.entry (6656 + 2 * k) = 6656 + k) ∧
     (∀ k < 256, m.entry (6656 + (2 * k + 1)) = 6912 + k)
   /-- The crossing's `y`: A's `μ`, `w1` and challenge bits, in order. -/
-  exprA : ∃ m : IndexMap, program.expr 50 = .reindex m (concatR (.leaf muA)
-      [.leaf w1A, .leaf (MldsaRingRelation.c program)]) ∧ ∀ t < 7168, m.entry t = t
+  exprA : ∃ m : IndexMap, program.expr crossA = .reindex m (concatR (.leaf muA)
+      [.leaf w1A, .leaf (MldsaRandomPoint.c program)]) ∧ ∀ t < 7168, m.entry t = t
   /-- The crossing's lengths. -/
-  lens : program.exprLen (.ref 513) = 7168 ∧ (program.value muH).size = 512 ∧
+  lens : program.exprLen (.ref crossH) = 7168 ∧ (program.value muH).size = 512 ∧
     (program.value w1H).size = 6144 ∧
     program.exprLen (.ref ((MldsaRingEmbed.σ program).ref 523)) = 256 ∧
     program.exprLen (.ref ((MldsaRingEmbed.σ program).ref 524)) = 256 ∧
@@ -117,10 +127,10 @@ class MldsaRingFront (program : RealizedProgram) [MldsaRingEmbed program]
   bitViews : program.isBitView muH = true ∧ program.isBitView w1H = true
   /-- The renaming's values: the native `z`, `h`, `challenge.c`, `signature.w`, `hint.w1`,
   H's `w1` and `μ`. -/
-  vals : (MldsaRingEmbed.σ program).val 57 = MldsaRingRelation.z program ∧
+  vals : (MldsaRingEmbed.σ program).val 57 = MldsaRandomPoint.z program ∧
     (MldsaRingEmbed.σ program).val 58 = hA ∧
-    (MldsaRingEmbed.σ program).val 59 = MldsaRingRelation.c program ∧
-    (MldsaRingEmbed.σ program).val 60 = MldsaRingRelation.w program ∧
+    (MldsaRingEmbed.σ program).val 59 = MldsaRandomPoint.c program ∧
+    (MldsaRingEmbed.σ program).val 60 = MldsaRandomPoint.w program ∧
     (MldsaRingEmbed.σ program).val 62 = w1A ∧ (MldsaRingEmbed.σ program).val 70 = w1H ∧
     (MldsaRingEmbed.σ program).val 120 = muH
   /-- The renamed typed values of domain `H`'s core are node-typed source values. -/
@@ -128,19 +138,33 @@ class MldsaRingFront (program : RealizedProgram) [MldsaRingEmbed program]
     (MldsaRingEmbed.σ program).val v < program.values.length ∧
       program.IsSourceValue ((MldsaRingEmbed.σ program).val v) ∧
       (program.value ((MldsaRingEmbed.σ program).val v)).typeSource = .node
-  /-- The native challenge `j` is the ring's challenge `j + 1`. -/
-  chalSucc : ∀ j, (MldsaRingEmbed.σ program).chal j = j + 1
+  /-- The offset of the native challenges among the ring's: the table's `γ` and the signature
+  relation's `r` come first. -/
+  sibOff : ℕ
+  /-- The native challenge `j` is the ring's challenge `j + sibOff`. -/
+  chalSucc : ∀ j, (MldsaRingEmbed.σ program).chal j = j + sibOff
   /-- The table's challenge `0` is a source challenge. -/
   chal0 : program.IsSourceChal 0
-  /-- The ring's source challenge `j + 1` is the native source challenge `j`. -/
-  chalIff : ∀ j, program.IsSourceChal (j + 1) ↔ (MldsaRingEmbed.nat program).IsSourceChal j
+  /-- The signature relation's challenge is a source challenge, distinct from `0` and below the
+  native challenges. -/
+  chalR : program.IsSourceChal (MldsaRandomPoint.rChal program) ∧
+    MldsaRandomPoint.rChal program ≠ 0 ∧ MldsaRandomPoint.rChal program < sibOff
+  /-- The values the relation's rows read read nothing from the run. -/
+  relReads : ∀ v ∈ [MldsaRandomPoint.w program, MldsaRandomPoint.q program,
+      MldsaRandomPoint.t1 program, MldsaRandomPoint.aHat program, MldsaRandomPoint.z program,
+      MldsaRandomPoint.c program], program.nodeReads program.fuel v = []
+  /-- The ring's source challenges: the table's, the relation's, and the native ones renamed. -/
+  chalCases : ∀ j, program.IsSourceChal j →
+    j = 0 ∨ j = MldsaRandomPoint.rChal program ∨ ∃ j', j = j' + sibOff
+  /-- The ring's source challenge `j + sibOff` is the native source challenge `j`. -/
+  chalIff : ∀ j, program.IsSourceChal (j + sibOff) ↔ (MldsaRingEmbed.nat program).IsSourceChal j
   /-- The native source challenges and their ring challenges: one coordinate drawn from the same
   field. -/
   chalShape : ∀ j, (MldsaRingEmbed.nat program).IsSourceChal j →
-    (program.challenge (j + 1)).size = 1 ∧ (program.challenge (j + 1)).sampler = .full ∧
+    (program.challenge (j + sibOff)).size = 1 ∧ (program.challenge (j + sibOff)).sampler = .full ∧
     ((MldsaRingEmbed.nat program).challenge j).size = 1 ∧
     ((MldsaRingEmbed.nat program).challenge j).sampler = .full ∧
-    program.chalField (j + 1) = (MldsaRingEmbed.nat program).chalField j
+    program.chalField (j + sibOff) = (MldsaRingEmbed.nat program).chalField j
   /-- The values the extractor reads (`c̃'`, `z`, `h`) read nothing from the run. -/
   projReads : ∀ v ∈ [(MldsaRingEmbed.σ program).val 457, (MldsaRingEmbed.σ program).val 57,
     (MldsaRingEmbed.σ program).val 58], program.nodeReads program.fuel v = []
@@ -179,6 +203,15 @@ local notation "nat" => MldsaRingEmbed.nat program
 set_option hygiene false in
 local notation "σ" => MldsaRingEmbed.σ program
 
+set_option hygiene false in
+local notation "ringV" => MldsaRingEmbed.V program
+
+set_option hygiene false in
+local notation "ringR" => MldsaRingEmbed.R program
+
+set_option hygiene false in
+local notation "predMap" => MldsaRingEmbed.pred program
+
 /-! ## The native readers at the ring's environment -/
 
 section Pull
@@ -204,7 +237,7 @@ theorem zVals_pull (e : program.Env interp) (j : Fin _root_.MLDSA.mldsa44.l)
     (k : Fin _root_.MLDSA.ringDegree) :
     MLDSA44.zVals ((nat).reader (pull e)) j k = zVals (program.reader e) j k := by
   unfold MLDSA44.zVals zVals
-  rw [evalE_pull e (by decide), MldsaRingFront.vals.1]
+  rw [evalE_pull e (MldsaRingEmbed.readV _ (by decide)), MldsaRingFront.vals.1]
 
 /-- The native extracted `z` is the ring's. -/
 theorem zOf_pull (e : program.Env interp) :
@@ -216,13 +249,13 @@ theorem zOf_pull (e : program.Env interp) :
 theorem wOf_pull (e : program.Env interp) :
     MLDSA44.wOf ((nat).reader (pull e)) = wOf (program.reader e) := by
   unfold MLDSA44.wOf wOf MLDSA44.wVals wVals
-  simp only [evalE_pull e (show 60 ∈ ringV by decide), MldsaRingFront.vals.2.2.2.1]
+  simp only [evalE_pull e (MldsaRingEmbed.readV 60 (by decide)), MldsaRingFront.vals.2.2.2.1]
 
 /-- The native challenge bits are the ring's. -/
 theorem cABits_pull (e : program.Env interp) (k : Fin _root_.MLDSA.ringDegree) (s : Fin 2) :
     MLDSA44.cABits ((nat).reader (pull e)) k s = cBits (program.reader e) k s := by
   unfold MLDSA44.cABits cBits
-  rw [evalE_pull e (by decide), MldsaRingFront.vals.2.2.1]
+  rw [evalE_pull e (MldsaRingEmbed.readV _ (by decide)), MldsaRingFront.vals.2.2.1]
 
 /-- The native challenge polynomial is the ring's. -/
 theorem cPolyA_pull (e : program.Env interp) :
@@ -235,28 +268,28 @@ theorem w1ABits_pull (e : program.Env interp) (t : Fin (8 * 768)) :
     MLDSA44.w1ABits ((nat).reader (pull e)) t =
       program.evalE (program.reader e) 0 (.leaf (MldsaRingFront.w1A program)) t := by
   unfold MLDSA44.w1ABits
-  rw [evalE_pull e (by decide), MldsaRingFront.vals.2.2.2.2.1]
+  rw [evalE_pull e (MldsaRingEmbed.readV _ (by decide)), MldsaRingFront.vals.2.2.2.2.1]
 
 /-- The native H's `w1` bits are the ring's. -/
 theorem w1HBits_pull (e : program.Env interp) (t : Fin (8 * 768)) :
     MLDSA44.w1HBits ((nat).reader (pull e)) t =
       program.evalE (program.reader e) 1 (.leaf (MldsaRingFront.w1H program)) t := by
   unfold MLDSA44.w1HBits
-  rw [evalE_pull e (by decide), MldsaRingFront.vals.2.2.2.2.2.1]
+  rw [evalE_pull e (MldsaRingEmbed.readV _ (by decide)), MldsaRingFront.vals.2.2.2.2.2.1]
 
 /-- The native `μ` bits are the ring's domain `H` `μ`. -/
 theorem muBits_pull (e : program.Env interp) (t : Fin (8 * 64)) :
     MLDSA44.muBits ((nat).reader (pull e)) t =
       program.evalE (program.reader e) 1 (.leaf (MldsaRingFront.muH program)) t := by
   unfold MLDSA44.muBits
-  rw [evalE_pull e (by decide), MldsaRingFront.vals.2.2.2.2.2.2]
+  rw [evalE_pull e (MldsaRingEmbed.readV _ (by decide)), MldsaRingFront.vals.2.2.2.2.2.2]
 
 /-- The native H's decoded support is the ring's renamed shared expression. -/
 theorem supH_pull (e : program.Env interp) (k : Fin 256) :
     MLDSA44.supH ((nat).reader (pull e)) k =
       (interp 1).toNat (program.evalE (program.reader e) 1 (.ref ((σ).ref 523)) k) := by
   unfold MLDSA44.supH
-  rw [evalE_ref_pull e (by decide)]
+  rw [evalE_ref_pull e (MldsaRingEmbed.readR _ (by decide))]
 
 variable [MLDSA44.MldsaHCross nat] in
 /-- The native H's decoded sign is the ring's renamed shared expression `σ.ref 524` (native
@@ -265,7 +298,7 @@ theorem sgnH_pull (e : program.Env interp) (k : Fin 256) :
     MLDSA44.sgnH ((nat).reader (pull e)) k =
       (interp 1).toNat (program.evalE (program.reader e) 1 (.ref ((σ).ref 524)) k) := by
   unfold MLDSA44.sgnH
-  rw [← evalE_ref_pull e (k := 524) (by decide),
+  rw [← evalE_ref_pull e (k := 524) (MldsaRingEmbed.readR _ (by decide)),
     RealizedProgram.evalE_ref MLDSA44.MldsaHCross.refsOrdered _ _
       MLDSA44.MldsaHCross.lt524, MLDSA44.MldsaHCross.expr524]
 
@@ -276,12 +309,8 @@ theorem hSatCore {e : program.Env interp} (hs : program.SourceSatAt e) :
   preds := hPreds_pull hs
   types v hv i hi := by
     obtain ⟨hl, hsrc, hts⟩ := MldsaRingFront.typedCore (program := program) v hv
-    have hvV : v ∈ ringV := by
-      simp only [MLDSA44.hTypedCore, List.mem_cons, List.not_mem_nil,
-        or_false] at hv
-      rcases hv with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-        simp only [ringV, List.mem_append, List.mem_range'_1, List.mem_cons,
-          List.not_mem_nil] <;> omega
+    have hvV : v ∈ ringV := MldsaRingEmbed.readV v
+      ((by decide : ∀ v ∈ MLDSA44.hTypedCore, v ∈ readVals) v hv)
     refine RealizedProgram.inType_pullEnv MldsaRingEmbed.embedding e hvV
       (hs.types _ hl hsrc hts i ?_)
     rw [((MldsaRingEmbed.embedding (program := program)).vals v hvV).2.2.2.1]

@@ -13,6 +13,6 @@ import all GordieHoweCerts.Generated.MLDSA44.Emulated.QROMParams.Program
 
 namespace GordieHowe.Generated.MLDSA44.Emulated.QROMParams.GKR.A
 
-check_entry_leaves cert ar 3 [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 2, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 4, 1, 1024, 4, 0, 0, 2, 2, 256, 163] 0 11
+check_entry_leaves cert ar 3 [0, 0, 16, 2, 1296, 33] 0 11
 
 end GordieHowe.Generated.MLDSA44.Emulated.QROMParams.GKR.A

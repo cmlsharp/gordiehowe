@@ -11,7 +11,7 @@ public import GordieHowe.Model.QROM.SaltedZKProofQuery
 /-!
 # Everlasting zero knowledge against query-bounded adversaries
 
-The paper's everlasting zero knowledge (`def:narg-zk-post`, Definition 6.2) bounds the queries an
+The paper's everlasting zero knowledge (`def:narg-zk-post`) bounds the queries an
 adversary makes before its last proof query, whose position is chosen at run time, and leaves the
 queries after it unbounded. For a query-bounded adversary (`QueryBoundedAdversary`) this is
 `QueryBoundedAdversary.QueriesBeforeLastProofQuery`: on every value of the auxiliary input, every
@@ -214,19 +214,29 @@ variable {X Y Stmt Wit Proof Coins SimCoins : Type} (rel : Stmt → Wit → Prop
   [DecidableEq Proof] [Nonempty X] [DecidableEq Y] [Fintype Coins] [DecidableEq Coins]
   [Fintype SimCoins] [DecidableEq SimCoins]
 
+/-- **The zero-knowledge advantage of `𝒟`** (Unruh 2017 Definition 6, p. 14): the distance between
+its probabilities of outputting `true` against the real challenger of `P`, its coins drawn from
+`μ`, and against the simulated challenger of `S`, each answering the first `Q` proof queries. -/
+noncomputable def _root_.GordieHowe.Quantum.QueryBoundedAdversary.zkAdvantage {T : ℕ}
+    (𝒟 : Quantum.QueryBoundedAdversary X Y (ProofQuery Stmt Wit) Proof Bool T)
+    (P : NARG.Prover X Y Stmt Wit Proof Coins) (μ : PMF Coins)
+    (S : NARG.Simulator X Y Stmt Proof SimCoins) (Q : ℕ) : ℝ :=
+  GordieHowe.advantage (𝒟.acceptProb (realChallenger rel P μ Q)).toReal
+    (𝒟.acceptProb (simChallenger rel S Q)).toReal
+
 /-- **Everlasting zero knowledge against query-bounded adversaries** (Unruh
 2017 Definition 6, p. 14, over the paper's `(t, Q)`-adversaries, `def:adversary`, with the query
 bound of `def:narg-zk-post`): for all `t` and `Q`, every query-bounded adversary that outputs a bit
 and makes at most `t` queries before its last proof query on every branch
-(`QueriesBeforeLastProofQuery`), and any number after it, outputs `true` against the real challenger
-of `P` and against the simulated challenger of `S`, each answering the first `Q` proof queries, with
-probabilities at most `ε t Q` apart. -/
+(`QueriesBeforeLastProofQuery`), and any number after it, has zero-knowledge advantage at most
+`ε t Q` (`zkAdvantage`: it outputs `true` against the real challenger of `P`, its coins drawn from
+`μ`, and against the simulated challenger of `S`, each answering the first `Q` proof queries, with
+probabilities at most `ε t Q` apart). -/
 def _root_.GordieHowe.QROM.EverlastingZeroKnowledge (P : NARG.Prover X Y Stmt Wit Proof Coins)
+    (μ : PMF Coins)
     (S : NARG.Simulator X Y Stmt Proof SimCoins) (ε : ℕ → ℕ → ℝ) : Prop :=
   ∀ (t Q T : ℕ) (𝒟 : Quantum.QueryBoundedAdversary X Y (ProofQuery Stmt Wit) Proof Bool T),
-    𝒟.QueriesBeforeLastProofQuery t →
-    GordieHowe.advantage (𝒟.acceptProb (realChallenger rel P Q)).toReal
-      (𝒟.acceptProb (simChallenger rel S Q)).toReal ≤ ε t Q
+    𝒟.QueriesBeforeLastProofQuery t → 𝒟.zkAdvantage rel P μ S Q ≤ ε t Q
 
 variable {rel}
 
@@ -237,10 +247,11 @@ acceptance probabilities of its dilation in the pure game, which has a request b
 slots with `width * q ≤ t` (`AdaptiveIAlg.dilRequestBudget`) and a post phase that rejects its
 halted branches; averaging over the auxiliary input keeps the bound. -/
 theorem EverlastingZeroKnowledgePure.everlastingZeroKnowledge
-    {P : NARG.Prover X Y Stmt Wit Proof Coins} {S : NARG.Simulator X Y Stmt Proof SimCoins}
+    {P : NARG.Prover X Y Stmt Wit Proof Coins} {μ : PMF Coins}
+        {S : NARG.Simulator X Y Stmt Proof SimCoins}
     {ε : ℕ → ℕ → ℝ}
-    (h : EverlastingZeroKnowledgePure rel P.toFn S.toFn ε) :
-    GordieHowe.QROM.EverlastingZeroKnowledge rel P S ε := by
+    (h : EverlastingZeroKnowledgePure rel P.toFn μ S.toFn ε) :
+    GordieHowe.QROM.EverlastingZeroKnowledge rel P μ S ε := by
   intro t Q T 𝒟 h𝒟
   refine PMF.abs_toReal_tsum_mul_sub_le 𝒟.aux (fun _ => PMF.toOuterMeasure_apply_le_one _ _)
     (fun _ => PMF.toOuterMeasure_apply_le_one _ _) fun a => ?_

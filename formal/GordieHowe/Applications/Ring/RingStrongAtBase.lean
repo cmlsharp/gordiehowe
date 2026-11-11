@@ -72,7 +72,9 @@ namespace RingSignature
 section AtBase
 
 variable {X Y Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] {N : ℕ}
-  {TB : BaseTypes} (B : BaseSigner X Y N TB) (sp : OracleSplit Y Y₁ Y₂) (ω : X → Y₁)
+  {TB : BaseTypes}
+  (B : BaseSigner X Y N TB)
+  (sp : OracleSplit Y Y₁ Y₂) (ω : X → Y₁)
 
 /-- **The base signer at the base component `ω`**, on the oracle `X → Y₂`: `B`'s types, keys and
 base messages, and each of its programs (the ring-aware signer, the ordinary signer, the public
@@ -114,8 +116,11 @@ theorem run_pub_atBase (pk : B.PK) (σ : B.BSig) (h : X → Y₂) :
 theorem bverify_atBase (h : X → Y₂) : (B.atBase sp ω).bverify h = B.bverify (join sp ω 0) :=
   rfl
 
+variable [Fintype TB.Coins] [Nonempty TB.Coins]
+
 variable {B}
 
+omit [Fintype TB.Coins] [Nonempty TB.Coins] in
 /-- **The ring-aware signer at a joined oracle** is the signer at `ω`, for a base signer reading
 only the base component. -/
 theorem BaseSigner.ReadsOnly.run_bsign_join (hB : B.ReadsOnly (base sp)) (sk : B.SK)
@@ -123,18 +128,21 @@ theorem BaseSigner.ReadsOnly.run_bsign_join (hB : B.ReadsOnly (base sp)) (sk : B
     (B.bsign sk R i m c).run (join sp ω h) = ((B.atBase sp ω).bsign sk R i m c).run h' :=
   hB.run_bsign _ _ (by rw [base_join, base_join]) _ _ _ _ _
 
+omit [Fintype TB.Coins] [Nonempty TB.Coins] in
 /-- **The public value at a joined oracle** is the public value at `ω`, for a base signer reading
 only the base component. -/
 theorem BaseSigner.ReadsOnly.run_pub_join (hB : B.ReadsOnly (base sp)) (pk : B.PK) (σ : B.BSig)
     (h h' : X → Y₂) : (B.pub pk σ).run (join sp ω h) = ((B.atBase sp ω).pub pk σ).run h' :=
   hB.run_pub _ _ (by rw [base_join, base_join]) _ _
 
+omit [Fintype TB.Coins] [Nonempty TB.Coins] in
 /-- **Verification at a joined oracle** is verification at `ω`, for a base signer reading only
 the base component. -/
 theorem BaseSigner.ReadsOnly.bverify_join (hB : B.ReadsOnly (base sp)) (h h' : X → Y₂) :
     B.bverify (join sp ω h) = (B.atBase sp ω).bverify h' :=
   hB.bverify_eq _ _ (by rw [base_join, base_join])
 
+omit [Fintype TB.Coins] [Nonempty TB.Coins] in
 /-- **The ordinary signer at a joined oracle** is the ordinary signer at `ω`, for an ordinary
 signer reading only the base component. -/
 theorem BaseSigner.run_ssign_join (hS : B.ReadsStdOnly (base sp)) (sk : B.SK) (bm : B.BMsg)
@@ -172,7 +180,9 @@ def BaseSigner.atBaseWit : RingWit (B.atBase sp ω) ≃ RingWit B where
 base signer at `ω` on the oracle `X → Y₂`, along equivalences of the coins and of the proofs: the
 honest proof at `join sp ω h` is `PS'`'s at `h` (`run_prove`), and so is verification
 (`verify_eq`). -/
-structure ProofSystem.AtBase {TB : BaseTypes} {B : BaseSigner X Y N TB} {TPS : PSTypes} (PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS)
+structure ProofSystem.AtBase {TB : BaseTypes}
+    {B : BaseSigner X Y N TB} {TPS : PSTypes}
+    (PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS)
     {TPS' : PSTypes} (PS' : ProofSystem X Y₂ (RingStmt (B.atBase sp ω)) (RingWit (B.atBase sp ω)) TPS') where
   /-- The coins. -/
   coinsEquiv : PS.Coins ≃ PS'.Coins
@@ -218,8 +228,13 @@ namespace RingSignature
 
 /-- **The forgery probability as an average** over the users' key coins and the oracle. -/
 theorem forgeProb_eq_tsum {X Y : Type} [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y]
-    [DecidableEq Y] [AddGroup Y] [Nonempty Y] {N n t : ℕ} {TS : RingTypes} {S : RingScheme X Y N TS}
-    {O : SideOracle S} {V : OracleView X Y}
+    [DecidableEq Y] [AddGroup Y] [Nonempty Y] {N n t : ℕ} {TS : RingTypes} [Fintype TS.PK]
+    [DecidableEq TS.PK] [Fintype TS.Msg] [DecidableEq TS.Msg] [Fintype TS.KeyCoins]
+    [DecidableEq TS.KeyCoins] [Nonempty TS.KeyCoins] [Fintype TS.Sig] [DecidableEq TS.Sig]
+    [Fintype TS.SignCoins] [DecidableEq TS.SignCoins] [Nonempty TS.SignCoins]
+    {S : RingScheme X Y N TS}
+    {O : SideOracle S} [Fintype O.BMsg] [DecidableEq O.BMsg] [Fintype O.BSig] [DecidableEq O.BSig]
+    {V : OracleView X Y}
     (A : UnforgeAdversary S n O V t) (Q : ℕ) :
     forgeProb A Q = ∑' keys, PMF.uniformOfFintype (Fin n → S.KeyCoins) keys *
       ∑' H, PMF.uniformOfFintype (X → Y) H *
@@ -238,10 +253,16 @@ theorem forgeProb_eq_tsum {X Y : Type} [Fintype X] [DecidableEq X] [Nonempty X] 
 section Game
 
 variable {X Y Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] {N n : ℕ}
-  {TB : BaseTypes} {B : BaseSigner X Y N TB} {sp : OracleSplit Y Y₁ Y₂} {ω : X → Y₁}
-  {TPS : PSTypes} {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS}
-  {TPS' : PSTypes} {PS' : ProofSystem X Y₂ (RingStmt (B.atBase sp ω)) (RingWit (B.atBase sp ω)) TPS'}
+  {TB : BaseTypes}
+  {B : BaseSigner X Y N TB}
+  {sp : OracleSplit Y Y₁ Y₂} {ω : X → Y₁}
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS}
+  {TPS' : PSTypes} [Fintype TPS'.Proof] [DecidableEq TPS'.Proof] [Fintype TPS'.Coins]
+  [DecidableEq TPS'.Coins] [Nonempty TPS'.Coins]
+  {PS' : ProofSystem X Y₂ (RingStmt (B.atBase sp ω)) (RingWit (B.atBase sp ω)) TPS'}
   (hPS : PS.AtBase sp ω PS') (adm : KeyRing B.PK N → Prop) [DecidablePred adm]
+
+variable [DecidableEq TB.PK]
 
 /-- **The game's requests of the two schemes**: the same corruptions and signing requests. -/
 def unforgeReqAt : UnforgeRequest (S := ofBase B PS adm) n (SideOracle.none _) ≃
@@ -282,6 +303,7 @@ def unforgeRelayAt :
   route _ r := unforgeReqAt adm r
   answer _ _ a := a.map (unforgeRespAt hPS adm).symm
 
+omit [DecidableEq TB.PK] in
 /-- **The signature of the game at `ω`** of a signature of `ofBase B PS adm`: the proof carried by
 `hPS.proofEquiv`. -/
 def outAt (o : KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof)) :
@@ -290,6 +312,9 @@ def outAt (o : KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof)) :
 
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [Nonempty Y]
   [Fintype Y₁] [DecidableEq Y₁] [Fintype Y₂] [DecidableEq Y₂] [Nonempty Y₂] [NeZero n] {t : ℕ}
+
+variable [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub]
+  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
 
 /-- **The adversary at the base component `ω`**: on the users' public keys, the adversary read at
 `ω` (`QueryBoundedAdversary.restrictAt`), with its requests and replies relabelled by
@@ -304,8 +329,12 @@ noncomputable def InsiderAdversary.restrictAt
 
 /-! ### The game's challenger read at `ω` relays the challenger of the game at `ω` -/
 
-omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [Nonempty Y]
-  [Fintype Y₁] [DecidableEq Y₁] [Fintype Y₂] [DecidableEq Y₂] [Nonempty Y₂] [NeZero n] in
+omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype Y₁]
+  [DecidableEq Y₁] [Fintype Y₂] [DecidableEq Y₂] [Nonempty Y₂] [NeZero n] [Fintype TPS.Proof]
+  [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
+  [Fintype TPS'.Proof] [DecidableEq TPS'.Proof] [Fintype TPS'.Coins] [DecidableEq TPS'.Coins]
+  [Nonempty TPS'.Coins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
 /-- **The relay of a request list** is the list of the relabelled requests. -/
 theorem relayList_unforgeRelayAt
     (rs : List (UnforgeRequest (S := ofBase B PS adm) n (SideOracle.none _))) :
@@ -313,8 +342,12 @@ theorem relayList_unforgeRelayAt
   refine List.ext_getElem (by simp [SideRelay.length_relayList]) fun i h₁ h₂ => ?_
   simp [SideRelay.relayList, unforgeRelayAt]
 
-omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [Nonempty Y]
-  [Fintype Y₁] [DecidableEq Y₁] [Fintype Y₂] [DecidableEq Y₂] [Nonempty Y₂] [NeZero n] in
+omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype Y₁]
+  [DecidableEq Y₁] [Fintype Y₂] [DecidableEq Y₂] [Nonempty Y₂] [NeZero n] [Fintype TPS.Proof]
+  [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
+  [Fintype TPS'.Proof] [DecidableEq TPS'.Proof] [Fintype TPS'.Coins] [DecidableEq TPS'.Coins]
+  [Nonempty TPS'.Coins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
 /-- **Freshness passes to the relabelled history**: a ring and message fresh after `hist` are
 fresh, in the game at `ω`, after every history whose requests are the relabelled requests of
 `hist`. -/
@@ -344,14 +377,20 @@ theorem Fresh.atBase {keys : Fin n → (ofBase B PS adm).KeyCoins}
     rcases h : e.request with j | ⟨s', R', m'⟩ | ⟨_, ⟨⟩⟩ <;> rw [h] at hre <;> cases hre
     rfl
 
+omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
 /-- **The coins of the game's challenger at `ω`**: the base signer's coins kept and the prover's
 carried by `hPS.coinsEquiv`, with no side coins. -/
 def coinsAt (Q : ℕ) : (Fin Q → B.Coins × PS.Coins) ≃ Unit × (Fin Q → B.Coins × PS'.Coins) :=
   ((Equiv.refl (Fin Q)).arrowCongr ((Equiv.refl B.Coins).prodCongr hPS.coinsEquiv)).trans
     (Equiv.punitProd _).symm
 
-omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [Nonempty Y]
-  [Fintype Y₁] [DecidableEq Y₁] [Fintype Y₂] [DecidableEq Y₂] [Nonempty Y₂] [NeZero n] in
+omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype Y₁]
+  [DecidableEq Y₁] [Fintype Y₂] [DecidableEq Y₂] [Nonempty Y₂] [NeZero n] [Fintype TPS.Proof]
+  [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
+  [Fintype TPS'.Proof] [DecidableEq TPS'.Proof] [Fintype TPS'.Coins] [DecidableEq TPS'.Coins]
+  [Nonempty TPS'.Coins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
 /-- **Signing at `ω`**: for a base signer reading only the base component, the signer of
 `ofBase (B.atBase sp ω) PS' adm` at the oracle `h` with the prover's coins carried by
 `hPS.coinsEquiv` outputs the signature of `ofBase B PS adm` at `join sp ω h`, its proof carried by
@@ -371,8 +410,13 @@ theorem run_sign_ofBase_atBase (hB : B.ReadsOnly (base sp)) (kp : B.PK × B.SK)
       exact congrArg some (Prod.ext rfl (hPS.run_prove ⟨R, m, _⟩ ⟨_, σ⟩ cp h).symm)
   · rfl
 
-omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [Nonempty Y]
-  [Fintype Y₁] [DecidableEq Y₁] [Fintype Y₂] [DecidableEq Y₂] [Nonempty Y₂] [NeZero n] in
+variable [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+
+omit [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype Y₁]
+  [DecidableEq Y₁] [Fintype Y₂] [DecidableEq Y₂] [Nonempty Y₂] [NeZero n] [Fintype TPS.Proof]
+  [DecidableEq TPS.Proof] [Fintype TPS'.Proof] [DecidableEq TPS'.Proof] [Fintype TB.PK]
+  [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
+  [DecidableEq TB.KeyCoins] in
 /-- **The game's challenger read at `ω` relays the game's challenger at `ω`** through
 `unforgeRelayAt`, at the coins `c'` and their image under `coinsAt`, for a base signer reading
 only the base component. -/
@@ -485,13 +529,16 @@ theorem toOuterMeasure_forges_join_le (hB : B.ReadsOnly (base sp))
     · exact ⟨fun ⟨p, hp, hf⟩ => (by cases hp; exact ⟨_, rfl, hf⟩),
         fun ⟨p, hp, hf⟩ => (by cases hp; exact ⟨_, rfl, hf⟩)⟩
 
+variable [Nonempty TB.KeyCoins]
+
 /-- **The unforgeability game as an average over the base component** (module docstring): for a
 base signer reading only the base component (`hB`) and a proof system that is `PS' ω` at each
 base component `ω` (`hPS`), the forgery probability of an adversary of BKM06 Definition 7 with `Q`
 requests is at most the average over a uniform base component `ω` of the forgery probability of
 the adversary at `ω` in the game for `ofBase (B.atBase sp ω) (PS' ω) adm`. -/
 theorem insiderForgeProb_le_tsum_restrictAt [Nonempty Y₁] (hB : B.ReadsOnly (base sp))
-    {TPS' : (X → Y₁) → PSTypes}
+    {TPS' : (X → Y₁) → PSTypes} [∀ ω, Fintype (TPS' ω).Proof] [∀ ω, DecidableEq (TPS' ω).Proof]
+    [∀ ω, Fintype (TPS' ω).Coins] [∀ ω, DecidableEq (TPS' ω).Coins] [∀ ω, Nonempty (TPS' ω).Coins]
     {PS' : (ω : X → Y₁) → ProofSystem X Y₂ (RingStmt (B.atBase sp ω)) (RingWit (B.atBase sp ω)) (TPS' ω)}
     (hPS : ∀ ω, PS.AtBase sp ω (PS' ω))
     (A : InsiderAdversary (ofBase B PS adm) n (OracleView.queriesOnly X Y) t) (Q : ℕ) :
@@ -530,14 +577,15 @@ open GordieHowe.QROM GordieHowe.SPBCS IOP SPTerm GordieHowe.IOP
 section SPBCS
 
 variable {k kN kS L e N : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁]
-  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes} {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
+  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)] {X₀ Wit₀ : Type}
   (M : SPBCS Mg P X₀ k kN kS L e) (Λ : SiteLayout Mg) {b : ℕ}
   [∀ j i, Fintype ((M.comp j).MessageWrite i)] (E : (j : ι) → (M.comp j).Encoder)
   {Vr : X₀ → FullTr P τ → Bool} {Qs : ∀ x, M.IOPQueries Vr x}
-  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [Nonempty R]
+  (hb : M.FormatBounds Qs b b) {R : Type} [Fintype R] [DecidableEq R] [Nonempty R]
   (honest : Wit₀ → R → CausalProver P τ X₀)
   (stmtProg : RingSignature.RingStmt B → OracleProg (Bits (queryBits k kN kS L)) Y₁ X₀) (qS : ℕ)
   (hS : ∀ x, (stmtProg x).QueriesLE qS) (check : RingSignature.RingStmt B → Bool)
@@ -590,6 +638,10 @@ noncomputable def atBase_spbcsSplitProofSystem (ω : Bits (queryBits k kN kS L) 
         (verify_spbcsComapProofSystem_eq_true_iff M Λ E hb honest _ _ _ h _ π).symm))
     rw [base_join, prf_join]
     rfl
+
+variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub]
+  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
 
 variable [Fintype Y] [DecidableEq Y] [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁]
   {n t : ℕ} [NeZero n] (adm : KeyRing B.PK N → Prop) [DecidablePred adm]
