@@ -76,10 +76,11 @@ theorem _root_.GordieHowe.expect_comp_embedding_eq {X' A Y' : Type*} [Fintype X'
 /-- **The refusal probability as an average**: the probability that the base signer refuses is the
 average over its uniform coins of the indicator that its ring-aware signer returns `none`. -/
 theorem _root_.GordieHowe.RingSignature.BaseSigner.toReal_refusalPubLaw_none
-    {N : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
-    [DecidableEq TB.Pub]
-    [Fintype TB.Coins]
-    [Nonempty TB.Coins] (B : BaseSigner X Y N TB) (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N)
+    {N : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type} [DecidableEq TS.PK]
+    [DecidableEq TS.Pub]
+    [Fintype TS.Coins]
+    [Nonempty TS.Coins] (B : BaseSigner X Y N TS RMsg) (H : X → Y) (kc : B.KeyCoins)
+    (R : KeyRing B.PK N)
     (m : B.Msg) :
     (B.refusalPubLaw H kc R m none).toReal =
       𝔼 cb : B.Coins,
@@ -111,23 +112,26 @@ variable (prims : Primitives p) [NeZero (bucketCount p)] [nttOps : NTTRingOps]
   [Fintype prims.Power2High] [DecidableEq prims.Power2High] [Fintype prims.Hint]
   [DecidableEq prims.Hint] [Inhabited prims.Hint] [Nonempty (MaskBox p)] [Fintype Msg]
   [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y]
-  (O : W1Oracles X Y p prims Msg N reps) (M : MaskOracle X Y p T Msg) (βmin : ℚ≥0) (tol : ℕ)
+  (O : W1Oracles X Y p prims Msg N reps) (M : MaskOracle X Y p T Msg) (βmin : ℚ≥0)
   (enc : Vector prims.High p.k → BucketVec p) (k D : ℕ) [NeZero D] {RMsg : Type} [Fintype RMsg]
   [DecidableEq RMsg] (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg)
-  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] (PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBase prims O M βmin tol enc k D bmsg)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS)
+  (test : RingOf (PubKey p prims) N → (Fin N → Fin reps → CommitHashBytes p) → Bool)
+  {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq
+      TPS.Coins] [Nonempty TPS.Coins] (PS : ProofSystem X Y (RingSignature.RingStmt (hedgedBaseOf
+      prims O M βmin enc k D bmsg test)) (RingSignature.RingWitOf (FIPSSignature p prims)) TPS)
   (adm : KeyRing (PubKey p prims) N → Prop) [DecidablePred adm]
   (n : ℕ) (hp : SigningParams p) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβt : (βmin : ℝ≥0∞) ≠ ⊤)
 
-local notation "Bh" => hedgedBase prims O M βmin tol enc k D bmsg
-local notation "Bf" => freshBase prims O M βmin tol enc k D bmsg
-local notation "Sh" => hedgedScheme prims O M βmin tol enc k D bmsg PS adm
+local notation "Bh" => hedgedBaseOf prims O M βmin enc k D bmsg test
+local notation "Bf" => freshBaseOf prims O M βmin enc k D bmsg test
+local notation "Sh" => hedgedSchemeOf prims O M βmin enc k D bmsg test PS adm
 
 omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
   [Nonempty TPS.Coins] in
-/-- **The fresh-mask signer refuses an admitted ring rarely**: at an oracle `H` at which the ring
-of the valid challenge `c` passes the check and has distinct message representatives, the signer
-of user `0` refuses with probability at most `2 · lowError + k / D + (1 - Lk)^k`, plus `1` when the
-ring's defect exceeds `s`. -/
+/-- **The fresh-mask signer refuses an admitted ring rarely**, at the ring test `test`: at an
+oracle `H` at which the ring of the valid challenge `c` passes the test and has distinct message
+representatives, the signer of user `0` refuses with probability at most
+`2 · lowError + k / D + (1 - Lk)^k`, plus `1` when the ring's defect exceeds `s`. -/
 theorem refusalPubLaw_freshBase_none_le (hT : 0 < T)
     (hMask : (uniformOfFintype Y).map M.ans = uniformOfFintype (MaskBox p))
     (h_laws : SigningLaws prims) (hv : VerifyLaws prims)
@@ -135,14 +139,14 @@ theorem refusalPubLaw_freshBase_none_le (hT : 0 < T)
     (hs2 : ∀ seed, polyVecBounded (keyGen prims seed).2.s2 p.eta) {s θ Lk : ℝ} (hθ0 : 0 < θ)
     (hθ1 : θ < 1) (hs1 : s < 1) (hLk : Lk ≤ keepLevel p βmin s θ) (hLk1 : Lk ≤ 1) (H : X → Y)
     (keys : Fin n → Bytes 32) (c : AnonRequest (Sh) n) (hc : c.Valid keys)
-    (hok : RingCheck prims βmin tol (O.gOrc H) c.ring ∧
+    (hok : test c.ring (fun j r => O.gOrc H (c.ring, j, r)) = true ∧
       MuDistinct prims (O.muOrc H) c.ring (bmsg c.ring c.msg)) :
     ((Bf).refusalPubLaw H (keys c.user₀) c.ring c.msg none).toReal ≤
-      2 * lowError prims O M βmin tol enc k D bmsg PS adm n hp hβ0 hβt keys (O.muOrc H) s θ
+      2 * lowError prims O M βmin enc k D bmsg test PS adm n hp hβ0 hβt keys (O.muOrc H) s θ
           (O.chOrc H) +
         k * (D : ℝ)⁻¹ + (1 - Lk) ^ k +
         (if s < ringDefect prims βmin c.ring.1 then 1 else 0) := by
-  have hF0 := lowError_nonneg (O := O) (M := M) (βmin := βmin) (tol := tol) (enc := enc) (k := k)
+  have hF0 := lowError_nonneg (O := O) (M := M) (βmin := βmin) (test := test) (enc := enc) (k := k)
     (D := D) (bmsg := bmsg) (PS := PS) (adm := adm) hp hβ0 hβt hs1 hθ0 keys (O.muOrc H) (O.chOrc H)
   have hL1 : ((Bf).refusalPubLaw H (keys c.user₀) c.ring c.msg none).toReal ≤ 1 :=
     ENNReal.toReal_le_of_le_ofReal zero_le_one (by simpa using PMF.coe_le_one _ _)
@@ -153,15 +157,16 @@ theorem refusalPubLaw_freshBase_none_le (hT : 0 < T)
     linarith
   simp only [hd, ↓reduceIte, add_zero]
   have hd' : LowDefect prims βmin s c.ring := not_lt.1 hd
-  let m : LowChal prims O M βmin tol enc k D bmsg PS adm n keys (O.muOrc H) s := ⟨c, hc, hok.2, hd'⟩
-  have hne : Nonempty (LowChal prims O M βmin tol enc k D bmsg PS adm n keys (O.muOrc H) s) := ⟨m⟩
-  set F := lowError prims O M βmin tol enc k D bmsg PS adm n hp hβ0 hβt keys (O.muOrc H) s θ
+  let m : LowChal prims O M βmin enc k D bmsg test PS adm n keys (O.muOrc H) s := ⟨c, hc, hok.2,
+      hd'⟩
+  have hne : Nonempty (LowChal prims O M βmin enc k D bmsg test PS adm n keys (O.muOrc H) s) := ⟨m⟩
+  set F := lowError prims O M βmin enc k D bmsg test PS adm n hp hβ0 hβt keys (O.muOrc H) s θ
     (O.chOrc H)
-  have hF : F = familyBound (lowFamily prims O M βmin tol enc k D bmsg PS adm n hp hβ0 hβt keys
+  have hF : F = familyBound (lowFamily prims O M βmin enc k D bmsg test PS adm n hp hβ0 hβt keys
       (O.muOrc H) s) θ (O.chOrc H) := dite_eq_left hne
-  set P := chalPair prims O M βmin tol enc k D bmsg PS adm n hp hβ0 hβt keys (O.muOrc H) c hc hok.2
+  set P := chalPair prims O M βmin enc k D bmsg test PS adm n hp hβ0 hβt keys (O.muOrc H) c hc hok.2
   by_cases hF2 : F < 1 / 2
-  · have hk := keep_ge_of_familyBound_lt (lowFamily prims O M βmin tol enc k D bmsg PS adm n hp
+  · have hk := keep_ge_of_familyBound_lt (lowFamily prims O M βmin enc k D bmsg test PS adm n hp
       hβ0 hβt keys (O.muOrc H) s) hθ0 hθ1 (lowFamily_mass_pos hp hβ0 hβt hs1 keys (O.muOrc H))
       (hF ▸ hF2) m false
     have hmass : (1 - s) * Fintype.card (BucketVec p) ≤ P.wts.mass := by
@@ -184,9 +189,11 @@ theorem refusalPubLaw_freshBase_none_le (hT : 0 < T)
     by_cases h1 : P.attempt false (O.chOrc H) none = 1
     · have : (1 : ℝ) ≤ (1 - Lk) ^ k := by simpa [h1] using hpow
       linarith
-    have htv := tvDist_refusalPubLaw_freshBase_le prims O M βmin tol enc k D bmsg hT hMask h_laws
+    have htv := tvDist_refusalPubLaw_freshBase_le prims O M βmin enc k D bmsg test hT hMask h_laws
       hv henc (hs2 _) H c.ring c.msg
-      (idxOf_lt_of_valid prims O M βmin tol enc k D bmsg PS adm n hc false) hok
+      (idxOf_lt_of_valid prims O M βmin enc k D bmsg test PS
+          adm n hc false)
+      hok
     have hpt := PMF.toReal_apply_le_add_tvDist ((Bf).refusalPubLaw H (keys c.user₀) c.ring c.msg)
       (untilSome (P.attempt false (O.chOrc H))) none
     erw [untilSome_apply_none h1, ENNReal.toReal_zero, zero_add] at hpt
@@ -197,10 +204,10 @@ theorem refusalPubLaw_freshBase_none_le (hT : 0 < T)
     linarith
 
 omit [Inhabited prims.Hint] in
-/-- **Hedged refusal is fresh refusal up to nonce collisions**: for a weight `Φ` with values in
-`[0, 1]` reading the oracle only at the base signer's points, the `Φ`-weighted average over a
-uniform oracle of the hedged signer's refusal probability is at most that of the fresh signer plus
-`C(k, 2) / 2^256`. -/
+/-- **Hedged refusal is fresh refusal up to nonce collisions**, at the ring test `test`: for a
+weight `Φ` with values in `[0, 1]` reading the oracle only at the base signer's points, the
+`Φ`-weighted average over a uniform oracle of the hedged signer's refusal probability is at most
+that of the fresh signer plus `C(k, 2) / 2^256`. -/
 theorem expect_mul_refusalPubLaw_hedged_le [Fintype X] [DecidableEq X]
     (hM : Function.Injective M.pt) (hdisj : ∀ x, O.IsPt x → x ∉ Set.range M.pt)
     (kc : Bytes 32) (R : KeyRing (PubKey p prims) N) (m : RMsg) (Φ : (X → Y) → ℝ)
@@ -231,9 +238,9 @@ theorem expect_mul_refusalPubLaw_hedged_le [Fintype X] [DecidableEq X]
     have hb : ((Bh).bsign ((Bf).sk kc) R (R.1.idxOf ((Bf).pk kc)) m (rv, uv)).run H =
         ((Bf).bsign ((Bf).sk kc) R (R.1.idxOf ((Bf).pk kc)) m
           ((fun c u => H (M.pt (rv c, u))), uv)).run H :=
-      (run_bsign_w1BaseSigner prims O βmin tol enc (MaskSource.hedged M) k D bmsg ((Bf).sk kc) R
+      (run_bsign_w1BaseSignerOf prims O test βmin enc (MaskSource.hedged M) k D bmsg ((Bf).sk kc) R
         (R.1.idxOf ((Bf).pk kc)) m (rv, uv) H).trans
-        (run_bsign_w1BaseSigner prims O βmin tol enc (MaskSource.fresh M) k D bmsg ((Bf).sk kc) R
+        (run_bsign_w1BaseSignerOf prims O test βmin enc (MaskSource.fresh M) k D bmsg ((Bf).sk kc) R
           (R.1.idxOf ((Bf).pk kc)) m ((fun c u => H (M.pt (rv c, u))), uv) H).symm
     change (if (((Bh).bsign ((Bf).sk kc) R (R.1.idxOf ((Bf).pk kc)) m (rv, uv)).run H).isNone
       then (1 : ℝ) else 0) = _
@@ -258,7 +265,7 @@ theorem expect_mul_refusalPubLaw_hedged_le [Fintype X] [DecidableEq X]
           rw [hΦ H H' hsp]
           congr 1
           exact congrArg (fun o => if Option.isNone o then (1 : ℝ) else 0)
-            ((readsOnly_freshBase prims O M βmin tol enc k D bmsg).run_bsign H H' hsp _ _ _ _ _)
+            ((readsOnly_freshBaseOf prims O test M βmin enc k D bmsg).run_bsign H H' hsp _ _ _ _ _)
       refine key.trans (Finset.expect_congr rfl fun H _ => ?_)
       exact Fintype.expect_equiv (Equiv.curry _ _ _)
         (fun g' => Φ H * fn H (fun c u => g' (c, u)) uv) (fun g => Φ H * fn H g uv) fun g' => rfl

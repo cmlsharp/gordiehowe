@@ -38,7 +38,6 @@ def collides (f : BitStr I J → Z) (D : Set (Bits m)) (pts : List (Bits m))
     (H : Bits m → BitStr I J) : Prop :=
   ∃ x ∈ pts, ∃ x' ∈ pts, x ∈ D ∧ x' ∈ D ∧ x ≠ x' ∧ f (H x) = f (H x')
 
-open Classical in
 /-- **An event of a game's run without a collision at the named points**: for start draws `k`
 and challengers `C k` answering `Q` requests with at most `q_C` queries each, and points named by
 the output and the answered requests (at most `ℓ` of them), an event `E` of the run has at most
@@ -58,6 +57,7 @@ theorem runLawIn_le_add_collision {K : Type} [Fintype K] [Nonempty K] {t : ℕ} 
           (E ∩ {x | ∀ q ∈ x.2.2, ¬ collides f D (pts x.1 (q.1, q.2.1)) x.2.1}) +
         (12 * ((t + Q * qC + ℓ : ℕ) : ℝ≥0∞) ^ 2 * ((t + Q * qC + ℓ - 1 : ℕ) : ℝ≥0∞) / c +
           2 * ℓ / Fintype.card (BitStr I J)) := by
+  classical
   set γ := 12 * ((t + Q * qC + ℓ : ℕ) : ℝ≥0∞) ^ 2 * ((t + Q * qC + ℓ - 1 : ℕ) : ℝ≥0∞) / c +
     2 * ℓ / Fintype.card (BitStr I J)
   set Col := {x : K × (Bits m → BitStr I J) × Option (O × List Req × (Bits m → BitStr I J)) |
@@ -128,7 +128,6 @@ theorem runLawIn_le_add_collision {K : Type} [Fintype K] [Nonempty K] {t : ℕ} 
         ENNReal.tsum_le_tsum fun k => mul_le_mul_of_nonneg_left (hk k) zero_le
     _ = γ := by rw [ENNReal.tsum_mul_right, PMF.tsum_coe, one_mul]
 
-open Classical in
 /-- **A game's run logs at most `Q` requests**: for challengers answering `Q` requests, an event of
 the run has the probability of the event with every logged request list of length at most `Q`. -/
 theorem toOuterMeasure_runLawIn_inter_length {K : Type} [Fintype K] [Nonempty K] {t : ℕ}

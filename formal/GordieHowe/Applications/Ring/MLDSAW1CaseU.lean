@@ -74,6 +74,19 @@ def w1Ok (pks : Fin n → PubKey p prims) (f : Frg × X₀f) (rs : List (MUR ⊕
   (f.2, w) ∈ w1ExpRel prims enc bmsg adm ∧ w1Honest pks f.2 rs w
 
 variable (prims O Mo βmin tol enc k D bmsg adm) in
+/-- **The test of the canonical witness is decidable**: membership in `w1ExpRel`
+(`instDecidablePredMemW1ExpRel`), and a user `i` whose key is that ring member's and whose
+corruption is not in `rs` (list membership by `DecidableEq` of the requests, `instDecEqW1Rq`). -/
+instance instDecidablePredW1Ok [DecidableEq X] (pks : Fin n → PubKey p prims) (f : Frg × X₀f)
+    (rs : List (MUR ⊕ Rq)) : DecidablePred (w1Ok prims O Mo βmin tol enc k D bmsg adm pks f rs) :=
+  fun w => by
+    unfold w1Ok w1Honest
+    haveI hd : DecidableEq (MUR ⊕ Rq) := inferInstance
+    haveI : ∀ i : Fin n, Decidable ((.inl (.corrupt i) : MUR ⊕ Rq) ∉ rs) := fun i =>
+      @instDecidableNot _ (@List.instDecidableMemOfLawfulBEq _ (@instBEqOfDecidableEq _ hd) _ _ _)
+    infer_instance
+
+variable (prims O Mo βmin tol enc k D bmsg adm) in
 /-- **The goal of the key-free chain** at the base component `ω`: the witness passes `w1Ok`, and
 the forgery satisfies the side condition `w1Side` at `ω`. -/
 def w1Goal (sp : Y ≃+ Y₁ × Y₂) (pks : Fin n → PubKey p prims) (ω : X → Y₁) (f : Frg × X₀f)

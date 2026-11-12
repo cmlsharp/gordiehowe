@@ -111,7 +111,6 @@ class MldsaAAlgebra (program : RealizedProgram) : Prop extends MldsaACross progr
   /-- The data of `signature.relation`'s operators. -/
   sigData : (program.value 55).size = 4096 ∧ (program.value 56).size = 1024 ∧ program.exprLen (.leaf 60) = 1024
 
-set_option maxRecDepth 4096 in
 /-- The native program at the ROM parameters has these facts. -/
 instance : MldsaAAlgebra program where
   kind56 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_key_2ea_5fhat_kind
@@ -163,7 +162,6 @@ local notation "interp" => RealizedProgram.mldsaInterpOf F0 FH
 
 section Tables
 
-set_option maxRecDepth 4096
 
 theorem pred0 :
     ∃ t, (program.predicate 0).body = .equal 0 (.add (.add (.add (.leaf 60) (.scale (.const 8380416) (.apply (.polyMatVec 55 4 4 (.ntt 1753)) (.leaf 57)))) (.scale (.const 8192) (.apply (.polyBroadcast 56 4 .coefficients) (.ref 0)))) (.scale (.const 8364033) (.apply (.polyBroadcast 56 4 .coefficients) (.ref 1)))) (.leaf 0) t :=

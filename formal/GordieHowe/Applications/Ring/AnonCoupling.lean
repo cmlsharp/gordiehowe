@@ -12,10 +12,10 @@ public import GordieHowe.Foundations.ToMathlib.PMFUniform
 /-!
 # The coupling bound for rounds with public outputs and refusals
 
-The anonymity argument of `GordieHowe/Applications/Ring/Anonymity.lean`
-(`PubAnonAdversary.abs_condProb_sub_le`), restated for any proof system with a witness
-indistinguishability hypothesis, for entries that may be refusals, and with the signing coins of a
-round shared by all challenges (as a challenger draws them).
+The coupling argument of anonymity for rounds with public outputs (`pubRun`,
+`GordieHowe/Applications/Ring/Anonymity.lean`), for any proof system with a witness
+indistinguishability hypothesis (`PubWI`), for entries that may be refusals, and with the signing
+coins of a round shared by all challenges (as a challenger draws them).
 
 - `PMF.bind_pi_bind_coord`: **resampling one coordinate of a product law** at the level of laws: if
   `f T` does not read coordinate `j` of `T`, binding `f T` and then a kernel reading `T j` is binding
@@ -413,23 +413,23 @@ theorem card_ehybridSet_le (T : CETable Ch Pub BSig Q) :
     mul_one]
 
 omit [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Fintype Pub] [Fintype BSig] [DecidableEq BSig] in
-open Classical in
 /-- **Every hybrid choice of a round is in the hybrid choice set.** -/
 theorem ehybrid_mem (T : CETable Ch Pub BSig Q) (j : Fin Q) (h : Ω) (hist : PubHist Pub Pf j)
     (x : SPBCS.WIChoice Stmt Wit)
     (hx : ehybrid (stmtOf := stmtOf) (witOf := witOf) (rel := rel) choice act T j h hist = some x) :
     x ∈ ehybridSet (stmtOf := stmtOf) (witOf := witOf) (rel := rel) act T := by
+  classical
   unfold ehybrid at hx
   split_ifs at hx with hA
   exact Finset.mem_biUnion.2 ⟨(j, choice j h hist), Finset.mem_product.2 ⟨Finset.mem_univ _, hA⟩,
     by rw [Option.mem_toFinset]; exact hx⟩
 
 omit [Fintype Ch] [DecidableEq Ch] [Fintype Pub] [Fintype BSig] [DecidableEq BSig] in
-open Classical in
 /-- **Every choice of the hybrid choice set is admissible.** -/
 theorem ehybridSet_admissible (T : CETable Ch Pub BSig Q) :
     ∀ c ∈ ehybridSet (stmtOf := stmtOf) (witOf := witOf) (rel := rel) act T,
       (c.stmt, c.wit₀) ∈ rel ∧ (c.stmt, c.wit₁) ∈ rel := by
+  classical
   intro x hx
   obtain ⟨p, -, hp⟩ := Finset.mem_biUnion.1 hx
   rw [Option.mem_toFinset] at hp
@@ -613,8 +613,7 @@ theorem toOuterMeasure_pure_none_ne :
     (PMF.pure (none : Option (Pub × BSig))).toOuterMeasure {e | e ≠ none} = 0 := by
   simp
 
-/-- **The coupling bound for rounds with entries** (the anonymity argument of
-`GordieHowe/Applications/Ring/Anonymity.lean`, `PubAnonAdversary.abs_condProb_sub_le`, for entries
+/-- **The coupling bound for rounds with entries** (the coupling argument of anonymity for entries
 that may be refusals): for a proof law with witness indistinguishability at error `wi` for `rel`
 (`hwi`), the active challenges `act` (every other challenge is refused by both users, `hact`), an
 `ε` bounding the distance of the two users' laws of the refusal-or-public value of every active

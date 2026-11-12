@@ -51,8 +51,8 @@ theorem base_reprogT (H : X → Y) (T : X → Option Y) :
     base sp (reprogT T H) = ωT sp (base sp H) T :=
   funext fun x => by cases h : T x <;> simp [base, reprogT, ωT, h]
 
-variable {N n : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
-  (B : BaseSigner X Y N TB) {Pf PC : Type} [Fintype Pf] [DecidableEq Pf]
+variable {N n : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type} [DecidableEq TS.PK]
+  (B : BaseSigner X Y N TS RMsg) {Pf PC : Type} [Fintype Pf] [DecidableEq Pf]
   [Fintype PC]
   [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) ⟨Pf, PC⟩}
@@ -64,7 +64,6 @@ variable {N n : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
   (toR : X₀ → Req B PS adm n × ℕ → B.BSig → R) (dummyR : Req B PS adm n × ℕ → R) {Q : ℕ}
   (sc : Fin Q → SC)
 
-open Classical in
 /-- **The key-free signature at the base component `ω` and the table `T`**: for a signing request
 by a member of a supported ring below `Q`, the public part and the signature `F.out` at `ωT ω T`;
 on one, a read of the oracle at the kept point, the published value, the signature and the

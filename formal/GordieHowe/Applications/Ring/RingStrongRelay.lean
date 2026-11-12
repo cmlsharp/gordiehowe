@@ -44,19 +44,19 @@ namespace GordieHowe.RingSignature
 open Quantum Signature QROM
 open scoped ENNReal
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes}
-  [Fintype TB.BMsg] [DecidableEq TB.BMsg]
-  [Nonempty TB.KeyCoins]
-  {B : BaseSigner X Y N TB} {TPS : PSTypes} [Fintype TPS.Proof]
+variable {X Y : Type} {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  [Fintype T.BMsg] [DecidableEq T.BMsg]
+  [Nonempty T.KeyCoins]
+  {B : BaseSigner X Y N T RMsg} {TPS : PSTypes} [Fintype TPS.Proof]
   [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {n : ℕ}
 
-variable [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+variable [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins]
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BSig]
+  [DecidableEq T.BSig] [Fintype T.Pub] [DecidableEq T.Pub] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins]
 
 variable (B PS adm n) in
 /-- **The main requests of the strong relay**: a request of the multi-user challenger with the
@@ -106,7 +106,6 @@ noncomputable def strongRingSign (pks : Fin n → B.PK) (s : Fin n) (R : KeyRing
           | _ => none
     | _ => askDummy B PS adm (.sign s R m) none
 
-open Classical in
 variable (B PS adm) in
 /-- **The strong relay program of a request**, with the users' public keys `pks`: every request
 makes exactly two main requests, a multi-user request and then a proof query. A corruption is

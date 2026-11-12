@@ -8,7 +8,7 @@ import GordieHowe
 
 The ring headlines are the `@[headline]` theorems (`GordieHowe/Headline.lean`) whose statement
 mentions one of the ring-signature games of `GordieHowe/Model/RingSignature/` (`ringGames`:
-completeness, anonymity, unforgeability, key-reuse unforgeability). Three checks run over them.
+completeness, anonymity, unforgeability, joint-security unforgeability). Three checks run over them.
 
 **Scheme constants** (section "One scheme per construction"). A *scheme
 constant* is a definition outside the model namespace `GordieHowe.RingSignature` whose type ends,
@@ -23,7 +23,12 @@ constructors generic in the base message (`w1Scheme`, `w1Concrete`, `w1Scheme44`
 2. for every scheme constant named by a ring headline, the ring headlines naming it cover the three
    games of `requiredGames` (completeness, anonymity, unforgeability), except the pairs listed in
    `knownMissingGames` with the reason; a listed pair whose game is covered fails the lint (remove it
-   from the list), so the list records the open work exactly.
+   from the list), so the list records the open work exactly;
+3. a scheme constant registered in `coveredBy` as covered by another constant for some games (the
+   constant is that constant at fixed arguments) need not carry those games itself, but the
+   covering constant must: some ring headline naming the covering constant covers each of them,
+   and every registered pair is named by a ring headline. A self-test runs the rule on a fixture in
+   which the covering constant lacks a game and fails the lint unless the rule reports it.
 
 So each construction's completeness, anonymity and unforgeability headlines name the same scheme
 constant, and a headline about a different scheme value (an idealized one, a second copy) is a
@@ -86,9 +91,9 @@ def ringGames : List (Name × String) :=
    (``GordieHowe.RingSignature.anonAdvantage, "anonymity"),
    (``GordieHowe.RingSignature.insiderForgeProb, "unforgeability"),
    (``GordieHowe.RingSignature.forgeProb, "unforgeability"),
-   (``GordieHowe.RingSignature.keyReuseForgeProb, "key-reuse unforgeability")]
+   (``GordieHowe.RingSignature.jointForgeProb, "joint-security unforgeability")]
 
-/-- The games every construction's headlines cover (key-reuse unforgeability is a
+/-- The games every construction's headlines cover (joint-security unforgeability is a
 strengthening stated only for ring-binding base messages). -/
 def requiredGames : List String := ["completeness", "anonymity", "unforgeability"]
 
@@ -99,6 +104,17 @@ def modelNamespace : Name := `GordieHowe.RingSignature
 the reason. -/
 def knownMissingGames : List (Name × String × String) :=
   []
+
+/-- **Scheme constants covered by another constant**: the covered constant, the constant whose ring
+headlines cover it, the games covered, and the reason. `w1BindConcrete` and `w1ConvConcrete`
+(`GordieHowe/Applications/Ring/MLDSAW1Ring.lean`) are abbreviations of `w1Concrete` at the base
+messages `Prod.mk` and `fun _ m => m`, so `w1Concrete`'s completeness and anonymity headlines hold
+at them by instantiation. -/
+def coveredBy : List (Name × Name × List String × String) :=
+  [(`GordieHowe.Ring.MLDSAW1.w1BindConcrete, `GordieHowe.Ring.MLDSAW1.w1Concrete,
+      ["completeness", "anonymity"], "w1Concrete at bmsg := Prod.mk (abbreviation)"),
+   (`GordieHowe.Ring.MLDSAW1.w1ConvConcrete, `GordieHowe.Ring.MLDSAW1.w1Concrete,
+      ["completeness", "anonymity"], "w1Concrete at bmsg := fun _ m => m (abbreviation)")]
 
 /-- **Generic constructors** outside the model namespace: constructors generic in the base message;
 headlines about them cover no concrete constant. -/
@@ -125,17 +141,39 @@ def hypothesisStructures : List Name :=
    `GordieHowe.Ring.ProgramHypotheses, `GordieHowe.RealizedProgram.ProofSystem.IOP.Sound,
    `GordieHowe.RealizedProgram.ProofSystem.IOP.Honest,
    `GordieHowe.NARG.QROM.Verifier.KnowledgeBound,
-   `GordieHowe.RingSignature.ProofSystem.CompiledBy]
+   `GordieHowe.RingSignature.ProofSystem.CompiledBy,
+   `GordieHowe.RingSignature.ProofSystem.RingExtractor, `GordieHowe.IOP.RBRKnowledgeExtractor,
+   `GordieHowe.RingSignature.Insider.RingArgument, `GordieHowe.Ring.StmtVerifiesRing.ZKFacts,
+   `GordieHowe.RingSignature.BaseSigner.AnonCoupling, `GordieHowe.Ring.MLDSAW1.RingCheck,
+   `GordieHowe.Ring.MLDSAW1.W1CouplingParams, `GordieHowe.Ring.MLDSAW1.W1RefusalPremises,
+   `GordieHowe.SPBCS.RingSimulator]
 
 /-- Heads of parameter conditions, not registered. -/
 def elementaryHeads : List Name :=
   [``LE.le, ``LT.lt, ``GE.ge, ``GT.gt, ``Eq, ``Ne, ``Not, ``Iff, ``And, ``Or, ``True,
-   ``Function.Injective, ``Membership.mem]
+   ``Function.Injective, ``Membership.mem, ``NeZero]
 
 /-- **The hypothesis registry**: each head predicate of a ring headline's hypotheses, with its
 satisfiability witnesses, or the reason it is trusted or open. -/
 def registry : List (Name × Witness) :=
-  [(`GordieHowe.RingSignature.BaseSigner.CorrectWithin, .witness
+  [(`GordieHowe.Ring.MLDSAW1.RingCheck, .witness
+      [`GordieHowe.Ring.MLDSAW1.RingCheck.sampled]),
+   (`GordieHowe.RingSignature.ProofSystem.RingExtractor, .witness
+      [`GordieHowe.Ring.StmtVerifiesRing.ringExtractor,
+       `GordieHowe.IOP.RBRKnowledgeExtractor.ringExtractor]),
+   (`GordieHowe.IOP.RBRKnowledgeExtractor, .witness
+      [`GordieHowe.RealizedProgram.ProofSystem.IOP.Sound.rbrExtractor]),
+   (`GordieHowe.RingSignature.Insider.RingArgument, .witness
+      [`GordieHowe.Ring.StmtVerifiesRing.ringArgument]),
+   (`GordieHowe.Ring.StmtVerifiesRing.ZKFacts, .witness
+      [`GordieHowe.MLDSA44.Ring.Native.ROMParams.convertedV_zkFacts]),
+   (`GordieHowe.RingSignature.BaseSigner.AnonCoupling, .witness
+      [`GordieHowe.RingSignature.BaseSigner.AnonCoupling.trivial]),
+   (`GordieHowe.RingSignature.BaseSigner.RefuseKeyWithin, .witness
+      [`GordieHowe.RingSignature.BaseSigner.refuseKeyWithin_one]),
+   (`GordieHowe.IOP.CausalProver.CompleteWithin, .witness
+      [`GordieHowe.IOP.CausalProver.completeWithin_one]),
+   (`GordieHowe.RingSignature.BaseSigner.CorrectWithin, .witness
       [`GordieHowe.RingSignature.BaseSigner.correctWithin_one,
        `GordieHowe.RingSignature.BaseSigner.uniformSig_correctWithin,
        `GordieHowe.Ring.MLDSAW1.correctWithin_w1ConcreteBase,
@@ -186,7 +224,7 @@ def registry : List (Name × Witness) :=
        `GordieHowe.Ring.spbcsComapProofSystem_completeWithin,
        `GordieHowe.RingSignature.ProofSystem.acceptAll_completeWithin]),
    (`GordieHowe.RingSignature.RingRel, .witness
-      [`GordieHowe.Ring.ringRel_of_mem_ringRelAll]),
+      [`GordieHowe.RingSignature.ringRel_of_mem_ringRelAll]),
    (`GordieHowe.Ring.PubWI, .witness
       [`GordieHowe.Ring.StmtVerifiesRing.pubWI_proofSystem,
        `GordieHowe.Ring.pubWI_spbcsComapProofSystem,
@@ -197,6 +235,18 @@ def registry : List (Name × Witness) :=
       [`GordieHowe.Ring.MLDSAW1.w1OraclesPlaced_exists44,
        `GordieHowe.Ring.MLDSAW1.w1OraclesPlaced_exists65,
        `GordieHowe.Ring.MLDSAW1.w1OraclesPlaced_exists87]),
+   (`GordieHowe.Ring.MLDSAW1.W1SplitMask, .witness
+      [`GordieHowe.Ring.MLDSAW1.w1SplitMask_maskPoints_exists44]),
+   (`GordieHowe.Ring.MLDSAW1.W1MaskPoints, .witness
+      [`GordieHowe.Ring.MLDSAW1.w1SplitMask_maskPoints_exists44]),
+   (`GordieHowe.Ring.MLDSAW1.W1MaskQueryFacts, .witness
+      [`GordieHowe.Ring.MLDSAW1.w1M_maskQueryFacts]),
+   (`GordieHowe.Ring.MLDSAW1.W1CouplingParams, .witness
+      [`GordieHowe.Ring.MLDSAW1.W1CouplingParams.ofLt]),
+   (`GordieHowe.Ring.MLDSAW1.W1RefusalPremises, .witness
+      [`GordieHowe.Ring.MLDSAW1.W1RefusalPremises.trivial]),
+   (`GordieHowe.SPBCS.RingSimulator, .witness
+      [`GordieHowe.RingSignature.Insider.RingArgument.simulator]),
    (`GordieHowe.Ring.MLDSAW1.W1Oracles.ReadsFst, .witness
       [`GordieHowe.Ring.MLDSAW1.W1Oracles.readsFst_unit,
        `GordieHowe.Ring.MLDSAW1.W1Oracles.readsFst_viaBase]),
@@ -306,6 +356,8 @@ structure RingHeadline where
   name : Name
   games : List String
   schemes : List Name
+  /-- The covering constants of `coveredBy` its statement names. -/
+  coverers : List Name := []
 
 /-- The ring headlines, sorted by name. -/
 def ringHeadlines : MetaM (Array RingHeadline) := do
@@ -318,7 +370,8 @@ def ringHeadlines : MetaM (Array RingHeadline) := do
     let games := (ringGames.filter fun (g, _) => cs.contains g).map (·.2) |>.eraseDups
     if games.isEmpty then continue
     let schemes ← cs.filterM isSchemeConst
-    out := out.push { name := n, games, schemes := schemes.toList }
+    let coverers := (coveredBy.map (·.2.1)).eraseDups.filter cs.contains
+    out := out.push { name := n, games, schemes := schemes.toList, coverers }
   return out
 
 /-- Whether the certificate library `GordieHoweCerts` is imported (`scripts/check.sh --certs`). Its
@@ -337,6 +390,7 @@ def witnessNames : List Name :=
 def missingNames : MetaM (List Name) := do
   let env ← getEnv
   let names := knownMissingGames.map (·.1) ++ idealized.map (·.1) ++ genericConstructors ++
+    coveredBy.map (·.1) ++ coveredBy.map (·.2.1) ++
     hypothesisStructures ++
     registry.map (·.1) ++ registry.flatMap fun
       | (_, .witness ns) => ns
@@ -345,25 +399,51 @@ def missingNames : MetaM (List Name) := do
 
 /-! ### One scheme per construction -/
 
-/-- The violations of the scheme-constant rule. -/
-def schemeViolations (hs : Array RingHeadline) : MetaM (List String) := do
+/-- The violations of the scheme-constant rule for the headlines `hs`, the open games `missing` and
+the coverings `cov`. -/
+def schemeViolationsOf (hs : List RingHeadline) (missing : List (Name × String × String))
+    (cov : List (Name × Name × List String × String)) : List String := Id.run do
   let mut bad : List String := []
   for h in hs do
     if h.schemes.length > 1 then
       bad := bad ++ [s!"{h.name} names {h.schemes.length} scheme constants: {h.schemes}"]
-  let schemes := (hs.toList.flatMap (·.schemes)).eraseDups
+  let schemes := (hs.flatMap (·.schemes)).eraseDups
   for s in schemes do
-    let games := (hs.toList.filter (·.schemes.contains s)).flatMap (·.games)
+    let games := (hs.filter (·.schemes.contains s)).flatMap (·.games)
     for g in requiredGames do
-      let listed := knownMissingGames.any fun (s', g', _) => s' == s && g' == g
+      let listed := missing.any fun (s', g', _) => s' == s && g' == g
+      let covered := cov.any fun (s', _, gs, _) => s' == s && gs.contains g
       if games.contains g && listed then
         bad := bad ++ [s!"{s}: {g} is covered but listed in knownMissingGames (remove it)"]
-      if !games.contains g && !listed then
+      if !games.contains g && !listed && !covered then
         bad := bad ++ [s!"{s}: no {g} headline (headlines name it for {games.eraseDups})"]
-  for (s, g, _) in knownMissingGames do
+  for (s, g, _) in missing do
     unless schemes.contains s do
       bad := bad ++ [s!"{s} ({g}) is listed in knownMissingGames but no ring headline names it"]
+  for (s, c, gs, _) in cov do
+    unless schemes.contains s do
+      bad := bad ++ [s!"{s} is listed in coveredBy but no ring headline names it"]
+    let cgames := (hs.filter (·.coverers.contains c)).flatMap (·.games)
+    for g in gs do
+      unless cgames.contains g do
+        bad := bad ++ [s!"{s}: {g} is covered by {c}, but no ring headline naming {c} covers {g}"]
   return bad
+
+/-- The violations of the scheme-constant rule. -/
+def schemeViolations (hs : Array RingHeadline) : MetaM (List String) :=
+  return schemeViolationsOf hs.toList knownMissingGames coveredBy
+
+/-- **The self-test of the covering rule**: a covered constant `s` whose covering constant `c` has
+an unforgeability headline only must be reported for completeness and anonymity. -/
+def coverSelfTest : List String :=
+  let hs : List RingHeadline :=
+    [{ name := `fixture.s_forge, games := ["unforgeability"], schemes := [`fixture.s] },
+     { name := `fixture.c_forge, games := ["unforgeability"], schemes := [],
+       coverers := [`fixture.c] }]
+  let v := schemeViolationsOf hs [] [(`fixture.s, `fixture.c, ["completeness", "anonymity"], "")]
+  let want := ["completeness", "anonymity"].map fun g =>
+    s!"fixture.s: {g} is covered by fixture.c, but no ring headline naming fixture.c covers {g}"
+  if want.all v.contains then [] else [s!"the covering rule did not report the fixture: {v}"]
 
 /-! ### Satisfiable hypotheses -/
 
@@ -516,10 +596,13 @@ run_cmd liftTermElabM do
   let mut fails : List String := []
   let sv ← schemeViolations hs
   fails := fails ++ sv.map ("scheme constants: " ++ ·)
+  fails := fails ++ coverSelfTest.map ("self-test: " ++ ·)
   let (unreg, elem) ← hypothesisReport hs
   fails := fails ++ unreg.map ("unregistered hypothesis: " ++ ·)
   fails := fails ++ (← badWitnesses).map ("registry: " ++ ·)
   fails := fails ++ (← idealizedViolations).map ("idealized object: " ++ ·)
+  IO.println "schemes covered by another constant (coveredBy):"
+  for (s, c, gs, r) in coveredBy do IO.println s!"  {s}\t{c}\t{gs}\t{r}"
   IO.println "open games (knownMissingGames):"
   for (s, g, r) in knownMissingGames do IO.println s!"  {s}\t{g}\t{r}"
   IO.println "hypothesis predicates without a satisfiability witness (registry gaps):"

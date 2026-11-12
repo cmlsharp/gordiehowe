@@ -1,103 +1,17 @@
 # An ML-DSA ring signature that publishes `w1`
 
-This directory holds a ring signature over ordinary FIPS 204 ML-DSA keys in which the signer
-publishes its commitment `w1`, with a Lean proof of anonymity at ML-DSA-44, ML-DSA-65 and
-ML-DSA-87: first for the ideal-mask signer (the mask `y` uniform at every attempt), then for
-FIPS 204 hedged signing against adversaries with a bounded number of queries to the mask
-derivation (see [Hedged signing](#hedged-signing)). The lemmas about ML-DSA itself that the proof uses (the signer, regularity, weights) are
-under `Applications/MLDSA/`. Paths below are relative to `formal/GordieHowe/`.
+This directory holds the public ring check and the numerical facts of a ring signature over
+ordinary FIPS 204 ML-DSA keys in which the signer publishes its commitment `w1`. The ring signature
+is `w1Concrete` and its instances `w1Scheme44`, `w1Scheme65`, `w1Scheme87`
+(`Applications/Ring/MLDSAW1Ring.lean`), with completeness and anonymity headlines in the
+library's ring-signature model, FIPS 204 hedged signing included ([the result](#the-result)). The
+lemmas about ML-DSA itself that the proof uses (the signer, regularity, weights) are under
+`Applications/MLDSA/`. Paths below are relative to `formal/GordieHowe/`.
 
 Publishing `w1` lets the verifier compute every member's challenge
 `c_j = SampleInBall(H(µ_j ‖ w1Encode(w1)))` itself, so the statement proved in zero knowledge
 needs no hash evaluation. Published naively, `w1` reveals the signer. The construction below
 removes the leak by rejection sampling, and the proof bounds what remains.
-
-## The result
-
-For every adversary in BKM06 Definition 4 (anonymity against full key exposure; Bender, Katz and
-Morselli, ePrint 2005/304, p. 6) whose challenge reads the check oracle `G` through at most `q`
-queries, in the random-oracle model with `H_µ`, `H`, `G`, `ExpandA`, `ExpandS` and `SampleInBall`
-random oracles, the advantage is at most
-
-```
-2 · (2/((1 − s)θ) · n · R · C / β_min + McD) + wiError + 2 (q + 1) / 2^240
-```
-
-with `n` honest users, cut-off `β_min`, threshold fraction `θ`, and `s` the defect budget of the
-check parameters (see [the check parameters](#the-check-parameters)). The adversary receives
-every honest user's key-generation coins and sees every oracle except `G` whole. The terms:
-
-| Term | ML-DSA-44 | ML-DSA-65 | ML-DSA-87 |
-|---|---|---|---|
-| Regularity `R` | 11·2^−101 | 11·2^−199 | 12·2^−294 |
-| Weight factor `C` | 24/5 | 9/2 | 33/5 |
-| Regularity term at `n = 1024`, `θ = β_min = 1/2`, `s = 1/2` | 2^−80.27 | 2^−178.37 | 2^−272.69 |
-
-- `McD ≤ √(N·n·log(C_ch + 1)) / (2^2000 · θ(1 − θ)(1 − s) · β_min)`, with `N` the largest ring
-  size and `C_ch` the number of challenges of the adversary's set valid for any one key vector
-  (negligible at any feasible `N`, `n`, `C_ch`);
-- `wiError` is the witness-indistinguishability error of the proof system for the ring relation,
-  left as a parameter;
-- `2 (q + 1) / 2^240` bounds the chance that the challenge ring has too many low-weight members
-  and still passes the signer's public check.
-
-An adversary that sees the whole check oracle gets the check term `C_ch / 2^240` instead, at
-tolerance 2 and `s = 1/2`; that term is small only for adversaries whose candidate rings per key
-vector number far fewer than `2^240`. No computational assumption enters except through
-`wiError`. The size of the ring enters through `McD` and the check parameters. The theorems of
-this directory state one challenge: `advantage_le_bkm06_mldsa{44,65,87}_query_checkParams`
-(query-bounded, at any row of check parameters) and `advantage_le_bkm06_mldsa{44,65,87}_checkParams`
-(the whole check oracle), in `Applications/Ring/PublicW1/MLDSAPublicW1Regularity.lean`. The
-headlines over the ring signature's `RingScheme` ([below](#the-ring-signature-as-a-ringscheme))
-state `Q` adaptive rounds.
-
-## Hedged signing
-
-FIPS 204 hedged signing derives the masks from a fresh 32-byte nonce: `ρ'' = H(K ‖ rnd ‖ µ)` and
-`y = ExpandMask(ρ'', κ)`. In the game, `H` composed with ExpandMask is a random oracle onto the
-mask box, on the points `(rnd, κ, K, µ)`, and the adversary reads it through at most `q`
-classical queries per choice and for the distinguisher (it holds every honest key, so it knows
-`K`). The ring signer calls ML-DSA.Sign, with at most `T` attempts per call, with a fresh `rnd`
-every time the flattening coin rejects. The theorems `advantage_le_bkm06_mldsa{44,65,87}_hedged`
-(`Applications/Ring/PublicW1/MLDSAPublicW1Hedged.lean`) bound the advantage by the ideal-mask
-bound plus
-
-```
-2 · 𝔼 ((k² + 2 q k) / 2^256 + 2 (1 − s̄)^k)
-```
-
-for every number `k` of attempts, where `s̄` is a lower bound on the keep probability of one ring
-attempt of the ideal-mask signer on the valid admitted challenges (`KeepBound`). With `k = t/s̄`
-the error is about `4 e^{−t} + 4 q t / (2^256 s̄)`. The `_hedged_keep` theorems discharge
-`KeepBound` with `s̄ = β_min θ / 64` outside an event of probability at most twice the
-anonymity error plus `C / 2^240` (with the anonymity error below `1/2`, every ring attempt keeps
-with probability at least half its level `K β_min` times `θ (1 − s) |V|`, and `K |V| ≥ 1/16`), so
-the added error is
-
-```
-2 · ((k² + 2 q k) / 2^256 + 2 · ((1 − β_min θ / 64)^k + 2 · (regularity + McD) + C / 2^240))
-```
-
-with no hypothesis on the signer: at `β_min = θ = 1/2` and `k = 2^20`, `(1 − 1/256)^k < 2^-5900`.
-For adversaries whose choices read the check oracle through `q` classical queries
-(`CheckQueryBounded` at every mask oracle), the `_hedged_query` and `_hedged_keep_query` theorems
-(`Applications/Ring/PublicW1/MLDSAPublicW1HedgedQuery.lean`) have `2 (q + 1) / 2^240` in place of
-`C / 2^240`, and the `_hedged_keep_query` form has no check term inside the hedged error. Its proof
-compares the hedged signer with the hedged signer that also refuses the rings of defect above
-`1/2` (`advantage_hedged_le_restrictLow`, at a cost of `2 (q + 1) / 2^240`); every ring the second
-signer admits has defect at most `1/2`, so its keep event needs only the anonymity error below
-`1/2`. The proof (`MaskedSigner.advantage_le_atMask`,
-`Applications/Ring/PublicW1/MaskOracle.lean`) draws the nonces of the first `k` calls of every
-round up front, swaps the mask oracle's slices at those nonces with fresh masks (a measure-
-preserving involution for distinct nonces), and charges the query phases that hit a drawn nonce,
-nonce collisions, and the rounds whose `k` calls all reject. Deterministic signing (`rnd = 0`) is
-not covered.
-
-Superposition queries to the mask derivation, together with superposition queries to `G` and the
-other hashes, quantum memory across rounds and `Q` adaptive challenges, are covered by the
-anonymity headlines over the ring signature's `RingScheme`
-([below](#the-ring-signature-as-a-ringscheme)), where the mask derivation is reprogrammed at the
-`Q · k` hidden nonces by one-way to hiding (`2 (C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256))`).
 
 ## The construction
 
@@ -174,7 +88,8 @@ below 2^−64:
 
 Every row has 355 samples per member and check error at most 2^−240 (`CheckParams`;
 `checkParams_tol2`, `checkParams_tol8`, `checkParams_tol16`, `checkParams_tol40`), so the check
-term stays `2 (q + 1) / 2^240` at every row. The larger defect budget costs only the factor
+term at check parameters is `2 (√Q + 2 t)² / 2^240` at every row. The larger defect budget costs
+only the factor
 `1/(1 − s)`: at ML-DSA-44 the regularity term at `n = 1024`, `θ = β_min = 1/2` is 2^−80.27 at
 `s = 1/2` and 2^−78.69 at `s = 5/6`. Tolerance 2 does not suffice at ML-DSA-44: by the same
 bound we estimate the refusal probability of a 1024-member ring at 2^−26. Honest rings stay below
@@ -198,7 +113,7 @@ depend on `i`. The real accepted mass differs from `K·aw_i` in two ways, and th
 - **`y` is uniform on the mask box, not `w` uniform in the bucket.** `w = A·y` with `y` uniform on a
   box. The accepted mass of `(v, c̃)` is `Pr_y[HighBits(A·y) = v, all four checks pass]`. Its
   stand-in replaces `A·y` by a uniform `w`, scaled by the z-check's acceptance fraction `ρ_z`. The
-  *regularity gap* `ringRegGap` is the column-wise ℓ1 distance between the two, relative to the
+  *regularity gap* `signerRegGap` is the column-wise ℓ1 distance between the two, relative to the
   signer's mean member weight.
 - **The loop is random.** Each attempt reads fresh oracle values. The two signers' loops are
   compared attempt by attempt: the distance between the loops' outputs is at most the normalized
@@ -235,17 +150,19 @@ rare keys that mean is small. The proof does not assume a lower bound on it. Cau
 matrix gives
 
 ```
-𝔼_A ringRegGap ≤ R/β_min · √(𝔼_A w⁻²)
+𝔼_A signerRegGap ≤ R/β_min · √(𝔼_A w⁻²)
 ```
 
-for any lower bound `w` on the mean member weight (`expect_ringRegGap_le_sqrt`). It remains to show
+for any lower bound `w` on the mean member weight (`expect_signerRegGap_le_sqrt`). It remains to
+show
 that `𝔼 w⁻²` is a small constant, averaged over keys, matrices and the `SampleInBall` oracle. The
 weight factor is `C = √(𝔼 w⁻²)`.
 
 - **The law of `t0` under a uniform matrix.** `t = A·s1 + s2`. Off the NTT slots where every
   component of `s1` vanishes, `t` is uniform. A Vandermonde argument shows that the top
   `256 − d` coefficients of every component of `t` are uniform and independent, where `d` is the
-  number of such slots (`expect_topCoeffs`, `Regularity/T0Law.lean`). With `ExpandS` a random oracle,
+  number of such slots (`expect_topCoeffs`, `Regularity/T0Law.lean`). With `ExpandS` a random
+  oracle,
   `Pr[d ≥ d0] ≤ C(256, d0)·9^{−ℓ d0}` (`expect_le_card_secretZeroSlots_le`). This gives
   moment-generating-function bounds on `‖t0‖₂²`, and with them layered Chernoff tails.
 - **ML-DSA-65 and ML-DSA-87.** Two floors bound the weight:
@@ -285,51 +202,17 @@ this out:
 - A ring above that passes the 355-sample check with at most `tol` failures with probability at
   most `x^tol · exp(−(1 − 1/x) · 355 · s) ≤ 2^−240` over the check oracle, at each row of check
   parameters (a Chernoff lower tail, `expect_ringCheck_le`).
-- The signer that also refuses the rings of defect above `s` needs no check term
-  (`advantage_restrictLow_le`). The real signer differs from it only when the challenge ring has
-  defect above `s` and passes the check (`PubAnonAdversary.advantage_le_restrict_one`, identical
-  until bad), which costs that event's probability once in each of the two experiments.
-- The check of a ring `l` reads `G` only at the points `(l, j, r)`. An adversary whose choice
-  reads `G` through `q` queries therefore finds a ring of defect above `s` that passes with
-  probability at most `(q + 1) · 2^−240` (`expect_badChoice_le`): the first query at a ring's
-  points, or the challenge itself when no query reaches them, sees uniform values there
-  (`ROM.expect_label_le`, a first-touch argument). The two experiments give `2 (q + 1) / 2^240`.
-- For an adversary that sees the whole check oracle, a union over its challenges valid for the
-  honest users' keys gives `C_ch / 2^240` (`advantage_le`). The union is over the challenges valid
-  for the actual keys: the adversary's set is fixed before the keys, so it holds candidate rings
-  for every key vector, and counting all of them would make the term exceed one.
+- The scheme and the scheme on the rings of defect at most `s` (`admLow`) are identical until an
+  answered challenge's ring has defect above `s` and passes the check
+  (`gameAdvantage_anon_restr_le_bad`). The check of a ring `l` reads `G` only at the points
+  `(l, j, r)`, so for an adversary with `t` superposition queries that event has probability at most
+  `(√Q + 2 t)² · checkError` (`toReal_runLaw_badReq_le`, the QROM search lemma
+  `RingSignature.toReal_runLaw_hit_le`).
 
 The refusal depends only on the ring, the message and the oracles, so it is the same for both
 challenge users.
 
-### The game and the proof
-
-The game is BKM06 Definition 4 with the keys given at the start (`PubAnonAdversary`,
-`Applications/Ring/Anonymity.lean`), the anonymity game of this directory's headlines; the generic
-ring signature of `Applications/Ring/Scheme.lean` is another instance of it (`keyedAnon_le`):
-- The adversary receives every honest user's key-generation coins and sees `H_µ`, `H` and the
-  oracle of the proof system whole; it sees `G` whole in `advantage_le` and through `q` queries
-  per choice in `advantage_le_query`.
-- It chooses any ring holding the two challenge users' keys, adaptively, and sees `⊥` when the
-  signer refuses. Rings are ordered lists, stronger than BKM06's sets.
-- The adversary is deterministic; a randomized adversary is a mixture of deterministic ones, which
-  is not formalized for this game. The `RingScheme` headlines quantify over quantum interactive
-  adversaries (`AnonAdversary`, `Model/RingSignature/Anonymity.lean`).
-
-Each round is handled by a coupling: when the two users' public values `w1` agree, the statements
-proved agree, and witness indistinguishability of the compiled proof hides the witness. Otherwise
-the round counts as bad, with probability at most the distance between the two `w1` laws. The
-general theorem (`PubAnonAdversary.advantage_le`) handles `Q` adaptive rounds at cost
-`Q · (ε + 2η) + Q · wiError + Pr[¬ Good]`, with `η` the probability that an honest signature is
-invalid, which is `0` for this signer on the good event (`advantage_le_of_signsValidly`); for the
-w1 ring it gives `(Q + 1)·(regularity + McD) + Q·wiError + C_ch/2^240`. The query-bounded form
-`2·(regularity + McD) + wiError + 2 (q + 1)/2^240` is proved for one challenge
-(`advantage_le_query`), and the theorems of this directory state `Q = 1`. Under full key exposure
-signing queries add nothing, because the adversary holds every honest user's coins. The headlines
-over the ring signature's `RingScheme` ([below](#the-ring-signature-as-a-ringscheme)) hold for
-every `Q`.
-
-## The ring signature as a `RingScheme`
+## The result
 
 `Applications/Ring/MLDSAW1Ring.lean` defines the ring signature as one value of the library's
 ring-signature model (`Model/RingSignature/`): `w1Scheme44`, `w1Scheme65` and `w1Scheme87` are
@@ -341,17 +224,19 @@ generation and functions) and a proof system `PS` for its ring relation. Its hea
   `w1Concrete.completeWithin` (`Applications/Ring/MLDSAW1Completeness.lean`). For a refusal rate
   `ρ` of the base signer on honest supported rings and a proof system adaptively complete for the
   ring relation at error `εp`, the ring signature refuses with probability at most `ρ` and is
-  rejected with probability at most `0 + εp (q + qPub)`.
+  rejected with probability at most `εp (q + qPub)`.
 - Anonymity (BKM06 Definition 4 with `Q` adaptive challenges, the honest users' key coins given at
   the start): `w1Scheme{44,65,87}.anonAdvantage_le`, `w1Concrete.anonAdvantage_le_coupling` and
   `w1Concrete.anonAdvantage_le_coupling_checkParams` (`Applications/Ring/MLDSAW1AnonQuery.lean`).
-  The oracle's values split as `Y ≃+ Y₁ × Y₂` (`OracleSplit`, `Applications/Ring/MLDSAW1Split.lean`):
+  The oracle's values split as `Y ≃+ Y₁ × Y₂` (`OracleSplit`,
+  `Applications/Ring/MLDSAW1Split.lean`):
   the base signer and the mask derivation read `Y₁`, and the honest prover reads `Y₁` only off the
   mask and check points. The adversary has `t` superposition queries to the whole oracle, and its
   table reads `Y₁` only off the mask and check points, so it reaches the check oracle `G` by queries
   only. For every such adversary and every `Q`, the advantage is at most
   `Q · w1CouplingError + Q · wi (Q · C) + 2 (C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256)) +
-  2 (√Q + 2 t)² · checkError`, with `wi` the witness-indistinguishability error of `PS` (a
+  2 (√Q + 2 t)² · checkError` (`w1NonceTerm k Q t` and `w1SampledCheckTerm reps tol s x Q t`), with
+  `wi` the witness-indistinguishability error of `PS` (a
   hypothesis) and `C` a bound on the valid challenges.
   - The third term reprograms the mask derivation at the `Q · k` hidden nonces.
   - The last term is the check term. In each experiment the scheme and the scheme on the rings of
@@ -377,8 +262,11 @@ generation and functions) and a proof system `PS` for its ring relation. Its hea
   The rows at check error `2^-300` need 439, 407, 405 and 401 samples per member for tolerances
   2, 8, 16 and 40 (`checkError_tol{2,8,16,40}_le_300`). The defaults stay at 355 samples.
 - Anonymity with `SampleInBall`, `ExpandS` and `ExpandA` random oracles, every term numeric:
-  `w1Scheme.expect_anonAdvantage_le_mldsa{44,65,87}`, with ring-binding (`…_bind_mldsa{44,65,87}`)
-  and converted (`…_conv_mldsa{44,65,87}`) base messages (`Applications/Ring/MLDSAW1AnonOracle.lean`).
+  `w1Scheme.expect_anonAdvantage_le` and its instances
+  `w1Scheme.expect_anonAdvantage_le_mldsa{44,65,87}`,
+  with ring-binding (`…_bind_mldsa{44,65,87}`) and converted (`…_conv_mldsa{44,65,87}`) base
+  messages
+  (`Applications/Ring/MLDSAW1AnonOracle.lean`).
   The scheme is `w1Scheme` at the concrete primitives with the three oracles `G_B`, `G_S`, `G_A`
   in place of `SampleInBall`, `ExpandS` and `ExpandA` (`randomOraclePrimitives`), the concrete
   encoding and the oracle placement `O` (`W1Oracles.atRandomOracles`). The
@@ -392,8 +280,9 @@ generation and functions) and a proof system `PS` for its ring relation. Its hea
     + Q · wi(Q · C) + 2 (C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256)) + 2 (√Q + 2 t)² / 2^240
   ```
 
-  with `ρ` the regularity bound times the weight factor of [the result](#the-result) (`11·2^−101 ·
-  24/5`, `11·2^−199 · 9/2` and `12·2^−294 · 33/5` at ML-DSA-44, -65 and -87) and `C` a bound on
+  with `ρ` the regularity bound times the weight factor (`11·2^−101 ·
+  24/5`, `11·2^−199 · 9/2` and `12·2^−294 · 33/5` at ML-DSA-44, -65 and -87,
+  `expect_regGapAvg_le_mldsa{44,65,87}`) and `C` a bound on
   the valid challenges per key vector, for `β_min ∈ (0, 1]`, `n ≥ 1`, `θ ∈ (0, 1)` and
   any row of check parameters with `0 ≤ s`. The proof applies
   `hedgedScheme.anonAdvantage_le_coupling` (the bound above at any primitives with the signing and
@@ -421,76 +310,53 @@ generation and functions) and a proof system `PS` for its ring relation. Its hea
 
 | Claim | Theorem | File |
 |---|---|---|
-| The game, BKM06 Definition 4 with refusals | `PubAnonAdversary`, `PubAnonAdversary.game`, `PubAnonAdversary.advantage_le` | `Applications/Ring/Anonymity.lean` |
-| The bound for signers that sign validly on a good event | `PubAnonAdversary.SignsValidly`, `PubAnonAdversary.advantage_le_of_signsValidly` | `Applications/Ring/PublicW1/PublicValue.lean` |
+| Rounds with public outputs, witness indistinguishability | `pubRun`, `tvDist_pubRun_le`, `gameAdvantage_pubRun_le`, `PubWI` | `Applications/Ring/Anonymity.lean`, `Applications/Ring/AnonCoupling.lean` |
 | The signer and the flattening identity | `ringLoopSigner`, `memberWeight`, `mul_flattenCoin_eq` | `Applications/MLDSA/Signing/RingSigner.lean` |
-| Correctness on accepted rings | `valid_of_mem_support_signLaw`, `ringVerify_attemptOutput` | `Applications/Ring/PublicW1/MLDSAPublicW1.lean`, `RingSigner.lean` |
-| Distinct message representatives | `MuDistinct`, `RingAdmissible`, `schemeOrc` | `Applications/Ring/PublicW1/MLDSAPublicW1.lean` |
-| The ring check and its error | `RingCheck`, `checkWeight`, `expect_ringCheck_le`, `checkError_checkParams_le` | `Applications/Ring/PublicW1/MLDSAPublicW1.lean`, `MLDSAPublicW1Regularity.lean` |
+| Distinct message representatives | `MuDistinct`, `RingAdmissible`, `schemeOrc` | `Applications/Ring/PublicW1/MLDSAPublicW1.lean`, `Applications/MLDSA/Signing/Oracles.lean` |
+| The ring check and its error | `sampledRingCheck`, `RingCheck.sampled`, `checkWeight`, `expect_ringCheck_le`, `checkError_checkParams_le` | `Applications/Ring/PublicW1/MLDSAPublicW1.lean`, `MLDSAPublicW1Regularity.lean` |
 | Check parameters | `CheckParams`, `checkParams_tol2`, `checkParams_tol8`, `checkParams_tol16`, `checkParams_tol40` | `Applications/Ring/PublicW1/MLDSAPublicW1Regularity.lean` |
 | Refusal of rings of low defect | `refuseError`, `expect_not_ringCheck_le`, `expect_not_ringCheck_honestRing_le`, `expect_not_muDistinct_le`, `expect_not_ringAdmissible_le` | `Applications/Ring/PublicW1/MLDSAPublicW1Refusal.lean` |
-| The search lemma | `ROM.expect_label_le`, `ROM.expect_weighted_label_le`, `ROM.expect_mul_eq_of_agree` | `Applications/Ring/PublicW1/CheckSearch.lean` |
-| The signer refusing high-defect rings, identical until bad | `PubSigner.restrict`, `PubAnonAdversary.advantage_le_restrict_one`, `advantage_restrictLow_le` | `Applications/Ring/PublicW1/Restrict.lean`, `MLDSAPublicW1Query.lean` |
-| Query-bounded check term | `CheckQueryBounded`, `expect_badChoice_le`, `advantage_le_query` | `Applications/Ring/PublicW1/MLDSAPublicW1Query.lean` |
 | Two loops, adversarial members | `RingPair.tvDist_untilSome_le`, `familyBound`, `RingWeights.massRatio_le_inv_one_sub` | `Foundations/ToMathlib/PMFOracleQuenched.lean` |
-| McDiarmid terms | `expect_mcDiarmidTerms_le_of`, `expect_commitCollision_le` | `Applications/Ring/PublicW1/MLDSAPublicW1Concentration.lean`, `Applications/MLDSA/Regularity/CommitCollision.lean` |
-| Regularity | `expect_ringRegGap_le_sqrt_mldsa{65,87}_seven`, `expect_ringRegGap_le_sqrt_mldsa44_box_seven_of_nonneg` | `Applications/MLDSA/Regularity/InstancesSeven.lean` |
-| Cauchy–Schwarz over the matrix | `expect_ringRegGap_le_sqrt`, `expect_ringRegGap_le_sqrt_of_nonneg` | `Applications/MLDSA/Regularity/SignerRegularity.lean` |
+| McDiarmid numbers | `sqrt_add_sqrt_le_of_le`, `four_mul_div_add_four_div_le`, `expect_commitCollision_le` | `Applications/Ring/PublicW1/MLDSAPublicW1Concentration.lean`, `Applications/MLDSA/Regularity/CommitCollision.lean` |
+| Regularity | `expect_regGapAvg_le_mldsa{44,65,87}`, `expect_signerRegGap_le_sqrt_mldsa{65,87}_seven`, `expect_signerRegGap_le_sqrt_mldsa44_box_seven_of_nonneg` | `Applications/Ring/PublicW1/MLDSAPublicW1Regularity.lean`, `Applications/MLDSA/Regularity/InstancesSeven.lean` |
+| Cauchy–Schwarz over the matrix | `expect_signerRegGap_le_sqrt`, `expect_signerRegGap_le_sqrt_of_nonneg` | `Applications/MLDSA/Regularity/SignerRegularity.lean` |
 | Law of `t0` under a uniform matrix | `expect_topCoeffs`, `expect_exp_t0SqNorm_le`, `expect_le_card_secretZeroSlots_le` | `Applications/MLDSA/Regularity/T0Law.lean` |
 | Weight factor at ML-DSA-65/87 | `expect_expect_floorInvSqBound_le_mldsa65`, `…_mldsa87` | `Applications/MLDSA/Regularity/WeightTail.lean` |
 | Weight factor at ML-DSA-44 | `sub_sum_le_poissonBinomialCdf`, `one_sub_le_expect_challengeBall_ct0_mldsa44`, `expect_expect_expect_inv_sq_mldsa44OracleWeight_le` | `Applications/MLDSA/Signing/Flatten.lean`, `Regularity/Ct0Tail44.lean`, `Regularity/WeightTail44.lean` |
-| Headlines | `advantage_le_bkm06_mldsa{44,65,87}_query_checkParams`, `…_query`, `…_checkParams`, `advantage_le_bkm06_mldsa{44,65,87}`, `expect_regGapAvg_le_mldsa{44,65,87}` | `Applications/Ring/PublicW1/MLDSAPublicW1Regularity.lean` |
-| FIPS 204 hedged signing (query-bounded mask derivation) | `MaskedSigner.advantage_le_atMask`, `advantage_le_bkm06_mldsa{44,65,87}_hedged`, `…_hedged_keep`, `KeepBound`, `keepBound_of_keepGood` | `Applications/Ring/PublicW1/MaskOracle.lean`, `MLDSAPublicW1Hedged.lean` |
-| Hedged signing against `q` check-oracle queries | `MaskedSigner.restrict`, `advantage_hedged_le_restrictLow`, `advantage_restrictLow_le_hedged`, `advantage_le_bkm06_mldsa{44,65,87}_hedged_query`, `…_hedged_keep_query` | `Applications/Ring/PublicW1/MLDSAPublicW1HedgedQuery.lean` |
+| Hedged masks and the keep level | `keepLevel`, `W1CouplingParams`, `PMF.weightedAttemptMasks`, `PMF.keep_ge_of_familyBound_lt` | `Applications/Ring/PublicW1/MLDSAPublicW1Hedged.lean`, `MaskOracle.lean` |
 | QROM search over a whole interactive run | `Distinguisher.eventProb_searchLogs_le`, `RingSignature.toReal_runLaw_hit_le` | `Model/Quantum/O2H/Search.lean`, `Model/RingSignature/Search.lean` |
 | Identical until a bad request | `RingSignature.gameAdvantage_runLaw_le_untilBad` | `Model/RingSignature/UntilBad.lean` |
-| The `RingScheme` anonymity headlines (check oracle by superposition queries) | `hedgedScheme.anonAdvantage_le_coupling`, `w1Concrete.anonAdvantage_le_coupling`, `…_checkParams`, `w1Scheme{44,65,87}.anonAdvantage_le` | `Applications/Ring/MLDSAW1AnonQuery.lean` |
-| The same with `SampleInBall`, `ExpandS` and `ExpandA` random oracles, numeric | `randomOraclePrimitives`, `W1Oracles.atRandomOracles`, `expect_w1CouplingError_randomOracle_le`, `w1Scheme.expect_anonAdvantage_le_mldsa{44,65,87}`, `…_bind_mldsa{44,65,87}`, `…_conv_mldsa{44,65,87}` | `Applications/Ring/MLDSAW1AnonOracle.lean`, `Applications/Ring/MLDSAW1IdealDist.lean` |
+| Completeness | `w1Concrete.completeWithin`, `w1Concrete.completeWithin_refusal` | `Applications/Ring/MLDSAW1Completeness.lean`, `MLDSAW1Refusal.lean` |
+| Anonymity (check oracle by superposition queries) | `hedgedScheme.anonAdvantage_le_coupling`, `w1Concrete.anonAdvantage_le_coupling`, `w1Scheme{44,65,87}.anonAdvantage_le` | `Applications/Ring/MLDSAW1AnonQuery.lean` |
+| The same with `SampleInBall`, `ExpandS` and `ExpandA` random oracles, numeric | `randomOraclePrimitives`, `W1Oracles.atRandomOracles`, `expect_w1CouplingError_randomOracle_le`, `w1Scheme.expect_anonAdvantage_le`, `w1Scheme.expect_anonAdvantage_le_mldsa{44,65,87}` | `Applications/Ring/MLDSAW1AnonOracle.lean`, `Applications/Ring/MLDSAW1IdealDist.lean` |
 
 ## What is not shown
 
-- **No unforgeability headline names the `RingScheme`.** `MLDSAPublicW1Unforgeability.lean`
-  instantiates the reductions of `Ring/Unforgeability.lean` (the games of `Ring/Games.lean`) at the
-  base scheme `w1SigScheme`, whose signer is a parameter (`W1Signer`). No unforgeability theorem
-  names `w1Scheme44`, `w1Scheme65` or `w1Scheme87`.
+- **Anonymity in three settings.** The library does not prove:
+  - the anonymity bound for an adversary that sees the check oracle `G` whole (a check term of the
+    form `C·checkError`);
+  - the bound for classical queries with check and hedge terms linear in the query count,
+    `2(q + 1)·checkError`, where the proved quantum-query form gives `2(1 + 2q)²·checkError`;
+  - a coupling whose good event and error depend on the base oracle and are averaged over it.
 - **`wiError` is a parameter.** Instantiating it needs the public-`w1` ring circuit and its
-  zero-knowledge proof, which do not exist. In the `RingScheme` headlines it is the hypothesis
-  `hwi` on the proof system `PS`.
+  zero-knowledge proof, which do not exist. In the headlines it is the hypothesis `hwi` on the
+  proof system `PS`.
 - **`t0` is not bound to the key.** An adversary may publish a false `t0` under an honest member's
   `(ρ, t1)`. Members could self-certify `(ρ, t1, t0)`; this is not formalized.
 - **The model:**
-  - The `advantage_le_bkm06_*` headlines are in the classical random-oracle model, with
-    `SampleInBall`, `ExpandA` and `ExpandS` as random oracles onto their ranges; their
-    query-bounded adversaries make classical queries to `G`. The `RingScheme` headlines are in the
-    quantum random-oracle model (below).
-  - The headlines `advantage_le_bkm06_mldsa{44,65,87}` are for the ideal-mask signer
-    (`Applications/MLDSA/Signing/Ideal.lean`: `y` uniform on the mask box, the commitment hash from
-    the oracle). FIPS 204 hedged signing is not statistically anonymous against an adversary with
-    unbounded queries to the mask derivation: the mask `y = ExpandMask(H(K ‖ rnd ‖ µ), κ)` takes
-    at most about `2^256` values per signer, and an adversary holding the keys can enumerate
-    `(rnd, κ)` and locate `w1`. The `_hedged` headlines cover hedged signing for adversaries with
-    `q` queries to the mask derivation (`_hedged_keep`; see [Hedged signing](#hedged-signing)). Neither is a byte-level implementation.
+  - The headlines are in the quantum random-oracle model. In `w1Concrete.anonAdvantage_le_coupling`
+    and `w1Scheme{44,65,87}.anonAdvantage_le`, `ExpandA`, `ExpandS` and `SampleInBall` are the FIPS
+    204 functions, and `regGapAt` and `collAt` stay defined averages. In
+    `w1Scheme.expect_anonAdvantage_le` they are random oracles held whole by the adversary, and
+    every term is numeric.
   - `µ_j = H_µ(tr_j ‖ m)` and `c̃ = H(µ ‖ w1Encode(w1))` are values of two random oracles, `H_µ`
     and `H` keyed on `(µ, w1)`, as FIPS 204 computes them.
   - The random oracles (`H_µ`, `H`, the check oracle `G`, the proof system's hash) are independent
-    in the model. An implementation must domain-separate them from each other and from FIPS 204's other
-    uses of SHAKE.
+    in the model. An implementation must domain-separate them from each other and from FIPS 204's
+    other uses of SHAKE.
   - The law of an honest key's check defect is not formalized, so the refusal probabilities of
     honest rings in [the check parameters](#the-check-parameters) are estimates; their reduction
     to that law is formalized (`MLDSAPublicW1Refusal.lean`).
-  - The query-bounded check terms of the `advantage_le_bkm06_*` headlines are proved for one
-    challenge and classical check-oracle queries. The `RingScheme` headlines have the check term
-    `2 (√Q + 2 t)² · checkError` against superposition queries, for every `Q`.
-  - The `RingScheme` headlines are in the quantum random-oracle model. In
-    `w1Concrete.anonAdvantage_le_coupling` and `w1Scheme{44,65,87}.anonAdvantage_le`, `ExpandA`,
-    `ExpandS` and `SampleInBall` are the FIPS 204 functions, and `regGapAt` and `collAt` stay
-    defined averages. In `w1Scheme.expect_anonAdvantage_le_mldsa{44,65,87}` they are random
-    oracles held whole by the adversary, and every term is numeric.
+  - Deterministic signing (`rnd = 0`) is not covered.
   - Efficiency is not formalized.
 - **No implementation or measurements.** The signing cost above is an estimate.
-
-The parent directory `Applications/Ring/` holds a generic ring signature over any base scheme,
-with its anonymity (`Anonymity.lean`), unforgeability (`Unforgeability.lean`) and games
-(`Games.lean`, `Scheme.lean`), and the theorems over the ring-signature model of
-`Model/RingSignature/` (`RingAnonymity.lean`, `RingUnforgeability.lean`, `SPBCSCompleteness.lean`,
-and the instances `MLDSARing.lean`, `MLDSAW1Ring.lean`).

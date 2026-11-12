@@ -49,15 +49,15 @@ the statement writes within `2^20` bytes (`ringTranscript_bounds`).
   read off the coins for a signer carrying it, `Signer.CarriesSalt`, satisfiable by
   `exists_carriesSalt`; no refusal; at most `card (AnonRequest …)` valid challenges).
 * **The extraction-forger bounds** `bindingScheme.insiderForgeProb_le_extractionSuccess`,
-  `bindingScheme.keyReuseForgeProb_le_extractionSuccess` (`StmtVerifiesRing.insiderForgeProb_le`,
-  `StmtVerifiesRing.keyReuseForgeProb_le`: the extraction forger's success plus spBCS's knowledge
+  `bindingScheme.jointForgeProb_le_extractionSuccess` (`StmtVerifiesRing.insiderForgeProb_le`,
+  `StmtVerifiesRing.jointForgeProb_le`: the extraction forger's success plus spBCS's knowledge
   error at the configuration's largest round error); `convertedScheme.insiderForgeProb_le_zkForgerTerm`
   (`StmtVerifiesRing.insiderForgeProb_le_zk`: unforgeability of `convertedScheme` with no
   ring-binding message, by zero knowledge and simulation extraction: the extraction forger's term,
   `zkError 0 t Q`, the simulation-extraction and knowledge errors and `2Q · εc`, for a signer
   carrying the salt). Their forms by MU-EUF-CMA^corr,
   `bindingScheme.insiderForgeProb_le_muEufProbWithin`,
-  `bindingScheme.keyReuseForgeProb_le_muEufProbWithin` and
+  `bindingScheme.jointForgeProb_le_muEufProbWithin` and
   `convertedScheme.insiderForgeProb_le`, are the unforgeability headlines.
 -/
 
@@ -241,41 +241,81 @@ noncomputable abbrev bindingScheme (G : Signer ringMsgLen) [Fintype G.KeyCoins]
     [Nonempty G.SignCoins] :=
   scheme G C ringMsgLen_le encodeRingMsg
 
+/-- **The base signer of `convertedScheme`**: `baseSigner` at the ring message as the base
+message. -/
+abbrev convertedBase := baseSigner G C (RMsg := Fin msgLen → UInt8) fun _ m => m
+
+/-- **The base signer of `bindingScheme`**: `baseSigner` at the ring-binding base message
+`encodeRingMsg`. -/
+abbrev bindingBase (G : Signer ringMsgLen) [Fintype G.KeyCoins]
+    [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins] [DecidableEq G.SignCoins]
+    [Nonempty G.SignCoins] :=
+  baseSigner G C encodeRingMsg
+
+/-- **The setting of `convertedScheme`**: the configuration's setting with merges
+(`ProofSystemTranscript.setting`) at `48`-byte Fiat–Shamir salts, for messages of at most `2^19`
+bytes (`hmsg`). -/
+noncomputable abbrev convertedSetting (hmsg : msgLen ≤ 2 ^ 19) :=
+  (ringTranscript G C).setting 48 (ringMergeBounds C hmsg)
+
+/-- **The non-interactive proofs of `convertedSetting`** (`SPBCS.NIProof` of its model, at the
+transcript's digest length `k`, Merkle salts of `2k` bytes, `48`-byte Fiat–Shamir salts, `2^40`-byte
+inputs and oracle answers of `k + fsExtraBytes + maxGrant` bytes). -/
+noncomputable abbrev convertedNIProof (hmsg : msgLen ≤ 2 ^ 19) : Type :=
+  SPBCS.NIProof (k := (ringTranscript G C).k) (kN := 2 * (ringTranscript G C).k) (kS := 48) (L := 2 ^ 40)
+    (e := Configurations.fsExtraBytes + (ringTranscript G C).maxGrant) (convertedSetting G C hmsg).model
+
+/-- **The canonical preimage table of `convertedSetting`** (`ProofSystemTranscript.preimages`):
+the preimage samplers of the setting's challenge samplers, from which the zero-knowledge simulator
+draws each round's stream at its simulated challenge. -/
+abbrev convertedPreimages (hmsg : msgLen ≤ 2 ^ 19) : (convertedSetting G C hmsg).model.Preimages :=
+  (ringTranscript G C).preimages 48 (ringMergeBounds C hmsg)
+
+/-- **The setting of `bindingScheme`**: the configuration's setting with merges at `48`-byte
+Fiat–Shamir salts, for the ring-binding messages of `ringMsgLen` bytes. -/
+noncomputable abbrev bindingSetting (G : Signer ringMsgLen) [Fintype G.KeyCoins]
+    [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins] [DecidableEq G.SignCoins]
+    [Nonempty G.SignCoins] :=
+  (ringTranscript G C).setting 48 (ringMergeBounds C ringMsgLen_le)
+
 /-! ## The headlines -/
 
 /-- **Completeness per key of the converted Falcon-512 ring signature**
 (`StmtVerifiesRing.completeAtWithin`): for a Falcon signer whose base signer has correctness error
 `εc` (`hc`), at every key and every ring of `64` keys holding it, `convertedScheme` refuses with
 probability `0` (`falconBaseSigner_refuseAtWithin`) and is rejected with probability at most
-`εc` plus the honest prover's completeness error `0`, spBCS's overrun and key-collision terms
-and `0 / 2^(8 · 48)`. -/
+`εc` plus spBCS's completeness error `ringCompletenessError` at the honest prover's completeness
+error `0` and the base signer's `0` oracle queries. -/
 @[headline]
 theorem convertedScheme.completeAtWithin
     (hmsg : msgLen ≤ 2 ^ 19) {εc : ℝ≥0∞}
-    (hc : (baseSigner G proofSystem (RMsg := Fin msgLen → UInt8) fun _ m => m).CorrectWithin εc) :
+    (hc : (convertedBase G proofSystem).CorrectWithin εc) :
     (convertedScheme G proofSystem hmsg).CompleteAtWithin 0
-      (εc + (((0 : ℝ≥0) : ℝ≥0∞) + ((ringTranscript G proofSystem).setting 48 (ringMergeBounds proofSystem hmsg)).model.overrun +
-        SPBCS.keyCollision ((ringIop G proofSystem).term.size (ringIop G proofSystem).rounds) (ringTranscript G proofSystem).k +
-          ((0 + 0 : ℕ) : ℝ≥0∞) / 2 ^ (8 * 48))) :=
-  StmtVerifiesRing.completeAtWithin (ringHonest G proofSystem) (ringMergeBounds proofSystem hmsg)
-    (ringProofFormat proofSystem hmsg) _ (ringHonest_errorBound G proofSystem)
+      (εc + (convertedSetting G proofSystem hmsg).model.ringCompletenessError 0 0) := by
+  have h := StmtVerifiesRing.completeAtWithin (ringHonest G proofSystem) (ringMergeBounds proofSystem hmsg)
+    (ringProofFormat proofSystem hmsg)
+    (Falcon512.Ring.ringVerifies G (fun _ m => m) _ _ program interp) (ringHonest_errorBound G proofSystem)
     (falconBaseSigner_refuseAtWithin G _ _) hc
+  rwa [ENNReal.coe_zero] at h
 
 /-- **Completeness per key of the ring-binding Falcon-512 ring signature**
-(`StmtVerifiesRing.completeAtWithin`): as `convertedScheme.completeAtWithin`, for `bindingScheme`. -/
+(`StmtVerifiesRing.completeAtWithin`): for a Falcon signer whose base signer has correctness error
+`εc` (`hc`), at every key and every ring of `64` keys holding it, `bindingScheme` refuses with
+probability `0` (`falconBaseSigner_refuseAtWithin`) and is rejected with probability at most
+`εc` plus spBCS's completeness error `ringCompletenessError` at the honest prover's completeness
+error `0` and the base signer's `0` oracle queries. -/
 @[headline]
 theorem bindingScheme.completeAtWithin (G : Signer ringMsgLen) [Fintype G.KeyCoins]
     [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins] [DecidableEq G.SignCoins]
     [Nonempty G.SignCoins] {εc : ℝ≥0∞}
-    (hc : (baseSigner G proofSystem encodeRingMsg).CorrectWithin εc) :
+    (hc : (bindingBase proofSystem G).CorrectWithin εc) :
     (bindingScheme proofSystem G).CompleteAtWithin 0
-      (εc + (((0 : ℝ≥0) : ℝ≥0∞) +
-        ((ringTranscript G proofSystem).setting 48 (ringMergeBounds proofSystem ringMsgLen_le)).model.overrun +
-        SPBCS.keyCollision ((ringIop G proofSystem).term.size (ringIop G proofSystem).rounds) (ringTranscript G proofSystem).k +
-          ((0 + 0 : ℕ) : ℝ≥0∞) / 2 ^ (8 * 48))) :=
-  StmtVerifiesRing.completeAtWithin (ringHonest G proofSystem) (ringMergeBounds proofSystem ringMsgLen_le)
-    (ringProofFormat proofSystem ringMsgLen_le) _ (ringHonest_errorBound G proofSystem)
+      (εc + (bindingSetting proofSystem G).model.ringCompletenessError 0 0) := by
+  have h := StmtVerifiesRing.completeAtWithin (ringHonest G proofSystem) (ringMergeBounds proofSystem ringMsgLen_le)
+    (ringProofFormat proofSystem ringMsgLen_le)
+    (Falcon512.Ring.ringVerifies G encodeRingMsg _ _ program interp) (ringHonest_errorBound G proofSystem)
     (falconBaseSigner_refuseAtWithin G _ _) hc
+  rwa [ENNReal.coe_zero] at h
 
 /-- **Unforgeability with respect to insider corruption (BKM06 Definition 7) of the ring-binding
 Falcon-512 ring signature** (`StmtVerifiesRing.insiderForgeProb_le` at
@@ -289,7 +329,7 @@ theorem bindingScheme.insiderForgeProb_le_extractionSuccess (G : Signer ringMsgL
     [DecidableEq G.SignCoins] [Nonempty G.SignCoins] {n t : ℕ}
     (A : InsiderAdversary (bindingScheme C G) n (OracleView.queriesOnly _ _) t) (Q : ℕ) :
     insiderForgeProb A Q ≤
-      extractionSuccess (insiderRelay (baseSigner G C encodeRingMsg) _ _) A Q
+      extractionSuccess (insiderRelay (bindingBase C G) _ _) A Q
           (compiledBy_spbcsComapProofSystem _ _ _ (ringProofFormat C ringMsgLen_le) _ _ _ _)
           (StmtVerifiesRing.extractor (ringMergeBounds C ringMsgLen_le)
             (Falcon512.Ring.ringVerifies G encodeRingMsg _ _ program interp)) +
@@ -297,24 +337,24 @@ theorem bindingScheme.insiderForgeProb_le_extractionSuccess (G : Signer ringMsgL
           (Configurations.fsExtraBytes + (ringTranscript G C).maxGrant)
           (kqOf (ringIop G C).merges (ringIop G C).rounds (max 3072 201) (max 3072 201))
           (t + Q * (bindingScheme C G).q + kqOf (ringIop G C).merges (ringIop G C).rounds (max 3072 201) (max 3072 201))
-          ((ringTranscript G C).setting 48 (ringMergeBounds C ringMsgLen_le)).model.senc.digestsPerInput
+          (bindingSetting C G).model.senc.digestsPerInput
           (ringIop G C).merges.nJ (maxError (ringIopSound G C).error) :=
   StmtVerifiesRing.insiderForgeProb_le (ringHonest G C) (ringMergeBounds C ringMsgLen_le)
     (ringProofFormat C ringMsgLen_le) _ (bindsRing_encodeRingMsg G) (ringIopSound G C) A Q
 
-/-- **Key-reuse unforgeability of the ring-binding Falcon-512 ring signature**
-(`StmtVerifiesRing.keyReuseForgeProb_le` at `bindsRing_encodeRingMsg`): the bound of
-`bindingScheme.insiderForgeProb_le_extractionSuccess` for the key-reuse game, the extraction forger in
+/-- **Joint-security unforgeability of the ring-binding Falcon-512 ring signature**
+(`StmtVerifiesRing.jointForgeProb_le` at `bindsRing_encodeRingMsg`): the bound of
+`bindingScheme.insiderForgeProb_le_extractionSuccess` for the joint-security game, the extraction forger in
 MU-EUF-CMA^corr with the ring-aware and the ordinary signing oracle. -/
-theorem bindingScheme.keyReuseForgeProb_le_extractionSuccess (G : Signer ringMsgLen)
+theorem bindingScheme.jointForgeProb_le_extractionSuccess (G : Signer ringMsgLen)
     [Fintype G.KeyCoins] [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins]
     [DecidableEq G.SignCoins] [Nonempty G.SignCoins] {n t : ℕ}
-    (A : KeyReuseAdversary (baseSigner G C encodeRingMsg)
+    (A : JointAdversary (bindingBase C G)
       ((Falcon512.Ring.ringVerifies G encodeRingMsg _ _ program interp).proofSystem
         (ringHonest G C) (ringMergeBounds C ringMsgLen_le) (ringProofFormat C ringMsgLen_le))
       Falcon512.Ring.adm64 n (OracleView.queriesOnly _ _) t) (Q : ℕ) :
-    keyReuseForgeProb A Q ≤
-      extractionSuccess (keyReuseRelay (baseSigner G C encodeRingMsg) _ _) A Q
+    jointForgeProb A Q ≤
+      extractionSuccess (jointRelay (bindingBase C G) _ _) A Q
           (compiledBy_spbcsComapProofSystem _ _ _ (ringProofFormat C ringMsgLen_le) _ _ _ _)
           (StmtVerifiesRing.extractor (ringMergeBounds C ringMsgLen_le)
             (Falcon512.Ring.ringVerifies G encodeRingMsg _ _ program interp)) +
@@ -322,65 +362,63 @@ theorem bindingScheme.keyReuseForgeProb_le_extractionSuccess (G : Signer ringMsg
           (Configurations.fsExtraBytes + (ringTranscript G C).maxGrant)
           (kqOf (ringIop G C).merges (ringIop G C).rounds (max 3072 201) (max 3072 201))
           (t + Q * (bindingScheme C G).q + kqOf (ringIop G C).merges (ringIop G C).rounds (max 3072 201) (max 3072 201))
-          ((ringTranscript G C).setting 48 (ringMergeBounds C ringMsgLen_le)).model.senc.digestsPerInput
+          (bindingSetting C G).model.senc.digestsPerInput
           (ringIop G C).merges.nJ (maxError (ringIopSound G C).error) :=
-  StmtVerifiesRing.keyReuseForgeProb_le (ringHonest G C) (ringMergeBounds C ringMsgLen_le)
+  StmtVerifiesRing.jointForgeProb_le (ringHonest G C) (ringMergeBounds C ringMsgLen_le)
     (ringProofFormat C ringMsgLen_le) _ (bindsRing_encodeRingMsg G) (ringIopSound G C) A Q
 
 /-- **Completeness of the converted Falcon-512 ring signature, averaged over honest rings**
 (`StmtVerifiesRing.completeWithin` at `RefuseAtWithin.refuseWithin` of
-`falconBaseSigner_refuseAtWithin`): refusal `0`, rejection as in
-`convertedScheme.completeAtWithin`. -/
+`falconBaseSigner_refuseAtWithin`): refusal `0`, rejection as in `convertedScheme.completeAtWithin`. -/
 @[headline]
 theorem convertedScheme.completeWithin
     (hmsg : msgLen ≤ 2 ^ 19) {εc : ℝ≥0∞}
-    (hc : (baseSigner G proofSystem (RMsg := Fin msgLen → UInt8) fun _ m => m).CorrectWithin εc) :
+    (hc : (convertedBase G proofSystem).CorrectWithin εc) :
     (convertedScheme G proofSystem hmsg).CompleteWithin 0
-      (εc + (((0 : ℝ≥0) : ℝ≥0∞) + ((ringTranscript G proofSystem).setting 48 (ringMergeBounds proofSystem hmsg)).model.overrun +
-        SPBCS.keyCollision ((ringIop G proofSystem).term.size (ringIop G proofSystem).rounds) (ringTranscript G proofSystem).k +
-          ((0 + 0 : ℕ) : ℝ≥0∞) / 2 ^ (8 * 48))) :=
-  StmtVerifiesRing.completeWithin (ringHonest G proofSystem) (ringMergeBounds proofSystem hmsg)
-    (ringProofFormat proofSystem hmsg) _ (ringHonest_errorBound G proofSystem)
+      (εc + (convertedSetting G proofSystem hmsg).model.ringCompletenessError 0 0) := by
+  have h := StmtVerifiesRing.completeWithin (ringHonest G proofSystem) (ringMergeBounds proofSystem hmsg)
+    (ringProofFormat proofSystem hmsg)
+    (Falcon512.Ring.ringVerifies G (fun _ m => m) _ _ program interp) (ringHonest_errorBound G proofSystem)
     (falconBaseSigner_refuseAtWithin G _ _).refuseWithin hc
+  rwa [ENNReal.coe_zero] at h
 
 /-- **Completeness of the ring-binding Falcon-512 ring signature, averaged over honest rings**
-(`StmtVerifiesRing.completeWithin` at `RefuseAtWithin.refuseWithin`). -/
+(`StmtVerifiesRing.completeWithin` at `RefuseAtWithin.refuseWithin` of
+`falconBaseSigner_refuseAtWithin`): refusal `0`, rejection as in `bindingScheme.completeAtWithin`. -/
 @[headline]
 theorem bindingScheme.completeWithin (G : Signer ringMsgLen) [Fintype G.KeyCoins]
     [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins] [DecidableEq G.SignCoins]
     [Nonempty G.SignCoins] {εc : ℝ≥0∞}
-    (hc : (baseSigner G proofSystem encodeRingMsg).CorrectWithin εc) :
+    (hc : (bindingBase proofSystem G).CorrectWithin εc) :
     (bindingScheme proofSystem G).CompleteWithin 0
-      (εc + (((0 : ℝ≥0) : ℝ≥0∞) +
-        ((ringTranscript G proofSystem).setting 48 (ringMergeBounds proofSystem ringMsgLen_le)).model.overrun +
-        SPBCS.keyCollision ((ringIop G proofSystem).term.size (ringIop G proofSystem).rounds) (ringTranscript G proofSystem).k +
-          ((0 + 0 : ℕ) : ℝ≥0∞) / 2 ^ (8 * 48))) :=
-  StmtVerifiesRing.completeWithin (ringHonest G proofSystem) (ringMergeBounds proofSystem ringMsgLen_le)
-    (ringProofFormat proofSystem ringMsgLen_le) _ (ringHonest_errorBound G proofSystem)
+      (εc + (bindingSetting proofSystem G).model.ringCompletenessError 0 0) := by
+  have h := StmtVerifiesRing.completeWithin (ringHonest G proofSystem) (ringMergeBounds proofSystem ringMsgLen_le)
+    (ringProofFormat proofSystem ringMsgLen_le)
+    (Falcon512.Ring.ringVerifies G encodeRingMsg _ _ program interp) (ringHonest_errorBound G proofSystem)
     (falconBaseSigner_refuseAtWithin G _ _).refuseWithin hc
+  rwa [ENNReal.coe_zero] at h
 
 /-- **Anonymity against full key exposure (BKM06 Definition 4, `Q` adaptive challenges) of the
 converted Falcon-512 ring signature** (`StmtVerifiesRing.anonAdvantage_le_of_pubOfCoins`): for a
 signer whose signatures carry the drawn salt (`hG`) and whose base signer has correctness error
 `εc` (`hcorr`), every anonymity adversary (any oracle view, at most `t` queries) has advantage at
-most `Q · wiError 0 (Q · |AnonRequest|) + 2Q · εc + 2Q · 0` (the honest prover has no completeness
-error and the signer never refuses). -/
+most `Q · wiError 0 (Q · |AnonRequest|) + 2Q · εc` (the honest prover has no completeness error and
+the signer never refuses). -/
 @[headline]
 theorem convertedScheme.anonAdvantage_le
     (hmsg : msgLen ≤ 2 ^ 19) (hG : G.CarriesSalt) {εc : ℝ≥0}
-    (hcorr : (baseSigner G proofSystem (RMsg := Fin msgLen → UInt8) fun _ m => m).CorrectWithin εc) {n : ℕ}
-    {Vw : OracleView (Bits (queryBits (ringTranscript G proofSystem).k (2 * (ringTranscript G proofSystem).k) 48
-      (2 ^ 40))) (XOut (ringTranscript G proofSystem).k
-        (Configurations.fsExtraBytes + (ringTranscript G proofSystem).maxGrant))} {t : ℕ}
+    (hcorr : (convertedBase G proofSystem).CorrectWithin εc) {n : ℕ}
+    {Vw : OracleView _ _} {t : ℕ}
     (A : AnonAdversary (convertedScheme G proofSystem hmsg) n Vw t) (Q : ℕ) :
     anonAdvantage A Q ≤
-      Q * ((ringTranscript G proofSystem).setting 48 (ringMergeBounds proofSystem hmsg)).model.wiError 0
+      Q * (convertedSetting G proofSystem hmsg).model.wiError 0
           (Q * Fintype.card (AnonRequest (convertedScheme G proofSystem hmsg) n)) +
-        2 * Q * εc + 2 * Q * ((0 : ℝ≥0) : ℝ) :=
-  StmtVerifiesRing.anonAdvantage_le_of_pubOfCoins (ringHonest G proofSystem) (ringMergeBounds proofSystem hmsg)
+        2 * Q * εc :=
+  (StmtVerifiesRing.anonAdvantage_le_of_pubOfCoins (ringHonest G proofSystem) (ringMergeBounds proofSystem hmsg)
     (ringProofFormat proofSystem hmsg) _ (ringHonest_errorBound G proofSystem) (falconBaseSigner_oracleFree G _)
-    (fun _ => Finset.card_filter_le _ _) (falconBaseSigner_pubOfCoins G _ hG) hcorr
-    (fun H kc Rg m _ => falconBaseSigner_refusal_le_zero G _ H kc Rg _ m) A Q
+    (RingScheme.validChallengeBound_le_card _ _) (falconBaseSigner_pubOfCoins G _ hG) hcorr
+    (fun H kc Rg m _ => falconBaseSigner_refusal_le_zero G _ H kc Rg _ m) A Q).trans_eq
+    (by simp only [NNReal.coe_zero, mul_zero, add_zero])
 
 /-- **Anonymity against full key exposure (BKM06 Definition 4, `Q` adaptive challenges) of the
 ring-binding Falcon-512 ring signature** (`StmtVerifiesRing.anonAdvantage_le_of_pubOfCoins`): the
@@ -389,24 +427,23 @@ bound of `convertedScheme.anonAdvantage_le` for `bindingScheme`. -/
 theorem bindingScheme.anonAdvantage_le (G : Signer ringMsgLen) [Fintype G.KeyCoins]
     [DecidableEq G.KeyCoins] [Nonempty G.KeyCoins] [Fintype G.SignCoins] [DecidableEq G.SignCoins]
     [Nonempty G.SignCoins] (hG : G.CarriesSalt) {εc : ℝ≥0}
-    (hcorr : (baseSigner G proofSystem encodeRingMsg).CorrectWithin εc) {n : ℕ}
-    {Vw : OracleView (Bits (queryBits (ringTranscript G proofSystem).k (2 * (ringTranscript G proofSystem).k) 48
-      (2 ^ 40))) (XOut (ringTranscript G proofSystem).k
-        (Configurations.fsExtraBytes + (ringTranscript G proofSystem).maxGrant))} {t : ℕ}
+    (hcorr : (bindingBase proofSystem G).CorrectWithin εc) {n : ℕ}
+    {Vw : OracleView _ _} {t : ℕ}
     (A : AnonAdversary (bindingScheme proofSystem G) n Vw t) (Q : ℕ) :
     anonAdvantage A Q ≤
-      Q * ((ringTranscript G proofSystem).setting 48 (ringMergeBounds proofSystem ringMsgLen_le)).model.wiError 0
+      Q * (bindingSetting proofSystem G).model.wiError 0
           (Q * Fintype.card (AnonRequest (bindingScheme proofSystem G) n)) +
-        2 * Q * εc + 2 * Q * ((0 : ℝ≥0) : ℝ) :=
-  StmtVerifiesRing.anonAdvantage_le_of_pubOfCoins (ringHonest G proofSystem)
+        2 * Q * εc :=
+  (StmtVerifiesRing.anonAdvantage_le_of_pubOfCoins (ringHonest G proofSystem)
     (ringMergeBounds proofSystem ringMsgLen_le) (ringProofFormat proofSystem ringMsgLen_le) _
     (ringHonest_errorBound G proofSystem) (falconBaseSigner_oracleFree G _)
-    (fun _ => Finset.card_filter_le _ _) (falconBaseSigner_pubOfCoins G _ hG) hcorr
-    (fun H kc Rg m _ => falconBaseSigner_refusal_le_zero G _ H kc Rg _ m) A Q
+    (RingScheme.validChallengeBound_le_card _ _) (falconBaseSigner_pubOfCoins G _ hG) hcorr
+    (fun H kc Rg m _ => falconBaseSigner_refusal_le_zero G _ H kc Rg _ m) A Q).trans_eq
+    (by simp only [NNReal.coe_zero, mul_zero, add_zero])
 
 /-- The converted base signer's messages are inhabited (`Falcon512.Ring.nonempty_msg`). -/
 instance baseSigner_nonempty_msg :
-    Nonempty (baseSigner G C (RMsg := Fin msgLen → UInt8) fun _ m => m).Msg :=
+    Nonempty (convertedBase G C).Msg :=
   Falcon512.Ring.nonempty_msg G _
 
 /-- **Unforgeability with respect to insider corruption (BKM06 Definition 7) of the converted
@@ -420,27 +457,27 @@ spBCS's knowledge error at the configuration's largest round error, and `2 Q εc
 preimage table of the joint simulator. -/
 theorem convertedScheme.insiderForgeProb_le_zkForgerTerm
     (hmsg : msgLen ≤ 2 ^ 19) (hG : G.CarriesSalt) {εc : ℝ≥0∞}
-    (hcorr : (baseSigner G C (RMsg := Fin msgLen → UInt8) fun _ m => m).CorrectWithin εc)
-    (T : ((ringTranscript G C).setting 48 (ringMergeBounds C hmsg)).model.Preimages) {n t : ℕ}
+    (hcorr : (convertedBase G C).CorrectWithin εc)
+    (T : (convertedSetting G C hmsg).model.Preimages) {n t : ℕ}
     (A : InsiderAdversary (convertedScheme G C hmsg) n (OracleView.queriesOnly _ _) t)
     (Q : ℕ) :
     insiderForgeProb A Q ≤
-      RingSignature.Insider.zkForgerTerm A
+      RingSignature.Insider.zkForgerTerm (ert := Falcon512.Ring.ringVerifies_emptyRingTest ..) A
           (Falcon512.Ring.ringVerifies G (fun _ m => m) _ _ program interp).wit
           (fun _ _ _ _ => False) Prod.fst
-          ((ringTranscript G C).setting 48 (ringMergeBounds C hmsg)).viewEncoder id
+          (convertedSetting G C hmsg).viewEncoder id
           (RealizedProgram.ProofSystem.IOP.simulator
             (C.fieldIopWithSimData (forkLowering C) (Ring.stmtOf (G := G))
               (Ring.ringOk (G := G))))
           T (ringIop G C).extractor Q +
-        ENNReal.ofReal (((ringTranscript G C).setting 48 (ringMergeBounds C hmsg)).model.zkError 0
+        ENNReal.ofReal ((convertedSetting G C hmsg).model.zkError 0
           t Q) +
-        ((ringTranscript G C).setting 48 (ringMergeBounds C hmsg)).model.simExtractionError
+        (convertedSetting G C hmsg).model.simExtractionError
           (kqOf (ringIop G C).merges (ringIop G C).rounds (max 3072 201) (max 3072 201))
           (maxError (ringIopSound G C).error)
-          (((ringTranscript G C).setting 48 (ringMergeBounds C hmsg)).model.niJointSimulatorProg
-            ((ringTranscript G C).setting 48 (ringMergeBounds C hmsg)).layout
-            ((ringTranscript G C).setting 48 (ringMergeBounds C hmsg)).viewEncoder.toViewRead
+          ((convertedSetting G C hmsg).model.niJointSimulatorProg
+            (convertedSetting G C hmsg).layout
+            (convertedSetting G C hmsg).viewEncoder.toViewRead
             (max 3072 201) id
             (RealizedProgram.ProofSystem.IOP.simulator
               (C.fieldIopWithSimData (forkLowering C) (Ring.stmtOf (G := G))
@@ -450,16 +487,16 @@ theorem convertedScheme.insiderForgeProb_le_zkForgerTerm
           (kqOf (ringIop G C).merges (ringIop G C).rounds (max 3072 201) (max 3072 201))
           (t + Q * (convertedScheme G C hmsg).q +
             kqOf (ringIop G C).merges (ringIop G C).rounds (max 3072 201) (max 3072 201))
-          ((ringTranscript G C).setting 48 (ringMergeBounds C hmsg)).model.senc.digestsPerInput
+          (convertedSetting G C hmsg).model.senc.digestsPerInput
           (ringIop G C).merges.nJ (maxError (ringIopSound G C).error) +
         2 * Q * εc :=
   StmtVerifiesRing.insiderForgeProb_le_zk (ringHonest G C) (ringMergeBounds C hmsg)
-    (ringProofFormat C hmsg) _ (show 0 < (ringTranscript G C).k from Nat.succ_pos 47)
+    (ringProofFormat C hmsg) _ (hk := ⟨Nat.succ_ne_zero 47⟩)
     (ringHonest_errorBound G C) (ringIopSound G C)
     (falconBaseSigner_oracleFree G _) (falconBaseSigner_pubOfCoins G _ hG)
     (falconBaseSigner_refusalOfCoins G _) hcorr
-    (Falcon512.Ring.ringVerifies_stmt_injective G _ _ _ program interp fun _ =>
-      Function.injective_id)
-    (Falcon512.Ring.not_mem_ringHonestRelOf_nil G _ program interp) T A Q
+    ⟨Falcon512.Ring.ringVerifies_emptyRingTest .., Falcon512.Ring.ringVerifies_stmt_injective G _ _ _
+      program interp fun _ => Function.injective_id,
+      Falcon512.Ring.not_mem_ringHonestRelOf_nil G _ program interp⟩ T A Q
 
 end GordieHowe.Falcon512.Ring.Carrier.QROMParams

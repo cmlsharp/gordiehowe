@@ -13,7 +13,7 @@ public import GordieHowe.Model.Signature.RingStdToStd
 
 The Falcon-512 and ML-DSA base signers of `GordieHowe/Applications/Ring/BaseSigners.lean` sign a
 ring and a message by signing the base message `bmsg R m` as the ordinary signer does
-(`BaseSigner.RingSignsStd`), so their key-reuse games reduce to the standard multi-user game
+(`BaseSigner.RingSignsStd`), so their joint-security games reduce to the standard multi-user game
 (`Signature.muEufProbWithin_ringStd_le_std`).
 
 - `falconBaseSigner_ringSignsStd`, `mldsaBaseSigner_ringSignsStd`.

@@ -72,7 +72,6 @@ class MldsaHSelHonest (program : RealizedProgram) : Prop where
     (program.value 562).size = 256 ∧ (program.value 563).size = 256 ∧
     (program.value 564).size = 39 ∧ (program.value 565).size = 39
 
-set_option maxRecDepth 4096 in
 /-- The native program at the ROM parameters has these facts. -/
 instance : MldsaHSelHonest program where
   sel_cells := Native.ROMParams.HonestWordFacts.sel_cells
@@ -266,7 +265,6 @@ theorem candBits_honest (k : Fin 264) (b : Fin 8) :
   · rw [if_neg (show ¬ (8 * (8 + (k : ℕ)) + b < 1088) by omega), if_neg h136,
       show (8 * (8 + (k : ℕ)) + b) % 1088 = 8 * ((8 + (k : ℕ)) % 136) + b by omega]
 
-set_option maxRecDepth 8192 in
 /-- **SampleInBall's selection predicates hold at honest values**: the hash values, the selected
 bytes the input's positions (`jF`) and the threshold words the honest low threshold bits packed
 (`lowF`). -/
@@ -337,7 +335,6 @@ theorem signsH_honest (t : Fin 39) :
     if_pos (show (t : ℕ) / 8 < 136 by omega),
     show (8 * ((t : ℕ) / 8) + (t : ℕ) % 8) % 1088 = 8 * ((t : ℕ) / 8 % 136) + (t : ℕ) % 8 by omega]
 
-set_option maxRecDepth 8192 in
 /-- **SampleInBall's memory check predicates hold at honest values**: the hash values, the selected
 bytes, and the memory cells the honest trace's (`memF`). -/
 theorem mem_holds_honest (h557 : ∀ v, v = 556 → ∀ n < 312, RealizedProgram.castElt (b := 1) (val v n) = jF FH i n)

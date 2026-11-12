@@ -32,9 +32,6 @@ The objects of the ring-signature construction, generic in the base signature sc
   circuit is compiled for).
 - `RingOf PK N`: rings of at most `N` keys, the finite type of the rings in statements and
   requests.
-- `BaseRequest`, `BaseResponse`, `baseAnswer`: the oracles of the multi-user signature game
-  (public key, signature, corruption returning the key-generation coins), the signing oracle
-  answering at signing coins drawn for the request.
 
 ## Sources
 
@@ -227,6 +224,17 @@ theorem mem_ringRel_iff {adm : List Sch.PK → Prop} {bind : List Sch.PK → RMs
     (x, w) ∈ ringRel adm bind ↔ adm x.ring.1 ∧ RingRel bind x w :=
   Iff.rfl
 
+/-- **Membership in the ring relation is decidable** for a decidable `adm` and public values with
+decidable equality: a position comparison, an equality of public values and a Boolean
+verification. A definition, not an instance, so that it applies only where it is named. -/
+def ringRelDecidable (adm : List Sch.PK → Prop) [DecidablePred adm] [DecidableEq Sch.Pub]
+    (bind : List Sch.PK → RMsg → Sch.Msg) :
+    DecidablePred (· ∈ (ringRel adm bind : Set (RingStmt Sch RMsg N × RingWit Sch))) :=
+  fun p => decidable_of_iff (adm p.1.ring.1 ∧ ∃ h : p.2.idx < p.1.ring.1.length,
+      Sch.pub p.2.sig = p.1.pub ∧
+        Sch.verify (p.1.ring.1[p.2.idx]'h) (bind p.1.ring.1 p.1.msg) p.2.sig = true)
+    ⟨fun ⟨ha, h, hp, hv⟩ => ⟨ha, h, hp, hv⟩, fun h => ⟨h.1, h.2.idx_lt, h.2.pub_eq, h.2.verify_eq⟩⟩
+
 /-- **An honest member's verifying signature is a ring witness**: a signature computed with the
 secret key of honestly generated coins `kc`, whose public key is at position `i` of the ring, is a
 witness for the statement with its public value, when it verifies (`hv`). -/
@@ -249,144 +257,9 @@ impossible: `Msg` is finite and `List PK` is not.) -/
 def BindsRing (bind : List Sch.PK → RMsg → Sch.Msg) : Prop :=
   ∀ (R R' : RingOf Sch.PK N) (m m' : RMsg), bind R.1 m = bind R'.1 m' → R.1 = R'.1 ∧ m = m'
 
-variable (N) in
-/-- **The base message of an encoding** `enc` of a ring of at most `N` keys and a ring message (a
-longer list is read as the empty ring). -/
-def bindOfEncoding (enc : RingOf Sch.PK N × RMsg → Sch.Msg) (R : List Sch.PK) (m : RMsg) :
-    Sch.Msg :=
-  if h : R.length ≤ N then enc (⟨R, h⟩, m) else enc (⟨[], Nat.zero_le _⟩, m)
-
-/-- **An injective encoding binds the ring**: `BindsRing` is satisfiable whenever `Msg` is large
-enough to encode a ring of at most `N` keys and a ring message. -/
-theorem bindsRing_bindOfEncoding {enc : RingOf Sch.PK N × RMsg → Sch.Msg}
-    (henc : Function.Injective enc) : BindsRing N (bindOfEncoding N enc) := by
-  intro R R' m m' h
-  simp only [bindOfEncoding, dif_pos R.2, dif_pos R'.2] at h
-  have h' := henc h
-  simp only [Prod.mk.injEq, Subtype.mk.injEq] at h'
-  exact h'
-
 /-- The key at the witness's position is a member of the ring. -/
 theorem RingRel.mem_ring {bind : List Sch.PK → RMsg → Sch.Msg} {x : RingStmt Sch RMsg N}
     {w : RingWit Sch} (h : RingRel bind x w) : x.ring.1[w.idx]'h.idx_lt ∈ x.ring.1 :=
   List.getElem_mem _
-
-/-! ### The oracles of the multi-user signature game -/
-
-variable (Sch) (n : ℕ)
-
-/-- **A request to the oracles of the multi-user signature game with corruption**: the public
-key of user `i`, a signature by user `i` on a message, or the corruption of user `i`. -/
-inductive BaseRequest where
-  /-- The public key of user `i`. -/
-  | publicKey (i : Fin n)
-  /-- A signature by user `i` on `m`. -/
-  | sign (i : Fin n) (m : Sch.Msg)
-  /-- The corruption of user `i`. -/
-  | corrupt (i : Fin n)
-
-/-! The decidable equality and finiteness of requests are the definitions `deriving DecidableEq,
-Fintype` generate, written out: they read the instances of `Sch.Msg` from binders. -/
-
-section BaseRequestInstances
-
-variable {Sch n}
-
-/-- Decidable equality of requests, constructor by constructor and field by field. -/
-def instDecidableEqBaseRequest.decEq [DecidableEq Sch.Msg] (x y : BaseRequest Sch n) :
-    Decidable (x = y) :=
-  match x, y with
-  | @BaseRequest.publicKey _ _ a0, @BaseRequest.publicKey _ _ b0 =>
-    if h : @a0 = @b0 then by subst h; exact isTrue rfl
-    else isFalse (by intro n; injection n; apply h _; assumption)
-  | BaseRequest.publicKey .., BaseRequest.sign .. => isFalse (by intro h; injection h)
-  | BaseRequest.publicKey .., BaseRequest.corrupt .. => isFalse (by intro h; injection h)
-  | BaseRequest.sign .., BaseRequest.publicKey .. => isFalse (by intro h; injection h)
-  | @BaseRequest.sign _ _ a0 a1, @BaseRequest.sign _ _ b0 b1 =>
-    if h0 : @a0 = @b0 then by
-      subst h0
-      exact
-        if h1 : @a1 = @b1 then by subst h1; exact isTrue rfl
-        else isFalse (by intro n; injection n; apply h1 _; assumption)
-    else isFalse (by intro n; injection n; apply h0 _; assumption)
-  | BaseRequest.sign .., BaseRequest.corrupt .. => isFalse (by intro h; injection h)
-  | BaseRequest.corrupt .., BaseRequest.publicKey .. => isFalse (by intro h; injection h)
-  | BaseRequest.corrupt .., BaseRequest.sign .. => isFalse (by intro h; injection h)
-  | @BaseRequest.corrupt _ _ a0, @BaseRequest.corrupt _ _ b0 =>
-    if h : @a0 = @b0 then by subst h; exact isTrue rfl
-    else isFalse (by intro n; injection n; apply h _; assumption)
-
-instance instDecidableEqBaseRequest [DecidableEq Sch.Msg] : DecidableEq (BaseRequest Sch n) :=
-  instDecidableEqBaseRequest.decEq
-
-instance instFintypeBaseRequest [Fintype Sch.Msg] : Fintype (BaseRequest Sch n) :=
-  derive_fintype% _
-
-end BaseRequestInstances
-
-variable {Sch n} in
-/-- The request is a signing request. -/
-def BaseRequest.isSign : BaseRequest Sch n → Bool
-  | .sign _ _ => true
-  | _ => false
-
-/-- **An answer of the oracles of the multi-user signature game.** -/
-inductive BaseResponse where
-  /-- A public key. -/
-  | publicKey (pk : Sch.PK)
-  /-- A signature. -/
-  | signature (σ : Sch.Sig)
-  /-- The key-generation coins of a corrupted user. -/
-  | keyCoins (kc : Sch.KeyCoins)
-
-/-! The decidable equality and finiteness of answers are the definitions `deriving DecidableEq,
-Fintype` generate, written out: they read the instances of `Sch.PK`, `Sch.Sig` and `Sch.KeyCoins`
-from binders. -/
-
-section BaseResponseInstances
-
-variable {Sch}
-
-/-- Decidable equality of answers, constructor by constructor. -/
-def instDecidableEqBaseResponse.decEq [DecidableEq Sch.PK] [DecidableEq Sch.Sig]
-    [DecidableEq Sch.KeyCoins] (x y : BaseResponse Sch) : Decidable (x = y) :=
-  match x, y with
-  | @BaseResponse.publicKey _ a0, @BaseResponse.publicKey _ b0 =>
-    if h : @a0 = @b0 then by subst h; exact isTrue rfl
-    else isFalse (by intro n; injection n; apply h _; assumption)
-  | BaseResponse.publicKey .., BaseResponse.signature .. => isFalse (by intro h; injection h)
-  | BaseResponse.publicKey .., BaseResponse.keyCoins .. => isFalse (by intro h; injection h)
-  | BaseResponse.signature .., BaseResponse.publicKey .. => isFalse (by intro h; injection h)
-  | @BaseResponse.signature _ a0, @BaseResponse.signature _ b0 =>
-    if h : @a0 = @b0 then by subst h; exact isTrue rfl
-    else isFalse (by intro n; injection n; apply h _; assumption)
-  | BaseResponse.signature .., BaseResponse.keyCoins .. => isFalse (by intro h; injection h)
-  | BaseResponse.keyCoins .., BaseResponse.publicKey .. => isFalse (by intro h; injection h)
-  | BaseResponse.keyCoins .., BaseResponse.signature .. => isFalse (by intro h; injection h)
-  | @BaseResponse.keyCoins _ a0, @BaseResponse.keyCoins _ b0 =>
-    if h : @a0 = @b0 then by subst h; exact isTrue rfl
-    else isFalse (by intro n; injection n; apply h _; assumption)
-
-instance instDecidableEqBaseResponse [DecidableEq Sch.PK] [DecidableEq Sch.Sig]
-    [DecidableEq Sch.KeyCoins] : DecidableEq (BaseResponse Sch) :=
-  instDecidableEqBaseResponse.decEq
-
-instance instFintypeBaseResponse [Fintype Sch.PK] [Fintype Sch.Sig] [Fintype Sch.KeyCoins] :
-    Fintype (BaseResponse Sch) :=
-  derive_fintype% _
-
-end BaseResponseInstances
-
-variable {Sch n}
-
-/-- **The answer of the oracles** with the users' key-generation coins `keys`, at the signing coins
-`c` drawn for the current request: the public key; a signature `signWith sk_i m c`; the
-key-generation coins (corruption returns the coins, as in BKP20 p. 7 and CCLM22 Experiment 3,
-p. 21; this reveals at least the secret key). -/
-def baseAnswer (keys : Fin n → Sch.KeyCoins) (c : Sch.SignCoins) :
-    BaseRequest Sch n → BaseResponse Sch
-  | .publicKey i => .publicKey (Sch.pk (keys i))
-  | .sign i m => .signature (Sch.signWith (Sch.sk (keys i)) m c)
-  | .corrupt i => .keyCoins (keys i)
 
 end GordieHowe.Ring

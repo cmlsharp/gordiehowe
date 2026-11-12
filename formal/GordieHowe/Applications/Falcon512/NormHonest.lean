@@ -312,7 +312,6 @@ section Columns
 
 variable {e : program.Env I}
 
-set_option maxRecDepth 2048
 
 /-- **`norm.column0` holds** where its integer equation holds (the converse of `column0_int`). -/
 theorem column0_holds (h : ∀ i < 1024,

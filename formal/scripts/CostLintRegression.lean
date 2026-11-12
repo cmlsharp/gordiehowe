@@ -70,13 +70,10 @@ noncomputable def badRingScheme {n : ℕ} {types : RingSignature.RingTypes}
 def goodRingTypes (x : RingSignature.RingTypes) := x
 noncomputable def badRingTypes (x : RingSignature.RingTypes) := Classical.choice ⟨x⟩
 
-def goodBaseSigner {n : ℕ} {types : RingSignature.BaseTypes}
-    (x : RingSignature.BaseSigner OracleIn OracleOut n types) := x
-noncomputable def badBaseSigner {n : ℕ} {types : RingSignature.BaseTypes}
-    (x : RingSignature.BaseSigner OracleIn OracleOut n types) := Classical.choice ⟨x⟩
-
-def goodBaseTypes (x : RingSignature.BaseTypes) := x
-noncomputable def badBaseTypes (x : RingSignature.BaseTypes) := Classical.choice ⟨x⟩
+def goodBaseSigner {n : ℕ} {types : Signature.SchemeTypes} {RMsg : Type}
+    (x : RingSignature.BaseSigner OracleIn OracleOut n types RMsg) := x
+noncomputable def badBaseSigner {n : ℕ} {types : Signature.SchemeTypes} {RMsg : Type}
+    (x : RingSignature.BaseSigner OracleIn OracleOut n types RMsg) := Classical.choice ⟨x⟩
 
 def goodProverFn (x : NARG.ProverFn OracleIn OracleOut Stmt W Proof Coins) := x
 noncomputable def badProverFn (x : NARG.ProverFn OracleIn OracleOut Stmt W Proof Coins) := Classical.choice ⟨x⟩
@@ -115,7 +112,7 @@ run_cmd liftTermElabM do
   let (bad, _) ← computabilityFailures #[]
   let cases := ["System", "Ready", "Certified", "RuntimeInputs", "CompletionInputs", "Iop", "Transcript", "Simulator",
     "ProverFn", "Prover", "Verifier", "Extractor", "PlainIop", "MultiIop", "IopProver", "IopVerifier",
-    "RingProofSystem", "PSTypes", "RingScheme", "RingTypes", "BaseSigner", "BaseTypes"]
+    "RingProofSystem", "PSTypes", "RingScheme", "RingTypes", "BaseSigner"]
   for suffix in cases do
     let good := Name.str `GordieHowe.CostLintRegression ("good" ++ suffix)
     let rejected := Name.str `GordieHowe.CostLintRegression ("bad" ++ suffix)

@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Model.RingSignature.Scheme
+public import GordieHowe.Model.Signature.Scheme
 public import GordieHowe.Foundations.Probability.Advantage
 
 @[expose] public section
@@ -64,7 +65,8 @@ theorem pk_mem_honestRing {r : ℕ} (hr : r ≤ N) (keys : Fin r → S.KeyCoins)
 
 /-- The draws of the completeness game with `r` members: the oracle, the members' key coins and
 the signing coins. -/
-abbrev CompletenessDraw (r : ℕ) : Type := (X → Y) × (Fin r → S.KeyCoins) × S.SignCoins
+abbrev CompletenessDraw (r : ℕ) : Type :=
+  Signature.SigningDraw X Y (Fin r → S.KeyCoins) S.SignCoins
 
 variable [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] [Fintype TS.KeyCoins]
   [Nonempty TS.KeyCoins] [Fintype TS.SignCoins] [Nonempty TS.SignCoins]
@@ -74,17 +76,19 @@ uniform oracle, uniform key coins of the members and uniform signing coins, the 
 the honest ring is supported and user `s` refuses to sign `m` on it. -/
 noncomputable def refuseProb {r : ℕ} (hr : r ≤ N) (s : Fin r) (m : S.Msg) : ℝ≥0∞ :=
   Pr[d ~ PMF.uniformOfFintype (S.CompletenessDraw r) :
-    S.Supported (S.honestRing hr d.2.1) ∧
-      (S.sign (S.keyGen (d.2.1 s)) (S.honestRing hr d.2.1) m d.2.2).run d.1 = none]
+    S.Supported (S.honestRing hr d.keys) ∧
+      (S.sign (S.keyGen (d.keys s)) (S.honestRing hr d.keys) m d.coins).run
+        d.oracle = none]
 
 /-- **The rejection probability** for `r` members, signer position `s` and message `m`: the
 probability that the honest ring is supported, user `s` signs `m` on it, and verification rejects
 the signature. -/
 noncomputable def rejectProb {r : ℕ} (hr : r ≤ N) (s : Fin r) (m : S.Msg) : ℝ≥0∞ :=
   Pr[d ~ PMF.uniformOfFintype (S.CompletenessDraw r) :
-    S.Supported (S.honestRing hr d.2.1) ∧
-      ∃ σ, (S.sign (S.keyGen (d.2.1 s)) (S.honestRing hr d.2.1) m d.2.2).run d.1 = some σ ∧
-        S.verify d.1 (S.honestRing hr d.2.1) m σ = false]
+    S.Supported (S.honestRing hr d.keys) ∧
+      ∃ σ, (S.sign (S.keyGen (d.keys s)) (S.honestRing hr d.keys) m d.coins).run
+        d.oracle = some σ ∧
+        S.verify d.oracle (S.honestRing hr d.keys) m σ = false]
 
 /-- **The scheme is complete with refusal error `εr` and rejection error `εv`**: for every ring
 size `r ≤ N`, signer position and message, the refusal probability is at most `εr` and the rejection
@@ -107,19 +111,21 @@ honest ring is supported and the signer does not output a verifying signature. -
 theorem refuseProb_add_rejectProb {r : ℕ} (hr : r ≤ N) (s : Fin r) (m : S.Msg) :
     S.refuseProb hr s m + S.rejectProb hr s m =
       Pr[d ~ PMF.uniformOfFintype (S.CompletenessDraw r) :
-        S.Supported (S.honestRing hr d.2.1) ∧
-          ¬ ∃ σ, (S.sign (S.keyGen (d.2.1 s)) (S.honestRing hr d.2.1) m d.2.2).run d.1 = some σ ∧
-            S.verify d.1 (S.honestRing hr d.2.1) m σ = true] := by
+        S.Supported (S.honestRing hr d.keys) ∧
+          ¬ ∃ σ, (S.sign (S.keyGen (d.keys s)) (S.honestRing hr d.keys) m d.coins).run
+              d.oracle = some σ ∧
+            S.verify d.oracle (S.honestRing hr d.keys) m σ = true] := by
   classical
   rw [refuseProb, rejectProb, PMF.toOuterMeasure_apply, PMF.toOuterMeasure_apply,
     PMF.toOuterMeasure_apply, ← ENNReal.tsum_add]
   refine tsum_congr fun d => ?_
   simp only [Set.indicator_apply, Set.mem_ofPred_eq]
-  by_cases hs : S.Supported (S.honestRing hr d.2.1)
+  by_cases hs : S.Supported (S.honestRing hr d.keys)
   · rcases Option.eq_none_or_eq_some
-      ((S.sign (S.keyGen (d.2.1 s)) (S.honestRing hr d.2.1) m d.2.2).run d.1) with h | ⟨σ, h⟩
+      ((S.sign (S.keyGen (d.keys s)) (S.honestRing hr d.keys) m d.coins).run
+        d.oracle) with h | ⟨σ, h⟩
     · simp [hs, h]
-    · cases hv : S.verify d.1 (S.honestRing hr d.2.1) m σ <;> simp [hs, h, hv]
+    · cases hv : S.verify d.oracle (S.honestRing hr d.keys) m σ <;> simp [hs, h, hv]
   · simp [hs]
 
 /-! ### A complete scheme -/
@@ -161,7 +167,7 @@ theorem trivial_completeWithin : (trivial X Y N).CompleteWithin 0 0 := by
     refine le_of_eq ?_
     rw [refuseProb, PMF.toOuterMeasure_apply_eq_zero_iff]
     refine Set.disjoint_left.2 fun d _ hd => ?_
-    have hmem := (trivial X Y N).pk_mem_honestRing hr d.2.1 s
+    have hmem := (trivial X Y N).pk_mem_honestRing hr d.keys s
     simp only [Set.mem_ofPred_eq] at hd
     have h2 := hd.2
     change (if _ ∈ _ then some () else none) = none at h2

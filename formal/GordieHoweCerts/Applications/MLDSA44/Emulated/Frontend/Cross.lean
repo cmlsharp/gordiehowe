@@ -64,13 +64,11 @@ local notation "interp" => RealizedProgram.mldsaInterpOf F0 FH
 
 /-! ## The program's data -/
 
-/-! The program's predicate and shared-expression tables have `276` and `528` entries; reading an
-entry by `rfl` unfolds `List.getD` that deep, past the default recursion depth, so the identities
-below raise `maxRecDepth` (generated data, not a proof structure; as `GordieHoweCerts/Applications/MLDSA44/Frontend/Cross.lean`). -/
+/-! The program's predicate and shared-expression tables have `276` and `528` entries; the
+identities below read entries of them. -/
 
 section Tables
 
-set_option maxRecDepth 4096
 
 theorem expr6 : program.expr 6 = .reindex idx8 (RealizedProgram.concatR (.leaf 63) [.leaf 60]) :=
   MldsaECross.expr6

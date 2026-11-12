@@ -30,11 +30,11 @@ Algorithm 7 with its loop capped at `T` attempts (FIPS 204 §6.2 and Appendix C)
   the probability that the relayed adversary outputs a signature verifying under an uncorrupted
   user's key (`muVerifyProb`; not a reduction to MU-SUF-CMA^corr).
 - `muEufProb_w1ConcreteBase_le_relay_ringStd`,
-  `muSufProb_w1ConcreteBase_le_muVerifyProb_relay_ringStd`: the same for the key-reuse game
+  `muSufProb_w1ConcreteBase_le_muVerifyProb_relay_ringStd`: the same for the joint-security game
   (`SignOracle.ringStd`).
 - `muEufProbWithin_w1ConcreteBase_le_relay`, `muEufProbWithin_w1ConcreteBase_le_relay_ringStd`: the
   MU-EUF-CMA^corr lifts with at most `Qs` signing and corruption requests in the ring-aware or
-  key-reuse game and at most `k · Qs` in the standard call game (`muEufProbWithin_le_relay`).
+  joint-security game and at most `k · Qs` in the standard call game (`muEufProbWithin_le_relay`).
 -/
 
 namespace GordieHowe.Ring.MLDSAW1
@@ -100,8 +100,8 @@ theorem muSufProb_w1ConcreteBase_le_muVerifyProb_relay (hp : p.isApproved) (hk :
         (k * Q) :=
   muSufProb_le_muVerifyProb_relay hk (isRejectionOn_w1ConcreteBase O M βmin tol k D bmsg hp) i₀ A Q
 
-/-- **MU-EUF-CMA^corr of the key-reuse game from the standard call game**: every adversary `A` of
-the key-reuse game of the concrete base signer (ring requests and base messages) with `Q` requests
+/-- **MU-EUF-CMA^corr of the joint-security game from the standard call game**: every adversary `A` of
+the joint-security game of the concrete base signer (ring requests and base messages) with `Q` requests
 has at most the success probability of its relayed adversary in the game of the standard call
 oracle with `k · Q` requests. -/
 theorem muEufProb_w1ConcreteBase_le_relay_ringStd (hp : p.isApproved) (hk : 0 < k) (i₀ : Fin n)
@@ -113,7 +113,7 @@ theorem muEufProb_w1ConcreteBase_le_relay_ringStd (hp : p.isApproved) (hk : 0 < 
   muEufProb_le_relay_ringStd hk (isRejectionOn_w1ConcreteBase O M βmin tol k D bmsg hp)
     (isStdOn_w1ConcreteBase O M βmin tol k D bmsg hk) i₀ A Q
 
-/-- **MU-SUF-CMA^corr of the key-reuse game against the standard call game**: the form of
+/-- **MU-SUF-CMA^corr of the joint-security game against the standard call game**: the form of
 `muSufProb_w1ConcreteBase_le_muVerifyProb_relay` for `SignOracle.ringStd`. -/
 theorem muSufProb_w1ConcreteBase_le_muVerifyProb_relay_ringStd (hp : p.isApproved) (hk : 0 < k)
     (i₀ : Fin n)
@@ -137,7 +137,7 @@ theorem muEufProbWithin_w1ConcreteBase_le_relay (hp : p.isApproved) (hk : 0 < k)
         (k * Q) (k * Qs) :=
   muEufProbWithin_le_relay hk (isRejectionOn_w1ConcreteBase O M βmin tol k D bmsg hp) i₀ A Q Qs
 
-/-- **The key-reuse form of `muEufProbWithin_w1ConcreteBase_le_relay`.** -/
+/-- **The joint-security form of `muEufProbWithin_w1ConcreteBase_le_relay`.** -/
 theorem muEufProbWithin_w1ConcreteBase_le_relay_ringStd (hp : p.isApproved) (hk : 0 < k)
     (i₀ : Fin n)
     (A : MUAdversary (SignOracle.ringStd (w1ConcreteBase p O M βmin tol k D bmsg)) n V t)

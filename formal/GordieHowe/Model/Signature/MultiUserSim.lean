@@ -51,10 +51,10 @@ end NoQuery
 
 section Ring
 
-variable {N : ℕ} {TB : BaseTypes} {B : BaseSigner X Y N TB}
+variable {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type} {B : BaseSigner X Y N T RMsg}
 
 /-- The ring-aware signing oracle of an oracle-free base signer makes no query. -/
-theorem SignOracle.noQuery_ring [DecidableEq TB.PK]
+theorem SignOracle.noQuery_ring [DecidableEq T.PK]
     (hB : B.OracleFree) : (SignOracle.ring B).NoQuery := by
   intro kp p c
   change (if kp.1 ∈ p.1.1 then B.bsign kp.2 p.1 (p.1.1.idxOf kp.1) p.2 c else .pure none).QueriesLE
@@ -64,7 +64,7 @@ theorem SignOracle.noQuery_ring [DecidableEq TB.PK]
   · exact OracleProg.QueriesLE.pure _ _
 
 /-- The ring-aware and ordinary signing oracles of an oracle-free base signer make no query. -/
-theorem SignOracle.noQuery_ringStd [DecidableEq TB.PK]
+theorem SignOracle.noQuery_ringStd [DecidableEq T.PK]
     (hB : B.OracleFree) : (SignOracle.ringStd B).NoQuery := by
   intro kp sm c
   rcases sm with p | bm
@@ -156,14 +156,14 @@ theorem _root_.GordieHowe.Quantum.AdaptiveIAlg.composeBothOut_mapOut {X Y Req Re
 section Forger
 
 variable {N n : ℕ} {m : ℕ} {I J Bd : Type} [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J]
-  {TB : BaseTypes}
-  {B : BaseSigner (Bits m) (BitStr I J) N TB} (O : SignOracle B.core) [NeZero n]
+  {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits m) (BitStr I J) N T RMsg} (O : SignOracle B.core) [NeZero n]
   (e : BitStr I J ≃ Bd)
 
 variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins]
 
 /-- **The forger holding a compressed-oracle simulation**: on the public keys `pks`, it draws the
 auxiliary input `a` from `aux pks`, runs the compressed-oracle simulation of the query algorithm
@@ -187,7 +187,7 @@ noncomputable def coSimMU (Aux : (Fin n → B.PK) → Type) (aux : ∀ pks, PMF 
 
 variable [Nonempty O.Coins]
 
-variable [Nonempty TB.KeyCoins]
+variable [Nonempty T.KeyCoins]
 
 /-- **The success probability of the forger holding a compressed-oracle simulation** in
 MU-EUF-CMA^corr with `Q'` requests, at least the number `t + 1` of request points (`hQ`), for a

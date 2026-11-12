@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.Model.NARG.OracleProg
+public import GordieHowe.Model.Signature.Scheme
 public import Mathlib.Data.Set.Finite.List
 public import Mathlib.Probability.Distributions.Uniform
 
@@ -83,9 +84,36 @@ end OracleProg
 
 namespace RingSignature
 
+open GordieHowe.Signature (KeyPair)
+
 /-- **A ring**: an ordered list of at most `N` public keys (BKM06 p. 3, "an ordered list
 `R = (PK_1, …, PK_n)` of public keys"; here unsorted, with repetitions allowed). -/
 abbrev KeyRing (PK : Type) (N : ℕ) : Type := {l : List PK // l.length ≤ N}
+
+namespace KeyRing
+
+variable {PK : Type} {N : ℕ}
+
+/-- **The keys of a ring**, in order. -/
+abbrev keys (R : KeyRing PK N) : List PK := R.1
+
+/-- **Membership in a ring**: `pk ∈ R` when `pk` is one of the keys of `R`. -/
+instance instMembership : Membership PK (KeyRing PK N) := ⟨fun R pk => pk ∈ R.keys⟩
+
+/-- `pk ∈ R` is `pk ∈ R.keys`. -/
+@[simp] theorem mem_keys {R : KeyRing PK N} {pk : PK} : pk ∈ R.keys ↔ pk ∈ R := Iff.rfl
+
+/-- Membership in a ring is decided by membership in its keys. -/
+instance decidableMem [DecidableEq PK] (pk : PK) (R : KeyRing PK N) : Decidable (pk ∈ R) :=
+  inferInstanceAs (Decidable (pk ∈ R.keys))
+
+/-- **The ring is empty.** -/
+abbrev IsEmpty (R : KeyRing PK N) : Prop := R.keys = []
+
+/-- **The ring holds `pk` at position `i`.** -/
+abbrev HoldsAt (R : KeyRing PK N) (i : ℕ) (pk : PK) : Prop := R.keys[i]? = some pk
+
+end KeyRing
 
 /-- **The rings as a finite set**: the lists of the functions `Fin k → PK` for `k ≤ N`
 (`List.ofFn`). Irreducible, so that unification does not evaluate the enumeration. -/
@@ -126,6 +154,25 @@ structure RingTypes where
   /-- The coins of signing. -/
   SignCoins : Type
 
+/-- **A candidate ring forgery with the types `T` and rings of at most `N` keys**: a ring, a
+message and a ring signature (BKM06 Definition 7's `(R*, M*, σ*)`). -/
+abbrev RingTypes.Candidate (T : RingTypes) (N : ℕ) : Type := KeyRing T.PK N × T.Msg × T.Sig
+
+namespace RingTypes.Candidate
+
+variable {T : RingTypes} {N : ℕ}
+
+/-- The ring. -/
+@[simp] abbrev ring (f : T.Candidate N) : KeyRing T.PK N := f.1
+
+/-- The message. -/
+@[simp] abbrev msg (f : T.Candidate N) : T.Msg := f.2.1
+
+/-- The ring signature. -/
+@[simp] abbrev sig (f : T.Candidate N) : T.Sig := f.2.2
+
+end RingTypes.Candidate
+
 /-- **A ring signature scheme in the random-oracle model** (BKM06 Definition 1, ePrint 2005/304,
 p. 3) with the random oracle `X → Y`, rings of at most `N` keys and the types `T`: key generation
 from uniform coins; signing, a classical oracle program making at most `q` queries, from the
@@ -133,12 +180,13 @@ signer's key pair, a ring, a message and uniform signing coins, which returns a 
 refuses (`none`); verification, a function of the oracle; and the rings the scheme supports. -/
 structure RingScheme (X Y : Type) (N : ℕ) (T : RingTypes) where
   /-- Key generation from its coins. -/
-  keyGen : T.KeyCoins → T.PK × T.SK
+  keyGen : T.KeyCoins → KeyPair T.PK T.SK
   /-- The bound on the signer's oracle queries. -/
   q : ℕ
   /-- Signing by the key pair `kp` on a ring and a message with drawn coins; `none` is a
   refusal. -/
-  sign : T.PK × T.SK → KeyRing T.PK N → T.Msg → T.SignCoins → OracleProg X Y (Option T.Sig)
+  sign : KeyPair T.PK T.SK → KeyRing T.PK N → T.Msg → T.SignCoins →
+    OracleProg X Y (Option T.Sig)
   /-- The signer makes at most `q` queries. -/
   sign_queries : ∀ kp R m c, (sign kp R m c).QueriesLE q
   /-- Verification at an oracle. -/
@@ -168,24 +216,46 @@ abbrev KeyCoins (_ : RingScheme X Y N T) : Type := T.KeyCoins
 /-- The coins of signing: those of the types `T`. -/
 abbrev SignCoins (_ : RingScheme X Y N T) : Type := T.SignCoins
 
+/-- **The output of an unforgeability adversary** against the scheme: a ring, a message and a
+ring signature (BKM06 Definition 7's `(R*, M*, σ*)`): `T.Candidate N`, spelled through the
+scheme's types so that the scheme is inferred from a forgery's type. -/
+abbrev RingForgery (S : RingScheme X Y N T) : Type := KeyRing S.PK N × S.Msg × S.Sig
+
+namespace RingForgery
+
+variable {S : RingScheme X Y N T}
+
+/-- The ring. -/
+@[simp] abbrev ring (f : S.RingForgery) : KeyRing S.PK N := f.1
+
+/-- The message. -/
+@[simp] abbrev msg (f : S.RingForgery) : S.Msg := f.2.1
+
+/-- The ring signature. -/
+@[simp] abbrev sig (f : S.RingForgery) : S.Sig := f.2.2
+
+end RingForgery
+
 variable (S : RingScheme X Y N T)
 
 /-- The public key generated from the coins `kc`. -/
-@[expose] def pk (kc : S.KeyCoins) : S.PK := (S.keyGen kc).1
+@[expose] def pk (kc : S.KeyCoins) : S.PK := (S.keyGen kc).pk
 
 /-- The secret key generated from the coins `kc`. -/
-@[expose] def sk (kc : S.KeyCoins) : S.SK := (S.keyGen kc).2
+@[expose] def sk (kc : S.KeyCoins) : S.SK := (S.keyGen kc).sk
 
 /-- **The signer refuses outside its rings**: signing returns `none`, at every oracle, on every ring
 that does not hold the signer's public key and on every unsupported ring. -/
 def RefusesOutside : Prop :=
-  ∀ (kp : S.PK × S.SK) (R : KeyRing S.PK N) (m : S.Msg) (c : S.SignCoins) (H : X → Y),
-    (kp.1 ∉ R.1 ∨ ¬ S.Supported R) → (S.sign kp R m c).run H = none
+  ∀ (kp : KeyPair S.PK S.SK) (R : KeyRing S.PK N) (m : S.Msg) (c : S.SignCoins)
+      (H : X → Y),
+    (kp.pk ∉ R ∨ ¬ S.Supported R) → (S.sign kp R m c).run H = none
 
 /-- `RefusesOutside`, unfolded. -/
 theorem refusesOutside_iff : S.RefusesOutside ↔
-    ∀ (kp : S.PK × S.SK) (R : KeyRing S.PK N) (m : S.Msg) (c : S.SignCoins) (H : X → Y),
-      (kp.1 ∉ R.1 ∨ ¬ S.Supported R) → (S.sign kp R m c).run H = none := by
+    ∀ (kp : KeyPair S.PK S.SK) (R : KeyRing S.PK N) (m : S.Msg) (c : S.SignCoins)
+      (H : X → Y),
+      (kp.pk ∉ R ∨ ¬ S.Supported R) → (S.sign kp R m c).run H = none := by
   rw [RefusesOutside]
 
 section Laws
@@ -193,12 +263,12 @@ section Laws
 variable [Fintype T.SignCoins] [Nonempty T.SignCoins]
 
 /-- **The law of the signer's output** at the oracle `H`: the signing coins uniform. -/
-noncomputable def signLaw (H : X → Y) (kp : S.PK × S.SK) (R : KeyRing S.PK N) (m : S.Msg) :
+noncomputable def signLaw (H : X → Y) (kp : KeyPair S.PK S.SK) (R : KeyRing S.PK N) (m : S.Msg) :
     PMF (Option S.Sig) :=
   (PMF.uniformOfFintype S.SignCoins).map fun c => (S.sign kp R m c).run H
 
 /-- `signLaw`, unfolded. -/
-theorem signLaw_eq (H : X → Y) (kp : S.PK × S.SK) (R : KeyRing S.PK N) (m : S.Msg) :
+theorem signLaw_eq (H : X → Y) (kp : KeyPair S.PK S.SK) (R : KeyRing S.PK N) (m : S.Msg) :
     S.signLaw H kp R m = (PMF.uniformOfFintype S.SignCoins).map fun c => (S.sign kp R m c).run H := by
   rw [signLaw]
 

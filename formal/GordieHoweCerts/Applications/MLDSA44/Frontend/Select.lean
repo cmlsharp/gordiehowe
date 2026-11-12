@@ -90,7 +90,6 @@ class MldsaHSelect (program : RealizedProgram) : Prop extends MldsaHCross progra
   /-- The length of the route's candidate product's operand. -/
   routeLens : program.exprLen (.reindex idx73 (.leaf 559)) = 264
 
-set_option maxRecDepth 4096 in
 /-- The native program at the ROM parameters has these facts. -/
 instance : MldsaHSelect program where
   bitView555 := by shape_decide
@@ -168,7 +167,6 @@ local notation "interp" => RealizedProgram.mldsaInterpOf F0 FH
 
 section Tables
 
-set_option maxRecDepth 4096
 
 theorem pred264 :
     ∃ t, (program.predicate 264).body = .equal 1 (.add (.reindex idx50 (.ref 508)) (.leaf 42)) (.leaf 43) t :=

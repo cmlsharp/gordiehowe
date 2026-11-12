@@ -160,7 +160,7 @@ noncomputable def ringVerifies :
 variable (G bmsg program I Xo Yo) in
 /-- **The statements of the empty ring are tested by the emptiness of the statement's ring**
 (`RingSignature.EmptyRingTest`, `SchemeView.stmtVerifiesRing_emptyRingTest`). -/
-instance ringVerifies_emptyRingTest :
+def ringVerifies_emptyRingTest :
     RingSignature.EmptyRingTest (ringVerifies G bmsg Xo Yo program I).stmt :=
   (schemeView G bmsg Xo Yo).stmtVerifiesRing_emptyRingTest (schemeVerifies G program I) adm64_iff
 

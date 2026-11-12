@@ -75,8 +75,8 @@ end Quantum.AdaptiveIAlg
 
 namespace RingSignature.KeyFree
 
-variable {X Y Xb Yb : Type} {N n : ℕ} {TB : BaseTypes}
-  (B : BaseSigner Xb Yb N TB) {Stmt Wit Proof R : Type}
+variable {X Y Xb Yb : Type} {N n : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  (B : BaseSigner Xb Yb N T RMsg) {Stmt Wit Proof R : Type}
   (rel : Stmt → Wit → Prop) [DecidableRel rel]
   (enc : MURequest (SignOracle.none B.core) n ⊕ R → ProofQuery Stmt Wit) (dummyS : Stmt)
 

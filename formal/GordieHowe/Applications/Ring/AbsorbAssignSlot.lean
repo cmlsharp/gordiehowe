@@ -288,10 +288,10 @@ section AbsorbAssignKF
 open GordieHowe.SPBCS IOP SPTerm Quantum.AdaptiveIAlg Classical
 
 variable {k kN kS L e N n : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq Yb]
-  {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
-  {B : BaseSigner Xb Yb N TB}
+  {T : Signature.SchemeTypes} {RMsg : Type} [Fintype T.PK] [DecidableEq T.PK]
+  [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins]
+  {B : BaseSigner Xb Yb N T RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]

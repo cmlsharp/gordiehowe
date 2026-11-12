@@ -27,7 +27,6 @@ open Generated.MLDSA44.Emulated.ROMParams (interp)
 open GordieHowe.Bits IOP
 open scoped NNReal ENNReal
 
-set_option maxRecDepth 4096 in
 /-- The emulated program at the ROM parameters has the composition's facts. -/
 instance : Emulated.MldsaEMain program where
   chal_phase := by

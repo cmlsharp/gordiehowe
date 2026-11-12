@@ -3,17 +3,21 @@
 
 module
 
-public import GordieHowe.Applications.Ring.Unforgeability
 public import GordieHowe.Model.Quantum.Interactive.AbsorbRelay
 public import GordieHowe.Model.Quantum.Interactive.ThenProg
 public import GordieHowe.Model.NARG.VerifierProg
+public import GordieHowe.Applications.Ring.Scheme
+public import GordieHowe.Model.Quantum.Interactive.SplitHybrid
+public import GordieHowe.SPBCS.Extraction.OnlineExtractTest
+public import GordieHowe.SPBCS.Online
+public import GordieHowe.SPBCS.ProverProg
 
 @[expose] public section
 
 /-!
 # Tools for the reduction of BKM06 Definition 7 at every base-message map
 
-Facts about the model used by `GordieHowe/Applications/Ring/Insider.lean`.
+Facts about the model used by the unforgeability reductions of the ring signature `ofBase`.
 
 - `NARG.Verifier.prog` (`GordieHowe/Model/NARG/VerifierProg.lean`): a verifier as a classical
   oracle program.

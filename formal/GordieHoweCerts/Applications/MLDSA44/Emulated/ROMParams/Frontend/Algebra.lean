@@ -30,7 +30,6 @@ def layout : Emulated.MldsaELayout where
   slack := ⟨645, [587, 588]⟩
   offsetBound := 416025
 
-set_option maxRecDepth 4096 in
 /-- The emulated program at the ROM parameters has domain `A`'s facts. -/
 instance : Emulated.MldsaEAlgebra program where
   layout := layout

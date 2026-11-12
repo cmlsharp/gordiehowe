@@ -41,10 +41,10 @@ open GordieHowe.QROM GordieHowe.SPBCS IOP SPTerm
 section SPBCS
 
 variable {k kN kS L e N n t kq : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq Yb]
-  {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
-  {B : BaseSigner Xb Yb N TB}
+  {TS : Signature.SchemeTypes} {RMsg : Type} [Fintype TS.PK] [DecidableEq TS.PK]
+  [Fintype TS.BSig] [DecidableEq TS.BSig]
+  [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins]
+  {B : BaseSigner Xb Yb N TS RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -151,7 +151,6 @@ theorem acceptProb_kfDist_le_one (henc : Function.Injective enc)
         ENNReal.tsum_le_tsum fun H => mul_le_mul_of_nonneg_left (PMF.coe_le_one _ _) zero_le
     _ = 1 := by rw [ENNReal.tsum_mul_right, PMF.tsum_coe, one_mul]
 
-open Classical in
 /-- **The distinguisher against the real challenger is the test against `kfMain`** at every
 oracle (L1, `outLaw_kfMain`). -/
 theorem outLaw_kfDist_real (henc : Function.Injective enc)
@@ -197,7 +196,6 @@ theorem outLaw_kfDist_sim (henc : Function.Injective enc)
   rw [AdaptiveIAlg.outLaw_thenProg]
   congr 2
 
-open Classical in
 /-- **The key-free route's zero-knowledge hop at one auxiliary value**: the test accepts against
 `kfMain` (the real challenger of the compiled spBCS prover at the statements `stmtX` and the
 decoded witnesses `fw`) with at most its probability against `kfMainSim` (the spBCS joint
@@ -249,7 +247,6 @@ theorem acceptKAt_kfMain_le (hrel : ∀ x w, rel x w ↔ (stmtX x, fw w) ∈ rel
   simp only [outLaw_kfDist_real, outLaw_kfDist_sim A' test henc hd] at hle
   exact hle
 
-open Classical in
 /-- **The key-free route's zero-knowledge hop**: `acceptKAt_kfMain_le` averaged over the
 auxiliary input. -/
 theorem acceptK_kfMain_le (hrel : ∀ x w, rel x w ↔ (stmtX x, fw w) ∈ relH)

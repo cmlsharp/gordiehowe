@@ -38,16 +38,16 @@ open scoped ENNReal
 section Win
 
 variable {m k e N n : ℕ} {Y₁ : Type} [AddGroup Y₁] {Y : Type} [AddGroup Y] [Fintype Y]
-  [DecidableEq Y] {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes}
-  {B : BaseSigner (Bits m) Y N TB}
+  [DecidableEq Y] {sp : OracleSplit Y Y₁ (XOut k e)} {TS : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits m) Y N TS RMsg}
   {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop}
   [DecidablePred adm] {O : SignOracle B.core} [NeZero n] {X₀ Cl : Type}
   {V : NARG.QROM.Verifier m k e Cl X₀}
 
 variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty O.Coins]
+variable [Fintype TS.PK] [DecidableEq TS.PK] [Fintype TS.BSig] [DecidableEq TS.BSig]
+  [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins] [Nonempty O.Coins]
 
 omit [Fintype Y] [DecidablePred adm] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
   [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype O.Coins] [DecidableEq O.Coins]
@@ -134,14 +134,14 @@ section Forger
 
 variable {m : ℕ} {I J Bd : Type} [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J]
   {Y Y₁ : Type} [DecidableEq Y] [AddGroup Y] [AddGroup Y₁] (sp : OracleSplit Y Y₁ (BitStr I J))
-  {N n : ℕ} {TB : BaseTypes}
-  {B : BaseSigner (Bits m) Y N TB} (O : SignOracle B.core) (e : BitStr I J ≃ Bd)
+  {N n : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits m) Y N TS RMsg} (O : SignOracle B.core) (e : BitStr I J ≃ Bd)
 
 variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
   [Nonempty O.Coins]
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+variable [Fintype TS.PK] [DecidableEq TS.PK] [Fintype TS.BSig] [DecidableEq TS.BSig]
+  [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins] [Nonempty TS.KeyCoins]
 
 variable [Fintype Y] [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁] [NeZero n]
   {Req Resp Req₁ Resp₁ Ot : Type} [Fintype Req] [DecidableEq Req] [Fintype Resp]

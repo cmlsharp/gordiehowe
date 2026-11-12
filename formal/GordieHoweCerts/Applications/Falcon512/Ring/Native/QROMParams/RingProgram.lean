@@ -75,14 +75,20 @@ noncomputable def ringProgramHypotheses :
 variable {RMsg : Type} [Fintype RMsg] [DecidableEq RMsg]
   (bmsg : KeyRing PublicKey 64 → RMsg → (Fin msgLen → UInt8)) {Xo Yo : Type}
 
-open Classical in
+/-- **Membership in `ringRel64 G` is decided** (`Ring.ringRelDecidable` at the rings of `64` keys and
+the bound message `bindMsg`). -/
+@[instance_reducible]
+def ringRel64Decidable : DecidablePred (· ∈ ringRel64 G) := by
+  unfold ringRel64
+  exact GordieHowe.Ring.ringRelDecidable _ _
+
 /-- **The configuration's program verifies the base signatures of `falconBaseSigner G bmsg`** for
 the ring relation on rings of `64` keys (`Ring.BaseVerifiesRing`): the program statement of the
 read ring statement `toRStmt x` (`Ring.stmtOf`), checked by `ringOk`; a witness of `Ring.rel` gives
 the ring witness of the signature encoded from the extracted `s2` with the statement's salt
 (`CoreWit.withSalt`, `ringRel_of_rel`); the honest input of a pair of the ring relation is the
 honest pair `(toRStmt x, toRWit w)` (`RingIn`), none off the ring relation. -/
-noncomputable def ringBaseVerifies :
+def ringBaseVerifies :
     BaseVerifiesRing program interp Ring.rel (Ring.relH G program interp)
       (falconBaseSigner («X» := Xo) («Y» := Yo) G bmsg) adm64 where
   stmt x := Ring.stmtOf (toRStmt G bmsg x)
@@ -90,6 +96,7 @@ noncomputable def ringBaseVerifies :
   wit x w := ofRWit G bmsg (w.withSalt (G := G) x.pub)
   sound H x _ hx hw := (Falcon512.Ring.mem_ringRel64_iff H x _).1 (Ring.ringRel_of_rel hx hw)
   input x w :=
+    haveI := ringRel64Decidable G
     if h : (toRStmt G bmsg x, toRWit G bmsg w) ∈ ringRel64 G then some ⟨_, _, h⟩ else none
   check_eq_true H x w h :=
     Ring.RingIn.ringOk_x (G := G)

@@ -80,11 +80,12 @@ namespace GordieHowe.RingSignature.KeyFree
 open Quantum Signature QROM OracleProg RingSignature.OracleSplit RingSignature.Insider
 
 variable {X Y Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] (sp : OracleSplit Y Y₁ Y₂)
-  [DecidableEq X] {N n : ℕ} {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg]
-  [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
-  [Nonempty TB.Coins] (B : BaseSigner X Y N TB)
+  [DecidableEq X] {N n : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type} [Fintype TS.PK]
+  [DecidableEq TS.PK] [Fintype RMsg]
+  [DecidableEq RMsg] [Fintype TS.BMsg] [DecidableEq TS.BMsg] [Fintype TS.BSig]
+  [DecidableEq TS.BSig] [Fintype TS.Pub] [DecidableEq TS.Pub] [Fintype TS.KeyCoins]
+  [DecidableEq TS.KeyCoins] [Nonempty TS.KeyCoins] [Fintype TS.Coins] [DecidableEq TS.Coins]
+  [Nonempty TS.Coins] (B : BaseSigner X Y N TS RMsg)
   {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
   [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) ⟨Pf, PC⟩}
@@ -97,11 +98,11 @@ variable {X Y Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] (sp
   (toR : X₀ → Req B PS adm n × ℕ → B.BSig → R) (dummyR : Req B PS adm n × ℕ → R) {Q : ℕ}
   [Inhabited X] [Inhabited B.Pub]
 
-omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TB.PK]
-  [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
-  [Nonempty TB.Coins] in
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TS.PK]
+  [Fintype RMsg] [DecidableEq RMsg] [Fintype TS.BMsg] [DecidableEq TS.BMsg] [Fintype TS.BSig]
+  [DecidableEq TS.BSig] [Fintype TS.Pub] [DecidableEq TS.Pub] [Fintype TS.KeyCoins]
+  [DecidableEq TS.KeyCoins] [Nonempty TS.KeyCoins] [Fintype TS.Coins] [DecidableEq TS.Coins]
+  [Nonempty TS.Coins] in
 /-- **The side-mode key-free relay's program of a request reads only its own side coins**: at
 side coins `sc'` agreeing with `sc` at the request's number when it is a signing request, the
 programs of the request are equal (`kfProgK_congr`). -/
@@ -139,11 +140,11 @@ def KFOutOfSig (ω : X → Y₁) (T : X → Option Y) (c : ℕ) (r : Req B PS ad
     r = .sign s Rg m ∧ (F.outB (pks s) Rg c m (sc ⟨c, h.1⟩)).run (ωT sp ω T) = some (q, kp) ∧
       o = some (kp.2.1, q.2, kp.2.2 (prfOf sp y))
 
-omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TB.PK]
-  [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
-  [Nonempty TB.Coins] in
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TS.PK]
+  [Fintype RMsg] [DecidableEq RMsg] [Fintype TS.BMsg] [DecidableEq TS.BMsg] [Fintype TS.BSig]
+  [DecidableEq TS.BSig] [Fintype TS.Pub] [DecidableEq TS.Pub] [Fintype TS.KeyCoins]
+  [DecidableEq TS.KeyCoins] [Nonempty TS.KeyCoins] [Fintype TS.Coins] [DecidableEq TS.Coins]
+  [Nonempty TS.Coins] in
 /-- **The resolved side-mode signature returns only `KFOutOfSig`.** -/
 theorem resolve_sigK_allOut (sc : Fin Q → SC) (ω : X → Y₁) (T : X → Option Y) (c : ℕ)
     (r : Req B PS adm n) :
@@ -174,11 +175,11 @@ theorem resolve_sigK_allOut (sc : Fin Q → SC) (ω : X → Y₁) (T : X → Opt
     · exact Or.inl rfl
   · exact Or.inl rfl
 
-omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TB.PK]
-  [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
-  [Nonempty TB.Coins] in
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TS.PK]
+  [Fintype RMsg] [DecidableEq RMsg] [Fintype TS.BMsg] [DecidableEq TS.BMsg] [Fintype TS.BSig]
+  [DecidableEq TS.BSig] [Fintype TS.Pub] [DecidableEq TS.Pub] [Fintype TS.KeyCoins]
+  [DecidableEq TS.KeyCoins] [Nonempty TS.KeyCoins] [Fintype TS.Coins] [DecidableEq TS.Coins]
+  [Nonempty TS.Coins] in
 /-- **The resolved side-mode statement** is the statement at the base component (`xPω`). -/
 theorem resolve_xK_stpB (ω : X → Y₁) (T : X → Option Y) (r : Req B PS adm n)
     (o : Option (B.Pub × B.BSig × List (Assignment X Y))) :
@@ -194,11 +195,11 @@ theorem resolve_xK_stpB (ω : X → Y₁) (T : X → Option Y) (r : Req B PS adm
   rw [xPω, ← S.run_stmtPB, ← ωT_eq sp ω]
   rfl
 
-omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TB.PK]
-  [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
-  [Nonempty TB.Coins] in
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TS.PK]
+  [Fintype RMsg] [DecidableEq RMsg] [Fintype TS.BMsg] [DecidableEq TS.BMsg] [Fintype TS.BSig]
+  [DecidableEq TS.BSig] [Fintype TS.Pub] [DecidableEq TS.Pub] [Fintype TS.KeyCoins]
+  [DecidableEq TS.KeyCoins] [Nonempty TS.KeyCoins] [Fintype TS.Coins] [DecidableEq TS.Coins]
+  [Nonempty TS.Coins] in
 /-- **The resolved side-mode key-free relay program with one request's signature moved**
 (`resolve_kfProgK_swap` with `sw` moving the main requests alike only at the signatures the
 signer can return, `KFOutOfSig`, and at the statements it then asks, `xPω`). -/
@@ -223,11 +224,11 @@ theorem resolve_kfProgK_swap_side (sc sc' : Fin Q → SC) (ω : X → Y₁) (T :
     resolve_bind, resolve_bind, resolve_xK_stpB]
   simp only [OracleProg.bind, translate, translate_bind, Sum.map_inr, hsw o ho, replyOf_mapSig]
 
-omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TB.PK]
-  [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
-  [Nonempty TB.Coins] in
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TS.PK]
+  [Fintype RMsg] [DecidableEq RMsg] [Fintype TS.BMsg] [DecidableEq TS.BMsg] [Fintype TS.BSig]
+  [DecidableEq TS.BSig] [Fintype TS.Pub] [DecidableEq TS.Pub] [Fintype TS.KeyCoins]
+  [DecidableEq TS.KeyCoins] [Nonempty TS.KeyCoins] [Fintype TS.Coins] [DecidableEq TS.Coins]
+  [Nonempty TS.Coins] in
 /-- **(ii-c) with the main requests moved only where the signer can return**
 (`progSwap_kfRelaySide` with `resolve_kfProgK_swap_side`): `sw` needs to move the main request of
 `r₀` alike only at the signatures `KFOutOfSig` and the statements `xPω` asked at them. -/
@@ -620,7 +621,6 @@ theorem w1MainSw_one (t₀ : RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 
   · simp [w1MainSw, w1ProofSw]
   · rfl
 
-open Classical in
 /-- **The move of the signatures at a slot's request between two coins**: the transposition of
 the two coins' signatures (`w1SlotSig`) when both sign, the identity otherwise. -/
 noncomputable def w1SlotSw (pks : Fin n → PubKey p prims) (ω : Xq → Y₁)

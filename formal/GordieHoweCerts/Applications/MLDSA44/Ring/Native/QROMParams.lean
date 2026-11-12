@@ -58,9 +58,6 @@ open Generated.MLDSA44.Ring.Native.QROMParams (interp ProofSystems certified fig
   conditions)
 open scoped NNReal ENNReal
 
-/- Generated data: the figures' checks read the generated program. -/
-set_option maxRecDepth 8192
-
 /-! ## The frontend -/
 
 

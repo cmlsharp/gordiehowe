@@ -123,6 +123,12 @@ theorem toBits_notMem_range_w1M (F : W1Fit k kN kS L p prims Msg N reps T)
   rintro ⟨b, hb⟩
   exact w1MaskPt_notMem_range_toBits F b ⟨q, hb.symm⟩
 
+omit [Fintype I₁] [DecidableEq I₁] [Nonempty (MaskBox p)] in
+/-- **The concrete mask oracle satisfies `W1MaskQueryFacts`** (`toBits_notMem_range_w1M`). -/
+theorem w1M_maskQueryFacts (F : W1Fit k kN kS L p prims Msg N reps T)
+    (d₁ : BitStr I₁ (Fin 8) → MaskBox p) : W1MaskQueryFacts k kN kS L (w1M e F d₁) :=
+  ⟨toBits_notMem_range_w1M F d₁⟩
+
 end ConcretePlaced
 
 /-! ### The proof-system facts -/
@@ -251,6 +257,25 @@ theorem w1OraclesPlaced_exists44 {prims : Primitives _root_.MLDSA.mldsa44}
         (w1M e (w1Fit_of_le hL) d₁) (w1Sp I₁ k e) :=
   let ⟨_, hd⟩ := exists_maskDecode44 hI
   ⟨_, w1OraclesPlaced _ ιm ιc hd⟩
+
+/-- **The split, masks and mask points of the placed oracles at ML-DSA-44**
+(`w1OraclesPlaced_exists44`): `W1SplitMask` and `W1MaskPoints` hold for some mask decoding. -/
+theorem w1SplitMask_maskPoints_exists44 {prims : Primitives _root_.MLDSA.mldsa44}
+    [Fintype prims.Power2High] [DecidableEq prims.Power2High] {I₁ : Type} [Fintype I₁]
+    [DecidableEq I₁]
+    (hL : max (max (Fintype.card (Bytes 64 × Msg))
+      (Fintype.card (Bytes 64 × BucketVec _root_.MLDSA.mldsa44)))
+      (max (Fintype.card (KeyRing (PubKey _ prims) N × Fin N × Fin reps))
+        (Fintype.card (Bytes 32 × MaskPt T Msg))) ≤ L)
+    (hI : 18432 ≤ 8 * Fintype.card I₁) (ιm : Fin 64 ↪ I₁)
+    (ιc : Fin (_root_.MLDSA.mldsa44.lambda / 4) ↪ I₁) :
+    ∃ d₁ : BitStr I₁ (Fin 8) → MaskBox _root_.MLDSA.mldsa44,
+      W1SplitMask (w1O e (w1Fit_of_le (k := k) (kN := kN) (kS := kS) hL) ιm ιc)
+          (w1M e (w1Fit_of_le hL) d₁) ∧
+        W1MaskPoints (w1O e (w1Fit_of_le (k := k) (kN := kN) (kS := kS) hL) ιm ιc)
+          (w1M e (w1Fit_of_le hL) d₁) :=
+  let ⟨d₁, h⟩ := w1OraclesPlaced_exists44 (e := e) hL hI ιm ιc
+  ⟨d₁, h.toW1SplitMask, h.toW1MaskPoints⟩
 
 /-- **The oracle facts at ML-DSA-65**: for `L` at least the four point domains' cardinalities and
 `25600 ≤ 8 |I₁|`, there is a mask decoding for which the concrete oracles satisfy them. -/

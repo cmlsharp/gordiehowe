@@ -127,14 +127,14 @@ theorem w1Num_injOn {c c' : ℕ} (h : c ≤ Q) (h' : c' ≤ Q) (he : w1Num Q c =
   rw [← val_w1Num h, ← val_w1Num h', he]
 
 /-- The bounded program statements have decidable equality. -/
-noncomputable instance instDecEqW1BStmt :
+instance instDecEqW1BStmt :
     DecidableEq (W1BStmt prims RMsg N) :=
   @instDecidableEqProd _ _
     (inferInstance : DecidableEq (RingSignature.RingStmtOf (PubKey p prims) RMsg (BucketVec p) N))
     (inferInstance : DecidableEq {l : List (CommitHashBytes p) // l.length ≤ N})
 
 /-- The tags have decidable equality. -/
-noncomputable instance instDecEqW1Tag [DecidableEq X] :
+instance instDecEqW1Tag [DecidableEq X] :
     DecidableEq (W1Tag prims O Mo βmin tol enc k D bmsg PS adm n Q) :=
   @instDecidableEqSum _ _ (inferInstance : DecidableEq (MURequest (SignOracle.none (Bf).core) n))
     (@instDecidableEqSum _ _
@@ -142,12 +142,12 @@ noncomputable instance instDecEqW1Tag [DecidableEq X] :
       (inferInstance : DecidableEq (RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1))))
 
 /-- The main statements have decidable equality. -/
-noncomputable instance instDecEqW1Stmt [DecidableEq X] :
+instance instDecEqW1Stmt [DecidableEq X] :
     DecidableEq (W1Stmt prims O Mo βmin tol enc k D bmsg PS adm n Q) :=
   @instDecidableEqProd _ _ instDecEqW1BStmt instDecEqW1Tag
 
 /-- The relay's proof requests have decidable equality. -/
-noncomputable instance instDecEqW1Rq [DecidableEq X] :
+instance instDecEqW1Rq [DecidableEq X] :
     DecidableEq (W1Rq prims O Mo βmin tol enc k D bmsg PS adm n Q) :=
   @instDecidableEqSum _ _
     (@instDecidableEqProd _ _ instDecEqW1BStmt
@@ -163,6 +163,13 @@ def w1Rel (s : W1Stmt prims O Mo βmin tol enc k D bmsg PS adm n Q)
     (w : RingSignature.Insider.RelayWit Bf) : Prop :=
   (w1StmtX s, RingSignature.Insider.RelayWit.toWit (B := Bf) w) ∈
     w1ExpRel prims enc bmsg adm
+
+/-- **The main challenger's relation is decidable**: it is membership in the fixed relation
+`w1ExpRel` (`instDecidablePredMemW1ExpRel`). -/
+instance instDecidableRelW1Rel :
+    DecidableRel (w1Rel prims O Mo βmin tol enc k D bmsg PS adm n Q) := fun s w =>
+  inferInstanceAs (Decidable ((w1StmtX s, RingSignature.Insider.RelayWit.toWit (B := Bf) w) ∈
+    w1ExpRel prims enc bmsg adm))
 
 omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
   [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
@@ -246,7 +253,6 @@ noncomputable def w1DummyS [NeZero n] : W1Stmt prims O Mo βmin tol enc k D bmsg
 def w1IsDummy (x₀ : X₀f) : Bool :=
   decide (x₀.1.ring.1 = [])
 
-open Classical in
 /-- **The check of a forgery** `o = (R, m, (y, π))` with the program statement `x₀`: the ring
 statement of `x₀` is `(R, m, y)`, and the ring is nonempty. -/
 noncomputable def w1CheckX {Pf : Type} (x₀ : X₀f)

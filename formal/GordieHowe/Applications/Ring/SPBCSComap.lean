@@ -40,8 +40,8 @@ namespace GordieHowe.Ring
 open Quantum GordieHowe.QROM GordieHowe.SPBCS IOP SPTerm GordieHowe.RingSignature GordieHowe.IOP
 open scoped ENNReal
 
-variable {k kN kS L e N : ℕ} {TB : BaseTypes}
-  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N T RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)] {X₀ Wit₀ : Type}
@@ -74,17 +74,20 @@ none for the missing proof. -/
 def spbcsComapClaim (x : RingStmt B) (π : M.Response b) : Option (Claim X₀ M.NIProof) :=
   π.map fun p => ⟨stmt x, p.1⟩
 
-open Classical in
 /-- **The spBCS proof system read at ring statements**: the prover `spbcsComapProver`, and the
 verifier accepting `π` on `x` at the oracle `H` exactly when `x` passes the check and the compiled
 verifier `M.qVerifier Qs b b` accepts the claim `spbcsComapClaim M stmt x π` against
-`outEquiv k e ∘ H`. -/
-noncomputable def spbcsComapProofSystem :
+`outEquiv k e ∘ H`.
+Acceptance is decided by the spBCS verifier's decision of `Accepts` (`SPBCS.decAcceptedQ` at
+the format bounds `hb`), so the proof system is computable. -/
+def spbcsComapProofSystem :
     ProofSystem (Bits (queryBits k kN kS L)) (XOut k e) (RingStmt B) (RingWit B)
       (spbcsPST M b R) :=
   ProofSystem.ofProver (spbcsComapProver M Λ E hb honest stmt input)
-    fun H x π => check x &&
-      decide (∃ c ∈ spbcsComapClaim M stmt x π, (M.qVerifier Qs b b).Accepted (outEquiv k e ∘ H) c)
+    fun H x π =>
+      haveI := M.decAcceptedQ hb (outEquiv k e ∘ H)
+      check x &&
+        decide (∃ c ∈ spbcsComapClaim M stmt x π, (M.qVerifier Qs b b).Accepted (outEquiv k e ∘ H) c)
 
 omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The prover of the proof system is the compiled honest prover read at ring statements.** -/
@@ -102,7 +105,7 @@ theorem verify_spbcsComapProofSystem_eq_true_iff (H : Bits (queryBits k kN kS L)
     (spbcsComapProofSystem M Λ E hb honest stmt check input).verify H x π = true ↔
       check x = true ∧
         ∃ c ∈ spbcsComapClaim M stmt x π, (M.qVerifier Qs b b).Accepted (outEquiv k e ∘ H) c := by
-  classical
+  letI := M.decAcceptedQ hb (outEquiv k e ∘ H)
   change (check x && decide _) = true ↔ _
   rw [Bool.and_eq_true, decide_eq_true_iff]
 
@@ -258,8 +261,8 @@ namespace GordieHowe.Ring
 
 open GordieHowe.QROM GordieHowe.SPBCS IOP GordieHowe.RingSignature
 
-variable {k kN kS L e N : ℕ} {TB : BaseTypes}
-  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N T RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]

@@ -39,6 +39,11 @@ variable {msgLen : ℕ} (G : Signer msgLen)
 `msgLen`-byte message and the salt. -/
 abbrev RStmt : Type := RingStmt (scheme G) (Fin msgLen → UInt8) 64
 
+/-- **A statement of a native Falcon ring**, an explicit computable value: the empty ring, the
+all-zero message and the all-zero salt. -/
+instance RStmt.instInhabited : Inhabited (RStmt G) :=
+  ⟨⟨⟨[], Nat.zero_le _⟩, fun _ => 0, Vector.replicate 40 0⟩⟩
+
 /-- **The rings the native Falcon rings' realized programs support**: exactly `64` keys. -/
 abbrev ringAdm64 : List PublicKey → Prop := fun R => R.length = 64
 

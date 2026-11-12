@@ -137,7 +137,6 @@ local notation "interp" => RealizedProgram.mldsaInterpOf F0 FH
 
 section Tables
 
-set_option maxRecDepth 4096
 
 theorem pred0 :
     ∃ t, (program.predicate 0).body = .equal 0 (.logic .leq 6 [.leaf 63, .reindex idx6 (.leaf 0)]) (.leaf 1) t :=

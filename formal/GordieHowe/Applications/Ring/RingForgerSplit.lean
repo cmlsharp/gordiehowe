@@ -59,8 +59,8 @@ theorem prf_join (ω : X → Y₁) (h : X → Y₂) : prf sp (join sp ω h) = h 
 end RingSignature.OracleSplit
 
 variable {X Y Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] (sp : OracleSplit Y Y₁ Y₂)
-  {N : ℕ} {TB : BaseTypes}
-  {B : BaseSigner X Y N TB} {n : ℕ}
+  {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner X Y N T RMsg} {n : ℕ}
 
 /-! ### Signing oracles reading the base component -/
 
@@ -72,7 +72,7 @@ def Signature.SignOracle.ReadsBase (O : SignOracle B.core) : Prop :=
 
 variable {sp}
 
-variable [DecidableEq TB.PK]
+variable [DecidableEq T.PK]
 
 /-- The ring-aware signing oracle of a base signer reading only the base component reads only
 the base component. -/
@@ -117,7 +117,7 @@ variable [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins]
 
 variable {O}
 
-omit [DecidableEq TB.PK] in
+omit [DecidableEq T.PK] in
 /-- **The multi-user challenger at a fixed base component answers by `muReplyAt`**, without
 assignments, at every second component, for a signing oracle reading only the base component. -/
 theorem run_respond_muChallenger_restrictAt (hO : O.ReadsBase sp) (ω : X → Y₁)
@@ -142,8 +142,8 @@ end Replies
 
 /-! ### The table form -/
 
-variable [Fintype TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins]
+variable [Fintype T.PK] [Fintype T.BSig] [DecidableEq T.BSig] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins]
 
 section Table
 
@@ -161,8 +161,8 @@ def muTabAt {Req Resp Ot : Type} [Fintype Req] [DecidableEq Req] [Fintype Resp]
 variable [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins]
 
 omit [Fintype Y] [DecidableEq Y] [Nonempty Y] [Nonempty X] [DecidableEq Y₂] [NeZero n]
-  [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] in
+  [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins] in
 /-- **The restricted multi-user challenger's reply after the requests `rs`** is `muReplyAt` at
 `|rs|`, for a signing oracle reading only the base component. -/
 theorem answerAfter_muChallenger_restrictAt_eq (hO : O.ReadsBase sp) (ω : X → Y₁)

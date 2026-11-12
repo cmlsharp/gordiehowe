@@ -352,6 +352,12 @@ theorem accepted_qVerifier_iff {Qs : ∀ x, M.IOPQueries V x} {NQ N : ℕ}
         rw [QROM.Expansion.queries_map] at this
         exact this) hv
 
+/-- **The compiled verifier's acceptance is decidable** under format bounds `hb`: by
+`accepted_qVerifier_iff`, from the decision of the spBCS verifier (`Accepts`). -/
+def decAcceptedQ {Qs : ∀ x, M.IOPQueries V x} {NQ N : ℕ} (hb : M.FormatBounds Qs NQ N)
+    (h : Bits (queryBits k kN kS L) → Out k e) : DecidablePred ((M.qVerifier Qs NQ N).Accepted h) :=
+  fun _ => decidable_of_iff _ (M.accepted_qVerifier_iff hb).symm
+
 variable {M rel E St}
 
 /-- **Online extractability of the spBCS verifier** with a query budget `kq` of its accepting

@@ -807,10 +807,10 @@ section ExtractBlock
 open GordieHowe.SPBCS IOP SPTerm
 
 variable {k kN kS L e N n : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq Yb]
-  {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
-  {B : BaseSigner Xb Yb N TB}
+  {T : Signature.SchemeTypes} {RMsg : Type} [Fintype T.PK] [DecidableEq T.PK]
+  [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins]
+  {B : BaseSigner Xb Yb N T RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -940,8 +940,8 @@ abbrev KFOutcome {shAg : AlgShape Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Respons
       Ag.slots (simExtChallenger Psim Q).q (simExtChallenger Psim Q).Coins) (kq + Q * Psim.q) ×
     DB Xq (Out k e)
 
-omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] in
 /-- **The extraction laws of equal adversaries, cast to one outcome type**: at `Ag₁ = Ag₂`, the
 laws of the extraction runs (`simPMF` of `extAdv`) cast along `KFOutcome Agᵢ = Ω` are equal
 (`PMF.map_cast_congr`). With `Ω` the outcomes of a shape term, the two outcome types are compared
@@ -981,8 +981,8 @@ noncomputable def kfSwapOut {prf : Frg → Option M.NIProof} {keys : Fin n → B
   (⟨ω.1.queries, ω.1.answers, kfFinalSwap (rel := rel) (enc := enc) (dummyS := dummyS) prf keys Q
     A Psim σW σR J ω.1.out⟩, ω.2)
 
-omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] in
 /-- **The extraction queries of an adversary with other Kraus maps** are those of the
 adversary: the expansion reads the output, the final assignments and the logs, not the steps. -/
 theorem simExtractionExpansion_withStep_next

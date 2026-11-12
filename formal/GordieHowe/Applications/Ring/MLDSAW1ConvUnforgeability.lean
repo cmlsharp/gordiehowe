@@ -83,7 +83,6 @@ attribute [local instance] admDecF
 
 variable [Inhabited Sc.NIProof]
 
-open Classical in
 /-- **Unforgeability with respect to insider corruption (BKM06 Definition 7) of the converted
 ML-DSA-44 ring signature publishing `w₁`** (`w1ConvScheme44`;
 `w1ConvConcrete.insiderForgeProb_le` at ML-DSA-44, `isApproved_mldsa44`): for an adversary
@@ -95,38 +94,36 @@ collision of message representatives, case U as the MU-EUF-NMA^corr success prob
 `w1UForger`, the guess of case S, `Q · kr · T · |BucketVec| / |MaskBox|`, and case S≠ as the
 Module-SIS term), plus `trCollAt` and the simulation-extraction and zero-knowledge errors of `Sc`.
 -/
-@[headline]
 theorem w1ConvScheme44.insiderForgeProb_le
     (hk : 0 < kh) (h : W1OracleFacts O MO sp)
-    (hQm : ∀ q : Query kh kN kS L, Query.toBits q ∉ Set.range MO.pt)
+    (hq : W1MaskQueryFacts kh kN kS L MO)
     (c₀ : Claim X₀f Sc.NIProof)
     {t : ℕ} (A : InsiderAdversary (w1ConvScheme44 (X := Xq) (Y := BitStr I J) (T := T) (Msg := Msg) (N := N)
         (reps := reps) O MO βmin tol kr D PSc adm) n
       (OracleView.queriesOnly Xq (BitStr I J)) t) {S w P' : ℕ}
     (hS : GameAdversary.ScheduleLE A S w P')
-    (VE : Sc.ViewEncoder E Qs) {Pub : Type} (pub : X₀f → Pub)
-    (Sim : CausalJointSimulator VE.MV Pub) (Tp : Sc.Preimages) {δ : NNReal}
-    (hvzk : CausalHVZK VE.MV (w1ExpRel (concretePrimitivesKeyGen Pm) (concreteEnc Pm) bmc adm) honest pub Sim δ)
-    {Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm)))} {St : CausalStateFn P τ X₀f}
-    {ε : ChIdx P τ → NNReal}
-    (hrbr : CausalRBRKnowledgeSound (w1ExpRel (concretePrimitivesKeyGen Pm) (concreteEnc Pm) bmc adm) Vr Ext St ε)
+    {Pub : Type} (pub : X₀f → Pub) {δ : NNReal}
+    (sim : SPBCS.RingSimulator Sc E Qs honest (w1ExpRel (concretePrimitivesKeyGen Pm) (concreteEnc
+      Pm) bmc adm) pub δ)
+    (X : RBRKnowledgeExtractor (w1ExpRel (concretePrimitivesKeyGen Pm) (concreteEnc Pm) bmc adm) Vr)
     (p₀ : Sc.Response b)
     (f₀ : PubKey Pm (concretePrimitivesKeyGen Pm) × Msg × FIPSSignature Pm (concretePrimitivesKeyGen Pm)) :
     insiderForgeProb A Q ≤
       knowledgeError kh e (kqOf Mg nr b b)
           (t + Q * ((Bc).qPub + (PSc).q) + 2 * N + kqOf Mg nr b b)
-          Sc.senc.digestsPerInput Mg.nJ (maxError ε) +
+          Sc.senc.digestsPerInput Mg.nJ (maxError X.ε) +
       (ENNReal.ofReal (w1H3HopError (O := O) (MO := MO) (βmin := βmin) (tol := tol) (kr := kr) (D := D)
           (sp := sp) (Sc := Sc) (Λ := Λ) (E := E) (hb := hb)
           (honest := honest) (adm := adm) (Qs := Qs) (n := n) (Q := Q) t w) +
-        (w1H3CaseError (Λ := Λ) (E := E) (hb := hb) (honest := honest) (Q := Q) h A hS VE pub Sim
-            Tp p₀ Ext f₀ +
+        (w1H3CaseError (Λ := Λ) (E := E) (hb := hb) (honest := honest) (Q := Q) h A hS sim.VE pub
+          sim.Sim
+            sim.T p₀ X.Ext f₀ +
           trCollAt (concretePrimitivesKeyGen Pm) n +
-          Sc.simExtractionError (kqOf Mg nr b b) (maxError ε)
-            (Sc.niJointSimulatorProg Λ VE.toViewRead b pub Sim Tp).q (t + w * (2 * N) + 2 * Q) Q +
+          Sc.simExtractionError (kqOf Mg nr b b) (maxError X.ε)
+            (Sc.niJointSimulatorProg Λ sim.VE.toViewRead b pub sim.Sim sim.T).q (t + w * (2 * N) +
+              2 * Q) Q +
           ENNReal.ofReal (Sc.zkError δ (t + w * (2 * N) + 2 * Q) Q))) :=
-  w1ConvConcrete.insiderForgeProb_le isApproved_mldsa44 hk h hQm c₀ A hS VE pub Sim Tp hvzk hrbr p₀
-    f₀
+  w1ConvConcrete.insiderForgeProb_le isApproved_mldsa44 hk h hq c₀ A hS pub sim X p₀ f₀
 
 end Conv44
 
@@ -180,7 +177,6 @@ attribute [local instance] admDecF
 
 variable [Inhabited Sc.NIProof]
 
-open Classical in
 /-- **Unforgeability with respect to insider corruption (BKM06 Definition 7) of the converted
 ML-DSA-65 ring signature publishing `w₁`** (`w1ConvScheme65`;
 `w1ConvConcrete.insiderForgeProb_le` at ML-DSA-65, `isApproved_mldsa65`): for an adversary
@@ -192,38 +188,36 @@ collision of message representatives, case U as the MU-EUF-NMA^corr success prob
 `w1UForger`, the guess of case S, `Q · kr · T · |BucketVec| / |MaskBox|`, and case S≠ as the
 Module-SIS term), plus `trCollAt` and the simulation-extraction and zero-knowledge errors of `Sc`.
 -/
-@[headline]
 theorem w1ConvScheme65.insiderForgeProb_le
     (hk : 0 < kh) (h : W1OracleFacts O MO sp)
-    (hQm : ∀ q : Query kh kN kS L, Query.toBits q ∉ Set.range MO.pt)
+    (hq : W1MaskQueryFacts kh kN kS L MO)
     (c₀ : Claim X₀f Sc.NIProof)
     {t : ℕ} (A : InsiderAdversary (w1ConvScheme65 (X := Xq) (Y := BitStr I J) (T := T) (Msg := Msg) (N := N)
         (reps := reps) O MO βmin tol kr D PSc adm) n
       (OracleView.queriesOnly Xq (BitStr I J)) t) {S w P' : ℕ}
     (hS : GameAdversary.ScheduleLE A S w P')
-    (VE : Sc.ViewEncoder E Qs) {Pub : Type} (pub : X₀f → Pub)
-    (Sim : CausalJointSimulator VE.MV Pub) (Tp : Sc.Preimages) {δ : NNReal}
-    (hvzk : CausalHVZK VE.MV (w1ExpRel (concretePrimitivesKeyGen Pm) (concreteEnc Pm) bmc adm) honest pub Sim δ)
-    {Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm)))} {St : CausalStateFn P τ X₀f}
-    {ε : ChIdx P τ → NNReal}
-    (hrbr : CausalRBRKnowledgeSound (w1ExpRel (concretePrimitivesKeyGen Pm) (concreteEnc Pm) bmc adm) Vr Ext St ε)
+    {Pub : Type} (pub : X₀f → Pub) {δ : NNReal}
+    (sim : SPBCS.RingSimulator Sc E Qs honest (w1ExpRel (concretePrimitivesKeyGen Pm) (concreteEnc
+      Pm) bmc adm) pub δ)
+    (X : RBRKnowledgeExtractor (w1ExpRel (concretePrimitivesKeyGen Pm) (concreteEnc Pm) bmc adm) Vr)
     (p₀ : Sc.Response b)
     (f₀ : PubKey Pm (concretePrimitivesKeyGen Pm) × Msg × FIPSSignature Pm (concretePrimitivesKeyGen Pm)) :
     insiderForgeProb A Q ≤
       knowledgeError kh e (kqOf Mg nr b b)
           (t + Q * ((Bc).qPub + (PSc).q) + 2 * N + kqOf Mg nr b b)
-          Sc.senc.digestsPerInput Mg.nJ (maxError ε) +
+          Sc.senc.digestsPerInput Mg.nJ (maxError X.ε) +
       (ENNReal.ofReal (w1H3HopError (O := O) (MO := MO) (βmin := βmin) (tol := tol) (kr := kr) (D := D)
           (sp := sp) (Sc := Sc) (Λ := Λ) (E := E) (hb := hb)
           (honest := honest) (adm := adm) (Qs := Qs) (n := n) (Q := Q) t w) +
-        (w1H3CaseError (Λ := Λ) (E := E) (hb := hb) (honest := honest) (Q := Q) h A hS VE pub Sim
-            Tp p₀ Ext f₀ +
+        (w1H3CaseError (Λ := Λ) (E := E) (hb := hb) (honest := honest) (Q := Q) h A hS sim.VE pub
+          sim.Sim
+            sim.T p₀ X.Ext f₀ +
           trCollAt (concretePrimitivesKeyGen Pm) n +
-          Sc.simExtractionError (kqOf Mg nr b b) (maxError ε)
-            (Sc.niJointSimulatorProg Λ VE.toViewRead b pub Sim Tp).q (t + w * (2 * N) + 2 * Q) Q +
+          Sc.simExtractionError (kqOf Mg nr b b) (maxError X.ε)
+            (Sc.niJointSimulatorProg Λ sim.VE.toViewRead b pub sim.Sim sim.T).q (t + w * (2 * N) +
+              2 * Q) Q +
           ENNReal.ofReal (Sc.zkError δ (t + w * (2 * N) + 2 * Q) Q))) :=
-  w1ConvConcrete.insiderForgeProb_le isApproved_mldsa65 hk h hQm c₀ A hS VE pub Sim Tp hvzk hrbr p₀
-    f₀
+  w1ConvConcrete.insiderForgeProb_le isApproved_mldsa65 hk h hq c₀ A hS pub sim X p₀ f₀
 
 end Conv65
 
@@ -277,7 +271,6 @@ attribute [local instance] admDecF
 
 variable [Inhabited Sc.NIProof]
 
-open Classical in
 /-- **Unforgeability with respect to insider corruption (BKM06 Definition 7) of the converted
 ML-DSA-87 ring signature publishing `w₁`** (`w1ConvScheme87`;
 `w1ConvConcrete.insiderForgeProb_le` at ML-DSA-87, `isApproved_mldsa87`): for an adversary
@@ -289,38 +282,36 @@ collision of message representatives, case U as the MU-EUF-NMA^corr success prob
 `w1UForger`, the guess of case S, `Q · kr · T · |BucketVec| / |MaskBox|`, and case S≠ as the
 Module-SIS term), plus `trCollAt` and the simulation-extraction and zero-knowledge errors of `Sc`.
 -/
-@[headline]
 theorem w1ConvScheme87.insiderForgeProb_le
     (hk : 0 < kh) (h : W1OracleFacts O MO sp)
-    (hQm : ∀ q : Query kh kN kS L, Query.toBits q ∉ Set.range MO.pt)
+    (hq : W1MaskQueryFacts kh kN kS L MO)
     (c₀ : Claim X₀f Sc.NIProof)
     {t : ℕ} (A : InsiderAdversary (w1ConvScheme87 (X := Xq) (Y := BitStr I J) (T := T) (Msg := Msg) (N := N)
         (reps := reps) O MO βmin tol kr D PSc adm) n
       (OracleView.queriesOnly Xq (BitStr I J)) t) {S w P' : ℕ}
     (hS : GameAdversary.ScheduleLE A S w P')
-    (VE : Sc.ViewEncoder E Qs) {Pub : Type} (pub : X₀f → Pub)
-    (Sim : CausalJointSimulator VE.MV Pub) (Tp : Sc.Preimages) {δ : NNReal}
-    (hvzk : CausalHVZK VE.MV (w1ExpRel (concretePrimitivesKeyGen Pm) (concreteEnc Pm) bmc adm) honest pub Sim δ)
-    {Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature Pm (concretePrimitivesKeyGen Pm)))} {St : CausalStateFn P τ X₀f}
-    {ε : ChIdx P τ → NNReal}
-    (hrbr : CausalRBRKnowledgeSound (w1ExpRel (concretePrimitivesKeyGen Pm) (concreteEnc Pm) bmc adm) Vr Ext St ε)
+    {Pub : Type} (pub : X₀f → Pub) {δ : NNReal}
+    (sim : SPBCS.RingSimulator Sc E Qs honest (w1ExpRel (concretePrimitivesKeyGen Pm) (concreteEnc
+      Pm) bmc adm) pub δ)
+    (X : RBRKnowledgeExtractor (w1ExpRel (concretePrimitivesKeyGen Pm) (concreteEnc Pm) bmc adm) Vr)
     (p₀ : Sc.Response b)
     (f₀ : PubKey Pm (concretePrimitivesKeyGen Pm) × Msg × FIPSSignature Pm (concretePrimitivesKeyGen Pm)) :
     insiderForgeProb A Q ≤
       knowledgeError kh e (kqOf Mg nr b b)
           (t + Q * ((Bc).qPub + (PSc).q) + 2 * N + kqOf Mg nr b b)
-          Sc.senc.digestsPerInput Mg.nJ (maxError ε) +
+          Sc.senc.digestsPerInput Mg.nJ (maxError X.ε) +
       (ENNReal.ofReal (w1H3HopError (O := O) (MO := MO) (βmin := βmin) (tol := tol) (kr := kr) (D := D)
           (sp := sp) (Sc := Sc) (Λ := Λ) (E := E) (hb := hb)
           (honest := honest) (adm := adm) (Qs := Qs) (n := n) (Q := Q) t w) +
-        (w1H3CaseError (Λ := Λ) (E := E) (hb := hb) (honest := honest) (Q := Q) h A hS VE pub Sim
-            Tp p₀ Ext f₀ +
+        (w1H3CaseError (Λ := Λ) (E := E) (hb := hb) (honest := honest) (Q := Q) h A hS sim.VE pub
+          sim.Sim
+            sim.T p₀ X.Ext f₀ +
           trCollAt (concretePrimitivesKeyGen Pm) n +
-          Sc.simExtractionError (kqOf Mg nr b b) (maxError ε)
-            (Sc.niJointSimulatorProg Λ VE.toViewRead b pub Sim Tp).q (t + w * (2 * N) + 2 * Q) Q +
+          Sc.simExtractionError (kqOf Mg nr b b) (maxError X.ε)
+            (Sc.niJointSimulatorProg Λ sim.VE.toViewRead b pub sim.Sim sim.T).q (t + w * (2 * N) +
+              2 * Q) Q +
           ENNReal.ofReal (Sc.zkError δ (t + w * (2 * N) + 2 * Q) Q))) :=
-  w1ConvConcrete.insiderForgeProb_le isApproved_mldsa87 hk h hQm c₀ A hS VE pub Sim Tp hvzk hrbr p₀
-    f₀
+  w1ConvConcrete.insiderForgeProb_le isApproved_mldsa87 hk h hq c₀ A hS pub sim X p₀ f₀
 
 end Conv87
 

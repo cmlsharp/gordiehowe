@@ -4,23 +4,23 @@
 module
 
 public import GordieHowe.Applications.Ring.RingForgerSplitChain
-public import GordieHowe.Applications.Ring.RingForgerKeyReuse
+public import GordieHowe.Applications.Ring.RingForgerJoint
 
 @[expose] public section
 
 /-!
-# The key-reuse game at a fixed base component, up to the extraction runs
+# The joint-security game at a fixed base component, up to the extraction runs
 
-The key-reuse form of `GordieHowe/Applications/Ring/RingForgerSplitChain.lean`: for a base signer
+The joint-security form of `GordieHowe/Applications/Ring/RingForgerSplitChain.lean`: for a base signer
 whose signer and ordinary signer read only the base component of an additive split
-`sp : Y ≃+ Y₁ × Y₂`, the key-reuse game (`keyReuseForgeProb`, ring requests and base messages) is at
+`sp : Y ≃+ Y₁ × Y₂`, the joint-security game (`jointForgeProb`, ring requests and base messages) is at
 most an average over the base component of the extraction runs of the relayed forger
 `relayedForgerStd` followed by a program `P`, read at that component, plus the knowledge error.
 
-- `relayedForgerStdThen`: the relayed forger of the key-reuse game followed by `P` on its output.
-- `keyReuseForgeProb_le_split`: the game at a fixed base component (the form of
+- `relayedForgerStdThen`: the relayed forger of the joint-security game followed by `P` on its output.
+- `jointForgeProb_le_split`: the game at a fixed base component (the form of
   `insiderForgeProb_le_split`).
-- `keyReuseForgeProb_le_extRun_split`: the game up to the extraction runs (the form of
+- `jointForgeProb_le_extRun_split`: the game up to the extraction runs (the form of
   `insiderForgeProb_le_extRun_split`, by `forgeSum_le_extRun_split` with
   `SignOracle.readsBase_ringStd`).
 -/
@@ -35,38 +35,38 @@ section Split
 variable {X Y Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] (sp : OracleSplit Y Y₁ Y₂)
   [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
   [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁] [Fintype Y₂] [DecidableEq Y₂]
-  [Nonempty Y₂] {N n t : ℕ} [NeZero n] {TB : BaseTypes}
-  {B : BaseSigner X Y N TB}
+  [Nonempty Y₂] {N n t : ℕ} [NeZero n] {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner X Y N T RMsg}
   {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop} [DecidablePred adm]
   {R : Type} (P : KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof) → OracleProg X Y R) (q : ℕ)
   (hP : ∀ o, (P o).QueriesLE q)
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
-  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
-  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
-  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BMsg]
+  [DecidableEq T.BMsg] [Fintype T.BSig] [DecidableEq T.BSig] [Fintype T.Pub]
+  [DecidableEq T.Pub] [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins]
+  [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins]
 
 variable (B PS adm) in
-/-- **The relayed forger of the key-reuse game followed by the program `P` on its output**: at most
+/-- **The relayed forger of the joint-security game followed by the program `P` on its output**: at most
 `t + Q · (qPub + PS.q) + q` queries. -/
 noncomputable abbrev relayedForgerStdThen
-    (A : KeyReuseAdversary B PS adm n (OracleView.queriesOnly X Y) t) (pks : Fin n → B.PK)
+    (A : JointAdversary B PS adm n (OracleView.queriesOnly X Y) t) (pks : Fin n → B.PK)
     (i₁ : Fin n) (Q : ℕ) (ρ : Fin Q → PS.Coins) :
     QueryBoundedAdversary X Y (MURequest (SignOracle.ringStd B) n) (MUResponse B.core)
       ((KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof)) × R) (t + Q * (B.qPub + PS.q) + q) :=
   (relayedForgerStd B PS adm A pks i₁ Q ρ).thenProgOut P q hP q fun _ => (one_mul q).le
 
-/-- **The key-reuse game at a fixed base component**: for a base message binding the ring
-(`hbind`), the forgery probability of an adversary of the key-reuse game with `Q` requests is at
+/-- **The joint-security game at a fixed base component**: for a base message binding the ring
+(`hbind`), the forgery probability of an adversary of the joint-security game with `Q` requests is at
 most the average, over the users' key coins, a uniform base component `ω`, a uniform second
 component `h` and the prover's coins, of the probability that the relayed forger followed by `P`,
 read at `ω`, against the multi-user challenger with the ring-aware and the ordinary signing oracle
 at `ω` with `Q' ≥ Q` requests at the second component `h`, outputs a ring signature verifying at
 `join sp ω h` and fresh for its multi-user requests, with `P`'s result at that oracle. -/
-theorem keyReuseForgeProb_le_split (hbind : B.BindsRing)
-    (A : KeyReuseAdversary B PS adm n (OracleView.queriesOnly X Y) t) (i₁ : Fin n)
+theorem jointForgeProb_le_split (hbind : B.BindsRing)
+    (A : JointAdversary B PS adm n (OracleView.queriesOnly X Y) t) (i₁ : Fin n)
     (Q Q' : ℕ) (hQ : Q ≤ Q') :
-    keyReuseForgeProb A Q ≤ ∑' keys, PMF.uniformOfFintype (Fin n → B.KeyCoins) keys *
+    jointForgeProb A Q ≤ ∑' keys, PMF.uniformOfFintype (Fin n → B.KeyCoins) keys *
       ∑' ω, PMF.uniformOfFintype (X → Y₁) ω * ∑' h, PMF.uniformOfFintype (X → Y₂) h *
         ∑ ρ, PMF.uniformOfFintype (Fin Q → PS.Coins) ρ *
           (((relayedForgerStdThen B PS adm P q hP A (fun i => B.pk (keys i)) i₁ Q ρ).restrictAt sp
@@ -75,7 +75,7 @@ theorem keyReuseForgeProb_le_split (hbind : B.BindsRing)
             {x | ∃ p ∈ x, (ofBase B PS adm).verify (join sp ω h) p.1.1.1 p.1.1.2.1 p.1.1.2.2 = true ∧
               MUFreshReq B (PS := PS) keys p.1.1 (p.2.map HistoryEntry.request) ∧
               p.1.2 = (P p.1.1).run (join sp ω h)} := by
-  refine (keyReuseForgeProb_le_relayedForgerStd hbind A i₁ Q Q' hQ).trans_eq ?_
+  refine (jointForgeProb_le_relayedForgerStd hbind A i₁ Q Q' hQ).trans_eq ?_
   refine tsum_congr fun keys => congrArg _ ?_
   rw [tsum_uniform_split sp]
   refine tsum_congr fun ω => congrArg _ (tsum_congr fun h => congrArg _ ?_)
@@ -114,33 +114,33 @@ section Chain
 
 variable {m k e N n : ℕ} {Y₁ : Type} [AddGroup Y₁] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁]
   {Y : Type} [AddGroup Y] [Fintype Y] [DecidableEq Y] [Nonempty Y]
-  {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes}
-  {B : BaseSigner (Bits m) Y N TB}
+  {sp : OracleSplit Y Y₁ (XOut k e)} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits m) Y N T RMsg}
   {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop}
   [DecidablePred adm] [NeZero n] {X₀ Cl : Type} {V : NARG.QROM.Verifier m k e Cl X₀}
   {rel : Set (X₀ × RingWit B)} {ext : X₀ → DB (Bits m) (Out k e) → Multiset (RingWit B)}
   {β : ℕ → ℝ≥0∞} {t : ℕ}
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
-  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
-  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
-  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BMsg]
+  [DecidableEq T.BMsg] [Fintype T.BSig] [DecidableEq T.BSig] [Fintype T.Pub]
+  [DecidableEq T.Pub] [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins]
+  [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins]
 
-/-- **The key-reuse game up to the extraction runs at a fixed base component**: the bound of
-`insiderForgeProb_le_extRun_split` for the key-reuse game, for a base signer whose signer and
+/-- **The joint-security game up to the extraction runs at a fixed base component**: the bound of
+`insiderForgeProb_le_extRun_split` for the joint-security game, for a base signer whose signer and
 ordinary signer read only the base component (`hB`, `hS`), the relayed forger `relayedForgerStd`
 followed by `P` and the multi-user challenger with the ring-aware and the ordinary signing
 oracle. -/
-theorem keyReuseForgeProb_le_extRun_split (hbind : B.BindsRing) (hB : B.ReadsOnly (base sp))
+theorem jointForgeProb_le_extRun_split (hbind : B.BindsRing) (hB : B.ReadsOnly (base sp))
     (hS : B.ReadsStdOnly (base sp)) (hC : PS.CompiledBySplit sp V)
     {cl : X₀ → PS.Proof → Option Cl} (hcl : ∀ ω x π, hC.claim ω x π = cl (hC.stmtAt ω x) π)
     (K : V.KnowledgeBound rel ext β) (c₀ : Cl)
     (P : KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof) → OracleProg (Bits m) Y X₀) (q : ℕ)
     (hP : ∀ o, (P o).QueriesLE q)
     (hPst : ∀ o ω h, (P o).run (join sp ω h) = hC.stmtAt ω ⟨o.1, o.2.1, o.2.2.1⟩)
-    (A : KeyReuseAdversary B PS adm n (OracleView.queriesOnly (Bits m) Y) t)
+    (A : JointAdversary B PS adm n (OracleView.queriesOnly (Bits m) Y) t)
     (i₁ i₂ : Fin n) (Q Q' : ℕ) (hQ : Q ≤ Q') :
-    keyReuseForgeProb A Q ≤ ∑' keys, PMF.uniformOfFintype (Fin n → B.KeyCoins) keys *
+    jointForgeProb A Q ≤ ∑' keys, PMF.uniformOfFintype (Fin n → B.KeyCoins) keys *
       ∑' ω, PMF.uniformOfFintype (Bits m → Y₁) ω *
         ∑' ρ, PMF.uniformOfFintype (Fin Q → PS.Coins) ρ *
           ∑' a, ((relayedForgerStdThen B PS adm P q hP A (fun i => B.pk (keys i)) i₁ Q
@@ -173,7 +173,7 @@ theorem keyReuseForgeProb_le_extRun_split (hbind : B.BindsRing) (hB : B.ReadsOnl
   have hg := forgeSum_le_extRun_split (adm := adm) (O := SignOracle.ringStd B) (Q := Q)
     (t' := t + Q * (B.qPub + PS.q) + q) (SignOracle.readsBase_ringStd hB hS) hC hcl K c₀ P hPst
     (fun keys ρ => relayedForgerStdThen B PS adm P q hP A (fun i => B.pk (keys i)) i₁ Q ρ) i₂ Q'
-  have h1 := keyReuseForgeProb_le_split sp P q hP hbind A i₁ Q Q' hQ
+  have h1 := jointForgeProb_le_split sp P q hP hbind A i₁ Q Q' hQ
   refine le_trans h1 (le_trans (le_of_eq ?_) (le_trans hg (le_of_eq ?_)))
   · with_reducible rfl
   · with_reducible rfl

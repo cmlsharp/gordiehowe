@@ -353,7 +353,7 @@ theorem firstKept_queries {α : Type} {q₁ q₂ : ℕ} :
       · exact (OracleProg.QueriesLE.pure _ _).mono (Nat.zero_le _)
       · exact ih
 
-variable {TB : BaseTypes} (B : BaseSigner X Y N TB)
+variable {TS : Signature.SchemeTypes} {RMsg : Type} (B : BaseSigner X Y N TS RMsg)
 
 /-- **A standard signer followed by a public rejection**, for the base signer `B`: the standard
 signer `std` on base messages with its own coins, the public ring check `check R` and the public keep
@@ -470,7 +470,7 @@ coins `kc`, ring `R` holding the public key of `kc`, message and coins, the run 
 secret key of `kc` at the first position of its public key in `R` is that of `rejectSign J K`, its
 coins read through `e`. These are the only signing calls of the multi-user challenger with the
 ring-aware oracle (`SignOracle.ring`). -/
-def IsRejectionOn [DecidableEq TB.PK] (J : Rejection B) (K : ℕ)
+def IsRejectionOn [DecidableEq TS.PK] (J : Rejection B) (K : ℕ)
     (e : B.Coins ≃ (Fin K → J.StdCoins × J.KeepCoins)) :
     Prop :=
   ∀ (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N), B.pk kc ∈ R.1 → ∀ (m : B.Msg) (c : B.Coins),
@@ -488,7 +488,7 @@ def IsStdOn (J : Rejection B) (K : ℕ) (e : B.Coins ≃ (Fin K → J.StdCoins �
 variable {B} {J : Rejection B} {K : ℕ} {e : B.Coins ≃ (Fin K → J.StdCoins × J.KeepCoins)}
 
 /-- **The rejection form at every key is the rejection form on honest keys.** -/
-theorem IsRejection.isRejectionOn [DecidableEq TB.PK] (h : IsRejection B J K e) :
+theorem IsRejection.isRejectionOn [DecidableEq TS.PK] (h : IsRejection B J K e) :
     IsRejectionOn B J K e :=
   fun H kc R _ m c => h H (B.sk kc) R _ m c
 
@@ -496,7 +496,7 @@ theorem IsRejection.isRejectionOn [DecidableEq TB.PK] (h : IsRejection B J K e) 
 by the key pair `kp` is `rejectWith` of `K` replies of the standard oracle to the same key pair on
 `bmsg R m`, with the independent standard coins `(e c j).1` and keep coins `(e c j).2`; refused when
 the key is not in the ring. -/
-theorem ring_sign_run_eq [DecidableEq TB.PK]
+theorem ring_sign_run_eq [DecidableEq TS.PK]
     (h : IsRejection B J K e) (H : X → Y) (kp : B.PK × B.SK)
     (R : KeyRing B.PK N) (m : B.Msg) (c : B.Coins) :
     ((SignOracle.ring B).sign kp (R, m) c).run H =
@@ -513,7 +513,8 @@ variable [Fintype J.StdCoins] [Nonempty J.StdCoins] [Fintype J.KeepCoins] [Nonem
 
 /-- **The refusal of a rejection signer**: `qᴷ` after a passed check, with `q` the probability that
 an attempt is not kept (over its standard and keep coins); `1` after a failed check. -/
-theorem pr_bsign_none_eq [Fintype TB.Coins] [Nonempty TB.Coins] (h : IsRejection B J K e) (H : X → Y)
+theorem pr_bsign_none_eq [Fintype TS.Coins] [Nonempty TS.Coins] (h : IsRejection B J K e)
+    (H : X → Y)
     (sk : B.SK) (R : KeyRing B.PK N)
     (i : ℕ) (m : B.Msg) :
     Pr[c ~ PMF.uniformOfFintype B.Coins : (B.bsign sk R i m c).run H = none] =
@@ -531,7 +532,8 @@ theorem pr_bsign_none_eq [Fintype TB.Coins] [Nonempty TB.Coins] (h : IsRejection
 attempts**: for every set `T` of signatures, after a passed check the probability that `bsign`
 outputs a signature in `T` is the probability that one standard attempt is kept with a signature in
 `T` (over its standard and keep coins), times `attemptsMean q K`; after a failed check it is `0`. -/
-theorem pr_bsign_kept_eq [Fintype TB.Coins] [Nonempty TB.Coins] (h : IsRejection B J K e) (H : X → Y)
+theorem pr_bsign_kept_eq [Fintype TS.Coins] [Nonempty TS.Coins] (h : IsRejection B J K e)
+    (H : X → Y)
     (sk : B.SK) (R : KeyRing B.PK N)
     (i : ℕ) (m : B.Msg) (T : B.BSig → Prop) :
     Pr[c ~ PMF.uniformOfFintype B.Coins : ∃ σ, (B.bsign sk R i m c).run H = some σ ∧ T σ] =
@@ -575,7 +577,8 @@ theorem pr_uniform_prod_fst {T U : Type} [Fintype T] [Nonempty T] [Fintype U] [N
 /-- **Correctness of a rejection signer from the standard signer's**: if the standard signer outputs
 a signature that fails base verification with probability at most `ε` at every oracle, key and base
 message, the ring-aware signer has correctness error at most `K · ε`. -/
-theorem correctWithin_of_isRejection [Fintype TB.Coins] [Nonempty TB.Coins] (h : IsRejection B J K e)
+theorem correctWithin_of_isRejection [Fintype TS.Coins] [Nonempty TS.Coins]
+    (h : IsRejection B J K e)
     {ε : ℝ≥0∞}
     (hstd : ∀ (H : X → Y) (kc : B.KeyCoins) (bm : B.BMsg),
       Pr[c ~ PMF.uniformOfFintype J.StdCoins :
@@ -603,7 +606,8 @@ theorem correctWithin_of_isRejection [Fintype TB.Coins] [Nonempty TB.Coins] (h :
 kept standard attempt (over its standard and keep coins) outputs `σ` with public value `y` with
 probability at most `γ` times the probability that it is kept with public value `y`, the ring-aware
 signer satisfies `SigGivenPubLe γ` (the expected number of attempts multiplies both sides). -/
-theorem sigGivenPubLe_of_isRejection [Fintype TB.Coins] [Nonempty TB.Coins] (h : IsRejection B J K e)
+theorem sigGivenPubLe_of_isRejection [Fintype TS.Coins] [Nonempty TS.Coins]
+    (h : IsRejection B J K e)
     {γ : ℝ≥0∞}
     (hatt : ∀ (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N) (i : ℕ) (m : B.Msg) (y : B.Pub)
       (σ : B.BSig),
@@ -642,11 +646,10 @@ theorem sigGivenPubLe_of_isRejection [Fintype TB.Coins] [Nonempty TB.Coins] (h :
 
 /-- The types of `bitSigner K`: one key, one message and one public value; bit signatures; `K` coin
 bits. -/
-abbrev bitSignerT (K : ℕ) : BaseTypes where
+abbrev bitSignerT (K : ℕ) : _root_.GordieHowe.Signature.SchemeTypes where
   PK := Unit
   SK := Unit
   KeyCoins := Unit
-  Msg := Unit
   BMsg := Unit
   BSig := Bool
   Pub := Unit
@@ -656,7 +659,7 @@ variable (X Y N) in
 /-- **A base signer of the rejection form**: one key, one message, one public value; a signature is
 a bit; each of `K` attempts draws a uniform bit and keeps it when it is `true` (keep probability
 `1/2`); the ring check passes. -/
-def bitSigner (K : ℕ) : BaseSigner X Y N (bitSignerT K) where
+def bitSigner (K : ℕ) : BaseSigner X Y N (bitSignerT K) Unit where
   keyGen _ := ((), ())
   bmsg _ _ := ()
   q := 0
@@ -711,11 +714,10 @@ theorem bitSigner_isRejection (K : ℕ) :
 
 /-- The types of `keepBitSigner K`: one key, one message and one public value; bit signatures; `K`
 pairs of a signature bit and a keep bit. -/
-abbrev keepBitSignerT (K : ℕ) : BaseTypes where
+abbrev keepBitSignerT (K : ℕ) : _root_.GordieHowe.Signature.SchemeTypes where
   PK := Unit
   SK := Unit
   KeyCoins := Unit
-  Msg := Unit
   BMsg := Unit
   BSig := Bool
   Pub := Unit
@@ -725,7 +727,7 @@ variable (X Y N) in
 /-- **A base signer of the rejection form with a public keep coin**: as `bitSigner`, but each of
 `K` attempts draws a uniform signature bit and a uniform keep bit, and keeps the signature when the
 keep bit is `true`; the ordinary signer outputs the signature bit of the first attempt. -/
-def keepBitSigner (K : ℕ) : BaseSigner X Y N (keepBitSignerT K) where
+def keepBitSigner (K : ℕ) : BaseSigner X Y N (keepBitSignerT K) Unit where
   keyGen _ := ((), ())
   bmsg _ _ := ()
   q := 0

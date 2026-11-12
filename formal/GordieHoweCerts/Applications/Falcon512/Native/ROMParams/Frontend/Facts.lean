@@ -291,7 +291,6 @@ instance : FalconHConsts program RealizedProgram.gf128 where
     rw [← hmul, gf2_128OfNat_gpow 511 (by omega), ← pow_succ]
     rfl
 
-set_option maxRecDepth 8192 in
 /-- The selection field of the program of `Falcon512.Native.ROMParams` is `GF(2^128)`, with its labels. -/
 instance : FalconSelField program RealizedProgram.gf128 RealizedProgram.fq9 :=
   FalconSelField.ofHash

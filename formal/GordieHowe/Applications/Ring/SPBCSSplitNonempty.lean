@@ -22,7 +22,7 @@ the second or a forgery on the empty ring.
 - `insiderForgeProb_le_spbcsSplit_check`: BKM06 Definition 7 for the first scheme is at most that
   for the second, for the adversary relabelled (`UnforgeAdversary.withVerify`), plus the forgery
   probability on the empty ring.
-- `keyReuseForgeProb_le_spbcsSplit_check`: the same in the key-reuse game.
+- `jointForgeProb_le_spbcsSplit_check`: the same in the joint-security game.
 -/
 
 namespace GordieHowe.Ring
@@ -32,8 +32,8 @@ open GordieHowe.RingSignature.OracleSplit
 open scoped ENNReal
 
 variable {k kN kS L e N : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁]
-  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes}
-  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
+  (sp : OracleSplit Y Y₁ (XOut k e)) {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N T RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)] {X₀ Wit₀ : Type}
@@ -48,7 +48,7 @@ variable {k kN kS L e N : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁]
   (input : RingSignature.RingStmt B → RingSignature.RingWit B → Option Wit₀)
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm]
 
-variable [DecidableEq TB.PK]
+variable [DecidableEq T.PK]
 
 omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The scheme with the check `check'` accepts what the scheme with `check` accepts on a
@@ -70,9 +70,9 @@ theorem verify_spbcsSplit_check
 variable [Fintype Y] [DecidableEq Y] [Nonempty Y] {n : ℕ} [NeZero n]
   {V : RingSignature.OracleView (Bits (queryBits k kN kS L)) Y} {t : ℕ}
 
-variable [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
-  [DecidableEq TB.Coins] [Nonempty TB.Coins]
+variable [Fintype T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.Pub] [DecidableEq T.Pub]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins] [Fintype T.Coins]
+  [DecidableEq T.Coins] [Nonempty T.Coins]
 
 /-- **BKM06 Definition 7 with the empty ring rejected** (`insiderForgeProb_le_withVerify`): for a
 check `check'` accepting the statements with a nonempty ring that `check` accepts (`hc`), the
@@ -96,20 +96,20 @@ theorem insiderForgeProb_le_spbcsSplit_check
   insiderForgeProb_le_withVerify _ (verify_spbcsSplit_check sp M Λ E hb honest stmtProg qS hS
     check' input hc) A Q
 
-variable [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig]
+variable [Fintype T.BMsg] [DecidableEq T.BMsg] [Fintype T.BSig] [DecidableEq T.BSig]
 
-/-- **The key-reuse game with the empty ring rejected** (`forgeProb_le_withVerify`): for a check
+/-- **The joint-security game with the empty ring rejected** (`forgeProb_le_withVerify`): for a check
 `check'` accepting the statements with a nonempty ring that `check` accepts (`hc`), the forgery
-probability of an adversary of the key-reuse game of the scheme of the split spBCS proof system
-with `check` is at most that of the relabelled adversary in the key-reuse game of the scheme with
+probability of an adversary of the joint-security game of the scheme of the split spBCS proof system
+with `check` is at most that of the relabelled adversary in the joint-security game of the scheme with
 `check'`, plus the probability of a forgery on the empty ring. -/
-theorem keyReuseForgeProb_le_spbcsSplit_check
+theorem jointForgeProb_le_spbcsSplit_check
     (hc : ∀ x, check x = true → x.ring.1 ≠ [] → check' x = true)
-    (A : KeyReuseAdversary B (spbcsSplitProofSystem sp M Λ E hb honest stmtProg qS hS check input)
+    (A : JointAdversary B (spbcsSplitProofSystem sp M Λ E hb honest stmtProg qS hS check input)
       adm n V t)
     (Q : ℕ) :
-    keyReuseForgeProb A Q ≤
-      keyReuseForgeProb
+    jointForgeProb A Q ≤
+      jointForgeProb
           (PS := spbcsSplitProofSystem sp M Λ E hb honest stmtProg qS hS check' input)
           (UnforgeAdversary.withVerify
             (S := ofBase B

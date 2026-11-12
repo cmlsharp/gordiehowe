@@ -317,7 +317,6 @@ theorem q_neg_one : ((12288 : ℕ) : (interp 1).K) = -1 := by
 
 section Signature
 
-set_option maxRecDepth 4096
 
 /-- The key's operator block: the negacyclic product with the inverse transform of
 `statement.hhat`. -/
@@ -405,7 +404,6 @@ theorem rdA595 (h : ∀ v ∈ NormValues program, val v = algVal program y v) {t
   rw [rdA_algVal h (by simp [NormValues]) (by rw [(FalconAAlg.sizes_sig (program := program)).1]; exact ht)]
   rw [hNat_595, nS2_hIn ht]
 
-set_option maxRecDepth 4096 in
 /-- **`signature.equation` (`mod_q`) holds** on the honest values at the honest key: modulo `q`,
 `s₁ + h s₂ = c` (`sig_zmod`), read through the constant coordinates (`applyInt_cast`,
 `coord0_keyPoly`). -/
@@ -475,7 +473,6 @@ theorem sig284_honest (hy : y.Valid) (hx : keyOf x = some y.pk)
   exact sig_zmod hy ⟨i, hi⟩
 
 
-set_option maxRecDepth 4096 in
 /-- **The key's polynomial in `F_q^9`** at the honest statement: the inverse transform of
 `statement.hhat` is the key's coefficients (`KeyNTT.inverseNtt_keyHat`, `map_inverseNtt`). -/
 theorem keyF_honest (hx : x = stmtOf y.pk) (a : Fin 512) :
@@ -517,7 +514,6 @@ section HonestSignatureField
 variable {L : ℕ} {y : Falcon512.PoP.HonestInput L} {val x : program.Valuation interp}
   {c : ∀ k, (program.layout interp).Ch k} {π : (program.layout interp).Pads}
 
-set_option maxRecDepth 4096 in
 /-- **`signature.equation` (field form) holds** on the honest values at the honest statement:
 `s₁ + h s₂ − c = 0` in `F_q^9` (`honestSignature_eq`, `keyF_honest`). -/
 theorem sig265_honest (hy : y.Valid) (hx : x = stmtOf y.pk)
@@ -642,7 +638,6 @@ theorem hNat594_lt (j : ℕ) : hNat program y 594 j < 2 := by
   · exact Nat.mod_lt _ (by norm_num)
   · norm_num
 
-set_option maxRecDepth 4096 in
 /-- **`mac.equal` holds at the source environment** on the honest values: the raw view and `c_A`
 are the same sample bits. -/
 theorem cross_honest (hsel : ∀ v ∈ [588, 590, 591], val v = selVal program FH FA y v)

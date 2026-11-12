@@ -97,7 +97,7 @@ theorem w1BindConcrete.insiderForgeProb_le_of_t0 (sp : OracleSplit Y Y₁ (XOut 
           (t + Q * ((w1ConcreteBase p O MO βmin tol kr D Prod.mk).qPub +
             (w1RingPS O MO βmin tol kr D Sc Λ E hb honest sp).q) + 2 * N + kqOf Mg nr b b)
           Sc.senc.digestsPerInput Mg.nJ (maxError ε) :=
-  (w1BindConcrete.insiderForgeProb_le sp hp hk hO hM hrbr c₀ f₀ A hS Q).trans
+  (w1BindConcrete.insiderForgeProb_le sp hp hk hO hM ⟨Ext, St, ε, hrbr⟩ c₀ f₀ A hS Q).trans
     (add_le_add (hε'.le_muEufProbWithin hmem) le_rfl)
 
 end RingBinding
@@ -142,7 +142,6 @@ attribute [local instance] admDecF
 
 variable [Inhabited Sc.NIProof]
 
-open Classical in
 omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **`w1H3CaseErrorWith` is monotone in the case-U term.** -/
 theorem w1H3CaseErrorWith_mono (h : W1OracleFacts O MO sp) {t : ℕ}
@@ -160,7 +159,6 @@ theorem w1H3CaseErrorWith_mono (h : W1OracleFacts O MO sp) {t : ℕ}
   dsimp only [w1H3CaseErrorWith]
   exact add_le_add le_rfl (add_le_add (add_le_add huu le_rfl) le_rfl)
 
-open Classical in
 /-- **The unforgeability bound of the converted ML-DSA ring signature publishing `w₁` under the
 named assumption with `t₀` published**: `w1ConvConcrete.insiderForgeProb_le` with the case-U term,
 MU-EUF-NMA^corr of the forger `w1H3UForger` against the signer with fresh masks, bounded by
@@ -200,8 +198,8 @@ theorem w1ConvConcrete.insiderForgeProb_le_of_t0
           Sc.simExtractionError (kqOf Mg nr b b) (maxError ε)
             (Sc.niJointSimulatorProg Λ VE.toViewRead b pub Sim Tp).q (t + w * (2 * N) + 2 * Q) Q +
           ENNReal.ofReal (Sc.zkError δ (t + w * (2 * N) + 2 * Q) Q))) := by
-  refine (w1ConvConcrete.insiderForgeProb_le hp hk h hQm c₀ A hS VE pub Sim Tp hvzk hrbr p₀
-    f₀).trans ?_
+  refine (w1ConvConcrete.insiderForgeProb_le hp hk h ⟨hQm⟩ c₀ A hS pub ⟨VE, Sim, Tp, hvzk⟩
+    ⟨Ext, St, ε, hrbr⟩ p₀ f₀).trans ?_
   rw [w1H3CaseError_eq_with]
   exact add_le_add le_rfl (add_le_add le_rfl (add_le_add (add_le_add (add_le_add
     (w1H3CaseErrorWith_mono h A hS VE pub Sim Tp p₀ Ext f₀ (hε'.le_muEufNmaProb hmem)) le_rfl)

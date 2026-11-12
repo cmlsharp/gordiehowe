@@ -39,18 +39,18 @@ open scoped ENNReal
 
 section Game
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes}
-  {B : BaseSigner X Y N TB} {TPS : PSTypes} [Fintype TPS.Proof]
+variable {X Y : Type} {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner X Y N T RMsg} {TPS : PSTypes} [Fintype TPS.Proof]
   [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {n : ℕ}
   [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
   [AddGroup Y] [Nonempty Y] [NeZero n] {t : ℕ}
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
-  [Nonempty TB.Coins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BSig]
+  [DecidableEq T.BSig] [Fintype T.Pub] [DecidableEq T.Pub] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins] [Fintype T.Coins] [DecidableEq T.Coins]
+  [Nonempty T.Coins]
 
 /-- **The game's forgeries in an event `E` through the relayed forger** (the restricted form of
 `insiderForgeProb_le_relayedForger` without freshness, for any base message): the forgery
@@ -94,12 +94,13 @@ theorem forgeProbOn_le_relayedForger
 end Game
 
 /-- **A statement with a witness of the ring relation has a nonempty ring** (`RingRel.idx_lt`). -/
-theorem ringStmt_ring_ne_nil_of_ringRel {X Y : Type} {N : ℕ} {TB : BaseTypes}
-    {B : BaseSigner X Y N TB}
+theorem ringStmt_ring_ne_nil_of_ringRel {X Y : Type} {N : ℕ} {T : Signature.SchemeTypes}
+    {RMsg : Type}
+    {B : BaseSigner X Y N T RMsg}
     {adm : KeyRing B.PK N → Prop} {H : X → Y} {x : RingStmt B} {w : RingWit B}
     (h : RingRel B adm H x w) : x.ring.1 ≠ [] := fun hx => by
   have := h.idx_lt
-  rw [hx] at this
+  rw [show x.ring.keys = [] from hx] at this
   exact Nat.not_lt_zero _ this
 
 end GordieHowe.RingSignature
@@ -114,16 +115,16 @@ section Split
 variable {X Y Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] (sp : OracleSplit Y Y₁ Y₂)
   [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
   [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁] [Fintype Y₂] [DecidableEq Y₂]
-  [Nonempty Y₂] {N n t : ℕ} [NeZero n] {TB : BaseTypes}
-  {B : BaseSigner X Y N TB}
+  [Nonempty Y₂] {N n t : ℕ} [NeZero n] {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner X Y N T RMsg}
   {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop} [DecidablePred adm]
   {R : Type} (P : KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof) → OracleProg X Y R) (q : ℕ)
   (hP : ∀ o, (P o).QueriesLE q)
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
-  [Nonempty TB.Coins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BSig]
+  [DecidableEq T.BSig] [Fintype T.Pub] [DecidableEq T.Pub] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins] [Fintype T.Coins] [DecidableEq T.Coins]
+  [Nonempty T.Coins]
 
 /-- **The game's forgeries in an event `E` at a fixed base component** (the restricted form of
 `insiderForgeProb_le_split` without freshness, for any base message): the forgery probability in
@@ -181,8 +182,8 @@ section Knowledge
 
 variable {m k e N n : ℕ} {Y₁ : Type} [AddGroup Y₁] {Y : Type} [AddGroup Y] [Fintype Y]
   [DecidableEq Y]
-  {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes}
-  {B : BaseSigner (Bits m) Y N TB}
+  {sp : OracleSplit Y Y₁ (XOut k e)} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits m) Y N T RMsg}
   {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop}
   [DecidablePred adm] {O : SignOracle B.core} [NeZero n] {X₀ Cl : Type}
   {V : NARG.QROM.Verifier m k e Cl X₀} {rel : Set (X₀ × RingWit B)}
@@ -190,8 +191,8 @@ variable {m k e N n : ℕ} {Y₁ : Type} [AddGroup Y₁] {Y : Type} [AddGroup Y]
 
 variable [Fintype O.SMsg] [DecidableEq O.SMsg]
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins]
 
 omit [Fintype Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
   [DecidableEq TPS.Coins] [Nonempty TPS.Coins] in
@@ -260,8 +261,8 @@ section Chain
 
 variable {m k e N n : ℕ} {Y₁ : Type} [AddGroup Y₁] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁]
   {Y : Type} [AddGroup Y] [Fintype Y] [DecidableEq Y] [Nonempty Y]
-  {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes}
-  {B : BaseSigner (Bits m) Y N TB}
+  {sp : OracleSplit Y Y₁ (XOut k e)} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits m) Y N T RMsg}
   {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop}
   [DecidablePred adm] [NeZero n] {X₀ Cl : Type} {V : NARG.QROM.Verifier m k e Cl X₀}
   {rel : Set (X₀ × RingWit B)} {ext : X₀ → DB (Bits m) (Out k e) → Multiset (RingWit B)}
@@ -273,8 +274,8 @@ private theorem tsum_pmf_mul_le {α : Type*} (μ : PMF α) {f : α → ℝ≥0�
   (ENNReal.tsum_le_tsum fun a => mul_le_mul' le_rfl (h a)).trans
     (by rw [ENNReal.tsum_mul_right, PMF.tsum_coe, one_mul])
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins]
 
 omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] in
 /-- **The averaged knowledge step for forgeries in an event without witnesses** (the restricted
@@ -346,8 +347,8 @@ theorem forgeSum_le_knowledgeError_split_on {O : SignOracle B.core} [Fintype O.S
   exact tsum_le_knowledgeError_split_on hC hcl K c₀ ω E (hE ω) keys i₂ Q' _ _
     (((𝒜 keys ρ).restrictAt sp ω).queries_le a)
 
-variable [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub]
-  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+variable [Fintype RMsg] [DecidableEq RMsg] [Fintype T.Pub] [DecidableEq T.Pub]
+  [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins]
 
 /-- **The forgery probability in an event without witnesses is at most the knowledge error**: for
 any base message, a base signer reading only the base component (`hB`), a

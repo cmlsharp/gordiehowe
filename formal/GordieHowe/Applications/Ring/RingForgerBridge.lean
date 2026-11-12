@@ -40,8 +40,8 @@ namespace GordieHowe
 open Quantum Signature RingSignature
 open scoped ENNReal
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes}
-  {B : BaseSigner X Y N TB} {O : SignOracle B.core} {n : ℕ}
+variable {X Y : Type} {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner X Y N T RMsg} {O : SignOracle B.core} {n : ℕ}
 
 /-! ### The inert challenger and the relay -/
 
@@ -167,8 +167,8 @@ theorem answerAfter_muChallenger_eq (hO : O.NoQuery) (keys : Fin n → B.KeyCoin
   · rw [Challenger.answerAfter_toPureEnv_of_le _ _ _ _ (not_lt.1 hi)]
     simp [muReplyAfter, hi]
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins]
 
 /-- **The multi-user challenger at the coins `ω` relays the inert challenger** through the relay at
 the table of its replies, on the logs of the `A.slots` slots of an adversary `A`: the count of the
@@ -195,8 +195,8 @@ theorem relays_muTwoRelay (hO : O.NoQuery) {Ot : Type}
       (inertChallenger_noAssign (MURequest O n) Q').oracle_eq H () _]
 
 omit [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [AddGroup Y] [Nonempty Y] [Nonempty X]
-  [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins]
+  [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins] [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins]
   [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- The relay of the requests to the inert challenger is injective. -/
 theorem muTwoRelay_route_injective (pk₀ : B.PK) (i₂ : Fin n)

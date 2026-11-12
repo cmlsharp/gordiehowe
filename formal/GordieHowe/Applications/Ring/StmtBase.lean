@@ -45,12 +45,12 @@ rings') is the case `X₀` = those statements.
   (`IOP.Sound.causal_rbr`) and the soundness map.
 - Headlines: `StmtVerifiesRing.completeWithin`, `StmtVerifiesRing.completeAtWithin` (completeness,
   refusal and rejection separate, for an honest prover with completeness error `errc`).
-- `StmtVerifiesRing.insiderForgeProb_le`, `StmtVerifiesRing.keyReuseForgeProb_le` (BKM06
-  Definition 7 and key-reuse unforgeability for a ring-binding base message, by knowledge
+- `StmtVerifiesRing.insiderForgeProb_le`, `StmtVerifiesRing.jointForgeProb_le` (BKM06
+  Definition 7 and joint-security unforgeability for a ring-binding base message, by knowledge
   soundness: the extraction forger's success plus spBCS's knowledge error at the largest round
   error of `C`). Their forms by MU-EUF-CMA^corr are the headlines
   (`StmtVerifiesRing.insiderForgeProb_le_muEufProbWithin`,
-  `StmtVerifiesRing.keyReuseForgeProb_le_muEufProbWithin`).
+  `StmtVerifiesRing.jointForgeProb_le_muEufProbWithin`).
 -/
 
 namespace GordieHowe.Ring
@@ -58,21 +58,6 @@ namespace GordieHowe.Ring
 open IOP GordieHowe.SPBCS GordieHowe.QROM Quantum RealizedProgram RealizedProgram.ProofSystem
   GordieHowe.RingSignature
 open scoped NNReal ENNReal
-
-/-- **The ring relation at every oracle**: the pairs in `ringRel B adm H` for every oracle `H`. -/
-def ringRelAll {Xo Yo : Type} {N : ℕ} {TB : BaseTypes}
-    (B : BaseSigner Xo Yo N TB) (adm : KeyRing B.PK N → Prop) :
-    Set (RingSignature.RingStmt B × RingSignature.RingWit B) :=
-  {p | ∀ H, p ∈ RingSignature.ringRel B adm H}
-
-/-- **A pair of `ringRelAll B adm` is in the ring relation at every oracle**: the condition `hrel`
-of the generic unforgeability theorems (`insiderForgeProb_le_of_knowledgeBound`) holds at the
-relation `ringRelAll B adm`. -/
-theorem ringRel_of_mem_ringRelAll {Xo Yo : Type} {N : ℕ} {TB : BaseTypes}
-    {B : BaseSigner Xo Yo N TB}
-    {adm : KeyRing B.PK N → Prop} :
-    ∀ x w, (x, w) ∈ ringRelAll B adm → ∀ H, RingSignature.RingRel B adm H x w :=
-  fun _ _ h H => h H
 
 /-- **Statements `X₀` with the relation `rel` verify base signatures of `B` for the ring relation**
 `RingSignature.ringRel B adm H` at every oracle `H` (BKM06 Definition 1, ePrint 2005/304, p. 3,
@@ -84,8 +69,8 @@ with `Vrfy_R(M, σ)` the verifier on the statement of `(R, M, y)`): for honest i
 * the honest direction: at every oracle, the statements of the ring relation pass the check, and a
   ring witness has an honest input (`input`, defined on the ring relation) at the statement. -/
 structure StmtVerifiesRing {X₀ W Inp : Type} (rel : Set (X₀ × W)) (relH : Set (X₀ × Inp))
-    {Xo Yo : Type} {N : ℕ} {TB : BaseTypes}
-    (B : BaseSigner Xo Yo N TB) (adm : KeyRing B.PK N → Prop) where
+    {Xo Yo : Type} {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+    (B : BaseSigner Xo Yo N T RMsg) (adm : KeyRing B.PK N → Prop) where
   /-- The statement of a ring statement. -/
   stmt : RingSignature.RingStmt B → X₀
   /-- The check of a ring statement. -/
@@ -106,8 +91,8 @@ namespace StmtVerifiesRing
 /-- **For a base signer verifying without the oracle, the conditions at one oracle suffice**: the
 ring relation is the same at every oracle (`VerifiesWithoutOracle.ringRel_eq`). -/
 def ofVerifiesWithoutOracle {X₀ W Inp : Type} {rel : Set (X₀ × W)} {relH : Set (X₀ × Inp)}
-    {Xo Yo : Type} {N : ℕ} {TB : BaseTypes}
-    {B : BaseSigner Xo Yo N TB} {adm : KeyRing B.PK N → Prop}
+    {Xo Yo : Type} {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+    {B : BaseSigner Xo Yo N T RMsg} {adm : KeyRing B.PK N → Prop}
     (hB : B.VerifiesWithoutOracle) (H₀ : Xo → Yo) (stmt : RingSignature.RingStmt B → X₀)
     (check : RingSignature.RingStmt B → Bool) (wit : RingSignature.RingStmt B → W → RingSignature.RingWit B)
     (sound : ∀ x w, check x = true → (stmt x, w) ∈ rel → (x, wit x w) ∈ RingSignature.ringRel B adm H₀)
@@ -127,8 +112,8 @@ def ofVerifiesWithoutOracle {X₀ W Inp : Type} {rel : Set (X₀ × W)} {relH : 
 
 /-- **A sound witness gives a ring witness at every oracle.** -/
 theorem mem_ringRelAll {X₀ W Inp : Type} {rel : Set (X₀ × W)} {relH : Set (X₀ × Inp)}
-    {Xo Yo : Type} {N : ℕ} {TB : BaseTypes}
-    {B : BaseSigner Xo Yo N TB} {adm : KeyRing B.PK N → Prop}
+    {Xo Yo : Type} {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+    {B : BaseSigner Xo Yo N T RMsg} {adm : KeyRing B.PK N → Prop}
     (V : StmtVerifiesRing rel relH B adm) (x : RingSignature.RingStmt B) (w : W) (hx : V.check x = true)
     (hw : (V.stmt x, w) ∈ rel) : (x, V.wit x w) ∈ ringRelAll B adm :=
   fun H => V.sound H x w hx hw
@@ -140,8 +125,8 @@ the relation `relOf rel` (a witness function read at the statement), the witness
 (V.stmt x))`, and the honest input `V.input x w`. -/
 def BaseVerifiesRing.toStmt {ir : RealizedProgram} {I : RealizedProgram.Interp} {W : Type}
     {rel : Set (ir.Valuation I × W)} {Inp : Type} {relH : Set (ir.Valuation I × Inp)} {Xo Yo : Type}
-    {N : ℕ} {TB : BaseTypes}
-    {B : BaseSigner Xo Yo N TB} {adm : KeyRing B.PK N → Prop}
+    {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+    {B : BaseSigner Xo Yo N T RMsg} {adm : KeyRing B.PK N → Prop}
     (V : BaseVerifiesRing ir I rel relH B adm) : StmtVerifiesRing (relOf rel) relH B adm where
   stmt := V.stmt
   check := V.check
@@ -157,8 +142,8 @@ section CompiledBy
 
 open SPTerm
 
-variable {k kN kS L e N : ℕ} {TB : BaseTypes}
-  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N T RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)] {X₀ Wit₀ : Type}
@@ -196,8 +181,9 @@ variable {X₀ W : Type} {rel₀ : Set (X₀ × W)} {C : RealizedProgram.ProofSy
   {SD : C.SimData} {Inp : Type} {relI : Set (X₀ × Inp)} (Hc : C.Honest SD Inp relI)
   {TD : SPBCS.ProofSystemTranscript C} {kS : ℕ} (hb : TD.MergeBounds kS) {pB : ℕ}
   (hf : TD.ProofFormat kS hb pB) {N : ℕ}
-  {TB : BaseTypes}
-  {B : BaseSigner (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40))) (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant)) N TB}
+  {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40)))
+    (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant)) N T RMsg}
   {adm : KeyRing B.PK N → Prop} {W' : Type} {rel : Set (X₀ × W')}
   (V : StmtVerifiesRing rel relI B adm)
 
@@ -227,8 +213,8 @@ theorem proofSystem_completeWithin {errc : ℝ≥0} (hE : Hc.app.ErrorBound fun 
 
 variable [DecidablePred adm]
 
-variable [DecidableEq TB.PK] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
-  [Nonempty TB.Coins]
+variable [DecidableEq T.PK] [Fintype T.KeyCoins] [Nonempty T.KeyCoins] [Fintype T.Coins]
+  [Nonempty T.Coins]
 
 /-- **Completeness of the ring signature of an IOP whose statements verify base signatures of
 `B`** (BKM06 Definition 1 with errors, averaged over honest rings): for an honest prover of `C`
@@ -240,12 +226,10 @@ most `εc + errc` plus spBCS's overrun and key-collision terms and `(q + qPub) /
 theorem completeWithin {errc : ℝ≥0} (hE : Hc.app.ErrorBound fun _ => errc) {ρ εc : ℝ≥0∞}
     (hρ : B.RefuseWithin adm ρ) (hc : B.CorrectWithin εc) :
     (ofBase B (V.proofSystem Hc hb hf) adm).CompleteWithin ρ
-      (εc + ((errc : ℝ≥0∞) + (TD.setting kS hb).model.overrun +
-        SPBCS.keyCollision (C.term.size C.rounds) TD.k +
-          ((B.q + B.qPub : ℕ) : ℝ≥0∞) / 2 ^ (8 * kS))) :=
+      (εc + (TD.setting kS hb).model.ringCompletenessError errc (B.q + B.qPub)) :=
   completeWithin_ofBase B _ adm hρ hc (V.proofSystem_completeWithin Hc hb hf hE)
 
-omit [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins] in
+omit [Fintype T.KeyCoins] [Nonempty T.KeyCoins] in
 /-- **Completeness per key of the ring signature of an IOP whose statements verify base signatures
 of `B`**: as `completeWithin`, with the per-key refusal rate `ρ` (`RefuseAtWithin`), at every key
 and every supported ring holding it. -/
@@ -253,29 +237,27 @@ and every supported ring holding it. -/
 theorem completeAtWithin {errc : ℝ≥0} (hE : Hc.app.ErrorBound fun _ => errc) {ρ εc : ℝ≥0∞}
     (hρ : B.RefuseAtWithin adm ρ) (hc : B.CorrectWithin εc) :
     (ofBase B (V.proofSystem Hc hb hf) adm).CompleteAtWithin ρ
-      (εc + ((errc : ℝ≥0∞) + (TD.setting kS hb).model.overrun +
-        SPBCS.keyCollision (C.term.size C.rounds) TD.k +
-          ((B.q + B.qPub : ℕ) : ℝ≥0∞) / 2 ^ (8 * kS))) :=
+      (εc + (TD.setting kS hb).model.ringCompletenessError errc (B.q + B.qPub)) :=
   completeAtWithin_ofBase B _ adm hρ hc (V.proofSystem_completeWithin Hc hb hf hE)
 
 /-! ### Knowledge soundness -/
 
-variable [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
-  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
-  [DecidableEq TB.Pub] [DecidableEq TB.KeyCoins] [DecidableEq TB.Coins]
+variable [Fintype T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BMsg]
+  [DecidableEq T.BMsg] [Fintype T.BSig] [DecidableEq T.BSig] [Fintype T.Pub]
+  [DecidableEq T.Pub] [DecidableEq T.KeyCoins] [DecidableEq T.Coins]
 
 variable [Inhabited W] [DecidableEq X₀] (V₀ : StmtVerifiesRing rel₀ relI B adm)
 
-omit [DecidableEq TB.PK] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
-  [Nonempty TB.Coins] in
+omit [DecidableEq T.PK] [Fintype T.KeyCoins] [Nonempty T.KeyCoins] [Fintype T.Coins]
+  [Nonempty T.Coins] in
 /-- **The compiled verifier of the proof system, read at ring statements** (`NARG.Verifier.comap`
 of spBCS's verifier at the setting with merges of `TD`, proofs in the format `pB`). -/
 abbrev verifier :=
   NARG.Verifier.comap ((TD.setting kS hb).model.qVerifier (TD.setting kS hb).queries pB pB)
     V₀.stmt V₀.check
 
-omit [DecidableEq TB.PK] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
-  [Nonempty TB.Coins] in
+omit [DecidableEq T.PK] [Fintype T.KeyCoins] [Nonempty T.KeyCoins] [Fintype T.Coins]
+  [Nonempty T.Coins] in
 /-- **The extractor of ring witnesses**: spBCS's database extractor at the extractor of `C`
 (`RealizedProgram.ProofSystem.IOP.extractor`) on the statement `V₀.stmt x`, its witnesses read by
 `V₀.wit x`.
@@ -287,8 +269,8 @@ abbrev extractor (x : RingSignature.RingStmt B)
     Multiset (RingSignature.RingWit B) :=
   ((TD.setting kS hb).model.dbExtractBits C.extractor (V₀.stmt x) D).map (V₀.wit x)
 
-omit [DecidableEq TB.PK] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
-  [Nonempty TB.Coins] in
+omit [DecidableEq T.PK] [Fintype T.KeyCoins] [Nonempty T.KeyCoins] [Fintype T.Coins]
+  [Nonempty T.Coins] in
 /-- **The extractor of ring witnesses as a list**: `extractor` with the list extractor
 `SPBCS.dbExtractBitsList` (the database's entries in the lexicographic order of their inputs).
 
@@ -300,10 +282,10 @@ abbrev extractorList (x : RingSignature.RingStmt B)
     List (RingSignature.RingWit B) :=
   ((TD.setting kS hb).model.dbExtractBitsList C.extractor (V₀.stmt x) D).map (V₀.wit x)
 
-omit [DecidablePred adm] [DecidableEq TB.PK] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins]
-  [Fintype TB.Coins] [Nonempty TB.Coins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg]
-  [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
-  [DecidableEq TB.Pub] [DecidableEq TB.KeyCoins] [DecidableEq TB.Coins] in
+omit [DecidablePred adm] [DecidableEq T.PK] [Fintype T.KeyCoins] [Nonempty T.KeyCoins]
+  [Fintype T.Coins] [Nonempty T.Coins] [Fintype T.PK] [Fintype RMsg] [DecidableEq RMsg]
+  [Fintype T.BMsg] [DecidableEq T.BMsg] [Fintype T.BSig] [DecidableEq T.BSig] [Fintype T.Pub]
+  [DecidableEq T.Pub] [DecidableEq T.KeyCoins] [DecidableEq T.Coins] in
 /-- **The list extractor read as multisets is `extractor`.** -/
 theorem coe_comp_extractorList :
     (fun x D => (extractorList hb V₀ x D : Multiset (RingSignature.RingWit B))) =
@@ -312,8 +294,8 @@ theorem coe_comp_extractorList :
   rw [extractorList, extractor, ← Multiset.map_coe]
   exact congrArg _ (SPBCS.coe_dbExtractBitsList _ _ _ _)
 
-omit [DecidableEq TB.PK] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
-  [Nonempty TB.Coins] in
+omit [DecidableEq T.PK] [Fintype T.KeyCoins] [Nonempty T.KeyCoins] [Fintype T.Coins]
+  [Nonempty T.Coins] in
 /-- **The knowledge bound of the read verifier for the ring relation at every oracle**
 (`ringRelAll`): spBCS's knowledge bound (`SPBCS.knowledgeBound`, CMS19 Proposition 8.12 and Lemmas
 5.9–5.10) from causal round-by-round knowledge soundness of `C` (`IOP.Sound.causal_rbr` of `Sd`),
@@ -325,7 +307,7 @@ noncomputable def knowledgeBound (Sd : C.Sound) :
     (TD.setting kS hb).queries _ fun _ _ _ hv => queries_length_le_of_formatBounds hf hv).comap
       V₀.stmt V₀.check (ringRelAll B adm) V₀.wit V₀.mem_ringRelAll
 
-omit [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] in
+omit [Fintype T.BMsg] [DecidableEq T.BMsg] [Fintype T.BSig] [DecidableEq T.BSig] in
 /-- **Unforgeability with respect to insider corruption (BKM06 Definition 7) of the ring signature
 of an IOP whose statements verify base signatures of `B`, for a ring-binding base message**, by
 knowledge soundness: for a base message that binds the ring (`hbind`) and the soundness data `Sd`
@@ -350,22 +332,22 @@ theorem insiderForgeProb_le (hbind : B.BindsRing) (Sd : C.Sound) {n t : ℕ}
   insiderForgeProb_le_of_knowledgeBound hbind _ (knowledgeBound hb hf V₀ Sd)
     (fun _ _ h => h) A Q
 
-/-- **Key-reuse unforgeability of the ring signature of an IOP whose statements verify base
+/-- **Joint-security unforgeability of the ring signature of an IOP whose statements verify base
 signatures of `B`, for a ring-binding base message**: the bound of `insiderForgeProb_le` for the
-key-reuse game, the extraction forger in MU-EUF-CMA^corr with the ring-aware and the ordinary
-signing oracle (`keyReuseRelay`). -/
-theorem keyReuseForgeProb_le (hbind : B.BindsRing) (Sd : C.Sound) {n t : ℕ}
-    (A : KeyReuseAdversary B (V₀.proofSystem Hc hb hf) adm n (OracleView.queriesOnly _ _) t)
+joint-security game, the extraction forger in MU-EUF-CMA^corr with the ring-aware and the ordinary
+signing oracle (`jointRelay`). -/
+theorem jointForgeProb_le (hbind : B.BindsRing) (Sd : C.Sound) {n t : ℕ}
+    (A : JointAdversary B (V₀.proofSystem Hc hb hf) adm n (OracleView.queriesOnly _ _) t)
     (Q : ℕ) :
-    keyReuseForgeProb A Q ≤
-      extractionSuccess (keyReuseRelay B _ adm) A Q
+    jointForgeProb A Q ≤
+      extractionSuccess (jointRelay B _ adm) A Q
           (compiledBy_spbcsComapProofSystem _ _ _ hf _ V₀.stmt V₀.check V₀.input)
           (extractor hb V₀) +
         SPBCS.knowledgeError TD.k (Configurations.fsExtraBytes + TD.maxGrant)
           (kqOf C.merges C.rounds pB pB)
           (t + Q * (ofBase B (V₀.proofSystem Hc hb hf) adm).q + kqOf C.merges C.rounds pB pB)
           (TD.setting kS hb).model.senc.digestsPerInput C.merges.nJ (maxError Sd.error) :=
-  keyReuseForgeProb_le_of_knowledgeBound hbind _ (knowledgeBound hb hf V₀ Sd)
+  jointForgeProb_le_of_knowledgeBound hbind _ (knowledgeBound hb hf V₀ Sd)
     (fun _ _ h => h) A Q
 
 end StmtVerifiesRing

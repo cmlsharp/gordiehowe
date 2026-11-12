@@ -106,6 +106,13 @@ noncomputable def keyCollisionBound (_ : SPBCS Mg P X k kN kS L e) : ℝ≥0∞ 
 IOP, the paper's `errcpl(0)` (`thm:bcs-main`(1)): `εc + overrun + keyCollisionBound`. -/
 noncomputable def completenessError (εc : ℝ≥0∞) : ℝ≥0∞ := εc + M.overrun + M.keyCollisionBound
 
+/-- **The completeness error of the compiled argument against a prover with `q` queries** at the
+completeness error `εc` of the IOP: `completenessError εc` plus the salt-collision term
+`q / 2^(8 kS)`, the error of the ring signatures compiled by spBCS
+(`Ring.completeWithin_ofBase_spbcs`). -/
+noncomputable def ringCompletenessError (εc : ℝ≥0∞) (q : ℕ) : ℝ≥0∞ :=
+  M.completenessError εc + (q : ℝ≥0∞) / 2 ^ (8 * kS)
+
 /-- A write function: the write of each prover round of each leaf as a function of its message. -/
 abbrev WriteFn : Type := (p : t.Leaf) → (i : (P p.label).MessageIdx) → (P p.label).Type i.1 →
   (M.comp p.label).MessageWrite i

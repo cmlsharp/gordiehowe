@@ -47,11 +47,12 @@ section Chain
 
 variable {k kN kS L e N n t : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁] [Fintype Y]
   [DecidableEq Y] [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁]
-  {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins]
-  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
+  {sp : OracleSplit Y Y₁ (XOut k e)} {TS : Signature.SchemeTypes} {RMsg : Type} [Fintype TS.PK]
+  [DecidableEq TS.PK]
+  [Fintype TS.BSig]
+  [DecidableEq TS.BSig] [Fintype TS.KeyCoins]
+  [DecidableEq TS.KeyCoins]
+  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TS RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -65,14 +66,13 @@ variable {k kN kS L e N n t : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁] 
   [DecidableEq Wit] [Inhabited (ProofQuery Stmt Wit)] [Fintype Rq] [DecidableEq Rq] [Inhabited Rq]
   [DecidableRel rel] [Inhabited M.NIProof] {dummyS : Stmt} {isDummy : X₀ → Bool}
 
-variable [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg]
-  [Fintype TB.Pub] [DecidableEq TB.Pub] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
-  [DecidableEq TB.Coins] [Nonempty TB.Coins]
+variable [Fintype RMsg] [DecidableEq RMsg] [Fintype TS.BMsg] [DecidableEq TS.BMsg]
+  [Fintype TS.Pub] [DecidableEq TS.Pub] [Nonempty TS.KeyCoins] [Fintype TS.Coins]
+  [DecidableEq TS.Coins] [Nonempty TS.Coins]
 
-open Classical in
-omit [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
-  [DecidableEq TB.Pub] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
-  [Nonempty TB.Coins] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype TS.BMsg] [DecidableEq TS.BMsg] [Fintype TS.Pub]
+  [DecidableEq TS.Pub] [Nonempty TS.KeyCoins] [Fintype TS.Coins] [DecidableEq TS.Coins]
+  [Nonempty TS.Coins] in
 /-- **The key-free chain** at fixed users' key coins `keys` and side coins
 `sc`. For the spBCS proof system on the second component (`spbcsSplitProofSystem`) and an
 adversary `𝒜` of the key-free ring game (`kfGame` of the key-free relay over `kfMainFull` with the

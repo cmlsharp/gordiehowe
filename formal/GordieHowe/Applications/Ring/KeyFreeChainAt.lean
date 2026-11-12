@@ -48,10 +48,10 @@ open GordieHowe.QROM GordieHowe.SPBCS IOP SPTerm RingSignature.Insider
 section SPBCS
 
 variable {k kN kS L e N n t : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq Yb]
-  {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
-  {B : BaseSigner Xb Yb N TB}
+  {TS : Signature.SchemeTypes} {RMsg : Type} [Fintype TS.PK] [DecidableEq TS.PK]
+  [Fintype TS.BSig] [DecidableEq TS.BSig]
+  [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins]
+  {B : BaseSigner Xb Yb N TS RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -112,8 +112,8 @@ noncomputable def kfWinTest {Ω : Type} (isDummy : X₀ → Bool) (pks : Fin n �
       .pure (v && (checkX p.2 p.1 &&
         decide (kfFresh enc stmtX isDummy pks fstX side ω p (rs.take Q))))
 
-omit [DecidableEq Xb] [DecidableEq Yb] [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [DecidableEq Xb] [DecidableEq Yb] [Fintype TS.PK] [DecidableEq TS.PK] [Fintype TS.BSig]
+  [DecidableEq TS.BSig] [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins] in
 /-- The test of a key-free win makes at most the verifier's `kq` queries. -/
 theorem kfWinTest_queriesLE {Ω : Type} (isDummy : X₀ → Bool) (pks : Fin n → B.PK)
     (fstX : X₀ → RingStmt B) (side : Ω → Frg × X₀ → List (MUR ⊕ Rq) → Prop)
@@ -130,8 +130,8 @@ theorem kfWinTest_queriesLE {Ω : Type} (isDummy : X₀ → Bool) (pks : Fin n �
       OracleProg.length_trace_mapQuery]
     exact NARG.Verifier.prog_queriesLE _ _ _
 
-omit [DecidableEq Xb] [DecidableEq Yb] [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [DecidableEq Xb] [DecidableEq Yb] [Fintype TS.PK] [DecidableEq TS.PK] [Fintype TS.BSig]
+  [DecidableEq TS.BSig] [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins] in
 /-- **The test of a key-free win accepts exactly on a key-free win** (`WinsKF` with the
 condition `kfFresh` at `ω`) at the oracle read through `outEquiv`. -/
 theorem run_kfWinTest {Ω : Type} (isDummy : X₀ → Bool) (pks : Fin n → B.PK)
@@ -194,7 +194,6 @@ theorem acceptKAt_kfMainSim_le_winTestProb (hb : M.FormatBounds Qs b b)
   · exact absurd hr (hd.not_rel _ hdq _)
 
 omit [DecidableEq X₀] in
-open Classical in
 /-- **The key-free game as the simulation-extraction game at one auxiliary value**
 (`acceptKAt_kfMain_le`, then `acceptKAt_kfMainSim_le_winTestProb`): the test of a key-free win
 at `ω` against `kfMain` with the compiled spBCS prover is at most the simulation-extraction game
@@ -224,7 +223,6 @@ theorem acceptKAt_kfMain_le_winTestProb (hb : M.FormatBounds Qs b b)
     (add_le_add (acceptKAt_kfMainSim_le_winTestProb A' hb prf checkX hd hdisj pks fstX side ω _
       p₀ keys Q a) le_rfl)
 
-open Classical in
 /-- **The key-free route's chain**: averaged over the auxiliary input, the adversary `A'` against
 the main challenger `kfMain` with the compiled spBCS prover passes the test of a key-free win at
 `ω` (`kfWinTest`) with at most the probability of the forger's win (`forgerWinsKF` at the goal

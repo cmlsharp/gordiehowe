@@ -39,9 +39,9 @@ the main prover's proof on the kept proof query.
   collide; the probability of a collision among `|ι|` values, at most `C(|ι|, 2) · δ`.
 - `exists_equiv_keyFreeAttempt_fiber`: at each commitment hash, a permutation of the masks
   carries the ideal attempt to the key-free attempt.
-- `chOf`, `intAttV`, `kfAttV`, `attLoop`, `callOut_eq_keptCall`, `loopOut_eq_attLoop`: attempts
-  carrying a base value, with the commitment hash `chOf v` of their base value, and loops of
-  calls of them; the ring loop is such a loop of ideal attempts.
+- `chOf`, `intAttV`, `kfAttV`, `attLoop`, `callOutOf_eq_keptCall`, `loopOutOf_eq_attLoop`,
+  `loopOut_eq_attLoop`: attempts carrying a base value, with the commitment hash `chOf v` of their
+  base value, and loops of calls of them; the ring loop is such a loop of ideal attempts.
 - `KFCoins`, `kfLoop`, `w1KFSign`, `w1KFSign_queries`, `run_w1KFSign`: **the key-free signer**:
   the public checks, the members' commitment hashes at the attempts' key-free commitments, the
   key-free loop, and for a kept output `(w₁, σ, v)` the published value `w1Of pk σ`, the
@@ -260,8 +260,8 @@ section Sign
 
 open GordieHowe.Signature
 
-variable [Zero Y] {N n : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
-  (B : RingSignature.BaseSigner X Y N TB)
+variable [Zero Y] {N n : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type} [DecidableEq TS.PK]
+  (B : RingSignature.BaseSigner X Y N TS RMsg)
   {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
   [DecidableEq PC] [Nonempty PC]
   {PS : RingSignature.ProofSystem X Y (RingSignature.RingStmt B) (RingSignature.RingWit B) ⟨Pf, PC⟩}
@@ -515,15 +515,16 @@ omit [Nonempty (MaskBox p)] in
 /-- **One call of the ring loop is a kept call of ideal attempts carrying base values**: at
 masks `ys` and base values `vs` with the signer's commitment hash `hc (i, w₁(y_t)) = chOf v_t`,
 `callOut` is the kept call of `intAttV` at the flattening weight, its signature. -/
-theorem callOut_eq_keptCall (βmin : ℚ≥0) (D : ℕ) (sk : SecretKey p)
+theorem callOutOf_eq_keptCall (cutOf : CutoffFamily prims) (D : ℕ) (sk : SecretKey p)
     (R : KeyRing (PubKey p prims) N) (i : Fin R.1.length)
     (hc : Fin R.1.length × BucketVec p → CommitHashBytes p) (ys : Fin T → MaskBox p)
     (vs : Fin T → Y₁)
     (h : ∀ t, hc (i, realBuckets (prims.expandA sk.rho) (ys t)) = chOf O sp (vs t))
     (u : Fin D) :
-    callOut prims βmin D sk R i hc ys u =
-      (keptCall (outWt (fun vc => flattenCoin prims sk (Cutoff.const βmin) vc *
-          (ringWeights prims βmin (ringT0s prims R.1)).otherWeight i hc vc.1))
+    callOutOf prims cutOf D sk R i hc ys u =
+      (keptCall (outWt (fun vc => flattenCoin prims sk (cutOf R.1 i) vc *
+          (ringWeightsOf prims (ringCuts prims cutOf R.1) (ringT0s prims
+              R.1)).otherWeight i hc vc.1))
         (fun t => intAttV prims O sp sk (prims.expandA sk.rho) (ys t, vs t)) u).map
         fun s => s.2.1 := by
   have hatt : (fun t => intAttV prims O sp sk (prims.expandA sk.rho) (ys t, vs t)) = fun t =>
@@ -536,7 +537,7 @@ theorem callOut_eq_keptCall (βmin : ℚ≥0) (D : ℕ) (sk : SecretKey p)
     rw [h t]
     unfold intAttV idealAttemptW1
     split_ifs <;> rfl
-  unfold callOut keptCall
+  unfold callOutOf keptCall
   rw [hatt, List.findSome?_ite_eq_map_find?]
   rcases (List.finRange T).find? _ with _ | t
   · rfl
@@ -544,8 +545,28 @@ theorem callOut_eq_keptCall (βmin : ℚ≥0) (D : ℕ) (sk : SecretKey p)
     split_ifs with hu <;> simp only [hu, ↓reduceIte, Option.map_some, Option.map_none]
 
 omit [Nonempty (MaskBox p)] in
-/-- **The ring loop is the loop of ideal attempts carrying base values** (`callOut_eq_keptCall`
+/-- **The ring loop is the loop of ideal attempts carrying base values** (`callOutOf_eq_keptCall`
 call by call), its signature. -/
+theorem loopOutOf_eq_attLoop (cutOf : CutoffFamily prims) {k D : ℕ} (sk : SecretKey p)
+    (R : KeyRing (PubKey p prims) N) (i : Fin R.1.length)
+    (hc : Fin R.1.length × BucketVec p → CommitHashBytes p) (ys : Fin k → Fin T → MaskBox p)
+    (vs : Fin k → Fin T → Y₁)
+    (h : ∀ c t, hc (i, realBuckets (prims.expandA sk.rho) (ys c t)) = chOf O sp (vs c t))
+    (uv : Fin k → Fin D) :
+    loopOutOf prims cutOf sk R i hc ys uv =
+      (attLoop (outWt (fun vc => flattenCoin prims sk (cutOf R.1 i) vc *
+          (ringWeightsOf prims (ringCuts prims cutOf R.1) (ringT0s prims
+              R.1)).otherWeight i hc vc.1))
+        (fun c t => intAttV prims O sp sk (prims.expandA sk.rho) (ys c t, vs c t)) uv).map
+        fun s => s.2.1 := by
+  unfold loopOutOf attLoop
+  rw [List.option_map_findSome?]
+  exact PMF.findSome?_congr_mem fun c _ => callOutOf_eq_keptCall prims O sp cutOf D sk R i hc (ys c)
+    (vs c) (h c) (uv c)
+
+omit [Nonempty (MaskBox p)] in
+/-- **The ring loop is the loop of ideal attempts carrying base values** (`callOutOf_eq_keptCall`
+call by call), its signature (`loopOutOf_eq_attLoop` at `constCut βmin`). -/
 theorem loopOut_eq_attLoop (βmin : ℚ≥0) {k D : ℕ} (sk : SecretKey p)
     (R : KeyRing (PubKey p prims) N) (i : Fin R.1.length)
     (hc : Fin R.1.length × BucketVec p → CommitHashBytes p) (ys : Fin k → Fin T → MaskBox p)
@@ -556,11 +577,8 @@ theorem loopOut_eq_attLoop (βmin : ℚ≥0) {k D : ℕ} (sk : SecretKey p)
       (attLoop (outWt (fun vc => flattenCoin prims sk (Cutoff.const βmin) vc *
           (ringWeights prims βmin (ringT0s prims R.1)).otherWeight i hc vc.1))
         (fun c t => intAttV prims O sp sk (prims.expandA sk.rho) (ys c t, vs c t)) uv).map
-        fun s => s.2.1 := by
-  unfold loopOut attLoop
-  rw [List.option_map_findSome?]
-  exact PMF.findSome?_congr_mem fun c _ => callOut_eq_keptCall prims O sp βmin D sk R i hc (ys c)
-    (vs c) (h c) (uv c)
+        fun s => s.2.1 :=
+  loopOutOf_eq_attLoop prims O sp (constCut prims βmin) sk R i hc ys vs h uv
 
 end Loops
 
@@ -729,7 +747,6 @@ theorem w1KFSign_queries (pk : PubKey p prims) (R : KeyRing (PubKey p prims) N) 
 
 omit [Fintype prims.Power2High] [Fintype prims.Hint] [DecidableEq prims.Hint] [Nonempty (MaskBox p)]
   [Fintype Msg] [DecidableEq Msg] [Fintype RMsg] [DecidableEq RMsg] in
-open Classical in
 /-- **The key-free signer at the oracle `H`**: `none` unless the ring passes the public check and
 its members' message representatives are distinct, and `pk` is in the ring; otherwise the key-free
 loop at the members' commitment hashes read from `H`, a kept output `(w₁, σ, v)` giving the
@@ -739,7 +756,8 @@ representative `µ` read from `H`. -/
 theorem run_w1KFSign (pk : PubKey p prims) (R : KeyRing (PubKey p prims) N) (c : ℕ) (m : RMsg)
     (sc : KFCoins (p := p) (T := T) k D Y₁) (H : X → Y) :
     (w1KFSign prims O sp βmin tol enc k D bmsg pk R c m sc).run H =
-      if RingCheck prims βmin tol (O.gOrc H) R ∧ MuDistinct prims (O.muOrc H) R (bmsg R m) then
+      if sampledRingCheck prims βmin tol (O.gOrc H) R ∧ MuDistinct prims (O.muOrc H) R (bmsg R
+          m) then
         if hi : R.1.idxOf pk < R.1.length then
           (kfLoop prims O sp βmin pk R ⟨_, hi⟩
             (PMF.ringOf (ringPts prims R.1 (bmsg R m)) (O.hOrc H)) sc).map fun s =>
@@ -792,13 +810,13 @@ theorem run_w1KFSign (pk : PubKey p prims) (R : KeyRing (PubKey p prims) N) (c :
   simp only [w1KFSign, OracleProg.run_bind]
   rcases hg' : (ringCheckProg prims O βmin tol R).run H <;>
     rcases hm' : (muDistinctProg prims O R (bmsg R m)).run H
-  · have : ¬ RingCheck prims βmin tol (O.gOrc H) R := fun h => by simp_all
+  · have : ¬ sampledRingCheck prims βmin tol (O.gOrc H) R := fun h => by simp_all
     simp [this]
-  · have : ¬ RingCheck prims βmin tol (O.gOrc H) R := fun h => by simp_all
+  · have : ¬ sampledRingCheck prims βmin tol (O.gOrc H) R := fun h => by simp_all
     simp [this]
   · have : ¬ MuDistinct prims (O.muOrc H) R (bmsg R m) := fun h => by simp_all
     simp [this]
-  · have h1 : RingCheck prims βmin tol (O.gOrc H) R := hg.1 hg'
+  · have h1 : sampledRingCheck prims βmin tol (O.gOrc H) R := hg.1 hg'
     have h2 : MuDistinct prims (O.muOrc H) R (bmsg R m) := hm.1 hm'
     simp only [and_self, ↓reduceIte, h1, h2]
     split_ifs with hi
@@ -1072,7 +1090,6 @@ theorem prove_run_reprogBase_eq (sp : Y ≃+ Y₁ × Y₂)
           hu (Prod.mk.inj (hch he)).1.symm
         simp only [h1, h2, ↓reduceIte]
 
-open Classical in
 omit [Fintype Pf] [DecidableEq Pf] in
 /-- **The reply of the kept-only challenger to a signing request** at the constant coins `Z` and
 `c'`, for a signer in the ring with an honest key: on a supported ring passing the checks at the
@@ -1094,7 +1111,7 @@ theorem run_w1C1_sign (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
     (hR : (Bf).pk (keys s) ∈ R.1) (h : hist.length < Q) (H : X → Y) :
     ((w1C1 Of sp keys Q).respond (fun _ : Fin Q => Z, fun _ : Fin Q => c') hist
         (.sign s R m)).run H =
-      if adm R ∧ RingCheck prims βmin tol (O.gOrc H) R ∧
+      if adm R ∧ sampledRingCheck prims βmin tol (O.gOrc H) R ∧
           MuDistinct prims (O.muOrc H) R (bmsg R m) then
         repOf O enc PS Of sp H ((Bf).pk (keys s)) R m c'.2
           (attLoop (outWt (ringWt O βmin ((Sf).sk (keys s)) R ⟨_, idxOf_lt_of_mem keys hR⟩
@@ -1125,7 +1142,7 @@ theorem run_w1C1_sign (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
   have hw := hw0
   unfold w1Resp at hw
   rw [hw]
-  by_cases hc : adm R ∧ RingCheck prims βmin tol (O.gOrc H) R ∧
+  by_cases hc : adm R ∧ sampledRingCheck prims βmin tol (O.gOrc H) R ∧
     MuDistinct prims (O.muOrc H) R (bmsg R m)
   swap
   · rw [ite_eq_right_of_eq_false _ _ (eq_false hc)]
@@ -1270,7 +1287,6 @@ noncomputable def intRep (sp : Y ≃+ Y₁ × Y₂) (H : X → Y) (pk : PubKey p
     (attLoop (outWt (ringWt O βmin sk R i (bmsg R m) H))
       (fun c t => intAttV prims O sp sk (prims.expandA sk.rho) (x.1.1 c t)) x.1.2)
 
-open Classical in
 omit [Fintype Pf] [DecidableEq Pf] in
 /-- **The kept-only challenger against the intermediate, at a signing request** (identical until
 two attempts share a commitment-hash point): for a signer in a supported ring passing the checks
@@ -1292,7 +1308,7 @@ theorem tvDist_w1C1_intRep_le (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
     (hist : List (HistoryEntry (UnforgeRequest (S := Sf) n Of) (UnforgeResponse (S := Sf) Of)))
     (s : Fin n) (R : KeyRing (PubKey p prims) N) (m : RMsg) (hR : (Bf).pk (keys s) ∈ R.1)
     (h : hist.length < Q) (H : X → Y)
-    (hc : adm R ∧ RingCheck prims βmin tol (O.gOrc H) R ∧
+    (hc : adm R ∧ sampledRingCheck prims βmin tol (O.gOrc H) R ∧
       MuDistinct prims (O.muOrc H) R (bmsg R m)) :
     PMF.tvDist ((prodLaw (PMF.uniformOfFintype (X → Y₁)) (PMF.uniformOfFintype (Sf).SignCoins)).map
         fun u => ((w1C1 Of sp keys Q).respond (fun _ : Fin Q => u.1, fun _ : Fin Q => u.2) hist
@@ -1946,7 +1962,6 @@ theorem keptInRel_of_forall (rel : Stmt → Wit → Prop)
 
 omit [Fintype X] [Fintype Pf] [DecidableEq Pf] [Nonempty PCs] [Fintype Msg] [DecidableEq Msg]
   [Fintype Y] [DecidableEq Y] [Nonempty Y] in
-open Classical in
 /-- **The reply of the key-free relay challenger to a signing request** at constant coins, for a
 signer in a supported ring: on a ring passing the checks at the oracle `H`, the key-free reply
 `kfRep`; a refusal with no assignment otherwise. The relay's proof is the main prover's on the
@@ -1972,14 +1987,16 @@ theorem run_w1C2_sign (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
     ((w1C2 prims O M βmin tol enc k D bmsg PS adm sp rel P μ penc stmtP toR dummyR hs idle keys
         Q).respond (fun _ : Fin Q => sc, (fun _ : Fin Q => (), fun _ : Fin Q => pc)) hist
         (.sign s R m)).run H =
-      if RingCheck prims βmin tol (O.gOrc H) R ∧ MuDistinct prims (O.muOrc H) R (bmsg R m) then
+      if sampledRingCheck prims βmin tol (O.gOrc H) R ∧ MuDistinct prims (O.muOrc H) R (bmsg R
+          m) then
         kfRep O βmin enc PS (SideOracle.none (freshScheme prims O M βmin tol enc k D bmsg PS adm))
           sp H ((Bf).pk (keys s)) R ⟨_, hi⟩ m (sc, pc)
       else ⟨none, []⟩ := by
   have hR : (Bf).pk (keys s) ∈ R.1 := (List.idxOf_lt_length_iff (α := PubKey p prims)).1 hi
   have hc0 : hist.length < Q ∧ (fun i => (Bf).pk (keys i)) s ∈ R.1 ∧ adm R := ⟨h, hR, ha⟩
   have hrun := run_w1KFSign prims O sp βmin tol enc k D bmsg ((Bf).pk (keys s)) R hist.length m sc H
-  by_cases hc : RingCheck prims βmin tol (O.gOrc H) R ∧ MuDistinct prims (O.muOrc H) R (bmsg R m)
+  by_cases hc : sampledRingCheck prims βmin tol (O.gOrc H) R ∧ MuDistinct prims (O.muOrc H) R (bmsg
+      R m)
   swap
   · have ho : (RingSignature.KeyFree.sigP (PS := PSf) (adm := adm) Bf (fun i => (Bf).pk (keys i))
         (w1KFSign (RMsg := RMsg) prims O sp βmin tol enc k D bmsg) (fun _ : Fin Q => sc)
@@ -2056,7 +2073,6 @@ noncomputable def w1ReqBound (keys : Fin n → (Sf).KeyCoins)
   | .sign s _ _ => ((k * T).choose 2 : ℝ) * commitPointMax (prims.expandA ((Sf).sk (keys s)).rho)
   | _ => 0
 
-open Classical in
 omit [Fintype Pf] [DecidableEq Pf] in
 /-- **The kept-only challenger against the key-free relay challenger, request by request**: at
 every oracle `H`, history of fewer than `Q` entries and request `r`, the law of the kept-only
@@ -2132,7 +2148,7 @@ theorem tvDist_w1C1_w1C2_le (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
         fun u => hnone u fun h => ha h.2.2) (hnn s)
     have hi2 : R.1.idxOf (α := PubKey p prims) ((Bf).pk (keys s)) < R.1.length :=
       (List.idxOf_lt_length_iff (α := PubKey p prims)).2 hR
-    by_cases hc : RingCheck prims βmin tol (O.gOrc H) R ∧
+    by_cases hc : sampledRingCheck prims βmin tol (O.gOrc H) R ∧
       MuDistinct prims (O.muOrc H) R (bmsg R m)
     swap
     · refine le_of_eq_of_le (PMF.tvDist_map_const_eq_zero _ _ _ _ ⟨none, []⟩
@@ -2167,7 +2183,6 @@ theorem tvDist_w1C1_w1C2_le (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst sp)
     exact hB
   · exact bm.elim
 
-open Classical in
 /-- **The hop from the kept-only to the key-free relay challenger** (R3 → R4 of converted `w₁`
 unforgeability): against every query-bounded adversary, the transcript with the answered
 requests and the final oracle in force lies in every event with probability at most the

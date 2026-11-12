@@ -192,13 +192,12 @@ variable {S n} {V : OracleView X Y} {t : ℕ}
 the oracle uniform, the adversary on the key coins and the oracle's table against the challenger of
 experiment `b`. -/
 noncomputable def anonLaw (A : AnonAdversary S n V t) (Q : ℕ) (b : Bool) :
-    PMF ((Fin n → S.KeyCoins) × (X → Y) × Option (Bool × List (HistoryEntry (AnonRequest S n) S.Sig))) :=
+    PMF (GameRun (Fin n → S.KeyCoins) X Y Bool (AnonRequest S n) S.Sig) :=
   runLaw (fun keys H => A (keys, V.view H)) fun keys => anonChallenger S n keys b Q
 
 /-- The event of the anonymity game: the adversary terminates with output `1`. -/
-def anonAccepts : Set ((Fin n → S.KeyCoins) × (X → Y) ×
-    Option (Bool × List (HistoryEntry (AnonRequest S n) S.Sig))) :=
-  {x | ∃ p ∈ x.2.2, p.1 = true}
+def anonAccepts : Set (GameRun (Fin n → S.KeyCoins) X Y Bool (AnonRequest S n) S.Sig) :=
+  {r | r.Outputs (· = true)}
 
 /-- **The probability that the adversary outputs `1` in experiment `b`.** -/
 noncomputable def anonAcceptProb (A : AnonAdversary S n V t) (Q : ℕ) (b : Bool) : ℝ≥0∞ :=

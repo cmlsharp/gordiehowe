@@ -55,15 +55,23 @@ def attAcc (sk : SecretKey p) {R : KeyRing (PubKey p prims) N} (i : Fin R.1.leng
     (hc : Fin R.1.length × BucketVec p → CommitHashBytes p) (y : MaskBox p) : Bool :=
   attemptAccept prims sk (prims.expandA sk.rho) y (hc (i, realBuckets (prims.expandA sk.rho) y))
 
-/-- The flattening coin `u`'s test of an attempt with mask `y`, at the commitment hash `hc`. -/
-def attOk (βmin : ℚ≥0) (D : ℕ) (sk : SecretKey p) (R : KeyRing (PubKey p prims) N)
-    (i : Fin R.1.length) (hc : Fin R.1.length × BucketVec p → CommitHashBytes p) (u : Fin D)
-    (y : MaskBox p) : Bool :=
-  decide (((u : ℕ) : ℚ≥0) < D * (flattenCoin prims sk (Cutoff.const βmin) (realBuckets
+/-- The flattening coin `u`'s test of an attempt with mask `y`, at the commitment hash `hc`, at
+the members' cut-offs `cutOf`. -/
+def attOkOf (cutOf : CutoffFamily prims) (D : ℕ) (sk : SecretKey p)
+    (R : KeyRing (PubKey p prims) N) (i : Fin R.1.length)
+    (hc : Fin R.1.length × BucketVec p → CommitHashBytes p) (u : Fin D) (y : MaskBox p) : Bool :=
+  decide (((u : ℕ) : ℚ≥0) < D * (flattenCoin prims sk (cutOf R.1 i) (realBuckets
       (prims.expandA sk.rho) y,
     hc (i, realBuckets (prims.expandA sk.rho) y)) *
-    (ringWeights prims βmin (ringT0s prims R.1)).otherWeight i hc
+    (ringWeightsOf prims (ringCuts prims cutOf R.1) (ringT0s prims R.1)).otherWeight i hc
       (realBuckets (prims.expandA sk.rho) y)))
+
+/-- The flattening coin `u`'s test of an attempt with mask `y`, at the commitment hash `hc`
+(`attOkOf` at the constant cut-off family `constCut βmin`). -/
+abbrev attOk (βmin : ℚ≥0) (D : ℕ) (sk : SecretKey p) (R : KeyRing (PubKey p prims) N)
+    (i : Fin R.1.length) (hc : Fin R.1.length × BucketVec p → CommitHashBytes p) (u : Fin D)
+    (y : MaskBox p) : Bool :=
+  attOkOf prims (constCut prims βmin) D sk R i hc u y
 
 /-- The signature of an attempt with mask `y`, at the commitment hash `hc`. -/
 def attOut (sk : SecretKey p) {R : KeyRing (PubKey p prims) N} (i : Fin R.1.length)
@@ -72,22 +80,33 @@ def attOut (sk : SecretKey p) {R : KeyRing (PubKey p prims) N} (i : Fin R.1.leng
   attemptOutput prims sk (prims.expandA sk.rho) (y, hc (i, realBuckets (prims.expandA sk.rho) y))
 
 /-- **The ring loop is `PMF.loopOut`** at the acceptance test, the flattening coin's test of each
-call and the attempt output. -/
+call and the attempt output, at the members' cut-offs `cutOf`. -/
+theorem loopOutOf_eq_pmf (cutOf : CutoffFamily prims) {k D : ℕ} (sk : SecretKey p)
+    (R : KeyRing (PubKey p prims) N) (i : Fin R.1.length)
+    (hc : Fin R.1.length × BucketVec p → CommitHashBytes p) (ys : Fin k → Fin T → MaskBox p)
+    (uv : Fin k → Fin D) :
+    loopOutOf prims cutOf sk R i hc ys uv =
+      PMF.loopOut (fun _ => attAcc prims sk i hc) (fun c => attOkOf prims cutOf D sk R i hc (uv c))
+        (fun _ => attOut prims sk i hc) ys := by
+  unfold loopOutOf PMF.loopOut PMF.firstKept
+  refine congrArg (fun f => List.findSome? f (List.finRange k)) (funext fun c => ?_)
+  unfold callOutOf PMF.callOutcome
+  simp only [attAcc, attOkOf, attOut]
+  rcases (List.finRange T).find? _ with _ | t
+  · rfl
+  · dsimp only
+    split_ifs <;> (try simp_all); exact absurd ‹_ < _› (not_lt.2 ‹_ ≤ _›)
+
+/-- **The ring loop is `PMF.loopOut`** at the acceptance test, the flattening coin's test of each
+call and the attempt output (`loopOutOf_eq_pmf` at `constCut βmin`). -/
 theorem loopOut_eq_pmf (βmin : ℚ≥0) {k D : ℕ} (sk : SecretKey p)
     (R : KeyRing (PubKey p prims) N) (i : Fin R.1.length)
     (hc : Fin R.1.length × BucketVec p → CommitHashBytes p) (ys : Fin k → Fin T → MaskBox p)
     (uv : Fin k → Fin D) :
     loopOut prims βmin sk R i hc ys uv =
       PMF.loopOut (fun _ => attAcc prims sk i hc) (fun c => attOk prims βmin D sk R i hc (uv c))
-        (fun _ => attOut prims sk i hc) ys := by
-  unfold loopOut PMF.loopOut PMF.firstKept
-  refine congrArg (fun f => List.findSome? f (List.finRange k)) (funext fun c => ?_)
-  unfold callOut PMF.callOutcome
-  simp only [attAcc, attOk, attOut]
-  rcases (List.finRange T).find? _ with _ | t
-  · rfl
-  · dsimp only
-    split_ifs <;> (try simp_all); exact absurd ‹_ < _› (not_lt.2 ‹_ ≤ _›)
+        (fun _ => attOut prims sk i hc) ys :=
+  loopOutOf_eq_pmf prims (constCut prims βmin) sk R i hc ys uv
 
 end Loop
 
@@ -243,7 +262,6 @@ theorem mem_w1Pts_sign (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q →
   · simp [OracleProg.run_query, OracleProg.run_pure, reqMasks]
   · exact absurd hR hR'
 
-open Classical in
 variable (enc) in
 /-- **The reply to a signing request from the loop's output**: on a supported ring passing the
 public check with distinct message representatives at the oracle `H`, the loop's output `L` with
@@ -252,7 +270,8 @@ noncomputable def replyOf (H Hp : X → Y) (pk : PubKey p prims) (R : KeyRing (P
     (m : RMsg) (cp : (PS).Coins)
     (L : Option (FIPSSignature p prims)) : Option (UnforgeResponse (S := Sf) Of) :=
   (if adm R then
-    (if RingCheck prims βmin tol (O.gOrc H) R ∧ MuDistinct prims (O.muOrc H) R (bmsg R m) then L
+    (if sampledRingCheck prims βmin tol (O.gOrc H) R ∧ MuDistinct prims (O.muOrc H) R (bmsg R m)
+        then L
       else none).map fun σ => (w1Of prims enc pk σ,
         ((PS).prove ⟨R, m, w1Of prims enc pk σ⟩
             ⟨R.1.idxOf pk, σ⟩ cp).run Hp)
@@ -283,7 +302,6 @@ theorem proverReadsPub_acceptAll (sp : Y ≃+ Y₁ × Y₂) :
       (D := D) (bmsg := bmsg) O (ProofSystem.acceptAll X Y _ _) sp :=
   fun _ _ _ _ _ _ _ => rfl
 
-open Classical in
 omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **The reply of the challenger at the oracle reprogrammed on a signing request's points** is
 `replyOf` of the loop's output against the commitment hash of the oracle `O*` reprogrammed on all
@@ -358,7 +376,8 @@ theorem response_reprogBase_sign (sp : Y ≃+ Y₁ × Y₂)
       ((Sf).sk (keys s)) R (R.1.idxOf ((Bf).pk (keys s))) m cb (reprogBase sp S Z H)
     rw [hgO, hmO] at hb
     erw [hb]
-    by_cases hc : RingCheck prims βmin tol (O.gOrc H) R ∧ MuDistinct prims (O.muOrc H) R (bmsg R m)
+    by_cases hc : sampledRingCheck prims βmin tol (O.gOrc H) R ∧ MuDistinct prims (O.muOrc
+        H) R (bmsg R m)
     · simp only [hc, hi, ↓reduceDIte]
       set mu := O.muAns (H (O.muPt (pubTr prims ((Bf).pk (keys s)), bmsg R m))) with hmu
       have hmemS : ∀ c' t, O.chPt (mu, realBuckets (prims.expandA ((Sf).sk (keys s)).rho)
@@ -471,16 +490,15 @@ theorem mem_keepOf_signature (σ : (Sf).Sig) (x : X) :
 omit [DecidableEq X] [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
   [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
   [DecidableEq Y] [Nonempty Y] in
-open Classical in
 /-- `replyOf` refuses when the ring is unsupported or fails the checks. -/
 theorem replyOf_eq_none {H Hp : X → Y} {pk : PubKey p prims} {R : KeyRing (PubKey p prims) N}
     {m : RMsg} {cp} (L : Option (FIPSSignature p prims))
-    (hf : ¬ (adm R ∧ RingCheck prims βmin tol (O.gOrc H) R ∧
+    (hf : ¬ (adm R ∧ sampledRingCheck prims βmin tol (O.gOrc H) R ∧
       MuDistinct prims (O.muOrc H) R (bmsg R m))) :
     replyOf (Of := Of) enc H Hp pk R m cp L = none := by
   unfold replyOf
   by_cases ha : adm R
-  · have hc : ¬ (RingCheck prims βmin tol (O.gOrc H) R ∧
+  · have hc : ¬ (sampledRingCheck prims βmin tol (O.gOrc H) R ∧
         MuDistinct prims (O.muOrc H) R (bmsg R m)) := fun hc => hf ⟨ha, hc⟩
     simp only [ha, hc, ↓reduceIte]
     rfl
@@ -490,7 +508,6 @@ theorem replyOf_eq_none {H Hp : X → Y} {pk : PubKey p prims} {R : KeyRing (Pub
 omit [DecidableEq X] [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
   [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
   [DecidableEq Y] [Nonempty Y] in
-open Classical in
 /-- `replyOf` refuses when the loop outputs nothing. -/
 theorem replyOf_none {H Hp : X → Y} {pk : PubKey p prims} {R : KeyRing (PubKey p prims) N}
     {m : RMsg} {cp} : replyOf (Of := Of) enc H Hp pk R m cp none = none := by
@@ -500,11 +517,10 @@ theorem replyOf_none {H Hp : X → Y} {pk : PubKey p prims} {R : KeyRing (PubKey
 omit [DecidableEq X] [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
   [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
   [DecidableEq Y] [Nonempty Y] in
-open Classical in
 /-- `replyOf` of an output on a supported ring passing the checks: its signature. -/
 theorem replyOf_some {H Hp : X → Y} {pk : PubKey p prims} {R : KeyRing (PubKey p prims) N}
     {m : RMsg} {cp} (σ : FIPSSignature p prims)
-    (hp : adm R ∧ RingCheck prims βmin tol (O.gOrc H) R ∧
+    (hp : adm R ∧ sampledRingCheck prims βmin tol (O.gOrc H) R ∧
       MuDistinct prims (O.muOrc H) R (bmsg R m)) :
     ∃ prf, replyOf (Of := Of) enc H Hp pk R m cp (some σ) =
       some (.signature (w1Of prims enc pk σ, prf)) := by
@@ -515,7 +531,6 @@ theorem replyOf_some {H Hp : X → Y} {pk : PubKey p prims} {R : KeyRing (PubKey
 omit [DecidableEq X] [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
   [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
   [DecidableEq Y] [Nonempty Y] in
-open Classical in
 /-- A signature from `replyOf` is the output's: its public value is the output's `w₁`. -/
 theorem exists_of_replyOf_eq_some {H Hp : X → Y} {pk : PubKey p prims}
     {R : KeyRing (PubKey p prims) N} {m : RMsg} {cp} {L : Option (FIPSSignature p prims)}
@@ -525,7 +540,7 @@ theorem exists_of_replyOf_eq_some {H Hp : X → Y} {pk : PubKey p prims}
   · rw [replyOf_none] at h
     exact absurd h (by simp)
   · refine ⟨σ₀, rfl, ?_⟩
-    by_cases hp : adm R ∧ RingCheck prims βmin tol (O.gOrc H) R ∧
+    by_cases hp : adm R ∧ sampledRingCheck prims βmin tol (O.gOrc H) R ∧
         MuDistinct prims (O.muOrc H) R (bmsg R m)
     · obtain ⟨prf, hprf⟩ := replyOf_some (Of := Of) (enc := enc) (Hp := Hp) (pk := pk) (cp := cp)
         σ₀ hp
@@ -540,12 +555,11 @@ theorem exists_of_replyOf_eq_some {H Hp : X → Y} {pk : PubKey p prims}
 omit [AddGroup Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
   [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype Msg] [DecidableEq Msg] [Fintype Y]
   [DecidableEq Y] [Nonempty Y] in
-open Classical in
 /-- The commitment-hash points of an output's public value are kept points of its reply, on a
 supported ring passing the checks. -/
 theorem mem_keepOf_replyOf {H Hp : X → Y} {pk : PubKey p prims} {R : KeyRing (PubKey p prims) N}
     {m : RMsg} {cp} (σ₀ : FIPSSignature p prims)
-    (hp : adm R ∧ RingCheck prims βmin tol (O.gOrc H) R ∧
+    (hp : adm R ∧ sampledRingCheck prims βmin tol (O.gOrc H) R ∧
       MuDistinct prims (O.muOrc H) R (bmsg R m)) (mu : Bytes 64) :
     O.chPt (mu, w1Of prims enc pk σ₀) ∈
       keepOf O (replyOf (Of := Of) enc H Hp pk R m cp (some σ₀)) := by
@@ -619,7 +633,6 @@ theorem w1Pts_sign_eq (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fin Q → 
   rw [hj]
   simp only [Finset.mem_univ, true_and]
 
-open Classical in
 omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **The response to a signing request at the oracle reprogrammed on its points** is `replyOf`
 of the loop's output at the commitment hash of `O*` (`response_reprogBase_sign`). -/
@@ -729,7 +742,6 @@ theorem w1Pts_update_ovrCoins (keys : Fin n → (Sf).KeyCoins) {Q : ℕ} (c : Fi
   refine (w1Pts_sign_eq keys _ rs s R m hR h H).trans ?_
   rw [Function.update_self, reqMasks_ovrCoins keys s]
 
-open Classical in
 omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **The response to a signing request at overwritten coins** is `replyOf` of `PMF.loopOut` on
 the decoded overwriting coins. -/
@@ -768,7 +780,6 @@ theorem w1Resp_update_ovrCoins (sp : Y ≃+ Y₁ × Y₂)
     (pubTr prims ((Bf).pk (keys s)), bmsg R m))))) Z H) ((Bf).pk (keys s)) R m ω.2 L)
     (loopOut_eq_pmf prims βmin _ R _ _ _ _)
 
-open Classical in
 omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] in
 /-- **A guess from the response to a signing request lands on a hidden point** (a point of the
 request not kept, `w1KeptPts`) with probability at most `2 k T commitPointMax(Â_s)` over the
@@ -835,7 +846,7 @@ theorem toReal_guess_mem_hidden_sign_le (sp : Y ≃+ Y₁ × Y₂)
                 (PMF.ringOf (ringPts prims R.1 (bmsg R m)) (O.hOrc (reprogBase sp (muChPts O
                   (O.muAns (H (O.muPt (pubTr prims ((Bf).pk (keys s)), bmsg R m))))) Z H))))
               ys)) := by
-    by_cases hp : adm R ∧ RingCheck prims βmin tol (O.gOrc H) R ∧
+    by_cases hp : adm R ∧ sampledRingCheck prims βmin tol (O.gOrc H) R ∧
         MuDistinct prims (O.muOrc H) R (bmsg R m)
     · refine Or.inr fun ys cc t hK => ?_
       rw [PMF.loopOut_of_keptAt _ _ _ hK]

@@ -36,7 +36,6 @@ variable {X Y Req Resp O Y₁ Y₂ : Type} [Fintype X] [DecidableEq X] [Fintype 
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] [Nonempty X] [AddGroup Y]
   [Nonempty Y] {t : ℕ}
 
-open Classical in
 /-- **The game form with a point bound per start draw** (module docstring): for every start draw
 `k` a `RevealedPair` of challengers `C₀ k` and `C₁ k` with point bound `ε k`, `Q` requests and at
 most `qc` classical reads per request, and an adversary and an event reading the oracle only

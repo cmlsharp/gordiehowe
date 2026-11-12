@@ -59,17 +59,16 @@ open scoped ENNReal
 
 variable {m : ℕ} {I J Bd : Type} [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J]
   {Y Y₁ : Type} [DecidableEq Y] [AddGroup Y] [AddGroup Y₁] (sp : OracleSplit Y Y₁ (BitStr I J))
-  {N n : ℕ} {TB : BaseTypes}
-  {B : BaseSigner (Bits m) Y N TB} (O : SignOracle B.core) (e : BitStr I J ≃ Bd)
+  {N n : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits m) Y N T RMsg} (O : SignOracle B.core) (e : BitStr I J ≃ Bd)
 
 /-! ### The reindexing of the coins at a fixed base component -/
 
 variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty O.Coins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] [Nonempty O.Coins]
 
-open Classical in
 /-- **The reindexing of the multi-user challenger's coins at a fixed base component**
 (`Signature.sum_simLaw_countND_muReply` with `muReplyAt`): for a dummy request `d₂` that is not a
 signing request (`hd₂`) and at least `t + 1` answered requests (`hQ`), the coin average of `simLaw`
@@ -432,9 +431,9 @@ end Drops
 
 /-! ### The challenger's replies at an oracle -/
 
-omit [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J] [DecidableEq Y] [Fintype TB.PK]
-  [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Fintype O.SMsg] [DecidableEq O.SMsg] in
+omit [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J] [DecidableEq Y] [Fintype T.PK]
+  [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins] [Fintype O.SMsg] [DecidableEq O.SMsg] in
 /-- **The multi-user challenger answers by `muReplyAt` at the oracle's base component**, without
 assignments, for a signing oracle reading only the base component. -/
 theorem run_respond_muChallenger_base (hO : O.ReadsBase sp) (keys : Fin n → B.KeyCoins) (Q' : ℕ)
@@ -452,7 +451,7 @@ theorem run_respond_muChallenger_base (hO : O.ReadsBase sp) (keys : Fin n → B.
 
 /-! ### The forger over a list of additions -/
 
-variable [Nonempty TB.KeyCoins]
+variable [Nonempty T.KeyCoins]
 
 section Adds
 
@@ -771,7 +770,7 @@ theorem sum_simLaw_le_muEufProb_tableForgerAdds (hO : O.ReadsBase sp)
       muEufProb (tableForgerAdds sp O e Aux aux A C₁ F d₂ E kq d₀ g Pb t' ht) Q' := by
   refine (sum_simLaw_le_muLaw_tableForgerAdds sp O e Aux aux A C₁ F d₂ E kq d₀ g hO hd₂ Pb t' ht hQ
     tab htab W run hrun (fun keys H f rs => ForgesReq keys H f rs) hwin).trans (le_of_eq ?_)
-  simp only [muEufProb, forges_iff_forgesReq]
+  simp only [muEufProb, GameRun.Wins, forges_iff_forgesReq]
 
 /-- **The bound in MU-EUF-CMA^corr** (`sum_simLaw_extRun_le_muLaw_tableForgerAdds` at the forgery
 event `ForgesReq`): the average of the events' probabilities is at most the success probability of
@@ -825,7 +824,7 @@ theorem sum_simLaw_extRun_le_muEufProb_tableForgerAdds (hO : O.ReadsBase sp)
     hout hd₂ P hlast Pb hPb st hst hTP' t' ht hQ tab htab W
     (fun keys H f rs => ForgesReq keys H f rs)
     hwin).trans (le_of_eq ?_)
-  simp only [muEufProb, forges_iff_forgesReq]
+  simp only [muEufProb, GameRun.Wins, forges_iff_forgesReq]
 
 end Adds
 
@@ -1041,7 +1040,7 @@ theorem sum_simLaw_extRun_le_muEufProb_tableForgerSplit (hO : O.ReadsBase sp)
   refine (sum_simLaw_extRun_le_muLaw_tableForgerSplit sp O e Aux aux A C₁ F d₂ E kq d₀ g hO hTP
     hout hd₂ t' ht hQ tab htab W (fun keys H f rs => ForgesReq keys H f rs) hwin).trans
     (le_of_eq ?_)
-  simp only [muEufProb, forges_iff_forgesReq]
+  simp only [muEufProb, GameRun.Wins, forges_iff_forgesReq]
 
 end Forger
 

@@ -97,8 +97,8 @@ theorem run_readL {α : Type} (T : X → Option Y) (p : OracleProg X Y α) (h : 
   rw [readL, run_translate]
   rfl
 
-variable {N n : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
-  (B : BaseSigner X Y N TB) {Pf PC : Type} [Fintype Pf] [DecidableEq Pf]
+variable {N n : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type} [DecidableEq TS.PK]
+  (B : BaseSigner X Y N TS RMsg) {Pf PC : Type} [Fintype Pf] [DecidableEq Pf]
   [Fintype PC]
   [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) ⟨Pf, PC⟩}
@@ -111,7 +111,6 @@ variable {N n : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
 
 /-! ### The program -/
 
-open Classical in
 /-- **The key-free signature of request number `c`**: `ksign` for a signing request by a member of
 a supported ring below `Q`, `none` otherwise. -/
 noncomputable def sigP (c : ℕ) :
@@ -287,7 +286,6 @@ def fullOnly {Yb α : Type} (p : OracleProg X Y α) : OracleProg (X ⊕ X) (Y �
 
 variable {Yb Xs Ys : Type}
 
-open Classical in
 /-- **The key-free signature over base reads** of request number `c`: `sgn` for a signing request
 by a member of a supported ring below `Q`, `none` otherwise. -/
 noncomputable def sigK
@@ -532,7 +530,7 @@ noncomputable def kfRelayOn {Yb Xs Ys : Type}
   sides_le := hsides
   asks_eq_one T c r h m := by rw [filterMap_trace_kfProgK]; rfl
 
-omit [DecidableEq X] [Fintype Pf] [DecidableEq Pf] [DecidableEq TB.PK] in
+omit [DecidableEq X] [Fintype Pf] [DecidableEq Pf] [DecidableEq TS.PK] in
 /-- **A program over full and base reads as a relay program makes no main request.** -/
 theorem asksIn_lift {Yb Xs Ys α : Type} (Rd : KFReads X Y Yb Xs Ys) (Tf Tb : X → Option Y)
     (p : OracleProg (X ⊕ X) (Y ⊕ Yb) α) (P : MURequest (SignOracle.none B.core) n ⊕ R → Prop) :
@@ -768,7 +766,7 @@ section ReadsLength
 variable {Stmt Wit Proof Coins SC' Rq : Type} (rel : Stmt → Wit → Prop) [DecidableRel rel]
   (enc : MURequest (SignOracle.none B.core) n ⊕ Rq → ProofQuery Stmt Wit)
 
-omit [DecidableEq X] [Zero Y] [DecidableEq TB.PK] in
+omit [DecidableEq X] [Zero Y] [DecidableEq TS.PK] in
 /-- **The multi-user part without messages answers by fixed replies below the cap**, so it reads
 its history only through its length there. -/
 theorem muChallenger_none_respond_eq (keys : Fin n → B.KeyCoins) (Q : ℕ)
@@ -778,7 +776,7 @@ theorem muChallenger_none_respond_eq (keys : Fin n → B.KeyCoins) (Q : ℕ)
     (muNone B keys Q).respond c hist r = (muNone (X := X) (Y := Y) B keys Q).respond c hist' r := by
   simp only [muNone, h, h', ↓reduceIte]
 
-omit [DecidableEq X] [Zero Y] [DecidableEq TB.PK] in
+omit [DecidableEq X] [Zero Y] [DecidableEq TS.PK] in
 /-- **The main challenger of the key-free route reads its history only through its length**
 below the cap. -/
 theorem kfMain_readsLength [Fintype Coins] [DecidableEq Coins]
@@ -793,7 +791,7 @@ theorem kfMain_readsLength [Fintype Coins] [DecidableEq Coins]
     rw [muChallenger_none_respond_eq B keys Q c.1 _ _ r h1 h2]
   · simp only [kfMain, Challenger.sumDummy, realChallenger, dummyHist, List.length_map, hl]
 
-omit [DecidableEq X] [Zero Y] [DecidableEq TB.PK] in
+omit [DecidableEq X] [Zero Y] [DecidableEq TS.PK] in
 /-- **The simulated main challenger of the key-free route reads its history only through its
 length** below the cap. -/
 theorem kfMainSim_readsLength [Fintype SC'] [DecidableEq SC']
@@ -883,8 +881,8 @@ request `idle`, the dummy and signing main requests `dummyR` and `toR`, the stat
 - on every path, `toR` carries the statement program's output as its statement (`htoR`);
 - the idle request's proof requests have dummy statements (`hidleS`);
 - the idle request is not a corruption (`hidleC`). -/
-structure KFEncoding {X Y : Type} {N n : ℕ} {TB : BaseTypes}
-    {B : BaseSigner X Y N TB}
+structure KFEncoding {X Y : Type} {N n : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type}
+    {B : BaseSigner X Y N TS RMsg}
     {R Stmt Wit X₀ Rr Sig X' Y' : Type}
     (enc : MURequest (SignOracle.none B.core) n ⊕ R → ProofQuery Stmt Wit) (stmtX : Stmt → X₀)
     (isDummy : X₀ → Bool) (idle : MURequest (SignOracle.none B.core) n ⊕ R) (dummyR : Rr → R)

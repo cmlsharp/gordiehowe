@@ -63,11 +63,11 @@ open Quantum Signature QROM OracleProg RingSignature.OracleSplit
 namespace RingSignature.KeyFree
 
 variable {X Y Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] (sp : OracleSplit Y Y₁ Y₂)
-  {N n : ℕ} {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins]
-  (B : BaseSigner X Y N TB) {Stmt Wit Proof Coins R : Type}
+  {N n : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type} [Fintype TS.PK] [DecidableEq TS.PK]
+  [Fintype TS.BSig]
+  [DecidableEq TS.BSig] [Fintype TS.KeyCoins]
+  [DecidableEq TS.KeyCoins]
+  (B : BaseSigner X Y N TS RMsg) {Stmt Wit Proof Coins R : Type}
   (rel : Stmt → Wit → Prop)
   [DecidableRel rel] [Fintype Coins] [DecidableEq Coins]
   (P₂ : NARG.Prover X Y₂ Stmt Wit Proof Coins) (μ : PMF Coins)
@@ -79,8 +79,8 @@ noncomputable abbrev kfMainFull (keys : Fin n → B.KeyCoins) (Q : ℕ) :
     Challenger X Y (MURequest (SignOracle.none B.core) n ⊕ R) (MUResponse B.core ⊕ Proof) :=
   kfMain B rel (P₂.mapQuery id fun y => (sp y).2) μ enc keys Q
 
-omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype TS.PK] [DecidableEq TS.PK] [Fintype TS.BSig] [DecidableEq TS.BSig]
+  [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins] in
 /-- **The replies of `kfMainFull` read the oracle only through its second component.** -/
 theorem run_kfMainFull_congr (keys : Fin n → B.KeyCoins) (Q : ℕ)
     (c : (kfMainFull sp B rel P₂ μ enc keys Q).Coins)
@@ -107,8 +107,8 @@ theorem run_kfMainFull_congr (keys : Fin n → B.KeyCoins) (Q : ℕ)
     · rfl
     · rfl
 
-omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype TS.PK] [DecidableEq TS.PK] [Fintype TS.BSig] [DecidableEq TS.BSig]
+  [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins] in
 /-- **Reprogramming that keeps the second component is not seen by `kfMainFull`** (the
 hypothesis `hresp` of `kfRelay_safeAssign` at the view `prf sp`). -/
 theorem kfMainFull_respond_reprogram [DecidableEq X] (keys : Fin n → B.KeyCoins) (Q : ℕ)
@@ -120,33 +120,33 @@ theorem kfMainFull_respond_reprogram [DecidableEq X] (keys : Fin n → B.KeyCoin
       ((kfMainFull sp B rel P₂ μ enc keys Q).respond c hist r).run H :=
   run_kfMainFull_congr sp B rel P₂ μ enc keys Q c hist r hL
 
-variable [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg]
-  [Fintype TB.Pub] [DecidableEq TB.Pub] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
-  [DecidableEq TB.Coins] [Nonempty TB.Coins]
+variable [Fintype RMsg] [DecidableEq RMsg] [Fintype TS.BMsg] [DecidableEq TS.BMsg]
+  [Fintype TS.Pub] [DecidableEq TS.Pub] [Nonempty TS.KeyCoins] [Fintype TS.Coins]
+  [DecidableEq TS.Coins] [Nonempty TS.Coins]
 
-omit [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
-  [DecidableEq TB.Pub] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
-  [Nonempty TB.Coins] [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype TS.BMsg] [DecidableEq TS.BMsg] [Fintype TS.Pub]
+  [DecidableEq TS.Pub] [Nonempty TS.KeyCoins] [Fintype TS.Coins] [DecidableEq TS.Coins]
+  [Nonempty TS.Coins] [Fintype TS.PK] [DecidableEq TS.PK] [Fintype TS.BSig] [DecidableEq TS.BSig]
+  [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins] in
 /-- **`kfMainFull` never reprograms.** -/
 theorem kfMainFull_noAssign [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y]
     [Nonempty Y] (keys : Fin n → B.KeyCoins) (Q : ℕ) :
     (kfMainFull sp B rel P₂ μ enc keys Q).NoAssign :=
   kfMain_noAssign B rel _ μ enc keys Q
 
-omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
-  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
-  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
-  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
+omit [Fintype TS.PK] [DecidableEq TS.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype TS.BMsg]
+  [DecidableEq TS.BMsg] [Fintype TS.BSig] [DecidableEq TS.BSig] [Fintype TS.Pub]
+  [DecidableEq TS.Pub] [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins] [Nonempty TS.KeyCoins]
+  [Fintype TS.Coins] [DecidableEq TS.Coins] [Nonempty TS.Coins] in
 /-- **`kfMainFull` reads its history only through its length** below the cap. -/
 theorem kfMainFull_readsLength (keys : Fin n → B.KeyCoins) (Q : ℕ) :
     ReadsLength (kfMainFull sp B rel P₂ μ enc keys Q) Q :=
   kfMain_readsLength B rel enc _ _ keys Q
 
-omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
-  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
-  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
-  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
+omit [Fintype TS.PK] [DecidableEq TS.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype TS.BMsg]
+  [DecidableEq TS.BMsg] [Fintype TS.BSig] [DecidableEq TS.BSig] [Fintype TS.Pub]
+  [DecidableEq TS.Pub] [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins] [Nonempty TS.KeyCoins]
+  [Fintype TS.Coins] [DecidableEq TS.Coins] [Nonempty TS.Coins] in
 /-- **The restricted `kfMainFull`**: at the base part `ω` and the second component `h`, its reply
 is `kfMainFull`'s at every oracle `H` with second component `h`, with no assignments. -/
 theorem run_respond_restrictAt_kfMainFull (keys : Fin n → B.KeyCoins) (Q : ℕ) (ω : X → Y₁)
@@ -162,10 +162,10 @@ theorem run_respond_restrictAt_kfMainFull (keys : Fin n → B.KeyCoins) (Q : ℕ
 
 
 
-omit [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub]
-  [DecidableEq TB.Pub] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
-  [Nonempty TB.Coins] [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype RMsg] [DecidableEq RMsg] [Fintype TS.BMsg] [DecidableEq TS.BMsg] [Fintype TS.Pub]
+  [DecidableEq TS.Pub] [Nonempty TS.KeyCoins] [Fintype TS.Coins] [DecidableEq TS.Coins]
+  [Nonempty TS.Coins] [Fintype TS.PK] [DecidableEq TS.PK] [Fintype TS.BSig] [DecidableEq TS.BSig]
+  [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins] in
 /-- **The restricted `kfMainFull` answers as `kfMain` on the second component's oracle**: at the
 base part `ω`, every reply runs as the reply of `kfMain` with the prover `P₂` of the oracle
 `X → Y₂`. -/
@@ -212,9 +212,9 @@ open RingSignature.Insider
 -- the extraction layers. Their instances are implicit, assigned by unification from the proof
 -- system's types record and never synthesized again: the coins' decidable equality is classical
 -- there, and a synthesized one would differ wherever `R` has decidable equality.
-variable {X Y : Type} [DecidableEq X] [Zero Y] {N n : ℕ} {TB : BaseTypes}
-  [DecidableEq TB.PK]
-  (B : BaseSigner X Y N TB)
+variable {X Y : Type} [DecidableEq X] [Zero Y] {N n : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type}
+  [DecidableEq TS.PK]
+  (B : BaseSigner X Y N TS RMsg)
   {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
   [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) ⟨Pf, PC⟩} {adm : KeyRing B.PK N → Prop}
@@ -389,11 +389,12 @@ open RingSignature.Insider
 
 variable {X Y Y₁ Y₂ : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [Nonempty X]
   [Nonempty Y] [Inhabited X] [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂]
-  (sp : OracleSplit Y Y₁ Y₂) {N n : ℕ} {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins]
-  (B : BaseSigner X Y N TB)
+  (sp : OracleSplit Y Y₁ Y₂) {N n : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type} [Fintype TS.PK]
+  [DecidableEq TS.PK]
+  [Fintype TS.BSig]
+  [DecidableEq TS.BSig] [Fintype TS.KeyCoins]
+  [DecidableEq TS.KeyCoins]
+  (B : BaseSigner X Y N TS RMsg)
   {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
   [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) ⟨Pf, PC⟩} {adm : KeyRing B.PK N → Prop}
@@ -417,8 +418,8 @@ omit [Fintype X] [Fintype Y] [DecidableEq Y] [Nonempty X] [Nonempty Y] [Inhabite
   [DecidableEq (Resp B PS adm)] [Inhabited (Req B PS adm n)] [Fintype R] [DecidableEq R]
   [Fintype (MUResponse B.core ⊕ Pf)] [DecidableEq (MUResponse B.core ⊕ Pf)]
   [Inhabited (MURequest (SignOracle.none B.core) n ⊕ R)] [AddGroup Ys] [Fintype Ys] [DecidableEq Ys]
-  [Fintype TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] in
+  [Fintype TS.PK] [Fintype TS.BSig] [DecidableEq TS.BSig] [Fintype TS.KeyCoins]
+  [DecidableEq TS.KeyCoins] in
 omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The freshness of the main requests**: for a relay `G` whose programs make only main requests
 that come from signed requests (`hA`, `FromSigned`), a main request of a history whose entries
@@ -456,8 +457,8 @@ omit [Fintype X] [Fintype Y] [DecidableEq Y] [Nonempty X] [Nonempty Y] [Inhabite
   [DecidableEq (Resp B PS adm)] [Inhabited (Req B PS adm n)] [Fintype R] [DecidableEq R]
   [Fintype (MUResponse B.core ⊕ Pf)] [DecidableEq (MUResponse B.core ⊕ Pf)]
   [Inhabited (MURequest (SignOracle.none B.core) n ⊕ R)] [AddGroup Ys] [Fintype Ys] [DecidableEq Ys]
-  [Fintype TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] in
+  [Fintype TS.PK] [Fintype TS.BSig] [DecidableEq TS.BSig] [Fintype TS.KeyCoins]
+  [DecidableEq TS.KeyCoins] in
 omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] in
 /-- **The honest ring of the main requests**: for a relay `G` whose programs make a main corruption
 only for a corruption (`hA`), when every key of the claim's ring is the key `pkOf i` of a user `i`
@@ -487,8 +488,8 @@ theorem honestKF_of_canAsk {Frg : Type} (pkOf : Fin n → B.PK)
   · exact hidleC i (h.symm.trans hreq)
   · exact hn (MultiRelay.canAsk_of_asksIn _ (hA p') hc i hreq ▸ List.mem_map_of_mem hp')
 
-omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TB.PK]
-  [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TS.PK]
+  [Fintype TS.BSig] [DecidableEq TS.BSig] [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins] in
 /-- **Every main request of the key-free relay comes from a signed request** (`FromSigned`). -/
 theorem asksIn_relayOf_kfRelay {isDummy : X₀ → Bool}
     (hdumS : ∀ r, isDummy (stmtX (enc (.inr (dummyR r))).stmt) = true)
@@ -503,8 +504,8 @@ theorem asksIn_relayOf_kfRelay {isDummy : X₀ → Bool}
     (KFReads.real id) hdumS (fun x => (hfst x).translate _ _) (fun x => (htoR x).translate _ _)
     T c r) p
 
-omit [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype Pf] [DecidableEq Pf] [Fintype TB.PK]
-  [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype Pf] [DecidableEq Pf] [Fintype TS.PK]
+  [Fintype TS.BSig] [DecidableEq TS.BSig] [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins] in
 /-- **The key-free relay makes a main corruption only for a corruption.** -/
 theorem asksIn_relayOf_kfRelay_corrupt (p : AssignRelay.TaggedReq X Y (Req B PS adm n) Q) :
     MultiRelay.AsksIn (MUResponse B.core ⊕ Pf)
@@ -514,8 +515,8 @@ theorem asksIn_relayOf_kfRelay_corrupt (p : AssignRelay.TaggedReq X Y (Req B PS 
       (r' : MURequest (SignOracle.none B.core) n ⊕ R) => ∀ i, r' = .inl (.corrupt i) → r = .corrupt i)
     (fun T c r => asksIn_kfProgK_corrupt B pks toR dummyR sc _ _ (KFReads.real id) T c r) p
 
-omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TB.PK]
-  [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TS.PK]
+  [Fintype TS.BSig] [DecidableEq TS.BSig] [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins] in
 /-- **Absorbing the key-free relay at one oracle through an agreeing relay**: against the outer
 challenger `kfGame` of the key-free relay over a main challenger `C'`, an event `E` of the output
 `p = (o, x₀)`, the answered requests and the final oracle in force has at most the probability
@@ -607,15 +608,15 @@ theorem assignLaw_kfGame_le {t : ℕ} {Frg : Type} {isDummy : X₀ → Bool} (pk
     o h3, honestKF_of_canAsk B fstX pkOf G₂ hAc (hidle ▸ hkf.hidleC) hP' hist' hex.1 o h4,
     hside T hP' hist' o h5 hex⟩
 
-variable [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg]
-  [Fintype TB.Pub] [DecidableEq TB.Pub] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
-  [DecidableEq TB.Coins] [Nonempty TB.Coins]
+variable [Fintype RMsg] [DecidableEq RMsg] [Fintype TS.BMsg] [DecidableEq TS.BMsg]
+  [Fintype TS.Pub] [DecidableEq TS.Pub] [Nonempty TS.KeyCoins] [Fintype TS.Coins]
+  [DecidableEq TS.Coins] [Nonempty TS.Coins]
 
-omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TB.Msg]
-  [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub] [DecidableEq TB.Pub]
-  [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
-  [Fintype TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] in
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype RMsg]
+  [DecidableEq RMsg] [Fintype TS.BMsg] [DecidableEq TS.BMsg] [Fintype TS.Pub] [DecidableEq TS.Pub]
+  [Nonempty TS.KeyCoins] [Fintype TS.Coins] [DecidableEq TS.Coins] [Nonempty TS.Coins]
+  [Fintype TS.PK] [Fintype TS.BSig] [DecidableEq TS.BSig] [Fintype TS.KeyCoins]
+  [DecidableEq TS.KeyCoins] in
 /-- **Absorbing the key-free relay through agreeing relays and fixing the base component** (the
 full-oracle half of the key-free chain): with the oracle `H` uniform, the event `E H` against
 `kfGame` over `kfMainFull` is at most the average, over a uniform base component `ω` and a uniform
@@ -684,11 +685,11 @@ theorem tsum_assignLaw_kfGame_le [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y�
   simp only [base_join, prf_join]
   rw [← hres]
 
-omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype TB.Msg]
-  [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.Pub] [DecidableEq TB.Pub]
-  [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
-  [Fintype TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] in
+omit [Fintype Pf] [DecidableEq Pf] [Fintype PC] [DecidableEq PC] [Nonempty PC] [Fintype RMsg]
+  [DecidableEq RMsg] [Fintype TS.BMsg] [DecidableEq TS.BMsg] [Fintype TS.Pub] [DecidableEq TS.Pub]
+  [Nonempty TS.KeyCoins] [Fintype TS.Coins] [DecidableEq TS.Coins] [Nonempty TS.Coins]
+  [Fintype TS.PK] [Fintype TS.BSig] [DecidableEq TS.BSig] [Fintype TS.KeyCoins]
+  [DecidableEq TS.KeyCoins] in
 /-- **The full-oracle half of the key-free chain**: with the oracle `H` uniform, an event `E H`
 of the output `p = (o, x₀)`, the answered requests and the final oracle in force, for the
 adversary `𝒜` against `kfGame` of the key-free relay over `kfMainFull`, is at most the average,

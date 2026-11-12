@@ -32,8 +32,8 @@ open scoped ENNReal
 section System
 
 variable {k kN kS L e N : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁]
-  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes}
-  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
+  (sp : OracleSplit Y Y₁ (XOut k e)) {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N T RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)] {X₀ Wit₀ : Type}

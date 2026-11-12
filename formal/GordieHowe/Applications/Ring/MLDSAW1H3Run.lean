@@ -178,8 +178,8 @@ theorem indicator_w1Goal_le (hO : O.ReadsFst sp)
       fun i j h => eq_of_pubTr_eq Pc hξ h
     -- TODO(unbundle-M4): `rw` times out here (presumably its closing `rfl` attempt comparing the
     -- two different `simProb` sums); `simp only` closes only reducible `rfl`s.
-    -- `-proj`: keep `(w1BaseT …).core` folded, as `key` states it; reducing it to its structure
-    -- literal makes `key`'s use below unfold `simProb` to match the two spellings.
+    -- `-proj`: keep the projections of the scheme types folded, as `key` states them; reducing
+    -- them makes `key`'s use below unfold `simProb` to match the two spellings.
     simp -proj only [Set.indicator_of_mem hξ, Set.indicator_of_mem hξ']
     refine le_trans (ENNReal.tsum_le_tsum fun sc => mul_le_mul_of_nonneg_left
       (ENNReal.tsum_le_tsum fun ω => mul_le_mul_of_nonneg_left

@@ -100,8 +100,7 @@ theorem keccakMaps : RealizedProgram.KeccakMaps idx6 idx7 idx8 idx9 idx10 idx11 
 `decide`): the `264` rounds' shapes, the rounds' predicates, expressions and outputs, the constant
 states. -/
 class FalconHHashData (program : RealizedProgram) : Prop where
-  /-- **The shapes of the `264` rounds** (generated data: reading predicate `269` of the table
-unfolds `List.getD` that deep). -/
+  /-- **The shapes of the `264` rounds.** -/
   roundShapes : ∀ p : Fin 11, ∀ t : Fin 24,
       (program.predicate (roundPred p t)).body.roundShape? =
           some ⟨0, outVal p t, linRef p t, rcLeaf t, 1, 3, idx12, idx13⟩ ∧

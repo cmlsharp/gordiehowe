@@ -90,7 +90,8 @@ private theorem typedCell {v : ℕ} {h : ValueShape}
       (program.value v).typeSource = .node :=
   ⟨hh.1, (valueShape_role hh.2).trans hr, (valueShape_typeSource hh.2).trans ht⟩
 
-set_option maxRecDepth 8192 in
+-- The `decide +kernel` checks of this instance decide closed goals about literals: the named
+-- generated facts (`…_kind`, `expr_…_eq`, `idx…_eq`) are rewritten into them first.
 /-- The native ML-DSA ring program at the QROM parameters has the frontend's facts. -/
 instance : MldsaRingFront program where
   muA := 56
@@ -125,16 +126,16 @@ instance : MldsaRingFront program where
   exprA := ⟨idx107, Generated.MLDSA44.Ring.Native.QROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eright_eq, fun t ht => by rw [idx107_eq, IndexMap.entry_step_one ht, Nat.zero_add]⟩
   lens := by
     have hk : program.expr 553 ≠ default := by
-      rw [expr_mac_2eequal_2eshape_2eleft_eq]
-      decide
+      rw [expr_mac_2eequal_2eshape_2eleft_eq, idx164_eq]
+      decide +kernel
     refine ⟨?_, valueShape_size value_mu_header.2, valueShape_size value_w1_header.2, ?_, ?_,
       valueShape_size value_hint_2ew1_header.2⟩
     · rw [exprLen_ref Generated.MLDSA44.Ring.Native.QROMParams.conditions.wellFormed.refsOrdered
           (expr_lt_of_ne_default hk), expr_mac_2eequal_2eshape_2eleft_eq, exprLen_reindex, idx164_eq]
-      decide
+      decide +kernel
     · have hk' : program.expr 551 ≠ default := by
         rw [expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2efirst_eq]
-        decide
+        decide +kernel
       change program.exprLen (.ref 551) = 256
       rw [exprLen_ref Generated.MLDSA44.Ring.Native.QROMParams.conditions.wellFormed.refsOrdered
           (expr_lt_of_ne_default hk'), expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2efirst_eq,
@@ -142,10 +143,10 @@ instance : MldsaRingFront program where
       exact valueShape_size value_h2c_2esample_2emem_2ec_5fenc_header.2
     · have hk' : program.expr 550 ≠ default := by
         rw [expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_2eshared_eq]
-        decide
+        decide +kernel
       have hk'' : program.expr 552 ≠ default := by
         rw [expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_eq]
-        decide
+        decide +kernel
       change program.exprLen (.ref 552) = 256
       rw [exprLen_ref Generated.MLDSA44.Ring.Native.QROMParams.conditions.wellFormed.refsOrdered (expr_lt_of_ne_default hk''), expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_eq,
         exprLen_ref Generated.MLDSA44.Ring.Native.QROMParams.conditions.wellFormed.refsOrdered (expr_lt_of_ne_default hk'), expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_2eshared_eq]

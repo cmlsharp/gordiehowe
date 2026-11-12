@@ -110,7 +110,8 @@ theorem σA_ids : (CarrierAEmbed.σ program).val 58 = 61 ∧ (CarrierAEmbed.σ p
     (CarrierAEmbed.σ program).val 60 = 63 ∧ (CarrierAEmbed.σ program).val 61 = 64 ∧
     (CarrierAEmbed.σ program).val 63 = 69 := by decide +kernel
 
-set_option maxRecDepth 8192 in
+-- The `decide +kernel` checks of this instance decide closed goals about literals: the named
+-- generated facts (`…_kind`, `expr_…_eq`, `idx…_eq`) are rewritten into them first.
 /-- The carrier at the QROM parameters has the frontend's facts. -/
 instance : MldsaCarrierFront program where
   hA := 62
@@ -148,26 +149,26 @@ instance : MldsaCarrierFront program where
   lens := by
     rw [σH_ids.1, σH_ids.2.1, σH_ids.2.2.2.1]
     have hk : program.expr 558 ≠ default := by
-      rw [expr_mac_2eequal_2eshape_2eleft_eq]
-      decide
+      rw [expr_mac_2eequal_2eshape_2eleft_eq, idx165_eq]
+      decide +kernel
     refine ⟨?_, valueShape_size value_mu_header.2, valueShape_size value_w1_header.2, ?_, ?_,
       valueShape_size value_hint_2ew1_header.2⟩
     · rw [exprLen_ref Generated.MLDSA44.Ring.Carrier.QROMParams.conditions.wellFormed.refsOrdered
           (expr_lt_of_ne_default hk), expr_mac_2eequal_2eshape_2eleft_eq, exprLen_reindex, idx165_eq]
-      decide
+      decide +kernel
     · have hk' : program.expr 556 ≠ default := by
         rw [expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2efirst_eq]
-        decide
+        decide +kernel
       rw [exprLen_ref Generated.MLDSA44.Ring.Carrier.QROMParams.conditions.wellFormed.refsOrdered
           (expr_lt_of_ne_default hk'), expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2efirst_eq,
         exprLen_add, exprLen_leaf]
       exact valueShape_size value_h2c_2esample_2emem_2ec_5fenc_header.2
     · have hk' : program.expr 555 ≠ default := by
         rw [expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_2eshared_eq]
-        decide
+        decide +kernel
       have hk'' : program.expr 557 ≠ default := by
         rw [expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_eq]
-        decide
+        decide +kernel
       change program.exprLen (.ref 557) = 256
       rw [exprLen_ref Generated.MLDSA44.Ring.Carrier.QROMParams.conditions.wellFormed.refsOrdered (expr_lt_of_ne_default hk''), expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_eq,
         exprLen_ref Generated.MLDSA44.Ring.Carrier.QROMParams.conditions.wellFormed.refsOrdered (expr_lt_of_ne_default hk'), expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2esecond_2esecond_2eshared_eq]

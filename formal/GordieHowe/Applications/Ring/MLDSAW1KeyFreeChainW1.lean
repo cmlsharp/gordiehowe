@@ -177,7 +177,6 @@ theorem _root_.GordieHowe.forall_mul_le_mul_right {α : Type*} {f : α → ℕ} 
     (h : ∀ a, f a ≤ w) : ∀ a, f a * c ≤ w * c :=
   fun a => Nat.mul_le_mul_right c (h a)
 
-open Classical in
 /-- **The key-free chain at the ML-DSA ring publishing `w₁`**, at the users' key coins `keys` and
 the side coins `sc`. For the proof system `w1HPS` at a check `chk` accepting only nonempty rings
 (`hchk`), read at the fresh statements, and an adversary `𝒜` of the key-free game (`kfGame` of the

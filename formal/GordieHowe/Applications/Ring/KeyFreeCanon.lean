@@ -43,10 +43,10 @@ open GordieHowe.SPBCS IOP SPTerm RingSignature.Insider
 section Canon
 
 variable {k kN kS L e N n : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq Yb]
-  {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
-  {B : BaseSigner Xb Yb N TB}
+  {T : Signature.SchemeTypes} {RMsg : Type} [Fintype T.PK] [DecidableEq T.PK]
+  [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins]
+  {B : BaseSigner Xb Yb N T RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -62,13 +62,15 @@ local notation "Xq" => Bits (queryBits k kN kS L)
 
 local notation "MUR" => MURequest (SignOracle.none B.core) n
 
-open Classical in
 /-- **The canonical extracted witness** for the explicit statement `x₀` and the database `D`: the
 first witness, read through `wit`, of the list extractor (`dbExtractBitsList`, the database's keys
 in lexicographic order) that satisfies `ok`; none if there is none. It is computed by
-`List.find?` over that list, with `ok` decided classically. -/
-noncomputable def kfCanon {WitK W : Type} (Ext : CausalExtractor P τ X₀ WitK)
-    (wit : X₀ → WitK → W) (ok : W → Prop) (x₀ : X₀) (D : DB Xq (Out k e)) : Option W :=
+`List.find?` over that list, with `ok` decided by its `DecidablePred` instance. It is sealed
+(`@[irreducible]`): its interface is `kfCanon_eq_some_iff`, `kfCanon_spec` and
+`exists_kfCanon_eq_some`. -/
+@[irreducible] def kfCanon {WitK W : Type} (Ext : CausalExtractor P τ X₀ WitK)
+    (wit : X₀ → WitK → W) (ok : W → Prop) [DecidablePred ok]
+    (x₀ : X₀) (D : DB Xq (Out k e)) : Option W :=
   ((M.dbExtractBitsList Ext x₀ D).map (wit x₀)).find? fun w => decide (ok w)
 
 omit [∀ j i, Nonempty ((P j).Challenge i)] [∀ j i, Fintype ((M.comp j).MessageWrite i)]
@@ -76,11 +78,11 @@ omit [∀ j i, Nonempty ((P j).Challenge i)] [∀ j i, Fintype ((M.comp j).Messa
 /-- **The canonical witness is the first one satisfying `ok`**: it satisfies `ok`, and it follows
 exactly the witnesses of the list extractor that fail `ok`. -/
 theorem kfCanon_eq_some_iff {WitK W : Type} (Ext : CausalExtractor P τ X₀ WitK)
-    (wit : X₀ → WitK → W) (ok : W → Prop) (x₀ : X₀) (D : DB Xq (Out k e)) (w : W) :
+    (wit : X₀ → WitK → W) (ok : W → Prop) [DecidablePred ok]
+    (x₀ : X₀) (D : DB Xq (Out k e)) (w : W) :
     kfCanon M Ext wit ok x₀ D = some w ↔ ok w ∧
       ∃ as bs, (M.dbExtractBitsList Ext x₀ D).map (wit x₀) = as ++ w :: bs ∧
         ∀ a ∈ as, ¬ ok a := by
-  classical
   rw [kfCanon, List.find?_eq_some_iff_append]
   simp only [decide_eq_true_eq, Bool.not_eq_true', decide_eq_false_iff_not]
 
@@ -88,10 +90,10 @@ omit [∀ j i, Nonempty ((P j).Challenge i)] [∀ j i, Fintype ((M.comp j).Messa
   [Inhabited M.NIProof] in
 /-- **The canonical witness is an extracted witness satisfying `ok`.** -/
 theorem kfCanon_spec {WitK W : Type} (Ext : CausalExtractor P τ X₀ WitK)
-    (wit : X₀ → WitK → W) (ok : W → Prop) (x₀ : X₀) (D : DB Xq (Out k e)) {w : W}
+    (wit : X₀ → WitK → W) (ok : W → Prop) [DecidablePred ok]
+    (x₀ : X₀) (D : DB Xq (Out k e)) {w : W}
     (h : kfCanon M Ext wit ok x₀ D = some w) :
     (∃ w' ∈ M.dbExtractBits Ext x₀ D, wit x₀ w' = w) ∧ ok w := by
-  classical
   obtain ⟨hok, as, bs, hl, -⟩ := (kfCanon_eq_some_iff M Ext wit ok x₀ D w).1 h
   refine ⟨?_, hok⟩
   have hm : w ∈ (M.dbExtractBitsList Ext x₀ D).map (wit x₀) := by simp [hl]
@@ -104,10 +106,10 @@ omit [∀ j i, Nonempty ((P j).Challenge i)] [∀ j i, Fintype ((M.comp j).Messa
   [Inhabited M.NIProof] in
 /-- **There is a canonical witness** when some extracted witness satisfies `ok`. -/
 theorem exists_kfCanon_eq_some {WitK W : Type} (Ext : CausalExtractor P τ X₀ WitK)
-    (wit : X₀ → WitK → W) (ok : W → Prop) (x₀ : X₀) (D : DB Xq (Out k e))
+    (wit : X₀ → WitK → W) (ok : W → Prop) [DecidablePred ok]
+    (x₀ : X₀) (D : DB Xq (Out k e))
     (h : ∃ w ∈ M.dbExtractBits Ext x₀ D, ok (wit x₀ w)) :
     ∃ w, kfCanon M Ext wit ok x₀ D = some w := by
-  classical
   obtain ⟨w, hw, hok⟩ := h
   rw [← coe_dbExtractBitsList] at hw
   rw [← Option.isSome_iff_exists, kfCanon, List.find?_isSome]
@@ -124,7 +126,7 @@ def forgerCanonKF {SC' WitK W : Type} [Fintype SC'] [DecidableEq SC']
     {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → W)
-    (ok G : Frg × X₀ → List (MUR ⊕ R) → W → Prop)
+    (ok G : Frg × X₀ → List (MUR ⊕ R) → W → Prop) [∀ f rs, DecidablePred (ok f rs)]
     (c : SPBCS.Reg (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) prf keys Q A) Psim Q)
     (D : DB Xq (Out k e)) : Prop :=
   ∃ w, kfCanon M Ext wit
@@ -148,7 +150,7 @@ theorem forgerWinsKF_canon {SC' WitK W : Type} [Fintype SC'] [DecidableEq SC']
     {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → W)
-    (Goal ok G₁ G₂ : Frg × X₀ → List (MUR ⊕ R) → W → Prop)
+    (Goal ok G₁ G₂ : Frg × X₀ → List (MUR ⊕ R) → W → Prop) [∀ f rs, DecidablePred (ok f rs)]
     (hok : ∀ p rs w, Goal p rs w → ok p rs w)
     (hsplit : ∀ p rs w w', Goal p rs w → ok p rs w' → G₁ p rs w' ∨ G₂ p rs w')
     (c : SPBCS.Reg (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) prf keys Q A) Psim Q)
@@ -174,7 +176,7 @@ theorem simProb_forgerWinsKF_le_canon {SC' WitK W : Type} [Fintype SC'] [Decidab
     {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → W)
-    (Goal ok G₁ G₂ : Frg × X₀ → List (MUR ⊕ R) → W → Prop)
+    (Goal ok G₁ G₂ : Frg × X₀ → List (MUR ⊕ R) → W → Prop) [∀ f rs, DecidablePred (ok f rs)]
     (hok : ∀ p rs w, Goal p rs w → ok p rs w)
     (hsplit : ∀ p rs w w', Goal p rs w → ok p rs w' → G₁ p rs w' ∨ G₂ p rs w') :
     simProb (outEquiv k e) (extAdv Qs (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) prf
@@ -200,7 +202,7 @@ noncomputable def kfCanonOut {SC' WitK W : Type} [Fintype SC'] [DecidableEq SC']
     {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → W)
-    (ok : Frg × X₀ → List (MUR ⊕ R) → W → Prop)
+    (ok : Frg × X₀ → List (MUR ⊕ R) → W → Prop) [∀ f rs, DecidablePred (ok f rs)]
     (c : SPBCS.Reg (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) prf keys Q A) Psim Q)
     (D : DB Xq (Out k e)) : Option W × (Frg × X₀) × List (MUR ⊕ R) :=
   (kfCanon M Ext wit
@@ -225,7 +227,7 @@ theorem simProb_forgerCanonKF_eq {SC' WitK W : Type} [Fintype SC'] [DecidableEq 
     {shA : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} (A : AdaptiveIAlg shA (Frg × X₀))
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC')
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → W)
-    (ok G : Frg × X₀ → List (MUR ⊕ R) → W → Prop) :
+    (ok G : Frg × X₀ → List (MUR ⊕ R) → W → Prop) [∀ f rs, DecidablePred (ok f rs)] :
     simProb (outEquiv k e) (extAdv Qs (seAlgKF (rel := rel) (enc := enc) (dummyS := dummyS) prf
         keys Q A) Psim Q kq)
         (forgerCanonKF (rel := rel) (enc := enc) (dummyS := dummyS) prf keys Q A Psim Ext wit
@@ -244,11 +246,12 @@ section Bridge
 
 variable {k kN kS L e N n : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁] [Fintype Y]
   [DecidableEq Y] [Fintype Y₁] [DecidableEq Y₁]
-  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins]
-  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
+  (sp : OracleSplit Y Y₁ (XOut k e)) {T : Signature.SchemeTypes} {RMsg : Type} [Fintype T.PK]
+  [DecidableEq T.PK]
+  [Fintype T.BSig]
+  [DecidableEq T.BSig] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins]
+  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N T RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -275,7 +278,7 @@ theorem forgerCanonKF_kfIns_iff {WitK W : Type}
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q : ℕ)
     (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Xq → Y₁)
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → W)
-    (ok G : Frg × X₀ → List (MUR ⊕ R) → W → Prop)
+    (ok G : Frg × X₀ → List (MUR ⊕ R) → W → Prop) [∀ f rs, DecidablePred (ok f rs)]
     (x : ExtReg ((A _ p).restrictAt sp ω) (simExtChallenger Psim Q) MUR (MUResponse B.core))
     (D : DB Xq (Out k e)) :
     forgerCanonKF (rel := rel) (enc := enc (fun i => B.pk (keys i))) (dummyS := dummyS) prf keys Q
@@ -296,7 +299,7 @@ theorem forgerCanonKF_kfIns_dropTabCW_iff {WitK W : Type}
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (Q : ℕ)
     (keys : Fin n → B.KeyCoins) (p : Aux fun i => B.pk (keys i)) (ω : Xq → Y₁)
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → W)
-    (ok G : Frg × X₀ → List (MUR ⊕ R) → W → Prop)
+    (ok G : Frg × X₀ → List (MUR ⊕ R) → W → Prop) [∀ f rs, DecidablePred (ok f rs)]
     (D : DB Xq (Out k e)) :
     ∀ c, (forgerCanonKF (rel := rel) (enc := enc (fun i => B.pk (keys i))) (dummyS := dummyS) prf
         keys Q

@@ -109,7 +109,6 @@ instance instPrimeCastFieldGold4PGold : RealizedProgram.PrimeCastField RealizedP
     change (goldilocksExt4Coords (k : GoldilocksExt4) 0).val = k
     rw [goldilocksExt4Coords_natCast, ZMod.val_natCast, Nat.mod_eq_of_lt hk]
 
-set_option maxRecDepth 4096 in
 /-- The emulated program at the QROM parameters has the composition's facts. -/
 instance : Emulated.MldsaEMain program where
   chal_phase := by
@@ -141,7 +140,6 @@ instance : Emulated.MldsaEMain program where
     · exact MLDSA44.Native.QROMParams.Reads.reads68
     · exact MLDSA44.Native.QROMParams.Reads.reads457
 
-set_option maxRecDepth 4096 in
 /-- The emulated program at the QROM parameters has the crossing's facts. -/
 instance : Emulated.MldsaECross program where
   expr6 := Generated.MLDSA44.Emulated.QROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eright_eq
@@ -164,7 +162,6 @@ def layout : Emulated.MldsaELayout where
   slack := ⟨4096, [586, 587]⟩
   offsetBound := 16777216
 
-set_option maxRecDepth 4096 in
 /-- The emulated program at the QROM parameters has domain `A`'s facts. -/
 instance : Emulated.MldsaEAlgebra program where
   layout := layout

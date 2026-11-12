@@ -165,7 +165,8 @@ theorem congruent_honest :
   rw [zVec_zvR, wNR, MLDSA44.NativeAlgebraCircuit.flat_apply, ZMod.natCast_zmod_val]
   rfl
 
-set_option maxRecDepth 8192 in
+-- Depth 1024 needed (fails at 512): unfolding the field interpretation `interp 1`.
+set_option maxRecDepth 1024 in
 /-- **The honest integer is a multiple of `q`.** -/
 theorem sigZ_dvd (i : Fin 4) (k : Fin 256) : (8380417 : ℤ) ∣ sigZ y i k := by
   have h1 := congruent_honest y i k

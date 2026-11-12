@@ -910,13 +910,13 @@ end Ctx
 
 section Ring
 
-variable {N : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB)
+variable {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type} (B : BaseSigner X Y N T RMsg)
 
 /-! ### The ring-aware rejection signer as a case -/
 
 namespace Rejection
 
-variable {B} (J : Rejection B) [DecidableEq TB.PK]
+variable {B} (J : Rejection B) [DecidableEq T.PK]
 
 /-- **The ring-aware rejection form as a rejection form with a context**: payloads the ring requests
 `(R, m)`, admitted when the key is in `R`; the context of `(R, m)` under `pk` is `R`, the first
@@ -952,11 +952,11 @@ theorem ringKeep_eq (hK : 0 < K) : SignOracle.ringKeep J K hK = J.toCtx.keepOrac
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
   [AddGroup Y] [Nonempty Y] {V : OracleView X Y} {t : ℕ} [Fintype J.StdCoins]
   [DecidableEq J.StdCoins] [Nonempty J.StdCoins] [Fintype J.KeepCoins] [DecidableEq J.KeepCoins]
-  [Nonempty J.KeepCoins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
-  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+  [Nonempty J.KeepCoins] [Fintype T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BMsg]
+  [DecidableEq T.BMsg] [Fintype T.BSig] [DecidableEq T.BSig] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins]
 
-omit [Fintype J.StdCoins] [DecidableEq J.StdCoins] [Nonempty J.StdCoins] [Nonempty TB.KeyCoins] in
+omit [Fintype J.StdCoins] [DecidableEq J.StdCoins] [Nonempty J.StdCoins] [Nonempty T.KeyCoins] in
 set_option smartUnfolding false in
 /-- **The relayed adversary of the ring-aware game is the context form's** along the payload
 classifier `Sum.inl`. The two oracles' fields are separately compiled matches that agree
@@ -967,9 +967,9 @@ theorem relayMUAdversary_eq (hK : 0 < K) (i₀ : Fin n) (A : MUAdversary (SignOr
       J.toCtx.relayAdversary K n hK i₀ (π := Sum.inl) Sum.inl_injective A Q :=
   rfl
 
-omit [Fintype J.StdCoins] [DecidableEq J.StdCoins] [Nonempty J.StdCoins] [Nonempty TB.KeyCoins] in
+omit [Fintype J.StdCoins] [DecidableEq J.StdCoins] [Nonempty J.StdCoins] [Nonempty T.KeyCoins] in
 set_option smartUnfolding false in
-/-- **The relayed adversary of the key-reuse game is the context form's** along the classifier
+/-- **The relayed adversary of the joint-security game is the context form's** along the classifier
 `id`. The two oracles' fields are separately compiled matches that agree constructor by
 constructor, and the elaborator compares them only with smart unfolding off. -/
 theorem relayMUAdversaryStd_eq (hK : 0 < K) (i₀ : Fin n)
@@ -982,7 +982,7 @@ end Rejection
 
 section SignsOn
 
-variable {B : BaseSigner X Y N TB} {J : Rejection B} {K : ℕ} [DecidableEq TB.PK]
+variable {B : BaseSigner X Y N T RMsg} {J : Rejection B} {K : ℕ} [DecidableEq T.PK]
   {e : B.Coins ≃ (Fin K → J.StdCoins × J.KeepCoins)}
 
 /-- **The ring-aware oracle signs as the context form** of a rejection form on honest keys. -/
@@ -999,7 +999,7 @@ theorem IsRejectionOn.signsOn (h : IsRejectionOn B J K e) (hK : 0 < K) :
     · rfl
   base_eq _ := rfl
 
-/-- **The key-reuse oracle signs as the context form** of a rejection form on honest keys whose
+/-- **The joint-security oracle signs as the context form** of a rejection form on honest keys whose
 ordinary signer is the standard signer. -/
 theorem IsRejectionOn.signsOn_ringStd (h : IsRejectionOn B J K e) {hK : 0 < K}
     (hstd : IsStdOn B J K e hK) : J.toCtx.SignsOn K hK (SignOracle.ringStd B) id e where
@@ -1015,12 +1015,12 @@ end SignsOn
 section RingLifting
 
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
-  [AddGroup Y] [Nonempty Y] {V : OracleView X Y} {t : ℕ} {B : BaseSigner X Y N TB}
+  [AddGroup Y] [Nonempty Y] {V : OracleView X Y} {t : ℕ} {B : BaseSigner X Y N T RMsg}
   {J : Rejection B} {K n : ℕ} [Fintype J.StdCoins] [DecidableEq J.StdCoins] [Nonempty J.StdCoins]
-  [Fintype J.KeepCoins] [DecidableEq J.KeepCoins] [Nonempty J.KeepCoins] [Fintype TB.PK]
-  [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg]
-  [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
-  [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+  [Fintype J.KeepCoins] [DecidableEq J.KeepCoins] [Nonempty J.KeepCoins] [Fintype T.PK]
+  [DecidableEq T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BMsg] [DecidableEq T.BMsg]
+  [Fintype T.BSig] [DecidableEq T.BSig] [Fintype T.KeyCoins] [DecidableEq T.KeyCoins]
+  [Nonempty T.KeyCoins] [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins]
   {e : B.Coins ≃ (Fin K → J.StdCoins × J.KeepCoins)}
 
 /-- **The lifting lemma for MU-EUF-CMA^corr** (`GordieHowe/Model/Signature/RejectionRelay.lean`):
@@ -1046,8 +1046,8 @@ theorem muSufProb_le_muVerifyProb_relay (hK : 0 < K) (hrej : IsRejectionOn B J K
   rw [Rejection.relayMUAdversary_eq]
   exact (hrej.signsOn hK).muSufProb_le_muVerifyProb_relay Sum.inl_injective i₀ A Q
 
-/-- **The lifting lemma for MU-EUF-CMA^corr with key reuse**: under `IsRejectionOn B J K e` and
-`IsStdOn B J K e hK`, every adversary `A` of the key-reuse game (`SignOracle.ringStd`, ring requests
+/-- **The lifting lemma for MU-EUF-CMA^corr in the joint-security setting**: under `IsRejectionOn B J K e` and
+`IsStdOn B J K e hK`, every adversary `A` of the joint-security game (`SignOracle.ringStd`, ring requests
 and base messages) with `Q` requests has at most the success probability of its relayed adversary
 `relayMUAdversaryStd` (at most `t + Q · (qCheck + K · qKeep)` queries) in the standard game with
 `K · Q` requests. -/
@@ -1057,9 +1057,9 @@ theorem muEufProb_le_relay_ringStd (hK : 0 < K) (hrej : IsRejectionOn B J K e)
   rw [Rejection.relayMUAdversaryStd_eq]
   exact (hrej.signsOn_ringStd hstd).muEufProb_le_relay Function.injective_id i₀ A Q
 
-/-- **The strong-forgery probability of the key-reuse game is at most the relayed adversary's
+/-- **The strong-forgery probability of the joint-security game is at most the relayed adversary's
 probability of a verifying signature under an uncorrupted user's key**: under the hypotheses of
-`muEufProb_le_relay_ringStd`, the bound of `muSufProb_le_muVerifyProb_relay` for the key-reuse game
+`muEufProb_le_relay_ringStd`, the bound of `muSufProb_le_muVerifyProb_relay` for the joint-security game
 and `relayMUAdversaryStd`. -/
 theorem muSufProb_le_muVerifyProb_relay_ringStd (hK : 0 < K) (hrej : IsRejectionOn B J K e)
     (hstd : IsStdOn B J K e hK) (i₀ : Fin n) (A : MUAdversary (SignOracle.ringStd B) n V t)

@@ -136,7 +136,6 @@ theorem const_rc :
     rw [constEntries_of_kind value_h2p_2eshake_2eblocks_2er23_2econstant_2eleft_2esecond_2esecond_kind]
     decide +kernel
 
-set_option maxRecDepth 8192 in
 /-- The `h2p.shake` facts of the program of `Falcon512.Native.ROMParams`, decided over the tables. -/
 instance : FalconHHashData program where
   roundShapes := roundShapes
@@ -297,7 +296,6 @@ theorem buf_facts :
   exact ⟨⟨value_nonce_header.1, valueShape_role value_nonce_header.2, valueShape_typeSource value_nonce_header.2, value_nonce_type.2⟩,
     ⟨value_message_header.1, valueShape_role value_message_header.2, valueShape_typeSource value_message_header.2, value_message_type.2⟩⟩
 
-set_option maxRecDepth 4096 in
 /-- expr_squeezeIn. -/
 theorem expr_squeezeIn :
     program.expr 53 = .reindex idx22 (.concat (.leaf 25) (.leaf 27)) ∧
@@ -306,7 +304,6 @@ theorem expr_squeezeIn :
     program.predicate 29 = «p.h2p.shake.padding.output» :=
   ⟨expr_h2p_2eshake_2epadding_2eoutput_2eshape_2eleft_2efirst_2efirst_2eshared_2efirst_2efirst_eq, expr_h2p_2eshake_2epadding_2eoutput_2eshape_2eleft_2efirst_2efirst_eq, expr_h2p_2eshake_2epadding_2eoutput_2eshape_2eleft_2esecond_2esecond_2efirst_eq, expr_h2p_2eshake_2esqueeze_2er0_2eshape_2eleft_2esecond_2efirst_2efirst_2eshared_2efirst_2efirst_2efirst_eq, RealizedProgram.Predicate.eq_of_equalParts predicate_h2p_2eshake_2epadding_2eoutput_body ⟨_, rfl⟩ predicate_h2p_2eshake_2epadding_2eoutput_header⟩
 
-set_option maxRecDepth 4096 in
 /-- pred_padding. -/
 theorem pred_padding :
     program.predicate 24 = «p.h2p.shake.padding.monotone» ∧
@@ -320,7 +317,6 @@ theorem pred_padding :
     RealizedProgram.Predicate.eq_of_equalParts predicate_h2p_2eshake_2epadding_2esuffix_body ⟨_, rfl⟩ predicate_h2p_2eshake_2epadding_2esuffix_header,
     RealizedProgram.Predicate.eq_of_equalParts predicate_h2p_2eshake_2epadding_2ezeros_body ⟨_, rfl⟩ predicate_h2p_2eshake_2epadding_2ezeros_header⟩
 
-set_option maxRecDepth 4096 in
 /-- expr_absorb. -/
 theorem expr_absorb :
     program.expr 0 =
@@ -333,7 +329,6 @@ theorem expr_absorb :
     (.reindex idx20 (.leaf 28))) :=
   ⟨expr_h2p_2eshake_2epadding_2esuffix_2eshape_2eleft_2esecond_2efirst_2eshared_2efirst_2efirst_2efirst_2efirst_2eshared_2efirst_eq, expr_h2p_2eshake_2epadding_2esuffix_2eshape_2eleft_2esecond_2efirst_2eshared_2efirst_2efirst_2efirst_2efirst_eq, expr_h2p_2eshake_2eblocks_2er0_2eshape_2eleft_2esecond_2efirst_2efirst_2eshared_2efirst_2efirst_2efirst_eq, expr_h2p_2eshake_2epadding_2esuffix_2eshape_2eleft_2efirst_2efirst_eq, expr_h2p_2eshake_2epadding_2esuffix_2eshape_2eleft_2esecond_2efirst_eq⟩
 
-set_option maxRecDepth 4096 in
 /-- The stream's expression. -/
 theorem expr537 :
     program.expr 537 =
@@ -348,7 +343,6 @@ theorem idx28_entry : ∀ i < 717, ∀ b < 16, idx28.entry (16 * i + b) =
       (16 * (i % 68) + if b < 8 then b + 8 else b - 8) :=
   idx_stream_entry rfl
 
-set_option maxRecDepth 4096 in
 /-- The view kinds of the output views. -/
 theorem view_kinds : ∀ k : Fin 10,
     (program.value (viewVal (k + 1))).kind =
@@ -368,7 +362,6 @@ theorem view_kinds : ∀ k : Fin 10,
   · exact ⟨value_h2p_2eshake_2eout_2ep9_kind, (word_facts 9 23).1, (word_facts 9 23).2.1⟩
   · exact ⟨value_h2p_2eshake_2eout_2ep10_kind, (word_facts 10 23).1, (word_facts 10 23).2.1⟩
 
-set_option maxRecDepth 8192 in
 /-- The `h2p.shake` facts of the program of `Falcon512.Native.ROMParams`. -/
 instance : FalconHHash program where
   shake_source := shake_source

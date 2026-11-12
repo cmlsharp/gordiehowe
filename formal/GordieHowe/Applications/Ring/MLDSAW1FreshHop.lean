@@ -7,7 +7,7 @@ public import GordieHowe.Applications.Ring.MLDSAW1Anonymity
 public import GordieHowe.Applications.Ring.MLDSAW1Rejection
 public import GordieHowe.Applications.Ring.MLDSAW1OracleFacts
 public import GordieHowe.Model.RingSignature.Unforgeability
-public import GordieHowe.Model.RingSignature.KeyReuse
+public import GordieHowe.Model.RingSignature.Joint
 public import GordieHowe.Model.RingSignature.SaltReprogramHist
 public import GordieHowe.Model.Quantum.Interactive.RelabelAdversary
 
@@ -17,8 +17,8 @@ public import GordieHowe.Model.Quantum.Interactive.RelabelAdversary
 # Hedged to fresh masks in the unforgeability games of the ML-DSA ring publishing `w₁`
 
 In the unforgeability game of BKM06 Definition 7 (`insiderForgeProb`,
-`GordieHowe/Model/RingSignature/Unforgeability.lean`) and in the key-reuse game
-(`keyReuseForgeProb`, `GordieHowe/Model/RingSignature/KeyReuse.lean`) of the hedged scheme
+`GordieHowe/Model/RingSignature/Unforgeability.lean`) and in the joint-security game
+(`jointForgeProb`, `GordieHowe/Model/RingSignature/Joint.lean`) of the hedged scheme
 (`hedgedScheme`, `GordieHowe/Applications/Ring/MLDSAW1Anonymity.lean`), the hedged masks
 `H(K ‖ rnd ‖ µ)` read by the signer at the per-call nonces `rnd` are replaced by fresh uniform
 masks, at the cost of the hidden-salt reprogramming at the `Q · k` nonces
@@ -54,8 +54,8 @@ masks, at the cost of the hidden-salt reprogramming at the `Q · k` nonces
   scheme for the relabelled history. `freshForgeProb_eq`: `freshForgeProb` is the fresh scheme's forgery probability of
   the relabelled adversary (`GameAdversary.relabel`,
   `GordieHowe/Model/Quantum/Interactive/RelabelAdversary.lean`), for `n ≥ 1` users.
-- `hedgedScheme.insiderForgeProb_le`, `hedgedScheme.keyReuseForgeProb_le`: **the hop in BKM06
-  Definition 7 and in the key-reuse game**: the hedged scheme's forgery probability is at most the
+- `hedgedScheme.insiderForgeProb_le`, `hedgedScheme.jointForgeProb_le`: **the hop in BKM06
+  Definition 7 and in the joint-security game**: the hedged scheme's forgery probability is at most the
   fresh scheme's for the relabelled adversary plus `C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256)`.
 - `acceptAll_verify_eq`: the accepting proof system satisfies `hPSv`. The other hypotheses hold at
   `sumOracles`, `sumMask` (`sumMask_pt_injective`, `sumOracles_isPt_not_mem`), the accepting proof
@@ -91,10 +91,11 @@ theorem run_stdProg_hedged (sk : SecretKey p) (m : Msg) (r : Fin k → (MaskSour
       OracleProg.run_tabulate, OracleProg.run_pure]
   · rfl
 
-omit [Fintype Msg] [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
+omit [DecidableEq Msg] [Fintype Y] [DecidableEq Y] [Nonempty Y] in
 /-- **The ordinary signer with fresh masks reads the oracle only at the base signer's points**: its
 runs agree at two oracles with the same first part of the split. -/
-theorem run_stdProg_fresh_congr {H H' : X → Y} (hs : (O.split H).1 = (O.split H').1)
+theorem run_stdProg_fresh_congr [DecidableEq X] [Fintype prims.Power2High] {H H' : X → Y}
+    (hs : (O.split H).1 = (O.split H').1)
     (sk : SecretKey p) (m : Msg) (g : Fin k → (MaskSource.fresh M).Rnd) :
     (stdProg prims (MaskSource.fresh M) O.toMLDSAOracles k sk m g).run H =
       (stdProg prims (MaskSource.fresh M) O.toMLDSAOracles k sk m g).run H' := by
@@ -179,6 +180,7 @@ def sideHopBase (hdisj : ∀ x, O.IsPt x → x ∉ Set.range M.pt) :
     rw [Equiv.refl_symm, Equiv.coe_refl, Option.map_id]
     rfl
   run_sign_congr H H' h kp bm c := by
+    classical
     have e : ∀ G : X → Y, ((baseSide (Bf) PS adm).sign kp bm c).run G =
         (stdProg prims (MaskSource.fresh M) O.toMLDSAOracles k kp.2 bm c.1.nonces).run G := fun G =>
       congrArg (OracleProg.run G) ((baseSide_sign (Bf) PS adm kp bm c).trans
@@ -319,13 +321,15 @@ noncomputable def unfSaltFreshPair (hdisj : ∀ x, O.IsPt x → x ∉ Set.range 
   ζ := PMF.uniformOfFintype _
   ans := unfHopAns P n keys Q
   readsOffRange c' j req g H H' h := by
+    classical
     unfold unfHopAns
     split_ifs with hj
     · rcases req with i | ⟨s, R, m⟩ | ⟨i, bm⟩
       · rfl
       · dsimp only
         split_ifs
-        · exact congrArg _ (freshScheme.run_sign_congr prims O M βmin tol enc k D bmsg PS adm
+        · exact congrArg _ (freshSchemeOf.run_sign_congr prims O M βmin enc k D bmsg
+            (sampledAdm prims (constCut prims βmin) tol) PS adm
             (funext fun x => h x.1 (hdisj x.1 x.2)) (fun x w c => hPS x w c H H' h) _ _ _ _)
         · rfl
       · dsimp only
@@ -354,7 +358,8 @@ noncomputable def unfSaltFreshPair (hdisj : ∀ x, O.IsPt x → x ∉ Set.range 
       · rw [OracleProg.run_bind]
         change Quantum.Reply.mk _ _ = Quantum.Reply.mk _ _
         congr 1
-        refine (congrArg (Option.map _) (hedgedScheme.run_sign prims O M βmin tol enc k D bmsg PS
+        refine (congrArg (Option.map _) (hedgedScheme.run_sign prims O M βmin enc k D bmsg
+            (sampledAdm prims (constCut prims βmin) tol) PS
           adm _ R m (c ⟨hist.length, hlt'⟩).1.1 (c ⟨hist.length, hlt'⟩).1.2
             (c ⟨hist.length, hlt'⟩).2 H)).trans ?_
         rw [hg]
@@ -585,7 +590,7 @@ theorem freshForgeProb_eq [NeZero n] {V : OracleView X Y} {t : ℕ}
 
 end Challenger
 
-/-! ### BKM06 Definition 7 and the key-reuse game -/
+/-! ### BKM06 Definition 7 and the joint-security game -/
 
 section Headlines
 
@@ -627,27 +632,27 @@ theorem hedgedScheme.insiderForgeProb_le (h : W1MaskPoints O M)
   rw [insiderForgeProb, insiderForgeProb, ← freshForgeProb_eq]
   exact hedgedScheme.forgeProb_le _ n h.hMinj h.hdisjM hPS hPSv hV A Q
 
-/-- **Hedged to fresh masks in the key-reuse game** (`keyReuseForgeProb`, the base signers'
+/-- **Hedged to fresh masks in the joint-security game** (`jointForgeProb`, the base signers'
 ordinary signers as side oracles, `sideHopBase`) for the ML-DSA ring publishing `w₁` with `n ≥ 1`
 users: for every adversary with `t` superposition queries and an oracle view read off the mask
 oracle's points (`hV`), and every number `Q` of requests, the probability of a forgery against the
 hedged scheme is at most that of the relabelled adversary against the fresh scheme plus
 `C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256)`. -/
-theorem hedgedScheme.keyReuseForgeProb_le (hM : Function.Injective M.pt)
+theorem hedgedScheme.jointForgeProb_le (hM : Function.Injective M.pt)
     (hdisj : ∀ x, O.IsPt x → x ∉ Set.range M.pt)
     (hPS : ∀ x w c H H', Quantum.AgreeOffRange M.pt H H' →
       (PS.prove x w c).run H = (PS.prove x w c).run H')
     (hPSv : ∀ x π H H', Quantum.AgreeOffRange M.pt H H' → PS.verify H x π = PS.verify H' x π)
     {V : OracleView X Y} (hV : ∀ H H', Quantum.AgreeOffRange M.pt H H' → V.view H = V.view H')
-    {t : ℕ} (A : KeyReuseAdversary (Bh) PS adm n V t) (Q : ℕ) :
-    (keyReuseForgeProb A Q).toReal ≤
-      (keyReuseForgeProb (B := Bf) (PS := PS) (adm := adm) (n := n) (V := V) (t := t)
+    {t : ℕ} (A : JointAdversary (Bh) PS adm n V t) (Q : ℕ) :
+    (jointForgeProb A Q).toReal ≤
+      (jointForgeProb (B := Bf) (PS := PS) (adm := adm) (n := n) (V := V) (t := t)
         (GameAdversary.relabel (Req := UnforgeRequest (S := Sh) n (baseSide (Bh) PS adm))
           (Resp := UnforgeResponse (S := Sh) (baseSide (Bh) PS adm))
           (unfReqEquiv (sideHopBase prims O M βmin tol enc k D bmsg PS adm hdisj) n)
           (unfRespEquiv (sideHopBase prims O M βmin tol enc k D bmsg PS adm hdisj)) A) Q).toReal +
       ((Q * k).choose 2 * (2 ^ 256 : ℝ)⁻¹ + 2 * t * √((Q * k : ℕ) * (2 ^ 256 : ℝ)⁻¹)) := by
-  unfold keyReuseForgeProb
+  unfold jointForgeProb
   rw [← freshForgeProb_eq]
   exact hedgedScheme.forgeProb_le _ n hM hdisj hPS hPSv hV A Q
 

@@ -72,8 +72,8 @@ end QROM
 
 namespace RingSignature
 
-variable {X Y Xb Yb : Type} {N n : ℕ} {TB : BaseTypes}
-  (B : BaseSigner Xb Yb N TB)
+variable {X Y Xb Yb : Type} {N n : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  (B : BaseSigner Xb Yb N T RMsg)
 
 /-- **The requests of the key-free route are inhabited through their second part** (the proof
 queries, `Sum.inhabitedRight`), not through the multi-user requests: the one instance of
@@ -125,8 +125,8 @@ theorem muNone_noAssign [DecidableEq X] (keys : Fin n → B.KeyCoins) (Q : ℕ) 
   simp only [muNone]
   split_ifs <;> rfl
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins]
 
 variable {Stmt Wit Proof Coins SC R : Type} (rel : Stmt → Wit → Prop) [DecidableRel rel]
   [Fintype Coins] [DecidableEq Coins] [Fintype SC] [DecidableEq SC]
@@ -148,16 +148,16 @@ noncomputable def kfMainSim (keys : Fin n → B.KeyCoins) (Q : ℕ) :
     Challenger X Y (MURequest (SignOracle.none B.core) n ⊕ R) (MUResponse B.core ⊕ Proof) :=
   Challenger.sumDummy (muNone B keys Q) (simChallenger rel S Q) enc
 
-omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] in
 /-- **The main challenger of the key-free route never reprograms.** -/
 theorem kfMain_noAssign [Fintype X] [DecidableEq X] [Nonempty X] [Fintype Y] [DecidableEq Y]
     [AddGroup Y] [Nonempty Y] (keys : Fin n → B.KeyCoins) (Q : ℕ) :
     (kfMain B rel P μ enc keys Q).NoAssign :=
   (muNone_noAssign B keys Q).sumDummy (realChallenger_noAssign rel P μ Q)
 
-omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] in
 /-- **The absorption hypotheses for the main challenger**, for an injective `enc`. -/
 theorem kfMain_dummyHyps (henc : Function.Injective enc) (keys : Fin n → B.KeyCoins) (Q : ℕ) :
     DummyHyps (muNone B keys Q) (realChallenger rel P μ Q) enc
@@ -167,8 +167,8 @@ theorem kfMain_dummyHyps (henc : Function.Injective enc) (keys : Fin n → B.Key
   byRequests₂ := realChallenger_respondsByRequests rel P μ Q
   dummy_noAssign c hist _ G := realChallenger_noAssign rel P μ Q c hist _ G
 
-omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] in
 /-- **The absorption hypotheses for the simulated main challenger**, for an injective `enc`
 whose dummy proof queries are outside the relation (`hd`), so that the simulator never runs on
 them. -/
@@ -278,8 +278,8 @@ theorem transcriptLaw_le_kfMainSim {t : ℕ} (henc : Function.Injective enc)
 
 end Absorb
 
-omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] in
 /-- **L2 for the main challengers**: the relay with the multi-user requests as outer requests
 (`TwoRelay.dummyTwo`), at the outer replies `keyReplyNone keys`, is
 `dummyRelay (keyReplyNone keys) enc Q`. -/

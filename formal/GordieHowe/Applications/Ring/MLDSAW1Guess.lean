@@ -244,7 +244,8 @@ theorem pr_ssign_freshBase_le
       Set.eq_empty_of_forall_notMem fun c hc => by
         obtain ⟨hk, -⟩ := exists_index_of_run_stdProg_eq_some prims (MaskSource.fresh M)
           O.toMLDSAOracles 0 sk bm c.1 H
-          (by simpa only [w1BaseSigner, mldsaT0BaseScheme, W1Loop.stdSigner, ringLoop,
+          (by simpa only [w1BaseSigner, w1BaseSignerOf, mldsaT0BaseScheme, W1Loop.stdSigner,
+              ringLoop, ringLoopOf,
             Set.mem_setOf_eq] using hc)
         exact absurd hk (lt_irrefl 0)
     rw [hempty, MeasureTheory.measure_empty]
@@ -255,7 +256,8 @@ theorem pr_ssign_freshBase_le
       (fun t => map_uniform_freshCoins_eq M k D hMask _ _) (fun cb σ' hσ' => by
         obtain ⟨hk', t, c', hσ⟩ := exists_index_of_run_stdProg_eq_some prims (MaskSource.fresh M)
           O.toMLDSAOracles k sk bm cb.1 H
-          (by simpa only [w1BaseSigner, mldsaT0BaseScheme, W1Loop.stdSigner, ringLoop] using hσ')
+          (by simpa only [w1BaseSigner, w1BaseSignerOf, mldsaT0BaseScheme, W1Loop.stdSigner,
+              ringLoop, ringLoopOf] using hσ')
         exact ⟨t, c', hσ⟩) σ
     rwa [Fintype.card_fin] at h
 

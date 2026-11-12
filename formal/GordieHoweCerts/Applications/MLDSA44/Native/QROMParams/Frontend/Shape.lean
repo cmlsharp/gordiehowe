@@ -27,14 +27,12 @@ namespace GordieHowe.MLDSA44.Native.QROMParams
 open Generated.MLDSA44.Native.QROMParams.Program (program)
 open ROMParams
 
-set_option maxRecDepth 8192 in
 /-- The native program at the QROM parameters has these facts. -/
 instance : MldsaHBase program where
   hPreds := Generated.MLDSA44.Native.QROMParams.ShapeFacts.predicate_h2c_2emu_2eblocks_2er0_source_range
   hTyped := by shape_decide
   trKind := Generated.MLDSA44.Native.QROMParams.ShapeFacts.value_tr_kind
 
-set_option maxRecDepth 8192 in
 /-- The native program at the QROM parameters has these facts. -/
 instance : MldsaHCross program where
   refsOrdered := Generated.MLDSA44.Native.QROMParams.conditions.wellFormed.refsOrdered
@@ -48,7 +46,6 @@ instance : MldsaHCross program where
   bitView71 := by shape_decide
   domainField1 := by shape_decide
 
-set_option maxRecDepth 8192 in
 /-- The native program at the QROM parameters has these facts. -/
 instance : MldsaHSelect program where
   bitView555 := by shape_decide
@@ -166,7 +163,6 @@ private theorem rounds_checked (p : Fin 10) (t : Fin 24) :
 
 end Rounds
 
-set_option maxRecDepth 8192 in
 /-- The native program at the QROM parameters has these facts. -/
 instance : MldsaHHashData program where
   roundShapes := fun p t => (rounds_checked p t).1
@@ -225,7 +221,6 @@ instance : MldsaHHashData program where
     · show program.constEntries 33 = _ ∧ program.isConstant 33 = true ∧ program.valueField 33 = 1
       shape_decide
 
-set_option maxRecDepth 8192 in
 /-- The native program at the QROM parameters has these facts. -/
 instance : MldsaHHash program where
   view_kinds := ⟨Generated.MLDSA44.Native.QROMParams.ShapeFacts.value_h2c_2ec_5ftilde_2eout_kind, Generated.MLDSA44.Native.QROMParams.ShapeFacts.value_h2c_2ec_5ftilde_2er167_2evalue_kind, Generated.MLDSA44.Native.QROMParams.ShapeFacts.value_h2c_2ec_5ftilde_2er167_2evalue_2ewords_kind, Generated.MLDSA44.Native.QROMParams.ShapeFacts.value_h2c_2esib_2eout_2ep0_kind, Generated.MLDSA44.Native.QROMParams.ShapeFacts.value_h2c_2esib_2er23_2evalue_kind, Generated.MLDSA44.Native.QROMParams.ShapeFacts.value_h2c_2esib_2er23_2evalue_2ewords_kind, Generated.MLDSA44.Native.QROMParams.ShapeFacts.value_h2c_2esib_2eout_2ep1_kind, Generated.MLDSA44.Native.QROMParams.ShapeFacts.value_h2c_2esib_2er47_2evalue_kind, Generated.MLDSA44.Native.QROMParams.ShapeFacts.value_h2c_2esib_2er47_2evalue_2ewords_kind⟩
@@ -251,7 +246,8 @@ instance : MldsaHHash program where
   bit_kinds := ⟨Generated.MLDSA44.Native.QROMParams.ShapeFacts.value_h2c_2emu_2eout_kind, Generated.MLDSA44.Native.QROMParams.ShapeFacts.value_w1_kind⟩
   kind458 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.value_h2c_2ec_5ftilde_2eout_kind
 
-set_option maxRecDepth 8192 in
+-- Depth 1024 needed (fails at 512): `shape_decide` in the field `recConsts`.
+set_option maxRecDepth 1024 in
 /-- The native program at the QROM parameters has these facts. -/
 instance : MldsaHShuffle program where
   phases_pos := by shape_decide
@@ -273,7 +269,6 @@ instance : MldsaHShuffle program where
     simp only [memR]
     shape_decide
 
-set_option maxRecDepth 8192 in
 /-- The native program at the QROM parameters has these facts. -/
 instance : MldsaHSample program where
   kind560 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.value_h2c_2esample_2eselect_2edelta_kind
@@ -298,7 +293,6 @@ theorem c37_pow : ∀ j < 8,
 instance : MldsaHConstsSelect program RealizedProgram.gf256 where
   c37 j hj := c37_pow j hj
 
-set_option maxRecDepth 8192 in
 /-- The native program at the QROM parameters, over `GF(2^256)`: the constant of `h2c.sample.mem.unit` is `θ + 1`. -/
 instance : MldsaHConsts program RealizedProgram.gf256 where
   theta := ⟨340282366920938463481821351509772796213, Generated.MLDSA44.Native.QROMParams.ShapeFacts.predicate_h2c_2esample_2emem_2eunit_body, Generated.MLDSA44.Native.QROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2efirst_eq,

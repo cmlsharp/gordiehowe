@@ -25,7 +25,7 @@ ordinary signer (`SignOracle.std`, the base scheme's own game).
   `base sm` a signature on `sm` is for. `SignOracle.ring B`: messages `(R, m)`, answered by
   `bsign` at the signer's first position in `R` (refused when its key is not in `R`), for the base
   message `bmsg R m`. `SignOracle.std B`: base messages, answered by `ssign`. `SignOracle.ringStd B`:
-  both, a request being a ring and a message or a base message (the key-reuse setting).
+  both, a request being a ring and a message or a base message (the joint-security setting).
 - `MURequest O n`, `MUResponse B`: the public key of user `i`, a signature of user `i` on a message
   (`sign i sm`), the corruption of user `i` (answered with its key coins); finite types through
   `MURequest.equivSum`, `MUResponse.equivSum`.
@@ -41,8 +41,7 @@ ordinary signer (`SignOracle.std`, the base scheme's own game).
 - `Forges` (MU-EUF-CMA^corr): `σ` verifies on `bm` under `pk` at the oracle, and `pk` is the key of a
   user neither corrupted nor asked to sign for `bm`. `StrongForges` (MU-SUF-CMA^corr): `pk` is the key
   of a user neither corrupted nor returned `σ` on a message for `bm`. `SigStrongForges`: neither
-  corrupted nor returned `σ` on any message (the freshness of
-  `GordieHowe/Applications/Ring/StrongForger.lean`, `Ring.StrongForgery`).
+  corrupted nor returned `σ` on any message.
 - `muLaw A Q`: the run of the game with `Q` requests. `muEufProb`, `muSufProb`, `muSufSigProb`: the
   probabilities of the three events in it.
 - Relations: `Forges.strongForges` and `SigStrongForges.strongForges` (both events are contained in
@@ -67,8 +66,7 @@ Their game: `n` key pairs; oracles `Sign(i, m)`, `Corrupt(i)` returning `sk_i`; 
 differences:
 
 1. **The forgery names a public key** in place of an index: it wins if some user with that key
-   qualifies. The forgeries of `Ring.BaseForgery` (`GordieHowe/Applications/Ring/Games.lean`) do
-   the same.
+   qualifies.
 2. **Corruption returns the key coins** (as BKP20, ePrint 2020/646, p. 7, and CCLM22, ePrint
    2021/1616, Experiment 3, p. 21), which determine `sk_i`.
 3. **The signing oracle is an interface.** At `SignOracle.std` it is the base scheme's signer on
@@ -103,6 +101,27 @@ namespace GordieHowe.Signature
 open GordieHowe.Quantum GordieHowe.RingSignature
 open scoped ENNReal
 
+/-- **The output of a multi-user adversary** against the base scheme `B`: a public key, a base
+message and a base signature (BHJKL15 Definition 2's forgery, indexed by key): `T.Candidate`,
+spelled through the scheme's types so that the scheme is inferred from a forgery's type. -/
+abbrev BaseScheme.MUForgery {X Y : Type} {T : SchemeTypes} (B : BaseScheme X Y T) : Type :=
+  B.PK × B.BMsg × B.BSig
+
+namespace BaseScheme.MUForgery
+
+variable {X Y : Type} {T : SchemeTypes} {B : BaseScheme X Y T}
+
+/-- The public key. -/
+@[simp] abbrev pk (f : B.MUForgery) : B.PK := f.1
+
+/-- The base message. -/
+@[simp] abbrev msg (f : B.MUForgery) : B.BMsg := f.2.1
+
+/-- The base signature. -/
+@[simp] abbrev sig (f : B.MUForgery) : B.BSig := f.2.2
+
+end BaseScheme.MUForgery
+
 variable {X Y : Type} {TB : SchemeTypes} (B : BaseScheme X Y TB)
 
 /-- **The signing oracle of a multi-user game** for the base signer `B`: messages `SMsg`, uniform
@@ -116,7 +135,7 @@ structure SignOracle where
   /-- The bound on the signer's queries. -/
   q : ℕ
   /-- The signer. -/
-  sign : B.PK × B.SK → SMsg → Coins → OracleProg X Y (Option B.BSig)
+  sign : KeyPair B.PK B.SK → SMsg → Coins → OracleProg X Y (Option B.BSig)
   /-- It makes at most `q` queries. -/
   sign_queries : ∀ kp sm c, (sign kp sm c).QueriesLE q
   /-- The base message a signature on the message is for. -/
@@ -126,43 +145,44 @@ namespace SignOracle
 
 section Ring
 
-variable {N : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB)
+variable {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type} (B : BaseSigner X Y N T RMsg)
 
 /-- **The ring-aware signing oracle**: a request `(R, m)` by the key pair `kp` is answered by `bsign`
 at the first position of `kp.1` in `R` (as `ofBase` signs), and refused when `kp.1` is not in `R`;
 the signature is for the base message `bmsg R m`. -/
-noncomputable def ring [DecidableEq TB.PK] : SignOracle B.core where
-  SMsg := KeyRing B.PK N × B.Msg
+noncomputable def ring [DecidableEq T.PK] : SignOracle B.core where
+  SMsg := RingMsg B.PK B.Msg N
   Coins := B.Coins
   q := B.q
   sign kp p c :=
-    if kp.1 ∈ p.1.1 then B.bsign kp.2 p.1 (p.1.1.idxOf kp.1) p.2 c else .pure none
+    if kp.pk ∈ p.ring then B.bsign kp.sk p.ring (p.ring.keys.idxOf kp.pk) p.msg c
+    else .pure none
   sign_queries kp p c := by
     split_ifs
     · exact B.bsign_queries _ _ _ _ _
     · exact OracleProg.QueriesLE.pure _ _
-  base p := B.bmsg p.1 p.2
+  base p := B.bmsg p.ring p.msg
 
-/-! The instances of the ring-aware oracle's messages and coins: those of `KeyRing B.PK N × B.Msg`
+/-! The instances of the ring-aware oracle's messages and coins: those of `RingMsg B.PK B.Msg N`
 and of `B.Coins`. -/
 
 section RingInstances
 
-variable [DecidableEq TB.PK]
+variable [DecidableEq T.PK]
 
-instance ring.instFintypeSMsg [Fintype TB.PK] [Fintype TB.Msg] : Fintype (ring B).SMsg :=
-  inferInstanceAs (Fintype (KeyRing B.PK N × B.Msg))
+instance ring.instFintypeSMsg [Fintype T.PK] [Fintype RMsg] : Fintype (ring B).SMsg :=
+  inferInstanceAs (Fintype (RingMsg B.PK B.Msg N))
 
-instance ring.instDecEqSMsg [DecidableEq TB.Msg] : DecidableEq (ring B).SMsg :=
-  inferInstanceAs (DecidableEq (KeyRing B.PK N × B.Msg))
+instance ring.instDecEqSMsg [DecidableEq RMsg] : DecidableEq (ring B).SMsg :=
+  inferInstanceAs (DecidableEq (RingMsg B.PK B.Msg N))
 
-instance ring.instFintypeCoins [Fintype TB.Coins] : Fintype (ring B).Coins :=
+instance ring.instFintypeCoins [Fintype T.Coins] : Fintype (ring B).Coins :=
   inferInstanceAs (Fintype B.Coins)
 
-instance ring.instDecEqCoins [DecidableEq TB.Coins] : DecidableEq (ring B).Coins :=
+instance ring.instDecEqCoins [DecidableEq T.Coins] : DecidableEq (ring B).Coins :=
   inferInstanceAs (DecidableEq B.Coins)
 
-instance ring.instNonemptyCoins [Nonempty TB.Coins] : Nonempty (ring B).Coins :=
+instance ring.instNonemptyCoins [Nonempty T.Coins] : Nonempty (ring B).Coins :=
   inferInstanceAs (Nonempty B.Coins)
 
 end RingInstances
@@ -175,21 +195,21 @@ base scheme's own multi-user game. -/
   SMsg := B.BMsg
   Coins := B.Coins
   q := B.q
-  sign kp bm c := B.ssign kp.2 bm c
-  sign_queries kp bm c := B.ssign_queries kp.2 bm c
+  sign kp bm c := B.ssign kp.sk bm c
+  sign_queries kp bm c := B.ssign_queries kp.sk bm c
   base bm := bm
 
 section RingStd
 
-variable {N : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB)
+variable {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type} (B : BaseSigner X Y N T RMsg)
 
 /-- **The ring-aware and the ordinary signing oracle together**: a request is a ring and a message
 (`inl`, answered as `ring` answers it, for the base message `bmsg R m`) or a base message (`inr`,
 answered by `ssign`, for itself). With it the game is the multi-user game of a user who signs with
-one key both in rings and in the base scheme (the setting of the key-reuse game of
-`GordieHowe/Model/RingSignature/KeyReuse.lean`). -/
-noncomputable def ringStd [DecidableEq TB.PK] : SignOracle B.core where
-  SMsg := (KeyRing B.PK N × B.Msg) ⊕ B.BMsg
+one key both in rings and in the base scheme (the setting of the joint-security game of
+`GordieHowe/Model/RingSignature/Joint.lean`). -/
+noncomputable def ringStd [DecidableEq T.PK] : SignOracle B.core where
+  SMsg := RingStdMsg B.PK B.Msg B.BMsg N
   Coins := B.Coins
   q := B.q
   sign kp
@@ -204,27 +224,27 @@ noncomputable def ringStd [DecidableEq TB.PK] : SignOracle B.core where
     | .inr bm => (std B.core).base bm
 
 /-! The instances of the combined oracle's messages and coins: those of
-`(KeyRing B.PK N × B.Msg) ⊕ B.BMsg` and of `B.Coins`. -/
+`RingStdMsg B.PK B.Msg B.BMsg N` and of `B.Coins`. -/
 
 section RingStdInstances
 
-variable [DecidableEq TB.PK]
+variable [DecidableEq T.PK]
 
-instance ringStd.instFintypeSMsg [Fintype TB.PK] [Fintype TB.Msg] [Fintype TB.BMsg] :
+instance ringStd.instFintypeSMsg [Fintype T.PK] [Fintype RMsg] [Fintype T.BMsg] :
     Fintype (ringStd B).SMsg :=
-  inferInstanceAs (Fintype ((KeyRing B.PK N × B.Msg) ⊕ B.BMsg))
+  inferInstanceAs (Fintype (RingStdMsg B.PK B.Msg B.BMsg N))
 
-instance ringStd.instDecEqSMsg [DecidableEq TB.Msg] [DecidableEq TB.BMsg] :
+instance ringStd.instDecEqSMsg [DecidableEq RMsg] [DecidableEq T.BMsg] :
     DecidableEq (ringStd B).SMsg :=
-  inferInstanceAs (DecidableEq ((KeyRing B.PK N × B.Msg) ⊕ B.BMsg))
+  inferInstanceAs (DecidableEq (RingStdMsg B.PK B.Msg B.BMsg N))
 
-instance ringStd.instFintypeCoins [Fintype TB.Coins] : Fintype (ringStd B).Coins :=
+instance ringStd.instFintypeCoins [Fintype T.Coins] : Fintype (ringStd B).Coins :=
   inferInstanceAs (Fintype B.Coins)
 
-instance ringStd.instDecEqCoins [DecidableEq TB.Coins] : DecidableEq (ringStd B).Coins :=
+instance ringStd.instDecEqCoins [DecidableEq T.Coins] : DecidableEq (ringStd B).Coins :=
   inferInstanceAs (DecidableEq B.Coins)
 
-instance ringStd.instNonemptyCoins [Nonempty TB.Coins] : Nonempty (ringStd B).Coins :=
+instance ringStd.instNonemptyCoins [Nonempty T.Coins] : Nonempty (ringStd B).Coins :=
   inferInstanceAs (Nonempty B.Coins)
 
 end RingStdInstances
@@ -409,31 +429,30 @@ def ReturnedSig (hist : MUHist O n) (i : Fin n) (σ : B.BSig) : Prop :=
 /-- **A forgery of MU-EUF-CMA^corr** at the key coins `keys`, the oracle `H` and the history `hist`:
 `σ` verifies on `bm` under `pk` at `H`, and `pk` is the key of a user neither corrupted nor asked
 to sign for `bm`. -/
-structure Forges (keys : Fin n → B.KeyCoins) (H : X → Y) (f : B.PK × B.BMsg × B.BSig)
+structure Forges (keys : Fin n → B.KeyCoins) (H : X → Y) (f : B.MUForgery)
     (hist : MUHist O n) : Prop where
   /-- The signature verifies. -/
-  verify_eq : B.bverify H f.1 f.2.1 f.2.2 = true
+  verify_eq : B.bverify H f.pk f.msg f.sig = true
   /-- The key is that of a user neither corrupted nor asked to sign for the base message. -/
-  exists_user : ∃ i, B.pk (keys i) = f.1 ∧ ¬ Corrupted hist i ∧ ¬ Signed hist i f.2.1
+  exists_user : ∃ i, B.pk (keys i) = f.pk ∧ ¬ Corrupted hist i ∧ ¬ Signed hist i f.msg
 
 /-- **A forgery of MU-SUF-CMA^corr** (Diemert et al. Definition 2): `σ` verifies on `bm` under `pk`,
 and `pk` is the key of a user neither corrupted nor returned `σ` on a message for `bm`. -/
-structure StrongForges (keys : Fin n → B.KeyCoins) (H : X → Y) (f : B.PK × B.BMsg × B.BSig)
+structure StrongForges (keys : Fin n → B.KeyCoins) (H : X → Y) (f : B.MUForgery)
     (hist : MUHist O n) : Prop where
   /-- The signature verifies. -/
-  verify_eq : B.bverify H f.1 f.2.1 f.2.2 = true
+  verify_eq : B.bverify H f.pk f.msg f.sig = true
   /-- The key is that of a user neither corrupted nor returned the pair. -/
-  exists_user : ∃ i, B.pk (keys i) = f.1 ∧ ¬ Corrupted hist i ∧ ¬ Returned hist i f.2.1 f.2.2
+  exists_user : ∃ i, B.pk (keys i) = f.pk ∧ ¬ Corrupted hist i ∧ ¬ Returned hist i f.msg f.sig
 
-/-- **A strong forgery whose signature was never returned to the user** (the freshness of
-`Ring.StrongForgery`, `GordieHowe/Applications/Ring/StrongForger.lean`): `σ` verifies on `bm` under
+/-- **A strong forgery whose signature was never returned to the user**: `σ` verifies on `bm` under
 `pk`, and `pk` is the key of a user neither corrupted nor returned `σ` on any message. -/
-structure SigStrongForges (keys : Fin n → B.KeyCoins) (H : X → Y) (f : B.PK × B.BMsg × B.BSig)
+structure SigStrongForges (keys : Fin n → B.KeyCoins) (H : X → Y) (f : B.MUForgery)
     (hist : MUHist O n) : Prop where
   /-- The signature verifies. -/
-  verify_eq : B.bverify H f.1 f.2.1 f.2.2 = true
+  verify_eq : B.bverify H f.pk f.msg f.sig = true
   /-- The key is that of a user neither corrupted nor returned the signature. -/
-  exists_user : ∃ i, B.pk (keys i) = f.1 ∧ ¬ Corrupted hist i ∧ ¬ ReturnedSig hist i f.2.2
+  exists_user : ∃ i, B.pk (keys i) = f.pk ∧ ¬ Corrupted hist i ∧ ¬ ReturnedSig hist i f.sig
 
 /-- A returned signature was asked for. -/
 theorem Returned.signed {hist : MUHist O n} {i : Fin n} {bm : B.BMsg} {σ : B.BSig}
@@ -442,29 +461,29 @@ theorem Returned.signed {hist : MUHist O n} {i : Fin n} {bm : B.BMsg} {σ : B.BS
   exact ⟨e, he, sm, hr, hb⟩
 
 /-- **An existential forgery is a strong forgery.** -/
-theorem Forges.strongForges {keys : Fin n → B.KeyCoins} {H : X → Y} {f : B.PK × B.BMsg × B.BSig}
+theorem Forges.strongForges {keys : Fin n → B.KeyCoins} {H : X → Y} {f : B.MUForgery}
     {hist : MUHist O n} (h : Forges keys H f hist) : StrongForges keys H f hist := by
   obtain ⟨i, hi, hc, hs⟩ := h.exists_user
   exact ⟨h.verify_eq, i, hi, hc, fun hr => hs hr.signed⟩
 
 /-- **A strong forgery with a never-returned signature is a strong forgery.** -/
 theorem SigStrongForges.strongForges {keys : Fin n → B.KeyCoins} {H : X → Y}
-    {f : B.PK × B.BMsg × B.BSig} {hist : MUHist O n} (h : SigStrongForges keys H f hist) :
+    {f : B.MUForgery} {hist : MUHist O n} (h : SigStrongForges keys H f hist) :
     StrongForges keys H f hist := by
   obtain ⟨i, hi, hc, hs⟩ := h.exists_user
   exact ⟨h.verify_eq, i, hi, hc, fun hr => hs ⟨_, hr⟩⟩
 
 /-- **The win condition is not vacuous**: with no requests, a verifying signature under the key of
 a user is a forgery. -/
-theorem forges_nil {keys : Fin n → B.KeyCoins} {H : X → Y} {f : B.PK × B.BMsg × B.BSig}
-    (hv : B.bverify H f.1 f.2.1 f.2.2 = true) (hk : ∃ i, B.pk (keys i) = f.1) :
+theorem forges_nil {keys : Fin n → B.KeyCoins} {H : X → Y} {f : B.MUForgery}
+    (hv : B.bverify H f.pk f.msg f.sig = true) (hk : ∃ i, B.pk (keys i) = f.pk) :
     Forges (O := O) keys H f [] := by
   obtain ⟨i, hi⟩ := hk
   exact ⟨hv, i, hi, by simp [Corrupted], by simp [Signed]⟩
 
 /-- **Freshness is lost, never gained**: a forgery after a history is one after every
 sub-history. -/
-theorem Forges.anti {keys : Fin n → B.KeyCoins} {H : X → Y} {f : B.PK × B.BMsg × B.BSig}
+theorem Forges.anti {keys : Fin n → B.KeyCoins} {H : X → Y} {f : B.MUForgery}
     {hist hist' : MUHist O n} (h : Forges keys H f hist) (hsub : hist' ⊆ hist) :
     Forges keys H f hist' := by
   obtain ⟨i, hi, hc, hs⟩ := h.exists_user
@@ -472,7 +491,7 @@ theorem Forges.anti {keys : Fin n → B.KeyCoins} {H : X → Y} {f : B.PK × B.B
     fun ⟨e, he, sm, hr⟩ => hs ⟨e, hsub he, sm, hr⟩⟩
 
 /-- **Strong freshness is lost, never gained.** -/
-theorem StrongForges.anti {keys : Fin n → B.KeyCoins} {H : X → Y} {f : B.PK × B.BMsg × B.BSig}
+theorem StrongForges.anti {keys : Fin n → B.KeyCoins} {H : X → Y} {f : B.MUForgery}
     {hist hist' : MUHist O n} (h : StrongForges keys H f hist) (hsub : hist' ⊆ hist) :
     StrongForges keys H f hist' := by
   obtain ⟨i, hi, hc, hs⟩ := h.exists_user
@@ -494,7 +513,7 @@ structure HistRelay (hist : MUHist O n) (hist' : MUHist O' n) : Prop where
 
 /-- **A forgery for a history is a forgery for every relay of it**: the relay asked no user to sign
 for a base message the history did not, and corrupted no user the history did not. -/
-theorem Forges.of_histRelay {keys : Fin n → B.KeyCoins} {H : X → Y} {f : B.PK × B.BMsg × B.BSig}
+theorem Forges.of_histRelay {keys : Fin n → B.KeyCoins} {H : X → Y} {f : B.MUForgery}
     {hist : MUHist O n} {hist' : MUHist O' n} (h : Forges keys H f hist)
     (hr : HistRelay hist hist') : Forges keys H f hist' := by
   obtain ⟨i, hi, hc, hs⟩ := h.exists_user
@@ -508,11 +527,11 @@ the relay's extra signatures: if every signature returned in `hist'` is returned
 attempts of a rejection signer), a strong forgery for `hist` whose signature is in no `Extra i bm`
 of its base message is a strong forgery for `hist'`. -/
 theorem StrongForges.of_histRelay {keys : Fin n → B.KeyCoins} {H : X → Y}
-    {f : B.PK × B.BMsg × B.BSig} {hist : MUHist O n} {hist' : MUHist O' n}
+    {f : B.MUForgery} {hist : MUHist O n} {hist' : MUHist O' n}
     {Extra : Fin n → B.BMsg → B.BSig → Prop} (h : StrongForges keys H f hist)
     (hr : HistRelay hist hist')
     (hret : ∀ i bm σ, Returned hist' i bm σ → Returned hist i bm σ ∨ Extra i bm σ)
-    (hf : ∀ i, ¬ Extra i f.2.1 f.2.2) : StrongForges keys H f hist' := by
+    (hf : ∀ i, ¬ Extra i f.msg f.sig) : StrongForges keys H f hist' := by
   obtain ⟨i, hi, hc, hs⟩ := h.exists_user
   refine ⟨h.verify_eq, i, hi, fun h' => hc (hr.corrupt_mem i h'), fun h' => ?_⟩
   rcases hret i _ _ h' with h'' | h''
@@ -533,7 +552,7 @@ public keys and the table `V` of the oracle, a `t`-query adversary making reques
 public key, a base message and a base signature (`GameAdversary`). -/
 abbrev MUAdversary (V : OracleView X Y) (t : ℕ) : Type 1 :=
   GameAdversary X Y (MURequest O n) (MUResponse B) ((Fin n → B.PK) × V.Tab)
-    (B.PK × B.BMsg × B.BSig) t
+    B.MUForgery t
 
 variable {V : OracleView X Y} {t : ℕ}
 
@@ -542,25 +561,25 @@ variable [Nonempty TB.KeyCoins] [Fintype O.Coins] [DecidableEq O.Coins] [Nonempt
 /-- **The run of the multi-user game** with `Q` requests: the users' key coins and the oracle
 uniform, the adversary on the public keys and the oracle's table against the challenger. -/
 noncomputable def muLaw (A : MUAdversary O n V t) (Q : ℕ) :
-    PMF ((Fin n → B.KeyCoins) × (X → Y) ×
-      Option ((B.PK × B.BMsg × B.BSig) × MUHist O n)) :=
+    PMF (GameRun (Fin n → B.KeyCoins) X Y B.MUForgery (MURequest O n)
+      (MUResponse B)) :=
   runLaw (fun keys H => A (fun i => B.pk (keys i), V.view H)) fun keys => muChallenger O n keys Q
 
 /-- **The success probability of the adversary in MU-EUF-CMA^corr** with `Q` requests: it
 terminates with a forgery (`Forges`) for the users' key coins, the oracle and the answered
 requests. -/
 noncomputable def muEufProb (A : MUAdversary O n V t) (Q : ℕ) : ℝ≥0∞ :=
-  (muLaw A Q).toOuterMeasure {x | ∃ p ∈ x.2.2, Forges x.1 x.2.1 p.1 p.2}
+  (muLaw A Q).toOuterMeasure {r | r.Wins Forges}
 
 /-- **The success probability of the adversary in MU-SUF-CMA^corr** with `Q` requests
 (`StrongForges`). -/
 noncomputable def muSufProb (A : MUAdversary O n V t) (Q : ℕ) : ℝ≥0∞ :=
-  (muLaw A Q).toOuterMeasure {x | ∃ p ∈ x.2.2, StrongForges x.1 x.2.1 p.1 p.2}
+  (muLaw A Q).toOuterMeasure {r | r.Wins StrongForges}
 
 /-- **The success probability of the adversary in the strong game with never-returned
-signatures** with `Q` requests (`SigStrongForges`, the freshness of `Ring.StrongForgery`). -/
+signatures** with `Q` requests (`SigStrongForges`). -/
 noncomputable def muSufSigProb (A : MUAdversary O n V t) (Q : ℕ) : ℝ≥0∞ :=
-  (muLaw A Q).toOuterMeasure {x | ∃ p ∈ x.2.2, SigStrongForges x.1 x.2.1 p.1 p.2}
+  (muLaw A Q).toOuterMeasure {r | r.Wins SigStrongForges}
 
 /-- **MU-EUF-CMA^corr is at most MU-SUF-CMA^corr**, adversary by adversary. -/
 theorem muEufProb_le_muSufProb (A : MUAdversary O n V t) (Q : ℕ) :

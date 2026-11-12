@@ -65,14 +65,15 @@ theorem countND_requestsBefore_le_card {Req : Type} [DecidableEq Req] {m : ℕ} 
 namespace Signature
 
 variable {N n : ℕ} {m : ℕ} {I J Bd : Type} [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J]
-  {TB : BaseTypes}
-  {B : BaseSigner (Bits m) (BitStr I J) N TB} (O : SignOracle B.core) (e : BitStr I J ≃ Bd) {t : ℕ}
+  {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits m) (BitStr I J) N T RMsg} (O : SignOracle B.core) (e : BitStr I J ≃ Bd)
+  {t : ℕ}
   {Ot : Type}
 
 variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty O.Coins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] [Nonempty O.Coins]
 
 /-- **Replies agreeing with the count-indexed multi-user replies** at every pattern of requests of
 the algorithm give the coin average of `simLaw` of the step-indexed instance
@@ -233,10 +234,10 @@ end AnswerSteps
 namespace Signature
 
 variable {N n : ℕ} {m : ℕ} {I J Bd : Type} [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J]
-  {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
-  {B : BaseSigner (Bits m) (BitStr I J) N TB} {O : SignOracle B.core}
+  {T : Signature.SchemeTypes} {RMsg : Type} [Fintype T.PK] [DecidableEq T.PK]
+  [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins]
+  {B : BaseSigner (Bits m) (BitStr I J) N T RMsg} {O : SignOracle B.core}
   {Req Resp Req₁ Resp₁ Ot : Type} [Fintype Req] [DecidableEq Req] [Fintype Resp]
   [DecidableEq Resp] [Fintype Req₁] [DecidableEq Req₁] [Fintype Resp₁] [DecidableEq Resp₁]
   [Inhabited Req₁] {shA : AlgShape (Bits m) (BitStr I J) Req Resp} (A : AdaptiveIAlg shA Ot)
@@ -249,8 +250,8 @@ variable (C₁ : Challenger (Bits m) (BitStr I J) Req₁ Resp₁)
   (d₂ : MURequest O n) (E : Expansion (Bits m) Bd (ExtReg A C₁ (MURequest O n) (MUResponse B.core)))
   (kq : ℕ) (d₀ : ExtReg A C₁ (MURequest O n) (MUResponse B.core))
 
-omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] in
 /-- **The replies used against the bridge algorithm**: on the answer steps, the table's at the
 count of the earlier non-dummy requests; elsewhere (where the bridge algorithm ignores the reply)
 the multi-user challenger's at that count. -/

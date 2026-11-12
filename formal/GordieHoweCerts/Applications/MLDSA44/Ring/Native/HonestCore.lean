@@ -687,7 +687,6 @@ theorem natOfBits_jBits (h557 : ∀ n < 312, castElt (b := 1) (val 556 n) = jFR 
   change y.positions t < 256
   omega
 
-set_option maxRecDepth 8192 in
 /-- **SampleInBall's selection predicates hold at the honest values**: the selected bytes the
 input's positions (`jFR`) and the threshold words the honest low threshold bits packed (`lowFR`);
 the stream is `SHAKE256(c̃)` (`sibStream_honest`), whose candidates the positions are the first
@@ -752,7 +751,8 @@ theorem signs_honest (t : Fin (samM program F0 FH).τ) :
     · exact h
     · exact absurd (decide_eq_true h) h1
 
-set_option maxRecDepth 8192 in
+-- Depth 1024 needed (fails at 512): unfolding the field interpretation `interp 1`.
+set_option maxRecDepth 1024 in
 /-- **SampleInBall's memory check predicates hold at the honest values**: the selected bytes, and
 the memory cells the honest trace's (`memFR`). -/
 theorem mem_core (h557 : ∀ n < 312, castElt (b := 1) (val 556 n) = jFR (K := FH.K) y n)

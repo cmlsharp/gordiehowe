@@ -52,8 +52,9 @@ open RingSignature.Insider
 section Asks
 
 variable {X Y Y₁ Y₂ : Type} [DecidableEq X] [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂]
-  (sp : OracleSplit Y Y₁ Y₂) {N n : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
-  (B : BaseSigner X Y N TB)
+  (sp : OracleSplit Y Y₁ Y₂) {N n : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type}
+  [DecidableEq TS.PK]
+  (B : BaseSigner X Y N TS RMsg)
   {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
   [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) ⟨Pf, PC⟩} {adm : KeyRing B.PK N → Prop}
@@ -192,10 +193,10 @@ section SPBCS
 open GordieHowe.SPBCS IOP SPTerm RingSignature.Insider
 
 variable {k kN kS L e N n t : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq Yb]
-  {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
-  {B : BaseSigner Xb Yb N TB}
+  {TS : Signature.SchemeTypes} {RMsg : Type} [Fintype TS.PK] [DecidableEq TS.PK]
+  [Fintype TS.BSig] [DecidableEq TS.BSig]
+  [Fintype TS.KeyCoins] [DecidableEq TS.KeyCoins]
+  {B : BaseSigner Xb Yb N TS RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -501,11 +502,12 @@ open GordieHowe.SPBCS IOP SPTerm
 
 variable {k kN kS L e N n : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁] [Fintype Y]
   [DecidableEq Y] [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁]
-  {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins]
-  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
+  {sp : OracleSplit Y Y₁ (XOut k e)} {TS : Signature.SchemeTypes} {RMsg : Type} [Fintype TS.PK]
+  [DecidableEq TS.PK]
+  [Fintype TS.BSig]
+  [DecidableEq TS.BSig] [Fintype TS.KeyCoins]
+  [DecidableEq TS.KeyCoins]
+  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TS RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]

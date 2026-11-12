@@ -85,6 +85,11 @@ instance : DecidablePred ringAdm := fun l => by unfold ringAdm; infer_instance
 representative and the public value `()`. -/
 abbrev RStmt : Type := GordieHowe.Ring.RingStmt (scheme msgLen) (Bytes msgLen) 64
 
+/-- **A statement of the ML-DSA-44 ring programs**, an explicit computable value: the empty ring,
+the all-zero message representative and the public value `()`. -/
+instance RStmt.instInhabited : Inhabited (RStmt msgLen) :=
+  ⟨⟨⟨[], Nat.zero_le _⟩, Vector.replicate msgLen 0, ()⟩⟩
+
 /-- **The ring relation of the ML-DSA-44 ring programs**: supported rings (`ringAdm`) and a
 signature at a position of the ring that verifies on the statement's message representative. -/
 abbrev ringRel64 : Set (RStmt msgLen × GordieHowe.Ring.RingWit (scheme msgLen)) :=
@@ -177,7 +182,7 @@ hedged signing with at most `maxAttempts` attempts on the base message `bmsg R m
 verification with the bounded samplers, public value `Unit`). -/
 abbrev baseSigner (maxAttempts : ℕ)
     (bmsg : KeyRing (_root_.MLDSA.PublicKey _root_.MLDSA.mldsa44 (prims eS eM)) 64 → RMsg → Bytes len) :
-    BaseSigner Xo Yo 64 (mldsaBaseT _root_.MLDSA.mldsa44 (prims eS eM) len RMsg) :=
+    BaseSigner Xo Yo 64 (mldsaSchemeT _root_.MLDSA.mldsa44 (prims eS eM) len) RMsg :=
   mldsaBaseSigner _root_.MLDSA.mldsa44 (prims eS eM) maxAttempts bmsg
 
 /-- A key of the primitives `prims eS eM` as a concrete key (the same `ρ` and `t₁`). -/

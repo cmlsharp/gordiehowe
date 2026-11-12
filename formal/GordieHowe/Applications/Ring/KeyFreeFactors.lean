@@ -54,7 +54,6 @@ variable {X Y : Type} {p : Params} {T : ℕ} {Msg : Type} {N reps : ℕ}
   (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg) [Fintype Msg] [DecidableEq Msg]
   [Fintype RMsg] [DecidableEq RMsg]
 
-open Classical in
 /-- **The public part and the signature of the key-free signer at a base component** `ω`: the
 key-free loop at the members' commitment hashes read at `ω`, a kept output `(w₁, σ, v)` giving the
 public part `(w1Of pk σ, v)` and the signature `σ`; `none` unless the ring passes the public check
@@ -62,7 +61,7 @@ and its members' message representatives are distinct at `ω`, and `pk` is in th
 noncomputable def w1KFOut (ω : X → Y₁) (pk : PubKey p prims) (R : KeyRing (PubKey p prims) N)
     (_c : ℕ) (m : RMsg) (sc : KFCoins (p := p) (T := T) k D Y₁) :
     Option ((BucketVec p × Y₁) × FIPSSignature p prims) :=
-  if RingCheck prims βmin tol (O.gOrc (join sp ω 0)) R ∧
+  if sampledRingCheck prims βmin tol (O.gOrc (join sp ω 0)) R ∧
       MuDistinct prims (O.muOrc (join sp ω 0)) R (bmsg R m) then
     if hi : R.1.idxOf pk < R.1.length then
       (kfLoop prims O sp βmin pk R ⟨_, hi⟩
@@ -133,13 +132,13 @@ theorem w1KFPre_queries (pk : PubKey p prims) (R : KeyRing (PubKey p prims) N) (
 
 omit [Fintype prims.Power2High] [Fintype prims.Hint] [DecidableEq prims.Hint]
   [Nonempty (MaskBox p)] [Fintype Msg] [DecidableEq Msg] [Fintype RMsg] [DecidableEq RMsg] in
-open Classical in
 /-- **The key-free signer before its kept read at the oracle `H`** (`run_w1KFSign` without the
 kept read). -/
 theorem run_w1KFPre (pk : PubKey p prims) (R : KeyRing (PubKey p prims) N) (c : ℕ) (m : RMsg)
     (sc : KFCoins (p := p) (T := T) k D Y₁) (H : X → Y) :
     (w1KFPre prims O sp βmin tol enc k D bmsg pk R c m sc).run H =
-      if RingCheck prims βmin tol (O.gOrc H) R ∧ MuDistinct prims (O.muOrc H) R (bmsg R m) then
+      if sampledRingCheck prims βmin tol (O.gOrc H) R ∧ MuDistinct prims (O.muOrc H) R (bmsg R
+          m) then
         if hi : R.1.idxOf pk < R.1.length then
           (kfLoop prims O sp βmin pk R ⟨_, hi⟩
             (PMF.ringOf (ringPts prims R.1 (bmsg R m)) (O.hOrc H)) sc).map fun s =>
@@ -155,13 +154,13 @@ theorem run_w1KFPre (pk : PubKey p prims) (R : KeyRing (PubKey p prims) N) (c : 
   simp only [w1KFPre, OracleProg.run_bind]
   rcases hg' : (ringCheckProg prims O βmin tol R).run H <;>
     rcases hm' : (muDistinctProg prims O R (bmsg R m)).run H
-  · have : ¬ RingCheck prims βmin tol (O.gOrc H) R := fun h => by simp_all
+  · have : ¬ sampledRingCheck prims βmin tol (O.gOrc H) R := fun h => by simp_all
     simp [this]
-  · have : ¬ RingCheck prims βmin tol (O.gOrc H) R := fun h => by simp_all
+  · have : ¬ sampledRingCheck prims βmin tol (O.gOrc H) R := fun h => by simp_all
     simp [this]
   · have : ¬ MuDistinct prims (O.muOrc H) R (bmsg R m) := fun h => by simp_all
     simp [this]
-  · have h1 : RingCheck prims βmin tol (O.gOrc H) R := hg.1 hg'
+  · have h1 : sampledRingCheck prims βmin tol (O.gOrc H) R := hg.1 hg'
     have h2 : MuDistinct prims (O.muOrc H) R (bmsg R m) := hm.1 hm'
     simp only [and_self, ↓reduceIte, h1, h2]
     split_ifs with hi
@@ -255,7 +254,6 @@ noncomputable def w1KFFactors (hO : O.ReadsFst sp) :
 
 omit [Fintype prims.Power2High] [Fintype prims.Hint] [DecidableEq prims.Hint] [Fintype Msg]
   [DecidableEq Msg] [Fintype RMsg] [DecidableEq RMsg] in
-open Classical in
 /-- **The key-free signature is hard to guess from its public part `(w1Of pk σ, v)`** (the public
 part of `w1KFFactors`; `sum_iSup_prob_kfLoop_le` for the public part `(w₁, v)`): at every base
 component, summed over the public parts, the largest probability of a signature is at most

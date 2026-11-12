@@ -343,6 +343,18 @@ def encoder (j : ι) : (F.model.comp j).Encoder where
     exact (congrArg ((F.leaf j i t).decodeLeaf ((I.comp j).leafDefault i t)) hν).trans
       (Codec.decodeLeaf_ser (F.leaf_fit j i t) ν _)
 
+/-- **A non-interactive proof from a full transcript**: the Fiat–Shamir salt `σ`, the honest write
+(`encoder`) of every prover message of `tr` with all-zero roots, no opened leaves and no paths. It
+is a well-formed value of the proof type, not an accepting proof; it serves to show the proof type
+inhabited. -/
+def proofOf (σ : FiatShamirSalt F.kS) (tr : FullTr P t) : F.model.NIProof :=
+  ⟨σ, fun p i => (F.encoder p.label).write i (tr p i.1) fun _ => 0, [], fun _ => []⟩
+
+/-- **The non-interactive proofs of a setting are inhabited** once its IOP has a full transcript
+(`proofOf` at the all-zero salt). -/
+theorem nonempty_niProof [Nonempty (FullTr P t)] : Nonempty F.model.NIProof :=
+  ⟨F.proofOf (fun _ => 0) (Classical.arbitrary _)⟩
+
 /-- The non-oracle part read off an entry of a message's view. -/
 def nonOracleOfEntry {p : t.Leaf} {i : (P p.label).MessageIdx} :
     Option (CausalIOPViews.Ans I p i) → Option ((I.comp p.label).NonOracle i)

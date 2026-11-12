@@ -90,6 +90,56 @@ abbrev GameAdversary (X Y Req Resp In O : Type) [Fintype X] [Fintype Y] [Fintype
     [Nonempty X] [AddGroup Y] [Nonempty Y] (t : ℕ) : Type 1 :=
   In → QueryBoundedAdversary X Y Req Resp O t
 
+/-- **The transcript of a terminated run**: the adversary's output and the answered requests with
+their replies (the challenger's history, `Quantum.AdaptiveIAlg.history`). -/
+abbrev GameTranscript (O Req Resp : Type) : Type := O × List (HistoryEntry Req Resp)
+
+namespace GameTranscript
+
+variable {O Req Resp : Type}
+
+/-- The adversary's output. -/
+@[simp] abbrev out (p : GameTranscript O Req Resp) : O := p.1
+
+/-- The answered requests with their replies. -/
+@[simp] abbrev history (p : GameTranscript O Req Resp) : List (HistoryEntry Req Resp) := p.2
+
+end GameTranscript
+
+/-- **A run of a game**: the start draws, of a type `K` (in the ring-signature and multi-user games
+the users' key coins), the oracle, and the transcript (`none` when the adversary does not
+terminate). Every game probability is the probability of an
+event of runs under `runLaw`. The accessors and `Wins` are `simp` lemmas, so `simp` reads an
+event in its unfolded form. -/
+abbrev GameRun (K X Y O Req Resp : Type) : Type :=
+  K × (X → Y) × Option (GameTranscript O Req Resp)
+
+namespace GameRun
+
+variable {K X Y O Req Resp : Type}
+
+/-- The start draws of the run. -/
+@[simp] abbrev start (r : GameRun K X Y O Req Resp) : K := r.1
+
+/-- The oracle of the run. -/
+@[simp] abbrev oracle (r : GameRun K X Y O Req Resp) : X → Y := r.2.1
+
+/-- The transcript of the run; `none` when the adversary does not terminate. -/
+@[simp] abbrev result (r : GameRun K X Y O Req Resp) : Option (GameTranscript O Req Resp) := r.2.2
+
+/-- **The run wins the event `E`**: the adversary terminates, and `E` holds of the start draws,
+the oracle, the output and the history. The winning conditions of the ring-signature and
+multi-user games are `{r | r.Wins E}` for their predicates `E` (`Forges`, `StrongForges`, …). -/
+@[simp] abbrev Wins (r : GameRun K X Y O Req Resp)
+    (E : K → (X → Y) → O → List (HistoryEntry Req Resp) → Prop) : Prop :=
+  ∃ p ∈ r.result, E r.start r.oracle p.out p.history
+
+/-- **The run terminates with an output satisfying `P`.** -/
+@[simp] abbrev Outputs (r : GameRun K X Y O Req Resp) (P : O → Prop) : Prop :=
+  r.Wins fun _ _ o _ => P o
+
+end GameRun
+
 end RingSignature
 
 variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
@@ -144,7 +194,8 @@ namespace Quantum.QueryBoundedAdversary
 `C`: the auxiliary input drawn, then the composed algorithm run, its output and the answered
 requests read from the measured registers; `none` when the run does not terminate. -/
 noncomputable def transcriptLaw (A : QueryBoundedAdversary X Y Req Resp O t)
-    (C : Challenger X Y Req Resp) (H : X → Y) : PMF (Option (O × List (HistoryEntry Req Resp))) :=
+    (C : Challenger X Y Req Resp) (H : X → Y) :
+    PMF (Option (RingSignature.GameTranscript O Req Resp)) :=
   A.aux.bind fun a =>
     ((A.alg a).toKindAlg.composeBothOut C fun v =>
       ((A.alg a).output C v, (A.alg a).history C v)).outLaw H
@@ -159,7 +210,7 @@ is a function of `k` and of the table of `H`, so `A k H` is a `GameAdversary` re
 noncomputable def runLaw {K : Type} [Fintype K] [Nonempty K]
     (A : K → (X → Y) → QueryBoundedAdversary X Y Req Resp O t)
     (C : K → Challenger X Y Req Resp) :
-    PMF (K × (X → Y) × Option (O × List (HistoryEntry Req Resp))) :=
+    PMF (GameRun K X Y O Req Resp) :=
   (PMF.uniformOfFintype K).bind fun k =>
     (PMF.uniformOfFintype (X → Y)).bind fun H =>
       ((A k H).transcriptLaw (C k) H).map fun o => (k, H, o)
@@ -167,14 +218,13 @@ noncomputable def runLaw {K : Type} [Fintype K] [Nonempty K]
 /-- **A game probability is at most `1`**: every event of the run's law. -/
 theorem prob_runLaw_le_one {K : Type} [Fintype K] [Nonempty K]
     (A : K → (X → Y) → QueryBoundedAdversary X Y Req Resp O t) (C : K → Challenger X Y Req Resp)
-    (E : Set (K × (X → Y) × Option (O × List (HistoryEntry Req Resp)))) :
+    (E : Set (GameRun K X Y O Req Resp)) :
     (runLaw A C).toOuterMeasure E ≤ 1 :=
   PMF.toOuterMeasure_apply_le_one _ _
 
 /-- **The output events of a game's run**: the adversary terminates with an output in `E`. -/
-def RunOutIn {Start : Type} (E : Set O) :
-    Set (Start × (X → Y) × Option (O × List (HistoryEntry Req Resp))) :=
-  {x | ∃ p ∈ x.2.2, p.1 ∈ E}
+def RunOutIn {Start : Type} (E : Set O) : Set (GameRun Start X Y O Req Resp) :=
+  {r | r.Outputs (· ∈ E)}
 
 end RingSignature
 

@@ -43,9 +43,10 @@ that the ring-signature theorems take as hypotheses, each with an instance showi
   holds, a predicate of the ring, the position, the message and the signing coins: refusal is decided
   without the secret key (`refuses = False` for a signer that never refuses an honest ring). The
   simulated ring signatures of the zero-knowledge reduction reproduce refusals this way.
-- `BaseSigner.OracleFree B`: the signers `bsign`, `ssign` and the public value `pub` make no oracle
-  queries and base verification does not depend on the oracle (the Falcon-512 and ML-DSA base
-  signers: `falconBaseSigner_oracleFree`, `mldsaBaseSigner_oracleFree`,
+- `BaseScheme.OracleFree C`: the scheme's `ssign` and `pub` make no oracle queries and base
+  verification does not depend on the oracle. `BaseSigner.OracleFree B`: its scheme is oracle-free
+  and `bsign` makes no oracle queries (`oracleFree_iff`, `oracleFree_ofCore`; the Falcon-512 and
+  ML-DSA base signers: `falconBaseSigner_oracleFree`, `mldsaBaseSigner_oracleFree`,
   `GordieHowe/Applications/Ring/BaseSignerFacts.lean`).
   `OracleProg.run_eq_of_queriesLE_zero`: a program without queries has one result at every oracle;
   `OracleFree.run_bsign_eq`, `OracleFree.run_ssign_eq`, `OracleFree.run_pub_eq`,
@@ -70,11 +71,8 @@ that the ring-signature theorems take as hypotheses, each with an instance showi
 ## Sources and deliberate differences
 
 The definitions transcribe those of the interface `Ring.SigScheme`
-(`GordieHowe/Applications/Ring/Scheme.lean`: `CorrectWithin`, `PubOfCoins`;
-`GordieHowe/Applications/Ring/StrongForger.lean`: `SigGivenPubLe`) to the ring-aware signer, and
-`GordieHowe/Applications/Ring/SigAssumptions.lean` proves that each property of a `Ring.SigScheme`
-gives the corresponding property of its base signer (`SigScheme.toBaseSigner`). The
-differences:
+(`GordieHowe/Applications/Ring/Scheme.lean`: `CorrectWithin`, `PubOfCoins`) to the ring-aware
+signer. The differences:
 
 1. **The signer reads the oracle, the ring and its position.** `bsign` is a classical oracle
    program; every property holds at every oracle `H` (the commitment hash and the check oracle
@@ -102,14 +100,14 @@ open scoped ENNReal
 variable {X Y : Type} {TB : SchemeTypes} (B : BaseScheme X Y TB)
 
 /-- The public key generated from the coins `kc`. -/
-def pk (kc : B.KeyCoins) : B.PK := (B.keyGen kc).1
+def pk (kc : B.KeyCoins) : B.PK := (B.keyGen kc).pk
 
 /-- The secret key generated from the coins `kc`. -/
-def sk (kc : B.KeyCoins) : B.SK := (B.keyGen kc).2
+def sk (kc : B.KeyCoins) : B.SK := (B.keyGen kc).sk
 
 /-- The draws of the refusal rate with `r` members: the oracle, the members' key coins and the
 signing coins. -/
-abbrev RefusalDraw (r : ℕ) : Type := (X → Y) × (Fin r → B.KeyCoins) × B.Coins
+abbrev RefusalDraw (r : ℕ) : Type := SigningDraw X Y (Fin r → B.KeyCoins) B.Coins
 
 variable [Fintype TB.Coins] [Nonempty TB.Coins]
 
@@ -134,6 +132,16 @@ theorem stdCorrectWithin_one : B.StdCorrectWithin 1 :=
 theorem stdRefuseWithin_one : B.StdRefuseWithin 1 :=
   fun _ _ _ => PMF.toOuterMeasure_apply_le_one _ _
 
+/-- **An oracle-free base scheme**: the ordinary signer and the public value make no oracle
+queries, and base verification is the same at every oracle. -/
+structure OracleFree : Prop where
+  /-- The ordinary signer makes no queries. -/
+  ssign_noQuery : ∀ sk bm c, (B.ssign sk bm c).QueriesLE 0
+  /-- The public value makes no queries. -/
+  pub_noQuery : ∀ pk σ, (B.pub pk σ).QueriesLE 0
+  /-- Base verification does not depend on the oracle. -/
+  bverify_eq : ∀ H H', B.bverify H = B.bverify H'
+
 end GordieHowe.Signature.BaseScheme
 
 namespace GordieHowe.RingSignature
@@ -142,11 +150,12 @@ open scoped ENNReal
 
 namespace BaseSigner
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB)
+variable {X Y : Type} {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  (B : BaseSigner X Y N T RMsg)
 
 /-! ### Correctness and refusal -/
 
-variable [Fintype TB.Coins] [Nonempty TB.Coins]
+variable [Fintype T.Coins] [Nonempty T.Coins]
 
 /-- **The correctness error of the ring-aware signer is at most `ε`**: at every oracle `H`, for
 every key-generation coins `kc`, every ring `R` holding the public key of `kc` at position `i` and
@@ -154,19 +163,19 @@ every message `m`, over uniform signing coins, the probability that `bsign` outp
 on `bmsg R m` that fails base verification under the key is at most `ε`. Refusals are not
 counted (`RefuseWithin`). -/
 def CorrectWithin (ε : ℝ≥0∞) : Prop :=
-  ∀ (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N) (i : ℕ), R.1[i]? = some (B.pk kc) →
+  ∀ (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N) (i : ℕ), R.HoldsAt i (B.pk kc) →
     ∀ m : B.Msg, Pr[c ~ PMF.uniformOfFintype B.Coins :
       ∃ σ, (B.bsign (B.sk kc) R i m c).run H = some σ ∧
         B.bverify H (B.pk kc) (B.bmsg R m) σ = false] ≤ ε
 
-omit [Fintype TB.Coins] [Nonempty TB.Coins] in
+omit [Fintype T.Coins] [Nonempty T.Coins] in
 /-- **The ring of `r` honest users** with key coins `keys`: their public keys in order. -/
 def honestRing {r : ℕ} (hr : r ≤ N) (keys : Fin r → B.KeyCoins) : KeyRing B.PK N :=
   ⟨List.ofFn fun j => B.pk (keys j), by simpa using hr⟩
 
 variable [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y]
 
-variable [DecidableEq TB.PK] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins]
+variable [DecidableEq T.PK] [Fintype T.KeyCoins] [Nonempty T.KeyCoins]
 
 /-- **The refusal probability of the ring-aware signer** for `r` members, signer `s` and message
 `m` on the supported rings `adm`: over a uniform oracle, uniform key coins of the members and
@@ -175,9 +184,9 @@ the first position of its key (where `ofBase` signs), refuses. -/
 noncomputable def refuseProb (adm : KeyRing B.PK N → Prop) {r : ℕ} (hr : r ≤ N) (s : Fin r)
     (m : B.Msg) : ℝ≥0∞ :=
   Pr[d ~ PMF.uniformOfFintype (B.RefusalDraw r) :
-    adm (B.honestRing hr d.2.1) ∧
-      (B.bsign (B.sk (d.2.1 s)) (B.honestRing hr d.2.1)
-        ((B.honestRing hr d.2.1).1.idxOf (B.pk (d.2.1 s))) m d.2.2).run d.1 = none]
+    adm (B.honestRing hr d.keys) ∧
+      (B.bsign (B.sk (d.keys s)) (B.honestRing hr d.keys)
+        ((B.honestRing hr d.keys).1.idxOf (B.pk (d.keys s))) m d.coins).run d.oracle = none]
 
 /-- **The refusal rate of the ring-aware signer is at most `ρ`** on the supported rings `adm`: for
 every ring size `r ≤ N`, signer and message, the refusal probability is at most `ρ`. -/
@@ -186,8 +195,8 @@ def RefuseWithin (adm : KeyRing B.PK N → Prop) (ρ : ℝ≥0∞) : Prop :=
 
 /-! ### Public values -/
 
-omit [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] [DecidableEq TB.PK] [Fintype TB.KeyCoins]
-  [Nonempty TB.KeyCoins]
+omit [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] [DecidableEq T.PK] [Fintype T.KeyCoins]
+  [Nonempty T.KeyCoins]
 
 /-- **A signature is guessed from its public value with probability at most `γ`**: at every oracle
 `H`, for every key coins `kc`, ring `R` holding the key at position `i`, message `m`, public value
@@ -196,48 +205,48 @@ with public value `y` is at most `γ` times the probability that it outputs some
 value `y`. That is, the conditional min-entropy of an honest signature given its public value is at
 least `log₂ (1 / γ)`. -/
 def SigGivenPubLe (γ : ℝ≥0∞) : Prop :=
-  ∀ (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N) (i : ℕ), R.1[i]? = some (B.pk kc) →
+  ∀ (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N) (i : ℕ), R.HoldsAt i (B.pk kc) →
     ∀ (m : B.Msg) (y : B.Pub) (σ : B.BSig),
       Pr[c ~ PMF.uniformOfFintype B.Coins :
           (B.bsign (B.sk kc) R i m c).run H = some σ ∧ (B.pub (B.pk kc) σ).run H = y] ≤
         γ * Pr[c ~ PMF.uniformOfFintype B.Coins :
           ∃ σ', (B.bsign (B.sk kc) R i m c).run H = some σ' ∧ (B.pub (B.pk kc) σ').run H = y]
 
-omit [Fintype TB.Coins] [Nonempty TB.Coins] in
+omit [Fintype T.Coins] [Nonempty T.Coins] in
 /-- **The public value of an honest signature is a function of the signing coins**: at every
 oracle, for every key coins, ring holding the key at position `i`, message and coins `c`, every
 signature `bsign` outputs has public value `pubOf c`. For Falcon `pubOf` reads the salt off the
 coins (`falconBaseSigner_pubOfCoins`, for a signer carrying the salt); for `Pub = Unit` it holds
 for every base signer (`pubOfCoins_unique`). -/
 def PubOfCoins (pubOf : B.Coins → B.Pub) : Prop :=
-  ∀ (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N) (i : ℕ), R.1[i]? = some (B.pk kc) →
+  ∀ (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N) (i : ℕ), R.HoldsAt i (B.pk kc) →
     ∀ (m : B.Msg) (c : B.Coins) (σ : B.BSig), (B.bsign (B.sk kc) R i m c).run H = some σ →
       (B.pub (B.pk kc) σ).run H = pubOf c
 
-omit [Fintype TB.Coins] [Nonempty TB.Coins] in
+omit [Fintype T.Coins] [Nonempty T.Coins] in
 /-- **The refusals of the ring-aware signer are decided without the secret key**: at every oracle,
 for every key coins, ring holding the key at position `i`, message and coins `c`, `bsign` refuses
 exactly when `refuses R i m c`. -/
 def RefusalOfCoins (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) : Prop :=
-  ∀ (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N) (i : ℕ), R.1[i]? = some (B.pk kc) →
+  ∀ (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N) (i : ℕ), R.HoldsAt i (B.pk kc) →
     ∀ (m : B.Msg) (c : B.Coins), (B.bsign (B.sk kc) R i m c).run H = none ↔ refuses R i m c
 
-omit [Fintype TB.Coins] [Nonempty TB.Coins] in
+omit [Fintype T.Coins] [Nonempty T.Coins] in
 /-- **The predicted refusals are refusals of the ring-aware signer**: at every oracle, for every key
 coins, ring holding the key at position `i`, message and coins `c` with `refuses R i m c`, `bsign`
 refuses. It holds for the empty predicate (`refusalSound_false`) and under `RefusalOfCoins`
 (`RefusalOfCoins.refusalSound`); the refusals it misses are counted separately. -/
 def RefusalSound (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) : Prop :=
-  ∀ (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N) (i : ℕ), R.1[i]? = some (B.pk kc) →
+  ∀ (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N) (i : ℕ), R.HoldsAt i (B.pk kc) →
     ∀ (m : B.Msg) (c : B.Coins), refuses R i m c → (B.bsign (B.sk kc) R i m c).run H = none
 
-omit [Fintype TB.Coins] [Nonempty TB.Coins] in
+omit [Fintype T.Coins] [Nonempty T.Coins] in
 /-- **Refusals decided by the coins are sound.** -/
 theorem RefusalOfCoins.refusalSound {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop}
     (h : B.RefusalOfCoins refuses) : B.RefusalSound refuses :=
   fun H kc R i hi m c hr => (h H kc R i hi m c).2 hr
 
-omit [Fintype TB.Coins] [Nonempty TB.Coins] in
+omit [Fintype T.Coins] [Nonempty T.Coins] in
 /-- **Predicting no refusal is sound.** -/
 theorem refusalSound_false : B.RefusalSound fun _ _ _ _ => False :=
   fun _ _ _ _ _ _ _ h => h.elim
@@ -257,20 +266,22 @@ theorem sigGivenPubLe_one : B.SigGivenPubLe 1 := by
   intro c hc
   exact ⟨σ, hc.1⟩
 
-omit [Fintype TB.Coins] [Nonempty TB.Coins] in
+omit [Fintype T.Coins] [Nonempty T.Coins] in
 /-- **With a single public value every base signer has public values from its coins.** -/
 theorem pubOfCoins_unique [Unique B.Pub] : B.PubOfCoins fun _ => default :=
   fun _ _ _ _ _ _ _ _ _ => Subsingleton.elim _ _
 
 /-- Correctness at error `ε` gives correctness at every larger error. -/
-theorem CorrectWithin.mono {TB : BaseTypes} [Fintype TB.Coins] [Nonempty TB.Coins]
-    {B : BaseSigner X Y N TB} {ε ε' : ℝ≥0∞} (h : B.CorrectWithin ε)
+theorem CorrectWithin.mono {T : Signature.SchemeTypes} {RMsg : Type} [Fintype T.Coins]
+    [Nonempty T.Coins]
+    {B : BaseSigner X Y N T RMsg} {ε ε' : ℝ≥0∞} (h : B.CorrectWithin ε)
     (hε : ε ≤ ε') : B.CorrectWithin ε' :=
   fun H kc R i hi m => (h H kc R i hi m).trans hε
 
 /-- `SigGivenPubLe` at `γ` gives it at every larger `γ`. -/
-theorem SigGivenPubLe.mono {TB : BaseTypes} [Fintype TB.Coins] [Nonempty TB.Coins]
-    {B : BaseSigner X Y N TB} {γ γ' : ℝ≥0∞} (h : B.SigGivenPubLe γ)
+theorem SigGivenPubLe.mono {T : Signature.SchemeTypes} {RMsg : Type} [Fintype T.Coins]
+    [Nonempty T.Coins]
+    {B : BaseSigner X Y N T RMsg} {γ γ' : ℝ≥0∞} (h : B.SigGivenPubLe γ)
     (hγ : γ ≤ γ') : B.SigGivenPubLe γ' :=
   fun H kc R i hi m y σ => (h H kc R i hi m y σ).trans (mul_le_mul_left hγ _)
 
@@ -281,8 +292,8 @@ every oracle `H`, for every key coins `kc`, ring `R` holding the key at position
 that the best guess of the signature from its public value is right, `2^(-H̃∞(σ | y))` for the
 average conditional min-entropy `H̃∞` of Dodis, Ostrovsky, Reyzin, Smith, "Fuzzy Extractors",
 SIAM J. Comput. 38(1), 2008, section 2.4, with a refusal counted as no signature. -/
-def SigGivenPubAvgLe [Fintype TB.Pub] (γ : ℝ≥0∞) : Prop :=
-  ∀ (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N) (i : ℕ), R.1[i]? = some (B.pk kc) →
+def SigGivenPubAvgLe [Fintype T.Pub] (γ : ℝ≥0∞) : Prop :=
+  ∀ (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N) (i : ℕ), R.HoldsAt i (B.pk kc) →
     ∀ m : B.Msg, ∑ y : B.Pub, ⨆ σ : B.BSig,
       Pr[c ~ PMF.uniformOfFintype B.Coins :
           (B.bsign (B.sk kc) R i m c).run H = some σ ∧ (B.pub (B.pk kc) σ).run H = y] ≤ γ
@@ -303,8 +314,9 @@ theorem _root_.PMF.sum_toOuterMeasure_eq_some_le_one {α β : Type*} [Fintype α
 
 /-- **The worst-case bound gives the average bound**: `SigGivenPubLe γ` gives
 `SigGivenPubAvgLe γ`. -/
-theorem SigGivenPubLe.sigGivenPubAvgLe {TB : BaseTypes} [Fintype TB.Coins] [Nonempty TB.Coins]
-    [Fintype TB.Pub] {B : BaseSigner X Y N TB} {γ : ℝ≥0∞} (h : B.SigGivenPubLe γ) :
+theorem SigGivenPubLe.sigGivenPubAvgLe {T : Signature.SchemeTypes} {RMsg : Type} [Fintype T.Coins]
+    [Nonempty T.Coins]
+    [Fintype T.Pub] {B : BaseSigner X Y N T RMsg} {γ : ℝ≥0∞} (h : B.SigGivenPubLe γ) :
     B.SigGivenPubAvgLe γ := by
   classical
   intro H kc R i hi m
@@ -330,12 +342,13 @@ theorem SigGivenPubLe.sigGivenPubAvgLe {TB : BaseTypes} [Fintype TB.Coins] [None
     _ = γ := mul_one γ
 
 /-- **Every base signer has average guessing probability at most `1`.** -/
-theorem sigGivenPubAvgLe_one [Fintype TB.Pub] : B.SigGivenPubAvgLe 1 :=
+theorem sigGivenPubAvgLe_one [Fintype T.Pub] : B.SigGivenPubAvgLe 1 :=
   (sigGivenPubLe_one B).sigGivenPubAvgLe
 
 /-- `SigGivenPubAvgLe` at `γ` gives it at every larger `γ`. -/
-theorem SigGivenPubAvgLe.mono {TB : BaseTypes} [Fintype TB.Coins] [Nonempty TB.Coins]
-    [Fintype TB.Pub]     {B : BaseSigner X Y N TB} {γ γ' : ℝ≥0∞} (h : B.SigGivenPubAvgLe γ)
+theorem SigGivenPubAvgLe.mono {T : Signature.SchemeTypes} {RMsg : Type} [Fintype T.Coins]
+    [Nonempty T.Coins]
+    [Fintype T.Pub]     {B : BaseSigner X Y N T RMsg} {γ γ' : ℝ≥0∞} (h : B.SigGivenPubAvgLe γ)
     (hγ : γ ≤ γ') : B.SigGivenPubAvgLe γ' :=
   fun H kc R i hi m => (h H kc R i hi m).trans hγ
 
@@ -343,14 +356,14 @@ section Refusal
 
 variable [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y]
 
-variable [DecidableEq TB.PK] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins]
+variable [DecidableEq T.PK] [Fintype T.KeyCoins] [Nonempty T.KeyCoins]
 
 /-- Every ring-aware signer has refusal rate at most `1`. -/
 theorem refuseWithin_one (adm : KeyRing B.PK N → Prop) : B.RefuseWithin adm 1 :=
   fun _ _ _ _ => PMF.toOuterMeasure_apply_le_one _ _
 
-omit [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] [Fintype TB.KeyCoins]
-  [Nonempty TB.KeyCoins] [Fintype TB.Coins] [Nonempty TB.Coins] [DecidableEq TB.PK] in
+omit [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] [Fintype T.KeyCoins]
+  [Nonempty T.KeyCoins] [Fintype T.Coins] [Nonempty T.Coins] [DecidableEq T.PK] in
 /-- **Signing of `ofBase` at a position refuses exactly when the base signer does.** -/
 theorem run_signAt_eq_none_iff {TPS : PSTypes} (PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS) {H : X → Y}
     {pk : B.PK} {sk : B.SK} {R : KeyRing B.PK N} {i : ℕ} {m : B.Msg} {c : B.Coins × PS.Coins} :
@@ -427,26 +440,33 @@ end Refusal
 
 /-! ### Oracle-free base signers -/
 
-omit [Fintype TB.Coins] [Nonempty TB.Coins]
+omit [Fintype T.Coins] [Nonempty T.Coins]
 
 /-- **A program without queries has one result at every oracle.** -/
 theorem _root_.GordieHowe.OracleProg.run_eq_of_queriesLE_zero {A B R : Type*} {p : OracleProg A B R}
     (hp : p.QueriesLE 0) (h h' : A → B) : p.run h = p.run h' :=
   OracleProg.run_congr p fun a ha => absurd (List.length_pos_of_mem ha) (by have := hp h; omega)
 
-/-- **An oracle-free base signer**: the ring-aware signer, the ordinary signer and the public value
-make no oracle queries, and base verification is the same at every oracle. The Falcon-512 and
-ML-DSA base signers are oracle-free (`falconBaseSigner_oracleFree`,
-`mldsaBaseSigner_oracleFree`). -/
-structure OracleFree {TB : BaseTypes} (B : BaseSigner X Y N TB) : Prop where
+/-- **An oracle-free base signer**: its scheme is oracle-free (`BaseScheme.OracleFree`: the
+ordinary signer and the public value make no oracle queries, and base verification is the same at
+every oracle), and the ring-aware signer makes no oracle queries. The Falcon-512 and ML-DSA base
+signers are oracle-free (`falconBaseSigner_oracleFree`, `mldsaBaseSigner_oracleFree`). -/
+structure OracleFree {T : Signature.SchemeTypes} {RMsg : Type} (B : BaseSigner X Y N T RMsg) : Prop
+    extends core : B.core.OracleFree where
   /-- The ring-aware signer makes no queries. -/
   bsign_noQuery : ∀ sk R i m c, (B.bsign sk R i m c).QueriesLE 0
-  /-- The ordinary signer makes no queries. -/
-  ssign_noQuery : ∀ sk bm c, (B.ssign sk bm c).QueriesLE 0
-  /-- The public value makes no queries. -/
-  pub_noQuery : ∀ pk σ, (B.pub pk σ).QueriesLE 0
-  /-- Base verification does not depend on the oracle. -/
-  bverify_eq : ∀ H H', B.bverify H = B.bverify H'
+
+/-- **Oracle-freeness of a base signer is that of its scheme and of the ring-aware signer.** -/
+theorem oracleFree_iff {T : Signature.SchemeTypes} {RMsg : Type} (B : BaseSigner X Y N T RMsg) :
+    B.OracleFree ↔ B.core.OracleFree ∧ ∀ sk R i m c, (B.bsign sk R i m c).QueriesLE 0 :=
+  ⟨fun h => ⟨h.core, h.bsign_noQuery⟩, fun h => ⟨h.1, h.2⟩⟩
+
+/-- **A base signer built from an oracle-free scheme is oracle-free** (`ofCore` signs with the
+scheme's `ssign`). -/
+theorem oracleFree_ofCore {S : Signature.SchemeTypes} {C : Signature.BaseScheme X Y S}
+    (hC : C.OracleFree) {RMsg : Type} (bmsg : KeyRing S.PK N → RMsg → S.BMsg) :
+    (ofCore C bmsg).OracleFree :=
+  ⟨hC, fun sk R _ m c => hC.ssign_noQuery sk (bmsg R m) c⟩
 
 namespace OracleFree
 
@@ -484,11 +504,10 @@ end OracleFree
 
 /-- The types of `uniformSig k`: one key, one message and one public value; signatures and signing
 coins in `Fin (k + 1)`. -/
-abbrev uniformSigT (k : ℕ) : BaseTypes where
+abbrev uniformSigT (k : ℕ) : _root_.GordieHowe.Signature.SchemeTypes where
   PK := Unit
   SK := Unit
   KeyCoins := Unit
-  Msg := Unit
   BMsg := Unit
   BSig := Fin (k + 1)
   Pub := Unit
@@ -500,7 +519,7 @@ value; the ring-aware and the ordinary signer output their coin as the signature
 accepts. It satisfies every hypothesis of this file (`CorrectWithin 0`, `StdCorrectWithin 0`,
 `StdRefuseWithin 0`, `RefuseWithin adm 0`, `SigGivenPubLe (k + 1)⁻¹`, `PubOfCoins`,
 `OracleFree`). -/
-def uniformSig (k : ℕ) : BaseSigner X Y N (uniformSigT k) where
+def uniformSig (k : ℕ) : BaseSigner X Y N (uniformSigT k) Unit where
   keyGen _ := ((), ())
   bmsg _ _ := ()
   q := 0

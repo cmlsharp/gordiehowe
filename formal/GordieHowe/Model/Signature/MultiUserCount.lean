@@ -172,7 +172,7 @@ corruption requests**, against the challenger answering `Q'` requests: it termin
 (`Forges`) for a history with at most `Qs` signing and corruption requests. -/
 noncomputable def muEufProbWithin (A : MUAdversary O n V t) (Q' Qs : ℕ) : ℝ≥0∞ :=
   (muLaw A Q').toOuterMeasure
-    {x | ∃ p ∈ x.2.2, Forges x.1 x.2.1 p.1 p.2 ∧ signCorruptCount p.2 ≤ Qs}
+    {r | r.Wins fun keys H f hist => Forges keys H f hist ∧ signCorruptCount hist ≤ Qs}
 
 /-- **The restricted event is within MU-EUF-CMA^corr.** -/
 theorem muEufProbWithin_le_muEufProb (A : MUAdversary O n V t) (Q' Qs : ℕ) :
@@ -189,7 +189,7 @@ corruption requests**, against the challenger answering `Q'` requests: it termin
 forgery (`StrongForges`) for a history with at most `Qs` signing and corruption requests. -/
 noncomputable def muSufProbWithin (A : MUAdversary O n V t) (Q' Qs : ℕ) : ℝ≥0∞ :=
   (muLaw A Q').toOuterMeasure
-    {x | ∃ p ∈ x.2.2, StrongForges x.1 x.2.1 p.1 p.2 ∧ signCorruptCount p.2 ≤ Qs}
+    {r | r.Wins fun keys H f hist => StrongForges keys H f hist ∧ signCorruptCount hist ≤ Qs}
 
 /-- **The restricted MU-EUF-CMA^corr event is within the restricted MU-SUF-CMA^corr event**
 (`Forges.strongForges`), with the same numbers of requests. -/
@@ -222,15 +222,15 @@ end Core
 section Forger
 
 variable {N n : ℕ} {m : ℕ} {I J Bd : Type} [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J]
-  {TB : BaseTypes}
-  {B : BaseSigner (Bits m) (BitStr I J) N TB} (O : SignOracle B.core) [NeZero n]
+  {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits m) (BitStr I J) N T RMsg} (O : SignOracle B.core) [NeZero n]
   (e : BitStr I J ≃ Bd)
 
 variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
   [Nonempty O.Coins]
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins]
 
 /-- **The success probability with few signing and corruption requests of the forger holding a
 compressed-oracle simulation** (`muEufProb_coSimMU` with the count): averaged over the users' key

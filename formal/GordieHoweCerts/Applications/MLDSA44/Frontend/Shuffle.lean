@@ -79,7 +79,8 @@ class MldsaHShuffle (program : RealizedProgram) : Prop extends MldsaHSelect prog
   /-- The lengths of the records' parts. -/
   recLens : program.exprLen (.reindex idx54 (.ref 521)) = 39 ∧ program.exprLen (.reindex idx54 (.leaf 560)) = 39 ∧ program.exprLen (.reindex idx54 (.leaf 565)) = 39 ∧ program.exprLen (.reindex idx45 (.concat (.leaf 50) (.reindex idx54 (.ref 521)))) = 256 ∧ program.exprLen (.reindex idx45 (.concat (.leaf 51) (.reindex idx54 (.leaf 564)))) = 256 ∧ program.exprLen (.reindex idx45 (.concat (.leaf 51) (.reindex idx54 (.leaf 52)))) = 256 ∧ program.exprLen (.leaf 50) = 217 ∧ program.exprLen (.leaf 51) = 217 ∧ program.exprLen memR = 295
 
-set_option maxRecDepth 4096 in
+-- Depth 1024 needed (fails at 512): `shape_decide` in the field `recConsts`.
+set_option maxRecDepth 1024 in
 /-- The native program at the ROM parameters has these facts. -/
 instance : MldsaHShuffle program where
   phases_pos := by shape_decide
@@ -128,7 +129,6 @@ class MldsaHConsts (program : RealizedProgram) (FH : RealizedProgram.FieldInterp
     program.expr 523 = .add (.leaf 562) (.scale (.const c) (.ref 522)) ∧
     FH.decode c = (HField.Θ (FH := FH)).θ + 1
 
-set_option maxRecDepth 4096 in
 /-- The native program at the ROM parameters, over `GF(2^128)`: the constant is `θ + 1 = g^21845 + 1`. -/
 instance : MldsaHConsts program RealizedProgram.gf128 where
   theta := ⟨54969562866131847669016652494142573320, Generated.MLDSA44.Native.ROMParams.ShapeFacts.predicate_h2c_2esample_2emem_2eunit_body, Generated.MLDSA44.Native.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eleft_2eshared_2efirst_2esecond_2efirst_eq,
@@ -146,7 +146,6 @@ local notation "interp" => RealizedProgram.mldsaInterpOf F0 FH
 
 section Tables
 
-set_option maxRecDepth 4096
 
 theorem pred268 :
     ∃ t, (program.predicate 268).body = .equal 1 (.add (.leaf 565) (.apply (.sum 6) (.mul (.reindex idx79 (.leaf 561)) (.reindex idx80 (.leaf 48))))) (.leaf 47) t :=

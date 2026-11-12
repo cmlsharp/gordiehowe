@@ -54,8 +54,6 @@ variable {X Y Req Resp O : Type} [Fintype X] [DecidableEq X] [Fintype Y] [Decida
   [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp]
   {shA : AlgShape X Y Req Resp} (A : AdaptiveIAlg shA O) [AddGroup Y]
 
-open Classical
-
 variable {Req' Resp' O' Xs Ys : Type} [Fintype Req'] [DecidableEq Req'] [Fintype Resp']
   [DecidableEq Resp'] [Inhabited X] [Inhabited Req'] [AddGroup Ys] [Fintype Ys] [DecidableEq Ys]
   (F : MultiRelay X Y Req Resp Req' Resp' Xs Ys) (Q : ℕ)
@@ -108,8 +106,6 @@ theorem relayGood₀_prog : A.relayGood₀ F Q out' F.prog Gin =
   rfl
 
 end Generic
-
-open Classical
 
 variable {X Y Req Resp O O' Req' Resp' Xs Ys : Type} [Fintype X] [DecidableEq X] [Fintype Y]
   [DecidableEq Y] [AddGroup Ys] [Fintype Ys] [DecidableEq Ys]
@@ -213,6 +209,7 @@ theorem blockRel_absorbAssign (h : A.TracePreserving) (hj : j < Q)
       ((A.absorbAssign G Q).restrictTrip sp H₁
         ((A.absorbAssignP Req' Resp' Q).relaySwap (G.relayOf Q) Q p' OUT (jTest Q j) (· = r₀) sw
           (PI))) r₀ := by
+  classical
   have hR := blockRel_relayAdv (A := A.absorbAssignP Req' Resp' Q) (F := G.relayOf Q) (Q := Q)
     (J := jTest Q j)
     (Gin := A.innerGin Req' Resp' Q j)

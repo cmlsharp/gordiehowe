@@ -21,8 +21,8 @@ The single-key weights, masses, loop signer and regularity gap are those of the 
 (`GordieHowe/Applications/MLDSA/Flattened/Core/Weights.lean`: `t0Weight`, `flatWeight`,
 `flatLoopSigner`, `signerRegGap`).
 
-* `ringWeights`: the members' flattened weights `min(1, aw_j / β_min)` as the column weights of
-  `PMF.RingWeights`.
+* `ringWeightsOf`: the members' flattened weights `min(1, aw_j / val_j)` at per-member cut-offs as
+  the column weights of `PMF.RingWeights`; `ringWeights` at the constant cut-off `β_min`.
 * `colDev_le_abs_sub`, `relColError_le_signerRegGap`: the signer's relative column error in the
   ring is at most its regularity gap `signerRegGap`.
 * `ringVerify`: FIPS 204 Algorithm 8 (`MLDSA.fipsVerify`) with the commitment hash
@@ -43,11 +43,18 @@ section Weights
 
 variable {p : Params} [NeZero (bucketCount p)] (prims : Primitives p) [nttOps : NTTRingOps]
 
-/-- **The column weights of a ring of published `t₀`s.** -/
-def ringWeights {n : ℕ} (βmin : ℚ≥0) (t0s : Fin n → RqVec p.k) :
+/-- **The column weights of a ring of published `t₀`s at per-member cut-offs**: member `j`
+weighs `flatWeight` at its own cut-off `cuts j`. -/
+def ringWeightsOf {n : ℕ} (cuts : Fin n → Cutoff p) (t0s : Fin n → RqVec p.k) :
     PMF.RingWeights (Fin n) (BucketVec p) (CommitHashBytes p) where
-  wtQ j := flatWeight prims (Cutoff.const βmin) (t0s j)
+  wtQ j := flatWeight prims (cuts j) (t0s j)
   wtQ_le_one _ _ := NNRat.minOneDiv_le_one _ _
+
+/-- **The column weights of a ring of published `t₀`s** at the constant cut-off `β_min`
+(`ringWeightsOf` with every member at `Cutoff.const βmin`). -/
+abbrev ringWeights {n : ℕ} (βmin : ℚ≥0) (t0s : Fin n → RqVec p.k) :
+    PMF.RingWeights (Fin n) (BucketVec p) (CommitHashBytes p) :=
+  ringWeightsOf prims (fun _ => Cutoff.const βmin) t0s
 
 end Weights
 
@@ -80,7 +87,8 @@ theorem colDev_le_abs_sub (hp : SigningParams p) (h_laws : SigningLaws prims)
           c)).toReal := by
     rw [← ENNReal.toReal_mul, hS, mul_assoc (standinScale p) (signerWeight prims sk (v, c)),
       mul_flattenCoin_eq prims sk _]
-    simp only [ringWeights, PMF.RingWeights.wt, hi, mul_assoc, ENNReal.nnratCast_one, mul_one]
+    simp only [ringWeights, ringWeightsOf, PMF.RingWeights.wt, hi, mul_assoc, ENNReal.nnratCast_one,
+        mul_one]
   have hκ : (flattenCoin prims sk (Cutoff.const βmin) (v, c) : ℝ≥0∞).toReal ≤ 1 :=
     ENNReal.toReal_le_one_of_le_one (coe_flattenCoin_le_one prims sk (Cutoff.const βmin) _)
   rw [colDev_eq, hlev, ENNReal.toReal_mul, ENNReal.toReal_mul, ← sub_mul, abs_mul,
@@ -104,7 +112,7 @@ theorem relColError_le_signerRegGap (hp : SigningParams p) (h_laws : SigningLaws
   refine Finset.sum_le_sum fun v _ => ?_
   have hmean : (ringWeights prims βmin t0s).meanWeight i v =
       𝔼 c, (flatWeight prims (Cutoff.const βmin) sk.t0 (v, c) : ℝ≥0∞).toReal := by
-    simp only [PMF.RingWeights.meanWeight_eq, PMF.RingWeights.wt, ringWeights, hi]
+    simp only [PMF.RingWeights.meanWeight_eq, PMF.RingWeights.wt, ringWeights, ringWeightsOf, hi]
   rw [hmean]
   refine div_le_div_of_nonneg_right ?_ (Finset.expect_nonneg fun _ _ => ENNReal.toReal_nonneg)
   exact Finset.expect_le_expect fun c _ =>

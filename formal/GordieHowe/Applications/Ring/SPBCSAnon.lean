@@ -27,7 +27,8 @@ error `wiError δ`).
   `wiError δ`**: relabelling the proofs (`PubWI.map_proof`) and splitting the oracle
   (`PubWI.of_split`).
 - `anonAdvantage_ofBase_spbcs_le`, `anonAdvantage_ofBase_spbcs_le_of_pubOfCoins`: the anonymity
-  headlines for the ring signature compiled by spBCS.
+  bounds of `anonAdvantage_ofBase_le` and `anonAdvantage_ofBase_le_of_pubOfCoins` for the ring
+  signature compiled by spBCS.
 - `pubWI_spbcsProofSystem_split`, `anonAdvantage_ofBase_spbcs_split_le`: the same for a base
   signer reading only the oracle off the compiled proofs' queries (the first part of `chainSplit`).
 - `replayVia`, `mapChoice`, `toWIAdversaryVia`, `map_wiRun_replayVia`, `pubWI_proofLaw_comap`:
@@ -47,7 +48,6 @@ section Split
 
 variable {k kN kS L e : ℕ}
 
-open Classical in
 /-- **The quantum oracle split into the oracle of the compiled proofs and the rest**: an oracle `H`
 is its values off the image of `Query.toBits` and the oracle `chainOracle H` on queries. -/
 noncomputable def chainSplit :
@@ -86,7 +86,6 @@ variable {k kN kS L e : ℕ} {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr :
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)] {X : Type}
   (M : SPBCS Mg P X k kN kS L e) {b : ℕ}
 
-open Classical in
 /-- **A compiled proof in the format `b`**, or none if it does not fit. -/
 noncomputable def toResponse (π : M.NIProof) : M.Response b :=
   if h : M.Bounded b π then some ⟨π, h⟩ else none
@@ -95,8 +94,8 @@ end Format
 
 section ProofLaw
 
-variable {k kN kS L e N : ℕ} {TB : BaseTypes}
-  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N T RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -151,9 +150,9 @@ theorem pubWI_spbcsProofSystem (VE : M.ViewEncoder E Qs)
 
 /-! ### Anonymity of the ring signature compiled by spBCS -/
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BSig]
+  [DecidableEq T.BSig] [Fintype T.Pub] [DecidableEq T.Pub] [Fintype T.KeyCoins]
+  [Nonempty T.KeyCoins] [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins]
 
 variable (adm : KeyRing B.PK N → Prop) [DecidablePred adm] {n : ℕ}
 
@@ -162,62 +161,47 @@ challenges, `GordieHowe/Model/RingSignature/Anonymity.lean`; `anonAdvantage_ofBa
 `pubWI_spbcsProofSystem`): for an oracle-free base signer (`hB`), a composite whose honest prover
 has honest-verifier zero knowledge at error `δ` for the ring relation at every oracle (`hz`, what
 the proof reveals read off the view by `VE`), at most `C` valid challenges for every key vector
-(`hC`), an `ε keys` bounding at the good key vectors the distance of the two users'
-refusal-or-public value laws at every oracle (`hε`) and correctness error `εc` (`hcorr`), every
+(`hC`), a coupling `cpl` of the two users' refusal-or-public value laws
+(`BaseSigner.AnonCoupling`) and correctness error `εc` (`hcorr`), every
 anonymity adversary with any oracle view and query bound has advantage at most
-`Q · (𝔼 ε + 2εc) + Q · wiError δ (Q · C) + Pr[¬ Good]`. -/
-@[headline]
+`Q · (cpl.meanError + 2εc) + Q · wiError δ (Q · C) + cpl.badProb`. -/
 theorem anonAdvantage_ofBase_spbcs_le (VE : M.ViewEncoder E Qs) {PubZ : Type}
     {pubZ : RingSignature.RingStmt B → PubZ} {sim : CausalJointSimulator VE.toReveal.MV PubZ}
     {δ : ℝ≥0}
     (hz : ∀ H, CausalHVZK VE.toReveal.MV (RingSignature.ringRel B adm H) honest pubZ sim δ)
     (hB : B.OracleFree) {C : ℕ}
-    (hC : ∀ keys : Fin n → (ofBase B (spbcsProofSystem M Λ E hb honest) adm).KeyCoins,
-      (Finset.univ.filter fun c : AnonRequest (ofBase B (spbcsProofSystem M Λ E hb honest) adm) n =>
-        c.Valid keys).card ≤ C)
-    (Good : (Fin n → (ofBase B (spbcsProofSystem M Λ E hb honest) adm).KeyCoins) → Prop)
-    [DecidablePred Good]
-    (ε : (Fin n → (ofBase B (spbcsProofSystem M Λ E hb honest) adm).KeyCoins) → ℝ)
-    (hε0 : ∀ keys, 0 ≤ ε keys)
-    (hε : ∀ keys, Good keys →
-      ∀ H (c : AnonRequest (ofBase B (spbcsProofSystem M Λ E hb honest) adm) n), c.Valid keys →
-        adm c.ring → PMF.tvDist (B.refusalPubLaw H (keys c.user₀) c.ring c.msg)
-          (B.refusalPubLaw H (keys c.user₁) c.ring c.msg) ≤ ε keys)
+    (hC : (ofBase B (spbcsProofSystem M Λ E hb honest) adm).validChallengeBound n ≤ C)
+    (cpl : B.AnonCoupling adm n)
     {εc : ℝ≥0} (hcorr : B.CorrectWithin εc) {V : OracleView (Bits (queryBits k kN kS L)) (XOut k e)}
     {t : ℕ} (A : AnonAdversary (ofBase B (spbcsProofSystem M Λ E hb honest) adm) n V t) (Q : ℕ) :
-    anonAdvantage A Q ≤ Q * ((𝔼 keys, ε keys) + 2 * εc) + Q * M.wiError δ (Q * C) +
-      𝔼 keys, (if Good keys then 0 else 1 : ℝ) :=
-  anonAdvantage_ofBase_le hB (fun H => pubWI_spbcsProofSystem M Λ E hb honest VE (hz H)) hC Good ε
-    hε0 hε hcorr A Q
+    anonAdvantage A Q ≤ Q * (cpl.meanError + 2 * εc) + Q * M.wiError δ (Q * C) +
+      cpl.badProb :=
+  anonAdvantage_ofBase_le hB (fun H => pubWI_spbcsProofSystem M Λ E hb honest VE (hz H)) hC cpl
+    hcorr A Q
 
 /-- **Anonymity of the ring signature compiled by spBCS when the public value is a function of the
 signing coins** (a salt read off the coins; `Pub = Unit`, `pubOfCoins_unique`;
 `anonAdvantage_ofBase_le_of_pubOfCoins` with `pubWI_spbcsProofSystem`): every anonymity adversary
 has advantage at most `Q · wiError δ (Q · C) + 2Q · εc + 2Q · ρ`, with `ρ` a bound on the base
 signer's refusal probability at every input (`hρ`). -/
-@[headline]
 theorem anonAdvantage_ofBase_spbcs_le_of_pubOfCoins (VE : M.ViewEncoder E Qs) {PubZ : Type}
     {pubZ : RingSignature.RingStmt B → PubZ} {sim : CausalJointSimulator VE.toReveal.MV PubZ}
     {δ : ℝ≥0}
     (hz : ∀ H, CausalHVZK VE.toReveal.MV (RingSignature.ringRel B adm H) honest pubZ sim δ)
     (hB : B.OracleFree) {C : ℕ}
-    (hC : ∀ keys : Fin n → (ofBase B (spbcsProofSystem M Λ E hb honest) adm).KeyCoins,
-      (Finset.univ.filter fun c : AnonRequest (ofBase B (spbcsProofSystem M Λ E hb honest) adm) n =>
-        c.Valid keys).card ≤ C)
+    (hC : (ofBase B (spbcsProofSystem M Λ E hb honest) adm).validChallengeBound n ≤ C)
     {pubOf : B.Coins → B.Pub} (hpub : B.PubOfCoins pubOf) {εc ρ : ℝ≥0} (hcorr : B.CorrectWithin εc)
-    (hρ : ∀ H (kc : B.KeyCoins) (Rg : KeyRing B.PK N) (m : B.Msg), B.pk kc ∈ Rg.1 →
-      Pr[cb ~ PMF.uniformOfFintype B.Coins :
-        (B.bsign (B.sk kc) Rg (Rg.1.idxOf (B.pk kc)) m cb).run H = none] ≤ ρ)
+    (hρ : B.RefuseKeyWithin ρ)
     {V : OracleView (Bits (queryBits k kN kS L)) (XOut k e)} {t : ℕ}
     (A : AnonAdversary (ofBase B (spbcsProofSystem M Λ E hb honest) adm) n V t) (Q : ℕ) :
     anonAdvantage A Q ≤ Q * M.wiError δ (Q * C) + 2 * Q * εc + 2 * Q * ρ :=
   anonAdvantage_ofBase_le_of_pubOfCoins hB
     (fun H => pubWI_spbcsProofSystem M Λ E hb honest VE (hz H)) hC hpub hcorr hρ A Q
 
-omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] [Fintype TB.PK]
-  [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins]
-  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [DecidableEq R] [Fintype T.PK]
+  [DecidableEq T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.Pub] [DecidableEq T.Pub] [Fintype T.KeyCoins] [Nonempty T.KeyCoins]
+  [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins] in
 /-- **Witness indistinguishability of the spBCS proof system at the oracles with a fixed off-query
 part** `ω₂`, at error `wiError δ` under the hypothesis `hz` of `pubWI_spbcsProofSystem` (the proofs
 read the oracle through `chainOracle`, the second part of `chainSplit`). -/
@@ -242,30 +226,20 @@ theorem pubWI_spbcsProofSystem_split (VE : M.ViewEncoder E Qs)
 off the compiled proofs' queries** (`anonAdvantage_ofBase_split_le` at `chainSplit`, with
 `pubWI_spbcsProofSystem_split`): for a base signer whose algorithms read the oracle only off the
 image of `Query.toBits` (`hB`), the bound of `anonAdvantage_ofBase_spbcs_le`. -/
-@[headline]
 theorem anonAdvantage_ofBase_spbcs_split_le (VE : M.ViewEncoder E Qs) {PubZ : Type}
     {pubZ : RingSignature.RingStmt B → PubZ} {sim : CausalJointSimulator VE.toReveal.MV PubZ}
     {δ : ℝ≥0}
     (hz : ∀ H, CausalHVZK VE.toReveal.MV (RingSignature.ringRel B adm H) honest pubZ sim δ)
     (hB : B.ReadsOnly fun H => (chainSplit H).1) {C : ℕ}
-    (hC : ∀ keys : Fin n → (ofBase B (spbcsProofSystem M Λ E hb honest) adm).KeyCoins,
-      (Finset.univ.filter fun c : AnonRequest (ofBase B (spbcsProofSystem M Λ E hb honest) adm) n =>
-        c.Valid keys).card ≤ C)
-    (Good : (Fin n → (ofBase B (spbcsProofSystem M Λ E hb honest) adm).KeyCoins) → Prop)
-    [DecidablePred Good]
-    (ε : (Fin n → (ofBase B (spbcsProofSystem M Λ E hb honest) adm).KeyCoins) → ℝ)
-    (hε0 : ∀ keys, 0 ≤ ε keys)
-    (hε : ∀ keys, Good keys →
-      ∀ H (c : AnonRequest (ofBase B (spbcsProofSystem M Λ E hb honest) adm) n), c.Valid keys →
-        adm c.ring → PMF.tvDist (B.refusalPubLaw H (keys c.user₀) c.ring c.msg)
-          (B.refusalPubLaw H (keys c.user₁) c.ring c.msg) ≤ ε keys)
+    (hC : (ofBase B (spbcsProofSystem M Λ E hb honest) adm).validChallengeBound n ≤ C)
+    (cpl : B.AnonCoupling adm n)
     {εc : ℝ≥0} (hcorr : B.CorrectWithin εc) {V : OracleView (Bits (queryBits k kN kS L)) (XOut k e)}
     {t : ℕ} (A : AnonAdversary (ofBase B (spbcsProofSystem M Λ E hb honest) adm) n V t) (Q : ℕ) :
-    anonAdvantage A Q ≤ Q * ((𝔼 keys, ε keys) + 2 * εc) + Q * M.wiError δ (Q * C) +
-      𝔼 keys, (if Good keys then 0 else 1 : ℝ) := by
+    anonAdvantage A Q ≤ Q * (cpl.meanError + 2 * εc) + Q * M.wiError δ (Q * C) +
+      cpl.badProb := by
   classical
   exact anonAdvantage_ofBase_split_le chainSplit hB
-    (fun ω₂ h₁ => pubWI_spbcsProofSystem_split M Λ E hb honest VE (hz _) ω₂) hC Good ε hε0 hε
+    (fun ω₂ h₁ => pubWI_spbcsProofSystem_split M Λ E hb honest VE (hz _) ω₂) hC cpl
     hcorr A Q
 
 end ProofLaw

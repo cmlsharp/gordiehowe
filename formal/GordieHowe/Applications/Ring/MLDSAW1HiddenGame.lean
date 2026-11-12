@@ -80,7 +80,6 @@ theorem forges_iff_verify_fresh {Of : SideOracle (Sf)}
   ⟨fun h => ⟨(hV.verify_eq G _ o.2.2.2).symm.trans h.verify_eq, h.fresh⟩,
     fun h => ⟨(hV.verify_eq G _ o.2.2.2).trans h.1, h.2⟩⟩
 
-open Classical in
 /-- **The game against the full reprogramming challenger is at most the game against the
 kept-only one plus the hidden-reads bound** (module docstring): for a proof system verifying by
 a program with at most `qv` queries, honest keys (`hs2`), and an adversary of width at most `w`

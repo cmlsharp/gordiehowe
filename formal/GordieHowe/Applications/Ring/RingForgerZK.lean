@@ -196,7 +196,6 @@ theorem simExtractionExpansion_mapOut_next_congr
     fun ans => (extractionProg (A.mapOut f).toTPKindAlg Psim Q Qs v').next padQuery ans
   rw [hp]
 
-omit [∀ j i, Nonempty ((P j).Challenge i)] in
 /-- **The extraction expansion of an adversary absorbed with a table, its output read through a
 map, does not depend on the table**: at two tables, two composed registers with the same claim
 and the same challenger's registers have the same next queries. -/
@@ -212,15 +211,31 @@ theorem simExtractionExpansion_absorbTab_next_congr [Inhabited X'] {Req₂ Resp�
     (h1 : advOut _ Psim Q v = advOut _ Psim Q v') (h2 : v.chal = v'.chal) :
     (simExtractionExpansion ((A₀.absorbTab F tab).mapOut f).toTPKindAlg Psim Q Qs).next v =
       (simExtractionExpansion ((A₀.absorbTab F tab').mapOut f).toTPKindAlg Psim Q Qs).next v' := by
-  have hp : extractionProg ((A₀.absorbTab F tab).mapOut f).toTPKindAlg Psim Q Qs v =
-      extractionProg ((A₀.absorbTab F tab').mapOut f).toTPKindAlg Psim Q Qs v' := by
-    unfold extractionProg finalAnswer assBytes finalAss simQueryInputs
-    rw [h1, h2]
-    rfl
-  change (fun ans => (extractionProg ((A₀.absorbTab F tab).mapOut f).toTPKindAlg Psim Q Qs v).next
-      padQuery ans) = fun ans =>
-    (extractionProg ((A₀.absorbTab F tab').mapOut f).toTPKindAlg Psim Q Qs v').next padQuery ans
-  rw [hp]
+  rw [← comapIn_ctrlExpansion, ← comapIn_ctrlExpansion]
+  change (ctrlExpansion _ Psim Q Qs).next (SPBCS.ctrlOf _ Psim Q v) =
+    (ctrlExpansion _ Psim Q Qs).next (SPBCS.ctrlOf _ Psim Q v')
+  unfold SPBCS.ctrlOf
+  rw [h1, h2]
+
+/-- **The extraction expansion at the reinserted table does not depend on the table**: for an
+adversary `A₀` absorbed through a two-relay `F` with any inner requests `Req` and replies `Resp`,
+the next queries of the extraction expansion at the registers `insertTabM … tab f r` and
+`insertTabM … tab' f r` agree (both are those of the control expansion at the claim and the
+challenger's registers, `comapIn_ctrlExpansion`). -/
+theorem simExtractionExpansion_insertTabM_next_congr [Inhabited X'] {Req Resp Req₂ Resp₂ : Type}
+    [Fintype Req] [DecidableEq Req] [Fintype Resp] [DecidableEq Resp] [Fintype Req₂]
+    [DecidableEq Req₂] [Fintype Resp₂] [DecidableEq Resp₂]
+    {shA₀ : AlgShape (Bits (queryBits k kN kS L)) (XOut k e) Req Resp} (A₀ : AdaptiveIAlg shA₀ O)
+    (F : TwoRelay Req Resp X' (M.Response Bf) Req₂ Resp₂) (tab tab' : A₀.OuterTab Req₂ Resp₂)
+    (f : O → Claim X M.NIProof)
+    (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response Bf) SC) (Q : ℕ)
+    (r : ExtReg A₀ (simExtChallenger Psim Q) Req₂ Resp₂) :
+    (simExtractionExpansion ((A₀.absorbTab F tab).mapOut f).toTPKindAlg Psim Q Qs).next
+        (Quantum.AdaptiveIAlg.insertTabM A₀ (simExtChallenger Psim Q) F tab f r) =
+      (simExtractionExpansion ((A₀.absorbTab F tab').mapOut f).toTPKindAlg Psim Q Qs).next
+        (Quantum.AdaptiveIAlg.insertTabM A₀ (simExtChallenger Psim Q) F tab' f r) := by
+  rw [← comapIn_ctrlExpansion, ← comapIn_ctrlExpansion]
+  rfl
 
 end SPBCS
 
@@ -232,11 +247,12 @@ open IOP.SPTerm Signature
 
 section ZK
 
-variable {k kN kS L e N n t : ℕ} {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.Msg] [DecidableEq TB.Msg]
-  [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins]
-  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N n t : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type} [Fintype TS.PK]
+  [DecidableEq TS.PK]
+  [Fintype RMsg] [DecidableEq RMsg]
+  [Fintype TS.Pub] [DecidableEq TS.Pub] [Fintype TS.KeyCoins]
+  [DecidableEq TS.KeyCoins]
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TS RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -251,7 +267,7 @@ variable {k kN kS L e N n t : ℕ} {TB : BaseTypes} [Fintype TB.PK] [DecidableEq
   (A : InsiderAdversary (ofBase B (Ring.spbcsComapProofSystem M Λ E hb honest stmt check input)
     adm) n (OracleView.queriesOnly (Bits (queryBits k kN kS L)) (XOut k e)) t)
   [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig] [Nonempty M.NIProof] [NeZero n]
-  [ert : EmptyRingTest stmt]
+  (ert : EmptyRingTest stmt)
 
 local notation "𝒫" => Ring.spbcsComapProofSystem M Λ E hb honest stmt check input
 
@@ -261,7 +277,7 @@ local notation "ZAdv" => QueryBoundedAdversary (Bits (queryBits k kN kS L)) (XOu
   (KeyRing (RingScheme.PK (ofBase B 𝒫 adm)) N × RingScheme.Msg (ofBase B 𝒫 adm) ×
     RingScheme.Sig (ofBase B 𝒫 adm)) t
 
-variable [Fintype TB.BSig] [DecidableEq TB.BSig]
+variable [Fintype TS.BSig] [DecidableEq TS.BSig]
 
 omit [Nonempty B.BSig] ert [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **One term of `zkForgerSuccess` as an extraction run of the table form**: the extraction run
@@ -412,7 +428,9 @@ theorem simProb_extAdv_seAlg_eq_zk (refuses : KeyRing B.PK N → ℕ → B.Msg �
         (simExtChallenger Psim Q) (MURequest (SignOracle.ring B) n) (MUResponse B.core))) =
       zkExp (A.at keys) refuses pubOf (fun i => B.pk (keys i)) Q a ds Psim := by
     unfold zkExp
-    congr 1
+    exact congrArg Expansion.mk (funext fun r =>
+      SPBCS.simExtractionExpansion_insertTabM_next_congr Qs ((A.at keys).alg a)
+        (seTwo B (fun i => B.pk (keys i)) refuses pubOf ds) _ _ claimOfOut Psim Q r)
   have hd : Quantum.AdaptiveIAlg.dropTabM ((A.at keys).alg a) (simExtChallenger Psim Q)
       (seTwo B (fun i => B.pk (keys i)) refuses pubOf ds) (fun _ => keyReply B keys) claimOfOut
       (((seAlg A refuses pubOf keys Q a ds).toTPKindAlg.composeBothOut
@@ -478,9 +496,9 @@ def ZKCand (𝒜 : ZAdv) (Ext : CausalExtractor P τ X₀ WitK) (pks : Fin n →
     ∀ H, B.bverify H f.1 f.2.1 f.2.2 = true ∧
       ∃ i, pks i = f.1 ∧ UnforgeRequest.corrupt i ∉ (requests (GordieHowe.extLogs r)).take Q
 
-variable [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+variable [Fintype TS.Coins] [DecidableEq TS.Coins] [Nonempty TS.Coins]
 
-variable [Nonempty TB.KeyCoins]
+variable [Nonempty TS.KeyCoins]
 
 variable (B) in
 /-- **The ring statement of a forgery** `(R, m, (y, π))`: `(R, m, y)`. -/
@@ -545,8 +563,8 @@ def zkReadout {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] {PS : 
   ((zkCands (stmt := stmt) (wit := wit) 𝒜 Ext o.1.out o.2).find?
     (zkCandTest 𝒜 pks Q o.1.out)).getD f₀
 
-omit [Nonempty B.BSig] ert [Fintype R] [DecidableEq R] [Nonempty R] [Nonempty TB.KeyCoins]
-  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
+omit [Nonempty B.BSig] ert [Fintype R] [DecidableEq R] [Nonempty R] [Nonempty TS.KeyCoins]
+  [Fintype TS.Coins] [DecidableEq TS.Coins] [Nonempty TS.Coins] in
 /-- **The forger's win in the extraction run gives a candidate.** -/
 theorem zkCand_of_forgerWinsQ (𝒜 : ZAdv)
     (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub)
@@ -566,8 +584,8 @@ theorem zkCand_of_forgerWinsQ (𝒜 : ZAdv)
   exact ⟨i, hi, fun hm => hc (corrupted_corruptHist.2 hm)⟩
 
 omit [Nonempty B.BSig] [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty M.NIProof] ert [Fintype R]
-  [DecidableEq R] [Nonempty R] [Fintype TB.BSig] [DecidableEq TB.BSig] [Nonempty TB.KeyCoins]
-  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
+  [DecidableEq R] [Nonempty R] [Fintype TS.BSig] [DecidableEq TS.BSig] [Nonempty TS.KeyCoins]
+  [Fintype TS.Coins] [DecidableEq TS.Coins] [Nonempty TS.Coins] in
 /-- **The readout is a forgery for the multi-user requests of the forger**: when there is a
 candidate, for multi-user requests `mrs` that are `publicKey 0` or corruptions among the first
 `Q` logged requests (`zk_bridge_requests`), the readout is a forgery of MU-EUF-CMA^corr for
@@ -617,9 +635,9 @@ noncomputable def zkAux (Q : ℕ) (pks : Fin n → B.PK) :
     PMF ((A (pks, ())).Aux × (Fin Q → B.Coins)) :=
   (A (pks, ())).aux.bind fun a => (PMF.uniformOfFintype (Fin Q → B.Coins)).map fun ds => (a, ds)
 
-omit ert [Fintype TB.BSig] [DecidableEq TB.BSig] [DecidableEq TB.Coins] [Nonempty B.Msg]
+omit ert [Fintype TS.BSig] [DecidableEq TS.BSig] [DecidableEq TS.Coins] [Nonempty B.Msg]
   [Nonempty B.Pub] [Nonempty B.BSig] [Nonempty M.NIProof] [NeZero n] [DecidableEq X₀] [Fintype R]
-  [DecidableEq R] [Nonempty R] [Nonempty TB.KeyCoins] in
+  [DecidableEq R] [Nonempty R] [Nonempty TS.KeyCoins] in
 /-- **The auxiliary input is the product of the adversary's and the uniform coins.** -/
 theorem zkAux_apply (Q : ℕ) (pks : Fin n → B.PK) (p : (A (pks, ())).Aux × (Fin Q → B.Coins)) :
     zkAux B A Q pks p = (A (pks, ())).aux p.1 * PMF.uniformOfFintype (Fin Q → B.Coins) p.2 := by
@@ -770,11 +788,12 @@ end ZK
 
 section ZKBound
 
-variable {k kN kS L e N n t : ℕ} {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.Msg] [DecidableEq TB.Msg]
-  [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins]
-  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N n t : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type} [Fintype TS.PK]
+  [DecidableEq TS.PK]
+  [Fintype RMsg] [DecidableEq RMsg]
+  [Fintype TS.Pub] [DecidableEq TS.Pub] [Fintype TS.KeyCoins]
+  [DecidableEq TS.KeyCoins]
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TS RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -790,7 +809,7 @@ variable {k kN kS L e N n t : ℕ} {TB : BaseTypes} [Fintype TB.PK] [DecidableEq
   {wit : RingStmt B → WitK → RingWit B}
   (A : InsiderAdversary (ofBase B (Ring.spbcsComapProofSystem M Λ E hb honest stmt check input)
     adm) n (OracleView.queriesOnly (Bits (queryBits k kN kS L)) (XOut k e)) t)
-  [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig] [ert : EmptyRingTest stmt]
+  [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig] (ert : EmptyRingTest stmt)
 
 local notation "𝒫" => Ring.spbcsComapProofSystem M Λ E hb honest stmt check input
 
@@ -810,7 +829,8 @@ abbrev zkPsim (VE : M.ViewEncoder E Qs) {Pub : Type} (pub : X₀ → Pub)
     (Sim : CausalJointSimulator VE.MV Pub) (T : M.Preimages) :
     NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) (RelayStmt B 𝒫 adm n)
       (M.Response b) (SaltedCoins (FiatShamirSalt kS) (M.JointSimCoins VE.toViewRead Sim T)) :=
-  (seSim (Λ := Λ) (hb := hb) (honest := honest) (stmt := stmt) (check := check) (input := input)
+  (seSim (ert := ert) (Λ := Λ) (hb := hb) (honest := honest) (stmt := stmt) (check := check) (input
+      := input)
     VE pub Sim T).comap (stmt ∘ Prod.fst)
 
 variable (Λ hb honest stmt check input adm n) in
@@ -820,11 +840,12 @@ schedule bound `S`, `w`, `P'` (`GameAdversary.ScheduleLE`): the bridge's request
 `kq = kqOf Mg nr b b + Q · q`. -/
 noncomputable def zkQ' (VE : M.ViewEncoder E Qs) {Pub : Type} (pub : X₀ → Pub)
     (Sim : CausalJointSimulator VE.MV Pub) (T : M.Preimages) (Q S w P' : ℕ) : ℕ :=
-  S * ((zkPsim n Λ hb honest stmt check input adm VE pub Sim T).q + w) + w * P' +
-    (kqOf Mg nr b b + Q * (zkPsim n Λ hb honest stmt check input adm VE pub Sim T).q) + 1
+  S * ((zkPsim (ert := ert) n Λ hb honest stmt check input adm VE pub Sim T).q + w) + w * P' +
+    (kqOf Mg nr b b + Q * (zkPsim (ert := ert) n Λ hb honest stmt check input adm VE pub Sim
+        T).q) + 1
 
-variable [Fintype TB.BSig] [DecidableEq TB.BSig] [Nonempty TB.KeyCoins] [Fintype TB.Coins]
-  [DecidableEq TB.Coins] [Nonempty TB.Coins]
+variable [Fintype TS.BSig] [DecidableEq TS.BSig] [Nonempty TS.KeyCoins] [Fintype TS.Coins]
+  [DecidableEq TS.Coins] [Nonempty TS.Coins]
 
 omit [Nonempty B.BSig] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The zero-knowledge route's term is bounded by MU-EUF-CMA^corr**: for an oracle-free base
@@ -836,55 +857,57 @@ theorem zkForgerTerm_le_muEufProb [NeZero n] [Nonempty M.NIProof] (hB : B.Oracle
     (VE : M.ViewEncoder E Qs) {Pub : Type} (pub : X₀ → Pub)
     (Sim : CausalJointSimulator VE.MV Pub) (T : M.Preimages) (Ext : CausalExtractor P τ X₀ WitK)
     (Q : ℕ) (f₀ : B.PK × B.BMsg × B.BSig) {S w P' : ℕ} (hS : GameAdversary.ScheduleLE A S w P') :
-    zkForgerTerm A wit refuses pubOf VE pub Sim T Ext Q ≤
+    zkForgerTerm (ert := ert) A wit refuses pubOf VE pub Sim T Ext Q ≤
       muEufProb (zkForger A (wit := wit) refuses pubOf Q
-          (zkPsim n Λ hb honest stmt check input adm VE pub Sim T) Ext (kqOf Mg nr b b) f₀)
-        (zkQ' n Λ hb honest stmt check input adm VE pub Sim T Q S w P') := by
+          (zkPsim (ert := ert) n Λ hb honest stmt check input adm VE pub Sim T) Ext (kqOf Mg nr b
+              b) f₀)
+        (zkQ' (ert := ert) n Λ hb honest stmt check input adm VE pub Sim T Q S w P') := by
   have hQ : ∀ pks (p : (A (pks, ())).Aux × (Fin Q → B.Coins)),
       (((((A (pks, ())).alg p.1).absorbTab (seTwo B pks refuses pubOf p.2)
         (tab₀ ((A (pks, ())).alg p.1))).toTPKindAlg.composeBothOut
-          (simExtChallenger (zkPsim n Λ hb honest stmt check input adm VE pub Sim T) Q) id).depth) +
-        (kqOf Mg nr b b + Q * (zkPsim n Λ hb honest stmt check input adm VE pub Sim T).q) + 1 ≤
-        zkQ' n Λ hb honest stmt check input adm VE pub Sim T Q S w P' := by
+          (simExtChallenger (zkPsim (ert := ert) n Λ hb honest stmt check input adm VE pub Sim T)
+              Q) id).depth) +
+        (kqOf Mg nr b b + Q * (zkPsim (ert := ert) n Λ hb honest stmt check input adm VE pub Sim
+            T).q) + 1 ≤
+        zkQ' (ert := ert) n Λ hb honest stmt check input adm VE pub Sim T Q S w P' := by
     intro pks p
     erw [KindAlg.composeBothOut_depth]
     rw [zkQ']
     change ((A (pks, ())).alg p.1).slots *
-        ((zkPsim n Λ hb honest stmt check input adm VE pub Sim T).q +
+        ((zkPsim (ert := ert) n Λ hb honest stmt check input adm VE pub Sim T).q +
           ((A (pks, ())).alg p.1).width) +
       ((A (pks, ())).alg p.1).width * ((A (pks, ())).alg p.1).post + _ + 1 ≤ _
     have h1 := hS.slots_le (pks, ()) p.1
     have h2 := hS.width_le (pks, ()) p.1
     have h3 := hS.post_le (pks, ()) p.1
     have := Nat.mul_le_mul h1
-      (Nat.add_le_add_left h2 (zkPsim n Λ hb honest stmt check input adm VE pub Sim T).q)
+      (Nat.add_le_add_left h2 (zkPsim (ert := ert) n Λ hb honest stmt check input adm VE pub Sim
+          T).q)
     have := Nat.mul_le_mul h2 h3
     omega
   have hslots : ∀ pks (a : (A (pks, ())).Aux), ((A (pks, ())).alg a).slots ≤
-      zkQ' n Λ hb honest stmt check input adm VE pub Sim T Q S w P' := by
+      zkQ' (ert := ert) n Λ hb honest stmt check input adm VE pub Sim T Q S w P' := by
     intro pks a
     have h1 := hS.slots_le (pks, ()) a
     have h2 := hS.width_le (pks, ()) a
     have hw : 1 ≤ w := le_trans ((A (pks, ())).alg a).width_pos h2
     rw [zkQ']
-    have : S ≤ S * ((zkPsim n Λ hb honest stmt check input adm VE pub Sim T).q + w) :=
+    have : S ≤ S * ((zkPsim (ert := ert) n Λ hb honest stmt check input adm VE pub Sim T).q + w) :=
       Nat.le_mul_of_pos_right _ (by omega)
     omega
   rw [zkForgerTerm, dif_pos ⟨inferInstance, inferInstance⟩]
   have h := sum_simProb_extAdv_le_muEufProb A (wit := wit) hB refuses pubOf Q
-    (zkPsim n Λ hb honest stmt check input adm VE pub Sim T) Ext (kqOf Mg nr b b) f₀ hQ
+    (zkPsim (ert := ert) n Λ hb honest stmt check input adm VE pub Sim T) Ext (kqOf Mg nr b b) f₀ hQ
     hslots
   exact h
 
-open Classical in
 /-- **BKM06 Definition 7 for the ring signature compiled by spBCS at a program's statements, from
 zero knowledge, simulation extraction and MU-EUF-CMA^corr**:
 `insiderForgeProb_le_zk` with `zkForgerTerm` bounded by the success probability of the explicit
 multi-user forger `zkForger` (`zkForgerTerm_le_muEufProb`), for an adversary with the schedule
 bound `S`, `w`, `P'` (`hS`) and `zkQ'` multi-user requests. The forger's multi-user requests are
 `publicKey 0` or corruptions among the adversary's first `Q` requests (`zk_bridge_requests`). -/
-@[headline]
-theorem insiderForgeProb_le_zk_muEufProb [NeZero n] [Nonempty M.NIProof] (hk : 0 < k)
+theorem insiderForgeProb_le_zk_muEufProb_of [NeZero n] [Nonempty M.NIProof] [NeZero k]
     (hB : B.OracleFree)
     {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop} {pubOf : B.Coins → B.Pub}
     (hpub : B.PubOfCoins pubOf) (href : B.RefusalOfCoins refuses) {εc : ℝ≥0∞}
@@ -894,11 +917,12 @@ theorem insiderForgeProb_le_zk_muEufProb [NeZero n] [Nonempty M.NIProof] (hk : 0
     (hvzk : CausalHVZK VE.MV relH honest pub Sim δ)
     {Ext : CausalExtractor P τ X₀ WitK} {St : CausalStateFn P τ X₀}
     {ε : ChIdx P τ → NNReal} (hrbr : CausalRBRKnowledgeSound rel Vr Ext St ε)
-    (Q : ℕ) (f₀ : B.PK × B.BMsg × B.BSig) {S w P' : ℕ} (hS : GameAdversary.ScheduleLE A S w P') :
+    (Q : ℕ) (f₀ : B.MUForgery) {S w P' : ℕ} (hS : GameAdversary.ScheduleLE A S w P') :
     insiderForgeProb A Q ≤
       muEufProb (zkForger A (wit := wit) refuses pubOf Q
-          (zkPsim n Λ hb honest stmt check input adm VE pub Sim T) Ext (kqOf Mg nr b b) f₀)
-        (zkQ' n Λ hb honest stmt check input adm VE pub Sim T Q S w P') +
+          (zkPsim (ert := ert) n Λ hb honest stmt check input adm VE pub Sim T) Ext (kqOf Mg nr b
+              b) f₀)
+        (zkQ' (ert := ert) n Λ hb honest stmt check input adm VE pub Sim T Q S w P') +
         ENNReal.ofReal (M.zkError δ t Q) +
         M.simExtractionError (kqOf Mg nr b b) (maxError ε)
           (M.niJointSimulatorProg Λ VE.toViewRead b pub Sim T).q t Q +
@@ -906,18 +930,18 @@ theorem insiderForgeProb_le_zk_muEufProb [NeZero n] [Nonempty M.NIProof] (hk : 0
           (t + Q * (ofBase B 𝒫 adm).q +
             kqOf Mg nr b b) M.senc.digestsPerInput Mg.nJ (maxError ε) +
         2 * Q * εc := by
-  refine (insiderForgeProb_le_zk A hk hB hpub href hcorr hz VE pub Sim T hvzk hrbr Q).trans ?_
+  refine (insiderForgeProb_le_zk (ert := ert) A hB hpub href hcorr hz VE pub Sim T hvzk hrbr
+      Q).trans ?_
   gcongr
-  exact zkForgerTerm_le_muEufProb A hB refuses pubOf VE pub Sim T Ext Q f₀ hS
+  exact zkForgerTerm_le_muEufProb (ert := ert) A hB refuses pubOf VE pub Sim T Ext Q f₀ hS
 
 
-open Classical in
 /-- **BKM06 Definition 7 from zero knowledge, simulation extraction and MU-EUF-CMA^corr, for a base
 signer whose refusals are bounded per key**: `insiderForgeProb_le_zk_refuseAt` with `zkForgerTerm`
 bounded by the success probability of the explicit multi-user forger `zkForger` at the empty refusal
 predicate (`zkForgerTerm_le_muEufProb`), for an adversary with the schedule bound `S`, `w`, `P'`
 (`hS`) and `zkQ'` multi-user requests. -/
-theorem insiderForgeProb_le_zk_muEufProb_refuseAt [NeZero n] [Nonempty M.NIProof] (hk : 0 < k)
+theorem insiderForgeProb_le_zk_muEufProb_refuseAt [NeZero n] [Nonempty M.NIProof] [NeZero k]
     (hB : B.OracleFree)
     {pubOf : B.Coins → B.Pub} (hpub : B.PubOfCoins pubOf) {ρ : ℝ≥0∞} (hρ : B.RefuseAtWithin adm ρ)
     {εc : ℝ≥0∞}
@@ -930,8 +954,9 @@ theorem insiderForgeProb_le_zk_muEufProb_refuseAt [NeZero n] [Nonempty M.NIProof
     (Q : ℕ) (f₀ : B.PK × B.BMsg × B.BSig) {S w P' : ℕ} (hS : GameAdversary.ScheduleLE A S w P') :
     insiderForgeProb A Q ≤
       muEufProb (zkForger A (wit := wit) (fun _ _ _ _ => False) pubOf Q
-          (zkPsim n Λ hb honest stmt check input adm VE pub Sim T) Ext (kqOf Mg nr b b) f₀)
-        (zkQ' n Λ hb honest stmt check input adm VE pub Sim T Q S w P') +
+          (zkPsim (ert := ert) n Λ hb honest stmt check input adm VE pub Sim T) Ext (kqOf Mg nr b
+              b) f₀)
+        (zkQ' (ert := ert) n Λ hb honest stmt check input adm VE pub Sim T Q S w P') +
         ENNReal.ofReal (M.zkError δ t Q) +
         M.simExtractionError (kqOf Mg nr b b) (maxError ε)
           (M.niJointSimulatorProg Λ VE.toViewRead b pub Sim T).q t Q +
@@ -939,17 +964,18 @@ theorem insiderForgeProb_le_zk_muEufProb_refuseAt [NeZero n] [Nonempty M.NIProof
           (t + Q * (ofBase B 𝒫 adm).q +
             kqOf Mg nr b b) M.senc.digestsPerInput Mg.nJ (maxError ε) +
         2 * Q * εc + Q * ρ := by
-  refine (insiderForgeProb_le_zk_refuseAt A hk hB hpub hρ hcorr hz VE pub Sim T hvzk hrbr Q).trans ?_
+  refine (insiderForgeProb_le_zk_refuseAt (ert := ert) A hB hpub hρ hcorr hz VE pub Sim T hvzk hrbr
+      Q).trans ?_
   gcongr
-  exact zkForgerTerm_le_muEufProb A hB (fun _ _ _ _ => False) pubOf VE pub Sim T Ext Q f₀ hS
+  exact zkForgerTerm_le_muEufProb (ert := ert) A hB (fun _ _ _ _ =>
+      False) pubOf VE pub Sim T Ext Q f₀ hS
 
-open Classical in
 /-- **BKM06 Definition 7 from zero knowledge, simulation extraction and MU-EUF-CMA^corr, for a base
 signer whose refusal rate is bounded on average over the honest key coins**:
 `insiderForgeProb_le_zk_refuseAvg` with `zkForgerTerm` bounded by the success probability of the
 explicit multi-user forger `zkForger` at the empty refusal predicate (`zkForgerTerm_le_muEufProb`),
 for an adversary with the schedule bound `S`, `w`, `P'` (`hS`) and `zkQ'` multi-user requests. -/
-theorem insiderForgeProb_le_zk_muEufProb_refuseAvg [NeZero n] [Nonempty M.NIProof] (hk : 0 < k)
+theorem insiderForgeProb_le_zk_muEufProb_refuseAvg_of [NeZero n] [Nonempty M.NIProof] [NeZero k]
     (hB : B.OracleFree)
     {pubOf : B.Coins → B.Pub} (hpub : B.PubOfCoins pubOf) {ρ : ℝ≥0∞} (hρ : B.RefuseAvgWithin adm ρ)
     {εc : ℝ≥0∞}
@@ -962,8 +988,9 @@ theorem insiderForgeProb_le_zk_muEufProb_refuseAvg [NeZero n] [Nonempty M.NIProo
     (Q : ℕ) (f₀ : B.PK × B.BMsg × B.BSig) {S w P' : ℕ} (hS : GameAdversary.ScheduleLE A S w P') :
     insiderForgeProb A Q ≤
       muEufProb (zkForger A (wit := wit) (fun _ _ _ _ => False) pubOf Q
-          (zkPsim n Λ hb honest stmt check input adm VE pub Sim T) Ext (kqOf Mg nr b b) f₀)
-        (zkQ' n Λ hb honest stmt check input adm VE pub Sim T Q S w P') +
+          (zkPsim (ert := ert) n Λ hb honest stmt check input adm VE pub Sim T) Ext (kqOf Mg nr b
+              b) f₀)
+        (zkQ' (ert := ert) n Λ hb honest stmt check input adm VE pub Sim T Q S w P') +
         ENNReal.ofReal (M.zkError δ t Q) +
         M.simExtractionError (kqOf Mg nr b b) (maxError ε)
           (M.niJointSimulatorProg Λ VE.toViewRead b pub Sim T).q t Q +
@@ -971,9 +998,148 @@ theorem insiderForgeProb_le_zk_muEufProb_refuseAvg [NeZero n] [Nonempty M.NIProo
           (t + Q * (ofBase B 𝒫 adm).q +
             kqOf Mg nr b b) M.senc.digestsPerInput Mg.nJ (maxError ε) +
         2 * Q * εc + Q * (n * ρ) := by
-  refine (insiderForgeProb_le_zk_refuseAvg A hk hB hpub hρ hcorr hz VE pub Sim T hvzk hrbr Q).trans ?_
+  refine (insiderForgeProb_le_zk_refuseAvg (ert := ert) A hB hpub hρ hcorr hz VE pub Sim T hvzk hrbr
+      Q).trans ?_
   gcongr
-  exact zkForgerTerm_le_muEufProb A hB (fun _ _ _ _ => False) pubOf VE pub Sim T Ext Q f₀ hS
+  exact zkForgerTerm_le_muEufProb (ert := ert) A hB (fun _ _ _ _ =>
+      False) pubOf VE pub Sim T Ext Q f₀ hS
+
+/-! ### The zero-knowledge route's bundles and named objects -/
+
+/-- **No refusal**: the refusal predicate that never holds (the forger of a base signer whose
+refusals are bounded in probability, not predicted). -/
+def _root_.GordieHowe.RingSignature.BaseSigner.noRefusal {X Y : Type} {N : ℕ}
+    {T : Signature.SchemeTypes} {RMsg : Type} (B : BaseSigner X Y N T RMsg) :
+    KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop :=
+  fun _ _ _ _ => False
+
+/-- **The unit public value** of signing coins (the public-value map of a base signer with
+`Pub = Unit`). -/
+def _root_.GordieHowe.RingSignature.unitPub {C : Type} : C → Unit :=
+  fun _ => ()
+
+variable (M E Qs honest relH) in
+/-- **An honest-verifier zero-knowledge simulator of the compiled argument** for `relH` at error
+`δ` (`IOP.CausalHVZK`, the paper's `def:zk` for composites): the view encoder, the joint simulator
+of the public part `pub` of a statement, and the preimage samplers of the challenge samplers.
+`Pub` and `pub` are parameters. -/
+structure _root_.GordieHowe.SPBCS.RingSimulator {Pub : Type} (pub : X₀ → Pub) (δ : NNReal) where
+  /-- The view encoder. -/
+  VE : M.ViewEncoder E Qs
+  /-- The joint simulator. -/
+  Sim : CausalJointSimulator VE.MV Pub
+  /-- The preimage samplers. -/
+  T : M.Preimages
+  /-- Honest-verifier zero knowledge at error `δ`. -/
+  hvzk : CausalHVZK VE.MV relH honest pub Sim δ
+
+variable (M E Qs honest relH rel stmt) in
+/-- **The proof-system side of the zero-knowledge route**: the zero-knowledge simulator
+`simulator`, a round-by-round extractor `extractor` for `rel`, the decided
+test of the statements of the empty ring at
+`stmt` (the route's simulator answers a request on the empty ring without reading it), and the
+forgery `forgery₀` the multi-user forger outputs where extraction fails. -/
+structure RingArgument {Pub : Type} (pub : X₀ → Pub) (δ : NNReal) where
+  /-- The zero-knowledge simulator. -/
+  simulator : SPBCS.RingSimulator M E Qs honest relH pub δ
+  /-- The round-by-round extractor. -/
+  extractor : GordieHowe.IOP.RBRKnowledgeExtractor rel Vr
+  /-- The test of the statements of the empty ring. -/
+  emptyTest : EmptyRingTest stmt
+  /-- The fallback forgery. -/
+  forgery₀ : B.MUForgery
+
+/-- **The multi-user forger of the zero-knowledge route** (`zkForger` at the simulator `zkPsim`
+of `G.simulator` with `G`'s test of the empty ring, the extractor `G.extractor.Ext` with
+the decoding `wit`, and
+the fallback `G.forgery₀`). -/
+noncomputable abbrev zkRouteForger [NeZero n] [Nonempty M.NIProof]
+    (wit : RingStmt B → WitK → RingWit B) {Pub : Type}
+    {pub : X₀ → Pub} {δ : NNReal} (G : RingArgument M E Qs honest stmt relH rel pub δ)
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub) (Q : ℕ) :
+    MUAdversary (SignOracle.ring B) n (OracleView.queriesOnly (Bits (queryBits k kN kS L))
+      (XOut k e)) 0 :=
+  zkForger A (wit := wit) refuses pubOf Q
+    (zkPsim (ert := G.emptyTest) n Λ hb honest stmt check input adm G.simulator.VE pub
+      G.simulator.Sim G.simulator.T)
+    G.extractor.Ext (kqOf Mg nr b b) G.forgery₀
+
+/-- **The multi-user requests of the zero-knowledge route's forger** (`zkQ'`). The adversary
+argument fixes the proof system and the query budget and is otherwise not read. -/
+noncomputable abbrev zkRouteRequests [NeZero n] [Nonempty M.NIProof]
+    (_A : InsiderAdversary
+      (ofBase B (Ring.spbcsComapProofSystem M Λ E hb honest stmt check input) adm) n
+      (OracleView.queriesOnly (Bits (queryBits k kN kS L)) (XOut k e)) t)
+    {Pub : Type} {pub : X₀ → Pub} {δ : NNReal}
+    (G : RingArgument M E Qs honest stmt relH rel pub δ) (Q S w P' : ℕ) : ℕ :=
+  zkQ' (ert := G.emptyTest) n Λ hb honest stmt check input adm G.simulator.VE pub
+    G.simulator.Sim G.simulator.T Q S w P'
+
+/-- **The zero-knowledge error of the route** (`SPBCS.zkError` at `t` queries and `Q`
+requests). -/
+noncomputable abbrev ringZkError (M : SPBCS Mg P X₀ k kN kS L e) (δ : NNReal) (t Q : ℕ) : ENNReal :=
+  ENNReal.ofReal (M.zkError δ t Q)
+
+/-- **The simulation-extraction error of the route** (`SPBCS.simExtractionError` at the joint
+simulator's query count, the extractor's largest error, the adversary's query budget `t` and `Q`
+requests). The adversary argument fixes the proof system and the query budget and is otherwise not
+read. -/
+noncomputable abbrev ringSimExtError [NeZero n] [Nonempty M.NIProof]
+    (_A : InsiderAdversary
+      (ofBase B (Ring.spbcsComapProofSystem M Λ E hb honest stmt check input) adm) n
+      (OracleView.queriesOnly (Bits (queryBits k kN kS L)) (XOut k e)) t)
+    {Pub : Type} {pub : X₀ → Pub} {δ : NNReal}
+    (G : RingArgument M E Qs honest stmt relH rel pub δ) (Q : ℕ) : ENNReal :=
+  M.simExtractionError (kqOf Mg nr b b) (maxError G.extractor.ε)
+    (M.niJointSimulatorProg Λ G.simulator.VE.toViewRead b pub G.simulator.Sim G.simulator.T).q t Q
+
+omit [Nonempty B.BSig] in
+/-- **BKM06 Definition 7 for the ring signature compiled by spBCS at a program's statements, from
+zero knowledge, simulation extraction and MU-EUF-CMA^corr** (`insiderForgeProb_le_zk_muEufProb_of`
+over the route's bundle `G`): the forgery probability is at most the success probability of the
+multi-user forger `zkRouteForger` with `zkRouteRequests` requests, the zero-knowledge and
+simulation-extraction errors, spBCS's knowledge error at `t + Q · q` queries (`SPBCS.ksError`) and
+`2 Q εc`, for an adversary with the schedule bound `S`, `w`, `P'` (`hS`). -/
+@[headline]
+theorem insiderForgeProb_le_zk_muEufProb [NeZero n] [Nonempty M.NIProof] [NeZero k]
+    (hB : B.OracleFree)
+    {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop} {pubOf : B.Coins → B.Pub}
+    (hpub : B.PubOfCoins pubOf) (href : B.RefusalOfCoins refuses) {εc : ENNReal}
+    (hcorr : B.CorrectWithin εc) (hz : ZKRingHyps B adm stmt check input fw enc relH rel wit)
+    {Pub : Type} {pub : X₀ → Pub} {δ : NNReal} (G : RingArgument M E Qs honest stmt relH rel pub δ)
+    (Q : ℕ) {S w P' : ℕ} (hS : GameAdversary.ScheduleLE A S w P') :
+    insiderForgeProb A Q ≤
+      muEufProb (zkRouteForger A wit G refuses pubOf Q) (zkRouteRequests A G Q S w P') +
+        ringZkError M δ t Q + ringSimExtError A G Q +
+        M.ksError b b G.extractor.ε (t + Q * (ofBase B 𝒫 adm).q) + 2 * Q * εc := by
+  have : Nonempty B.BSig := ⟨G.forgery₀.2.2⟩
+  have h := insiderForgeProb_le_zk_muEufProb_of (ert := G.emptyTest) A hB hpub href hcorr
+    hz G.simulator.VE
+    pub G.simulator.Sim G.simulator.T G.simulator.hvzk G.extractor.sound Q G.forgery₀ hS
+  refine h.trans_eq ?_
+  rfl
+
+omit [Nonempty B.BSig] in
+/-- **BKM06 Definition 7 from zero knowledge, simulation extraction and MU-EUF-CMA^corr, for a
+base signer whose refusals are bounded on average over the key coins**
+(`insiderForgeProb_le_zk_muEufProb_refuseAvg_of` over the route's bundle `G`): the multi-user
+forger at the empty refusal predicate (`BaseSigner.noRefusal`), at the cost `Q · n · ρ`. -/
+theorem insiderForgeProb_le_zk_muEufProb_refuseAvg [NeZero n] [Nonempty M.NIProof] [NeZero k]
+    (hB : B.OracleFree) {pubOf : B.Coins → B.Pub} (hpub : B.PubOfCoins pubOf) {ρ : ENNReal}
+    (hρ : B.RefuseAvgWithin adm ρ) {εc : ENNReal} (hcorr : B.CorrectWithin εc)
+    (hz : ZKRingHyps B adm stmt check input fw enc relH rel wit)
+    {Pub : Type} {pub : X₀ → Pub} {δ : NNReal} (G : RingArgument M E Qs honest stmt relH rel pub δ)
+    (Q : ℕ) {S w P' : ℕ} (hS : GameAdversary.ScheduleLE A S w P') :
+    insiderForgeProb A Q ≤
+      muEufProb (zkRouteForger A wit G B.noRefusal pubOf Q) (zkRouteRequests A G Q S w P') +
+        ringZkError M δ t Q + ringSimExtError A G Q +
+        M.ksError b b G.extractor.ε (t + Q * (ofBase B 𝒫 adm).q) + 2 * Q * εc + Q * (n * ρ) := by
+  have : Nonempty B.BSig := ⟨G.forgery₀.2.2⟩
+  have h := insiderForgeProb_le_zk_muEufProb_refuseAvg_of (ert := G.emptyTest) A hB hpub hρ hcorr hz
+    G.simulator.VE pub G.simulator.Sim G.simulator.T G.simulator.hvzk G.extractor.sound Q
+    G.forgery₀ hS
+  refine h.trans_eq ?_
+  rfl
 
 end ZKBound
 
@@ -981,8 +1147,8 @@ end ZKBound
 
 section Identity
 
-variable {k kN kS L e N n t : ℕ} {TB : BaseTypes}
-  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N n t : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TS RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -994,12 +1160,11 @@ variable {k kN kS L e N n t : ℕ} {TB : BaseTypes}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm]
   [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig]
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
-  [Nonempty TB.Coins]
+variable [Fintype TS.PK] [DecidableEq TS.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype TS.BSig]
+  [DecidableEq TS.BSig] [Fintype TS.Pub] [DecidableEq TS.Pub] [Fintype TS.KeyCoins]
+  [DecidableEq TS.KeyCoins] [Nonempty TS.KeyCoins] [Fintype TS.Coins] [DecidableEq TS.Coins]
+  [Nonempty TS.Coins]
 
-open Classical in
 /-- **BKM06 Definition 7 for the ring signature compiled by spBCS (`spbcsProofSystem`), from zero
 knowledge, simulation extraction and MU-EUF-CMA^corr**: `insiderForgeProb_le_zk_muEufProb` at the
 identity reading of ring statements (`zkRingHyps_id`), the composite over ring statements
@@ -1007,11 +1172,10 @@ honest-verifier zero knowledge and round-by-round knowledge sound for the ring r
 adversary with the schedule bound `S`, `w`, `P'` (`hS`) and `zkQ'` multi-user requests. The forger's
 multi-user requests are `publicKey 0` or corruptions among the adversary's first `Q` requests
 (`zk_bridge_requests`). -/
-@[headline]
-theorem insiderForgeProb_le_zk_muEufProb_spbcs [NeZero n] [Nonempty M.NIProof] (hk : 0 < k)
+theorem insiderForgeProb_le_zk_muEufProb_spbcs_of [NeZero n] [Nonempty M.NIProof] [NeZero k]
     (hB : B.OracleFree)
     {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop} {pubOf : B.Coins → B.Pub}
-    (hpub : B.PubOfCoins pubOf) (href : B.RefusalOfCoins refuses) {εc : ℝ≥0∞}
+    (hpub : B.PubOfCoins pubOf) (href : B.RefusalOfCoins refuses) {εc : ENNReal}
     (hcorr : B.CorrectWithin εc) (VE : M.ViewEncoder E Qs) {Pub : Type} (pub : RingStmt B → Pub)
     (Sim : CausalJointSimulator VE.MV Pub) (T : M.Preimages) {δ : NNReal}
     (hvzk : CausalHVZK VE.MV (ringRel B adm 0) honest pub Sim δ)
@@ -1019,13 +1183,15 @@ theorem insiderForgeProb_le_zk_muEufProb_spbcs [NeZero n] [Nonempty M.NIProof] (
     {ε : ChIdx P τ → NNReal} (hrbr : CausalRBRKnowledgeSound (ringRel B adm 0) Vr Ext St ε)
     (A : InsiderAdversary (ofBase B (Ring.spbcsProofSystem M Λ E hb honest) adm) n
       (OracleView.queriesOnly (Bits (queryBits k kN kS L)) (XOut k e)) t) (Q : ℕ)
-    (f₀ : B.PK × B.BMsg × B.BSig) {S w P' : ℕ} (hS : GameAdversary.ScheduleLE A S w P') :
+    (f₀ : B.MUForgery) {S w P' : ℕ} (hS : GameAdversary.ScheduleLE A S w P') :
     insiderForgeProb A Q ≤
       muEufProb (zkForger (stmt := id) (check := fun _ => true) (input := fun _ w => some w) A
           (wit := fun _ w => w) refuses pubOf Q
-          (zkPsim n Λ hb honest id (fun _ => true) (fun _ w => some w) adm VE pub Sim T) Ext
+          (zkPsim (ert := EmptyRingTest.self) n Λ hb honest id (fun _ => true) (fun _ w => some w)
+              adm VE pub Sim T) Ext
           (kqOf Mg nr b b) f₀)
-        (zkQ' n Λ hb honest id (fun _ => true) (fun _ w => some w) adm VE pub Sim T Q S w P') +
+        (zkQ' (ert := EmptyRingTest.self) n Λ hb honest id (fun _ => true) (fun _ w => some w) adm
+            VE pub Sim T Q S w P') +
         ENNReal.ofReal (M.zkError δ t Q) +
         M.simExtractionError (kqOf Mg nr b b) (maxError ε)
           (M.niJointSimulatorProg Λ VE.toViewRead b pub Sim T).q t Q +
@@ -1033,9 +1199,45 @@ theorem insiderForgeProb_le_zk_muEufProb_spbcs [NeZero n] [Nonempty M.NIProof] (
           (t + Q * (ofBase B (Ring.spbcsProofSystem M Λ E hb honest) adm).q + kqOf Mg nr b b)
           M.senc.digestsPerInput Mg.nJ (maxError ε) +
         2 * Q * εc :=
-  insiderForgeProb_le_zk_muEufProb (stmt := id) (check := fun _ => true)
-    (input := fun _ w => some w) A hk hB hpub href hcorr (zkRingHyps_id B adm) VE pub Sim T hvzk
+  insiderForgeProb_le_zk_muEufProb_of (ert := EmptyRingTest.self) (stmt := id)
+    (check := fun _ => true)
+    (input := fun _ w => some w) A hB hpub href hcorr (zkRingHyps_id B adm) VE pub Sim T hvzk
     hrbr Q f₀ hS
+
+omit [Nonempty B.BSig] in
+/-- **BKM06 Definition 7 for the ring signature compiled by spBCS (`spbcsProofSystem`), from zero
+knowledge, simulation extraction and MU-EUF-CMA^corr** (`insiderForgeProb_le_zk_muEufProb_of`
+at the identity reading of ring statements, `zkRingHyps_id`, over the route's bundle
+`G`): the forgery probability
+is at most the success probability of the multi-user forger `zkRouteForger` with
+`zkRouteRequests` requests, the zero-knowledge and simulation-extraction errors, spBCS's knowledge
+error at `t + Q · q` queries (`SPBCS.ksError`) and `2 Q εc`, for an adversary with the schedule
+bound `S`, `w`, `P'` (`hS`). -/
+theorem insiderForgeProb_le_zk_muEufProb_spbcs [NeZero n] [Nonempty M.NIProof] [NeZero k]
+    (hB : B.OracleFree)
+    {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop} {pubOf : B.Coins → B.Pub}
+    (hpub : B.PubOfCoins pubOf) (href : B.RefusalOfCoins refuses) {εc : ENNReal}
+    (hcorr : B.CorrectWithin εc) {Pub : Type} {pub : RingStmt B → Pub} {δ : NNReal}
+    (G : RingArgument M E Qs honest id (ringRel B adm 0) (ringRel B adm 0) pub δ)
+    (A : InsiderAdversary (ofBase B (Ring.spbcsProofSystem M Λ E hb honest) adm) n
+      (OracleView.queriesOnly (Bits (queryBits k kN kS L)) (XOut k e)) t) (Q : ℕ)
+    {S w P' : ℕ} (hS : GameAdversary.ScheduleLE A S w P') :
+    insiderForgeProb A Q ≤
+      muEufProb (zkRouteForger (check := fun _ => true) (input := fun _ w => some w) A
+          (fun _ w => w) G refuses pubOf Q)
+        (zkRouteRequests (check := fun _ => true) (input := fun _ w => some w) A G Q S w P') +
+        ringZkError M δ t Q +
+        ringSimExtError (check := fun _ => true) (input := fun _ w => some w) A G Q +
+        M.ksError b b G.extractor.ε
+          (t + Q * (ofBase B (Ring.spbcsProofSystem M Λ E hb honest) adm).q) +
+        2 * Q * εc := by
+  have : Nonempty B.BSig := ⟨G.forgery₀.2.2⟩
+  have h := insiderForgeProb_le_zk_muEufProb_of (ert := G.emptyTest) (stmt := id)
+    (check := fun _ => true) (input := fun _ w => some w) A hB hpub href hcorr
+    (zkRingHyps_id B adm) G.simulator.VE pub G.simulator.Sim G.simulator.T
+    G.simulator.hvzk G.extractor.sound Q G.forgery₀ hS
+  refine h.trans_eq ?_
+  rfl
 
 end Identity
 

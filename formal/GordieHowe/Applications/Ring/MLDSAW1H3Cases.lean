@@ -94,7 +94,6 @@ noncomputable abbrev w1AbsAdv {SC : Type} {t : ℕ}
   ((((𝒜 _).alg a.1).absorbAssign (G (fun i => (Bf).pk (keys i)) sc ω) Q).restrictAt sp
     ω).mapOut Prod.fst
 
-open Classical in
 /-- **The simulation-extraction adversary of case U's extraction run** (`seAlgKF` at the relation
 `w1Rel`, the encoding `w1Enc` of the public keys of `keys`, the dummy statement `w1DummyS` and the
 proofs `w1PrfOf`) of `w1AbsAdv`. Statements pass this name to `extAdv`, so the run's depth index
@@ -117,7 +116,6 @@ noncomputable abbrev w1ExtAdvF {SC : Type} {t : ℕ}
     (enc := w1Enc (PS := PS) (adm := adm) (Q := Q) fun i => (Bf).pk (keys i))
     (dummyS := w1DummyS PS adm n Q) w1PrfOf keys Q (w1AbsAdv sp 𝒜 G keys sc ω a)
 
-open Classical in
 /-- **The MU-EUF-NMA^corr forger of case U** (`kfCanonSideForger` at the relation `w1Rel`, the
 encoding `w1Enc`, the dummy statement `w1DummyS` and the proofs `w1PrfOf`): it runs the relayed
 adversaries at zero (`AdaptiveIAlg.assignSideBase`) of the adversaries `𝒜 pks` at the auxiliary
@@ -161,7 +159,6 @@ noncomputable def w1UForger {SC : Type} [Fintype SC] [Nonempty SC] {t : ℕ}
         ((𝒜 pks).alg (kfAbsAux.fst p).1) (G pks (kfAbsAux.coins p)) Psim Q kq pks
         (hsl pks _) (hpo pks _) (hwd pks _) (hG1 pks (kfAbsAux.coins p))
 
-open Classical in
 omit [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] in
 /-- **Case U as MU-EUF-NMA^corr** (`kfAbsorbSide_le_muEufNmaProb` at the relation `w1Rel`, the
 encoding `w1Enc`, the dummy statement `w1DummyS`, the proofs `w1PrfOf`, the test `w1Ok`, the goal
@@ -253,7 +250,6 @@ local notation "Rq" => W1Rq prims O Mo βmin tol enc k D bmsg PSh adm n Q
 
 attribute [local instance] admDecF
 
-open Classical in
 omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The guess of case S, averaged over the side coins** (`slotLaws_kfExtractionLaw` at the
 relation `w1Rel`, the encoding `w1Enc` of the public keys of `ξ`, the dummy statement `w1DummyS`

@@ -112,7 +112,6 @@ theorem W1OracleFacts.probUniform_muAns_mem_le (h : W1OracleFacts O Mo sp)
   simp only [Finset.coe_sort_coe, Fintype.card_coe]
 
 omit [Nonempty Y₁] in
-open Classical in
 /-- **The forgery event without a message-representative collision**: against the key-free relay
 challenger `w1C2`, the forgery event has at most the probability of the forgery event without a
 collision of the message representatives at the base oracle (`w1ForgeEv`), plus the collision
@@ -197,7 +196,6 @@ theorem _root_.GordieHowe.ENNReal.tsum_mul_sum_le {α β : Type} [Fintype β] (a
         exact tsum_congr fun x => mul_left_comm _ _ _
     _ ≤ ∑' s, b s * Y s := ENNReal.tsum_le_tsum fun s => mul_le_mul_of_nonneg_left (h s) zero_le
 
-open Classical in
 /-- **The forgery event without a collision, through the key-free chain**: against the key-free
 relay challenger `w1C2`, the event `w1ForgeEv` has at most the average over the users' key coins
 and the side coins of the bound of `kfGame_le_w1Chain`. -/
@@ -275,7 +273,6 @@ theorem runLawIn_w1ForgeEv_le [Inhabited Mc.NIProof]
   exact _root_.GordieHowe.ENNReal.tsum_mul_sum_le _ _ _ _ fun sc =>
     kfGame_le_w1Chain hk hchk h keys sc (A' keys) (hw' keys) VE pub Sim Tp hvzk hrbr p₀
 
-open Classical in
 /-- **The hops to the key-free relay challenger** (`insiderForgeProb_le_w1C2` at `w1HPS`, the
 encoding `w1Enc`, the statement program `w1StmtP` and the main prover `w1MainProver`). -/
 theorem insiderForgeProb_le_w1C2_w1HPS [Inhabited Mc.NIProof]
@@ -320,7 +317,6 @@ theorem insiderForgeProb_le_w1C2_w1HPS [Inhabited Mc.NIProof]
     (fun keys => w1KeptInRel (Q := Q) sp h.hO keys) A (fun keys => hw fun i => (Bf).pk (keys i)) Q
   exact h1
 
-open Classical in
 /-- **The backbone of the key-free unforgeability chain at the ML-DSA ring publishing `w₁`**: for
 an adversary `A` of BKM06 Definition 7 against the hedged scheme of `w1HPS` at a check `chk`
 accepting only nonempty rings (`hchk`), the forgery probability is at most the hop terms of

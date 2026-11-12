@@ -130,7 +130,8 @@ variable {program : RealizedProgram} [MldsaHHonest program] [MldsaHShuffle progr
 set_option hygiene false in
 local notation "interp" => mldsaInterpOf F0 FH
 
-set_option maxRecDepth 8192 in
+-- Depth 1024 needed (fails at 512): unfolding the field interpretation `interp 1`.
+set_option maxRecDepth 1024 in
 /-- **SampleInBall's honest memory cells lie in `GF(2^16)`.** -/
 theorem memFR_mem {v : ℕ} (n : ℕ) (hv : v ∈ [560, 562, 563, 564, 565]) :
     memFR program F0 FH y v n ∈ (interp 1).node "GF(2^16)" := by
@@ -174,7 +175,6 @@ theorem memFR_mem {v : ℕ} (n : ℕ) (hv : v ∈ [560, 562, 563, 564, 565]) :
       exact bit_mem_subfield (honestWit_origin_bool _ _ _ _ _ _)
     · exact zero
 
-set_option maxRecDepth 8192 in
 /-- **The core's honest words lie in `GF(2^16)`**: the core rounds' words, `w1`'s and `μ`'s
 words, the threshold words and the memory cells. -/
 theorem hValCore_mem_gf16 {u : ℕ} (hf : program.valueField u = 1) (hu : natGF16B u = true)
@@ -212,7 +212,6 @@ theorem hValCore_mem_gf16 {u : ℕ} (hf : program.valueField u = 1) (hu : natGF1
         simp only [List.mem_cons, List.not_mem_nil, or_false] at hm ⊢
         omega))
 
-set_option maxRecDepth 8192 in
 /-- **The core's honest bits lie in the node `bit`**: the selected bytes' bits and the read
 origins' bits. -/
 theorem hValCore_mem_bit {u : ℕ} (hf : program.valueField u = 1) (hu : u ∈ [556, 561]) (j : ℕ) :

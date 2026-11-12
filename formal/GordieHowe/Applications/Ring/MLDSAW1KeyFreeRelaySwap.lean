@@ -118,7 +118,7 @@ theorem countsLE_w1KFPre (pk : PubKey p prims) (R : KeyRing (PubKey p prims) N) 
       (w1KFPre prims O sp βmin tol enc k D bmsg pk R c m s) := by
   unfold w1KFPre
   have hring : CountsLE (fun _ => true) (N * reps) (ringCheckProg prims O βmin tol R) := by
-    unfold ringCheckProg
+    unfold ringCheckProg ringCheckProgOf
     refine (CountsLE.tabulate (q := 1) _ _ fun _ _ =>
       countsLE_query fun _ => countsLE_pure 0 _).mapOutput.mono ?_
     simp [List.length_product]
@@ -179,7 +179,6 @@ local notation "PSf" => PS
 
 attribute [local instance] admDecF
 
-open Classical in
 /-- **The signature of the proof requests tagged `t₀` moved by `swσ`**; other proof requests
 kept. -/
 noncomputable def w1ProofSw (t₀ : RingSignature.Insider.Req Bf PSf adm n × Fin (Q + 1))

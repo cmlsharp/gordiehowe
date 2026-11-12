@@ -23,12 +23,10 @@ namespace GordieHowe.MLDSA44.Native.QROMParams
 open Generated.MLDSA44.Native.QROMParams.Program (program)
 open ROMParams
 
-set_option maxRecDepth 8192 in
 /-- The native program at the QROM parameters has these facts. -/
 instance : MldsaABase program where
   projReads := by shape_decide
 
-set_option maxRecDepth 8192 in
 /-- The native program at the QROM parameters has these facts. -/
 instance : MldsaACross program where
   lt7 := by shape_decide
@@ -40,7 +38,6 @@ instance : MldsaACross program where
   src272 := by shape_decide
   crossPred := Generated.MLDSA44.Native.QROMParams.ShapeFacts.predicate_mac_2eequal_body
 
-set_option maxRecDepth 8192 in
 /-- The native program at the QROM parameters has these facts. -/
 instance : MldsaAAlgebra program where
   kind56 := Generated.MLDSA44.Native.QROMParams.ShapeFacts.value_key_2ea_5fhat_kind

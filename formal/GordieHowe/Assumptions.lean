@@ -111,9 +111,8 @@ query-bounded quantum adversaries in the QROM with classical requests to a chall
   ring adversary's success by the success of explicit base-scheme forgers
   (`muEufProb (ringMUForger …)` in `Applications/Ring/RingForger*.lean` and
   `Applications/Falcon512/Ring/*/*/RingForger.lean`, to which `MUEufCmaHard.le` applies; the
-  relay and extraction forgers of `Applications/Ring/Unforgeability.lean`,
-  `RingUnforgeability.lean` and `StrongForger.lean`, which are not `MUAdversary`s); no result
-  takes these predicates as hypotheses.
+  extraction forgers of `Applications/Ring/RingUnforgeability.lean` and `RingInsider.lean`, which
+  are not `MUAdversary`s); no result takes these predicates as hypotheses.
 - **Named assumptions with `t₀` published** (`Applications/MLDSA/Assumptions.lean`, section "`t₀`
   published"): `MLDSAT0EufCma`, `MLDSAT0MUEufCma`, `MLDSAT0MUEufCmaWithin` (EUF-CMA) and
   `MLDSAT0EufNma`, `MLDSAT0MUEufNma` (EUF-NMA), with `MLDSA44T0EufCma` … `MLDSA87T0MUEufNma` at the
@@ -134,11 +133,12 @@ about the concrete function it replaces.
   headlines.** `w1Scheme.expect_anonAdvantage_le_mldsa{44,65,87}` and their `_bind` and `_conv`
   forms (`Applications/Ring/MLDSAW1AnonOracle.lean`) average the advantage over the three
   oracles (`randomOraclePrimitives`), with the adversary indexed by them.
-- **`ExpandA` as a random oracle (`Â` uniform).** `withExpandA`, `expect_regGap_withExpandA`,
-  `idealAnonError`, `advantage_le_ideal` (`Applications/Ring/PublicW1/MLDSAPublicW1.lean`); the
-  three-oracle anonymity headlines `advantage_le_bkm06` and `advantage_le_bkm06_mldsa{44,65,87}`
-  and their `_of`, `_query`, `_checkParams` forms (`PublicW1/MLDSAPublicW1Regularity.lean`) and the
-  hedged forms (`PublicW1/MLDSAPublicW1Hedged*.lean`); the regularity and collision lemmas at a
+- **`ExpandA` as a random oracle (`Â` uniform).** `withExpandA`, `expect_regGap_withExpandA` and
+  `regGapAvg` (`Applications/Ring/PublicW1/MLDSAPublicW1.lean`) and its bounds
+  `expect_regGapAvg_le_mldsa{44,65,87}` (`PublicW1/MLDSAPublicW1Regularity.lean`), which the
+  anonymity headline `w1Scheme.expect_anonAdvantage_le` (`Applications/Ring/MLDSAW1AnonOracle.lean`)
+  applies;
+  the regularity and collision lemmas at a
   uniform matrix (`Applications/MLDSA/Regularity/`: `T0Law`, `CommitCollision`
   (`expect_commitCollision_le`), `SignerRegularity`, `Instances*`).
 - **`ExpandS` as a random oracle (a uniform `η`-box secret).** `withExpandS`

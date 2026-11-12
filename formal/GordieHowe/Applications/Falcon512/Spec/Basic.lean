@@ -370,7 +370,6 @@ def unsupportedFraction (P : Params) : ℚ :=
       firstAccepted (fun v => decide (v < P.bound))
         (samples16 fun i => (bytes i : ℕ)) P.n = none).card : ℚ) / (256 : ℚ) ^ (2 * P.S)
 
-set_option maxRecDepth 8000 in
 /-- For Falcon-512, at most a `2^-256` fraction of `1434`-byte strings has fewer than
 `512` samples below `61445` among its `717` big-endian 16-bit samples. The fraction is
 the binomial tail `Σ_{k<512} C(717,k) · 61445^k · 4091^(717−k) / 65536^717`, about
@@ -405,12 +404,14 @@ theorem unsupportedFraction_le : unsupportedFraction falcon512 ≤ (2 : ℚ) ^ (
   have hnat : 2 ^ 256 * binomialTail falcon512.S falcon512.bound 65536 falcon512.n
       ≤ 65536 ^ falcon512.S := by
     rw [hS, hn, hboundeq]
-    decide
+    decide +kernel
   have hpow256 : (256 : ℚ) ^ (2 * falcon512.S) = (65536 : ℚ) ^ falcon512.S := by
     rw [pow_mul, show (256 : ℚ) ^ 2 = 65536 from by norm_num]
   unfold unsupportedFraction
   rw [hcard, hpow256, show (2 : ℚ) ^ (-(256 : ℤ)) = 1 / (2 : ℚ) ^ 256 from by norm_num,
     div_le_div_iff₀ (by positivity) (by positivity), one_mul]
+  generalize binomialTail falcon512.S falcon512.bound 65536 falcon512.n = B at hnat ⊢
+  rw [Nat.mul_comm] at hnat
   exact_mod_cast hnat
 
 /-- The algebraic core of Falcon verification on decoded values, Algorithm 16

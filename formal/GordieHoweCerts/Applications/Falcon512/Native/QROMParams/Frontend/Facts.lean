@@ -290,7 +290,6 @@ instance : FalconHConsts program RealizedProgram.gf256 where
     rw [← hmul, gf2_256OfNat_gpow 511 (by omega), ← pow_succ]
     rfl
 
-set_option maxRecDepth 8192 in
 /-- The selection field of the program of `Falcon512.Native.QROMParams` is `GF(2^256)`, with its labels. -/
 instance : FalconSelField program RealizedProgram.gf256 RealizedProgram.fq20 :=
   FalconSelField.ofHash

@@ -8,6 +8,8 @@ public import GordieHowe.Applications.Ring.MLDSAW1KeyFreeH3Chain
 public import GordieHowe.Applications.Ring.MLDSAW1HedgedPS
 public import GordieHowe.Applications.Ring.SPBCSSplitVerifies
 public import GordieHowe.Applications.Ring.MLDSAW1H3Cases
+public import GordieHowe.Applications.Ring.RingForgerZK
+public import GordieHowe.Applications.Ring.W1ProofReads
 
 @[expose] public section
 
@@ -384,7 +386,6 @@ local notation "WbbC" keys:max sc:max ω:max => (∑' a, ((((QueryBoundedAdversa
 set_option quotPrecheck true
 set_option hygiene true
 
-open Classical in
 omit [DecidableEq R] in
 omit [DecidableEq R] in
 /-- **`tsum_simProb_w1Goal_le` at the adversary of the chain.** -/
@@ -448,7 +449,6 @@ theorem tsum_simProb_w1Goal_le_chain
   exact hR
 
 omit [Nonempty Y₁] [DecidableEq R] in
-open Classical in
 /-- **The backbone's summand at `keys`, `sc` and `ω` is the summand of
 `tsum_simProb_w1Goal_le`** (`QueryBoundedAdversary.tsum_absorbAssign_restrictAt_mapOut`). -/
 theorem WbbC_eq
@@ -495,7 +495,6 @@ theorem WbbC_eq
     HEq.rfl
   exact hR.trans (tsum_congr fun a => congrArg (_ * ·) rfl)
 
-open Classical in
 omit [DecidableEq R] in
 /-- **The backbone's average is the average of `tsum_simProb_w1Goal_le`** at the adversary of the
 chain. -/
@@ -533,7 +532,6 @@ theorem tsum_WbbC_eq
   exact WbbC_eq (Λ := Λ) (E := E) (hb := hb) (honest := honest) (Q := Q) hp hk h hQm c₀ A hw VE
     pub Sim Tp hvzk hrbr p₀ keys sc ω
 
-open Classical in
 omit [DecidableEq R] in
 /-- **The backbone's average splits into the three cases** (`tsum_simProb_w1Goal_le` at the
 adversary of the chain): the average over the key coins, the side coins and the base components of
@@ -677,7 +675,6 @@ theorem w1KFChainAvg_le_cases
     (tsum_simProb_w1Goal_le_chain (Λ := Λ) (E := E) (hb := hb) (honest := honest) (Q := Q) hp hk h
       hQm c₀ A hw VE pub Sim Tp hvzk hrbr p₀)
 
-open Classical in
 /-- **The converted scheme's forgery probability, through the empty-ring step and the backbone**
 (`insiderForgeProb_le_w1KFChain` at the check of a nonempty ring). -/
 theorem insiderForgeProb_w1ConvAdv_le_backbone
@@ -836,7 +833,6 @@ theorem w1ConvConcrete.insiderForgeProb_le_w1ConvAdv (h : W1OracleFacts O MO sp)
           Sc.senc.digestsPerInput Mg.nJ (maxError ε) := by
   convert w1Concrete.insiderForgeProb_le_nonempty (bmsg := bmc) sp h.hO h.hM hrbr c₀ A Q using 2
 
-open Classical in
 /-- **The converted scheme's forgery probability, through the empty-ring step and the backbone**
 (`w1Concrete.insiderForgeProb_le_nonempty`, `insiderForgeProb_le_w1KFChain` at the check of a
 nonempty ring). -/
@@ -1046,7 +1042,6 @@ local notation "UForgerC" => w1UForger (PS := PSh) (adm := adm) sp (Qs) UAdvC Gk
   (fun _ a => Nat.add_le_add_right (hS.post_le _ a) _) (fun _ a => hS.width_le _ a)
   (fun _ _ => ⟨rfl, rfl, rfl⟩)
 
-open Classical in
 omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **Case U of the chain as MU-EUF-NMA^corr** (`w1UAvg_le` at the chain's adversaries at the public keys, the key-free relays
 `Gkf`, whose relay at `ω` is the relay at zero with side `ω` by `relayOf_kfRelaySide`): the
@@ -1096,7 +1091,6 @@ local notation "GlS" ξ:max sc:max ω:max => fun (_ : (KeyRing (PubKey p (concre
       (w1KFFactors (T := T) Pc O sp βmin tol (concreteEnc p) kr D bmc h.hO)
       (w1StmtPω Pc O MO βmin tol (concreteEnc p) kr D bmc sp) (w1ToR (Q := Q)) sc ω e'
 
-open Classical in
 omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The guess event at the canonical witness is the slot guess of the run's outcome**
 (`simProb_forgerCanonKF_eq`, `w1CanonSig_eq`, `cast_natOutcome`): the canonical witness satisfies
@@ -1139,7 +1133,6 @@ theorem w1CanS_le_slotGuess (h : W1OracleFacts O MO sp) {t : ℕ}
   exact ⟨wt.sig, congrArg (Option.map fun (w : RingSignature.RingWitOf (FIPSSignature p
     (concretePrimitivesKeyGen p))) => w.sig) hwt, e', he', hs, hsig, hask⟩
 
-open Classical in
 omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The guess of case S at the chain** (`w1GuessAvg_le` through `w1CanS_le_slotGuess`, the
 averages over the side coins innermost, `ENNReal.tsum4_le_of_second`): the average of the guess
@@ -1172,7 +1165,6 @@ theorem w1GuessAvgC_le (h : W1OracleFacts O MO sp) {t : ℕ}
     (kqOf Mg nr b b) Ext
 
 
-open Classical in
 /-- **The union bound over the cases of the forger's win**, for an adversary `A` with a schedule
 bound `hS`, at the view encoder `VE`, the simulator `Sim`, the preimages `Tp`, the response `p₀`
 and the extractor `Ext` of `Sc`, and the default forgery `f₀` of the readout. It is the sum of one
@@ -1221,7 +1213,6 @@ noncomputable def w1H3CaseError (h : W1OracleFacts O MO sp) {t : ℕ}
               (fun j => (Bf).pk (ξ j))) ξ sc ω).map fun o => (o.1, sc, ω, o.2.1, o.2.2)).map
         (w1MsisReadout sp h.hO ξ)))
 
-open Classical in
 omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- The terms of `w1H3CaseError`: collision + ((case U + case S=) + case S≠). -/
 @[simp] theorem w1H3CaseError_eq (h : W1OracleFacts O MO sp) {t : ℕ}
@@ -1259,7 +1250,6 @@ omit [Fintype R] [DecidableEq R] [Nonempty R] in
           (w1MsisReadout sp h.hO ξ))) :=
   rfl
 
-open Classical in
 /-- **`w1H3CaseError` with the case-U term `u`** in place of the success probability of the
 MU-EUF-NMA^corr forger `w1UForger` (`w1H3CaseError_eq_with`), so that a bound on that game can
 replace it (`Applications/Ring/MLDSAW1NamedAssumptions.lean`). It sits here because the terms
@@ -1297,7 +1287,6 @@ noncomputable def w1H3CaseErrorWith (h : W1OracleFacts O MO sp) {t : ℕ}
               (fun j => (Bf).pk (ξ j))) ξ sc ω).map fun o => (o.1, sc, ω, o.2.1, o.2.2)).map
         (w1MsisReadout sp h.hO ξ)))
 
-open Classical in
 /-- **The case-U forger of `w1H3CaseError`**: the MU-EUF-NMA^corr forger `w1UForger` against the
 signer with fresh masks. -/
 noncomputable def w1H3UForger (h : W1OracleFacts O MO sp) {t : ℕ}
@@ -1310,7 +1299,6 @@ noncomputable def w1H3UForger (h : W1OracleFacts O MO sp) {t : ℕ}
   have hw := w1ChainAdv_width_le hS
   UForgerC
 
-open Classical in
 /-- **The requests of the case-U game of `w1H3CaseError`.** -/
 noncomputable def w1H3URequests (h : W1OracleFacts O MO sp) {t : ℕ}
     (A : InsiderAdversary (w1ConvConcrete p O MO βmin tol kr D PSc adm) n
@@ -1321,7 +1309,6 @@ noncomputable def w1H3URequests (h : W1OracleFacts O MO sp) {t : ℕ}
     (f₀ : PubKey p (concretePrimitivesKeyGen p) × Msg × FIPSSignature p (concretePrimitivesKeyGen p)) : ℕ :=
   kfAbsorbSideRequests S (P' + 2 * N) w PsimQ (kqOf Mg nr b b + Q * PsimQ)
 
-open Classical in
 omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **`w1H3CaseError` at its case-U term** (`w1H3CaseErrorWith`). -/
 theorem w1H3CaseError_eq_with (h : W1OracleFacts O MO sp) {t : ℕ}
@@ -1344,7 +1331,6 @@ theorem w1H3CaseError_eq_with (h : W1OracleFacts O MO sp) {t : ℕ}
 set_option quotPrecheck true
 set_option hygiene true
 
-open Classical in
 /-- **The bound by case at the fresh program statements** (BKM06 Definition 7, at the concrete
 primitives): for an adversary `A` against the converted
 scheme `w1ConvConcrete` with the proof system `w1PS` of an spBCS argument `Sc`, the forgery
@@ -1489,51 +1475,67 @@ theorem _root_.GordieHowe.ENNReal.add_regroup7 (k h g x c s z : ℝ≥0∞) :
     k + (h + (g + (x + c + s + z))) = k + (h + (g + x + c + s + z)) := by
   simp only [add_assoc]
 
-open Classical in
+/-- **The simulation-extraction error of the w₁ route** (`SPBCS.simExtractionError` of `Sc`) at the
+simulator `sim` and the extractor `X`: at the verifier's `kqOf Mg nr b b` queries, the extractor's
+largest round error and the query count of the joint simulator of `sim`, for `t + w · 2N + 2Q`
+adversary queries and `Q` signing requests. The count is that of the chain's adversary
+(`w1WidthMul`, `w1SimExtF_eq`): `t` plus the statement program's `2N` reads per unit of the width `w`
+plus `2Q`, not the adversary's `t` as in `RingSignature.Insider.ringSimExtError`, which reads its
+components off a `RingArgument` that this split route does not build. -/
+noncomputable abbrev w1SimExtError {Pub : Type} (pub : X₀f → Pub) {δ : NNReal}
+    (sim : SPBCS.RingSimulator Sc E Qs honest (w1ExpRel (concretePrimitivesKeyGen p) (concreteEnc
+      p) bmc adm) pub δ)
+    (X : RBRKnowledgeExtractor (w1ExpRel (concretePrimitivesKeyGen p) (concreteEnc p) bmc adm) Vr)
+    (t w : ℕ) : ℝ≥0∞ :=
+  Sc.simExtractionError (kqOf Mg nr b b) (maxError X.ε)
+    (Sc.niJointSimulatorProg Λ sim.VE.toViewRead b pub sim.Sim sim.T).q (t + w * (2 * N) + 2 * Q) Q
+
 /-- **The unforgeability bound of the converted ML-DSA ring signature publishing `w₁`, by case**
-(BKM06 Definition 7, at the concrete primitives): for an adversary `A` against the converted
-scheme `w1ConvConcrete` with the proof system `w1PS` of an spBCS argument `Sc`, with a schedule
-bound of width `w`, the forgery probability is at most the spBCS knowledge error of the empty ring
+(BKM06 Definition 7, at the concrete primitives): for an approved parameter set (`hp`), `0 < kh`
+(`hk`), the oracle facts `h` and the mask-query facts `hq`, an adversary `A` against the converted
+scheme `w1ConvConcrete` with the proof system `w1PS` of an spBCS argument `Sc`, with the schedule
+bound `S`, `w`, `P'` (`hS`), the zero-knowledge simulator `sim`, the extractor `X`, the fallback
+claim `c₀` and forgery `f₀` and a response `p₀` of `Sc`, the forgery probability is at most spBCS's
+knowledge error `ksError` of the empty ring at `t + Q · (qPub + q) + 2N` queries
 (`w1Concrete.insiderForgeProb_le_nonempty`), plus the hops to the key-free relay challenger
 (`w1H3HopError`), plus the cases of the forger's win at their explicit terms (`w1H3CaseError`:
 the collision term, case U as MU-EUF-NMA^corr of `w1UForger`, the guess of case S, case S≠ as
-Module-SIS), plus `trCollAt` and the simulation-extraction and zero-knowledge errors of `Sc`. -/
+Module-SIS), plus `trCollAt`, the simulation-extraction error `w1SimExtError` and the
+zero-knowledge error `ringZkError` of `Sc`, both at the chain's `t + w · 2N + 2Q` queries. -/
 @[headline]
 theorem w1ConvConcrete.insiderForgeProb_le
     (hp : p.isApproved) (hk : 0 < kh) (h : W1OracleFacts O MO sp)
-    (hQm : ∀ q : Query kh kN kS L, Query.toBits q ∉ Set.range MO.pt)
+    (hq : W1MaskQueryFacts kh kN kS L MO)
     (c₀ : Claim X₀f Sc.NIProof)
     {t : ℕ} (A : InsiderAdversary (w1ConvConcrete p O MO βmin tol kr D PSc adm) n
       (OracleView.queriesOnly Xq (BitStr I J)) t) {S w P' : ℕ}
     (hS : GameAdversary.ScheduleLE A S w P')
-    (VE : Sc.ViewEncoder E Qs) {Pub : Type} (pub : X₀f → Pub)
-    (Sim : CausalJointSimulator VE.MV Pub) (Tp : Sc.Preimages) {δ : NNReal}
-    (hvzk : CausalHVZK VE.MV (w1ExpRel (concretePrimitivesKeyGen p) (concreteEnc p) bmc adm) honest pub Sim δ)
-    {Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p)))} {St : CausalStateFn P τ X₀f}
-    {ε : ChIdx P τ → NNReal}
-    (hrbr : CausalRBRKnowledgeSound (w1ExpRel (concretePrimitivesKeyGen p) (concreteEnc p) bmc adm) Vr Ext St ε)
+    {Pub : Type} (pub : X₀f → Pub) {δ : NNReal}
+    (sim : SPBCS.RingSimulator Sc E Qs honest (w1ExpRel (concretePrimitivesKeyGen p) (concreteEnc
+      p) bmc adm) pub δ)
+    (X : RBRKnowledgeExtractor (w1ExpRel (concretePrimitivesKeyGen p) (concreteEnc p) bmc adm) Vr)
     (p₀ : Sc.Response b)
-    (f₀ : PubKey p (concretePrimitivesKeyGen p) × Msg × FIPSSignature p (concretePrimitivesKeyGen p)) :
+    (f₀ : (Bc).MUForgery) :
     insiderForgeProb A Q ≤
-      knowledgeError kh e (kqOf Mg nr b b)
-          (t + Q * ((Bc).qPub + (PSc).q) + 2 * N + kqOf Mg nr b b)
-          Sc.senc.digestsPerInput Mg.nJ (maxError ε) +
+      Sc.ksError b b X.ε (t + Q * ((Bc).qPub + (PSc).q) + 2 * N) +
       (ENNReal.ofReal (w1H3HopError (O := O) (MO := MO) (βmin := βmin) (tol := tol) (kr := kr) (D := D)
           (sp := sp) (Sc := Sc) (Λ := Λ) (E := E) (hb := hb)
           (honest := honest) (adm := adm) (Qs := Qs) (n := n) (Q := Q) t w) +
-        (w1H3CaseError (Λ := Λ) (E := E) (hb := hb) (honest := honest) (Q := Q) h A hS VE pub Sim
-            Tp p₀ Ext f₀ +
+        (w1H3CaseError (Λ := Λ) (E := E) (hb := hb) (honest := honest) (Q := Q) h A hS sim.VE pub
+          sim.Sim
+            sim.T p₀ X.Ext f₀ +
           trCollAt (concretePrimitivesKeyGen p) n +
-          Sc.simExtractionError (kqOf Mg nr b b) (maxError ε)
-            (Sc.niJointSimulatorProg Λ VE.toViewRead b pub Sim Tp).q (t + w * (2 * N) + 2 * Q) Q +
-          ENNReal.ofReal (Sc.zkError δ (t + w * (2 * N) + 2 * Q) Q))) := by
+          w1SimExtError (Λ := Λ) (b := b) (Q := Q) pub sim X t w +
+          ringZkError Sc δ (t + w * (2 * N) + 2 * Q) Q)) := by
+  classical
   have hc := w1ConvConcrete.insiderForgeProb_le_cases_aux (Λ := Λ) (E := E) (hb := hb)
-    (honest := honest) (Q := Q) hp hk h hQm c₀ A (w1ChainAdv_width_le hS) VE pub Sim Tp hvzk hrbr
+    (honest := honest) (Q := Q) hp hk h hq.toBits_notMem c₀ A (w1ChainAdv_width_le hS) sim.VE pub
+      sim.Sim sim.T sim.hvzk X.sound
     p₀
   have hU := w1CaseUAvgC_le (Λ := Λ) (E := E) (hb := hb) (honest := honest) (Q := Q) h A hS
-    (w1ChainAdv_width_le hS) VE pub Sim Tp p₀ Ext f₀
+    (w1ChainAdv_width_le hS) sim.VE pub sim.Sim sim.T p₀ X.Ext f₀
   have hG := w1GuessAvgC_le (Λ := Λ) (E := E) (hb := hb) (honest := honest) (Q := Q) h A
-    (w1ChainAdv_width_le hS) VE pub Sim Tp p₀ Ext
+    (w1ChainAdv_width_le hS) sim.VE pub sim.Sim sim.T p₀ X.Ext
   refine hc.trans (le_trans (add_le_add le_rfl (add_le_add le_rfl (add_le_add le_rfl
     (add_le_add (add_le_add (add_le_add (add_le_add (add_le_add hU hG) le_rfl) le_rfl) le_rfl)
       le_rfl)))) (le_of_eq ?_))

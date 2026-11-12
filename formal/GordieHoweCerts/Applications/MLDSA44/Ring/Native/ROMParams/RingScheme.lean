@@ -57,9 +57,6 @@ open scoped NNReal ENNReal
 
 attribute [local instance] _root_.MLDSA.Concrete.concreteNTTRingOps
 
-/- Generated data: unifying the figures' terms reads the generated program. -/
-set_option maxRecDepth 8192
-
 /-! ## The honest prover -/
 
 variable (msgLen : ℕ) (C : ProofSystems)
@@ -173,6 +170,30 @@ noncomputable abbrev bindingScheme (maxAttempts : ℕ) :=
     (bindingMsg (GordieHowe.MLDSA.Spec.expandS _root_.MLDSA.mldsa44)
       (GordieHowe.MLDSA.Spec.expandMask _root_.MLDSA.mldsa44))
 
+/-- **The setting of `convertedScheme`**: the configuration's setting with merges
+(`ProofSystemTranscript.setting`) at the converted base messages' length `2 + 32` and `32`-byte
+Fiat–Shamir salts. -/
+noncomputable abbrev convertedSetting :=
+  (ringTranscript (2 + 32) C).setting 32 (ringMergeBounds C msgLen_le)
+
+/-- **The non-interactive proofs of `convertedSetting`** (`SPBCS.NIProof` of its model, at the
+transcript's digest length `k`, Merkle salts of `2k` bytes, `32`-byte Fiat–Shamir salts, `2^40`-byte
+inputs and oracle answers of `k + fsExtraBytes + maxGrant` bytes). -/
+noncomputable abbrev convertedNIProof : Type :=
+  SPBCS.NIProof (k := (ringTranscript (2 + 32) C).k) (kN := 2 * (ringTranscript (2 + 32) C).k) (kS := 32) (L := 2 ^ 40)
+    (e := Configurations.fsExtraBytes + (ringTranscript (2 + 32) C).maxGrant) (convertedSetting C).model
+
+/-- **The canonical preimage table of `convertedSetting`** (`ProofSystemTranscript.preimages`):
+the preimage samplers of the setting's challenge samplers, from which the zero-knowledge simulator
+draws each round's stream at its simulated challenge. -/
+abbrev convertedPreimages : (convertedSetting C).model.Preimages :=
+  (ringTranscript (2 + 32) C).preimages 32 (ringMergeBounds C msgLen_le)
+
+/-- **The setting of `bindingScheme`**: the configuration's setting with merges at the ring-binding
+base messages' length `2 + ringMsgLen` and `32`-byte Fiat–Shamir salts. -/
+noncomputable abbrev bindingSetting :=
+  (ringTranscript (2 + ringMsgLen) C).setting 32 (ringMergeBounds C bindingLen_le)
+
 /-! ## The base signer's facts -/
 
 variable (msgLen) in
@@ -189,36 +210,46 @@ theorem baseSigner_correctWithin (maxAttempts : ℕ)
 /-- **Completeness of the converted ML-DSA-44 ring signature, averaged over honest rings**
 (`mldsaScheme.completeWithin`): at every number of attempts, `convertedScheme` refuses with
 probability at most the per-message refusal term `mldsaRefuseMsg` at `convertedMsg`
-(`refuseWithin_mldsaRefuseMsg`, left symbolic) and is rejected with probability at most the base
-signer's correctness error `0` (`baseSigner_correctWithin`) plus the honest prover's completeness
-error `0`, spBCS's overrun and key-collision terms and `0 / 2^(8 · 32)`. -/
+(`refuseWithin_mldsaRefuseMsg`, left symbolic) and is rejected with probability at most spBCS's
+completeness error `ringCompletenessError` at the honest prover's completeness error `0` and `0`
+oracle queries of the base signer: the base signer has correctness error `0`
+(`baseSigner_correctWithin`) and the honest prover none (`ringHonest_errorBound`). -/
 @[headline]
 theorem convertedScheme.completeWithin (maxAttempts : ℕ) :
     (convertedScheme proofSystem maxAttempts).CompleteWithin
       (mldsaRefuseMsg _root_.MLDSA.mldsa44 fipsPrims maxAttempts
         (convertedMsg (GordieHowe.MLDSA.Spec.expandS _root_.MLDSA.mldsa44)
           (GordieHowe.MLDSA.Spec.expandMask _root_.MLDSA.mldsa44)))
-      (0 + (((0 : ℝ≥0) : ℝ≥0∞) +
-        ((ringTranscript (2 + 32) proofSystem).setting 32 (ringMergeBounds proofSystem msgLen_le)).model.overrun +
-        SPBCS.keyCollision ((ringIop (2 + 32) proofSystem).term.size (ringIop (2 + 32) proofSystem).rounds)
-          (ringTranscript (2 + 32) proofSystem).k + ((0 + 0 : ℕ) : ℝ≥0∞) / 2 ^ (8 * 32))) :=
-  mldsaScheme.completeWithin _ _ _ _ _ _ _ (ringHonest_errorBound _ proofSystem)
-    (baseSigner_correctWithin _ proofSystem _ _)
+      ((convertedSetting proofSystem).model.ringCompletenessError 0 0) := by
+  have h := mldsaScheme.completeWithin _ _ _ (ringHonest (2 + 32) proofSystem)
+    (ringMergeBounds proofSystem msgLen_le) (ringProofFormat proofSystem msgLen_le)
+    (ringStmtVerifies (2 + 32) proofSystem maxAttempts
+      (convertedMsg (GordieHowe.MLDSA.Spec.expandS _root_.MLDSA.mldsa44)
+        (GordieHowe.MLDSA.Spec.expandMask _root_.MLDSA.mldsa44)))
+    (ringHonest_errorBound _ proofSystem) (baseSigner_correctWithin _ proofSystem maxAttempts _)
+  rwa [zero_add, ENNReal.coe_zero] at h
 
 /-- **Completeness of the ring-binding ML-DSA-44 ring signature, averaged over honest rings**
-(`mldsaScheme.completeWithin`): as `convertedScheme.completeWithin`, for `bindingScheme`. -/
+(`mldsaScheme.completeWithin`): at every number of attempts, `bindingScheme` refuses with
+probability at most the per-message refusal term `mldsaRefuseMsg` at `bindingMsg`
+(`refuseWithin_mldsaRefuseMsg`, left symbolic) and is rejected with probability at most spBCS's
+completeness error `ringCompletenessError` at the honest prover's completeness error `0` and `0`
+oracle queries of the base signer: the base signer has correctness error `0`
+(`baseSigner_correctWithin`) and the honest prover none (`ringHonest_errorBound`). -/
 @[headline]
 theorem bindingScheme.completeWithin (maxAttempts : ℕ) :
     (bindingScheme proofSystem maxAttempts).CompleteWithin
       (mldsaRefuseMsg _root_.MLDSA.mldsa44 fipsPrims maxAttempts
         (bindingMsg (GordieHowe.MLDSA.Spec.expandS _root_.MLDSA.mldsa44)
           (GordieHowe.MLDSA.Spec.expandMask _root_.MLDSA.mldsa44)))
-      (0 + (((0 : ℝ≥0) : ℝ≥0∞) +
-        ((ringTranscript (2 + ringMsgLen) proofSystem).setting 32 (ringMergeBounds proofSystem bindingLen_le)).model.overrun +
-        SPBCS.keyCollision ((ringIop (2 + ringMsgLen) proofSystem).term.size (ringIop (2 + ringMsgLen) proofSystem).rounds)
-          (ringTranscript (2 + ringMsgLen) proofSystem).k + ((0 + 0 : ℕ) : ℝ≥0∞) / 2 ^ (8 * 32))) :=
-  mldsaScheme.completeWithin _ _ _ _ _ _ _ (ringHonest_errorBound _ proofSystem)
-    (baseSigner_correctWithin _ proofSystem _ _)
+      ((bindingSetting proofSystem).model.ringCompletenessError 0 0) := by
+  have h := mldsaScheme.completeWithin _ _ _ (ringHonest (2 + ringMsgLen) proofSystem)
+    (ringMergeBounds proofSystem bindingLen_le) (ringProofFormat proofSystem bindingLen_le)
+    (ringStmtVerifies (2 + ringMsgLen) proofSystem maxAttempts
+      (bindingMsg (GordieHowe.MLDSA.Spec.expandS _root_.MLDSA.mldsa44)
+        (GordieHowe.MLDSA.Spec.expandMask _root_.MLDSA.mldsa44)))
+    (ringHonest_errorBound _ proofSystem) (baseSigner_correctWithin _ proofSystem maxAttempts _)
+  rwa [zero_add, ENNReal.coe_zero] at h
 
 /-- **Completeness per key of the converted ML-DSA-44 ring signature**
 (`mldsaScheme.completeAtWithin`): at every number of attempts, every key and every supported ring
@@ -228,7 +259,7 @@ prover's completeness error `0`, spBCS's overrun and key-collision terms and `0 
 theorem convertedScheme.completeAtWithin (maxAttempts : ℕ) :
     (convertedScheme C maxAttempts).CompleteAtWithin 1
       (0 + (((0 : ℝ≥0) : ℝ≥0∞) +
-        ((ringTranscript (2 + 32) C).setting 32 (ringMergeBounds C msgLen_le)).model.overrun +
+        (convertedSetting C).model.overrun +
         SPBCS.keyCollision ((ringIop (2 + 32) C).term.size (ringIop (2 + 32) C).rounds)
           (ringTranscript (2 + 32) C).k + ((0 + 0 : ℕ) : ℝ≥0∞) / 2 ^ (8 * 32))) :=
   mldsaScheme.completeAtWithin _ _ _ _ _ _ _ (ringHonest_errorBound _ C)
@@ -239,7 +270,7 @@ theorem convertedScheme.completeAtWithin (maxAttempts : ℕ) :
 theorem bindingScheme.completeAtWithin (maxAttempts : ℕ) :
     (bindingScheme C maxAttempts).CompleteAtWithin 1
       (0 + (((0 : ℝ≥0) : ℝ≥0∞) +
-        ((ringTranscript (2 + ringMsgLen) C).setting 32 (ringMergeBounds C bindingLen_le)).model.overrun +
+        (bindingSetting C).model.overrun +
         SPBCS.keyCollision ((ringIop (2 + ringMsgLen) C).term.size (ringIop (2 + ringMsgLen) C).rounds)
           (ringTranscript (2 + ringMsgLen) C).k + ((0 + 0 : ℕ) : ℝ≥0∞) / 2 ^ (8 * 32))) :=
   mldsaScheme.completeAtWithin _ _ _ _ _ _ _ (ringHonest_errorBound _ C)
@@ -248,7 +279,7 @@ theorem bindingScheme.completeAtWithin (maxAttempts : ℕ) :
 /-- **Anonymity against full key exposure (BKM06 Definition 4, `Q` adaptive challenges) of the
 converted ML-DSA-44 ring signature** (`mldsaScheme.anonAdvantage_le`): at every number of
 attempts, every anonymity adversary (any oracle view, at most `t` queries) has advantage at most
-`Q · wiError 0 (Q · |AnonRequest|) + 2Q · 0 + Q · n · mldsaRefuseAvg` (the honest prover has no
+`Q · wiError 0 (Q · |AnonRequest|) + Q · n · mldsaRefuseAvg` (the honest prover has no
 completeness error, the base signer has correctness error `0` and refuses with probability at most
 the worst-message refusal term `mldsaRefuseAvg` averaged over the keys,
 `refuseAvgWithin_mldsaRefuseAvg`, left symbolic). -/
@@ -257,12 +288,12 @@ theorem convertedScheme.anonAdvantage_le (maxAttempts : ℕ) {n : ℕ}
     {Vw : OracleView _ _} {t : ℕ}
     (A : AnonAdversary (convertedScheme proofSystem maxAttempts) n Vw t) (Q : ℕ) :
     anonAdvantage A Q ≤
-      Q * ((ringTranscript (2 + 32) proofSystem).setting 32 (ringMergeBounds proofSystem msgLen_le)).model.wiError 0
+      Q * (convertedSetting proofSystem).model.wiError 0
           (Q * Fintype.card (AnonRequest (convertedScheme proofSystem maxAttempts) n)) +
-        2 * Q * ((0 : ℝ≥0) : ℝ) +
-          Q * n * (mldsaRefuseAvg _root_.MLDSA.mldsa44 fipsPrims maxAttempts).toReal :=
-  mldsaScheme.anonAdvantage_le _ _ _ _ _ _ _ (ringHonest_errorBound _ proofSystem)
-    (by simpa using baseSigner_correctWithin _ proofSystem maxAttempts _) A Q
+        Q * n * (mldsaRefuseAvg _root_.MLDSA.mldsa44 fipsPrims maxAttempts).toReal :=
+  (mldsaScheme.anonAdvantage_le _ _ _ _ _ _ _ (ringHonest_errorBound _ proofSystem) (εc := 0)
+    (by simpa using baseSigner_correctWithin _ proofSystem maxAttempts _) A Q).trans_eq
+    (by simp only [NNReal.coe_zero, mul_zero, add_zero])
 
 /-- **Anonymity against full key exposure (BKM06 Definition 4, `Q` adaptive challenges) of the
 ring-binding ML-DSA-44 ring signature** (`mldsaScheme.anonAdvantage_le`): the bound of
@@ -272,12 +303,11 @@ theorem bindingScheme.anonAdvantage_le (maxAttempts : ℕ) {n : ℕ}
     {Vw : OracleView _ _} {t : ℕ}
     (A : AnonAdversary (bindingScheme proofSystem maxAttempts) n Vw t) (Q : ℕ) :
     anonAdvantage A Q ≤
-      Q * ((ringTranscript (2 + ringMsgLen) proofSystem).setting 32
-          (ringMergeBounds proofSystem bindingLen_le)).model.wiError 0
+      Q * (bindingSetting proofSystem).model.wiError 0
           (Q * Fintype.card (AnonRequest (bindingScheme proofSystem maxAttempts) n)) +
-        2 * Q * ((0 : ℝ≥0) : ℝ) +
-          Q * n * (mldsaRefuseAvg _root_.MLDSA.mldsa44 fipsPrims maxAttempts).toReal :=
-  mldsaScheme.anonAdvantage_le _ _ _ _ _ _ _ (ringHonest_errorBound _ proofSystem)
-    (by simpa using baseSigner_correctWithin _ proofSystem maxAttempts _) A Q
+        Q * n * (mldsaRefuseAvg _root_.MLDSA.mldsa44 fipsPrims maxAttempts).toReal :=
+  (mldsaScheme.anonAdvantage_le _ _ _ _ _ _ _ (ringHonest_errorBound _ proofSystem) (εc := 0)
+    (by simpa using baseSigner_correctWithin _ proofSystem maxAttempts _) A Q).trans_eq
+    (by simp only [NNReal.coe_zero, mul_zero, add_zero])
 
 end GordieHowe.MLDSA44.Ring.Native.ROMParams

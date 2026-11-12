@@ -92,7 +92,6 @@ theorem prf_reprogram_w1KFSign (sp : Y ≃+ Y₁ × Y₂) (pk : PubKey p prims)
   obtain ⟨s, -, rfl⟩ := Option.map_eq_some_iff.1 ho
   exact prf_reprogram_keptValue sp H _ _
 
-open Classical in
 omit [Fintype PCs] [DecidableEq PCs] [Nonempty PCs] [Fintype Msg] [DecidableEq Msg] in
 /-- **The key-free relay challenger at fixed side coins**: with the main challenger on the full
 oracle (`kfMainFull`, the prover `P₂` reading the second components), an event `E` of the
@@ -146,7 +145,6 @@ theorem transcriptLawIn_w1C2_eq [Nonempty X] [Inhabited X] [NeZero n] [Fintype R
         hL))
     H E
 
-open Classical in
 omit [Fintype PCs] [DecidableEq PCs] [Nonempty PCs] [Fintype Msg] [DecidableEq Msg] in
 /-- **The key-free relay challenger's game at fixed side coins** (`transcriptLawIn_w1C2_eq` at
 each key draw and oracle): an event of the run against `w1C2` (of the key coins, the oracle and
@@ -186,7 +184,6 @@ theorem runLawIn_w1C2_eq [Nonempty X] [Inhabited X] [NeZero n] [Fintype Rq] [Dec
 
 local notation "Sf" => freshScheme prims O M βmin tol enc k D bmsg PS adm
 
-open Classical in
 /-- **The hop from the kept-only to the key-free relay challenger, for a game's run**
 (`transcriptLawIn_w1C1_le_w1C2` at each key draw): with the users' key coins uniform and an
 adversary family `A keys`, an event of the run against `w1C1` has at most the probability of the

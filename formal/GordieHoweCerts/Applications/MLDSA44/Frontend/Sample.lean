@@ -48,7 +48,6 @@ class MldsaHSample (program : RealizedProgram) : Prop extends MldsaHShuffle prog
   /-- The challenges are one coordinate of `GF(2^128)`, drawn whole. -/
   chalFacts : (program.challenge 0).size = 1 ∧ (program.challenge 0).sampler = .full ∧ program.chalField 0 = 1 ∧ (program.challenge 1).size = 1 ∧ (program.challenge 1).sampler = .full ∧ program.chalField 1 = 1
 
-set_option maxRecDepth 4096 in
 /-- The native program at the ROM parameters has these facts. -/
 instance : MldsaHSample program where
   kind560 := Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2esample_2eselect_2edelta_kind

@@ -137,9 +137,7 @@ def adversaryTypes : List Name :=
   [``GordieHowe.Quantum.Alg, ``GordieHowe.Quantum.IAlg, ``GordieHowe.Quantum.KindAlg, ``GordieHowe.Quantum.AdaptiveIAlg,
     ``GordieHowe.Quantum.QueryAlg, ``GordieHowe.Quantum.Distinguisher,
     ``GordieHowe.Quantum.OracleAlg, ``GordieHowe.Quantum.MixedAlg, ``GordieHowe.SPBCS.SimExtractionAdversary,
-    ``GordieHowe.SPBCS.WIAdversary, ``GordieHowe.ROM.Alg, ``GordieHowe.ROM.Adversary,
-    ``GordieHowe.Ring.ExtractionForger, ``GordieHowe.Ring.RingAdversary, ``GordieHowe.Ring.PubAnonAdversary,
-    ``GordieHowe.Ring.KeyedAnonAdversary]
+    ``GordieHowe.SPBCS.WIAdversary, ``GordieHowe.ROM.Alg, ``GordieHowe.ROM.Adversary]
 
 /-- **Constructions on adversaries that are not reductions**, each with the reason: the
 translations that define the semantics of the model and the
@@ -375,7 +373,7 @@ def runtimeComputableTypes : List Name :=
     ``GordieHowe.IOP.Prover, ``GordieHowe.IOP.Verifier,
     ``GordieHowe.RingSignature.ProofSystem, ``GordieHowe.RingSignature.PSTypes,
     ``GordieHowe.RingSignature.RingScheme, ``GordieHowe.RingSignature.RingTypes,
-    ``GordieHowe.RingSignature.BaseSigner, ``GordieHowe.RingSignature.BaseTypes]
+    ``GordieHowe.RingSignature.BaseSigner]
 
 /-- All result types checked for compiled code. -/
 def computableTypes : List Name := strictComputableTypes ++ runtimeComputableTypes
@@ -524,10 +522,13 @@ def computabilityFailures (reductions : Array Name) : MetaM (Array (Name × Stri
   let (strict, runtime, checked) ← computabilityFailureClasses reductions
   return (strict ++ runtime, checked)
 
-/-- The measured additional-runtime failure ceiling at `ff9135ad5`: 84. This ceiling may be
-lowered as repairs land; raising it is not permitted. Extractors, simulators and regressions
-against the pinned baseline never belong to this allowance. -/
-def runtimeFailureCeiling : Nat := 84
+/-- The additional-runtime failure ceiling: 84 as measured at `ff9135ad5`, lowered to 81 when
+`spbcsProofSystem`, `spbcsComapProofSystem` and `spbcsSplitProofSystem` became computable, and to 77
+when the older generic relay layer was removed with four entries of the list
+(`BaseVerifiesRing.proofSystem`, `ringHonest`, `VerifiesRing.prover`, `VerifiesRing.signer`). This
+ceiling may be lowered as repairs land; raising it is not permitted. Extractors, simulators and
+regressions against the pinned baseline never belong to this allowance. -/
+def runtimeFailureCeiling : Nat := 77
 
 /-- Fail when additional runtime failures exceed the fixed allowance. The explicit limit also
 lets the regression fixture exercise the boundary with a small pair of actual failures. -/

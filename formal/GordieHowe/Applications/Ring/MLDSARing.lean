@@ -34,12 +34,12 @@ map `V : StmtVerifiesRing …`, which the compiled ML-DSA-44 ring programs insta
   `εc`; the per-key form `mldsaScheme.completeAtWithin` remains, its refusal hypothesis known at the
   FIPS primitives only at `ρ = 1`),
   `mldsaScheme.insiderForgeProb_le_of_bindsRing`,
-  `mldsaScheme.keyReuseForgeProb_le_of_bindsRing` (BKM06 Definition 7 and key-reuse
+  `mldsaScheme.jointForgeProb_le_of_bindsRing` (BKM06 Definition 7 and joint-security
   unforgeability for a ring-binding base message, by knowledge soundness, from the base scheme's
   standard MU-EUF-CMA^corr game `SignOracle.std` with at most `Q` signing and corruption requests;
   the ring-oracle forms `mldsaScheme.insiderForgeProb_le_muEufProbWithin`,
-  `mldsaScheme.keyReuseForgeProb_le_muEufProbWithin` and the extraction-forger forms
-  `mldsaScheme.insiderForgeProb_le_extractionSuccess`, `mldsaScheme.keyReuseForgeProb_le_extractionSuccess` remain),
+  `mldsaScheme.jointForgeProb_le_muEufProbWithin` and the extraction-forger forms
+  `mldsaScheme.insiderForgeProb_le_extractionSuccess`, `mldsaScheme.jointForgeProb_le_extractionSuccess` remain),
   `mldsaScheme.insiderForgeProb_le` (BKM06 Definition 7 for every base
   message, from zero knowledge, simulation extraction and MU-EUF-CMA^corr, at the worst-message
   refusal term `mldsaRefuseAvg`; the form at a refusal bound `ρ`,
@@ -60,6 +60,7 @@ namespace GordieHowe.Ring
 
 open IOP GordieHowe.SPBCS GordieHowe.QROM Quantum Signature RealizedProgram RealizedProgram.ProofSystem
   GordieHowe.RingSignature _root_.MLDSA
+open GordieHowe.MLDSA (mldsaSchemeT)
 open scoped NNReal ENNReal
 
 variable (p : Params) (prims : Primitives p) [NTTRingOps] [Fintype prims.Power2High]
@@ -74,7 +75,8 @@ RMsg)` and the unary encoding of the index of `(R, m)` (byte `j` is `1` exactly 
 the index). -/
 theorem exists_bindsRing_mldsaBaseSigner {Xo Yo : Type} (N : ℕ) :
     ∃ (len : ℕ) (bmsg : KeyRing (PublicKey p prims) N → RMsg → _root_.MLDSA.Bytes len),
-      (mldsaBaseSigner p prims maxAttempts bmsg : BaseSigner Xo Yo N (mldsaBaseT p prims len RMsg)).BindsRing := by
+      (mldsaBaseSigner p prims maxAttempts bmsg :
+        BaseSigner Xo Yo N (mldsaSchemeT p prims len) RMsg).BindsRing := by
   classical
   let e := Fintype.equivFin (KeyRing (PublicKey p prims) N × RMsg)
   let n := Fintype.card (KeyRing (PublicKey p prims) N × RMsg)
@@ -102,7 +104,7 @@ abbrev mldsaOn {X₀ W : Type} {rel₀ : Set (X₀ × W)} {C : RealizedProgram.P
     (TD : SPBCS.ProofSystemTranscript C) (kS : ℕ) {N : ℕ}
     (bmsg : KeyRing (PublicKey p prims) N → RMsg → _root_.MLDSA.Bytes len) :
     BaseSigner (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40))) (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant)) N
-      (mldsaBaseT p prims len RMsg) :=
+      (mldsaSchemeT p prims len) RMsg :=
   mldsaBaseSigner p prims maxAttempts bmsg
 
 /-- **The generic ML-DSA ring signature** at the base message `bmsg`: `ofBase
@@ -118,7 +120,7 @@ noncomputable abbrev mldsaScheme {X₀ W : Type} {rel₀ : Set (X₀ × W)}
     (V : StmtVerifiesRing rel₀ relI (mldsaOn p prims maxAttempts TD kS bmsg) adm)
     [DecidablePred adm] :
     RingScheme (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40))) (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant)) N
-      (ofBaseT (mldsaBaseT p prims len RMsg) (transcriptPST TD kS hb pB Hc.Coins)) :=
+      (ofBaseT (mldsaSchemeT p prims len) RMsg (transcriptPST TD kS hb pB Hc.Coins)) :=
   ofBase (mldsaOn p prims maxAttempts TD kS bmsg) (V.proofSystem Hc hb hf) adm
 
 variable {X₀ W : Type} {rel₀ : Set (X₀ × W)} {C : RealizedProgram.ProofSystem.IOP X₀ W rel₀}
@@ -135,16 +137,15 @@ for an honest prover with completeness error `errc` (`hE`) and a hedged signer w
 error `εc` (`hc`), `mldsaScheme` refuses with probability at most the per-message refusal term
 `mldsaRefuseMsg p prims maxAttempts bmsg` (the refusal probability of an honest member at the base
 message of its honest ring, averaged over the members' key seeds; `refuseWithin_mldsaRefuseMsg`)
-and is rejected with probability at most `εc + errc` plus spBCS's overrun and key-collision terms
-and `0 / 2^(8 kS)`. The refusal term is left symbolic; FIPS 204 Appendix C's heuristic puts it
+and is rejected with probability at most `εc` plus spBCS's completeness error at `errc` and no
+signer queries (`ringCompletenessError errc 0`: overrun, key collision, `0 / 2^(8 kS)`). The refusal term is left symbolic; FIPS 204 Appendix C's heuristic puts it
 near `2^-256` at `maxAttempts = 814`, a remark about its expected size, not a hypothesis here. -/
 @[headline]
 theorem mldsaScheme.completeWithin {errc : ℝ≥0} (hE : Hc.app.ErrorBound fun _ => errc)
     {εc : ℝ≥0∞} (hc : (mldsaOn p prims maxAttempts TD kS bmsg).CorrectWithin εc) :
     (mldsaScheme p prims maxAttempts Hc hb hf V).CompleteWithin
       (mldsaRefuseMsg p prims maxAttempts bmsg)
-      (εc + ((errc : ℝ≥0∞) + (TD.setting kS hb).model.overrun +
-        SPBCS.keyCollision (C.term.size C.rounds) TD.k + ((0 + 0 : ℕ) : ℝ≥0∞) / 2 ^ (8 * kS))) :=
+      (εc + (TD.setting kS hb).model.ringCompletenessError errc 0) :=
   V.completeWithin Hc hb hf hE (refuseWithin_mldsaRefuseMsg p prims maxAttempts bmsg adm) hc
 
 /-- **Completeness per key of the generic ML-DSA ring signature**
@@ -186,23 +187,23 @@ theorem mldsaScheme.insiderForgeProb_le_extractionSuccess
           (TD.setting kS hb).model.senc.digestsPerInput C.merges.nJ (maxError Sd.error) :=
   V.insiderForgeProb_le Hc hb hf hbind Sd A Q
 
-/-- **Key-reuse unforgeability of the generic ML-DSA ring signature for a ring-binding base
-message** (`StmtVerifiesRing.keyReuseForgeProb_le`): the bound of `mldsaScheme.insiderForgeProb_le_extractionSuccess`
-for the key-reuse game, the extraction forger in MU-EUF-CMA^corr with the ring-aware and the
-ordinary signing oracle. The headline form is `mldsaScheme.keyReuseForgeProb_le_muEufProbWithin`. -/
-theorem mldsaScheme.keyReuseForgeProb_le_extractionSuccess
+/-- **Joint-security unforgeability of the generic ML-DSA ring signature for a ring-binding base
+message** (`StmtVerifiesRing.jointForgeProb_le`): the bound of `mldsaScheme.insiderForgeProb_le_extractionSuccess`
+for the joint-security game, the extraction forger in MU-EUF-CMA^corr with the ring-aware and the
+ordinary signing oracle. The headline form is `mldsaScheme.jointForgeProb_le_muEufProbWithin`. -/
+theorem mldsaScheme.jointForgeProb_le_extractionSuccess
     (hbind : (mldsaOn p prims maxAttempts TD kS bmsg).BindsRing) (Sd : C.Sound) {n t : ℕ}
-    (A : KeyReuseAdversary _ (V.proofSystem Hc hb hf) adm n (OracleView.queriesOnly _ _) t)
+    (A : JointAdversary _ (V.proofSystem Hc hb hf) adm n (OracleView.queriesOnly _ _) t)
     (Q : ℕ) :
-    keyReuseForgeProb A Q ≤
-      extractionSuccess (keyReuseRelay _ _ adm) A Q
+    jointForgeProb A Q ≤
+      extractionSuccess (jointRelay _ _ adm) A Q
           (compiledBy_spbcsComapProofSystem _ _ _ hf _ V.stmt V.check V.input)
           (StmtVerifiesRing.extractor hb V) +
         SPBCS.knowledgeError TD.k (Configurations.fsExtraBytes + TD.maxGrant)
           (kqOf C.merges C.rounds pB pB)
           (t + Q * (mldsaScheme p prims maxAttempts Hc hb hf V).q + kqOf C.merges C.rounds pB pB)
           (TD.setting kS hb).model.senc.digestsPerInput C.merges.nJ (maxError Sd.error) :=
-  V.keyReuseForgeProb_le Hc hb hf hbind Sd A Q
+  V.jointForgeProb_le Hc hb hf hbind Sd A Q
 
 /-- **Unforgeability with respect to insider corruption (BKM06 Definition 7) of the generic ML-DSA
 ring signature for a ring-binding base message, from MU-EUF-CMA^corr**
@@ -252,51 +253,39 @@ theorem mldsaScheme.insiderForgeProb_le_of_bindsRing
     (hbind : (mldsaOn p prims maxAttempts TD kS bmsg).BindsRing) (Sd : C.Sound) {n t : ℕ}
     (c₀ : RingSignature.RingStmt (mldsaOn p prims maxAttempts TD kS bmsg) ×
       Claim X₀ (TD.setting kS hb).model.NIProof)
-    (f₀ : (mldsaOn p prims maxAttempts TD kS bmsg).PK ×
-      (mldsaOn p prims maxAttempts TD kS bmsg).BMsg × (mldsaOn p prims maxAttempts TD kS bmsg).BSig)
+    (f₀ : (mldsaOn p prims maxAttempts TD kS bmsg).MUForgery)
     (A : InsiderAdversary (mldsaScheme p prims maxAttempts Hc hb hf V) n
       (OracleView.queriesOnly _ _) t)
     {S w P : ℕ} (hS : GameAdversary.ScheduleLE A S w P) (Q : ℕ) :
     insiderForgeProb A Q ≤
-      muEufProbWithin (Signature.ringToStd 0 (ringMUForger _ (V.proofSystem Hc hb hf) adm
-          (compiledBy_spbcsComapProofSystem _ _ _ hf _ V.stmt V.check V.input) c₀
-          (StmtVerifiesRing.extractorList hb V) f₀
-          (embedAdversary (le_max_left n 2) A)
-          (insiderFam _ (V.proofSystem Hc hb hf) adm (max n 2)) 1 Q
-          (ringQ' (StmtVerifiesRing.verifier hb (pB := pB) V) Q S w P
-            (1 + ((mldsaOn p prims maxAttempts TD kS bmsg).qPub + (V.proofSystem Hc hb hf).q))))
-          (ringQ' (StmtVerifiesRing.verifier hb (pB := pB) V) Q S w P
-            (1 + ((mldsaOn p prims maxAttempts TD kS bmsg).qPub + (V.proofSystem Hc hb hf).q))))
-        (ringQ' (StmtVerifiesRing.verifier hb (pB := pB) V) Q S w P
-          (1 + ((mldsaOn p prims maxAttempts TD kS bmsg).qPub + (V.proofSystem Hc hb hf).q))) Q +
-        SPBCS.knowledgeError TD.k (Configurations.fsExtraBytes + TD.maxGrant)
-          (kqOf C.merges C.rounds pB pB)
-          (t + Q * ((mldsaOn p prims maxAttempts TD kS bmsg).qPub + (V.proofSystem Hc hb hf).q) +
-            kqOf C.merges C.rounds pB pB)
-          (TD.setting kS hb).model.senc.digestsPerInput C.merges.nJ (maxError Sd.error) :=
+      muEufProbWithin (insiderStdForger (V.ringExtractor Hc hb hf Sd c₀ f₀) A Q S w P)
+          (ringStdRequests (mldsaOn p prims maxAttempts TD kS bmsg) (V.proofSystem Hc hb hf)
+            (StmtVerifiesRing.verifier hb (pB := pB) V) Q S w P) Q +
+        (TD.setting kS hb).model.ksError pB pB Sd.error
+          (ringSignQueries (mldsaOn p prims maxAttempts TD kS bmsg) (V.proofSystem Hc hb hf) t Q) :=
   V.insiderForgeProb_le_muEufProbWithin_std Hc hb hf hbind
     (mldsaBaseSigner_oracleFree p prims maxAttempts bmsg)
     (mldsaBaseSigner_ringSignsStd p prims maxAttempts bmsg) Sd c₀ f₀ A hS Q
 
-/-- **Key-reuse unforgeability of the generic ML-DSA ring signature for a ring-binding base
-message, from MU-EUF-CMA^corr** (`StmtVerifiesRing.keyReuseForgeProb_le_muEufProbWithin`): the bound
-of `mldsaScheme.insiderForgeProb_le_muEufProbWithin` for the key-reuse game, the multi-user forger
+/-- **Joint-security unforgeability of the generic ML-DSA ring signature for a ring-binding base
+message, from MU-EUF-CMA^corr** (`StmtVerifiesRing.jointForgeProb_le_muEufProbWithin`): the bound
+of `mldsaScheme.insiderForgeProb_le_muEufProbWithin` for the joint-security game, the multi-user forger
 with the ring-aware and the ordinary signing oracle. The headline form is
-`mldsaScheme.keyReuseForgeProb_le_of_bindsRing`. -/
-theorem mldsaScheme.keyReuseForgeProb_le_muEufProbWithin
+`mldsaScheme.jointForgeProb_le_of_bindsRing`. -/
+theorem mldsaScheme.jointForgeProb_le_muEufProbWithin
     (hbind : (mldsaOn p prims maxAttempts TD kS bmsg).BindsRing) (Sd : C.Sound) {n t : ℕ}
     (c₀ : RingSignature.RingStmt (mldsaOn p prims maxAttempts TD kS bmsg) ×
       Claim X₀ (TD.setting kS hb).model.NIProof)
     (f₀ : (mldsaOn p prims maxAttempts TD kS bmsg).PK ×
       (mldsaOn p prims maxAttempts TD kS bmsg).BMsg × (mldsaOn p prims maxAttempts TD kS bmsg).BSig)
-    (A : KeyReuseAdversary _ (V.proofSystem Hc hb hf) adm n (OracleView.queriesOnly _ _) t)
+    (A : JointAdversary _ (V.proofSystem Hc hb hf) adm n (OracleView.queriesOnly _ _) t)
     {S w P : ℕ} (hS : GameAdversary.ScheduleLE A S w P) (Q : ℕ) :
-    keyReuseForgeProb A Q ≤
+    jointForgeProb A Q ≤
       muEufProbWithin (ringMUForger _ (V.proofSystem Hc hb hf) adm
           (compiledBy_spbcsComapProofSystem _ _ _ hf _ V.stmt V.check V.input) c₀
           (StmtVerifiesRing.extractorList hb V) f₀
           (embedAdversary (le_max_left n 2) A)
-          (keyReuseFam _ (V.proofSystem Hc hb hf) adm (max n 2)) 1 Q
+          (jointFam _ (V.proofSystem Hc hb hf) adm (max n 2)) 1 Q
           (ringQ' (StmtVerifiesRing.verifier hb (pB := pB) V) Q S w P
             (1 + ((mldsaOn p prims maxAttempts TD kS bmsg).qPub + (V.proofSystem Hc hb hf).q))))
         (ringQ' (StmtVerifiesRing.verifier hb (pB := pB) V) Q S w P
@@ -306,43 +295,31 @@ theorem mldsaScheme.keyReuseForgeProb_le_muEufProbWithin
           (t + Q * ((mldsaOn p prims maxAttempts TD kS bmsg).qPub + (V.proofSystem Hc hb hf).q) +
             kqOf C.merges C.rounds pB pB)
           (TD.setting kS hb).model.senc.digestsPerInput C.merges.nJ (maxError Sd.error) :=
-  V.keyReuseForgeProb_le_muEufProbWithin Hc hb hf hbind
+  V.jointForgeProb_le_muEufProbWithin Hc hb hf hbind
     (mldsaBaseSigner_oracleFree p prims maxAttempts bmsg) Sd c₀ f₀ A hS Q
 
-/-- **Key-reuse unforgeability of the generic ML-DSA ring signature for a ring-binding base
+/-- **Joint-security unforgeability of the generic ML-DSA ring signature for a ring-binding base
 message, from the standard MU-EUF-CMA^corr game**
-(`StmtVerifiesRing.keyReuseForgeProb_le_muEufProbWithin_std`; the ring-aware signer signs as the
+(`StmtVerifiesRing.jointForgeProb_le_muEufProbWithin_std`; the ring-aware signer signs as the
 ordinary signer on the base message, `mldsaBaseSigner_ringSignsStd`): the bound of
-`mldsaScheme.keyReuseForgeProb_le_muEufProbWithin` with the multi-user forger relayed to the base
-scheme's own game (`SignOracle.std`, `Signature.ringStdToStd`), with the same numbers of requests
-and of signing and corruption requests. -/
+`mldsaScheme.jointForgeProb_le_muEufProbWithin` with the multi-user forger relayed to the base
+scheme's own game (`jointStdForger` at `StmtVerifiesRing.ringExtractor`), with the same numbers of
+requests and of signing and corruption requests. -/
 @[headline]
-theorem mldsaScheme.keyReuseForgeProb_le_of_bindsRing
+theorem mldsaScheme.jointForgeProb_le_of_bindsRing
     (hbind : (mldsaOn p prims maxAttempts TD kS bmsg).BindsRing) (Sd : C.Sound) {n t : ℕ}
     (c₀ : RingSignature.RingStmt (mldsaOn p prims maxAttempts TD kS bmsg) ×
       Claim X₀ (TD.setting kS hb).model.NIProof)
-    (f₀ : (mldsaOn p prims maxAttempts TD kS bmsg).PK ×
-      (mldsaOn p prims maxAttempts TD kS bmsg).BMsg × (mldsaOn p prims maxAttempts TD kS bmsg).BSig)
-    (A : KeyReuseAdversary _ (V.proofSystem Hc hb hf) adm n (OracleView.queriesOnly _ _) t)
+    (f₀ : (mldsaOn p prims maxAttempts TD kS bmsg).MUForgery)
+    (A : JointAdversary _ (V.proofSystem Hc hb hf) adm n (OracleView.queriesOnly _ _) t)
     {S w P : ℕ} (hS : GameAdversary.ScheduleLE A S w P) (Q : ℕ) :
-    keyReuseForgeProb A Q ≤
-      muEufProbWithin (Signature.ringStdToStd 0 (ringMUForger _ (V.proofSystem Hc hb hf) adm
-          (compiledBy_spbcsComapProofSystem _ _ _ hf _ V.stmt V.check V.input) c₀
-          (StmtVerifiesRing.extractorList hb V) f₀
-          (embedAdversary (le_max_left n 2) A)
-          (keyReuseFam _ (V.proofSystem Hc hb hf) adm (max n 2)) 1 Q
-          (ringQ' (StmtVerifiesRing.verifier hb (pB := pB) V) Q S w P
-            (1 + ((mldsaOn p prims maxAttempts TD kS bmsg).qPub + (V.proofSystem Hc hb hf).q))))
-          (ringQ' (StmtVerifiesRing.verifier hb (pB := pB) V) Q S w P
-            (1 + ((mldsaOn p prims maxAttempts TD kS bmsg).qPub + (V.proofSystem Hc hb hf).q))))
-        (ringQ' (StmtVerifiesRing.verifier hb (pB := pB) V) Q S w P
-          (1 + ((mldsaOn p prims maxAttempts TD kS bmsg).qPub + (V.proofSystem Hc hb hf).q))) Q +
-        SPBCS.knowledgeError TD.k (Configurations.fsExtraBytes + TD.maxGrant)
-          (kqOf C.merges C.rounds pB pB)
-          (t + Q * ((mldsaOn p prims maxAttempts TD kS bmsg).qPub + (V.proofSystem Hc hb hf).q) +
-            kqOf C.merges C.rounds pB pB)
-          (TD.setting kS hb).model.senc.digestsPerInput C.merges.nJ (maxError Sd.error) :=
-  V.keyReuseForgeProb_le_muEufProbWithin_std Hc hb hf hbind
+    jointForgeProb A Q ≤
+      muEufProbWithin (jointStdForger (V.ringExtractor Hc hb hf Sd c₀ f₀) A Q S w P)
+          (ringStdRequests (mldsaOn p prims maxAttempts TD kS bmsg) (V.proofSystem Hc hb hf)
+            (StmtVerifiesRing.verifier hb (pB := pB) V) Q S w P) Q +
+        (TD.setting kS hb).model.ksError pB pB Sd.error
+          (ringSignQueries (mldsaOn p prims maxAttempts TD kS bmsg) (V.proofSystem Hc hb hf) t Q) :=
+  V.jointForgeProb_le_muEufProbWithin_std Hc hb hf hbind
     (mldsaBaseSigner_oracleFree p prims maxAttempts bmsg)
     (mldsaBaseSigner_ringSignsStd p prims maxAttempts bmsg) Sd c₀ f₀ A hS Q
 
@@ -373,7 +350,8 @@ theorem mldsaScheme.anonAdvantage_le {errc : ℝ≥0} (hE : Hc.app.ErrorBound fu
       (mldsaRefuseAvg_le_one p prims maxAttempts))]
     exact refuseAvgWithin_mldsaRefuseAvg p prims maxAttempts bmsg adm
   have h := V.anonAdvantage_le_of_pubOfCoins_avg Hc hb hf hE
-    (mldsaBaseSigner_oracleFree p prims maxAttempts bmsg) (fun _ => Finset.card_filter_le _ _)
+    (mldsaBaseSigner_oracleFree p prims maxAttempts bmsg)
+    (RingScheme.validChallengeBound_le_card _ _)
     (BaseSigner.pubOfCoins_unique _) hcorr hρ A Q
   rwa [ENNReal.coe_toNNReal_eq_toReal] at h
 
@@ -382,7 +360,6 @@ omit [Inhabited W] [DecidableEq X₀] in
 instance mldsaOn_nonempty_pub : Nonempty (mldsaOn p prims maxAttempts TD kS bmsg).Pub :=
   inferInstanceAs (Nonempty Unit)
 
-open Classical in
 /-- **Unforgeability with respect to insider corruption (BKM06 Definition 7) of the generic ML-DSA
 ring signature for every base message (converted signatures included), from zero knowledge,
 simulation extraction and MU-EUF-CMA^corr, at a refusal rate averaged over the keys**
@@ -393,60 +370,39 @@ soundness data `Sd` of `C`, a signer refusing with probability at most `ρ` aver
 keys on the supported rings (`hρ`; at `mldsaRefuseAvg`,
 `mldsaScheme.insiderForgeProb_le`), with correctness error `εc`
 (`hcorr`; `mldsaBaseSigner_correctWithin_zero` at the FIPS primitives), an injective statement map
-(`hinj`) and no honest statement of the empty ring (`hnil`), an adversary of BKM06 Definition 7
+(`zkf.stmt_injective`) and no honest statement of the empty ring (`zkf.not_mem_relH_nil`), an adversary of BKM06 Definition 7
 with the schedule bound `S`, `w`, `P'` (`hS`) forges with probability at most the success of the
 multi-user forger `zkForger` with `zkQ'` requests, plus the zero-knowledge error, the
 simulation-extraction error, spBCS's knowledge error, `2Q · εc` and `Q · n · ρ`. The statements
 of the empty ring are tested by `RingSignature.EmptyRingTest V.stmt`. -/
 theorem mldsaScheme.insiderForgeProb_le_refuseAvg [Fintype Inp] [DecidableEq Inp]
-    [RingSignature.EmptyRingTest V.stmt]
     [Nonempty (mldsaOn p prims maxAttempts TD kS bmsg).Msg]
-    [Nonempty (mldsaOn p prims maxAttempts TD kS bmsg).BSig]
-    (hk : 0 < TD.k) {errc : ℝ≥0} (hE : Hc.app.ErrorBound fun _ => errc) (Sd : C.Sound) {ρ : ℝ≥0∞}
+    [hk : NeZero TD.k] {errc : ℝ≥0} (hE : Hc.app.ErrorBound fun _ => errc) (Sd : C.Sound) {ρ : ℝ≥0∞}
     (hρ : (mldsaOn p prims maxAttempts TD kS bmsg).RefuseAvgWithin adm ρ) {εc : ℝ≥0∞}
     (hcorr : (mldsaOn p prims maxAttempts TD kS bmsg).CorrectWithin εc)
-    (hinj : Function.Injective V.stmt)
-    (hnil : ∀ x : RingSignature.RingStmt (mldsaOn p prims maxAttempts TD kS bmsg),
-      x.ring.1 = [] → ∀ y, (V.stmt x, y) ∉ relI)
+    (zkf : V.ZKFacts)
     (T : (TD.setting kS hb).model.Preimages) {n t : ℕ}
     (A : InsiderAdversary (mldsaScheme p prims maxAttempts Hc hb hf V) n
       (OracleView.queriesOnly _ _) t) [NeZero n]
-    [Nonempty (SPBCS.NIProof (k := TD.k) (kN := 2 * TD.k) (kS := kS) (L := 2 ^ 40)
-      (e := Configurations.fsExtraBytes + TD.maxGrant) (TD.setting kS hb).model)] (Q : ℕ)
-    (f₀ : (mldsaOn p prims maxAttempts TD kS bmsg).PK ×
-      (mldsaOn p prims maxAttempts TD kS bmsg).BMsg × (mldsaOn p prims maxAttempts TD kS bmsg).BSig)
+    (Q : ℕ)
+    (f₀ : (mldsaOn p prims maxAttempts TD kS bmsg).MUForgery)
     {S w P' : ℕ} (hS : GameAdversary.ScheduleLE A S w P') :
+    haveI := V.nonempty_niProof SD hb
     insiderForgeProb A Q ≤
-      muEufProb (RingSignature.Insider.zkForger A (wit := V.wit) (fun _ _ _ _ => False)
-          (fun _ => ()) Q
-          (RingSignature.Insider.zkPsim (ert := ‹RingSignature.EmptyRingTest V.stmt›) n
-            (TD.setting kS hb).layout hf
-            (RealizedProgram.ProofSystem.IOP.honest Hc) V.stmt
-            V.check V.input adm (TD.setting kS hb).viewEncoder id
-            (RealizedProgram.ProofSystem.IOP.simulator SD) T)
-          C.extractor (kqOf C.merges C.rounds pB pB) f₀)
-        (RingSignature.Insider.zkQ' (ert := ‹RingSignature.EmptyRingTest V.stmt›) n
-          (TD.setting kS hb).layout hf
-          (RealizedProgram.ProofSystem.IOP.honest Hc) V.stmt
-          V.check V.input adm (TD.setting kS hb).viewEncoder id
-          (RealizedProgram.ProofSystem.IOP.simulator SD) T Q S w P') +
-        ENNReal.ofReal ((TD.setting kS hb).model.zkError errc t Q) +
-        (TD.setting kS hb).model.simExtractionError (kqOf C.merges C.rounds pB pB)
-          (maxError Sd.error)
-          ((TD.setting kS hb).model.niJointSimulatorProg (TD.setting kS hb).layout
-            (TD.setting kS hb).viewEncoder.toViewRead pB id
-            (RealizedProgram.ProofSystem.IOP.simulator SD) T).q t Q +
-        SPBCS.knowledgeError TD.k (Configurations.fsExtraBytes + TD.maxGrant)
-          (kqOf C.merges C.rounds pB pB)
-          (t + Q * (mldsaScheme p prims maxAttempts Hc hb hf V).q + kqOf C.merges C.rounds pB pB)
-          (TD.setting kS hb).model.senc.digestsPerInput C.merges.nJ (maxError Sd.error) +
+      muEufProb (RingSignature.Insider.zkRouteForger A V.wit (V.ringArgument Hc hb hE Sd zkf T f₀)
+          (mldsaOn p prims maxAttempts TD kS bmsg).noRefusal RingSignature.unitPub Q)
+          (RingSignature.Insider.zkRouteRequests A (V.ringArgument Hc hb hE Sd zkf T f₀) Q S w P') +
+        RingSignature.Insider.ringZkError (TD.setting kS hb).model errc t Q +
+        RingSignature.Insider.ringSimExtError A (V.ringArgument Hc hb hE Sd zkf T f₀) Q +
+        (TD.setting kS hb).model.ksError pB pB Sd.error
+          (t + Q * (mldsaScheme p prims maxAttempts Hc hb hf V).q) +
         2 * Q * εc + Q * (n * ρ) :=
   haveI : Unique (mldsaOn p prims maxAttempts TD kS bmsg).Pub := inferInstanceAs (Unique Unit)
-  V.insiderForgeProb_le_zk_muEufProb_refuseAvg Hc hb hf hk hE Sd
+  have := V.nonempty_niProof SD hb
+  V.insiderForgeProb_le_zk_muEufProb_refuseAvg Hc hb hf hE Sd
     (mldsaBaseSigner_oracleFree p prims maxAttempts bmsg) (BaseSigner.pubOfCoins_unique _) hρ
-    hcorr hinj hnil T A Q f₀ hS
+    hcorr zkf T A Q f₀ hS
 
-open Classical in
 /-- **Unforgeability with respect to insider corruption (BKM06 Definition 7) of the generic ML-DSA
 ring signature for every base message (converted signatures included), from zero knowledge,
 simulation extraction and MU-EUF-CMA^corr**
@@ -455,48 +411,27 @@ simulation extraction and MU-EUF-CMA^corr**
 refusals, `mldsaRefuseAvg` left symbolic. -/
 @[headline]
 theorem mldsaScheme.insiderForgeProb_le [Fintype Inp] [DecidableEq Inp]
-    [RingSignature.EmptyRingTest V.stmt]
     [Nonempty (mldsaOn p prims maxAttempts TD kS bmsg).Msg]
-    [Nonempty (mldsaOn p prims maxAttempts TD kS bmsg).BSig]
-    (hk : 0 < TD.k) {errc : ℝ≥0} (hE : Hc.app.ErrorBound fun _ => errc) (Sd : C.Sound) {εc : ℝ≥0∞}
-    (hcorr : (mldsaOn p prims maxAttempts TD kS bmsg).CorrectWithin εc)
-    (hinj : Function.Injective V.stmt)
-    (hnil : ∀ x : RingSignature.RingStmt (mldsaOn p prims maxAttempts TD kS bmsg),
-      x.ring.1 = [] → ∀ y, (V.stmt x, y) ∉ relI)
-    (T : (TD.setting kS hb).model.Preimages) {n t : ℕ}
+    [hk : NeZero TD.k] {errc : ℝ≥0} (hE : Hc.app.ErrorBound fun _ => errc) (Sd : C.Sound)
+    {εc : ℝ≥0∞} (hcorr : (mldsaOn p prims maxAttempts TD kS bmsg).CorrectWithin εc)
+    (zkf : V.ZKFacts) (T : (TD.setting kS hb).model.Preimages) {n t : ℕ}
     (A : InsiderAdversary (mldsaScheme p prims maxAttempts Hc hb hf V) n
       (OracleView.queriesOnly _ _) t) [NeZero n]
-    [Nonempty (SPBCS.NIProof (k := TD.k) (kN := 2 * TD.k) (kS := kS) (L := 2 ^ 40)
-      (e := Configurations.fsExtraBytes + TD.maxGrant) (TD.setting kS hb).model)] (Q : ℕ)
-    (f₀ : (mldsaOn p prims maxAttempts TD kS bmsg).PK ×
-      (mldsaOn p prims maxAttempts TD kS bmsg).BMsg × (mldsaOn p prims maxAttempts TD kS bmsg).BSig)
+    (Q : ℕ)
+    (f₀ : (mldsaOn p prims maxAttempts TD kS bmsg).MUForgery)
     {S w P' : ℕ} (hS : GameAdversary.ScheduleLE A S w P') :
+    haveI := V.nonempty_niProof SD hb
     insiderForgeProb A Q ≤
-      muEufProb (RingSignature.Insider.zkForger A (wit := V.wit) (fun _ _ _ _ => False)
-          (fun _ => ()) Q
-          (RingSignature.Insider.zkPsim (ert := ‹RingSignature.EmptyRingTest V.stmt›) n
-            (TD.setting kS hb).layout hf
-            (RealizedProgram.ProofSystem.IOP.honest Hc) V.stmt
-            V.check V.input adm (TD.setting kS hb).viewEncoder id
-            (RealizedProgram.ProofSystem.IOP.simulator SD) T)
-          C.extractor (kqOf C.merges C.rounds pB pB) f₀)
-        (RingSignature.Insider.zkQ' (ert := ‹RingSignature.EmptyRingTest V.stmt›) n
-          (TD.setting kS hb).layout hf
-          (RealizedProgram.ProofSystem.IOP.honest Hc) V.stmt
-          V.check V.input adm (TD.setting kS hb).viewEncoder id
-          (RealizedProgram.ProofSystem.IOP.simulator SD) T Q S w P') +
-        ENNReal.ofReal ((TD.setting kS hb).model.zkError errc t Q) +
-        (TD.setting kS hb).model.simExtractionError (kqOf C.merges C.rounds pB pB)
-          (maxError Sd.error)
-          ((TD.setting kS hb).model.niJointSimulatorProg (TD.setting kS hb).layout
-            (TD.setting kS hb).viewEncoder.toViewRead pB id
-            (RealizedProgram.ProofSystem.IOP.simulator SD) T).q t Q +
-        SPBCS.knowledgeError TD.k (Configurations.fsExtraBytes + TD.maxGrant)
-          (kqOf C.merges C.rounds pB pB)
-          (t + Q * (mldsaScheme p prims maxAttempts Hc hb hf V).q + kqOf C.merges C.rounds pB pB)
-          (TD.setting kS hb).model.senc.digestsPerInput C.merges.nJ (maxError Sd.error) +
-        2 * Q * εc + Q * (n * mldsaRefuseAvg p prims maxAttempts) :=
-  mldsaScheme.insiderForgeProb_le_refuseAvg p prims maxAttempts Hc hb hf V hk hE Sd
-    (refuseAvgWithin_mldsaRefuseAvg p prims maxAttempts bmsg adm) hcorr hinj hnil T A Q f₀ hS
+      muEufProb (RingSignature.Insider.zkRouteForger A V.wit (V.ringArgument Hc hb hE Sd zkf T f₀)
+          (mldsaOn p prims maxAttempts TD kS bmsg).noRefusal RingSignature.unitPub Q)
+          (RingSignature.Insider.zkRouteRequests A (V.ringArgument Hc hb hE Sd zkf T f₀) Q S w P') +
+        RingSignature.Insider.ringZkError (TD.setting kS hb).model errc t Q +
+        RingSignature.Insider.ringSimExtError A (V.ringArgument Hc hb hE Sd zkf T f₀) Q +
+        (TD.setting kS hb).model.ksError pB pB Sd.error
+          (t + Q * (mldsaScheme p prims maxAttempts Hc hb hf V).q) +
+        2 * Q * εc + Q * (n * mldsaRefuseAvg p prims maxAttempts) := by
+  have := V.nonempty_niProof SD hb
+  exact mldsaScheme.insiderForgeProb_le_refuseAvg p prims maxAttempts Hc hb hf V hE Sd
+    (refuseAvgWithin_mldsaRefuseAvg p prims maxAttempts bmsg adm) hcorr zkf T A Q f₀ hS
 
 end GordieHowe.Ring

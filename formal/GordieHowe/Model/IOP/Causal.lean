@@ -479,4 +479,19 @@ abbrev CausalRBRKnowledgeSound [∀ j (i : (P j).ChallengeIdx), Fintype ((P j).C
     (S : CausalStateFn P t Stmt) (ε : ChIdx P t → ℝ≥0) : Prop :=
   CausalRBR rel E S ε (fun _ => False) fun x f => V x f = true
 
+/-- **A round-by-round knowledge extractor** for `rel` and the composite verifier `V` (the paper's
+`def:rbr`): an extractor, its state function, its per-challenge errors, and the proof of causal
+round-by-round knowledge soundness at them (`CausalRBRKnowledgeSound`). -/
+structure RBRKnowledgeExtractor [∀ j (i : (P j).ChallengeIdx), Fintype ((P j).Challenge i)]
+    [∀ j (i : (P j).ChallengeIdx), Nonempty ((P j).Challenge i)] {t : SPTerm ι} {Stmt Wit : Type}
+    (rel : Set (Stmt × Wit)) (V : Stmt → FullTr P t → Bool) where
+  /-- The extractor. -/
+  Ext : CausalExtractor P t Stmt Wit
+  /-- The state function. -/
+  St : CausalStateFn P t Stmt
+  /-- The per-challenge errors. -/
+  ε : ChIdx P t → ℝ≥0
+  /-- Causal round-by-round knowledge soundness at these errors. -/
+  sound : CausalRBRKnowledgeSound rel V Ext St ε
+
 end GordieHowe.IOP

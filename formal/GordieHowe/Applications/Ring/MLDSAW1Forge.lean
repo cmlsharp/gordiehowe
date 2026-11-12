@@ -226,7 +226,7 @@ end OneMsg
 omit nttOps in
 /-- **The fixed relation `w1ExpRel` is decidable**, so the one-message IOP
 (`causalRBRKnowledgeSound_oneMsg`) decides it. -/
-noncomputable instance instDecidablePredMemW1ExpRel {adm : KeyRing (PubKey p prims) N → Prop}
+instance instDecidablePredMemW1ExpRel {adm : KeyRing (PubKey p prims) N → Prop}
     [hadm : DecidablePred adm] : DecidablePred (· ∈ w1ExpRel prims enc bmsg adm) :=
   fun q => by
     unfold w1ExpRel

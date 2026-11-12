@@ -26,7 +26,6 @@ GordieHowe.MLDSA.Regularity.envelope_seven_mldsa65	GordieHowe.Applications.MLDSA
 GordieHowe.RealizedProgram.holdsWith_mod_of_grouped	GordieHowe.Language.Realizations.RealizeGrouped	12.3	0.3	15.4	pre-existing	elaboration, 9.1 s of it in the IR interpreter (decide/#eval)
 <instance : Norm.FalconNorm program where dA := 1 fA := 1 domainField >	GordieHoweCerts.Applications.Falcon512.Native.ROMParams.Frontend.AlgebraFacts	0.2	12.1	15.2	kernel check of a concrete table	decide +kernel fields of the instance (29 sites)
 GordieHowe.RealizedProgram.holdsWith_mod_of_grouped_named	GordieHowe.Language.Realizations.RealizeGrouped	11.8	0.3	14.8	pre-existing	elaboration, 9.1 s of it in the IR interpreter (decide/#eval)
-GordieHowe.RingSignature.completeWithin_ofBase	GordieHowe.Model.RingSignature.BaseCompleteness	10.8	0.1	13.5	pre-existing	elaboration
 <instance : MldsaHHashData program where roundShapes := fun p t => (ro>	GordieHoweCerts.Applications.MLDSA44.Frontend.HashData	0.6	10.8	13.5	kernel check of a concrete table	decide +kernel fields of the instance (25 sites)
 GordieHowe.Falcon512.Native.QROMParams.const_rc	GordieHoweCerts.Applications.Falcon512.Native.QROMParams.Frontend.HashFacts	0.4	10.6	13.3	kernel check of a concrete table	decide +kernel fields of the instance (24 sites)
 <instance : MldsaHHashData program where roundShapes := fun p t => (ro>	GordieHoweCerts.Applications.MLDSA44.Native.QROMParams.Frontend.Shape	0.6	10.5	13.2	kernel check of a concrete table	decide +kernel fields of the instance (25 sites)
@@ -38,7 +37,6 @@ GordieHowe.Falcon512.Emulated.ROMParams.absorb_facts	GordieHoweCerts.Application
 GordieHowe.Falcon512.Native.ROMParams.absorb_facts	GordieHoweCerts.Applications.Falcon512.Native.ROMParams.Frontend.HashFacts	0.2	10.1	12.7	kernel check of a concrete table	decide +kernel fields of the instance (13 sites)
 GordieHowe.Falcon512.Emulated.QROMParams.absorb_facts	GordieHoweCerts.Applications.Falcon512.Emulated.QROMParams.Frontend.HashFacts	0.2	9.9	12.4	kernel check of a concrete table	decide +kernel fields of the instance (13 sites)
 GordieHowe.Falcon512.Native.QROMParams.absorb_facts	GordieHoweCerts.Applications.Falcon512.Native.QROMParams.Frontend.HashFacts	0.2	9.9	12.4	kernel check of a concrete table	decide +kernel fields of the instance (13 sites)
-GordieHowe.RingSignature.Insider.simProb_extAdv_seAlg_eq_zk	GordieHowe.Applications.Ring.RingForgerZK	2.0	9.8	12.3	pre-existing	slow elaboration and kernel check
 GordieHowe.MLDSA44.Emulated.QROMParams.honest	GordieHoweCerts.Applications.MLDSA44.Emulated.QROMParams.Facts	0.3	7.0	8.8	kernel check of a concrete table	decide +kernel fields of the instance (25 sites)
 GordieHowe.MLDSA44.Emulated.ROMParams.honest	GordieHoweCerts.Applications.MLDSA44.Emulated.ROMParams.Facts	0.3	7.0	8.8	kernel check of a concrete table	decide +kernel fields of the instance (25 sites)
 <instance : MldsaRingHonest program where inv := heldInv σ embedData.V>	GordieHoweCerts.Applications.MLDSA44.Ring.Native.QROMParams.Facts	0.2	6.7	8.4	kernel check of a concrete table	decide +kernel fields of the instance (9 sites)
@@ -50,6 +48,5 @@ GordieHowe.MLDSA44.Emulated.ROMParams.honest	GordieHoweCerts.Applications.MLDSA4
 GordieHowe.MLDSA44.Emulated.ROMParams.predCorr	GordieHoweCerts.Applications.MLDSA44.Emulated.ROMParams.Frontend.Embed	0.1	5.6	7.0	kernel check of a concrete table	one decide over the data under a short wrapper
 GordieHowe.MLDSA44.Emulated.QROMParams.predCorr	GordieHoweCerts.Applications.MLDSA44.Emulated.QROMParams.Frontend.Basic	0.1	5.4	6.8	kernel check of a concrete table	one decide over the data under a short wrapper
 GordieHowe.MLDSA44.idxLevel_toList	GordieHoweCerts.Applications.MLDSA44.Frontend.Select	0.1	5.4	6.8	kernel check of a concrete table	the body is one decide over the data
-GordieHowe.SPBCS.simExtractionExpansion_absorbTab_next_congr	GordieHowe.Applications.Ring.RingForgerZK	0.5	5.2	6.5	pre-existing	kernel check
 GordieHowe.Falcon512.Native.QROMParams.HashShapeFacts.roundRow_mem	GordieHoweCerts.Applications.Falcon512.Native.QROMParams.HashShapeFacts	0.1	5.2	6.5	kernel check of a concrete table	the body is one decide over the data; QROM twin of the ROM row
 GordieHowe.Falcon512.Native.ROMParams.HashShapeFacts.roundRow_mem	GordieHoweCerts.Applications.Falcon512.Native.ROMParams.HashShapeFacts	0.1	5.1	6.4	kernel check of a concrete table	the body is one decide over the data

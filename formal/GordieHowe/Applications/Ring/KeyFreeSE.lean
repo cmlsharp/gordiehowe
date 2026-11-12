@@ -60,11 +60,12 @@ namespace RingSignature.KeyFree
 
 section Relay
 
-variable {X Y Xb Yb : Type} {N n : ℕ} {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins]
-  (B : BaseSigner Xb Yb N TB) {Stmt Wit Proof SC R : Type}
+variable {X Y Xb Yb : Type} {N n : ℕ} {T : Signature.SchemeTypes} {RMsg : Type} [Fintype T.PK]
+  [DecidableEq T.PK]
+  [Fintype T.BSig]
+  [DecidableEq T.BSig] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins]
+  (B : BaseSigner Xb Yb N T RMsg) {Stmt Wit Proof SC R : Type}
   (rel : Stmt → Wit → Prop) [DecidableRel rel]
   (enc : MURequest (SignOracle.none B.core) n ⊕ R → ProofQuery Stmt Wit) (dummyS : Stmt)
   {X₀ : Type} (stmtX : Stmt → X₀)
@@ -96,15 +97,15 @@ def seTwoKF (pks : Fin n → B.PK) (Q : ℕ) :
     | _ => none
   answer₂ _ _ b := b.map Sum.inl
 
-omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] in
 /-- The relay of the simulation-extraction step sends distinct requests to distinct statements. -/
 theorem seTwoKF_route_injective (pks : Fin n → B.PK) (Q c : ℕ) :
     Function.Injective ((seTwoKF (Proof := Proof) B rel enc dummyS pks Q).route₁ c) :=
   fun _ _ h => congrArg Prod.snd h
 
-omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] in
 /-- **The outer requests of the simulation-extraction relay are corruptions.** -/
 theorem seTwoKF_outer_eq (pks : Fin n → B.PK) {Q c : ℕ} {r} {q : MURequest (SignOracle.none B.core) n}
     (h : (seTwoKF (Proof := Proof) B rel enc dummyS pks Q).outer c r = some q) :
@@ -145,8 +146,8 @@ structure DummyStmts (isDummy : X₀ → Bool) : Prop where
 
 variable [Fintype SC] [DecidableEq SC] {isDummy : X₀ → Bool}
 
-omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] in
 /-- **The simulated main challenger relays the simulation-extraction challenger** of the simulator
 inert on dummy statements, by the relay `seTwoKF` at the public keys of `keys` and the outer
 replies `keyReplyNone keys`: a public-key request is answered by the relay and a corruption by
@@ -205,8 +206,8 @@ theorem relays_kfMainSim_se (hd : DummyStmts B rel enc dummyS stmtX isDummy)
       · simp [TwoRelay.atC, seTwoKF, not_lt.2 hi]
     · simp [TwoRelay.atC, seTwoKF]
 
-omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] in
 /-- The relayed requests of the simulation-extraction relay are the tagged statements. -/
 theorem relayList_seTwoKF (pks : Fin n → B.PK) (Q : ℕ)
     (b : ℕ → MURequest (SignOracle.none B.core) n → Option (MUResponse B.core))
@@ -216,8 +217,8 @@ theorem relayList_seTwoKF (pks : Fin n → B.PK) (Q : ℕ)
   exact List.ext_getElem (by simp) fun i _ _ => by
     simp [SideRelay.relayList, TwoRelay.atC, seTwoKF]
 
-omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+omit [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] in
 /-- **The statements sent for the first `Q` requests differ from a statement `x₀`** when every
 dummy statement does (`hdisj`) and every proof query in the relation among them does (`hq`). -/
 theorem stmtOf_ne {isDummy : X₀ → Bool}
@@ -321,10 +322,10 @@ section SPBCS
 open GordieHowe.SPBCS IOP SPTerm RingSignature.Insider
 
 variable {k kN kS L e N n t : ℕ} {Xb Yb : Type} [DecidableEq Xb] [DecidableEq Yb]
-  {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
-  {B : BaseSigner Xb Yb N TB}
+  {T : Signature.SchemeTypes} {RMsg : Type} [Fintype T.PK] [DecidableEq T.PK]
+  [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins]
+  {B : BaseSigner Xb Yb N T RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -407,7 +408,6 @@ theorem accepts_of_acceptedKF {G : Xq → XOut k e} {c : Claim X₀ M.NIProof}
   rwa [QROM.Expansion.queries_map] at this
 
 omit [Inhabited M.NIProof] in
-open Classical in
 /-- **The simulation-extraction game of an adversary with its output read through a map**,
 through the composition of the adversary before the readout. -/
 theorem winTestProb_mapOut' {X' O : Type} [Fintype X'] [DecidableEq X']

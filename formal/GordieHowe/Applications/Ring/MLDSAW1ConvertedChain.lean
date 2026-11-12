@@ -112,7 +112,6 @@ noncomputable abbrev w1FreshAdv {t : ℕ}
   GameAdversary.relabel (unfReqEquiv (sideHopNone prims O M βmin tol enc k D bmsg PS adm) n)
     (unfRespEquiv (sideHopNone prims O M βmin tol enc k D bmsg PS adm)) A
 
-open Classical in
 /-- **From BKM06 Definition 7 to the key-free relay challenger** (module docstring): the
 probability of a forgery against the hedged scheme is at most the probability of the forgery
 event against `w1C2` for the relabelled adversary, plus the four hybrids' terms. The encoding of the

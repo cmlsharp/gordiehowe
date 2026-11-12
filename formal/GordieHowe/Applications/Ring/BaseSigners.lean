@@ -44,8 +44,8 @@ rings `adm`. Their completeness facts are in `GordieHowe/Applications/Ring/BaseS
   signature `(c̃, z, h)` without `w₁`; the public value `w₁ = enc(UseHint(h, Â·z − c·t₁·2^d))`
   recomputed from the key and the signature (`w1Of`); verification `ringVerify` against the
   commitment hash `H(H_µ(tr, m), w₁)` read from the oracle (`MLDSAOracles.hOrc`). The base signer
-  reads the ring: it refuses rings failing the public check `RingCheck` against the check oracle
-  `G`, which it reads by at most `N · reps` classical queries (`ringCheckProg`,
+  reads the ring: it refuses rings failing the public check `sampledRingCheck` against the check
+  oracle `G`, which it reads by at most `N · reps` classical queries (`ringCheckProg`,
   `run_ringCheckProg`, `ringCheckProg_queries`), and rings whose members' message representatives
   `µ_j = H_µ(tr_j, m)` are not pairwise distinct (`MuDistinct`, by at most `N` queries:
   `muDistinctProg`, `run_muDistinctProg`, `muDistinctProg_queries`), and otherwise runs the ring
@@ -72,17 +72,13 @@ open GordieHowe.Falcon512 (Signer PublicKey falconSchemeT falconBaseScheme)
 
 variable {msgLen : ℕ}
 
-/-- The types of `falconBaseSigner G bmsg`: those of `falconBaseScheme G` and the ring messages
-`RMsg`. -/
-abbrev falconBaseT (G : Signer msgLen) (RMsg : Type) : BaseTypes :=
-  BaseTypes.ofCore (falconSchemeT G) RMsg
 
 /-- **The Falcon-512 base signer** with the signer `G` and the base message `bmsg` of a ring and a
 ring message: the Falcon-512 signature scheme `falconBaseScheme G` signing `bmsg R m` (the ring read
 only through `bmsg`). -/
 def falconBaseSigner (G : Signer msgLen) {RMsg : Type}
     (bmsg : KeyRing PublicKey N → RMsg → (Fin msgLen → UInt8)) :
-    BaseSigner X Y N (falconBaseT G RMsg) :=
+    BaseSigner X Y N (falconSchemeT G) RMsg :=
   BaseSigner.ofCore (falconBaseScheme G) bmsg
 
 end Falcon
@@ -95,9 +91,6 @@ open _root_.MLDSA GordieHowe.MLDSA LatticeCrypto TransformOps
 
 variable (p : Params) (prims : Primitives p) [nttOps : NTTRingOps]
 
-/-- The types of `mldsaBaseSigner`: those of `mldsaBaseScheme` and the ring messages `RMsg`. -/
-abbrev mldsaBaseT (len : ℕ) (RMsg : Type) : BaseTypes :=
-  BaseTypes.ofCore (mldsaSchemeT p prims len) RMsg
 
 variable [Fintype prims.Power2High] [DecidableEq prims.Power2High] [Fintype prims.Hint]
   [DecidableEq prims.Hint]
@@ -106,7 +99,7 @@ variable [Fintype prims.Power2High] [DecidableEq prims.Power2High] [Fintype prim
 signature scheme `mldsaBaseScheme` signing `bmsg R m` (the ring read only through `bmsg`). -/
 def mldsaBaseSigner (maxAttempts : ℕ) {len : ℕ} {RMsg : Type}
     (bmsg : KeyRing (PublicKey p prims) N → RMsg → Bytes len) :
-    BaseSigner X Y N (mldsaBaseT p prims len RMsg) :=
+    BaseSigner X Y N (mldsaSchemeT p prims len) RMsg :=
   BaseSigner.ofCore (mldsaBaseScheme p prims maxAttempts len) bmsg
 
 end MLDSA
@@ -167,24 +160,48 @@ def W1Oracles.gameOrc (O : W1Oracles X Y p prims Msg N reps) (H : X → Y) :
 
 variable (prims)
 
-/-- **The public ring check as a classical oracle program**: query the check oracle at
-`(R, j, r)` for every `j < N` and `r < reps`, then decide `RingCheck` at the cut-off `β_min` with
-tolerance `tol` on the answers (at most `N · reps` queries, `ringCheckProg_queries`). -/
-def ringCheckProg (O : W1Oracles X Y p prims Msg N reps) (βmin : ℚ≥0) (tol : ℕ)
+/-- **A ring check as a classical oracle program**: query the check oracle at `(R, j, r)` for
+every `j < N` and `r < reps`, then run the test `test` (`RingCheck.adm`) on the ring and the
+answers (at most `N · reps` queries, `ringCheckProgOf_queries`). -/
+def ringCheckProgOf (O : W1Oracles X Y p prims Msg N reps)
+    (test : RingOf (PubKey p prims) N → (Fin N → Fin reps → CommitHashBytes p) → Bool)
     (R : KeyRing (PubKey p prims) N) : OracleProg X Y Bool :=
   (OracleProg.tabulate (fun _ => none) (List.finRange N ×ˢ List.finRange reps)
       fun jr => .query (O.gPt (R, jr.1, jr.2)) fun y => .pure (some y)).mapOutput fun T =>
-    decide (RingCheck prims βmin tol
-      (fun pt : KeyRing (PubKey p prims) N × Fin N × Fin reps =>
-        ((T (pt.2.1, pt.2.2)).map O.gAns).getD default) R)
+    test R fun j r => ((T (j, r)).map O.gAns).getD default
+
+omit [NeZero (bucketCount p)] nttOps in
+/-- A ring check makes `N · reps` queries. -/
+theorem ringCheckProgOf_queries (O : W1Oracles X Y p prims Msg N reps)
+    (test : RingOf (PubKey p prims) N → (Fin N → Fin reps → CommitHashBytes p) → Bool)
+    (R : KeyRing (PubKey p prims) N) : (ringCheckProgOf prims O test R).QueriesLE (N * reps) :=
+  fun h => by
+    rw [ringCheckProgOf, OracleProg.trace_mapOutput, OracleProg.length_trace_tabulate]
+    simp [List.length_product]
+
+omit [NeZero (bucketCount p)] nttOps in
+/-- **A ring check as a program runs the test** at the check oracle read from the oracle. -/
+theorem run_ringCheckProgOf (O : W1Oracles X Y p prims Msg N reps)
+    (test : RingOf (PubKey p prims) N → (Fin N → Fin reps → CommitHashBytes p) → Bool)
+    (R : KeyRing (PubKey p prims) N) (H : X → Y) :
+    (ringCheckProgOf prims O test R).run H = test R (fun j r => O.gOrc H (R, j, r)) := by
+  simp only [ringCheckProgOf, OracleProg.run_mapOutput, OracleProg.run_tabulate,
+    OracleProg.run_query, OracleProg.run_pure, List.mem_product, List.mem_finRange, and_self,
+    ite_true, Option.map_some, Option.getD_some]
+  rfl
+
+/-- **The public ring check as a classical oracle program**: query the check oracle at
+`(R, j, r)` for every `j < N` and `r < reps`, then decide `sampledRingCheck` at the cut-off `β_min`
+with tolerance `tol` on the answers (at most `N · reps` queries, `ringCheckProg_queries`). -/
+abbrev ringCheckProg (O : W1Oracles X Y p prims Msg N reps) (βmin : ℚ≥0) (tol : ℕ)
+    (R : KeyRing (PubKey p prims) N) : OracleProg X Y Bool :=
+  ringCheckProgOf prims O (sampledAdm prims (constCut prims βmin) tol) R
 
 omit [NeZero (bucketCount p)] in
 /-- The public ring check makes `N · reps` queries. -/
 theorem ringCheckProg_queries (O : W1Oracles X Y p prims Msg N reps) (βmin : ℚ≥0) (tol : ℕ)
     (R : KeyRing (PubKey p prims) N) : (ringCheckProg prims O βmin tol R).QueriesLE (N * reps) :=
-  fun h => by
-    rw [ringCheckProg, OracleProg.trace_mapOutput, OracleProg.length_trace_tabulate]
-    simp [List.length_product]
+  ringCheckProgOf_queries prims O _ R
 
 /-- **The distinct-µ check as a classical oracle program**: query the message-representative
 oracle at `(tr_j, m)` for every member `j` of `R` and decide whether the answers `µ_j` are pairwise
@@ -212,15 +229,14 @@ theorem run_muDistinctProg (O : W1Oracles X Y p prims Msg N reps) (R : KeyRing (
     decide_eq_true_eq]
   rfl
 
-omit [NeZero (bucketCount p)] in
-/-- **The public ring check decides `RingCheck`** at the check oracle read from the oracle. -/
+/-- **The public ring check decides `sampledRingCheck`** at the check oracle read from the
+oracle. -/
 theorem run_ringCheckProg (O : W1Oracles X Y p prims Msg N reps) (βmin : ℚ≥0) (tol : ℕ)
     (R : KeyRing (PubKey p prims) N) (H : X → Y) :
-    (ringCheckProg prims O βmin tol R).run H = true ↔ RingCheck prims βmin tol (O.gOrc H) R := by
-  simp only [ringCheckProg, OracleProg.run_mapOutput, OracleProg.run_tabulate, OracleProg.run_query,
-    OracleProg.run_pure, List.mem_product, List.mem_finRange, and_self, ite_true,
-    Option.map_some, Option.getD_some, decide_eq_true_eq]
-  rfl
+    (ringCheckProg prims O βmin tol R).run H = true ↔ sampledRingCheck prims βmin tol (O.gOrc
+        H) R := by
+  rw [ringCheckProg, run_ringCheckProgOf]
+  exact decide_eq_true_iff
 
 /-- **The ring loop of the ring publishing `w₁`** with the signing coins `Coins`, a parameter of
 the base signer: the ring loop `sign` from the secret key, the ring, the signer's position, the base
@@ -247,13 +263,31 @@ def W1Loop.stdSigner {CL : Type} (L : W1Loop X Y p prims Msg N CL) (reps : ℕ) 
   ⟨N * reps + (N + L.q), L.std, fun sk m c => (L.std_queries sk m c).mono (by omega)⟩
 
 variable (Msg) in
-/-- The types of the base signer of the ML-DSA ring publishing `w₁` with the signing coins `Coins`:
-those of ML-DSA with `t₀` published (`mldsaT0SchemeT`) and the ring messages `RMsg`. -/
-abbrev w1BaseT (RMsg Coins : Type) : BaseTypes :=
-  BaseTypes.ofCore (mldsaT0SchemeT prims Msg Coins) RMsg
 
 variable [Fintype prims.Power2High] [DecidableEq prims.Power2High] [Fintype prims.Hint]
   [DecidableEq prims.Hint] [Fintype Msg] [DecidableEq Msg]
+
+/-- **The base signer of the ML-DSA ring publishing `w₁` at a ring check** with the oracles `O`,
+the test `test`, the encoding `enc` of recomputed commitments, the ring loop `L` and the base
+message `bmsg`: published keys `(ρ, t₁, t₀)` (`keyGen`), base signatures `(c̃, z, h)`, public value
+`w₁ = w1Of enc pk σ`. Its ring-aware signer runs the test `test` on the ring's check samples
+(`ringCheckProgOf`) and the distinct-µ check (`muDistinctProg`), refuses when either fails, and
+otherwise runs `L.sign`; the ordinary signer is `L.std`. Verification is `ringVerify` against the
+commitment hash read from the oracle, at the recomputed `w₁`. -/
+def w1BaseSignerOf (O : W1Oracles X Y p prims Msg N reps)
+    (test : RingOf (PubKey p prims) N → (Fin N → Fin reps → CommitHashBytes p) → Bool)
+    (enc : Vector prims.High p.k → BucketVec p) {CL : Type} (L : W1Loop X Y p prims Msg N CL)
+    {RMsg : Type} (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg) :
+    BaseSigner X Y N (mldsaT0SchemeT prims Msg CL) RMsg :=
+  ⟨mldsaT0BaseScheme prims O.toMLDSAOracles enc (L.stdSigner reps), bmsg,
+    fun sk R i m c => (ringCheckProgOf prims O test R).bind fun ok =>
+      (muDistinctProg prims O R (bmsg R m)).bind fun ok' =>
+        if ok ∧ ok' then L.sign sk R i (bmsg R m) c else .pure none,
+    fun sk R i m c => (ringCheckProgOf_queries prims O test R).bind fun ok =>
+      (muDistinctProg_queries prims O R (bmsg R m)).bind fun ok' => by
+        split_ifs
+        · exact L.sign_queries _ _ _ _ _
+        · exact OracleProg.QueriesLE.pure _ _⟩
 
 /-- **The base signer of the ML-DSA ring publishing `w₁`** with the oracles `O`, the check's
 cut-off `β_min` and tolerance `tol`, the encoding `enc` of recomputed commitments, the ring loop `L`
@@ -261,20 +295,24 @@ and the base message `bmsg`: published keys `(ρ, t₁, t₀)` (`keyGen`), base 
 public value `w₁ = w1Of enc pk σ`. The base signer refuses rings failing the public check
 (`ringCheckProg`) or whose members' message representatives `µ_j` are not pairwise distinct
 (`muDistinctProg`), and otherwise runs `L.sign`; the ordinary signer is `L.std`. Verification is
-`ringVerify` against the commitment hash read from the oracle, at the recomputed `w₁`. -/
-def w1BaseSigner (O : W1Oracles X Y p prims Msg N reps) (βmin : ℚ≥0) (tol : ℕ)
+`ringVerify` against the commitment hash read from the oracle, at the recomputed `w₁`.
+`w1BaseSignerOf` at the sampled test of the constant cut-off family. -/
+abbrev w1BaseSigner (O : W1Oracles X Y p prims Msg N reps) (βmin : ℚ≥0) (tol : ℕ)
     (enc : Vector prims.High p.k → BucketVec p) {CL : Type} (L : W1Loop X Y p prims Msg N CL)
     {RMsg : Type} (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg) :
-    BaseSigner X Y N (w1BaseT prims Msg RMsg CL) :=
-  ⟨mldsaT0BaseScheme prims O.toMLDSAOracles enc (L.stdSigner reps), bmsg,
-    fun sk R i m c => (ringCheckProg prims O βmin tol R).bind fun ok =>
-      (muDistinctProg prims O R (bmsg R m)).bind fun ok' =>
-        if ok ∧ ok' then L.sign sk R i (bmsg R m) c else .pure none,
-    fun sk R i m c => (ringCheckProg_queries prims O βmin tol R).bind fun ok =>
-      (muDistinctProg_queries prims O R (bmsg R m)).bind fun ok' => by
-        split_ifs
-        · exact L.sign_queries _ _ _ _ _
-        · exact OracleProg.QueriesLE.pure _ _⟩
+    BaseSigner X Y N (mldsaT0SchemeT prims Msg CL) RMsg :=
+  w1BaseSignerOf prims O (sampledAdm prims (constCut prims βmin) tol) enc L bmsg
+
+omit [NeZero (bucketCount p)] in
+/-- The scheme of the base signer publishing `w₁` at a ring check is ML-DSA with `t₀` published at
+the ring loop's ordinary signer. -/
+theorem w1BaseSignerOf_core (O : W1Oracles X Y p prims Msg N reps)
+    (test : RingOf (PubKey p prims) N → (Fin N → Fin reps → CommitHashBytes p) → Bool)
+    (enc : Vector prims.High p.k → BucketVec p) {CL : Type} (L : W1Loop X Y p prims Msg N CL)
+    {RMsg : Type} (bmsg : KeyRing (PubKey p prims) N → RMsg → Msg) :
+    (w1BaseSignerOf prims O test enc L bmsg).core =
+      mldsaT0BaseScheme prims O.toMLDSAOracles enc (L.stdSigner reps) :=
+  rfl
 
 /-- The scheme of the base signer publishing `w₁` is ML-DSA with `t₀` published at the ring
 loop's ordinary signer. -/

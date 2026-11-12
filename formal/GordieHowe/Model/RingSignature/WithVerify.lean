@@ -3,7 +3,7 @@
 
 module
 
-public import GordieHowe.Model.RingSignature.KeyReuse
+public import GordieHowe.Model.RingSignature.Joint
 public import GordieHowe.Model.Quantum.Interactive.RelabelAdversary
 
 @[expose] public section
@@ -221,7 +221,8 @@ theorem forgeProb_withVerify_eq (A : UnforgeAdversary S n O V t) (Q : ℕ) :
   rcases x with _ | ⟨out, hist⟩
   · simp
   · simp only [Set.mem_preimage, Set.mem_ofPred_eq, Option.map_some, Option.mem_def,
-      Option.some.injEq, exists_eq_left']
+      Option.some.injEq, exists_eq_left', GameRun.Wins, GameRun.result, GameRun.start,
+      GameRun.oracle, GameTranscript.out, GameTranscript.history]
 
 /-- **A forgery against `S` is a forgery against `S.withVerify v` or a forgery in `E`**: for a
 verifier `v` accepting what `S.verify` accepts outside the event `E` of the forgery (`hv`), the

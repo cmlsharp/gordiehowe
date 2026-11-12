@@ -47,10 +47,10 @@ theorem bornWeight_mono_of_support {ι : Type*} [Fintype ι] (v : QState ι) {S 
 namespace Signature
 
 variable {N n : ℕ} {m : ℕ} {I J Bd : Type} [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J]
-  {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
-  {B : BaseSigner (Bits m) (BitStr I J) N TB} (O : SignOracle B.core) [NeZero n]
+  {T : Signature.SchemeTypes} {RMsg : Type} [Fintype T.PK] [DecidableEq T.PK]
+  [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins]
+  {B : BaseSigner (Bits m) (BitStr I J) N T RMsg} (O : SignOracle B.core) [NeZero n]
   (e : BitStr I J ≃ Bd)
   {Req Resp Req₁ Resp₁ Ot : Type} [Fintype Req] [DecidableEq Req] [Fintype Resp]
   [DecidableEq Resp] [Fintype Req₁] [DecidableEq Req₁] [Fintype Resp₁] [DecidableEq Resp₁]
@@ -83,7 +83,7 @@ noncomputable def tableForger : MUAdversary O n (OracleView.queriesOnly (Bits m)
 
 variable [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins]
 
-variable [Nonempty TB.KeyCoins]
+variable [Nonempty T.KeyCoins]
 
 /-- **Extraction runs at tables of the multi-user challenger's replies are bounded by the multi-user
 forger of their bridge algorithms** (module docstring): for a signing oracle without queries (`hO`),

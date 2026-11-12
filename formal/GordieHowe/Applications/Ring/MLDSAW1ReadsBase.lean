@@ -34,8 +34,8 @@ variable {X Y : Type} {N : ℕ}
 
 /-- **The ordinary signer reads the oracle only through `f`**: its runs agree at two oracles with
 the same value of `f`. -/
-def BaseSigner.ReadsStdOnly {TB : BaseTypes}
-    (B : BaseSigner X Y N TB) {Ω₂ : Type} (f : (X → Y) → Ω₂) : Prop :=
+def BaseSigner.ReadsStdOnly {TS : Signature.SchemeTypes} {RMsg : Type}
+    (B : BaseSigner X Y N TS RMsg) {Ω₂ : Type} (f : (X → Y) → Ω₂) : Prop :=
   ∀ H H', f H = f H' → ∀ sk bm c, (B.ssign sk bm c).run H = (B.ssign sk bm c).run H'
 
 end GordieHowe.RingSignature
@@ -116,7 +116,7 @@ theorem readsOnly_w1Base (hO : O.ReadsFst sp) (hM : M.ReadsFst sp) :
       funext fun c' => funext fun t => MaskOracle.ans_eq_of_base hM h _
     rw [hh, hmask]
     by_cases hc :
-        RingCheck prims βmin tol (O.gOrc H') R ∧ MuDistinct prims (O.muOrc H') R (bmsg R m)
+        sampledRingCheck prims βmin tol (O.gOrc H') R ∧ MuDistinct prims (O.muOrc H') R (bmsg R m)
     · rw [if_pos (by rw [hg, hmu]; exact hc), if_pos hc]
     · rw [if_neg (by rw [hg, hmu]; exact hc), if_neg hc]
   run_pub _ _ _ _ _ := rfl
@@ -150,7 +150,8 @@ theorem readsStdOnly_w1Base (hO : O.ReadsFst sp) (hM : M.ReadsFst sp) :
     · unfold stdProg
       simp only [hk, ↓reduceDIte, OracleProg.run_pure]
   intro sk bm c
-  simpa only [w1BaseSigner, mldsaT0BaseScheme, W1Loop.stdSigner, ringLoop] using key sk bm c.1
+  simpa only [w1BaseSigner, w1BaseSignerOf, mldsaT0BaseScheme, W1Loop.stdSigner, ringLoop,
+      ringLoopOf] using key sk bm c.1
 
 end Signer
 

@@ -59,7 +59,6 @@ class MldsaHHonest (program : RealizedProgram) : Prop extends MldsaHHash program
   /-- `tr` is the statement's opaque value. -/
   kind67 : (program.value 66).kind = .pub (.opaque "tr" [])
 
-set_option maxRecDepth 4096 in
 /-- The program of `MLDSA44.Native.ROMParams` has these facts. -/
 instance : MldsaHHonest program where
   words_checks := Native.ROMParams.HonestWordFacts.wordsChecks

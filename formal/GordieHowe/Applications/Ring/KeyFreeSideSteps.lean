@@ -32,7 +32,6 @@ open Quantum Signature QROM OracleProg RingSignature.OracleSplit
 
 namespace Quantum.AdaptiveIAlg
 
-open Classical
 
 variable {m : ℕ} {Y Y₁ Req Resp O Req' Resp' O' : Type} [Fintype Y] [DecidableEq Y] [AddGroup Y]
   [Nonempty Y] [AddGroup Y₁] [Fintype Y₁] [DecidableEq Y₁] [Fintype Req] [DecidableEq Req]
@@ -204,8 +203,8 @@ open RingSignature.Insider
 
 variable {m : ℕ} {Y Y₁ Y₂ : Type} [AddGroup Y] [AddGroup Y₁] [AddGroup Y₂] [Fintype Y]
   [DecidableEq Y] [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁]
-  (sp : OracleSplit Y Y₁ Y₂) {N n : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
-  (B : BaseSigner (Bits m) Y N TB)
+  (sp : OracleSplit Y Y₁ Y₂) {N n : ℕ} {T : Signature.SchemeTypes} {RMsg : Type} [DecidableEq T.PK]
+  (B : BaseSigner (Bits m) Y N T RMsg)
   {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
   [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) ⟨Pf, PC⟩}

@@ -46,8 +46,8 @@ open scoped ENNReal
 section System
 
 variable {k kN kS L e N : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁]
-  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes}
-  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
+  (sp : OracleSplit Y Y₁ (XOut k e)) {TS : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TS RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)] {X₀ Wit₀ : Type}
@@ -411,5 +411,13 @@ theorem proverReadsPub_w1HPS (hdisj : ∀ a b, O.muPt a ≠ O.chPt b) :
   simp only [base, h1 z hz']
 
 end Hedged
+
+/-- **The spBCS queries are not mask points**: no encoded query `Query.toBits q` of the spBCS
+argument with parameters `kh`, `kN`, `kS`, `L` is a point of the mask oracle `MO`. The Prop field is
+a hypothesis the user supplies; `w1M_maskQueryFacts` proves it for the concrete mask oracle. -/
+structure W1MaskQueryFacts {Y : Type} {p : Params} {T : ℕ} {Msg : Type} (kh kN kS L : ℕ)
+    (MO : MaskOracle (Bits (queryBits kh kN kS L)) Y p T Msg) : Prop where
+  /-- No encoded query is a mask point. -/
+  toBits_notMem : ∀ q : Query kh kN kS L, Query.toBits q ∉ Set.range MO.pt
 
 end GordieHowe.Ring.MLDSAW1

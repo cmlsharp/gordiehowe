@@ -4,14 +4,14 @@
 module
 
 public import GordieHowe.Applications.Ring.RingForgerMU
-public import GordieHowe.Model.RingSignature.KeyReuse
+public import GordieHowe.Model.RingSignature.Joint
 
 @[expose] public section
 
 /-!
-# The numbered requests of the key-reuse game relayed to the multi-user challenger
+# The numbered requests of the joint-security game relayed to the multi-user challenger
 
-The key-reuse game of `ofBase B PS adm` (`GordieHowe/Model/RingSignature/KeyReuse.lean`, the
+The joint-security game of `ofBase B PS adm` (`GordieHowe/Model/RingSignature/Joint.lean`, the
 unforgeability game with the base scheme's ordinary signer `baseSide` as its side oracle) relayed
 to the multi-user challenger with the ring-aware and the ordinary signing oracle
 (`Signature.SignOracle.ringStd B`), as `GordieHowe/Applications/Ring/RingForgerMU.lean` relays BKM06
@@ -29,7 +29,7 @@ passed on. One main request and `qPub + PS.q` queries per request.
   challenger by the multi-user challenger.
 - `RingFreshReqStd`, `Fresh.ringFreshReqStd`, `muFreshReq_of_relayStd`: freshness read from the
   requests, and through the relay for a ring-binding base message.
-- `relayedForgerStd`, `keyReuseForgeProb_le_relayedForgerStd`: the game's forgery probability is
+- `relayedForgerStd`, `jointForgeProb_le_relayedForgerStd`: the game's forgery probability is
   at most the average, over the users' key coins, the oracle and the prover's coins, of the
   probability that the relayed forger outputs a verifying ring signature fresh for its multi-user
   requests.
@@ -40,21 +40,21 @@ namespace GordieHowe.RingSignature
 open Quantum Signature
 open scoped ENNReal
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes}
-  {B : BaseSigner X Y N TB} {TPS : PSTypes} [Fintype TPS.Proof]
+variable {X Y : Type} {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner X Y N T RMsg} {TPS : PSTypes} [Fintype TPS.Proof]
   [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {n : ℕ}
 
 /-! ### The game's replies -/
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
-  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.Pub]
-  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
-  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BMsg]
+  [DecidableEq T.BMsg] [Fintype T.BSig] [DecidableEq T.BSig] [Fintype T.Pub]
+  [DecidableEq T.Pub] [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins]
+  [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins]
 
 variable (B PS adm) in
-/-- **The key-reuse game's reply to a request** at the users' key coins `keys`, the oracle `H` and
+/-- **The joint-security game's reply to a request** at the users' key coins `keys`, the oracle `H` and
 the request's coins `c`: as `ringReply`, and the base signer's ordinary signature for an ordinary
 signing request. -/
 noncomputable def ringReplyStd (keys : Fin n → B.KeyCoins) (H : X → Y) (c : B.Coins × PS.Coins) :
@@ -68,10 +68,10 @@ noncomputable def ringReplyStd (keys : Fin n → B.KeyCoins) (H : X → Y) (c : 
         .sideSignature
 
 omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
-  [Nonempty TPS.Coins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub]
-  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
-  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] [Fintype TB.BMsg]
-  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] in
+  [Nonempty TPS.Coins] [Fintype T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.Pub]
+  [DecidableEq T.Pub] [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins]
+  [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins] [Fintype T.BMsg]
+  [DecidableEq T.BMsg] [Fintype T.BSig] [DecidableEq T.BSig] in
 /-- **The game's reply to a member's request on a supported ring** is `signAt` at the member's
 first position. -/
 theorem ringReplyStd_sign_of_mem (keys : Fin n → B.KeyCoins) (H : X → Y) (c : B.Coins × PS.Coins)
@@ -88,10 +88,10 @@ theorem ringReplyStd_sign_of_mem (keys : Fin n → B.KeyCoins) (H : X → Y) (c 
   · exact absurd hm h
 
 omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
-  [Nonempty TPS.Coins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub]
-  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins]
-  [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] [Fintype TB.BMsg]
-  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] in
+  [Nonempty TPS.Coins] [Fintype T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.Pub]
+  [DecidableEq T.Pub] [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins]
+  [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins] [Fintype T.BMsg]
+  [DecidableEq T.BMsg] [Fintype T.BSig] [DecidableEq T.BSig] in
 /-- **The game refuses a request off a supported ring holding the member's key.** -/
 theorem ringReplyStd_sign_of_not (keys : Fin n → B.KeyCoins) (H : X → Y) (c : B.Coins × PS.Coins)
     {s : Fin n} {R : KeyRing (ofBase B PS adm).PK N} {m : (ofBase B PS adm).Msg}
@@ -109,11 +109,11 @@ theorem ringReplyStd_sign_of_not (keys : Fin n → B.KeyCoins) (H : X → Y) (c 
     rfl
   · rfl
 
-omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TB.PK] [Fintype TB.Msg]
-  [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.BMsg] [DecidableEq TB.BMsg]
-  [Fintype TB.BSig] [DecidableEq TB.BSig] in
-/-- **The numbered challenger of the key-reuse game never reprograms.** -/
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype T.PK] [Fintype RMsg]
+  [DecidableEq RMsg] [Fintype T.Pub] [DecidableEq T.Pub] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins] [Fintype T.BMsg] [DecidableEq T.BMsg]
+  [Fintype T.BSig] [DecidableEq T.BSig] in
+/-- **The numbered challenger of the joint-security game never reprograms.** -/
 theorem numChallenger_noAssign_std [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
     [AddGroup Y] (keys : Fin n → B.KeyCoins) (Q : ℕ) :
     (numChallenger B PS adm n (baseSide B PS adm) keys Q).NoAssign := by
@@ -132,10 +132,10 @@ theorem numChallenger_noAssign_std [Fintype X] [DecidableEq X] [Fintype Y] [Deci
     · simp [OracleProg.run_bind]
   · rfl
 
-omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TB.PK] [Fintype TB.Msg]
-  [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.BMsg] [DecidableEq TB.BMsg]
-  [Fintype TB.BSig] [DecidableEq TB.BSig] in
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype T.PK] [Fintype RMsg]
+  [DecidableEq RMsg] [Fintype T.Pub] [DecidableEq T.Pub] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins] [Fintype T.BMsg] [DecidableEq T.BMsg]
+  [Fintype T.BSig] [DecidableEq T.BSig] in
 /-- **The numbered challenger's reply** to a request numbered below `Q` is the game's reply with
 the base signer's coins of that number and the request's prover's coins. -/
 theorem answerAfter_numChallenger_std [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
@@ -196,9 +196,8 @@ def relayRingSignStd (pks : Fin n → B.PK) (ρ : PS.Coins) (s : Fin n) (R : Key
           some (.signature ((y, π) : B.Pub × PS.Proof))
     | _ => .pure none
 
-open Classical in
 variable (B PS adm) in
-/-- **The relay program of a request of the key-reuse game with its prover's coins**: a
+/-- **The relay program of a request of the joint-security game with its prover's coins**: a
 corruption asked as it is; a ring-signing request by a member of a supported ring relayed by
 `relayRingSignStd`; the other ring-signing requests refused without a request; an ordinary
 signing request asked as the signing request on `inr bm`, its signature passed on. -/
@@ -214,7 +213,7 @@ noncomputable def forgerProgStd (pks : Fin n → B.PK) :
       | _ => none
 
 variable (B PS adm) in
-/-- **The relay of the key-reuse game's numbered requests to the multi-user challenger**: the
+/-- **The relay of the joint-security game's numbered requests to the multi-user challenger**: the
 programs `forgerProgStd pks`, one main request and `qPub + PS.q` queries per request, the idle
 request the public key of user `i₁`. -/
 noncomputable def forgerRelayStd (pks : Fin n → B.PK) (i₁ : Fin n) :
@@ -231,7 +230,7 @@ end Programs
 /-! ### The main requests of the relay -/
 
 variable (B PS adm) in
-/-- **The main request a numbered request of the key-reuse game relays to**: the same corruption,
+/-- **The main request a numbered request of the joint-security game relays to**: the same corruption,
 the signing request of the same user on `inl (R, m)`, or on `inr bm`. -/
 def ForgerAskStd :
     NumReq B PS adm n (baseSide B PS adm) → MURequest (SignOracle.ringStd B) n → Prop
@@ -240,10 +239,10 @@ def ForgerAskStd :
   | (_, .sideSign i bm), r' => r' = .sign i (.inr bm)
 
 omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
-  [Nonempty TPS.Coins] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
-  [Nonempty TB.Coins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
-  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] in
+  [Nonempty TPS.Coins] [Fintype T.Pub] [DecidableEq T.Pub] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins] [Fintype T.Coins] [DecidableEq T.Coins]
+  [Nonempty T.Coins] [Fintype T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BMsg]
+  [DecidableEq T.BMsg] [Fintype T.BSig] [DecidableEq T.BSig] in
 /-- **Every main request of a relay program is one its request relays to.** -/
 theorem asksIn_forgerProgStd [Zero Y] (pks : Fin n → B.PK)
     (r : NumReq B PS adm n (baseSide B PS adm)) :
@@ -276,10 +275,10 @@ noncomputable abbrev ringStdMUAns : List (MURequest (SignOracle.ringStd B) n) �
   (muChallenger (SignOracle.ringStd B) n keys Q').toPureEnv.answerAfter (H, c')
 
 omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
-  [Nonempty TPS.Coins] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.PK] [Fintype TB.Msg]
-  [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] in
+  [Nonempty TPS.Coins] [Fintype T.Pub] [DecidableEq T.Pub] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins] [Fintype T.PK] [Fintype RMsg]
+  [DecidableEq RMsg] [Fintype T.BMsg] [DecidableEq T.BMsg] [Fintype T.BSig]
+  [DecidableEq T.BSig] in
 /-- **A relayed request runs with the game's reply**: the request `(ρ, r)`, after the main requests
 `L` (fewer than `Q'`), runs with the game's reply at the coins `(c' |L|, ρ)`, at most one main
 request and `qPub + PS.q` queries. -/
@@ -375,8 +374,8 @@ section Relays
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
   [AddGroup Y] [Nonempty Y] [NeZero n]
 
-omit [Nonempty TB.KeyCoins] in
-/-- **The numbered challenger of the key-reuse game with `Q` requests is the relay
+omit [Nonempty T.KeyCoins] in
+/-- **The numbered challenger of the joint-security game with `Q` requests is the relay
 `forgerRelayStd` of the multi-user challenger with `Q' ≥ Q` requests**
 (`MultiRelay.RelaysChallenger`), along the restriction of the coins to the first `Q`. -/
 theorem relaysChallenger_forgerRelayStd (keys : Fin n → B.KeyCoins) (i₁ : Fin n) {Q Q' : ℕ}
@@ -413,7 +412,7 @@ end Relays
 section Fresh
 
 variable (B PS adm) in
-/-- **A ring forgery is fresh for the requests `rs` of the key-reuse game**: every key of its ring
+/-- **A ring forgery is fresh for the requests `rs` of the joint-security game**: every key of its ring
 is the key of a user that no request of `rs` corrupts, no request of `rs` asks for a ring
 signature on its ring and message, and no request of `rs` asks a member of its ring for an
 ordinary signature on its base message `bmsg R m`. -/
@@ -424,11 +423,11 @@ def RingFreshReqStd (keys : Fin n → B.KeyCoins) (o : KeyRing B.PK N × B.Msg �
     ∀ i bm, UnforgeRequest.sideSign i bm ∈ rs → B.pk (keys i) ∈ o.1.1 → bm ≠ B.bmsg o.1 o.2.1
 
 omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
-  [Nonempty TPS.Coins] [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.Pub]
-  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Fintype TB.Coins]
-  [DecidableEq TB.Coins] [Nonempty TB.Coins] [Nonempty TB.KeyCoins] [Fintype TB.BMsg]
-  [DecidableEq TB.BMsg] [Fintype TB.BSig] [DecidableEq TB.BSig] in
-/-- **A fresh ring and message are fresh for the requests of the key-reuse game's history.** -/
+  [Nonempty TPS.Coins] [Fintype T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.Pub]
+  [DecidableEq T.Pub] [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] [Fintype T.Coins]
+  [DecidableEq T.Coins] [Nonempty T.Coins] [Nonempty T.KeyCoins] [Fintype T.BMsg]
+  [DecidableEq T.BMsg] [Fintype T.BSig] [DecidableEq T.BSig] in
+/-- **A fresh ring and message are fresh for the requests of the joint-security game's history.** -/
 theorem Fresh.ringFreshReqStd {keys : Fin n → B.KeyCoins}
     {hist : UnforgeHist (S := ofBase B PS adm) n (baseSide B PS adm)}
     {o : KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof)} (h : Fresh keys hist o.1 o.2.1) :
@@ -444,11 +443,11 @@ theorem Fresh.ringFreshReqStd {keys : Fin n → B.KeyCoins}
     exact h.not_sideCovered ⟨e, he, i, bm, hr, hm, hb⟩
 
 omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins]
-  [Nonempty TPS.Coins] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.PK] [Fintype TB.Msg]
-  [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
-/-- **Freshness passes through the relay of the key-reuse game** for a ring-binding base message:
+  [Nonempty TPS.Coins] [Fintype T.Pub] [DecidableEq T.Pub] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins] [Fintype T.PK] [Fintype RMsg]
+  [DecidableEq RMsg] [Fintype T.BMsg] [DecidableEq T.BMsg] [Fintype T.BSig]
+  [DecidableEq T.BSig] [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins] in
+/-- **Freshness passes through the relay of the joint-security game** for a ring-binding base message:
 if every multi-user request is the idle public-key request or one that a numbered request of `nrs`
 relays to (`ForgerAskStd`), a ring forgery fresh for the requests of `nrs` (read without their
 prover's coins) is fresh for the multi-user requests. -/
@@ -491,31 +490,31 @@ variable [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [Dec
   [AddGroup Y] [Nonempty Y] [NeZero n] {t : ℕ}
 
 variable (B PS adm) in
-/-- **The relayed forger of the key-reuse game** at the users' public keys `pks` and the prover's
+/-- **The relayed forger of the joint-security game** at the users' public keys `pks` and the prover's
 coins `ρ`: the adversary absorbed through `numRelay Q ρ`, relayed to the multi-user challenger by
 `forgerRelayStd pks i₁` (`relayedForgerVia`). At most `t + Q · (qPub + PS.q)` queries. -/
-noncomputable def relayedForgerStd (A : KeyReuseAdversary B PS adm n
+noncomputable def relayedForgerStd (A : JointAdversary B PS adm n
     (OracleView.queriesOnly X Y) t) (pks : Fin n → B.PK) (i₁ : Fin n) (Q : ℕ)
     (ρ : Fin Q → PS.Coins) :
     QueryBoundedAdversary X Y (MURequest (SignOracle.ringStd B) n) (MUResponse B.core)
       (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof)) (t + Q * (B.qPub + PS.q)) :=
   relayedForgerVia A (forgerRelayStd B PS adm pks i₁) pks Q ρ
 
-/-- **The key-reuse game's forgery probability through the relayed forger** (a ring-binding base
+/-- **The joint-security game's forgery probability through the relayed forger** (a ring-binding base
 message `hbind`): at most the average, over the users' key coins, the oracle and the prover's
 coins, of the probability that the relayed forger against the multi-user challenger with the
 ring-aware and the ordinary signing oracle and `Q' ≥ Q` requests outputs a ring signature that
 verifies and is fresh for the multi-user requests of its history (`MUFreshReq`). -/
-theorem keyReuseForgeProb_le_relayedForgerStd (hbind : B.BindsRing)
-    (A : KeyReuseAdversary B PS adm n (OracleView.queriesOnly X Y) t) (i₁ : Fin n)
+theorem jointForgeProb_le_relayedForgerStd (hbind : B.BindsRing)
+    (A : JointAdversary B PS adm n (OracleView.queriesOnly X Y) t) (i₁ : Fin n)
     (Q Q' : ℕ) (hQ : Q ≤ Q') :
-    keyReuseForgeProb A Q ≤ ∑' keys, PMF.uniformOfFintype (Fin n → B.KeyCoins) keys *
+    jointForgeProb A Q ≤ ∑' keys, PMF.uniformOfFintype (Fin n → B.KeyCoins) keys *
       ∑' H, PMF.uniformOfFintype (X → Y) H * ∑ ρ, PMF.uniformOfFintype (Fin Q → PS.Coins) ρ *
         ((relayedForgerStd B PS adm A (fun i => B.pk (keys i)) i₁ Q ρ).transcriptLaw
           (muChallenger (SignOracle.ringStd B) n keys Q') H).toOuterMeasure
           {x | ∃ p ∈ x, (ofBase B PS adm).verify H p.1.1 p.1.2.1 p.1.2.2 = true ∧
             MUFreshReq B (PS := PS) keys p.1 (p.2.map HistoryEntry.request)} := by
-  simp only [keyReuseForgeProb, forgeProb, unforgeLaw, runLaw, PMF.toOuterMeasure_bind_apply,
+  simp only [jointForgeProb, forgeProb, unforgeLaw, runLaw, PMF.toOuterMeasure_bind_apply,
     PMF.toOuterMeasure_map_apply]
   refine ENNReal.tsum_le_tsum fun keys => mul_le_mul' le_rfl
     (ENNReal.tsum_le_tsum fun H => mul_le_mul' le_rfl ?_)

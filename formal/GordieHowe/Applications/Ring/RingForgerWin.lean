@@ -122,16 +122,16 @@ end Logs
 
 /-! ### The forgery read from the extraction -/
 
-variable {m k e N : ℕ} {TB : BaseTypes}
-  {B : BaseSigner (Bits m) (XOut k e) N TB}
+variable {m k e N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits m) (XOut k e) N T RMsg}
   {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem (Bits m) (XOut k e) (RingStmt B) (RingWit B) TPS}
   {adm : KeyRing B.PK N → Prop} [DecidablePred adm] {n : ℕ} [NeZero n]
   {Cl : Type} {V : NARG.QROM.Verifier m k e Cl (RingStmt B)} {O : SignOracle B.core}
 
 variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [DecidableEq TB.Pub] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty O.Coins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [DecidableEq T.Pub] [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] [Nonempty O.Coins]
 
 variable (B PS adm) in
 /-- **The forgery read from the extraction run** (the multi-user forger's readout): the decoding
@@ -210,7 +210,7 @@ theorem forgesReq_muReadout (hC : PS.CompiledBy V) (c₀ : Cl) {rel : Set (RingS
   rw [hring, hmsg]
 
 omit [DecidablePred adm] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
-  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [DecidableEq TB.Pub] [Fintype O.Coins]
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [DecidableEq T.Pub] [Fintype O.Coins]
   [DecidableEq O.Coins] [Nonempty O.Coins] in
 /-- **The correspondence of the multi-user requests to the relayed forger's requests**: under the
 logs statement (`hlogs`), on every basis state of nonzero amplitude of the bridge's simulation,

@@ -79,6 +79,7 @@ noncomputable def w1SecondRunLaw {SC' : Type} [Fintype SC'] [DecidableEq SC']
     (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MUR ⊕ Rq)) (M.Response b) SC')
     (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))))
     (ok : (Fin n → _root_.MLDSA.Bytes 32) → Frg × X₀f → List (MUR ⊕ Rq) → RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p)) → Prop)
+    [∀ ξ f rs, DecidablePred (ok ξ f rs)]
     (ξ : Fin n → _root_.MLDSA.Bytes 32) (sc : Fin Q → KFCoins (p := p) (T := T) k D Y₁) (ω : Xq → Y₁) :
     PMF (Option (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))) × (Frg × X₀f) × List (MUR ⊕ Rq)) :=
   (aux ξ sc ω).bind fun a =>
@@ -108,7 +109,8 @@ theorem tsum_simProb_w1SecondSig_le (sp : Y ≃+ Y₁ × Y₂) (hO : O.ReadsFst 
     (A : ∀ ξ sc ω (a : Aux ξ sc ω), AdaptiveIAlg (shA ξ sc ω a) (Frg × X₀f))
     (Psim : NARG.Simulator Xq (XOut kh e) (Stmt × (MUR ⊕ Rq)) (M.Response b) SC')
     (Ext : CausalExtractor P τ X₀f (RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p))))
-    (ok : (Fin n → _root_.MLDSA.Bytes 32) → Frg × X₀f → List (MUR ⊕ Rq) → RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p)) → Prop) :
+    (ok : (Fin n → _root_.MLDSA.Bytes 32) → Frg × X₀f → List (MUR ⊕ Rq) → RingSignature.RingWitOf (FIPSSignature p (concretePrimitivesKeyGen p)) → Prop)
+    [∀ ξ f rs, DecidablePred (ok ξ f rs)] :
     ∑' ξ, PMF.uniformOfFintype (Fin n → _root_.MLDSA.Bytes 32) ξ *
         {ξ : Fin n → _root_.MLDSA.Bytes 32 | ∀ i j, pubTr Pc ((Bf).pk (ξ i)) = pubTr Pc ((Bf).pk (ξ j)) →
           (Bf).pk (ξ i) = (Bf).pk (ξ j)}.indicator (fun ξ =>

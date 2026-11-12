@@ -240,9 +240,10 @@ end RingScheme
 
 namespace BaseSigner
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB)
+variable {X Y : Type} {N : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type}
+  (B : BaseSigner X Y N TS RMsg)
 
-variable [DecidableEq TB.PK] [Fintype TB.Coins] [Nonempty TB.Coins]
+variable [DecidableEq TS.PK] [Fintype TS.Coins] [Nonempty TS.Coins]
 
 /-- **The per-key refusal rate of the ring-aware signer is at most `ρ`** on the supported rings
 `adm`: at every oracle `H`, for every key-generation coins `kc`, every supported ring `R` holding
@@ -254,7 +255,20 @@ def RefuseAtWithin (adm : KeyRing B.PK N → Prop) (ρ : ℝ≥0∞) : Prop :=
     Pr[c ~ PMF.uniformOfFintype B.Coins :
       (B.bsign (B.sk kc) R (R.1.idxOf (B.pk kc)) m c).run H = none] ≤ ρ
 
-variable [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins]
+/-- **The per-key refusal rate of the ring-aware signer is at most `ρ` on every ring**: at every
+oracle `H`, for every key-generation coins `kc`, every ring `R` holding their public key (supported
+or not) and every message `m`, `bsign` at the key's first position refuses with probability at most
+`ρ` over uniform signing coins. -/
+def RefuseKeyWithin (ρ : ℝ≥0∞) : Prop :=
+  ∀ (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N) (m : B.Msg), B.pk kc ∈ R.1 →
+    Pr[c ~ PMF.uniformOfFintype B.Coins :
+      (B.bsign (B.sk kc) R (R.1.idxOf (B.pk kc)) m c).run H = none] ≤ ρ
+
+/-- Every ring-aware signer has per-key refusal rate at most `1` on every ring. -/
+theorem refuseKeyWithin_one : B.RefuseKeyWithin 1 :=
+  fun _ _ _ _ _ => PMF.toOuterMeasure_apply_le_one _ _
+
+variable [Fintype TS.KeyCoins] [Nonempty TS.KeyCoins]
 
 /-- **The refusal rate of the ring-aware signer averaged over the honest key coins is at most `ρ`**
 on the supported rings `adm`: the average, over uniform key-generation coins `kc`, of the largest
@@ -275,7 +289,7 @@ theorem RefuseAtWithin.refuseAvgWithin {adm : KeyRing B.PK N → Prop} {ρ : ℝ
       h H kc R hk ha m) zero_le).trans ?_
   rw [ENNReal.tsum_mul_right, PMF.tsum_coe, one_mul]
 
-omit [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins] in
+omit [Fintype TS.KeyCoins] [Nonempty TS.KeyCoins] in
 /-- Every ring-aware signer has per-key refusal rate at most `1`. -/
 theorem refuseAtWithin_one (adm : KeyRing B.PK N → Prop) : B.RefuseAtWithin adm 1 :=
   fun _ _ _ _ _ _ => PMF.toOuterMeasure_apply_le_one _ _
@@ -297,8 +311,9 @@ variable [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y]
 
 /-- **The per-key refusal rate bounds the averaged refusal rate**: `RefuseAtWithin` gives
 `RefuseWithin` (the signer's key is in every honest ring of its user). -/
-theorem RefuseAtWithin.refuseWithin {TB : BaseTypes} [DecidableEq TB.PK] [Fintype TB.KeyCoins]
-    [Nonempty TB.KeyCoins] [Fintype TB.Coins] [Nonempty TB.Coins] {B : BaseSigner X Y N TB}
+theorem RefuseAtWithin.refuseWithin {TS : Signature.SchemeTypes} {RMsg : Type} [DecidableEq TS.PK]
+    [Fintype TS.KeyCoins]
+    [Nonempty TS.KeyCoins] [Fintype TS.Coins] [Nonempty TS.Coins] {B : BaseSigner X Y N TS RMsg}
     {adm : KeyRing B.PK N → Prop}
     {ρ : ℝ≥0∞} (h : B.RefuseAtWithin adm ρ) : B.RefuseWithin adm ρ := by
   intro r hr s m
@@ -353,8 +368,9 @@ theorem tsum_uniformOfFintype_pi_eval {K : Type} [Fintype K] [DecidableEq K] [No
 given the members' key coins is at most the largest refusal probability of the signer's key over
 the oracles, supported rings holding it and messages; averaging it over the signer's own key coins
 is the averaged rate (`tsum_uniformOfFintype_pi_eval`). -/
-theorem RefuseAvgWithin.refuseWithin {TB : BaseTypes} [DecidableEq TB.PK] [Fintype TB.KeyCoins]
-    [Nonempty TB.KeyCoins] [Fintype TB.Coins] [Nonempty TB.Coins] {B : BaseSigner X Y N TB}
+theorem RefuseAvgWithin.refuseWithin {TS : Signature.SchemeTypes} {RMsg : Type} [DecidableEq TS.PK]
+    [Fintype TS.KeyCoins]
+    [Nonempty TS.KeyCoins] [Fintype TS.Coins] [Nonempty TS.Coins] {B : BaseSigner X Y N TS RMsg}
     {adm : KeyRing B.PK N → Prop}
     {ρ : ℝ≥0∞} (h : B.RefuseAvgWithin adm ρ) : B.RefuseWithin adm ρ := by
   classical
@@ -379,8 +395,8 @@ theorem RefuseAvgWithin.refuseWithin {TB : BaseTypes} [DecidableEq TB.PK] [Finty
   · rw [QROM.probUniform_eq_zero fun d hd => ha hd.1]
     exact zero_le
 
-omit [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] [DecidableEq TB.PK] [Fintype TB.KeyCoins]
-  [Nonempty TB.KeyCoins] [Fintype TB.Coins] [Nonempty TB.Coins]
+omit [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] [DecidableEq TS.PK] [Fintype TS.KeyCoins]
+  [Nonempty TS.KeyCoins] [Fintype TS.Coins] [Nonempty TS.Coins]
 
 /-- **Base verification and the public value read no oracle**: `bverify` is the same function at
 every oracle, and so is the result of every public-value program. The Falcon-512 and ML-DSA base
@@ -442,12 +458,13 @@ end BaseSigner
 
 /-! ### Completeness of `ofBase` -/
 
-variable {X Y : Type} {N : ℕ} {TB : BaseTypes} (B : BaseSigner X Y N TB) {TPS : PSTypes} (PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS)
+variable {X Y : Type} {N : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type}
+  (B : BaseSigner X Y N TS RMsg) {TPS : PSTypes} (PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS)
   [Fintype TPS.Coins] [Nonempty TPS.Coins]
   (adm : KeyRing B.PK N → Prop) [DecidablePred adm] [Fintype X] [DecidableEq X] [Fintype Y]
   [Nonempty Y]
 
-variable [DecidableEq TB.PK] [Fintype TB.Coins] [Nonempty TB.Coins]
+variable [DecidableEq TS.PK] [Fintype TS.Coins] [Nonempty TS.Coins]
 
 /-- **The refusal of `ofBase` at a key is that of its base signer**: on a supported ring holding
 the key, at most the per-key refusal rate `ρ`. -/
@@ -528,7 +545,7 @@ theorem completeAtWithin_ofBase {ρ εc : ℝ≥0∞} {εp : ℕ → ℝ≥0∞}
   ⟨fun _ _ m hR ha => refuseProbAt_ofBase_le B PS adm hρ hR ha m,
     fun _ _ m hR ha => rejectProbAt_ofBase_le B PS adm hc hp hR ha m⟩
 
-variable [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins]
+variable [Fintype TS.KeyCoins] [Nonempty TS.KeyCoins]
 
 /-- **Completeness of `ofBase`** (BKM06 Definition 1 with errors, averaged over honest rings): for
 a base signer with refusal rate `ρ` on honest rings (`RefuseWithin`) and correctness error `εc`,
@@ -540,7 +557,7 @@ theorem completeWithin_ofBase {ρ εc : ℝ≥0∞} {εp : ℕ → ℝ≥0∞} (
     (hc : B.CorrectWithin εc) (hp : PS.CompleteWithin (ringRel B adm) εp) :
     (ofBase B PS adm).CompleteWithin ρ (εc + εp (B.q + B.qPub)) :=
   ⟨fun r hr s m => (BaseSigner.refuseProb_ofBase_eq B PS adm hr s m).le.trans (hρ r hr s m),
-    fun _ hr s m => RingScheme.rejectProb_le_of_rejectProbAt _
+    fun _ hr s m => (ofBase B PS adm).rejectProb_le_of_rejectProbAt (ε := εc + εp (B.q + B.qPub))
       (fun _ _ m hR ha => rejectProbAt_ofBase_le B PS adm hc hp hR ha m) hr s m⟩
 
 omit [DecidablePred adm] in

@@ -53,22 +53,18 @@ record `key.spectrum`, the rows `statement.ring`, the natural-order transform of
 /-- The selection's identifiers. -/
 instance : FalconRingSelect program := ⟨⟨rfl, rfl, rfl, rfl, rfl⟩⟩
 
-set_option maxRecDepth 4096 in
 theorem ring_member : ∃ t, (program.predicate 0).body = .equal 0 (.add (.apply (.sum 512)
     (.mul (.reindex [(0, 1, 512)] (.reindex [(0, 1, 512)] (.leaf 5))) (.reindex [(0, 1, 512)] (.leaf 21))))
     (.scale (.const 12288) (.mux (.reindex [(5, 0, 1)] (.leaf 6)) (.reindex [(1, 0, 1)] (.ref 20))
       (.reindex [(0, 0, 1)] (.ref 20))))) (.leaf 1) t := predicate_member_2esigner_body
 
-set_option maxRecDepth 4096 in
 theorem ring_sig : ∃ t, (program.predicate 1).body =
     .equal 0 (sigLhs (.add (.leaf 4) (.scale (.const 12288) (.leaf 9))) 5 8 10 23 24 25 12288)
       (.leaf 1) t := predicate_signature_2eequation_body
 
-set_option maxRecDepth 4096 in
 theorem ring_idxBool :
     ∃ t, (program.predicate 14).body = .equal 0 (.mul (.leaf 6) (.leaf 6)) (.leaf 6) t := predicate_member_2esigner_2eindex_2eboolean_body
 
-set_option maxRecDepth 4096 in
 /-- The membership's facts: the ring `4`, the spectrum `6`, the powers `20`, the zero constant `1`,
 `ψ = 10302`, `−1 = 12288`, the index bits' check `14`. -/
 @[expose] instance : FalconRingMember program where
@@ -124,7 +120,6 @@ set_option maxRecDepth 4096 in
   values_length := value_member_2eone_header.1
   privKinds := ⟨value_key_2espectrum_kind, value_member_2esigner_2eindex_kind, value_s2_kind⟩
 
-set_option maxRecDepth 4096 in
 /-- The native ring's facts outside the membership. -/
 instance : FalconRingBase program where
   s1 := 9
@@ -202,79 +197,59 @@ instance : FalconRingBase program where
       (by decide +kernel)]
     decide +kernel
 
-set_option maxRecDepth 4096 in
 theorem norm_center : ∃ t, (program.predicate 2).body = .equal 0 (.add (.mul (.ref 38) (.ref 38))
     (.scale (.const 12288) (.mul (.add (.add (.ref 39) (.scale (.const 64) (.ref 40)))
       (.scale (.const 4096) (.ref 41))) (.add (.add (.ref 39) (.scale (.const 64) (.ref 40)))
         (.scale (.const 4096) (.ref 41)))))) (.leaf 2) t := predicate_norm_2ecenter_body
-set_option maxRecDepth 4096 in
 theorem norm_top : ∃ t, (program.predicate 3).body = .equal 0 (.ref 42) (.leaf 1) t := predicate_norm_2etop_body
-set_option maxRecDepth 4096 in
 theorem norm_col0 : ∃ real, (program.predicate 4).body = .mod 0 0 (.mul (.ref 43) (.ref 43))
     (.add (.ref 44) (.scale (.const 64) (.ref 45))) real := by
   obtain ⟨real, h, -⟩ := predicate_norm_2ecolumn0_body
   exact ⟨real, h⟩
-set_option maxRecDepth 4096 in
 theorem norm_col1 : ∃ real, (program.predicate 5).body = .mod 0 0
     (.add (.scale (.const 2) (.mul (.ref 43) (.ref 46))) (.ref 47))
     (.add (.ref 48) (.scale (.const 64) (.ref 49))) real := by
   obtain ⟨real, h, -⟩ := predicate_norm_2ecolumn1_body
   exact ⟨real, h⟩
-set_option maxRecDepth 4096 in
 theorem norm_col2 : ∃ real, (program.predicate 6).body = .mod 0 0
     (.add (.add (.scale (.const 2) (.mul (.ref 43) (.ref 50))) (.mul (.ref 46) (.ref 46)))
       (.ref 51)) (.add (.ref 52) (.scale (.const 64) (.ref 53))) real := by
   obtain ⟨real, h, -⟩ := predicate_norm_2ecolumn2_body
   exact ⟨real, h⟩
-set_option maxRecDepth 4096 in
 theorem norm_col3 : ∃ real, (program.predicate 7).body = .mod 0 0
     (.add (.scale (.const 2) (.mul (.ref 46) (.ref 50))) (.ref 54))
     (.add (.ref 55) (.scale (.const 64) (.ref 56))) real := by
   obtain ⟨real, h, -⟩ := predicate_norm_2ecolumn3_body
   exact ⟨real, h⟩
-set_option maxRecDepth 4096 in
 theorem norm_col4 : ∃ real, (program.predicate 8).body = .mod 0 0
     (.add (.mul (.ref 50) (.ref 50)) (.ref 57)) (.add (.ref 58) (.scale (.const 64) (.ref 59)))
     real := by
   obtain ⟨real, h, -⟩ := predicate_norm_2ecolumn4_body
   exact ⟨real, h⟩
-set_option maxRecDepth 4096 in
 theorem norm_col5 : ∃ real, (program.predicate 9).body = .mod 0 0 (.ref 60) (.ref 61) real := by
   obtain ⟨real, h, -⟩ := predicate_norm_2ecolumn5_body
   exact ⟨real, h⟩
-set_option maxRecDepth 4096 in
 theorem norm_normalize : ∃ real, (program.predicate 10).body = .mod 0 0
     (.add (.add (.ref 62) (.apply (.batched 102 (.sum 63)) (.ref 63))) (.ref 64))
     (.add (.leaf 15) (.scale (.const 64) (.ref 65))) real := by
   obtain ⟨real, h, -⟩ := predicate_norm_2enormalize_body
   exact ⟨real, h⟩
-set_option maxRecDepth 4096 in
 theorem norm_complement : ∃ real, (program.predicate 11).body = .mod 0 0
     (.add (.add (.ref 66) (.leaf 17)) (.ref 67)) (.add (.leaf 19) (.scale (.const 64) (.leaf 18)))
     real := by
   obtain ⟨real, h, -⟩ := predicate_norm_2ecomplement_body
   exact ⟨real, h⟩
-set_option maxRecDepth 4096 in
 theorem norm_dcBool : ∃ t, (program.predicate 15).body =
     .equal 0 (.mul (.leaf 18) (.leaf 18)) (.leaf 18) t := predicate_norm_2eDc_2eboolean_body
-set_option maxRecDepth 4096 in
 theorem norm_encB : ∃ t, (program.predicate 16).body =
     .equal 0 (.mul (.ref 71) (.ref 71)) (.ref 71) t := predicate_enc_2eb_2eboolean_body
-set_option maxRecDepth 4096 in
 theorem norm_rangeA : ∃ real, (program.predicate 17).body = .mem 0 [.leaf 12] (.range 64) real := predicate_norm_2ea_body
-set_option maxRecDepth 4096 in
 theorem norm_rangeSq : ∃ real, (program.predicate 18).body = .mem 0 [.leaf 13] (.range 64) real := predicate_norm_2esq_body
-set_option maxRecDepth 4096 in
 theorem norm_rangeCc : ∃ real, (program.predicate 19).body = .mem 0 [.leaf 14] (.range 189) real := predicate_norm_2ecc_body
-set_option maxRecDepth 4096 in
 theorem norm_rangeNd : ∃ real, (program.predicate 20).body = .mem 0 [.leaf 15] (.range 64) real := predicate_norm_2end_body
-set_option maxRecDepth 4096 in
 theorem norm_rangeNc : ∃ real, (program.predicate 21).body = .mem 0 [.leaf 16] (.range 64) real := predicate_norm_2enc_body
-set_option maxRecDepth 4096 in
 theorem norm_rangeD : ∃ real, (program.predicate 22).body = .mem 0 [.leaf 17] (.range 64) real := predicate_norm_2eD_body
-set_option maxRecDepth 4096 in
 theorem norm_high : ∃ real, (program.predicate 23).body = .mem 0 [.ref 68] (.range 16) real := predicate_enc_2ehigh_body
-set_option maxRecDepth 4096 in
 theorem norm_slack : ∃ real, (program.predicate 24).body =
     .mem 0 [.add (.scale (.const 12288) (.apply (.sum 512) (.ref 68))) (.leaf 20)] (.range 393)
       real := predicate_enc_2eslack_body
@@ -298,7 +273,8 @@ theorem norm_digit_entries : ∀ i < 1024, idx38.entry i = 6 * i ∧ idx39.entry
   rw [idx38_eq, idx39_eq, idx40_eq, idx41_eq, idx42_eq, idx43_eq]
   decide +kernel
 
-set_option maxRecDepth 4096 in
+-- The `decide +kernel` checks of this instance decide closed goals about literals: the named
+-- generated facts (`…_kind`, `expr_…_eq`, `idx…_eq`) are rewritten into them first.
 /-- **The generic norm's identifiers and facts** at the ring's one domain. -/
 @[expose] noncomputable instance : FalconNorm program where
   dA := 0
@@ -522,9 +498,9 @@ set_option maxRecDepth 4096 in
     | _ => rfl
   consts_A := by
     refine ⟨isConstant_of_kind value_member_2ezero_kind, valueShape_field value_member_2ezero_header.2, ?_, isConstant_of_kind value_norm_2ecenter_2ezero_kind, valueShape_field value_norm_2ecenter_2ezero_header.2, ?_, isConstant_of_kind value_enc_2eslack_2eoffset_kind, valueShape_field value_enc_2eslack_2eoffset_header.2, ?_⟩
-    · rw [constEntries_of_kind value_member_2ezero_kind]; rfl
-    · rw [constEntries_of_kind value_norm_2ecenter_2ezero_kind]; rfl
-    · rw [constEntries_of_kind value_enc_2eslack_2eoffset_kind]; rfl
+    · rw [constEntries_of_kind value_member_2ezero_kind]; decide +kernel
+    · rw [constEntries_of_kind value_norm_2ecenter_2ezero_kind]; decide +kernel
+    · rw [constEntries_of_kind value_enc_2eslack_2eoffset_kind]; decide +kernel
   const41 := ⟨[0], value_member_2ezero_kind, rfl⟩
   const555 := ⟨valueShape_field value_norm_2etarget_header.2, [38, 16, 53, 1, 2, 0], value_norm_2etarget_kind, by decide⟩
   i52_entry := fun i hi => (norm_linear_entries i hi).1

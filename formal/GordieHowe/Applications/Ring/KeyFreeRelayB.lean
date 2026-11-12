@@ -82,8 +82,8 @@ theorem ωT_overT (ω : X → Y₁) (T L : X → Option Y) :
 
 /-! ### The program -/
 
-variable [DecidableEq X] {N n : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
-  (B : BaseSigner X Y N TB)
+variable [DecidableEq X] {N n : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type} [DecidableEq TS.PK]
+  (B : BaseSigner X Y N TS RMsg)
   {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
   [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) ⟨Pf, PC⟩}
@@ -116,7 +116,7 @@ def stpB (x : RingStmt B) : OracleProg (X ⊕ X) (Y ⊕ Y₁) X₀ :=
 
 variable {sp B F S}
 
-omit [DecidableEq X] [DecidableEq TB.PK] in
+omit [DecidableEq X] [DecidableEq TS.PK] in
 /-- The full and base reads of the signer: one full read, `qOut` base reads, and `qSt` more on
 refusal. -/
 theorem sgnB_reads (pk : B.PK) (Rg : KeyRing B.PK N) (c : ℕ) (msg : B.Msg) (s : SC)

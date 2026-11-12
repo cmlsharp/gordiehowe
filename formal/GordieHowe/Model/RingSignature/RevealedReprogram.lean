@@ -215,7 +215,6 @@ theorem toOuterMeasure_runLawIn {K : Type} [Fintype K] [Nonempty K]
   rw [PMF.toOuterMeasure_map_apply]
   rfl
 
-open Classical in
 /-- **Adaptive reprogramming at revealed points in a game's run** (GHHM21 Theorem 1): with start
 draws `k`, for every `k` a `RevealedPair` of challengers `C₀ k` and `C₁ k` with `Q` requests and
 at most `qc` classical reads per request, an adversary `A k H` and an event that read the oracle
@@ -232,6 +231,7 @@ theorem gameAdvantage_runLawIn_revealed_le {K : Type} [Fintype K] [Nonempty K] [
     (hE : ∀ k H H' x, SameClassical sp B H H' → ((k, H, x) ∈ E ↔ (k, H', x) ∈ E)) :
     gameAdvantage (runLawIn A C₀) (runLawIn A C₁) E ≤
       Q * (√(ε * (t + qc * Q)) + ε * (t + qc * Q) / 2) := by
+  classical
   set b : ℝ := Q * (√(ε * (t + qc * Q)) + ε * (t + qc * Q) / 2) with hb
   set N : ℕ := Fintype.card (X → Y₁) with hNdef
   have hN : (0 : ℝ) < N := Nat.cast_pos.mpr Fintype.card_pos

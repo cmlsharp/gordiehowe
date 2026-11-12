@@ -192,11 +192,12 @@ section Forger
 
 variable {k kN kS L e N n : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁] [Fintype Y]
   [DecidableEq Y] [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁]
-  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins]
-  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB} [NeZero n]
+  (sp : OracleSplit Y Y₁ (XOut k e)) {T : Signature.SchemeTypes} {RMsg : Type} [Fintype T.PK]
+  [DecidableEq T.PK]
+  [Fintype T.BSig]
+  [DecidableEq T.BSig] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins]
+  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N T RMsg} [NeZero n]
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -653,7 +654,7 @@ theorem simProb_seAlgKF_kfStepAdv_eq_extRun
   · simp only [kfExpansionAt, kfDefaultAt]
   · rfl
 
-variable [Nonempty TB.KeyCoins]
+variable [Nonempty T.KeyCoins]
 
 /-- **The key-free extraction runs with additions after the restricted Kraus maps as
 MU-EUF-NMA^corr** (`sum_simLaw_extRun_le_muEufProb_tableForgerAdds` at the signing oracle without
@@ -803,7 +804,7 @@ theorem kfExtAdds_le_muEufNmaProb
       cases hq
       exact mem_take_requests_of_logs _ j' hr hlt
 
-omit [Nonempty Y₁] [Nonempty TB.KeyCoins] in
+omit [Nonempty Y₁] [Nonempty T.KeyCoins] in
 /-- **A corruption logged by the bridge read after drops is among the absorbed adversary's first
 `Q` requests**: on every basis state of nonzero amplitude of the instance of the bridge read after
 drops `β` that keep the absorbed logs, the halting flag and the ancilla (`hβ`), a logged
@@ -1204,7 +1205,7 @@ noncomputable abbrev kfSidePb
     (kfExpansionAt sp Qs Aux A prf Psim Q pks p) (kq + Q * Psim.q)
     (kfDefaultAt sp rel enc dummyS Aux A prf Psim Q pks p) ((hside pks p).splitAdds sp))
 
-omit [Nonempty TB.KeyCoins] in
+omit [Nonempty T.KeyCoins] in
 /-- **The forger's query count for absorbed adversaries with side reads**: one per bridge step
 for the restriction's local queries, and at most the number of side reads. -/
 theorem slotQ_kfSidePb_le
@@ -1470,7 +1471,7 @@ noncomputable abbrev kfAbsAdv {Rq Rs : Type} [Fintype Rq] [DecidableEq Rq] [Fint
     0 (AssignRelay.qP_le_zero _) Q).mapOut
     Prod.fst).alg p.1
 
-omit [NeZero n] [∀ j i, Nonempty ((P j).Challenge i)] [Inhabited M.NIProof] [Nonempty TB.KeyCoins]
+omit [NeZero n] [∀ j i, Nonempty ((P j).Challenge i)] [Inhabited M.NIProof] [Nonempty T.KeyCoins]
   in
 /-- **The absorbed adversaries are trace preserving.** -/
 theorem tracePreserving_kfAbsAdv {Rq Rs : Type} [Fintype Rq] [DecidableEq Rq] [Fintype Rs]

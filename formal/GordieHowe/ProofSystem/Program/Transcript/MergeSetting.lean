@@ -97,6 +97,20 @@ def setting (kS : ℕ) (hb : T.MergeBounds kS) :
       (nJ_mul_le hb.toBounds)
   sampler := C.samplersOf T.readers T.k (Configurations.fsExtraBytes + T.maxGrant) T.stream
 
+/-- **The non-interactive proofs of a setting with merges are inhabited**: the transcript the
+simulator data `SD` assembles at any statement, challenges and coins (`assembleView`, as in
+`simAt`) is a full transcript of the IOP (`Setting.nonempty_niProof`). No witness is needed. -/
+theorem nonempty_niProof (SD : C.SimData) [Nonempty Stmt] (kS : ℕ) (hb : T.MergeBounds kS) :
+    Nonempty (T.setting kS hb).model.NIProof := by
+  obtain ⟨x⟩ := ‹Nonempty Stmt›
+  have ch : Chs C.P C.term := fun _ => Classical.arbitrary _
+  have s : SD.app.SimCoins × ∀ d, (SD.sim d).Coins := Classical.arbitrary _
+  have : Nonempty (FullTr C.P C.term) :=
+    ⟨C.assembleView (SD.app.sim x (C.appCh ch) s.1) fun d =>
+      (SD.sim d).sim (C.app.pub d x (SD.app.sim x (C.appCh ch) s.1)) (chN C.m (C.commitCh ch) d)
+        (fun b => C.branchCh d b ch) (C.joinCh d ch) (s.2 d)⟩
+  exact (T.setting kS hb).nonempty_niProof
+
 variable (T) in
 /-- **The preimage samplers of the setting's samplers** (`RealizedProgram.ProofSystem.IOP.preimagesOf`), from which
 the zero-knowledge simulator draws each round's stream at its simulated challenge. -/

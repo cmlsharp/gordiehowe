@@ -93,6 +93,6 @@ theorem muSufProb_none_eq_muEufNmaProb (A : MUAdversary (SignOracle.none B) n V 
   unfold muSufProb muEufNmaProb muEufProb
   congr 1
   ext x
-  simp only [Set.mem_ofPred_eq, strongForges_none_iff]
+  simp only [Set.mem_ofPred_eq, GameRun.Wins, strongForges_none_iff]
 
 end GordieHowe.Signature

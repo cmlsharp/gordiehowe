@@ -95,6 +95,14 @@ def wants : OracleProg A B R → List B → Bool
   | .query _ _, [] => true
   | .query _ k, b :: ans => wants (k b) ans
 
+/-- **Feeding answers to a program followed by a pure map** gives the mapped result. -/
+theorem result_bind_pure {X Y R R' : Type} (g : R → R') :
+    ∀ (p : OracleProg X Y R) (ans : List Y),
+      result (p.bind fun r => .pure (g r)) ans = (result p ans).map g
+  | .pure _, _ => rfl
+  | .query _ _, [] => rfl
+  | .query _ k, b :: ans => result_bind_pure g (k b) ans
+
 end OracleProgAns
 
 /-! ### Interactive adversaries -/

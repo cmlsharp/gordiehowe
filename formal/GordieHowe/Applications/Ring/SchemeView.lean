@@ -50,8 +50,8 @@ abbrev bindSelf {PK M : Type} : List PK → M → M := fun _ m => m
 into the scheme's (`pk`, `bm`, `pub`, the first and the last injective), its signatures the
 scheme's (`sig`), with the scheme's verification (`verify_eq`) and public value (`pub_eq`) at
 every oracle. -/
-structure SchemeView {TB : BaseTypes}
-    (B : BaseSigner Xo Yo N TB) (Sch : SigScheme) where
+structure SchemeView {T : Signature.SchemeTypes} {RMsg : Type}
+    (B : BaseSigner Xo Yo N T RMsg) (Sch : SigScheme) where
   /-- The keys. -/
   pk : B.PK → Sch.PK
   /-- The key map is injective. -/
@@ -92,8 +92,8 @@ abbrev _root_.GordieHowe.Ring.SigScheme.ofVerifier (PK Msg Sig Pub : Type) [Inha
 
 namespace SchemeView
 
-variable {TB : BaseTypes}
-  {B : BaseSigner Xo Yo N TB}
+variable {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner Xo Yo N T RMsg}
   {Sch : SigScheme} (V : SchemeView B Sch)
 
 /-- **The ring read as the scheme's**: the keys mapped by `pk`. -/
@@ -176,25 +176,28 @@ structure SchemeVerifies (Sch : SigScheme) (N : ℕ) {W Inp : Type}
 
 namespace SchemeView
 
-variable {TB : BaseTypes}
-  {B : BaseSigner Xo Yo N TB}
+variable {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner Xo Yo N T RMsg}
   {Sch : SigScheme} (V : SchemeView B Sch)
 
-open Classical in
 /-- **The base signer's statements verify its signatures** (`StmtVerifiesRing`) for the ring
 relation on `admB`: statements read by `toStmt` and checked by the program's check, the ring
 witness of a program witness read back (`ofWit`), the honest input of a pair of the ring relation
-the program's at the read pair. -/
-noncomputable def stmtVerifiesRing {W Inp : Type}
+the program's at the read pair. Membership in the ring relation is decided by
+`GordieHowe.Ring.ringRelDecidable` (for a decidable `admS` and public values with decidable
+equality), so the definition is computable. -/
+def stmtVerifiesRing {W Inp : Type}
     {rel : Set (GordieHowe.Ring.RingStmt Sch Sch.Msg N × W)}
     {relH : Set (GordieHowe.Ring.RingStmt Sch Sch.Msg N × Inp)} {admS : List Sch.PK → Prop}
-    (S : SchemeVerifies Sch N rel relH admS) {admB : KeyRing B.PK N → Prop}
+    [DecidablePred admS] [DecidableEq Sch.Pub] (S : SchemeVerifies Sch N rel relH admS)
+    {admB : KeyRing B.PK N → Prop}
     (hadm : ∀ R, admB R ↔ admS (V.ringOf R).1) : StmtVerifiesRing rel relH B admB where
   stmt := V.toStmt
   check x := S.check (V.toStmt x)
   wit x w := V.ofWit (S.wit (V.toStmt x) w)
   sound H x w hx hw := V.mem_ringRel_of hadm H x (S.sound _ _ hx hw)
   input x w :=
+    haveI := GordieHowe.Ring.ringRelDecidable (N := N) admS bindSelf
     if h : (V.toStmt x, V.toWit w) ∈ GordieHowe.Ring.ringRel admS bindSelf then
       some (S.input _ _ h) else none
   check_eq_true H x w h := S.check_eq_true _ _ ((V.mem_ringRel_iff hadm H x w).2 h)
@@ -220,7 +223,8 @@ theorem toStmt_injective (hbm : ∀ R, Function.Injective (B.bmsg R))
 theorem stmtVerifiesRing_stmt_injective {W Inp : Type}
     {rel : Set (GordieHowe.Ring.RingStmt Sch Sch.Msg N × W)}
     {relH : Set (GordieHowe.Ring.RingStmt Sch Sch.Msg N × Inp)} {admS : List Sch.PK → Prop}
-    (S : SchemeVerifies Sch N rel relH admS) {admB : KeyRing B.PK N → Prop}
+    [DecidablePred admS] [DecidableEq Sch.Pub] (S : SchemeVerifies Sch N rel relH admS)
+    {admB : KeyRing B.PK N → Prop}
     (hadm : ∀ R, admB R ↔ admS (V.ringOf R).1) (hbm : ∀ R, Function.Injective (B.bmsg R))
     (hb : Function.Injective V.bm) : Function.Injective (V.stmtVerifiesRing S hadm).stmt :=
   V.toStmt_injective hbm hb
@@ -235,10 +239,11 @@ theorem not_mem_of_nil {Inp : Type} {relH : Set (GordieHowe.Ring.RingStmt Sch Sc
 /-- **The statement map of `stmtVerifiesRing` keeps the ring's length** (`length_ringOf`), so the
 statements of the empty ring are tested by the emptiness of the statement's ring
 (`RingSignature.EmptyRingTest`). -/
-instance stmtVerifiesRing_emptyRingTest {W Inp : Type}
+def stmtVerifiesRing_emptyRingTest {W Inp : Type}
     {rel : Set (GordieHowe.Ring.RingStmt Sch Sch.Msg N × W)}
     {relH : Set (GordieHowe.Ring.RingStmt Sch Sch.Msg N × Inp)} {admS : List Sch.PK → Prop}
-    (S : SchemeVerifies Sch N rel relH admS) {admB : KeyRing B.PK N → Prop}
+    [DecidablePred admS] [DecidableEq Sch.Pub] (S : SchemeVerifies Sch N rel relH admS)
+    {admB : KeyRing B.PK N → Prop}
     (hadm : ∀ R, admB R ↔ admS (V.ringOf R).1) :
     RingSignature.EmptyRingTest (V.stmtVerifiesRing S hadm).stmt where
   isNil r := r.ring.1.isEmpty

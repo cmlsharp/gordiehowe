@@ -556,7 +556,6 @@ theorem exprLen_refA {k : ℕ} (hk : k ≤ eMax) :
     program.exprLen (.ref k) = program.exprLen (program.expr k) :=
   RealizedProgram.exprLen_ref (FalconNorm.refsOrdered (program := program)) (lt_of_le_of_lt hk (FalconNorm.exprs_length (program := program)))
 
-set_option maxRecDepth 2048 in
 /-- The zero constant `const41` reads `0` on the integers. -/
 theorem intOf_41 (rd : program.Valuation I) : program.intOf rd vZ1 0 = 0 := by
   obtain ⟨es, hk, he⟩ := FalconNorm.const41 (program := program)
@@ -580,7 +579,6 @@ theorem evalIntWith_top (e : program.Env I) {i : ℕ} (hi : i < 1024) :
   · rw [show 3072 - 3072 = 0 from rfl, RealizedProgram.evalIntWith_leaf]
     exact intOf_41 _
 
-set_option maxRecDepth 2048 in
 /-- **`norm.column0`**: `a₀² = sq₀ + 64 c₀`. -/
 theorem column0_int {e : program.Env I} (hs : program.SourceSatAt e) {i : ℕ} (hi : i < 1024) :
     ia e vA (3 * i) * ia e vA (3 * i) = ia e vSq (6 * i) + 64 * ia e vCc (5 * i) := by
@@ -599,7 +597,6 @@ theorem column0_int {e : program.Env I} (hs : program.SourceSatAt e) {i : ℕ} (
     (FalconNorm.i59_entry (program := program)) i hi] at this
   exact this
 
-set_option maxRecDepth 2048 in
 /-- **`norm.column1`**: `2 a₀ a₁ + c₀ = sq₁ + 64 c₁`. -/
 theorem column1_int {e : program.Env I} (hs : program.SourceSatAt e) {i : ℕ} (hi : i < 1024) :
     2 * (ia e vA (3 * i) * ia e vA (3 * i + 1)) + ia e vCc (5 * i) =
@@ -619,7 +616,6 @@ theorem column1_int {e : program.Env I} (hs : program.SourceSatAt e) {i : ℕ} (
     (FalconNorm.i59_entry (program := program)) i hi, (FalconNorm.i60_entry (program := program)) i hi, (FalconNorm.i61_entry (program := program)) i hi] at this
   exact this
 
-set_option maxRecDepth 2048 in
 /-- **`norm.column2`**: `2 a₀ a₂ + a₁² + c₁ = sq₂ + 64 c₂` (`a₂` the top digit, `topInt`). -/
 theorem column2_int {e : program.Env I} (hs : program.SourceSatAt e) {i : ℕ} (hi : i < 1024) :
     2 * (ia e vA (3 * i) * topInt e i) + ia e vA (3 * i + 1) * ia e vA (3 * i + 1) +
@@ -641,7 +637,6 @@ theorem column2_int {e : program.Env I} (hs : program.SourceSatAt e) {i : ℕ} (
     (FalconNorm.i61_entry (program := program)) i hi, (FalconNorm.i62_entry (program := program)) i hi, (FalconNorm.i63_entry (program := program)) i hi] at this
   exact this
 
-set_option maxRecDepth 2048 in
 /-- **`norm.column3`**: `2 a₁ a₂ + c₂ = sq₃ + 64 c₃`. -/
 theorem column3_int {e : program.Env I} (hs : program.SourceSatAt e) {i : ℕ} (hi : i < 1024) :
     2 * (ia e vA (3 * i + 1) * topInt e i) + ia e vCc (5 * i + 2) =
@@ -664,7 +659,6 @@ theorem column3_int {e : program.Env I} (hs : program.SourceSatAt e) {i : ℕ} (
     (FalconNorm.i65_entry (program := program)) i hi] at this
   exact this
 
-set_option maxRecDepth 2048 in
 /-- **`norm.column4`**: `a₂² + c₃ = sq₄ + 64 c₄`. -/
 theorem column4_int {e : program.Env I} (hs : program.SourceSatAt e) {i : ℕ} (hi : i < 1024) :
     topInt e i * topInt e i + ia e vCc (5 * i + 3) =
@@ -686,7 +680,6 @@ theorem column4_int {e : program.Env I} (hs : program.SourceSatAt e) {i : ℕ} (
     ] at this
   exact this
 
-set_option maxRecDepth 2048 in
 /-- **`norm.column5`**: `c₄ = sq₅`. -/
 theorem column5_int {e : program.Env I} (hs : program.SourceSatAt e) {i : ℕ} (hi : i < 1024) :
     ia e vCc (5 * i + 4) = ia e vSq (6 * i + 5) := by
@@ -821,7 +814,6 @@ theorem normalize_int {e : program.Env I} (hs : program.SourceSatAt e) {b m : �
   rw [Finset.sum_congr rfl fun s _ => evalIntWith_517 e hb hm s] at this
   exact this
 
-set_option maxRecDepth 2048 in
 /-- The complement's target digits (`norm.target`, value `555`) read on the integers: the base-`64`
 digits of `β² = 34034726`. -/
 theorem intOf_555 (rd : program.Valuation I) {m : ℕ} (hm : m < 6) :

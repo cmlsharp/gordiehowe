@@ -106,7 +106,6 @@ class MldsaHHash (program : RealizedProgram) : Prop extends MldsaHHashData progr
   /-- `kind458`. -/
   kind458 : (program.value 457).kind = .bits 455 idx3
 
-set_option maxRecDepth 4096 in
 /-- The native program at the ROM parameters has these facts. -/
 instance : MldsaHHash program where
   view_kinds := ⟨Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2ec_5ftilde_2eout_kind, Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2ec_5ftilde_2er167_2evalue_kind, Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2ec_5ftilde_2er167_2evalue_2ewords_kind, Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2esib_2eout_2ep0_kind, Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2esib_2er23_2evalue_kind, Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2esib_2er23_2evalue_2ewords_kind, Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2esib_2eout_2ep1_kind, Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2esib_2er47_2evalue_kind, Generated.MLDSA44.Native.ROMParams.ShapeFacts.value_h2c_2esib_2er47_2evalue_2ewords_kind⟩
@@ -386,7 +385,6 @@ theorem entry_run_zero {m : RealizedProgram.IndexMap} {a n : ℕ} (h : m = [(a, 
   rw [h]
   exact RealizedProgram.IndexMap.entry_step_zero ht
 
-set_option maxRecDepth 4096 in
 /-- The kinds of the output views and of the permutation outputs they share words with (generated
 data). -/
 theorem view_kinds : (program.value 457).kind = .bits 455 idx3 ∧ (program.value 456).kind = .bits 455 idx1 ∧ (program.value 455).kind = .priv ∧ (program.value 554).kind = .bits 504 idx4 ∧ (program.value 505).kind = .bits 504 idx1 ∧ (program.value 504).kind = .priv ∧ (program.value 555).kind = .bits 552 idx4 ∧ (program.value 553).kind = .bits 552 idx1 ∧ (program.value 552).kind = .priv :=
@@ -467,13 +465,11 @@ theorem idx40_id {t : ℕ} (ht : t < 7616) : idx38.entry t = t :=
 theorem idx47_id {t : ℕ} (ht : t < 256) : idx45.entry t = t :=
   (entry_run_one (m := idx45) (a := 0) (n := 256) rfl ht).trans (Nat.zero_add t)
 
-set_option maxRecDepth 4096 in
 /-- The shared expressions of the core permutations' inputs (generated data). -/
 theorem hash_exprs_core : program.expr 66 = .reindex idx38 (.concat (.reindex idx10 (.reindex idx10 (.concat (.reindex idx12 (.leaf 120)) (.reindex idx37 (.leaf 70))))) (.leaf 40)) ∧ program.expr 67 = .reindex idx16 (.reindex idx16 (.concat (.reindex idx15 (.ref 66)) (.leaf 9))) ∧ program.expr 410 = .reindex idx16 (.reindex idx16 (.concat (.reindex idx15 (.reindex idx15 (.concat (.reindex idx45 (.reindex idx45 (.leaf 457))) (.leaf 41)))) (.leaf 9))) ∧ program.expr 459 = .reindex idx16 (.reindex idx16 (.leaf 505)) :=
   MldsaHHashCore.hash_exprs
 
 
-set_option maxRecDepth 4096 in
 /-- The inputs of `c̃'`'s later absorbs: the previous output plus the absorbed block
 (generated data). -/
 theorem expr_blk : ∀ p : Fin 10, 2 ≤ (p : ℕ) → (p : ℕ) ≤ 7 → program.expr (linRef p 0 - 2) = .reindex idx16 (.add (.reindex idx16 (.leaf (outVal (p - 1) 23))) (.reindex idx16 (.concat (.reindex (blkIdx p) (.ref 66)) (.leaf 9)))) ∧ blkIdx p = ([(1088 * ((p : ℕ) - 1), 1, 1088)] : RealizedProgram.IndexMap) :=
@@ -596,7 +592,6 @@ theorem constBit_80 {K : Type*} [Field K] {b : ℕ} (hb : b < 8) :
     constBit (K := K) 0x80 b = if b = 7 then 1 else 0 := by
   interval_cases b <;> simp [constBit]
 
-set_option maxRecDepth 4096 in
 /-- The kinds of `μ`'s output, `w1` and `c̃'` (bit views, generated data). -/
 theorem bit_kinds : (program.value 120).kind = .bits 119 idx2 ∧ (program.value 70).kind = .bits 69 idx0 :=
   MldsaHHashCore.bit_kinds
@@ -734,7 +729,6 @@ def cTildeSponge : HSpongeCore program F0 FH 32 where
 
 /-! ## The SampleInBall stream's call -/
 
-set_option maxRecDepth 4096 in
 theorem kind458 : (program.value 457).kind = .bits 455 idx3 :=
   MldsaHHashCore.kind458
 
@@ -888,7 +882,6 @@ local notation "interp" => RealizedProgram.mldsaInterpOf F0 FH
 
 /-! ## Permutation `0` and `μ`'s inputs -/
 
-set_option maxRecDepth 4096 in
 /-- The shared expressions of the permutations' inputs (generated data). -/
 theorem hash_exprs : program.expr 11 = .reindex idx15 (.concat (.reindex idx13 (.concat (.reindex idx12 (.leaf 66)) (.leaf 8))) (.reindex idx14 (.leaf 67))) ∧ program.expr 12 = .reindex idx16 (.reindex idx16 (.concat (.reindex idx15 (.reindex idx15 (.ref 11))) (.leaf 9))) ∧ program.expr 66 = .reindex idx38 (.concat (.reindex idx10 (.reindex idx10 (.concat (.reindex idx12 (.leaf 120)) (.reindex idx37 (.leaf 70))))) (.leaf 40)) ∧ program.expr 67 = .reindex idx16 (.reindex idx16 (.concat (.reindex idx15 (.ref 66)) (.leaf 9))) ∧ program.expr 410 = .reindex idx16 (.reindex idx16 (.concat (.reindex idx15 (.reindex idx15 (.concat (.reindex idx45 (.reindex idx45 (.leaf 457))) (.leaf 41)))) (.leaf 9))) ∧ program.expr 459 = .reindex idx16 (.reindex idx16 (.leaf 505)) :=
   ⟨MldsaHHashMu.mu_exprs.1, MldsaHHashMu.mu_exprs.2, MldsaHHashCore.hash_exprs⟩
@@ -939,7 +932,6 @@ theorem evalE_ref12 (e : program.Env interp) {j : ℕ} (hj : j < 1600) :
 
 /-! ## `μ`'s padding -/
 
-set_option maxRecDepth 4096 in
 /-- `μ`'s padding predicates and shared expressions (generated data). -/
 theorem pad_exprs : (∃ t, (program.predicate 42).body = .equal 1 (.mul (.reindex idx25 (.leaf 68)) (.add (.reindex idx26 (.leaf 68)) (.reindex idx27 (.leaf 6)))) (.leaf 34) t) ∧ (∃ t, (program.predicate 43).body = .equal 1 (.reindex idx28 (.leaf 68)) (.leaf 35) t) ∧ (∃ t, (program.predicate 44).body = .equal 1 (.add (.reindex idx29 (.leaf 68)) (.leaf 6)) (.leaf 35) t) ∧ (∃ t, (program.predicate 45).body = .equal 1 (.mul (.add (.ref 61) (.leaf 68)) (.add (.ref 62) (.leaf 37))) (.leaf 38) t) ∧ (∃ t, (program.predicate 46).body = .equal 1 (.mul (.add (.ref 61) (.reindex idx32 (.leaf 6))) (.add (.ref 62) (.mul (.reindex idx32 (.ref 64)) (.leaf 39)))) (.leaf 38) t) ∧ (∃ t, (program.predicate 47).body = .equal 1 (.mul (.reindex idx36 (.ref 64)) (.add (.reindex idx12 (.leaf 120)) (.reindex idx12 (.ref 65)))) (.leaf 9) t) ∧ program.expr 61 = .reindex idx30 (.concat (.leaf 6) (.reindex idx26 (.leaf 68))) ∧ program.expr 62 = .apply (.sum 8) (.mul (.reindex idx15 (.reindex idx15 (.ref 11))) (.reindex idx31 (.leaf 36))) ∧ program.expr 63 = .reindex idx33 (.concat (.leaf 6) (.leaf 35)) ∧ program.expr 64 = .add (.reindex idx34 (.ref 63)) (.reindex idx35 (.ref 63)) ∧ program.expr 65 = .reindex idx12 (.leaf 118) :=
   MldsaHHashMu.pad_exprs

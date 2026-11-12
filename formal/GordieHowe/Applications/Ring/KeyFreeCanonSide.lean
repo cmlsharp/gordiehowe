@@ -34,11 +34,12 @@ open GordieHowe.SPBCS IOP SPTerm RingSignature.Insider
 
 variable {k kN kS L e N n : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁] [Fintype Y]
   [DecidableEq Y] [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁]
-  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes} [Fintype TB.PK] [DecidableEq TB.PK]
-  [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins]
-  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB} [NeZero n]
+  (sp : OracleSplit Y Y₁ (XOut k e)) {T : Signature.SchemeTypes} {RMsg : Type} [Fintype T.PK]
+  [DecidableEq T.PK]
+  [Fintype T.BSig]
+  [DecidableEq T.BSig] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins]
+  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N T RMsg} [NeZero n]
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)]
@@ -77,10 +78,10 @@ theorem bT_mapOut_restrictAt_eq {Rq Rs O O' Req₁ Resp₁ Req₂ Resp₂ : Type
 /-- **The forger's readout of the canonical witness**: `rd` at the output of the extraction run's
 registers and the canonical witness (`kfCanon`) at the test `ok pks`, at those registers and the
 measured database. -/
-noncomputable def kfCanonReadout {WitK Wt : Type} {shA₁ : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} {A₁ : AdaptiveIAlg shA₁ (Frg × X₀)} {C₁ : Challenger Xq (XOut k e) (Stmt × (MUR ⊕ R))
+def kfCanonReadout {WitK Wt : Type} {shA₁ : AlgShape Xq (XOut k e) (MUR ⊕ R) (MUResponse B.core ⊕ M.Response b)} {A₁ : AdaptiveIAlg shA₁ (Frg × X₀)} {C₁ : Challenger Xq (XOut k e) (Stmt × (MUR ⊕ R))
       (M.Response b)} {t₀ : ℕ}
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → Wt)
-    (ok : Frg × X₀ → List (MUR ⊕ R) → Wt → Prop)
+    (ok : Frg × X₀ → List (MUR ⊕ R) → Wt → Prop) [∀ f rs, DecidablePred (ok f rs)]
     (rd : Frg × X₀ → Option Wt → B.PK × B.BMsg × B.BSig)
     (Q : ℕ) (x : BaseGame.Tuple Xq (Out k e) (ExtReg A₁ C₁ MUR (MUResponse B.core)) t₀ ×
       DB Xq (Out k e)) : B.PK × B.BMsg × B.BSig :=
@@ -107,6 +108,7 @@ noncomputable abbrev kfCanonSideForger {Tb WitK Wt : Type}
     (hside : ∀ pks p, (X pks p).SideSteps (stω pks p))
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → Wt)
     (ok : (Fin n → B.PK) → Frg × X₀ → List (MUR ⊕ R) → Wt → Prop)
+    [∀ pks f rs, DecidablePred (ok pks f rs)]
     (rd : Frg × X₀ → Option Wt → B.PK × B.BMsg × B.BSig) (t' : ℕ)
     (ht : ∀ pks p, bT (((X pks p).mapOut Prod.fst).restrictAt sp 0) (simExtChallenger Psim Q)
       (seTwoKF (Proof := M.Response b) B rel (enc pks) dummyS pks Q) (kq + Q * Psim.q) + 1 +
@@ -131,7 +133,7 @@ theorem simProb_withStep_restrictAt_eq {WitK Wt : Type}
     (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins) (Q : ℕ)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (kq : ℕ)
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → Wt)
-    (ok G : Frg × X₀ → List (MUR ⊕ R) → Wt → Prop) (ω : Xq → Y₁) :
+    (ok G : Frg × X₀ → List (MUR ⊕ R) → Wt → Prop) [∀ f rs, DecidablePred (ok f rs)] (ω : Xq → Y₁) :
     simProb (outEquiv k e) (extAdv Qs (seAlgKF (rel := rel) (enc := enc (fun i => B.pk (keys i)))
         (dummyS := dummyS) prf keys Q ((A.withStep st).restrictAt sp ω)) Psim Q kq)
       (forgerCanonKF (rel := rel) (enc := enc (fun i => B.pk (keys i))) (dummyS := dummyS) prf keys
@@ -147,7 +149,7 @@ theorem simProb_withStep_restrictAt_eq {WitK Wt : Type}
   unfold AdaptiveIAlg.restrictAt AdaptiveIAlg.withStep
   rfl
 
-variable [Nonempty TB.KeyCoins]
+variable [Nonempty T.KeyCoins]
 
 /-- **The canonical witness's goal in the key-free extraction runs with side reads as
 MU-EUF-NMA^corr** (`kfExtSide_le_muEufNmaProb` at the event `forgerCanonKF`): for relayed
@@ -173,6 +175,7 @@ theorem kfCanonSide_le_muEufNmaProb {Tb WitK Wt : Type}
     (hside : ∀ pks p, (X pks p).SideSteps (stω pks p))
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → Wt)
     (ok : (Fin n → B.PK) → Frg × X₀ → List (MUR ⊕ R) → Wt → Prop)
+    [∀ pks f rs, DecidablePred (ok pks f rs)]
     (G : (Xq → Y₁) → Frg × X₀ → List (MUR ⊕ R) → Wt → Prop)
     (rd : Frg × X₀ → Option Wt → B.PK × B.BMsg × B.BSig)
     (hver : ∀ pks (ω : Xq → Y₁) (h : Xq → XOut k e) f rs w, ok pks f rs w → G ω f rs w →
@@ -234,7 +237,7 @@ theorem _root_.GordieHowe.ENNReal.tsum_mul_tsum_comm {α β : Type} (u : α → 
   refine tsum_congr fun y => tsum_congr fun x => ?_
   ring
 
-omit [Nonempty Y₁] [NeZero n] [∀ j i, Nonempty ((P j).Challenge i)] [Nonempty TB.KeyCoins] in
+omit [Nonempty Y₁] [NeZero n] [∀ j i, Nonempty ((P j).Challenge i)] [Nonempty T.KeyCoins] in
 /-- **The canonical witness's goal in the run of a relayed adversary is read past the order of
 restricting and dropping the table.** -/
 theorem simProb_restrictAt_mapOut_comm {Tb WitK Wt : Type}
@@ -245,7 +248,7 @@ theorem simProb_restrictAt_mapOut_comm {Tb WitK Wt : Type}
     (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins) (Q : ℕ)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (kq : ℕ)
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → Wt)
-    (ok G : Frg × X₀ → List (MUR ⊕ R) → Wt → Prop) (ω : Xq → Y₁) :
+    (ok G : Frg × X₀ → List (MUR ⊕ R) → Wt → Prop) [∀ f rs, DecidablePred (ok f rs)] (ω : Xq → Y₁) :
     simProb (outEquiv k e) (extAdv Qs (seAlgKF (rel := rel) (enc := enc (fun i => B.pk (keys i)))
         (dummyS := dummyS) prf keys Q (((X.withStep st).restrictAt sp ω).mapOut Prod.fst)) Psim Q
             kq)
@@ -278,7 +281,7 @@ def kfAbsorbSideBudget (S P w q kq qS : ℕ) : ℕ :=
   kfAbsorbSideRequests S P w q kq + ((S + P) * max w 3 + 1) * qS
 
 omit [Nonempty Y₁] [NeZero n] [∀ j i, Nonempty ((P j).Challenge i)] [DecidableEq X₀]
-  [Inhabited M.NIProof] [Nonempty TB.KeyCoins] in
+  [Inhabited M.NIProof] [Nonempty T.KeyCoins] in
 /-- The numbers of `assignSideBase` for base adversaries with at most `S` slots, `P` post batches
 and
 width `w`, through relays with one oracle read and one pad sub-slot: the requests. -/
@@ -301,7 +304,7 @@ theorem bT_assignSideBase_le {Rq Rs : Type} [Fintype Rq] [DecidableEq Rq] [Inhab
     (max_le_max hwd le_rfl))) _
 
 omit [Nonempty Y₁] [NeZero n] [∀ j i, Nonempty ((P j).Challenge i)] [DecidableEq X₀]
-  [Inhabited M.NIProof] [Nonempty TB.KeyCoins] in
+  [Inhabited M.NIProof] [Nonempty T.KeyCoins] in
 /-- The side reads of `assignSideBase` in all, for base adversaries with at most `S` slots, `P` post
 batches and width `w`, through relays with one oracle read, one pad sub-slot and `qS` side reads. -/
 theorem sum_sideSteps_assignSideBase_le {Rq Rs : Type} [Fintype Rq] [DecidableEq Rq]
@@ -326,7 +329,7 @@ theorem sum_sideSteps_assignSideBase_le {Rq Rs : Type} [Fintype Rq] [DecidableEq
     (max_le_max hwd le_rfl)) _)
 
 omit [Nonempty Y₁] [NeZero n] [∀ j i, Nonempty ((P j).Challenge i)] [DecidableEq X₀]
-  [Inhabited M.NIProof] [Nonempty TB.KeyCoins] in
+  [Inhabited M.NIProof] [Nonempty T.KeyCoins] in
 /-- **The forger's request bound for absorbed relays** (`hQ` of `kfCanonSide_le_muEufNmaProb`). -/
 theorem hQ_assignSideBase {Rq Rs : Type} [Fintype Rq] [DecidableEq Rq] [Inhabited Rq]
     [Fintype Rs] [DecidableEq Rs] {shA₀ : AlgShape Xq Y Rq Rs} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀))
@@ -342,7 +345,7 @@ theorem hQ_assignSideBase {Rq Rs : Type} [Fintype Rq] [DecidableEq Rq] [Inhabite
       hG1) 1
 
 omit [Nonempty Y₁] [NeZero n] [∀ j i, Nonempty ((P j).Challenge i)] [DecidableEq X₀]
-  [Inhabited M.NIProof] [Nonempty TB.KeyCoins] in
+  [Inhabited M.NIProof] [Nonempty T.KeyCoins] in
 /-- **The forger's query budget for absorbed relays** (`ht` of `kfCanonSide_le_muEufNmaProb`). -/
 theorem ht_assignSideBase {Rq Rs : Type} [Fintype Rq] [DecidableEq Rq] [Inhabited Rq]
     [Fintype Rs] [DecidableEq Rs] {shA₀ : AlgShape Xq Y Rq Rs} (A₀ : AdaptiveIAlg shA₀ (Frg × X₀))
@@ -358,7 +361,7 @@ theorem ht_assignSideBase {Rq Rs : Type} [Fintype Rq] [DecidableEq Rq] [Inhabite
   Nat.add_le_add (hQ_assignSideBase sp rel enc dummyS A₀ G Psim Q kq pks hsl hpo hwd
     ⟨hG1.1, hG1.2.1⟩) (sum_sideSteps_assignSideBase_le A₀ G Q hsl hpo hwd hG1)
 
-omit [Nonempty Y₁] [NeZero n] [∀ j i, Nonempty ((P j).Challenge i)] [Nonempty TB.KeyCoins] in
+omit [Nonempty Y₁] [NeZero n] [∀ j i, Nonempty ((P j).Challenge i)] [Nonempty T.KeyCoins] in
 /-- **The canonical witness's goal in the run of an adversary with the relay at `ω` absorbed** is
 that in the run of the relayed adversary at zero with the Kraus maps at `ω`
 (`AdaptiveIAlg.absorbAssign_apply_eq_assignSideBase`), its output read through `Prod.fst` after
@@ -371,7 +374,7 @@ theorem simProb_absorbAssign_eq_assignSideBase {Rq Rs WitK Wt : Type} [Fintype R
     (prf : Frg → Option M.NIProof) (keys : Fin n → B.KeyCoins)
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (kq : ℕ)
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → Wt)
-    (ok Gl : Frg × X₀ → List (MUR ⊕ R) → Wt → Prop) :
+    (ok Gl : Frg × X₀ → List (MUR ⊕ R) → Wt → Prop) [∀ f rs, DecidablePred (ok f rs)] :
     simProb (outEquiv k e) (extAdv Qs (seAlgKF (rel := rel) (enc := enc (fun i => B.pk (keys i)))
         (dummyS := dummyS) prf keys Q (((A₀.absorbAssign (G ω) Q).restrictAt sp ω).mapOut
           Prod.fst)) Psim Q kq)
@@ -413,6 +416,7 @@ theorem kfAbsorbSide_le_muEufNmaProb {Rq Rs SC WitK Wt : Type} [Fintype Rq] [Dec
     (Psim : NARG.Simulator Xq (XOut k e) (Stmt × (MUR ⊕ R)) (M.Response b) SC') (kq : ℕ)
     (Ext : CausalExtractor P τ X₀ WitK) (wit : X₀ → WitK → Wt)
     (ok : (Fin n → B.PK) → Frg × X₀ → List (MUR ⊕ R) → Wt → Prop)
+    [∀ pks f rs, DecidablePred (ok pks f rs)]
     (Gl : (Xq → Y₁) → Frg × X₀ → List (MUR ⊕ R) → Wt → Prop)
     (rd : Frg × X₀ → Option Wt → B.PK × B.BMsg × B.BSig)
     (hver : ∀ pks (ω : Xq → Y₁) (h : Xq → XOut k e) f rs w, ok pks f rs w → Gl ω f rs w →

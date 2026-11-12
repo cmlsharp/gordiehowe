@@ -14,7 +14,7 @@ public import GordieHowe.Model.RingSignature.Adversary
 The unforgeability game of a `RingScheme`, BKM06 Definition 7 (ePrint 2005/304, p. 7,
 unforgeability w.r.t. insider corruption), against the adversaries of
 `GordieHowe/Model/RingSignature/Adversary.lean`, with an optional second signing oracle for the
-key-reuse game (`GordieHowe/Model/RingSignature/KeyReuse.lean`).
+joint-security game (`GordieHowe/Model/RingSignature/Joint.lean`).
 
 - `SideOracle S`: a signing oracle beside the ring signer, on messages `BMsg` with signatures
   `BSig`, answered from a user's key pair and the request's signing coins; `Covers bm R m`: a
@@ -58,7 +58,7 @@ BKM06's game: `n` key pairs from `Gen`, `S = {PK_i}` given to `A`; `OSign(s, M, 
    of one key, the key is honest if either is uncorrupted.
 6. **Quantum adversaries in the QROM** with at most `t` superposition queries to the oracle and `Q`
    requests; verification of the forgery at the same oracle.
-7. **A side oracle** (`SideOracle`): absent in Definition 7 (`SideOracle.none`); the key-reuse game
+7. **A side oracle** (`SideOracle`): absent in Definition 7 (`SideOracle.none`); the joint-security game
    adds the base scheme's ordinary signer and widens freshness by `Covers`.
 -/
 
@@ -69,7 +69,7 @@ open scoped ENNReal
 
 variable {X Y : Type} {N : ℕ} {TS : RingTypes} (S : RingScheme X Y N TS) (n : ℕ)
 
-/-- **A signing oracle beside the ring signer** (the key-reuse game's ordinary base signer): on a
+/-- **A signing oracle beside the ring signer** (the joint-security game's ordinary base signer): on a
 user's key pair, a message `BMsg` and the request's signing coins, a classical oracle program with
 at most `q` queries returning a signature `BSig` or `none`; and `Covers bm R m`, which a member's
 answered signature on `bm` makes a forgery on `(R, m)` not fresh. -/
@@ -81,7 +81,7 @@ structure SideOracle where
   /-- The bound on its queries. -/
   q : ℕ
   /-- The side signer. -/
-  sign : S.PK × S.SK → BMsg → S.SignCoins → OracleProg X Y (Option BSig)
+  sign : Signature.KeyPair S.PK S.SK → BMsg → S.SignCoins → OracleProg X Y (Option BSig)
   /-- It makes at most `q` queries. -/
   sign_queries : ∀ kp bm c, (sign kp bm c).QueriesLE q
   /-- A member's signature on `bm` makes a forgery on `(R, m)` not fresh. -/
@@ -297,7 +297,7 @@ def SignQueried (hist : UnforgeHist n O) (R : KeyRing S.PK N) (m : S.Msg) : Prop
 `hist`, at the users' key coins `keys`. -/
 def SideCovered (keys : Fin n → S.KeyCoins) (hist : UnforgeHist n O) (R : KeyRing S.PK N)
     (m : S.Msg) : Prop :=
-  ∃ e ∈ hist, ∃ i bm, e.request = .sideSign i bm ∧ S.pk (keys i) ∈ R.1 ∧ O.Covers bm R m
+  ∃ e ∈ hist, ∃ i bm, e.request = .sideSign i bm ∧ S.pk (keys i) ∈ R ∧ O.Covers bm R m
 
 /-- **A fresh ring and message** for the key coins `keys` and the history `hist` (BKM06
 Definition 7, step 4: "`A` never queried `(?, M*, R*)`, and `R* ⊆ S \ C`"): every key of the ring is
@@ -306,7 +306,7 @@ for a side signature covering `(R, m)`. -/
 structure Fresh (keys : Fin n → S.KeyCoins) (hist : UnforgeHist n O) (R : KeyRing S.PK N)
     (m : S.Msg) : Prop where
   /-- Every key of the ring is the key of an uncorrupted user. -/
-  honest_ring : ∀ pk ∈ R.1, ∃ i, S.pk (keys i) = pk ∧ ¬ Corrupted hist i
+  honest_ring : ∀ pk ∈ R, ∃ i, S.pk (keys i) = pk ∧ ¬ Corrupted hist i
   /-- No ring signature on the ring and message was requested. -/
   not_signQueried : ¬ SignQueried hist R m
   /-- No member was asked for a side signature covering the ring and message. -/
@@ -314,12 +314,12 @@ structure Fresh (keys : Fin n → S.KeyCoins) (hist : UnforgeHist n O) (R : KeyR
 
 /-- **The output `(R*, m*, σ*)` is a forgery** at the key coins `keys`, the oracle `H` and the
 history `hist`: `σ*` verifies on `(R*, m*)` at `H`, and `(R*, m*)` is fresh. -/
-structure Forges (keys : Fin n → S.KeyCoins) (H : X → Y) (out : KeyRing S.PK N × S.Msg × S.Sig)
+structure Forges (keys : Fin n → S.KeyCoins) (H : X → Y) (out : S.RingForgery)
     (hist : UnforgeHist n O) : Prop where
   /-- The signature verifies. -/
-  verify_eq : S.verify H out.1 out.2.1 out.2.2 = true
+  verify_eq : S.verify H out.ring out.msg out.sig = true
   /-- The ring and message are fresh. -/
-  fresh : Fresh keys hist out.1 out.2.1
+  fresh : Fresh keys hist out.ring out.msg
 
 /-- **With no requests, a ring is fresh exactly when its keys are honest.** -/
 theorem fresh_nil_iff {keys : Fin n → S.KeyCoins} {R : KeyRing S.PK N} {m : S.Msg} :
@@ -387,7 +387,7 @@ the users' public keys and the table `V` of the oracle, a `t`-query adversary ma
 outputting a ring, a message and a ring signature (`GameAdversary`). -/
 abbrev UnforgeAdversary (V : OracleView X Y) (t : ℕ) : Type 1 :=
   GameAdversary X Y (UnforgeRequest n O) (UnforgeResponse O) ((Fin n → S.PK) × V.Tab)
-    (KeyRing S.PK N × S.Msg × S.Sig) t
+    S.RingForgery t
 
 variable (S n) in
 /-- **An adversary of BKM06 Definition 7**: no side oracle. -/
@@ -400,8 +400,8 @@ variable {V : OracleView X Y} {t : ℕ} [Nonempty TS.KeyCoins] [Fintype TS.SignC
 /-- **The run of the unforgeability game** with `Q` requests: the users' key coins and the oracle
 uniform, the adversary on the public keys and the oracle's table against the challenger. -/
 noncomputable def unforgeLaw (A : UnforgeAdversary S n O V t) (Q : ℕ) :
-    PMF ((Fin n → S.KeyCoins) × (X → Y) ×
-      Option ((KeyRing S.PK N × S.Msg × S.Sig) × UnforgeHist n O)) :=
+    PMF (GameRun (Fin n → S.KeyCoins) X Y S.RingForgery
+      (UnforgeRequest n O) (UnforgeResponse O)) :=
   runLaw (fun keys H => A (fun i => S.pk (keys i), V.view H)) fun keys =>
     unforgeChallenger S n O keys Q
 
@@ -409,7 +409,7 @@ noncomputable def unforgeLaw (A : UnforgeAdversary S n O V t) (Q : ℕ) :
 terminates with a forgery (`Forges`) for the users' key coins, the oracle and the answered
 requests. -/
 noncomputable def forgeProb (A : UnforgeAdversary S n O V t) (Q : ℕ) : ℝ≥0∞ :=
-  (unforgeLaw A Q).toOuterMeasure {x | ∃ p ∈ x.2.2, Forges x.1 x.2.1 p.1 p.2}
+  (unforgeLaw A Q).toOuterMeasure {r | r.Wins Forges}
 
 /-- **The forgery probability is at most `1`.** -/
 theorem forgeProb_le_one (A : UnforgeAdversary S n O V t) (Q : ℕ) : forgeProb A Q ≤ 1 :=
@@ -419,5 +419,18 @@ theorem forgeProb_le_one (A : UnforgeAdversary S n O V t) (Q : ℕ) : forgeProb 
 corruption) with `Q` requests: the game without a side oracle. -/
 noncomputable def insiderForgeProb (A : InsiderAdversary S n V t) (Q : ℕ) : ℝ≥0∞ :=
   forgeProb A Q
+
+/-- **No forgery output, no forgery**: if the scheme has no ring forgeries (for instance no
+message, or no signature), the adversary never terminates with an output and the forgery
+probability is `0`. -/
+theorem forgeProb_eq_zero_of_isEmpty [IsEmpty S.RingForgery] (A : UnforgeAdversary S n O V t)
+    (Q : ℕ) : forgeProb A Q = 0 :=
+  (PMF.toOuterMeasure_apply_eq_zero_iff _ _).2
+    (Set.disjoint_left.2 fun _ _ ⟨p, _, _⟩ => isEmptyElim (p.1 : S.RingForgery))
+
+/-- **No forgery output, no forgery in BKM06 Definition 7** (`forgeProb_eq_zero_of_isEmpty`). -/
+theorem insiderForgeProb_eq_zero_of_isEmpty [IsEmpty S.RingForgery]
+    (A : InsiderAdversary S n V t) (Q : ℕ) : insiderForgeProb A Q = 0 :=
+  forgeProb_eq_zero_of_isEmpty A Q
 
 end GordieHowe.RingSignature

@@ -69,7 +69,7 @@ theorem not_mem_of_nil (S : SchemeVerifies (scheme len) 64 rel relH ringAdm) (ho
 
 /-- **The statements of the empty ring are tested by the emptiness of the statement's ring**
 (`SchemeView.stmtVerifiesRing_emptyRingTest`). -/
-instance ringVerifies_emptyRingTest (S : SchemeVerifies (scheme len) 64 rel relH ringAdm) :
+def ringVerifies_emptyRingTest (S : SchemeVerifies (scheme len) 64 rel relH ringAdm) :
     RingSignature.EmptyRingTest (ringVerifies eS eM Xo Yo maxAttempts bmsg S).stmt :=
   (schemeView eS eM Xo Yo maxAttempts bmsg).stmtVerifiesRing_emptyRingTest S
     (adm_iff eS eM maxAttempts bmsg)

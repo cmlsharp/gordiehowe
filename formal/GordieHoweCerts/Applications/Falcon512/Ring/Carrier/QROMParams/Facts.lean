@@ -63,7 +63,6 @@ theorem carrier_idxBool :
     ∃ t, (program.predicate 9).body = .equal 0 (.mul (.leaf 8) (.leaf 8)) (.leaf 8) t :=
   predicate_member_2esigner_2eindex_2eboolean_body
 
-set_option maxRecDepth 4096 in
 /-- The membership's facts: the ring `5`, the challenge `6`, the spectrum `7`, `s2` `10`, the powers
 `20`, the zero constant `1`, `ψ = psiG`, `−1 = p − 1`, the index bits' check `9`. -/
 @[expose] instance : FalconRingMember program where
@@ -126,7 +125,8 @@ theorem carrier_sig : ∃ t, (program.predicate 1).body = .equal 0
     (.leaf 1) t :=
   predicate_signature_2eequation_body
 
-set_option maxRecDepth 4096 in
+-- The `decide +kernel` checks of this instance decide closed goals about literals: the named
+-- generated facts (`…_kind`, `expr_…_eq`, `idx…_eq`) are rewritten into them first.
 /-- The carrier's facts outside the membership. -/
 instance : FalconCarrierBase program where
   sigE := .add (.add (.add (.leaf 6) (.scale (.const mOneG) (.leaf 11)))
@@ -194,11 +194,12 @@ instance : FalconCarrierBase program where
     · exact ⟨predicate_encoding_2ehigh2_role.1, program.inSource_of_source predicate_encoding_2ehigh2_role.2⟩
   consts := by
     exact ⟨RealizedProgram.isConstant_of_kind value_magnitudes_2emodulus_kind,
-      by rw [RealizedProgram.constEntries_of_kind value_magnitudes_2emodulus_kind]; rfl,
+      by rw [RealizedProgram.constEntries_of_kind value_magnitudes_2emodulus_kind]; decide +kernel,
       RealizedProgram.isConstant_of_kind value_magnitudes_2ezero_kind,
-      by rw [RealizedProgram.constEntries_of_kind value_magnitudes_2ezero_kind]; rfl,
+      by rw [RealizedProgram.constEntries_of_kind value_magnitudes_2ezero_kind]; decide +kernel,
       RealizedProgram.isConstant_of_kind value_encoding_2ebudget_2eoffset_kind,
-      by rw [RealizedProgram.constEntries_of_kind value_encoding_2ebudget_2eoffset_kind]; rfl⟩
+      by rw [RealizedProgram.constEntries_of_kind value_encoding_2ebudget_2eoffset_kind]
+         decide +kernel⟩
   qloConst := ⟨RealizedProgram.isConstant_of_kind value_signature_2eequation_2eoffset_kind,
     by rw [RealizedProgram.constEntries_of_kind value_signature_2eequation_2eoffset_kind]; rfl⟩
   fields := by

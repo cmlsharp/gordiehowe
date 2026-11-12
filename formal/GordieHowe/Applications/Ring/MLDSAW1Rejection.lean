@@ -30,7 +30,7 @@ attempts at one nonce).
 - `run_stdProg_one`: one call of the standard signer computes the first accepted attempt against
   the commitment hashes at the masks of the nonce.
 - `isStdOn_w1Base`: the ordinary signer is the standard signer at the first nonce
-  (`Signature.IsStdOn`, the hypothesis of the key-reuse lifting), for `0 < k`.
+  (`Signature.IsStdOn`, the hypothesis of the joint-security lifting), for `0 < k`.
 - `callOut_eq_att`: on an honest key at its position, one call of the ring loop is one attempt of
   the rejection form: the standard signature, kept by `w1Keep`, given the signing and verification
   laws and an encoding coherent with `bucketsOf`.
@@ -173,12 +173,12 @@ variable [Fintype src.Rnd] [DecidableEq src.Rnd] [Nonempty src.Rnd]
 
 omit [Inhabited prims.Hint] in
 /-- **The ordinary signer is the standard signer at the first nonce** (`Signature.IsStdOn`, the
-hypothesis of the key-reuse lifting lemma), for `0 < k`. -/
+hypothesis of the joint-security lifting lemma), for `0 < k`. -/
 theorem isStdOn_w1Base (hk : 0 < k) :
     IsStdOn (w1BaseSigner prims O βmin tol enc (ringLoop prims src O βmin k D) bmsg)
       (w1Rejection prims src O βmin tol k D enc bmsg) k (w1CoinEquiv src k D) hk := by
   intro H kc bm c
-  simp only [w1BaseSigner, ringLoop]
+  simp only [w1BaseSigner, w1BaseSignerOf, ringLoop, ringLoopOf]
   change (stdProg prims src O.toMLDSAOracles k _ bm c.1).run H =
     (stdProg prims src O.toMLDSAOracles 1 _ bm fun _ => c.1 ⟨0, hk⟩).run H
   unfold stdProg
@@ -216,7 +216,7 @@ theorem callOut_eq_att (h_laws : SigningLaws prims) (hv : VerifyLaws prims)
   unfold Rejection.att
   dsimp only
   rw [hstd, run_stdProg_one]
-  unfold callOut
+  unfold callOut callOutOf
   simp only [hhc]
   rcases hf : (List.finRange T).find? (fun t => attemptAccept prims sk A (ys t)
       (O.hOrc H ((sk.tr, bmsg R m), realBuckets A (ys t)))) with _ | t
@@ -295,7 +295,8 @@ theorem isRejectionOn_w1Base (h_laws : SigningLaws prims) (hv : VerifyLaws prims
       decide ((R.1.map fun x => O.muPt (pubTr prims x, bmsg R m)).map (O.muAns ∘ H)).Nodup := by
     simp only [muDistinctProg, OracleProg.run_mapOutput, OracleProg.run_queryAll, List.map_map]
     rfl
-  simp only [w1BaseSigner, ringLoop, Signature.BaseScheme.pk, Signature.BaseScheme.sk,
+  simp only [w1BaseSigner, w1BaseSignerOf, ringLoop, ringLoopOf, Signature.BaseScheme.pk,
+      Signature.BaseScheme.sk,
     OracleProg.run_bind, hmd]
   change _ = if (ringCheckProg prims O βmin tol R).run H then _ else _
   rcases (ringCheckProg prims O βmin tol R).run H with _ | _
@@ -303,7 +304,7 @@ theorem isRejectionOn_w1Base (h_laws : SigningLaws prims) (hv : VerifyLaws prims
   · by_cases hnd : ((R.1.map fun x => O.muPt (pubTr prims x, bmsg R m)).map (O.muAns ∘ H)).Nodup
     · simp only [hnd, decide_true, and_self, ite_true]
       erw [run_ringLoopProg prims src O βmin k D _ R _ (bmsg R m) c H, dif_pos hi]
-      unfold loopOut
+      unfold loopOut loopOutOf
       rw [List.ofFn_eq_map, List.findSome?_map]
       congr 1
       funext c'

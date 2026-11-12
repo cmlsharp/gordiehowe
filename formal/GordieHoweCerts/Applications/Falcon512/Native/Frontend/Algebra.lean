@@ -316,7 +316,6 @@ theorem applyInt_cast (e : program.Env interp) (op : RealizedProgram.NamedOp) {v
   rw [ia_eq_nA e hf hc, Int.cast_natCast, nA, toNat_eq_val, ZMod.natCast_zmod_val,
     coord0_mul_prime (hprime t t.isLt)]
 
-set_option maxRecDepth 4096 in
 /-- **The key's polynomial read by `signature.equation`**: the constant coordinates of the inverse
 transform of `statement.hhat` are the key's coefficients, at a statement that decodes to `pk`. -/
 theorem coord0_keyPoly {e : program.Env interp} {pk : PublicKey} (hpk : keyOf e.stmt = some pk)
@@ -353,7 +352,6 @@ theorem φq_coord0_bool {x : (interp 1).K} (hx : x = 0 ∨ x = 1) : φq (coord0 
   · rw [show (1 : (interp 1).K) = ((1 : ℕ) : (interp 1).K) from Nat.cast_one.symm, coord0_natCast,
       map_natCast]
 
-set_option maxRecDepth 4096 in
 /-- **The signature rows hold** at the decoded key (`Native.SignatureRows`), from
 `signature.equation`'s constant coordinates. -/
 theorem signatureRows {e : program.Env interp} (hs : program.SourceSatAt e) {pk : PublicKey}

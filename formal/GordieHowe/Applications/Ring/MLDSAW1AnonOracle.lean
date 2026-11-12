@@ -28,11 +28,11 @@ memory across rounds and `Q` adaptive challenges.
   `regGapAt` over `G_A` is `regGapAvg` (`expect_regGapAt_withExpandA`), the average of `collAt` is
   at most the collision bound (`expect_collAt_withExpandA_le`), Jensen's inequality for the square
   root (`expect_w1CouplingError_le`) and the McDiarmid numbers (`sqrt_add_sqrt_le_of_le`).
-- `w1Scheme.expect_anonAdvantage_le`: the averaged advantage of `w1Scheme` at the random-oracle
-  primitives, the concrete encoding and `W1Oracles.atRandomOracles`, at any approved parameter set,
-  from `hedgedScheme.anonAdvantage_le_coupling` at each triple of oracles, with keep level
-  `Lk = β_min θ (1 - s) / 32` (`mul_div_le_keepLevel`) and check parameters (`CheckParams`).
-- `w1Scheme.expect_anonAdvantage_le_mldsa{44,65,87}`: **the headlines** at ML-DSA-44, -65 and -87,
+- `w1Scheme.expect_anonAdvantage_le`: **the headline**, the averaged advantage of `w1Scheme` at the
+  random-oracle primitives, the concrete encoding and `W1Oracles.atRandomOracles`, at any approved
+  parameter set, from `hedgedScheme.anonAdvantage_le_coupling` at each triple of oracles, with keep
+  level `Lk = β_min θ (1 - s) / 32` (`mul_div_le_keepLevel`) and check parameters (`CheckParams`).
+- `w1Scheme.expect_anonAdvantage_le_mldsa{44,65,87}`: the headline at ML-DSA-44, -65 and -87,
   with the regularity bounds `expect_regGapAvg_le_mldsa{44,65,87}`, and their forms with
   ring-binding (`bmsg := Prod.mk`, `w1Scheme.expect_anonAdvantage_le_bind_mldsa{44,65,87}`) and
   converted (`bmsg := fun _ m => m`, `w1Scheme.expect_anonAdvantage_le_conv_mldsa{44,65,87}`) base
@@ -129,9 +129,8 @@ of `w1CouplingError` is at most
 `2 (2 / ((1 - s) θ) · n R + √(N n log (C + 1)) / (2^2000 θ (1 - θ) (1 - s) β_min)) + 2 k / D +
 2 (1 - Lk)^k`. The average of `regGapAt` over `G_A` is `regGapAvg` (`expect_regGapAt_withExpandA`);
 that of `collAt` is at most the collision bound (`expect_collAt_withExpandA_le`); `collAt` enters
-under a square root (`expect_w1CouplingError_le`); the McDiarmid terms are bounded as in
-`expect_mcDiarmidTerms_le_of` (`sqrt_add_sqrt_le_of_le` with `ε = 2^-4352`, `L = 1/16` and
-`c = 2^-2001`). -/
+under a square root (`expect_w1CouplingError_le`); the McDiarmid terms are bounded by
+`sqrt_add_sqrt_le_of_le` with `ε = 2^-4352`, `L = 1/16` and `c = 2^-2001`. -/
 theorem expect_w1CouplingError_randomOracle_le (hp : p.isApproved) {βmin : ℚ≥0}
     (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) {s θ : ℝ} (hθ0 : 0 < θ) (hθ1 : θ < 1)
     (hs1 : s < 1) (N n : ℕ) [NeZero n] (C k D : ℕ) (Lk : ℝ) {R : ℝ}
@@ -221,7 +220,6 @@ variable [NeZero (bucketCount p)] [Nonempty (MaskBox p)] [Fintype Msg] [Decidabl
   {adm : KeyRing (PubKey p (concretePrimitivesKeyGen p)) N → Prop} [DecidablePred adm] {n : ℕ}
   {Y₁ Y₂ : Type} [AddGroup Y₁] [AddGroup Y₂] [Fintype Y₁] [DecidableEq Y₁] [Fintype Y₂]
 
-open Classical in
 /-- **Anonymity of the ML-DSA ring signature publishing `w₁` with `SampleInBall`, `ExpandS` and
 `ExpandA` random oracles**, at an approved parameter set: for every family of anonymity
 adversaries indexed by the three oracles `G_B`, `G_S`, `G_A`, with `t` superposition queries to the
@@ -235,12 +233,10 @@ parameters (`hcp`) with `0 ≤ s`, and `θ ∈ (0, 1)`. At each triple of oracle
 `hedgedScheme.anonAdvantage_le_coupling` at the keep level `β_min θ (1 - s) / 32`
 (`mul_div_le_keepLevel`); the coupling error averages by
 `expect_w1CouplingError_randomOracle_le`. -/
+@[headline]
 theorem w1Scheme.expect_anonAdvantage_le (sp : RingSignature.OracleSplit Y Y₁ Y₂)
-    (hp : p.isApproved) (hT : 0 < T) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
-    (hO : O.UniformSplit)
-    (hMask : (PMF.uniformOfFintype Y).map M.ans = PMF.uniformOfFintype (MaskBox p))
-    (hM : Function.Injective M.pt) (hdisj : ∀ x, O.IsPt x → x ∉ Set.range M.pt)
-    (hsp : O.ReadsFst sp) (hMsp : M.ReadsFst sp)
+    (hp : p.isApproved) (hT : 0 < T) [NeZero βmin] (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
+    (h : W1OracleFacts O M sp)
     (hPS : ∀ GB GS GA, (PS GB GS GA).ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {V : OracleView X Y} (hV : V.ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {wi : ℕ → ℝ}
@@ -249,10 +245,9 @@ theorem w1Scheme.expect_anonAdvantage_le (sp : RingSignature.OracleSplit Y Y₁ 
       (RingSignature.ringRel (w1Base p (randomOraclePrimitives GB GS GA) (concreteEnc p)
           (O.atRandomOracles GB GS GA) M βmin tol k D bmsg) adm
         (O.split.symm (ω₂, h₁))) wi)
-    {C : ℕ} (hC : ∀ GB GS GA (keys : Fin n → Bytes 32), (Finset.univ.filter fun c :
-      RingSignature.AnonRequest (w1Scheme p (randomOraclePrimitives GB GS GA) (concreteEnc p)
-          (O.atRandomOracles GB GS GA) M βmin tol k D bmsg (PS GB GS GA) adm) n =>
-        c.Valid keys).card ≤ C)
+    {C : ℕ} (hC : ∀ GB GS GA, (w1Scheme p (randomOraclePrimitives GB GS GA) (concreteEnc p)
+        (O.atRandomOracles GB GS GA) M βmin tol k D bmsg (PS GB GS GA) adm).validChallengeBound
+          n ≤ C)
     [NeZero n] {s θ x : ℝ} (hcp : CheckParams reps tol s x) (hs0 : 0 ≤ s) (hθ0 : 0 < θ)
     (hθ1 : θ < 1) {R : ℝ}
     (hR : 𝔼 GB : CommitHashBytes p → ChallengeBall p.tau, 𝔼 GS : Bytes 64 → SecretCoeffs p,
@@ -271,8 +266,12 @@ theorem w1Scheme.expect_anonAdvantage_le (sp : RingSignature.OracleSplit Y Y₁ 
               (2 ^ 2000 * (θ * (1 - θ) * (1 - s) * (βmin : ℝ≥0∞).toReal))) +
           2 * (k * (D : ℝ)⁻¹) + 2 * (1 - (βmin : ℝ≥0∞).toReal * θ * (1 - s) / 32) ^ k) +
         Q * wi (Q * C) +
-        2 * ((Q * k).choose 2 * (2 ^ 256 : ℝ)⁻¹ + 2 * t * √((Q * k : ℕ) * (2 ^ 256 : ℝ)⁻¹)) +
+        w1NonceTerm k Q t +
         2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) := by
+  have hβ0 : (βmin : ℝ≥0∞) ≠ 0 := by exact_mod_cast NeZero.ne βmin
+  obtain ⟨⟨hM, hdisj⟩, ⟨hO, hMask⟩, ⟨hsp, hMsp⟩⟩ := h
+  replace hC := fun GB GS GA => RingScheme.validChallengeBound_le_iff.1 (hC GB GS GA)
+  rw [w1NonceTerm]
   have := challengeBall_nonempty (tau_le_ringDegree hp)
   have hβt : (βmin : ℝ≥0∞) ≠ ⊤ := ne_top_of_le_ne_top ENNReal.one_ne_top hβ1
   have hb1 : (βmin : ℝ≥0∞).toReal ≤ 1 := ENNReal.toReal_le_one_of_le_one hβ1
@@ -292,13 +291,16 @@ theorem w1Scheme.expect_anonAdvantage_le (sp : RingSignature.OracleSplit Y Y₁ 
   have hpt : ∀ GB GS GA, anonAdvantage (A GB GS GA) Q ≤
       Q * w1CouplingError (randomOraclePrimitives GB GS GA) βmin N n s θ C k D
         ((βmin : ℝ≥0∞).toReal * θ * (1 - s) / 32) + E := fun GB GS GA => by
-    have h := hedgedScheme.anonAdvantage_le_coupling (randomOraclePrimitives GB GS GA) sp
+    have h := hedgedScheme.anonAdvantage_le_coupling (randomOraclePrimitives GB GS GA)
+      (RingCheck.sampled (randomOraclePrimitives GB GS GA)
+        (constCut (randomOraclePrimitives GB GS GA) βmin) tol N reps s x hcp.one_le_x) sp
       (SigningParams.of_isApproved hp) hT hβ0 hβt (hO.atRandomOracles GB GS GA) hMask
       (signingLaws_randomOraclePrimitives hp GB GS GA)
       (verifyLaws_randomOraclePrimitives hp GB GS GA)
       (fun w => concreteEnc_highBitsVec hp w) (fun _ => (secretOfCoeffs_bounded _).2) hM hdisj
       (hsp.atRandomOracles GB GS GA) hMsp (hPS GB GS GA) hV (hwi GB GS GA) (hC GB GS GA) hθ0 hθ1
-      hs1 hcp.one_le_x hLk hLk1 (A GB GS GA) Q
+      hs1 hLk hLk1 (A GB GS GA) Q
+    dsimp only [RingCheck.sampled] at h
     simp only [E]
     linarith
   have hE := expect_w1CouplingError_randomOracle_le hp hβ0 hβ1 hθ0 hθ1 hs1 N n C k D
@@ -335,7 +337,6 @@ variable {O : W1Oracles X Y Pm Kg Msg N reps}
       (RingSignature.RingWitOf (FIPSSignature Pm (randomOraclePrimitives GB GS GA))) TPS}
   {adm : KeyRing (PubKey Pm Kg) N → Prop} [DecidablePred adm]
 
-open Classical in
 /-- **Anonymity of the ML-DSA-44 ring signature publishing `w₁` with `SampleInBall`, `ExpandS` and
 `ExpandA` random oracles** (`w1Scheme.expect_anonAdvantage_le` at ML-DSA-44 with the regularity
 bound `11 · 2^-101 · (24/5) / β_min`, `expect_regGapAvg_le_mldsa44`): for every family of anonymity
@@ -347,12 +348,9 @@ number `Q` of challenges, the advantage averaged over the three oracles is at mo
 - s) / 32)^k) + Q · wi (Q · C) + 2 (C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256)) + 2 (√Q + 2 t)² / 2^240`
 with `R` = `11 · 2^-101 · (24/5) / β_min`, for `β_min ∈ (0, 1]`, `n ≥ 1` honest users, check
 parameters (`CheckParams`, for instance `checkParams_tol2`) with `0 ≤ s`, and `θ ∈ (0, 1)`. -/
-@[headline]
 theorem w1Scheme.expect_anonAdvantage_le_mldsa44 (sp : RingSignature.OracleSplit Y Y₁ Y₂)
-    (hT : 0 < T) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hO : O.UniformSplit)
-    (hMask : (PMF.uniformOfFintype Y).map M.ans = PMF.uniformOfFintype (MaskBox Pm))
-    (hM : Function.Injective M.pt) (hdisj : ∀ x, O.IsPt x → x ∉ Set.range M.pt)
-    (hsp : O.ReadsFst sp) (hMsp : M.ReadsFst sp)
+    (hT : 0 < T) [NeZero βmin] (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
+    (h : W1OracleFacts O M sp)
     (hPS : ∀ GB GS GA, (PS GB GS GA).ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {V : OracleView X Y} (hV : V.ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {wi : ℕ → ℝ}
@@ -361,10 +359,9 @@ theorem w1Scheme.expect_anonAdvantage_le_mldsa44 (sp : RingSignature.OracleSplit
       (RingSignature.ringRel (w1Base Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
         (O.atRandomOracles GB GS GA) M βmin tol k D bmsg) adm
         (O.split.symm (ω₂, h₁))) wi)
-    {C : ℕ} (hC : ∀ GB GS GA (keys : Fin n → Bytes 32), (Finset.univ.filter fun c :
-      RingSignature.AnonRequest (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
-        (O.atRandomOracles GB GS GA) M βmin tol k D bmsg (PS GB GS GA) adm) n =>
-        c.Valid keys).card ≤ C)
+    {C : ℕ} (hC : ∀ GB GS GA, (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
+        (O.atRandomOracles GB GS GA) M βmin tol k D bmsg (PS GB GS GA) adm).validChallengeBound
+          n ≤ C)
     [NeZero n] {s θ x : ℝ} (hcp : CheckParams reps tol s x) (hs0 : 0 ≤ s) (hθ0 : 0 < θ)
     (hθ1 : θ < 1) {t : ℕ}
     (A : ∀ GB GS GA, AnonAdversary (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
@@ -377,12 +374,14 @@ theorem w1Scheme.expect_anonAdvantage_le_mldsa44 (sp : RingSignature.OracleSplit
               (2 ^ 2000 * (θ * (1 - θ) * (1 - s) * (βmin : ℝ≥0∞).toReal))) +
           2 * (k * (D : ℝ)⁻¹) + 2 * (1 - (βmin : ℝ≥0∞).toReal * θ * (1 - s) / 32) ^ k) +
         Q * wi (Q * C) +
-        2 * ((Q * k).choose 2 * (2 ^ 256 : ℝ)⁻¹ + 2 * t * √((Q * k : ℕ) * (2 ^ 256 : ℝ)⁻¹)) +
-        2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) :=
-  w1Scheme.expect_anonAdvantage_le sp isApproved_mldsa44 hT hβ0 hβ1 hO hMask hM hdisj hsp hMsp hPS
-    hV hwi hC hcp hs0 hθ0 hθ1 (expect_regGapAvg_le_mldsa44 hβ0 hβ1)
-    commitCollisionBound_le_mldsa44 one_div_sixteen_le_standinScale_mul_card_mldsa44
-    two_pow_le_card_bucketVec_mldsa44 A Q
+        w1NonceTerm k Q t +
+        2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) := by
+  have hβ0 : (βmin : ℝ≥0∞) ≠ 0 := by exact_mod_cast NeZero.ne βmin
+  exact w1Scheme.expect_anonAdvantage_le sp isApproved_mldsa44 hT hβ1 h hPS hV hwi hC hcp hs0 hθ0
+      hθ1
+      (expect_regGapAvg_le_mldsa44 hβ0 hβ1)
+      commitCollisionBound_le_mldsa44 one_div_sixteen_le_standinScale_mul_card_mldsa44
+      two_pow_le_card_bucketVec_mldsa44 A Q
 
 end P44
 
@@ -400,7 +399,6 @@ variable {O : W1Oracles X Y Pm Kg (KeyRing (PubKey Pm Kg) N × RMsg) N reps}
       (RingSignature.RingWitOf (FIPSSignature Pm (randomOraclePrimitives GB GS GA))) TPS}
   {adm : KeyRing (PubKey Pm Kg) N → Prop} [DecidablePred adm]
 
-open Classical in
 /-- **Anonymity of the ML-DSA-44 ring signature publishing `w₁` with `SampleInBall`, `ExpandS` and
 `ExpandA` random oracles** with ring-binding base messages (`bmsg := Prod.mk`, the base message `(R,
 m)`) (`w1Scheme.expect_anonAdvantage_le` at ML-DSA-44 with the regularity bound `11 · 2^-101 ·
@@ -413,12 +411,9 @@ advantage averaged over the three oracles is at most `Q · (2 (2 / ((1 - s) θ) 
 + 2 (C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256)) + 2 (√Q + 2 t)² / 2^240` with `R` = `11 · 2^-101 ·
 (24/5) / β_min`, for `β_min ∈ (0, 1]`, `n ≥ 1` honest users, check parameters (`CheckParams`, for
 instance `checkParams_tol2`) with `0 ≤ s`, and `θ ∈ (0, 1)`. -/
-@[headline]
 theorem w1Scheme.expect_anonAdvantage_le_bind_mldsa44 (sp : RingSignature.OracleSplit Y Y₁ Y₂)
-    (hT : 0 < T) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hO : O.UniformSplit)
-    (hMask : (PMF.uniformOfFintype Y).map M.ans = PMF.uniformOfFintype (MaskBox Pm))
-    (hM : Function.Injective M.pt) (hdisj : ∀ x, O.IsPt x → x ∉ Set.range M.pt)
-    (hsp : O.ReadsFst sp) (hMsp : M.ReadsFst sp)
+    (hT : 0 < T) [NeZero βmin] (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
+    (h : W1OracleFacts O M sp)
     (hPS : ∀ GB GS GA, (PS GB GS GA).ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {V : OracleView X Y} (hV : V.ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {wi : ℕ → ℝ}
@@ -427,10 +422,9 @@ theorem w1Scheme.expect_anonAdvantage_le_bind_mldsa44 (sp : RingSignature.Oracle
       (RingSignature.ringRel (w1Base Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
         (O.atRandomOracles GB GS GA) M βmin tol k D Prod.mk) adm
         (O.split.symm (ω₂, h₁))) wi)
-    {C : ℕ} (hC : ∀ GB GS GA (keys : Fin n → Bytes 32), (Finset.univ.filter fun c :
-      RingSignature.AnonRequest (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
-        (O.atRandomOracles GB GS GA) M βmin tol k D Prod.mk (PS GB GS GA) adm) n =>
-        c.Valid keys).card ≤ C)
+    {C : ℕ} (hC : ∀ GB GS GA, (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
+        (O.atRandomOracles GB GS GA) M βmin tol k D Prod.mk (PS GB GS GA) adm).validChallengeBound
+          n ≤ C)
     [NeZero n] {s θ x : ℝ} (hcp : CheckParams reps tol s x) (hs0 : 0 ≤ s) (hθ0 : 0 < θ)
     (hθ1 : θ < 1) {t : ℕ}
     (A : ∀ GB GS GA, AnonAdversary (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
@@ -443,13 +437,14 @@ theorem w1Scheme.expect_anonAdvantage_le_bind_mldsa44 (sp : RingSignature.Oracle
               (2 ^ 2000 * (θ * (1 - θ) * (1 - s) * (βmin : ℝ≥0∞).toReal))) +
           2 * (k * (D : ℝ)⁻¹) + 2 * (1 - (βmin : ℝ≥0∞).toReal * θ * (1 - s) / 32) ^ k) +
         Q * wi (Q * C) +
-        2 * ((Q * k).choose 2 * (2 ^ 256 : ℝ)⁻¹ + 2 * t * √((Q * k : ℕ) * (2 ^ 256 : ℝ)⁻¹)) +
-        2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) :=
-  w1Scheme.expect_anonAdvantage_le (bmsg := Prod.mk) (PS := PS) sp
-    isApproved_mldsa44 hT hβ0 hβ1 hO hMask hM hdisj hsp hMsp hPS
-    hV hwi hC hcp hs0 hθ0 hθ1 (expect_regGapAvg_le_mldsa44 hβ0 hβ1)
-    commitCollisionBound_le_mldsa44 one_div_sixteen_le_standinScale_mul_card_mldsa44
-    two_pow_le_card_bucketVec_mldsa44 A Q
+        w1NonceTerm k Q t +
+        2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) := by
+  have hβ0 : (βmin : ℝ≥0∞) ≠ 0 := by exact_mod_cast NeZero.ne βmin
+  exact w1Scheme.expect_anonAdvantage_le (bmsg := Prod.mk) (PS := PS) sp
+      isApproved_mldsa44 hT hβ1 h hPS
+      hV hwi hC hcp hs0 hθ0 hθ1 (expect_regGapAvg_le_mldsa44 hβ0 hβ1)
+      commitCollisionBound_le_mldsa44 one_div_sixteen_le_standinScale_mul_card_mldsa44
+      two_pow_le_card_bucketVec_mldsa44 A Q
 
 end P44Bind
 
@@ -467,7 +462,6 @@ variable {O : W1Oracles X Y Pm Kg Msg N reps}
       (RingSignature.RingWitOf (FIPSSignature Pm (randomOraclePrimitives GB GS GA))) TPS}
   {adm : KeyRing (PubKey Pm Kg) N → Prop} [DecidablePred adm]
 
-open Classical in
 /-- **Anonymity of the ML-DSA-44 ring signature publishing `w₁` with `SampleInBall`, `ExpandS` and
 `ExpandA` random oracles** with converted base messages (`bmsg := fun _ m => m`, the base message
 `m`) (`w1Scheme.expect_anonAdvantage_le` at ML-DSA-44 with the regularity bound `11 · 2^-101 ·
@@ -480,12 +474,9 @@ advantage averaged over the three oracles is at most `Q · (2 (2 / ((1 - s) θ) 
 + 2 (C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256)) + 2 (√Q + 2 t)² / 2^240` with `R` = `11 · 2^-101 ·
 (24/5) / β_min`, for `β_min ∈ (0, 1]`, `n ≥ 1` honest users, check parameters (`CheckParams`, for
 instance `checkParams_tol2`) with `0 ≤ s`, and `θ ∈ (0, 1)`. -/
-@[headline]
 theorem w1Scheme.expect_anonAdvantage_le_conv_mldsa44 (sp : RingSignature.OracleSplit Y Y₁ Y₂)
-    (hT : 0 < T) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hO : O.UniformSplit)
-    (hMask : (PMF.uniformOfFintype Y).map M.ans = PMF.uniformOfFintype (MaskBox Pm))
-    (hM : Function.Injective M.pt) (hdisj : ∀ x, O.IsPt x → x ∉ Set.range M.pt)
-    (hsp : O.ReadsFst sp) (hMsp : M.ReadsFst sp)
+    (hT : 0 < T) [NeZero βmin] (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
+    (h : W1OracleFacts O M sp)
     (hPS : ∀ GB GS GA, (PS GB GS GA).ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {V : OracleView X Y} (hV : V.ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {wi : ℕ → ℝ}
@@ -494,10 +485,10 @@ theorem w1Scheme.expect_anonAdvantage_le_conv_mldsa44 (sp : RingSignature.Oracle
       (RingSignature.ringRel (w1Base Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
         (O.atRandomOracles GB GS GA) M βmin tol k D (fun _ m => m)) adm
         (O.split.symm (ω₂, h₁))) wi)
-    {C : ℕ} (hC : ∀ GB GS GA (keys : Fin n → Bytes 32), (Finset.univ.filter fun c :
-      RingSignature.AnonRequest (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
-        (O.atRandomOracles GB GS GA) M βmin tol k D (fun _ m => m) (PS GB GS GA) adm) n =>
-        c.Valid keys).card ≤ C)
+    {C : ℕ} (hC : ∀ GB GS GA, (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
+        (O.atRandomOracles GB GS GA) M βmin tol k D (fun _ m => m) (PS GB GS GA)
+          adm).validChallengeBound
+          n ≤ C)
     [NeZero n] {s θ x : ℝ} (hcp : CheckParams reps tol s x) (hs0 : 0 ≤ s) (hθ0 : 0 < θ)
     (hθ1 : θ < 1) {t : ℕ}
     (A : ∀ GB GS GA, AnonAdversary (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
@@ -510,13 +501,14 @@ theorem w1Scheme.expect_anonAdvantage_le_conv_mldsa44 (sp : RingSignature.Oracle
               (2 ^ 2000 * (θ * (1 - θ) * (1 - s) * (βmin : ℝ≥0∞).toReal))) +
           2 * (k * (D : ℝ)⁻¹) + 2 * (1 - (βmin : ℝ≥0∞).toReal * θ * (1 - s) / 32) ^ k) +
         Q * wi (Q * C) +
-        2 * ((Q * k).choose 2 * (2 ^ 256 : ℝ)⁻¹ + 2 * t * √((Q * k : ℕ) * (2 ^ 256 : ℝ)⁻¹)) +
-        2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) :=
-  w1Scheme.expect_anonAdvantage_le (bmsg := fun _ m => m) (PS := PS) sp
-    isApproved_mldsa44 hT hβ0 hβ1 hO hMask hM hdisj hsp hMsp hPS
-    hV hwi hC hcp hs0 hθ0 hθ1 (expect_regGapAvg_le_mldsa44 hβ0 hβ1)
-    commitCollisionBound_le_mldsa44 one_div_sixteen_le_standinScale_mul_card_mldsa44
-    two_pow_le_card_bucketVec_mldsa44 A Q
+        w1NonceTerm k Q t +
+        2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) := by
+  have hβ0 : (βmin : ℝ≥0∞) ≠ 0 := by exact_mod_cast NeZero.ne βmin
+  exact w1Scheme.expect_anonAdvantage_le (bmsg := fun _ m => m) (PS := PS) sp
+      isApproved_mldsa44 hT hβ1 h hPS
+      hV hwi hC hcp hs0 hθ0 hθ1 (expect_regGapAvg_le_mldsa44 hβ0 hβ1)
+      commitCollisionBound_le_mldsa44 one_div_sixteen_le_standinScale_mul_card_mldsa44
+      two_pow_le_card_bucketVec_mldsa44 A Q
 
 end P44Conv
 
@@ -535,7 +527,6 @@ variable {O : W1Oracles X Y Pm Kg Msg N reps}
       (RingSignature.RingWitOf (FIPSSignature Pm (randomOraclePrimitives GB GS GA))) TPS}
   {adm : KeyRing (PubKey Pm Kg) N → Prop} [DecidablePred adm]
 
-open Classical in
 /-- **Anonymity of the ML-DSA-65 ring signature publishing `w₁` with `SampleInBall`, `ExpandS` and
 `ExpandA` random oracles** (`w1Scheme.expect_anonAdvantage_le` at ML-DSA-65 with the regularity
 bound `11 · 2^-199 · (9/2) / β_min`, `expect_regGapAvg_le_mldsa65`): for every family of anonymity
@@ -547,12 +538,9 @@ number `Q` of challenges, the advantage averaged over the three oracles is at mo
 - s) / 32)^k) + Q · wi (Q · C) + 2 (C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256)) + 2 (√Q + 2 t)² / 2^240`
 with `R` = `11 · 2^-199 · (9/2) / β_min`, for `β_min ∈ (0, 1]`, `n ≥ 1` honest users, check
 parameters (`CheckParams`, for instance `checkParams_tol2`) with `0 ≤ s`, and `θ ∈ (0, 1)`. -/
-@[headline]
 theorem w1Scheme.expect_anonAdvantage_le_mldsa65 (sp : RingSignature.OracleSplit Y Y₁ Y₂)
-    (hT : 0 < T) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hO : O.UniformSplit)
-    (hMask : (PMF.uniformOfFintype Y).map M.ans = PMF.uniformOfFintype (MaskBox Pm))
-    (hM : Function.Injective M.pt) (hdisj : ∀ x, O.IsPt x → x ∉ Set.range M.pt)
-    (hsp : O.ReadsFst sp) (hMsp : M.ReadsFst sp)
+    (hT : 0 < T) [NeZero βmin] (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
+    (h : W1OracleFacts O M sp)
     (hPS : ∀ GB GS GA, (PS GB GS GA).ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {V : OracleView X Y} (hV : V.ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {wi : ℕ → ℝ}
@@ -561,10 +549,9 @@ theorem w1Scheme.expect_anonAdvantage_le_mldsa65 (sp : RingSignature.OracleSplit
       (RingSignature.ringRel (w1Base Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
         (O.atRandomOracles GB GS GA) M βmin tol k D bmsg) adm
         (O.split.symm (ω₂, h₁))) wi)
-    {C : ℕ} (hC : ∀ GB GS GA (keys : Fin n → Bytes 32), (Finset.univ.filter fun c :
-      RingSignature.AnonRequest (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
-        (O.atRandomOracles GB GS GA) M βmin tol k D bmsg (PS GB GS GA) adm) n =>
-        c.Valid keys).card ≤ C)
+    {C : ℕ} (hC : ∀ GB GS GA, (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
+        (O.atRandomOracles GB GS GA) M βmin tol k D bmsg (PS GB GS GA) adm).validChallengeBound
+          n ≤ C)
     [NeZero n] {s θ x : ℝ} (hcp : CheckParams reps tol s x) (hs0 : 0 ≤ s) (hθ0 : 0 < θ)
     (hθ1 : θ < 1) {t : ℕ}
     (A : ∀ GB GS GA, AnonAdversary (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
@@ -577,12 +564,14 @@ theorem w1Scheme.expect_anonAdvantage_le_mldsa65 (sp : RingSignature.OracleSplit
               (2 ^ 2000 * (θ * (1 - θ) * (1 - s) * (βmin : ℝ≥0∞).toReal))) +
           2 * (k * (D : ℝ)⁻¹) + 2 * (1 - (βmin : ℝ≥0∞).toReal * θ * (1 - s) / 32) ^ k) +
         Q * wi (Q * C) +
-        2 * ((Q * k).choose 2 * (2 ^ 256 : ℝ)⁻¹ + 2 * t * √((Q * k : ℕ) * (2 ^ 256 : ℝ)⁻¹)) +
-        2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) :=
-  w1Scheme.expect_anonAdvantage_le sp isApproved_mldsa65 hT hβ0 hβ1 hO hMask hM hdisj hsp hMsp hPS
-    hV hwi hC hcp hs0 hθ0 hθ1 (expect_regGapAvg_le_mldsa65 hβ0 hβ1)
-    commitCollisionBound_le_mldsa65 one_div_sixteen_le_standinScale_mul_card_mldsa65
-    two_pow_le_card_bucketVec_mldsa65 A Q
+        w1NonceTerm k Q t +
+        2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) := by
+  have hβ0 : (βmin : ℝ≥0∞) ≠ 0 := by exact_mod_cast NeZero.ne βmin
+  exact w1Scheme.expect_anonAdvantage_le sp isApproved_mldsa65 hT hβ1 h hPS hV hwi hC hcp hs0 hθ0
+      hθ1
+      (expect_regGapAvg_le_mldsa65 hβ0 hβ1)
+      commitCollisionBound_le_mldsa65 one_div_sixteen_le_standinScale_mul_card_mldsa65
+      two_pow_le_card_bucketVec_mldsa65 A Q
 
 end P65
 
@@ -600,7 +589,6 @@ variable {O : W1Oracles X Y Pm Kg (KeyRing (PubKey Pm Kg) N × RMsg) N reps}
       (RingSignature.RingWitOf (FIPSSignature Pm (randomOraclePrimitives GB GS GA))) TPS}
   {adm : KeyRing (PubKey Pm Kg) N → Prop} [DecidablePred adm]
 
-open Classical in
 /-- **Anonymity of the ML-DSA-65 ring signature publishing `w₁` with `SampleInBall`, `ExpandS` and
 `ExpandA` random oracles** with ring-binding base messages (`bmsg := Prod.mk`, the base message `(R,
 m)`) (`w1Scheme.expect_anonAdvantage_le` at ML-DSA-65 with the regularity bound `11 · 2^-199 · (9/2)
@@ -613,12 +601,9 @@ advantage averaged over the three oracles is at most `Q · (2 (2 / ((1 - s) θ) 
 + 2 (C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256)) + 2 (√Q + 2 t)² / 2^240` with `R` = `11 · 2^-199 ·
 (9/2) / β_min`, for `β_min ∈ (0, 1]`, `n ≥ 1` honest users, check parameters (`CheckParams`, for
 instance `checkParams_tol2`) with `0 ≤ s`, and `θ ∈ (0, 1)`. -/
-@[headline]
 theorem w1Scheme.expect_anonAdvantage_le_bind_mldsa65 (sp : RingSignature.OracleSplit Y Y₁ Y₂)
-    (hT : 0 < T) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hO : O.UniformSplit)
-    (hMask : (PMF.uniformOfFintype Y).map M.ans = PMF.uniformOfFintype (MaskBox Pm))
-    (hM : Function.Injective M.pt) (hdisj : ∀ x, O.IsPt x → x ∉ Set.range M.pt)
-    (hsp : O.ReadsFst sp) (hMsp : M.ReadsFst sp)
+    (hT : 0 < T) [NeZero βmin] (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
+    (h : W1OracleFacts O M sp)
     (hPS : ∀ GB GS GA, (PS GB GS GA).ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {V : OracleView X Y} (hV : V.ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {wi : ℕ → ℝ}
@@ -627,10 +612,9 @@ theorem w1Scheme.expect_anonAdvantage_le_bind_mldsa65 (sp : RingSignature.Oracle
       (RingSignature.ringRel (w1Base Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
         (O.atRandomOracles GB GS GA) M βmin tol k D Prod.mk) adm
         (O.split.symm (ω₂, h₁))) wi)
-    {C : ℕ} (hC : ∀ GB GS GA (keys : Fin n → Bytes 32), (Finset.univ.filter fun c :
-      RingSignature.AnonRequest (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
-        (O.atRandomOracles GB GS GA) M βmin tol k D Prod.mk (PS GB GS GA) adm) n =>
-        c.Valid keys).card ≤ C)
+    {C : ℕ} (hC : ∀ GB GS GA, (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
+        (O.atRandomOracles GB GS GA) M βmin tol k D Prod.mk (PS GB GS GA) adm).validChallengeBound
+          n ≤ C)
     [NeZero n] {s θ x : ℝ} (hcp : CheckParams reps tol s x) (hs0 : 0 ≤ s) (hθ0 : 0 < θ)
     (hθ1 : θ < 1) {t : ℕ}
     (A : ∀ GB GS GA, AnonAdversary (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
@@ -643,13 +627,14 @@ theorem w1Scheme.expect_anonAdvantage_le_bind_mldsa65 (sp : RingSignature.Oracle
               (2 ^ 2000 * (θ * (1 - θ) * (1 - s) * (βmin : ℝ≥0∞).toReal))) +
           2 * (k * (D : ℝ)⁻¹) + 2 * (1 - (βmin : ℝ≥0∞).toReal * θ * (1 - s) / 32) ^ k) +
         Q * wi (Q * C) +
-        2 * ((Q * k).choose 2 * (2 ^ 256 : ℝ)⁻¹ + 2 * t * √((Q * k : ℕ) * (2 ^ 256 : ℝ)⁻¹)) +
-        2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) :=
-  w1Scheme.expect_anonAdvantage_le (bmsg := Prod.mk) (PS := PS) sp
-    isApproved_mldsa65 hT hβ0 hβ1 hO hMask hM hdisj hsp hMsp hPS
-    hV hwi hC hcp hs0 hθ0 hθ1 (expect_regGapAvg_le_mldsa65 hβ0 hβ1)
-    commitCollisionBound_le_mldsa65 one_div_sixteen_le_standinScale_mul_card_mldsa65
-    two_pow_le_card_bucketVec_mldsa65 A Q
+        w1NonceTerm k Q t +
+        2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) := by
+  have hβ0 : (βmin : ℝ≥0∞) ≠ 0 := by exact_mod_cast NeZero.ne βmin
+  exact w1Scheme.expect_anonAdvantage_le (bmsg := Prod.mk) (PS := PS) sp
+      isApproved_mldsa65 hT hβ1 h hPS
+      hV hwi hC hcp hs0 hθ0 hθ1 (expect_regGapAvg_le_mldsa65 hβ0 hβ1)
+      commitCollisionBound_le_mldsa65 one_div_sixteen_le_standinScale_mul_card_mldsa65
+      two_pow_le_card_bucketVec_mldsa65 A Q
 
 end P65Bind
 
@@ -667,7 +652,6 @@ variable {O : W1Oracles X Y Pm Kg Msg N reps}
       (RingSignature.RingWitOf (FIPSSignature Pm (randomOraclePrimitives GB GS GA))) TPS}
   {adm : KeyRing (PubKey Pm Kg) N → Prop} [DecidablePred adm]
 
-open Classical in
 /-- **Anonymity of the ML-DSA-65 ring signature publishing `w₁` with `SampleInBall`, `ExpandS` and
 `ExpandA` random oracles** with converted base messages (`bmsg := fun _ m => m`, the base message
 `m`) (`w1Scheme.expect_anonAdvantage_le` at ML-DSA-65 with the regularity bound `11 · 2^-199 · (9/2)
@@ -680,12 +664,9 @@ advantage averaged over the three oracles is at most `Q · (2 (2 / ((1 - s) θ) 
 + 2 (C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256)) + 2 (√Q + 2 t)² / 2^240` with `R` = `11 · 2^-199 ·
 (9/2) / β_min`, for `β_min ∈ (0, 1]`, `n ≥ 1` honest users, check parameters (`CheckParams`, for
 instance `checkParams_tol2`) with `0 ≤ s`, and `θ ∈ (0, 1)`. -/
-@[headline]
 theorem w1Scheme.expect_anonAdvantage_le_conv_mldsa65 (sp : RingSignature.OracleSplit Y Y₁ Y₂)
-    (hT : 0 < T) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hO : O.UniformSplit)
-    (hMask : (PMF.uniformOfFintype Y).map M.ans = PMF.uniformOfFintype (MaskBox Pm))
-    (hM : Function.Injective M.pt) (hdisj : ∀ x, O.IsPt x → x ∉ Set.range M.pt)
-    (hsp : O.ReadsFst sp) (hMsp : M.ReadsFst sp)
+    (hT : 0 < T) [NeZero βmin] (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
+    (h : W1OracleFacts O M sp)
     (hPS : ∀ GB GS GA, (PS GB GS GA).ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {V : OracleView X Y} (hV : V.ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {wi : ℕ → ℝ}
@@ -694,10 +675,10 @@ theorem w1Scheme.expect_anonAdvantage_le_conv_mldsa65 (sp : RingSignature.Oracle
       (RingSignature.ringRel (w1Base Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
         (O.atRandomOracles GB GS GA) M βmin tol k D (fun _ m => m)) adm
         (O.split.symm (ω₂, h₁))) wi)
-    {C : ℕ} (hC : ∀ GB GS GA (keys : Fin n → Bytes 32), (Finset.univ.filter fun c :
-      RingSignature.AnonRequest (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
-        (O.atRandomOracles GB GS GA) M βmin tol k D (fun _ m => m) (PS GB GS GA) adm) n =>
-        c.Valid keys).card ≤ C)
+    {C : ℕ} (hC : ∀ GB GS GA, (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
+        (O.atRandomOracles GB GS GA) M βmin tol k D (fun _ m => m) (PS GB GS GA)
+          adm).validChallengeBound
+          n ≤ C)
     [NeZero n] {s θ x : ℝ} (hcp : CheckParams reps tol s x) (hs0 : 0 ≤ s) (hθ0 : 0 < θ)
     (hθ1 : θ < 1) {t : ℕ}
     (A : ∀ GB GS GA, AnonAdversary (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
@@ -710,13 +691,14 @@ theorem w1Scheme.expect_anonAdvantage_le_conv_mldsa65 (sp : RingSignature.Oracle
               (2 ^ 2000 * (θ * (1 - θ) * (1 - s) * (βmin : ℝ≥0∞).toReal))) +
           2 * (k * (D : ℝ)⁻¹) + 2 * (1 - (βmin : ℝ≥0∞).toReal * θ * (1 - s) / 32) ^ k) +
         Q * wi (Q * C) +
-        2 * ((Q * k).choose 2 * (2 ^ 256 : ℝ)⁻¹ + 2 * t * √((Q * k : ℕ) * (2 ^ 256 : ℝ)⁻¹)) +
-        2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) :=
-  w1Scheme.expect_anonAdvantage_le (bmsg := fun _ m => m) (PS := PS) sp
-    isApproved_mldsa65 hT hβ0 hβ1 hO hMask hM hdisj hsp hMsp hPS
-    hV hwi hC hcp hs0 hθ0 hθ1 (expect_regGapAvg_le_mldsa65 hβ0 hβ1)
-    commitCollisionBound_le_mldsa65 one_div_sixteen_le_standinScale_mul_card_mldsa65
-    two_pow_le_card_bucketVec_mldsa65 A Q
+        w1NonceTerm k Q t +
+        2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) := by
+  have hβ0 : (βmin : ℝ≥0∞) ≠ 0 := by exact_mod_cast NeZero.ne βmin
+  exact w1Scheme.expect_anonAdvantage_le (bmsg := fun _ m => m) (PS := PS) sp
+      isApproved_mldsa65 hT hβ1 h hPS
+      hV hwi hC hcp hs0 hθ0 hθ1 (expect_regGapAvg_le_mldsa65 hβ0 hβ1)
+      commitCollisionBound_le_mldsa65 one_div_sixteen_le_standinScale_mul_card_mldsa65
+      two_pow_le_card_bucketVec_mldsa65 A Q
 
 end P65Conv
 
@@ -735,7 +717,6 @@ variable {O : W1Oracles X Y Pm Kg Msg N reps}
       (RingSignature.RingWitOf (FIPSSignature Pm (randomOraclePrimitives GB GS GA))) TPS}
   {adm : KeyRing (PubKey Pm Kg) N → Prop} [DecidablePred adm]
 
-open Classical in
 /-- **Anonymity of the ML-DSA-87 ring signature publishing `w₁` with `SampleInBall`, `ExpandS` and
 `ExpandA` random oracles** (`w1Scheme.expect_anonAdvantage_le` at ML-DSA-87 with the regularity
 bound `12 · 2^-294 · (33/5) / β_min`, `expect_regGapAvg_le_mldsa87`): for every family of anonymity
@@ -747,12 +728,9 @@ number `Q` of challenges, the advantage averaged over the three oracles is at mo
 - s) / 32)^k) + Q · wi (Q · C) + 2 (C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256)) + 2 (√Q + 2 t)² / 2^240`
 with `R` = `12 · 2^-294 · (33/5) / β_min`, for `β_min ∈ (0, 1]`, `n ≥ 1` honest users, check
 parameters (`CheckParams`, for instance `checkParams_tol2`) with `0 ≤ s`, and `θ ∈ (0, 1)`. -/
-@[headline]
 theorem w1Scheme.expect_anonAdvantage_le_mldsa87 (sp : RingSignature.OracleSplit Y Y₁ Y₂)
-    (hT : 0 < T) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hO : O.UniformSplit)
-    (hMask : (PMF.uniformOfFintype Y).map M.ans = PMF.uniformOfFintype (MaskBox Pm))
-    (hM : Function.Injective M.pt) (hdisj : ∀ x, O.IsPt x → x ∉ Set.range M.pt)
-    (hsp : O.ReadsFst sp) (hMsp : M.ReadsFst sp)
+    (hT : 0 < T) [NeZero βmin] (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
+    (h : W1OracleFacts O M sp)
     (hPS : ∀ GB GS GA, (PS GB GS GA).ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {V : OracleView X Y} (hV : V.ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {wi : ℕ → ℝ}
@@ -761,10 +739,9 @@ theorem w1Scheme.expect_anonAdvantage_le_mldsa87 (sp : RingSignature.OracleSplit
       (RingSignature.ringRel (w1Base Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
         (O.atRandomOracles GB GS GA) M βmin tol k D bmsg) adm
         (O.split.symm (ω₂, h₁))) wi)
-    {C : ℕ} (hC : ∀ GB GS GA (keys : Fin n → Bytes 32), (Finset.univ.filter fun c :
-      RingSignature.AnonRequest (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
-        (O.atRandomOracles GB GS GA) M βmin tol k D bmsg (PS GB GS GA) adm) n =>
-        c.Valid keys).card ≤ C)
+    {C : ℕ} (hC : ∀ GB GS GA, (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
+        (O.atRandomOracles GB GS GA) M βmin tol k D bmsg (PS GB GS GA) adm).validChallengeBound
+          n ≤ C)
     [NeZero n] {s θ x : ℝ} (hcp : CheckParams reps tol s x) (hs0 : 0 ≤ s) (hθ0 : 0 < θ)
     (hθ1 : θ < 1) {t : ℕ}
     (A : ∀ GB GS GA, AnonAdversary (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
@@ -777,12 +754,14 @@ theorem w1Scheme.expect_anonAdvantage_le_mldsa87 (sp : RingSignature.OracleSplit
               (2 ^ 2000 * (θ * (1 - θ) * (1 - s) * (βmin : ℝ≥0∞).toReal))) +
           2 * (k * (D : ℝ)⁻¹) + 2 * (1 - (βmin : ℝ≥0∞).toReal * θ * (1 - s) / 32) ^ k) +
         Q * wi (Q * C) +
-        2 * ((Q * k).choose 2 * (2 ^ 256 : ℝ)⁻¹ + 2 * t * √((Q * k : ℕ) * (2 ^ 256 : ℝ)⁻¹)) +
-        2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) :=
-  w1Scheme.expect_anonAdvantage_le sp isApproved_mldsa87 hT hβ0 hβ1 hO hMask hM hdisj hsp hMsp hPS
-    hV hwi hC hcp hs0 hθ0 hθ1 (expect_regGapAvg_le_mldsa87 hβ0 hβ1)
-    commitCollisionBound_le_mldsa87 one_div_sixteen_le_standinScale_mul_card_mldsa87
-    two_pow_le_card_bucketVec_mldsa87 A Q
+        w1NonceTerm k Q t +
+        2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) := by
+  have hβ0 : (βmin : ℝ≥0∞) ≠ 0 := by exact_mod_cast NeZero.ne βmin
+  exact w1Scheme.expect_anonAdvantage_le sp isApproved_mldsa87 hT hβ1 h hPS hV hwi hC hcp hs0 hθ0
+      hθ1
+      (expect_regGapAvg_le_mldsa87 hβ0 hβ1)
+      commitCollisionBound_le_mldsa87 one_div_sixteen_le_standinScale_mul_card_mldsa87
+      two_pow_le_card_bucketVec_mldsa87 A Q
 
 end P87
 
@@ -800,7 +779,6 @@ variable {O : W1Oracles X Y Pm Kg (KeyRing (PubKey Pm Kg) N × RMsg) N reps}
       (RingSignature.RingWitOf (FIPSSignature Pm (randomOraclePrimitives GB GS GA))) TPS}
   {adm : KeyRing (PubKey Pm Kg) N → Prop} [DecidablePred adm]
 
-open Classical in
 /-- **Anonymity of the ML-DSA-87 ring signature publishing `w₁` with `SampleInBall`, `ExpandS` and
 `ExpandA` random oracles** with ring-binding base messages (`bmsg := Prod.mk`, the base message `(R,
 m)`) (`w1Scheme.expect_anonAdvantage_le` at ML-DSA-87 with the regularity bound `12 · 2^-294 ·
@@ -813,12 +791,9 @@ advantage averaged over the three oracles is at most `Q · (2 (2 / ((1 - s) θ) 
 + 2 (C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256)) + 2 (√Q + 2 t)² / 2^240` with `R` = `12 · 2^-294 ·
 (33/5) / β_min`, for `β_min ∈ (0, 1]`, `n ≥ 1` honest users, check parameters (`CheckParams`, for
 instance `checkParams_tol2`) with `0 ≤ s`, and `θ ∈ (0, 1)`. -/
-@[headline]
 theorem w1Scheme.expect_anonAdvantage_le_bind_mldsa87 (sp : RingSignature.OracleSplit Y Y₁ Y₂)
-    (hT : 0 < T) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hO : O.UniformSplit)
-    (hMask : (PMF.uniformOfFintype Y).map M.ans = PMF.uniformOfFintype (MaskBox Pm))
-    (hM : Function.Injective M.pt) (hdisj : ∀ x, O.IsPt x → x ∉ Set.range M.pt)
-    (hsp : O.ReadsFst sp) (hMsp : M.ReadsFst sp)
+    (hT : 0 < T) [NeZero βmin] (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
+    (h : W1OracleFacts O M sp)
     (hPS : ∀ GB GS GA, (PS GB GS GA).ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {V : OracleView X Y} (hV : V.ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {wi : ℕ → ℝ}
@@ -827,10 +802,9 @@ theorem w1Scheme.expect_anonAdvantage_le_bind_mldsa87 (sp : RingSignature.Oracle
       (RingSignature.ringRel (w1Base Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
         (O.atRandomOracles GB GS GA) M βmin tol k D Prod.mk) adm
         (O.split.symm (ω₂, h₁))) wi)
-    {C : ℕ} (hC : ∀ GB GS GA (keys : Fin n → Bytes 32), (Finset.univ.filter fun c :
-      RingSignature.AnonRequest (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
-        (O.atRandomOracles GB GS GA) M βmin tol k D Prod.mk (PS GB GS GA) adm) n =>
-        c.Valid keys).card ≤ C)
+    {C : ℕ} (hC : ∀ GB GS GA, (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
+        (O.atRandomOracles GB GS GA) M βmin tol k D Prod.mk (PS GB GS GA) adm).validChallengeBound
+          n ≤ C)
     [NeZero n] {s θ x : ℝ} (hcp : CheckParams reps tol s x) (hs0 : 0 ≤ s) (hθ0 : 0 < θ)
     (hθ1 : θ < 1) {t : ℕ}
     (A : ∀ GB GS GA, AnonAdversary (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
@@ -843,13 +817,14 @@ theorem w1Scheme.expect_anonAdvantage_le_bind_mldsa87 (sp : RingSignature.Oracle
               (2 ^ 2000 * (θ * (1 - θ) * (1 - s) * (βmin : ℝ≥0∞).toReal))) +
           2 * (k * (D : ℝ)⁻¹) + 2 * (1 - (βmin : ℝ≥0∞).toReal * θ * (1 - s) / 32) ^ k) +
         Q * wi (Q * C) +
-        2 * ((Q * k).choose 2 * (2 ^ 256 : ℝ)⁻¹ + 2 * t * √((Q * k : ℕ) * (2 ^ 256 : ℝ)⁻¹)) +
-        2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) :=
-  w1Scheme.expect_anonAdvantage_le (bmsg := Prod.mk) (PS := PS) sp
-    isApproved_mldsa87 hT hβ0 hβ1 hO hMask hM hdisj hsp hMsp hPS
-    hV hwi hC hcp hs0 hθ0 hθ1 (expect_regGapAvg_le_mldsa87 hβ0 hβ1)
-    commitCollisionBound_le_mldsa87 one_div_sixteen_le_standinScale_mul_card_mldsa87
-    two_pow_le_card_bucketVec_mldsa87 A Q
+        w1NonceTerm k Q t +
+        2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) := by
+  have hβ0 : (βmin : ℝ≥0∞) ≠ 0 := by exact_mod_cast NeZero.ne βmin
+  exact w1Scheme.expect_anonAdvantage_le (bmsg := Prod.mk) (PS := PS) sp
+      isApproved_mldsa87 hT hβ1 h hPS
+      hV hwi hC hcp hs0 hθ0 hθ1 (expect_regGapAvg_le_mldsa87 hβ0 hβ1)
+      commitCollisionBound_le_mldsa87 one_div_sixteen_le_standinScale_mul_card_mldsa87
+      two_pow_le_card_bucketVec_mldsa87 A Q
 
 end P87Bind
 
@@ -867,7 +842,6 @@ variable {O : W1Oracles X Y Pm Kg Msg N reps}
       (RingSignature.RingWitOf (FIPSSignature Pm (randomOraclePrimitives GB GS GA))) TPS}
   {adm : KeyRing (PubKey Pm Kg) N → Prop} [DecidablePred adm]
 
-open Classical in
 /-- **Anonymity of the ML-DSA-87 ring signature publishing `w₁` with `SampleInBall`, `ExpandS` and
 `ExpandA` random oracles** with converted base messages (`bmsg := fun _ m => m`, the base message
 `m`) (`w1Scheme.expect_anonAdvantage_le` at ML-DSA-87 with the regularity bound `12 · 2^-294 ·
@@ -880,12 +854,9 @@ advantage averaged over the three oracles is at most `Q · (2 (2 / ((1 - s) θ) 
 + 2 (C(Q k, 2) / 2^256 + 2 t √(Q k / 2^256)) + 2 (√Q + 2 t)² / 2^240` with `R` = `12 · 2^-294 ·
 (33/5) / β_min`, for `β_min ∈ (0, 1]`, `n ≥ 1` honest users, check parameters (`CheckParams`, for
 instance `checkParams_tol2`) with `0 ≤ s`, and `θ ∈ (0, 1)`. -/
-@[headline]
 theorem w1Scheme.expect_anonAdvantage_le_conv_mldsa87 (sp : RingSignature.OracleSplit Y Y₁ Y₂)
-    (hT : 0 < T) (hβ0 : (βmin : ℝ≥0∞) ≠ 0) (hβ1 : (βmin : ℝ≥0∞) ≤ 1) (hO : O.UniformSplit)
-    (hMask : (PMF.uniformOfFintype Y).map M.ans = PMF.uniformOfFintype (MaskBox Pm))
-    (hM : Function.Injective M.pt) (hdisj : ∀ x, O.IsPt x → x ∉ Set.range M.pt)
-    (hsp : O.ReadsFst sp) (hMsp : M.ReadsFst sp)
+    (hT : 0 < T) [NeZero βmin] (hβ1 : (βmin : ℝ≥0∞) ≤ 1)
+    (h : W1OracleFacts O M sp)
     (hPS : ∀ GB GS GA, (PS GB GS GA).ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {V : OracleView X Y} (hV : V.ReadsOff sp (Set.range M.pt ∪ Set.range O.gPt))
     {wi : ℕ → ℝ}
@@ -894,10 +865,10 @@ theorem w1Scheme.expect_anonAdvantage_le_conv_mldsa87 (sp : RingSignature.Oracle
       (RingSignature.ringRel (w1Base Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
         (O.atRandomOracles GB GS GA) M βmin tol k D (fun _ m => m)) adm
         (O.split.symm (ω₂, h₁))) wi)
-    {C : ℕ} (hC : ∀ GB GS GA (keys : Fin n → Bytes 32), (Finset.univ.filter fun c :
-      RingSignature.AnonRequest (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
-        (O.atRandomOracles GB GS GA) M βmin tol k D (fun _ m => m) (PS GB GS GA) adm) n =>
-        c.Valid keys).card ≤ C)
+    {C : ℕ} (hC : ∀ GB GS GA, (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
+        (O.atRandomOracles GB GS GA) M βmin tol k D (fun _ m => m) (PS GB GS GA)
+          adm).validChallengeBound
+          n ≤ C)
     [NeZero n] {s θ x : ℝ} (hcp : CheckParams reps tol s x) (hs0 : 0 ≤ s) (hθ0 : 0 < θ)
     (hθ1 : θ < 1) {t : ℕ}
     (A : ∀ GB GS GA, AnonAdversary (w1Scheme Pm (randomOraclePrimitives GB GS GA) (concreteEnc Pm)
@@ -910,13 +881,14 @@ theorem w1Scheme.expect_anonAdvantage_le_conv_mldsa87 (sp : RingSignature.Oracle
               (2 ^ 2000 * (θ * (1 - θ) * (1 - s) * (βmin : ℝ≥0∞).toReal))) +
           2 * (k * (D : ℝ)⁻¹) + 2 * (1 - (βmin : ℝ≥0∞).toReal * θ * (1 - s) / 32) ^ k) +
         Q * wi (Q * C) +
-        2 * ((Q * k).choose 2 * (2 ^ 256 : ℝ)⁻¹ + 2 * t * √((Q * k : ℕ) * (2 ^ 256 : ℝ)⁻¹)) +
-        2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) :=
-  w1Scheme.expect_anonAdvantage_le (bmsg := fun _ m => m) (PS := PS) sp
-    isApproved_mldsa87 hT hβ0 hβ1 hO hMask hM hdisj hsp hMsp hPS
-    hV hwi hC hcp hs0 hθ0 hθ1 (expect_regGapAvg_le_mldsa87 hβ0 hβ1)
-    commitCollisionBound_le_mldsa87 one_div_sixteen_le_standinScale_mul_card_mldsa87
-    two_pow_le_card_bucketVec_mldsa87 A Q
+        w1NonceTerm k Q t +
+        2 * ((√Q + 2 * t) ^ 2 / 2 ^ 240) := by
+  have hβ0 : (βmin : ℝ≥0∞) ≠ 0 := by exact_mod_cast NeZero.ne βmin
+  exact w1Scheme.expect_anonAdvantage_le (bmsg := fun _ m => m) (PS := PS) sp
+      isApproved_mldsa87 hT hβ1 h hPS
+      hV hwi hC hcp hs0 hθ0 hθ1 (expect_regGapAvg_le_mldsa87 hβ0 hβ1)
+      commitCollisionBound_le_mldsa87 one_div_sixteen_le_standinScale_mul_card_mldsa87
+      two_pow_le_card_bucketVec_mldsa87 A Q
 
 end P87Conv
 

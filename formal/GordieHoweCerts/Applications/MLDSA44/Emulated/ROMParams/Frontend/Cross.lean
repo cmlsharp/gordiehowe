@@ -20,7 +20,6 @@ namespace GordieHowe.MLDSA44.Emulated.ROMParams
 
 open Generated.MLDSA44.Emulated.ROMParams.Program
 
-set_option maxRecDepth 4096 in
 /-- The emulated program at the ROM parameters has the crossing's facts. -/
 instance : Emulated.MldsaECross program where
   expr6 := Generated.MLDSA44.Emulated.ROMParams.ShapeFacts.expr_mac_2eequal_2eshape_2eright_eq

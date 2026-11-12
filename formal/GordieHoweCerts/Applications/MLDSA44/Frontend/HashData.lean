@@ -84,8 +84,7 @@ theorem keccakMaps : RealizedProgram.KeccakMaps idx17 idx18 idx19 idx20 idx21 id
 
 /-- **The program facts of domain `H`'s Keccak trace** (`MldsaHBase` and): the shapes of the `240` rounds (with the index maps of the program at the ROM parameters), their table facts, and the constant states. Each program instantiates it by `decide`. -/
 class MldsaHHashData (program : RealizedProgram) : Prop extends MldsaHBase program where
-  /-- **The shapes of the `240` rounds** (generated data: reading predicate `263` of the table
-  unfolds `List.getD` that deep). -/
+  /-- **The shapes of the `240` rounds.** -/
   roundShapes : ∀ p : Fin 10, ∀ t : Fin 24, (program.predicate (roundPred p t)).body.roundShape? = some ⟨1, outVal p t, linRef p t, rcLeaf t, 10, 12, idx23, idx24⟩ ∧ (program.expr (linRef p t)).linShape? = some ⟨roundSrc p t.castSucc, linRef p t - 1, idx18, idx19, idx20, idx21, idx22⟩ ∧ (program.expr (linRef p t - 1)).colShape? = some (roundSrc p t.castSucc, idx17)
   /-- The rounds are source predicates below the table's length, their shared expressions below
   the expressions' length, their outputs of `1600` coordinates. -/
@@ -174,7 +173,6 @@ private theorem rounds_checked (p : Fin 10) (t : Fin 24) :
         rw [Generated.MLDSA44.Native.ROMParams.ShapeFacts.family_keccak_rounds_1_expr1_eq hr]; intro h; cases h)
     · exact (RealizedProgram.valueShape_size hhead.2).ge
 
-set_option maxRecDepth 8192 in
 /-- The native program at the ROM parameters has these facts. -/
 instance : MldsaHHashData program where
   roundShapes := fun p t => (rounds_checked p t).1
@@ -259,8 +257,7 @@ section Full
 
 variable {program : RealizedProgram} [MldsaHHashData program]
 
-/-- **The shapes of the `240` rounds** (generated data: reading predicate `263` of the table
-unfolds `List.getD` that deep). -/
+/-- **The shapes of the `240` rounds.** -/
 theorem roundShapes : ∀ p : Fin 10, ∀ t : Fin 24, (program.predicate (roundPred p t)).body.roundShape? = some ⟨1, outVal p t, linRef p t, rcLeaf t, 10, 12, idx23, idx24⟩ ∧ (program.expr (linRef p t)).linShape? = some ⟨roundSrc p t.castSucc, linRef p t - 1, idx18, idx19, idx20, idx21, idx22⟩ ∧ (program.expr (linRef p t - 1)).colShape? = some (roundSrc p t.castSucc, idx17) :=
   MldsaHHashData.roundShapes
 /-- The rounds are source predicates below the table's length, their shared expressions below

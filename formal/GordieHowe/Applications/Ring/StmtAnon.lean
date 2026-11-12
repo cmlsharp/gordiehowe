@@ -43,8 +43,8 @@ open scoped NNReal ENNReal BigOperators
 
 section Comap
 
-variable {k kN kS L e N : ℕ} {TB : BaseTypes}
-  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N TB}
+variable {k kN kS L e N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) (XOut k e) N T RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)] {X₀ Wit₀ : Type}
@@ -160,8 +160,9 @@ variable {X₀ W : Type} {rel₀ : Set (X₀ × W)} {C : RealizedProgram.ProofSy
   {SD : C.SimData} {Inp : Type} {relI : Set (X₀ × Inp)} (Hc : C.Honest SD Inp relI)
   {TD : SPBCS.ProofSystemTranscript C} {kS : ℕ} (hb : TD.MergeBounds kS) {pB : ℕ}
   (hf : TD.ProofFormat kS hb pB) {N : ℕ}
-  {TB : BaseTypes}
-  {B : BaseSigner (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40))) (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant)) N TB}
+  {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40)))
+    (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant)) N T RMsg}
   {adm : KeyRing B.PK N → Prop} {W' : Type} {rel : Set (X₀ × W')}
   (V : StmtVerifiesRing rel relI B adm)
 
@@ -178,38 +179,31 @@ theorem pubWI_proofSystem {errc : ℝ≥0} (hE : Hc.app.ErrorBound fun _ => errc
 
 variable [DecidablePred adm] {n : ℕ}
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BSig]
+  [DecidableEq T.BSig] [Fintype T.Pub] [DecidableEq T.Pub] [Fintype T.KeyCoins]
+  [Nonempty T.KeyCoins] [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins]
 
 /-- **Anonymity of the ring signature of a compiled IOP over its own statements** (the program
 form, Theorem 5.2, of `anonAdvantage_ofBase_le`; BKM06 Definition 4 with `Q` adaptive challenges,
 `GordieHowe/Model/RingSignature/Anonymity.lean`): for statements verifying base signatures of an
 oracle-free base signer (`V`, `hB`), an honest prover with completeness error `errc` (`hE`), at
-most `C'` valid challenges for every key vector (`hC`), an `ε keys` bounding at the good key vectors
-the distance of the two users' refusal-or-public value laws (`hε`) and correctness error `εc`
+most `C'` valid challenges for every key vector (`hC`), a coupling `cpl` of the two users'
+refusal-or-public value laws (`BaseSigner.AnonCoupling`) and correctness error `εc`
 (`hcorr`), every anonymity adversary with any oracle view and query bound has advantage at most
-`Q · (𝔼 ε + 2εc) + Q · wiError errc (Q · C') + Pr[¬ Good]`. -/
+`Q · (cpl.meanError + 2εc) + Q · wiError errc (Q · C') + cpl.badProb`. -/
 @[headline]
 theorem anonAdvantage_le {errc : ℝ≥0} (hE : Hc.app.ErrorBound fun _ => errc) (hB : B.OracleFree)
     {C' : ℕ}
-    (hC : ∀ keys : Fin n → (ofBase B (V.proofSystem Hc hb hf) adm).KeyCoins,
-      (Finset.univ.filter fun c : AnonRequest (ofBase B (V.proofSystem Hc hb hf) adm) n =>
-        c.Valid keys).card ≤ C')
-    (Good : (Fin n → (ofBase B (V.proofSystem Hc hb hf) adm).KeyCoins) → Prop) [DecidablePred Good]
-    (ε : (Fin n → (ofBase B (V.proofSystem Hc hb hf) adm).KeyCoins) → ℝ) (hε0 : ∀ keys, 0 ≤ ε keys)
-    (hε : ∀ keys, Good keys →
-      ∀ H (c : AnonRequest (ofBase B (V.proofSystem Hc hb hf) adm) n), c.Valid keys → adm c.ring →
-        PMF.tvDist (B.refusalPubLaw H (keys c.user₀) c.ring c.msg)
-          (B.refusalPubLaw H (keys c.user₁) c.ring c.msg) ≤ ε keys)
+    (hC : (ofBase B (V.proofSystem Hc hb hf) adm).validChallengeBound n ≤ C')
+    (cpl : B.AnonCoupling adm n)
     {εc : ℝ≥0} (hcorr : B.CorrectWithin εc)
     {Vw : OracleView (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40)))
       (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant))} {t : ℕ}
     (A : AnonAdversary (ofBase B (V.proofSystem Hc hb hf) adm) n Vw t) (Q : ℕ) :
-    anonAdvantage A Q ≤ Q * ((𝔼 keys, ε keys) + 2 * εc) +
+    anonAdvantage A Q ≤ Q * (cpl.meanError + 2 * εc) +
       Q * (TD.setting kS hb).model.wiError errc (Q * C') +
-        𝔼 keys, (if Good keys then 0 else 1 : ℝ) :=
-  anonAdvantage_ofBase_le hB (V.pubWI_proofSystem Hc hb hf hE) hC Good ε hε0 hε hcorr A Q
+        cpl.badProb :=
+  anonAdvantage_ofBase_le hB (V.pubWI_proofSystem Hc hb hf hE) hC cpl hcorr A Q
 
 /-- **Anonymity of the ring signature of a compiled IOP over its own statements when the public
 value is a function of the signing coins** (`hpub`: a salt read off the coins, or `Pub = Unit`; the
@@ -222,13 +216,9 @@ every anonymity adversary with any oracle view and query bound has advantage at 
 @[headline]
 theorem anonAdvantage_le_of_pubOfCoins {errc : ℝ≥0} (hE : Hc.app.ErrorBound fun _ => errc)
     (hB : B.OracleFree) {C' : ℕ}
-    (hC : ∀ keys : Fin n → (ofBase B (V.proofSystem Hc hb hf) adm).KeyCoins,
-      (Finset.univ.filter fun c : AnonRequest (ofBase B (V.proofSystem Hc hb hf) adm) n =>
-        c.Valid keys).card ≤ C')
+    (hC : (ofBase B (V.proofSystem Hc hb hf) adm).validChallengeBound n ≤ C')
     {pubOf : B.Coins → B.Pub} (hpub : B.PubOfCoins pubOf) {εc ρ : ℝ≥0} (hcorr : B.CorrectWithin εc)
-    (hρ : ∀ H (kc : B.KeyCoins) (Rg : KeyRing B.PK N) (m : B.Msg), B.pk kc ∈ Rg.1 →
-      Pr[cb ~ PMF.uniformOfFintype B.Coins :
-        (B.bsign (B.sk kc) Rg (Rg.1.idxOf (B.pk kc)) m cb).run H = none] ≤ ρ)
+    (hρ : B.RefuseKeyWithin ρ)
     {Vw : OracleView (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40)))
       (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant))} {t : ℕ}
     (A : AnonAdversary (ofBase B (V.proofSystem Hc hb hf) adm) n Vw t) (Q : ℕ) :
@@ -245,9 +235,7 @@ per-key bound, every anonymity adversary has advantage at most
 @[headline]
 theorem anonAdvantage_le_of_pubOfCoins_avg {errc : ℝ≥0} (hE : Hc.app.ErrorBound fun _ => errc)
     (hB : B.OracleFree) {C' : ℕ}
-    (hC : ∀ keys : Fin n → (ofBase B (V.proofSystem Hc hb hf) adm).KeyCoins,
-      (Finset.univ.filter fun c : AnonRequest (ofBase B (V.proofSystem Hc hb hf) adm) n =>
-        c.Valid keys).card ≤ C')
+    (hC : (ofBase B (V.proofSystem Hc hb hf) adm).validChallengeBound n ≤ C')
     {pubOf : B.Coins → B.Pub} (hpub : B.PubOfCoins pubOf) {εc ρ : ℝ≥0} (hcorr : B.CorrectWithin εc)
     (hρ : B.RefuseAvgWithin adm ρ)
     {Vw : OracleView (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40)))
@@ -265,26 +253,19 @@ reading only the oracle off the compiled proofs' queries** (`anonAdvantage_ofBas
 @[headline]
 theorem anonAdvantage_le_split {errc : ℝ≥0} (hE : Hc.app.ErrorBound fun _ => errc)
     (hB : B.ReadsOnly fun H => (chainSplit H).1) {C' : ℕ}
-    (hC : ∀ keys : Fin n → (ofBase B (V.proofSystem Hc hb hf) adm).KeyCoins,
-      (Finset.univ.filter fun c : AnonRequest (ofBase B (V.proofSystem Hc hb hf) adm) n =>
-        c.Valid keys).card ≤ C')
-    (Good : (Fin n → (ofBase B (V.proofSystem Hc hb hf) adm).KeyCoins) → Prop) [DecidablePred Good]
-    (ε : (Fin n → (ofBase B (V.proofSystem Hc hb hf) adm).KeyCoins) → ℝ) (hε0 : ∀ keys, 0 ≤ ε keys)
-    (hε : ∀ keys, Good keys →
-      ∀ H (c : AnonRequest (ofBase B (V.proofSystem Hc hb hf) adm) n), c.Valid keys → adm c.ring →
-        PMF.tvDist (B.refusalPubLaw H (keys c.user₀) c.ring c.msg)
-          (B.refusalPubLaw H (keys c.user₁) c.ring c.msg) ≤ ε keys)
+    (hC : (ofBase B (V.proofSystem Hc hb hf) adm).validChallengeBound n ≤ C')
+    (cpl : B.AnonCoupling adm n)
     {εc : ℝ≥0} (hcorr : B.CorrectWithin εc)
     {Vw : OracleView (Bits (queryBits TD.k (2 * TD.k) kS (2 ^ 40)))
       (XOut TD.k (Configurations.fsExtraBytes + TD.maxGrant))} {t : ℕ}
     (A : AnonAdversary (ofBase B (V.proofSystem Hc hb hf) adm) n Vw t) (Q : ℕ) :
-    anonAdvantage A Q ≤ Q * ((𝔼 keys, ε keys) + 2 * εc) +
+    anonAdvantage A Q ≤ Q * (cpl.meanError + 2 * εc) +
       Q * (TD.setting kS hb).model.wiError errc (Q * C') +
-        𝔼 keys, (if Good keys then 0 else 1 : ℝ) :=
-  anonAdvantage_ofBase_split_le (PS := V.proofSystem Hc hb hf) (Good := Good) chainSplit hB
+        cpl.badProb :=
+  anonAdvantage_ofBase_split_le (PS := V.proofSystem Hc hb hf) chainSplit hB
     (fun ω₂ _ => pubWI_spbcsComapProofSystem_split _ _ _ hf _ _ _ _ (TD.setting kS hb).viewEncoder
       (RealizedProgram.ProofSystem.IOP.hvzk_of_errorBound Hc hE)
-      (fun x w h => V.input_mem _ x w h) ω₂) hC ε hε0 hε hcorr A Q
+      (fun x w h => V.input_mem _ x w h) ω₂) hC cpl hcorr A Q
 
 end StmtVerifiesRing
 

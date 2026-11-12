@@ -101,14 +101,15 @@ theorem countND_requestsBefore_lt {Req : Type} [DecidableEq Req] {m : ℕ} (d : 
 namespace Signature
 
 variable {N n : ℕ} {m : ℕ} {I J Bd : Type} [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J]
-  {TB : BaseTypes}
-  {B : BaseSigner (Bits m) (BitStr I J) N TB} (O : SignOracle B.core) (e : BitStr I J ≃ Bd) {t : ℕ}
+  {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits m) (BitStr I J) N T RMsg} (O : SignOracle B.core) (e : BitStr I J ≃ Bd)
+  {t : ℕ}
   {Ot : Type}
 
 variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] [Nonempty O.Coins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] [Nonempty O.Coins]
 
 open Classical in
 /-- **The reindexing of the multi-user challenger's coins** (module docstring): for a dummy request

@@ -25,7 +25,7 @@ lifting lemmas are proved for rejection forms with a public context
    the keep coins `ks` and `K` standard coins of the oracle (refused when the key is not in `R`);
    a base message `bm` is answered by the standard signer with the standard coins of attempt `0`.
    At the side coins `s : Fin Q → Fin K → J.KeepCoins`, signing request number `c` for `p` becomes
-   the request for `(p, keepAt s c)` (`ringKeepMsg`; `ringStdKeepMsg` for the key-reuse oracle
+   the request for `(p, keepAt s c)` (`ringKeepMsg`; `ringStdKeepMsg` for the joint-security oracle
    `SignOracle.ringStd B`), along the split `keepSplit e Q` of the signing coins into keep coins and
    standard coins (`uniform_keepSplit_symm`). `MURequest.mapMsg`, `msgRelay`,
    `relaysChallenger_msgRelay`, `histRelay_of_msgRelay`: the general relay of messages and its
@@ -59,7 +59,7 @@ The lifting lemmas, in `GordieHowe/Model/Signature/RejectionCtx.lean`, with `0 <
   repeating a signature that `A'` passed on to `A`. A reduction would charge only the outputs
   repeating a rejected attempt that `A'` obtained and did not pass on; that form is not proved
   (`GordieHowe/Model/Signature/Rejection.lean`).
-- `muEufProb_le_relay_ringStd`, `muSufProb_le_muVerifyProb_relay_ringStd` (**the key-reuse
+- `muEufProb_le_relay_ringStd`, `muSufProb_le_muVerifyProb_relay_ringStd` (**the joint-security
   form**), under `IsRejectionOn` and `IsStdOn` (the ordinary signer is the standard signer at the
   standard coins of attempt `0`): the same bounds for `SignOracle.ringStd B` and
   `relayMUAdversaryStd`, each ordinary request relayed as one standard request.
@@ -74,8 +74,8 @@ variable {X Y : Type}
 
 section RingKeep
 
-variable {N : ℕ} {TB : BaseTypes}
-  {B : BaseSigner X Y N TB} (J : Rejection B) (K n : ℕ)
+variable {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner X Y N T RMsg} (J : Rejection B) (K n : ℕ)
 
 /-! ### The signing oracle with keep coins in the request -/
 
@@ -84,15 +84,15 @@ variable {N : ℕ} {TB : BaseTypes}
 in `R`, with attempt `j` on the oracle's standard coins `cs j` and the keep coin `ks j` (refused when
 `kp.1 ∉ R`), for the base message `bmsg R m`; a base message `bm` is answered by the standard
 signer with the standard coins `cs 0`, for itself. -/
-noncomputable def SignOracle.ringKeep [DecidableEq TB.PK] (hK : 0 < K) : SignOracle B.core where
-  SMsg := ((KeyRing B.PK N × B.Msg) × (Fin K → J.KeepCoins)) ⊕ B.BMsg
+noncomputable def SignOracle.ringKeep [DecidableEq T.PK] (hK : 0 < K) : SignOracle B.core where
+  SMsg := (RingMsg B.PK B.Msg N × (Fin K → J.KeepCoins)) ⊕ B.BMsg
   Coins := Fin K → J.StdCoins
   q := J.qCheck + K * (J.qStd + J.qKeep)
   sign kp
-    | .inl p, cs => if kp.1 ∈ p.1.1.1 then
-        J.rejectSign K kp.2 p.1.1 (p.1.1.1.idxOf kp.1) p.1.2 (fun j => (cs j, p.2 j))
+    | .inl p, cs => if kp.pk ∈ p.1.ring then
+        J.rejectSign K kp.sk p.1.ring (p.1.ring.keys.idxOf kp.pk) p.1.msg (fun j => (cs j, p.2 j))
       else .pure none
-    | .inr bm, cs => J.std kp.2 bm (cs ⟨0, hK⟩)
+    | .inr bm, cs => J.std kp.sk bm (cs ⟨0, hK⟩)
   sign_queries kp sm cs := by
     rcases sm with p | bm
     · dsimp only
@@ -103,26 +103,26 @@ noncomputable def SignOracle.ringKeep [DecidableEq TB.PK] (hK : 0 < K) : SignOra
         (Nat.le_add_right _ _).trans (Nat.le_mul_of_pos_left _ hK)
       exact (J.std_queries _ _ _).mono (by omega)
   base
-    | .inl p => B.bmsg p.1.1 p.1.2
+    | .inl p => B.bmsg p.1.ring p.1.msg
     | .inr bm => bm
 
 /-! The instances of the oracle's messages and coins: those of
-`((KeyRing B.PK N × B.Msg) × (Fin K → J.KeepCoins)) ⊕ B.BMsg` and of `Fin K → J.StdCoins`. -/
+`(RingMsg B.PK B.Msg N × (Fin K → J.KeepCoins)) ⊕ B.BMsg` and of `Fin K → J.StdCoins`. -/
 
 section RingKeepInstances
 
 variable (hK : 0 < K)
 
-variable [DecidableEq TB.PK]
+variable [DecidableEq T.PK]
 
-instance SignOracle.ringKeep.instFintypeSMsg [Fintype TB.PK] [Fintype TB.Msg] [Fintype TB.BMsg]
+instance SignOracle.ringKeep.instFintypeSMsg [Fintype T.PK] [Fintype RMsg] [Fintype T.BMsg]
     [Fintype J.KeepCoins] : Fintype (SignOracle.ringKeep J K hK).SMsg :=
-  inferInstanceAs (Fintype (((KeyRing B.PK N × B.Msg) × (Fin K → J.KeepCoins)) ⊕ B.BMsg))
+  inferInstanceAs (Fintype ((RingMsg B.PK B.Msg N × (Fin K → J.KeepCoins)) ⊕ B.BMsg))
 
-instance SignOracle.ringKeep.instDecEqSMsg [DecidableEq TB.Msg] [DecidableEq TB.BMsg]
+instance SignOracle.ringKeep.instDecEqSMsg [DecidableEq RMsg] [DecidableEq T.BMsg]
     [DecidableEq J.KeepCoins] :
     DecidableEq (SignOracle.ringKeep J K hK).SMsg :=
-  inferInstanceAs (DecidableEq (((KeyRing B.PK N × B.Msg) × (Fin K → J.KeepCoins)) ⊕ B.BMsg))
+  inferInstanceAs (DecidableEq ((RingMsg B.PK B.Msg N × (Fin K → J.KeepCoins)) ⊕ B.BMsg))
 
 instance SignOracle.ringKeep.instFintypeCoins [Fintype J.StdCoins] :
     Fintype (SignOracle.ringKeep J K hK).Coins :=
@@ -243,18 +243,18 @@ end MsgRelay
 
 section RingSide
 
-variable {N : ℕ} {TB : BaseTypes}
-  {B : BaseSigner X Y N TB} (J : Rejection B) (K n : ℕ)
+variable {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner X Y N T RMsg} (J : Rejection B) (K n : ℕ)
 
 variable [Fintype J.StdCoins] [DecidableEq J.StdCoins] [Fintype J.KeepCoins]
   [DecidableEq J.KeepCoins]
 
 /-! ### The keep coins as side coins -/
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
-  [DecidableEq TB.BMsg] [Nonempty J.StdCoins] [Nonempty J.KeepCoins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BMsg]
+  [DecidableEq T.BMsg] [Nonempty J.StdCoins] [Nonempty J.KeepCoins]
 
-variable [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+variable [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins]
 
 section Side
 
@@ -264,8 +264,8 @@ variable {J K n}
 noncomputable def keepAt {Q : ℕ} (s : Fin Q → Fin K → J.KeepCoins) (c : ℕ) : Fin K → J.KeepCoins :=
   if h : c < Q then s ⟨c, h⟩ else Classical.arbitrary _
 
-omit [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
-  [DecidableEq TB.BMsg] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+omit [Fintype T.PK] [DecidableEq T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BMsg]
+  [DecidableEq T.BMsg] [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins]
   [Fintype J.StdCoins] [DecidableEq J.StdCoins] [Fintype J.KeepCoins] [DecidableEq J.KeepCoins]
   [Nonempty J.StdCoins] in
 /-- The keep coins of request number `j < Q` are `s j`. -/
@@ -278,7 +278,7 @@ noncomputable def ringKeepMsg (hK : 0 < K) {Q : ℕ} (s : Fin Q → Fin K → J.
     (p : (SignOracle.ring B).SMsg) : (SignOracle.ringKeep J K hK).SMsg :=
   .inl (p, keepAt s c)
 
-/-- **The message map of the key-reuse game at the side coins `s`**: the ring request `p` numbered
+/-- **The message map of the joint-security game at the side coins `s`**: the ring request `p` numbered
 `c` becomes `(p, keepAt s c)`, a base message stays. -/
 noncomputable def ringStdKeepMsg (hK : 0 < K) {Q : ℕ} (s : Fin Q → Fin K → J.KeepCoins) (c : ℕ) :
     (SignOracle.ringStd B).SMsg → (SignOracle.ringKeep J K hK).SMsg
@@ -286,16 +286,16 @@ noncomputable def ringStdKeepMsg (hK : 0 < K) {Q : ℕ} (s : Fin Q → Fin K →
   | .inr bm => .inr bm
 
 omit [Fintype J.StdCoins] [DecidableEq J.StdCoins] [Fintype J.KeepCoins] [DecidableEq J.KeepCoins]
-  [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg]
-  [Nonempty J.StdCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
+  [Fintype T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BMsg] [DecidableEq T.BMsg]
+  [Nonempty J.StdCoins] [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins] in
 /-- `ringKeepMsg` is injective at every request number. -/
 theorem ringKeepMsg_injective (hK : 0 < K) {Q : ℕ} (s : Fin Q → Fin K → J.KeepCoins) (c : ℕ) :
     Function.Injective (ringKeepMsg hK s c) := fun _ _ h =>
   (Prod.mk.inj (Sum.inl_injective h)).1
 
 omit [Fintype J.StdCoins] [DecidableEq J.StdCoins] [Fintype J.KeepCoins] [DecidableEq J.KeepCoins]
-  [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg] [DecidableEq TB.BMsg]
-  [Nonempty J.StdCoins] [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] in
+  [Fintype T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BMsg] [DecidableEq T.BMsg]
+  [Nonempty J.StdCoins] [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins] in
 /-- `ringStdKeepMsg` is injective at every request number. -/
 theorem ringStdKeepMsg_injective (hK : 0 < K) {Q : ℕ} (s : Fin Q → Fin K → J.KeepCoins) (c : ℕ) :
     Function.Injective (ringStdKeepMsg hK s c) := by
@@ -358,16 +358,16 @@ end ToSig
 
 section RingRelay
 
-variable {N : ℕ} {TB : BaseTypes}
-  {B : BaseSigner X Y N TB} (J : Rejection B) (K n : ℕ)
+variable {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner X Y N T RMsg} (J : Rejection B) (K n : ℕ)
 
 variable [Fintype J.StdCoins] [DecidableEq J.StdCoins] [Fintype J.KeepCoins]
   [DecidableEq J.KeepCoins]
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
-  [DecidableEq TB.BMsg] [Nonempty J.StdCoins] [Nonempty J.KeepCoins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BMsg]
+  [DecidableEq T.BMsg] [Nonempty J.StdCoins] [Nonempty J.KeepCoins]
 
-variable [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+variable [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins]
 
 section Programs
 
@@ -399,8 +399,8 @@ def ringProg (hK : 0 < K) (pks : Fin n → B.PK) :
         (Option (MUResponse B.core))
   | .publicKey i => askResp (.publicKey i)
   | .corrupt i => askResp (.corrupt i)
-  | .sign i (.inl p) => if pks i ∈ p.1.1.1 then
-      (relaySign J K n p.1.1 (p.1.1.1.idxOf (pks i)) p.1.2 p.2 i).mapOutput (Option.map .signature)
+  | .sign i (.inl p) => if pks i ∈ p.1.ring.keys then
+      (relaySign J K n p.1.ring (p.1.ring.keys.idxOf (pks i)) p.1.msg p.2 i).mapOutput (Option.map .signature)
     else .pure none
   | .sign i (.inr bm) => askResp (.sign i bm)
 
@@ -509,16 +509,16 @@ end Challenger
 
 section RingLift
 
-variable {N : ℕ} {TB : BaseTypes}
-  {B : BaseSigner X Y N TB} (J : Rejection B) (K n : ℕ)
+variable {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner X Y N T RMsg} (J : Rejection B) (K n : ℕ)
 
 variable [Fintype J.StdCoins] [DecidableEq J.StdCoins] [Fintype J.KeepCoins]
   [DecidableEq J.KeepCoins]
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
-  [DecidableEq TB.BMsg] [Nonempty J.StdCoins] [Nonempty J.KeepCoins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BMsg]
+  [DecidableEq T.BMsg] [Nonempty J.StdCoins] [Nonempty J.KeepCoins]
 
-variable [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+variable [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins]
 
 /-! ### The coins of the attempts -/
 
@@ -584,18 +584,18 @@ theorem _root_.GordieHowe.Quantum.MultiRelay.RunsWith.congr_res {Req' Resp' R : 
 
 end Runs
 
-variable [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+variable [Fintype T.BSig] [DecidableEq T.BSig] [Fintype T.KeyCoins] [DecidableEq T.KeyCoins]
 
 /-! ### The lifting lemma -/
 
-variable [Nonempty TB.KeyCoins]
+variable [Nonempty T.KeyCoins]
 
 section Lifting
 
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
   [AddGroup Y] [Nonempty Y] {V : OracleView X Y} {t : ℕ}
 
-omit [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] [Fintype J.StdCoins]
+omit [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins] [Fintype J.StdCoins]
   [DecidableEq J.StdCoins] [Nonempty J.StdCoins] in
 /-- **The relayed multi-user adversary** of an adversary `A` of the game with the signing oracle
 `O` and `Q` requests, along the message maps `f s` at the side coins `s`: on the public keys
@@ -617,7 +617,7 @@ noncomputable def liftAdversary (hK : 0 < K) (i₀ : Fin n) {O : SignOracle B.co
     (fun s => msgRelay n (f s)) fun s c => MURequest.mapMsg_injective (hf s c)).relay
       (ringRelay J K n hK inp.1 i₀) Q
 
-omit [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] [Fintype J.StdCoins]
+omit [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins] [Fintype J.StdCoins]
   [DecidableEq J.StdCoins] [Nonempty J.StdCoins] in
 /-- **The relayed multi-user adversary of the ring-aware game** (`liftAdversary` along
 `ringKeepMsg`). -/
@@ -626,9 +626,9 @@ noncomputable def relayMUAdversary (hK : 0 < K) (i₀ : Fin n)
     MUAdversary J.stdOracle n V (t + Q * (J.qCheck + K * J.qKeep)) :=
   liftAdversary J K n hK i₀ Q (ringKeepMsg hK) (ringKeepMsg_injective hK) A
 
-omit [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins] [Fintype J.StdCoins]
+omit [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins] [Fintype J.StdCoins]
   [DecidableEq J.StdCoins] [Nonempty J.StdCoins] in
-/-- **The relayed multi-user adversary of the key-reuse game** (`liftAdversary` along
+/-- **The relayed multi-user adversary of the joint-security game** (`liftAdversary` along
 `ringStdKeepMsg`). -/
 noncomputable def relayMUAdversaryStd (hK : 0 < K) (i₀ : Fin n)
     (A : MUAdversary (SignOracle.ringStd B) n V t) (Q : ℕ) :
@@ -690,7 +690,7 @@ such an output, and so is every signature the oracle returned to an uncorrupted 
 noncomputable def muVerifyProb {O : SignOracle B} [Fintype O.SMsg] [DecidableEq O.SMsg]
     [Fintype O.Coins] [DecidableEq O.Coins] [Nonempty O.Coins] (A : MUAdversary O n V t) (Q : ℕ) :
     ℝ≥0∞ :=
-  (muLaw A Q).toOuterMeasure {x | ∃ p ∈ x.2.2, HonestVerifies x.1 x.2.1 p.1 p.2}
+  (muLaw A Q).toOuterMeasure {r | r.Wins HonestVerifies}
 
 end Honest
 

@@ -36,14 +36,14 @@ namespace GordieHowe.RingSignature
 open GordieHowe.Quantum GordieHowe.Interaction GordieHowe.Ring
 
 variable {X Y : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [Nonempty Y]
-  {N n : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
-  {B : BaseSigner X Y N TB} {TPS : PSTypes}
+  {N n : ℕ} {T : Signature.SchemeTypes} {RMsg : Type} [DecidableEq T.PK]
+  {B : BaseSigner X Y N T RMsg} {TPS : PSTypes}
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS}
   [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {adm : KeyRing B.PK N → Prop} [DecidablePred adm]
   (keys : Fin n → (ofBase B PS adm).KeyCoins) (Q : ℕ) (m : (X → Y) → ℕ)
   (s : (X → Y) → AnonDetStrategy (ofBase B PS adm) n)
 
-variable [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+variable [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins]
 
 omit [DecidableEq Y] in
 /-- **The probability of a family of deterministic strategies, the oracle drawn through `ψ`, is
@@ -56,13 +56,13 @@ theorem detAnonWinVia_mem_Icc (b : Bool) {Ω₁ : Type} [Fintype Ω₁] [Nonempt
         Finset.expect_le_expect fun h₁ _ => toReal_toOuterMeasure_le_one _ _
     _ = 1 := Fintype.expect_const _
 
-variable [DecidableEq TB.KeyCoins]
+variable [DecidableEq T.KeyCoins]
 
-variable [Fintype TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [Nonempty TB.KeyCoins]
+variable [Fintype T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BSig]
+  [DecidableEq T.BSig] [Fintype T.Pub] [DecidableEq T.Pub] [Fintype T.KeyCoins]
+  [Nonempty T.KeyCoins]
 
-omit [DecidableEq TB.KeyCoins] [Fintype TB.KeyCoins] [Nonempty TB.KeyCoins] in
+omit [DecidableEq T.KeyCoins] [Fintype T.KeyCoins] [Nonempty T.KeyCoins] in
 /-- **The deterministic classical game at a key vector with errors depending on the base signer's
 part of the oracle** (`abs_detAnonWinVia_sub_le` at each value `ω₂` of the first part of the split
 `e`, on the good event `Good ω₂`, and the trivial bound `1` off it, averaged over `ω₂`): for a base

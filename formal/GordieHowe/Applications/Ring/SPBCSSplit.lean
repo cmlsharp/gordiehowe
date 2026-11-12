@@ -69,8 +69,8 @@ structure _root_.GordieHowe.RingSignature.ProofSystem.CompiledBySplit {m k e : �
 section System
 
 variable {k kN kS L e N : ℕ} {Y Y₁ : Type} [AddGroup Y] [AddGroup Y₁]
-  (sp : OracleSplit Y Y₁ (XOut k e)) {TB : BaseTypes}
-  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N TB}
+  (sp : OracleSplit Y Y₁ (XOut k e)) {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits (queryBits k kN kS L)) Y N T RMsg}
   {ι : Type} {τ : SPTerm ι} {Mg : Merges τ} {nr : ι → ℕ}
   {P : (j : ι) → ProtocolSpec (nr j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] [∀ j i, Nonempty ((P j).Challenge i)] {X₀ Wit₀ : Type}
@@ -94,14 +94,15 @@ def spbcsSplitClaim (ω : Bits (queryBits k kN kS L) → Y₁) (x : RingSignatur
     Option (Claim X₀ M.NIProof) :=
   π.map fun p => ⟨(stmtProg x).run ω, p.1⟩
 
-open Classical in
 /-- **The spBCS proof system on the second component of the split `sp`**: the prover runs
 `stmtProg x` on the base component and then, at the honest input `input x w` (the missing proof
 when there is none), the compiled honest prover on the program statement, on the second
 component; the verifier accepts `π` on `x` at `H` exactly when `x` passes `check` and the
 compiled verifier `M.qVerifier Qs b b` accepts `spbcsSplitClaim (base sp H) x π` against the
-second component `prf sp H`. -/
-noncomputable def spbcsSplitProofSystem :
+second component `prf sp H`.
+Acceptance is decided by the spBCS verifier's decision of `Accepts` (`SPBCS.decAcceptedQ` at
+the format bounds `hb`), so the proof system is computable. -/
+def spbcsSplitProofSystem :
     ProofSystem (Bits (queryBits k kN kS L)) Y (RingSignature.RingStmt B) (RingSignature.RingWit B)
       (spbcsPST M b R) where
   q := qS + (splitNIProver M Λ E hb honest).q
@@ -117,8 +118,10 @@ noncomputable def spbcsSplitProofSystem :
       · intro H
         rw [Option.elim_some, OracleProg.length_trace_mapQuery]
         exact (splitNIProver M Λ E hb honest).prog_queries x₀ y c _
-  verify H x π := check x && decide (∃ c ∈ spbcsSplitClaim M stmtProg (base sp H) x π,
-    (M.qVerifier Qs b b).Accepted (outEquiv k e ∘ prf sp H) c)
+  verify H x π :=
+    haveI := M.decAcceptedQ hb (outEquiv k e ∘ prf sp H)
+    check x && decide (∃ c ∈ spbcsSplitClaim M stmtProg (base sp H) x π,
+      (M.qVerifier Qs b b).Accepted (outEquiv k e ∘ prf sp H) c)
 
 omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The proof system accepts exactly the checked statements whose claims the compiled verifier
@@ -128,7 +131,7 @@ theorem verify_spbcsSplitProofSystem_eq_true_iff (H : Bits (queryBits k kN kS L)
     (spbcsSplitProofSystem sp M Λ E hb honest stmtProg qS hS check input).verify H x π = true ↔
       check x = true ∧ ∃ c ∈ spbcsSplitClaim M stmtProg (base sp H) x π,
         (M.qVerifier Qs b b).Accepted (outEquiv k e ∘ prf sp H) c := by
-  classical
+  letI := M.decAcceptedQ hb (outEquiv k e ∘ prf sp H)
   change (check x && decide _) = true ↔ _
   rw [Bool.and_eq_true, decide_eq_true_iff]
 

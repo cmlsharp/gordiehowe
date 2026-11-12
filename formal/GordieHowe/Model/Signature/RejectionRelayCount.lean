@@ -233,25 +233,25 @@ end Ctx
 
 section Ring
 
-variable {N : ℕ} {TB : BaseTypes}
-  {B : BaseSigner X Y N TB} (J : Rejection B) (K n : ℕ)
+variable {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner X Y N T RMsg} (J : Rejection B) (K n : ℕ)
 
 variable [Fintype J.StdCoins] [DecidableEq J.StdCoins] [Nonempty J.StdCoins] [Fintype J.KeepCoins]
   [DecidableEq J.KeepCoins] [Nonempty J.KeepCoins]
 
 variable {J K n}
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BMsg]
-  [DecidableEq TB.BMsg]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BMsg]
+  [DecidableEq T.BMsg]
 
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
   [AddGroup Y] [Nonempty Y] {V : OracleView X Y} {t : ℕ}
 
-variable [Fintype TB.BSig] [DecidableEq TB.BSig] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+variable [Fintype T.BSig] [DecidableEq T.BSig] [Fintype T.KeyCoins] [DecidableEq T.KeyCoins]
 
-variable [Nonempty TB.KeyCoins]
+variable [Nonempty T.KeyCoins]
 
-variable [Fintype TB.Coins] [DecidableEq TB.Coins] [Nonempty TB.Coins]
+variable [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins]
 
 variable {e : B.Coins ≃ (Fin K → J.StdCoins × J.KeepCoins)}
 
@@ -268,8 +268,8 @@ theorem muEufProbWithin_le_relay (hK : 0 < K) (hrej : IsRejectionOn B J K e) (i�
   rw [Rejection.relayMUAdversary_eq]
   exact (hrej.signsOn hK).muEufProbWithin_le_relay Sum.inl_injective i₀ A Q Qs
 
-/-- **The key-reuse form**: under `IsRejectionOn B J K e` and `IsStdOn B J K e hK`, the bound of
-`muEufProbWithin_le_relay` for the key-reuse game and `relayMUAdversaryStd`. -/
+/-- **The joint-security form**: under `IsRejectionOn B J K e` and `IsStdOn B J K e hK`, the bound of
+`muEufProbWithin_le_relay` for the joint-security game and `relayMUAdversaryStd`. -/
 theorem muEufProbWithin_le_relay_ringStd (hK : 0 < K) (hrej : IsRejectionOn B J K e)
     (hstd : IsStdOn B J K e hK) (i₀ : Fin n) (A : MUAdversary (SignOracle.ringStd B) n V t)
     (Q Qs : ℕ) :

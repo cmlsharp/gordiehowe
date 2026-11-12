@@ -68,16 +68,16 @@ section Game
 
 variable [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited X] [Fintype Y] [DecidableEq Y]
   [Nonempty Y] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁] [Fintype Y₂] [DecidableEq Y₂]
-  [Nonempty Y₂] {N n t : ℕ} [NeZero n] {TB : BaseTypes}
-  {B : BaseSigner X Y N TB}
+  [Nonempty Y₂] {N n t : ℕ} [NeZero n] {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner X Y N T RMsg}
   {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem X Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop} [DecidablePred adm]
   {R : Type} (P : KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof) → OracleProg X Y R) (q : ℕ)
   (hP : ∀ o, (P o).QueriesLE q)
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
-  [Nonempty TB.Coins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BSig]
+  [DecidableEq T.BSig] [Fintype T.Pub] [DecidableEq T.Pub] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins] [Fintype T.Coins] [DecidableEq T.Coins]
+  [Nonempty T.Coins]
 
 variable (B PS adm) in
 /-- **The relayed forger followed by the program `P` on its output**: at most
@@ -148,8 +148,8 @@ end Split
 section Knowledge
 
 variable {m k e N n : ℕ} {Y₁ : Type} [AddGroup Y₁] {Y : Type} [AddGroup Y] [Fintype Y] [DecidableEq Y]
-  {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes}
-  {B : BaseSigner (Bits m) Y N TB}
+  {sp : OracleSplit Y Y₁ (XOut k e)} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits m) Y N T RMsg}
   {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop}
   [DecidablePred adm] {O : SignOracle B.core} [NeZero n] {X₀ Cl : Type}
   {V : NARG.QROM.Verifier m k e Cl X₀} {rel : Set (X₀ × RingWit B)}
@@ -157,8 +157,8 @@ variable {m k e N n : ℕ} {Y₁ : Type} [AddGroup Y₁] {Y : Type} [AddGroup Y]
 
 /-- The output of the relayed forger followed by the program: a ring signature and a program
 statement. -/
-abbrev SplitOut {TB : BaseTypes}
-    (B : BaseSigner (Bits m) Y N TB) {TPS : PSTypes}
+abbrev SplitOut {T : Signature.SchemeTypes} {RMsg : Type}
+    (B : BaseSigner (Bits m) Y N T RMsg) {TPS : PSTypes}
     (PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) TPS)
     (X₀ : Type) : Type :=
   (KeyRing B.PK N × B.Msg × (B.Pub × PS.Proof)) × X₀
@@ -170,8 +170,8 @@ def splitClaim (cl : X₀ → PS.Proof → Option Cl) (c₀ : Cl) (o : SplitOut 
 
 variable [Fintype O.SMsg] [DecidableEq O.SMsg] [Fintype O.Coins] [DecidableEq O.Coins]
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins]
 
 variable (sp) in
 /-- **The test of the extraction at the base component `ω`**: the program statement is the one of
@@ -187,8 +187,8 @@ def splitTest (hC : PS.CompiledBySplit sp V) (cl : X₀ → PS.Proof → Option 
     MUFreshReq B (PS := PS) keys (extForgery v).1 ((requests (extLogs v)).take Q')
 
 omit [Fintype Y] [DecidableEq Y] [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins]
-  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype TB.PK] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins] in
+  [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype T.PK] [Fintype T.BSig]
+  [DecidableEq T.BSig] [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] in
 /-- **A verifying ring signature at an oracle with base component `ω`, with its program statement
 at `ω`, has an accepted claim** against the second component. -/
 theorem accepted_splitClaim (hC : PS.CompiledBySplit sp V) {cl : X₀ → PS.Proof → Option Cl}
@@ -313,17 +313,17 @@ section Chain
 
 variable {m k e N n : ℕ} {Y₁ : Type} [AddGroup Y₁] [Fintype Y₁] [DecidableEq Y₁] [Nonempty Y₁]
   {Y : Type} [AddGroup Y] [Fintype Y] [DecidableEq Y] [Nonempty Y]
-  {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes}
-  {B : BaseSigner (Bits m) Y N TB}
+  {sp : OracleSplit Y Y₁ (XOut k e)} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits m) Y N T RMsg}
   {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop}
   [DecidablePred adm] [NeZero n] {X₀ Cl : Type} {V : NARG.QROM.Verifier m k e Cl X₀}
   {rel : Set (X₀ × RingWit B)} {ext : X₀ → DB (Bits m) (Out k e) → Multiset (RingWit B)}
   {β : ℕ → ℝ≥0∞} {t : ℕ}
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.Msg] [DecidableEq TB.Msg] [Fintype TB.BSig]
-  [DecidableEq TB.BSig] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.KeyCoins]
-  [DecidableEq TB.KeyCoins] [Nonempty TB.KeyCoins] [Fintype TB.Coins] [DecidableEq TB.Coins]
-  [Nonempty TB.Coins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.BSig]
+  [DecidableEq T.BSig] [Fintype T.Pub] [DecidableEq T.Pub] [Fintype T.KeyCoins]
+  [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins] [Fintype T.Coins] [DecidableEq T.Coins]
+  [Nonempty T.Coins]
 
 variable (sp B PS adm) in
 /-- **The relayed forger followed by `P`, read at the base component `ω`**, at the auxiliary value
@@ -348,9 +348,9 @@ noncomputable abbrev splitDefault {O : SignOracle B.core} [Fintype O.SMsg] [Deci
     (tab₀ A') (((A'.absorbTab (muTwoRelay O n pk₀ i₂) (tab₀ A')).toTPKindAlg.composeBothOut
       (inertChallenger (Bits m) (XOut k e) (MURequest O n) Q') id)).defaultOut
 
-omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] [Fintype TB.Msg]
-  [DecidableEq TB.Msg] [Fintype TB.Pub] [DecidableEq TB.Pub] [Fintype TB.Coins]
-  [DecidableEq TB.Coins] [Nonempty TB.Coins] in
+omit [Fintype TPS.Proof] [DecidableEq TPS.Proof] [DecidableEq TPS.Coins] [Fintype RMsg]
+  [DecidableEq RMsg] [Fintype T.Pub] [DecidableEq T.Pub] [Fintype T.Coins]
+  [DecidableEq T.Coins] [Nonempty T.Coins] in
 /-- **The game at a fixed base component up to the extraction runs** (the step after
 `insiderForgeProb_le_split`, for any signing oracle reading only the base component, `hO`): for a
 proof system compiled by `V` at each base component (`hC`) whose claims factor through the program
@@ -398,7 +398,7 @@ theorem forgeSum_le_extRun_split {O : SignOracle B.core} [Fintype O.SMsg] [Decid
                         (MUResponse B.core)) D => splitTest sp hC cl c₀ ω keys Q' v ∧
                     NARG.ExtractsAt rel ext (V.stmt (splitClaim cl c₀ (extForgery v))) D) +
         V.knowledgeError β (t' + V.kq) := by
-  refine Ring.tsum_mul_le_tsum_mul_add _ fun keys => Ring.tsum_mul_le_tsum_mul_add _ fun ω => ?_
+  refine PMF.tsum_mul_le_tsum_mul_add _ fun keys => PMF.tsum_mul_le_tsum_mul_add _ fun ω => ?_
   -- the transcripts as runs of the table form
   have htab : ∀ h ρ, (((𝒜 keys ρ).restrictAt sp ω).transcriptLaw
       ((muChallenger O n keys Q').restrictAt sp ω) h).toOuterMeasure
@@ -428,11 +428,11 @@ theorem forgeSum_le_extRun_split {O : SignOracle B.core} [Fintype O.SMsg] [Decid
   -- the second component's average innermost
   simp only [← tsum_fintype (L := .unconditional _)]
   rw [tsum_mul_tsum_mul_comm]
-  refine Ring.tsum_mul_le_tsum_mul_add _ fun ρ => ?_
+  refine PMF.tsum_mul_le_tsum_mul_add _ fun ρ => ?_
   rw [tsum_mul_tsum_mul_comm]
-  refine Ring.tsum_mul_le_tsum_mul_add _ fun a => ?_
+  refine PMF.tsum_mul_le_tsum_mul_add _ fun a => ?_
   rw [tsum_mul_tsum_mul_comm]
-  refine Ring.tsum_mul_le_tsum_mul_add _ fun c => ?_
+  refine PMF.tsum_mul_le_tsum_mul_add _ fun c => ?_
   exact tsum_le_extRun_split hC hcl K c₀ ω keys i₂ Q' _ _ _
     (((𝒜 keys ρ).restrictAt sp ω).queries_le a)
 
@@ -498,16 +498,16 @@ end Chain
 section Win
 
 variable {m k e N n : ℕ} {Y₁ : Type} [AddGroup Y₁] {Y : Type} [AddGroup Y] [Fintype Y]
-  [DecidableEq Y] {sp : OracleSplit Y Y₁ (XOut k e)} {TB : BaseTypes}
-  {B : BaseSigner (Bits m) Y N TB}
+  [DecidableEq Y] {sp : OracleSplit Y Y₁ (XOut k e)} {T : Signature.SchemeTypes} {RMsg : Type}
+  {B : BaseSigner (Bits m) Y N T RMsg}
   {TPS : PSTypes} [Fintype TPS.Proof] [DecidableEq TPS.Proof] [Fintype TPS.Coins] [DecidableEq TPS.Coins] [Nonempty TPS.Coins] {PS : ProofSystem (Bits m) Y (RingStmt B) (RingWit B) TPS} {adm : KeyRing B.PK N → Prop}
   [DecidablePred adm] {O : SignOracle B.core} [NeZero n] {X₀ Cl : Type}
   {V : NARG.QROM.Verifier m k e Cl X₀}
 
 variable [Fintype O.SMsg] [DecidableEq O.SMsg]
 
-variable [Fintype TB.PK] [DecidableEq TB.PK] [Fintype TB.BSig] [DecidableEq TB.BSig]
-  [Fintype TB.KeyCoins] [DecidableEq TB.KeyCoins]
+variable [Fintype T.PK] [DecidableEq T.PK] [Fintype T.BSig] [DecidableEq T.BSig]
+  [Fintype T.KeyCoins] [DecidableEq T.KeyCoins]
 
 variable (B) in
 /-- **The decoding of a witness** `(i, σ)` for the ring statement `(R, m, y)`: the key at position

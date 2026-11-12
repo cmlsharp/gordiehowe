@@ -579,9 +579,9 @@ namespace RingSignature.KeyFree
 
 open Quantum Signature QROM OracleProg RingSignature.Insider
 
-variable {X Y : Type} [DecidableEq X] [Zero Y] {N n : ℕ} {TB : BaseTypes}
-  [DecidableEq TB.PK]
-  (B : BaseSigner X Y N TB)
+variable {X Y : Type} [DecidableEq X] [Zero Y] {N n : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type}
+  [DecidableEq TS.PK]
+  (B : BaseSigner X Y N TS RMsg)
   {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
   [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) ⟨Pf, PC⟩} {adm : KeyRing B.PK N → Prop}
@@ -594,7 +594,7 @@ def mapSig (swσ : B.BSig → B.BSig) :
       Option (B.Pub × B.BSig × List (Assignment X Y)) :=
   Option.map (Prod.map id (Prod.map swσ id))
 
-omit [DecidableEq TB.PK] in
+omit [DecidableEq TS.PK] in
 variable {B} in
 theorem asgOf_mapSig (swσ : B.BSig → B.BSig) (o : Option (B.Pub × B.BSig × List (Assignment X Y))) :
     asgOf B (mapSig B swσ o) = asgOf B o := by
@@ -718,8 +718,8 @@ theorem KFReads.lift_mapOutput {Yb Xs Ys α β Req' Resp' : Type} (Rd : KFReads 
       (Rd.lift Tf Tb p).mapOutput f :=
   translate_mapOutput _ _ f p
 
-variable [DecidableEq X] {N n : ℕ} {TB : BaseTypes} [DecidableEq TB.PK]
-  (B : BaseSigner X Y N TB)
+variable [DecidableEq X] {N n : ℕ} {TS : Signature.SchemeTypes} {RMsg : Type} [DecidableEq TS.PK]
+  (B : BaseSigner X Y N TS RMsg)
   {Pf PC : Type} [Fintype Pf] [DecidableEq Pf] [Fintype PC]
   [DecidableEq PC] [Nonempty PC]
   {PS : ProofSystem X Y (RingStmt B) (RingWit B) ⟨Pf, PC⟩}

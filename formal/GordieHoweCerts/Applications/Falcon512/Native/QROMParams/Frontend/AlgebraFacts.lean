@@ -17,8 +17,8 @@ public import GordieHowe.Applications.Falcon512.Frontend.Norm
 
 The program facts domain `A` reads (`GordieHowe.Falcon512.Native.FalconAAlg`) for
 `GordieHowe.Generated.Falcon512.Native.QROMParams.Program.program` (export `3ed06086`): the predicates by index and
-body, the shared expressions, the values and the constants, by `decide` and `rfl` (generated data:
-reading entries several hundred deep raises `maxRecDepth` for the `rfl` facts).
+body, the shared expressions, the values and the constants, read off the generated shape facts
+(`ShapeFacts`) and by `decide`.
 -/
 
 namespace GordieHowe.Falcon512.Native.QROMParams
@@ -27,7 +27,6 @@ open Generated.Falcon512.Native.QROMParams.Program
 open Generated.Falcon512.Native.QROMParams.ShapeFacts
 open RealizedProgram
 
-set_option maxRecDepth 4096 in
 /-- `norm.center`. -/
 theorem alg_center :
     ∃ t, (program.predicate 275).body = .equal 1 (.add (.mul (.ref 540) (.ref 540))
@@ -36,13 +35,11 @@ theorem alg_center :
     (.scale (.const 4096) (.ref 543)))))) (.leaf 42) t :=
   predicate_norm_2ecenter_body
 
-set_option maxRecDepth 4096 in
 /-- `norm.top`. -/
 theorem alg_top :
     ∃ t, (program.predicate 276).body = .equal 1 (.ref 544) (.leaf 41) t :=
   predicate_norm_2etop_body
 
-set_option maxRecDepth 4096 in
 /-- `norm.column0`. -/
 theorem alg_col0 :
     ∃ real, (program.predicate 277).body =
@@ -50,7 +47,6 @@ theorem alg_col0 :
   obtain ⟨real, h, -⟩ := predicate_norm_2ecolumn0_body
   exact ⟨real, h⟩
 
-set_option maxRecDepth 4096 in
 /-- `norm.column1`. -/
 theorem alg_col1 :
     ∃ real, (program.predicate 278).body = .mod 1 0
@@ -59,7 +55,6 @@ theorem alg_col1 :
   obtain ⟨real, h, -⟩ := predicate_norm_2ecolumn1_body
   exact ⟨real, h⟩
 
-set_option maxRecDepth 4096 in
 /-- `norm.column2`. -/
 theorem alg_col2 :
     ∃ real, (program.predicate 279).body = .mod 1 0
@@ -68,7 +63,6 @@ theorem alg_col2 :
   obtain ⟨real, h, -⟩ := predicate_norm_2ecolumn2_body
   exact ⟨real, h⟩
 
-set_option maxRecDepth 4096 in
 /-- `norm.column3`. -/
 theorem alg_col3 :
     ∃ real, (program.predicate 280).body = .mod 1 0
@@ -77,7 +71,6 @@ theorem alg_col3 :
   obtain ⟨real, h, -⟩ := predicate_norm_2ecolumn3_body
   exact ⟨real, h⟩
 
-set_option maxRecDepth 4096 in
 /-- `norm.column4`. -/
 theorem alg_col4 :
     ∃ real, (program.predicate 281).body = .mod 1 0 (.add (.mul (.ref 552) (.ref 552))
@@ -85,14 +78,12 @@ theorem alg_col4 :
   obtain ⟨real, h, -⟩ := predicate_norm_2ecolumn4_body
   exact ⟨real, h⟩
 
-set_option maxRecDepth 4096 in
 /-- `norm.column5`. -/
 theorem alg_col5 :
     ∃ real, (program.predicate 282).body = .mod 1 0 (.ref 562) (.ref 563) real := by
   obtain ⟨real, h, -⟩ := predicate_norm_2ecolumn5_body
   exact ⟨real, h⟩
 
-set_option maxRecDepth 4096 in
 /-- `norm.normalize`. -/
 theorem alg_normalize :
     ∃ real, (program.predicate 283).body = .mod 1 0
@@ -101,7 +92,6 @@ theorem alg_normalize :
   obtain ⟨real, h, -⟩ := predicate_norm_2enormalize_body
   exact ⟨real, h⟩
 
-set_option maxRecDepth 4096 in
 /-- `norm.complement`. -/
 theorem alg_complement :
     ∃ real, (program.predicate 284).body = .mod 1 0
@@ -110,61 +100,51 @@ theorem alg_complement :
   obtain ⟨real, h, -⟩ := predicate_norm_2ecomplement_body
   exact ⟨real, h⟩
 
-set_option maxRecDepth 4096 in
 /-- `norm.Dc.boolean`. -/
 theorem alg_dcBool :
     ∃ t, (program.predicate 293).body = .equal 1 (.mul (.leaf 603) (.leaf 603)) (.leaf 603) t :=
   predicate_norm_2eDc_2eboolean_body
 
-set_option maxRecDepth 4096 in
 /-- `encoding.b.boolean`. -/
 theorem alg_encB :
     ∃ t, (program.predicate 295).body = .equal 1 (.mul (.ref 577) (.ref 577)) (.ref 577) t :=
   predicate_encoding_2eb_2eboolean_body
 
-set_option maxRecDepth 4096 in
 /-- `norm.a`. -/
 theorem alg_rangeA :
     ∃ real, (program.predicate 297).body = .mem 1 [.leaf 597] (.range 64) real :=
   predicate_norm_2ea_body
 
-set_option maxRecDepth 4096 in
 /-- `norm.sq`. -/
 theorem alg_rangeSq :
     ∃ real, (program.predicate (297 + 1)).body = .mem 1 [.leaf 598] (.range 64) real :=
   predicate_norm_2esq_body
 
-set_option maxRecDepth 4096 in
 /-- `norm.cc`. -/
 theorem alg_rangeCc :
     ∃ real, (program.predicate (297 + 2)).body = .mem 1 [.leaf 599] (.range 189) real :=
   predicate_norm_2ecc_body
 
-set_option maxRecDepth 4096 in
 /-- `norm.nd`. -/
 theorem alg_rangeNd :
     ∃ real, (program.predicate (297 + 3)).body = .mem 1 [.leaf 600] (.range 64) real :=
   predicate_norm_2end_body
 
-set_option maxRecDepth 4096 in
 /-- `norm.nc`. -/
 theorem alg_rangeNc :
     ∃ real, (program.predicate (297 + 4)).body = .mem 1 [.leaf 601] (.range 64) real :=
   predicate_norm_2enc_body
 
-set_option maxRecDepth 4096 in
 /-- `norm.D`. -/
 theorem alg_rangeD :
     ∃ real, (program.predicate (297 + 5)).body = .mem 1 [.leaf 602] (.range 64) real :=
   predicate_norm_2eD_body
 
-set_option maxRecDepth 4096 in
 /-- `encoding.high`. -/
 theorem alg_high :
     ∃ real, (program.predicate 303).body = .mem 1 [.ref 574] (.range 16) real :=
   predicate_encoding_2ehigh_body
 
-set_option maxRecDepth 4096 in
 /-- `encoding.slack`. -/
 theorem alg_slack :
     ∃ real, (program.predicate 304).body =
@@ -172,7 +152,6 @@ theorem alg_slack :
     real :=
   predicate_encoding_2eslack_body
 
-set_option maxRecDepth 4096 in
 /-- The field-form `signature.equation`. -/
 theorem alg_sig :
     ∃ real, (program.predicate 308).body = .mod 1 12289
@@ -181,7 +160,6 @@ theorem alg_sig :
   obtain ⟨real, h, -⟩ := predicate_signature_2eequation_2esource_body
   exact ⟨real, h⟩
 
-set_option maxRecDepth 4096 in
 /-- The norm's shared expressions. -/
 theorem alg_exprs_norm :
     program.expr 540 =
@@ -217,7 +195,6 @@ theorem alg_exprs_norm :
     program.expr 569 = .reindex idx62 (.concat (.leaf 603) (.leaf 41)) :=
   ⟨expr_norm_2ecenter_2eshape_2eleft_2efirst_2efirst_eq, expr_norm_2ecenter_2eshape_2eleft_2esecond_2efirst_2efirst_2efirst_2efirst_eq, expr_norm_2ecenter_2eshape_2eleft_2esecond_2efirst_2efirst_2efirst_2esecond_2efirst_eq, expr_norm_2ecenter_2eshape_2eleft_2esecond_2efirst_2efirst_2esecond_2efirst_eq, expr_norm_2etop_2eshape_2eleft_eq, expr_norm_2ecolumn0_2eshape_2eleft_2efirst_eq, expr_norm_2ecolumn0_2eshape_2eright_2efirst_eq, expr_norm_2ecolumn0_2eshape_2eright_2esecond_2efirst_eq, expr_norm_2ecolumn1_2eshape_2eleft_2efirst_2efirst_2esecond_eq, expr_norm_2ecolumn1_2eshape_2eleft_2esecond_eq, expr_norm_2ecolumn1_2eshape_2eright_2efirst_eq, expr_norm_2ecolumn1_2eshape_2eright_2esecond_2efirst_eq, expr_norm_2ecolumn4_2eshape_2eleft_2efirst_2efirst_eq, expr_norm_2ecolumn2_2eshape_2eleft_2esecond_eq, expr_norm_2ecolumn2_2eshape_2eright_2efirst_eq, expr_norm_2ecolumn2_2eshape_2eright_2esecond_2efirst_eq, expr_norm_2ecolumn3_2eshape_2eleft_2esecond_eq, expr_norm_2ecolumn3_2eshape_2eright_2efirst_eq, expr_norm_2ecolumn3_2eshape_2eright_2esecond_2efirst_eq, expr_norm_2ecolumn4_2eshape_2eleft_2esecond_eq, expr_norm_2ecolumn4_2eshape_2eright_2efirst_eq, expr_norm_2ecolumn4_2eshape_2eright_2esecond_2efirst_eq, expr_norm_2ecolumn5_2eshape_2eleft_eq, expr_norm_2ecolumn5_2eshape_2eright_eq, expr_norm_2enormalize_2eshape_2eleft_2efirst_2efirst_eq, expr_norm_2enormalize_2eshape_2eleft_2efirst_2esecond_2efirst_eq, expr_norm_2enormalize_2eshape_2eleft_2esecond_eq, expr_norm_2enormalize_2eshape_2eright_2esecond_2efirst_eq, expr_norm_2ecomplement_2eshape_2eleft_2efirst_2efirst_eq, expr_norm_2ecomplement_2eshape_2eleft_2esecond_eq⟩
 
-set_option maxRecDepth 4096 in
 /-- The encoding's shared expressions. -/
 theorem alg_exprs_enc :
     program.expr 574 = .reindex idx75 (.leaf 597) ∧
@@ -307,20 +284,17 @@ theorem alg_consts_A :
   · rw [constEntries_of_kind value_norm_2ecenter_2econstant_2eright_kind]; decide +kernel
   · rw [constEntries_of_kind value_encoding_2eslack_2eoffset_kind]; rfl
 
-set_option maxRecDepth 4096 in
 /-- The constant `41` is zero. -/
 theorem alg_const41 :
     ∃ es, (program.value 41).kind = .constant es ∧ es.getD 0 0 = 0 :=
   ⟨[0], value_norm_2ezero_kind, rfl⟩
 
-set_option maxRecDepth 4096 in
 /-- The constant `604` holds the base-`64` digits of `β² = 34034726`. -/
 theorem alg_const604 :
     program.valueField 604 = 1 ∧ ∃ es, (program.value 604).kind = .constant es ∧
     ∀ m < 6, es.getD m 0 = NativeNorm.digit 34034726 m :=
   ⟨valueShape_field value_norm_2etarget_header.2, [38, 16, 53, 1, 2, 0], value_norm_2etarget_kind, by decide⟩
 
-set_option maxRecDepth 4096 in
 /-- `statement.hhat` is an opaque statement value of no argument. -/
 theorem alg_hhatKind :
     (program.value 593).kind = .pub (.opaque "statement.hhat" []) :=
@@ -358,7 +332,6 @@ theorem norm_i70_entry : ∀ b < 17, ∀ m < 6, ∀ s < 63, idx58.entry ((6 * b 
     if 63 * b + s < 1024 then 6 * (63 * b + s) + m else 6144 := by
   decide +kernel
 
-set_option maxRecDepth 4096 in
 /-- **The generic norm's identifiers and facts** at domain `A` (`FalconNorm`, domain and field
 `1`). -/
 instance : Norm.FalconNorm program where
