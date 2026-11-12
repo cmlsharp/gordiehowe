@@ -101,6 +101,166 @@ private theorem round_of_row {r : List ℕ} {src : RealizedProgram.StateSrc}
   exact ⟨RealizedProgram.PredBody.roundShape?_of_eq ht, RealizedProgram.Expr.linShape?_of_eq hl,
     RealizedProgram.Expr.colShape?_of_eq hc⟩
 
+/-- The rounds of permutation `0` (closed data). -/
+private theorem round_rows_0 : ∀ t : Fin 24,
+    ((t : ℕ) = 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_0_rows,
+      r.getD 0 0 = roundPred (0 : Fin 10) t ∧
+      r.getD 1 0 = outVal (0 : Fin 10) t ∧ r.getD 2 0 = linRef (0 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = linRef (0 : Fin 10) 0 - 2 ∧
+      r.getD 7 0 = linRef (0 : Fin 10) t - 1) ∧
+    ((t : ℕ) ≠ 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_1_rows,
+      r.getD 0 0 = roundPred (0 : Fin 10) t ∧
+      r.getD 1 0 = outVal (0 : Fin 10) t ∧ r.getD 2 0 = linRef (0 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = outVal (0 : Fin 10) (t - 1) ∧
+      r.getD 7 0 = linRef (0 : Fin 10) t - 1) := by
+  decide +kernel
+
+/-- The rounds of permutation `1` (closed data). -/
+private theorem round_rows_1 : ∀ t : Fin 24,
+    ((t : ℕ) = 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_0_rows,
+      r.getD 0 0 = roundPred (1 : Fin 10) t ∧
+      r.getD 1 0 = outVal (1 : Fin 10) t ∧ r.getD 2 0 = linRef (1 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = linRef (1 : Fin 10) 0 - 2 ∧
+      r.getD 7 0 = linRef (1 : Fin 10) t - 1) ∧
+    ((t : ℕ) ≠ 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_1_rows,
+      r.getD 0 0 = roundPred (1 : Fin 10) t ∧
+      r.getD 1 0 = outVal (1 : Fin 10) t ∧ r.getD 2 0 = linRef (1 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = outVal (1 : Fin 10) (t - 1) ∧
+      r.getD 7 0 = linRef (1 : Fin 10) t - 1) := by
+  decide +kernel
+
+/-- The rounds of permutation `2` (closed data). -/
+private theorem round_rows_2 : ∀ t : Fin 24,
+    ((t : ℕ) = 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_0_rows,
+      r.getD 0 0 = roundPred (2 : Fin 10) t ∧
+      r.getD 1 0 = outVal (2 : Fin 10) t ∧ r.getD 2 0 = linRef (2 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = linRef (2 : Fin 10) 0 - 2 ∧
+      r.getD 7 0 = linRef (2 : Fin 10) t - 1) ∧
+    ((t : ℕ) ≠ 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_1_rows,
+      r.getD 0 0 = roundPred (2 : Fin 10) t ∧
+      r.getD 1 0 = outVal (2 : Fin 10) t ∧ r.getD 2 0 = linRef (2 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = outVal (2 : Fin 10) (t - 1) ∧
+      r.getD 7 0 = linRef (2 : Fin 10) t - 1) := by
+  decide +kernel
+
+/-- The rounds of permutation `3` (closed data). -/
+private theorem round_rows_3 : ∀ t : Fin 24,
+    ((t : ℕ) = 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_0_rows,
+      r.getD 0 0 = roundPred (3 : Fin 10) t ∧
+      r.getD 1 0 = outVal (3 : Fin 10) t ∧ r.getD 2 0 = linRef (3 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = linRef (3 : Fin 10) 0 - 2 ∧
+      r.getD 7 0 = linRef (3 : Fin 10) t - 1) ∧
+    ((t : ℕ) ≠ 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_1_rows,
+      r.getD 0 0 = roundPred (3 : Fin 10) t ∧
+      r.getD 1 0 = outVal (3 : Fin 10) t ∧ r.getD 2 0 = linRef (3 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = outVal (3 : Fin 10) (t - 1) ∧
+      r.getD 7 0 = linRef (3 : Fin 10) t - 1) := by
+  decide +kernel
+
+/-- The rounds of permutation `4` (closed data). -/
+private theorem round_rows_4 : ∀ t : Fin 24,
+    ((t : ℕ) = 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_0_rows,
+      r.getD 0 0 = roundPred (4 : Fin 10) t ∧
+      r.getD 1 0 = outVal (4 : Fin 10) t ∧ r.getD 2 0 = linRef (4 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = linRef (4 : Fin 10) 0 - 2 ∧
+      r.getD 7 0 = linRef (4 : Fin 10) t - 1) ∧
+    ((t : ℕ) ≠ 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_1_rows,
+      r.getD 0 0 = roundPred (4 : Fin 10) t ∧
+      r.getD 1 0 = outVal (4 : Fin 10) t ∧ r.getD 2 0 = linRef (4 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = outVal (4 : Fin 10) (t - 1) ∧
+      r.getD 7 0 = linRef (4 : Fin 10) t - 1) := by
+  decide +kernel
+
+/-- The rounds of permutation `5` (closed data). -/
+private theorem round_rows_5 : ∀ t : Fin 24,
+    ((t : ℕ) = 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_0_rows,
+      r.getD 0 0 = roundPred (5 : Fin 10) t ∧
+      r.getD 1 0 = outVal (5 : Fin 10) t ∧ r.getD 2 0 = linRef (5 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = linRef (5 : Fin 10) 0 - 2 ∧
+      r.getD 7 0 = linRef (5 : Fin 10) t - 1) ∧
+    ((t : ℕ) ≠ 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_1_rows,
+      r.getD 0 0 = roundPred (5 : Fin 10) t ∧
+      r.getD 1 0 = outVal (5 : Fin 10) t ∧ r.getD 2 0 = linRef (5 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = outVal (5 : Fin 10) (t - 1) ∧
+      r.getD 7 0 = linRef (5 : Fin 10) t - 1) := by
+  decide +kernel
+
+/-- The rounds of permutation `6` (closed data). -/
+private theorem round_rows_6 : ∀ t : Fin 24,
+    ((t : ℕ) = 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_0_rows,
+      r.getD 0 0 = roundPred (6 : Fin 10) t ∧
+      r.getD 1 0 = outVal (6 : Fin 10) t ∧ r.getD 2 0 = linRef (6 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = linRef (6 : Fin 10) 0 - 2 ∧
+      r.getD 7 0 = linRef (6 : Fin 10) t - 1) ∧
+    ((t : ℕ) ≠ 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_1_rows,
+      r.getD 0 0 = roundPred (6 : Fin 10) t ∧
+      r.getD 1 0 = outVal (6 : Fin 10) t ∧ r.getD 2 0 = linRef (6 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = outVal (6 : Fin 10) (t - 1) ∧
+      r.getD 7 0 = linRef (6 : Fin 10) t - 1) := by
+  decide +kernel
+
+/-- The rounds of permutation `7` (closed data). -/
+private theorem round_rows_7 : ∀ t : Fin 24,
+    ((t : ℕ) = 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_0_rows,
+      r.getD 0 0 = roundPred (7 : Fin 10) t ∧
+      r.getD 1 0 = outVal (7 : Fin 10) t ∧ r.getD 2 0 = linRef (7 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = linRef (7 : Fin 10) 0 - 2 ∧
+      r.getD 7 0 = linRef (7 : Fin 10) t - 1) ∧
+    ((t : ℕ) ≠ 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_1_rows,
+      r.getD 0 0 = roundPred (7 : Fin 10) t ∧
+      r.getD 1 0 = outVal (7 : Fin 10) t ∧ r.getD 2 0 = linRef (7 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = outVal (7 : Fin 10) (t - 1) ∧
+      r.getD 7 0 = linRef (7 : Fin 10) t - 1) := by
+  decide +kernel
+
+/-- The rounds of permutation `8` (closed data). -/
+private theorem round_rows_8 : ∀ t : Fin 24,
+    ((t : ℕ) = 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_0_rows,
+      r.getD 0 0 = roundPred (8 : Fin 10) t ∧
+      r.getD 1 0 = outVal (8 : Fin 10) t ∧ r.getD 2 0 = linRef (8 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = linRef (8 : Fin 10) 0 - 2 ∧
+      r.getD 7 0 = linRef (8 : Fin 10) t - 1) ∧
+    ((t : ℕ) ≠ 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_1_rows,
+      r.getD 0 0 = roundPred (8 : Fin 10) t ∧
+      r.getD 1 0 = outVal (8 : Fin 10) t ∧ r.getD 2 0 = linRef (8 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = outVal (8 : Fin 10) (t - 1) ∧
+      r.getD 7 0 = linRef (8 : Fin 10) t - 1) := by
+  decide +kernel
+
+/-- The rounds of permutation `9` (closed data). -/
+private theorem round_rows_9 : ∀ t : Fin 24,
+    ((t : ℕ) = 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_0_rows,
+      r.getD 0 0 = roundPred (9 : Fin 10) t ∧
+      r.getD 1 0 = outVal (9 : Fin 10) t ∧ r.getD 2 0 = linRef (9 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = linRef (9 : Fin 10) 0 - 2 ∧
+      r.getD 7 0 = linRef (9 : Fin 10) t - 1) ∧
+    ((t : ℕ) ≠ 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_1_rows,
+      r.getD 0 0 = roundPred (9 : Fin 10) t ∧
+      r.getD 1 0 = outVal (9 : Fin 10) t ∧ r.getD 2 0 = linRef (9 : Fin 10) t ∧
+        r.getD 3 0 = 10 ∧
+      r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = outVal (9 : Fin 10) (t - 1) ∧
+      r.getD 7 0 = linRef (9 : Fin 10) t - 1) := by
+  decide +kernel
+
 /-- Each round has a row of the checked round family: the first permutation round reads the
 permutation's input expression, every later round the previous round's output. -/
 private theorem round_rows : ∀ p : Fin 10, ∀ t : Fin 24,
@@ -111,8 +271,17 @@ private theorem round_rows : ∀ p : Fin 10, ∀ t : Fin 24,
     ((t : ℕ) ≠ 0 → ∃ r ∈ Generated.MLDSA44.Native.QROMParams.Shapes.family_keccak_rounds_1_rows, r.getD 0 0 = roundPred p t ∧
       r.getD 1 0 = outVal p t ∧ r.getD 2 0 = linRef p t ∧ r.getD 3 0 = 10 ∧
       r.getD 4 0 = rcLeaf t ∧ r.getD 5 0 = 12 ∧ r.getD 6 0 = outVal p (t - 1) ∧
-      r.getD 7 0 = linRef p t - 1) := by
-  decide +kernel
+      r.getD 7 0 = linRef p t - 1)
+  | ⟨0, _⟩ => round_rows_0
+  | ⟨1, _⟩ => round_rows_1
+  | ⟨2, _⟩ => round_rows_2
+  | ⟨3, _⟩ => round_rows_3
+  | ⟨4, _⟩ => round_rows_4
+  | ⟨5, _⟩ => round_rows_5
+  | ⟨6, _⟩ => round_rows_6
+  | ⟨7, _⟩ => round_rows_7
+  | ⟨8, _⟩ => round_rows_8
+  | ⟨9, _⟩ => round_rows_9
 
 /-- The rounds' checked shapes and table facts. -/
 private theorem rounds_checked (p : Fin 10) (t : Fin 24) :

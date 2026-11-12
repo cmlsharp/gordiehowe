@@ -351,11 +351,19 @@ def signerIn (pkOf : Fin n → B.PK) (refuses : KeyRing B.PK N → ℕ → B.Msg
   | .sign s R m => pkOf s ∈ R.1 ∧ adm R ∧ ¬ refuses R (R.1.idxOf (pkOf s)) m sc
   | _ => False
 
-open Classical in
+/-- **`signerIn` is decidable** from a decision of the refusals: for a ring-signing request, the
+key's membership in the ring (`DecidableEq B.PK`), `adm` and the refusal; false for the other
+requests. -/
+instance instDecidablePredSignerIn (pkOf : Fin n → B.PK)
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (sc : B.Coins) : DecidablePred (α := Req B PS adm n) (signerIn B pkOf refuses sc) := fun r => by
+  cases r <;> unfold signerIn <;> infer_instance
+
 /-- **The statement of request number `c`**: for a ring-signing request `(s, R, m)` by a member
 that signs at the request's coins `ds c`, `(R, m, pubOf (ds c))`; otherwise `dummyStmt`. -/
 noncomputable def stmtAt (pkOf : Fin n → B.PK)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub) {Q : ℕ}
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub) {Q : ℕ}
     (ds : Fin Q → B.Coins) (c : ℕ) (r : Req B PS adm n) : RingStmt B :=
   if h : c < Q then
     if signerIn B pkOf refuses (ds ⟨c, h⟩) r then
@@ -404,6 +412,13 @@ def drawOkR (keys : Fin n → B.KeyCoins) (sc : B.Coins) : Req B PS adm n → Pr
       B.bverify 0 (B.pk (keys s)) (B.bmsg R m) σ = true
   | _ => True
 
+/-- **`drawOkR` is decidable**: for a ring-signing request, the signer's key in the ring, `adm`,
+and the verification of the signature `bsigOf` outputs (an `Option`); true for the other
+requests. -/
+instance instDecidablePredDrawOkR (keys : Fin n → B.KeyCoins) (sc : B.Coins) :
+    DecidablePred (α := Req B PS adm n) (drawOkR B keys sc) := fun r => by
+  cases r <;> unfold drawOkR <;> infer_instance
+
 omit [Fintype T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.Pub] [DecidableEq T.Pub]
   [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins] [Fintype T.Coins]
   [DecidableEq T.Coins] [Nonempty T.Coins] in
@@ -420,12 +435,12 @@ theorem drawOk_of_drawOkR {keys : Fin n → B.KeyCoins} {sc : B.Coins} {r : Req 
   | corrupt _ => trivial
   | sideSign _ bm => exact bm.elim
 
-open Classical in
 /-- **The reply to request number `c < Q`** from the main reply `a`: the key coins `kcOf i` of a
 corrupted user, or for a ring-signing request by a member that signs the main proof with the
 public value `pubOf (ds c)` as a ring signature; `none` otherwise and from request `Q` on. -/
 noncomputable def sideAnswer (pkOf : Fin n → B.PK) (kcOf : Fin n → B.KeyCoins)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub) {Q : ℕ}
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub) {Q : ℕ}
     (ds : Fin Q → B.Coins) (c : ℕ) (r : Req B PS adm n) (a : Option PS.Proof) :
     Option (Resp B PS adm) :=
   if h : c < Q then
@@ -443,7 +458,8 @@ number `c` is sent as its statement `stmtAt` with the request, and answered by `
 public keys `pkOf`, the key coins `kcOf` (read only for corrupted users), the refusals and the
 public values of the coins `ds`. It reads no secret key. -/
 noncomputable def seRelay (pkOf : Fin n → B.PK) (kcOf : Fin n → B.KeyCoins)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub) {Q : ℕ}
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub) {Q : ℕ}
     (ds : Fin Q → B.Coins) :
     SideRelay (Req B PS adm n) (Resp B PS adm) (RelayStmt B PS adm n) PS.Proof where
   route c r := (stmtAt B pkOf refuses pubOf ds c r, r)
@@ -459,14 +475,14 @@ def keyReply (kc : Fin n → B.KeyCoins) :
   | .sign _ _ => none
 
 omit [Nonempty B.BSig] [AddGroup Y] in
-open Classical in
 /-- **The relay of statements with the corruptions as requests of the multi-user game**: as
 `seRelay`, with a corruption of user `i` among the first `Q` requests the outer request `corrupt i`
 of MU-EUF-CMA^corr, answered from its reply, the user's key coins (`TwoRelay.answer₂`), and the
 other requests (a later corruption among them) answered as by `sideAnswer` (`TwoRelay.answer₁`). It reads no key coins: they come from the outer replies. No
 outer request is `publicKey 0` (`seTwo_outer_ne`), the dummy of the bridge. -/
 noncomputable def seTwo (pkOf : Fin n → B.PK)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub) {Q : ℕ}
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub) {Q : ℕ}
     (ds : Fin Q → B.Coins) :
     Quantum.TwoRelay (Req B PS adm n) (Resp B PS adm) (RelayStmt B PS adm n) PS.Proof
       (Signature.MURequest (Signature.SignOracle.ring B) n) (Signature.MUResponse B.core) where
@@ -497,7 +513,8 @@ omit [Nonempty B.BSig] [AddGroup Y] [Fintype T.Pub] [DecidableEq T.Pub] [Fintype
 /-- **The outer requests of `seTwo` are never the dummy `publicKey 0`**: the hypothesis of the
 bridge (`Quantum.ExtBridge`) holds for `seTwo` with the dummy `publicKey 0`. -/
 theorem seTwo_outer_ne [NeZero n] (pkOf : Fin n → B.PK)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub) {Q : ℕ}
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub) {Q : ℕ}
     (ds : Fin Q → B.Coins) :
     ∀ c r q, (seTwo B (PS := PS) (adm := adm) pkOf refuses pubOf ds).outer c r = some q →
       q ≠ .publicKey 0 := by
@@ -517,7 +534,8 @@ omit [Nonempty B.BSig] [AddGroup Y] [Fintype T.Pub] [DecidableEq T.Pub] [Fintype
   [DecidableEq RMsg] [Fintype T.Coins] [DecidableEq T.Coins] [Nonempty T.Coins] in
 /-- **At the key coins as outer replies, the relay with outer corruptions is `seRelay`.** -/
 theorem seTwo_atC (pkOf : Fin n → B.PK) (kcOf : Fin n → B.KeyCoins)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub) {Q : ℕ}
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub) {Q : ℕ}
     (ds : Fin Q → B.Coins) :
     (seTwo B (PS := PS) (adm := adm) pkOf refuses pubOf ds).atC (fun _ => keyReply B kcOf) =
       seRelay B pkOf kcOf refuses pubOf ds := by
@@ -529,11 +547,11 @@ theorem seTwo_atC (pkOf : Fin n → B.PK) (kcOf : Fin n → B.KeyCoins)
   | sign s R m => by_cases h : c < Q <;> simp [h]
   | sideSign j bm => exact bm.elim
 
-open Classical in
 /-- **The statement of a proof query**: the statement `stmtAt` of request number `c` when its base
 signature at the request's coins exists and verifies (`drawOkR`), `dummyStmt` otherwise. -/
 noncomputable def zkStmt (keys : Fin n → B.KeyCoins)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub) {Q : ℕ}
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub) {Q : ℕ}
     (ds : Fin Q → B.Coins) (c : ℕ) (r : Req B PS adm n) : RingStmt B :=
   if h : c < Q then
     if drawOkR B keys (ds ⟨c, h⟩) r then stmtAt B (fun i => B.pk (keys i)) refuses pubOf ds c r
@@ -546,6 +564,7 @@ finite type `W'`: request number `c` is sent as the proof query of its statement
 request) and the encoding of its witness `witAt`, and answered by `sideAnswer`. -/
 noncomputable def zkRelay {W' : Type} (enc : RingStmt B → RelayWit B → W')
     (keys : Fin n → B.KeyCoins) (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop)
+    [B.DecidableRefusal refuses]
     (pubOf : B.Coins → B.Pub) {Q : ℕ} (ds : Fin Q → B.Coins) :
     SideRelay (Req B PS adm n) (Resp B PS adm) (ProofQuery (RelayStmt B PS adm n) W')
       PS.Proof where
@@ -557,7 +576,8 @@ omit [Nonempty B.BSig] [AddGroup Y] [Fintype T.PK] [Fintype RMsg] [DecidableEq R
   [Fintype T.Pub] [DecidableEq T.Pub] [Fintype T.Coins] [DecidableEq T.Coins]
   [Nonempty T.Coins] [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins] in
 theorem seRelay_route_injective (pkOf : Fin n → B.PK) (kcOf : Fin n → B.KeyCoins)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub) {Q : ℕ}
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub) {Q : ℕ}
     (ds : Fin Q → B.Coins) (c : ℕ) :
     Function.Injective ((seRelay B pkOf kcOf refuses pubOf ds (PS := PS) (adm := adm)).route c) :=
   fun _ _ h => congrArg Prod.snd h
@@ -567,7 +587,8 @@ omit [Fintype T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.Pub] [Decidable
   [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins] in
 theorem zkRelay_route_injective {W' : Type} (enc : RingStmt B → RelayWit B → W')
     (keys : Fin n → B.KeyCoins)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub) {Q : ℕ}
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub) {Q : ℕ}
     (ds : Fin Q → B.Coins) (c : ℕ) :
     Function.Injective ((zkRelay B enc keys refuses pubOf ds (PS := PS) (adm := adm)).route c) :=
   fun _ _ h => congrArg (fun q => q.stmt.2) h
@@ -597,6 +618,7 @@ omit [Nonempty B.BSig] [AddGroup Y] [Fintype T.PK] [Fintype RMsg] [DecidableEq R
 /-- A request that is not a ring-signing request by a member that signs has the statement
 `dummyStmt`. -/
 theorem stmtAt_of_not {pkOf : Fin n → B.PK} {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop}
+    [B.DecidableRefusal refuses]
     {pubOf : B.Coins → B.Pub} {Q : ℕ} {ds : Fin Q → B.Coins} {c : ℕ} {r : Req B PS adm n}
     (h : ¬ ∃ h : c < Q, signerIn B pkOf refuses (ds ⟨c, h⟩) r) :
     stmtAt B pkOf refuses pubOf ds c r = dummyStmt B := by
@@ -611,6 +633,7 @@ omit [Nonempty B.BSig] [AddGroup Y] [Fintype T.PK] [Fintype RMsg] [DecidableEq R
   [Nonempty T.Coins] [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins] in
 /-- The statement of a ring-signing request by a member that signs. -/
 theorem stmtAt_sign {pkOf : Fin n → B.PK} {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop}
+    [B.DecidableRefusal refuses]
     {pubOf : B.Coins → B.Pub} {Q : ℕ} {ds : Fin Q → B.Coins} {c : ℕ} (hc : c < Q) {s : Fin n}
     {R : KeyRing (ofBase B PS adm).PK N} {m : (ofBase B PS adm).Msg}
     (h : signerIn (PS := PS) (adm := adm) B pkOf refuses (ds ⟨c, hc⟩) (.sign s R m)) :
@@ -633,12 +656,13 @@ theorem witAt_sign (keys : Fin n → B.KeyCoins) {Q : ℕ} {ds : Fin Q → B.Coi
   split_ifs
   rfl
 
-variable {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop} {pubOf : B.Coins → B.Pub}
+variable {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop} [B.DecidableRefusal refuses]
+  {pubOf : B.Coins → B.Pub}
 
 omit [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig] [Fintype T.PK] [Fintype RMsg]
   [DecidableEq RMsg] [Fintype T.Pub] [DecidableEq T.Pub] [Fintype T.Coins]
   [DecidableEq T.Coins] [Nonempty T.Coins] [Fintype T.KeyCoins] [DecidableEq T.KeyCoins]
-  [Nonempty T.KeyCoins] in
+  [Nonempty T.KeyCoins] [B.DecidableRefusal refuses] in
 /-- **An oracle-free signer refusing as `refuses` outputs a signature exactly when it does not
 refuse.** -/
 theorem bsigOf_eq_none_iff (href : B.RefusalOfCoins refuses) (keys : Fin n → B.KeyCoins)
@@ -796,7 +820,6 @@ noncomputable def checkedSplit (keys : Fin n → B.KeyCoins) (Q : ℕ) :
 
 variable {SC : Type} [Fintype SC] [DecidableEq SC]
 
-open Classical in
 /-- **The reply of the simulated challengers** to request number `i` at the key coins `keys` and
 the draw `d` (base signing coins and simulator coins), with the test `ok` of the draw: a ring-signing
 request by a member that signs (`signerIn`) whose draw passes `ok` runs `Sim` on its statement
@@ -804,9 +827,10 @@ request by a member that signs (`signerIn`) whose draw passes `ok` runs `Sim` on
 ring signature and appends the simulator's assignments; such a request failing `ok` gets `none`;
 any other request is answered by `sideAnswer` without queries or assignments. -/
 noncomputable def simReply (keys : Fin n → B.KeyCoins)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub)
-    (Sim : NARG.Simulator X Y (RingStmt B) PS.Proof SC) (Q : ℕ)
-    (ok : B.Coins → Req B PS adm n → Prop) (d : B.Coins × SC) (i : ℕ) (r : Req B PS adm n) :
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub) (Sim : NARG.Simulator X Y (RingStmt B) PS.Proof SC) (Q : ℕ)
+    (ok : B.Coins → Req B PS adm n → Prop) [∀ d r, Decidable (ok d r)] (d : B.Coins × SC) (i : ℕ)
+    (r : Req B PS adm n) :
     OracleProg X Y (Reply X Y (Resp B PS adm)) :=
   if signerIn B (fun i => B.pk (keys i)) refuses d.1 r then
     if ok d.1 r then
@@ -822,9 +846,10 @@ variable (PS adm) in
 /-- **The simulated challengers at fixed keys as split challengers**: per request uniform base
 signing coins and simulator coins, the replies `simReply` with the test `ok`. -/
 noncomputable def simSplit (keys : Fin n → B.KeyCoins)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub)
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub)
     (Sim : NARG.Simulator X Y (RingStmt B) PS.Proof SC) (Q : ℕ)
-    (ok : B.Coins → Req B PS adm n → Prop) :
+    (ok : B.Coins → Req B PS adm n → Prop) [∀ d r, Decidable (ok d r)] :
     SplitChallenger X Y (Req B PS adm n) (Resp B PS adm) Unit (B.Coins × SC) where
   keys := PMF.pure ()
   draw := (PMF.uniformOfFintype B.Coins).bind fun c => Sim.coins.map fun d => (c, d)
@@ -844,7 +869,8 @@ variable (PS adm) in
 /-- **The refusing challenger at fixed keys**: per request uniform signing coins, every request
 answered by `sideAnswer` without a proof (the key coins of a corrupted user, `none` otherwise). -/
 noncomputable def refuseSplit (keys : Fin n → B.KeyCoins)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub) (Q : ℕ) :
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub) (Q : ℕ) :
     SplitChallenger X Y (Req B PS adm n) (Resp B PS adm) Unit B.Coins where
   keys := PMF.pure ()
   draw := PMF.uniformOfFintype B.Coins
@@ -856,7 +882,8 @@ noncomputable def refuseSplit (keys : Fin n → B.KeyCoins)
 
 /-! ### The relays -/
 
-variable {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop} {pubOf : B.Coins → B.Pub}
+variable {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop} [B.DecidableRefusal refuses]
+  {pubOf : B.Coins → B.Pub}
 
 omit [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] [Fintype SC] [DecidableEq SC]
   [Nonempty B.Msg] [Nonempty B.Pub] [Nonempty B.BSig] [AddGroup Y] [Fintype TPS.Coins]
@@ -881,7 +908,6 @@ theorem sideAnswer_of_not {pkOf : Fin n → B.PK} {kcOf : Fin n → B.KeyCoins} 
 
 omit [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] [Fintype SC] [DecidableEq SC]
   [Fintype T.PK] [Fintype RMsg] [DecidableEq RMsg] [Fintype T.Pub] [DecidableEq T.Pub] in
-open Classical in
 omit [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins] in
 /-- **The checked game at fixed keys relays the real zero-knowledge challenger** of a prover `Pz`
 of statements `stmt x` (a program's statements) on the relayed proof queries (`zkRelay` with the
@@ -893,6 +919,7 @@ of the coins (`hpub`) and which refuses whenever `refuses` predicts it (`hsound`
 theorem relays_real (hB : B.OracleFree) (hpub : B.PubOfCoins pubOf)
     (hsound : B.RefusalSound refuses) {X₀ Wit₀ W' : Type} (stmt : RingStmt B → X₀)
     (fw : W' → Wit₀) (enc : RingStmt B → RelayWit B → W') {relH : Set (X₀ × Wit₀)}
+    [DecidablePred (· ∈ relH)]
     (hsign : ∀ x (w : RelayWit B), (x, w.toWit) ∈ ringRel B adm 0 → (stmt x, fw (enc x w)) ∈ relH)
     (hnil : ∀ x : RingStmt B, x.ring.1 = [] → ∀ y, (stmt x, y) ∉ relH)
     (Pz : NARG.Prover X Y X₀ Wit₀ PS.Proof PS.Coins)
@@ -1032,7 +1059,6 @@ theorem stmtAt_ring_eq_nil_iff (pkOf : Fin n → B.PK) {Q : ℕ} (ds : Fin Q →
 omit [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] [Fintype TPS.Coins]
   [DecidableEq TPS.Coins] [Nonempty TPS.Coins] [Fintype T.PK] [Fintype RMsg] [DecidableEq RMsg]
   [Fintype T.Pub] [DecidableEq T.Pub] in
-open Classical in
 omit [Fintype T.KeyCoins] [DecidableEq T.KeyCoins] [Nonempty T.KeyCoins] in
 /-- **The checked simulated challenger relays the simulated zero-knowledge challenger** of a
 simulator `Simz` of statements `stmt x` on the relayed proof queries (`zkRelay` with the witness
@@ -1040,6 +1066,7 @@ encoding `enc`), the simulated ring signatures being `Simz` read at `stmt`, with
 under the hypotheses of `relays_real` but `hsound`. -/
 theorem relays_sim_zk (hB : B.OracleFree) (hpub : B.PubOfCoins pubOf) {X₀ Wit₀ W' : Type} (stmt : RingStmt B → X₀)
     (fw : W' → Wit₀) (enc : RingStmt B → RelayWit B → W') {relH : Set (X₀ × Wit₀)}
+    [DecidablePred (· ∈ relH)]
     (hsign : ∀ x (w : RelayWit B), (x, w.toWit) ∈ ringRel B adm 0 → (stmt x, fw (enc x w)) ∈ relH)
     (hnil : ∀ x : RingStmt B, x.ring.1 = [] → ∀ y, (stmt x, y) ∉ relH)
     (keys : Fin n → B.KeyCoins) (Simz : NARG.Simulator X Y X₀ PS.Proof SC) {Q : ℕ}
@@ -1168,7 +1195,8 @@ omit [Nonempty B.BSig] [AddGroup Y] [Fintype X] [DecidableEq X] [Fintype Y] [Non
 /-- **The coins of the simulated challengers are uniform signing coins and independent simulator
 coins.** -/
 theorem coins_simSplit (keys : Fin n → B.KeyCoins) (Sim : NARG.Simulator X Y (RingStmt B) PS.Proof SC)
-    (Q : ℕ) (ok : B.Coins → Req B PS adm n → Prop) (ds : Fin Q → B.Coins) (scs : Fin Q → SC) :
+    (Q : ℕ) (ok : B.Coins → Req B PS adm n → Prop) [∀ d r, Decidable (ok d r)]
+    (ds : Fin Q → B.Coins) (scs : Fin Q → SC) :
     (simSplit PS adm keys refuses pubOf Sim Q ok).toChallenger.coins
         ((coinSplit Q B.Coins SC).symm (ds, scs)) =
       PMF.uniformOfFintype (Fin Q → B.Coins) ds * (PMF.pi fun _ => Sim.coins) scs := by

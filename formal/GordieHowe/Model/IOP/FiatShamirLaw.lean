@@ -234,6 +234,7 @@ structure WIChoice (X W : Type) where
   wit₀ : W
   /-- The witness answered in the experiment `D_1`. -/
   wit₁ : W
+deriving DecidableEq
 
 /-- **The salt term**: `√(log c / (2 · 2^(8k)))` for `c` choices of the adversary (its
 statement and witness pairs, `WIAdversary.choices`) and `k`-byte Fiat–Shamir salts. -/

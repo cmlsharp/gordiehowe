@@ -24,11 +24,110 @@ open _root_.GordieHowe.Generated.Falcon512.Native.QROMParams
 open Program (program idx0 idx6 idx7 idx8 idx9 idx10 idx11 idx12 idx13)
 open ShapeFacts
 
-/-- **Every round is a row of its family.** Closed data: no reading of the program. -/
+/-- The rounds of permutation `0` are rows of their families (closed data). -/
+private theorem roundRow_mem_0 : ∀ t : Fin 24,
+    (roundSrcIsRef ⟨0, by decide⟩ t = true →
+      roundRow ⟨0, by decide⟩ t ∈ Shapes.family_rounds_0_rows) ∧
+      (roundSrcIsRef ⟨0, by decide⟩ t = false →
+        roundRow ⟨0, by decide⟩ t ∈ Shapes.family_rounds_1_rows) := by
+  decide +kernel
+
+/-- The rounds of permutation `1` are rows of their families (closed data). -/
+private theorem roundRow_mem_1 : ∀ t : Fin 24,
+    (roundSrcIsRef ⟨1, by decide⟩ t = true →
+      roundRow ⟨1, by decide⟩ t ∈ Shapes.family_rounds_0_rows) ∧
+      (roundSrcIsRef ⟨1, by decide⟩ t = false →
+        roundRow ⟨1, by decide⟩ t ∈ Shapes.family_rounds_1_rows) := by
+  decide +kernel
+
+/-- The rounds of permutation `2` are rows of their families (closed data). -/
+private theorem roundRow_mem_2 : ∀ t : Fin 24,
+    (roundSrcIsRef ⟨2, by decide⟩ t = true →
+      roundRow ⟨2, by decide⟩ t ∈ Shapes.family_rounds_0_rows) ∧
+      (roundSrcIsRef ⟨2, by decide⟩ t = false →
+        roundRow ⟨2, by decide⟩ t ∈ Shapes.family_rounds_1_rows) := by
+  decide +kernel
+
+/-- The rounds of permutation `3` are rows of their families (closed data). -/
+private theorem roundRow_mem_3 : ∀ t : Fin 24,
+    (roundSrcIsRef ⟨3, by decide⟩ t = true →
+      roundRow ⟨3, by decide⟩ t ∈ Shapes.family_rounds_0_rows) ∧
+      (roundSrcIsRef ⟨3, by decide⟩ t = false →
+        roundRow ⟨3, by decide⟩ t ∈ Shapes.family_rounds_1_rows) := by
+  decide +kernel
+
+/-- The rounds of permutation `4` are rows of their families (closed data). -/
+private theorem roundRow_mem_4 : ∀ t : Fin 24,
+    (roundSrcIsRef ⟨4, by decide⟩ t = true →
+      roundRow ⟨4, by decide⟩ t ∈ Shapes.family_rounds_0_rows) ∧
+      (roundSrcIsRef ⟨4, by decide⟩ t = false →
+        roundRow ⟨4, by decide⟩ t ∈ Shapes.family_rounds_1_rows) := by
+  decide +kernel
+
+/-- The rounds of permutation `5` are rows of their families (closed data). -/
+private theorem roundRow_mem_5 : ∀ t : Fin 24,
+    (roundSrcIsRef ⟨5, by decide⟩ t = true →
+      roundRow ⟨5, by decide⟩ t ∈ Shapes.family_rounds_0_rows) ∧
+      (roundSrcIsRef ⟨5, by decide⟩ t = false →
+        roundRow ⟨5, by decide⟩ t ∈ Shapes.family_rounds_1_rows) := by
+  decide +kernel
+
+/-- The rounds of permutation `6` are rows of their families (closed data). -/
+private theorem roundRow_mem_6 : ∀ t : Fin 24,
+    (roundSrcIsRef ⟨6, by decide⟩ t = true →
+      roundRow ⟨6, by decide⟩ t ∈ Shapes.family_rounds_0_rows) ∧
+      (roundSrcIsRef ⟨6, by decide⟩ t = false →
+        roundRow ⟨6, by decide⟩ t ∈ Shapes.family_rounds_1_rows) := by
+  decide +kernel
+
+/-- The rounds of permutation `7` are rows of their families (closed data). -/
+private theorem roundRow_mem_7 : ∀ t : Fin 24,
+    (roundSrcIsRef ⟨7, by decide⟩ t = true →
+      roundRow ⟨7, by decide⟩ t ∈ Shapes.family_rounds_0_rows) ∧
+      (roundSrcIsRef ⟨7, by decide⟩ t = false →
+        roundRow ⟨7, by decide⟩ t ∈ Shapes.family_rounds_1_rows) := by
+  decide +kernel
+
+/-- The rounds of permutation `8` are rows of their families (closed data). -/
+private theorem roundRow_mem_8 : ∀ t : Fin 24,
+    (roundSrcIsRef ⟨8, by decide⟩ t = true →
+      roundRow ⟨8, by decide⟩ t ∈ Shapes.family_rounds_0_rows) ∧
+      (roundSrcIsRef ⟨8, by decide⟩ t = false →
+        roundRow ⟨8, by decide⟩ t ∈ Shapes.family_rounds_1_rows) := by
+  decide +kernel
+
+/-- The rounds of permutation `9` are rows of their families (closed data). -/
+private theorem roundRow_mem_9 : ∀ t : Fin 24,
+    (roundSrcIsRef ⟨9, by decide⟩ t = true →
+      roundRow ⟨9, by decide⟩ t ∈ Shapes.family_rounds_0_rows) ∧
+      (roundSrcIsRef ⟨9, by decide⟩ t = false →
+        roundRow ⟨9, by decide⟩ t ∈ Shapes.family_rounds_1_rows) := by
+  decide +kernel
+
+/-- The rounds of permutation `10` are rows of their families (closed data). -/
+private theorem roundRow_mem_10 : ∀ t : Fin 24,
+    (roundSrcIsRef ⟨10, by decide⟩ t = true →
+      roundRow ⟨10, by decide⟩ t ∈ Shapes.family_rounds_0_rows) ∧
+      (roundSrcIsRef ⟨10, by decide⟩ t = false →
+        roundRow ⟨10, by decide⟩ t ∈ Shapes.family_rounds_1_rows) := by
+  decide +kernel
+
+/-- **Every round is a row of its family.** Closed data: no reading of the program. One kernel
+check per permutation (`roundRow_mem_0` to `roundRow_mem_10`). -/
 theorem roundRow_mem : ∀ (p : Fin 11) (t : Fin 24),
     (roundSrcIsRef p t = true → roundRow p t ∈ Shapes.family_rounds_0_rows) ∧
-      (roundSrcIsRef p t = false → roundRow p t ∈ Shapes.family_rounds_1_rows) := by
-  decide +kernel
+      (roundSrcIsRef p t = false → roundRow p t ∈ Shapes.family_rounds_1_rows)
+  | ⟨0, _⟩ => roundRow_mem_0
+  | ⟨1, _⟩ => roundRow_mem_1
+  | ⟨2, _⟩ => roundRow_mem_2
+  | ⟨3, _⟩ => roundRow_mem_3
+  | ⟨4, _⟩ => roundRow_mem_4
+  | ⟨5, _⟩ => roundRow_mem_5
+  | ⟨6, _⟩ => roundRow_mem_6
+  | ⟨7, _⟩ => roundRow_mem_7
+  | ⟨8, _⟩ => roundRow_mem_8
+  | ⟨9, _⟩ => roundRow_mem_9
+  | ⟨10, _⟩ => roundRow_mem_10
 
 /-- **The shapes of the `264` rounds.** -/
 theorem roundShapes (p : Fin 11) (t : Fin 24) :

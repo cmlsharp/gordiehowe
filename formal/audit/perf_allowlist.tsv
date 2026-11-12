@@ -48,5 +48,3 @@ GordieHowe.MLDSA44.Emulated.ROMParams.honest	GordieHoweCerts.Applications.MLDSA4
 GordieHowe.MLDSA44.Emulated.ROMParams.predCorr	GordieHoweCerts.Applications.MLDSA44.Emulated.ROMParams.Frontend.Embed	0.1	5.6	7.0	kernel check of a concrete table	one decide over the data under a short wrapper
 GordieHowe.MLDSA44.Emulated.QROMParams.predCorr	GordieHoweCerts.Applications.MLDSA44.Emulated.QROMParams.Frontend.Basic	0.1	5.4	6.8	kernel check of a concrete table	one decide over the data under a short wrapper
 GordieHowe.MLDSA44.idxLevel_toList	GordieHoweCerts.Applications.MLDSA44.Frontend.Select	0.1	5.4	6.8	kernel check of a concrete table	the body is one decide over the data
-GordieHowe.Falcon512.Native.QROMParams.HashShapeFacts.roundRow_mem	GordieHoweCerts.Applications.Falcon512.Native.QROMParams.HashShapeFacts	0.1	5.2	6.5	kernel check of a concrete table	the body is one decide over the data; QROM twin of the ROM row
-GordieHowe.Falcon512.Native.ROMParams.HashShapeFacts.roundRow_mem	GordieHoweCerts.Applications.Falcon512.Native.ROMParams.HashShapeFacts	0.1	5.1	6.4	kernel check of a concrete table	the body is one decide over the data

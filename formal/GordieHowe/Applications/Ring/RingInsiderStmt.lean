@@ -112,6 +112,7 @@ round error of `C`, and `2 Q εc`. -/
 theorem insiderForgeProb_le_zk [Nonempty B₁.Msg] [Nonempty B₁.Pub] [Nonempty B₁.BSig]
     [hk : NeZero TD.k] {errc : ℝ≥0} (hE : Hc.app.ErrorBound fun _ => errc) (Sd : C.Sound)
     (hB : B₁.OracleFree) {refuses : KeyRing B₁.PK N → ℕ → B₁.Msg → B₁.Coins → Prop}
+    [B₁.DecidableRefusal refuses]
     {pubOf : B₁.Coins → B₁.Pub} (hpub : B₁.PubOfCoins pubOf) (href : B₁.RefusalOfCoins refuses)
     {εc : ℝ≥0∞} (hcorr : B₁.CorrectWithin εc) (zkf : V.ZKFacts)
     (T : (TD.setting kS hb).model.Preimages) {n t : ℕ}

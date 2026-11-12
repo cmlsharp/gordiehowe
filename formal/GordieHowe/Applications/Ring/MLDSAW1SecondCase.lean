@@ -192,8 +192,9 @@ theorem muSufSigProb_le_msis_add_fresh (hp : p.isApproved) (A : MUAdversary SO n
           (Lattice.msisBoundU p) n (msisReduction A Q) +
         (muLaw A Q).toOuterMeasure {x | ∃ q ∈ x.2.2, FreshW1Forges x.1 x.2.1 q.1 q.2} := by
   classical
+  -- The game through its equation, so that `measure_mono` meets the same outer measure.
+  rw [muSufSigProb]
   refine le_trans (MeasureTheory.measure_mono (μ := (muLaw A Q).toOuterMeasure)
-    (s := {x | ∃ q ∈ x.2.2, SigStrongForges x.1 x.2.1 q.1 q.2})
     (t := {x | ∃ q ∈ x.2.2, SameW1Forges x.1 x.2.1 q.1 q.2} ∪
       {x | ∃ q ∈ x.2.2, FreshW1Forges x.1 x.2.1 q.1 q.2}) fun x hx => ?_)
     ((MeasureTheory.measure_union_le _ _).trans (add_le_add ?_ le_rfl))

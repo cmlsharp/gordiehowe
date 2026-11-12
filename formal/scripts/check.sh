@@ -34,11 +34,14 @@
 #                    (the headline theorems of the applications' instantiations are there).
 #   --paper-dir DIR  also check the paper's LaTeX source in DIR against GordieHoweCerts/PaperManifest.lean
 #                    (scripts/paper_manifest.py --check); without it that step is skipped.
-#   --perf REF       at the end, profile the modules changed since REF's merge base and run the
-#                    performance gate on them (scripts/perf_profile.sh, scripts/perf_gate.py,
+#   --perf REF       at the end, profile the modules changed since REF's merge base and their
+#                    dependents (the direct importers of a changed module and the transitive
+#                    importers with a row in audit/perf_baseline.tsv) and run the performance
+#                    gate on them (scripts/perf_profile.sh, scripts/perf_gate.py,
 #                    audit/PERF.md); a gate failure fails the check. GordieHoweCerts'
 #                    hand-written modules are profiled only with --certs.
 #   --perf-report    with --perf, report only: the gate's result does not change the exit status.
+#   --perf-changed-only  with --perf, profile the changed modules without their dependents.
 #
 # Every build step's per-module result lines from Lake (`✔ [i/n] Built <module> (<time>)`, and the
 # failures') go to .lake/check/build_times.txt, with or without --quiet, so later checks can rank
@@ -55,7 +58,7 @@ certs=
 paper_dir=
 perf_ref=
 perf_strict=1
-usage="usage: scripts/check.sh [--quiet] [--dev] [--certs] [--paper-dir DIR] [--perf REF [--perf-report]]"
+usage="usage: scripts/check.sh [--quiet] [--dev] [--certs] [--paper-dir DIR] [--perf REF [--perf-report] [--perf-changed-only]]"
 while [ $# -gt 0 ]; do
   case "$1" in
     --quiet) quiet=1; shift ;;
@@ -69,10 +72,12 @@ while [ $# -gt 0 ]; do
       [ $# -ge 2 ] || { echo "check.sh: --perf needs a git revision" >&2; exit 2; }
       perf_ref=$2; shift 2 ;;
     --perf-report) perf_strict=; perf_report=1; shift ;;
+    --perf-changed-only) perf_changed_only=1; shift ;;
     *) echo "$usage" >&2; exit 2 ;;
   esac
 done
 [ -z "${perf_report:-}" ] || [ -n "$perf_ref" ] || { echo "check.sh: --perf-report needs --perf REF" >&2; exit 2; }
+[ -z "${perf_changed_only:-}" ] || [ -n "$perf_ref" ] || { echo "check.sh: --perf-changed-only needs --perf REF" >&2; exit 2; }
 cd "$(dirname "$0")/.."
 
 # Vendored proof subsets checked like GordieHowe (provenance in Vendor/rs-provenance.json).
@@ -402,7 +407,17 @@ fi
 
 if [ -n "$perf_ref" ]; then
   echo
-  echo "== performance gate (modules changed since $perf_ref; audit/PERF.md) =="
+  # The changed modules' dependents are profiled with them (--perf-changed-only: without), and
+  # the roles file tells the gate which modules are which.
+  perf_dep=(--dependents --roles .lake/perf/roles.tsv)
+  perf_roles=(--roles .lake/perf/roles.tsv)
+  perf_what="modules changed since $perf_ref and their dependents"
+  if [ -n "${perf_changed_only:-}" ]; then
+    perf_dep=()
+    perf_roles=()
+    perf_what="modules changed since $perf_ref, without their dependents"
+  fi
+  echo "== performance gate ($perf_what; audit/PERF.md) =="
   if [ -n "$perf_strict" ]; then echo "(strict: a failure fails the check)"; else echo "(report only)"; fi
   mkdir -p .lake/perf
   perf_status=0
@@ -410,10 +425,10 @@ if [ -n "$perf_ref" ]; then
   # are skipped, with a note (an earlier build's oleans may be stale).
   perf_certs=()
   [ -n "$certs" ] || { perf_certs=(--no-certs); echo "(GordieHoweCerts' modules skipped: --certs builds them)"; }
-  if scripts/perf_profile.sh "${perf_certs[@]}" "$perf_ref" -o .lake/perf/profile.tsv; then
+  if scripts/perf_profile.sh "${perf_certs[@]}" "${perf_dep[@]}" "$perf_ref" -o .lake/perf/profile.tsv; then
     perf_base=()
     [ -f audit/perf_baseline.tsv ] && perf_base=(--base audit/perf_baseline.tsv)
-    python3 -I scripts/perf_gate.py .lake/perf/profile.tsv "${perf_base[@]}" || perf_status=1
+    python3 -I scripts/perf_gate.py .lake/perf/profile.tsv "${perf_base[@]}" "${perf_roles[@]}" || perf_status=1
   else
     echo "perf_profile.sh failed"
     perf_status=1

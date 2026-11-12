@@ -329,21 +329,21 @@ theorem entryLaw_eq_map_eside (b : Bool) :
 
 variable (stmtOf : Ch → Pub → Stmt) (witOf : Bool → Ch → BSig → Wit) (rel : Set (Stmt × Wit))
 
-open Classical in
 /-- The witness of user `1` in the hybrid choice, given user `0`'s valid entry `p₀`: user `1`'s
 when its entry is valid with the same public value, user `0`'s otherwise. -/
-noncomputable def hybWit₁ (ch : Ch) (p₀ : Pub × BSig) : Option (Pub × BSig) → Wit
+noncomputable def hybWit₁ [DecidablePred (· ∈ rel)] (ch : Ch) (p₀ : Pub × BSig) :
+    Option (Pub × BSig) → Wit
   | some p₁ =>
     if p₁.1 = p₀.1 ∧ (stmtOf ch p₁.1, witOf true ch p₁.2) ∈ rel then witOf true ch p₁.2
     else witOf false ch p₀.2
   | none => witOf false ch p₀.2
 
-open Classical in
 /-- **The hybrid choice of a challenge at a coupled entry**: when user `0`'s entry is valid, its
 statement and witness, with user `1`'s witness when that is valid with the same public value; when
 user `0`'s entry is invalid and user `1`'s valid, user `1`'s statement and witness twice; otherwise
 (user `0` refuses, or neither is valid) `none`. -/
-noncomputable def ehybChoice (ch : Ch) : EPair Pub BSig → Option (SPBCS.WIChoice Stmt Wit)
+noncomputable def ehybChoice [DecidablePred (· ∈ rel)] (ch : Ch) :
+    EPair Pub BSig → Option (SPBCS.WIChoice Stmt Wit)
   | (none, _) => none
   | (some p₀, x₁) =>
     if (stmtOf ch p₀.1, witOf false ch p₀.2) ∈ rel then
@@ -358,7 +358,8 @@ noncomputable def ehybChoice (ch : Ch) : EPair Pub BSig → Option (SPBCS.WIChoi
 
 omit [Fintype Ch] [DecidableEq Ch] [Fintype Pub] [Fintype BSig] [DecidableEq BSig] in
 /-- **Every hybrid choice is admissible.** -/
-theorem ehybChoice_admissible {ch : Ch} {x : EPair Pub BSig} {w : SPBCS.WIChoice Stmt Wit}
+theorem ehybChoice_admissible [DecidablePred (· ∈ rel)] {ch : Ch}
+    {x : EPair Pub BSig} {w : SPBCS.WIChoice Stmt Wit}
     (hw : ehybChoice stmtOf witOf rel ch x = some w) :
     (w.stmt, w.wit₀) ∈ rel ∧ (w.stmt, w.wit₁) ∈ rel := by
   classical
@@ -387,21 +388,22 @@ variable (choice : (j : Fin Q) → Ω → PubHist Pub Pf j → Ch) (act : Finset
 
 /-- **The hybrid two-witness choices** at the coupled table `T`: in round `j`, the hybrid choice of
 the round's challenge at its coupled entry when the challenge is active, `none` otherwise. -/
-noncomputable def ehybrid (T : CETable Ch Pub BSig Q) :
+noncomputable def ehybrid [DecidablePred (· ∈ rel)] (T : CETable Ch Pub BSig Q) :
     (j : Fin Q) → Ω → PubHist Pub Pf j → Option (SPBCS.WIChoice Stmt Wit) :=
   fun j h hist => if choice j h hist ∈ act then
     ehybChoice stmtOf witOf rel (choice j h hist) (T j (choice j h hist)) else none
 
-open Classical in
 /-- **The hybrid choice set** at the coupled table `T`: the hybrid choices of the active challenges at
 every round. -/
-noncomputable def ehybridSet (T : CETable Ch Pub BSig Q) : Finset (SPBCS.WIChoice Stmt Wit) :=
+noncomputable def ehybridSet [DecidablePred (· ∈ rel)] [DecidableEq Stmt] [DecidableEq Wit]
+    (T : CETable Ch Pub BSig Q) : Finset (SPBCS.WIChoice Stmt Wit) :=
   ((Finset.univ : Finset (Fin Q)) ×ˢ act).biUnion fun p =>
     (ehybChoice stmtOf witOf rel p.2 (T p.1 p.2)).toFinset
 
 omit [Fintype Ch] [DecidableEq Ch] [Fintype Pub] [Fintype BSig] [DecidableEq BSig] in
 /-- **The hybrid choice set has at most `Q · |act|` choices.** -/
-theorem card_ehybridSet_le (T : CETable Ch Pub BSig Q) :
+theorem card_ehybridSet_le [DecidablePred (· ∈ rel)] [DecidableEq Stmt] [DecidableEq Wit]
+    (T : CETable Ch Pub BSig Q) :
     (ehybridSet (stmtOf := stmtOf) (witOf := witOf) (rel := rel) act T).card ≤ Q * act.card := by
   classical
   refine Finset.card_biUnion_le.trans ?_
@@ -414,7 +416,8 @@ theorem card_ehybridSet_le (T : CETable Ch Pub BSig Q) :
 
 omit [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Fintype Pub] [Fintype BSig] [DecidableEq BSig] in
 /-- **Every hybrid choice of a round is in the hybrid choice set.** -/
-theorem ehybrid_mem (T : CETable Ch Pub BSig Q) (j : Fin Q) (h : Ω) (hist : PubHist Pub Pf j)
+theorem ehybrid_mem [DecidablePred (· ∈ rel)] [DecidableEq Stmt] [DecidableEq Wit]
+    (T : CETable Ch Pub BSig Q) (j : Fin Q) (h : Ω) (hist : PubHist Pub Pf j)
     (x : SPBCS.WIChoice Stmt Wit)
     (hx : ehybrid (stmtOf := stmtOf) (witOf := witOf) (rel := rel) choice act T j h hist = some x) :
     x ∈ ehybridSet (stmtOf := stmtOf) (witOf := witOf) (rel := rel) act T := by
@@ -426,7 +429,8 @@ theorem ehybrid_mem (T : CETable Ch Pub BSig Q) (j : Fin Q) (h : Ω) (hist : Pub
 
 omit [Fintype Ch] [DecidableEq Ch] [Fintype Pub] [Fintype BSig] [DecidableEq BSig] in
 /-- **Every choice of the hybrid choice set is admissible.** -/
-theorem ehybridSet_admissible (T : CETable Ch Pub BSig Q) :
+theorem ehybridSet_admissible [DecidablePred (· ∈ rel)] [DecidableEq Stmt] [DecidableEq Wit]
+    (T : CETable Ch Pub BSig Q) :
     ∀ c ∈ ehybridSet (stmtOf := stmtOf) (witOf := witOf) (rel := rel) act T,
       (c.stmt, c.wit₀) ∈ rel ∧ (c.stmt, c.wit₁) ∈ rel := by
   classical
@@ -451,7 +455,7 @@ def bad₁ (ch : Ch) (x : EPair Pub BSig) : Prop :=
 omit [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Fintype Pub] [Fintype BSig] [DecidableEq BSig] in
 /-- **In experiment `0` the game selects as the hybrid with the first witnesses** unless the round's
 coupled entry is bad for experiment `0`. -/
-theorem entrySel_false_ne (T : CETable Ch Pub BSig Q) (j : Fin Q) (h : Ω)
+theorem entrySel_false_ne [DecidablePred (· ∈ rel)] (T : CETable Ch Pub BSig Q) (j : Fin Q) (h : Ω)
     (hist : PubHist Pub Pf j)
     (hne : entrySel choice stmtOf witOf false (eside false T) j h hist ≠
       wiSelector (ehybrid (stmtOf := stmtOf) (witOf := witOf) (rel := rel) choice act T)
@@ -476,7 +480,7 @@ theorem entrySel_false_ne (T : CETable Ch Pub BSig Q) (j : Fin Q) (h : Ω)
 omit [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Fintype Pub] [Fintype BSig] [DecidableEq BSig] in
 /-- **In experiment `1` the game selects as the hybrid with the second witnesses** unless the round's
 coupled entry is bad for experiment `1`. -/
-theorem entrySel_true_ne (T : CETable Ch Pub BSig Q) (j : Fin Q) (h : Ω)
+theorem entrySel_true_ne [DecidablePred (· ∈ rel)] (T : CETable Ch Pub BSig Q) (j : Fin Q) (h : Ω)
     (hist : PubHist Pub Pf j)
     (hne : entrySel choice stmtOf witOf true (eside true T) j h hist ≠
       wiSelector (ehybrid (stmtOf := stmtOf) (witOf := witOf) (rel := rel) choice act T)

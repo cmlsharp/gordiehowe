@@ -1055,7 +1055,7 @@ theorem sum_vLaw_saltEnvOn_eq (hemb : Function.Injective emb) (hμH : IsUniformO
   rw [hsum, hsum]
   refine Finset.sum_congr rfl fun c _ => ?_
   simp only [← Finset.mul_sum]
-  congr 1
+  refine congrArg ((u * (ζ c).toReal) * ·) ?_
   let g : (X → Y) × (Fin K → U → Y₁) → ℝ := fun p =>
     (μH p.1).toReal * D.acceptProbAt (freshEnv ans₁ μH ζ ν) post ((p.1, slicesOn emb e p.1 ρ, c), ρ)
   have h1 : ∀ p : (X → Y) × (Fin K → U → Y₁),

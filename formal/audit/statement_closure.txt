@@ -326,7 +326,7 @@
 # transitive	GordieHowe.Falcon512.Ring.Carrier.QROMParams.convertedScheme.anonAdvantage_le	4099299893429064154
 # transitive	GordieHowe.Falcon512.Ring.Carrier.QROMParams.convertedScheme.completeAtWithin	7232350052886488160
 # transitive	GordieHowe.Falcon512.Ring.Carrier.QROMParams.convertedScheme.completeWithin	687661672419358913
-# transitive	GordieHowe.Falcon512.Ring.Carrier.QROMParams.convertedScheme.insiderForgeProb_le	14937404697120200485
+# transitive	GordieHowe.Falcon512.Ring.Carrier.QROMParams.convertedScheme.insiderForgeProb_le	13178436194495318240
 # transitive	GordieHowe.Falcon512.Ring.Carrier.ROMParams.bindingScheme.anonAdvantage_le	16529804303388879252
 # transitive	GordieHowe.Falcon512.Ring.Carrier.ROMParams.bindingScheme.completeAtWithin	12150072621530414232
 # transitive	GordieHowe.Falcon512.Ring.Carrier.ROMParams.bindingScheme.completeWithin	10023153039669614079
@@ -335,7 +335,7 @@
 # transitive	GordieHowe.Falcon512.Ring.Carrier.ROMParams.convertedScheme.anonAdvantage_le	12653805304455899281
 # transitive	GordieHowe.Falcon512.Ring.Carrier.ROMParams.convertedScheme.completeAtWithin	8039780817002824916
 # transitive	GordieHowe.Falcon512.Ring.Carrier.ROMParams.convertedScheme.completeWithin	7379717223315473828
-# transitive	GordieHowe.Falcon512.Ring.Carrier.ROMParams.convertedScheme.insiderForgeProb_le	3474510388104132385
+# transitive	GordieHowe.Falcon512.Ring.Carrier.ROMParams.convertedScheme.insiderForgeProb_le	8915056878519941683
 # transitive	GordieHowe.Falcon512.Ring.Native.QROMParams.bindingScheme.anonAdvantage_le	2695697717916999703
 # transitive	GordieHowe.Falcon512.Ring.Native.QROMParams.bindingScheme.completeAtWithin	15793743217297812138
 # transitive	GordieHowe.Falcon512.Ring.Native.QROMParams.bindingScheme.completeWithin	10148750411369235024
@@ -344,7 +344,7 @@
 # transitive	GordieHowe.Falcon512.Ring.Native.QROMParams.convertedScheme.anonAdvantage_le	5488232199610460030
 # transitive	GordieHowe.Falcon512.Ring.Native.QROMParams.convertedScheme.completeAtWithin	3423404427633751084
 # transitive	GordieHowe.Falcon512.Ring.Native.QROMParams.convertedScheme.completeWithin	2318174796722925003
-# transitive	GordieHowe.Falcon512.Ring.Native.QROMParams.convertedScheme.insiderForgeProb_le	1623500307635520230
+# transitive	GordieHowe.Falcon512.Ring.Native.QROMParams.convertedScheme.insiderForgeProb_le	15062219780493495163
 # transitive	GordieHowe.Falcon512.Ring.Native.ROMParams.bindingScheme.anonAdvantage_le	226690509419997345
 # transitive	GordieHowe.Falcon512.Ring.Native.ROMParams.bindingScheme.completeAtWithin	13786208871104418929
 # transitive	GordieHowe.Falcon512.Ring.Native.ROMParams.bindingScheme.completeWithin	18219686014809237675
@@ -353,7 +353,7 @@
 # transitive	GordieHowe.Falcon512.Ring.Native.ROMParams.convertedScheme.anonAdvantage_le	9729442444187768573
 # transitive	GordieHowe.Falcon512.Ring.Native.ROMParams.convertedScheme.completeAtWithin	9374713009907216375
 # transitive	GordieHowe.Falcon512.Ring.Native.ROMParams.convertedScheme.completeWithin	5848797412369176950
-# transitive	GordieHowe.Falcon512.Ring.Native.ROMParams.convertedScheme.insiderForgeProb_le	10637266521218172976
+# transitive	GordieHowe.Falcon512.Ring.Native.ROMParams.convertedScheme.insiderForgeProb_le	4018461029854437103
 # transitive	GordieHowe.GKR.LayeredCircuit.hvzk	15526773072931893368
 # transitive	GordieHowe.IOP.CausalComplete.par	11164318609490393165
 # transitive	GordieHowe.IOP.CausalComplete.seq	8692310520261162448
@@ -433,28 +433,28 @@
 # transitive	GordieHowe.MLDSA44.Ring.Carrier.QROMParams.bindingScheme.jointForgeProb_le	13048953584495353629
 # transitive	GordieHowe.MLDSA44.Ring.Carrier.QROMParams.convertedScheme.anonAdvantage_le	8590813314860418528
 # transitive	GordieHowe.MLDSA44.Ring.Carrier.QROMParams.convertedScheme.completeWithin	9979240818603525191
-# transitive	GordieHowe.MLDSA44.Ring.Carrier.QROMParams.convertedScheme.insiderForgeProb_le	12784970029832855002
+# transitive	GordieHowe.MLDSA44.Ring.Carrier.QROMParams.convertedScheme.insiderForgeProb_le	10836841381230761505
 # transitive	GordieHowe.MLDSA44.Ring.Carrier.ROMParams.bindingScheme.anonAdvantage_le	12161358249726639757
 # transitive	GordieHowe.MLDSA44.Ring.Carrier.ROMParams.bindingScheme.completeWithin	17157165142046485528
 # transitive	GordieHowe.MLDSA44.Ring.Carrier.ROMParams.bindingScheme.insiderForgeProb_le	11360287205205836917
 # transitive	GordieHowe.MLDSA44.Ring.Carrier.ROMParams.bindingScheme.jointForgeProb_le	10658028168943602905
 # transitive	GordieHowe.MLDSA44.Ring.Carrier.ROMParams.convertedScheme.anonAdvantage_le	10454106543578638101
 # transitive	GordieHowe.MLDSA44.Ring.Carrier.ROMParams.convertedScheme.completeWithin	9704204224274399014
-# transitive	GordieHowe.MLDSA44.Ring.Carrier.ROMParams.convertedScheme.insiderForgeProb_le	15345440497368597788
+# transitive	GordieHowe.MLDSA44.Ring.Carrier.ROMParams.convertedScheme.insiderForgeProb_le	7842048017412621450
 # transitive	GordieHowe.MLDSA44.Ring.Native.QROMParams.bindingScheme.anonAdvantage_le	1478334853750899526
 # transitive	GordieHowe.MLDSA44.Ring.Native.QROMParams.bindingScheme.completeWithin	8373156650568032361
 # transitive	GordieHowe.MLDSA44.Ring.Native.QROMParams.bindingScheme.insiderForgeProb_le	10923382367220688824
 # transitive	GordieHowe.MLDSA44.Ring.Native.QROMParams.bindingScheme.jointForgeProb_le	13240351975757106286
 # transitive	GordieHowe.MLDSA44.Ring.Native.QROMParams.convertedScheme.anonAdvantage_le	895183931824916422
 # transitive	GordieHowe.MLDSA44.Ring.Native.QROMParams.convertedScheme.completeWithin	8871709445586081456
-# transitive	GordieHowe.MLDSA44.Ring.Native.QROMParams.convertedScheme.insiderForgeProb_le	10143603271887683429
+# transitive	GordieHowe.MLDSA44.Ring.Native.QROMParams.convertedScheme.insiderForgeProb_le	18284860460592115409
 # transitive	GordieHowe.MLDSA44.Ring.Native.ROMParams.bindingScheme.anonAdvantage_le	5653633868396612869
 # transitive	GordieHowe.MLDSA44.Ring.Native.ROMParams.bindingScheme.completeWithin	16222195222594045424
 # transitive	GordieHowe.MLDSA44.Ring.Native.ROMParams.bindingScheme.insiderForgeProb_le	2929750034949886609
 # transitive	GordieHowe.MLDSA44.Ring.Native.ROMParams.bindingScheme.jointForgeProb_le	11095015999275963660
 # transitive	GordieHowe.MLDSA44.Ring.Native.ROMParams.convertedScheme.anonAdvantage_le	8096026917137250610
 # transitive	GordieHowe.MLDSA44.Ring.Native.ROMParams.convertedScheme.completeWithin	10346352328841017162
-# transitive	GordieHowe.MLDSA44.Ring.Native.ROMParams.convertedScheme.insiderForgeProb_le	8728720552662655252
+# transitive	GordieHowe.MLDSA44.Ring.Native.ROMParams.convertedScheme.insiderForgeProb_le	6737265699636123038
 # transitive	GordieHowe.NARG.QROM.Verifier.acceptsFalse_le_of_outcomeDistLE	6037980007240624808
 # transitive	GordieHowe.NARG.ROM.Adversary.acceptsFalse_le	11332986731338592110
 # transitive	GordieHowe.PackingStage.unpack_tower	15902168599172810801
@@ -507,14 +507,14 @@
 # transitive	GordieHowe.Ring.StmtVerifiesRing.completeAtWithin	8559359811625926231
 # transitive	GordieHowe.Ring.StmtVerifiesRing.completeWithin	1237220128652177069
 # transitive	GordieHowe.Ring.StmtVerifiesRing.insiderForgeProb_le_muEufProbWithin_std	570078941081873132
-# transitive	GordieHowe.Ring.StmtVerifiesRing.insiderForgeProb_le_zk_muEufProb	11821340765335617553
+# transitive	GordieHowe.Ring.StmtVerifiesRing.insiderForgeProb_le_zk_muEufProb	18373818788986496418
 # transitive	GordieHowe.Ring.StmtVerifiesRing.jointForgeProb_le_muEufProbWithin_std	1394951576976072682
 # transitive	GordieHowe.Ring.mldsaScheme.anonAdvantage_le	256047732251237992
 # transitive	GordieHowe.Ring.mldsaScheme.completeWithin	8257908308276740999
-# transitive	GordieHowe.Ring.mldsaScheme.insiderForgeProb_le	18313740099687814468
+# transitive	GordieHowe.Ring.mldsaScheme.insiderForgeProb_le	15994986700195859241
 # transitive	GordieHowe.Ring.mldsaScheme.insiderForgeProb_le_of_bindsRing	11660169223828731943
 # transitive	GordieHowe.Ring.mldsaScheme.jointForgeProb_le_of_bindsRing	4604601582984925978
-# transitive	GordieHowe.RingSignature.Insider.insiderForgeProb_le_zk_muEufProb	12203316543909661913
+# transitive	GordieHowe.RingSignature.Insider.insiderForgeProb_le_zk_muEufProb	683916790187829001
 # transitive	GordieHowe.RingSignature.anonAdvantage_ofBase_le	18214865821432915935
 # transitive	GordieHowe.RingSignature.anonAdvantage_ofBase_le_of_pubOfCoins	7284942270916947504
 # transitive	GordieHowe.RingSignature.anonAdvantage_ofBase_le_of_pubOfCoins_avg	2809769520649757935
@@ -2206,7 +2206,7 @@ GordieHowe.Applications.Ring.MLDSARing	GordieHowe.Ring.mldsaOn_nonempty_pub	1442
 GordieHowe.Applications.Ring.MLDSARing	GordieHowe.Ring.mldsaScheme	1132313463081440500
 GordieHowe.Applications.Ring.MLDSARing	GordieHowe.Ring.mldsaScheme.anonAdvantage_le	2411814462
 GordieHowe.Applications.Ring.MLDSARing	GordieHowe.Ring.mldsaScheme.completeWithin	2211396529
-GordieHowe.Applications.Ring.MLDSARing	GordieHowe.Ring.mldsaScheme.insiderForgeProb_le	1836628399
+GordieHowe.Applications.Ring.MLDSARing	GordieHowe.Ring.mldsaScheme.insiderForgeProb_le	4118802569
 GordieHowe.Applications.Ring.MLDSARing	GordieHowe.Ring.mldsaScheme.insiderForgeProb_le_of_bindsRing	146445364
 GordieHowe.Applications.Ring.MLDSARing	GordieHowe.Ring.mldsaScheme.jointForgeProb_le_of_bindsRing	3755688824
 GordieHowe.Applications.Ring.MLDSAW1AnonOracle	GordieHowe.Ring.MLDSAW1.W1Oracles.atRandomOracles	9150532185988955993
@@ -2485,6 +2485,7 @@ GordieHowe.Applications.Ring.RingForgerTableSplit	GordieHowe.tableForgerSplit	12
 GordieHowe.Applications.Ring.RingForgerWin	GordieHowe.muReadout	1075146605486542446
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.Quantum.AdaptiveIAlg.dropTabM	2999402498213687988
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.Quantum.AdaptiveIAlg.insertTabM	12435237044170939028
+GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.BaseSigner.instDecidableRefusalNoRefusal	10437043334137288001
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.BaseSigner.noRefusal	8434329807493069282
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.RingArgument	3817260447
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.RingArgument.emptyTest	4620403956303664640
@@ -2493,19 +2494,19 @@ GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.RingA
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.RingArgument.mk	3776964116
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.RingArgument.simulator	17014863271900454225
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.forgeryStmt	4938669756978165084
-GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.insiderForgeProb_le_zk_muEufProb	1104615483
+GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.insiderForgeProb_le_zk_muEufProb	675347291
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.ringSimExtError	9463758309849227177
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.ringZkError	4241797666384476396
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.zkAux	6528131637189011312
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.zkCandTest	744081568220708800
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.zkCands	4187813666572500851
-GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.zkDefault	4994121726094421701
-GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.zkExp	3328513038550199782
-GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.zkForger	11424302592552348236
+GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.zkDefault	13613341603746592433
+GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.zkExp	4511274885274086580
+GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.zkForger	16974540112454672419
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.zkPsim	14074512627017706626
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.zkQ'	2902132881725617805
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.zkReadout	9509162574374684324
-GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.zkRouteForger	17973096353651274423
+GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.zkRouteForger	4412842912441222109
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.Insider.zkRouteRequests	1093728671891529665
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.RingSignature.unitPub	5166970800375150005
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.SPBCS.RingSimulator	630476939
@@ -2514,7 +2515,7 @@ GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.SPBCS.RingSimulator.T	97198
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.SPBCS.RingSimulator.VE	9925578814606975299
 GordieHowe.Applications.Ring.RingForgerZK	GordieHowe.SPBCS.RingSimulator.mk	656139106
 GordieHowe.Applications.Ring.RingForgerZKStmt	GordieHowe.RealizedProgram.ProofSystem.IOP.Sound.rbrExtractor	8567417334371798191
-GordieHowe.Applications.Ring.RingForgerZKStmt	GordieHowe.Ring.StmtVerifiesRing.insiderForgeProb_le_zk_muEufProb	3848912767
+GordieHowe.Applications.Ring.RingForgerZKStmt	GordieHowe.Ring.StmtVerifiesRing.insiderForgeProb_le_zk_muEufProb	1852587746
 GordieHowe.Applications.Ring.RingForgerZKStmt	GordieHowe.Ring.StmtVerifiesRing.nonempty_niProof	713976382
 GordieHowe.Applications.Ring.RingForgerZKStmt	GordieHowe.Ring.StmtVerifiesRing.ringArgument	12877619250233243103
 GordieHowe.Applications.Ring.RingInsider	GordieHowe.RingSignature.Insider.Output	13572138408097986666
@@ -2530,9 +2531,10 @@ GordieHowe.Applications.Ring.RingInsiderRelays	GordieHowe.RingSignature.Insider.
 GordieHowe.Applications.Ring.RingInsiderRelays	GordieHowe.RingSignature.Insider.Req	6464182728096858447
 GordieHowe.Applications.Ring.RingInsiderRelays	GordieHowe.RingSignature.Insider.Resp	3982101724013359592
 GordieHowe.Applications.Ring.RingInsiderRelays	GordieHowe.RingSignature.Insider.dummyStmt	9864301097051587951
-GordieHowe.Applications.Ring.RingInsiderRelays	GordieHowe.RingSignature.Insider.seTwo	2845538938790407450
+GordieHowe.Applications.Ring.RingInsiderRelays	GordieHowe.RingSignature.Insider.instDecidablePredSignerIn	3711403983188316294
+GordieHowe.Applications.Ring.RingInsiderRelays	GordieHowe.RingSignature.Insider.seTwo	11023449922936846073
 GordieHowe.Applications.Ring.RingInsiderRelays	GordieHowe.RingSignature.Insider.signerIn	18212524996602319012
-GordieHowe.Applications.Ring.RingInsiderRelays	GordieHowe.RingSignature.Insider.stmtAt	9745926592622715270
+GordieHowe.Applications.Ring.RingInsiderRelays	GordieHowe.RingSignature.Insider.stmtAt	9511390720079794078
 GordieHowe.Applications.Ring.RingInsiderStmt	GordieHowe.Ring.StmtVerifiesRing.ZKFacts	1328223389
 GordieHowe.Applications.Ring.RingInsiderStmt	GordieHowe.Ring.StmtVerifiesRing.ZKFacts.emptyTest	16481963283069012309
 GordieHowe.Applications.Ring.RingInsiderStmt	GordieHowe.Ring.StmtVerifiesRing.ZKFacts.mk	2709990531
@@ -6226,6 +6228,7 @@ GordieHowe.Model.Signature.MultiUserTableForger	GordieHowe.Signature.tableForger
 GordieHowe.Model.Signature.NMA	GordieHowe.Signature.SignOracle.none	10051456806098817357
 GordieHowe.Model.Signature.NMA	GordieHowe.Signature.muEufNmaProb	13859055587888490852
 GordieHowe.Model.Signature.Properties	GordieHowe.RingSignature.BaseSigner.CorrectWithin	8143898627690805311
+GordieHowe.Model.Signature.Properties	GordieHowe.RingSignature.BaseSigner.DecidableRefusal	11633710208301978327
 GordieHowe.Model.Signature.Properties	GordieHowe.RingSignature.BaseSigner.OracleFree	3453574544
 GordieHowe.Model.Signature.Properties	GordieHowe.RingSignature.BaseSigner.PubOfCoins	11537974281358613601
 GordieHowe.Model.Signature.Properties	GordieHowe.RingSignature.BaseSigner.RefusalOfCoins	5471290104289393073
@@ -10587,7 +10590,7 @@ GordieHoweCerts.Applications.Falcon512.Ring.Carrier.QROMParams.RingForger	Gordie
 GordieHoweCerts.Applications.Falcon512.Ring.Carrier.QROMParams.RingForger	GordieHowe.Falcon512.Ring.Carrier.QROMParams.convertedArgument	16593977191025941654
 GordieHoweCerts.Applications.Falcon512.Ring.Carrier.QROMParams.RingForger	GordieHowe.Falcon512.Ring.Carrier.QROMParams.convertedBase_inhabited	614979342578295901
 GordieHoweCerts.Applications.Falcon512.Ring.Carrier.QROMParams.RingForger	GordieHowe.Falcon512.Ring.Carrier.QROMParams.convertedNIProof_nonempty	2876334928
-GordieHoweCerts.Applications.Falcon512.Ring.Carrier.QROMParams.RingForger	GordieHowe.Falcon512.Ring.Carrier.QROMParams.convertedScheme.insiderForgeProb_le	1815020530
+GordieHoweCerts.Applications.Falcon512.Ring.Carrier.QROMParams.RingForger	GordieHowe.Falcon512.Ring.Carrier.QROMParams.convertedScheme.insiderForgeProb_le	527736914
 GordieHoweCerts.Applications.Falcon512.Ring.Carrier.QROMParams.RingForger	GordieHowe.Falcon512.Ring.Carrier.QROMParams.convertedV	17723803782918348865
 GordieHoweCerts.Applications.Falcon512.Ring.Carrier.QROMParams.RingForger	GordieHowe.Falcon512.Ring.Carrier.QROMParams.convertedV_zkFacts	1997846850204466446
 GordieHoweCerts.Applications.Falcon512.Ring.Carrier.QROMParams.RingScheme	GordieHowe.Falcon512.Ring.Carrier.QROMParams.baseSigner	13961341708918281235
@@ -10647,7 +10650,7 @@ GordieHoweCerts.Applications.Falcon512.Ring.Carrier.ROMParams.RingForger	GordieH
 GordieHoweCerts.Applications.Falcon512.Ring.Carrier.ROMParams.RingForger	GordieHowe.Falcon512.Ring.Carrier.ROMParams.convertedArgument	2170022615909006323
 GordieHoweCerts.Applications.Falcon512.Ring.Carrier.ROMParams.RingForger	GordieHowe.Falcon512.Ring.Carrier.ROMParams.convertedBase_inhabited	2579550424827374944
 GordieHoweCerts.Applications.Falcon512.Ring.Carrier.ROMParams.RingForger	GordieHowe.Falcon512.Ring.Carrier.ROMParams.convertedNIProof_nonempty	2268364647
-GordieHoweCerts.Applications.Falcon512.Ring.Carrier.ROMParams.RingForger	GordieHowe.Falcon512.Ring.Carrier.ROMParams.convertedScheme.insiderForgeProb_le	483127086
+GordieHoweCerts.Applications.Falcon512.Ring.Carrier.ROMParams.RingForger	GordieHowe.Falcon512.Ring.Carrier.ROMParams.convertedScheme.insiderForgeProb_le	3204128008
 GordieHoweCerts.Applications.Falcon512.Ring.Carrier.ROMParams.RingForger	GordieHowe.Falcon512.Ring.Carrier.ROMParams.convertedV	17712863641689498045
 GordieHoweCerts.Applications.Falcon512.Ring.Carrier.ROMParams.RingForger	GordieHowe.Falcon512.Ring.Carrier.ROMParams.convertedV_zkFacts	15800593532589109982
 GordieHoweCerts.Applications.Falcon512.Ring.Carrier.ROMParams.RingScheme	GordieHowe.Falcon512.Ring.Carrier.ROMParams.baseSigner	6099887983815977293
@@ -10730,7 +10733,7 @@ GordieHoweCerts.Applications.Falcon512.Ring.Native.QROMParams.RingForger	GordieH
 GordieHoweCerts.Applications.Falcon512.Ring.Native.QROMParams.RingForger	GordieHowe.Falcon512.Ring.Native.QROMParams.convertedArgument	12611900760712371063
 GordieHoweCerts.Applications.Falcon512.Ring.Native.QROMParams.RingForger	GordieHowe.Falcon512.Ring.Native.QROMParams.convertedBase_inhabited	1401845830662942977
 GordieHoweCerts.Applications.Falcon512.Ring.Native.QROMParams.RingForger	GordieHowe.Falcon512.Ring.Native.QROMParams.convertedNIProof_nonempty	3485968922
-GordieHoweCerts.Applications.Falcon512.Ring.Native.QROMParams.RingForger	GordieHowe.Falcon512.Ring.Native.QROMParams.convertedScheme.insiderForgeProb_le	1911467619
+GordieHoweCerts.Applications.Falcon512.Ring.Native.QROMParams.RingForger	GordieHowe.Falcon512.Ring.Native.QROMParams.convertedScheme.insiderForgeProb_le	4248689613
 GordieHoweCerts.Applications.Falcon512.Ring.Native.QROMParams.RingForger	GordieHowe.Falcon512.Ring.Native.QROMParams.convertedV	16671596012363543297
 GordieHoweCerts.Applications.Falcon512.Ring.Native.QROMParams.RingForger	GordieHowe.Falcon512.Ring.Native.QROMParams.convertedV_zkFacts	14694072983996757531
 GordieHoweCerts.Applications.Falcon512.Ring.Native.QROMParams.RingScheme	GordieHowe.Falcon512.Ring.Native.QROMParams.baseSigner	10718086806165010524
@@ -10812,7 +10815,7 @@ GordieHoweCerts.Applications.Falcon512.Ring.Native.ROMParams.RingForger	GordieHo
 GordieHoweCerts.Applications.Falcon512.Ring.Native.ROMParams.RingForger	GordieHowe.Falcon512.Ring.Native.ROMParams.convertedArgument	10719712041692398926
 GordieHoweCerts.Applications.Falcon512.Ring.Native.ROMParams.RingForger	GordieHowe.Falcon512.Ring.Native.ROMParams.convertedBase_inhabited	1371131518938058360
 GordieHoweCerts.Applications.Falcon512.Ring.Native.ROMParams.RingForger	GordieHowe.Falcon512.Ring.Native.ROMParams.convertedNIProof_nonempty	1182824463
-GordieHoweCerts.Applications.Falcon512.Ring.Native.ROMParams.RingForger	GordieHowe.Falcon512.Ring.Native.ROMParams.convertedScheme.insiderForgeProb_le	4010171888
+GordieHoweCerts.Applications.Falcon512.Ring.Native.ROMParams.RingForger	GordieHowe.Falcon512.Ring.Native.ROMParams.convertedScheme.insiderForgeProb_le	664612455
 GordieHoweCerts.Applications.Falcon512.Ring.Native.ROMParams.RingForger	GordieHowe.Falcon512.Ring.Native.ROMParams.convertedV	6998854650289790718
 GordieHoweCerts.Applications.Falcon512.Ring.Native.ROMParams.RingForger	GordieHowe.Falcon512.Ring.Native.ROMParams.convertedV_zkFacts	3455917170421801756
 GordieHoweCerts.Applications.Falcon512.Ring.Native.ROMParams.RingScheme	GordieHowe.Falcon512.Ring.Native.ROMParams.baseSigner	13904364169663166272
@@ -11440,7 +11443,7 @@ GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.QROMParams.RingForger	GordieHo
 GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.QROMParams.RingForger	GordieHowe.MLDSA44.Ring.Carrier.QROMParams.convertedBase	6689346926161687034
 GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.QROMParams.RingForger	GordieHowe.MLDSA44.Ring.Carrier.QROMParams.convertedBase_inhabited	3079658705953334925
 GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.QROMParams.RingForger	GordieHowe.MLDSA44.Ring.Carrier.QROMParams.convertedNIProof_nonempty	2758372691
-GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.QROMParams.RingForger	GordieHowe.MLDSA44.Ring.Carrier.QROMParams.convertedScheme.insiderForgeProb_le	1326427083
+GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.QROMParams.RingForger	GordieHowe.MLDSA44.Ring.Carrier.QROMParams.convertedScheme.insiderForgeProb_le	1459850531
 GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.QROMParams.RingForger	GordieHowe.MLDSA44.Ring.Carrier.QROMParams.convertedV	475851608550014664
 GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.QROMParams.RingForger	GordieHowe.MLDSA44.Ring.Carrier.QROMParams.convertedV_emptyRingTest	10519876608136161761
 GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.QROMParams.RingForger	GordieHowe.MLDSA44.Ring.Carrier.QROMParams.convertedV_zkFacts	16827027106306356552
@@ -11538,7 +11541,7 @@ GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.ROMParams.RingForger	GordieHow
 GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.ROMParams.RingForger	GordieHowe.MLDSA44.Ring.Carrier.ROMParams.convertedBase	4840772741600745313
 GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.ROMParams.RingForger	GordieHowe.MLDSA44.Ring.Carrier.ROMParams.convertedBase_inhabited	2122082492494306079
 GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.ROMParams.RingForger	GordieHowe.MLDSA44.Ring.Carrier.ROMParams.convertedNIProof_nonempty	1006585191
-GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.ROMParams.RingForger	GordieHowe.MLDSA44.Ring.Carrier.ROMParams.convertedScheme.insiderForgeProb_le	1304799447
+GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.ROMParams.RingForger	GordieHowe.MLDSA44.Ring.Carrier.ROMParams.convertedScheme.insiderForgeProb_le	3566368806
 GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.ROMParams.RingForger	GordieHowe.MLDSA44.Ring.Carrier.ROMParams.convertedV	4609545216479423967
 GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.ROMParams.RingForger	GordieHowe.MLDSA44.Ring.Carrier.ROMParams.convertedV_emptyRingTest	9182041841066683993
 GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.ROMParams.RingForger	GordieHowe.MLDSA44.Ring.Carrier.ROMParams.convertedV_zkFacts	15233210863382204415
@@ -11687,7 +11690,7 @@ GordieHoweCerts.Applications.MLDSA44.Ring.Native.QROMParams.RingForger	GordieHow
 GordieHoweCerts.Applications.MLDSA44.Ring.Native.QROMParams.RingForger	GordieHowe.MLDSA44.Ring.Native.QROMParams.convertedBase	7649503716681044793
 GordieHoweCerts.Applications.MLDSA44.Ring.Native.QROMParams.RingForger	GordieHowe.MLDSA44.Ring.Native.QROMParams.convertedBase_inhabited	17760729302224402319
 GordieHoweCerts.Applications.MLDSA44.Ring.Native.QROMParams.RingForger	GordieHowe.MLDSA44.Ring.Native.QROMParams.convertedNIProof_nonempty	3000286024
-GordieHoweCerts.Applications.MLDSA44.Ring.Native.QROMParams.RingForger	GordieHowe.MLDSA44.Ring.Native.QROMParams.convertedScheme.insiderForgeProb_le	1922425477
+GordieHoweCerts.Applications.MLDSA44.Ring.Native.QROMParams.RingForger	GordieHowe.MLDSA44.Ring.Native.QROMParams.convertedScheme.insiderForgeProb_le	2908051561
 GordieHoweCerts.Applications.MLDSA44.Ring.Native.QROMParams.RingForger	GordieHowe.MLDSA44.Ring.Native.QROMParams.convertedV	7526778761889472992
 GordieHoweCerts.Applications.MLDSA44.Ring.Native.QROMParams.RingForger	GordieHowe.MLDSA44.Ring.Native.QROMParams.convertedV_emptyRingTest	3122716533736402468
 GordieHoweCerts.Applications.MLDSA44.Ring.Native.QROMParams.RingForger	GordieHowe.MLDSA44.Ring.Native.QROMParams.convertedV_zkFacts	10149874703908105258
@@ -11771,7 +11774,7 @@ GordieHoweCerts.Applications.MLDSA44.Ring.Native.ROMParams.RingForger	GordieHowe
 GordieHoweCerts.Applications.MLDSA44.Ring.Native.ROMParams.RingForger	GordieHowe.MLDSA44.Ring.Native.ROMParams.convertedBase	6979167638346004515
 GordieHoweCerts.Applications.MLDSA44.Ring.Native.ROMParams.RingForger	GordieHowe.MLDSA44.Ring.Native.ROMParams.convertedBase_inhabited	853795201024931833
 GordieHoweCerts.Applications.MLDSA44.Ring.Native.ROMParams.RingForger	GordieHowe.MLDSA44.Ring.Native.ROMParams.convertedNIProof_nonempty	1866973582
-GordieHoweCerts.Applications.MLDSA44.Ring.Native.ROMParams.RingForger	GordieHowe.MLDSA44.Ring.Native.ROMParams.convertedScheme.insiderForgeProb_le	1255203819
+GordieHoweCerts.Applications.MLDSA44.Ring.Native.ROMParams.RingForger	GordieHowe.MLDSA44.Ring.Native.ROMParams.convertedScheme.insiderForgeProb_le	2827256144
 GordieHoweCerts.Applications.MLDSA44.Ring.Native.ROMParams.RingForger	GordieHowe.MLDSA44.Ring.Native.ROMParams.convertedV	17250524035820907112
 GordieHoweCerts.Applications.MLDSA44.Ring.Native.ROMParams.RingForger	GordieHowe.MLDSA44.Ring.Native.ROMParams.convertedV_emptyRingTest	15823535731058154762
 GordieHoweCerts.Applications.MLDSA44.Ring.Native.ROMParams.RingForger	GordieHowe.MLDSA44.Ring.Native.ROMParams.convertedV_zkFacts	9402949589895528825
@@ -30220,4 +30223,4 @@ LatticeCrypto.Ring.VectorBackend	LatticeCrypto.vectorNegacyclicRing	713150001336
 # library VCVio: 2
 # external	VCVio	arrayVectorEquivFin
 # external	VCVio	instFintypeVector
-# total: headlines 284; project declarations 28068 (GordieHowe 9983, GordieHoweCerts 14746, GordieHoweNative 2963, GordieHoweCheck 0, LatticeCrypto 348, HashSig 12, ArkLib 16, CompPoly 0); external constants 1581 (Batteries 4, Init 622, Mathlib 953, VCVio 2)
+# total: headlines 284; project declarations 28071 (GordieHowe 9986, GordieHoweCerts 14746, GordieHoweNative 2963, GordieHoweCheck 0, LatticeCrypto 348, HashSig 12, ArkLib 16, CompPoly 0); external constants 1581 (Batteries 4, Init 622, Mathlib 953, VCVio 2)

@@ -282,11 +282,10 @@ theorem replayVia_succ_snoc (F : (j : Fin Q) → (Query k kN kS L → Out k e) �
 def mapChoice (c : SPBCS.WIChoice X W) : SPBCS.WIChoice X₀ W₀ :=
   ⟨σ c.stmt, ι' c.stmt c.wit₀, ι' c.stmt c.wit₁⟩
 
-open Classical in
 /-- **The witness-indistinguishability adversary of the composite** from two-witness choices of
 statements `X`: the choices read through `σ` and `ι'`, from the history recomputed from the proofs,
 with the choice `c₀` for the refused rounds. -/
-noncomputable def toWIAdversaryVia {rel₀ : Set (X₀ × W₀)}
+noncomputable def toWIAdversaryVia [DecidableEq X₀] [DecidableEq W₀] {rel₀ : Set (X₀ × W₀)}
     (F : (j : Fin Q) → (Query k kN kS L → Out k e) → PubHist Pub M.NIProof j →
       Option (SPBCS.WIChoice X W)) (S : Finset (SPBCS.WIChoice X W))
     (hS : ∀ c ∈ S, ((mapChoice σ ι' c).stmt, (mapChoice σ ι' c).wit₀) ∈ rel₀ ∧
@@ -311,7 +310,7 @@ variable {E : (j : ι) → (M.comp j).Encoder} {Vr : X₀ → FullTr P τ → Bo
 omit [∀ j i, Nonempty ((P j).Challenge i)] [DecidableEq R] in
 /-- **The witness-indistinguishability experiment with its history recomputed** is the experiment
 with public outputs of the selector, the proofs of statements `σ x` with witnesses `ι' x w`. -/
-theorem map_wiRun_replayVia {rel₀ : Set (X₀ × W₀)}
+theorem map_wiRun_replayVia [DecidableEq X₀] [DecidableEq W₀] {rel₀ : Set (X₀ × W₀)}
     {F : (j : Fin Q) → (Query k kN kS L → Out k e) → PubHist Pub M.NIProof j →
       Option (SPBCS.WIChoice X W)} {S : Finset (SPBCS.WIChoice X W)}
     {hS : ∀ c ∈ S, ((mapChoice σ ι' c).stmt, (mapChoice σ ι' c).wit₀) ∈ rel₀ ∧

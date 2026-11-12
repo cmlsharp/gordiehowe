@@ -4,19 +4,27 @@
 
 # Profile modules per declaration (elaboration, kernel and interpreter seconds) for the performance
 # gate, scripts/perf_gate.py (audit/PERF.md). Run after `lake build`: each module is elaborated by
-# `lean -Dtrace.profiler=true` against the built tree, several at once, all under the one memory cap
-# of scripts/lake.sh (`scripts/lake.sh env python3 scripts/perf_profile.py …`).
+# `lean --json -Dprofiler=true -Dprofiler.threshold=0` against the built tree (nothing is written to
+# it), several at once, all under the one memory cap of scripts/lake.sh
+# (`scripts/lake.sh env python3 scripts/perf_profile.py …`).
 #
 # Usage: scripts/perf_profile.sh [OPTIONS] BASE_REF [MODULES…]   modules changed since BASE_REF's
 #                                                                merge base (working tree included)
+#        scripts/perf_profile.sh [OPTIONS] --changed-from FILE   modules FILE lists as changed (names
+#                                                                or paths; a tree without git)
 #        scripts/perf_profile.sh [OPTIONS] MODULES…              the modules given (names or paths)
 #        scripts/perf_profile.sh [OPTIONS] --all                 the import closures of GordieHowe and
 #                                                                GordieHoweCerts (seeding)
 # The first argument is BASE_REF when it names a git commit.
-# Options (scripts/perf_profile.py --help): -o FILE (default stdout), -j JOBS (default PQ_LAKE_JOBS,
-# as lake.sh sets it), --threads N (lean -j, default 4), --threshold-ms MS
-# (with --trace only, default 100; budgets profile every step), --timeout S (per module, default 900), --keep-raw DIR, --list, --no-certs (skip
-# GordieHoweCerts' modules: the library is not built in this run).
+# Options (scripts/perf_profile.py --help): -o FILE (default stdout), -j JOBS (default 16, the
+# regime of the budgets, whatever the build's PQ_LAKE_JOBS; the profile records it), --threads N
+# (lean -j, default 4), --threshold-ms MS (with --trace only, default 100; budgets profile every
+# step), --timeout S (per module, default 900), --keep-raw DIR, --list, --no-certs (skip
+# GordieHoweCerts' modules: the library is not built in this run), --dependents (with BASE_REF or
+# --changed-from: also the changed modules' direct importers and the transitive importers with a row
+# in --base-profile FILE, default audit/perf_baseline.tsv), --roles FILE (which profiled modules are
+# changed, which dependents: for perf_gate.py --roles), --estimate (print the selected modules,
+# sorted, and the estimated wall time; run nothing).
 # The generated modules and the certificate-check modules (scripts/cert_boundary.py, perf_exempt),
 # modules outside the two closures and, unless built, GordieHoweCerts' modules are skipped, with a
 # note.
@@ -27,11 +35,11 @@ opts=()
 pos=()
 while [ $# -gt 0 ]; do
   case "$1" in
-    -o|--output|-j|--jobs|--threads|--threshold-ms|--timeout|--keep-raw)
+    -o|--output|-j|--jobs|--threads|--threshold-ms|--timeout|--keep-raw|--changed-from|--base-profile|--roles)
       [ $# -ge 2 ] || { echo "perf_profile.sh: $1 needs a value" >&2; exit 2; }
       opts+=("$1" "$2"); shift 2 ;;
-    --all|--list|--no-certs) opts+=("$1"); shift ;;
-    -h|--help) sed -n '5,23p' "$0"; exit 0 ;;
+    --all|--list|--no-certs|--dependents|--estimate) opts+=("$1"); shift ;;
+    -h|--help) sed -n '5,31p' "$0"; exit 0 ;;
     -*) echo "perf_profile.sh: unknown option $1" >&2; exit 2 ;;
     *) pos+=("$1"); shift ;;
   esac

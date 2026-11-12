@@ -1130,8 +1130,17 @@ theorem w1CanS_le_slotGuess (h : W1OracleFacts O MO sp) {t : ℕ}
   refine (PMF.toOuterMeasure_map_apply _ _ _).trans_le
     ((MeasureTheory.measure_mono fun x hx => ?_).trans_eq (PMF.toOuterMeasure_map_apply _ _ _).symm)
   obtain ⟨wt, hwt, e', he', hs, hsig, hask⟩ := hx
-  exact ⟨wt.sig, congrArg (Option.map fun (w : RingSignature.RingWitOf (FIPSSignature p
-    (concretePrimitivesKeyGen p))) => w.sig) hwt, e', he', hs, hsig, hask⟩
+  -- The readout through `w1CanonSig_eq` at every argument, so that it meets `hwt` (read from the
+  -- restricted algorithm) syntactically and no instance is searched with unknown arguments.
+  have hc := w1CanonSig_eq (prims := concretePrimitivesKeyGen p) (O := O) (Mo := MO) (βmin := βmin)
+    (tol := tol) (enc := concreteEnc p) (k := kr) (D := D) (bmsg := bmc) (Mc := Sc) (Λ := Λ)
+    (E := E) (hb := hb) (honest := honest) (adm := adm) (n := n) (Q := Q) (chk := chkN) (T := T)
+    (rel := w1Rel (concretePrimitivesKeyGen p) O MO βmin tol (concreteEnc p) kr D bmc PSh adm n Q)
+    (penc := w1Enc (PS := PSh) (adm := adm) (Q := Q) fun i => (Bf).pk (ξ i))
+    (dummyS := w1DummyS PSh adm n Q) sp h.hO ((TPA ξ).alg a.1) PsimC (kqOf Mg nr b b) Ext ξ ω
+    w1Idle sc w1PrfOf x
+  exact ⟨wt.sig, hc.trans (congrArg (Option.map fun (w : RingSignature.RingWitOf (FIPSSignature p
+    (concretePrimitivesKeyGen p))) => w.sig) hwt), e', he', hs, hsig, hask⟩
 
 omit [Fintype R] [DecidableEq R] [Nonempty R] in
 /-- **The guess of case S at the chain** (`w1GuessAvg_le` through `w1CanS_le_slotGuess`, the

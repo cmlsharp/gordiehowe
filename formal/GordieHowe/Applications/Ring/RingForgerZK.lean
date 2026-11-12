@@ -285,6 +285,7 @@ of the simulation-extraction adversary `seAlg` (`extAdv`) is the extraction run 
 adversary at the table `keyReply keys` through `seTwo`, with the expansion and the win read
 through the reinsertion of the table (`insertTabM`) and the default with the table dropped. -/
 theorem simProb_extAdv_seAlg_eq (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop)
+    [B.DecidableRefusal refuses]
     (pubOf : B.Coins → B.Pub) (keys : Fin n → B.KeyCoins) (Q : ℕ) (a : (A.at keys).Aux)
     (ds : Fin Q → B.Coins) {SC : Type} [Fintype SC] [DecidableEq SC]
     (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e)
@@ -342,7 +343,8 @@ theorem simProb_extAdv_seAlg_eq (refuses : KeyRing B.PK N → ℕ → B.Msg → 
 with the table `keyReply keys` through `seTwo`, its output read as a claim. `seAlg` is `seAlgQ` at
 `A.at keys`. -/
 noncomputable abbrev seAlgQ (𝒜 : ZAdv)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub)
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub)
     (keys : Fin n → B.KeyCoins) (Q : ℕ) (a : 𝒜.Aux) (ds : Fin Q → B.Coins) :=
   (AdaptiveIAlg.absorbTab (Req₁ := RelayStmt B 𝒫 adm n) (Resp₁ := (𝒫).Proof) (𝒜.alg a)
     (seTwo B (fun i => B.pk (keys i)) refuses pubOf ds) (fun _ => keyReply B keys)).mapOut
@@ -351,7 +353,8 @@ noncomputable abbrev seAlgQ (𝒜 : ZAdv)
 /-- **The forger's win in one extraction run at an adversary `𝒜`** (`forgerWins` at `𝒜`):
 `forgerWins` is `forgerWinsQ` at `A.at keys`. -/
 def forgerWinsQ (𝒜 : ZAdv)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub)
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub)
     (keys : Fin n → B.KeyCoins) (Q : ℕ) (a : 𝒜.Aux) (ds : Fin Q → B.Coins) {SC : Type}
     [Fintype SC] [DecidableEq SC] (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e)
       (RelayStmt B 𝒫 adm n) (M.Response b) SC)
@@ -372,7 +375,8 @@ def forgerWinsQ (𝒜 : ZAdv)
 simulation-extraction adversary at the empty table (`tab₀`), through the reinsertion of the
 table; it reads no key coins (`simExtractionExpansion_absorbTab_next_congr`). -/
 noncomputable def zkExp (𝒜 : ZAdv)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub)
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub)
     (pks : Fin n → B.PK) (Q : ℕ) (a : 𝒜.Aux) (ds : Fin Q → B.Coins) {SC : Type} [Fintype SC]
     [DecidableEq SC] (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e)
       (RelayStmt B 𝒫 adm n) (M.Response b) SC) :
@@ -387,7 +391,8 @@ noncomputable def zkExp (𝒜 : ZAdv)
 /-- **The default output of the extraction run at an adversary `𝒜`**: that of the run at the
 empty table, the table dropped (`dropTabM_defaultOut_congr`: the same at every table). -/
 noncomputable def zkDefault (𝒜 : ZAdv)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub)
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub)
     (pks : Fin n → B.PK) (Q : ℕ) (a : 𝒜.Aux) (ds : Fin Q → B.Coins) {SC : Type} [Fintype SC]
     [DecidableEq SC] (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e)
       (RelayStmt B 𝒫 adm n) (M.Response b) SC) :
@@ -403,6 +408,7 @@ omit [Nonempty B.BSig] ert [Fintype R] [DecidableEq R] [Nonempty R] in
 (`simProb_extAdv_seAlg_eq` with the expansion and the default read at the empty table, the win at
 `A.at keys`): only the table, `keyReply keys`, holds the users' key coins. -/
 theorem simProb_extAdv_seAlg_eq_zk (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop)
+    [B.DecidableRefusal refuses]
     (pubOf : B.Coins → B.Pub) (keys : Fin n → B.KeyCoins) (Q : ℕ) (a : (A.at keys).Aux)
     (ds : Fin Q → B.Coins) {SC : Type} [Fintype SC] [DecidableEq SC]
     (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e)
@@ -451,7 +457,8 @@ compressed-oracle simulation of the bridge at an adversary `𝒜` (against any r
 logged multi-user request is `publicKey 0`, or `corrupt i` with `corrupt i` among the first `Q`
 requests the adversary logged (`seTwo` forwards corruptions numbered below `Q` only). -/
 theorem zk_bridge_requests (𝒜 : ZAdv)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub)
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub)
     (pks : Fin n → B.PK) (Q : ℕ) (a : 𝒜.Aux) (ds : Fin Q → B.Coins) {SC : Type} [Fintype SC]
     [DecidableEq SC] (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e)
       (RelayStmt B 𝒫 adm n) (M.Response b) SC) (kq : ℕ)
@@ -567,7 +574,8 @@ omit [Nonempty B.BSig] ert [Fintype R] [DecidableEq R] [Nonempty R] [Nonempty TS
   [Fintype TS.Coins] [DecidableEq TS.Coins] [Nonempty TS.Coins] in
 /-- **The forger's win in the extraction run gives a candidate.** -/
 theorem zkCand_of_forgerWinsQ (𝒜 : ZAdv)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub)
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub)
     (keys : Fin n → B.KeyCoins) (Q : ℕ) (a : 𝒜.Aux) (ds : Fin Q → B.Coins) {SC : Type}
     [Fintype SC] [DecidableEq SC] (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e)
       (RelayStmt B 𝒫 adm n) (M.Response b) SC) (Ext : CausalExtractor P τ X₀ WitK)
@@ -662,6 +670,7 @@ expansion `zkExp`, the default `zkDefault`) with its request points sent to the 
 challenger, and outputs the candidate read from the output and the measured database
 (`zkReadout`). -/
 noncomputable def zkForger (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop)
+    [B.DecidableRefusal refuses]
     (pubOf : B.Coins → B.Pub) (Q : ℕ) {SC : Type} [Fintype SC] [DecidableEq SC]
     (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e)
       (RelayStmt B 𝒫 adm n) (M.Response b) SC)
@@ -678,6 +687,7 @@ noncomputable def zkForger (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coi
 /-- **The extraction-run sum at an adversary `𝒜`**: the average over the signing coins and the
 auxiliary input of the probability of the win in the extraction run of the table form. -/
 noncomputable def zkSum (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop)
+    [B.DecidableRefusal refuses]
     (pubOf : B.Coins → B.Pub) (keys : Fin n → B.KeyCoins) (Q : ℕ) {SC : Type} [Fintype SC]
     [DecidableEq SC] (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e)
       (RelayStmt B 𝒫 adm n) (M.Response b) SC) (Ext : CausalExtractor P τ X₀ WitK) (kq : ℕ)
@@ -706,7 +716,8 @@ queries (`hB`), with `Q'` at least the bridge's request points (`hQ`) and the ad
 forger's win in the simulation-extraction game is at most the success probability of `zkForger` in
 MU-EUF-CMA^corr with the ring-aware signing oracle and `Q'` requests. -/
 theorem sum_simProb_extAdv_le_muEufProb (hB : B.OracleFree)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub) (Q : ℕ)
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub) (Q : ℕ)
     {SC : Type} [Fintype SC] [DecidableEq SC]
     (Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e)
       (RelayStmt B 𝒫 adm n) (M.Response b) SC)
@@ -853,7 +864,8 @@ signer (`hB`) and an adversary with the schedule bound `S`, `w`, `P'` (`hS`), `z
 most the success probability of the explicit multi-user forger `zkForger` in MU-EUF-CMA^corr with
 the ring-aware signing oracle and `zkQ'` requests. -/
 theorem zkForgerTerm_le_muEufProb [NeZero n] [Nonempty M.NIProof] (hB : B.OracleFree)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub)
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub)
     (VE : M.ViewEncoder E Qs) {Pub : Type} (pub : X₀ → Pub)
     (Sim : CausalJointSimulator VE.MV Pub) (T : M.Preimages) (Ext : CausalExtractor P τ X₀ WitK)
     (Q : ℕ) (f₀ : B.PK × B.BMsg × B.BSig) {S w P' : ℕ} (hS : GameAdversary.ScheduleLE A S w P') :
@@ -909,7 +921,8 @@ bound `S`, `w`, `P'` (`hS`) and `zkQ'` multi-user requests. The forger's multi-u
 `publicKey 0` or corruptions among the adversary's first `Q` requests (`zk_bridge_requests`). -/
 theorem insiderForgeProb_le_zk_muEufProb_of [NeZero n] [Nonempty M.NIProof] [NeZero k]
     (hB : B.OracleFree)
-    {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop} {pubOf : B.Coins → B.Pub}
+    {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop} [B.DecidableRefusal refuses]
+    {pubOf : B.Coins → B.Pub}
     (hpub : B.PubOfCoins pubOf) (href : B.RefusalOfCoins refuses) {εc : ℝ≥0∞}
     (hcorr : B.CorrectWithin εc) (hz : ZKRingHyps B adm stmt check input fw enc relH rel wit)
     (VE : M.ViewEncoder E Qs) {Pub : Type} (pub : X₀ → Pub)
@@ -1013,6 +1026,12 @@ def _root_.GordieHowe.RingSignature.BaseSigner.noRefusal {X Y : Type} {N : ℕ}
     KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop :=
   fun _ _ _ _ => False
 
+/-- **No refusal is decided**: it never holds. -/
+instance _root_.GordieHowe.RingSignature.BaseSigner.instDecidableRefusalNoRefusal {X Y : Type}
+    {N : ℕ} {T : Signature.SchemeTypes} {RMsg : Type} (B : BaseSigner X Y N T RMsg) :
+    B.DecidableRefusal B.noRefusal :=
+  fun _ _ _ _ => inferInstanceAs (Decidable False)
+
 /-- **The unit public value** of signing coins (the public-value map of a base signer with
 `Pub = Unit`). -/
 def _root_.GordieHowe.RingSignature.unitPub {C : Type} : C → Unit :=
@@ -1056,7 +1075,8 @@ the fallback `G.forgery₀`). -/
 noncomputable abbrev zkRouteForger [NeZero n] [Nonempty M.NIProof]
     (wit : RingStmt B → WitK → RingWit B) {Pub : Type}
     {pub : X₀ → Pub} {δ : NNReal} (G : RingArgument M E Qs honest stmt relH rel pub δ)
-    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) (pubOf : B.Coins → B.Pub) (Q : ℕ) :
+    (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) [B.DecidableRefusal refuses]
+    (pubOf : B.Coins → B.Pub) (Q : ℕ) :
     MUAdversary (SignOracle.ring B) n (OracleView.queriesOnly (Bits (queryBits k kN kS L))
       (XOut k e)) 0 :=
   zkForger A (wit := wit) refuses pubOf Q
@@ -1103,7 +1123,8 @@ simulation-extraction errors, spBCS's knowledge error at `t + Q · q` queries (`
 @[headline]
 theorem insiderForgeProb_le_zk_muEufProb [NeZero n] [Nonempty M.NIProof] [NeZero k]
     (hB : B.OracleFree)
-    {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop} {pubOf : B.Coins → B.Pub}
+    {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop} [B.DecidableRefusal refuses]
+    {pubOf : B.Coins → B.Pub}
     (hpub : B.PubOfCoins pubOf) (href : B.RefusalOfCoins refuses) {εc : ENNReal}
     (hcorr : B.CorrectWithin εc) (hz : ZKRingHyps B adm stmt check input fw enc relH rel wit)
     {Pub : Type} {pub : X₀ → Pub} {δ : NNReal} (G : RingArgument M E Qs honest stmt relH rel pub δ)
@@ -1174,7 +1195,8 @@ multi-user requests are `publicKey 0` or corruptions among the adversary's first
 (`zk_bridge_requests`). -/
 theorem insiderForgeProb_le_zk_muEufProb_spbcs_of [NeZero n] [Nonempty M.NIProof] [NeZero k]
     (hB : B.OracleFree)
-    {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop} {pubOf : B.Coins → B.Pub}
+    {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop} [B.DecidableRefusal refuses]
+    {pubOf : B.Coins → B.Pub}
     (hpub : B.PubOfCoins pubOf) (href : B.RefusalOfCoins refuses) {εc : ENNReal}
     (hcorr : B.CorrectWithin εc) (VE : M.ViewEncoder E Qs) {Pub : Type} (pub : RingStmt B → Pub)
     (Sim : CausalJointSimulator VE.MV Pub) (T : M.Preimages) {δ : NNReal}
@@ -1215,7 +1237,8 @@ error at `t + Q · q` queries (`SPBCS.ksError`) and `2 Q εc`, for an adversary 
 bound `S`, `w`, `P'` (`hS`). -/
 theorem insiderForgeProb_le_zk_muEufProb_spbcs [NeZero n] [Nonempty M.NIProof] [NeZero k]
     (hB : B.OracleFree)
-    {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop} {pubOf : B.Coins → B.Pub}
+    {refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop} [B.DecidableRefusal refuses]
+    {pubOf : B.Coins → B.Pub}
     (hpub : B.PubOfCoins pubOf) (href : B.RefusalOfCoins refuses) {εc : ENNReal}
     (hcorr : B.CorrectWithin εc) {Pub : Type} {pub : RingStmt B → Pub} {δ : NNReal}
     (G : RingArgument M E Qs honest id (ringRel B adm 0) (ringRel B adm 0) pub δ)

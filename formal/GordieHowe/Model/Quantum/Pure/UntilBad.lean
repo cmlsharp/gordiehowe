@@ -75,8 +75,9 @@ theorem final_congr {St St' : Type _} {Q' : ℕ} [OracleState St X Y] [OracleSta
     · rfl
   have hst : D.run E ω = D.run E' ω' := by
     simp only [run, stage]
-    exact congrArg (fun π => hybrid D.liftedStep (fun k => permOp (π k)) D.gameInit m)
+    have h := congrArg (fun π => hybrid D.liftedStep (fun k => permOp (π k)) D.gameInit m)
       (funext hev)
+    exact h
   simp only [final, hst]
   exact congrArg (fun U => logControlled U (D.run E' ω')) (funext fun lg => by rw [hO lg])
 

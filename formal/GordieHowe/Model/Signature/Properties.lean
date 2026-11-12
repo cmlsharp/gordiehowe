@@ -231,6 +231,12 @@ def RefusalOfCoins (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → P
   ∀ (H : X → Y) (kc : B.KeyCoins) (R : KeyRing B.PK N) (i : ℕ), R.HoldsAt i (B.pk kc) →
     ∀ (m : B.Msg) (c : B.Coins), (B.bsign (B.sk kc) R i m c).run H = none ↔ refuses R i m c
 
+/-- **A decision of a refusal predicate** at every ring, position, message and coins: the
+`DecidablePred` of a four-argument predicate. A binder of this type is a local instance: it unfolds
+reducibly to a `Decidable` family. -/
+abbrev DecidableRefusal (refuses : KeyRing B.PK N → ℕ → B.Msg → B.Coins → Prop) : Type :=
+  ∀ R i m c, Decidable (refuses R i m c)
+
 omit [Fintype T.Coins] [Nonempty T.Coins] in
 /-- **The predicted refusals are refusals of the ring-aware signer**: at every oracle, for every key
 coins, ring holding the key at position `i`, message and coins `c` with `refuses R i m c`, `bsign`

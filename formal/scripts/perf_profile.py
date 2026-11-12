@@ -21,8 +21,29 @@ declaration:
 
 A declaration's name is the one its source command declares, qualified by the namespaces open
 there (auxiliary declarations such as `foo._proof_1` or `foo.eq_1` are part of `foo`'s command).
-A command that declares nothing, an `example` or an anonymous instance is named `<…>` by its first
-words. Per module, the row `<unattributed>` holds the difference between Lean's cumulative totals
+The prefixes of a declaration (docstring, attributes, `omit … in`, `include … in`, `open … in`,
+`set_option … in`, `variable … in`, `attribute … in`, on one line or several, stacked in any
+order) belong to its command and do not change its name. A command that declares nothing, an
+`example` or an anonymous instance is named `<…>` by the first 60 characters of its text, with
+`#2`, `#3`, … added when that label occurs again in the module, in source order.
+
+The profile starts with `#` lines recording the regime it was taken in:
+
+  # perf_profile 1
+  # regime: jobs=16 threads=4 modules=54 selection=changed+dependents changed=13 dependents=41 base=fdaf9bf04
+  # host: cpus=256 runnable_before=1 runnable_after=2 other_lean_before=0 other_lean_after=0
+  #       other_lake_before=0 other_lake_after=0 load1_before=0.42 load1_after=9.80
+  # run: wall_s=38 lean=leanprover/lean4:v4.34.0 head=254eed5ff date=2026-11-12T04:31:02
+
+selection is changed, changed+dependents, all or named. The runnable threads and the `lean` and
+`lake` processes of any user, other than this process, its ancestors (it runs under `lake env`)
+and its descendants, are read twice, before the first job starts and after the last one ends, so
+that another build that starts during the profile shows; a `lake` process shows a build between
+two of its `lean` runs. The host is not named. The
+budgets of scripts/perf_gate.py are seconds at PROFILE_JOBS jobs of PROFILE_THREADS threads with
+no other build on the host: a declaration costs the same in a profile of 54 modules and one of
+2,074 at 16 jobs, and 8 to 14% more at 64 (audit/PERF.md), so the job count is the profiler's
+own and not the build's. Per module, the row `<unattributed>` holds the difference between Lean's cumulative totals
 (less import and initialization) and the attributed messages. The threshold is 0 because Lean
 applies it to each step, not to each command: at 1 ms, the many sub-millisecond steps of a
 `norm_num`- or instance-heavy proof (WeightTail44: 12 s, a quarter of the library's time) are
@@ -40,14 +61,21 @@ A module whose `lean` run exceeds the timeout gets the row `<timeout>` with elab
 one that fails gets `<error>` (elab_s its running time) and its first error lines on stderr.
 
 Module selection (scripts/perf_profile.sh is the entry point): the modules changed since a git
-revision, an explicit list, or `--all`, the import closures of GordieHowe.lean and
-GordieHoweCerts.lean. Skipped, with a note: the generated modules and the certificate-check modules
+revision (or listed in a file, `--changed-from`, for a tree that is not a git checkout), an explicit
+list, or `--all`, the import closures of GordieHowe.lean and GordieHoweCerts.lean. With
+`--dependents`, the changed modules' dependents are added: the direct importers of a changed module
+and the transitive importers that have a row in the base profile (audit/perf_baseline.tsv), so that
+a slowdown in a file the diff does not touch is measured. The set is a function of the diff, the
+tree's import graph and the committed base profile; `--estimate` prints it, sorted, with an
+estimated wall time, and runs nothing. `--roles FILE` records which profiled modules are changed and
+which are dependents, for scripts/perf_gate.py. Skipped, with a note: the generated modules and the certificate-check modules
 (`cert_boundary.perf_exempt`: `GordieHoweCerts.Generated.*`, `GordieHoweCheck.*`, the modules
 defining the checks), modules outside the two closures, and the hand-written modules of
 GordieHoweCerts when that library is not built (no olean, or `--no-certs`).
 """
 import argparse
 import bisect
+import collections
 import json
 import os
 import re
@@ -63,6 +91,19 @@ sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 from cert_boundary import check_source_dir, perf_exempt
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+BASELINE = os.path.join(ROOT, 'audit', 'perf_baseline.tsv')
+
+# The regime of a profile. The measurement has its own job count, independent of the build's
+# PQ_LAKE_JOBS: at 16 jobs a declaration costs the same whatever else is profiled with it.
+PROFILE_JOBS = 16
+PROFILE_THREADS = 4
+# The host is busy when, before the first job starts or after the last one ends, more than
+# BUSY_RUNNABLE threads are runnable, or more than BUSY_FOREIGN_LEAN `lean` processes or more than
+# BUSY_FOREIGN_LAKE `lake` processes exist that are not the profiler's own (of any user).
+BUSY_RUNNABLE = 8
+BUSY_FOREIGN_LEAN = 0
+BUSY_FOREIGN_LAKE = 0
+HEADER_VERSION = '# perf_profile 1'
 IMPORT = re.compile(r'^(?:public\s+)?(?:meta\s+)?import\s+(?:all\s+)?([A-Za-z0-9_.\']+)', re.M)
 CERTS = 'GordieHoweCerts'
 CHECK_SRC = check_source_dir()
@@ -159,6 +200,81 @@ def changed_modules(base):
         if m and m not in mods:
             mods.append(m)
     return mods
+
+
+def listed_modules(path):
+    """Modules named in a file, one per line: module names, or source paths relative to formal/ or
+    to the repository (the output of `git diff --name-only`). Lines that name no module of the
+    library (other files of a diff) are ignored."""
+    mods = []
+    with open(path, encoding='utf-8') as fh:
+        for line in fh:
+            n = line.strip()
+            if not n or n.startswith('#'):
+                continue
+            if n.endswith('.lean'):
+                if not os.path.isabs(n) and n.startswith('formal/'):
+                    n = n[len('formal/'):]
+                p = n if os.path.isabs(n) else os.path.join(ROOT, n)
+                m = path_module(p) if os.path.isfile(p) else None
+            else:
+                m = n if module_path(n) else None
+            if m and m not in mods:
+                mods.append(m)
+    return mods
+
+
+def base_seconds(path):
+    """{module: [rows, elab_s + kernel_s over them]} of a base profile (no file: empty)."""
+    out = {}
+    if os.path.exists(path):
+        with open(path, encoding='utf-8') as fh:
+            for line in fh:
+                p = line.rstrip('\n').split('\t')
+                if len(p) >= 4 and not line.startswith('#') and p[0] != 'declaration':
+                    r = out.setdefault(p[1], [0, 0.0])
+                    r[0] += 1
+                    r[1] += float(p[2]) + float(p[3])
+    return out
+
+
+def dependents(changed, base_rows):
+    """[(module, distance, via)]: the unchanged modules profiled with a set of changed ones, i.e.
+    the direct importers of a changed module and the transitive importers with a row in the base
+    profile. distance is the length of the shortest import chain to a changed module and via the
+    next module on it. A function of the changed set, the tree's import graph and the base profile
+    (a committed file): no timing of this run enters."""
+    rev = collections.defaultdict(list)
+    for m in sorted(library_closure()):
+        for i in imports_of(m):
+            rev[i].append(m)
+    start = sorted(changed)
+    dist, via = {c: 0 for c in start}, {}
+    todo = collections.deque(start)
+    while todo:
+        x = todo.popleft()
+        for y in rev[x]:
+            if y not in dist:
+                dist[y], via[y] = dist[x] + 1, x
+                todo.append(y)
+    return [(m, dist[m], via[m]) for m in sorted(dist, key=lambda m: (dist[m], m))
+            if dist[m] > 0 and (dist[m] == 1 or m in base_rows)]
+
+
+# The estimate's two constants, from stored runs on a 256-core host (audit/PERF.md): the slot time
+# of a module beyond its base rows (imports, declarations under the base profile's floor) and the
+# start cost of the slowest module.
+EST_SLOT_S = 3.6
+EST_START_S = 6.0
+
+
+def estimate(mods, base_rows, jobs):
+    """Estimated wall seconds of profiling mods, jobs at once: the slowest module or the pool's
+    throughput, whichever is larger. An estimate from the base profile, not a measurement."""
+    if not mods:
+        return 0.0
+    b = [base_rows[m][1] if m in base_rows else 0.0 for m in mods]
+    return max(EST_START_S + max(b), sum(EST_SLOT_S + x for x in b) / max(1, jobs))
 
 
 def select(mods, no_certs=False):
@@ -467,7 +583,7 @@ def parse_profile(lines, names):
 # Profiler messages (the default mode)
 
 CONTINUATION = re.compile(r'^(termination_by|decreasing_by|where|deriving|with|\||\)|\]|\}|·|:=)')
-PREFIX_IN = re.compile(r'^(?:omit|include|open|set_option|variable)\b.*\bin$', re.S)
+STOP_WORDS = frozenset(KEYWORDS + ('namespace', 'section', 'end', 'mutual'))
 
 
 def strip_comments(t):
@@ -491,8 +607,34 @@ def strip_comments(t):
     return ''.join(out)
 
 
+IN_PREFIX = re.compile(r'(?:omit|include|open|set_option|variable|attribute)\b')
+TOKEN = re.compile(r'"(?:[^"\\]|\\.)*"|[()\[\]{}⟨⟩⦃⦄]|[^\s()\[\]{}⟨⟩⦃⦄"]+')
+OPENERS, CLOSERS = '([{⟨⦃', ')]}⟩⦄'
+
+
+def in_prefix_end(s):
+    """The end of a leading `… in` prefix of s (omit, include, open, set_option, variable or
+    attribute, up to its `in`, on one line or several), or None. The `in` is the first one outside
+    brackets and strings; a declaration keyword before it means s is not such a prefix."""
+    if not IN_PREFIX.match(s):
+        return None
+    depth = 0
+    for k, mm in enumerate(TOKEN.finditer(s, 0, 6000)):
+        tok = mm.group(0)
+        if tok in OPENERS:
+            depth += 1
+        elif tok in CLOSERS:
+            depth -= 1
+        elif depth == 0 and k > 0:
+            if tok == 'in':
+                return mm.end()
+            if tok in STOP_WORDS:
+                return None
+    return None
+
+
 def strip_attrs(t):
-    """t without leading attributes `@[…]` and `… in` prefixes (omit, include, open, set_option)."""
+    """t without leading attributes `@[…]` and `… in` prefixes (in_prefix_end)."""
     while True:
         s = t.lstrip()
         if s.startswith('@['):
@@ -507,9 +649,9 @@ def strip_attrs(t):
                 i += 1
             t = s[i + 1:]
             continue
-        mm = re.match(r'(?:omit|include|open|set_option)\b[^\n]*?\bin\b', s)
-        if mm:
-            t = s[mm.end():]
+        end = in_prefix_end(s)
+        if end is not None:
+            t = s[end:]
             continue
         return s
 
@@ -519,7 +661,7 @@ def command_label(text):
     s = strip_attrs(strip_comments(text))
     mm = re.match(r'(?:(?:%s)\s+)*(%s)\b(.*)' % ('|'.join(MODIFIERS), '|'.join(KEYWORDS)), s, re.S)
     if not mm:
-        return None, '<%s>' % ' '.join(s.split()[:3])[:60]
+        return None, '<%s>' % ' '.join(s.split())[:60]
     short = decl_name(mm.group(1), mm.group(2))
     if short is None:
         return None, '<%s %s>' % (mm.group(1), ' '.join(mm.group(2).split())[:60])
@@ -531,7 +673,8 @@ def source_blocks(path):
 
     A command starts at a line that begins in column 0 outside a block comment; a docstring,
     attribute or `… in` prefix belongs to the command after it."""
-    lines = open(path, encoding='utf-8').read().split('\n')
+    with open(path, encoding='utf-8') as fh:
+        lines = fh.read().split('\n')
     starts, depth = [], 0
     for n, line in enumerate(lines, 1):
         if depth == 0 and line and not line[0].isspace() and not line.startswith('--') and \
@@ -561,9 +704,8 @@ def source_blocks(path):
             merged.append([blk[0], blk[1], False])
         body = strip_comments(merged[-1][1]).strip()
         rest = strip_attrs(body)
-        merged[-1][2] = (not rest or bool(PREFIX_IN.match(' '.join(rest.split()))) or
-                         rest in MODIFIERS)
-    blocks, stack = [], []
+        merged[-1][2] = not rest or rest in MODIFIERS
+    blocks, stack, seen = [], [], {}
     for first, text, _ in merged:
         s = strip_attrs(strip_comments(text)).strip()
         mm = re.match(r'namespace\s+(\S+)', s)
@@ -580,7 +722,9 @@ def source_blocks(path):
             ns = [p for e in stack if e for p in e]
             name = short[len('_root_.'):] if short.startswith('_root_.') else '.'.join(ns + [short])
         else:
-            name = label
+            # a label that occurs again in the module gets an ordinal, in source order
+            seen[label] = seen.get(label, 0) + 1
+            name = label if seen[label] == 1 else '%s#%d' % (label, seen[label])
         blocks.append((first, name))
     return blocks
 
@@ -699,14 +843,33 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('modules', nargs='*', help='modules or source paths (with --base: added)')
     ap.add_argument('--base', help='git revision: profile the modules changed since its merge base')
+    ap.add_argument('--changed-from', metavar='FILE',
+                    help='profile the modules FILE lists as changed (module names or source '
+                         'paths, one per line, e.g. the output of `git diff --name-only`): for a '
+                         'tree that is not a git checkout')
+    ap.add_argument('--dependents', action='store_true',
+                    help='with --base or --changed-from: also the direct importers of the changed '
+                         'modules and the transitive importers with a row in --base-profile')
+    ap.add_argument('--base-profile', default=BASELINE, metavar='FILE',
+                    help='the base profile whose rows select dependents and feed --estimate '
+                         '(default audit/perf_baseline.tsv)')
+    ap.add_argument('--roles', metavar='FILE',
+                    help='write the profiled modules with their role (changed or dependent), '
+                         'distance and via to FILE, for perf_gate.py --roles')
+    ap.add_argument('--estimate', action='store_true',
+                    help='print the selected modules, sorted (role, module, distance, via, base '
+                         'rows, base seconds), and the estimated wall time; run nothing')
     ap.add_argument('--all', action='store_true',
                     help='every module of the closures of GordieHowe and GordieHoweCerts')
     ap.add_argument('--no-certs', action='store_true',
                     help='skip the modules of GordieHoweCerts (the library is not built in this run)')
     ap.add_argument('-o', '--output', default='-', help='profile TSV (default stdout)')
-    ap.add_argument('-j', '--jobs', type=int,
-                    default=int(os.environ.get('PQ_LAKE_JOBS') or 8), help='parallel lean runs')
-    ap.add_argument('--threads', type=int, default=4, help='threads per lean run (lean -j)')
+    ap.add_argument('-j', '--jobs', type=int, default=PROFILE_JOBS,
+                    help='parallel lean runs (default %(default)s, the regime of the budgets; '
+                         'another count is recorded in the profile, and perf_gate.py then '
+                         'refuses it unless told otherwise)')
+    ap.add_argument('--threads', type=int, default=PROFILE_THREADS,
+                    help='threads per lean run (lean -j; default %(default)s, part of the regime)')
     ap.add_argument('--threshold-ms', type=int, default=100,
                     help='with --trace, the trace threshold (default 100); budgets always profile '
                          'every step (profiler.threshold 0)')
@@ -726,10 +889,28 @@ def main():
         if m is None:
             sys.exit('perf_profile: not a module of the library: %s' % x)
         mods.append(m)
+    changed = []
     if args.base:
-        mods += [m for m in changed_modules(args.base) if m not in mods]
+        changed += changed_modules(args.base)
+    if args.changed_from:
+        changed += [m for m in listed_modules(args.changed_from) if m not in changed]
+    roles = {m: ('named', 0, '') for m in mods}
+    mods += [m for m in changed if m not in mods]
+    roles.update({m: ('changed', 0, '') for m in changed})
+    if args.dependents:
+        if not (args.base or args.changed_from):
+            sys.exit('perf_profile: --dependents needs a base revision or --changed-from')
+        own = set(mods)
+        for m, d, v in dependents(changed, base_seconds(args.base_profile)):
+            if m not in own:
+                roles[m] = ('dependent', d, v)
+                mods.append(m)
     if args.all:
-        mods += sorted(m for m in library_closure() if m not in mods)
+        rest = sorted(m for m in library_closure() if m not in mods)
+        roles.update({m: ('all', 0, '') for m in rest})
+        mods += rest
+    selection = 'all' if args.all else 'changed+dependents' if args.dependents else \
+        'changed' if args.base or args.changed_from else 'named'
     if args.parse:
         if len(mods) != 1:
             sys.exit('perf_profile: --parse needs exactly one module')
@@ -741,7 +922,8 @@ def main():
             elines = open(ep, encoding='utf-8').readlines() if os.path.exists(ep) else []
             rows, _ = parse_messages(lines, elines, source_blocks(module_path(mods[0])))
         results = [(mods[0], 'ok', 0.0, rows)]
-        write_profile(args.output, results)
+        write_profile(args.output, results, [HEADER_VERSION, '# regime: parsed from %s' %
+                                             os.path.basename(args.parse)])
         return 0
     keep, skip = select(mods, args.no_certs)
     for why in sorted({w for _, w in skip}):
@@ -751,16 +933,47 @@ def main():
     if args.list:
         print('\n'.join(keep))
         return 0
+    ndep = sum(1 for m in keep if roles[m][0] == 'dependent')
+    nchanged = sum(1 for m in keep if roles[m][0] == 'changed')
+    if args.roles:
+        with open(args.roles + '.tmp', 'w', encoding='utf-8') as fh:
+            fh.write('module\trole\tdistance\tvia\n')
+            for m in sorted(keep, key=lambda m: (roles[m][0] == 'dependent', m)):
+                fh.write('%s\t%s\t%d\t%s\n' % ((m,) + roles[m]))
+        os.replace(args.roles + '.tmp', args.roles)
+    if args.estimate:
+        rows = base_seconds(args.base_profile)
+        own = [m for m in keep if roles[m][0] != 'dependent']
+        for m in sorted(keep, key=lambda m: (roles[m][0] == 'dependent', m)):
+            r, b = roles[m], rows.get(m, [0, 0.0])
+            print('%s\t%s\t%d\t%s\t%d\t%.2f' % (r[0], m, r[1], r[2], b[0], b[1]))
+        print('perf_profile: estimate, %d at once: %d modules %.0f s; with the %d dependents %.0f s'
+              % (args.jobs, len(own), estimate(own, rows, args.jobs), ndep,
+                 estimate(keep, rows, args.jobs)), file=sys.stderr)
+        return 0
 
     raw_dir = args.keep_raw or tempfile.mkdtemp(prefix='perf-profile-')
     os.makedirs(raw_dir, exist_ok=True)
     root_opts, lib_opts = lean_options()
+    runnable, foreign, load1, lakes = host_state()
+    regime = 'jobs=%d threads=%d modules=%d selection=%s' % (args.jobs, args.threads, len(keep),
+                                                             selection)
+    if selection.startswith('changed'):
+        regime += ' changed=%d' % nchanged
+        if args.dependents:
+            regime += ' dependents=%d' % ndep
+        regime += ' base=%s' % (args.base or 'file:' + os.path.basename(args.changed_from))
+    if busy(runnable, foreign, lakes):
+        print('perf_profile: the host is busy (%s runnable threads, %s other lean and %s other '
+              'lake processes): the times of this profile are not those of a quiet host' %
+              (runnable, foreign, lakes), file=sys.stderr)
     # Longest-first would need history; source size is a fair proxy for scheduling.
     keep.sort(key=lambda m: -os.path.getsize(module_path(m)))
     start = time.time()
     results = []
-    print('perf_profile: %d modules, %d at once, %d threads each' %
-          (len(keep), args.jobs, args.threads), file=sys.stderr)
+    print('perf_profile: %d modules%s, %d at once, %d threads each' %
+          (len(keep), ' (%d of them dependents)' % ndep if args.dependents else '', args.jobs,
+           args.threads), file=sys.stderr)
     with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as ex:
         futs = [ex.submit(run_module, m, args, root_opts, lib_opts, raw_dir) for m in keep]
         for k, f in enumerate(as_completed(futs), 1):
@@ -779,14 +992,126 @@ def main():
         except OSError:
             pass
 
-    write_profile(args.output, results)
-    print('perf_profile: %d modules in %.0f s (wall)' % (len(results), time.time() - start),
-          file=sys.stderr)
+    wall = time.time() - start
+    # the jobs are over: every lean process now is another build's
+    after = host_state()
+    if busy(after[0], after[1], after[3]) and not busy(runnable, foreign, lakes):
+        print('perf_profile: the host is busy at the end of the profile (%s runnable threads, %s '
+              'other lean and %s other lake processes): another build ran during it' %
+              (after[0], after[1], after[3]), file=sys.stderr)
+    write_profile(args.output, results, [
+        HEADER_VERSION, '# regime: ' + regime,
+        '# host: cpus=%s runnable_before=%s runnable_after=%s other_lean_before=%s '
+        'other_lean_after=%s other_lake_before=%s other_lake_after=%s load1_before=%s '
+        'load1_after=%s' %
+        (os.cpu_count(), runnable, after[0], foreign, after[1], lakes, after[3], load1,
+         after[2]),
+        '# run: wall_s=%.0f lean=%s head=%s date=%s' %
+        (wall, toolchain(), head_commit(), time.strftime('%Y-%m-%dT%H:%M:%S'))])
+    print('perf_profile: %d modules in %.0f s (wall)' % (len(results), wall), file=sys.stderr)
     return 0
 
 
-def write_profile(output, results):
-    out = ['declaration\tmodule\telab_s\tkernel_s\tinterp_s']
+def read_procs():
+    """{pid: (name, parent pid)} of every process of the host, of any user (/proc/PID/stat)."""
+    procs = {}
+    for pid in os.listdir('/proc'):
+        if pid.isdigit():
+            try:
+                with open('/proc/%s/stat' % pid, encoding='utf-8', errors='replace') as fh:
+                    s = fh.read()
+                # "pid (name) state ppid …": the name may hold spaces and parentheses
+                i, j = s.index('('), s.rindex(')')
+                procs[int(pid)] = (s[i + 1:j], int(s[j + 1:].split()[1]))
+            except (OSError, ValueError, IndexError):
+                pass
+    return procs
+
+
+def others(procs, name, me):
+    """How many processes called name are not me, an ancestor of me or a descendant of me.
+    Ancestors and descendants are found by parent pid, not by name: the profiler runs under
+    `lake env`, and that lake process is its own."""
+    def ancestors(pid):
+        seen = set()
+        while pid in procs and pid not in seen:
+            seen.add(pid)
+            pid = procs[pid][1]
+        return seen
+    mine = ancestors(me)
+    return sum(1 for pid, (n, _) in procs.items()
+               if n == name and pid not in mine and me not in ancestors(pid))
+
+
+def host_state():
+    """(runnable threads, other `lean` processes, 1-minute load average, other `lake` processes)
+    now, each 'unknown' where /proc does not give it. Read before the first job starts and after
+    the last one ends."""
+    runnable = foreign = load1 = lakes = 'unknown'
+    try:
+        with open('/proc/stat', encoding='ascii') as fh:
+            for line in fh:
+                if line.startswith('procs_running'):
+                    # less this process
+                    runnable = max(0, int(line.split()[1]) - 1)
+        with open('/proc/loadavg', encoding='ascii') as fh:
+            load1 = fh.read().split()[0]
+        procs = read_procs()
+        foreign = others(procs, 'lean', os.getpid())
+        lakes = others(procs, 'lake', os.getpid())
+    except OSError:
+        pass
+    return runnable, foreign, load1, lakes
+
+
+def busy(runnable, foreign, lakes=''):
+    """Whether a host state (host_state, or the fields of a profile's header) is a busy host."""
+    def over(x, limit):
+        return str(x).isdigit() and int(x) > limit
+    return over(runnable, BUSY_RUNNABLE) or over(foreign, BUSY_FOREIGN_LEAN) or \
+        over(lakes, BUSY_FOREIGN_LAKE)
+
+
+def toolchain():
+    try:
+        return open(os.path.join(ROOT, 'lean-toolchain'), encoding='utf-8').read().split()[0]
+    except (OSError, IndexError):
+        return 'unknown'
+
+
+def head_commit():
+    """The tree's commit, short, with + when a tracked file under formal/ differs from it."""
+    def git(*a):
+        return subprocess.run(['git', '-C', ROOT] + list(a), capture_output=True, text=True)
+    try:
+        r = git('rev-parse', '--short=9', 'HEAD')
+        if r.returncode != 0:
+            return 'not-a-git-checkout'
+        dirty = git('status', '--porcelain', '--untracked-files=no', '--', '.').stdout.strip()
+        return r.stdout.strip() + ('+' if dirty else '')
+    except OSError:
+        return 'not-a-git-checkout'
+
+
+def read_header(path):
+    """{field: value} of a profile's `#` lines (regime, host and run fields; no header: empty)."""
+    meta = {}
+    try:
+        with open(path, encoding='utf-8') as fh:
+            for line in fh:
+                if not line.startswith('#'):
+                    break
+                for tok in line[1:].split():
+                    if '=' in tok:
+                        k, v = tok.split('=', 1)
+                        meta[k] = v
+    except OSError:
+        pass
+    return meta
+
+
+def write_profile(output, results, header=()):
+    out = list(header) + ['declaration\tmodule\telab_s\tkernel_s\tinterp_s']
     body = []
     for m, status, wall, rows in results:
         if status != 'ok':
