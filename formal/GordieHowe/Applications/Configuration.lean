@@ -249,6 +249,22 @@ structure Facts : Prop extends R.GrantedFacts where
 instance {R : Configuration} : CoeOut R.Facts R.GrantedFacts :=
   ⟨Facts.toGrantedFacts⟩
 
+variable {R} in
+/-- **The composite of a configuration has at most `rounds` challenges**
+(`SPBCS.card_chIdx_le_size`, `GrantedFacts.rounds_le`). -/
+theorem GrantedFacts.card_chIdx_le_rounds (F : R.GrantedFacts) (C : R.ProofSystem) :
+    Fintype.card (ChIdx (R.iop C).P (R.iop C).term) ≤ R.rounds :=
+  (SPBCS.card_chIdx_le_size _ _).trans ((size_eq_sum _ _).trans_le (F.rounds_le C))
+
+variable {R} in
+/-- **The verifier's query figure exceeds the number of challenges** when the composite has a
+round (`card_chIdx_le_rounds`, `GrantedFacts.kq_ge`). -/
+theorem GrantedFacts.card_chIdx_add_one_le_kq (F : R.GrantedFacts) (C : R.ProofSystem)
+    (h : 1 ≤ R.rounds) : Fintype.card (ChIdx (R.iop C).P (R.iop C).term) + 1 ≤ R.kq := by
+  have h1 := F.card_chIdx_le_rounds C
+  have h2 := F.kq_ge C
+  omega
+
 end
 
 namespace Common

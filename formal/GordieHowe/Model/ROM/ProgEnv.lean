@@ -25,8 +25,8 @@ simulated environment of a simulator is the environment of the simulator's kerne
 - `IAlg.liftReq`, `Adversary.liftReq`: a proof query `⟨x, w⟩` read as the proof query `⟨⟨x, w⟩, ()⟩` of
   the game whose statements are the proof queries and whose witnesses are trivial, so that a kernel
   becomes a simulator (`Kernel.toSimulator`) and the zero-knowledge theorems of
-  `GordieHowe/Model/ROM/SaltedZK.lean` apply to a kernel (`acceptProb_liftReq_realEnv`,
-  `acceptProb_liftReq_simEnv`).
+  `GordieHowe/Model/ROM/SaltedZKLastProofQuery.lean` apply to a kernel
+  (`acceptProb_liftReq_realEnv`, `acceptProb_liftReq_simEnv`).
 - `IAlg.PostOracleFree`: the output bit does not read the oracle after the steps, so every query
   of the adversary is one of its `m` steps and counts toward its budget.
 -/

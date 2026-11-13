@@ -24,6 +24,12 @@ charged. The adversary's own budget of queries over all its steps is not charged
   adversary's budget of `t` queries covers all its queries and its output does not read the final
   oracle (`OutputOracleFree`); implied by `ROM.NIZK.ZeroKnowledgeQueryBounded`
   (`zeroKnowledge_of_queryBounded`).
+
+This file defines `ROM.ZeroKnowledge` and `ROM.EverlastingZeroKnowledge` over
+`ROM.QueryBoundedAdversary` and proves them from the internal forms of
+`GordieHowe/Model/ROM/NIZK.lean` by `ROM.QueryBoundedAdversary.zeroKnowledge_of_queryBounded` and
+`ROM.QueryBoundedAdversary.everlastingZeroKnowledge_of_nizk`; that module's docstring describes the
+whole chain.
 -/
 
 namespace GordieHowe.ROM
@@ -34,12 +40,6 @@ open scoped ENNReal
 namespace IAlg
 
 variable {A B Req Resp Out : Type} {m : ℕ} (𝒜 : IAlg A B Req Resp Out m)
-
-/-- **The number of queries before step `k`** of the run of `𝒜` against `R` from `O`, for any
-response type (`IAlg.queriesBefore` of `GordieHowe/Model/ROM/SimExtract.lean` is the same count for optional
-responses). -/
-def queryCountBefore (R : Responder A B Req Resp) (O : A → B) (k : ℕ) : ℕ :=
-  ((Finset.range k).filter fun i => (𝒜.next (𝒜.run R O i).hist).IsQuery).card
 
 /-- **A budget of `t` queries before each proof query**: against every responder and every oracle, every
 proof query of `𝒜` comes after at most `t` queries of its run. The queries after the last proof query of a

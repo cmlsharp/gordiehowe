@@ -43,6 +43,14 @@ variable {ι : Type} {t : SPTerm ι} {Mg : Merges t} {k kN kS L e : ℕ} {n : ι
   {P : (j : ι) → ProtocolSpec (n j)} [∀ j i, Fintype ((P j).Challenge i)]
   [∀ j i, DecidableEq ((P j).Challenge i)] {X : Type}
 
+omit [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)] in
+variable (t P) in
+/-- **A composite has at most `t.size n` challenges**: one per challenge round of each leaf. -/
+theorem card_chIdx_le_size : Fintype.card (ChIdx P t) ≤ t.size n := by
+  rw [Fintype.card_congr ChIdx.equivSigma, Fintype.card_sigma, size_eq_sum]
+  exact Finset.sum_le_sum fun p _ =>
+    (Fintype.card_subtype_le _).trans_eq (Fintype.card_fin _)
+
 section
 
 variable [∀ j i, Nonempty ((P j).Challenge i)] (M : SPBCS Mg P X k kN kS L e)
@@ -150,6 +158,31 @@ variable {M} in
 theorem FormatBounds.queriesAtMost {Qs : ∀ x, M.IOPQueries V x} {NQ N : ℕ}
     (hb : M.FormatBounds Qs NQ N) : M.QueriesAtMost Qs (kqOf Mg n NQ N) :=
   fun _ _ _ hv => queries_length_le_of_formatBounds hb hv
+
+omit [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)]
+  [∀ j i, Nonempty ((P j).Challenge i)] in
+variable (Mg P) in
+/-- **The verifier's query budget exceeds the number of challenges** when the composite has a
+round. -/
+theorem card_chIdx_add_one_le_kqOf (NQ N : ℕ) (h : 1 ≤ t.size n) :
+    Fintype.card (ChIdx P t) + 1 ≤ kqOf Mg n NQ N := by
+  have := card_chIdx_le_size t P
+  unfold kqOf
+  omega
+
+omit [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)]
+  [∀ j i, Nonempty ((P j).Challenge i)] in
+variable (Mg) in
+/-- **The round errors and one largest error together are at most `kqOf` largest errors** when
+the composite has a round. -/
+theorem sum_add_maxError_le_kqOf (NQ N : ℕ) (h : 1 ≤ t.size n) (ε : ChIdx P t → ℝ≥0) :
+    ∑ c, ε c + maxError ε ≤ kqOf Mg n NQ N * maxError ε := by
+  calc ∑ c, ε c + maxError ε ≤ Fintype.card (ChIdx P t) * maxError ε + maxError ε :=
+        add_le_add (sum_le_card_mul_max ε) le_rfl
+    _ = ((Fintype.card (ChIdx P t) + 1 : ℕ) : ℝ≥0) * maxError ε := by push_cast; ring
+    _ ≤ kqOf Mg n NQ N * maxError ε := by
+        gcongr
+        exact_mod_cast card_chIdx_add_one_le_kqOf Mg P NQ N h
 
 /-! ### The instance -/
 

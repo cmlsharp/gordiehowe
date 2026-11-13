@@ -9,6 +9,7 @@ public import GordieHowe.Foundations.ToMathlib.PMFUniformApprox
 public import GordieHowe.Model.Quantum.Interactive.QueryBoundedZK
 public import GordieHowe.Model.QROM.SaltedRead
 public import GordieHowe.Model.QROM.ProverCoins
+public import GordieHowe.Model.ROM.SaltedZK
 
 public section
 

@@ -84,23 +84,6 @@ theorem queryBound_toSEProg (t : ℕ) : (𝒜.toSEProg t).QueryBound t := by
 
 variable (R : Responder A B Req (Option Resp)) (O : A → B)
 
-/-- **The number of queries among the first `k` steps** of the run. -/
-def queriesBefore (k : ℕ) : ℕ :=
-  ((Finset.range k).filter fun k' => (𝒜.next (𝒜.run R O k').hist).IsQuery).card
-
-theorem queriesBefore_succ (k : ℕ) :
-    𝒜.queriesBefore R O (k + 1) =
-      𝒜.queriesBefore R O k + if (𝒜.next (𝒜.run R O k).hist).IsQuery then 1 else 0 := by
-  rw [queriesBefore, queriesBefore, Finset.range_add_one, Finset.filter_insert]
-  split_ifs with h
-  · rw [Finset.card_insert_of_notMem (by simp)]
-  · rfl
-
-theorem queriesBefore_mono {k k' : ℕ} (h : k ≤ k') : 𝒜.queriesBefore R O k ≤ 𝒜.queriesBefore R O k' :=
-  Finset.card_le_card (Finset.filter_subset_filter _ (Finset.range_subset_range.2 h))
-
-theorem queriesBefore_steps : 𝒜.queriesBefore R O m = 𝒜.queryCount R O := rfl
-
 variable [DecidableEq A] {SC : Type} (Sim : Req → SC → OracleProg A B (NARG.SimOutput A B Resp))
   {Q : ℕ} (c : Fin Q → SC)
 
@@ -121,10 +104,10 @@ theorem compose_tree {t : ℕ} (ht : 𝒜.queryCount (simResponder Sim c) O ≤ 
       (𝒜.run (simResponder Sim c) O k).oracle = O.reprogram ass →
       min i Q = min (𝒜.run (simResponder Sim c) O k).nreq Q →
       ((SEProg.compose Sim c (𝒜.tree t j (𝒜.run (simResponder Sim c) O k).hist
-          (𝒜.queriesBefore (simResponder Sim c) O k)) ass i qs).run O).out =
+          (𝒜.queryCountBefore (simResponder Sim c) O k)) ass i qs).run O).out =
           𝒜.output (simResponder Sim c) O ∧
       O.reprogram ((SEProg.compose Sim c (𝒜.tree t j (𝒜.run (simResponder Sim c) O k).hist
-          (𝒜.queriesBefore (simResponder Sim c) O k)) ass i qs).run O).ass =
+          (𝒜.queryCountBefore (simResponder Sim c) O k)) ass i qs).run O).ass =
           (𝒜.run (simResponder Sim c) O m).oracle
   | 0, k, ass, i, qs, hk, hO, _ => by
     obtain rfl : k = m := by omega
@@ -132,17 +115,17 @@ theorem compose_tree {t : ℕ} (ht : 𝒜.queryCount (simResponder Sim c) O ≤ 
   | j + 1, k, ass, i, qs, hk, hO, hi => by
     set R := simResponder Sim c
     have hstep := 𝒜.run_succ R O k
-    have hqb := 𝒜.queriesBefore_succ R O k
+    have hqb := 𝒜.queryCountBefore_succ R O k
     unfold tree
     split
     · rename_i a ha
       have hq : (Action.query a : Action A Req).IsQuery := trivial
-      have hu : 𝒜.queriesBefore R O (k + 1) = 𝒜.queriesBefore R O k + 1 := by
+      have hu : 𝒜.queryCountBefore R O (k + 1) = 𝒜.queryCountBefore R O k + 1 := by
         rw [hqb, ha]
         simp [hq]
-      have hlt : 𝒜.queriesBefore R O k < t := by
-        have h1 := 𝒜.queriesBefore_mono R O (show k + 1 ≤ m by omega)
-        rw [hu, queriesBefore_steps] at h1
+      have hlt : 𝒜.queryCountBefore R O k < t := by
+        have h1 := 𝒜.queryCountBefore_mono R O (show k + 1 ≤ m by omega)
+        rw [hu, queryCountBefore_steps] at h1
         omega
       simp only [hlt, ↓reduceIte, SEProg.compose, OracleProg.run_query]
       have hans : (lastAssign ass a).getD (O a) = (𝒜.run R O k).oracle a := by
@@ -156,7 +139,7 @@ theorem compose_tree {t : ℕ} (ht : 𝒜.queryCount (simResponder Sim c) O ≤ 
       rw [hk1, hu] at ih
       exact ih
     · rename_i r hr
-      have hu : 𝒜.queriesBefore R O (k + 1) = 𝒜.queriesBefore R O k := by
+      have hu : 𝒜.queryCountBefore R O (k + 1) = 𝒜.queryCountBefore R O k := by
         rw [hqb, hr]
         simp [Action.IsQuery]
       simp only [SEProg.compose]

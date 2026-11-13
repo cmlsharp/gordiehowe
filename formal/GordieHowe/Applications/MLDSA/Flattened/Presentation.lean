@@ -5,7 +5,7 @@ module
 
 public import GordieHowe.Applications.MLDSA.Flattened.Signer
 public import GordieHowe.Applications.MLDSA.Flattened.Core.Oracle
-public import GordieHowe.Model.ROM.ProgEnv
+public import GordieHowe.Model.QROM.SaltedZK
 public import GordieHowe.Foundations.ToMathlib.PMFUniformPullback
 
 public section
@@ -26,7 +26,7 @@ points of both oracles (`PresIn`, `PresOut`), the presenter given as an oracle p
 
 namespace GordieHowe.MLDSA
 
-open _root_.MLDSA _root_.MLDSA.Concrete Finset PMF GordieHowe.ROM.NIZK GordieHowe.QROM
+open _root_.MLDSA _root_.MLDSA.Concrete Finset PMF GordieHowe.QROM
 open scoped ENNReal BigOperators
 
 variable {p : Params} [NeZero (bucketCount p)] {Rnd Ctx : Type}

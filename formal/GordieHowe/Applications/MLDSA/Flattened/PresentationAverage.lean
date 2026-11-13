@@ -40,7 +40,7 @@ are the forms without the suffix `_of_keyFloorAt`, with `L = β_min`.
 
 namespace GordieHowe.MLDSA
 
-open _root_.MLDSA _root_.MLDSA.Concrete Finset PMF GordieHowe.MLDSA.Regularity GordieHowe.ROM.NIZK
+open _root_.MLDSA _root_.MLDSA.Concrete Finset PMF GordieHowe.MLDSA.Regularity
 open scoped ENNReal BigOperators
 
 /-- `min(1, a + b) ≤ min(1, a) + b` for `b ≥ 0`. -/

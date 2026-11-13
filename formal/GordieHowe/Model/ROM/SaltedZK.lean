@@ -10,7 +10,7 @@ public import GordieHowe.Foundations.Probability.Probability
 @[expose] public section
 
 /-!
-# Zero knowledge of a salted argument in the classical random-oracle model
+# Salted arguments in the classical random-oracle model: slices and hybrids
 
 The classical counterpart of `GordieHowe/Model/QROM/SaltedZK.lean`, for the same salted arguments:
 the oracle is `H : X → Y`, `saltOf x` is the salt in the slot of the input `x`, the prover's and
@@ -22,31 +22,26 @@ with salt `σ` on the same oracle are within `η H` in total variation. It is a 
 about one proof; averaged over the salt it is the hypothesis `GordieHowe.QROM.SliceClose` of the
 quantum theorem.
 
-**The theorem** (`zeroKnowledge_of_sliceCloseAt`): zero knowledge against classical adversaries
-(`ROM.NIZK.ZeroKnowledge`), unbounded after their steps, at the simulator `S`, with error
-
-    Q t / |Sd| + Q (Q - 1) / (2 |Sd|) + Q · 𝔼 H, η H.
-
-**The argument.** Hybrid `j` (`hybResp`) answers the valid proof queries numbered below `j` with the
+**The hybrids.** Hybrid `j` (`hybResp`) answers the valid proof queries numbered below `j` with the
 simulator and the others with the prover, all on the oracle in force; its tape (`Tape`) draws one
 salt per proof query, shared by the prover and the simulator, so that hybrids `j` and `j + 1` use the
-same salt `σ` at proof query `j`. From `j` to `j + 1`:
+same salt `σ` at proof query `j`. This file proves the lemmas of the hybrid argument:
 
-1. (exact) Relabel the tape so that the initial oracle is `H` with the slice of `σ` answered by a
-   fresh `F` (`expect_relabel`).
-2. (identical until bad, `(t + j) / |Sd|`) Unless a query before proof query `j` carries the salt `σ`
-   (`Hit`, at most `t / |Sd|`: the run before proof query `j` does not read `σ`) or an earlier proof query
-   drew `σ` (`Coll`, at most `j / |Sd|`), the run from the relabelled oracle and the run from `H`
-   in which proof query `j` replaces the slice of `σ` by `F` have the same replies, and the same state
-   from proof query `j` on (`run_coupling`), in both hybrids.
-3. (kernel, `𝔼 H, η H`) In the second run proof query `j`'s reply has the law `realSliceAt σ` in hybrid
-   `j` and `simSliceAt σ` in hybrid `j + 1` on the oracle in force at that proof query, which agrees
-   with `H` on the salt-free inputs; the bad event does not depend on proof query `j`'s coins, so the
-   kernel step is charged on the good event at the fixed salt `σ`
-   (`abs_expect_accepts_override_sub_le`).
+- the relabelling of the tape so that the initial oracle is `H` with the slice of `σ` answered by a
+  fresh `F` (`expect_relabel`);
+- the coupling of the runs from the relabelled oracle and from `H` with proof query `j` replacing
+  the slice of `σ` by `F`, which have the same replies and the same state from proof query `j` on
+  while no query and no earlier proof query has the salt `σ` (`run_coupling`), and the bound on an
+  earlier proof query drawing `σ` (`StepColl`, `expect_ite_exists_salt_le`);
+- the kernel step at the fixed salt `σ`, where proof query `j`'s reply has the law `realSliceAt σ`
+  in hybrid `j` and `simSliceAt σ` in hybrid `j + 1` (`abs_expect_accepts_override_sub_le`,
+  `tvDist_replyAt_le`);
+- the real and simulated games as hybrids `0` and `Q` (`toReal_acceptProb_realEnv`,
+  `toReal_acceptProb_simEnv`) and the sum of the step errors (`sum_range_stepError`).
 
-The bad event is charged once per proof query, which is where the classical bound gains over the two
-O2H steps of the quantum argument (`4 Q t / √|Sd|` there).
+The two zero-knowledge theorems of salted arguments in the classical random-oracle model,
+`everlastingZeroKnowledge_of_sliceCloseAt` and `zeroKnowledge_of_sliceCloseAt`, are proved from
+these lemmas in `GordieHowe/Model/ROM/SaltedZKLastProofQuery.lean`.
 -/
 
 open Finset
@@ -590,14 +585,6 @@ variable (rel P S) in
 def baseResp {Q : ℕ} (j : ℕ) (ω : Tape X Y Sd C SC Q) : Responder X Y Stmt Wit Proof :=
   override (hybResp rel P S j ω) j refuseReply
 
-variable (saltOf rel P S) in
-/-- **A query hits the salt of proof query `j`**: some query of the run of `baseResp j ω` carries the
-salt of proof query `j`. -/
-def StepHit {m : ℕ} (A : IAlg X Y Stmt Wit Proof m) {Q : ℕ} {j : ℕ} (hj : j < Q)
-    (ω : Tape X Y Sd C SC Q) : Prop :=
-  ∃ k < m, ∃ x, A.next (A.run (baseResp rel P S j ω) ω.oracle k).hist = .query x ∧
-    saltOf x = some (ω.salts ⟨j, hj⟩)
-
 /-- **An earlier proof query drew the salt of proof query `j`.** -/
 def StepColl {Q : ℕ} {j : ℕ} (hj : j < Q) (ω : Tape X Y Sd C SC Q) : Prop :=
   ∃ i : Fin Q, (i : ℕ) < j ∧ ω.salts i = ω.salts ⟨j, hj⟩
@@ -639,101 +626,6 @@ theorem override_hybResp_updSim {Q : ℕ} {j : ℕ} (hj : j < Q) (j' : ℕ) (ω 
     · have hne : (⟨i, h1⟩ : Fin Q) ≠ ⟨j, hj⟩ := fun e => hi (congrArg Fin.val e)
       simp only [dif_pos h1, Function.update_of_ne hne]
     · simp only [dif_neg h1]
-
-/-- **One hybrid step, pointwise**: unless a query before proof query `j` or an earlier proof query has
-the salt of proof query `j`, the difference of the outputs of hybrids `j` and `j + 1` from the oracle
-with that salt's slice answered by `F` is the difference of the outputs from the original oracle
-when proof query `j` is answered with that slice by the prover and by the simulator. -/
-theorem step_pointwise (hloc : SaltedLocal saltOf P μ S) {m : ℕ} (A : IAlg X Y Stmt Wit Proof m)
-    {Q j : ℕ} (hj : j < Q) (ω : Tape X Y Sd C SC Q) (F : X → Y)
-    (hH : ¬ StepHit saltOf rel P S A hj ω) (hC : ¬ StepColl hj ω) :
-    ind (A.accepts (hybResp rel P S j ω) (replaceSlice saltOf (ω.salts ⟨j, hj⟩) ω.oracle F)) -
-        ind (A.accepts (hybResp rel P S (j + 1) ω)
-          (replaceSlice saltOf (ω.salts ⟨j, hj⟩) ω.oracle F)) =
-      ind (A.accepts (override (hybResp rel P S j ω) j
-          (realReplyAt saltOf rel P (ω.salts ⟨j, hj⟩) ⟨ω.proverCoins ⟨j, hj⟩, F⟩)) ω.oracle) -
-        ind (A.accepts (override (hybResp rel P S j ω) j
-          (simReplyAt saltOf rel S (ω.salts ⟨j, hj⟩) ⟨ω.simCoins ⟨j, hj⟩, F⟩)) ω.oracle) := by
-  classical
-  set σ := ω.salts ⟨j, hj⟩ with hσ
-  set H := ω.oracle
-  set R₁ := hybResp rel P S j ω with hR₁
-  set R₁' := hybResp rel P S (j + 1) ω with hR₁'
-  set gP := realReplyAt saltOf rel P σ ⟨ω.proverCoins ⟨j, hj⟩, F⟩
-  set gS := simReplyAt saltOf rel S σ ⟨ω.simCoins ⟨j, hj⟩, F⟩
-  have hcol : ∀ i : Fin Q, (i : ℕ) < j → ω.salts i ≠ σ := fun i hi e => hC ⟨i, hi, e⟩
-  have hlt : ∀ i < j, ∀ req O,
-      (R₁ i req (replaceSlice saltOf σ O F)).response = (R₁ i req O).response ∧
-        (R₁ i req (replaceSlice saltOf σ O F)).state = replaceSlice saltOf σ (R₁ i req O).state F :=
-    fun i hi req O => hybResp_replaceSlice hloc ω hcol F hi req O
-  have hlt' : ∀ i < j, ∀ req O,
-      (R₁' i req (replaceSlice saltOf σ O F)).response = (R₁' i req O).response ∧
-        (R₁' i req (replaceSlice saltOf σ O F)).state = replaceSlice saltOf σ (R₁' i req O).state F :=
-    fun i hi req O => by
-      rw [hR₁', hybResp_succ_of_ne rel P S ω hi.ne]
-      exact hlt i hi req O
-  have h12 : ∀ i, i ≠ j → override R₁ j gP i = R₁ i := fun i hi => override_of_ne _ _ hi
-  have h12' : ∀ i, i ≠ j → override R₁ j gS i = R₁' i := fun i hi => by
-    rw [override_of_ne _ _ hi, hR₁', hybResp_succ_of_ne rel P S ω hi]
-  have hj1 : ∀ req O, override R₁ j gP j req O = R₁ j req (replaceSlice saltOf σ O F) := by
-    intro req O
-    rw [override_self]
-    simp only [gP, realReplyAt, hR₁, hybResp, dif_pos hj, lt_irrefl, if_false]
-    rfl
-  have hj1' : ∀ req O, override R₁ j gS j req O = R₁' j req (replaceSlice saltOf σ O F) := by
-    intro req O
-    rw [override_self]
-    simp only [gS, simReplyAt, hR₁', hybResp, dif_pos hj, Nat.lt_succ_self, if_true]
-    rfl
-  have hagree : ∀ g g' : ReplyFn X Y Stmt Wit Proof, ∀ i < j, override R₁ j g i = override R₁ j g' i :=
-    fun g g' i hi => by rw [override_of_ne _ _ hi.ne, override_of_ne _ _ hi.ne]
-  -- the runs before proof query `j` are the run of `baseResp`
-  have hpre : ∀ (g : ReplyFn X Y Stmt Wit Proof) k, (A.run (override R₁ j g) H k).nreq ≤ j →
-      A.run (baseResp rel P S j ω) H k = A.run (override R₁ j g) H k :=
-    fun g => A.run_eq_of_forall_lt (hagree g refuseReply)
-  have hpre₀ : ∀ (g : ReplyFn X Y Stmt Wit Proof) k, (A.run (baseResp rel P S j ω) H k).nreq ≤ j →
-      A.run (override R₁ j g) H k = A.run (baseResp rel P S j ω) H k :=
-    fun g => A.run_eq_of_forall_lt (hagree refuseReply g)
-  have hq : ∀ g : ReplyFn X Y Stmt Wit Proof, ∀ k < m, ∀ x, (A.run (override R₁ j g) H k).nreq ≤ j →
-      A.next (A.run (override R₁ j g) H k).hist = .query x → saltOf x ≠ some σ :=
-    fun g k hk x hn hx e => hH ⟨k, hk, x, by rw [hpre g k hn]; exact hx, e⟩
-  have C1 := run_coupling saltOf A h12 hlt hj1 (hq gP)
-  have C2 := run_coupling saltOf A h12' hlt' hj1' (hq gS)
-  by_cases hM : ∃ k < m, ∃ req, (A.run (baseResp rel P S j ω) H k).nreq = j ∧
-      A.next (A.run (baseResp rel P S j ω) H k).hist = .request req
-  · obtain ⟨k, hk, req, hn, hr⟩ := hM
-    have fin : ∀ (g : ReplyFn X Y Stmt Wit Proof) (R : Responder X Y Stmt Wit Proof),
-        (((A.run (override R₁ j g) H m).nreq ≤ j ∧
-          SliceRel saltOf σ F (A.run R (replaceSlice saltOf σ H F) m) (A.run (override R₁ j g) H m)) ∨
-        (j < (A.run (override R₁ j g) H m).nreq ∧
-          A.run R (replaceSlice saltOf σ H F) m = A.run (override R₁ j g) H m)) →
-        A.accepts R (replaceSlice saltOf σ H F) = A.accepts (override R₁ j g) H := by
-      intro g R hC'
-      rcases hC' with ⟨hn', -⟩ | ⟨-, heq⟩
-      · have he := hpre₀ g k hn.le
-        have hr' : A.next (A.run (override R₁ j g) H k).hist = .request req := by rw [he]; exact hr
-        have := A.nreq_lt_of_request hr' hk
-        rw [he, hn] at this
-        omega
-      · exact A.accepts_eq_of_run_eq heq
-    rw [fin gP R₁ (C1 m le_rfl), fin gS R₁' (C2 m le_rfl)]
-  · push Not at hM
-    have ha' : A.accepts (override R₁ j gP) H = A.accepts (override R₁ j gS) H := by
-      rw [A.accepts_override_eq_of_not_made R₁ H refuseReply gP hM,
-        A.accepts_override_eq_of_not_made R₁ H refuseReply gS hM]
-    have ha : A.accepts R₁ (replaceSlice saltOf σ H F) = A.accepts R₁' (replaceSlice saltOf σ H F) := by
-      refine A.accepts_eq_of_run_eq (A.run_eq_of_forall_ne (j := j)
-        (fun i hi => (hybResp_succ_of_ne rel P S ω hi).symm) (fun k hk req hn hr => ?_) m le_rfl)
-      rcases C1 k hk.le with ⟨hn2, hrel⟩ | ⟨hlt2, heq⟩
-      · have hn3 : (A.run (override R₁ j gP) H k).nreq = j := by rw [← hrel.nreq]; exact hn
-        have hr3 : A.next (A.run (override R₁ j gP) H k).hist = .request req := by
-          rw [← hrel.hist]; exact hr
-        have he := hpre gP k hn3.le
-        rw [← he] at hn3 hr3
-        exact absurd hr3 (hM k hk req hn3)
-      · rw [heq] at hn
-        omega
-    rw [ha, ha', sub_self, sub_self]
 
 /-! #### Counting the bad events -/
 
@@ -818,56 +710,6 @@ theorem baseResp_updSim {Q j : ℕ} (hj : j < Q) (ω : Tape X Y Sd C SC Q) (a : 
     baseResp rel P S j (ω.updSim ⟨j, hj⟩ a) = baseResp rel P S j ω :=
   override_hybResp_updSim hj j ω a refuseReply
 
-/-- **The bad events of step `j`** have probability at most `(t + j) / |Sd|` for an algorithm
-with a budget of `t` queries: the run before proof query `j` does not read proof query `j`'s salt. -/
-theorem expect_ite_bad_le {m t : ℕ} (A : IAlg X Y Stmt Wit Proof m) (hA : A.Budget t) {Q j : ℕ}
-    (hj : j < Q) [DecidablePred (fun ω : Tape X Y Sd C SC Q =>
-      StepHit saltOf rel P S A hj ω ∨ StepColl hj ω)] :
-    𝔼 ω : Tape X Y Sd C SC Q,
-        (if StepHit saltOf rel P S A hj ω ∨ StepColl hj ω then (1 : ℝ) else 0) ≤
-      (t + j) / Fintype.card Sd := by
-  classical
-  rw [← Tape.expect_updSalt ⟨j, hj⟩]
-  have hpt : ∀ (ω : Tape X Y Sd C SC Q) (a : Sd),
-      (if StepHit saltOf rel P S A hj (ω.updSalt ⟨j, hj⟩ a) ∨ StepColl hj (ω.updSalt ⟨j, hj⟩ a)
-        then (1 : ℝ) else 0) ≤
-      (if ∃ k < m, ∃ x, A.next (A.run (baseResp rel P S j ω) ω.oracle k).hist = .query x ∧
-          saltOf x = some a then (1 : ℝ) else 0) +
-        (if ∃ i : Fin Q, (i : ℕ) < j ∧ ω.salts i = a then (1 : ℝ) else 0) := by
-    intro ω a
-    have hH : StepHit saltOf rel P S A hj (ω.updSalt ⟨j, hj⟩ a) ↔
-        ∃ k < m, ∃ x, A.next (A.run (baseResp rel P S j ω) ω.oracle k).hist = .query x ∧
-          saltOf x = some a := by
-      unfold StepHit
-      rw [baseResp_updSalt]
-      simp [Tape.updSalt]
-    have hC : StepColl hj (ω.updSalt ⟨j, hj⟩ a) ↔ ∃ i : Fin Q, (i : ℕ) < j ∧ ω.salts i = a := by
-      unfold StepColl
-      refine exists_congr fun i => and_congr_right fun hi => ?_
-      have hne : i ≠ ⟨j, hj⟩ := fun e => by rw [e] at hi; exact lt_irrefl _ hi
-      simp [Tape.updSalt, Function.update_of_ne hne]
-    rw [if_congr (or_congr hH hC) rfl rfl]
-    split_ifs <;> simp_all
-  have hq : ∀ ω : Tape X Y Sd C SC Q,
-      (((range m).filter fun k =>
-        (A.next (A.run (baseResp rel P S j ω) ω.oracle k).hist).IsQuery).card : ℝ) ≤ t := fun ω => by
-    exact_mod_cast hA _ _
-  calc 𝔼 ω : Tape X Y Sd C SC Q, 𝔼 a : Sd,
-        (if StepHit saltOf rel P S A hj (ω.updSalt ⟨j, hj⟩ a) ∨ StepColl hj (ω.updSalt ⟨j, hj⟩ a)
-          then (1 : ℝ) else 0)
-      ≤ 𝔼 ω : Tape X Y Sd C SC Q, 𝔼 a : Sd,
-          ((if ∃ k < m, ∃ x, A.next (A.run (baseResp rel P S j ω) ω.oracle k).hist = .query x ∧
-              saltOf x = some a then (1 : ℝ) else 0) +
-            (if ∃ i : Fin Q, (i : ℕ) < j ∧ ω.salts i = a then (1 : ℝ) else 0)) :=
-        Finset.expect_le_expect fun ω _ => Finset.expect_le_expect fun a _ => hpt ω a
-    _ ≤ 𝔼 _ω : Tape X Y Sd C SC Q, ((t : ℝ) / Fintype.card Sd + j / Fintype.card Sd) := by
-        refine Finset.expect_le_expect fun ω _ => ?_
-        rw [Finset.expect_add_distrib]
-        exact add_le_add ((expect_ite_exists_query_le saltOf _ m).trans
-          (div_le_div_of_nonneg_right (hq ω) (Nat.cast_nonneg _)))
-          (expect_ite_exists_salt_le ω.salts j)
-    _ = (t + j) / Fintype.card Sd := by rw [Fintype.expect_const, add_div]
-
 /-! #### The relabelled oracle -/
 
 theorem replaceSlice_replaceSlice_swap (σ : Sd) (H F : X → Y) :
@@ -907,124 +749,6 @@ noncomputable def hyb {m : ℕ} (A : IAlg X Y Stmt Wit Proof m) (Q j : ℕ) : �
 
 theorem abs_ind_sub_ind_le (b b' : Bool) : |ind b - ind b'| ≤ 1 :=
   abs_sub_le_iff.2 ⟨by linarith [ind_le_one b, ind_nonneg b'], by linarith [ind_le_one b', ind_nonneg b]⟩
-
-/-- **One hybrid step**: hybrids `j` and `j + 1` differ by at most `(t + j) / |Sd| + 𝔼 H, η H`
-for an algorithm with a budget of `t` queries. -/
-theorem abs_hyb_sub_le [Fintype Proof] (hloc : SaltedLocal saltOf P μ S) {η : (X → Y) → ℝ}
-    (hcl : SliceCloseAt saltOf rel P S η) {m t : ℕ} (A : IAlg X Y Stmt Wit Proof m)
-    (hA : A.Budget t) {Q j : ℕ} (hj : j < Q) :
-    |hyb rel P S A Q j - hyb rel P S A Q (j + 1)| ≤ (t + j) / Fintype.card Sd + 𝔼 H, η H := by
-  classical
-  set J : Fin Q := ⟨j, hj⟩
-  let a : Tape X Y Sd C SC Q → (X → Y) → ℝ := fun ω F =>
-    ind (A.accepts (hybResp rel P S j ω) (replaceSlice saltOf (ω.salts J) ω.oracle F))
-  let b : Tape X Y Sd C SC Q → (X → Y) → ℝ := fun ω F =>
-    ind (A.accepts (hybResp rel P S (j + 1) ω) (replaceSlice saltOf (ω.salts J) ω.oracle F))
-  let Φ : Tape X Y Sd C SC Q → ReplyFn X Y Stmt Wit Proof → ℝ := fun ω g =>
-    ind (A.accepts (override (hybResp rel P S j ω) j g) ω.oracle)
-  let a' : Tape X Y Sd C SC Q → (X → Y) → ℝ := fun ω F =>
-    Φ ω (realReplyAt saltOf rel P (ω.salts J) ⟨ω.proverCoins J, F⟩)
-  let b' : Tape X Y Sd C SC Q → (X → Y) → ℝ := fun ω F =>
-    Φ ω (simReplyAt saltOf rel S (ω.salts J) ⟨ω.simCoins J, F⟩)
-  let Bad : Tape X Y Sd C SC Q → Prop := fun ω => StepHit saltOf rel P S A hj ω ∨ StepColl hj ω
-  have ha : hyb rel P S A Q j = 𝔼 ω, 𝔼 F, a ω F :=
-    (expect_relabel saltOf hj fun ω => ind (A.accepts (hybResp rel P S j ω) ω.oracle)).symm
-  have hb : hyb rel P S A Q (j + 1) = 𝔼 ω, 𝔼 F, b ω F :=
-    (expect_relabel saltOf hj fun ω => ind (A.accepts (hybResp rel P S (j + 1) ω) ω.oracle)).symm
-  have hpt : ∀ ω F, a ω F - b ω F =
-      (if Bad ω then a ω F - b ω F else 0) + (if Bad ω then 0 else a' ω F - b' ω F) := by
-    intro ω F
-    by_cases h : Bad ω
-    · simp [h]
-    · rw [if_neg h, if_neg h, zero_add]
-      exact step_pointwise hloc A hj ω F (fun h' => h (Or.inl h')) (fun h' => h (Or.inr h'))
-  have hsplit : hyb rel P S A Q j - hyb rel P S A Q (j + 1) =
-      𝔼 ω, 𝔼 F, (if Bad ω then a ω F - b ω F else 0) +
-        𝔼 ω, 𝔼 F, (if Bad ω then 0 else a' ω F - b' ω F) := by
-    rw [ha, hb, ← Finset.expect_sub_distrib]
-    rw [← Finset.expect_add_distrib univ (fun ω => 𝔼 F, (if Bad ω then a ω F - b ω F else 0))
-      (fun ω => 𝔼 F, (if Bad ω then 0 else a' ω F - b' ω F))]
-    refine Finset.expect_congr rfl fun ω _ => ?_
-    rw [← Finset.expect_sub_distrib,
-      ← Finset.expect_add_distrib univ (fun F => if Bad ω then a ω F - b ω F else 0)
-        (fun F => if Bad ω then 0 else a' ω F - b' ω F)]
-    exact Finset.expect_congr rfl fun F _ => hpt ω F
-  rw [hsplit]
-  refine (abs_add_le _ _).trans (add_le_add ?_ ?_)
-  · -- the bad events
-    calc |𝔼 ω, 𝔼 F, (if Bad ω then a ω F - b ω F else 0)|
-        ≤ 𝔼 ω : Tape X Y Sd C SC Q, (if Bad ω then (1 : ℝ) else 0) := by
-          refine (Finset.abs_expect_le _ _).trans (Finset.expect_le_expect fun ω _ => ?_)
-          refine (Finset.abs_expect_le _ _).trans ?_
-          by_cases h : Bad ω
-          · simp only [h, if_true]
-            exact (Finset.expect_le_expect fun F _ => abs_ind_sub_ind_le _ _).trans_eq
-              (Fintype.expect_const (1 : ℝ))
-          · simp [h]
-      _ ≤ (t + j) / Fintype.card Sd := expect_ite_bad_le A hA hj
-  · -- the kernel step at the fixed salt, on the good event
-    set f : Tape X Y Sd C SC Q → ℝ := fun ω => 𝔼 F, (if Bad ω then 0 else a' ω F - b' ω F)
-    have hupd : ∀ ω : Tape X Y Sd C SC Q, ∀ (s : SC) (c : C),
-        f ((ω.updSim J s).updProver J c) = if Bad ω then 0 else
-          (𝔼 F, Φ ω (realReplyAt saltOf rel P (ω.salts J) ⟨c, F⟩) -
-            𝔼 F, Φ ω (simReplyAt saltOf rel S (ω.salts J) ⟨s, F⟩)) := by
-      intro ω s c
-      have hΦ : ∀ g, Φ ((ω.updSim J s).updProver J c) g = Φ ω g := fun g => by
-        simp only [Φ]
-        rw [override_hybResp_updProver, override_hybResp_updSim]
-        rfl
-      have hBad : Bad ((ω.updSim J s).updProver J c) ↔ Bad ω := by
-        simp only [Bad, StepHit, StepColl]
-        rw [baseResp_updProver, baseResp_updSim]
-        rfl
-      have hpc : ((ω.updSim J s).updProver J c).proverCoins J = c := by simp [Tape.updProver]
-      have hsc : ((ω.updSim J s).updProver J c).simCoins J = s := by
-        simp [Tape.updProver, Tape.updSim]
-      have hs : ((ω.updSim J s).updProver J c).salts = ω.salts := rfl
-      simp only [f, a', b', hΦ, hs, hpc, hsc]
-      by_cases h : Bad ω
-      · have h' : Bad ((ω.updSim J s).updProver J c) := hBad.2 h
-        simp [h, h']
-      · have h' : ¬ Bad ((ω.updSim J s).updProver J c) := fun h'' => h (hBad.1 h'')
-        simp only [h, h', if_false, Finset.expect_sub_distrib]
-    have hfresh : ∀ {Cx : Type} [Fintype Cx] [Nonempty Cx] (g : FreshSlice X Y Cx → ℝ),
-        𝔼 c : Cx, 𝔼 F : X → Y, g ⟨c, F⟩ = 𝔼 a, g a := by
-      intro Cx _ _ g
-      rw [← expect_prod_eq (fun p : Cx × (X → Y) => g ⟨p.1, p.2⟩)]
-      exact Fintype.expect_equiv (FreshSlice.equivProd X Y _).symm _ _ fun _ => rfl
-    have hker : ∀ ω : Tape X Y Sd C SC Q,
-        |𝔼 s : SC, 𝔼 c : C, f ((ω.updSim J s).updProver J c)| ≤ η ω.oracle := by
-      intro ω
-      simp_rw [hupd]
-      by_cases h : Bad ω
-      · simp only [h, if_true, Fintype.expect_const, abs_zero]
-        exact hcl.nonneg _
-      · simp only [h, if_false]
-        have e : 𝔼 s : SC, 𝔼 c : C,
-            (𝔼 F, Φ ω (realReplyAt saltOf rel P (ω.salts J) ⟨c, F⟩) -
-              𝔼 F, Φ ω (simReplyAt saltOf rel S (ω.salts J) ⟨s, F⟩)) =
-            𝔼 c : C, 𝔼 F, Φ ω (realReplyAt saltOf rel P (ω.salts J) ⟨c, F⟩) -
-              𝔼 s : SC, 𝔼 F, Φ ω (simReplyAt saltOf rel S (ω.salts J) ⟨s, F⟩) := by
-          simp only [Finset.expect_sub_distrib, Fintype.expect_const]
-        rw [e, hfresh (fun a => Φ ω (realReplyAt saltOf rel P (ω.salts J) a)),
-          hfresh (fun a => Φ ω (simReplyAt saltOf rel S (ω.salts J) a))]
-        refine A.abs_expect_accepts_override_sub_le (hybResp rel P S j ω) ω.oracle j refuseReply
-          (realReplyAt saltOf rel P (ω.salts J)) (simReplyAt saltOf rel S (ω.salts J))
-          (hcl.nonneg _) fun k _ req _ _ => ?_
-        refine (tvDist_replyAt_le saltOf rel P S hcl _ req _).trans_eq (hcl.congr _ _ ?_)
-        refine A.agreeOffSalted_run (saltOf := saltOf) (fun i req' O => ?_) ω.oracle k
-        by_cases hi : i = j
-        · rw [hi, override_self]
-          exact fun _ _ => rfl
-        · rw [override_of_ne _ _ hi]
-          exact agreeOffSalted_hybResp hloc j ω i req' O
-    calc |𝔼 ω, f ω|
-        = |𝔼 ω : Tape X Y Sd C SC Q, 𝔼 s : SC, 𝔼 c : C, f ((ω.updSim J s).updProver J c)| := by
-          rw [← Tape.expect_updProver J f]
-          rw [← Tape.expect_updSim J fun ω => 𝔼 c : C, f (ω.updProver J c)]
-      _ ≤ 𝔼 ω : Tape X Y Sd C SC Q, η ω.oracle :=
-          (Finset.abs_expect_le _ _).trans (Finset.expect_le_expect fun ω _ => hker ω)
-      _ = 𝔼 H, η H := Tape.expect_oracle η
 
 /-! #### The real and the simulated games -/
 
@@ -1107,38 +831,6 @@ theorem sum_range_stepError (t c e : ℝ) (Q : ℕ) :
       ring
     · field_simp
       ring
-
-/-- **The hybrids from the real to the simulated game**: hybrids `0` and `Q` differ by at most
-`Q t / |Sd| + Q (Q - 1) / (2 |Sd|) + Q · 𝔼 H, η H` for an algorithm with a budget of `t`
-queries. -/
-theorem abs_hyb_zero_sub_le [Fintype Proof] (hloc : SaltedLocal saltOf P μ S) {η : (X → Y) → ℝ}
-    (hcl : SliceCloseAt saltOf rel P S η) {m t : ℕ} (A : IAlg X Y Stmt Wit Proof m)
-    (hA : A.Budget t) (Q : ℕ) :
-    |hyb rel P S A Q 0 - hyb rel P S A Q Q| ≤
-      Q * t / Fintype.card Sd + Q * (Q - 1) / (2 * Fintype.card Sd) + Q * 𝔼 H, η H := by
-  rw [← Finset.sum_range_sub' (fun j => hyb rel P S A Q j), ← sum_range_stepError]
-  refine (Finset.abs_sum_le_sum_abs _ _).trans (Finset.sum_le_sum fun j hj => ?_)
-  exact abs_hyb_sub_le hloc hcl A hA (Finset.mem_range.1 hj)
-
-/-! ### The theorem -/
-
-/-- **Zero knowledge of a salted argument in the classical random-oracle model.** For a prover
-and a simulator local in their salt (`hloc`) whose real and simulated slice laws are within
-`η H` at every salt (`hcl`), every classical adversary with a budget of `t` queries and `Q`
-proof queries answered has advantage at most
-
-    Q t / |Sd| + Q (Q - 1) / (2 |Sd|) + Q · 𝔼 H, η H
-
-between the honest prover `P` and the simulator `S`, unbounded after its steps. -/
-theorem zeroKnowledge_of_sliceCloseAt [Fintype Proof] (hloc : SaltedLocal saltOf P μ S)
-    {η : (X → Y) → ℝ} (hcl : SliceCloseAt saltOf rel P S η) :
-    ZeroKnowledge rel P μ S fun t Q =>
-      Q * t / Fintype.card Sd + Q * (Q - 1) / (2 * Fintype.card Sd) + Q * 𝔼 H, η H := by
-  intro m t Q 𝒜
-  refine 𝒜.abs_acceptProb_sub_le _ _ fun r => ?_
-  rw [toReal_acceptProb_realEnv (S := S) (𝒜.alg r) hloc.coins_eq,
-    toReal_acceptProb_simEnv (P := P) (𝒜.alg r)]
-  exact abs_hyb_zero_sub_le hloc hcl (𝒜.alg r) (𝒜.budget r) Q
 
 end Salted
 

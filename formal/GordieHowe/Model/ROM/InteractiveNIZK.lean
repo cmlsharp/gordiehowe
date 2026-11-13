@@ -20,10 +20,12 @@ in force after the steps (so the queries after the last step are unbounded, as i
 - `IAlg.accepts`, `QueryBoundedAdversary.acceptProb`, `QueryBoundedAdversary.advantage`: the game
   against an environment of `GordieHowe/Model/Quantum/Pure/Game.lean`, its responder read through
   `toResponder` (`ROM.NIZK.envResponder`).
-- `GordieHowe.ROM.ZeroKnowledge rel P μ S ε`: every query-bounded adversary with a budget of
-  `t` queries has advantage at most `ε t Q`.
 - `IAlg.toNIZK`, `QueryBoundedAdversary.toNIZK`: the maps to the adversaries of
   `GordieHowe/Model/ROM/NIZK.lean`, with equal advantages (`advantage_toNIZK`).
+
+This file defines the query-bounded game and the maps `toNIZK` to the internal adversaries
+`ROM.NIZK.Adversary` of `GordieHowe/Model/ROM/NIZK.lean`; that module's docstring describes the
+internal and final zero-knowledge forms and the theorems linking them.
 -/
 
 namespace GordieHowe.ROM
@@ -155,8 +157,5 @@ theorem advantage_toNIZK (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ : PMF 
   rw [NIZK.Adversary.advantage, advantage, acceptProb_toNIZK, acceptProb_toNIZK]
 
 end QueryBoundedAdversary
-
-variable [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] {rel : Stmt → Wit → Prop}
-  [DecidableRel rel] {Coins SimCoins : Type} [Fintype Coins] [Fintype SimCoins]
 
 end GordieHowe.ROM

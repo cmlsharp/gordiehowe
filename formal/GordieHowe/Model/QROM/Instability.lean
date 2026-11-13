@@ -128,15 +128,16 @@ theorem probUniform_prod_fst {C : Type*} [Fintype C] [Nonempty C] (E : Y → Pro
   rw [this, Finset.card_product, Finset.card_univ, Nat.cast_mul, Nat.cast_mul,
     ENNReal.mul_div_mul_right _ _ (by simp) (by simp)]
 
-/-- An event on a uniform pair whose section at every second component has probability at most
-`c` has probability at most `c`. -/
-theorem probUniform_prod_le {C : Type*} [Fintype C] [Nonempty C] (E : Y × C → Prop)
-    {c : ℝ≥0∞} (h : ∀ z, Pr[y ← Y : E (y, z)] ≤ c) : Pr[p ← Y × C : E p] ≤ c := by
+/-- **An event on a uniform pair whose section at every second component `z` has probability at
+most `w z`** has probability at most the average of `w`. -/
+theorem probUniform_prod_le_avg {C : Type*} [Fintype C] [Nonempty C] (E : Y × C → Prop)
+    (w : C → ℝ≥0∞) (h : ∀ z, Pr[y ← Y : E (y, z)] ≤ w z) :
+    Pr[p ← Y × C : E p] ≤ (∑ z, w z) / Fintype.card C := by
   classical
   rw [probUniform_eq_card_div]
   have hY : (Fintype.card Y : ℝ≥0∞) ≠ 0 := by simp
   have hcount : ∀ z, ((Finset.univ.filter fun y => E (y, z)).card : ℝ≥0∞) ≤
-      c * Fintype.card Y := fun z => by
+      w z * Fintype.card Y := fun z => by
     have := h z
     rw [probUniform_eq_card_div, ENNReal.div_le_iff hY (by simp)] at this
     exact this
@@ -153,12 +154,26 @@ theorem probUniform_prod_le {C : Type*} [Fintype C] [Nonempty C] (E : Y × C →
       exact Prod.ext he (hp.2.trans hp'.2.symm)
     · intro y hy
       exact ⟨(y, z), by simpa using hy, rfl⟩
-  rw [hsplit, Nat.cast_sum, Fintype.card_prod, Nat.cast_mul,
-    ENNReal.div_le_iff (by simp) (ENNReal.mul_ne_top (by simp) (by simp))]
-  calc ∑ z : C, ((Finset.univ.filter fun y => E (y, z)).card : ℝ≥0∞)
-      ≤ ∑ _z : C, c * Fintype.card Y := Finset.sum_le_sum fun z _ => hcount z
-    _ = c * (Fintype.card Y * Fintype.card C) := by
-      rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]; ring
+  rw [hsplit, Nat.cast_sum, Fintype.card_prod, Nat.cast_mul]
+  calc (∑ z : C, ((Finset.univ.filter fun y => E (y, z)).card : ℝ≥0∞)) /
+        (Fintype.card Y * Fintype.card C)
+      ≤ (∑ z : C, w z * Fintype.card Y) / (Fintype.card Y * Fintype.card C) :=
+        ENNReal.div_le_div_right (Finset.sum_le_sum fun z _ => hcount z) _
+    _ = (∑ z, w z) / Fintype.card C := by
+        rw [← Finset.sum_mul, mul_comm (Fintype.card Y : ℝ≥0∞),
+          ENNReal.mul_div_mul_right _ _ hY (by simp)]
+
+/-- The average of a constant over a finite nonempty type is that constant. -/
+theorem sum_const_div_card {C : Type*} [Fintype C] [Nonempty C] (c : ℝ≥0∞) :
+    (∑ _z : C, c) / Fintype.card C = c := by
+  rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, ENNReal.div_eq_inv_mul, ← mul_assoc,
+    ENNReal.inv_mul_cancel (by simp) (by simp), one_mul]
+
+/-- An event on a uniform pair whose section at every second component has probability at most
+`c` has probability at most `c`. -/
+theorem probUniform_prod_le {C : Type*} [Fintype C] [Nonempty C] (E : Y × C → Prop)
+    {c : ℝ≥0∞} (h : ∀ z, Pr[y ← Y : E (y, z)] ≤ c) : Pr[p ← Y × C : E p] ≤ c :=
+  (probUniform_prod_le_avg E (fun _ => c) h).trans_eq (sum_const_div_card c)
 
 /-- **An event on the coordinates of a uniform function at an embedded index set** has the
 probability of that event on a uniform function on the index set: `a ∘ φ` is uniform. -/

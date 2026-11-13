@@ -44,6 +44,11 @@ What is proved:
   `Pr[log ∈ R] ≤ t · flip(R̄ → R, t)`, by a union bound over the `t` steps. It is the classical
   counterpart of CMS19 Lemmas 5.9 and 5.10 (`Pr[D ∈ R] ≤ 6 t² I(R, t)`, `Lifting.measured_le`);
   CMS19 footnote 6 (p. 22) states the classical bound `t · I(P, t)`.
+- **The weighted union bound** (`prob_log_mem_le_avg`, `prob_log_mem_le_of_weight`): a weight per
+  step and oracle that bounds the step's flip at a fresh query; `Pr[log ∈ R]` is at most the
+  average over oracles of the summed weights, and at most `β` when every oracle's weights sum to
+  at most `β`. The uniform bounds `prob_step_le` and `prob_log_mem_le` are its constant case.
+  `sum_fresh_eq`: the weights of the fresh steps sum to the weight of the distinct queries.
 -/
 
 namespace GordieHowe.ROM
@@ -243,11 +248,16 @@ theorem resample_involutive : Function.Involutive (𝒜.resample j) := by
     simp only [resample, hq, ite_false, hq', hs, Function.update_idem, Function.update_eq_self,
       Function.update_self]
 
-/-- **One step moves the log into `R`** with probability at most `flip(R̄ → R, t)` (CMS19
-Definition 5.4, p. 21), for a step `j < t`: a query already in the log adds nothing, and the answer
-to a fresh query is uniform and independent of the run so far (`resample`). -/
-theorem prob_step_le [Fintype A] [Fintype B] [Nonempty B] {R : Set (DB A B)} (hj : j < t) :
-    Pr[h ← (A → B) : 𝒜.log h j ∉ R ∧ 𝒜.log h (j + 1) ∈ R] ≤ flipProb Rᶜ R t := by
+/-- **One step moves the log into `R`** with probability at most the average over oracles `h` of
+a weight `w h` that bounds the flip of the log by the step's query whenever that query is fresh
+and the log is not in `R`: a query already in the log adds nothing, and the answer to a fresh
+query is uniform and independent of the run so far (`resample`). -/
+theorem prob_step_le_avg [Fintype A] [Fintype B] [Nonempty B] {R : Set (DB A B)}
+    (w : (A → B) → ℝ≥0∞)
+    (hw : ∀ h, 𝒜.queryAt h j ∉ 𝒜.queries h j → 𝒜.log h j ∉ R →
+      Pr[y ← B : (𝒜.log h j).extend (𝒜.queryAt h j) y ∈ R] ≤ w h) :
+    Pr[h ← (A → B) : 𝒜.log h j ∉ R ∧ 𝒜.log h (j + 1) ∈ R] ≤
+      (∑ h, w h) / Fintype.card (A → B) := by
   classical
   set F : (A → B) → Prop := fun h => 𝒜.log h j ∉ R ∧ 𝒜.log h (j + 1) ∈ R
   set G : (A → B) × B → Prop := fun p =>
@@ -273,16 +283,10 @@ theorem prob_step_le [Fintype A] [Fintype B] [Nonempty B] {R : Set (DB A B)} (hj
         rw [hs, hq', logOf_append, logOf_update hq, Function.update_self]
       rw [e1, e2] at hF
       exact ⟨hq, hF.1, hF.2⟩
-  have hstep : ∀ h, Pr[y ← B : G (h, y)] ≤ flipProb Rᶜ R t := by
+  have hstep : ∀ h, Pr[y ← B : G (h, y)] ≤ w h := by
     intro h
     by_cases hG : 𝒜.queryAt h j ∉ 𝒜.queries h j ∧ 𝒜.log h j ∉ R
-    · have hmem : 𝒜.queryAt h j ∉ 𝒜.log h j := by
-        rw [log, mem_logOf]
-        exact hG.1
-      calc Pr[y ← B : G (h, y)]
-          ≤ Pr[y ← B : (𝒜.log h j).extend (𝒜.queryAt h j) y ∈ R] :=
-            QROM.probUniform_mono fun y hy => hy.2.2
-        _ ≤ flipProb Rᶜ R t := le_flipProb hG.2 ((𝒜.size_log_le h j).trans_lt hj) hmem
+    · exact (QROM.probUniform_mono fun y hy => hy.2.2).trans (hw h hG.1 hG.2)
     · exact le_of_eq_of_le (probUniform_eq_zero fun y hy => hG ⟨hy.1, hy.2.1⟩) zero_le
   let e : (A → B) × B ≃ (A → B) × B := (resample_involutive 𝒜 j).toPerm _
   calc Pr[h ← (A → B) : F h]
@@ -291,7 +295,21 @@ theorem prob_step_le [Fintype A] [Fintype B] [Nonempty B] {R : Set (DB A B)} (hj
     _ ≤ Pr[p ← (A → B) × B : G p] := QROM.probUniform_mono hFG
     _ = Pr[p ← B × (A → B) : G (Equiv.prodComm B (A → B) p)] :=
         (QROM.probUniform_equiv (Equiv.prodComm B (A → B)) G).symm
-    _ ≤ flipProb Rᶜ R t := QROM.probUniform_prod_le _ fun h => hstep h
+    _ ≤ _ := QROM.probUniform_prod_le_avg _ w fun h => hstep h
+
+/-- A fresh query at a log of size below `t` outside `R` moves it into `R` with probability at
+most `flip(R̄ → R, t)`. -/
+theorem flip_le_flipProb {R : Set (DB A B)} [Fintype B] [Nonempty B] (hj : j < t) (h : A → B)
+    (hq : 𝒜.queryAt h j ∉ 𝒜.queries h j) (hD : 𝒜.log h j ∉ R) :
+    Pr[y ← B : (𝒜.log h j).extend (𝒜.queryAt h j) y ∈ R] ≤ flipProb Rᶜ R t :=
+  le_flipProb hD ((𝒜.size_log_le h j).trans_lt hj) (by rw [log, mem_logOf]; exact hq)
+
+/-- **One step moves the log into `R`** with probability at most `flip(R̄ → R, t)` (CMS19
+Definition 5.4, p. 21), for a step `j < t` (`prob_step_le_avg` at the constant weight). -/
+theorem prob_step_le [Fintype A] [Fintype B] [Nonempty B] {R : Set (DB A B)} (hj : j < t) :
+    Pr[h ← (A → B) : 𝒜.log h j ∉ R ∧ 𝒜.log h (j + 1) ∈ R] ≤ flipProb Rᶜ R t :=
+  (𝒜.prob_step_le_avg j (fun _ => flipProb Rᶜ R t)
+    fun h hq hD => 𝒜.flip_le_flipProb j hj h hq hD).trans_eq (QROM.sum_const_div_card _)
 
 /-- A property false at `0` and true at `n` turns true at some step below `n`. -/
 theorem exists_step_of {P : ℕ → Prop} (h0 : ¬ P 0) :
@@ -303,14 +321,16 @@ theorem exists_step_of {P : ℕ → Prop} (h0 : ¬ P 0) :
       exact ⟨j, by omega, h⟩
     · exact ⟨n, by omega, hP, hn⟩
 
-/-- **The classical measured-database bound**: for a property `R` that the empty database does
-not have, the log of a `t`-query algorithm lies in `R` with probability at most
-`t · flip(R̄ → R, t)`. The classical counterpart of CMS19 Lemmas 5.9 and 5.10
-(`Lifting.measured_le`, `Pr[D ∈ R] ≤ 6 t² I(R, t)`): the log starts empty, and each of the `t`
-steps moves it into `R` with probability at most `flip(R̄ → R, t)` (`prob_step_le`). -/
-theorem prob_log_mem_le [Fintype A] [Fintype B] [Nonempty B] {R : Set (DB A B)}
-    (hR : (∅ : DB A B) ∉ R) :
-    Pr[h ← (A → B) : 𝒜.log h t ∈ R] ≤ t * flipProb Rᶜ R t := by
+/-- **The weighted union bound**: for a property `R` that the empty database does not have, if
+the flip of the log at each step `j < t` by a fresh query is at most `w j h`, the log of a
+`t`-query algorithm lies in `R` with probability at most the average over oracles of
+`∑ j, w j h` (`prob_step_le_avg` at each step, summed). -/
+theorem prob_log_mem_le_avg [Fintype A] [Fintype B] [Nonempty B] {R : Set (DB A B)}
+    (hR : (∅ : DB A B) ∉ R) (w : ℕ → (A → B) → ℝ≥0∞)
+    (hw : ∀ j < t, ∀ h, 𝒜.queryAt h j ∉ 𝒜.queries h j → 𝒜.log h j ∉ R →
+      Pr[y ← B : (𝒜.log h j).extend (𝒜.queryAt h j) y ∈ R] ≤ w j h) :
+    Pr[h ← (A → B) : 𝒜.log h t ∈ R] ≤
+      (∑ h, ∑ j : Fin t, w j h) / Fintype.card (A → B) := by
   calc Pr[h ← (A → B) : 𝒜.log h t ∈ R]
       ≤ Pr[h ← (A → B) : ∃ j : Fin t, 𝒜.log h j ∉ R ∧ 𝒜.log h (j + 1) ∈ R] :=
         QROM.probUniform_mono fun h hh => by
@@ -319,9 +339,51 @@ theorem prob_log_mem_le [Fintype A] [Fintype B] [Nonempty B] {R : Set (DB A B)}
           exact ⟨⟨j, hj⟩, h1, h2⟩
     _ ≤ ∑ j : Fin t, Pr[h ← (A → B) : 𝒜.log h j ∉ R ∧ 𝒜.log h (j + 1) ∈ R] :=
         probUniform_exists_le _
-    _ ≤ ∑ _j : Fin t, flipProb Rᶜ R t :=
-        Finset.sum_le_sum fun j _ => 𝒜.prob_step_le j j.2
-    _ = t * flipProb Rᶜ R t := by simp
+    _ ≤ ∑ j : Fin t, (∑ h, w j h) / Fintype.card (A → B) :=
+        Finset.sum_le_sum fun j _ => 𝒜.prob_step_le_avg j (w j) (hw j j.2)
+    _ = _ := by
+        simp only [ENNReal.div_eq_inv_mul, ← Finset.mul_sum]
+        rw [Finset.sum_comm]
+
+/-- **The weighted union bound at a bound per oracle**: `Pr[log ∈ R] ≤ β` when the weights of
+every oracle sum to at most `β`. -/
+theorem prob_log_mem_le_of_weight [Fintype A] [Fintype B] [Nonempty B] {R : Set (DB A B)}
+    (hR : (∅ : DB A B) ∉ R) (w : ℕ → (A → B) → ℝ≥0∞)
+    (hw : ∀ j < t, ∀ h, 𝒜.queryAt h j ∉ 𝒜.queries h j → 𝒜.log h j ∉ R →
+      Pr[y ← B : (𝒜.log h j).extend (𝒜.queryAt h j) y ∈ R] ≤ w j h)
+    {β : ℝ≥0∞} (hβ : ∀ h, ∑ j : Fin t, w j h ≤ β) :
+    Pr[h ← (A → B) : 𝒜.log h t ∈ R] ≤ β :=
+  (𝒜.prob_log_mem_le_avg hR w hw).trans <|
+    (ENNReal.div_le_div_right (Finset.sum_le_sum fun h _ => hβ h) _).trans_eq
+      (QROM.sum_const_div_card β)
+
+/-- **The classical measured-database bound**: for a property `R` that the empty database does
+not have, the log of a `t`-query algorithm lies in `R` with probability at most
+`t · flip(R̄ → R, t)`. The classical counterpart of CMS19 Lemmas 5.9 and 5.10
+(`Lifting.measured_le`, `Pr[D ∈ R] ≤ 6 t² I(R, t)`): the log starts empty, and each of the `t`
+steps moves it into `R` with probability at most `flip(R̄ → R, t)` (`prob_log_mem_le_of_weight`
+at the constant weight). -/
+theorem prob_log_mem_le [Fintype A] [Fintype B] [Nonempty B] {R : Set (DB A B)}
+    (hR : (∅ : DB A B) ∉ R) :
+    Pr[h ← (A → B) : 𝒜.log h t ∈ R] ≤ t * flipProb Rᶜ R t :=
+  𝒜.prob_log_mem_le_of_weight hR (fun _ _ => flipProb Rᶜ R t)
+    (fun j hj h hq hD => 𝒜.flip_le_flipProb j hj h hq hD) fun h => by simp
+
+variable (h) in
+/-- **Fresh weights charge each distinct query once**: the weights of the steps whose query is
+fresh sum to the sum of the weight over the distinct queries. -/
+theorem sum_fresh_eq (g : A → ℝ≥0∞) :
+    ∀ i, ∑ j ∈ Finset.range i,
+        (if 𝒜.queryAt h j ∈ 𝒜.queries h j then 0 else g (𝒜.queryAt h j)) =
+      ∑ a ∈ (𝒜.queries h i).toFinset, g a
+  | 0 => by simp [queries]
+  | i + 1 => by
+    rw [Finset.sum_range_succ, sum_fresh_eq g i, queries_succ, List.toFinset_append]
+    by_cases ha : 𝒜.queryAt h i ∈ 𝒜.queries h i
+    · simp [ha, Finset.insert_eq_of_mem (List.mem_toFinset.2 ha)]
+    · rw [ite_cond_eq_false _ _ (eq_false ha), List.toFinset_cons, List.toFinset_nil,
+        insert_empty_eq, Finset.union_singleton, Finset.sum_insert (mt List.mem_toFinset.1 ha),
+        add_comm]
 
 end Alg
 

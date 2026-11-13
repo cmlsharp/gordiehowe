@@ -8,24 +8,35 @@ public import GordieHowe.Model.ROM.SaltedZK
 @[expose] public section
 
 /-!
-# Everlasting zero knowledge of a salted argument in the classical random-oracle model
+# Zero knowledge of a salted argument in the classical random-oracle model
 
-`GordieHowe/Model/ROM/SaltedZK.lean` charges an adversary for every query of its steps (`IAlg.Budget t`). The
-paper's everlasting zero knowledge (`def:narg-zk-post`) charges only the queries
-before the adversary's last proof query, whose position is chosen at run time: `IAlg.RequestBudget t`,
-at most `t` queries before each proof query, on every run. This file proves the same bound under it.
+For the salted arguments of `GordieHowe/Model/ROM/SaltedZK.lean` (a prover and a simulator local in
+their salt, `SaltedLocal`, whose slice laws are within `η H` at every salt, `SliceCloseAt`), every
+classical adversary with `Q` proof queries answered has advantage at most
 
-**The argument.** Only the bad event of a hybrid step changes. A query of the run before proof query
-`j` that carries proof query `j`'s salt is charged only if it is among the run's first `t` queries
-(`StepHitWithin`). If the first such query comes after `t` queries, the run has made more than `t`
-queries, so by the request budget it makes no further proof query: proof query `j` is made neither in the
-run nor in the relabelled runs that agree with it up to that query (`run_coupling` up to it), so
-both sides of the hybrid step are `0` (`step_pointwise_requestBudget`). At most `t` steps are among
-the first `t` queries, so the bad event has probability at most `(t + j) / |Sd|` as before.
+    Q t / |Sd| + Q (Q - 1) / (2 |Sd|) + Q · 𝔼 H, η H
+
+between the prover and the simulator, under either query bound: `IAlg.RequestBudget t`, at most `t`
+queries before each proof query on every run, the bound of the paper's everlasting zero knowledge
+(`def:narg-zk-post`; `everlastingZeroKnowledge_of_sliceCloseAt`), or a budget of `t` queries over
+all steps (`IAlg.Budget t`), which implies it (`IAlg.Budget.requestBudget`,
+`EverlastingZeroKnowledge.zeroKnowledge`; `zeroKnowledge_of_sliceCloseAt`).
+
+**The argument.** Hybrid `j` (`hybResp`) answers the proof queries numbered below `j` with the
+simulator and the others with the prover. From hybrid `j` to `j + 1`, relabel the tape so that the
+slice of proof query `j`'s salt `σ` is fresh (`expect_relabel`). The bad events are a query of the
+run before proof query `j` that carries `σ` and is among the run's first `t` queries
+(`StepHitWithin`), and an earlier proof query that drew `σ` (`StepColl`); together they have
+probability at most `(t + j) / |Sd|`, since at most `t` steps are among the first `t` queries. Off
+them, either the run coupling (`run_coupling`) reduces the step to the kernel step at the fixed
+salt `σ`, at `𝔼 H, η H`, or the first query with salt `σ` comes after `t` queries: then the run has
+made more than `t` queries, so by the request budget it makes no further proof query, proof query
+`j` is made neither in the run nor in the relabelled runs that agree with it up to that query, and
+both sides of the hybrid step are `0` (`step_pointwise_requestBudget`).
 
 - `IAlg.RequestBudget`, `IAlg.Budget.requestBudget`.
-- `GordieHowe.ROM.NIZK.EverlastingZeroKnowledge`, and `GordieHowe.ROM.NIZK.everlastingZeroKnowledge_of_sliceCloseAt` with
-  the error of `zeroKnowledge_of_sliceCloseAt`.
+- `GordieHowe.ROM.NIZK.EverlastingZeroKnowledge`, `EverlastingZeroKnowledge.zeroKnowledge`.
+- `everlastingZeroKnowledge_of_sliceCloseAt`, `zeroKnowledge_of_sliceCloseAt`.
 -/
 
 open Finset
@@ -151,6 +162,14 @@ theorem EverlastingZeroKnowledge.mono {P : NARG.ProverFn X Y Stmt Wit Proof Coin
     (h : EverlastingZeroKnowledge rel P μ S ε) (hε : ∀ t Q, ε t Q ≤ ε' t Q) :
     EverlastingZeroKnowledge rel P μ S ε' :=
   fun m T t Q 𝒜 h𝒜 => (h m T t Q 𝒜 h𝒜).trans (hε t Q)
+
+/-- **Everlasting zero knowledge gives zero knowledge**, at the same error: an adversary with a
+budget of `t` queries over all its steps has that budget before each proof query
+(`IAlg.Budget.requestBudget`). -/
+theorem EverlastingZeroKnowledge.zeroKnowledge {P : NARG.ProverFn X Y Stmt Wit Proof Coins}
+    {μ : PMF Coins} {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} {ε : ℕ → ℕ → ℝ}
+    (h : EverlastingZeroKnowledge rel P μ S ε) : ZeroKnowledge rel P μ S ε :=
+  fun m t Q 𝒜 => h m t t Q 𝒜 fun r => (𝒜.budget r).requestBudget
 
 end Notion
 
@@ -356,12 +375,14 @@ theorem step_pointwise_of_noHit (hloc : SaltedLocal saltOf P μ S) {m : ℕ}
         omega
     rw [ha, ha', sub_self, sub_self]
 
-/-- **One hybrid step at a run that makes no further proof query**: under a request budget of `t`, if no
-query among the first `t` of the run before proof query `j` and no earlier proof query has the salt of
-proof query `j`, the pointwise identity of `step_pointwise` holds. If a query of the run before
-proof query `j` has that salt, the first one comes after `t` queries; then neither the run of
-`baseResp j ω` nor the relabelled runs, which agree with it up to that query, make proof query `j`,
-and both sides are `0`. -/
+/-- **One hybrid step at a run that makes no further proof query**: under a request budget of `t`,
+if no query among the first `t` of the run before proof query `j` and no earlier proof query has the
+salt of proof query `j`, the difference of the outputs of hybrids `j` and `j + 1` from the oracle
+with that salt's slice answered by `F` is the difference of the outputs from the original oracle
+when proof query `j` is answered with that slice by the prover and by the simulator. If a query of
+the run before proof query `j` has that salt, the first one comes after `t` queries; then neither
+the run of `baseResp j ω` nor the relabelled runs, which agree with it up to that query, make proof
+query `j`, and both sides are `0`. -/
 theorem step_pointwise_requestBudget (hloc : SaltedLocal saltOf P μ S) {m t : ℕ}
     (A : IAlg X Y Stmt Wit Proof m) (hA : A.RequestBudget t) {Q j : ℕ} (hj : j < Q)
     (ω : Tape X Y Sd C SC Q) (F : X → Y)
@@ -602,6 +623,21 @@ theorem everlastingZeroKnowledge_of_sliceCloseAt [Fintype Proof] (hloc : SaltedL
   rw [toReal_acceptProb_realEnv (S := S) (𝒜.alg r) hloc.coins_eq,
     toReal_acceptProb_simEnv (P := P) (𝒜.alg r)]
   exact abs_hyb_zero_sub_le_requestBudget hloc hcl (𝒜.alg r) (h𝒜 r) Q
+
+/-- **Zero knowledge of a salted argument in the classical random-oracle model.** For a prover
+and a simulator local in their salt (`hloc`) whose real and simulated slice laws are within
+`η H` at every salt (`hcl`), every classical adversary with a budget of `t` queries and `Q`
+proof queries answered has advantage at most
+
+    Q t / |Sd| + Q (Q - 1) / (2 |Sd|) + Q · 𝔼 H, η H
+
+between the honest prover `P` and the simulator `S`, unbounded after its steps
+(`everlastingZeroKnowledge_of_sliceCloseAt` through `EverlastingZeroKnowledge.zeroKnowledge`). -/
+theorem zeroKnowledge_of_sliceCloseAt [Fintype Proof] (hloc : SaltedLocal saltOf P μ S)
+    {η : (X → Y) → ℝ} (hcl : SliceCloseAt saltOf rel P S η) :
+    ZeroKnowledge rel P μ S fun t Q =>
+      Q * t / Fintype.card Sd + Q * (Q - 1) / (2 * Fintype.card Sd) + Q * 𝔼 H, η H :=
+  (everlastingZeroKnowledge_of_sliceCloseAt hloc hcl).zeroKnowledge
 
 end Salted
 

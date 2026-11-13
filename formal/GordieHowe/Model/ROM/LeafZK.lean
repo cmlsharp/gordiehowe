@@ -13,9 +13,7 @@ public import GordieHowe.Model.ROM.HiddenLeaves
 **The notion** (`ZeroKnowledgeQueryBounded`): Unruh 2017 Definition 6 (ePrint 2017/398, p. 14)
 with classical adversaries all of whose queries are counted: every adversary with a budget of `t`
 queries whose output does not read the final oracle (`IAlg.PostOracleFree`), with `Q` proof queries
-answered, has advantage at most `ε t Q`. It is implied by `ZeroKnowledge` (whose adversaries may
-also read the whole final oracle), so the errors of `ZeroKnowledge` are errors here too
-(`ZeroKnowledge.zeroKnowledgeQueryBounded`).
+answered, has advantage at most `ε t Q`.
 
 **The composite theorem** (`zeroKnowledgeQueryBounded_of_leafKernel`): the real game of a prover
 `P` and the simulated game of a simulator `S` are compared through three intermediate games:
@@ -52,14 +50,6 @@ def ZeroKnowledgeQueryBounded (P : NARG.ProverFn X Y Stmt Wit Proof Coins) (μ :
     𝒜.advantage rel P μ S Q ≤ ε t Q
 
 variable {rel}
-
-/-- **Zero knowledge against adversaries unbounded after their steps gives zero knowledge against
-query-bounded adversaries**, at the same error. -/
-theorem ZeroKnowledge.zeroKnowledgeQueryBounded {P : NARG.ProverFn X Y Stmt Wit Proof Coins}
-    {μ : PMF Coins}
-    {S : NARG.SimulatorFn X Y Stmt Proof SimCoins} {ε : ℕ → ℕ → ℝ} (h : ZeroKnowledge rel P μ S ε) :
-    ZeroKnowledgeQueryBounded rel P μ S ε :=
-  fun m t Q 𝒜 _ => h m t Q 𝒜
 
 /-- A larger error bound. -/
 theorem ZeroKnowledgeQueryBounded.mono {P : NARG.ProverFn X Y Stmt Wit Proof Coins} {μ : PMF Coins}

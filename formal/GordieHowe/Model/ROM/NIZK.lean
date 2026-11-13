@@ -46,6 +46,21 @@ queries before the last proof query (K3) and unbounded after it (K4, Fractal's d
 Definition 7.1.8 (p. 74) is the classical one-statement form with a programming simulator
 `(π, µ) ← S^f(x)`, which reads the oracle in force; invalid proof queries are answered by `⊥` as in
 Unruh 2015 Definition 2 (p. 6).
+
+**Internal and final forms.** The zero-knowledge predicates over the adversaries
+`ROM.NIZK.Adversary` of `GordieHowe/Model/ROM/NIZK.lean`, namely `ROM.NIZK.ZeroKnowledge`,
+`ROM.NIZK.ZeroKnowledgeQueryBounded` (`GordieHowe/Model/ROM/LeafZK.lean`) and
+`ROM.NIZK.EverlastingZeroKnowledge` (`GordieHowe/Model/ROM/SaltedZKLastProofQuery.lean`), are
+internal forms, on which the salted hybrids are proved. The forms over the generic
+`ROM.QueryBoundedAdversary` are `ROM.ZeroKnowledge` and `ROM.EverlastingZeroKnowledge`
+(`GordieHowe/Model/ROM/InteractiveNIZKLastProofQuery.lean`), obtained from the internal forms by
+`ROM.QueryBoundedAdversary.zeroKnowledge_of_queryBounded` and
+`ROM.QueryBoundedAdversary.everlastingZeroKnowledge_of_nizk`. `ROM.ZeroKnowledge.of_decode` and
+`ROM.EverlastingZeroKnowledge.of_decode` (`GordieHowe/Model/ROM/Encode.lean`) carry them through an
+oracle encoding, and `NARG.ROM.ZeroKnowledge.of_encode` and
+`NARG.ROM.EverlastingZeroKnowledge.of_encode` (`GordieHowe/Model/NARG/ROM.lean`) give the program
+forms `NARG.ROM.ZeroKnowledge` and `NARG.ROM.EverlastingZeroKnowledge`, which statements outside the
+Model layer use.
 -/
 
 open Finset

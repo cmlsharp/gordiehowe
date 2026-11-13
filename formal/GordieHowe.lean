@@ -953,7 +953,6 @@ public import GordieHowe.Model.ROM.AdaptiveCompleteness
 public import GordieHowe.Model.ROM.AdaptiveCompletenessProg
 public import GordieHowe.Model.ROM.Encode
 public import GordieHowe.Model.ROM.HiddenLeaves
-public import GordieHowe.Model.ROM.HiddenProgramming
 public import GordieHowe.Model.ROM.Interactive
 public import GordieHowe.Model.ROM.InteractiveNIZK
 public import GordieHowe.Model.ROM.InteractiveNIZKLastProofQuery

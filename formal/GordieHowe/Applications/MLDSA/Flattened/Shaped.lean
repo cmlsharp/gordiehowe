@@ -37,7 +37,7 @@ involves `x̂`, `E` and `SampleInBall`, and no key.
 
 namespace GordieHowe.MLDSA
 
-open _root_.MLDSA _root_.MLDSA.Concrete Finset PMF GordieHowe.MLDSA.Regularity GordieHowe.ROM.NIZK
+open _root_.MLDSA _root_.MLDSA.Concrete Finset PMF GordieHowe.MLDSA.Regularity
 open scoped ENNReal BigOperators
 
 variable {p : Params}

@@ -25,7 +25,7 @@ paper's "query-bounded adversaries" (`def:adversary`).
 - `Responder`: the answer to request number `i` on the oracle in force, with the oracle after it
   (a simulator may reprogram it).
 - `IAlg.run`, `IAlg.output`, `IAlg.queryCount`, `IAlg.Budget`: the run, its output, its number of
-  queries and the budget.
+  queries and the budget; `IAlg.queryCountBefore`: the number of queries before a step.
 - `QueryBoundedAdversary A B Req Resp Out t`: coins, then an algorithm with a budget of `t`.
 
 The other forms are instances or derived by proved maps:
@@ -128,6 +128,26 @@ def queryCount (R : Responder A B Req Resp) (O : A → B) : ℕ :=
 /-- **A budget of `t` queries**: against every responder and every oracle, at most `t` of the `m`
 steps are queries; requests are not counted. -/
 def Budget (t : ℕ) : Prop := ∀ R O, 𝒜.queryCount R O ≤ t
+
+/-- **The number of queries before step `k`** of the run of `𝒜` against `R` from `O`: the steps
+below `k` whose action is a query. -/
+def queryCountBefore (R : Responder A B Req Resp) (O : A → B) (k : ℕ) : ℕ :=
+  ((Finset.range k).filter fun i => (𝒜.next (𝒜.run R O i).hist).IsQuery).card
+
+theorem queryCountBefore_succ (R : Responder A B Req Resp) (O : A → B) (k : ℕ) :
+    𝒜.queryCountBefore R O (k + 1) =
+      𝒜.queryCountBefore R O k + if (𝒜.next (𝒜.run R O k).hist).IsQuery then 1 else 0 := by
+  rw [queryCountBefore, queryCountBefore, Finset.range_add_one, Finset.filter_insert]
+  split_ifs with h
+  · rw [Finset.card_insert_of_notMem (by simp)]
+  · rfl
+
+theorem queryCountBefore_mono (R : Responder A B Req Resp) (O : A → B) {k k' : ℕ} (h : k ≤ k') :
+    𝒜.queryCountBefore R O k ≤ 𝒜.queryCountBefore R O k' :=
+  Finset.card_le_card (Finset.filter_subset_filter _ (Finset.range_subset_range.2 h))
+
+theorem queryCountBefore_steps (R : Responder A B Req Resp) (O : A → B) :
+    𝒜.queryCountBefore R O m = 𝒜.queryCount R O := rfl
 
 theorem run_succ (R : Responder A B Req Resp) (O : A → B) (k : ℕ) :
     𝒜.run R O (k + 1) = 𝒜.step R (𝒜.run R O k) := rfl

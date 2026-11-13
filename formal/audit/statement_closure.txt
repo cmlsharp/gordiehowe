@@ -5887,6 +5887,7 @@ GordieHowe.Model.ROM.Interactive	GordieHowe.ROM.IAlg.noRequests	9809100737994639
 GordieHowe.Model.ROM.Interactive	GordieHowe.ROM.IAlg.out	11463713631469567295
 GordieHowe.Model.ROM.Interactive	GordieHowe.ROM.IAlg.output	11410172256817300443
 GordieHowe.Model.ROM.Interactive	GordieHowe.ROM.IAlg.queryCount	14339338011254302942
+GordieHowe.Model.ROM.Interactive	GordieHowe.ROM.IAlg.queryCountBefore	12283290901067968428
 GordieHowe.Model.ROM.Interactive	GordieHowe.ROM.IAlg.run	4319553143008897287
 GordieHowe.Model.ROM.Interactive	GordieHowe.ROM.IAlg.step	11153099622901130251
 GordieHowe.Model.ROM.Interactive	GordieHowe.ROM.IAlg.toAlg	18065674503196975854
@@ -5911,7 +5912,6 @@ GordieHowe.Model.ROM.InteractiveNIZK	GordieHowe.ROM.QueryBoundedAdversary.advant
 GordieHowe.Model.ROM.InteractiveNIZK	GordieHowe.ROM.toResponder	10511181528209113914
 GordieHowe.Model.ROM.InteractiveNIZKLastProofQuery	GordieHowe.ROM.EverlastingZeroKnowledge	10640878610944444383
 GordieHowe.Model.ROM.InteractiveNIZKLastProofQuery	GordieHowe.ROM.IAlg.RequestBudget	7327442788717120948
-GordieHowe.Model.ROM.InteractiveNIZKLastProofQuery	GordieHowe.ROM.IAlg.queryCountBefore	12283290901067968428
 GordieHowe.Model.ROM.InteractiveNIZKLastProofQuery	GordieHowe.ROM.QueryBoundedAdversary.OutputOracleFree	4342013748639129696
 GordieHowe.Model.ROM.InteractiveNIZKLastProofQuery	GordieHowe.ROM.QueryBoundedAdversary.QueriesBeforeLastProofQuery	6036310320577735368
 GordieHowe.Model.ROM.InteractiveNIZKLastProofQuery	GordieHowe.ROM.ZeroKnowledge	12140612557874567746

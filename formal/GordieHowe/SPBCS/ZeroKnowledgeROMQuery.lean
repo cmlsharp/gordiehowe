@@ -5,7 +5,6 @@ module
 
 public import GordieHowe.SPBCS.ZeroKnowledgeROM
 public import GordieHowe.Model.ROM.LeafZK
-public import GordieHowe.Model.ROM.SaltedZK
 
 @[expose] public section
 

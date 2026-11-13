@@ -45,7 +45,7 @@ the computed cut-offs `computedCutoff65`, `computedCutoff87` with no shape hypot
 
 namespace GordieHowe.MLDSA
 
-open _root_.MLDSA _root_.MLDSA.Concrete Finset PMF GordieHowe.MLDSA.Regularity GordieHowe.ROM.NIZK
+open _root_.MLDSA _root_.MLDSA.Concrete Finset PMF GordieHowe.MLDSA.Regularity
 open scoped ENNReal BigOperators
 
 attribute [local instance] concreteNTTRingOps
