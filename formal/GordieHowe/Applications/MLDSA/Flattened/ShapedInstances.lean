@@ -24,19 +24,21 @@ cut-off `Pr[Bin(N, x_max) ≤ ω]` (`keyFloor_mldsa65_of_spectrumEnvelope`,
 
 For a public `x̂ ≤ x_max` satisfying the shape bound, the shaped cut-offs `shapedCutoff65`,
 `shapedCutoff87` have mean shape at least `2^-14` and `2^-18`, and the presentations averaged over
-a uniform matrix, counted on the matrices whose key is under the table, have advantage at most
+a uniform matrix, counted on the matrices whose key is under the table, have advantage in the
+quantum random-oracle model (`GordieHowe.QROM.ZeroKnowledge`, query-bounded quantum adversaries,
+`R` of 64 bytes) at most
 
-* `Q / 2^504 + (11 Q + 22) / 2^185 + Q δ + (2 Q t + Q (Q - 1) / 2) / 2^256
-  + (Q t + Q (Q - 1) / 2) / 2^512` at ML-DSA-65
-  (`expect_advantage_honestPresenter_le_mldsa65_shaped`);
+* `Q / 2^504 + (11 Q + 22) / 2^185 + Q δ + Q (Q - 1) / 2^513 + 2 t √(Q / 2^512)
+  + 4 Q t / 2^256 + Q (Q - 1) / 2^512` at ML-DSA-65
+  (`expect_zkAdvantage_honestPresenter_le_mldsa65_shaped`);
 * `Q / 2^758 + (12 Q + 24) / 2^276 + Q δ + …` with the same salt terms at ML-DSA-87
-  (`expect_advantage_honestPresenter_le_mldsa87_shaped`).
+  (`expect_zkAdvantage_honestPresenter_le_mldsa87_shaped`).
 
 The computed shapes `xhat65`, `xhat87` (`shapedXhat` at `P = 40`, `L = 32`, capped at `x_max`)
 satisfy the shape bound (`shapeBound_xhat65`, `shapeBound_xhat87`), so the bounds above hold at
 the computed cut-offs `computedCutoff65`, `computedCutoff87` with no shape hypothesis
-(`expect_advantage_honestPresenter_le_mldsa65_computedShape`,
-`expect_advantage_honestPresenter_le_mldsa87_computedShape`). The key checks `spectrumCheck65`,
+(`expect_zkAdvantage_honestPresenter_le_mldsa65_computedShape`,
+`expect_zkAdvantage_honestPresenter_le_mldsa87_computedShape`). The key checks `spectrumCheck65`,
 `spectrumCheck87` imply the spectrum envelopes (`spectrumEnvelope_of_spectrumCheck65`,
 `spectrumEnvelope_of_spectrumCheck87`).
 -/
@@ -331,33 +333,36 @@ theorem keyUnderTable_of_spectrumCheck87 {t0 : RqVec mldsa87.k} (ht0 : polyVecNo
 
 /-! ### The presentations averaged over a uniform matrix -/
 
-/-- **The presentations at ML-DSA-65 with the shaped cut-off**, averaged over a uniform matrix
-and counted on the matrices whose key is under the table: for a public `x̂ ≤ 233 / 4096`
-satisfying the shape bound, a sampler `f` within `δ` of the shaped target, `R` of 32 bytes and
-every adversary with a budget of `t` queries whose output does not read the final oracle, with
-`Q` presentations answered, the advantage against `flatPresentSimOf f` is at most
-`Q / 2^504 + (11 Q + 22) / 2^185 + Q δ + (2 Q t + Q (Q - 1) / 2) / 2^256
-+ (Q t + Q (Q - 1) / 2) / 2^512`. -/
-theorem expect_advantage_honestPresenter_le_mldsa65_shaped {Ctx : Type} [Fintype Ctx]
-    [DecidableEq Ctx] (sk₀ : SecretKey mldsa65) (hs1 : polyVecBounded sk₀.s1 mldsa65.eta)
-    (hs2 : polyVecBounded sk₀.s2 mldsa65.eta) {xhat : CommitHashBytes mldsa65 → ℚ≥0}
+/-- **The presentations at ML-DSA-65 with the shaped cut-off, in the quantum random-oracle model**,
+averaged over a uniform matrix and counted on the matrices whose key is under the table: for a
+public `x̂ ≤ 233 / 4096` satisfying the shape bound, a sampler `f` within `δ` of the shaped target,
+`R` of 64 bytes, every family of query-bounded quantum adversaries all of whose queries are counted,
+with `Q` presentations answered, and every group structure on the oracle's values, the advantage
+against the simulator program `flatPresentSimProgOf f` is at most `Q / 2^504 + (11 Q + 22) / 2^185 +
+Q δ + Q (Q - 1) / 2^513 + 2 t √(Q / 2^512) + 4 Q t / 2^256 + Q (Q - 1) / 2^512`. -/
+theorem expect_zkAdvantage_honestPresenter_le_mldsa65_shaped {Ctx : Type} [Fintype Ctx]
+    [DecidableEq Ctx] [AddCommGroup (PresOut mldsa65)] (sk₀ : SecretKey mldsa65)
+    (hs1 : polyVecBounded sk₀.s1 mldsa65.eta) (hs2 : polyVecBounded sk₀.s2 mldsa65.eta)
+    {xhat : CommitHashBytes mldsa65 → ℚ≥0}
     (hx : ∀ c, xhat c ≤ 233 / 4096)
     (hb : ShapeBound (concretePrimitives mldsa65) spectrumTable65 xhat)
-    {C : Type} [Fintype C] [Nonempty C] (f : C → BucketVec mldsa65 × CommitHashBytes mldsa65)
+    {C : Type} [Fintype C] [Nonempty C] [DecidableEq C]
+    (f : C → BucketVec mldsa65 × CommitHashBytes mldsa65)
     {δ : ℝ}
     (hδ : tvDist ((uniformOfFintype C).map f) (shapedTarget (shapedCutoff65 xhat hx)) ≤ δ)
-    (trOf : TqMatrix mldsa65.k mldsa65.l → _root_.MLDSA.Bytes 64) {m t Q : ℕ}
-    (𝒜 : TqMatrix mldsa65.k mldsa65.l → Adversary (PresIn mldsa65 (_root_.MLDSA.Bytes 32) Ctx)
-      (PresOut mldsa65) Ctx Unit (Option (Presentation mldsa65)) m t)
-    (hpost : ∀ aHat r, ((𝒜 aHat).alg r).PostOracleFree) :
+    (trOf : TqMatrix mldsa65.k mldsa65.l → _root_.MLDSA.Bytes 64) {t Q : ℕ}
+    (𝒟 : TqMatrix mldsa65.k mldsa65.l → Quantum.QueryBoundedAdversary
+      (PresIn mldsa65 (_root_.MLDSA.Bytes 64) Ctx) (PresOut mldsa65) (QROM.ProofQuery Ctx Unit)
+      (Option (Presentation mldsa65)) Bool t) :
     𝔼 aHat : TqMatrix mldsa65.k mldsa65.l,
         {aHat | SpectrumEnvelope spectrumTable65 (matrixKey sk₀ aHat).t0}.indicator
-          (fun aHat => (𝒜 aHat).advantage (fun _ _ => True) (honestPresenter (trOf aHat))
+          (fun aHat => (𝒟 aHat).zkAdvantage (fun _ _ => True) (honestPresenterProg (trOf aHat))
             (honestPresenterLaw (concretePrimitives mldsa65) (matrixKey sk₀ aHat) aHat
               (shapedCutoff65 xhat hx))
-            (flatPresentSimOf f) Q) aHat ≤
+            (flatPresentSimProgOf f) Q) aHat ≤
       Q / 2 ^ 504 + (11 * Q + 22) / 2 ^ 185 + Q * δ +
-        ((2 * Q * t + Q * (Q - 1) / 2) / 2 ^ 256 + (Q * t + Q * (Q - 1) / 2) / 2 ^ 512) := by
+        ((Q * (Q - 1) / (2 * 2 ^ 512) + 2 * t * √(Q / 2 ^ 512)) +
+          (4 * Q * t / 2 ^ 256 + Q * (Q - 1) / 2 ^ 512)) := by
   have := concreteNTTRingLaws
   have hm := one_div_two_pow_le_meanShape_shapedCutoff65 xhat hx
   have hf : ∀ aHat ∈ {aHat | SpectrumEnvelope spectrumTable65 (matrixKey sk₀ aHat).t0},
@@ -366,8 +371,8 @@ theorem expect_advantage_honestPresenter_le_mldsa65_shaped {Ctx : Type} [Fintype
     keyFloorAt_shapedCutoff_of_shapeBound floorParams_mldsa65 (by norm_num)
       (sampleInBallShape_concrete _)
       (by simpa only [matrixKey_eq] using polyVecNorm_matrixKey_t0_le sk₀ aHat) hS _ hb
-  have h := expect_advantage_honestPresenter_le_mldsa65_of_keyFloorAt sk₀ hs1 hs2 le_rfl _ hf f
-    hδ trOf (Q := Q) 𝒜 hpost
+  have h := expect_zkAdvantage_honestPresenter_le_mldsa65_of_keyFloorAt sk₀ hs1 hs2 le_rfl _ hf f
+    hδ trOf (Q := Q) 𝒟
   refine h.trans ?_
   simp only [shapedCutoff_top, ENNReal.nnratCast_one, ENNReal.toReal_one, one_mul, sub_zero,
     mul_one, mul_zero, add_zero, one_pow]
@@ -390,33 +395,36 @@ theorem expect_advantage_honestPresenter_le_mldsa65_shaped {Ctx : Type} [Fintype
       _ ≤ (11 * Q + 22) / 2 ^ 185 * L := mul_le_mul_of_nonneg_left hm (by positivity)
   exact add_le_add (add_le_add (add_le_add h1 h2) le_rfl) le_rfl
 
-/-- **The presentations at ML-DSA-87 with the shaped cut-off**, averaged over a uniform matrix
-and counted on the matrices whose key is under the table: for a public `x̂ ≤ 15 / 256` satisfying
-the shape bound, a sampler `f` within `δ` of the shaped target, `R` of 32 bytes and every
-adversary with a budget of `t` queries whose output does not read the final oracle, with `Q`
-presentations answered, the advantage against `flatPresentSimOf f` is at most
-`Q / 2^758 + (12 Q + 24) / 2^276 + Q δ + (2 Q t + Q (Q - 1) / 2) / 2^256
-+ (Q t + Q (Q - 1) / 2) / 2^512`. -/
-theorem expect_advantage_honestPresenter_le_mldsa87_shaped {Ctx : Type} [Fintype Ctx]
-    [DecidableEq Ctx] (sk₀ : SecretKey mldsa87) (hs1 : polyVecBounded sk₀.s1 mldsa87.eta)
-    (hs2 : polyVecBounded sk₀.s2 mldsa87.eta) {xhat : CommitHashBytes mldsa87 → ℚ≥0}
+/-- **The presentations at ML-DSA-87 with the shaped cut-off, in the quantum random-oracle model**,
+averaged over a uniform matrix and counted on the matrices whose key is under the table: for a
+public `x̂ ≤ 15 / 256` satisfying the shape bound, a sampler `f` within `δ` of the shaped target,
+`R` of 64 bytes, every family of query-bounded quantum adversaries all of whose queries are counted,
+with `Q` presentations answered, and every group structure on the oracle's values, the advantage
+against the simulator program `flatPresentSimProgOf f` is at most `Q / 2^758 + (12 Q + 24) / 2^276 +
+Q δ + Q (Q - 1) / 2^513 + 2 t √(Q / 2^512) + 4 Q t / 2^256 + Q (Q - 1) / 2^512`. -/
+theorem expect_zkAdvantage_honestPresenter_le_mldsa87_shaped {Ctx : Type} [Fintype Ctx]
+    [DecidableEq Ctx] [AddCommGroup (PresOut mldsa87)] (sk₀ : SecretKey mldsa87)
+    (hs1 : polyVecBounded sk₀.s1 mldsa87.eta) (hs2 : polyVecBounded sk₀.s2 mldsa87.eta)
+    {xhat : CommitHashBytes mldsa87 → ℚ≥0}
     (hx : ∀ c, xhat c ≤ 15 / 256)
     (hb : ShapeBound (concretePrimitives mldsa87) spectrumTable87 xhat)
-    {C : Type} [Fintype C] [Nonempty C] (f : C → BucketVec mldsa87 × CommitHashBytes mldsa87)
+    {C : Type} [Fintype C] [Nonempty C] [DecidableEq C]
+    (f : C → BucketVec mldsa87 × CommitHashBytes mldsa87)
     {δ : ℝ}
     (hδ : tvDist ((uniformOfFintype C).map f) (shapedTarget (shapedCutoff87 xhat hx)) ≤ δ)
-    (trOf : TqMatrix mldsa87.k mldsa87.l → _root_.MLDSA.Bytes 64) {m t Q : ℕ}
-    (𝒜 : TqMatrix mldsa87.k mldsa87.l → Adversary (PresIn mldsa87 (_root_.MLDSA.Bytes 32) Ctx)
-      (PresOut mldsa87) Ctx Unit (Option (Presentation mldsa87)) m t)
-    (hpost : ∀ aHat r, ((𝒜 aHat).alg r).PostOracleFree) :
+    (trOf : TqMatrix mldsa87.k mldsa87.l → _root_.MLDSA.Bytes 64) {t Q : ℕ}
+    (𝒟 : TqMatrix mldsa87.k mldsa87.l → Quantum.QueryBoundedAdversary
+      (PresIn mldsa87 (_root_.MLDSA.Bytes 64) Ctx) (PresOut mldsa87) (QROM.ProofQuery Ctx Unit)
+      (Option (Presentation mldsa87)) Bool t) :
     𝔼 aHat : TqMatrix mldsa87.k mldsa87.l,
         {aHat | SpectrumEnvelope spectrumTable87 (matrixKey sk₀ aHat).t0}.indicator
-          (fun aHat => (𝒜 aHat).advantage (fun _ _ => True) (honestPresenter (trOf aHat))
+          (fun aHat => (𝒟 aHat).zkAdvantage (fun _ _ => True) (honestPresenterProg (trOf aHat))
             (honestPresenterLaw (concretePrimitives mldsa87) (matrixKey sk₀ aHat) aHat
               (shapedCutoff87 xhat hx))
-            (flatPresentSimOf f) Q) aHat ≤
+            (flatPresentSimProgOf f) Q) aHat ≤
       Q / 2 ^ 758 + (12 * Q + 24) / 2 ^ 276 + Q * δ +
-        ((2 * Q * t + Q * (Q - 1) / 2) / 2 ^ 256 + (Q * t + Q * (Q - 1) / 2) / 2 ^ 512) := by
+        ((Q * (Q - 1) / (2 * 2 ^ 512) + 2 * t * √(Q / 2 ^ 512)) +
+          (4 * Q * t / 2 ^ 256 + Q * (Q - 1) / 2 ^ 512)) := by
   have := concreteNTTRingLaws
   have hm := one_div_two_pow_le_meanShape_shapedCutoff87 xhat hx
   have hf : ∀ aHat ∈ {aHat | SpectrumEnvelope spectrumTable87 (matrixKey sk₀ aHat).t0},
@@ -425,8 +433,8 @@ theorem expect_advantage_honestPresenter_le_mldsa87_shaped {Ctx : Type} [Fintype
     keyFloorAt_shapedCutoff_of_shapeBound floorParams_mldsa87 (by norm_num)
       (sampleInBallShape_concrete _)
       (by simpa only [matrixKey_eq] using polyVecNorm_matrixKey_t0_le sk₀ aHat) hS _ hb
-  have h := expect_advantage_honestPresenter_le_mldsa87_of_keyFloorAt sk₀ hs1 hs2 le_rfl _ hf f
-    hδ trOf (Q := Q) 𝒜 hpost
+  have h := expect_zkAdvantage_honestPresenter_le_mldsa87_of_keyFloorAt sk₀ hs1 hs2 le_rfl _ hf f
+    hδ trOf (Q := Q) 𝒟
   refine h.trans ?_
   simp only [shapedCutoff_top, ENNReal.nnratCast_one, ENNReal.toReal_one, one_mul, sub_zero,
     mul_one, mul_zero, add_zero, one_pow]
@@ -452,56 +460,62 @@ theorem expect_advantage_honestPresenter_le_mldsa87_shaped {Ctx : Type} [Fintype
 
 /-! ### The presentations at the computed cut-offs -/
 
-/-- **The presentations at ML-DSA-65 with the computed cut-off**, averaged over a uniform matrix
-and counted on the matrices whose key is under the table: for a sampler `f` within `δ` of the
-target of `computedCutoff65`, `R` of 32 bytes and every adversary with a budget of `t` queries
-whose output does not read the final oracle, with `Q` presentations answered, the advantage
-against `flatPresentSimOf f` is at most `Q / 2^504 + (11 Q + 22) / 2^185 + Q δ
-+ (2 Q t + Q (Q - 1) / 2) / 2^256 + (Q t + Q (Q - 1) / 2) / 2^512`. -/
-theorem expect_advantage_honestPresenter_le_mldsa65_computedShape {Ctx : Type} [Fintype Ctx]
-    [DecidableEq Ctx] (sk₀ : SecretKey mldsa65) (hs1 : polyVecBounded sk₀.s1 mldsa65.eta)
-    (hs2 : polyVecBounded sk₀.s2 mldsa65.eta)
-    {C : Type} [Fintype C] [Nonempty C] (f : C → BucketVec mldsa65 × CommitHashBytes mldsa65)
+/-- **The presentations at ML-DSA-65 with the computed cut-off, in the quantum random-oracle
+model**, averaged over a uniform matrix and counted on the matrices whose key is under the table:
+for a sampler `f` within `δ` of the target of `computedCutoff65`, `R` of 64 bytes, every family of
+query-bounded quantum adversaries all of whose queries are counted, with `Q` presentations answered,
+and every group structure on the oracle's values, the advantage against the simulator program
+`flatPresentSimProgOf f` is at most `Q / 2^504 + (11 Q + 22) / 2^185 + Q δ + Q (Q - 1) / 2^513 + 2 t
+√(Q / 2^512) + 4 Q t / 2^256 + Q (Q - 1) / 2^512`. -/
+theorem expect_zkAdvantage_honestPresenter_le_mldsa65_computedShape {Ctx : Type} [Fintype Ctx]
+    [DecidableEq Ctx] [AddCommGroup (PresOut mldsa65)] (sk₀ : SecretKey mldsa65)
+    (hs1 : polyVecBounded sk₀.s1 mldsa65.eta) (hs2 : polyVecBounded sk₀.s2 mldsa65.eta)
+    {C : Type} [Fintype C] [Nonempty C] [DecidableEq C]
+    (f : C → BucketVec mldsa65 × CommitHashBytes mldsa65)
     {δ : ℝ} (hδ : tvDist ((uniformOfFintype C).map f) (shapedTarget computedCutoff65) ≤ δ)
-    (trOf : TqMatrix mldsa65.k mldsa65.l → _root_.MLDSA.Bytes 64) {m t Q : ℕ}
-    (𝒜 : TqMatrix mldsa65.k mldsa65.l → Adversary (PresIn mldsa65 (_root_.MLDSA.Bytes 32) Ctx)
-      (PresOut mldsa65) Ctx Unit (Option (Presentation mldsa65)) m t)
-    (hpost : ∀ aHat r, ((𝒜 aHat).alg r).PostOracleFree) :
+    (trOf : TqMatrix mldsa65.k mldsa65.l → _root_.MLDSA.Bytes 64) {t Q : ℕ}
+    (𝒟 : TqMatrix mldsa65.k mldsa65.l → Quantum.QueryBoundedAdversary
+      (PresIn mldsa65 (_root_.MLDSA.Bytes 64) Ctx) (PresOut mldsa65) (QROM.ProofQuery Ctx Unit)
+      (Option (Presentation mldsa65)) Bool t) :
     𝔼 aHat : TqMatrix mldsa65.k mldsa65.l,
         {aHat | SpectrumEnvelope spectrumTable65 (matrixKey sk₀ aHat).t0}.indicator
-          (fun aHat => (𝒜 aHat).advantage (fun _ _ => True) (honestPresenter (trOf aHat))
+          (fun aHat => (𝒟 aHat).zkAdvantage (fun _ _ => True) (honestPresenterProg (trOf aHat))
             (honestPresenterLaw (concretePrimitives mldsa65) (matrixKey sk₀ aHat) aHat
               computedCutoff65)
-            (flatPresentSimOf f) Q) aHat ≤
+            (flatPresentSimProgOf f) Q) aHat ≤
       Q / 2 ^ 504 + (11 * Q + 22) / 2 ^ 185 + Q * δ +
-        ((2 * Q * t + Q * (Q - 1) / 2) / 2 ^ 256 + (Q * t + Q * (Q - 1) / 2) / 2 ^ 512) :=
-  expect_advantage_honestPresenter_le_mldsa65_shaped sk₀ hs1 hs2 xhat65_le shapeBound_xhat65 f
-    hδ trOf 𝒜 hpost
+        ((Q * (Q - 1) / (2 * 2 ^ 512) + 2 * t * √(Q / 2 ^ 512)) +
+          (4 * Q * t / 2 ^ 256 + Q * (Q - 1) / 2 ^ 512)) :=
+  expect_zkAdvantage_honestPresenter_le_mldsa65_shaped sk₀ hs1 hs2 xhat65_le shapeBound_xhat65 f
+    hδ trOf 𝒟
 
-/-- **The presentations at ML-DSA-87 with the computed cut-off**, averaged over a uniform matrix
-and counted on the matrices whose key is under the table: for a sampler `f` within `δ` of the
-target of `computedCutoff87`, `R` of 32 bytes and every adversary with a budget of `t` queries
-whose output does not read the final oracle, with `Q` presentations answered, the advantage
-against `flatPresentSimOf f` is at most `Q / 2^758 + (12 Q + 24) / 2^276 + Q δ
-+ (2 Q t + Q (Q - 1) / 2) / 2^256 + (Q t + Q (Q - 1) / 2) / 2^512`. -/
-theorem expect_advantage_honestPresenter_le_mldsa87_computedShape {Ctx : Type} [Fintype Ctx]
-    [DecidableEq Ctx] (sk₀ : SecretKey mldsa87) (hs1 : polyVecBounded sk₀.s1 mldsa87.eta)
-    (hs2 : polyVecBounded sk₀.s2 mldsa87.eta)
-    {C : Type} [Fintype C] [Nonempty C] (f : C → BucketVec mldsa87 × CommitHashBytes mldsa87)
+/-- **The presentations at ML-DSA-87 with the computed cut-off, in the quantum random-oracle
+model**, averaged over a uniform matrix and counted on the matrices whose key is under the table:
+for a sampler `f` within `δ` of the target of `computedCutoff87`, `R` of 64 bytes, every family of
+query-bounded quantum adversaries all of whose queries are counted, with `Q` presentations answered,
+and every group structure on the oracle's values, the advantage against the simulator program
+`flatPresentSimProgOf f` is at most `Q / 2^758 + (12 Q + 24) / 2^276 + Q δ + Q (Q - 1) / 2^513 + 2 t
+√(Q / 2^512) + 4 Q t / 2^256 + Q (Q - 1) / 2^512`. -/
+theorem expect_zkAdvantage_honestPresenter_le_mldsa87_computedShape {Ctx : Type} [Fintype Ctx]
+    [DecidableEq Ctx] [AddCommGroup (PresOut mldsa87)] (sk₀ : SecretKey mldsa87)
+    (hs1 : polyVecBounded sk₀.s1 mldsa87.eta) (hs2 : polyVecBounded sk₀.s2 mldsa87.eta)
+    {C : Type} [Fintype C] [Nonempty C] [DecidableEq C]
+    (f : C → BucketVec mldsa87 × CommitHashBytes mldsa87)
     {δ : ℝ} (hδ : tvDist ((uniformOfFintype C).map f) (shapedTarget computedCutoff87) ≤ δ)
-    (trOf : TqMatrix mldsa87.k mldsa87.l → _root_.MLDSA.Bytes 64) {m t Q : ℕ}
-    (𝒜 : TqMatrix mldsa87.k mldsa87.l → Adversary (PresIn mldsa87 (_root_.MLDSA.Bytes 32) Ctx)
-      (PresOut mldsa87) Ctx Unit (Option (Presentation mldsa87)) m t)
-    (hpost : ∀ aHat r, ((𝒜 aHat).alg r).PostOracleFree) :
+    (trOf : TqMatrix mldsa87.k mldsa87.l → _root_.MLDSA.Bytes 64) {t Q : ℕ}
+    (𝒟 : TqMatrix mldsa87.k mldsa87.l → Quantum.QueryBoundedAdversary
+      (PresIn mldsa87 (_root_.MLDSA.Bytes 64) Ctx) (PresOut mldsa87) (QROM.ProofQuery Ctx Unit)
+      (Option (Presentation mldsa87)) Bool t) :
     𝔼 aHat : TqMatrix mldsa87.k mldsa87.l,
         {aHat | SpectrumEnvelope spectrumTable87 (matrixKey sk₀ aHat).t0}.indicator
-          (fun aHat => (𝒜 aHat).advantage (fun _ _ => True) (honestPresenter (trOf aHat))
+          (fun aHat => (𝒟 aHat).zkAdvantage (fun _ _ => True) (honestPresenterProg (trOf aHat))
             (honestPresenterLaw (concretePrimitives mldsa87) (matrixKey sk₀ aHat) aHat
               computedCutoff87)
-            (flatPresentSimOf f) Q) aHat ≤
+            (flatPresentSimProgOf f) Q) aHat ≤
       Q / 2 ^ 758 + (12 * Q + 24) / 2 ^ 276 + Q * δ +
-        ((2 * Q * t + Q * (Q - 1) / 2) / 2 ^ 256 + (Q * t + Q * (Q - 1) / 2) / 2 ^ 512) :=
-  expect_advantage_honestPresenter_le_mldsa87_shaped sk₀ hs1 hs2 xhat87_le shapeBound_xhat87 f
-    hδ trOf 𝒜 hpost
+        ((Q * (Q - 1) / (2 * 2 ^ 512) + 2 * t * √(Q / 2 ^ 512)) +
+          (4 * Q * t / 2 ^ 256 + Q * (Q - 1) / 2 ^ 512)) :=
+  expect_zkAdvantage_honestPresenter_le_mldsa87_shaped sk₀ hs1 hs2 xhat87_le shapeBound_xhat87 f
+    hδ trOf 𝒟
 
 end GordieHowe.MLDSA

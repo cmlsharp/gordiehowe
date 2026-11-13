@@ -108,7 +108,7 @@
 # headline	GordieHowe.MAC.binding
 # headline	GordieHowe.MAC.probUniform_bindingEvent_le
 # headline	GordieHowe.MLDSA.keyFloorAt_shapedCutoff
-# headline	GordieHowe.MLDSA.presentations_advantage_le_shaped
+# headline	GordieHowe.MLDSA.zeroKnowledge_presentations_shaped
 # headline	GordieHowe.MLDSA44.Emulated.QROMParams.completeness
 # headline	GordieHowe.MLDSA44.Emulated.QROMParams.completeness_adaptive_qrom
 # headline	GordieHowe.MLDSA44.Emulated.QROMParams.completeness_honest
@@ -392,7 +392,7 @@
 # transitive	GordieHowe.MAC.binding	3801851357322935557
 # transitive	GordieHowe.MAC.probUniform_bindingEvent_le	12991006625988045183
 # transitive	GordieHowe.MLDSA.keyFloorAt_shapedCutoff	2823878344693631790
-# transitive	GordieHowe.MLDSA.presentations_advantage_le_shaped	3736750225606696536
+# transitive	GordieHowe.MLDSA.zeroKnowledge_presentations_shaped	11807200794002578861
 # transitive	GordieHowe.MLDSA44.Emulated.QROMParams.completeness	12578366360703326413
 # transitive	GordieHowe.MLDSA44.Emulated.QROMParams.completeness_adaptive_qrom	16994101875197113009
 # transitive	GordieHowe.MLDSA44.Emulated.QROMParams.completeness_honest	13570406825518062843
@@ -1335,24 +1335,32 @@ GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.PresOut.pr
 GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.PresOut.rec	3532028667
 GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.Presentation	2575889213
 GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.Presentation.mk	224393719
-GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.flatPresentSimOf	16415000702418825464
-GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.honestPresenter	2706631349282451790
+GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.Presentation.proxyTypeEquiv	7560097892523111340
+GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.Presentation.rec	998059354
+GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.bucketVecList	14982617507058409775
+GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.flatPresentSimProgOf	16233182633060086872
 GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.honestPresenterLaw	6607706819691508512
+GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.honestPresenterProg	12313851398419389520
 GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.instDecidableEqPresIn	17933097435902769387
 GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.instDecidableEqPresIn.decEq	12228156229216160668
+GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.instDecidableEqPresOut	568418993421316894
+GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.instDecidableEqPresOut.decEq	13564355595180115761
+GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.instDecidableEqPresentation	12368800482437055068
+GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.instDecidableEqPresentation.decEq	9405379662718301833
 GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.instFintypePresIn	15488972640681994681
 GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.instFintypePresOut	10909022121030488617
+GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.instFintypePresentation	4971023601054746931
+GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.instNonemptyPresIn	3289923803
 GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.instNonemptyPresOut	4174533281
 GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.loopTapeLaw	10326120194171587579
-GordieHowe.Applications.MLDSA.Flattened.Presentation	GordieHowe.MLDSA.presentAt	7084430098003663254
 GordieHowe.Applications.MLDSA.Flattened.Shaped	GordieHowe.MLDSA.KeyUnderTable	4121404793
 GordieHowe.Applications.MLDSA.Flattened.Shaped	GordieHowe.MLDSA.ShapeBound	15607939110829234242
 GordieHowe.Applications.MLDSA.Flattened.Shaped	GordieHowe.MLDSA.ShapedSetup	179346702
 GordieHowe.Applications.MLDSA.Flattened.Shaped	GordieHowe.MLDSA.ShapedSetup.cutoff	9581421222136946561
 GordieHowe.Applications.MLDSA.Flattened.Shaped	GordieHowe.MLDSA.ShapedSetup.xhat_lt_one	2349575227
 GordieHowe.Applications.MLDSA.Flattened.Shaped	GordieHowe.MLDSA.keyFloorAt_shapedCutoff	2569385179
-GordieHowe.Applications.MLDSA.Flattened.Shaped	GordieHowe.MLDSA.presentations_advantage_le_shaped	2300442720
 GordieHowe.Applications.MLDSA.Flattened.Shaped	GordieHowe.MLDSA.shapedCutoff	15553209478902223970
+GordieHowe.Applications.MLDSA.Flattened.Shaped	GordieHowe.MLDSA.zeroKnowledge_presentations_shaped	2947162585
 GordieHowe.Applications.MLDSA.Flattened.Target	GordieHowe.MLDSA.Cutoff.sum_shape_ne_top	2190221052
 GordieHowe.Applications.MLDSA.Flattened.Target	GordieHowe.MLDSA.Cutoff.sum_shape_ne_zero	3357333666
 GordieHowe.Applications.MLDSA.Flattened.Target	GordieHowe.MLDSA.KeyFloorAt	3467192672
@@ -5925,38 +5933,8 @@ GordieHowe.Model.ROM.Model	GordieHowe.ROM.Alg.out	4376841328136765484
 GordieHowe.Model.ROM.Model	GordieHowe.ROM.Alg.output	9100408519458665676
 GordieHowe.Model.ROM.Model	GordieHowe.ROM.Alg.queries	13060002793447834993
 GordieHowe.Model.ROM.Model	GordieHowe.ROM.logOf	15999936603840624800
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.Action	707537510
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.Action.IsQuery	6925553249291422608
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.Action.query	2398678098
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.Action.rec	1665931502
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.Action.request	3786632567
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.Adversary	2664730046
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.Adversary.Coins	17510298731516036093
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.Adversary.acceptProb	819706912822155085
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.Adversary.advantage	6295631291393164327
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.Adversary.alg	11371616452635888939
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.Adversary.coins	9649254054021904797
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.GameState	707537510
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.GameState.hist	411070969725370377
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.GameState.mk	1710999410
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.GameState.nreq	9486796672940183590
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.GameState.oracle	1261661648050784159
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.IAlg	5632596
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.IAlg.Budget	3391597119795750148
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.IAlg.acceptProb	4504464739719813280
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.IAlg.accepts	7467811622189275077
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.IAlg.next	17420324509765610635
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.IAlg.post	10018433236160219914
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.IAlg.queryCount	7172587335179620798
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.IAlg.run	3327233028322629565
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.IAlg.step	11415952050023207042
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.Reply	2301245127
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.Reply.answer	1760121169
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.Reply.response	1158022721
 GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.Responder	16901697711859941784
 GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.envResponder	13758206842387750312
-GordieHowe.Model.ROM.NIZK	GordieHowe.ROM.NIZK.instDecidableIsQuery	2718217766870130883
-GordieHowe.Model.ROM.ProgEnv	GordieHowe.ROM.NIZK.IAlg.PostOracleFree	5284644214153069449
 GordieHowe.Model.ROM.SimExtract	GordieHowe.ROM.IAlg.toSEProg	12537415913820870642
 GordieHowe.Model.ROM.SimExtract	GordieHowe.ROM.IAlg.tree	16986370834570929140
 GordieHowe.Model.ROM.SimExtract	GordieHowe.SPBCS.SimExtractionAdversaryROM	11069737124890006148
@@ -29266,7 +29244,7 @@ LatticeCrypto.Ring.VectorBackend	LatticeCrypto.vectorNegacyclicRing	713150001336
 # external	Init	panicWithPosWithDecl
 # external	Init	rfl
 # external	Init	trivial
-# library Mathlib: 953
+# library Mathlib: 957
 # external	Mathlib	AddCommGroup
 # external	Mathlib	AddCommGroup.mk
 # external	Mathlib	AddCommGroup.toAddCommMonoid
@@ -29535,8 +29513,11 @@ LatticeCrypto.Ring.VectorBackend	LatticeCrypto.vectorNegacyclicRing	713150001336
 # external	Mathlib	Fin.instUnique
 # external	Mathlib	Fin.isEmpty'
 # external	Mathlib	Fin.snoc
+# external	Mathlib	FinEnum.fin
 # external	Mathlib	FinEnum.instFintype
 # external	Mathlib	FinEnum.instUInt8
+# external	Mathlib	FinEnum.prod
+# external	Mathlib	FinEnum.toList
 # external	Mathlib	Finite
 # external	Mathlib	Finite.equivFin
 # external	Mathlib	Finite.of_fintype
@@ -29708,6 +29689,7 @@ LatticeCrypto.Ring.VectorBackend	LatticeCrypto.vectorNegacyclicRing	713150001336
 # external	Mathlib	LinearOrder.toPartialOrder
 # external	Mathlib	List.LE'
 # external	Mathlib	List.Nodup.getEquivOfForallMemList
+# external	Mathlib	List.Pi.finEnum
 # external	Mathlib	List.Vector
 # external	Mathlib	List.Vector.instFintype
 # external	Mathlib	List.dedup
@@ -30223,4 +30205,4 @@ LatticeCrypto.Ring.VectorBackend	LatticeCrypto.vectorNegacyclicRing	713150001336
 # library VCVio: 2
 # external	VCVio	arrayVectorEquivFin
 # external	VCVio	instFintypeVector
-# total: headlines 284; project declarations 28071 (GordieHowe 9986, GordieHoweCerts 14746, GordieHoweNative 2963, GordieHoweCheck 0, LatticeCrypto 348, HashSig 12, ArkLib 16, CompPoly 0); external constants 1581 (Batteries 4, Init 622, Mathlib 953, VCVio 2)
+# total: headlines 284; project declarations 28049 (GordieHowe 9964, GordieHoweCerts 14746, GordieHoweNative 2963, GordieHoweCheck 0, LatticeCrypto 348, HashSig 12, ArkLib 16, CompPoly 0); external constants 1585 (Batteries 4, Init 622, Mathlib 957, VCVio 2)

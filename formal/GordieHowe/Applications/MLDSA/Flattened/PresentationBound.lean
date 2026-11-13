@@ -5,40 +5,43 @@ module
 
 public import GordieHowe.Applications.MLDSA.Flattened.Presentation
 public import GordieHowe.Applications.MLDSA.Flattened.KeepProb
-public import GordieHowe.Model.ROM.HiddenProgramming
-public import GordieHowe.Model.ROM.ProverCoins
 public import GordieHowe.Foundations.ToMathlib.PMFUniformApprox
-public import GordieHowe.Model.ROM.InteractiveNIZKLastProofQuery
+public import GordieHowe.Model.Quantum.Interactive.QueryBoundedZK
+public import GordieHowe.Model.QROM.SaltedRead
+public import GordieHowe.Model.QROM.ProverCoins
 
 public section
 
 /-!
 # Simulating the presentations of the flattened signer
 
-The bound `presentations_advantage_le_of_keyFloorAt`, at a cut-off under `KeyFloorAt` with the
-simulator `flatPresentSimOf f` for a sampler `f` within `δ` of the shaped target, through hybrids
-with the loop tape drawn as `g u` for a uniform `u : Fin D` (`honestPresenterAt`;
-`exists_map_uniformOfFintype_tvDist_le` puts it within `|LoopTape| / D` of the tape's law, and `D`
-is then taken large):
+`zeroKnowledge_presentations_of_keyFloorAt` states that the presentations are zero knowledge in the
+quantum random-oracle model (`GordieHowe.QROM.ZeroKnowledge`, query-bounded quantum adversaries all
+of whose queries are counted), at a cut-off under `KeyFloorAt`, with the simulator program
+`flatPresentSimProgOf f` for a sampler `f` within `δ` of the shaped target. With the loop tape
+drawn as `g u` for a uniform `u : Fin D` (`exists_map_uniformOfFintype_tvDist_le` puts it within
+`|LoopTape| / D` of the tape's law, and `D` is then taken large), the proof
+(`advantage_honestPresenter_le_tape`) is:
 
-* step A (`advantage_freshMuSim_le`, salt `R`, `zeroKnowledge_of_sliceCloseAt`): the honest
-  presenter against `freshMuSim`, which draws `µ` fresh and programs `H_µ(tr, R, ctx) := µ`; the
-  two slice laws are equal (`realSliceAt_eq_simSliceAt_freshMu`);
-* step C (`abs_acceptProb_simEnv_dropAssignments_le`, salt `R`): dropping that programming;
-* step B (`advantage_freshMuPresenter_le_of_keyFloorAt`, salt `µ`,
-  `zeroKnowledge_of_sliceCloseAt`): the presenter with a fresh `µ` against `flatPresentSimOf f`.
-  Both slice laws are lifts of hash laws by uniform message representatives (`sliceLift`, which
-  does not increase the distance): the simulator's of the sampled target followed by the
-  reprogramming kernel (`simSliceAt_flatPresentSimOf_eq_sliceLift`). The one-presentation term is
-  `stepBError + δ`: the loop against a uniform commitment-hash function against the shaped target
+* the honest presenter is the salted reading prover at the points of `H_µ`
+  (`acceptProb_realEnv_honestPresenter_eq_saltedRead`);
+* hidden-salt reprogramming at `R` (`advantage_saltedRead_fresh_le`) replaces the programmed
+  `H_µ` answers by fresh values, at `Q (Q - 1) / (2 |Rnd|) + 2 t √(Q / |Rnd|)`; with the tape
+  drawn as `g u` this is the presenter with a fresh `µ`
+  (`acceptProb_realEnv_freshRead_eq_freshMuPresenter`);
+* the salted hybrid at `µ` for the commitment hash (`zeroKnowledgeAfterAdaptive_of_sliceClose`),
+  at `4 Q t / 2^256 + Q (Q - 1) / 2^512` and `Q (stepBError + δ)`, between the presenter with a
+  fresh `µ` and `flatPresentSimOf f`. Both one-presentation slice laws are lifts of hash laws by
+  uniform message representatives (`sliceLift`, which does not increase the distance): the
+  simulator's of the sampled target followed by the reprogramming kernel
+  (`simSliceAt_flatPresentSimOf_eq_sliceLift`). The one-presentation term `stepBError + δ` is the
+  loop against a uniform commitment-hash function against the shaped target
   (`tvDist_oracleProver_le`, `tvDist_flatSigner_shapedTarget_le_of_keyFloorAt`), the distance of
   the tape drawn as `g u` from the tape's law, and `δ`.
 
-Moving the honest coins to the tape drawn as `g u` costs `Q` times that distance
-(`abs_acceptProb_realEnv_law_sub_le`). `zeroKnowledge_presentations_of_keyFloorAt` states the bound
-as `GordieHowe.ROM.ZeroKnowledge`. `presentations_advantage_le_of_keyFloor` and
-`zeroKnowledge_presentations` are the constant cut-off under `KeyFloor` with `flatPresentSim`, the
-identity sampler (`δ = 0`).
+`zeroKnowledgeQueryBoundedPure_presentations_of_keyFloorAt` is the bound against distinguishers
+with no final unitary (`QROM.ZeroKnowledgeQueryBoundedPure`). `zeroKnowledge_presentations` is the
+constant cut-off under `KeyFloor` with `flatPresentSimProg`, the identity sampler (`δ = 0`).
 -/
 
 namespace GordieHowe.MLDSA
@@ -48,68 +51,13 @@ open scoped ENNReal BigOperators
 
 variable {p : Params} [NeZero (bucketCount p)] {Rnd Ctx : Type}
 
-/-- **The salt of a point of `H_µ`**: its `R`; the points of `H` carry none. -/
-def saltR : PresIn p Rnd Ctx → Option Rnd
-  | .mu _ R _ => some R
-  | .commit _ _ => none
-
 /-- **The salt of a point of `H`**: its `µ`; the points of `H_µ` carry none. -/
 def saltMu : PresIn p Rnd Ctx → Option (_root_.MLDSA.Bytes 64)
   | .mu .. => none
   | .commit mu _ => some mu
 
-section Slice
-
-variable {X Y Sd C : Type} [DecidableEq X] [DecidableEq Sd]
-
-/-- Replacing a slice by a function updated at a point of the slice updates the result there. -/
-theorem replaceSlice_update (saltOf : X → Option Sd) {σ : Sd} {x : X} (hx : saltOf x = some σ)
-    (H F : X → Y) (y : Y) :
-    replaceSlice saltOf σ H (Function.update F x y) =
-      Function.update (replaceSlice saltOf σ H F) x y := by
-  funext z
-  by_cases hz : z = x
-  · subst hz; simp [replaceSlice, hx]
-  · simp [replaceSlice, Function.update_of_ne hz]
-
-/-- **Splitting off the value at `x`** of a fresh slice whose coins carry a value. -/
-def sliceSplit (x : X) : FreshSlice X Y (Y × C) ≃ FreshSlice X Y C × Y where
-  toFun a := (⟨a.coins.2, Function.update a.slice x a.coins.1⟩, a.slice x)
-  invFun b := ⟨(b.1.slice x, b.1.coins), Function.update b.1.slice x b.2⟩
-  left_inv a := by
-    ext
-    · simp
-    · simp
-    · simp
-  right_inv b := by
-    ext
-    · simp
-    · simp
-    · simp
-
-end Slice
-
 variable [Fintype Rnd] [Nonempty Rnd] [DecidableEq Rnd] [Fintype Ctx] [DecidableEq Ctx]
   (tr : _root_.MLDSA.Bytes 64) {D : ℕ} [NeZero D] (f : Fin D → LoopTape p)
-
-/-- **The honest presenter with the tape drawn as `f u`** for a uniform `u : Fin D`, its coins
-`(R, u)` drawn uniformly. -/
-def honestPresenterAt :
-    NARG.ProverFn (PresIn p Rnd Ctx) (PresOut p) Ctx Unit (Option (Presentation p))
-      (SaltedCoins Rnd (Fin D)) where
-  prove O ctx _ c := presentAt O (O (.mu tr c.salt ctx)).mu (f c.coins)
-
-/-- **A fresh `µ`, programmed into `H_µ`**: with coins `(R, (y, u))` it publishes from the tape
-`f u` at `µ = y.mu` and programs `H_µ(tr, R, ctx) := y`.
-
-Running time: one read of the tape and the oracle at the points `(µ, ·)` it reads (`presentAt`),
-and an assignment list of length one; the coins are those of `R`, one oracle value and `u`. This
-running time is argued here, not proved in Lean. -/
-def freshMuSim :
-    NARG.SimulatorFn (PresIn p Rnd Ctx) (PresOut p) Ctx (Option (Presentation p))
-      (SaltedCoins Rnd (PresOut p × Fin D)) where
-  run O ctx c := ⟨presentAt O c.coins.1.mu (f c.coins.2), [⟨.mu tr c.salt ctx, c.coins.1⟩]⟩
-  coins_nonempty := inferInstance
 
 /-- **The presenter with a fresh `µ`** as its salt: it publishes from the tape `f u` at `µ`, its
 coins drawn uniformly. -/
@@ -117,118 +65,6 @@ def freshMuPresenter :
     NARG.ProverFn (PresIn p Rnd Ctx) (PresOut p) Ctx Unit (Option (Presentation p))
       (SaltedCoins (_root_.MLDSA.Bytes 64) (Rnd × CommitHashBytes p × Fin D)) where
   prove O _ _ c := presentAt O c.salt (f c.coins.2.2)
-
-/-! ### Step A: the message representative -/
-
-omit [NeZero (bucketCount p)] [DecidableEq Rnd] [Fintype Ctx] [DecidableEq Ctx] in
-/-- The honest presenter and `freshMuSim` are local in the salt `R`. -/
-theorem saltedLocal_freshMuSim :
-    SaltedLocal (saltR : PresIn p Rnd Ctx → Option Rnd) (honestPresenterAt tr f)
-      (uniformOfFintype (SaltedCoins Rnd (Fin D))) (freshMuSim tr f) where
-  prove_congr H H' x w c h := by
-    have h1 : H (.mu tr c.salt x) = H' (.mu tr c.salt x) := h _ (Or.inr rfl)
-    change presentAt H (H (.mu tr c.salt x)).mu (f c.coins) =
-      presentAt H' (H' (.mu tr c.salt x)).mu (f c.coins)
-    rw [h1]
-    exact presentAt_congr (fun v => h _ (Or.inl rfl)) _
-  run_congr H H' x s h := by
-    change (⟨presentAt H _ _, _⟩ : NARG.SimOutput _ _ _) = ⟨presentAt H' _ _, _⟩
-    rw [presentAt_congr (fun v => h _ (Or.inl rfl))]
-  run_salt H x s a ha := by
-    change a ∈ [_] at ha
-    rw [List.mem_singleton] at ha
-    subst ha
-    rfl
-  coins_eq := rfl
-
-omit [NeZero (bucketCount p)] in
-/-- **The two slice laws of step A are equal**: drawing `µ` fresh and programming
-`H_µ(tr, R, ctx) := µ` on a fresh slice is the same as reading `µ` from the fresh slice. -/
-theorem realSliceAt_eq_simSliceAt_freshMu (σ : Rnd) (H : PresIn p Rnd Ctx → PresOut p)
-    (x : Ctx) (w : Unit) :
-    realSliceAt saltR (honestPresenterAt tr f) σ H x w =
-      simSliceAt saltR (freshMuSim tr f) σ H x := by
-  classical
-  rw [realSliceAt, simSliceAt, ← map_fst_uniformOfFintype (β := PresOut p),
-    ← map_uniformOfFintype_equiv (sliceSplit (.mu tr σ x)), map_comp, map_comp]
-  congr 1
-  funext a
-  have hx : saltR (.mu tr σ x : PresIn p Rnd Ctx) = some σ := rfl
-  change (⟨some (presentAt (replaceSlice saltR σ H (Function.update a.slice (.mu tr σ x) a.coins.1))
-      ((replaceSlice saltR σ H (Function.update a.slice (.mu tr σ x) a.coins.1)) (.mu tr σ x)).mu
-      (f a.coins.2)), replaceSlice saltR σ H (Function.update a.slice (.mu tr σ x) a.coins.1)⟩ :
-      Quantum.EnvReply _ _) =
-    ⟨some (presentAt (replaceSlice saltR σ H a.slice) a.coins.1.mu (f a.coins.2)),
-      Function.update (replaceSlice saltR σ H a.slice) (.mu tr σ x) a.coins.1⟩
-  rw [replaceSlice_update saltR hx, Function.update_self,
-    presentAt_congr (O' := replaceSlice saltR σ H a.slice) fun v =>
-      Function.update_of_ne (by simp) _ _]
-
-omit [NeZero (bucketCount p)] in
-/-- The slice laws of step A are within `0`. -/
-theorem sliceCloseAt_freshMuSim :
-    SliceCloseAt (saltR : PresIn p Rnd Ctx → Option Rnd) (fun _ _ => True) (honestPresenterAt tr f)
-      (freshMuSim tr f) fun _ => 0 where
-  close σ H x w _ := by
-    rw [realSliceAt_eq_simSliceAt_freshMu, tvDist_self]
-  nonneg _ := le_rfl
-  congr _ _ _ := rfl
-
-omit [NeZero (bucketCount p)] in
-/-- **Step A**: the honest presenter and `freshMuSim` are within
-`Q t / |Rnd| + Q (Q - 1) / (2 |Rnd|)` (`zeroKnowledge_of_sliceCloseAt`, salt `R`). -/
-theorem advantage_freshMuSim_le {m t Q : ℕ}
-    (𝒜 : Adversary (PresIn p Rnd Ctx) (PresOut p) Ctx Unit (Option (Presentation p)) m t) :
-    𝒜.advantage (fun _ _ => True) (honestPresenterAt tr f)
-        (uniformOfFintype (SaltedCoins Rnd (Fin D))) (freshMuSim tr f) Q ≤
-      Q * t / Fintype.card Rnd + Q * (Q - 1) / (2 * Fintype.card Rnd) := by
-  have h := zeroKnowledge_of_sliceCloseAt (hloc := saltedLocal_freshMuSim tr f)
-    (hcl := sliceCloseAt_freshMuSim tr f) m t Q 𝒜
-  simpa using h
-
-/-! ### Step C: the programming of the message representative -/
-
-omit [NeZero (bucketCount p)] [Fintype Rnd] [DecidableEq Rnd] [Fintype Ctx] [DecidableEq Ctx] in
-/-- `freshMuSim` programs at the hidden salt `R`. -/
-theorem hiddenProgramming_freshMuSim :
-    HiddenProgramming (saltR : PresIn p Rnd Ctx → Option Rnd) (freshMuSim tr f) where
-  run_congr H H' x s h := by
-    change (⟨presentAt H _ _, _⟩ : NARG.SimOutput _ _ _) = ⟨presentAt H' _ _, _⟩
-    rw [presentAt_congr fun v => h _ rfl]
-  proof_salt _ _ _ _ _ := rfl
-  run_salt H x s a ha := by
-    change a ∈ [_] at ha
-    rw [List.mem_singleton] at ha
-    subst ha
-    rfl
-
-/-- The coins of `freshMuSim` as those of `freshMuPresenter`: the fresh value's `µ` is the salt. -/
-def freshMuCoinsEquiv :
-    SaltedCoins Rnd (PresOut p × Fin D) ≃
-      SaltedCoins (_root_.MLDSA.Bytes 64) (Rnd × CommitHashBytes p × Fin D) where
-  toFun c := ⟨c.coins.1.mu, (c.salt, c.coins.1.cTilde, c.coins.2)⟩
-  invFun c := ⟨c.coins.1, (⟨c.salt, c.coins.2.1⟩, c.coins.2.2)⟩
-  left_inv _ := rfl
-  right_inv _ := rfl
-
-omit [NeZero (bucketCount p)] in
-/-- **Without its programming, `freshMuSim` is the presenter with a fresh `µ`.** -/
-theorem acceptProb_simEnv_dropAssignments_freshMuSim {m t Q : ℕ}
-    (𝒜 : Adversary (PresIn p Rnd Ctx) (PresOut p) Ctx Unit (Option (Presentation p)) m t) :
-    𝒜.acceptProb (simEnv (fun _ _ => True) (freshMuSim tr f).dropAssignments Q) =
-      𝒜.acceptProb (realEnv (fun _ _ => True) (freshMuPresenter f)
-        (uniformOfFintype (SaltedCoins (_root_.MLDSA.Bytes 64) (Rnd × CommitHashBytes p × Fin D)))
-        Q) := by
-  have h : ∀ r,
-      (𝒜.alg r).acceptProb (simEnv (fun _ _ => True) (freshMuSim tr f).dropAssignments Q) =
-        (𝒜.alg r).acceptProb (realEnv (fun _ _ => True) (freshMuPresenter f)
-          (uniformOfFintype
-            (SaltedCoins (_root_.MLDSA.Bytes 64) (Rnd × CommitHashBytes p × Fin D))) Q) :=
-      fun r => by
-    rw [IAlg.acceptProb_simEnv_dropAssignments]
-    exact (IAlg.acceptProb_realEnv_eq_of_map _ _ _ _ _ _ freshMuCoinsEquiv (fun _ _ _ _ => rfl)
-      (map_uniformOfFintype_equiv _).symm).symm
-  simp only [Adversary.acceptProb, h]
 
 /-! ### Step B: the commitment hash -/
 
@@ -807,308 +643,287 @@ theorem saltedLocal_flatPresentSim :
   rw [flatPresentSim_eq_flatPresentSimOf]
   exact saltedLocal_flatPresentSimOf f id
 
-/-- **Step B with a sampler**: the presenter with a fresh `µ` and `flatPresentSimOf samp` are
-within `Q t / 2^512 + Q (Q - 1) / 2^513 + Q · (stepBError + δ)` (`zeroKnowledge_of_sliceCloseAt`,
-salt `µ`). -/
-theorem advantage_freshMuPresenter_le_of_keyFloorAt (hp : SigningParams p)
-    (h_laws : SigningLaws prims) (hs2 : polyVecBounded sk.s2 p.eta) {ε : ℝ}
-    (hf : KeyFloorAt prims cut ε sk.t0) {C : Type} [Fintype C] [Nonempty C]
-    (samp : C → BucketVec p × CommitHashBytes p) {δ : ℝ}
-    (hδ : tvDist ((uniformOfFintype C).map samp) (shapedTarget cut) ≤ δ) {m t Q : ℕ}
-    (𝒜 : Adversary (PresIn p Rnd Ctx) (PresOut p) Ctx Unit (Option (Presentation p)) m t) :
-    𝒜.advantage (fun _ _ => True) (freshMuPresenter f)
-        (uniformOfFintype (SaltedCoins (_root_.MLDSA.Bytes 64) (Rnd × CommitHashBytes p × Fin D)))
-        (flatPresentSimOf samp) Q ≤
-      Q * t / Fintype.card (_root_.MLDSA.Bytes 64) +
-        Q * (Q - 1) / (2 * Fintype.card (_root_.MLDSA.Bytes 64)) +
-        Q * (stepBError f prims sk aHat cut ε + δ) := by
-  have h := zeroKnowledge_of_sliceCloseAt (hloc := saltedLocal_flatPresentSimOf f samp)
-    (hcl := sliceCloseAt_flatPresentSimOf f prims sk aHat cut hp h_laws hs2 hf samp hδ) m t Q 𝒜
-  exact h.trans_eq (by rw [Fintype.expect_const])
-
-/-- **Step B**: the presenter with a fresh `µ` and `flatPresentSim` are within
-`Q t / 2^512 + Q (Q - 1) / 2^513 + Q · stepBError` (`advantage_freshMuPresenter_le_of_keyFloorAt`
-with the identity sampler). -/
-theorem advantage_freshMuPresenter_le (βmin : ℚ≥0) (hp : SigningParams p)
-    (h_laws : SigningLaws prims) (hs2 : polyVecBounded sk.s2 p.eta) {ε : ℝ}
-    (hf : KeyFloor prims βmin ε sk.t0) {m t Q : ℕ}
-    (𝒜 : Adversary (PresIn p Rnd Ctx) (PresOut p) Ctx Unit (Option (Presentation p)) m t) :
-    𝒜.advantage (fun _ _ => True) (freshMuPresenter f)
-        (uniformOfFintype (SaltedCoins (_root_.MLDSA.Bytes 64) (Rnd × CommitHashBytes p × Fin D)))
-        flatPresentSim Q ≤
-      Q * t / Fintype.card (_root_.MLDSA.Bytes 64) +
-        Q * (Q - 1) / (2 * Fintype.card (_root_.MLDSA.Bytes 64)) +
-        Q * stepBError f prims sk aHat (Cutoff.const βmin) ε := by
-  have h := advantage_freshMuPresenter_le_of_keyFloorAt f prims sk aHat (Cutoff.const βmin) hp
-    h_laws hs2 (keyFloorAt_const_iff.2 hf) id (tvDist_map_id_shapedTarget_const βmin) (Q := Q) 𝒜
-  rw [flatPresentSim_eq_flatPresentSimOf]
-  simpa only [add_zero] using h
-
 end StepB
 
-/-! ### The presentations -/
-
-section Assembly
-
-variable (prims : Primitives p) [nttOps : NTTRingOps] [Nonempty (MaskBox p)] (sk : SecretKey p)
-  (aHat : TqMatrix p.k p.l) (cut : Cutoff p)
-
-omit nttOps in
 /-- `Bytes 64` has `2^512` values (`GordieHowe.Lattice.card_bytes`). -/
 theorem card_bytes64 : (Fintype.card (_root_.MLDSA.Bytes 64) : ℝ) = 2 ^ 512 := by
   rw [GordieHowe.Lattice.card_bytes, Nat.cast_pow, show ((256 : ℕ) : ℝ) = 2 ^ 8 by norm_num,
     ← pow_mul]
 
-/-- **The coins of the honest presenter with the tape drawn as `f u`**: a uniform `R` and the
-tape `f u` for a uniform `u`. -/
-noncomputable def tapeCoinsAt : PMF (Rnd × LoopTape p) :=
-  (uniformOfFintype Rnd).bind fun R => ((uniformOfFintype (Fin D)).map f).map (R, ·)
+/-! ### The presentations in the quantum random-oracle model -/
 
-omit [NeZero (bucketCount p)] [DecidableEq Rnd] [Fintype Ctx] [DecidableEq Ctx] nttOps
-  [Nonempty (MaskBox p)] in
-/-- The coins of `honestPresenterAt`, read as `(R, f u)`, have the law `tapeCoinsAt f`. -/
-theorem map_uniform_eq_tapeCoinsAt :
-    (uniformOfFintype (SaltedCoins Rnd (Fin D))).map (fun c => (c.salt, f c.coins)) =
-      tapeCoinsAt f := by
-  rw [← map_uniformOfFintype_equiv (SaltedCoins.equivProd Rnd (Fin D)).symm, PMF.map_comp,
-    uniformOfFintype_prod_eq_bind, PMF.map_bind, tapeCoinsAt]
-  congr 1
-  funext R
-  simp only [PMF.map_comp]
+section QROM
+
+open GordieHowe.Quantum
+
+/-- **The points of `H_µ` as salted points**: `(R, (tr, ctx))` is the point `H_µ(tr ‖ R ‖ ctx)`,
+with the salt `R`. -/
+def presMuEmb : Rnd × (_root_.MLDSA.Bytes 64 × Ctx) → PresIn p Rnd Ctx :=
+  fun x => .mu x.2.1 x.1 x.2.2
+
+omit [NeZero (bucketCount p)] [Fintype Rnd] [Nonempty Rnd] [DecidableEq Rnd] [Fintype Ctx]
+  [DecidableEq Ctx] in
+theorem presMuEmb_injective :
+    Function.Injective (presMuEmb (p := p) (Rnd := Rnd) (Ctx := Ctx)) := by
+  rintro ⟨R, tr, c⟩ ⟨R', tr', c'⟩ h
+  simp only [presMuEmb, PresIn.mu.injEq] at h
+  obtain ⟨rfl, rfl, rfl⟩ := h
   rfl
 
-omit [DecidableEq Rnd] [Fintype Ctx] [DecidableEq Ctx] in
-/-- **The tape drawn as `f u`** moves the honest coins by at most the distance of the tapes. -/
-theorem tvDist_honestPresenterLaw_le :
-    tvDist (honestPresenterLaw (Rnd := Rnd) prims sk aHat cut) (tapeCoinsAt f) ≤
-      tvDist ((uniformOfFintype (Fin D)).map f) (loopTapeLaw prims sk aHat cut) := by
-  rw [honestPresenterLaw_eq, tapeCoinsAt]
-  refine (tvDist_uniformOfFintype_bind_le _ _).trans ?_
-  refine (Finset.expect_le_expect fun R _ => ?_).trans_eq (Fintype.expect_const _)
-  rw [tvDist_comm]
-  exact tvDist_map_le _ _ _
+/-- **The split of the presentation oracle's values**: the message representative (read as `H_µ`)
+and the commitment hash (read as `H`). -/
+def presOutSplit : PresOut p ≃ _root_.MLDSA.Bytes 64 × CommitHashBytes p where
+  toFun y := (y.mu, y.cTilde)
+  invFun z := ⟨z.1, z.2⟩
+  left_inv _ := rfl
+  right_inv _ := rfl
 
-omit [NeZero (bucketCount p)] nttOps [Nonempty (MaskBox p)] in
-/-- **The honest presenter with the coins `tapeCoinsAt f`** is `honestPresenterAt f` with uniform
-coins. -/
-theorem acceptProb_realEnv_tapeCoinsAt {m t Q : ℕ}
-    (𝒜 : Adversary (PresIn p Rnd Ctx) (PresOut p) Ctx Unit (Option (Presentation p)) m t) :
-    𝒜.acceptProb (realEnv (fun _ _ => True) (honestPresenter tr) (tapeCoinsAt f) Q) =
-      𝒜.acceptProb (realEnv (fun _ _ => True) (honestPresenterAt tr f)
-        (uniformOfFintype (SaltedCoins Rnd (Fin D))) Q) := by
-  have h : ∀ r, (𝒜.alg r).acceptProb (realEnv (fun _ _ => True) (honestPresenter tr)
-      (tapeCoinsAt f) Q) =
-      (𝒜.alg r).acceptProb (realEnv (fun _ _ => True) (honestPresenterAt tr f)
-        (uniformOfFintype (SaltedCoins Rnd (Fin D))) Q) := fun r =>
-    IAlg.acceptProb_realEnv_eq_of_map _ _ _ _ _ _ (fun c => (c.salt, f c.coins))
-      (fun H x w c => honestPresenter_prove tr H x w (c.salt, f c.coins))
-      (map_uniform_eq_tapeCoinsAt f).symm
-  simp only [Adversary.acceptProb, h]
+/-- **Publishing from the loop tape at a given message representative**, as the part of the
+honest presenter after its read of `H_µ` (`presentAt`). -/
+def presentCore (H : PresIn p Rnd Ctx → PresOut p) (_ : Ctx) (_ : Unit)
+    (mu : _root_.MLDSA.Bytes 64) (τ : LoopTape p) : Option (Presentation p) :=
+  presentAt H mu τ
 
-/-- **The presentations at a fixed tape approximation with a sampler**: steps A, C and B, and the
-move of the honest coins to `tapeCoinsAt f`. -/
-theorem advantage_honestPresenter_le_tape_of_keyFloorAt (hp : SigningParams p)
+omit [NeZero (bucketCount p)] [Fintype Rnd] [Nonempty Rnd] [DecidableEq Rnd] [Fintype Ctx]
+  [DecidableEq Ctx] in
+/-- Publishing reads the oracle only at the points `(µ, ·)`, off the points of `H_µ`. -/
+theorem presentCore_congr (H H' : PresIn p Rnd Ctx → PresOut p)
+    (h : AgreeOffRangeOn presMuEmb presOutSplit H H') (x : Ctx) (w : Unit)
+    (mu : _root_.MLDSA.Bytes 64) (τ : LoopTape p) :
+    presentCore H x w mu τ = presentCore H' x w mu τ :=
+  presentAt_congr (fun v => h.1 _ fun ⟨_, hc⟩ => by cases hc) τ
+
+/-- `√(2^512) = 2^256`. -/
+theorem sqrt_two_pow_512 : √((2 : ℝ) ^ 512) = 2 ^ 256 := by
+  rw [show (2 : ℝ) ^ 512 = (2 ^ 256) ^ 2 by rw [← pow_mul], Real.sqrt_sq (by positivity)]
+
+/-- `2 q √(n x) ≤ 2 t √x` for a budget of `q` query slots of `n` parallel queries with
+`n q ≤ t`. -/
+theorem two_mul_sqrt_mul_le {n q t : ℕ} (hq : n * q ≤ t) (x : ℝ) :
+    2 * (q : ℝ) * √(n * x) ≤ 2 * t * √x := by
+  have hmt : (q : ℝ) * √n ≤ t := by
+    rcases Nat.eq_zero_or_pos n with hn | hn
+    · simp [hn]
+    · have h1 : √(n : ℝ) ≤ n := Real.sqrt_le_iff.2 ⟨by positivity, by
+        have : (1 : ℝ) ≤ n := by exact_mod_cast hn
+        nlinarith⟩
+      calc (q : ℝ) * √n ≤ q * n := mul_le_mul_of_nonneg_left h1 (by positivity)
+        _ = (n * q : ℕ) := by push_cast; ring
+        _ ≤ t := by exact_mod_cast hq
+  rw [Real.sqrt_mul (Nat.cast_nonneg n), ← mul_assoc, mul_assoc 2 (q : ℝ)]
+  exact mul_le_mul_of_nonneg_right (by linarith) (Real.sqrt_nonneg x)
+
+variable (prims : Primitives p) [nttOps : NTTRingOps] [Nonempty (MaskBox p)] (sk : SecretKey p)
+  (aHat : TqMatrix p.k p.l) (cut : Cutoff p) [AddCommGroup (PresOut p)] {W : Type} [Fintype W]
+  {n m : ℕ}
+  (Dq : Quantum.Distinguisher W (PresIn p Rnd Ctx) (PresOut p) (ProofQuery Ctx Unit)
+    (Option (Presentation p)) n m)
+
+/-- **The honest presenter reads `H_µ` at a hidden salt**: its real game is that of the salted
+reading prover at the points of `H_µ`, reading the message representative. -/
+theorem acceptProb_realEnv_honestPresenter_eq_saltedRead {Q : ℕ} :
+    Dq.acceptProb (realEnv (fun _ _ => True) (honestPresenter tr)
+        (honestPresenterLaw prims sk aHat cut) Q) noPost =
+      Dq.acceptProb (realEnv (fun _ _ => True)
+        (saltedReadProver presMuEmb presOutSplit (fun ctx => (tr, ctx)) presentCore)
+        (saltedCoinLaw (loopTapeLaw prims sk aHat cut)) Q) noPost :=
+  acceptProb_realEnv_eq_of_map _ Dq noPost _ _ _ _ (fun c => (c.salt, c.coins))
+    (fun H x w c => honestPresenter_prove tr H x w (c.salt, c.coins))
+    ((honestPresenterLaw_eq prims sk aHat cut).trans (by
+      rw [saltedCoinLaw, PMF.map_comp]
+      exact (PMF.map_id _).symm))
+
+omit nttOps [Nonempty (MaskBox p)] [NeZero (bucketCount p)] in
+/-- **The fresh-value prover with the tape drawn as `f u`** is the presenter with a fresh `µ` with
+uniform coins. -/
+theorem acceptProb_realEnv_freshRead_eq_freshMuPresenter {Q : ℕ} :
+    Dq.acceptProb (realEnv (fun _ _ => True) (freshReadProver presentCore)
+        (freshValueLaw ((uniformOfFintype (Fin D)).map f)) Q) noPost =
+      Dq.acceptProb (realEnv (fun _ _ => True) (freshMuPresenter f)
+        (uniformOfFintype (SaltedCoins (_root_.MLDSA.Bytes 64) (Rnd × CommitHashBytes p × Fin D)))
+        Q) noPost := by
+  refine acceptProb_realEnv_eq_of_map _ Dq noPost _ _ _ _ (fun c => (c.salt, f c.coins.2.2))
+    (fun _ _ _ _ => rfl) ?_
+  have hπ : (uniformOfFintype (Rnd × CommitHashBytes p × Fin D)).map (fun c => c.2.2) =
+      uniformOfFintype (Fin D) := by
+    rw [show (fun c : Rnd × CommitHashBytes p × Fin D => c.2.2) = Prod.snd ∘ Prod.snd from rfl,
+      ← PMF.map_comp, map_snd_uniformOfFintype, map_snd_uniformOfFintype]
+  rw [freshValueLaw, ← map_uniformOfFintype_equiv (SaltedCoins.equivProd _ _).symm, PMF.map_comp,
+    uniformOfFintype_prod_eq_bind]
+  change _ = (prodLaw (uniformOfFintype (_root_.MLDSA.Bytes 64))
+    (uniformOfFintype (Rnd × CommitHashBytes p × Fin D))).map
+      (Prod.map id (f ∘ fun c : Rnd × CommitHashBytes p × Fin D => c.2.2))
+  rw [map_prodLaw_prodMap, PMF.map_id, ← PMF.map_comp, hπ]
+
+/-- **The presentations at a fixed tape approximation, against quantum distinguishers**: the
+honest presenter is the salted reading prover at `H_µ`
+(`acceptProb_realEnv_honestPresenter_eq_saltedRead`); hidden-salt reprogramming at `R`
+(`advantage_saltedRead_fresh_le`) gives the fresh-value prover; its tape moves to `f u`
+(`abs_acceptProb_realEnv_law_sub_le`), which is the presenter with a fresh `µ`
+(`acceptProb_realEnv_freshRead_eq_freshMuPresenter`); step B is the salted hybrid at `µ`
+(`zeroKnowledgeAfterAdaptive_of_sliceClose`). -/
+theorem advantage_honestPresenter_le_tape (hp : SigningParams p)
     (h_laws : SigningLaws prims) (hs2 : polyVecBounded sk.s2 p.eta) {ε : ℝ}
     (hf : KeyFloorAt prims cut ε sk.t0) {C : Type} [Fintype C] [Nonempty C]
     (samp : C → BucketVec p × CommitHashBytes p) {δ : ℝ}
-    (hδ : tvDist ((uniformOfFintype C).map samp) (shapedTarget cut) ≤ δ) {m t Q : ℕ}
-    (𝒜 : Adversary (PresIn p Rnd Ctx) (PresOut p) Ctx Unit (Option (Presentation p)) m t)
-    (hpost : ∀ r, (𝒜.alg r).PostOracleFree) :
-    𝒜.advantage (fun _ _ => True) (honestPresenter tr) (honestPresenterLaw prims sk aHat cut)
-        (flatPresentSimOf samp) Q ≤
+    (hδ : tvDist ((uniformOfFintype C).map samp) (shapedTarget cut) ≤ δ) {Q q t : ℕ}
+    (bud : Dq.Budget q) (hq : n * q ≤ t) :
+    QROM.advantage (Q := Q) (fun _ _ => True) (honestPresenter tr)
+        (honestPresenterLaw prims sk aHat cut) (flatPresentSimOf samp) Dq noPost ≤
       Q * tvDist ((uniformOfFintype (Fin D)).map f) (loopTapeLaw prims sk aHat cut) +
-        (Q * t / Fintype.card Rnd + Q * (Q - 1) / (2 * Fintype.card Rnd)) +
-        Q * t / Fintype.card Rnd +
-        (Q * t / Fintype.card (_root_.MLDSA.Bytes 64) +
-          Q * (Q - 1) / (2 * Fintype.card (_root_.MLDSA.Bytes 64)) +
+        (Q * (Q - 1) / (2 * Fintype.card Rnd) + 2 * t * √(Q / Fintype.card Rnd)) +
+        (4 * Q * t / 2 ^ 256 + Q * (Q - 1) / 2 ^ 512 +
           Q * (stepBError f prims sk aHat cut ε + δ)) := by
-  have h0 := 𝒜.abs_acceptProb_realEnv_law_sub_le (fun _ _ => True) (Q := Q)
-    (honestPresenter tr) (honestPresenterLaw prims sk aHat cut) (tapeCoinsAt f)
-  rw [acceptProb_realEnv_tapeCoinsAt] at h0
-  have hA := advantage_freshMuSim_le tr f (Q := Q) 𝒜
-  have hC := abs_acceptProb_simEnv_dropAssignments_le (rel := fun _ _ => True)
-    (Q := Q) (hS := hiddenProgramming_freshMuSim tr f) (𝒜 := 𝒜) (hpost := hpost)
-  rw [acceptProb_simEnv_dropAssignments_freshMuSim] at hC
-  have hB := advantage_freshMuPresenter_le_of_keyFloorAt f prims sk aHat cut hp h_laws hs2 hf samp
-    hδ (Q := Q) 𝒜
-  rw [Adversary.advantage] at hA hB ⊢
-  rw [GordieHowe.advantage] at hA hB ⊢
+  have h01 : Dq.acceptProb (realEnv (fun _ _ => True) (honestPresenter tr)
+        (honestPresenterLaw prims sk aHat cut) Q) noPost =
+      Dq.acceptProb (realEnv (fun _ _ => True)
+        (saltedReadProver presMuEmb presOutSplit (fun ctx => (tr, ctx)) presentCore)
+        (saltedCoinLaw (loopTapeLaw prims sk aHat cut)) Q) noPost :=
+    acceptProb_realEnv_honestPresenter_eq_saltedRead tr prims sk aHat cut Dq
+  have h12 := advantage_saltedRead_fresh_le (D := Dq) (emb := presMuEmb) (e := presOutSplit)
+    (u := fun ctx => (tr, ctx)) (core := presentCore) (rel := fun _ _ => True) (Q := Q)
+    presMuEmb_injective presentCore_congr (loopTapeLaw prims sk aHat cut) bud
+  have h23 := abs_acceptProb_realEnv_law_sub_le (fun _ _ => True) Dq noPost (Q := Q)
+    (freshReadProver presentCore) (freshValueLaw (loopTapeLaw prims sk aHat cut))
+    (freshValueLaw ((uniformOfFintype (Fin D)).map f))
   have hcoins := mul_le_mul_of_nonneg_left
-    (tvDist_honestPresenterLaw_le (Rnd := Rnd) f prims sk aHat cut)
-    (Nat.cast_nonneg (α := ℝ) Q)
+    ((tvDist_freshValueLaw_le (Y₁ := _root_.MLDSA.Bytes 64) (loopTapeLaw prims sk aHat cut)
+      ((uniformOfFintype (Fin D)).map f)).trans_eq
+      (tvDist_comm _ _)) (Nat.cast_nonneg (α := ℝ) Q)
+  rw [acceptProb_realEnv_freshRead_eq_freshMuPresenter f Dq] at h23
+  have h45 := zeroKnowledgeAfterAdaptive_of_sliceClose (saltOf := saltMu) (rel := fun _ _ => True)
+    (P := freshMuPresenter f)
+    (μ := uniformOfFintype (SaltedCoins (_root_.MLDSA.Bytes 64) (Rnd × CommitHashBytes p × Fin D)))
+    (S := flatPresentSimOf samp) (saltedLocal_flatPresentSimOf f samp)
+    (sliceCloseAt_flatPresentSimOf f prims sk aHat cut hp h_laws hs2 hf samp hδ).sliceClose
+    t W n m Q q Dq noPost bud hq
+  rw [Fintype.expect_const, card_bytes64, sqrt_two_pow_512] at h45
+  have hchoose : ((Q.choose 2 : ℕ) : ℝ) / Fintype.card Rnd =
+      Q * (Q - 1) / (2 * Fintype.card Rnd) := by
+    rw [Nat.cast_choose_two, div_div]
+  have hsq := two_mul_sqrt_mul_le hq ((Q : ℝ) / Fintype.card Rnd)
+  rw [hchoose] at h12
+  rw [QROM.advantage, GordieHowe.advantage] at h45 ⊢
+  rw [GordieHowe.advantage, ← h01] at h12
   have := abs_sub_le
-    (𝒜.acceptProb (realEnv (fun _ _ => True) (honestPresenter tr)
-      (honestPresenterLaw prims sk aHat cut) Q))
-    (𝒜.acceptProb (realEnv (fun _ _ => True) (honestPresenterAt tr f)
-      (uniformOfFintype (SaltedCoins Rnd (Fin D))) Q))
-    (𝒜.acceptProb (simEnv (fun _ _ => True) (flatPresentSimOf samp) Q))
-  have := abs_sub_le (𝒜.acceptProb (realEnv (fun _ _ => True) (honestPresenterAt tr f)
-      (uniformOfFintype (SaltedCoins Rnd (Fin D))) Q))
-    (𝒜.acceptProb (simEnv (fun _ _ => True) (freshMuSim tr f) Q))
-    (𝒜.acceptProb (simEnv (fun _ _ => True) (flatPresentSimOf samp) Q))
-  have := abs_sub_le (𝒜.acceptProb (simEnv (fun _ _ => True) (freshMuSim tr f) Q))
-    (𝒜.acceptProb (realEnv (fun _ _ => True) (freshMuPresenter f)
-      (uniformOfFintype (SaltedCoins (_root_.MLDSA.Bytes 64) (Rnd × CommitHashBytes p × Fin D))) Q))
-    (𝒜.acceptProb (simEnv (fun _ _ => True) (flatPresentSimOf samp) Q))
+    (Dq.acceptProb (realEnv (fun _ _ => True) (honestPresenter tr)
+      (honestPresenterLaw prims sk aHat cut) Q) noPost)
+    (Dq.acceptProb (realEnv (fun _ _ => True) (freshReadProver presentCore)
+      (freshValueLaw (loopTapeLaw prims sk aHat cut)) Q) noPost)
+    (Dq.acceptProb (simEnv (fun _ _ => True) (flatPresentSimOf samp) Q) noPost)
+  have := abs_sub_le
+    (Dq.acceptProb (realEnv (fun _ _ => True) (freshReadProver presentCore)
+      (freshValueLaw (loopTapeLaw prims sk aHat cut)) Q) noPost)
+    (Dq.acceptProb (realEnv (fun _ _ => True) (freshMuPresenter f)
+      (uniformOfFintype (SaltedCoins (_root_.MLDSA.Bytes 64) (Rnd × CommitHashBytes p × Fin D)))
+      Q) noPost)
+    (Dq.acceptProb (simEnv (fun _ _ => True) (flatPresentSimOf samp) Q) noPost)
+  generalize (2 : ℝ) ^ 512 = N at h45 ⊢
   linarith
 
-/-- **The presentations at a fixed tape approximation**: steps A, C and B, and the move of the
-honest coins to `tapeCoinsAt f` (`advantage_honestPresenter_le_tape_of_keyFloorAt` with the
-identity sampler). -/
-theorem advantage_honestPresenter_le_tape (βmin : ℚ≥0) (hp : SigningParams p)
+/-- **The presentations are zero knowledge against quantum distinguishers with a query budget and
+no final unitary** (`QROM.ZeroKnowledgeQueryBoundedPure`), under the floor at the cut-off, with
+the simulator `flatPresentSimOf f` for a sampler `f` within `δ` of the shaped target. The loop
+tape is drawn as `g u` for a uniform `u : Fin D` within `|LoopTape| / D` of its law
+(`exists_map_uniformOfFintype_tvDist_le`), which costs `2 Q |LoopTape| / D` at every `D`
+(`advantage_honestPresenter_le_tape`), and `D` is taken large. -/
+theorem zeroKnowledgeQueryBoundedPure_presentations_of_keyFloorAt (hp : SigningParams p)
     (h_laws : SigningLaws prims) (hs2 : polyVecBounded sk.s2 p.eta) {ε : ℝ}
-    (hf : KeyFloor prims βmin ε sk.t0) {m t Q : ℕ}
-    (𝒜 : Adversary (PresIn p Rnd Ctx) (PresOut p) Ctx Unit (Option (Presentation p)) m t)
-    (hpost : ∀ r, (𝒜.alg r).PostOracleFree) :
-    𝒜.advantage (fun _ _ => True) (honestPresenter tr)
-        (honestPresenterLaw prims sk aHat (Cutoff.const βmin)) flatPresentSim Q ≤
-      Q * tvDist ((uniformOfFintype (Fin D)).map f)
-          (loopTapeLaw prims sk aHat (Cutoff.const βmin)) +
-        (Q * t / Fintype.card Rnd + Q * (Q - 1) / (2 * Fintype.card Rnd)) +
-        Q * t / Fintype.card Rnd +
-        (Q * t / Fintype.card (_root_.MLDSA.Bytes 64) +
-          Q * (Q - 1) / (2 * Fintype.card (_root_.MLDSA.Bytes 64)) +
-          Q * stepBError f prims sk aHat (Cutoff.const βmin) ε) := by
-  have h := advantage_honestPresenter_le_tape_of_keyFloorAt tr f prims sk aHat (Cutoff.const βmin)
-    hp h_laws hs2 (keyFloorAt_const_iff.2 hf) id (tvDist_map_id_shapedTarget_const βmin) (Q := Q)
-    𝒜 hpost
-  rw [flatPresentSim_eq_flatPresentSimOf]
-  simpa only [add_zero] using h
-
-/-- **The presentations of the flattened signer are simulated by `flatPresentSimOf f`**: under the
-floor at the cut-off, for a sampler `f` whose output on uniform coins is within `δ` of the shaped
-target, every adversary with a budget of `t` queries whose output does not read the final oracle
-(`IAlg.PostOracleFree`), with `Q` presentations answered, has advantage at most
-
-    Q · (flatOracleConcError + ε + signerRegGap / (1 - ε) + δ)
-      + (2 Q t + Q (Q - 1) / 2) / |Rnd| + (Q t + Q (Q - 1) / 2) / 2^512
-
-between the honest presenter and the simulator. The adversary chooses each context and sees
-`(µ, w₁, c̃)` per presentation and the oracles; `R` is never published.
-
-The proof draws the loop tape as `g u` for a uniform `u : Fin D`, within `|LoopTape| / D` of its
-law (`exists_map_uniformOfFintype_tvDist_le`); that costs `2 Q |LoopTape| / D` at every `D`
-(`advantage_honestPresenter_le_tape_of_keyFloorAt`), and `D` is taken large. -/
-theorem presentations_advantage_le_of_keyFloorAt (hp : SigningParams p)
-    (h_laws : SigningLaws prims) (hs2 : polyVecBounded sk.s2 p.eta) {ε : ℝ}
-    (hf : KeyFloorAt prims cut ε sk.t0) {C : Type} [Fintype C] [Nonempty C]
+    (hf : KeyFloorAt prims cut ε sk.t0) {C : Type} [Fintype C] [Nonempty C] [DecidableEq C]
     (f : C → BucketVec p × CommitHashBytes p) {δ : ℝ}
-    (hδ : tvDist ((uniformOfFintype C).map f) (shapedTarget cut) ≤ δ) {m t Q : ℕ}
-    (𝒜 : Adversary (PresIn p Rnd Ctx) (PresOut p) Ctx Unit (Option (Presentation p)) m t)
-    (hpost : ∀ r, (𝒜.alg r).PostOracleFree) :
-    𝒜.advantage (fun _ _ => True) (honestPresenter tr) (honestPresenterLaw prims sk aHat cut)
-        (flatPresentSimOf f) Q ≤
-      Q * (flatOracleConcError prims sk aHat cut + ε + signerRegGap prims sk aHat cut / (1 - ε) +
-          δ) +
-        (2 * Q * t + Q * (Q - 1) / 2) / Fintype.card Rnd + (Q * t + Q * (Q - 1) / 2) / 2 ^ 512 := by
+    (hδ : tvDist ((uniformOfFintype C).map f) (shapedTarget cut) ≤ δ) :
+    ZeroKnowledgeQueryBoundedPure (fun (_ : Ctx) (_ : Unit) => True)
+      (honestPresenter (Rnd := Rnd) tr) (honestPresenterLaw prims sk aHat cut)
+      (flatPresentSimOf f)
+      fun t Q =>
+        Q * (flatOracleConcError prims sk aHat cut + ε +
+          signerRegGap prims sk aHat cut / (1 - ε) + δ) +
+          (Q * (Q - 1) / (2 * Fintype.card Rnd) + 2 * t * √(Q / Fintype.card Rnd)) +
+          (4 * Q * t / 2 ^ 256 + Q * (Q - 1) / 2 ^ 512) := by
+  intro t W _ n m Q q Dq bud hq
   refine le_of_forall_pos_le_add fun e he => ?_
   set L : ℝ := (Fintype.card (LoopTape p) : ℝ)
-  obtain ⟨n, hn⟩ := exists_nat_gt (2 * Q * L / e)
-  have : NeZero (n + 1) := ⟨n.succ_ne_zero⟩
-  obtain ⟨g, hg⟩ := exists_map_uniformOfFintype_tvDist_le (loopTapeLaw prims sk aHat cut) (n + 1)
-  have h := advantage_honestPresenter_le_tape_of_keyFloorAt tr g prims sk aHat cut hp h_laws hs2
-    hf f hδ (Q := Q) 𝒜 hpost
-  rw [stepBError, card_bytes64] at h
-  have hD : (0 : ℝ) < (n + 1 : ℕ) := Nat.cast_pos.2 n.succ_pos
-  have hδ' : (Q : ℝ) *
-      tvDist ((uniformOfFintype (Fin (n + 1))).map g) (loopTapeLaw prims sk aHat cut)
-      ≤ Q * L / (n + 1 : ℕ) := by
+  obtain ⟨k, hk⟩ := exists_nat_gt (2 * Q * L / e)
+  have : NeZero (k + 1) := ⟨k.succ_ne_zero⟩
+  obtain ⟨g, hg⟩ := exists_map_uniformOfFintype_tvDist_le (loopTapeLaw prims sk aHat cut) (k + 1)
+  have h := advantage_honestPresenter_le_tape tr g prims sk aHat cut Dq hp h_laws hs2 hf f hδ
+    (Q := Q) bud hq
+  rw [stepBError] at h
+  have hD : (0 : ℝ) < (k + 1 : ℕ) := Nat.cast_pos.2 k.succ_pos
+  have hη : (Q : ℝ) *
+      tvDist ((uniformOfFintype (Fin (k + 1))).map g) (loopTapeLaw prims sk aHat cut)
+      ≤ Q * L / (k + 1 : ℕ) := by
     rw [mul_div_assoc]
     exact mul_le_mul_of_nonneg_left hg (Nat.cast_nonneg Q)
-  have hsmall : 2 * (Q * L / (n + 1 : ℕ)) ≤ e := by
+  have hsmall : 2 * (Q * L / (k + 1 : ℕ)) ≤ e := by
     rw [← mul_div_assoc, div_le_iff₀ hD]
-    have : 2 * Q * L / e < (n + 1 : ℕ) := by push_cast; linarith
+    have : 2 * Q * L / e < (k + 1 : ℕ) := by push_cast; linarith
     rw [div_lt_iff₀ he] at this
     linarith
-  have hR : (0 : ℝ) < Fintype.card Rnd := Nat.cast_pos.2 Fintype.card_pos
-  have hsplit : (2 * Q * t + Q * (Q - 1) / 2) / (Fintype.card Rnd : ℝ) =
-      Q * t / Fintype.card Rnd + Q * (Q - 1) / (2 * Fintype.card Rnd) +
-        Q * t / Fintype.card Rnd := by
-    field_simp
-    ring
-  set N : ℝ := 2 ^ 512
-  have hN0 : (0 : ℝ) < N := by positivity
-  clear_value N
-  have hsplit' : (Q * t + Q * (Q - 1) / 2) / N = Q * t / N + Q * (Q - 1) / (2 * N) := by
-    field_simp
-  set η := tvDist ((uniformOfFintype (Fin (n + 1))).map g) (loopTapeLaw prims sk aHat cut)
+  set η := tvDist ((uniformOfFintype (Fin (k + 1))).map g) (loopTapeLaw prims sk aHat cut)
   have hmul : (Q : ℝ) * (flatOracleConcError prims sk aHat cut +
       (ε + signerRegGap prims sk aHat cut / (1 - ε)) + η + δ) =
       Q * (flatOracleConcError prims sk aHat cut + ε + signerRegGap prims sk aHat cut / (1 - ε) +
           δ) +
         Q * η := by ring
   rw [hmul] at h
-  rw [hsplit, hsplit']
+  generalize (2 : ℝ) ^ 512 = N at h ⊢
   linarith
 
-/-- **The presentations of the flattened signer are simulated by `flatPresentSim`**: under the
-floor, every adversary with a budget of `t` queries whose
-output does not read the final oracle (`IAlg.PostOracleFree`), with `Q` presentations answered,
-has advantage at most
-
-    Q · (flatOracleConcError + ε + signerRegGap / (1 - ε))
-      + (2 Q t + Q (Q - 1) / 2) / |Rnd| + (Q t + Q (Q - 1) / 2) / 2^512
-
-between the honest presenter and the simulator. The adversary chooses each context and sees
-`(µ, w₁, c̃)` per presentation and the oracles; `R` is never published. It is
-`presentations_advantage_le_of_keyFloorAt` at the constant cut-off with the identity sampler
-(`δ = 0`). -/
-theorem presentations_advantage_le_of_keyFloor (βmin : ℚ≥0) (hp : SigningParams p)
-    (h_laws : SigningLaws prims) (hs2 : polyVecBounded sk.s2 p.eta) {ε : ℝ}
-    (hf : KeyFloor prims βmin ε sk.t0) {m t Q : ℕ}
-    (𝒜 : Adversary (PresIn p Rnd Ctx) (PresOut p) Ctx Unit (Option (Presentation p)) m t)
-    (hpost : ∀ r, (𝒜.alg r).PostOracleFree) :
-    𝒜.advantage (fun _ _ => True) (honestPresenter tr)
-        (honestPresenterLaw prims sk aHat (Cutoff.const βmin)) flatPresentSim Q ≤
-      Q * (flatOracleConcError prims sk aHat (Cutoff.const βmin) + ε + signerRegGap prims sk aHat
-          (Cutoff.const βmin) / (1 - ε)) +
-        (2 * Q * t + Q * (Q - 1) / 2) / Fintype.card Rnd + (Q * t + Q * (Q - 1) / 2) / 2 ^ 512 := by
-  have h := presentations_advantage_le_of_keyFloorAt tr prims sk aHat (Cutoff.const βmin) hp
-    h_laws hs2 (keyFloorAt_const_iff.2 hf) id (tvDist_map_id_shapedTarget_const βmin) (Q := Q)
-    𝒜 hpost
-  rw [flatPresentSim_eq_flatPresentSimOf]
-  simpa only [add_zero] using h
-
-/-- **The presentations are zero knowledge** in the classical random-oracle model against
-query-bounded adversaries (`GordieHowe.ROM.ZeroKnowledge`, through
-`ROM.NIZK.ZeroKnowledgeQueryBounded` and `zeroKnowledge_of_queryBounded`), at the error of
-`presentations_advantage_le_of_keyFloorAt`: under the floor at the cut-off, with the simulator
-`flatPresentSimOf f` for a sampler `f` within `δ` of the shaped target. -/
+/-- **The presentations are zero knowledge in the quantum random-oracle model** against
+query-bounded adversaries all of whose queries are counted (`GordieHowe.QROM.ZeroKnowledge`):
+under the floor at the cut-off, with the simulator program `flatPresentSimProgOf f` for a sampler
+`f` within `δ` of the shaped target, for every group structure on the oracle's values. The salt
+terms are hidden-salt reprogramming at `R` (`Q (Q - 1) / (2 |Rnd|) + 2 t √(Q / |Rnd|)`) and the
+salted hybrid at `µ` (`4 Q t / 2^256 + Q (Q - 1) / 2^512`). The presenter's program tabulates
+`H(µ ‖ ·)` to read the loop tape (`honestPresenterProg`); its query count enters no bound. -/
 theorem zeroKnowledge_presentations_of_keyFloorAt (hp : SigningParams p)
     (h_laws : SigningLaws prims) (hs2 : polyVecBounded sk.s2 p.eta) {ε : ℝ}
-    (hf : KeyFloorAt prims cut ε sk.t0) {C : Type} [Fintype C] [Nonempty C]
+    (hf : KeyFloorAt prims cut ε sk.t0) {C : Type} [Fintype C] [Nonempty C] [DecidableEq C]
     (f : C → BucketVec p × CommitHashBytes p) {δ : ℝ}
     (hδ : tvDist ((uniformOfFintype C).map f) (shapedTarget cut) ≤ δ) :
-    GordieHowe.ROM.ZeroKnowledge (fun (_ : Ctx) (_ : Unit) => True)
-      (honestPresenter (Rnd := Rnd) tr) (honestPresenterLaw prims sk aHat cut)
-      (flatPresentSimOf f)
+    GordieHowe.QROM.ZeroKnowledge (fun (_ : Ctx) (_ : Unit) => True)
+      (honestPresenterProg (Rnd := Rnd) tr) (honestPresenterLaw prims sk aHat cut)
+      (flatPresentSimProgOf f)
       fun t Q =>
         Q * (flatOracleConcError prims sk aHat cut + ε +
           signerRegGap prims sk aHat cut / (1 - ε) + δ) +
-          (2 * Q * t + Q * (Q - 1) / 2) / Fintype.card Rnd + (Q * t + Q * (Q - 1) / 2) / 2 ^ 512 :=
-  GordieHowe.ROM.QueryBoundedAdversary.zeroKnowledge_of_queryBounded fun _ _ _ 𝒜 hpost =>
-    presentations_advantage_le_of_keyFloorAt tr prims sk aHat cut hp h_laws hs2 hf f hδ 𝒜 hpost
+          (Q * (Q - 1) / (2 * Fintype.card Rnd) + 2 * t * √(Q / Fintype.card Rnd)) +
+          (4 * Q * t / 2 ^ 256 + Q * (Q - 1) / 2 ^ 512) := by
+  refine ZeroKnowledgeQueryBoundedPure.zeroKnowledgeQueryBounded
+    (P := honestPresenterProg (Rnd := Rnd) (Ctx := Ctx) tr)
+    (μ := honestPresenterLaw prims sk aHat cut) (S := flatPresentSimProgOf f) ?_
+  rw [honestPresenterProg_toFn, flatPresentSimProgOf_toFn]
+  exact zeroKnowledgeQueryBoundedPure_presentations_of_keyFloorAt tr prims sk aHat cut hp h_laws
+    hs2 hf f hδ
 
-/-- **The presentations are zero knowledge** in the classical random-oracle model against
-query-bounded adversaries (`GordieHowe.ROM.ZeroKnowledge`, through
-`ROM.NIZK.ZeroKnowledgeQueryBounded` and `zeroKnowledge_of_queryBounded`), at the error of
-`presentations_advantage_le_of_keyFloor`.
+/-- **The presentations are zero knowledge in the quantum random-oracle model** against
+query-bounded adversaries all of whose queries are counted (`GordieHowe.QROM.ZeroKnowledge`), at
+the constant cut-off under `KeyFloor`, with the simulator program `flatPresentSimProg`, for every
+group structure on the oracle's values (`zeroKnowledge_presentations_of_keyFloorAt` with the
+identity sampler, `δ = 0`).
 
-The everlasting form fails: an adversary unbounded after its steps can search `H_µ(tr, ·, ctx)`
-for the published `µ`, which the simulator draws without programming `H_µ`. -/
+The bound is for query-bounded adversaries only. The everlasting form fails: an adversary
+unbounded after its queries can search `H_µ(tr, ·, ctx)` for the published `µ`, which the
+simulator draws as its salt without querying or programming `H_µ`. -/
 theorem zeroKnowledge_presentations (βmin : ℚ≥0) (hp : SigningParams p)
     (h_laws : SigningLaws prims) (hs2 : polyVecBounded sk.s2 p.eta) {ε : ℝ}
     (hf : KeyFloor prims βmin ε sk.t0) :
-    GordieHowe.ROM.ZeroKnowledge (fun (_ : Ctx) (_ : Unit) => True)
-      (honestPresenter (Rnd := Rnd) tr) (honestPresenterLaw prims sk aHat (Cutoff.const βmin))
-      flatPresentSim
+    GordieHowe.QROM.ZeroKnowledge (fun (_ : Ctx) (_ : Unit) => True)
+      (honestPresenterProg (Rnd := Rnd) tr) (honestPresenterLaw prims sk aHat (Cutoff.const βmin))
+      flatPresentSimProg
       fun t Q =>
         Q * (flatOracleConcError prims sk aHat (Cutoff.const βmin) + ε +
           signerRegGap prims sk aHat (Cutoff.const βmin) / (1 - ε)) +
-          (2 * Q * t + Q * (Q - 1) / 2) / Fintype.card Rnd + (Q * t + Q * (Q - 1) / 2) / 2 ^ 512 :=
-  GordieHowe.ROM.QueryBoundedAdversary.zeroKnowledge_of_queryBounded fun _ _ _ 𝒜 hpost =>
-    presentations_advantage_le_of_keyFloor tr prims sk aHat βmin hp h_laws hs2 hf 𝒜 hpost
+          (Q * (Q - 1) / (2 * Fintype.card Rnd) + 2 * t * √(Q / Fintype.card Rnd)) +
+          (4 * Q * t / 2 ^ 256 + Q * (Q - 1) / 2 ^ 512) := by
+  have h := zeroKnowledge_presentations_of_keyFloorAt (Rnd := Rnd) (Ctx := Ctx) tr prims sk
+    aHat (Cutoff.const βmin) hp
+    h_laws hs2 (keyFloorAt_const_iff.2 hf) (C := BucketVec p × CommitHashBytes p) id
+    (tvDist_map_id_shapedTarget_const βmin)
+  rw [flatPresentSimProg_eq_flatPresentSimProgOf]
+  simpa only [add_zero] using h
 
-end Assembly
+end QROM
 
 end GordieHowe.MLDSA

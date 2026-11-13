@@ -73,6 +73,11 @@ gives the same answers and oracles has the same acceptance probabilities.
 `toReal_pi_exists_eq_le`, `toReal_pi_not_injective_le`: for `K` independent salts with point
 probabilities at most `δ`, a given point is a salt with probability at most `K δ`, and two salts
 collide with probability at most `C(K, 2) δ`.
+
+`prodLaw p q` is the law of an independent pair (`prodLaw_apply`, `map_prodLaw_prodMap`,
+`map_fst_prodLaw`, `map_snd_prodLaw`); `map_equiv_apply` evaluates the image of a law under an
+equivalence.
+
 ## Reprogramming only a component of the oracle's values
 
 The oracle's values may split as `e : Y ≃ Y₁ × Y₂` (a plain equivalence), where the challenger
@@ -652,6 +657,34 @@ theorem prodLaw_apply {α β : Type*} (p : PMF α) (q : PMF β) (a : α) (b : β
   rw [prodLaw, PMF.bind_apply, tsum_eq_single a fun a' ha' => by
     rw [map_pair_apply, if_neg (Ne.symm ha'), mul_zero]]
   rw [map_pair_apply, if_pos rfl]
+
+/-- The image of a law under an equivalence, at a point, is the law at the preimage. -/
+theorem map_equiv_apply {α β : Type*} (p : PMF α) (f : α ≃ β) (b : β) :
+    p.map f b = p (f.symm b) := by
+  rw [PMF.map_apply, tsum_eq_single (f.symm b) fun a ha => by
+    split_ifs with h
+    · exact (ha (by rw [h, Equiv.symm_apply_apply])).elim
+    · rfl]
+  simp
+
+/-- Mapping the two coordinates of an independent pair maps each law. -/
+theorem map_prodLaw_prodMap {α β γ δ : Type*} (p : PMF α) (q : PMF β) (f : α → γ)
+    (g : β → δ) :
+    (prodLaw p q).map (Prod.map f g) = prodLaw (p.map f) (q.map g) := by
+  simp only [prodLaw, PMF.map_bind, PMF.bind_map, PMF.map_comp]
+  rfl
+
+/-- The first coordinate of an independent pair has the first law. -/
+theorem map_fst_prodLaw {α β : Type*} (p : PMF α) (q : PMF β) :
+    (prodLaw p q).map Prod.fst = p := by
+  simp only [prodLaw, PMF.map_bind, PMF.map_comp]
+  exact (congrArg p.bind (funext fun a => PMF.map_const q a)).trans (PMF.bind_pure p)
+
+/-- The second coordinate of an independent pair has the second law. -/
+theorem map_snd_prodLaw {α β : Type*} (p : PMF α) (q : PMF β) :
+    (prodLaw p q).map Prod.snd = q := by
+  simp only [prodLaw, PMF.map_bind, PMF.map_comp]
+  exact (congrArg p.bind (funext fun _ => PMF.map_id q)).trans (PMF.bind_const p q)
 
 /-- The law of the oracle, the fresh functions and the other coins: `μH`, uniform, and `ζ`,
 independently. -/

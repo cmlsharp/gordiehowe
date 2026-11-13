@@ -748,7 +748,9 @@ public import GordieHowe.Model.QROM.QueryBoundedRun
 public import GordieHowe.Model.QROM.QueryCount
 public import GordieHowe.Model.QROM.QueryCountExpand
 public import GordieHowe.Model.QROM.QueryCountExpandAt
+public import GordieHowe.Model.QROM.ProverCoins
 public import GordieHowe.Model.QROM.QueryStep
+public import GordieHowe.Model.QROM.SaltedRead
 public import GordieHowe.Model.QROM.SaltedZK
 public import GordieHowe.Model.QROM.Select
 public import GordieHowe.Model.QROM.SimPMF

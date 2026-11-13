@@ -16,10 +16,12 @@ public section
 A presentation answers a context `ctx` chosen by the verifier: it draws a fresh `R`, computes
 `µ = H_µ(tr ‖ R ‖ ctx)` (FIPS 204 Algorithm 7 line 6 with `M = R ‖ ctx`), runs the flattened
 signer with `c̃ = H(µ ‖ w1Encode(w₁))` read from the random oracle, and publishes `(µ, w₁, c̃)`.
-The game is the classical zero-knowledge game of `GordieHowe/Model/ROM/NIZK.lean` with one random
-function on the points of both oracles (`PresIn`, `PresOut`): the adversary chooses `ctx` for each
-presentation and sees exactly `(µ, w₁, c̃)` per presentation, besides the oracles and whatever it
-holds (the public key, so `tr`). `R` and the rest of the signature are not published.
+The game is zero knowledge in the quantum random-oracle model (`GordieHowe.QROM.ZeroKnowledge`,
+query-bounded quantum adversaries all of whose queries are counted) with one random function on the
+points of both oracles (`PresIn`, `PresOut`), the presenter given as an oracle program
+(`honestPresenterProg`): the adversary chooses `ctx` for each presentation and sees exactly
+`(µ, w₁, c̃)` per presentation, besides the oracles and whatever it holds (the public key, so
+`tr`). `R` and the rest of the signature are not published.
 -/
 
 namespace GordieHowe.MLDSA
@@ -77,6 +79,21 @@ instance instFintypePresIn [Fintype Rnd] [Fintype Ctx] : Fintype (PresIn p Rnd C
 
 instance instNonemptyPresOut : Nonempty (PresOut p) :=
   ⟨⟨default, default⟩⟩
+
+/-- The points of the presentation oracles are nonempty: a commitment-hash point at the zero bucket
+vector. -/
+instance instNonemptyPresIn : Nonempty (PresIn p Rnd Ctx) :=
+  ⟨.commit default fun _ => 0⟩
+
+/-- **A group structure on the values of the presentation oracle**: the cyclic group on
+`Fin |PresOut p|` carried over by an enumeration. The quantum oracle adds its answer into a
+register, so its value type needs some group structure; the quantum statements take the group as
+an instance argument and hold for every one, and this definition witnesses that one exists. It is
+not an instance. -/
+@[instance_reducible]
+noncomputable def presOutAddCommGroup : AddCommGroup (PresOut p) :=
+  haveI : NeZero (Fintype.card (PresOut p)) := ⟨Fintype.card_ne_zero⟩
+  (Fintype.equivFin (PresOut p)).addCommGroup
 
 variable (prims : Primitives p) [nttOps : NTTRingOps] [Nonempty (MaskBox p)] (sk : SecretKey p)
   (aHat : TqMatrix p.k p.l) (cut : Cutoff p)
@@ -136,6 +153,62 @@ theorem honestPresenter_prove (tr : _root_.MLDSA.Bytes 64) (O : PresIn p Rnd Ctx
     (ctx : Ctx) (w : Unit) (c : Rnd × LoopTape p) :
     (honestPresenter tr).prove O ctx w c = presentAt O (O (.mu tr c.1 ctx)).mu c.2 := by
   unfold honestPresenter; rfl
+
+/-- **An enumeration of the bucket vectors**, from `FinEnum` of the function type. Sealed, so that
+no proof unfolds the enumeration. -/
+@[irreducible] def bucketVecList (p : Params) : List (BucketVec p) :=
+  FinEnum.toList (CoeffIndex p → Fin (bucketCount p))
+
+omit [NeZero (bucketCount p)] nttOps [Nonempty (MaskBox p)] in
+/-- Every bucket vector is in `bucketVecList`. -/
+theorem mem_bucketVecList (v : BucketVec p) : v ∈ bucketVecList p := by
+  unfold bucketVecList
+  exact FinEnum.mem_toList (α := CoeffIndex p → Fin (bucketCount p)) v
+
+omit [NeZero (bucketCount p)] nttOps [Nonempty (MaskBox p)] in
+/-- `bucketVecList` has one entry per bucket vector. -/
+theorem length_bucketVecList : (bucketVecList p).length = Fintype.card (BucketVec p) := by
+  unfold bucketVecList
+  change (FinEnum.toList (CoeffIndex p → Fin (bucketCount p))).length =
+    Fintype.card (CoeffIndex p → Fin (bucketCount p))
+  rw [FinEnum.toList, List.length_map, List.length_finRange]
+  exact FinEnum.card_eq_fintypeCard.trans (Fintype.card_congr (Equiv.refl _))
+
+omit nttOps [Nonempty (MaskBox p)] in
+/-- **The honest presenter as an oracle program**: it queries `H_µ` at `(tr, R, ctx)`, then `H` at
+every point `(µ, v)`, and reads the loop tape at the function `H(µ ‖ ·)` so tabulated. Reading the
+loop tape, a device of the proof, needs the whole function `H(µ ‖ ·)`, so the program queries
+`1 + |BucketVec p|` points; the signer's loop itself queries `H(µ ‖ ·)` only at the commitments it
+tries. Its semantics is `honestPresenter tr` (`honestPresenterProg_toFn`). -/
+def honestPresenterProg (tr : _root_.MLDSA.Bytes 64) :
+    NARG.Prover (PresIn p Rnd Ctx) (PresOut p) Ctx Unit (Option (Presentation p))
+      (Rnd × LoopTape p) where
+  prog ctx _ c := .query (.mu tr c.1 ctx) fun y =>
+    (OracleProg.tabulate (fun _ => default) (bucketVecList p)
+        fun v => .query (.commit y.mu v) fun z => .pure z.cTilde).bind fun g =>
+      .pure ((c.2 g).map fun w1 => ⟨y.mu, w1, g w1⟩)
+  q := Fintype.card (BucketVec p) + 1
+  prog_queries ctx w c := by
+    refine OracleProg.QueriesLE.query _ fun y => ?_
+    have h := OracleProg.QueriesLE.tabulate (fun _ => (default : CommitHashBytes p))
+      (bucketVecList p) (q := 1) fun v =>
+        OracleProg.QueriesLE.query (PresIn.commit (Rnd := Rnd) (Ctx := Ctx) y.mu v)
+          (k := fun z : PresOut p => OracleProg.pure z.cTilde) fun _ =>
+          OracleProg.QueriesLE.pure _ 0
+    rw [length_bucketVecList, mul_one] at h
+    exact (h.bind (q₂ := 0) fun _ => OracleProg.QueriesLE.pure _ 0).mono (Nat.add_zero _).le
+
+omit [NeZero (bucketCount p)] nttOps [Nonempty (MaskBox p)] [Fintype Rnd] [Nonempty Rnd]
+  [DecidableEq Rnd] [Fintype Ctx] [DecidableEq Ctx] in
+/-- The honest presenter's program computes the honest presenter. -/
+theorem honestPresenterProg_toFn (tr : _root_.MLDSA.Bytes 64) :
+    (honestPresenterProg (Rnd := Rnd) (Ctx := Ctx) tr).toFn = honestPresenter (p := p) tr := by
+  rw [honestPresenter, NARG.Prover.toFn]
+  congr 1
+  funext O ctx w c
+  simp only [honestPresenterProg, OracleProg.run_query, OracleProg.run_bind,
+    OracleProg.run_tabulate, OracleProg.run_pure, mem_bucketVecList, ite_true,
+    presentAt]
 
 omit [DecidableEq Rnd] in
 theorem honestPresenterLaw_eq :
@@ -231,6 +304,62 @@ theorem flatPresentSim_run (O : PresIn p Rnd Ctx → PresOut p) (x : Ctx)
       ⟨some ⟨s.salt, s.coins.1, s.coins.2⟩,
         [⟨.commit s.salt s.coins.1, ⟨(O (.commit s.salt s.coins.1)).mu, s.coins.2⟩⟩]⟩ := by
   rw [flatPresentSim_eq_flatPresentSimOf, flatPresentSimOf_run]
+  rfl
+
+/-- **The simulator of the flattened presentations with a sampler, as an oracle program**: with
+coins `(µ, u)` it queries the point `(µ, w₁)` for `(w₁, c̃) = f u`, publishes `(µ, w₁, c̃)` and
+programs `H(µ ‖ w₁) := c̃`, keeping the `H_µ`-component it read. Its semantics is
+`flatPresentSimOf f` (`flatPresentSimProgOf_toFn`).
+
+Running time: it evaluates `f` once on its coins, makes one query at `(µ, w₁)`, and returns an
+assignment list of length one; the coins are `512` bits and the sampler's coins. This running
+time is argued here, not proved in Lean. -/
+def flatPresentSimProgOf {C : Type} [Fintype C] [Nonempty C]
+    (f : C → BucketVec p × CommitHashBytes p) :
+    NARG.Simulator (PresIn p Rnd Ctx) (PresOut p) Ctx (Option (Presentation p))
+      (SaltedCoins (_root_.MLDSA.Bytes 64) C) where
+  prog _ s := .query (.commit s.salt (f s.coins).1) fun y =>
+    .pure ⟨some ⟨s.salt, (f s.coins).1, (f s.coins).2⟩,
+      [⟨.commit s.salt (f s.coins).1, ⟨y.mu, (f s.coins).2⟩⟩]⟩
+  coins_nonempty := inferInstance
+  q := 1
+  prog_queries _ _ := OracleProg.QueriesLE.query _ fun _ => OracleProg.QueriesLE.pure _ 0
+
+omit [NeZero (bucketCount p)] nttOps [Nonempty (MaskBox p)] [Fintype Rnd] [Nonempty Rnd]
+  [DecidableEq Rnd] [Fintype Ctx] [DecidableEq Ctx] in
+/-- The simulator program with a sampler computes the simulator with that sampler. -/
+theorem flatPresentSimProgOf_toFn {C : Type} [Fintype C] [Nonempty C]
+    (f : C → BucketVec p × CommitHashBytes p) :
+    (flatPresentSimProgOf (Rnd := Rnd) (Ctx := Ctx) f).toFn = flatPresentSimOf f := by
+  rw [flatPresentSimOf]
+  rfl
+
+/-- **The presentation simulator as an oracle program**: `flatPresentSimProgOf` with the identity
+sampler. Its semantics is `flatPresentSim` (`flatPresentSimProg_toFn`).
+
+Running time: it copies its coins, makes one query at `(µ, w₁)`, and returns an assignment list of
+length one; the coins are `512` bits, a bucket vector and a commitment hash. This running time is
+argued here, not proved in Lean. -/
+def flatPresentSimProg :
+    NARG.Simulator (PresIn p Rnd Ctx) (PresOut p) Ctx (Option (Presentation p))
+      (SaltedCoins (_root_.MLDSA.Bytes 64) (BucketVec p × CommitHashBytes p)) :=
+  flatPresentSimProgOf id
+
+omit nttOps [Nonempty (MaskBox p)] [Fintype Rnd] [Nonempty Rnd] [DecidableEq Rnd] [Fintype Ctx]
+  [DecidableEq Ctx] in
+/-- The presentation simulator program is the simulator program with the identity sampler. -/
+theorem flatPresentSimProg_eq_flatPresentSimProgOf :
+    (flatPresentSimProg : NARG.Simulator (PresIn p Rnd Ctx) (PresOut p) Ctx _ _) =
+      flatPresentSimProgOf id := by
+  unfold flatPresentSimProg
+  rfl
+
+omit nttOps [Nonempty (MaskBox p)] [Fintype Rnd] [Nonempty Rnd] [DecidableEq Rnd] [Fintype Ctx]
+  [DecidableEq Ctx] in
+/-- The presentation simulator program computes the presentation simulator. -/
+theorem flatPresentSimProg_toFn :
+    (flatPresentSimProg (Rnd := Rnd) (Ctx := Ctx) (p := p)).toFn = flatPresentSim := by
+  rw [flatPresentSim_eq_flatPresentSimOf]
   rfl
 
 end GordieHowe.MLDSA

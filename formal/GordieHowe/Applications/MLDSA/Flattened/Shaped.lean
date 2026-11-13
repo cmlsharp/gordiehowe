@@ -31,7 +31,8 @@ involves `x̂`, `E` and `SampleInBall`, and no key.
   `Pr[Bin(N, x_max) ≤ ω]`.
 * `keyFloor_of_spectrumEnvelope`: the constant cut-off `Pr[Bin(N, x) ≤ ω]` under the fill
   condition at `x`.
-* `presentations_advantage_le_shaped`: the presentation bound at the shaped cut-off.
+* `zeroKnowledge_presentations_shaped`: zero knowledge of the presentations in the quantum
+  random-oracle model at the shaped cut-off.
 -/
 
 namespace GordieHowe.MLDSA
@@ -240,65 +241,71 @@ section Presentations
 variable [NeZero (bucketCount p)] [Nonempty (MaskBox p)] [nttOps : NTTRingOps] {Rnd Ctx : Type}
   [Fintype Rnd] [Nonempty Rnd] [DecidableEq Rnd] [Fintype Ctx] [DecidableEq Ctx]
 
-/-- **The presentations of the flattened signer at the shaped cut-off**: for `SampleInBall` of the
-shape of FIPS 204, a key with `‖t₀‖∞ ≤ 2^12` under the spectrum envelope `E`, `x̂` satisfying the
-shape bound, and a sampler `f` whose output on uniform coins is within `δ` of the shaped target,
-every adversary with a budget of `t` queries whose output does not read the final oracle, with
-`Q` presentations answered, has advantage at most
+/-- **The presentations of the flattened signer at the shaped cut-off are zero knowledge in the
+quantum random-oracle model** (`GordieHowe.QROM.ZeroKnowledge`, query-bounded quantum adversaries
+all of whose queries are counted): for `SampleInBall` of the shape of FIPS 204, a key with
+`‖t₀‖∞ ≤ 2^12` under the spectrum envelope `E`, `x̂` satisfying the shape bound, and a sampler `f`
+whose output on uniform coins is within `δ` of the shaped target, for every group structure on
+the oracle's values, the honest presenter's program and the simulator program
+`flatPresentSimProgOf f` are within
 
     Q · (flatOracleConcError + signerRegGap + δ)
-      + (2 Q t + Q (Q - 1) / 2) / |Rnd| + (Q t + Q (Q - 1) / 2) / 2^512
+      + Q (Q - 1) / (2 |Rnd|) + 2 t √(Q / |Rnd|) + 4 Q t / 2^256 + Q (Q - 1) / 2^512
 
-between the honest presenter and the simulator `flatPresentSimOf f`. -/
-theorem presentations_advantage_le_shaped_of_shapeBound (tr : _root_.MLDSA.Bytes 64)
+with `Q` presentations answered (`zeroKnowledge_presentations_of_keyFloorAt`). -/
+theorem zeroKnowledge_presentations_shaped_of_shapeBound [AddCommGroup (PresOut p)]
+    (tr : _root_.MLDSA.Bytes 64)
     (prims : Primitives p) (sk : SecretKey p) (aHat : TqMatrix p.k p.l) (hp : SigningParams p)
     (h_laws : SigningLaws prims) (hs2 : polyVecBounded sk.s2 p.eta) {x₀ κ : ℝ}
     (hf : FloorParams p x₀ κ) (hx₀ : x₀ ≤ 1 / 2) (hshape : SampleInBallShape prims)
     (ht0 : polyVecNorm sk.t0 ≤ 4096) {E : ℕ → ℝ} (hE : SpectrumEnvelope E sk.t0)
     {xhat : CommitHashBytes p → ℚ≥0} (h : ∀ c, xhat c < 1) (hb : ShapeBound prims E xhat)
-    {C : Type} [Fintype C] [Nonempty C] (f : C → BucketVec p × CommitHashBytes p) {δ : ℝ}
-    (hδ : tvDist ((uniformOfFintype C).map f) (shapedTarget (shapedCutoff p xhat h)) ≤ δ)
-    {m t Q : ℕ}
-    (𝒜 : Adversary (PresIn p Rnd Ctx) (PresOut p) Ctx Unit (Option (Presentation p)) m t)
-    (hpost : ∀ r, (𝒜.alg r).PostOracleFree) :
-    𝒜.advantage (fun _ _ => True) (honestPresenter tr)
-        (honestPresenterLaw prims sk aHat (shapedCutoff p xhat h)) (flatPresentSimOf f) Q ≤
-      Q * (flatOracleConcError prims sk aHat (shapedCutoff p xhat h) +
+    {C : Type} [Fintype C] [Nonempty C] [DecidableEq C] (f : C → BucketVec p × CommitHashBytes p)
+    {δ : ℝ} (hδ : tvDist ((uniformOfFintype C).map f) (shapedTarget (shapedCutoff p xhat h)) ≤ δ) :
+    GordieHowe.QROM.ZeroKnowledge (fun (_ : Ctx) (_ : Unit) => True)
+      (honestPresenterProg (Rnd := Rnd) tr)
+      (honestPresenterLaw prims sk aHat (shapedCutoff p xhat h)) (flatPresentSimProgOf f)
+      fun t Q =>
+        Q * (flatOracleConcError prims sk aHat (shapedCutoff p xhat h) +
           signerRegGap prims sk aHat (shapedCutoff p xhat h) + δ) +
-        (2 * Q * t + Q * (Q - 1) / 2) / Fintype.card Rnd + (Q * t + Q * (Q - 1) / 2) / 2 ^ 512 := by
+          (Q * (Q - 1) / (2 * Fintype.card Rnd) + 2 * t * √(Q / Fintype.card Rnd)) +
+          (4 * Q * t / 2 ^ 256 + Q * (Q - 1) / 2 ^ 512) := by
   have := h_laws.transform
-  have hb' := presentations_advantage_le_of_keyFloorAt tr prims sk aHat (shapedCutoff p xhat h) hp
-    h_laws hs2 (keyFloorAt_shapedCutoff_of_shapeBound hf hx₀ hshape ht0 hE h hb) f hδ (Q := Q) 𝒜
-    hpost
+  have hb' := zeroKnowledge_presentations_of_keyFloorAt (Rnd := Rnd) (Ctx := Ctx) tr prims sk aHat
+    (shapedCutoff p xhat h) hp h_laws hs2
+    (keyFloorAt_shapedCutoff_of_shapeBound hf hx₀ hshape ht0 hE h hb) f hδ
   simpa only [add_zero, sub_zero, div_one] using hb'
 
-/-- **The presentations of the flattened signer at the shaped cut-off**: for valid public data of
-a shaped cut-off, a key under the table `E`, and a sampler `f` whose output on uniform coins is
-within `δ` of the shaped target, every adversary with a budget of `t` queries whose output does
-not read the final oracle, with `Q` presentations answered, has advantage at most
+/-- **The presentations of the flattened signer at the shaped cut-off are zero knowledge in the
+quantum random-oracle model** (`GordieHowe.QROM.ZeroKnowledge`, query-bounded quantum adversaries
+all of whose queries are counted): for valid public data of a shaped cut-off, a key under the
+table `E`, and a sampler `f` whose output on uniform coins is within `δ` of the shaped target,
+for every group structure on the oracle's values, the honest presenter's program and the
+simulator program `flatPresentSimProgOf f` are within
 
     Q · (flatOracleConcError + signerRegGap + δ)
-      + (2 Q t + Q (Q - 1) / 2) / |Rnd| + (Q t + Q (Q - 1) / 2) / 2^512
+      + Q (Q - 1) / (2 |Rnd|) + 2 t √(Q / |Rnd|) + 4 Q t / 2^256 + Q (Q - 1) / 2^512
 
-between the honest presenter and the simulator `flatPresentSimOf f`. -/
+with `Q` presentations answered. -/
 @[headline]
-theorem presentations_advantage_le_shaped (tr : _root_.MLDSA.Bytes 64) (prims : Primitives p)
-    (sk : SecretKey p) (aHat : TqMatrix p.k p.l) (hp : SigningParams p)
+theorem zeroKnowledge_presentations_shaped [AddCommGroup (PresOut p)] (tr : _root_.MLDSA.Bytes 64)
+    (prims : Primitives p) (sk : SecretKey p) (aHat : TqMatrix p.k p.l) (hp : SigningParams p)
     (h_laws : SigningLaws prims) (hs2 : polyVecBounded sk.s2 p.eta) {E : ℕ → ℝ}
     {xhat : CommitHashBytes p → ℚ≥0} (S : ShapedSetup prims E xhat)
-    (K : KeyUnderTable E sk.t0) {C : Type} [Fintype C] [Nonempty C]
+    (K : KeyUnderTable E sk.t0) {C : Type} [Fintype C] [Nonempty C] [DecidableEq C]
     (f : C → BucketVec p × CommitHashBytes p) {δ : ℝ}
-    (hδ : tvDist ((uniformOfFintype C).map f) (shapedTarget S.cutoff) ≤ δ)
-    {m t Q : ℕ}
-    (𝒜 : Adversary (PresIn p Rnd Ctx) (PresOut p) Ctx Unit (Option (Presentation p)) m t)
-    (hpost : ∀ r, (𝒜.alg r).PostOracleFree) :
-    𝒜.advantage (fun _ _ => True) (honestPresenter tr)
-        (honestPresenterLaw prims sk aHat S.cutoff) (flatPresentSimOf f) Q ≤
-      Q * (flatOracleConcError prims sk aHat S.cutoff + signerRegGap prims sk aHat S.cutoff + δ) +
-        (2 * Q * t + Q * (Q - 1) / 2) / Fintype.card Rnd + (Q * t + Q * (Q - 1) / 2) / 2 ^ 512 :=
+    (hδ : tvDist ((uniformOfFintype C).map f) (shapedTarget S.cutoff) ≤ δ) :
+    GordieHowe.QROM.ZeroKnowledge (fun (_ : Ctx) (_ : Unit) => True)
+      (honestPresenterProg (Rnd := Rnd) tr) (honestPresenterLaw prims sk aHat S.cutoff)
+      (flatPresentSimProgOf f)
+      fun t Q =>
+        Q * (flatOracleConcError prims sk aHat S.cutoff + signerRegGap prims sk aHat S.cutoff +
+          δ) +
+          (Q * (Q - 1) / (2 * Fintype.card Rnd) + 2 * t * √(Q / Fintype.card Rnd)) +
+          (4 * Q * t / 2 ^ 256 + Q * (Q - 1) / 2 ^ 512) :=
   let ⟨_, _, hf, hx₀⟩ := S.floorParams
-  presentations_advantage_le_shaped_of_shapeBound tr prims sk aHat hp h_laws hs2 hf hx₀
-    S.sampleInBallShape K.norm_le K.spectrumEnvelope S.xhat_lt_one S.shapeBound f hδ 𝒜 hpost
+  zeroKnowledge_presentations_shaped_of_shapeBound tr prims sk aHat hp h_laws hs2 hf hx₀
+    S.sampleInBallShape K.norm_le K.spectrumEnvelope S.xhat_lt_one S.shapeBound f hδ
 
 end Presentations
 

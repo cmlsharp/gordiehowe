@@ -224,6 +224,38 @@ noncomputable def _root_.GordieHowe.Quantum.QueryBoundedAdversary.zkAdvantage {T
   GordieHowe.advantage (𝒟.acceptProb (realChallenger rel P μ Q)).toReal
     (𝒟.acceptProb (simChallenger rel S Q)).toReal
 
+/-- **A bit-valued adversary accepts with probability at most one.** -/
+theorem _root_.GordieHowe.Quantum.QueryBoundedAdversary.acceptProb_le_one {X Y Req Resp : Type}
+    [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [Fintype Req] [DecidableEq Req]
+    [Fintype Resp] [DecidableEq Resp] [Nonempty X] [AddGroup Y] [Nonempty Y] {T : ℕ}
+    (𝒟 : Quantum.QueryBoundedAdversary X Y Req Resp Bool T) (C : Quantum.Challenger X Y Req Resp) :
+    𝒟.acceptProb C ≤ 1 := by
+  rw [Quantum.QueryBoundedAdversary.acceptProb]
+  calc _ ≤ ∑' a, 𝒟.aux a :=
+        ENNReal.tsum_le_tsum fun a => mul_le_of_le_one_right' (PMF.toOuterMeasure_apply_le_one _ _)
+    _ = 1 := PMF.tsum_coe _
+
+/-- **A zero-knowledge advantage is at most one**: both acceptance probabilities lie in
+`[0, 1]`. -/
+theorem _root_.GordieHowe.Quantum.QueryBoundedAdversary.zkAdvantage_le_one {X Y Stmt Wit Proof Coins
+    SimCoins : Type} (rel : Stmt → Wit → Prop) [DecidableRel rel] [Fintype X] [DecidableEq X]
+    [Fintype Y] [Nonempty Y] [AddGroup Y] [Fintype Stmt] [Fintype Wit] [DecidableEq Stmt]
+    [DecidableEq Wit] [Fintype Proof] [DecidableEq Proof] [Nonempty X] [DecidableEq Y]
+    [Fintype Coins] [DecidableEq Coins] [Fintype SimCoins] [DecidableEq SimCoins] {T : ℕ}
+    (𝒟 : Quantum.QueryBoundedAdversary X Y (QROM.ProofQuery Stmt Wit) Proof Bool T)
+    (P : NARG.Prover X Y Stmt Wit Proof Coins) (μ : PMF Coins)
+    (S : NARG.Simulator X Y Stmt Proof SimCoins) (Q : ℕ) :
+    𝒟.zkAdvantage rel P μ S Q ≤ 1 := by
+  rw [Quantum.QueryBoundedAdversary.zkAdvantage, GordieHowe.advantage]
+  have h₀ := ENNReal.toReal_mono ENNReal.one_ne_top (𝒟.acceptProb_le_one
+    (QROM.realChallenger rel P μ Q))
+  have h₁ := ENNReal.toReal_mono ENNReal.one_ne_top (𝒟.acceptProb_le_one
+    (QROM.simChallenger rel S Q))
+  rw [ENNReal.toReal_one] at h₀ h₁
+  exact abs_sub_le_iff.2 ⟨by linarith [ENNReal.toReal_nonneg (a := 𝒟.acceptProb
+    (QROM.simChallenger rel S Q))], by linarith [ENNReal.toReal_nonneg (a := 𝒟.acceptProb
+    (QROM.realChallenger rel P μ Q))]⟩
+
 /-- **Everlasting zero knowledge against query-bounded adversaries** (Unruh
 2017 Definition 6, p. 14, over the paper's `(t, Q)`-adversaries, `def:adversary`, with the query
 bound of `def:narg-zk-post`): for all `t` and `Q`, every query-bounded adversary that outputs a bit
