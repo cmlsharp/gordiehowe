@@ -146,6 +146,12 @@ noncomputable def cpError : ℝ≥0 :=
 theorem sum_cpError : ∑ j, (T.sound Rel H).cpε j = T.cpError :=
   T.cp.error_sum
 
+/-- **The proof phase's errors sum to** the masked reduction's, `1/|K|` per combination and the
+commit-and-prove error (`sum_ipError`, `sum_cpError`). -/
+theorem sum_error :
+    ∑ j, (T.sound Rel H).error j = ∑ i, ε i + T.path.combinations / Fintype.card K + T.cpError := by
+  rw [FieldProof.Sound.sum_error, T.sum_ipError H, T.sum_cpError H]
+
 /-- **The commit error**: the commit phase draws one challenge, exceptional with probability at
 most `B/(|K| − 1)`. -/
 theorem sum_commitError : ∑ j, (T.sound Rel H).cpεc j = T.cp.bounds.commit := by

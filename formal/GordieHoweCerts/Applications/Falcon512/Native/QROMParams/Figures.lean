@@ -20,7 +20,8 @@ Zero knowledge: for every `t ≥ 1` hash queries and `Q ≤ proofQueryCap = 2^64
 
 Knowledge soundness: for every `t ≥ 1` hash queries, the quantum knowledge error of
 `knowledge_soundness_qrom_at` and `soundness_qrom_at` against `t`-query adversaries,
-`knowledgeErrorQROM (t + kq)`, satisfies `min(1, err) ≤ t · 2^-λ`. The error is evaluated at `t +
+`extractionErrorQROM t`, at most `knowledgeErrorQROMAtFigures (t + kq)`, satisfies `min(1, err) ≤ t
+· 2^-λ`. The error is evaluated at `t +
 kq`, the adversary's and the verifier's queries, as in the paper's `errks(t)` and in
 `analysis/eval_params.py`.
 
@@ -69,13 +70,14 @@ theorem knowledgeBudgetQROM_le :
     (M := 35) (E := 122) (e := 11687) (by norm_num) (by norm_num) (by decide +kernel)
 
 /-- **The bit security of knowledge soundness of the native Falcon-512 proof of possession at the
-QROM parameters**: for every `t ≥ 1` hash queries, the quantum knowledge error of
-`knowledge_soundness_qrom_at` and `soundness_qrom_at` against `t`-query adversaries, evaluated at `t
+QROM parameters**: for every `t ≥ 1` hash queries, the extraction error `extractionErrorQROM` of
+`knowledge_soundness_qrom_at` and `soundness_qrom_at` against `t`-query adversaries, at most the
+quantum knowledge error at the figures (`extractionErrorQROM_le_atFigures`) evaluated at `t
 + kq` as in the paper's `errks(t)` and `analysis/eval_params.py`, satisfies `min(1, err) ≤ t ·
 2^-116.87`, so `λ(errks) ≥ 116.87`. -/
 theorem soundness_bits_qrom :
-    BitSecurityAtLeast extractionErrorQROM 116.87 :=
-  SoundnessBits.knowledgeErrorQROM_le_bits configuration configurationFacts (e := 11687)
+    BitSecurityAtLeast (extractionErrorQROM proofSystem) 116.87 :=
+  SoundnessBits.knowledgeErrorQROM_le_bits configuration configurationFacts proofSystem (e := 11687)
     (by norm_num) (by decide +kernel) (knowledgeBudgetQROM_le)
 
 end GordieHowe.Falcon512.Native.QROMParams

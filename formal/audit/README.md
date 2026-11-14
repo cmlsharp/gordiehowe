@@ -32,7 +32,18 @@ DAG, schedule, node table and entries. The precise field list is `readFields` in
 derivations, honest nodes, tableaus and records remain in the closure. A moved check declaration
 is still project code because the closure includes `GordieHoweCheck`.
 
-A declaration's fingerprint covers its own type and body only, so a headline's meaning can change
+A declaration's fingerprint (`fingerprintWith` in `scripts/StatementClosure.lean`) hashes its
+type; for a definition also its body; for an inductive (a structure, a class) also each
+constructor's type, in order, so a field added, removed, retyped or moved changes it. A theorem
+contributes its statement only. A definition compiled by structural recursion keeps its body in
+an internal auxiliary constant, and a `match` keeps its patterns in an internal matcher: an edit
+of such a body or of patterns alone moves the auxiliary's fingerprint and the transitive
+fingerprint of every headline reaching it, not the definition's own line. Binder names and binder
+info (explicit, implicit, instance-implicit) do not enter the hash; universe-parameter names do.
+`scripts/tests/test_statement_closure.py`, run by `check.sh`, checks on small variants of a
+structure that field edits move its fingerprint and unrelated edits do not.
+
+A declaration's fingerprint covers its own declaration only, so a headline's meaning can change
 through a dependency (a configuration constant's field read through a named constant) while every
 headline's own fingerprint stays put. The closure therefore also gives each headline a transitive
 fingerprint, on a line `# transitive<TAB><headline><TAB><fingerprint>` after the `# headline`
@@ -45,7 +56,7 @@ previous closure, listing those whose own fingerprint did not.
 
 `audited.txt` records audited declarations, one per line:
 `<declaration>\t<commit>\t<audit reason>\t<fingerprint>`, where the fingerprint is the hash of
-the declaration's type (and body, for a definition) that `statement_closure.txt` prints in its
+the declaration's type (and body or constructor types) that `statement_closure.txt` prints in its
 third column at the audit. The reason stands on its own text: after the audit's label, one or two
 sentences saying what the statement says and the fact that makes it right (the lemma, the
 computation, or why a definition matches its source), with no reference to a file outside the
@@ -70,6 +81,11 @@ This removes the names since recorded or no longer in the closure and adds none.
 `--accept-new` also lists the new unrecorded declarations, which defers their audit; the additions
 appear in the diff of `unrecorded.txt` for review. Run on a smaller closure (`check.sh` without
 `--certs`), `--write-baseline` would drop the names that closure does not reach.
+
+With the environment variable `STATEMENT_CLOSURE_OLD_INDUCTIVE` set, `StatementClosure.lean`
+also prints `# inductive<TAB><name><TAB><type-only fingerprint><TAB><fingerprint>` for every
+inductive reached: the hash of its type alone beside its fingerprint, to match a ledger row that
+records the hash of the type alone. The ledger tools ignore these lines.
 
 A declaration renaming does not void its audits. `renames.tsv` lists the renames of the last
 renaming pass (`<old>\t<new>`, under a header line naming the pass); the closure's optional fourth

@@ -20,17 +20,18 @@ Zero knowledge: for every `t ≥ 1` hash queries and `Q ≤ proofQueryCap = 2^64
 
 Knowledge soundness: for every `t ≥ 1` hash queries, the classical knowledge error of
 `knowledge_soundness_rom_at` and `soundness_rom_at` against `t`-query adversaries,
-`knowledgeErrorROM (t + kq)`, satisfies `min(1, err) ≤ t · 2^-λ`. The error is evaluated at `t +
+`extractionErrorROMTyped t`, at most `knowledgeErrorROM (t + kq)`, satisfies
+`min(1, err) ≤ t · 2^-λ`. The error is evaluated at `t +
 kq`, the adversary's and the verifier's queries, as in the paper's `errks^C(t)` and in
 `analysis/eval_params.py`.
 
 | figure | `λ` |
 |---|---|
 | everlasting zero knowledge, one proof (`zero_knowledge_bits_rom`) | `117.67` |
-| knowledge soundness and soundness (`soundness_bits_rom`) | `102.99` |
+| knowledge soundness and soundness (`soundness_bits_rom`) | `112.64` |
 
 Each `λ` is rounded down to two decimals. The budgets (`GordieHowe.Configuration.zkBudgetROM`,
-`GordieHowe.Configuration.knowledgeBudgetROM`) are bounded at the figures
+`GordieHowe.Configuration.knowledgeBudgetROMTyped`) are bounded at the figures
 (`GordieHowe.Configuration.ofCertifiedWith_readsFigures`) by a dyadic ratio `M / 2^E` and compared
 with `2^-λ` through `M^100 · 2^(100 λ) ≤ 2^(100 E)`.
 -/
@@ -58,23 +59,26 @@ theorem zero_knowledge_bits_rom (G : Falcon512.Signer 32) :
   Configuration.ZKBits.zkErrorROM_le_bits (configuration G) (configurationFacts G) proofSystem
     (zkBudgetROM_le G)
 
-/-- **The classical knowledge budget of `Falcon512.Ring.Carrier.ROMParams` below `2 ^ 103` queries**
-is at most `2^-102.99`: at most `515/2^112` (`knowledgeBudgetROM_le_two_rpow` at the generated
-figures). -/
-theorem knowledgeBudgetROM_le (G : Falcon512.Signer 32) :
-    (configuration G).knowledgeBudgetROM (2 ^ 103) ≤ (2 : ℝ) ^ (-102.99 : ℝ) :=
-  knowledgeBudgetROM_le_two_rpow
-    (ofCertifiedWith_readsFigures Generated.Falcon512.Ring.Carrier.ROMParams.figures_eq)
-    (M := 515) (E := 112) (e := 10299) (by norm_num) (by norm_num) (by decide +kernel)
+/-- **The typed classical knowledge budget of `Falcon512.Ring.Carrier.ROMParams` below `2 ^ 113`
+queries** is at most `2^-112.64`: at most `5255/2^125` (`knowledgeBudgetROMTyped_le_two_rpow` at the
+generated figures and the configuration's `errorSum`). -/
+theorem knowledgeBudgetROMTyped_le (G : Falcon512.Signer 32) :
+    (configuration G).knowledgeBudgetROMTyped (2 ^ 113) 1 ≤ (2 : ℝ) ^ (-112.64 : ℝ) :=
+  knowledgeBudgetROMTyped_le_two_rpow
+    (ofCertifiedWith_readsFigures Generated.Falcon512.Ring.Carrier.ROMParams.figures_eq) rfl
+    (es := 84845906) (M := 5255) (E := 125) (e := 11264) (by norm_num) (by norm_num)
+    (by decide +kernel)
 
 /-- **The bit security of knowledge soundness of the carrier Falcon-512 ring signature at the ROM
-parameters**: for every `t ≥ 1` hash queries, the classical knowledge error of
-`knowledge_soundness_rom_at` and `soundness_rom_at` against `t`-query adversaries, evaluated at `t +
-kq` as in the paper's `errks^C(t)` and `analysis/eval_params.py`, satisfies `min(1, err) ≤ t ·
-2^-102.99`, so `λ(errks^C) ≥ 102.99`. -/
+parameters**: for every `t ≥ 1` hash queries, the typed extraction error `extractionErrorROMTyped`
+of `knowledge_soundness_rom_at` and `soundness_rom_at` against `t`-query adversaries, at most the
+classical knowledge error at `t + kq` as in the paper's `errks^C(t)` and `analysis/eval_params.py`
+(`extractionErrorROMTyped_le`), satisfies `min(1, err) ≤ t · 2^-112.64`, so `λ(errks^C) ≥ 112.64`.
+-/
 theorem soundness_bits_rom (G : Falcon512.Signer 32) :
-    BitSecurityAtLeast (extractionErrorROM G) 102.99 :=
-  SoundnessBits.knowledgeErrorROM_le_bits (configuration G) (configurationFacts G) (e := 10299)
-    (by norm_num) (by decide +kernel) (knowledgeBudgetROM_le G)
+    BitSecurityAtLeast (extractionErrorROMTyped G proofSystem) 112.64 :=
+  SoundnessBits.knowledgeErrorROMTyped_le_bits (configuration G) (configurationFacts G) proofSystem
+    (m := 1) domains_length.le (e := 11264) (by norm_num) (by decide +kernel)
+    (knowledgeBudgetROMTyped_le G)
 
 end GordieHowe.Falcon512.Ring.Carrier.ROMParams

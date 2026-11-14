@@ -26,10 +26,11 @@ This module states them once, generically:
   figures: rounds, Chernoff exponent and point, leaves, queried leaves, verifier queries, the
   largest round error, digests per input, query caps, positions and the digest length);
 * `GordieHowe.Configuration.GrantedFacts`: the facts the generic proofs use, and `GordieHowe.Configuration.Facts`, the form
-  of a configuration without granted points, which extends it. Among them are the guarantees of
-  the end-to-end theorem at the configuration's IOP (`knowledge`, `e2e`), which a configuration
-  proves as an instance of the proof system's end-to-end theorem
-  (`GordieHowe.RealizedProgram.ProofSystem.FieldBranches.e2e_knowledge`, `GordieHowe.RealizedProgram.ProofSystem.FieldBranches.e2e`, paper
+  of a configuration without granted points, which extends it. Among them are the witness map
+  into the relation (`witnessMap_mem`), from which the knowledge guarantees of the end-to-end
+  theorem follow (`GrantedFacts.knowledge`), and the guarantees of the end-to-end theorem at the
+  configuration's IOP (`e2e`), which a configuration proves as an instance of the proof system's
+  end-to-end theorem (`GordieHowe.RealizedProgram.ProofSystem.FieldBranches.e2e`, paper
   `thm:e2e`); every headline follows from them and the figures;
 * the templates (`@[config_template]`, `GordieHowe/Applications/Configuration/Instantiate.lean`) in five families:
   `Common` (the setting, the extractor, the knowledge errors, the verifiers, the honest prover and
@@ -165,6 +166,8 @@ structure _root_.GordieHowe.Configuration.{u} where
   errorMax : ℕ
   /-- The exponent of the denominator of the bound on the largest round error. -/
   errorExp : ℕ
+  /-- The numerator of the bound on the sum of the round errors, at denominator `2^errorExp`. -/
+  errorSum : ℕ
   /-- The bound on the digests of one chain input with the final digests. -/
   D : ℕ
   /-- The query cap of the quantum headlines (`2^40` at the ROM parameters, `2^100` at the QROM
@@ -196,16 +199,13 @@ extends. -/
 structure GrantedFacts : Prop where
   /-- The facts every spBCS setting is built from. -/
   hb : ∀ C, (R.T C).MergeBounds R.kS
-  /-- **The end-to-end theorem, knowledge soundness** (paper `thm:e2e`(2)) at every query budget
-  of the spBCS verifier, for the relation at the extractor's witness read by `witnessMap`
-  (an instance of `RealizedProgram.ProofSystem.FieldBranches.e2e_knowledge`). -/
-  knowledge : ∀ C {kq : ℕ} (hkq : (R.T C).QueryBudget R.kS (hb C) kq),
-    (R.T C).KnowledgeGuarantees R.kS (hb C) (R.sound C) R.rel R.witnessMap hkq
   /-- **The end-to-end theorem** (paper `thm:e2e`) at every honest strategy, with the strategy's
   completeness error (an instance of `RealizedProgram.ProofSystem.FieldBranches.e2e`). -/
   e2e : ∀ C {Inp : Type} {relH : Set (R.Val × Inp)} (H : R.Strategy Inp relH)
     {kq : ℕ} (hkq : (R.T C).QueryBudget R.kS (hb C) kq) (hf : (R.T C).ProofFormat R.kS (hb C) R.proofBound),
     (R.T C).Guarantees R.kS (hb C) (R.sound C) R.rel R.witnessMap hkq hf (R.honest C H) (R.err H)
+  /-- The witness map sends the IOP's relation into the relation. -/
+  witnessMap_mem : ∀ x w, (x, w) ∈ R.iopRel → (x, R.witnessMap x w) ∈ R.rel
   /-- The composite has at most `rounds` rounds. -/
   rounds_le : ∀ C, ∑ q : (R.iop C).shape.term.Leaf, (R.iop C).rounds q.label ≤ R.rounds
   /-- Every round's load passes the Chernoff test `2^-chernoff` at the point `zNum / zDen` on the
@@ -223,6 +223,10 @@ structure GrantedFacts : Prop where
   kq_le : R.kq ≤ 2 ^ 16
   /-- The largest round error is at most `errorMax / 2^errorExp`. -/
   error_le : ∀ C, maxError (R.sound C).error ≤ (R.errorMax : ℝ≥0) / 2 ^ R.errorExp
+  /-- The round errors sum to at most `errorSum / 2^errorExp`. -/
+  errorSum_le : ∀ C, ∑ c, (R.sound C).error c ≤ (R.errorSum : ℝ≥0) / 2 ^ R.errorExp
+  /-- The bound on the sum is at most `rounds` largest. -/
+  errorSum_le_rounds : R.errorSum ≤ R.rounds * R.errorMax
   /-- The digests of one chain input, the final digests and the seeding's are at most `D`. -/
   digests_le : ∀ C,
     max 2 (ProofSystemTranscript.digests (C := R.iop C)) + (R.iop C).merges.nJ + 1 ≤ R.D
@@ -244,6 +248,16 @@ structure Facts : Prop extends R.GrantedFacts where
     (PassesChernoff ((R.zNum : ℝ) / R.zDen) ((1 / 2) ^ R.chernoff) ((R.T C).k + fsExtraBytes))
   loadsGranted := fun C j => SpecReaders.AllGranted.of_allLoads
     (fun _ _ h => h.anti (Nat.le_add_right _ _)) (loads C j)
+
+variable {R} in
+/-- **The end-to-end theorem, knowledge soundness** (paper `thm:e2e`(2)) at every query budget
+of the spBCS verifier, for the relation at the extractor's witness read by `witnessMap`:
+`SPBCS.ProofSystemTranscript.knowledgeGuarantees` at the soundness data and
+`GrantedFacts.witnessMap_mem`. -/
+theorem GrantedFacts.knowledge (F : R.GrantedFacts) (C : R.ProofSystem) {kq : ℕ}
+    (hkq : (R.T C).QueryBudget R.kS (F.hb C) kq) :
+    (R.T C).KnowledgeGuarantees R.kS (F.hb C) (R.sound C) R.rel R.witnessMap hkq :=
+  ProofSystemTranscript.knowledgeGuarantees (R.sound C) F.witnessMap_mem hkq
 
 /-- The facts of a configuration without granted points are its facts. -/
 instance {R : Configuration} : CoeOut R.Facts R.GrantedFacts :=
@@ -346,15 +360,29 @@ SHAKE128 candidates). This running time is argued here, not proved in Lean. -/
 def queryDecoder (C : R.ProofSystem) :=
   ((R.T C).setting R.kS (F.hb C)).model.senc.decode
 
-/-- **The quantum knowledge error at `t` queries**:
+/-- **The quantum knowledge error of a proof system at `t` queries**:
+`2^9/2^(4k) + 6 t² (errorMax/2^errorExp + (max 2 m + 1) t/2^(8k))`, `m` the domains of the proof
+system's IOP (its Merkle trees). It bounds the spBCS knowledge error at the collision coefficient
+of the flips by entry class (`SPBCS.condInstab_bad_le_slot`), term by term
+(`Configurations.knowledgeError_le`, `GrantedFacts.kq_le`, `GrantedFacts.error_le`), and is at
+most `knowledgeErrorQROMAtFigures` (`knowledgeErrorQROM_le_atFigures`). -/
+@[config_template]
+noncomputable abbrev knowledgeErrorQROM (_F : R.GrantedFacts) (C : R.ProofSystem) (t : ℕ) :
+    ℝ≥0∞ :=
+  2 ^ 9 / 2 ^ (4 * R.k) + 6 * (t : ℝ≥0∞) ^ 2 *
+    ((((R.errorMax : ℝ≥0) / 2 ^ R.errorExp : ℝ≥0) : ℝ≥0∞) +
+      (((max 2 (R.iop C).m + 1) * t : ℕ) : ℝ≥0∞) / 2 ^ (8 * R.k))
+
+/-- **The quantum knowledge error at `t` queries at the configuration's figures**:
 `2^9/2^(4k) + 6 t² (errorMax/2^errorExp + D t/2^(8k))`. At `t + kq` it bounds the paper's
 `errks(t)` (`thm:e2e`(2)), the spBCS error `2 √(kq/2^(8(k + e))) + 6 (t + kq)² (errk + c' (t +
 kq)/2^(8k))` (`SPBCS.knowledgeError_eq`), term by term (`Configurations.knowledgeError_le`): the
 first term `2^9/2^(4k)` bounds `2 √(kq/2^(8(k + e)))` since `kq ≤ 2^16` (`GrantedFacts.kq_le`),
 `errorMax/2^errorExp` bounds the largest round error `errk` (`GrantedFacts.error_le`), and `D`
-bounds `c'` (`GrantedFacts.digests_le`). -/
+bounds `c'` (`GrantedFacts.digests_le`). It bounds `knowledgeErrorQROM`
+(`knowledgeErrorQROM_le_atFigures`). -/
 @[config_template]
-noncomputable abbrev knowledgeErrorQROM (_F : R.GrantedFacts) (t : ℕ) : ℝ≥0∞ :=
+noncomputable abbrev knowledgeErrorQROMAtFigures (_F : R.GrantedFacts) (t : ℕ) : ℝ≥0∞ :=
   2 ^ 9 / 2 ^ (4 * R.k) + 6 * (t : ℝ≥0∞) ^ 2 *
     ((((R.errorMax : ℝ≥0) / 2 ^ R.errorExp : ℝ≥0) : ℝ≥0∞) + ((R.D * t : ℕ) : ℝ≥0∞) / 2 ^ (8 * R.k))
 
@@ -365,18 +393,57 @@ noncomputable abbrev knowledgeErrorROM (_F : R.GrantedFacts) (t : ℕ) : ℝ≥0
   (t : ℝ≥0∞) * ((((R.errorMax : ℝ≥0) / 2 ^ R.errorExp : ℝ≥0) : ℝ≥0∞) +
     ((R.D * t : ℕ) : ℝ≥0∞) / 2 ^ (8 * R.k))
 
-/-- **The quantum extraction error against `t`-query adversaries** (paper `thm:e2e`(2), `errks(t)`):
-the quantum knowledge error at the adversary's and the verifier's queries, `t + kq`. -/
+/-- **The paper's quantum extraction error against `t`-query adversaries** (paper `thm:e2e`(2),
+`errks(t)`): the quantum knowledge error at the configuration's figures at the adversary's and
+the verifier's queries, `t + kq`. The extraction error of the knowledge-soundness theorems is at
+most it (`extractionErrorQROM_le_atFigures`). -/
 @[config_template]
-noncomputable abbrev extractionErrorQROM (t : ℕ) : ℝ≥0∞ :=
-  knowledgeErrorQROM R F (t + R.kq)
+noncomputable abbrev extractionErrorQROMAtFigures (t : ℕ) : ℝ≥0∞ :=
+  knowledgeErrorQROMAtFigures R F (t + R.kq)
 
-/-- **The classical extraction error against `t`-query adversaries** (paper `thm:e2e`(2),
+/-- **The quantum extraction error of a proof system against `t`-query adversaries**: the quantum
+knowledge error of the proof system at the adversary's and the verifier's queries, `t + kq`, at
+most the paper's `errks(t)` (`extractionErrorQROM_le_atFigures`). -/
+@[config_template]
+noncomputable abbrev extractionErrorQROM (C : R.ProofSystem) (t : ℕ) : ℝ≥0∞ :=
+  knowledgeErrorQROM R F C (t + R.kq)
+
+/-- **The paper's classical extraction error against `t`-query adversaries** (paper `thm:e2e`(2),
 `errks^C(t)`): the classical knowledge error at the adversary's and the verifier's queries,
-`t + kq`. -/
+`t + kq`. The typed extraction error of the knowledge-soundness theorems is at most it
+(`extractionErrorROMTyped_le`). -/
 @[config_template]
 noncomputable abbrev extractionErrorROM (t : ℕ) : ℝ≥0∞ :=
   knowledgeErrorROM R F (t + R.kq)
+
+/-- **The classical knowledge error with the round errors and the collisions charged by entry
+class, at a bound `σ / 2^errorExp` on the sum of the round errors**
+(`SPBCS.knowledgeErrorROMTyped` at the digests' `k` bytes, the verifier's `kq` queries, the `m`
+domains of the proof system's IOP, which are its Merkle trees, and the largest round error
+`errorMax / 2^errorExp`): `t · errorMax/2^errorExp + σ/2^errorExp + errorMax/2^errorExp +
+(t + kq)(max 2 m + 1)(t + kq)/2^(8k)` against `t`-query adversaries. -/
+@[config_template]
+noncomputable abbrev knowledgeErrorROMSum (_F : R.GrantedFacts) (C : R.ProofSystem) (σ t : ℕ) :
+    ℝ≥0∞ :=
+  SPBCS.knowledgeErrorROMTyped R.k t R.kq (R.iop C).m ((R.errorMax : ℝ≥0) / 2 ^ R.errorExp)
+    ((σ : ℝ≥0) / 2 ^ R.errorExp)
+
+/-- **The typed classical extraction error against `t`-query adversaries**, at most the paper's
+`errks^C(t)` (`thm:e2e`(2)), with the round errors and the collisions charged by entry class:
+`knowledgeErrorROMSum` at the configuration's bound `errorSum` on the sum of the round errors,
+that is `t · errorMax/2^errorExp + errorSum/2^errorExp + errorMax/2^errorExp +
+(t + kq)(max 2 m + 1)(t + kq)/2^(8k)` with `m` the domains of the proof system's IOP. It is at most
+`extractionErrorROM t` (`extractionErrorROMTyped_le`). -/
+@[config_template]
+noncomputable abbrev extractionErrorROMTyped (C : R.ProofSystem) (t : ℕ) : ℝ≥0∞ :=
+  knowledgeErrorROMSum R F C R.errorSum t
+
+/-- **The typed extraction error is monotone in the adversary's queries**
+(`SPBCS.knowledgeErrorROMTyped_mono_queries`). -/
+@[config_template]
+theorem extractionErrorROMTyped_mono (C : R.ProofSystem) {t t' : ℕ} (ht : t ≤ t') :
+    extractionErrorROMTyped R F C t ≤ extractionErrorROMTyped R F C t' :=
+  SPBCS.knowledgeErrorROMTyped_mono_queries ht
 
 /-- **The bound on the overrun** (paper `errov`): `rounds / 2^chernoff` (`overrun_le`). -/
 @[config_template]
@@ -475,12 +542,51 @@ theorem overrun_le (C : R.ProofSystem) :
 theorem card_pos (C : R.ProofSystem) : Fintype.card (argument R F C).Pos = R.pos :=
   ((R.T C).card_pos (F.hb C)).trans (F.pos_eq C)
 
+/-- **A composite has a round**: the prefix's first message. -/
+theorem one_le_sum_rounds (C : R.ProofSystem) :
+    1 ≤ ∑ q : (R.iop C).shape.term.Leaf, (R.iop C).rounds q.label :=
+  (R.iop C).pos_rounds_pre.trans_le (Finset.single_le_sum
+    (f := fun q : (R.iop C).shape.term.Leaf => (R.iop C).rounds q.label)
+    (fun _ _ => Nat.zero_le _) (Finset.mem_univ (R.iop C).preLeafT))
+
 /-- **The quantum knowledge error is monotone in the query count.** -/
 @[config_template]
-theorem knowledgeErrorQROM_mono {t t' : ℕ} (h : t ≤ t') :
-    knowledgeErrorQROM R F t ≤ knowledgeErrorQROM R F t' := by
+theorem knowledgeErrorQROM_mono (C : R.ProofSystem) {t t' : ℕ} (h : t ≤ t') :
+    knowledgeErrorQROM R F C t ≤ knowledgeErrorQROM R F C t' := by
   unfold knowledgeErrorQROM
   gcongr
+
+/-- **The quantum knowledge error at the figures is monotone in the query count.** -/
+@[config_template]
+theorem knowledgeErrorQROMAtFigures_mono {t t' : ℕ} (h : t ≤ t') :
+    knowledgeErrorQROMAtFigures R F t ≤ knowledgeErrorQROMAtFigures R F t' := by
+  unfold knowledgeErrorQROMAtFigures
+  gcongr
+
+include F in
+/-- **The domains bound the collision coefficient by the figure**: `max 2 m + 1 ≤ D`, the `m`
+domains among the `rounds · m` digests of a chain input (`GrantedFacts.digests_le`). -/
+theorem max_domains_add_one_le (C : R.ProofSystem) : max 2 (R.iop C).m + 1 ≤ R.D := by
+  have h1 := F.digests_le C
+  have hm : (R.iop C).m ≤ ProofSystemTranscript.digests (C := R.iop C) :=
+    Nat.le_mul_of_pos_left _ (one_le_sum_rounds R C)
+  omega
+
+/-- **The quantum knowledge error is at most its value at the figures**
+(`max_domains_add_one_le`). -/
+@[config_template]
+theorem knowledgeErrorQROM_le_atFigures (C : R.ProofSystem) (t : ℕ) :
+    knowledgeErrorQROM R F C t ≤ knowledgeErrorQROMAtFigures R F t := by
+  unfold knowledgeErrorQROM knowledgeErrorQROMAtFigures
+  gcongr
+  exact max_domains_add_one_le R F C
+
+/-- **The quantum extraction error is at most the paper's `errks(t)`**
+(`knowledgeErrorQROM_le_atFigures`). -/
+@[config_template]
+theorem extractionErrorQROM_le_atFigures (C : R.ProofSystem) (t : ℕ) :
+    extractionErrorQROM R F C t ≤ extractionErrorQROMAtFigures R F t :=
+  knowledgeErrorQROM_le_atFigures R F C (t + R.kq)
 
 /-- **The classical knowledge error is monotone in the query count.** -/
 @[config_template]
@@ -489,42 +595,80 @@ theorem knowledgeErrorROM_mono {t t' : ℕ} (h : t ≤ t') :
   unfold knowledgeErrorROM
   gcongr
 
+/-- **The spBCS knowledge error at the slot constant is at most the quantum knowledge error of the
+proof system** (`Configurations.knowledgeError_le` at `max 2 m + 1`, `GrantedFacts.kq_le`,
+`GrantedFacts.error_le`). -/
+theorem knowledgeError_slot_le (C : R.ProofSystem) (t : ℕ) :
+    knowledgeError (R.T C).k (fsExtraBytes + (R.T C).maxGrant) R.kq t (R.iop C).m 0
+      (maxError (R.sound C).error) ≤ knowledgeErrorQROM R F C t :=
+  (Configurations.knowledgeError_le (k := (R.T C).k) (e := fsExtraBytes + (R.T C).maxGrant)
+    (t := t) (D := max 2 (R.iop C).m + 1) F.kq_le le_rfl (F.error_le C)).trans_eq
+    (by rw [F.k_eq C])
+
 /-! ## Knowledge soundness and soundness -/
 
 /-- **Knowledge soundness of the configuration's argument at `t` quantum queries: online
 extractability** (DFMS22 Definition 3.1, p. 10, with CMS19's compressed oracle as the oracle
 simulator, `εsim = 0` and a quantum auxiliary output;
-`SPBCS.ProofSystemTranscript.knowledge`, the `knowledge` clause of
-`SPBCS.knowledgeGuarantees`) against every `t`-query adversary of `def:adversary` that makes no
-proof queries (`Quantum.QueryBoundedAdversary`) whose output is a statement, a proof and a
+`SPBCS.ProofSystemTranscript.knowledge_slot`, the `knowledge` clause of
+`SPBCS.knowledgeGuarantees` at the slot constant) against every `t`-query adversary of
+`def:adversary` that makes no proof queries (`Quantum.QueryBoundedAdversary`) whose output is a
+statement, a proof and a
 classical value in `Z`: the state of the adversary's register after measuring only its output is
 the same in the coherent extraction run as in the real run, and in the extraction run the spBCS
 verifier accepts while the database extractor at `extractor` returns no witness of the
-relation with probability at most `extractionErrorQROM t`, the quantum knowledge error at
-`t + kq` (paper `thm:e2e`(2), `errks(t)`). -/
+relation with probability at most `extractionErrorQROM C t`, the proof system's quantum knowledge
+error at `t + kq` with the collision coefficient `max 2 m + 1`, `m` the domains of its IOP
+(`SPBCS.ProofSystemTranscript.knowledge_slot`); it is at most the paper's `errks(t)` (`thm:e2e`(2),
+`extractionErrorQROM_le_atFigures`). -/
 @[config_template headline]
 theorem knowledge_soundness_qrom_at (C : R.ProofSystem) {Zo : Type} {t : ℕ}
     (𝒢 : KnowledgeAdversaryQROM R F C Zo t) :
     𝒢.OnlineExtracts (verifierQROM R F C) NARG.QROM.compressedSim R.rel
-      (extractorQROM R F C) 0 (extractionErrorQROM R F t) := by
-  have h1 := (F.knowledge C (verifierQueries_le R F C)).knowledge 𝒢
-  have h2 : _ ≤ knowledgeErrorQROM R F (t + R.kq) := (Configurations.knowledgeError_le (k := (R.T C).k)
-    (e := fsExtraBytes + (R.T C).maxGrant) (t := t + R.kq) F.kq_le (F.digests_le C)
-    (F.error_le C)).trans_eq (by rw [F.k_eq C])
-  exact h1.mono le_rfl h2
+      (extractorQROM R F C) 0 (extractionErrorQROM R F C t) :=
+  (ProofSystemTranscript.knowledge_slot (R.sound C) F.witnessMap_mem
+    (verifierQueries_le R F C) 𝒢).mono le_rfl (knowledgeError_slot_le R F C (t + R.kq))
 
 /-- **Soundness of the configuration's argument at `t` quantum queries**
-(`SPBCS.ProofSystemTranscript.soundness`, the `soundness` clause of
-`SPBCS.knowledgeGuarantees`): every `t`-query adversary of `def:adversary` that makes no proof
+(`SPBCS.ProofSystemTranscript.soundness_slot`, the `soundness` clause of
+`SPBCS.knowledgeGuarantees` at the slot constant): every `t`-query adversary of `def:adversary`
+that makes no proof
 queries outputs a statement without a witness of the relation and a proof the spBCS
-verifier accepts with probability at most `extractionErrorQROM t` (paper `thm:e2e`(2), `errks(t)`). -/
+verifier accepts with probability at most `extractionErrorQROM C t`
+(`SPBCS.ProofSystemTranscript.soundness_slot`), at most the paper's `errks(t)` (`thm:e2e`(2),
+`extractionErrorQROM_le_atFigures`). -/
 @[config_template headline]
 theorem soundness_qrom_at (C : R.ProofSystem) {t : ℕ} (𝒜 : SoundnessAdversaryQROM R F C t) :
-    𝒜.acceptsFalse (verifierQROM R F C) R.rel ≤ extractionErrorQROM R F t := by
-  have h2 : _ ≤ knowledgeErrorQROM R F (t + R.kq) := (Configurations.knowledgeError_le (k := (R.T C).k)
-    (e := fsExtraBytes + (R.T C).maxGrant) (t := t + R.kq) F.kq_le (F.digests_le C)
-    (F.error_le C)).trans_eq (by rw [F.k_eq C])
-  exact ((F.knowledge C (verifierQueries_le R F C)).soundness 𝒜).trans h2
+    𝒜.acceptsFalse (verifierQROM R F C) R.rel ≤ extractionErrorQROM R F C t :=
+  (ProofSystemTranscript.soundness_slot (R.sound C) F.witnessMap_mem
+    (verifierQueries_le R F C) 𝒜).trans (knowledgeError_slot_le R F C (t + R.kq))
+
+/-- **The typed extraction error is at most the uniform one**:
+`extractionErrorROMTyped C t ≤ extractionErrorROM t`, since `errorSum ≤ rounds · errorMax`
+(`GrantedFacts.errorSum_le_rounds`), `rounds + 1 ≤ kq` (`GrantedFacts.kq_ge`, `one_le_sum_rounds`)
+and `max 2 m + 1 ≤ D` (`GrantedFacts.digests_le`, the `m` domains among the `rounds · m` digests of
+a chain input). -/
+@[config_template]
+theorem extractionErrorROMTyped_le (C : R.ProofSystem) (t : ℕ) :
+    extractionErrorROMTyped R F C t ≤ extractionErrorROM R F t := by
+  have hr : R.rounds + 1 ≤ R.kq := by
+    have := F.kq_ge C
+    have := (one_le_sum_rounds R C).trans (F.rounds_le C)
+    omega
+  have hD : max 2 (R.iop C).m + 1 ≤ R.D := by
+    have h1 := F.digests_le C
+    have hm : (R.iop C).m ≤ ProofSystemTranscript.digests (C := R.iop C) :=
+      Nat.le_mul_of_pos_left _ (one_le_sum_rounds R C)
+    omega
+  refine knowledgeErrorROMTyped_le_mul _ _ _ _ R.D ?_ hD
+  calc (R.errorSum : ℝ≥0) / 2 ^ R.errorExp + (R.errorMax : ℝ≥0) / 2 ^ R.errorExp
+      ≤ ((R.rounds * R.errorMax : ℕ) : ℝ≥0) / 2 ^ R.errorExp +
+          (R.errorMax : ℝ≥0) / 2 ^ R.errorExp := by
+        gcongr
+        exact_mod_cast F.errorSum_le_rounds
+    _ = ((R.rounds + 1 : ℕ) : ℝ≥0) * ((R.errorMax : ℝ≥0) / 2 ^ R.errorExp) := by
+        push_cast; ring
+    _ ≤ R.kq * ((R.errorMax : ℝ≥0) / 2 ^ R.errorExp) := by gcongr
 
 /-- **Knowledge soundness of the configuration's argument in the classical random-oracle model at
 `t` queries: online extractability against the lazily sampled oracle**
@@ -534,28 +678,37 @@ theorem soundness_qrom_at (C : R.ProofSystem) {t : ℕ} (𝒜 : SoundnessAdversa
 run's law of the output and the verdict, and in it the spBCS verifier accepts while the
 database extractor at `extractor`, reading the table of the adversary's and the verifier's
 `kq` queries, returns no witness of the relation with probability at most
-`extractionErrorROM t`, the classical knowledge error at `t + kq` (paper `thm:e2e`(2), `errks^C(t)`). -/
+`extractionErrorROMTyped C t`, at most the paper's `errks^C(t)` (`thm:e2e`(2)), with the round
+errors and the collisions charged by entry class: `t · errorMax/2^errorExp + errorSum/2^errorExp +
+errorMax/2^errorExp + (t + kq)(max 2 m + 1)(t + kq)/2^(8k)`, `m` the domains of the proof system's
+IOP (`SPBCS.ProofSystemTranscript.knowledgeROM_typed`, `GrantedFacts.errorSum_le`); it is at most
+`extractionErrorROM t`, the classical knowledge error at `t + kq` (`extractionErrorROMTyped_le`). -/
 @[config_template headline]
 theorem knowledge_soundness_rom_at (C : R.ProofSystem) {Zo : Type} {t : ℕ}
     (𝒢 : KnowledgeAdversaryROM R F C Zo t) :
     𝒢.OnlineExtracts (verifierROM R F C) NARG.ROM.OracleSampler.lazy.law R.rel
-      (extractorROM R F C) 0 (extractionErrorROM R F t) := by
-  have h1 := (F.knowledge C (verifierQueries_le R F C)).knowledgeROM 𝒢
-  have h2 : _ ≤ knowledgeErrorROM R F (t + R.kq) := (Configurations.knowledgeErrorROM_le
-    (k := (R.T C).k) (t := t + R.kq) (F.digests_le C) (F.error_le C)).trans_eq (by rw [F.k_eq C])
-  exact h1.mono le_rfl h2
+      (extractorROM R F C) 0 (extractionErrorROMTyped R F C t) :=
+  (ProofSystemTranscript.knowledgeROM_typed (R.sound C) F.witnessMap_mem
+    (verifierQueries_le R F C) 𝒢).mono le_rfl
+    ((knowledgeErrorROMTyped_mono le_rfl (F.error_le C) (F.errorSum_le C)).trans_eq
+      (by rw [F.k_eq C]))
 
 /-- **Soundness of the configuration's argument in the classical random-oracle model at `t`
 queries** (`SPBCS.ProofSystemTranscript.soundnessROM`, the `soundnessROM` clause of
 `SPBCS.knowledgeGuarantees`): every classical `t`-query adversary that makes no proof queries
 outputs a statement without a witness of the relation and a proof the spBCS verifier accepts
-with probability at most `extractionErrorROM t` (paper `thm:e2e`(2), `errks^C(t)`). -/
+with probability at most `extractionErrorROMTyped C t`, at most the paper's `errks^C(t)`
+(`thm:e2e`(2)): `t · errorMax/2^errorExp + errorSum/2^errorExp + errorMax/2^errorExp +
+(t + kq)(max 2 m + 1)(t + kq)/2^(8k)` (`SPBCS.ProofSystemTranscript.soundnessROM_typed`,
+`GrantedFacts.errorSum_le`), at most the classical knowledge error at `t + kq`
+(`extractionErrorROMTyped_le`). -/
 @[config_template headline]
 theorem soundness_rom_at (C : R.ProofSystem) {t : ℕ} (𝒜 : SoundnessAdversaryROM R F C t) :
-    𝒜.acceptsFalse (verifierROM R F C) R.rel ≤ extractionErrorROM R F t := by
-  have h2 : _ ≤ knowledgeErrorROM R F (t + R.kq) := (Configurations.knowledgeErrorROM_le
-    (k := (R.T C).k) (t := t + R.kq) (F.digests_le C) (F.error_le C)).trans_eq (by rw [F.k_eq C])
-  exact ((F.knowledge C (verifierQueries_le R F C)).soundnessROM 𝒜).trans h2
+    𝒜.acceptsFalse (verifierROM R F C) R.rel ≤ extractionErrorROMTyped R F C t :=
+  (ProofSystemTranscript.soundnessROM_typed (R.sound C) F.witnessMap_mem
+    (verifierQueries_le R F C) 𝒜).trans
+    ((knowledgeErrorROMTyped_mono le_rfl (F.error_le C) (F.errorSum_le C)).trans_eq
+      (by rw [F.k_eq C]))
 
 /-- **Knowledge soundness of the configuration's argument at the quantum query cap `qQ`** (online
 extractability, DFMS22 Definition 3.1, p. 10, with CMS19's compressed oracle as the oracle
@@ -563,51 +716,48 @@ simulator and simulation error `0`): for every
 adversary of `def:adversary` that makes no proof queries, with at most `qQ` queries and an
 auxiliary output, the extraction run leaves the adversary's register in its real-run state at every
 output and verdict, and in it the spBCS verifier accepts while the database extractor returns no witness with probability at
-most `extractionErrorQROM qQ` (`knowledge_soundness_qrom_at`, `knowledgeErrorQROM_mono`). -/
+most `extractionErrorQROM C qQ` (`knowledge_soundness_qrom_at`, `knowledgeErrorQROM_mono`). -/
 @[config_template]
 theorem knowledge_soundness_qrom (C : R.ProofSystem) {Zo : Type} {t : ℕ}
     (𝒢 : KnowledgeAdversaryQROM R F C Zo t) (ht : t ≤ R.qQ) :
     𝒢.OnlineExtracts (verifierQROM R F C) NARG.QROM.compressedSim R.rel
-      (extractorQROM R F C) 0 (extractionErrorQROM R F R.qQ) :=
+      (extractorQROM R F C) 0 (extractionErrorQROM R F C R.qQ) :=
   (knowledge_soundness_qrom_at R F C 𝒢).mono le_rfl
-    (knowledgeErrorQROM_mono R F (Nat.add_le_add_right ht _))
+    (knowledgeErrorQROM_mono R F C (Nat.add_le_add_right ht _))
 
 /-- **Soundness of the configuration's argument at the quantum query cap `qQ`**: every
 adversary of `def:adversary` that makes no proof queries, with at most `qQ` queries, outputs a statement without a
 witness of the relation and an accepted proof with probability at most
-`extractionErrorQROM qQ` (`soundness_qrom_at`, `knowledgeErrorQROM_mono`). -/
+`extractionErrorQROM C qQ` (`soundness_qrom_at`, `knowledgeErrorQROM_mono`). -/
 @[config_template]
 theorem soundness_qrom (C : R.ProofSystem) {t : ℕ} (𝒜 : SoundnessAdversaryQROM R F C t)
     (ht : t ≤ R.qQ) :
-    𝒜.acceptsFalse (verifierQROM R F C) R.rel ≤ extractionErrorQROM R F R.qQ :=
-  (soundness_qrom_at R F C 𝒜).trans (knowledgeErrorQROM_mono R F (Nat.add_le_add_right ht _))
+    𝒜.acceptsFalse (verifierQROM R F C) R.rel ≤ extractionErrorQROM R F C R.qQ :=
+  (soundness_qrom_at R F C 𝒜).trans (knowledgeErrorQROM_mono R F C (Nat.add_le_add_right ht _))
 
 /-- **Knowledge soundness of the configuration's argument in the classical random-oracle model at
 the classical query cap `qR`** (online extractability against the lazily sampled oracle): for every
 classical adversary that makes no proof queries, with at most `qR` queries and an auxiliary output,
 the extraction run has the real run's law of the output and the verdict, and in it the spBCS
 verifier accepts while the database extractor returns no witness with probability at most
-`extractionErrorROM qR` (`knowledge_soundness_rom_at`,
-`knowledgeErrorROM_mono`). -/
+`extractionErrorROMTyped C qR` (`knowledge_soundness_rom_at`, `extractionErrorROMTyped_mono`). -/
 @[config_template]
 theorem knowledge_soundness_rom (C : R.ProofSystem) {Zo : Type} {t : ℕ}
     (𝒢 : KnowledgeAdversaryROM R F C Zo t) (ht : t ≤ R.qR) :
     𝒢.OnlineExtracts (verifierROM R F C) NARG.ROM.OracleSampler.lazy.law R.rel
-      (extractorROM R F C) 0 (extractionErrorROM R F R.qR) :=
-  (knowledge_soundness_rom_at R F C 𝒢).mono le_rfl
-    (knowledgeErrorROM_mono R F (Nat.add_le_add_right ht _))
+      (extractorROM R F C) 0 (extractionErrorROMTyped R F C R.qR) :=
+  (knowledge_soundness_rom_at R F C 𝒢).mono le_rfl (extractionErrorROMTyped_mono R F C ht)
 
 /-- **Soundness of the configuration's argument in the classical random-oracle model at the
 classical query cap `qR`**: every classical adversary that makes no proof queries, with at most
 `qR` queries, outputs a statement without a witness of the relation and an accepted proof with
-probability at most `extractionErrorROM qR` (`soundness_rom_at`,
-`knowledgeErrorROM_mono`). -/
+probability at most `extractionErrorROMTyped C qR` (`soundness_rom_at`,
+`extractionErrorROMTyped_mono`). -/
 @[config_template]
 theorem soundness_rom (C : R.ProofSystem) {t : ℕ} (𝒜 : SoundnessAdversaryROM R F C t)
     (ht : t ≤ R.qR) :
-    𝒜.acceptsFalse (verifierROM R F C) R.rel ≤ extractionErrorROM R F R.qR :=
-  (soundness_rom_at R F C 𝒜).trans
-    (knowledgeErrorROM_mono R F (Nat.add_le_add_right ht _))
+    𝒜.acceptsFalse (verifierROM R F C) R.rel ≤ extractionErrorROMTyped R F C R.qR :=
+  (soundness_rom_at R F C 𝒜).trans (extractionErrorROMTyped_mono R F C ht)
 
 /-! ## The honest prover -/
 
@@ -831,19 +981,28 @@ Running time: that of `simulator` (its Running time paragraph), each oracle quer
 abbrev simulatorQROM (C : R.ProofSystem) :=
   (simulator R F C).encode queryEncoding
 
-/-- **The simulation-extraction error in the QROM** (paper `thm:e2e`(5), `errse(t, Q)`): the
-spBCS error `SPBCS.simExtractionError` at the verifier's `kq` queries, the largest round error and
-`simQueries` simulator queries per proof query. -/
+/-- **The simulation-extraction error in the QROM** (paper `thm:e2e`(5), `errse(t, Q)`, at the
+collision coefficient of the flips by entry class): the spBCS knowledge error at `kq + Q q`
+appended queries and `tq + Q q + kq + Q q` queries in all, with `q = simQueries` simulator queries
+per proof query, the largest round error and the collision coefficient `max 2 m + 1`, `m` the
+domains of the proof system's IOP (`SPBCS.simulation_sound_extractability_slot`). It is at most
+`simExtractionErrorQROMAtFigures` (`simExtractionErrorQROM_le_atFigures`). -/
 @[config_template]
-noncomputable abbrev simExtractionErrorQROM (C : R.ProofSystem) :=
-  (argument R F C).simExtractionError R.kq (maxRoundError R F C) (simQueries R F C)
+noncomputable abbrev simExtractionErrorQROM (C : R.ProofSystem) : ℕ → ℕ → ℝ≥0∞ :=
+  fun tq Q => SPBCS.knowledgeError (R.T C).k (fsExtraBytes + (R.T C).maxGrant)
+    (R.kq + Q * simQueries R F C) (tq + Q * simQueries R F C + (R.kq + Q * simQueries R F C))
+    (R.iop C).m 0 (maxRoundError R F C)
 
-/-- **The simulation-extraction error in the ROM** (paper `thm:e2e`(5), `errse^C(t, Q)`): the
-spBCS error `SPBCS.simExtractionErrorROM` at the verifier's `kq` queries, the largest round error
-and `simQueries` simulator queries per proof query. -/
+/-- **The simulation-extraction error in the ROM** (paper `thm:e2e`(5), `errse^C(t, Q)`, at the
+collision coefficient of the flips by entry class): the classical knowledge error at
+`tq + Q q + kq` queries, with `q = simQueries` simulator queries per proof query, the largest round
+error and the collision coefficient `max 2 m + 1`, `m` the domains of the proof system's IOP
+(`SPBCS.weak_online_simulation_extractability_rom_slot`). It is at most
+`simExtractionErrorROMAtFigures` (`simExtractionErrorROM_le_atFigures`). -/
 @[config_template]
-noncomputable abbrev simExtractionErrorROM (C : R.ProofSystem) :=
-  (argument R F C).simExtractionErrorROM R.kq (maxRoundError R F C) (simQueries R F C)
+noncomputable abbrev simExtractionErrorROM (C : R.ProofSystem) : ℕ → ℕ → ℝ≥0∞ :=
+  fun tq Q => SPBCS.knowledgeErrorROM (R.T C).k (tq + Q * simQueries R F C + R.kq) (R.iop C).m 0
+    (maxRoundError R F C)
 
 /-- **The simulation-extraction error for tests that query the oracle**: at `tq` adversary queries,
 `tTest` test queries and `Q` proof queries, `simExtractionErrorQROM` at `tq + tTest` queries plus
@@ -855,60 +1014,69 @@ noncomputable abbrev simExtractionErrorSimOracle (C : R.ProofSystem) :=
 open Classical in
 /-- **Weak online simulation extractability of the configuration's argument in the QROM** (paper
 `thm:e2e`(5) in the QROM, the joint form of `def:bcs-se`:
-`SPBCS.ProofSystemTranscript.SimGuarantees.simOnlineExtractability` at `GrantedFacts.e2e`) against
+`SPBCS.ProofSystemTranscript.simOnlineExtractability_slot` at the configuration's soundness data,
+witness map and honest strategy) against
 query-bounded adversaries, with the counted simulator of the configuration's simulator (`simulator`) and the
 database extractor at `extractor`, at the verifier's `kq` queries: in the extraction run the
 joint state of the adversary's output and its auxiliary output is as in the simulated run, and an
 accepted proof of a fresh statement from which the extractor obtains no witness of the relation
-has probability at most `simExtractionErrorQROM t Q`, the spBCS error
-`simExtractionError kq errk q_S t Q` at the largest round error `maxRoundError` and `simQueries`
-simulator queries per proof query (`SPBCS.WeakOnlineSimulationExtractable`). -/
+has probability at most `simExtractionErrorQROM C t Q`, the spBCS knowledge error at the largest
+round error `maxRoundError`, `simQueries` simulator queries per proof query and the collision
+coefficient `max 2 m + 1` (`SPBCS.WeakOnlineSimulationExtractable`); it is at most the paper's
+`errse(t, Q)` at the configuration's figures (`simExtractionErrorQROM_le_atFigures`). -/
 @[config_template headline]
 theorem weak_online_simulation_extractability_qrom (C : R.ProofSystem) :
     (argument R F C).WeakOnlineSimulationExtractable (proofBound R F)
       (queries R F C) R.rel (extractor R F C) R.kq
       (simulatorQROM R F C) (simExtractionErrorQROM R F C) := by
   rw [extractor_eq R F C]
-  exact (F.e2e C R.strategy (verifierQueries_le R F C) (proofFormat R F C)).simOnlineExtractability
+  exact ProofSystemTranscript.simOnlineExtractability_slot (R.sound C) F.witnessMap_mem
+    (verifierQueries_le R F C) (proofFormat R F C) (R.honest C R.strategy)
 
 open Classical in
 /-- **Simulation-sound extractability of the configuration's argument in the QROM** (paper
-`thm:e2e`(5) in the QROM: `SPBCS.ProofSystemTranscript.SimGuarantees.simExtractability` at
-`GrantedFacts.e2e`; Unruh 2017, Definition 14, p. 21, weak variant, for residual-state tests that
+`thm:e2e`(5) in the QROM: `SPBCS.ProofSystemTranscript.simExtractability_slot` at the
+configuration's soundness data, witness map and honest strategy; Unruh 2017, Definition 14, p. 21,
+weak variant, for residual-state tests that
 make no oracle queries, with straight-line extraction and freshness in both events) against
 query-bounded adversaries, with the counted simulator of the configuration's simulator (`simulator`) and the
-database extractor at `extractor`, at the verifier's `kq` queries. -/
+database extractor at `extractor`, at the verifier's `kq` queries, with the error
+`simExtractionErrorQROM C` (`simExtractionErrorQROM_le_atFigures`). -/
 @[config_template headline]
 theorem unruh_simulation_extractability_qrom (C : R.ProofSystem) :
     (argument R F C).SimulationSoundExtractableFresh (proofBound R F)
       (queries R F C) R.rel (extractor R F C) R.kq
       (simulatorQROM R F C) (simExtractionErrorQROM R F C) := by
   rw [extractor_eq R F C]
-  exact (F.e2e C R.strategy (verifierQueries_le R F C) (proofFormat R F C)).simExtractability
+  exact ProofSystemTranscript.simExtractability_slot (R.sound C) F.witnessMap_mem
+    (verifierQueries_le R F C) (proofFormat R F C) (R.honest C R.strategy)
 
 /-- **Weak online simulation extractability of the configuration's argument in the classical
 random-oracle model** (paper `thm:e2e`(5) in the ROM, the joint form of `def:bcs-se`:
-`SPBCS.ProofSystemTranscript.SimGuarantees.simOnlineExtractabilityROM` at `GrantedFacts.e2e`)
+`SPBCS.ProofSystemTranscript.simExtractabilityROM_slot` at the configuration's soundness data,
+witness map and honest strategy)
 against query-bounded classical adversaries with an auxiliary output, with the classical simulator
 program of the configuration's simulator (`simulator`) on uniform coins and the database extractor at `extractor`
 on the table of the lazily sampled execution, at the verifier's `kq` queries: the extractor's
 execution has the simulated execution's law of the claim, the auxiliary output, the statements
 of the proof queries and the verdict (oracle simulation error `0`), and wins without extraction with
-probability at most `simExtractionErrorROM tq Q`, the spBCS error
-`simExtractionErrorROM kq errk q_S tq Q` at the largest round error `maxRoundError` and
-`simQueries` simulator queries per proof query. -/
+probability at most `simExtractionErrorROM C tq Q`, the classical knowledge error at the largest
+round error `maxRoundError`, `simQueries` simulator queries per proof query and the collision
+coefficient `max 2 m + 1`; it is at most the paper's `errse^C(t, Q)` at the configuration's figures
+(`simExtractionErrorROM_le_atFigures`). -/
 @[config_template headline]
 theorem weak_online_simulation_extractability_rom (C : R.ProofSystem) :
     (argument R F C).WeakOnlineSimulationExtractableROM (proofBound R F)
       (queries R F C) R.rel (extractor R F C) R.kq (simulator R F C).prog
       (simQueries R F C) (simExtractionErrorROM R F C) := by
   rw [extractor_eq R F C]
-  exact (F.e2e C R.strategy (verifierQueries_le R F C) (proofFormat R F C)).simOnlineExtractabilityROM
+  exact ProofSystemTranscript.simExtractabilityROM_slot (R.sound C) F.witnessMap_mem
+    (verifierQueries_le R F C) (proofFormat R F C) (R.honest C R.strategy)
 
 open Classical in
 /-- **Simulation-sound extractability of the configuration's argument for tests that query the
-oracle** (`SPBCS.ProofSystemTranscript.SimGuarantees.simExtractabilitySimOracle` at
-`GrantedFacts.e2e`; Unruh
+oracle** (`SPBCS.ProofSystemTranscript.simExtractabilitySimOracle_slot` at the configuration's
+soundness data, witness map and honest strategy; Unruh
 2017, Definition 14, p. 21, weak variant, eq. (6) with the test in Extract′ answered by the
 simulated oracle after extraction) against query-bounded adversaries, with the counted simulator of
 the configuration's simulator (`simulator`) and the targeted extractor at `extractor`, at the verifier's
@@ -922,7 +1090,8 @@ theorem unruh_simulation_extractability_sim_oracle_qrom (C : R.ProofSystem) :
       (queries R F C) R.rel (extractor R F C) R.kq
       (simulatorQROM R F C) (simExtractionErrorSimOracle R F C) := by
   rw [extractor_eq R F C]
-  exact (F.e2e C R.strategy (verifierQueries_le R F C) (proofFormat R F C)).simExtractabilitySimOracle
+  exact ProofSystemTranscript.simExtractabilitySimOracle_slot (R.sound C) F.witnessMap_mem
+    (verifierQueries_le R F C) (proofFormat R F C) (R.honest C R.strategy)
 
 /-- **The bound on the simulator's queries per proof query**: `2 pos + kq`, at least `simQueries`
 (`simQueries_le`). -/
@@ -966,7 +1135,7 @@ noncomputable abbrev simExtractionErrorROMAtFigures (_F : R.GrantedFacts) (tq Q 
 
 /-- **The simulation-extraction error in the QROM is at most its value at the figures**:
 `simQueries_le` bounds the simulator's queries, `GrantedFacts.error_le` the round error,
-`GrantedFacts.digests_le` the digests and `Out.two_pow_le_card` the output space. -/
+`max_domains_add_one_le` the collision coefficient and `Out.two_pow_le_card` the output space. -/
 @[config_template]
 theorem simExtractionErrorQROM_le_atFigures (C : R.ProofSystem) (tq Q : ℕ) :
     simExtractionErrorQROM R F C tq Q ≤ simExtractionErrorQROMAtFigures R F tq Q := by
@@ -974,11 +1143,10 @@ theorem simExtractionErrorQROM_le_atFigures (C : R.ProofSystem) (tq Q : ℕ) :
   have hkq : R.kq + Q * simQueries R F C ≤ R.kq + Q * simQueriesBound R F := by gcongr
   have hT : tq + Q * simQueries R F C + (R.kq + Q * simQueries R F C) ≤
       tq + Q * simQueriesBound R F + (R.kq + Q * simQueriesBound R F) := by gcongr
-  have hD := F.digests_le C
+  have hD : max 2 (R.iop C).m + 0 + 1 ≤ R.D := max_domains_add_one_le R F C
   have hκ := F.error_le C
   have hcard := Out.two_pow_le_card (R.T C).k (fsExtraBytes + (R.T C).maxGrant)
-  unfold simExtractionErrorQROM simExtractionErrorQROMAtFigures SPBCS.simExtractionError
-    knowledgeError
+  unfold simExtractionErrorQROM simExtractionErrorQROMAtFigures SPBCS.knowledgeError
   rw [← F.k_eq C]
   refine add_le_add ?_ (mul_le_mul' ?_ (add_le_add (by exact_mod_cast hκ) ?_))
   · have hc : ((2 ^ (8 * (R.T C).k) : ℕ) : ℝ≥0∞) ≤
@@ -991,14 +1159,16 @@ theorem simExtractionErrorQROM_le_atFigures (C : R.ProofSystem) (tq Q : ℕ) :
 
 /-- **The simulation-extraction error in the ROM is at most its value at the figures**:
 `simQueries_le` bounds the simulator's queries (`knowledgeErrorROM_mono`), and
-`Configurations.knowledgeErrorROM_le` the round error and the digests. -/
+`Configurations.knowledgeErrorROM_le` the round error and the collision coefficient
+(`max_domains_add_one_le`). -/
 @[config_template]
 theorem simExtractionErrorROM_le_atFigures (C : R.ProofSystem) (tq Q : ℕ) :
     simExtractionErrorROM R F C tq Q ≤ simExtractionErrorROMAtFigures R F tq Q := by
   have hq := simQueries_le R F C
   have hT : tq + Q * simQueries R F C + R.kq ≤ tq + Q * simQueriesBound R F + R.kq := by gcongr
   refine ((Configurations.knowledgeErrorROM_le (k := (R.T C).k)
-    (t := tq + Q * simQueries R F C + R.kq) (F.digests_le C) (F.error_le C)).trans_eq
+    (t := tq + Q * simQueries R F C + R.kq) (D := R.D) (max_domains_add_one_le R F C)
+    (F.error_le C)).trans_eq
     (by rw [F.k_eq C])).trans (knowledgeErrorROM_mono R F hT)
 
 open Classical in

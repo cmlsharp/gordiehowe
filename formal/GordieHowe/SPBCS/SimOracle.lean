@@ -648,7 +648,9 @@ theorem instabPart_extractLabelR_le (c : SPBCS.Ctrl (A.withTest T).toTPKindAlg P
 variable {A T E} {C : Type} [Fintype C] [DecidableEq (SaltedCoins (FiatShamirSalt kS) C)]
   (fx : X' → X)
 
-/-- **Prove against Extract′ at one adversary and one test**: the probability that `A` wins Prove and its test,
+/-- **At an instability bound** (`hI`, as in `dbProb_bad_union_le_of_queryCount_of`):
+**Prove against Extract′ at one adversary and one test**: the probability that `A` wins Prove and
+its test,
 run on the residual state with the final oracle, accepts (`winTestProb` of `A^Π` at the test's
 outcome) is at most the probability that `E_T` returns a witness in Extract′ with the test
 accepting (`extractQTestProb`), plus the knowledge error at `kq + Q · q` appended queries and
@@ -662,10 +664,12 @@ state (`simLaw_le_ofReal_foldedProb`, `simState_expandAt_eq_zero`), and the swap
 (`abs_foldedProb_sub_extractAtProb_le` with `instabPart_extractLabelR_le`). Hypotheses: `hkq`,
 the verifier's query bound; `hrbr`, causal round-by-round knowledge soundness of the composite;
 `hA`, the simulator program assigns only at the keys of its chain inputs. -/
-theorem winTestProb_withTest_le
+theorem winTestProb_withTest_le_of
     (hkq : M.QueriesAtMost Qs kq)
     {rel : Set (X × Wit)} {St : CausalStateFn P t X} {ε : ChIdx P t → ℝ≥0}
-    (hrbr : CausalRBRKnowledgeSound rel V E St ε)
+    (hrbr : CausalRBRKnowledgeSound rel V E St ε) (c cP : ℕ)
+    (hI : ∀ b, condInstab (M.bad rel E St) digestCollisionᶜ b ≤
+      maxError ε + (((max 2 c + cP) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k))
     {Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
       (SaltedCoins (FiatShamirSalt kS) C)}
     (hA : M.SimAssignsAtKeys B Psim fx) :
@@ -673,7 +677,7 @@ theorem winTestProb_withTest_le
       extractQTestProb A T Psim Q Qs kq E rel +
       knowledgeError k e (kq + Q * Psim.q)
         (SPBCS.branchQueries (A.withTest T) Psim Q + (kq + Q * Psim.q))
-        M.senc.digestsPerInput Mg.nJ (maxError ε) +
+        c cP (maxError ε) +
       M.swapError T.queries := by
   classical
   set ee := outEquiv k e
@@ -753,7 +757,7 @@ theorem winTestProb_withTest_le
     trivial
   have hcount := QueryCount.expandAt K ee ((ctrlExpansion A'.toTPKindAlg Psim Q Qs)) s κ
     (SPBCS.pureQueryCount A T Psim Q) hs hpost
-  have hbad := dbProb_bad_union_le_of_queryCount (M := M) hrbr 𝒜E hcount
+  have hbad := dbProb_bad_union_le_of_queryCount_of (M := M) c cP hI 𝒜E hcount
   -- the event at the end of the simulated run is the folded event
   have hfold : simLaw ee 𝒜E {p | R' p.1 p.2} ≤ ENNReal.ofReal (foldedProb ee ((ctrlExpansion A'.toTPKindAlg Psim Q Qs))
       K 𝒜 s κ (extractLabelR A T Psim Q Qs kq E) (testAccepts A T Psim Q Qs kq) (labelSucceeds A T Psim Q Qs kq E rel)) := by
@@ -800,7 +804,7 @@ theorem winTestProb_withTest_le
       ≤ winS ee 𝒜E G + 2 * esqrt (K / Fintype.card (Out k e)) := hexpand.trans hsimulation
     _ ≤ extractQTestProb A T Psim Q Qs kq E rel + M.swapError T.queries +
           6 * ((SPBCS.branchQueries A' Psim Q + K : ℕ) : ℝ≥0∞) ^ 2 *
-            ((maxError ε : ℝ≥0∞) + (((max 2 M.senc.digestsPerInput + Mg.nJ + 1) *
+            ((maxError ε : ℝ≥0∞) + (((max 2 c + cP + 1) *
               (SPBCS.branchQueries A' Psim Q + K) : ℕ) : ℝ≥0∞) / 2 ^ (8 * k)) +
           2 * esqrt (K / Fintype.card (Out k e)) := by
         gcongr
@@ -808,6 +812,36 @@ theorem winTestProb_withTest_le
     _ = _ := by
         rw [knowledgeError]
         ring
+
+/-- **Prove against Extract′ at one adversary and one test**: the probability that `A` wins Prove
+and its test,
+run on the residual state with the final oracle, accepts (`winTestProb` of `A^Π` at the test's
+outcome) is at most the probability that `E_T` returns a witness in Extract′ with the test
+accepting (`extractQTestProb`), plus the knowledge error at `kq + Q · q` appended queries and
+`b + kq + Q · q` queries in all (`b = branchQueries` of `A^Π`, its per-branch query count with the
+simulation challenger, which includes the test's queries), plus
+the swap error at `T.queries`. The chain: `winO_expandAt` with `expand_mem_simExtGame`,
+`oracle_sim_card`, the cover with `E_T` (`cover_simExtGame_targeted`),
+`dbProb_bad_union_le_of_queryCount` at `QueryCount.expandAt`,
+the event at the end of the simulated run bounded by `foldedProb` on the support of the simulated
+state (`simLaw_le_ofReal_foldedProb`, `simState_expandAt_eq_zero`), and the swap
+(`abs_foldedProb_sub_extractAtProb_le` with `instabPart_extractLabelR_le`). Hypotheses: `hkq`,
+the verifier's query bound; `hrbr`, causal round-by-round knowledge soundness of the composite;
+`hA`, the simulator program assigns only at the keys of its chain inputs. -/
+theorem winTestProb_withTest_le
+    (hkq : M.QueriesAtMost Qs kq)
+    {rel : Set (X × Wit)} {St : CausalStateFn P t X} {ε : ChIdx P t → ℝ≥0}
+    (hrbr : CausalRBRKnowledgeSound rel V E St ε)
+    {Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
+      (SaltedCoins (FiatShamirSalt kS) C)}
+    (hA : M.SimAssignsAtKeys B Psim fx) :
+    winTestProb Qs (A.withTest T) Psim Q fx (fun w => T.ok w.1) ≤
+      extractQTestProb A T Psim Q Qs kq E rel +
+      knowledgeError k e (kq + Q * Psim.q)
+        (SPBCS.branchQueries (A.withTest T) Psim Q + (kq + Q * Psim.q))
+        M.senc.digestsPerInput Mg.nJ (maxError ε) +
+      M.swapError T.queries :=
+  winTestProb_withTest_le_of Q Qs kq fx hkq hrbr _ _ (fun _ => M.condInstab_bad_le rel E St hrbr) hA
 
 end SimOracle
 
@@ -863,6 +897,40 @@ def SimulationSoundExtractableSimOracle [DecidableEq X] {Wit : Type} (rel : Set 
 variable {C : Type} [Fintype C] [DecidableEq (SaltedCoins (FiatShamirSalt kS) C)]
 
 /-- **Simulation-sound extractability with the test answered by the simulated oracle, for the
+spBCS compiler over the game's adversaries** (proof-internal), at an instability bound `hI` (as in
+`dbProb_bad_union_le_of_queryCount_of`): the bound of
+`simulation_sound_extractability_sim_oracle_of` for every adversary of the game. -/
+theorem simulation_sound_extractability_sim_oracle_game_of [DecidableEq X] {kq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {Wit : Type}
+    {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
+    {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε) (c cP : ℕ)
+    (hI : ∀ b, condInstab (M.bad rel E St) digestCollisionᶜ b ≤
+      maxError ε + (((max 2 c + cP) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k))
+    (Sim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X (M.Response B)
+      (SaltedCoins (FiatShamirSalt kS) C)) (hA : M.SimAssignsAtKeys B Sim id) :
+    M.SimulationSoundExtractableSimOracleGame B Qs rel E kq Sim
+      fun tq tTest Q => knowledgeError k e (kq + Q * Sim.q)
+        (tq + tTest + Q * Sim.q + (kq + Q * Sim.q)) c cP (maxError ε) + M.swapError tTest := by
+  intro X' _ _ fx tq tTest Q 𝒜 T
+  set Psim := Sim.comap fx
+  have hq : Psim.q = Sim.q := rfl
+  rw [← hq]
+  beta_reduce
+  refine SPBCS.SimExtractionAdversary.tsum_le_tsum_add (𝒜.withTest T) fun a => ?_
+  refine (winTestProb_withTest_le_of Q Qs kq fx hkq hrbr c cP hI (hA.comap fx)).trans ?_
+  rw [add_assoc]
+  refine add_le_add le_rfl (add_le_add ?_ (M.swapError_mono (T.queries_le a)))
+  unfold knowledgeError
+  set B' := (𝒜.alg a).withTest (T.test a)
+  have h2 : B'.width * (B'.budget + B'.post) ≤ tq + tTest := (𝒜.withTest T).queries_le a
+  have hb : SPBCS.branchQueries B' Psim Q + (kq + Q * Psim.q) ≤
+      tq + tTest + Q * Psim.q + (kq + Q * Psim.q) := by
+    change B'.width * B'.budget + Q * Psim.q + B'.width * B'.post + (kq + Q * Psim.q) ≤
+      tq + tTest + Q * Psim.q + (kq + Q * Psim.q)
+    nlinarith
+  gcongr
+
+/-- **Simulation-sound extractability with the test answered by the simulated oracle, for the
 spBCS compiler over the game's adversaries** (proof-internal): the
 bound of `simulation_sound_extractability_sim_oracle` for every adversary of the game. -/
 theorem simulation_sound_extractability_sim_oracle_game [DecidableEq X] {kq : ℕ}
@@ -873,25 +941,9 @@ theorem simulation_sound_extractability_sim_oracle_game [DecidableEq X] {kq : �
       (SaltedCoins (FiatShamirSalt kS) C)) (hA : M.SimAssignsAtKeys B Sim id) :
     M.SimulationSoundExtractableSimOracleGame B Qs rel E kq Sim
       fun tq tTest Q => M.simExtractionError kq (maxError ε) Sim.q (tq + tTest) Q +
-        M.swapError tTest := by
-  intro X' _ _ fx tq tTest Q 𝒜 T
-  set Psim := Sim.comap fx
-  have hq : Psim.q = Sim.q := rfl
-  rw [← hq]
-  beta_reduce
-  refine SPBCS.SimExtractionAdversary.tsum_le_tsum_add (𝒜.withTest T) fun a => ?_
-  refine (winTestProb_withTest_le Q Qs kq fx hkq hrbr (hA.comap fx)).trans ?_
-  rw [add_assoc]
-  refine add_le_add le_rfl (add_le_add ?_ (M.swapError_mono (T.queries_le a)))
-  unfold simExtractionError knowledgeError
-  set B' := (𝒜.alg a).withTest (T.test a)
-  have h2 : B'.width * (B'.budget + B'.post) ≤ tq + tTest := (𝒜.withTest T).queries_le a
-  have hb : SPBCS.branchQueries B' Psim Q + (kq + Q * Psim.q) ≤
-      tq + tTest + Q * Psim.q + (kq + Q * Psim.q) := by
-    change B'.width * B'.budget + Q * Psim.q + B'.width * B'.post + (kq + Q * Psim.q) ≤
-      tq + tTest + Q * Psim.q + (kq + Q * Psim.q)
-    nlinarith
-  gcongr
+        M.swapError tTest :=
+  simulation_sound_extractability_sim_oracle_game_of Qs hkq hrbr _ _
+    (fun _ => M.condInstab_bad_le rel E St hrbr) Sim hA
 
 /-- **Weak simulation-sound extractability of the spBCS compiler for tests that query the
 oracle** (Unruh 2017, Definition 14, p. 21, weak variant, eq. (6) with `d = 1`, `p = 1`,
@@ -920,6 +972,40 @@ theorem simulation_sound_extractability_sim_oracle [DecidableEq X] {kq : ℕ}
   fun X' _ _ fx tq tTest Q 𝒜 T =>
     simulation_sound_extractability_sim_oracle_game Qs hkq hrbr Sim hA X' fx tq tTest Q
       (𝒜.toSimExtraction Q) T
+
+/-- **Simulation-sound extractability for tests that query the oracle at an instability bound**
+(`simulation_sound_extractability_sim_oracle` with `hI` as in
+`dbProb_bad_union_le_of_queryCount_of`). -/
+theorem simulation_sound_extractability_sim_oracle_of [DecidableEq X] {kq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {Wit : Type}
+    {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
+    {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε) (c cP : ℕ)
+    (hI : ∀ b, condInstab (M.bad rel E St) digestCollisionᶜ b ≤
+      maxError ε + (((max 2 c + cP) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k))
+    (Sim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X (M.Response B)
+      (SaltedCoins (FiatShamirSalt kS) C)) (hA : M.SimAssignsAtKeys B Sim id) :
+    M.SimulationSoundExtractableSimOracle B Qs rel E kq Sim
+      fun tq tTest Q => knowledgeError k e (kq + Q * Sim.q)
+        (tq + tTest + Q * Sim.q + (kq + Q * Sim.q)) c cP (maxError ε) + M.swapError tTest :=
+  fun X' _ _ fx tq tTest Q 𝒜 T =>
+    simulation_sound_extractability_sim_oracle_game_of Qs hkq hrbr c cP hI Sim hA X' fx tq tTest Q
+      (𝒜.toSimExtraction Q) T
+
+/-- **Simulation-sound extractability for tests that query the oracle at the slot constant**
+(`simulation_sound_extractability_sim_oracle_of` at `condInstab_bad_le_slot`): the collision
+coefficient `max 2 T + 1`, `T` the Merkle trees. -/
+theorem simulation_sound_extractability_sim_oracle_slot [DecidableEq X] {kq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {Wit : Type}
+    {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
+    {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε)
+    (Sim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X (M.Response B)
+      (SaltedCoins (FiatShamirSalt kS) C)) (hA : M.SimAssignsAtKeys B Sim id) :
+    M.SimulationSoundExtractableSimOracle B Qs rel E kq Sim
+      fun tq tTest Q => knowledgeError k e (kq + Q * Sim.q)
+        (tq + tTest + Q * Sim.q + (kq + Q * Sim.q)) (Fintype.card M.TreeSig) 0 (maxError ε) +
+          M.swapError tTest :=
+  simulation_sound_extractability_sim_oracle_of Qs hkq hrbr _ 0 (fun b => by
+    simpa only [Nat.add_zero] using M.condInstab_bad_le_slot rel E St hrbr (tq := b)) Sim hA
 
 end Notion
 

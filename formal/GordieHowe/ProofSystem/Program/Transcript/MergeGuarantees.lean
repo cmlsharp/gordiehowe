@@ -321,6 +321,37 @@ theorem simOnlineExtractability [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) 
     (T.setting kS hb).encoder (T.setting kS hb).viewEncoder hf, ← C.card_site]
   exact h
 
+open Classical in
+/-- **Weak online simulation extractability at the setting with merges in the QROM at the slot
+constant** (`SPBCS.weak_online_simulation_extractability_qrom_slot` at the budget `kq`): as
+`simOnlineExtractability`, at the knowledge error with the collision coefficient `max 2 m + 1`,
+`m = C.m` the number of domains (`card_treeSig_eq`). -/
+theorem simOnlineExtractability_slot [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) {W' : Type}
+    {rel' : Set (Stmt × W')} {g : Stmt → W → W'} (hg : ∀ x w, (x, w) ∈ rel → (x, g x w) ∈ rel')
+    {kq : ℕ} (hkq : T.QueryBudget kS hb kq) {pB : ℕ} (hf : T.ProofFormat kS hb pB) {I' : Type}
+    {relI : Set (Stmt × I')} {SD : C.SimData} (Hc : C.Honest SD I' relI) :
+    (T.setting kS hb).model.WeakOnlineSimulationExtractable pB
+      (T.setting kS hb).queries rel' (C.extractor.mapWit g) kq
+      ((T.simulator kS hb hf SD).encode queryEncoding) fun tq Q =>
+        knowledgeError T.k (Configurations.fsExtraBytes + T.maxGrant)
+          (kq + Q * T.simQueries kS hb)
+          (tq + Q * T.simQueries kS hb + (kq + Q * T.simQueries kS hb))
+          C.m 0 (maxError Sd.error) := by
+  have hk : 0 < (T.setting kS hb).k := hb.k_pos
+  have h := SPBCS.weak_online_simulation_extractability_qrom_slot (M := (T.setting kS hb).model)
+    (B := pB) (T.setting kS hb).queries hkq (Sd.causal_rbr.mapWit hg)
+    ((T.setting kS hb).model.niJointSimulatorProg (T.setting kS hb).layout
+      (T.setting kS hb).viewEncoder.toViewRead pB id (RealizedProgram.ProofSystem.IOP.simulator SD)
+      (T.preimages kS hb))
+    (SPBCS.simAssignsAtKeys_niJointSimulatorProg hk (T.setting kS hb).layout
+      (T.setting kS hb).viewEncoder pB id (RealizedProgram.ProofSystem.IOP.simulator SD)
+      (T.preimages kS hb))
+  rw [card_treeSig_eq T kS hb] at h
+  unfold simQueries
+  rw [simulator, (T.setting kS hb).model.encode_niSimulator (T.setting kS hb).layout
+    (T.setting kS hb).encoder (T.setting kS hb).viewEncoder hf, ← C.card_site]
+  exact h
+
 /-- **The simulation-extraction guarantees at the setting with merges** (`SimGuarantees`) for the
 soundness data `Sd`, the witness map `g` into `rel'` (`hg`), the query budget `kq` (`hkq`) and the
 simulator of every honest prover `Hc`: `simOnlineExtractability`, `simExtractabilityROM`,

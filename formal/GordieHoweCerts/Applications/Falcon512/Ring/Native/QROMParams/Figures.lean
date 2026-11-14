@@ -20,7 +20,8 @@ Zero knowledge: for every `t ≥ 1` hash queries and `Q ≤ proofQueryCap = 2^64
 
 Knowledge soundness: for every `t ≥ 1` hash queries, the quantum knowledge error of
 `knowledge_soundness_qrom_at` and `soundness_qrom_at` against `t`-query adversaries,
-`knowledgeErrorQROM (t + kq)`, satisfies `min(1, err) ≤ t · 2^-λ`. The error is evaluated at `t +
+`extractionErrorQROM t`, at most `knowledgeErrorQROMAtFigures (t + kq)`, satisfies `min(1, err) ≤ t
+· 2^-λ`. The error is evaluated at `t +
 kq`, the adversary's and the verifier's queries, as in the paper's `errks(t)` and in
 `analysis/eval_params.py`.
 
@@ -70,13 +71,15 @@ theorem knowledgeBudgetQROM_le (G : Falcon512.Signer 32) :
     (M := 17) (E := 121) (e := 11690) (by norm_num) (by norm_num) (by decide +kernel)
 
 /-- **The bit security of knowledge soundness of the native Falcon-512 ring signature at the QROM
-parameters**: for every `t ≥ 1` hash queries, the quantum knowledge error of
-`knowledge_soundness_qrom_at` and `soundness_qrom_at` against `t`-query adversaries, evaluated at `t
+parameters**: for every `t ≥ 1` hash queries, the extraction error `extractionErrorQROM` of
+`knowledge_soundness_qrom_at` and `soundness_qrom_at` against `t`-query adversaries, at most the
+quantum knowledge error at the figures (`extractionErrorQROM_le_atFigures`) evaluated at `t
 + kq` as in the paper's `errks(t)` and `analysis/eval_params.py`, satisfies `min(1, err) ≤ t ·
 2^-116.90`, so `λ(errks) ≥ 116.90`. -/
 theorem soundness_bits_qrom (G : Falcon512.Signer 32) :
-    BitSecurityAtLeast (extractionErrorQROM G) 116.90 :=
-  SoundnessBits.knowledgeErrorQROM_le_bits (configuration G) (configurationFacts G) (e := 11690)
+    BitSecurityAtLeast (extractionErrorQROM G proofSystem) 116.90 :=
+  SoundnessBits.knowledgeErrorQROM_le_bits (configuration G) (configurationFacts G) proofSystem
+    (e := 11690)
     (by norm_num) (by decide +kernel) (knowledgeBudgetQROM_le G)
 
 end GordieHowe.Falcon512.Ring.Native.QROMParams

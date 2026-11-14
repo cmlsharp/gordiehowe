@@ -35,17 +35,24 @@ Output format:
   headline's closure changes that headline's transitive fingerprint, though the headline's own
   fingerprint may not move (a configuration constant's body, read through a named constant);
 * `<module>\t<declaration>\t<fingerprint>`: one line per own declaration, the fingerprint hashing
-  the type and, for a definition, the body, with private constants by their user-facing names
-  (`stripPrivate`), so that moving a file changes no fingerprint;
+  the type, for a definition the body, and for an inductive (a structure, a class) each
+  constructor's type in order, so that a field added, removed, retyped or moved changes it
+  (`fingerprintWith`), with private constants by their user-facing names (`stripPrivate`), so
+  that moving a file changes no fingerprint;
 * a fourth column, present when a declaration mentions a constant renamed at the last renaming
   pass (`audit/renames.tsv`, `<old>\t<new>`): the fingerprint with every renamed constant replaced
   by its old name, which `scripts/carry_audits.py` compares with the ledger to carry an audit
   across the renaming;
+* with the environment variable `STATEMENT_CLOSURE_OLD_INDUCTIVE` set, before the declaration
+  lines: `# inductive\t<name>\t<type-only fingerprint>\t<fingerprint>`, one line per inductive
+  reached, its fingerprint before constructor types were hashed and now, to check the ledger
+  across that change;
 * after `# ==== external constants`: `# external\t<module root>\t<name>`, one line per external
   constant reached;
 * last line: `# total ...`, the counts.
 
-Run as `lake env lean scripts/StatementClosure.lean`.
+Run as `lake env lean scripts/StatementClosure.lean`. The definitions above the `run_cmd` need
+only Lean; `scripts/tests/test_statement_closure.py` checks the fingerprints on small inductives.
 -/
 
 open Lean Meta Elab Command
@@ -158,6 +165,33 @@ partial def undoRenames (m : Std.HashMap Name Name) (e : Expr) : Expr :=
     | .proj s i b => some (.proj ((undoName m s).getD s) i (undoRenames m b))
     | _ => none
 
+/-- **The fingerprint of a declaration** after the rewrite `u` (the identity, or `undoRenames`):
+the hash of its type and, for a definition, of its body; for an inductive (a structure, a class),
+of its type and of each constructor's type in order, so that a field added, removed, retyped or
+moved changes it. Private constants count by their user-facing names (`stripPrivate`). -/
+def fingerprintWith (env : Environment) (u : Expr → Expr) (ci : ConstantInfo) : UInt64 :=
+  match ci with
+  | .defnInfo d => mixHash (u (stripPrivate ci.type)).hash (u (stripPrivate d.value)).hash
+  | .inductInfo i => i.ctors.foldl (init := (u (stripPrivate ci.type)).hash) fun h c =>
+      match env.find? c with
+      | some cc => mixHash h (u (stripPrivate cc.type)).hash
+      | none => h
+  | _ => (u (stripPrivate ci.type)).hash
+
+/-- The fingerprint of an inductive before its constructors' types were hashed: its type alone. -/
+def typeOnlyFingerprint (ci : ConstantInfo) : UInt64 :=
+  (stripPrivate ci.type).hash
+
+/-- **A transitive fingerprint**: a hash over the fingerprints `fp` of the declarations `reach`,
+by user-facing name, then fingerprint (two private constants may share a name). -/
+def transitiveFingerprint (fp : Std.HashMap Name UInt64) (reach : NameSet) : UInt64 := Id.run do
+  let named := reach.toList.toArray.map fun c =>
+    (((privateToUserName? c).getD c).toString, fp.getD c 0)
+  let mut t : UInt64 := 7
+  for (u, h) in named.qsort (fun a b => a.1 < b.1 || (a.1 == b.1 && a.2 < b.2)) do
+    t := mixHash (mixHash t (hash u)) h
+  return t
+
 run_cmd liftTermElabM do
   let env ← getEnv
   let renames ← loadRenames
@@ -186,9 +220,7 @@ run_cmd liftTermElabM do
   let mut fp : Std.HashMap Name UInt64 := {}
   for n in seen.toList do
     let some ci := env.find? n | continue
-    fp := fp.insert n (match ci with
-      | .defnInfo d => mixHash (stripPrivate ci.type).hash (stripPrivate d.value).hash
-      | _ => (stripPrivate ci.type).hash)
+    fp := fp.insert n (fingerprintWith env id ci)
   let mut byModule : Std.HashMap Name (Array (Name × UInt64 × UInt64)) := {}
   for n in seen.toList do
     let un := (privateToUserName? n).getD n
@@ -199,10 +231,7 @@ run_cmd liftTermElabM do
     let some ci := env.find? n | continue
     -- the fingerprint of what a reader trusts: the type, and the body of a definition
     let h : UInt64 := fp.getD n 0
-    let u := fun e => undoRenames renames e
-    let h₀ : UInt64 := match ci with
-      | .defnInfo d => mixHash (u (stripPrivate ci.type)).hash (u (stripPrivate d.value)).hash
-      | _ => (u (stripPrivate ci.type)).hash
+    let h₀ : UInt64 := fingerprintWith env (undoRenames renames) ci
     byModule := byModule.insert m ((byModule.getD m #[]).push (un, h, h₀))
   let mods := byModule.toArray.qsort (fun a b => a.1.toString < b.1.toString)
   for n in heads do
@@ -218,13 +247,15 @@ run_cmd liftTermElabM do
       reach := reach.insert c
       for d in succs.getD c #[] do
         unless reach.contains d do todo := d :: todo
-    -- by user-facing name, then fingerprint (two private constants may share a name)
-    let named := reach.toList.toArray.map fun c =>
-      (((privateToUserName? c).getD c).toString, fp.getD c 0)
-    let mut t : UInt64 := 7
-    for (u, h) in named.qsort (fun a b => a.1 < b.1 || (a.1 == b.1 && a.2 < b.2)) do
-      t := mixHash (mixHash t (hash u)) h
-    IO.println s!"# transitive\t{n}\t{t}"
+    IO.println s!"# transitive\t{n}\t{transitiveFingerprint fp reach}"
+  -- with STATEMENT_CLOSURE_OLD_INDUCTIVE set, for the run across the change of fingerprint:
+  -- each inductive's fingerprint before (its type alone) and after (with its constructors)
+  if (← IO.getEnv "STATEMENT_CLOSURE_OLD_INDUCTIVE").isSome then
+    for n in seen.toList.toArray.qsort (·.toString < ·.toString) do
+      let some ci := env.find? n | continue
+      if ci matches .inductInfo _ then
+        let un := (privateToUserName? n).getD n
+        IO.println s!"# inductive\t{un}\t{typeOnlyFingerprint ci}\t{fp.getD n 0}"
   let mut total := 0
   let mut perLib : Std.HashMap Name Nat := {}
   for (m, ns) in mods do

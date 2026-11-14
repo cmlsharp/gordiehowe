@@ -4,6 +4,7 @@
 module
 
 public import GordieHowe.SPBCS.Cover
+public import GordieHowe.SPBCS.StabilitySlots
 public import GordieHowe.Headline
 public import GordieHowe.SPBCS.Extraction.KnowledgeError
 public import GordieHowe.Model.QROM.QueryBits
@@ -26,7 +27,11 @@ CMS19 section 8.5.2 (pp. 43–44, knowledge) for the spBCS compiler
   query count `b` lies in `bad ∪ P_col` with probability at most
   `6b² (maxError ε + (max 2 c + nJ + 1) b / 2^(8k))`; the error is
   `knowledgeError k e kq t c nJ κ`, the knowledge error with `c = M.senc.digestsPerInput`
-  digests per chain input and `nJ` extra digests per input.
+  digests per chain input and `nJ` extra digests per input. It is the instance at
+  `condInstab_bad_le` of `dbProb_bad_union_le_of_queryCount_of`, which takes any bound
+  `maxError ε + (max 2 c + cP) b / 2^(8k)` on the conditional instability and gives
+  `6b² (maxError ε + (max 2 c + cP + 1) b / 2^(8k))`; at the slot bound `condInstab_bad_le_slot`
+  it gives `dbProb_bad_union_le_of_queryCount_slot`, with `max 2 T + 1`, `T` the Merkle trees.
 -/
 
 namespace GordieHowe.SPBCS
@@ -115,17 +120,21 @@ section QueryCount
 
 variable {M} [∀ j i, Nonempty ((P j).Challenge i)] {V : X → FullTr P t → Bool}
 
-/-- The measured-database bound for the spBCS compiler at a per-branch query count `b`:
-`6b² (maxError ε + (max 2 c + maxNb + 1) b / 2^(8k))`. -/
-@[headline]
-theorem dbProb_bad_union_le_of_queryCount {Wit : Type} {rel : Set (X × Wit)}
-    {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X} {ε : ChIdx P t → ℝ≥0}
-    (hrbr : CausalRBRKnowledgeSound rel V E St ε) {C : Type} {K tq b : ℕ}
+omit [∀ j i, Nonempty ((P j).Challenge i)] in
+/-- **The measured-database bound for the spBCS compiler at an instability bound**: for every
+bound `maxError ε + (max 2 c + cP) b / 2^(8k)` on the conditional instability of `bad` given no
+digest collision (`hI`), the measured database of an algorithm with per-branch query count `b` lies
+in `bad ∪ P_col` with probability at most `6b² (maxError ε + (max 2 c + cP + 1) b / 2^(8k))`. -/
+theorem dbProb_bad_union_le_of_queryCount_of {Wit : Type} {rel : Set (X × Wit)}
+    {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X} {ε : ChIdx P t → ℝ≥0} (c cP : ℕ)
+    (hI : ∀ b, condInstab (M.bad rel E St) digestCollisionᶜ b ≤
+      maxError ε + (((max 2 c + cP) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k))
+    {C : Type} {K tq b : ℕ}
     (𝒜 : Adv (Bits (queryBits k kN kS L)) (XOut k e) (Out k e) C K tq)
     (h : QueryCount (outEquiv k e) 𝒜 b) :
     dbProb (outEquiv k e) 𝒜 (DB.restrict Query.toBits ⁻¹' (M.bad rel E St ∪ digestCollision)) ≤
       6 * (b : ℝ≥0∞) ^ 2 * (maxError ε +
-        (((max 2 M.senc.digestsPerInput + Mg.nJ + 1) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k)) := by
+        (((max 2 c + cP + 1) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k)) := by
   rw [Set.preimage_union]
   refine (Lifting.dbProb_union_le_of_queryCount (outEquiv k e) 𝒜 h
     (empty_notMem_preimage_restrict (M.empty_notMem_bad rel E St))
@@ -137,11 +146,38 @@ theorem dbProb_bad_union_le_of_queryCount {Wit : Type} {rel : Set (X × Wit)}
         + instab (DB.restrict Query.toBits ⁻¹' digestCollision) b
       ≤ condInstab (M.bad rel E St) digestCollisionᶜ b + instab digestCollision b :=
         add_le_add condInstab_preimage_restrict_le instab_preimage_restrict_le
-    _ ≤ (maxError ε + (((max 2 M.senc.digestsPerInput + Mg.nJ) * b : ℕ) : ℝ≥0∞) /
+    _ ≤ (maxError ε + (((max 2 c + cP) * b : ℕ) : ℝ≥0∞) /
           2 ^ (8 * k)) + (b : ℝ≥0∞) / 2 ^ (8 * k) :=
-        add_le_add (M.condInstab_bad_le rel E St hrbr) instab_digestCollision_le
+        add_le_add (hI b) instab_digestCollision_le
     _ = _ := by
         rw [add_assoc, ENNReal.div_add_div_same, ← Nat.cast_add, add_mul _ 1, one_mul]
+
+/-- The measured-database bound for the spBCS compiler at a per-branch query count `b`:
+`6b² (maxError ε + (max 2 c + maxNb + 1) b / 2^(8k))`. -/
+@[headline]
+theorem dbProb_bad_union_le_of_queryCount {Wit : Type} {rel : Set (X × Wit)}
+    {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X} {ε : ChIdx P t → ℝ≥0}
+    (hrbr : CausalRBRKnowledgeSound rel V E St ε) {C : Type} {K tq b : ℕ}
+    (𝒜 : Adv (Bits (queryBits k kN kS L)) (XOut k e) (Out k e) C K tq)
+    (h : QueryCount (outEquiv k e) 𝒜 b) :
+    dbProb (outEquiv k e) 𝒜 (DB.restrict Query.toBits ⁻¹' (M.bad rel E St ∪ digestCollision)) ≤
+      6 * (b : ℝ≥0∞) ^ 2 * (maxError ε +
+        (((max 2 M.senc.digestsPerInput + Mg.nJ + 1) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k)) :=
+  dbProb_bad_union_le_of_queryCount_of _ _ (fun _ => M.condInstab_bad_le rel E St hrbr) 𝒜 h
+
+/-- **The measured-database bound at the slot constant**:
+`6b² (maxError ε + (max 2 T + 1) b / 2^(8k))`, `T` the Merkle trees of the composite
+(`condInstab_bad_le_slot`). -/
+theorem dbProb_bad_union_le_of_queryCount_slot {Wit : Type} {rel : Set (X × Wit)}
+    {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X} {ε : ChIdx P t → ℝ≥0}
+    (hrbr : CausalRBRKnowledgeSound rel V E St ε) {C : Type} {K tq b : ℕ}
+    (𝒜 : Adv (Bits (queryBits k kN kS L)) (XOut k e) (Out k e) C K tq)
+    (h : QueryCount (outEquiv k e) 𝒜 b) :
+    dbProb (outEquiv k e) 𝒜 (DB.restrict Query.toBits ⁻¹' (M.bad rel E St ∪ digestCollision)) ≤
+      6 * (b : ℝ≥0∞) ^ 2 * (maxError ε +
+        (((max 2 (Fintype.card M.TreeSig) + 1) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k)) :=
+  dbProb_bad_union_le_of_queryCount_of (Fintype.card M.TreeSig) 0
+    (fun _ => M.condInstab_bad_le_slot rel E St hrbr) 𝒜 h
 
 end QueryCount
 

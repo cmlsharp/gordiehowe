@@ -12,7 +12,8 @@ public import GordieHowe.SPBCS.ComponentModel
 
 `ComponentModel.chainProg`: the key and `xof` queries of a chain whose chain input at the items `l`
 is `inputOf l`, as a classical oracle program (`run_chainProg`: the chain `chainWith` and its `xof`
-answers; `mem_trace_chainProg_iff`: its queries; `length_trace_chainProg`: two per round). The
+answers; `mem_trace_chainProg_iff`: its queries; `length_trace_chainProg`: two per round;
+`inputsBefore_trace_chainProg`: every `xof` query follows the key query of its round). The
 compiled verifiers' query programs are built from it.
 -/
 
@@ -134,6 +135,23 @@ theorem length_trace_chainProg : ∀ r (hr : r ≤ m),
     simp only [GordieHowe.OracleProg.trace_query, GordieHowe.OracleProg.trace_pure, List.length_cons,
       List.length_nil]
     omega
+
+/-- **Every stream point of the chain program follows its round's key query.** -/
+theorem inputsBefore_trace_chainProg : ∀ r (hr : r ≤ m),
+    InputsBefore (fun a b => ∃ j, ∃ hj : j < m,
+        a = .transcript (inputOf (C.chainWith wr (C.keyOfInput inputOf h) salt h j hj.le)) ∧
+        b = .xof (C.keyOfInput inputOf h (C.chainWith wr (C.keyOfInput inputOf h) salt h j hj.le))
+          salt)
+      Query.IsXof ((C.chainProg wr salt inputOf r hr).trace h)
+  | 0, _ => InputsBefore.of_forall_not (by simp [chainProg])
+  | r + 1, hr => by
+    rw [chainProg, GordieHowe.OracleProg.trace_bind, run_chainProg]
+    simp only [GordieHowe.OracleProg.trace_query, GordieHowe.OracleProg.trace_pure]
+    refine (inputsBefore_trace_chainProg r (by omega)).append ?_
+    intro i hi hm
+    match i, hi with
+    | 0, _ => obtain ⟨_, _, he⟩ := hm; cases he
+    | 1, _ => exact ⟨_, List.mem_singleton_self _, r, by omega, rfl, rfl⟩
 
 end ComponentModel
 

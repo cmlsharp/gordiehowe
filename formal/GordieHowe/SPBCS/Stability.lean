@@ -58,12 +58,38 @@ noncomputable def slotError (ε : ChIdx P t → ℝ≥0) (p : t.Leaf) (r : ℕ) 
   then ε ⟨p, ⟨⟨r, h.1⟩, h.2⟩⟩ else 0
 
 omit [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)] in
+/-- **A round's error is its slot error.** -/
 theorem le_slotError (ε : ChIdx P t → ℝ≥0) (c : ChIdx P t) :
     ε c ≤ slotError ε c.leaf c.idx.1.1 := by
   obtain ⟨p, ⟨⟨r, hr⟩, hd⟩⟩ := c
   have h : ∃ hr : r < n p.label, (P p.label).dir ⟨r, hr⟩ = .V_to_P := ⟨hr, hd⟩
   simp only [slotError, dite_eq_left_of_eq_true (eq_true h)]
   exact le_rfl
+
+omit [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)] in
+/-- **The slot error at a round of the leaf**: the round's error at a challenge round. -/
+theorem slotError_fin (ε : ChIdx P t → ℝ≥0) (p : t.Leaf) (r : Fin (n p.label)) :
+    slotError ε p r = if hd : (P p.label).dir r = .V_to_P then ε ⟨p, ⟨r, hd⟩⟩ else 0 := by
+  by_cases hd : (P p.label).dir r = .V_to_P
+  · have h1 : ∃ hr : r.1 < n p.label, (P p.label).dir ⟨r.1, hr⟩ = .V_to_P := ⟨r.2, hd⟩
+    rw [slotError, dite_eq_left_of_eq_true (eq_true h1), dite_eq_left_of_eq_true (eq_true hd)]
+  · have h1 : ¬ ∃ hr : r.1 < n p.label, (P p.label).dir ⟨r.1, hr⟩ = .V_to_P :=
+      fun ⟨_, h⟩ => hd h
+    rw [slotError, dite_eq_right_of_eq_false (eq_false h1), dite_eq_right_of_eq_false (eq_false hd)]
+
+omit [∀ j i, Fintype ((P j).Challenge i)] [∀ j i, DecidableEq ((P j).Challenge i)] in
+/-- **The slot errors over all rounds of all leaves sum to the round errors.** -/
+theorem sum_slotError (ε : ChIdx P t → ℝ≥0) :
+    ∑ s : (Σ p : t.Leaf, Fin (n p.label)), slotError ε s.1 s.2 = ∑ c, ε c := by
+  classical
+  rw [← ChIdx.equivSigma.symm.sum_comp, Fintype.sum_sigma, Fintype.sum_sigma]
+  refine Finset.sum_congr rfl fun p _ => ?_
+  simp only [slotError_fin]
+  rw [← Finset.sum_filter_of_ne (p := fun x => (P p.label).dir x = .V_to_P)
+    (fun x _ hx => by by_contra hd; exact hx (dite_eq_right_of_eq_false (eq_false hd)))]
+  rw [Finset.sum_subtype (Finset.univ.filter fun x => (P p.label).dir x = .V_to_P)
+    (p := fun x => (P p.label).dir x = .V_to_P) (fun x => by simp)]
+  exact Finset.sum_congr rfl fun y _ => by rw [dite_eq_left_of_eq_true (eq_true y.2)]; rfl
 
 section
 

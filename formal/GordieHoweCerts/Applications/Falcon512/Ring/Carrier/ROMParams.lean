@@ -10,6 +10,7 @@ public import GordieHoweCerts.Applications.Falcon512.Ring.Carrier.ROMParams.Rela
 public import GordieHowe.ProofSystem.Program.Transcript.MergeSetting
 public import GordieHowe.ProofSystem.Program.ForkJoinComap
 public import GordieHowe.Applications.Configuration.Certified
+public import GordieHoweCerts.Applications.Falcon512.Ring.Carrier.ROMParams.ErrorSum
 public import GordieHowe.ProofSystem.Program.EndToEnd
 
 @[expose] public section
@@ -124,18 +125,31 @@ instantiate_config GordieHowe.Falcon512.Ring.Carrier.ROMParams
   from [GordieHowe.Configuration.CertifiedFrontWith] folding [ringStmtRel]
   {G : Signer 32} => certified source (frontend G)
 
+open Generated.Falcon512.Ring.Carrier.ROMParams (data packingsOk checked) in
+open RealizedProgram (figErrorSum) in
+/-- **The summed round errors within `84845906 / 2^errorExp`**: the summed round errors rounded up
+(`figErrorSum`) are the numeric calculation (`ProgramData.figErrorSum_eq_errorSumN`), within
+the bound by `errorSumN_le`. -/
+theorem errorSumOk :
+    figErrorSum certified.ready certified.sourceErrors certified.figures.errorExp ≤ 84845906 :=
+  (le_of_eq (ProgramData.figErrorSum_eq_errorSumN data packingsOk checked.figures
+    conditions.toCoreConditions data.figures.figures.errorExp)).trans errorSumN_le
+
 /-! ## The configuration -/
 
 /-- **`Falcon512.Ring.Carrier.ROMParams` as a configuration under spBCS** at the signer `G` (module docstring,
 `Configuration.ofCertifiedWith`): the ROM parameter set `ParamSet.rom` (`32`-byte salts and the quantum query cap `2 ^ 40`). -/
 noncomputable def configuration (G : Signer 32) : Configuration :=
-  .ofCertifiedWith certified source (frontend G) .rom
+  .ofCertifiedWith certified source (frontend G) .rom (errorSum := 84845906)
 
 /-- **The facts of `configuration G`** (`Configuration.ofCertifiedWith_facts`): the frontend's
 (`frontendFacts`) and the generated loads' check (`GordieHowe.RuntimeInputs.FiguresFacts.loads`). -/
 theorem configurationFacts (G : Signer 32) : (configuration G).Facts :=
   Configuration.ofCertifiedWith_facts certified source (frontendFacts G) (Nat.le_of_ble_eq_true rfl)
     (conditions.fullFacts.figures.loads rfl)
+    (hsum :=
+      Configuration.CertifiedFrontWith.sumRoundError_le_of certified source (frontend G) errorSumOk)
+    (hsr := Nat.le_of_ble_eq_true rfl)
 
 instantiate_config GordieHowe.Falcon512.Ring.Carrier.ROMParams
   from [GordieHowe.Configuration.Common, GordieHowe.Configuration.ZeroKnowledgeROM,

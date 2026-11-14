@@ -494,28 +494,54 @@ variable (hA : ∀ r a, M.AssignsAtKeys (sp r a) ⟨a.salt, fx r⟩) {Wit : Type
 include hA hrbr hkq
 
 omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
+/-- **The extraction condition at a flip bound** (`hF`, as in `prob_log_bad_union_le_of`): the
+extractor's execution wins without extraction with probability at most
+`knowledgeErrorROM k (tq + Q q + kq) cD cP (maxError ε)`, at every value of the
+simulator's coins (`SPBCS.weak_online_simulation_extractability_rom_basic` for the adversary
+without its auxiliary
+output), so also averaged over them. -/
+theorem winsNotExtracts_le_of (cD cP : ℕ)
+    (hF : ∀ tq, condFlip (M.bad rel E St) digestCollisionᶜ tq ≤
+      maxError ε + (((max 2 cD + cP) * tq : ℕ) : ℝ≥0∞) / 2 ^ (8 * k)) :
+    𝒜.extractionWinsNotExtracts Qs sp fx rel E Q (tq + Q * q + kq) ≤
+      knowledgeErrorROM k (tq + Q * q + kq) cD cP (maxError ε) := by
+  have key : ∀ c : Fin Q → SaltedCoins (FiatShamirSalt kS) C,
+      ∑' r, 𝒜.coins r * (𝒜.extractionRun Qs sp c r (tq + Q * q + kq)).toOuterMeasure
+        {p | 𝒜.WinsNotExtracts Qs sp c fx rel E r p} ≤
+        knowledgeErrorROM k (tq + Q * q + kq) cD cP (maxError ε) := fun c => by
+    refine le_trans (ENNReal.tsum_le_tsum fun r => mul_le_mul_of_nonneg_left ?_ zero_le)
+      (SPBCS.weak_online_simulation_extractability_rom_basic_of (Qs := Qs) (fx := fx) hA hqs hrbr
+        cD cP hF hkq c 𝒜.claims)
+    rw [extractionRun, ROM.Alg.lazyRun_eq, PMF.toOuterMeasure_map_apply]
+    exact MeasureTheory.measure_mono fun h hh =>
+      𝒜.winsROM_of_winsNotExtracts c r h hqs hh
+  calc 𝒜.extractionWinsNotExtracts Qs sp fx rel E Q (tq + Q * q + kq)
+      ≤ ∑' c : Fin Q → SaltedCoins (FiatShamirSalt kS) C, PMF.uniformOfFintype _ c *
+          knowledgeErrorROM k (tq + Q * q + kq) cD cP (maxError ε) :=
+        ENNReal.tsum_le_tsum fun c => mul_le_mul_of_nonneg_left (key c) zero_le
+    _ = knowledgeErrorROM k (tq + Q * q + kq) cD cP (maxError ε) := by
+        rw [ENNReal.tsum_mul_right, PMF.tsum_coe, one_mul]
+
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
+/-- **Weak online simulation extractability in the ROM at one adversary and a flip bound**
+(`WeakOnlineSimExtractsROM`), with oracle simulation error `0` and extraction error
+`simExtractionErrorROM kq (maxError ε) q tq Q`. -/
+theorem weakOnlineSimExtractsROM_of (cD cP : ℕ)
+    (hF : ∀ tq, condFlip (M.bad rel E St) digestCollisionᶜ tq ≤
+      maxError ε + (((max 2 cD + cP) * tq : ℕ) : ℝ≥0∞) / 2 ^ (8 * k)) :
+    WeakOnlineSimExtractsROM Qs sp 𝒜 Q kq q fx rel E
+      (knowledgeErrorROM k (tq + Q * q + kq) cD cP (maxError ε)) :=
+  ⟨fun c r => 𝒜.extractionLaw_eq_simLaw c r hqs, 𝒜.winsNotExtracts_le_of hqs hA hrbr hkq cD cP hF⟩
+
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
 /-- **The extraction condition**: the extractor's execution wins without extraction with
 probability at most `simExtractionErrorROM kq (maxError ε) q tq Q`, at every value of the
 simulator's coins (`SPBCS.weak_online_simulation_extractability_rom_basic` for the adversary without its auxiliary
 output), so also averaged over them. -/
 theorem winsNotExtracts_le :
     𝒜.extractionWinsNotExtracts Qs sp fx rel E Q (tq + Q * q + kq) ≤
-      M.simExtractionErrorROM kq (maxError ε) q tq Q := by
-  have key : ∀ c : Fin Q → SaltedCoins (FiatShamirSalt kS) C,
-      ∑' r, 𝒜.coins r * (𝒜.extractionRun Qs sp c r (tq + Q * q + kq)).toOuterMeasure
-        {p | 𝒜.WinsNotExtracts Qs sp c fx rel E r p} ≤
-        M.simExtractionErrorROM kq (maxError ε) q tq Q := fun c => by
-    refine le_trans (ENNReal.tsum_le_tsum fun r => mul_le_mul_of_nonneg_left ?_ zero_le)
-      (SPBCS.weak_online_simulation_extractability_rom_basic (Qs := Qs) (fx := fx) hA hqs hrbr hkq c 𝒜.claims)
-    rw [extractionRun, ROM.Alg.lazyRun_eq, PMF.toOuterMeasure_map_apply]
-    exact MeasureTheory.measure_mono fun h hh =>
-      𝒜.winsROM_of_winsNotExtracts c r h hqs hh
-  calc 𝒜.extractionWinsNotExtracts Qs sp fx rel E Q (tq + Q * q + kq)
-      ≤ ∑' c : Fin Q → SaltedCoins (FiatShamirSalt kS) C, PMF.uniformOfFintype _ c *
-          M.simExtractionErrorROM kq (maxError ε) q tq Q :=
-        ENNReal.tsum_le_tsum fun c => mul_le_mul_of_nonneg_left (key c) zero_le
-    _ = M.simExtractionErrorROM kq (maxError ε) q tq Q := by
-        rw [ENNReal.tsum_mul_right, PMF.tsum_coe, one_mul]
+      M.simExtractionErrorROM kq (maxError ε) q tq Q :=
+  𝒜.winsNotExtracts_le_of hqs hA hrbr hkq _ _ (fun _ => M.condFlip_bad_le rel E St hrbr)
 
 omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
 /-- **Weak online simulation extractability in the ROM at one adversary**
@@ -526,6 +552,37 @@ theorem weakOnlineSimExtractsROM :
   ⟨fun c r => 𝒜.extractionLaw_eq_simLaw c r hqs, 𝒜.winsNotExtracts_le hqs hA hrbr hkq⟩
 
 end SimExtractionAdversaryROM
+
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
+/-- **At a flip bound** (`hF`, as in `prob_log_bad_union_le_of`). **Weak online simulation
+extractability of the spBCS compiler in the classical random-oracle model** (paper `thm:bcs-se`(2);
+`def:bcs-se` in the ROM,
+`WeakOnlineSimulationExtractableROM`): for a composite causally round-by-round knowledge sound at
+the causal extractor `E` with errors `ε` (`hrbr`), query phases whose accepting runs make at most
+`kq` verifier queries (`hkq`), and a classical simulator program `Sim` that assigns only at the keys
+of its chain inputs (`hA`) and makes at most `q` queries (`hqs`), with uniform coins for each
+proof query: against every query-bounded classical adversary with an auxiliary output, the
+extractor's
+execution (lazy sampling of the game's queries, the database extractor `dbExtract` on its table)
+has the simulated execution's law of the claim, the auxiliary output, the queried statements and
+the verdict, at every value of the adversary's and the simulator's coins (oracle simulation error
+`0`), and wins without extraction with probability at most `simExtractionErrorROM kq (maxError ε)
+q tq Q`, the classical knowledge error with merges at `tq + Q q + kq` queries. -/
+theorem weak_online_simulation_extractability_rom_of
+    {Sim : X → SaltedCoins (FiatShamirSalt kS) C →
+      OracleProg (Query k kN kS L) (Out k e)
+        (NARG.SimOutput (Query k kN kS L) (Out k e) (M.Response B))}
+    (hA : ∀ x a, M.AssignsAtKeys (Sim x a) ⟨a.salt, x⟩) {q : ℕ}
+    (hqs : ∀ x a G, ((Sim x a).trace G).length ≤ q) {Wit : Type} {rel : Set (X × Wit)}
+    {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X} {ε : ChIdx P t → ℝ≥0}
+    (hrbr : CausalRBRKnowledgeSound rel V E St ε) (cD cP : ℕ)
+    (hF : ∀ tq, condFlip (M.bad rel E St) digestCollisionᶜ tq ≤
+      maxError ε + (((max 2 cD + cP) * tq : ℕ) : ℝ≥0∞) / 2 ^ (8 * k)) {kq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) :
+    M.WeakOnlineSimulationExtractableROM B Qs rel E kq Sim q
+      (fun tq Q => knowledgeErrorROM k (tq + Q * q + kq) cD cP (maxError ε)) :=
+  fun _ _ fx _ _ 𝒜 => 𝒜.weakOnlineSimExtractsROM_of (fun r a G => hqs (fx r) a G)
+    (fun r a => hA (fx r) a) hrbr hkq cD cP hF
 
 omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
 /-- **Weak online simulation extractability of the spBCS compiler in the classical
@@ -550,8 +607,29 @@ theorem weak_online_simulation_extractability_rom
     (hrbr : CausalRBRKnowledgeSound rel V E St ε) {kq : ℕ}
     (hkq : M.QueriesAtMost Qs kq) :
     M.WeakOnlineSimulationExtractableROM B Qs rel E kq Sim q
-      (M.simExtractionErrorROM kq (maxError ε) q) := fun _ _ fx _ _ 𝒜 =>
-  𝒜.weakOnlineSimExtractsROM (fun r a G => hqs (fx r) a G) (fun r a => hA (fx r) a) hrbr hkq
+      (M.simExtractionErrorROM kq (maxError ε) q) :=
+  weak_online_simulation_extractability_rom_of (hA := hA) (hqs := hqs) (hrbr := hrbr)
+    (hF := fun _ => M.condFlip_bad_le rel E St hrbr) (hkq := hkq)
+
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
+/-- **Weak online simulation extractability of the spBCS compiler in the classical random-oracle
+model at the slot constant** (`weak_online_simulation_extractability_rom_of` at
+`condFlip_bad_le_slot`): the classical knowledge error with the collision coefficient
+`max 2 T + 1`, `T` the Merkle trees. -/
+theorem weak_online_simulation_extractability_rom_slot
+    {Sim : X → SaltedCoins (FiatShamirSalt kS) C →
+      OracleProg (Query k kN kS L) (Out k e)
+        (NARG.SimOutput (Query k kN kS L) (Out k e) (M.Response B))}
+    (hA : ∀ x a, M.AssignsAtKeys (Sim x a) ⟨a.salt, x⟩) {q : ℕ}
+    (hqs : ∀ x a G, ((Sim x a).trace G).length ≤ q) {Wit : Type} {rel : Set (X × Wit)}
+    {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X} {ε : ChIdx P t → ℝ≥0}
+    (hrbr : CausalRBRKnowledgeSound rel V E St ε) {kq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) :
+    M.WeakOnlineSimulationExtractableROM B Qs rel E kq Sim q
+      (fun tq Q => knowledgeErrorROM k (tq + Q * q + kq) (Fintype.card M.TreeSig) 0 (maxError ε)) :=
+  weak_online_simulation_extractability_rom_of (hA := hA) (hqs := hqs) (hrbr := hrbr) (cP := 0)
+    (hF := fun tq => by
+      simpa only [Nat.add_zero] using M.condFlip_bad_le_slot rel E St hrbr (tq := tq)) (hkq := hkq)
 
 end
 

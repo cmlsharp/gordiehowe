@@ -285,6 +285,8 @@ echo "(declarations a reader must trust to read the headline theorems; scripts/S
 # The recorded closure, audit/statement_closure.txt, is the full one (--certs); without --certs the
 # closure of GordieHowe's headlines goes to .lake/ and is compared with the ledger the same way.
 if [ -n "$certs" ]; then closure=audit/statement_closure.txt; else closure=.lake/statement_closure_lib.txt; fi
+# A structure's fingerprints: field edits move them, unrelated edits do not (Lean only).
+python3 scripts/tests/test_statement_closure.py 2>&1 || status=1
 if run_script StatementClosure.lean > "$closure.tmp" 2>&1; then
   # the previous closure, for the headlines' transitive fingerprints
   if [ -f "$closure" ]; then cp "$closure" .lake/statement_closure_prev.txt; else : > .lake/statement_closure_prev.txt; fi

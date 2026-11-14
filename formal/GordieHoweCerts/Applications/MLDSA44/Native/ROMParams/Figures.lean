@@ -20,17 +20,18 @@ Zero knowledge: for every `t ≥ 1` hash queries and `Q ≤ proofQueryCap = 2^64
 
 Knowledge soundness: for every `t ≥ 1` hash queries, the classical knowledge error of
 `knowledge_soundness_rom_at` and `soundness_rom_at` against `t`-query adversaries,
-`knowledgeErrorROM (t + kq)`, satisfies `min(1, err) ≤ t · 2^-λ`. The error is evaluated at `t +
+`extractionErrorROMTyped t`, at most `knowledgeErrorROM (t + kq)`, satisfies
+`min(1, err) ≤ t · 2^-λ`. The error is evaluated at `t +
 kq`, the adversary's and the verifier's queries, as in the paper's `errks^C(t)` and in
 `analysis/eval_params.py`.
 
 | figure | `λ` |
 |---|---|
 | everlasting zero knowledge, one proof (`zero_knowledge_bits_rom`) | `116.41` |
-| knowledge soundness and soundness (`soundness_bits_rom`) | `101.32` |
+| knowledge soundness and soundness (`soundness_bits_rom`) | `111.74` |
 
 Each `λ` is rounded down to two decimals. The budgets (`GordieHowe.Configuration.zkBudgetROM`,
-`GordieHowe.Configuration.knowledgeBudgetROM`) are bounded at the figures
+`GordieHowe.Configuration.knowledgeBudgetROMTyped`) are bounded at the figures
 (`GordieHowe.Configuration.ofCertified_readsFigures`) by a dyadic ratio `M / 2^E` and compared with
 `2^-λ` through `M^100 · 2^(100 λ) ≤ 2^(100 E)`.
 -/
@@ -57,23 +58,26 @@ theorem zero_knowledge_bits_rom :
   Configuration.ZKBits.zkErrorROM_le_bits configuration configurationFacts proofSystem
     zkBudgetROM_le
 
-/-- **The classical knowledge budget of `MLDSA44.Native.ROMParams` below `2 ^ 102` queries** is at
-most `2^-101.32`: at most `205/2^109` (`knowledgeBudgetROM_le_two_rpow` at the generated figures).
--/
-theorem knowledgeBudgetROM_le :
-    configuration.knowledgeBudgetROM (2 ^ 102) ≤ (2 : ℝ) ^ (-101.32 : ℝ) :=
-  knowledgeBudgetROM_le_two_rpow
-    (ofCertified_readsFigures Generated.MLDSA44.Native.ROMParams.figures_eq)
-    (M := 205) (E := 109) (e := 10132) (by norm_num) (by norm_num) (by decide +kernel)
+/-- **The typed classical knowledge budget of `MLDSA44.Native.ROMParams` below `2 ^ 113` queries**
+is at most `2^-111.74`: at most `9800/2^125` (`knowledgeBudgetROMTyped_le_two_rpow` at the generated
+figures and the configuration's `errorSum`). -/
+theorem knowledgeBudgetROMTyped_le :
+    configuration.knowledgeBudgetROMTyped (2 ^ 113) 2 ≤ (2 : ℝ) ^ (-111.74 : ℝ) :=
+  knowledgeBudgetROMTyped_le_two_rpow
+    (ofCertified_readsFigures Generated.MLDSA44.Native.ROMParams.figures_eq) rfl
+    (es := 182217060) (M := 9800) (E := 125) (e := 11174) (by norm_num) (by norm_num)
+    (by decide +kernel)
 
 /-- **The bit security of knowledge soundness of the native ML-DSA-44 proof of possession at the ROM
-parameters**: for every `t ≥ 1` hash queries, the classical knowledge error of
-`knowledge_soundness_rom_at` and `soundness_rom_at` against `t`-query adversaries, evaluated at `t +
-kq` as in the paper's `errks^C(t)` and `analysis/eval_params.py`, satisfies `min(1, err) ≤ t ·
-2^-101.32`, so `λ(errks^C) ≥ 101.32`. -/
+parameters**: for every `t ≥ 1` hash queries, the typed extraction error `extractionErrorROMTyped`
+of `knowledge_soundness_rom_at` and `soundness_rom_at` against `t`-query adversaries, at most the
+classical knowledge error at `t + kq` as in the paper's `errks^C(t)` and `analysis/eval_params.py`
+(`extractionErrorROMTyped_le`), satisfies `min(1, err) ≤ t · 2^-111.74`, so `λ(errks^C) ≥ 111.74`.
+-/
 theorem soundness_bits_rom :
-    BitSecurityAtLeast extractionErrorROM 101.32 :=
-  SoundnessBits.knowledgeErrorROM_le_bits configuration configurationFacts (e := 10132)
-    (by norm_num) (by decide +kernel) (knowledgeBudgetROM_le)
+    BitSecurityAtLeast (extractionErrorROMTyped proofSystem) 111.74 :=
+  SoundnessBits.knowledgeErrorROMTyped_le_bits configuration configurationFacts proofSystem
+    (m := 2) domains_length.le (e := 11174) (by norm_num) (by decide +kernel)
+    (knowledgeBudgetROMTyped_le)
 
 end GordieHowe.MLDSA44.Native.ROMParams

@@ -25,6 +25,9 @@ observers sorted by rank computes the chains and final digests of the proof.
   the honest queries of every observer).
 * `treeProg`, `queryProg`, `queries`: then each tree's multiproof queries at the positions the
   query phase reads.
+* `slotInput`, `slotPoint`: the key query and the stream point of one round of one leaf;
+  `inputsBefore_queries`: every `xof` query of the verifier is the stream point of a round whose
+  key query comes earlier.
 -/
 
 namespace GordieHowe.SPBCS
@@ -374,6 +377,43 @@ the query budget of the knowledge and simulation-extraction theorems. The format
 the paper's `k_q` (`FormatBounds.queriesAtMost`). -/
 def QueriesAtMost {V : X → FullTr P t → Bool} (Qs : ∀ x, M.IOPQueries V x) (kq : ℕ) : Prop :=
   ∀ x h π, M.Accepts h x π (Qs x) → (M.queries x π h (Qs x)).length ≤ kq
+
+variable (h : Query k kN kS L → Out k e)
+
+/-- **The key query of round `j` of leaf `p`** of the verifier on the proof `π`. -/
+def slotInput (p : t.Leaf) (j : ℕ) (hj : j ≤ n p.label) : Query k kN kS L :=
+  .transcript (M.senc.encode (roundContent (M.ssOf x π) (M.chains h (M.ssOf x π) π.writes)
+    (M.finals h (M.ssOf x π) π.writes) p ((M.comp p.label).chainWith (π.writes p)
+      (M.key h (M.ssOf x π) (M.chains h (M.ssOf x π) π.writes) (M.finals h (M.ssOf x π) π.writes) p)
+      π.salt h j hj)))
+
+/-- **The stream point of round `j` of leaf `p`** of the verifier on the proof `π`: the `xof`
+point at the digest of the answer to its key query. -/
+def slotPoint (p : t.Leaf) (j : ℕ) (hj : j ≤ n p.label) : Query k kN kS L :=
+  .xof (h (M.slotInput x π h p j hj)).digest π.salt
+
+/-- **Every stream point of the verifier's queries follows its round's key query.** -/
+theorem inputsBefore_queries {V : X → FullTr P t → Bool}
+    (Q : M.IOPQueries V x) :
+    InputsBefore (fun a b => ∃ p j, ∃ hj : j < n p.label,
+        a = M.slotInput x π h p j hj.le ∧ b = M.slotPoint x π h p j hj.le)
+      Query.IsXof (M.queries x π h Q) := by
+  rw [queries_eq, trace_roundsProg]
+  refine (InputsBefore.flatMap fun o _ => ?_).append (InputsBefore.flatMap fun τ _ => ?_)
+  · cases o with
+    | leaf p =>
+      exact ((M.comp p.label).inputsBefore_trace_chainProg (π.writes p) π.salt _ h _ le_rfl).mono
+        fun a b ⟨j, hj, ha, hb⟩ => ⟨p, j, hj, ha, hb⟩
+    | sink s =>
+      refine InputsBefore.of_forall_not fun q hq => ?_
+      rw [honestTrace, List.mem_singleton] at hq
+      rintro ⟨_, _, he⟩
+      rw [hq] at he
+      cases he
+  · refine InputsBefore.of_forall_not fun q hq => ?_
+    rintro ⟨_, _, rfl⟩
+    rcases M.opening.merkle_of_mem_trace (by unfold treeProg at hq; exact hq) with
+      ⟨_, _, he⟩ | ⟨_, _, he⟩ <;> cases he
 
 end Queries
 

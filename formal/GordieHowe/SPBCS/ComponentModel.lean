@@ -21,7 +21,9 @@ read from a write and the views of its trees, and the sampler of each challenge 
 * `ComponentModel.writeAt`, `ComponentModel.views`: the write of a round held by an item, and the
   Merkle views of a round's trees read from a database at the roots of a write;
   `digest_mem_of_views_ne`: recording one new collision-free answer changes these views only at
-  one of the write's roots or a digest of `S(D)`.
+  one of the write's roots or a digest of `S(D)`; `root_or_nodeKids_of_views_ne`: at one of the
+  roots or a child of a recorded node; `views_extend_of_not_merkle`: an input that is neither a
+  `node` nor a `leaf` changes none.
 -/
 
 namespace GordieHowe.SPBCS
@@ -228,6 +230,24 @@ theorem digest_mem_of_views_ne {D : ODB k kN kS L e} {q : Query k kN kS L} {y : 
   rcases hmem with hmem | hmem
   · exact Finset.mem_union_left _ (hmem ▸ C.rootOf_mem_roots i w τ)
   · exact Finset.mem_union_right _ hmem
+
+/-- If recording `q ↦ y` changes the views of a round's trees at the roots of `w`, the digest of
+`y` is one of those roots or a child of a node recorded before. -/
+theorem root_or_nodeKids_of_views_ne {D : ODB k kN kS L e} {q : Query k kN kS L} {y : Out k e}
+    (hq : q ∉ D) {i : P.MessageIdx} {w : C.MessageWrite i}
+    (h : C.views (D.extend q y) i w ≠ C.views D i w) :
+    (∃ τ, C.rootOf i w τ = y.digest) ∨ y.digest ∈ nodeKids D := by
+  by_contra hc
+  push Not at hc
+  exact h (funext fun τ => view_extend_of_notMem_nodeKids hq (fun he => hc.1 τ he.symm) hc.2)
+
+/-- **Recording a new input that is neither a `node` nor a `leaf` without a digest collision
+changes no view of a round's trees.** -/
+theorem views_extend_of_not_merkle {D : ODB k kN kS L e} {q : Query k kN kS L} {y : Out k e}
+    (hq : q ∉ D) (hcol : D.extend q y ∉ digestCollision) (hqc : q.children = none)
+    (hqo : q.opening = none) (i : P.MessageIdx) (w : C.MessageWrite i) :
+    C.views (D.extend q y) i w = C.views D i w :=
+  funext fun _ => view_extend_of_not_merkle hq hcol hqc hqo
 
 end ComponentModel
 

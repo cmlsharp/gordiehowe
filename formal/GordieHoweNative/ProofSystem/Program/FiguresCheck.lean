@@ -211,6 +211,16 @@ variable (x : DomainFig)
     (x.columnNum + (if x.N.np = 0 then 0 else x.jointNum), x.columnDen), (x.batchesNum, x.q),
     (max 3 (2 * x.gkrWidth), x.q), (x.N.degrees.length, x.q)]
 
+/-- `GKR.CircuitBudget.shapeBudget` of a circuit's width bound and layers. -/
+@[expose] def shapeBudgetN (c : Nat × Nat) : Nat := 2 * c.1 + (2 + 5 * c.1) * c.2 + 1
+
+/-- **The summed round charges as fractions** (`FieldReady.sumFracs`) with the mask test: the
+commit, test and column rounds, the covered batches, GKR's shape budgets and the combinations. -/
+@[expose] def sumFracs : List (Nat × Nat) :=
+  [(x.t.exceptions ^ x.t.nrep, (x.q - 1) ^ x.t.nrep), (1, x.q),
+    (x.columnNum + (if x.N.np = 0 then 0 else x.jointNum), x.columnDen), (x.batchesNum, x.q),
+    ((x.N.circuits.map shapeBudgetN).sum, x.q), (x.N.degrees.length, x.q)]
+
 /-- **The round charges within `num / 2^e`** (`FieldRoundsOk`), with the mask test. -/
 @[expose] def fieldRoundsB (num e : Nat) : Bool :=
   x.t.split &&
@@ -277,6 +287,12 @@ variable (ds : List DomainFig)
       (fun p m => max (dyadicCeilN e p) m) 0)).foldr max 0)
     (((List.range ir.phases).map fun k =>
       dyadicCeilN e (fracSumN (phaseTermsN ir cf src k))).foldr max 0)
+
+/-- **The summed round errors**, in units of `2^-e`, each term rounded up (`figErrorSum`): every
+domain's summed round charges and every phase's error. -/
+@[expose] def errorSumN (cf : Nat → Nat) (src : Nat → Nat × Nat) (e : Nat) : Nat :=
+  (ds.map fun x => (x.sumFracs.map (dyadicCeilN e)).sum).sum +
+    ((List.range ir.phases).map fun k => dyadicCeilN e (fracSumN (phaseTermsN ir cf src k))).sum
 
 /-- **The figures' check** (`ProgramFigures.Check`, `FitsOk`, the messages' bound, `ReadersOk`
 and `DefaultLoadsOk`) on the numbers: the domains `ds`, the plan's hash `hash`, the fields' reader

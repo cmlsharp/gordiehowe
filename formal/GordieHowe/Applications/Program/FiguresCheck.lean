@@ -219,4 +219,50 @@ theorem FiguresOk.of_descs (hp : d.PackingsOk) (hfig : d.figuresPartB true = tru
     rw [← hn] at hg
     exact (chernoffB_iff _ _ _ _ _).1 hg
 
+/-- **The summed round errors of the ready data are the numeric calculation** (`figErrorSum`,
+`FigCheck.errorSumN` at the numeric domain figures), at a program whose figures pass the check
+(`figuresPartB`) and whose packings answer the registry (`PackingsOk`). -/
+theorem figErrorSum_eq_errorSumN (hp : d.PackingsOk) (hfig : d.figuresPartB true = true)
+    (h : CoreConditions d) (e : ℕ) :
+    figErrorSum (d.ready h.readyFacts) d.figures.sourceErrors e =
+      errorSumN d.program (@figuresDomains d CR) d.fieldTable.interp.cardN d.figures.sourceErrors
+        e := by
+  simp only [figuresPartB, ↓reduceIte, figuresReaderB, Bool.and_eq_true] at hfig
+  obtain ⟨-, ⟨hbat, hmasks⟩, hfig⟩ := hfig
+  have hb : d.program.batchesB = true := by
+    rw [batchesB, batchesE_eq_reader, ← CellsReader.batchesK_eq]
+    exact hbat
+  have hlen := h.fieldTable.domains_length
+  have hi (i : Fin d.program.domains.length) : (i : ℕ) < d.fieldTable.domainFields.length :=
+    hlen ▸ i.2
+  have hD (i : Fin d.program.domains.length) :
+      (d.ready h.readyFacts i).Pk.desc (d.packingDesc i) = d.packingDesc i := by
+    change (d.fieldTable.interp.packing (d.program.domainField i)).desc _ = _
+    rw [d.figures_domainField h i]
+    exact hp i (hi i)
+  have hmask (i : Fin d.program.domains.length) :
+      MasksCover (d.packingDesc i) (d.program.planPacking d.plan i) := by
+    apply (masksCoverB_iff _ _).1
+    exact (List.all_eq_true.1 hmasks) i (List.mem_range.2 (hi i))
+  have ht := d.figures_tableau h
+  have hN (i : Fin d.program.domains.length) :
+      (X i).N = @ForkReader.domainNums d.program CR i d.plan (d.packingDesc i) := rfl
+  have hcard : d.interp.specCard = d.fieldTable.interp.cardN :=
+    funext d.fieldTable.interp.specCard_eq
+  change @FigCheck.figuresB d.program ((List.range d.fieldTable.domainFields.length).map X)
+    (CellsReader.ofProgram d.program).toPReader d.plan.hash d.fieldTable.interp.loadN
+    d.fieldTable.interp.cardN d.fieldTable.interp.fbN d.figures = true at hfig
+  rw [← hlen] at hfig
+  simp only [FigCheck.figuresB, Bool.and_eq_true, and_assoc, decide_eq_true_eq, beq_iff_eq] at hfig
+  obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, herrors, -⟩ := hfig
+  have hsplit (i : Fin d.program.domains.length) : (X i).t.split = true := by
+    have he := List.all_eq_true.1 herrors _ (List.mem_map.2 ⟨i, List.mem_range.2 i.2, rfl⟩)
+    simp only [DomainFig.fieldRoundsB, Bool.and_eq_true] at he
+    exact he.1.1.1.1.1.1.1.1
+  change _ = errorSumN d.program ((List.range d.fieldTable.domainFields.length).map X)
+    d.fieldTable.interp.cardN d.figures.sourceErrors e
+  rw [← hlen, ← hcard]
+  exact figErrorSum_eq (d.ready h.readyFacts) X d.packingDesc hb hN ht hD hmask hsplit
+    (d.figures_q h) _ _
+
 end GordieHowe.ProgramData

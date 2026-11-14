@@ -616,6 +616,10 @@ def entries : List Entry := [
     instances := [
       ``GordieHowe.MLDSA44.Emulated.ROMParams.completeness_honest,
       ``GordieHowe.MLDSA44.Emulated.QROMParams.completeness_honest] },
+  -- `cfg-knowledge-soundness` and `cfg-soundness`: the named declarations state the sharper bound
+  -- `extractionErrorQROM C`, with the collision coefficient `max 2 m + 1` of the proof system's `m`
+  -- domains; the printed sentence at `errks(t)` (`extractionErrorQROMAtFigures`) follows by
+  -- `extractionErrorQROM_le_atFigures`.
   { key := "cfg-knowledge-soundness", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.Common.knowledge_soundness_qrom_at,
     instances := [
@@ -624,6 +628,10 @@ def entries : List Entry := [
     decl := ``GordieHowe.Configuration.Common.soundness_qrom_at,
     instances := [
       ``GordieHowe.MLDSA44.Emulated.QROMParams.soundness_qrom_at] },
+  -- `cfg-knowledge-soundness-rom` and `cfg-soundness-rom`: the named declarations state the
+  -- sharper bound `extractionErrorROMTyped`, with the round errors and the collisions charged by
+  -- classes of queries; the printed sentence at `errks^C(t)` (`extractionErrorROM`) follows by
+  -- `extractionErrorROMTyped_le`.
   { key := "cfg-knowledge-soundness-rom", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.Common.knowledge_soundness_rom_at,
     instances := [
@@ -649,6 +657,9 @@ def entries : List Entry := [
     instances := [
       ``GordieHowe.MLDSA44.Emulated.ROMParams.unconditional_witness_indistinguishability,
       ``GordieHowe.MLDSA44.Emulated.QROMParams.unconditional_witness_indistinguishability] },
+  -- `cfg-sse-online` and `cfg-sse`: the named declarations state the sharper bound
+  -- `simExtractionErrorQROM C`, with the collision coefficient `max 2 m + 1`; the printed sentence
+  -- at `errse(t, Q)` follows by `simExtractionErrorQROM_le_atFigures`.
   { key := "cfg-sse-online", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.Common.weak_online_simulation_extractability_qrom,
     instances := [
@@ -665,10 +676,25 @@ def entries : List Entry := [
     decl := ``GordieHowe.MLDSA44.Emulated.QROMParams.zero_knowledge_bits_qrom },
   -- `tab:eval-params`, the extraction column: the bit security of knowledge soundness and
   -- soundness for the proof of possession of ML-DSA-44.
+  -- `mldsa-soundness-bits-rom`: the named declaration states the figure 111.90 of the typed
+  -- error `extractionErrorROMTyped`, with the round errors and the collisions charged by classes
+  -- of queries. The printed sentence is about the paper's `errks^C(t)` (`extractionErrorROM`), a
+  -- larger function, and is not a consequence of the named declaration. What the named
+  -- declarations give is the bound on an adversary's success: with `soundness_rom_at`, at most
+  -- `t · 2^{-111.90}`, hence at most the printed `t · 2^{-101.36}`.
   { key := "mldsa-soundness-bits-rom", label := "tab:eval-params",
     decl := ``GordieHowe.MLDSA44.Emulated.ROMParams.soundness_bits_rom },
+  -- `mldsa-soundness-bits-qrom`: the named declaration states the figure 116.87 of the current
+  -- extraction error `extractionErrorQROM proofSystem`, with the collision coefficient
+  -- `max 2 m + 1`. The printed sentence is about the paper's `errks(t)`
+  -- (`extractionErrorQROMAtFigures`), a larger function, and is not a consequence of the named
+  -- declaration. What the named declarations give is the bound on an adversary's success: with
+  -- `soundness_qrom_at`, at most `t · 2^{-116.87}`.
   { key := "mldsa-soundness-bits-qrom", label := "tab:eval-params",
     decl := ``GordieHowe.MLDSA44.Emulated.QROMParams.soundness_bits_qrom },
+  -- `cfg-sse-rom`: the named declaration states the sharper bound `simExtractionErrorROM C`, with
+  -- the collision coefficient `max 2 m + 1`; the printed sentence at `errse^C(t, Q)` follows by
+  -- `simExtractionErrorROM_le_atFigures`.
   { key := "cfg-sse-rom", label := "thm:e2e",
     decl := ``GordieHowe.Configuration.Common.weak_online_simulation_extractability_rom,
     instances := [

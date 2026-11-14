@@ -311,6 +311,49 @@ theorem maxRoundError_le [Inhabited W] (C : ir.ProofSystem P I) :
     (cp.figuresOk.fieldRoundsLe cp.fieldCard)
     (fun _ => cp.figuresOk.phaseError_le cp.fieldCard src.eps src.eps_le _))
 
+/-- **The round errors of the series–parallel composite sum to at most `figErrorSum / 2^errorExp`**
+(`RealizedProgram.ProofSystem.fieldForkError_sum_le`): every domain's summed round charges and every
+phase's error, each rounded up (`RealizedProgram.ProgramFigures.Check.fieldSumBound_le`,
+`RealizedProgram.ProgramFigures.Check.phaseError_le_ceil`). -/
+@[config_template]
+theorem sumRoundError_le [Inhabited W] (C : ir.ProofSystem P I) :
+    ∑ c, (CertifiedFront.forkIopSound cp src F C).error c ≤
+      (figErrorSum cp.ready cp.sourceErrors cp.figures.errorExp : ℝ≥0) /
+        2 ^ cp.figures.errorExp := by
+  refine (C.fieldForkError_sum_le cp.ready F.stmtOf src.sound src.final).trans ?_
+  rw [figErrorSum, Nat.cast_add, add_div, Nat.cast_sum, Finset.sum_div, Nat.cast_sum,
+    Finset.sum_div]
+  refine add_le_add (Finset.sum_le_sum fun d _ => cp.figuresOk.fieldSumBound_le cp.fieldCard d) ?_
+  change ∑ j, (ir.layout I).error (ir.phaseError I (ir.roundError I src.eps)) j ≤ _
+  refine ((ir.layout I).sum_error _).trans_le (Finset.sum_le_sum fun k _ => ?_)
+  exact cp.figuresOk.phaseError_le_ceil cp.fieldCard src.eps src.eps_le k
+
+/-- **The round errors sum to at most `rounds · errorMax / 2^errorExp`**: at most `rounds`
+challenges (`SPBCS.ProofSystemTranscript.card_chIdx_le`, the figures' `rounds_le`), each at most
+`errorMax / 2^errorExp` (`maxRoundError_le`). -/
+theorem sumRoundError_le_rounds [Inhabited W] (C : ir.ProofSystem P I) :
+    ∑ c, (CertifiedFront.forkIopSound cp src F C).error c ≤
+      ((cp.figures.rounds * cp.figures.errorMax : ℕ) : ℝ≥0) / 2 ^ cp.figures.errorExp := by
+  calc ∑ c, (CertifiedFront.forkIopSound cp src F C).error c
+      ≤ Fintype.card (ChIdx (CertifiedFront.forkIop cp src F C).P
+          (CertifiedFront.forkIop cp src F C).term) *
+          maxError (CertifiedFront.forkIopSound cp src F C).error := sum_le_card_mul_max _
+    _ ≤ cp.figures.rounds * ((cp.figures.errorMax : ℝ≥0) / 2 ^ cp.figures.errorExp) := by
+      gcongr
+      · exact_mod_cast (SPBCS.ProofSystemTranscript.card_chIdx_le
+          (C := CertifiedFront.forkIop cp src F C)).trans (cp.figuresOk.figures (B := C)
+        (Lw := CertifiedSource.forkLowering cp src C)
+        (f := F.stmtOf)).rounds_le
+      · exact CertifiedFront.maxRoundError_le cp src F C
+    _ = _ := by push_cast; rw [mul_div_assoc]
+
+/-- **The round errors sum to at most `n / 2^errorExp`** when the summed round errors rounded up
+(`figErrorSum`) are at most `n` (`sumRoundError_le`). -/
+theorem sumRoundError_le_of [Inhabited W] {n : ℕ}
+    (h : figErrorSum cp.ready cp.sourceErrors cp.figures.errorExp ≤ n) (C : ir.ProofSystem P I) :
+    ∑ c, (CertifiedFront.forkIopSound cp src F C).error c ≤ (n : ℝ≥0) / 2 ^ cp.figures.errorExp :=
+  (CertifiedFront.sumRoundError_le cp src F C).trans (by gcongr)
+
 end CertifiedFront
 
 /-! ## The frontend family with a statement check -/
@@ -361,6 +404,50 @@ theorem maxRoundError_le [Inhabited W] (C : ir.ProofSystem P I) :
     (cp.figuresOk.fieldRoundsLe cp.fieldCard)
     (fun _ => cp.figuresOk.phaseError_le cp.fieldCard src.eps src.eps_le _))
 
+/-- **The round errors of the series–parallel composite sum to at most `figErrorSum / 2^errorExp`**
+(`RealizedProgram.ProofSystem.fieldForkErrorWith_sum_le`): every domain's summed round charges
+and every phase's error, each rounded up (`RealizedProgram.ProgramFigures.Check.fieldSumBound_le`,
+`RealizedProgram.ProgramFigures.Check.phaseError_le_ceil`). -/
+@[config_template]
+theorem sumRoundError_le [Inhabited W] (C : ir.ProofSystem P I) :
+    ∑ c, (CertifiedFrontWith.forkIopSound cp src F C).error c ≤
+      (figErrorSum cp.ready cp.sourceErrors cp.figures.errorExp : ℝ≥0) /
+        2 ^ cp.figures.errorExp := by
+  refine (C.fieldForkErrorWith_sum_le cp.ready F.stmtOf src.sound src.final).trans ?_
+  rw [figErrorSum, Nat.cast_add, add_div, Nat.cast_sum, Finset.sum_div, Nat.cast_sum,
+    Finset.sum_div]
+  refine add_le_add (Finset.sum_le_sum fun d _ => cp.figuresOk.fieldSumBound_le cp.fieldCard d) ?_
+  change ∑ j, (ir.layout I).error (ir.phaseError I (ir.roundError I src.eps)) j ≤ _
+  refine ((ir.layout I).sum_error _).trans_le (Finset.sum_le_sum fun k _ => ?_)
+  exact cp.figuresOk.phaseError_le_ceil cp.fieldCard src.eps src.eps_le k
+
+/-- **The round errors sum to at most `rounds · errorMax / 2^errorExp`**: at most `rounds`
+challenges (`SPBCS.ProofSystemTranscript.card_chIdx_le`, the figures' `rounds_le`), each at most
+`errorMax / 2^errorExp` (`maxRoundError_le`). -/
+theorem sumRoundError_le_rounds [Inhabited W] (C : ir.ProofSystem P I) :
+    ∑ c, (CertifiedFrontWith.forkIopSound cp src F C).error c ≤
+      ((cp.figures.rounds * cp.figures.errorMax : ℕ) : ℝ≥0) / 2 ^ cp.figures.errorExp := by
+  calc ∑ c, (CertifiedFrontWith.forkIopSound cp src F C).error c
+      ≤ Fintype.card (ChIdx (CertifiedFrontWith.forkIop cp src F C).P
+          (CertifiedFrontWith.forkIop cp src F C).term) *
+          maxError (CertifiedFrontWith.forkIopSound cp src F C).error := sum_le_card_mul_max _
+    _ ≤ cp.figures.rounds * ((cp.figures.errorMax : ℝ≥0) / 2 ^ cp.figures.errorExp) := by
+      gcongr
+      · exact_mod_cast (SPBCS.ProofSystemTranscript.card_chIdx_le
+          (C := CertifiedFrontWith.forkIop cp src F C)).trans (cp.figuresOk.figuresWith (B := C)
+        (Lw := CertifiedSource.forkLowering cp src C)
+        (f := F.stmtOf) F.ok).rounds_le
+      · exact CertifiedFrontWith.maxRoundError_le cp src F C
+    _ = _ := by push_cast; rw [mul_div_assoc]
+
+/-- **The round errors sum to at most `n / 2^errorExp`** when the summed round errors rounded up
+(`figErrorSum`) are at most `n` (`sumRoundError_le`). -/
+theorem sumRoundError_le_of [Inhabited W] {n : ℕ}
+    (h : figErrorSum cp.ready cp.sourceErrors cp.figures.errorExp ≤ n) (C : ir.ProofSystem P I) :
+    ∑ c, (CertifiedFrontWith.forkIopSound cp src F C).error c ≤
+      (n : ℝ≥0) / 2 ^ cp.figures.errorExp :=
+  (CertifiedFrontWith.sumRoundError_le cp src F C).trans (by gcongr)
+
 end CertifiedFrontWith
 
 /-! ## The configurations -/
@@ -388,7 +475,8 @@ strategy and the generated figures, at the parameter set `ps` (its salt length `
 cap `qQ`) and the classical query cap `2^64`. -/
 @[expose] noncomputable def ofCertified [DecidableEq Stmt] [Inhabited W]
     (cp : CertifiedProgram P ir I) (src : SourceFront cp W S)
-    (F : Frontend cp src Stmt W' HonestIn) (ps : ParamSet) : Configuration where
+    (F : Frontend cp src Stmt W' HonestIn) (ps : ParamSet)
+    (errorSum : ℕ := cp.figures.rounds * cp.figures.errorMax) : Configuration where
   ProofSystem := ir.ProofSystem P I
   Stmt := Stmt
   IopWit := ir.Valuation I → W
@@ -421,6 +509,7 @@ cap `qQ`) and the classical query cap `2^64`. -/
   kq := cp.figures.kq
   errorMax := cp.figures.errorMax
   errorExp := cp.figures.errorExp
+  errorSum := errorSum
   D := cp.figures.D
   qQ := ps.quantumQueryCap
   qR := 2 ^ 64
@@ -431,7 +520,8 @@ cap `qQ`) and the classical query cap `2^64`. -/
 (`ofCertified` with `CertifiedFrontWith`). -/
 @[expose] noncomputable def ofCertifiedWith [DecidableEq Stmt] [Inhabited W]
     (cp : CertifiedProgram P ir I) (src : SourceFront cp W S)
-    (F : FrontendWith cp src Stmt W' HonestIn) (ps : ParamSet) : Configuration where
+    (F : FrontendWith cp src Stmt W' HonestIn) (ps : ParamSet)
+    (errorSum : ℕ := cp.figures.rounds * cp.figures.errorMax) : Configuration where
   ProofSystem := ir.ProofSystem P I
   Stmt := Stmt
   IopWit := ir.Valuation I → W
@@ -464,6 +554,7 @@ cap `qQ`) and the classical query cap `2^64`. -/
   kq := cp.figures.kq
   errorMax := cp.figures.errorMax
   errorExp := cp.figures.errorExp
+  errorSum := errorSum
   D := cp.figures.D
   qQ := ps.quantumQueryCap
   qR := 2 ^ 64
@@ -492,22 +583,25 @@ theorem mergeBoundsWith {F : FrontendWith cp src Stmt W' HonestIn} (hF : F.Facts
     (fun a => cp.branchName_le a.1), hkS⟩
 
 /-- **The facts of `ofCertified`** with granted points (`Configuration.GrantedFacts`): the setting's
-facts (`mergeBounds`), the end-to-end theorem at the configuration's IOP
-(`RealizedProgram.ProofSystem.FieldBranches.e2e_knowledge`,
-`RealizedProgram.ProofSystem.FieldBranches.e2e`, at the frontend's witness map and the domains'
-generic honest provers), the figures' bounds from the generated check
+facts (`mergeBounds`), the witness map into the relation (`Frontend.Facts.mem_rel`), the
+end-to-end theorem at the configuration's IOP (`RealizedProgram.ProofSystem.FieldBranches.e2e`, at
+the frontend's witness map and the domains' generic honest provers), the figures' bounds from
+the generated check
 (`RealizedProgram.ProgramFigures.Check.figures`, `RealizedProgram.ProgramFigures.Check.loadsGranted`,
 `CertifiedFront.maxRoundError_le`) and the honest strategy's (`Frontend.Facts.exec_δ`). -/
 theorem ofCertified_grantedFacts {F : Frontend cp src Stmt W' HonestIn} (hF : F.Facts) {ps : ParamSet}
-    (hkS : ps.saltBytes ≤ 2 ^ 10) : (ofCertified cp src F ps).GrantedFacts where
+    (hkS : ps.saltBytes ≤ 2 ^ 10) {errorSum : ℕ}
+    (hsum : ∀ C, ∑ c, (CertifiedFront.forkIopSound cp src F C).error c ≤
+      (errorSum : ℝ≥0) / 2 ^ cp.figures.errorExp := by
+      exact CertifiedFront.sumRoundError_le_rounds _ _ _)
+    (hsr : errorSum ≤ cp.figures.rounds * cp.figures.errorMax := by exact le_rfl) :
+    (ofCertified cp src F ps errorSum).GrantedFacts where
   hb := mergeBounds cp src hF hkS
-  knowledge C _ hkq := (C.fieldBranches cp.ready).e2e_knowledge (C.fieldBranchesSound cp.ready)
-    src.sourceSound F.stmtOf (CertifiedFront.forkTranscript cp src F C) ps.saltBytes
-    (mergeBounds cp src hF hkS C) hF.mem_rel hkq
   e2e C _ _ H _ hkq hf := (C.fieldBranches cp.ready).e2e (C.fieldBranchesSound cp.ready)
     src.sourceSound F.stmtOf (CertifiedFront.forkTranscript cp src F C) ps.saltBytes (mergeBounds cp src hF hkS C)
     hF.mem_rel hkq hf (C.fieldHonestDomains cp.ready) (C.fieldForkHonestDomains cp.ready)
     H.toHonestCore H.complete
+  witnessMap_mem := hF.mem_rel
   rounds_le C := (cp.figuresOk.figures (B := C) (Lw := CertifiedSource.forkLowering cp src C)
     (f := F.stmtOf)).rounds_le
   loadsGranted C := cp.figuresOk.loadsGranted (B := C)
@@ -520,6 +614,8 @@ theorem ofCertified_grantedFacts {F : Frontend cp src Stmt W' HonestIn} (hF : F.
     (f := F.stmtOf)).kq_ge
   kq_le := cp.figuresOk.kq_le
   error_le := CertifiedFront.maxRoundError_le cp src F
+  errorSum_le := hsum
+  errorSum_le_rounds := hsr
   digests_le C := (cp.figuresOk.figures (B := C) (Lw := CertifiedSource.forkLowering cp src C)
     (f := F.stmtOf)).digests_le
   pos_eq C := (cp.figuresOk.figures (B := C) (Lw := CertifiedSource.forkLowering cp src C)
@@ -535,9 +631,13 @@ theorem ofCertified_grantedFacts {F : Frontend cp src Stmt W' HonestIn} (hF : F.
 load passes the Chernoff test on the default stream (`RealizedProgram.ProgramFigures.Check.loads`
 at `hl`). -/
 theorem ofCertified_facts {F : Frontend cp src Stmt W' HonestIn} (hF : F.Facts) {ps : ParamSet}
-    (hkS : ps.saltBytes ≤ 2 ^ 10) (hl : cp.figures.DefaultLoadsOk cp.numbers) :
-    (ofCertified cp src F ps).Facts where
-  toGrantedFacts := ofCertified_grantedFacts cp src hF hkS
+    (hkS : ps.saltBytes ≤ 2 ^ 10) (hl : cp.figures.DefaultLoadsOk cp.numbers) {errorSum : ℕ}
+    (hsum : ∀ C, ∑ c, (CertifiedFront.forkIopSound cp src F C).error c ≤
+      (errorSum : ℝ≥0) / 2 ^ cp.figures.errorExp := by
+      exact CertifiedFront.sumRoundError_le_rounds _ _ _)
+    (hsr : errorSum ≤ cp.figures.rounds * cp.figures.errorMax := by exact le_rfl) :
+    (ofCertified cp src F ps errorSum).Facts where
+  toGrantedFacts := ofCertified_grantedFacts cp src hF hkS hsum hsr
   loads C := cp.figuresOk.loads hl (B := C) (Lw := CertifiedSource.forkLowering cp src C)
     (f := F.stmtOf)
 
@@ -546,15 +646,18 @@ checked statements, `RealizedProgram.ProofSystem.FieldBranches.e2eWith_knowledge
 `RealizedProgram.ProofSystem.FieldBranches.e2eWith`). -/
 theorem ofCertifiedWith_grantedFacts {F : FrontendWith cp src Stmt W' HonestIn} (hF : F.Facts)
     {ps : ParamSet}
-    (hkS : ps.saltBytes ≤ 2 ^ 10) : (ofCertifiedWith cp src F ps).GrantedFacts where
+    (hkS : ps.saltBytes ≤ 2 ^ 10) {errorSum : ℕ}
+    (hsum : ∀ C, ∑ c, (CertifiedFrontWith.forkIopSound cp src F C).error c ≤
+      (errorSum : ℝ≥0) / 2 ^ cp.figures.errorExp := by
+      exact CertifiedFrontWith.sumRoundError_le_rounds _ _ _)
+    (hsr : errorSum ≤ cp.figures.rounds * cp.figures.errorMax := by exact le_rfl) :
+    (ofCertifiedWith cp src F ps errorSum).GrantedFacts where
   hb := mergeBoundsWith cp src hF hkS
-  knowledge C _ hkq := (C.fieldBranches cp.ready).e2eWith_knowledge (C.fieldBranchesSound cp.ready)
-    src.sourceSound F.stmtOf F.ok (CertifiedFrontWith.forkTranscript cp src F C) ps.saltBytes
-    (mergeBoundsWith cp src hF hkS C) hF.mem_rel hkq
   e2e C _ _ H _ hkq hf := (C.fieldBranches cp.ready).e2eWith (C.fieldBranchesSound cp.ready)
     src.sourceSound F.stmtOf F.ok (CertifiedFrontWith.forkTranscript cp src F C) ps.saltBytes
     (mergeBoundsWith cp src hF hkS C) hF.mem_rel hkq hf (C.fieldHonestDomains cp.ready)
     (C.fieldForkHonestDomains cp.ready) H.toHonestCore H.complete
+  witnessMap_mem := hF.mem_rel
   rounds_le C := (cp.figuresOk.figuresWith (B := C) (Lw := CertifiedSource.forkLowering cp src C)
     (f := F.stmtOf) F.ok).rounds_le
   loadsGranted C := cp.figuresOk.loadsGrantedWith (B := C)
@@ -567,6 +670,8 @@ theorem ofCertifiedWith_grantedFacts {F : FrontendWith cp src Stmt W' HonestIn} 
     (f := F.stmtOf) F.ok).kq_ge
   kq_le := cp.figuresOk.kq_le
   error_le := CertifiedFrontWith.maxRoundError_le cp src F
+  errorSum_le := hsum
+  errorSum_le_rounds := hsr
   digests_le C := (cp.figuresOk.figuresWith (B := C)
     (Lw := CertifiedSource.forkLowering cp src C) (f := F.stmtOf) F.ok).digests_le
   pos_eq C := (cp.figuresOk.figuresWith (B := C) (Lw := CertifiedSource.forkLowering cp src C)
@@ -581,9 +686,13 @@ theorem ofCertifiedWith_grantedFacts {F : FrontendWith cp src Stmt W' HonestIn} 
 /-- **The facts of `ofCertifiedWith` without granted points** (`ofCertified_facts` at the checked
 statements, `RealizedProgram.ProgramFigures.Check.loadsWith`). -/
 theorem ofCertifiedWith_facts {F : FrontendWith cp src Stmt W' HonestIn} (hF : F.Facts) {ps : ParamSet}
-    (hkS : ps.saltBytes ≤ 2 ^ 10) (hl : cp.figures.DefaultLoadsOk cp.numbers) :
-    (ofCertifiedWith cp src F ps).Facts where
-  toGrantedFacts := ofCertifiedWith_grantedFacts cp src hF hkS
+    (hkS : ps.saltBytes ≤ 2 ^ 10) (hl : cp.figures.DefaultLoadsOk cp.numbers) {errorSum : ℕ}
+    (hsum : ∀ C, ∑ c, (CertifiedFrontWith.forkIopSound cp src F C).error c ≤
+      (errorSum : ℝ≥0) / 2 ^ cp.figures.errorExp := by
+      exact CertifiedFrontWith.sumRoundError_le_rounds _ _ _)
+    (hsr : errorSum ≤ cp.figures.rounds * cp.figures.errorMax := by exact le_rfl) :
+    (ofCertifiedWith cp src F ps errorSum).Facts where
+  toGrantedFacts := ofCertifiedWith_grantedFacts cp src hF hkS hsum hsr
   loads C := cp.figuresOk.loadsWith hl (B := C) (Lw := CertifiedSource.forkLowering cp src C)
     (f := F.stmtOf) F.ok
 

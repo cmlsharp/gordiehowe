@@ -489,6 +489,58 @@ theorem fieldForkError_le [Inhabited W] {proj : ir.Valuation I → ir.Assignment
     gcongr
     exact_mod_cast ir.combinations_fieldTreeOf_le B.src (R d)
 
+/-- **The round errors of the series–parallel composite on the generic per-field domain proofs sum
+to at most** the domains' `fieldSumBound` and the application phase's errors
+(`IOP.Sound.sum_error`): each domain's commit rounds to its certified commit bound
+(`RingSwitching.TreeFieldProof.sum_commitError`), its branches to the covered batches' phase errors
+and GKR's shape budgets (`sum_branchError_le`), its join to the combinations', test and column
+terms (`RingSwitching.TreeFieldProof.sum_ipError`, `sum_cpError`). -/
+theorem fieldForkError_sum_le [Inhabited W] {proj : ir.Valuation I → ir.Assignment I → W}
+    {S : KnowledgeStateFunction (ir.sourceVerifier I)} {ε : (ir.sourceSpec I).ChallengeIdx → ℝ≥0}
+    (h : RBRKnowledgeSound rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
+    (hend : ∀ i, ir.rounds.get i.1 = .final → ε i = 0) :
+    ∑ c, (((B.fieldBranches R).soundIOPSound (B.fieldBranchesSound R) h hend).comap f).error c ≤
+      ∑ d : Fin ir.domains.length, ir.fieldSumBound I (R d) +
+        ∑ j, ((B.fieldBranches R).soundIOPSound (B.fieldBranchesSound R) h hend).εapp j := by
+  refine IOP.Sound.sum_error_le _ fun d => ?_
+  have hsum := ((ir.fieldFork B.src (R d)).join.sum_commitError
+    (Rel := (ir.fieldForkSound B.src (R d)).joinRel)
+    (ir.fieldForkSound B.src (R d)).joinSound).trans
+    (congrArg Ligero.AgreementThreshold.Bounds.commit
+      (Ligero.MaskRow.TreeLayout.Numbers.bounds_setup ..))
+  have hjoin := (ir.fieldFork B.src (R d)).join.sum_error
+    (Rel := (ir.fieldForkSound B.src (R d)).joinRel) (ir.fieldForkSound B.src (R d)).joinSound
+  have h0 : ∑ i, (ir.fieldForkSound B.src (R d)).εj i = 0 := Finset.sum_eq_zero fun i _ => i.1.elim0
+  rw [h0, zero_add, RingSwitching.TreeFieldProof.cpError,
+    show (ir.fieldFork B.src (R d)).join.cp.t = (R d).numbers.Sh.nreq from
+      Ligero.MaskRow.TreeLayout.Numbers.t_setup ..,
+    show (ir.fieldFork B.src (R d)).join.cp.bounds = (R d).numbers.bounds from
+      Ligero.MaskRow.TreeLayout.Numbers.bounds_setup ..] at hjoin
+  have hj2 : ∑ j, ((ir.fieldFork B.src (R d)).join.sound
+      (Rel := (ir.fieldForkSound B.src (R d)).joinRel)
+      (ir.fieldForkSound B.src (R d)).joinSound).error j =
+      ((ir.fieldFork B.src (R d)).join.path.combinations : ℝ≥0) /
+        Fintype.card (I (ir.domainField d)).K +
+      ((R d).numbers.bounds.test + (R d).numbers.bounds.column +
+        (if npOf (R d).Pk (R d).rs = 0 then 0 else
+          Ligero.SubfieldTest.jointSubfieldError (R d).numbers.Sh.block (R d).numbers.Sh.N
+            (R d).numbers.Sh.nreq)) := hjoin
+  have hc : ((ir.fieldFork B.src (R d)).join.path.combinations : ℝ≥0) ≤ (R d).rs.length := by
+    exact_mod_cast ir.combinations_fieldTreeOf_le B.src (R d)
+  refine (add_le_add (le_of_eq hsum) (add_le_add (ir.sum_branchError_le B.src (R d).rs B.enforce)
+    (le_of_eq hj2))).trans ?_
+  rw [fieldSumBound]
+  have hq : ((ir.fieldFork B.src (R d)).join.path.combinations : ℝ≥0) /
+      Fintype.card (I (ir.domainField d)).K ≤
+      ((R d).rs.length : ℝ≥0) / Fintype.card (I (ir.domainField d)).K := by gcongr
+  calc _ ≤ (R d).numbers.bounds.commit + (ir.batchesError d (R d).Pk + ir.gkrSumError I d +
+        (((R d).rs.length : ℝ≥0) / Fintype.card (I (ir.domainField d)).K +
+          ((R d).numbers.bounds.test + (R d).numbers.bounds.column +
+          (if npOf (R d).Pk (R d).rs = 0 then 0 else
+            Ligero.SubfieldTest.jointSubfieldError (R d).numbers.Sh.block (R d).numbers.Sh.N
+              (R d).numbers.Sh.nreq)))) := by gcongr
+    _ = _ := by ring
+
 /-- **Every round of the composite read through `f` and checked** (as `fieldForkError_le`). -/
 theorem fieldForkErrorWith_le [Inhabited W] {chk : Stmt → Bool} {proj : ir.Valuation I → ir.Assignment I → W}
     {S : KnowledgeStateFunction (ir.sourceVerifier I)} {ε : (ir.sourceSpec I).ChallengeIdx → ℝ≥0}
@@ -519,6 +571,61 @@ theorem fieldForkErrorWith_le [Inhabited W] {chk : Stmt → Bool} {proj : ir.Val
     refine le_trans ?_ (hk d).combinations
     gcongr
     exact_mod_cast ir.combinations_fieldTreeOf_le B.src (R d)
+
+
+/-- **The round errors of the composite read through `f` and checked sum to at most** the
+domains' `fieldSumBound` and the application phase's errors
+(`IOP.Sound.sum_error`): each domain's commit rounds to its certified commit bound
+(`RingSwitching.TreeFieldProof.sum_commitError`), its branches to the covered batches' phase errors
+and GKR's shape budgets (`sum_branchError_le`), its join to the combinations', test and column
+terms (`RingSwitching.TreeFieldProof.sum_ipError`, `sum_cpError`). -/
+theorem fieldForkErrorWith_sum_le [Inhabited W] {chk : Stmt → Bool}
+    {proj : ir.Valuation I → ir.Assignment I → W}
+    {S : KnowledgeStateFunction (ir.sourceVerifier I)} {ε : (ir.sourceSpec I).ChallengeIdx → ℝ≥0}
+    (h : RBRKnowledgeSound rel (ir.sourceVerifier I) (ir.sourceExtractor I proj) S ε)
+    (hend : ∀ i, ir.rounds.get i.1 = .final → ε i = 0) :
+    ∑ c, (((B.fieldBranches R).soundIOPSound (B.fieldBranchesSound R) h hend).comapWith f chk).error
+      c ≤
+      ∑ d : Fin ir.domains.length, ir.fieldSumBound I (R d) +
+        ∑ j, ((B.fieldBranches R).soundIOPSound (B.fieldBranchesSound R) h hend).εapp j := by
+  refine IOP.Sound.sum_error_le _ fun d => ?_
+  have hsum := ((ir.fieldFork B.src (R d)).join.sum_commitError
+    (Rel := (ir.fieldForkSound B.src (R d)).joinRel)
+    (ir.fieldForkSound B.src (R d)).joinSound).trans
+    (congrArg Ligero.AgreementThreshold.Bounds.commit
+      (Ligero.MaskRow.TreeLayout.Numbers.bounds_setup ..))
+  have hjoin := (ir.fieldFork B.src (R d)).join.sum_error
+    (Rel := (ir.fieldForkSound B.src (R d)).joinRel) (ir.fieldForkSound B.src (R d)).joinSound
+  have h0 : ∑ i, (ir.fieldForkSound B.src (R d)).εj i = 0 := Finset.sum_eq_zero fun i _ => i.1.elim0
+  rw [h0, zero_add, RingSwitching.TreeFieldProof.cpError,
+    show (ir.fieldFork B.src (R d)).join.cp.t = (R d).numbers.Sh.nreq from
+      Ligero.MaskRow.TreeLayout.Numbers.t_setup ..,
+    show (ir.fieldFork B.src (R d)).join.cp.bounds = (R d).numbers.bounds from
+      Ligero.MaskRow.TreeLayout.Numbers.bounds_setup ..] at hjoin
+  have hj2 : ∑ j, ((ir.fieldFork B.src (R d)).join.sound
+      (Rel := (ir.fieldForkSound B.src (R d)).joinRel)
+      (ir.fieldForkSound B.src (R d)).joinSound).error j =
+      ((ir.fieldFork B.src (R d)).join.path.combinations : ℝ≥0) /
+        Fintype.card (I (ir.domainField d)).K +
+      ((R d).numbers.bounds.test + (R d).numbers.bounds.column +
+        (if npOf (R d).Pk (R d).rs = 0 then 0 else
+          Ligero.SubfieldTest.jointSubfieldError (R d).numbers.Sh.block (R d).numbers.Sh.N
+            (R d).numbers.Sh.nreq)) := hjoin
+  have hc : ((ir.fieldFork B.src (R d)).join.path.combinations : ℝ≥0) ≤ (R d).rs.length := by
+    exact_mod_cast ir.combinations_fieldTreeOf_le B.src (R d)
+  refine (add_le_add (le_of_eq hsum) (add_le_add (ir.sum_branchError_le B.src (R d).rs B.enforce)
+    (le_of_eq hj2))).trans ?_
+  rw [fieldSumBound]
+  have hq : ((ir.fieldFork B.src (R d)).join.path.combinations : ℝ≥0) /
+      Fintype.card (I (ir.domainField d)).K ≤
+      ((R d).rs.length : ℝ≥0) / Fintype.card (I (ir.domainField d)).K := by gcongr
+  calc _ ≤ (R d).numbers.bounds.commit + (ir.batchesError d (R d).Pk + ir.gkrSumError I d +
+        (((R d).rs.length : ℝ≥0) / Fintype.card (I (ir.domainField d)).K +
+          ((R d).numbers.bounds.test + (R d).numbers.bounds.column +
+          (if npOf (R d).Pk (R d).rs = 0 then 0 else
+            Ligero.SubfieldTest.jointSubfieldError (R d).numbers.Sh.block (R d).numbers.Sh.N
+              (R d).numbers.Sh.nreq)))) := by gcongr
+    _ = _ := by ring
 
 end ProofSystem
 

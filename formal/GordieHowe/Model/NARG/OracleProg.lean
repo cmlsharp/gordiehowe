@@ -21,6 +21,8 @@ queries are given as one (`GordieHowe.SPBCS.roundsProg`, `GordieHowe/SPBCS/Verif
 `pure`, sequential composition, a query and a tabulation.
 `AllOut p P`: every output of `p`, on every path of answers, satisfies `P` (`AllOut.run`,
 `mono`, `mapOutput`, `translate`).
+`InputsBefore Pair Mark L`: every marked entry of a query list has an earlier entry paired with
+it, closed under `append` and `flatMap`.
 -/
 
 namespace GordieHowe
@@ -392,5 +394,52 @@ theorem AllOut.translate {A' B' : Type} (ι : A → A') (g : A → B' → B) {P 
 end AllOut
 
 end OracleProg
+
+/-! ### Paired entries of a list -/
+
+/-- **Every marked entry of `L` has an earlier entry paired with it.** -/
+def InputsBefore {A : Type*} (Pair : A → A → Prop) (Mark : A → Prop) (L : List A) : Prop :=
+  ∀ i (hi : i < L.length), Mark L[i] → ∃ a ∈ L.take i, Pair a L[i]
+
+namespace InputsBefore
+
+variable {A : Type*} {Pair Pair' : A → A → Prop} {Mark : A → Prop}
+
+/-- A list without marked entries. -/
+theorem of_forall_not {L : List A} (h : ∀ x ∈ L, ¬ Mark x) : InputsBefore Pair Mark L :=
+  fun _ hi hm => absurd hm (h _ (List.getElem_mem hi))
+
+/-- A weaker pairing. -/
+theorem mono {L : List A} (hP : ∀ a b, Pair a b → Pair' a b) (h : InputsBefore Pair Mark L) :
+    InputsBefore Pair' Mark L := fun i hi hm => by
+  obtain ⟨a, ha, hp⟩ := h i hi hm
+  exact ⟨a, ha, hP _ _ hp⟩
+
+/-- **Concatenation**: the earlier entries of the second part include the first part. -/
+theorem append {L M : List A} (hL : InputsBefore Pair Mark L) (hM : InputsBefore Pair Mark M) :
+    InputsBefore Pair Mark (L ++ M) := by
+  intro i hi hm
+  by_cases hiL : i < L.length
+  · have e : (L ++ M)[i] = L[i] := List.getElem_append_left hiL
+    rw [e] at hm ⊢
+    obtain ⟨a, ha, hp⟩ := hL i hiL hm
+    exact ⟨a, by rw [List.take_append_of_le_length hiL.le]; exact ha, hp⟩
+  · obtain ⟨i', rfl⟩ := Nat.exists_eq_add_of_le (not_lt.1 hiL)
+    have hi' : i' < M.length := by simp at hi; omega
+    have e : (L ++ M)[L.length + i'] = M[i'] := by simp
+    rw [e] at hm ⊢
+    obtain ⟨a, ha, hp⟩ := hM i' hi' hm
+    exact ⟨a, by rw [List.take_append]; exact List.mem_append_right _ (by simpa using ha), hp⟩
+
+/-- **Concatenation of a family.** -/
+theorem flatMap {ι : Type*} {f : ι → List A} :
+    ∀ {l : List ι}, (∀ x ∈ l, InputsBefore Pair Mark (f x)) →
+      InputsBefore Pair Mark (l.flatMap f)
+  | [], _ => of_forall_not (by simp)
+  | x :: l, h => by
+    rw [List.flatMap_cons]
+    exact (h x (List.mem_cons_self ..)).append (flatMap fun y hy => h y (List.mem_cons_of_mem _ hy))
+
+end InputsBefore
 
 end GordieHowe

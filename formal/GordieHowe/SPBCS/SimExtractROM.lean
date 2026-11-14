@@ -259,6 +259,49 @@ theorem gameLog_mem_bad [DecidableEq X] (hA : ∀ r a, M.AssignsAtKeys (sp r a) 
   · exact Or.inl hb
 
 omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
+/-- **At a flip bound** (`hF`, as in `prob_log_bad_union_le_of`). **Simulation-sound
+extractability of the spBCS compiler in the classical random-oracle model, joint form** (CY24
+Definition 5.1.1 with Unruh 2017 Definition 14, weak variant): for a
+composite causally round-by-round knowledge sound at `E` with errors `ε` (`hrbr`), query phases
+whose accepting runs make at most `kq` spBCS verifier queries (`hkq`), digests of at least one
+byte, every classical adversary tree with at most `tq` queries of its own (`h𝒜`) and all simulator
+coins `c`, over a uniform base oracle: the probability that the adversary outputs a statement none
+of its proof queries was, with a proof the spBCS verifier accepts under the final oracle, and the
+straight-line extractor (`dbExtract` on the game's query table) returns no witness for the
+statement, is at most `knowledgeErrorROM k (tq + Q q + kq) cD cP (max_c ε c)`, with
+`q` the queries of one run of `Sim`. -/
+theorem simulation_sound_extractability_rom_joint_of [DecidableEq X]
+    (hA : ∀ r a, M.AssignsAtKeys (sp r a) ⟨a.salt, fx r⟩) {q : ℕ}
+    (hqs : ∀ r a G, ((sp r a).trace G).length ≤ q)
+    (hrbr : CausalRBRKnowledgeSound rel V E St ε) (cD cP : ℕ)
+    (hF : ∀ tq, condFlip (M.bad rel E St) digestCollisionᶜ tq ≤
+      maxError ε + (((max 2 cD + cP) * tq : ℕ) : ℝ≥0∞) / 2 ^ (8 * k)) {kq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {Q tq : ℕ}
+    (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C)
+    (𝒜 : M.ROMAdversary B X') (h𝒜 : 𝒜.QueryBound tq) :
+    Pr[h ← (Query k kN kS L → Out k e) : M.WinsROM B Qs fx sp c 𝒜 h ∧
+        M.gameLog B Qs sp c 𝒜
+          (tq + Q * q + kq) h ∉
+          M.extracts rel E (M.romResult B sp c 𝒜 h).out.stmt] ≤
+      knowledgeErrorROM k (tq + Q * q + kq) cD cP (maxError ε) := by
+  set K := tq + Q * q + kq
+  have hlen : ∀ h, M.WinsROM B Qs fx sp c 𝒜 h →
+      ((M.romGame B Qs sp c 𝒜).trace h).length ≤ K := fun h hw => by
+    rw [trace_romGame, List.length_append]
+    have h1 := SEProg.length_trace_compose _ c hqs 𝒜 tq h𝒜 [] 0 [] h (Nat.zero_le _)
+    have h2 := hkq _ _ _ hw.2
+    simp only [Nat.sub_zero] at h1
+    omega
+  have hle := M.prob_log_bad_union_le_of rel E St cD cP hF
+    ((SPBCS.baseAlg (k := k) (kN := kN) (kS := kS) (L := L) (e := e)).append
+      (OracleProg.toExpansion (fun _ : Unit => M.romGame B Qs sp c 𝒜)
+        (.xof (fun _ => 0) fun _ => 0)) K)
+  refine le_trans (QROM.probUniform_mono fun h hh => ?_)
+    (hle.trans_eq (by rw [Nat.zero_add]))
+  have := gameLog_mem_bad hA hrbr c 𝒜 (hlen h hh.1) hh.1 hh.2
+  simpa [gameLog] using this
+
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
 /-- **Simulation-sound extractability of the spBCS compiler in the classical random-oracle
 model, joint form** (CY24 Definition 5.1.1 with Unruh 2017 Definition 14, weak variant): for a
 composite causally round-by-round knowledge sound at `E` with errors `ε` (`hrbr`), query phases
@@ -280,23 +323,9 @@ theorem simulation_sound_extractability_rom_joint [DecidableEq X]
           (tq + Q * q + kq) h ∉
           M.extracts rel E (M.romResult B sp c 𝒜 h).out.stmt] ≤
       M.simExtractionErrorROM kq (maxError ε)
-        q tq Q := by
-  set K := tq + Q * q + kq
-  have hlen : ∀ h, M.WinsROM B Qs fx sp c 𝒜 h →
-      ((M.romGame B Qs sp c 𝒜).trace h).length ≤ K := fun h hw => by
-    rw [trace_romGame, List.length_append]
-    have h1 := SEProg.length_trace_compose _ c hqs 𝒜 tq h𝒜 [] 0 [] h (Nat.zero_le _)
-    have h2 := hkq _ _ _ hw.2
-    simp only [Nat.sub_zero] at h1
-    omega
-  have hle := M.prob_log_bad_union_le rel E St hrbr
-    ((SPBCS.baseAlg (k := k) (kN := kN) (kS := kS) (L := L) (e := e)).append
-      (OracleProg.toExpansion (fun _ : Unit => M.romGame B Qs sp c 𝒜)
-        (.xof (fun _ => 0) fun _ => 0)) K)
-  refine le_trans (QROM.probUniform_mono fun h hh => ?_)
-    (hle.trans_eq (by rw [Nat.zero_add, simExtractionErrorROM]))
-  have := gameLog_mem_bad hA hrbr c 𝒜 (hlen h hh.1) hh.1 hh.2
-  simpa [gameLog] using this
+        q tq Q :=
+  simulation_sound_extractability_rom_joint_of hA hqs hrbr _ _
+    (fun _ => M.condFlip_bad_le rel E St hrbr) hkq c 𝒜 h𝒜
 
 /-! ### Query-bounded classical adversaries -/
 
@@ -332,6 +361,39 @@ variable {M : SPBCS Mg P X k kN kS L e} {B : ℕ} [∀ j i, Fintype ((M.comp j).
   {St : CausalStateFn P t X} {ε : ChIdx P t → ℝ≥0}
 
 omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
+/-- **At a flip bound** (`hF`, as in `prob_log_bad_union_le_of`). **Simulation-sound
+extractability of the spBCS compiler in the classical random-oracle model, at fixed simulator
+coins** (the extraction condition of paper `thm:bcs-se`(2), from which
+`SPBCS.weak_online_simulation_extractability_rom` derives the full statement; Unruh 2017, ePrint
+2017/398, Definition 14, p. 21, weak variant,
+with straight-line extraction, against classical adversaries; the event of CY24 Definition 5.1.1,
+p. 48, with coins independent of the oracle, CY24 Remark 5.1.4, p. 49): for a composite causally
+round-by-round knowledge sound at `E` with errors `ε` (`hrbr`), query phases whose accepting runs
+make at most `kq` verifier queries (`hkq`), the simulation oracle running a classical simulator
+program `sp` that assigns only at the keys of its chain inputs (`hA`) and makes at most `q`
+queries (`hqs`), with coins `c`, on any queried statement and answering the first `Q` proof queries,
+and every query-bounded classical adversary (`ROM.QueryBoundedAdversary`): over its coins and a
+uniform base oracle, the probability that it outputs a statement none of its proof queries was with
+a
+proof the verifier accepts under the final reprogrammed oracle while the straight-line extractor
+`dbExtract` at `E`, reading the query table of the adversary's, the simulator's and the
+verifier's queries, returns no witness for the statement is at most
+`simExtractionErrorROM kq (maxError ε) q tq Q`. -/
+theorem _root_.GordieHowe.SPBCS.weak_online_simulation_extractability_rom_basic_of [DecidableEq X]
+    (hA : ∀ r a, M.AssignsAtKeys (sp r a) ⟨a.salt, fx r⟩) {q : ℕ}
+    (hqs : ∀ r a G, ((sp r a).trace G).length ≤ q)
+    (hrbr : CausalRBRKnowledgeSound rel V E St ε) (cD cP : ℕ)
+    (hF : ∀ tq, condFlip (M.bad rel E St) digestCollisionᶜ tq ≤
+      maxError ε + (((max 2 cD + cP) * tq : ℕ) : ℝ≥0∞) / 2 ^ (8 * k)) {kq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {Q tq : ℕ}
+    (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C)
+    (𝒜 : M.SimExtractionAdversaryROM B X' (Claim X M.NIProof) tq) :
+    SimExtractionAdversaryROM.winsNotExtracts (Qs := Qs) (fx := fx) (sp := sp) 𝒜 c rel E kq q ≤
+      knowledgeErrorROM k (tq + Q * q + kq) cD cP (maxError ε) :=
+  𝒜.tsum_le fun r => simulation_sound_extractability_rom_joint_of hA hqs hrbr cD cP hF hkq c
+    _ ((𝒜.alg r).queryBound_toSEProg tq)
+
+omit [∀ j i, Fintype ((M.comp j).MessageWrite i)] in
 /-- **Simulation-sound extractability of the spBCS compiler in the classical random-oracle
 model, at fixed simulator coins** (the extraction condition of paper `thm:bcs-se`(2), from which
 `SPBCS.weak_online_simulation_extractability_rom` derives the full statement; Unruh 2017, ePrint 2017/398, Definition 14, p. 21, weak variant,
@@ -355,8 +417,8 @@ theorem _root_.GordieHowe.SPBCS.weak_online_simulation_extractability_rom_basic 
     (c : Fin Q → SaltedCoins (FiatShamirSalt kS) C) (𝒜 : M.SimExtractionAdversaryROM B X' (Claim X M.NIProof) tq) :
     SimExtractionAdversaryROM.winsNotExtracts (Qs := Qs) (fx := fx) (sp := sp) 𝒜 c rel E kq q ≤
       M.simExtractionErrorROM kq (maxError ε) q tq Q :=
-  𝒜.tsum_le fun r => simulation_sound_extractability_rom_joint hA hqs hrbr hkq c
-    _ ((𝒜.alg r).queryBound_toSEProg tq)
+  SPBCS.weak_online_simulation_extractability_rom_basic_of hA hqs hrbr _ _
+    (fun _ => M.condFlip_bad_le rel E St hrbr) hkq c 𝒜
 
 end ROM
 

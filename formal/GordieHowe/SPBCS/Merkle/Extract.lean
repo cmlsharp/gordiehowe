@@ -49,6 +49,10 @@ Deviations from CMS19 section 6.1.
   partial leaf openings. "Subtree" (Lemma 6.4) is extension of both partial maps.
 - Lemma 6.5 is proved without the collision-freeness hypotheses (only `x ∉ D` is
   used), and with `S(D)` for any transcript parse `digestsOf`.
+The children of the recorded nodes (`nodeKids`) already bound the change: a new answer changes the
+tree read below `rt` only when its digest is `rt` or one of them
+(`view_extend_of_notMem_nodeKids`), and a new input that is neither a `node` nor a `leaf` changes no
+tree in a collision-free extension (`view_extend_of_not_merkle`).
 -/
 
 namespace GordieHowe.SPBCS
@@ -404,5 +408,130 @@ theorem prob_extract_change_le_size (hx : x ∉ D) {digestsOf : Bytes L → Fins
   refine (prob_extract_change_le hx digestsOf).trans ?_
   gcongr
   exact_mod_cast card_halfPre_le hT
+
+
+/-! ### Changes at the children of recorded nodes -/
+
+/-- **The children of the recorded `node` entries.** -/
+def nodeKids (D : ODB k kN kS L e) : Finset (Digest k) :=
+  D.keys.biUnion fun z => match z with
+    | .node l r => {l, r}
+    | _ => ∅
+
+/-- The node recorded with the children read at a digest is recorded. -/
+theorem node_mem_of_children_eq_some {c : Children k} (h : children D u = some c) :
+    Query.node c.left c.right ∈ D := by
+  obtain ⟨q, hq, hc⟩ := Option.bind_eq_some_iff.1 h
+  exact Query.eq_node_of_children_eq_some hc ▸ mem_of_preimage_eq_some hq
+
+/-- **Every extracted digest is the root or a child of a recorded node.** -/
+theorem label_mem_nodeKids :
+    ∀ p {v : Digest k}, label D n rt p = some v → v = rt ∨ v ∈ nodeKids D := by
+  intro p
+  induction p using Nat.strong_induction_on with
+  | _ p ih =>
+    match p with
+    | 0 => simp [label_zero]
+    | 1 => intro v h; rw [label_one] at h; exact Or.inl (Option.some_inj.1 h).symm
+    | p + 2 =>
+      intro v h
+      rw [label_succ_succ] at h
+      split_ifs at h
+      obtain ⟨w, -, hw⟩ := Option.bind_eq_some_iff.1 h
+      obtain ⟨c, hc, rfl⟩ := Option.map_eq_some_iff.1 hw
+      have hm := Finmap.mem_keys.2 (node_mem_of_children_eq_some hc)
+      refine Or.inr (selectChild_mem _ ⟨?_, ?_⟩) <;>
+        exact Finset.mem_biUnion.2 ⟨_, hm, by simp⟩
+
+/-- A new answer whose digest is neither the root nor a child of a recorded node changes no
+label. -/
+theorem label_extend_of_notMem_nodeKids (hx : x ∉ D) (hy : y.digest ≠ rt)
+    (hy' : y.digest ∉ nodeKids D) : ∀ p, label (D.extend x y) n rt p = label D n rt p := by
+  intro p
+  induction p using Nat.strong_induction_on with
+  | _ p ih =>
+    match p with
+    | 0 => simp [label_zero]
+    | 1 => simp [label_one]
+    | p + 2 =>
+      rw [label_succ_succ, label_succ_succ, ih _ (by omega)]
+      split_ifs
+      · cases hv : label D n rt ((p + 2) / 2) with
+        | none => rfl
+        | some v =>
+          have hne : y.digest ≠ v := by
+            rintro rfl
+            exact (label_mem_nodeKids _ hv).elim hy hy'
+          simp [children_extend_of_ne hx hne]
+      · rfl
+
+/-- **A new answer changes the tree read below `rt` only at `rt` or at a child of a node
+recorded before it** (CMS19 Lemma 6.5, p. 31, with the children of the recorded nodes in place
+of `S(D)`). -/
+theorem view_extend_of_notMem_nodeKids (hx : x ∉ D) (hy : y.digest ≠ rt)
+    (hy' : y.digest ∉ nodeKids D) : view (D.extend x y) n rt = view D n rt := by
+  have hl := label_extend_of_notMem_nodeKids (n := n) hx hy hy'
+  refine MerkleView.ext (funext hl) (funext fun j => ?_)
+  simp only [view, leafAt, hl]
+  cases hu : label D n rt (n + j) with
+  | none => rfl
+  | some v =>
+    have hne : y.digest ≠ v := by
+      rintro rfl
+      exact (label_mem_nodeKids _ hu).elim hy hy'
+    simp [Merkle.opening_extend_of_ne hx hne]
+
+/-! ### Entries that are neither nodes nor leaves -/
+
+/-- A reading of the unique preimage that is `none` at a new input `x` is unchanged by recording
+`x ↦ y` without a digest collision. -/
+theorem preimage_bind_extend_of_none {β : Type} (f : Query k kN kS L → Option β) (hx : x ∉ D)
+    (hcol : D.extend x y ∉ digestCollision) (hf : f x = none) (v : Digest k) :
+    (preimage (D.extend x y) v).bind f = (preimage D v).bind f := by
+  by_cases hv : y.digest = v
+  · cases hp : preimage D v with
+    | some q => rw [preimage_extend_of_eq_some hx hcol hp]
+    | none =>
+      cases hp' : preimage (D.extend x y) v with
+      | none => rfl
+      | some q =>
+        have hm : q ∈ preimages (D.extend x y) v := by
+          rw [preimage_eq_some_iff.1 hp']
+          exact Finset.mem_singleton_self q
+        rcases (mem_preimages_extend hx).1 hm with ⟨rfl, -⟩ | hm'
+        · simp [hf]
+        · exfalso
+          have hcolD : D ∉ digestCollision := notMem_collisionOn_of_extend hx hcol
+          have h1 : preimage D v = some q := preimage_eq_some_iff.2
+            (Finset.eq_singleton_iff_unique_mem.2 ⟨hm', fun b hb =>
+              Finset.card_le_one.1 (card_preimages_le_one hcolD v) b hb q hm'⟩)
+          rw [hp] at h1
+          exact absurd h1 (by simp)
+  · rw [preimage_extend_of_ne hx hv]
+
+/-- Recording a new input that is not a `node` without a digest collision changes no label. -/
+theorem label_extend_of_children_eq_none (hx : x ∉ D) (hcol : D.extend x y ∉ digestCollision)
+    (hxc : x.children = none) : ∀ p, label (D.extend x y) n rt p = label D n rt p := by
+  intro p
+  induction p using Nat.strong_induction_on with
+  | _ p ih =>
+    match p with
+    | 0 => simp [label_zero]
+    | 1 => simp [label_one]
+    | p + 2 =>
+      rw [label_succ_succ, label_succ_succ, ih _ (by omega)]
+      simp only [children, preimage_bind_extend_of_none Query.children hx hcol hxc]
+
+/-- **Recording a new input that is neither a `node` nor a `leaf` without a digest collision
+changes no extracted tree.** -/
+theorem view_extend_of_not_merkle (hx : x ∉ D) (hcol : D.extend x y ∉ digestCollision)
+    (hxc : x.children = none) (hxo : x.opening = none) :
+    view (D.extend x y) n rt = view D n rt := by
+  refine MerkleView.ext (funext (label_extend_of_children_eq_none hx hcol hxc))
+    (funext fun j => ?_)
+  simp only [view, leafAt, label_extend_of_children_eq_none hx hcol hxc]
+  congr 1
+  funext v
+  exact preimage_bind_extend_of_none Query.opening hx hcol hxo v
 
 end GordieHowe.SPBCS

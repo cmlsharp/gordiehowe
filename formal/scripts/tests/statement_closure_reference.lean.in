@@ -1,0 +1,35 @@
+
+-- Appended to the definitions of scripts/StatementClosure.lean, after a variant of the
+-- declarations of `FpTest` (scripts/tests/test_statement_closure.py): prints the fingerprint of
+-- the structure `FpTest.S`, its type-only fingerprint, and the transitive fingerprint of the
+-- root `FpTest.root` over the `FpTest` declarations it reaches.
+
+-- a private constant counts by its user-facing name, whatever its module
+#guard (stripPrivate (.const (Lean.mkPrivateNameCore `A.B `k) [])).hash ==
+  (stripPrivate (.const (Lean.mkPrivateNameCore `C `k) [])).hash
+
+open Lean in
+run_cmd Elab.Command.liftTermElabM do
+  let env ← getEnv
+  let own := fun (c : Name) => (`FpTest).isPrefixOf ((privateToUserName? c).getD c)
+  let mut reach : NameSet := {}
+  let mut todo := [`FpTest.root]
+  while !todo.isEmpty do
+    let c := todo.head!
+    todo := todo.tail!
+    if reach.contains c then continue
+    let some ci := env.find? c | continue
+    reach := reach.insert c
+    for d in (successors env ci).toList do
+      if own d && !reach.contains d then todo := d :: todo
+  let mut fp : Std.HashMap Name UInt64 := {}
+  for c in reach.toList do
+    if let some ci := env.find? c then fp := fp.insert c (fingerprintWith env id ci)
+  let some s := env.find? `FpTest.S | throwError "no FpTest.S"
+  unless reach.contains `FpTest.S do throwError "FpTest.root does not reach FpTest.S"
+  -- the renamed fingerprint agrees with the plain one when nothing is renamed
+  unless fingerprintWith env (undoRenames {}) s == fingerprintWith env id s do
+    throwError "undoRenames with no renames moved the fingerprint"
+  IO.println s!"fingerprint\t{fingerprintWith env id s}"
+  IO.println s!"type-only\t{typeOnlyFingerprint s}"
+  IO.println s!"transitive\t{transitiveFingerprint fp reach}"

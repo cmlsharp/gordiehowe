@@ -353,6 +353,25 @@ theorem forkRoundsAt_eq (hbat : ir.batchesB = true) (x : DomainFig) (hx : x.N = 
   rw [List.map_map]
   rfl
 
+/-- **GKR's shape budgets are the numbers'.** -/
+theorem gkrShapeNum_eq (x : DomainFig) (hx : x.N = N) :
+    ir.gkrShapeNum d = (x.N.circuits.map DomainFig.shapeBudgetN).sum := by
+  rw [gkrShapeNum, hx]
+  have h1 : ∑ i : Fin (ir.circs d).length, GKR.CircuitBudget.shapeBudget
+        (ir.circuitWidth (ir.circAt d i)) (ir.circuit (ir.circAt d i)).layers =
+      ((ForkReader.circs ir d).map fun c =>
+        GKR.CircuitBudget.shapeBudget (ForkReader.circW ir c) (ForkReader.circL ir c)).sum := by
+    rw [← sum_fin_idx (circs_idx (ir := ir) d)
+      (fun c => GKR.CircuitBudget.shapeBudget (ForkReader.circW ir c) (ForkReader.circL ir c))]
+    refine Finset.sum_congr rfl fun i _ => ?_
+    simp only [circuitWidth_eq]
+    rfl
+  rw [h1]
+  change _ = ((ForkReader.circs ir d).map (fun c => (ForkReader.circW ir c, ForkReader.circL ir c))
+    |>.map DomainFig.shapeBudgetN).sum
+  rw [List.map_map]
+  rfl
+
 theorem batchesNum_eq (hbat : ir.batchesB = true) (x : DomainFig) (hx : x.N = N) :
     ir.batchesNum d R.Pk = x.batchesNum := by
   have hB := R.batchesOk
@@ -429,6 +448,17 @@ theorem chargeFracs_eq (hbat : ir.batchesB = true) (hD : R.Pk.desc D = D)
   rw [FieldReady.chargeFracs, DomainFig.chargeFracs, cert_testNum R ht hs,
     cert_columnNum R ht hs x hxt, cert_jointNum R ht x hxt, cert_columnDen R ht x hxt,
     R.np_eq hD hc, batchesNum_eq R hbat x hx, gkrWidth_eq x hx, rs_length (D := D) R, hx, hxt]
+  subst ht
+  rfl
+
+/-- **The summed round charges are the numbers'.** -/
+theorem sumFracs_eq (hbat : ir.batchesB = true) (hD : R.Pk.desc D = D)
+    (hc : MasksCover D (ir.planPacking P d)) (ht : R.cert.nums = t) (hs : t.split = true)
+    (x : DomainFig) (hx : x.N = N) (hxt : x.t = t) :
+    R.sumFracs x.q = x.sumFracs := by
+  rw [FieldReady.sumFracs, DomainFig.sumFracs, cert_testNum R ht hs,
+    cert_columnNum R ht hs x hxt, cert_jointNum R ht x hxt, cert_columnDen R ht x hxt,
+    R.np_eq hD hc, batchesNum_eq R hbat x hx, gkrShapeNum_eq x hx, rs_length (D := D) R, hx, hxt]
   subst ht
   rfl
 
@@ -574,6 +604,24 @@ theorem figErrorMax_eq
       rfl
   · rw [← sup_fin_eq_foldr]
     exact Finset.sup_congr rfl fun i _ => by
+      rw [phaseTermsN_eq ir _ _ i, fracSumN_eq, dyadicCeilN_eq]
+
+include hbat hN ht in
+/-- **The summed round errors are the descriptor calculation**, including the phase errors. -/
+theorem figErrorSum_eq
+    (hD : ∀ i : Fin ir.domains.length, (R i).Pk.desc (D i) = D i)
+    (hc : ∀ i : Fin ir.domains.length, MasksCover (D i) (ir.planPacking P i))
+    (hs : ∀ i : Fin ir.domains.length, (x i).t.split = true)
+    (hq : ∀ i : Fin ir.domains.length, (x i).q = I.specCard (ir.domainField i))
+    (src : ℕ → ℕ × ℕ) (e : ℕ) :
+    figErrorSum R src e = errorSumN ir ((List.range ir.domains.length).map x) I.specCard src e := by
+  rw [figErrorSum, errorSumN]
+  congr 1
+  · exact sum_indexed x _ _ fun i => by
+      rw [← hq i, sumFracs_eq (R i) hbat (hD i) (hc i) (ht i) (hs i) (x i) (hN i) rfl]
+      rfl
+  · rw [← sum_fin_eq_list]
+    exact Finset.sum_congr rfl fun i _ => by
       rw [phaseTermsN_eq ir _ _ i, fracSumN_eq, dyadicCeilN_eq]
 
 include hbat hN in

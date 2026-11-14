@@ -106,15 +106,15 @@ variable {P : Export.Plan} {ir : RealizedProgram} {I : Interp}
   {f : ProgramFigures}
 
 /-- **The configuration of a certified program reads the program's figures.** -/
-theorem ofCertified_readsFigures {F : Frontend cp src Stmt W' HonestIn} (hf : cp.figures = f) :
-    (ofCertified cp src F ps).ReadsFigures ps.saltBytes f := by
+theorem ofCertified_readsFigures {F : Frontend cp src Stmt W' HonestIn} {errorSum : ℕ}
+    (hf : cp.figures = f) : (ofCertified cp src F ps errorSum).ReadsFigures ps.saltBytes f := by
   subst hf
   exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 /-- **The configuration of a certified program with a statement check reads the program's
 figures.** -/
-theorem ofCertifiedWith_readsFigures {F : FrontendWith cp src Stmt W' HonestIn}
-    (hf : cp.figures = f) : (ofCertifiedWith cp src F ps).ReadsFigures ps.saltBytes f := by
+theorem ofCertifiedWith_readsFigures {F : FrontendWith cp src Stmt W' HonestIn} {errorSum : ℕ}
+    (hf : cp.figures = f) : (ofCertifiedWith cp src F ps errorSum).ReadsFigures ps.saltBytes f := by
   subst hf
   exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 

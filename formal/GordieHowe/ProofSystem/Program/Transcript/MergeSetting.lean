@@ -97,6 +97,26 @@ def setting (kS : ℕ) (hb : T.MergeBounds kS) :
       (nJ_mul_le hb.toBounds)
   sampler := C.samplersOf T.readers T.k (Configurations.fsExtraBytes + T.maxGrant) T.stream
 
+variable (T) in
+/-- **The setting has `C.m` Merkle trees**: the domains' trees of the prefix's first message,
+none elsewhere (`nTrees_pre_of_eq`, `nTrees_comp_eq_zero`, `label_ne_pre`). -/
+theorem card_treeSig_eq (kS : ℕ) (hb : T.MergeBounds kS) :
+    Fintype.card (T.setting kS hb).model.TreeSig = C.m := by
+  classical
+  rw [Fintype.card_sigma, Finset.sum_eq_single C.preLeafT]
+  · rw [Fintype.card_congr TreeIdx.equivSigma, Fintype.card_sigma]
+    simp only [Fintype.card_fin]
+    change ∑ i, (C.comp .pre).nTrees i = C.m
+    refine (Finset.sum_eq_single C.oracleIdx (fun i _ hi => ?_) (by simp)).trans
+      (C.nTrees_pre_of_eq rfl)
+    exact C.nTrees_comp_eq_zero i (.inr fun h => hi (Subtype.ext (Fin.ext h)))
+  · intro q _ hq
+    rw [Fintype.card_congr TreeIdx.equivSigma, Fintype.card_sigma]
+    exact Finset.sum_eq_zero fun i _ => by
+      rw [Fintype.card_fin]
+      exact C.nTrees_comp_eq_zero i (.inl (C.label_ne_pre hq))
+  · simp
+
 /-- **The non-interactive proofs of a setting with merges are inhabited**: the transcript the
 simulator data `SD` assembles at any statement, challenges and coins (`assembleView`, as in
 `simAt`) is a full transcript of the IOP (`Setting.nonempty_niProof`). No witness is needed. -/
@@ -235,6 +255,39 @@ theorem soundness [Inhabited W] (Sd : C.Sound) {W' : Type} {rel' : Set (Stmt × 
         C.merges.nJ (maxError Sd.error) :=
   SPBCS.soundness_toQVerifier (E := C.extractor.mapWit g) (Sd.causal_rbr.mapWit hg) hkq 𝒜
 
+open Classical in
+/-- **Knowledge soundness at the setting with merges at the slot constant**
+(`SPBCS.onlineExtracts_toQVerifier_slot` at the budget `kq`): as `knowledge`, at the knowledge
+error with the collision coefficient `max 2 m + 1`, `m = C.m` the number of domains (the setting's
+Merkle trees, `card_treeSig_eq`). -/
+theorem knowledge_slot [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) {W' : Type}
+    {rel' : Set (Stmt × W')} {g : Stmt → W → W'} (hg : ∀ x w, (x, w) ∈ rel → (x, g x w) ∈ rel')
+    {kq : ℕ} (hkq : ∀ x h π, (T.setting kS hb).model.Accepts h x π ((T.setting kS hb).queries x) →
+      ((T.setting kS hb).model.queries x π h ((T.setting kS hb).queries x)).length ≤ kq)
+    {Zo : Type} {t : ℕ}
+    (𝒢 : (T.setting kS hb).QROMAdversary (Claim Stmt (T.setting kS hb).model.NIProof × Zo) t) :
+    𝒢.OnlineExtracts (T.verifier kS hb kq) NARG.QROM.compressedSim rel'
+      (NARG.QROM.compressedExt ((T.setting kS hb).model.dbExtractBits (C.extractor.mapWit g))) 0
+      (knowledgeError T.k (Configurations.fsExtraBytes + T.maxGrant) kq (t + kq) C.m 0
+        (maxError Sd.error)) := by
+  have := SPBCS.onlineExtracts_toQVerifier_slot (Sd.causal_rbr.mapWit hg) hkq 𝒢
+  rwa [card_treeSig_eq T kS hb] at this
+
+open Classical in
+/-- **Soundness at the setting with merges at the slot constant**
+(`SPBCS.soundness_toQVerifier_slot` at the budget `kq`), at the error of `knowledge_slot`. -/
+theorem soundness_slot [Inhabited W] (Sd : C.Sound) {W' : Type} {rel' : Set (Stmt × W')}
+    {g : Stmt → W → W'} (hg : ∀ x w, (x, w) ∈ rel → (x, g x w) ∈ rel') {kq : ℕ}
+    (hkq : ∀ x h π, (T.setting kS hb).model.Accepts h x π ((T.setting kS hb).queries x) →
+      ((T.setting kS hb).model.queries x π h ((T.setting kS hb).queries x)).length ≤ kq)
+    {t : ℕ} (𝒜 : (T.setting kS hb).QROMAdversary (Claim Stmt (T.setting kS hb).model.NIProof) t) :
+    𝒜.acceptsFalse (T.verifier kS hb kq) rel' ≤
+      knowledgeError T.k (Configurations.fsExtraBytes + T.maxGrant) kq (t + kq) C.m 0
+        (maxError Sd.error) := by
+  have := SPBCS.soundness_toQVerifier_slot (E := C.extractor.mapWit g)
+    (Sd.causal_rbr.mapWit hg) hkq 𝒜
+  rwa [card_treeSig_eq T kS hb] at this
+
 /-- **Knowledge soundness at the setting with merges in the ROM: online extractability against the
 lazily sampled oracle** (`SPBCS.onlineExtracts_toRVerifier`, the `knowledgeROM` clause of
 `SPBCS.knowledgeGuarantees` at the budget `kq`) against classical `t`-query adversaries without
@@ -261,6 +314,38 @@ theorem soundnessROM [Inhabited W] (Sd : C.Sound) {W' : Type} {rel' : Set (Stmt 
     𝒜.acceptsFalse (T.verifierROM kS hb kq) rel' ≤
       knowledgeErrorROM T.k (t + kq) (digests (C := C)) C.merges.nJ (maxError Sd.error) :=
   SPBCS.soundness_toRVerifier (E := C.extractor.mapWit g) (Sd.causal_rbr.mapWit hg) hkq 𝒜
+
+/-- **Knowledge soundness at the setting with merges in the ROM, with the round errors and the
+collisions charged by entry class** (`SPBCS.onlineExtracts_toRVerifier_typed` at the budget `kq`):
+as `knowledgeROM`, at `knowledgeErrorROMTyped k t kq m (maxError Sd.error) (∑ c, Sd.error c)`
+with `m = C.m` the number of domains (the setting's Merkle trees, `card_treeSig_eq`):
+`t · errk + ∑ c, Sd.error c + errk + (t + kq)(max 2 m + 1)(t + kq) / 2^(8k)`. -/
+theorem knowledgeROM_typed [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) {W' : Type}
+    {rel' : Set (Stmt × W')} {g : Stmt → W → W'} (hg : ∀ x w, (x, w) ∈ rel → (x, g x w) ∈ rel')
+    {kq : ℕ} (hkq : ∀ x h π, (T.setting kS hb).model.Accepts h x π ((T.setting kS hb).queries x) →
+      ((T.setting kS hb).model.queries x π h ((T.setting kS hb).queries x)).length ≤ kq)
+    {Zo : Type} {t : ℕ}
+    (𝒢 : (T.setting kS hb).ROMAdversary (Claim Stmt (T.setting kS hb).model.NIProof × Zo) t) :
+    𝒢.OnlineExtracts (T.verifierROM kS hb kq) NARG.ROM.OracleSampler.lazy.law rel'
+      ((T.setting kS hb).model.dbExtract (C.extractor.mapWit g)) 0
+      (knowledgeErrorROMTyped T.k t kq C.m (maxError Sd.error) (∑ c, Sd.error c)) := by
+  have := SPBCS.onlineExtracts_toRVerifier_typed (Sd.causal_rbr.mapWit hg) hkq 𝒢
+  rwa [card_treeSig_eq T kS hb] at this
+
+open Classical in
+/-- **Soundness at the setting with merges in the ROM, with the round errors and the collisions
+charged by entry class** (`SPBCS.soundness_toRVerifier_typed` at the budget `kq`), at the error
+of `knowledgeROM_typed`. -/
+theorem soundnessROM_typed [Inhabited W] (Sd : C.Sound) {W' : Type} {rel' : Set (Stmt × W')}
+    {g : Stmt → W → W'} (hg : ∀ x w, (x, w) ∈ rel → (x, g x w) ∈ rel') {kq : ℕ}
+    (hkq : ∀ x h π, (T.setting kS hb).model.Accepts h x π ((T.setting kS hb).queries x) →
+      ((T.setting kS hb).model.queries x π h ((T.setting kS hb).queries x)).length ≤ kq)
+    {t : ℕ} (𝒜 : (T.setting kS hb).ROMAdversary (Claim Stmt (T.setting kS hb).model.NIProof) t) :
+    𝒜.acceptsFalse (T.verifierROM kS hb kq) rel' ≤
+      knowledgeErrorROMTyped T.k t kq C.m (maxError Sd.error) (∑ c, Sd.error c) := by
+  have := SPBCS.soundness_toRVerifier_typed (E := C.extractor.mapWit g)
+    (Sd.causal_rbr.mapWit hg) hkq 𝒜
+  rwa [card_treeSig_eq T kS hb] at this
 
 variable (T kS hb) in
 open Classical in
@@ -359,6 +444,42 @@ theorem simExtractability [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) {W' : 
     (T.setting kS hb).viewEncoder hf, ← C.card_site]
   exact h
 
+open Classical in
+/-- **Simulation-sound extractability at the setting with merges in the QROM at the slot
+constant** (`SPBCS.simulation_sound_extractability_slot` at the budget `kq`): as
+`simExtractability`, at the knowledge error with the collision coefficient `max 2 m + 1`, `m = C.m`
+the number of domains (`card_treeSig_eq`). -/
+theorem simExtractability_slot [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) {W' : Type}
+    {rel' : Set (Stmt × W')} {g : Stmt → W → W'} (hg : ∀ x w, (x, w) ∈ rel → (x, g x w) ∈ rel')
+    {kq : ℕ}
+    (hkq : ∀ x h π, (T.setting kS hb).model.Accepts h x π ((T.setting kS hb).queries x) →
+      ((T.setting kS hb).model.queries x π h ((T.setting kS hb).queries x)).length ≤ kq)
+    {pB : ℕ} (hf : T.ProofFormat kS hb pB) {I' : Type} {relI : Set (Stmt × I')} {SD : C.SimData}
+    (Hc : C.Honest SD I' relI) :
+    T.SimExtractable kS hb hf Hc rel' (C.extractor.mapWit g) kq fun tq Q =>
+      knowledgeError T.k (Configurations.fsExtraBytes + T.maxGrant)
+        (kq + Q * (2 * Fintype.card (T.setting kS hb).model.Pos +
+          C.shape.term.size C.rounds + ∑ d, C.shape.nb d))
+        (tq + Q * (2 * Fintype.card (T.setting kS hb).model.Pos +
+          C.shape.term.size C.rounds + ∑ d, C.shape.nb d) +
+          (kq + Q * (2 * Fintype.card (T.setting kS hb).model.Pos +
+            C.shape.term.size C.rounds + ∑ d, C.shape.nb d)))
+        C.m 0 (maxError Sd.error) := by
+  have hk : 0 < (T.setting kS hb).k := hb.k_pos
+  have h := SPBCS.simulation_sound_extractability_slot (M := (T.setting kS hb).model)
+    (B := pB) (T.setting kS hb).queries hkq (Sd.causal_rbr.mapWit hg)
+    ((T.setting kS hb).model.niJointSimulatorProg (T.setting kS hb).layout
+      (T.setting kS hb).viewEncoder.toViewRead pB id (RealizedProgram.ProofSystem.IOP.simulator SD)
+      (T.preimages kS hb))
+    (SPBCS.simAssignsAtKeys_niJointSimulatorProg hk (T.setting kS hb).layout
+      (T.setting kS hb).viewEncoder pB id (RealizedProgram.ProofSystem.IOP.simulator SD)
+      (T.preimages kS hb))
+  rw [card_treeSig_eq T kS hb] at h
+  unfold SimExtractable
+  rw [(T.setting kS hb).model.encode_niSimulator (T.setting kS hb).layout (T.setting kS hb).encoder
+    (T.setting kS hb).viewEncoder hf, ← C.card_site]
+  exact h
+
 variable (T kS hb) in
 /-- **Weak online simulation extractability at the setting with merges in the ROM**
 (`SPBCS.WeakOnlineSimulationExtractableROM`) with the classical simulator program of
@@ -405,6 +526,39 @@ theorem simExtractabilityROM [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) {W'
   rw [simulator, (T.setting kS hb).model.niSimulator_eq, ← C.card_site]
   exact h
 
+/-- **Weak online simulation extractability at the setting with merges in the ROM at the slot
+constant** (`SPBCS.weak_online_simulation_extractability_rom_slot` at the budget `kq`): as
+`simExtractabilityROM`, at the classical knowledge error with the collision coefficient
+`max 2 m + 1`, `m = C.m` the number of domains (`card_treeSig_eq`). -/
+theorem simExtractabilityROM_slot [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) {W' : Type}
+    {rel' : Set (Stmt × W')} {g : Stmt → W → W'} (hg : ∀ x w, (x, w) ∈ rel → (x, g x w) ∈ rel')
+    {kq : ℕ}
+    (hkq : ∀ x h π, (T.setting kS hb).model.Accepts h x π ((T.setting kS hb).queries x) →
+      ((T.setting kS hb).model.queries x π h ((T.setting kS hb).queries x)).length ≤ kq)
+    {pB : ℕ} (hf : T.ProofFormat kS hb pB) {I' : Type} {relI : Set (Stmt × I')} {SD : C.SimData}
+    (Hc : C.Honest SD I' relI) :
+    T.SimExtractableROM kS hb hf Hc rel' (C.extractor.mapWit g) kq
+      (2 * Fintype.card (T.setting kS hb).model.Pos + C.shape.term.size C.rounds +
+        ∑ d, C.shape.nb d) fun tq Q =>
+      knowledgeErrorROM T.k (tq + Q * (2 * Fintype.card (T.setting kS hb).model.Pos +
+        C.shape.term.size C.rounds + ∑ d, C.shape.nb d) + kq)
+        C.m 0 (maxError Sd.error) := by
+  have hk : 0 < (T.setting kS hb).k := hb.k_pos
+  have h := SPBCS.weak_online_simulation_extractability_rom_slot (M := (T.setting kS hb).model)
+    (B := pB) (Qs := (T.setting kS hb).queries)
+    (Sim := ((T.setting kS hb).model.niSimulatorTotal (T.setting kS hb).layout
+      (T.setting kS hb).viewEncoder.toViewRead pB id
+      (RealizedProgram.ProofSystem.IOP.simulator SD) (T.preimages kS hb)).prog)
+    (fun _ _ => (T.setting kS hb).model.assignsAtKeys_jointProg (T.setting kS hb).layout
+      (T.setting kS hb).viewEncoder.toViewRead pB hk _ _ _ _ _ _ _)
+    (fun _ _ G => (T.setting kS hb).model.length_trace_jointProg_le (h := G)
+      (T.setting kS hb).layout (T.setting kS hb).viewEncoder.toViewRead pB _ _ _ _ _ _ _)
+    (Sd.causal_rbr.mapWit hg) hkq
+  rw [card_treeSig_eq T kS hb] at h
+  unfold SimExtractableROM
+  rw [simulator, (T.setting kS hb).model.niSimulator_eq, ← C.card_site]
+  exact h
+
 variable (T kS hb) in
 open Classical in
 /-- **Simulation-sound extractability for tests that query the oracle, at the setting with merges
@@ -446,6 +600,44 @@ theorem simExtractabilitySimOracle [Inhabited W] [DecidableEq Stmt] (Sd : C.Soun
     (SPBCS.simAssignsAtKeys_niJointSimulatorProg hk (T.setting kS hb).layout
       (T.setting kS hb).viewEncoder pB id (RealizedProgram.ProofSystem.IOP.simulator SD)
       (T.preimages kS hb))
+  unfold SimExtractableSimOracle
+  rw [(T.setting kS hb).model.encode_niSimulator (T.setting kS hb).layout (T.setting kS hb).encoder
+    (T.setting kS hb).viewEncoder hf, ← C.card_site]
+  exact h
+
+open Classical in
+/-- **Simulation-sound extractability for tests that query the oracle, at the setting with merges in
+the QROM, at the slot constant** (`SPBCS.simulation_sound_extractability_sim_oracle_slot` at the
+budget `kq`): as `simExtractabilitySimOracle`, at the knowledge error with the collision coefficient
+`max 2 m + 1`, `m = C.m` the number of domains (`card_treeSig_eq`). -/
+theorem simExtractabilitySimOracle_slot [Inhabited W] [DecidableEq Stmt] (Sd : C.Sound) {W' : Type}
+    {rel' : Set (Stmt × W')} {g : Stmt → W → W'} (hg : ∀ x w, (x, w) ∈ rel → (x, g x w) ∈ rel')
+    {kq : ℕ}
+    (hkq : ∀ x h π, (T.setting kS hb).model.Accepts h x π ((T.setting kS hb).queries x) →
+      ((T.setting kS hb).model.queries x π h ((T.setting kS hb).queries x)).length ≤ kq)
+    {pB : ℕ} (hf : T.ProofFormat kS hb pB) {I' : Type} {relI : Set (Stmt × I')} {SD : C.SimData}
+    (Hc : C.Honest SD I' relI) :
+    T.SimExtractableSimOracle kS hb hf Hc rel' (C.extractor.mapWit g) kq
+      fun tq tTest Q => knowledgeError T.k (Configurations.fsExtraBytes + T.maxGrant)
+          (kq + Q * (2 * Fintype.card (T.setting kS hb).model.Pos +
+            C.shape.term.size C.rounds + ∑ d, C.shape.nb d))
+          (tq + tTest + Q * (2 * Fintype.card (T.setting kS hb).model.Pos +
+            C.shape.term.size C.rounds + ∑ d, C.shape.nb d) +
+            (kq + Q * (2 * Fintype.card (T.setting kS hb).model.Pos +
+              C.shape.term.size C.rounds + ∑ d, C.shape.nb d)))
+          C.m 0 (maxError Sd.error) +
+        (T.setting kS hb).model.swapError tTest := by
+  have hk : 0 < (T.setting kS hb).k := hb.k_pos
+  have h := SPBCS.simulation_sound_extractability_sim_oracle_slot
+    (M := (T.setting kS hb).model) (B := pB) (T.setting kS hb).queries hkq
+    (Sd.causal_rbr.mapWit hg)
+    ((T.setting kS hb).model.niJointSimulatorProg (T.setting kS hb).layout
+      (T.setting kS hb).viewEncoder.toViewRead pB id (RealizedProgram.ProofSystem.IOP.simulator SD)
+      (T.preimages kS hb))
+    (SPBCS.simAssignsAtKeys_niJointSimulatorProg hk (T.setting kS hb).layout
+      (T.setting kS hb).viewEncoder pB id (RealizedProgram.ProofSystem.IOP.simulator SD)
+      (T.preimages kS hb))
+  rw [card_treeSig_eq T kS hb] at h
   unfold SimExtractableSimOracle
   rw [(T.setting kS hb).model.encode_niSimulator (T.setting kS hb).layout (T.setting kS hb).encoder
     (T.setting kS hb).viewEncoder hf, ← C.card_site]

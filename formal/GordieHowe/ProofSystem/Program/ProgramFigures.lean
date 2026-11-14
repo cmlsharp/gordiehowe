@@ -233,7 +233,105 @@ noncomputable def figErrorMax (R : ∀ d : Fin ir.domains.length, ir.FieldReady 
       ((R d).chargeFracs (I.specCard (ir.domainField d))).foldr (fun p m => max (dyadicCeil e p) m) 0)
     (Finset.univ.sup fun k : Fin ir.phases => dyadicCeil e (fracSum (ir.phaseTerms I.specCard src k)))
 
+/-- **A fraction is at most its dyadic ceiling**, as numbers: `a · 2^e ≤ ⌈a · 2^e / b⌉ · b` when
+`b` is positive or `a` is zero. -/
+theorem mul_two_pow_le_dyadicCeil_mul {a b e : ℕ} (h : 0 < b ∨ a = 0) :
+    a * 2 ^ e ≤ dyadicCeil e (a, b) * b := by
+  rcases h with hb | rfl
+  · unfold dyadicCeil
+    have h1 := Nat.div_add_mod (a * 2 ^ e + b - 1) b
+    have h2 := Nat.mod_lt (a * 2 ^ e + b - 1) hb
+    rw [mul_comm (_ / b)]
+    generalize b * ((a * 2 ^ e + b - 1) / b) = M at h1 ⊢
+    generalize a * 2 ^ e = A at h1 h2 ⊢
+    omega
+  · simp
+
+variable {d : ℕ} in
+/-- **The summed round charges of domain `d` as fractions** on a field of `q` elements: the
+commit, test and column rounds, the covered batches, GKR's shape budgets (`gkrShapeNum`) and the
+combinations. -/
+def FieldReady.sumFracs (R : ir.FieldReady I d P) (q : ℕ) : List (ℕ × ℕ) :=
+  [(R.cert.exceptions ^ R.cert.Sh.nrep, (q - 1) ^ R.cert.Sh.nrep), (R.cert.testNum, q),
+    (R.cert.columnNum + (if npOf R.Pk R.rs = 0 then 0 else R.cert.jointNum), R.cert.columnDen),
+    (ir.batchesNum d R.Pk, q), (ir.gkrShapeNum d, q), (R.rs.length, q)]
+
+/-- **The summed round errors in units of `2^-e`, rounded up term by term**: every domain's summed
+round charges (`FieldReady.sumFracs`, on fields of their specifications' sizes) and every phase's
+error (`fracSum` of `phaseTerms`, the source challenges at `src`), each rounded up. -/
+noncomputable def figErrorSum (R : ∀ d : Fin ir.domains.length, ir.FieldReady I d P)
+    (src : ℕ → ℕ × ℕ) (e : ℕ) : ℕ :=
+  ∑ d : Fin ir.domains.length,
+      (((R d).sumFracs (I.specCard (ir.domainField d))).map (dyadicCeil e)).sum +
+    ∑ k : Fin ir.phases, dyadicCeil e (fracSum (ir.phaseTerms I.specCard src k))
+
 end ErrorMax
+
+section SumDomain
+
+variable {ir : RealizedProgram} {I : Interp} {d : ℕ} {P : Export.Plan} {R : ir.FieldReady I d P}
+
+/-- **The summed round charges of domain `d` from their fractions**: on a field of `q` elements
+whose charges pass `FieldRoundsOk` at some `num`, the bound `fieldSumBound` on the summed round
+errors is at most the sum of the charges' dyadic ceilings (`dyadicCeil`). -/
+theorem fieldSumBound_le {q num e : ℕ} (hK : Fintype.card (I (ir.domainField d)).K = q)
+    (h : FieldRoundsOk R q num e) :
+    ir.fieldSumBound I R ≤ (((R.sumFracs q).map (dyadicCeil e)).sum : ℝ≥0) / 2 ^ e := by
+  have hb := R.Pk.numbers_bounds R.cert R.valid
+  have hq := h.q_pos
+  have hcommit : R.numbers.bounds.commit ≤
+      (dyadicCeil e (R.cert.exceptions ^ R.cert.Sh.nrep, (q - 1) ^ R.cert.Sh.nrep) : ℝ≥0) /
+        2 ^ e := by
+    rw [hb, hK]
+    refine ratio_pred_pow_le_dyadic (mul_two_pow_le_dyadicCeil_mul ?_)
+    rcases Nat.eq_zero_or_pos ((q - 1) ^ R.cert.Sh.nrep) with h0 | h0
+    · have hc := h.commit
+      rw [h0, mul_zero, Nat.le_zero, Nat.mul_eq_zero] at hc
+      have : ¬ 2 ^ e = 0 := by positivity
+      exact .inr (hc.resolve_right this)
+    · exact .inl h0
+  have htest : R.numbers.bounds.test ≤ (dyadicCeil e (R.cert.testNum, q) : ℝ≥0) / 2 ^ e := by
+    rw [hb, hK]
+    exact ratio_le_dyadic hq (mul_two_pow_le_dyadicCeil_mul (.inl hq))
+  have hcol : R.numbers.bounds.column + (if npOf R.Pk R.rs = 0 then 0 else
+      Ligero.SubfieldTest.jointSubfieldError R.numbers.Sh.block R.numbers.Sh.N R.numbers.Sh.nreq) ≤
+      (dyadicCeil e (R.cert.columnNum + (if npOf R.Pk R.rs = 0 then 0 else R.cert.jointNum),
+        R.cert.columnDen) : ℝ≥0) / 2 ^ e := by
+    have hc := mul_two_pow_le_dyadicCeil_mul (e := e) (a := R.cert.columnNum +
+      (if npOf R.Pk R.rs = 0 then 0 else R.cert.jointNum)) (.inl h.den_pos)
+    rw [hb]
+    change (R.cert.columnNum : ℝ≥0) / R.cert.columnDen +
+      (if npOf R.Pk R.rs = 0 then 0 else
+        (R.cert.jointNum : ℝ≥0) / R.cert.columnDen) ≤ _
+    split_ifs with hnp
+    · simp only [hnp, ↓reduceIte, add_zero] at hc ⊢
+      exact ratio_le_dyadic h.den_pos hc
+    · simp only [hnp, ↓reduceIte] at hc ⊢
+      rw [← add_div]
+      exact_mod_cast ratio_le_dyadic h.den_pos hc
+  have hbat : ir.batchesError d R.Pk ≤ (dyadicCeil e (ir.batchesNum d R.Pk, q) : ℝ≥0) / 2 ^ e := by
+    rw [batchesError_eq, hK]
+    exact ratio_le_dyadic hq (mul_two_pow_le_dyadicCeil_mul (.inl hq))
+  have hgkr : ir.gkrSumError I d ≤ (dyadicCeil e (ir.gkrShapeNum d, q) : ℝ≥0) / 2 ^ e := by
+    rw [gkrSumError_eq, hK]
+    exact ratio_le_dyadic hq (mul_two_pow_le_dyadicCeil_mul (.inl hq))
+  have hrs : (R.rs.length : ℝ≥0) / Fintype.card (I (ir.domainField d)).K ≤
+      (dyadicCeil e (R.rs.length, q) : ℝ≥0) / 2 ^ e := by
+    rw [hK]
+    exact ratio_le_dyadic hq (mul_two_pow_le_dyadicCeil_mul (.inl hq))
+  rw [fieldSumBound, FieldReady.sumFracs]
+  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, Nat.cast_add,
+    add_div]
+  calc _ ≤ (dyadicCeil e (R.cert.exceptions ^ R.cert.Sh.nrep, (q - 1) ^ R.cert.Sh.nrep) : ℝ≥0) /
+        2 ^ e + (dyadicCeil e (ir.batchesNum d R.Pk, q) : ℝ≥0) / 2 ^ e +
+        (dyadicCeil e (ir.gkrShapeNum d, q) : ℝ≥0) / 2 ^ e +
+        (dyadicCeil e (R.rs.length, q) : ℝ≥0) / 2 ^ e +
+        (dyadicCeil e (R.cert.testNum, q) : ℝ≥0) / 2 ^ e +
+        (dyadicCeil e (R.cert.columnNum + (if npOf R.Pk R.rs = 0 then 0 else R.cert.jointNum),
+          R.cert.columnDen) : ℝ≥0) / 2 ^ e := by gcongr
+    _ = _ := by ring
+
+end SumDomain
 
 /-! ## The figures of a program and their check -/
 
@@ -376,6 +474,24 @@ theorem Check.phaseError_le (h : Check F Nm src rd chal hL Lr mg)
     (hsrc : ∀ j, ir.IsSourceChal j → ε₀ j ≤ ((src j).1 : ℝ≥0) / (src j).2) (k : Fin ir.phases) :
     ir.phaseError I (ir.roundError I ε₀) k ≤ (F.errorMax : ℝ≥0) / 2 ^ F.errorExp :=
   phaseError_le_of ε₀ hcard hsrc h.phases k
+
+/-- **Phase `k + 1`'s error is within its own dyadic ceiling** (`phaseError_le_at`): the phase's
+terms rounded up as one fraction at `errorExp`, when every source challenge's error `ε₀ j` is within
+its fraction `src j`. -/
+theorem Check.phaseError_le_ceil (h : Check F Nm src rd chal hL Lr mg)
+    (hcard : ∀ f, Fintype.card (I f).K = I.specCard f) (ε₀ : ℕ → ℝ≥0)
+    (hsrc : ∀ j, ir.IsSourceChal j → ε₀ j ≤ ((src j).1 : ℝ≥0) / (src j).2) (k : Fin ir.phases) :
+    ir.phaseError I (ir.roundError I ε₀) k ≤
+      (dyadicCeil F.errorExp (fracSum (ir.phaseTerms I.specCard src k)) : ℝ≥0) / 2 ^ F.errorExp :=
+  phaseError_le_at ε₀ hcard hsrc k (h.phases k).1
+    (mul_two_pow_le_dyadicCeil_mul (.inl (fracSum_eq _ (h.phases k).1).1))
+
+/-- **Every domain's summed round charges within their dyadic ceilings** (`fieldSumBound_le`). -/
+theorem Check.fieldSumBound_le (h : Check F Nm src rd chal hL Lr mg)
+    (hcard : ∀ f, Fintype.card (I f).K = I.specCard f) (d : Fin ir.domains.length) :
+    ir.fieldSumBound I (R d) ≤ ((((R d).sumFracs (I.specCard (ir.domainField d))).map
+      (dyadicCeil F.errorExp)).sum : ℝ≥0) / 2 ^ F.errorExp :=
+  RealizedProgram.fieldSumBound_le (hcard _) (h.errors d)
 
 namespace Check
 

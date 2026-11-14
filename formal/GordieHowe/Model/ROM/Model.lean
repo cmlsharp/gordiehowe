@@ -381,7 +381,7 @@ theorem sum_fresh_eq (g : A → ℝ≥0∞) :
     rw [Finset.sum_range_succ, sum_fresh_eq g i, queries_succ, List.toFinset_append]
     by_cases ha : 𝒜.queryAt h i ∈ 𝒜.queries h i
     · simp [ha, Finset.insert_eq_of_mem (List.mem_toFinset.2 ha)]
-    · rw [ite_cond_eq_false _ _ (eq_false ha), List.toFinset_cons, List.toFinset_nil,
+    · rw [ite_eq_right_of_eq_false _ _ (eq_false ha), List.toFinset_cons, List.toFinset_nil,
         insert_empty_eq, Finset.union_singleton, Finset.sum_insert (mt List.mem_toFinset.1 ha),
         add_comm]
 

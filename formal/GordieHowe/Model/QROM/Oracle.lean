@@ -324,6 +324,9 @@ def Query.digests (digestsOf : Bytes L → Finset (Digest k)) : Query k kN kS L 
   | .transcript p => digestsOf p
   | .xof key _ => {key}
 
+/-- **A stream point**: an `xof` query. -/
+def Query.IsXof (q : Query k kN kS L) : Prop := ∃ key salt, q = .xof key salt
+
 /-- `S(D)` (CMS19 Def 6.3, p. 31), adapted to the tagged oracle: the digests occurring
 inside the recorded inputs of `D`. -/
 def halfPre (digestsOf : Bytes L → Finset (Digest k)) (D : ODB k kN kS L e) : Finset (Digest k) :=

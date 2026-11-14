@@ -314,6 +314,32 @@ theorem knowledgeError_toQVerifier (Qs : ∀ x, M.IOPQueries V x) (kq : ℕ) (b 
       knowledgeError k e kq b M.senc.digestsPerInput Mg.nJ (maxError ε) :=
   rfl
 
+/-- **The knowledge bound of the spBCS argument at an instability bound**: `knowledgeBound`'s bad
+databases and Proposition 8.12, with the database bound
+`6b² (maxError ε + (max 2 c + cP + 1) b / 2^(8k))` for every bound
+`maxError ε + (max 2 c + cP) b / 2^(8k)` on the conditional instability (`hI`,
+`dbProb_bad_union_le_of_queryCount_of`). -/
+noncomputable def knowledgeBoundOf [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
+    (Qs : ∀ x, M.IOPQueries V x) (kq : ℕ) (hkq : M.QueriesAtMost Qs kq) (c cP : ℕ)
+    (hI : ∀ b, condInstab (M.bad rel E St) digestCollisionᶜ b ≤
+      maxError ε + (((max 2 c + cP) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k)) :
+    (M.toQVerifier Qs kq).KnowledgeBound rel (M.dbExtractBits E) fun b =>
+      6 * (b : ℝ≥0∞) ^ 2 * (maxError ε + (((max 2 c + cP + 1) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k)) :=
+  { M.knowledgeBound rel E St hrbr Qs kq hkq with
+    dbProb_le := fun 𝒜 hb => dbProb_bad_union_le_of_queryCount_of c cP hI 𝒜 hb
+    mono := fun _ _ h => by dsimp only; gcongr }
+
+/-- **The knowledge bound of the spBCS argument at the slot constant** (`knowledgeBoundOf` at
+`condInstab_bad_le_slot`): the database bound `6b² (maxError ε + (max 2 T + 1) b / 2^(8k))`,
+`T` the Merkle trees. -/
+noncomputable def knowledgeBoundSlot [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
+    (Qs : ∀ x, M.IOPQueries V x) (kq : ℕ) (hkq : M.QueriesAtMost Qs kq) :
+    (M.toQVerifier Qs kq).KnowledgeBound rel (M.dbExtractBits E) fun b =>
+      6 * (b : ℝ≥0∞) ^ 2 * (maxError ε +
+        (((max 2 (Fintype.card M.TreeSig) + 0 + 1) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k)) :=
+  M.knowledgeBoundOf rel E St hrbr Qs kq hkq _ 0 fun b => by
+    simpa only [Nat.add_zero] using M.condInstab_bad_le_slot rel E St hrbr (tq := b)
+
 /-! ### The classical random-oracle model -/
 
 /-- **The spBCS verifier as a `NARG.ROM.Verifier`**: its query expansion with `kq` queries; on the
@@ -357,6 +383,20 @@ theorem jointBound [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε
       fun b => knowledgeErrorROM k b M.senc.digestsPerInput Mg.nJ (maxError ε) := fun 𝒜 =>
   (QROM.probUniform_mono fun _ hh => ⟨(M.accepted_toRVerifier_iff Qs hkq).1 hh.1, hh.2⟩).trans
     (M.knowledge_of_causalRBR_rom_joint rel E St Qs hrbr (le_maxError ε) hkq 𝒜)
+
+/-- **The joint knowledge bound of the spBCS argument in the ROM with the round errors and the
+collisions charged by entry class** (`knowledge_of_causalRBR_rom_joint_typed`) at the database
+extractor `dbExtract`, with error `knowledgeErrorROMTyped k (b - kq) kq T (maxError ε) (∑ c, ε c)`
+at `b` queries in all, `T` the number of Merkle trees. -/
+theorem jointBound_typed [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
+    (Qs : ∀ x, M.IOPQueries V x) {kq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) :
+    (M.toRVerifier Qs kq).JointBound rel (M.dbExtract E)
+      fun b => knowledgeErrorROMTyped k (b - kq) kq (Fintype.card M.TreeSig) (maxError ε)
+        (∑ c, ε c) := fun 𝒜 =>
+  (QROM.probUniform_mono fun _ hh => ⟨(M.accepted_toRVerifier_iff Qs hkq).1 hh.1, hh.2⟩).trans
+    ((M.knowledge_of_causalRBR_rom_joint_typed rel E St Qs hrbr (le_maxError ε) hkq 𝒜).trans_eq
+      (by simp only [show (M.toRVerifier Qs kq).kq = kq from rfl, Nat.add_sub_cancel]))
 
 /-! ### The instances at the verifier's query budget -/
 
@@ -414,6 +454,28 @@ theorem soundness_toQVerifier [DecidableEq X] (hrbr : CausalRBRKnowledgeSound re
     𝒜.acceptsFalse (M.toQVerifier Qs kq) rel ≤
       knowledgeError k e kq (t + kq) M.senc.digestsPerInput Mg.nJ (maxError ε) :=
   QROM.soundness _ (M.knowledgeBound rel E St hrbr Qs kq hkq) 𝒜
+
+/-- **Online extractability of the spBCS verifier at the slot constant**
+(`onlineExtracts_toQVerifier` with `knowledgeBoundSlot`): at
+`knowledgeError k e kq (t + kq) T 0 (maxError ε)`, `T` the Merkle trees. -/
+theorem onlineExtracts_toQVerifier_slot [DecidableEq X]
+    (hrbr : CausalRBRKnowledgeSound rel V E St ε) {Qs : ∀ x, M.IOPQueries V x} {kq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {Z : Type}
+    {t : ℕ} (𝒢 : NARG.QROM.Adversary (queryBits k kN kS L) k e (Claim X M.NIProof × Z) t) :
+    𝒢.OnlineExtracts (M.toQVerifier Qs kq) NARG.QROM.compressedSim rel
+      (NARG.QROM.compressedExt (M.dbExtractBits E)) 0
+      (knowledgeError k e kq (t + kq) (Fintype.card M.TreeSig) 0 (maxError ε)) :=
+  QROM.onlineExtracts _ (M.knowledgeBoundSlot rel E St hrbr Qs kq hkq) 𝒢
+
+/-- **Soundness of the spBCS verifier at the slot constant**, at the error of
+`onlineExtracts_toQVerifier_slot`. -/
+theorem soundness_toQVerifier_slot [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
+    {Qs : ∀ x, M.IOPQueries V x} {kq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {t : ℕ}
+    (𝒜 : NARG.QROM.Adversary (queryBits k kN kS L) k e (Claim X M.NIProof) t) :
+    𝒜.acceptsFalse (M.toQVerifier Qs kq) rel ≤
+      knowledgeError k e kq (t + kq) (Fintype.card M.TreeSig) 0 (maxError ε) :=
+  QROM.soundness _ (M.knowledgeBoundSlot rel E St hrbr Qs kq hkq) 𝒜
 
 /-- **Online extractability of the spBCS verifier in the ROM** with a query budget `kq`
 (`hkq`) against classical query-bounded adversaries without proof queries, at
@@ -478,6 +540,57 @@ theorem soundness_rom [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St
     𝒜.acceptsFalse (M.rVerifier Qs NQ N) rel ≤
       knowledgeErrorROM k (t + kqOf Mg n NQ N) M.senc.digestsPerInput Mg.nJ (maxError ε) :=
   soundness_toRVerifier hrbr (fun _ _ _ hv => queries_length_le_of_formatBounds hb hv) 𝒜
+
+/-- **Online extractability of the spBCS verifier in the ROM, with the round errors and the
+collisions charged by entry class**, with a query budget `kq` (`hkq`), at
+`knowledgeErrorROMTyped k t kq T (maxError ε) (∑ c, ε c)`, `T` the number of Merkle trees. -/
+theorem onlineExtracts_toRVerifier_typed [DecidableEq X]
+    (hrbr : CausalRBRKnowledgeSound rel V E St ε) {Qs : ∀ x, M.IOPQueries V x} {kq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {Z : Type}
+    {t : ℕ} (𝒢 : NARG.ROM.Adversary (Query k kN kS L) (Out k e) (Claim X M.NIProof × Z) t) :
+    𝒢.OnlineExtracts (M.toRVerifier Qs kq) NARG.ROM.OracleSampler.lazy.law rel (M.dbExtract E) 0
+      (knowledgeErrorROMTyped k t kq (Fintype.card M.TreeSig) (maxError ε) (∑ c, ε c)) := by
+  have := ROM.onlineExtracts (V := M.toRVerifier Qs kq) (rel := rel) (ext := M.dbExtract E)
+    (β := fun b => knowledgeErrorROMTyped k (b - kq) kq (Fintype.card M.TreeSig) (maxError ε)
+      (∑ c, ε c))
+    (M.jointBound_typed rel E St hrbr Qs hkq) 𝒢
+  simpa only [show (M.toRVerifier Qs kq).kq = kq from rfl, Nat.add_sub_cancel] using this
+
+/-- **Soundness of the spBCS verifier in the ROM, with the round errors and the collisions
+charged by entry class**, at the error of `onlineExtracts_toRVerifier_typed`. -/
+theorem soundness_toRVerifier_typed [DecidableEq X]
+    (hrbr : CausalRBRKnowledgeSound rel V E St ε) {Qs : ∀ x, M.IOPQueries V x} {kq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {t : ℕ}
+    (𝒜 : NARG.ROM.Adversary (Query k kN kS L) (Out k e) (Claim X M.NIProof) t) :
+    𝒜.acceptsFalse (M.toRVerifier Qs kq) rel ≤
+      knowledgeErrorROMTyped k t kq (Fintype.card M.TreeSig) (maxError ε) (∑ c, ε c) := by
+  have := ROM.soundness (V := M.toRVerifier Qs kq) (ext := M.dbExtract E)
+    (β := fun b => knowledgeErrorROMTyped k (b - kq) kq (Fintype.card M.TreeSig) (maxError ε)
+      (∑ c, ε c))
+    (M.jointBound_typed rel E St hrbr Qs hkq) 𝒜
+  simpa only [show (M.toRVerifier Qs kq).kq = kq from rfl, Nat.add_sub_cancel] using this
+
+/-- **Online extractability in the ROM at the query budget of the format bounds, with the round
+errors and the collisions charged by entry class** (`onlineExtracts_toRVerifier_typed` at
+`kqOf Mg n NQ N`): `t · maxError ε + ∑ c, ε c + maxError ε +
+(t + kq)(max 2 T + 1)(t + kq) / 2^(8k)`. -/
+theorem onlineExtracts_rom_typed [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
+    {Qs : ∀ x, M.IOPQueries V x} {NQ N : ℕ} (hb : M.FormatBounds Qs NQ N) {Z : Type} {t : ℕ}
+    (𝒢 : NARG.ROM.Adversary (Query k kN kS L) (Out k e) (Claim X M.NIProof × Z) t) :
+    𝒢.OnlineExtracts (M.rVerifier Qs NQ N) NARG.ROM.OracleSampler.lazy.law rel (M.dbExtract E) 0
+      (knowledgeErrorROMTyped k t (kqOf Mg n NQ N) (Fintype.card M.TreeSig) (maxError ε)
+        (∑ c, ε c)) :=
+  onlineExtracts_toRVerifier_typed hrbr (fun _ _ _ hv => queries_length_le_of_formatBounds hb hv) 𝒢
+
+/-- **Soundness in the ROM at the query budget of the format bounds, with the round errors and
+the collisions charged by entry class**, at the error of `onlineExtracts_rom_typed`. -/
+theorem soundness_rom_typed [DecidableEq X] (hrbr : CausalRBRKnowledgeSound rel V E St ε)
+    {Qs : ∀ x, M.IOPQueries V x} {NQ N : ℕ} (hb : M.FormatBounds Qs NQ N) {t : ℕ}
+    (𝒜 : NARG.ROM.Adversary (Query k kN kS L) (Out k e) (Claim X M.NIProof) t) :
+    𝒜.acceptsFalse (M.rVerifier Qs NQ N) rel ≤
+      knowledgeErrorROMTyped k t (kqOf Mg n NQ N) (Fintype.card M.TreeSig) (maxError ε)
+        (∑ c, ε c) :=
+  soundness_toRVerifier_typed hrbr (fun _ _ _ hv => queries_length_le_of_formatBounds hb hv) 𝒜
 
 end
 

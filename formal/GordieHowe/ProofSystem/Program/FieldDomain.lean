@@ -190,6 +190,18 @@ structure FieldRoundsLe (δ : ℝ≥0) : Prop where
     (if npOf R.Pk R.rs = 0 then 0 else
       Ligero.SubfieldTest.jointSubfieldError R.numbers.Sh.block R.numbers.Sh.N R.numbers.Sh.nreq) ≤ δ
 
+variable (I) in
+/-- **The bound on the summed round errors of domain `d`'s proof**: the commit bound, the covered
+batches' phase errors (`batchesError`), GKR's summed shape budgets (`gkrSumError`), the
+combinations' `|rs|/|K|`, the test bound, and the column bound with, when the prefix is nonempty,
+the joint subfield term (`ProofSystem.fieldForkError_sum_le`). -/
+noncomputable def fieldSumBound : ℝ≥0 :=
+  R.numbers.bounds.commit + ir.batchesError d R.Pk + ir.gkrSumError I d +
+    (R.rs.length : ℝ≥0) / Fintype.card (I (ir.domainField d)).K + R.numbers.bounds.test +
+    (R.numbers.bounds.column +
+      (if npOf R.Pk R.rs = 0 then 0 else
+        Ligero.SubfieldTest.jointSubfieldError R.numbers.Sh.block R.numbers.Sh.N R.numbers.Sh.nreq))
+
 end
 
 end GordieHowe.RealizedProgram

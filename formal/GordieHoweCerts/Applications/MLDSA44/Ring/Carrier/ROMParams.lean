@@ -11,6 +11,7 @@ public import GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.ROMParams.Relati
 public import GordieHowe.ProofSystem.Program.Transcript.MergeSetting
 public import GordieHowe.ProofSystem.Program.ForkJoinComap
 public import GordieHowe.Applications.Configuration.Certified
+public import GordieHoweCerts.Applications.MLDSA44.Ring.Carrier.ROMParams.ErrorSum
 public import GordieHowe.ProofSystem.Program.EndToEnd
 
 @[expose] public section
@@ -167,12 +168,22 @@ theorem ringProofFormat (hmsg : msgLen ≤ 2 ^ 19) :
 /-- The converted base messages' length `2 + 32` is within the setting's `2^19` bytes. -/
 theorem msgLen_le : 2 + 32 ≤ 2 ^ 19 := by norm_num
 
+open Generated.MLDSA44.Ring.Carrier.ROMParams (data packingsOk checked) in
+open RealizedProgram (figErrorSum) in
+/-- **The summed round errors within `181520298 / 2^errorExp`**: the summed round errors rounded up
+(`figErrorSum`) are the numeric calculation (`ProgramData.figErrorSum_eq_errorSumN`), within
+the bound by `errorSumN_le`. -/
+theorem errorSumOk :
+    figErrorSum certified.ready certified.sourceErrors certified.figures.errorExp ≤ 181520298 :=
+  (le_of_eq (ProgramData.figErrorSum_eq_errorSumN data packingsOk checked.figures
+    conditions.toCoreConditions data.figures.figures.errorExp)).trans errorSumN_le
+
 /-! ## The configuration -/
 
 /-- **`MLDSA44.Ring.Carrier.ROMParams` as a configuration under spBCS** at `34`-byte message representatives
 (module docstring, `Configuration.ofCertifiedWith`): the ROM parameter set `ParamSet.rom` (`32`-byte salts and the quantum query cap `2 ^ 40`). -/
 noncomputable def configuration : Configuration :=
-  .ofCertifiedWith certified source (frontend (2 + 32)) .rom
+  .ofCertifiedWith certified source (frontend (2 + 32)) .rom (errorSum := 181520298)
 
 /-- **The facts of `configuration`** (`Configuration.ofCertifiedWith_facts`): the frontend's
 (`frontendFacts` at `msgLen_le`) and the generated loads' check
@@ -180,6 +191,10 @@ noncomputable def configuration : Configuration :=
 theorem configurationFacts : configuration.Facts :=
   Configuration.ofCertifiedWith_facts certified source (frontendFacts msgLen_le) (Nat.le_of_ble_eq_true rfl)
     (conditions.fullFacts.figures.loads rfl)
+    (hsum :=
+      Configuration.CertifiedFrontWith.sumRoundError_le_of certified source (frontend (2 + 32))
+        errorSumOk)
+    (hsr := Nat.le_of_ble_eq_true rfl)
 
 instantiate_config GordieHowe.MLDSA44.Ring.Carrier.ROMParams
   from [GordieHowe.Configuration.Common, GordieHowe.Configuration.ZeroKnowledgeROM,

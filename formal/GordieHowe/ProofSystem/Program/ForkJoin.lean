@@ -289,6 +289,36 @@ theorem Sound.error_le {δ : ℝ≥0} (hcommit : ∀ d j, (S.circuit d).εc j �
     (IOP.errN_le .par C.m fun d => errNode_le (IOP.errN_le .par (C.circuit d).nb fun b =>
       errLeaf_le (hbranch d b)) (errLeaf_le (hjoin d)))
 
+omit [Inhabited W] in
+/-- **The errors of the composite sum to** the domains' commit rounds', the application phase's,
+every branch's and every join's sums. -/
+theorem Sound.sum_error :
+    ∑ c, S.error c = (∑ d, ∑ j, (S.circuit d).εc j + ∑ j, S.εapp j) +
+      ∑ d, ((∑ b, ∑ j, (S.circuit d).εb b j) + ∑ j, (S.circuit d).εj j) := by
+  have hpre : ∑ i, S.preError i = ∑ d, ∑ j, (S.circuit d).εc j + ∑ j, S.εapp j := by
+    have := PhaseStep.sum_committedError (A := C.app) (Com := C.Com) (R := C.commitRounds)
+      (ProtocolSpec.errN C.m fun d => (S.circuit d).εc) S.εapp
+    rw [ProtocolSpec.sum_errN] at this
+    exact this
+  rw [Sound.error, sum_errNode, sum_errLeaf, hpre, IOP.sum_errN]
+  congr 1
+  refine Finset.sum_congr rfl fun d _ => ?_
+  rw [sum_errNode, IOP.sum_errN]
+  congr 1
+  · exact Finset.sum_congr rfl fun b _ => sum_errLeaf (P := C.P) (j := .br d b) _
+  · exact sum_errLeaf (P := C.P) (j := .jn d) _
+
+omit [Inhabited W] in
+/-- **A bound on every domain's summed errors bounds the composite's summed errors** with the
+application phase's (`Sound.sum_error`). -/
+theorem Sound.sum_error_le {β : Fin C.m → ℝ≥0}
+    (h : ∀ d, ∑ j, (S.circuit d).εc j +
+      ((∑ b, ∑ j, (S.circuit d).εb b j) + ∑ j, (S.circuit d).εj j) ≤ β d) :
+    ∑ c, S.error c ≤ ∑ d, β d + ∑ j, S.εapp j := by
+  rw [S.sum_error, add_comm (∑ d, _) (∑ j, S.εapp j), add_assoc, ← Finset.sum_add_distrib,
+    add_comm]
+  exact add_le_add (Finset.sum_le_sum fun d _ => h d) le_rfl
+
 /-- **Domain `d` reduces its branches' input claims and its fixed claim to its verdict.** -/
 theorem Sound.domain_rbr (d : Fin C.m) :
     CausalRBR (Set.onStmt (a := C.preTerm) rel)

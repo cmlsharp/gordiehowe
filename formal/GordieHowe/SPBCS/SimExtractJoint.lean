@@ -416,6 +416,25 @@ noncomputable def simExtKnowledgeBound [DecidableEq X] (fx : X' → X) {Wit : Ty
   dbProb_le 𝒜 hb := dbProb_bad_union_le_of_queryCount hrbr 𝒜 hb
   mono := M.dbBound_mono ε
 
+/-- **The knowledge bound of the simulation-extraction game at an instability bound** (`hI`, as in
+`dbProb_bad_union_le_of_queryCount_of`) (CMS19 Proposition 8.12 for
+`simExtGame`, by the cover `cover_simExtGame`, and the database bound
+`dbProb_bad_union_le_of_queryCount`), from causal round-by-round knowledge soundness. -/
+noncomputable def simExtKnowledgeBoundOf [DecidableEq X] (fx : X' → X) {Wit : Type}
+    {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
+    {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε) (c cP : ℕ)
+    (hI : ∀ b, condInstab (M.bad rel E St) digestCollisionᶜ b ≤
+      maxError ε + (((max 2 c + cP) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k)) :
+    (simExtVerifier Qs A Psim Q kq fx).KnowledgeBound rel (M.dbExtractBits E)
+      fun b =>
+      6 * (b : ℝ≥0∞) ^ 2 * (maxError ε + (((max 2 c + cP + 1) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k)) where
+  bad := DB.restrict Query.toBits ⁻¹' (M.bad rel E St ∪ digestCollision)
+  mem_of_game _ ho _ hD := (cover_simExtGame A.toTPKindAlg Psim Q fx St hrbr
+      ((mem_game_simExtVerifier_iff Qs A Psim Q kq fx).1 ho).2 hD).imp_left
+    (M.extractsAt_dbExtractBits_iff rel E).2
+  dbProb_le 𝒜 hb := dbProb_bad_union_le_of_queryCount_of c cP hI 𝒜 hb
+  mono _ _ h := by dsimp only; gcongr
+
 /-- **The extraction run of `A`**: the coherent pure form of its simulated run, followed by the
 extraction queries on its measured control (`NARG.QROM.Verifier.expandedOpt` of `simVerifier`), run against
 CMS19's compressed oracle by `simLaw`. The adversary's workspace is not measured.
@@ -699,28 +718,31 @@ theorem simLaw_verdict_not_simExtGame
 variable [DecidableEq X]
 
 include hkq in
-/-- **The extraction run of one adversary wins without extraction with probability at most the
+/-- **At an instability bound** (`hI`, as in `dbProb_bad_union_le_of_queryCount_of`). **The
+extraction run of one adversary wins without extraction with probability at most the
 spBCS knowledge error** at `kq + Q · q` appended queries and `b + kq + Q · q` queries, with `b` the
 per-branch query count of the simulated run: the extraction run with all composed registers
 measured has the law of the control and the database (`simLaw_extRun`), the knowledge bound of
 `simExtGame` (`simExtKnowledgeBound`, `GordieHowe.SPBCS.QROM.simLaw_acceptsNotExtracts_le_of_queryCount`)
 and `simLaw_verdict_not_simExtGame`. -/
-theorem simLaw_winsNotExtracts_le {Wit : Type} {rel : Set (X × Wit)}
+theorem simLaw_winsNotExtracts_le_of {Wit : Type} {rel : Set (X × Wit)}
     {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X} {ε : ChIdx P t → ℝ≥0}
-    (hrbr : CausalRBRKnowledgeSound rel V E St ε)
+    (hrbr : CausalRBRKnowledgeSound rel V E St ε) (c cP : ℕ)
+    (hI : ∀ b, condInstab (M.bad rel E St) digestCollisionᶜ b ≤
+      maxError ε + (((max 2 c + cP) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k))
     {Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
       (SaltedCoins (FiatShamirSalt kS) C)} {fx : X' → X} (hA : M.SimAssignsAtKeys B Psim fx) :
     simLaw (outEquiv k e) (extRun Qs A Psim Q kq)
         {p | WinsNotExtracts Qs A Psim Q kq fx rel E p} ≤
       knowledgeError k e (kq + Q * Psim.q) (SPBCS.branchQueries A Psim Q + (kq + Q * Psim.q))
-        M.senc.digestsPerInput Mg.nJ (maxError ε) := by
+        c cP (maxError ε) := by
   set A₀ := A.toTPKindAlg.composeBothOut (simExtChallenger Psim Q) id
   set V1 := simExtVerifier Qs A Psim Q kq fx
   set ν := simLaw (outEquiv k e) (extRunFull Qs A Psim Q kq)
   have hrun : extRunFull Qs A Psim Q kq = V1.expandedOpt id A₀.defaultOut A₀.toQueryAlgCoh :=
     rfl
   have hK := QROM.simLaw_acceptsNotExtracts_le_of_queryCount V1 id
-    (simExtKnowledgeBound Qs A Psim Q kq fx hrbr) A₀.defaultOut A₀.toQueryAlgCoh
+    (simExtKnowledgeBoundOf Qs A Psim Q kq fx hrbr c cP hI) A₀.defaultOut A₀.toQueryAlgCoh
     (AdaptiveIAlg.tpQueryCount (outEquiv k e) A (simExtChallenger Psim Q) id id)
   rw [← hrun] at hK
   have h0 := simLaw_verdict_not_simExtGame Qs A Q kq hkq hA
@@ -758,11 +780,73 @@ theorem simLaw_winsNotExtracts_le {Wit : Type} {rel : Set (X × Wit)}
         rw [add_zero, add_zero]
         exact hK
 
+include hkq in
+/-- **The extraction run of one adversary wins without extraction with probability at most the
+spBCS knowledge error** at `kq + Q · q` appended queries and `b + kq + Q · q` queries, with `b` the
+per-branch query count of the simulated run: the extraction run with all composed registers
+measured has the law of the control and the database (`simLaw_extRun`), the knowledge bound of
+`simExtGame` (`simExtKnowledgeBound`,
+`GordieHowe.SPBCS.QROM.simLaw_acceptsNotExtracts_le_of_queryCount`)
+and `simLaw_verdict_not_simExtGame`. -/
+theorem simLaw_winsNotExtracts_le {Wit : Type} {rel : Set (X × Wit)}
+    {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X} {ε : ChIdx P t → ℝ≥0}
+    (hrbr : CausalRBRKnowledgeSound rel V E St ε)
+    {Psim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
+      (SaltedCoins (FiatShamirSalt kS) C)} {fx : X' → X} (hA : M.SimAssignsAtKeys B Psim fx) :
+    simLaw (outEquiv k e) (extRun Qs A Psim Q kq)
+        {p | WinsNotExtracts Qs A Psim Q kq fx rel E p} ≤
+      knowledgeError k e (kq + Q * Psim.q) (SPBCS.branchQueries A Psim Q + (kq + Q * Psim.q))
+        M.senc.digestsPerInput Mg.nJ (maxError ε) :=
+  simLaw_winsNotExtracts_le_of Qs A Q kq hkq hrbr _ _
+    (fun _ => M.condInstab_bad_le rel E St hrbr) hA
+
 end Extraction
 
 /-! ### The theorem -/
 
 variable {C : Type} [Fintype C] [DecidableEq (SaltedCoins (FiatShamirSalt kS) C)]
+
+/-- **Weak online simulation extractability of the spBCS compiler in the QROM at an instability
+bound** (`weak_online_simulation_extractability_qrom` with `hI` as in
+`dbProb_bad_union_le_of_queryCount_of`). -/
+theorem weak_online_simulation_extractability_qrom_of [DecidableEq X] {kq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {Wit : Type}
+    {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
+    {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε) (c cP : ℕ)
+    (hI : ∀ b, condInstab (M.bad rel E St) digestCollisionᶜ b ≤
+      maxError ε + (((max 2 c + cP) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k))
+    (Sim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X (M.Response B)
+      (SaltedCoins (FiatShamirSalt kS) C)) (hA : M.SimAssignsAtKeys B Sim id) :
+    M.WeakOnlineSimulationExtractable B Qs rel E kq Sim fun tq Q =>
+      knowledgeError k e (kq + Q * Sim.q) (tq + Q * Sim.q + (kq + Q * Sim.q)) c cP
+        (maxError ε) := by
+  intro X' _ _ fx tq Q 𝒜
+  refine ⟨fun a vo => extractionOutputState_eq_model Qs (𝒜.alg a) _ Q kq (𝒜.withinBudget a) vo,
+    ?_⟩
+  set Psim := Sim.comap fx
+  have hq : Psim.q = Sim.q := rfl
+  rw [← hq]
+  have key : ∀ a, simLaw (outEquiv k e) (extRun Qs (𝒜.alg a) Psim Q kq)
+      {p | WinsNotExtracts Qs (𝒜.alg a) Psim Q kq fx rel E p} ≤
+      knowledgeError k e (kq + Q * Psim.q) (tq + Q * Psim.q + (kq + Q * Psim.q)) c cP
+        (maxError ε) := fun a => by
+    refine (simLaw_winsNotExtracts_le_of Qs (𝒜.alg a) Q kq hkq hrbr c cP hI (hA.comap fx)).trans ?_
+    unfold knowledgeError
+    have h2 := 𝒜.queries_le a
+    have hb : SPBCS.branchQueries (𝒜.alg a) Psim Q + (kq + Q * Psim.q) ≤
+        tq + Q * Psim.q + (kq + Q * Psim.q) := by
+      change (𝒜.alg a).width * (𝒜.alg a).budget + Q * Psim.q + (𝒜.alg a).width * (𝒜.alg a).post +
+        (kq + Q * Psim.q) ≤ tq + Q * Psim.q + (kq + Q * Psim.q)
+      nlinarith
+    gcongr
+  calc ∑' a, 𝒜.aux a * simLaw (outEquiv k e) (extRun Qs (𝒜.alg a) Psim Q kq)
+        {p | WinsNotExtracts Qs (𝒜.alg a) Psim Q kq fx rel E p}
+      ≤ ∑' a, 𝒜.aux a * knowledgeError k e (kq + Q * Psim.q)
+          (tq + Q * Psim.q + (kq + Q * Psim.q)) c cP (maxError ε) :=
+        ENNReal.tsum_le_tsum fun a => mul_le_mul_of_nonneg_left (key a) zero_le
+    _ = knowledgeError k e (kq + Q * Psim.q) (tq + Q * Psim.q + (kq + Q * Psim.q)) c cP
+        (maxError ε) := by
+        rw [ENNReal.tsum_mul_right, PMF.tsum_coe, one_mul]
 
 /-- **Weak online simulation extractability of the spBCS compiler in the QROM** (paper
 `thm:bcs-se`(1), joint form; `WeakOnlineSimulationExtractable`): for a composite causally
@@ -787,31 +871,24 @@ theorem weak_online_simulation_extractability_qrom [DecidableEq X] {kq : ℕ}
     (Sim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X (M.Response B)
       (SaltedCoins (FiatShamirSalt kS) C)) (hA : M.SimAssignsAtKeys B Sim id) :
     M.WeakOnlineSimulationExtractable B Qs rel E kq Sim
-      (M.simExtractionError kq (maxError ε) Sim.q) := by
-  intro X' _ _ fx tq Q 𝒜
-  refine ⟨fun a vo => extractionOutputState_eq_model Qs (𝒜.alg a) _ Q kq (𝒜.withinBudget a) vo,
-    ?_⟩
-  set Psim := Sim.comap fx
-  have hq : Psim.q = Sim.q := rfl
-  rw [← hq]
-  have key : ∀ a, simLaw (outEquiv k e) (extRun Qs (𝒜.alg a) Psim Q kq)
-      {p | WinsNotExtracts Qs (𝒜.alg a) Psim Q kq fx rel E p} ≤
-      M.simExtractionError kq (maxError ε) Psim.q tq Q := fun a => by
-    refine (simLaw_winsNotExtracts_le Qs (𝒜.alg a) Q kq hkq hrbr (hA.comap fx)).trans ?_
-    unfold simExtractionError knowledgeError
-    have h2 := 𝒜.queries_le a
-    have hb : SPBCS.branchQueries (𝒜.alg a) Psim Q + (kq + Q * Psim.q) ≤
-        tq + Q * Psim.q + (kq + Q * Psim.q) := by
-      change (𝒜.alg a).width * (𝒜.alg a).budget + Q * Psim.q + (𝒜.alg a).width * (𝒜.alg a).post +
-        (kq + Q * Psim.q) ≤ tq + Q * Psim.q + (kq + Q * Psim.q)
-      nlinarith
-    gcongr
-  calc ∑' a, 𝒜.aux a * simLaw (outEquiv k e) (extRun Qs (𝒜.alg a) Psim Q kq)
-        {p | WinsNotExtracts Qs (𝒜.alg a) Psim Q kq fx rel E p}
-      ≤ ∑' a, 𝒜.aux a * M.simExtractionError kq (maxError ε) Psim.q tq Q :=
-        ENNReal.tsum_le_tsum fun a => mul_le_mul_of_nonneg_left (key a) zero_le
-    _ = M.simExtractionError kq (maxError ε) Psim.q tq Q := by
-        rw [ENNReal.tsum_mul_right, PMF.tsum_coe, one_mul]
+      (M.simExtractionError kq (maxError ε) Sim.q) :=
+  weak_online_simulation_extractability_qrom_of Qs hkq hrbr _ _
+    (fun _ => M.condInstab_bad_le rel E St hrbr) Sim hA
+
+/-- **Weak online simulation extractability of the spBCS compiler in the QROM at the slot
+constant** (`weak_online_simulation_extractability_qrom_of` at `condInstab_bad_le_slot`): the
+collision coefficient `max 2 T + 1`, `T` the Merkle trees. -/
+theorem weak_online_simulation_extractability_qrom_slot [DecidableEq X] {kq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {Wit : Type}
+    {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
+    {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε)
+    (Sim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X (M.Response B)
+      (SaltedCoins (FiatShamirSalt kS) C)) (hA : M.SimAssignsAtKeys B Sim id) :
+    M.WeakOnlineSimulationExtractable B Qs rel E kq Sim fun tq Q =>
+      knowledgeError k e (kq + Q * Sim.q) (tq + Q * Sim.q + (kq + Q * Sim.q))
+        (Fintype.card M.TreeSig) 0 (maxError ε) :=
+  weak_online_simulation_extractability_qrom_of Qs hkq hrbr _ 0 (fun b => by
+    simpa only [Nat.add_zero] using M.condInstab_bad_le_slot rel E St hrbr (tq := b)) Sim hA
 
 /-! ### The weak form for query-free tests -/
 

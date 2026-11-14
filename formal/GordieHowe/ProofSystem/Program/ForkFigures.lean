@@ -320,14 +320,16 @@ instance (cf : ℕ → ℕ) (src : ℕ → ℕ × ℕ) (num e : ℕ) : Decidable
   unfold PhaseErrorsOk
   infer_instance
 
-/-- **Every phase's error is at most `num / 2^e`** (`phaseError`): field `f` has `cf f` elements, every source challenge's error `ε₀ j` is at most `src j` as a fraction, and the
-phases' terms pass `PhaseErrorsOk`. -/
-theorem phaseError_le_of (ε₀ : ℕ → ℝ≥0) {cf : ℕ → ℕ} {src : ℕ → ℕ × ℕ} {num e : ℕ}
+/-- **Phase `k + 1`'s error is at most `num / 2^e`** (`phaseError`): field `f` has `cf f`
+elements, every source challenge's error `ε₀ j` is at most `src j` as a fraction, and the phase's
+terms have positive denominators and sum to at most `num / 2^e`. -/
+theorem phaseError_le_at (ε₀ : ℕ → ℝ≥0) {cf : ℕ → ℕ} {src : ℕ → ℕ × ℕ} {num e : ℕ}
     (hcard : ∀ f, Fintype.card (I f).K = cf f)
     (hsrc : ∀ j, ir.IsSourceChal j → ε₀ j ≤ ((src j).1 : ℝ≥0) / (src j).2)
-    (h : ir.PhaseErrorsOk cf src num e) (k : Fin ir.phases) :
+    (k : Fin ir.phases) (hpos : ∀ p ∈ ir.phaseTerms cf src k, 0 < p.2)
+    (hle : (fracSum (ir.phaseTerms cf src k)).1 * 2 ^ e ≤
+      num * (fracSum (ir.phaseTerms cf src k)).2) :
     ir.phaseError I (ir.roundError I ε₀) k ≤ (num : ℝ≥0) / 2 ^ e := by
-  obtain ⟨hpos, hle⟩ := h k
   obtain ⟨hden, hsum⟩ := fracSum_eq _ hpos
   have hl : ir.phaseError I (ir.roundError I ε₀) k =
       ((ir.chalList k).map fun j : ir.ChalAt k =>
@@ -356,6 +358,16 @@ theorem phaseError_le_of (ε₀ : ℕ → ℝ≥0) {cf : ℕ → ℕ} {src : ℕ
     · simp
   · rw [div_le_div_iff₀ (by exact_mod_cast hden) (by positivity)]
     exact_mod_cast hle
+
+/-- **Every phase's error is at most `num / 2^e`** (`phaseError`): field `f` has `cf f` elements,
+every source challenge's error `ε₀ j` is at most `src j` as a fraction, and the
+phases' terms pass `PhaseErrorsOk`. -/
+theorem phaseError_le_of (ε₀ : ℕ → ℝ≥0) {cf : ℕ → ℕ} {src : ℕ → ℕ × ℕ} {num e : ℕ}
+    (hcard : ∀ f, Fintype.card (I f).K = cf f)
+    (hsrc : ∀ j, ir.IsSourceChal j → ε₀ j ≤ ((src j).1 : ℝ≥0) / (src j).2)
+    (h : ir.PhaseErrorsOk cf src num e) (k : Fin ir.phases) :
+    ir.phaseError I (ir.roundError I ε₀) k ≤ (num : ℝ≥0) / 2 ^ e :=
+  phaseError_le_at ε₀ hcard hsrc k (h k).1 (h k).2
 
 end PhaseErrors
 

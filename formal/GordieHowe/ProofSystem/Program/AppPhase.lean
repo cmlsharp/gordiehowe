@@ -186,6 +186,13 @@ def committedError (εR : R.ChallengeIdx → ℝ≥0) (ε : A.spec.ChallengeIdx 
 
 variable {A R}
 
+/-- **The errors after the commit phase sum to the commit rounds' and the phase's sums.** -/
+theorem sum_committedError (εR : R.ChallengeIdx → ℝ≥0) (ε : A.spec.ChallengeIdx → ℝ≥0) :
+    ∑ i, A.committedError (Com := Com) R εR ε i = ∑ j, εR j + ∑ j, ε j := by
+  unfold committedError
+  rw [ProtocolSpec.sum_appendError, ProtocolSpec.sum_appendError,
+    Finset.sum_eq_zero fun i _ => (commitSpec.not_challengeIdx i).elim, zero_add]
+
 /-- A bound on the commit rounds' and the phase's errors bounds every error after the commitment
 round. -/
 theorem committedError_le {εR : R.ChallengeIdx → ℝ≥0} {ε : A.spec.ChallengeIdx → ℝ≥0} {δ : ℝ≥0}

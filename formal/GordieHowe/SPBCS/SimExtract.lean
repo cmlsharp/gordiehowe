@@ -219,13 +219,16 @@ theorem winTestProb_le_winO
   rwa [he] at hm
 
 /-- **Simulation-sound extractability of the spBCS argument at one adversary and a query-free
-test**, with freshness in the extraction experiment: `winTestProb ok ≤ extractFreshTestProb ok +
-knowledgeError k e (kq + Q q) (b + kq + Q q) c nJ (maxError ε)`, with `b` the per-branch query
+test, at an instability bound** (`hI`, as in `dbProb_bad_union_le_of_queryCount_of`), with
+freshness in the extraction experiment: `winTestProb ok ≤ extractFreshTestProb ok +
+knowledgeError k e (kq + Q q) (b + kq + Q q) c cP (maxError ε)`, with `b` the per-branch query
 count of the composed algorithm. -/
-theorem winTestProb_le_fresh [DecidableEq X]
+theorem winTestProb_le_fresh_of [DecidableEq X]
     (hkq : M.QueriesAtMost Qs kq) {Wit : Type}
     {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
-    {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε)
+    {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε) (c cP : ℕ)
+    (hI : ∀ b, condInstab (M.bad rel E St) digestCollisionᶜ b ≤
+      maxError ε + (((max 2 c + cP) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k))
     (Psim' : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
       (SaltedCoins (FiatShamirSalt kS) C))
     (hA : M.SimAssignsAtKeys B Psim' fx)
@@ -233,7 +236,7 @@ theorem winTestProb_le_fresh [DecidableEq X]
     winTestProb Qs A Psim' Q fx ok ≤ extractFreshTestProb Qs A Psim' Q kq fx rel E ok +
       knowledgeError k e (kq + Q * Psim'.q)
         (SPBCS.branchQueries A Psim' Q + (kq + Q * Psim'.q))
-        M.senc.digestsPerInput Mg.nJ (maxError ε) := by
+        c cP (maxError ε) := by
   set e' := outEquiv k e
   set K := kq + Q * Psim'.q
   set b := SPBCS.branchQueries A Psim' Q + K
@@ -251,12 +254,12 @@ theorem winTestProb_le_fresh [DecidableEq X]
     · exact Or.inr hbad
   have hbad : dbProb e' 𝒜 (DB.restrict Query.toBits ⁻¹' (M.bad rel E St ∪ digestCollision)) ≤
       6 * (b : ℝ≥0∞) ^ 2 * (maxError ε +
-        (((max 2 M.senc.digestsPerInput + Mg.nJ + 1) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k)) :=
-    dbProb_bad_union_le_of_queryCount hrbr 𝒜 (extAdvQueryCount Qs A Psim' Q kq)
+        (((max 2 c + cP + 1) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k)) :=
+    dbProb_bad_union_le_of_queryCount_of c cP hI 𝒜 (extAdvQueryCount Qs A Psim' Q kq)
   calc winTestProb Qs A Psim' Q fx ok ≤ winS e' 𝒜 G + 2 * esqrt (K / Fintype.card (Out k e)) :=
         hexpand.trans hsimulation
     _ ≤ extractFreshTestProb Qs A Psim' Q kq fx rel E ok + 6 * (b : ℝ≥0∞) ^ 2 *
-          ((maxError ε : ℝ≥0∞) + (((max 2 M.senc.digestsPerInput + Mg.nJ + 1) * b : ℕ) : ℝ≥0∞) /
+          ((maxError ε : ℝ≥0∞) + (((max 2 c + cP + 1) * b : ℕ) : ℝ≥0∞) /
             2 ^ (8 * k)) + 2 * esqrt (K / Fintype.card (Out k e)) := by
         gcongr
         exact hcover.trans (add_le_add le_rfl hbad)
@@ -265,6 +268,25 @@ theorem winTestProb_le_fresh [DecidableEq X]
         ring
 
 /-! ### The bundled notion and the headline -/
+
+/-- **Simulation-sound extractability of the spBCS argument at one adversary and a query-free
+test**, with freshness in the extraction experiment: `winTestProb ok ≤ extractFreshTestProb ok +
+knowledgeError k e (kq + Q q) (b + kq + Q q) c nJ (maxError ε)`, with `b` the per-branch query
+count of the composed algorithm. -/
+theorem winTestProb_le_fresh [DecidableEq X]
+    (hkq : M.QueriesAtMost Qs kq) {Wit : Type}
+    {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
+    {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε)
+    (Psim' : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X' (M.Response B)
+      (SaltedCoins (FiatShamirSalt kS) C))
+    (hA : M.SimAssignsAtKeys B Psim' fx)
+    (ok : A.W → Prop) :
+    winTestProb Qs A Psim' Q fx ok ≤ extractFreshTestProb Qs A Psim' Q kq fx rel E ok +
+      knowledgeError k e (kq + Q * Psim'.q)
+        (SPBCS.branchQueries A Psim' Q + (kq + Q * Psim'.q))
+        M.senc.digestsPerInput Mg.nJ (maxError ε) :=
+  winTestProb_le_fresh_of Qs A Q kq fx hkq hrbr _ _ (fun _ => M.condInstab_bad_le rel E St hrbr)
+    Psim' hA ok
 
 variable (M) in
 /-- **The simulation-sound extractability error of the spBCS argument** at the verifier's
@@ -333,6 +355,39 @@ theorem SimulationSoundExtractableFreshGame.queryBounded [DecidableEq X] {Wit : 
     M.SimulationSoundExtractableFresh B Qs rel E kq Sim ε := fun X' _ _ fx tq Q 𝒜 ok =>
   h X' fx tq Q (𝒜.toSimExtraction Q) ok
 
+/-- **Simulation-sound extractability of the spBCS compiler over the game's adversaries at an
+instability bound** (proof-internal; `hI` as in `dbProb_bad_union_le_of_queryCount_of`): the
+spBCS knowledge error at `kq + Q q` appended queries, `tq + Q q + kq + Q q` queries in all and the
+collision coefficient `max 2 c + cP + 1`. -/
+theorem simulation_sound_extractability_game_of [DecidableEq X] {kq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {Wit : Type}
+    {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
+    {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε) (c cP : ℕ)
+    (hI : ∀ b, condInstab (M.bad rel E St) digestCollisionᶜ b ≤
+      maxError ε + (((max 2 c + cP) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k))
+    (Sim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X (M.Response B)
+      (SaltedCoins (FiatShamirSalt kS) C)) (hA : M.SimAssignsAtKeys B Sim id) :
+    M.SimulationSoundExtractableFreshGame B Qs rel E kq Sim fun tq Q =>
+      knowledgeError k e (kq + Q * Sim.q) (tq + Q * Sim.q + (kq + Q * Sim.q)) c cP
+        (maxError ε) := by
+  intro X' _ _ fx tq Q 𝒜 ok
+  set Psim := Sim.comap fx
+  have hq : Psim.q = Sim.q := rfl
+  rw [← hq]
+  refine SPBCS.SimExtractionAdversary.tsum_le_tsum_add 𝒜 fun a => ?_
+  refine (winTestProb_le_fresh_of Qs (𝒜.alg a) Q kq fx hkq hrbr c cP hI Psim (hA.comap fx)
+    (ok a)).trans
+    (add_le_add le_rfl ?_)
+  beta_reduce
+  unfold knowledgeError
+  have h2 := 𝒜.queries_le a
+  have hb : SPBCS.branchQueries (𝒜.alg a) Psim Q + (kq + Q * Psim.q) ≤
+      tq + Q * Psim.q + (kq + Q * Psim.q) := by
+    change (𝒜.alg a).width * (𝒜.alg a).budget + Q * Psim.q + (𝒜.alg a).width * (𝒜.alg a).post +
+      (kq + Q * Psim.q) ≤ tq + Q * Psim.q + (kq + Q * Psim.q)
+    nlinarith
+  gcongr
+
 /-- **Simulation-sound extractability of the spBCS compiler over the game's adversaries**
 (proof-internal): the bound of `simulation_sound_extractability` for every adversary of the
 simulation-extraction game, whose steps need not be channels. -/
@@ -343,22 +398,9 @@ theorem simulation_sound_extractability_game [DecidableEq X] {kq : ℕ}
     (Sim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X (M.Response B)
       (SaltedCoins (FiatShamirSalt kS) C)) (hA : M.SimAssignsAtKeys B Sim id) :
     M.SimulationSoundExtractableFreshGame B Qs rel E kq Sim
-      (M.simExtractionError kq (maxError ε) Sim.q) := by
-  intro X' _ _ fx tq Q 𝒜 ok
-  set Psim := Sim.comap fx
-  have hq : Psim.q = Sim.q := rfl
-  rw [← hq]
-  refine SPBCS.SimExtractionAdversary.tsum_le_tsum_add 𝒜 fun a => ?_
-  refine (winTestProb_le_fresh Qs (𝒜.alg a) Q kq fx hkq hrbr Psim (hA.comap fx) (ok a)).trans
-    (add_le_add le_rfl ?_)
-  unfold simExtractionError knowledgeError
-  have h2 := 𝒜.queries_le a
-  have hb : SPBCS.branchQueries (𝒜.alg a) Psim Q + (kq + Q * Psim.q) ≤
-      tq + Q * Psim.q + (kq + Q * Psim.q) := by
-    change (𝒜.alg a).width * (𝒜.alg a).budget + Q * Psim.q + (𝒜.alg a).width * (𝒜.alg a).post +
-      (kq + Q * Psim.q) ≤ tq + Q * Psim.q + (kq + Q * Psim.q)
-    nlinarith
-  gcongr
+      (M.simExtractionError kq (maxError ε) Sim.q) :=
+  simulation_sound_extractability_game_of Qs hkq hrbr _ _
+    (fun _ => M.condInstab_bad_le rel E St hrbr) Sim hA
 
 /-- **Simulation-sound extractability of the spBCS compiler in the QROM** (paper
 `thm:bcs-se`(1); Unruh 2017, Definition 14, p. 21, weak variant, eq. (6) with `d = 1`, `p = 1`,
@@ -378,6 +420,35 @@ theorem simulation_sound_extractability [DecidableEq X] {kq : ℕ}
     M.SimulationSoundExtractableFresh B Qs rel E kq Sim
       (M.simExtractionError kq (maxError ε) Sim.q) :=
   (simulation_sound_extractability_game Qs hkq hrbr Sim hA).queryBounded
+
+/-- **Simulation-sound extractability of the spBCS compiler in the QROM at an instability bound**
+(`simulation_sound_extractability` with `hI` as in `dbProb_bad_union_le_of_queryCount_of`). -/
+theorem simulation_sound_extractability_of [DecidableEq X] {kq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {Wit : Type}
+    {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
+    {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε) (c cP : ℕ)
+    (hI : ∀ b, condInstab (M.bad rel E St) digestCollisionᶜ b ≤
+      maxError ε + (((max 2 c + cP) * b : ℕ) : ℝ≥0∞) / 2 ^ (8 * k))
+    (Sim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X (M.Response B)
+      (SaltedCoins (FiatShamirSalt kS) C)) (hA : M.SimAssignsAtKeys B Sim id) :
+    M.SimulationSoundExtractableFresh B Qs rel E kq Sim fun tq Q =>
+      knowledgeError k e (kq + Q * Sim.q) (tq + Q * Sim.q + (kq + Q * Sim.q)) c cP (maxError ε) :=
+  (simulation_sound_extractability_game_of Qs hkq hrbr c cP hI Sim hA).queryBounded
+
+/-- **Simulation-sound extractability of the spBCS compiler in the QROM at the slot constant**
+(`simulation_sound_extractability_of` at `condInstab_bad_le_slot`): the spBCS knowledge error with
+the collision coefficient `max 2 T + 1`, `T` the Merkle trees. -/
+theorem simulation_sound_extractability_slot [DecidableEq X] {kq : ℕ}
+    (hkq : M.QueriesAtMost Qs kq) {Wit : Type}
+    {rel : Set (X × Wit)} {E : CausalExtractor P t X Wit} {St : CausalStateFn P t X}
+    {ε : ChIdx P t → ℝ≥0} (hrbr : CausalRBRKnowledgeSound rel V E St ε)
+    (Sim : NARG.Simulator (Bits (queryBits k kN kS L)) (XOut k e) X (M.Response B)
+      (SaltedCoins (FiatShamirSalt kS) C)) (hA : M.SimAssignsAtKeys B Sim id) :
+    M.SimulationSoundExtractableFresh B Qs rel E kq Sim fun tq Q =>
+      knowledgeError k e (kq + Q * Sim.q) (tq + Q * Sim.q + (kq + Q * Sim.q))
+        (Fintype.card M.TreeSig) 0 (maxError ε) :=
+  simulation_sound_extractability_of Qs hkq hrbr _ 0 (fun b => by
+    simpa only [Nat.add_zero] using M.condInstab_bad_le_slot rel E St hrbr (tq := b)) Sim hA
 
 end
 

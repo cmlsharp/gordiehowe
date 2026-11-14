@@ -15226,7 +15226,6 @@ GordieHowe.MLDSA44.Emulated.QROMParams.keyRel
 GordieHowe.MLDSA44.Emulated.QROMParams.keyStmtCodec
 GordieHowe.MLDSA44.Emulated.QROMParams.keyStmtOf
 GordieHowe.MLDSA44.Emulated.QROMParams.keyWitRel
-GordieHowe.MLDSA44.Emulated.QROMParams.knowledge_soundness_qrom_at
 GordieHowe.MLDSA44.Emulated.QROMParams.label
 GordieHowe.MLDSA44.Emulated.QROMParams.layout
 GordieHowe.MLDSA44.Emulated.QROMParams.nat
@@ -15242,8 +15241,6 @@ GordieHowe.MLDSA44.Emulated.QROMParams.sampleEvent_use
 GordieHowe.MLDSA44.Emulated.QROMParams.setting
 GordieHowe.MLDSA44.Emulated.QROMParams.simulator
 GordieHowe.MLDSA44.Emulated.QROMParams.sound_of_views
-GordieHowe.MLDSA44.Emulated.QROMParams.soundness_bits_qrom
-GordieHowe.MLDSA44.Emulated.QROMParams.soundness_qrom_at
 GordieHowe.MLDSA44.Emulated.QROMParams.source
 GordieHowe.MLDSA44.Emulated.QROMParams.sourceError_final
 GordieHowe.MLDSA44.Emulated.QROMParams.sourceExec
@@ -15313,7 +15310,6 @@ GordieHowe.MLDSA44.Emulated.ROMParams.sampleEvent_use
 GordieHowe.MLDSA44.Emulated.ROMParams.setting
 GordieHowe.MLDSA44.Emulated.ROMParams.simulator
 GordieHowe.MLDSA44.Emulated.ROMParams.sound_of_views
-GordieHowe.MLDSA44.Emulated.ROMParams.soundness_bits_rom
 GordieHowe.MLDSA44.Emulated.ROMParams.soundness_rom_at
 GordieHowe.MLDSA44.Emulated.ROMParams.source
 GordieHowe.MLDSA44.Emulated.ROMParams.sourceError_final

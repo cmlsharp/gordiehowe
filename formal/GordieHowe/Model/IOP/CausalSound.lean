@@ -47,6 +47,24 @@ def errNode {k : Comp} {a b : SPTerm ι} (ε₁ : ChIdx P a → ℝ≥0) (ε₂ 
   | ⟨.left p, i⟩ => ε₁ ⟨p, i⟩
   | ⟨.right p, i⟩ => ε₂ ⟨p, i⟩
 
+/-- **The challenges of a node** are those of its first subterm and those of its second. -/
+def ChIdx.nodeEquiv {k : Comp} {a b : SPTerm ι} :
+    ChIdx P a ⊕ ChIdx P b ≃ ChIdx P (SPTerm.node k a b) where
+  toFun := Sum.elim ChIdx.left ChIdx.right
+  invFun
+    | ⟨.left p, i⟩ => .inl ⟨p, i⟩
+    | ⟨.right p, i⟩ => .inr ⟨p, i⟩
+  left_inv c := by cases c <;> rfl
+  right_inv
+    | ⟨.left _, _⟩ => rfl
+    | ⟨.right _, _⟩ => rfl
+
+/-- **The errors of a node sum to its subterms' sums.** -/
+theorem sum_errNode {k : Comp} {a b : SPTerm ι} (ε₁ : ChIdx P a → ℝ≥0) (ε₂ : ChIdx P b → ℝ≥0) :
+    ∑ c, errNode (k := k) ε₁ ε₂ c = ∑ c, ε₁ c + ∑ c, ε₂ c := by
+  rw [← ChIdx.nodeEquiv.sum_comp, Fintype.sum_sum_type]
+  rfl
+
 @[simp] theorem errNode_left {k : Comp} {a b : SPTerm ι} (ε₁ : ChIdx P a → ℝ≥0)
     (ε₂ : ChIdx P b → ℝ≥0) (c : ChIdx P a) : errNode (k := k) ε₁ ε₂ c.left = ε₁ c := rfl
 @[simp] theorem errNode_right {k : Comp} {a b : SPTerm ι} (ε₁ : ChIdx P a → ℝ≥0)
@@ -344,6 +362,20 @@ theorem ProtocolSpec.Transcript.exists_flip {m : ℕ} {Q : ProtocolSpec m}
 /-- **The error of a one-component composite**: the component's error at its challenge round. -/
 def errLeaf {j : ι} (ε : (P j).ChallengeIdx → ℝ≥0) : ChIdx P (leaf j) → ℝ≥0
   | ⟨.here _, i⟩ => ε i
+
+/-- **The challenges of a one-component composite** are the component's. -/
+def ChIdx.leafEquiv {j : ι} : (P j).ChallengeIdx ≃ ChIdx P (SPTerm.leaf j) where
+  toFun i := ⟨.here j, i⟩
+  invFun
+    | ⟨.here _, i⟩ => i
+  left_inv _ := rfl
+  right_inv
+    | ⟨.here _, _⟩ => rfl
+
+/-- **The errors of a one-component composite sum to the component's.** -/
+theorem sum_errLeaf {j : ι} (ε : (P j).ChallengeIdx → ℝ≥0) : ∑ c, errLeaf ε c = ∑ i, ε i := by
+  rw [← ChIdx.leafEquiv.sum_comp]
+  rfl
 
 /-- A bound on the component's errors bounds the one-component composite's. -/
 theorem errLeaf_le {j : ι} {ε : (P j).ChallengeIdx → ℝ≥0} {δ : ℝ≥0} (h : ∀ i, ε i ≤ δ) :
@@ -675,6 +707,15 @@ def errN (k : Comp) : (m : ℕ) → {c : Fin m → SPTerm ι} → (∀ i, ChIdx 
     ChIdx P (SPTerm.nodeN k m c) → ℝ≥0
   | 0, _, _ => fun ⟨p, _⟩ => nomatch p
   | m + 1, _, ε => errNode (ε 0) (errN k m fun i => ε i.succ)
+
+/-- **The errors of `nodeN k m c` sum to the composites' sums.** -/
+theorem sum_errN (k : Comp) : (m : ℕ) → {c : Fin m → SPTerm ι} → (ε : ∀ i, ChIdx P (c i) → ℝ≥0) →
+    ∑ d, errN k m ε d = ∑ i, ∑ d, ε i d
+  | 0, _, _ => by
+    rw [Fin.sum_univ_zero]
+    exact Finset.sum_eq_zero fun d _ => by obtain ⟨p, _⟩ := d; exact nomatch p
+  | m + 1, _, ε => (sum_errNode (k := k) (ε 0) (errN k m fun i => ε i.succ)).trans (by
+      rw [sum_errN k m, Fin.sum_univ_succ])
 
 /-- A bound on every composite's errors bounds those of `nodeN k m c`. -/
 theorem errN_le (k : Comp) : (m : ℕ) → {c : Fin m → SPTerm ι} → {ε : ∀ i, ChIdx P (c i) → ℝ≥0} →

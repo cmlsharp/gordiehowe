@@ -1182,6 +1182,7 @@ public import GordieHowe.SPBCS.SimExtractUnruh
 public import GordieHowe.SPBCS.SimOracle
 public import GordieHowe.SPBCS.SimProg
 public import GordieHowe.SPBCS.Stability
+public import GordieHowe.SPBCS.StabilitySlots
 public import GordieHowe.SPBCS.Targeted
 public import GordieHowe.SPBCS.Term
 public import GordieHowe.SPBCS.TermIso

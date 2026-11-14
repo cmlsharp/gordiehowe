@@ -880,6 +880,65 @@ theorem gkrBranchError_le (T : ir.CircuitsEnforce I src) (u : Unit) (k) :
     exact (((shapeAtMost_circSource src i).2 (T.shape _)).error_le (ir.circNodes d src i) j).trans
       (div_le_div_of_nonneg_right (by exact_mod_cast hw) (by positivity))) _ k
 
+variable (I d) in
+/-- **The summed error bound of GKR's branch of domain `d`**: `shapeBudget (w, L) / |K|` summed over
+the domain's circuits, at each circuit's width bound `w` (`circuitWidth`) and layers `L`. -/
+noncomputable def gkrSumError : ℝ≥0 :=
+  ∑ i : Fin (ir.circs d).length,
+    (GKR.CircuitBudget.shapeBudget (ir.circuitWidth (ir.circAt d i))
+      (ir.circuit (ir.circAt d i)).layers : ℝ≥0) / Fintype.card (I (ir.domainField d)).K
+
+variable (d) in
+/-- **The numerator of `gkrSumError`**: the domain's circuits' shape budgets summed. -/
+def gkrShapeNum : ℕ :=
+  ∑ i : Fin (ir.circs d).length,
+    GKR.CircuitBudget.shapeBudget (ir.circuitWidth (ir.circAt d i))
+      (ir.circuit (ir.circAt d i)).layers
+
+/-- `gkrSumError` as one fraction over the field's size. -/
+theorem gkrSumError_eq :
+    ir.gkrSumError I d = (ir.gkrShapeNum d : ℝ≥0) / Fintype.card (I (ir.domainField d)).K := by
+  rw [gkrSumError, gkrShapeNum, Nat.cast_sum, Finset.sum_div]
+
+/-- **GKR's branch's errors sum to at most `gkrSumError`** under the circuits' correspondence's
+shapes (`CircuitsEnforce.shape`): each circuit's within its shape budget
+(`GordieHowe.GKR.LayeredCircuit.ShapeAtMost.error_sum_le`), in sequence
+(`MaskedReduction.sum_ofListError`). -/
+theorem sum_gkrBranchError_le (T : ir.CircuitsEnforce I src) (u : Unit) :
+    ∑ k, ir.branchError src rs (.inr u) k ≤ ir.gkrSumError I d := by
+  refine (FieldProof.MaskedReduction.sum_ofListError (ncOf := fun _ => 1) (ir.gkrIP src rs)
+    (fun i => (ir.circSource d src i).error (ir.circNodes d src i)) (List.finRange _)).trans_le ?_
+  rw [gkrSumError, Fin.sum_univ_def]
+  exact List.sum_le_sum fun i _ =>
+    ((shapeAtMost_circSource src i).2 (T.shape _)).error_sum_le (ir.circNodes d src i)
+
+/-- **The branches' errors of domain `d` sum to at most** the covered batches' phase errors
+(`batchesError`, exactly: `AffineBatch.error_sum`, `AffineBatch.bitError_sum`,
+`MergedAffineBatch.sum_fusedError`, `MergedAffineBatch.bitError_sum`) and GKR's
+(`sum_gkrBranchError_le`). -/
+theorem sum_branchError_le (T : ir.CircuitsEnforce I src) :
+    ∑ b, ∑ k, ir.branchError src rs (ir.branchEquiv d Pk b) k ≤
+      ir.batchesError d Pk + ir.gkrSumError I d := by
+  have hl : ∀ {α : Type} (l : List α) (f : α → ℝ≥0),
+      ∑ i : Fin l.length, f l[i] = (l.map f).sum := fun l f => by
+    rw [Fin.sum_univ_def]
+    exact sum_map_finRange_getElem l f
+  rw [Fintype.sum_equiv (ir.branchEquiv d Pk) _ (fun j => ∑ k, ir.branchError src rs j k)
+      fun _ => rfl, Fintype.sum_sum_type, Fintype.sum_sum_type, Fintype.sum_sum_type,
+    Fintype.sum_sum_type, Fintype.sum_unique (ι := Unit)]
+  have e1 : ∀ i, ∑ k, ir.branchError src rs (.inl (.inl (.inl i))) k =
+      cbError (ir.cbatches d Pk)[i] := fun i => AffineBatch.error_sum _
+  have e2 : ∀ i, ∑ k, ir.branchError src rs (.inl (.inl (.inr i))) k =
+      sbError (ir.sumBatches d Pk)[i] := fun i => AffineBatch.bitError_sum _
+  have e3 : ∀ i, ∑ k, ir.branchError src rs (.inl (.inr (.inl i))) k =
+      mbError (ir.mbatches d Pk)[i] := fun i => MergedAffineBatch.sum_fusedError _
+  have e4 : ∀ i, ∑ k, ir.branchError src rs (.inl (.inr (.inr i))) k =
+      smbError (ir.sumMBatches d Pk)[i] := fun i => MergedAffineBatch.bitError_sum _
+  rw [Finset.sum_congr rfl fun i _ => e1 i, Finset.sum_congr rfl fun i _ => e2 i,
+    Finset.sum_congr rfl fun i _ => e3 i, Finset.sum_congr rfl fun i _ => e4 i, hl, hl, hl, hl,
+    batchesError, ← add_assoc]
+  exact add_le_add le_rfl (ir.sum_gkrBranchError_le src rs T ())
+
 /-- **Every round of branch `j` is at most `δ`** when the covered batches' phase errors together are
 (`batchesError`) and a GKR round's charge is (`gkrRoundError`): a batch branch's round within its
 batch's summed phase error (`AffineBatch.error_sum`, `MergedAffineBatch.sum_fusedError`), a round of GKR's

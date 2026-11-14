@@ -10,6 +10,7 @@ public import GordieHoweCerts.Applications.MLDSA44.Native.ROMParams.Relations
 public import GordieHowe.ProofSystem.Program.Transcript.MergeSetting
 public import GordieHowe.ProofSystem.Program.ForkJoinComap
 public import GordieHowe.Applications.Configuration.Certified
+public import GordieHoweCerts.Applications.MLDSA44.Native.ROMParams.ErrorSum
 public import GordieHowe.ProofSystem.Program.EndToEnd
 
 @[expose] public section
@@ -169,18 +170,30 @@ instantiate_config GordieHowe.MLDSA44.Native.ROMParams
   from [GordieHowe.Configuration.CertifiedHonest, GordieHowe.Configuration.CertifiedFront]
   folding [keyRel] certified source frontend
 
+open Generated.MLDSA44.Native.ROMParams (data packingsOk checked) in
+open RealizedProgram (figErrorSum) in
+/-- **The summed round errors within `182217060 / 2^errorExp`**: the summed round errors rounded up
+(`figErrorSum`) are the numeric calculation (`ProgramData.figErrorSum_eq_errorSumN`), within
+the bound by `errorSumN_le`. -/
+theorem errorSumOk :
+    figErrorSum certified.ready certified.sourceErrors certified.figures.errorExp ≤ 182217060 :=
+  (le_of_eq (ProgramData.figErrorSum_eq_errorSumN data packingsOk checked.figures
+    conditions.toCoreConditions data.figures.figures.errorExp)).trans errorSumN_le
+
 /-! ## The configuration -/
 
 /-- **`MLDSA44.Native.ROMParams` as a configuration under spBCS** (module docstring,
 `Configuration.ofCertified`): the ROM parameter set `ParamSet.rom` (`32`-byte salts and the quantum query cap `2 ^ 40`). -/
 noncomputable def configuration : Configuration :=
-  .ofCertified certified source frontend .rom
+  .ofCertified certified source frontend .rom (errorSum := 182217060)
 
 /-- **The facts of `configuration`** (`Configuration.ofCertified_facts`): the frontend's
 (`frontendFacts`) and the generated loads' check (`GordieHowe.RuntimeInputs.FiguresFacts.loads`). -/
 theorem configurationFacts : configuration.Facts :=
   Configuration.ofCertified_facts certified source frontendFacts (Nat.le_of_ble_eq_true rfl)
     (conditions.fullFacts.figures.loads rfl)
+    (hsum := Configuration.CertifiedFront.sumRoundError_le_of certified source frontend errorSumOk)
+    (hsr := Nat.le_of_ble_eq_true rfl)
 
 /-- **The honest inputs of the paper's relation** (`Configuration.HonestOf` at `keyWitRel`, the
 paper's relation `MLDSA44.PoP.relUpTo 32` at the key): every pair has the honest input
